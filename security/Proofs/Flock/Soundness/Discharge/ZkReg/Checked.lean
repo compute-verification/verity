@@ -107,7 +107,6 @@ theorem check_tables {c : Circuit} {pub : Public} {own : Array Registered.Port} 
   · exact absurd (Registered.except_bind_ok h) fun ⟨_, h1, _⟩ => Registered.throw_ne_ok _ _ h1
   · split at h
     · obtain ⟨_, _, h⟩ := Registered.except_bind_ok h
-      obtain ⟨_, _, h⟩ := Registered.except_bind_ok h
       split at h
       · rename_i t ht
         obtain ⟨indices, hidx, h⟩ := Registered.except_bind_ok h

@@ -25,7 +25,6 @@ from verity_vllm.config import WORKLOADS, RowId, UsageError, workload_file
 from verity_vllm.pipeline import circuit_db, cli, epoch
 from verity_vllm.pipeline import config_record as CR
 from verity_vllm.pipeline import research_outputs as ro
-from verity_vllm.pipeline import row_records as RR
 from verity_vllm.records.property_record import REGISTRY, seal
 
 ROW = "llama32-1b__bf16__l40s__tp2__b1__i256__o32__mixed__greedy__bi-eager"
@@ -297,29 +296,6 @@ def test_publish_refuses_a_needed_property_left_silent_and_records_a_named_gap(t
     assert rec["evidence"]["gaps"] == {PROP: "no capture of the tree's harness"} and rec["evidence"]["conformance"] == {}
 
 
-def test_a_request_programs_census_digest_is_in_the_record_beside_its_program_digest(tmp_path):
-    """The census digest a request Build cached (its result.json's `census`, `pipeline.memory_map.cache`) reaches the Build summary
-    and the record's `census_digests`, keyed as `programs`: per rank on a TP row, and on a TP1 row; a Build with none has no entry."""
-    census = lambda r: {"census": f"c{r}" * 64, "kv_rows": True}  # noqa: E731
-    d = tmp_path / ROW
-    for r in range(2):
-        rd = d / "build" / f"rank{r}"
-        _w(rd / "build_step" / "result.json", {"ok": True, "program": {"digest": f"s{r}"}})
-        _w(rd / "build_request_LP9_T2" / "result.json", {"ok": True, "program": {"digest": f"q{r}"}, "census": census(r)})
-        _w(rd / "build_request_LP9_T3" / "result.json", {"ok": True, "program": {"digest": f"p{r}"}, "census": {"error": "MemoryError()"}})
-        _w(rd / "build_workload" / "workload_program.json", {"workload_digest": f"w{r}"})
-    assert RR.tp_build_summary(str(d / "build"), 2) == "PASS"
-    per = CR.record(d, ROW)["build"]["per_rank"]
-    assert {r: (p["programs"], p["census_digests"]) for r, p in per.items()} == {
-        str(r): ({"build_request_LP9_T2": f"q{r}", "build_request_LP9_T3": f"p{r}", "build_step": f"s{r}"},
-                 {"build_request_LP9_T2": census(r)["census"]}) for r in range(2)}
-
-    one = tmp_path / "tp1"
-    _w(one / "build_step" / "result.json", {"ok": True, "program": {"digest": "s"}})
-    _w(one / "build_request" / "result.json", {"ok": True, "program": {"digest": "q"}, "census": census(0)})
-    assert RR.build_summary(str(one)) == "PASS"
-    b = CR.build_part(one)
-    assert (b["programs"], b["census_digests"]) == ({"request": "q", "step": "s"}, {"request": census(0)["census"]})
 
 
 def test_publish_cites_each_needed_property_s_newest_holding_capture_when_asked(tmp_path, store):
@@ -548,7 +524,7 @@ def test_each_records_subcommand_runs_its_own_function_with_its_options(tmp_path
         (["capture", "r1", "--property", PROP], [("capture", ("r1", [PROP]), {})], f"{PROP}=art:p"),
         (["show"], [("index", (), {})], json.dumps({ROW: "art:rec"}, indent=1, sort_keys=True)),
         (["show", ROW], [("record", (ROW,), {})], json.dumps({"config": {"row": ROW}}, indent=1, sort_keys=True)),
-        (["fetch", ROW, "--to", str(tar), "--rank", "1"], [("bundle", (ROW, tar, [1]), {"part": None})], str(tar)),
+        (["fetch", ROW, "--to", str(tar), "--rank", "0"], [("bundle", (ROW, tar, [0]), {"part": None})], str(tar)),
         (["staged", REPO, "abc", "--at", "2026-01-01T00:00:00Z", "--ref", "r1", "--by", "circuits"],
          [("staged", (REPO, "abc"), {"at": "2026-01-01T00:00:00Z", "ref": "r1", "by": "circuits"})], "staged"),
         (["programs", ROW, "--part", "workload", "--bundle", str(tar)],
@@ -562,6 +538,12 @@ def test_each_records_subcommand_runs_its_own_function_with_its_options(tmp_path
         assert circuit_db.main(cli.parse("records", argv, {})) == 0
         assert calls == want, argv
         assert capsys.readouterr().out.rstrip("\n") == printed, argv
+
+
+@pytest.mark.parametrize("argv", [["fetch", ROW, "--to", "t.tar", "--rank", "1"], ["programs", ROW, "--rank", "0", "--rank", "3"]])
+def test_a_rank_past_0_is_refused_by_name(argv):
+    with pytest.raises(UsageError, match=r"the multi-GPU model is not served: --rank \[\d\]"):
+        circuit_db.main(cli.parse("records", argv, {}))
 
 
 # What each reader makes of a document that leaves an optional field out, or holds it null or empty.

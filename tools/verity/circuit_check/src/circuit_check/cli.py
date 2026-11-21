@@ -2,7 +2,6 @@
 
     circuit-check F32Add_v1 'WidgetNorm_v1{N=64,EPS=1e-05}'        Definitions
     circuit-check rope-head gemm-coordinate/k64/sm80-mma-bf16       templates, subcircuits
-    circuit-check path/to/build_request_LP3_T2                      a served workload's request Program
     circuit-check verity/circuits/ops/boolean/gf2k.circuit-check.py
                                                                     the targets a sidecar's bindings reach that its module defines
     circuit-check --all                                             every registered Definition and template (the suite's set)
@@ -29,11 +28,9 @@ each rule holds: every spot checked, and each passing.
 
 Exit status 1 when a check fails (each failure is named, `FAIL NAME`, and in the summary), 0 otherwise: the verdict is every
 target's real one, and whether a failure may stay red is drive's policy (`research.policy`, policy.toml's allowances), never
-this command's.  A Call over the partition's leaf budget or its cost target is partitioned by its callees (`checks.by_callees`,
-whose callees fail by name); otherwise one over the leaf budget fails by its own name (``partition/unpartitioned``).  Redundant
-and dead gates, an unpinned or untyped lowering, a Definition over the partition's cost target, a Call or not
-(``partition/over-cost-target``: its proof blocks are held to Flock's range by ``block``), one over the leaf budget that is no
-Call, and a target no realization compared on a random
+this command's.  Redundant and dead gates, an unpinned or untyped lowering, a
+Definition over the partition's budgets whose return type is past the widest size class (``partition/over-cost-target``: its
+proof blocks are held to Flock's range by ``block``), and a target no realization compared on a random
 vector (``vectors/edge-only``, ``vectors/none``: `checks.vector_class`) are warnings, which never fail
 (``--fail-on-warnings`` makes them fail too): a target with one is logged ``unchecked``, not ``ok``, the warnings are printed
 under ``unchecked`` by check, with counts, a line before the last counts the targets of each vector class (the summary's
@@ -233,9 +230,7 @@ def _tasks(specs: list[str], opts: CK.Options, everything: bool, as_call: bool |
         named = len(tasks)
     for s in specs:
         kind = TG.kind_of(s)
-        if kind == "row":
-            tasks.append(("row", s, lambda s=s: CK.check_row(s, opts, memo=memo(), pins=pins)))
-        elif kind == "sidecar":
+        if kind == "sidecar":
             found, tpls = TG.sidecar_targets(s)
             for fid, fn in found.items():
                 tasks.append(("definition", fid, lambda fn=fn: CK.check_definition(fn, opts, memo=memo(), pins=pins, as_call=as_call),
@@ -1081,14 +1076,13 @@ def progress_row(r: dict, holds: dict[str, tuple[str, str]]) -> dict:
 
 def target_line(r: dict, holds: dict[str, tuple[str, str]]) -> str:
     """Target ``r``'s line in the log: its word (`_status`), and its ``failures`` those the verdict counts (`checks.counted`)."""
-    across = (r.get("partition") or {}).get("recomputed_across")
     qc = (r.get("partition") or {}).get("q_call") or {}
     call = (f" q_call={qc['units']}u/{qc['committed_bits']}b" if "units" in qc else
             f" q_call=refused:{qc['inapplicable'].get('why')}" if "inapplicable" in qc else "")
     if r.get("mode") == BC.CHECK:
         call += f" by-calls: {len((r.get('by_calls') or {}).get('callees', []))} callees, not lowered whole"
     return (f"{_status(r, holds)} {r['kind']:10s} {r['target'][:90]}  failures={CK.counted(r, holds)[0]} "
-            f"unchecked={len(r['warnings'])}" + (f" recomputed_across={across}" if across else "") + call + f" ({_where_time_went(r)})")
+            f"unchecked={len(r['warnings'])}" + call + f" ({_where_time_went(r)})")
 
 
 def _checked_all(tasks: list[tuple], specs: list[str], opts: CK.Options, everything: bool, as_call: bool | None, log, jobs: int,
@@ -1844,7 +1838,8 @@ def verdict(rep: dict, *, out: Path | None, fail_on_warnings: bool = False, what
     """Print the report's verdict, each failure, each warning, each range rule a spot of which the run checked
     (`ranges.section`; a shard's report has none, since the rule's other spots may be in other shards) and a last line counting
     ``what`` (default: its targets); write the report to ``out``; and return the exit status.  A rule that doesn't hold fails
-    nothing itself: a failed spot is its own target's failure, and a run may check only some spots."""
+    nothing itself: a failed spot is its own target's failure, and a run may check only some spots; a rule with unchecked spots
+    and no failed one prints nothing here (the report's ``ranges`` keeps its ``missing``)."""
     s = rep["summary"]
     for name in s["failure_names"]:
         print(f"FAIL {name}")
@@ -1855,14 +1850,14 @@ def verdict(rep: dict, *, out: Path | None, fail_on_warnings: bool = False, what
     if "shard" not in rep and (rs := RG.section(rep["targets"])):
         rep["ranges"] = rs
         for r in rs:
-            why = [f"{len(r['failed'])} failed"] * bool(r["failed"]) + [f"{len(r['missing'])} not checked"] * bool(r["missing"])
+            if r["missing"] and not r["failed"]:
+                continue
             skipped = sorted({c for cs in r["unchecked"].values() for c in cs})
             print(f"circuit-check: range {r['rule']}: {len(r['spots'])} spot(s), "
-                  + ("holds" if r["holds"] else f"does not hold ({', '.join(why)}; --ranges checks them all)")
+                  + ("holds" if r["holds"] else f"does not hold ({len(r['failed'])} failed; --ranges checks them all)")
                   + (f"; {len(r['unchecked'])} spot(s) passed without running {', '.join(skipped)}" if skipped else ""))
     if out:
         out.write_text(json.dumps(rep, indent=1, default=str) + "\n")
-    across = s.get("recomputed_across") or {}
     refused = s.get("q_call_refused") or {}
     v = s.get("vectors") or {}
     if any(v.get(c, {}).get("count") for c in CK.VECTOR_CLASSES):
@@ -1873,7 +1868,6 @@ def verdict(rep: dict, *, out: Path | None, fail_on_warnings: bool = False, what
     u = s["unchecked"]
     print(f"circuit-check: {what}, {s['failures']} failure(s), {len(s.get('block_held', {}))} held past the block, "
           f"{u['items']} unchecked (warnings, which never fail) on {u['definitions']} Definition(s)"
-          + (f", {len(across)} Boolean Call(s) recomputing {sum(across.values())} gate(s) across units (Q_word v2)" if across else "")
           + (f", {len(refused)} Definition(s) Q_call v1 refuses" if refused else "")
           + (f", report {out}" if out else ""))
     return 1 if s["failures"] or (fail_on_warnings and s["warnings"]) else 0

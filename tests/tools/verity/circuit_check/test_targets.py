@@ -118,51 +118,6 @@ def test_a_definition_valued_static_parses_to_the_definition_it_names_recursivel
     assert TG.definition(mid.id) is mid and TG.definition(exact.id) is exact
 
 
-def test_a_composites_lift_parses_to_the_lift_a_body_calling_it_binds(monkeypatch):
-    """``circuit-check 'Lifted[MoeRouterTopK_v1]_v2{E=4,TOPK=2,VPT=2,ORD=0}'`` failed with ``'CompositeDefinition' object has no
-    attribute 'params'`` in a process where no body had lifted the composite yet, while ``--all`` checks it.  Named, a composite's
-    lift is the very specialization a body that calls the composite binds (`lifted.lift_def`), and checks; a lift its id doesn't
-    name (`MoeFfnFixed`'s is by hand) is refused by name; without the catalog."""
-    from verity.circuits.defs import REGISTRY, bind
-    from verity_vllm.definitions.registry import lifted as L
-    from verity_vllm.definitions.registry import moe, ref_prims
-
-    from circuit_check import checks as CK
-
-    TG.load_registries()
-    _no_catalog(monkeypatch)
-    fresh = {"ArgmaxStepF32_v1", "MoeRouterTopK_v1"}
-    monkeypatch.setattr(L, "_LIFTED_COMPOSITES", {k: v for k, v in L._LIFTED_COMPOSITES.items() if k not in fresh})
-    monkeypatch.setattr(L, "_UNLIFTED_OF", dict(L._UNLIFTED_OF))
-    monkeypatch.setattr(REGISTRY, "defs", {k: v for k, v in REGISTRY.defs.items() if k not in {f"Lifted[{f}]_v2" for f in fresh}})
-    step = TG.definition("Lifted[ArgmaxStepF32_v1]_v2{ORD=0}")
-    router = TG.definition("Lifted[MoeRouterTopK_v1]_v2{E=4,TOPK=2,VPT=2,ORD=0}")
-    assert step is L.lift_def(bind(ref_prims.ArgmaxStepF32))
-    assert router is L.lift_def(bind(moe.MoeRouterTopK, E=4, TOPK=2, VPT=2))
-    assert CK.check_definition(step, as_call=False)["failures"] == []
-    with pytest.raises(LookupError, match=r"Lifted\[MoeFfnFixed_v1\]_v2 names no Definition: MoeFfnFixed_v1's lift is LMoeFfn_v1"):
-        TG.definition("Lifted[MoeFfnFixed_v1]_v2{E=8,TOPK=2,VPT=8,H=16,I=16,ORD=0}")
-
-
-def test_a_composites_lift_names_the_owner_of_its_pins(monkeypatch):
-    """A traced check looks its target's id up in the ``digests`` pins, and the reads it records place that pin in its owner's
-    file (`sidecars.pin_owner`, from the id alone: `sidecars.named`).  A composite's lift is `lifted.lift_composite` of the
-    composite, the lifted module's; the on-demand ``Lifted[...]_v2`` family lifts primitives only, and made from it,
-    ``Lifted[ArgmaxStepF32_v1]_v2``'s pin raised ``'CompositeDefinition' object has no attribute 'params'``, which killed the
-    target's check in ``--all``.  A lift its id doesn't name (`MoeFfnFixed`'s is by hand) names no owner."""
-    from verity_vllm.definitions.registry import lifted as L
-    from verity_vllm.definitions.registry import ref_prims
-
-    from circuit_check import sidecars as SC
-
-    TG.load_registries()
-    _no_catalog(monkeypatch)
-    assert SC.named("Lifted[ArgmaxStepF32_v1]_v2") is L.lift_composite(ref_prims.ArgmaxStepF32)
-    assert SC.pin_owner("digests", "Lifted[ArgmaxStepF32_v1]_v2{ORD=0}") == L.__name__
-    assert SC.named("Lifted[MoeFfnFixed_v1]_v2") is None
-    assert SC.pin_owner("digests", "Lifted[MoeFfnFixed_v1]_v2{E=8,TOPK=2,VPT=8,H=16,I=16,ORD=0}") is None
-
-
 def test_the_pouw_h1_tile_roots_parse_from_their_ids(monkeypatch):
     """`PouwH1Tile`'s roots (its sidecar's bindings of each version: ``EXACT=GemmAccumulatorS8_v2{K=64,DOT=...}`` and
     the tile's cells) can be targeted by id: each parses to the very Definition the sidecar binds, without building it
@@ -170,7 +125,7 @@ def test_the_pouw_h1_tile_roots_parse_from_their_ids(monkeypatch):
     TG.load_registries()
     _no_catalog(monkeypatch)
     (make,) = [make for units, make in TG._root_bindings("_pouw_roots") if units[0].startswith(
-        "verity.protocols.resource_accounting.compute.pouw.prover.circuit.h1tile.circuit-check#")]
+        "verity.protocols.accounting.compute.pouw.prover.circuit.h1tile.circuit-check#")]
     roots = make()
     if not roots:
         pytest.skip("PouwH1Tile is not registered on this tree (no circuit.segment)")
@@ -193,7 +148,7 @@ def test_a_record_static_a_catalog_root_binds_parses_without_the_catalog(monkeyp
     monkeypatch.setattr(TG, "_RECORDS", {})
     monkeypatch.setattr(TG, "_LOOKED", set())
     roots = {fn.id: fn for fn in TG.binding_roots() if re.search(r"=\{[0-9a-f]{12}\}", getattr(fn, "id", ""))}
-    assert {"GfResiduals_v1", "Serve_v1", "StepBody_v1"} <= {fid.split("{")[0] for fid in roots}
+    assert {"GfResiduals_v1", "Serve_v1"} <= {fid.split("{")[0] for fid in roots}
     for fid, fn in roots.items():
         assert TG.definition(fid) is fn
     with pytest.raises(pytest.fail.Exception, match="the catalog was built"):
@@ -201,8 +156,7 @@ def test_a_record_static_a_catalog_root_binds_parses_without_the_catalog(monkeyp
 
 
 def test_a_vocabulary_kind_that_does_not_bind_leaves_the_call_families_refused_by_name(monkeypatch):
-    """A kind left out of `word_call_families` would make every check of its family judge the partition as no Call's, and
-    `test_every_call_the_suite_checks_is_partitioned` pass without it."""
+    """A kind left out of `word_call_families` would make every check of its family judge the partition as no Call's."""
     monkeypatch.setattr(TG, "_SHORT", {})
     monkeypatch.setattr(TG, "_BOUND", {})
     monkeypatch.setattr(TG, "templates", lambda: [])
@@ -239,20 +193,9 @@ def test_a_root_function_with_its_bindings_beside_it_is_made_from_them_and_names
     assert units == ("syn.circuit-check#_lone_roots",) and make() == [made] and errors == [("b", "KeyError: 'K'")]
 
 
-def test_a_request_program_is_read_by_the_one_sidecar_that_defines_its_reader(monkeypatch):
-    _binding_files(monkeypatch, a={"request_program": lambda path: ("P", "Q", path)}, b={})
-    assert TG.request_program("build/instances.json.gz") == ("P", "Q", "build/instances.json.gz")
-    _binding_files(monkeypatch, a={}, b={})
-    with pytest.raises(ValueError, match="x: a request Program is read by the one sidecar .* 0 that .* do: none"):
-        TG.request_program("x")
-    _binding_files(monkeypatch, a={"request_program": len}, b={"request_program": len})
-    with pytest.raises(ValueError, match=r"2 that .* do: a.circuit-check#, b.circuit-check#"):
-        TG.request_program("x")
-
-
 def test_a_struct_slots_split_is_read_by_the_one_sidecar_that_defines_its_reader(monkeypatch):
-    """`structural_slots` reads a split as the row check reads a request Program, importing nothing of Flock: the sidecar
-    beside `verity_flock.struct_slots` defines the reader, and a tree with none or two is refused by name."""
+    """`structural_slots` reads a split importing nothing of Flock: the sidecar beside `verity_flock.struct_slots` defines the
+    reader, and a tree with none or two is refused by name."""
     import ast
 
     from circuit_check import sidecars as SC
@@ -281,7 +224,8 @@ def test_each_hook_is_read_from_the_one_sidecar_that_defines_it(monkeypatch, nam
     which is then empty."""
     from circuit_check import sidecars as SC
 
-    assert len(SC.handing(name)) == 1, [mod for mod, _m in SC.handing(name)]
+    handed = SC.handing(name)
+    assert len(handed) == 1 or (name in TG.OPTIONAL and not handed), [mod for mod, _m in handed]
     hand = object()
     for found, want in (([("a", types.SimpleNamespace(**{name: hand}))], hand),
                         ([], dict if name in TG.OPTIONAL else "0 that .* do: none"),

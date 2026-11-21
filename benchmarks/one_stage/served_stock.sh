@@ -7,10 +7,10 @@
 # scheme's order release-order (--protocols-config under its name) and --window-requests SLOTS, and --window-steps
 # WINDOW_STEPS when it is set (unset: not passed), under served_verdicts.sh's engine environment
 # (VLLM_BATCH_INVARIANT=1, eager), then LOADS loads of `adapters/vllm/tools/served_run/serve_load.py --varied` with served_verdicts.sh's
-# REQUESTS, RATE, PROMPTS, MAX_TOKENS and SEED, each under a release run of its own. With FIXED (unset: the varied load) each
-# load is served_verdicts.sh's LOAD=fixed instead, `serve_load.py --fixed FIXED --prompt-range PROMPTS --window-steps
-# WINDOW_STEPS` with SEED: FIXED requests of PROMPTS tokens, each with ignore_eos and max_tokens WINDOW_STEPS, which FIXED
-# needs (REQUESTS, RATE and MAX_TOKENS unused). The first load is the composed run's one load after its endpoint listens; later ones are warm.
+# REQUESTS, RATE, PROMPTS, MAX_TOKENS and SEED, each under a release run of its own. With DATASET (unset: the varied load)
+# each load is served_verdicts.sh's LOAD=dataset instead, the input dataset DATASET at TIMING, which DATASET needs, sent by
+# `verity_vllm.inputs.sender` (REQUESTS, RATE, PROMPTS, MAX_TOKENS and SEED unused). The first load is the composed run's
+# one load after its endpoint listens; later ones are warm.
 # What the composed run has and this doesn't: the Commit (committer, taps, GPU tree, seal), H1, any SERVE_ARGS subprotocol, and
 # the weights registration before the load. Each lifetime's --out is a serve dir on the node, SERVE_ROOT/runs/RUN/<lifetime>:
 # serve.json, advice_trace.jsonl (the scheduler's step trace with wall times), summary.json, pauses.jsonl, load-<j>.jsonl,
@@ -35,10 +35,10 @@ VENV=${VENV:-/workspace/cp/venv312}
 REPO=${REPO:-verity-int8/Llama-3.2-1B-INT8} REV=${REV:-15b0976d400d796ee589e7737d03a919526bf800} PRECISION=${PRECISION:-verity_int8}
 PORT=${PORT:-18191} SLOTS=${SLOTS:-4} PROMPTS=${PROMPTS:-16:24} MAX_TOKENS=${MAX_TOKENS:-4} RATE=${RATE:-1000} SEED=${SEED:-1}
 REQUESTS=${REQUESTS:-$SLOTS} MAX_MODEL_LEN=${MAX_MODEL_LEN:-512} MNBT=${MNBT:-512} REPS=${REPS:-5} LOADS=${LOADS:-3} WARM=${WARM:-1}
-FIXED=${FIXED:-} WINDOW_STEPS=${WINDOW_STEPS:-}
+DATASET=${DATASET:-} TIMING=${TIMING:-} WINDOW_STEPS=${WINDOW_STEPS:-}
 export PY=$VENV/bin/python HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1
 export CUDA_HOME=${CUDA_HOME:-$(python3 "$TREE/benchmarks/kernels/machine.py" toolkit 13.0)}
-export PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/adapters/torch:$TREE/tools/config:$TREE/verity/protocols/proofs/flock/prover/python:$TREE/tools/research/src
+export PYTHONPATH=$TREE:$TREE/library/datasets:$TREE/adapters/vllm:$TREE/adapters/torch:$TREE/tools/config:$TREE/verity/protocols/proof/flock/prover/python:$TREE/tools/research/src
 ROOT=${SERVE_ROOT:-${TMPDIR:-/tmp}/served-stock}
 export PRED=${PRED:-$ROOT/predicted/${RESEARCH_RUN_ID:-local}}
 PRIV=$ROOT/runs/${RESEARCH_RUN_ID:-local}; mkdir -p "$PRIV"; export PRIV
@@ -47,14 +47,15 @@ export TRITON_CACHE_DIR=$ROOT/cache/triton VLLM_CACHE_ROOT=$ROOT/cache/vllm VLLM
 serve() {  # under the lease: lifetime $1's (rep-<i> or warm-<i>) endpoint, its LOADS loads, the endpoint stopped
   export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
   local D=$ROOT/runs/${RESEARCH_RUN_ID:-local}/$1 srv up=0 rc=0 j release ws=()
-  local load=(--varied "$REQUESTS" --rate "$RATE" --max-tokens "$MAX_TOKENS")
-  [ -n "$FIXED" ] && load=(--fixed "$FIXED" --window-steps "$WINDOW_STEPS")
+  local load=("$TREE/adapters/vllm/tools/served_run/serve_load.py" --model "$REPO" --varied "$REQUESTS" --rate "$RATE"
+    --max-tokens "$MAX_TOKENS" --prompt-range "$PROMPTS" --seed "$SEED")
+  [ -n "$DATASET" ] && load=("$TREE/adapters/vllm/tools/served_run/inputs.py" send --dataset "$DATASET" --timing "$TIMING")
   [ -n "$WINDOW_STEPS" ] && ws=(--window-steps "$WINDOW_STEPS")
   if [ -n "${NOT_AFTER:-}" ] && [ "$(date -u +%s)" -gt "$(date -u -d "$NOT_AFTER" +%s)" ]; then
     echo "$1: not started, past NOT_AFTER $NOT_AFTER" | tee -a "$OUT/stock.txt"; return 11
   fi
   mkdir -p "$D"
-  local na=network-attester; "$PY" -m verity.protocols.compose.schemes "$na" settings > /dev/null || return 9
+  local na=network-attester; "$PY" -m verity.protocols.run.schemes "$na" settings > /dev/null || return 9
   cd "$TREE/adapters/vllm" || return 9
   "$PY" -m verity_vllm.pipeline.cli serve-openai --model "$REPO" --revision "$REV" --out "$D" --port "$PORT" \
     --precision "$PRECISION" --run-id "${RESEARCH_RUN_ID:-local}-$1" --no-commit --required-manifest "$PRED/manifest.json" \
@@ -74,8 +75,7 @@ serve() {  # under the lease: lifetime $1's (rep-<i> or warm-<i>) endpoint, its 
   fi
   for j in $(seq 1 "$LOADS"); do
     release=$("$PY" -c 'import uuid; print(uuid.uuid4().hex)')
-    "$PY" "$TREE/adapters/vllm/tools/served_run/serve_load.py" --port "$PORT" --model "$REPO" "${load[@]}" --prompt-range "$PROMPTS" \
-      --release "$release" --seed "$SEED" --out "$D/load-$j.jsonl" > "$D/load-$j.log" 2>&1 || rc=$?
+    "$PY" "${load[@]}" --port "$PORT" --release "$release" --out "$D/load-$j.jsonl" > "$D/load-$j.log" 2>&1 || rc=$?
     echo "$1 LOAD $j (exit $rc, release run $release): $(tail -1 "$D/load-$j.log" | sed -E 's/, prompts .*//' | cut -c1-300)" \
       >> "$PRIV/stock.txt"
     echo "$1 LOAD $j: exit $rc" | tee -a "$OUT/stock.txt"
@@ -97,11 +97,10 @@ reps() {
 }
 
 if [ "${1:-}" = reps ]; then reps; exit $?; fi
-for v in FIXED WINDOW_STEPS; do
-  [[ -z ${!v} || ${!v} =~ ^[1-9][0-9]*$ ]] || { echo "PREFLIGHT: $v is a positive integer or unset" | tee -a "$OUT/stock.txt"; exit 3; }
-done
-[ -z "$FIXED" ] || [ -n "$WINDOW_STEPS" ] \
-  || { echo "PREFLIGHT: FIXED needs WINDOW_STEPS, each request's max_tokens" | tee -a "$OUT/stock.txt"; exit 3; }
+[[ -z $WINDOW_STEPS || $WINDOW_STEPS =~ ^[1-9][0-9]*$ ]] \
+  || { echo "PREFLIGHT: WINDOW_STEPS is a positive integer or unset" | tee -a "$OUT/stock.txt"; exit 3; }
+[ -z "$DATASET" ] || [ -n "$TIMING" ] \
+  || { echo "PREFLIGHT: DATASET needs TIMING, at-once or rate:R" | tee -a "$OUT/stock.txt"; exit 3; }
 { id -un; hostname; git -C "$TREE" rev-parse HEAD 2>/dev/null; nproc; nvidia-smi -L; echo "row $ROW"; } > "$PRIV/machine.txt" 2>&1
 git -C "$TREE" rev-parse HEAD 2>/dev/null | tee "$OUT/machine.txt"
 for f in "$ROW/manifest.json" "$PY"; do [ -e "$f" ] || { echo "PREFLIGHT: no $f" | tee -a "$OUT/stock.txt"; exit 3; }; done

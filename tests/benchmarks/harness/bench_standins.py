@@ -1,6 +1,10 @@
-"""The stand-ins the bench tests share: a fake engine and its factory, and a spec's preset, point and arms."""
+"""The stand-ins the bench tests share: a fake engine and its factory, a spec's preset, point and arms, and the machine
+they run on."""
 from __future__ import annotations
 
+from pathlib import Path
+
+from verity_bench import kit
 from verity_bench.vllm.arms import (
     Arm,
 )
@@ -14,12 +18,27 @@ from verity_bench.vllm.runner import (
     _token_digest,
 )
 
+MACHINES = Path(__file__).parent / "fixtures" / "machines"
+#: the processors the stand-in machine's record gives, which bound a point's host-quiet gate
+CPUS = kit.machine_cpus("one-card", directory=MACHINES)
+#: a timed rep's `host` on a quiet host: the run of record's load on the 16-processor H100 VM
+QUIET = {"loadavg_1m": 1.6, "involuntary_switches": 40}
+
+
+def on_stand_in_machine(monkeypatch, run_dir: Path, machine: str = "one-card") -> None:
+    """`run_dir` as `research run --on MACHINE` leaves it: the stand-in machine's record in its inputs/."""
+
+    (run_dir / "inputs").mkdir(exist_ok=True)
+    (run_dir / "inputs" / f"{machine}.toml").write_text((MACHINES / f"{machine}.toml").read_text())
+    monkeypatch.setenv("RESEARCH_MACHINE", machine)
+
 
 class FakeEngine:
     def __init__(self, arm, events, *, gate_ok=True, bad_tokens=False, kv_tokens=458_752, timed_digest=None,
-                 drift=0.0, timed_ok=True, per_pass_tokens=False):
+                 drift=0.0, timed_ok=True, per_pass_tokens=False, load=QUIET["loadavg_1m"]):
         self.arm, self.events, self.gate_ok, self.bad_tokens = arm, events, gate_ok, bad_tokens
         self.timed_digest, self.drift, self.timed_ok, self.per_pass_tokens = timed_digest, drift, timed_ok, per_pass_tokens
+        self.load = load
         self.identity = {
             "vllm_version": "0.fake+gd9105ea80",
             "kernel_digest": f"digest-{arm.id}",
@@ -58,6 +77,7 @@ class FakeEngine:
             },
             "spans": {"hashing": scale},
             "extras": {"share": scale / 10},
+            "host": {**QUIET, "loadavg_1m": self.load},
         }
 
     def close(self):
@@ -66,8 +86,9 @@ class FakeEngine:
 
 class FakeFactory:
     def __init__(self, *, resident_failure=None, gate_ok=True, bad_tokens=None, kv_tokens=None, timed_digest=None,
-                 drift=0.0, kv_after_gate=None, timed_ok=True, per_pass_tokens=()):
+                 drift=0.0, kv_after_gate=None, timed_ok=True, per_pass_tokens=(), load=None):
         self.events = []
+        self.load = load or {}
         self.per_pass_tokens = set(per_pass_tokens)
         self.resident_failure = resident_failure
         self.failed = False
@@ -89,7 +110,8 @@ class FakeFactory:
         return FakeEngine(arm, self.events, gate_ok=self.gate_ok,
                           bad_tokens=arm.id == self.bad_tokens,
                           kv_tokens=kv, timed_digest=self.timed_digest.get(arm.id), drift=self.drift,
-                          timed_ok=self.timed_ok, per_pass_tokens=arm.id in self.per_pass_tokens)
+                          timed_ok=self.timed_ok, per_pass_tokens=arm.id in self.per_pass_tokens,
+                          load=self.load.get(arm.id, QUIET["loadavg_1m"]))
 
 
 def inputs():

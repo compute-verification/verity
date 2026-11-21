@@ -57,7 +57,7 @@ from dataclasses import dataclass, field
 from typing import Any, cast
 
 import numpy as np
-from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul, Shape
+from verity.protocols.accounting.compute.pouw.verifier.protocol import Matmul, Shape
 
 from verity_torch.pouw.pearl_c.ends import _RunState, _Stages
 from verity_torch.pouw.pearl_c.host import fresh_into
@@ -150,7 +150,7 @@ class WholeCalls(_RunState):
     _prefetch_open: bool = False
     #: a commitment of each forward replayed whole beside the scheme's, while its ``enabled`` (with hashing): inside the
     #: capture, `stage(w, sh)` after each call's steps (and `prepare(w, sh)` outside it, in the warm-up); after each replay,
-    #: `after(calls, tiles_at)` on the replaying stream (verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/statement.py's `Statement`)
+    #: `after(calls, tiles_at)` on the replaying stream (verity/protocols/accounting/compute/pouw/prover/kernels/served_zk/statement.py's `Statement`)
     statement: Any = None
 
     def whole_key(self, retained: bool | None = None) -> tuple | None:
@@ -286,7 +286,7 @@ class WholeCalls(_RunState):
         self._slots_copied = self._slots_copied or torch.cuda.Event()
         self._slots_copied.record()
         for c in calls:
-            fresh_into(c.salts, c.m16)
+            fresh_into(c.salts, c.m16, salts=cur.salts)
         self._uploaded = s
         return staged
 

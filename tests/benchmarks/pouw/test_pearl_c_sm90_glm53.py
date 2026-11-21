@@ -1,12 +1,10 @@
 """GLM-5.3's linears under pearl-c-h100-v1-h3 (benchmarks/pouw/pearl_c_sm90/glm53.py): one TP8 rank's shapes from the
 checkpoint's config, the sm_90a kernels' domain verdict on each, the gap's formula against a Lean price twin, Llama-3.2-1B's
-(llama32_1b.py) beside them, the H200 session's shapes each model's table's, glm53_timing's slowdowns and --whole over a
-stand-in card, and glm53_passes' full check of a retained pass."""
+(llama32_1b.py) beside them, the H200 session's shapes each model's table's, and glm53_passes' full check of a retained
+pass."""
 
 from __future__ import annotations
 
-import contextlib
-import hashlib
 import importlib.util
 import json
 import os
@@ -74,8 +72,8 @@ def test_expert_parallel_brings_the_experts_into_the_domain():
 def test_gamma_is_the_lean_twins():
     """`Pouw.PearlC.pearlCGapSm120v1Cast32Rev1_8192`: v1 under rev1 (cap 1/400) at the sm_120 record, 8192³, the honest cast
     at 32 (24 over the credited 8), the gap 173561/22302500."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
-    from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_device import SM120
+    from verity.protocols.accounting.compute.pouw.prover.schemes import pearl_c as C
+    from verity.protocols.accounting.compute.pouw.prover.schemes.pearl_c_device import SM120
 
     s = C.PearlC(forming="v1", device=replace(SM120, cap=Fraction(1, 400)), hashing="h3")
     assert G.gamma(s, 8192, 8192, Fraction(24)) == Fraction(173561, 22302500)
@@ -112,34 +110,20 @@ def test_llama_linears_are_one_cards_and_all_in_the_domain():
 
 def test_h200_session_runs_the_tables_shapes():
     """h200.sh's run.py SHAPES are every in-domain (n, k) of its MODEL (`in_domain`, each model's list), at decode's 64 and
-    prefill's 8192; every step after the check runs at MODEL's linears; it times each linear under the serial schedule,
-    graphed and eager, and deferred-a, decode's forward whole (--whole, every in-domain shape) over llama32_1b's every layer
-    and one of glm53's, and prefill under the h3 chain beside the default one (TIMING=0: none of it), and after every lease
-    gives up the passes' rows over a debit cap, then verifies them at the verdict's samples and checks their outputs in full.
-    With LOCK_MHZ the timing runs at the card's locked clock, reset when the lease ends, the lock's outcome kept out of
-    rc.txt."""
+    prefill's 8192; the capture after the check runs at MODEL's linears; and after every lease it gives up the passes' rows
+    over a debit cap, then verifies them at the verdict's samples and checks their outputs in full."""
     sh = (HERE / "h200.sh").read_text()
-    listed = {m: (nks, int(layers)) for m, nks, layers in
-              re.findall(r'^\s*(\w+)\) NKS="([\dx ]+)"; LAYERS=\$\{LAYERS:-(\d+)\} ;;$', sh, re.M)}
-    T, llama = _timing(), _llama()
-    assert set(listed) == set(T.MODELS) and "MODEL=${MODEL:-glm53}" in sh
-    for model, mod in (("glm53", G), ("llama32_1b", llama)):
-        assert {tuple(map(int, x.split("x"))) for x in listed[model][0].split()} == set(mod.in_domain()), model
-    assert listed["llama32_1b"][1] == llama.CONFIG["L"] and listed["glm53"][1] == 1
+    listed = dict(re.findall(r'^\s*(\w+)\) NKS="([\dx ]+)" ;;$', sh, re.M))
+    assert set(listed) == {"glm53", "llama32_1b"} and "MODEL=${MODEL:-glm53}" in sh
+    for model, mod in (("glm53", G), ("llama32_1b", _llama())):
+        assert {tuple(map(int, x.split("x"))) for x in listed[model].split()} == set(mod.in_domain()), model
     assert 'for nk in $NKS; do\n  SHAPES="$SHAPES 64x$nk 8192x$nk"' in sh
     assert '"$D/glm53_passes.py" capture --model "$MODEL" --retain "$KEPT" --out "$O/passes"' in sh
     assert "KEPT=$(mktemp -d /tmp/pearlplus-glm53.XXXXXX)" in sh and """trap 'rm -rf "$S" "$KEPT"' EXIT""" in sh
-    assert '"$D/glm53_timing.py" --model "$MODEL" --out "$O" --graphs --schedule serial deferred-a >' in sh
-    assert '"$D/glm53_timing.py" --model "$MODEL" --whole --layers "$LAYERS" --out "$O/whole"' in sh
-    assert 'PEARLC_CHAIN=h3 "$PY" "$D/glm53_timing.py" --model "$MODEL" --out "$O/timing-h3" --m 2048 8192' in sh
     assert sh.index('"$D/glm53_passes.py" full --retain "$KEPT" --out "$O/passes" --jobs "$(nproc)"') > sh.index('echo "lease rc $?"')
     lease, volunteer = sh.index('echo "lease rc $?"'), sh.index('"$D/glm53_passes.py" volunteer --retain "$KEPT" --out "$O/passes" --jobs "$(nproc)"')
     verify = sh.index('"$D/glm53_passes.py" verify --retain "$KEPT" --out "$O/passes" --fast --draws "${DRAWS:-459}"')
     assert lease < volunteer < verify and _served_passes().DRAWS == 459
-    assert sh.index('"$D/glm53_passes.py" capture') < sh.index('[ "$TIMING" = 1 ] || exit 0') < sh.index('"$D/glm53_timing.py"')
-    lock, trap = sh.index('sudo -n nvidia-smi -i "$U" -lgc "$LOCK_MHZ,$LOCK_MHZ"'), sh.index('trap "sudo -n nvidia-smi -i $U -rgc')
-    assert trap < lock < sh.index('"$D/glm53_timing.py" --model "$MODEL" --out "$O" --graphs')
-    assert '-lgc exit $?" > "$O/clock.txt"' in sh and "kill \"$smi\"'" in sh
 
 
 @pytest.mark.parametrize("needed, volunteer, step, rc", [
@@ -170,297 +154,11 @@ def test_h200_session_gives_rows_up_exactly_while_the_verdict_rejects_one_over_i
     assert (said.read_text() if said.exists() else None) == (step and f"volunteer-needed: {needed}; VOLUNTEER={step}\n")
 
 
-def test_slowdowns_divide_by_the_fastest_stock_call_its_graph_and_the_plain_gemm_apart():
-    """A row's slowdowns: over the fastest stock arm that ran eagerly, over the fastest of their graphs, and over the fastest
-    plain arm, eager or graphed; a plain arm is never the stock divisor, and a divisor no arm of its kind ran is None."""
-    T = _timing()
-    med = {"pearlc": 6.0, "pearlc-nohash": 4.0, "deepgemm": 3.0, "cublaslt": 2.0, "deepgemm-graph": 1.5,
-           "cublaslt-gemm": 1.2, "cublaslt-gemm-graph": 1.0}
-    got = T.slowdowns(med, {"pearlc": None}, ["deepgemm", "cutlass", "cublaslt"], {"cublaslt-gemm": None})
-    assert got == {"fastest_stock": "cublaslt", "slowdown": 3.0, "slowdowns": {"pearlc": 3.0}, "slowdown_nohash": 2.0,
-                   "fastest_stock_graphed": "deepgemm-graph", "slowdowns_graphed": {"pearlc": 4.0},
-                   "fastest_plain": "cublaslt-gemm-graph", "slowdowns_plain": {"pearlc": 6.0}}
-    none = T.slowdowns({"pearlc": 6.0, "pearlc-nohash": 4.0}, {"pearlc": None}, [], {"cublaslt-gemm": None})
-    assert none["fastest_stock"] is none["slowdown"] is none["fastest_plain"] is none["slowdowns_graphed"] is None
-
-
-def _timing():
-    spec = importlib.util.spec_from_file_location("pearl_c_sm90_glm53_timing", HERE / "glm53_timing.py")
-    T = sys.modules[spec.name] = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(T)
-    return T
-
-
 def _served_passes():
     spec = importlib.util.spec_from_file_location("pearl_c_vllm_served_passes", HERE.parent / "pearl_c_vllm" / "served_passes.py")
     mod = sys.modules[spec.name] = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
-
-
-class Card:
-    """A stand-in GPU: a clock in ms that the work run on it advances, and the graph torch is capturing into, if any."""
-
-    def __init__(self):
-        self.t, self.capturing = 0.0, None
-
-    def launch(self, work):
-        if self.capturing is not None:
-            self.capturing.work.append(work)
-        else:
-            work()
-
-
-def _card(monkeypatch, torch) -> Card:
-    """torch.cuda's events, graphs and streams over a `Card`."""
-    card = Card()
-
-    class Event:
-        def __init__(self, enable_timing=False):
-            self.at = None
-
-        def record(self, stream=None):
-            self.at = card.t
-
-        def synchronize(self):
-            pass
-
-        def elapsed_time(self, end):
-            return end.at - self.at
-
-    class Graph:
-        def __init__(self):
-            self.work = []
-
-        def replay(self):
-            for f in self.work:
-                f()
-
-    @contextlib.contextmanager
-    def graph(g, stream=None):
-        card.capturing = g
-        try:
-            yield
-        finally:
-            card.capturing = None
-    stream = SimpleNamespace(wait_stream=lambda other: None)
-    monkeypatch.setattr(torch.cuda, "Event", Event)
-    monkeypatch.setattr(torch.cuda, "CUDAGraph", Graph)
-    monkeypatch.setattr(torch.cuda, "graph", graph)
-    monkeypatch.setattr(torch.cuda, "Stream", lambda device=None: stream)
-    monkeypatch.setattr(torch.cuda, "current_stream", lambda device=None: stream)
-    monkeypatch.setattr(torch.cuda, "synchronize", lambda device=None: None)
-    return card
-
-
-class Run:
-    """`PearlCDeviceRun`'s whole-capture surface over a `Card`: a call is 1 ms of GEMM and, with hashing, 0.5 ms of tile
-    hashing, which a deferred capture runs beside the next call, less 0.25 ms where it also defers A's tree
-    (``whole_defer_a``), and 0.25 ms more when made alone (its own graph's slot and launch).  A pass commits the calls its
-    GPU work ran, in order; `leak` makes the deferred work leave a call's leaves unwritten ("deferred"), or the poison in
-    them ("poison")."""
-
-    def __init__(self, card: Card, order: dict):
-        self.card, self.order, self.device = card, order, "cuda"
-        self.graphs, self.hashing, self.whole_defer, self.whole_defer_a, self.leak = True, True, False, False, None
-        self.log, self._whole, self.units, self.ran, self.poisoned = [], None, 0, [], False
-        self.repeat_at = None
-
-    def options(self):
-        return tuple(sorted(k for k, v in vars(self).items() if k.startswith("whole_") and v is True))
-
-    def epoch_calls(self):
-        return self.units
-
-    def whole_key(self):
-        return (self.hashing, self.options() if self.hashing else ()) if self.graphs else None
-
-    def whole_capture_begin(self, key):
-        self.log.append(("begin", key, self.hashing, self.options()))
-        self._whole = []
-
-    def whole_capture_end(self):
-        calls, self._whole = tuple(self._whole), None
-        self.log.append(("end", calls))
-        return calls
-
-    def gemm(self, w, x, W, bias):
-        m, captured = x.shape[0], self.card.capturing is not None
-        deferred = captured and self.whole_defer and self.hashing
-        if captured:
-            self._whole.append((w, m))
-        else:
-            self.log.append(("call", w, m, self._whole is not None))
-            self.units += 1
-        cost = 1.0 + 0.5 * (self.hashing and not deferred) + 0.25 * (not captured) - 0.25 * (deferred and self.whole_defer_a)
-        hashing = self.hashing
-
-        def work():
-            self.card.t += cost
-            leaked = deferred and (self.leak == "deferred" or (self.leak == "poison" and self.poisoned))
-            self.ran.append((w, m, hashing, leaked))
-        self.card.launch(work)
-        return x
-
-    def whole_replay(self, calls):
-        self.log.append(("replay", calls))
-        return False
-
-    def whole_replayed(self, calls):
-        self.units += len(calls)
-
-    def poison(self):
-        self.log.append(("poison",))
-        self.poisoned = True
-
-    def end_pass(self):
-        out = {"units": self.units, "hashing": self.hashing}
-        if self.hashing and self.units:
-            self.card.t += 0.125
-            out.update(transcript_root=hashlib.sha512(repr(self.ran).encode()).hexdigest(), tiles=4 * len(self.ran),
-                       activation_roots=hashlib.sha512(repr([r[:2] for r in self.ran]).encode()).hexdigest(),
-                       screened_rows=sum(r[1] for r in self.ran), failing_rows=0, unsure_rows=0)
-        self.log.append(("end_pass", self.units, self.hashing))
-        self.units, self.ran, self.poisoned = 0, [], False
-        return out
-
-
-def _whole_setup(monkeypatch):
-    torch = pytest.importorskip("torch")
-    T, card = _timing(), _card(monkeypatch, torch)
-    run = Run(card, {7: 0, 5: 1, 6: 2})
-    weights = {w: torch.zeros(8 * (w - 4), 4) for w in (5, 6, 7)}
-    xs = {w: torch.zeros(16, 4) for w in weights}
-
-    def stock(cost, refuse=False, fail=False):
-        def f(x):
-            if fail or (refuse and card.capturing is not None):
-                raise RuntimeError("operation not permitted when stream is capturing")
-            card.launch(lambda: setattr(card, "t", card.t + cost))
-        return {w: f for w in weights}
-    return T, run, weights, xs, {"cutlass": stock(0.25), "triton": stock(0.5, refuse=True), "deepgemm": stock(0.25, fail=True)}
-
-
-def test_whole_times_decodes_forward_captured_serial_deferred_and_as_served_beside_the_calls_one_at_a_time(monkeypatch):
-    """--whole's row: each capture sets its pass's hashing and whole-capture options before `whole_capture_begin`, warms up
-    outside the capture and captures every weight once in slot order; each pearlc sample is a fresh pass of `INNER` replays
-    (slots, graph, records); a stock forward torch can't capture runs eagerly, one whose warm-up fails is left out; and the
-    hashing arms' passes, and one of each from poisoned outputs, commit alike."""
-    T, run, weights, xs, stock = _whole_setup(monkeypatch)
-    row = T.whole(run, weights, xs, stock, reps=3)
-    assert row["ms"] == {"pearlc-calls": 3 * 1.75, "pearlc-whole": 3 * 1.5, "pearlc-deferred": 3.0,
-                         "pearlc-served-unsplit": 3.0, "pearlc-served": 2.25, "pearlc-served-shared": 2.25,
-                         "pearlc-whole-nohash": 3.0, "cutlass": 0.75, "triton": 1.5}
-    assert row["ms_per_call"]["pearlc-deferred"] == 1.0 and row["calls"] == 3 and row["m"] == 16
-    assert row["layers"] == 1 and row["ms_per_layer"] == row["ms"]
-    assert row["shapes"] == [[24, 4], [8, 4], [16, 4]]
-    assert row["saving"] == {nm: {"vs_calls": 1 - row["ms"][nm] / 5.25, "vs_whole": 1 - row["ms"][nm] / 4.5} for nm in T.SAVING}
-    assert row["fastest_stock"] == "cutlass" and row["slowdown"]["pearlc-deferred"] == 4.0
-    assert row["slowdown"]["pearlc-served"] == row["slowdown"]["pearlc-served-shared"] == 3.0
-    assert row["stock_graphed"] == {"cutlass": True, "triton": False, "deepgemm": False}
-    assert set(row["stock_errors"]) == {"triton", "deepgemm"} and len(row["runs"]["triton"]) == 3
-    assert row["pass_end_ms"] == {**dict.fromkeys(list(T.WHOLE)[:-1], 0.125), "pearlc-whole-nohash": 0}
-    assert row["commitments_equal"] and row["poisoned_equal"] and "commitments" not in row
-    assert row["commitment"]["units"] == 3 * T.INNER and row["commitment"]["screened_rows"] == 16 * 3 * T.INNER
-    begins = [e for e in run.log if e[0] == "begin"]
-    unsplit, served = ("whole_defer", "whole_fork_stats"), tuple(sorted(T.SERVED))
-    shared = tuple(sorted((*T.SERVED, "whole_pd_shared")))
-    assert begins == [("begin", (True, ()), True, ()), ("begin", (True, ("whole_defer",)), True, ("whole_defer",)),
-                      ("begin", (True, unsplit), True, unsplit), ("begin", (True, served), True, served),
-                      ("begin", (True, shared), True, shared), ("begin", (False, ()), False, ())]
-    at = run.log.index(begins[1])
-    assert run.log[at - 1][0] == "end_pass" and run.log[at + 1:at + 4] == [("call", w, 16, True) for w in (7, 5, 6)]
-    assert run.log[at + 4] == ("end", ((7, 16), (5, 16), (6, 16))) and run.log[at + 5][0] == "end_pass"
-    poisons = [i for i, e in enumerate(run.log) if e == ("poison",)]
-    assert len(poisons) == 6 and all(run.log[i - 1][0] == "end_pass" for i in poisons)
-    assert run.log[poisons[1] + 1:poisons[1] + 1 + T.INNER] == [("replay", ((7, 16), (5, 16), (6, 16)))] * T.INNER
-    assert (run.hashing, run.options()) == (True, ())
-
-
-def test_whole_nvtx_ranges_each_arms_forwards_in_a_pass_of_their_own_after_the_timed_reps(monkeypatch):
-    """--whole --nvtx: after the timed reps, every arm, pearlc and stock, makes `NVTX_FORWARDS` forwards, each in its own
-    range ``call whole ARM mM #i`` holding that forward's work alone, a pearlc arm's in a fresh pass ended after them; the
-    row's times and commitments are the row without it."""
-    torch = pytest.importorskip("torch")
-    T, run, weights, xs, stock = _whole_setup(monkeypatch)
-    keys = ("ms", "pass_end_ms", "commitment", "commitments_equal", "poisoned_equal")
-    plain = T.whole(run, weights, xs, stock, reps=3)
-    T, run, weights, xs, stock = _whole_setup(monkeypatch)
-    pushed, ranges = [], []
-    monkeypatch.setattr(torch.cuda.nvtx, "range_push", lambda x: pushed.append((x, run.card.t, len(run.log))))
-    monkeypatch.setattr(torch.cuda.nvtx, "range_pop", lambda: ranges.append((*pushed.pop(), run.card.t, len(run.log))))
-    row = T.whole(run, weights, xs, stock, reps=3, nvtx=True)
-    assert {k: row[k] for k in keys} == {k: plain[k] for k in keys} and not pushed
-    names = [*T.WHOLE, "cutlass", "triton"]
-    assert [r[0] for r in ranges] == [f"call whole {nm} m16 #{i}" for nm in names for i in range(T.NVTX_FORWARDS)]
-    for nm in names:
-        rs = [r for r in ranges if r[0].startswith(f"call whole {nm} ")]
-        assert all(r[3] - r[1] == pytest.approx(row["ms"][nm]) for r in rs)
-        if nm in T.WHOLE:
-            assert run.log[rs[0][2] - 1][0] == "end_pass" and run.log[rs[-1][4]][0] == "end_pass"
-            assert all(e[0] != "end_pass" for e in run.log[rs[0][2]:rs[-1][4]])
-
-
-def test_whole_served_arm_captures_as_the_served_arm_does_on_this_kernel():
-    """--whole's ``pearlc-served`` captures with the whole-capture options pearl_c_vllm's served arm runs on pearl_c_sm90
-    (`PearlCWholeArm.run_options` less its pearl_c_sm120-only ones), and `OPTIONS` names every whole-capture option
-    `whole_options` takes but the pass end's and pearl_c_sm120's B̃ prefetch, so a new served option fails here."""
-    import inspect
-
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.lanes import whole_options
-    spec = importlib.util.spec_from_file_location("pearl_c_vllm_bench_arm", HERE.parent / "pearl_c_vllm" / "bench_arm.py")
-    B = sys.modules[spec.name] = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(B)
-    T, arm = _timing(), B.PearlCWholeArm
-    takes = set(inspect.signature(whole_options).parameters) - {"entry", "kernel"}
-    assert set(T.OPTIONS) == takes - {"lag_ends", "aside_ends", "whole_prefetch_b"}
-    assert {o for o in arm.run_options if o in takes - {"lag_ends", "aside_ends"} and o not in arm.RTX_ONLY} == set(T.SERVED)
-    assert T.WHOLE["pearlc-served"] == (True, T.SERVED) and set(T.SAVING) <= set(T.WHOLE)
-
-
-def test_whole_runs_layers_of_the_models_linears_in_the_layers_order(tmp_path, monkeypatch):
-    """--whole --layers L calls L layers' linears, each its own weights, in the layer's order (`in_domain`'s), and --layers
-    and --nvtx are refused without --whole."""
-    pytest.importorskip("torch")
-    T, got = _timing(), []
-
-    def device_run(shapes, *args):
-        got.append(shapes)
-        raise SystemExit(3)
-    monkeypatch.setattr(T, "device_run", device_run)
-    with pytest.raises(SystemExit) as e:
-        T.main(["--whole", "--model", "llama32_1b", "--layers", "16", "--out", str(tmp_path / "out")])
-    layer = list(_llama().in_domain())
-    assert e.value.code == 3 and len(layer) == 4 and got == [layer * 16]
-    for args in (["--layers", "2"], ["--nvtx"]):
-        with pytest.raises(SystemExit) as e:
-            T.main([*args, "--out", str(tmp_path / "calls")])
-        assert e.value.code == 2 and not (tmp_path / "calls").exists()
-
-
-@pytest.mark.parametrize("leak", ["deferred", "poison"])
-def test_whole_names_a_deferred_capture_that_commits_otherwise(monkeypatch, leak):
-    """A deferred capture whose passes commit other bytes than the calls one at a time, always or only from poisoned outputs,
-    is flagged, with every arm's commitments in the row."""
-    T, run, weights, xs, stock = _whole_setup(monkeypatch)
-    run.leak = leak
-    row = T.whole(run, weights, xs, stock, reps=2)
-    assert row["commitments_equal"] is (leak == "poison") and row["poisoned_equal"] is False
-    for nm in T.SAVING:
-        assert row["commitments"][nm][0] != row["commitment"] or leak == "poison"
-        assert row["poisoned"]["pearlc-whole"] == row["commitment"] != row["poisoned"][nm]
-
-
-@pytest.mark.parametrize("args", [["--m", "512"], ["--schedule", "deferred"], ["--shapes", "512:6144", "512:6144"],
-                                  ["--shapes", "512:6144", "--layers", "2"], ["--layers", "0"],
-                                  ["--model", "llama32_1b", "--m", "8192"], ["--model", "gpt2"]])
-def test_whole_refuses_what_it_cant_capture(tmp_path, args):
-    """--whole runs the serial schedule at M up to GRAPH_ROWS over shapes no two consecutive alike (a deferred call joins at
-    once after its own shape's), and refuses anything else before it touches a card."""
-    pytest.importorskip("torch")
-    with pytest.raises(SystemExit) as e:
-        _timing().main(["--whole", "--out", str(tmp_path / "out"), *args])
-    assert e.value.code == 2 and not (tmp_path / "out").exists()
 
 
 def _passes_module():
@@ -485,21 +183,22 @@ def retained(tmp_path_factory):
     """A retained pass in glm53_passes' layout, as `prefill` and as `decode` (the same pass): two calls of a test instance of
     pearl-c-h100-v1-h3 (k = 128, 16 x 16 tiles), one with 12 filler rows, proved by the scheme's reference prover and written
     as the device run writes them, and each call's served y from the scheme over the whole call as one tile (U and α), its
-    two FP32 products numpy's and its BF16 rounding torch's."""
+    two FP32 products numpy's and its BF16 rounding torch's, committed in its manifest as the served path does
+    (`served_y.retain_y`: load refuses a credited call with no y root)."""
     import random
     import shutil
 
     np = pytest.importorskip("numpy")
     torch = pytest.importorskip("torch")
     GP = _passes_module()
-    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/resource_accounting/compute/pouw/prover/clear"))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/accounting/compute/pouw/prover/clear"))
     import clear_work as CW
     from clear_audit import Prover
-    from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
+    from verity.protocols.accounting.compute.pouw.prover import schemes as pouw_schemes
     from verity_torch.pouw.pearl_c import run_device as PPDR
 
-    from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
-    from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
+    from verity.protocols.accounting.compute.pouw.verifier import core_check as CC
+    from verity.protocols.accounting.compute.pouw.verifier.audit import (
         HM96_SALT,
         HM96_TRANSCRIPT,
         HM96_WEIGHTS,
@@ -514,9 +213,10 @@ def retained(tmp_path_factory):
         weight_binding,
         weights_root,
     )
-    from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger
-    from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Context, Matmul, Shape, Tile
-    from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_work as PW
+    from verity.protocols.accounting.compute.pouw.verifier.coins import Challenger
+    from verity.protocols.accounting.compute.pouw.verifier.protocol import Context, Matmul, Shape, Tile
+    from verity.protocols.accounting.compute.pouw.prover.schemes import pearl_c_work as PW
+    from verity.protocols.accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
     from verity.commitments.merkle import tree_levels
 
     scheme = "pearl-c-h100-v1-h3"
@@ -591,7 +291,9 @@ def retained(tmp_path_factory):
         ops = s.encode(ctx, noise, x, rows(wrows[u.weight]), Tile(tuple(range(m)), tuple(range(n))))
         uu = np.array(s.checked(ctx, ops).u, np.uint32)[:rec.real_rows].view(np.float32)
         y = torch.from_numpy((uu * inv(ops.a.alpha)[:rec.real_rows, None]) * inv(ops.b.alpha)[None, :]).to(torch.bfloat16)
-        (d / "y" / f"{u.index}.bf16").write_bytes(y.view(torch.int16).numpy().tobytes())
+        served = y.view(torch.int16).numpy().tobytes()
+        (d / "y" / f"{u.index}.bf16").write_bytes(served)
+        matmuls[-1]["y"] = SY.retain_y(d, u.index, served, n, epoch.salt)
         y_words += y.numel()
     count = tr.commitment.count
     leaves = [prover.digest(t) for t in range(count)]
@@ -604,7 +306,7 @@ def retained(tmp_path_factory):
             "salts_t": PPDR._write(d / "salts_t", salts(prover._tree))}
     PPDR.write_manifest(d, head, weights, matmuls)
     (base / "coins.json").write_text(json.dumps(coins[0].to_json()) + "\n")
-    for name in GP.FULL:
+    for name in GP.PASSES:
         shutil.copytree(d, base / name)
     shutil.rmtree(d)
     return SimpleNamespace(base=base, count=count, y_words=y_words, GP=GP)
@@ -626,7 +328,7 @@ def test_full_checks_every_tile_and_every_served_y_word(retained, tmp_path):
     out, pub = _copy(retained, tmp_path)
     assert retained.GP.main(["full", "--retain", str(out), "--out", str(pub), "--jobs", "2", "--cross-check", "2"]) == 0
     res = json.loads((pub / "full.json").read_text())
-    for name in retained.GP.FULL:
+    for name in retained.GP.PASSES:
         r = res[name]
         assert r["ok"] and r["tiles"] == retained.count and r["failed"] == 0, r["line"]
         assert r["shapes"] == {"16x128": 2, "32x128": 2} and r["words"] == 32 * 16 + 16 * 32
@@ -661,15 +363,15 @@ def test_volunteer_leaves_each_pass_no_tile_over_an_inert_bound_and_its_transcri
     """`volunteer` runs `volunteer_pass` on prefill's and decode's passes: each pass's records then leave no tile over a
     debit cap, its commitment is the capture's, its manifest's records root is the one written, and every tile passes the
     verifier's check under it."""
-    from verity.protocols.resource_accounting.compute.pouw.verifier.coins import CoinCommitment
+    from verity.protocols.accounting.compute.pouw.verifier.coins import CoinCommitment
 
     out, pub = _copy(retained, tmp_path)
-    before = {n: json.loads((out / n / "manifest.json").read_text()) for n in retained.GP.FULL}
+    before = {n: json.loads((out / n / "manifest.json").read_text()) for n in retained.GP.PASSES}
     assert retained.GP.main(["volunteer", "--retain", str(out), "--out", str(pub), "--jobs", "1"]) == 0
     import verify_run as VR
 
     res, coins = json.loads((pub / "volunteer.json").read_text()), CoinCommitment.from_json(json.loads((pub / "coins.json").read_text()))
-    for name in retained.GP.FULL:
+    for name in retained.GP.PASSES:
         r, man = res[name], json.loads((out / name / "manifest.json").read_text())
         assert r["ok"] and r["left"] == [] and r["tiles"] == retained.count, r["line"]
         assert man["commitment"] == before[name]["commitment"] and man["records_root"] == r["records_root"]["after"]
@@ -684,11 +386,11 @@ def test_full_requires_the_served_y_unless_told_the_pass_has_none(retained, tmp_
     import shutil
 
     out, pub = _copy(retained, tmp_path)
-    for name in retained.GP.FULL:
+    for name in retained.GP.PASSES:
         shutil.rmtree(out / name / "y")
     assert retained.GP.main(["full", "--retain", str(out), "--out", str(pub), "--jobs", "1"]) == 1
     res = json.loads((pub / "full.json").read_text())
-    assert all("call 0: no served y of 20 x 16 BF16 words" in res[x]["error"] for x in retained.GP.FULL) and not res["ok"]
+    assert all("call 0: no served y of 20 x 16 BF16 words" in res[x]["error"] for x in retained.GP.PASSES) and not res["ok"]
     assert retained.GP.main(["full", "--retain", str(out), "--out", str(pub), "--jobs", "1", "--without-y"]) == 0
     res = json.loads((pub / "full.json").read_text())
-    assert all(res[x]["y_words"] == 0 and "served y not retained" in res[x]["line"] for x in retained.GP.FULL)
+    assert all(res[x]["y_words"] == 0 and "served y not retained" in res[x]["line"] for x in retained.GP.PASSES)

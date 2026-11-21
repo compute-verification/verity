@@ -32,8 +32,6 @@ from verity_vllm.program.frontend.target_profile import TargetProfile
 BATCH = [[[1, 17], [1, 231], [65, 0]], [[1, 18], [1, 65], [187, 0]]]
 GLM_B8 = os.path.join(WORKLOADS,
                       "glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__greedy__eager.json")
-DSV4_B8 = os.path.join(WORKLOADS,
-                       "dsv4-pro__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__greedy__eager.json")
 
 
 @pytest.fixture
@@ -151,8 +149,8 @@ def test_batch_dispatch_is_a_multi_request_row_without_batch_invariance():
 
 
 def test_the_batch_lists_a_step_in_admission_order():
-    """The order the scheduler keeps its running requests in and vLLM's runner its decodes (`vllm_dsv4._launch_decodes` reads a
-    decode's index there): by arrival, ties in the workload's order, whatever order the workload lists them in."""
+    """The order the scheduler keeps its running requests in and vLLM's runner its decodes: by arrival, ties in the workload's
+    order, whatever order the workload lists them in."""
     reqs = LC._requests(_wl([(20, 4, 2), (10, 4, 0), (30, 4, 2)], batch_invariant=False))
     assert LC.request_launch_batch(reqs, reqs[0])[0] == [[1, 11], [20, 0], [30, 0]]
 
@@ -170,21 +168,6 @@ def test_glm53_b8_every_request_sits_in_its_declared_batch():
             assert own in seqs
     steps = range(max(r["arrive_step"] + r["max_tokens"] for r in reqs))
     assert sorted({sum(LC.rows_at(q, e) for q in reqs) for e in steps}) == [1, 2, 3, 4, 6, 11, 12, 67, 189, 232, 393]
-
-
-def test_dsv4_b8_every_request_sits_in_its_declared_batch():
-    with open(workload_file(DSV4_B8)) as f:
-        w = json.load(f)
-    assert LC.batch_dispatch(w)
-    reqs = LC._requests(w)
-    for r in reqs:
-        batch = LC.shape_contexts(w)[(r["prompt_len"], r["max_tokens"] - 1)]
-        assert len(batch) == r["max_tokens"]
-        for s, seqs in enumerate(batch):
-            own = [r["prompt_len"], 0] if s == 0 else [1, r["prompt_len"] + s - 1]
-            assert own in seqs
-    steps = range(max(r["arrive_step"] + r["max_tokens"] for r in reqs))
-    assert sorted({sum(LC.rows_at(q, e) for q in reqs) for e in steps}) == [1, 2, 3, 4, 5, 6, 7, 14, 55, 129, 140, 203, 290]
 
 
 def test_launch_region_tags_the_traced_nodes_and_the_export_keeps_them(declared):
@@ -286,7 +269,7 @@ def test_a_batch_dispatch_request_program_needs_its_batch(tmp_path):
     for launch in (None, TG.parse_launch_context([65, 187]), TG.parse_launch_context("conflict")):
         res = run(str(tmp_path / "b"), 1, 8, "b1-eager-v3", "gloo", wrapper="request", LP=65, T=1, launch=launch, batch_dispatch=True)
         assert res["ok"] is False and res["unsupported"]["reason"] == "launch_context", res.get("unsupported")
-        assert "verity-vllm launch-context <workload> 65 1" in res["unsupported"]["hint"]
+        assert "cli.run(launch_context) <workload> 65 1" in res["unsupported"]["hint"]
 
 
 def test_the_batch_is_an_applicability_condition_only_when_declared():

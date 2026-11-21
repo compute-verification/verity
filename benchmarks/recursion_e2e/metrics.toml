@@ -1,19 +1,14 @@
-# This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
-# enforces it.
+# This directory's numbers, one [[metric]] each, by the rules of tests/test_metrics_registry.py,
+# which enforces them. `run.py` refuses, and `--on NODE` is no node, so the loop doesn't run them; their readings stand.
 
-# `record.py run` launches `run.py run`'s job as one recorded run on a CPU node (the default behind the ZK server: 85's CPU prover,
-# no GPU), a few hours at K = 4096, with record.py around job.sh, which writes both numbers from job.sh's result. Recursion
-# is rerun monthly. Its two numbers are the proof benchmarks' recursion result on the Metrics tab (top/proof-table-recursion-row):
-# `verity bench prove layers` prints that row and writes neither, since its seconds are a whole recursive run's, not a
-# proof block's.
 [[metric]]
 id = "benchmarks/recursion-run-seconds"
 title = "Recursive audit run time"
 owner = "benchmarks"
 unit = "s"
-axis = "Seconds an auditor waits for one recursive run behind the ZK server: the inner proof, V*'s staging, V*'s statements proved one at a time and Lean's checks."
+axis = "Seconds an auditor waits for one recursive run behind the ZK server: the inner proof, V*'s staging, V*'s statements proved one at a time and Lean's checks; the command refuses, as the old recursion's benchmark is gone, and the readings of record stand."
 better = "lower"
-command = "uv run python benchmarks/recursion_e2e/record.py run"
+command = "research run --on NODE --project verity --source . --cwd source -- uv run python benchmarks/recursion_e2e/run.py"
 every = "30d"
 goal = "top/proof-table-recursion-row"
 
@@ -22,8 +17,41 @@ id = "benchmarks/recursion-lean-verifier-seconds"
 title = "Recursive audit verifier time"
 owner = "benchmarks"
 unit = "s"
-axis = "Seconds the auditor's Lean verifier takes on one recursive run: every V* release, the inner run and its statement."
+axis = "Seconds the auditor's Lean verifier takes on one recursive run: every V* release, the inner run and its statement; the command refuses, as the old recursion's benchmark is gone, and the readings of record stand."
 better = "lower"
-command = "uv run python benchmarks/recursion_e2e/record.py run"
+command = "research run --on NODE --project verity --source . --cwd source -- uv run python benchmarks/recursion_e2e/run.py"
 every = "30d"
 goal = "top/proof-table-recursion-row"
+
+[[metric]]
+id = "benchmarks/recursion-core-years-world-year"
+title = "Recursive audit cost, world year"
+owner = "benchmarks"
+unit = "CPU core-years"
+axis = "CPU core-years to audit every machine of the world for a year by recursive sessions, one a machine a window, at the run of record's session; the command refuses, as the old recursion's benchmark is gone, and the readings of record stand."
+better = "lower"
+command = "research run --on NODE --project verity --source . --cwd source -- uv run python benchmarks/recursion_e2e/run.py"
+every = "30d"
+goal = "top/parked"
+
+[[metric]]
+id = "benchmarks/recursion-ks-error-log2-world-year"
+title = "Recursive audit soundness error"
+owner = "benchmarks"
+unit = "log₂ of error"
+axis = "Log₂ of the recursive sessions' knowledge-soundness error over the world's year, against the world's GPUs' SHA-512 calls, union-bounded over the year's sessions; the command refuses, as the old recursion's benchmark is gone, and the readings of record stand."
+better = "lower"
+command = "research run --on NODE --project verity --source . --cwd source -- uv run python benchmarks/recursion_e2e/run.py"
+every = "30d"
+goal = "top/parked"
+
+[[metric]]
+id = "benchmarks/recursion-stop-leak-bits-world-year"
+title = "Recursive audit stop leakage"
+owner = "benchmarks"
+unit = "bits"
+axis = "Bits the ZK server's stops can leak over the world's year, a stream a machine and a session a window, at the run of record's parts; the command refuses, as the old recursion's benchmark is gone, and the readings of record stand."
+better = "lower"
+command = "research run --on NODE --project verity --source . --cwd source -- uv run python benchmarks/recursion_e2e/run.py"
+every = "30d"
+goal = "top/parked"

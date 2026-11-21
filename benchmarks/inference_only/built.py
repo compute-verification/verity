@@ -51,7 +51,7 @@ H200 = {"compute_capability": (9, 0), "num_sms": load_card("h200-sxm-141gb", dir
         "int8_exact": "linears"}
 DIVISIONS = ("session", "position", "proof block")
 #: the inference-only policy's check, a Lake package
-PACKAGE = P.ROOT / "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean"
+PACKAGE = P.ROOT / "verity/protocols/policy/training_detection/inference_only/verifier/lean"
 
 
 def _declared() -> tuple[tuple[str, ...], str]:
@@ -88,11 +88,12 @@ def registered(model: str = MODEL) -> Any:
 
 
 def record(circuit: Any) -> tuple[dict[str, Any], dict[str, str]]:
-    """A circuit's record, as its description and its blocks, and θ as the pins that hold every registered weight."""
+    """A circuit's record (`interface.descriptor_record`, at `prove_path.py`'s default cap), which names the program digest
+    the block counts hold its templates to, and θ as the pins that hold every registered weight."""
+    from verity.commitments.periods import interface as IF
     from verity_vllm.check.weights_of_record import PARAM
 
-    doc = {**circuit.description(), "name": circuit.name, "partition": "",
-           "blocks": circuit.blocks.doc(sum(circuit.units.values()), "")}
+    doc = IF.descriptor_record(circuit, 64)
     return doc, {p: "00" for p in circuit.registered.params if p.split("/", 1)[0] == PARAM}
 
 
@@ -100,12 +101,11 @@ def block_work(cls: tuple[int, int, int], model: str) -> dict[str, int]:
     """One block's work: one slot of the class's fixed load (`window_class.Tables.schedule`) priced as
     `served_shares.step_macs` prices a served step, and its total in the policy's unit (`policy.TOTAL`)."""
     import served_shares as SS
-    import served_verdicts as SV
     from verity_vllm.program.predict.window_class import Tables
 
-    if model not in SS.MODELS or model not in SV.DECLARED:
-        raise ValueError(f"served_shares.MODELS and served_verdicts.DECLARED hold no shapes for {model!r}, so a block's "
-                         f"work isn't priced: add them there (they hold {sorted(SS.MODELS)})")
+    if model not in SS.MODELS:
+        raise ValueError(f"served_shares.MODELS holds no shapes for {model!r}, so a block's work isn't priced: add them "
+                         f"there (it holds {sorted(SS.MODELS)})")
     macs = dict.fromkeys(P.WORK, 0)
     for rows in Tables.schedule(P.class_of(cls)):
         mine = [r for r in rows if r[0] == 0]
@@ -117,17 +117,17 @@ def block_work(cls: tuple[int, int, int], model: str) -> dict[str, int]:
 def policy(doc: Mapping[str, Any], pins: Mapping[str, str]) -> dict[str, Any]:
     """The session policy of the record ``doc`` under θ = ``pins``: its block Definition and slots, `c` and `k`, the
     gate table and each template's gates a unit."""
-    from verity.circuits.ops.boolean.versions import gate_table
+    from verity.circuits import count as K
     # block_counts registers the vLLM adapter's catalog with the Boolean-versions lookup as it loads
     from verity_vllm.program.predict import block_counts as BC
 
-    fn, m, steps = BC.session(doc)
-    table, unpriced = gate_table([fn])
+    program, m, steps = BC.session(doc)
+    fn, table = program.fn, K.table(program)
     memo: dict = {}
     c, missing = BC.gates(fn, table, memo)
-    if unpriced or missing:
+    if missing:
         raise ValueError(f"{doc.get('name')}: a block reaches primitives the gate table doesn't price, so its gates "
-                         f"aren't known: {sorted({*unpriced, *missing})}")
+                         f"aren't known: {sorted(missing)}")
     import inference_only as IO
 
     by_template = {t: BC.gates(BC.resolve(t), table, memo)[0] for t, _ in doc["templates"]}
@@ -248,7 +248,7 @@ def need_lake() -> None:
 
 def lake_built(exe: str) -> Path:
     """The package's executable ``exe``, built first with `lake` under the tree's Lake build lock (`verifier.executable`)."""
-    from verity.protocols.proofs.spot.verifier.one_stage import verifier as V
+    from verity.protocols.proof.spot.verifier.one_stage import verifier as V
     if shutil.which("lake") is None:
         raise NoLake
     try:

@@ -23,5 +23,5 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # its figures through the session's sheets (which list every node file); the served circuits' Definitions
 # (`verity_vllm.definitions`) its tests import, with the package they sit in
 inputs = ["calibration/hardware/cards", "calibration/hardware/nodes", "calibration/hardware/architectures",
-          "benchmarks/poub_session/sheets.py", "tests/verity/protocols/resource_accounting/memory/poub/figures.json", "adapters/vllm/verity_vllm/__init__.py",
-          "adapters/vllm/verity_vllm/definitions", "benchmarks/datacenter"]
+          "benchmarks/poub_session/sheets.py", "tests/verity/protocols/accounting/memory/poub/figures.json", "adapters/vllm/verity_vllm/__init__.py",
+          "adapters/vllm/verity_vllm/definitions", "benchmarks/datacenter", "calibration/census/hardware.json"]

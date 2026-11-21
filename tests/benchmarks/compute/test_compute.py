@@ -498,7 +498,7 @@ def test_a_scheme_no_served_run_attaches_is_not_implemented():
       "LEAN": to("work", "credited", value=MACS["linears"] + 1)},
      ("Pearl+'s answer holds 136,230,993,921 MACs, more than the 136,230,993,920 of the linears of the policy's class: "
       "its passes are not one load of the class")),
-    ({"ANSWER": to("public", "work", "macs", value=2 * MACS["linears"])},
+    ({"ANSWER": to("public", "work", "checked_macs", value=2 * MACS["linears"])},
      "Pearl+'s answer holds 272,461,987,840 MACs, more than the 136,230,993,920 of the linears of the policy's class"),
 ])
 def test_a_record_that_cannot_give_the_models_macs_at_one_load_of_its_class_exits_2(store, tmp_path, capsys, edits, why):
@@ -629,13 +629,17 @@ def test_each_measurement_names_the_served_model_then_the_card_the_record_says_i
     assert len(got) == 8 and [m.get("member") for m in got] == [line] * 8
 
 
-def h200_site(devices: int):
-    """A registered site of one host with `devices` H200s, each naming the sheet its card file gives."""
+def site_of(sku: str, devices: int):
+    """A registered site of one host with `devices` cards of `sku`, each naming the sheet its card file gives."""
     from verity import device as S
-    sheet = S.Sheet.of_file(S.load_card("h200-sxm-141gb", directory=CARD_FILES))
+    sheet = S.Sheet.of_file(S.load_card(sku, directory=CARD_FILES))
     locs = [S.Loc("site", "site"), S.Loc("host", "host", "site")]
     locs += [S.Loc(f"gpu{i}", "device", "host", sheet=sheet.digest()) for i in range(devices)]
     return S.Site((sheet,), tuple(locs))
+
+
+def h200_site(devices: int):
+    return site_of("h200-sxm-141gb", devices)
 
 
 def test_capacity_is_the_registered_devices_peak_at_each_data_sheet_reading_times_the_span(store, tmp_path):
@@ -656,6 +660,15 @@ def test_capacity_is_the_registered_devices_peak_at_each_data_sheet_reading_time
     # with either missing, capacity and free are absent and say which
     assert {m["name"]: m.get("why") for m in C.amounts(doc, h200_site(2))}["capacity"] == f"absent: {C.NO_SPAN}"
     assert {m["name"]: m.get("why") for m in C.amounts(doc, None, Fraction(600))}["free"] == f"absent: {C.NO_SITE}"
+
+
+def test_a_card_whose_tensor_clock_is_no_ceiling_has_its_capacity_at_the_ceilings_clock():
+    """The H100's `clock.tensor` is a vendor's figure and no ceiling: its capacity at that reading is taken at `clock.sm`'s
+    1980 MHz, as at the other, while the H200's, whose `clock.tensor` is a ceiling, is at 1830."""
+    sm = 132 * 4096 * 1_980_000_000 * 600
+    assert C.capacity(site_of("h100-sxm-80gb", 1), Fraction(600)) == {"tensor": sm, "sm": sm}
+    assert C.capacity(site_of("h100-sxm-80gb", 1), Fraction(1, 10 ** 9)) == {"tensor": 1_070_531, "sm": 1_070_531}
+    assert C.capacity(h200_site(1), Fraction(600))["tensor"] == 132 * 4096 * 1_830_000_000 * 600
 
 
 def test_capacity_refuses_hardware_it_cannot_read_a_peak_off(tmp_path):
@@ -839,7 +852,7 @@ def test_per_call_reads_the_grid_form_of_an_answer_held_to_its_classs_fixed_load
     whole, credited = PASSES + 29_360_128, CREDITED - 1_000_000
 
     def held(give_up: int = 4_194_304, macs: int = whole) -> dict:
-        work = {"credited": credited, "macs": macs, "epsilon": "1/100", "give_up": give_up}
+        work = {"credited": credited, "checked_macs": macs, "epsilon": "1/100", "give_up": give_up}
         return {"ANSWER": to("public", "work", value=work), "LEAN": to("work", value=work)}
 
     store.add(RUN, a_record(tmp_path, **held()))
@@ -903,7 +916,7 @@ def head_record(tmp_path: Path, real_rows: int = 4, without: int | None = None, 
     for name in (C.ANSWER, C.LEAN):
         doc = json.loads((record / name).read_text())
         work = doc["public"]["work"] if name == C.ANSWER else doc["work"]
-        work.update(macs=totals["checked_macs"], credited=totals["credited"])
+        work.update(checked_macs=totals["checked_macs"], credited=totals["credited"])
         (record / name).write_text(json.dumps(doc))
     return record
 

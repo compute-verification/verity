@@ -165,6 +165,14 @@ def test_the_gathers_resolve_by_id_in_a_cold_decode() -> None:
     assert lookup_primitive(REGISTRY, "GatherF32x256_v1") is X.gather_f32(256)
 
 
+def test_the_e4m3_gathers_boolean_version_is_made_on_demand() -> None:
+    """`GatherE4m3x{V}_v1`'s Boolean version is a family the lookup makes from the id alone, as the other gathers', so a
+    Program over it builds in a process that never made `GatherE4m3x{V}_v2`."""
+    made = SW.made_on_demand("GatherE4m3x256_v1")
+    assert made is not None and made.id == "GatherE4m3x256_v2"
+    assert SW.boolean_version(X.gather_e4m3(256)).id == "GatherE4m3x256_v2"
+
+
 #: on bits: two tiles over two scale blocks (the step sm_120's or Hopper's), the GEMMs over a whole and a partial weight block, the
 #: gathers, and the pair forms over 3 experts
 BOOLEAN = [bind(BM.MoeExpertFp8BlockCoordinateV4, K=64, G=32, KB=32, SWAP=False, DOT=BG.BlackwellE4m3QmmaDot32),
@@ -203,11 +211,12 @@ def test_on_bits_agrees_with_its_word_view(target) -> None:
         assert not bad.size, f"{target.id}: {bad.size} of {len(r)} instances differ from {word.id}, first {bad[:5]}"
 
 
-def test_the_v2_forms_keep_their_word_views() -> None:
-    """The switch maps `_v1` to `_v2` and `_v3{DOT}` to `_v4{DOT on bits}`: a DOT form never stands for the Hopper-pinned `_v1`."""
+def test_a_dot_form_never_stands_for_the_hopper_pinned_v1() -> None:
+    """The switch maps `_v3{DOT}` to `_v4{DOT on bits}`, and refuses the Hopper-pinned `_v1`, which has no Boolean version."""
     v1 = bind(M.MoeExpertFp8BlockCoordinate, K=64, G=32, KB=32, SWAP=False)
     v3 = bind(M.MoeExpertFp8BlockCoordinateV3, K=64, G=32, KB=32, SWAP=False, DOT=HP)
-    assert SW.boolean_version(v1).id == "MoeExpertFp8BlockCoordinate_v2{K=64,G=32,KB=32,SWAP=False}"
+    with pytest.raises(SW.NoBooleanVersion, match="MoeExpertFp8BlockCoordinate_v1"):
+        SW.boolean_version(v1)
     assert SW.boolean_version(v3).id == "MoeExpertFp8BlockCoordinate_v4{K=64,G=32,KB=32,SWAP=False,DOT=HopperE4m3QgmmaDot32_v2}"
     with pytest.raises(ValueError, match="from 1 to 1024 experts"):
         BM.gather_e4m3(1025)

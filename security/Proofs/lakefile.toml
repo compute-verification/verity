@@ -20,11 +20,11 @@ path = ".."
 
 [[require]]
 name = "flock_verifier"
-path = "../../verity/protocols/proofs/flock/verifier"
+path = "../../verity/protocols/proof/flock/verifier"
 
 [[require]]
 name = "certifier_program"
-path = "../../verity/protocols/resource_accounting/network/attester/program/lean"
+path = "../../verity/protocols/accounting/network/attester/program/lean"
 
 [[require]]
 name = "core_randomness"
@@ -33,18 +33,18 @@ path = "../../verity/commitments/randomness"
 # V*'s circuits as core code (`VStar`), which the bridge (`Proofs.Flock.VBridge.OfVStar`) is stated over
 [[require]]
 name = "core_vstar"
-path = "../../verity/protocols/proofs/recursion/verifier/vstar_cli"
+path = "../../verity/protocols/proof/recursion/verifier/vstar_cli"
 
 # SPOT[Flock]'s sampled check and its two-stage form (`VStar.Recursive.Sampled`, `VStar.Recursive.SampledTwo`)
 [[require]]
 name = "core_vstar_recursive"
-path = "../../verity/protocols/proofs/spot_flock/verifier/lean"
+path = "../../verity/protocols/proof/spot_flock/verifier/lean"
 
 # SPOT's recursive configuration (`VStar.Recursive`), whose acceptance `Proofs.Properties.Verity.Recursive` relates to
 # `RecursiveKSAt`'s event
 [[require]]
 name = "spot_flock_recursion"
-path = "../../verity/protocols/proofs/spot_flock_recursion/verifier/lean"
+path = "../../verity/protocols/proof/spot_flock_recursion/verifier/lean"
 
 # The properties a proof here proves (`Properties`), stated against the code where that proof needs this package.
 [[require]]
@@ -59,9 +59,8 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.InferenceOnly", "Proofs.Slowd
   "Proofs.Flock.SpotFlock.AddressFacts.Row", "Proofs.Flock.SpotFlock.AddressFacts.RowRead",
   "Proofs.Flock.SpotFlock.AddressFacts.RowKind", "Proofs.Flock.SpotFlock.AddressFacts.RowGive",
   "Proofs.Flock.SpotFlock.AddressFacts.RowLeaf", "Proofs.Flock.SpotFlock.AddressFacts.RowInstance",
-  "Proofs.Flock.SpotFlock.AddressFacts.RowDraw", "Proofs.Flock.SpotFlock.AddressFacts.RowOf",
-  "Proofs.Flock.SpotFlock.AddressFacts.RowParse", "Proofs.Flock.SpotFlock.AddressFacts.RowLeaves",
-  "Proofs.Flock.SpotFlock.AddressFacts.RowTable", "Proofs.Flock.SpotFlock.AddressFacts.RowPlace",
+  "Proofs.Flock.SpotFlock.AddressFacts.RowDraw",
+  "Proofs.Flock.SpotFlock.AddressFacts.RowParse",
   "Proofs.Flock.SpotFlock.AddressFacts.Width", "Proofs.Flock.SpotFlock.AddressFacts.Copy",
   "Proofs.Flock.SpotFlock.AddressFacts.WidthOf", "Proofs.Flock.SpotFlock.AddressFacts.CopyOf",
   "Proofs.Flock.SpotFlock.AddressFacts.BitsIn", "Proofs.Flock.SpotFlock.AddressFacts.BitsOwn",
@@ -69,18 +68,7 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.InferenceOnly", "Proofs.Slowd
   "Proofs.Flock.SpotFlock.AddressFacts.CopyOut", "Proofs.Flock.SpotFlock.AddressFacts.PortsOnceOf",
   "Proofs.Flock.SpotFlock.AddressFacts.OfRuns", "Proofs.Flock.SpotFlock.AddressFacts.Connected",
   "Proofs.Flock.SpotFlock.Honest.Instance", "Proofs.Flock.SpotFlock.Honest.Wiring",
-  "Proofs.Flock.SpotFlock.Honest.Sits", "Proofs.Flock.SpotFlock.Honest.Any", "Proofs.Flock.SpotFlock.SampleBelow",
-  "Proofs.Flock.SpotFlock.Honest.AtHeldOf", "Proofs.Flock.SpotFlock.Honest.Checked", "Proofs.Flock.SpotFlock.Honest.Ref",
-  "Proofs.Flock.SpotFlock.InstanceStmt.TraceFacts", "Proofs.Flock.SpotFlock.InstanceStmt.TraceRows",
-  "Proofs.Flock.SpotFlock.InstanceStmt.TraceNetRows", "Proofs.Flock.SpotFlock.InstanceStmt.TraceDelta",
-  "Proofs.Flock.SpotFlock.InstanceStmt.TraceDaA", "Proofs.Flock.SpotFlock.InstanceStmt.TraceDaB",
-  "Proofs.Flock.SpotFlock.InstanceStmt.TraceDa", "Proofs.Flock.SpotFlock.InstanceStmt.Trace",
-  "Proofs.Flock.SpotFlock.InstanceStmt.TraceHolds", "Proofs.Flock.SpotFlock.InstanceStmt.TraceRegions",
-  "Proofs.Flock.SpotFlock.InstanceStmt.RelFacts", "Proofs.Flock.SpotFlock.InstanceStmt.RelParse",
-  "Proofs.Flock.SpotFlock.InstanceStmt.Rel", "Proofs.Flock.SpotFlock.InstanceStmt.AcceptsFixture",
-  "Proofs.Flock.SpotFlock.AddressFacts.RowSample", "Proofs.Flock.SpotFlock.AddressFacts.RowPublished",
-  "Proofs.Flock.SpotFlock.AddressFacts.RowFirst",
-  "Proofs.Flock.SpotFlock.AddressFacts.RowWires",
+  "Proofs.Flock.SpotFlock.SampleBelow",
   "Proofs.Properties.Pouw", "Proofs.Properties.Pouw.Check",
   "Proofs.Properties.Pouw.Commit", "Proofs.Properties.Pouw.LiveSalt", "Proofs.Properties.Pouw.LiveSalt.Ledger",
   "Proofs.Properties.Pouw.LiveSalt.Canon", "Proofs.Properties.Pouw.LiveSalt.Coin", "Proofs.Properties.Pouw.Strata",
@@ -101,7 +89,7 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.InferenceOnly", "Proofs.Slowd
   "Proofs.Properties.InferenceOnly.OperandsResolve", "Proofs.Properties.InferenceOnly.Agrees",
   "Proofs.Properties.Spot", "Proofs.Properties.Spot.Halt", "Proofs.Properties.Spot.Interval",
   "Proofs.Properties.Spot.FactorUpper", "Proofs.Properties.Spot.TwoStageCheck", "Proofs.Properties.Spot.Bits",
-  "Proofs.Properties.Spot.Wires", "Proofs.Properties.Spot.Edges", "Proofs.Properties.Spot.Tables", "Proofs.Properties.Core.Evaluate",
+  "Proofs.Properties.Spot.Wires", "Proofs.Properties.Spot.Edges", "Proofs.Properties.Spot.Tables", "Proofs.Properties.Verity.Sampled.PortsHeld", "Proofs.Properties.Spot.RootsRecord", "Proofs.Properties.Core.Evaluate",
   "Proofs.Properties.Certifier.Records", "Proofs.Properties.Spot.PlanCheck", "Proofs.Properties.Spot.Units",
   "Proofs.Properties.Certifier.Registered",
   "Proofs.Properties.Spot.Credited", "Proofs.Properties.Spot.HistoryTable", "Proofs.Properties.Core.Period",
@@ -121,18 +109,18 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.InferenceOnly", "Proofs.Slowd
   "Proofs.Properties.Verity.Sampled.Deployed", "Proofs.Properties.Poub.Remote.SubprotocolWitnesses",
   "Proofs.Flock.SpotFlock.RunsAs", "Proofs.Flock.SpotFlock.RunsAs.Played", "Proofs.Flock.SpotFlock.RunsAs.FirstSample",
   "Proofs.Flock.SpotFlock.HeldOf", "Proofs.Flock.SpotFlock.HeldOfFiles", "Proofs.Flock.SpotFlock.HeldOfCheck",
-  "Proofs.Flock.SpotFlock.HeldOfRun", "Proofs.Flock.SpotFlock.RunsAs.OfCheck", "Proofs.Flock.SpotFlock.RunsAs.Parsed",
+  "Proofs.Flock.SpotFlock.HeldOfRun",
   "Proofs.Flock.SpotFlock.HeldOfDesc",
-  "Proofs.Flock.SpotFlock.HeldOfWires",
   "Proofs.Flock.SpotFlock.DoWalk", "Proofs.Flock.SpotFlock.ParamsWf", "Proofs.Properties.InferenceOnly.ReadsExact",
   "Proofs.Properties.InferenceOnly.BodiesOk.ReadsDecoded", "Proofs.Properties.Composition", "Proofs.Properties.Challenger.Limits",
   "Proofs.Properties.Challenger.ChallengePhase", "Proofs.Properties.Challenger.CanonRead",
   "Proofs.Properties.Challenger.Window", "Proofs.Properties.Challenger.Lines", "Proofs.Properties.Challenger.Coins",
   "Proofs.Properties.Pous.WipeSigned", "Proofs.Properties.Pous.WipeCount", "Proofs.Properties.Challenger", "Proofs.Properties.Challenger.CanonLine",
-  "Proofs.Properties.Challenger.Drawn", "Proofs.Properties.ZkServer", "Proofs.Properties.Flock.Nets",
+  "Proofs.Properties.Challenger.Drawn", "Proofs.Properties.ZkServer", "Proofs.Properties.Flock.Nets", "Proofs.Properties.Flock.EvalBool", "Proofs.Properties.Flock.Circuit.Inline", "Proofs.Properties.Flock.Circuit.Chain", "Proofs.Properties.Flock.Circuit.LowerDef", "Proofs.Properties.Flock.Circuit.LowerAsm", "Proofs.Properties.Flock.Circuit.LowerEval", "Proofs.Properties.InferenceOnly.OperandWidths", "Proofs.Properties.Flock.DecodeBoolean",
   "Proofs.Properties.Core.Site", "Proofs.Properties.InferenceOnly.Protocol",
   "Proofs.Properties.InferenceOnly.RecordRead", "Proofs.Properties.InferenceOnly.RecordForm",
-  "Proofs.Properties.InferenceOnly.RecordCounts", "Proofs.Properties.InferenceOnly.DecodeKeys",
+  "Proofs.Properties.InferenceOnly.RecordCounts", "Proofs.Properties.Flock.Decoder.Walk", "Proofs.Properties.Flock.Decoder.Resolve", "Proofs.Properties.Flock.Decoder.Basic", "Proofs.Properties.Flock.Decoder.Nonneg", "Proofs.Properties.Flock.Decoder.Node", "Proofs.Properties.Flock.Decoder.Decode", "Proofs.Properties.Flock.Decoder.Composite", "Proofs.Properties.Flock.Decoder.Decoded",
+  "Proofs.Properties.Flock.Decoder.DecodeKeys",
   "Proofs.Properties.Ties", "Proofs.Properties.Verity.Soundness",
   "Proofs.Properties.InferenceOnly.Record", "Proofs.Properties.InferenceOnly.RecordProvenance",
   "Proofs.Properties.InferenceOnly.Lemmas.Opening", "Proofs.Properties.Verity.Sampled",
@@ -164,11 +152,10 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.InferenceOnly", "Proofs.Slowd
   "Proofs.Properties.Verity.Sampled.Record", "Proofs.Properties.Verity.Sampled.Record.Facts",
   "Proofs.Properties.Verity.Sampled.Record.Session", "Proofs.Properties.Verity.Sampled.Record.Accepts",
   "Proofs.Properties.Verity.Sampled.Record.Runs", "Proofs.Properties.Verity.Sampled.Record.Opens",
-  "Proofs.Properties.Verity.Sampled.Record.Scope", "Proofs.Properties.Verity.Sampled.Record.Inner",
+  "Proofs.Properties.Verity.Sampled.Record.Scope",
   "Proofs.Properties.Verity.Sampled.Record.Reg", "Proofs.Flock.Claims.Sampling.Select.Prefix",
   "Proofs.Properties.Verity.Subprotocols", "Proofs.Properties.Verity.Coupling",
-  "Proofs.Properties.Remote", "Proofs.Properties.Remote.Honest", "Proofs.Properties.Verity.Recursive",
-  "Proofs.Properties.Verity.Recursive.Target", "Proofs.Properties.Verity.Recursive.Refusals",
+  "Proofs.Properties.Remote", "Proofs.Properties.Remote.Honest",
   "Proofs.Properties.Verity.Sampled.RecursiveRefused", "Proofs.Properties.Verity.Sampled.MemberForm",
   "Proofs.Properties.Verity.Sampled.Target", "Proofs.Properties.Verity.Assembled",
   "Proofs.Properties.Verity.Sampled.Place", "Proofs.Properties.Verity.Sampled.Instance",
@@ -195,63 +182,10 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.InferenceOnly", "Proofs.Slowd
   "Proofs.Properties.Verity.Sampled.Window.Instance", "Proofs.Properties.Verity.ExecutionPhaseFiles",
   "Proofs.Properties.Verity.Sampled.Window.Unbound", "Proofs.Properties.Verity.Sampled.Window.UnboundMember",
   "Proofs.Properties.Verity.Sampled.Window.UnboundLaid", "Proofs.Flock.SpotFlock.HeldOfReads",
-  "Proofs.Flock.SpotFlock.ReadsCheck", "Proofs.Properties.Verity.SampledTwo.Messages",
-  "Proofs.Properties.Verity.SampledTwo.MessagesShown", "Proofs.Properties.Verity.SampledTwo.SessionMsgs",
-  "Proofs.Properties.Verity.SampledTwo.Cut", "Proofs.Properties.Verity.SampledTwo.CutPrints",
-  "Proofs.Properties.Verity.SampledTwo.CutHeld", "Proofs.Properties.Verity.SampledTwo.CutRead",
-  "Proofs.Properties.Verity.SampledTwo.CoinMap", "Proofs.Properties.Verity.SampledTwo.CoinMapDistribution",
-  "Proofs.Properties.Verity.SampledTwo.CoinMapAgree", "Proofs.Properties.Verity.SampledTwo.CoinStages",
-  "Proofs.Properties.Verity.SampledTwo.CoinPrefix", "Proofs.Properties.Verity.SampledTwo.SessionCoins",
-  "Proofs.Properties.Verity.SampledTwo.SessionAgrees", "Proofs.Flock.SpotFlock.ScopeTable",
-  "Proofs.Properties.Verity.SampledTwo.OneTable", "Proofs.Properties.Verity.SampledTwo.TableName",
-  "Proofs.Properties.Verity.SampledTwo.AttachmentFits", "Proofs.Properties.Verity.SampledTwo.SessionHeld",
-  "Proofs.Properties.Verity.SampledTwo.SessionRecord", "Proofs.Properties.Verity.SampledTwo.Accepts",
-  "Proofs.Properties.Verity.SampledTwo.AcceptsProof", "Proofs.Properties.Verity.SampledTwo.Cover",
-  "Proofs.Properties.Verity.SampledTwo.ReadsOnly", "Proofs.Properties.Verity.SampledTwo.Reached",
+  "Proofs.Flock.SpotFlock.ReadsCheck", "Proofs.Flock.SpotFlock.ScopeTable",
   "Proofs.Properties.Verity.Sampled.Record.PartCong", "Proofs.Properties.Verity.Sampled.Record.PartSame",
   "Proofs.Properties.Verity.Sampled.Record.ReadsSame", "Proofs.Properties.Verity.Sampled.Record.PartReadsBack",
-  "Proofs.Properties.Verity.SampledTwo.OfRun", "Proofs.Properties.Verity.SampledTwo.Fits",
-  "Proofs.Properties.Verity.SampledTwo.Within",
-  "Proofs.Properties.Verity.SampledTwo.AcceptsOfSteps",
-  "Proofs.Properties.Verity.SampledTwo.ClaimInner",
-  "Proofs.Properties.Verity.SampledTwo.Deployed",
-  "Proofs.Properties.Verity.SampledTwo.FirstSample",
-  "Proofs.Properties.Verity.SampledTwo.Ordered",
-  "Proofs.Properties.Verity.SampledTwo.Shown",
-  "Proofs.Properties.Verity.SampledTwo.RuleTwo", "Proofs.Properties.Verity.SampledTwo.Device",
-  "Proofs.Properties.Verity.SampledTwo.DeviceRead", "Proofs.Properties.Verity.SampledTwo.DeviceOrder",
-  "Proofs.Properties.Verity.SampledTwo.Apart", "Proofs.Properties.Verity.SampledTwo.FirstCoins",
-  "Proofs.Properties.Verity.SampledTwo.SecondCoins", "Proofs.Properties.Verity.SampledTwo.CoinBytes",
-  "Proofs.Properties.Verity.SampledTwo.StageLog", "Proofs.Properties.Verity.SampledTwo.StageCut",
-  "Proofs.Properties.Verity.SampledTwo.StageCoins", "Proofs.Properties.Verity.SampledTwo.StageAlone",
-  "Proofs.Properties.Verity.SampledTwo.CutOrder", "Proofs.Properties.Verity.SampledTwo.CutFirst",
-  "Proofs.Properties.Verity.SampledTwo.CutAccept", "Proofs.Properties.Verity.SampledTwo.ProjectionOf",
-  "Proofs.Properties.Verity.SampledTwo.CouplingOf", "Proofs.Properties.Verity.Majority",
-  "Proofs.Properties.Verity.SampledTwo.Majority", "Proofs.Properties.Verity.SampledTwo.Binding",
-  "Proofs.Properties.Verity.SampledTwo.JoinElems", "Proofs.Properties.Verity.SampledTwo.Joined",
-  "Proofs.Properties.Verity.SampledTwo.SessionDev", "Proofs.Properties.Verity.SampledTwo.SessionOpened",
-  "Proofs.Properties.Verity.SampledTwo.SessionLogged", "Proofs.Properties.Verity.SampledTwo.SessionCut",
-  "Proofs.Properties.Verity.SampledTwo.SessionTreeless", "Proofs.Properties.Verity.SampledTwo.GoodCase",
-  "Proofs.Properties.Verity.SampledTwo.CutRoots",
-  "Proofs.Properties.Verity.SampledTwo.DrawRoots", "Proofs.Properties.Verity.SampledTwo.DeviceAccept",
-  "Proofs.Properties.Verity.SampledTwo.MemberChecks",
-  "Proofs.Properties.Verity.SampledTwo.JpWalk", "Proofs.Properties.Verity.SampledTwo.AtStmt",
-  "Proofs.Properties.Verity.SampledTwo.RoundsRise",
-  "Proofs.Properties.Verity.SampledTwo.PrefixFixed", "Proofs.Properties.Verity.SampledTwo.SessionPrefix",
-  "Proofs.Properties.Verity.SampledTwo.SessionExtra", "Proofs.Properties.Verity.SampledTwo.SessionRecordRounds",
-  "Proofs.Properties.Verity.SampledTwo.SessionAsk",
-  "Proofs.Properties.Verity.SampledTwo.SessionReplay", "Proofs.Properties.Verity.SampledTwo.RoundPrefix",
-  "Proofs.Properties.Verity.SampledTwo.MessagesOpen", "Proofs.Properties.Verity.SampledTwo.LogStrings",
-  "Proofs.Properties.Verity.SampledTwo.RoundOne", "Proofs.Properties.Verity.SampledTwo.SessionAnswers",
-  "Proofs.Properties.Verity.SampledTwo.SessionMiddle", "Proofs.Properties.Verity.SampledTwo.SessionLast",
-  "Proofs.Properties.Verity.SampledTwo.SessionFirst", "Proofs.Properties.Verity.SampledTwo.StmtsRound",
-  "Proofs.Properties.Verity.SampledTwo.FormRounds",
-  "Proofs.Properties.Verity.SampledTwo.FormRecords", "Proofs.Properties.Verity.SampledTwo.FormVerdicts",
-  "Proofs.Properties.Verity.SampledTwo.FormLast",
-  "Proofs.Properties.Verity.SampledTwo.FormLink",
-  "Proofs.Properties.Verity.SampledTwo.SessionLive",
-  "Proofs.Properties.Verity.SampledTwo.StmtBytes",
-  "Proofs.Properties.Verity.SampledTwo.Claim", "Proofs.Properties.Verity.SampledTwo.DevAgrees",
-  "Proofs.Properties.Verity.SampledTwo.InputMap", "Proofs.Properties.Verity.SampledTwo.Projection",
-  "Proofs.Properties.Verity.SampledTwo.Reading", "Proofs.Properties.Verity.SampledTwo.SecondRead",
-  "Proofs.Properties.Verity.SampledTwo.Steps", "Proofs.Properties.Verity.SampledTwo.Subprotocol"]
+  "Proofs.Properties.Verity.Majority", "Proofs.Properties.Verity.Recursive.Assumptions",
+  "Proofs.Properties.Verity.Recursive.Compiled", "Proofs.Properties.Verity.Recursive.PartVerdict",
+  "Proofs.Properties.Verity.Recursive.ScheduleRun", "Proofs.Properties.Verity.Recursive.ScheduleInner",
+  "Proofs.Properties.Verity.Recursive.ScheduleSession"]

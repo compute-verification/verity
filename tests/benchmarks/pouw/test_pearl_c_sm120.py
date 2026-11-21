@@ -1,4 +1,4 @@
-"""Pearl-C's sm_120 tree off the card (verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120): the shared-memory swizzles conflict-free for
+"""Pearl-C's sm_120 tree off the card (verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm120): the shared-memory swizzles conflict-free for
 every ldmatrix phase and the GEMMs within sm_120's 99 KB, the kernel's constants the scheme's, the SASS gate refusing a
 lowered or spilling build, the check fixture against the scheme on both device records, and run.py's identity refusal
 and dry run on a CPU stand-in for libcuda (pearl_c/fake_cuda.c, with fake_tma.c's tensor maps; an RTX PRO 6000's name,
@@ -23,13 +23,13 @@ import pytest
 from conftest import load
 from verity_config.settings import of
 
-from verity.protocols.resource_accounting.compute.pouw.verifier.audit import weights_root
-from verity.protocols.resource_accounting.compute.pouw.verifier.coins import CoinCommitment, CoinOpening, coin_reason
+from verity.protocols.accounting.compute.pouw.verifier.audit import weights_root
+from verity.protocols.accounting.compute.pouw.verifier.coins import CoinCommitment, CoinOpening, coin_reason
 
-HERE = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "kernels" / "pearl_c_sm120"
+HERE = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "compute" / "pouw" / "prover" / "kernels" / "pearl_c_sm120"
 
 
-#: by `load`: other directories have a fixture.py, a sass_gate.py and a run.py too
+#: by `load`: other directories have a fixture.py and a run.py too
 F = load("pearl_c_sm120/fixture.py")
 
 
@@ -44,7 +44,7 @@ def kernel(file: str):
     return sys.modules[name]
 
 
-S = kernel("sass_gate.py")
+S = kernel("../../build_gate.py").load(HERE / "sass_gate.json")
 RUN = kernel("run.py")
 
 SOURCE = (HERE / "pearl_c_sm120.cu").read_text()
@@ -130,7 +130,7 @@ def test_gemms_fit_sm120_shared_memory():
     assert ML_SMEM == 98352 and gemm_smem("M_PEARLC", 64, 64) == 49152 and gemm_smem("M_PEARLC", 64, 64, 128) == 81920
     assert form_kernels() == ["form_s5", "form_s5_r144", "form_s5_scalar", "form_rate", "form_rate_r144", "form_rate_scalar",
                               "form_rate_nocast", "form_rate_nocast_r144", "form_rate_atoms"]
-    assert set(S.WANT) - {"words", "words_u", "words_k", *form_kernels()} == names
+    assert set(S.want) - {"words", "words_u", "words_k", *form_kernels()} == names
     assert set(RUN.FORM_RATES) == set(form_rates()) and set(RUN.FORM_ALTS) == {"form_s5_scalar", "form_s5_r144"}
 
 
@@ -156,9 +156,9 @@ def test_k32_is_the_transposed_grid_of_column_pairs_and_leaves_every_product_unc
 
 
 def test_kernel_constants_match_the_reference():
-    from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
-    from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_kw as P
-    from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_device import SM120, SM120_UNPROMOTED
+    from verity.protocols.accounting.compute.pouw.prover.schemes import pearl_c as C
+    from verity.protocols.accounting.compute.pouw.prover.schemes import pearl_kw as P
+    from verity.protocols.accounting.compute.pouw.prover.schemes.pearl_c_device import SM120, SM120_UNPROMOTED
 
     assert int(re.search(r"S5_LINE = (0x[0-9A-Fa-f]+);", SOURCE).group(1), 16) == C.S5_LINE
     assert "0x1p-32f" in SOURCE and C.S5_FLOOR == P.f32_bits(2.0 ** -32)
@@ -221,7 +221,7 @@ PTXAS_OK = ("ptxas info    : Compiling entry function 'gemm_x' for 'sm_120a'\n"
 
 
 def test_sass_gate_refuses_what_it_should(monkeypatch):
-    monkeypatch.setattr(S, "WANT", {"gemm_x": (1, 1)})
+    monkeypatch.setattr(S, "want", {"gemm_x": [1, 1]})
     funcs, problems = S.gate(PTXAS_OK, SASS_OK)
     assert not problems and funcs["gemm_x"]["QMMA"] == 1 and funcs["gemm_x"]["HMMA"] == 1 and funcs["gemm_x"]["regs"] == 96
     bad = {
@@ -433,6 +433,7 @@ def ship(tmp_path_factory):
     subprocess.run([cc, "-O1", "-Wall", "-Werror", "-shared", "-fPIC", "-o", str(out / "fake_cuda.so"), str(HERE / "fake_tma.c")],
                    check=True)
     shutil.copy(HERE / "run.py", out)
+    shutil.copy(HERE.parent / "pearl_c" / "driver.py", out)
     (out / "pearl_c_sm120.cubin").write_bytes(b"\x7fELF" + bytes(14) + bytes([190, 0]) + bytes(44))
     return out
 

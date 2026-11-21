@@ -3,13 +3,15 @@ a table that only shrinks; every other component is its scheme's declaration (`s
 ``depends`` is a requirement a configuration is refused without."""
 from __future__ import annotations
 
+import importlib
 import sys
 
 import pytest
 
 from verity import config as K
 from verity.channel import Refused
-from verity.protocols.compose import schemes
+from verity.protocols.run import schemes
+from verity.protocols.accounting.scheme import Launch
 from verity_cli import run as R
 
 REG = R.registry()
@@ -21,7 +23,7 @@ OWNERS = {"pouw": "compute-accounting"}
 def test_the_undeclared_rows_only_shrink() -> None:
     grown = sorted(set(T.UNDECLARED) - set(OWNERS))
     assert not grown, (f"served_table.UNDECLARED gained {grown}: a component is a scheme's declaration "
-                       "(verity.protocols.compose.schemes), never a new row here")
+                       "(verity.protocols.run.schemes), never a new row here")
     now = sorted(n for n in T.UNDECLARED if n in schemes.DECLARATIONS)
     assert not now, "; ".join(f"{n} is declared now: {OWNERS[n]} deletes its row from served_table.UNDECLARED "
                               "(and from OWNERS here)" for n in now)
@@ -63,10 +65,64 @@ def test_a_declared_schemes_parameters_are_its_settings_refused_by_name(given: d
     assert (e.value.name, e.value.detail) == (name, detail)
 
 
-def test_every_declared_piece_has_an_entry_and_every_entry_a_declared_piece() -> None:
-    declared = {(n, p) for n in T.MANIFESTS for p in T.launches(n)}
-    assert declared == set(T.ENTRIES), (f"declared without an entry: {sorted(declared - set(T.ENTRIES))}; an entry "
-                                        f"without a declared piece: {sorted(set(T.ENTRIES) - declared)}")
+def test_every_declared_piece_names_its_entry_and_executables() -> None:
+    said = {(n, p): x for n in T.MANIFESTS for p, x in T.launches(n).items()}
+    lacking = [k for k, x in said.items() if isinstance(x.entry, T.Lacks) or isinstance(x.executables, T.Lacks)]
+    assert not lacking, "each declared piece declares its entry and executables (`Launch.entry`, `Launch.executables`)"
+    for (n, p), x in said.items():
+        piece = T.PIECES[n][p]
+        module, attribute = x.entry.split(":")
+        made = getattr(T if module == "served_table" else importlib.import_module(module), attribute)(
+            T.UNDECLARED[n][0] if n in T.UNDECLARED else schemes.get(n))
+        assert (piece.hooks, piece.scripts, piece.executables) == (made[0], made[1], x.executables)
+
+
+def test_an_entry_is_the_declarations_alone_and_nothing_a_node_sets_overrides_it(monkeypatch) -> None:
+    """`Launch.entry` and `Launch.executables` are read from the registered declaration and nowhere else: the table's
+    former by-name launchers (``ENTRIES``, the ``*_LAUNCHER`` attributes) and the scripts' former program overrides
+    (``POUS_EXE``, ``BW_CASE_EXE``, ``BW_PARTY_EXE``, ``WIPE_PROTOCOL_EXE``) set to another change no piece."""
+    def launched() -> dict:
+        return {(n, r): (p.hooks.__code__, p.scripts, p.executables, p.what)
+                for n, c in T.MANIFESTS.items() for r, p in T._pieces(c).items()}
+
+    before = launched()
+    other = T.Launcher(lambda cfg, params, bound, pinned: {"POUS_CMD": "evil"}, ("evil.sh",))
+    monkeypatch.setattr(T, "ENTRIES", {(n, p): other for n in T.MANIFESTS for p in T.launches(n)}, raising=False)
+    for name in ("SPOT", "POUW", "PEARLPLUS", "POUS", "BANDWIDTH", "ATTESTER", "WIPE"):
+        monkeypatch.setattr(T, f"{name}_LAUNCHER", other, raising=False)
+    for var in ("POUS_EXE", "BW_CASE_EXE", "BW_PARTY_EXE", "WIPE_PROTOCOL_EXE", "VERITY_ENTRY"):
+        monkeypatch.setenv(var, "/tmp/evil")
+    assert launched() == before
+
+
+def test_the_attesters_piece_is_its_declarations_and_neither_the_tables_former_names_nor_a_node_replace_it(
+        monkeypatch) -> None:
+    """The network attester's piece is its scheme's `launch_attester` with network-period and network-rows of its
+    Lake package: the table's former ``attester_entry``, ``_attester_piece`` and ``ATTESTER_PIECE``, and the
+    variables served_verdicts.sh reads the piece's commands from, set to another, change none of it."""
+    from verity.protocols.accounting.network import scheme as NS
+
+    def piece() -> tuple:
+        p = T._pieces(T.MANIFESTS["network-attester"])[T.WORKERS]
+        return p.hooks.__code__, p.scripts, p.executables
+
+    before = piece()
+    package = "verity/protocols/accounting/network/verifier/lean"
+    assert before == (NS._attester_hooks.__code__, (NS.ATTESTER_PIECE,),
+                      tuple(schemes.get("network-attester").pieces[T.WORKERS].executables))
+    assert [(e.package, e.target) for e in before[2]] == [(package, "network-period"), (package, "network-rows")]
+    other = T.Launcher(lambda cfg, params, bound, pinned: {"CERTIFIER_PERIOD_CMD": "evil"}, ("evil.py",))
+    for name, value in (("attester_entry", lambda declaration: other), ("_attester_piece", other.hooks),
+                        ("ATTESTER_PIECE", "evil.py"), ("ATTESTER_LAUNCHER", other)):
+        monkeypatch.setattr(T, name, value, raising=False)
+    for var in ("CERTIFIER_CMD", "CERTIFIER_CHAIN_CMD", "CERTIFIER_PERIOD_CMD", "CERTIFIER_FRONT"):
+        monkeypatch.setenv(var, "/tmp/evil")
+    assert piece() == before
+
+
+def test_an_entry_that_gives_no_hooks_is_refused_by_name() -> None:
+    with pytest.raises(ValueError, match="gives .* not its hooks and scripts"):
+        T._launcher("x", T.PROVER, Launch(entry="builtins:str", executables=()), None)
 
 
 def test_a_piece_reaches_its_declared_channels_gate_party_and_says_one_only_where_none_joins() -> None:

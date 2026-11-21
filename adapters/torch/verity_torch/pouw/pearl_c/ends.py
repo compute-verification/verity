@@ -13,17 +13,17 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, cast
 
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_work as PW
-from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
+from verity.protocols.accounting.compute.pouw.prover.schemes import pearl_c as C
+from verity.protocols.accounting.compute.pouw.prover.schemes import pearl_c_work as PW
+from verity.protocols.accounting.compute.pouw.verifier.audit import (
     HM96_SALT,
     Epoch,
     Workload,
     transcript_domain,
 )
-from verity.protocols.resource_accounting.compute.pouw.verifier.core_check import MANIFEST_SCHEMA
-from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul
-from verity.protocols.resource_accounting.compute.pouw.verifier.serving import Schedule, SchemeId
+from verity.protocols.accounting.compute.pouw.verifier.window import MANIFEST_SCHEMA
+from verity.protocols.accounting.compute.pouw.verifier.protocol import Matmul
+from verity.protocols.accounting.compute.pouw.verifier.serving import Schedule, SchemeId
 
 from verity_torch.pouw.pearl_c import served_y_device as SY
 from verity_torch.pouw.pearl_c.host import (
@@ -36,14 +36,15 @@ from verity_torch.pouw.pearl_c.host import (
     _TorchStream,
     _Uploads,
     _zeros,
+    PassSalts,
     fresh_into,
     joined,
     write_behind,
     write_manifest,
 )
 from verity_torch.pouw.pearl_c.host import behind as host_behind
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.kernel import Kernel
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.manifest import session_head
+from verity.protocols.accounting.compute.pouw.prover.serving.pearl_c.kernel import Kernel
+from verity.protocols.accounting.compute.pouw.prover.serving.pearl_c.manifest import session_head
 from verity_torch.pouw.pearl_c.screen import excluded, excluded_host
 
 #: a retained whole capture's stages (`whole_calls.WholeCalls._stages`): each (weight, m₁₆)'s A words, A tree and y
@@ -64,12 +65,17 @@ class _Pass:
     stepped: bool = False            # begun by an engine step's end (`PearlCDeviceRun.end_pass`'s ``step``)
     base: int | None = None          # its call at position p has index base + p; None until its first call (`call_index`)
     dirs: set[str] = field(default_factory=set)   # the directories under ``retain`` its retained calls have made
+    salts: PassSalts = field(default_factory=PassSalts)   # its hm96 salts' key and counter, dropped at its end
 
     @property
     def first(self) -> int:
         """The index of the pass's first call: ``base`` as it is, which a pass has from its first call on.  Before that it
         is None, unchecked here: what reads it then fails on its own arithmetic."""
         return cast(int, self.base)
+
+    @property
+    def ended(self) -> bool:
+        return not self.salts.open
 
 
 class _RunState:
@@ -171,7 +177,15 @@ class PassEnds(_RunState):
         the host doesn't wait for them: the returned dict gets them, and `commits` its root, when the next end, `settle`
         or `finish` completes the readback.  With `behind` (and `retain_behind`) a retained pass's files and manifest are
         completed behind it, in order (`retained_ends`, which `finish` waits for): the dict gets ``excluded_rows`` and
-        ``manifest`` once its manifest is written, after every file it names."""
+        ``manifest`` once its manifest is written, after every file it names.  Ended or failed, the pass drops its salts' key
+        (`PassSalts.drop`): a fill after it is refused until a pass begins."""
+        cur = self.cur
+        try:
+            return self._close(lag, behind)
+        finally:
+            cur.salts.drop()
+
+    def _close(self, lag: bool, behind: bool) -> dict[str, Any]:
         import torch
         self.settle()
         self.retained_ends(wait=False)
@@ -194,7 +208,7 @@ class PassEnds(_RunState):
                 (self.leaves.data_ptr(), None, None)
             leaves, side, got = where
             K.dev.stream = side.cuda_stream if aside else self.stream()
-            fresh_into(salts_t, count, K.dev.stream if salts_t.is_cuda else None)
+            fresh_into(salts_t, count, K.dev.stream if salts_t.is_cuda else None, salts=cur.salts)
             try:
                 for _, f in R.Pipeline.tree_setup(ns, "t", count, "dom_t"):
                     f()
@@ -411,7 +425,8 @@ class PassEnds(_RunState):
 
     def finish(self) -> None:
         if self.cur is not None and self.cur.matmuls:
-            self.end()
+            if not self.cur.ended:
+                self.end()
             self.cur = _Pass(None)
         self.settle()
         self.retained_ends()

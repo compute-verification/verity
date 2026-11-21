@@ -30,15 +30,15 @@ from verity_vllm.definitions.registry import sampling_boolean as SB
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
-    "ArgmaxStep_v2": (134, 290, 20, "0422abdc1d8d51c1d43422cd68a396305832a3beabbc81352c8f28f63893ebc9c5b12d06c8ab61332e72e32aed2c2c594217babc149e3540a6059a171379957d"),
-    "ArgmaxLeaf_v1{G=64,FIRST=0,FINAL=0}": (3415, 8032, 1261, "bd47155e54f01c18fd094000c04cb90a58658e5787eec755d901f1b8b789fb8b1e832f09062cf062c2c5cd07b0a961424c77127652cf5640a31bd9111d6e5d53"),
-    "ArgmaxLeaf_v1{G=64,FIRST=1,FINAL=0}": (3431, 8061, 1261, "a27b946b783337eb9d4f94d01863d55cde9e3cf5fd50e5921cf359de3e30d30ad07b56bf3ac6720cac9496d281d46e5172044022fba1b83f6b3762c7e00ce707"),
-    "ArgmaxMerge_v1{G=64,IW=6,FINAL=0}": (2577, 6036, 1197, "5cdd52545245b4001db977e2bc768d230e7b5ad508ef0be411cd3217b9bafad12da8b3beee93020ca1e5694e2bb222a58d0363136e2e1467090bb3ae22a92fc1"),
-    "TokenSelect_v2{V=50}": (2661, 6252, 981, "01242c512a75f2516c05b1e34532249ce4dee88a727ff61349e15416ee6792a41d1ea4401d0df4c9dbe349c4c6f4582d60208137f7029a343d9aa509bac6ebed"),
-    "TokenSelect_v2{V=200}": (10759, 25301, 3981, "e8b49b86aeef42b1d39cde82c945692e0e49fbfbdb87f79ca79df0b45e97b36fb9f4384927277df9b2b5ab2748cf110c412a6f9a9b2a978332bf4bdce079a194"),
-    "F32ArgmaxLeaf_v1{G=64,FIRST=0,FINAL=0}": (6455, 16144, 2269, "7149b47805ec23902d0084386b1f46cdd902770543f841e47574d189d995034aa5ea37e04763187cad968233d16fbab6cab91f7f8cbd4df871b9dcafbecb80e8"),
-    "F32ArgmaxLeaf_v1{G=64,FIRST=1,FINAL=0}": (6487, 16205, 2269, "5d91cf8bbb8ac72e17104a66b42b9e7c4b4d1fe9e17ed1dcc7a180bef438e54d561c85560760d3eebf04019a130b8ee189040a3db9d5c3d24b9259e3794d6760"),
-    "F32ArgmaxMerge_v1{G=64,IW=6,FINAL=0}": (4593, 11076, 2205, "3d968ff678a8abe625ab3dd3996bad854ee21fda125b1cf3db7a31bb87cd22d3e00daf72a48e377796ff4810d4c5e1ed797205f15050c621bf1a641106bcd8d6"),
+    "ArgmaxStep_v2": (134, 290, 20, "493e837b622e30a757262ab9141e849513253a5927aef8a6ffd220cd2494eace07ab40273a7ddd8abcc7722713d28b58457c85d167fd45270ceaefa8178adfca"),
+    "ArgmaxLeaf_v1{G=64,FIRST=0,FINAL=0}": (3415, 8032, 1261, "efa3cc398fb723fbd576e3c75b8e837d7359c4228a083320bf8b9e5e4b6a40d0f6f27514edaf99878e4debe01353e4b61101f2f6a950eaee6ea94da5040e1ec0"),
+    "ArgmaxLeaf_v1{G=64,FIRST=1,FINAL=0}": (3431, 8061, 1261, "e27d460cebf100be7a485942af0f426386424a19e220868ceedd83bb78f81cb03def6467fec1e005b16197528232e3c638aa5774e3ea30e9032fb2299ef1ceab"),
+    "ArgmaxMerge_v1{G=64,IW=6,FINAL=0}": (2577, 6036, 1197, "d23ffc8e4f8ed51884063e1a4f4c37d23d52f51914914e2a2d2865bf5b691bad8e140d7f19dec81280f7990168717e6a92fe531e586770a76605468b958434ca"),
+    "TokenSelect_v2{V=50}": (2661, 6252, 981, "01c358163a7822cee02a5a17365eba9ad4944df2f3132871910af0a1939c419d4f316e7e9398ac85302aa4ec7a9db5cc839efbfffb3721458ddaea43b653e113"),
+    "TokenSelect_v2{V=200}": (10759, 25301, 3981, "0041b5fd49aa42b7c30d919830c7f49867b28e93daa48b46dc3c878be69f3f1752d81b468f1087a5c80baa6bfa1da70cc8aef1bd53b30f07b43df07682502a7d"),
+    "F32ArgmaxLeaf_v1{G=64,FIRST=0,FINAL=0}": (6455, 16144, 2269, "9514d990261a288fc6a6bc53e857bf70b279643fbd409a93178cdc4721489680ffe09d1b7054d41b40378c61b5761d06164fa956474e183f079027b64878d1fd"),
+    "F32ArgmaxLeaf_v1{G=64,FIRST=1,FINAL=0}": (6487, 16205, 2269, "53935d20470a49f8230f58fc975f63ca74c4e0f30d29689b7ce4433ecbecd7415596e878cb0a74847fe766f74aa799b5b149286fc2d89f6db455a498a6a832e6"),
+    "F32ArgmaxMerge_v1{G=64,IW=6,FINAL=0}": (4593, 11076, 2205, "f828cd6e4dc650719610027d0e3c4c394bf96ff9c00c269c53c68d08669969dc16eeab5754ed29af66cba8023b73a2cd48d9e5eef0d3064a68ddcf269cb96248"),
 }
 
 #: the served vocabularies: TokenSelect_v2{V}'s And gates (54 per logit) and the tree's candidate counts per level
@@ -217,8 +217,6 @@ def test_one_logit_is_index_0() -> None:
     assert not BS.evaluate_words(bind(SB.TokenSelect, V=1), x).any()
 
 
-@pytest.mark.xfail(strict=True, reason="TokenSelect_v1{V=1} returns logits[0], not 0: its scan has no iterations, and "
-                   "verity.circuits.layout.resolve_gate reads a zero-length scan's carry from iteration n - 1 = -1 instead of from init")
 def test_word_view_at_one_logit() -> None:
     x = SPECIALS[:, None]
     assert not E.evaluate_batch(bind(b1.TokenSelect, V=1), x).any()

@@ -6,6 +6,7 @@ public import Proofs.Properties.InferenceOnly.DescVerdict
 public import Proofs.Properties.InferenceOnly.Theta
 public import Proofs.Properties.InferenceOnly.ThetaSteps
 public import Proofs.Properties.InferenceOnly
+public import Proofs.Properties.InferenceOnly.Count
 public import Proofs.Properties.InferenceOnly.Agrees
 public import Proofs.Slowdown.FitWitness
 public import Proofs.Properties.Spot
@@ -299,7 +300,8 @@ theorem stage_zk_at {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitment} 
   swap
   · obtain ⟨r, -, -, hc⟩ := Spot.OneStageZk.checkMembersAt_accept h
     exact ⟨r, hc⟩
-  unfold Spot.OneStageZk.checkOneAt at h
+  replace h := Spot.OneStageZk.checkOneAt_body h
+  unfold Spot.OneStageZk.checkOneBody at h
   dsimp only at h
   split at h
   · cases h

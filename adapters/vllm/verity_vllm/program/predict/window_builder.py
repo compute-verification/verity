@@ -135,7 +135,14 @@ class _Builder:
     programs: int = 1
     fns: dict[str, Any] = field(default_factory=dict)
     units: dict[str, int] = field(default_factory=dict)
-    local: dict[tuple[int, str], int] = field(default_factory=dict)
+    #: the node being lowered and the slots ``[lo, hi)`` that lower it alike (`window_lowering._Program.kind`)
+    node: int = 0
+    among: tuple[int, int] | None = None
+    #: each slot's allocations of a template at a node so far, and each allocation's first unit and count
+    seen: dict[tuple[int, str, int], int] = field(default_factory=dict)
+    groups: dict[tuple[str, int, int, int, int], tuple[int, int]] = field(default_factory=dict)
+    #: each template's allocations' first units, a span each (`interface.ordered`'s ``starts``)
+    starts: dict[str, list[int]] = field(default_factory=dict)
     feeds: list[_Feed] = field(default_factory=list)
     #: each template port's row count, its first feed's: the cut `settle` gives it
     read_rows: dict[tuple[str, str], int] = field(default_factory=dict)
@@ -154,22 +161,54 @@ class _Builder:
     weights: tuple[tuple[str, int, int], ...] = ()
     params: dict[str, int] = field(default_factory=dict)
 
-    def unit(self, fn: Any, count: int = 1) -> tuple[str, int]:
-        """``count`` new units of ``fn`` at the current label: its descriptor id and the first one's index. Every slot makes
-        the same allocations in the same order, so a slot's allocation of a template whose earlier ones took ``base`` of its
-        units takes units ``base · programs + slot · count`` on: each allocation's slots sit side by side, and the slots'
-        copies of a wire or read coalesce into one pattern."""
+    def unit(self, fn: Any, count: int = 1, among: tuple[int, int] | None = None) -> tuple[str, int]:
+        """``count`` new units of ``fn`` at the current label: its descriptor id and the first one's index. The slots
+        ``among`` (default the node's, `among`) make the same allocations at a node in the same order, slot ``lo`` first, so
+        the allocation takes ``count · (hi - lo)`` units at once and slot s the ``count`` from ``(s - lo) · count`` on: each
+        allocation's slots sit side by side, and the slots' copies of a wire or read coalesce into one pattern."""
         tid = descriptor_id(fn)
         if self.label is None:
             raise Unexpressible(f"{tid}: a unit of no slot's step")
         slot = self.label[0]
+        lo, hi = among or self.among or (0, self.programs)
+        if not lo <= slot < hi:
+            raise ValueError(f"{tid}: a unit of slot {slot}, not of the slots [{lo}, {hi}) that lower node {self.node}")
         self.fns.setdefault(tid, fn)
-        base = self.local.get((slot, tid), 0)
-        self.local[(slot, tid)] = base + count
-        self.units[tid] = max(self.units.get(tid, 0), (base + count) * self.programs)
-        at = base * self.programs + slot * count
+        k = (slot, tid, self.node)
+        i = self.seen[k] = self.seen.get(k, -1) + 1
+        g = (tid, self.node, i, lo, hi)
+        if g not in self.groups:
+            if slot != lo:
+                raise Unexpressible(f"{tid}: slot {slot}'s allocation {i} at node {self.node}, which slot {lo}, the first of "
+                                    f"[{lo}, {hi}), didn't make")
+            self.groups[g] = (self.units.get(tid, 0), count)
+            self.units[tid] = self.units.get(tid, 0) + count * (hi - lo)
+        start, n = self.groups[g]
+        if n != count:
+            raise Unexpressible(f"{tid}: slot {slot} allocates {count} units at node {self.node} where slot {lo} took {n}")
+        at = start + (slot - lo) * count
         self.spans.setdefault(tid, []).append((at, count, *self.label))
+        self.starts.setdefault(tid, []).append(start)
         return tid, at
+
+    def allocation(self, fn: Any, labels: Sequence[tuple[int, int]]) -> tuple[str, int]:
+        """One allocation of ``fn``, unit i of the slot and step ``labels[i]``: its descriptor id and first unit."""
+        tid = descriptor_id(fn)
+        self.fns.setdefault(tid, fn)
+        start = self.units.get(tid, 0)
+        self.units[tid] = start + len(labels)
+        self.spans.setdefault(tid, []).extend((start + i, 1, *label) for i, label in enumerate(labels))
+        self.starts.setdefault(tid, []).append(start)
+        return tid, start
+
+    def allocation_wires(self) -> list[IF.Wire]:
+        """Each reader allocation's wires coalesced on their own: `interface.ordered` bounds what a range reads by a box over
+        a wire's digits, which a digit cut across allocations of other sizes widens past what the range reads, to a cycle."""
+        starts = {t: sorted(set(s)) for t, s in self.starts.items()}
+        by: dict[tuple[str, int], list[IF.Wire]] = {}
+        for w in self.wires:
+            by.setdefault((w.reader, bisect.bisect_right(starts[w.reader], w.at)), []).append(w)
+        return [x for g in by.values() for x in IF.coalesce(g)]
 
     def feed(self, tid: str, port: str, at: int, count: int, rows: Sequence[Row],
              lead: tuple[tuple[int, int], ...] = ()) -> None:
@@ -291,6 +330,48 @@ def check_provable(circuit: IF.Circuit) -> None:
         raise Unexpressible(f"{len(why)} templates Flock's composer wouldn't prove: " + "; ".join(why))
 
 
+def row_compressions(bits: int) -> int:
+    """A bit row's SHA-512 compressions before its last block, as the door counts a port's ``chunks``
+    (``Flock/Compose.lean``'s ``bitPort``; an output port is a bit row of exactly ``16 * words`` bits, its ``outPort``)."""
+    return ((bits + 7) // 8 + 17 + 127) // 128 - 1
+
+
+def check_served(circuit: IF.Circuit) -> dict[str, dict[str, str]]:
+    """`check_provable` for a served window, which the door proves: it refuses past `IF.MAX_ROWS` rows or `IF.K_MAX`. ->
+    by id with why, without refusing, each template the door cannot prove, under each reason it has: ``row_floor``, no
+    compression before the last SHA-512 block in any of its rows, input and output together, each at its own bits
+    (`row_compressions`, ``Flock/Compose.lean``'s ``outPort`` and ``bitPort``, and ``compose``'s refusal at ``rowSlots``); and
+    ``prover_floor``, a block of all of its units in the window under the prover's zero-knowledge floor (``m >= ZK_M_MIN``,
+    `laying.zk_min_units`), estimated from a unit's input and output bits and ANDs, since the door's lowering sets its
+    ``k_log``. Such a template's units stay in the circuit and its sample: a draw of one is a failed proof."""
+    from verity.circuits.count import count
+    from verity.circuits.laying import ZK_M_MIN, zk_min_units
+    from verity.circuits.program import Program
+
+    why, named = [], {"row_floor": {}, "prover_floor": {}}
+    for fn, n in circuit.templates:
+        tid, cuts = descriptor_id(fn), circuit.cuts.get(descriptor_id(fn))
+        lay = IF.layout(fn)
+        ins, outs = [2 * w for _, w, _ in lay.cut(cuts)], [2 * w for _, w in lay.outs]
+        if len(ins) + len(outs) > IF.MAX_ROWS:
+            why.append(f"{tid}: {len(ins) + len(outs)} rows, past a proof block's {IF.MAX_ROWS}")
+        elif (k := IF.proof_block_k_log(ins, outs)) > IF.K_MAX:
+            why.append(f"{tid}: its rows alone need a Flock block of 2^{k} bits, past 2^{IF.K_MAX}")
+        if sum(row_compressions(8 * b) for b in ins + outs) == 0:
+            named["row_floor"][tid] = (f"no row has a compression before its last SHA-512 block (its widest {max(ins + outs)} B, "
+                                       f"none of {len(ins) + len(outs)} rows past {IF.LAST_BLOCK_BYTES} B)")
+        prog = Program(fn)
+        bits = 8 * (sum(ins) + sum(outs)) + count(prog)[descriptor_id(prog.root)].ands
+        k = max(bits - 1, 1).bit_length()
+        # g is the door's, unknown before its lowering; at g = 1 the floor is the fewest units any packing needs.
+        if n < (need := zk_min_units(k, 1)):
+            named["prover_floor"][tid] = (f"a unit is {bits} input, output and AND bits, so k_log about {k}, and a block of "
+                                          f"all {n} units is under {need} (`zk_min_units` at g 1): m under {ZK_M_MIN}")
+    if why:
+        raise Unexpressible(f"{len(why)} templates Flock wouldn't prove: " + "; ".join(why))
+    return named
+
+
 def _rows(fn: Any, cuts: dict[str, int] | None) -> int:
     """A unit of ``fn``'s rows in and out under ``cuts``, each an hm96 slot Flock's composer gives it
     (`interface.unit_rows`)."""
@@ -298,43 +379,47 @@ def _rows(fn: Any, cuts: dict[str, int] | None) -> int:
     return len(lay.cut(cuts)) + len(lay.outs)
 
 
-def _follow(groups: list[tuple[int, tuple[tuple[int, str], ...], int]], axis: str,
-            delta: int) -> list[tuple[int, tuple[tuple[int, str], ...], int]]:
-    """``groups`` (first unit, digits as ``(radix, axis)``, step), consecutive, with each run of like ones (one digits, their
-    steps ``delta`` apart) as one whose first digit is ``axis``, of the run's length."""
+def _follow(groups: list[tuple[int, tuple[tuple[int, str], ...], int, int]], axis: str,
+            delta: int) -> list[tuple[int, tuple[tuple[int, str], ...], int, int]]:
+    """``groups`` (first unit, digits as ``(radix, axis)``, step, first slot), consecutive, with each run of like ones (one
+    digits and first slot, their steps ``delta`` apart) as one whose first digit is ``axis``, of the run's length."""
     out, i = [], 0
     while i < len(groups):
-        at, digits, step = groups[i]
+        at, digits, step, slot = groups[i]
         j = i + 1
-        while j < len(groups) and groups[j][1] == digits and groups[j][2] == step + (j - i) * delta:
+        while j < len(groups) and groups[j][1] == digits and groups[j][3] == slot and groups[j][2] == step + (j - i) * delta:
             j += 1
-        out.append((at, (((j - i, axis),) if j > i + 1 else ()) + digits, step))
+        out.append((at, (((j - i, axis),) if j > i + 1 else ()) + digits, step, slot))
         i = j
     return out
 
 
 def inference(spans: dict[str, list[tuple[int, int, int, int]]], slots: int) -> list[IF.InferenceEntry]:
-    """Each template's units as inference entries (`interface.InferenceEntry`): its runs in unit order, an allocation's
-    slots' runs of one length at one step side by side, are one entry (the slot, then the run), and like entries that follow
-    on merge, at one step under a ``-`` digit, then at consecutive steps under a ``step`` digit. Refused where a template's
-    units aren't such runs."""
+    """Each template's units as inference entries (`interface.InferenceEntry`): its runs in unit order, consecutive slots'
+    runs of one length at one step side by side, are one entry (the slot from the first of them, then the run), and like
+    entries that follow on merge, at one step under a ``-`` digit, then at consecutive steps under a ``step`` digit. Refused
+    where a run's slot is at or past ``slots``."""
     out = []
     for tid, spans_ in spans.items():
         merged: list[tuple[int, int, int, int]] = []
         for at, n, slot, step in sorted(spans_):
+            if not 0 <= slot < slots:
+                raise Unexpressible(f"{tid}: units from {at} are slot {slot}'s, not one of the circuit's {slots}")
             if merged and merged[-1][2:] == (slot, step):
                 merged[-1] = (merged[-1][0], merged[-1][1] + n, slot, step)
             else:
                 merged.append((at, n, slot, step))
-        groups = []
-        for i in range(0, len(merged), slots):
-            g = merged[i:i + slots]
-            if [r[2] for r in g] != list(range(slots)) or len({(r[1], r[3]) for r in g}) != 1:
-                raise Unexpressible(f"{tid}: units from {g[0][0]} are not {slots} slots' runs of one length at one step")
-            groups.append((g[0][0], ((slots, "slot"),) + (((g[0][1], "-"),) if g[0][1] > 1 else ()), g[0][3]))
+        runs: list[list[tuple[int, int, int, int]]] = []
+        for r in merged:
+            if runs and (p := runs[-1][-1])[2] + 1 == r[2] and (p[1], p[3]) == (r[1], r[3]):
+                runs[-1].append(r)
+            else:
+                runs.append([r])
+        groups = [(g[0][0], ((len(g), "slot"),) + (((g[0][1], "-"),) if g[0][1] > 1 else ()), g[0][3], g[0][2]) for g in runs]
         for axis, delta in (("-", 0), ("step", 1)):
             groups = _follow(groups, axis, delta)
-        out += [IF.InferenceEntry(tid, at, tuple(r for r, _ in d), tuple(a for _, a in d), step) for at, d, step in groups]
+        out += [IF.InferenceEntry(tid, at, tuple(r for r, _ in d), tuple(a for _, a in d), step, slot)
+                for at, d, step, slot in groups]
     return out
 
 

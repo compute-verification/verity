@@ -14,6 +14,7 @@ from verity_bench.vllm.arms import Arm
 from verity_bench.vllm.presets import expand_sweep, resolve_spec
 from verity_bench.vllm.runner import run_benchmark
 
+from bench_standins import CPUS
 from test_served_table import COMMIT_SPEC, RTX, ScaledFactory
 
 REPO = Path(__file__).resolve().parents[3]
@@ -47,7 +48,7 @@ def _result() -> dict:
     [point] = [p for p in expand_sweep("quick") if p.id == "b8-p512-mixed"]
     arms = (Arm("stock-fp8"), Arm("commit", control="stock-fp8"))
     return run_benchmark(resolve_spec(COMMIT_SPEC).preset, arms, (point,), sweep="quick", reps=2,
-                         factory=ScaledFactory(1.0, RTX), git_commit="c" * 40)
+                         factory=ScaledFactory(1.0, RTX), git_commit="c" * 40, cpus=CPUS)
 
 
 def test_every_gate_a_vllm_run_stores_is_its_own_process_and_its_table_says_so():

@@ -21,6 +21,8 @@ import time
 from collections import Counter, defaultdict
 from pathlib import Path
 
+import class_size as CS
+
 
 def kinds_of(circuit, IF):
     """(tid, port) -> the kinds its rows are filled by."""
@@ -71,7 +73,7 @@ def census(circuit, IF) -> dict:
         fresh = sum(1 + blocks(128 + b) + FRESH_EXTRA - 1 for b in out_bytes)  # prefix block folded in blocks(128 + b)
         reused = REUSED * sum(v for k, v in row.items() if k != "out")
         comp = n * (fresh + reused)
-        lab = fn.id.split("{")[0] + "{" + ",".join(f"{k}={v}" for k, v in fn.bindings.items() if type(v) in (int, bool)) + "}"
+        lab = fn.id.split("{")[0] + "{" + ",".join(f"{k}={v}" for k, v in CS.keyed(fn).items()) + "}"
         while lab in out:
             lab += "'"
         out[lab] = {"units": n, "rows": dict(row), "bytes": dict(rb), "compressions_a_unit": fresh + reused}
@@ -102,6 +104,7 @@ def main(argv=None) -> int:
     sys.path.insert(0, str(Path.cwd() / "adapters/vllm"))
     sys.path.insert(0, str(Path.cwd() / "adapters/torch"))
     from verity_vllm.program.predict import window_circuit as WC
+    from verity_vllm.inputs.serves import window_class_parts
     from verity_vllm.program.predict.window_circuit import CLASS_OF_RECORD, Grain, WindowClass, check_provable, class_circuit
     from verity.commitments.periods import interface as IF
     from verity_vllm.program.predict.steps import Registered
@@ -124,13 +127,13 @@ def main(argv=None) -> int:
             target = {**target, "int8_exact": "linears"}
         phi = Phi(model={"repo": "org/m", "revision": "r", "hf_config": cfg}, target=target)
         reg = Registered.of(phi, default_seed=7)
-        cls = WindowClass(*map(int, a.cls.split(","))) if a.cls else CLASS_OF_RECORD
+        cls = WindowClass(*window_class_parts(a.cls)) if a.cls else CLASS_OF_RECORD
         if a.probe:
-            cls = WindowClass(*map(int, a.probe.split(",")))
+            cls = WindowClass(*window_class_parts(a.probe))
             circuit = class_circuit(reg, cls, 1)
         else:
-            built, program = WC.class_program(reg, cls), WC.class_program
-            WC.class_program = lambda r, c: built if c == cls else program(r, c)
+            built, program = WC.class_program(reg, cls.positions), WC.class_program
+            WC.class_program = lambda r, n: built if n == cls.positions else program(r, n)
             circuit = class_circuit(reg, cls)
             check_provable(circuit)
     t1 = time.perf_counter()

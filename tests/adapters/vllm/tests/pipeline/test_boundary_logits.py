@@ -18,9 +18,9 @@ import pytest
 import torch
 from verity.circuits.codec import descriptor_id
 from verity.commitments.periods import rows as CS
-from verity.protocols.proofs.spot.verifier import second_stage as SS
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+from verity.circuits import replay_links as RL
+from verity.protocols.proof.spot.verifier.one_stage import docket as R
+from verity.protocols.proof.spot.verifier.one_stage import partition as P
 
 from tests.pipeline.test_boundary_tables import DESIGN
 from verity_vllm.engine.hooks import Hooks
@@ -50,7 +50,7 @@ def logit(rid: str, j: int) -> np.ndarray:
 
 def test_a_class_lists_its_select_inputs_after_its_return_at_the_rows_round_2s_links_read(check):
     """Each of the select's K units a token reads its lanes of the token's logits, unit k of token j at row j·K + k, as
-    round 2 derives the links (`second_stage.replay_rows`); the value is listed after the return, ``logits`` or, beside
+    round 2 derives the links (`replay_links.replay_rows`); the value is listed after the return, ``logits`` or, beside
     tables, under the replay block's id, at O·K rows a span of N words, under the row values' window domain."""
     L = BR.Layout(check, 0, 1, 8, 4, 3, "ab" * 64, True, ids=True, logits=True)
     assert L.logit_rows == (4 * K, N) and L.logits_port == BR.LOGITS
@@ -58,9 +58,9 @@ def test_a_class_lists_its_select_inputs_after_its_return_at_the_rows_round_2s_l
     assert (L.leaves(BR.LOGITS), L.words(BR.LOGITS), L.schemas()[BR.LOGITS]) == (3 * 4 * K, N, BR.SCHEMA)
     assert L.domain(BR.LOGITS) == BR.window_domain(L.partition["program"], P.digest(L.partition), BR.LOGITS, 3 * 4 * K,
                                                    L.run)
-    rows = {(r.template, r.port): r for r in SS.replay_rows(L.program, descriptor_id(L.replay))}
+    rows = {(r.template, r.port): r for r in RL.replay_rows(L.program, descriptor_id(L.replay))}
     reads = [rows[(P.template_id(t), "logits")] for t in L.templates]
-    assert [(r.per, [SS.row_at(r.runs, j) for j in range(4)]) for r in reads] == [
+    assert [(r.per, [RL.row_at(r.runs, j) for j in range(4)]) for r in reads] == [
         (4 * K, [j * K + k for j in range(4)]) for k in range(K)]
     T = BR.Layout(check, 0, 1, 8, 4, 3, "ab" * 64, True, (0,), 16, ids=True, logits=True)
     block = descriptor_id(T.replay)

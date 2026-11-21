@@ -7,6 +7,7 @@ public import Proofs.Hash.TreeRoot
 public import Proofs.Hash.HistoryTable
 public import Proofs.Hash.Witnesses
 public import Proofs.Hash.HistoryWitness
+public import Proofs.Hash.StringCommitment
 
 /-! The hash area's proofs. -/
 

@@ -1,10 +1,10 @@
-// The honest step the probes time beside other work (side.cu, power.cu): 8 independent int8 IMMA (m16n8k32) on sampled
+// The honest step the probes time beside other work (power.cu, uniform.cu, l2gather.cu, dc's): 8 independent int8 IMMA (m16n8k32) on sampled
 // operands, then each accumulator's 4 words folded by duo (receipt_folds.cuh's rf_duo_step, 3 scalar instructions a word
 // as ptxas lowers it) into that accumulator's own (y, z), so the fold binds every output word of every MMA.
 #pragma once
 #include <stdint.h>
 
-#include "../../../../verity/protocols/resource_accounting/compute/pouw/verifier/receipts/receipt_folds.cuh"
+#include "../../../../verity/protocols/accounting/compute/pouw/verifier/receipts/receipt_folds.cuh"
 
 __device__ __forceinline__ void mma_imma(int32_t* d, const uint32_t* a, const uint32_t* b) {
   asm volatile("mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3};"

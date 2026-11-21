@@ -12,7 +12,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity.protocols.resource_accounting.network.prover import leak_scan as LS, proof_drivers
+from verity.protocols.accounting.network.prover import leak_scan as LS, proof_drivers
 from benchmarks.network_traces import zk_drivers
 
 zk_drivers.install()
@@ -181,8 +181,8 @@ def test_reads_are_the_formats_fields_and_its_nonces():
 
 
 def test_reads_swaps_the_reader_under_its_lock_and_restores_it(monkeypatch):
-    """`reads` reads through its own recorder in place of `transcript_check.R` only while it holds ``_SWAP`` (n2_zk scans
-    its members in threads), and puts the reader back even when the format refuses the stream."""
+    """`reads` reads through its own recorder in place of `transcript_check.R` only while it holds ``_SWAP`` (a driver may
+    scan its members in threads), and puts the reader back even when the format refuses the stream."""
     seen, layout, R = [], RD.layout, RD.tc.R
     monkeypatch.setattr(RD, "layout", lambda b, zk: seen.append((LS._SWAP.locked(), RD.tc.R)) or layout(b, zk=zk))
     assert LS.reads.__wrapped__(b"\x01") is None

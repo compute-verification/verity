@@ -102,9 +102,8 @@ waits on the whole unit's tree.  h0 is a plain format (TurboSHAKE128 digests, SH
 uses.  -h3 (``pearl-c-nvfp4-v0-h3``, not registered) keys each row's E_A on its own SHA-512 digest, as Pearl-C's -h3
 does; no device path forms it yet.
 The domain (`PearlC4.check`), B-OVF's credit discount (`B_OVF`), D-SK (`seed_b`) and the accounting
-(`wref`, `credit_of`) are stated where they are coded.  The reference replay (`benchmarks/pouw/pearl_c4/replay.py`) opens
-rows and is a development shortcut: the protocol checks a sampled tile by a zero-knowledge proof of `pc4`'s hiding
-Programs, which opens nothing.
+(`wref`, `credit_of`) are stated where they are coded.  The protocol checks a sampled tile by a zero-knowledge proof of
+`pc4`'s hiding Programs, which opens nothing.
 
 **Stand-ins.**  The atoms are the RTX 5090 pins (`BLACKWELL_SM120_NVF4`, `_MXF4`, `HOPPER_BF16_M16N8K16`), pending GPU 4's
 RTX PRO recheck.  The E2M1, UE4M3 and UE8M0 casts are modelled from the PTX ISA, not captured.  A negative value that
@@ -129,8 +128,8 @@ from verity.circuits.silicon import fp32
 from verity.circuits.silicon.models import BLACKWELL_SM120_MXF4, BLACKWELL_SM120_NVF4, HOPPER_BF16_M16N8K16, BlockScaledAlignAdd
 from verity.errors import InvalidArtifact
 
-from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Certificate, Context, DomainError, Matmul, Shape, Tile, grid_tiles
-from verity.protocols.resource_accounting.compute.pouw.verifier.registration import (  # noqa: F401 - re-exported
+from verity.protocols.accounting.compute.pouw.verifier.protocol import Certificate, Context, DomainError, Matmul, Shape, Tile, grid_tiles
+from verity.protocols.accounting.compute.pouw.verifier.registration import (  # noqa: F401 - re-exported
     GAMMA_FOLD,
     HEAD_INTERLEAVE,
     REGISTRATION_STACKS,
@@ -140,10 +139,10 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.registration imp
     check_registration,
 )
 
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
+from verity.protocols.accounting.compute.pouw.prover.schemes import pearl_c as C
 from . import pearl_c4_c_L as CL
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_kw as P
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_work import UnitRecord
+from verity.protocols.accounting.compute.pouw.prover.schemes import pearl_kw as P
+from verity.protocols.accounting.compute.pouw.prover.schemes.pearl_c_work import UnitRecord
 
 R = 32
 ATOM = 64
@@ -1066,7 +1065,7 @@ def tile_inert_work(fmt: Fmt, a: Formed, b: Formed, rows: Sequence[int], cols: S
                f1: RowF1 | None = None, memo: RowTerms | None = None) -> InertWork:
     """The inert work over the credited words at tile positions rows x cols of a tile's formed operands (A′ = a, B̃ = b, with
     this salt's E lines e_a and e_b), for a unit of m x k x n (m defaults to n).  `f1` evaluates a row's F1′; a verifier
-    may pass a faster evaluation that charges at least the rule's (`verity/protocols/experimental/pearl_c4/prover/f1_fast.py`).  `memo` holds
+    may pass a faster evaluation that charges at least the rule's.  `memo` holds
     rows already evaluated on these operands with this `f1` (`row_terms`)."""
     m = n if m is None else m
     f1 = row_f1 if f1 is None else f1
@@ -1128,8 +1127,7 @@ class PearlC4:
             raise ValueError(f"hashing {hashing!r}: one of {', '.join(HASHINGS)}")
         self.fmt, self.hashing = FORMATS[fmt], hashing
         self.commitment_hash = C.TREE_HASH[hashing]
-        #: F1′'s evaluation: the rule's own, or a verifier's that charges at least it (staged: `f1_fast`, pending a
-        #: rating of its bounds)
+        #: F1′'s evaluation: the rule's own, or a verifier's that charges at least it
         self.f1 = row_f1 if f1 is None else f1
         self.name = NAMES[fmt] + ("" if hashing == "h0" else f"-{hashing}")
         #: MXFP4 is contrast only: its int8 closure holds under F2, but F1′ puts 9.5–57% of honest MXFP4 credit over the

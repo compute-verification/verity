@@ -1,10 +1,10 @@
-"""Pearl-C's sm_90a tree off the card (verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90): the GEMMs within the H100's 227 KB with their
+"""Pearl-C's sm_90a tree off the card (verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm90): the GEMMs within the H100's 227 KB with their
 tiles the runner's, the kernel's constants the scheme's, the SASS gate refusing a lowered or spilling build, the check
 fixture against the scheme on the H100 record, and run.py's identity refusal and dry run on a CPU stand-in for libcuda
 (pearl_c/fake_cuda.c, with pearl_c_sm120/fake_tma.c's tensor maps; an H200's name, SM count, compute capability, UUID
 and shared-memory limit), every launch's pointers and sizes checked against each kernel's footprint as pearl_c_sm90.cu
 states it, and each GEMM's operands against the tensor maps encoded for them at its tile's boxes.  With VERITY_POUW_NVCC
-naming a CUDA >= 12.8 toolkit, the real sm_90a build passes the gate."""
+naming the toolkit sm_90a's pins name (nvcc V13.0.88), the real sm_90a build passes the gate."""
 
 from __future__ import annotations
 
@@ -23,10 +23,10 @@ import pytest
 from conftest import load
 from verity_config.settings import of
 
-from verity.protocols.resource_accounting.compute.pouw.verifier.audit import weights_root
-from verity.protocols.resource_accounting.compute.pouw.verifier.coins import CoinCommitment, CoinOpening, coin_reason
+from verity.protocols.accounting.compute.pouw.verifier.audit import weights_root
+from verity.protocols.accounting.compute.pouw.verifier.coins import CoinCommitment, CoinOpening, coin_reason
 
-HERE = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "kernels" / "pearl_c_sm90"
+HERE = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "compute" / "pouw" / "prover" / "kernels" / "pearl_c_sm90"
 POUW = (Path(__file__).resolve().parents[3] / "benchmarks" / "pouw")
 SM120_DIR = HERE.parent / "pearl_c_sm120"
 
@@ -41,7 +41,7 @@ def anew(name: str, path: Path):
 
 
 F = load("pearl_c_sm90/fixture.py")
-S = load("pearl_c_sm90/sass_gate.py")
+S = anew("pouw_build_gate", HERE.parents[1] / "build_gate.py").load(HERE / "sass_gate.json")
 RUN = load("pearl_c_sm90/run.py")
 
 SOURCE = (HERE / "pearl_c_sm90.cu").read_text()
@@ -90,7 +90,7 @@ def test_gemms_fit_h100_shared_memory_and_are_the_runners():
     for name, mode, tm, bn, g in gemms():
         assert 48 * 1024 < tile_smem(tm, bn) <= H100_MAX_DYN, name
         assert RUN.gemm_tile(name) == (tm, bn) and RUN.gemm_threads(name) == 128 * (tm // 64 + 1), name
-        assert S.WANT[name][0] == bn and S.WANT[name][2] == (4 if mode in ("M_PEARLC", "M_PEARLC_S") else 0), name
+        assert S.want[name][0] == bn and S.want[name][2] == (4 if mode in ("M_PEARLC", "M_PEARLC_S") else 0), name
         assert g in (0, 4) and (g == 0) == name.startswith("gemm_fast"), name
         if not name.startswith("gemm_words"):
             base = name.removesuffix(RUN.tile_suffix(tm, bn))
@@ -101,11 +101,11 @@ def test_gemms_fit_h100_shared_memory_and_are_the_runners():
     for name, spec in grouped.items():                   # each is its ungrouped kernel's mode, tile and gate
         alone = name.replace("_g_d", "_d")
         assert spec == next((m, tm, bn, g) for n, m, tm, bn, g in gemms() if n == alone), name
-        assert RUN.gemm_tile(name) == RUN.gemm_tile(alone) and S.WANT[name] == S.WANT[alone], name
-    assert set(S.WANT) - {"form_s5", "form_s5_scalar", "form_s5_g", "form_s5_ep", "form_s5_epw"} == names | set(grouped)
-    assert S.WANT["form_s5_g"] == S.WANT["form_s5_ep"] == S.WANT["form_s5_epw"] == S.WANT["form_s5"]
+        assert RUN.gemm_tile(name) == RUN.gemm_tile(alone) and S.want[name] == S.want[alone], name
+    assert set(S.want) - {"form_s5", "form_s5_scalar", "form_s5_g", "form_s5_ep", "form_s5_epw"} == names | set(grouped)
+    assert S.want["form_s5_g"] == S.want["form_s5_ep"] == S.want["form_s5_epw"] == S.want["form_s5"]
     # form_s5_epw's window is gemm_words_win_d's tile: its four k32 atoms at N = 32
-    assert S.WINDOW_ATOMS == {"form_s5_epw": S.WANT["gemm_words_win_d"][1]} and S.WANT["gemm_words_win_d"][0] == 32
+    assert S.window["atoms"] == {"form_s5_epw": S.want["gemm_words_win_d"][1]} and S.want["gemm_words_win_d"][0] == 32
     assert set(RUN.FORM_ALTS) == {"form_s5_scalar"}
     assert form_kernels() == ["form_s5", "form_s5_scalar", "form_s5_g", "form_s5_ep", "form_s5_epw"]
 
@@ -170,9 +170,9 @@ def test_descriptors_are_the_layouts_staged():
 
 
 def test_kernel_constants_match_the_reference():
-    from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
-    from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_kw as P
-    from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_device import H100
+    from verity.protocols.accounting.compute.pouw.prover.schemes import pearl_c as C
+    from verity.protocols.accounting.compute.pouw.prover.schemes import pearl_kw as P
+    from verity.protocols.accounting.compute.pouw.prover.schemes.pearl_c_device import H100
 
     assert int(re.search(r"S5_LINE = (0x[0-9A-Fa-f]+);", SOURCE).group(1), 16) == C.S5_LINE
     assert "0x1p-32f" in SOURCE and C.S5_FLOOR == P.f32_bits(2.0 ** -32)
@@ -452,7 +452,7 @@ PTXAS_OK = ("ptxas info    : Compiling entry function 'gemm_x' for 'sm_90a'\n"
 
 
 def test_sass_gate_refuses_what_it_should(monkeypatch):
-    monkeypatch.setattr(S, "WANT", {"gemm_x": (128, 2, 1)})
+    monkeypatch.setattr(S, "want", {"gemm_x": (128, 2, 1)})
     funcs, problems = S.gate(PTXAS_OK, SASS_OK)
     assert not problems and funcs["gemm_x"]["QGMMA"] == 2 and funcs["gemm_x"]["HGMMA"] == 1 and funcs["gemm_x"]["regs"] == 168
     bad = {
@@ -471,18 +471,18 @@ def test_sass_gate_refuses_what_it_should(monkeypatch):
                   SASS_OK)[1]
     assert S.gate(PTXAS_OK, SASS_OK.replace("gemm_x", "gemm_y"))[1]
     # a kernel with A'F_B's window has exactly its atoms at N = 32 beside its own; no other kernel has any
-    monkeypatch.setattr(S, "WINDOW_ATOMS", {"gemm_x": 2})
+    monkeypatch.setitem(S.window, "atoms", {"gemm_x": 2})
     window = "\n  /*0050*/ QGMMA.64x32x32.F32.E4M3.E4M3 R8, gdesc[UR4], RZ, !UPT, gsb0 ;"
     funcs, problems = S.gate(PTXAS_OK, SASS_OK + window * 2)
     assert not problems and funcs["gemm_x"]["QGMMA_window"] == 2 and funcs["gemm_x"]["QGMMA"] == 2
     assert S.gate(PTXAS_OK, SASS_OK + window)[1] and S.gate(PTXAS_OK, SASS_OK + window * 3)[1]
-    monkeypatch.setattr(S, "WINDOW_ATOMS", {})
+    monkeypatch.setitem(S.window, "atoms", {})
     assert S.gate(PTXAS_OK, SASS_OK + window * 2)[1]
 
 
 def test_sass_gate_allows_local_memory_only_in_the_reference_row_digest(monkeypatch):
-    assert {k: v[0] for k, v in S.LOCAL_OK.items()} == {"s512_rows": 16}
-    monkeypatch.setattr(S, "WANT", {"gemm_x": (128, 2, 1)})
+    assert {k: v[0] for k, v in S.local_ok.items()} == {"s512_rows": 16}
+    monkeypatch.setattr(S, "want", {"gemm_x": (128, 2, 1)})
     rows = ("ptxas info    : Compiling entry function 's512_rows' for 'sm_90a'\n"
             "ptxas info    : Function properties for s512_rows\n    8 bytes stack frame, 4 bytes spill stores, 4 bytes spill loads\n"
             "ptxas info    : Used 255 registers\n")
@@ -505,7 +505,31 @@ def test_the_build_says_its_one_target_with_no_toolkit():
     assert (HERE.parents[7] / "calibration" / "hardware" / "architectures" / f"{arch}.toml").is_file()
 
 
-@pytest.mark.skipif(not of(__file__).VERITY_POUW_NVCC, reason="VERITY_POUW_NVCC names a CUDA >= 12.8 toolkit (about 30 s)")
+def test_the_build_refuses_an_nvcc_its_sm90a_pins_do_not_name(tmp_path):
+    """build.sh builds with no nvcc but the one whose ptxas `sass_pins.json` pins for sm_90a, so its harness gate (enforced)
+    has pins to read: another release is refused by name before anything is built, and the pinned one is let through to
+    the compile (here a stand-in nvcc that refuses it)."""
+    pins = json.loads((HERE.parents[1] / "sass_pins.json").read_text())["toolkits"]
+    pinned = sorted({t["version"] for t in pins.values() if any(a.split()[:2] == ["-arch", "sm_90a"] for a in t["args"])})
+    assert pinned == ["Cuda compilation tools, release 13.0, V13.0.88"]
+
+    def build(said: str) -> subprocess.CompletedProcess:
+        kit = tmp_path / said.rsplit(" ", 1)[-1]
+        (kit / "bin").mkdir(parents=True)
+        (kit / "bin" / "nvcc").write_text(f"#!/bin/sh\n[ \"$1\" = --version ] && {{ echo 'nvcc: NVIDIA (R) Cuda compiler driver'; "
+                                          f"echo '{said}'; exit 0; }}\necho 'stand-in nvcc: no compile' >&2; exit 1\n")
+        (kit / "bin" / "nvcc").chmod(0o755)
+        env = dict(os.environ, CUDA_HOME=str(kit), GENCODE="arch=compute_90a,code=sm_90a")
+        return subprocess.run(["bash", str(HERE / "build.sh"), str(kit / "out")], capture_output=True, text=True, env=env)
+
+    r = build("Cuda compilation tools, release 12.9, V12.9.86")
+    assert r.returncode == 1 and "builds only with the nvcc" in r.stderr and pinned[0] in r.stderr, r.stderr
+    assert "V12.9.86" in r.stderr and not (tmp_path / "V12.9.86" / "out").exists()
+    r = build(pinned[0])
+    assert r.returncode == 1 and "builds only with" not in r.stderr and "stand-in nvcc: no compile" in r.stderr, r.stderr
+
+
+@pytest.mark.skipif(not of(__file__).VERITY_POUW_NVCC, reason="VERITY_POUW_NVCC names the toolkit sm_90a's pins name, nvcc V13.0.88 (about 30 s)")
 def test_the_sm90a_build_passes_the_gate(tmp_path):
     cuda = Path(of(__file__).VERITY_POUW_NVCC)
     cubin, ptxas, sass = tmp_path / "k.cubin", tmp_path / "ptxas.txt", tmp_path / "k.sass"
@@ -760,6 +784,7 @@ def ship(tmp_path_factory):
     subprocess.run([cc, "-O1", "-Wall", "-Werror", "-shared", "-fPIC", "-o", str(out / "fake_cuda.so"), str(SM120_DIR / "fake_tma.c")],
                    check=True)
     shutil.copy(HERE / "run.py", out)
+    shutil.copy(HERE.parent / "pearl_c" / "driver.py", out)
     (out / "pearl_c_sm90.cubin").write_bytes(b"\x7fELF" + bytes(14) + bytes([190, 0]) + bytes(44))
     return out
 

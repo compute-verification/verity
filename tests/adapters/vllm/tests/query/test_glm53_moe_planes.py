@@ -6,7 +6,6 @@ that reads another pair's quant is named, never read."""
 from __future__ import annotations
 
 import copy
-import re
 
 import numpy as np
 import pytest
@@ -62,7 +61,7 @@ class _Served(nn.Module):
 def instances() -> dict:
     """The derived chain's instance rows under `model.model.layers.3.mlp.experts`, with the rows the CPU derive cannot emit appended:
     `MoeSum_v1` per token (`_moe_C.moe_sum` needs vLLM), the next layer's fused norm reading it, the logits and the token select."""
-    from verity_vllm.pipeline.build import _instance_sequence
+    from verity_vllm.pipeline.build_instances import _instance_sequence
     from verity_vllm.program.frontend.rules import vllm_bindings as VB
 
     class Root(nn.Module):
@@ -152,24 +151,6 @@ def test_the_replay_index_addresses_every_row_at_the_plane_the_manifest_sizes(in
     assert seen == sizes and all(d["members"] == [("out", H, "bf16")] for d in sm)
     act_q = next(r for r in instances["rows"] if pi.describe(r).get("plane_kind") == "act_quant")
     assert pi.describe(act_q)["members"] == [("act_q", INTER, "w8"), ("act_scale", INTER // G, "f32")]
-
-
-def test_a_block_whose_router_no_plane_names_is_calls_like_the_rest(instances):
-    """DeepSeek-V4's Marlin block is routed by `MoeRouterSqrtSoftplus_v1`, which no plane names: its module has no planes
-    (`format.moe_plane_modules`), so the manifest requires every Value the block's Calls exchange, the SiLU's among them, as
-    `call_boundaries`, and the replay index addresses each row at its Call, never at a plane it cannot size."""
-    rows = [dict(r, spec=re.sub(r"^MoeRouterSigmoidBias_v1\{(E=\d+),TOPK=\d+,(SCALE=.*),KERNEL=.*\}$", r"MoeRouterSqrtSoftplus_v1{\1,\2}",
-                                r["spec"])) for r in instances["rows"]]
-    inst = dict(instances, rows=rows)
-    assert fmt.moe_plane_modules((fmt.spec_family(r["spec"]), fmt.split_name(r["name"])[0]) for r in rows) == frozenset()
-    P = from_instances(inst)
-    m = request_manifest(P, Correspondence(P), RESULT, request_id="r0", rank=0, ranks=1).manifest
-    assert m["complete"] and not [x for x in m["identities"] if x["family"] == "moe_block_stream"]
-    assert {x["spec"] for x in m["identities"] if x["family"] == "call_boundaries"} == {
-        "MoeRouterSqrtSoftplus_v1", "Fp8GroupQuantUe8m0_v1", "MoeExpertFp8Gemm_v1", "SiluMul_v2", "MoeExpertFp8GemmW_v1"}
-    pi = IX.ProgramIndex(inst)
-    block = [pi.describe(r) for r in rows if r["name"].startswith(X + "/")]
-    assert len(block) == len(rows) - M - 2 and all(d["members"] and "plane_kind" not in d and "copies" not in d for d in block)
 
 
 def _rewire(inst: dict, i: int, arg: int, j: int) -> dict:

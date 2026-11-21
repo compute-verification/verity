@@ -1,4 +1,4 @@
-"""Pearl+'s live sample end to end on one CPU machine, against infra's own gate code (`verity/protocols/compose/verifier/live_challenger/auditor.py`)
+"""Pearl+'s live sample end to end on one CPU machine, against infra's own gate code (`verity/protocols/run/verifier/live_challenger/auditor.py`)
 on a scratch auditor device: its LMS-signed ledger, and each session's challenger a real ``serve.py`` process whose coins
 are the Lean verifier's (``spot-verifier``, built first).
 
@@ -11,7 +11,7 @@ process of its own (this file's ``serve`` verb, `auditor.run` with no coin link,
 
 1. ``served_verdicts.py pearlplus-period open``: the lane's Pearl-C period, cap 1.
 2. A salt-only session reserved in that period and opened on salt epoch 0's root over the passes' fixed operands' root
-   (`pouw_h1_window.reserve_salt` and ``open_session``, as Pearl+'s attach does (`pouw.scheme.Attached.reserve`)), its salt coin salting
+   (`reserve_salt` and ``open_session``, as Pearl+'s attach does (`pouw.scheme.Attached.reserve`)), its salt coin salting
    a toy pass (the pouw suite's `proved_pass`, k = 128 and 16 x 16 tiles, in place of a GPU serve), then closed.
 3. ``served_verdicts.py pearlplus-period close``, once that session has ended.
 4. ``served_passes.py verify --tie W --test-instance`` under PEARLC_CHALLENGER_GATE/PEER/LANE: the verifier's sample a sample
@@ -28,7 +28,7 @@ process of its own (this file's ``serve`` verb, `auditor.run` with no coin link,
 
 Stand-ins, named in OUT/e2e.json: the serve (one toy pass, `served.json` written here), SPOT's window
 docket and records audit (two files tied to W), and, unless ``--lean`` names a ``pouw-pearlplus``, the Lean
-``PouwCheck.PearlPlus`` verdict (``pearlplus-lean.json``, copied from Pearl+'s answer); with it, `served_pearlplus.sh`'s
+``PouwVerifier.PearlPlus`` verdict (``pearlplus-lean.json``, copied from Pearl+'s answer); with it, `served_pearlplus.sh`'s
 Lean step writes that file (``served_passes.py lean``, both verdicts in OUT/e2e.json's ``lean``). Then, as a control, a
 second sample on the same commitment: the gate refuses its open (one session a root, ever), so no second coin exists, and
 the piece written after it composes the same row."""
@@ -45,7 +45,7 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
-from verity.protocols.compose import schemes
+from verity.protocols.run import schemes
 
 HERE = Path(__file__).resolve().parent
 TREE = HERE.parents[1]
@@ -62,7 +62,7 @@ WAIT_S = 300
 
 def _auditor():
     import importlib.util
-    spec = importlib.util.spec_from_file_location("e2e_auditor", TREE / "verity" / "protocols" / "compose" / "verifier" / "live_challenger" / "auditor.py")
+    spec = importlib.util.spec_from_file_location("e2e_auditor", TREE / "verity" / "protocols" / "run" / "verifier" / "live_challenger" / "auditor.py")
     module = sys.modules.setdefault(spec.name, importlib.util.module_from_spec(spec))
     spec.loader.exec_module(module)
     return module
@@ -186,7 +186,7 @@ def init(root: Path) -> dict:
     """The scratch auditor host under `root`, with its key, peers, pin and coin ports: the gate command, the pin and the
     key's SHA-512, the coins' Lean verifier (``spot-verifier``) built first."""
     from verity.commitments.crypto import lms
-    from verity.protocols.proofs.spot.verifier.one_stage import verifier as V
+    from verity.protocols.proof.spot.verifier.one_stage import verifier as V
 
     t = time.monotonic()
     print(f"[coins] {V.executable()} built in {time.monotonic() - t:.0f} s: each challenger's coins are its", flush=True)
@@ -227,9 +227,9 @@ def run(out: Path, lean: str | None = None) -> int:
 
 
 def _run(out: Path, root: Path, lean: str | None = None) -> int:
-    from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
+    from verity.protocols.accounting.compute.pouw.verifier import salt as PS
     from verity_vllm.pipeline.commit_coins import ChallengerGate
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as PHW
+    from verity.protocols.accounting.compute.pouw.prover.serving.coins import window as PHW
 
     sys.path[:0] = [str(HERE), str(TREE / "tests" / "benchmarks" / "pouw")]
     import served_verdicts as S
@@ -244,7 +244,7 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
     (main := out / "main.txt").write_text(pin + "\n")
     piece, log = out / "pieces" / "pouw", []
     piece.mkdir(parents=True)
-    report: dict = {"gate": "verity/protocols/compose/verifier/live_challenger/auditor.py on a scratch host, as lane " + LANE, "pin": pin,
+    report: dict = {"gate": "verity/protocols/run/verifier/live_challenger/auditor.py on a scratch host, as lane " + LANE, "pin": pin,
                     "key_sha512": key_sha512, "period": PERIOD, "steps": log,
                     "stand_ins": {"serve": "one toy pass (proved_pass, k 128, 16 x 16 tiles) salted by the live session",
                                   "spot": "registration.json chained after W, a records-audit summary tied to W "
@@ -310,7 +310,7 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
         "output_tokens": 1, "ok": True, "over_caps": [],
         "coins": {"source": S.LIVE_SOURCE, "reserved": reserved, "session": carried,
                   "closed": {"closed": True, "complete": True}},
-        "passes": [{"pass": 0, "timed": True, "units": 2, "macs": work.get("macs"), "manifest": str(path)}]}))
+        "passes": [{"pass": 0, "timed": True, "units": 2, "macs": work.get("checked_macs"), "manifest": str(path)}]}))
     # the Lean verdict before the piece, as the harness takes it, so the piece holds both checks' costs
     tie = ((answer.get("public") or {}).get("tie") or {}).get("record")
     if lean is None:
@@ -318,11 +318,16 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
             "verdict": answer.get("verdict"), "reason": None, "commitment": answer.get("commitment"),
             "source": (answer.get("profile") or {}).get("source"), "drawn": verified.get("draws"), "work": work,
             "tie": {"record": tie}, "stand_in": True}))
+        # `served_passes.timed_credit` over the one pass, which is timed: the whole work
+        (piece / S.PEARLPLUS_LEAN_CHECK).write_text(json.dumps({
+            "line": verified.get("line"), "stand_in": True,
+            "timed": {"passes": 1, "macs": work.get("checked_macs"), "credited": work.get("credited")}
+            if answer.get("verdict") == "accept" else None}))
     else:
         exe = lean
         if lean == "build":
-            from verity.protocols.proofs.spot.verifier.one_stage import verifier as V
-            pkg = TREE / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "verifier" / "lean" / "pearlplus"
+            from verity.protocols.proof.spot.verifier.one_stage import verifier as V
+            pkg = TREE / "verity" / "protocols" / "accounting" / "compute" / "pouw" / "verifier" / "lean" / "pearlplus"
             try:
                 exe = str(V.executable("pouw-pearlplus", pkg))
                 log.append({"step": "lean build", "rc": 0})
@@ -340,8 +345,8 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
                             "--main", str(main), "--coin", str(piece / S.COIN_PUT)])
 
     # 6. the compose
-    from verity.protocols.proofs.spot.verifier import service as SV
-    from verity.protocols.proofs.spot.verifier.one_stage.verdict_record import DESIGN
+    from verity.protocols.proof.spot.verifier import service as SV
+    from verity.protocols.proof.spot.verifier.one_stage.verdict_record import DESIGN
 
     audit = out / "sampled-proofs"
     rule = "stratified-rate:1/1"
@@ -371,7 +376,7 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
     spec = importlib.util.spec_from_file_location("e2e_bench_arm", TREE / "benchmarks" / "pouw" / "pearl_c_vllm" / "bench_arm.py")
     BA = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(BA)
-    from verity.protocols.proofs.spot.verifier.challenger.challenger import CoinError
+    from verity.protocols.proof.spot.verifier.challenger.challenger import CoinError
     marks: list = []
     try:
         BA.LiveDraw(gate_cmd, PEER, LANE)(bytes.fromhex(record["commitment"]), marks.append)

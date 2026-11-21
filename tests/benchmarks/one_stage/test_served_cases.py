@@ -44,15 +44,15 @@ import pytest
 from verity.commitments import docket_digest as DD
 from verity.circuits import population as PN
 from verity.commitments import domains as DM
-from verity.protocols.resource_accounting.compute.pouw.verifier import credit as Cr
-from verity.protocols.resource_accounting.compute.pouw.verifier import weights as PW
-from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import draw as DR
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P
-from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
-from verity.protocols.proofs.spot.prover import docket as DK
+from verity.protocols.accounting.compute.pouw.verifier import credit as Cr
+from verity.protocols.accounting.compute.pouw.verifier import weights as PW
+from verity.protocols.proof.spot.verifier import service as S
+from verity.protocols.proof.spot.verifier.one_stage import draw as DR
+from verity.protocols.proof.spot.verifier.one_stage import partition as P
+from verity.protocols.proof.spot.verifier.one_stage import proofs as PF
+from verity.protocols.proof.spot.verifier.one_stage import registered as G
+from verity.protocols.proof.spot.verifier.one_stage import docket as R
+from verity.protocols.proof.spot.prover import docket as DK
 from verity.circuits import codec, partition_object as PO
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
@@ -139,7 +139,7 @@ def audit_dir(root: Path, v1: dict, *, v2: bool | str = True) -> Path:
             "blobs": [str(b) for b in blobs], "commitment": v1["commitment"],
             "evidence": codec.canonical_json(evidence).hex(),
             "params": {**v1["params"], "challenger": {"key": key, "label": "draw"},
-                       "proofs": {"circuit": "cc" * 64, "public": "aa" * 64, "registered": None},
+                       "proofs": {"public": "aa" * 64, "registered": None},
                        "window_root": "0f" * 64}},
             sort_keys=True))
     return root / "audit"
@@ -233,8 +233,6 @@ H1 = hashlib.sha512(b"the H1 window Program's descriptor").hexdigest()
 OPEN = hashlib.sha512(b"the H1 window's open root").hexdigest()
 K, M = 2048, 4
 TABLES = ((Cr.commit_rows(0, K), f"pouw/h1/a/{K}@0", PW.chunks(K) * M), (Cr.commit_ids(0), "pouw/h1/ids@0", 8))
-#: the auditor's ledger digest a period case commits to
-LEDGER = "1e" * 64
 
 
 def h1_docket(previous: str | None = None, entry: int = 0) -> dict:
@@ -272,33 +270,12 @@ def tied_v1_case(w: dict) -> dict:
             "params": json.loads(json.dumps(params))}
 
 
-def h1_log(h1: Path, records: list[tuple[int, str, dict]]) -> None:
-    """The serve's H1 log in ``h1`` as `serve_tie` writes it: each ``(window, kind, record)`` in
-    ``w<window>/<kind>.json`` and a line naming that file and the record's digest."""
-    lines = []
-    for k, kind, r in records:
-        f = h1 / f"w{k}" / f"{kind}.json"
-        f.parent.mkdir(parents=True, exist_ok=True)
-        f.write_text(json.dumps(r, sort_keys=True))
-        lines.append({"digest": DD.digest(r), "file": f"w{k}/{kind}.json", "kind": kind, "window": k})
-    (h1 / "log.jsonl").write_text("".join(json.dumps(x, sort_keys=True) + "\n" for x in lines))
-
-
-def tied_serve(root: Path, commits: list | None = None) -> tuple[Path, dict, dict]:
-    """A serve dir under H1's tie (`served_verdicts.sh`'s H1_TIE) at its one audited window: V3c's audit of the window's
-    record R (``v3c-w0-…/audit``), H1's log of W then R (``h1/``), and PoUW's period case as `served_pouw.sh` has
-    `pouw_piece.py period` write it (``private/pouw/period``), its windows' ``commit`` each of ``commits`` (default: one
-    window naming R, its canonical JSON in hex as credit reads it). The dir, v1's case and W."""
+def tied_serve(root: Path) -> tuple[Path, dict, dict]:
+    """A serve dir at its one audited window: V3c's audit of the window's record R (``v3c-w0-…/audit``) chained right
+    after the window's docket W. The dir, v1's case and W."""
     w = h1_docket()
     v1 = tied_v1_case(w)
     audit_dir(root / "v3c-w0-4-32-4", v1)
-    h1_log(root / "h1", [(0, "registration", w), (0, "record", json.loads(bytes.fromhex(v1["commitment"])))])
-    piece = root / SC.PERIOD_PIECE
-    piece.mkdir(parents=True)
-    evidence = {"pins": [], "windows": [{"commit": c} for c in ([v1["commitment"]] if commits is None else commits)]}
-    (piece / "case.json").write_text(json.dumps({"blobs": [], "commitment": LEDGER, "params": {"period": "p"},
-                                                 "evidence": codec.canonical_json(evidence).hex()}, sort_keys=True))
-    (piece / "answer.json").write_text(json.dumps(answer(SC.PERIOD, LEDGER), sort_keys=True) + "\n")
     return root, v1, w
 
 
@@ -933,71 +910,6 @@ def test_the_serve_dir_names_its_one_audited_window(tmp_path, capsys):
     assert "holds 2 audited windows" in refused[0]["reason"]
 
 
-def test_under_h1s_tie_every_case_commits_to_the_record_h1_named(tmp_path, capsys):
-    """The serve dir under H1's tie: the one-stage case is V3c's audit's, the policy's commits to the same R with its log
-    the serve's H1 log through W (which R is chained right after), and PoUW's period case, every window naming R, is
-    written as `pouw_piece.py` wrote it beside its own answer. R's digest is the one credit reads off each period window's
-    Commit record, so the three name one record, the tie remote checks."""
-    serve, v1, w = tied_serve(tmp_path / "serve")
-    rec, d = json.loads(bytes.fromhex(v1["commitment"])), digest_of(v1)
-    assert rec["previous"] == DD.digest(w) and Cr.commit_of(v1["commitment"])[0][0].hex() == d
-    private = serve / "private"
-    rc, cases, refused, out = run(capsys, "--serve-dir", serve, "--private", private, "--alpha", "1", "--gamma", 1,
-                                  *stand_ins(tmp_path, v1))
-    assert (rc, refused) == (0, []), out
-    assert cases == [{"dir": str(private / d_), "protocol": id, "verdict": "accept"} | there for id, d_, there in (
-        (V1, "sampled-proofs-v1", ran()), (SAMPLED, "sampled-proofs", ran()), (INF, "inference-only", ran()),
-        (SC.PERIOD, "pouw-period", {}))]
-    piece, got = serve / SC.PERIOD_PIECE, private / "pouw-period"
-    assert stat.S_IMODE(got.stat().st_mode) == 0o700
-    assert {f.name: stat.S_IMODE(f.stat().st_mode) for f in got.iterdir()} == {"case.json": 0o600, "answer.json": 0o600}
-    assert json.loads((got / "case.json").read_text()) == json.loads((piece / "case.json").read_text())
-    assert (got / "answer.json").read_text() == (piece / "answer.json").read_text()
-    reg = json.loads((private / "inference-only" / "case.json").read_text())
-    assert reg["commitment"] == v1["commitment"] and reg["params"]["log"] == [w]
-    assert reg["params"]["parameters"] == v1["params"]["parameters"]
-    assert [n for n, _ in reg["params"]["parameters"]] == [name for name, _, _ in TABLES] + ["0.x", "1.x"]
-    assert json.loads((tmp_path / "reg.seen").read_text())["commitment"] == v1["commitment"]
-    for secret in (v1["commitment"], reg["evidence"], json.loads((piece / "case.json").read_text())["evidence"]):
-        assert secret not in out
-
-
-@pytest.mark.parametrize("change, reason", [
-    ("h1-registration", "window 0 of the period names the Commit record {w}…, not the window's registration record "
-                        "{r}…: remote's record tie rejects it"),
-    ("second-window", "window 1 of the period names the Commit record {w}…"),
-    ("no-commit", "window 0 of the period names no Commit record, so not the window's registration record {r}…"),
-    ("v1-record", "window 0 of the period names no Commit record"),
-    ("no-windows", "the period's evidence names no windows"),
-    ("other-answer", f"the period's answer is {V1!r}'s, not {SC.PERIOD}'s"),
-    ("no-answer", "the period's case has no answer line"),
-    ("case-key", "case.json is not a case"),
-])
-def test_a_period_on_another_record_is_refused_before_any_composite(tmp_path, capsys, change, reason):
-    """A period case is taken only when every window names R as its Commit record: one naming H1's own docket W
-    (the record H1 named before the tie), one window of two on W, none, or a v1 record, is refused here and so is handed to
-    neither product; so is a period case with no windows, no answer, another protocol's answer or another key. v1's and
-    the policy's cases are still written."""
-    w = h1_docket()
-    on_r, on_w = tied_v1_case(w)["commitment"], codec.canonical_json(w).hex()
-    commits = {"h1-registration": [on_w], "second-window": [on_r, on_w], "no-commit": [None], "no-windows": [],
-               "v1-record": [codec.canonical_json({**w, "format": DM.REGISTRATION_V1}).hex()]}.get(change)
-    serve, v1, _ = tied_serve(tmp_path / "serve", commits)
-    piece = serve / SC.PERIOD_PIECE
-    if change == "other-answer":
-        (piece / "answer.json").write_text(json.dumps(answer(V1, LEDGER)) + "\n")
-    elif change == "no-answer":
-        (piece / "answer.json").unlink()
-    elif change == "case-key":
-        (piece / "case.json").write_text(json.dumps({**json.loads((piece / "case.json").read_text()), "public": {}}))
-    rc, cases, refused, out = run(capsys, "--serve-dir", serve, "--private", serve / "private", "--alpha", "1",
-                                  "--gamma", 1, *stand_ins(tmp_path, v1))
-    assert rc == 1 and [c["protocol"] for c in cases] == [V1, SAMPLED, INF], out
-    want = reason.format(w=DD.digest(w)[:16], r=digest_of(v1)[:16])
-    assert [r["protocol"] for r in refused] == [SC.PERIOD] and want in refused[0]["reason"], refused
-    assert not (serve / "private" / "pouw-period").exists()
-
-
 #: the salts a Pearl+ pass kept beside its tiles' leaves, two of 192 bytes
 SALTS = bytes(range(192)) * 2
 
@@ -1021,9 +933,9 @@ def pearlplus_parts(serve: Path, w: dict | None = None) -> tuple[Path, dict]:
                         "record": w or {"window": {"version": 2}, "registered": [], "previous": None}},
              "evidence": {"files": [{"pearl/w0/rows.bin": hashlib.sha512(blob).hexdigest()}]},
              "lean": {"verdict": "accept", "reason": None, "drawn": 3,
-                      "work": {"credited": 4, "credited_tiles": 2, "macs": 16, "rho": "1/4", "epsilon": "1/8",
+                      "work": {"credited": 4, "credited_tiles": 2, "checked_macs": 16, "rho": "1/4", "epsilon": "1/8",
                                "over_cap_draws": 0, "give_up": 8},
-                      "exact_work": {"credited": 7, "credited_tiles": 1, "macs": 9}}}
+                      "exact_work": {"credited": 7, "credited_tiles": 1, "checked_macs": 9}}}
     (piece / "parts.json").write_text(json.dumps(parts, sort_keys=True))
     return piece, parts
 
@@ -1037,14 +949,14 @@ def test_pearl_plus_s_case_is_its_piece_s_parts_naming_the_records_digest(tmp_pa
     ‖ commitment), its public the exact work the protocol's check publishes, never the grid form's give-up. Nothing of
     the commitment is printed. A part naming a blob that isn't a file is refused saying so, and so are parts with no
     window, or one that isn't the protocol's; the other cases are still written."""
-    serve, v1, _ = tied_serve(tmp_path / "serve")
-    piece, parts = pearlplus_parts(serve)
+    serve, v1, w = tied_serve(tmp_path / "serve")
+    piece, parts = pearlplus_parts(serve, w)
     private = serve / "private"
     rc, cases, refused, out = run(capsys, "--serve-dir", serve, "--private", private, "--alpha", "1", "--gamma", 1,
                                   *stand_ins(tmp_path, v1))
     assert (rc, refused) == (0, []), out
     assert cases[-1] == {"dir": str(private / "pouw-pearl-plus"), "protocol": SC.PEARL_PLUS, "verdict": "accept"}
-    assert [c["protocol"] for c in cases] == [V1, SAMPLED, INF, SC.PERIOD, SC.PEARL_PLUS]
+    assert [c["protocol"] for c in cases] == [V1, SAMPLED, INF, SC.PEARL_PLUS]
     got = private / "pouw-pearl-plus"
     assert {f.name: stat.S_IMODE(f.stat().st_mode) for f in got.iterdir()} == {"case.json": 0o600, "answer.json": 0o600}
     case = json.loads((got / "case.json").read_text())
@@ -1059,14 +971,14 @@ def test_pearl_plus_s_case_is_its_piece_s_parts_naming_the_records_digest(tmp_pa
     assert json.loads((got / "answer.json").read_text()) == {
         "protocol": SC.PEARL_PLUS, "verdict": "accept", "reason": None,
         "commitment": hashlib.sha512(b"verity/pouw/pearl-plus/manifests/v1\0" + commitment).hexdigest(),
-        "public": {"credited": 7, "credited_tiles": 1, "macs": 9, "rho": "1/4", "epsilon": "1/8", "delta": "1/100"},
+        "public": {"credited": 7, "credited_tiles": 1, "checked_macs": 9, "rho": "1/4", "epsilon": "1/8", "delta": "1/100"},
         "profile": {"draws": 3, "drawn": 3, "passes": 1}}
     assert case["commitment"] not in out
     assert SALTS.hex() not in out and hashlib.sha256(SALTS).hexdigest() not in out and "salts_t" not in out
     (piece / "blobs" / h).unlink()
     rc, cases, refused, out = run(capsys, "--serve-dir", serve, "--private", tmp_path / "p2", "--alpha", "1",
                                   "--gamma", 1, *stand_ins(tmp_path, v1))
-    assert rc == 1 and [c["protocol"] for c in cases] == [V1, SAMPLED, INF, SC.PERIOD], out
+    assert rc == 1 and [c["protocol"] for c in cases] == [V1, SAMPLED, INF], out
     assert [r["protocol"] for r in refused] == [SC.PEARL_PLUS], refused
     assert "the parts name 1 blob(s) that aren't files" in refused[0]["reason"] and h not in out
     (piece / "blobs" / h).write_bytes(b"the pass's rows")
@@ -1076,45 +988,8 @@ def test_pearl_plus_s_case_is_its_piece_s_parts_naming_the_records_digest(tmp_pa
         (piece / "parts.json").write_text(json.dumps(bad, sort_keys=True))
         rc, cases, refused, out = run(capsys, "--serve-dir", serve, "--private", tmp_path / f"w{n}", "--alpha", "1",
                                       "--gamma", 1, *stand_ins(tmp_path, v1))
-        assert rc == 1 and [r["protocol"] for r in refused] == [SC.PEARL_PLUS], (n, refused)
-        assert "parts" in refused[0]["reason"], (n, refused)
-
-
-def test_period_names_the_period_case_to_check_against_the_audits_record(tmp_path, capsys):
-    """``--period`` names the period case beside ``--audit``; with neither it nor a serve dir holding one, no period case
-    is made, and a v1 case that isn't one refuses the period with every other."""
-    serve, v1, w = tied_serve(tmp_path / "serve")
-    audit, piece, exes = serve / "v3c-w0-4-32-4" / "audit", serve / SC.PERIOD_PIECE, stand_ins(tmp_path, v1)
-    log = tmp_path / "log.json"
-    log.write_text(json.dumps([w]))
-    rc, cases, _, out = run(capsys, "--audit", audit, "--private", tmp_path / "p1", "--period", piece, "--log", log,
-                            "--alpha", "1", "--gamma", 1, *exes)
-    assert rc == 0 and [c["protocol"] for c in cases] == [V1, SAMPLED, INF, SC.PERIOD], out
-    rc, cases, _, out = run(capsys, "--audit", audit, "--private", tmp_path / "p2", "--log", log, "--alpha", "1",
-                            "--gamma", 1, *exes)
-    assert rc == 0 and [c["protocol"] for c in cases] == [V1, SAMPLED, INF], out
-    (audit / "window" / "case.json").unlink()
-    (audit / "window" / "case-error.txt").write_text("ValueError: the audit's record has no receipt\n")
-    rc, cases, refused, out = run(capsys, "--serve-dir", serve, "--private", tmp_path / "p3", "--alpha", "1",
-                                  "--gamma", 1, *exes)
-    assert rc == 1 and cases == [] and [r["protocol"] for r in refused] == [V1, SAMPLED, INF, SC.PERIOD], out
-    assert not (tmp_path / "p3").exists()
-
-
-def test_the_policys_log_is_the_serves_h1_log_through_the_records_previous(tmp_path):
-    """Over a serve of several windows, each window's W then R, the log before a window's R is every record through its
-    own W, which chains from the deployment's first record (null previous) to R; later windows' records aren't in it."""
-    w0 = h1_docket()
-    r0 = {"format": DM.REGISTRATION, "previous": DD.digest(w0), "program": "11" * 64}
-    w1 = h1_docket(DD.digest(r0), entry=1)
-    r1 = {"format": DM.REGISTRATION, "previous": DD.digest(w1), "program": "11" * 64}
-    w2 = h1_docket(DD.digest(r1), entry=2)
-    h1_log(tmp_path, [(0, "registration", w0), (0, "record", r0), (1, "registration", w1), (1, "record", r1),
-                      (2, "registration", w2)])
-    assert SC.h1_log(tmp_path / "log.jsonl", r1) == [w0, r0, w1]
-    assert SC.h1_log(tmp_path / "log.jsonl", r0) == [w0]
-    assert SC.h1_log(tmp_path / "nowhere.jsonl", {**r0, "previous": None}) == []
-    SC._chain([w0, r0, w1], r1)
+        assert rc == 1 and [r["protocol"] for r in refused] == ([INF] if n < 2 else []) + [SC.PEARL_PLUS], (n, refused)
+        assert "parts" in refused[-1]["reason"], (n, refused)
 
 
 def test_on_a_serve_tied_to_pearl_plus_the_policys_log_is_w_and_the_serves_first_record_before_it(tmp_path):
@@ -1149,12 +1024,11 @@ def test_on_a_serve_tied_to_pearl_plus_the_policys_log_is_w_and_the_serves_first
             SC.pearl_log(*serve(name, held, start), after(w))
 
 
-def test_without_an_h1_log_the_policys_case_takes_its_log_from_pearl_plus_parts(tmp_path, capsys):
-    """Through the command: a serve dir with Pearl+'s parts and no H1 log writes the policy's case with its log the W
+def test_the_policys_case_takes_its_log_from_pearl_plus_parts(tmp_path, capsys):
+    """Through the command: a serve dir with Pearl+'s parts writes the policy's case with its log the W
     the parts hold, which R is chained right after, and Pearl+'s case commits to that same W; parts holding another W
     refuse the policy's case alone."""
     serve, v1, w = tied_serve(tmp_path / "serve")
-    (serve / "h1" / "log.jsonl").unlink()
     piece, parts = pearlplus_parts(serve, w)
     private = serve / "private"
     rc, cases, refused, out = run(capsys, "--serve-dir", serve, "--private", private, "--alpha", "1", "--gamma", 1,
@@ -1312,38 +1186,6 @@ def test_the_lean_check_refuses_a_log_whose_w_is_not_the_record_r_names(tmp_path
 
 
 @pytest.mark.parametrize("change, reason", [
-    ("other-file", "the serve's H1 log names w0/registration.json as the record of digest"),
-    ("no-file", "a line of the serve's H1 log names no record file and digest"),
-    ("unchained", "the record's previous is no record the serve's H1 log names"),
-    ("not-json", "the record names a previous record, and the serve's H1 log isn't readable: JSONDecodeError"),
-    ("no-log", "which the record names as its previous, so its log doesn't chain from the deployment's first record: "
-               "pass the deployment's log (--log)"),
-])
-def test_the_policy_case_is_refused_when_the_serves_h1_log_does_not_reach_its_record(tmp_path, capsys, change, reason):
-    """The policy's log is read off the serve's H1 log only as it names its records: a line whose file isn't the record
-    of its digest, a line naming none, or a log that never reaches R's previous or isn't JSON refuses the policy's case
-    alone (one-stage's and the period's are still written). So does a serve dir with no H1 log for an R naming a
-    previous record: its log is then walked among the serve's own docket records, which hold none of that
-    digest."""
-    serve, v1, w = tied_serve(tmp_path / "serve")
-    h1 = serve / "h1"
-    if change == "other-file":
-        (h1 / "w0" / "registration.json").write_text(json.dumps({**w, "window": {**w["window"], "entry": 9}}))
-    elif change == "no-file":
-        (h1 / "log.jsonl").write_text(json.dumps({"digest": DD.digest(w), "kind": "registration", "window": 0}) + "\n")
-    elif change == "unchained":
-        h1_log(h1, [(0, "registration", h1_docket(entry=5))])
-    elif change == "not-json":
-        (h1 / "log.jsonl").write_text("{\n")
-    else:
-        (h1 / "log.jsonl").unlink()
-    rc, cases, refused, out = run(capsys, "--serve-dir", serve, "--private", serve / "private", "--alpha", "1",
-                                  "--gamma", 1, *stand_ins(tmp_path, v1))
-    assert rc == 1 and [c["protocol"] for c in cases] == [V1, SAMPLED, SC.PERIOD], out
-    assert [r["protocol"] for r in refused] == [INF] and reason in refused[0]["reason"], refused
-
-
-@pytest.mark.parametrize("change, reason", [
     ("table-leaves", "isn't the population program over its root's templates and the values its params' parameters "
                      "name"),
     ("template-type", "v1's params' parameters aren't its Program's program function's"),
@@ -1435,3 +1277,24 @@ def test_the_inference_only_case_on_the_4_32_4_class_is_accepted_at_its_budgets(
         assert (got["protocol"], got["commitment"], got["verdict"]) == (INF, digest_of(v1), verdict), got
     print(json.dumps({"class": "4,32,4", "templates": len(circuit.templates), "gates": gates, "input_bits": bits,
                       "program_bytes": len(codec.canonical_json(v1["params"]["program"]))}, sort_keys=True))
+
+
+@pytest.mark.parametrize("flag", ["--period"])
+def test_a_request_for_h1s_period_case_is_refused_by_name(tmp_path, capsys, flag):
+    """PoUW H1 is deleted: ``--period`` is refused with the one sentence that names it, before any case is made."""
+    with pytest.raises(SystemExit) as e:
+        SC.main(["--audit", str(tmp_path), "--private", str(tmp_path / "p"), flag, str(tmp_path)])
+    assert e.value.code == SC.USAGE
+    assert f"--period: {SC.H1_REFUSED}" in capsys.readouterr().err
+    assert not (tmp_path / "p").exists()
+
+
+def test_a_serve_dir_holding_h1s_log_is_refused_by_name(tmp_path, capsys):
+    """A serve dir whose ``h1/log.jsonl`` is PoUW H1's is refused with the same sentence, and no case is made from it."""
+    (tmp_path / "h1").mkdir()
+    (tmp_path / "h1" / "log.jsonl").write_text("")
+    with pytest.raises(SystemExit) as e:
+        SC.main(["--serve-dir", str(tmp_path), "--private", str(tmp_path / "p")])
+    assert e.value.code == SC.USAGE
+    assert f"--serve-dir holds PoUW H1's log (h1/log.jsonl): {SC.H1_REFUSED}" in capsys.readouterr().err
+    assert not (tmp_path / "p").exists()

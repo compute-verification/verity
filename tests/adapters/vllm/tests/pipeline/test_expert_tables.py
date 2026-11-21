@@ -18,6 +18,7 @@ import pytest
 
 from tests.check.test_weights_of_record import write_safetensors
 from verity_vllm.check import weights_of_record as WR
+from verity_vllm.config import UsageError
 from verity_vllm.pipeline import expert_rows as ER
 from verity_vllm.pipeline import expert_tables as ET
 from verity_vllm.pipeline import serving_templates as ST
@@ -381,3 +382,10 @@ def test_a_weight_in_bnk_order_is_one_value_committed_once_a_process(ckpt, regs,
         ER.commit_bnk(ER.committer(XT.ExpertTables.of(regs[1], "registration"), salts[1]), ABSORB, K, served)
     with pytest.raises(ValueError, match=r"is \(B, K, N\) 16-bit words"):
         ET.register(ckpt["progs"][1], ckpt["dir"], BLOCKS, salts_to=tmp_path / "x.salts", bnk=[EMBED], checkpoints_manifest=ckpt["man"])
+
+
+@pytest.mark.parametrize("world, rank", [(2, 1), (8, 0)])
+def test_tables_of_a_served_rank_of_more_than_one_gpu_are_refused_by_name(world, rank, tmp_path):
+    with pytest.raises(UsageError, match=f"the multi-GPU model is not served: --world {world} --rank {rank}"):
+        ET.main(ET.Options(served=str(tmp_path / "params.json"), world=world, rank=rank, checkpoint_dir=str(tmp_path),
+                           block=["w13=1"], out=str(tmp_path / "t.json")))

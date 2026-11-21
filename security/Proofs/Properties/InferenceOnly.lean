@@ -2,7 +2,6 @@ module
 
 public import Proofs.Properties.InferenceOnly.Lemmas
 public import Proofs.Properties.InferenceOnly.Desc
-public import Proofs.Properties.InferenceOnly.Count
 public import Proofs.Properties.InferenceOnly.DefinitionDigest
 public import Proofs.Properties.InferenceOnly.ClosureDigest
 public import Proofs.Properties.InferenceOnly.DigestEntries
@@ -21,8 +20,7 @@ import all Init.Data.Ord.String
 
 Each statement of `Properties.InferenceOnly`, proved of `InferenceOnlyCheck.evaluate` from the lemmas about its steps
 (`Proofs.Properties.InferenceOnly.Lemmas`), and the description-sized check's summaries against it (`sizes_eq_tally`, with
-`Proofs.Properties.InferenceOnly.Desc`); and the day's bound a published count gives once `DescCountsCK` holds
-(`Proofs.Properties.InferenceOnly.Count`). It also brings in which branch a Definition's digests take
+`Proofs.Properties.InferenceOnly.Desc`). It also brings in which branch a Definition's digests take
 (`Proofs.Properties.InferenceOnly.DefinitionDigest`), what a closure digest hashes (`Proofs.Properties.InferenceOnly.ClosureDigest`) and
 that one closure digest gives one canonical entry for each Definition reached (`Proofs.Properties.InferenceOnly.DigestEntries`),
 what the decoder reads alike from equivalent entries (`Proofs.Properties.InferenceOnly.DigestDecode`) and that its references are

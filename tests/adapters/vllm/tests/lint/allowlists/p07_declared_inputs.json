@@ -1,13 +1,7 @@
 {
   "rule": "P7 (results depend only on declared inputs)",
   "entries": [
-    {"file": "verity_vllm/check/replay/driver.py", "kind": "seed-default", "symbol": "sampled_replay", "detail": "seed_challenge"},
-    {"file": "verity_vllm/check/replay/driver.py", "kind": "seed-default", "symbol": "sampled_replay", "detail": "seed_source"},
     {"file": "verity_vllm/definitions/numerics/twins.py", "kind": "seed-default", "symbol": "admit", "detail": "seed"},
-    {"file": "verity_vllm/pipeline/commit.py", "kind": "cwd", "symbol": "git_head", "detail": "pathlib.Path.cwd"},
-    {"file": "verity_vllm/pipeline/release_json.py", "kind": "cwd", "symbol": "main", "detail": "os.getcwd"},
-    {"file": "verity_vllm/pipeline/release_json.py", "kind": "machine-path", "symbol": "<module>", "detail": "/workspace", "count": 2},
-    {"file": "verity_vllm/pipeline/release_json.py", "kind": "machine-path", "symbol": "main", "detail": "/workspace"},
     {"file": "verity_vllm/pipeline/research_tools.py", "kind": "environ", "symbol": "_probe_pins", "detail": "PY"},
     {"file": "verity_vllm/pipeline/research_tools.py", "kind": "machine-path", "symbol": "<module>", "detail": "/workspace"},
     {"file": "verity_vllm/program/frontend/derive_examples.py", "kind": "seed-default", "symbol": "StochasticServe.__init__", "detail": "literal_seed"},
@@ -30,7 +24,6 @@
     {"file": "verity_vllm/definitions/numerics/_jit.py", "kind": "optional-import", "symbol": "build_lock", "detail": "except ImportError|OSError", "count": 2},
     {"file": "verity_vllm/definitions/numerics/dense_rows.py", "kind": "environ", "symbol": "<module>", "detail": "VERITY_DENSE_THREADS"},
     {"file": "verity_vllm/program/frontend/gemm_targets.py", "kind": "broad-except", "symbol": "vllm_tuned_gemm_arch_family", "detail": "except Exception"},
-    {"file": "verity_vllm/definitions/registry/lifted.py", "kind": "broad-except", "symbol": "_is_decoded", "detail": "except Exception"},
     {"file": "verity_vllm/commit/committer/optional_torch.py", "kind": "optional-import", "symbol": "<module>", "detail": "except ImportError"}
   ]
 }

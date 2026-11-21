@@ -123,8 +123,15 @@ def served(monkeypatch):
 
 
 def cut(rows, histories=True, caps=CAPS):
-    plan = HR.Plan(TMPLS, rows, histories)
-    return plan, HR.cut(SRW.members(TMPLS, rows, None, caps, HR.seg(TMPLS, histories)), plan)
+    """The history plan and the window's members, by `serving_rows.population`'s member steps in its order (it reads served
+    Programs, which these rows stand in for)."""
+    plan, hp = SRW.EX.Plan(TMPLS, rows), HR.Plan(TMPLS, rows, histories)
+    ms = SRW.EX.wire(SRW.EX.cut(SRW.members(TMPLS, rows, None, caps, HR.seg(TMPLS, histories)), plan), plan)
+    ms = HR.cut(ms, hp)
+    ms = SRW.ST.wire(SRW.CH.wire(SRW.KC.wire(ms, TMPLS, rows), TMPLS, rows), TMPLS, rows)
+    ms = SRW.PR.wire(ms, TMPLS, rows, SRW.row_units)
+    ms = SRW.WT.cut(ms, SRW.WT.reads(ms, rows, SRW.row_units))
+    return hp, SRW.CH.shared_tables(ms)
 
 
 def binding(ms) -> CS.Binding:
@@ -181,6 +188,7 @@ class Light:
     members: tuple[Any, ...]
     row_tables: tuple[Any, ...] = ()
     partition_digest: str = "ef" * 64
+    program_digest: str = PROGRAM
 
 
 def light(ms) -> Light:
@@ -207,7 +215,7 @@ def windows(served, commit=None):
         tables = plan.keys()
         edges = {key: hs.edge(*key) for key in tables}
         got = SRW.window_values((commit or {}).get("window", light)(ms), rows, served.store, None, histories=hs, on=True)
-        data, entries, roots, salts_of, strings_of, _idx, hreg, _w = got
+        data, entries, roots, salts_of, strings_of, _idx, hreg, window = got
         assert {key: hs.edge(*key) for key in tables} == {key: edges[key] + WINDOWS[k]["tokens"] for key in edges}
         for key, t in hs.tables.items():
             assert all(np.array_equal(t.rows[p], served.latent[(key[1], p)]) for p in range(len(t.rows)))
@@ -235,7 +243,7 @@ def windows(served, commit=None):
             HT.check(PROGRAM, h.name, WORDS, bcs, bytes.fromhex(roots[h.name]), HT.CAPACITY)
             held[h.name] = bcs
         if commit is not None:
-            commit["check"](rows, ms, data, roots, salts_of, strings_of, hreg)
+            commit["check"](rows, window, data, roots, salts_of, strings_of, hreg)
     assert hs.retained("r0") == 2 * 6 * H.ROW_BYTES and hs.end("r0") == 2 * 6 * H.ROW_BYTES and hs.requests() == []
 
 
@@ -254,12 +262,14 @@ def test_the_window_commits_the_writers_rows_as_its_tables_strings_and_the_verif
     earlier windows (`history.params`, `history.roots_of`), as the verifier does."""
     held: dict[str, list[bytes]] = {}
 
-    def check(rows, ms, data, roots, salts_of, strings_of, hreg):
+    def check(rows, w, data, roots, salts_of, strings_of, hreg):
         nonlocal held
-        w = binding(ms)
+        ms = w.members
         c = CS.commit(w, data, salts_of=salts_of, strings_of=strings_of)
         full = CS.commit(w, data, salts_of=salts_of)
-        assert full.roots == c.roots and full.bc == c.bc
+        # every other port's salts are fresh a commit
+        trees = {w.tree(m, o) for m in ms for o, _w in m.outs if m.port(o) in strings_of}
+        assert trees and all(full.roots[t] == c.roots[t] for t in trees) and all(full.bc[q] == c.bc[q] for q in strings_of)
         publics = {m.key: c.public_body(i) for i, m in enumerate(ms)}
         doc = json.loads(IF.circuit_bytes(SRW.circuit_record(w, rows, None, hreg)))
         pins = HW.pins(doc, roots)

@@ -23,8 +23,7 @@ none is named here) and loads a binding file by its path: its name is no module 
 registry enumeration imports it, and a Definition module imports nothing of circuit-check; the registries import every module
 with a sidecar (`targets.load_registries`).  A sidecar whose module is gone is an error.  What circuit-check needs of another
 distribution it reads the same way, from a sidecar that distribution owns, and never by importing it: the frontend vocabularies'
-kinds (``_vocabulary_roots``, the word Call families) and the reader of a served workload's request Program
-(``request_program(path)``, `targets.request_program`).  `targets.py` keeps what no one module
+kinds (``_vocabulary_roots``, the word Call families).  `targets.py` keeps what no one module
 owns, and ``pins/`` the pins of Definitions no key names alone (made only inside another's body, and of no family its maker's
 binding file holds, `BODY_FAMILIES`) or no module defines, one file per pin (`entries`): ``pins/<kind>/<entries.name(key)>.json``, in a pins file's form (``{kind: {key: counts}}``).
 """
@@ -107,7 +106,7 @@ def discover() -> dict[str, dict[str, Path]]:
     it has from the top of the regular packages it is in (``__init__.py`` all the way down), so a package inside another's
     tree names its own (`verity_flock`'s is inside `verity`'s).  One counts only where Python imports that top directory as
     the package of its name: a copy of a package behind a directory without ``__init__.py`` would name modules that another
-    directory owns (``verity.protocols.proofs.flock.prover.python.verity_flock.rec_open``), and importing it registers their Definitions twice."""
+    directory owns (``verity.protocols.proof.flock.prover.python.verity_flock.rec_open``), and importing it registers their Definitions twice."""
     return _beside(("py", "json"))
 
 
@@ -349,24 +348,9 @@ def body_family(fid: str) -> str | None:
 _NAMED: dict[str, Any] = {}
 
 
-def composite_lift(fid: str) -> Any | None:
-    """The lift (`targets.HOOKS`' ``lift_composite``) of the registered composite a ``Lifted[<composite>]_v<k>`` id wraps (the
-    lift a body calling it makes, or its hand lift), whatever version the id writes; None when the id wraps no registered
-    composite.  The on-demand ``Lifted[...]`` families lift primitives only."""
-    from verity.circuits.defs import REGISTRY, CompositeDefinition
-
-    m = re.fullmatch(r"Lifted\[(.+)\]_v\d+", fid)
-    inner = REGISTRY.defs.get(m[1]) if m else None
-    if not isinstance(inner, CompositeDefinition):
-        return None
-    from . import targets as TG
-
-    return TG._handed("lift_composite")(inner)
-
-
 def named(fid: str) -> Any | None:
-    """The Definition ``fid`` names, made from the id alone: one a loaded module binds at its top level (`_index`), else a
-    registered composite's lift (`composite_lift`, when its id is ``fid``), else one an on-demand family makes from it
+    """The Definition ``fid`` names, made from the id alone: one a loaded module binds at its top level (`_index`), else one an
+    on-demand family makes from it
     (`verity.circuits.codec.lookup_primitive` with nothing registered, so the family's own factory whoever asked for it first).
     None for one made only inside another Definition's body (a multiplexer tree's levels, `body_family`) or by nothing, built in
     this process or not."""
@@ -378,8 +362,6 @@ def named(fid: str) -> Any | None:
     if (d := _NAMED.get(fid)) is not None:
         return d
     with CC.internal():
-        if (d := composite_lift(fid)) is not None:
-            return d if d.id == fid else None
         try:
             return lookup_primitive(DefinitionTable(), fid)
         except (KeyError, ValueError):

@@ -21,7 +21,7 @@ process has loaded, and `replay(port, value)` compares one input. Nothing here r
 (`tests/test_no_wall_clock.py`): a port whose Lean never answers hangs its test.
 
 A port names its verifier (`of_record`): ``"python"`` until its protocol switches to its Lean by the friction
-skill's switching ruling, ``"lean"`` after (PoUW's switch is `verity/protocols/resource_accounting/compute/pouw/verifier/verifier.py`). Either way the
+skill's switching ruling, ``"lean"`` after (PoUW's switch is `verity/protocols/accounting/compute/pouw/verifier/verifier.py`). Either way the
 two sides must agree; the side of record is the verdict a `Mismatch` holds the other to, and what a run's `Stats` count.
 
 The harness never skips: when `lake` is missing or the build fails it raises. A port's test module skips on `lake` itself
@@ -39,6 +39,9 @@ import copy
 import fcntl
 import functools
 import json
+import os
+import re
+import signal
 import subprocess
 import tempfile
 from collections.abc import Callable, Iterator, Sequence
@@ -135,22 +138,54 @@ def build(package: Path, exe: str) -> Path:
         except FileNotFoundError:
             raise BuildError(f"lake is not on the PATH, so {exe} in {package} cannot be built") from None
     if p.returncode != 0:
-        raise BuildError(f"lake build {exe} in {package} failed ({p.returncode}):\n{p.stdout}{p.stderr}")
+        raise BuildError(f"lake build {exe} in {package} failed ({p.returncode}); the last {BUILD_TAIL} bytes of its stdout:\n"
+                         f"{_tail(p.stdout)}\nand of its stderr:\n{_tail(p.stderr)}")
     return package / ".lake" / "build" / "bin" / exe
 
 
+#: how much of each of Lake's output streams a failed build's error keeps, from its end
+BUILD_TAIL = 4000
+
+
+def _tail(text: str) -> str:
+    raw = text.encode("utf-8", "replace")
+    return raw.decode("utf-8", "replace") if len(raw) <= BUILD_TAIL else "…" + raw[-BUILD_TAIL:].decode("utf-8", "replace")
+
+
+#: a line Lean's runtime writes on a panic or an abort: ``PANIC at DECL MODULE:LINE:COL: MSG`` (`mkPanicMessageWithDecl`),
+#: the C runtime's ``PANIC: MSG`` and ``INTERNAL PANIC: MSG``, and its lines with no ``PANIC``: an array index past the end
+#: (`lean_array_get_panic`, `lean_array_set_panic`), `String.get!` off a character, `Task.get` in a sync task, a stack
+#: overflow and a debug build's assertion
+PANIC = re.compile(r"^(?:(?:INTERNAL )?PANIC\b.*|Error: index out of bounds|Error: invalid `String\.Pos` at `String\.get!`"
+                   r"|`Task\.get` called from a `\(sync := true\)` task|Stack overflow detected\. Aborting\."
+                   r"|LEAN ASSERTION VIOLATION)$", re.M)
+LEAN_PANIC = "lean-panic: the Lean verifier wrote a panic: its answer is not read"
+LEAN_EXIT = "lean-exit: the Lean verifier ended with a status it does not document: its answer is not read"
+ABORT_ON_PANIC = "LEAN_ABORT_ON_PANIC"
+
+
+def _exit_why(code: int) -> str:
+    """`LEAN_EXIT`, then how a Lean process that did not end with status 0 ended: killed by a signal, or at a status."""
+    if code < 0 and -code in signal.valid_signals():
+        return f"{LEAN_EXIT}: killed by {signal.Signals(-code).name}"
+    return f"{LEAN_EXIT}: status {code}{' (abort)' if code == 128 + signal.SIGABRT else ''}"
+
+
 class Server:
-    """One server process, started at the first request and again after it dies; requests are answered in order."""
+    """One server process, started at the first request and again after it dies, with `ABORT_ON_PANIC` set; requests are
+    answered in order, and a request whose reply comes beside a panic line on the process's standard error is refused
+    (`LEAN_PANIC`)."""
 
     def __init__(self, argv: Sequence[str]):
         self.argv = list(argv)
         self._proc: subprocess.Popen | None = None
         self._stderr = None
+        self._exit_why: str | None = None
 
     def _start(self) -> subprocess.Popen:
-        self._stderr = tempfile.TemporaryFile()
+        self._stderr = tempfile.TemporaryFile("a+b")
         self._proc = subprocess.Popen(self.argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self._stderr,
-                                      text=True, encoding="utf-8")
+                                      text=True, encoding="utf-8", env={**os.environ, ABORT_ON_PANIC: "1"})
         return self._proc
 
     def exchange(self, request: Any) -> dict:
@@ -163,8 +198,14 @@ class Server:
             reply = proc.stdout.readline()
         except BrokenPipeError:
             reply = ""
+        self._stderr.seek(0)
+        if (panic := PANIC.search(self._stderr.read().decode("utf-8", "replace"))) is not None:
+            proc.kill()
+            self._dead()
+            raise ProtocolError(f"{LEAN_PANIC}: {panic.group(0)}")
         if not reply.endswith("\n"):
-            raise ProtocolError(f"{self.argv[0]} ended on {line}: {self._dead()}")
+            dead = self._dead()
+            raise ProtocolError(f"{self.argv[0]} ended on {line}: {self._exit_why or ''}{dead}")
         reply = reply[:-1]
         try:
             msg = json.loads(reply)
@@ -197,6 +238,7 @@ class Server:
         if proc.stdin:
             proc.stdin.close()
         code = proc.wait()
+        self._exit_why = None if code == 0 else _exit_why(code) + "; "
         self._stderr.seek(0)
         err = self._stderr.read().decode("utf-8", "replace")
         self._stderr.close()
@@ -205,6 +247,25 @@ class Server:
     def close(self) -> None:
         if self._proc is not None:
             self._dead()
+
+    def close_checked(self) -> None:
+        """End of input, then the process's end, waited for (an event, no clock): refused by name (`ProtocolError`) where
+        the process wrote a panic line while it ended, or ended with a status but 0, whatever it answered before. For a
+        caller that reads a verdict from this server and uses it only once the server has ended cleanly; `close` is for
+        one that does not."""
+        proc, self._proc = self._proc, None
+        if proc is None:
+            return
+        proc.stdin.close()
+        proc.stdout.read()
+        code = proc.wait()
+        self._stderr.seek(0)
+        err = self._stderr.read().decode("utf-8", "replace")
+        self._stderr.close()
+        if (panic := PANIC.search(err)) is not None:
+            raise ProtocolError(f"{LEAN_PANIC}: {panic.group(0)}")
+        if code != 0:
+            raise ProtocolError(_exit_why(code))
 
     def __enter__(self) -> Server:
         return self

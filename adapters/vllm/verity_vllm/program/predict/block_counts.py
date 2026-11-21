@@ -10,13 +10,12 @@ a window circuit, and a window is m activations of it. A block class is that Def
 SHA-512 (`partition_v2.id_digest`).
 
 **Gates** are counted as `InferenceOnlyCheck.Count` counts a block Definition's (``boolGates``,
-`verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyCheck/Count.lean`): once per specialized Definition, callees first, a
+`verity/protocols/policy/training_detection/inference_only/verifier/lean/InferenceOnlyCheck/Count.lean`): once per specialized Definition, callees first, a
 primitive's from the gate table and a composite's the sum over its nodes of members times the callee's (`gates`). The gate
-table is the one `definitions.boolean.gate_table` gives: each primitive's two-input Boolean gates as the census counts work
-(`census`: an n-input And or Xor n - 1, a Not 1, a constant bit or an input 0) through its Boolean version
-(`definitions.boolean.boolean_version`). A primitive with none, or whose Boolean version reaches a primitive that is no
-gate, is *unpriced*: its activations a block are listed apart and its gates are not guessed. circuit-check pins no per-primitive table, so the table counted by is
-published with the judgment.
+table is each word primitive's body in the session Program's own Boolean map, counted (`verity.circuits.count.table`:
+an n-input And or Xor n - 1 two-input gates, a Not 1, a constant bit or an input 0), and it is published with the judgment.
+A primitive a table lacks is *unpriced*: its activations a block are listed apart and its gates are not guessed; a
+session Program holds a body for every word primitive it reaches (`program.boolean_map`), so its own table lacks none.
 
 **Fresh bits** are B's k (`inference_blocks.budgets`): |in(I) \\ θ|, the circuit's free and ingress input bits at the
 verifier's pins (`interface.input_count`: θ the weights pinned before the run at the roots the window's registration
@@ -24,7 +23,15 @@ records) over its m slots, since no wire crosses slots. The wires are the record
 Definition doesn't carry, so this is the record's count and not `InferenceOnlyCheck.Count`'s ``fresh`` on the session Definition,
 which would count every wired read.
 
-**The judgment** (`judge`). A window adds m blocks to its class, and the day's blocks are the classes' summed, exactly. The
+**The declared circuit** (`pinned`). A record names its templates by id, and each is counted as the Definition `resolve`
+binds under that id, so a record is counted only where the Program those Definitions rebuild (`interface.program_of_record`)
+has the record's program digest (`codec.program_digest`), as `interface.window_of_record` holds a period's: a body under
+an id that is not the declared circuit's, or a record that names no program digest, is refused by name and counted at
+no gate and no unregistered input bit. `main` counts a record only beside the registration that binds it
+(`interface.tied_record`: its SHA-512, program, partition and run), so the program digest `pinned` holds the Definitions
+to is the registered one.
+
+**The judgment** (`records.block_counts.judge`). A window adds m blocks to its class, and the day's blocks are the classes' summed, exactly. The
 declaration (``--declaration``, a JSON object with natural ``c``, ``k`` and ``n``, such as the inference-only policy) is
 named by its SHA-512. Its rules, in `InferenceOnlyCheck.Count`'s order: every class's block at most c gates (undecided where a block
 reaches an unpriced primitive, its gates then a lower bound, unless that bound already passes c) and k fresh bits, and the
@@ -53,7 +60,7 @@ from typing import Any
 from verity.circuits import codec
 from verity.circuits import partition_v2 as PV2
 from verity.circuits.defs import PrimitiveDefinition
-from verity.circuits.ops.boolean.versions import gate_table
+from verity.circuits import count as K
 from verity.circuits.parts import n_members
 from verity.circuits.population import wired_population_program
 from verity.circuits.program import is_input
@@ -66,19 +73,37 @@ from verity_vllm.records.weights_registration import WeightsRegistration
 
 
 def session(doc: Mapping[str, Any]) -> tuple[Any, int, int]:
-    """A window circuit record's session Definition (module docstring), its slots m and steps T. Refused (ValueError) where
-    the record states no inference blocks or its entries don't tile its templates (`interface.Blocks.of`)."""
+    """A window circuit record's session Program, whose function is the session Definition (module docstring), its slots m and
+    steps T. Refused (ValueError) where the record states no inference blocks, its entries don't tile its templates
+    (`interface.Blocks.of`) or its templates are not the declared circuit's (`pinned`)."""
     if "blocks" not in doc:
         raise ValueError(f"{doc.get('name')}: the circuit record states no inference blocks")
     units = {t: int(n) for t, n in doc["templates"]}
     blocks = IF.Blocks.of(doc["blocks"], units, doc["partition"])
+    if not blocks.uniform:
+        raise ValueError(f"{doc.get('name')}: a served window's blocks, a request each of its own positions, have no one "
+                         "session Definition; a class circuit's do")
     per: Counter[str]
     m, per = blocks.slots, Counter()
     for e in blocks.inference:
         per[e.template] += e.units // m
     members = [(resolve(t), per[t]) for t, _ in doc["templates"]]
     program, _ = wired_population_program(members, {"templates": [[codec.descriptor_id(fn), n] for fn, n in members]})
-    return program.fn, m, blocks.steps
+    pinned(doc)
+    return program, m, blocks.steps
+
+
+def pinned(doc: Mapping[str, Any]) -> None:
+    """Refuse (ValueError) a record that names no program digest, or whose templates, each the Definition `resolve` binds
+    under its id, rebuild a Program (`interface.program_of_record`) of another digest than the record's ``program``."""
+    want = doc.get("program")
+    if not isinstance(want, str) or not want:
+        raise ValueError(f"{doc.get('name')}: the circuit record names no program digest, so the Definitions its template ids "
+                         "name can't be held to the declared circuit, and it is not counted")
+    got = codec.program_digest(IF.program_of_record(doc, resolve)[0])
+    if got != want:
+        raise ValueError(f"{doc.get('name')}: its template ids rebuild the program {got}, not the record's {want}: a "
+                         "template's body under its id is not the declared circuit's, and the record is not counted")
 
 
 def resolve(tid: str) -> Any:
@@ -121,8 +146,9 @@ def gates(fn: Any, table: Mapping[str, int], memo: dict[int, tuple[Any, int, Cou
 
 def fresh(doc: Mapping[str, Any], m: int, pins: Mapping[str, str] | None, roots: Mapping[str, str] | None) -> int:
     """A block's fresh-input bits (module docstring): the record's free and ingress bits at the verifier's ``pins`` and the
-    window's ``roots`` (`interface.input_count`), over its m slots."""
-    count = IF.input_count(doc, pins=pins, roots=roots)
+    window's ``roots`` (`interface.input_count`), over its m slots, of the Definitions `pinned` holds to the declared circuit."""
+    pinned(doc)
+    count = IF.input_count(doc, resolve, pins=pins, roots=roots)
     bits = count["free"] + count["ingress"]
     if bits % m:
         raise ValueError(f"{doc.get('name')}: {bits} fresh input bits over {m} slots, not a slot's share each")
@@ -141,21 +167,6 @@ def declaration(doc: Any) -> tuple[str, int, int, int]:
     return hashlib.sha512(codec.canonical_json(doc)).hexdigest(), c, k, n
 
 
-def judge(classes: tuple[RBC.BlockClass, ...] | list[RBC.BlockClass], total: int, c: int, k: int, n: int) -> tuple[dict[str, str], str | None]:
-    """`InferenceOnlyCheck.Count`'s rules on ``classes`` (each with a block) and the day's exact ``total``: each rule's outcome, and
-    the first that doesn't accept as a sentence naming c, k or n, never a count (None when every rule accepts)."""
-    checks = {**RBC.shape_checks(classes, c, k), "count": "accept" if total <= n else "refuse"}
-    over = next((x for x in classes if x.gates > c), None)
-    unpriced = sorted({p for x in classes for p in x.unpriced})
-    fat = next((x for x in classes if x.fresh > k), None)
-    reasons = {"gates": (f"a block of {over.gates} gates, more than c = {c}" if over else
-                         f"undecided: a block reaches {', '.join(unpriced)}, which the gate table can't price, so its "
-                         f"gates are a lower bound against c = {c}"),
-               "fresh": f"a block of {fat.fresh} fresh bits, more than k = {k}" if fat else "",
-               "count": f"the blocks' exact count is more than n = {n}"}
-    return checks, next((reasons[r] for r in RBC.RULES if checks[r] != "accept"), None)
-
-
 @dataclass
 class Day:
     """A day's served windows, counted one at a time (`add`), as `judgment` judges them."""
@@ -171,12 +182,13 @@ class Day:
         rec = hashlib.sha512(IF.circuit_bytes(IF.circuit_of(doc))).hexdigest()
         if rec not in self._sessions:
             self._sessions[rec] = session(doc)
-        fn, m, steps = self._sessions[rec]
+        program, m, steps = self._sessions[rec]
         held = (rec, IF.held_params(self.pins, roots))
         if held not in self._fresh:
             self._fresh[held] = fresh(doc, m, self.pins, roots)
-        d = PV2.id_digest(fn)
-        c = self._classes.setdefault(d, {"fn": fn, "slots": m, "steps": steps, "fresh": 0, "count": 0})
+        d = PV2.id_digest(program.fn)
+        c = self._classes.setdefault(d, {"fn": program.fn, "program": program, "slots": m, "steps": steps, "fresh": 0,
+                                         "count": 0})
         c["fresh"], c["count"] = max(c["fresh"], self._fresh[held]), c["count"] + m
         self._windows += 1
         return d
@@ -185,7 +197,7 @@ class Day:
         """The public judgment (`records.block_counts`) of the windows added against the declaration ``decl``, and the
         private one: the public one with each class's exact blocks, the day's and its windows."""
         digest, c, k, n = declaration(decl)
-        table, _ = gate_table(x["fn"] for x in self._classes.values())
+        table = {k: v for x in self._classes.values() for k, v in K.table(x["program"]).items()}
         memo: dict = {}
         classes, exact = [], {}
         for d, x in sorted(self._classes.items()):
@@ -194,7 +206,7 @@ class Day:
                                           unpriced=dict(sorted(miss.items())), fresh=x["fresh"]))
             exact[d] = x["count"]
         total = sum(exact.values())
-        checks, reason = judge(classes, total, c, k, n)
+        checks, reason = RBC.judge(classes, total, c, k, n)
         pub = RBC.BlockJudgment(day=self.day, declaration=digest, c=c, k=k, n=n, table=table, classes=tuple(classes),
                                 checks=checks, verdict="accept" if reason is None else "refuse", reason=reason)
         return pub, {**pub.dump(), "blocks": exact, "total": total, "windows": self._windows}
@@ -228,8 +240,9 @@ class Options:
     private: Path = option("--private", type=Path,
                            help="write the private judgment, with the exact counts, here (0600), beside the run's private files")
     window: list = option("--window", nargs=2, action="append", metavar=("CIRCUIT", "REGISTRATION"), default=[],
-                          help="one served window: its circuit record (circuit.json) and its registration (the "
-                               "registered roots it records), or - for none; repeat for each of the day's windows")
+                          help="one served window: its circuit record (circuit.json) and the registration that binds it "
+                               "(its SHA-512, program, partition and run, and the registered roots it records); repeat "
+                               "for each of the day's windows")
     pins: Path | None = option("--pins", default=None, type=Path,
                                help="the committer's weights registration, the verifier's pins (none: every read is free)")
     out: Path | None = option("--out", default=None, type=Path, help="write the public judgment here as well as to stdout")
@@ -241,8 +254,11 @@ def main(a: Options) -> int:
         pins = dict(WeightsRegistration.of(json.loads(a.pins.read_text()), str(a.pins)).roots)
     d = Day(a.day, pins)
     for circuit, registration in a.window:
-        roots = None if registration == "-" else IF.registered_roots(json.loads(Path(registration).read_text()))
-        d.add(json.loads(Path(circuit).read_text()), roots)
+        if registration == "-":
+            raise ValueError(f"{circuit}: no registration is given, so nothing holds the circuit record to the registered "
+                             "circuit, and it is not counted")
+        reg = json.loads(Path(registration).read_text())
+        d.add(IF.tied_record(Path(circuit).read_bytes(), reg, circuit), IF.registered_roots(reg))
     pub, private = d.judgment(json.loads(a.declaration.read_text()))
     pub = RBC.BlockJudgment.of(pub.dump(), "block-counts")
     write_private(a.private, private)
@@ -255,5 +271,5 @@ def main(a: Options) -> int:
     return 0
 
 
-__all__ = ["Day", "Options", "declaration", "fresh", "gates", "judge", "judgment", "main", "resolve", "session",
+__all__ = ["Day", "Options", "declaration", "fresh", "gates", "judgment", "main", "resolve", "session",
            "write_private"]

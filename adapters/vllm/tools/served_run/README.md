@@ -1,19 +1,19 @@
 # The vLLM served run: the remote protocol on a served H200
 
 The served run is the runnable form of the **remote protocol**'s H1 development executable (`verity/remote/v0`, H1's
-period as its work, which no configuration names, in `verity/protocols/compose/verifier/remote/`; the composite of record, `verity/remote/v1`, has Pearl+'s run instead):
+period as its work, which no configuration names, in `verity/protocols/run/verifier/remote/`; the composite of record, `verity/remote/v1`, has Pearl+'s run instead):
 what an auditor with no devices at the site establishes about a datacenter serving a model. One served run of
 Llama-3.2-1B INT8 on one H200 gives its verdict, and the same run carries the onsite protocol's subprotocols beside it.
 The remote protocol composes three subprotocols, tied to one record, and accepts only when all three accept:
 
-- **integrity**, by SPOT's one-stage audit (`verity/protocols/proofs/spot/`): every value the serving
+- **integrity**, by SPOT's one-stage audit (`verity/protocols/proof/spot/`): every value the serving
   computes is committed under hiding commitments, live coins sample proof blocks from a sealed execution phase, the
   prover proves each sampled block with Flock `--zk` behind the Lean ZK server, and the Lean verifier gives the verdict;
-- **work**, by proof of useful work (PoUW, `verity/protocols/resource_accounting/compute/pouw/verifier/`), on the served model itself: the endpoint
+- **work**, by proof of useful work (PoUW, `verity/protocols/accounting/compute/pouw/verifier/`), on the served model itself: the endpoint
   serves PoUW's H1, each execution phase's coins come from a session of its own on the challenger's gate, and PoUW's
   piece checks them against that session, the gate's ledger and its pins;
-- **the inference-only policy** (`verity/protocols/workload_classification/training_detection/inference_only/verifier/`): the registered circuit divides into inference
-  blocks within their gate and fresh-input budgets. The served run checks it on the served node: once step 3 has
+- **the inference-only policy** (`verity/protocols/policy/training_detection/inference_only/verifier/`): the registered circuit divides into inference
+  blocks within their gate and unregistered-input budgets. The served run checks it on the served node: once step 3 has
   counted the window's circuit at the policy's class (`IO_CLASS`), `inference_only.py verdict` judges the window's
   blocks against the policy written before the serve, and the Lean `inference-only-check --count` counts one block's
   gates, which must agree. That answer is the served node's own. The compose off the node carries it into the record
@@ -29,7 +29,7 @@ is none. SPOT's guarantee, `Flock.Guarantees.SampledKSLiveV3`, is proved: when t
 session, the committed trace is outside the sampling relation with probability at most δ plus the proof system's
 errors. But the remote protocol's composed theorem, `Verity.remote_soundness_of_subprotocols`, takes its three subprotocols'
 targets as open premises, and no Lean statement carries the acceptance of remote's one-stage form, one-stage v2, which runs the proof check
-itself, to `SampledKSLiveV3`'s event (`verity/protocols/compose/verifier/remote/README.md`, "What's open"). PoUW's proof layer needs `AcceptedLive`, which no served path
+itself, to `SampledKSLiveV3`'s event (`verity/protocols/run/verifier/remote/README.md`, "What's open"). PoUW's proof layer needs `AcceptedLive`, which no served path
 meets. Onsite's chain has a gap of its own: network attestation's `NetTiming.Guarantees.SampledAuditAccepted` takes
 `Claims.SamplingGeneric.Compiled.KS` as a hypothesis, and the theorem that gives it at the deployed record,
 `SamplingDeploy.ks_compiled`, is not a lock guarantee and takes the verifier's own facts as hypotheses
@@ -55,7 +55,7 @@ The placed window (`[run.window.plain]`) is remote with no accounting piece: it 
 (`H1_GATE` empty), so PoUW's piece is `MISSING`, and it runs no V3c (`V3C_CLASS` empty, so step 3's audit is the SPOT
 audit of record) and no composite (`COMPOSITE` empty). Its record is composed off the node by `run.sh compose`. The
 tied window (`run.sh window --tie`, `[run.window.tie]`) serves the BF16 row (`tied_row`) under Pearl+
-(`PEARLPLUS_TIE`, `POUW=pearlplus`), its linears committed at V3c's class `4,32,4` (4 slots, prompts 32:32), leaves
+(`POUW=pearlplus`, untied: Pearl+'s own verdict over its own passes, held to no window record, crediting nothing), its linears committed at V3c's class `4,32,4` (4 slots, prompts 32:32), leaves
 `COMPOSITE` at its default, so its hand-off carries `POUW` and the compose off the node composes remote's composite of
 record, `verity/remote/v1` (a hand-off without `POUW` composes v0, which its record says is not of record), and it
 defers V3c's audit off the node (`V3C_AUDIT_MEM_GB` above node A's memory) to `run.sh copy` and
@@ -74,7 +74,7 @@ directory holds the served run's own: its placement and its commands.
 
 ## The onsite protocol on the same run
 
-Onsite (`verity/onsite/v1`, in `verity/protocols/compose/verifier/onsite/`) is the superset of remote's composite of
+Onsite (`verity/onsite/v1`, in `verity/protocols/run/verifier/onsite/`) is the superset of remote's composite of
 record: beside SPOT, the inference-only policy and Pearl+'s run verdict it composes PoUS, PoUB-P2
 (`verity/remote-bandwidth/p2/v0`), network attestation and the memory wipe. Each runs on the workload as its piece where `served_verdicts.sh` names
 its command (`POUS_CMD`, `BANDWIDTH_CMD`, `CERTIFIER_CMD`, `WIPE_CMD`). A piece that doesn't run is named `MISSING` and
@@ -101,8 +101,9 @@ read, may run on the endpoint's node too. Being placed needs each of them on a m
   which `verity-vllm predict row` writes from the workload alone before serving. The row's traced Build, made by
   `run.sh setup` and named in `placement.toml`'s `builds`, is its cross-check (`predict compare --predicted`), and the
   endpoint serves only when they agree.
-- The load, `serve_load.py`: `served_verdicts.sh`'s one execution phase of varied requests (`--varied`, or with
-  `LOAD=fixed` one full execution phase of fixed length).
+- The load: `serve_load.py`, `served_verdicts.sh`'s one execution phase of varied requests (`--varied`), or with
+  `LOAD=dataset` the input dataset `DATASET` at `TIMING` through the one sender, `verity_vllm.inputs.sender`, once the
+  adapter's door (`verity_vllm.inputs.serves`) takes it.
 - `placement.toml`: where each run goes and what its node holds. The window serves on node A (`vy-spot-glm53`, eight
   H200s shared by card) unless the launch names another node (`--env NODE=vy-h100-1`, one H100), and its record is
   composed on `vy-nebius-cpu-14`. A node's table holds its venv, CUDA, HF cache, taps, traced Builds and Flock's build,

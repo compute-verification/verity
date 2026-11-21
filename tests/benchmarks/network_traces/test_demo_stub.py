@@ -14,20 +14,20 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.resource_accounting.network.verifier import id_form as IDF, io_tie as IT
-from verity.protocols.resource_accounting.network.verifier.link_frame import HEADER
+from verity.protocols.accounting.network.verifier import id_form as IDF, io_tie as IT
+from verity.protocols.accounting.network.verifier.link_frame import HEADER
 from verity.release import RUN_ID_BYTES, with_release
 
 HERE = (Path(__file__).resolve().parents[3] / "benchmarks" / "network_traces")
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/compose/verifier/live_challenger"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/run/verifier/live_challenger"))
 sys.path.append(str(Path(__file__).resolve().parents[3]))  # the root, for benchmarks.network_traces
 import auditor as G  # noqa: E402
 import demo_stub as S  # noqa: E402
-from verity.protocols.resource_accounting.network.attester import network_attester_serve as ws  # noqa: E402
-from verity.protocols.resource_accounting.network.prover import scan_zk as sz  # noqa: E402
+from verity.protocols.accounting.network.attester import network_attester_serve as ws  # noqa: E402
+from verity.protocols.accounting.network.verifier import network_attester as W  # noqa: E402
 
-from tests.verity.protocols.resource_accounting.network.attester.relay_runs import _run  # noqa: E402
+from tests.verity.protocols.accounting.network.attester.relay_runs import _run  # noqa: E402
 
 P = S.ID_PAYLOAD
 NAME = S.Shape().name
@@ -325,7 +325,7 @@ def test_the_gates_demo_traffic_through_the_network_attester_is_the_demo_stand_i
     given exactly what the network attester sent the server (its release headers on), serves every request and answers
     the bytes the network attester attested, every connection ends within the two execution phases 24 tokens take at D
     = 27, and the check accepts the run."""
-    from verity.protocols.resource_accounting.network.verifier import relay_check as RC
+    from verity.protocols.accounting.network.verifier import relay_check as RC
     from verity.release import release_of
     prompts = S.prompts(4)
     req = {"device": "warden", "requests": None, "tokens": 24, "height": 10, "minutes": 4, "scan": True,
@@ -333,7 +333,7 @@ def test_the_gates_demo_traffic_through_the_network_attester_is_the_demo_stand_i
     (tmp_path / G.PROMPTS).write_bytes(G.network_attester_prompts(req, json.dumps(prompts).encode()))
     args = ws.parser().parse_args(G.network_attester_command(req, tmp_path, "http://127.0.0.1:40001")[2:])
     params = ws._params(args)
-    assert params == sz.PARAMS and (args.requests, args.max_tokens) == (4, 24)
+    assert params == W.W63 and (args.requests, args.max_tokens) == (4, 24)
     traffic = ws.traffic_of(args, S.Shape().name)
     assert [x["ids"]["prompt"] for x in traffic] == prompts
     assert {(x["ids"]["max_tokens"], x["ids"]["temperature"], x["ids"]["top_p"]) for x in traffic} == {(24, 0.0, 1.0)}

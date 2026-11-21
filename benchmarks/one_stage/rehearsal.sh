@@ -19,8 +19,7 @@
 #                         circuit cut at Pearl+'s linears from the serve's phi (a stand-in for `serve-phi`, which
 #                         reads the card: the H200's compute capability and SMs); a stand-in window of the class at
 #                         the settings' engine args through what a served window's close reads of it
-#                         (`rehearsal_window.py`: the row dir's Builds hold the Programs the registered compiler
-#                         compiles, the window's commit reads each request's served rows, and W as its writer writes
+#                         (`rehearsal_window.py`: the window's commit reads each request's served rows, and W as its writer writes
 #                         it is a W the served compare takes); the harness's own policy step,
 #                         which fixes the limits and states what they prove; the policy's Lean check on the class's
 #                         own Program (`rehearsal_limits.py`), and the settings' ALPHA, GAMMA and DAY_PROGRAM held to
@@ -156,7 +155,7 @@ settings_class() {  # $1, the settings file: the class its serve commits the win
 
 settings_engine() {  # $1, the settings file: the engine args its serve states, MAX_MODEL_LEN,T (the harness's 512 each
   # where the settings name none)
-  bash -c 'set -a; . "$0" > /dev/null 2>&1; set +a; printf %s "${MAX_MODEL_LEN:-512},${T:-${H1_T:-512}}"' "$1"
+  bash -c 'set -a; . "$0" > /dev/null 2>&1; set +a; printf %s "${MAX_MODEL_LEN:-512},${T:-512}"' "$1"
 }
 
 serve() {
@@ -331,6 +330,7 @@ import hashlib, json, os, subprocess, sys
 from pathlib import Path
 sys.path.insert(0, str(Path(sys.argv[3]).resolve().parents[1]))
 from benchmarks.one_stage import a0 as a0
+from verity.protocols.proof.spot.verifier.one_stage import lean_child as LC
 lean, root = sys.argv[1], Path(sys.argv[2])
 root.mkdir(parents=True, exist_ok=True)
 circuit = root / "circuit.txt"
@@ -348,8 +348,8 @@ def member(name, link):
     return out, a0.lean_verify(lean, st, 8, out)
 
 def said(out):  # the verifier's own answer on the archive's circuit and public objects, the archive's path left out
-    p = subprocess.run([lean, "statement", "--statement", a0.STATEMENT_ID, "--archive", str(out / "archive"), "--circuit", key,
-                        "--public", pub], capture_output=True, text=True)
+    p = LC.run([lean, "statement", "--statement", a0.STATEMENT_ID, "--archive", str(out / "archive"), "--circuit", key,
+                "--public", pub])
     return p.returncode, (p.stdout + p.stderr).replace(str(out), "OUT")[-600:]
 
 (put_out, put), (link_out, linked) = member("put", False), member("link", True)
@@ -416,7 +416,7 @@ check() {
   local TREE S=$OUT/steps.txt failed=0 scratch PY D CLASS SCHEME=${SCHEME:-}
   TREE=$(cd "$HERE/../.." && pwd)
   cd "$TREE" || exit 3
-  SCHEME=${SCHEME:-$(python3 -m verity.protocols.compose.schemes pearl-plus option)} || exit 3; SCHEME=${SCHEME#*:}
+  SCHEME=${SCHEME:-$(python3 -m verity.protocols.run.schemes pearl-plus option)} || exit 3; SCHEME=${SCHEME#*:}
   SETTINGS=${SETTINGS:-${RESEARCH_RUN_DIR:-.}/inputs/record.env}
   CLASS=$(settings_class "$SETTINGS")
   step() {  # NAME LIMIT CMD...
@@ -546,10 +546,10 @@ print(json.dumps(doc, sort_keys=True))
 EOF
 
   # the Lean the three verbs run
-  step lean-flock 50m bash -c 'cd verity/protocols/proofs/flock/verifier && lake build Flock verity-verify-proof flock-zk-server'
-  step link-lean 5m env PY="$PY" bash "$SELF" link-test "$TREE/verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof" "$scratch/link"
-  step lean-pearlplus 40m bash -c 'cd verity/protocols/resource_accounting/compute/pouw/verifier/lean/pearlplus && lake build pouw-pearlplus'
-  step lean-remote-v1 40m bash -c 'cd verity/protocols/compose/verifier/remote && lake build remote-v1'
+  step lean-flock 50m bash -c 'cd verity/protocols/proof/flock/verifier && lake build Flock verity-verify-proof flock-zk-server'
+  step link-lean 5m env PY="$PY" bash "$SELF" link-test "$TREE/verity/protocols/proof/flock/verifier/.lake/build/bin/verity-verify-proof" "$scratch/link"
+  step lean-pearlplus 40m bash -c 'cd verity/protocols/accounting/compute/pouw/verifier/lean/pearlplus && lake build pouw-pearlplus'
+  step lean-remote-v1 40m bash -c 'cd verity/protocols/run/verifier/remote && lake build remote-v1'
 
   # Pearl+ end to end against this tree's own gate code; the piece holds the phase's times and each check's cost
   step pearlplus-e2e 30m "$PY" benchmarks/one_stage/pearlplus_local_e2e.py run --out "$scratch/e2e" --lean build

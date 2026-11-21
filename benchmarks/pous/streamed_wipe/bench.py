@@ -1,6 +1,6 @@
 """The streamed-label wipe's timing on one node: the labels a GPU generates, what reaches host memory and the network
 stack, and the challenge round trips, so the fill time and the challenger's GPU budget are measured
-(`verity/protocols/resource_accounting/memory/pous/verifier/streamed_wipe.py`).
+(`verity/protocols/accounting/memory/pous/verifier/streamed_wipe.py`).
 
 `bench.py all --bin WIPELABELS --scratch DIR --out DIR` runs every step and writes `timing.json`:
 
@@ -39,12 +39,12 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path[:0] = [str(ROOT), str(ROOT / "tests/verity/protocols/resource_accounting/memory/pous/verifier")]
+sys.path[:0] = [str(ROOT), str(ROOT / "tests/verity/protocols/accounting/memory/pous/verifier")]
 
-from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw  # noqa: E402
-from verity.protocols.resource_accounting.memory.pous.attester import wipe_challenger as WC  # noqa: E402
+from verity.protocols.accounting.memory.pous.verifier import streamed_wipe as sw  # noqa: E402
+from verity.protocols.accounting.memory.pous.attester import wipe_challenger as WC  # noqa: E402
 
-WIPE_VERDICT = ROOT / "verity/protocols/resource_accounting/memory/pous/attester/lean/wipe_verdict.py"
+WIPE_VERDICT = ROOT / "verity/protocols/accounting/memory/pous/attester/lean/wipe_verdict.py"
 SECRET, SERVER = b"streamed-wipe bench secret", b"bench-node/bench"
 SESSION = hashlib.sha512(b"streamed-wipe bench session").digest()[:32]
 TABLE_LABELS = 1 << 28
@@ -316,6 +316,7 @@ def session(port: int, verdict: str) -> dict:
         signed = c.close()
     t3 = time.perf_counter_ns()
     v, sides = wv.judge(signed, c.commitment, trusted={signer.public_key}, schemes=ts.SCHEMES, decide=verdict)
+    wv.finish()
     t4 = time.perf_counter_ns()
     per = [r.elapsed_ns for r in signed.batches]
     return {"labels": n, "k": k, "ended": signed.ended, "accepted": v.accepted, "outcome": wv.outcome(v),

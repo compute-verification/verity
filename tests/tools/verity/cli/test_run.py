@@ -20,10 +20,11 @@ import pytest
 from verity.commitments import docket_digest as DD
 from verity import config as K
 from verity.protocol import Channel, Role
-from verity.protocols.resource_accounting.network.verifier import parties as NC
-from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams
-from verity.protocols.workload_classification.training_detection.inference_only.verifier import parties as IO
-from verity.protocols.proofs.spot.verifier import parties as SP
+from verity.protocols.run import schemes
+from verity.protocols.accounting.network.verifier import parties as NC
+from verity.protocols.accounting.network.verifier.network_attester import NetworkAttesterParams
+from verity.protocols.policy.training_detection.inference_only.verifier import parties as IO
+from verity.protocols.proof.spot.verifier import parties as SP
 from verity.channel import Refused
 import verity_cli as V
 from verity_cli import run as R
@@ -165,6 +166,13 @@ def test_the_composites_are_remote_and_onsite():
     assert "verity/onsite/v0" not in K.COMPOSITES and "verity/onsite/v0" not in SP.SUBPROTOCOLS
 
 
+def test_each_subprotocols_id_is_its_declarations():
+    """`parties.IDS` gives each declared subprotocol its declaration's ``protocol``, but the sampled proofs, whose id
+    outside a composite is the one-stage manifest's (`SP.ID`)."""
+    assert {n: i for n, i in SP.IDS.items() if n in schemes.DECLARATIONS and i != schemes.get(n).protocol} == {
+        "sampled-proofs": SP.ID}
+
+
 def test_a_workload_that_lacks_a_need_is_refused_by_name():
     bare = dataclasses.replace(REG.workloads["toy"], provides=frozenset({"windows", "ingress-relay"}))
     with pytest.raises(K.Refused) as e:
@@ -206,8 +214,8 @@ def test_the_hash_leaves_out_the_transport_and_fills_the_defaults():
 
 #: The onsite configuration's hash with neither the network attester's bound on a response's tokens nor its lengths
 #: rows' form set: a configuration that sets neither keeps it.
-UNBOUNDED_ONSITE = ("9b4816cf6ec07897e4625e3e5bf44f782af8d0826d587fa988f048bcf4bf1315"
-                    "0097f52430810a5afbcdb79e4abca85b03389c4cecce4b8518d6a38e10e37d0a")
+UNBOUNDED_ONSITE = ("2fc7e9f06b0bc50426ffb093843ecfeba3e33368d545c34b1ea32496aa8b7cd7"
+                    "2b55c23fe8023a32df1060b322d9ec6b0c23b634886fb062bdf01b9b90e86e51")
 
 
 def bounded(tokens):
@@ -511,44 +519,6 @@ def verifier_says(line: dict) -> R.Registry:
 def accepting(cfg: dict, product: str) -> dict:
     return {"block": 0, "components": dict.fromkeys(cfg["protocols"], "accept"), "product": product, "reason": None,
             "registration": None, "coins": "simulated", "verdict": "accept"}
-
-
-@pytest.mark.parametrize("cid", sorted(K.UNACCEPTED))
-def test_onsites_smaller_sets_are_read_and_hashed_and_their_verdict_is_undecided_under_their_own_id(tmp_path, capsys,
-                                                                                                    cid):
-    """Each of onsite's two smaller sets is a deployment with an id of its own, never onsite's: `check` reads it, and
-    `verity run` runs its parties and records each period's verdict under that id, undecided, since no composite
-    takes it, even where every subprotocol's verifier accepts."""
-    cfg = config([p for p in ONSITE_H1 if p in K.UNACCEPTED[cid]])
-    assert K.composite(cfg["protocols"], REG.components) == cid and K.digest(cfg) != K.digest(config())
-    rc, lines = run(tmp_path, verifier_says(accepting(cfg, cid)), cfg=cfg)
-    assert rc == 2 and [(x["product"], x["verdict"]) for x in lines] == [(cid, "undecided")]
-    assert lines[0]["components"] == dict.fromkeys(cfg["protocols"], "accept") and cid in lines[0]["reason"]
-    assert said(capsys.readouterr().out, "VERDICT") == lines
-
-
-@pytest.mark.parametrize("cid", sorted(K.UNACCEPTED))
-def test_a_smaller_sets_record_never_carries_onsites_id(tmp_path, capsys, cid):
-    cfg = config([p for p in ONSITE_H1 if p in K.UNACCEPTED[cid]])
-    rc, lines = run(tmp_path, verifier_says(accepting(cfg, "verity/onsite/v0")), cfg=cfg)
-    out = capsys.readouterr().out
-    assert rc == 2 and [(x["product"], x["verdict"]) for x in lines] == [(cid, "undecided")]
-    assert "verity/onsite/v0" not in (tmp_path / "state" / "record" / "verdicts.jsonl").read_text()
-    assert "verity/onsite/v0" not in out
-
-
-@pytest.mark.parametrize("verdict, rc", [("accept", 0), ("reject", 1)])
-@pytest.mark.parametrize("cid", sorted(K.UNACCEPTED))
-def test_a_smaller_sets_verdict_the_table_combined_is_passed_through_with_who_combined_it(tmp_path, capsys, cid,
-                                                                                          verdict, rc):
-    cfg = config([p for p in ONSITE_H1 if p in K.UNACCEPTED[cid]])
-    by = f"python: no Lean verifier takes {cid}"
-    line = {**accepting(cfg, "verity/onsite/v0"), "verdict": verdict, "combined_by": by}
-    got, lines = run(tmp_path, verifier_says(line), cfg=cfg)
-    captured = capsys.readouterr()
-    assert got == rc and [(x["product"], x["verdict"], x["combined_by"]) for x in lines] == [(cid, verdict, by)]
-    assert f"verity run: block 0's verdict {verdict} is combined by {by}; no composite takes {cid}" in captured.err
-    assert said(captured.out, "VERDICT") == lines and "verity/onsite/v0" not in captured.out
 
 
 def test_verity_run_refuses_a_configuration_that_is_no_composite(tmp_path, capsys):
@@ -978,6 +948,15 @@ def test_the_runs_tree_is_its_commits_archive_under_the_commits_name(tmp_path):
     assert R.archive(tmp_path, commit, root=repo) == "tree.tar"
     with tarfile.open(tmp_path / "tree.tar") as t:
         assert t.extractfile(f"{commit}/a.txt").read() == b"a\n"
+
+
+def test_a_live_run_s_period_line_is_the_run_s_last(tmp_path, capsys):
+    cfg = config(**AUDITOR)
+    said = verifier_says(accepting(cfg, "verity/onsite/v0"))
+    reg = dataclasses.replace(said, live=lambda c, s, h: SimpleNamespace(outcomes=said.live(c, s, h).outcomes,
+                                                                          period={"outcome": 20}))
+    rc, _ = run(tmp_path, reg, "--on", "auditor-1", cfg=cfg)
+    assert rc == 0 and capsys.readouterr().out.splitlines()[-1] == 'PERIOD {"outcome": 20}'
 
 
 @pytest.mark.parametrize("machines, on", [(["auditor-1"], "auditor-1"), (["auditor-1", "local"], "local")])

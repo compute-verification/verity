@@ -19,19 +19,13 @@ PATTERN = re.compile(r"(?:^|[-_.])(?:n1_|n2_|vy-n1-|vy-n2-|vy-node1-|pool_n1|neb
 MACHINE_DIRS = ("infra/vcf/",)
 
 ALLOWED = {
-    "benchmarks/network_traces/n2_tie_zk.sh",
-    "benchmarks/network_traces/n2_zk.sh",
     "infra/cluster/src/cluster/nebius2.py",
     "infra/vcf/payload.sh",
     "infra/vcf/vcf-bench.sh",
     "infra/vcf/vcf-job-run.sh",
     "infra/vcf/vcf-publish.sh",
-    "tests/benchmarks/network_traces/test_n2_zk.py",
     "tests/infra/cluster/test_nebius2.py",
-    "tests/verity/protocols/resource_accounting/network/prover/test_n2_tie_zk.py",
     "tools/research/src/research/pods/nebius/n2_custody.sh",
-    "verity/protocols/resource_accounting/network/prover/n2_tie_zk.py",
-    "verity/protocols/resource_accounting/network/prover/n2_zk.py",
 }
 
 

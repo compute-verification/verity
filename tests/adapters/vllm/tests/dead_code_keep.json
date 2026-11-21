@@ -4,7 +4,6 @@
  "modules": {
   "verity_vllm.definitions.numerics.ref_prims_twins": "numpy twins of registry.ref_prims, checked against the registered bodies by tests/program/test_ref_prims.py (LIVE registry.ref_prims)",
   "verity_vllm.program.frontend.derive_examples": "source modules of the derivation tests (LIVE frontend.derive)",
-  "verity_vllm.program.lifting.dump": "complete-assignment dump used by tests/program/test_lifted_tiny.py (LIVE registry.lifted / pad_prims)",
   "verity_vllm.definitions.numerics.fa3_split_twins": "numpy twins of registry.fa3_split's Definitions, checked word for word against them by tests/program/test_fa3_split.py (LIVE registry.fa3_split) and run by the H200 capture tests/properties/glm53_fa3_prefill_capture_gpu.py; live once a replay row binds AttentionSplit_v1",
   "verity_vllm.definitions.numerics.deepgemm_schedule": "DeepGEMM's cc 9.0 launch-configuration model (the chosen layout, its boundaries over M, the sweep and the JIT template arguments), pinned by tests/program/test_deepgemm_schedule.py and read by the capture tests/properties/deepgemm_capture_gpu.py; live once a Program carries a schedule claim",
   "verity_vllm.definitions.numerics.nvfp4_twins": "the NVFP4 linear's device layouts (scale swizzle, packed E2M1 codes), whose offsets and packing tests/program/test_nvfp4.py checks (LIVE registry.nvfp4, its Definitions); live once a Commit opens an NVFP4 linear",
@@ -15,11 +14,20 @@
   "verity_vllm.program.quarantine.collective.allreduce": "see quarantine.collective",
   "verity_vllm.program.quarantine": "the admission home of provisional Definitions: collective",
   "verity_vllm.compiler.advice_check": "AdviceCheck_v1, the advice format's check Definition, read by its circuit-check sidecar and tests/compiler/test_network_attester_advice_check.py",
-  "verity_vllm.compiler.compile_slice_v7": "CompileSlice_v7, the slice charging the length terms, held by tests/compiler/test_network_attester_compile_slice_v7.py; benchmarks/network_traces/compile_slice_zk.py proves it",
+  "verity_vllm.compiler.compile_slice_v7": "CompileSlice_v7, the slice charging the length terms, held by tests/compiler/test_network_attester_compile_slice_v7.py",
   "verity_vllm.compiler.served_statics": "the served statics' Definition, held by tests/compiler/test_network_attester_served_statics.py, by benchmarks/prove_path/served_statics_zk.py cost (its size and Flock block) and by benchmarks/prove_path/served_tie_window.py (its statics check, in plain); no proof of it runs",
   "verity_vllm.compiler.served_tie": "the served tie's Definition, held by tests/compiler/test_network_attester_served_tie.py and by benchmarks/prove_path/served_tie_window.py (its check, in plain, on a sealed window's rows); no proof of it runs",
-  "verity_vllm.pipeline.tick_slice": "TickSlice_v1, the compile slice under the certified tick, read by its circuit-check sidecar and tests/pipeline/test_tick_slice.py",
   "verity_vllm.program.predict.mtp": "dsa's MTP draft layer: its part of the weights record (draft_layer, the name-to-path map a match reads) and the draft forward, held against the pin's launches by tests/program/test_predict_mtp.py; live once the predictor builds a drafted request's Program, which domain.check_phi refuses until then",
-  "verity_vllm.definitions.numerics.greedy_accept_twin": "numpy twin of the greedy rejection kernels' tiled argmax and accept at the vLLM pin, held to registry.spec's GreedyAccept_v1 by tests/program/test_greedy_accept.py (LIVE registry.spec); live once a drafted request's Program binds it"
+  "verity_vllm.definitions.numerics.greedy_accept_twin": "numpy twin of the greedy rejection kernels' tiled argmax and accept at the vLLM pin, held to registry.spec's GreedyAccept_v1 by tests/program/test_greedy_accept.py (LIVE registry.spec); live once a drafted request's Program binds it",
+  "verity_vllm.query.router_softmax": "the ordered router's softmax per token row, the IR side of the router-tap exactness property (tests.properties.router_tap_exactness, a registered property that moe_source's router declaration cites as its evidence)",
+  "verity_vllm.acquire.sources.router_softmax_source": "the router-softmax tap's source, which the router-tap exactness property's GPU check attaches (tests/properties/router_tap_exactness_gpu.py)",
+  "verity_vllm.query.vocab_range": "a TP rank's vocabulary-range values per token row, the IR side of the vocabulary-range exactness property (tests.properties.vocab_range_exactness, registered in records.property_record)",
+  "verity_vllm.acquire.sources.vocab_range_source": "the vocabulary-range source, which the vocabulary-range exactness property's GPU check attaches (tests/properties/vocab_range_exactness_gpu.py)",
+  "verity_vllm.observe.runtime_tree": "the completeness tests' meta-device module tree (observe/), kept with the capture, fold and Match road",
+  "verity_vllm.check.commit_rules": "read by tests only once the sampled replay's CPU road is deleted; cut with its tests in the next deletion (test_commit_rules, test_absent_commit_fields, test_mla_attention_hidden)",
+  "verity_vllm.check.cublas_route_pin": "read by tests only once the sampled replay's CPU road is deleted; cut with its tests in the next deletion (test_redteam_pinned_cublas_route, test_absent_fields, test_verdict)",
+  "verity_vllm.query.compose": "read by tests only once the sampled replay's CPU road is deleted; cut with its tests in the next deletion (merge_ranks, compose_global: eight query, correspondence and commit tests)",
+  "verity_vllm.records.commit_run": "read by tests only once the sampled replay's CPU road is deleted; cut with its tests in the next deletion (test_commit_run, test_serve_seal)",
+  "verity_vllm.definitions.numerics.serve3_reference": "read by tests only once the sampled replay's CPU road is deleted; cut with its tests in the next deletion (adapters/torch's frontend tests import materialize)"
  }
 }

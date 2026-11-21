@@ -13,12 +13,12 @@ import pytest
 import pearl_c4_vectors as V4
 import test_circuit_rowk as R
 from verity.circuits.evaluation import evaluate
-from verity.protocols.resource_accounting.compute.pouw.prover.circuit import leaves as L
+from verity.protocols.accounting.compute.pouw.prover.circuit import leaves as L
 from verity.protocols.experimental.pearl_c4.prover import pc4, pc4_rowk
-from verity.protocols.resource_accounting.compute.pouw.prover.circuit import plan, rowk
+from verity.protocols.accounting.compute.pouw.prover.circuit import rowk
 from verity.protocols.experimental.pearl_c4.prover import pearl_c4 as F
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_kw as P
-from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import DomainError
+from verity.protocols.accounting.compute.pouw.prover.schemes import pearl_kw as P
+from verity.protocols.accounting.compute.pouw.verifier.protocol import DomainError
 
 SEED = R.SEED
 K4, KS4 = 256, 64
@@ -79,22 +79,6 @@ def test_the_cut_computes_every_value_in_exactly_one_unit(side, hidden):
     """`test_circuit_rowk`'s on Pearl-C4's cut, whose forms decode their segment's BF16 words again (`Bf16ToF32`,
     wiring)."""
     R.cut_computes_every_value_once(pc4, replace(SHAPE, hidden=hidden), side, {"Bf16ToF32_v1"})
-
-
-def test_the_layout_proves_each_rows_pieces_with_its_tiles():
-    """`plan.tile_layout` on a cut shape: a tile's closure is the tile and its rows of A's units (head, forms, tail, row by
-    row), and its weight rows are its rows of B's in the weight's Program."""
-    shape = pc4.Shape(4, K4, 6, tile=(2, 3), row_k=KS4)
-    lay = plan.tile_layout(shape, 1)
-    lay.check()
-    us, ws = pc4.units(pc4.call(shape)), pc4.units(pc4.weight(shape))
-    for t in (u for u in us if u.role == "tile"):
-        rs, cs = t.where
-        assert lay.closure[t.index][0] == t.index
-        assert sorted(us[i].where[0] for i in lay.closure[t.index][1:]) == sorted(
-            [rs * 2 + i for i in range(2)] * (K4 // KS4 + 2))
-        assert all(us[i].role.startswith("row_a") for i in lay.closure[t.index][1:])
-        assert sorted(ws[j].where[0] for j in lay.b_rows[t.index]) == sorted([cs * 3 + j for j in range(3)] * (K4 // KS4 + 2))
 
 
 def _pieces_of(shape) -> dict[str, list]:

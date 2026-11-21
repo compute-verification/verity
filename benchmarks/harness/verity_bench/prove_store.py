@@ -20,7 +20,6 @@ from verity_bench import prove as P
 from verity_bench import prove_flock as PF
 from verity_bench.boolean import boolean_version
 from verity_bench.prove_common import (
-    _ABSENT,
     ART_RATES,
     CENSUS,
     CUT,
@@ -32,7 +31,6 @@ from verity_bench.prove_common import (
     WARMED,
     Workload,
     _count,
-    _field,
     _input,
     _read,
     card,
@@ -44,6 +42,7 @@ from verity_bench.prove_rows import (
     steady_row,
 )
 from verity_bench.served_table import record_runs, records
+from verity_bench.steady import _ABSENT, _field
 
 CENSUS_KIND = "block-census/v1"
 CENSUS_FILE = "census.json"
@@ -71,7 +70,7 @@ WARM_SUMMARY, WARM_CONFIG = "out/gpu*/out/summary.json", "out/gpu*/out/config.tx
 
 def census_docs(store: Any, workload: Workload) -> tuple[str, Any, list[tuple[str | None, dict]]]:
     """The workload's census of record: its art, the art's manifest and each request's `census.json` by its request.
-    The art holds one at its root (a request named None) or, as `block_census.sh --request` writes them, one a request
+    The art holds one at its root (a request named None) or, as `block_census.py --request` writes them, one a request
     at `REQUEST/census.json`."""
 
     art = of_record(store, workload.record(CENSUS), "block census")
@@ -456,4 +455,4 @@ def serving(root: Path, workload: Workload) -> P.Serving:
     return P.Serving(mfu["value"], peak,
                      f"MFU {mfu['value']:g} ({mfu['status']}, {mfu['low']:g} to {mfu['high']:g}: {mfu['source']}; {FLEETS} "
                      f"`{workload.fleet}`) of the {gpu.name}'s data-sheet peak, {peak:.5g} FLOP/s "
-                     f"({overhead_records.CENSUS}/hardware.json `{gpu.datasheet}`), at {P.FLOP_PER_MAC} FLOP a MAC")
+                     f"({overhead_records.CENSUS}/hardware.json `{gpu.datasheet}`, reading `{overhead_records.READING}`), at {P.FLOP_PER_MAC} FLOP a MAC")

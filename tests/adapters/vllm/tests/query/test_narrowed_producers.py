@@ -11,7 +11,6 @@ from __future__ import annotations
 import copy
 import gzip
 import json
-import re
 from types import SimpleNamespace
 
 import numpy as np
@@ -23,15 +22,8 @@ except ModuleNotFoundError:
     pytest.skip("could not import 'torch'", allow_module_level=True)
 
 from tests.query.test_boolean_manifest import _write
-from verity_vllm.acquire.sources import narrowed_source as NS
-from verity_vllm.check.replay import coverage as COV
-from verity_vllm.check.replay import index as IX
-from verity_vllm.check.replay import population as RP
-from verity_vllm.check.replay.evaluate import evaluate
-from verity_vllm.commit.binding import build_binding_map
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.definitions.registry import b1
-from verity_vllm.query.manifest.bind import Binder, coverage_check
 from verity_vllm.query.program_view import from_instances
 from verity_vllm.query.required import request_manifest
 
@@ -85,33 +77,6 @@ def test_the_manifest_models_the_narrowed_qkv_and_the_whole_last_row_as_two_iden
     assert _rows(man, "lm.model.layers.0.qkv_proj") == {(0, "out"): (LP, 128, [0, LP * 128], "Gemm_v1", None),
                                                         (1, "out"): (1, 128, [0, 128], "Gemm_v1", None)}
     assert not [r for r in man["identities"] if "@" in r["output_member"] and r["op_path"] != LAST_QKV]
-
-
-def test_the_replay_addresses_each_producer_at_its_own_identity_and_names_a_manifest_missing_either(build):
-    """The replay's index reads the members off the same population: the narrowed rows at `out@64`, the whole row at `out`.  Its
-    reconciliation passes against the manifest, and refuses one without either producer, naming that producer's VU."""
-    d, man, inst = build
-    addrs: dict[tuple, dict] = {}
-    RP.population(IX.ProgramIndex(inst, program_dir=str(d)), "r0", addresses=addrs)
-    assert {k[3]: (a["rows"], a["spec"]) for k, a in addrs.items() if k[:3] == ("r0", 0, LAST_QKV)} == {
-        "out": (1, "Gemm_v1{K=64,N=128}"), "out@64": (LP - 1, "Gemm_v1{K=64,N=64}")}
-    checks = COV.query_population(man, addrs, set(), ranks=[0])["query_checks"]
-    assert checks["ok"] is True, checks
-    for member in ("out", "out@64"):
-        checks = COV.query_population(_without(man, 0, member), addrs, set(), ranks=[0])["query_checks"]
-        assert checks["ok"] is False
-        assert [(v["op_path"], v["member"]) for v in checks["vus_outside_query"]["first"]] == [(LAST_QKV, member)]
-
-
-def test_the_modules_returned_tensor_binds_the_whole_rows_and_only_a_label_binds_the_narrowed(build):
-    """The tuple slot of `qkv_proj`'s return binds `out`, never the narrowed rows; a committed tensor labelled `out@64` binds
-    those.  With the returned tensor alone, the Commit's coverage names the narrowed rows missing, and only them."""
-    _d, man, _inst = build
-    binder = Binder.of_manifest(man)
-    assert binder.bind(0, [LAST_QKV]) == [(LAST_QKV, "out", 0, "slot")]
-    assert binder.bind(0, [LAST_QKV, f"{LAST_QKV}/out@64"]) == [(LAST_QKV, "out", 0, "slot"), (LAST_QKV, "out@64", 0, "label")]
-    cov = coverage_check(man, {0: [{"name": LAST_QKV, "shape": [LP, 128]}]}, request_id="r0", max_report=10**6)
-    assert [(m["op_path"], m["output_member"]) for m in cov["missing"] if m["op_path"] == LAST_QKV and m["step"] == 0] == [(LAST_QKV, "out@64")]
 
 
 def test_the_manifest_places_the_last_layers_prompt_identities_at_the_last_runtime_row(build):
@@ -176,11 +141,6 @@ def _bf16(a: np.ndarray) -> np.ndarray:
     return (a.astype(np.float32).view(np.uint32) >> 16).astype(np.uint16)
 
 
-def _gemm(x: np.ndarray, w: np.ndarray, spec: str) -> np.ndarray:
-    """A `Gemm_v1` Call's Values on token row `x` and weight rows `w`: its registered row kernel."""
-    return evaluate("Gemm_v1", {k: int(v) for k, v in re.findall(r"(\w+)=(\d+)", spec)}, [[x], []], [None, w.reshape(-1)])["out"]
-
-
 def _metas(acquired: list) -> list:
     metas, off = [], 0
     for i, (name, t) in enumerate(acquired):
@@ -191,67 +151,40 @@ def _metas(acquired: list) -> list:
     return metas
 
 
-def test_the_committed_words_of_the_narrowed_and_the_last_rows_are_the_programs_values(build):
-    """The fused GEMM's whole rows at the prompt step, through the committer's hook and the narrowed-rows source, bound by the manifest's
-    binder in the binding map: the words each step-0 identity of the last layer's qkv reads are the Values its Program Calls compute,
-    each from the weight rows the Call reads (the narrowed Calls the keys' and values' rows).  Row 0's words are not the last row's: the
-    whole rows' identity is bound at its runtime row."""
-    d, man, inst = build
-    pi = IX.ProgramIndex(inst, program_dir=str(d))
-    rng = np.random.default_rng(7)
-    x, W = _bf16(rng.standard_normal((LP, 64))), _bf16(rng.standard_normal((128, 64)) * 0.125)
-    calls = [r for r in inst["rows"] if str(r.get("name", "")).startswith(f"{LAST_QKV}/")][:LP]
-    assert [r["spec"] for r in calls] == ["Gemm_v1{K=64,N=64}"] * (LP - 1) + ["Gemm_v1{K=64,N=128}"]
-    program = []
-    for t, r in enumerate(calls):
-        (_p, _param, lo, hi), = r["args"][1]
-        field, flo, fhi, _shape = pi.weight_slice(lo, hi)
-        assert field == f"{LAST_QKV}.weight"
-        program.append(_gemm(x[t], W.reshape(-1)[flo:fhi], r["spec"]))
-    whole = np.stack([_gemm(x[t], W, "Gemm_v1{K=64,N=128}") for t in range(LP)])
-
-    root = torch.nn.Module()
-    root.lm = torch.nn.Module()
-    root.lm.model = torch.nn.Module()
-    root.lm.model.layers = torch.nn.ModuleList([torch.nn.Module(), torch.nn.Module()])
-    root.lm.model.layers[1].qkv_proj = _Qkv(torch.from_numpy(whole.view(np.int16).copy()).view(torch.bfloat16))
-    com = _Committer(root)
-    src = NS.attach(com, man)
-    assert com.sources == [src] and src.own_names == {f"{LAST_QKV}/out@64"}
-    src.install()
-    com._cur, com._plan_shape = SimpleNamespace(step=0), (LP, 1)
-    out, _bias = root.lm.model.layers[1].qkv_proj(None)
-    com.acquired.insert(0, (LAST_QKV, out.clone()))
-    assert [n for n, _t in com.acquired] == [LAST_QKV, f"{LAST_QKV}/out@64"] and not com.errors
-
-    bmap = build_binding_map({0: _metas(com.acquired)}, [], bytes(64), man["program_digest"], binder=Binder.of_manifest(man))
-    words = {n: t.view(torch.int16).numpy().view(np.uint16).reshape(-1) for n, t in com.acquired}
-    entry = {e["identity"]["output_member"]: e for e in bmap["entries"] if e["identity"]["op_path"] == LAST_QKV}
-    want = {r["output_member"]: r["element_range"] for r in man["identities"] if r["op_path"] == LAST_QKV and r["step"] == 0}
-    assert set(want) == set(entry) == {"out", "out@64"}
-    got = {}
-    for member, (lo, hi) in want.items():
-        e = entry[member]
-        elo, ehi = e["identity"]["element_range"]
-        assert "refused" not in e and elo <= lo and hi <= ehi
-        got[member] = words[e["name"]][e["element_offset"] + lo:e["element_offset"] + hi]
-    assert (entry["out"]["element_offset"], entry["out@64"]["element_offset"]) == ((LP - 1) * 128, 0)
-    assert got["out@64"].tolist() == np.concatenate(program[:LP - 1]).tolist()
-    assert got["out"].tolist() == program[LP - 1].tolist()
-    assert words[LAST_QKV][:128].tolist() != program[LP - 1].tolist()
 
 
-def test_a_share_without_the_runtime_row_is_refused_and_coverage_names_it(build):
-    """A committed qkv of one row (a committer that kept only the identity's rows) has no row LP - 1: the binding map refuses its
-    entry by name, and coverage names the whole rows missing while the narrowed rows stay covered."""
+def _plan(build, tmp_path) -> list[dict]:
+    """The seal's capture plan of the fixture's one request Program (`capture_plan.rows_of_build`)."""
+    from verity_vllm.check.capture_plan import rows_of_build
+
+    d, _man, _inst = build
+    (tmp_path / "build_request_r0").symlink_to(d)
+    return rows_of_build(tmp_path)
+
+
+def test_the_seals_binder_binds_a_narrowed_linears_return_to_its_whole_rows_at_every_step(build, tmp_path):
+    """The seal binds each step's events with the capture plan's members (`serve_seal.served_binder_of`), which name the last
+    layer's qkv `out` and `out@64` at one op path: its returned tensor binds `out`, never the empty member of an unbound slot,
+    and every module's return binds a member the plan names."""
+    from verity_vllm.pipeline.serve_seal import served_binder_of
+
     _d, man, _inst = build
-    metas = [SimpleNamespace(name=LAST_QKV, shape=(1, 128), chunk=256, stream_off=0, first_leaf=0, nbytes=256, dtype="bf16", ordinal=0)]
-    bmap = build_binding_map({0: metas}, [], bytes(64), man["program_digest"], binder=Binder.of_manifest(man))
-    assert [e.get("refused") for e in bmap["entries"]] == [
-        f"{LAST_QKV}: r0's values start at its row {LP - 1}; its share is rows [0, 1): bound to no row"]
-    layouts = {0: [{"name": LAST_QKV, "shape": [1, 128]}, {"name": f"{LAST_QKV}/out@64", "shape": [LP, 64]}]}
-    cov = coverage_check(man, layouts, request_id="r0", max_report=10**6)
-    assert [(m["op_path"], m["output_member"]) for m in cov["missing"] if m["op_path"] == LAST_QKV and m["step"] == 0] == [(LAST_QKV, "out")]
-    layouts[0][0]["shape"] = [LP, 128]
-    cov = coverage_check(man, layouts, request_id="r0", max_report=10**6)
-    assert not [m for m in cov["missing"] if m["op_path"] == LAST_QKV and m["step"] == 0]
+    plan = _plan(build, tmp_path)
+    members = {str(r["op_path"]): [str(m[0]) for m in r["members"]] for r in plan}
+    assert members[LAST_QKV] == ["out@64", "out"] or members[LAST_QKV] == ["out", "out@64"]
+    binder = served_binder_of(plan, [0, 1], {}, False, man["op_path_aliases"])
+    returns = [op for op, ms in members.items() if "/" not in op and len([m for m in ms if "@" not in m]) == 1]
+    for step in (0, 1):
+        got = binder.bind(step, returns)
+        assert not [g for g in got if g[3] == "unbound"], [g for g in got if g[3] == "unbound"]
+        assert got[returns.index(LAST_QKV)] == (LAST_QKV, "out", 0, "slot")
+
+
+def test_a_narrowed_linears_slot_that_binds_nothing_is_refused_by_name():
+    """A capture plan that names a narrowed linear's narrowed rows and not its whole rows leaves its returned tensor nothing to
+    bind: the binder refuses it by module, invocation and slot, where it would otherwise bind the empty member."""
+    from verity_vllm.pipeline.serve_seal import served_binder_of
+
+    plan = [{"op_path": LAST_QKV, "members": [("out@64", 64, "bf16")]}]
+    with pytest.raises(ValueError, match=rf"step 0: {LAST_QKV} at invocation 0, slot 0: a narrowed linear's slot binds none"):
+        served_binder_of(plan, [0], {}, False).bind(0, [LAST_QKV])

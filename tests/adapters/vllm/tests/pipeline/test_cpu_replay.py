@@ -6,7 +6,6 @@ from __future__ import annotations
 import json
 import struct
 from pathlib import Path
-from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -102,18 +101,6 @@ def test_every_servable_tensor_opens_against_the_committed_root_and_is_served_as
     assert rd("model.unknown.weight", 0, 1) is None and rd("model.half.weight", 0, 1) is None
 
 
-def test_the_weights_attest_counts_the_consumed_fields_and_attests_only_when_every_one_opened(world):
-    words, wc = _open(world)
-    c = {"weights_pin": {"result": True, "root_of_record": "ab" * 32}}
-    b = {"manifest_sha256": "cd" * 32}
-    a = CPU.weights_attest(c, wc, {QKV, "model.rotary_emb.cos_sin_cache"}, words, world["tree"]["extra"], b)
-    assert a == {"pin": {"equal": True, "digest": "ab" * 32}, "root_openings": "2/2", "sources": {"checkpoint": 1, "bundle": 1},
-                 "attests": CPU.ATTESTS, "replay": f"cpu, from bundle {'cd' * 32}"}
-    a = CPU.weights_attest(c, wc, {QKV, "model.unknown.weight"}, words, world["tree"]["extra"], b)
-    assert a["root_openings"] == "1/2" and a["attests"] is None, "a consumed field that did not open attests nothing"
-    assert CPU.weights_attest(c, dict(wc, equal=False), {QKV}, words, world["tree"]["extra"], b)["attests"] is None
-
-
 def test_a_flipped_checkpoint_byte_fails_the_opening_by_the_tensors_name(world):
     shard = world["ck"] / "model.safetensors"
     b = bytearray(shard.read_bytes())
@@ -199,11 +186,21 @@ def test_on_read_opens_a_tensor_on_its_first_read_as_open_weights_does_and_refus
         CPU.OnRead(world["bundle"], world["tree"], world["root"], None)
 
 
+def _safetensors(path, tensors):
+    """A safetensors file of `tensors` (name -> (safetensors dtype, array))."""
+    hdr, off, blobs = {}, 0, []
+    for name, (dt, a) in tensors.items():
+        b = np.ascontiguousarray(a).tobytes()
+        hdr[name] = {"dtype": dt, "shape": list(a.shape), "data_offsets": [off, off + len(b)]}
+        off += len(b)
+        blobs.append(b)
+    h = json.dumps(hdr).encode()
+    path.write_bytes(struct.pack("<Q", len(h)) + h + b"".join(blobs))
+
+
 def test_an_int32_table_opens_as_the_checkpoints_i64_words_in_range(tmp_path):
     """DeepSeek-V4's hash-routed layers register `ffn.gate.tid2eid` as int32 [V, 6], stored I64 in the checkpoint: it opens as the
     checkpoint's values in i32 words (the replay's `GatherI32x{V}` rows read it), and a value outside int32 leaves it unopened."""
-    from tests.pipeline.test_tp_replay_deferred import _safetensors
-
     name = "model.layers.0.ffn.gate.tid2eid"
     table = RNG.integers(0, 384, (16, 6), dtype=np.int64)
 
@@ -281,12 +278,6 @@ def test_the_replay_takes_the_commits_workers_unless_told_otherwise():
     assert a.replay_workers == 4 and a.program_dir == "/row/build_request" and ctx["args"]["replay_workers"] is None
 
 
-def test_a_workers_baseline_is_the_word_replays_unless_measured():
-    """The baseline `driver.fit_pool` adds to each pick's stated peak: the calibration's, unless measured."""
-    assert CPU.worker_peak(CPU.Options(bundle="b", row_dir="r", checkpoint_dir="c")) == 250 << 20
-    assert CPU.worker_peak(CPU.Options(bundle="b", row_dir="r", checkpoint_dir="c", worker_peak_gb=1.5)) == int(1.5 * (1 << 30))
-
-
 STEPS = {0: [("model.embed_tokens", bytes(range(256)) * 20), ("model.layers.0.self_attn.qkv_proj", b"\x07" * 900)],
          1: [("model.embed_tokens", bytes(reversed(range(256))) * 3), ("runner.sampler", b"\x01\x02\x03\x04")],
          2: [("model.layers.0.mlp.down_proj", bytes(i % 251 for i in range(3000)))]}
@@ -307,177 +298,3 @@ def _kept(tmp_path, tree=None):
     return out, b, store, run, t, want, c, plan
 
 
-def test_the_slim_keep_reopens_every_pick_against_the_run_root_and_nothing_else(tmp_path):
-    from verity_vllm.check import oracle_compare as OC
-    from verity_vllm.commit import opened as OV
-    from verity_vllm.commit import store_dump as SD
-
-    out, b, store, run, t, want, c, plan = _kept(tmp_path)
-    doc = CPU.keep(out, b, store, run, t, plan, c, opened={"model.rotary_emb.cos_sin_cache"})
-    k = CPU.slim_path(out, 1)
-    assert json.loads((k / CPU.SLIM_DOC).read_text()) == doc and not k.with_name(k.name + ".partial").exists()
-    assert (doc["schema"], doc["pair"], doc["run_root"], doc["picked"], doc["picks"], doc["commit_pass"]) == (
-        CPU.SLIM_SCHEMA, 1, run.run_root.hex(), 2, plan["picks"], True)
-    assert doc["binding_map_sha256"] == b["manifest"]["files"]["binding_map.json"]["sha256"] and doc["bundle_manifest_sha256"] == b["manifest_sha256"]
-    assert doc["programs"] == c["sampled_replay"]["programs"]
-    on_disk = {x.relative_to(k).as_posix() for x in k.rglob("*") if x.is_file()} - {CPU.SLIM_DOC}
-    assert set(doc["files"]) == on_disk and {"binding_map.json", "context.json", "weights/tree.json", "weights/extra/0.bin", "store/store.json"} <= on_disk
-    assert all(RB._sha256(k / r) == f["sha256"] and (k / r).stat().st_size == f["bytes"] for r, f in doc["files"].items())
-    bundled = sum(x.stat().st_size for x in (Path(b["path"]) / "store").rglob("*.bin"))
-    assert sum(f["bytes"] for r, f in doc["files"].items() if r.endswith(".bin") and r.startswith("store/")) < bundled
-    slim, srun = SD.load(k / "store")
-    assert slim._run_root(srun) == run.run_root, "the slim store folds to the run root of record"
-    rd = OC.OpenedReader(slim, srun)
-    assert all(rd(s, n, lo, hi) == want[(s, n)] is not None for s, n, lo, hi in PICKS), "every pick re-opens against the run root"
-    assert rd(2, "model.layers.0.mlp.down_proj", 0, 100) is None and rd(0, "model.embed_tokens", 0, 64) is None, "and nothing else"
-    raw = k / "store" / "raw" / "s1.bin"
-    raw.write_bytes(bytes(x ^ 1 for x in raw.read_bytes()))
-    with pytest.raises(OV.OpeningNotVerified):
-        OC.OpenedReader(*SD.load(k / "store"))(1, "runner.sampler", 0, 4)
-
-
-def test_the_slim_keep_is_written_only_for_the_replay_s_own_draw(tmp_path):
-    out, b, store, run, t, _want, c, plan = _kept(tmp_path)
-    for bad in (dict(plan, picked=1), {k: v for k, v in plan.items() if k != "plan"}, dict(plan, picks=plan["picks"][:1])):
-        assert CPU.keep(out, b, store, run, t, bad, c, opened=set()) is None
-    assert CPU.keep(out, b, store, run, t, plan, {"sampled_replay": {"grade": "not-evaluated"}}, opened=set()) is None
-    assert not list(out.glob("replay_slim_p*"))
-
-
-def test_a_rows_sha512_keep_carries_only_the_salts_of_the_tensors_its_replay_opened(tmp_path):
-    """A tensor's salts open its weights leaves, and a keep is read by later replays: no file of a rows-sha512 keep holds an unopened
-    tensor's salts, only those of the tensors the replay opened (its salt file), with the bundle's bytes of those alone.  A replay
-    from the keep opens the same tensors and reports the rest unopened, not mismatched."""
-    tree = weights_tree(_served()) | {"extra": {"model.rotary_emb.cos_sin_cache": 2}}
-    out, b, store, run, t, _want, c, plan = _kept(tmp_path, tree)
-    salts = {n: tensor_salts(n, int(nb)) for n, _dt, _s, nb in tree["names"] if int(nb)}
-    assert SF.params(CPU.salts_path(Path(b["path"]))).keys() == salts.keys(), "the private bundle holds every tensor's salts"
-    for opened in ({QKV, "model.rotary_emb.cos_sin_cache"}, {QKV}):
-        CPU.keep(out, b, store, run, t, plan, c, opened=opened)
-        k = CPU.slim_path(out, 1)
-        secret = [ys[:64] for n, ys in salts.items() if n not in opened]
-        for f in (x for x in k.rglob("*") if x.is_file()):
-            data = f.read_bytes()
-            assert not [s for s in secret if s in data or s.hex().encode() in data], f"{f.relative_to(k)} holds an unopened tensor's salts"
-        kt = json.loads((k / "weights" / "tree.json").read_text())
-        assert not {"key", "tensor_keys"} & kt.keys()
-        assert {n: SF.read(CPU.salts_path(k), n) for n in SF.params(CPU.salts_path(k))} == {n: salts[n] for n in opened}
-        assert (kt["root"], kt["tensor_roots"], kt["names"]) == (tree["root"], tree["tensor_roots"], tree["names"])
-        assert kt["extra"] == {n: i for n, i in tree["extra"].items() if n in opened}
-        assert sorted(x.name for x in (k / "weights" / "extra").glob("*")) == [f"{i}.bin" for i in sorted(kt["extra"].values())]
-    ckd = tmp_path / "ck"
-    ckd.mkdir()
-    (ckd / "config.json").write_text("{}")
-    _shard(ckd / "model.safetensors", PARTS)
-    CPU.keep(out, b, store, run, t, plan, c, opened={QKV, "model.rotary_emb.cos_sin_cache"})
-    k = CPU.slim_path(out, 1)
-    words, wc = CPU.open_weights(k, json.loads((k / "weights" / "tree.json").read_text()), tree["root"],
-                                 WR.CheckpointIndex(str(ckd), verify_shards=False), threads=2)
-    assert wc["equal"] is True and set(words) == {QKV, "model.rotary_emb.cos_sin_cache"} and wc["mismatched_n"] == 0, wc
-    assert {u["name"]: u["why"] for u in wc["unopened"]} == {n: "the salt file holds no salts for it" for n in ("model.norm.weight", "model.unknown.weight")}
-    with pytest.raises(KeyError, match="holds no salts for it"):
-        CPU.tensor_root_of(k, json.loads((k / "weights" / "tree.json").read_text()), 1, PARTS["model.norm.weight"].view(np.uint8))
-
-
-def _decided(tmp_path):
-    """A record whose deferred replay was decided and left its keep, and its instrumented row as it awaited the replay."""
-    out, b, store, run, t, _want, c, plan = _kept(tmp_path)
-    CPU.keep(out, b, store, run, t, plan, c, opened=set())
-    rows, row, verdict, _s, _r = CPU.of_record(b, out)
-    rc = row["commit"]
-    rc.update(commit_fail_reason=RB.PENDING, value_correspondence={"method": "offline-suite", "result": None, "why": None,
-                                                                   "components": {"weights_pin": {"result": True}}})
-    awaiting = json.loads(json.dumps(row))
-    rc.update(commit_pass=True, commit_fail_reason="PASS", sampled_replay={"result": True, "grade": "complete"},
-              boundary_linkage={"result": True, "linked": 2}, opened_values={"method": "opened", "replay_linkage": {"n": 2}},
-              weights_attest={"root_openings": "2/2"})
-    vc = rc["value_correspondence"]
-    vc.update(method="sampled-exact-replay(complete) + boundary-linkage + offline-suite", result=True)
-    vc["components"].update(sampled_replay={"result": True}, boundary_linkage={"result": True}, negatives={"suite": "s"})
-    CPU.record(out, rows, verdict, b, 1.0)
-    return out, awaiting
-
-
-def test_a_decided_record_reads_back_from_its_keep_as_it_awaited_its_bundle(tmp_path):
-    out, awaiting = _decided(tmp_path)
-    assert not RB.awaits_replay(json.loads((out / "runs.jsonl").read_text())["commit"])
-    k, b = CPU.open_source(CPU.slim_path(out, 1)), CPU.open_source(RB.path(out, 1))
-    assert "keep" in k and "keep" not in b and k["manifest_sha256"] == b["manifest_sha256"] and k["context"] == b["context"]
-    assert k["manifest"]["files"]["binding_map.json"] == b["manifest"]["files"]["binding_map.json"]
-    _rows, row, _verdict, store, run = CPU.of_record(k, out)
-    assert row == awaiting and RB.awaits_replay(row["commit"])
-    assert store._run_root(run) == run.run_root and run.run_root.hex() == row["commit"]["run_root"]
-
-
-@pytest.mark.parametrize("tamper,why", [
-    (lambda k: (k / "context.json").write_text("{}"), "sha256 is not slim.json's"),
-    (lambda k: (k / "weights" / "stray.bin").write_bytes(b"\x00"), "extra"),
-    (lambda k: (k / "binding_map.json").unlink(), "missing"),
-    (lambda k: (k / CPU.SLIM_DOC).write_text(json.dumps({**json.loads((k / CPU.SLIM_DOC).read_text()), "dump_sha256": "00"})), "dump sha256"),
-])
-def test_a_keep_that_is_not_its_slim_json_is_refused(tmp_path, tamper, why):
-    out, _ = _decided(tmp_path)
-    tamper(CPU.slim_path(out, 1))
-    with pytest.raises(ValueError, match=why):
-        CPU.open_keep(CPU.slim_path(out, 1))
-
-
-def test_a_record_not_decided_by_the_keep_s_bundle_is_refused(tmp_path):
-    out, _ = _decided(tmp_path)
-    v = json.loads((out / "verdict.json").read_text())
-    v["replay_deferred"]["replayed"][0]["manifest_sha256"] = "00" * 32
-    (out / "verdict.json").write_text(json.dumps(v))
-    with pytest.raises(CPU.Refused, match="not decided by a replay of the bundle"):
-        CPU.of_record(CPU.open_keep(CPU.slim_path(out, 1)), out)
-
-
-def test_a_keep_replays_only_under_the_draw_it_was_kept_for(tmp_path, monkeypatch):
-    from verity_vllm.pipeline import c2_replay as C2
-
-    out, _ = _decided(tmp_path)
-    slim = CPU.open_keep(CPU.slim_path(out, 1))["keep"]
-    site = C2.ReplaySources(args=SimpleNamespace(replay_draw="uniform"), out=out, pair=1, com=None, rc=None, row={}, reqs=[], sampling={}, tokens={},
-                            manifest=None, stop_of_record={}, ids_full={}, versions={}, components={}, vc_result=None, weights_of=None,
-                            weights_check=None, tl=None)
-    drawn: dict[str, list] = {"picks": [tuple(p) for p in slim["picks"]]}
-    monkeypatch.setattr(C2, "plan", lambda s: {"replay": drawn})
-    CPU.kept_sample(site, slim)
-    drawn["picks"] = drawn["picks"][::-1]
-    with pytest.raises(CPU.Refused, match=r"shares 2 of the keep's 2 picks \(2 sampled\); the record samples by 'uniform'"):
-        CPU.kept_sample(site, slim)
-    drawn["picks"] = [["r0", 9, 9, "model.embed_tokens"], *slim["picks"][:1]]
-    with pytest.raises(CPU.Refused, match=r"shares 1 of the keep's 2 picks"):
-        CPU.kept_sample(site, slim)
-
-    def lacks(s):
-        raise KeyError("tree node 1 of step 0 level 0 is not in the slim dumped store")
-
-    monkeypatch.setattr(C2, "plan", lacks)
-    with pytest.raises(CPU.Refused, match="reads what the keep does not hold .*tree node 1 of step 0"):
-        CPU.kept_sample(site, slim)
-
-
-def test_the_replay_s_engine_of_record_is_the_commit_engine_s(tmp_path):
-    art = tmp_path / "sampled_replay_p1.json"
-    cpu = {"VLLM_BATCH_INVARIANT": None, "compute_capability": "unavailable: no CUDA device"}
-    art.write_text(json.dumps({"sampled_replay": {"engine_of_record": cpu}, "boundary_linkage": {}}))
-    row = {"commit": {"sampled_replay": {"engine_of_record": cpu}}}
-    gpu = {"VLLM_BATCH_INVARIANT": "1", "compute_capability": [12, 0]}
-    CPU.engine_of_record(row, {"engine_of_record": gpu}, art)
-    for sr in (row["commit"]["sampled_replay"], json.loads(art.read_text())["sampled_replay"]):
-        assert sr["engine_of_record"] == gpu and sr["engine_of_replay"] == cpu
-
-
-def test_the_record_is_rewritten_whole_with_the_decided_run(tmp_path):
-    out = _deferred(tmp_path)
-    b = RB.open_bundle(RB.path(out, 1))
-    rows, row, verdict, _s, _r = CPU.of_record(b, out)
-    (out / "summary.json").write_text(json.dumps({"commit_pass": None}))
-    row["commit"].update(commit_pass=False, commit_fail_reason="C2 FAIL", sampled_replay={"result": False, "grade": "mismatch"})
-    CPU.record(out, rows, verdict, b, 1.5)
-    v = json.loads((out / "verdict.json").read_text())
-    assert v["commit_pass"] is False and v["first_fail_reason"] == "C2 FAIL" and v["replay_deferred"]["pending_pairs"] == []
-    assert v["replay_deferred"]["replayed"][0]["manifest_sha256"] == b["manifest_sha256"]
-    assert json.loads((out / "summary.json").read_text())["commit_pass"] is False
-    assert json.loads((out / "runs.jsonl").read_text())["commit"]["commit_fail_reason"] == "C2 FAIL"
-    assert not list(out.glob("*.tmp"))

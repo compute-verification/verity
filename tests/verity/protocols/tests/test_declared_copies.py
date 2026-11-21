@@ -5,10 +5,10 @@ from __future__ import annotations
 
 import pytest
 
-from verity.protocols.compose import schemes
-from verity.protocols.proofs.spot.verifier import parties as SP
-from verity.protocols.resource_accounting.network.verifier import parties as NC
-from verity.protocols.workload_classification.training_detection.inference_only.verifier import parties as IO
+from verity.protocols.run import schemes
+from verity.protocols.proof.spot.verifier import parties as SP
+from verity.protocols.accounting.network.verifier import parties as NC
+from verity.protocols.policy.training_detection.inference_only.verifier import parties as IO
 
 #: the names the composites list that no scheme declares yet, each with the lane that declares it; only shrinks
 UNDECLARED: dict[str, str] = {}
@@ -31,7 +31,7 @@ def test_the_undeclared_composite_names_only_shrink() -> None:
     names = {n for subs in SP.SUBPROTOCOLS.values() for n in subs if n not in schemes.DECLARATIONS}
     grown = sorted(names - set(UNDECLARED))
     assert not grown, (f"{grown} are in parties.SUBPROTOCOLS and not in the one table "
-                       "(verity.protocols.compose.schemes): declare each one there")
+                       "(verity.protocols.run.schemes): declare each one there")
     assert not set(UNDECLARED) - names, (f"{sorted(set(UNDECLARED) - names)} are declared now: delete each from "
                                          "UNDECLARED here")
 

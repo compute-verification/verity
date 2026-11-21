@@ -30,6 +30,7 @@ public import Definitions.Pous.Guarantees.StreamedWipeFamily
 public import Definitions.Pous.Guarantees.StreamedWipeReads
 public import Definitions.Pous.Guarantees.StreamedWipeServer
 public import Definitions.Pous.Guarantees.StreamedWipeDisk
+public import Definitions.Pous.Guarantees.StreamedWipeResidual
 public import Definitions.Pouw
 public import Definitions.Certifier
 public import Definitions.Certifier.Guarantees.SampledAudit
@@ -102,6 +103,8 @@ public import Definitions.Poub.Assumptions.RemoteP2
 public import Definitions.Compose.Assumptions.Parties
 public import Definitions.Pouw.Assumptions.TS.Fixed
 public import Definitions.ResourceAccounting.Guarantees
+public import Definitions.Compose.Blocks
+public import Definitions.Compose.Guarantees.Blocks
 public import Definitions.Hash.Assumptions
 public import Definitions.Hash.Guarantees
 public import Definitions.Certifier.Guarantees.MonitoringPeriodFails
@@ -125,6 +128,7 @@ public import Definitions.WeightSecurity.ToyFaulted
 public import Definitions.WeightSecurity.ToyServed
 public import Definitions.WeightSecurity.ToyTied
 public import Definitions.Assumptions
+public import Definitions.Flock.Recursive.Generic
 
 /-! The spec: each component's vocabulary, named assumptions and guarantee statements. -/
 

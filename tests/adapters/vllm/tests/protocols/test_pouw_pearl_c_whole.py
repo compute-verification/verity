@@ -15,11 +15,11 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import PEARL_C_SCHEMES, pearl_c_scheme
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
-from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul, Shape
-from verity.protocols.resource_accounting.compute.pouw.verifier.serving import DEFERRED_A, SERIAL
+from verity.protocols.accounting.compute.pouw.prover.serving import PEARL_C_SCHEMES, pearl_c_scheme
+from verity.protocols.accounting.compute.pouw.prover.serving import pearl_c as PPD
+from verity.protocols.accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
+from verity.protocols.accounting.compute.pouw.verifier.protocol import Matmul, Shape
+from verity.protocols.accounting.compute.pouw.verifier.serving import DEFERRED_A, SERIAL
 from verity_torch.pouw.pearl_c import graphs as PG
 from verity_torch.pouw.pearl_c import lanes_device as L
 from verity_torch.pouw.pearl_c import passes as PP
@@ -292,7 +292,7 @@ class Calls(PG.GraphCalls, PP.EpochCalls, PassEnds):
         self.schedule, self.capacity = PPD.schedule_of(SERIAL, pearl_c_scheme(PEARL_C_SCHEMES[0])), PPD.LEAF_CAPACITY
         self.order, self.nb = {7: 0, 8: 1, 9: 2}, 64
         self.roots = {w: bytes([w]) * 32 for w in self.order}
-        self.keys = lambda root, index, m16: bytes([root[0], index, m16]) * 56
+        self.keys = lambda root, index, m16: bytes([root[0], index % 251, m16]) * 56
         self.key_slots = torch.zeros((3, PG.SLOT_BYTES), dtype=torch.uint8)
         self.offs = torch.zeros((3, 3), dtype=torch.int64)
         self._host_keys, self._host_offs = torch.zeros_like(self.key_slots), torch.zeros_like(self.offs)
@@ -351,11 +351,11 @@ def test_a_replay_uploads_the_slots_the_last_one_staged_only_from_where_they_wer
     assert keys[2, :168].tobytes() == run.keys(run.roots[9], 2, 32) and keys[0, :168].tobytes() == run.keys(run.roots[7], 3, 32)
     assert offs[2].tolist() == [64 * 40, 2 * 64, 64 * 2] and offs[0].tolist() == [64 * 48, 2 * 96, 64 * 3]
     assert run._predicted == {9: (2, 32, 40, 64), 7: (3, 32, 48, 96)} and run._slots_copied.recorded == 2
-    run.cur = PPDR._Pass(None)                                 # a new pass is elsewhere (numbered on from the epoch's 4)
+    run.cur = PPDR._Pass(None)                                 # a new pass is elsewhere (the epoch's next round)
     assert run.whole_replay(calls) is False and offs[2].tolist() == [0, 0, 0]
     run.whole_replayed(calls)
     assert run.whole_replay(calls[:1]) is False               # and so do other calls
-    assert keys[2, :168].tobytes() == run.keys(run.roots[9], 4 + 2, 32)
+    assert keys[2, :168].tobytes() == run.keys(run.roots[9], PP.ROUND_CALLS + 2, 32)
 
 
 def test_a_graphed_calls_slots_are_predicted_at_the_first_weight_and_a_call_they_do_not_hold_uploads_its_own():

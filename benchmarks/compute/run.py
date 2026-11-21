@@ -9,7 +9,7 @@ holds no Lean verdict of, prints no number and exits 1.
     verity bench compute --protocol NAME --from DIR|RUN --per-call [--uncredited F] [--top N]   and where the rest of
                                                              its MACs went
 
-NAME is the useful-work scheme's registered name (`verity.protocols.resource_accounting.scheme.get`, `pearl-plus`), a
+NAME is the useful-work scheme's registered name (`verity.protocols.accounting.scheme.get`, `pearl-plus`), a
 compute scheme: another name is refused (exit 2) with the registered compute schemes. The answer must be that scheme's
 verifier's (its `Scheme.protocol`). A scheme that attaches to no served run (its `Scheme.option` empty, as `dither`'s)
 raises `NotImplementedError` before any record is read: no kernel serves it and no verifier answers for a served run
@@ -108,10 +108,10 @@ credit, as exact fractions. The causes
 over the model are those, the LM head and attention (which Pearl+ doesn't credit), the linears outside the passes, and
 the floor of the credit; they sum to the give-up exactly. The split is the answer's or it is refused (exit 2): its
 commitment and its passes' records roots are the answer's, each call's terms sum as above, and its calls' credited
-cells' MACs are the answer's ``macs`` and their credit, floored, its ``credited``. An answer held to its class's fixed
-load publishes its work in the grid form instead (``give_up`` among it: Pearl+'s `verify_run.grid_work`): its ``macs``
+cells' MACs are the answer's ``checked_macs`` and their credit, floored, its ``credited``. An answer held to its class's fixed
+load publishes its work in the grid form instead (``give_up`` among it: Pearl+'s `verify_run.grid_work`): its ``checked_macs``
 are the passes' whole MACs, each call's real MACs less its side channels, and its ``credited`` the whole passes' credit
-less ``give_up``, the give-up padded up to H1's window grid. So there the split's whole MACs are the answer's ``macs``,
+less ``give_up``, the give-up padded up to H1's window grid. So there the split's whole MACs are the answer's ``checked_macs``,
 its credit, floored, is at least the answer's ``credited`` and at most that plus ``give_up``, and what the padding
 takes off past the split's credit is the cause ``grid``. Where the passes hold the LM head's
 calls, the LM head is no cause of its own: its calls are calls like the linears', and what the head computes outside
@@ -159,7 +159,7 @@ from pathlib import Path
 from typing import Any, NamedTuple
 
 from verity.device import Site, load_card, rate
-from verity.protocols.resource_accounting.scheme import Scheme
+from verity.protocols.accounting.scheme import Scheme
 from verity_bench import kit, schemes
 from verity_bench.kit_report import RUN_ID
 
@@ -381,7 +381,7 @@ def credit(tree: Path, scheme: Scheme) -> dict:
                                "without it")
         protocol, verdict, public = answer["protocol"], answer["verdict"], answer.get("public") or {}
         work = public.get("work") or {}
-        credited, passes = work.get("credited"), work.get("macs")
+        credited, passes = work.get("credited"), work.get("checked_macs")
         mine = ("accept", answer.get("commitment"), credited)
         theirs = (lean["verdict"], lean.get("commitment"), (lean.get("work") or {}).get("credited"))
         differ = check["differ"]
@@ -606,12 +606,12 @@ def split(tree: Path, given: Path | None, macs: dict[str, int], credited: int, s
     exact = int(sums["credited_macs"])
     if "give_up" in work:
         whole = sums["checked_macs"] + sum(sums[x] for x in ROWS[:3])
-        if whole != work["macs"] or not credited <= exact <= credited + work["give_up"]:
+        if whole != work["checked_macs"] or not credited <= exact <= credited + work["give_up"]:
             raise Unreadable(f"the per-call split's calls credit {exact:,} of {int(whole):,} whole MACs and the answer's "
-                             f"grid form {credited:,} of {work['macs']:,} less a give-up of {work['give_up']:,}")
-    elif (sums["checked_macs"], exact) != (work["macs"], credited):
+                             f"grid form {credited:,} of {work['checked_macs']:,} less a give-up of {work['give_up']:,}")
+    elif (sums["checked_macs"], exact) != (work["checked_macs"], credited):
         raise Unreadable(f"the per-call split's calls credit {exact:,} of "
-                         f"{int(sums['checked_macs']):,} MACs and the answer {credited:,} of {work['macs']:,}")
+                         f"{int(sums['checked_macs']):,} MACs and the answer {credited:,} of {work['checked_macs']:,}")
     if sums["macs"] - in_head > macs["linears"]:
         raise Unreadable(f"the per-call split's calls hold {int(sums['macs'] - in_head):,} real MACs, more than the "
                          f"{macs['linears']:,} of the class's linears")
@@ -686,11 +686,17 @@ def made_up_text(said: str) -> str:
     return f"  what the record says of itself: {said}"
 
 
+def ceiling_clock(card: dict, reading: str) -> int | float:
+    """The clock of ``card``'s ``reading`` in MHz where its entry is a ceiling, else `clock.sm`'s, the tensor's ceiling: a card
+    whose `clock.tensor` is a vendor's figure and no ceiling has its capacity at that reading taken at the ceiling's clock."""
+    return card["clock"][reading if card["clock"][reading]["mark"] == "ceiling" else "sm"]["value"]
+
+
 def capacity(site: Site, span_s: Fraction) -> dict[str, int]:
     """The registered hardware's MACs over `span_s` seconds at each data-sheet reading (`READINGS`): each registered
-    device's peak `FORMAT` MACs a second at its card's clock of that reading (`verity.device.rate` on the card
-    file of its sheet's SKU), summed over the devices, times the span, rounded up. `Unreadable` where the site registers
-    no device, or a device names no registered sheet or an SKU with no card file."""
+    device's peak `FORMAT` MACs a second at its card's clock of that reading, or at `clock.sm` where that clock is no
+    ceiling (`ceiling_clock`; `verity.device.rate` on the card file of its sheet's SKU), summed over the devices, times
+    the span, rounded up. `Unreadable` where the site registers no device, or a device names no registered sheet or an SKU with no card file."""
     if not site.units:
         raise Unreadable("the registered hardware holds no device")
     total = dict.fromkeys(READINGS, Fraction(0))
@@ -702,7 +708,7 @@ def capacity(site: Site, span_s: Fraction) -> dict[str, int]:
         except KeyError as e:
             raise Unreadable(f"the registered device {d}'s SKU has no card file: {e}") from e
         for r in READINGS:
-            total[r] += rate(card, fmt=FORMAT, mhz=card["clock"][r]["value"]) * span_s
+            total[r] += rate(card, fmt=FORMAT, mhz=ceiling_clock(card, r)) * span_s
     return {r: math.ceil(v) for r, v in total.items()}
 
 
@@ -742,7 +748,7 @@ def amounts(doc: dict, site: Site | None = None, span_s: Fraction | None = None)
 
 
 def member(doc: dict) -> str | None:
-    """The metrics' line a document's measurements are for, as `benchmarks/README.md` names one, model then card: the
+    """The metrics' line a document's measurements are for, as `tests/test_metrics_registry.py` names one, model then card: the
     served model's name and the card the record says the run served on (`RAN`'s ``card``, nvidia-smi's name), each
     lower-case and hyphenated (``llama-3.2-1b-h200``); None where the record names no card."""
     if not doc.get("card"):
@@ -905,7 +911,7 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], EvidenceStore]
     withdrawals of parts of a record (`EvidenceStore.files`)."""
     ap = argparse.ArgumentParser(prog="verity bench compute", description=__doc__.split("\n\n")[0])
     ap.add_argument("--protocol", metavar="NAME", required=True,
-                    help="the useful-work scheme's registered name (verity.protocols.resource_accounting.scheme), a "
+                    help="the useful-work scheme's registered name (verity.protocols.accounting.scheme), a "
                          "compute scheme such as pearl-plus")
     ap.add_argument("--from", dest="source", metavar="DIR|RUN", required=True,
                     help="a run's record: its directory (the run's, holding out/ and job.json), read from disk alone, or "

@@ -1,4 +1,4 @@
-"""The protocol options of a vLLM run: PoUW and SPOT, each enabled on its own, both in one run.
+"""The protocol options of a vLLM run: SPOT, and any option a run enables beside it.
 
 A run enables a set of ``name:scheme`` entries (`config.parse_protocols`), off by default.  `verity_vllm.LLM` takes it as
 ``protocols=`` and fills the settings an adapter takes from the built engine (`engine_fills`, `from_engine`); a row takes it from ``PROTOCOLS`` (``verity-vllm row --protocols``) or its workload target, and every stage
@@ -6,15 +6,11 @@ reads it as the target's ``protocols`` (`TargetProfile.protocols`), so the Build
 A row refuses a set it cannot run before any stage starts, and the Commit before its engine exists, both by
 `commit_context`.  Each protocol has one adapter module here (`config.PROTOCOLS`, `interface`), imported only when it is enabled; PoUB, which
 serving drives by flag rather than as an option, is a process its scheme registers (`pipeline.poub_session`), and PoUS
-attaches by its scheme's name on the build's exchange (`verity.protocols.compose.schemes`, `verity_vllm.messages`), not here.  The
-protocol logic is its package's (`verity.protocols.resource_accounting.compute.pouw.verifier`, `verity.protocols.proofs.spot.verifier`), never this package's.
+attaches by its scheme's name on the build's exchange (`verity.protocols.run.schemes`, `verity_vllm.messages`), not here.  The
+protocol logic is its package's (`verity.protocols.proof.spot.verifier`), never this package's.
 
-**Order.**  The nesting at each site is stated in `SITES`.  Adapters install in `config.PROTOCOLS` order, innermost
-first, and uninstall in reverse:
-
-1. ``pouw`` executes at each linear layer's ``quant_method.apply``: it replaces the GEMM, reading the weight from the
-   layer it is called with;
-2. ``sampled-proofs`` is outermost: the Commit's committer and taps commit the values the model produced.
+**Order.**  Adapters install in `config.PROTOCOLS` order, innermost first, and uninstall in reverse; ``sampled-proofs``
+is outermost: the Commit's committer and taps commit the values the model produced.
 
 **Phases.**  First every enabled option commits to the plaintext weights of record (``commit_weights``), with the model
 untouched and no beacon read; then each installs.  A Commit installs its composition after its committers registered the
@@ -55,18 +51,12 @@ from verity_vllm.records.schema_ids import PROTOCOL_COMPOSITION_SCHEMA
 if TYPE_CHECKING:
     from verity_vllm.errors import Refused
 
-__all__ = ["RECORD_SCHEMA", "SITES", "Composition", "Context", "Installed", "Option", "Target",
+__all__ = ["RECORD_SCHEMA", "Composition", "Context", "Installed", "Option", "Target",
            "adapter",
            "WeightsView", "at_capture", "at_commit", "capture_context", "commit_context", "engine_fills",
-           "from_engine", "install", "into_verdict", "load_settings", "own_auditor",
+           "from_engine", "install", "into_verdict", "load_settings",
            "parse", "refusals", "refused", "register_weights", "requests", "undeclared", "weights_view"]
 
-#: Each hook site and who is at it, outermost first; the last may execute there (``EXECUTES``, or per scheme the adapter's
-#: ``executes(scheme)``: PoUW's H1 executes nowhere, since the int8_exact arm serves its own y), the others wrap.  At a
-#: linear layer's ``apply`` PoUW replaces the GEMM.  SPOT commits at the
-#: module boundary, outside every site, and its replay evaluates Definitions, never an executor.  `config.PROTOCOLS`, the
-#: install order, is innermost first at every site.
-SITES = {"LinearBase.quant_method.apply": ("pouw",)}
 RECORD_SCHEMA = PROTOCOL_COMPOSITION_SCHEMA
 
 parse = config.parse_protocols
@@ -395,14 +385,6 @@ def commit_context(profile: Any, *, world: int = 1, settings: Any = None, commit
     if bad:
         raise refused(bad)
     return ctx
-
-
-def own_auditor(config: str | Path | Mapping[str, Any] | None, profile: Any) -> dict[str, dict[str, Any]]:
-    """The protocols config (`load_settings`) of a pipeline that is its run's own auditor (the Commit, a Match capture):
-    PoUW's ``coins`` a challenger of the epoch held in this process when ``profile`` declares PoUW (`pouw.challenged`),
-    unless the config names the auditor device's ``challenger``, the coins' one source."""
-    from verity_vllm.protocols import pouw
-    return pouw.challenged(load_settings(config), getattr(profile, "protocols", None))
 
 
 def capture_context(profile: Any, *, settings: Any = None) -> Context | None:

@@ -68,8 +68,10 @@ public import Proofs.Flock.Claims.KS.PlainSampleAcc
 public import Proofs.Flock.Claims.KS.PlainSampleDec
 public import Proofs.Flock.Claims.KS.PlainSampleSim
 public import Proofs.Flock.Claims.KS.PlainSampleKDefs
-public import Proofs.Flock.Claims.KS.PlainSampleRCols
-public import Proofs.Flock.Claims.KS.PlainSampleRColsE
+public import Proofs.Flock.C3.VStarList.Accepts
+public import Proofs.Flock.Claims.Recursion.DeployHonest
+public import Proofs.Flock.Claims.Recursion.SlotsCheck
+public import Proofs.Flock.Claims.Recursion.VarLen
 public import Proofs.Flock.Claims.KS.PlainSampleK
 public import Proofs.Flock.Claims.KS.PlainSampleAccK
 public import Proofs.Flock.Claims.KS.PlainSampleDecK
@@ -79,8 +81,6 @@ public import Proofs.Flock.Claims.KS.PlainClash0K
 public import Proofs.Flock.Claims.KS.PlainLeafClashK
 public import Proofs.Flock.Claims.KS.PlainSampleJ
 public import Proofs.Flock.Claims.KS.PlainSampleJMove
-public import Proofs.Flock.Claims.KS.PlainSampleJRun
-public import Proofs.Flock.Claims.KS.PlainSampleJCols
 public import Proofs.Flock.Claims.KS.PlainSlackFit
 public import Proofs.Flock.Claims.KS.PlainSim
 public import Proofs.Flock.Claims.KS.PlainLock
@@ -176,7 +176,6 @@ public import Proofs.Flock.Claims.KS.ZkKSTableNumbers
 public import Proofs.Flock.Claims.KS.KSTableOne
 public import Proofs.Flock.Claims.KS.PlainUntrim
 public import Proofs.Flock.Claims.KS.ZkOuter
-public import Proofs.Flock.Claims.KS.PlainAccPrR
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` samples, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a

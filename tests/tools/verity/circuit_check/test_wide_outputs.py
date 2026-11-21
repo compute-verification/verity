@@ -10,7 +10,7 @@ from circuit_check import checks as CK
 def test_an_output_wider_than_64_bits_is_compared_limb_by_limb(monkeypatch):
     """`PouwHopperE4m3Window_v1` returns 480 bits from bytes, and Flock lowers it through its Boolean version: the lowering
     is compared with the reference on every limb, and one that differs only in its top bit is caught."""
-    import verity.protocols.resource_accounting.compute.pouw.prover.circuit.boolean  # noqa: F401  (registers the Boolean version that Flock lowers it through)
+    import verity.circuits.ops.boolean.words  # noqa: F401  (registers the Boolean version that Flock lowers it through)
     from verity_flock import ir_lower as IL
     from verity.circuits.ops import words as W
 

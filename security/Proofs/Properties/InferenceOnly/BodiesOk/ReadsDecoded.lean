@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Properties.InferenceOnly.BodiesOk.Decode
+public import Proofs.Properties.Flock.Decoder.Decode
 public import Proofs.Properties.InferenceOnly.BodiesOk.ForReads
 public import Proofs.Properties.InferenceOnly.ReadsSet
 import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
@@ -21,8 +21,8 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
-import Proofs.Properties.InferenceOnly.BodiesOk.Basic
-import Proofs.Properties.InferenceOnly.BodiesOk.Decoded
+import Proofs.Properties.Flock.Decoder.Basic
+import Proofs.Properties.Flock.Decoder.Decoded
 import Proofs.Properties.InferenceOnly.ReadsOneNode
 
 /-!
@@ -50,16 +50,18 @@ theorem partNonneg_iff (q : Part) : ReadsExact.PartNonneg q ↔ PartNonneg q := 
   cases q <;> exact Iff.rfl
 
 /-- **The decoder's facts the core reads hold of every decoded Program.** -/
-theorem decoded_reads (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P) :
+theorem decoded_reads (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
+    (hrc : (P.defs[P.root]!).body.recut = #[] := by assumption) :
     ReadsExact.Decoded P := by
   intro d hd
-  obtain ⟨h1, h2, h3⟩ := decoded bytes P hdec d hd
+  obtain ⟨h1, h2, h3⟩ := decoded bytes P hdec hrc d hd
   refine ⟨h1, h2, fun k hk i hi => ?_⟩
   obtain ⟨a, b, c⟩ := h3 k hk i hi
   exact ⟨a, fun q hq => (partNonneg_iff q).2 (b q hq), c⟩
 
 /-- **The decoder's facts on a Definition's return hold of every decoded Program.** -/
-theorem retParts_reads (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P) :
+theorem retParts_reads (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
+    (hrc : (P.defs[P.root]!).body.recut = #[] := by assumption) :
     ReadsExact.RetParts P := by
   obtain ⟨st, hP, hinv, -⟩ := decode_spec bytes P hdec
   have hok : ∀ i < P.defs.size, DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1
@@ -96,7 +98,8 @@ theorem scanOut_of_ok (P : Prog) (hok : ∀ i < P.defs.size, DefOk P.defs i P.de
 
 /-- **A scan node's output is its final carry's leaves, then its ys'**, in every body of a decoded Program. -/
 theorem scanOut_reads (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
-    (memo : Array InferenceOnlyVerifier.Desc.Summary) (d : ℕ) : ReadsExact.ScanOut (ReadsExact.ctxOf P memo d) := by
+    (memo : Array InferenceOnlyVerifier.Desc.Summary) (d : ℕ)
+    (hrc : (P.defs[P.root]!).body.recut = #[] := by assumption) : ReadsExact.ScanOut (ReadsExact.ctxOf P memo d) := by
   obtain ⟨st, hP, hinv, -⟩ := decode_spec bytes P hdec
   have hok : ∀ i < P.defs.size, DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1
   exact scanOut_of_ok P hok memo d
@@ -104,7 +107,8 @@ theorem scanOut_reads (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decod
 /-- **The decoder's facts `ReadsExact.RootSegs` reads hold of every decoded Program whose order passes**: no reached
 Definition calls the root, each reached one being at most the root (`reached_spec`) and each callee before its caller. -/
 theorem rootFacts (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
-    (hov : P.orderViolation = none) : ReadsExact.RootFacts P := by
+    (hov : P.orderViolation = none)
+    (hrc : (P.defs[P.root]!).body.recut = #[] := by assumption) : ReadsExact.RootFacts P := by
   obtain ⟨hr, hp, hp0⟩ := decode_root bytes P hdec
   obtain ⟨st, hP, hinv, -⟩ := decode_spec bytes P hdec
   have hok : ∀ i < P.defs.size, DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1
@@ -126,13 +130,15 @@ theorem rootFacts (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode by
 (`rootFacts`). -/
 theorem readsExact_of_nodes_set (hN : ReadsExact.RootNodes) (hS : ReadsExact.RootSet) : Fresh.ReadsExact :=
   ReadsExact.readsExact_of_rootReads (ReadsExact.rootReads_of
-    (ReadsExact.rootSegs_of (fun bytes P hd ho => rootFacts bytes P hd ho) (ReadsExact.rootGates_of hN)) hS)
+    (ReadsExact.rootSegs_of (fun bytes P hd ho hw => rootFacts bytes P hd ho (hrc := Walk.walkable_recut P hw))
+      (ReadsExact.rootGates_of hN)) hS)
 
 /-- **The decoder's facts the widths read hold of every decoded Program `Desc.walkable` passes**: a primitive is one
 gate (`CalleeOk`), every composite's body is laid out (`Walk.bodiesLaidOut_spec`), and its nodes call what `NodeOk`
 lets them. -/
 theorem widthFacts (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
     (hwk : InferenceOnlyVerifier.Desc.walkable P = true) : ReadsExact.WidthFacts P := by
+  have hrc := Walk.walkable_recut P hwk
   obtain ⟨st, hP, hinv, -⟩ := decode_spec bytes P hdec
   have hok : ∀ i < P.defs.size, DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1
   have hwk' := hwk
@@ -149,18 +155,21 @@ theorem widthFacts (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode b
 /-- **`ReadsExact.RootOneNode`**: a root read's gates are one root node's, with the decoder's facts (`rootFacts`,
 `widthFacts`). -/
 theorem rootOneNode : ReadsExact.RootOneNode :=
-  ReadsExact.rootOneNode_of fun bytes P hd ho hw => ⟨rootFacts bytes P hd ho, widthFacts bytes P hd hw⟩
+  ReadsExact.rootOneNode_of fun bytes P hd ho hw =>
+    ⟨rootFacts bytes P hd ho (hrc := Walk.walkable_recut P hw), widthFacts bytes P hd hw⟩
 
 /-- **`Fresh.ReadsExact` from `ReadsExact.RootSet`**, with the decoder's facts (`rootFacts`,
 `widthFacts`): the reads' widths are `ReadsExact.rootW_circuit`'s and their nodes `rootOneNode`'s. -/
 theorem readsExact_of_set (hS : ReadsExact.RootSet) : Fresh.ReadsExact :=
   readsExact_of_nodes_set
-    (ReadsExact.rootNodes_of (fun bytes P hd ho hw => ⟨rootFacts bytes P hd ho, widthFacts bytes P hd hw⟩)
+    (ReadsExact.rootNodes_of (fun bytes P hd ho hw =>
+        ⟨rootFacts bytes P hd ho (hrc := Walk.walkable_recut P hw), widthFacts bytes P hd hw⟩)
       rootOneNode) hS
 
 /-- **Every reference of a node calling a primitive is read by a member**, unless it is a batch of none, in every body
 of a decoded Program (`cover_of_nodeOk`). -/
-theorem cover_reads (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P) :
+theorem cover_reads (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
+    (hrc : (P.defs[P.root]!).body.recut = #[] := by assumption) :
     ∀ d < P.defs.size, ∀ k < (P.defs[d]!).body.nodes.size, ∀ node, (P.defs[d]!).body.nodes[k]! = node →
       (P.defs[node.fn]!).prim = true → ¬ (node.form == .batch && node.n == 0) = true →
       ∀ i < node.args.size, ∀ t < (node.args[i]!).seq.count, ∃ m < node.members,
@@ -235,7 +244,7 @@ theorem tile_of_nodeOk (c : Defn) (nd : Node) (hc : CalleeOk c) (hn : NodeOk c n
       simp [Node.members, show (Form.scan == Form.scan) = true from rfl]
     rw [hmem] at hm ⊢
     have hn0 : 0 < n := Nat.pos_of_ne_zero hm
-    obtain ⟨carry, y, -, -, hp0, ha0, hrest⟩ := hsh
+    obtain ⟨carry, y, -, -, hp0, ha0, ⟨hrest, -⟩⟩ := hsh
     by_cases hi0 : i = 0
     · subst hi0
       refine ⟨0, hn0, t, by rw [hp0, ← ha0]; exact ht, ?_⟩
@@ -297,7 +306,8 @@ parameter of none (`DimsOk`), each member's parameter leaf is in range (`lo_of_n
 reference is one (`tile_of_nodeOk`), and a scan's carry is within its callee's return (`carry_le_of_nodeOk`). -/
 theorem compShape_reads (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
     {d : ℕ} (hd : d < P.defs.size) {k : ℕ} (hk : k < (P.defs[d]!).body.nodes.size) {node : Node}
-    (hg : (P.defs[d]!).body.nodes[k]! = node) (hp : (P.defs[node.fn]!).prim = false) :
+    (hg : (P.defs[d]!).body.nodes[k]! = node) (hp : (P.defs[node.fn]!).prim = false)
+    (hrc : (P.defs[P.root]!).body.recut = #[] := by assumption) :
     ReadsExact.CompShape P node := by
   obtain ⟨st, hP, hinv, -⟩ := decode_spec bytes P hdec
   have hok : ∀ i < P.defs.size, DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1
@@ -307,14 +317,16 @@ theorem compShape_reads (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.dec
   obtain ⟨hbp, -, -⟩ := hc.2 hp
   unfold ReadsExact.CompShape
   exact ⟨hbp.symm, by rw [hbp]; exact hnd.1.symm,
-    fun i hi e L h h0 => by rw [hbp]; exact hnd.2.2.2.2.2 i hi e L h h0,
+    fun i hi e L h h0 => by rw [hbp]; exact hnd.2.2.2.2.2.1 i hi e L h h0,
     lo_of_nodeOk _ node hc hnd hp, tile_of_nodeOk _ node hc hnd hp, carry_le_of_nodeOk _ node hc hnd hp⟩
 
 /-- **`ReadsExact.RootSet`**, from the decoder's facts (`rootFacts`, `widthFacts`, `cover_reads`, `compShape_reads`):
 `ReadsExact.rootSet_of`. -/
 theorem rootSet : ReadsExact.RootSet :=
-  ReadsExact.rootSet_of (fun bytes P hd ho => rootFacts bytes P hd ho) (fun bytes P hd hw => widthFacts bytes P hd hw)
-    (fun bytes P hd => cover_reads bytes P hd)
-    (fun bytes P hd _ hd' _ hk _ hg hp => compShape_reads bytes P hd hd' hk hg hp)
+  ReadsExact.rootSet_of (fun bytes P hd ho hw => rootFacts bytes P hd ho (hrc := Walk.walkable_recut P hw))
+    (fun bytes P hd hw => widthFacts bytes P hd hw)
+    (fun bytes P hd hw => cover_reads bytes P hd (hrc := Walk.walkable_recut P hw))
+    (fun bytes P hd hw _ hd' _ hk _ hg hp =>
+      compShape_reads bytes P hd hd' hk hg hp (hrc := Walk.walkable_recut P hw))
 
 end InferenceOnlyVerifier.Properties.SecurityProofs.BodiesOk

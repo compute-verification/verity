@@ -4,6 +4,8 @@ import gc
 
 import pytest
 
+import stand_in  # noqa: F401  (registers the suite's Boolean lookup)
+
 
 @pytest.fixture
 def collector():

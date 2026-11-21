@@ -11,7 +11,6 @@ string shows a request's length; and what round 2 opens, kept on the node, a ser
 
 from __future__ import annotations
 
-import hashlib
 import json
 import stat
 from types import SimpleNamespace as NS
@@ -25,9 +24,9 @@ from verity.circuits.types import Array
 from verity.circuits.types import Value as Bits
 from verity.commitments import history as HT
 from verity.commitments.periods import rows as CS
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P
-from verity.protocols.proofs.spot.verifier.one_stage import verifier as V
+from verity.protocols.proof.spot.verifier.one_stage import docket as R
+from verity.protocols.proof.spot.verifier.one_stage import partition as P
+from verity.protocols.proof.spot.verifier.one_stage import verifier as V
 
 from verity_vllm.commit import history_tables as H
 from verity_vllm.engine.hooks import Hooks
@@ -42,9 +41,6 @@ LEAVES = 16
 BLOCK = 4
 #: an fp8_ds_mla cache row's bytes: 512 e4m3 NoPE bytes, four f32 scales, 64 bf16 RoPE dims
 FP8_ROW = 656
-#: a bf16 class's layout (`test_a_bf16_launchs_hook_tables_domains_and_program_are_unchanged`) as it was before any cache's
-#: layout was read: a change to it changes what every bf16 launch commits
-BF16_LAYOUT = "c6406c32156291d13279096cc11a48ae9a2b88b52377e5d3ea3343b5bb9b130a"
 
 
 def test_a_tables_name_binds_the_run_the_class_the_slot_and_the_layer_and_nothing_else():
@@ -301,15 +297,11 @@ def test_over_fp8_ds_mla_caches_the_hook_reads_each_row_as_its_328_words_and_the
     hooks.uninstall()
 
 
-def test_a_bf16_launchs_hook_tables_domains_and_program_are_unchanged():
-    """A bf16 launch is unchanged by the fp8_ds_mla layout: its rows are 576 words, its layout's ports, domains, provenance
-    and program are the ones they were before the layout was read (`BF16_LAYOUT`), and its record names no words."""
+def test_a_bf16_launch_names_no_row_words_and_its_layout_equals_the_stated_width():
+    """A bf16 launch is unchanged by the fp8_ds_mla layout: its rows are 576 words and its record names no words."""
     _runner, hook, _hooks = serve()
     assert hook.latents.words == H.WORDS == H.LAYOUT_WORDS["bf16"] == 576 and BT.layout(Model()) == "bf16"
     L = BR.Layout(PAIR, 0, 1, 4, 4, 2, RUN, layers=(0, 3), capacity=LEAVES)
-    doc = {"program": L.partition["program"], "ports": L.ports(), "provenance": L.provenance(),
-           "words": [L.words(t) for t in L.tables]}
-    assert hashlib.sha256(json.dumps(doc, sort_keys=True).encode()).hexdigest() == BF16_LAYOUT
     assert "words" not in L.provenance()["tables"] and BR.Layout(PAIR, 0, 1, 4, 4, 2, RUN, layers=(0, 3), capacity=LEAVES,
                                                                       row_words=H.WORDS) == L
 

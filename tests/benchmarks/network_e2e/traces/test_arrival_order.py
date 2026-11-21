@@ -151,8 +151,7 @@ def network_attester_trace(root):
          "egress_cells": 1, "bytes_in": 9, "bytes_out": 9, "failed": None, "failed_at": None, "upstream": None,
          "cut": False} for k in range(4)], "refused": 0, "lateness_ms": {"n": 10, "p50": 0.1, "p99": 0.5, "max": 0.6,
                                                                          "over_slack": 0}}))
-    (root / "plan.jsonl").write_text("".join(json.dumps({"i": k}) + "\n" for k in range(4)))
-    (root / "meta.json").write_text(json.dumps({"requests": 4, "traces": {"w": {}}}))
+    (root / "meta.json").write_text(json.dumps({"traces": {"w": {}}}))
     return d
 
 

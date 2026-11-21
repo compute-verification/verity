@@ -32,10 +32,10 @@ from verity.commitments.rowleaf import (
 )
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
-from verity.protocols.proofs.spot.prover import docket as DK
+from verity.protocols.proof.spot.verifier.one_stage import docket as R
+from verity.protocols.proof.spot.prover import docket as DK
 from verity.commitments import randomness as RND
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+from verity.protocols.proof.spot.verifier.one_stage import partition as P
 
 from verity_vllm.commit import index as IX
 from verity_vllm.definitions.registry import b1  # noqa: F401  (registers RoPEHead_v1 and SiluMul_v1)
@@ -145,13 +145,16 @@ def test_the_registration_is_cores_v1_record_over_served_domains(tmp_path):
     # the verifier's own copies: its window over its program, the run root of record, and the public bodies it holds
     mine = window(9, 4)
     publics = {m.template: (tmp_path / f"m{k}-public.bin").read_bytes() for k, m in enumerate(mine.members)}
-    v = R.check(rec, mine.program, mine.query, DESIGN, SR.SCHEME, SR.expected_ports(mine), leaf_layer=SR.leaf_layer(publics))
+    v = R.check(rec, mine.program, mine.query, DESIGN, SR.SCHEME, SR.expected_ports(mine), leaf_layer=SR.leaf_layer(publics),
+                partition=mine.partition)
     assert v.ok, v.detail
     other = window(9, 4, "cd" * 32)
-    v = R.check(rec, other.program, other.query, DESIGN, SR.SCHEME, SR.expected_ports(other), leaf_layer=SR.leaf_layer(publics))
+    v = R.check(rec, other.program, other.query, DESIGN, SR.SCHEME, SR.expected_ports(other), leaf_layer=SR.leaf_layer(publics),
+                partition=other.partition)
     assert not v.ok and "R3-domain" in v.codes
     flipped = dict(publics, **{TEMPLATES[1]: publics[TEMPLATES[1]][:-1] + bytes([publics[TEMPLATES[1]][-1] ^ 1])})
-    assert R.check(rec, mine.program, mine.query, DESIGN, SR.SCHEME, SR.expected_ports(mine), leaf_layer=SR.leaf_layer(flipped)).codes == ("R4-leaf-layer",)
+    assert R.check(rec, mine.program, mine.query, DESIGN, SR.SCHEME, SR.expected_ports(mine), leaf_layer=SR.leaf_layer(flipped),
+                   partition=mine.partition).codes == ("R4-leaf-layer",)
     fewer = window(9, 3)
     assert "R2-population" in R.check(rec, fewer.program, fewer.query, DESIGN, SR.SCHEME, SR.expected_ports(fewer),
                                       leaf_layer=SR.leaf_layer(publics)).codes
@@ -198,7 +201,7 @@ def test_flock_input_files_wrap_each_members_bodies(tmp_path):
     SR.write(c, tmp_path / "w", {"row": 101}, IX.index_doc(w.members, [[], []], RUN), registrar=DK)
     meta = {"scheme": SR.SCHEME, "ports": [["in0", 128, 1], ["in1", 64, 1], ["out.0", 128, 1], ["out.1", 64, 1]], "input_ports": 2,
             "out_ports": [["out.0", 128], ["out.1", 3]], "vus_per_block": 2, "units_per_vu": 8, "partition": {"rule": "verity/partition/v1", "digest": "cd" * 64}, "program_sha512": "ab" * 64, "program_digests": {},
-            "statement": "verity/flock-circuit", "subcircuit": "norm/n128"}
+            "statement": "verity/flock-circuit", "subcircuit": "norm/n128", "unit": "norm/n128"}
     text = "flock-circuit v2\nMETA " + json.dumps(meta) + "\nCIRCUIT unit\n..."
     got = FI.flock_input_files(tmp_path / "w", 1, text, tmp_path / "m0")
     assert got["pub"].endswith("m1-pub-3.bin") and got["inst"].endswith("m1-inst-3.bin")
@@ -234,7 +237,7 @@ def test_a_members_public_file_alone_then_its_provers_file_are_the_files_its_cir
     SR.write(c, tmp_path / "w", {"row": 101}, IX.index_doc(w.members, [[], []], RUN), registrar=DK)
     meta = {"scheme": SR.SCHEME, "ports": [["in0", 128, 1], ["in1", 64, 1], ["out.0", 128, 1], ["out.1", 64, 1]], "input_ports": 2,
             "out_ports": [["out.0", 128], ["out.1", 3]], "vus_per_block": 2, "units_per_vu": 8, "partition": {"rule": "verity/partition/v1", "digest": "cd" * 64},
-            "program_sha512": "ab" * 64, "program_digests": {"t": "ef" * 64}, "subcircuit": "norm/n128"}
+            "program_sha512": "ab" * 64, "program_digests": {"t": "ef" * 64}, "subcircuit": "norm/n128", "unit": "norm/n128"}
     text = "flock-circuit v2\nMETA " + json.dumps(meta) + "\nCIRCUIT unit µ\n..."
     whole = FI.flock_input_files(tmp_path / "w", 1, text, tmp_path / "whole")
     circ = FI.flock_circuit(text.encode())
@@ -280,7 +283,7 @@ def test_a_shared_row_member_commits_its_tables_and_writes_m0s_shared_row_body(t
         SR.commit(w, [{"rows": tables, "outs": {"y": y}, "refs": refs + [0, 5]}])
     SR.write(c, tmp_path / "w", {"row": 101}, IX.index_doc((m,), [[]], RUN), registrar=DK)
     meta = {"scheme": SR.SCHEME, "ports": [["x", 64, 1], ["w", 64, 1], ["y", 64, 1]], "input_ports": 2, "out_ports": [["y", 1]],
-            "vus_per_block": 4, "units_per_vu": 1, "subcircuit": "gemm/k64"}
+            "vus_per_block": 4, "units_per_vu": 1, "subcircuit": "gemm/k64", "unit": "gemm/k64"}
     got = FI.flock_input_files(tmp_path / "w", 0, "flock-circuit v2\nMETA " + json.dumps(meta) + "\n", tmp_path / "m0")
     head = json.loads(Path(got["pub"]).read_bytes().split(b"\n", 1)[0])
     assert head["shared_rows"] == {"x": 3, "w": 5, "y": 15} and head["instances"] == 15
@@ -329,10 +332,11 @@ def test_bit_row_chunks_commit_each_port_under_its_schema_and_tile_their_templat
     rec = json.loads((tmp_path / "registration.json").read_text())
     mine, _ = s8_window([(0, 3), (3, 2)])
     publics = {m.name: (tmp_path / f"m{k}-public.bin").read_bytes() for k, m in enumerate(ms)}
-    v = R.check(rec, mine.program, mine.query, mine.law, SR.SCHEME, SR.expected_ports(mine), leaf_layer=SR.leaf_layer(publics))
+    v = R.check(rec, mine.program, mine.query, mine.law, SR.SCHEME, SR.expected_ports(mine), leaf_layer=SR.leaf_layer(publics),
+                partition=mine.partition)
     assert v.ok, v.detail
     meta = {"scheme": SR.SCHEME, "ports": [["x", 34, 1], ["w", 34, 1], ["o0", 1, 1]], "input_ports": 2, "out_ports": [["o0", 1]],
-            "row_schemas": [[SEG, 544], [V2, 544], [V2, 16]], "vus_per_block": 1, "units_per_vu": 1, "subcircuit": "s8/k64"}
+            "row_schemas": [[SEG, 544], [V2, 544], [V2, 16]], "vus_per_block": 1, "units_per_vu": 1, "subcircuit": "s8/k64", "unit": "s8/k64"}
     got = FI.flock_input_files(tmp_path, 1, "flock-circuit v2\nMETA " + json.dumps(meta) + "\n", tmp_path / "m1")
     assert json.loads(Path(got["pub"]).read_bytes().split(b"\n", 1)[0])["units"]["indices"] == [3, 4]
     with pytest.raises(ValueError, match="row schemas"):

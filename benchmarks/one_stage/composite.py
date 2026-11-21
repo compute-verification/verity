@@ -41,6 +41,8 @@ the commit of the tree it was built from (``--tree``), the executable's SHA-512,
 ``NOT_ESTABLISHED``. It decides nothing itself: a subprotocol with no case, or whose directory lacks its case
 or its answer, is left out of the product's case, and Lean's verdict on that case is the composite's (a rejection
 naming the missing case). Such a run is labelled ``NOT_ESTABLISHED``, naming what is missing. 64 is a usage error.
+Where its check wrote a panic line, was killed or ended with a status other than 0, 1 or 2 (`lean_child`), there is no
+verdict: it prints ``ERROR`` and the refusal's name, writes no public output and exits 67 (``ERROR``).
 
 ``--development WHY`` labels a composite that claims no record (one composed on the served node, which the prover
 controls: `served_composite.sh`): ``composite.json`` carries ``development`` WHY, and ``DEVELOPMENT WHY`` is the first
@@ -60,7 +62,11 @@ from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Any
 
-# `served_composite.sh` runs this file with an interpreter that may not import `verity`: the standard library only.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from verity.protocols.proof.spot.verifier.one_stage import lean_child as LC
+
+# `served_composite.sh` runs this file with an interpreter that may not import `verity`: the standard library and this
+# tree's `lean_child` and the `verity.lean_process` it re-exports, whose own imports are the standard library's, only.
 PRODUCTS = {"onsite": "verity/onsite/v1", "remote": "verity/remote/v0", "remote-v1": "verity/remote/v1"}
 #: Each product's subprotocols, as `Core.Onsite.components`, `Core.Remote.components` and `Core.Remote.V1.components`
 #: list them; read only to name the missing ones.
@@ -88,6 +94,8 @@ USAGE = 64
 LEAK = 65
 #: An accept whose cited guarantee the lock at the tree's commit doesn't list.
 UNCITED = 66
+#: A check whose answer is not read (`lean_child`'s `LeanPanic`, `LeanExit`): no verdict.
+ERROR = 67
 #: Public bytes sharing a run of twice this with a case's evidence are refused: the evidence's windows at this stride,
 #: looked up among every window of the public bytes, find any such run.
 WINDOW = 32
@@ -316,7 +324,13 @@ def run(a: argparse.Namespace) -> int:
            *blobs]
     rc, verdict, ran = 0, None, None
     if a.exe:
-        p = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        try:
+            p = LC.run(cmd, check=False, ok_statuses=LC.CHECK_EXITS)
+        except LC.LeanPanic as e:
+            write_private(priv, {"check.err": f"{e}\n".encode()})
+            # a panic line may carry the check's values, so the public line names the refusal and not its line
+            print(f"ERROR {e if isinstance(e, LC.LeanExit) else LC.LEAN_PANIC}", flush=True)
+            return ERROR
         answer = p.stdout.strip().splitlines()[-1] if p.stdout.strip() else None
         write_private(priv, {"answer.json": f"{answer or ''}\n".encode(), "check.err": p.stderr.encode()})
         verdict = outcome(PRODUCTS[a.product], answer)

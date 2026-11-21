@@ -68,6 +68,10 @@
    "and": 1296,
    "type": "42505e73aeeea38ba1ec639e3cd9550a86c90bb228f06044de8723e5c6e6f9e63203e24eaf74b5927180a9ba35716619b8f2263742f2dc44a60101752e35ed2e"
   },
+  "DsaButterflySet_v2": {
+   "and": 94,
+   "type": "62e0dd8dfdec9c4fd8cf1fbc935a5ee266466d4575c59a8ff8c6fea4dd1eea8fd4f3700b6c8d9a1054af0f91e0c12b99899fe33eed0ed9b8fe1906866a8c6937"
+  },
   "DsaButterflySettings_v2{N=20,K=16}": {
    "and": 247,
    "type": "c5ca1c0e1c03798b590894a3b2fe47c75f7284866d3d857a9705b93c1aec299870d54dac2fe15b199832ecd66cc37c0e8f9b6eab46a0e93792938a30d067226d"
@@ -684,6 +688,14 @@
    "and": 19,
    "type": "d7ebe59dbcf31a6e3a4e2770c3736aa499c693a287ae50e453a380debb215390bed5b20921dd1d33afa7e555c406f0e9d27e799d12e3c303cefb4b2970dd1082"
   },
+  "DsaMaskCount_v2": {
+   "and": 31,
+   "type": "008189c6beae207e5873504641c6ca1bfbbf2f9da6918e030dcf1a7b2a4310f236105ee8f42b7c628ff96f894f2eb1c1bc8848f66cb2d721bca3cfd7037cf077"
+  },
+  "DsaMaskTag_v2": {
+   "and": 15,
+   "type": "320668e8114971efb70d8aa1a1e6e9cc2a73bbfdb3d0bf6723005e3c2640d9cab12107f1b5650ee9629902c6d2c44b5414aad37d294b1d577bf7901b7b13af78"
+  },
   "DsaRadixPassCount_v1{N=20}": {
    "and": 18,
    "type": "0052046041825689e8d54d56d56cc22ee6ca8517645207c2d022c143365e8f2463ebf7d2ed00217410ecc3c2447af8b817141c97fe1720eb7d47e62ef77935de"
@@ -900,9 +912,29 @@
    "and": 40976,
    "type": "710c644bf107cc7b1b6a1cf9a118b7dbd79d60b3e3697225a944d40f2c523c9c1e70765e35fb42ce85ae709b79474b07c9d5d681d6ab5b67dbf795b376a752c5"
   },
+  "DsaTopKAtLeastBelow_v2": {
+   "and": 97,
+   "type": "13f5d7e782866c18b7e41219df7c0593c32ecd3ebdb910fa39ed1a052792aa96af7b72619838da43e454829b3c8764f312e6ae9e83f453d2b4becb9fe67aa810"
+  },
+  "DsaTopKAtLeast_v2": {
+   "and": 64,
+   "type": "751549cceb8bd43a0e9d18d7ed2e9a2d610b97e0da7491e53a3ca8d944e13001ad0d985d6537e482ae4cb9acf5343f9c88b05982b05394aa672ba89f8ad7a4af"
+  },
+  "DsaTopKCountedThresholdIndex9x8_v2": {
+   "and": 1554,
+   "type": "ea3ed6528d8f534fec54dd7c2cb034a2b3c63736b66d89a811c0e42f5680617158fb9ecea6fa16bbcf9ac0017b9f8c270f0a1bd753f7e82611bafd390a9f426e"
+  },
+  "DsaTopKCountedThresholdKey9x8_v2": {
+   "and": 1831,
+   "type": "e15c065e7e2eb5c22d8d63f546d8bc29b5b56b64a113df1ec26e37d184b130143eb8b0ea7f56ac6b72b384d0f6f66a29898ad8d6c6108cf4fcaf125d10260e7f"
+  },
   "DsaTopKKey_v2": {
    "and": 0,
    "type": "a2bf9d5b39727f2ec3d842582d10fa3867182b7b40ee350bb39c112b5ef395206655de01023cb3103d60c0e890757ec24be2ccfdcf8d19bd581fc31b88aa645b"
+  },
+  "DsaTopKLongRowCheck9x8_v2": {
+   "and": 1866,
+   "type": "fd05a867c9d724eb0d1c62386d4c433b5049e987d5a81fd8681ee8c05dccc25aa0d15d4b00cede37c7152906b8f4a2bae7567ff4c0a960f26fef03d53e50add6"
   },
   "DsaTopKMaskCounted_v2{N=20,TOPK=16}": {
    "and": 3183,
@@ -915,17 +947,29 @@
   "DsaTopKRow_v2{N=20,TOPK=16}": {
    "and": 3505,
    "type": "6e13f6fcdc209a61769af56427986febd5297a64a4fec32e6943f42b7fd45b956012e495becc9ff8af4f3d55c19936ae5afb4648428c641b049f02d7f1abab7a"
+  },
+  "DsaTopKSlot9x8_v2": {
+   "and": 1755,
+   "type": "bb221488ba94cb8ce62be81556ed783cedeb9ec0ee9b2db6acb1ad1e95e5afe5334badfc6ca617163fd3b628e704b8a35be2d5f8453f39eba23b7ecae4097343"
+  },
+  "DsaTopKThresholdIndex9x8_v2": {
+   "and": 1466,
+   "type": "4f5946c2a9949c271d3e9bd6c3a6203f2b3cb835439f7c7e7e20d01acab7691cd188041f3502e78620fb96649e92ab62322745f71237d3e4f100f2aefaceaaab"
+  },
+  "DsaTopKThresholdKey9x8_v2": {
+   "and": 1715,
+   "type": "4addb8fb536028a11116da12f489544d2345d012951cd8de7cde4391ee37d9023d58aef53629cca6174fcf8bdd36230f464de8f10e70aa0aea3d6dc6dfc1d4a0"
   }
  },
  "digests": {
   "DsaRadixPass_v2{N=40960,TOPK=2048}": {
-   "sha512": "2f0ce291745fd2c7e230f4b3e5f48a44f0ac825d8b504ca575dcdd876a0422f05d224fbe8782098c6cf48c8bff673786f1cc2105e62ee2d565a822c507788298"
+   "sha512": "f33734ecef06f97938458930db9a6b2f2eff65aa6daf9e06dc8eb5548578a914a238afa89128ecdf6a39780597b1487e4148f376068195463974ac4ebd9c7b61"
   },
   "DsaRadixTies_v2{N=16384,TOPK=2048}": {
-   "sha512": "5dcf25042882c87ca3f694c4a9d8f3362ed9d08680d11feff070c59e3d0db864aecdf632a45db5e197229eae20d122d8971accee0282fcaecdad960235772ecf"
+   "sha512": "35dd7a82033df2c79ab03ab8a43504ff19ae7dc54ef16d132ad5eff46a55643884d903bc8177a2000746a62158ee65dc2c63a3939b029389c1d5a1f662810a78"
   },
   "DsaRadixTies_v2{N=40960,TOPK=2048}": {
-   "sha512": "c4d5f0fb7a9134f3c8e7411d34925cc5c3bab5ac7ae26864fef43ec84c90878f9ba19141b7045adb97390872f8e3bf0855a116dd0c787c15a8fb77a3ab75b05c"
+   "sha512": "81bb53e7421eedb3f505c961963651f9ce5ed14a0255464bb38ae2d73bf93e3d7fa4cefdc21b3057c700ea9fe258cc057bc1056c47ba770022f69deb98dd5da7"
   }
  }
 }

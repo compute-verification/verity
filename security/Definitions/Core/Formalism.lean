@@ -26,14 +26,14 @@ stated on these objects.
   Flock pays for. Credit and reporting count `andSize`; Theorem 3 and the `(c, k)`-partition count `size`.
 * **Credit** (`creditSize lower d`) is the AND count of the registered circuit under one public lowering,
   pinned at registration.
-* The **committed registered circuit** `R` (`Committed`) is the committed trace, the values the developer committed in
-  the execution phase, with the registered circuit (`Verity.RegisteredCircuit`) and the committed values of `θ`'s gates. Its
+* The **committed registered circuit** `R` (`Committed`) is the committed trace, the values the developer committed under
+  each root (the registered values' and each execution phase's), with the registered circuit (`Verity.RegisteredCircuit`) and the committed values of `θ`'s gates. Its
   circuit `C`, `θ`, its partition `𝓘` of the operation gates into inference blocks and their partition into proof
   blocks are the output of the registration's compiler (`Verity.Compiler`, named by its builder) on the registration's
   θ and the advice reported in the execution phases, which it runs at the start of each verification phase, after the
   trace is committed, so the partition the protocols prove blocks of is the one this model reads. The output
-  **explains** the committed trace (`Committed.Explains`) when its committed gates take distinct positions in the trace
-  and some transcript holds the registered values on `θ` and, at each proof block's committed inputs and outputs, the
+  **explains** the committed trace (`Committed.Explains`) when its committed gates take distinct positions (a root and a
+  leaf, `Partition.pos`) and some transcript holds the registered values on `θ` and, at each proof block's committed inputs and outputs, the
   committed value at the gate's position: what the developer proves of `B`'s run before any coin. `R` is not the
   registration (`Verity.Registration`), which holds only the Site, `θ` and the builder `B`: the advice, and with it the
   partition, is private. An inference block is a unit of a
@@ -123,13 +123,13 @@ structure Partition.IsCK (d : RegisteredCircuit) {B : ℕ} (P : Partition d.D B)
 each inference block priced at `c` gates. -/
 noncomputable def slowdown (c B : ℕ) (T₀ : ℝ) : ℝ := ((c * B : ℕ) : ℝ) / T₀
 
-/-- **The committed registered circuit**: the committed trace (`trace`, the values committed in the execution phase,
-in commitment order), the registered circuit `d`, whose circuit `C`, registered inputs `θ`, partition `𝓘` into `d.n`
+/-- **The committed registered circuit**: the committed trace (`trace`, under each root the values committed under
+it, in leaf order), the registered circuit `d`, whose circuit `C`, registered inputs `θ`, partition `𝓘` into `d.n`
 inference blocks and partition into proof blocks are the registered compiler's output on the registered θ and the
 advice reported in the execution phases, and the committed values of `θ`'s gates (`val`, read only there), fixed before
 the monitored computation. -/
 structure Committed where
-  trace : List (List Bool)
+  trace : Root → List (List Bool)
   d : RegisteredCircuit
   val : d.D.Trace
 
@@ -141,17 +141,18 @@ variable (R : Committed)
 def Honest (a : R.d.D.Trace) : Prop := ∀ g ∈ R.d.θ, a g = R.val g
 
 /-- **`X` reads the commitments**: it holds the registered values on `θ`, and at each proof block's committed inputs
-and outputs outside `θ` (`Partition.committed` of the proof blocks) the committed value at the gate's position in the
-trace, as its bits. -/
+and outputs outside `θ` (`Partition.boundary` of the proof blocks) the value committed at the gate's position, under
+its root at its leaf, as its bits. -/
 def Reads (X : R.d.D.Trace) : Prop :=
-  R.Honest X ∧ ∀ g ∈ R.d.P.committed, g ∉ R.d.θ → ∃ i, R.d.pos g = some i ∧ R.trace[i]? = some (R.d.D.bits X [g])
+  R.Honest X ∧ ∀ g ∈ R.d.P.boundary, g ∉ R.d.θ →
+    ∃ p, R.d.pos g = some p ∧ (R.trace p.1)[p.2]? = some (R.d.D.bits X [g])
 
 /-- **The compiler's output explains the committed trace**: no two of the proof blocks' committed gates outside `θ` take
 one position in the trace, and some transcript reads the commitments, so each proof block's inputs and outputs are
 committed values, each its own. The developer proves it of `B`'s run on the committed advice at the start of the
 verification phase, before the challenger's coins; a trace too coarse for the partition `B` outputs has no such
 transcript. -/
-def Explains : Prop := Set.InjOn R.d.pos ↑(R.d.P.committed \ R.d.θ) ∧ ∃ X, R.Reads X
+def Explains : Prop := Set.InjOn R.d.pos ↑(R.d.P.boundary \ R.d.θ) ∧ ∃ X, R.Reads X
 
 /-- **Inference block `u` recomputed** from `R` and `X`: a registered gate takes its registered value, every
 other gate outside the inference block takes `X`'s value, and the inference block's gates are computed in order. On the

@@ -1,14 +1,14 @@
 """The build family: the check's steps that build the Flock verifier and run what it built, and Flock's Rust, as
 `tools/check/check.py` runs them (its `lean_steps` and `groups`), each step one task.
 
-- `lean-build:verity/protocols/proofs/flock/verifier`: `lake build` of the Lean verifier, which reads its package and the packages of
+- `lean-build:verity/protocols/proof/flock/verifier`: `lake build` of the Lean verifier, which reads its package and the packages of
   the tree it requires by path; its outputs are the executables its lakefile's
   `defaultTargets` name, each at its path in a built tree (`.lake/build/bin/<exe>`, where the suites that run them look), and
   the rest of the build, each of those packages' `.lake/build` in one archive (`TREE`, its var `builds` the packages).
-- `lean-unit-cut:verity/protocols/proofs/flock/prover/agreement/unit_cut_agree.py`: the script on the Lean verifier it reads, the Lean partition
+- `lean-unit-cut:verity/protocols/proof/flock/prover/agreement/unit_cut_agree.py`: the script on the Lean verifier it reads, the Lean partition
   check's conformance with `verity.circuits.partition`; its inputs are the script's import closure (`test_file.Imports`: it
   reads no data), its output the script's result.json.
-- `lean-agreement:verity/protocols/proofs/flock/prover/agreement`: `check.py --lean-agreement` on the Lean verifier it reads, against upstream's Rust
+- `lean-agreement:verity/protocols/proof/flock/prover/agreement`: `check.py --lean-agreement` on the Lean verifier it reads, against upstream's Rust
   verifier on the upstream build and inputs `upstream.json` pins; its inputs are its directory less its Markdown, which no
   script there reads, and what check.py reads; its output is ci.py's per-set verdicts.
 - `lean-suites:SUITE`: `suites.py` on one of the suites check runs after lean-build (`suites.AFTER_LEAN`, read from its source:
@@ -22,9 +22,9 @@
   its output is suites.py's report. A suite
   that declares `parallel` takes the family's slot, and one that doesn't one process (`suites.TEST_PROCESS_GB`, or its
   `worker_gb`); its timeout is its own `timeout_s`, else the family's.
-- `flock-circuit-build:verity/protocols/proofs/flock/prover/live`: `check_build.sh`, `cargo check` of flock-circuit in each CPU feature set a pod
+- `flock-circuit-build:verity/protocols/proof/flock/prover/live`: `check_build.sh`, `cargo check` of flock-circuit in each CPU feature set a pod
   builds. It outputs nothing: `cargo check` builds nothing a reader runs.
-- `flock-rust-tests:verity/protocols/proofs/flock/prover/live`: `check_build.sh test`, the Rust tests in release on the same checkout, which it makes
+- `flock-rust-tests:verity/protocols/proof/flock/prover/live`: `check_build.sh test`, the Rust tests in release on the same checkout, which it makes
   itself: it reads nothing of flock-circuit-build's.
 
 A tree without the verifier's Lean package or its pin lists none of the Lean tasks, as check skips them there; one without
@@ -39,9 +39,9 @@ from pathlib import Path
 from ..runners.lean_build import TREE
 from .test_file import Imports, Layout, Tree, discover
 
-LEAN = "verity/protocols/proofs/flock/verifier"
-VERIFIER = "verity/protocols/proofs/flock/prover/agreement"
-FLOCK = "verity/protocols/proofs/flock/prover"
+LEAN = "verity/protocols/proof/flock/verifier"
+VERIFIER = "verity/protocols/proof/flock/prover/agreement"
+FLOCK = "verity/protocols/proof/flock/prover"
 UNIT_CUT = f"{VERIFIER}/unit_cut_agree.py"
 SUITES = "tools/check/suites.py"
 #: the lean-suites suites listed in parts, {suite: parts}: `suites.py --files K/M` on a timing record that has none of their
@@ -55,6 +55,9 @@ SUITES_DISK_GB = 60
 #: where lean-build's output holding the rest of its build (`lean_build.TREE`: each `.lake/build` but the executables) is in a work
 #: directory
 TREE_PATH = "lean-build/lake-build.tar.gz"
+#: what the agreement's scripts read from outside their directory, by path: `check.AGREEMENT_READS`, which
+#: `tests/tools/verity/graph/test_build.py` holds this to
+AGREEMENT_READS = ("verity/protocols/proof/flock/prover/python/verity_flock/record_text.py",)
 #: what `check.py --lean-agreement` reads of the tree outside the verifier's directory: check.py, the modules it loads as it
 #: starts (suites.py's suite layout rule among them) and the job declaration and policy they read, with the Slack registry the
 #: declaration checks its handles against (`tests/test_build.py` holds this list to what an audit hook sees it open)
@@ -215,7 +218,7 @@ def tasks(root: Path, files: list[str]) -> list[dict]:
                     "about": "agree with upstream's Rust verifier on the pinned upstream build and inputs (ci.py)",
                     "vars": {"verify": f"{bin_}/verity-verify-proof"},
                     "inputs": sorted({*(f for f in files if f.startswith(VERIFIER + "/") and not f.endswith(".md")),
-                                      *(f for f in CHECK_READS if f in files)}),
+                                      *(f for f in (*AGREEMENT_READS, *CHECK_READS) if f in files)}),
                     "reads": [{"task": build, "output": "verity-verify-proof"}],
                     "outputs": [{"name": "sets", "path": "flock-agreement/ci/sets.json"}]})
     return out + suite_tasks(root, files, build, bin_, exes)

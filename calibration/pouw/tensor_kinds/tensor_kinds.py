@@ -4,7 +4,7 @@ SMSP-cycles a MMA and the lane warps' instructions a SMSP-cycle, each over its o
 
     python tensor_kinds.py OUT_DIR            # reads OUT_DIR/tensor_kinds.jsonl and OUT_DIR/sass/tensor_kinds.sass
     python tensor_kinds.py refit OUT_DIR...   # VF3n-16's JI3n rows from every program of these runs, as JSON
-    python tensor_kinds.py search OUT_DIR     # a search.sh run (M1c): every schedule's program, the control, the gates
+    python tensor_kinds.py search OUT_DIR     # a stored M1c search: every schedule's program, the control, the gates
     python tensor_kinds.py refit OUT_DIR... --search SEARCH_DIR...   # VF3o-16's JI3o rows, the margin measured
     python tensor_kinds.py target CARD        # the TK_SM run.sh builds for the card nvidia-smi names CARD
 
@@ -352,7 +352,7 @@ def tpl_key(name: str) -> tuple[str, str, tuple[int, ...]] | None:
 
 
 def search_points(out: Path) -> tuple[list[tuple[str, dict]], list[str]]:
-    """Every program of a search run (search.sh): (form, point) as `analyze` gives them, and the gate failures."""
+    """Every program of a stored M1c search run: (form, point) as `analyze` gives them, and the gate failures."""
     kl = {}
     for p in sorted((out / "sass").glob("search-*.sass")):
         for fn, body in parse_sass(p.read_text()).items():

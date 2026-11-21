@@ -8,12 +8,8 @@ import random
 from pathlib import Path
 
 import pytest
-from verity.commitments.randomness import derive
 
-from tests.commit import test_binding_negatives as T
 from verity_vllm.acquire.committer_api import RunCommitment, StepCommitment
-from verity_vllm.check.replay import sample as SR
-from verity_vllm.commit import binding as B
 from verity_vllm.commit import challenge as CH
 
 V = json.loads(Path(__file__).with_name("challenge_legacy_vectors.json").read_text())
@@ -24,17 +20,6 @@ AUDITOR_KEY = b"auditor key 1041"
 def _vus() -> list[dict]:
     return [{"stratum": f"s{i % 5}|a|b|{'prefill' if i % 2 else 'decode'}", "op_path": f"m.layers.{i % 3}.mlp", "step": i % 4, "i": i}
             for i in range(83)]
-
-
-@pytest.mark.parametrize("case", V["seeds"], ids=lambda c: c["challenge"])
-def test_legacy_replay_seed_is_byte_identical(case):
-    assert SR.challenge_seed(case["challenge"], ROOT) == (case["seed"], case["source"])
-
-
-@pytest.mark.parametrize("case", V["samples"], ids=lambda c: f"per{c['per_stratum']}")
-def test_legacy_stratified_sample_is_byte_identical(case):
-    picked, strata, tgt = SR.sample(_vus(), case["per_stratum"], case["seed"], targets=case["targets"])
-    assert [v["i"] for v in picked] == case["picked"] and strata == case["strata"] and tgt == case["targets_out"]
 
 
 def _run(roots: list[bytes], errors: tuple[str, ...] = ()) -> RunCommitment:
@@ -100,19 +85,6 @@ def test_positions_are_sampled_over_a_sha512_root_and_other_sizes_are_refused():
             CH.challenge_positions(bytes(n), lps, 4, source=AUDITOR_KEY)
 
 
-def test_identities_sample_through_the_picker():
-    c, run, bmap = T.commit(T.produce())
-    pop = list(B.expected_population(T.structure(), T.workload()))
-    fresh = B.challenge_identities(pop, bmap, run.run_root, 16, salt=b"t", source=AUDITOR_KEY)
-    assert fresh and all(e is not None for _, e, _ in fresh)
-    assert fresh == B.challenge_identities(pop, bmap, run.run_root, 16, salt=b"t", source=AUDITOR_KEY)
-    assert fresh != B.challenge_identities(pop, bmap, run.run_root, 16, salt=b"t", source=b"another key")
-    with pytest.raises(ValueError, match="needs a source: the run's live coin"):
-        B.challenge_identities(pop, bmap, run.run_root, 16, salt=b"t", source=None)
-    pick = CH.identity_picker(ROOT, "ab" * 32, source=AUDITOR_KEY)
-    assert all(0 <= pick(i, 7) < 7 for i in range(100))
-
-
 @pytest.mark.parametrize(("extra", "said"), [
     (None, "none recorded"), ({}, "none recorded"), ({"steps": 1}, "none recorded"), ({"errors": None}, "none recorded"),
     ({"errors": []}, "none recorded"), ({"errors": ()}, "none recorded"), ({"errors": ["first", "second"]}, "first"),
@@ -123,16 +95,6 @@ def test_a_run_without_a_root_names_its_first_error_where_it_records_one(extra, 
     run = RunCommitment(b"", [StepCommitment(0, b"", b"", 4, 64, 1, b"", 0.0, 0.0, 0)], {}, 0.0, 0.0, 0, 0, extra=extra)
     with pytest.raises(CH.NoRunRoot, match=rf"1 of 1 steps not committed \(steps \[0\]\); first error: {said}$"):
         CH.run_root_of(run)
-
-
-def test_non_legacy_replay_sample_is_the_former_proof_block_sample():
-    key = CH.replay_key(AUDITOR_KEY, ROOT)
-    assert key == derive(AUDITOR_KEY, "verity/sampled-proofs/vu-sample/v1", {"run_root": ROOT})
-    picked, strata, _ = SR.sample(_vus(), 3, 0, key=key)
-    assert all(s["sampled"] == 3 for s in strata.values()) and len(picked) == 3 * len(strata)
-    assert [v["stratum"] for v in picked[:len(strata)]] == sorted(strata)  # round-robin: every stratum's first pick first
-    assert picked == SR.sample(_vus(), 3, 0, key=key)[0]
-    assert picked != SR.sample(_vus(), 3, 0, key=CH.replay_key(b"another key", ROOT))[0]
 
 
 def test_stratum_picks_takes_a_seed_or_a_key():

@@ -6,7 +6,6 @@
   "art:c94fae7b8f1c37950b8bb13e76221948057b0bfa4d616ca0a7644ca74a39d3df": "benchmarks/numerical/bench-instances/v1/vu-k1536.index.json",
   "art:9e977c565a9468b46936120b1d09495786ffaf308963409a350f565426cc9169": "benchmarks/numerical/bench-instances/v1/vu-k1536-neg.index.json",
   "art:19f80a238753239044f5f850e9907259a53938522512eed40a53ea1f5fd7fd53": "benchmarks/numerical/bench-instances/v1/tu-k16.index.json",
-  "art:ad3eaa3e52972a08384ee2de612b657a52efc4cc8dcc15d37fb94ad78c6cee55": "tests/adapters/vllm/tests/query/fixtures/pouw_row_binding.json.gz",
   "art:712ec77fca7da4c4f72121af05125eb4ac7237ce1a5735eb56b0269565ae0048": "fixtures/lean-vectors",
   "art:cb796395face65cdcb01321729bc5477942b5d33cbe1b65b5f6dab018308a00c": "verity/circuits/silicon/captures/autoproof-probe-vectors.json",
   "art:88a9a67d87412aec852c6e6695d1ac8a3245d5454b10491af28d6b7e443d3b65": "tests/benchmarks/numerical/checker/fixtures/typed-obligation-v0/stage2--qkv-proj-decode-0-k1536.json",
@@ -23,9 +22,9 @@
   "art:c32e2740a2da0e567f0121e77667081214e016b87149bab0b258cf69fbda7072": "tests/verity/circuits/ops/fixtures/tc-total-2026-09-07/a100/mma_special.reduced.json.gz",
   "art:afe6bacd767cd55298790dda9d5f67994b0500a44c735481ad865a66e02bfe04": "tests/verity/circuits/ops/fixtures/vectors/tc-ampere-bf16-total-hw.json",
   "art:d549388039b89d9c53fe8d5b5cdbe9bb5be4cc71cea1ef0844f5c71e606c4c1f": "tests/verity/circuits/ops/fixtures/vectors/tc-ampere-bf16-total.json",
-  "art:8e64204959f3943541eaaa2eb7e980a7b6d09a470d6f3ccb4b17f676efcdffa7": "tests/verity/protocols/proofs/flock/prover/fixtures/hidden-outputs",
-  "art:4274bdf17e6fe0cbb00d0605644a955182a0f4fbe4c84d2f0263d0e26f838260": "tests/verity/protocols/proofs/flock/prover/fixtures/public-inputs",
-  "art:73260dcd0a485e06024b588ddc499bbe904c599cae142960e980148f13ebcdeb": "tests/verity/protocols/proofs/flock/prover/fixtures/public-inputs-blocks",
+  "art:8e64204959f3943541eaaa2eb7e980a7b6d09a470d6f3ccb4b17f676efcdffa7": "tests/verity/protocols/proof/flock/prover/fixtures/hidden-outputs",
+  "art:4274bdf17e6fe0cbb00d0605644a955182a0f4fbe4c84d2f0263d0e26f838260": "tests/verity/protocols/proof/flock/prover/fixtures/public-inputs",
+  "art:73260dcd0a485e06024b588ddc499bbe904c599cae142960e980148f13ebcdeb": "tests/verity/protocols/proof/flock/prover/fixtures/public-inputs-blocks",
   "art:a093dd5b2963d1ad15ac8fe580d5240acee3aa157791b2e4d0131a4a013e67c4": "benchmarks/nci/sources",
   "art:c1170d49b98fb7ece129c26db47d316e359f5d79067f35e2035f6100e7153d60": "tests/adapters/vllm/tests/regression/expected/llama32-1b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager.json",
   "art:5ccc6114ed48964f5b74b4766f80afa61a6e3c987482a6bf6390468ad38bb489": "tests/adapters/vllm/tests/regression/expected/mistral-7b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json",
@@ -34,23 +33,18 @@
   "art:c301c7f124485ef41dda34186ac6846bccf7fcab99ad752bedac997b4d5bc0f4": "tests/adapters/vllm/tests/regression/expected/qwen25-15b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager.json",
   "art:4f366f8dc159047d337d29e0069db6af2b428eaba50830cf1fd8b8c8de886be3": "tests/adapters/vllm/tests/regression/expected/qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json",
   "art:67f611682f489222d26ee0af3be4eb026fe57860f622f24be20af0667cef1379": "tests/adapters/vllm/tests/protocols/fixtures/challenger_periods",
-  "art:31c671f6ef98b1d361a0a93dbff17bf8261f6dee4f8edbaf0df94a7454134af5": "tests/verity/protocols/proofs/flock/prover/fixtures/forged-proofs",
-  "art:b9cc903cef2f33e1034814e305ebb8bb96ca47cb27038d32c4ca0e783195d8c2": "tests/verity/protocols/proofs/flock/prover/fixtures/zk-sessions",
-  "art:0278327a962ffc33ccb55d29447bacc30616287a509490caf71215b3e24c63e8": "tests/verity/commitments/fixtures/layouts",
+  "art:b9cc903cef2f33e1034814e305ebb8bb96ca47cb27038d32c4ca0e783195d8c2": "tests/verity/protocols/proof/flock/prover/fixtures/zk-sessions",
   "art:5a029694eb35f29f9babee787dc9a2d875575e305788eaf59e0356524c9be2ff": "tests/benchmarks/network_e2e/encodings/fixtures",
   "art:ec57810bfc93888b6911fddb9315bc7e840658398e43446d8c4f3bf603f2f850": "tests/benchmarks/network_e2e/data/endpoint_carry/advice_trace.jsonl",
-  "art:e58f171c9b16e2c6b4b5b5ea561b0549300217757ecfce37aecab69ad2b7f8e6": "tests/verity/protocols/resource_accounting/network/attester/fixtures/weights-v1-h200-digests.json",
-  "art:844ad075fdd79a0e8723ed46a765d7422847d4edf1edb6ab70b3af3a5f2d0c7c": "tests/verity/protocols/resource_accounting/network/verifier/fixtures/cache_step_vectors.json",
-  "art:70f4d6ec7fc238d2dee69c6b90b832660934f67c2631d7884eaadc46b360fb75": "tests/verity/protocols/resource_accounting/network/verifier/fixtures/replay_step_vectors.json",
+  "art:e58f171c9b16e2c6b4b5b5ea561b0549300217757ecfce37aecab69ad2b7f8e6": "tests/verity/protocols/accounting/network/attester/fixtures/weights-v1-h200-digests.json",
+  "art:844ad075fdd79a0e8723ed46a765d7422847d4edf1edb6ab70b3af3a5f2d0c7c": "tests/verity/protocols/accounting/network/verifier/fixtures/cache_step_vectors.json",
+  "art:70f4d6ec7fc238d2dee69c6b90b832660934f67c2631d7884eaadc46b360fb75": "tests/verity/protocols/accounting/network/verifier/fixtures/replay_step_vectors.json",
   "art:01c2b9eb67e8ef2eeb75523257351459a1f9265a1768692fabfff62d94260548": "tests/adapters/vllm/tests/regression/files.toml",
-  "art:531cdd949cc1f2d8cf0e5239701f1defbbb2efd5b3285ed89e8132d3d1ff4954": "adapters/vllm/data/logs/m1.jsonl.gz",
   "art:08ab3b7ebebddff3d18d66ef890c8594b41c52388749aee610f3b117fad27de2": "adapters/vllm/data/logs/m6/log.jsonl.gz",
   "art:ad56845b3654e20dbf3ac62ca346ca7a0c9f304160cc9a8d77a38a615135ded4": "calibration/machine_model/data/cover/corpus.json",
   "art:61d521ebdf9cb49b76ba2343c027a6197addf0c83a6801a97801572202aeaa2b": "calibration/machine_model/data/cover/bu_12_9.json",
   "art:eb79e5280af4a8bad9ff2a864de5ae4684e11cbed44a01d5ca6c66bafa24720c": "calibration/machine_model/data/cover/sass_isa_tables.json",
   "art:fbda52b07457b79607d0170e149923debd5ff104fb0c7e94bf3b933ddc946887": "adapters/vllm/tools/served_run/workloads/llama32-1b__bf16__rtxpro6000__tp1__b4__i256__o32__mixed__greedy__bi-eager.json",
-  "art:6de3e339833a96cd1c2df2878be6525cbde4a81d32dc10aa6f0b0d330cc4f72b": "adapters/vllm/workloads/dsv4-pro__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager.json",
-  "art:ac0642a356eff29ed4dc08992ebc2556dad56e76c2a54760bde4dbf7cd7d62c9": "adapters/vllm/workloads/dsv4-pro__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__greedy__eager.json",
   "art:fc4e77efdf81a241cc00b1aa6c79656e78743a055738f622571e8ce121ffc94e": "adapters/vllm/workloads/gemma2-2b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json",
   "art:f4b8509129999176946778097401fd27ddf9875b3fbedc9e686f330842149c7b": "adapters/vllm/workloads/glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager.json",
   "art:3215709311cc06a46c044421e50abc38707cd6329df8bb0fbc1fbcb451c600a2": "adapters/vllm/workloads/glm53__fp8__h200__tp8__b1__i256__o32__mixed__stoch-t0.8-p0.95__eager.json",
@@ -139,9 +133,7 @@
   "art:132eb7d0c8e242f7e4253523152ea88e7de07e26200d9fe3720adbb358b7cd83": "tests/adapters/vllm/tests/program/data/fp8_block_operands.npz",
   "art:253adf1eef867d6ff128cf97ba0460d220a4473960269b018c711b6a15334c51": "tests/adapters/vllm/tests/regression/expected/llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager.json",
   "art:85fba674558e464a36b5ca3e9110762cb36749e736a0f94c0b2f2e5cc6a18403": "tests/adapters/vllm/tests/properties/fixtures/dsv4_q_norm_commit_20261021.json",
-  "art:b814ce20730fb161ac2e5868cf8c8162d6a875cfd311924d745f0391fddbffd1": "tests/adapters/vllm/tests/check/fixtures/deepseek_v4/inventory-tp8-rank0.json",
   "art:71dfa3cefbe4e4d42f33f018c9d0cb0650e8ea6d48c35c61cb23b53c797b1066": "tests/adapters/vllm/tests/check/fixtures/glm_moe_dsa/inventory-tp8-rank0.json",
-  "art:dc67eafe48fc2d5ae6e7f15d905d25d827f8110561691fbb073921adc98bdf67": "tests/adapters/vllm/tests/properties/fixtures/dsv4_mhc_capture_20261013.json",
   "art:5e51751f634b46d06f2ae846d4d2365898e1a789d9d76455dde7d8684d094650": "tests/adapters/vllm/tests/regression/expected/llama32-1b__bf16__l40s__tp1__b64__i1024__o128__mixed__greedy__bi-eager.json",
   "art:593cc61980fa4b1500031f845e322eb5eb777d4dfabf75767270a09a5a90fda3": "tests/adapters/vllm/tests/program/data/fp8_saved_operands.npz",
   "art:d1642f5d9fd7c25468cfc1ec7ac29e6f85d7b61bea27713a8ebd527eb29767c7": "tests/adapters/vllm/tests/program/data/fp8_production_row_l0_qkv.npz",
@@ -166,26 +158,33 @@
   "art:ca9544e3781926c76b0980b26326112bf86aae29d3481165bad816f05e5f22dd": "tests/adapters/vllm/tests/check/fixtures/glm_moe_dsa/config.json",
   "art:76398a8149f3e74bd9959f043570e8187a48354f0c259fa85dd9cc23a4fbf11e": "tests/adapters/vllm/tests/records/data",
   "art:98ccdf6cfe3a5a632e5babed1245d0600d6ef38d67672113d25a32ffa026ef4f": "tests/adapters/vllm/tests/commit/serving_row_leaf_vector.json",
-  "art:5a228652b1b2fae7c14df941448938b171f2e2add451b3270749bccc72a0da09": "tests/verity/protocols/proofs/flock/prover/fixtures/honest-session",
-  "art:53eee1826c7004daf74b353ccaaef4460ffa9473132f26fcab06ec2905f1e62a": "tests/verity/protocols/proofs/flock/prover/fixtures/plain-tree",
-  "art:2cf0182ca5bd415214ed211025a1d2b53b223540c46779284b49fdd344938798": "tests/verity/protocols/proofs/flock/prover/fixtures/rec-c3-inner",
-  "art:7d947140aaee50e3bb2dc6ea031450acc703fa02ca4d2f209d0d9ea222bf5ceb": "tests/verity/protocols/proofs/flock/prover/fixtures/rec-coins",
-  "art:80d0fa3b94c1d022767ce27f240113d9217adeb1530c4fa0c548639ed41224de": "tests/verity/protocols/proofs/flock/prover/fixtures/f1-gate",
-  "art:6d14f28a00edc46e3aa4b3432ef2e4b56fbeb9e12e6e0ad4e6179500f18b70b4": "tests/verity/protocols/proofs/flock/prover/fixtures/rec-links",
-  "art:b3c6b626af8e260c5d51316ab4cb69b8059cb2823a4dd16e4e57b11f6c7711b4": "tests/verity/protocols/proofs/spot/verifier/fixtures/form-refusals",
+  "art:5a228652b1b2fae7c14df941448938b171f2e2add451b3270749bccc72a0da09": "tests/verity/protocols/proof/flock/prover/fixtures/honest-session",
+  "art:2cf0182ca5bd415214ed211025a1d2b53b223540c46779284b49fdd344938798": "tests/verity/protocols/proof/flock/prover/fixtures/rec-c3-inner",
+  "art:7d947140aaee50e3bb2dc6ea031450acc703fa02ca4d2f209d0d9ea222bf5ceb": "tests/verity/protocols/proof/flock/prover/fixtures/rec-coins",
+  "art:80d0fa3b94c1d022767ce27f240113d9217adeb1530c4fa0c548639ed41224de": "tests/verity/protocols/proof/flock/prover/fixtures/f1-gate",
+  "art:6d14f28a00edc46e3aa4b3432ef2e4b56fbeb9e12e6e0ad4e6179500f18b70b4": "tests/verity/protocols/proof/flock/prover/fixtures/rec-links",
   "art:d351a150a5b589d8ab65ab0ba90502150193d4bd84992e177db38c578bf8e1fd": "verity/circuits/silicon/discrepancy_log.json",
-  "art:7dd1c98def937458596a43889730245b4b2dff3c71af75cec5ae9e8dee0e9190": "tests/verity/protocols/resource_accounting/network/verifier/fixtures/arith_encode_vectors.json",
+  "art:7dd1c98def937458596a43889730245b4b2dff3c71af75cec5ae9e8dee0e9190": "tests/verity/protocols/accounting/network/verifier/fixtures/arith_encode_vectors.json",
   "art:4a1acc582ca22768ad4a658b6a9f5bb3c512ae49db3b50a1e48271b6ef9970b2": "calibration/training/data/v3-selection.json",
   "art:1881d170c2833e3de28fa41662946272c99ca3e7edd13f10a3219b51bc657892": "tests/benchmarks/network_e2e/encodings/fixtures_draft",
   "art:f164ac2c74b1dfdcc4835c72b8d6dfaa9a051c9621af7a13239c0a8b52058742": "tests/benchmarks/one_stage/fixtures/guard.tar.xz",
   "art:3b4e100e16ec5f11bccadf73cab4d002d370ffe50815ac9eb4f3d37cbd36ec57": "tests/adapters/vllm/verity_vllm/definitions/fixtures/fa2_train_bwd_sm120.npz",
-  "art:ed3b2d968923fe39be309d15f9e2c41cae215ff4fcce40590131b9f0b02a2d52": "tests/verity/protocols/compose/verifier/lean/fixtures/sampled-two-case",
   "art:9606d9658bc4fa470a1041657128bcb6acd171c98866a253ae07e8b8ef534d9a": "tests/adapters/vllm/tests/observe/fixtures/glm53_tp8_fp8_ds_mla.rank0.jsonl.gz",
   "toys": {
-    "tests/verity/protocols/proofs/flock/prover/fixtures/f1-gate": "witness files of two recursion runs of a toy circuit at 2 instances, on generated values",
-    "tests/verity/protocols/proofs/flock/prover/fixtures/rec-c3-inner": "a recorded prover session and its private part for the recursion's inner shape at 16 instances, a toy circuit on generated values",
-    "tests/verity/protocols/proofs/flock/prover/fixtures/rec-coins": "a recorded recursive session's salts and private part at 64 instances, a toy circuit on generated values"
+    "tests/verity/protocols/proof/flock/prover/fixtures/f1-gate": "witness files of two recursion runs of a toy circuit at 2 instances, on generated values",
+    "tests/verity/protocols/proof/flock/prover/fixtures/rec-c3-inner": "a recorded prover session and its private part for the recursion's inner shape at 16 instances, a toy circuit on generated values",
+    "tests/verity/protocols/proof/flock/prover/fixtures/rec-coins": "a recorded recursive session's salts and private part at 64 instances, a toy circuit on generated values"
   },
+  "art:7458391214a64fd498d7aa9db36460de928fe67a3de7ffe3e2ea1e465333284d": "tests/verity/circuits/count_vectors.jsonl",
+  "art:7fa434603c3b932b8c021cbc11fad9c5502e3f95f2ac19707ab1b44c780b952f": "tests/verity/protocols/proof/flock/prover/fixtures/forged-proofs",
+  "art:bd47bdb13a0b1566dc57da0d3a84edc8bc9f7f40fe74fe2a2da399eec2ebd6c0": "tests/verity/protocols/proof/flock/prover/fixtures/plain-tree",
+  "art:1e19323c8f894a347c32f9b6a41c50f567b286210b66d6ef2cf9926566741518": "tests/verity/circuits/format_vectors.json",
+  "art:fc9d18e2a2e8474fd447b830cbe2a6b77c64118e0a463a5e05f1cf2c7f6a7295": "tests/verity/circuits/qcall_vectors.json",
+  "art:519d84c74b2560218cc9df4dab478a3e4def7d36ae09b95a815487e2abfe8105": "tests/verity/circuits/qword_vectors.json",
+  "art:70f12de7f1b7b7621d0ad66d00462b53cd4dcd3f6c4ad5fcaa0112f856bc8dba": "tests/verity/protocols/proof/flock/prover/fixtures/served-registered-plain",
+  "art:dbb6b477b327e702b5bfc966112c5de07042a10683f0653adc4001979476c3a3": "tests/verity/protocols/proof/flock/prover/fixtures/served-registered-plain-descriptor-v2",
+  "art:06745f84e47b6c288575a521908d926d643c89c1cd70da86ac4689f6a822ad2c": "tests/verity/protocols/proof/flock/prover/fixtures/registered-reads",
+  "art:fe832ea47edd381c681c33f736b997f7514bd0dd929616369baef8a75407ada1": "tests/verity/protocols/proof/flock/prover/fixtures/session-tables",
   "previous": {
     "art:26b81171153e286b3f5306e767290795def2cdbabfce2acf4608b3ef9ce15f7c": [
       "art:d775cc59e5e058b21c9eac5d748fab785ecd6be184782427bead14eb3cc80811"
@@ -209,12 +208,6 @@
       "art:d68968cee842d0199f1e12aa7efb6a8ee90e1d0ea1123e4946afdd4f7ceb7f5b",
       "art:44aca97047b4caa2a39334546d40877f48ef64dd70f67f4bd3b941b11abf9f75",
       "art:3fb2a43cd8bdd9e9fb7b99b5442730cf24cf35fa384ac85a0b561da554640555"
-    ],
-    "art:31c671f6ef98b1d361a0a93dbff17bf8261f6dee4f8edbaf0df94a7454134af5": [
-      "art:b77622446779b9f9b1e46861300e60973433f96d4edf43322acff35d13502d35"
-    ],
-    "art:53eee1826c7004daf74b353ccaaef4460ffa9473132f26fcab06ec2905f1e62a": [
-      "art:8bfe414af3d247db7b062b4c99a13b2d50f757cebeadf6c7411c39387bbed65c"
     ],
     "art:7d947140aaee50e3bb2dc6ea031450acc703fa02ca4d2f209d0d9ea222bf5ceb": [
       "art:84471c45417ce1f0da5e1ebcc7c9e65fc15b833357f4ec654ce12037100d7be3",
@@ -269,6 +262,23 @@
       "art:0f06d319352cda8ee686374ee342ad0e6ffd16ee19cd845b365ca33e09af8cc5",
       "art:d33c61991e10d9135f5fb7bb07227bcfacf90043d6f5b5810734664e6d89854d",
       "art:5b4ba00d45618b4cf4aca1ccc01003e504f1e4dcfd517b9744e9f87ee31a6b0a"
+    ],
+    "art:7fa434603c3b932b8c021cbc11fad9c5502e3f95f2ac19707ab1b44c780b952f": [
+      "art:31c671f6ef98b1d361a0a93dbff17bf8261f6dee4f8edbaf0df94a7454134af5",
+      "art:b77622446779b9f9b1e46861300e60973433f96d4edf43322acff35d13502d35"
+    ],
+    "art:bd47bdb13a0b1566dc57da0d3a84edc8bc9f7f40fe74fe2a2da399eec2ebd6c0": [
+      "art:53eee1826c7004daf74b353ccaaef4460ffa9473132f26fcab06ec2905f1e62a",
+      "art:8bfe414af3d247db7b062b4c99a13b2d50f757cebeadf6c7411c39387bbed65c"
+    ],
+    "art:dbb6b477b327e702b5bfc966112c5de07042a10683f0653adc4001979476c3a3": [
+      "art:e43917db0ffa59b34e6beae04917b27a70489a4d7ab778d734ddb10c85c5af7b"
+    ],
+    "art:06745f84e47b6c288575a521908d926d643c89c1cd70da86ac4689f6a822ad2c": [
+      "art:bf70d8eb6799f6a6284b649341a4ae2044642a47ac509c1d28bdabe5e018e85a"
+    ],
+    "art:fe832ea47edd381c681c33f736b997f7514bd0dd929616369baef8a75407ada1": [
+      "art:425f686027a8995ec4a328c617473de659f9c07678d6f7002bd18b3761d0657d"
     ]
   }
 }

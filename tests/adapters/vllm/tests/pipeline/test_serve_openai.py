@@ -18,13 +18,13 @@ import numpy as np
 import pytest
 import torch
 from verity import hooks as H
-from verity.protocols.compose import schemes as declarations
-from verity.protocols.resource_accounting.network.prover import ids_protocol as idp
-from verity.protocols.resource_accounting.network.verifier import id_form as IDF
-from verity.protocols.resource_accounting.network.verifier import io_tie as IT
+from verity.protocols.run import schemes as declarations
+from verity.protocols.accounting.network.prover import ids_protocol as idp
+from verity.protocols.accounting.network.verifier import id_form as IDF
+from verity.protocols.accounting.network.verifier import io_tie as IT
 from verity import release as REL
-from verity.protocols.resource_accounting.network.verifier.link_frame import HEADER
-from verity.protocols.resource_accounting.scheme import Lacks
+from verity.protocols.accounting.network.verifier.link_frame import HEADER
+from verity.protocols.accounting.scheme import Lacks
 
 from tests.pipeline import predicted
 from verity_vllm.commit import served_record as SR
@@ -38,6 +38,7 @@ from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline import serve_protocol as proto
+from verity_vllm.pipeline import serve_row as RW
 from verity_vllm.pipeline import serve_seal as ss
 from verity_vllm.pipeline.serve_admit import Admission, Delta
 from verity_vllm.records.predicted_row import FILE
@@ -156,6 +157,14 @@ def test_command_is_registered_and_defaults_to_the_setting_that_fits_network_cer
         cli.parse("serve-openai", ["--out", "/tmp/x"], environ={})
 
 
+@pytest.mark.parametrize("kw", [{"tensor_parallel_size": 2}, {"tensor_parallel_size": 8}, {"pipeline_parallel_size": 2}])
+def test_an_engine_over_more_than_one_gpu_is_refused_by_name(kw):
+    opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r"], environ={})
+    assert so.one_gpu(so.engine_options(opts)) == so.engine_options(opts)
+    with pytest.raises(so.UsageError, match="the multi-GPU model is not served"):
+        so.one_gpu({**so.engine_options(opts), **kw})
+
+
 @pytest.mark.parametrize("precision, parts, scope", [("verity_int8", ("linears",), "linears"),
                                                      ("int8_exact", ("linears", "attention"), "all"), ("pin", ("linears",), None),
                                                      ("bfloat16", ("linears",), None)])
@@ -168,8 +177,8 @@ def test_every_precision_registers_the_verity_int8_method_before_the_engine(prec
 
 def test_preflight_refuses_a_commit_without_ninja_before_the_model_loads(tmp_path):
     man = predicted.row(tmp_path)
-    opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--required-manifest", str(man), "--out", str(tmp_path)],
-                     environ={})
+    opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--row-build", str(man), "--out", str(tmp_path),
+                                      *CLASS], environ={})
     with pytest.raises(cli.UsageError, match=r"ninja is\) on PATH, or pass --no-commit$"):
         so.preflight(opts, which=lambda _: None)
     so.preflight(opts, which=lambda _: "/v/bin/ninja")
@@ -252,6 +261,15 @@ def test_a_listed_scheme_that_is_not_declared_is_refused_by_name(monkeypatch, tm
         so.listed(_listing(monkeypatch, tmp_path, "a,nope", []), tmp_path)
 
 
+@pytest.mark.parametrize("protocols", ["pouw:eps1-sm120-h1fx1", "pouw"])
+def test_the_first_stage_is_refused_by_name_before_the_model_loads(tmp_path, protocols):
+    opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--out", str(tmp_path / "serve"), "--no-commit",
+                                      "--protocols", protocols], environ={})
+    with pytest.raises(cli.UsageError, match=f"--protocols {protocols}: {protocols}: the first stage is deleted; useful work "
+                                             "is Pearl\\+'s, attached by its declared name"):
+        so.preflight(opts, which=lambda _: None)
+
+
 def test_a_declared_schemes_option_is_refused_naming_its_name(tmp_path):
     opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--out", str(tmp_path),
                                       "--protocols", "pouw:pearl-c-h100-v1-h3"])
@@ -262,9 +280,9 @@ def test_a_declared_schemes_option_is_refused_naming_its_name(tmp_path):
 
 def test_the_served_commit_is_rows_sha512_alone(tmp_path):
     """rows-sha512 is the one served scheme: a committing run is refused before the model loads until it names its bench
-    row's manifest, and by the committer before it builds anything; vllm-v1 (SHA-256) is no longer a choice."""
+    row's Build of record, and by the committer before it builds anything; vllm-v1 (SHA-256) is no longer a choice."""
     def parse(*more: str) -> so.Options:
-        return cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--out", str(tmp_path), *more], environ={})
+        return cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--out", str(tmp_path), *CLASS, *more], environ={})
 
     def refusal(opts: so.Options) -> str | None:
         try:
@@ -275,20 +293,29 @@ def test_the_served_commit_is_rows_sha512_alone(tmp_path):
 
     man = predicted.row(tmp_path)
     assert parse().scheme == ss.ROWS == "rows-sha512" and ss.SCHEMES == (ss.ROWS,)
-    assert "--required-manifest DIR/manifest.json" in refusal(parse())
-    assert refusal(parse("--required-manifest", str(man))) is None and refusal(parse("--no-commit")) is None
-    with pytest.raises(cli.UsageError, match="--required-manifest DIR/manifest.json"):
+    assert "pass --row-build DIR" in refusal(parse())
+    assert refusal(parse("--row-build", str(man))) is None and refusal(parse("--no-commit")) is None
+    bare = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--out", str(tmp_path), "--row-build", str(man)],
+                     environ={})
+    assert "sizes the Commit's arena from the window class the application declares: pass --window-class S,P,O" in refusal(bare)
+    assert "is not S,P,O[,LANES,EVERY]" in refusal(parse("--row-build", str(man), "--window-class", "4,27"))
+    assert refusal(parse("--row-build", str(man), "--window-class", "4,27,2")) == (
+        "--window-class 4,27,2 bounds a step at 4 sequences of 29 positions, and the engine admits 8 of 512: pass "
+        "--max-num-seqs 4 --max-model-len 29")
+    assert refusal(parse("--row-build", str(man), "--window-class", "4,27,2", "--max-num-seqs", "4", "--max-model-len",
+                         "29")) is None
+    with pytest.raises(cli.UsageError, match="pass --row-build DIR"):
         ss.committer(parse(), llm=None)
     with pytest.raises(SystemExit):
         parse("--scheme", "vllm-v1")
 
 
 def test_the_served_commit_binds_only_the_build_of_record_predict_wrote(tmp_path):
-    """The row's manifest is the one the ahead-of-time compiler wrote with the row's Build of record (`predict row`): a manifest
-    with no record of predict's beside it (a traced Build's), another schema's, or a record naming other bytes is refused
-    before the model loads, committing or not, and by the committer; the Build is the manifest's own dir (no --programs-root)."""
+    """The row's Build of record is the ahead-of-time compiler's (`predict row`): a dir with no record of predict's (a traced
+    Build's), another schema's, or a record binding another compiler than this tree's is refused before the model loads,
+    committing or not; the Build is the dir itself (no --programs-root)."""
     def parse(*more: str) -> so.Options:
-        return cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--out", str(tmp_path), *more], environ={})
+        return cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--out", str(tmp_path), *CLASS, *more], environ={})
 
     def refusal(*more: str) -> str | None:
         try:
@@ -298,27 +325,21 @@ def test_the_served_commit_binds_only_the_build_of_record_predict_wrote(tmp_path
         return None
 
     (traced := tmp_path / "traced").mkdir()
-    (traced / "manifest.json").write_text("{}")
     (traced / "build_summary.json").write_text("{}")
     for more in ((), ("--no-commit",)):
-        why = refusal("--required-manifest", str(traced / "manifest.json"), *more)
-        assert "no record of predict's beside it" in why and "`verity-vllm predict row --row ROW --out DIR`" in why, more
-    assert refusal("--required-manifest", str(tmp_path / "none" / "manifest.json")).endswith("manifest.json: no such file")
+        why = refusal("--row-build", str(traced), *more)
+        assert "no record of predict's in it" in why and "`verity-vllm predict row --row ROW --out DIR`" in why, more
     (row := tmp_path / "row").mkdir()
-    man = predicted.row(row, {"manifest_digest": "m"})
-    assert refusal("--required-manifest", str(man)) is None
+    assert refusal("--row-build", str(predicted.row(row))) is None
     rec = json.loads((row / FILE).read_text())
     (row / FILE).write_text(json.dumps(rec | {"schema": "verity-vllm/aot-comparison/v1"}))
-    assert "'schema' is 'verity-vllm/aot-comparison/v1'" in refusal("--required-manifest", str(man))
-    (row / FILE).write_text(json.dumps(rec))
-    man.write_text(json.dumps({"manifest_digest": "m2"}))
-    assert "so predict didn't write it" in refusal("--required-manifest", str(man), "--no-commit")
-    with pytest.raises(cli.UsageError, match="so predict didn't write it"):
-        ss.committer(parse("--required-manifest", str(man)), llm=None)
-    opts = parse("--required-manifest", str(predicted.row(row)))
-    assert ss.programs_root_of(opts) == str(row.resolve()) == ss.committer_args(opts).programs_root
+    assert "'schema' is 'verity-vllm/aot-comparison/v1'" in refusal("--row-build", str(row))
+    predicted.row(row, {"name": "other", "digest": "0" * 128})
+    assert "binds compiler other 0000000000000000…, not this tree's" in refusal("--row-build", str(row))
+    opts = parse("--row-build", str(predicted.row(row)))
+    assert RW.programs_root_of(opts) == str(row.resolve())
     with pytest.raises(SystemExit):
-        parse("--required-manifest", str(man), "--programs-root", str(traced))
+        parse("--row-build", str(row), "--programs-root", str(traced))
 
 
 def test_retain_exclude_takes_the_attention_interiors_only_under_the_rows_sha512_commit(tmp_path):
@@ -326,7 +347,7 @@ def test_retain_exclude_takes_the_attention_interiors_only_under_the_rows_sha512
     values no reader of a sealed window opens; anything else, and a run with no rows-sha512 Commit, is refused before the model
     loads, and by the committer before it builds anything."""
     man = predicted.row(tmp_path)
-    rows = ("--model", "m", "--revision", "r", "--required-manifest", str(man), "--out", str(tmp_path))
+    rows = ("--model", "m", "--revision", "r", "--row-build", str(man), "--out", str(tmp_path), *CLASS)
 
     def refusal(*more: str, environ: dict[str, str] | None = None) -> str | None:
         try:
@@ -494,13 +515,12 @@ class Serving:
     def __init__(self, out: Path, *, commit: bool = True, flip: tuple[int, int] | None = None, window_steps: int = 64,
                  idle_close_steps: int = 1, force_include_usage: bool = True, seed_override: int | None = None,
                  served: dict | None = None, marks: Any = None, block: int | None = None, protocol: Any = None,
-                 arm: Any = None, runner: Runner | None = None,
+                 runner: Runner | None = None,
                  no_slice: str | None = None) -> None:
         self.runner = runner if runner is not None else Runner()
         self.windows = sc.CommitWindows(Committer(self.runner, flip), out, run_id="t", window_steps=window_steps,
                                        idle_close_steps=idle_close_steps, eos_ids=[Tokenizer.eos_token_id],
-                                       clock=lambda: 0.0, wall=lambda: 0.0, served=served, no_slice=no_slice, marks=marks,
-                                       arm=arm(self.runner) if arm is not None else None) if commit else None
+                                       clock=lambda: 0.0, wall=lambda: 0.0, served=served, no_slice=no_slice, marks=marks) if commit else None
         self.loop = so.EngineLoop(Engine(self.runner, seed_override), self.windows)
         self.server = so.Server(proto=protocol or proto.PlainProtocol(force_include_usage), served_name="m", max_model_len=512,
                                 tokenizer=Tokenizer(),
@@ -801,21 +821,6 @@ def test_a_later_turn_read_from_the_prefix_cache_is_checked_against_the_turns_th
     assert got["passed"] and (got["cache_hits"], got["cached_positions"]) == (2, 28), got
 
 
-def test_the_gpu_arms_client_serves_shared_prefix_turns_that_the_server_checks(tmp_path):
-    from tests.pipeline import serve_prefix_gpu as client
-
-    sent = tmp_path / "client.jsonl"
-    with Serving(tmp_path, block=4) as s:
-        assert client.main(["--url", s.url, "--out", str(sent), "--requests", "6", "--prompt-range", "8:32", "--tokens", "4",
-                            "--system-prompts", "2", "--system-tokens", "24", "--turns", "2", "--max-model-len", "512"]) == 0
-    got = client.compare(records(tmp_path, "client.jsonl"), records(tmp_path, "requests.jsonl"))
-    assert got["passed"] and got["later_turns"] > 0 and got["cache_hits"] >= got["later_turns"], got
-    assert s.windows.summary()["passed"]
-    bad = records(tmp_path, "client.jsonl")
-    bad[0]["streamed_ids"] = bad[0]["streamed_ids"][:-1]
-    assert not client.compare(bad, records(tmp_path, "requests.jsonl"))["passed"]
-
-
 def test_each_request_records_when_it_was_received_submitted_admitted_and_first_streamed(tmp_path):
     """The wall-clock stamps that tell late bytes (``received``) from a hold before the engine (``submitted``,
     ``admitted``), on one clock the server, the engine loop and the windows share."""
@@ -1028,6 +1033,7 @@ def test_top_p_below_one_is_refused_naming_the_gap(tmp_path, top_p):
 
 # ---------------------------------------------------------------------------------------------------------------- served rows
 
+CLASS = ("--window-class", "8,256,256")
 ENGINE = {"max_num_seqs": 8, "max_num_batched_tokens": 2048, "max_model_len": 512, "num_gpu_blocks": 64, "block_size": 16}
 
 

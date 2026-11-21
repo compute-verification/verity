@@ -13,14 +13,14 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parents[2] / "verity/protocols/resource_accounting/memory/poub/prover/poub_session"))
+sys.path.insert(0, str(HERE.parents[2] / "verity/protocols/accounting/memory/poub/prover/poub_session"))
 
 from verity.commitments import Commitment, verify_opening  # noqa: E402
 from verity.commitments import Opening as MerkleOpening  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.prover import audit_prover  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier.rota import Schedule  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec, receipts as rb  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier.session import wire  # noqa: E402
+from verity.protocols.accounting.memory.poub.prover import audit_prover  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier.rota import Schedule  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier import audit, codec, receipts as rb  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier.session import wire  # noqa: E402
 
 import prover  # noqa: E402
 
@@ -152,7 +152,7 @@ def test_a_refresh_session_is_refused_outside_an_honest_or_kv_session_over_a_bac
     p = prover.ProverSide.__new__(prover.ProverSide)
     p.backend, p.ahead = backend(), None
     with pytest.raises(ValueError, match="re-keys by appends"):
-        prover.ProverSide.session(p, {"k": 0, "windows": 2, "lifetime": 2, "refresh": True}, "skip", 0.0)
+        prover.ProverSide.session(p, {"k": 0, "windows": 2, "samples": 6, "lifetime": 2, "refresh": True}, "skip", 0.0)
 
 
 def test_an_origin_is_named_on_the_wire_as_the_append_message_carries_it_and_read_back():

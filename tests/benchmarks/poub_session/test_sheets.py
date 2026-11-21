@@ -12,12 +12,12 @@ sys.path.insert(0, str(ROOT / "benchmarks" / "poub_session"))
 
 import sheets  # noqa: E402
 from verity.device import load_card, load_node  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier import timing  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier.poub_session import verifier_process as VP  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier import timing  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier.poub_session import verifier_process as VP  # noqa: E402
 
 CARD_FILES = ROOT / "calibration/hardware/cards"
 NODE_FILES = ROOT / "calibration/hardware/nodes"
-FIXTURE = ROOT / "tests/verity/protocols/resource_accounting/memory/poub/figures.json"
+FIXTURE = ROOT / "tests/verity/protocols/accounting/memory/poub/figures.json"
 RTX = "rtx-pro-6000-server-x8"
 
 
@@ -72,7 +72,7 @@ def test_a_figures_file_not_the_one_its_pinned_digest_names_is_refused_and_a_rec
     read, and the record the process writes, here a refused registration's, carries the figures whole and their
     digest, the ingress rate beside them, and says whether they were pinned: unpinned, as where both parties run on
     the developer's machine, it says they weren't."""
-    from verity.protocols.resource_accounting.memory.poub.verifier.session import verifier as V
+    from verity.protocols.accounting.memory.poub.verifier.session import verifier as V
 
     fixture = timing.Figures.of_json(json.loads(FIXTURE.read_text()))
     lenient = tmp_path / "lenient.json"
@@ -102,7 +102,7 @@ def test_a_figures_file_not_the_one_its_pinned_digest_names_is_refused_and_a_rec
         def registry_json(self):
             return {}
 
-        def stop(self):
+        def stop(self, check=True):
             pass
 
     monkeypatch.setattr(V.wire, "listen", lambda host, port: Server())

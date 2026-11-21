@@ -15,8 +15,8 @@ setting exposes.
 Its tokens are Pearl-C's own y (Pearl's FP8 quantization), so no stock arm is a bit-exact control (``control=None``), and
 each call's noise is seeded by its index across the epoch, so no two of the engine's passes need agree either (the gate's
 `runner.PER_PASS_TOKENS`); the arm's gate is Pearl-C's own, `e2e.gate`'s call check: at every distinct (n, k), served y
-against x·Wᵀ within `ERR` rel RMS, the same call twice with equal tile digests under different roots (its salts are
-fresh), and the ``hash_leaf``-omitted negative control changing the tile digests (`e2e.call_verdict`).
+against x·Wᵀ within `ERR` rel RMS, and the same call twice with equal tile digests under different roots (its salts
+are fresh; `e2e.call_verdict`).
 
 Env: ``PEARLC_KERNEL`` (default the tree's directory of the kernel scheme on the card, `kernel_directory`), ``PEARLC_CUBIN``
 (default the directory's build.sh cubin, ``<directory name>.cubin``), ``PEARLC_SCHEDULE`` (default ``deferred``, the
@@ -40,14 +40,14 @@ from verity_config.settings import of
 
 HERE = Path(__file__).resolve().parent
 #: the tree's kernel directories, one per kernel scheme family and build target (`kernel_directory`)
-KERNELS = HERE.parents[2] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "kernels"
+KERNELS = HERE.parents[2] / "verity" / "protocols" / "accounting" / "compute" / "pouw" / "prover" / "kernels"
 settings = of(__file__)
 #: `e2e.gate`'s bound on served y against x·Wᵀ (rel RMS), Pearl's FP8 quantization noise
 ERR = 0.08
 
 
 def _e2e() -> Any:
-    """`e2e.py`, loaded from its file: the call check's verdict (`call_verdict`, `under_salt`) and `whole_check`."""
+    """`e2e.py`, loaded from its file: the call check (`call_checks` on `shape_cases`) and `whole_check`."""
     import importlib.util
 
     spec = importlib.util.spec_from_file_location("pearl_c_e2e", HERE / "e2e.py")
@@ -59,7 +59,7 @@ def _e2e() -> Any:
 def kernel_directory(scheme: str, card: str) -> Path:
     """The tree's kernel directory of the PoUW kernel scheme ``scheme`` on the card ``card`` (its short name): its
     family's, built for the card's target (``pearl_c_sm90`` for ``pearl-c-h100-v1-h3`` on an H200)."""
-    from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import named
+    from verity.protocols.accounting.compute.pouw.verifier.kernel_schemes import named
     from verity_bench.schemes import arch
 
     return KERNELS / f"{named(scheme).family.replace('-', '_')}_{arch(card).removesuffix('a').replace('_', '')}"
@@ -69,14 +69,14 @@ class _Coins:
     """`e2e.Coins`, trimmed: one epoch's challenger, each coin opened once."""
 
     def __init__(self, epoch: int) -> None:
-        from verity.protocols.resource_accounting.compute.pouw.verifier import verifier
-        from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger
+        from verity.protocols.accounting.compute.pouw.verifier import verifier
+        from verity.protocols.accounting.compute.pouw.verifier.coins import Challenger
 
         self.challenger, self.opened = Challenger(epoch, verifier.coins), {}
         self.commitment = self.challenger.commitment
 
     def open(self, label: str, after: bytes) -> Any:
-        from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import DomainError
+        from verity.protocols.accounting.compute.pouw.verifier.protocol import DomainError
 
         if label in self.opened:
             if self.opened[label].after != after:
@@ -102,7 +102,7 @@ class _LiveSession:
 
     def __init__(self, gate: str, peer: str, epoch: int, lane: str, run: Any = None) -> None:
         from verity_vllm.pipeline.commit_coins import ChallengerGate
-        from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as PHW
+        from verity.protocols.accounting.compute.pouw.prover.serving.coins import window as PHW
 
         self.gate = ChallengerGate(gate, run)
         self.reserved, self.period = PHW.reserve_salt(self.gate.call, self.gate.ledger, lane, peer, epoch)
@@ -110,7 +110,7 @@ class _LiveSession:
         self.carried: dict[str, Any] = {}
 
     def open(self, entry: str, root: bytes) -> Any:
-        from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as PHW
+        from verity.protocols.accounting.compute.pouw.prover.serving.coins import window as PHW
 
         self.client, self.commitment, opening, _, self.carried = PHW.open_session(
             entry, self.gate.call, self.reserved["session"], root, self.k)
@@ -143,9 +143,9 @@ class LiveDraw:
         self.gate, self.peer, self.lane, self.at, self.period = ChallengerGate(gate, run), peer, lane, at, period
 
     def __call__(self, root: bytes, asking: Any) -> tuple[bytes, dict[str, Any]]:
-        from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
-        from verity.protocols.proofs.spot.verifier.challenger.challenger import CoinError
-        from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as PHW
+        from verity.protocols.accounting.compute.pouw.verifier import window as Wd
+        from verity.protocols.proof.spot.verifier.challenger.challenger import CoinError
+        from verity.protocols.accounting.compute.pouw.prover.serving.coins import window as PHW
 
         lines = self.gate.ledger()
         period = PHW.open_period(lines, self.lane)
@@ -219,7 +219,7 @@ class PearlCArm:
         where None, the leased card's, `kit.card_short` of the run's stamp), for the served model's weights, which
         registration pins, and its directory ``PEARLC_KERNEL`` or the tree's (`kernel_directory`)."""
         if self._kernel is None:
-            from verity.protocols.resource_accounting.scheme import declared
+            from verity.protocols.accounting.scheme import declared
             from verity_bench import kit
             from verity_bench.schemes import arch, served, useful_work
 
@@ -268,16 +268,16 @@ class PearlCArm:
         return max(leaf_default, pow2(tiles)), max(rows_default, pow2(rows))
 
     def ready(self, target: Any) -> None:
-        from verity.protocols.resource_accounting.compute.pouw.verifier.audit import weights_root
-        from verity.protocols.compose import schemes
-        from verity.protocols.resource_accounting.scheme import declared
+        from verity.protocols.accounting.compute.pouw.verifier.audit import weights_root
+        from verity.protocols.run import schemes
+        from verity.protocols.accounting.scheme import declared
         from verity.hooks import ComputeBlockWith
         from verity_vllm import messages
         from verity_vllm.protocols.linear import vllm_site
         from verity_vllm.protocols.linear.api import Arm as StackArm
         from verity_vllm.protocols.linear.api import PassSpec, Stack
-        from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
-        from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
+        from verity.protocols.accounting.compute.pouw.prover import schemes as pouw_schemes
+        from verity.protocols.accounting.compute.pouw.prover.serving import pearl_c as PPD
         from verity_torch.pouw.pearl_c import run_device as PPDR
 
         scheme = self.scheme
@@ -341,34 +341,16 @@ class PearlCArm:
         self.run, self.stack, self.weights = run, stack, weights
 
     def gate(self, target: Any) -> dict[str, Any]:
-        """`e2e.gate`'s call check, between passes: y against x·Wᵀ, the call twice under the salt, and the negative control
-        (`e2e.call_verdict`)."""
+        """`e2e.gate`'s call check (`e2e.call_checks`, each pass on a twin of the run): y against x·Wᵀ and the call twice under
+        the salt."""
         import torch
 
         run, weights, e2e = self.run, self.weights, _e2e()
-        checks, seen = [], set()
-        gen = torch.Generator(device=next(iter(weights.values())).device).manual_seed(20260930)
-        for w, W in weights.items():
-            if tuple(W.shape) in seen:
-                continue
-            seen.add(tuple(W.shape))
-            for m in (16, 64):
-                x = torch.randn(m, W.shape[1], device=W.device, generator=gen).to(torch.bfloat16)
-                commits, served, at = [], None, run.epoch_calls()
-                for omit in ((), (), ("hash_leaf",)):
-                    run.begin(at=at)
-                    run.poison()
-                    run.omit = frozenset(omit)
-                    y = run.gemm(w, x, W, None)
-                    served = y if served is None else served
-                    commits.append(e2e.under_salt(run, run.end()))
-                run.omit = frozenset()
-                ref = x.float() @ W.float().T
-                err = float(((served.float() - ref).pow(2).sum() / ref.pow(2).sum()).sqrt())
-                checks.append({"n": W.shape[0], "k": W.shape[1], "m": m, **e2e.call_verdict(commits, err)})
+        cases = e2e.shape_cases(weights, (16, 64), torch.Generator(device=next(iter(weights.values())).device).manual_seed(20260930))
+        checks = [{"n": W.shape[0], "k": W.shape[1], "m": x.shape[0], **v}
+                  for (_, W, x), v in zip(cases, e2e.call_checks(run, cases), strict=True)]
         from verity_bench.vllm.runner import PER_PASS_TOKENS
 
-        run.details["passes"].clear()
         return {"passed": all(c["ok"] for c in checks), "scheme": run.scheme.name, "schedule": self.schedule,
                 "coins": self.coins, "checks": checks, PER_PASS_TOKENS: True}
 

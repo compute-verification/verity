@@ -1,4 +1,4 @@
-"""-h3's noise derivation as registered Definitions (`verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_c_noise`), word and Boolean,
+"""-h3's noise derivation as registered Definitions (`verity.protocols.accounting.compute.pouw.prover.circuit.pearl_c_noise`), word and Boolean,
 against PoUW's reference (`schemes.pearl_c`: `seed_b`, `row_digest`, `row_seed`, `line_key`, `sample_line`) on random and
 edge inputs, and on the vectors the Lean specification proves of its own noise (`Pouw.PearlC.W1Checks`: `seedB_vec`,
 `rowDigest_vec`, `rowSeed_vec`, `lineEA_vec`, `lineFB_vec`).
@@ -23,10 +23,10 @@ from verity.circuits.evaluation.bits import evaluate_words
 from verity.circuits.ops.boolean.versions import boolean_version, sigma_lift
 from verity.commitments.gates import sha512 as SHA
 from verity.commitments.gates.sha512 import compress_ref, pad_tail, words_be
-from verity.protocols.resource_accounting.compute.pouw.prover.circuit import (
+from verity.protocols.accounting.compute.pouw.prover.circuit import (
     pearl_c_noise as N,
 )
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import (
+from verity.protocols.accounting.compute.pouw.prover.schemes import (
     pearl_c as C,
 )
 
@@ -438,3 +438,24 @@ def test_a_rows_line_on_bits():
     assert got[0] == LINE_EA
     assert got == [C.sample_line(C.row_seed(salt, C.row_digest(row_bytes(x)), root, unit, row), 0, 0, 0)
                    for salt, x, root, unit, row in cases]
+
+
+@pytest.mark.slow
+def test_each_byte_primitive_has_its_boolean_body():
+    """Each compression's byte primitive (`PearlCSeedBByte_v1` and its like) has its Boolean body (`BYTE_BODIES`): the
+    compression, its ``_v2``'s gates, then ``at``'s select. On two random instances it is the primitive at every ``at``, and
+    its ANDs are its ``_v2``'s and (n − 1) · 8 more, n its value's bytes."""
+    assert sorted(N.BYTE_BODIES) == sorted(p for p in N.__all__ if p.endswith("Byte"))
+    rng = random.Random(11)
+    for name, body in N.BYTE_BODIES.items():
+        prim = getattr(N, name)
+        assert boolean_version(prim).id == bind(body).id == prim.id.replace("_v1", "_v2")
+        params, _ = prim.signature()
+        n = 1 << params[-1][1].w
+        args = [[[rng.randrange(1 << t.elem.w) for _ in range(t.n)] if hasattr(t, "n") else rng.randrange(1 << t.w)
+                 for _, t in params[:-1]] for _ in range(2)]
+        cols = [[a[i] for a in args for _ in range(n)] for i in range(len(params) - 1)] + [list(range(n)) * len(args)]
+        want = [word(prim, *(c[j] for c in cols))[0] for j in range(len(cols[-1]))]
+        assert on_bits(body, *cols) == [[w] for w in want], name
+        ands = compile_bits(bind(body)).counts["and"]
+        assert ands == compile_bits(bind(getattr(N, name[:-len("Byte")] + "V2"))).counts["and"] + (n - 1) * 8, name

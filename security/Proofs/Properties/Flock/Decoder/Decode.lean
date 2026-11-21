@@ -1,0 +1,502 @@
+module
+
+public import Proofs.Properties.Flock.Decoder.Nonneg
+public import Proofs.Properties.Flock.Decoder.Node
+import Batteries.Tactic.OpenPrivate
+import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.Measurability.Init
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Properties.Flock.Decoder.Basic
+import Std.Data.HashMap.Lemmas
+
+/-!
+# The decoder's invariant
+
+`Flock.Program.decode` builds its Definitions with `getDef`, `composite` and `staticFns`, mutually recursive on a fuel.
+Every Definition it appends is `DefOk`: a primitive one gate with an empty body; a composite's nodes each call an
+earlier Definition as `NodeOk` says (`buildNode_spec`), and every reference of its body names a leaf of a parameter or
+of a node's declared output (`Walk.parsePartsIn_valid`). `decode_spec` proves it by induction on the fuel.
+-/
+
+@[expose] public section
+
+namespace InferenceOnlyVerifier.Properties.SecurityProofs.BodiesOk
+open Flock.Program
+open private getDef composite staticFns DecState DecState.defs DecState.index DecState.busy Desc liftV at_ paramsOf
+  from Circuits.Descriptor
+
+abbrev DM := StateT DecState (Except String)
+
+theorem st_bind {α β : Type} {x : DM α} {f : α → DM β} {s : DecState} {b : β} {s' : DecState}
+    (h : (x >>= f) s = .ok (b, s')) : ∃ a s1, x s = .ok (a, s1) ∧ f a s1 = .ok (b, s') := by
+  simp only [bind, StateT.bind] at h
+  rcases hx : x s with e | ⟨a, s1⟩
+  · rw [hx] at h; exact absurd h (by intro h; injection h)
+  · rw [hx] at h; exact ⟨a, s1, rfl, h⟩
+
+theorem st_pure {α : Type} {a b : α} {s s' : DecState} (h : (pure a : DM α) s = .ok (b, s')) : a = b ∧ s = s' := by
+  injection h with h; injection h with h1 h2; exact ⟨h1, h2⟩
+
+theorem st_get {st s s1 : DecState} (h : (get : DM DecState) s = .ok (st, s1)) : s = st ∧ s = s1 := by
+  injection h with h; injection h with h1 h2; exact ⟨h1, h2⟩
+
+theorem st_liftV {α : Type} {x : Flock.V α} {s : DecState} {a : α} {s' : DecState}
+    (h : liftV x s = .ok (a, s')) : x = .ok a ∧ s = s' := by
+  cases x with
+  | ok a' => injection h with h; injection h with h1 h2; subst h1 h2; exact ⟨rfl, rfl⟩
+  | error e => exact absurd h (by intro h; injection h)
+
+/-- A reference of body `b` names a leaf of one of its parameters or of one of its nodes' outputs. -/
+def RefIn (b : Body) (r : Ref) : Prop :=
+  (r.p = true → r.i < b.params.size ∧ r.j < (b.params[r.i]!).2.leaves) ∧
+  (r.p = false → r.i < b.nodes.size ∧ r.j < (b.nodes[r.i]!).out.leaves)
+
+/-- A strided part repeats a pattern of positive length (`parsePartsIn` refuses a pattern of length 0), and a grid's lanes
+all have its first lane's periods (`parsePartsIn` refuses lanes of other period counts as `grid-shape`). -/
+def PartInner : Part → Prop
+  | .strided _ _ _ inner _ _ _ => 0 < inner
+  | .grid _ lanes => ∀ l ∈ lanes, l.periods = lanes[0]!.periods
+  | _ => True
+
+/-- Every part of body `b`'s references is `PartInner`: each argument's, and the return's. -/
+def BodyInner (b : Body) : Prop :=
+  (∀ k < b.nodes.size, ∀ a < (b.nodes[k]!).args.size, ∀ q ∈ ((b.nodes[k]!).args[a]!).seq.parts, PartInner q) ∧
+    ∀ q ∈ b.ret.parts, PartInner q
+
+/-- One unfolding of `parsePartsIn`, as `parsePartsIn_nonneg_step` takes it, for `PartInner`: a strided part is
+parsed only with a pattern of positive length. -/
+theorem parsePartsIn_inner_step (leaves : Bool → Nat → Option Nat) (args : Nat → Nat → Option Seq)
+    (hargs : ∀ k x s, args k x = some s → ∀ q ∈ s.parts, PartInner q) (n : Nat)
+    (b : Nat.below (motive := fun _ => Lean.Json → Flock.V (Array Part)) (n + 1))
+    (hb : ∀ x ps, b.1 x = .ok ps → ∀ q ∈ ps, PartInner q) (j : Lean.Json) (ps : Array Part)
+    (h : Flock.Program.parsePartsIn._f leaves args (n + 1) b j = .ok ps) : ∀ q ∈ ps, PartInner q := by
+  delta Flock.Program.parsePartsIn._f at h
+  dsimp only at h
+  cases j with
+  | null => exact nomatch h
+  | bool _ => exact nomatch h
+  | num _ => exact nomatch h
+  | str _ => exact nomatch h
+  | arr _ => exact nomatch h
+  | obj kvs =>
+    dsimp only at h
+    split at h
+    · rename_i a _
+      rcases a with _ | _ | _ | _ | ⟨⟨l⟩⟩ | _
+      all_goals try (injection h; done)
+      rcases l with _ | ⟨k, _ | ⟨x, _ | ⟨y, l⟩⟩⟩
+      all_goals try (injection h; done)
+      conv at h => lhs; whnf
+      split at h
+      all_goals try (injection h; done)
+      split at h
+      all_goals try (injection h; done)
+      rename_i s hs
+      injection h with h
+      subst h
+      exact hargs _ _ s hs
+    · split at h
+      · rename_i c _
+        rcases c with _ | _ | _ | _ | cs | _
+        all_goals try (injection h; done)
+        dsimp only at h
+        rcases hm : cs.mapM (fun x => b.1 x) with e | r <;> simp only [hm, bind, Except.bind] at h
+        · exact absurd h (by intro h; injection h)
+        injection h with h; subst h
+        intro q hq
+        rw [← Array.foldl_toList] at hq
+        rcases Walk.mem_foldl_append r.toList #[] q hq with hq | ⟨y, hy, hq⟩
+        · simp at hq
+        · obtain ⟨x, -, hx⟩ := Walk.array_mapM_ok _ cs r hm y (by simpa using hy)
+          exact hb x y hx q hq
+      · split at h
+        · rename_i a _
+          rcases a with _ | _ | _ | _ | ⟨⟨l⟩⟩ | _
+          all_goals try (injection h; done)
+          rcases l with _ | ⟨s0, _ | ⟨i0, _ | ⟨b0, _ | ⟨c0, _ | ⟨y, l⟩⟩⟩⟩⟩
+          all_goals try (injection h; done)
+          conv at h => lhs; whnf
+          split at h
+          all_goals try (injection h; done)
+          split at h
+          · injection h with h; subst h
+            intro q hq
+            simp only [Array.mem_singleton] at hq
+            subst hq
+            trivial
+          · split at h
+            all_goals try (injection h; done)
+            injection h with h; subst h
+            intro q hq
+            simp only [Array.mem_singleton] at hq
+            subst hq
+            trivial
+        · split at h
+          · rename_i a _
+            rcases a with _ | _ | _ | _ | ⟨⟨l⟩⟩ | _
+            all_goals try (injection h; done)
+            rcases l with _ | ⟨s0, _ | ⟨i0, _ | ⟨b0, _ | ⟨n0, _ | ⟨o0, _ | ⟨j0, _ | ⟨c0, _ | ⟨y, l⟩⟩⟩⟩⟩⟩⟩⟩
+            all_goals try (injection h; done)
+            conv at h => lhs; whnf
+            split at h
+            all_goals try (injection h; done)
+            rename_i _ cc inn ost ist c _
+            split at h
+            all_goals try (injection h; done)
+            rename_i hinn
+            have hin : 0 < inn := by simp at hinn; omega
+            try dsimp only at h
+            split at h
+            · injection h with h; subst h
+              intro q hq
+              simp only [Array.mem_singleton] at hq
+              subst hq
+              exact hin
+            try dsimp only at h
+            split at h
+            all_goals try (injection h; done)
+            injection h with h; subst h
+            intro q hq
+            simp only [Array.mem_singleton] at hq
+            subst hq
+            exact hin
+          · split at h
+            · rename_i e _
+              rcases e with _ | _ | _ | _ | items | _
+              all_goals try (injection h; done)
+              dsimp only at h
+              obtain ⟨rs, -, h⟩ := Walk.except_bind_ok h
+              injection h with h; subst h
+              intro q hq
+              simp only [Array.mem_singleton] at hq
+              subst hq
+              trivial
+            · split at h
+              · obtain ⟨run, lanes, rfl, hp, -⟩ := Walk.parseGrid_ok h
+                intro q hq
+                simp only [Array.mem_singleton] at hq
+                subst hq
+                exact hp
+              · exact absurd h (by intro h; injection h)
+
+/-- **Every parsed strided part repeats a pattern of positive length**, given every part of an argument an alias may
+name does. -/
+theorem parsePartsIn_inner (leaves : Bool → Nat → Option Nat) (args : Nat → Nat → Option Seq)
+    (hargs : ∀ k x s, args k x = some s → ∀ q ∈ s.parts, PartInner q) :
+    ∀ fuel j ps, Flock.Program.parsePartsIn fuel j leaves args = .ok ps → ∀ q ∈ ps, PartInner q := by
+  intro fuel
+  induction fuel with
+  | zero =>
+    intro j ps h
+    delta Flock.Program.parsePartsIn at h
+    exact nomatch h
+  | succ n ih =>
+    intro j ps h
+    delta Flock.Program.parsePartsIn at h
+    exact parsePartsIn_inner_step leaves args hargs n _
+      (fun x ps hx => ih x ps (by delta Flock.Program.parsePartsIn; exact hx)) j ps h
+
+/-- The width check passes the default body, which has no node and returns no reference. -/
+theorem bodyBad_default (defs : Array Defn) (key : String) (w : ℕ) :
+    (Widths.bodyBad defs key (default : Body)).run w = .ok none w := by
+  unfold Widths.bodyBad
+  have h0 : (default : Body).nodes.size = 0 := rfl
+  have hp : (default : Body).ret.parts = #[] := rfl
+  simp only [h0, hp, Widths.seqBad, Bool.false_eq_true, ↓reduceIte]
+  rw [Std.Legacy.Range.forIn_eq_forIn_range']
+  simp only [Std.Legacy.Range.size, Nat.sub_self, Nat.zero_add, Nat.zero_div, List.range'_zero, List.forIn_nil]
+  rfl
+
+/-- What the decoder establishes of the body of Definition `i`: each node calls an earlier Definition as `NodeOk`
+says, its arguments and its return are sequences of parts, none naming a negative position, and every reference names a
+leaf; every strided part repeats a pattern of positive length (`BodyInner`), and the width check (`Widths.bodyBad`)
+passed the body, on some Definitions for its callees. -/
+def BodyFacts (defs : Array Defn) (i : ℕ) (b : Body) : Prop :=
+  (∀ k < b.nodes.size, (b.nodes[k]!).fn < i ∧ NodeOk defs[(b.nodes[k]!).fn]! (b.nodes[k]!) ∧
+    ∀ a < (b.nodes[k]!).args.size,
+      (∃ ps : Array Part, ((b.nodes[k]!).args[a]!).seq = Seq.ofParts ps ∧ ∀ q ∈ ps, PartNonneg q) ∧
+      ∀ t < ((b.nodes[k]!).args[a]!).seq.count, RefIn b (((b.nodes[k]!).args[a]!).seq.get t)) ∧
+  (∀ t < b.ret.count, RefIn b (b.ret.get t)) ∧
+  ∃ ps : Array Part, b.ret = Seq.ofParts ps ∧ (∀ q ∈ ps, PartNonneg q) ∧ BodyInner b ∧
+    ∃ (defs' : Array Defn) (key : String) (w w' : ℕ), (Widths.bodyBad defs' key b).run w = .ok none w'
+
+def DefOk (defs : Array Defn) (i : ℕ) (c : Defn) : Prop := CalleeOk c ∧ BodyFacts defs i c.body
+
+/-- `b` extends `a`. -/
+def Pre (a b : Array Defn) : Prop := a.size ≤ b.size ∧ ∀ i < a.size, b[i]! = a[i]!
+
+/-- `c`'s gates as the decoder lays them over `defs`: a primitive is one gate, and a composite's nodes take its gates in
+order from 0, each its members' callee's. -/
+def LaidDef (defs : Array Defn) (c : Defn) : Prop :=
+  (c.prim = true → c.gates = 1) ∧
+  (c.prim = false → c.body.offsets.size = c.body.nodes.size + 1 ∧ c.body.offsets[0]! = 0 ∧
+    c.body.offsets[c.body.nodes.size]! = c.gates ∧ ∀ k < c.body.nodes.size, (c.body.nodes[k]!).fn < defs.size ∧
+      c.body.offsets[k + 1]! = c.body.offsets[k]! + (c.body.nodes[k]!).members * (defs[(c.body.nodes[k]!).fn]!).gates)
+
+theorem laidDef_mono {a b : Array Defn} {c : Defn} (hp : Pre a b) (h : LaidDef a c) : LaidDef b c := by
+  refine ⟨h.1, fun hc => ?_⟩
+  obtain ⟨h1, h2, h3, h4⟩ := h.2 hc
+  refine ⟨h1, h2, h3, fun k hk => ?_⟩
+  obtain ⟨h5, h6⟩ := h4 k hk
+  exact ⟨Nat.lt_of_lt_of_le h5 hp.1, by rw [hp.2 _ h5]; exact h6⟩
+
+/-- Every node reference of node `k`'s arguments names a node before `k` (`Part.forwardOf`, `forwardRefusal`). -/
+def NodesFwd (nodes : Array Node) : Prop :=
+  ∀ k < nodes.size, ∀ a < (nodes[k]!).args.size, ∀ t < ((nodes[k]!).args[a]!).seq.count,
+    (((nodes[k]!).args[a]!).seq.get t).p = false → (((nodes[k]!).args[a]!).seq.get t).i < k
+
+/-- A body whose nodes read only earlier nodes (`NodesFwd`). -/
+def BodyFwd (b : Body) : Prop := NodesFwd b.nodes
+
+theorem bodyFwd_default : BodyFwd default := fun _ hk => absurd hk (Nat.not_lt_zero _)
+
+/-- The decoder's invariant: every Definition decoded so far is `DefOk` and laid out, the index names decoded ones,
+and every body reads only earlier nodes (`BodyFwd`). -/
+def Inv (s : DecState) : Prop :=
+  (∀ i < (DecState.defs s).size, DefOk (DecState.defs s) i (DecState.defs s)[i]!) ∧
+  (∀ (k : String) (v : ℕ), (DecState.index s)[k]? = some v → v < (DecState.defs s).size) ∧
+  (∀ i < (DecState.defs s).size, LaidDef (DecState.defs s) (DecState.defs s)[i]!) ∧
+  ∀ i < (DecState.defs s).size, BodyFwd ((DecState.defs s)[i]!).body
+
+/-- A step of the decoder: it keeps the invariant and only appends Definitions. -/
+def Grows (s s' : DecState) : Prop := Inv s → Inv s' ∧ Pre (DecState.defs s) (DecState.defs s')
+
+theorem pre_refl (a : Array Defn) : Pre a a := ⟨le_refl _, fun _ _ => rfl⟩
+
+theorem pre_trans {a b c : Array Defn} (h1 : Pre a b) (h2 : Pre b c) : Pre a c :=
+  ⟨le_trans h1.1 h2.1, fun i hi => by rw [h2.2 i (by have := h1.1; omega), h1.2 i hi]⟩
+
+theorem grows_refl (s : DecState) : Grows s s := fun h => ⟨h, pre_refl _⟩
+
+theorem grows_trans {s1 s2 s3 : DecState} (h1 : Grows s1 s2) (h2 : Grows s2 s3) : Grows s1 s3 := fun h =>
+  let ⟨i2, p2⟩ := h1 h
+  let ⟨i3, p3⟩ := h2 i2
+  ⟨i3, pre_trans p2 p3⟩
+
+theorem bodyFacts_mono {a b : Array Defn} {i : ℕ} {body : Body} (hp : Pre a b) (hi : i ≤ a.size)
+    (h : BodyFacts a i body) : BodyFacts b i body := by
+  refine ⟨fun k hk => ?_, h.2⟩
+  obtain ⟨h1, h2, h3⟩ := h.1 k hk
+  exact ⟨h1, by rw [hp.2 _ (by omega)]; exact h2, h3⟩
+
+theorem defOk_mono {a b : Array Defn} {i : ℕ} {c : Defn} (hp : Pre a b) (hi : i ≤ a.size)
+    (h : DefOk a i c) : DefOk b i c := ⟨h.1, bodyFacts_mono hp hi h.2⟩
+
+/-- `getDef`'s last step: the Definition appended and indexed. -/
+theorem push_spec (s s' : DecState) (fid : String) (defn : Defn) (hs : Inv s)
+    (hd : DefOk (DecState.defs s) (DecState.defs s).size defn) (hl : LaidDef (DecState.defs s) defn)
+    (hf : BodyFwd defn.body) (e1 : DecState.defs s' = (DecState.defs s).push defn)
+    (e2 : DecState.index s' = (DecState.index s).insert fid (DecState.defs s).size) :
+    Inv s' ∧ Pre (DecState.defs s) (DecState.defs s') := by
+  rw [e1]
+  have hp : Pre (DecState.defs s) ((DecState.defs s).push defn) :=
+    ⟨by simp, fun i hi => getElem!_push_lt _ _ hi⟩
+  refine ⟨⟨fun i hi => ?_, fun k v hk => ?_, fun i hi => ?_, fun i hi => ?_⟩, hp⟩
+  · rw [e1] at hi ⊢
+    simp only [Array.size_push] at hi
+    rcases Nat.lt_succ_iff_lt_or_eq.1 hi with hi | rfl
+    · rw [getElem!_push_lt _ _ hi]
+      exact defOk_mono hp (le_of_lt hi) (hs.1 i hi)
+    · rw [getElem!_push_eq]
+      exact defOk_mono hp (le_refl _) hd
+  · rw [e2, Std.HashMap.getElem?_insert] at hk
+    rw [e1]
+    simp only [Array.size_push]
+    split at hk
+    · injection hk with hk; omega
+    · have := hs.2.1 k v hk; omega
+  · rw [e1] at hi ⊢
+    simp only [Array.size_push] at hi
+    rcases Nat.lt_succ_iff_lt_or_eq.1 hi with hi | rfl
+    · rw [getElem!_push_lt _ _ hi]
+      exact laidDef_mono hp (hs.2.2.1 i hi)
+    · rw [getElem!_push_eq]
+      exact laidDef_mono hp hl
+  · rw [e1] at hi ⊢
+    simp only [Array.size_push] at hi
+    rcases Nat.lt_succ_iff_lt_or_eq.1 hi with hi | rfl
+    · rw [getElem!_push_lt _ _ hi]
+      exact hs.2.2.2 i hi
+    · rw [getElem!_push_eq]
+      exact hf
+
+def GetSpec (fuel : ℕ) : Prop := ∀ (desc : Desc) (fid : String) (s : DecState) (i : ℕ) (s' : DecState),
+  getDef fuel desc fid false s = .ok (i, s') → Inv s → Inv s' ∧ Pre (DecState.defs s) (DecState.defs s') ∧
+    i < (DecState.defs s').size
+
+def CompSpec (fuel : ℕ) : Prop := ∀ (desc : Desc) (fid : String) (d : Lean.Json) (form id : String) (s : DecState)
+  (defn : Defn) (s' : DecState), composite fuel desc fid d form id false s = .ok (defn, s') → Inv s →
+    Inv s' ∧ Pre (DecState.defs s) (DecState.defs s') ∧ DefOk (DecState.defs s') (DecState.defs s').size defn ∧
+      LaidDef (DecState.defs s') defn ∧ BodyFwd defn.body
+
+def StatSpec (fuel : ℕ) : Prop := ∀ (desc : Desc) (v : Lean.Json) (s : DecState) (u : Unit) (s' : DecState),
+  staticFns fuel desc v false s = .ok (u, s') → Grows s s'
+
+theorem default_bodyFacts (defs : Array Defn) (i : ℕ) : BodyFacts defs i default :=
+  ⟨fun _ hk => absurd hk (Nat.not_lt_zero _), fun _ ht => absurd ht (Nat.not_lt_zero _), #[], rfl,
+    fun _ h => absurd h (by simp),
+    ⟨fun _ hk => absurd hk (Nat.not_lt_zero _), fun q h => absurd (show q ∈ (#[] : Array Part) from h) (by simp)⟩,
+    #[], "", 0, 0, bodyBad_default _ _ _⟩
+
+theorem getDef_succ (n : ℕ) (hc : CompSpec n) : GetSpec (n + 1) := by
+  intro desc fid s i s' h hs
+  unfold getDef at h
+  extract_lets push inp main at h
+  have hpush : ∀ defn s1 i s', push defn s1 = .ok (i, s') → Inv s1 →
+      DefOk (DecState.defs s1) (DecState.defs s1).size defn → LaidDef (DecState.defs s1) defn → BodyFwd defn.body →
+      Inv s' ∧ Pre (DecState.defs s1) (DecState.defs s') ∧ i < (DecState.defs s').size := by
+    intro defn s1 i s' hp hs hd hl hf
+    simp only [push] at hp
+    obtain ⟨st, s2, hg, hp⟩ := st_bind hp
+    obtain ⟨rfl, rfl⟩ := st_get hg
+    obtain ⟨u, s3, hset, hp⟩ := st_bind hp
+    obtain ⟨rfl, rfl⟩ := st_pure hp
+    injection hset with hset; injection hset with h1 h2; subst h2
+    refine ⟨?_, ?_, by show _ < ((DecState.defs s1).push defn).size; simp⟩
+    · exact (push_spec s1 _ fid defn hs hd hl hf rfl rfl).1
+    · exact (push_spec s1 _ fid defn hs hd hl hf rfl rfl).2
+  obtain ⟨st, s1, hg, h1⟩ := st_bind h
+  obtain ⟨rfl, rfl⟩ := st_get hg
+  clear h hg
+  rcases hidx : (DecState.index s)[fid]? with _ | i0
+  swap
+  · rw [hidx] at h1
+    obtain ⟨e1, e2⟩ := st_pure h1
+    subst e1 e2
+    exact ⟨hs, pre_refl _, hs.2.1 fid _ hidx⟩
+  rw [hidx] at h1
+  dsimp only at h1
+  obtain ⟨st, s1, hg, h2⟩ := st_bind h1
+  obtain ⟨rfl, rfl⟩ := st_get hg
+  clear h1 hg
+  split at h2
+  · exact absurd h2 (by intro h; injection h)
+  simp only [main] at h2
+  rcases hdd : (Desc.ddefs desc)[fid]? with _ | d
+  · rw [hdd] at h2; exact absurd h2 (by intro h; injection h)
+  rw [hdd] at h2
+  dsimp only at h2
+  split at h2
+  · split at h2
+    · exact absurd h2 (by intro h; injection h)
+    obtain ⟨params, s2, hp, h3⟩ := st_bind h2
+    obtain ⟨-, rfl⟩ := st_liftV hp
+    obtain ⟨ret, s3, hr, h4⟩ := st_bind h3
+    obtain ⟨-, rfl⟩ := st_liftV hr
+    clear h2 h3 hp hr
+    rcases ret with w | _ | _ | _
+    rotate_left
+    all_goals try (dsimp only at h4; exact absurd h4 (by intro h; injection h))
+    dsimp only at h4
+    have hd : ∀ (key id : String) (binding : Option String) (pl : ℕ),
+        DefOk (DecState.defs s) (DecState.defs s).size
+          { key, id, prim := true, params, ret := .value w, binding, gates := 1, paramLeaves := pl, outLeaves := 1 } :=
+      fun _ _ _ _ => ⟨⟨fun _ => ⟨rfl, rfl, rfl, w, rfl⟩, fun h => absurd h (by simp)⟩, default_bodyFacts _ _⟩
+    have hl : ∀ (key id : String) (binding : Option String) (pl : ℕ),
+        LaidDef (DecState.defs s)
+          { key, id, prim := true, params, ret := .value w, binding, gates := 1, paramLeaves := pl, outLeaves := 1 } :=
+      fun _ _ _ _ => ⟨fun _ => rfl, fun h => absurd h (by simp)⟩
+    rcases hinp : inp with _ | ⟨fst, iw⟩
+    all_goals rw [hinp] at h4; dsimp only at h4
+    · obtain ⟨defn, s4, hdf, h5⟩ := st_bind h4
+      obtain ⟨rfl, rfl⟩ := st_pure hdf
+      exact hpush _ _ _ _ h5 hs (hd _ _ _ _) (hl _ _ _ _) bodyFwd_default
+    · split at h4
+      · exact absurd h4 (by intro h; injection h)
+      obtain ⟨defn, s4, hdf, h5⟩ := st_bind h4
+      obtain ⟨rfl, rfl⟩ := st_pure hdf
+      exact hpush _ _ _ _ h5 hs (hd _ _ _ _) (hl _ _ _ _) bodyFwd_default
+  · obtain ⟨defn, s2, hdf, h3⟩ := st_bind h2
+    obtain ⟨i2, p2, d2, l2, f2⟩ := hc _ _ _ _ _ _ _ _ hdf hs
+    obtain ⟨i3, p3, h4⟩ := hpush _ _ _ _ h3 i2 d2 l2 f2
+    exact ⟨i3, pre_trans p2 p3, h4⟩
+
+theorem forIn_grows {α β : Type} (l : List α) (f : α → β → DM (ForInStep β))
+    (hf : ∀ x b s t s', f x b s = .ok (t, s') → Grows s s') :
+    ∀ (b : β) (s : DecState) (r : β) (s' : DecState), forIn l b f s = .ok (r, s') → Grows s s' := by
+  intro b s r s' h
+  have := forIn_stateT_inv f (fun _ s1 => Grows s s1) l (fun _ _ s1 => Grows s s1) b r s s' (grows_refl s)
+    (fun i hi b s1 t s2 hg hf' => by
+      have := grows_trans hg (hf _ _ _ _ _ hf')
+      rcases t <;> exact this) h
+  rcases this with h | h <;> exact h
+
+theorem st_discard {α : Type} {x : DM α} {s : DecState} {u : PUnit} {s' : DecState}
+    (h : (discard x : DM PUnit) s = .ok (u, s')) : ∃ a, x s = .ok (a, s') := by
+  rcases hx : x s with e | ⟨a, s1⟩
+  · have : (discard x : DM PUnit) s = .error e := by
+      simp only [discard, Functor.mapConst, Function.comp, StateT.map, hx]; rfl
+    rw [this] at h; exact absurd h (by intro h; injection h)
+  · have : (discard x : DM PUnit) s = .ok (PUnit.unit, s1) := by
+      simp only [discard, Functor.mapConst, Function.comp, StateT.map, hx]; rfl
+    rw [this] at h; injection h with h; injection h with h1 h2; subst h2; exact ⟨a, rfl⟩
+
+theorem statFns_succ (n : ℕ) (hg : GetSpec n) (hst : StatSpec n) : StatSpec (n + 1) := by
+  intro desc v s u s' h
+  unfold staticFns at h
+  rcases v with _ | _ | _ | _ | a | kvs
+  all_goals dsimp only at h
+  case null | bool | num | str => obtain ⟨-, rfl⟩ := st_pure h; exact grows_refl _
+  case arr =>
+    obtain ⟨u1, s1, hl, h2⟩ := st_bind h
+    obtain ⟨-, rfl⟩ := st_pure h2
+    rw [← Array.forIn_toList] at hl
+    exact forIn_grows _ _ (fun x b s t s' hf => by
+      obtain ⟨u2, s2, h1, h2⟩ := st_bind hf
+      obtain ⟨-, rfl⟩ := st_pure h2
+      exact hst _ _ _ _ _ h1) _ _ _ _ hl
+  case obj =>
+    rcases hfn : (Lean.Json.obj kvs).getObjVal? "fn" with e | f
+    · rw [hfn] at h
+      dsimp only at h
+      rcases hf64 : (Lean.Json.obj kvs).getObjVal? "f64" with e | f
+      · rw [hf64] at h
+        dsimp only at h
+        rcases hdict : (Lean.Json.obj kvs).getObjVal? "dict" with e | dd
+        · rw [hdict] at h
+          dsimp only at h
+          obtain ⟨-, rfl⟩ := st_pure h; exact grows_refl _
+        · rw [hdict] at h
+          dsimp only at h
+          rcases dd with _ | _ | _ | _ | _ | kvs2
+          all_goals dsimp only at h
+          all_goals try (exact absurd h (by intro h; injection h))
+          obtain ⟨u1, s1, hl, h2⟩ := st_bind h
+          obtain ⟨-, rfl⟩ := st_pure h2
+          rw [← Array.forIn_toList] at hl
+          exact forIn_grows _ _ (fun x b s t s' hf => by
+            obtain ⟨u2, s2, h1, h2⟩ := st_bind hf
+            obtain ⟨-, rfl⟩ := st_pure h2
+            exact hst _ _ _ _ _ h1) _ _ _ _ hl
+      · rw [hf64] at h
+        dsimp only at h
+        rcases f with _ | _ | _ | _ | _ | _
+        all_goals dsimp only at h
+        rotate_left 3
+        · obtain ⟨-, rfl⟩ := st_pure h; exact grows_refl _
+        all_goals exact absurd h (by intro h; injection h)
+    · rw [hfn] at h
+      dsimp only at h
+      rcases f with _ | _ | _ | f | _ | _
+      all_goals dsimp only at h
+      all_goals try (exact absurd h (by intro h; injection h))
+      obtain ⟨a, ha⟩ := st_discard h
+      intro hs
+      obtain ⟨h1, h2, -⟩ := hg _ _ _ _ _ ha hs
+      exact ⟨h1, h2⟩
+
+end InferenceOnlyVerifier.Properties.SecurityProofs.BodiesOk

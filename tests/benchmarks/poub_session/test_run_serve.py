@@ -245,7 +245,7 @@ class Node:
         base = {"PATH": f"{self.bin}:{MACHINE_PATH}", "HOME": str(self.tmp / "home"), "TMPDIR": str(self.tmp / "scratch"),
                 "RESEARCH_RUN_DIR": str(self.tmp / "run"), "NODE_WORKSPACE": str(self.ws), "RESEARCH_MACHINE": "node",
                 "STUB_DIR": str(self.stub), "REAL_PY": sys.executable, "STUB_TORCH_CUDA": "12.9",
-                "GPU_LEASE": str(self.lease), "LEAN_EXE": str(self.lean), "TUNNEL_WAIT_S": "0",
+                "GPU_LEASE": str(self.lease), "STUB_LEAN": str(self.lean), "TUNNEL_WAIT_S": "0",
                 "NODE_KIND": "rtx-pro-6000-server-x8"}
         env = {k: v for k, v in (base | env).items() if v is not None}
         return subprocess.run([BASH, str(RUN)], cwd=ROOT, env=env, capture_output=True, text=True)
@@ -255,9 +255,10 @@ class Node:
         row = {"ROW": ROW, "ROW_FILE": str(self.row)} if serve_as == "row" else {}
         return self.run(**({"ROLE": "both", "SERVE": serve_as, "PORT": str(free_port())} | row | env))
 
-    def calls(self) -> list[str]:
+    def calls(self, lean: bool = False) -> list[str]:
+        """What the stubs were called for, in order; the Lean verifier's build only with ``lean``."""
         f = self.stub / "calls"
-        return f.read_text().splitlines() if f.exists() else []
+        return [c for c in (f.read_text().splitlines() if f.exists() else []) if lean or c != "lean-build"]
 
     def provers(self) -> list[dict]:
         f = self.stub / "prover.jsonl"
@@ -441,81 +442,14 @@ def test_refresh_reaches_the_verifier_as_the_line_states_it_and_not_at_all_when_
     assert argv[argv.index("--refresh") + 1] == "0,1"
 
 
-def test_one_line_of_a_row_builds_before_the_lease_and_commits_under_it(node):
-    port = str(free_port())
-    p = node.both("row", PORT=port, ROW_ARGS="--norm-tap-so /taps/norm.so")
-    assert p.returncode == 0, said(p)
-    assert "remote session verdict: session accepted (1 on the verifier's record) (exit 0)" in p.stdout
-    build, commit = node.provers()
-    calls = node.calls()
-    lease, = [c for c in calls if c.startswith("lease")]
-    nvcc, = [c for c in calls if c.startswith("nvcc")]
-    # kv.cu's build, the Build with no GPU visible and the verifier all before the lease; the Commit alone under it
-    assert calls == [nvcc, "row build", "verifier", lease, "row commit"]
-    kept = sorted(str(f.relative_to(node.out / "row")) for f in (node.out / "row").rglob("*") if f.is_file())
-    assert kept == [f"commit/{n}" for n in ("remote_session.json", "verdict.json")], kept
-    assert not (node.out / "row" / "commit" / "runs.jsonl").exists()
-    assert build["env"]["CUDA_VISIBLE_DEVICES"] == "" and commit["env"]["CUDA_VISIBLE_DEVICES"] is None
-    sweep = build["argv"][build["argv"].index("--sweep-dir") + 1]
-    assert sweep.startswith(str(node.tmp / "scratch")) and node.scratch() == []      # scratch, gone with the run
-    assert build["sweep_made"]                                # and there before the row's first stage runs in it
-    head = ["row", "run", ROW, "CHECKPOINT", "org/model", "0123abcd", "--py", str(node.ws / "venv312/bin/python"),
-            "--sweep-dir", sweep, "--cuda-bin", str(node.tmp / "cuda/cuda-12.9/bin"), "--norm-tap-so", "/taps/norm.so",
-            "--stages"]
-    assert build["argv"] == [*head, "build"] and commit["argv"] == [*head, "commit"]
-    assert lease.endswith(" ".join([str(node.ws / "venv312/bin/verity-vllm"), *head, "commit"]))
-    assert build["env"]["REMOTE_VERIFIER"] is None           # the session is the Commit's: its Build sees no verifier
-    # the registration is encoded on the card: kv.cu built for it at the session's codec, handed to the Commit
-    assert nvcc.startswith("nvcc -O3 -arch=sm_90 ") and "-DKV_FIELD=1024 -DKV_MASK=1 -DKV_FOLD6=1" in nvcc
-    kv = "verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.cu"
-    assert nvcc.endswith(kv) and (ROOT / kv).is_file()
-    assert commit["env"]["EXTRA_COMMIT_ARGS"].split() == [
-        "--remote-plan", "serve", "--remote-kv-pages", "24", "--remote-weight-blocks", "4096", "--remote-kv-lib",
-        f"{Path(sweep).parent}/kv.so"]
-    assert commit["env"]["REMOTE_VERIFIER"] == f"127.0.0.1:{port}" and commit["env"]["CONFIG_RUN"] == "1"
-    assert commit["env"]["GPU_LEASE"] is None                # the Commit asks for no lease of its own
-    assert commit["env"]["NATIVE_COLLECT_BUILD"].startswith(str(node.tmp / "scratch"))
-    assert build["cpus"] == commit["cpus"] == cores()[1] and commit["env"]["OMP_NUM_THREADS"] == str(len(commit["cpus"]))
-    # the windows fit the row's 32 steps, and the row's records are kept
-    assert "--windows 3 --window-ms 2000 " in " ".join(node.verifier()["argv"])
-    assert json.loads((node.out / "row/commit/remote_session.json").read_text())["accepted"] is True
-
-
-#: files a row's Commit directory holds that are private (the vLLM integration's list, the unsalted token digest of
-#: runs.jsonl, the memory map's payload digests, the Build's inputs), each holding the served tokens
-ROW_PRIVATE = ("tokens.json", "commit/tokens_p0.json", "match_stoch.json", "commit/sampled_replay_p0.json",
-               "requests.jsonl", "step_trace.jsonl", "advice_trace.jsonl", "load_0.jsonl", "topology.json",
-               "timeline.jsonl", "timeline_report.json", "replay_bundle_p0/values.json", "replay_slim_p0/keep.json",
-               "commit/runs.jsonl", "commit/memory_map.jsonl", "build_request/inputs.json", "commit/summary.json")
-SERVED_TOKENS = "[90211, 4417, 118003, 2290]"
-
-
-def test_a_row_keeps_its_public_records_and_none_of_its_private_files(node):
-    sweep = node.tmp / "sweep"
-    for rel in ROW_PRIVATE:
-        (sweep / ROW / rel).parent.mkdir(parents=True, exist_ok=True)
-        (sweep / ROW / rel).write_text(f'{{"tokens": {SERVED_TOKENS}}}\n')
-    for rel in ("stages.txt", "build_summary.json", "config_record.json", "commit/verdict.json"):
-        (sweep / ROW / rel).write_text('{"verdict": "PASS"}\n')
-    p = node.both("row", SWEEP_DIR=str(sweep))
-    assert p.returncode == 0, said(p)
-    kept = sorted(f.relative_to(node.out / "row").as_posix() for f in (node.out / "row").rglob("*") if f.is_file())
-    assert kept == sorted(["stages.txt", "build_summary.json", "config_record.json", "commit/verdict.json",
-                           "commit/remote_session.json"])
-    assert "keep.py: kept 5 of the row's public records" in p.stdout
-    held = [f for f in (node.tmp / "run").rglob("*") if f.is_file() and SERVED_TOKENS in f.read_text(errors="replace")]
-    assert held == []
-
-
 @pytest.mark.parametrize("change, why", [
-    ({"SWEEP_DIR": "{run}/out/sweep"}, "refused: SWEEP_DIR={run}/out/sweep is inside the run's directory"),
     ({"VERIFIER_ARGS": "--challenger serve --challenger-key {run}/keys"},
      "refused: --challenger-key {run}/keys is inside the run's directory"),
     ({"VERIFIER_ARGS": "--challenger-key={run}/keys"}, "refused: --challenger-key {run}/keys is inside the run's directory"),
 ])
 def test_a_private_store_inside_the_runs_directory_is_refused(node, change, why):
     run = str(node.tmp / "run")
-    refused(node, node.both("row", **{k: v.format(run=run) for k, v in change.items()}), why.format(run=run))
+    refused(node, node.both("tiny", **{k: v.format(run=run) for k, v in change.items()}), why.format(run=run))
     assert not (node.tmp / "run" / "out" / "sweep").exists()
 
 
@@ -523,9 +457,6 @@ def test_a_private_store_inside_the_runs_directory_is_refused(node, change, why)
 
 @pytest.mark.parametrize("serve_as, prover, code, line", [
     ("tiny", "rejected", 6, "session not accepted: the verifier rejected it"),
-    ("row", "rejected", 6, "the prover's record: RuntimeError: the run ended after 32 steps"),
-    ("row", "accepted-then-red", 12, "the prover ended 12 with its session accepted"),
-    ("row", "commitfail", 12, "the prover ended 12 with no session on record"),
     ("tiny", "crash", 1, "the prover ended 1 with no session on record"),
 ])
 def test_a_rejected_session_a_failed_commit_and_a_crash_end_apart(node, serve_as, prover, code, line):
@@ -570,7 +501,7 @@ def test_a_served_line_declares_its_cores_to_a_lease_program_that_takes_them(nod
     with socket.create_server(("127.0.0.1", 0)) as server:
         port = str(server.getsockname()[1])
         (node.stub / "busy").write_text(port + "\n")
-        p = node.run(ROLE="prover", SERVE="row", ROW=ROW, ROW_FILE=str(node.row), PORT=port)
+        p = node.run(ROLE="prover", SERVE="tiny", PORT=port)
         assert p.returncode == 0, said(p)
     first, second = (c for c in node.calls() if c.startswith("lease"))
     assert first.startswith(f"lease {node.lease} 1 --on 0 --max-min 30 --cores {both} -- taskset -c {prover} ")
@@ -596,59 +527,21 @@ def refused(node: Node, p: subprocess.CompletedProcess, why: str) -> None:
     assert node.scratch() == []
 
 
-def test_windows_that_do_not_fit_the_rows_run_are_refused_before_the_lease(node):
-    p = node.both("row", WINDOWS="3", WINDOW_MS="11000", PASS_MS="580")
-    refused(node, p, "run.sh: refused: 3 windows of 11000 ms take up to 58 engine steps at a pass every 580 ms (PASS_MS), "
-                     "and the run is 32 steps")
-    assert "WINDOW_MS under 5800 fits" in p.stdout
-    assert node.both("row", WINDOWS="3", WINDOW_MS="3000", PASS_MS="580").returncode == 0     # as accepted on an H200
-    assert "--windows 3 --window-ms 3000 " in " ".join(node.verifier()["argv"])
-
-
-def test_under_role_prover_the_windows_are_checked_only_when_the_line_states_both(node, tmp_path):
-    with socket.create_server(("127.0.0.1", 0)) as server:
-        port = str(server.getsockname()[1])
-        (node.stub / "busy").write_text(port + "\n")
-        line = {"ROLE": "prover", "SERVE": "row", "ROW": ROW, "ROW_FILE": str(node.row), "PORT": port}
-        refused(node, node.run(**line, WINDOWS="3", WINDOW_MS="11000", PASS_MS="580"), "and the run is 32 steps")
-        p = node.run(**line, WINDOW_MS="11000", PASS_MS="580")        # the verifier's line holds the windows
-        assert p.returncode == 0, said(p)
-        assert "remote session verdict: session accepted (exit 0)" in p.stdout
-        assert "verifier" not in node.calls()
-
-
 @pytest.mark.parametrize("change, why", [
-    ({"ROW_FILE": None, "STUB_ROW_FILE": "/no/such/row.json"}, "refused: the row file /no/such/row.json can't be read"),
-    ({"ROW_FILE": None}, f"refused: row {ROW}: its file can't be found: UsageError: the row has a file in two directories"),
-    ({"ROW": None}, "refused: SERVE=row takes ROW, a row id"),
-    ({"PLAN": "honest"}, "refused: PLAN=honest is not a plan of a served session: SERVE=row takes serve"),
-    ({"PLAN": "servedrop:1"}, "refused: PLAN=servedrop:1 is not a plan of a served session: SERVE=row takes serve"),
     ({"SESSIONS": "2"}, "refused: SESSIONS=2: a served store serves one session"),
-    ({"STAGES": "build,match"}, "refused: STAGES=build,match holds no commit"),
     ({"SERVE": "rows"}, "refused: SERVE is tiny, row or node, not rows"),
-    ({"KV_LIB": "/no/such/kv.so"}, "refused: KV_LIB=/no/such/kv.so is not build, cpu or a built kv.cu"),
-    ({"LEAN_EXE": "/no/such/verifier"}, "refused: LEAN_EXE=/no/such/verifier is not an executable"),
+    ({"LEAN_EXE": "/bin/true"}, "refused: LEAN_EXE names a Lean verifier of the caller's"),
+    ({"VERIFIER_ARGS": "--lean-exe /bin/true"}, "refused: VERIFIER_ARGS names --lean-exe"),
+    ({"VERIFIER_ARGS": "--lean-exe=/bin/true"}, "refused: VERIFIER_ARGS names --lean-exe"),
+    ({"VERIFIER_ARGS": "'unclosed"}, "refused: VERIFIER_ARGS is not shell words"),
     ({"VLLM_PY": "/no/such/python"}, "refused: VLLM_PY=/no/such/python is not an executable"),
     ({"GPU_LEASE": "/no/such/gpu-lease"}, "refused: GPU_LEASE=/no/such/gpu-lease is not a program"),
-    ({"CODEC": "p512/k2"}, "refused: SERVE=row's Commit registers the deployed p1024/k3/masked, not CODEC=p512/k2"),
-    ({"CODEC": "p768/k2"}, "refused: CODEC=p768/k2: a card's session is built at p1024/kK/masked or p512/kK"),
+    ({"SERVE": None, "PY": "{py}", "CODEC": "p768/k2"}, "refused: CODEC=p768/k2: a card's session is built at p1024/kK/masked or p512/kK"),
+    ({"SERVE": "row"}, "refused: SERVE=row is deleted with the row's Commit (verity-vllm row, epoch resolve)"),
 ])
 def test_a_line_that_cannot_run_is_refused_with_the_reason(node, change, why):
-    refused(node, node.both("row", **change), why)
-
-
-def test_a_row_whose_target_does_not_declare_synchronous_scheduling_is_refused(node):
-    row_file(node.row, target={"ir": "boolean"})
-    refused(node, node.both("row"), "target declares async_scheduling None")
-
-
-def test_kv_cu_is_built_for_the_card_the_rows_target_declares_or_the_one_stated(node):
-    row_file(node.row, target={"async_scheduling": False})
-    refused(node, node.both("row"), "the row's target declares no compute_capability to build kv.cu for: state KV_ARCH, or "
-                                    "KV_LIB=cpu")
-    refused(node, node.both("row", KV_ARCH="h200"), "refused: KV_ARCH=h200 is no card's architecture (sm_90)")
-    assert node.both("row", KV_ARCH="sm_120a").returncode == 0
-    assert node.calls()[0].startswith("nvcc -O3 -arch=sm_120a ")
+    py = str(node.ws / "venv312/bin/python")
+    refused(node, node.both("tiny", **{k: v.format(py=py) if v else v for k, v in change.items()}), why)
 
 
 @pytest.mark.parametrize("codec, defines", [
@@ -667,12 +560,12 @@ def test_a_cards_session_builds_kv_cu_and_registers_at_codec(node, codec, define
                  CUDA_HOME=str(node.tmp / "cuda" / "cuda-13.0"),
                  PROVER_CPUS=",".join(map(str, sorted(os.sched_getaffinity(0)))))
     assert p.returncode == 0, said(p)
-    kv = "verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.cu"
+    kv = "verity/protocols/accounting/memory/poub/prover/word_codec/kv.cu"
     (nvcc,) = [c for c in node.calls() if c.startswith("nvcc ") and c.endswith(kv)]
     assert nvcc.startswith("nvcc -O3 -gencode arch=compute_90a,code=sm_90a ")
     assert nvcc.split(" -o ")[0].endswith(f"-Xptxas -v {defines}")
     (prover,) = [c for c in node.calls() if c.startswith("card prover ")]
-    from verity.protocols.resource_accounting.memory.poub.verifier import codec as deployed
+    from verity.protocols.accounting.memory.poub.verifier import codec as deployed
     assert prover.split("--gib 16 ")[1].startswith(f"--codec {codec or deployed.DEFAULT.name}")
 
 
@@ -724,37 +617,37 @@ def test_the_vllm_venv_is_the_first_there(tmp_path):
 ])
 def test_cuda_home_is_the_machines_toolkit_at_torchs_version(tmp_path, toolkits, torch, home):
     node = Node(tmp_path, toolkits=toolkits)
-    p = node.both("row", STUB_TORCH_CUDA=torch)
+    p = node.both("tiny", STUB_TORCH_CUDA=torch)
     if home is None:
         return refused(node, p, "refused: no CUDA toolkit 13.0: CUDA_HOME is not set, and the machine's record lists none")
     if home == 13:
         return refused(node, p, f"refused: the vLLM venv's torch is built for CUDA 12, and {tmp_path}/cuda/cuda-13.0's "
                                 "nvcc is CUDA 13: install a CUDA 12 toolkit and state CUDA_HOME")
     assert p.returncode == 0, said(p)
-    build, commit = node.provers()
-    assert build["env"]["CUDA_HOME"] == commit["env"]["CUDA_HOME"] == f"{tmp_path}/cuda/{home}"
-    assert commit["argv"][commit["argv"].index("--cuda-bin") + 1] == f"{tmp_path}/cuda/{home}/bin"
+    prover, = node.provers()
+    assert prover["env"]["CUDA_HOME"] == f"{tmp_path}/cuda/{home}"
 
 
-# ------------------------------------------------------------------------------------ run.sh: a row around its lease
-
-def test_a_failed_build_or_kv_build_ends_before_the_lease_with_its_own_code(node):
-    p = node.both("row", STUB_BUILD_RC="10")
-    assert p.returncode == 10 and "the row's Build ended 10 with no GPU visible" in p.stdout, said(p)
-    assert [c.split()[0] for c in node.calls()] == ["nvcc", "row"]
-    (node.stub / "calls").unlink()
-    p = node.both("row", STUB_NVCC_RC="1")
-    assert p.returncode == 4 and "kv.cu's build for sm_90 failed (KV_LIB=cpu encodes on the CPU)" in p.stdout, said(p)
-    assert [c.split()[0] for c in node.calls()] == ["nvcc"] and node.scratch() == []
-
+# ------------------------------------------------------------------------------------- run.sh: around its lease
 
 def test_a_failed_lean_build_ends_4_before_the_lease(node):
-    p = node.both("tiny", LEAN_EXE=None)
+    p = node.both("tiny", STUB_LEAN=None)
     assert p.returncode == 4 and "the Lean verifier's build failed" in p.stdout, said(p)
-    assert node.calls() == ["lean-build"]
+    assert node.calls(lean=True) == ["lean-build"]
     (node.stub / "calls").unlink()
-    assert node.both("tiny", LEAN_EXE=None, STUB_LEAN=str(node.lean)).returncode == 0
-    assert node.calls()[:2] == ["lean-build", "verifier"] and f"--lean-exe {node.lean}" in " ".join(node.verifier()["argv"])
+    assert node.both("tiny").returncode == 0
+    assert node.calls(lean=True)[:2] == ["lean-build", "verifier"]
+    assert f"--lean-exe {node.lean}" in " ".join(node.verifier()["argv"])
+
+
+def test_verifier_args_are_split_as_shell_words_and_never_evaluated(node, tmp_path):
+    """VERIFIER_ARGS reach the verifier as the words they spell, quotes grouping one, and nothing in them runs."""
+    p = node.both("tiny", VERIFIER_ARGS=f"--challenger-ssh '-i KEY HOST' $(touch {tmp_path}/ran)")
+    assert p.returncode == 0, said(p)
+    argv = node.verifier()["argv"]
+    at = argv.index("--challenger-ssh")
+    assert argv[at:at + 4] == ["--challenger-ssh", "-i KEY HOST", "$(touch", f"{tmp_path}/ran)"], argv
+    assert not (tmp_path / "ran").exists()
 
 
 def test_a_verifier_that_never_listens_ends_the_line_before_the_lease(node):
@@ -790,14 +683,14 @@ def test_a_red_prover_under_role_prover_ends_the_verifier_itself(node, tmp_path)
     """The same against the verifier's own process, started as by hand with the Lean verifier built: the connection
     `run.sh` opens and drops is the one it accepts, and it ends red at the closed stream rather than listening on.
     The verifier's output is read to its end, so one that listened on would hang here."""
-    from verity.protocols.resource_accounting.memory.poub.verifier.session import lean_verifier as lv
+    from verity.protocols.accounting.memory.poub.verifier.session import lean_verifier as lv
 
     port = str(free_port())
-    line = [sys.executable, str(ROOT / "verity/protocols/resource_accounting/memory/poub/verifier/poub_session/verifier_process.py"),
+    line = [sys.executable, str(ROOT / "verity/protocols/accounting/memory/poub/verifier/poub_session/verifier_process.py"),
             "--host", "127.0.0.1", "--port", port, "--out", str(tmp_path / "verifier"), "--windows", "3",
             "--window-ms", "2000", "--samples", "2773", "--jitter-ms", "5000", "--sessions", "1", "--check-workers", "1",
             "--lean-exe", str(lv.build()),
-            "--figures", str(ROOT / "tests/verity/protocols/resource_accounting/memory/poub/figures.json")]
+            "--figures", str(ROOT / "tests/verity/protocols/accounting/memory/poub/figures.json")]
     verifier = subprocess.Popen(line, cwd=ROOT, env=os.environ | {"HOME": str(tmp_path / "home")},
                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     try:

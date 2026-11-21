@@ -29,7 +29,7 @@ Which form each takes:
   the menu heads a fresh word.
 * (I6) `FoldOpt` and `FillOpt` in the price form D-ideal's proof reads. FOLD-OPT's per-word kernel (the duo step
   `u = y ⊕ d ⊕ k`, `y' = u·a + z`, `z' = rotl(u, r) + y'` needs three instructions over the modeled ISA,
-  `benchmarks/pouw/theory/fold_opt.py`) is a mechanical fact; the multi-round residual, that no program folds below the
+  `calibration/pouw/theory/fold_opt.py`) is a mechanical fact; the multi-round residual, that no program folds below the
   menu's price across rounds, is what stays assumed. `FanIn`, the sources the ISA lets an instruction read (every form,
   guarded), gives both at the fan-in menu's price (`ResourceAccounting.Guarantees.TS.FoldOptOfFanIn`, `FillOptOfFanIn`): for a
   fold or filler presented as a straight-line dataflow over the words it absorbs, priced at least the menu's routes of
@@ -183,7 +183,8 @@ every round, whatever the past, the values of the round's deficient words have p
 the cheater's skip and its values for them are functions of (`ReceiptGame.OperandPointMass`, HMU's `SkipRound.PointMass`
 at word level). The headlines take it at `¾`. Lemma B at fibre 1 (`ResourceAccounting.Guarantees.HMu.LemmaB`) turns it into the
 operand luck at `μ`. Where it holds:
-* the coins give it for a fresh-bit skipped value (`ResourceAccounting.Guarantees.HMu.CoinPointMass`: `½` at one bit);
+* the coins give it for a fresh-bit skipped value (`ResourceAccounting.Guarantees.HMu.CoinPointMass`: `½` at one bit),
+  for a Program whose flow graph the Build admits, which no statement yet gives of a decoded Program;
 * for degree-2 operands on cube bits `OperandLuckCube` gives the operand luck at `¾` directly, on affine-operand runs
   only;
 * where the cheater computes a word that shares the skipped value's coins, it is computational: the cheater hasn't

@@ -5501,6 +5501,27 @@
         "security/Definitions/Certifier/AttesterScheme.lean": "security/Definitions/ResourceAccounting/Network/AttesterScheme.lean",
         "security/Proofs/Certifier/AttesterScheme.lean": "security/Proofs/ResourceAccounting/Network/AttesterScheme.lean"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/": "verity/protocols/proof/",
+        "verity/protocols/resource_accounting/": "verity/protocols/accounting/",
+        "verity/protocols/workload_classification/": "verity/protocols/policy/",
+        "verity/protocols/compose/": "verity/protocols/run/",
+        "tests/verity/protocols/proofs/": "tests/verity/protocols/proof/",
+        "tests/verity/protocols/resource_accounting/": "tests/verity/protocols/accounting/",
+        "tests/verity/protocols/workload_classification/": "tests/verity/protocols/policy/",
+        "tests/verity/protocols/compose/": "tests/verity/protocols/run/"
+      }
+    },
+    {
+      "paths": {
+        "input_datasets/input_datasets/": "library/datasets/input_datasets/",
+        "input_datasets/definitions/": "library/datasets/definitions/",
+        "input_datasets/pyproject.toml": "library/datasets/pyproject.toml",
+        "input_datasets/README.md": "library/datasets/README.md",
+        "tests/input_datasets/": "tests/library/datasets/"
+      }
     }
   ]
 }

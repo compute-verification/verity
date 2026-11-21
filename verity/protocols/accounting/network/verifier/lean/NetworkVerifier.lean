@@ -1,0 +1,63 @@
+module
+
+public import NetworkVerifier.Certificate
+public import NetworkVerifier.Check
+public import NetworkVerifier.Registered
+public import NetworkVerifier.Difftest
+public import NetworkVerifier.Records
+public import NetworkVerifier.RecordsGrid
+public import NetworkVerifier.RecordsBytes
+public import NetworkVerifier.ScanOk
+public import NetworkVerifier.Period
+public import NetworkVerifier.ConnectionRowsGuards
+public import NetworkVerifier.TransferBlocks
+public import NetworkVerifier.Load
+public import NetworkVerifier.RowsAudit
+public import NetworkVerifier.Span
+
+/-!
+# The network certificate's checks
+
+Executable Lean that reads the network certificate's canonical formats (`NetworkCheck.Certificate`: the frame tree, the
+parameters digest, the record head and its digest, the message a certificate signs), and its difftest against
+`verity/protocols/accounting/certifier/verifier/certificate.py` (`NetworkCheck.Difftest`). `NetworkCheck.Check` is the
+auditor's check of a spatial unit's certified execution phases as a core protocol (`verity/network-certificate/v4`, the
+`network-check` executable), run on generated units by `tests/test_network_check_protocol.py`. `NetworkCheck.Records` is the
+same audit over raw, committed and certified records (`verity/network-records/v3`, the `network-records` executable,
+which `lean_audit.Audit` runs, with the egress grid compared or, for `check_link(grid=False)`, not), run on generated units
+by `tests/test_network_records_protocol.py`; `NetworkCheck.RecordsGrid` proves that its linear Program grid is
+`NetworkCheck.Check`'s, and `NetworkCheck.RecordsBytes` that its evidence, payloads kept
+as bytes, is v4's read as bits. `NetworkCheck.Period` is onsite's communication component
+(`verity/certifier/v0`, the `network-period` executable): a period's execution phases, the network attester's own rows,
+registered under its one schedule and read by the scan (the rows form), beside its compute audits, and the bound `K` on
+what left the site, held to its Python mirror by `tests/test_network_period_protocol.py`. `NetworkCheck.ScanOk` is the
+rows form's constants: each scan member's ok bits' root, computed from the schedule's T, which the period check holds
+every scan's registration to. `NetworkCheck.RowsAudit` audits a run of the active network attester over the records it
+signed (`verity/network-rows/v1`, the `network-rows` executable): each record held to its certified head, then the
+certifier program's rows audit (`NetworkAttester.Rows.audit`), which refuses cells cut, clocked or ordered otherwise
+than the schedule. Code: it imports only Lean, Flock's verifier (`Flock.Hash`, `Flock.Bytes`, `Flock.Canon`,
+`Flock.Public`'s frame-v3 hash and `Flock.RegKnown`'s leaves at known content), the core protocol interface, the
+certifier program and the LMS port.
+-/
+
+@[expose] public section
+
+/-!
+`NetworkCheck.TransferBlocks` is N2's verdict of record on one execution phase from its proof (`service.TransferBlocks.verify`,
+the `link-window` function of `network-records verdicts`). Beyond the above it imports Flock's `Flock.Hm96` and core's
+identity hash (`Identity.Tagged`).
+-/
+
+/-!
+`NetworkVerifier.Load` is the check of the registrations a run kept of a workload's own requests, sent through the
+network attester (`relay_check.check_load`'s verdict, the `load` function of `network-records verdicts`): one
+registration of each value of the shape's manifest, each read for the transfer the verifier expects under the
+deployment's key and session. Beyond the above it imports Flock's registered value's domain (`Flock.Registered`).
+-/
+
+/-!
+`NetworkCheck.Span` is the count over a span between two marks the network attester certified
+(`verity/certifier/span/v0`, the `network-span` executable): whether every execution phase of the span and of its tail
+is certified under the schedule, and the bits that can have left on the link over them, held to its Python mirror by
+`tests/test_network_span_protocol.py`. Beyond the above it imports the table of domain separators (`Identity.Domains`).
+-/

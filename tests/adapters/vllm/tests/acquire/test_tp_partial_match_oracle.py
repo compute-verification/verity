@@ -10,7 +10,7 @@ Needs torch (torch.save/load of the oracle steps); CPU only.
   * NEGATIVE retained copy changed after the commit (the oracle agrees with the change) -> not_verified -> FAIL
   * MoE align witnesses: nothing is exempt, so every tensor is compared whatever the witnesses say; a differing witness FAILS by name
     with what it implies (a routing difference, or routing or schedule), even when every value is equal; a witness on one side only
-    FAILS; a schedule difference alone never reads as routing
+    FAILS
 
 The rank's members are committed on the GPU-tree step block path and read through `oracle_compare.OpenedReader` (opened, verified against the
 rank's run root), as `worker.tp2_commit_finalize` reads them.
@@ -365,24 +365,3 @@ def test_a_witness_on_one_side_only_fails_named(tmp_path):
     (list(OW.MEMBERS), OW.ROUTING), (["align.rank"], OW.ROUTING_OR_SCHEDULE), (["align.rank", "align.start", "align.blk"], OW.ROUTING_OR_SCHEDULE)])
 def test_what_a_differing_witness_implies(members, implies):
     assert OW.implied(members) == implies
-
-
-def test_a_schedule_difference_alone_never_reads_as_routing():
-    """Two atomic orders of one routing, the kernel's own freedom (`moe_align_source.align_values` over the emulated kernel): whatever
-    members differ, `implied` says routing or schedule, never routing."""
-    from tests.acquire.test_dsv4_moe_align_source import kernel
-    from verity_vllm.acquire.sources import moe_align_source as MA
-
-    g, E, BM, seen = torch.Generator().manual_seed(5), 6, 4, set()
-    for P in range(2, 30):
-        ids = torch.randint(0, E, (P,), generator=g, dtype=torch.int32)
-        ws = []
-        for _ in range(2):
-            *vals, ok = MA.align_values(ids.reshape(-1, 1), *kernel(ids.tolist(), E, BM, torch.randperm(P, generator=g).tolist()), E, BM)
-            assert bool(ok)
-            ws.append([tps._bytes(v.view(torch.float32)) for v in vals])
-        differs = [m for m, a, b in zip(OW.MEMBERS, *ws) if a != b]
-        if differs:
-            assert OW.implied(differs) == OW.ROUTING_OR_SCHEDULE, (ids.tolist(), differs)
-            seen.add(tuple(differs))
-    assert seen

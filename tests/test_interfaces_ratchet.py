@@ -6,7 +6,7 @@ list. The lists are written only by this file: ``--prune`` drops stale entries a
 integrator runs it at each merge sweep), ``--init`` rewrites them from the tree (top's alone), ``--report`` prints each
 ratchet's count, naming apart what a ruling keeps (``KEPT``). Tests (``tests/``, any ``/tests/``), ``archive/`` and ``fixtures/`` are never offenders.
 
-- ``scheme_name_tables``: a Python or shell file outside `verity/protocols/compose/schemes.py` and every ``scheme.py``
+- ``scheme_name_tables``: a Python or shell file outside `verity/protocols/run/schemes.py` and every ``scheme.py``
   that compares against a scheme's name (``DECLARATIONS``' keys, the old ``pouw``, ``certifier``,
   ``network-certifier``, and the components still to declare, ``TO_DECLARE``), keys a mapping by it, indexes by it, or reads it with ``.get``, ``.pop`` or ``.setdefault``;
   a membership test counts every name in its literal. Python is read by token, so a docstring or comment never counts.
@@ -51,7 +51,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 LIST = ROOT / "tests" / "interfaces_ratchet.json"
 ME = "python3 tests/test_interfaces_ratchet.py"
-SCHEMES = "verity/protocols/compose/schemes.py"
+SCHEMES = "verity/protocols/run/schemes.py"
 HOOKS = "verity/hooks.py"
 HARDWARE = "calibration/hardware/"
 OLD_SCHEMES = ("pouw", "certifier", "network-certifier")
@@ -62,17 +62,16 @@ SCRIPT = (".py", ".sh")
 #: an architecture (`sm_120a`, `sm90`, or one built by hand, `sm_$SM`) or a card's printed name in a shell line; not a
 #: card's id (`h100-sxm-80gb`), and not a longer name holding one (`pearl_c_sm90`, `sm90_wgmma.cu`, `pearl-c-sm120-v1`)
 SHELL_CARD = re.compile(r"(?<![\w-])sm_?\d{2,3}a?(?![\w-])|(?<![\w-])sm_\$\{?\w|\b(?:H100|H200|B200)\b|RTX PRO 6000")
-SCHEME_IMPORT = re.compile(r"^\s*(?:from|import)\s+verity\.protocols\.(?:resource_accounting\.(?:compute|memory|network)"
+SCHEME_IMPORT = re.compile(r"^\s*(?:from|import)\s+verity\.protocols\.(?:accounting\.(?:compute|memory|network)"
                            r"|experimental\.dither)\b")
 SCHEME_IMPORTERS = ("benchmarks/", "calibration/", "tools/", "applications/")
 #: {file: the scheme names that are another word there}: a rounding mode or a design called dither, a card's memory bandwidth
 NOT_SCHEMES = {"benchmarks/ppl/steps.py": {"dither"}, "calibration/pouw/theory/checked_strip.py": {"dither"},
-               "benchmarks/hash/dither/dbw.py": {"dither"}, "verity/device.py": {"bandwidth"},
-               "calibration/pouw/dc/pipe.py": {"bandwidth"}}
+               "verity/device.py": {"bandwidth"}}
 #: {ratchet: {file: why it stays}}: a second path kept by a ruling. It is still held from growing, and ``--report`` counts
 #: it apart, so nobody finds it again as a table to remove.
 KEPT = {"scheme_name_tables": {
-    "verity/protocols/proofs/spot/verifier/parties.py":
+    "verity/protocols/proof/spot/verifier/parties.py":
         "the sampled proofs' verifier files each case under its protocol id itself (`SUBPROTOCOLS`, `ids_of`): which "
         "id the composite check is told is decided on the verifier's side, never handed in by a caller, and the "
         "verifier may not load the one table; a test outside the verifier holds the two equal (soundness, 18 Nov)"},
@@ -96,31 +95,24 @@ KEPT = {"scheme_name_tables": {
     "calibration/pouw/theory/fold_routes.py":
         "the honest fold's instructions a word and the certificate's weights per device, read off the design files "
         "(top, 18 Nov)",
-    "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120/build.sh":
+    "verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm120/build.sh":
         "the kernel's one line stating its own target, which `build.sh --arch` reads (top, 18 Nov)",
-    "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90/build.sh":
+    "verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm90/build.sh":
         "the kernel's one line stating its own target, which `build.sh --arch` reads (top, 18 Nov)",
-    "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120/run.py":
+    "verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm120/run.py":
         "the variants' registered names, `VARIANT_G`'s keys (top, 18 Nov)",
-    "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90/run.py":
+    "verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm90/run.py":
         "the variants' registered names, `VARIANT_G`'s keys (top, 18 Nov)",
     "benchmarks/pouw/pearl_c_sm120/card.sh": "the variants' registered names (top, 18 Nov)",
     "benchmarks/pouw/pearl_c_vllm/served_profile.sh": "the variants' registered names (top, 18 Nov)",
     "benchmarks/pouw/pearl_c_vllm/window.sh": "the variants' registered names (top, 18 Nov)",
     "benchmarks/pouw/pearl_c_vllm/served_step.sh": "a refusal quoting a scheme's registered id (top, 18 Nov)",
-    "benchmarks/pouw/pearl_c4/ship.sh":
-        "a pinned commit message, whose hash is every rebuilt ship's launch path (top, 18 Nov)",
     "benchmarks/pouw/harness/native/build.sh":
         "the NVFP4 units and the CUTLASS baselines stating their one target, the block-scaled `mma.sync`, which no "
         "architecture file states (top, 18 Nov)",
-    "verity/commitments/cuda/commit_slots/slots.py":
-        "a key of a pinned fixture, `commit-slots-v1.json`, whose digest a suite pins (top, 18 Nov)",
     "benchmarks/pouw/hidden_zk/registered.sh":
         "the registered semantics' name its template is generated at, an `INSTRUCTIONS` key of `verity/circuits/silicon` "
-        "(compute-accounting, 18 Nov)"},
-    "scheme_package_imports": {
-    "benchmarks/memory/refresh.py":
-        "a benchmark of the bandwidth audit reads the bandwidth audit's own codec and memory map (top, 18 Nov)"}}
+        "(compute-accounting, 18 Nov)"}}
 #: a toolkit's directory written out: under `/usr/local` or `/opt`, any path to a `cuda-<version>` directory (a file
 #: named so, `cuda-13.3.sh`, is not one), and pip's toolkit under `site-packages` (kernels' pattern, 18 Nov)
 CUDA = re.compile(r"(?<![\w.-])(?:/usr/local/cuda|/opt/cuda)"
@@ -128,13 +120,13 @@ CUDA = re.compile(r"(?<![\w.-])(?:/usr/local/cuda|/opt/cuda)"
                   r"|site-packages/nvidia/cu\d")
 #: the machine record's reader and the toolkit fetcher it points at: where a toolkit's directory is written down
 KIT = ("benchmarks/harness/verity_bench/kit.py", "benchmarks/harness/verity_bench/kit_report.py",
-       "benchmarks/kernels/machine.py", "verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh")
+       "benchmarks/kernels/machine.py", "verity/protocols/proof/flock/prover/pod/cuda-13.3.sh")
 #: where a class of `verity.hooks` can be named, the first that holds a path; `verity` is the rest of `verity/`
 AREAS = (("adapter", "adapters/"),
-         ("compute", "verity/protocols/resource_accounting/compute/"),
-         ("poub", "verity/protocols/resource_accounting/memory/poub/"),
-         ("pous", "verity/protocols/resource_accounting/memory/pous/"),
-         ("network", "verity/protocols/resource_accounting/network/"),
+         ("compute", "verity/protocols/accounting/compute/"),
+         ("poub", "verity/protocols/accounting/memory/poub/"),
+         ("pous", "verity/protocols/accounting/memory/pous/"),
+         ("network", "verity/protocols/accounting/network/"),
          ("dither", "verity/protocols/experimental/dither/"),
          ("verity", "verity/"),
          ("benchmarks", "benchmarks/"))
@@ -195,7 +187,7 @@ SECOND = {
                                                        "security/Definitions/Claims/SamplingTwo.lean"), "Sampling",
                                _claims_sampling_named),
     "Claims.Sampling (proofs)": (PROOFS, ".lean", (), "Sampling", _claims_sampling_named),
-    "unitGates": ("", ".lean", ("verity/protocols/proofs/flock/verifier/Flock/TemplateQuery.lean",), "unitGates",
+    "unitGates": ("", ".lean", ("verity/protocols/proof/flock/verifier/Flock/TemplateQuery.lean",), "unitGates",
                   re.compile(r"\bTemplateQuery\.unitGates\b").search),
     "cut_wires": ("", ".py", (), "cut_wires", re.compile(r"\bcut_wires\b").search),
     "served_program": ("", ".py", (), "served_program", re.compile(r"(?<!h1\.)\bserved_program\b").search),
@@ -213,8 +205,8 @@ TOOLKIT = ("the machine's record of its toolkits, read by one function: `verity_
            "`CUDA_HOME` as given and refuses without it")
 #: {ratchet: the interface its offenders go through}
 INTERFACE = {
-    "scheme_name_tables": "`verity.protocols.compose.schemes.get(name)` and the scheme's declared fields (`Scheme`)",
-    "scheme_package_imports": "the scheme by its name from the table (`verity.protocols.compose.schemes.get`), attached "
+    "scheme_name_tables": "`verity.protocols.run.schemes.get(name)` and the scheme's declared fields (`Scheme`)",
+    "scheme_package_imports": "the scheme by its name from the table (`verity.protocols.run.schemes.get`), attached "
                               "through the exchange",
     "messages_one_sided": "a message of `verity.hooks` exists because two sides use it; a scheme's own need is a declared "
                           "field or a port of its `Scheme`",
@@ -240,7 +232,7 @@ def _excluded(path: str) -> bool:
 
 
 def _scheme_names(text: str) -> tuple[str, ...]:
-    """``DECLARATIONS``' keys, read from `verity/protocols/compose/schemes.py`'s text, the old names and those to declare."""
+    """``DECLARATIONS``' keys, read from `verity/protocols/run/schemes.py`'s text, the old names and those to declare."""
     for node in ast.walk(ast.parse(text)):
         if isinstance(node, (ast.Assign, ast.AnnAssign)) and "DECLARATIONS" in {
                 getattr(t, "id", None) for t in (node.targets if isinstance(node, ast.Assign) else [node.target])}:
@@ -562,17 +554,17 @@ def _flagged(ratchet: str, files: dict[str, str]) -> dict[str, int]:
     ("scheme_name_tables", "benchmarks/a.py", '"""keys: {"pous": 1}, s == "pous"."""\n# s == "pous"\nNAME = "pous"\n'
                                               'f(protocol="pous")\nx = ["pous", "dither"]\n'
                                               'for p in ("pous", "dither"):\n    pass\n', 0),
-    ("scheme_name_tables", "benchmarks/a.py", 'P = schemes.get("pous").protocol\nq = compose.schemes.get("dither")\n', 0),
+    ("scheme_name_tables", "benchmarks/a.py", 'P = schemes.get("pous").protocol\nq = run.schemes.get("dither")\n', 0),
     ("scheme_name_tables", "benchmarks/a.py", 'S = declarations.get("pous")\nt = table.get("pous")\n', 1),
     ("scheme_name_tables", "benchmarks/ppl/steps.py", 'if mode == "dither":\n    pass\nif s == "pous":\n    pass\n', 1),
     ("scheme_name_tables", "verity/protocols/x/scheme.py", 'if s == "pous":\n    pass\n', 0),
     ("scheme_name_tables", "benchmarks/tests/a.py", 'if s == "pous":\n    pass\n', 0),
     ("scheme_name_tables", "benchmarks/a.sh", '# [ "$p" == "pous" ]\necho "pous"\n', 0),
     ("scheme_package_imports", "tools/a.py",
-     "from verity.protocols.resource_accounting.memory.poub import scheme\nimport verity.protocols.experimental.dither\n", 2),
+     "from verity.protocols.accounting.memory.poub import scheme\nimport verity.protocols.experimental.dither\n", 2),
     ("scheme_package_imports", "tools/a.py",
-     "from verity.protocols.resource_accounting import scheme\nfrom verity.protocols.compose import schemes\n", 0),
-    ("scheme_package_imports", "verity/a.py", "from verity.protocols.resource_accounting.compute import pouw\n", 0),
+     "from verity.protocols.accounting import scheme\nfrom verity.protocols.run import schemes\n", 0),
+    ("scheme_package_imports", "verity/a.py", "from verity.protocols.accounting.compute import pouw\n", 0),
     ("toolkit_paths", "benchmarks/run.sh", "export PATH=/usr/local/cuda/bin:$PATH\n", 1),
     ("toolkit_paths", "benchmarks/run.sh", 'nvcc="$(python3 benchmarks/kernels/machine.py toolkit 13.0)/bin/nvcc"\n', 0),
     ("toolkit_paths", "benchmarks/run.sh", "export CUDA_HOME=/workspace/jobs/cuda-12.9\nT=$ROOT/cuda-$V\n", 2),
@@ -605,7 +597,7 @@ def test_each_ratchet_reads_each_form(ratchet: str, path: str, text: str, count:
 
 def test_a_one_sided_message_is_found() -> None:
     files = {"adapters/x/a.py": "from verity import hooks as H\nH.Both(1)\nH.OneSide()\n",
-             "verity/protocols/resource_accounting/network/b.py": "from verity.hooks import Both\n",
+             "verity/protocols/accounting/network/b.py": "from verity.hooks import Both\n",
              "benchmarks/c.py": '"""H.Nowhere and OneSide."""\nimport verity.hooks\n# hooks.Nowhere\n'
                                 "x = verity.hooks.EVENTS\n"}
     assert _flagged("messages_one_sided", files) == {"OneSide": 1, "Nowhere": 0}

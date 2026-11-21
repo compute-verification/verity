@@ -1,6 +1,6 @@
 """On one GPU: Llama served with `TargetProfile.int8_exact` (`--int8-exact linears|attention|all`, default all), checked end
 to end on the CPU: the linears against the registered Definition's equations, the attention against compute accounting's LUT softmax
-(`verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/fattn_ref.py`, `apv_ref.py`).
+(`verity/protocols/accounting/compute/pouw/prover/kernels/edited_gemm/fattn_ref.py`, `apv_ref.py`).
 
 One process writes `<out>/int8_exact_gpu.json` (and, with the linears in scope, `<out>/pin_entry.json`, the int8 pin's entry):
 
@@ -25,7 +25,7 @@ One process writes `<out>/int8_exact_gpu.json` (and, with the linears in scope, 
   attention (attention) the first and last attention layers' first calls, request by request (`int8_attention_gpu`): the served
             rows against a GPU rerun, the CPU and `fattn_oracle.attention`, `fattn_ref.check` on the GPU's softmax of a row at
             every head dimension 128 call (all bit for bit), and solo requests against the batched ones.  The K scales are the served revision's
-            (`engine.int8_k_scales`; `VERITY_VLLM_INT8_K_SCALES` names a calibration run's table).
+            (`engine.int8_k_scales`).
             Each decode's window is checked against the K and V written in the earlier steps.
 
     cd adapters/vllm; PY=/workspace/jobs/venv312/bin/python3     # PYTHONPATH=.:../..:../../tools/research/src

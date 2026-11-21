@@ -13,7 +13,7 @@ public import VStarRecursive.Caller
 
 `Core.Remote.protocol` (`verity/remote/v0`) is `Core.Composition.tiedSameB` over three subprotocols, in the order of
 their ids: the inference-only policy (`InferenceOnlyCheck.Protocol.protocol`), PoUW's period credit
-(`PouwCheck.Period.protocol`) and SPOT (`VStar.Recursive.Sampled.protocol`, `verity/sampled-proofs/v1`):
+(`PouwVerifier.Period.protocol`) and SPOT (`VStar.Recursive.Sampled.protocol`, `verity/sampled-proofs/v1`):
 one-stage v2's audit at one level, the two-stage audit at two. The policy's
 commitment and SPOT's (the one-stage registration record, `Spot.OneStage.commitmentOf`, in both
 forms) are the run's registration record, and the composite rejects unless both decode to one digest
@@ -135,10 +135,9 @@ verifier (the v1 part of its params, `Spot.OneStageZk.Params.base`), which it ve
 (`Properties.Spot.R2`). The record keeps the caller's facts against that verifier (`Properties.Spot.CallerHeld`): it names its day's declared program, its window names the stream, the
 prover, the seed salt, the registered compiler and the pool's reset the verifier holds, it opens the pool the previous
 window of record left, and no output value reads a port of a record the verifier's verdict log names refused. SPOT's own statement (`Properties.Spot.AcceptMeans`) holds none of them: they are what SPOT's caller hands the
-verifier, so they are stated here, of the case the caller's check (`VStar.Recursive.Caller.check`) accepted. The
-verifier accepts two levels ahead of their proof, so SPOT's case may instead decode in
-that form, and its clause is the caller's facts against the boundary record's verifier alone: nothing is said of the
-two-stage form's soundness. -/
+verifier, so they are stated here, of the case the caller's check (`VStar.Recursive.Caller.check`) accepted. SPOT's
+case may instead decode in the two-stage form, which the verifier refuses at registration, and its clause there is
+the caller's facts against the boundary record's verifier alone: nothing is said of the two-stage form's soundness. -/
 def StageHeld (k : Case) : Prop :=
   (∃ (p : Spot.OneStageZk.Params) (c : Spot.OneStage.Commitment),
     (canonicalJson k.params.toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson) = .ok (.inl p) ∧
@@ -154,7 +153,7 @@ each under its own subprotocol's decoder (SPOT's is the one-stage registration r
 the run's record's;
 every Commit record the
 period's windows name, when they decode, has digest `r` (a period whose windows don't decode is the period's own
-refusal, `PouwCheck.Period.check`, which this doesn't read); the policy's case is `CaseHeld`: the record names the
+refusal, `PouwVerifier.Period.check`, which this doesn't read); the policy's case is `CaseHeld`: the record names the
 registered circuit by its SHA-512, θ holds what the log's first record registers, the instance checked has a parse, a
 declaration the registered circuit lays out and a division, every parse carries the policy's `program`, `Γ` and `α`,
 and every declaration the registered circuit lays out, with the declared division, meets the policy; and SPOT's case is `StageHeld`: it is in the one-stage form, its record names, by its SHA-512, the program of one-stage

@@ -14,6 +14,7 @@ from pathlib import Path
 
 import pytest
 
+import stand_in  # noqa: F401  (the test primitives' Boolean bodies, also when run as a script)
 from verity.circuits import codec, cut, partition_object as PO
 from verity.circuits.defs import Body, Builder, CompositeDefinition, PrimitiveDefinition, DefinitionTable, bind
 from verity.circuits.layout import resolve
@@ -180,9 +181,9 @@ def expand(j) -> list[list]:
 
 
 def first_seen_tables(desc: dict) -> tuple[list, list]:
-    """The v1 tables from the definitions alone: a post-order walk from `root` (a composite's callees in node order, then the
-    functions its binding record names, in record order), then those `program_fn`'s record names; each composite, when
-    finished, adds per node its callee, its argument types and its output type."""
+    """The tables from the definitions alone: a post-order walk from `root` (a composite's callees in node order, then the
+    functions its binding record names, in record order), then those `program_fn`'s record names, then the bodies `boolean`
+    names in key order; each composite, when finished, adds per node its callee, its argument types and its output type."""
     D, C, T = desc["definitions"], desc["callees"], desc["types"]
     seen: set[str] = set()
     callees: list[str] = []
@@ -216,6 +217,8 @@ def first_seen_tables(desc: dict) -> tuple[list, list]:
     for f in named(desc["program_fn"]):
         if f in D:
             visit(f)
+    for k in sorted(desc.get("boolean", {})):
+        visit(desc["boolean"][k])
     return callees, types
 
 
@@ -344,6 +347,16 @@ REJECT = [
     ("a primitive with a parameter name twice", lambda d: d["definitions"]["TAdd32_v1"]["params"][1].__setitem__(0, "a"),
      "signature differs from the registry"),
     ("an Input node inside a Definition", lambda d: _inner_input(d, "Input32_v1"), "appears only in the root's body"),
+    ("a v1 descriptor", lambda d: d.update(schema="verity-ir/descriptor/v1"), "E_SCHEMA"),
+    ("a v0 descriptor", lambda d: d.update(schema="verity-ir/descriptor/v0"), "E_SCHEMA"),
+    ("a Boolean map that is not an object", lambda d: d.update(boolean=[]), "E_BODY_KEY"),
+    ("a word primitive with no Boolean body", lambda d: d["boolean"].pop("TAdd32_v1"), "E_BODY_MISSING"),
+    ("a Boolean map key that is no word primitive", lambda d: d["boolean"].__setitem__("TPair_v1", d["boolean"]["TAdd32_v1"]),
+     "E_BODY_KEY"),
+    ("a Boolean body that is no definition", lambda d: d["boolean"].__setitem__("TAdd32_v1", "Absent_v1"), "E_BODY_NOT_BOOLEAN"),
+    ("a Boolean body of another signature", lambda d: d["boolean"].__setitem__("TAdd32_v1", d["boolean"]["TWiden16_v1"]),
+     "E_BODY_NOT_BOOLEAN"),
+    ("a word body", lambda d: d["boolean"].__setitem__("TAdd32_v1", "TPair_v1"), "E_BODY_NOT_BOOLEAN"),
     ("a RegisteredInput node inside a Definition", lambda d: _inner_input(d, "RegisteredInput32_v1"), "appears only in the root's body"),
 ]
 
@@ -441,6 +454,7 @@ def build() -> dict:
         "alias_reader": {"node": 12, "arg": 0, "refs": [list(r) for r in _root_nodes(D)[12].args[0].refs]},
         "definition_digest": [[fid, codec.definition_digest(e, desc)] for fid, e in sorted(desc["definitions"].items())],
         "decoder_rejects": rejects,
+        "boolean_map": desc["boolean"],
         "input_ids": [[i, bool(INPUT_ID.fullmatch(i))] for i in INPUT_IDS],
         "input_lowering": [[t, [[n.fn.id, n.form, list(n.axes), n.n] for n in Program(_identity(t)).root.body.nodes]] for t in LOWERINGS],
         "program": {"root": D.root.id, "input_nodes": [[k, n.fn.id, n.n] for k, n in enumerate(D.root.body.nodes) if is_input(n.fn)],
@@ -466,28 +480,18 @@ def _root_nodes(D):
 
 
 def _forward(desc: dict) -> dict:
-    """A body whose node reads a later node decodes (checkers name the defect); every partition query refuses it (`order_violation`),
-    and `CallGraph` refuses a Call whose gate reads a later gate of the Call (a backstop)."""
-    def refusal(D):
-        try:
-            PO.evaluate(D)
-            return None
-        except cut.QueryInapplicable as e:
-            return e.detail
+    """The decoder's refusals of a root node reading a later node and of a Call's node reading a later node of the Call."""
+    def refusal(d):
+        with pytest.raises(ValueError) as e:
+            codec.decode_program(d, REG)
+        return str(e.value)
 
     d = json.loads(_canon(desc))
     _node(d, 3)["args"][1]["refs"] = {"affine": ["n", 9, 0, 1]}               # root node 3 reads node 9: two Calls, out of order
-    R = codec.decode_program(d, REG)
+    root = refusal(d)
     d = json.loads(_canon(desc))
     d["definitions"]["TPair_v1"]["body"]["nodes"][0]["args"][0]["refs"] = {"affine": ["n", 1, 0, 1]}   # inside TPair: s reads s + a
-    D = codec.decode_program(d, REG)
-    try:
-        cut.CallGraph(D.defs["TPair_v1"])
-        backstop = None
-    except ValueError as e:
-        backstop = str(e)
-    return {"root_gate_11_operands": list(R.circuit.gate(11).operands), "root_refused": refusal(R),
-            "call_gate_0_operands": list(D.circuit.gate(11).operands), "call_refused": refusal(D), "q_word": backstop}
+    return {"root_refused": root, "call_refused": refusal(d)}
 
 
 def _identity(t_json):
@@ -575,8 +579,8 @@ def test_the_descriptor_round_trips(decoded):
     assert _canon(codec.encode_program(Program(PROG))) == VECTORS["descriptor"], REWRITE
     assert _canon(codec.encode_program(decoded)) == VECTORS["descriptor"]
     desc = json.loads(VECTORS["descriptor"])
-    assert sorted(desc) == ["callees", "definitions", "program_fn", "root", "schema", "types"]
-    assert desc["schema"] == "verity-ir/descriptor/v1" and desc["root"] == "Root[TProg_v1]_v1" and desc["program_fn"] == "TProg_v1"
+    assert sorted(desc) == ["boolean", "callees", "definitions", "program_fn", "root", "schema", "types"]
+    assert desc["schema"] == "verity-ir/descriptor/v2" and desc["root"] == "Root[TProg_v1]_v1" and desc["program_fn"] == "TProg_v1"
 
 
 def test_the_interning_tables_are_first_seen_order():
@@ -632,6 +636,17 @@ def test_the_definition_digest(live, decoded):
     assert "alias" not in json.dumps(root) and expand(root) == VECTORS["alias_reader"]["refs"]
 
 
+def test_the_boolean_map(live, decoded):
+    """§4.9: the map's keys are the word primitives among `definitions`, sorted, and each body is among them too; the program
+    digest covers it."""
+    assert live["boolean_map"] == VECTORS["boolean_map"], REWRITE
+    desc = json.loads(VECTORS["descriptor"])
+    assert list(desc["boolean"]) == sorted(desc["boolean"]) == sorted(decoded.boolean)
+    assert all(b in desc["definitions"] for b in desc["boolean"].values())
+    moved = {**desc, "boolean": {**desc["boolean"], "TAdd32_v1": desc["boolean"]["TSum2_v1"]}}
+    assert codec.program_digest(moved) != codec.program_digest(desc)
+
+
 @pytest.mark.parametrize("label,edit,why", REJECT, ids=[r[0] for r in REJECT])
 def test_the_decoder_refuses(live, label, edit, why):
     got = dict(live["decoder_rejects"])[label]
@@ -657,13 +672,14 @@ def test_the_builders_refuse_a_parameter_name_twice():
 
 
 def test_the_self_contained_entry_and_v0(decoded):
-    """§4.7: a v0 descriptor's definitions are the self-contained entries, which a v0 decode gives back; a v1 decode flattens
-    node 12's nested concatenation, the same references, so the root's entry, and only it, differs."""
+    """§4.7: a v0 descriptor's definitions are the self-contained entries, and no decoder reads it (`E_SCHEMA`); a v2 decode
+    flattens node 12's nested concatenation, the same references, so the root's entry, and only it, differs."""
     program = Program(PROG)
     v0 = codec.encode_program(program, codec.SCHEMA_V0)
-    assert sorted(v0) == ["annotations", "definitions", "program_fn", "root", "schema"]
+    assert sorted(v0) == ["annotations", "boolean", "definitions", "program_fn", "root", "schema"]
     assert v0["definitions"][v0["root"]] == codec.definition_entry(program.root)
-    assert codec.encode_program(codec.decode_program(v0, REG), codec.SCHEMA_V0)["definitions"] == v0["definitions"]
+    with pytest.raises(ValueError, match="E_SCHEMA"):
+        codec.decode_program(v0, REG)
     via_v1 = {**v0, "definitions": codec.encode_program(decoded, codec.SCHEMA_V0)["definitions"]}
     assert [k for k in v0["definitions"] if via_v1["definitions"][k] != v0["definitions"][k]] == [v0["root"]]
     nested, flat = _node(v0, 12)["args"][0]["refs"], _node(via_v1, 12)["args"][0]["refs"]
@@ -719,11 +735,11 @@ def test_scope_resolution(live):
     assert live["layout"]["resolve"] == VECTORS["layout"]["resolve"], REWRITE
 
 
-def test_a_forward_reference_decodes_and_q_word_refuses_it(live):
+def test_the_decoder_refuses_a_forward_reference(live):
     assert live["forward_reference"] == VECTORS["forward_reference"], REWRITE
     f = VECTORS["forward_reference"]
-    assert f["root_gate_11_operands"] == [0, 39] and f["call_gate_0_operands"] == [12, 1] and "not topological" in f["q_word"]
-    assert f["root_refused"]["node"] == 3 and f["call_refused"]["definition"] == "TPair_v1" and f["call_refused"]["why"] == "not topological"
+    assert f["root_refused"].endswith(codec.forward_refusal(3, 9))
+    assert f["call_refused"] == "definition 'TPair_v1' node 0: " + codec.forward_refusal(0, 1)
 
 
 # -- 8. Q_word v1 inputs: wiring, wide gates ------------------------------------------------------------------------------------

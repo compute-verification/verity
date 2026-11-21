@@ -1,6 +1,6 @@
 """What every protocol option implements, and what the selector hands it (`verity_vllm.protocols`).
 
-An adapter is one module of this package (`spot`, `pouw`) that defines:
+An adapter is one module of this package (`spot`) that defines:
 
 * ``NAME``: its protocol, one of `config.PROTOCOLS`;
 * ``schemes() -> tuple[str, ...]``: the scheme names its protocol package registers;
@@ -11,21 +11,21 @@ An adapter is one module of this package (`spot`, `pouw`) that defines:
   (`verity.hooks.RequireProperty`), read against `Context.properties`; one whose computation is the
   row's Build requires the profile's kernels (`BUILD_BOUND`, with ``fixes``);
 * optionally ``EXECUTES: tuple[str, ...]``: the sites where the option replaces the computation rather than wrapping
-  it (PoUW: ``LinearBase.quant_method.apply``).  A site has at most one executor, innermost; the others wrap it from
-  outside (`protocol_options.SITES`).  An executor is refused beside SPOT, since SPOT would trace it as the stock
+  it (``LinearBase.quant_method.apply``, for one).  A site has at most one executor, innermost; the others wrap it from
+  outside.  An executor is refused beside SPOT, since SPOT would trace it as the stock
   computation.  An adapter
-  whose sites depend on the scheme defines ``executes(scheme) -> tuple[str, ...]`` instead (PoUW's H1 executes nowhere);
+  whose sites depend on the scheme defines ``executes(scheme) -> tuple[str, ...]`` instead;
 * optionally ``commit_weights(scheme, target) -> Mapping``: its commitment to the plaintext weights of record, made in
   the composition's first phase, before any option changes the model or reads a beacon (`install`).  ``install`` then
   finds every option's in ``target.weight_commitments``;
 * optionally ``fills(scheme, settings) -> tuple[str, ...]`` and ``from_engine(scheme, settings, llm, epoch) -> Mapping``:
-  the settings it takes from the built engine when the caller leaves them unset (PoUW's H1: the model runner and, without
-  a challenger, in-process coins), named before the build and read from the built ``vllm.LLM`` after it.
+  the settings it takes from the built engine when the caller leaves them unset (the model runner, for one), named before
+  the build and read from the built ``vllm.LLM`` after it.
   `verity_vllm.LLM` fills them (`protocol_options.from_engine`): its refusals before the build read the named keys as set
   (`Context.filled`), and the install's refusals read the filled settings, so a key left unfilled is refused there.
 
 An adapter holds no protocol logic: the scheme, its commitments, the salt and the audit are its protocol package's
-(`verity.protocols.resource_accounting.compute.pouw.verifier`, `verity.protocols.proofs.spot.verifier`), which never import this one.  It finds its hook sites by type,
+(`verity.protocols.proof.spot.verifier`), which never import this one.  It finds its hook sites by type,
 never by module name, and makes every patch and service through ``target.hooks(entry)``: an `engine.hooks.Hooks` tagged
 with its entry, so the composition uninstalls it and a committer recognises it (`engine.hooks.live(tag)`).
 """

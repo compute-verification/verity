@@ -1,63 +1,56 @@
 # The ACCEL model of each measured card
 
-`machine-model` prices PoUW's designs on the ACCEL model 𝓜 of each measured card. For a card it holds, as data, the rows
-(the measured ceilings: a pipe, a port, or a joint frontier of several classes), the census that places every warp
-instruction class on them, the attack families and the designs. From them it solves the price vectors and reports a
-design's ε. Capacity is the peak rate per operand class, read at the card's clock: a row is a ceiling no program beats,
-and the model has no power or energy term. It measures nothing: no command starts a process, reads the environment or
-the network, or needs a GPU. The directory and the command keep the name "machine model"; everywhere else 𝓜 is the
-ACCEL model (`GLOSSARY.md`).
+`machine-model` prices every warp instruction class, and useful work's designs, on the measured ceilings of a card,
+and reports a design's ε: an accepted window's node performed at least 1 − ε of the work the window credits
+(`data/headline.toml`'s `scope` says what a per-GPU reading needs). It measures nothing and needs no GPU: its inputs
+are the card's figures and the probes' censuses, as data.
+
+Not yet: a census arrives by hand, with no command that takes a probe's output into `data/census/`.
+
+## Pieces
+
+| Piece | What it is | Where |
+|---|---|---|
+| Device | One card's model: the card it names, its rows (ceilings), its sheet lines | `data/model.toml`, `data/devices/<device>/` |
+| Census | Where each instruction class lands on the rows, one file an epoch | `data/census/` |
+| Vectors | Published price vectors, each re-solved and checked | `data/vectors/` |
+| Attacks | Programs priced against a vector | `data/attacks/` |
+| Designs | A design's instruction counts, and the honest profile it is compared with | `data/designs/`, `data/honest/` |
+| Opcode table | The evidence that every opcode a card runs is priced | `data/cover/` |
+| Commands | `solve`, `eps`, `attacks`, `cover`, `headline`, `lean-headline`, `sheet` | `verity_machine_model/commands/` |
+| Metric | Each design's ε as one registered point | `run.py`, `metrics.toml` |
+
+## What varies
+
+The device. Each cell is exists or never written; no application reads the model.
+
+| Device | Card | Census and vectors | Designs | Lean sheet | Lean headline |
+|---|---|---|---|---|---|
+| `sm_120` | `rtx-pro-6000-server` | exists | exists | never written | exists |
+| `sm_90` | `h200-sxm-141gb` | exists | exists | exists | exists |
+| `sm_100` | `b200-sxm-180gb` | exists | exists | exists | exists |
+| none | `h100-sxm-80gb` | never written | never written | never written | never written |
+
+A new device supplies: a directory with a `model.toml` naming its card, its rows and census from the probes, and a
+`sheet.toml`. No code changes.
+
+Fixed for every device: the linear program, the commands, and that a card's figure is read from the card when a
+command runs (a `card = ` line), never copied into the model's data.
+
+## Interfaces
+
+- From the workload: nothing.
+- From `run`: nothing; it takes a card's rates, clocks and stores from the hardware data sheets
+  (`verity.device.load_card`) and a census of instruction classes on a device from the probes, as a file.
+- It gives: to useful work's accounting, a design's ε (`eps`, `headline`) and the generated Lean that states a card's
+  sheet and a design's headline (`sheet --lean`, `lean-headline`), each held current by a test; to the dashboard, one
+  metric, each design's ε.
 
 ## Try it
-
-Re-solve a device's current price vector and check it (a command that reads one device's model is given it):
 
 ~~~sh
 uv run machine-model --card rtx-pro-6000-server solve
 ~~~
 
-It prints the vector's τ, U/F_low and margin beside the numbers it was published with, the cheapest attacks, the check
-of every price, credit and attack, and each claim with what is under it. It exits 1 when the vector fails its check or
-doesn't reproduce a published number. `uv run machine-model` alone prints every command's usage.
-
-`run.py` puts the Dither designs' ε on the Metrics tab (`metrics.toml`'s `compute-accounting/machine-model-design-epsilon`,
-modeled): a run through `metrics.toml`'s command writes each family's core ε at each reading as a member
-(`h200-measured`), then the H200's at the data sheet's reading as the metric's point. It is the one file here that writes
-outside stdout.
-
-What it computes:
-
-- **Price vectors** (`solve`): the LP that prices every warp instruction class as a convex combination of the rows. Each
-  named vector re-solves to the τ, U/F_low and margin it was published with, and every attack of its epoch is checked
-  against it.
-- **ε** (`eps`): a design's core ε in the tensor–scalar model, every term from data.
-- **The headline** (`headline`): each GPU family's design of record at the data-sheet and measured readings, the numbers
-  the Lean headline guarantees are exported from ("The headline is per node").
-- **The card table** (`theta`, `sheet`): each card's rates, capacities and clocks with their sources, and its data-sheet
-  lines.
-- **The opcode table** (`cover`): the evidence for the card assumption.
-
-This file holds no table of the data. `machine-model render` prints every one as Markdown from a data directory alone:
-the vectors, the epochs and their census, the rows, the floors, the designs, the honest kernels, the proof blocks, the
-MMA forms, the table route, the headline's designs, the attack families, the devices and the card table.
-`tests/calibration/machine_model/test_render.py` fails on a table here, so a new vector, design or census row touches only its own data file.
-
-## The headline is per node
-
-`machine-model headline`'s ε, and the Lean headline guarantees exported from this data
-(`ResourceAccounting.Guarantees.TS.Sm120SheetHeadline` and `Sm120MeasuredHeadline`), bound work done by the node: an accepted
-window's node, its GPUs, host CPU and peer GPUs together, performed at least (1 − ε) of the work the window credits. The
-device that did it is left to the attribution layer. The floor argument places no work: every credited word is a fresh
-function of the post-coin noise, so it was computed after the coin, but nothing ties a committed tile to the GPU that
-computed it. The transcript is a Merkle root over tile digests, so a helper holding the salt ships one 64-byte digest a
-tile. The model prices the work on one device's rows, which makes ε a share of the credited time `T_cred` on that
-device, not of that device's own time.
-
-A per-GPU reading of ε comes only through the attribution layer, under two conditions:
-
-- **The host deduction**: what the host CPU can compute of the work the window credits is deducted exactly from the
-  GPUs' credit. On int8 that is AMX for a tile's products and AVX-512 for the fold and credited fillers, each bit-exact.
-- **The peer-GPU premise**: every billable GPU on the node is credited each window, so no uncredited peer computes a
-  credited GPU's tiles over NVLink. Otherwise the node is the unit.
-
-Counted per GPU without them, the host's AMX and AVX-512 (and NVLink peers) take every device over 1% on some real host.
+It re-solves that card's current price vector and prints its τ, margin and cheapest attacks beside the numbers it was
+published with; it exits 1 if the vector fails its check. `uv run machine-model` alone prints every command's usage.

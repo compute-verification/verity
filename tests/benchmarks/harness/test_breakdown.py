@@ -1,15 +1,13 @@
-"""`verity-bench breakdown` (`verity_bench.breakdown`) on fake engines whose arms report the bandwidth audit's spans the
-way `bench_arm`'s extras do: the rows sum to the spans arms' audit-over-plain, each row is the part it names, the view
-reads local results or the store's newest passing run that times every arm, and no gate or ratio reads a span."""
+"""`verity_bench.breakdown` on fake engines whose arms report the bandwidth audit's spans the
+way `bench_arm`'s extras do: the rows sum to the spans arms' audit-over-plain, each row is the part it names, a record's
+breakdown stands beside its protocol's served row, and no gate or ratio reads a span."""
 from __future__ import annotations
-
-import json
 
 import pytest
 
-from test_served_table import ADDED, Producer, _fresh
+from bench_standins import CPUS, QUIET
+from test_served_table import Producer, _fresh
 from verity_bench import breakdown as B
-from verity_bench.cli import main
 from verity_bench.vllm.arms import Arm
 from verity_bench.vllm.presets import expand_sweep, resolve_spec
 from verity_bench.vllm.runner import _token_digest, run_benchmark
@@ -83,7 +81,7 @@ class SpanEngine:
         return {"token_digest": _token_digest({f"{point.id}-0": (7, 9)}), "generated_tokens": TOKENS,
                 "metrics": {"time_per_output_token_s": tpot_s, "time_to_first_token_s": 1.0, "tokens_per_s": 1 / tpot_s,
                             "peak_gpu_memory_bytes": 1.0},
-                "spans": {"span": spans}, "extras": extras}
+                "spans": {"span": spans}, "extras": extras, "host": QUIET}
 
     def close(self):
         pass
@@ -101,7 +99,7 @@ def _result(point_id="b8-p512-mixed", *, arms=B.ARMS, span_scale=1.0, reps=2):
     [point] = [p for p in expand_sweep("quick") if p.id == point_id]
     resolved = tuple(Arm(arm, control=None if arm == B.PLAIN else B.PLAIN) for arm in arms)
     return run_benchmark(resolve_spec(B.SPEC).preset, resolved, (point,), sweep="quick", reps=reps,
-                         factory=SpanFactory(span_scale), git_commit="c" * 40)
+                         factory=SpanFactory(span_scale), git_commit="c" * 40, cpus=CPUS)
 
 
 def _rows(entry):
@@ -134,18 +132,6 @@ def test_the_rows_sum_to_the_spans_arms_audit_over_plain_and_each_is_the_part_it
     assert sum(shares.values()) == pytest.approx(1.0)
 
 
-def test_each_spans_arms_step_by_part_is_its_reps_mean():
-    [row] = _result()["points"]
-    entry = B.point(row, {"result": "x"})
-    assert list(entry["arms"]) == list(B.SPANS_ARMS)
-    audit = entry["arms"][B.AUDIT_OFF]
-    assert audit["kinds"]["graph"]["parts_ms"] == pytest.approx(AUDIT_GRAPH)
-    assert audit["kinds"]["eager"]["parts_ms"] == pytest.approx(AUDIT_EAGER)
-    assert (audit["kinds"]["graph"]["steps"], audit["kinds"]["eager"]["tokens_per_step"]) == (GRAPH_STEPS, 643.0)
-    assert audit["topup_busy_share"] == 0.0 and entry["arms"][B.AUDIT_SPANS]["topup_busy_share"] == 0.9
-    assert entry["arms"][B.PLAIN_SPANS]["kinds"]["graph"]["parts_ms"]["linear"] == pytest.approx(6.6)
-
-
 def test_spans_enter_no_gate_and_no_ratio():
     """The same runs with every span a thousand times larger: the gates, every metric and every ratio are equal; only
     the spans and the extras that carry them differ."""
@@ -169,40 +155,6 @@ def test_an_arm_without_spans_or_a_missing_arm_is_refused():
         rep["extras"] = {"filler_share": 0.7}
     with pytest.raises(ValueError, match=f"{B.AUDIT_SPANS} at b8-p512-mixed rep 0 recorded no spans"):
         B.attribution(row)
-
-
-def test_the_breakdown_command_reads_result_files(tmp_path, capsys):
-    paths = []
-    for point in ("b8-p512-mixed", "b32-p512-mixed"):
-        paths.append(tmp_path / f"{point}.json")
-        paths[-1].write_text(json.dumps(_result(point)))
-    assert main(["breakdown", *map(str, paths), "--json"]) == 0
-    doc = json.loads(capsys.readouterr().out)
-    assert doc["schema"] == B.SCHEMA and [p["point"] for p in doc["points"]] == ["b8-p512-mixed", "b32-p512-mixed"]
-    assert main(["breakdown", str(paths[0])]) == 0
-    markdown = capsys.readouterr().out
-    assert "| top-up contention |" in markdown and "| **step** |" in markdown and "ratio" not in markdown.split("\n## ")[1]
-
-
-def test_the_breakdown_takes_each_points_newest_passing_run_that_times_every_arm_from_the_remote(tmp_path):
-    producer = Producer(tmp_path)
-    kept = producer.ran("r20261024-020000-0001", B.SPEC, "b8-p512-mixed", _result("b8-p512-mixed"))
-    old_arms = producer.ran("r20261024-030000-0002", B.SPEC, "b8-p512-mixed",
-                            _result("b8-p512-mixed", arms=(B.PLAIN, B.AUDIT)))
-    table = B.build(store=_fresh(tmp_path, producer), root=tmp_path, added=lambda spec: ADDED, log=lambda _: None)
-    [b8] = table["points"]
-    assert (b8["point"], b8["source"]["run"], b8["source"]["art"]) == ("b8-p512-mixed", "r20261024-020000-0001", kept)
-    assert [(s["run"], s["art"], s["why"]) for s in table["skipped"]] == [
-        ("r20261024-030000-0002", old_arms, f"no timed {', '.join(B.SPANS_ARMS)} at b8-p512-mixed"),
-        (None, None, "no passing run")]
-    assert table["skipped"][1]["point"] == "b32-p512-mixed"
-    assert "r20261024-020000-0001" in B.render(table)
-
-
-def test_the_breakdown_names_its_specs_card_by_its_card_file():
-    assert B.cards_named() == "NVIDIA RTX PRO 6000 Blackwell Server Edition"
-    assert "on one NVIDIA RTX PRO 6000 Blackwell Server Edition, the bandwidth audit's" in B.render(
-        {"points": [], "skipped": []})
 
 
 def test_the_served_table_puts_a_records_breakdown_beside_the_protocols_row(tmp_path):

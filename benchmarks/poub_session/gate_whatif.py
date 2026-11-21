@@ -6,10 +6,10 @@ and root's receipt on the challenger's come back to the nanosecond, and so the l
 (`identity`, checked; the script exits 1 when it fails).
 
 The loop replayed is `verifier.py`'s at k = 1, as a session's record shows it, and a record of another form is refused:
-at root g the verifier asks the challenger for openings coin g and chal_(g+2) in one round trip
+at root g the verifier asks the challenger for sample g's coins and chal_(g+2), the challenge in the last round trip
 (`coins.SessionCoins.ahead`), sends window g's samples (its `draws_sent_ns` D_g), then chal_(g+2) (its `released_ns`
 R_(g+2)); chal_0 and chal_1 each go alone, stamped before they are asked (`audit.AuditRun._release`), and the last two
-groups' openings coins go alone. Group g's root arrives at A_g. The prover's record (`prover.json`) has each pass from
+groups' samples go alone. Group g's root arrives at A_g. The prover's record (`prover.json`) has each pass from
 its coin's arrival to its root, ph_g, and from its root to its send, gp_g, and τ, half the verifier↔prover round trip
 (verifier.json's `rtt` median), puts them on the verifier's clock: root g seen at S_g = A_g − τ − gp_g, coin g arrived
 at C_g = S_g − ph_g. So:
@@ -56,12 +56,12 @@ sys.path.insert(0, str(HERE))
 
 import auditor_line as al  # noqa: E402
 
-from verity.protocols.proofs.spot.verifier.challenger import remote  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier import coins  # noqa: E402
+from verity.protocols.proof.spot.verifier.challenger import remote  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier import coins  # noqa: E402
 
 RTT_MS = (0.3, 1.15, 10.0, 25.0, 50.0)
 """The round trips a row is replayed at by default, ms: in-region and a few farther."""
-FAMILIES = (coins.CHALLENGE, coins.OPENINGS)
+FAMILIES = (coins.CHALLENGE, coins.SAMPLE)
 
 
 class Refused(ValueError):
@@ -142,16 +142,19 @@ def record(s: dict, lines: list[str], auditor: list[dict], prover: dict, tau: in
     log = log_coins(lines)
     if {label for label, *_ in log} - set(FAMILIES):
         raise Refused(f"its release log has {sorted({x[0] for x in log} - set(FAMILIES))} coins: the replay models "
-                      "challenge and openings coins only")
+                      "challenge and sample coins only")
     at = {(label, i): j for j, (label, i, *_) in enumerate(log)}
-    if any((f, g) not in at for f in FAMILIES for g in range(n)):
-        raise Refused(f"its release log hasn't a challenge and an openings coin for each of its {n} groups")
+    m = sum(1 for label, *_ in log if label == coins.SAMPLE) // max(n, 1)
+    first = {g: at.get((coins.SAMPLE, g * m)) for g in range(n)}
+    last = {g: at.get((coins.SAMPLE, g * m + m - 1)) for g in range(n)}
+    if m < 1 or any((coins.CHALLENGE, g) not in at or first[g] is None or last[g] is None for g in range(n)):
+        raise Refused(f"its release log hasn't a challenge and a sample's coins for each of its {n} groups")
     if [x[:2] for x in log[:2]] != [(coins.CHALLENGE, 0), (coins.CHALLENGE, 1)]:
         raise Refused("its release log doesn't start with σ_0 and σ_1, each asked alone")
-    alone = [g for g in range(n - 2) if (j := at[coins.OPENINGS, g]) + 1 >= len(log)
+    alone = [g for g in range(n - 2) if (j := last[g]) + 1 >= len(log)
              or log[j + 1][:3] != (coins.CHALLENGE, g + 2, log[j][2])]
     if alone:
-        raise Refused(f"σ_(g+2) wasn't asked with openings coin g, after its root, in one round trip at g = {alone[:8]} "
+        raise Refused(f"σ_(g+2) wasn't asked with sample g's last coins, after its root, in one round trip at g = {alone[:8]} "
                       "(coins.SessionCoins.ahead): the replay models a k = 1 loop whose every root asks its two coins at once")
     R = [w["released_ns"] for w in seen]
     A = [w["arrivals_ns"][-1] for w in seen]
@@ -167,8 +170,8 @@ def record(s: dict, lines: list[str], auditor: list[dict], prover: dict, tau: in
     C = [x - p for x, p in zip(S, ph)]
     pure = [S[0] - C[0]] + [S[g] - max(C[g], A[g - 1] - tau) for g in range(1, n)]
     Q = [max(A[0], b[0], C[1] - tau)] + [max(a, x) for a, x in zip(A[1:], b[1:])]
-    end = [log[at[coins.CHALLENGE, g + 2]][4] if g + 2 < n else log[at[coins.OPENINGS, g]][4] for g in range(n)]
-    P = [end[g] - log[at[coins.OPENINGS, g]][3] for g in range(n)]
+    end = [log[at[coins.CHALLENGE, g + 2]][4] if g + 2 < n else log[last[g]][4] for g in range(n)]
+    P = [end[g] - log[first[g]][3] for g in range(n)]
     sigma0 = log[at[coins.CHALLENGE, 0]]
     return SessionTimes(n=n, tau=tau, window=s["window_ns"], R=R, A=A, D=D, Ra=Ra, Aa=Aa,
                         coin=[c - r for c, r in zip(C, R)], pure=pure, gp=gp,

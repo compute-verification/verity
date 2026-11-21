@@ -1,12 +1,11 @@
 """The line of record as the Lean verifier computes it (`auditor_line.line_of_record`: `poub-verifier`'s
 `line_record` request off the record, or its `line` of groups and windows given), held exactly to `line.py`'s on the
 same inputs: a disagreement refuses the line, naming both values, whether
-the Lean's answer or line.py's is the one that moved, and on gate runs 5-7's credited sessions the Lean's line gives
+the Lean's answer or line.py's is the one that moved, and on gate run 7's credited sessions the Lean's line gives
 the line at each T the recorded `auditor_line.json` holds, every share bit for bit once the half chunk the chips'
-whole chunks add to the record's S is given back (gate run 7's all of them) but for four of gate runs 5 and 6's
-(`ULP`), where the record's float arithmetic is a float off the exact share's nearest.
+whole chunks add to the record's S is given back.
 
-`fixtures/gate_run_<G>.json.gz` holds each credited session's line inputs on the auditor's clock, of groups and windows
+`fixtures/gate_run_7.json.gz` holds each credited session's line inputs on the auditor's clock, of groups and windows
 given (`line`), as `verifier.recorded_inputs` read them from the run's record before the line read the Lean's record,
 with no bursts (the reading of gate runs up to 7), its groups as rows in `line.GROUP`'s order, beside the recorded
 shares and line (from a run that reran each run's `auditor_line.analyse` through the Lean)."""
@@ -16,7 +15,6 @@ import copy
 import dataclasses
 import gzip
 import json
-import math
 import re
 import sys
 from fractions import Fraction
@@ -29,12 +27,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 import auditor_line as al  # noqa: E402
 
-from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec, line, receipts  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier.session import lean_verifier as lv  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier import audit, codec, line, receipts  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier.session import lean_verifier as lv  # noqa: E402
 
 FIXTURES = Path(__file__).parent / "fixtures"
 RECORDED_DISK = 4.4e9
-"""The disks' rate gate runs 5-7 were read at, which `auditor_line.RATES` has since lowered to the card's measurement."""
+"""The disks' rate gate run 7 was read at, which `auditor_line.RATES` has since lowered to the card's measurement."""
 OLD = {"4.4e+09": line.TIME_HELD, "5.4e+10": line.LINK_CHARGED}
 """The recorded lines' forms by today's names (disk 4.4e9, and disk 4.4e9 plus link 5e10)."""
 GROUPS = [{"released_ns": 10 ** 9 * g, "last_ns": 10 ** 9 * g + 10 ** 8, "passes": 2, "least": 1000, "weights": 1200,
@@ -163,24 +161,15 @@ def test_any_other_difference_refuses_the_line_too(change, at):
     assert at in str(e.value)
 
 
-ULP = {5: {(2, line.TIME_HELD, "time")},
-       6: {(0, line.TIME_HELD, "snapshot"), (0, line.LINK_CHARGED, "time"), (2, line.LINK_CHARGED, "snapshot")},
-       7: set()}
-"""The recorded shares (session, form, share) a float apart from the exact share's nearest float: gate runs 5-7 were
-analysed in floats, before line.py, and these four came out the next float over, no nearer the exact share."""
-
-
-@pytest.mark.parametrize("g", [5, 6, 7])
-def test_the_leans_line_is_the_record_of_gate_runs_5_to_7(lean, g):
+def test_the_leans_line_is_the_record_of_gate_run_7(lean):
     """Each credited session's shares, both forms, over time and at the passes, weights and filler, with its worst
     stretch, through the Lean's line are the recorded floats bit for bit once the half chunk the chips' rounding up
     adds is given back: the record charged S = chip_bytes/b = 743590.5 chunks, the line charges 743591, so every
     share above zero is the recorded one's exact value less (S·b - chip_bytes)/node_bytes, and the worst stretch is
-    the same. That holds but for `ULP`'s, each the float beside the exact share's nearest and no nearer it; and the
-    line at each T is the recorded one, its session the record's."""
-    run = json.loads(gzip.decompress((FIXTURES / f"gate_run_{g}.json.gz").read_bytes()))
-    assert run["gate_run"] == g and run["rates"] == al.rates_at(RECORDED_DISK, bursts="none")
-    got, off = {}, set()
+    the same; and the line at each T is the recorded one, its session the record's."""
+    run = json.loads(gzip.decompress((FIXTURES / "gate_run_7.json.gz").read_bytes()))
+    assert run["gate_run"] == 7 and run["rates"] == al.rates_at(RECORDED_DISK, bursts="none")
+    got = {}
     for s in run["sessions"]:
         inputs = {**s["inputs"], "groups": [dict(zip(line.GROUP, x)) for x in s["inputs"]["groups"]]}
         b, chip = inputs["block_bytes"], inputs["chip_bytes"]
@@ -195,11 +184,7 @@ def test_the_leans_line_is_the_record_of_gate_runs_5_to_7(lean, g):
                     continue
                 share = line.number(mine["exact"][x])
                 exact = share + half if share else share
-                if float(exact) != w:
-                    off.add((s["k"], form, x))
-                    assert w == math.nextafter(float(exact), w), (s["k"], form, x)
-                    assert abs(Fraction(w) - exact) > abs(Fraction(float(exact)) - exact), (s["k"], form, x)
-    assert off == ULP[g]
+                assert float(exact) == w, (s["k"], form, x)
     for t, row in run["line"].items():
         at = [s for s in run["sessions"] if s["T"] == t]
         assert row["credited_sessions"] == [s["k"] for s in at]

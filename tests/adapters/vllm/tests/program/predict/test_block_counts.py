@@ -4,11 +4,14 @@ gates, its gate table and its verdict agree with `InferenceOnlyCheck.Count`'s Py
 and `check_count`, which `inference-only-count-difftest` holds the Lean to) on the session Program, m activations of the block
 Definition; the public judgment holds only its record's fields and no count, so days of different counts under n publish
 the same bytes, and a refusal past n names n; the exact counts are in the private file alone (0600); the wiring between
-leaf widths prices at no gate; a block reaching an unpriced primitive leaves the gates undecided; on `test_window_circuit`'s TINY window a block's fresh bits are B's k
+leaf widths prices at no gate; a primitive with no Boolean body refuses the circuit, and a block reaching one a table lacks
+leaves the gates undecided; `main` counts a record only beside the registration that binds it (its SHA-512,
+program, partition and run) and refuses one with none; on `test_window_circuit`'s TINY window a block's fresh bits are B's k
 (`inference_blocks.budgets`); and the module's import alone loads no registry module, which `resolve` loads on its first
 call."""
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import os
@@ -18,24 +21,32 @@ import sys
 from pathlib import Path
 
 import pytest
-from verity.circuits import codec
-from verity.circuits import partition_v2 as PV2
-from verity.circuits.defs import REGISTRY, bind
-from verity.circuits.ops import gemm as GEMM_OPS
-from verity.circuits.ops.boolean.versions import gate_table
-from verity.circuits.population import BitsWord, WordBits, wired_population_program
-from verity.commitments.periods import interface as IF
-
 import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
 from verity_vllm.program.predict import block_counts as BC
 from verity_vllm.records import block_counts as RBC
 from verity_vllm.records.fields import RecordError, UnknownField
 
-REFERENCE = Path(__file__).resolve().parents[6] / "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/scripts/inference_only_reference.py"
+from verity.circuits import codec
+from verity.circuits import count as K
+from verity.circuits import partition_v2 as PV2
+from verity.circuits import program as PG
+from verity.circuits.defs import (
+    CompositeDefinition,
+    PrimitiveDefinition,
+    bind,
+)
+from verity.circuits.ops import gemm as GEMM_OPS
+from verity.circuits.ops.boolean import versions as V
+from verity.circuits.population import BitsWord, WordBits, wired_population_program
+from verity.circuits.program import NoBooleanBody, Program
+from verity.circuits.types import Value
+from verity.commitments.periods import interface as IF
+
+REFERENCE = Path(__file__).resolve().parents[6] / "verity/protocols/policy/training_detection/inference_only/verifier/lean/scripts/inference_only_reference.py"
 GEMM = 'Gemm_v2{K=64,N=8,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}'
 ROPE = "RoPEHead_v1{D=16}"
 DAY = "2026-11-01"
-ON_DEMAND = "LEnable_v1"
+ON_DEMAND = "GatherBf16x64_v1"
 ALONE = """
 import json, sys
 from verity_vllm.program.predict import block_counts as BC
@@ -81,7 +92,8 @@ def test_the_count_is_ncicheck_counts_on_the_session_program(small):
     same c, k and n the judgment's."""
     pub, private = BC.judgment(DAY, [(small, None)], {"c": 10 ** 12, "k": 10 ** 12, "n": 2})
     (cls,) = pub.classes
-    fn, m, steps = BC.session(small)
+    session, m, steps = BC.session(small)
+    fn = session.fn
     assert (m, steps, cls.slots, cls.steps, private["total"], private["windows"]) == (2, 3, 2, 3, 2, 1)
     assert cls.definition == PV2.id_digest(fn) and not cls.unpriced and private["blocks"] == {cls.definition: 2}
     key = codec.descriptor_id(fn)
@@ -100,17 +112,89 @@ def test_the_count_is_ncicheck_counts_on_the_session_program(small):
     assert cls.fresh == IF.input_count(small)["free"] // 2
 
 
-def _run(tmp_path: Path, record: dict, windows: int, decl: dict, tag: str) -> tuple[bytes, Path]:
-    """`main` on ``windows`` served windows of ``record``, each with a registration: its public file's bytes and its
-    private file."""
-    (tmp_path / "circuit.json").write_text(json.dumps(record))
-    (tmp_path / "registration.json").write_text("{}")
+def _impostor(tid: str):
+    """A Definition under ``tid`` whose body is another: the registered one's with its two parameters swapped."""
+    real = BC.resolve(tid)
+    d = real.defn
+    other = CompositeDefinition(d.name, d.version, d.statics, d.signature, lambda B, S, a, b: d.body(B, S, b, a),
+                                register=False, ports=d.ports)
+    fn = bind(other, **real.bindings)
+    assert codec.descriptor_id(fn) == tid and fn is not real
+    return fn
+
+
+def test_a_record_its_ids_do_not_rebuild_is_refused_by_name(small, monkeypatch):
+    """The counts refuse a record whose template ids rebuild another program than the record's digest names: its program
+    field tampered, or one id bound to another body than the record's (two bodies under one id); and one that names no
+    program digest. The honest record is counted."""
+    assert BC.session(small)[1:] == (2, 3) and BC.fresh(small, 2, None, None) > 0
+    honest = codec.program_digest(IF.program_of_record(small, BC.resolve)[0])
+    assert honest == small["program"]
+    bare = {k: v for k, v in small.items() if k != "program"}
+    for count in (lambda d: BC.session(d), lambda d: BC.fresh(d, 2, None, None)):
+        with pytest.raises(ValueError, match="test/blocks: the circuit record names no program digest, so the Definitions its "
+                                             "template ids name can't be held to the declared circuit, and it is not counted"):
+            count(bare)
+        with pytest.raises(ValueError, match=f"test/blocks: its template ids rebuild the program {honest}, not the record's "
+                                             f"{'0' * 128}: a template's body under its id is not the declared circuit's"):
+            count({**small, "program": "0" * 128})
+    swapped = {ROPE: _impostor(ROPE)}
+    real = BC.resolve
+    monkeypatch.setattr(BC, "resolve", lambda tid: swapped.get(tid) or real(tid))
+    for count in (lambda d: BC.session(d), lambda d: BC.fresh(d, 2, None, None),
+                  lambda d: BC.judgment(DAY, [(d, None)], {"c": 10 ** 12, "k": 10 ** 12, "n": 2})):
+        with pytest.raises(ValueError, match=f"not the record's {small['program']}: a template's body under its id is not "
+                                             "the declared circuit's, and the record is not counted"):
+            count(small)
+
+
+def _registration(body: bytes, record: dict, **change) -> dict:
+    """The registration that binds the circuit record ``record`` whose file's bytes are ``body``, but for ``change``."""
+    return {"program": record.get("program"), "partition": record.get("partition"),
+            "window": {"circuit": hashlib.sha512(body).hexdigest(), "run": record.get("run")}, **change}
+
+
+def _main(tmp_path: Path, record: dict, windows: int, decl: dict, tag: str, registration: dict | None = None) -> int:
+    body = json.dumps(record).encode()
+    (tmp_path / "circuit.json").write_bytes(body)
+    reg = tmp_path / "registration.json"
+    reg.write_text(json.dumps(_registration(body, record) if registration is None else registration))
     (tmp_path / "declaration.json").write_text(json.dumps(decl))
-    out, private = tmp_path / f"public-{tag}.json", tmp_path / f"private-{tag}.json"
-    a = BC.Options(day=DAY, declaration=tmp_path / "declaration.json", private=private, out=out,
-                   window=[[str(tmp_path / "circuit.json"), "-"]] * windows)
-    assert BC.main(a) == 0
-    return out.read_bytes(), private
+    a = BC.Options(day=DAY, declaration=tmp_path / "declaration.json", private=tmp_path / f"private-{tag}.json",
+                   out=tmp_path / f"public-{tag}.json", window=[[str(tmp_path / "circuit.json"), str(reg)]] * windows)
+    return BC.main(a)
+
+
+def _run(tmp_path: Path, record: dict, windows: int, decl: dict, tag: str) -> tuple[bytes, Path]:
+    """`main` on ``windows`` served windows of ``record``, each with the registration that binds it: its public file's
+    bytes and its private file."""
+    assert _main(tmp_path, record, windows, decl, tag) == 0
+    return (tmp_path / f"public-{tag}.json").read_bytes(), tmp_path / f"private-{tag}.json"
+
+
+@pytest.mark.parametrize("change, refusal", [
+    ({"program": "ab" * 20}, "the circuit record names another program, partition or run than its registration"),
+    ({"partition": "ab" * 20}, "the circuit record names another program, partition or run than its registration"),
+    ({"window": {"circuit": "ab" * 64}}, r"circuit.json is not the circuit record the registration binds \(abab"),
+])
+def test_a_record_its_registration_doesnt_bind_is_not_counted(small, tmp_path, change, refusal):
+    """A registration that names another program or partition than the record, or binds other bytes, refuses the count
+    before any window is counted, and nothing is written."""
+    body = json.dumps(small).encode()
+    with pytest.raises(ValueError, match=refusal):
+        _main(tmp_path, small, 1, {"c": 10 ** 12, "k": 10 ** 12, "n": 2}, "x", _registration(body, small, **change))
+    assert not (tmp_path / "public-x.json").exists() and not (tmp_path / "private-x.json").exists()
+
+
+def test_a_window_with_no_registration_is_not_counted(small, tmp_path):
+    (tmp_path / "circuit.json").write_text(json.dumps(small))
+    (tmp_path / "declaration.json").write_text(json.dumps({"c": 10 ** 12, "k": 10 ** 12, "n": 2}))
+    a = BC.Options(day=DAY, declaration=tmp_path / "declaration.json", private=tmp_path / "private.json",
+                   window=[[str(tmp_path / "circuit.json"), "-"]])
+    with pytest.raises(ValueError, match="circuit.json: no registration is given, so nothing holds the circuit record to "
+                                         "the registered circuit, and it is not counted"):
+        BC.main(a)
+    assert not (tmp_path / "private.json").exists()
 
 
 def test_days_of_different_counts_under_n_publish_the_same_bytes(small, tmp_path, capsys):
@@ -161,61 +245,78 @@ def test_the_judgment_holds_its_fields_alone(small):
     assert "ab" * 64 not in text and "test/blocks" not in text
 
 
-def test_the_gate_table_prices_bit_at_by_its_boolean_version():
-    """`TokenFeed_v1` reads `BitAtx32_v1`, which the one gate table (`definitions.boolean.gate_table`) prices by
+def _calling(*fns) -> Program:
+    """A circuit calling each of ``fns`` once on parameters of its own."""
+    params = tuple((f"{i}.{n}", t) for i, fn in enumerate(fns) for n, t in fn.signature()[0])
+    ret = fns[0].signature()[1]
+
+    def body(B, S, *a):
+        out, at = None, 0
+        for fn in fns:
+            k = len(fn.signature()[0])
+            got = B.call(fn, *a[at:at + k])
+            out, at = got if out is None else out, at + k
+        return out
+    return Program(bind(CompositeDefinition("BlockCountsCalling", 1, (), lambda S: (params, ret), body, register=False)))
+
+
+def test_the_gate_table_prices_bit_at_by_its_body():
+    """`TokenFeed_v1` reads `BitAtx32_v1`, which the gate table (`count.table`) prices by its body in the circuit,
     `BitAtx32_v2`: 147 gates, every primitive priced, so a feed's gates are its primitives' sum."""
     feed = BC.resolve("TokenFeed_v1{NP=4,FIRST=false}")
-    table, unpriced = gate_table([feed])
-    assert unpriced == [] and table["BitAtx32_v1"] == 147
+    table = K.table(_calling(feed))
+    assert table["BitAtx32_v1"] == 147
     g, miss = BC.gates(feed, table)
     assert not miss and g == sum(table.values()) > 147
 
 
-def test_a_primitive_with_no_boolean_version_is_unpriced():
-    """`F32TanhRn_v1` has no Boolean version: the table leaves it out and a block lists its activations apart, its gates not
-    guessed."""
-    tanh = REGISTRY["F32TanhRn_v1"]
-    assert gate_table([tanh]) == ({}, ["F32TanhRn_v1"])
-    assert BC.gates(tanh, {}) == (0, {"F32TanhRn_v1": 1})
+def test_a_primitive_with_no_boolean_body_is_refused_and_a_table_lacking_one_leaves_it_unpriced(monkeypatch):
+    """A word primitive no Boolean Definition names as its word is refused by name when a circuit reaches it (under the
+    catalog's lookup alone: the suite's conftest gives a test's own primitive a stand-in body), and a block counted by a table
+    that lacks it lists its activations apart, its gates not guessed."""
+    monkeypatch.setattr(PG, "_BODY_LOOKUP", [V.boolean_version])
+    lonely = PrimitiveDefinition("BlockCountsLonelyWord", 1, (("x", Value(32)),), Value(32), lambda x: x, register=False)
+    with pytest.raises(NoBooleanBody, match="BlockCountsLonelyWord_v1"):
+        _calling(lonely)
+    assert BC.gates(lonely, {}) == (0, {"BlockCountsLonelyWord_v1": 1})
 
 
 def test_the_wiring_between_leaf_widths_is_priced_at_no_gate():
-    """`WordBits{16}` and `BitsWord{32}` only rename wires (`BitOf{W}x{I}`, `WordOf{W}`, whose Boolean versions hold no gate), so
-    the table prices each at 0 and an int8 product reading its weights as u16 words prices as its coordinates; a block reaching
-    them beside `F32TanhRn_v1`, which has no Boolean version, still lists that apart."""
-    wiring = [bind(WordBits, W=16), bind(BitsWord, W=32)]
-    assert gate_table(wiring) == ({**{f"BitOf16x{i}_v1": 0 for i in range(16)}, "WordOf32_v1": 0}, [])
-    table, unpriced = gate_table([*wiring, REGISTRY["F32TanhRn_v1"]])
-    assert unpriced == ["F32TanhRn_v1"] and BC.gates(REGISTRY["F32TanhRn_v1"], table) == (0, {"F32TanhRn_v1": 1})
+    """`WordBits{16}` and `BitsWord{32}` only rename wires (`BitOf{W}x{I}`, `WordOf{W}`, whose bodies hold no gate), so the
+    table prices each at 0 and an int8 product reading its weights as u16 words prices as its coordinates."""
+    assert K.table(_calling(bind(WordBits, W=16), bind(BitsWord, W=32))) == \
+        {**{f"BitOf16x{i}_v1": 0 for i in range(16)}, "WordOf32_v1": 0}
     mm = bind(GEMM_OPS.ScaledMmS8V3, K=64, N=8, **GEMM_OPS.GEMM_SM120_S8)
     coordinate = bind(GEMM_OPS.ScaledMmS8Coordinate, K=64, **GEMM_OPS.GEMM_SM120_S8)
-    table, unpriced = gate_table([mm])
-    assert not unpriced and BC.gates(mm, table) == (8 * BC.gates(coordinate, table)[0], {}) and mm.gates > 8 * coordinate.gates
+    table = K.table(_calling(mm))
+    assert BC.gates(mm, table) == (8 * BC.gates(coordinate, table)[0], {}) and mm.gates > 8 * coordinate.gates
 
 
 def test_a_block_with_an_unpriced_primitive_leaves_the_gates_undecided():
     """Its gates are a lower bound: under c the gates rule is undecided and the day refused, naming the primitive and c; a
     lower bound already over c refuses on the gates."""
     cls = RBC.BlockClass(definition="ab" * 64, slots=2, steps=3, gates=100, unpriced={"BitAtx32_v1": 1}, fresh=7)
-    checks, reason = BC.judge([cls], 2, 10 ** 6, 10, 2)
+    checks, reason = RBC.judge([cls], 2, 10 ** 6, 10, 2)
     assert checks == {"gates": "undecided", "fresh": "accept", "count": "accept"}
     assert reason == ("undecided: a block reaches BitAtx32_v1, which the gate table can't price, so its gates are a lower "
                       "bound against c = 1000000")
-    assert BC.judge([cls], 2, 99, 10, 2) == ({"gates": "refuse", "fresh": "accept", "count": "accept"},
+    assert RBC.judge([cls], 2, 99, 10, 2) == ({"gates": "refuse", "fresh": "accept", "count": "accept"},
                                              "a block of 100 gates, more than c = 99")
 
 
 @pytest.mark.slow
 def test_on_the_tiny_window_a_blocks_fresh_bits_are_bs_k():
-    """TINY's window at its class (2 slots): two blocks a window, each of the session's gates, and fresh bits B's k with the
-    weights held (its slot's lane of the scan state)."""
-    from tests.program.predict.test_window_circuit import WINDOW, _circuit
+    """TINY's fixed load at its class (2 slots, the class circuit): two blocks a window, each of the session's gates, and fresh bits B's k with the
+    weights held (the scan state its lanes' units read)."""
     from verity_vllm.program.predict import inference_blocks as IB
     from verity_vllm.program.predict.window_builder import WEIGHTS
+    from verity_vllm.program.predict.window_circuit import class_circuit
 
-    circuit = _circuit(WINDOW)
-    doc = {**circuit.description(), "name": circuit.name, "partition": "",
-           "blocks": circuit.blocks.doc(sum(circuit.units.values()), "")}
+    from tests.program.predict import test_steps as S
+    from tests.program.predict.test_window_circuit import CLASS, GRAIN
+
+    circuit = class_circuit(S._registered(), CLASS, None, GRAIN)
+    doc = IF.descriptor_record(circuit, 64)
     roots = {p: "ab" * 64 for p in circuit.registered.params if p.split("/", 1)[0] == WEIGHTS}
     pub, private = BC.judgment(DAY, [(doc, roots)], {"c": 0, "k": 0, "n": 0}, pins=roots)
     (cls,) = pub.classes

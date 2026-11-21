@@ -19,10 +19,14 @@ import json
 import os
 import resource
 import subprocess
+import sys
 import tempfile
 import time
 from pathlib import Path
 from typing import Any, Mapping, Sequence
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from verity.protocols.proof.spot.verifier.one_stage import lean_child as LC
 
 #: the stack limit the executable runs under, where its caller's is lower: Linux's limit on arguments is then its own
 STACK = 24 << 20
@@ -80,10 +84,12 @@ def run(case: Mapping[str, Any], exe: Path, command: str, d: Path) -> dict[str, 
         raise ValueError(f"{len(args)} arguments and the environment take {took} bytes, past Linux's {ARGS_LIMIT}")
     t = time.monotonic()
     with open(d / "stdout", "w") as out, open(d / "stderr", "w") as err:
-        p = subprocess.Popen(args, cwd=d, stdout=out, stderr=err, preexec_fn=_stack)
+        p = subprocess.Popen(args, cwd=d, stdout=out, stderr=err, preexec_fn=_stack, env=LC.lean_env())
         _, status, use = os.wait4(p.pid, 0)
         p.returncode = os.waitstatus_to_exitcode(status)
     seconds = round(time.monotonic() - t, 1)
+    LC.refuse_panic((d / "stderr").read_text(errors="replace"))
+    LC.refuse_exit(p.returncode, LC.CHECK_EXITS)
     lines = (d / "stdout").read_text().strip().splitlines()
     names = args[5:]
     return {"rc": p.returncode, "line": lines[-1] if lines else None, "seconds": seconds, "peak_rss_kb": use.ru_maxrss,

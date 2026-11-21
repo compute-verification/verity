@@ -11,7 +11,9 @@
 per trace in `TRACES`, each on a fresh server (so every trace starts with a cold prefix cache), into DIR/<trace>/:
 ``raw/`` holds the hook's files and ``client.jsonl`` the client's. `summarize` (`summary.py`) joins them into each trace's
 ``steps.jsonl`` and ``requests.jsonl``, compares every trace's output ids request by request, and writes DIR/summary.json
-and DIR/README.md. `compare` does the same comparison across corpora that serve the same plan.
+and DIR/README.md. `compare` does the same comparison across corpora that serve the same plan. DIR holds no file of the
+plan: its meta.json has the plan's SHA-512 and the recipe that rebuilds it (`plan_record`), which is how `compare` tells
+one plan from another.
 
 `HOSTILE`'s traces test batch invariance against a malicious scheduler. Each serves heavy's load on one server (chunked
 prefill, an 8192-token budget): ``honest`` under vLLM's own scheduler, the others under `vllm_adversarial_plugin`'s hostile
@@ -36,7 +38,7 @@ egress from the release a, or from the admission s) is the trace's meta.json `ne
 TCP accept, headers and body in the API server, so that the order requests arrived in can be told apart on each side of
 the wire.
 
-``--admit tick`` serves every trace of the run under the attested tick (`verity.protocols.resource_accounting.network.prover.admission`, its
+``--admit tick`` serves every trace of the run under the attested tick (`verity.protocols.accounting.network.prover.admission`, its
 ``tick``): the server turns the network attester's scheme on by name (`verity_vllm.pipeline.scheme_plugin`), its
 `register` a general plugin beside the tracer, configured by ``VERITY_PROTOCOLS``, and its `Front` the outermost
 middleware, which writes the release headers and the watermark the server gets to its feed in ``raw/``, and each
@@ -151,7 +153,7 @@ CUT = {"cut-8": {"every_steps": 8}, "cut-64": {"every_steps": 64}, "cut-1s": {"e
 TRACES |= {name: (TRACES["honest"][0], f"{TRACES['honest'][1]}, cut at every window edge ({json.dumps(c)})")
            for name, c in CUT.items()}
 #: network attester trace -> (the trace whose server and load it serves, D in buckets). The client reaches the server only through the
-#: active network attester (`verity.protocols.resource_accounting.network.verifier.network_attester`, run by `verity/protocols/resource_accounting/network/attester/network_attester_serve.py serve`), in
+#: active network attester (`verity.protocols.accounting.network.verifier.network_attester`, run by `verity/protocols/accounting/network/attester/network_attester_serve.py serve`), in
 #: cells. A late egress cell fails its connection closed and vLLM aborts the request, so D, from the network attester's egress base
 #: (`egress_base`), covers the slowest request's send to last token without the network attester (heavy 10.7 s, small KV 55.7 s,
 #: async greedy). Under ``--admit tick`` it is kept, so that a tick trace's network attester has an arrival trace's
@@ -185,7 +187,7 @@ TICK_BUCKET_MS = 100
 TICK_SAT, TICK_FREE = 0.9, 1.1
 #: how long the gate waits on a released request that hasn't reached the engine, or on a silent watermark, before it goes on
 TICK_HOLD_MS = 5000
-#: `verity.protocols.resource_accounting.network.prover.admission.FrontFeed`, the server's side of the release headers and the watermark (the network attester's or
+#: `verity.protocols.accounting.network.prover.admission.FrontFeed`, the server's side of the release headers and the watermark (the network attester's or
 #: `StandIn`'s)
 TICK_MIDDLEWARE = "verity_vllm.pipeline.scheme_plugin.Front"
 CUT_MIDDLEWARE = "verity_vllm.pipeline.cut_plugin.SentFeed"
@@ -291,6 +293,23 @@ def load_docs(c4: Path, tokenizer: Path, n: int) -> list[list[int]]:
     return [e.ids for e in tok.encode_batch(texts, add_special_tokens=False)]
 
 
+def file_sha512(path: Path) -> str:
+    h = hashlib.sha512()
+    with open(path, "rb") as f:
+        while block := f.read(1 << 20):
+            h.update(block)
+    return h.hexdigest()
+
+
+def plan_record(requests: list[dict], c4: Path, tokenizer: Path, docs: int, seed: int) -> dict:
+    """What a corpus keeps of its plan, which it doesn't store: its digest (`traffic.plan_sha512`) and its recipe, what
+    `traffic.plan(load_docs(c4, tokenizer, docs), requests, seed)` takes: the C4 shard and the tokenizer (each a path and
+    the file's SHA-512), the number of documents, the seed and the number of requests."""
+    return {"sha512": traffic.plan_sha512(requests),
+            "recipe": {"c4": str(c4), "c4_sha512": file_sha512(c4), "tokenizer": str(tokenizer),
+                       "tokenizer_sha512": file_sha512(tokenizer), "docs": docs, "seed": seed, "requests": len(requests)}}
+
+
 def plugin_site(site: Path, tick: bool = False, cut: bool = False) -> Path:
     """A directory whose .dist-info declares `vllm_adversarial_plugin.register` and `vllm_trace_plugin.register` as vLLM
     general plugins, in that order: vLLM calls them in the file's order, so the tracer wraps the adversary's `schedule`
@@ -310,7 +329,7 @@ def plugin_site(site: Path, tick: bool = False, cut: bool = False) -> Path:
 
 class StandIn:
     """The network attester's side of ``--admit tick`` where none is in front of the server: what it sends in the release
-    headers and the watermark (`verity.protocols.resource_accounting.network.prover.admission`), from the client's sends. `release` numbers a request
+    headers and the watermark (`verity.protocols.accounting.network.prover.admission`), from the client's sends. `release` numbers a request
     N, in the order of the calls, and puts it in the bucket of `now`, counted from `origin` in buckets of `bucket_s`;
     `close` gives the watermark's next line, ``t n`` with n the releases of buckets up to t, once bucket t has closed
     (`due`). A release after a bucket's line goes to a later bucket whatever `now` says (an event loop may run a timer a
@@ -375,7 +394,7 @@ def tick_modules():
     p = str(ROOT / "adapters/vllm")
     if p not in sys.path:
         sys.path.insert(0, p)
-    from verity.protocols.resource_accounting.network.prover import admission as network_admission
+    from verity.protocols.accounting.network.prover import admission as network_admission
     from verity_vllm.pipeline import scheme_plugin
     return network_admission, scheme_plugin
 
@@ -399,8 +418,9 @@ async def drive(port: int, served: str, requests: list[dict], arrivals: list[flo
     async def one(session, r: dict, at: float, rid: str) -> None:
         await asyncio.sleep(max(0.0, t0 + at - loop.time()))
         sent = loop.time()
-        rec = {"id": rid, "i": r["i"], "planned_s": round(at, 6), "send_s": round(sent - t0, 6),
-               "send_unix": t0_unix + (sent - t0), "max_tokens": r["max_tokens"], "output_ids": [], "chunks": []}
+        rec = {"id": rid, "i": r["i"], "prefix": r.get("prefix"), "prefix_len": r.get("prefix_len"), "planned_s": round(at, 6),
+               "send_s": round(sent - t0, 6), "send_unix": t0_unix + (sent - t0), "max_tokens": r["max_tokens"],
+               "output_ids": [], "chunks": []}
         headers = {"X-Request-Id": rid}
         if cert is not None:
             n, a = cert.release(sent)
@@ -546,9 +566,9 @@ def network_attester_modules():
     for p in (ROOT, ROOT / "benchmarks/network_traces"):
         if str(p) not in sys.path:
             sys.path.insert(0, str(p))
-    from verity.protocols.resource_accounting.network.verifier import network_attester
+    from verity.protocols.accounting.network.verifier import network_attester
 
-    from verity.protocols.resource_accounting.network.attester import network_attester_serve
+    from verity.protocols.accounting.network.attester import network_attester_serve
     return network_attester, network_attester_serve
 
 
@@ -605,8 +625,9 @@ async def drive_network_attester(deployment: dict, endpoints: dict, served: str,
             body = request_body(served, r, rid, sampling)
             request = http_request(body, rid, host)
             sent = time.time()
-            rec = {"id": rid, "i": r["i"], "planned_s": round(at, 6), "send_s": round(loop.time() - t0, 6), "send_unix": sent,
-                   "max_tokens": r["max_tokens"], "seed": body.get("seed"), "output_ids": [], "chunks": []}
+            rec = {"id": rid, "i": r["i"], "prefix": r.get("prefix"), "prefix_len": r.get("prefix_len"), "planned_s": round(at, 6),
+                   "send_s": round(loop.time() - t0, 6), "send_unix": sent, "max_tokens": r["max_tokens"],
+                   "seed": body.get("seed"), "output_ids": [], "chunks": []}
             shim = network_attester.Shim(B, time.time)
             try:
                 reader, writer = await asyncio.open_connection(*listen)
@@ -713,7 +734,7 @@ def start_network_attester(d: Path, port: int, delay: int, span_s: float, key: P
     windows = math.ceil((span_s + delay * tau + NETWORK_ATTESTER_TAIL_S) / (params["window"] * tau))
     w = d / "warden"
     w.mkdir(parents=True, exist_ok=True)
-    subprocess.run([sys.executable, str(ROOT / "verity/protocols/resource_accounting/network/attester/network_attester_serve.py"), "keys", "--dir", str(key)],
+    subprocess.run([sys.executable, str(ROOT / "verity/protocols/accounting/network/attester/network_attester_serve.py"), "keys", "--dir", str(key)],
                    check=True, stdout=subprocess.DEVNULL, env=env)
     flags = [x for k, v in params.items() for x in (f"--{k.replace('_', '-')}", str(v))] + ["--watermark"] * watermark
     with open(w / "serve.log", "w") as log:
@@ -732,7 +753,7 @@ def check_network_attester(d: Path) -> int:
     cells against them), into d/warden/check.json."""
     env = dict(os.environ, PYTHONPATH=os.pathsep.join([str(ROOT), *filter(None, [os.environ.get("PYTHONPATH")])]))
     with open(d / "warden" / "check.log", "w") as log:
-        return subprocess.run([sys.executable, str(ROOT / "verity/protocols/resource_accounting/network/attester/network_attester_serve.py"), "check", "--run",
+        return subprocess.run([sys.executable, str(ROOT / "verity/protocols/accounting/network/attester/network_attester_serve.py"), "check", "--run",
                                str(d / "warden")], stdout=log, stderr=subprocess.STDOUT, env=env).returncode
 
 
@@ -743,7 +764,7 @@ def rate_of(model: Model, name: str, rate: float | None) -> float | None:
 
 
 def tick_args(trace: str | None, given_ms: str | None) -> dict:
-    """``--admit tick``'s constants in microseconds (`verity.protocols.resource_accounting.network.prover.admission.Tick`'s fields) and where τ came from: calibrated on a
+    """``--admit tick``'s constants in microseconds (`verity.protocols.accounting.network.prover.admission.Tick`'s fields) and where τ came from: calibrated on a
     trace's directory (`tick_from`), or given as ``SAT,FREE`` in ms."""
     if (trace is None) == (given_ms is None):
         raise SystemExit("--admit tick takes τ_sat and τ_free from one of --tick-from TRACE_DIR and --tick-ms SAT,FREE")
@@ -932,17 +953,16 @@ def run(args: argparse.Namespace) -> int:
     t = clock()
     docs = load_docs(Path(args.c4), checkpoint / "tokenizer.json", args.docs)
     requests = traffic.plan(docs, args.requests, args.seed)
-    print(f"[corpus] plan: {len(requests)} requests over {len(docs)} documents in {round(clock() - t, 1)} s", flush=True)
-    with open(out / "plan.jsonl", "w", encoding="utf-8") as f:
-        for r in requests:
-            f.write(json.dumps(r, separators=(",", ":")) + "\n")
+    plan = plan_record(requests, Path(args.c4), checkpoint / "tokenizer.json", args.docs, args.seed)
+    print(f"[corpus] plan: {len(requests)} requests over {len(docs)} documents in {round(clock() - t, 1)} s, "
+          f"SHA-512 {plan['sha512']}", flush=True)
     sampling, async_scheduling = VARIANTS[args.variant]
     meta = {"model_id": args.model_id, "model": f"{model.repo}@{model.revision}", "model_what": model.what,
             "variant": args.variant, "sampling": {"name": sampling, **SAMPLING[sampling],
                                                   "seed_rule": request_seed.__doc__ if sampling == "seeded" else None},
             "async_scheduling": async_scheduling, "engine_env": {**ENGINE_ENV, **model.env}, "rate": args.rate,
             "admit": args.admit, "tick": args.tick,
-            "checkpoint": str(checkpoint), "c4": args.c4, "docs": args.docs, "seed": args.seed, "requests": args.requests,
+            "checkpoint": str(checkpoint), "plan": plan,
             "eos_token_ids": stop_ids(checkpoint), "traffic": {"lengths": traffic.LENGTHS, "prefixes": traffic.PREFIXES,
                                                                "shared": traffic.SHARED, "at_end": traffic.AT_END,
                                                                "gap": traffic.GAP, "caps": traffic.CAPS},

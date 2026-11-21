@@ -15,9 +15,9 @@ from verity.commitments import domains as DM
 from verity.circuits.defs import REGISTRY, bind
 from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+from verity.protocols.proof.spot.verifier.one_stage import docket as R
 from verity.commitments import randomness as RND
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+from verity.protocols.proof.spot.verifier.one_stage import partition as P
 
 from tests.pipeline import served_rope as SR
 from tests.pipeline.served_rope import DESIGN, HEADS, ROPE, D
@@ -49,14 +49,15 @@ def test_a_deferred_commits_serving_rows_are_the_verifiers_window_over_the_serve
     # the verifier's own copies: its listed Program, the run root of record, the public body it holds
     defn = bind(REGISTRY["RoPEHead_v1"], D=D)
     program, query = IF.listed_program([(defn, heads)], ())
-    ports = {f"{ROPE}/{p}": {"leaves": heads, "domain": R.window_domain(P.program_digest(program), P.digest(P.partition(program, query)),
+    mine = DRW.window_of(DRW.of_record(RB.path(c["out"], 1), str(c["row_dir"])), str(c["partition"]))
+    ports = {f"{ROPE}/{p}": {"leaves": heads, "domain": R.window_domain(P.program_digest(program), mine.partition_digest,
                                                                           f"{ROPE}/{p}", CS.ROW_SCHEMA, heads, c["run_root"])}
              for p in ("x", "cs", "out")}
     pub = (wdir / "m0-public.bin").read_bytes()
-    v = R.check(rec, program, query, RND.parse_design(DESIGN), CS.SCHEME, ports, leaf_layer=CS.leaf_layer({ROPE: pub}))
+    v = R.check(rec, program, query, RND.parse_design(DESIGN), CS.SCHEME, ports, leaf_layer=CS.leaf_layer({ROPE: pub}),
+                partition=mine.partition)
     assert v.ok, v.detail
     # the same copies from the record alone, as the audit's verifier derives them (no committed value read)
-    mine = DRW.window_of_record(RB.path(c["out"], 1), str(c["row_dir"]), str(c["partition"]))
     assert (mine.partition_digest, mine.run, CS.expected_ports(mine)) == (win["partition_digest"], c["run_root"], ports)
     # and from the window's own records: its circuit record, whose SHA-512 the registration binds
     assert w["circuit"] == hashlib.sha512((wdir / "circuit.json").read_bytes()).hexdigest()

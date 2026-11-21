@@ -21,7 +21,7 @@ The record path's two development checks are findings wherever they reach the ve
 check): an advice binding in a registration (``window.compiler``, ``window.advice``: the compiler and the advice's root and
 length an audit opens, `records_audit.py audit --opening`), since no audit of record reads an advice (V3c's class
 window's circuit is the class's) and no registration of the record path binds one to be opened; and the chain's
-endpoint rebuild (the report's ``endpoint`` step, chain_record.sh's CR_ENDPOINT on the endpoint's records and advice in
+endpoint rebuild (the report's ``endpoint`` step, on the endpoint's records and advice in
 the clear), which the network attester path refuses. The report's steps are the network attester path's (`STEPS`). A
 text field (a verdict's reason, a step's account of what ran in the clear) is declared by its key, its text not read,
 and so is a text file (`TEXT`, a
@@ -69,7 +69,7 @@ OPENING = Development("an advice binding, which an audit opens (records_audit.py
                       "and nothing opens one")
 ENDPOINT = Development("the chain's endpoint rebuild (CR_ENDPOINT: the endpoint's records and advice, in the clear), a "
                        "development check the network attester path refuses")
-#: the chain's steps on the network attester path (`chain_record.report`)
+#: the chain's steps on the network attester path
 STEPS = ("custody", "certificates", "n2", "scan", "lean")
 
 
@@ -77,7 +77,7 @@ def under(prefix: str, table: Mapping[str, Any]) -> dict[str, Any]:
     return {f"{prefix}.{k}": v for k, v in table.items()}
 
 
-#: a Program's descriptor (``verity-ir/descriptor/v1``): the circuit, every field of it structure
+#: a Program's descriptor (``verity-ir/descriptor/v2``): the circuit, every field of it structure
 DESCRIPTOR = {"**": S}
 #: a registered value's entry (`registered_value.Registered.entry`)
 ENTRY = {"value": S, "root": M, "leaves": S, "words": S, "word_bits": S, "domain": S}
@@ -111,9 +111,9 @@ ONE_STAGE = {
     "public": O, "public.bound": O, "public.per_template": O, "public.per_template.*": O, "public.drawn[]": C,
     "public.proved[]": C,
 }
-#: an attestation (`scan_period.ATTESTATION_KEYS`), the network attester's in the clear
+#: an attestation, the network attester's in the clear
 ATTESTATION_DOC = dict.fromkeys(("digest", "direction", "key_id", "link", "signature", "window"), X)
-#: the execution phase's attestations as the piece publishes them (`attester_piece.certificates`): its records' and
+#: the execution phase's attestations: its records' and
 #: its row registrations', each with its own fields alone
 CERTIFICATES = {**under("records[]", ATTESTATION_DOC), **under("rows[]", ATTESTATION_DOC)}
 #: ``verity/certifier/v0``'s answer (`Answer.toJson`) with the piece's placement: K, ε and their terms the protocol's

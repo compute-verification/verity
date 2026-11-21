@@ -6,9 +6,9 @@ import statistics
 from dataclasses import replace
 
 import pytest
-from bench_standins import FakeFactory, inputs
+from bench_standins import CPUS, FakeFactory, inputs
 
-from verity_bench.cli import main
+from verity_bench.kit_report import PIECE
 from verity_bench.vllm import presets
 from verity_bench.vllm import result as result_format
 from verity_bench.vllm.arms import (
@@ -18,10 +18,6 @@ from verity_bench.vllm.presets import (
     expand_sweep,
 )
 from verity_bench.vllm.result import (
-    IdentityMismatch,
-    identity_mismatches,
-    judge,
-    merge,
     validate,
 )
 from verity_bench.vllm.runner import (
@@ -63,20 +59,16 @@ def test_inter_token_latency_is_per_token_after_the_first_and_shares_a_multi_tok
     assert percentile([2.0], 99) == 2.0 and percentile([], 50) is None
 
 
-def test_result_schema_and_identity_strict_judge():
+def test_result_schema_and_identity():
     preset, points, arms = inputs()
-    doc = run_benchmark(preset, arms, points, sweep="quick", reps=2, factory=FakeFactory(), git_commit="abc")
+    doc = run_benchmark(preset, arms, points, sweep="quick", reps=2, factory=FakeFactory(), git_commit="abc", cpus=CPUS)
     validate(doc)
     assert doc["identity"]["arms"][0]["engine_overrides"] == {"quantization": "fp8"}
-    other = {**doc, "identity": {**doc["identity"], "git_commit": "def"}}
-    with pytest.raises(IdentityMismatch, match="git_commit"):
-        judge(doc, other)
-    assert judge(doc, other, ("git_commit",))["accepted"]
 
 
 def test_a_points_numbers_are_measurements_of_its_result(tmp_path, monkeypatch):
     preset, points, arms = inputs()
-    doc = run_benchmark(preset, arms, points[:1], sweep="quick", reps=2, factory=FakeFactory(), git_commit="abc")
+    doc = run_benchmark(preset, arms, points[:1], sweep="quick", reps=2, factory=FakeFactory(), git_commit="abc", cpus=CPUS)
     monkeypatch.setattr(result_format.kit, "host_stamp", lambda: {"commit": "abc", "card": "none"})
     (tmp_path / "result.json").write_text(json.dumps({"schema": "research/result/v0.1", "kind": "verity-vllm-benchmark/v1",
                                                      "run_id": "r1", "measurements": []}))
@@ -107,7 +99,7 @@ def test_every_metric_a_point_measures_has_a_unit():
 def test_ratio_table_puts_the_headline_cell_first():
     preset, points, arms = inputs()
     points = (replace(points[0], batch=8), points[0])
-    doc = run_benchmark(preset, arms, points, sweep="quick", reps=2, factory=FakeFactory(), git_commit="abc")
+    doc = run_benchmark(preset, arms, points, sweep="quick", reps=2, factory=FakeFactory(), git_commit="abc", cpus=CPUS)
     lines = [line for line in render(doc).splitlines() if line.startswith("| b")]
     assert lines[0].startswith("| b32-p512-mixed **headline** | time / output token |")
     assert "2.000×" in lines[0]
@@ -155,10 +147,10 @@ def test_the_decode_metric_is_reported_only_where_every_rep_has_it():
 THREE_ARMS = (Arm("stock-fp8", precision="fp8"), Arm("a", control="stock-fp8"), Arm("b", control="stock-fp8"))
 
 
-def bench(factory=None, *, arms=None, reps=2, points=None):
+def bench(factory=None, *, arms=None, reps=2, points=None, cpus=CPUS):
     preset, default_points, default_arms = inputs()
     return run_benchmark(preset, arms or default_arms, points or default_points, sweep="quick", reps=reps,
-                         factory=factory or FakeFactory(), git_commit="abc")
+                         factory=factory or FakeFactory(), git_commit="abc", cpus=cpus)
 
 
 @pytest.mark.parametrize("resident_failure", [None, "a"])
@@ -206,7 +198,7 @@ def test_decode_time_charges_a_step_to_the_forward_it_waited_on_and_refuses_unse
 
 def test_validate_refuses_dropped_reordered_or_edited_reps():
     """A result's points are recomputed from its reps, so a caller can't drop a slow rep, reorder,
-    edit a mean or change `reps` and still have `judge` accept it."""
+    edit a mean or change `reps` and still have it accepted."""
 
     doc = bench(reps=3)
     validate(doc)
@@ -222,52 +214,6 @@ def test_validate_refuses_dropped_reordered_or_edited_reps():
             validate(bad)
     with pytest.raises(ValueError, match="reps"):
         validate({**doc, "execution": {**doc["execution"], "reps": 2}})
-    with pytest.raises(IdentityMismatch, match="reps"):
-        judge(doc, bench(reps=2))
-    with pytest.raises(IdentityMismatch, match="interleave"):
-        judge(doc, bench(FakeFactory(resident_failure="candidate"), reps=3))
-
-
-def test_an_allow_hides_only_the_paths_it_names_and_judge_lists_what_it_hid():
-    """`--allow precision` used to match every leaf named precision (each arm's as well as the
-    preset's), and `--allow id` every arm id."""
-
-    doc = bench()
-    arms = [dict(a) for a in doc["identity"]["arms"]]
-    arms[1].update(id="other", precision="int4", kernel_digest="digest-x")
-    other = {**doc, "identity": {**doc["identity"], "arms": arms}}
-    for allow in (("id",), ("precision",), ("kernel_digest",)):
-        assert identity_mismatches(doc, other, allow)
-    digest_only = {**doc, "identity": {**doc["identity"], "arms": [arms[0], {**doc["identity"]["arms"][1],
-                                                                              "kernel_digest": "digest-x"}]}}
-    verdict = judge(doc, digest_only, ("arms[*].kernel_digest",))
-    assert verdict["differences"] == {"arms[1].kernel_digest": ["digest-candidate", "digest-x"]}
-
-
-def test_table_merges_one_specs_point_results_only_when_their_identities_agree(tmp_path):
-    """A dispatched spec runs each point as its own run, so a sweep's table is assembled from
-    several results; `verity-bench table` refuses results whose identities differ anywhere but the point's own."""
-
-    preset, (p32,), arms = inputs()
-    p8 = replace(p32, batch=8)
-
-    def point(p, identity, **kw):
-        return run_benchmark(preset, arms, (p,), sweep="quick", reps=2, factory=FakeFactory(), git_commit="abc",
-                             config_identity={"point_identity": identity, **kw})
-
-    merged = merge([point(p8, "i8"), point(p32, "i32")])
-    assert [p["point"]["id"] for p in merged["points"]] == ["b8-p512-mixed", "b32-p512-mixed"]
-    assert merged["identity"]["config"]["point_identity"] == ["i8", "i32"]
-    with pytest.raises(IdentityMismatch, match="uv_lock_sha256"):
-        merge([point(p8, "i8", uv_lock_sha256="a"), point(p32, "i32", uv_lock_sha256="b")])
-    with pytest.raises(ValueError, match="two results"):
-        merge([point(p32, "i32"), point(p32, "i32")])
-    files = []
-    for i, doc in enumerate((point(p8, "i8"), point(p32, "i32"))):
-        files.append(tmp_path / f"{i}.json")
-        files[-1].write_text(json.dumps(doc))
-    assert main(["table", *map(str, files), "--out", str(tmp_path / "merged.json")]) == 0
-    validate(json.loads((tmp_path / "merged.json").read_text()))
 
 
 def test_an_arm_cannot_be_its_own_control():
@@ -321,6 +267,38 @@ def test_an_arm_without_a_control_is_timed_on_its_own_gated_tokens_in_resident_m
     good = bench()
     with pytest.raises(ValueError, match="lacks gates"):
         validate({**good, "gates": [g for g in good["gates"] if g["kind"] != "tokens"]})
+
+
+def test_a_point_timed_on_a_loaded_host_keeps_no_points_and_its_gate_carries_the_reading_and_the_bound():
+    """A served point is bound by the host that launches its kernels: on a 16-processor H100 VM at load 20-22 the stock
+    arms ran 2.1x slower than at 1.6-5, and nothing failed. A rep that opened over half the machine's processors fails its
+    arm's point, not the rep, since the paired ratios need every arm's same reps; so does a rep with no reading."""
+
+    doc = bench(FakeFactory(load={"candidate": 21.0}))
+    point = doc["sweep"][0]["id"]
+    gates = {g["arm"]: g for g in doc["gates"] if g["kind"] == "host-quiet"}
+    assert gates["candidate"] == {"arm": "candidate", "point": point, "kind": "host-quiet", "passed": False, "bound": 8.0,
+                                  "cpus": 16, "loadavg_1m_max": 21.0, "involuntary_switches_max": 40, "reps": [0, 1],
+                                  "checked_by": PIECE}
+    assert gates["stock-fp8"]["passed"] and "reps" not in gates["stock-fp8"] and doc["points"] == []
+    validate(doc)
+    quiet = bench(FakeFactory(load={"stock-fp8": 5.3, "candidate": 5.3}))
+    assert all(g["passed"] for g in quiet["gates"]) and quiet["points"]
+    assert {g["loadavg_1m_max"] for g in quiet["gates"] if g["kind"] == "host-quiet"} == {5.3}
+    unread = bench(FakeFactory(load={"candidate": None}))
+    [gate] = [g for g in unread["gates"] if g["kind"] == "host-quiet" and not g["passed"]]
+    assert (gate["arm"], gate["reps"], gate["loadavg_1m_max"], unread["points"]) == ("candidate", [0, 1], None, [])
+    blocks = bench(FakeFactory(resident_failure="candidate", load={"candidate": 21.0}))
+    assert blocks["execution"]["interleave"] == "blocks" and blocks["points"] == []
+    assert [g["arm"] for g in blocks["gates"] if g["kind"] == "host-quiet" and not g["passed"]] == ["candidate"]
+
+
+def test_the_host_quiet_bound_is_half_the_machines_processors_and_a_point_needs_them():
+    many = bench(FakeFactory(load={"candidate": 21.0}), cpus=224)
+    assert {g["bound"] for g in many["gates"] if g["kind"] == "host-quiet"} == {112.0} and many["points"]
+    for cpus in (0, "16", None):
+        with pytest.raises(ValueError, match="the machine's processors as a positive count"):
+            bench(cpus=cpus)
 
 
 def test_intervals_use_the_t_quantile_for_n_and_ratios_refuse_a_zero_or_missing_baseline_rep():

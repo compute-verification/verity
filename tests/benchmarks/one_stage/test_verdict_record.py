@@ -22,7 +22,7 @@ from verity.commitments import docket_digest as DD
 HERE = (Path(__file__).resolve().parent)
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
-VR = importlib.import_module("verity.protocols.proofs.spot.verifier.one_stage.verdict_record")
+VR = importlib.import_module("verity.protocols.proof.spot.verifier.one_stage.verdict_record")
 
 NAMES = {"run": "r-verdict", "serve": "r-serve", "commit": "c0ffee"}
 STOP_RULE = {"ids": [3], "max_model_len": 64, "outputs": 4}
@@ -55,18 +55,6 @@ def _stop_summary(first: dict, accepted: bool = True, complete: bool = True, **m
             "accepted": accepted, "complete": complete, **more}
 
 
-def _interior(first: dict, n: int = 8) -> dict:
-    """The interior docket a second stage registers after the boundary record of ``first``: every one of its
-    ``n`` proof blocks."""
-    return _record(n, n, previous=first["registration"], interior=True)
-
-
-def _second_summary(first: dict, held: bool = True, interior: dict | None = None, **outcome: object) -> dict:
-    """A second stage's summary on ``first``, naming the interior docket ``interior`` where it registered one."""
-    named = {} if interior is None else {"second_stage": {"registration": DD.digest(interior)}}
-    return {"first_stage": {"registration": first["registration"]}, "held": held, "outcome": outcome, **named}
-
-
 def test_a_stop_records_verdict_names_its_class_serve_registration_and_registered_rate():
     first = _first()
     got = VR.record("stop_record", first, _stop_summary(first), **NAMES)
@@ -97,49 +85,13 @@ def test_the_rate_is_the_registrations_and_never_the_summarys_word():
             VR.rate(registered)
 
 
-def test_the_second_stages_word_is_its_commands_and_its_rate_the_boundary_records():
-    first = _first(k=2, n=6)
-    interior = _interior(first)
-    words = {name: VR.record("second_stage", first, summary, stream=stream, **NAMES) for name, (summary, stream) in {
-        "complete": (_second_summary(first, interior=interior, accepted=True, complete=True), interior),
-        "accepted, complete false": (_second_summary(first, interior=interior, accepted=True, complete=False), interior),
-        "accepted, no complete": (_second_summary(first, interior=interior, accepted=True), interior),
-        "held, its form refused": (_second_summary(first, interior=interior, accepted=False,
-                                                   statements=["two-stage-form"]), interior),
-        "not held": (_second_summary(first, False, interior, accepted=True, complete=True), interior),
-        "not held, no interior": (_second_summary(first, False, accepted=True, complete=True), None),
-        "no outcome": ({"first_stage": {"registration": first["registration"]}, "held": False}, None)}.items()}
-    assert {name: got["verdict"] for name, got in words.items()} == {
-        "complete": "accept", "accepted, complete false": "not complete", "accepted, no complete": "not complete",
-        "held, its form refused": "withheld", "not held": "refuse", "not held, no interior": "refuse",
-        "no outcome": "refuse"}
-    for name, got in words.items():
-        assert (got["rate"], got["class"], got["registration"]) == ("1/3", "w7/p256-o64", first["registration"])
-        assert got["verifier"]["module"] == "benchmarks/one_stage/two_stage.py" and got["proved_by"] is None
-        assert got["open"] == "the two-stage form's soundness is not proved"
-        assert (got["stream_registration"], got["stream_names_boundary"]) == (
-            (None, None) if name in ("not held, no interior", "no outcome") else (DD.digest(interior), True))
-
-
 def test_a_verdicts_own_stream_is_held_to_the_classs_boundary_record():
-    """A verdict names its own stream's docket, the record handed is the one its summary names, and that
-    record's ``previous`` is the class's boundary record: a second stage whose interior was registered after another
-    record, however right the boundary record its summary names, gets no record."""
-    first, other = _first(), _first(row=8)
-    interior, strayed = _interior(first), _interior(other)
-    held = _second_summary(first, interior=interior, accepted=True, complete=True)
-    for summary, stream, why in (
-            (held, None, "the record handed .* is none"),
-            (held, _interior(first, n=4), "not the record with that digest"),
-            (held, first["stop"]["record"], "not the record with that digest"),
-            (_second_summary(first, interior=strayed, accepted=True, complete=True), strayed,
-             "interior registration's `previous` is not the class's boundary record"),
-            (_second_summary(first, accepted=True, complete=True), None, "a second stage that held registered one"),
-            (_second_summary(first, False), interior, "names no interior registration .* for the record handed")):
-        with pytest.raises(ValueError, match=why):
-            VR.record("second_stage", first, summary, stream=stream, **NAMES)
+    """A verdict's own stream is the docket its first-stage file names: a stop audit handed another record gets no
+    record."""
+    first = _first()
     with pytest.raises(ValueError, match="registered by the first-stage file's stop record, not the record handed"):
-        VR.record("stop_record", first, _stop_summary(first), stream=interior, **NAMES)
+        VR.record("stop_record", first, _stop_summary(first), stream=_record(8, 8, previous=first["registration"]),
+                  **NAMES)
 
 
 def test_a_class_is_named_as_its_serve_files_it():
@@ -159,15 +111,12 @@ def test_a_summary_or_a_record_that_is_not_this_classs_is_refused():
             ("stop_record", {"accepted": False, "complete": False, "error": "ValueError: refused before it registered"},
              "nothing ties it to the class"),
             ("stop_record", {**_stop_summary(first), "registration": {"boundary": first["registration"]}},
-             "nothing ties it to the class"),
-            ("second_stage", _second_summary(other, interior=_interior(other), accepted=True),
-             "nothing ties it to the class"),
-            ("second_stage", {"held": False, "refused": "the first stage sampled nothing"}, "nothing ties it to the class")):
+             "nothing ties it to the class")):
         with pytest.raises(ValueError, match=why):
             VR.record(piece, first, summary, **NAMES)
     changed = {**first, "record": {**first["record"], "population": 60}}
     with pytest.raises(ValueError, match="boundary record is not the record whose digest it names"):
-        VR.record("second_stage", changed, _second_summary(first, accepted=True), **NAMES)
+        VR.record("stop_record", changed, _stop_summary(first), **NAMES)
     moved = {**first, "stop": {**first["stop"], "record": {**first["stop"]["record"], **_design("subset", 1)}}}
     with pytest.raises(ValueError, match="stop record is not the record whose digest it names"):
         VR.record("stop_record", moved, _stop_summary(first), **NAMES)
@@ -178,13 +127,13 @@ def test_a_summary_or_a_record_that_is_not_this_classs_is_refused():
     with pytest.raises(ValueError, match="holds no stop record"):
         VR.record("stop_record", {k: v for k, v in first.items() if k != "stop"}, _stop_summary(first), **NAMES)
     with pytest.raises(ValueError, match="holds no boundary record"):
-        VR.record("second_stage", {"error": "the first stage sampled nothing"}, {}, **NAMES)
+        VR.record("stop_record", {"error": "the first stage sampled nothing"}, {}, **NAMES)
 
 
 def test_a_record_names_its_piece_control_run_serve_and_commit():
     first = _first()
     summary = _stop_summary(first)
-    with pytest.raises(ValueError, match="one of stop_record, second_stage"):
+    with pytest.raises(ValueError, match="one of stop_record, not"):
         VR.record("response_tie", first, summary, **NAMES)
     with pytest.raises(ValueError, match="one of id, max_tokens"):
         VR.record("stop_record", first, summary, control="honest", **NAMES)
@@ -198,8 +147,6 @@ def test_the_command_appends_one_line_a_verdict_and_refuses_a_second_on_one_piec
     (tmp_path / "first.json").write_text(json.dumps(first))
     (tmp_path / "stop.json").write_text(json.dumps(_stop_summary(first, complete=False)))
     (tmp_path / "forged.json").write_text(json.dumps(_stop_summary(first, False)))
-    (tmp_path / "interior.json").write_text(json.dumps(_interior(first)))
-    (tmp_path / "second.json").write_text(json.dumps(_second_summary(first, interior=_interior(first), accepted=False)))
     out = tmp_path / "out"
 
     def run(piece: str, summary: str, *more: str) -> int:
@@ -209,20 +156,16 @@ def test_the_command_appends_one_line_a_verdict_and_refuses_a_second_on_one_piec
     assert run("stop_record", "stop.json") == 0
     assert capsys.readouterr().out.startswith('VERDICT {"class": "w7/p256-o64", "control": null,')
     assert run("stop_record", "forged.json", "--control", "id") == 0
-    assert run("second_stage", "second.json") == 1
-    assert "`--stream`: its `interior/registration.json`" in capsys.readouterr().err
-    assert run("second_stage", "second.json", "--stream", str(tmp_path / "interior.json")) == 0
     lines = [json.loads(x) for x in (out / VR.FILE).read_text().splitlines()]
     assert [(x["piece"], x["control"], x["verdict"], x["run"]) for x in lines] == [
-        ("stop_record", None, "not complete", "r-verdict"), ("stop_record", "id", "refuse", "r-verdict"),
-        ("second_stage", None, "withheld", "r-verdict")]
+        ("stop_record", None, "not complete", "r-verdict"), ("stop_record", "id", "refuse", "r-verdict")]
     assert {x["registration"] for x in lines} == {first["registration"]} and {x["serve"] for x in lines} == {"r-serve"}
-    assert [x["stream_registration"] for x in lines] == [first["stop"]["registration"]] * 2 + [DD.digest(_interior(first))]
+    assert [x["stream_registration"] for x in lines] == [first["stop"]["registration"]] * 2
     assert all(x["stream_names_boundary"] is True for x in lines)
     capsys.readouterr()
     assert run("stop_record", "stop.json") == 1 and run("stop_record", "forged.json", "--control", "id") == 1
     assert "already holds a verdict on stop_record" in capsys.readouterr().err
-    assert len((out / VR.FILE).read_text().splitlines()) == 3, "a refused record adds no line"
+    assert len((out / VR.FILE).read_text().splitlines()) == 2, "a refused record adds no line"
     monkeypatch.setattr(VR, "_head", lambda: "")
     for given, lacks in ((("--run", "r-verdict"), "--commit"), (("--commit", "c0ffee"), "--run")):
         with pytest.raises(SystemExit):

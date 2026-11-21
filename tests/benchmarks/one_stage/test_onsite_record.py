@@ -73,7 +73,7 @@ from benchmarks.network_traces import network_attester_chain as WC  # noqa: E402
 from verity import device as S  # noqa: E402
 from verity.protocols.registration.verifier import site_log as L  # noqa: E402
 from verity.protocols.registration.verifier import registration as REG  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import audit as A  # noqa: E402
+from verity.protocols.proof.spot.verifier.one_stage import audit as A  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
 
 NODE = "computeinstance-toy"
@@ -311,7 +311,7 @@ GATE = "the challenger gate:research@toy-gate (peer toy-peer)"
 
 def coins_line(said: str, lead: str = "") -> str:
     """The run's COINS line as served_verdicts.sh says it, its sampled-proofs part ``said``, led by ``lead``."""
-    return (f"COINS {lead}sampled proofs: {said}; PoUW H1: not served (H1_GATE empty); the bandwidth audit's: "
+    return (f"COINS {lead}sampled proofs: {said}; PoUW: not served; the bandwidth audit's: "
             "vy-auditor-2's bw_party, inside PoUS's piece")
 
 
@@ -1132,8 +1132,8 @@ def test_w63k4_at_a_4_s_tick_charges_800_bits_a_phase_beside_its_advice_whatever
     each, the period's check's terms however few connections were served; with the jitter T_j log2 d_jit = 32 at
     d_jit = 2, a phase's terms but ℓ_{a,j} and k_{skip,j} are 800 bits."""
     sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "network_traces"))
-    from verity.protocols.resource_accounting.network.prover import scan_zk as SZ
-    schedule = dataclasses.asdict(SZ.W63K4.params) | {"bucket_ms": 4000}
+    from verity.protocols.accounting.network.verifier import network_attester as W
+    schedule = dataclasses.asdict(W.W63K4) | {"bucket_ms": 4000}
     scan = dict(SCAN, jitter=schedule["window"])
     public = dict(PUBLIC, K=3 * (768 + 9088 + 32), cells=3 * 384, schedules=3 * 384, windows=3, scans=[scan] * 3,
                   eps="3/1048576")
@@ -1161,8 +1161,8 @@ def test_w63k4s_tied_audit_drawn_in_part_charges_its_slot_entries_and_drawn_whol
     blocks proved, the entries and its δ_i leave the bound. With a check open, each phase's figure of record adds the
     run's advice cap ℓ_a + 1 = 2^23 + 1, 8,390,305 bits a phase drawn in part."""
     sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "network_traces"))
-    from verity.protocols.resource_accounting.network.prover import scan_zk as SZ
-    schedule = dataclasses.asdict(SZ.W63K4.params) | {"bucket_ms": 4000}
+    from verity.protocols.accounting.network.verifier import network_attester as W
+    schedule = dataclasses.asdict(W.W63K4) | {"bucket_ms": 4000}
     scan = dict(SCAN, delta=f"1/{2 ** 64}", free=0, faulty_entries=entries, jitter=32)
     audit = {"delta": "1/2", "drawn": drawn, "units": 16, "wrong_units": 8 if drawn < 16 else 0}
     charged = [dict(audit, delta=f"1/{2 ** 64}", wrong_units=15)] * 3 if drawn < 16 else []
@@ -1193,8 +1193,8 @@ def test_eps_is_pooled_over_each_monitoring_period_at_its_windows_with_the_tied_
     over those windows. Drawn whole, none is read and eps is the scans' δ alone. The ONSITE line states the count and
     each period's pooled eps beside the per-window term, and the record and its line leave the node as written."""
     sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "network_traces"))
-    from verity.protocols.resource_accounting.network.prover import scan_zk as SZ
-    schedule = dataclasses.asdict(SZ.W63K4.params) | {"bucket_ms": 4000}
+    from verity.protocols.accounting.network.verifier import network_attester as W
+    schedule = dataclasses.asdict(W.W63K4) | {"bucket_ms": 4000}
     entries = 896 if drawn < 16 else 0
     scan = dict(SCAN, delta=f"1/{2 ** 64}", free=0, faulty_entries=entries, jitter=32)
     audit = {"delta": "1/2", "drawn": drawn, "units": 16, "wrong_units": 8 if drawn < 16 else 0}
@@ -1418,13 +1418,13 @@ def test_the_record_lists_the_re_proof_inputs_and_which_of_outs_the_run_wrote(tm
     assert got["copy"] == {"missing": OR.NO_COPY}
 
 
-def _reproof_files(path: str, tie: bool = False) -> list[str]:
-    """A file of window 7 at class c64 for each a `REPROOF` path names (one under each directory), H1-tied where ``tie``."""
+def _reproof_files(path: str) -> list[str]:
+    """A file of window 7 at class c64 for each a `REPROOF` path names (one under each directory)."""
     out = []
     for part in path.split(", "):
         m = re.fullmatch(r"(.*)\{([^}]*)\}(.*)", part)
         for p in [m[1] + x + m[3] for x in m[2].split(",")] if m else [part]:
-            p = p.replace("<K>", "7").replace("<class>", "c64").replace("<tie>", "-tie" if tie else "")
+            p = p.replace("<K>", "7").replace("<class>", "c64")
             out.append(p + "m0-private.bin" if p.endswith("/") else p)
     return out
 
@@ -1454,30 +1454,14 @@ def test_the_serve_dirs_re_proof_inputs_are_checked_against_their_copys_listing_
         "error": "the copy's listing (--reproof-listing) can't be read: FileNotFoundError"}
 
 
-def test_under_h1s_tie_the_re_proofs_circuit_is_the_record_reading_h1s_tables(tmp_path):
-    """Under H1_TIE the window commit's circuit is held to the verifier's record reading H1's tables (served_verdicts.sh's
-    `v3c_record`, window-circuit-w<K>-<class>-tie.json), so a tied run's copy holding only the untied record at the
-    class hasn't copied the circuit; `--h1-tie` says the run is tied, and the record names the circuit it needs."""
-    out, copy = accepted(tmp_path), "vy-nebius-cpu-3:/home/research/keep/reproof"
-    serve = [p for at, p, _ in OR.REPROOF.values() if at == "serve dir"]
-    listing = tmp_path / "private" / "listing.txt"
-    listing.parent.mkdir()
-    for tie in (False, True):
-        listing.write_text("\n".join(f for p in serve for f in _reproof_files(p, tie)) + "\n")
-        got = record(out, copy=copy, listing=listing, tie=tie)["reproof"]
-        assert got["copy"]["not_copied"] == []
-        assert got["inputs"]["circuit"]["path"] == f"window-circuit-w<K>-<class>{'-tie' * tie}.json"
-        assert main([str(out), "--reproof-copy", copy, "--reproof-listing", str(listing), *(["--h1-tie"] * tie)]) == 0
-        written = json.loads((out / "record" / "onsite.json").read_text())["reproof"]
-        assert written["copy"]["not_copied"] == [] and written["inputs"]["circuit"] == got["inputs"]["circuit"]
-        assert "<tie>" not in json.dumps(written)
-    untied = [f for p in serve for f in _reproof_files(p)]
-    listing.write_text("\n".join(untied) + "\n")
-    assert record(out, copy=copy, listing=listing, tie=True)["reproof"]["copy"]["not_copied"] == ["circuit"]
-    assert main([str(out), "--reproof-copy", copy, "--reproof-listing", str(listing), "--h1-tie"]) == 0
-    assert json.loads((out / "record" / "onsite.json").read_text())["reproof"]["copy"]["not_copied"] == ["circuit"]
-    [tied] = OR.named("window-circuit-w<K>-<class><tie>.json", tie=True)
-    assert tied.fullmatch("window-circuit-w7-c64-tie.json") and not tied.fullmatch("window-circuit-w7-c64.json")
+def test_a_request_for_a_run_tied_to_h1s_window_is_refused_by_name(tmp_path, capsys):
+    """PoUW H1 is deleted: ``--h1-tie`` is refused with the one sentence that names it, and no record is written."""
+    out = accepted(tmp_path)
+    with pytest.raises(SystemExit) as e:
+        main([str(out), "--h1-tie"])
+    assert e.value.code == 2
+    assert f"--h1-tie: {OR.H1_TIE_REFUSED}" in capsys.readouterr().err
+    assert not (out / "record" / "onsite.json").exists()
 
 
 def test_the_record_leaves_the_node_as_written(tmp_path):
@@ -2279,9 +2263,9 @@ def test_spot_credits_only_members_whose_registered_file_was_completed_and_names
                                         "not credited, by name", "a visible failure"))
 
 
-#: the PoUW part of a COINS line where the run served PoUW H1 (served_verdicts.sh's H1_COINS under H1_GATE)
-H1_SERVED = ("PoUW H1: each window's coins from a session of its own on vy-challenger-1's gate (peer toy-peer, T 63, "
-             "S 16), a development run under the lane's development key: it credits nothing")
+#: the PoUW part of a COINS line where the run served Pearl+ (served_verdicts.sh's PW_COINS under POUW=pearlplus)
+PW_SERVED = ("PoUW: Pearl+'s own served run on this card after the window's (POUW=pearlplus), its epoch's coins an "
+             "in-process challenger's: it credits nothing")
 
 
 def test_pouw_credits_no_freed_compute_whatever_its_row_states_and_is_not_claimed_by_name(tmp_path, capsys):
@@ -2291,18 +2275,17 @@ def test_pouw_credits_no_freed_compute_whatever_its_row_states_and_is_not_claime
     work = {"protocol": "verity/pouw/period/v1", "owner": "compute-accounting", "verdict": "accept", "reason": None,
             "quantity": {"freed_flops": 123456789}, "answer": {"public": {"freed": 987654321}}}
     out = served_out(tmp_path, work=work, coins=None)
-    (out / "verdicts.txt").write_text(f"COINS sampled proofs: {GATE}; {H1_SERVED}; the bandwidth audit's: "
+    (out / "verdicts.txt").write_text(f"COINS sampled proofs: {GATE}; {PW_SERVED}; the bandwidth audit's: "
                                       "vy-auditor-2's bw_party, inside PoUS's piece\n" + coins_line(GATE) + "\n")
     assert main([str(out)]) == 0
     rec = json.loads((out / "record" / "onsite.json").read_text())
     assert rec["verdicts"]["PoUW"] == {"protocol": "verity/pouw/period/v1", "verdict": "accept",
                                        "from": "record/verdicts.json protocols.work", "not_claimed": OR.POUW_OPEN}
-    assert rec["pouw_freed_compute"] == {"open": True, "credited": None, "served": [H1_SERVED, "PoUW H1: not served "
-                                                                                              "(H1_GATE empty)"],
+    assert rec["pouw_freed_compute"] == {"open": True, "credited": None, "served": [PW_SERVED, "PoUW: not served"],
                                          "from": "verdicts.txt COINS", "is": OR.POUW}
     assert not {123456789, 987654321} & set(numbers(rec))
     assert json.loads(capsys.readouterr().out.strip()[7:])["not_claimed"] == [OR.DAY_OPEN, OR.POUW_OPEN]
-    assert all(x in OR.POUW for x in ("OnsiteFreed", "noFoldRound", "eps1-sm120-h1fx1", "credits nothing", "Pearl+"))
+    assert all(x in OR.POUW for x in ("OnsiteFreed", "noFoldRound", "credits nothing", "Pearl+"))
 
 
 def test_a_verdict_carries_its_rows_stated_source_so_pouws_says_what_no_auditor_side_entry_checks(tmp_path):
@@ -2313,7 +2296,7 @@ def test_a_verdict_carries_its_rows_stated_source_so_pouws_says_what_no_auditor_
     work = {"protocol": "verity/pouw/period/v1", "owner": "compute-accounting", "verdict": "accept", "reason": None,
             "answer_from": said}
     out = served_out(tmp_path, work=work, coins=None)
-    (out / "verdicts.txt").write_text(f"COINS sampled proofs: {GATE}; {H1_SERVED}; the bandwidth audit's: "
+    (out / "verdicts.txt").write_text(f"COINS sampled proofs: {GATE}; {PW_SERVED}; the bandwidth audit's: "
                                       "vy-auditor-2's bw_party, inside PoUS's piece\n" + coins_line(GATE) + "\n")
     assert main([str(out)]) == 0
     v = json.loads((out / "record" / "onsite.json").read_text())["verdicts"]["PoUW"]
@@ -2412,7 +2395,7 @@ def test_a_run_with_no_attester_case_states_the_pooled_count_and_no_period_cells
 
 
 def test_a_draw_of_a_member_of_each_stratum_has_no_pooled_figure_and_is_named_refused(tmp_path):
-    """stratified:1, H1_TIE's default, draws one member of each template's stratum: its window's bound is stated, but
+    """stratified:1, a tie's default, draws one member of each template's stratum: its window's bound is stated, but
     IntegrityHorizon pools only a uniform k-subset, so it has no pooled figure, and the record names the window of
     several members such a draw needs as one a run of record doesn't have: its case is the per-member one, which no
     listed guarantee covers."""

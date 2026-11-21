@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[4]
-LEAN = ROOT / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "verifier" / "lean" / "pearlplus" / "PouwPearlPlus"
+LEAN = ROOT / "verity" / "protocols" / "accounting" / "compute" / "pouw" / "verifier" / "lean" / "pearlplus" / "PouwPearlPlus"
 CASES = Path(__file__).resolve().parent / "test_pearlplus_lean.py"
 
 
@@ -41,7 +41,8 @@ def test_the_lean_parses_the_options_the_cases_pass():
     lean = {f: bool(v) for f, v in re.findall(r'\| "(--[a-z-]+)" :: (v :: )?rest', parse)}
     cases = {f: sep == "," for f, sep in re.findall(r'"(--[a-z-]+)"([,\]])', CASES.read_text())}
     assert lean == cases == {"--coins": True, "--draws": True, "--source": True, "--record": True, "--over-cap": True,
-                             "--test-instance": False, "--tie": True, "--class": True, "--of-record": False}
+                             "--test-instance": False, "--tie": True, "--class": True, "--of-record": False,
+                             "--draw-live": True, "--salt-live": True}
 
 
 def test_the_over_inert_bound_rules_and_default_are_verify_runs():
@@ -89,7 +90,7 @@ def test_the_fixed_loads_rows_and_refusal_are_verify_runs():
 def test_the_grid_is_h1s_window_grid():
     """`Grid.lean`'s `GRID_BITS` and `gridPad` are `window.GRID_BITS` and `window.pad` (0 at 0, where `verify_run.grid_work`
     pads nothing), at each value its guards name, the run of record's give-up among them."""
-    from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
+    from verity.protocols.accounting.compute.pouw.verifier import window as Wd
 
     grid = (LEAN / "Grid.lean").read_text()
     assert int(re.search(r"def GRID_BITS : Nat := (\d+)", grid).group(1)) == Wd.GRID_BITS and VR.grid_pad is Wd.pad

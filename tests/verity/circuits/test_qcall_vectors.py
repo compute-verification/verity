@@ -2,7 +2,8 @@
 every rule of `verity.circuits.cut`'s "Q_call v1" -- a Call that fits, one that splits into sub-Calls, a batch, a scan (its carry chained,
 and passed through), a pass-through output, a constant read by two units, a constant-derived gate read across units, former wiring,
 a dead gate, a recompute across units and one within a unit, a gate of more than 4096 inputs, a 64-bit input -- at X = 32 and 64,
-and every refusal (`gate-too-wide`, `root-form`, not topological, another program, served commits, malformed objects).  Programs
+and every refusal (`gate-too-wide`, `root-form`, another program, served commits, malformed objects; the decoder's of a program
+that is not topological).  Programs
 are descriptor bytes; the evaluation is from the bytes.  Its `--write` rewrites the file; `REWRITE` names the command that runs
 it."""
 from __future__ import annotations
@@ -15,7 +16,8 @@ from pathlib import Path
 
 import pytest
 
-from test_qword_vectors import TAdd64, Dead, Max3, Step, TwiceSep, WideTwice, Wiring, _c, _canon, _top, registry as _qword_registry
+from test_qword_vectors import TAdd64, Dead, Max3, Step, TwiceSep, WideTwice, Wiring, _c, _canon, _top, forward_sentence, registry as _qword_registry
+import stand_in  # noqa: F401  (the test primitives' Boolean bodies, also when run as a script)
 from verity.circuits import boolean as BL
 from verity.circuits import codec, cut, partition_object as PO
 from verity.circuits.defs import PrimitiveDefinition, DefinitionTable
@@ -255,9 +257,9 @@ def build() -> dict:
     for label, name, key, node, arg, refs in ORDER:
         d = json.loads(_canon(PROGRAMS[name]))
         d["definitions"][key or d["root"]]["body"]["nodes"][node]["args"][arg]["refs"] = refs
-        D = codec.decode_program(d, reg)
-        v = PO.verify(PO.build(D, PO.call_query()), D)
-        order.append([label, name, key, node, arg, refs, {"codes": list(v.codes), "detail": v.detail.get("query-inapplicable", {}).get("gates")}])
+        with pytest.raises(ValueError) as e:
+            codec.decode_program(d, reg)
+        order.append([label, name, key, node, arg, refs, {"refused": str(e.value)}])
     return {
         "about": "Pinned vectors of Q_call v1 (verity.circuits.cut 'Q_call v1', verity.circuits.partition_object, verity/circuits/PROTOCOL.md §11), checked "
                  "by tests/verity/circuits/test_qcall_vectors.py; written by it with --write.  Programs are descriptor bytes (TWide_v1, TAdd64_v1 and "
@@ -391,10 +393,10 @@ def test_verify_refuses(live):
     assert got["another program"]["codes"] == ["program"]
 
 
-def test_every_query_refuses_a_program_that_is_not_topological(live):
+def test_the_decoder_refuses_a_program_that_is_not_topological(live):
     assert live["order_refusals"] == VECTORS["order_refusals"], REWRITE
-    for *_x, v in VECTORS["order_refusals"]:
-        assert v["codes"] == ["query-inapplicable"] and v["detail"][0]["why"] == "not topological"
+    for _l, name, key, node, _a, refs, v in VECTORS["order_refusals"]:
+        assert v["refused"] == forward_sentence(VECTORS["descriptors"], name, key, node, refs)
 
 
 def test_served(live):

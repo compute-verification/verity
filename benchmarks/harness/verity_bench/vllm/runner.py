@@ -31,6 +31,9 @@ T95 = {1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447, 7: 2.365, 8:
 # at load 600-900 a bandwidth engine's stalled runs were 8% to 8x slower than the next; an extra warm-up costs
 # seconds against an engine's minutes of start-up, so the bar is strict and `max_warmups` bounds it.
 WARMUP_AGREEMENT = 0.05
+# A timed rep's one-minute load average at most this share of the machine's processors. A served point is bound by the host
+# that launches its kernels: on a 16-processor H100 VM at load 20-22 the stock arms ran 2.1x slower than at 1.6-5.
+HOST_QUIET_SHARE = 0.5
 
 
 def t95(df: int) -> float:
@@ -207,8 +210,8 @@ def _pearl_c_gate(run: Any, scheme: str | None) -> dict[str, Any]:
     check.run, check.schedule = run, run.schedule.name
     c = run.commits
     if c.get("coin_source", "in-process") != "in-process":
-        from verity.protocols.compose import schemes
-        from verity.protocols.resource_accounting.scheme import declared
+        from verity.protocols.run import schemes
+        from verity.protocols.accounting.scheme import declared
 
         open_root = declared(schemes.get(scheme), "salt_open_root")
         check.coins = {"source": c["coin_source"], "session": c.get("session"), "pass_index": c["pass_index"],
@@ -217,8 +220,8 @@ def _pearl_c_gate(run: Any, scheme: str | None) -> dict[str, Any]:
         check.coins = {"source": "in-process"}
     check.weights = {w: x.tensor for w, x in run.weights.items()}
     got = check.gate(None)
-    # The check begins and ends its own passes; the next forward's calls need an open pass, as the adapter's hook leaves
-    # one between steps.
+    # The check's passes are on twins of the run (`e2e.call_checks`); the next forward's calls need an open stepped pass,
+    # as the adapter's hook leaves one between steps.
     run.begin(stepped=True)
     return {**got, "provided": True}
 
@@ -250,6 +253,29 @@ def _timed_token_gates(
             bad = sorted(r for r in mine.keys() | theirs.keys() if mine.get(r) is None or mine.get(r) != theirs.get(r))
             out.append({"arm": arm.id, "control": arm.control, "point": point.id, "kind": "timed-tokens",
                         "passed": not bad, **({"reps": bad} if bad else {})})
+    return out
+
+
+def _host_quiet_gates(
+    arms: tuple[Arm, ...], points: tuple[SweepPoint, ...], samples: Mapping[tuple[str, str], list[dict[str, Any]]],
+    cpus: int,
+) -> list[dict[str, Any]]:
+    """Every timed rep of every arm ran on a quiet host: its one-minute load average when the rep opened (`host.loadavg_1m`,
+    `timing.HostProbe`) at most `HOST_QUIET_SHARE` of the machine's `cpus`. A rep over it, or with no reading, fails the
+    point and not the rep, since the paired ratios need the same reps in every arm."""
+
+    bound = HOST_QUIET_SHARE * cpus
+    out = []
+    for arm in arms:
+        for point in points:
+            reps = samples[(arm.id, point.id)]
+            loads = {r["rep"]: (r.get("host") or {}).get("loadavg_1m") for r in reps}
+            bad = sorted(rep for rep, load in loads.items() if load is None or load > bound)
+            read = [load for load in loads.values() if load is not None]
+            switches = [r["host"]["involuntary_switches"] for r in reps if "involuntary_switches" in (r.get("host") or {})]
+            out.append({"arm": arm.id, "point": point.id, "kind": "host-quiet", "passed": not bad, "bound": bound,
+                        "cpus": cpus, "loadavg_1m_max": max(read, default=None),
+                        "involuntary_switches_max": max(switches, default=None), **({"reps": bad} if bad else {})})
     return out
 
 
@@ -437,6 +463,7 @@ def run_benchmark(
     sweep: str,
     reps: int,
     factory: EngineFactory,
+    cpus: int,
     git_commit: str | None = None,
     config_identity: Mapping[str, Any] | None = None,
     warmups: int = 1,
@@ -445,13 +472,16 @@ def run_benchmark(
     """Run every gate before any timing, then use resident interleaving or `blocks`, with at least `warmups`
     discarded runs of a point before an engine's first timed one and, up to `max_warmups`, as many more as it takes two
     consecutive runs to agree (`_warm`). An arm's own gate is read again after its timed runs (`arm-closing`), and a
-    failure there leaves the result without points."""
+    failure there leaves the result without points; so does a timed rep on a loaded host (`host-quiet`, bounded by the
+    machine's `cpus`, `kit.machine_cpus`)."""
 
     if reps < 1 or not arms or not points:
         raise ValueError("benchmark needs at least one arm, point, and repetition")
     max_warmups = warmups if max_warmups is None else max_warmups
     if warmups < 1 or max_warmups < warmups:
         raise ValueError("benchmark needs at least one warm-up a point, and max_warmups no fewer than warmups")
+    if type(cpus) is not int or cpus < 1:
+        raise ValueError(f"benchmark needs the machine's processors as a positive count (kit.machine_cpus), not {cpus!r}")
     if any(a.control == a.id for a in arms):
         raise ValueError("an arm cannot be its own control: its greedy gate would compare it with itself")
     baseline = "stock-fp8" if any(a.id == "stock-fp8" for a in arms) else "stock" if any(a.id == "stock" for a in arms) else arms[0].id
@@ -528,6 +558,7 @@ def run_benchmark(
 
     if all(g["passed"] for g in gates):
         gates += _timed_token_gates(arms, points, samples, tokens, mode, custom)
+        gates += _host_quiet_gates(arms, points, samples, cpus)
     identity = _identity(preset, arms, sweep, git_commit or _git_head(), versions, config_identity,
                          reps=reps, warmups=warmups, max_warmups=max_warmups, interleave=mode)
     doc = {

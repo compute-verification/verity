@@ -26,7 +26,7 @@
   `writer(out).fingerprint(**fields)`, `.measurement_file(path)` and `.artifact(path)` add what actually ran and the files
   `research` keeps; the first of them writes all three of its keys, so a result that uses none holds none.
 - `record_dir(arg)`, `ran_with(coins, parameters, detail=None, verified=False)` and `report(name, text, doc, measured,
-  ...)`: the core benchmarks' interface (`benchmarks/README.md`'s "The core benchmarks' interface"), written in
+  ...)`: the core benchmarks' interface (`tests/test_metrics_registry.py`'s docstring), written in
   `kit_report`: what a command takes, the one line of its coins and parameters, and its last step, which prints and
   writes its number.
 
@@ -437,6 +437,19 @@ def machine_properties(name: str | None = None, *, directory: Path | None = None
             raise refuse(f"gives cards 0 and yet places cards {[e['card'] for e in numa]} in numa: a machine with no card "
                          "gives numa []")
     return table
+
+
+def machine_cpus(name: str | None = None, *, directory: Path | None = None) -> int:
+    """The processors machine `name`'s record gives (`[properties]` `cpus`, read as `machine_properties` reads it), which a
+    served point's host-quiet gate bounds the load by; refused by name where the record gives it ``"unread"``."""
+
+    entry = machine_properties(name, directory=directory)["cpus"]
+    if entry["value"] == "unread":
+        name = name or settings.RESEARCH_MACHINE
+        raise SystemExit(f"machine {name!r}: its record gives cpus \"unread\", and a served point's host-quiet gate is "
+                         f"bounded by it: read it on the machine and write in its record's [properties] "
+                         f"cpus = {{ value = N, read = \"nproc\" }}")
+    return entry["value"]
 
 
 class NotListed(SystemExit):

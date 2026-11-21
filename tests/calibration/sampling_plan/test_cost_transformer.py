@@ -15,8 +15,8 @@ from types import SimpleNamespace
 import pytest
 
 import transformer as T
-from verity.protocols.proofs.spot.verifier.one_stage.draw import work_k
-from verity.protocols.proofs.spot.prover.optimize import Candidate
+from verity.protocols.proof.spot.verifier.one_stage.draw import work_k
+from verity.protocols.proof.spot.prover.optimize import Candidate
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.ops import gemm as G
@@ -129,7 +129,7 @@ def test_handoff_merges_one_definition_cut_from_two_ops_at_the_higher_rate():
 
 
 def test_large_model_fills_the_card():
-    card = next(h for h in json.loads(CENSUS.read_text()) if h["id"] == "rtx-pro-6000-server/e4m3")["memory_bytes"]
+    card = next(h for h in json.loads(CENSUS.read_text()) if h["id"] == "rtx-pro-6000-server-tensor/e4m3")["memory_bytes"]
     m = T.LARGE
     assert 0.9 * card < m.weight_bytes + m.kv_resident <= card and m.linear_params == 70 * 12 * 8192 ** 2 + 256 * 8192
     assert m.requests == round(T.BLOCK_S / T.LARGE_STEP_S * T.LARGE_SEQUENCES / m.positions)

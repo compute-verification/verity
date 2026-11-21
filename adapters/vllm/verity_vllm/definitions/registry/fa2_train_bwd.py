@@ -55,10 +55,10 @@ from verity.circuits.refs import array_of, concat, strided_view, tuple_of
 from verity.circuits.types import Array, Tuple
 from verity.device import compute_capability, load_card, skus
 
-from verity_vllm.definitions.evidence import EVIDENCE
+from verity_vllm.definitions.evidence import EVIDENCE, card_files
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry.b1 import NEG_INF32, scale_log2_bits
-from verity_vllm.definitions.registry.dsv4_moe import Ex2Approx
+from verity_vllm.definitions.registry.moe import Ex2Approx
 from verity_vllm.definitions.registry.prims import A16, BF16, F32
 
 #: float(M_LOG2E)
@@ -276,8 +276,7 @@ def Fa2TrainBwdHead(B, S, do, q, k, v, o, lse):
 def sms_at(cc: tuple[int, int]) -> int:
     """The SMs of the one GPU card file at compute capability ``cc``, read when a head is bound so that loading this module reads no
     card; ValueError, naming them, where none or several cards are at it."""
-    from verity_torch.pouw.row_table_device import CARD_FILES as cards
-
+    cards = card_files()
     found = [c for c in (load_card(s, directory=cards) for s in skus("gpu", directory=cards)) if compute_capability(c) == tuple(cc)]
     if len(found) != 1:
         raise ValueError(f"cc {tuple(cc)}: {len(found)} GPU card files under {cards} are at it ({sorted(c['sku'] for c in found)})")

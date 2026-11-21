@@ -9,9 +9,7 @@ PoUW's rows (`leaves.statement_rows`) and, for a row unit, its anchors as public
 
 x is a seeded N(0, 1) row in BF16; a tile's rows are `pouw_rows_vectors`' seeded nvfp4-p rows. The anchors are the
 verifier's own (`TileAnchors.of` the scheme's seeds). Writes circuit.txt, inst.bin, pub.bin, pin.txt and stage.json under
-OUT, and for a row unit the verifier's own file public-inputs.bin (`TileAnchors.public_inputs`) and the controls' files:
-public-inputs-wrong.bin (one anchor bit flipped, the verifier's file wrong) and pub-chosen.bin (the same bit flipped in the
-public file's tail, an anchor the prover chose).
+OUT, and for a row unit the verifier's own file public-inputs.bin (`TileAnchors.public_inputs`).
 
 `HZ_STAGE` (``fast``, the default, or ``library``): whether `fast_stage` patches the library first, for the same bytes in
 less time and memory; stage.json records which. `HZ_SALTS` (a file): the rows' salts as data, read from it when it exists,
@@ -34,11 +32,11 @@ from pathlib import Path
 import numpy as np
 
 from verity.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_V2
-from verity.protocols.resource_accounting.compute.pouw.prover.circuit import leaves as L
+from verity.protocols.accounting.compute.pouw.prover.circuit import leaves as L
 from verity.protocols.experimental.pearl_c4.prover import pc4
-from verity.protocols.resource_accounting.compute.pouw.prover.circuit.anchors import TileAnchors, public_ports
+from verity.protocols.accounting.compute.pouw.prover.circuit.anchors import TileAnchors, public_ports
 from verity.protocols.experimental.pearl_c4.prover import pearl_c4 as F
-from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Context, Matmul, Shape
+from verity.protocols.accounting.compute.pouw.verifier.protocol import Context, Matmul, Shape
 from verity_flock import circuit as FC
 from verity_flock import class_statement as CS
 from verity_flock import ir_lower as IL
@@ -47,7 +45,6 @@ from verity_config.settings import of
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 ROLE, K, N, OUT = sys.argv[1], int(sys.argv[2]), int(sys.argv[3]), Path(sys.argv[4])
-FLIP = {"row_a": "fa", "row_b": "g"}      # the anchor whose word 0, instance 0, bit 0 the controls flip
 SETTINGS = of(__file__)
 STAGE = SETTINGS.HZ_STAGE
 SALTS = Path(SETTINGS.HZ_SALTS) if SETTINGS.HZ_SALTS else None
@@ -71,16 +68,6 @@ def bf16(v: np.ndarray) -> np.ndarray:
 
 def gb() -> float:
     return round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 2)
-
-
-def flip_at(data: bytes, ports: list[dict], port: str, tail: bool) -> int:
-    """The byte offset of word 0 of ``port`` in instance 0's regions: in a --public-inputs file (after its header line), or
-    in a public file's tail (the last ``instances`` x regions words)."""
-    words = sum(p["words"] for p in ports)
-    before = sum(p["words"] for p in ports[:[p["port"] for p in ports].index(port)])
-    if tail:
-        return len(data) - 2 * N * words + 2 * before
-    return len(data.split(b"\n", 1)[0]) + 1 + 2 * before
 
 
 def main() -> None:
@@ -111,7 +98,7 @@ def main() -> None:
         for p in ports:
             rows[p] = np.array([r[p] for r in regs], dtype=np.uint16)
     elif ROLE.startswith(("tile", "hidden")):
-        V = _load("pouw_rows_vectors", ROOT / "tests" / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "verifier" / "pouw_rows_vectors.py")
+        V = _load("pouw_rows_vectors", ROOT / "tests" / "verity" / "protocols" / "accounting" / "compute" / "pouw" / "verifier" / "pouw_rows_vectors.py")
         hidden = ROLE.startswith("hidden")
         if hidden:
             sys.path.insert(0, str(HERE))
@@ -159,17 +146,9 @@ def main() -> None:
         own = ta.public_inputs(ROLE, range(N))
         ta.check_public_inputs(ROLE, range(N), own)
         (OUT / "public-inputs.bin").write_bytes(own)
-        head = json.loads(own.split(b"\n", 1)[0])
         pub = (OUT / "pub.bin").read_bytes()
         assert pub.endswith(own.split(b"\n", 1)[1]), "the public file's tail is not the verifier's own words"
-        wrong = bytearray(own)
-        wrong[flip_at(own, head["ports"], FLIP[ROLE], tail=False)] ^= 1
-        (OUT / "public-inputs-wrong.bin").write_bytes(bytes(wrong))
-        chosen = bytearray(pub)
-        chosen[flip_at(pub, head["ports"], FLIP[ROLE], tail=True)] ^= 1
-        (OUT / "pub-chosen.bin").write_bytes(bytes(chosen))
-        rec.update(own_bytes=len(own), own_sha256=hashlib.sha256(own).hexdigest(), flipped={"port": FLIP[ROLE], "word": 0,
-                   "instance": 0, "bit": 0})
+        rec.update(own_bytes=len(own), own_sha256=hashlib.sha256(own).hexdigest())
     rec.update(ands=got["ands"], k_log=meta["k_log"], vus_per_block=meta.get("vus_per_block"),
                row_schemas=meta["row_schemas"], out_row_ports=meta.get("out_row_ports"),
                circuit_bytes=fast_stage.size(text) if STAGE == "fast" else len(text),

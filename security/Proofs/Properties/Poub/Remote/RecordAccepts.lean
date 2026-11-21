@@ -1,9 +1,11 @@
 module
 
 public import Properties.Poub.Remote.Line.Record
+public import Properties.Poub.Remote.Shared
 public import Proofs.Properties.Poub.Remote.Schedule
 public import Proofs.Properties.Poub.Remote.Window
 public import Proofs.Properties.Poub.Remote.SubprotocolWitnesses
+public import Proofs.Flock.Bridge.QsRows.FirstReads
 import all Init.Data.Array.Basic
 import all Init.Data.Array.QSort.Basic
 import all Init.Data.Range.Basic
@@ -14,10 +16,11 @@ import all Init.Data.Range.Basic
 `record_verified`: the Lean verifier accepts a record (`Properties.Poub.Line.Verified`). The node stores one
 registered block under the deployed codec, and runs one window of one pass under one sample, at one window a sample. The
 session starts, receives the pass's root over the whole store, ends the window, samples its one receipt and verifies its
-opening. The sample of one receipt among one is position 0 whatever the coin (`receiptSample_one`). The opening is
+opening. The sample of one receipt among one is position 0 on a sample's coins of 128 zero bytes, `Session.sampleBytes 1 1`
+(`receiptSample_one`). The opening is
 `Schedule`'s zero-block opening at one block: its leaf is the block's receipt alone, and the receipt and payload trees
 each have one leaf, so their roots are the leaves' digests (`zeroRoot`). The session's steps read the roots and coins
-only through their sizes (`run_accepts`, over any registration of one block, any coins and any root of 64 bytes), so no
+only through their sizes (`run_accepts`, over any registration of one block, any first coin and any root of 64 bytes), so no
 SHA-512 is evaluated.
 
 `lineHeld_accepted`: `Properties.Poub.Line.LineHeld`'s premises hold together with an accepted play. The record's
@@ -25,6 +28,9 @@ one window is one group, its coin released at 0 and its root arriving at 1 (`gro
 inside its span (`honestSchedule_one`), and `Subprotocol.lineHeldAtSubprotocol_honest` gives every premise. Stated with
 `Shared.run` as `Record.run` applies it, that is `LineHeld`'s honest witness
 (`Properties.Poub.Line.SecurityProofs.lineHeld_honest`).
+The same session's window, sample and run are the honest witnesses of the window's properties
+(`AcceptChecksOpenings`, `AcceptOpensSamples`, `AcceptSamplesOpenable`), the sample's (`SampleIsSubset`,
+`Shared.AcceptSamplesOpenable`) and `AppendsInOrder`, beside their nontrivial witnesses (the last section).
 -/
 
 @[expose] public section
@@ -42,10 +48,6 @@ attribute [local irreducible] zeroRoot
 
 /-! ## The sample of one receipt among one -/
 
-theorem hash_size (m : ByteArray) : (Flock.Sha512.hash m).size = 64 := by
-  unfold Flock.Sha512.hash
-  exact Array.size_ofFn
-
 theorem beNat_lt_aux (b : ByteArray) (off : ℕ) : ∀ (l : List ℕ) (acc k : ℕ), acc < 256 ^ k →
     l.foldl (fun acc i => acc * 256 + (b.get! (off + i)).toNat) acc < 256 ^ (k + l.length)
   | [], acc, k, h => by simpa using h
@@ -60,24 +62,17 @@ theorem beNat_lt (b : ByteArray) (off len : ℕ) : Flock.Draw.beNat b off len < 
   have h := beNat_lt_aux b off (List.range len) 0 0 (by decide)
   simpa [Flock.Draw.beNat] using h
 
-theorem stream_size (key : ByteArray) (idx : List FlockSoundness.Randomness.Part) :
-    (FlockSoundness.Randomness.stream key idx 64).size = 64 := by
-  simp [FlockSoundness.Randomness.stream, FlockSoundness.Randomness.block, ByteArray.size_extract, hash_size]
-
 theorem width_one : Flock.Draw.width 1 = 9 := by
   have h : Nat.log2 1 = 0 := (Nat.log2_eq_iff (by decide)).2 ⟨by decide, by decide⟩
   simp [Flock.Draw.width, h]
 
-/-- One uniform sample in `[0, 1)` from 64 bytes is 0: its 9-byte word is below `2^72`, which 1 divides. -/
-theorem uniformOn_one (s : ByteArray) (hs : s.size = 64) : FlockSoundness.Randomness.uniformOn 1 s = some 0 := by
+/-- One uniform draw in `[0, 1)` from a stream of 82 bytes is 0, at its first 9-byte word, below `2^72`. -/
+theorem uniform_one (s : ByteArray) (hs : s.size = 82) : Flock.Draw.uniform 1 s (s.size + 1) 0 = some (0, 9) := by
   have hx : Flock.Draw.beNat s 0 9 < 4722366482869645213696 := by
     have h := beNat_lt s 0 9
     norm_num at h
     exact h
-  unfold FlockSoundness.Randomness.uniformOn
-  rw [hs]
-  show (Flock.Draw.uniform 1 s (64 + 1) 0).map (·.1) = some 0
-  rw [Flock.Draw.uniform]
+  rw [hs, Flock.Draw.uniform]
   simp only [width_one, hs]
   simp [hx, Nat.mod_one]
 
@@ -91,21 +86,24 @@ theorem qsort_single (a : ℕ) (lt : ℕ → ℕ → Bool) : #[a].qsort lt 0 0 =
 theorem qsort_map_zero (F : ℕ → ℕ) (lt : ℕ → ℕ → Bool) (h : F 0 = 0) : (#[0].map F).qsort lt 0 0 = #[0] := by
   rw [Array.map_singleton, h, qsort_single]
 
-theorem subsetOn_one (streams : ℕ → ByteArray) (h : FlockSoundness.Randomness.uniformOn 1 (streams 0) = some 0) :
-    FlockSoundness.Randomness.subsetOn 1 1 streams = some #[0] := by
-  unfold FlockSoundness.Randomness.subsetOn
+theorem subset_one (s : ByteArray) {p : ℕ} (h : Flock.Draw.uniform 1 s (s.size + 1) 0 = some (0, p)) :
+    Flock.Draw.subset 1 1 s = some #[0] := by
+  unfold Flock.Draw.subset
   simp [Id.run, h, Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size]
   rw [show Array.range 1 = #[0] from rfl, qsort_map_zero]
   · rfl
   · simp [Std.HashMap.getD_insert_self]
 
-theorem subsetExact_one (key : ByteArray) (idx : List FlockSoundness.Randomness.Part) :
-    FlockSoundness.Randomness.subsetExact key 1 1 idx = some #[0] := by
-  have h : FlockSoundness.Randomness.subset key 1 1 idx 64 = some #[0] :=
-    subsetOn_one _ (uniformOn_one _ (stream_size _ _))
-  unfold FlockSoundness.Randomness.subsetExact
-  simp [Id.run, h, Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size, List.range']
-  try rfl
+/-- The subset draw of one unit among one, on 128 zero bytes, reads its first stream's `2 · width 1 + 64 = 82` bytes
+and samples unit 0. -/
+theorem sampleUnits_one : Spot.Draw.sampleUnits (.subset 1) 1 (zeros 128) = .ok (#[0], 82) := by
+  have hz : ((zeros 128).extract 0 (0 + 82)).size = 82 := by simp [ByteArray.size_extract, zeros_size]
+  have h := Properties.Spot.SecurityProofs.onWith_take_first (zeros 128) 82 (Flock.Draw.subset 1 1) 0 #[0]
+    (by rw [zeros_size]; decide) (subset_one _ (by rw [uniform_one _ hz]))
+  unfold Spot.Draw.sampleUnits Flock.Draw.drawWith
+  simp only [width_one]
+  simp [h]
+  rfl
 
 theorem bisectRight_one : bisectRight #[1] 0 = 0 := by
   first
@@ -113,10 +111,12 @@ theorem bisectRight_one : bisectRight #[1] 0 = 0 := by
     | decide
     | decide +kernel
 
-/-- A window of one pass of one receipt samples that receipt, whatever the registration and the coin. -/
-theorem receiptSample_one (digest coin : ByteArray) : receiptSample digest 0 coin 1 #[1] = some #[(0, 0)] := by
-  unfold receiptSample
-  simp [subsetExact_one, bisectRight_one]
+/-- A window of one pass of one receipt samples that receipt on a sample's coins of 128 zero bytes, the session's
+`sampleBytes 1 1`. -/
+theorem receiptSample_one : receiptSample 1 (zeros 128) #[1] = some #[(0, 0)] := by
+  unfold receiptSample receiptSampleRead
+  simp [sampleUnits_one, bisectRight_one]
+  exact ⟨82, rfl⟩
 
 /-! ## The window: one block, one pass, its opening -/
 
@@ -131,18 +131,6 @@ theorem leafReceipt_one {R : ByteArray} (hR : R.size = 64) : leafReceipt R 0 1 =
     exact absurd h (by decide)
   · show some (R.extract 0 64) = some R
     rw [← hR, ByteArray.extract_zero_size]
-
-/-- The receipt of the zero block under seed `s`: position 0's leaf, the plan's only one. -/
-def leaf1 (reg : Registration) (s : ByteArray) : ByteArray :=
-  (receipter reg.receipt s reg.rows).receipt 0 (zeros Codec.BLOCK_BYTES)
-
-/-- The receipt tree's root of a pass over the one-block store under seed `s`. -/
-def root1 (reg : Registration) (s : ByteArray) : ByteArray :=
-  zeroRoot (treeDomain s (Plan.whole 1)) 0 (hidden (leaf1 reg s) (zeros SALT_BYTES))
-
-/-- Window 0 under challenge `c`, one pass over the whole store, chained to the registration. -/
-def window1 (reg : Registration) (c root : ByteArray) : WindowRecord :=
-  ⟨0, c, reg.digest, #[⟨root, Plan.whole 1, none⟩]⟩
 
 /-- The opening of position 0 of pass 0 under challenge `c`. -/
 def opening1 (reg : Registration) (c : ByteArray) : Opening :=
@@ -202,24 +190,20 @@ theorem checkWindow_one (reg : Registration) (c : ByteArray) (hB : reg.blocks = 
 
 /-! ## The session -/
 
-/-- One window of one pass, one sample of one receipt; no deadline, no stated length, no pace. -/
-def params1 : _root_.Poub.Session.Params :=
-  { deadlineNs := 0, windows := 1, samples := 1, minPasses := 1, windowNs := 0, lifetime := 1 }
-
 /-- Start at 0; receive window 0's one root, over the whole store at step 0, at 1; end window 0 at 1; sample it at 2;
 verify its opening. -/
 def events1 (root : ByteArray) (o : Opening) : Array _root_.Poub.Session.Event :=
   #[.start 0, .receive 0 0 root none none (some 0) 1, .boundary 1, .close 0 2, .verify 0 #[o]]
 
-/-- The session's run accepts, over any registration of one block, any two coins and any root of 64 bytes whose
+/-- The session's run accepts, over any registration of one block, any first coin and any root of 64 bytes whose
 window's openings `checkWindow` accepts, and its record has one window, of one pass of one block, which drew one
-receipt. -/
-theorem run_accepts (reg : Registration) (hB : reg.blocks = 1) (c0 c1 root : ByteArray) (hroot : root.size = 64)
+receipt, its sample's coins 128 zero bytes. -/
+theorem run_accepts (reg : Registration) (hB : reg.blocks = 1) (c0 root : ByteArray) (hroot : root.size = 64)
     (o : Opening) (hcheck : checkWindow reg reg.digest #[] (window1 reg c0 root) #[(0, 0)] #[o] = .accept) :
-    ∃ rs s, _root_.Poub.Session.run (_root_.Poub.Session.State.init params1 reg #[c0, c1] #[] 0)
+    ∃ rs s, _root_.Poub.Session.run (_root_.Poub.Session.State.init params1 reg #[c0, zeros 128] #[] 0)
       (events1 root o) = .ok (rs, s) ∧ s.outcome = some "accepted" ∧
       s.summary.map (fun sm => sm.windows.map fun w => (w.lengths, w.drawn)) = some #[(#[1], 1)] := by
-  have hdraw := receiptSample_one reg.digest c1
+  have hdraw := receiptSample_one
   have hr1 : Array.range 1 = #[0] := rfl
   simp only [window1] at hcheck
   simp [hr1, _root_.Poub.Session.run, events1, _root_.Poub.Session.step, _root_.Poub.Session.start,
@@ -240,14 +224,6 @@ theorem run_accepts (reg : Registration) (hB : reg.blocks = 1) (c0 c1 root : Byt
 
 /-! ## The instance -/
 
-/-- The one-block registration of node `zeros 1` under the zero codec seed and the deployed codec, sketch-sha512
-receipts of 16 rows, its payload tree holding `zeroPayload` at block 0. -/
-def reg1 : Registration :=
-  let key := Codec.key (zeros Codec.SEED_BYTES) honestCodec
-  let pd := Flock.FV3.Sha512.Domain.make (Poub.sha512 (PAYLOAD_DOMAIN ++ frameBytes (zeros 1))) 0 0 1
-  { node := zeros 1, blocks := 1, payloadRoot := zeroRoot pd 0 (hidden (zeroPayload key) (zeros SALT_BYTES)),
-    codecSeed := zeros Codec.SEED_BYTES, codec := honestCodec, receipt := .sketch, rows := 16, key }
-
 /-- The node: `params1` at one window a sample over `reg1`; the line's other fields are arbitrary. -/
 def node1 : Node :=
   { params := params1, groupsPerCoin := 1, reg := reg1, per := 1, blockBytes := 1, chipBytes := 0, nodeBytes := 0,
@@ -256,10 +232,11 @@ def node1 : Node :=
 /-- What the auditor saw of window 0: its coin released at 0 and its last root at 1. -/
 def seen1 : Array _root_.Poub.Line.Seen := #[⟨0, 1, 1, 0, 1, 0⟩]
 
-/-- The record: both coins zero, no appends, `events1` with `root1` and `opening1`, and `seen1`. -/
+/-- The record: its challenge and its sample's coins zero, no appends, `events1` with `root1` and `opening1`, and
+`seen1`. -/
 def record1 : Record :=
   let c := zeros 64
-  { coins := #[c, c], appendCoins := #[], notBeforeNs := 0,
+  { coins := #[c, zeros 128], appendCoins := #[], notBeforeNs := 0,
     events := events1 (root1 reg1 (seed c 0 reg1.digest)) (opening1 reg1 c), seen := seen1 }
 
 theorem reg1_make : Registration.make? (zeros 1) 1 reg1.payloadRoot (zeros Codec.SEED_BYTES) honestCodec .sketch false
@@ -286,7 +263,7 @@ theorem record_run : ∃ rs s, record1.run node1 = .ok (rs, s) ∧ s.outcome = s
     rfl
   have hcheck := checkWindow_one reg1 (zeros 64) rfl rfl hpay
   simp only [Record.run, node1, record1, _root_.Poub.Shared.run_one]
-  exact run_accepts reg1 rfl (zeros 64) (zeros 64) _ hroot _ hcheck
+  exact run_accepts reg1 rfl (zeros 64) _ hroot _ hcheck
 
 theorem record_verified : Verified node1 record1 := by
   obtain ⟨rs, s, hr, ho, -⟩ := record_run
@@ -360,14 +337,14 @@ verifier's messages entering it as its certifiers count, every receipt correct a
 premise of `Properties.Poub.Line.LineHeld` holds at `δs = δnet = 0`, and the Lean verifier accepts the play at
 every coin. -/
 theorem lineHeld_accepted :
-    ∃ (node : Node) (κ : ℕ) (X Cm : Type) (_ : Fintype X)
+    ∃ (node : Node) (κ : ℕ) («X» Cm : Type) (_ : Fintype «X»)
       (prf : Fin node.samples → Pous.Bits κ → Blocks receiptMax)
-      (rest : SampleCoins node.samples κ X → Fin node.samples → ℕ → ℕ)
-      (recs : Cm → SampleCoins node.samples κ X → Record)
-      (correct : Cm → Fin node.samples → SampleCoins node.samples κ X → Finset ℕ)
-      (com : SampleCoins node.samples κ X → Cm) (T : Trace (SampleCoins node.samples κ X))
-      (R : Receipts node.samples κ X) (δs δnet : ℝ)
-      (O : Outside (ofRecord T node (played recs com))) (I : Ingress (SampleCoins node.samples κ X)),
+      (rest : SampleCoins node.samples κ «X» → Fin node.samples → ℕ → ℕ)
+      (recs : Cm → SampleCoins node.samples κ «X» → Record)
+      (correct : Cm → Fin node.samples → SampleCoins node.samples κ «X» → Finset ℕ)
+      (com : SampleCoins node.samples κ «X» → Cm) (T : Trace (SampleCoins node.samples κ «X»))
+      (R : Receipts node.samples κ «X») (δs δnet : ℝ)
+      (O : Outside (ofRecord T node (played recs com))) (I : Ingress (SampleCoins node.samples κ «X»)),
       Paced (ofRecord T node (played recs com)) (recordPace node (played recs com)) ∧
       Covers (ofRecord T node (played recs com)) ∧
       SketchBoundAt (ofRecord T node (played recs com)) O δs ∧
@@ -388,14 +365,14 @@ theorem lineHeld_accepted :
 `Properties.Poub.Line.LineHeld` holds, and `Shared.run` runs the played record's session, at the node's parameters,
 windows a sample and registration, to an accepted state. -/
 theorem _root_.Properties.Poub.Line.SecurityProofs.lineHeld_honest :
-    ∃ (node : Node) (κ : ℕ) (X Cm : Type) (_ : Fintype X)
+    ∃ (node : Node) (κ : ℕ) («X» Cm : Type) (_ : Fintype «X»)
       (prf : Fin node.samples → Pous.Bits κ → Blocks receiptMax)
-      (rest : SampleCoins node.samples κ X → Fin node.samples → ℕ → ℕ)
-      (recs : Cm → SampleCoins node.samples κ X → Record)
-      (correct : Cm → Fin node.samples → SampleCoins node.samples κ X → Finset ℕ)
-      (com : SampleCoins node.samples κ X → Cm) (T : Trace (SampleCoins node.samples κ X))
-      (R : Receipts node.samples κ X) (δs δnet : ℝ)
-      (O : Outside (ofRecord T node (played recs com))) (I : Ingress (SampleCoins node.samples κ X)),
+      (rest : SampleCoins node.samples κ «X» → Fin node.samples → ℕ → ℕ)
+      (recs : Cm → SampleCoins node.samples κ «X» → Record)
+      (correct : Cm → Fin node.samples → SampleCoins node.samples κ «X» → Finset ℕ)
+      (com : SampleCoins node.samples κ «X» → Cm) (T : Trace (SampleCoins node.samples κ «X»))
+      (R : Receipts node.samples κ «X») (δs δnet : ℝ)
+      (O : Outside (ofRecord T node (played recs com))) (I : Ingress (SampleCoins node.samples κ «X»)),
       Paced (ofRecord T node (played recs com)) (recordPace node (played recs com)) ∧
       Covers (ofRecord T node (played recs com)) ∧
       SketchBoundAt (ofRecord T node (played recs com)) O δs ∧
@@ -408,9 +385,171 @@ theorem _root_.Properties.Poub.Line.SecurityProofs.lineHeld_honest :
           (_root_.Poub.Session.State.init node.params node.reg (played recs com ω).coins
             (played recs com ω).appendCoins (played recs com ω).notBeforeNs) (played recs com ω).events =
           .ok (rs, s) ∧ s.outcome = some "accepted" := by
-  obtain ⟨node, κ, X, Cm, hX, prf, rest, recs, correct, com, T, R, δs, δnet, O, I, hP, hCv, hSk, hCov, hIc, hLive,
+  obtain ⟨node, κ, «X», Cm, hX, prf, rest, recs, correct, com, T, R, δs, δnet, O, I, hP, hCv, hSk, hCov, hIc, hLive,
     hRef, hCnt, ω, rs, s, hr, ho⟩ := lineHeld_accepted
-  exact ⟨node, κ, X, Cm, hX, prf, rest, recs, correct, com, T, R, δs, δnet, O, I, hP, hCv, hSk, hCov, hIc, hLive,
+  exact ⟨node, κ, «X», Cm, hX, prf, rest, recs, correct, com, T, R, δs, δnet, O, I, hP, hCv, hSk, hCov, hIc, hLive,
     hRef, hCnt, ω, rs, s, hr, ho⟩
 
 end Properties.Poub.Line.Honest
+
+/-! ## Witnesses of the window's, the sample's and the appends' properties
+
+The honest witnesses are at this session: the one-block registration `reg1`, which `Registration.make?` accepts at the
+deployed codec, sketch-sha512 receipts of 16 rows (`reg1_make`), and its window 0 of one pass over the whole store under
+challenge `zeros 64`, whose one receipt a sample of one draws on 128 zero bytes (`receiptSample_one`) and whose opening
+`checkWindow` accepts (`checkWindow_one`).
+
+* `verifyWindow_one`: `verifyWindow` accepts that window, its one opening and its sample's coins: the premise of
+  `AcceptChecksOpenings`, `AcceptOpensSamples` and `AcceptSamplesOpenable`.
+* `sampleIsSubset_honest`, `Shared.acceptSamplesOpenable_honest`: the sample of that window, alone or as the one window
+  of its sample, is drawn.
+* `appendsInOrder_honest`: the session's run, which accepts (`run_accepts`).
+
+The nontrivial witnesses: on a sample's coins of no bytes the draw of one receipt among one runs out on its first read
+(`sampleUnits_empty`), so no sample is drawn (`receiptSample_empty`) and no values are the draw's
+(`sampleValues_empty`), while a verifier that accepted every window would accept it (also the shared sample's
+`SampleIsSubset`, `RunSamplesRecords` and `AcceptedSamplesOpenable`, whose honest witnesses need a run's state at a
+sample's close); and a state whose store does not end where its registration and appends end fails `AppendsInOrder`'s
+first conjunct.
+-/
+
+namespace Properties.Poub
+
+open Properties.Poub.Line.Honest
+
+/-- The draw of one unit among one on no bytes throws `RAN_OUT` at its first read, before its loop. -/
+theorem sampleUnits_empty : Spot.Draw.sampleUnits (.subset 1) 1 ByteArray.empty = .error Spot.Draw.RAN_OUT := by
+  unfold Spot.Draw.sampleUnits Flock.Draw.drawWith Flock.Draw.onWith
+  simp only [width_one]
+  rfl
+
+theorem receiptSample_empty : receiptSample 1 ByteArray.empty #[1] = none := by
+  unfold receiptSample receiptSampleRead
+  simp [sampleUnits_empty]
+  rfl
+
+theorem sampleValues_empty (us : Array ℕ) : ¬ SampleValues 1 1 ByteArray.empty us := by
+  rintro (⟨h, -⟩ | ⟨-, read, h⟩)
+  · exact absurd h (by decide)
+  · rw [show min 1 1 = 1 from rfl, sampleUnits_empty] at h
+    cases h
+
+theorem window0_lengths : window0.passes.map (·.plan.length) = #[1] := by
+  simp [window0, window1, plan_length]
+
+theorem verifyWindow_one : verifyWindow reg1 #[] window0 (zeros 128) 1 #[opening1 reg1 (zeros 64)] = some .accept := by
+  have hs : receiptSample 1 (zeros 128) (window0.passes.map (·.plan.length)) = some #[(0, 0)] := by
+    rw [window0_lengths]
+    exact receiptSample_one
+  have hc := checkWindow_one reg1 (zeros 64) rfl rfl rfl
+  unfold verifyWindow
+  rw [hs]
+  exact congrArg some hc
+
+/-- **`AcceptChecksOpenings`' premise holds at the one-block registration.** `verifyWindow` accepts window 0 of one
+pass over the whole store of a registration `Registration.make?` accepts, on a sample of one receipt and its opening. -/
+theorem acceptChecksOpenings_honest :
+    ∃ (reg : Registration) (w : WindowRecord) (coin : ByteArray) (openings : Array Opening),
+      Registration.make? (zeros 1) 1 reg.payloadRoot (zeros Codec.SEED_BYTES) honestCodec .sketch false LAYOUT 16 =
+          .ok reg ∧
+        verifyWindow reg #[] w coin 1 openings = some .accept :=
+  ⟨reg1, window0, zeros 128, #[opening1 reg1 (zeros 64)], reg1_make, verifyWindow_one⟩
+
+/-- **`AcceptChecksOpenings` fails without the draw.** On a sample's coins of no bytes no sample is drawn over the
+window's one receipt, which a verifier that accepted every window would accept. -/
+theorem acceptChecksOpenings_nontrivial : ∀ sampled, ¬ receiptSample 1 ByteArray.empty #[1] = some sampled := by
+  intro sampled h
+  rw [receiptSample_empty] at h
+  cases h
+
+/-- **`AcceptOpensSamples`' premise holds at the one-block registration** (`acceptChecksOpenings_honest`). -/
+theorem acceptOpensSamples_honest :
+    ∃ (reg : Registration) (w : WindowRecord) (coin : ByteArray) (openings : Array Opening),
+      Registration.make? (zeros 1) 1 reg.payloadRoot (zeros Codec.SEED_BYTES) honestCodec .sketch false LAYOUT 16 =
+          .ok reg ∧
+        verifyWindow reg #[] w coin 1 openings = some .accept :=
+  acceptChecksOpenings_honest
+
+/-- **`AcceptOpensSamples` fails without the draw** (`acceptChecksOpenings_nontrivial`). -/
+theorem acceptOpensSamples_nontrivial : ∀ sampled, ¬ receiptSample 1 ByteArray.empty #[1] = some sampled :=
+  acceptChecksOpenings_nontrivial
+
+/-- **`AcceptSamplesOpenable`' premise holds at the one-block registration** (`acceptChecksOpenings_honest`). -/
+theorem acceptSamplesOpenable_honest :
+    ∃ (reg : Registration) (w : WindowRecord) (coin : ByteArray) (openings : Array Opening),
+      Registration.make? (zeros 1) 1 reg.payloadRoot (zeros Codec.SEED_BYTES) honestCodec .sketch false LAYOUT 16 =
+          .ok reg ∧
+        verifyWindow reg #[] w coin 1 openings = some .accept :=
+  acceptChecksOpenings_honest
+
+/-- **`AcceptSamplesOpenable` fails without the draw.** On a sample's coins of no bytes no values among the window's one
+receipt are the draw's. -/
+theorem acceptSamplesOpenable_nontrivial : ∀ us, ¬ SampleValues 1 1 ByteArray.empty us :=
+  sampleValues_empty
+
+/-- **`SampleIsSubset`'s premise holds at the one-block registration's window**: its one receipt is drawn on 128 zero
+bytes. -/
+theorem sampleIsSubset_honest :
+    ∃ (src : ByteArray) (sampled : Array (ℕ × ℕ)), receiptSample 1 src (window0.passes.map (·.plan.length)) =
+      some sampled :=
+  ⟨zeros 128, #[(0, 0)], by rw [window0_lengths]; exact receiptSample_one⟩
+
+/-- **`SampleIsSubset` fails without the draw.** On no bytes no values among one receipt are the draw's. -/
+theorem sampleIsSubset_nontrivial : ∀ us, ¬ SampleValues 1 1 ByteArray.empty us :=
+  sampleValues_empty
+
+/-- **`AppendsInOrder`'s premise holds at the one-block registration**: the session's run over window 0, its one pass,
+its sample and its opening accepts (`run_accepts`). -/
+theorem appendsInOrder_honest :
+    ∃ (reg : Registration) (coins : Array ByteArray) (events : Array _root_.Poub.Session.Event)
+      (rs : Array _root_.Poub.Session.Result) (s : _root_.Poub.Session.State),
+      Registration.make? (zeros 1) 1 reg.payloadRoot (zeros Codec.SEED_BYTES) honestCodec .sketch false LAYOUT 16 =
+          .ok reg ∧
+        _root_.Poub.Session.run (_root_.Poub.Session.State.init params1 reg coins #[] 0) events = .ok (rs, s) ∧
+        s.outcome = some "accepted" := by
+  have hroot : (root1 reg1 (seed (zeros 64) 0 reg1.digest)).size = 64 := by
+    simp only [root1, zeroRoot, climb_size]
+  obtain ⟨rs, s, hr, ho, -⟩ :=
+    run_accepts reg1 rfl (zeros 64) _ hroot _ (checkWindow_one reg1 (zeros 64) rfl rfl rfl)
+  exact ⟨reg1, _, _, rs, s, reg1_make, hr, ho⟩
+
+/-- **`AppendsInOrder` fails without the session's checks.** A state whose store ends past its registration's one block
+with no appends, which a verifier that accepted every session would leave, has its store not ending where its
+registration and appends do. -/
+theorem appendsInOrder_nontrivial : ¬ overrun.extent = reg1.blocks + (overrun.appends.toList.map (·.count)).sum := by
+  intro h
+  have h' : (2 : ℕ) = 1 + 0 := h
+  omega
+
+namespace Shared
+
+/-- **`Shared.AcceptSamplesOpenable`'s premise holds at the one-block registration**: a sample whose one window is its
+window 0 draws that window's one receipt on 128 zero bytes. -/
+theorem acceptSamplesOpenable_honest :
+    ∃ (coin : ByteArray) (sampled : Array (ℕ × ℕ)), receiptSample 1 coin (lengthsOf [window0]) = some sampled :=
+  ⟨zeros 128, #[(0, 0)], by
+    rw [show lengthsOf [window0] = #[1] by simp [lengthsOf, window0, window1, plan_length]]
+    exact receiptSample_one⟩
+
+/-- **`Shared.AcceptSamplesOpenable` fails without the draw.** On no bytes no values among one receipt are the
+draw's. -/
+theorem acceptSamplesOpenable_nontrivial : ∀ us, ¬ SampleValues 1 1 ByteArray.empty us :=
+  sampleValues_empty
+
+/-- **`Shared.SampleIsSubset` fails without the draw.** On no bytes no values among one receipt are the draw's. -/
+theorem sampleIsSubset_nontrivial : ∀ us, ¬ SampleValues 1 1 ByteArray.empty us :=
+  sampleValues_empty
+
+/-- **`Shared.RunSamplesRecords` fails without the draw.** On a sample's coins of no bytes no sample is drawn over one
+receipt. -/
+theorem runSamplesRecords_nontrivial : ∀ sampled, ¬ receiptSample 1 ByteArray.empty #[1] = some sampled :=
+  acceptChecksOpenings_nontrivial
+
+/-- **`Shared.AcceptedSamplesOpenable` fails without the draw.** On no bytes no values among one receipt are the
+draw's. -/
+theorem acceptedSamplesOpenable_nontrivial : ∀ us, ¬ SampleValues 1 1 ByteArray.empty us :=
+  sampleValues_empty
+
+end Shared
+
+end Properties.Poub

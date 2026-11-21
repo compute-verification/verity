@@ -57,11 +57,11 @@ def test_a_trace_splits_into_loads_and_each_is_timed_from_its_arrivals_and_steps
 
 
 def test_a_windows_close_on_the_loop_counts_only_in_busy_throughput(tmp_path):
-    w = {"window": 0, "seconds": {"open": 0.4, "on_loop": 2.0}, "on_loop_phases_s": {"arm": 1.5}, "pouw_h1": {"tied": True}}
+    w = {"window": 0, "seconds": {"open": 0.4, "on_loop": 2.0}, "on_loop_phases_s": {"arm": 1.5}}
     ld = O.serve_dir(_dir(tmp_path / "c", _load(10.0, 0.5, window=0), windows=[w]))["loads"][0]
     assert ld["tokens_per_s"] == pytest.approx(2.0) and ld["busy_tokens_per_s"] == pytest.approx(1.0)
     assert ld["windows"] == {"n": 1, "closed_mid_load": 0, "open_s": 0.4, "close_on_loop_s": 2.0, "close_on_loop_after_s": 2.0,
-                             "arm_close_s": 1.5, "h1": ["tied"]}
+                             "arm_close_s": 1.5}
 
 
 def test_the_table_takes_first_loads_and_puts_composed_over_stock(tmp_path):
@@ -148,8 +148,8 @@ def test_a_load_the_commit_serves_as_two_windows_is_one_load_with_the_gap_and_mi
         return [{"kind": "arrive", "request": a, "t": t0}, {"kind": "arrive", "request": b, "t": t0},
                 {"kind": "window", "window": w, "event": "open"}, _step(t0 + 1, {a: 1, b: 1}, (a, b)),
                 {"kind": "window", "window": w, "event": "close"}]
-    ws = [{"window": 0, "seconds": {"open": 0.5, "on_loop": 2.0}, "on_loop_phases_s": {"arm": 1.0}, "pouw_h1": {"tied": True}},
-          {"window": 1, "seconds": {"open": 0.5, "on_loop": 1.0}, "pouw_h1": {"error": "refused"}}]
+    ws = [{"window": 0, "seconds": {"open": 0.5, "on_loop": 2.0}, "on_loop_phases_s": {"arm": 1.0}},
+          {"window": 1, "seconds": {"open": 0.5, "on_loop": 1.0}}]
     c = _dir(tmp_path / "c", half(10.0, 0) + half(13.0, 1), windows=ws)
     (c / "load.timings.json").write_text(json.dumps(_timings(9.9, 0.0, 1.2, 4.2)))
     assert len(O.loads(O._jsonl(c / O.TRACE))) == 2
@@ -157,7 +157,7 @@ def test_a_load_the_commit_serves_as_two_windows_is_one_load_with_the_gap_and_mi
     assert (ld["requests"], ld["tokens"], ld["steps"], ld["span_s"]) == (4, 4, 2, pytest.approx(4.0))
     assert ld["time_to_first_token_s"] == pytest.approx(1.0) and ld["busy_tokens_per_s"] == pytest.approx(4 / 5.0)
     assert ld["windows"] == {"n": 2, "closed_mid_load": 1, "open_s": 1.0, "close_on_loop_s": 3.0, "close_on_loop_after_s": 1.0,
-                             "arm_close_s": 1.0, "h1": ["tied", "error"]}
+                             "arm_close_s": 1.0}
 
 
 def test_public_ratios_carry_no_count_time_or_rate_of_either_arm(tmp_path, capsys):
@@ -250,7 +250,7 @@ def test_without_timings_the_table_has_only_the_engine_ruler(tmp_path):
 
 
 def _fixed(t0: float, n: int, steps: int, step_s: float) -> list[dict]:
-    """`serve_load.py --fixed n --window-steps steps`'s load on the trace: n requests arriving at t0, each emitting a token at
+    """An at-once input dataset's load of n requests of ``steps`` window steps on the trace: n requests arriving at t0, each emitting a token at
     every one of the window's steps (ignore_eos), all finishing at its last."""
     users = [f"fixed.{j:05d}.{t0}" for j in range(n)]
     return [{"kind": "arrive", "request": u, "t": t0} for u in users] + [
@@ -258,14 +258,14 @@ def _fixed(t0: float, n: int, steps: int, step_s: float) -> list[dict]:
 
 
 def _fixed_timings(at: float, n: int, steps: int, step_s: float) -> dict:
-    """The fixed load's timings document as `serve_load.timings` writes it: every request at 0, released in order."""
+    """The at-once load's timings document as `verity_vllm.inputs.sender.timings` writes it: every request at 0, released in order."""
     req = lambda j: {"user": f"fixed.{j:05d}", "release": j, "at_s": 0.0, "send_s": 0.0, "first_token_s": step_s,  # noqa: E731
                      "done_s": steps * step_s, "tokens": steps, "ok": True}
     return {"clock": "monotonic", "release_run": "r", "start_unix": at, "requests": [req(j) for j in range(n)]}
 
 
 def test_a_fixed_load_lifetime_is_read_as_a_varied_one(tmp_path, capsys):
-    """A stock lifetime of `served_stock.sh` with FIXED (4 requests of max_tokens WINDOW_STEPS 4, ignore_eos): `metrics` gives
+    """A stock lifetime of `served_stock.sh` with DATASET at at-once (4 requests of max_tokens WINDOW_STEPS 4, ignore_eos): `metrics` gives
     its aggregate and `table --stock --public` its ratios, as for a varied lifetime."""
     c = _dir(tmp_path / "c", _fixed(10.0, 4, 4, 0.5), windows=[])
     (c / "load.timings.json").write_text(json.dumps(_fixed_timings(10.0, 4, 4, 0.5)))
@@ -292,7 +292,8 @@ printf '%s\\n' "$*" >> "$ARGV_LOG"
 case "$*" in
   "-c "*) echo 0123456789abcdef ;;
   *" serve-openai "*) echo "SERVE-OPENAI listening on 127.0.0.1"; exec tail -f /dev/null ;;
-  *serve_load.py*) echo "[serve-load] fixed: 4/4 ok, prompts 32…32 tokens" ;;
+  *serve_load.py*) echo "[serve-load] varied: 4/4 ok, prompts 16…24 tokens" ;;
+  *'served_run/inputs.py send'*) echo "[send] llama32_1b_fixed_4_27_2 at at-once: 4/4 ok, prompts 27…27 ids; identity i" ;;
   *"served_overhead.py metrics"*) echo '{}' ;;
 esac
 """
@@ -319,16 +320,17 @@ def _argv(lines: list[str], what: str) -> list[str]:
     return line.split()
 
 
-def test_served_stock_sh_with_fixed_serves_the_records_fixed_load_and_window_steps(tmp_path):
-    """FIXED and WINDOW_STEPS give serve_load.py the fixed load as served_verdicts.sh's LOAD=fixed passes it and serve-openai
-    its --window-steps; $OUT gets status lines alone and the load's counts stay in the private dir."""
-    p, lines = _stock(tmp_path, "reps", FIXED="4", WINDOW_STEPS="4")
+def test_served_stock_sh_with_a_dataset_sends_it_through_the_one_sender_and_serves_its_window_steps(tmp_path):
+    """DATASET and TIMING go to the adapter's one sender as served_verdicts.sh's LOAD=dataset passes them, WINDOW_STEPS to
+    serve-openai; $OUT gets status lines alone and the load's counts stay in the private dir."""
+    p, lines = _stock(tmp_path, "reps", DATASET="llama32_1b_fixed_4_27_2", TIMING="at-once", WINDOW_STEPS="2")
     assert p.returncode == 0, p.stdout + p.stderr
-    serve, load = _argv(lines, " serve-openai "), _argv(lines, "serve_load.py")
-    assert serve[serve.index("--window-steps") + 1] == "4" and serve.count("--window-steps") == 1
-    i = load.index("--fixed")
-    assert load[i:i + 6] == ["--fixed", "4", "--window-steps", "4", "--prompt-range", "32:32"]
-    assert not {"--varied", "--rate", "--max-tokens"} & set(load)
+    serve, load = _argv(lines, " serve-openai "), _argv(lines, "served_run/inputs.py send")
+    assert serve[serve.index("--window-steps") + 1] == "2" and serve.count("--window-steps") == 1
+    assert load[0].endswith("adapters/vllm/tools/served_run/inputs.py") and \
+        load[1:6] == ["send", "--dataset", "llama32_1b_fixed_4_27_2", "--timing", "at-once"]
+    assert load[6] == "--port" and load[load.index("--release") + 1] == "0123456789abcdef"
+    assert not {"--varied", "--rate", "--max-tokens", "--prompt-range", "--seed"} & set(load)
     out = tmp_path / "out"
     assert sorted(f.name for f in out.iterdir()) == ["stock.txt"]
     assert (out / "stock.txt").read_text().splitlines() == ["rep-1 LOAD 1: exit 0", "rep-1: stopped (exit 143)"]
@@ -342,11 +344,11 @@ def test_served_stock_sh_without_fixed_serves_the_varied_load_and_no_window_step
     assert "--window-steps" not in _argv(lines, " serve-openai ")
     load = _argv(lines, "serve_load.py")
     assert load[load.index("--varied"):load.index("--varied") + 6] == ["--varied", "4", "--rate", "1000", "--max-tokens", "4"]
-    assert "--fixed" not in load and "--window-steps" not in load
+    assert "--dataset" not in load and "--window-steps" not in load
 
 
-@pytest.mark.parametrize(("env", "why"), [({"FIXED": "4"}, "FIXED needs WINDOW_STEPS"),
-                                         ({"FIXED": "4", "WINDOW_STEPS": "four"}, "WINDOW_STEPS is a positive integer")])
-def test_served_stock_sh_refuses_a_fixed_load_without_its_window_steps(tmp_path, env, why):
+@pytest.mark.parametrize(("env", "why"), [({"DATASET": "llama32_1b_fixed_4_27_2"}, "DATASET needs TIMING"),
+                                         ({"WINDOW_STEPS": "four"}, "WINDOW_STEPS is a positive integer")])
+def test_served_stock_sh_refuses_a_dataset_without_its_timing_and_steps_that_are_no_number(tmp_path, env, why):
     p, lines = _stock(tmp_path, **env)
     assert p.returncode == 3 and f"PREFLIGHT: {why}" in (tmp_path / "out" / "stock.txt").read_text() and lines == []

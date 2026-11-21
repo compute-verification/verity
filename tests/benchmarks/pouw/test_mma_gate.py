@@ -1,11 +1,11 @@
-"""Every build gate on ptxas's report and cuobjdump's SASS (`verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py`'s `mma_gate`,
-through each kernel's own `sass_gate.py`): its CLI's exit code, OUT_JSON and printed lines on each case are pinned in
+"""Every build gate on ptxas's report and cuobjdump's SASS (`verity/protocols/accounting/compute/pouw/prover/sass_gate.py`'s `mma_gate`,
+through `build_gate.py` on each tree's table, its `sass_gate.json`): its CLI's exit code, OUT_JSON and printed lines on each case are pinned in
 `fixtures/mma_gate/verdicts.json` (sha256s of the bytes), so a refactor of the shared gate can't move a verdict.
 
 The cases: a clean listing of every kernel the gate wants (`pass`, and `pass_sm120a` for a gate given ARCH), the same with
 one of each refusal (`refused`), and the harness's real sm_120a `cuobjdump -sass` listings (`plain` and `fast_math`
-in `tests/verity/protocols/resource_accounting/compute/pouw/prover/fixtures/sass_gate/`) under a ptxas report of their functions. The listings are generated here from each gate's own tables, so a
-change that means to move a verdict (a kernel added to WANT, say) rewrites the pins: `python test_mma_gate.py --write`.
+in `tests/verity/protocols/accounting/compute/pouw/prover/fixtures/sass_gate/`) under a ptxas report of their functions. The listings are generated here from each gate's own tables, so a
+change that means to move a verdict (a kernel added to a table's `want`, say) rewrites the pins: `python test_mma_gate.py --write`.
 """
 from __future__ import annotations
 
@@ -22,20 +22,25 @@ import pytest
 ROOT = Path(__file__).resolve().parents[3]
 FIX = Path(__file__).resolve().parent / "fixtures"
 VERDICTS = FIX / "mma_gate" / "verdicts.json"
-SASS_FIX = ROOT / "tests/verity/protocols/resource_accounting/compute/pouw/prover/fixtures/sass_gate"
-GATES = {"pearl_c_sm90": ("verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90/sass_gate.py", None),
-         "pearl_c_sm120": ("verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120/sass_gate.py", None)}
+SASS_FIX = ROOT / "tests/verity/protocols/accounting/compute/pouw/prover/fixtures/sass_gate"
+BUILD_GATE = ROOT / "verity/protocols/accounting/compute/pouw/prover/build_gate.py"
+GATES = {"pearl_c_sm90": ("verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm90/sass_gate.json", None),
+         "pearl_c_sm120": ("verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm120/sass_gate.json", None)}
 #: the arch each gate's real-listing cases are reported for
 REAL_ARCH = {"pearl_c_sm90": "sm_90a", "pearl_c_sm120": "sm_120a"}
 
 
-def _load(gate: str):
-    name = f"mma_gate_case_{gate}"
+def _build_gate():
+    name = "mma_gate_build_gate"
     if name not in sys.modules:
-        spec = importlib.util.spec_from_file_location(name, ROOT / GATES[gate][0])
+        spec = importlib.util.spec_from_file_location(name, BUILD_GATE)
         sys.modules[name] = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(sys.modules[name])
     return sys.modules[name]
+
+
+def _load(gate: str):
+    return _build_gate().load(ROOT / GATES[gate][0])
 
 
 def entry(name: str, arch: str, regs: int = 64, stack: int = 0, spills: int = 0, smem: int = 1024, used: bool = True) -> str:
@@ -66,7 +71,7 @@ class Listing:
 def pearl_c_sm90(arch: str, bad: bool) -> tuple[str, str]:
     G = _load("pearl_c_sm90")
     p, s = [], Listing()
-    for name, (n, q, h) in G.WANT.items():
+    for name, (n, q, h) in G.want.items():
         if bad and name == "gemm_words":
             continue
         p.append(entry(name, "sm_90a", regs=168))
@@ -76,7 +81,7 @@ def pearl_c_sm90(arch: str, bad: bool) -> tuple[str, str]:
         s.ins(f"QGMMA.64x{n}x32.F32.E4M3.E4M3 R24, gdesc[UR4], R24, gsb0", 3 if bad and name == "gemm_plain" else
               2 * q if name == "gemm_plain" else q)
         s.ins(f"HGMMA.64x{n}x16.F32.BF16 R24, gdesc[UR8], R24, gsb0", h)
-        s.ins("QGMMA.64x32x32.F32.E4M3.E4M3 R88, gdesc[UR12], R88, gsb0", G.WINDOW_ATOMS.get(name, 0) + (bad and name in G.WINDOW_ATOMS))
+        s.ins("QGMMA.64x32x32.F32.E4M3.E4M3 R88, gdesc[UR12], R88, gsb0", G.window["atoms"].get(name, 0) + (bad and name in G.window["atoms"]))
         if bad and name == "gemm_ct":
             s.ins("HMMA.16816.F32.BF16 R4, R8, R12, R4")
         if bad and name == "gemm_fast":
@@ -99,7 +104,7 @@ def pearl_c_sm90(arch: str, bad: bool) -> tuple[str, str]:
 def pearl_c_sm120(arch: str, bad: bool) -> tuple[str, str]:
     G = _load("pearl_c_sm120")
     p, s = [], Listing()
-    for name, (q, h) in G.WANT.items():
+    for name, (q, h) in G.want.items():
         if bad and name == "words_k":
             continue
         p.append(entry(name, "sm_120a", regs=96))
@@ -147,7 +152,7 @@ def run(gate: str, case: str, tmp: Path) -> dict:
     (tmp / "sass.txt").write_text(sass)
     out = tmp / "out.json"
     out.unlink(missing_ok=True)
-    argv = [sys.executable, str(ROOT / path)] + ([arch] if takes_arch else []) + [str(tmp / "ptxas.txt"), str(tmp / "sass.txt"), str(out)]
+    argv = [sys.executable, str(BUILD_GATE), str(ROOT / path)] + ([arch] if takes_arch else []) + [str(tmp / "ptxas.txt"), str(tmp / "sass.txt"), str(out)]
     r = subprocess.run(argv, capture_output=True, text=True, cwd=tmp)
     digest = lambda b: hashlib.sha256(b).hexdigest()  # noqa: E731
     return {"rc": r.returncode, "out_json": digest(out.read_bytes()) if out.exists() else None,
@@ -162,7 +167,7 @@ def test_the_gates_verdict_and_out_json_are_pinned(gate, case, tmp_path):
 
 
 def test_sass_functions_takes_each_functions_lines_and_a_repeated_header_starts_over():
-    H = _load("pearl_c_sm90").H
+    H = _build_gate().H
     listing = "code for sm_90a\n  Function : a\n  /*0000*/ X ;\n  Function : b\n  /*0000*/ Y ;\n  Function : a\n  /*0000*/ Z ;\n"
     assert H.sass_functions(listing) == {"a": ["  /*0000*/ Z ;"], "b": ["  /*0000*/ Y ;"]}
 
@@ -170,7 +175,7 @@ def test_sass_functions_takes_each_functions_lines_and_a_repeated_header_starts_
 def test_an_hfma2_mma_constant_load_is_no_mma_form():
     """ptxas loads a constant with an HFMA2.MMA of -RZ and RZ in most kernels; the gate's MMA pattern takes the tensor-core
     forms beside it and not that, so no `allowed` has to name it."""
-    H = _load("pearl_c_sm90").H
+    H = _build_gate().H
     forms = lambda text: [m.group(0) for m in H.MMA.finditer(text)]  # noqa: E731
     assert forms("HFMA2.MMA R4, -RZ, RZ, 0, 0") == []
     assert forms("HMMA.16816.F32.BF16 R4, R8, R12, R4") == ["HMMA.16816.F32.BF16"]

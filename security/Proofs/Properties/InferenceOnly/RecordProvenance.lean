@@ -44,6 +44,7 @@ open InferenceOnlyVerifier.Record.SecurityProofs (form front_text tmplOf_spec ra
 Program the record check reads; and its Definition is one of the Program's. -/
 theorem tmpl_index {P : Prog} {doc : Json} {ts : List Tmpl} (hP : ReadProg P) (hts : templatesOf P doc = .ok ts)
     {t : Tmpl} (ht : t ∈ ts) : P.index[t.tid]? = some t.defn ∧ t.defn < P.defs.size := by
+  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Walk.walkable_recut P hP.2.2.2.2.1
   obtain ⟨tids, rs, hev, -, -, hmapM⟩ := templatesOf_spec hts
   obtain ⟨x, -, hx⟩ := (InferenceOnlyVerifier.Record.SecurityProofs.Json.mapM_ok _ _ _ hmapM t).1 ht
   obtain ⟨-, -, r, hr, -, htm⟩ := tmplAt_ok hx

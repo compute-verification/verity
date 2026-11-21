@@ -7,7 +7,7 @@ public import Definitions.Core.Circuit
 
 The circuits Flock proves are Boolean: input gates, and AND, XOR and NOT gates over earlier gates, and rows, the AND
 of the XOR of some earlier gates and the XOR of others (a row as the verifier parses it, `Flock.Circuit` in
-`verity/protocols/proofs/flock/verifier/`; the compiled lowering reads a template's rows as these gates, `Lowering.lean`). A Boolean
+`verity/protocols/proof/flock/verifier/`; the compiled lowering reads a template's rows as these gates, `Lowering.lean`). A Boolean
 circuit is a circuit whose gates are all one bit wide (`toCircuit`), so every definition about circuits applies to it as
 it is.
 
@@ -98,8 +98,9 @@ decreasing_by all_goals assumption
 def eval (a : Fin C.N → Bool) : Fin C.N → Bool :=
   C.run fun g => if (C.op g).isInput then some (a g) else none
 
-/-- A Boolean circuit is a circuit of one-bit gates. -/
-def toCircuit (B : Circuit) : Verity.Circuit where
+/-- A Boolean circuit is a circuit of one-bit gates. Reducible, so that a gate's width is `1` and its index a gate of
+`B` wherever simp and instances look. -/
+@[reducible] def toCircuit (B : Circuit) : Verity.Circuit where
   N := B.N
   w _ := 1
   isInput g := (B.op g).isInput

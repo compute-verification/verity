@@ -20,7 +20,7 @@ it (`pipeline.config_record`).  Torch-free: vLLM is imported only inside a servi
 The collectives' switches are among them: which of `CudaCommunicator.all_reduce`'s routes are on, FlashInfer's all-reduce backend, and
 NCCL's own (`NCCL_ENVS`, those that change its algorithm, protocol, channels or chunking).  What vLLM resolved from them on a rank, which
 the node decides too (FlashInfer's ``auto`` backend falls back to ``trtllm`` without NVSwitch multicast), is read back beside the
-switches as ``collectives`` (`collectives`) and recorded, not judged: two engines' records compare with `collectives_differ`.
+switches as ``collectives`` (`collectives`) and recorded, not judged.
 """
 from __future__ import annotations
 
@@ -261,7 +261,7 @@ def read_rank(worker: Any) -> dict[str, Any]:
             "collectives": collectives()}
 
 
-#: The switches that pick a TP all-reduce's route or NCCL's order of adds, which `collectives_differ` compares
+#: The switches that pick a TP all-reduce's route or NCCL's order of adds
 COLLECTIVE_SWITCHES = ("disable_custom_all_reduce", "VLLM_ALLREDUCE_USE_FLASHINFER", "VLLM_FLASHINFER_ALLREDUCE_BACKEND",
                        "VLLM_ALLREDUCE_USE_SYMM_MEM", "VLLM_USE_NCCL_SYMM_MEM", "VLLM_ALLREDUCE_USE_FLASHINFER_PCIE_IPC",
                        "VLLM_DISABLE_PYNCCL", "NCCL_P2P_DISABLE", *NCCL_ENVS)
@@ -288,20 +288,6 @@ def collectives() -> dict[str, Any]:
             "custom_max_bytes": getattr(ca, "max_size", None) if on("ca_comm") else None, "symm_mem": on("symm_mem_comm"),
             "symm_mem_max_bytes": getattr(sm, "max_size", None) if on("symm_mem_comm") else None, "pynccl": on("pynccl_comm"),
             "nccl_version": getattr(nc, "nccl_version", None)}
-
-
-def collectives_differ(a: Mapping[str, Any], b: Mapping[str, Any]) -> list[str]:
-    """Where two engines' served records (`record`) differ, rank by rank, in a `COLLECTIVE_SWITCHES` switch or a resolved route
-    (``collectives``).  Two engines whose all-reduces are to agree bit for bit, such as a replay on another node, need none; the
-    order a node's NVSwitch reduces in is its own, and neither record shows it."""
-    ra, rb = ({r["rank"]: r for r in x["ranks"]} for x in (a, b))
-    out = [] if set(ra) == set(rb) else [f"ranks {sorted(ra)} against {sorted(rb)}"]
-    for k in sorted(set(ra) & set(rb)):
-        sa, sb = ra[k]["switches"], rb[k]["switches"]
-        out += [f"rank {k}: {s} {sa.get(s)!r} against {sb.get(s)!r}" for s in COLLECTIVE_SWITCHES if sa.get(s) != sb.get(s)]
-        ca, cb = ra[k].get("collectives", {}), rb[k].get("collectives", {})
-        out += [f"rank {k}: {c} {ca.get(c)!r} against {cb.get(c)!r}" for c in sorted(set(ca) | set(cb)) if ca.get(c) != cb.get(c)]
-    return out
 
 
 def record(ranks: list[Mapping[str, Any]], decl: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:

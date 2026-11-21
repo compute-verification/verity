@@ -79,15 +79,15 @@ lowrisk_lane = true
 # the registration log's verifier (verity/protocols/registration/verifier/), not only its files' names; the verifier
 # machine's deployment the research tool holds (tools/research/src/research/pods/nebius/verifier/), so `verdict_plain`
 # freeing tools/research/ leaves it on the whole check;
-# compose's verifier (verity/protocols/compose/verifier/), not only its lean/, onsite/ and remote/
+# compose's verifier (verity/protocols/run/verifier/), not only its lean/, onsite/ and remote/
 lowrisk_excludes = ["*.lean", "lean-audit.json", "lakefile.*", "lean-toolchain", "lake-manifest.json", "TRUSTED.sha256",
-                    "verity/runtime/", "verity/circuits/evaluate/", "verity/circuits/requirement/", "tools/difftest/", "record.py", "registration.py", "verity/protocols/resource_accounting/network/attester/", "verity/protocols/resource_accounting/network/verifier/", "verity/protocols/proofs/flock/verifier/sigma/", "verity/protocols/proofs/flock/verifier/", "verity/protocols/workload_classification/training_detection/inference_only/verifier/", "verity/protocols/interface/", "verity/protocols/compose/verifier/onsite/", "verity/protocols/resource_accounting/memory/poub/verifier/", "verity/protocols/resource_accounting/memory/pous/attester/", "tools/pous_grader/", "verity/protocols/resource_accounting/memory/pous/verifier/", "verity/protocols/resource_accounting/compute/pouw/verifier/", "verity/protocols/proofs/recursion/verifier/", "verity/protocols/compose/verifier/remote/", "verity/protocols/compose/verifier/lean/", "verity/protocols/proofs/spot/", "verity/protocols/proofs/spot_flock/verifier/", "verity/protocols/proofs/spot_flock_recursion/verifier/", "tests/verity/protocols/",
-                    "verity/protocols/registration/verifier/", "verity/protocols/compose/verifier/",
+                    "verity/runtime/", "verity/circuits/evaluate/", "verity/circuits/requirement/", "tools/difftest/", "record.py", "registration.py", "verity/protocols/accounting/network/attester/", "verity/protocols/accounting/network/verifier/", "verity/protocols/proof/flock/verifier/sigma/", "verity/protocols/proof/flock/verifier/", "verity/protocols/policy/training_detection/inference_only/verifier/", "verity/protocols/interface/", "verity/protocols/run/verifier/onsite/", "verity/protocols/accounting/memory/poub/verifier/", "verity/protocols/accounting/memory/pous/attester/", "tools/pous_grader/", "verity/protocols/accounting/memory/pous/verifier/", "verity/protocols/accounting/compute/pouw/verifier/", "verity/protocols/proof/recursion/verifier/", "verity/protocols/run/verifier/remote/", "verity/protocols/run/verifier/lean/", "verity/protocols/proof/spot/", "verity/protocols/proof/spot_flock/verifier/", "verity/protocols/proof/spot_flock_recursion/verifier/", "tests/verity/protocols/",
+                    "verity/protocols/registration/verifier/", "verity/protocols/run/verifier/",
                     "verity/party.py", "verity/protocol.py", "verity/config.py", "verity/channel.py", "verity/device.py", "verity/errors.py", "tests/verity/", "calibration/hardware/",
-                    "verity/protocols/resource_accounting/memory/poub/attester/", "benchmarks/network_traces/", "adapters/vllm/manifests/checkpoints-int8.json",
-                    "benchmarks/one_stage/", "verity/protocols/resource_accounting/memory/poub/verifier/bandwidth-mem69-v2.json", "benchmarks/poub_session/auditor_line.py",
+                    "verity/protocols/accounting/memory/poub/attester/", "benchmarks/network_traces/", "adapters/vllm/manifests/checkpoints-int8.json",
+                    "benchmarks/one_stage/", "verity/protocols/accounting/memory/poub/verifier/bandwidth-mem69-v2.json", "benchmarks/poub_session/auditor_line.py",
                     "__init__.py",
-                    "verity/circuits/", "verity/circuits/ops/", "verity/circuits/silicon/", "verity/circuits/kernels/", "verity/commitments/", "adapters/vllm/verity_vllm/commitments/", "tests/adapters/vllm/tests/commitments/", "verity/commitments/crypto/", "verity/commitments/randomness/",
+                    "verity/circuits/", "verity/circuits/ops/", "verity/circuits/silicon/", "verity/circuits/kernels/", "verity/commitments/", "verity/commitments/crypto/", "verity/commitments/randomness/",
                     "tools/verity/lean/", "tests/", "tools/check/", "tools/verity/graph/", ".gitattributes",
                     "queue.py",
                     "infra/", "tools/research/", "tools/research/src/research/pods/nebius/verifier/", "tools/move/", "tools/agent-guard/",
@@ -99,7 +99,7 @@ lowrisk_excludes = ["*.lean", "lean-audit.json", "lakefile.*", "lean-toolchain",
 # list empty, none is plain. What the gate reads of `lowrisk_excludes` keeps off Lean, its locks and Lake files, the
 # verifiers, the soundness-path Python and the Lean check; this adds the auditor's devices it doesn't name. A move's PR is
 # never plain, whatever it touches, nor a change to a Lean input of the tree (`vqueue_slim.lean_inputs`)
-verdict_excludes = ["verity/protocols/compose/verifier/", "verity/protocols/resource_accounting/memory/poub/attester/"]
+verdict_excludes = ["verity/protocols/run/verifier/", "verity/protocols/accounting/memory/poub/attester/"]
 # the entries of `lowrisk_excludes` the land verdicts gate doesn't read (`DriveFlags.plain_excludes`): each keeps a change
 # off the low-risk lane so that a reader sees it before it lands, which its land verdict is, and none needs the whole check
 # first. Each is written character for character as in `lowrisk_excludes`, and the parse refuses any other, one in

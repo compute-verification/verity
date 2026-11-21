@@ -8,7 +8,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
-from bench_standins import FakeFactory, inputs
+from bench_standins import CPUS, FakeFactory, inputs, on_stand_in_machine
 
 import verity_bench.cli as cli
 from verity_bench import jobs
@@ -221,6 +221,7 @@ def test_a_requeued_point_deletes_its_earlier_attempts_verdict_before_it_runs(tm
     monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path))
     monkeypatch.setenv("RESEARCH_SOURCE_SHA", "a" * 40)
     monkeypatch.chdir(root)
+    on_stand_in_machine(monkeypatch, tmp_path)
 
     def preempted(*args, **kwargs):
         raise RuntimeError("preempted")
@@ -244,18 +245,20 @@ def test_a_timed_point_records_its_numbers_in_its_runs_result(tmp_path, monkeypa
     monkeypatch.setenv("RESEARCH_RUN_ID", "r20261114-000000-0000")
     monkeypatch.delenv("OUT", raising=False)
     monkeypatch.chdir(root)
+    on_stand_in_machine(monkeypatch, tmp_path)
     preset, _, arms = inputs()
     ran = []
 
-    def timed(_preset, _arms, points, **_kwargs):
-        ran.append(points)
-        return run_benchmark(preset, arms, points, sweep="quick", reps=2, factory=FakeFactory(), git_commit="abc")
+    def timed(_preset, _arms, points, **kwargs):
+        ran.append((points, kwargs["cpus"]))
+        return run_benchmark(preset, arms, points, sweep="quick", reps=2, factory=FakeFactory(), git_commit="abc",
+                             cpus=kwargs["cpus"])
 
     monkeypatch.setattr(cli, "run_benchmark", timed)
     monkeypatch.setattr(result_format.kit, "host_stamp", lambda: {"commit": "abc", "card": RTX})
     assert cli.main(["_vllm-point", "--spec", "llama31-8b-fp8-1gpu", "--point", item.point.id,
                      "--identity", item.identity]) == 0
-    assert ran == [(item.point,)]
+    assert ran == [((item.point,), CPUS)]
     held = json.loads((tmp_path / "result.json").read_text())
     assert held["run_id"] == "r20261114-000000-0000" and held["validation"]["status"] == "passed"
     got = {m["name"]: m for m in held["measurements"]}

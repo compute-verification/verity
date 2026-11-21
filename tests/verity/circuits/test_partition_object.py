@@ -186,15 +186,15 @@ def test_the_pinned_vector_bytes_in_graph_and_partition_out(program):
     assert PO.verify(obj, D).ok
 
 
-#: `partition_object.program_sha512` of each, as it was computed before `codec.program_digest` absorbed it
+#: `partition_object.program_sha512` of each
 PROGRAM_SHA512 = {
-    ("format_vectors.json", "descriptor"): "8217ea3d075b702f23db9e9a2693cedab39091e7d1f6fd09ae82d42b364d37bd90f27df47ecdbd45bfabd7b0b4ecc1bb219e0fab98e190c83d7fc50c0720876e",
-    ("format_vectors.json", "registered_program"): "88ccc55f0fe24f3867b7d668557c042447d688355293adf9a85f283e1376c85a76fbf3cf2bb225d7707b01fe65f9cb99c0be905085cf2597f5705a88b0eca5b6",
-    ("qword_vectors.json", "narrow"): "316a0a2f00fa1453296dcf891ab69c6ab484d9e37f9bcd9eab206f97a89eacc491f144af5f173db0a91efa19554b41c72268bac2fc65cbbf973f727bda157cdd",
-    ("template_instance_vectors.json", "population"): "543f0b5c4cdc441c066dbb56e1669c99107062b24bab8fcd569bd4e4b5075b603290eb33bed0baa286a1675aae48a2b89dcb9d4319ec783e59d7ce5f849a596e",
-    "Max3": "62d82112d04e10bcd984b812331ba13c2eace59e55613e685a06f0de3ddd092ed6584ea47f8527890dffd45f94fbeee008298a0bf74b7e092550392bcdea88ce",
-    "Pair": "e4c91d2d5b7f4598463d77977f0ce96d34f0ca5c93ee1b91ad0f03b69be1ca3664ab313dc976cc55a8002b5c966880f53545f98a6b7e7ed749541095caf1cf35",
-    "Rows": "c953a14c107cf35cbd209477a8252b53173c2570ad7565239b152d5748eeaedef5990fd6a6d9d57a594866bc3014d50630f0337f0ea351c63f670051d343e070",
+    ("format_vectors.json", "descriptor"): "b86eceb191f6bcbe0ebf942fff174cea5ba858696a1b4823077d5d4e7df10330883977c858ca96eafe6f542890577bbde8d4f454e1c1d99fbba0e7967eaa8db9",
+    ("format_vectors.json", "registered_program"): "45d9064c7f382c21af84c66598b85e53c669c188acb14bc882517376529bfcf9b896956a3fbbe4630d00364a6c08c9ebb5e1b63a7ac6addbe49609de18175d9d",
+    ("qword_vectors.json", "narrow"): "40522a9ab0f7247552647d5369920762dd9c29d190ceed223882bcd7c4ae473aba9f806352819fbc8b2d816b5c309ce14032c9755ba581908209db9e8587f8da",
+    ("template_instance_vectors.json", "population"): "3173a7a43345b10ef52dd9c456157734200d52bf80fd4a7c7df50e39bc4da1766fc995c6695ebd66b04caf93af1854e4b7c42d0bb9332a0aa6a2a5543e339486",
+    "Max3": "cd905283d0e4cae38f19995e86822caca9d064d688ecb0731e59425479366d4554849f40eada9a840c76f72cdf83936201624f4ecbef395764bbdcca6fd47029",
+    "Pair": "2caf56a684cf86de0a6a2316f9c7ad0ea910508f02a0a1347ca09e83dcb154ffe5b6ffb84815c9fe59df6204ba10c04562a253d67fd6708d8a852a374a2332c1",
+    "Rows": "ad3d4767bee0aae530d1cd69df510d96e7eb1d8e94c7d25cb14d12762bdc4b499b0917d046b083484f847d72bf2b6626e9334766347c43875e2814ae79348c6b",
 }
 
 
@@ -205,7 +205,7 @@ def _vector_descriptor(file: str, name: str) -> dict:
 
 
 def test_the_program_digest_is_the_program_sha512_registrations_were_made_with():
-    """Same preimage, SHA-512 over it: a program registered by `program_sha512` keeps its digest. A program whose root
+    """Same preimage, SHA-512 over it: `program_sha512` is `codec.program_digest`. A program whose root
     Definition has dict statics is not among these: its root key `Root[<readable id>]_v1` spells the id's `{12 hex}`,
     which moved with the hash."""
     for key, want in PROGRAM_SHA512.items():

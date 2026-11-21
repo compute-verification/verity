@@ -116,6 +116,40 @@ def read_rows(entries: Mapping[str, Mapping[str, Any]], mem: Mapping[str, Any], 
     return out
 
 
+#: the refusal of a member whose output rows are padded to whole SHA-512 blocks where the circuit's are exactly its words
+ROWS_PADDED = "E_ROWS_PADDED"
+#: the refusal of a member whose input rows are cut otherwise than the circuit's (`ioCuts`): a whole row where it cuts
+ROWS_CUT = "E_ROWS_CUT"
+
+
+def _uncut(rows: Sequence[Sequence[Any]]) -> list[list[Any]]:
+    out: list[list[Any]] = []
+    for name, w in rows:
+        base = name.split("#")[0]
+        if out and "#" in name and out[-1][0] == base and not name.endswith("#0"):
+            out[-1][1] += w
+        else:
+            out.append([base, w])
+    return out
+
+
+def ports_form(meta: Mapping[str, Any], mem: Mapping[str, Any]) -> str | None:
+    """Where member ``mem``'s rows are the circuit's in another form, the refusal naming it: output rows padded to whole
+    SHA-512 blocks (`ROWS_PADDED`), or input rows of the same words cut otherwise (`ROWS_CUT`); else None."""
+    c = [list(p[:2]) for p in meta["ports"]]
+    m = [list(p) for p in mem["ports"]]
+    ci, mi = int(meta.get("input_ports", 0)), int(mem.get("input_ports", 0))
+    c_out, m_out = c[ci:], m[mi:]
+    if (c_out != m_out and [n for n, _ in c_out] == [n for n, _ in m_out]
+            and all(mw == -(-cw // 64) * 64 for (_, cw), (_, mw) in zip(c_out, m_out))):
+        return (f"{ROWS_PADDED}: its output rows {m_out} are padded to whole SHA-512 blocks, and the circuit's are "
+                f"{c_out}, exactly their words: the period commits each output row as a bit row of its words")
+    if c[:ci] != m[:mi] and _uncut(c[:ci]) == _uncut(m[:mi]):
+        return (f"{ROWS_CUT}: its input rows {m[:mi]} are not the circuit's {c[:ci]}, the same words cut otherwise: "
+                f"the circuit's rows are in(S)'s cuts (`ioCuts`), the rows the period commits")
+    return None
+
+
 def flock_input_files(window_dir: str | Path, k: int, circuit: str | FlockCircuit, out_dir: str | Path, *,
                       write: Sequence[str] = ("pub", "inst"), files: tuple[Mapping[str, Any], Mapping[str, Any]] | None = None,
                       sparse: bool = False, keyed: Collection[str] | None = None) -> dict[str, Any]:
@@ -141,6 +175,8 @@ def flock_input_files(window_dir: str | Path, k: int, circuit: str | FlockCircui
     win, rec = files if files is not None else (json.loads((d / "window.json").read_text()), json.loads((d / "registration.json").read_text()))
     mem = win["members"][k]
     meta = c.meta
+    if why := ports_form(meta, mem):
+        raise ValueError(f"member {k}: {why}")
     if ([list(p[:2]) for p in meta["ports"]] != mem["ports"] or [list(p) for p in meta["out_ports"]] != mem["out_ports"]
             or meta.get("input_ports") != mem["input_ports"]):
         raise ValueError(f"the circuit's ports {meta['ports']} / {meta['out_ports']} ({meta.get('input_ports')} input rows) are not "
@@ -154,7 +190,7 @@ def flock_input_files(window_dir: str | Path, k: int, circuit: str | FlockCircui
     units = {"vus_per_block": G, "units_per_vu": meta["units_per_vu"], "indices": idx, "blocks": [idx[b:b + G] for b in range(0, n, G)],
              "classes": [c.cls] * n}
     head = {"format": M0_FORMAT, "statement": meta.get("statement", M0_STATEMENT), "scheme": SCHEME,
-            "set": f"served/{rec['window']['run']}/m{k}", "subcircuit": meta["subcircuit"], "range": [0, n], "instances": n,
+            "set": f"served/{rec['window']['run']}/m{k}", "subcircuit": meta.get("unit"), "range": [0, n], "instances": n,
             "circuit_sha512": c.pin, "units": units, "frame_v3": mem["frame_v3"], "rows": True}
     if mem.get("shared_rows"):
         head["shared_rows"] = mem["shared_rows"]

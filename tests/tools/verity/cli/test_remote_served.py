@@ -17,11 +17,15 @@ from pathlib import Path
 import pytest
 
 from verity import config as K
-from verity.protocols.proofs.spot.verifier import parties as SP
+from verity.protocols.proof.spot.verifier import parties as SP
 from verity_cli import run as R
+from verity_vllm.inputs import serves
 
 ROOT = Path(R.ROOT)
 CONFIG = ROOT / "applications" / "remote.toml"
+S = serves.SERVES
+DATASET = serves.application(str(CONFIG))[0]
+WINDOW = {"SLOTS": str(S.slots), "WINDOW_STEPS": str(S.outputs), "V3C_CLASS": S.window_class, "CLASSES": S.window_class}
 ONSITE = ROOT / "applications" / "onsite_full.toml"
 REG = R.registry()
 T = sys.modules["served_table"]
@@ -32,13 +36,12 @@ BINDINGS = {"challenger": {"pearl-plus": {"gate": "gate-command", "peer": "peer-
 STARTED = {"challenger": {"pearl-plus": {**BINDINGS["challenger"]["pearl-plus"], "lane": "lane-1", "main-file": "main.txt"},
                           "sampled-proofs": {"loopback": "loopback-host", "main-file": "main.txt"}}}
 STARTED_HOOKS = {"PEARLC_CHALLENGER_LANE": "lane-1", "MAIN_FILE": "main.txt"}
-LOCAL = {"POUW": "pearlplus", "PEARLPLUS_TIE": "1", "PRODUCT": "remote", "PEARLC_CHALLENGER_GATE": "",
+LOCAL = {"POUW": "pearlplus", "PRODUCT": "remote", "PEARLC_CHALLENGER_GATE": "",
          "PEARLC_CHALLENGER_PEER": "", "DEVELOPMENT": "1"}
-PEARLPLUS = {"POUW": "pearlplus", "PEARLPLUS_TIE": "1", "PRODUCT": "remote", "PEARLC_CHALLENGER_GATE": "gate-command",
+PEARLPLUS = {"POUW": "pearlplus", "PRODUCT": "remote", "PEARLC_CHALLENGER_GATE": "gate-command",
              "PEARLC_CHALLENGER_PEER": "peer-1", "H1_KEY_SHA512": KEY}
-#: what remote's file asks of Pearl+: its class and the uniform tie
-ASKED = {"V3C_CLASS": "4,27,2", "CLASSES": "4,27,2", "PEARLPLUS_TIE_UNIFORM": "1"}
-OPTIONAL = {"PEARLC_CHALLENGER_LANE", "MAIN_FILE", "V3C_CLASS", "CLASSES", "PEARLPLUS_TIE_UNIFORM"}
+#: the runner's variables a run inherits unless the test clears them; Pearl+'s untied hooks set none of the last four
+OPTIONAL = {"PEARLC_CHALLENGER_LANE", "MAIN_FILE", "V3C_CLASS", "CLASSES", "PEARLPLUS_TIE", "PEARLPLUS_TIE_UNIFORM"}
 
 
 def toml(tables: dict) -> str:
@@ -93,7 +96,7 @@ def test_without_bindings_no_key_blocks_and_pearl_pluss_coins_are_the_workloads_
     for on in ((), ("--on", T.PROVER_NODE)):
         rc, got, err = dry(capsys, *on)
         assert rc == 0 and [x["unbound"] for x in got["dry"]] == [[]], err
-        assert hooks_of(got) == LOCAL | ASKED
+        assert hooks_of(got) == LOCAL
     assert T.unbound(cfg, {}) == []
     variables = T.variables(cfg, {})
     assert [k for k, v in variables.items() if "<" in v] == []
@@ -105,24 +108,24 @@ ONSITE_UNBOUND = [k for k in T.unbound(R.load(ONSITE, REG), {}) if k.split(".")[
 
 def onsite_pearlplus(tmp: Path) -> Path:
     f = tmp / "onsite.toml"
-    f.write_text(K.render(T.configuration(K.parse(ONSITE.read_text())["program"]["commit"])))
+    f.write_text(ONSITE.read_text())
     return f
 
 
 def test_under_onsite_pearl_plus_takes_h1s_place_with_its_product_and_no_compute_key_blocks(tmp_path, capsys):
-    assert "pearl-plus" in T.listed("onsite_full") and "pouw" not in T.listed("onsite_full")
+    assert "pearl-plus" in (listed := K.parse(ONSITE.read_text())["protocols"]) and "pouw" not in listed
     f = onsite_pearlplus(tmp_path)
     rc, got, err = dry(capsys, config=f)
     written = {f"{p}.{c}.{k}" for p, s in T.STARTS.items() for c, ks in s.writes.items() for k in ks}
     assert rc == 0 and got["dry"][0]["unbound"] == sorted(set(ONSITE_UNBOUND) - written), err
-    assert hooks_of(got) == LOCAL | ASKED | {"PRODUCT": "onsite"}
+    assert hooks_of(got) == LOCAL | {"PRODUCT": "onsite"}
     assert not {"H1_GATE", "H1_PEER"} & set(T.variables(R.load(f, REG), {}))
     tables = json.loads(json.dumps(STARTED))
     for key in ONSITE_UNBOUND:
         p, c, k = key.split(".")
         tables.setdefault(p, {}).setdefault(c, {})[k] = "192.0.2.1:7000"
     rc, got, err = dry(capsys, "--bindings", bindings(tmp_path, tables), config=f)
-    assert rc == 0 and hooks_of(got) == PEARLPLUS | ASKED | STARTED_HOOKS | {"PRODUCT": "onsite"}, err
+    assert rc == 0 and hooks_of(got) == PEARLPLUS | STARTED_HOOKS | {"PRODUCT": "onsite"}, err
     assert T.unbound(R.load(f, REG), {}) == ONSITE_UNBOUND
 
 
@@ -139,39 +142,22 @@ def test_a_part_of_pearl_pluss_live_challenger_is_refused_by_name(tmp_path, caps
 def test_the_runners_variables_under_remote_are_pearl_pluss():
     cfg = R.load(CONFIG, REG)
     serve = T.SERVE.variables(cfg, BINDINGS)
-    assert {k: serve[k] for k in ("REPO", "PRECISION", "SLOTS", "WINDOW_STEPS", "LOAD")} == {
-        "REPO": "unsloth/Llama-3.2-1B", "PRECISION": "bfloat16", "SLOTS": "4", "WINDOW_STEPS": "2", "LOAD": "fixed"}
-    variables = serve | PEARLPLUS | ASKED | {"VERITY_CONFIGURATION": K.digest(cfg), "VERITY_PINS": "[]"}
+    assert {k: serve[k] for k in ("REPO", "PRECISION", "SLOTS", "WINDOW_STEPS", "LOAD", "DATASET", "TIMING", "V3C_CLASS",
+                                  "CLASSES")} == {
+        "REPO": "unsloth/Llama-3.2-1B", "PRECISION": "bfloat16", "SLOTS": str(S.slots), "WINDOW_STEPS": str(S.outputs),
+        "LOAD": "dataset", "DATASET": DATASET, "TIMING": "at-once", "V3C_CLASS": S.window_class, "CLASSES": S.window_class}
+    variables = serve | PEARLPLUS | {"VERITY_CONFIGURATION": K.digest(cfg), "VERITY_PINS": "[]",
+                                     "PP_DEVELOPMENT_UNDER_HOLD": "1"}
     assert T.variables(cfg, BINDINGS) == variables
     both = {"challenger": {"pearl-plus": {**BINDINGS["challenger"]["pearl-plus"], "lane": "vllm-2",
                                           "main-file": "/tmp/main.json"}}}
     assert T.variables(cfg, both) == variables | {"PEARLC_CHALLENGER_LANE": "vllm-2", "MAIN_FILE": "/tmp/main.json"}
 
 
-def test_pearl_pluss_class_is_the_runners_and_refused_by_name_where_the_workload_disagrees(tmp_path, capsys):
-    rc, got, err = dry(capsys, "--bindings", bindings(tmp_path, STARTED), config=remote(tmp_path, {"class": "4,27,2"},
-                                                                                   **{"window-steps": 2}))
-    assert rc == 0, err
-    assert {k: hooks_of(got).get(k) for k in ("V3C_CLASS", "CLASSES")} == {"V3C_CLASS": "4,27,2", "CLASSES": "4,27,2"}
-    for params, workload in (({"class": "4,27,2"}, {"window-steps": 16}), ({"class": "5,27,2"}, {"window-steps": 2})):
-        rc, _, err = dry(capsys, config=remote(tmp_path, params, **workload))
-        assert rc == 2 and "refused params: Pearl+'s class" in err, err
-    for bad in ("4,27", "4,0,2", "a,b,c", 4):
-        rc, _, err = dry(capsys, config=remote(tmp_path, {"class": bad}))
-        assert rc == 2 and "refused params: class is SLOTS,PROMPT,OUTPUTS" in err, err
-    rc, _, err = dry(capsys, config=remote(tmp_path, {"classes": "4,27,2"}))
-    assert rc == 2 and "refused unknown-key" in err and "known: class, tie-uniform" in err
-
-
-def test_the_uniform_tie_is_set_only_when_asked(tmp_path, capsys):
-    assert T.variables(R.load(CONFIG, REG), BINDINGS)["PEARLPLUS_TIE_UNIFORM"] == "1"
-    assert R.load(CONFIG, REG)["params"][PP] == {"class": "4,27,2", "tie-uniform": True}
-    for asked, want in ((True, "1"), (False, None)):
-        rc, got, err = dry(capsys, "--bindings", bindings(tmp_path, STARTED),
-                           config=remote(tmp_path, {"tie-uniform": asked}))
-        assert rc == 0 and hooks_of(got).get("PEARLPLUS_TIE_UNIFORM") == want, err
-    rc, _, err = dry(capsys, config=remote(tmp_path, {"tie-uniform": 1}))
-    assert rc == 2 and "refused params: pearl-plus.tie-uniform is a bool, not 1" in err
+def test_the_retired_tie_params_are_refused_by_name(tmp_path, capsys):
+    for retired in ({"class": S.window_class}, {"tie-uniform": True}):
+        rc, _, err = dry(capsys, config=remote(tmp_path, retired))
+        assert rc == 2 and "refused unknown-key" in err and f"pearl-plus has no setting {sorted(retired)}" in err, err
 
 
 #: coreutils' env by path: agent VMs put a redacting `env` ahead of it on PATH (`tools/agent-guard/env_guard.py`)
@@ -193,7 +179,7 @@ def test_the_workload_runs_once_with_pearl_pluss_hooks(tmp_path, capsys, monkeyp
     here = sorted(p["name"] for p in R.load(CONFIG, REG)["party"] if p["machine"] == T.PROVER_NODE)
     assert said(capsys.readouterr().out, "PARTY") == [{"party": p, "refused": None} for p in here] and "workers" in here
     hooks = dict(x.split("=", 1) for x in (state / "out" / "hooks.txt").read_text().splitlines())
-    assert hooks == PEARLPLUS | ASKED | {"SLOTS": "4", "WINDOW_STEPS": "2"}
+    assert hooks == PEARLPLUS | WINDOW
 
 
 def test_without_bindings_the_workload_runs_with_no_gate_and_no_placeholder(tmp_path, capsys, monkeypatch):
@@ -206,7 +192,7 @@ def test_without_bindings_the_workload_runs_with_no_gate_and_no_placeholder(tmp_
     rc = R.run_main([str(CONFIG), "--on", T.PROVER_NODE, "--state", str(state)], REG)
     assert rc == 0 and set(parties(capsys).values()) == {None}
     hooks = dict(x.split("=", 1) for x in (state / "out" / "hooks.txt").read_text().splitlines())
-    assert hooks == {k: v for k, v in LOCAL.items() if k != "DEVELOPMENT"} | ASKED | {"SLOTS": "4", "WINDOW_STEPS": "2"}
+    assert hooks == {k: v for k, v in LOCAL.items() if k != "DEVELOPMENT"} | WINDOW
 
 
 HANDED = "HANDOFF the final record, composed off this node: on COMPOSE_NODE (auditor-2)"
@@ -269,7 +255,7 @@ def written(base: Path, line: dict | None, rows: dict | None, inference_only: di
 ACCEPTED = {"integrity": {"verdict": "accept"}, "work": {"verdict": "accept"}}
 #: inference-only's row as a verifier-side run would write it: its answer recomputed off the served node
 CHECKED = {"verdict": "accept", "answer_from": "recomputed on this host by its Lean verifier"}
-ALL_ACCEPTED = {c: "accept" for c in T.listed("remote")}
+ALL_ACCEPTED = {c: "accept" for c in K.parse(CONFIG.read_text())["protocols"]}
 YES = {"composed": "accept", "product": "remote"}
 
 
@@ -287,23 +273,23 @@ def test_remotes_verifier_reads_the_compose_answers_record_pearl_plus_under_work
 
 @pytest.mark.parametrize("work, verdict", [("accept", "accept"), ("reject", "reject"), ("missing", "undecided")])
 def test_pearl_plus_row_says_what_the_auditor_leaves_unchecked_on_every_verdict(tmp_path, work, verdict):
-    """Its coins' signatures, and the CUDA-graph rows its tie doesn't cover."""
+    """Its coins' signatures, and the CUDA-graph rows its verdict doesn't cover."""
     cfg = R.load(CONFIG, REG)
     written(tmp_path / "out" / "compose", {**YES, "composed": {"missing": "pending"}.get(work, work)},
             {**ACCEPTED, "work": {"verdict": work}, "inference-only": CHECKED})
     got = T.remote_check(cfg, tmp_path)
     assert got["verdict"] == verdict and got["answer_from"] == {
-        "pearl-plus": "coins' signatures checked on the served node only; not checked by the auditor; the tie covers a "
-                      "workload served eager (vLLM's graph mode NONE): under a CUDA graph (FULL or PIECEWISE) a step's "
-                      "linear runs at the capture size, with rows no request owns, and those rows are outside what the "
-                      "tie covers"}
+        "pearl-plus": "coins' signatures checked on the served node only; not checked by the auditor; Pearl+'s verdict "
+                      "covers a workload served eager (vLLM's graph mode NONE): under a CUDA graph (FULL or PIECEWISE) a "
+                      "step's linear runs at the capture size, with rows no request owns, and those rows are outside what "
+                      "its verdict covers"}
 
 
 def test_a_component_that_charges_nothing_reads_why_for_its_figure_and_shows_its_verdict(tmp_path, monkeypatch):
     """A stand-in declaration under inference-only's name whose resource is a `Lacks`: the check's line says why it
     has no figure (``charges_nothing``) and keeps its verdict among the components and in the combined verdict, as
     any component's: a reject of it makes the line reject and names it, and a missing row holds the line open."""
-    from verity.protocols.resource_accounting import scheme as S
+    from verity.protocols.accounting import scheme as S
     nothing = S.Lacks("charges nothing: a stand-in that checks a policy")
     standin = S.Scheme("inference-only", "verity/inference-only/v0", nothing, nothing, (), (), ())
     monkeypatch.setattr(T.schemes, "DECLARATIONS", {**T.schemes.DECLARATIONS, "inference-only": "stand-in"})

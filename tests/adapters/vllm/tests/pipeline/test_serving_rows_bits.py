@@ -34,7 +34,7 @@ from verity_vllm.pipeline import long_row as LR
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.pipeline import serving_templates as ST
 from verity_vllm.query.program_view import spec_base
-from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+from verity.protocols.proof.spot.verifier.one_stage import proofs as PF
 
 #: `Flock.Statement.checkInRange`'s bound on a statement's regions; a unit's are one a row (`Flock.HmOut.regions`)
 REGIONS_MAX = 1024

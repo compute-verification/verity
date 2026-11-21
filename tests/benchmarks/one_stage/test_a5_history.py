@@ -18,9 +18,9 @@ import numpy as np
 import pytest
 
 from verity.commitments import docket_digest as DD
-from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, docket as R, verifier as V
-from verity.protocols.proofs.spot.prover import docket as DK
+from verity.protocols.proof.spot.verifier import service as S
+from verity.protocols.proof.spot.verifier.one_stage import draw as D, docket as R, verifier as V
+from verity.protocols.proof.spot.prover import docket as DK
 from verity.commitments import randomness as RND
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
@@ -31,7 +31,7 @@ from verity.commitments.periods import history as HW, interface as I, rows as CS
 
 HERE = (Path(__file__).resolve().parent)
 sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "verity" / "protocols" / "proofs" / "spot" / "verifier"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "verity" / "protocols" / "proof" / "spot" / "verifier"))
 import a0  # noqa: E402
 import a5 as A5  # noqa: E402
 import fake_challenger as FC  # noqa: E402
@@ -88,7 +88,7 @@ def _verifier(mine, rec: dict):
 
     def check(ports: dict, leaf_layer: str, history: dict | None = None) -> V.Verdict:
         return V.check(rec, mine.program, mine.query, own, CS.SCHEME, ports, leaf_layer=leaf_layer,
-                       work_table=mine.work_table, history=history)
+                       work_table=mine.work_table, history=history, partition=mine.partition)
 
     return check, D.derive(mine.program, mine.query, own, mine.work_table)
 
@@ -107,10 +107,10 @@ def test_the_verifier_holds_the_registered_history_root_to_the_writers_bodies(tm
         return verify(want, leaf, h)
 
     def register(h: dict | None) -> S.WindowCommitmentRecord:
-        stream, counts = A5.stream_of(a, mine, [{"defn": G8, "m": m} for m in mine.members], want, leaf,
+        stream, counts = A5.stream_of(a, mine, [{"defn": G8, "m": m, "st": {}} for m in mine.members], want, leaf,
                                       FC.Challenger("a5-history"))
         return stream.register(rec, want, leaf_layer=leaf, window_root=a.window_root, counts=counts,
-                               work_table=mine.work_table, **A5.registering(a, h))
+                               work_table=mine.work_table, partition=mine.partition, **A5.registering(a, h))
 
     got = check(hist)
     assert got.ok and got.verifiers["lean"] == got.verifiers["python"], got

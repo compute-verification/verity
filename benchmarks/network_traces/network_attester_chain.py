@@ -41,16 +41,14 @@ import hashlib
 import json
 import sys
 from collections import defaultdict
-from fractions import Fraction
 from pathlib import Path
 
-from verity.protocols.resource_accounting.network.verifier import io_tie as IT
-from verity.protocols.resource_accounting.network.verifier import service as SVC
-from verity.protocols.resource_accounting.network.verifier import network_attester as W
-from verity.protocols.resource_accounting.network.verifier.id_form import id_request
-from verity.protocols.resource_accounting.network.verifier.certificate import Direction
-from verity.protocols.resource_accounting.network.verifier.schedule import SyncSet
-from verity.protocols.resource_accounting.network.verifier import record_files as RF, relay_check as RC
+from verity.protocols.accounting.network.verifier import io_tie as IT
+from verity.protocols.accounting.network.verifier import service as SVC
+from verity.protocols.accounting.network.verifier import network_attester as W
+from verity.protocols.accounting.network.verifier.id_form import id_request
+from verity.protocols.accounting.network.verifier.certificate import Direction
+from verity.protocols.accounting.network.verifier import record_files as RF, relay_check as RC
 from verity.commitments.crypto import lms
 
 HERE = Path(__file__).resolve().parent
@@ -63,9 +61,6 @@ PROXY = ("a network attester rehearsal's run (its records through the older netw
 ATTESTER_FILES = ("plan.json", "calibration.json", "proxy.json.gz")
 #: an id request's fields (`id_form.id_request`'s keywords but the frame's)
 FIELDS = ("model", "user", "prompt", "max_tokens", "temperature", "top_p", "seed")
-#: a network attester link declares no sync, so its Σ_sync is never read (`service.TransferBlocks`'s ``network_attester``); one
-#: value for the field
-UNREAD_SYNCS = SyncSet((0,), (Fraction(1),))
 #: the auditor's record of a network attester run, ``ATTESTER_KEY``'s form: ``deployment``, the gate's own
 #: ``out/deployment.json`` of the run as the auditor read it off the gate, ``deployment_sha512`` its bytes' SHA-512 (hex),
 #: and ``key`` and ``session``, the deployment's; the fields the gate's run also gives it (``host``, ``run``, ``pinned``,
@@ -171,9 +166,9 @@ def own_record(run: Path) -> dict:
 def link(run: Path) -> tuple[SVC.TransferBlocks, dict, W.NetworkAttesterParams]:
     """N2's link on the run (the module docstring's `link`), its deployment and the network attester's schedule."""
     dep, params = deployment(run)
-    lw = SVC.TransferBlocks(dep["link"], params.grid, UNREAD_SYNCS, RF.read_public(dep["key"]), dep["run_id"],
-                         bytes.fromhex(dep["session"]), ingress=params.grid, proof_deadline=RC.PROOF_DEADLINE_S,
-                         network_attester=SVC.NetworkAttesterProfile(dep["windows"], params.digest))
+    lw = SVC.TransferBlocks(dep["link"], params.grid, RF.read_public(dep["key"]), dep["run_id"],
+                            bytes.fromhex(dep["session"]), ingress=params.grid,
+                            network_attester=SVC.NetworkAttesterProfile(dep["windows"], params.digest))
     return lw, dep, params
 
 

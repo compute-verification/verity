@@ -127,7 +127,7 @@ class DraftEngine(Engine):
 class Tick:
     """The certified tick's registered constants, in microseconds: the network attester's bucket τ_b, and the engine
     class's step times τ_sat (a step after which the waiting queue is nonempty) and τ_free (one after which it is empty).
-    The serving side's is `verity.protocols.resource_accounting.network.prover.admission.Tick`; this stdlib copy keeps the replay loadable alone."""
+    The serving side's is `verity.protocols.accounting.network.prover.admission.Tick`; this stdlib copy keeps the replay loadable alone."""
 
     bucket_us: int
     sat_us: int

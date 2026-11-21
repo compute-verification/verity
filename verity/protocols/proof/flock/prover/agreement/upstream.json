@@ -1,0 +1,27 @@
+{
+ "note": "What check's lean-agreement step runs against, stored once (upstream-build.sh from a ci-bundle.sh bundle, on the oldest glibc checks run on: Ubuntu 22.04, for x86-64-v3 so it runs on every check pod's CPU) and pinned by hash. A new #83 version or replayable set in vectors.json: rebuild, `research data put`, re-pin.",
+ "upstream": {
+  "art": "art:fd8516a05f93b00ffd242475754ef5895193b5badbbe4f2fa5fea8e74f870ee5",
+  "sha256": "2e848f9881a225ed00be438bbebf64b2c9c83e4f1648cebaf51f535acecf9763",
+  "flock": "b684b1258e4b1f202bec24afd660ace851b09e5e",
+  "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",
+  "host": "x86_64-unknown-linux-gnu",
+  "glibc": "2.34",
+  "build_glibc": "ldd (Ubuntu GLIBC 2.35-0ubuntu3.15) 2.35",
+  "rustflags": "-C target-cpu=x86-64-v3",
+  "bundle_sha256": "957f5751b566127942b91ca9a79c02ae930d328f4028c7e94fd2b267b1f663cf",
+  "built_in": "r20260929-071947-51d1",
+  "binaries": {
+   "25519ba1": "b984ec8784eb0f3beb03d796196b6184798d900d8b54d61c7696c1dd02e85069",
+   "e51e2b86": "f10493f742f935a6ee35f17e572257135a400b9ffb1195f2fd2b24f64c0ef55b"
+  }
+ },
+ "inputs": {
+  "art": "art:cd366ac2befbb1363b800cef1c32638808672135180b804654e0479b9105d67e",
+  "sha256": "af87c5f9cce005f0aefd1b132dc1e9c81b23a6f58c295f2e0f3590e1a6b55619"
+ },
+ "ci": {
+  "seed": 20260926,
+  "fuzz": 20
+ }
+}

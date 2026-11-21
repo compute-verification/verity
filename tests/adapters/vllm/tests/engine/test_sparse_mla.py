@@ -85,16 +85,3 @@ def test_arm_installs_when_the_backend_is_imported_and_imports_nothing_itself(on
         sys.modules.pop("fake_vllm_pkg", None)
 
 
-def test_a_rank_arms_the_switch_at_import_and_the_driver_before_it_builds() -> None:
-    import ast
-    import inspect
-
-    from verity_vllm.engine import build
-    from verity_vllm.pipeline.tp import rank_worker
-
-    top = ast.parse(inspect.getsource(sparse_mla)).body
-    assert any(isinstance(n, ast.Expr) and ast.unparse(n) == "arm()" for n in top)
-    assert any(isinstance(n, ast.ImportFrom) and n.module == "verity_vllm.engine" and "sparse_mla" in {a.name for a in n.names}
-               for n in ast.parse(inspect.getsource(rank_worker)).body)
-    src = inspect.getsource(build.build_engine)
-    assert src.index("sparse_mla.arm()") < src.index("hooked(lambda: LLM(**kw))")

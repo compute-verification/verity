@@ -4,11 +4,11 @@ epoch (`test_pearl_c_vllm.proved_pass`) in a serve dir, verified at 3 samples on
 
 The step runs the executable on the passes that run's document names, the epoch's coins, its sample count, its coin
 record, the W ``verify --tie`` held the passes to and, on a live session's coins, ``--of-record`` (`lean_argv`), and
-writes the Lean's answer, W at ``tie``, only where the Lean's printout is the Python's on every field the Lean's
-difftest holds (`LEAN_HELD`), its ``drawn`` the sample count and its W the Python's (or none on both).
-Anything else (a field that differs, an exit code that isn't its verdict's, a printout that isn't one, no coin record,
-passes other than those the verdict read, no executable) writes none and removes one there, and both verdicts go to the
-check document either way. The real executable's run is `benchmarks/one_stage`'s ``test_served_pearlplus_lean``.
+writes the Lean's answer, W at ``tie``, whatever the Python's verdict says: where the printout differs from the Python's on
+a field the Lean's difftest holds (`LEAN_HELD`), its ``drawn`` or its W, the check document names the fields, and the
+answer is still the Lean's. No verdict (an exit code that isn't its verdict's, a printout that isn't one, no coin record,
+passes other than those the coin was drawn on, no executable) writes none and removes one there, and both verdicts go
+to the check document either way. The real executable's run is `benchmarks/one_stage`'s ``test_served_pearlplus_lean``.
 
 ``served_passes.py case`` on the Lean answer written there writes the run's case's parts for remote's composite of record
 (`verity/pouw/pearl-plus/v1`): its params, the retained manifests, the window record W the verdict held the passes to,
@@ -47,7 +47,7 @@ pytestmark = pytest.mark.slow
 @pytest.fixture(scope="module")
 def run(tmp_path_factory) -> tuple[Path, Path, dict]:
     """The serve dir, ``verify``'s document's path and the document, accepted."""
-    from verity.protocols.resource_accounting.compute.pouw.verifier import verifier as PV
+    from verity.protocols.accounting.compute.pouw.verifier import verifier as PV
 
     tmp = tmp_path_factory.mktemp("lean")
     with pytest.MonkeyPatch.context() as mp:
@@ -56,7 +56,7 @@ def run(tmp_path_factory) -> tuple[Path, Path, dict]:
         mp.setattr(sys.modules[SP.__name__], "CLOCK", iter(VERIFY_CLOCK).__next__)
         for k in ("PEARLC_CHALLENGER_GATE", "PEARLC_CHALLENGER_PEER"):
             mp.delenv(k, raising=False)
-        a, b = (T.proved_pass(tmp / name, H100, ix)[0] for name, ix in (("a", (0, 1)), ("b", (2, 3))))
+        a, b = (T.proved_pass(tmp / name, H100, s)[0] for name, s in (("a", 0), ("b", 1)))
         d = T._serve_dir(tmp, [a, b])
         rc, doc, _answer = T.served_verify(d, tmp / "piece" / "verify.json")
     assert rc == 0 and doc["answer"]["verdict"] == "accept" and doc["source"] == SOURCE.hex(), doc["line"]
@@ -117,29 +117,30 @@ def test_each_check_records_its_wall_seconds_and_the_node_it_ran_on(run, tmp_pat
     assert rc == 2 and check["check_cost"] is None
 
 
-def test_a_lean_verdict_that_differs_on_any_held_field_writes_no_answer_and_removes_one_there(run, tmp_path):
-    """Each field the difftest holds, ``drawn`` and the W the Lean names: one differing leaves no answer (a stale one
-    removed), exit 2, and the check document names the fields beside both verdicts."""
+def test_a_lean_verdict_that_differs_from_the_pythons_on_any_held_field_is_still_the_answer(run, tmp_path):
+    """Each field the difftest holds, ``drawn`` and the W the Lean names: one differing from the Python's still writes the
+    Lean's printout as the answer, with the Lean's exit, and the check document names the fields beside both verdicts.
+    The Python's verdict is a measurement: nothing it says removes or replaces the Lean's."""
     d, verify, doc = run
     work = doc["answer"]["public"]["work"]
     cases = [({"work": {**work, "credited": work["credited"] + 1}}, ["work"]),
              ({"source": "00" * 32}, ["source"]),
              ({"commitment": "00" * 64, "verdicts": []}, ["commitment", "verdicts"]),
              ({"drawn": 4}, ["drawn"]),
-             ({"public": {"tie": "ab" * 64}}, ["tie"])]
-    out = tmp_path / "piece" / "pearlplus-lean.json"
+             ({"public": {"tie": "ab" * 64}}, ["tie"]),
+             ({"verdict": "reject", "reason": "pass 0 tile 3: B opening", "work": None}, ["verdict", "reason", "work"])]
     for kw, differ in cases:
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text("{}")
-        rc, answer, check = lean(tmp_path, verify, d, stub(tmp_path, printout(doc, **kw), 0))
-        assert (rc, answer, check["differ"], check["answer"]) == (2, None, differ, None), kw
-        assert check["lean"] == printout(doc, **kw) and check["python"] == SP.python_answer(doc)
-        assert check["reason"] == f"{SP.LEAN_DISAGREES}: they differ in {', '.join(differ)}"
+        said = printout(doc, **kw)
+        rc, answer, check = lean(tmp_path, verify, d, stub(tmp_path, said, int(said["verdict"] != "accept")))
+        assert (rc, check["differ"], check["reason"]) == (int(said["verdict"] != "accept"), differ, None), kw
+        assert answer == check["answer"] == SP.lean_answer(said) and check["python"] == SP.python_answer(doc)
+        assert "the Python's differs in " + ", ".join(differ) in check["line"]
 
 
-def test_the_lean_verdicts_w_is_the_answers_tie_and_must_be_the_pythons(run, tmp_path):
-    """A Lean that names W (as ``public.tie`` or ``tie``, a digest or ``{"record": digest}``) agrees only on the W the
-    Python's verdict held the passes to, and its answer carries it at ``tie.record``, where the compose reads it."""
+def test_the_lean_verdicts_w_is_the_answers_tie_whatever_the_pythons(run, tmp_path):
+    """A Lean that names W (as ``public.tie`` or ``tie``, a digest or ``{"record": digest}``) carries it at ``tie.record``
+    in its answer, where the compose reads it; a W other than the Python's verdict's, or none where it names one, is
+    still the answer's, and the check names ``tie`` among the fields that differ."""
     d, verify, doc = run
     tied = {**doc, "tie": {"record": W, "tables": 8}}
     (v := tmp_path / "verify.json").write_text(json.dumps(tied))
@@ -147,9 +148,9 @@ def test_the_lean_verdicts_w_is_the_answers_tie_and_must_be_the_pythons(run, tmp
         rc, answer, _ = lean(tmp_path, v, d, stub(tmp_path, printout(doc, **kw), 0))
         assert rc == 0 and answer["tie"]["record"] == W, kw
     rc, answer, check = lean(tmp_path, verify, d, stub(tmp_path, printout(doc, tie=W), 0))
-    assert (rc, answer, check["differ"]) == (2, None, ["tie"])
+    assert (rc, answer["tie"], check["differ"]) == (0, {"record": W}, ["tie"])
     rc, answer, check = lean(tmp_path, v, d, stub(tmp_path, printout(doc), 0))
-    assert (rc, answer, check["differ"]) == (2, None, ["tie"])
+    assert (rc, answer["tie"], check["differ"]) == (0, None, ["tie"])
 
 
 def test_the_lean_is_given_w_and_on_live_coins_is_asked_for_a_verdict_of_record(run, tmp_path):
@@ -157,8 +158,8 @@ def test_the_lean_is_given_w_and_on_live_coins_is_asked_for_a_verdict_of_record(
     `window.LIVE_SCHEME`) adds ``--of-record``; both after the rule on a tile over its inert-work bound and the test
     instance and before the passes, which stay last."""
     import shutil
-    from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
-    from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
+    from verity.protocols.accounting.compute.pouw.verifier import window as Wd
+    from verity.protocols.proof.spot.verifier.challenger import challenger as Ch
 
     d, verify, doc = run
     (wfile := tmp_path / "w.json").write_text("{}")
@@ -190,6 +191,35 @@ def test_an_agreeing_rejection_is_written_and_the_lean_exit_code_must_be_its_ver
     for said, code in ((printout(no), 0), (printout(doc), 1), ("lake: no such target\n", 1), ("[1, 2]\n", 0), ("", 0)):
         rc, answer, check = lean(tmp_path, verify, d, stub(tmp_path, said, code))
         assert (rc, answer, check["lean"]) == (2, None, None) and check["reason"].startswith(f"the Lean exited {code}")
+
+
+@pytest.mark.parametrize("said", ["PANIC at PouwVerifier.PearlPlus.run M:1:2: boom", "Error: index out of bounds"])
+def test_a_lean_that_panics_beside_an_agreeing_accept_with_exit_0_is_refused_by_name(run, tmp_path, said):
+    """A ``pouw-pearlplus`` that writes a panic line (a ``PANIC`` one, or an out-of-range index's with none) and prints the
+    Python's own accept with exit 0 gives no answer: the step runs it under `lean_child` and refuses it by
+    `lean_child.LEAN_PANIC`, whatever it printed."""
+    from verity.protocols.proof.spot.verifier.one_stage import lean_child as LC
+
+    d, verify, doc = run
+    exe = stub(tmp_path, printout(doc), 0)
+    exe.write_text(exe.read_text().replace("cat ", f"echo '{said}' >&2\ncat ", 1))
+    rc, answer, check = lean(tmp_path, verify, d, exe)
+    assert (rc, answer) == (2, None) and check["reason"] == f"{LC.LEAN_PANIC}: {said}", check["reason"]
+
+
+@pytest.mark.parametrize("end, how", [("kill -ABRT $$", "killed by SIGABRT"), ("exit 3", "status 3"),
+                                      ("exit 134", "status 134 (abort)")])
+def test_a_lean_killed_by_a_signal_or_with_no_verdicts_exit_status_is_refused_by_name(run, tmp_path, end, how):
+    """A ``pouw-pearlplus`` that prints the Python's own accept, then ends by a signal or with a status that is no
+    verdict's (`served_passes.PEARLPLUS_EXITS`: 0 accept, 1 reject; 134 an abort's) gives no answer:
+    `lean_child.LEAN_EXIT`, whatever it printed."""
+    from verity.protocols.proof.spot.verifier.one_stage import lean_child as LC
+
+    d, verify, doc = run
+    exe = stub(tmp_path, printout(doc), 0)
+    exe.write_text(exe.read_text().replace("exit 0\n", f"{end}\n"))
+    rc, answer, check = lean(tmp_path, verify, d, exe)
+    assert (rc, answer) == (2, None) and check["reason"] == f"{LC.LEAN_EXIT}: {how}", check["reason"]
 
 
 def test_the_step_refuses_before_the_lean_without_a_coin_record_the_verdicts_passes_or_an_executable(run, tmp_path):
@@ -282,28 +312,25 @@ def test_case_writes_nothing_without_the_lean_answer_its_coin_record_or_its_pass
 
 
 def test_verify_sh_exits_on_the_leans_verdict_on_each_pass(tmp_path, monkeypatch):
-    """``verify.sh`` on a window's passes (an honest prefill and decode and a control whose weight rows are flipped, each
-    `test_pearl_c_vllm.proved_pass`'s, of one epoch, as a test instance, ``TEST_INSTANCE=1``), their coin records drawn
+    """``verify.sh`` on a window's passes (an honest prefill and decode, each `test_pearl_c_vllm.proved_pass`'s, of one epoch, each round 0 of a device run of its own as verified alone, as a test instance, ``TEST_INSTANCE=1``), their coin records drawn
     first on a fixed source, which the script's twin reads as a retry does, and a ``pouw-pearlplus`` that gives each pass
     the twin's verdict but those ``REFUSE`` names, where it answers nothing: the script exits 0 where the Lean accepts
-    prefill and decode and rejects the control, and 1 where the Lean answers nothing on the prefill, which the twin
-    accepts, or on the control, which the twin rejects. `panel_rows.verdicts` reads the Lean's verdicts it leaves."""
+    prefill and decode, and 1 where the Lean answers nothing on the prefill, which the twin accepts. `panel_rows.verdicts`
+    reads the Lean's verdicts it leaves."""
     import os
     import subprocess
 
-    from verity.protocols.resource_accounting.compute.pouw.verifier import verifier as PV
+    from verity.protocols.accounting.compute.pouw.verifier import verifier as PV
 
     monkeypatch.setattr(PV, "coins", lambda n: SOURCE[:n])
     for k in ("PEARLC_CHALLENGER_GATE", "PEARLC_CHALLENGER_PEER"):
         monkeypatch.delenv(k, raising=False)
     run, passes, said = "r-window", tmp_path / "work" / "passes" / "r-window", tmp_path / "said"
     said.mkdir()
-    for name, ix in (("prefill", (0, 1)), ("decode", (2, 3)), ("control", (4, 5))):
-        T.proved_pass(passes / name, H100, ix)
+    for name in ("prefill", "decode"):
+        T.proved_pass(passes / name, H100)
     (passes / "coins.json").write_text((passes / "prefill" / "coins.json").read_text())
-    rows = passes / "control" / json.loads((passes / "control" / "manifest.json").read_text())["weights"]["0"]["rows"]["path"]
-    rows.write_bytes(bytes(b ^ 1 for b in rows.read_bytes()))
-    for name, rc in (("prefill", 0), ("decode", 0), ("control", 1)):
+    for name, rc in (("prefill", 0), ("decode", 0)):
         d = passes / name
         got = SP.main(["verify", "--passes", str(passes), "--manifest", str(d / "manifest.json"), "--coin-record",
                        str(d / "coin.json"), "--out", str(said / f"{name}-verify.json"), "--draws", "3", "--jobs", "1",
@@ -332,17 +359,14 @@ def test_verify_sh_exits_on_the_leans_verdict_on_each_pass(tmp_path, monkeypatch
     assert r.returncode == 0, r.stdout + r.stderr
     assert [ln for ln in r.stdout.splitlines() if ln.startswith("verify.sh: ")] == [
         "verify.sh: prefill: the Lean's ACCEPT, as a prefill pass must have",
-        "verify.sh: decode: the Lean's ACCEPT, as a decode pass must have",
-        "verify.sh: control: the Lean's REJECT, as a control pass must have"]
+        "verify.sh: decode: the Lean's ACCEPT, as a decode pass must have"]
     v = PR.verdicts(tmp_path / "out")
-    assert {p: x["accepted"] for p, x in v.items()} == {"prefill": True, "decode": True, "control": False}
-    assert v["prefill"]["line"].startswith("ACCEPT ") and v["control"]["line"].startswith("REJECT ")
+    assert {p: x["accepted"] for p, x in v.items()} == {"prefill": True, "decode": True}
+    assert v["prefill"]["line"].startswith("ACCEPT ")
     assert all(x["transcript"] in x["line"] for x in v.values())
-    for refuse in ("prefill", "control"):
-        r = verify_sh(tmp_path / f"out-{refuse}", refuse)
-        assert r.returncode == 1, r.stdout + r.stderr
-        want = "ACCEPT (exit 0)" if refuse == "prefill" else "REJECT (exit 1)"
-        assert f"verify.sh: {refuse}: the Lean's exit 2, where a {refuse} pass must have its {want}" in r.stdout
-        v = PR.verdicts(tmp_path / f"out-{refuse}")
-        assert v[refuse]["accepted"] is None and v[refuse]["line"].startswith("lean REFUSED: ")
-        assert not (tmp_path / f"out-{refuse}" / f"{refuse}-lean.json").exists()
+    r = verify_sh(tmp_path / "out-prefill", "prefill")
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert "verify.sh: prefill: the Lean's exit 2, where a prefill pass must have its ACCEPT (exit 0)" in r.stdout
+    v = PR.verdicts(tmp_path / "out-prefill")
+    assert v["prefill"]["accepted"] is None and v["prefill"]["line"].startswith("lean REFUSED: ")
+    assert not (tmp_path / "out-prefill" / "prefill-lean.json").exists()

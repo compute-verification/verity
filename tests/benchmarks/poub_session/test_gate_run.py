@@ -38,7 +38,7 @@ def dry_run(tmp_path: Path, words: tuple[str, ...] = ("--dry-run",), **given: st
     result, the words of the prover's run it printed and the words of each `research run` it started, in order (the
     probe, then the fire)."""
     r, origin, bin_, home = tmp_path / "repo", tmp_path / "origin.git", tmp_path / "bin", tmp_path / "home"
-    pin = r / "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/models.json"
+    pin = r / "verity/protocols/accounting/compute/pouw/verifier/lean/check/models.json"
     for d in (pin.parent, r / "benchmarks/poub_session", bin_, home):
         d.mkdir(parents=True)
     pin.write_text(json.dumps({"TINY": {"repo": "org/tiny", "revision": "abc123"}}))
@@ -73,51 +73,6 @@ def after(words: list[str], flag: str) -> str:
 
 
 FORM = {"SESSIONS": "1", "WINDOWS": "7", "WINDOW_MS": "60000", "SAMPLES": "33273"}
-
-
-@pytest.mark.parametrize("given, node_args, mem_gb, form", [
-    ({}, NODE_ARGS, "256", {}),
-    ({"HOST_GIB": "8", **FORM}, f"{NODE_ARGS} --host-gib 8", "264", FORM),
-    ({"HOST_GIB": "08", "ENGINES": "4", "PACED": "1:1000:2773:7", "PACE_PASS_MS": "46"},
-     f"{NODE_ARGS} --host-gib 8", "136", {"PACED": "1:1000:2773:7", "PACE_PASS_MS": "46"}),
-    ({"HOST_GIB": "8", "LEASE_MEM_GB": "300"}, f"{NODE_ARGS} --host-gib 8", "300", {}),
-    ({"HOST_GIB": "8", "LEAF_CTAS": "160", **FORM}, f"{NODE_ARGS} --host-gib 8 --leaf-ctas 160", "264", FORM),
-], ids=["default", "host-part-and-one-coin-a-window", "host-part-paced", "lease-memory-given",
-        "leaf-pass-host-part-one-coin-a-window"])
-def test_a_dry_run_prints_the_provers_run_with_the_host_part_and_hands_the_sessions_form_to_the_gate_steps(
-        tmp_path, given, node_args, mem_gb, form):
-    """HOST_GIB reaches the node as --host-gib and adds to the 32 GB an engine the lease is asked for, unless
-    LEASE_MEM_GB says otherwise; without it the node's arguments name no host part, and without LEAF_CTAS no leaf
-    pass. The probe and the fire get the form's variables that are set and no other, and no model."""
-    p, prover, calls = dry_run(tmp_path, **given)
-    assert p.returncode == 0, p.stdout + p.stderr
-    assert "checkpoint skipped (CHECKPOINT=0): nothing checks that the node serves the pin's checkpoint" in p.stdout
-    line = " ".join(prover)
-    assert f"--env NODE_ARGS={node_args} --env VERIFIER_SSH=" in line
-    assert f" prover@{HOSTS['VY_AUDITOR_1_HOST']} --env TUNNEL_WAIT_S=1800" in line
-    assert after(prover, "--mem-gb") == mem_gb
-    assert [after(c, "--on") for c in calls] == ["vy-nebius-cpu-5", "vy-nebius-cpu-5"]
-    assert [c[-1] for c in calls] == [f'bash "$RESEARCH_RUN_DIR/inputs/gate.sh" {verb}' for verb in ("probe", "fire")]
-    for c in calls:
-        got = envs(c)
-        assert got["DRY"] == "1" and not {"MODEL", "BIND", "ARENA_BLOCKS"} & set(got)
-        assert {k: got[k] for k in HOSTS if k in got} == {k: HOSTS[k] for k in ("VY_CHALLENGER_1_HOST", "VY_AUDITOR_1_HOST")}
-        assert got["PROVER_SSH"].endswith(f" research@{HOSTS['VY_NEBIUS_2_HOST']}")
-        assert {k: got[k] for k in ("PACED", "PACE_PASS_MS", *FORM) if k in got} == form
-
-
-@pytest.mark.parametrize("given, pool", [({}, ["--pool", "research", "--as", "memory-accounting"]),
-                                         ({"GATE_POOL": "network"}, ["--pool", "network", "--as", "memory-accounting"]),
-                                         ({"GATE_POOL": ""}, [])], ids=["default", "given", "none"])
-def test_the_gate_steps_take_a_slot_of_gate_pool(tmp_path, given, pool):
-    """The probe and the fire run in GATE_POOL's check slots on GATE_ON (`research run --pool`, default `research`), the one
-    way a machine with /etc/vy/runs-via-slot takes a run; an empty GATE_POOL names none."""
-    p, _, calls = dry_run(tmp_path, **given)
-    assert p.returncode == 0, p.stdout + p.stderr
-    assert len(calls) == 2
-    for c in calls:
-        got = c[c.index("--on") + 2:c.index("--cwd")]
-        assert got == pool
 
 
 @pytest.mark.parametrize("host_gib", ["8.5", "-1", "8G", "eight"])

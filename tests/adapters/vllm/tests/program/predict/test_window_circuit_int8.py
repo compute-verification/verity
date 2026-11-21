@@ -21,7 +21,7 @@ from tests.program.predict.test_window_circuit import (
     CLASS,
     ROPE,
     SCAN_PIN,
-    WINDOW,
+    FULL,
     _alone,
     _checkpoint,
     _label,
@@ -67,10 +67,10 @@ def test_an_int8_linear_is_its_quantizer_and_s8_slices_at_the_gemms_weight_words
     The window holds the norm both o_proj and down_proj write, cut at its residual add after down_proj (module docstring);
     its lowering registers the weights and the scan state."""
     reg = _registered()
-    window = window_circuit(reg, S.compile_steps(reg, *S._session(*WINDOW)), CLASS, GRAIN)
+    window = window_circuit(reg, S.compile_steps(reg, *S._session(*FULL)), CLASS, GRAIN)
     add = "RMSNormFusedCudaAdd_v2{N=64,C=64,AT=0,R=8}"
     assert {t: k for fn, k in window.templates if (t := _label(fn)).startswith("RMSNormFused")} == {
-        "RMSNormFusedCuda_v2{N=64}": 20, add: 20, "RMSNormFusedCudaTail_v1{N=64}": 20}
+        "RMSNormFusedCuda_v2{N=64}": 14, add: 14, "RMSNormFusedCudaTail_v1{N=64}": 14}
     assert {t: c for t, c in window.cuts.items() if t.startswith("RMSNormFused")} == {NORM: {"x": 4}, add: {"x": 8}}
     circuit = _lowered(reg)
     n = {_label(fn): k for fn, k in circuit.templates}
@@ -79,7 +79,7 @@ def test_an_int8_linear_is_its_quantizer_and_s8_slices_at_the_gemms_weight_words
         "Int8RowQuant_v3{K=64,R=1}": 40, "Int8RowQuant_v3{K=64,R=4}": 20, "Int8RowQuant_v3{K=128,R=1}": 20,
         "ScaledMmS8_v3{K=64,N=16}": 560, "ScaledMmS8_v3{K=128,N=8}": 160,
         "Gemm_v2{K=64,N=8}": 320, "Gemm_v2{K=64,N=1}": 10}
-    assert (sum(circuit.units.values()), len(circuit.wires)) == (1568, 173)
+    assert (sum(circuit.units.values()), len(circuit.wires)) == (1570, 193)
     mm = ids["ScaledMmS8_v3{K=64,N=16}"]
     reads = {(r.param, r.port, r.base, r.step[-1]) for r in circuit.registered.reads if r.reader == mm}
     layer = "model.layers.0.self_attn.qkv_proj", "model.layers.0.self_attn.o_proj", "model.layers.0.mlp.gate_up_proj"
@@ -89,7 +89,7 @@ def test_an_int8_linear_is_its_quantizer_and_s8_slices_at_the_gemms_weight_words
     assert params.pop(SCAN_STATE) == 16 * 4548 and len(params) == 25
     assert {p.split("/", 1)[0] for p in params} == {WC.WEIGHTS}
     assert IF.input_count(json.loads(json.dumps(circuit.description())), **held(circuit)) == {
-        "units": 1568, "inputs": 10547104, "wired": 1385248, "registered": 9161856, "ingress": 0, "free": 0}
+        "units": 1570, "inputs": 10692640, "wired": 1385248, "registered": 9307392, "ingress": 0, "free": 0}
 
 
 @pytest.mark.parametrize("flip, param", [("model.layers.1.mlp.down_proj.weight", "model.layers.1.mlp.down_proj.weight@512"),
@@ -111,7 +111,7 @@ def test_the_committers_registered_roots_hold_every_int8_weight_read_but_the_rot
     assert set(pins) == set(_lowered(reg).registered.params) - {ROPE, SCAN_STATE}
     rope, both = _alone(doc, ROPE), {**pins, **SCAN_PIN}
     held_ = IF.input_count(doc, pins=both, roots=both)
-    assert held_ == {"units": 1568, "inputs": 10547104, "wired": 1385248, "registered": 9161856 - rope, "ingress": 0,
+    assert held_ == {"units": 1570, "inputs": 10692640, "wired": 1385248, "registered": 9307392 - rope, "ingress": 0,
                      "free": rope}
     served = WW.record_words(reg, *_checkpoint(tmp_path / "served", flip=flip, quant=INT8_EXACT_QUANT))
     refused = {param.rpartition("@")[0]: "served words that aren't the checkpoint's"}

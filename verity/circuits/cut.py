@@ -4,7 +4,7 @@ each Call's computing graph, the cut, the width rule.
 The algorithm, as a verifier re-implements it (`partition_object.evaluate`; any change to its behaviour bumps the query's version):
 
 **Input.**  The program's descriptor, `codec.canonical_json(codec.encode_program(program))` minus `annotations` (schema
-`verity-ir/descriptor/v1`), decoded by `codec.decode_program`.  The format, the canonical layout and reference resolution are
+`verity-ir/descriptor/v2`), decoded by `codec.decode_program`.  The format, the canonical layout and reference resolution are
 specified in `verity/circuits/PROTOCOL.md` (pinned by `tests/verity/circuits/format_vectors.json`); its §8 restates the wide-gate rule of step 3.
 
 0. **Applicability.**  Q_word v1 applies to a program that is topological -- every node of every body names only its body's

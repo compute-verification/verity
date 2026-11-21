@@ -3,6 +3,7 @@ same function on bits (`verity.circuits.boolean.trace`).
 
     F32ExpRn_v2   (x: Array<32, Value<1>>) -> Array<32, Value<1>>    word view: F32ExpRn_v1 (ref_prims)
     F32LogRn_v2   (x: Array<32, Value<1>>) -> Array<32, Value<1>>    word view: F32LogRn_v1 (ref_prims)
+    F32TanhRn_v2  (x: Array<32, Value<1>>) -> Array<32, Value<1>>    word view: F32TanhRn_v1 (ref_prims)
 
 `F32ExpRn_v2` computes exp(x) = 2^n 2^f to within 2^-55 relative and rounds that once, nearest even, subnormal results
 included. No binary32 x whose exp(x) rounds to a finite nonzero word has exp(x) within 2^-29 ulp (so 2^-53 relative) of a
@@ -54,6 +55,9 @@ F32LogRn` holds it to `F32LogRn_v1` on all 2^32 words.
   exponent field 133 - lz. A value within the error of ln(x) is no rounding boundary, so the guard bit alone decides.
 - Specials, as the word's: a NaN and x < 0 (-inf among them, -0 not) give 0x7FC00000; ±0 gives -inf, +inf gives +inf, and 1
   gives +0 (the sum is exactly 0, the leading-zero count's all-zero flag clears the exponent).
+
+`F32TanhRn_v2` is `boolean_tanh.tanh_f32` at `TANH_FN`, `TanhF32Rn_v3`'s circuit: `calibration/f32_exhaustive/run.py boolean
+F32TanhRn` holds it to `F32TanhRn_v1` on all 2^32 words.
 """
 from __future__ import annotations
 
@@ -82,8 +86,9 @@ from verity.circuits.silicon import fp
 from verity.circuits.types import Array
 
 from . import ref_prims as R
+from .boolean_tanh import TANH_FN, tanh_f32
 
-__all__ = ["F32ExpRn", "F32LogRn", "exp_rn", "log_rn"]
+__all__ = ["F32ExpRn", "F32LogRn", "F32TanhRn", "exp_rn", "log_rn"]
 
 F32 = Array(32, BL.BIT)
 F, K, W = 57, 64, 60
@@ -428,3 +433,7 @@ def log_rn(C, x):
 
 F32LogRn = definition("F32LogRn", 2, log_rn, (("x", F32),), F32, word=R.F32LogRn,
                       doc="F32LogRn_v1 on bits: RN(ln(x)), subnormal x, NaN and x < 0 0x7FC00000, ±0 -inf, +inf +inf")
+
+
+F32TanhRn = definition("F32TanhRn", 2, lambda C, x: tanh_f32(C, x, *TANH_FN), (("x", F32),), F32, word=R.F32TanhRn,
+                       doc="F32TanhRn_v1 on bits: RN(tanh(x)) by fixed-point exp and division, NaN 0x7FC00000")

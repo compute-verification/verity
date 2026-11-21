@@ -6,7 +6,7 @@ from typing import Any
 
 import torch
 
-from verity.protocols.resource_accounting.compute.pouw.prover.kernels.served_zk import statement as _statement
+from verity.protocols.accounting.compute.pouw.prover.kernels.served_zk import statement as _statement
 
 
 class Statement(_statement.Statement):
@@ -47,36 +47,30 @@ class Statement(_statement.Statement):
             finally:
                 calls = run.whole_capture_end()
             run.end()
-            for name, skip in (("honest", False), ("control", True)):
-                run.begin()
-                run.poison()
-                self.poison()
-                at = run.cur.tiles
-                run.whole_replay(calls)
-                graph.replay()
-                self.skip = skip
-                try:
-                    run.whole_replayed(calls)
-                finally:
-                    self.skip = False
-                torch.cuda.synchronize(dev)
-                cms = self._commits(m, sum(c.tiles for c in calls))
-                cms[-1].data = run.leaves.data_ptr() + run.nb * at
-                same = []
-                for cm in cms:
-                    want = cm.reference(cm.read_rows())
-                    same.append(self.h.read(cm.tree + cm.tree_bytes - 64, 64) == want["root"]
-                                and self.h.read(cm.bc, 128 * cm.rows) == want["bc"])
-                staged = all(torch.equal(self.stages[(k, m)][i * m:(i + 1) * m], xs[w].float()) for w, (k, i) in self.pos.items())
-                res[name] = {"roots_equal": same, "staged_rows_equal": staged}
-                run.end()
+            run.begin()
+            run.poison()
+            self.poison()
+            at = run.cur.tiles
+            run.whole_replay(calls)
+            graph.replay()
+            run.whole_replayed(calls)
+            torch.cuda.synchronize(dev)
+            cms = self._commits(m, sum(c.tiles for c in calls))
+            cms[-1].data = run.leaves.data_ptr() + run.nb * at
+            same = []
+            for cm in cms:
+                want = cm.reference(cm.read_rows())
+                same.append(self.h.read(cm.tree + cm.tree_bytes - 64, 64) == want["root"]
+                            and self.h.read(cm.bc, 128 * cm.rows) == want["bc"])
+            staged = all(torch.equal(self.stages[(k, m)][i * m:(i + 1) * m], xs[w].float()) for w, (k, i) in self.pos.items())
+            res["honest"] = {"roots_equal": same, "staged_rows_equal": staged}
+            run.end()
         finally:
             run.graphs, run.hashing, self.enabled = held
             self.forwards = self.taken = 0
         rows = {f"x/k{k}": self.count[k] * m for k in self.ks}
         rows["tiles"] = sum(c.tiles for c in calls)
-        ok = (all(res["honest"]["roots_equal"]) and res["honest"]["staged_rows_equal"] and res["control"]["staged_rows_equal"]
-              and not any(res["control"]["roots_equal"]))
+        ok = all(res["honest"]["roots_equal"]) and res["honest"]["staged_rows_equal"]
         return {"check": "statement", "cubin_sha256": self.cubin_sha256, "calls": len(calls), "rows": rows, **res, "ok": ok}
 
 

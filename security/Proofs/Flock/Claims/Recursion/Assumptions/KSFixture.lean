@@ -77,7 +77,7 @@ deployment at K = 64 and N = 4 (`RecDeploy.HonestFixture`'s docstring has the ge
 the kept session). On its inner statement's files the compiled verifier's `rec-inner` writes the inner shape (`m`,
 `k_log`, regions) and neither a `holo` nor a `sparse` key (dense); its `rec-statements` at that shape lists V\*'s
 statements, at least one; and its `statement` on the same files derives the plain inner statement's setup. The
-whole-session tests of `verity/protocols/proofs/recursion/verifier/vstar_cli/tests/test_vstar_recursive.py` (opt-in,
+whole-session tests of `verity/protocols/proof/recursion/verifier/vstar_cli/tests/test_vstar_recursive.py` (opt-in,
 under `VERITY_VSTAR_RECURSIVE_DATA`) run the first two on the session they read and hold a proved session to each
 statement listed; no test compares the setup's readings with `setupView`'s ranges. It is weaker than the Prop in that
 no Lean term `x` is formed, so the readings are the compiled verifier's on the session's files rather than `parse`,
@@ -96,7 +96,7 @@ the fixture's inner statement. Witnessed outside Lean on the fixture's session, 
 
 How the witness is reproduced. The session is `DeployedParses`'s, at its live-coin record (the inner session and its
 `public.json` transcript). The whole-session tests of
-`verity/protocols/proofs/recursion/verifier/vstar_cli/tests/test_vstar_recursive.py` hold that the compiled verifier
+`verity/protocols/proof/recursion/verifier/vstar_cli/tests/test_vstar_recursive.py` hold that the compiled verifier
 accepts each part under `--zk` at that part's flags, so each part's setup passed; the parts are as many as
 `rec-statements` lists; and `vstar-recursive statement` holds the statement the session's inputs name under `2^56`
 bytes. No test compares a part's setup (`mPts`, `m`, `k_log`, regions) with `PartIn`'s ranges; the compiled

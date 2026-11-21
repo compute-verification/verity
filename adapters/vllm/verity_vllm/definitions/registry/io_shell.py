@@ -43,19 +43,19 @@ class's whatever the prompt's length. It carries the slot from position to posit
 first id (a prompt has at least one); every other takes ``slot[1]`` while ``slot[0] − 1`` (mod 2^32) is non-negative, which is
 ``slot[0]`` positive on every slot but ``slot[0]`` = −2^31, else ``sel``: the sign of the count it carries on, so the count's one
 carry chain is the test. Each outputs its token and the next position's slot. A window's slots take their first position's
-from the scan state row (`boolean_io_shell.ScanSlots_v3`), so a window places only the later positions'.
+from the scan state row (`boolean_io_shell.ScanSlots_v5`), so a window places only the later positions'.
 
 A window has a fixed number of slots, each a class Program whether or not it carries a request, so whether a slot
 is occupied is a private word of its ingress row, which its entry reads (`SlotEntry_v1`, all zero for an empty slot).
 
 The network attester's scan carries the slots: the Programs at a boundary read their slots from the scan's
 state row before it (a registered row of NS u16 words, its fields bit-packed least significant bit first), and hand their
-outputs to the scan's Programs' row at that boundary. `boolean_io_shell.ScanSlots_v3{NS, NP, IDB, K0, K, OCC, LP, MAX,
-IDS}` is the read: for each of the row's lanes j (``OCC[j]``, ``LP[j]``, ``MAX[j]`` and ``IDS[j]`` the bit offsets of its
-occupancy word, its prompt's length, its ``max_tokens`` and its ids; prompt position p's id the IDB bits at
-``IDS[j] + IDB·position(p)`` zero-extended, `position`: K0 ids in a request's first cell, K in each later one), its first
-position's token and the slot it carries (`TokenFeed_v1{NP, FIRST}`'s on (lp, ids[0], …, ids[NP − 1])), its occupancy word
-and its head (lp, max_tokens). `slots_reference` is each lane's fields and `scan_reference` the Definition's function. `OutCollect_v1{KO, FIRST}` carries a slot's
+outputs to the scan's Programs' row at that boundary. `boolean_io_shell.ScanSlots_v5{NS, NP, IDB, K0, K, OCC, LP, MAX,
+IDS}` is one lane's read (``OCC``, ``LP``, ``MAX`` and ``IDS`` the bit offsets of its occupancy word, its prompt's length,
+its ``max_tokens`` and its ids; prompt position p's id the IDB bits at ``IDS + IDB·position(p)`` zero-extended,
+`position`: K0 ids in a request's first cell, K in each later one): its first position's token and the slot it carries
+(`TokenFeed_v1{NP, FIRST}`'s on (lp, ids[0], …, ids[NP − 1])), its occupancy word and its head (lp, max_tokens).
+`slots_reference` is the lane's fields and `scan_reference` the Definition's function. `OutCollect_v1{KO, FIRST}` carries a slot's
 outputs from position to position, (w, m, ids[0], …, ids[KO − 1]): w counts down from lp − 1, one a position, and while
 1 − KO ≤ w ≤ 0 (the KO positions from the prompt's last on) the position's output is shifted in at the end, so after the
 last position ids[i] is output i; m is ``max_tokens``. The first position's starts from the head. `SlotEntry_v1{KO, IDB,
@@ -84,7 +84,7 @@ Registered functions:
                              user: RID u8), schema v1 (`boolean_io_shell`)
   TokenFeed{NP,FIRST}        (slot: NP + 1 i32[, sel: i32]) -> (tok: i32, slot: NP + 1 i32)
   ScanSlots{NS,NP,...}       (state: NS u16) -> (tok: i32, slot: NP + 1 i32, occ: i32, head: 2 i32)
-                             a lane (`boolean_io_shell`)
+                             one lane (`boolean_io_shell`)
   OutCollect{KO,FIRST}       (head: 2 i32 | state: KO + 2 i32, tok: i32) -> KO + 2 i32
   SlotEntry{KO,IDB,NP,STOP}  (occ: i32, state: KO + 2 i32) -> ⌈(33 + KO·IDB) / 16⌉ u16 bits
   SelectCollect{V,C,KO,FIRST}
@@ -417,46 +417,43 @@ def _nat(v) -> bool:
 
 def slots_refuse(S: dict) -> str | None:
     """A binding whose fields aren't bits of its row: NS, NP, IDB (at most 32), K0 and K (K0 ≤ K) positive, and OCC, LP, MAX
-    and IDS one bit offset a lane each, every field inside the row's 16·NS bits."""
+    and IDS the lane's bit offsets, every field inside the row's 16·NS bits."""
     have = {k: S[k] for k in ("NS", "NP", "IDB", "K0", "K") if k in S}
     if not all(_nat(v) and v >= 1 for v in have.values()) or have.get("IDB", 1) > 32 or have.get("K0", 1) > have.get("K", 1 << 31):
         return f"NS, NP, IDB <= 32 and K0 <= K are positive integers (got {have})"
-    lanes = {k: S[k] for k in ("OCC", "LP", "MAX", "IDS") if k in S}
-    if not all(isinstance(v, tuple) and v and all(map(_nat, v)) for v in lanes.values()) or len({len(v) for v in lanes.values()}) > 1:
-        return f"OCC, LP, MAX and IDS are one bit offset a lane each, as many lanes each (got {lanes})"
-    if len(have) == 5 and len(lanes) == 4:
+    lane = {k: S[k] for k in ("OCC", "LP", "MAX", "IDS") if k in S}
+    if not all(map(_nat, lane.values())):
+        return f"OCC, LP, MAX and IDS are the lane's bit offsets, an integer each (got {lane})"
+    if len(have) == 5 and len(lane) == 4:
         bits, ids = 16 * S["NS"], S["IDB"] * (position(S["K0"], S["K"], S["NP"] - 1) + 1)
-        if max(max(S[k]) + 32 for k in ("OCC", "LP", "MAX")) > bits or max(S["IDS"]) + ids > bits:
-            return f"a lane's fields past the row's {bits} bits"
+        if max(S[k] + 32 for k in ("OCC", "LP", "MAX")) > bits or S["IDS"] + ids > bits:
+            return f"the lane's fields past the row's {bits} bits"
     return None
 
 
 def slots_sig(S):
-    lane = (I32, Array(S.NP + 1, I32), I32, Array(2, I32))
-    return (("state", Array(S.NS, Value(16))),), Tuple(*[t for _ in S.OCC for t in lane])
+    return (("state", Array(S.NS, Value(16))),), Tuple(I32, Array(S.NP + 1, I32), I32, Array(2, I32))
 
 
-def slots_reference(state: list[int], NP: int, IDB: int, K0: int, K: int, OCC, LP, MAX, IDS) -> list[tuple[list[int], list[int]]]:
-    """Each lane's fields of the scan state row's u16 words as i32 encodings: its row (occupancy, prompt length, ids[0], …,
+def slots_reference(state: list[int], NP: int, IDB: int, K0: int, K: int, OCC: int, LP: int, MAX: int,
+                    IDS: int) -> tuple[list[int], list[int]]:
+    """The lane's fields of the scan state row's u16 words as i32 encodings: its row (occupancy, prompt length, ids[0], …,
     ids[NP − 1]) and its head (prompt length, ``max_tokens``)."""
     x = sum(w << 16 * i for i, w in enumerate(state))
 
     def at(lo: int, w: int) -> int:
         return x >> lo & (1 << w) - 1
 
-    return [([at(o, 32), at(lp, 32), *[at(ids + IDB * position(K0, K, p), IDB) for p in range(NP)]], [at(lp, 32), at(m, 32)])
-            for o, lp, m, ids in zip(OCC, LP, MAX, IDS)]
+    return [at(OCC, 32), at(LP, 32), *[at(IDS + IDB * position(K0, K, p), IDB) for p in range(NP)]], [at(LP, 32), at(MAX, 32)]
 
 
-def scan_reference(state: list[int], NP: int, IDB: int, K0: int, K: int, OCC, LP, MAX,
-                   IDS) -> list[tuple[int, list[int], int, list[int]]]:
-    """`boolean_io_shell.ScanSlots_v3`'s function on the row's u16 words: each lane's (token, slot, occupancy word, head),
+def scan_reference(state: list[int], NP: int, IDB: int, K0: int, K: int, OCC: int, LP: int, MAX: int,
+                   IDS: int) -> tuple[int, list[int], int, list[int]]:
+    """`boolean_io_shell.ScanSlots_v5`'s function on the row's u16 words: the lane's (token, slot, occupancy word, head),
     its first position's `TokenFeed_v1` on its row (`slots_reference`), as i32 encodings."""
-    out = []
-    for row, head in slots_reference(state, NP, IDB, K0, K, OCC, LP, MAX, IDS):
-        tok, slot = feed_reference(row[1:], None, NP)
-        out.append((tok, slot, row[0], head))
-    return out
+    row, head = slots_reference(state, NP, IDB, K0, K, OCC, LP, MAX, IDS)
+    tok, slot = feed_reference(row[1:], None, NP)
+    return tok, slot, row[0], head
 
 
 def collect_refuse(S: dict) -> str | None:
@@ -631,4 +628,46 @@ def SelectEntry(B, S, x0, best, idx, a, occ):
     return B.call(bind(SlotEntry, KO=S.KO, IDB=S.IDB, NP=S.NP, STOP=S.STOP), occ, state)
 
 
-IO_SHELL_COMPOSITES = [IngressPrompt, TokenFeed, OutCollect, SlotEntry, SelectCollect, SelectEntry, SelectCollectV2]
+PAD_WORDS = 56
+
+
+def _padded(sig):
+    def padded_sig(S):
+        ins, ret = sig(S)
+        return ins, Tuple(ret, Array(PAD_WORDS, Array(16, BIT)))
+    return padded_sig
+
+
+def _pad(B):
+    return Coll(Array(PAD_WORDS, Array(16, BIT)), concat([broadcast(*B.call(const(1, 0)).refs[0], 16 * PAD_WORDS)]))
+
+
+@composite("OutCollect", 2, ["KO", "FIRST"], _padded(collect_sig), refuse=collect_refuse,
+           conformance="not-yet-established: OutCollect_v1, with a zero row of 896 bits")
+def OutCollectV2(B, S, a, tok):
+    """`OutCollect_v1{KO, FIRST}`'s state, and a zero row of `PAD_WORDS` u16 words."""
+    return tuple_of(B.call(bind(OutCollect, KO=S.KO, FIRST=S.FIRST), a, tok), _pad(B))
+
+
+@composite("SlotEntry", 2, ["KO", "IDB", "NP", "STOP"], _padded(entry_sig), refuse=entry_refuse,
+           conformance="not-yet-established: SlotEntry_v1, with a zero row of 896 bits")
+def SlotEntryV2(B, S, occ, state):
+    """`SlotEntry_v1{KO, IDB, NP, STOP}`'s entry, and a zero row of `PAD_WORDS` u16 words."""
+    return tuple_of(B.call(bind(SlotEntry, KO=S.KO, IDB=S.IDB, NP=S.NP, STOP=S.STOP), occ, state), _pad(B))
+
+
+def padded_feed_sig(S):
+    ins, ret = feed_sig(S)
+    return ins, Tuple(*ret.fields, Array(PAD_WORDS, Array(16, BIT)))
+
+
+@composite("TokenFeed", 2, ["NP", "FIRST"], padded_feed_sig, refuse=feed_refuse,
+           conformance="not-yet-established: TokenFeed_v1, with a zero row of 896 bits")
+def TokenFeedV2(B, S, slot, sel=None):
+    """`TokenFeed_v1{NP, FIRST}`'s token and slot, and a zero row of `PAD_WORDS` u16 words."""
+    r = B.call(bind(TokenFeed, NP=S.NP, FIRST=S.FIRST), *((slot,) if S.FIRST else (slot, sel)))
+    return tuple_of(r[0], r[1], _pad(B))
+
+
+IO_SHELL_COMPOSITES = [IngressPrompt, TokenFeed, OutCollect, SlotEntry, SelectCollect, SelectEntry, SelectCollectV2,
+                       OutCollectV2, SlotEntryV2, TokenFeedV2]

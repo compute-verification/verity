@@ -1,9 +1,6 @@
 {
   "rule": "lane text in prose (tests/lint/test_repo_lane_text.py)",
   "entries": [
-    {"file": "tests/adapters/vllm/tests/program/predict/test_node_window_reads.py", "count": 1},
-    {"file": "adapters/vllm/verity_vllm/program/predict/class_window.py", "count": 15},
-    {"file": "adapters/vllm/verity_vllm/program/predict/node_window_join.py", "count": 1},
     {"file": "tests/benchmarks/one_stage/test_served_pearlplus_lean.py", "count": 2},
     {"file": "benchmarks/pouw/pearl_c_vllm/served_passes.py", "count": 1},
     {"file": "benchmarks/pouw/pearl_c_vllm/verify_run.py", "count": 1},
@@ -20,7 +17,6 @@
     {"file": "tests/test_boundaries.py", "count": 1},
     {"file": "tests/test_vllm_public_api.py", "count": 1},
     {"file": "tests/tools/check/test_slot.py", "count": 1},
-    {"file": "tools/move/device_term_map.toml", "count": 2},
     {"file": "tools/research/src/research/goals_audit.py", "count": 1},
     {"file": "tools/research/src/research/remote.py", "count": 1},
     {"file": "tools/research/src/research/response.py", "count": 2},
@@ -34,8 +30,8 @@
     {"file": "tests/tools/research/test_treelock.py", "count": 1},
     {"file": "tools/verity/lean/README.md", "count": 1},
     {"file": "tools/verity/lean/posture.py", "count": 1},
-    {"file": "verity/protocols/resource_accounting/compute/pouw/verifier/lean/pearlplus/PouwPearlPlus/Check.lean", "count": 1},
-    {"file": "tests/verity/protocols/compose/verifier/lean/test_composition_difftest.py", "count": 4},
+    {"file": "verity/protocols/accounting/compute/pouw/verifier/lean/pearlplus/PouwPearlPlus/Check.lean", "count": 1},
+    {"file": "tests/verity/protocols/run/verifier/lean/test_composition_difftest.py", "count": 4},
     {"file": "tests/verity/tests/test_cards.py", "count": 2}
   ]
 }

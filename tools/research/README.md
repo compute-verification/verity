@@ -137,7 +137,7 @@ GitHub never closes), and deletes a closed one's head branch unless an open one 
 
 A tool's declaration may name result steps a change needs by path (`Tool.merge_requires`, `{step: [path prefixes]}`, read from
 the target's checkout, `merge.required_steps`): `!` patterns leave paths out (`!README.md`: every file of that name under the
-prefixes). `check` requires `lean-agreement` for `verity/protocols/proofs/flock/`'s `prover/`, `pod/`, `agreement/`,
+prefixes). `check` requires `lean-agreement` for `verity/protocols/proof/flock/`'s `prover/`, `pod/`, `agreement/`,
 `verifier/` and `tool.py`, less README.md and PROTOCOL.md. It may also name what runs after a landing (`Tool.after_land`, an
 argv), started detached on the landed commit; `check`'s is its `post_train.py`, the vLLM regression's manifest rebuilds,
 which label the landing's check attempt.

@@ -27,10 +27,6 @@ from verity_vllm.definitions.registry import dsa as _dsa
 from verity_vllm.definitions.registry import dsa_ds_mla as _dsa_ds_mla
 from verity_vllm.definitions.registry import dsa_norm as _dsa_norm
 from verity_vllm.definitions.registry import dsa_topk_mask as _dsa_topk_mask
-from verity_vllm.definitions.registry import dsv4_compressor as _dsv4_compressor
-from verity_vllm.definitions.registry import dsv4_indexer as _dsv4_indexer
-from verity_vllm.definitions.registry import dsv4_moe as _dsv4_moe
-from verity_vllm.definitions.registry import dsv4_qnorm_insert as _dsv4_qnorm
 from verity_vllm.definitions.registry import fa2_check_inf as _f2
 from verity_vllm.definitions.registry import fa2_softcap as _f2s
 from verity_vllm.definitions.registry import fa3_check_inf as _f3
@@ -47,8 +43,6 @@ from verity_vllm.definitions.registry import fp8_vocab as _fp8_vocab
 from verity_vllm.definitions.registry import gemm_bias as _gemm_bias
 from verity_vllm.definitions.registry import layer_norm as _LN
 from verity_vllm.definitions.registry import ll_bf16 as _ll_bf16
-from verity_vllm.definitions.registry import marlin_moe as _marlin
-from verity_vllm.definitions.registry import mhc as _mhc
 from verity_vllm.definitions.registry import moe as _moe
 from verity_vllm.definitions.registry import pad_prims as PP
 from verity_vllm.definitions.registry import pouw_rows as _pouw_rows
@@ -61,7 +55,6 @@ from verity_vllm.definitions.registry import (
 )
 from verity_vllm.definitions.registry import tp_allreduce as _tp_allreduce
 from verity_vllm.definitions.registry import value_inputs as _vi
-from verity_vllm.definitions.registry.dsv4_decode_indices import gather_i32
 from verity_vllm.program.frontend import targets as _targets
 
 
@@ -260,8 +253,8 @@ _DNK, _DNN = _dense_kinds()
 
 
 def _moe_ffn_fixed(E: int, TOPK: int, VPT: int, H: int, I: int):
-    """[route A (3)] `MoeFfnFixedL_v1{E,TOPK,VPT,H,I}` (registry.moe_pad), imported on first use: the padded registry (pad's lifted
-    registry + the hand-lift hook) is not loaded by a dense derivation that never asks for the kind."""
+    """[route A (3)] `MoeFfnFixedL_v1{E,TOPK,VPT,H,I}` (registry.moe_pad), imported on first use: the padded registry is not
+    loaded by a dense derivation that never asks for the kind."""
     from verity_vllm.definitions.registry import moe_pad as _mp
     return ir_bind(_mp.MoeFfnFixedL, E=E, TOPK=TOPK, VPT=VPT, H=H, I=I)
 
@@ -358,7 +351,7 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "silu_mul_fp8_block_quant": lambda I, G: _silu_mul_fp8_block_quant(I, G),
            # the fused-MoE block under `TargetProfile.moe_construction = "padded"` as ONE kind per token: the fixed-slot
            # construction from the router logits (`registry.moe_pad.MoeFfnFixedL_v1`: ALL E expert bodies on their own weights, the TOPK slot
-           # outputs selected by the router ids, `MoeSum_v1`); its lift of record is the hand-authored `LMoeFfnL_v1` (unselected slots DISABLED).
+           # outputs selected by the router ids, `MoeSum_v1`).
            # `rules/vllm_moe.py`'s padded rules ask for it at `_moe_C.moe_sum` (the block's last kernel); the registry is imported lazily.
            "moe_ffn_fixed": lambda E, TOPK, VPT, H, I: _moe_ffn_fixed(E, TOPK, VPT, H, I),
            # tensor-parallel collectives (registry.b1_tp2; exact-model-tested B1 TP2, re-confirmed on Llama TP2 by the step-1 probe):
@@ -398,8 +391,6 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "scaled_mm_fp8_block": lambda K, N, G, SCALE, FP8_DOT=None: _fp8_vocab.block_gemm(K, N, G, SCALE, FP8_DOT),
            "flashinfer_fp8_linear": lambda K, N: ir_bind(_deepgemm.FlashInferFp8Linear, K=K, N=N),
            "deepgemm_fp8_linear": lambda K, N: ir_bind(_deepgemm.DeepGemmFp8Linear, K=K, N=N),
-           # DeepGEMM's `fp8_einsum("bhr,hdr->bhd")` on one token (DeepSeek-V4's wo_a); `rules/vllm_bindings/fp8.py` asks for it
-           "deepgemm_fp8_einsum_grouped": lambda H, K, N, G: ir_bind(_deepgemm.ScaledMmFp8BlockGrouped, H=H, K=K, N=N, G=G),
            # GPT-NeoX's nn.LayerNorm (weight + bias): torch's vectorized CUDA kernel, the Definition the eager Match fold binds
            # (`registry/layer_norm.py`, `observe/fold/profiles/gen_ln_patterns.py`).  `rules/vllm_bindings/layer_norm.py` asks for it.
            "layer_norm_aten": lambda N, EPS: ir_bind(_LN.LayerNormAten, N=N, EPS=EPS),
@@ -459,42 +450,11 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # its lse, split where a PER is given, and the merge of a token's context and suffix partials. `predict.dsa` asks for them.
            "attention_head_lse": lambda T, D, BN, DOT, INV, MASKED_FROM, PER=None: _attention_head_lse(T, D, BN, DOT, INV, MASKED_FROM, PER),
            "merge_attn_states": lambda NH, D: _merge_attn_states(NH, D),
-           # [DSV4] DeepSeek-V4's mHC on the H200 (registry.mhc), per token. `rules/vllm_mhc.py` asks for them.
-           "mhc_pre_broadcast": lambda HC, H, NS, TN, REPEAT, EPS, HC_EPS:
-               ir_bind(_mhc.MhcPreBroadcast, HC=HC, H=H, NS=NS, TN=TN, REPEAT=REPEAT, EPS=EPS, HC_EPS=HC_EPS),
-           "mhc_residual_broadcast": lambda HC, H: ir_bind(_mhc.MhcResidualBroadcast, HC=HC, H=H),
-           "mhc_fused_post_pre": lambda HC, H, NS, TH, TN, REPEAT, EPS, HC_EPS:
-               ir_bind(_mhc.MhcFusedPostPre, HC=HC, H=H, NS=NS, TH=TH, TN=TN, REPEAT=REPEAT, EPS=EPS, HC_EPS=HC_EPS),
-           "mhc_post_pre_tf32": lambda HC, H, NS, TN, REPEAT, EPS, HC_EPS:
-               ir_bind(_mhc.MhcPostPreTf32, HC=HC, H=H, NS=NS, TN=TN, REPEAT=REPEAT, EPS=EPS, HC_EPS=HC_EPS),
-           "mhc_post": lambda HC, N: ir_bind(_mhc.MhcPost, HC=HC, N=N),
-           "hc_head": lambda HC, H, TH, EPS, HC_EPS: ir_bind(_mhc.HcHead, HC=HC, H=H, TH=TH, EPS=EPS, HC_EPS=HC_EPS),
-           "dsv4_qnorm_rope_kv_insert": lambda NH, NHP, DN, DR, QB, EPS:
-               ir_bind(_dsv4_qnorm.Dsv4QNormRopeKvInsert, NH=NH, NHP=NHP, DN=DN, DR=DR, QB=QB, EPS=EPS),
-           "dsv4_compressor_score": lambda W: ir_bind(_dsv4_indexer.Dsv4CompressorScore, W=W),
-           "dsv4_compress_c4": lambda ROWS, D, QB, EPS: ir_bind(_dsv4_compressor.Dsv4MlaCompressC4, ROWS=ROWS, D=D, QB=QB, EPS=EPS),
-           "dsv4_compress_c128": lambda W, R, D, QB, EPS:
-               ir_bind(_dsv4_compressor.Dsv4MlaCompressC128, W=W, R=R, D=D, QB=QB, EPS=EPS),
            "flashmla_decode": lambda NH, SPLITS, NW, DN, DR, QT, BN, DOT, SCALE:
                ir_bind(_flashmla.FlashMlaDecode, NH=NH, SPLITS=SPLITS, NW=NW, DN=DN, DR=DR, QT=QT, BN=BN, DOT=DOT, SCALE=SCALE),
            "flashmla_gather_row": lambda DN, DR, QT: ir_bind(_flashmla_prefill.FlashMlaGatherRow, DN=DN, DR=DR, QT=QT),
            "flashmla_prefill": lambda NH, NP, D, BN, DOT, SCALE:
-               ir_bind(_flashmla_prefill.FlashMlaPrefill, NH=NH, NP=NP, D=D, BN=BN, DOT=DOT, SCALE=SCALE),
-           "dsv4_inv_rope_quant_head": lambda CHUNKS, QG, ROPE:
-               ir_bind(_dsv4_indexer.Dsv4InvRopeQuantHead, CHUNKS=CHUNKS, QG=QG, ROPE=ROPE),
-           # vLLM's clamped SwiGLU (registry.dsv4_moe). `rules/vllm_bindings/elementwise.py` asks for it.
-           "silu_mul_clamp": lambda I, LIMIT: ir_bind(_dsv4_moe.SiluMulClamp, I=I, LIMIT=LIMIT),
-           # [DSV4] the sqrtsoftplus routers (registry.dsv4_moe) and the hash table's lookup. `rules/vllm_moe_router.py` asks for them.
-           "gather_i32": lambda V: gather_i32(V),
-           "moe_router_hash": lambda E, SCALE: ir_bind(_dsv4_moe.MoeRouterHash, E=E, SCALE=SCALE),
-           "moe_router_sqrtsoftplus": lambda E, SCALE: ir_bind(_dsv4_moe.MoeRouterSqrtSoftplus, E=E, SCALE=SCALE),
-           # [DSV4] the MXFP4 Marlin MoE's schedule and expert GEMMs (registry.marlin_moe). `rules/vllm_marlin_moe.py` asks for them.
-           "marlin_moe_rank": lambda E, P, BM: ir_bind(_marlin.MoeAlignRanks, E=E, P=P, BM=BM),
-           "marlin_moe_align": lambda P, BM: ir_bind(_marlin.MoeAlignBlocks, P=P, BM=BM),
-           "marlin_moe_gemm": lambda E, K, N, TK, TN, GRID, DOT:
-               ir_bind(_marlin.MarlinMoeExpertGemm, E=E, K=K, N=N, TK=TK, TN=TN, GRID=GRID, DOT=DOT),
-           "marlin_moe_gemm_w": lambda E, K, N, TK, TN, GRID, DOT:
-               ir_bind(_marlin.MarlinMoeExpertGemmW, E=E, K=K, N=N, TK=TK, TN=TN, GRID=GRID, DOT=DOT)},
+               ir_bind(_flashmla_prefill.FlashMlaPrefill, NH=NH, NP=NP, D=D, BN=BN, DOT=DOT, SCALE=SCALE)},
     notes={**PROFILE_B1_EAGER.notes, **_PAD_NOTES, **_DNN,
            "int8_row_quant": "Int8RowQuant_v1{K}: verity_int8::row_quant on one bf16 token row -> (x_q s8[K], s_a f32): s_a = "
                              "RN32(max(amax, RN32(1e-30))/127), x_q = clamp(rint(RN32(x/s_a)), ±127) (registry.int8_exact)",
@@ -569,8 +529,6 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
                                     "scale_1x128_kernel followed by the TRT-LLM swapAB GEMM",
            "deepgemm_fp8_linear": "DeepGemmFp8Linear_v1{K,N}: vLLM's default Hopper block-FP8 linear for M >= 32; ue8m0 group quant "
                                   "followed by DeepGEMM fp8_gemm_nt, returning the materialised q, scale and bf16 output",
-           "deepgemm_fp8_einsum_grouped": "ScaledMmFp8BlockGrouped_v1{H,K,N,G}: DeepGEMM's fp8_einsum('bhr,hdr->bhd', recipe=(1, G, G)) on one "
-                                          "token -- per group h ScaledMmFp8BlockSharedScale_v1{K,N,G} over xq[h], sx[h], w[h], ws[h]",
            "layer_norm_aten": "LayerNormAten_v1{N,EPS}: aten.layer_norm on a bf16 row with bf16 weight and bias -- torch 2.13 "
                               "vectorized_layer_norm_kernel<bf16, float>: Welford over 128 threads / 4 warps, rsqrtf(var + eps), "
                               "bf16(w * (rstd * (x - mean)) + b)",
@@ -627,42 +585,11 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
                                  "its lse (return_softmax_lse); with PER, AttentionHeadSplitLse_v1, its splits combined with the lse",
            "merge_attn_states": "MergeAttnStates_v1{NH,D}: vLLM's merge_attn_states of one token's NH heads, the context's and the "
                                 "suffix's partial outputs by their lse",
-           "mhc_pre_broadcast": "MhcPreBroadcast_v1{HC,H,NS,TN,REPEAT,EPS,HC_EPS}: layer 0's mHC pre on the embedding -- DeepGEMM's TF32 "
-                                "hc-prenorm GEMM over fn_broadcast in NS splits, the mixes, Sinkhorn and the fused RMS norm",
-           "mhc_residual_broadcast": "MhcResidualBroadcast_v1{HC,H}: layer 0's embedding copied to the HC streams",
-           "mhc_fused_post_pre": "MhcFusedPostPre_v1{HC,H,NS,TH,TN,REPEAT,EPS,HC_EPS}: mhc_fused_post_pre_tilelang at most 16 tokens -- "
-                                 "the post and the pre's products by FMA in NS splits of H, then the big fuse",
-           "mhc_post_pre_tf32": "MhcPostPreTf32_v1{HC,H,NS,TN,REPEAT,EPS,HC_EPS}: mhc_fused_post_pre_tilelang above 16 tokens -- "
-                                "mhc_post, DeepGEMM's TF32 hc-prenorm GEMM in NS splits, the big fuse",
-           "mhc_post": "MhcPost_v1{HC,N}: mhc_post_tilelang, the streams after the last layer",
-           "hc_head": "HcHead_v1{HC,H,TH,EPS,HC_EPS}: hc_head_fuse_tilelang, the final streams' mix to one row",
-           "dsv4_qnorm_rope_kv_insert": "Dsv4QNormRopeKvInsert_v1{NH,NHP,DN,DR,QB,EPS}: the sparse MLA's query norm, RoPE and "
-                                        "fp8_ds_mla window row, one token",
-           "dsv4_compressor_score": "Dsv4CompressorScore_v1{W}: save_partial_states' score row plus ape[pos % ratio]",
-           "dsv4_compress_c4": "Dsv4MlaCompressC4_v1{ROWS,D,QB,EPS}: the ratio-4 compressor's row at a window's end (CuTe DSL)",
-           "dsv4_compress_c128": "Dsv4MlaCompressC128_v1{W,R,D,QB,EPS}: the ratio-128 compressor's row at a window's end (CuTe DSL)",
            "flashmla_decode": "FlashMlaDecode_v1{NH,SPLITS,NW,DN,DR,QT,BN,DOT,SCALE}: FlashMLA's sparse fp8 decode of one token over "
                               "its window and compressed rows, at the planner's splits",
            "flashmla_gather_row": "FlashMlaGatherRow_v1{DN,DR,QT}: the prefill's K-cache gather of one fp8_ds_mla row to bf16",
-           "flashmla_prefill": "FlashMlaPrefill_v1{NH,NP,D,BN,DOT,SCALE}: FlashMLA's sparse prefill of one token over its gathered rows",
-           "dsv4_inv_rope_quant_head": "Dsv4InvRopeQuantHead_v1{CHUNKS,QG,ROPE}: fused_inv_rope_fp8_quant's one head, its rotary suffix "
-                                       "inverse-rotated and each group of QG quantised to e4m3 with an f32 scale",
-           "silu_mul_clamp": "SiluMulClamp_v1{I,LIMIT}: _C.silu_and_mul_with_clamp(alpha 1, beta 0) on one row -- gate fminf'd to LIMIT, "
-                             "up clamped to [-LIMIT, LIMIT], then SiluMulBf16_v2 per element",
-           "gather_i32": "GatherI32x{V}_v1: column[token] of V i32 words, -1 for a token outside [0, V)",
-           "moe_router_hash": "MoeRouterHash_v1{E,SCALE}: dsv4HashTopkSoftplusSqrt's weights for one token from its f32 logits and six "
-                              "table ids -- Dsv4HashWeight_v1 of each id's logit, renormalised and scaled by SCALE",
-           "moe_router_sqrtsoftplus": "MoeRouterSqrtSoftplus_v1{E,SCALE}: _dsv4_topk_kernel's weights and ids for one token from its f32 "
-                                      "logits and the correction bias -- the top six of Dsv4SqrtSoftplus_v1 + bias, renormalised and "
-                                      "scaled by SCALE",
-           "marlin_moe_rank": "MoeAlignRanks_v1{E,P,BM}: moe_align_block_size's ranks over P router ids, each expert's pairs ranked by a "
-                              "key per pair, ties by index -- each pair's rank and whether it opens a moe block",
-           "marlin_moe_align": "MoeAlignBlocks_v1{P,BM}: moe_align_block_size's schedule over those ranks -- each pair's moe block and "
-                               "the padded block count",
-           "marlin_moe_gemm": "MarlinMoeExpertGemm_v1{E,K,N,TK,TN,GRID,DOT}: Marlin's w13 launch (W4A16 e2m1, e8m0 group-32 scales) on one "
-                              "pair at its moe block, the k slices and fp32 fold of the launch's schedule",
-           "marlin_moe_gemm_w": "MarlinMoeExpertGemmW_v1{E,K,N,TK,TN,GRID,DOT}: Marlin's w2 launch on one pair, the routed weight rounded "
-                                "to bf16 and multiplied in"})
+           "flashmla_prefill": "FlashMlaPrefill_v1{NH,NP,D,BN,DOT,SCALE}: FlashMLA's sparse prefill of one token over its gathered rows"})
+
 
 
 def profile_records(vocab: Vocabulary) -> dict | None:

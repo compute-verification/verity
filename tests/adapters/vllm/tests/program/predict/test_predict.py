@@ -21,12 +21,12 @@ from typing import Any
 
 import pytest
 
-from verity_vllm.config import MANIFESTS, WORKLOADS, RowEngine, workload_file
+from verity_vllm.config import WORKLOADS, RowEngine, workload_file
 from verity_vllm.definitions.registry.tp_allreduce import settings_of
 from verity_vllm.engine.profiles.dense_generic import HF_CONFIG_DIR, pinned_hf_config
 from verity_vllm.program.model import INT8_EXACT_LMHEAD_QUANT, INT8_EXACT_QUANT
 from verity_vllm.program.predict import build as BUILD
-from verity_vllm.program.predict import dsa, dsv4
+from verity_vllm.program.predict import dsa
 from verity_vllm.program.predict import node as NODE
 from verity_vllm.program.predict import score as S
 from verity_vllm.program.predict.build import Unexpressible, build_program
@@ -35,10 +35,6 @@ from verity_vllm.program.predict.phi import Phi
 
 FIX = Path(__file__).parent / "fixtures"
 GLM53 = "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager"
-GLM53_B8 = "glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__greedy__eager"
-GLM53_S1 = "glm53__fp8__h200__tp8__b1__i256__o32__mixed__stoch-t0.8-p0.95__eager"
-GLM53_S8 = "glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__stoch-t0.8-p0.95__eager"
-DSV4 = "dsv4-pro__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager"
 RTXPRO6000 = {"compute_capability": [12, 0], "num_sms": 188}
 H200 = {"compute_capability": [9, 0], "num_sms": 132}
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128, "num_attention_heads": 4,
@@ -66,15 +62,15 @@ def _row_phi(row: str, case: str, hf_home: Path, rank: int = 0) -> Phi:
 
 
 @pytest.mark.parametrize("model,digest", [
-    ("smollm2-135m", "d469f1d4eefafff23e468803ca7894d762d80f8eb81cc2eb10e689629207497d2b4967993360d9c1bb535b3faa3c95f5aa7b18bf4ffd5752935e8a62d18b7ee4"),
-    ("llama32-1b", "5e34739ca3f59dda9febb8dc7c89ab8f4bf146945168079d83c420dc4dd49676034115612e78a3642471d3ebca1e1573e8618d795c31d7e6f118292ccb40e903"),
-    ("tinyllama-11b", "18372d884c9c7551bca643d830ab55c7c8e53568c7ee2528819ba997a657e1f7fc97b82068a3de2a3d373cc8a328fa9108115e440f311c17209800e695769d83"),
-    ("qwen25-05b", "bff68977892d274b710782a1b5db23e4c5485f716f1aa23b9872744d50cb43692f878fd0d20c83bec28f2b261ac833019cf0a1a80ae3f678cc54f92ffc6e73e9"),
-    ("phi3-mini", "3c7404516954d1a8cfb4dcc00c2a8a10d8ecce091c4e7c04ff5ae3f8659e57faa630797df41e5659bda9ad24225cdc2f8f1a6a08633aa3790a04532c169cda43"),
-    ("qwen3-4b", "424f31562fc5c47ffcf92f885185c46c1f81914a4d6ea2b7615f08c2ee8e94a9a81ede55594ee919fe90a1cc3e165838b144823baf13ea7bb692221a23a3761b"),
-    ("olmoe-1b-7b", "67b6a189e59333a6613287cbc1e035aeb898870b90276c4eeda4c9ac0096cdeae9675bacc00c84dda8204d274b41ff4c73e05800209e3a274c2c6fd6a460d058"),
-    ("qwen3-30b-a3b", "9022c3110e66548ba855863705cae93bca9f7262049ef3ce309425afb6187874c585397314c7b4e55a46ee1319b659e3f059985105ed7fd5eb0f453d45841934"),
-    ("gemma2-2b", "b0688044e6a562d2cbb7a6fa6995deb9025d08d134b331236dc4c16ffedf8e38cb093a5e521052cb8c19d5d1641b0c8bb725eddb50e1a0f480149354bbab15c7"),
+    ("smollm2-135m", "c3fccb15a8daec8f573d5dd95fc012c0acd3cc1d0d88b4578f84dfe364a181b6f69f0d0ffd2988f0cc02728d942d3c2641eabb69b676656519c3a73d71ae0d88"),
+    ("llama32-1b", "af2574da8ac1c38c12cb022b9a3f1e5bdd62869c57cecf0ecade142eca124a168fa440c413a5e7c68c9a1637d7bb99fb4fefd88942340e357fed293e62952c3c"),
+    ("tinyllama-11b", "2a8bee32041927d0a2978c925360319a74e6b5dc492e89ae9eb1046e8428be605953858c99ab25b7a57b645c4641d7ab291b9f08d416541c7b8debcdbf3b71eb"),
+    ("qwen25-05b", "278cf9ddf3d46a7fe57cef6a1b6430603a5b5756b26beaf9c69ae3c3d9b6a76da9250b0298caeeb10fcb86899a4c96330cf3b38b3879aab79f2323373bf96f6e"),
+    ("phi3-mini", "d06e4c508379231cad05e05cffdd60581010882258fc92447c1c2b50b9dc6ac470e36be3aeec30d3d36d488ecf243a3dae6f01d58c64e6795717b324d2cbe095"),
+    ("qwen3-4b", "cfc1ce91aa29288c2e480eeb299e72c46eb02c2236ca5388d08f71b638b8076fc2ed8d5d58ae97d0e84d030dc3a90bb0e9fe129973105f29384823e2e6663684"),
+    ("olmoe-1b-7b", "ae54a3fde31a57b61b48f09ef77838b8c24238e8f223d9d6b16c3edea30385538f95c6588e9719694663b32e94f2cfd60a71c7fed05150be3ba89fdf71282bb8"),
+    ("qwen3-30b-a3b", "a3e6e95551920a8583751442cf11ff8bea82d69dcb3a4e6b5ad0e0044c07915aebbcc97a40e968702fbe223f4ace250af6e9882ab823b9885e11decef4741728"),
+    ("gemma2-2b", "a5ec0d9212dee862f849ec9332dabfb2429341abc268f4ba9e2298f5a70e731c680731853d202e6069eee950f5f40c39e8d090d015de0c8ad49204957a90ed73"),
 ])
 def test_step_program_equals_the_traced_build(model, digest):
     r = build_program(_phi(json.loads((FIX / f"{model}.config.json").read_text())), "step", M=1, pos0=8)
@@ -91,20 +87,20 @@ def test_request_and_workload_programs_equal_the_traced_build():
     phi = _phi(json.loads((FIX / "smollm2-135m.config.json").read_text()),
                [{"request_id": "u0", "index": 0, "prompt_len": 256, "max_tokens": 32, "arrive_step": 0}])
     r = build_program(phi, "request", LP=256, T=31)
-    assert r.digest == "91d5eaf172589c9a5586e4eb7b8a83e047448018a2a14bcd6e0048f0618bc0a31a390b53b33459979cb706927233124ba258c1043c76a6461ffc91f7d8411888"
+    assert r.digest == "5d27500cfc13de9c702784aba413700764b20c9c0b652940c91e3d54c2083802dd730213feb3712295b6274cdee059be514bdfbb457c99003a22eb7bfc6a0c4e"
     assert r.n_root_nodes == 84698
-    assert S.predict_workload(phi)["digest"] == "24835950b9fd8c930fcf2077b8a767921c9a5ddc6e12cfe1ed20c4a2030c658a60ec601035e171e4f9197de081ad75b6b06da9ea7be4742a00aa6d0d62ba242f"
+    assert S.predict_workload(phi)["digest"] == "647476fb737cd62b89936075f5fb6a3d9e66a92379ff5dcaca2d14f62d0d6e32b5619fb3fc797ae836e09325983e25343b3b15cb8596dc9d1b4b8506292fcc3c"
 
 
 @pytest.mark.parametrize("model,function,rank,digest", [
-    ("llama32-1b", "LlamaForCausalLM]]_v1{SRC={c74ad5d713d6}}", 0, "3e1e44f5367000d4696ccb03551c70801dc794a69030e28eeeb156c9533ebf774b4dc40f11a9057f28a83340d96a10467814c6cbc7160f1178e670822a0f2764"),
-    ("llama32-1b", "LlamaForCausalLM]]_v1{SRC={c74ad5d713d6}}", 1, "a80fefc8ead7c8d09c2bf2b43ca6ed34296ec4db8d9891b71a850a90613cae6a77a4be0cde7b22a9a0f693c650684380712438a452e6eeb0287ddfdf037b4b6a"),
-    ("gemma2-2b", "Gemma2ForCausalLM]]_v1{SRC={72bb75022406}}", 0, "15bf71465c58172b07dbd848f434f886274de57e88d30fe8d41075b08cc45c8cfedc7a5164343af904af3cc7f47227cdc51725704a1f28e6e82c3bdef4425b8e"),
-    ("gemma2-2b", "Gemma2ForCausalLM]]_v1{SRC={72bb75022406}}", 1, "8c4abf0f43e41613ab749374f38aaade322cf7a2cc8e692c68de5b7c28840aa1c77933a18c89db9a55f741895621d0d7679e1e6d7201b485211ecec09511e6b8"),
-    ("qwen3-30b-a3b", "Qwen3MoeForCausalLM]]_v1{SRC={bbe90689fb26}}", 0, "3af7a5544449ff2ebef6c4959ddbd927860584fedf39b11f137053bc6b178b6b52345869185d725efc1280db5e3203f8214c9d03949d63603c8c4c560723f074"),
-    ("qwen3-30b-a3b", "Qwen3MoeForCausalLM]]_v1{SRC={bbe90689fb26}}", 1, "081f73cd80e91a8536309c9b99a94c1dda7f17cea0fd980a9f6568a33ed238ddfef9e6484b43d004f1acd55352371d382cd9c56e337d092f5dde2c44043d66bc"),
-    ("olmoe-1b-7b", "OlmoeForCausalLM]]_v1{SRC={46db9231ff55}}", 0, "7e1eb5ef961eee0624dcaa342a431bfefc2d1db8f645a716411441944043773f3d5130ce516e6f0303f3e1e3803b756ea0d4434e35a3e013739c856c36c16542"),
-    ("olmoe-1b-7b", "OlmoeForCausalLM]]_v1{SRC={46db9231ff55}}", 1, "d06092a14690787d3b505c2f07cd5ee176bc77cc4d411819b78186899d724a0b87d0da41e24917b52919b4e0114be948ccf30c413a96f5c604831a6fa4941490"),
+    ("llama32-1b", "LlamaForCausalLM]]_v1{SRC={c74ad5d713d6}}", 0, "a96055dbae7e4ff741181c4fe29e222074541ed56b9a91fb5879cbf12b00cb574a8d5a9f6284a0731285f8556d5a08ae88132c92d37d02df0846aead8887df53"),
+    ("llama32-1b", "LlamaForCausalLM]]_v1{SRC={c74ad5d713d6}}", 1, "d2ac2f2f20834ab53a2046b37ad0a1adac6028e8c409790bd6f229e46f283e23636b6e49fa1ee24be2c68aeecf27d552e2de220a62ce5f14d49a7f39fa74b2aa"),
+    ("gemma2-2b", "Gemma2ForCausalLM]]_v1{SRC={72bb75022406}}", 0, "1b021232b0d3ab2a3e433dd5d9aaf82c07598b897d165093d454e14044b2dbd3c21d35e4b4fcb5e875818c452b0adcf531b29452c8080378a1c1197cb2f9aa60"),
+    ("gemma2-2b", "Gemma2ForCausalLM]]_v1{SRC={72bb75022406}}", 1, "b12ecf5e2a5b995218d1133ce12172353edb32766df283ab1fcb63cf25500fe3c45ff8291c8aa5289dc617b879bc629a2d30ed78f203e5be219cff6b30ffd2e9"),
+    ("qwen3-30b-a3b", "Qwen3MoeForCausalLM]]_v1{SRC={bbe90689fb26}}", 0, "1105d3f8e9932d7fa4753e78acd8eba53ab4de9368e908157f32682990f18d99d4a56dd483a70403a5c8da73e72986c144b63dba856276d3324c54adbfdc1161"),
+    ("qwen3-30b-a3b", "Qwen3MoeForCausalLM]]_v1{SRC={bbe90689fb26}}", 1, "be534afc7a520559229475e6ddd491ef731bcff1ca946a5c01fb575bba26d8401001301ad7a96d8ae366fb77cae7aae03e066964d00cfdb038842027b9dc95fa"),
+    ("olmoe-1b-7b", "OlmoeForCausalLM]]_v1{SRC={46db9231ff55}}", 0, "3a80f8e277c8fcafee8063b1a0948d25064b91daa86821fd9537132a4d459934e0c989381228cf2ddf5d58d3de44bb2dc6fe9e2b739ecc278d33367d0f6fb0f6"),
+    ("olmoe-1b-7b", "OlmoeForCausalLM]]_v1{SRC={46db9231ff55}}", 1, "dd3e5ed28881c73e9b709990019e1e628c21cdcc218df8b8c005ec122dc663108db7a8f414c71e143d793984d0e4246db7fe26e4f412c72dba1ab05fc22e6479"),
 ])
 def test_tensor_parallel_rank_step_equals_the_traced_build(model, function, rank, digest):
     """Llama-3.2-1B (cov-p000), Gemma-2-2B (cov-p058-2), Qwen3-30B-A3B (cov-p081) and OLMoE (cov-p069) at TP2: each rank's step
@@ -123,50 +119,7 @@ def test_tensor_parallel_rank_workload_equals_the_traced_build():
     `peers_*` Inputs GP-01 keeps request-local.  About 15 s."""
     phi = _phi(json.loads((FIX / "llama32-1b.config.json").read_text()),
                [{"request_id": "u0", "index": 0, "prompt_len": 256, "max_tokens": 32, "arrive_step": 0}], tp={"world": 2, "rank": 1})
-    assert S.predict_workload(phi)["digest"] == "93df4dd412d503b870425a351b2d46c916f7ce83e194b92ea2acab147a5aa10389bae4320dc5f1bedc56c7dad10e040cd80791cb90b0d8dfb9eb497d3682973c"
-
-
-@pytest.mark.slow
-@pytest.mark.parametrize("rank", range(8))
-def test_dsa_rank_step_equals_the_record(rank, tmp_path):
-    """GLM-5.3 at TP8 on H200 (block FP8, cc 9.0): each rank's step through the DeepSeek sparse-attention decoder (`predict.dsa`)
-    is the rank's step Program `records.json` pins for the row (its FlashInfer fused all-reduce + RMSNorm, the decode-path sparse
-    MLA, the indexer on its layers, the tuned fused-MoE tile at M = 1)."""
-    r = build_program(_row_phi(GLM53, "GLM53", tmp_path, rank), "step", M=1, pos0=8)
-    assert r.function.startswith("Derived[vLLMStep[DeepseekV32ForCausalLM]]_v1")
-    assert r.digest == json.loads((MANIFESTS / "records.json").read_text())["rows"][GLM53]["programs"][str(rank)]["step"]
-
-
-@pytest.mark.slow
-@pytest.mark.parametrize("wrapper,shape,digest", [
-    ("step", {"M": 8, "pos0": 8}, "562e290d02aeb6efb06786f508a90ae9ea08748ab3f8b4777f0c56f76b4cd6d09cab8cb9bf0d21346c7af16f2e9b174a728f1bc7f8e12c5b2ccd48121b0dfb60"),
-    ("request", {"LP": 11, "T": 12}, "d2ede82f0989fdf7a43e45dbca1b6adb3a9c29b245f1d6058c583bbd72599d4cb9be7724df848104e448a966bc5e3d6a60b0c255f5c32db575ea15611c8b0175"),
-])
-def test_dsa_launch_batch_equals_the_traced_build(wrapper, shape, digest, tmp_path):
-    """GLM-5.3's B8 mixed-arrivals row (no batch invariance) at rank 0, as the Build traced it: the step of 8
-    rows, and the first request's Program under its launch batch (its prefill alone, then decodes beside the second request's
-    prefill and decodes), every token-count-dependent selection at the launch's tokens."""
-    r = build_program(_row_phi(GLM53_B8, "GLM53", tmp_path), wrapper, **shape)
-    assert r.digest == digest
-
-
-@pytest.mark.slow
-@pytest.mark.parametrize("row,wrapper,shape,digest", [
-    (GLM53_S1, "step", {"M": 1, "pos0": 8},
-     "746b518918f6ad8b280cca0a347df80e5dba1876bdddad668b8ee75e6801b9d948d55fb2ad7515c41c344b8fa56096ae4d84e31716f6065589ebba03202b24a3"),
-    (GLM53_S8, "step", {"M": 8, "pos0": 8},
-     "1a572036533ba212766ed728bb945b0f695b209b29a95966d2417643578a6b3d789dfdaf5e480cc033531e63c68015b098d884235dde0a80762574b60accd486"),
-    (GLM53_S8, "request", {"LP": 25, "T": 6},
-     "4709aa07ded03c4a2fb0807ae9c21222b4078dd12544ee40c92c9eff600a6b6d589b49621eb413d2a581ca0edbfafc878c411a8de8ce1b6d968e14877fed6e71"),
-])
-def test_dsa_stochastic_equals_the_traced_build(row, wrapper, shape, digest, tmp_path):
-    """GLM-5.3's seeded top-p rows (t0.8 p0.95) at rank 0: the B1 step as the Build traced it, and the B8 step
-    and second request at the same registered split count (`engine.topp_pin`), the select after the vocabulary's all-gather, as
-    the B8 row's traced Build pins them.  The second request's launch batch is its realized arrival
-    (`engine.arrivals.realized_arrive_steps`): the first request ends at forward 1, so the idle engine prefills it alone at forward 2
-    and it decodes alone, not beside the step-13 prefills its declared arrive_step 9 would put it with."""
-    r = build_program(_row_phi(row, "GLM53", tmp_path), wrapper, **shape)
-    assert r.digest == digest
+    assert S.predict_workload(phi)["digest"] == "70468fe0fee095b09765883d67013afffda931d609ae63b67c26d81da0d445942ff49dd254f8d2477d7f721c06b2a7758237b3c2ded6a1dbccdb0eaf3a7c2f4a"
 
 
 @pytest.mark.parametrize(("T", "error"), [("x", ValueError), ([1], TypeError)])
@@ -215,59 +168,6 @@ def test_the_execution_label_names_the_batch_invariance(tmp_path):
         build_program(Phi.from_json({**phi.to_json(), "engine": {**phi.engine, "env": {"VLLM_BATCH_INVARIANT": "1"}}}), "step")
 
 
-@pytest.mark.slow
-@pytest.mark.parametrize("rank", [0, 7])
-def test_mhc_rank_step_equals_the_record(rank, tmp_path):
-    """DeepSeek-V4-Pro at TP8 on H200 (block FP8, MXFP4 experts, cc 9.0): the first and last rank's step through the hyper-connected
-    decoder (`predict.dsv4`) is the rank's step Program `records.json` pins for the switched row:
-    the mHC pre and post-pre between sublayers, the compressed-attention decode over each layer's opened window, the table and
-    sqrtsoftplus routers, the Marlin experts aligned in pair-index order.  About 25 s a rank, nearly all of it encoding the mHC
-    Definitions' bodies for the digest; no cheaper test reaches this decoder, and the ranks between differ only in the peer order
-    GLM-5.3's ranks pin."""
-    r = build_program(_row_phi(DSV4, "DSV4_PRO", tmp_path, rank), "step", M=1, pos0=8)
-    assert r.function.startswith("Derived[vLLMStep[DeepseekV4ForCausalLM]]_v1")
-    assert r.digest == json.loads((MANIFESTS / "records.json").read_text())["rows"][DSV4]["programs"][str(rank)]["step"]
-
-
-@pytest.mark.slow
-def test_mhc_request_equals_the_record(tmp_path):
-    """DeepSeek-V4-Pro's switched row at rank 0: its one request through `predict.dsv4`, the prefill of its prompt and each decode
-    after it, is the request Program `records.json` pins for the rank.  The step above is one decode of one row, and a request of
-    two rows adds to it only the prefill's gather and attention and the ratio-4 compressor; the row's own lengths alone reach the
-    ratio-128 compressor, the TF32 post-pre of more than 16 rows, DeepGEMM's FP8 linear from 32 rows, cuBLAS's f32 GEMM without
-    split-K and the multimem all-reduce.  About 140 s."""
-    phi = _row_phi(DSV4, "DSV4_PRO", tmp_path)
-    [(lp, t)] = phi.request_shapes()
-    r = build_program(phi, "request", LP=lp, T=t)
-    assert r.function.startswith("Derived[vLLMRequest[DeepseekV4ForCausalLM]]_v1")
-    assert r.digest == json.loads((MANIFESTS / "records.json").read_text())["rows"][DSV4]["programs"]["0"]["requests"][f"build_request_LP{lp}_T{t}"]
-
-
-def test_mhc_refuses_outside_its_domain(tmp_path):
-    phi = _row_phi(DSV4, "DSV4_PRO", tmp_path)
-    short = {**phi.hf_config, "compress_ratios": [4] + phi.hf_config["compress_ratios"][1:], "index_topk": 1}
-    with pytest.raises(Unexpressible, match=re.escape("position 7 has 2 compressed rows, more than the indexer's top-1")):
-        build_program(Phi.from_json({**phi.to_json(), "model": {**phi.model, "hf_config": short}}), "step", M=8, pos0=0)
-    cfg = {**phi.hf_config, "compress_ratios": [1] + phi.hf_config["compress_ratios"][1:]}
-    with pytest.raises(Unexpressible, match=re.escape("compress ratios [1] (the compressors: [4, 128]")):
-        build_program(Phi.from_json({**phi.to_json(), "model": {**phi.model, "hf_config": cfg}}), "step")
-    half = {**phi.hf_config, "head_dim": 256}
-    with pytest.raises(Unexpressible, match=re.escape("no FlashMLA sparse geometry at head 256, rope 64 (registered: ")):
-        dsv4.Net(Phi.from_json({**phi.to_json(), "model": {**phi.model, "hf_config": half}}), 1, 8)
-
-
-def test_mhc_reads_an_engine_without_env_and_refuses_a_config_without_its_quantization_block(tmp_path):
-    """A φ whose engine states no `env` runs its all-reduce under no switch (`tp_allreduce.settings_of` of an empty env), as one
-    whose `env` is empty does.  A checkpoint config without `quantization_config` is refused by that name."""
-    phi = _row_phi(DSV4, "DSV4_PRO", tmp_path)
-    doc, stated = phi.to_json(), {k: v for k, v in phi.engine.items() if k != "env"}
-    nets = [dsv4.Net(Phi.from_json({**doc, "engine": e}), 1, 8) for e in (stated, {**stated, "env": {}})]
-    assert nets[0].settings == nets[1].settings == settings_of(False, {})
-    bare = {k: v for k, v in phi.hf_config.items() if k != "quantization_config"}
-    with pytest.raises(Unexpressible, match="a checkpoint without its block-FP8 quantization_config"):
-        dsv4.Net(Phi.from_json({**doc, "model": {**phi.model, "hf_config": bare}}), 1, 8)
-
-
 def test_dsa_reads_an_engine_without_env_as_under_no_switch(tmp_path):
     """A φ whose engine states no `env` runs the sparse-attention decoder's all-reduce under no switch (`tp_allreduce.settings_of`
     of an empty env), as one whose `env` is empty does, and a stated switch is read.  The first two part at a row past INDEX_TOPK
@@ -312,45 +212,32 @@ def test_a_request_states_its_prompt_length_one_of_three_ways_and_one_that_state
 def test_a_row_that_pins_no_revision_names_no_snapshot_dir(tmp_path):
     """`score.phi_of` finds a row's config.json under `hf_home` by its checkpoint's revision.  A row whose engine block pins none
     names no dir there, which is `os.path.join`'s TypeError; given a `config` it is that config's φ, with no revision."""
-    w = json.loads(workload_file(WORKLOADS / f"{DSV4}.json").read_text())
+    w = json.loads(workload_file(WORKLOADS / f"{GLM53}.json").read_text())
     bare = {**w, "engine": {k: v for k, v in w["engine"].items() if k != "revision"}}
     with pytest.raises(TypeError, match="NoneType"):
-        S.phi_of({"row": DSV4, "workload": bare}, hf_home=str(tmp_path))
-    config = str(HF_CONFIG_DIR / "DSV4_PRO.config.json")
-    full, pinless = (S.phi_of({"row": DSV4, "workload": doc}, config=config).to_json() for doc in (w, bare))
+        S.phi_of({"row": GLM53, "workload": bare}, hf_home=str(tmp_path))
+    config = str(HF_CONFIG_DIR / "GLM53.config.json")
+    full, pinless = (S.phi_of({"row": GLM53, "workload": doc}, config=config).to_json() for doc in (w, bare))
     assert pinless["model"]["revision"] is None and {**pinless, "model": full["model"]} == full
 
 
 def test_phi_of_opens_the_config_by_the_name_given():
     """`score.phi_of` hands ``config`` to `open` as it is given: the file's name in bytes is read as the same name in a str is."""
-    w = json.loads(workload_file(WORKLOADS / f"{DSV4}.json").read_text())
-    config = str(HF_CONFIG_DIR / "DSV4_PRO.config.json")
+    w = json.loads(workload_file(WORKLOADS / f"{GLM53}.json").read_text())
+    config = str(HF_CONFIG_DIR / "GLM53.config.json")
     in_bytes: Any = os.fsencode(config)
-    assert S.phi_of({"row": DSV4, "workload": w}, config=in_bytes).to_json() == S.phi_of({"row": DSV4, "workload": w}, config=config).to_json()
+    assert S.phi_of({"row": GLM53, "workload": w}, config=in_bytes).to_json() == S.phi_of({"row": GLM53, "workload": w}, config=config).to_json()
 
 
 def test_a_workload_manifest_without_requests_gives_a_phi_of_none():
     """`score.phi_of` on a row whose declared manifest states no `requests`: φ's workload holds none, and the rest of φ is the
     row's as with them."""
-    w = json.loads(workload_file(WORKLOADS / f"{DSV4}.json").read_text())
-    config = str(HF_CONFIG_DIR / "DSV4_PRO.config.json")
-    full = S.phi_of({"row": DSV4, "workload": w}, config=config)
-    bare = S.phi_of({"row": DSV4, "workload": {k: v for k, v in w.items() if k != "requests"}}, config=config)
+    w = json.loads(workload_file(WORKLOADS / f"{GLM53}.json").read_text())
+    config = str(HF_CONFIG_DIR / "GLM53.config.json")
+    full = S.phi_of({"row": GLM53, "workload": w}, config=config)
+    bare = S.phi_of({"row": GLM53, "workload": {k: v for k, v in w.items() if k != "requests"}}, config=config)
     assert bare.workload == {"requests": []} and len(full.requests) == len(w["requests"]) > 0
     assert {**bare.to_json(), "workload": full.workload} == full.to_json()
-
-
-@pytest.mark.parametrize("sampling,M,digest", [
-    ({**STOCH}, 8, "cbfc83a7ecd96ac573e80ab31e5b9cd54e25aaaa35c0d53df0d503901ad7419c62cb5f702e41323204d7278278aacb87f394f3155e3a9a5afdaae3e730e4df27"),
-    pytest.param({**STOCH, "top_p": 1.0}, 1, "a027f8b304f152187eef0e47466573131375e5dc5f75a8b5abb8ca49490b65fcf9e7fc1e040b78fb0cca04e367a4686ef0fad45153d7c2e6ecc1c282636103b0",
-                 marks=pytest.mark.slow),
-])
-def test_stochastic_step_program_equals_the_traced_build(sampling, M, digest):
-    """SmolLM2-135M under the seeded top-p policy at the registered S = 32 on 188 SMs: a B8 row's step and a B1 row's.  The B8 row's
-    traced Build read a derived `splits` Input, which serving no longer produces (`engine.topp_pin`); its digest is the registered-S
-    Program's, until that row is rebuilt."""
-    r = build_program(_phi(json.loads((FIX / "smollm2-135m.config.json").read_text()), sampling=sampling), "step", M=M, pos0=8)
-    assert r.digest == digest
 
 
 def test_sampling_follows_the_builds_policy():
@@ -455,26 +342,21 @@ def test_an_int8_rows_dtype_is_its_checkpoints():
         build_program(as_row(bf16, "float8_e4m3fn"), "step")
 
 
-#: The H200 int8 Llama-3.2-1B rows' traced Builds (the same digests
-#: on two H200 nodes): each Program digest the row's `build_summary.json` gives (the step at its M and pos0 8,
-#: each request shape (LP, T), GP-01's workload) and its `manifest.json`'s digest and identities, with the Programs its header names
-#: (`program_digest`, and a batch's `component_digests`).  B4's lone `build_request` (LP256_T31, no request of its batch) is B1's.
+#: The H200 int8 Llama-3.2-1B rows' Builds: each Program digest of the row (the step at its M and pos0 8,
+#: each request shape (LP, T), GP-01's workload).  B4's lone `build_request` (LP256_T31, no request of its batch) is B1's.
 H200_INT8: dict[str, dict] = {
     "llama32-1b__int8__h200__tp1__b1__i256__o32__mixed__greedy__bi-eager": {
-        "step": (1, "66cc640b4c9736b2b784626f7987f865499ee9b62c0dc47b8b4e666dcc9990e538bc46e18fbd431221031b96dcfc4d608e38af457f6bd044d47afb07b8ca296f"),
-        "requests": {(256, 31): "963a228135f64eb6db7d423209c47f42f544aabfa05d7733f58f5912a7bc3241bb907af6ed69bb89203ae413042971cc0bfb30218ef6f90f2252fc58b0d99c23"},
-        "workload": "3acd044df21073dc7cfa7a999fd531f9e46055221fda040c54a0f6f5a81a980fb4d9ac11c6c7ff6174483f5e9ca0fd4a0b23206dc227ba788f91b262cfee26a4",
-        "manifest": ("6715e143e1ff21ea7baaf14cf496fe8706e2015f641bae337dfe1743787cd215", 12163, ("request LP256_T31",)),
+        "step": (1, "6a146f062a03ab20598ddcd23cc08781975eec979a7e2a1f94c5d8a42a4c5f4d9bd66fb6a579dcb19fca08c8a15a4311c509ae54d0bf18bd4d8b54a689744293"),
+        "requests": {(256, 31): "4bf2e0c502e48a505e377e9cce9d4cc94a0644d338eca95e0a03549c540f563e74679bd1cb5c932a306c4a99587574a8a1209d1c7c644dff6527f5d32bd83a61"},
+        "workload": "6260a85900bcc21ee63e60bdc90b74cfaf3e386951f87a57c3ce3071a21c091d85b4ce43fd7ed3e437459f7adbfd8f84b3eb40ab721eec22f4912a53ec4504ac",
     },
     "llama32-1b__int8__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager": {
-        "step": (4, "b24251993d3ede502ee5933b1688f95d871303f415a8553b152dba32fcce848b136f81238095b8fb8fb5adb168b523ba95c28a228109af54c1269dd150e54f62"),
-        "requests": {(11, 8): "bec8910e13b197706b72c29b9e64808d8c4bb8715e75880bd2ef142db8d74f399b77226af6e0725829ea34ef3adbd3f93063e224144baa75dec6bb64af1734d4",
-                     (123, 19): "5426f0fb0717df5ca97c05aca07dc9b0f7affa808e66c6928b3f9f30843b5f14ba0107b1ab76db8c1dd663d1f5db6dca1debc9363928fac716ddaab5f0e843b7",
-                     (159, 31): "878afca2b9a5f48d77183a3f008c5acd72ce5a0fc7976894c32b245f67079a60df0aff9579bda19ba580f34d5ecb7c954d5a23f4ec775c5ae4118e778d1fb7dd",
-                     (256, 1): "05780e3bd779ed8797e079b98cb00755381dbcbf86ff06b6c571fb4db454e2b1d1991943b4564cbcd09159314da23fa4078d89f24c5f9db72053e0ee8514d1c3"},
-        "workload": "b611b68a180f306936fb81c85d26be81a044a31d0fb70dea09a786a91343cb9f332d71f285d2d047d0897d295f5856aaa1830ce89fba940dcce24072e6b436ec",
-        "manifest": ("4d294fcb0d3ad28eddbd434dfd2773fffc5a379fda7c7796713ce0a71e990e7b", 23230,
-                     ("workload", "request LP11_T8", "request LP123_T19", "request LP159_T31", "request LP256_T1")),
+        "step": (4, "b1e6df98ccebeae046ceed767d11b39c87d719cb584927a7875af60ffb7517f1366bfcae0ef2942e38f19520e624becd0f844d63e183dfcee3111a31a594faed"),
+        "requests": {(11, 8): "f327ab463b59afbcd377ab24615c513df7b0f8c2f82173723cca6b21b53c6ce23613411c8b3b09b57778f8f9c89d625eeb8d380fd5bb84711aa88a5a74a25154",
+                     (123, 19): "2ef3503d1adc7f0c6f9214357c3dffd9e3bcf67cd98679c0e7c90bff9050634e67c05d725aa3b81ab0eec468a1e4fcd19964ec80cfec1635028b6afa30f4c31c",
+                     (159, 31): "73e53f40588b074ad7c9073930e3cc6a083e0ac318ba07608e92c6fc6c6facf9a5220e21423a6424e5b6b2f0205349069693e9245c25136c8de97e7674179d0d",
+                     (256, 1): "afd45eebb3323e47b6d1a66666ae0a64d03d0927c890d53a5fe8c99cb120ed96fcc895bad83b101713be332014f0e8a4071a7c560e0da1bbffa844a677607b65"},
+        "workload": "1e4ee6030e9a4091c4c669c2b0032808236a310469f2aec6706eede2f8253ed90471ba34a5bdc223af2ae5bd900e69130b8d23145857fc3f5c7bcdd7fd722a5e",
     },
 }
 
@@ -487,9 +369,7 @@ def test_the_h200_int8_rows_predict_their_builds_of_record(row):
     digest that moved is named.  `test_a_batch_invariant_request_reads_its_launchs_longest_query` holds one launch's context (the FA3
     tile at TINY's shapes); this holds the whole step and request Programs at the served shapes (each int8 linear's quantizer and s8
     product, FA3's tile in each launch of the batch, the bf16 LM head, the sampler) and the batch's composition, so a change to predict,
-    the int8 linears or the workload fails here by name.  This builds no manifest (`predict row` does, over its own named Programs, and
-    `predict compare --predicted` holds it to the trace's): the traced manifest is pinned with the Programs its header names, and a moved
-    one names the manifest it leaves behind.  About 2 min."""
+    the int8 linears or the workload fails here by name.  About 2 min."""
     pin = H200_INT8[row]
     w = json.loads(workload_file(WORKLOADS / f"{row}.json").read_text())
     phi = S.phi_of({"row": row, "workload": w}, config=str(pinned_hf_config(w["model"], RowEngine.of(w).revision)))
@@ -502,12 +382,9 @@ def test_the_h200_int8_rows_predict_their_builds_of_record(row):
         got[f"request LP{lp}_T{t}"], comps[(lp, t)] = r.digest, S.request_component(r)
     got["workload"] = S.predict_workload(phi, comps)["digest"]
     moved = [k for k in want if got[k] != want[k]]
-    manifest, identities, over = pin["manifest"]
-    stale = [k for k in over if k in moved]
     assert not moved, "\n".join(
         [f"{row}: predict moved from the row's traced Build (re-trace the row on the H200 and pin the new digests with the predictor's)"]
-        + [f"  {k}: Build {want[k][:16]}…, predicted {got[k][:16]}…" for k in moved]
-        + ([f"  the traced manifest {manifest[:16]}… ({identities:,} identities) is over {', '.join(stale)}"] if stale else []))
+        + [f"  {k}: Build {want[k][:16]}…, predicted {got[k][:16]}…" for k in moved])
 
 
 @pytest.mark.parametrize("cfg,phi_kw,fact", [
@@ -576,10 +453,9 @@ def test_a_family_that_states_no_rules_facts_or_constructor_is_read_as_one_with_
         build_program(_phi(cfg), "step")
 
 
-def test_the_record_path_reaches_the_predictor_only_through_a_switched_rows_aot_build():
-    """No module outside `verity_vllm.program.predict` imports it: the record path runs it only as `predict emit`, the derive of a switched
-    row's AOT Build (`row_tp.TpRow.derive`, under `config_record.aot_of`; `tests/pipeline/test_tp_build_width.py`), and the trace
-    that checks it lists the package as a forbidden input."""
+def test_no_module_outside_the_predictor_imports_or_runs_it():
+    """No module outside `verity_vllm.program.predict` imports it or runs `predict`, and the trace that checks a Build lists the
+    package as a forbidden input."""
     from verity_vllm.program.frontend import inputs_trace
     here, name = Path(S.__file__).resolve().parent, S.__name__.rpartition(".")[0]
     pkg = here.parents[name.count(".") - 1]
@@ -589,7 +465,7 @@ def test_the_record_path_reaches_the_predictor_only_through_a_switched_rows_aot_
     hits = [str(p.relative_to(pkg)) for p in outside if pat.search(p.read_text())]
     assert hits == []
     runs = [str(p.relative_to(pkg)) for p in outside if re.search(r"""cli\(\s*["']predict["']""", p.read_text())]
-    assert runs == ["pipeline/row_tp.py"]
+    assert runs == []
     assert any(m in str(Path(S.__file__).resolve()) for m in inputs_trace._FORBIDDEN_MARKERS)
 
 

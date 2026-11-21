@@ -17,7 +17,7 @@ replayed word by word from the pass's own files, the rows that leave a tile or a
   ⌈n/64⌉, `clear_work.check_records`) and the ``records_root`` over them.  The transcript (the tile leaves and tree, A's
   roots, every committed byte) is the pass's.  A pass already given up is left as it is.
 - **The replay** runs on `fast_tile`'s batch forms over J processes: each tile opened from the pass's files
-  (`verify_run.Opened`), encoded under the epoch's salt as `clear_work.check_drawn` encodes it, and its words' counts taken
+  (`opened.Opened`), encoded under the epoch's salt as `clear_work.check_drawn` encodes it, and its words' counts taken
   (`fast_tile.words_inert_work`).
 - **On the device** (``--device``, an H100 or H200 and pearl_c_sm90's debit_sm90.cubin): each call's A′ (its real rows) and
   each fixed operand's B̃ formed once on the J processes, as `encode` forms them (the scheme's `_side`, on fast_tile's `form_v1`;
@@ -45,15 +45,15 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parents[2] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "clear"))
+sys.path.insert(0, str(HERE.parents[2] / "verity" / "protocols" / "accounting" / "compute" / "pouw" / "prover" / "clear"))
 import fast_tile as FT  # noqa: E402
 import verify_run as VR  # noqa: E402
 import clear_work as CW  # noqa: E402
-from verity.protocols.resource_accounting.compute.pouw.verifier.audit import opened_value  # noqa: E402
-from verity.protocols.resource_accounting.compute.pouw.verifier.coins import CoinCommitment  # noqa: E402
-from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Context  # noqa: E402
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C  # noqa: E402
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_work as PW  # noqa: E402
+from verity.protocols.accounting.compute.pouw.verifier.audit import opened_value  # noqa: E402
+from verity.protocols.accounting.compute.pouw.verifier.coins import CoinCommitment  # noqa: E402
+from verity.protocols.accounting.compute.pouw.verifier.protocol import Context  # noqa: E402
+from verity.protocols.accounting.compute.pouw.prover.schemes import pearl_c as C  # noqa: E402
+from verity.protocols.accounting.compute.pouw.prover.schemes import pearl_c_work as PW  # noqa: E402
 
 #: the device's counts are held to the CPU replay's on every Nth tile id
 CROSS_CHECK = 1024
@@ -131,12 +131,12 @@ def _form(job: tuple[str, int, int, int]) -> tuple[tuple[str, int, int, int], np
     noise = s.noise(ctx)
     if side == "a":
         data = p.prover.files(p.man["matmuls"][at]["rows"])
-        rows = [VR.f32_row(data, k, i) for i in idx]
+        rows = [VR.PO.f32_row(data, k, i) for i in idx]
         e = [C.sample_line(x, 0, 0, 0) for x in s.row_seeds(ctx, rows, idx)] if s.hashing in C.ROW_SEEDED else None
         formed, _ = s._side(rows, idx, 0, noise.seed_a, noise.seed_b, k, e)
     else:
         data = p.prover.files(p.man["weights"][str(u.weight)]["rows"])
-        formed, _ = s._side([VR.f32_row(data, k, j) for j in idx], idx, 1, noise.seed_b, noise.seed_b, k)
+        formed, _ = s._side([VR.PO.f32_row(data, k, j) for j in idx], idx, 1, noise.seed_b, noise.seed_b, k)
     return job, np.asarray(formed.codes, np.uint8).reshape(len(idx), k)
 
 

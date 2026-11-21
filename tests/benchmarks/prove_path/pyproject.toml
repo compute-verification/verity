@@ -12,40 +12,37 @@ untraced = [
     "test_run_keep.py",
     "test_run_request_values.py",
     "test_run_rows.py",
+    "test_run_rules.py",
 ]
 # `adapters/vllm`: advice_windows, the TP serving rows and the stand-in TP Commit the tests build; `adapters/torch`: the
 # frontend class_rows and the tie tests load beside it; `benchmarks/one_stage`:
 # a5, which prove_path imports; `verity`: what both import; `verity_numerical.bench`'s input sets and templates, which a5
-# imports; scan_zk (with
-# network_attester_zk, which it imports), whose --v3c reads the scan state window-commit opens for it (`scan_state_opening`); of
+# imports; of
 # `research`, what the served compiler's identity imports (`code_identity`: `research_tools` and `source_identity`);
 # `deployments.json`: the census's reference deployment window_cost (and one_stage's block record) read.
-inputs = ["calibration/hardware/cards", "verity", "adapters/vllm", "adapters/torch/verity_torch", "benchmarks/one_stage", "verity/protocols/resource_accounting/network/prover/leak_scan.py",
-          "verity/protocols/resource_accounting/network/prover/scan_zk.py", "verity/protocols/resource_accounting/network/prover/network_attester_zk.py",
+inputs = ["calibration/hardware/cards", "verity", "adapters/vllm", "adapters/torch/verity_torch", "benchmarks/one_stage", "verity/protocols/accounting/network/prover/leak_scan.py",
           "tools/research/src/research/__init__.py", "tools/research/src/research/pythonpath.py",
           "tools/research/src/research/store", "tools/research/src/research/telemetry",
           "calibration/census/deployments.json", "benchmarks/network_traces/zk_drivers.py",
           "benchmarks/numerical/python/verity_numerical/__init__.py",
           "benchmarks/numerical/python/verity_numerical/bench/__init__.py",
-          "verity/protocols/proofs/flock/prover/python/verity_flock/input_sets.py",
-          "verity/protocols/proofs/flock/prover/python/verity_flock/subcircuit_templates.py",
+          "verity/protocols/proof/flock/prover/python/verity_flock/input_sets.py",
+          "verity/protocols/proof/flock/prover/python/verity_flock/subcircuit_templates.py",
           # the network attester's run `attester_piece` kept, which window-commit's scan reads (`kept_scan`):
           # attester_piece and network_attester_chain, what they import, and the site.json, settings.py and host.json that
           # served_session and auditor read on import; and serve.py, which the challenger's ledgers test_records_audit
           # signs with auditor read
           "benchmarks/network_traces/attester_piece.py", "benchmarks/network_traces/served_session.py",
           "benchmarks/network_traces/settings.py",
-          "benchmarks/network_traces/network_attester_chain.py", "verity/protocols/resource_accounting/network/attester/network_attester_serve.py",
-          "verity/protocols/resource_accounting/network/attester/connection_rows_run.py",
-          "verity/protocols/resource_accounting/network/attester/runner_parts.py", "verity/protocols/resource_accounting/network/attester/attester_key.py",
-          "verity/protocols/resource_accounting/network/attester/runner_cli.py",
-          "verity/protocols/resource_accounting/network/attester/load_relay.py", "verity/protocols/resource_accounting/network/attester/stall_probe.py",
-          "benchmarks/network_traces/site.json", "verity/protocols/compose/verifier/live_challenger/auditor.py",
-          "verity/protocols/compose/verifier/live_challenger/host.json", "verity/protocols/compose/verifier/live_challenger/serve.py",
-          # Pearl+'s verdict, whose W check (`verify_run.tie`) test_pearltie runs on its toy's passes: verify_run, what it
-          # imports, and the settings registry it loads (`verity_config.settings.of`, which finds it beside pouw's pyproject)
-          "benchmarks/pouw/pearl_c_vllm/verify_run.py", "benchmarks/pouw/pearl_c_vllm/fast_tile.py",
-          "verity/protocols/resource_accounting/compute/pouw/prover/clear", "benchmarks/pouw/settings.py", "tests/benchmarks/pouw/pyproject.toml",
+          "benchmarks/network_traces/network_attester_chain.py", "verity/protocols/accounting/network/attester/network_attester_serve.py",
+          "verity/protocols/accounting/network/attester/connection_rows_run.py",
+          "verity/protocols/accounting/network/attester/runner_parts.py", "verity/protocols/accounting/network/attester/attester_key.py",
+          "verity/protocols/accounting/network/attester/runner_cli.py",
+          "verity/protocols/accounting/network/attester/load_relay.py", "verity/protocols/accounting/network/attester/stall_probe.py",
+          "benchmarks/network_traces/site.json", "verity/protocols/run/verifier/live_challenger/auditor.py",
+          "verity/protocols/run/verifier/live_challenger/host.json", "verity/protocols/run/verifier/live_challenger/serve.py",
+          # the settings registry `verity_config.settings.of` loads, which finds pouw's beside its pyproject
+          "verity/protocols/accounting/compute/pouw/prover/clear", "benchmarks/pouw/settings.py", "tests/benchmarks/pouw/pyproject.toml",
           "tools/config/verity_config",
           # `verity_bench.kit_report`: the words served_tie_window's result says who checked it in
           "benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit_report.py",

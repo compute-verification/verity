@@ -38,15 +38,6 @@ HISTORY_KEYS = frozenset({"argv", "command", "cmd", "invocation", "provenance", 
 
 #: (file, the string as written: `module` or `module:attr`) that don't resolve and aren't meant to, each with why
 EXEMPT = {
-    # the reuse probe's candidates: names a design document left unstated, tried one by one on the pod
-    ("tests/adapters/vllm/tests/program/test_artifact_applicability_independent.py", "verity_vllm.check.artifact:check_applicability"):
-        "probed",
-    ("tests/adapters/vllm/tests/program/test_artifact_applicability_independent.py", "verity_vllm.check.artifact:load_artifact"):
-        "probed",
-    ("tests/adapters/vllm/tests/program/test_artifact_applicability_independent.py", "verity_vllm.check.applicability:check"):
-        "probed",
-    ("tests/adapters/vllm/tests/program/test_artifact_applicability_independent.py", "verity_vllm.pipeline.build:check_applicability"):
-        "probed",
     # the tool specs the preflight tests feed it, which name no tool on purpose
     ("tests/tools/research/test_remote_preflight.py", "tools.fake.tool:FAKE"): "a stand-in",
     ("tests/tools/research/test_remote_preflight.py", "tools.other.tool:X"): "a stand-in",
@@ -249,6 +240,6 @@ def test_the_scan_sees_each_kind_and_catches_a_dangling_one():
     seen = {(p, k, m + (f":{a}" if a else "")) for p, k, m, a in scan()}
     registry = "tools/research/src/research/store/tools_registry.py"
     assert {(registry, "attr", "tools.check.tool:CHECK"), ("tools/research/pyproject.toml", "attr", "research.cli:main"),
-            ("tests/adapters/vllm/tests/ops/test_epoch_row.py", "main", "verity_vllm.pipeline.cli"),
+            ("adapters/vllm/tools/served_run/setup.sh", "main", "verity_vllm.pipeline.cli"),
             ("tests/adapters/vllm/tests/engine/test_cov_difr_b0.py", "import", "verity_vllm.observe.fold.profiles.derived_B0_ovs"),
             ("benchmarks/numerical/python/verity_numerical/bench/drivers/c_interactive.py", "main", "verity_flock.register")} <= seen

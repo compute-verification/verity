@@ -19,17 +19,17 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.protocols.resource_accounting.network.verifier import network_attester_rows as WR
-from verity.protocols.resource_accounting.network.verifier.link_frame import HEADER
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, verifier as V
+from verity.protocols.accounting.network.verifier import network_attester_rows as WR
+from verity.protocols.accounting.network.verifier.link_frame import HEADER
+from verity.protocols.proof.spot.verifier.one_stage import draw as D, verifier as V
 from verity.commitments.periods import rows as SR
 
 HERE = (Path(__file__).resolve().parents[3] / "benchmarks" / "one_stage")
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1] / "tests" / "benchmarks" / "network_traces"))
 import a5_network_attester as AW  # noqa: E402
-from verity.protocols.resource_accounting.network.verifier import relay_check as RC  # noqa: E402
-from tests.verity.protocols.resource_accounting.network.attester import relay_runs as tws  # noqa: E402
+from verity.protocols.accounting.network.verifier import relay_check as RC  # noqa: E402
+from tests.verity.protocols.accounting.network.attester import relay_runs as tws  # noqa: E402
 
 N, REST = 8, 4
 
@@ -92,7 +92,7 @@ def test_the_registration_proves_every_transfer_gate_unit_beside_the_sampled_res
     assert tg != rid and mine.work_table == {tg: {"work": 0, "floor": 2 * N}, rid: {"work": 1, "floor": 1}}
     publics = {m.key: c.public_body(k) for k, m in enumerate(mine.members)}
     v = V.check(rec, mine.program, mine.query, mine.law, AW.CS.SCHEME, AW.CS.expected_ports(mine),
-                leaf_layer=AW.CS.leaf_layer(publics), work_table=mine.work_table)
+                leaf_layer=AW.CS.leaf_layer(publics), work_table=mine.work_table, partition=mine.partition)
     assert v.ok, v.codes
     strata = {s["template"]: s for s in D.derive(mine.program, mine.query, mine.law, mine.work_table)["strata"]}
     assert strata[tg]["units"] == [[0, 2 * N]] and strata[tg]["k"] == 2 * N

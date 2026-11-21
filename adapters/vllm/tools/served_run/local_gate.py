@@ -1,5 +1,5 @@
-"""Infra's challenger gate (`verity/protocols/compose/verifier/live_challenger/auditor.py`) run on one node
-under a test key, for a rehearsal of a served window (`tests/adapters/vllm/tests/protocols/pouw_h1_rehearsal.py`).
+"""Infra's challenger gate (`verity/protocols/run/verifier/live_challenger/auditor.py`) run on one node
+under a test key, for a rehearsal of a served window.
 
     python -I local_gate.py DIR init --tree TGZ --commit SHA [--params W,H] [--peer NAME] [--ports LO-HI]
     python -I local_gate.py DIR VERB ...   # the gate's verbs as the lane's key: reserve, open, status, ledger, pins,
@@ -39,7 +39,7 @@ from pathlib import Path
 CONFIG = "gate.json"
 #: what the tree's archive holds: infra's code and core, and every checkpoint manifest `models.MANIFESTS` reads, so a role
 #: of any registers
-ARCHIVE = ("verity", "verity/protocols/compose/verifier/live_challenger", "adapters/vllm/manifests/checkpoints-int8.json")
+ARCHIVE = ("verity", "verity/protocols/run/verifier/live_challenger", "adapters/vllm/manifests/checkpoints-int8.json")
 
 
 def _config(d: Path) -> dict:
@@ -49,7 +49,7 @@ def _config(d: Path) -> dict:
 def _auditor(d: Path, cfg: dict):
     """Infra's auditor.py from the pinned tree, which puts that tree first on sys.path (no `verity` imported before it)."""
     assert "verity" not in sys.modules, "verity was imported before infra's tree went on sys.path"
-    sys.path.insert(0, str(Path(cfg["tree"]) / "verity" / "protocols" / "compose" / "verifier" / "live_challenger"))
+    sys.path.insert(0, str(Path(cfg["tree"]) / "verity" / "protocols" / "run" / "verifier" / "live_challenger"))
     import auditor
     lo, hi = cfg["ports"]
     auditor.PORTS = range(lo, hi + 1)
@@ -122,7 +122,7 @@ def init(d: Path, argv: list[str]) -> int:
         print(f"local_gate: the tree {a.tree} has no {', '.join(missing)}: make it with "
               f"`git archive --format=tar.gz -o TGZ {a.commit} {' '.join(ARCHIVE)}`", file=sys.stderr)
         return 2
-    pkg = tree / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "lean"
+    pkg = tree / "verity" / "protocols" / "proof" / "spot" / "verifier" / "lean"
     b = subprocess.run(["lake", "build", "spot-verifier"], cwd=pkg, capture_output=True, text=True)
     if b.returncode:
         print(f"local_gate: lake build spot-verifier exited {b.returncode}, and the gate's coins are the Lean "

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# PoUW's piece with Pearl+, `served_verdicts.sh`'s POUW_CMD under POUW=pearlplus (H1 off): Pearl+'s own served run on the
+# PoUW's piece with Pearl+, `served_verdicts.sh`'s POUW_CMD under POUW=pearlplus: Pearl+'s own served run on the
 # card after the window's serve, every pass retained, and Pearl+'s verdict over all of them:
 #   POUW_CMD='bash benchmarks/one_stage/served_pearlplus.sh "$1" "$2" "$3"'      (served_verdicts.sh runs it in the tree)
 #   bash benchmarks/one_stage/served_pearlplus.sh SERVE_DIR WINDOW PIECE_DIR
@@ -62,13 +62,14 @@
 #      id, its answer in PIECE_DIR/coin-put.json, which names the run's Attempt carrying out/'s copy as its custody);
 #      the RULE line then reads the ledger again: whether the sample session was the lane's first reserve after the
 #      period's close (`served_verdicts.py pearlplus-period rule`, kept as period.json's rule);
-#   4b. once verify wrote its document, `served_passes.py lean` takes the Lean verdict of record, PouwCheck.PearlPlus's
-#      pouw-pearlplus (PEARLPLUS_LEAN_EXE, else built here as served_pouw.sh builds pouw-period, its log
+#   4b. once verify wrote its document, `served_passes.py lean` takes the Lean verdict of record, PouwVerifier.PearlPlus's
+#      pouw-pearlplus (PEARLPLUS_LEAN_EXE, else built here, its log
 #      pouw-pearlplus-build.log; one that doesn't build answers nothing), on the same passes, epoch coins, samples, coin
 #      record and W (--tie), of record (--of-record) on a live session's coins, within PEARLPLUS_LEAN_TIMEOUT seconds
 #      (default 3,600), and writes its answer to PIECE_DIR/pearlplus-lean.json,
-#      the file `served_verdicts.pearlplus_of_record` reads, only where it is the Python verdict's; both verdicts, its
-#      command line and the executable's SHA-256 go to PIECE_DIR/pearlplus-lean-check.json either way;
+#      the file the piece's verdict and `served_verdicts.pearlplus_of_record` read, whatever the Python's verdict says
+#      (verify's verdict decides nothing: its coin and its timed credit are what is read of it); both verdicts, where
+#      they differ, its command line and the executable's SHA-256 go to PIECE_DIR/pearlplus-lean-check.json either way;
 #   4c. where the Lean answered, `served_passes.py case` writes the parts of the run's case as remote's composite of
 #      record reads it that need no docket, and the pass files its opened tiles read, to
 #      SERVE_DIR/private/pearlplus/case, where served_cases.py makes the case once the window's record R is made;
@@ -87,15 +88,13 @@
 # window record W (`--window-record`, private/pearlplus/window-record.json, rounds dropped as above), chained after the
 # serve's first registration record where the serve wrote one (`--previous-record`: SERVE_DIR/deployment-registration.json,
 # served_verdicts.sh's weights(), which registers the weights before the first request) and naming the day the serve
-# declared where it declared one (`--day-declaration`: SERVE_DIR/declaration.json, serve-openai's --day), and then, before the coin,
-# PEARLPLUS_TIE_CMD (`served_verdicts.sh pearl-tie SERVE_DIR WINDOW W PASSES`) committing the window tied to W, its
-# docket R chained right after W, and where that commit fails, or `retain` wrote no W, the piece goes no further:
-# the commit is what holds the window to its class's fixed load, so without it there is no sample, no verdict and no
-# Pearl+ line, and step 5 writes a piece that rejects for want of one; step 4 is `verify --tie W`, which holds the
+# declared where it declared one (`--day-declaration`: SERVE_DIR/declaration.json, serve-openai's --day), and where `retain`
+# wrote no W the piece goes no further: without it there is no sample, no verdict and no
+# Pearl+ line, and step 5 refuses for want of one (pearlplus-no-verdict); step 4 is `verify --tie W`, which holds the
 # passes to W, with PEARLPLUS_CLASS (served_verdicts.sh's: V3C_CLASS, the class the window is committed at) `--class`,
 # which refuses passes that are not that class's fixed load, so the verdict's counts of passes, calls and tables are the
 # class's, and whose accept publishes its work in the grid form (verify_run.grid_work: the class's structural credit less
-# the give-up padded up to H1's window grid; the exact credit is the profile's exact_work, which `publish` holds on the
+# the give-up padded up to the window grid; the exact credit is the profile's exact_work, which `publish` holds on the
 # node), and under the gate it samples only after the window serve's Pearl-C period (SERVE_DIR/pearlplus/period.json,
 # the one its RULE line reads) closed with the lane's reserves since its open the window's salt sessions alone. Its salt coin is the
 # scheme's: a salt session of the window's own under the gate (`serve_openai.scheme_settings`), which step 5 holds each pass
@@ -105,7 +104,10 @@
 # The passes hold the run's activations, so they stay in SERVE_DIR/private, under served_verdicts.sh's `research keep`,
 # and the piece runs under umask 077, so every file it or a step writes there is 0600.
 # env: served_verdicts.sh's (VENV, HF_HOME, CUDA_HOME), PEARLPLUS_* above. Its lines name no window. Exit 0 once step 5
-# wrote the piece.
+# wrote the piece. Where it has no verdict it writes no answer: on a node that lists no card it serves nothing and
+# refuses before step 1 (pearlplus-no-card; under PEARLPLUS_TIE the window's own serve took the card), and where step 2
+# or step 4 wrote no document step 5 refuses (pearlplus-no-verdict); either way its sentence is PIECE_DIR/refused.txt,
+# its POUW-REFUSED line says it, and it exits 2.
 set -uo pipefail
 for o in PEARLPLUS_DRAWS:PEARLPLUS_SAMPLES; do n=${o#*:} o=${o%%:*}; [ -z "${!o+x}" ] || [ -n "${!n+x}" ] \
   || { echo "served-pearlplus: $o is set and $n is not: it is read as $n now; set $n instead" >&2; exit 2; }; done
@@ -125,6 +127,13 @@ took() { echo "$(( ($(date +%s) - $1) / 60 )) min"; }
 export VERITY_BENCH_VENV=${VERITY_BENCH_VENV:-${VENV:-/workspace/cp/venv312}}
 # shellcheck source=/dev/null
 . benchmarks/harness/env.sh
+rm -f "$P/refused.txt" "$P/development.json"
+CARDS=$(nvidia-smi -L 2>/dev/null)
+if [ -z "${PEARLPLUS_TIE:-}" ] && [[ $CARDS != *"GPU "* ]]; then
+  echo "pearlplus-no-card: this node lists no card (nvidia-smi -L), so Pearl+ serves nothing, has no verdict and" \
+    "the piece writes no answer" | tee "$P/refused.txt" | sed 's/^/POUW-REFUSED /'
+  exit 2
+fi
 NEEDED=$("$VENV/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py volunteer-needed \
   ${PEARLPLUS_OVER_CAP:+--over-cap "$PEARLPLUS_OVER_CAP"} 2> "$Q/volunteer-needed.log")
 RULE=${NEEDED#* } VOLUNTEER=${PEARLPLUS_VOLUNTEER-auto}
@@ -319,17 +328,9 @@ if [ -n "$GO" ] && { [ -s "$Q/volunteer.json" ] || [ -n "$TIE" ]; }; then
   say "retain: served_passes.py retain exit $rc: $(grep -m1 '^retain ' "$Q/retain.log" | cut -c1-400)"
   [ "$rc" = 0 ] || [ -z "$TIE" ] || GO=
 fi
-# the window commit tied to W, before Pearl+'s coin, as H1's is made at its window's close before its sample coin
 if [ -n "$GO" ] && [ -n "$TIE" ]; then
   if [ -s "$W" ]; then
     say "W: $(grep -m1 '^retain W: ' "$Q/retain.log" | sed -E 's/^retain W: [^,]*, //' | cut -c1-300)"
-    t=$(date +%s)
-    (cd "$TREE" && bash -c "${PEARLPLUS_TIE_CMD:?served_verdicts.sh sets PEARLPLUS_TIE_CMD}" _ "$SD" "$K" "$W" "$Q/passes") \
-      > "$Q/tie.log" 2>&1
-    rc=$?
-    say "tie: served_verdicts.sh pearl-tie exit $rc after $(took "$t"): $(tail -1 "$Q/tie.log" | cut -c1-600)"
-    [ "$rc" = 0 ] || { say "draw: refused before it: the window's commit tied to W failed (pearl-tie exit $rc), so" \
-      "nothing holds the passes to the window's class and no sample or Pearl+ line follows it"; GO=; }
   else
     say "W: retain wrote no window record, so nothing ties the passes to the window and no sample or Pearl+ line follows"
     GO=
@@ -379,14 +380,31 @@ if [ -n "$GO" ] && [ -s "$P/verify.json" ]; then
   t=$(date +%s)
   LX=${PEARLPLUS_LEAN_EXE:-}
   if [ -z "$LX" ]; then
-    LX=$TREE/verity/protocols/resource_accounting/compute/pouw/verifier/lean/pearlplus/.lake/build/bin/pouw-pearlplus
-    (cd verity/protocols/resource_accounting/compute/pouw/verifier/lean/pearlplus && lake build pouw-pearlplus) > "$Q/pouw-pearlplus-build.log" 2>&1 || {
+    LX=$TREE/verity/protocols/accounting/compute/pouw/verifier/lean/pearlplus/.lake/build/bin/pouw-pearlplus
+    (cd verity/protocols/accounting/compute/pouw/verifier/lean/pearlplus && lake build pouw-pearlplus) > "$Q/pouw-pearlplus-build.log" 2>&1 || {
       say "lean: pouw-pearlplus doesn't build (its log in the serve dir's private/pearlplus), so no Lean answer is written"
       LX=; }
   fi
   [ -n "$LX" ] && [ -x "$LX" ] || LX=
+  DL=  # the challenger sample's draw session, which the Lean holds it to (served_verdicts.py pearlplus-draw-live)
+  if [ -n "${PEARLC_CHALLENGER_GATE:-}" ] && [ -n "${H1_KEY_SHA512:-}" ] && [ -n "${MAIN_FILE:-}" ] \
+     && "$TPY" benchmarks/one_stage/served_verdicts.py pearlplus-draw-live "$Q" --record "$Q/passes/coin.json" \
+          --gate "$PEARLC_CHALLENGER_GATE" --key-sha512 "$H1_KEY_SHA512" --main "$MAIN_FILE" > "$Q/draw-live.log" 2>&1 \
+     && [ -s "$Q/pearlplus-draw-live.json" ]; then
+    DL=$Q/pearlplus-draw-live.json
+  fi
+  say "lean: draw session: $(tail -1 "$Q/draw-live.log" 2>/dev/null | cut -c1-300)"
+  SL=  # the epoch's salt session, which the Lean holds each live pass's salt to (served_verdicts.py pearlplus-salt-live)
+  if [ -n "${PEARLC_CHALLENGER_GATE:-}" ] && [ -n "${H1_KEY_SHA512:-}" ] && [ -n "${MAIN_FILE:-}" ] \
+     && "$TPY" benchmarks/one_stage/served_verdicts.py pearlplus-salt-live "$Q" --served "$SERVED" \
+          --gate "$PEARLC_CHALLENGER_GATE" --key-sha512 "$H1_KEY_SHA512" --main "$MAIN_FILE" > "$Q/salt-live.log" 2>&1 \
+     && [ -s "$Q/pearlplus-salt-live.json" ]; then
+    SL=$Q/pearlplus-salt-live.json
+  fi
+  say "lean: salt session: $(tail -1 "$Q/salt-live.log" 2>/dev/null | cut -c1-300)"
   "$VENV/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py lean --passes "$Q/passes" --verify "$P/verify.json" \
-    --exe "${LX:-none}" --out "$P/pearlplus-lean.json" --timeout "${PEARLPLUS_LEAN_TIMEOUT:-3600}" > "$Q/lean.log" 2>&1
+    --exe "${LX:-none}" --out "$P/pearlplus-lean.json" --timeout "${PEARLPLUS_LEAN_TIMEOUT:-3600}" \
+    ${DL:+--draw-live "$DL"} ${SL:+--salt-live "$SL"} > "$Q/lean.log" 2>&1
   say "lean: served_passes.py lean exit $? after $(took "$t"): $(tail -1 "$Q/lean.log" | cut -c1-400)"
 fi
 if [ -s "$P/pearlplus-lean.json" ]; then
@@ -405,6 +423,6 @@ UN=()
   ${MAIN_FILE:+--main "$MAIN_FILE"} --coin "$P/coin-put.json" > "$Q/pearlplus.log" 2>&1
 rc=$?
 copy_back
-grep '^POUW-DEV ' "$Q/pearlplus.log"
+grep -E '^POUW-(DEV|REFUSED) ' "$Q/pearlplus.log"
 say "piece: served_verdicts.py pearlplus exit $rc"
 exit "$rc"

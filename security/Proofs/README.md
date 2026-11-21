@@ -29,16 +29,16 @@ needs only the checkout.
     `Proofs.Pous.Accounting.Numbers` for a submission to import, as `submissions/reference.lean` beside it does the
     first; `check.sh` beside it runs the Lean check on `security` with the grader, on scratch submissions that
     import `Proofs.Pous.Statements`.
-  - `tests/verity/protocols/proofs/spot/verifier/lean/generate.sh` runs `ExfiltrationVectors.lean`
+  - `tests/verity/protocols/proof/spot/verifier/lean/generate.sh` runs `ExfiltrationVectors.lean`
     (`Proofs.Spot.Sampling.Influence`, `Proofs.Spot.Sampling.StratifiedMiss`) and
     `ExfiltrationTwoVectors.lean` (`Proofs.Flock.SamplingGeneric.TwoTable`), both beside it.
-  - `tests/verity/protocols/proofs/flock/prover/lean/generate.sh` runs `RandomnessVectors.lean` beside it
+  - `tests/verity/protocols/proof/flock/prover/lean/generate.sh` runs `RandomnessVectors.lean` beside it
     (`Proofs.Flock.Soundness.PlanDraw`).
-  - `tests/verity/protocols/proofs/flock/prover/test_lean_verifier.py` builds `Proofs.Flock.Verifier`, which its scratch
+  - `tests/verity/protocols/proof/flock/prover/test_lean_verifier.py` builds `Proofs.Flock.Verifier`, which its scratch
     files import; `test_security_inputs.py` beside it checks that the suite's inputs hold that module's imports.
   - `tests/benchmarks/one_stage/guard_node.py` builds `Proofs.Flock.SpotFlock.Code` and
     `Proofs.Flock.SamplingGeneric.TwoAt` and runs `TwoGuard.lean` beside it, which imports them.
-  - `tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_lean_package.py` reads the lock's `runs` entry of `Proofs.Pouw.Bulk`.
+  - `tests/verity/protocols/accounting/compute/pouw/verifier/test_lean_package.py` reads the lock's `runs` entry of `Proofs.Pouw.Bulk`.
 
 ## Areas
 

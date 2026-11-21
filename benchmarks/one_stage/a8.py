@@ -36,7 +36,7 @@ deploys them), so that the verifier receives no chunk bytes; and the prover's co
   path, which rechecks a host witness; ``nofw``), on the device with ``--gpu``: the process's wall and CPU seconds, and the
   session's ``e2e_s``, ``wait_s`` (the prover waiting on the verifier), ``witness_s`` and ``prove_total_s``. ``--no-audit``
   stages only the honest statement and runs the points, Lean verifying each arm's session at the largest k. ``--lease``
-  is a command each prover process runs under (`a8_gpu.sh`'s GPU lease), so the device is held for the proofs alone; the
+  is a command each prover process runs under (a GPU lease), so the device is held for the proofs alone; the
   process's wall then includes the lease's wait, and the session's own times don't.
 """
 from __future__ import annotations
@@ -60,23 +60,23 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 #: the directory of Flock's proof-format reader, `redigest.py`, which the leak scan reads proof streams with
-sys.path.insert(0, str(HERE.parents[1] / "verity/protocols/proofs/flock/prover/agreement"))
+sys.path.insert(0, str(HERE.parents[1] / "verity/protocols/proof/flock/prover/agreement"))
 
 import a0  # noqa: E402
 import a7  # noqa: E402
 import redigest  # noqa: E402
-from verity.protocols.resource_accounting.network.prover import leak_scan as LS  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.prover import audit_prover  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.prover import opening_prover  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec, coins, opening as C3, receipts  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier.receipts import Plan  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R, verifier as V  # noqa: E402
-from verity.protocols.proofs.spot.prover import docket as DK  # noqa: E402
+from verity.protocols.accounting.network.prover import leak_scan as LS  # noqa: E402
+from verity.protocols.accounting.memory.poub.prover import audit_prover  # noqa: E402
+from verity.protocols.accounting.memory.poub.prover import opening_prover  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier import audit, codec, coins, opening as C3, receipts  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier.receipts import Plan  # noqa: E402
+from verity.protocols.proof.spot.verifier.one_stage import partition as P, docket as R, verifier as V  # noqa: E402
+from verity.protocols.proof.spot.prover import docket as DK  # noqa: E402
 from verity.commitments import randomness as RND  # noqa: E402
 from verity.circuits.codec import canonical_json, descriptor_id, encode_program  # noqa: E402
 from verity.circuits.defs import bind  # noqa: E402
 from verity.circuits.population import wired_population_program  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier.commitments.gates import block_check as BC  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier.commitments.gates import block_check as BC  # noqa: E402
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity_flock import circuit as FC, class_statement as CS  # noqa: E402
 
@@ -110,7 +110,7 @@ def window(store: audit_prover.Store, L: int, samples: int, delta: float, secret
     reg, N = store.registration, store.registration.blocks
     p = audit.Params(blocks=N, deadline_ns=10**6, windows=1, samples=samples, delta=delta, window_ns=10, codec=P512)
     clock = a7.Clock()
-    s = audit.AuditRun(p, reg, None, coins.local(reg.digest, 0, p.windows, a7.Entropy(b"a8 coins %d" % seed)),
+    s = audit.AuditRun(p, reg, None, coins.local(reg.digest, 0, p.windows, a7.Entropy(b"a8 coins %d" % seed), samples=p.samples),
                        not_before_ns=0, clock=clock)
     prover = audit_prover.Prover(store, None, entropy=a7.Entropy(secret + b"receipt salts"))
     challenge, previous, passes, msgs = s.start(), reg.digest, {}, []

@@ -1,8 +1,7 @@
 """A served run's registration log registers its compiler (`serve_day.register_compiler`, which `advice.write` calls before it
 binds any advice): the log a run declared its day in holds one item of kind ``builder``, core's check accepts the log with it,
 and that item is what the run's advice windows are bound under: its digest the one each window's binding names the compiler by,
-its ℓ at least each window's advice bits, its format the one that decodes each window's advice. Under the tie the item stands
-in the log before the first window's sample coin. A log that registers another compiler refuses this one by core's name, and
+its ℓ at least each window's advice bits, its format the one that decodes each window's advice. A log that registers another compiler refuses this one by core's name, and
 no advice is written; a log with site entries takes the item under ``--day-params``' auditor. A run that declared no day
 registers nothing."""
 from __future__ import annotations
@@ -16,10 +15,6 @@ import pytest
 
 from tests.pipeline.test_serve_advice import C, _served
 from tests.pipeline.test_serve_day import PROGRAM, _day, _opts, _params
-from tests.pipeline.test_serve_h1 import PROMPTS, Later, _Server
-from tests.pipeline.test_serve_tie import SEALED, WindowCommit
-from tests.protocols.test_pouw_h1_commit import AUDITED, ROWS, STEPS
-from tests.protocols.test_pouw_h1_served import _unit
 from verity import device as S
 from verity.protocols.registration.verifier import registration as G
 from verity.protocols.registration.verifier import site_log as L
@@ -28,8 +23,6 @@ from verity_vllm.engine import step_trace as ST
 from verity_vllm.pipeline import advice as ADV
 from verity_vllm.pipeline import advice_windows as AW
 from verity_vllm.pipeline import serve_day as SD
-from verity_vllm.pipeline import serve_h1 as SH
-from verity_vllm.pipeline import serve_tie as TIE
 from verity_vllm.pipeline import window_advice as WA
 
 pytestmark = pytest.mark.usefixtures("code_versions_stood_in")
@@ -151,8 +144,7 @@ def test_a_run_that_declared_no_day_registers_nothing(tmp_path):
 
 
 def test_a_log_with_site_entries_takes_the_item_under_the_day_params_auditor_and_is_refused_without_it(tmp_path):
-    """The served path's `verity-vllm advice` (`served_verdicts.sh`'s ``advice_of``, which passes ``--day-params`` under
-    ``DAY``) on a day declared in a log whose site entries only ``--day-params``' auditor accepts: without the parameters
+    """`verity-vllm advice` with ``--day-params`` on a day declared in a log whose site entries only ``--day-params``' auditor accepts: without the parameters
     the call is refused by name and writes nothing; with them it registers the item and binds the advice."""
     params = tmp_path / "site-params.json"
     params.write_text(json.dumps(G.params("onsite", AUDITOR)))
@@ -170,40 +162,3 @@ def test_a_log_with_site_entries_takes_the_item_under_the_day_params_auditor_and
     view, log = _view(tmp_path, params)
     assert view["builder"] == ADV.builder_item(C) and [type(e) for e in log] == [L.Entry, G.Declaration, G.Information]
     assert (out / "advice" / "windows.json").exists()
-
-
-def test_under_the_tie_the_item_stands_in_the_log_before_the_first_windows_sample_coin(tmp_path, monkeypatch):
-    """Under the tie (``--h1-window-commit``) the command at each window's close (`served_verdicts.sh`'s ``tie``) runs
-    `verity-vllm advice` for the window before window-commit writes R, and the window's roots and its sample coin come only
-    once R is bound. So the first window's call registers the item while none of them is bound, and each later window's
-    call finds it."""
-    serve = tmp_path / "serve"
-    serve.mkdir()
-    day = SD.declare(_opts(tmp_path, *_day(tmp_path, 0, AUDITED)), serve)
-    srv, runs, seen = _Server(monkeypatch), {}, []
-    wc = WindowCommit(runs)
-
-    def tie_command(argv: list[str], log: Any) -> int:
-        registered = SD.register_compiler(serve, ADV.builder_item(C)).registered
-        rc = wc(argv, log)
-        seen.append((int(argv[5]), registered, wc.calls[-1]["bound"]))
-        return rc
-
-    tie = TIE.WindowTie("v3c-window-commit", serve, runner=tie_command, day=day)
-    arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=serve, unit=_unit(), prover=tmp_path / "prover",
-                       closer=(closer := Later()), tie=tie)
-    pending = []
-    for w, prompts in enumerate(PROMPTS):
-        arm.open(w)
-        runs[w] = srv.serve(prompts, w)
-        pending.append(arm.close(w))
-        arm.sealed(w, {"window": w, **SEALED})
-    closer.run()
-    outs = [f.result() for f in pending]
-    assert seen == [(w, "now" if w == 0 else "earlier", []) for w in range(len(PROMPTS))]
-    for w, out in enumerate(outs):
-        assert "error" not in out and out["commit_record"]["named"] is True, out
-    view, log = _view(tmp_path)
-    assert view["builder"] == ADV.builder_item(C) and [type(e) for e in log] == [G.Declaration, G.Information]
-    arm.drain()
-    srv.src.uninstall()

@@ -167,6 +167,24 @@ def io_record(path: str | Path) -> dict[str, dict[str, Any]]:
     return out
 
 
+def bodies(run: str | Path, window: int) -> dict[str, dict[str, Any]]:
+    """The certified body of each request with rows in a serve-openai run's Commit window ``window``, by its I1 id (its body's
+    ``user``, else its HTTP id), as the registered compiler takes it: the sampling fields it brought (its ingress record's
+    ``brought``) with its prompt ids. Only the window's own records count: a run can serve a user again in another window."""
+    out: dict[str, dict[str, Any]] = {}
+    for line in M.lines(Path(run) / "requests.jsonl", "Request"):
+        d = json.loads(line)
+        if d.get("windows") is None or int(window) not in d["windows"]:
+            continue
+        user = str(d.get("user") or d.get("http_id") or d.get("engine_id"))
+        if user in out:
+            raise ValueError(f"requests.jsonl: user {user!r} has two requests in window {window}")
+        ingress = d.get("ingress")
+        brought = ingress.get("brought") if isinstance(ingress, dict) else None
+        out[user] = {**(brought if brought is not None else {}), "prompt": list(d["prompt_ids"])}
+    return out
+
+
 @dataclass
 class _Req:
     rid: str
@@ -268,7 +286,8 @@ def from_trace(recs: list[dict[str, Any]], io: dict[str, dict[str, Any]] | None 
     is held to, and the tokens a cache hit's sources are read from).  ``carry`` makes it a served Commit window's
     (`window_advice`): what the last window left (`Built.left`; ``()`` for a window that opens on an idle engine), each
     request it must carry and each it may that has a row here coming first, held to its state; and a request may end the window
-    unfinished, its record then the Commit record's.  Without it the trace is a whole session's, every request finished.  Either
+    unfinished, its record then the Commit record's, and a request the trace records sampling at a temperature but 0 is
+    refused.  Without it the trace is a whole session's, every request finished.  Either
     way a request its client aborted before it was ever scheduled is dropped (`Built.dropped`)."""
     window = carry is not None
     ids = {row[0] for r in recs if r["kind"] == "step" for row in r["rows"]}
@@ -282,6 +301,9 @@ def from_trace(recs: list[dict[str, Any]], io: dict[str, dict[str, Any]] | None 
                 continue
             if q is not None:
                 raise ValueError(f"request {r['request']} arrives twice")
+            if window and r.get("sampling", {}).get("temperature", 0) != 0:
+                raise ValueError(f"request {r['request']} samples at temperature {r['sampling']['temperature']!r}, and a served "
+                                 "window's Program is greedy (window_class.GREEDY): its advice says no sampled request yet")
             reqs[r["request"]] = _Req(r["request"], int(r["prompt_len"]))
     tokens = {rid: rec["prompt_ids"] + rec["output_ids"] for rid, rec in io.items()} if io is not None else None
     block = next((int(r["config"].get("block_size") or 1) for r in recs if r["kind"] == "header" and "config" in r), 1)
@@ -519,7 +541,7 @@ def write_served(run: Path, out: Path, recs: list[dict[str, Any]], trace: Path, 
                  compiler: Any, window: int | None = None, registered_roots: dict[str, str] | None = None) -> dict[str, Any]:
     """A server's advice, one a closed Commit window (`windows_of`; only ``window`` when given): each under ``out/w<k>/`` as
     `write_one` writes it, its registration naming the window's Commit (its run id and run root, from windows.jsonl, or
-    from seals.jsonl while the window's line waits for its PoUW H1 release, which reads this advice: `serve_tie`).  The
+    from seals.jsonl while the window's line is not yet written).  The
     windows are read in order, each opening with what the last one left (`from_trace`'s ``carry``), so ``window`` reads the
     ones before it too.  A window whose advice is refused (a finish the advice can't say, a trace the Commit record contradicts)
     is named in ``refused``, and the others are written; the window after a refused one opens on nothing carried.  Until the

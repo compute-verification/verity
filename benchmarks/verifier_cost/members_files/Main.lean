@@ -3,10 +3,10 @@ import Spot
 /-!
 `members-files-time PARAMS COMMITMENT BLOBS N|all... [--ref-max R]`: the per-member form's pass over every member's
 files (`OneStageZk.membersFiles`, as the compiled check runs it) against the pass as it is stated, `Member.files` a
-member, each reading the blobs and parsing its circuit file itself (`membersFiles_eq_kept` proves them equal), on one
+member, each reading the blobs itself (`membersFiles_eq_kept` proves them equal), on one
 per-member case's parameters, registration record and files, as the executable's `check` takes them; BLOBS is a file
-of the blobs' paths, a line each. A row is the case's first N members of its first member's circuit file, in the
-parameters' order, so N members of one circuit file; `all` is every member of the case. Each pass is timed once the
+of the blobs' paths, a line each. A row is the case's first N members, in the parameters' order; `all` is every
+member of the case. Each pass is timed once the
 case is parsed and the blobs are read and hashed; one `PHASE {json}` line each on stdout. The stated pass runs up to R
 members. The case's own line carries its program's size (its bytes and its root's nodes) and the microseconds of one
 evaluation of the strata of its partition's query on the program (`Partition.strata`), which the stated pass makes
@@ -86,8 +86,8 @@ def main (args : List String) : IO UInt32 := do
   let c ← IO.ofExcept (OneStage.commitmentOf (← IO.FS.readBinFile commitment))
   let some ms := p.members
     | do IO.eprintln "the parameters name no members: the case is not of the per-member form"; return 2
-  let some m := ms[0]?
-    | do IO.eprintln "the parameters' members are none"; return 2
+  if ms.isEmpty then
+    IO.eprintln "the parameters' members are none"; return 2
   let roots ← IO.ofExcept (rootsOf ms c.record)
   let prog ← IO.ofExcept (Program.parse p.own.program)
   let rootNodes := match prog.prog.defs[prog.prog.root]? with
@@ -98,19 +98,16 @@ def main (args : List String) : IO UInt32 := do
   let files ← paths.mapM fun (f : String) => IO.FS.readBinFile f
   let bs := Core.Blobs.ofArray files
   let slice := fun (x : Member) => x.slice c.record roots
-  let same := ms.toList.filter (·.own.circuit == m.own.circuit)
-  let circuit := match bs.get m.own.circuit "circuit" with
-    | .ok b => b.size
-    | .error _ => 0
-  let head := Json.mkObj [("fn", Json.str "case"), ("members", toJson ms.size), ("circuit_members", toJson same.length),
+  let same := ms.toList
+  let head := Json.mkObj [("fn", Json.str "case"), ("members", toJson ms.size),
     ("blobs", toJson files.size), ("blob_bytes", toJson (files.foldl (· + ·.size) 0)),
-    ("circuit_bytes", toJson circuit), ("program_bytes", toJson p.own.program.size), ("root_nodes", toJson rootNodes),
+    ("program_bytes", toJson p.own.program.size), ("root_nodes", toJson rootNodes),
     ("strata", toJson strata), ("strata_us", toJson strataUs)]
   IO.println s!"PHASE {head.compress}"
   let mut bad := false
   for size in sizes do
     if size.toNat?.any (· > same.length) then
-      IO.eprintln s!"{size} members asked of a circuit file the case holds {same.length} members of"
+      IO.eprintln s!"{size} members asked of a case of {same.length} members"
       return 2
     let handed := match size.toNat? with
       | some n => same.take n
@@ -128,7 +125,7 @@ def main (args : List String) : IO UInt32 := do
       bad := bad || !held
       let hwm ← statusKb "VmHWM:"
       let row := Json.mkObj [("fn", Json.str name), ("members", toJson n),
-        ("circuit_files", toJson (handed.map (·.own.circuit)).eraseDups.length), ("us", toJson us),
+        ("us", toJson us),
         ("hwm_mb", toJson (hwm / 1024)), ("held", Json.bool held),
         ("result_sha512", Json.str (Flock.hexOf (Flock.Sha512.hash text.toUTF8)))]
       IO.println s!"PHASE {row.compress}"

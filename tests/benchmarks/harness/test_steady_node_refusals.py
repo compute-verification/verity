@@ -27,7 +27,6 @@ from verity_bench import settings
 from verity_bench import steady as S
 from verity_bench import steady_cards as C
 from verity_bench import steady_node as N
-from verity_bench import steady_plan as P
 from verity_bench import steady_spec as SP
 from verity_bench.tool import STEADY_POINT
 
@@ -55,16 +54,16 @@ def test_the_node_side_refuses_a_tree_whose_point_is_not_the_one_it_was_launched
     node = Node(tmp_path, monkeypatch)
     with pytest.raises(ValueError, match=f"point identity changed: this tree gives {POINT} {node.identity}"):
         node.point(identity="0" * 64)
-    (node.root / "verity/protocols/proofs/flock/prover/src/main.rs").write_text("fn main() { /* edited on the node */ }\n")
+    (node.root / "verity/protocols/proof/flock/prover/src/main.rs").write_text("fn main() { /* edited on the node */ }\n")
     with pytest.raises(ValueError, match="a file its time depends on differs from the launching checkout's"):
         node.point()
-    (node.root / "verity/protocols/proofs/flock/prover/src/main.rs").write_text(FILES["verity/protocols/proofs/flock/prover/src/main.rs"])
+    (node.root / "verity/protocols/proof/flock/prover/src/main.rs").write_text(FILES["verity/protocols/proof/flock/prover/src/main.rs"])
     # a shipped tree is no checkout: a file a build left under the closure's directories counts, and the refusal says so
-    (left := node.root / "verity/protocols/proofs/flock/prover/target/built.o").parent.mkdir()
+    (left := node.root / "verity/protocols/proof/flock/prover/target/built.o").parent.mkdir()
     left.write_text("object\n")
     with pytest.raises(ValueError) as shipped:
         node.point()
-    assert ("This tree is no checkout, so every file under verity/protocols/proofs/flock/prover, verity/protocols/proofs/flock/prover/pod "
+    assert ("This tree is no checkout, so every file under verity/protocols/proof/flock/prover, verity/protocols/proof/flock/prover/pod "
             "counts: one the launching checkout doesn't track (what a build or a setup left there) changes the identity "
             "too. Its closure here is ") in str(shipped.value)
     assert re.search(r"Its closure here is \d+ files \(SHA-256 [0-9a-f]{16}\.\.\.\); `plan` prints the launching "
@@ -73,13 +72,13 @@ def test_the_node_side_refuses_a_tree_whose_point_is_not_the_one_it_was_launched
     left.unlink()
     git(node.root)
     left.write_text("object\n")
-    (node.root / "verity/protocols/proofs/flock/prover/src/main.rs").write_text("fn main() { /* edited in the checkout */ }\n")
+    (node.root / "verity/protocols/proof/flock/prover/src/main.rs").write_text("fn main() { /* edited in the checkout */ }\n")
     with pytest.raises(ValueError) as checkout:
         node.point()
     assert "differs from the launching checkout's. Its closure here is " in str(checkout.value)
     assert "no checkout" not in str(checkout.value)
     monkeypatch.setenv("RUST_MIN_STACK", "1")
-    (node.root / "verity/protocols/proofs/flock/prover/src/main.rs").write_text(FILES["verity/protocols/proofs/flock/prover/src/main.rs"])
+    (node.root / "verity/protocols/proof/flock/prover/src/main.rs").write_text(FILES["verity/protocols/proof/flock/prover/src/main.rs"])
     with pytest.raises(ValueError, match=r"differs from spec 'steady''s env and setup in \['RUST_MIN_STACK'\]"):
         node.point()
     assert node.ran == [] and not (node.run_dir / "result.json").exists()
@@ -355,20 +354,3 @@ def test_the_node_side_reads_the_environment_through_declared_settings_and_names
     assert all(any(path.startswith(pattern.removesuffix("/**")) for pattern in STEADY_POINT.closure) for path in SP.CLOSURE)
     assert all(settings.REGISTRY.known(name) for name in (
         "VERITY_BENCH_STEADY_BIN", "VERITY_BENCH_STEADY_PY", "VERITY_BENCH_STEADY_SCRATCH", "CUDA_VISIBLE_DEVICES"))
-
-
-def test_the_readme_states_a_steady_state_spec_as_the_code_keeps_it():
-    readme = (Path(__file__).resolve().parents[3] / "benchmarks" / "harness" / "README.md").read_text()
-    section = readme[readme.index("## A steady-state spec"):readme.index("## Settings")]
-    for name in (SP.SCHEMA, "verity_bench.tool:STEADY_POINT", "VERITY_BENCH_STEADY_BIN", "VERITY_BENCH_STEADY_PY",
-                 "benchmarks/harness/steady_point.sh", SP.STAGER, SP.TIMER, "steady_plan.completed_rows", P.DERIVATION, SP.VERSIONS,
-                 *SP.CLOSURE[:2], "out/verdict.json", "out/point.json"):
-        assert f"`{name}`" in section, name
-    assert (N.VERDICT_FILE, N.POINT_FILE) == ("out/verdict.json", "out/point.json")
-    assert (f"exits 0 for a passed point, {SP.NOT_PASSED} for a point that was timed and didn't pass, {N.REFUSED} where "
-            f"nothing was timed, and {N.STOPPED} where\nTERM or INT ended it") in section
-    assert "`steady_plan.completed_rows`, `completed`" in section and "runs and arts" in section
-    assert all(f"`{name}`" in section for name in ("kit.lease", "kit.host_stamp", "kit.Writer", "jobs.dispatch"))
-    spec_keys = {"workload", "card", "cores", "sessions", "ahead", "driver", "cuda_toolkit", "setup", "[env]", "[admission]",
-                 "max_minutes", "mem_gb", "[[row]]", "type", "n", "pin", "provers", "warm", "period", "staged"}
-    assert all(f"`{key}`" in section for key in spec_keys), [key for key in spec_keys if f"`{key}`" not in section]

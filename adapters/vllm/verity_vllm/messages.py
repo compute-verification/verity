@@ -8,8 +8,7 @@ before the build's answer, and any other before serving begins, at the first ste
 requests, tokens and KV blocks into the circuit's words.
 
 On disk, by the types the proof layer and each declared scheme declare (`types`, `Scheme.messages`): a body is checked against its declared
-type as it is written and as it is read, and its bytes are left as they are. `tests/workload_messages.toml` lists each
-message's writers and readers.
+type as it is written and as it is read, and its bytes are left as they are.
 """
 
 from __future__ import annotations
@@ -26,9 +25,9 @@ from typing import Any, NamedTuple
 
 from verity import hooks as H
 from verity.channel import Message, MessageTypes, Refused
-from verity.protocols.proofs.spot.prover import workload as spot
-from verity.protocols.compose import schemes as declarations
-from verity.protocols.resource_accounting import scheme as schemes
+from verity.protocols.proof.spot.prover import workload as spot
+from verity.protocols.run import schemes as declarations
+from verity.protocols.accounting import scheme as schemes
 from verity_vllm import settings
 
 __all__ = ["Exchange", "append", "attach_listed", "body", "build", "close", "current", "declaring", "line", "lines", "listed_refusals",
@@ -86,7 +85,7 @@ class Exchange:
     def attach(self, scheme: schemes.Scheme, given: Mapping[str, Any] | None = None, *,
                gate: Callable[..., Mapping[str, Any]] | None = None, private: str | Path | None = None,
                **launcher: Any) -> Any:
-        """Attach ``scheme`` with ``ctx`` (`verity.protocols.resource_accounting.scheme`) ``{"settings": its settings,
+        """Attach ``scheme`` with ``ctx`` (`verity.protocols.accounting.scheme`) ``{"settings": its settings,
         ``given`` over its defaults; "build": this build's key; "gate": ``gate``; "private"; **launcher}``: its
         ``attach(self, ctx)``, then each of its ``requests(ctx)`` its attach did not file; returns what attach returns.
         ``gate`` is the auditor device's challenger gate in its own words, ``gate(*words) -> answer``
@@ -289,7 +288,7 @@ class Exchange:
 
 def providing(role: str) -> schemes.Scheme:
     """The one declared scheme that provides ``role`` (`Scheme.provides`), the only one imported; `LookupError` naming
-    those that do otherwise (`compose.schemes.named`)."""
+    those that do otherwise (`run.schemes.named`)."""
     return declarations.get(declarations.named("provides", role))
 
 
@@ -304,7 +303,7 @@ def option(entry: str | None) -> schemes.Scheme | None:
 
 def declaring(port: str) -> schemes.Scheme:
     """The one declared scheme with a port named ``port`` (`Scheme.ports`), the only one imported; `LookupError` naming
-    those that have otherwise (`compose.schemes.named`)."""
+    those that have otherwise (`run.schemes.named`)."""
     return declarations.get(declarations.named("ports", port))
 
 
@@ -430,9 +429,9 @@ _TYPES: tuple[int, MessageTypes] | None = None
 
 
 def types() -> MessageTypes:
-    """The message types on disk: the proof layer's, useful work's workload list (H1's, which no scheme declares), and
+    """The message types on disk: the proof layer's, useful work's workload list (which no scheme declares), and
     those of every scheme registered so far (`Scheme.messages`); `body` loads every declaration only for a type none
-    of them declares (`compose.schemes.workload_messages`)."""
+    of them declares (`run.schemes.workload_messages`)."""
     global _TYPES
     registry = schemes.SCHEMES
     if _TYPES is None or _TYPES[0] != len(registry):

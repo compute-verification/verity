@@ -82,7 +82,7 @@ theorem rows_localEval (tr : (circuitOf D hU n).Trace) (u : Fin n) {j : ℕ} (hj
   · simp only [FlockVBridge.copyVal, FlockVBridge.colVal_fin]
     exact hone
   · simp only [FlockVBridge.copyVal, FlockVBridge.colVal_fin]
-    exact (Verity.Partition.localEval_ofAudit_bit (keyPartition D hU n) tr u _).symm
+    exact (Verity.Partition.localEval_bool_bit (keyPartition D hU n) tr u _).symm
 
 /-- Unit `u`'s constant gate is the gate the program wires its constant to (`Const.Prog.oneAt`). -/
 theorem constGate_eq_oneAt (u : Fin n) :
@@ -132,11 +132,11 @@ theorem constGate_mem_io (u : Fin n) (hupv : 0 < D.unroll.upv) : constGate D hU 
     · exact List.mem_singleton.2 rfl
     · rename_i h
       exact absurd (Nat.zero_mod _) h
-  have hread : ∀ g : Fin (keyCircuit D hU n).N, g = constGate D hU n u → g ∈ (coreOp ((keyCircuit D hU n).op
-      ((unitInst D hU n u).wire ((Placed.circuitRows D.unroll hU).comp ⟨0, h0⟩)))).args.toFinset := by
+  have hread : ∀ g : Fin (keyCircuit D hU n).N, g = constGate D hU n u → g ∈ ((keyCircuit D hU n).op
+      ((unitInst D hU n u).wire ((Placed.circuitRows D.unroll hU).comp ⟨0, h0⟩))).args.toFinset := by
     intro g hg
     rw [(unitInst D hU n u).op ⟨0, h0⟩]
-    simp only [coreOp, Verity.Boolean.Op.args, List.mem_toFinset, List.mem_append, List.mem_map]
+    simp only [Verity.Boolean.Op.args, List.mem_toFinset, List.mem_append, List.mem_map]
     exact Or.inl ⟨_, hrow, hg.symm⟩
   rw [Verity.Partition.io, Finset.mem_filter]
   exact ⟨hcom, Or.inr ⟨_, (unitInst D hU n u).mem ⟨0, h0⟩, hread _ rfl⟩⟩

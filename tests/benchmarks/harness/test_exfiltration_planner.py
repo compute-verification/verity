@@ -125,8 +125,7 @@ def test_a_family_priced_several_ways_is_split_by_its_ways_and_only_an_own_row_i
         "family": (0.25, {"B_v1": 0.25})}
     point = E.at_share("world year", "r1", own, 0.10, ("r2", plan))
     marks = {i["input"]: i["mark"] for i in E._inputs({"world year": point}, ["r1"], {"inputs": {}},
-                                                       {"at_zero_in": [], "GB": None}, 0.10, 0.003, E.ROW,
-                                                       E.served_share(None))}
+                                                       {"at_zero_in": [], "GB": None}, 0.10, 0.003, E.ROW)}
     assert {k: v for k, v in marks.items() if k.startswith("proving priced")} == {
         "proving priced steady": "measured", "proving priced modeled": "modeled", "proving priced family": "modeled"}
 

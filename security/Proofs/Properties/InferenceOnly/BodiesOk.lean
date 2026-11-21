@@ -1,7 +1,8 @@
 module
 
-public import Proofs.Properties.InferenceOnly.BodiesOk.Decoded
+public import Proofs.Properties.Flock.Decoder.Decoded
 public import Proofs.Properties.InferenceOnly.BodiesOk.Order
+public import Proofs.Properties.InferenceOnly.Resolve
 import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
 import Mathlib.Data.NNRat.Floor
 import Mathlib.Tactic.Echelon.Zsqrtd
@@ -86,6 +87,36 @@ theorem body_ok (P : Prog) (hok : ∀ i < P.defs.size, DefOk P.defs i P.defs[i]!
     exact ⟨hp1, fun h => ⟨hord h, (hp2 h).2⟩⟩
   · exact hret t ht
 
+/-- A composite of a decoded Program whose nodes read only earlier nodes (`BodyFwd`) is `BodyOk`. -/
+theorem body_ok_fwd (P : Prog) (hok : ∀ i < P.defs.size, DefOk P.defs i P.defs[i]!)
+    (hfw : ∀ i < P.defs.size, BodyFwd (P.defs[i]!).body) (d : ℕ) : Resolve.BodyOk P d := by
+  by_cases hd : d < P.defs.size
+  swap
+  · have e : P.defs[d]! = default := getElem!_neg P.defs d hd
+    refine ⟨fun k hk => ?_, fun t ht => ?_⟩
+    · rw [e] at hk; exact absurd hk (Nat.not_lt_zero _)
+    · rw [e] at ht; exact absurd ht (Nat.not_lt_zero _)
+  obtain ⟨-, hnodes, hret, -⟩ := hok d hd
+  refine ⟨fun k hk => ?_, fun t ht => ?_⟩
+  · obtain ⟨hfn, hnd, hargs⟩ := hnodes k hk
+    have hfs : ((P.defs[d]!).body.nodes[k]!).fn < P.defs.size := by omega
+    have hc : CalleeOk P.defs[((P.defs[d]!).body.nodes[k]!).fn]! := (hok _ hfs).1
+    refine ⟨hfs, fun i t ht => ?_, up_ok _ _ hc hnd, down_ok _ _ hc hnd, fun _ => op_ok _ _ hnd⟩
+    by_cases hi : i < ((P.defs[d]!).body.nodes[k]!).args.size
+    swap
+    · rw [getElem!_neg _ i hi] at ht; exact absurd ht (Nat.not_lt_zero _)
+    obtain ⟨hp1, hp2⟩ := (hargs i hi).2 t ht
+    exact ⟨hp1, fun h => ⟨hfw d hd k hk i hi t ht h, (hp2 h).2⟩⟩
+  · exact hret t ht
+
+/-- **Every body of a decoded Program is `BodyOk`**, the root without recut: the decoder refuses a forward reference
+(`decode_fwd`). -/
+theorem decoded_bodyOk (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P)
+    (hr : (P.defs[P.root]!).body.recut = #[] := by assumption) (d : ℕ) : Resolve.BodyOk P d := by
+  obtain ⟨st, hP, hinv, -⟩ := decode_spec bytes P h hr
+  have hok : ∀ i < P.defs.size, DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1
+  exact body_ok_fwd P hok (decode_fwd bytes P h hr) d
+
 end InferenceOnlyVerifier.Properties.SecurityProofs.BodiesOk
 
 namespace InferenceOnlyVerifier.Properties.SecurityProofs.Resolve
@@ -93,7 +124,8 @@ open Flock.Program BodiesOk
 
 /-- **Every body resolution reaches holds its references in range.** -/
 theorem bodiesOk : BodiesOk := by
-  intro bytes P hdec hov _ _ _ _ sc hg
+  intro bytes P hdec hov _ _ hwk _ sc hg
+  have hrc := Walk.walkable_recut P hwk
   obtain ⟨st, hP, hinv, hroot⟩ := decode_spec bytes P hdec
   obtain ⟨S, hS0, hS⟩ := order_closed P hov
   have hok : ∀ i < P.defs.size, DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1

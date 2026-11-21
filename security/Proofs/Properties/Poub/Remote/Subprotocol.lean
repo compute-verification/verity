@@ -11,7 +11,7 @@ that ended accepted with a record, publishing `certify` of it at the session's p
 record's at the node, at the node's windows a sample; `plays_iff_publishes` reads it as `Publishes` at some public
 outputs, and `publishes_publishedQBytes_iff` reads `PublishedQBytes`, which spells the acceptance out, as its statement
 at `Publishes`. `publishedEps` reads `certify`'s `eps` at the node's parameters
-and g: `ratio` of a nonnegative rational is that rational (`ratio_val`), and `openingsCoins` is `Node.samples`.
+and g: `ratio` of a nonnegative rational is that rational (`ratio_val`), and `draws` is `Node.samples`.
 -/
 
 @[expose] public section
@@ -116,7 +116,7 @@ theorem publishedEps : PublishedEps := by
     intro node hp hg hδ
     subst hp hg
     dsimp only
-    have hd : Poub.Protocol.openingsCoins node.params node.groupsPerCoin = node.samples := rfl
+    have hd : Poub.Protocol.draws node.params node.groupsPerCoin = node.samples := rfl
     rw [ratio_val (eps_nonneg _ _), Finset.sum_const, Finset.card_univ, Fintype.card_fin, smul_eq_mul, hδ]
     unfold Poub.Protocol.eps
     rw [hd]

@@ -131,12 +131,17 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, NamedTuple
 
-from verity.protocols.resource_accounting.network.prover import ingress_scan as IS
-from verity.protocols.resource_accounting.network.prover import stop_verdicts as SV
-from verity.protocols.resource_accounting.network.verifier import class_charge as CC
-from verity.protocols.resource_accounting.network.verifier import network_attester as W
+from verity.protocols.accounting.network.prover import ingress_scan as IS
+from verity.protocols.accounting.network.prover import stop_verdicts as SV
+from verity.protocols.accounting.network.verifier import class_charge as CC
+from verity.protocols.accounting.network.verifier import network_attester as W
 from verity import protocol
-from verity.protocols.resource_accounting.network.verifier.scan_answer import JITTER_BOUND
+
+#: the jitter bound D_j that K is charged at (`NetTiming.JitterBounded`, one bound over every step): a statement of k
+#: steps, one a bucket, pays ⌈log2 D_j^k⌉ = k bits. Each bucket leaves at a time fixed before it is made
+#: (`network_attester.NetworkAttester(paced=…)`), yet the host's state after the server's writes for the next
+#: bucket still moves a bucket's arrival offset, so J isn't met at D_j = 1
+JITTER_BOUND = 2
 
 #: the monitoring periods' seconds, by name
 PERIODS: dict[str, int] = dict(protocol.MONITORING_PERIODS)
@@ -163,7 +168,7 @@ WORKLOAD = "benchmarks/spot_figures/cards/workload.glm-5.3.json"
 #: server's line at its last step, at the 128k serving plan's request
 PLANNER, PLAN_CASE = "benchmarks/spot_figures/breakeven", "P5+poolwin600"
 #: the served model, the slowdown calculator's world fleet and the census's GPU peak, the H200's dense FP8 rate
-MODEL, WORLD, PEAK = "GLM-5.3", "world-h200", "h100-sxm5-80gb/e4m3"
+MODEL, WORLD, PEAK, READING = "GLM-5.3", "world-h200", "h100-sxm-80gb-sm/e4m3", "datasheet"
 #: a GB's bits, and FP4's bits a parameter
 GB, FP4 = 8 * 10 ** 9, 4
 
@@ -533,7 +538,7 @@ RESPONSE_IDS, ID_BITS, BUCKETS = 4096, 18, 1280
 #: the scan's slot stride in buckets, the scan class's default
 EVERY: int = IS.Class.__dataclass_fields__["EVERY"].default
 #: the lengths rows' cost runner, whose default schedule (`cost`'s) the count's inputs are read at
-COST_RUNNER = "verity/protocols/resource_accounting/network/attester/connection_rows_run.py"
+COST_RUNNER = "verity/protocols/accounting/network/attester/connection_rows_run.py"
 #: that schedule: its content classes, its delay D in buckets, which its ingress buckets equal, its lanes and its
 #: execution phase's buckets. The count is at the first two where a caller names none; the last two are the schedule
 #: `render` prints the count at beside the command's own
@@ -724,7 +729,7 @@ def inputs(*, response_ids: int = RESPONSE_IDS, id_bits: int = ID_BITS, buckets:
         raise ValueError(f"the request counted is one of {', '.join(REQUESTS)}, not {requests!r}")
     counted = "given" if world_requests is not None else requests
     census, dc = _reference("adversary.json"), _reference("deployments.json")
-    peak = next(e for e in _json(HARDWARE) if e["id"] == PEAK)
+    peak = next(r for e in _json(HARDWARE) if e["id"] == PEAK for r in e["readings"] if r["name"] == READING)
     fleet, card = _toml(SLOWDOWN)["fleet"][WORLD], _json(WORKLOAD)
     count, mfu = fleet["count"], fleet["mfu_serve"]
     gpus = _toml(SLOWDOWN_HARDWARE)["location"][fleet["location"]]["devices"]
@@ -743,7 +748,7 @@ def inputs(*, response_ids: int = RESPONSE_IDS, id_bits: int = ID_BITS, buckets:
         "mfu_serve": Input(mfu["value"], "", _MARK[mfu["status"]],
                            f"{SLOWDOWN} fleet.{WORLD}.mfu_serve, {mfu['low']} to {mfu['high']}: {mfu['source']}"),
         "peak_flops": Input(peak["flop_per_second"], "FLOP/s", "assumed",
-                            f"{HARDWARE} {PEAK}.flop_per_second: the data sheet's dense FP8 peak, the H200's too "
+                            f"{HARDWARE} {PEAK}, reading {READING}: the data sheet's dense FP8 peak, the H200's too "
                             "(one die, one clock)"),
         "request_tokens": Input(census["tokens_per_request"], "token", "modeled",
                                 f"{ADVERSARY} {census['id']}.tokens_per_request"),

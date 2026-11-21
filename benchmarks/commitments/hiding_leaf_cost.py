@@ -22,7 +22,7 @@ rounds of 7 additions, Ch and Maj, 48 schedule words of 3 additions and 8 feed-f
 80 rounds, 64 schedule words and 8 feed-forward additions (w = 64); a BLAKE3 compression is 7 rounds of 8 G of 6 additions.  A
 public prefix block is a constant midstate; every other compression is private.  hm96's XORs are those of ``b = x XOR M y`` for the
 pinned key; the hashes' own XORs are not counted.  Host times run the integration's paths on one core:
-``verity_vllm.commit.scheme.pos_leaf`` (under ``hashlib.sha512`` for SHA-512), ``verity.commitments.periods.hiding.HidingLeaves``
+``pos_leaf`` (the retired vllm-v1 serving leaf, under ``hashlib.sha512`` for SHA-512), ``verity.commitments.periods.hiding.HidingLeaves``
 (salts from the OS generator included) and the ``blake3`` package; the median of ``--reps``.
 
 Writes ``hiding_leaf_cost.json`` and ``result.json`` (``research/result/v0.1``) to ``$RESEARCH_RUN_DIR`` or ``--out`` when either is
@@ -42,10 +42,9 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from verity.protocols.proofs.spot.prover.optimize import SHA512_ANDS
-from verity.commitments import hm96
+from verity.protocols.proof.spot.prover.optimize import SHA512_ANDS
+from verity.commitments import domains, hm96
 from verity.commitments.rowleaf import ROLE_X, blake3_row_key, sha256_row_prefix, sha512_row_prefix
-from verity_vllm.commit import scheme
 from verity.commitments.periods.hiding import HidingLeaves
 
 try:
@@ -57,8 +56,17 @@ RULES = ("blake3-keyed/row/v2", "vllm-v1/pos-leaf", "hm96/pos-leaf", "hm96/sha25
          "hm96-sha512/pos-leaf", "hm96-sha512/sha512-row", "salted-blake3")
 DEFAULT_ROW_BYTES = (4, 256, 1536, 3072, 4096, 8192)
 RESULT_SCHEMA = "research/result/v0.1"
-POS_LEAF_PREFIX = len(scheme.POS_LEAF_TAG) + 8
+POS_LEAF_TAG = domains.POS_LEAF.encode()
+POS_LEAF_PREFIX = len(POS_LEAF_TAG) + 8
 SALTED_BLAKE3_SALT = 32
+
+
+def pos_leaf(value: bytes | memoryview, new: Callable[..., Any] = hashlib.sha256) -> bytes:
+    """``H(POS_LEAF_TAG || u64be(len(value)) || value)``; a memoryview must be byte-cast."""
+    h = new(POS_LEAF_TAG)
+    h.update(len(value).to_bytes(8, "big"))
+    h.update(value)
+    return h.digest()
 
 ADD = 31
 SHA256_ANDS = 64 * (7 * ADD + 32 + 32) + 48 * 3 * ADD + 8 * ADD
@@ -136,10 +144,10 @@ def measure(r: int, n: int, reps: int) -> tuple[dict[str, float | None], bool]:
     row512_prefix = hashlib.sha512(sha512_row_prefix(ROLE_X, 8, max(r, 1)))
 
     def pos() -> list[bytes]:
-        return [scheme.pos_leaf(v) for v in rows]
+        return [pos_leaf(v) for v in rows]
 
     def pos512() -> list[bytes]:
-        return [scheme.pos_leaf(v, hashlib.sha512) for v in rows]
+        return [pos_leaf(v, hashlib.sha512) for v in rows]
 
     def prefixed(prefix) -> list[bytes]:
         out = []

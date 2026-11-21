@@ -1,4 +1,4 @@
-"""Flock's committed synthetic sets (``tests/verity/protocols/proofs/flock/prover/fixtures/synthetic_sets``) are what the generator writes for
+"""Flock's committed synthetic sets (``tests/verity/protocols/proof/flock/prover/fixtures/synthetic_sets``) are what the generator writes for
 their recipes (``verity_numerical.bench.fixture_sets``)."""
 from __future__ import annotations
 

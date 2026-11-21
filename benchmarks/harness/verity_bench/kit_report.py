@@ -1,4 +1,4 @@
-"""The core benchmarks' interface as code a command calls (`benchmarks/README.md`'s "The core benchmarks' interface"),
+"""The core benchmarks' interface as code a command calls (`tests/test_metrics_registry.py`'s docstring),
 re-exported by `kit`:
 
 - `record_dir(arg)`: what a command takes, a run's record as a directory, read with nothing of ours; a run id is fetched
@@ -28,7 +28,7 @@ from verity_bench import settings
 
 #: the version of each metric whose `metrics.toml` row gives one above 1, by id; every other name's is 1. A literal: the
 #: registry's test (`tests/test_metrics_registry.py`) reads it without importing the kit and holds it equal to the rows
-VERSIONS: dict[str, int] = {}
+VERSIONS: dict[str, int] = {"benchmarks/proof-layer-build-seconds": 2}
 #: what each metric whose row gives `needs` needs its measurements to name, by id, as the row lists it: `"parameter"`,
 #: the security parameters its value depends on (`parameters`), and `"calibration"`, the calibration numbers it uses
 #: (`calibration`). A literal the registry's test holds equal to the rows, as `VERSIONS`

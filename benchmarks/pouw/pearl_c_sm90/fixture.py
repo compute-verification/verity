@@ -2,14 +2,14 @@
 pearl_c_sm90.cu's kernels write, in its row-major layout (every operand in natural order along k), for forming v1 on
 `pearl_c_device.H100` (G = 4: `pearl-c-h100-v1-h3`), hashing format -h3 (SHA-512 throughout); the unpromoted plain
 baseline (gemm_fast's y_fast) on the H100 record without promotion (`H100_UNPROMOTED`, no scheme of its own).  Forming,
-lines and hashes come from `verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c` on the device record; the products over every
+lines and hashes come from `verity.protocols.accounting.compute.pouw.prover.schemes.pearl_c` on the device record; the products over every
 cell are batched in numpy (the chains window by window, the peel with `verity.circuits.kernels.tc.group_sum_total_batch` on the
 record's peel step), and one whole 64 x 64 tile is recomputed by the scheme (`encode`, `checked`, `digest`) and must
 agree.  run.py compares the device's buffers with these bytes before it times anything.
 
   uv run python benchmarks/pouw/pearl_c_sm90/fixture.py OUT_DIR [m n k]     (default 256 384 1024; m, n multiples of 128)
 
-The instance is a one-unit epoch as `verity.protocols.resource_accounting.compute.pouw.verifier.audit` starts it: B's `audit.HM96` row tree, each
+The instance is a one-unit epoch as `verity.protocols.accounting.compute.pouw.verifier.audit` starts it: B's `audit.HM96` row tree, each
 leaf under its salt in the fixture's fixed salts (`salts_of`; check.json's `salts` names each tree's file), the salt from the salt coin of the gate's test challenger (`test_challenger`,
 `Epoch.start`) opened after B's root, A's HM96 row tree, seed_A from A's committed root (so E_A's padding line key is an
 output the device derives, `line_a`) and each row's seed and line key from its SHA-512 row digest.  Writes
@@ -34,7 +34,7 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-sys.path.insert(0, str(ROOT / "tests" / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "verifier"))
+sys.path.insert(0, str(ROOT / "tests" / "verity" / "protocols" / "accounting" / "compute" / "pouw" / "verifier"))
 
 
 def _sm120_fixture():
@@ -52,14 +52,14 @@ F120 = _sm120_fixture()
 from pearl_c_sm120_fixture import (Out, adopted, bf16_bytes, crosscheck, epoch_of, form, glue_y,  # noqa: E402
                                    padded, pa_rows, pb_rows, peel_np, plain, product, recip, tile_leaves, tree_bytes)
 import pearl_c_vectors as CV  # noqa: E402
-from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (HM96_SALT, ROW_SCHEMA, TILE_SCHEMA,  # noqa: E402
+from verity.protocols.accounting.compute.pouw.verifier.audit import (HM96_SALT, ROW_SCHEMA, TILE_SCHEMA,  # noqa: E402
                                                          activation_binding, hm96_kernel_constants,
                                                          rows_domain, transcript_domain)
-from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger  # noqa: E402
-from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Context, Matmul, Shape  # noqa: E402
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C  # noqa: E402
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c import keys_of, unit_block  # noqa: E402, F401 - the scheme's unit keys, re-exported
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_device import H100  # noqa: E402
+from verity.protocols.accounting.compute.pouw.verifier.coins import Challenger  # noqa: E402
+from verity.protocols.accounting.compute.pouw.verifier.protocol import Context, Matmul, Shape  # noqa: E402
+from verity.protocols.accounting.compute.pouw.prover.schemes import pearl_c as C  # noqa: E402
+from verity.protocols.accounting.compute.pouw.prover.schemes.pearl_c import keys_of, unit_block  # noqa: E402, F401 - the scheme's unit keys, re-exported
+from verity.protocols.accounting.compute.pouw.prover.schemes.pearl_c_device import H100  # noqa: E402
 
 VARIANTS = (H100,)
 #: the plain baseline unpromoted (gemm_fast): one accumulator over all of k on the H100's atom

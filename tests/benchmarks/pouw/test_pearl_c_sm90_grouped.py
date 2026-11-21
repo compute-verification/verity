@@ -1,4 +1,4 @@
-"""Pearl-C's grouped call on sm_90a off the card (verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90/grouped.py, and the vLLM call over it,
+"""Pearl-C's grouped call on sm_90a off the card (verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm90/grouped.py, and the vLLM call over it,
 `pouw_pearl_c_grouped.gemm_grouped`), on a recording stand-in for the device: each expert's rows cut into units of at most
 pd_commit's 256 rows; each unit's record in the call's table is the launch `run.Pipeline` makes for that unit's rows called
 alone, at the unit's offsets; a call is eight launches whatever its experts; and the vLLM call's matmuls, tiles, keys, screen
@@ -6,7 +6,6 @@ and retained records are those of each unit called alone through `PearlCDeviceRu
 from __future__ import annotations
 
 import hashlib
-import json
 import struct
 
 import numpy as np
@@ -15,15 +14,16 @@ from conftest import load
 
 torch = pytest.importorskip("torch")
 
-from verity.protocols.resource_accounting.compute.pouw.verifier.audit import HM96_SALT, weights_root  # noqa: E402
-from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger  # noqa: E402
-from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul, Shape  # noqa: E402
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD  # noqa: E402
-from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes  # noqa: E402
+from verity.protocols.accounting.compute.pouw.verifier.audit import HM96_SALT, weights_root  # noqa: E402
+from verity.protocols.accounting.compute.pouw.verifier.coins import Challenger  # noqa: E402
+from verity.protocols.accounting.compute.pouw.verifier.protocol import Matmul, Shape  # noqa: E402
+from verity.protocols.accounting.compute.pouw.prover.serving import pearl_c as PPD  # noqa: E402
+from verity.protocols.accounting.compute.pouw.prover import schemes as pouw_schemes  # noqa: E402
 from verity_torch.pouw.pearl_c import run_device as PPDR
 from verity_torch.pouw.pearl_c import grouped as PG  # noqa: E402
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY  # noqa: E402
+from verity.protocols.accounting.compute.pouw.prover.serving.pearl_c import served_y as SY  # noqa: E402
 from verity_torch.pouw.pearl_c.host import joined  # noqa: E402
+from verity_torch.pouw.pearl_c.passes import ROUND_CALLS  # noqa: E402
 
 SCHEME = "pearl-c-h100-v1-h3"
 STEPS = ["pd_commit_gm_851", "stats_s5", "eprime", "form_s5_g", "gemm_words_g_d", "pa", "gemm_pearlc_g_d", "pd_tiles_g_979"]
@@ -389,8 +389,8 @@ def test_each_calls_table_is_its_layouts_with_its_keys_leaves_and_pass_offsets(s
         if call == 2:
             run.end_pass()
         pos, tiles, flag_rows = len(run.cur.matmuls), run.cur.tiles, run.cur.flag_rows
-        index = run.cur.base + pos
-        assert index == call * len(us)
+        index = (call // 2) * ROUND_CALLS + pos         # its place: the pass's round, the call's position in it
+        assert pos == (call % 2) * len(us) and run.rounds() == (call + 1) // 2
         PG.gemm_grouped(run, ws, torch.randn(sum(counts), k).to(torch.bfloat16), counts)
         assert [u.index for u in run.cur.matmuls[pos:]] == list(range(index, index + len(us)))
         g = run._groups[ws]
@@ -401,59 +401,6 @@ def test_each_calls_table_is_its_layouts_with_its_keys_leaves_and_pass_offsets(s
                 + struct.pack("<3q", run.nb * pos, 2 * flag_rows, 0))
         assert PPDR._bytes(g.sets[j]["meta"])[:len(want)] == want, call
     assert len(g.calls) == len(g.sets) == (2 if split else 1)
-
-
-def test_grouped_checks_pass_diff_counts_what_is_committed_not_the_schedule(tmp_path, monkeypatch):
-    """grouped_check's `_same` over a grouped call's retained pass under ``deferred-a`` and its units called alone under the
-    serial schedule: their manifests less what each pass's fresh salts make differ (`SALTED`) differ in the schedule they
-    ran under alone, which it doesn't count, and a changed A rows file it does.  The recording stand-in runs no GEMM, so a call alone's y is whatever
-    ``torch.empty`` left: zeroed, as the grouped call's buffers start."""
-    C = load("pearl_c_sm90/grouped_check.py")
-    empty = torch.empty
-    monkeypatch.setattr(torch, "empty", lambda *a, **kw: empty(*a, **kw).zero_())
-    ws, counts, n, k = (1, 3), [3, 20], 128, 1024
-    x = torch.randn(sum(counts), k).to(torch.bfloat16)
-    run, weights = device_run(4, n, k, tmp_path / "grouped", "deferred-a")
-    PG.gemm_grouped(run, ws, x, counts)
-    alone, _ = device_run(4, n, k, tmp_path / "alone")
-    for u in G.units(counts, n, R.PD_MAX_ROWS):
-        alone.gemm(ws[u.pos], x[u.src:u.src + u.m], weights[ws[u.pos]], None)
-    run.end_pass()
-    alone.end_pass()
-    a, b = (json.loads((tmp_path / d / "manifest.json").read_text()) for d in ("alone", "grouped"))
-    ua, ub = C._unsalted(a), C._unsalted(b)
-    assert [kk for kk in ua if ua[kk] != ub.get(kk)] == ["schedule"] and all("y" in u for u in b["matmuls"])
-    assert a["salts_t"] != b["salts_t"] and a["matmuls"][0]["salts"] != b["matmuls"][0]["salts"]
-    assert C._same(tmp_path / "alone", tmp_path / "grouped") == []
-    rows = tmp_path / "grouped" / b["matmuls"][1]["rows"]["path"]
-    rows.write_bytes(bytes(c ^ 1 for c in rows.read_bytes()))
-    assert C._same(tmp_path / "alone", tmp_path / "grouped") == ["matmul 1 rows"]
-
-
-def test_grouped_check_keeps_a_pass_s_roots_in_out_and_never_its_manifest(tmp_path, capsys):
-    """What grouped_check puts in --out of a retained pass is its roots, counts and its manifest's sha256: no file the pass
-    keeps (its salts, its rows) is named.  And --passes is refused where it is, holds or sits in --out."""
-    C = load("pearl_c_sm90/grouped_check.py")
-    d = tmp_path / "pass"
-    (d / "y").mkdir(parents=True)
-    for f in ("rows-0.bin", "rows-0.salts", "y/0.salts", "y/0.tree"):
-        (d / f).write_bytes(b"\xa5" * 192)
-    man = d / "manifest.json"
-    man.write_text(json.dumps({"scheme": "pearl-c-h100-v1-h3", "units": 2, "tiles": 4, "transcript_root": "ab" * 64,
-                               "run": "grouped-check", "matmuls": [
-                                   {"index": 0, "rows": {"path": "rows-0.bin"}, "salts": {"path": "rows-0.salts"},
-                                    "y": {"tree": "y/0.tree", "salts": "y/0.salts"}}]}))
-    got = C.public_of(man)
-    assert got["manifest_sha256"] == hashlib.sha256(man.read_bytes()).hexdigest() and got["transcript_root"]
-    assert set(got) <= {"manifest_sha256", *C.PUBLIC}
-    kept = {p.name for p in (tmp_path / "pass").rglob("*") if p.is_file() and p.name != "manifest.json"}
-    assert kept and not any(name in json.dumps(got) for name in kept)
-    out = tmp_path / "run" / "out"
-    for passes in (out, out / "passes", tmp_path / "run" / "out" / ".."):
-        with pytest.raises(SystemExit) as ex:
-            C.main(["--out", str(out), "--passes", str(passes)])
-        assert ex.value.code == 2 and "never go under --out" in capsys.readouterr().err
-    assert not out.exists()
 
 
 def test_the_vllm_call_runs_unsplit_on_a_cubin_without_pd_tree_g():

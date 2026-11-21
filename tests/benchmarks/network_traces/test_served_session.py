@@ -8,12 +8,8 @@ nothing when late; io writes the kept run's attested I/O 0600 in KEEP; endpoint 
 node's records in a private copy whose requests.jsonl is rebuilt from the users map and the attested I/O (moved out of
 the run dir first), publishes only its report, windows.jsonl and serve.json, and writes nothing from an endpoint that
 didn't serve the session's flags or when a published file would carry a request's values (a planted prompt length,
-seed or trace record); chain runs chain_record.sh's network attester path on the kept fetch with the endpoint's art or a dry
-rehearsal's records, and is refused without the leak guard; its sample on the gate's coins names the auditor's node as
-the coin link's peer by default, takes the served node and records it as the served node, and refuses it by
-VERITY_HOLD_PLACEMENT's name when that is 1. The gate's host is the challenger host's address, which the
-environment holds and site.json only names the variable of: a session, or a chain on the gate's coins, without it is
-refused by that name before anything is sent."""
+seed or trace record). The gate's host is the challenger host's address, which the environment holds and site.json only
+names the variable of: a session without it is refused by that name before anything is sent."""
 from __future__ import annotations
 
 import argparse
@@ -35,7 +31,7 @@ import pytest
 HERE = (Path(__file__).resolve().parents[3] / "benchmarks" / "network_traces")
 sys.path.insert(0, str(HERE))
 import served_session as SS  # noqa: E402
-from verity.protocols.resource_accounting.network.prover import scan_zk as sz  # noqa: E402
+from verity.protocols.accounting.network.prover import ingress_scan as IS  # noqa: E402
 
 RUN = "c20261028T120000Z-0000"
 #: the challenger host's address as the environment holds it, here a documentation address, and the gate `SS.GATE` is then
@@ -86,7 +82,7 @@ else:
 
 
 def test_the_plan_is_the_scan_rehearsal_at_the_scans_class_and_the_gate_takes_it():
-    assert (SS.KI, SS.KO) == (sz.CLASS.KI, sz.CLASS.KO) and SS.PROMPT_IDS == 256 < SS.KI
+    assert (SS.KI, SS.KO) == (IS.W63.KI, IS.W63.KO) and SS.PROMPT_IDS == 256 < SS.KI
     a = SS.parser().parse_args(["plan"])
     a.minutes = SS.A.network_attester_minutes(a.requests, a.height) + SS.MARGIN
     ps = SS.prompts(a.prompts, a.prompt_ids, a.vocab, b"seed")
@@ -100,12 +96,7 @@ def test_the_plan_is_the_scan_rehearsal_at_the_scans_class_and_the_gate_takes_it
     assert doc["endpoint"].endswith("--port 18782 --protocol ids --id-payload 503 --protocols-config "
                                     "'{\"network-attester\": {\"order\": \"release-order\"}}' "
                                     "--scheme rows-sha512 --seal --retain-exclude hidden_m1")
-    run = shlex.split(doc["runs"]["chain"])
-    assert "--store-read" in run[:run.index("--")] and run[run.index("--run-max") + 1] == "14400"
-    inner = SS.parser().parse_args(shlex.split(run[-1])[2:])
-    assert (inner.cmd, inner.endpoint, inner.eos_ids, inner.draw, inner.coins, str(inner.challenger_key)) == (
-        "chain", "ART", None, 8, "gate", "$RESEARCH_RUN_DIR/inputs/challenger-key.json")
-    assert all(w in doc["hand_start"] for w in ("--required-manifest ROW/manifest.json", "--disk-floor-gb 40",
+    assert all(w in doc["hand_start"] for w in ("--row-build ROW", "--disk-floor-gb 40",
                                                  "VERITY_STAGING_BOUNDED stays unset"))
     ep = shlex.split(doc["runs"]["endpoint"])
     inner = SS.parser().parse_args(shlex.split(ep[-1])[2:])
@@ -142,16 +133,14 @@ def test_the_plans_runs_are_on_the_nodes_it_is_given_and_its_commands_name_no_ot
                   b"[[1]]")
     runs = {name: shlex.split(cmd) for name, cmd in doc["runs"].items()}
     assert {name: run[run.index("--on") + 1] for name, run in runs.items()} == {
-        "session": SOME_AUDITOR, "io": SOME_AUDITOR, "endpoint": SOME_PEER, "chain": SOME_AUDITOR}
+        "session": SOME_AUDITOR, "io": SOME_AUDITOR, "endpoint": SOME_PEER}
     text = json.dumps(doc)
     assert text.count("--on ") == len(runs)
     # the session's own parser takes the command the plan writes for it, so the command carries no --auditor
     session = SS.parser().parse_args(shlex.split(runs["session"][-1])[2:])
     assert (session.cmd, session.peer) == ("session", SOME_PEER) and not hasattr(session, "auditor")
-    # the chain samples on the gate's coins where it runs
-    assert SS.parser().parse_args(shlex.split(runs["chain"][-1])[2:]).coin_peer == SOME_AUDITOR
-    # the two runs that ask the gate take the challenger host's address from the launcher's environment
-    assert {name for name, run in runs.items() if "VY_CHALLENGER_1_HOST=$VY_CHALLENGER_1_HOST" in run} == {"session", "chain"}
+    # the run that asks the gate takes the challenger host's address from the launcher's environment
+    assert {name for name, run in runs.items() if "VY_CHALLENGER_1_HOST=$VY_CHALLENGER_1_HOST" in run} == {"session"}
     assert CHALLENGER_HOST not in text
     # nothing of site.json is written into the plan but the lane, which is each run's --as
     assert not [k for k, v in SS.SITE.items() if k != "lane" and v in text]
@@ -179,8 +168,8 @@ def challenger_host(monkeypatch):
 
 def test_the_gates_host_is_the_address_the_environment_holds_and_unset_it_is_refused_by_name(tmp_path, monkeypatch, capsys):
     """site.json names the variable that holds the challenger host's address, never the address: `gate_at` fills it,
-    leaves a gate given whole and ``local`` as they are, and a session or a chain on the gate's coins with it unset is
-    refused, naming it, before anything is sent or written. A plan, and a chain on the verifier's coins, read no gate."""
+    leaves a gate given whole and ``local`` as they are, and a session with it unset is refused, naming it, before
+    anything is sent or written. A plan reads no gate."""
     assert SS.GATE == "research@${VY_CHALLENGER_1_HOST}" and SS.gate_at(SS.GATE) == LIVE_GATE
     assert [SS.gate_at(g) for g in ("local", "vy-admin@192.0.2.9")] == ["local", "vy-admin@192.0.2.9"]
     monkeypatch.delenv("VY_CHALLENGER_1_HOST")
@@ -190,10 +179,6 @@ def test_the_gates_host_is_the_address_the_environment_holds_and_unset_it_is_ref
     assert SS.main(["session", "--out", str(tmp_path / "out"), "--keep", str(tmp_path / "keep")]) == 2
     assert why in capsys.readouterr().err and list(tmp_path.iterdir()) == [tmp_path / "out"]
     assert list((tmp_path / "out").iterdir()) == []
-    assert SS.main(["chain", "--run", RUN, "--keep", str(tmp_path / "keep"), "--coins", "gate"]) == 2
-    assert why in capsys.readouterr().err
-    assert SS.main(["chain", "--run", RUN, "--keep", str(tmp_path / "keep")]) == 2
-    assert "no kept fetch" in capsys.readouterr().err
     assert SS.main(["plan"]) == 0
 
 
@@ -513,45 +498,6 @@ def test_endpoint_refuses_on_its_serve_dir_and_flags(tmp_path, monkeypatch, caps
         (tmp_path / f).rename(src / f)
 
 
-def test_chain_runs_chain_records_network_attester_path_on_the_kept_fetch_and_needs_the_leak_guard(tmp_path, monkeypatch):
-    here = tmp_path / "here"
-    here.mkdir()
-    (here / "chain_record.sh").write_text('env | grep "^CR_" | sort > "$SEEN"\n')
-    monkeypatch.setattr(SS, "HERE", here)
-    guard = SS.LEAK_GUARD
-    monkeypatch.setattr(SS, "LEAK_GUARD", "verity_has_no_such_guard")
-    monkeypatch.setenv("SEEN", str(tmp_path / "seen"))
-    keep = tmp_path / "keep"
-    (keep / RUN / "endpoint").mkdir(parents=True)
-    for f in ("requests.jsonl", "advice_trace.jsonl"):
-        (keep / RUN / "endpoint" / f).write_text("")
-    (keep / RUN / "fetch.tar.gz").write_bytes(b"")
-    argv = ["chain", "--run", RUN, "--keep", str(keep), "--eos-ids", "256", "CR_N2_DRAW=4"]
-    assert SS.main(argv) == 2
-    monkeypatch.setattr(SS, "LEAK_GUARD", guard)
-    assert SS.main(argv) == 0
-    seen = dict(line.split("=", 1) for line in (tmp_path / "seen").read_text().splitlines())
-    assert seen == {"CR_PATH": "warden", "CR_GATES": str(keep / RUN / "fetch.tar.gz"), "CR_MEM_GB": "96",
-                    "CR_N2_DRAW": "4", "CR_TIE_WINDOWS": "8", "CR_ENDPOINT": str(keep / RUN / "endpoint"),
-                    "CR_EOS_IDS": "256"}
-    assert SS.main(["chain", "--run", RUN, "--keep", str(keep)]) == 2
-    assert SS.main([*argv, "N2_DRAW=4"]) == 2
-    assert SS.main([*argv, "--draw", "8"]) == 0
-    assert "CR_SCAN_ARGS=--draw 8" in (tmp_path / "seen").read_text().splitlines()
-
-
-def test_chain_reads_the_endpoints_art_as_given_and_needs_no_eos_ids_for_it(tmp_path, monkeypatch):
-    here, keep = tmp_path / "here", tmp_path / "keep"
-    for d in (here, keep / RUN):
-        d.mkdir(parents=True)
-    (here / "chain_record.sh").write_text('env | grep "^CR_E" | sort > "$SEEN"\n')
-    (keep / RUN / "fetch.tar.gz").write_bytes(b"")
-    monkeypatch.setattr(SS, "HERE", here)
-    monkeypatch.setenv("SEEN", str(tmp_path / "seen"))
-    assert SS.main(["chain", "--run", RUN, "--keep", str(keep), "--endpoint", "art:ep"]) == 0
-    assert (tmp_path / "seen").read_text().splitlines() == ["CR_ENDPOINT=art:ep"]
-
-
 def test_the_endpoints_requests_jsonl_is_rebuilt_from_its_users_map_and_the_attested_io(tmp_path, capsys):
     ps = [[5, 6], [7], [8]]
     src = _serve_dir(tmp_path / "serve", ps)
@@ -570,71 +516,6 @@ def test_the_endpoints_requests_jsonl_is_rebuilt_from_its_users_map_and_the_atte
         (src / SS.USERS).write_text(users + json.dumps(bad) + "\n")
         with pytest.raises(SS.Refused, match="request_users.jsonl line 4: its user is no certified request left"):
             SS.rebuild(src, tmp_path / "keep" / "records", io, [128001])
-
-
-def _gate_chain(tmp_path, monkeypatch, peer):
-    here = tmp_path / "here"
-    here.mkdir(exist_ok=True)
-    (here / "chain_record.sh").write_text('env | grep "^CR_SCAN_ARGS=" > "$SEEN"\nprintf %s "$CR_COIN_PEER" > "$SEEN.peer"\n')
-    monkeypatch.delenv(SS.settings.HOLD_PLACEMENT, raising=False)
-    monkeypatch.setattr(SS, "HERE", here)
-    monkeypatch.setenv("SEEN", str(tmp_path / "seen"))
-    (tmp_path / "challenger-key.json").write_text("{}")
-    (tmp_path / "gate-key").write_text("")
-    (tmp_path / "main.txt").write_text("abc\n")
-    buf = io.BytesIO()
-    with tarfile.open(fileobj=buf, mode="w:gz") as tar:  # as the gate's fetch gives the run's own lane its request
-        for name, doc in ((f"{RUN}/request.json", {"device": "warden"}),
-                          (f"{RUN}/witness/request.json", {"device": "warden", "peer": peer})):
-            data = json.dumps(doc).encode()
-            info = tarfile.TarInfo(name)
-            info.size = len(data)
-            tar.addfile(info, io.BytesIO(data))
-    (tmp_path / "keep" / RUN).mkdir(parents=True, exist_ok=True)
-    (tmp_path / "keep" / RUN / "fetch.tar.gz").write_bytes(buf.getvalue())
-    return ["chain", "--run", RUN, "--keep", str(tmp_path / "keep"), "--coins", "gate", "--draw", "8",
-            "--challenger-key", str(tmp_path / "challenger-key.json"), "--key", str(tmp_path / "gate-key"),
-            "--main", str(tmp_path / "main.txt")]
-
-
-def _seen(tmp_path):
-    scan = (tmp_path / "seen").read_text().strip().removeprefix("CR_SCAN_ARGS=").split(" ")
-    return scan, json.loads((tmp_path / "seen.peer").read_text())
-
-
-def test_a_gate_coin_sample_runs_on_the_auditors_side_by_default(tmp_path, monkeypatch, capsys):
-    argv = _gate_chain(tmp_path, monkeypatch, SOME_PEER)
-    assert SS.main(argv) == 0
-    assert _seen(tmp_path) == (["--draw", "8", "--challenger", f"gate:{LIVE_GATE}", "--main", str(tmp_path / "main.txt"),
-                                "--peer", SS.AUDITOR, "--challenger-key", str(tmp_path / "challenger-key.json"),
-                                "--gate-key", str(tmp_path / "gate-key")],
-                               {"name": SS.AUDITOR, "served_node": False})
-    assert SS.main([*argv, f"CR_SCAN_ARGS=--peer {SOME_PEER}"]) == 2
-    assert SS.main([*argv[:-2], "--key", str(tmp_path / "no-key")]) == 2
-    assert "no gate key" in capsys.readouterr().err
-    assert SS.main([a for a in argv if a not in ("--draw", "8")]) == 2
-    assert "give K" in capsys.readouterr().err
-
-
-def test_a_gate_coin_sample_on_the_served_node_is_taken_and_recorded_as_the_served_nodes(tmp_path, monkeypatch):
-    for peer in (SS.PEER, SOME_PEER):
-        argv = _gate_chain(tmp_path, monkeypatch, SOME_PEER)
-        assert SS.main([*argv, "--coin-peer", peer]) == 0
-        scan, coin_peer = _seen(tmp_path)
-        assert scan[scan.index("--peer") + 1] == peer
-        assert coin_peer == {"name": peer, "served_node": True}
-
-
-def test_hold_placement_refuses_a_gate_coin_sample_on_the_served_node_by_its_name(tmp_path, monkeypatch, capsys):
-    for peer in (SS.PEER, SOME_PEER):
-        argv = _gate_chain(tmp_path, monkeypatch, SOME_PEER)
-        monkeypatch.setenv("VERITY_HOLD_PLACEMENT", "1")
-        (tmp_path / "seen").unlink(missing_ok=True)
-        assert SS.main([*argv, "--coin-peer", peer]) == 2
-        assert "is the served node, the prover's, and VERITY_HOLD_PLACEMENT=1 holds" in capsys.readouterr().err
-        assert not (tmp_path / "seen").exists()
-    assert SS.main(argv) == 0
-    assert _seen(tmp_path)[1] == {"name": SS.AUDITOR, "served_node": False}
 
 
 def test_a_relay_sessions_request_is_the_gates_and_a_run_opened_earlier_is_ended_by_its_close(tmp_path, monkeypatch):

@@ -12,20 +12,7 @@ untraced = ["test_cublas_train.py"]
 # `verity_vllm/__init__.py`, which importing this package opens
 inputs = ["verity", "tools/config/verity_config/verity_settings.py", "tools/config/verity_config",
           "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/definitions",
-          "calibration/hardware/cards",
-          # the cards' directory, `CARD_FILES`, which `tp_allreduce` and `fa2_train_bwd` take from verity-torch's kit
-          "adapters/torch/verity_torch/__init__.py", "adapters/torch/verity_torch/pouw/__init__.py",
-          "adapters/torch/verity_torch/pouw/row_table_device.py"]
+          "calibration/hardware/cards"]
 # its tests are independent, and in one process the suite is among the longest of a check's
 parallel = true
 worker_gb = 6
-# one test, the sparse attention's long-row reads, runs about an hour on the batch evaluator's reference path,
-# past suites.py's SUITE_TIMEOUT_S
-timeout_s = 7200
-
-# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
-# what a program it starts reads): the graph's test-file tasks are keyed on it.
-
-[[tool.verity.tests.reads]]
-tests = ["test_catalog.py"]
-paths = ["verity/circuits/ops/kv_cache.py"]

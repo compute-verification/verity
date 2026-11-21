@@ -2,7 +2,9 @@
 (`verity.commitments.periods.interface`) under core's docket:
 
 * the verifier's window is the circuit record's, each template a Definition a catalog registers, and the record must be the one
-  the docket binds; a window with row tables is refused until its records carry their segment roots;
+  the docket binds; a window with row tables is refused until its records carry their segment roots; Pearl+'s tile and
+  credit reader resolve in a fresh audit process to the body registered under their id, and a Definition of that id with
+  another body is refused by name;
 * the compile check runs the registered compiler as the verifier's table names it, on advice that opens the registered root,
   and refuses by name a compiler it doesn't hold, an opening of another root, a compiler that refuses the advice, one whose
   circuit is another or that writes none, and a length other than the registered one or none;
@@ -15,8 +17,7 @@
 * a circuit reading registered values is audited against the entries the verifier pinned, each under its own domain
   (`pinned`), and refused before any sample without them, a record that lists its members (a served window's) as one that
   states them; one whose program takes values only tied to the earlier docket that registered them first
-  (`tie_of`), its readers' reads registered at that record's roots, and the verifier's tie tests' own tie
-  (`window_tie.py`) is that one on their toys;
+  (`tie_of`), its readers' reads registered at that record's roots;
 * a window's audit is one compute audit of the network attester's period (`period`), its scan state's reads registered;
 * a declared day (``--day``, `declared_day`) hands R2 the registration log's declarations, so a program other than the
   day's is refused;
@@ -25,11 +26,7 @@
 * the gate's coins (``--challenger gate:USER@HOST``) reach the challenger's session with the peer and the key record;
 * ``warm`` fills a5's compose cache from the verifier's window, its composers keyed by what they compose from, a table
   read's by the verifier's executable too, and the audit takes that cache;
-* of `verity_vllm` it loads only a catalog package (`verity.circuits.defs.catalog_package`) and nothing else of the adapter,
-  and the served compiler's command (``prove_path.py circuit``) refuses advice it can't compile and charges the length the
-  docket does;
-* that command compiles over its own trace of each Program, never the prover's row dir, so a row dir whose names make
-  another circuit under unchanged digests is refused by name and one whose names make the same circuit is ignored."""
+* of `verity_vllm` it loads only a catalog package (`verity.circuits.defs.catalog_package`) and nothing else of the adapter."""
 from __future__ import annotations
 
 import hashlib
@@ -47,8 +44,8 @@ import settings
 
 from verity.commitments import docket_digest as DD
 from verity.commitments import domains as DM
-from verity.protocols.proofs.spot.verifier.one_stage import caller as C, registered as REG, docket as R
-from verity.protocols.proofs.spot.prover import docket as DK
+from verity.protocols.proof.spot.verifier.one_stage import caller as C, registered as REG, docket as R
+from verity.protocols.proof.spot.prover import docket as DK
 from verity.commitments import registered_value as RV
 from verity.commitments import randomness as RND
 from verity.circuits.codec import canonical_json, descriptor_id, encode_program, program_digest
@@ -71,7 +68,7 @@ HERE = (Path(__file__).resolve().parent)
 sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "prove_path"))
 sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
 import records_audit as RA  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import served_integrity as SI  # noqa: E402
+from verity.protocols.proof.spot.verifier.one_stage import served_integrity as SI  # noqa: E402
 
 K = 64
 COORD = bind(G.ScaledMmS8Coordinate, K=K, **G.GEMM_SM120_S8)
@@ -164,13 +161,18 @@ def test_the_verifiers_window_is_the_circuit_record_under_verity_s_catalog(writt
         RA.verifier_window(written.dir, RND.parse_design(SAMPLING_DESIGN), None)
 
 
+def test_the_advice_binding_is_the_registrations_alone_and_leaves_the_circuit_record_as_it_is(written, tmp_path):
+    bare = _write(tmp_path / "bare", advice=False)
+    assert bare.doc == written.doc
+    assert not {"compiler", "advice"} & set(bare.rec["window"]) and {"compiler", "advice"} <= set(written.rec["window"])
+
+
 def test_a_registry_template_resolves_in_a_fresh_audit_process():
-    """A window's io shell (`ScanSlots_v3`) is a registry Definition, which `interface.resolve`'s own walk doesn't import: in a
+    """A window's io shell (`ScanSlots_v5`) is a registry Definition, which `interface.resolve`'s own walk doesn't import: in a
     fresh process, which has loaded nothing else, `catalog_resolve` resolves its id to itself."""
     from verity_vllm.definitions.registry import boolean_io_shell as BX
 
-    occ, lp, mx, ids = (tuple(f + 36333 * j for j in range(2)) for f in (376, 168, 200, 474))
-    tid = descriptor_id(bind(BX.ScanSlotsV3, NS=4548, NP=4, IDB=17, K0=12, K=45, OCC=occ, LP=lp, MAX=mx, IDS=ids))
+    tid = descriptor_id(bind(BX.ScanSlotsV5, NS=4548, NP=4, IDB=17, K0=12, K=45, OCC=376, LP=168, MAX=200, IDS=474))
     code = f"""
 import sys
 sys.path.insert(0, {str(HERE.parents[2] / "benchmarks" / "prove_path")!r})
@@ -180,6 +182,56 @@ assert descriptor_id(RA.catalog_resolve(sys.argv[1])) == sys.argv[1]
 """
     p = subprocess.run([sys.executable, "-c", code, tid], capture_output=True, text=True)
     assert p.returncode == 0, p.stderr[-3000:]
+
+
+PEARL_PLUS_IDS = ("PearlPlusTileSeed_v4{K=256,TN=1}", "PearlPlusTileLine_v4{SIDE=0,FACTOR=1,G=32}")
+
+
+def test_pearl_plus_templates_resolve_in_a_fresh_audit_process_to_their_registered_body():
+    """Pearl+'s tile (`pearl_plus_tile`) and its credit reader (`pearl_plus_credited`) are a later place's than
+    `interface`, whose walk can't import them: in a fresh process, which has loaded nothing else, `catalog_resolve`
+    resolves each id to the Definition that module registered under it, its body and definition digest that one's,
+    where `interface.resolve` alone refuses it ("names no Definition a catalog registers")."""
+    code = f"""
+import sys
+sys.path.insert(0, {str(HERE.parents[2] / "benchmarks" / "prove_path")!r})
+from verity.commitments.periods import interface as IF
+for tid in sys.argv[1:]:
+    try:
+        IF.resolve(tid)
+    except ValueError as e:
+        assert "names no Definition a catalog registers" in str(e), e
+    else:
+        raise AssertionError(f"{{tid}} resolved with no catalog of Pearl+'s loaded")
+import records_audit as RA
+from verity.circuits.codec import definition_digest, definition_entry, descriptor_id
+from verity.circuits.defs import REGISTRY, bind
+from verity.protocols.accounting.compute.pouw.prover.circuit import pearl_plus_credited as PC, pearl_plus_tile as PT
+for tid in sys.argv[1:]:
+    fn = RA.catalog_resolve(tid)
+    assert descriptor_id(fn) == tid and fn.defn is REGISTRY[tid.partition("{{")[0]], tid
+    assert fn.defn.body.__module__ == PT.__name__, fn.defn.body.__module__
+seed = bind(PT.PearlPlusTileSeed, K=256, TN=1)
+assert definition_digest(definition_entry(RA.catalog_resolve(sys.argv[1]))) == definition_digest(definition_entry(seed))
+assert REGISTRY[PC.PearlPlusTileCoreWired.id] is PC.PearlPlusTileCoreWired
+"""
+    p = subprocess.run([sys.executable, "-c", code, *PEARL_PLUS_IDS], capture_output=True, text=True)
+    assert p.returncode == 0, p.stderr[-3000:]
+
+
+def test_a_definition_of_a_pearl_plus_id_with_another_body_is_refused_by_name():
+    """A Definition named as Pearl+'s tile seed but with another body never stands for it: the registry refuses it under
+    that id, and as a template it is refused as no Definition a catalog registers, by its id."""
+    from verity.circuits.defs import CompositeDefinition
+    from verity.protocols.accounting.compute.pouw.prover.circuit import pearl_plus_tile as PT
+
+    seed = PT.PearlPlusTileSeed
+    with pytest.raises(ValueError, match=f"registry already has a different definition for {seed.id}"):
+        CompositeDefinition(seed.name, seed.version, seed.statics, seed.signature, lambda *a, **k: None)
+    other = CompositeDefinition(seed.name, seed.version, seed.statics, seed.signature, lambda *a, **k: None, register=False)
+    with pytest.raises(ValueError, match=f"{seed.id}: not a Definition a catalog registers"):
+        IF.catalog(bind(other, K=256, TN=1))
+    assert IF.resolve(PEARL_PLUS_IDS[0]).defn is seed
 
 
 def test_the_compile_check_runs_the_registered_compiler_on_the_opened_advice(written, tmp_path):
@@ -239,6 +291,74 @@ def test_source_and_the_negatives_refuse_what_the_records_dont_bind(written, tmp
     got = RA.negatives(fw, held, fixed.doc, tmp_path / "n")
     assert set(got) == {"registration-naming-another-circuit", "registration-naming-another-run",
                         "registration-binding-a-compiler-for-a-fixed-circuit"} and all(x["refused"] for x in got.values())
+
+
+def _prover_circuit_audit(w: SimpleNamespace, monkeypatch, tmp_path: Path, flags: list[str]) -> tuple[int, dict]:
+    """`main`'s audit of written window ``w`` under ``flags`` in place of ``--circuit``, its sessions (`a5.audit`) stubbed:
+    the stub's docket is the window's own, received before the draw, and its verdict is `source`'s on that docket.
+    -> (the exit code, what the stub saw: ``source``, ``negatives``, ``summary``)."""
+    import a5 as A5
+    from verity.protocols.proof.spot.verifier.challenger import challenger_session as AC
+
+    seen: dict = {}
+
+    def audit(a, sets, out, mine, served, source, port, summary, more, **kw):
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "registration.json").write_text(json.dumps(w.rec))
+        (out / "receipt.json").write_text(json.dumps({"registration": DD.digest(w.rec), "verifier": A5.CHALLENGER}))
+        seen.update(source=source(w.rec["window"]), negatives=more, summary=summary)
+        return {"audit": {"accepted": True}, "draw": {"units": [0]}}, seen["source"]["ok"]
+
+    session = SimpleNamespace(skip=lambda r: None, join=lambda: None, evidence=lambda: {}, shutdown=lambda: None)
+    monkeypatch.setattr(RA, "free_ports", lambda span: 20000)
+    monkeypatch.setattr(A5, "audit", audit)
+    monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
+    args = [x for x in _audit_args(w) if x != "--skip-negatives"]
+    i = args.index("--circuit")
+    return RA.main([*args[:i], *flags, *args[i + 2:], "--out", str(tmp_path / "o")]), seen
+
+
+def test_prover_circuit_takes_the_registered_circuit_holds_its_compiler_and_advice_and_says_compiled_not_checked(
+        written, tmp_path, monkeypatch, capsys):
+    """A compiled window whose compiler no command rebuilds, audited under ``--prover-circuit`` and ``--development``: no
+    compile check runs, the docket is still held to the compiler and advice it registers (`source`, `fixed_before_draw`,
+    the registration negatives, each refused), and the summary and the ``RECORDS`` line say the compile check did not run."""
+    rc, seen = _prover_circuit_audit(written, monkeypatch, tmp_path, ["--prover-circuit", "--development"])
+    assert rc == 0 and seen["source"]["ok"] and seen["source"]["detail"]["compiled"] == RA.NOT_CHECKED
+    assert set(seen["negatives"]) == {"registration-naming-another-circuit", "registration-naming-another-run",
+                                      "registration-naming-another-compiler", "registration-naming-another-advice-root",
+                                      "registration-charging-another-length", "registration-binding-no-compiler-or-advice"}
+    assert all(x["refused"] for x in seen["negatives"].values()), seen["negatives"]
+    summary = json.loads((tmp_path / "o" / "summary.json").read_text())
+    assert (summary["ok"], summary["compiled"], summary["compile"], summary["after_draw"]) == (True, "not checked", None,
+                                                                                              "not checked")
+    assert summary["fixed_before_draw"]["ok"] and (summary["compiler"], summary["advice"]) == (
+        written.bound["compiler"], written.bound["advice"])
+    assert seen["summary"]["compiled"] == "not checked" and not (tmp_path / "o" / "compile").exists()
+    line, = (x for x in capsys.readouterr().out.splitlines() if x.startswith("RECORDS "))
+    assert "compiled: not checked (the circuit is the one the prover registered)" in line
+
+
+def test_prover_circuit_is_refused_by_name_without_development(written, tmp_path, monkeypatch, capsys):
+    with pytest.raises(SystemExit):
+        _prover_circuit_audit(written, monkeypatch, tmp_path, ["--prover-circuit"])
+    assert "--prover-circuit: a development mode: the compile check does not run" in capsys.readouterr().err
+    assert not (tmp_path / "o").exists()
+
+
+def test_prover_circuit_is_refused_by_name_for_a_docket_binding_no_compiler(tmp_path, monkeypatch):
+    rc, seen = _prover_circuit_audit(_write(tmp_path / "w", advice=False), monkeypatch, tmp_path, ["--prover-circuit", "--development"])
+    assert (rc, seen) == (1, {})
+    why = json.loads((tmp_path / "o" / "summary.json").read_text())["refused"]["records"]
+    assert "--prover-circuit: the docket binds no compiler and advice" in why
+
+
+def test_without_prover_circuit_a_compiled_window_with_no_compile_check_fails_compiler(written, tmp_path, monkeypatch):
+    """The same window audited as today, at the circuit it registers and with no opening: the docket's compiler and
+    advice are not the verifier's (it holds none), so `source` fails them and the audit does not pass."""
+    rc, seen = _prover_circuit_audit(written, monkeypatch, tmp_path, ["--circuit", written.rec["window"]["circuit"]])
+    assert rc == 1 and seen["source"]["codes"] == ["compiler", "advice"]
+    assert "compiled" not in json.loads((tmp_path / "o" / "summary.json").read_text())
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -318,9 +438,11 @@ def test_the_leak_count_is_the_circuits_unwired_input_bits_and_vacuous_past_the_
 
 
 def _registered_circuit(n: int = 2, free: str | None = None) -> IF.Circuit:
-    """``n`` coordinates whose every input row is a registered read of one parameter ``a``, but port ``free``'s."""
+    """``n`` coordinates whose every input row is a registered read of one parameter ``a``, but port ``free``'s; each read
+    starts on a whole row of its port's words (`interface._reads_of`)."""
     rows, at, reads = IF.layout(BITS).rows, 0, []
     for p, words in rows:
+        at = -(-at // words) * words
         if p != free:
             reads.append(IF.Read(descriptor_id(BITS), p, "a", at=0, radix=(n,), base=at, step=(words,)))
         at += n * words
@@ -397,21 +519,15 @@ def test_a_declared_records_count_is_its_free_inputs_and_the_advice_against_the_
 
 def test_a_windows_roots_are_its_registered_roots_and_its_committed_values_entries_roots():
     """`window_roots`: the roots a window's docket records for its parameters are its ``registered_roots`` and each
-    entry's root of the committed values it names, ``{program, values}`` (`ENTRY_GROUPS`: per-window ``activations``,
-    PoUW's operands among them, and pinned ``registered``, PoUW's weights), one root a parameter; a group that isn't one,
+    entry's root of the committed values it names, ``{program, values}`` (`ENTRY_GROUPS`: per-window ``activations`` and
+    pinned ``registered``), one root a parameter; a group that isn't one,
     an entry with no root of hex digits, or two roots for one parameter are refused."""
     def group(**roots: str) -> dict:
         return {"program": "p", "values": {v: {"value": v, "root": r} for v, r in roots.items()}}
 
-    from verity.protocols.resource_accounting.compute.pouw.verifier import operands as OP
-
     w = {"context": RUN, "registered_roots": {"e": "01" * 64}, "activations": group(x="ab" * 64, e="01" * 64),
          "registered": group(w="cd" * 64)}
     assert RA.window_roots(w) == {"e": "01" * 64, "x": "ab" * 64, "w": "cd" * 64}
-    a, b = (RV.Registered.commit("test/model", v, [[i] * 4], schema=REG.SCHEMA_V2) for i, v in enumerate("ab"))
-    pouw = {"context": RUN, "kind": "served", "public": {}, OP.KEY: OP.block("test/h1", {"a": a}),
-            "registered": OP.block("test/model", {"b": b})}
-    assert RA.window_roots(pouw) == {"a": a.root.hex(), "b": b.root.hex()}
     assert RA.window_roots({"run": RUN, "registered": None}) == {} == RA.registration_roots({"window": 63})
     assert RA.registration_roots({"window": w}) == RA.window_roots(w)
     for bad, why in [({"registered": {"w": "cd" * 64}}, r"is \{program, values"), ({"activations": group(x=7)}, "hex digits"),
@@ -474,42 +590,29 @@ def test_the_window_circuit_command_writes_i2s_circuit_whose_count_is_the_charge
     assert "prove_path.py window-circuit: I2's window circuit refuses the advice" in capsys.readouterr().err
 
 
-def test_the_window_circuit_command_refuses_a_class_whose_units_no_proof_block_takes(tmp_path, monkeypatch, capsys):
-    """``prove_path.py window-circuit`` refuses, by the template's name, a lowered class whose unit Flock's composer
-    wouldn't prove (`window_builder.check_provable`): `COORD`'s rows are none past 111 bytes."""
-    import prove_path as PP
-    from test_prove_path import _served
-    from verity_vllm.program.predict import window_circuit as WC
-
-    s = _served(tmp_path, monkeypatch)
-    monkeypatch.setattr(WC, "window_circuit", lambda registered, compiled, cls, tables=None: IF.Circuit("test", ((COORD, 2),)))
-    (tmp_path / "advice.bin").write_bytes(s.data)
-    assert PP.main(["window-circuit", "--serve-run", str(s.run), "--window", "0", "--row-dir", s.a.row_dir, "--advice",
-                    str(tmp_path / "advice.bin"), "--cap", "4", "--out", str(tmp_path / "c.json")]) == RA.REFUSED
-    err = capsys.readouterr().err
-    assert "I2's window circuit refuses the advice: 1 templates Flock's composer wouldn't prove" in err and TID in err
-    assert not (tmp_path / "c.json").exists()
-
-
 def test_class_circuit_from_phi_alone_is_window_circuits_record_and_serve_phi_names_the_runs_compiler_before_it_serves(
         tmp_path, monkeypatch, capsys):
-    """``prove_path.py class-circuit --serve F`` builds the class's circuit from φ alone, no advice, row dir or window, and
-    writes ``window-circuit``'s record of the run's window byte for byte, at the class of record and cut at Pearl+'s
-    linears under ``--pearl-tables`` alike (I2's class circuit stubbed, `window_circuit.window_circuit` left to call it).
-    ``serve-phi`` states what serve.json will record of φ from this device (`prove_path.device_target` stubbed with the
-    run's), and ``compiler --serve`` over it names the compiler ``compiler --serve-run`` names once the run has served."""
+    """``prove_path.py class-circuit --serve F`` builds the class's circuit from φ alone, no advice, row dir or window: under
+    ``--pearl-tables``, cut at Pearl+'s linears, it is ``window-circuit``'s record of the run's window byte for byte (the
+    window held to the fixed load, `FixedLoad.held` stubbed); without tables ``window-circuit``'s is the served circuit,
+    of the window's requests (`takes`, stubbed), and the class circuit takes none (I2's class circuit stubbed,
+    `window_circuit.window_circuit` left to call it). ``serve-phi`` states what serve.json will record of φ from this
+    device (`prove_path.device_target` stubbed with the run's), and ``compiler --serve`` over it names the compiler
+    ``compiler --serve-run`` names once the run has served."""
     import prove_path as PP
     from test_prove_path import _served
     from verity_vllm.program.predict import window_circuit as WC
+    from verity_vllm.program.predict.window_class import FixedLoad
 
-    s, circuit, seen = _served(tmp_path, monkeypatch), _registered_circuit(), []
+    s, circuit, seen, taken = _served(tmp_path, monkeypatch), _registered_circuit(), [], ("the window's requests",)
 
-    def lower(registered, cls, programs=None, grain=None, tables=None):
-        seen.append((registered, cls, tables))
+    def lower(registered, cls, programs=None, grain=None, tables=None, requests=None):
+        seen.append((registered, cls, tables, requests))
         return circuit
 
     monkeypatch.setattr(WC, "class_circuit", lower)
-    monkeypatch.setattr(WC, "takes", lambda *a: None)
+    monkeypatch.setattr(WC, "takes", lambda *a: taken)
+    monkeypatch.setattr(FixedLoad, "held", lambda *a: None)
     (tmp_path / "advice.bin").write_bytes(s.data)
     serve = json.loads((s.run / "serve.json").read_text())
     monkeypatch.setattr(PP, "device_target", lambda async_scheduling=False: {
@@ -523,48 +626,15 @@ def test_class_circuit_from_phi_alone_is_window_circuits_record_and_serve_phi_na
         for given in (s.run / "serve.json", phi):
             assert PP.main(["class-circuit", "--serve", str(given), "--cap", "4", "--out", str(tmp_path / "c.json"),
                             *tables]) == 0
-            assert (tmp_path / "c.json").read_bytes() == (tmp_path / "w.json").read_bytes()
-        assert len(seen) == 3 and seen[0] == seen[1] == seen[2] and seen[0][1] == WC.CLASS_OF_RECORD
+            assert not tables or (tmp_path / "c.json").read_bytes() == (tmp_path / "w.json").read_bytes()
+        assert len(seen) == 3 and seen[1] == seen[2] and seen[1][3] is None and seen[0][:3] == seen[1][:3]
+        assert seen[0][1] == WC.CLASS_OF_RECORD and seen[0][3] == (None if tables else taken)
         assert (seen[0][2] is None) == (not tables) and (not tables or seen[0][2].scheme == "pearl-c-h100-v1-h3")
     capsys.readouterr()
     assert PP.main(["compiler", "--serve-run", str(s.run)]) == 0
     served = json.loads(capsys.readouterr().out)
     assert PP.main(["compiler", "--serve", str(phi)]) == 0
     assert json.loads(capsys.readouterr().out) == served
-
-
-def test_the_window_circuit_command_under_h1s_w_reads_its_tables_with_no_key(tmp_path, monkeypatch, capsys):
-    """``prove_path.py window-circuit --window-registration W``, the verifier's record of a window H1 tied: I2's window
-    circuit reads H1's tables of W's Program (`h1_tie`'s, as window-commit's circuit with W reads them), and the command
-    takes no key, which is H1's prover's alone; without W it reads none. Refused for a W under another Program."""
-    import prove_path as PP
-    from test_prove_path import _served
-    from verity_vllm.program.predict import window_circuit as WC
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
-
-    s, circuit, seen = _served(tmp_path, monkeypatch), _registered_circuit(), []
-
-    def lower(registered, compiled, cls, tables=None):
-        seen.append((cls.outputs, tables))
-        return circuit
-
-    monkeypatch.setattr(WC, "window_circuit", lower)
-    (tmp_path / "advice.bin").write_bytes(s.data)
-    layout = {"calls": [["a", 0], ["b", 0]] * 2, "linears": [["a", 64, 8], ["b", 64, 8]], "m": 8}
-    (s.run / "h1").mkdir()
-    (s.run / "h1" / PH.PROGRAM_META).write_text(json.dumps({"program_digest": "p" * 128, "steps": 2, "layout": layout}))
-    (tmp_path / "w.json").write_text(json.dumps({"program": "p" * 128, "registered": []}))
-    (tmp_path / "other.json").write_text(json.dumps({"program": "q" * 128}))
-    base = ["window-circuit", "--serve-run", str(s.run), "--window", "0", "--row-dir", s.a.row_dir, "--advice",
-            str(tmp_path / "advice.bin"), "--class", "4,32,2"]
-    assert PP.main([*base, "--out", str(tmp_path / "c.json")]) == 0
-    assert PP.main([*base, "--out", str(tmp_path / "t.json"), "--window-registration", str(tmp_path / "w.json")]) == 0
-    assert seen == [(2, None), (2, WC.Tables(64, 8, 2))]
-    with pytest.raises(SystemExit):
-        PP.main([*base, "--out", str(tmp_path / "k.json"), "--window-registration", str(tmp_path / "w.json"), "--h1-prover", "k"])
-    capsys.readouterr()
-    assert PP.main([*base, "--out", str(tmp_path / "o.json"), "--window-registration", str(tmp_path / "other.json")]) == RA.REFUSED
-    assert "is no registration under the serve's H1 window Program" in capsys.readouterr().err
 
 
 def _listed(w: CS.Binding) -> CS.Binding:
@@ -606,8 +676,9 @@ def test_registered_reads_are_audited_against_the_pinned_entries_and_leave_the_f
     got = _registered(tmp_path / "w")
     mine, doc, _sets = RA.verifier_window(got.dir, RND.parse_design(SAMPLING_DESIGN), None)
     pins = RA.pinned(got.pin)
-    files = IF.registered_reads(doc, mine, pins, registered=REG)
-    assert [f["ports"]["wrow"]["reads"] for f in files.values()] == [[0, 1, 2, 3], [0, 1, 2, 3]]
+    files = IF.registered_file(doc, mine, pins)
+    assert {f["format"] for f in files.values()} == {IF.REGISTERED_FILE} and len(files) == 2
+    assert not any({"reads", "reads_from"} & set(port) for f in files.values() for port in f["ports"].values())
     assert all(f["ports"]["wrow"]["root"] == got.value.root.hex() for f in files.values())
     per_unit = sum(16 * w for _p, w in IF.layout(COORD).rows)
     rec = json.loads((got.dir / "registration.json").read_text())
@@ -670,8 +741,8 @@ def test_a_listed_records_registered_weight_reads_are_audited_and_counted_as_a_s
     assert "cap" in sdoc and "members" in ldoc and "cap" not in ldoc and ldoc["registered"] == sdoc["registered"]
     assert ml.members == ms.members and all(dict(m.tables)["wrow"] == 4 for m in ml.members)
     pins = RA.pinned(listed.pin)
-    files = IF.registered_reads(ldoc, ml, pins, registered=REG)
-    assert files == IF.registered_reads(sdoc, ms, pins, registered=REG) and len(files) == 2
+    files = IF.registered_file(ldoc, ml, pins)
+    assert files == IF.registered_file(sdoc, ms, pins) and len(files) == 2
     pin = RA.pin_roots(pins)
     roots = RA.registration_roots(json.loads((listed.dir / "registration.json").read_text()))
     count = RA.declared_count(ldoc, 0, pins=pin, roots=roots)
@@ -695,7 +766,7 @@ def test_a_listed_records_registered_weight_reads_are_audited_and_counted_as_a_s
 def test_a_tie_pins_the_circuits_values_at_the_earlier_registrations_tables():
     """`tie_of`: a circuit whose program takes values (a served window's H1 tables, by their Commit names) is tied to the
     earlier docket W that registered them first: one-stage's ``log`` is W, each value's ``registered`` words are W's
-    entry's, its ``outputs`` W's table of it under the prefix (`credit.window_table`) and its schema v2, and the audit pins
+    entry's, its ``outputs`` W's table of it under the prefix (`window.window_table`) and its schema v2, and the audit pins
     each at W's     entry under the value's own name. With neither values nor W there's no tie; values without W, W without values, a
     value W registers other than once (with no prefix, by its own name: told to give H1's) and a value that is no Commit
     table are refused."""
@@ -773,33 +844,6 @@ def test_a_tie_with_no_prefix_takes_pearls_values_by_their_own_names_in_32_bit_s
                                  (w, "h1/", "is no Commit name")):
         with pytest.raises(ValueError, match=why):
             RA.tie_of(doc, earlier, prefix)
-
-
-@pytest.mark.slow
-def test_the_verifier_tie_tests_tie_is_the_audits_on_their_toys():
-    """test_pearltie and test_remotetie tie and resolve with `window_tie` beside them, which loads
-    no file of the audit: on test_pearltie's toy, its tie to W and to the flipped W' is `tie_of`'s with no prefix, and every
-    template of both toys' circuits resolves under its id as `catalog_resolve` resolves it. The tie reads the circuit
-    record's declarations alone (`interface.declarations`), the circuit's own, as its ``circuit.json`` carries them. In a
-    fresh process, where the ``settings`` the verifier's tests import is their own registry."""
-    code = f"""
-import sys
-sys.path[:0] = [{str(HERE)!r}, {str(HERE.parents[2] / "benchmarks" / "prove_path")!r}]
-import test_pearltie as TP, test_remotetie as TR, window_tie as WT  # first: records_audit puts one_stage's settings first
-import records_audit as RA
-from verity.circuits.codec import descriptor_id
-import json
-pearl, h1 = TP.make_toy(), TR.make_toy()
-doc = json.loads(json.dumps(pearl.low.circuit.declared()))
-own = {{TP.SS.SCAN_STATE: pearl.values[TP.SS.SCAN_STATE].entry()}}
-for w in (pearl.W, TP._flipped(pearl).W):
-    tied = WT.tie_of(doc, w, own)
-    assert tied == RA.tie_of(doc, w, None, own) and tied[0]["registered"], tied
-ids = [t for c in (pearl.low.circuit, h1.low.circuit) for t in c.ids]
-assert ids and all(descriptor_id(WT.catalog_resolve(t)) == descriptor_id(RA.catalog_resolve(t)) == t for t in ids)
-"""
-    p = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
-    assert p.returncode == 0, p.stderr[-3000:]
 
 
 def test_a_ties_summary_names_w_and_for_pearls_w_its_development_verifier():
@@ -912,7 +956,7 @@ def test_the_audit_ties_a_window_whose_circuit_takes_values_to_the_earlier_regis
     output class (its readers sampled like any other unit), and the summary names W's digest and the values. The sessions
     (`a5.audit`) are stubbed and sample nothing, so the audit doesn't pass."""
     import a5 as A5
-    from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
+    from verity.protocols.proof.spot.verifier.challenger import challenger_session as AC
 
     got = _tied(tmp_path / "w")
     assert got.rec["previous"] == DD.digest(got.w) and got.rec["registered"] == [{**got.entry, "value": got.name}]
@@ -1006,7 +1050,8 @@ def test_a_declared_day_holds_the_registrations_program_to_the_days_one_declarat
     assert day == {"day": 3, "declarations": [e.body() for e in entries]}
 
     def r2(d: dict) -> list[str]:
-        v = C.both(written.rec, mine.program, mine.query, RND.parse_design(SAMPLING_DESIGN), CS.SCHEME, {}, **d)
+        v = C.both(written.rec, mine.program, mine.query, RND.parse_design(SAMPLING_DESIGN), CS.SCHEME, {},
+                   partition=mine.partition, **d)
         return sorted(c for c in v.codes if c.startswith("R2"))
     assert r2(day) == []
     assert r2({**day, "day": 4}) == ["R2-declared"] and r2({**day, "day": 5}) == ["R2-undeclared"]
@@ -1049,14 +1094,14 @@ DAY0, PIN, S1, S2 = 20746, "c" * 40, "s20261020T093000Z-0001", "s20261020T093000
 
 
 def _auditor():
-    from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
-    return LC._module("a5_auditor", Path(__file__).resolve().parents[3] / "verity" / "protocols" / "compose" / "verifier" / "live_challenger" / "auditor.py")
+    from verity.protocols.proof.spot.prover.audit import local_challenger as LC
+    return LC._module("a5_auditor", Path(__file__).resolve().parents[3] / "verity" / "protocols" / "run" / "verifier" / "live_challenger" / "auditor.py")
 
 
 def _device_ledger(tmp_path: Path, events: list[tuple[str, str | None, dict]]) -> tuple[list[str], object, Path]:
     """The challenger device's own ledger of ``events`` (kind, session, body), chained and signed by the live challenger's
-    code (`verity/protocols/compose/verifier/live_challenger/auditor.py`): its lines, its key and the key record ``--challenger-key`` reads."""
-    from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
+    code (`verity/protocols/run/verifier/live_challenger/auditor.py`): its lines, its key and the key record ``--challenger-key`` reads."""
+    from verity.protocols.proof.spot.verifier.challenger import challenger as Ch
     from verity.commitments.crypto import lms
     A = _auditor()
     (tmp_path / "var" / "sessions").mkdir(parents=True)
@@ -1092,7 +1137,7 @@ def _window(session: str, reserve_seq: int, root: str, by: str = "hash", reserve
 
 
 def _verify(key: object):
-    from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
+    from verity.protocols.proof.spot.verifier.challenger import challenger_session as AC
     return AC.lms_verify
 
 
@@ -1108,7 +1153,8 @@ def test_the_device_day_is_the_challengers_declared_day_over_its_own_ledger_and_
     lines, key, _record = _device_ledger(tmp_path, [_declared(program), *_window(S1, 1, root)])
     day = RA.device_day(lines, root, key, _verify(key))
     assert day == {"day": DAY0, "declarations": [{"blocks": ["t"], "day": DAY0, "program": program}]}
-    assert not [c for c in R.check(written.rec, mine.program, mine.query, RND.parse_design(SAMPLING_DESIGN), CS.SCHEME, {}, **day).codes
+    assert not [c for c in R.check(written.rec, mine.program, mine.query, RND.parse_design(SAMPLING_DESIGN), CS.SCHEME, {},
+                                   partition=mine.partition, **day).codes
                 if c.startswith("R2")]
     rebuilt = G.Declaration(DAY0, program, ("t",)).digest()
     assert RA.device_day(lines, root, key, _verify(key), {"window": {"day": DAY0, "declaration": rebuilt}}) == day
@@ -1129,7 +1175,8 @@ def test_a_window_opened_before_its_days_declaration_or_of_a_lane_that_never_dec
     program = written.rec["program"]
 
     def r2(d: dict) -> list[str]:
-        v = C.both(written.rec, mine.program, mine.query, RND.parse_design(SAMPLING_DESIGN), CS.SCHEME, {}, **d)
+        v = C.both(written.rec, mine.program, mine.query, RND.parse_design(SAMPLING_DESIGN), CS.SCHEME, {},
+                   partition=mine.partition, **d)
         return sorted(c for c in v.codes if c.startswith("R2"))
     late, key, _ = _device_ledger(tmp_path / "late",
                                   [*_window(S1, 0, "01" * 64), _declared(program), *_window(S2, 3, "02" * 64)])
@@ -1149,7 +1196,7 @@ def test_the_device_day_reads_the_devices_own_ledger_and_refuses_a_copy_pous_cut
     """memory-accounting's third point: PoUS cuts its copies of the ledger to the entries a window cites
     (`pous.period_prover.cited`), which drops the day's declaration; ``declared_day`` refuses such a copy as a ledger (its chain
     no longer runs from seq 0), so R2 reads the device's own ledger or nothing, never a copy that would read undeclared."""
-    from verity.protocols.resource_accounting.memory.pous.prover import period_prover
+    from verity.protocols.accounting.memory.pous.prover import period_prover
     program, root = written.rec["program"], "01" * 64
     lines, key, _ = _device_ledger(tmp_path, [_declared(program), *_window(S1, 1, root)])
     cut = [lines[i] for i in period_prover.cited([json.loads(x) for x in lines], {S1})]
@@ -1170,7 +1217,8 @@ def test_a_window_that_crosses_utc_midnight_belongs_to_its_opens_day(written, tm
     program, root = written.rec["program"], "01" * 64
 
     def r2(d: dict) -> list[str]:
-        v = C.both(written.rec, mine.program, mine.query, RND.parse_design(SAMPLING_DESIGN), CS.SCHEME, {}, **d)
+        v = C.both(written.rec, mine.program, mine.query, RND.parse_design(SAMPLING_DESIGN), CS.SCHEME, {},
+                   partition=mine.partition, **d)
         return sorted(c for c in v.codes if c.startswith("R2"))
     def late(reserve_seq: int) -> list[tuple[str, str, dict]]:
         return _window(S1, reserve_seq, root, reserved_at="2026-10-20T23:55:00Z", expires="2026-10-21T00:05:00Z",
@@ -1230,7 +1278,7 @@ def test_a5_holds_a_history_tables_registered_root_to_the_one_over_its_writers_b
     docket that records no root for the table is refused before any session. The sessions (`a5.audit`) are stubbed
     and sample nothing, so the audit doesn't pass."""
     import a5 as A5
-    from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
+    from verity.protocols.proof.spot.verifier.challenger import challenger_session as AC
     from verity.commitments import history as HT
 
     got, seen = _history(tmp_path / "w"), {}
@@ -1330,21 +1378,20 @@ def test_a_windows_audit_is_a_period_audit_whose_scan_state_reads_count_register
     assert "records_audit.py period: " in capsys.readouterr().err and not (tmp_path / "q.json").exists()
 
 
-#: a `ScanSlots_v3` of two lanes on a 40-word state row (`test_io_shell`'s)
-SLOTS = {"NS": 40, "NP": 4, "IDB": 17, "K0": 2, "K": 3,
-         "OCC": (3, 300), "LP": (40, 340), "MAX": (80, 380), "IDS": (120, 420)}
+#: a `ScanSlots_v5` at the first lane of a 40-word state row (`test_io_shell`'s)
+SLOTS = {"NS": 40, "NP": 4, "IDB": 17, "K0": 2, "K": 3, "OCC": 3, "LP": 40, "MAX": 80, "IDS": 120}
 
 
 def _io_shell_window(d: Path, n: int = 8, cap: int = 4, shell: int = 3) -> SimpleNamespace:
     """`_registered`'s window of ``n`` coordinates reading the window's own scan state (`TIED`), with ``shell`` units
-    of an io shell's `ScanSlots_v3` at `SLOTS` beside them, on random state rows, each with the outputs its Definition
+    of an io shell's `ScanSlots_v5` at `SLOTS` beside them, on random state rows, each with the outputs its Definition
     gives it."""
     from verity_vllm.definitions.registry import boolean_io_shell as BX
     from verity_vllm.definitions.registry import io_shell as X
 
-    fn = bind(BX.ScanSlotsV3, **SLOTS)
+    fn = bind(BX.ScanSlotsV5, **SLOTS)
     state = np.random.default_rng(2).integers(0, 1 << 16, (shell, SLOTS["NS"]), dtype=np.uint16)
-    got = np.array([[v for k, s, o, h in X.scan_reference(row.tolist(), *(SLOTS[k] for k in BX.SCAN_STATICS[1:]))
+    got = np.array([[v for k, s, o, h in [X.scan_reference(row.tolist(), *(SLOTS[k] for k in BX.SCAN_STATICS[1:]))]
                      for v in (k, *s, o, *h)] for row in state], dtype=np.uint32)
     outs = np.split(got, np.cumsum([count // 2 for _o, count in IF.layout(fn).outs])[:-1], axis=1)
     rng = np.random.default_rng(1)
@@ -1366,7 +1413,7 @@ def _io_shell_window(d: Path, n: int = 8, cap: int = 4, shell: int = 3) -> Simpl
 
 def test_a_period_counts_an_io_shell_window_in_a_process_that_loaded_no_registry_definition(tmp_path):
     """``records_audit.py period`` as V3c runs it, in a process of its own, on a window whose circuit holds an io
-    shell's `ScanSlots_v3` beside the coordinates that read its scan state. `ScanSlots_v3` is a registry Definition,
+    shell's `ScanSlots_v5` beside the coordinates that read its scan state. `ScanSlots_v5` is a registry Definition,
     which `interface.resolve`'s own walk doesn't import, so the period resolves the circuit's templates with the
     registry loaded (`catalog_resolve`): it counts the shell's state rows free beside the coordinates' own, where
     `interface.resolve` alone refuses the window ("names no Definition a catalog registers")."""
@@ -1485,12 +1532,12 @@ def test_the_advice_is_fixed_before_the_sample_and_refused_re_committed_after_it
 
 
 def test_the_gates_coins_take_the_peer_and_key_record_to_the_challengers_session(written, tmp_path, monkeypatch):
-    """``--challenger gate:USER@HOST`` hands ``--gate-key``, ``--peer`` and ``--challenger-key`` to `a5_coins.start`, as
-    `prove_path.py audit` does; the command refuses a gate without the peer or the key record, and any other challenger.
+    """``--challenger gate:USER@HOST`` hands ``--gate-key``, ``--peer`` and ``--challenger-key`` to `a5_coins.start`;
+    the command refuses a gate without the peer or the key record, and any other challenger.
     ``--deployed-key`` reaches `a5_coins.start` as ``deployed`` with ``--challenger local``, and is refused with a gate."""
     import a5 as A5
-    from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
-    from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
+    from verity.protocols.proof.spot.verifier.challenger import challenger_session as AC
+    from verity.protocols.proof.spot.prover.audit import local_challenger as LC
 
     args = ["audit", "--window", str(written.dir), "--sampling-design", _rate(written.dir), "--circuit", written.rec["window"]["circuit"], "--run", RUN,
             "--port", "10000",
@@ -1536,7 +1583,7 @@ def test_the_audit_reserves_a_port_for_every_session_its_sample_can_open(tmp_pat
     the audit reserves one a member, not a rank's 16 (`a5.RANK_PORTS`), and a sample needing more than ``--ports`` is
     refused before any session listens, since the next one could reach another audit's verifier."""
     import a5 as A5
-    from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
+    from verity.protocols.proof.spot.verifier.challenger import challenger_session as AC
 
     got = _write(tmp_path / "w", n=20, cap=1)
     mine, _doc, _sets = RA.verifier_window(got.dir, RND.parse_design(SAMPLING_DESIGN), None)
@@ -1576,17 +1623,14 @@ def test_the_audit_reserves_a_port_for_every_session_its_sample_can_open(tmp_pat
         assert seen == want
 
 
-def test_the_audit_passes_a_refused_window_on_the_check_for_what_its_caller_says_it_forges(written, tmp_path, monkeypatch, capsys):
-    """`audit` is told what a window that must be refused forges, ``--forged`` a false unit or ``--forged-read`` a
-    registered read that opens no pinned root, and passes it on that kind's check alone (`forged_outcome`). The sessions
-    (`a5.audit`) are stubbed and leave the record of a window of no false unit whose read opens no root: its proof left,
-    and Lean refused its session at setup on a row of the read. As a forged read it passes, its prover run as an honest
-    window's; as a forged unit it fails, its prover run with its self-check skipped; told neither it fails as any
-    rejected audit does, and told both the command refuses its arguments before any session. The summary of a window
-    that passes as a forged read carries that verdict under ``forged``, as a forged unit's does, so no reader of it
-    takes the pass for an accepting audit (the weights tie's pins refuse a summary that holds it)."""
+def test_the_audit_passes_a_refused_window_on_the_check_for_a_forged_unit(written, tmp_path, monkeypatch, capsys):
+    """`audit` told ``--forged`` passes a window that must be refused on the check for a false unit alone
+    (`forged_outcome`), its prover run with its self-check skipped. The sessions (`a5.audit`) are stubbed and leave the
+    record of a window of no false unit whose read opens no root: its proof left, and Lean refused its session at setup
+    on a row of the read, which is no check of a false unit, so it fails; told nothing it fails as any rejected audit
+    does."""
     import a5 as A5
-    from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
+    from verity.protocols.proof.spot.verifier.challenger import challenger_session as AC
 
     why = "setup: registered reads: port w: table row 0 does not open weights's registered root at position 0"
     self_checks = []
@@ -1624,12 +1668,6 @@ def test_the_audit_passes_a_refused_window_on_the_check_for_what_its_caller_says
         assert list(checks.values()) == [True, True], row
         return got
 
-    rc, row = run("--forged-read")
-    assert rc == 0 and row["ok"] is True and row["accepted"] is False, row
-    assert (row["forged"]["ok"], row["forged"]["passes_on"]) == (True, "read_refused"), row
-    assert stopped(row) == {"no_proof_released": False, "lean_refused": None, "read_refused": True}, row
-    summary = json.loads((tmp_path / "out--forged-read" / "summary.json").read_text())
-    assert summary["ok"] is True and summary["forged"] == row["forged"] and summary["audit"]["accepted"] is False, summary
     rc, row = run()
     assert rc == 1 and row["ok"] is False and "forged" not in row, row
     assert "forged" not in json.loads((tmp_path / "out" / "summary.json").read_text())
@@ -1637,10 +1675,7 @@ def test_the_audit_passes_a_refused_window_on_the_check_for_what_its_caller_says
     assert rc == 1 and row["ok"] is False, row
     assert (row["forged"]["ok"], row["forged"]["passes_on"]) == (False, "no_proof_released"), row
     assert stopped(row) == {"no_proof_released": False, "lean_refused": None, "read_refused": True}, row
-    assert self_checks == ["stop", "stop", "skip"]
-    with pytest.raises(SystemExit) as refused:
-        RA.main([*args, "--out", str(tmp_path / "both"), "--forged", "--forged-read"])
-    assert refused.value.code == 2 and len(self_checks) == 3
+    assert self_checks == ["stop", "skip"]
 
 
 def test_the_audit_counts_a_listed_record_with_window_ingress_and_prints_its_window_figure_with_its_premise(
@@ -1652,7 +1687,7 @@ def test_the_audit_counts_a_listed_record_with_window_ingress_and_prints_its_win
     is the records' alone. a5's workers' flags (`a5.lean_options`) reach the stub as given, a5's defaults otherwise, and
     the summary carries a5's ``negative_workers``."""
     import a5 as A5
-    from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
+    from verity.protocols.proof.spot.verifier.challenger import challenger_session as AC
 
     mine, stated, _sets = RA.verifier_window(written.dir, RND.parse_design(SAMPLING_DESIGN), None)
     mine = _listed(mine)
@@ -1699,15 +1734,11 @@ def test_the_audit_counts_a_listed_record_with_window_ingress_and_prints_its_win
     assert json.loads((tmp_path / "several" / "summary.json").read_text())["negative_workers"] == {"workers": 5}
 
 
-def test_warm_fills_the_compose_cache_the_audit_then_takes(written, tmp_path, monkeypatch, capsys):
+def test_warm_fills_the_compose_cache_it_is_given(written, tmp_path, monkeypatch, capsys):
     """``warm`` hands `a5.warm` the verifier's window and its composers, each saying what it composes from (the record's
     statement under the stager's label, which a5's cache keys), with ``--compose-cache``, ``--jobs`` and ``--mem-gb``, and
-    prints each template's row as it finishes. The audit warms first, ``--jobs`` at a time within ``--audit-mem-gb``, into
-    its ``--compose-cache``, or with none into its own, saying so at once, and keeps each row in its ``composed.jsonl``;
-    it hands a5 that cache. It hands a5 ``--archive-link`` and ``--gpus`` (its proof server's cards, `a5.devices`) too,
-    each only where it is given."""
+    prints each template's row as it finishes."""
     import a5 as A5
-    from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
 
     seen = {}
 
@@ -1729,39 +1760,6 @@ def test_warm_fills_the_compose_cache_the_audit_then_takes(written, tmp_path, mo
     assert lines[0] == "WARMING 1 templates, 2 at a time"
     assert json.loads(lines[1].removeprefix("COMPOSED "))["template"] == TID
     assert json.loads(lines[-1].removeprefix("WARM "))["templates"] == 1
-
-    class Opened(Exception):
-        pass
-
-    def audit(a, *args, **kw):
-        seen["audit"] = a.compose_cache, a.archive_link, A5.devices(a)
-        raise Opened
-
-    session = SimpleNamespace(skip=lambda r: None, join=lambda: None, evidence=lambda: {}, shutdown=lambda: None)
-    monkeypatch.setattr(A5, "audit", audit)
-    monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
-    monkeypatch.setattr(RA, "free_ports", lambda span: 20000)
-    monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
-    args = ["audit", "--window", str(written.dir), "--sampling-design", _rate(written.dir), "--circuit", written.rec["window"]["circuit"], "--run", RUN,
-            "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--zk-server", "f", "--out", str(tmp_path / "out"),
-            "--skip-negatives", "--challenger", "local", "--main", "m.txt"]
-    own = str(tmp_path / "out" / "compose-cache")
-    for extra, want in ((["--compose-cache", cache], (cache, False, None)), ([], (own, False, None)),
-                        (["--archive-link"], (own, True, None)), (["--gpus", "0,2"], (own, False, [0, 2]))):
-        capsys.readouterr()
-        with pytest.raises(Opened):
-            RA.main([*args, *extra])
-        assert seen["audit"] == want and seen["jobs"] == 1
-        said = [x for x in capsys.readouterr().out.splitlines() if x.startswith("COMPOSE")]
-        told = [] if extra[:1] == ["--compose-cache"] else [
-            "COMPOSE composing 1 templates one at a time: no compose cache was given; run the warm first, or pass --jobs"]
-        assert said[:-1] == told and said[-1].startswith("COMPOSED "), said
-        assert [json.loads(x)["template"] for x in (tmp_path / "out" / RA.COMPOSED).read_text().splitlines()] == [TID]
-    with pytest.raises(Opened):
-        RA.main([*args, "--jobs", "4", "--audit-mem-gb", "100", "--keep-circuits", "--min-free-gb", "50"])
-    assert (seen["jobs"], seen["mem"], seen["keep"], seen["free"]) == (4, 100.0, True, 50.0)
-    with pytest.raises(SystemExit):
-        RA.main([*args, "--gpus", "0,0"])
 
 
 def test_a_table_reads_composer_is_keyed_by_the_verifiers_executable_and_no_other_composer_is(tmp_path, monkeypatch):
@@ -1835,36 +1833,6 @@ print(json.dumps([sorted(m for m in sys.modules if m.split(".")[0] == "verity_vl
     assert other == [], f"the audit loaded these modules of the adapter, outside every catalog package ({catalogs}): {other}"
 
 
-def test_the_served_compilers_command_charges_the_registered_length_and_refuses_what_it_cant_compile(tmp_path, monkeypatch, capsys):
-    """``prove_path.py circuit``, the served window's registered compiler as `records_audit.compile_check` runs it, on the
-    synthetic serve-openai run of `test_prove_path` (its I2 compile stubbed, and the window over its Programs a coordinate
-    window): it writes a circuit record the audit reads (`interface.window_of_record`) under no run and prints the length the
-    docket charges, and exits `records_audit.REFUSED` on advice it can't compile."""
-    import prove_path as PP
-    from test_prove_path import _served
-    from verity_vllm.pipeline import serving_rows as SRW
-
-    s = _served(tmp_path, monkeypatch)
-    loaded = SimpleNamespace(progs={"r0": {}}, dirs={"r0": "d"}, arrivals={"r0": 0})
-    monkeypatch.setattr(PP.I2Compiler, "load", lambda self, rank, world, requests: loaded)
-    window = _listed(IF.Window(IF.Circuit("test", ((COORD, 5),)), "", RND.parse_design(SAMPLING_DESIGN), 4).window)
-    monkeypatch.setattr(SRW, "population", lambda progs, partition, run, dirs, **kw: (window, [[]]) if run == "" else None)
-    (tmp_path / "part.json").write_text(json.dumps({"templates": [TID], "law": SAMPLING_DESIGN}))
-    (tmp_path / "advice.bin").write_bytes(s.data)
-    base = ["circuit", "--serve-run", str(s.run), "--window", "0", "--partition", str(tmp_path / "part.json"), "--out",
-            str(tmp_path / "out.json")]
-    capsys.readouterr()
-    assert PP.main([*base, "--advice", str(tmp_path / "advice.bin")]) == 0
-    assert json.loads(capsys.readouterr().out.strip().splitlines()[-1]) == {"bits": s.bound["advice"]["bits"]}
-    out = json.loads((tmp_path / "out.json").read_text())
-    assert out["format"] == IF.CIRCUIT and (out["run"], out["context"]) == ("", "") and set(out) == set(IF.circuit_record(
-        window, "x", IF.templates_of(window)))
-    assert IF.window_of_record(out, RND.parse_design(SAMPLING_DESIGN), IF.resolve).partition_digest == window.partition_digest
-    (tmp_path / "bad.bin").write_bytes(b"\xff" * 7)
-    assert PP.main([*base, "--advice", str(tmp_path / "bad.bin")]) == RA.REFUSED
-    assert "prove_path.py circuit:" in capsys.readouterr().err
-
-
 def test_the_output_class_is_the_given_ranges_and_every_uncut_registered_read_of_an_output_port():
     """`output_class`: the verifier's own ranges, with each uncut registered read of an ``o<j>`` port adding its reader's
     units at the template's base in the population; a read of an input port, or a cut one, adds none."""
@@ -1894,46 +1862,6 @@ def test_a_served_output_that_the_next_step_reads_keeps_its_units_in_the_output_
         {"reader": "a", "port": "x", "param": "out", "at": 0, "radix": [8]}]}}
     assert RA.output_class(decode) == [[8, 16]]
     assert RA.output_class(decode, own={"y"}) == [[8, 16]]
-
-
-def test_a_row_dir_whose_names_are_permuted_under_its_digests_is_refused_or_ignored_by_the_compile_check(tmp_path, monkeypatch):
-    """No Program digest covers a Build's row names or its weights fields' names (nor its ``supplied``, correspondence or
-    ``prefix_cache.json``), and the served compiler's command reads none of them from the prover: it takes no row dir and
-    compiles over its own Build of each Program I2 compiled, beside the names its compile gives it (`prove_path.own_builds`).
-    Against a prover's row dir permuted under unchanged digests (each Build still I2's Program, `build_of`, its correspondence
-    record permuted with its names), the compile check refuses by name (``circuit``) the circuit.json whose names make another
-    circuit (a layer-1 SiluMul row and layer 0's first down_proj row swap names: one more SiluMul row in layer 0's scope), and
-    ignores names that make the same one (layers 0 and 1's first SiluMul rows swapped, which moves only the prover's own reads;
-    two weights fields swapped): the verifier's record is its own compile's in each case."""
-    import prove_path as PP
-    from test_prove_path import LAYER0, _circuit, _row_dir, _tiny_served
-
-    s = _tiny_served(tmp_path, monkeypatch)
-    (tmp_path / "part.json").write_text(json.dumps(LAYER0))
-    (tmp_path / "advice.bin").write_bytes(s.data)
-    out = tmp_path / "mine" / "circuit.json"
-    out.parent.mkdir()
-    assert PP.main(["circuit", "--serve-run", str(s.run), "--window", "0", "--partition", str(tmp_path / "part.json"),
-                    "--advice", str(tmp_path / "advice.bin"), "--out", str(out)]) == 0
-    assert s.compiles == [True] and list(out.parent.iterdir()) == [out]
-    mine = json.loads(out.read_text())
-    own, own_rows = _circuit(PP.Capped(PP.i2_of_serve(str(s.run), 0, str(tmp_path / "own"), None, None, own=True)), s.data, LAYER0)
-    assert IF.circuit_of(own) == IF.circuit_of(mine)
-    copy = ("import json, shutil, sys; a = sys.argv; shutil.copy(a[1], a[a.index('--out') + 1]); "
-            f"print(json.dumps({{'bits': {s.bound['advice']['bits']}}}))")
-    compilers = {s.bound["compiler"]["name"]: {"digest": s.bound["compiler"]["digest"], "argv": [sys.executable, "-c", copy, str(out)]}}
-    opening = json.loads(Path(s.a.opening).read_text())
-    reads = lambda rows: [(rid, int(r["i"])) for rid, _pi, r, _d in rows[0]]  # noqa: E731
-    for k, (name, names, params, codes, same_reads) in enumerate((
-            ("honest", None, False, [], True),
-            ("a layer-1 SiluMul row and layer 0's down_proj swapped", ("model.model.layers.1.mlp.act_fn/", "model.model.layers.0.mlp.down_proj/"),
-             False, ["circuit"], False),
-            ("layers 0 and 1's SiluMul rows swapped", ("model.model.layers.0.mlp.act_fn/", "model.model.layers.1.mlp.act_fn/"), False, [], False),
-            ("layers 0 and 1's down_proj weights swapped", None, True, [], True))):
-        rows = _row_dir(tmp_path / f"rows{k}", s, names, params)
-        theirs, their_rows = _circuit(PP.Capped(PP.i2_of_serve(str(s.run), 0, str(rows), None, None)), s.data, LAYER0)
-        v, bound = RA.compile_check(theirs, s.bound, opening, compilers, tmp_path / "c")
-        assert (v["codes"], bound is None, reads(their_rows) == reads(own_rows)) == (codes, bool(codes), same_reads), name
 
 
 @pytest.mark.parametrize("ports", [(), (SimpleNamespace(name="scan-state", value=""),),

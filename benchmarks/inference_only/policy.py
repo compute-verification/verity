@@ -39,7 +39,7 @@ TIED = HERE / "tied.toml"
 WORK = ("linears", "attention", "lm_head")
 TOTAL = "total"
 #: a policy's units. `c` is in two-input Boolean gates, as the Lean count counts a block Definition's by the gate
-#: table (`definitions.boolean.gate_table`): not the block's gates at their widths (`Definition.gates`), which
+#: table (`verity.circuits.count.table`): not the block's gates at their widths (`Definition.gates`), which
 #: `inference_blocks.budgets` sums into a number also called c
 UNITS = {"c": "Boolean gates a block", "k": "fresh input bits a block", "n": "blocks"}
 #: the work every figure is for, which the bound's premises are taken of (`min_cut`'s docstring has why): a registered

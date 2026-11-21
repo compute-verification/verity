@@ -30,7 +30,7 @@ XOR-in folds' per-row keys did, and neither fold is an ε design ("ε in the ten
 
 ## Measure a facet
 
-A facet is measured by a microbenchmark that knows nothing about any algorithm (`../pouw/opcode_probe/`, on `../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/gpu_kit/`).
+A facet is measured by a microbenchmark that knows nothing about any algorithm (`../pouw/opcode_probe/`, on `../../verity/protocols/accounting/compute/pouw/prover/kernels/gpu_kit/`).
 Its numbers enter `data/` only from a run that passes every gate below. A refused probe stays in the run as a visible
 failure.
 
@@ -100,8 +100,7 @@ that writes registers its `copy16` line (`tests/calibration/machine_model/test_d
 ## Adopt a probe's census
 
 An opcode probe (`../pouw/opcode_probe/`) writes its gated rows as `census.csv` in this schema, with no epochs. After steps 3
-and 4 above, `uv run machine-model --device sm_120 adopt CENSUS EPOCH` merges it at `EPOCH`, which must be the last epoch. Each (kind,
-row) keeps the faster of its line at the epoch before and the measured one: a row's u must be a lower bound on what
+and 4 above, merge it at `EPOCH`, the last epoch, by hand. Each (kind, row) keeps the faster of its line at the epoch before and the measured one: a row's u must be a lower bound on what
 every program pays on it, so a line slower than the hardware makes a price that isn't sound. A faster line closes the
 old one at the epoch before (in the old line's file), adds its own to `data/census/EPOCH.csv` and adds its runs to the
 row's in `rows.csv`; a slower one changes nothing. A probe case the census has no row for is a new row and, if it is
@@ -111,7 +110,7 @@ A joint row a re-measurement finds violated (a measured point past 1) is unsound
 closes at the epoch before, and the new frontier's rows replace it. `opcode_probe/eps1.py facets --prior data/rows.csv
 --emit EPOCH` prints them: the upper hull of the new points and the old rows' vertices, with the 2% margin. Each MMA
 form is its own kind on the joint rows (`IMMA16816`, `HMMA1684T`, …, each with its `copy16` line). A vector's own file
-says what it closed and what replaced it (its `summary` and `note`); `machine-model render vectors` lists them all.
+says what it closed and what replaced it (its `summary` and `note`).
 
 ## Designs
 
@@ -119,9 +118,8 @@ A design is one file, `data/designs/NAME.toml`. Its `aliases` are its other name
 read on top of its `base` (the design it varies, if it names one) and of `data/designs.toml`, which holds what every
 design shares: honest's profile, L, the proof block, the coins, the fold, ε_clock, the sampling budget, the baseline and
 the routes. Each top-level key a file sets replaces the inherited one whole, and `name`, `title`, `summary` and
-`aliases` are never inherited. `machine-model designs` prints the registry (`--json` too), `machine-model render
-designs` prints it with the noise leaves (`NOISE` in `eps.py`) and the peel sums kernels (`SUMS`) as legends, and `eps
---json` carries a design's entry under `registry`.
+`aliases` are never inherited.
+`eps --json` carries a design's entry under `registry`.
 
 Beside its names, a design file has these keys:
 
@@ -152,8 +150,8 @@ for the design's noise, an arm that isn't a spec, and a filler off lanes.
 that reads one device's model is given it, by `--device`, `--card` or `--data`, and refused without one. Another device's measurements go in `data/devices/sm_NN/`: sm_90 (the H200) and
 sm_100 (the B200). Each directory's model is the one card its `model.toml` names (`card`), never another card of its
 target: `--card SKU` reads the directory whose model is that card's, and refuses a card none is (an H100, sm_90a like
-the H200, has none). `machine-model render devices` lists each directory a command can price, with its epochs, rows,
-census lines, vectors, designs and honest kernels. A device directory follows these rules:
+the H200, has none).
+A device directory follows these rules:
 
 - It holds `rows.csv` and `census.csv` in `data/`'s schema, and its rows follow "Measure a facet". Its probe's
   `census.py` writes them from gated runs.

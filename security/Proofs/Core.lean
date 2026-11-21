@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Core.Circuit
+public import Proofs.Core.Rblk
 public import Proofs.Core.Scheme
 public import Proofs.Core.Advice
 public import Proofs.Core.PrivatePartition

@@ -257,8 +257,8 @@ theorem readersOf_noUnit {d : Json} {D : Draw.UnitSample} (hD : Draw.UnitSample.
     HmLinks.readersOf (some d) = some #[] := by
   simp only [HmLinks.readersOf, Option.bind_some, hD, Except.toOption, Option.map_some, hpr]
 
-/-- **Linking at no unit returns at any public file whose unit indices read**, when it returned at one: it parses
-META's links and decodes the program, which the public file does not enter, and checks no reader. -/
+/-- **Linking at no unit returns at any public file whose unit indices read**, when it returned at one: it decodes
+the program, which the public file does not enter, and checks no reader. -/
 theorem links_noUnit {c : Circuit} {pop pop' : Public} {prog : ByteArray} {w : Nat} {u : Json} {a : Array Json}
     {idx : Array Nat} (h : HmLinks.check c pop (some #[]) prog = .ok w)
     (hu : J.get pop'.header "units" "public file" = .ok u) (ha : J.arr u "indices" "public file" = .ok a)
@@ -266,7 +266,6 @@ theorem links_noUnit {c : Circuit} {pop pop' : Public} {prog : ByteArray} {w : N
     OkWith (HmLinks.check c pop' (some #[]) prog) fun _ => True := by
   unfold HmLinks.check at h
   dsimp only at h
-  walk_step
   walk_step
   unfold HmLinks.check HmLinks.checkAt
   dsimp only

@@ -34,8 +34,9 @@ from verity.circuits.defs import bind  # noqa: E402
 from verity.circuits.evaluation import evaluate_batch  # noqa: E402
 from verity.commitments.periods import interface as IF  # noqa: E402
 from verity.circuits.ops import gemm as G  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, proofs as PF  # noqa: E402
-from verity.protocols.proofs.spot.prover import docket as DK  # noqa: E402
+from verity.protocols.proof.spot.verifier.one_stage import draw as D, proofs as PF  # noqa: E402
+from verity.protocols.proof.spot.verifier.one_stage.settings import lean_env  # noqa: E402
+from verity.protocols.proof.spot.prover import docket as DK  # noqa: E402
 from verity.commitments import randomness as RND  # noqa: E402
 
 
@@ -73,7 +74,7 @@ def window(d: Path, members: int) -> Path:
 
 
 def audit_argv(win: Path, out: Path, main: Path, flock: Path, lean: Path) -> list[str]:
-    m0 = os.pathsep.join(str(ROOT / p) for p in ("", "benchmarks/numerical/python", "verity/protocols/proofs/flock/prover/python",
+    m0 = os.pathsep.join(str(ROOT / p) for p in ("", "benchmarks/numerical/python", "verity/protocols/proof/flock/prover/python",
                                                   "adapters/vllm"))
     return [sys.executable, str(ROOT / "benchmarks" / "prove_path" / "records_audit.py"), "audit", "--window", str(win),
             "--sampling-design", RULE, "--circuit", hashlib.sha512((win / "circuit.json").read_bytes()).hexdigest(), "--run", RUN,
@@ -95,7 +96,7 @@ def one(root: Path, members: int, flock: Path, lean: Path) -> dict:
     env = {k: v for k, v in os.environ.items() if not k.startswith(("FC_", "FLOCK_")) and k != "PYTHONPATH"}
     env.update(RAYON_NUM_THREADS=str(os.cpu_count()), RUST_MIN_STACK=str(64 << 20), FLOCK_CHALLENGER="1")
     t = time.monotonic()
-    p = subprocess.run(audit_argv(win, work / "audit", main, flock, lean), capture_output=True, text=True, env=env)
+    p = subprocess.run(audit_argv(win, work / "audit", main, flock, lean), capture_output=True, text=True, env=lean_env(env))
     (d / "audit.log").write_text(p.stdout)
     (d / "audit.err").write_text(p.stderr)
     res["audit"] = {"rc": p.returncode, "seconds": round(time.monotonic() - t, 1),

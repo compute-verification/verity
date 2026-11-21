@@ -45,7 +45,7 @@ checkout. It starts its own `research run` in a slot of the research pool `resea
 nodes' check slots take train checks only), so inside a `research run` it is refused, naming this command.
 
 Locally, while editing, one named test file or `-k` selection of under about a minute and 1 GB is fine:
-`uv run pytest tests/verity/protocols/proofs/flock/prover/test_layouts.py -k round_trip`, from the root (pytest takes the
+`uv run pytest tests/verity/protocols/proof/flock/prover/test_layouts.py -k round_trip`, from the root (pytest takes the
 suite's own configuration; `uv run` inside a suite's directory can find a workspace of its own). It doesn't cache and doesn't load the read guard. The shell
 hook refuses a local pytest that names no file or `-k`; `AGENT_GUARD_LOCAL_OK=1` is the opt-in.
 
@@ -108,11 +108,7 @@ untraced`, which keys it on the suite's whole tree. A test that builds or runs a
   `research run` set). Name it `VERITY_{PACKAGE}_...`, and say in the skip reason how long it takes. A test that leaves
   `check` this way but must still run goes in `check.py`'s `OPT_IN`, which the nightly cold check (`--no-cache`) runs by
   name with its variable set; `tests/test_opt_in_tests.py` holds it to its mark.
-- **A check far past ten minutes cold** stays out of `check` and runs as a recorded run on the change that needs it:
-  adapters/vllm's heavy circuit-neutrality tier, `verity-vllm neutrality --tier heavy` on a 256-CPU node (`research
-  pods list`; `adapters/vllm/verity_vllm/pipeline/neutrality.py`), on a change under `adapters/vllm/verity_vllm/program/`,
-  `adapters/vllm/verity_vllm/engine/` or its `pipeline/build.py` meant to leave the circuits alone. Its fast tier runs
-  after each landing (`post_train.py`), and a row it finds moved rings @vllm: a PR that moves one on purpose re-pins it.
+- **A check far past ten minutes cold** stays out of `check` and runs as a recorded run on the change that needs it.
 - **GPU, pod and vLLM tests skip themselves** without the hardware or runtime; their real runs are recorded runs on a pod.
 - **Skip on a third-party package, never on a module of this checkout** (the guard fails that skip):
   `pytest.importorskip("torch")`, then import ours plainly.

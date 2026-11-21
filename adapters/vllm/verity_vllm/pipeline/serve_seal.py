@@ -1,12 +1,12 @@
 """The Commit scheme and the sealing of `verity_vllm.pipeline.serve_openai`'s windows.
 
 `committer` builds the server's committer, rows-sha512's (``--scheme``), the declared Commit of record's
-(`pipeline.commit.make_committer`'s ``native_collect_v2b``: hm96-sha512 rows in frame-v3-sha512 trees, 64-byte roots) with its
-acquisition built as the Commit builds it (`pipeline.commit_attach.attach_of_record`) over the row's required manifest
-(``--required-manifest``, the one ``verity-vllm predict row`` wrote with the row's Build of record, `serve_row`): the attention
-hidden tap (``--hidden-so``), the norm-scale tap (``--norm-tap-so``) and the hook sets of
-the acquisition plan, so its name is the Commit's (``...+hidden_m1+norm_scale+plan``) and a part the manifest names that did not
-attach is refused (`parts_missing`). Then `served_record.StepInputPort` (each step's
+(`make_committer`'s ``native_collect_v2b``: hm96-sha512 rows in frame-v3-sha512 trees, 64-byte roots) with its
+acquisition over the row's capture plan (`check.capture_plan.captured` over the registered compiler's slot
+Programs) of the row's Build of record (``--row-build``, ``verity-vllm predict row``'s, `serve_row`), built at the serve's start:
+the sources of the values no module returns (`commit_attach.attach_of_plan`) and the plan's hook sets, a shared module's k-th
+call bound as its k-th path (`RuntimeTree.aliases`, sealed as the context's ``op_path_aliases``), and the arena sized from the
+window class the application declares (``--window-class``, `arena_envelope`). Then `served_record.StepInputPort` (each step's
 stream starts with its input ids, then its positions, each padded to ``--max-num-batched-tokens``: the port network attestation's
 served-rows tie's Definition reads; no proof of it runs, so today the rows registered at serve time are the
 prover's word) and `served_record.SamplerInputsSource` are attached and the arena sized; under ``--seal`` it registers
@@ -19,12 +19,11 @@ deferred Commit's row dir, ``windows/w<k>/``, the way a declared Commit with ``-
 (`pipeline.replay_bundle`): ``commit/replay_bundle_p0/`` (the committed store, the weights tree, the binding map, the context,
 the manifest), and beside it the record that bundle is opened against (`deferred_rows.of_record`): ``commit/verdict.json``
 naming the bundle, ``commit/runs.jsonl`` with the window's run, and ``commit/binding_map_p0.json``. The binding map names
-each committed value as the row's Programs read it (`served_binder`: a Linear's ``out``, RoPE's ``query`` / ``key``, a norm's
-``norm_scale``, ``fa2.m1/*``, and the port's ids and positions as the identities the Programs read them under,
+each committed value as the row's Programs read it (`served_binder`: each member of each row of the capture plan, under the
+slot Programs' own op paths, and the port's ids and positions as the identities the Programs read them under,
 `port_identities`), with no second tensor under an identity the port is (`copies_beside_port`) and no port position other
-than its rows ran (`positions_off`), and the context carries the row's required manifest by its path, its Program digest and its
-``manifest_digest`` (a manifest naming no digest is refused, `manifest_refusal`), the manifest's ``op_path_aliases``, which the
-opened store resolves a shared module's layer-N path through, the window's served-rows record (`serve_commit.CommitWindows`' ``served_rows``) and the
+than its rows ran (`positions_off`), and the context carries the registered compiler the row's Build of record binds
+(``compiler``, its name and digest), the window's served-rows record (`serve_commit.CommitWindows`' ``served_rows``) and the
 step-input port (`port_of`; `port_layout` is where the window's streams put it). The window's requests are named by the body's ``user`` (the id the advice names them
 by), and the bundle names no Programs: a served window's Programs are the registered compiler's for its advice, made after
 the window closed. With ``--retain-exclude hidden_m1`` (`serve_release.RetentionOptions`) the attention interiors (``fa2.m1/*``, ``fa3.m1/*``)
@@ -78,24 +77,39 @@ SCHEMES = (ROWS,)
 SERVED_WINDOW = "verity-vllm/served-window/v1"
 
 
-#: the committer a declared Commit commits rows-sha512 with (`pipeline.commit`'s default ``--committer``)
+#: the committer a declared Commit commits rows-sha512 with
 DECLARED_COMMITTER = "native_collect_v2b"
 
 
+def make_committer(kind: str, engine: Any, args: Any, run_id: str) -> Any:
+    """The windowed worker (native hook bodies and FA2 tap glue, size-adaptive gather windows, the native worker step), which
+    commits rows-sha512 (`step_rows`) over a ring of device windows; refused (ValueError) for any other ``kind``."""
+    if kind != DECLARED_COMMITTER:
+        raise ValueError(f"--committer {kind}: the Commit's committers are {DECLARED_COMMITTER} (the windowed worker, rows-sha512)")
+    from verity_vllm.commit.committer.native_collect import NativeCollectCommitter
+
+    return NativeCollectCommitter(engine, run_id=run_id, arena_bytes=((args.arena_mb << 20) if args.arena_mb else None), gather=True,
+                                  native_hooks=True, auto_blocks=True, native_worker=True,
+                                  populate_threads=getattr(args, "pinned_populate_threads", None),
+                                  commit_scheme=getattr(args, "commit_scheme", None))
+
+
 def scheme_refusal(opts: Any) -> str | None:
-    """Why ``opts`` can't commit under rows-sha512 (None: it can): it needs the row's manifest and a token budget of whole
-    step-input port rows (`PORT_IDS`); a row's manifest, which the engine's scheduler follows too (`serve_row`), is predict's
-    (`serve_row.row_refusal`), committing or not."""
+    """Why ``opts`` can't commit under rows-sha512 (None: it can): it needs the row's Build of record and a token budget of
+    whole step-input port rows (`PORT_IDS`); a row's Build, whose workload Program the engine's scheduler follows too
+    (`serve_row`), is predict's under this tree's compiler (`serve_row.row_refusal`), committing or not."""
     if why := SL.retention_refusal(opts):
         return why
-    if opts.required_manifest and (why := row_refusal(opts.required_manifest)):
+    if opts.row_build and (why := row_refusal(opts.row_build)):
         return why
     if not opts.commit:
         return None
-    if not opts.required_manifest:
-        return (f"--scheme {ROWS} commits with the Commit of record's parts, which its row's manifest names: pass "
-                "--required-manifest DIR/manifest.json, DIR the row's Build of record (`verity-vllm predict row --row ROW --out DIR`), "
-                "and the row's --hidden-so, --norm-tap-so, or --no-commit to serve without a Commit")
+    if not opts.row_build:
+        return (f"--scheme {ROWS} commits the row's capture plan, the registered compiler's: pass --row-build DIR, DIR the row's "
+                "Build of record (`verity-vllm predict row --row ROW --out DIR`), and the row's --hidden-so, or "
+                "--no-commit to serve without a Commit")
+    if why := class_refusal(opts):
+        return why
     if int(opts.max_num_batched_tokens) % PORT_IDS:
         return (f"--scheme {ROWS} starts each step's stream with its step-input port, the step's ids in whole "
                 f"{step_rows.ROW_BYTES}-byte rows: pass --max-num-batched-tokens a multiple of {PORT_IDS}, not "
@@ -104,48 +118,47 @@ def scheme_refusal(opts: Any) -> str | None:
 
 
 def committer_args(opts: Any) -> SimpleNamespace:
-    """What `pipeline.commit.make_committer` and `pipeline.commit_attach.attach_of_record` read of a Commit's options, for
-    `DECLARED_COMMITTER` under ``opts.scheme`` and the row's manifest ``opts.required_manifest``."""
-    from verity_vllm.acquire.sources.taps import TapSources
-
+    """What `make_committer` and `pipeline.commit_attach.attach_of_plan` read of the serve's options."""
     return SimpleNamespace(arena_mb=0, profile_hooks=False, pinned_populate_threads=None, commit_scheme=opts.scheme,
-                           required_manifest=opts.required_manifest, programs_root=programs_root_of(opts), program_dir=None,
-                           hidden_so=opts.hidden_so, hidden_ns=opts.hidden_ns, tap_cap_mb=opts.tap_cap_mb, out=opts.out,
-                           tap_sources=TapSources(norm_tap_so=opts.norm_tap_so), moe_source="auto",
-                           required_classes=None)
+                           programs_root=programs_root_of(opts), program_dir=None, out=opts.out,
+                           moe_source="off", required_classes=None)
 
 
-def manifest_of_record(opts: Any) -> dict[str, Any]:
-    """The row's required manifest, held to its partition of record (`commit.partition.require_partition`), as the Commit
-    loads it."""
-    from verity_vllm import messages as M
-    from verity_vllm.commit.partition import require_partition
+def window_class_of(opts: Any) -> SimpleNamespace:
+    """The bounds the window class ``opts.window_class`` (``S,P,O[,LANES,EVERY]``) declares: its ``slots``, ``prompt`` and
+    ``positions`` (`WindowClass.positions`, the longest prompt's then every output but the last); `ValueError` when it declares
+    none.  The record path reaches the predictor, which defines the class, only through ``predict emit``."""
+    from verity_vllm.inputs.serves import window_class_parts
 
-    man = require_partition(json.loads(M.read(Path(opts.required_manifest), "Circuit")), programs_root_of(opts), None)
-    if why := manifest_refusal(opts.required_manifest, man):
-        raise UsageError(why)
-    return man
+    try:
+        slots, prompt, outputs = window_class_parts(opts.window_class)[:3]
+    except ValueError as e:
+        raise ValueError(f"--window-class {e}") from None
+    return SimpleNamespace(slots=slots, prompt=prompt, positions=prompt + outputs - 1)
 
 
-def manifest_refusal(path: str | None, manifest: Mapping[str, Any]) -> str | None:
-    """Why a sealed window can't record the row's required manifest ``manifest``, read from ``path`` (None: it can): its context
-    binds the manifest by its Program digest and its own digest, ``manifest_digest`` over its identities, both of which predict
-    row writes into it."""
-    if missing := [k for k in ("program_digest", "manifest_digest") if not isinstance(manifest.get(k), str) or not manifest[k]]:
-        return (f"the row's manifest {path} names no {' and no '.join(missing)}, and a sealed window binds its manifest by "
-                "it: pass the row's Build of record (`verity-vllm predict row --row ROW --out DIR`, --required-manifest "
-                "DIR/manifest.json)")
+def class_refusal(opts: Any) -> str | None:
+    """Why the Commit can't size its arena (None: it can): the bound is the window class the application declares
+    (``--window-class``), and the engine's limits admit no more than it, slots a step and positions a sequence."""
+    if not opts.window_class:
+        return (f"--scheme {ROWS} sizes the Commit's arena from the window class the application declares: pass --window-class "
+                "S,P,O (the class verity_vllm.inputs.serves.SERVES states)")
+    try:
+        cls = window_class_of(opts)
+    except ValueError as e:
+        return str(e)
+    if int(opts.max_num_seqs) > cls.slots or int(opts.max_model_len) > cls.positions + 1:
+        return (f"--window-class {opts.window_class} bounds a step at {cls.slots} sequences of {cls.positions + 1} positions, and the "
+                f"engine admits {opts.max_num_seqs} of {opts.max_model_len}: pass --max-num-seqs {cls.slots} --max-model-len "
+                f"{cls.positions + 1}")
     return None
 
 
-def parts_missing(com: Any, manifest: Mapping[str, Any], hidden_required: bool | None) -> list[str]:
-    """The committer parts the Commit of record has for ``manifest`` that ``com`` lacks: the hidden tap when the manifest names
-    the hidden class, each tap source `taps.attached` names, and the acquisition plan."""
-    from verity_vllm.acquire.sources.taps import attached
-
-    have = str(com.name).split("+")
-    want = (["hidden_m1"] if hidden_required else []) + attached(manifest) + ["plan"]
-    return [p for p in want if not any(h == p or (p == "hidden_m1" and h.startswith(p)) for h in have)]
+def arena_envelope(cls: Any) -> dict[str, Any]:
+    """The workload envelope the committer's arena is sized from (`size_arena`): the window class ``cls``'s bounds (its slots a
+    step, each of at most its prompt, its positions a sequence), one new token a decode step."""
+    return {"batch": cls.slots, "max_prompt": cls.prompt, "max_new": 1, "max_num_batched_tokens": cls.slots * cls.prompt,
+            "max_model_len": cls.positions + 1}
 
 
 def target_of(model: Any = None, async_scheduling: bool = False) -> dict[str, Any]:
@@ -175,50 +188,44 @@ def seal_of(opts: Any) -> dict[str, Any]:
 
 def committer(opts: Any, llm: Any, label: str = "serve-openai") -> Any:
     """The server's committer over ``llm`` under ``opts.scheme`` (module docstring), its run ``label:<run id>``, refused unless the
-    scheme may commit (`scheme_refusal`) and it retains on the host (the served record is read back from there)."""
+    scheme may commit (`scheme_refusal`) and it retains on the host (the served record is read back from there). Its capture
+    plan is the row's Build of record's (`capture_plan.rows_of_build` for the seal's binder, `capture_plan.of_build` for the
+    acquisition, whose prompt ids the step-input port carries), and its arena is sized from the window class the application declares."""
     if why := scheme_refusal(opts):
         raise UsageError(why)
     from verity_vllm import settings
+    from verity_vllm.check import capture_plan as CP
     from verity_vllm.commit.committer.host_retention import retain_exclude_families
-    from verity_vllm.engine import vllm_adapter as va
+    from verity_vllm.commit.served_record import SamplerInputsSource
     from verity_vllm.engine.handle import engine_of, model_runner
-    from verity_vllm.pipeline import commit as C, commit_attach as CA
+    from verity_vllm.pipeline import commit_attach as CA
+    from verity_vllm.pipeline.advice import registered_compiler
 
     run_id = f"{label}:{opts.run_id}"
+    rows, classes, args = CP.rows_of_build(opts.row_build), CP.of_build(opts.row_build), committer_args(opts)
     eng = SimpleNamespace(llm=llm.vllm, runner=model_runner(llm.vllm), model=llm.model, vllm_config=engine_of(llm.vllm).vllm_config,
                           cp={"repo": llm.pin.model, "revision": llm.pin.revision})
     spec = opts.retention.retain_exclude
-    manifest, args = manifest_of_record(opts), committer_args(opts)
     if spec:
         settings.put("VERITY_RETAIN_EXCLUDE", spec)
-    com = C.make_committer(DECLARED_COMMITTER, eng, args, run_id)
+    com = make_committer(DECLARED_COMMITTER, eng, args, run_id)
     if spec and set(getattr(com, "retain_exclude", ())) != retain_exclude_families(spec):
         raise RuntimeError(f"--retain-exclude {spec}: the committer {com.name} excludes {sorted(getattr(com, 'retain_exclude', ()))}")
     if com.commit_scheme != opts.scheme:
         raise RuntimeError(f"--scheme {opts.scheme}: the committer {com.name} commits {com.commit_scheme}")
     if com.retain != "host":
         raise UsageError(f"VERITY_RETAIN={com.retain}: the served record is read back from the values retained on the host")
-    fa = va.observed_flash_attn_version(llm.model)
-    classes, family = CA.classes_of_record(manifest, llm.model, fa)
-    att = CA.attach_of_record(com, eng, args, manifest, Path(opts.out) / "acquisition", kind=DECLARED_COMMITTER,
-                             required_classes=classes, required_classes_cli=False, hidden_family=family, fa_version=fa)
-    if missing := parts_missing(com, manifest, bool(att.hidden_required and family)):
-        raise UsageError(f"--scheme rows-sha512: the committer {com.name} lacks {missing}, which the Commit of record attaches for "
-                         f"{opts.required_manifest}; pass the bench row's taps (--hidden-so, --norm-tap-so) as its Commit does")
-    com.required_manifest, com.required_manifest_path = manifest, str(Path(opts.required_manifest).resolve())
-    hidden_m1 = bool(opts.hidden_so) and att.hidden_required is not False
-    from verity_vllm.commit.served_record import SamplerInputsSource, StepInputPort
-
-    tokens = int(opts.max_num_batched_tokens)
+    att = CA.attach_of_plan(com, eng, args, [c for c in classes if c["capture"] != CP.INPUT_IDS], Path(opts.out) / "acquisition",
+                            kind=DECLARED_COMMITTER, rows=rows)
+    com.capture_plan, com.op_path_aliases = rows, {k: list(v) for k, v in att.runtime.aliases().items()}
+    here = registered_compiler()
+    com.compiler = {"name": here.name, "digest": here.digest}   # the row's, `row_refusal` held it to this tree's
     try:
-        com.attach_source(StepInputPort(com, tokens))
+        com.attach_source(StepInputPort(com, int(opts.max_num_batched_tokens)))
     except ValueError as e:
         raise UsageError(str(e)) from None
-    single_ids(com, manifest)
     com.attach_source(SamplerInputsSource(com))
-    com.arena_sizing_record = com.size_arena({"batch": opts.max_num_seqs, "max_prompt": tokens, "max_new": 1,
-                                              "max_num_batched_tokens": tokens, "max_model_len": opts.max_model_len},
-                                             hidden_m1=hidden_m1)
+    com.arena_sizing_record = com.size_arena(arena_envelope(window_class_of(opts)), hidden_m1=False)
     if getattr(com, "windowed", False):
         com.window_ring = com.enable_windows(com.arena_sizing_record)     # windowed staging's ring replaces the per-step blocks
     if opts.retention.retain == "device":
@@ -259,63 +266,68 @@ def window_requests(rows: Mapping[int, Sequence[tuple]], name_of: Callable[[str]
     return list(reqs.values()), request_rows
 
 
-def served_binder(manifest: Mapping[str, Any], steps: Sequence[int], sources: Sequence[Any] = ()) -> Any:
+def served_binder(plan: Sequence[Mapping[str, Any]], steps: Sequence[int], sources: Sequence[Any] = (),
+                  aliases: Mapping[str, Sequence[Any]] | None = None) -> Any:
     """The `query.manifest.bind.Binder` of a served window's ``steps``: the identities one engine step of the bench row's
-    Programs commits (its manifest's rows, weights aside, each (op_path, member, invocation) once, at its first row's place in
-    the Program), at every step, with the committing sources' ports. A served step batches requests at any step of their own,
-    and a module's output at a step is one identity whatever the requests in it; the binding map splits it between them
+    Programs commits (each member of each row of its capture plan, `capture_plan.captured`, each (op_path, member, row) once, in
+    the plan's order), at every step, with the committing sources' ports. A served step batches requests at any step of their
+    own, and a module's output at a step is one identity whatever the requests in it; the binding map splits it between them
     (`binding.build_binding_map`'s request rows). With a `served_record.StepInputPort` among the sources, its tensors bind as
     the identities the Programs read them under (`port_identities`), ahead of any other tensor of the step."""
     from verity_vllm.commit.served_record import StepInputPort
     from verity_vllm.query.manifest.bind import source_ports
 
-    return served_binder_of(manifest, steps, source_ports(sources), any(isinstance(s, StepInputPort) for s in sources))
+    return served_binder_of(plan, steps, source_ports(sources), any(isinstance(s, StepInputPort) for s in sources), aliases)
 
 
-def served_binder_of(manifest: Mapping[str, Any], steps: Sequence[int], ports: Mapping[str, Any], has_port: bool) -> Any:
-    """`served_binder` given the sources' merged ports (`bind.source_ports`) and whether a step-input port is among them."""
+def served_binder_of(plan: Sequence[Mapping[str, Any]], steps: Sequence[int], ports: Mapping[str, Any], has_port: bool,
+                     aliases: Mapping[str, Sequence[Any]] | None = None) -> Any:
+    """`served_binder` given the sources' merged ports (`bind.source_ports`) and whether a step-input port is among them. A
+    shared instance's path (``aliases``, `RuntimeTree.aliases`) binds as its first path's call of its index."""
     from verity_vllm.query.manifest.bind import Binder
+    from verity_vllm.query.manifest.format import narrowed_of
 
     one: dict[tuple[str, str, int], dict[str, Any]] = {}
-    for row in manifest.get("identities") or []:
-        r = {**row, **(row.get("identity") or {})}
-        if r.get("family") != "weights" and r.get("op_path") != "weights":
-            one.setdefault((str(r["op_path"]), str(r.get("output_member", "out")), int(r.get("invocation", 0))), r)
+    shared = {str(k): (str(v[0]), int(v[1])) for k, v in (aliases or {}).items()}
+    for d in plan:
+        op, k = shared.get(str(d["op_path"]), (str(d["op_path"]), 0))
+        for j, (m, _width, _dtype) in enumerate(d["members"]):
+            key = (op, str(m), k)
+            wide = narrowed_of(str(m))
+            one.setdefault(key, {"op_path": key[0], "output_member": key[1], "invocation": key[2], "position": [j],
+                                 **({"narrowed_of": wide} if wide else {})})
     placed = [{**r, "identity": None, "request_id": "*", "step": None, "engine_step": int(s), "rank": 0} for s in steps for r in one.values()]
-    binder = Binder.of_manifest({**manifest, "identities": placed, "requests_declared": []}, rank=0, ports=dict(ports))
+    binder = Binder(placed, rank=0, ports=dict(ports))
     if has_port:
-        binder.rebind.update(port_identities(manifest))
+        binder.rebind.update(port_identities(plan))
     return binder
 
 
-def port_identities(manifest: Mapping[str, Any]) -> dict[str, tuple[str, str]]:
+#: the Definitions whose input is the prompt's ids: an eager row's step-input port binds its ids as that row's ``in``
+EMBEDDINGS = ("Embedding_v1", "EmbeddingShard_v1")
+
+
+def port_identities(plan: Sequence[Mapping[str, Any]]) -> dict[str, tuple[str, str]]:
     """The identities the row's Programs read that the step-input port's tensors bind as, (op_path, member) by port name: its
-    ids the manifest's one input-ids identity (``c00.input/ids`` on the compiled path, the embedding's ``<module>/in`` on the
-    eager one), its positions ``c00.input/positions`` where the manifest has it. An eager row's Programs read no committed
-    positions: RoPE's are static structure of the Program (`rules.profile.RotaryEmbeddingRule` refuses a computed one),
-    compiled from the advice's rows, and the served-rows tie states that the port's positions are the window's served
-    rows; no proof of it runs, so today the rows registered at serve time are the prover's word. A manifest naming two
-    ids identities is refused."""
-    from verity_vllm.query.manifest.format import SERVED_IDS, SERVED_POSITIONS
+    ids the input of the capture plan's one embedding row (`EMBEDDINGS`, ``<module>/in`` on the eager path) or the compiled
+    path's ``c00.input/ids``, its positions ``c00.input/positions`` where the plan has it. An eager row's Programs read no
+    committed positions: RoPE's are static structure of the Program (`rules.profile.RotaryEmbeddingRule` refuses a computed
+    one), compiled from the advice's rows, and the served-rows tie states that the port's positions are the window's served
+    rows; no proof of it runs, so today the rows registered at serve time are the prover's word. A plan naming two ids is
+    refused."""
+    from verity_vllm.query.manifest.format import (
+        SERVED_IDS,
+        SERVED_POSITIONS,
+        spec_family,
+    )
 
-    fam: dict[tuple[str, str], str] = {}
-    for row in manifest.get("identities") or []:
-        r = {**row, **(row.get("identity") or {})}
-        if r.get("family") != "weights" and r.get("op_path") != "weights":
-            fam.setdefault((str(r["op_path"]), str(r.get("output_member", "out"))), str(r.get("family")))
+    have = {(str(d["op_path"]), str(m)) for d in plan for m, _w, _t in d["members"]}
     compiled_ids, compiled_pos = (tuple(n.rsplit("/", 1)) for n in (SERVED_IDS, SERVED_POSITIONS))
-    ids = sorted({k for k, f in fam.items() if f == "input_token_ids"} | ({compiled_ids} & set(fam)))
+    ids = sorted({(str(d["op_path"]), "in") for d in plan if spec_family(str(d.get("spec", ""))) in EMBEDDINGS}
+                 | ({compiled_ids} & have))
     if len(ids) > 1:
-        raise ValueError(f"the row's manifest names {len(ids)} input-ids identities, {ids}: the step-input port's ids can be one of them only")
-    return ({PORT_NAMES[0]: ids[0]} if ids else {}) | ({PORT_NAMES[1]: compiled_pos} if compiled_pos in fam else {})
-
-
-def single_ids(com: Any, manifest: Mapping[str, Any]) -> None:
-    """The port's ids as the step's one copy: the module whose ``<module>/in`` they bind as (`port_identities`) is dropped from the
-    acquisition plan's input sites, so its own input isn't committed beside them."""
-    op, member = port_identities(manifest).get(PORT_NAMES[0], (None, None))
-    if member == "in" and getattr(com, "plan_inputs", None) is not None:
-        com.plan_inputs.discard(op)
+        raise ValueError(f"the capture plan names {len(ids)} input-ids reads, {ids}: the step-input port's ids can be one of them only")
+    return ({PORT_NAMES[0]: ids[0]} if ids else {}) | ({PORT_NAMES[1]: compiled_pos} if compiled_pos in have else {})
 
 
 def copies_beside_port(bmap: Mapping[str, Any], aliased: Mapping[str, tuple[str, str]]) -> list[str]:
@@ -374,12 +386,14 @@ def positions_off_of(positions: Mapping[int, list[int] | None], rows: Mapping[in
 
 def seal_window(com: Any, rc: Any, d: Path, *, rec: Mapping[str, Any], reqs: list[dict[str, Any]],
                 request_rows: dict[int, list[tuple[str, int, int]]], tokens: Mapping[str, list[int]], sampling: Mapping[str, Any],
-                label: str, code: str | None = None, engine_of_record: Mapping[str, Any] | None = None, extras: Any = None) -> dict[str, Any]:
+                label: str, code: str | None = None, engine_of_record: Mapping[str, Any] | None = None, extras: Any = None,
+                binding: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """Seal one closed window into the row dir ``d`` as a declared Commit with ``--replay-deferred`` seals its run: the binding map
     (`binding.build_binding_map` over the window's layouts and step roots, its request rows by name), the store and weights tree
     (`replay_bundle.write_store`, with ``extras`` the registered tensors' bytes `extras_of` read, else read here), then
     `replay_bundle.seal_all` over the window's one run, its sampled replay and linkage deferred to the bundle; ``commit/runs.jsonl``
-    and ``commit/verdict.json`` are the record it is opened against. Returns what the window's line in windows.jsonl records of it.
+    and ``commit/verdict.json`` are the record it is opened against; ``binding``, what the window's close wrote of its binding
+    map (`binding_of`), else it is built here. Returns what the window's line in windows.jsonl records of it.
     The values the committer committed and didn't retain (``--retain-exclude``, `store_dump.not_retained`, which refuses any other
     gap) are named in the context, the bundle's manifest and that line as `replay_bundle.NOT_RETAINED`."""
     from verity_vllm.pipeline import replay_bundle as RB
@@ -389,7 +403,7 @@ def seal_window(com: Any, rc: Any, d: Path, *, rec: Mapping[str, Any], reqs: lis
     out.mkdir(parents=True, exist_ok=True)
     return seal_view(view_of(com), rc, d, store=lambda hashed: RB.write_store(out, 0, com, rc, digests=hashed, extras=extras), rec=rec,
                      reqs=reqs, request_rows=request_rows, tokens=tokens, sampling=sampling, label=label, code=code,
-                     engine_of_record=engine_of_record, t0=t0)
+                     engine_of_record=engine_of_record, t0=t0, binding=binding)
 
 
 @dataclass
@@ -404,8 +418,9 @@ class SealView:
     name: str
     scheme: str
     retain: str | None
-    manifest: Mapping[str, Any] | None
-    manifest_path: str | None
+    plan: Sequence[Mapping[str, Any]] | None
+    compiler: Mapping[str, str] | None
+    aliases: Mapping[str, Sequence[Any]]
     port: dict[str, Any] | None
     ports: Mapping[str, Any]
     has_port: bool
@@ -420,37 +435,30 @@ def view_of(com: Any) -> SealView:
     from verity_vllm.commit.served_record import StepInputPort, served_rows
     from verity_vllm.query.manifest.bind import source_ports
 
-    manifest, sources = getattr(com, "required_manifest", None), getattr(com, "sources", None) or ()
+    plan, sources = getattr(com, "capture_plan", None), getattr(com, "sources", None) or ()
     return SealView(program_digest=bytes(com.program_digest), chunk=com.chunk, layouts=com._layouts, name=com.name,
-                    scheme=com.commit_scheme, retain=getattr(com, "retain", None), manifest=manifest,
-                    manifest_path=getattr(com, "required_manifest_path", None), port=port_of(com),
-                    ports=source_ports(sources) if manifest is not None else {},
+                    scheme=com.commit_scheme, retain=getattr(com, "retain", None), plan=plan,
+                    compiler=getattr(com, "compiler", None), aliases=getattr(com, "op_path_aliases", None) or {}, port=port_of(com),
+                    ports=source_ports(sources) if plan is not None else {},
                     has_port=any(isinstance(s, StepInputPort) for s in sources), rows=served_rows(com),
                     positions=functools.partial(port_positions, com), unretained=functools.partial(SD.not_retained, com))
 
 
-def seal_view(v: SealView, rc: Any, d: Path, *, store: Callable[[dict[str, str]], Any], rec: Mapping[str, Any], reqs: list[dict[str, Any]],
-              request_rows: dict[int, list[tuple[str, int, int]]], tokens: Mapping[str, list[int]], sampling: Mapping[str, Any],
-              label: str, code: str | None = None, engine_of_record: Mapping[str, Any] | None = None,
-              t0: float | None = None) -> dict[str, Any]:
-    """`seal_window` over ``v``, its store written by ``store`` (given the dict that takes the sha256 of the files it hashed as it
-    wrote them) where `seal_window` writes it; ``t0`` is when the seal began."""
+def binding_of(v: SealView, rc: Any, d: Path, request_rows: dict[int, list[tuple[str, int, int]]]) -> tuple[dict[str, Any], dict[str, Any]]:
+    """The closed window's binding map (`binding.build_binding_map` over its layouts and step roots, its request rows by name),
+    written to ``d/commit/binding_map_p0.json`` at the window's close, and what its seal reads of it (``digest``, ``entries_n``,
+    the step-input port's identities, ``binds``: whether a binder bound it); refused by name where the step-input port isn't
+    the window's one copy of what it binds, or its positions aren't the rows'."""
     from verity_vllm.commit import binding as B
-    from verity_vllm.pipeline import replay_bundle as RB
 
-    t0 = time.perf_counter() if t0 is None else t0
     out = Path(d) / "commit"
     out.mkdir(parents=True, exist_ok=True)
-    pd = v.program_digest.hex()
-    manifest = v.manifest
-    if manifest is not None and (why := manifest_refusal(v.manifest_path, manifest)):
-        raise ValueError(why)
-    port = v.port
+    plan, port = v.plan, v.port
     with gc_paused():
-        binder = served_binder_of(manifest, sorted(v.layouts), v.ports, v.has_port) if manifest is not None else None
-        bmap = B.build_binding_map(v.layouts, rc.steps, rc.run_root, pd, request_rows=request_rows, chunk=v.chunk,
+        binder = served_binder_of(plan, sorted(v.layouts), v.ports, v.has_port, v.aliases) if plan is not None else None
+        bmap = B.build_binding_map(v.layouts, rc.steps, rc.run_root, v.program_digest.hex(), request_rows=request_rows, chunk=v.chunk,
                                    weight_registration=rc.weight_registration, binder=binder, padded=PORT_NAMES if port is not None else ())
-        aliased = port_identities(manifest) if binder is not None and port is not None else {}
+        aliased = port_identities(plan) if binder is not None and port is not None else {}
         if twice := copies_beside_port(bmap, aliased):
             raise ValueError(f"the step-input port is the window's one copy of {sorted(aliased.values())}, and {len(twice)} other "
                              f"tensor(s) bind as them too ({twice[:3]}): the row's Programs would read one of two copies")
@@ -460,12 +468,29 @@ def seal_view(v: SealView, rc: Any, d: Path, *, store: Callable[[dict[str, str]]
                              "they don't read")
         with open(out / "binding_map_p0.json", "w") as fh:
             fh.writelines(JC.dict_pieces(bmap, "entries", separators=(",", ":"), default=str))
+    return bmap, {"digest": bmap["digest"], "entries_n": bmap["entries_n"], "aliased": aliased, "binds": binder is not None}
+
+
+def seal_view(v: SealView, rc: Any, d: Path, *, store: Callable[[dict[str, str]], Any], rec: Mapping[str, Any], reqs: list[dict[str, Any]],
+              request_rows: dict[int, list[tuple[str, int, int]]], tokens: Mapping[str, list[int]], sampling: Mapping[str, Any],
+              label: str, code: str | None = None, engine_of_record: Mapping[str, Any] | None = None,
+              t0: float | None = None, binding: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    """`seal_window` over ``v``, its store written by ``store`` (given the dict that takes the sha256 of the files it hashed as it
+    wrote them) where `seal_window` writes it; ``t0`` is when the seal began. ``binding`` is what the window's close wrote of its
+    binding map (`binding_of`), else it is built here."""
+    from verity_vllm.pipeline import replay_bundle as RB
+
+    t0 = time.perf_counter() if t0 is None else t0
+    out = Path(d) / "commit"
+    out.mkdir(parents=True, exist_ok=True)
+    pd = v.program_digest.hex()
+    port = v.port
+    if binding is None:
+        bmap, binding = binding_of(v, rc, d, request_rows)
         drop(bmap["entries"])
+    aliased = binding["aliased"]
     t_map = time.perf_counter()
-    of_record = {} if manifest is None else {
-        "required_manifest": {"path": v.manifest_path, "program_digest": manifest["program_digest"],
-                              "manifest_digest": manifest["manifest_digest"]},
-        "op_path_aliases": dict(manifest.get("op_path_aliases") or {})}
+    of_record = {} if v.compiler is None else {"compiler": dict(v.compiler)}
     hashed: dict[str, str] = {}
     unretained = {RB.NOT_RETAINED: nr} if (nr := v.unretained()) else {}
     store(hashed)
@@ -476,17 +501,17 @@ def seal_view(v: SealView, rc: Any, d: Path, *, store: Callable[[dict[str, str]]
            "tokens_equal_ref": None,
            "commit": {"run_root": rc.run_root.hex(), "commit_scheme": scheme, "weight_registration": rc.weight_registration,
                       "steps": rec.get("steps"), "committer": v.name, "passed": rec.get("passed"),
-                      "binding": {"map_digest": bmap["digest"], "map_entries_n": bmap["entries_n"], "program_digest": pd},
+                      "binding": {"map_digest": binding["digest"], "map_entries_n": binding["entries_n"], "program_digest": pd},
                       "commit_pass": None, "commit_fail_reason": None, "sampled_replay": sr, "boundary_linkage": bl}}
     layout = port_layout_of(v.layouts, v.chunk, port) if port is not None else None
     args = {k: None for k in RB.ARGS} | {"label": label, "retain": v.retain}
     ctx = {"pair": 0, "arm": "instrumented", "committer": v.name, "run_root": rc.run_root.hex(), "code": code, "args": args,
            "requests": reqs, "sampling": dict(sampling), "tokens": {k: list(t) for k, t in tokens.items()}, "stop_of_record": None,
-           "ids_full": None, "retention": v.retain, "required_manifest_sha256": None, "declaration": None,
+           "ids_full": None, "retention": v.retain, "declaration": None, "op_path_aliases": {k: list(a) for k, a in v.aliases.items()},
            "required_classes": [], "min_openings": 0, "vc_result": None, "engine_of_record": dict(engine_of_record or {}), "slim": None,
            "served_window": {"schema": SERVED_WINDOW, "window": rec.get("window"), "run_id": rec.get("run_id"), "commit_scheme": scheme,
                              "programs": "none sealed: the registered compiler's Programs for the window's advice",
-                             "served_rows": rec.get("served_rows"), "step_input_port": port if port is None or binder is None else
+                             "served_rows": rec.get("served_rows"), "step_input_port": port if port is None or not binding["binds"] else
                              {**port, "binds_as": {k: list(b) for k, b in aliased.items()}}, **of_record},
            RB.HASHED: hashed, **unretained}
     verdict: dict[str, Any] = {"schema": SERVED_WINDOW, "run_id": rec.get("run_id"), "window": rec.get("window"), "commit_pass": None,
@@ -497,7 +522,7 @@ def seal_view(v: SealView, rc: Any, d: Path, *, store: Callable[[dict[str, str]]
     (out / "verdict.json").write_text(json.dumps(verdict, indent=1, default=str) + "\n")
     b = (verdict.get("replay_deferred") or {}).get("bundles") or [{}]
     return {"row_dir": str(d), "bundle": b[0].get("path"), "bytes": b[0].get("bytes"),
-            "commit_scheme": scheme, "binding_map_digest": bmap["digest"], "binding_map_entries": bmap["entries_n"],
+            "commit_scheme": scheme, "binding_map_digest": binding["digest"], "binding_map_entries": binding["entries_n"],
             "requests": [q["request_id"] for q in reqs], "port_layout": layout, "seal_s": round(time.perf_counter() - t0, 3),
             "phases_s": {"binding_map": round(t_map - t0, 3), "store": round(t_store - t_map, 3),
                          "bundle": round(time.perf_counter() - t_store, 3)}, **unretained}

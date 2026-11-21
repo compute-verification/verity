@@ -1,6 +1,6 @@
-"""The Commit's ``rows-sha512`` scheme: COMMIT-GPU's construction (``verity/commitments/cuda/commit_gpu``) over a step's
-stream, on the windowed worker (``NativeCollectCommitter``, whose unset scheme it is) and its offline CPU core
-(``NativeHostCommitter.commit_block_offline``, by name).  Every Commit commits under it by default: the single-GPU Commit
+"""The Commit's ``rows-sha512`` scheme: each row of a step's stream an hm96-sha512 hiding leaf, its salt keyed SHA-512, on the
+windowed worker (``NativeCollectCommitter``, whose unset scheme it is) and its offline CPU core (``NativeHostCommitter.commit_block_offline``,
+by name).  Every Commit commits under it by default: the single-GPU Commit
 (``pipeline.commit``'s ``--commit-scheme``, on the windowed ``native_collect_v2b``) and every rank of a TP Commit (``pipeline.tp.commit``,
 under the SHA-512 TP run root ``pipeline.tp.run_root``); ``vllm-v1`` is by name (any other collector, an old record's configuration),
 and a single-GPU Commit takes it only to commit again the recorded vllm-v1 Commit ``--of-record`` names (`pipeline.commit.scheme_refusal`).
@@ -18,7 +18,7 @@ chunk index ``pos`` (rank = position):
   leaf    the ``frame-v3-sha512`` row leaf of ``h``, schema ``hm96-sha512/row/v2``
 
 ``Ks`` is 64 fresh bytes from the OS generator per step, kept by the committer (a replay of the run takes the same keys) and never
-logged; a leaf's salt ``y`` is derived from it by SHA-512 alone, as COMMIT-GPU derives it.  The step's ``N`` leaves are one tree under
+logged; a leaf's salt ``y`` is derived from it by SHA-512 alone.  The step's ``N`` leaves are one tree under
 ``CommitmentDomain(binding, -1, RangeIndexedDomain(0, N), "sha512")`` with ``binding = identity_digest_sha512(DOMAIN_TAG, {program,
 ctx, geo, row_bits})`` over the step's identity digests, so the domain is known when the step's length is (a hit plan's, or
 the step's end); the tree is core's ``tree_levels`` (padded to a power of two with frame pads).  The step root is :func:`step_root`
@@ -34,8 +34,7 @@ registration (:func:`fresh_tensor_salts`) and kept in its salt file (`verity.com
 ``CommitmentDomain(binding_t, -1, RangeIndexedDomain(0, N_t), "sha512")`` with ``binding_t = identity_digest_sha512(WEIGHTS_TAG,
 {geo, tensor: t, entry, row_bits})`` over its names entry ``[name, dtype, shape, bytes]``; the weights root is :func:`weights_root`
 over the tensor roots and the names' :func:`names_digest`.  The tree (:func:`weights_tree`) holds no salt: a replay of the
-registration reproduces its roots from the salt file, and a slim keep carries the salts of the tensors its replay opened alone
-(`pipeline.cpu_replay.slim_tree`).
+registration reproduces its roots from the salt file.
 """
 from __future__ import annotations
 
@@ -280,8 +279,8 @@ def weights_tree(geo: bytes, names: Sequence[Sequence], tensor_roots: Sequence[b
 
 def t_table(key: bytes = KEY) -> bytes:
     """``T_v`` = the XOR of ``(K >> s)`` over the set bits ``s`` of ``v``, ``K`` the key as a little-endian integer: 256 rows of 256
-    bytes.  ``M_key`` is Hankel, so ``byte_tables(key)[p][v]`` is bytes ``[p, p + 64)`` of ``T_v`` (COMMIT-GPU's ``reference.t_table``);
-    refused unless it is."""
+    bytes.  ``M_key`` is Hankel, so ``byte_tables(key)[p][v]`` is bytes ``[p, p + 64)`` of ``T_v``; refused unless it
+    is."""
     k = int.from_bytes(INST.check_key(key), "little")
     rows = [0] * 256
     for v in range(1, 256):

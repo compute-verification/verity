@@ -29,8 +29,8 @@ from typing import Any
 from verity_bench import jobs, kit
 from verity_bench.kit_report import checked_by_of
 from verity_bench.vllm import result as result_format
-from verity_bench.vllm.presets import (FORMER_SPEC, FORMER_SPECS, SOURCE_ROOT, SPEC_ROOT, current_spec, expand_sweep,
-                                       former_arm, former_specs, load_spec, resolve_spec, spec_file, split_card)
+from verity_bench.vllm.presets import (SOURCE_ROOT, SPEC_ROOT, expand_sweep, load_spec, resolve_spec, spec_file,
+                                       split_card)
 from verity_bench.vllm.runner import summarize
 
 SCHEMA = "verity-bench/served-table/v1"
@@ -40,18 +40,24 @@ CAVEAT_KEYS = ("label", "note")
 LIVE_CAVEAT_KEYS = ("label", "row", "note")
 SUPERSEDED_BY = "superseded_by"
 RUN_OF_RECORD = "run_of_record"
+#: a run's `SPEC@CARD` where its record names its spec by a path or id it no longer has
+SPEC_LABEL = "spec"
+#: a run's arm ids as they are named now, where its result names an arm by an id it no longer has
+ARMS_LABEL = "arms"
 POINT_TOOL = "vllm_bench_point"
 
 # Validation comes from result.json alone; rc 0 rules out a run killed after writing it, and a dirty tree ran code its
 # commit doesn't name (jobs.StoreCompletion's rule, keyed here by spec and point rather than by one commit's identity).
-# The spec is named by any of its recorded paths (`spec_paths`), one placeholder each: `passing`.
+# The spec is named by any of its recorded paths (`spec_paths`) or its runs' `SPEC_LABEL` (`labelled`), one placeholder
+# each: `passing`.
 PASSING = """
 SELECT a.id, o.artifact, a.source_commit
 FROM attempts a
-JOIN attempt_params s ON s.attempt = a.id AND s.key = 'spec' AND s.value IN ({paths})
+JOIN attempt_params s ON s.attempt = a.id AND s.key = 'spec'
 JOIN attempt_params p ON p.attempt = a.id AND p.key = 'point' AND p.value = ?
 JOIN attempt_outputs o ON o.attempt = a.id AND o.name = 'result'
 WHERE a.tool = 'vllm_bench_point' AND a.validation = 'passed' AND a.rc = 0 AND a.source_dirty IS NOT 1
+AND (s.value IN ({paths}) OR a.id IN ({runs}))
 ORDER BY a.start_utc DESC, a.id DESC
 """.strip()
 
@@ -148,50 +154,59 @@ def spec_path(spec: str) -> str:
 
 
 def spec_paths(spec: str) -> tuple[str, ...]:
-    """The paths a run of `spec` may have recorded: where the spec is, and where it was while the specs had a directory
-    of their own (`presets.FORMER_SPEC`), each as it was named (``SPEC@CARD`` too, `presets.split_card`), and the same
-    of each former id it is now (`presets.FORMER_IDS`), on its card when `spec` names one. A run of record keeps the
-    path it ran under, so all are read; a path that doesn't name the card (``SPEC``) is read, and its run's card judged
-    (`_judge`)."""
+    """The paths a run of `spec` may have recorded: the spec's, and as named (``SPEC@CARD``, `presets.split_card`) when
+    `spec` names its card. A path that doesn't name the card is read, and its run's card judged (`_judge`)."""
+
+    return tuple(dict.fromkeys(spec_path(each) for each in (split_card(spec)[0], spec)))
+
+
+def labelled(store: Any, spec: str) -> list[str]:
+    """The runs whose latest `SPEC_LABEL` names `spec`, on its card when `spec` names one."""
 
     name, card = split_card(spec)
-    names = [name, *([spec] if card else []),
-             *(old for old, now in former_specs().items() if now[0] == name and card in (None, now[1]))]
-    return tuple(path for each in dict.fromkeys(names) for path in (spec_path(each), FORMER_SPEC.format(name=each)))
+    latest = dict(store.index.sql("SELECT target, value FROM labels WHERE key = ? ORDER BY ts, path", (SPEC_LABEL,)))
+    return [run for run, value in latest.items()
+            if split_card(str(value))[0] == name and card in (None, split_card(str(value))[1])]
 
 
-def passing(paths: Sequence[str]) -> str:
-    """`PASSING` for a spec recorded under any of `paths`."""
+def passing(paths: Sequence[str], runs: Sequence[str]) -> str:
+    """`PASSING` for a spec recorded under any of `paths` or labelled on any of `runs`."""
 
-    return PASSING.format(paths=", ".join("?" * len(paths)))
+    return PASSING.format(paths=", ".join("?" * len(paths)), runs=", ".join("?" * len(runs)))
 
 
 def spec_name(path: str) -> str:
-    """The spec a recorded path names, under either of its directories (`spec_paths`), by its name now
-    (`presets.current_spec`); any other path stays a path."""
+    """The spec a recorded path names (`spec_paths`); any other path stays a path."""
 
-    for under in (SPECS, FORMER_SPECS):
-        if path.startswith(f"{under}/"):
-            return current_spec(path.removeprefix(f"{under}/").removesuffix(".toml"))
-    return path.removesuffix(".toml")
+    return path.removeprefix(f"{SPECS}/").removesuffix(".toml")
+
+
+def _latest(store: Any, target: str, key: str) -> Any:
+    """The value of `target`'s latest `key` label, None where it has none."""
+
+    found = sorted(store.labels(target, key=key), key=lambda label: label.ts)
+    return found[-1].value if found else None
 
 
 def _on_card(spec: str, card: str | None) -> str:
-    """`spec` as the card its run was on names it (``SPEC@CARD``), unless that card is its spec's one card now: a run on a
-    card the spec no longer lists keeps its card's name."""
+    """`spec` as the card its run was on names it (``SPEC@CARD``, the card `spec` names, else `card`), unless that card is
+    its spec's one card now: a run on a card the spec no longer lists keeps its card's name, and a deleted spec's run
+    its id."""
 
-    if card is None or split_card(spec)[1] is not None or spec_file(spec) is None:
-        return spec
-    return spec if load_spec(spec).cards == (card,) else f"{spec}@{card}"
+    name, named = split_card(spec)
+    card = named or card
+    if card is None or spec_file(name) is None:
+        return name
+    return name if load_spec(name).cards == (card,) else f"{name}@{card}"
 
 
 def spec_added(root: Path, spec: str) -> int:
-    """When the commit that added the spec was committed, under the earliest of its paths and its former ids' (`spec_paths`,
-    the card it names set aside): none of its runs can start before."""
+    """When the commit that added the spec's file was committed, following it across moves (the card `spec` names set
+    aside): none of its runs can start before."""
 
-    paths = [path.replace(f"@{card}.toml", ".toml") if (card := split_card(spec)[1]) else path for path in spec_paths(spec)]
+    path = spec_path(split_card(spec)[0])
     try:
-        process = subprocess.run(["git", "log", "--diff-filter=A", "--format=%ct", "--", *dict.fromkeys(paths)],
+        process = subprocess.run(["git", "log", "--follow", "--diff-filter=A", "--format=%ct", "--", path],
                                  cwd=root, capture_output=True, text=True)
     except FileNotFoundError:
         raise jobs.NoCatalog(f"no git here, so {spec_path(spec)}'s runs can't be looked up on the store's remote") from None
@@ -231,7 +246,7 @@ def _judge(store: Any, run: str, art: str, commit: str, arms: Sequence[str], poi
            record: str | None = None, card: str | None = None) -> tuple[list[Found], str | None]:
     """The result's points (those of `points`, else all) as rows, or why the result can't stand: a `superseded_by`
     label, an invalid result, a run on another card than `card` (where one is asked), or a point without every one of
-    `arms` timed, each under its id now (`former_arm`). The caveats are the result's, its run's and the `record` art's
+    `arms` timed, each under its id now (the run's `ARMS_LABEL`). The caveats are the result's, its run's and the `record` art's
     that named the run."""
 
     labels = _labels(store, [art, run, *([record] if record else [])])
@@ -245,7 +260,8 @@ def _judge(store: Any, run: str, art: str, commit: str, arms: Sequence[str], poi
     ran_on = (doc["identity"].get("preset") or {}).get("gpu_id")
     if card is not None and ran_on != card:
         return [], f"ran on the {ran_on}, not the {card}"
-    rows = [{**row, "arms": {former_arm(arm) or arm: v for arm, v in row["arms"].items()}}
+    now = _latest(store, run, ARMS_LABEL) or {}
+    rows = [{**row, "arms": {now.get(arm, arm): v for arm, v in row["arms"].items()}}
             for row in doc["points"] if points is None or row["point"]["id"] in points]
     if not rows:
         return [], f"no timed point {', '.join(points or ())}"
@@ -263,8 +279,8 @@ def newest_passing(store: Any, spec: str, point: str, arms: Sequence[str],
     """The newest passing run of `spec` at `point` that isn't a trial (`kit.trial_attempt`), whose result isn't
     superseded and holds `arms`; each newer run passed over goes into `skipped` with why."""
 
-    paths = spec_paths(spec)
-    for run, art, commit in store.index.sql(passing(paths), (*paths, point)):
+    paths, runs = spec_paths(spec), labelled(store, spec)
+    for run, art, commit in store.index.sql(passing(paths, runs), (point, *paths, *runs)):
         if kit.trial_attempt(store.get_attempt(run) or {}):
             skipped.append({"spec": spec, "point": point, "run": run, "art": art,
                             "why": f"a trial run ({kit.TRIAL}): its measurements are its own, never a row"})
@@ -318,19 +334,27 @@ def _recorded(store: Any, run: str, arms: Sequence[str], record: str | None) -> 
     attempt = store.get_attempt(run)
     if attempt is None:
         return "", [], "not in the store or on its remote"
-    spec = spec_name(str(attempt.get("params", {}).get("spec", "")))
+    spec = _latest(store, run, SPEC_LABEL) or spec_name(str(attempt.get("params", {}).get("spec", "")))
     if why := kit.trial_why(run, attempt):
         return spec, [], why
     status, source = attempt.get("status") or {}, attempt.get("source") or {}
     art = (attempt.get("outputs") or {}).get("result")
     tool = (attempt.get("tool") or {}).get("name")
     if tool != POINT_TOOL or status.get("validation") != "passed" or status.get("rc") != 0 or source.get("dirty"):
+        failed = _failed_gates(store, art) if tool == POINT_TOOL and art else []
         return spec, [], (f"not a passing {POINT_TOOL} run (tool {tool}, validation {status.get('validation')}, "
-                          f"rc {status.get('rc')}, dirty {bool(source.get('dirty'))})")
+                          f"rc {status.get('rc')}, dirty {bool(source.get('dirty'))})"
+                          + (f": its {', '.join(failed)} gate failed" if failed else ""))
     if not art:
         return spec, [], "no result output"
     found, why = _judge(store, run, art, str(source.get("commit") or ""), arms, None, record)
     return _on_card(spec, found[0].card if found else None), found, why
+
+
+def _failed_gates(store: Any, art: str) -> list[str]:
+    """The kinds of the gates a point's result records as failed, in its order."""
+
+    return list(dict.fromkeys(g["kind"] for g in _benchmark(store, art)["gates"] if not g["passed"]))
 
 
 def _arms(protocol: Protocol) -> list[str]:

@@ -8,12 +8,9 @@ from __future__ import annotations
 import gzip
 import hashlib
 import json
-import shutil
 import subprocess
 import sys
 import tracemalloc
-from collections import Counter
-from pathlib import Path
 
 import numpy as np
 import pytest
@@ -31,16 +28,10 @@ from verity.circuits.query_ast import oracle_gateset, oracle_out
 from verity.circuits.refs import tuple_of
 from verity.circuits.types import Array, Tuple
 
-from verity_vllm.commit.partition import word_check_refusal
-from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.definitions.registry import fp8_moe_experts as XM
 from verity_vllm.definitions.registry import moe
 from verity_vllm.definitions.registry import sampling as SM
-from verity_vllm.pipeline import cli
-from verity_vllm.pipeline import manifest as M
 from verity_vllm.query import program_view as PV
-from verity_vllm.query.program_view import from_instances
-from verity_vllm.query.required import population
 
 
 def _fn(fam: str, **statics):
@@ -175,9 +166,6 @@ def test_the_gate_limit_is_the_runs_not_the_querys(norm):
         r = W.check_calls([g], strict=False, max_gates=raised, specialize=PV.specialization)
         assert r["ok"] and r["units"] == 2049 and r["query"] == capped["query"] == W.query_id()
     assert W.gate_limit(norm, f"{low},Gemm_v1=5") == low and W.gate_limit(norm, {norm.id: 7, "RMSNormTriton_v1": 9}) == 7
-    for cmd, argv in (("manifest", ["build", "--program", "p", "--out", "o"]), ("program-graph", ["o", "i"])):
-        assert cli.parse(cmd, argv, {W.MAX_GATES_ENV: "GumbelTopPTokenSelect_v2=120000000"}).word_max_gates == "GumbelTopPTokenSelect_v2=120000000"
-        assert cli.parse(cmd, [*argv, "--word-max-gates", "1"], {}).word_max_gates == "1"
 
 
 def test_uncommitted_boundaries_are_named():
@@ -191,19 +179,6 @@ def test_uncommitted_boundaries_are_named():
     assert ok["ok"] and ok["units"] == 16 and ok["gates"] == 2 * _fn("Gemm_v1", K=64, N=8).gates
 
 
-def test_the_manifest_build_runs_the_check(tmp_path):
-    from tests.check.test_sampled_replay import _program
-    inst, _w = _program(attn=True)
-    P = from_instances(inst)
-    corr = Correspondence(P)
-    pop = population(P, corr)
-    r = M.word_check(P, corr, pop.required, "16/32", strict=False)
-    assert r["query"] == "Q_word_v1{X=16,W=32,R=no-recompute}" and r["calls"] == len(inst["rows"]) - len(pop.literals)
-    assert r["units"] > r["calls"]
-    # the test Program's o_proj output feeds no other module: interior to its body, so no unit can end at it
-    assert {(v["definition"].split("{")[0], v["class"]) for v in r["violations"]} == {("Gemm_v1", "output-not-committed")}
-    with pytest.raises(W.QueryRuleViolation, match="o_proj"):
-        M.word_check(P, corr, pop.required, "16/32")
 
 
 def _program_dir(tmp_path, **kw) -> str:
@@ -216,33 +191,8 @@ def _program_dir(tmp_path, **kw) -> str:
     return str(tmp_path)
 
 
-def test_the_manifest_records_the_check_it_passed_in_the_header_and_its_rows_are_unchanged(tmp_path):
-    """The header's `query.word_check` is what the Commit requires (`commit.partition.word_check_refusal`); it is no identity, so the
-    rows digest of a checked build is the unchecked one's.  A check that fails raises before the manifest is written."""
-    d = _program_dir(tmp_path)
-    checked, plain = (M.build(d, request_id="r0", word=w) for w in ("16/32", None))
-    wc = checked["query"]["word_check"]
-    assert wc["query"] == checked["query"]["query_id"] == "Q_word_v1{X=16,W=32,R=no-recompute}"
-    assert wc["strict"] is True and wc["ok"] is True and wc["violations"] == 0 and wc["units"] > wc["calls"] > 0
-    assert wc["max_gates"] == W.gate_limits(None) and "groups" not in wc and word_check_refusal(checked["query"]) is None
-    assert "word_check" not in plain["query"] and "no word check recorded" in word_check_refusal(plain["query"])
-    assert checked["manifest_digest"] == plain["manifest_digest"] and checked["identities"] == plain["identities"]
-    assert {k: v for k, v in checked["query"].items() if k != "word_check"} == plain["query"]
 
 
-def test_a_dead_output_passes_the_check_only_as_unreturned_and_listed(tmp_path):
-    """The attention Program's o_proj output feeds nothing and no policy requires it: UNRETURNED, so the check skips it and the
-    manifest lists it by identity, outside the identities.  A Call with a required output gets no such pass: without the return-slot
-    policy the final fused norm's residual is read by nothing while its normed row feeds the logits, and the check fails it."""
-    (tmp_path / "attn").mkdir()
-    attn = M.build(_program_dir(tmp_path / "attn", attn=True), request_id="r0", word="16/32")
-    dead = [r for r in attn["unreturned"] if "o_proj" in r["op_path"]]
-    assert attn["query"]["word_check"]["ok"] and dead and {r["spec"] for r in dead} == {"Gemm_v1"}
-    assert {r["step"] for r in dead} == set(attn["steps"])
-    assert not [r for r in attn["identities"] if "o_proj" in r["op_path"] and r["family"] != "weights"]
-    assert attn["populations"]["unreturned_calls"] == sum(r["rows"] for r in dead) and len(attn["unreturned_digest"]) == 128
-    with pytest.raises(W.QueryRuleViolation, match="RMSNormFusedCuda_v2.*output-not-committed"):
-        M.build(_program_dir(tmp_path, attn=True), request_id="r0", word="16/32", return_slots=False)
 
 
 def test_a_dead_gate_joins_the_unit_it_reads():
@@ -512,41 +462,6 @@ def test_prefetch_under_a_memory_budget_runs_only_the_cuts_that_fit_and_memos_th
     assert r["n"] == [4, 4] and r["at_once"] == 1 and r["same"], r
 
 
-@pytest.mark.slow
-def test_build_global_builds_the_same_manifest_in_one_process_and_in_several(tmp_path):
-    """`--jobs`: the word check's rules prefetched and the components built in forked processes (`manifest.build_components`) give the
-    manifest one process gives, byte for byte; the first component to fail, in declaration order, is the one reported.  A workload
-    digest read from stdin once the components are built (`--workload-digest -`) gives the manifest the same digest named on the
-    command line gives, and none read fails it."""
-    from tests.check.test_sampled_replay import LP, T
-    d = tmp_path / "row" / f"build_request_LP{LP}_T{T}"
-    d.mkdir(parents=True)
-    _program_dir(d)
-    with gzip.open(d / "instances.json.gz", "rt") as f:
-        hist = Counter(r["spec"] for r in json.load(f)["rows"])
-    (d / "result.json").write_text(json.dumps(dict(json.loads((d / "result.json").read_text()), spec_histogram=dict(hist))))
-    requests = [{"request_id": q, "prompt_len": LP, "max_tokens": T + 1, "arrive_step": 0} for q in "abc"]
-    fx = {"fixture": "t", "requests": requests}
-    (tmp_path / "wl.json").write_text(json.dumps(fx))
-
-    def build_global(jobs: int, out: str, *extra: str, stdin: str | None = None) -> subprocess.CompletedProcess:
-        return subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "manifest", "build-global", "--fixture", str(tmp_path / "wl.json"),
-                               "--programs-root", str(tmp_path / "row"), "--jobs", str(jobs), *extra, "--out", str(tmp_path / out)],
-                              cwd=(Path(__file__).resolve().parents[5] / "adapters" / "vllm"), input=stdin, capture_output=True, text=True)
-
-    for jobs in (1, 3):
-        assert build_global(jobs, f"m{jobs}.json").returncode == 0
-    assert (tmp_path / "m1.json").read_bytes() == (tmp_path / "m3.json").read_bytes()
-    assert build_global(3, "named.json", "--workload-digest", "w" * 64).returncode == 0
-    assert build_global(3, "stdin.json", "--workload-digest", "-", stdin="w" * 64 + "\n").returncode == 0
-    assert (tmp_path / "named.json").read_bytes() == (tmp_path / "stdin.json").read_bytes() != (tmp_path / "m1.json").read_bytes()
-    p = build_global(3, "none.json", "--workload-digest", "-", stdin="")
-    assert p.returncode != 0 and "no workload digest on stdin" in p.stderr and not (tmp_path / "none.json").exists(), p.stderr[-2000:]
-    shutil.copytree(d, tmp_path / "row" / f"build_request_LP{LP}_T{T - 1}")    # a wrong component for r1
-    requests[1]["max_tokens"] = T
-    (tmp_path / "wl.json").write_text(json.dumps(fx))
-    p = build_global(3, "bad.json")
-    assert p.returncode != 0 and f"request r1: Program has {T + 1} steps" in p.stderr, p.stderr[-2000:]
 
 
 # ---------------------------------------------------------------------------------------------------------------- the rule cache
@@ -593,21 +508,5 @@ def test_a_rule_json_would_not_give_back_equal_is_not_written(tmp_path, monkeypa
     assert not list(tmp_path.rglob("*.json"))
 
 
-def test_the_manifest_is_the_same_without_the_cache_as_with_it_cold_and_read_back(tmp_path, monkeypatch):
-    d = _program_dir(tmp_path)
-
-    def build():
-        monkeypatch.setattr(W, "_RULES", {})
-        return M.build(d, request_id="r0", word="16/32")
-    plain = build()
-    monkeypatch.setattr(W, "_RULE_CACHE", [str(tmp_path / "rules")])
-    cold = build()
-    monkeypatch.setattr(W, "Graph", _no_cut)
-    assert plain == cold == build() and plain["query"]["word_check"]["units"] > 0
 
 
-def test_the_manifest_cli_takes_the_cache_directory_from_its_flag_or_the_environment():
-    argv = ["build", "--program", "p", "--out", "o"]
-    assert cli.parse("manifest", [*argv, "--unit-rule-cache", "/r"], {}).unit_rule_cache == "/r"
-    assert cli.parse("manifest", argv, {W.RULE_CACHE_ENV: "/e"}).unit_rule_cache == "/e"
-    assert cli.parse("manifest", ["build-global", "--fixture", "f", "--programs-root", "p", "--out", "o"], {}).unit_rule_cache is None

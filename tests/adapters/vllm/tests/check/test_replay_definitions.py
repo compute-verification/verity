@@ -1,8 +1,8 @@
 """The replay refuses a Definition the Build of record did not bind (`verity_vllm.check.replay.definitions`).
 
 The sampled replay evaluates a row with its family's row kernel, which answers for the Definition in the replay's own tree, while
-the Commit bound the Program the Build compiled.  A small Llama's request Program in a Build dir: both loaders
-(`tp.rank_replay.load`, `c2_replay.programs_of_record`) take it as built, and refuse it by name once the Build's descriptor holds
+the Commit bound the Program the Build compiled.  A small Llama's request Program in a Build dir: the loader
+(`c2_replay.programs_of_record`) takes it as built, and refuse it by name once the Build's descriptor holds
 another body for a specialization the replay evaluates (the Program a Build at another body of that Definition compiles, digest
 of record and all), or is not the Program of record.  Two Definitions under one id show that the check reads bodies, not ids.
 Both also refuse a row kernel that fails its self-check against its Definition.
@@ -38,17 +38,13 @@ from verity_torch.frontend.boolean import derived
 from verity_torch.frontend.derive import DeriveReport
 
 from tests.program.predict.test_predict import TINY, _phi
-from verity_vllm.check import c2_rules
 from verity_vllm.check.replay import definitions as DF
-from verity_vllm.definitions.numerics import derived_rows as DR
 from verity_vllm.definitions.registry.catalog import load
 from verity_vllm.definitions.replay import replayer
 from verity_vllm.pipeline import c2_replay as C2
-from verity_vllm.pipeline.build import _instance_rows
+from verity_vllm.pipeline.build_instances import _instance_rows
 from verity_vllm.pipeline.build_instances import write_instances
-from verity_vllm.pipeline.tp import rank_replay as RR
 from verity_vllm.program.predict.build import build_program
-from verity_vllm.query.manifest.format import spec_family
 
 NORM = "RMSNormTriton_v5{"
 SILU, SILU_BITS, PICK, PICK_BITS = "SiluMul_v1{I=4}", "SiluMul_v3{I=4}", "TokenSelect_v1{V=8}", "TokenSelect_v2{V=8}"
@@ -140,24 +136,10 @@ def _moved(desc: dict, prefix: str = NORM) -> tuple[dict, str]:
     raise AssertionError(f"no {prefix} node with two operands of one type")
 
 
-def _rank(d, dg):
-    return RR.load({"requests": [REQ], "programs": {"0": str(d)}, "of_record": {"0": [dg]}}, 0, 1)
-
-
 def _c2(d, dg):
     site = SimpleNamespace(args=SimpleNamespace(program_digest=dg, programs_root=None, program_dir=str(d)), manifest=None, reqs=[REQ],
                            sampling={})
     return C2.programs_of_record(site, C2.request_labels([REQ]))
-
-
-def test_the_rank_replay_refuses_a_body_its_build_did_not_bind(tmp_path, program):
-    dg = _build(tmp_path / "built", program)
-    assert _rank(tmp_path / "built", dg).digs == {"q0": dg}
-    desc, fid = _moved(encode_program(program))
-    moved = _build(tmp_path / "moved", program, desc)
-    with pytest.raises(RuntimeError, match=r"^rank 0: REFUSED \(not the Definitions of record\)") as e:
-        _rank(tmp_path / "moved", moved)
-    assert f"{fid}: {fid} is not the Definition the Build bound" in str(e.value)
 
 
 def test_the_c2_replay_refuses_it_too(tmp_path, program):
@@ -168,22 +150,6 @@ def test_the_c2_replay_refuses_it_too(tmp_path, program):
     with pytest.raises(RuntimeError, match=r"^replay: REFUSED \(not the Definitions of record\)") as e:
         _c2(tmp_path / "moved", moved)
     assert fid in str(e.value)
-
-
-def test_both_loaders_refuse_a_row_kernel_that_is_not_its_definition(tmp_path, program, monkeypatch):
-    """The Build is of record, but the row kernel the replay grades its norm rows by is one bit off its Definition: refused by
-    name before any row is graded, by the kernel's self-check."""
-    dg = _build(tmp_path / "built", program)
-    _unchecked(monkeypatch)
-    assert DF.kernel_refusal(DF.evaluated_specs(_instance_rows(program))) is None
-    right = DR.rmsnorm_triton_rows
-    monkeypatch.setattr(DR, "rmsnorm_triton_rows", lambda x, w, eps: {"out": right(x, w, eps)["out"] ^ 1})
-    _unchecked(monkeypatch)
-    with pytest.raises(RuntimeError, match=r"^rank 0: REFUSED \(a row kernel is not its Definition\): RMSNormTriton_v5: "):
-        _rank(tmp_path / "built", dg)
-    _unchecked(monkeypatch)
-    with pytest.raises(RuntimeError, match=r"^replay: REFUSED \(a row kernel is not its Definition\): RMSNormTriton_v5: .* mismatches"):
-        _c2(tmp_path / "built", dg)
 
 
 def test_a_build_whose_descriptor_is_not_the_program_of_record_is_refused(tmp_path, program):
@@ -222,54 +188,6 @@ def test_the_check_reads_bodies_not_ids(tmp_path, monkeypatch):
     why = DF.refusal(str(d), dg, [(fid, fid)])
     assert f"{fid}: {fid} is not the Definition the Build bound" in why
     assert f"{fid}: this tree's reaches {sub.id}, which the Build's descriptor does not hold" in why
-
-
-def test_both_loaders_take_a_boolean_build_and_refuse_a_boolean_body_it_did_not_bind(tmp_path, boolean):
-    dg = _boolean_build(tmp_path / "built", boolean)
-    assert _rank(tmp_path / "built", dg).digs == {"q0": dg} and _c2(tmp_path / "built", dg)[1] == {"r0": dg}
-    held, specs = set(boolean.descriptor["definitions"]), DF.evaluated_specs(_instance_rows(boolean.program))
-    assert (SILU, SILU_BITS) in specs and all(bound in held and spec not in held for spec, bound in specs)
-    desc, fid = _moved(boolean.descriptor, SILU_BITS)
-    moved = _boolean_build(tmp_path / "moved", boolean, desc)
-    for loader, what in ((_rank, "rank 0"), (_c2, "replay")):
-        with pytest.raises(RuntimeError, match=rf"^{what}: REFUSED \(not the Definitions of record\)") as e:
-            loader(tmp_path / "moved", moved)
-        assert f"{fid}: {fid} is not the Definition the Build bound" in str(e.value)
-
-
-def test_a_boolean_row_is_held_to_the_word_definition_it_is_graded_as(tmp_path, boolean):
-    """Each of these Builds is of record and every Boolean Definition its rows name is the one it bound, but the replay would
-    grade a row by the kernel of a word Definition its ``bits`` does not compute, or of one no Definition of the Build answers
-    for: a row whose ``bits`` names another word Definition than its ``spec``, and rows that name no ``bits``."""
-    other = _boolean_build(tmp_path / "other", boolean, row=lambda r: {**r, "bits": PICK_BITS} if r["spec"] == SILU else r)
-    bare = _boolean_build(tmp_path / "bare", boolean, row=lambda r: {k: v for k, v in r.items() if k != "bits"})
-    for loader, what in ((_rank, "rank 0"), (_c2, "replay")):
-        with pytest.raises(RuntimeError, match=rf"^{what}: REFUSED \(not the Definitions of record\)") as e:
-            loader(tmp_path / "other", other)
-        assert f"{PICK_BITS}: this tree's names the word Definition {PICK}, and its row is graded as {SILU}" in str(e.value)
-        with pytest.raises(RuntimeError, match=rf"^{what}: REFUSED \(not the Definitions of record\)") as e:
-            loader(tmp_path / "bare", bare)
-        assert f"{SILU}: this tree does not rebuild it" in str(e.value) and f"the Build's descriptor holds no {SILU}" in str(e.value)
-
-
-def test_both_loaders_refuse_a_boolean_row_whose_kernel_is_not_its_gates(tmp_path, boolean, monkeypatch):
-    """The Build is of record and each row kernel is its word Definition, but the gates of the Boolean Definition the Build
-    bound its SiluMul rows under give another word than the kernel: refused by name before any row is graded.  Every family
-    whose rows carry ``bits`` is compared with that ``bits`` family's gates."""
-    from verity.circuits import evaluation as EV
-
-    dg = _boolean_build(tmp_path / "built", boolean)
-    specs = DF.evaluated_specs(_instance_rows(boolean.program))
-    _unchecked(monkeypatch)
-    assert DF.kernel_refusal(specs) is None
-    assert dict(DF._GATE_CHECKS) == {(spec_family(spec), spec_family(bound)): ([], set()) for spec, bound in specs}
-    right = EV.evaluate_words
-    monkeypatch.setattr(EV, "evaluate_words", lambda b, *a: right(b, *a) ^ (descriptor_id(b) == "SiluMul_v3{I=8}"))
-    for loader, what in ((_rank, "rank 0"), (_c2, "replay")):
-        _unchecked(monkeypatch)
-        with pytest.raises(RuntimeError, match=rf"^{what}: REFUSED \(a row kernel is not its Definition\): SiluMul_v1: SiluMul_v1{{I=8}}: "
-                                                 rf"the row kernel's rows are not SiluMul_v3{{I=8}}'s gates on (\d) of the \1 inputs"):
-            loader(tmp_path / "built", dg)
 
 
 def test_the_gates_are_compared_on_the_self_check_s_own_inputs(monkeypatch):
@@ -338,18 +256,3 @@ def test_a_specialisation_whose_gates_this_tree_does_not_build_is_refused_by_nam
                                                       f"no row is held to them ({error.__name__}: unsupported statics)")
 
 
-def test_a_replay_of_boolean_rows_says_what_its_pass_leaves_unshown(program, boolean):
-    """The replay's record carries the line only for rows of a Boolean Definition, and the verdict's sampled-replay rule passes
-    with it in its notes."""
-    assert f"{DF.SAMPLES} inputs" in DF.BOOLEAN_PREMISE and "nothing holds the kernel to the gates at a served binding" in DF.BOOLEAN_PREMISE
-    assert DF.premises(_instance_rows(program)) == [] and DF.premises(_instance_rows(boolean.program)) == [DF.BOOLEAN_PREMISE]
-
-    def rule(sr):
-        (r,) = (c for c in c2_rules.c2_rules({"sampled_replay": sr, "boundary_linkage": {"result": True}}, {})
-                if c.name == "local_replay/sampled_replay")
-        return r
-
-    sr = {"result": True, "grade": "complete"}
-    told = rule(sr | {"premises": DF.premises(_instance_rows(boolean.program))})
-    assert told.outcome == rule(sr).outcome == "PASS"
-    assert DF.BOOLEAN_PREMISE in told.notes and DF.BOOLEAN_PREMISE not in rule(sr).notes

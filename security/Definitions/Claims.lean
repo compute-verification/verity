@@ -19,7 +19,7 @@ stated over Core's interaction model (`Definitions.Core.Interaction`, with the s
   the sampling compiler's relation `Claims.Sampling.RelS` (`Definitions.Claims.Sampling`) only with bounded
   probability. It is SPOT's row in `security/README.md`.
 * `Flock.Guarantees.SampledKSLiveV5` (`Proofs.Flock.Bridge.V5.Statement`): the same at the verifier's public inputs,
-  under the sampling design. Both are in the lock's `deployed`.
+  under the sampling design. Neither is in the lock's `deployed`.
 * `Flock.Guarantees.ClaimsStated` (`Definitions.Flock.Guarantees.Claims`) reads every claim here but `Flock.ZK`, and
   `Flock.Guarantees.MaskedZK` (`Proofs.Flock.Masked.Statement`) states `Flock.ZK` at the deployed masked record. The
   lock records each one's text under `reads`, so a changed claim is a changed record.
@@ -54,10 +54,10 @@ Names here are relative to the namespace `Claims`; Flock's claims are under `Cla
   at the encoded length of the word it decodes (`Flock.wordLen`); `Flock.Efficient` bounds them.
 * Nontriviality (`Flock.Nontrivial`) is a test's to establish, not a Lean proof's, since Lean's kernel can't evaluate
   SHA-512 over real proofs. `check`'s `lean-agreement` job (`tools/check/ci.toml`) holds the compiled
-  verifier's checks on recorded honest sessions to upstream's verdicts (`verity/protocols/proofs/flock/prover/agreement/agree.py`).
+  verifier's checks on recorded honest sessions to upstream's verdicts (`verity/protocols/proof/flock/prover/agreement/agree.py`).
 
 The module is Mathlib only, as `Definitions/` is, so every claim is parametric in the deployed verifier, its parser and
-the hash. Binding them to the compiled verifier (`verity/protocols/proofs/flock/verifier/`) is the code side's.
+the hash. Binding them to the compiled verifier (`verity/protocols/proof/flock/verifier/`) is the code side's.
 
 ## Submodules
 
@@ -363,7 +363,7 @@ def Efficient {F : Type} [Fintype F] [DecidableEq F] [Zero (List F)] (H : Msg �
 /-- **Flock: nontriviality**: recorded honest runs, each of a statement the scope check takes, that the verifier
 accepts. It is for a test against recorded sessions to establish, not a Lean proof, and none is expected: `check`'s
 `lean-agreement` job (`tools/check/ci.toml`) runs the compiled Lean verifier's checks on recorded honest sessions
-(`verity-verify-proof agree`, `verity/protocols/proofs/flock/prover/agreement/agree.py`) and fails unless each passes them. Its sessions
+(`verity-verify-proof agree`, `verity/protocols/proof/flock/prover/agreement/agree.py`) and fails unless each passes them. Its sessions
 are of forms the verifier then refuses, so it reaches this acceptance only up to those refusals. -/
 def Nontrivial (H : Msg → Msg) (D : Deploy Coin Col T) (recs : List (Recorded D.V)) : Prop :=
   Claims.Nontrivial H D.V recs ∧ ∀ e ∈ recs, D.scopeCheck e.x = true

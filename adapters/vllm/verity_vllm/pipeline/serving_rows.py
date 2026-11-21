@@ -1,15 +1,12 @@
 """The serving rows of a Commit: the units of the verifier's partition, read exactly as the replay reads them (committed members
 through an opened reader, registered weights for weight slices), committed in M0's serving row format by
-:mod:`verity.commitments.periods.rows`, with core's one-stage registration over them.  Three ways in, one window, two kinds:
+:mod:`verity.commitments.periods.rows`, with core's one-stage registration over them.  Two ways in, one window, two kinds:
 
 * **In the Commit** (opt-in, ``commit --serving-rows``): the row stage writes a request ``{"dir", "partition", "run",
   "committer"}``, and the in-process C2 replay commits the window after the Commit's roots are final and before its seed (``readers``);
   a Commit whose replay is deferred to its bundle (``--replay-deferred``, not slim) commits it at its C2 site, before the bundle is
-  sealed and before sampling (`c2_replay.serving_rows`). The window is ``served``: its roots are serving's own commitment, made before sampling.  The profile makes no claim that they
+  sealed and before sampling. The window is ``served``: its roots are serving's own commitment, made before sampling.  The profile makes no claim that they
   hold the values under the Commit's roots.
-* **In a TP Commit** (``tp-commit --serving-rows``, `pipeline.tp.serving_rows`): one ``served`` window per rank, committed in the
-  rank's process once every rank's root is final and the TP run root fixed, before the challenge; its run is the TP run root and
-  the rank.
 * **From a deferred Commit's bundle** (``verity-vllm serving-rows BUNDLE --row-dir D --partition F --out O``,
   `pipeline.deferred_rows`): the sealed replay bundle opened against the Commit's record as the CPU replay opens it, and the same
   window written into ``O`` as a ``stand-in``: serving's commitment is the record's roots, and these rows are committed afterwards
@@ -130,11 +127,11 @@ from typing import Any
 
 import numpy as np
 
-from verity.protocols.proofs.spot.verifier import service as SV
-from verity.protocols.proofs.spot.prover import docket as DK
+from verity.protocols.proof.spot.verifier import service as SV
+from verity.protocols.proof.spot.prover import docket as DK
 from verity.circuits import partition_object as PO
 from verity_vllm.check.replay.index import ProgramIndex, index_of
-from verity_vllm.check.replay.opening import CommittedStore
+from verity_vllm.check.replay.opening import CommittedStore, alias_table
 from verity_vllm.commit import history_tables as H, index as IX, row_tables as RTB, step_rows
 from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
@@ -179,7 +176,7 @@ def readers(request: str | None, com: Any, rc: Any, weights: Callable, programs:
         try:
             hs = H.of_request(req.get("committer"), HR.on(json.loads(Path(req["partition"]).read_text())))
             after_commit(req["dir"], partition_file=req["partition"], programs=programs, bmap=bmap, committed=OpenedReader(com, rc),
-                         weights=weights, manifest=manifest if isinstance(manifest, dict) else None, run_root=rc.run_root, run=req.get("run"),
+                         weights=weights, aliases=alias_table(manifest if isinstance(manifest, dict) else None), run_root=rc.run_root, run=req.get("run"),
                          row=row or None, arrivals=arrivals, program_dirs={k: v.get("dir") for k, v in loaded.items()},
                          digests=digests, committer=req.get("committer"), tables=EX.of_request(req.get("tables")), histories=hs)
         except Exception as e:  # noqa: BLE001
@@ -202,8 +199,7 @@ def member_rows(programs: dict[str, dict[str, Any]], tmpls: Sequence[str], scope
     """Per template, its rows in order (request, its ProgramIndex, the row, its description), restricted to ``scope`` (an op_path
     prefix, or a list of them: a row under any) and ``steps`` (``[lo, hi)`` of the request's steps); each template's Definition;
     and its instance count.  Rows are matched by the template's word (:func:`template`), so two templates that compute one word
-    Definition are refused.  Fixed by the Build's Programs before serving.  ``index``: the ProgramIndex's ``attention_paths`` and ``tp`` for a rank Program
-    (`pipeline.tp.serving_rows`); ``reuse``: indexes already built, each taken for the Program it was built from with these
+    Definition are refused.  Fixed by the Build's Programs before serving.  ``index``: the ProgramIndex's ``attention_paths`` and ``tp`` for a rank Program; ``reuse``: indexes already built, each taken for the Program it was built from with these
     arguments (`index_of`).  A norm row with a ``FINAL`` cut is read by the templates `final_hits` keeps (the final norm whole)."""
     ts = [template(t) for t in tmpls]
     prefixes = (scope,) if isinstance(scope, str) else tuple(scope or ())
@@ -637,8 +633,8 @@ def _operand(pi: Any, store: Any, weights: Callable, rid: str, arrive: int, grou
 
 def _slices(pi: Any, store: Any, weights: Callable, rid: str, arrive: int, group: Sequence, *,
             bits: int | None = None) -> list[np.ndarray]:
-    """Each run of one argument group, a stored ``"N"``/``"P"`` progression as its runs (`compact.runs_from_file_items`, the
-    replay's `row_args`): a GLM-5.3 rank Program stores MoeSum's TOPK expert outputs as one node progression.  Given the port's
+    """Each run of one argument group, a stored ``"N"``/``"P"`` progression as its runs (`compact.runs_from_file_items`): a
+    GLM-5.3 rank Program stores MoeSum's TOPK expert outputs as one node progression.  Given the port's
     element width ``bits``, a committed member of a wider signed integer dtype (``BY_VALUE``: the sampler's i64 token under the
     vocabulary shard's 32-bit ``tok``) is read by value, its low word with the high word zero or refused (`_by_value`)."""
     words = []
@@ -699,13 +695,13 @@ def window_values(window: CS.Binding, rows: Sequence[list[Row]], store: Any, wei
     reg = registered(ms, rows, hreg) if weight_values else merged(EX.declarations(plan), hreg)
     if tables is not None:
         made = EX.commit_tables(plan, store, weights, arrivals, _slices, tables)
-        values |= made | IF.supplied(reg, {p: v.entry() for p, v in made.items()}, window.partition_digest)
+        values |= made | IF.supplied(reg, {p: v.entry() for p, v in made.items()}, window.program_digest)
     by_t, at = dict(zip(tmpls, rows, strict=True)), {}
     first, apart = ([m for m in ms if (template(m.template).layout == "history") == a] for a in (False, True))
     got = read_all(first, [by_t[t] for t in dict.fromkeys(m.template for m in first)], store, weights, arrivals, values)
     if histories is not None:
         at = HR.append(hp, first, got, histories)
-        values |= IF.supplied(hreg, {H.name(*k): histories.tables[k].entry() for k in hp}, window.partition_digest)
+        values |= IF.supplied(hreg, {H.name(*k): histories.tables[k].entry() for k in hp}, window.program_digest)
     if apart:
         read = dict(zip([m.key for m in first], got, strict=True))
         read |= zip([m.key for m in apart], read_all(apart, [by_t[t] for t in dict.fromkeys(m.template for m in apart)], store,
@@ -723,7 +719,7 @@ def window_values(window: CS.Binding, rows: Sequence[list[Row]], store: Any, wei
 
 
 def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[str, Any]], bmap: dict[str, Any], committed: Callable,
-                 weights: Callable, manifest: dict[str, Any] | None, run_root: bytes | str, run: str | None = None, row: Any = None,
+                 weights: Callable, aliases: Mapping[str, Sequence[Any]] | None = None, run_root: bytes | str, run: str | None = None, row: Any = None,
                  arrivals: dict[str, int] | None = None, program_dirs: dict[str, str] | None = None,
                  digests: Mapping[str, str] | None = None, committer: dict[str, Any] | None = None,
                  workers: int | None = None, stand_in: Mapping[str, Any] | None = None, tp: Mapping[str, Any] | None = None,
@@ -735,7 +731,7 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
     the registration (core's v1 record, its window the run root ``run_root`` and the provenance: the scheme the values were read
     under (``commitment``, rows-sha512), the research run ``run``, the row, the committer and the served Programs' ``digests``),
     ``partition.json``, the index and M0's bodies.  The window is ``served``; with ``stand_in`` (its ``of`` and ``link``), a
-    ``stand-in`` with them in its provenance.  A TP rank's window (`pipeline.tp.serving_rows`) gives its run as a string, its world and roots as ``tp``, its ProgramIndex arguments as ``index`` and the index it
+    ``stand-in`` with them in its provenance.  A TP rank's window gives its run as a string, its world and roots as ``tp``, its ProgramIndex arguments as ``index`` and the index it
     loaded its Programs with as ``reuse``.  ``transfer_gates`` are the templates the registered compiler lists as holding transfer
     gates, which the window's sampling design proves whole (`population`); ``weight_values`` (the committer's weights, by registered
     parameter) commit its weight reads by reference, their roots its ``registered_roots`` (`weight_rows.by_reference`); ``tables``
@@ -754,7 +750,7 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
     window, rows = population(programs, pf, run_root if isinstance(run_root, str) else bytes(run_root).hex(), dirs, index, arrivals,
                               rt.get("context", ""), reuse, transfer_gates)
     ms = window.members
-    store = CommittedStore.of_record(bmap, committed, manifest)
+    store = CommittedStore.of_record(bmap, committed, aliases)
     data, entries, roots, salts_of, strings_of, idx, hreg, window = window_values(window, rows, store, weights, arrivals,
                                                                                   weight_values, tables, histories, HR.on(pf))
     t_read = time.perf_counter()

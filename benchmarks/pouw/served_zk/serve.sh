@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # served_zk's served side on an RTX PRO 6000 node, untimed: GPU 1's ship built from this tree (CPU, build.sh), then
 # window.sh's smoke (its identity, ship and device checks, both engines resident, the arm's gates) with RETAIN=1, under
-# -h2: the arm serves e2e.py's SERVED requests, "request" and "other", each a retained pass under $WORK/passes/<run id>,
+# -h2: the arm serves e2e.py's SERVED request, "request", a retained pass under $WORK/passes/<run id>,
 # salted by epoch coins flipped from the challenger whose entropy is $WORK/coin-state/<run id>.  The passes stay on the
 # node for commit.py and job.sh under window.sh's retention record (priority keep): only `research retention rm`, with
 # the owner's yes, deletes them.
@@ -23,7 +23,7 @@ tar -cf "$S/ship.tar" -C "$S" "ship-${HEAD:0:8}"
 # the challenger's coins are the Lean verifier's (pouw.verifier.coins): built before the lease, not inside it
 command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
 stamp "pouw-verifier-difftest build"
-(cd verity/protocols/resource_accounting/compute/pouw/verifier/lean/check && lake build pouw-verifier-difftest) > "$OUT/lean-coins-build.log" 2>&1 \
+(cd verity/protocols/accounting/compute/pouw/verifier/lean/check && lake build pouw-verifier-difftest) > "$OUT/lean-coins-build.log" 2>&1 \
   || { stamp "LEAN_BUILD_FAIL rc=$?"; tail -20 "$OUT/lean-coins-build.log"; exit 12; }
 
 export SCHEME=pearl-c-sm120-v1-h3 MODE=smoke RETAIN=1

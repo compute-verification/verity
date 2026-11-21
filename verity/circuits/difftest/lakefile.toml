@@ -1,10 +1,10 @@
 # The differential test's Lean half: `Difftest.serve`, the server every port's difftest executable runs, and an example
 # port (`difftest-example`) that the harness's own tests drive, the annotation check's port (`annot-difftest`,
 # `Circuits.Annot`), which the Python mirror's tests call through `verity_difftest.annot`, and the JSON parser's port
-# (`flock-json-difftest`, `Base.JsonParse`). Code, not analysis: Lean core, the base and the circuit format.
+# (`flock-json-difftest`, `Base.JsonParse`), and the program decoder's and encoder's port (`program-difftest`, `Circuits.Program`, `Circuits.Encode`). Code, not analysis: Lean core, the base and the circuit format.
 name = "verity_difftest"
 defaultTargets = ["Difftest", "AnnotDifftest", "FlockJsonDifftest", "difftest-example", "annot-difftest",
-  "flock-json-difftest"]
+  "flock-json-difftest", "ProgramDifftest", "program-difftest"]
 
 [leanOptions]
 autoImplicit = false
@@ -28,6 +28,9 @@ name = "AnnotDifftest"
 [[lean_lib]]
 name = "FlockJsonDifftest"
 
+[[lean_lib]]
+name = "ProgramDifftest"
+
 [[lean_exe]]
 name = "difftest-example"
 root = "DifftestExample"
@@ -39,3 +42,7 @@ root = "AnnotDifftestMain"
 [[lean_exe]]
 name = "flock-json-difftest"
 root = "FlockJsonDifftestMain"
+
+[[lean_exe]]
+name = "program-difftest"
+root = "ProgramDifftestMain"

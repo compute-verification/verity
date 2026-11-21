@@ -73,7 +73,6 @@ SKIP = {
     "fixtures/": "replicated fixtures and their notes are data, named by what they hold",
     "calibration/census/": "data only (AGENTS.md: verity never reads it)",
     f"tests/lint/test_{NAME}.py": "its examples are the terms it refuses",
-    "tests/test_retired_terms.py": "the prose lint that holds a few of the terms at zero names them to find them",
 }
 #: test fixtures: a path with one of these directories is data
 FIXTURE_DIRS = ("fixtures", "testdata", "golden")
@@ -88,7 +87,7 @@ LIVE = {
     "slack": "the table keeps its other senses, Slack among them",
     "tap": "vLLM's capture taps are live; the network attester's are retired as \"uplink tap\" and \"the auditor's tap\"",
     "remote audit": "PoUB's Lean names keep the words until their rename, and the remote configuration's audit "
-                    "(`benchmarks/rho`'s `Remote`) is live; the docs' prose holds it at zero (`tests/test_retired_terms.py`)",
+                    "(`benchmarks/rho`'s `Remote`) is live",
     "M0": "a label the code uses for other things", "M1": "a label the code uses for other things",
     "M2": "a label the code uses for other things",
     "layer 1": "a model's layers", "layer 2": "a model's layers", "layer 3": "a model's layers",
@@ -137,11 +136,157 @@ OTHER_SENSES = re.compile("|".join((OTHER_NAMES, *CAP_SENSES.values())))
 #: the live proof block's files, which name no Pearl term: each request's cap, its public ``max_tokens``, in the table
 #: ``caps`` with ports ``cap_<i>``, and in capitals the table's role ``CAPS`` and the request's index ``CAP``; and the
 #: tests of a PoUW session's cap, which name none either, with their vectors' cap ``CAP``
-LIVE_CAPS = ("verity/protocols/resource_accounting/compute/pouw/prover/circuit/live.py",
-             "verity/protocols/resource_accounting/compute/pouw/verifier/live_reads.py",
-             "tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_circuit_live.py",
-             "tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_pouw_window.py",
-             "tests/verity/protocols/resource_accounting/compute/pouw/verifier/window_vectors.py")
+LIVE_CAPS = ("verity/protocols/accounting/compute/pouw/prover/circuit/live.py",
+             "verity/protocols/accounting/compute/pouw/verifier/live_reads.py",
+             "tests/verity/protocols/accounting/compute/pouw/verifier/test_circuit_live.py",
+             "tests/verity/protocols/accounting/compute/pouw/verifier/test_pouw_window.py",
+             "tests/verity/protocols/accounting/compute/pouw/verifier/window_vectors.py")
+
+#: The retired terms `research msg` warns on, and what to write instead (`tools/research/src/research/vocabulary.py`
+#: reads these assignments): `TERMS`, retired everywhere but the Lean, and `DOC_TERMS`, retired in the maintained docs'
+#: prose, each with its pattern; `_CODE` is a code span or fence, where a term is a mention.
+TERMS = {"proof unit": "proof block", "faulty unit": "incorrect proof block", "proof service": "proof system",
+         "faulty ANDs": "incorrect ANDs"}
+_SEP = r"(?:[ \t]+|-|[ \t]*\n[ \t]*(?:#+|//+|--|\*|;+)?[ \t]*)"
+_TERM = re.compile(rf"\b(?:(?:proof|faulty){_SEP}units?|proof{_SEP}services?|faulty{_SEP}ANDs)\b", re.I)
+DOC_TERMS = {
+    "wrong unit, incorrect unit": "incorrect proof block",
+    "faulty proof block, faulty block, faulty set": "incorrect proof block; the incorrect set F",
+    "isolation unit, IU": "inference block",
+    "replay unit": "replay block",
+    "draw, drawn, redraw": "the sample, sampled proof block (verb: sample; coins are flipped)",
+    "verity example, verity demo": "verity run NAME",
+    "components, the composite's product": "subprotocols, composition",
+    "firewall": "ZK server",
+    "warden, network warden": "the network attester (what keeps the older name, a format's value or a name a caller "
+                              "outside the tree gives, stays in backticks: tests/lint/retired_terms.md)",
+    "flock-verify, remote check, naming the verifier": "verity verify proof, verity verify remote (a command someone runs today "
+                                                      "stays in backticks)",
+    "coin server, coin source, coin device, randomness source": "the challenger",
+    "salted leaf, salted commitment": "hiding leaf, hiding commitment",
+    "acceptance probability P_a, a sampling design's acceptance probability": "miss probability (detection is its "
+                                                                              "complement; a prover's acceptance probability "
+                                                                              "keeps the word)",
+    "egress cone": "reach (E)",
+    "link window": "an execution phase's transfer blocks (`link-window` stays in backticks until a format version)",
+    "block-scaled, blockwise, scale block": "scale group",
+    "production": "serving, or proving",
+    "builder, advice compiler, circuit builder": "registered compiler",
+    "declared advice": "advice",
+    "declared circuit": "registered circuit",
+    "declared work, declared workload, declares its advice": "registered circuit; the developer reports its advice, which "
+                                                             "the registered compiler turns into the execution block",
+    "registered work": "registered circuit (D)",
+    "the prover's node, machine, host or site, a machine the prover doesn't control, nothing the prover runs or hosts, "
+    "prover-controlled, the prover system":
+        "the developer's node, machine, host or site, a machine the developer doesn't control, nothing the developer runs "
+        "or hosts, developer-controlled, the developer's hardware (\"prover\" stays for the proving side of a proof: "
+        "Flock's prover, a proof's messages, a cheating prover)",
+    "onsite deployment, remote deployment, composite protocol": "configuration (onsite or remote, the Lean's `Composite`)",
+    "named premise, the card premise": "assumption, or a proposed assumption until a lock lists it; the card assumption (a "
+                                       "theorem's hypothesis stays a premise)",
+    "sampled unit, unit class": "sampled proof block; a size class, or Flock's proof-block class",
+    "C-Flock": "Flock (Succinct's is upstream Flock)",
+    "netlist": "a private circuit, or the circuit's description",
+    "M0": "Flock's circuit prover",
+    "IR, Verity IR": "circuit or Program (`verity.circuits`)",
+    "verifier of record": "the verifier (other checking code is named for what it is: the Rust cross-check, a Python mirror)",
+    "audit coin": "the challenger's coins (the step that reads them is the verification phase)",
+    "declaration block, declaration period": "execution block, execution phase",
+    "uplink tap, the auditor's tap": "the network attester, and its records network attestations",
+    "timed verifier": "the memory attester",
+    "network transparency": "network accounting",
+    "prover gateway, verifier gateway": "the ZK server; the challenger",
+    "batch verifier": "the verifier",
+    "GPU workers": "workers",
+    "escape probability": "miss probability",
+    "post-landing run, postland": "after-landing run",
+    "Commit window": "Commit period",
+    "accounting period": "the monitoring period",
+    "isolation block, certified block": "inference block",
+    "transformer block": "layer",
+    "audit phase, audit round": "the verification phase",
+    "monitored compute, monitored hardware, monitored server": "registered hardware (the monitoring period keeps its name)",
+    "staging decode": "the store's load",
+    "pinned theorem, pinned statement": "guarantee",
+    "trusted text": "spec",
+    "sampling period, sampling block, PoUW's commit period": "execution phase (work plus its audit: an execution phase and its "
+                                                            "verification phase)",
+    "hm96 rows, outside the commitments' docs": "hiding commitments",
+    "integrity period": "execution phase",
+    "execution transcript": "trace (a proof's or a session's messages stay its transcript)",
+    "that period's coins": "before any coins are flipped",
+    "rejection dominates, reject dominance": "any rejection rejects the whole",
+    "physical block": "server block",
+    "thread block": "CTA",
+    "KV block": "KV page",
+    "the accelerator model, the machine model": "the ACCEL model (`calibration/machine_model/` and its `machine-model` "
+                                                "command keep the name)",
+    "coverage premise, coverage table": "the card assumption, the opcode table",
+    "envelope ISA, envelope op": "the ACCEL ops",
+    "server-time block, serving block, server-window": "server block",
+    "overhead lower bound, exclusion bound": "the slowdown lower bound",
+    "circuit-size slowdown, training efficiency, hardware multiple": "slowdown(𝒢, 𝒜, η)",
+    "per-block cap, per-block limit": "the server-block yield q_S, or the inference-block yield q(c, k)",
+    "training class": "pricing argument",
+    "physical class, restricted class, monitored class": "the feasible set 𝓕; the admissible set 𝒜",
+    "certified work, accounted compute, declared compute": "verified compute, V",
+    "certified share, declared utilization": "utilization",
+    "uncertified capacity, uncertified gates, undeclared compute, skippable work, residual compute, monitored residual":
+        "free compute, U",
+    "dark compute, dark fleet, dark leaves, undeclared hardware": "unregistered hardware, ε_unreg",
+    "unregistered input, unregistered information, novel information": "fresh input, fresh input bits",
+    "registered computation": "the registered circuit",
+    "work requirement": "necessary subcomputation",
+    "dampener, compute dampener": "the slowdown, slowdown(𝒢, 𝒜, η) (`Nci.Dampener` and `Dampener*` stay in backticks until renamed)",
+    "NCI, novel communication intensity": "the inference-only policy (`Nci*`, `NciCheck` and the `nci` directories stay in backticks until "
+                                          "renamed)",
+    "leg": "the subprotocol's name (SPOT, PoUW, PoUS, PoUB, network attestation), the bandwidth audit's or the "
+           "memory wipe's, or run",
+    "remote bandwidth audit, remote bandwidth, remote audit, proof of useful bandwidth":
+        "PoUB (the `verity/remote-bandwidth/` ids are bytes and stay, in backticks, until PoUB's next version)",
+}
+_SPACE = r"(?:[ \t]+|-|[ \t]*\n[ \t]*)"
+_DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}units?|(?:physical|thread|KV){_SPACE}blocks?"
+                       rf"|wardens?"
+                       rf"|legs?|(?:re)?(?:draws?|drawn|drawing|drew)|components?|firewall(?:s|ed)?|flock-verify"
+                       rf"|coin{_SPACE}(?:servers?|sources?|devices?)|randomness{_SPACE}sources?"
+                       rf"|salted{_SPACE}(?:leaf|leaves|commitments?)|egress{_SPACE}cones?"
+                       rf"|acceptance{_SPACE}probabilit(?:y|ies){_SPACE}\$?(?:\\bar\{{?\s?)?P\u0304?\}}?_\{{?a\b"
+                       rf"|(?:sampling{_SPACE})?design's{_SPACE}acceptance{_SPACE}probabilit(?:y|ies)"
+                       rf"|link{_SPACE}windows?|block{_SPACE}scaled|blockwise|scale{_SPACE}blocks?|productions?"
+                       rf"|remote{_SPACE}check|builders?|advice{_SPACE}compilers?|declared{_SPACE}(?:advice|circuits?|work(?:loads?)?)"
+                       rf"|declar(?:es|ed|ing){_SPACE}(?:its|their|the){_SPACE}advice|sampled{_SPACE}units?"
+                       rf"|integrity{_SPACE}periods?|execution{_SPACE}transcripts?"
+                       rf"|units?{_SPACE}class(?:es)?|audit{_SPACE}coins?"
+                       rf"|registered{_SPACE}work|(?:named|card){_SPACE}premises?|(?:onsite|remote){_SPACE}deployments?|composite{_SPACE}protocols?"
+                       rf"|prover{_SPACE}systems?|prover-controlled|prover{_SPACE}runs{_SPACE}or{_SPACE}hosts"
+                       rf"|prover's{_SPACE}(?:own{_SPACE})?(?:nodes?|machines?|hosts?|sites?|datacenters?|servers?|GPUs?|hardware)"
+                       rf"|prover{_SPACE}(?:doesn't|does{_SPACE}not){_SPACE}control|(?:hosts?|machines?){_SPACE}the{_SPACE}prover{_SPACE}controls"
+                       rf"|faulty{_SPACE}(?:proof{_SPACE})?blocks?|faulty{_SPACE}sets?"
+                       rf"|declaration{_SPACE}(?:blocks?|periods?)|sampling{_SPACE}(?:periods?|blocks?)|hm96{_SPACE}rows?"
+                       rf"|(?:accelerator|machine){_SPACE}models?|coverage{_SPACE}(?:premises?|tables?)|envelope{_SPACE}(?:ISA|ops?)"
+                       rf"|server{_SPACE}time{_SPACE}blocks?|serving{_SPACE}blocks?|server-windows?"
+                       rf"|(?:overhead{_SPACE}lower|exclusion){_SPACE}bounds?|circuit{_SPACE}size{_SPACE}slowdown"
+                       rf"|training{_SPACE}efficiency|hardware{_SPACE}multiples?|per{_SPACE}block{_SPACE}(?:caps?|limits?)"
+                       rf"|(?:training|physical|restricted|monitored){_SPACE}class(?:es)?|certified{_SPACE}(?:work|shares?)"
+                       rf"|accounted{_SPACE}compute|declared{_SPACE}(?:compute|utilization)|uncertified{_SPACE}(?:capacity|gates)"
+                       rf"|undeclared{_SPACE}(?:compute|hardware)|skippable{_SPACE}work|residual{_SPACE}compute|monitored{_SPACE}residuals?"
+                       rf"|dark{_SPACE}(?:compute|fleets?|leaves|hardware)|unregistered{_SPACE}(?:inputs?|information)"
+                       rf"|novel{_SPACE}information|registered{_SPACE}computations?|work{_SPACE}requirements?"
+                       rf"|period's{_SPACE}(?:audit{_SPACE})?coins|reject(?:ion)?{_SPACE}domina\w*|dampeners?"
+                       rf"|uplink{_SPACE}taps?|auditor's{_SPACE}taps?"
+                       rf"|timed{_SPACE}verifiers?|network{_SPACE}transparency|(?:prover|verifier){_SPACE}gateways?"
+                       rf"|batch{_SPACE}verifiers?|GPU{_SPACE}workers?|escape{_SPACE}probabilit(?:y|ies)"
+                       rf"|post{_SPACE}landing(?:{_SPACE}runs?)?|postland\w*|commit{_SPACE}windows?|accounting{_SPACE}periods?"
+                       rf"|(?:isolation|certified|transformer){_SPACE}blocks?|audit{_SPACE}(?:phases?|rounds?)"
+                       rf"|monitored{_SPACE}(?:compute|hardware|servers?)|staging{_SPACE}decodes?"
+                       rf"|pinned{_SPACE}(?:theorems?|statements?)|trusted{_SPACE}texts?"
+                       rf"|remote{_SPACE}(?:bandwidth(?:{_SPACE}audits?)?|audits?)|proof{_SPACE}of{_SPACE}useful{_SPACE}bandwidth"
+                       rf"|novel{_SPACE}communication{_SPACE}intensity)\b)|\bIUs?\b|\bNCI\b"
+                       rf"|(?i:\bC-Flock\b|\bnetlists?\b|\bverifiers?{_SPACE}of{_SPACE}record\b)|\bM0\b|\bIRs?\b"
+                       rf"|\bcommit{_SPACE}periods?\b")
+_CODE = re.compile(r"^[ \t]*(`{3,}|~{3,}).*?^[ \t]*\1[^\n]*$|(`+)[\s\S]*?(?<!`)\2(?!`)", re.M | re.S)
 
 
 def _vllm(path: str) -> str:
@@ -149,16 +294,10 @@ def _vllm(path: str) -> str:
     return f"tests/adapters/vllm/{path}" if path.startswith("tests/") else f"adapters/vllm/{path}"
 
 
-#: the vLLM adapter's files of a request's length cap, its ``max_tokens``, which name no Pearl term: the continuation
-#: controller that lifts a request to its cap, the workload and executed prefix that declare it, and their tests, whose
-#: ``CAP`` in capitals is the same cap
+#: the vLLM adapter's files of a request's length cap, its ``max_tokens``, which name no Pearl term: the workload and executed
+#: prefix that declare it, whose ``CAP`` in capitals is the same cap
 REQUEST_CAPS = tuple(_vllm(p) for p in (
-    "verity_vllm/program/lifting/continuation.py", "verity_vllm/program/workload.py",
-    "verity_vllm/commit/executed_prefix.py", "verity_vllm/commit/served_record.py",
-    "tests/program/test_continuation.py", "tests/program/test_lifted_request.py",
-    "tests/program/test_lifted_request_padrev.py", "tests/program/test_lifted_dense_b1.py",
-    "tests/program/test_lifted_dense_b1_padrev.py", "tests/program/test_lifted_tiny.py",
-    "tests/program/test_lifted_tiny_padrev.py"))
+    "verity_vllm/program/workload.py", "verity_vllm/commit/executed_prefix.py", "verity_vllm/commit/served_record.py"))
 #: the vLLM and torch adapters' files of a logit soft cap, which name no Pearl term: the softcapped attention chain's static ``CAP``
 #: (``AttentionSoftcap_v2{...,CAP}``) and the scalar ``cap`` its rules and tests pass
 SOFTCAP_CAPS = tuple(_vllm(p) for p in (
@@ -173,8 +312,8 @@ CAPITALS = LIVE_CAPS + REQUEST_CAPS + SOFTCAP_CAPS
 #: the files whose "cap" is their own, by path prefix, with each reason; Pearl's spellings still count there, and
 #: ``PEARL_CAP`` too outside ``CAPITALS``
 OWN_CAPS = {
-    "verity/protocols/resource_accounting/memory/pous/": "PoUS's caps (an audit's duration, its schemes' bounds); Pearl's is PoUW's",
-    "verity/protocols/resource_accounting/memory/poub/": "PoUB's lifetime cap on a schedule's bits; Pearl's is PoUW's",
+    "verity/protocols/accounting/memory/pous/": "PoUS's caps (an audit's duration, its schemes' bounds); Pearl's is PoUW's",
+    "verity/protocols/accounting/memory/poub/": "PoUB's lifetime cap on a schedule's bits; Pearl's is PoUW's",
     **dict.fromkeys(tuple(f"security/{tree}/{area}"
                           for tree in ("Definitions", "Properties", "Proofs", "Proofs/Properties")
                           for area in ("Pous", "Poub")),
@@ -187,14 +326,13 @@ OWN_CAPS = {
                           for b in ("pous", "poub_session", "vllm_encoded", "kv_filler", "codec_tensor")),
                     "PoUS's and PoUB's benchmarks' caps (an RTT allowance, a period's cap, a buffer's rows, a fill's "
                     "CTAs); Pearl's is PoUW's"),
-    "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/row_table": "a row table's `cap` counts its leaves",
-    "verity/protocols/resource_accounting/compute/pouw/verifier/window.py": "a session's cap, the most tile instances one session holds",
-    "verity/protocols/resource_accounting/compute/pouw/verifier/lean/window/": "`window.py`'s session cap in its Lean port",
-    "tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/window/": "`window.py`'s session cap in its Lean port's tests",
-    "verity/protocols/proofs/flock/": "Flock's caps (a Merkle cap, the nodes a proof's rows open to; its bounds on runs and tables)",
-    "verity/protocols/proofs/recursion/": "Flock's Merkle caps, as the recursion's verifier checks them",
+    "verity/protocols/accounting/compute/pouw/prover/kernels/pouw_cuda/row_table": "a row table's `cap` counts its leaves",
+    "verity/protocols/accounting/compute/pouw/verifier/window.py": "a session's cap, the most tile instances one session holds",
+    "verity/protocols/accounting/compute/pouw/verifier/lean/window/": "`window.py`'s session cap in its Lean port",
+    "tests/verity/protocols/accounting/compute/pouw/verifier/lean/window/": "`window.py`'s session cap in its Lean port's tests",
+    "verity/protocols/proof/flock/": "Flock's caps (a Merkle cap, the nodes a proof's rows open to; its bounds on runs and tables)",
+    "verity/protocols/proof/recursion/": "Flock's Merkle caps, as the recursion's verifier checks them",
     "benchmarks/recursion_e2e/": "Flock's Merkle caps, the V* statements the recursion's benchmark proves and times",
-    "benchmarks/recursion_figures/": "Flock's Merkle caps, the V* parts the recursion's figures name",
     "security/Proofs/Flock/": "Flock's caps in its proofs: the Merkle cap, and its bounds on runs, tables and samples",
     "security/Definitions/Claims/": "the bound on an extractor's reruns that Flock's claims state (`Deploy.cap`, `Arg.cap`)",
     **dict.fromkeys(LIVE_CAPS, "the live proof block's caps, its requests' public `max_tokens`; a session's cap"),
@@ -230,21 +368,15 @@ OWN_NAMES = {
          "the attestation period of `Attest.Period`, in its guarantees' names (`PeriodSigned`, `PeriodSound`, "
          "`PeriodRun`), in their two files only: elsewhere `PeriodRun` is compose's and `PeriodSound` PoUW's",
          ("security/Properties/Attest.lean", "security/Proofs/Properties/Pous/MemoryAttester/Attest.lean")),
-        (r"_PeriodAuditor",
-         "the auditor of H1's challenge period in the vLLM adapter's PoUW tests: a span of time, which retired_terms.md's row "
-         "of \"window\" calls a period, and not the stretch of time a bound is about that its row of `*Period*` retires",
-         ("tests/adapters/vllm/tests/pipeline/test_serve_h1.py", "tests/adapters/vllm/tests/protocols/test_pouw_h1_drawn.py")),
     ),
     "row of record": (
         (r"row[\s_]+of[\s_]+record",
          "vLLM's workload of record: retired_terms.md's row of \"row\" for a workload keeps \"row of record\" "
          "(`manifests/records.json`) in `adapters/vllm/` until vLLM's workloads move",
          tuple(_vllm(p) for p in (
-             "tests/pipeline/test_circuit_db.py", "tests/pipeline/test_done_source.py", "tests/pipeline/test_neutrality.py",
-             "tests/pipeline/test_row_chain.py", "tests/program/test_compact.py", "verity_vllm/config.py",
-             "verity_vllm/pipeline/circuit_db.py", "verity_vllm/pipeline/config_record.py",
-             "verity_vllm/pipeline/neutrality.py", "verity_vllm/pipeline/research.py", "verity_vllm/pipeline/row.py",
-             "verity_vllm/pipeline/row_config.py", "verity_vllm/pipeline/workload.py",
+             "tests/pipeline/test_circuit_db.py", "tests/pipeline/test_done_source.py", "tests/program/test_compact.py",
+             "verity_vllm/config.py", "verity_vllm/pipeline/circuit_db.py", "verity_vllm/pipeline/config_record.py",
+             "verity_vllm/pipeline/workload.py",
              "verity_vllm/program/gemm_target_correspondence.py"))),
     ),
 }
@@ -259,13 +391,12 @@ OWN_NAME = {term: tuple((re.compile(pattern), files) for pattern, _, files in na
 #: refused as stale); when an owner writes a new key beside the old one, the entry's reason gets the day the old key stops
 #: being read.  A file's entry in the list falls by its held sites (``--prune``) and never rises for them.
 HELD_KEYS = {
-    "sampled-proofs:*": (("benchmarks/harness/README.md", "benchmarks/harness/specs/llama31-8b-fp8-1gpu-commit-served.toml",
+    "sampled-proofs:*": (("benchmarks/harness/specs/llama31-8b-fp8-1gpu-commit-served.toml",
                           "tests/benchmarks/harness/test_bench.py", "benchmarks/harness/verity_bench/vllm/commit_arm.py"),
                          "a stored run's arm key, vllm's"),
     "coin_source": (("benchmarks/harness/verity_bench/vllm/runner.py", "tests/benchmarks/harness/test_bench.py",
-                     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/__init__.py",
-                     "verity/protocols/resource_accounting/compute/pouw/prover/serving/coins/challenger.py",
-                     "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/window.py"),
+                     "verity/protocols/accounting/compute/pouw/prover/serving/coins/challenger.py",
+                     "verity/protocols/accounting/compute/pouw/prover/serving/pearl_c/window.py"),
                     "the PoUW commitment's key, compute-accounting's"),
 }
 #: a character of an identifier a held key stands in
@@ -739,7 +870,7 @@ def test_a_draw_in_a_comment_or_string_of_a_composite_body_is_still_the_sample()
             '    """Each unit we draw, one by one."""\n'
             '    k = draw(st.integers(0, 3))  # draw the count, then the units\n'
             '    return [draw(st.just(i)) for i in range(k)]  # draw\n')
-    assert said(text, "verity/protocols/proofs/spot/tests/test_units.py") == [(6, "draw"), (7, "draw"), (8, "draw")]
+    assert said(text, "verity/protocols/proof/spot/tests/test_units.py") == [(6, "draw"), (7, "draw"), (8, "draw")]
 
 
 def test_a_composite_shown_in_markdown_keeps_every_bare_draw_of_its_body() -> None:
@@ -749,11 +880,11 @@ def test_a_composite_shown_in_markdown_keeps_every_bare_draw_of_its_body() -> No
     text = ("# Units\n\n```python\nfrom hypothesis import strategies as st\n\n\n@st.composite\ndef units(draw):\n"
             "    k = draw(st.integers(0, 3))  # draw the count\n    return [draw(st.just(i)) for i in range(k)]\n```\n\n"
             "It's the sample that counts past the example: one draw.\n")
-    assert said(text, "verity/protocols/proofs/spot/README.md") == [(13, "draw")]
+    assert said(text, "verity/protocols/proof/spot/README.md") == [(13, "draw")]
 
 
 def test_a_python_file_that_doesn_t_tokenize_stops_the_scan_naming_itself() -> None:
-    path = "verity/protocols/proofs/spot/tests/test_broken.py"
+    path = "verity/protocols/proof/spot/tests/test_broken.py"
     text = 'from hypothesis import given, strategies as st\n\n\n@given(st.data())\ndef test_it(data):\n    data.draw(st.just("x))\n'
     try:
         said(text, path)
@@ -777,7 +908,7 @@ def test_the_stacking_property_s_caps_and_nvidia_smi_s_compute_cap_are_other_sen
 def test_a_kernel_s_grid_cap_is_another_sense_and_pearl_s_cap_beside_it_is_not() -> None:
     """A kernel's ``grid_cap`` as the identifier it is; Pearl's spellings beside it, and a longer name built on it, still
     count in the same file."""
-    path = "verity/protocols/resource_accounting/compute/pouw/prover/kernels/masked_gemm/sgemm.cu"
+    path = "verity/protocols/accounting/compute/pouw/prover/kernels/masked_gemm/lpgemm.cu"
     theirs = "static void ssetup(SProb& P, int grid_cap) {\n  P.grid = std::min(tiles, grid_cap > 0 ? grid_cap : nsm);\n"
     assert said(theirs, path) == []
     assert said(theirs + "// grid_cap, then Pearl's cap, CAP and capOK; grid_capOK, grid_cap_check\n", path) == [
@@ -814,10 +945,10 @@ def test_a_cap_of_pous_or_poub_is_another_sense_and_pearl_s_beside_it_is_not() -
     theirs = "the cap: `Params.schedule_cap`, SCHEDULE_CAP, `RTT_ALLOWANCE_CAP_NS`, cap_ns, `AUDIT_CAP`, `auditCap`; v.cap, caps"
     pearls = "\nPearl's: capOK, Device.cap, CAP, an over-cap tile, the cap check"
     pearl = [(2, "capOK"), (2, "Device.cap"), (2, "CAP"), (2, "over-cap"), (2, "cap check")]
-    for path in ("verity/protocols/resource_accounting/memory/pous/verifier/audit.py", "verity/protocols/resource_accounting/memory/poub/verifier/audit.py"):
+    for path in ("verity/protocols/accounting/memory/pous/verifier/audit.py", "verity/protocols/accounting/memory/poub/verifier/audit.py"):
         assert said(theirs + pearls, path) == pearl
-    assert said(theirs + pearls, "verity/protocols/resource_accounting/compute/pouw/verifier/pearl.py") == [(1, "cap"), (1, "cap"), (1, "caps"), *pearl]
-    assert [w.split("'")[1] for _, w in sites(pearls, "verity/protocols/resource_accounting/memory/poub/verifier/audit.py")] == [o for _, o in pearl]
+    assert said(theirs + pearls, "verity/protocols/accounting/compute/pouw/verifier/pearl.py") == [(1, "cap"), (1, "cap"), (1, "caps"), *pearl]
+    assert [w.split("'")[1] for _, w in sites(pearls, "verity/protocols/accounting/memory/poub/verifier/audit.py")] == [o for _, o in pearl]
 
 
 def test_the_unread_ratchet_s_cap_is_the_lean_check_s_own_and_pearl_s_beside_it_is_not() -> None:
@@ -836,12 +967,12 @@ def test_a_row_table_s_cap_is_its_number_of_leaves_and_pearl_s_beside_it_is_not(
     table = "uint64_t cap;  // its leaves\nif (p < t->cap) return 2 * cap;"
     pearls = "\n// Pearl's: capOK, CAP, an over-cap tile"
     pearl = [(3, "capOK"), (3, "CAP"), (3, "over-cap")]
-    for path in ("verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/row_table.cu",
-                 "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/row_table.cuh",
-                 "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/row_table_host.cpp"):
+    for path in ("verity/protocols/accounting/compute/pouw/prover/kernels/pouw_cuda/row_table.cu",
+                 "verity/protocols/accounting/compute/pouw/prover/kernels/pouw_cuda/row_table.cuh",
+                 "verity/protocols/accounting/compute/pouw/prover/kernels/pouw_cuda/row_table_host.cpp"):
         assert Path(ROOT, path).is_file(), f"{path} is gone: move its line of OWN_CAPS with it"
         assert said(table + pearls, path) == pearl
-    beside = "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/pearl_tile.cu"
+    beside = "verity/protocols/accounting/compute/pouw/prover/kernels/pouw_cuda/pearl_tile.cu"
     assert said(table + pearls, beside) == [(1, "cap"), (2, "cap"), (2, "cap"), *pearl]
 
 
@@ -881,7 +1012,7 @@ def test_the_live_block_s_caps_are_its_own_in_capitals_too_and_pearl_s_other_spe
     for path in LIVE_CAPS:
         assert Path(ROOT, path).is_file(), f"{path} is gone: move its line of LIVE_CAPS with it"
         assert said(live + pearls, path) == pearl
-    credit = "verity/protocols/resource_accounting/compute/pouw/verifier/credit.py"
+    credit = "verity/protocols/accounting/compute/pouw/verifier/credit.py"
     assert said(live + pearls, credit) == [(1, "CAPS"), (1, "caps"), (2, "CAP"), (3, "cap"), (3, "CAPS"), (3, "cap"),
                                            *pearl]
 
@@ -894,7 +1025,7 @@ def test_a_session_s_cap_is_its_own_and_pearl_s_other_spellings_there_are_not() 
                "CAP = 2\nWd.public_inputs(reg, SAMPLED, s, V.CAP, domain_h3)\n")
     pearls = "# Pearl's: capOK, Device.cap, an over-cap tile, the cap check\n"
     pearl = [(4, "capOK"), (4, "Device.cap"), (4, "over-cap"), (4, "cap check")]
-    window = "verity/protocols/resource_accounting/compute/pouw/verifier/"
+    window = "verity/protocols/accounting/compute/pouw/verifier/"
     for path in ("test_pouw_window.py", "window_vectors.py"):
         assert Path(ROOT, "tests", window, path).is_file(), f"tests/{window}{path} is gone: move its line of LIVE_CAPS with it"
         assert said(session + pearls, f"tests/{window}{path}") == pearl
@@ -1001,8 +1132,8 @@ def test_a_word_of_two_kept_senses_the_lint_tells_apart_still_counts_in_its_reti
     assert "draw" not in {t.old for t in terms_of(SENSES_EXAMPLE + two.replace("Cap", "Draw"))}
     assert "cap" in {t.old for t in terms()[0]}, f"{TABLE}'s two-senses list no longer stops Pearl's cap from counting"
     kept = "a served cap S charges each replay block at most F S; `NetworkAttesterParams.max_tokens_cap`\n"
-    assert said(kept, "verity/protocols/proofs/spot/prover/plancheck.py") == []
-    assert said(kept + "Pearl's cap, a tile over the cap\n", "verity/protocols/proofs/spot/prover/plancheck.py") == [
+    assert said(kept, "verity/protocols/proof/spot/prover/plancheck.py") == []
+    assert said(kept + "Pearl's cap, a tile over the cap\n", "verity/protocols/proof/spot/prover/plancheck.py") == [
         (2, "cap"), (2, "cap")]
 
 
@@ -1137,15 +1268,13 @@ def test_the_responder_s_and_a_party_s_periods_keep_the_word_and_attest_s_names_
         "PeriodSigned", "PeriodSound", "PeriodRun"]
 
 
-def test_the_adapter_s_row_of_record_and_h1_s_period_auditor_keep_their_words_only_in_their_files() -> None:
-    """vLLM's "row of record" and H1's ``_PeriodAuditor`` aren't sites in the adapter's files that name them, and are
-    elsewhere."""
-    text = "the row of record, row_of_record and _PeriodAuditor"
-    for term, (_, _, files) in (("row of record", OWN_NAMES["row of record"][0]), ("*Period*", OWN_NAMES["*Period*"][4])):
-        for f in files:
-            assert Path(ROOT, f).is_file(), f"{f} is gone: move its line of OWN_NAMES with it"
-            assert [w.split("'")[1] for _, w in sites(text, f) if (term == "*Period*") == ("Period" in w)] == []
-    assert [w.split("'")[1] for _, w in sites(text, "verity/a.py")] == ["row of record", "row_of_record", "_PeriodAuditor"]
+def test_the_adapter_s_row_of_record_keeps_its_words_only_in_its_files() -> None:
+    """vLLM's "row of record" isn't a site in the adapter's files that name it, and is elsewhere."""
+    text = "the row of record and row_of_record"
+    for f in OWN_NAMES["row of record"][0][2]:
+        assert Path(ROOT, f).is_file(), f"{f} is gone: move its line of OWN_NAMES with it"
+        assert [w.split("'")[1] for _, w in sites(text, f)] == []
+    assert [w.split("'")[1] for _, w in sites(text, "verity/a.py")] == ["row of record", "row_of_record"]
 
 
 ARM_KEYS = ('bound_arm, _control = resolve_arms("sampled-proofs:hm96,stock-fp8")\n'
@@ -1178,14 +1307,14 @@ def test_the_word_in_prose_or_in_a_new_name_in_a_listed_file_still_counts() -> N
 
 
 def test_a_held_key_in_a_listed_file_is_not_a_site() -> None:
-    """Each key where it stands whole in a file its entry names, quoted or as the identifier it is, in code, a comment or
-    Markdown; a site beside it on the same line still counts."""
+    """Each key where it stands whole in a file its entry names, quoted or as the identifier it is, in code or in a
+    comment; a site beside it on the same line still counts."""
     assert retired(ARM_KEYS, "tests/" + HARNESS + "test_bench.py") == []
     coins = ('check.coins = ({"source": c["coin_source"]} if c.get("coin_source", "in-process") != "in-process"\n'
              "               else {}  # the firewall's coins\n")
     assert retired(coins, HARNESS + "verity_bench/vllm/runner.py") == [(2, "firewall")]
     assert retired("A protocol arm (`pouw:SCHEME`, SPOT's key, `sampled-proofs:SCHEME`) runs; sampled-proofs alone\n",
-                   HARNESS + "README.md") == [(1, "sampled-proofs")]
+                   HARNESS + "specs/llama31-8b-fp8-1gpu-commit-served.toml") == [(1, "sampled-proofs")]
 
 
 def test_a_held_key_that_no_longer_stands_in_a_file_its_entry_names_is_refused_as_stale() -> None:

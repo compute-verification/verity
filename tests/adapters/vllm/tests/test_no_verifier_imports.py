@@ -15,12 +15,12 @@ ROOT = (Path(__file__).resolve().parents[4] / "adapters" / "vllm")
 PREFIX = "verity.protocols."
 TRUSTED = ("verifier", "attester")
 LANES = {
-    "proofs.": "proofs",
+    "proof.": "proofs",
     "registration.": "proofs",
-    "resource_accounting.compute.": "compute-accounting",
-    "resource_accounting.network.": "network-accounting",
-    "resource_accounting.memory.poub.": "network-accounting",
-    "resource_accounting.memory.pous.": "memory-accounting",
+    "accounting.compute.": "compute-accounting",
+    "accounting.network.": "network-accounting",
+    "accounting.memory.poub.": "network-accounting",
+    "accounting.memory.pous.": "memory-accounting",
 }
 
 KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
@@ -30,13 +30,15 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
         # types (`CoinError`, `LiveOpening`, `LiveRecord`).
         "verity_vllm/pipeline/advice.py": ("registration.verifier.registration",),
         "verity_vllm/pipeline/commit_coins.py": (
-            "proofs.spot.verifier.challenger.challenger", "proofs.spot.verifier.challenger.challenger.live_reason",
-            "proofs.spot.verifier.challenger.remote",
+            "proof.spot.verifier.challenger.challenger", "proof.spot.verifier.challenger.challenger.live_reason",
+            "proof.spot.verifier.challenger.remote",
         ),
         "verity_vllm/pipeline/serve_day.py": ("registration.verifier.registration",),
-        "verity_vllm/pipeline/serving_rows.py": ("proofs.spot.verifier.service",),
-        "verity_vllm/protocols/pouw/h1_ranks.py": ("proofs.spot.verifier.challenger.challenger.LiveRecord",),
-        "verity_vllm/protocols/pouw/h1_settings.py": ("proofs.spot.verifier.challenger.challenger.LiveRecord",),
+        "verity_vllm/pipeline/serving_rows.py": ("proof.spot.verifier.service",),
+        # SamplingDesign and params_sampling_design from SPOT's verifier service: owner proofs, gone by Tue 24 Nov to a home
+        # the adapter may import (top's ruling, Fri 20 Nov 9:02 AM PST, TOP-447)
+        "verity_vllm/program/predict/serve.py": ("proof.spot.verifier.service",),
+        "verity_vllm/program/predict/window_record.py": ("proof.spot.verifier.service",),
     },
     "network-accounting": {},
     "memory-accounting": {},
@@ -94,7 +96,7 @@ def test_known_lists_only_live_imports():
 
 
 def test_no_import_of_the_network_attesters_package():
-    network = PREFIX + "resource_accounting.network"
+    network = PREFIX + "accounting.network"
     found = [f"{rel}: {n}" for rel, tree in _library() for n in _names(tree) if n == network or n.startswith(network + ".")]
     assert not found, ("library files import the network attester's package: reach the network attester through its "
-                       'scheme, `compose.schemes.get("network-attester")`:\n' + "\n".join(found))
+                       'scheme, `run.schemes.get("network-attester")`:\n' + "\n".join(found))

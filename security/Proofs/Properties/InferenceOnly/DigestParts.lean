@@ -27,7 +27,7 @@ namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 open Lean (Json)
 open Claims.Json (Wf)
 open FlockDeploy (JsonEquiv jsonEquiv_arr_iff)
-open InferenceOnlyVerifier.DefinitionDigest (written)
+open Flock.DefinitionDigest (written)
 
 theorem concat_mkObj1 (v : Json) : ((Json.mkObj [("concat", v)]).getObjVal? "concat").toOption = some v := by
   simp only [Json.mkObj, Json.getObjVal?]
@@ -81,7 +81,7 @@ open Lean (Json)
 open Flock Flock.Program
 open Claims.Json (Wf)
 open FlockDeploy (JsonEquiv jsonEquiv_arr_iff jsonForm)
-open private natJ? intJ? from Circuits.Program
+open private natJ? intJ? from Circuits.Descriptor
 
 /-- The decoder's reference space: `p`, a parameter; `n`, a node's output. -/
 private def spaceOf (s : Json) : Option Bool := match s with

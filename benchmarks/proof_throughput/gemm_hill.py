@@ -66,15 +66,15 @@ import sys
 import time
 from pathlib import Path
 
-sys.path.insert(0, str((Path(__file__).resolve().parent.parent.parent / "verity" / "protocols" / "proofs" / "flock" / "prover" / "pod")))
+sys.path.insert(0, str((Path(__file__).resolve().parent.parent.parent / "verity" / "protocols" / "proof" / "flock" / "prover" / "pod")))
 import gemm_slowdown as GS
 
 #: dtype -> the coordinate Definition, its dot, the census line of its dense peak at FP32 accumulate, and the campaign target
 #: (verity.circuits.targets.target) whose operands and accumulator these are: MXFP4 has none, so its result.json names none
-DTYPES = {"bf16": ("GemmCoordinate_v2", "HopperBF16WgmmaDot16_v1", "rtx-pro-6000-server/bf16", "bf16-hopper-mma-draft/2026-09-22"),
-          "e4m3": ("GemmCoordinateE4m3_v1", "BlackwellE4m3QmmaDot32_v1", "rtx-pro-6000-server/e4m3", "fp8-sm120-mma-draft/2026-09-30"),
-          "nvf4": ("GemmCoordinateNvf4_v1", "BlackwellNvf4OmmaDot64_v1", "rtx-pro-6000-server/e2m1", "nvfp4-sm120-mma-draft/2026-09-22"),
-          "mxf4": ("GemmCoordinateMxf4_v1", "BlackwellMxf4OmmaDot64_v1", "rtx-pro-6000-server/e2m1", None)}
+DTYPES = {"bf16": ("GemmCoordinate_v2", "HopperBF16WgmmaDot16_v1", "rtx-pro-6000-server-tensor/bf16", "bf16-hopper-mma-draft/2026-09-22"),
+          "e4m3": ("GemmCoordinateE4m3_v1", "BlackwellE4m3QmmaDot32_v1", "rtx-pro-6000-server-tensor/e4m3", "fp8-sm120-mma-draft/2026-09-30"),
+          "nvf4": ("GemmCoordinateNvf4_v1", "BlackwellNvf4OmmaDot64_v1", "rtx-pro-6000-server-tensor/e2m1", "nvfp4-sm120-mma-draft/2026-09-22"),
+          "mxf4": ("GemmCoordinateMxf4_v1", "BlackwellMxf4OmmaDot64_v1", "rtx-pro-6000-server-tensor/e2m1", None)}
 M = 35
 #: BF16's instances per statement at m = 35: 2^(35 - k_log), k_log the block circuit.compose packs one coordinate into (the unit's
 #: row slot and its rows' hashing): 24, 24, 25, 26, 27. K = 32768 is at Stmt.InRange's k_log <= 27. The FP8 / FP4 rows take theirs
@@ -117,7 +117,7 @@ def defs(a) -> None:
         Path(a.out).write_text(json.dumps({f'Gemm_v2{{K={a.K},N={n},DOT={{"fn":"{DTYPES["bf16"][1]}"}}}}': 1}) + "\n")
         print(n, f"DEFS={a.out}")
     else:
-        print(n, f"PROGRAM=verity/protocols/proofs/flock/prover/pod/gemm_fp.py:{a.dtype}_K{a.K}_N{n}")
+        print(n, f"PROGRAM=verity/protocols/proof/flock/prover/pod/gemm_fp.py:{a.dtype}_K{a.K}_N{n}")
 
 
 def fill(a) -> None:
@@ -350,7 +350,7 @@ def verifier_flags(root: Path, lincheck: str | None) -> list[str]:
     sources it compiles, since a synced tree has no history: the column-major fold, and the structured lincheck when FC_LINCHECK
     leaves it on (unset or partial; `both` rejects unless it equals upstream's flat fold, `flat` is upstream's). A source that
     carries its change but none of the reviewed versions, or a circuit.rs that can't be read, is a change nobody reviewed."""
-    live = root / "verity/protocols/proofs/flock/prover/live/src"
+    live = root / "verity/protocols/proof/flock/prover/live/src"
     flags: list[str] = []
     for name, mark, unreviewed, reviewed in VERIFIER_SOURCES:
         if name == "session_verify.rs" and (lincheck or "partial") != "partial":

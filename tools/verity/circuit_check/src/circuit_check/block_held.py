@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from . import sidecars as SC
 
-MAX = 121
+MAX = 119
 
 
 def held() -> dict[str, tuple[str, str]]:

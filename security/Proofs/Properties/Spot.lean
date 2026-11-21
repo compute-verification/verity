@@ -154,7 +154,7 @@ theorem checks_ok (reg receipt draw samplingDesign : Json) (units : Array Int) (
     (Draw.checkProvedFull draw provedUnits instances).codes = #[] ∧
     jeq (getD receipt "registration") (.str digest) = true ∧
     (∀ s, served = some s → s.qsort (· < ·) = units.qsort (· < ·)) ∧
-    (∀ roots, sessionRoots = some roots → roots ≠ #[] ∧
+    (∀ roots, sessionRoots = some roots →
       ∀ pr ∈ roots, ∃ r, (Record.byPort reg).find? (·.1 == pr.1) = some r ∧ jeq (getD r.2 "root") pr.2 = true) ∧
     OpenedRegistered (opened.getD #[]) (Record.registeredRoots reg) := by
   unfold Record.checks
@@ -181,20 +181,20 @@ theorem checks_ok (reg receipt draw samplingDesign : Json) (units : Array Int) (
   all_goals clear j0 j1 j2 j3 o0 o1 incorrect want opened' registered
   case some.some =>
     constructor
-    · rintro ⟨h1, h2, h3, h4, h5, h6⟩
-      refine ⟨h1, h2, h3, h4, fun pr hpr => ?_, h6⟩
+    · rintro ⟨h1, h2, h3, h5, h6⟩
+      refine ⟨h1, h2, h3, fun pr hpr => ?_, h6⟩
       have := h5 pr hpr; revert this; split <;> simp_all
-    · rintro ⟨h1, h2, h3, h4, h5, h6⟩
-      refine ⟨h1, h2, h3, h4, fun pr hpr => ?_, h6⟩
+    · rintro ⟨h1, h2, h3, h5, h6⟩
+      refine ⟨h1, h2, h3, fun pr hpr => ?_, h6⟩
       obtain ⟨r, hr, hj⟩ := h5 pr hpr
       simp only [hr, hj, ↓reduceIte]
   case none.some =>
     constructor
-    · rintro ⟨h1, h2, h4, h5, h6⟩
-      refine ⟨h1, h2, h4, fun pr hpr => ?_, h6⟩
+    · rintro ⟨h1, h2, h5, h6⟩
+      refine ⟨h1, h2, fun pr hpr => ?_, h6⟩
       have := h5 pr hpr; revert this; split <;> simp_all
-    · rintro ⟨h1, h2, h4, h5, h6⟩
-      refine ⟨h1, h2, h4, fun pr hpr => ?_, h6⟩
+    · rintro ⟨h1, h2, h5, h6⟩
+      refine ⟨h1, h2, fun pr hpr => ?_, h6⟩
       obtain ⟨r, hr, hj⟩ := h5 pr hpr
       simp only [hr, hj, ↓reduceIte]
   all_goals exact Iff.rfl
@@ -605,7 +605,14 @@ theorem earlierRoot_some (log : Array Json) (want : Registered.Entry) (d : Strin
       EarlierIs log want.leaves want.words want.wordBits d e := by
   cases e with
   | port p => exact outputRoot_some log want.leaves d p
-  | value u => exact valueRoot_some log want.leaves want.words want.wordBits d u
+  | value u =>
+    simp only [Docket.earlierRoot, EarlierIs]
+    by_cases h : d = Docket.lastDigest log
+    · subst h
+      simp only [beq_self_eq_true, ↓reduceIte, true_and]
+      exact valueRoot_some log want.leaves want.words want.wordBits _ u
+    · have hb : (d == Docket.lastDigest log) = false := by simpa using h
+      simp [hb, h]
 
 /-- An entry's shape: its leaf count, words and word bits, all an output value's earlier entry is held to. -/
 abbrev shape (e : Registered.Entry) : Nat × Nat × Nat := (e.leaves, e.words, e.wordBits)
@@ -1393,7 +1400,7 @@ theorem unitsProved_nil (c : Commitment) (e : Evidence) :
         Receipt c e ∧
         (∀ served, e.served = some served →
           (served.map fun n : Nat => (n : Int)).qsort (· < ·) = (sampledInts e.draw).qsort (· < ·)) ∧
-        (∀ roots, e.sessionRoots = some roots → entries roots ≠ #[] ∧
+        (∀ roots, e.sessionRoots = some roots →
           ∀ pr ∈ entries roots, ∃ reg, (Record.byPort c.record).find? (·.1 == pr.1) = some reg ∧
             jeq (getD reg.2 "root") pr.2) ∧
         OpenedRegistered ((Record.lessOwnReads c.record
@@ -1411,7 +1418,7 @@ theorem acceptMeans_unnamed (p : Params) (c : Commitment) (e : Evidence) (pub : 
         Receipt c e ∧
         (∀ served, e.served = some served →
           (served.map fun n : Nat => (n : Int)).qsort (· < ·) = (sampledInts e.draw).qsort (· < ·)) ∧
-        (∀ roots, e.sessionRoots = some roots → entries roots ≠ #[] ∧
+        (∀ roots, e.sessionRoots = some roots →
           ∀ pr ∈ entries roots, ∃ reg, (Record.byPort c.record).find? (·.1 == pr.1) = some reg ∧
             jeq (getD reg.2 "root") pr.2) ∧
         OpenedRegistered ((Record.lessOwnReads c.record

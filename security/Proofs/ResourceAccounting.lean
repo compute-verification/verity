@@ -3,6 +3,7 @@ module
 public import Proofs.Pous.Accounting.Memory
 public import Proofs.Registration.Device
 public import Proofs.ResourceAccounting.Gates
+public import Proofs.ResourceAccounting.BlockProperties
 public import Proofs.Pouw.FillerLuck
 public import Proofs.Pouw.Headline
 public import Proofs.Pouw.HeadlineDc
@@ -11,7 +12,6 @@ public import Proofs.ResourceAccounting.Gates.Rows
 public import Proofs.ResourceAccounting.Gates.Bitwise
 public import Proofs.ResourceAccounting.Gates.ToCircuit
 public import Proofs.Poub.Bandwidth
-public import Proofs.Pouw.ChainWork
 public import Proofs.ResourceAccounting.Prob
 public import Proofs.Compose.Joint
 public import Proofs.Certifier.JointBridge.WorkOfCreditedWords

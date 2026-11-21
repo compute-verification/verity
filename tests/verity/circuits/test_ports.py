@@ -161,7 +161,7 @@ def test_a_declared_definition_carries_its_ports_and_a_pinned_digest():
 
 
 #: the typed descriptor's digest: a change to how ports are written changes it
-PINNED = "7995bc7e0cff4bf4dc43d7dae970cdedaf7c59ee9a3837ea1598a2acbb1179312ebac7484ae175822cbc06c0a4409fa1cede0aea43c27ca3a18a28fa78cd4f0f"
+PINNED = "f5e05bdcf0d6b549cb1b27efc6d904aa409527b057c66d0838f230242525fe6faacd15c30ad3a626cc758d409bb19afa77735c2846d74624a29f37e3f02645a8"
 
 
 # --- rule 2: intervals --------------------------------------------------------------------------------------------------------
@@ -409,6 +409,11 @@ def test_malformed_interval_declarations():
         In(bound=(3, 2))
     with pytest.raises(PortError, match="E_PORT_DECL.*has no parameter"):
         P.bind_ports("T", (("x", V8),), V8, Ports(params={"y": In(bound=(0, 1))}))
+
+
+def test_a_return_port_of_no_ports_keys_is_refused():
+    with pytest.raises(PortError, match="E_PORT_DECL: Root\\[X_v1\\]_v1 return: a port is a non-empty object with keys from"):
+        P.PortTypes.from_json("Root[X_v1]_v1", {"ret": [[0, 1, {"equals": ["seed", 0, 1]}]]}, [], V16, [V16])
 
 
 # --- rule 3: sinks ------------------------------------------------------------------------------------------------------------
@@ -679,19 +684,18 @@ def test_the_decoder_refuses_a_tampered_word_typed_as_s8_lanes():
             decode_program(tampered, REGISTRY)
 
 
-def test_a_node_naming_itself_or_a_later_node_at_another_width_decodes_for_its_checkers():
-    """A node that names itself or a later node is an order violation, which decodes so that its checkers name it (PROTOCOL.md
-    §4.4): the width check reads only the parameters and earlier nodes, so it doesn't preempt them whatever the widths."""
-    from verity.circuits.partition_object import order_violation
+def test_a_node_naming_itself_or_a_later_node_at_another_width_is_refused():
+    """A node that names itself or a later node is refused by the decoder by name (PROTOCOL.md §4.4), whatever the widths: the
+    width check reads only the parameters and earlier nodes, so a later 8-bit leaf read as 32 bits never reaches it."""
     f = comp("PortsTestLanesOk", [("x", V32)], TupleT(Array(32, V8), Array(32, V8)),
              lambda B, S, x: (lambda y, lo: tuple_of(B.batch(Id8, lanes(lo), axes=(0,)), lanes(lo)))(B.call(Pair, x), B.call(Lo8, x)))
     desc, _ = roundtrip(Program(used(f)))
     for node, target in ((1, 1), (0, 2)):
         tampered = copy.deepcopy(desc)
         tampered["definitions"]["PortsTestLanesOk_v1"]["body"]["nodes"][node]["args"][0]["refs"] = {"affine": ["n", target, 0, 1]}
-        bad = order_violation(decode_program(tampered, REGISTRY))
-        assert bad == {"definition": "PortsTestLanesOk_v1", "node": node, "arg": 0, "reference": ["n", target],
-                       "why": "not topological"}
+        with pytest.raises(ValueError, match=re.escape(f"definition 'PortsTestLanesOk_v1' node {node}: forward-reference: node {node} "
+                                                       f"reads node {target}, which is not before it")):
+            decode_program(tampered, REGISTRY)
 
 
 @primitive("PortsTestPair", 1, (("x", V32),), V32)

@@ -5,9 +5,9 @@ of that card ([`machine_model/`](../../machine_model/README.md)), which prices e
 times one instruction class in one loop and writes its price row in that census's form.
 
 A rate is only as good as the loop it timed, so nothing is timed before the SASS gate
-(`verity/protocols/resource_accounting/compute/pouw/prover/kernels/gpu_kit/sass_gate.py`) has read the probe's SASS
-and found exactly the instructions the probe declares. A probe that does not pass writes no row. The probes this
-directory keeps as known-invalid must each be refused by the check it names, or nothing is timed at all.
+(`verity/protocols/accounting/compute/pouw/prover/kernels/gpu_kit/sass_gate.py`) has read the probe's SASS
+and found exactly the instructions the probe declares. A probe that does not pass writes no row. A probe declared
+known-invalid must be refused by the check it names, or nothing is timed at all.
 
 The probes in `../dc/`, `../facet_break/` and `../sass_census/` are written and run with this directory's harness.
 
@@ -41,7 +41,7 @@ The probes in `../dc/`, `../facet_break/` and `../sass_census/` are written and 
 
    ptxas wraps some uniform ops (UBLKRED) in an ELECT loop that runs once a lane: issue them from one lane, and the gate
    counts that loop as one trip. A SHFL in a warp-divergent role gets a BRA.DIV fallback past the closing clock read, so
-   the gate refuses its loop (frontier.cu has no warp-specialized SHFL point).
+   the gate refuses its loop.
 
 2. **The table entry.** One `OpProbe` a probe, in a `PROBES` array, and `main` returns `op_main(argc, argv, PROBES)`:
 

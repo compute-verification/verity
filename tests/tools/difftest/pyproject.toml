@@ -16,7 +16,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
-untraced = ["test_example_port.py", "test_protocol_port.py"]
+untraced = ["test_example_port.py", "test_protocol_port.py", "test_program_decode_port.py"]
 # Test-only: `lake` builds lean/ (in this directory) and, through its path requires, the base packages (`Base.Canon`
 # and what it imports; `Base.JsonParse`, the JSON parser's port). The annotation port's test builds `annot-difftest`,
 # which reads `Circuits.Annot`, `Circuits.AnnotExpand` and what they import (`verity_difftest.annot.INPUTS`), and holds
@@ -25,19 +25,23 @@ untraced = ["test_example_port.py", "test_protocol_port.py"]
 # package and, of Flock's verifier, which it requires by path, the
 # package's configuration, the names it imports the base modules by (`Flock.Bytes`, `Flock.Canon`, `Flock.Hash`) and
 # the packages that one requires.
-inputs = ["verity/protocols/interface", "verity/protocols/proofs/flock/verifier/lakefile.toml", "verity/protocols/proofs/flock/verifier/lake-manifest.json",
-          "verity/protocols/proofs/flock/verifier/lean-toolchain", "verity/protocols/proofs/flock/verifier/Flock/Bytes.lean",
-          "verity/protocols/proofs/flock/verifier/Flock/Canon.lean", "verity/protocols/proofs/flock/verifier/Flock/Hash.lean",
+inputs = ["verity/protocols/interface", "verity/protocols/proof/flock/verifier/lakefile.toml", "verity/protocols/proof/flock/verifier/lake-manifest.json",
+          "verity/protocols/proof/flock/verifier/lean-toolchain", "verity/protocols/proof/flock/verifier/Flock/Bytes.lean",
+          "verity/protocols/proof/flock/verifier/Flock/Canon.lean", "verity/protocols/proof/flock/verifier/Flock/Hash.lean",
           "verity/circuits/base", "verity/circuits/lean", "verity/commitments/lean",
           "verity/__init__.py", "verity/circuits",
           # the JSON parser's port reads the recorded public files' headers (`RECORDED_FIXTURES`), fetched fixtures
-          "tests/verity/protocols/proofs/flock/prover/fixtures/forged-proofs", "tests/verity/protocols/proofs/flock/prover/fixtures/public-inputs",
-          "tests/verity/protocols/proofs/flock/prover/fixtures/public-inputs-blocks", "tests/verity/protocols/proofs/flock/prover/fixtures/rec-coins",
-          "tests/verity/protocols/proofs/flock/prover/fixtures/rec-links", "tests/verity/protocols/proofs/flock/prover/fixtures/zk-sessions",
+          "tests/verity/protocols/proof/flock/prover/fixtures/forged-proofs", "tests/verity/protocols/proof/flock/prover/fixtures/public-inputs",
+          "tests/verity/protocols/proof/flock/prover/fixtures/public-inputs-blocks", "tests/verity/protocols/proof/flock/prover/fixtures/rec-coins",
+          "tests/verity/protocols/proof/flock/prover/fixtures/rec-links", "tests/verity/protocols/proof/flock/prover/fixtures/zk-sessions",
           "verity/protocols/__init__.py",
           # the JSON parser's port reads the JSON the verifiers' tests hold (`VERIFIER_FIXTURES`), which `Core.canonicalJson` reads
-          "tests/verity/protocols/resource_accounting/network/verifier/network/fixtures", "tests/verity/protocols/resource_accounting/network/verifier/fixtures",
-          "tests/verity/protocols/resource_accounting/memory/poub/verifier/fixtures", "verity/protocols/resource_accounting/memory/poub/verifier/vectors.json",
-          "tests/verity/protocols/resource_accounting/memory/pous/verifier/fixtures", "tests/verity/protocols/resource_accounting/compute/pouw/verifier/vectors",
-          "tests/verity/protocols/proofs/recursion/verifier/zk_server/fixtures",
-          "tests/verity/protocols/proofs/flock/prover/fixtures/inner-trees-served", "tests/verity/protocols/proofs/spot/verifier/fixtures"]
+          "tests/verity/protocols/accounting/network/verifier/network/fixtures", "tests/verity/protocols/accounting/network/verifier/fixtures",
+          "tests/verity/protocols/accounting/memory/poub/verifier/fixtures", "verity/protocols/accounting/memory/poub/verifier/vectors.json",
+          "tests/verity/protocols/accounting/memory/pous/verifier/fixtures", "tests/verity/protocols/accounting/compute/pouw/verifier/vectors",
+          "tests/verity/protocols/proof/recursion/verifier/zk_server/fixtures",
+          "tests/verity/protocols/proof/flock/prover/fixtures/inner-trees-served", "tests/verity/protocols/proof/spot/verifier/fixtures",
+          # the program decoder's port (`program-difftest`, `Circuits.Program`) on the format's cases: decode_difftest.py with
+          # the format test, its vectors and stand-in bodies it imports, and the chain it builds from the GEMM and the periods
+          "tests/verity/circuits/decode_difftest.py", "tests/verity/circuits/test_format_spec.py", "tests/verity/circuits/stand_in.py",
+          "tests/verity/circuits/format_vectors.json", "tests/verity/circuits/conftest.py", "verity/commitments", "verity/errors.py"]

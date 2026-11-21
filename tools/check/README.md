@@ -86,7 +86,7 @@ follows.
 | `pod_setup.sh` | prepares a check pod once, so every pod of the pool computes the same verdict keys |
 | `slot.py`, `lean_slot.py` | a command in one of a node's merge-check or Lean check slots |
 | `train.sh` | the verified queue's recorded check of a candidate, and its records run |
-| `post_train.py` | the vLLM reference regression's manifest rebuilds and the fast workloads of record's neutrality after a landing |
+| `post_train.py` | the vLLM reference regression's manifest rebuilds after a landing |
 | `lean_prebuild.py` | a Lean change built before the candidate that holds it: the audit of a ready mark's merge (`tools/verity/lean/warm.py`) as a `research run` in a machine's research pool, off the check slots |
 | `drive.toml`, `queue.toml` | the merge queue's flags and its admission rules |
 | `gates/markdown_caps.py` | the warn gate naming a change that puts a Markdown file over its size limit |
@@ -149,7 +149,7 @@ timing record it is of), and each task is:
 | `argv`, `cwd` | the command `check.py` builds for that part alone (`check.groups`), with `<tree>`, `<cache>`, `<out>` and `<python>` for the tree, the check's cache, the run's output directory and the interpreter; `argv` is null where check can't run it on this tree |
 | `reason` | null, or why `argv` is null: one starting `skipped:` is a skip, any other a failure |
 | `inputs` | `{"closure", "paths"}`: paths and globs from the root that cover what the task reads, and the function that lists them (`suites.inputs_of`, with the runner's files; `lean_audit.inputs`; circuit-check's workspace closure). `["."]` is the whole tree, for a job that declares none |
-| `needs` | the artifacts it reads that another task makes: `lean-build:verity/protocols/proofs/flock/verifier/.lake/build`, `flock-circuit-build:$FLOCK_CHECKOUT` |
+| `needs` | the artifacts it reads that another task makes: `lean-build:verity/protocols/proof/flock/verifier/.lake/build`, `flock-circuit-build:$FLOCK_CHECKOUT` |
 | `outputs` | the artifacts it makes (a build's) |
 | `deps` | the task ids that must end before it starts (its job's ci.toml `needs` and `after`) |
 | `beside` | the tasks that build what it builds (a spec's audit and the packages its `proved_in` names), so best on one worker; no order |
@@ -215,7 +215,7 @@ The loop merges the marked PRs that are reviewed or low-risk onto
 moves `main` only to a candidate with no new failure, each gating task passed or failing on its base too (under `--gate
 verdict` a plain candidate, AGENTS.md's, lands on its members' land verdicts and the quick tier, and `main`'s whole check
 follows); `post_train.py`
-then runs the vLLM regression's rebuilds and fast neutrality tier. A failure the candidate's base shares blames no PR; any
+then runs the vLLM regression's rebuilds. A failure the candidate's base shares blames no PR; any
 other's suspects are the PRs whose change touches what it names: a lone one is ejected, several are bisected. A red job off
 the gate holds nothing. The team skill's "Landing" is the procedure. A layout move's PR (`Move: tools/move/MAP.toml` in its
 body) lands on its ready mark alone once the queue's rerun of its map is certified (`tools/move/README.md`);

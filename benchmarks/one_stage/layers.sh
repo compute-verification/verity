@@ -2,7 +2,7 @@
 # The proof system by layer on stand-in values and one H200: one Llama 3.2 1B decoder layer's W8A8 linears for one token
 # (a6.py's default members, 23,552 ScaledMmS8Coordinate_v1 units at K=2048 and K=8192, seeded s8 values, never served),
 # each row a6.py on a CUDA build of Flock's flock-circuit, its sessions proved with `prove --gpu`. The served rows are
-# benchmarks/prove_path/run.sh's and a5_llama1b_h200.sh's, which `verity bench prove layers` prints:
+# benchmarks/prove_path/run.sh's, which `verity bench prove layers` prints:
 #   flock     every unit, Flock's plain protocol: each statement a window of its own (Lean's plain scope)
 #   zk        every unit, Flock with zero knowledge (--zk), one docket over the layer
 #   sampled   SPOT's one-stage audit: LAYERS_K units under the stratified draw, --zk, the audit's ε at δ
@@ -51,7 +51,7 @@ export A6_CACHE=${LAYERS_CACHE:-$X/cache}
   echo "a measurement, not an audit: stand-in values, never served"; } | tee "$OUT/layers.txt"
 
 # a build directory is built once: its checkout keeps the patches' new files, which a second `git apply` refuses
-KEY=$(find verity/protocols/proofs/flock/prover -type f ! -path '*/python/*' ! -path '*/tests/*' -print0 | sort -z \
+KEY=$(find verity/protocols/proof/flock/prover -type f ! -path '*/python/*' ! -path '*/tests/*' -print0 | sort -z \
   | xargs -0 sha256sum | sha256sum | cut -c1-16)
 FW=$FW/sm${SM:-90}-$KEY
 BIN=$FW/flock-gpu-link/flock/target/release/flock-circuit
@@ -59,10 +59,10 @@ if [ ! -x "$BIN" ]; then
   echo "$(date -u +%H:%M:%SZ) layers: CUDA build of flock-circuit (SM ${SM:-90}) in $FW"
   mkdir -p "$FW"
   RESEARCH_RUN_DIR=$OUT/gpu-build FLOCK_WORK=$FW MODE=build GPU=1 SM=${SM:-90} \
-    bash verity/protocols/proofs/flock/prover/pod/60-circuit.sh || { rm -rf "$FW"; exit 1; }
+    bash verity/protocols/proof/flock/prover/pod/60-circuit.sh || { rm -rf "$FW"; exit 1; }
 fi
 sha256sum "$BIN"
-(export PATH=$HOME/.elan/bin:$PATH; cd verity/protocols/proofs/spot/verifier/lean && lake build spot-verifier spot-difftest) \
+(export PATH=$HOME/.elan/bin:$PATH; cd verity/protocols/proof/spot/verifier/lean && lake build spot-verifier spot-difftest) \
   > "$OUT/build-challenger.log" 2>&1 || { tail -40 "$OUT/build-challenger.log"; exit 7; }
 if [ -n "${LAYERS_CARD:-}" ]; then
   real=$(command -v gpu-lease) || { echo "layers.sh: LAYERS_CARD=$LAYERS_CARD and no gpu-lease" >&2; exit 2; }

@@ -38,7 +38,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from verity_vllm import messages, settings
+from verity_vllm import messages
 from verity_vllm.records.schema_ids import SPEC_TOKENS_SCHEMA
 
 if TYPE_CHECKING:
@@ -162,10 +162,6 @@ class Options:
                                    help="LLM(**kw) override key=value (JSON value), repeatable; e.g. max_num_batched_tokens=64")
     target: str | None = option("--target", default=None,
                                 help="TargetProfile JSON overrides / path the engine is built for (default: the workload's `target` block over this device)")
-    acquisition_manifest: str | None = option("--acquisition-manifest", default=None,
-                                              help="[v2 acquire, Phase 4a] the row's required-value manifest: the plan's hooks are installed beside "
-                                              "the observer (occurrence counts only: DIR/acquisition_observed.json) and DIR/runtime_tree.json, acquisition_plan.json are "
-                                              "written (default: $ACQUIRE_MANIFEST)")
 
 
 def adapter_revision(args: Options) -> str:
@@ -184,7 +180,7 @@ def capture_protocols(wl: dict, args: Options, model: object) -> tuple[Compositi
     from verity_vllm import protocols as PO
 
     target = va.target_of_workload(wl, args.target)
-    protocols = PO.at_capture(target, model, PO.own_auditor(wl.get("protocols_config"), target))
+    protocols = PO.at_capture(target, model, PO.load_settings(wl.get("protocols_config")))
     return protocols, list(protocols.entries) if protocols is not None else []
 
 
@@ -265,13 +261,12 @@ def main(args: Options) -> None:
     # [v2 acquire, Phase 4a] the built engine's runtime tree (always) and, with a required-value manifest, the acquisition plan, written
     # before any run; the plan's hooks go in beside the observer below (counts / shapes only).
     from verity_vllm.acquire.install import IncompletePlan
-    from verity_vllm.acquire.stage import MANIFEST_ENV, plan_at_stage
+    from verity_vllm.acquire.stage import plan_at_stage
     from verity_vllm.observe.capture import Capture, ObserverConfig
     from verity_vllm.observe.capture_types import make_header
 
-    man_path = args.acquisition_manifest or settings.raw(MANIFEST_ENV) or None
     try:
-        acq_docs = plan_at_stage(eng.model, getattr(eng, "runner", None), man_path, out, source="m1_capture")
+        acq_docs = plan_at_stage(eng.model, getattr(eng, "runner", None), None, out, source="m1_capture")
     except IncompletePlan as e:
         print(f"[m1] REFUSE: acquisition plan: {e}", flush=True)
         sys.exit(3)

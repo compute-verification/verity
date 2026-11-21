@@ -5,8 +5,7 @@ committed on the device by the adapter's Pearl-C run, timed against stock vLLM's
 the reference replay of the passes that run retained. The cards are the RTX PRO 6000 and the H100 and H200.
 
 `e2e.py` is the measurement. Before any timing it gates every distinct linear shape in the arm's own process: the
-served output against the float product, the commitment twice bit for bit, and a control with its tile leaves omitted
-that must differ. It then times prefill and decode with both engines resident, in the modes `fp8` (stock), `bf16`,
+served output against the float product and the commitment twice bit for bit under fresh salts. It then times prefill and decode with both engines resident, in the modes `fp8` (stock), `bf16`,
 `pearlc-nohash` and `pearlc`, and with `--retain` replays the timed prompts as retained passes over poisoned buffers.
 Its docstring has every mode and switch.
 
@@ -35,7 +34,7 @@ before.
 | --- | --- | --- | --- |
 | `setup` | the node's CPUs | the environment a window needs: the pinned vLLM in a venv, the model at its pinned revision and FlashInfer's sampling kernels | under `$WORK` |
 | `window` | 8 leased GPUs, timing on the first | the timed window: the card's identity, the shipped kernel tree against its manifest, the device check, then `e2e.py`; `MODE=smoke`, `profile` and `perplexity` are its untimed forms | `e2e.json` (or `smoke.json`, `profile.json`, `quality.json`); the retained passes under `$WORK/passes/<run id>` |
-| `verify` | CPUs, after the window | Pearl+'s verdict on each retained pass in Lean (`served_passes.py lean`), beside the Python twin it is held to (`served_passes.py verify`); exits non-zero unless the Lean accepts prefill and decode and rejects every control | `<pass>-lean-check.json`, `<pass>-lean.json`, `<pass>-verify.json` and `<pass>-manifest.json` |
+| `verify` | CPUs, after the window | Pearl+'s verdict on each retained pass in Lean (`served_passes.py lean`), beside the Python twin's (`served_passes.py verify`), which draws the sample and gates nothing; exits non-zero unless the Lean accepts prefill and decode | `<pass>-lean-check.json`, `<pass>-lean.json`, `<pass>-verify.json` and `<pass>-manifest.json` |
 | `served_passes serve`, `verify` | one leased GPU, then CPUs | one served run through `verity_vllm.LLM` with every pass retained, then each replayed (`served_passes.py`); only a declared scheme's arm serves, Pearl+'s on the H100 and H200, so the RTX PRO 6000's Pearl-C arm is refused by name | `served.json`, `verify.json` |
 | `served_inputs` | CPUs, after a pass | a retained pass's inert work per input against the scheme's bound, by census or sample, or by fresh trials | a directory of `inputs.json` and the tiles' lines, which `served_table.py` reads |
 | `served_step` | one leased GPU, then CPUs | where a served decode step's time goes, one engine process an arm, under Nsight Systems or not (`served_step.py`) | a directory an arm and `breakdown.md` |

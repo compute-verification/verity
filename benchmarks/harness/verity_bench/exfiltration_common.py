@@ -90,7 +90,7 @@ WHOLE = {"all three": "with the timing taken once and the entries charged throug
 #: the network attester's prover's module that reads the stop class's verdict records of the runs of `VERDICTS`:
 #: its `of_runs` answers how the calculator's rows read from verdict records are charged (`_reader`)
 READER = "stop_verdicts"
-READER_MODULE = f"verity.protocols.resource_accounting.network.prover.{READER}"
+READER_MODULE = f"verity.protocols.accounting.network.prover.{READER}"
 #: the network attester's row whose schedules are what a response's output count is charged while the server chooses
 #: it: the design before a served audit has sampled a stop block
 OUTPUT_COUNT = "design, no stop block"
@@ -143,36 +143,8 @@ RATE = "1/1"
 #: an issue's id, which the print never carries: `open` states what is open, and the issue is on the board (SHA-512
 #: is a hash's name, not an issue)
 ISSUE_ID = re.compile(r"\b(?!SHA-)[A-Z]+-[0-9]+\b")
-#: the audit's GPU time on a served two-stage run, by part, which the share of compute it measures sums: what each part
-#: is, and why a run's record lacks it where it does
-SERVED_PARTS = {
-    "prove": ("the sessions' proving", ("the two-stage audit's record keeps each session's proving seconds "
-              "(`audit.timing`) and not the GPUs it held")),
-    "staging": ("staging the sampled proof blocks for their sessions", ("the one-stage audit times its staging "
-                "(`staged_s`) and its summary leaves the seconds out")),
-    "replay": ("the replay of the sampled spans", "the two-stage audit reads no clock over its replay"),
-    "interior": ("the interior commitment of the sampled spans' proof blocks",
-                 "the two-stage audit reads no clock over its interior commitment"),
-    "serving_charge": ("serving under Verity over stock vLLM serving the same load", ("no stock serve of the window's "
-                       "load (`stock`) and no serving cost of the served arm over stock (`serving_cost`, "
-                       "`verity bench serve_tax`)")),
-}
-#: the record's field that says which seconds a session's proving is (`prove`): ``busy``, the proof server's busy
-#: seconds on a card, measured; or ``session``, a session's seconds, its wait behind the others of its prover included,
-#: measured, at most
-PROVE_SOURCE = "prove_seconds_source"
-PROVE_SOURCES = {"busy": ("measured", "the proof server's busy seconds a card"),
-                 "session": ("measured" + AT_MOST, "a session's seconds, its wait included: an upper bound")}
-PROVE_SOURCE_GAP = ("the record doesn't say whether a session's proving seconds are the proof server's busy seconds or "
-                    "the whole session's, its wait included (`audit.timing`'s `prove_seconds_source`)")
-#: why a run's record lacks the window's serving, which the share is of
-SERVING_GAP = ("the window's serve is not tied to the audit's record: its load's seconds and GPUs (serve_tax's "
-               "`meta.json`: `wall_s`, `gpu`) are in the serve's own run")
 #: what the command prints for the share a served run measures where no record is given
 NO_RUN = "not measured: no served run's record"
-#: what the command prints beside a served run's part whose entries are all on 0 GPUs, so its 0 doesn't read as GPU
-#: time given free
-ON_CPUS = "on CPUs: no GPU-seconds"
 #: the inputs both parts read: the fleet and what a request of the plan is, which give the requests, and the weights
 SHARED = ("world_machines", "datacenter_machines", "machine_gpus", "mfu_serve", "peak_flops", "request_tokens",
           "token_macs", "world_requests", "request_count", "weights")

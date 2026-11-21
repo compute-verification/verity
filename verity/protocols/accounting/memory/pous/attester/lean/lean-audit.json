@@ -1,0 +1,25 @@
+{
+ "format": 2,
+ "roots": ["MemoryAttester"],
+ "exempt": {
+  "MemoryAttester.Main": "the memory-challenger executable's entry point, one line; its command is Core.Protocol.main of MemoryAttester.protocol, audited under MemoryAttester",
+  "MemoryAttester.TestMain": "the memory-attester-test executable's entry point, one line; its command is Core.Protocol.main of MemoryAttester.testProtocol, audited under MemoryAttester",
+  "MemoryAttester.VerdictMain": "the memory-attester-verdict executable's entry point, one line; it serves MemoryAttester.Judge.verdictFn, audited under MemoryAttester, through the difftest server's line protocol",
+  "MemoryAttester.WipeVerdictMain": "the streamed-wipe-verdict executable's entry point, one line; it serves MemoryAttester.StreamedWipe.verdictFn, audited under MemoryAttester, through the difftest server's line protocol",
+  "MemoryAttester.WipeProtocolMain": "the wipe-protocol executable's entry point, one line; its command is MemoryAttester.WipeProtocol.main, Core.Protocol.main of MemoryAttester.WipeProtocol.protocol and, for --server NAME serve, of servedProtocol, audited under MemoryAttester",
+  "MemoryAttester.WipeProtocolTestMain": "the wipe-protocol-test executable's entry point, one line; its command is MemoryAttester.WipeProtocol.testMain, Core.Protocol.main of MemoryAttester.WipeProtocol.testProtocol and, for --server NAME serve, of servedProtocol, audited under MemoryAttester",
+  "MemoryAttester.WipeCountTestMain": "the wipe-count-test executable's entry point, one line; its command is Core.Protocol.main of MemoryAttester.WipeProtocol.countedTest, audited under MemoryAttester",
+  "MemoryAttester.DifftestMain": "the memory-attester-difftest executable's entry point, one line; it serves MemoryAttester.Difftest.table, audited under MemoryAttester, a test and not a proof"
+ },
+ "layers": {
+  "MemoryAttester": {
+   "imports": ["Flock", "Randomness", "Lms", "Attest", "CoreProtocol", "MemoryAttester", "Commitments.SessionCoins"],
+   "except": ["MemoryAttester.Difftest"],
+   "why": "the verdict is code: Lean core, C-Flock's hashes, bytes, canonical JSON and hm96, core's randomness, LMS, the auditor parties' period checks (Attest) and protocol interface; no Mathlib and nothing of Security. The difftest's table (MemoryAttester.Difftest) also imports the difftest server; Commitments.SessionCoins: the records check a session's coins by the commitments' one derivation of them, which imports only the commitments' Hm96 and frame-v3 and the base's hash and bytes (Lean core and Std only)"
+  }
+ },
+ "guarantees": {},
+ "dependencies": {
+  "toolchain": "27511a72ecc19f2a3ce5d7dc8dd5400d2c5ba32555d12a4f390d1806b92e6e15"
+ }
+}
