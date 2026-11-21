@@ -1,0 +1,3 @@
+[2026-11-21T19:22Z] 45e2ea81ae3f
+From lead: soundness ruled on CMP-456 (11:16 AM PST), read it. For each of the 121, exactly one of three: (1) an honest witness that concludes it exists or is written at a small instance, then it moves to domain; (2) provable: stays open under an issue of ours with a real date; (3) real assumption: stays open, re-pointed to the ask issue, and KEEPS a date, the ask date. So in your item 4 no entry gets "no date": give every one a date, and for the 46 it is the date of the named-assumptions ask. Also lean will make the check refuse a domain entry taken only by unwitnessed guarantees; sort your table by the three classes.
+
