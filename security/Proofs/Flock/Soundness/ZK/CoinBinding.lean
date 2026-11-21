@@ -7,7 +7,7 @@ public import Definitions.Flock.Merkle
 
 The model of the one computational step of the public-circuit zero-knowledge proof (`docs/zk-proof-public.md` in the
 Project store, §4.1 T6). The verifier commits to every coin of a session with a coin tree
-(`verity/protocols/proofs/flock/prover/live/src/coin_tree.rs`, Flock ZK), today the keyed `coin-tree/hm96-sha512/v2`: v1's tree with every hash
+(`verity/protocols/proof/flock/prover/live/src/coin_tree.rs`, Flock ZK), today the keyed `coin-tree/hm96-sha512/v2`: v1's tree with every hash
 under the session's nonce. This file's model is v1's: per (stream, round), a block of coins is chained,
 `T_i = H(CHAIN ‖ c_i ‖ T_{i+1})` (`chainTop`); the round's digest is `x = H(ROUND ‖ stream ‖ round ‖ T_0)`; the leaf is
 the hm96 leaf of `x` under a salt, `H(lp ‖ b ‖ c)` with `b = mix(x, y)` and `c = H(sp ‖ y)` (`coinLeaf`); the leaves sit

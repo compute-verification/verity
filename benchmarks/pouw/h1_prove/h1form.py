@@ -1,10 +1,10 @@
 """This harness's H1 tile and statement form, ``H1_TILE`` and ``H1_TMPL`` (`settings.py`), handed to H1's lowering
-(`verity.protocols.resource_accounting.compute.pouw.prover.lowering.h1unit`) as its arguments."""
+(`verity.protocols.accounting.compute.pouw.prover.lowering.h1unit`) as its arguments."""
 from __future__ import annotations
 
 from verity_config.settings import of
 
-from verity.protocols.resource_accounting.compute.pouw.prover.lowering import h1unit as U
+from verity.protocols.accounting.compute.pouw.prover.lowering import h1unit as U
 
 SETTINGS = of(__file__)
 

@@ -8,7 +8,7 @@ from dataclasses import replace
 
 import pytest
 from verity.protocols.registration.verifier import registration
-from verity.protocols.proofs.spot.prover import docket as DK
+from verity.protocols.proof.spot.prover import docket as DK
 from verity.circuits import partition_object
 from verity.circuits.census import census
 from verity.circuits.codec import program_digest

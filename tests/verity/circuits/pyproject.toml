@@ -23,7 +23,7 @@ paths = ["verity"]
 
 [[tool.verity.tests.reads]]
 tests = ["test_supplied.py"]
-paths = ["verity/protocols/proofs/spot/verifier/lean/Spot/Supplied.lean"]
+paths = ["verity/protocols/proof/spot/verifier/lean/Spot/Supplied.lean"]
 
 [[tool.verity.tests.reads]]
 tests = ["test_settings.py"]

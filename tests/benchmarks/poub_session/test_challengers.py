@@ -1,4 +1,4 @@
-"""`challengers.ChallengerGate` against the auditor device's own gate (`verity/protocols/compose/verifier/live_challenger/auditor.py`), in this process: its
+"""`challengers.ChallengerGate` against the auditor device's own gate (`verity/protocols/run/verifier/live_challenger/auditor.py`), in this process: its
 requests go to `auditor.gate` as the lane key's forced command would pass them, and each opened session is served by
 `auditor.run` through `serve.py` (the Lean's coins stubbed, `stub_serve.py`) on a thread, with the gate's root steps
 (chown, systemctl) and the clock injected. An honest session whose coins the gate's session released is accepted and
@@ -26,26 +26,26 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
-LIVE = ROOT / "verity" / "protocols" / "compose" / "verifier" / "live_challenger"
+LIVE = ROOT / "verity" / "protocols" / "run" / "verifier" / "live_challenger"
 sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "benchmarks" / "poub_session")))
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(LIVE))
-sys.path.insert(0, str(ROOT / "tests" / "verity" / "protocols" / "resource_accounting" / "memory" / "poub" / "verifier"))
+sys.path.insert(0, str(ROOT / "tests" / "verity" / "protocols" / "accounting" / "memory" / "poub" / "verifier"))
 
 import auditor as A  # noqa: E402
 import auditor_line as al  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier.session import challengers  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier.session import verifier  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier.poub_session import verifier_process as VP  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier.session import wire  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier.session import challengers  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier.session import verifier  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier.poub_session import verifier_process as VP  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier.session import wire  # noqa: E402
 from test_poub import SCHEDULE, drive, finish, params, store  # noqa: E402,F401
 from test_session import run as run_sessions  # noqa: E402
 import lean_stands_in  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier import coins  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import verifier as spot_verifier  # noqa: E402
-from verity.protocols.proofs.spot.verifier.challenger.challenger import NO_MAIN, NO_PINS, CoinError, pin_line, pins_seal  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier import coins  # noqa: E402
+from verity.protocols.proof.spot.verifier.one_stage import verifier as spot_verifier  # noqa: E402
+from verity.protocols.proof.spot.verifier.challenger.challenger import NO_MAIN, NO_PINS, CoinError, pin_line, pins_seal  # noqa: E402
 from verity.commitments.crypto import lms  # noqa: E402
-from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch  # noqa: E402
+from verity.protocols.proof.spot.verifier.challenger import challenger as Ch  # noqa: E402
 
 P = lms.Params(64, 4, 4)
 T0 = datetime(2026, 10, 21, 1, 0, 0, tzinfo=timezone.utc)
@@ -96,7 +96,7 @@ class Host:
         body = A.sessions_of(A.read_ledger(self.host.ledger))[session]["open"]["body"]
         argv = A.serve_argv(self.host, session, body)
         argv[argv.index("--port") + 1] = "0"
-        argv = [sys.executable, str(LIVE.parents[4] / "tests" / "verity" / "protocols" / "compose" / "verifier" / "live_challenger" / "stub_serve.py"), *argv[2:], "--params", "4,4",
+        argv = [sys.executable, str(LIVE.parents[4] / "tests" / "verity" / "protocols" / "run" / "verifier" / "live_challenger" / "stub_serve.py"), *argv[2:], "--params", "4,4",
                 "--keygen-workers", "1"]
         listening, raised = threading.Event(), []
 
@@ -333,7 +333,7 @@ def test_an_honest_paced_session_closes_complete_and_a_dropper_does_not(host, tm
         source = host.gate(tmp_path / "out")
     else:
         (tmp_path / "served").mkdir()
-        serve = (sys.executable, str(LIVE.parents[4] / "tests" / "verity" / "protocols" / "compose" / "verifier" / "live_challenger" / "stub_serve.py"), "--coins-log", str(tmp_path / "coins.log"),
+        serve = (sys.executable, str(LIVE.parents[4] / "tests" / "verity" / "protocols" / "run" / "verifier" / "live_challenger" / "stub_serve.py"), "--coins-log", str(tmp_path / "coins.log"),
                  str(LIVE / "serve.py"), "--keygen-workers", "1")
         source = challengers.Serve(tmp_path / "served", tmp_path / "key", "4,4", command=serve, verify=VP.verify)
     pace = verifier.pace_of("1:4:160:2", 1.0)
@@ -651,7 +651,7 @@ def served_honest_run(tmp_path: Path) -> tuple[dict, dict]:
     """An honest session paced through `challengers.Serve` (the challenger's process on the verifier's machine), read
     with `verifier_process.verify`: its record and its registration."""
     (tmp_path / "served").mkdir()
-    serve = (sys.executable, str(LIVE.parents[4] / "tests" / "verity" / "protocols" / "compose" / "verifier" / "live_challenger" / "stub_serve.py"), "--coins-log", str(tmp_path / "coins.log"),
+    serve = (sys.executable, str(LIVE.parents[4] / "tests" / "verity" / "protocols" / "run" / "verifier" / "live_challenger" / "stub_serve.py"), "--coins-log", str(tmp_path / "coins.log"),
              str(LIVE / "serve.py"), "--keygen-workers", "1")
     source = challengers.Serve(tmp_path / "served", tmp_path / "key", "4,4", command=serve, verify=VP.verify)
     got = {}

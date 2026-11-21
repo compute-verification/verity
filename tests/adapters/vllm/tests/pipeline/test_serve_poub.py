@@ -8,9 +8,9 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from verity.protocols.resource_accounting.memory.poub.prover.node_store import serving
-from verity.protocols.compose import schemes as declarations
-from verity.protocols.resource_accounting import scheme
+from verity.protocols.accounting.memory.poub.prover.node_store import serving
+from verity.protocols.run import schemes as declarations
+from verity.protocols.accounting import scheme
 
 from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Serving
 from verity_vllm.pipeline import cli
@@ -19,7 +19,7 @@ from verity_vllm.pipeline import serve_mirror as sm
 from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline import poub_session
 from verity_vllm.pipeline import serve_poub as SR
-from verity.protocols.resource_accounting.memory.poub.prover import commit_session as remote
+from verity.protocols.accounting.memory.poub.prover import commit_session as remote
 
 VERIFIER = ("--remote-verifier", "127.0.0.1:7781")
 

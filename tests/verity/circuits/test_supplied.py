@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from verity.circuits import supplied as S
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.protocols.proof.spot.verifier.one_stage import registered as G
 
 
 def _entry(name, fn, args, layout, bits, n=1):
@@ -58,7 +58,7 @@ def test_every_function_reads_only_public_things():
 
 
 #: the Lean registry: each function a supplied input may name has its body there, and a function exists when it has one
-LEAN_REGISTRY = Path(__file__).parents[3] / "verity/protocols/proofs/spot/verifier/lean/Spot/Supplied.lean"
+LEAN_REGISTRY = Path(__file__).parents[3] / "verity/protocols/proof/spot/verifier/lean/Spot/Supplied.lean"
 #: a function's body in the Lean registry: an arm of `Supplied.body`'s match on the function's name
 LEAN_BODY = re.compile(r'^  \| "([a-z0-9_]+(?:\.[a-z0-9_]+)+/v[1-9][0-9]*)" =>', re.M)
 #: the functions the Lean registry has no body of yet; each strict failure below is one to take off this list
@@ -223,7 +223,7 @@ NOT_THE_KEY = "'s coin's key is not the one the commitment holds the hash of"
 def other_session_coin(**kw):
     """The openings of ANOTHER session of the same attester: its own session id and coin root, the same coin key, indices that
     are blocks of the first session's store too."""
-    from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as MA
+    from verity.protocols.accounting.memory.pous.attester import memory_attester as MA
     key = bytes.fromhex(KEY)
     sid = hashlib.sha512(b"another session").digest()[:32]
     tree = MA.CoinTree(sid, VECTORS["commitment"]["blocks"], [o["index"] for o in VECTORS["openings"]], key,

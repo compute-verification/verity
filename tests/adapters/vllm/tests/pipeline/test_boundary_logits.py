@@ -19,8 +19,8 @@ import torch
 from verity.circuits.codec import descriptor_id
 from verity.commitments.periods import rows as CS
 from verity.circuits import replay_links as RL
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+from verity.protocols.proof.spot.verifier.one_stage import docket as R
+from verity.protocols.proof.spot.verifier.one_stage import partition as P
 
 from tests.pipeline.test_boundary_tables import DESIGN
 from verity_vllm.engine.hooks import Hooks

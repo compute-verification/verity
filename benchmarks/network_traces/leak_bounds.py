@@ -131,10 +131,10 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, NamedTuple
 
-from verity.protocols.resource_accounting.network.prover import ingress_scan as IS
-from verity.protocols.resource_accounting.network.prover import stop_verdicts as SV
-from verity.protocols.resource_accounting.network.verifier import class_charge as CC
-from verity.protocols.resource_accounting.network.verifier import network_attester as W
+from verity.protocols.accounting.network.prover import ingress_scan as IS
+from verity.protocols.accounting.network.prover import stop_verdicts as SV
+from verity.protocols.accounting.network.verifier import class_charge as CC
+from verity.protocols.accounting.network.verifier import network_attester as W
 from verity import protocol
 
 #: the jitter bound D_j that K is charged at (`NetTiming.JitterBounded`, one bound over every step): a statement of k
@@ -538,7 +538,7 @@ RESPONSE_IDS, ID_BITS, BUCKETS = 4096, 18, 1280
 #: the scan's slot stride in buckets, the scan class's default
 EVERY: int = IS.Class.__dataclass_fields__["EVERY"].default
 #: the lengths rows' cost runner, whose default schedule (`cost`'s) the count's inputs are read at
-COST_RUNNER = "verity/protocols/resource_accounting/network/attester/connection_rows_run.py"
+COST_RUNNER = "verity/protocols/accounting/network/attester/connection_rows_run.py"
 #: that schedule: its content classes, its delay D in buckets, which its ingress buckets equal, its lanes and its
 #: execution phase's buckets. The count is at the first two where a caller names none; the last two are the schedule
 #: `render` prints the count at beside the command's own

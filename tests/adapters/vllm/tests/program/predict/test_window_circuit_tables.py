@@ -10,7 +10,7 @@ import json
 
 import pytest
 from verity.commitments.periods import interface as IF
-from verity.protocols.resource_accounting.compute.pouw.verifier import credit
+from verity.protocols.accounting.compute.pouw.verifier import credit
 
 from tests.program.predict import test_steps as S
 from tests.program.predict.test_window_circuit import (

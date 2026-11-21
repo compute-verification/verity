@@ -1,7 +1,7 @@
 # How fast a node squares
 
 How fast a node can square modulo the store codec's Sloth primes bounds how fast it can rebuild an encoded store. These
-measurements are the evidence for the bandwidth audit's (PoUB, `verity/protocols/resource_accounting/memory/poub/verifier`)
+measurements are the evidence for the bandwidth audit's (PoUB, `verity/protocols/accounting/memory/poub/verifier`)
 stated squaring ceiling: the GPU's CUDA cores in every form, each gated against Python's `pow` before it is timed, and
 the host's AVX-512 IFMA rate.
 

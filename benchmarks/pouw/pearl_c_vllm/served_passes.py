@@ -184,8 +184,8 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from verity_config.settings import of
-from verity.protocols.proofs.spot.verifier.one_stage import lean_child as LC
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.window import KEEP, SERVED_SCHEMA, coins_of, served_passes as passes_of
+from verity.protocols.proof.spot.verifier.one_stage import lean_child as LC
+from verity.protocols.accounting.compute.pouw.prover.serving.pearl_c.window import KEEP, SERVED_SCHEMA, coins_of, served_passes as passes_of
 HERE = Path(__file__).resolve().parent
 settings = of(__file__)
 SPEC = HERE.parents[1] / "harness" / "specs" / "llama32-1b-1gpu-pouw-protocol-served.toml"
@@ -214,7 +214,7 @@ PEARLPLUS_EXITS = frozenset({0, 1})
 LEAN_CHECK = "pearlplus-lean-check.json"
 #: ``lean --exe build``: the Lake package `pouw_pearlplus` (`PouwVerifier.PearlPlus`), built there, and the executable the build makes
 BUILD = "build"
-LEAN_PACKAGE = HERE.parents[2] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "verifier" / "lean" / "pearlplus"
+LEAN_PACKAGE = HERE.parents[2] / "verity" / "protocols" / "accounting" / "compute" / "pouw" / "verifier" / "lean" / "pearlplus"
 LEAN_EXE = LEAN_PACKAGE / ".lake" / "build" / "bin" / "pouw-pearlplus"
 LEAN_SCHEMA = "verity-pouw/pearl-plus-lean-check/v1"
 #: why the step refuses where the two verdicts disagree
@@ -252,7 +252,7 @@ def prompts(vocab: int, requests: int, tokens: int) -> list[list[int]]:
 def undeclared(entries) -> str | None:
     """Why a served arm of ``entries`` can't run: the first entry that is no declared scheme's name (`compose.schemes`), as
     the RTX PRO 6000's Pearl-C and Pearl-C4's are none, which no served path serves; None when there is none."""
-    from verity.protocols.compose import schemes
+    from verity.protocols.run import schemes
 
     names = [n for n, s in schemes.load().items() if s.option]
     for e in entries:
@@ -325,7 +325,7 @@ def seed_install() -> None:
     """`serve --seeded`: the in-process challenger's entropy (`serving.in_process_coins`, the verifier's ``coins``)
     sampled from `seeded` coins, in this process. The leaves' salts are fresh bytes from the OS all the same: nothing
     seeds them."""
-    from verity.protocols.resource_accounting.compute.pouw.verifier import verifier
+    from verity.protocols.accounting.compute.pouw.verifier import verifier
 
     verifier.coins = seeded("coins")
 
@@ -353,7 +353,7 @@ def serve(args: argparse.Namespace) -> int:
         seed_install()
     engine_env.apply_engine(None)
     from verity_vllm import LLM
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
+    from verity.protocols.accounting.compute.pouw.prover.serving import pearl_c as PPD
     from vllm import SamplingParams
 
     attached = M.attach_listed(M.build(), [(scheme, own)], process=H.ENGINE, **ctx)[0]
@@ -612,7 +612,7 @@ def retain(args: argparse.Namespace) -> int:
         return 1
     if args.window_record:
         from verity.commitments import docket_digest as DD
-        from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR
+        from verity.protocols.accounting.compute.pouw.prover.serving.pearl_c import window as PWR
 
         try:
             before = DD.digest(json.loads(Path(args.previous_record).read_text())) if args.previous_record else None
@@ -771,7 +771,7 @@ def lean(args: argparse.Namespace) -> int:
     if named != doc.get("passes"):
         return done("the retained passes are not the ones the Python verdict read, by name and SHA-256", 2)
     if args.exe == BUILD:
-        from verity.protocols.proofs.spot.verifier.one_stage import verifier as V
+        from verity.protocols.proof.spot.verifier.one_stage import verifier as V
         try:
             exe = V.executable(LEAN_EXE.name, LEAN_PACKAGE)
         except (OSError, V.LeanError) as e:

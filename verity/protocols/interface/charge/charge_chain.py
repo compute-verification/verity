@@ -1,5 +1,5 @@
 """The charge's carry chain: `ChargeCount_v1{N}`'s carry handed from one window to the next under hiding commitments
-(`../../resource_accounting/network/verifier/protocol/charge-chain.md`).
+(`../../accounting/network/verifier/protocol/charge-chain.md`).
 
     ChargeLink_v1{N}  (book, carry_in[96], carry_out[96], en[N], bit[N]) -> (ok, bits[CW])
 
@@ -11,7 +11,7 @@ each window has a produced value `VALUE` of two rows, its carry-in and its carry
 `ChargeCount_v1{N}` reading its carry from row 0 and holding its carry' to row 1. This module is that chain: the row
 (`encode`, `carry_of`), its reads (`reads`) and the Boolean part with its specification (`ChargeLink`,
 `reference_link`); the rows' commitment and the check of how the windows join are the compiler's
-(`verity.protocols.resource_accounting.network.prover.charge_rows`).
+(`verity.protocols.accounting.network.prover.charge_rows`).
 
 **The row**, `ROW_BITS` = 96 bits, six u16 words: n0 3×15 | n1 3×15 | run 1×2, each element least significant bit
 first, then four zero bits (`arith_encode._CARRY`'s fields in order).

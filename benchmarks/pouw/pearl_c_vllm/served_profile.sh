@@ -30,7 +30,7 @@ export PYTHONPATH=$PWD:$PWD/tools/config:$PWD/adapters/vllm:$PWD/benchmarks/pouw
 export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES%%,*} CUDA_DEVICE_ORDER=PCI_BUS_ID SERVED_TREE=$PWD
 UUID=${GPU_LEASE_UUID:?run under gpu-lease}; UUID=${UUID%%,*}; export E2E_GPU_UUID=$UUID
 nvidia-smi --query-gpu=uuid,name,compute_cap,clocks.sm,clocks.mem,driver_version --format=csv,noheader -i "$UUID" > "$OUT/identity.csv"
-KERNEL=verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120; K=$(basename "$KERNEL")
+KERNEL=verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm120; K=$(basename "$KERNEL")
 # the card file naming the device, and the kernel directory its card takes (`bench_arm.kernel_directory`): $K's, or refused
 TAKES=$(PYTHONPATH=${PYTHONPATH:-}:$PWD/benchmarks/pouw/pearl_c_vllm:$PWD/benchmarks/harness "$PY" -c 'import sys
 from bench_arm import kernel_directory; from e2e import SCHEME; from verity_bench.kit import card_short

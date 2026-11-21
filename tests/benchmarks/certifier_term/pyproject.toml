@@ -44,10 +44,10 @@ inputs = ["verity/lean_process.py", "benchmarks/certifier_term", "benchmarks/net
     "verity/protocols/registration/verifier/registration.py",
     "verity/protocols/registration/verifier/site_log.py",
     "verity/device.py",
-    "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/resource_accounting/__init__.py",
+    "verity/protocols/__init__.py", "verity/protocols/proof/__init__.py", "verity/protocols/accounting/__init__.py",
     "verity/protocol.py",
-    "verity/protocols/resource_accounting/network",
-    "verity/protocols/proofs/spot",
+    "verity/protocols/accounting/network",
+    "verity/protocols/proof/spot",
     "benchmarks/slowdown/data/reference.toml",
     "benchmarks/slowdown/data/hardware.toml",
 ]

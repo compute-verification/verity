@@ -1,5 +1,5 @@
 """Schemes turned on by name inside vLLM's own OpenAI server (``vllm serve``), each the scheme its name registers in the
-one table (`verity.protocols.compose.schemes.get`), as ``VERITY_PROTOCOLS`` lists them, with ``VERITY_PROTOCOLS_CONFIG``.
+one table (`verity.protocols.run.schemes.get`), as ``VERITY_PROTOCOLS`` lists them, with ``VERITY_PROTOCOLS_CONFIG``.
 
 `Front`, the server's ``--middleware``, is the front's side, in the API server's process. `register`, a vLLM general
 plugin, is the engine's side, in the engine core's process: the adapter's memory hook
@@ -90,7 +90,7 @@ def attach(exchange: messages.Exchange, vllm_config: Any, names: list[str], cfg:
     """Each scheme ``names`` on ``exchange`` in the engine (`messages.attach_listed`), then the exchange answered (`messages.Exchange.answer`); what
     each attach returned, in order. An engine on more than one GPU, or whose model runner is not in the engine core's
     process (where its scheduler and steps are), is refused by `GOAL`."""
-    from verity.protocols.compose import schemes
+    from verity.protocols.run import schemes
 
     pc = vllm_config.parallel_config
     shape = (pc.tensor_parallel_size, pc.pipeline_parallel_size, pc.data_parallel_size, pc.distributed_executor_backend)
@@ -113,7 +113,7 @@ def write_reports(exchange: messages.Exchange, out: str | Path) -> None:
     """At the workload's stop, each scheme attached on ``exchange`` released, then its report written
     under ``out/schemes/<its name>/``: ``configuration.json`` its settings and ``record``, ``summary.json`` its
     ``summary``, and ``commitment.json``, its closed ``commitment``, each where the scheme's report has it
-    (`verity.protocols.resource_accounting.scheme`). Every scheme is released
+    (`verity.protocols.accounting.scheme`). Every scheme is released
     and written before the first release's failure is raised. What a scheme keeps private it keeps under its own
     ``ctx["private"]``."""
     failed: list[BaseException] = []
@@ -313,7 +313,7 @@ class Front:
     Without the variable it passes everything."""
 
     def __init__(self, app: Any, environ: Mapping[str, str] | None = None) -> None:
-        from verity.protocols.compose import schemes
+        from verity.protocols.run import schemes
 
         self.app, self.ex = app, None
         names, cfg = config(environ)

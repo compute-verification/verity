@@ -169,8 +169,8 @@ def test_served_passes_arm_writes_that_arm_as_serve_openais_protocols_config(mon
     (the server flips each epoch's); an unset ``$`` value is refused, naming it."""
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3]))
     from benchmarks.pouw.pearl_c_vllm import served_passes as SP
-    from verity.protocols.resource_accounting.compute.pouw.verifier import verifier
-    from verity.protocols.resource_accounting.scheme import settings
+    from verity.protocols.accounting.compute.pouw.verifier import verifier
+    from verity.protocols.accounting.scheme import settings
     from verity_vllm import messages as M
 
     def flipped(n):
@@ -210,7 +210,7 @@ def test_served_passes_serve_attaches_pearl_plus_by_name_with_its_settings_and_a
     directory in its ctx, and refused by name without PEARLC_PRIVATE."""
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3]))
     from benchmarks.pouw.pearl_c_vllm import served_passes as SP
-    from verity.protocols.resource_accounting.scheme import settings
+    from verity.protocols.accounting.scheme import settings
     from verity_vllm import messages as M
 
     arm = SP.pearl_c_arm(resolve_spec("llama32-1b-1gpu-pouw-protocol-served@h200"))

@@ -31,10 +31,10 @@ from typing import Any
 
 import pytest
 
-from verity.protocols.resource_accounting.network.prover import ingress_scan as IS
-from verity.protocols.resource_accounting.network.verifier import network_attester as W
-from verity.protocols.resource_accounting.network.verifier.id_form import id_request
-from verity.protocols.resource_accounting.network.verifier.certificate import Issuer, LmsSigner
+from verity.protocols.accounting.network.prover import ingress_scan as IS
+from verity.protocols.accounting.network.verifier import network_attester as W
+from verity.protocols.accounting.network.verifier.id_form import id_request
+from verity.protocols.accounting.network.verifier.certificate import Issuer, LmsSigner
 from verity.commitments.crypto import lms
 from verity_vllm.program.predict.window_circuit import WindowClass
 
@@ -63,7 +63,7 @@ def network_traces() -> Iterator[None]:
 with network_traces():
     import attester_piece as CP
     from benchmarks.network_traces import network_attester_chain as WCH
-    from verity.protocols.resource_accounting.network.attester import network_attester_serve as WS
+    from verity.protocols.accounting.network.attester import network_attester_serve as WS
 
 
 def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str]) -> Any:
@@ -71,7 +71,7 @@ def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str]) -> Any:
     return PP.kept_scan(serve_dir, cls, users, kept_ingress=CP.kept_ingress)
 
 
-_spec = importlib.util.spec_from_file_location("scan_traffic", ROOT / "tests/verity/protocols/resource_accounting/network/verifier/scan_traffic.py")
+_spec = importlib.util.spec_from_file_location("scan_traffic", ROOT / "tests/verity/protocols/accounting/network/verifier/scan_traffic.py")
 ST = sys.modules["scan_traffic"] = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(ST)
 

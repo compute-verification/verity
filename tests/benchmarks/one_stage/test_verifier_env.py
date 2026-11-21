@@ -18,8 +18,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity.protocols.proofs.spot.verifier.one_stage.proofs import EXE
-from verity.protocols.proofs.spot.verifier.one_stage.settings import ABORT_ON_PANIC
+from verity.protocols.proof.spot.verifier.one_stage.proofs import EXE
+from verity.protocols.proof.spot.verifier.one_stage.settings import ABORT_ON_PANIC
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))

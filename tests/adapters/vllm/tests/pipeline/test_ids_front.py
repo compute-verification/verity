@@ -23,9 +23,9 @@ from verity_vllm.pipeline import ids_front as F
 from verity_vllm.pipeline import serve_protocol as proto
 
 from tests.pipeline import test_serve_openai as served
-from verity.protocols.resource_accounting.network.prover import id_relay as R
-from verity.protocols.resource_accounting.network.prover import ids_protocol as idp
-from verity.protocols.resource_accounting.network.verifier import io_tie as IT
+from verity.protocols.accounting.network.prover import id_relay as R
+from verity.protocols.accounting.network.prover import ids_protocol as idp
+from verity.protocols.accounting.network.verifier import io_tie as IT
 from verity import release as REL
 
 P = 140
@@ -453,7 +453,7 @@ def test_the_launcher_starts_each_process_a_named_scheme_files_with_this_servers
     """A stand-in registry: scheme ``stand-in`` files a `StartBeside` of its registered process with both readers; the
     launcher calls it with the server's own readers and its options, and refuses a name the registry lacks."""
     from verity import hooks as H
-    from verity.protocols.resource_accounting import scheme as schemes
+    from verity.protocols.accounting import scheme as schemes
     from verity_vllm import messages
 
     called: list = []
@@ -484,8 +484,8 @@ def test_the_launcher_starts_each_process_a_named_scheme_files_with_this_servers
 
 
 def test_the_launcher_starts_the_network_attesters_id_relay_from_the_one_table():
-    from verity.protocols.resource_accounting.network import scheme as network
-    from verity.protocols.resource_accounting.network.prover import id_relay
+    from verity.protocols.accounting.network import scheme as network
+    from verity.protocols.accounting.network.prover import id_relay
     from verity_vllm import messages
 
     ex = messages.Exchange()
