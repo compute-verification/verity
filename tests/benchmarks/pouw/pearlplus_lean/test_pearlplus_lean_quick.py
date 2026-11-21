@@ -42,7 +42,7 @@ def test_the_lean_parses_the_options_the_cases_pass():
     cases = {f: sep == "," for f, sep in re.findall(r'"(--[a-z-]+)"([,\]])', CASES.read_text())}
     assert lean == cases == {"--coins": True, "--draws": True, "--source": True, "--record": True, "--over-cap": True,
                              "--test-instance": False, "--tie": True, "--class": True, "--of-record": False,
-                             "--draw-live": True}
+                             "--draw-live": True, "--salt-live": True}
 
 
 def test_the_over_inert_bound_rules_and_default_are_verify_runs():
