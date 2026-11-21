@@ -29,7 +29,7 @@ def test_each_architecture_loads_with_its_gates_sourced(name: str) -> None:
     arch = load_architecture(name, directory=ARCH_FILES)
     assert arch["virtual"] == name.replace("sm_", "compute_")
     for gate in arch["toolkit"]:
-        assert re.fullmatch(r"\d+\.\d+", gate["version"]) and re.fullmatch(r"\d+\.\d+", gate["ptx_isa"]), gate
+        assert re.fullmatch(r"\d+\.\d+", gate["version"]), gate
         assert re.fullmatch(r"\d+(\.\d+)+", gate["driver_min"]), gate
 
 

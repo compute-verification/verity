@@ -60,7 +60,7 @@ hyphens, no two GPU cards the same; `verity.device`'s `gpu_card_called` finds th
 
 `architectures/<name>.toml` is the machine code's side of a GPU, shared by every card whose `arch` is `name`: its
 compute capability, its virtual architecture, and its toolkit gates (`[[toolkit]]`), each a CUDA toolkit that builds
-for the target, its PTX ISA, and `driver_min`, the oldest driver that toolkit's release notes require. A build target,
+for the target and `driver_min`, the oldest driver that toolkit's release notes require. A build target,
 a machine-code gate's table and a check of a device's capability or driver read it with
 `load_architecture(name, directory=...)`; a card's figures stay in the card, even where two cards of one architecture
 state the same number. Its values are versions, strings beside one `source`, so they carry no `mark`. Every GPU card's
