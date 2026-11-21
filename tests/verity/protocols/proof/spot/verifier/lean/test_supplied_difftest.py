@@ -142,7 +142,8 @@ def instances(draw) -> dict:
         widths = draw(JUNK)
     cuts = {x[0]: draw(st.one_of(st.tuples(st.integers(0, 16), st.integers(0, 16)).map(list), JUNK))
             for x in inputs if isinstance(x, list) and x and isinstance(x[0], str) and draw(st.booleans())}
-    held = draw(st.sampled_from([None, HELD, HELD, {"w": {"root": "55" * 64}}, {"w": 5}, []]))
+    # the held tables follow the record, so that the seeded draws stay the ones other tests' streams expect
+    held = HELD if rec is RECORD else None
     return {"program": desc(inputs, fns), "coins": coins, "widths": widths, "record": rec, "log": log,
             "binding": binding, **({"cuts": cuts} if cuts else {}), **({} if held is None else {"held": held})}
 
@@ -243,6 +244,8 @@ def test_the_order_rule_names_the_commitments_registered_after_the_coin():
                                                   "widths": {"dv": 1}}, None),
     ("a held table with no domain id", lambda j: {**j, "held": {"w": {"root": "55" * 64}},
                                                   "program": desc([["rw", 1, ROOTS[0]]], [3]), "widths": {"rw": 1}}, None),
+    ("held tables that are no object", lambda j: {**j, "held": []}, None),
+    ("a held table that is no object", lambda j: {**j, "held": {"w": 5}}, None),
     ("the root and the domain id of the held table w", lambda j: {
         **j, "held": HELD, "program": desc([["rw", 1, ROOTS[0]], ["dw", 1, ROOTS[5]]], [3, 3]),
         "widths": {"rw": 1, "dw": 1}},
