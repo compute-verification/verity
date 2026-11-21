@@ -55,4 +55,4 @@ NODE_KIND=rtx-pro-6000-server-x8 uv run verity bench memory --loopback
 ~~~
 
 A whole `poub` session on the CPU, both parties on this machine over a test store, the Lean verifier built first: it
-prints the share of the read rate left uncertified with its error, says no node was audited, and exits 0.
+prints the share of the node's read rate left uncertified with its error, then `a measurement, not an audit`, and exits 0.
