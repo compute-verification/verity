@@ -266,6 +266,11 @@ class Options:
     retention: RL.RetentionOptions = group(RL.RetentionOptions)
     learning: SL.LearnOptions = group(SL.LearnOptions)
     day: SD.DayOptions = group(SD.DayOptions)
+    boundary_rows: str | None = option("--boundary-rows", default=None,
+                                       help="the two-stage variant's first stage, off unless given: each window's finished "
+                                            "spans committed at their edges under OUT/boundary/ (BoundaryWindows.of's "
+                                            "configuration, a JSON object or a JSON file; its logits' private directory "
+                                            "outside OUT and --copy-records-to; no history tables)")
 
 
 # ---------------------------------------------------------------------------------------------------------------- HTTP
@@ -686,6 +691,57 @@ class HttpThread(threading.Thread):
 
 # ---------------------------------------------------------------------------------------------------------------- main
 
+def boundary_config(opts: Options) -> dict[str, Any] | None:
+    """``--boundary-rows``' configuration, None without it; `UsageError` for history tables, whose rank-0 runner hook
+    this serve doesn't install."""
+    raw = opts.boundary_rows
+    if not raw:
+        return None
+    try:
+        cfg = json.loads(Path(raw).read_text() if not raw.lstrip().startswith("{") else raw)
+    except (OSError, ValueError) as e:
+        raise UsageError(f"--boundary-rows {raw[:80]}: {e}") from None
+    if not isinstance(cfg, dict) or "check" not in cfg:
+        raise UsageError(f"--boundary-rows {raw[:80]}: a JSON object naming its check template (check)")
+    if cfg.get("tables"):
+        raise UsageError("--boundary-rows: serve-openai commits no history tables (tables)")
+    return cfg
+
+
+def install_boundary(cfg: Mapping[str, Any], llm: Any, engine: Any, out: Path, public: Sequence[Path]) -> Callable[[], None]:
+    """The first stage on this process's engine: rank 0's logits builder where ``cfg`` names ``logits`` (its sampler
+    wrapped after the engine's warm-up, as serve-tax's plugin wraps it at the first served step), then `BoundaryWindows`
+    on its scheduler, each window's classes under ``out``/boundary/ and their lines in ``out``/boundary.jsonl. Returns
+    the stop: the open window closed and committed, the builder stopped, the scheduler's hooks taken off."""
+    from verity_vllm.engine.handle import model_runner, scheduler
+    from verity_vllm.engine.hooks import Hooks
+    from verity_vllm.pipeline import boundary_logits as BL
+    from verity_vllm.pipeline.boundary_windows import BoundaryWindows
+
+    stop_builder = None
+    if lc := cfg.get("logits"):
+        hook = BL.SamplerHook.install(model_runner(llm.vllm))
+        stop_builder = BL.Channel.of(lc, out, *public).start(BL.Builder(hook.logits, BL.Kept.of(lc, out, *public)))
+    lines = (out / "boundary.jsonl").open("a")
+    lock = threading.Lock()
+
+    def sink(rec: dict) -> None:
+        with lock:
+            lines.write(json.dumps(rec, separators=(",", ":")) + "\n")
+            lines.flush()
+
+    hooks = Hooks(tag="boundary-rows")
+    bw = BoundaryWindows.of(cfg, out / "boundary", sink, public=(out, *public)).install(scheduler(engine), hooks)
+
+    def stop() -> None:
+        bw.stop()
+        if stop_builder is not None:
+            stop_builder.set()
+        hooks.uninstall()
+        lines.close()
+    return stop
+
+
 def engine_options(opts: Options) -> dict[str, Any]:
     kw: dict[str, Any] = {"max_num_seqs": opts.max_num_seqs, "max_model_len": opts.max_model_len, "async_scheduling": opts.async_scheduling,
                           "max_num_batched_tokens": opts.max_num_batched_tokens, "gpu_memory_utilization": float(opts.gpu_memory_utilization),
@@ -812,11 +868,14 @@ def main(opts: Options, plan_of: Callable[[Path, Any, Callable[[], Any]], Any] |
     """The serve; ``plan_of(out, opts, flush)`` makes the plan each committed window's close compiles (`CommitWindows.plan`),
     which the command's entry passes (`program.predict.serve`); a committing serve refuses to run without it."""
     preflight(opts)
+    boundary = boundary_config(opts)
     (out := Path(opts.out)).mkdir(parents=True, exist_ok=True)
     SD.declare(opts, out)
     session = SR.session_of(opts, out)
     llm, com = build(opts, session, row := RW.of(opts))
     engine = llm.vllm.llm_engine
+    public = [Path(opts.copy_records_to)] if opts.copy_records_to else []
+    stop_boundary = install_boundary(boundary, llm, engine, out, public) if boundary is not None else None
     given = {} if opts.protocol in PROTOCOLS or opts.id_payload is None else {"payload": opts.id_payload}
     proto = framings()[opts.protocol](opts.force_include_usage, **given)
     reference = getattr(proto, "base", proto)
@@ -936,6 +995,8 @@ def main(opts: Options, plan_of: Callable[[Path, Any, Callable[[], Any]], Any] |
         trace.uninstall()
         if rows is not None:
             rows.uninstall()
+        if stop_boundary is not None:
+            stop_boundary()
         if com is not None:
             com.close()
     passed = windows is None or windows.summary()["passed"] or not server.served
