@@ -1,5 +1,5 @@
-"""Onsite's and remote's Lean (`onsite serve`, `remote serve`: each product's executable, the core CLI) against the
-Python reference (`reference.py`: the trial's composition rule, in which any rejection rejects the whole, over the harness's framing of the
+"""Onsite's and remote's Lean against the Python reference, on refusals only (`onsite serve`, `remote serve`: each
+product's executable, the core CLI; the reference is `reference.py`: the trial's composition rule, in which any rejection rejects the whole, over the harness's framing of the
 core interface and the subprotocols' own Python). Hypothesis samples each subprotocol's case to accept, reject, be
 undecided or fail to decode (from its own difftest's generator: PoUW's periods, made once from
 `pouw_period_cases`, the network attester's period `build`, the inference-only policy's `sampled`, which is
@@ -15,7 +15,8 @@ breaks the composition's own inputs (a subprotocol dropped, unknown, repeated or
 a wrong or short commitment, non-canonical or malformed evidence, blobs missing or malformed) or the case itself (a
 field missing or not hex, not an object), and every field of the outcome but its reason must agree exactly. SPOT's cases all reject: v2 refuses evidence naming no session (`oneSession`), and a session on the challenger's coin
 trees is verified by `verity-verify-proof`, which the mirror doesn't run. So every product rejects here, onsite often with a
-subprotocol undecided beside the rejection. Remote's `windows` tie decides only where no subprotocol rejects, so this
+subprotocol undecided beside the rejection, and no accepting onsite or remote run is compared: each agreement test
+asserts that no case accepts. Remote's `windows` tie decides only where no subprotocol rejects, so this
 difftest doesn't reach it; `CoreRemote`'s `#guard`s check which windows it finds stray. Remote's case on one record
 that reuses the window's registration of its tables (`reusing`) is one made case, which SPOT refuses at
 `oneSession` too, before R1-R7 read the record; `CoreRemote`'s `#guard`s check what v2 decides on that record with a
@@ -25,7 +26,7 @@ composite `verity run`'s verifier runs, is held to the same reference, and `prod
 their subprotocols and refuses every other set: the same two composites a configuration may list
 (`verity.config.COMPOSITES`). Onsite's development composite with the wipe's count held (`onsite-counted serve`) is held
 to the same reference with the count over the wipe's span and the counted wipe in its subprotocols
-(`test_onsite_counted_agrees`); its wipe's ties are `test_wipe_count_ties.py`'s."""
+(`test_onsite_counted_refusals_agree`); its wipe's ties are `test_wipe_count_ties.py`'s."""
 
 from __future__ import annotations
 
@@ -537,20 +538,21 @@ def _agree(p: D.ProtocolPort, server, seen: collections.Counter, examples: int,
 
 @pytest.mark.slow
 @OPT_IN
-def test_remote_agrees(remote_server):
+def test_remote_refusals_agree(remote_server):
     """Remote's subprotocols meet on one record (left to the subprotocols) and on two (refused), each often. What only
     whole cases hold: `remote serve`, the three subprotocols' own Lean behind the composition's framing, takes a case
     of megabytes (hex in JSON in hex) without failing, decodes it as the reference does (the rejection carries the
     commitment exactly when the case, the params and the commitment decode) and rejects it. A subprotocol's own
     difftest never passes its case through that framing. SPOT's refusal alone rejects every case here (the
     module's docstring), so the outcome doesn't show what remote's record check found. Its thousand cases reach what
-    `test_remote_agrees_on_fewer_cases` samples too seldom (`FEWER`)."""
+    `test_remote_refusals_agree_on_fewer_cases` samples too seldom (`FEWER`). No case accepts (`_agree` asserts it), so
+    no accepting remote run is compared."""
     _agree(REMOTE, remote_server, SEEN["remote"], 1000, (R.REJECT, "one record", "two records"))
 
 
 @pytest.mark.slow
-def test_remote_agrees_on_fewer_cases(remote_server):
-    """`test_remote_agrees` on `FEWER` cases: what it holds, which only whole cases through `remote serve` can, of the
+def test_remote_refusals_agree_on_fewer_cases(remote_server):
+    """`test_remote_refusals_agree` on `FEWER` cases: what it holds, which only whole cases through `remote serve` can, of the
     cases the generator samples often."""
     _agree(REMOTE, remote_server, SEEN["remote"], FEWER, (R.REJECT, "one record", "two records"))
 
@@ -1037,27 +1039,28 @@ def test_remote_v1_and_the_policy_compiled_on_a_small_window(tmp_path, monkeypat
 
 @pytest.mark.slow
 @OPT_IN
-def test_onsite_agrees(onsite_server, recorded):
+def test_onsite_refusals_agree(onsite_server, recorded):
     """Onsite rejects with a subprotocol undecided beside the rejection, its policy and integrity meet on one record
     (left to the subprotocols) and on two (refused), and PoUS and PoUB-P2 on one store and on two, each often; its
     Pearl+ run is refused (`R.PEARL_PLUS`), so its run's ties are never read here. What only whole cases hold: `onsite serve`, over its seven
-    subprotocols' own Lean, decodes a case as the reference does (`test_remote_agrees`) and rejects it where a
+    subprotocols' own Lean, decodes a case as the reference does (`test_remote_refusals_agree`) and rejects it where a
     subprotocol is undecided beside a rejection. Its thousand cases reach what
-    `test_onsite_agrees_on_fewer_cases` samples too seldom (`FEWER`)."""
+    `test_onsite_refusals_agree_on_fewer_cases` samples too seldom (`FEWER`). No case accepts (`_agree` asserts it), so
+    no accepting onsite run is compared."""
     _agree(ONSITE, onsite_server, SEEN["onsite"], 1000, (R.REJECT, "reject, a component undecided", "one record",
                                                        "two records", "one store", "two stores"))
 
 
 @pytest.mark.slow
-def test_onsite_agrees_on_fewer_cases(onsite_server, recorded):
-    """`test_onsite_agrees` on `FEWER` cases: what it holds, which only whole cases through `onsite serve` can, of the
+def test_onsite_refusals_agree_on_fewer_cases(onsite_server, recorded):
+    """`test_onsite_refusals_agree` on `FEWER` cases: what it holds, which only whole cases through `onsite serve` can, of the
     cases the generator samples often."""
     _agree(ONSITE, onsite_server, SEEN["onsite"], FEWER, (R.REJECT, "reject, a component undecided", "one record",
                                                          "two records", "one store", "two stores"))
 
 
 @pytest.mark.slow
-def test_onsite_counted_agrees(onsite_counted_server, recorded):
+def test_onsite_counted_refusals_agree(onsite_counted_server, recorded):
     """`onsite-counted serve` (`Core.Onsite.counted`) against `ONSITE_COUNTED` on 50 cases. What only whole cases through
     it hold, which `test_wipe_count_ties.py` can't: its eight subprotocols, with the count over the wipe's span on its
     host's one link and the counted wipe, decode a case and reject it as the reference does. No case here reaches its
@@ -1070,7 +1073,7 @@ def test_onsite_counted_agrees(onsite_counted_server, recorded):
 def test_onsite_refuses_p2_named_as_the_generic_bandwidth_audit(onsite_server, recorded):
     """PoUB-P2's case named as the generic bandwidth audit's, under a commitment that binds it, names no component of
     onsite: refused, in Lean as in Python, on every sampled case (`generic-bandwidth` on each, a break that
-    `test_onsite_agrees`'s seeded sample needn't reach)."""
+    `test_onsite_refusals_agree`'s seeded sample needn't reach)."""
     seen = collections.Counter()
     p = RejectingPort("onsite", reference(R.ONSITE, seen), composite(R.ONSITE, "generic-bandwidth"),
                       package=ONSITE_PACKAGE, need_rejects=False)
@@ -1115,7 +1118,7 @@ def test_product_names_only_the_composites():
 @pytest.mark.slow
 def test_product_over_onsites_subprotocols_is_onsite(product_onsite_server, recorded):
     """`product IDS serve` over onsite's subprotocols, which `verity run`'s verifier runs, is held to the reference as
-    `onsite serve` is (`test_onsite_agrees`): only its own run on whole cases shows that executable to be onsite. It
+    `onsite serve` is (`test_onsite_refusals_agree`): only its own run on whole cases shows that executable to be onsite. It
     disagrees with onsite's reference nowhere, and rejects with a subprotocol undecided beside the rejection, at 50
     cases; the nightly runs 200 (`test_product_over_onsites_subprotocols_is_onsite_at_200`)."""
     _agree(PRODUCT[R.ONSITE.id], product_onsite_server, SEEN["onsite"], 50, (R.REJECT, "reject, a component undecided"))

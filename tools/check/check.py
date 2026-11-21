@@ -2003,8 +2003,8 @@ OPT_IN = {
         "test_figures.py::test_figures_writes_every_figure",)},
     "verity/protocols/run/verifier/lean": {"VERITY_SLOW": (
         "test_composition_difftest.py::test_product_over_onsites_subprotocols_is_onsite_at_200",
-        "test_composition_difftest.py::test_remote_agrees",
-        "test_composition_difftest.py::test_onsite_agrees")},
+        "test_composition_difftest.py::test_remote_refusals_agree",
+        "test_composition_difftest.py::test_onsite_refusals_agree")},
     # the whole recursive session: the kept run's data, fetched from the evidence store with the run's custody key
     "verity/protocols/proof/recursion/verifier/vstar_cli": {"VERITY_VSTAR_RECURSIVE_DATA": (
         "test_vstar_recursive.py::test_the_honest_recursive_session_is_accepted_part_for_part",
