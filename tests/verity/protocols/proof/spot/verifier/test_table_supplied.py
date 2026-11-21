@@ -1,11 +1,12 @@
 """A table's supplied rows (`Window.supply`: its root, its domain id and the opening verdict's 1) are the rows R7 recomputes
-from the program's digest: with the anchors' values from C's marks alone (`registered.root/v1`, `registered.domain/v1` of
-the table's own registered entry), both verifiers accept the window's own rows, and each row's public salts are the
+from the program's digest: with the anchors' values from C's marks (`registered.root/v1`, `registered.domain/v1` of the
+table's registered value) and the table's pin, both verifiers accept the window's own rows, and each row's public salts are the
 program's (`registered_value.supplied_salts`), the digest `Window.give` and the verifier's `Supplied.root` salt with, never
 the partition's. It runs Lean's registration check beside
 the Python twin (minutes, with the executable built): no cheaper test holds a window's own committed rows to Lean's R7."""
 from __future__ import annotations
 
+import hashlib
 import json
 
 import numpy as np
@@ -73,32 +74,48 @@ def _window(out) -> tuple[I.Window, Table, dict]:
     return win, table, json.loads((out / "registration.json").read_text())
 
 
-def test_a_tables_anchors_from_cs_marks_alone_are_the_rows_r7_recomputes_from_the_programs_digest(tmp_path):
-    """C marks the table's root and domain anchors with `registered.root/v1` and `registered.domain/v1` of the table's
-    registered value; the record registers the table's own entry under that value, and no scheme or parameter supplies
-    rows for the anchors: R7 recomputes their rows from the marks, the rows `interface.supplied` commits, in both
-    verifiers, salted with the program's digest. A scheme that also supplies rows for a marked anchor is refused (one
-    source for a supplied value)."""
-    win, table, window = _window(tmp_path / "window")
+def _pinned(out) -> tuple[I.Window, Table, dict, dict]:
+    """`_window`'s window with its record and check: the record registers the anchors' entries and not the table's, the
+    check holds a weights' registration of record pinning the table (`embed`) at its root, leaves, words and domain, and
+    names no source for the anchors, whose rows are C's marks'."""
+    win, table, window = _window(out)
     prog, query = win.window.program, win.window.query
-    pd = program_digest(prog)
-    assert pd == window["program"] != win.window.partition_digest
     assert G.marks(json.loads(b"".join(descriptor_chunks(prog)))) == {
         f"embed/{of}": {"supplied": f"registered.{of}/v1", "args": {"value": "embed"}, "layout": "digest", "bits": 512}
         for of in ("root", "domain")}
     values = {f"embed/{of}": win.registered[f"embed/{of}"] for of in ("root", "domain")}
     rec = DK.record(prog, query, DESIGN, SCHEME, window["roots"], {"kind": "served", "row": 7, "run": "r-table"},
-                    leaf_layer=window["leaf_layer"], registered=[table.entry(), *(v.entry() for v in values.values())])
+                    leaf_layer=window["leaf_layer"], registered=[v.entry() for v in values.values()])
+    body = json.dumps({"program": WEIGHTS_RECORD, "values": {"embed": table.entry()}}).encode()
     check = {"program": prog, "query": query, "sampling_design": DESIGN, "scheme": SCHEME,
              "ports": {r["port"]: {"leaves": r["leaves"], "domain": r["domain"]} for r in window["roots"]},
              "leaf_layer": window["leaf_layer"], "registered": {v: x.words for v, x in values.items()},
-             "schemas": {v: V2 for v in values}}
-    got = V.check(rec, **check)
-    assert got.ok and got.codes == (), got
-    assert R.check(rec, **check).ok
+             "schemas": {v: V2 for v in values}, "weights_of_record": (body, hashlib.sha512(body).hexdigest())}
+    return win, table, rec, check
+
+
+@pytest.mark.xfail(strict=True, reason="the anchors' functions read the record's entry of the table's value, which the "
+                   "record doesn't register (the table is no parameter of the program); it passes once their source is "
+                   "the table's accepted pin")
+def test_a_tables_anchors_from_cs_marks_and_its_pin_are_the_rows_r7_recomputes_from_the_programs_digest(tmp_path):
+    """C marks the table's root and domain anchors with `registered.root/v1` and `registered.domain/v1` of the table's
+    registered value, the weights' registration of record pins the table, and no scheme or parameter supplies rows for
+    the anchors: R7 recomputes their rows from the pin, the rows `interface.supplied` commits, in both verifiers, salted
+    with the program's digest."""
+    win, table, rec, check = _pinned(tmp_path / "window")
+    pd = program_digest(check["program"])
     for of in ("root", "domain", "opened"):
         row = win.registered[f"embed/{of}"]
         assert row.program == pd and list(row.salts) == RV.supplied_salts(pd, f"embed/{of}", 1), of
+    got = V.check(rec, **check)
+    assert got.ok and got.codes == (), got
+    assert R.check(rec, **check).ok
+
+
+def test_a_scheme_that_also_supplies_a_marked_anchor_is_refused(tmp_path):
+    """A table's anchor that C marks takes its rows from the mark alone: a scheme that also supplies rows for it is refused
+    by both verifiers, one source for a supplied value."""
+    win, table, rec, check = _pinned(tmp_path / "window")
     both = {**check, "supplied": {"embed/root": [[{"bytes": table.tree.root.hex()}]],
                                   "embed/domain": [[{"bytes": table.dom.domain_id.hex()}]]}}
     for verifier in (V, R):
