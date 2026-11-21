@@ -444,7 +444,7 @@ private theorem up_wide (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.r
         (by rw [← Resolve.bs_members _ (Or.inl hf)]; exact hm), hmt]
   · simp only [hf] at hu
     simp only [hf, BodiesOk.Shape] at hshape
-    obtain ⟨carry, y, hcr, -, hp0, ha0, hrest⟩ := hshape
+    obtain ⟨carry, y, hcr, -, hp0, ha0, ⟨hrest, -⟩⟩ := hshape
     by_cases hi0 : i = 0
     · subst hi0
       simp only [ite_true] at hu

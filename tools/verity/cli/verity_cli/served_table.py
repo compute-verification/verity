@@ -248,8 +248,6 @@ PLACEMENT = {WORKERS: PROVER_NODE, ZK_SERVER: PROVER_NODE, PROVER: PROVER_NODE, 
 APPLICATIONS = ROOT / "applications"
 #: the configuration this table's application runs, whose `[[pin]]` entries are the only statement of the keys the auditor pinned
 CONFIG = APPLICATIONS / "onsite_full.toml"
-_UNDECIDED = ("`verity run` records each period's verdict under that id, undecided unless the line says who",
-              "combined it: no composite takes it.")
 #: the header of each application's file
 HEADERS = {
     "onsite_full": (
@@ -257,18 +255,6 @@ HEADERS = {
         "the auditor pinned for its devices. Run it on each machine with `verity run THIS --on MACHINE --bindings",
         "FILE` (tools/verity/cli/README.md); the deploy bindings hold every host and address, this file none.",
         "`verity run THIS --dry-run` resolves it all."),
-    "onsite_compute": (
-        "The served window under SPOT, PoUW, the inference-only policy, the network attester and the memory",
-        "wipe (verity/onsite-compute/v0, a deployment of its own, never onsite): onsite without PoUS and PoUB,",
-        "each party on its machine, and the key the auditor pinned for its memory attester.", *_UNDECIDED),
-    "onsite_network": (
-        "The served window under the network attester, SPOT and the memory wipe (verity/onsite-network/v0, a",
-        "deployment of its own, never onsite), each party on its machine, and the key the auditor pinned for",
-        "its memory attester.", *_UNDECIDED),
-    "onsite_network_front": (
-        "onsite_network.toml with the network attester's front as the run's one load (load front): the one run in",
-        "which the network attester's chain and the window's compute audit see the same window, so the period check",
-        "can reach its tied form.", *_UNDECIDED),
     "remote": (
         "The served window under remote's subprotocols (verity/remote/v1): SPOT, PoUW's Pearl+ run verdict and the",
         "inference-only policy. No auditor's device is at the site: the developer's parties are on the prover node",
@@ -284,11 +270,10 @@ def listed(demo: str) -> tuple[str, ...]:
 
 #: an application's own workload values over the shared defaults, each of whose listed schemes then states its declared
 #: `Scheme.tie` over its parameters' defaults; remote and onsite both serve Pearl+ untied at this workload and its input
-#: dataset, the other three name their load, and onsite_network_front only the front's
+#: dataset
 _TIED = {"model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da",
          "precision": "bfloat16", "slots": 1, "window-steps": 1, "dataset": "llama32_1b_fixed_1_1_1", "timing": "at-once"}
-DEMO_VALUES = {"remote": _TIED, "onsite_full": _TIED, "onsite_compute": {"load": "varied"},
-               "onsite_network": {"load": "varied"}, "onsite_network_front": {"load": "front"}}
+DEMO_VALUES = {"remote": _TIED, "onsite_full": _TIED}
 
 
 def tied(protocols: Sequence[str]) -> dict[str, dict[str, Any]]:
