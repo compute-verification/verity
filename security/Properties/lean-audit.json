@@ -1065,7 +1065,6 @@
  },
  "meaning": [
   "Properties.Flock.Circuit.CircuitOf",
-  "Properties.Flock.Circuit.Chain",
   "Properties.Flock.Circuit.Keyed",
   "Properties.Flock.Circuit.Outs",
   "Properties.Flock.Circuit.Keys",
@@ -3009,76 +3008,6 @@
    },
    "type_hash": "7b4111cc25192d1589a6fa7b4d4048850da3772390db68c0de2fc1346aa7d3a9",
    "unfolded_hash": "e7175f079887ec9994ca6e66aec9f63e7cfbe6f76da0ed94323d643397389d66"
-  },
-  "Flock.Chain.doorLengths": {
-   "owner": "@lean",
-   "signature": ["Flock.Chain.doorLengths : Flock.Chain.DoorLengths"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": ["Flock.Chain.UnitResolves", "InferenceOnlyVerifier.Properties.GateOk"],
-    "reads": []
-   },
-   "type_hash": "a7c559d4bf966a0e04f642541eab2fd23a0c486e53534d80b200a150ca965418",
-   "unfolded_hash": "7a547ceca65423126f57bc96151fbee9b432e9dee87f1fdb0276741afc7ccfe9"
-  },
-  "Flock.Chain.lowerEval": {
-   "owner": "@lean",
-   "signature": ["Flock.Chain.lowerEval : Flock.Chain.LowerEval"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": ["FlockSoundness.Built", "FlockSoundness.Rows.Sat"],
-    "reads": []
-   },
-   "type_hash": "31fa1ddf6f1a1cc5c20423da01f60168ebf7cc83748782a68cb87df14b065e34",
-   "unfolded_hash": "251822ae681d22d68fa266499fb2eb7be14d2d5dea6fa6ab93c134ea95df26a0"
-  },
-  "Flock.Chain.lowerEvalDoor": {
-   "owner": "@lean",
-   "signature": ["Flock.Chain.lowerEvalDoor : Flock.Chain.LowerEvalDoor"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": ["FlockSoundness.Built", "FlockSoundness.Rows.Sat"],
-    "reads": []
-   },
-   "type_hash": "01b41509e27ff26800788896d26f78d7e7fe66c8cb0ee615e0dbdcd49a88cc3e",
-   "unfolded_hash": "86807320d431d89afaa7460a4d1bb0c4fba87d28d043bfee936535729336dd54"
-  },
-  "Flock.Chain.portsBind": {
-   "owner": "@lean",
-   "signature": ["Flock.Chain.portsBind : Flock.Chain.PortsBind"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "Flock.Chain.BlockIs",
-     "Flock.Chain.PortsOpenAt",
-     "Hash.StringCommitment.Binds",
-     "Verity.Partition.Rblk"
-    ],
-    "reads": []
-   },
-   "type_hash": "d8fd28dbc1db172bf92286dcf95c90f3df4b4c369cb6ba845ba40abceb722dff",
-   "unfolded_hash": "cc7e78fdb74c6e1f6b3fd10977f2e6278b31e024681c2fac7a5c41cfec746d33"
-  },
-  "Flock.Chain.restrictBodyAgrees": {
-   "owner": "@lean",
-   "signature": ["Flock.Chain.restrictBodyAgrees : Flock.Chain.RestrictBodyAgrees"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "afa748058d4ef57d6dba5c944567a9a26c8c4d1c8e8f6017d0db49816118a631",
-   "unfolded_hash": "3026db889e865cc919584f891195a808c6e1b85c65433220ff77562fa30f396b"
   },
   "InferenceOnlyVerifier.Properties.SecurityProofs.AcceptsExactly": {
    "owner": "@network-accounting",
@@ -15523,13 +15452,13 @@
    "Flock.Chain.TreeMapTotal": "unstated: on an accept, every committed gate a member's block reads or writes has a position and a leaf of a tree the verifier holds before any coin; a stated link of the chain, not proved in general; no theorem states it yet.",
    "Flock.Chain.TreeScBinds": "unstated: treeSc binds under the collision premise its trees bind under; a stated link of the chain, not proved in general; no theorem states it yet.",
    "Flock.Chain.UnitIndicesAgree": "unstated: the public file's unit indices, which the session reads, are the header's; a stated link of the chain, not proved in general; no theorem states it yet.",
-   "Flock.Chain.lowerEval": "frozen (no-function): a link of the chain from an accept to block correctness in C, stated over the circuit, its lowering and the commitments, not a property of one function's acceptance.",
-   "Flock.Chain.portsBind": "frozen (no-function): a link of the chain from an accept to block correctness in C, stated over the circuit, its lowering and the commitments, not a property of one function's acceptance.",
-   "Flock.Chain.lowerEvalDoor": "frozen (no-function): a link of the chain from an accept to block correctness in C, stated over the circuit, its lowering and the commitments, not a property of one function's acceptance.",
-   "Flock.Chain.doorLengths": "frozen (no-function): a link of the chain from an accept to block correctness in C, stated over the circuit, its lowering and the commitments, not a property of one function's acceptance.",
-   "Flock.Chain.restrictBodyAgrees": "frozen (no-function): a link of the chain from an accept to block correctness in C, stated over the circuit, its lowering and the commitments, not a property of one function's acceptance.",
    "Spot.Challenger.CutMeans": "unstated: on a log releasedLogOf accepts, cut accepting gives Log.Cut at the commitments (the code's challenger log is the core's log); a stated link, not proved; no theorem states it yet. Waits on the remote guarantee that was to read it, or its deletion as dead; owner @lean, issue LEAN-186, due 2026-11-30.",
-   "Spot.Challenger.KeyedBySlotMeans": "unstated: on a log releasedLogOf accepts, every family's coins are keyed by slot (Log.KeyedBySlot); a stated link, not proved; no theorem states it yet. Waits on the remote guarantee that was to read it, or its deletion as dead; owner @lean, issue LEAN-186, due 2026-11-30."
+   "Spot.Challenger.KeyedBySlotMeans": "unstated: on a log releasedLogOf accepts, every family's coins are keyed by slot (Log.KeyedBySlot); a stated link, not proved; no theorem states it yet. Waits on the remote guarantee that was to read it, or its deletion as dead; owner @lean, issue LEAN-186, due 2026-11-30.",
+   "Flock.Chain.LowerEval": "unstated: the lowered net's rows, where they hold, evaluate as the Definition bit for bit; proved by Flock.Chain.lowerEval from FlockSoundness.Built and FlockSoundness.Rows.Sat, with inline hypotheses, its statement reading Properties.Flock.EvalBool outside `meaning`; not listed until those are placed. Owner @lean, due 2026-11-30.",
+   "Flock.Chain.PortsBind": "unstated: a block's openings and the statement's at one commitment give C's port values as the statement's port columns, or a SHA-512 collision; proved by Flock.Chain.portsBind from Flock.Chain.BlockIs, Flock.Chain.PortsOpenAt, Hash.StringCommitment.Binds and Verity.Partition.Rblk, with inline hypotheses, its statement reading Properties.Flock.Circuit.OfProgram outside `meaning`; not listed until those are placed. Owner @lean, due 2026-11-30.",
+   "Flock.Chain.LowerEvalDoor": "unstated: LowerEval at the door: satisfied rows of the net the block's template unrolls to force each output column of the door's file to the bit the template's lift to bits gives on its input columns; proved by Flock.Chain.lowerEvalDoor from FlockSoundness.Built and FlockSoundness.Rows.Sat, with inline hypotheses, its statement reading Properties.Flock.EvalBool outside `meaning`; not listed until those are placed. Owner @lean, due 2026-11-30.",
+   "Flock.Chain.DoorLengths": "unstated: at every unit of the block, the bits of a trace of C at its arguments and at its return leaves are exactly the input rows' and the return fields' bits; proved by Flock.Chain.doorLengths from Flock.Chain.UnitResolves and InferenceOnlyVerifier.Properties.GateOk, with inline hypotheses, its statement reading Properties.Flock.Circuit.OfProgram outside `meaning`; not listed until those are placed. Owner @lean, due 2026-11-30.",
+   "Flock.Chain.RestrictBodyAgrees": "unstated: the block's Program restrict P units of a decoded C whose root has no recut keeps C's word primitives evaluating as their Boolean Definitions; proved by Flock.Chain.restrictBodyAgrees from no named premise, with inline hypotheses, its statement reading Properties.Flock.DecodeBoolean outside `meaning`; not listed until those are placed. Owner @lean, due 2026-11-30."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -17625,7 +17554,7 @@
    }
   },
   "Definitions.Core.Circuit": {
-   "digest": "3fa5e8abe3e7de1eea1677a3dc495b2e1a965962b2be6cd70cbb6311016af2d0",
+   "digest": "a9ef55317ff0b37e8d53d0f6966cb057a2379b4c971787adcb1b1de716f3b713",
    "definitions": {
     "Verity.Circuit": "c86ddd734da68edae1a4e99343f0dfc3e717418d0f7bc8a55a8a33af0f471a17",
     "Verity.Circuit.N": "41024293e7ed9a8b1848ff13d93bc8ddd2e8afa1f9ef29855dca860b83bd8022",
@@ -17637,7 +17566,6 @@
     "Verity.Circuit.op": "52c6b3809c85fa1ecc4a24cdb391a9d07d94cf708e48cf598179a0b7b9631b03",
     "Verity.Circuit.outputs": "7f749644690f06b37f98f3a6c086038be1ad082c6c849759ca0bf45813499e7f",
     "Verity.Circuit.reads": "ba5e38dc5aed7fbf8124167038ac7db763251a85f1b86a0162b1e9b922c77955",
-    "Verity.Circuit.restrict": "d44a87e6461764ec9f7aeb16905ba0732031f32f93c0dd3a4ad2d5276737e223",
     "Verity.Circuit.run": "3c7d060c45950ce4dd6de6828c079406d226cd4570161c6f86f64aa72199cfa6",
     "Verity.Circuit.size": "72bd6646c19ce3e502a8b20391366dd1932d3a5e566282b3da6b0a4044d286f2",
     "Verity.Circuit.w": "71844378ec086d9fae9d11086d055d967b6904caee3f9eef3f104f31129a3bee",
@@ -17836,17 +17764,10 @@
    }
   },
   "Definitions.Core.Hash": {
-   "digest": "2ab07b4524bc984d6cd411ee75d13d05cf88bf1a8ca2c48361478e8a813be99c",
+   "digest": "75b434676752cddaefbd1f1e59bad521bacb0f719708922bbc77f261e8b67998",
    "definitions": {
     "Hash.Collision": "6352b7c1183e5a22df83ca267ec49a423df2fbf74845e167f5927c3873f3c545",
-    "Hash.CollisionIn": "11b3b2e09ac3618b7a040ce90654ab0a6ae58e0284a88a1d7920a879e23322a7",
     "Hash.Msg": "eae8a43b934169e52427b2520a329dbf40092e7d809802407f5c6cb3402c20f0",
-    "Hash.StringCommitment": "8b834a0e4d2d5dd86c7d928c5e518fd0988fbbfbca022b3e650bbca333bbf46a",
-    "Hash.StringCommitment.Binds": "b9c2a29af0a0347d740d68ddd57534bc91a8bf13af64e06fe82a269187796f64",
-    "Hash.StringCommitment.Com": "04669e85a0245aa6cce2ec312dfee9eb3e0daa014120edf2b86ecc8b12a97a8c",
-    "Hash.StringCommitment.Op": "38876056b4bfdedfb356656fba31cdaeda59a03bc13df7c9a91e33a08acfa704",
-    "Hash.StringCommitment.Opens": "6f913878feb912491c83113a87857b24d6651278c5de3f149a21f306fc25d85d",
-    "Hash.StringCommitment.hashed": "baad1d9c2c0d7488c785e679b50118212bad9dd44f2205acc4c8650747cba1fd",
     "Hash.be": "1f945d5d60fb165788d157937623ac5e53f53bbe2a91810626dc2d5f9c4e2cd4",
     "Hash.cstr": "cc8a9d2799527c9325f6d52d1f4af04631d52ef3849529d96cd70def0f45ab7b",
     "Hash.padTo": "d13d242f6c91872c3dc574789e9f2fd063e15ae64aa08096b9dee20717d00477",
@@ -17884,13 +17805,12 @@
    }
   },
   "Definitions.Core.Partition": {
-   "digest": "b03f7cacbfcd927840f5651de71b3611753c4d3ac082ec24b95ff530bc2ac1a6",
+   "digest": "05efbbf889d8f751548022ac407a5eabdd1f4e7dc21d243db534312bf1c92150",
    "definitions": {
     "Verity.Layout": "fb8ce2caae4a73068963f39a186b5961f29fb188f09a8317f56b94984419057c",
     "Verity.Layout.phase": "6ae4b8a493cf87af02ed8422497cc4c3032ec378fbefceeb8c665f76d6c12005",
     "Verity.Layout.reg": "47e93abc0c6bc5d6c2f921040cdca0903b1be39b634b65787df6de352025d96a",
     "Verity.Partition": "22bc62b950d67ab5a0572f63a989d211fa3064e10e3f2bf031fd12353d29ead2",
-    "Verity.Partition.Before": "d18e6bd46b19305656a94b1d6f7c3fb8157403ecdb24574541ebc08811800c71",
     "Verity.Partition.Correct": "71598c961502ae6e52b3f9f9b0a38c000a3208215229ba18bfb4531b5533b322",
     "Verity.Partition.Refines": "e167d724562f5e04f88ee94e7b3fbbe133a4bf84083727155d505f4bd6c439d1",
     "Verity.Partition.Refines.parent": "72731b435f7a2f4345812eb596b0ddf975d7631606e7827773a93f6c1ac39b33",
@@ -17900,13 +17820,7 @@
     "Verity.Partition.incorrect": "2e225da54ef4d995736d5ed454ff91fd71df727ef0f18f76f7a68b218fdee442",
     "Verity.Partition.io": "6a472b289b278116cb35431864639fd6026cb96dd6bf5c58fcf5db58d5a9638d",
     "Verity.Partition.localEval": "67c30c15b2e22b75847c8da59c92525bdfd4b50c0d4705980bf2a90541c4805d",
-    "Verity.Partition.pos": "c1781d9bdf995d151514882b2b40d18de3602f22129d46cf753271728111cd6a",
-    "Verity.Partition.unit": "b54d29eb5c65700aaa72158c37899485fbb277203c4bd593696085072d25d7b9",
-    "Verity.Partition.window": "3e62592b761055332915f09ed66a2867ec0242684dfd9c11d6a7d83edc6c545f",
-    "Verity.Partition.writerRank": "5d7662150be2782e7deca6b01555e5f2215ff485f0dadf4c29316300f22ae3e3",
-    "Verity.Root": "bc0800deac5fb7f6f3cd574add80e65d5897d10553ee9fbbefbabd797b328c8f",
-    "Verity.Root.phase": "6403af388efbff58c4ca4229d09ed6d609d23cd76e53bccadc5e49be89b945af",
-    "Verity.Root.reg": "62be1918cfaa011ea0f0caf549ec1d5ebf9ffefce281377f7b9595cea2e2cdad"
+    "Verity.Partition.unit": "b54d29eb5c65700aaa72158c37899485fbb277203c4bd593696085072d25d7b9"
    }
   },
   "Definitions.Core.Period": {
@@ -17945,12 +17859,6 @@
     "Verity.Prims.f32ToE2m1Sat": "a67bcf3902e7148d0f7d7eae33672440616448bd6830eb215f0fa3b7e0191fad",
     "Verity.Prims.f32ToE4m3Sat": "f2a0f375a25f18709497876450c1afa0f02c0ff52b19231b0da9b7c2d934bec0",
     "Verity.Prims.roundEvenDyadic": "b829aac2724fa97e70ff976045f1bf0042b3bf0a60fd44de01e57c3cac417f0a"
-   }
-  },
-  "Definitions.Core.Rblk": {
-   "digest": "6c03347c405a0974b05a7972c0b04553a769b0c66fa5cde798f47ba762512f26",
-   "definitions": {
-    "Verity.Partition.Rblk": "b881d4323173304f68ec7c7a7d82b6036498f1eb4e94baaa9120f2fc83e62467"
    }
   },
   "Definitions.Core.RegisteredCircuit": {
@@ -18285,7 +18193,7 @@
    }
   },
   "Definitions.Flock.Lowering": {
-   "digest": "a7a664d7e8c26813730bdc14e0a3a82207059258bff452226abec9a1ec53f58a",
+   "digest": "f73cba36978e70ca40b21332d10ce9a7d904cfc28b4c53802bac11796064f0fb",
    "definitions": {
     "FlockSoundness.Prog": "802da4afc4af4a75ed5d2db20fb003a7af1259d87e5edb1db2d80afecb37b7d1",
     "FlockSoundness.Prog.RowsWire": "31b15927e1f6c110a131cf1232bb666ea7afc4173fd4d54dd9b95a79d9d06ac2",
@@ -18306,7 +18214,6 @@
     "FlockSoundness.Prog.snoc": "a483637c248db1a5929db2dc137add6bb784521bb16797965b86ee881b0739bc",
     "FlockSoundness.Prog.unit": "a7a86fe6899d9f9471795205177f7ebea2fbc606d07346216ee32fa42c63ffad",
     "FlockSoundness.Rows": "eafd00fa7b02297bcaa72274acd01d5ac81dc5a3f0ba6e2d15c9322c62d8ffe1",
-    "FlockSoundness.Rows.Sat": "743b79bc15be6e75ee0943ea5fdeda63f8025bb8889479eab13013d8dc496188",
     "FlockSoundness.Rows.a": "335a51d69a144b8d413cb547f18224b7d037e6e7ba69f0cc2bc67f08e7669a70",
     "FlockSoundness.Rows.b": "1283308c04d49734be64c36247c2479128b739cb0ca4b4675c5d09ebeacb7740",
     "FlockSoundness.Rows.comp": "a68f9a325b387699b2cb7d961bb679bb5397ee45687a29c1c5d28daedeb682a7",
@@ -20667,7 +20574,7 @@
    }
   },
   "Flock.Lower": {
-   "digest": "842734d90a430eabc69745adda4ea065e921562d52fba3e7d55d8043d2215c82",
+   "digest": "5c7a1ac618c7940998c16e1df231bc2b911b315cdddeedb0b9800f4202a26d43",
    "definitions": {
     "Flock.Lower.Bind": "fbeace8ffbbc35121fa039199368aa2dfcf895f041c106afd4827eaccb1feffb",
     "Flock.Lower.Bind.a": "2c41c45e791532b1d99e7a1a42fd4afdb6913694c0b6a19b2787e52bbd78e7ef",
@@ -20739,7 +20646,6 @@
     "Flock.Lower.gateOf?": "95329636518f6211b864309d4fa9e089746ca34b04da07daae648d907c8b4507",
     "Flock.Lower.getRef": "2186855447e7a78c94f15e52d6de2a5c698ed9425c96a6a679f1cd3f95a80bad",
     "Flock.Lower.groupsText": "94e08ebe80013e2c4b70c0d5cdc3d1ef412b862f57731f269d2e44cb7ef1011e",
-    "Flock.Lower.inBit": "5139297d002811d419fa63b266a029e46694877af6fa864fae29a87bdba80a85",
     "Flock.Lower.instInhabitedBind": "b9237ee76829a06ad6fea8e6951f4fa6165c851da6cd7b63c29e1635bd7c90aa",
     "Flock.Lower.instInhabitedBind.default": "dd3105e7b8ea36c7ddc32de24a1db289bf5fcdbf16a40f2d23a34386a5c19153",
     "Flock.Lower.lower": "7f5cfcce91004c916569b71441d985af5619e5bfe2b995e5f2494e88782cb928",
@@ -20747,7 +20653,6 @@
     "Flock.Lower.memberIx": "e385ba79a5e03f95284650f74e9846771a06fbf17a8a1dd5f6db010c679bafba",
     "Flock.Lower.nodeStep": "3517960e0aba1f84e5f5dc027335b413edc404a2bf3f1da67ca72c29f990eff5",
     "Flock.Lower.onBits": "c6ba9f43c0388a6297413d397f144599b803203c37ffc033a3696af445d8a372",
-    "Flock.Lower.outBit": "cf406906ae614a781b56e77ff2fdf631b1b0b2ed3ddb9060ecf823317d5b498c",
     "Flock.Lower.partAt": "6d55daf14a264ca4ade40e87ba0649846f618aa5dadfb860f9420a170854558b",
     "Flock.Lower.partIx": "9014b8d6168e144a63eb805d42c2a15a90d1074c34438e2af3d5a7f42de606a6",
     "Flock.Lower.pieceEnd": "5d2908887e657b99d2328a28aec454efd4ce696591491bc20b9b1aaf7d968edc",
@@ -26953,29 +26858,6 @@
     "Properties.Site.witnessDigests": "5cbecb43ebf6554f1e32a9cc8a7271da83d901dfaecf4cdeffa52722b1ec90a3"
    }
   },
-  "Properties.Flock.Circuit.Chain": {
-   "digest": "979d3aba3d0bbfb2f2bcdd53e13b3255851cc8c594d892729f665471f25c1041",
-   "definitions": {
-    "Flock.Chain.BlockIs": "2df832bbc4b7a82e4d69fd4d406aeafb1c3ecbabb740eaba40f7c74f2e1ae9f3",
-    "Flock.Chain.DoorLengths": "dd62941e8f371ca77db5fecc0f3ffa55d80a1ae07244c8875a67fa403d90c3d6",
-    "Flock.Chain.LowerEval": "2c4fe8f1d41898bcd513d45ac5ecd28ca69a687f8d0c5ed9f7fde98c341043c1",
-    "Flock.Chain.LowerEvalDoor": "ce035f0c77735a13eb656214b669635e95cd9396265b45ecc623e522b46cff63",
-    "Flock.Chain.PortsBind": "13369a55694d63e1ed510819e4c5b931071e10bb38f203b8fa9efec8ebd3fb5d",
-    "Flock.Chain.PortsOpenAt": "57cd02db0e4d811c245d938b196cd55b408d9225852046a80a7ec5ad8654a0e8",
-    "Flock.Chain.RestrictBodyAgrees": "e08c16e82bff36d4b4c8e1fb48d6cbb393badab8ec0f043cd6de4c8300cb56c2",
-    "Flock.Chain.UnitResolves": "b145e8ea430092c7844cc5383e06d3ed844dbe63d0d44b760da3c765cd771003",
-    "Flock.Chain.argBits": "de535a796bb6aa86e811ff1eee1d410d3b56275cc5297643f047474414b54440",
-    "Flock.Chain.bitsOf": "a7f4fbb0d5839cdcaeac2be1dee9f5df326b27b7820fdb5c794a6af2971a8966",
-    "Flock.Chain.doorCol": "184e38e46c38bce8d9d05e07e969bbce052e55bb4f5076ed4f71141fd9c7c2f3",
-    "Flock.Chain.doorCol.go": "ab130ca1c1a8f9d4e04430c56181466ca70b0b20d89d51c8a58c7a6f3c748f6c",
-    "Flock.Chain.outBits": "13860243ff5a6f3e860b867b8556e6c1553f3b095d7991d247e8e48b26421c4e",
-    "Flock.Chain.portBits": "1b239828b19a5fe2d9c96a6f7719e0e1b1f553db9171f34678834219e15b13e4",
-    "Flock.Chain.portWidth": "4ffb7ad5c41d8956f1158eb8ae5ef45b832df8693027917c03cd357a8490db53",
-    "Flock.Chain.servedLayout": "e92f1ed20ea9d428454c72692cccf91fe68ce600938d043c3810004fbf7ec1c3",
-    "Flock.Chain.unitArgs": "9b7b4708cf2f5d0db06eea357d5664bf5229153e2cdcf76e4af1b22fc913ba44",
-    "Flock.Chain.unitOuts": "fe7559876ae0f19a48697294b35998279c30fcdbbb8683a2d2c9c70ebb48074c"
-   }
-  },
   "Properties.Flock.Circuit.CircuitOf": {
    "digest": "ffaf192fbf1902be9b1a22f84799dbc2d59383e6e188d34bafc1f63daf78e29d",
    "definitions": {
@@ -28996,12 +28878,11 @@
    }
   },
   "Spot.BlockFront": {
-   "digest": "54317fa7c52e21d99670f4628aa865315726609f0cf1c3b0ea3a81fcfb64ee38",
+   "digest": "07e0c9faa5182a80b3b640d4b0f3e8d93b5026fccfa99a5706ce1e42377de2bb",
    "definitions": {
     "Spot.BlockFront.Front": "aafa4421ff1fcfbd872e4ceea8bffd374c22c7ebebc47cdd04b1ac64e41496c8",
     "Spot.BlockFront.Front.ins": "38b1ac23448aa379245ea54bfbdb93dfbf4549e92bb776200b66260796b4c1a2",
     "Spot.BlockFront.Front.outs": "a0a0266292c11eabee7867a741acecd819a0b00d66a8495d2bb99b12c42c01d0",
-    "Spot.BlockFront.Front.ranges": "b32a187b131b35b0b3312ce89a1b783a303cdcfff2143d8e9f0b75c93216a7c2",
     "Spot.BlockFront.Port": "c9f7a432ec58c0727bdb3ccb599956962cab95fc5a0ef753c23ac262bd7cc2fd",
     "Spot.BlockFront.Port.gate": "6d3c0797cc4f6c67e30fc95bca9f28588de463d6f319aa6753149e6281e67145",
     "Spot.BlockFront.Port.width": "8ee8d8501e5b0b38b250aaf696af4bbec8546d5b6c3aafb53574a2282719a712",

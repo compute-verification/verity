@@ -635,6 +635,24 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "Claims.Recursion.R": {
+   "owner": "@lean",
+   "digest": "60c01a02b549f4424875d50bd3a3df908323700aa7b729387fd47ecd81e610d2",
+   "issue": "LEAN-339",
+   "due": "2026-11-30"
+  },
+  "Claims.Recursion.RPriv": {
+   "owner": "@lean",
+   "digest": "49d648cc9cef7a19ab0f031bbd9d32bb80515097dc8a86283bcaa3370049828e",
+   "issue": "LEAN-339",
+   "due": "2026-11-30"
+  },
+  "Claims.Recursion.Scope": {
+   "owner": "@lean",
+   "digest": "45f9421e121745700e6942d6b8503bb470de24729ea9e92f18eb53ae06b88bc5",
+   "issue": "LEAN-339",
+   "due": "2026-11-30"
+  },
   "Claims.Sampling.InScopeTwo": {
    "owner": "@proofs",
    "digest": "54d52ad10bb17118bb32e7c108b7b17656ea700c2e9d8830a07c2d76473e2c0c",
@@ -905,6 +923,12 @@
    "owner": "@proofs",
    "digest": "43d9f7f1ec797d053bee277c545d0ca0dc942216addeaab9c7e4e9f3ebb5781b",
    "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "FlockComplete.RegionsFit": {
+   "owner": "@lean",
+   "digest": "546678e83deeb19adf6840000481c3dbe8914bb0fa24b91fa31b65ef5b1f4874",
+   "issue": "LEAN-339",
    "due": "2026-11-30"
   },
   "FlockSoundness.Assumptions.RecordCustodyExec": {
@@ -1707,6 +1731,12 @@
    "owner": "@proofs",
    "digest": "9620be11d5e3e60d98ec40800dca48a50bab6726018ca15d4f258ebfef7d8d4d",
    "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "RecDeploy.PlainLeavesAdmitted": {
+   "owner": "@lean",
+   "digest": "ea16e265ed65a03236b42fc9f4c42336cd772a7f3135ea6d37887a4097cd18ae",
+   "issue": "LEAN-339",
    "due": "2026-11-30"
   },
   "ResourceAccounting.Additive": {
