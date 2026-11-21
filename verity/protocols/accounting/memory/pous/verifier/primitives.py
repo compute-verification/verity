@@ -21,12 +21,6 @@ A node with `j` parents costs `j + 1` calls of `Π₂`.  A chaining value `h_j` 
 parent, since walking back needs the dropped `r_j`; anything that reveals a parent and also finishes the row is a whole
 call state of `2m + 512` bits, more than the two labels it yields.
 
-**Broken modes, kept for the GPU twin's mode check and the primitives' tests:** `XorSponge`, the sponge of the
-first instantiation (`s_j = Π(s_{j−1} ⊕ (B_j ‖ 0))`, rate `m`, capacity 512, a header block first), from whose states
-`Π⁻¹` recovers an absorbed parent (`lean/submissions/sponge-dense`, `dense_two_labels_from_one_state`); and
-`MiyaguchiPreneel` (`s_j = Π(x_j) ⊕ x_j`, `x_j = s_{j−1} ⊕ (B_j ‖ 0)`), whose pre-image `x_j` is a checkpoint that is
-also a masked parent.  Neither is a default anywhere.
-
 **Heuristic backend (`heuristic_arx`)**, fast on GPUs and not analysed: the overwrite chain over an ARX `Π₂`, and `P_T`
 the 5-round iterated Even–Mansour cipher `k ⊕ π₅(k ⊕ … π₁(x ⊕ k))` over five butterflies, `k = SHAKE256(0x4B || T)[0 : m]`.
 A butterfly stage `s` pairs word `i` with `j = i + 2^b`, `b = s mod ⌈log₂ N⌉`, for every `i` with bit `b` clear and
@@ -235,76 +229,6 @@ class OverwriteChain:
 
 
 @dataclass(slots=True)
-class _RateStepper:
-    """The broken rate-`m` modes: a header block, the parents newest first, the pad; `x` is the last pre-image."""
-
-    blocks: list[tuple[int, int | None]]
-    m: int
-    feed_forward: bool
-    i: int = 0
-    state: int = 0
-    x: int = 0
-    done: bool = False
-    key: int | None = None
-
-    def block(self, labels: Mapping[int, int]) -> int:
-        constant, parent = self.blocks[self.i]
-        return constant if parent is None else labels[parent]
-
-    def query(self, labels: Mapping[int, int]) -> Query:
-        self.x = self.state ^ self.block(labels)
-        return PiQuery(self.x)
-
-    def feed(self, answer: int) -> None:
-        self.state = answer ^ self.x if self.feed_forward else answer
-        self.i += 1
-        if self.i == len(self.blocks):
-            self.done, self.key = True, self.state & mask(self.m)
-
-
-@dataclass(frozen=True, slots=True)
-class XorSponge:
-    """**Broken.** The first instantiation's sponge: `s_j = Π(s_{j−1} ⊕ (B_j ‖ 0))` over `pi` of `m + 512` bits, zero
-    IV, blocks the header (zero-filled to `m`), the parents newest first and the pad; the key is the rate.  One state
-    regenerates two labels through `Π⁻¹`."""
-
-    params: Params
-    pi: Permutation
-    name: str = "pous-p3-v1-H/xor-sponge-broken"
-    feed_forward = False
-
-    def __post_init__(self) -> None:
-        if self.pi.width != self.params.m + CAPACITY_BITS:
-            raise ValueError(f"the sponge needs a permutation of m + {CAPACITY_BITS} bits")
-        if self.params.m % 8 or self.params.m // 8 < len(HEADER) + 36:
-            raise ValueError("the sponge's rate must be whole bytes and hold its 48-byte header")
-
-    def stepper(self, tag: int, layer: int, node: int, parents: Sequence[int]) -> _RateStepper:
-        blocks = ([(int.from_bytes(header(tag, layer, node, len(parents)), "little"), None)]
-                  + [(0, u) for u in sorted(parents, reverse=True)] + [(pad_block(self.params.m), None)])
-        return _RateStepper(blocks, self.params.m, self.feed_forward)
-
-    def steps(self, parents: Sequence[int]) -> list[tuple[int, ...]]:
-        return [()] + [(u,) for u in sorted(parents, reverse=True)] + [()]
-
-    def answer(self, q: Query) -> int:
-        if isinstance(q, PiQuery):
-            return self.pi.forward(q.x)
-        if isinstance(q, PiInvQuery):
-            return self.pi.inverse(q.y)
-        raise TypeError(f"the sponge answers Π and Π⁻¹ queries, not {type(q).__name__}")
-
-
-@dataclass(frozen=True, slots=True)
-class MiyaguchiPreneel(XorSponge):
-    """**Broken on band rows.** As `XorSponge`, but `s_j = Π(x_j) ⊕ x_j`: the pre-image `x_j` is a checkpoint and a
-    masked parent."""
-
-    name: str = "pous-p3-v1-H/miyaguchi-preneel-broken"
-    feed_forward = True
-
-
-@dataclass(slots=True)
 class _OneQuery:
     tag: int
     layer: int
@@ -379,7 +303,7 @@ def _check_width(width: int, x: int) -> None:
 
 @dataclass(frozen=True, slots=True)
 class FeistelPi:
-    """`Π₂` (or the broken modes' `Π`): Feistel10 on `width` bits, untweaked, domain byte 0x48."""
+    """`Π₂`: Feistel10 on `width` bits, untweaked, domain byte 0x48."""
 
     width: int
     name: str = "feistel10-shake256-pi/v1"
