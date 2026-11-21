@@ -63,7 +63,7 @@ served checks are depends on the shape's Definitions, which the group's premise
 
 namespace ResourceAccounting.TS.Group
 
-open ResourceAccounting.TS ResourceAccounting.TS.Checked ResourceAccounting.TS.Lanes Flock.SoundAtBridge FlockSoundness.Discharge.ZkReg
+open ResourceAccounting.TS ResourceAccounting.TS.Lanes Flock.SoundAtBridge FlockSoundness.Discharge.ZkReg
 open Pouw.RelativeSecurity (Paths)
 
 /-- **A leaf's group of statements**: lane `l`'s chunk `c` (`some (l, c)`) for `L` lanes of `n` chunks, then the

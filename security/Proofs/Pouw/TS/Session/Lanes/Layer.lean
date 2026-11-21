@@ -96,7 +96,7 @@ receipt words are `BitVec 32`. These definitions sit beside the checked layer's,
 
 namespace ResourceAccounting.TS.Lanes
 
-open ResourceAccounting.TS ResourceAccounting.TS.Checked Flock.SoundAtBridge FlockSoundness.Discharge.ZkReg
+open ResourceAccounting.TS Flock.SoundAtBridge FlockSoundness.Discharge.ZkReg
 open Pouw.RelativeSecurity (Paths)
 
 /-- Lane `l`'s row at row slot `s < 4`: `g + 8s` with `g = ⌊l/4⌋`. -/

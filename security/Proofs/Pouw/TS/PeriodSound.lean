@@ -15,7 +15,8 @@ public import Proofs.Flock.Soundness.Discharge.Composed.SampledJ
 public import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 public import Proofs.Flock.Soundness.Registered.Binding
 public import Proofs.Flock.SoundAtBridge.Reduce
-public import Proofs.Pouw.TS.Session.Assumptions
+public import Proofs.Flock.C3.Compose.RowsReg
+public import Proofs.Flock.SoundAtBridge.Served
 public import Proofs.Pouw.FillerLuck
 public import Proofs.Pouw.MonitoringPeriod.Honest
 
@@ -73,28 +74,6 @@ theorem CheckProofSystemSound : Properties.Certifier.JointBridge.CheckProofSyste
 
 open Flock.SoundAtBridge
 open scoped ENNReal
-
-/-- **`ServiceSound` from a window's Flock sessions**: when the check layer's proofs are Flock sessions `sess` that
-meet `ResourceAccounting.Guarantees.TS.SessionSoundAt`'s named premises, the check accepts a window and some sampled proof block fails
-its relation with probability at most `n_π · (δ_s + δ)`. -/
-theorem serviceSound_of_sessions {C Ξ V : Type} [Fintype C] [Fintype Ξ] {m Np n nπ : ℕ} (p : PouwVerifier.Params)
-    (ws : Properties.Pouw.MonitoringPeriod.Executions (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n)
-    (opened : Paths (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → ℕ → ℕ → V)
-    (rel : Paths (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → Fin Np → (ℕ → V) → Prop)
-    (sessOf : Paths (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → Fin Np → Fin nπ)
-    (sess : Paths (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → Fin nπ → RowsSession)
-    (out : ∀ x w i, (sess x w i).Out) (rows : ∀ s : RowsSession, (Fin s.Circ.N → Bool) → ℕ → ℕ → V)
-    (δs δ : ℝ)
-    (hCR : ∀ x w i, (sess x w i).CR)
-    (hAcc : ResourceAccounting.Assumptions.TS.AcceptedLive (checkLayer p ws opened rel sessOf) sess out)
-    (hSamplingDesign : ResourceAccounting.Assumptions.TS.ExecutionPhaseDesign sess out)
-    (hChk : ResourceAccounting.Assumptions.TS.ServedChecksHold (checkLayer p ws opened rel sessOf) sess out rows)
-    (hLink : ResourceAccounting.Assumptions.TS.ServedRootsLinked (checkLayer p ws opened rel sessOf) sess out rows δs)
-    (hδ : ∀ x w i, ((sess x w i).n : ℝ≥0∞) * (sess x w i).bound ≤ ENNReal.ofReal δ) (hδ0 : 0 ≤ δ) :
-    Properties.Pouw.MonitoringPeriod.ServiceSound p ws opened rel (nπ * (δs + δ)) :=
-  ResourceAccounting.SecurityProofs.Bridge.CheckProofSystemSound p ws opened rel sessOf (δs + δ)
-    (ResourceAccounting.SecurityProofs.TS.SessionSoundAt (checkLayer p ws opened rel sessOf) sess out rows δs δ hCR hAcc hSamplingDesign
-      hChk hLink hδ hδ0)
 
 open Properties.Pouw.MonitoringPeriod Properties.Pouw.MonitoringPeriod.SecurityProofs.HonestH1
 

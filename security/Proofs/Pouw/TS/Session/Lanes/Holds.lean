@@ -52,7 +52,7 @@ field's bits hold the encoding of the leaf's word there, and the words are in ra
 
 namespace ResourceAccounting.TS.Lanes
 
-open PouwWindow.Lanes Flock.SoundAtBridge ResourceAccounting.TS.Checked
+open PouwWindow.Lanes Flock.SoundAtBridge
 
 /-- **An A or B row is in range**: s8 codes, and its scale's encoding a u32. -/
 structure RowInRange {K : ℕ} (r : Row K) : Prop where

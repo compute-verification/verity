@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Flock.SoundAtBridge.Union
+public import Definitions.Pouw.TS.ProofLayer
 public import Proofs.Flock.SoundAtBridge.Session
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic

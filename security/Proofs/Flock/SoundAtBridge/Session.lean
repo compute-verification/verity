@@ -124,12 +124,6 @@ theorem hc : HmOut.parse (zkTags s.I) s.I.circuitFile s.I.tables = .ok s.c := Fl
 /-- The session's outcome: the registration, the sample and the transcript. -/
 abbrev Out : Type := s.Reg × Finset (Fin s.n) × Discharge.Exec.Transcript
 
-/-- The verifier's sample. -/
-abbrev L := SamplingDesign.execOS (n := s.n) s.src (.subset s.kd) s.n
-
-/-- The live audit. -/
-abbrev G : Game s.Out := auditLive s.L s.Reg (liveOfZJ s.dg (planZHJ s.dj s.y₀) s.N s.wr)
-
 /-- The key program's partition. -/
 abbrev P := (keyProg s.c s.hU s.n).partition (Discharge.Layout.outsOf s.c s.hU s.n)
 
@@ -164,29 +158,6 @@ def RowsAt (o : s.Out) (u : Fin s.n) : Prop :=
   RowsRightZC execArith hs512 s.P (planZHJ s.dj s.y₀) (tabZHJ s.dj s.y₀) s.vb (reg s.σ) (cont s.σ)
     (fun p => OwnReadsHJ s.I s.own s.c s.pub o.2.2 (s.rdU u).isRead (s.rdU u).port (s.rdU u).readAt ∧
       (s.rdU u).isRead p) (s.wo u) s.k s.Rw u
-
-/-- **`EndToEndRegisteredRows`' named assumptions at every unit's opening**: `cr/sha-512` for each table's knowledge
-finders (`TableCRZ`), `ecr/sha-512` for the link finders (`LinkCRZC`), and, at each unit's opening `rdU u`,
-`ecr/sha-512` for its rows finders (`RowsCRZC`) and `cr/sha-512` at `qR` for its registered reads' finder. -/
-def CR : Prop :=
-  (∀ ω j, TableCRZ execArith hs512 (planZHJ s.dj s.y₀ (s.L.draw ω) (reg s.σ)) j
-      (zcStrat execArith hs512 (planZHJ s.dj s.y₀) (cont s.σ ω)) s.qF s.qS) ∧
-    LinkCRZC execArith hs512 s.P (planZHJ s.dj s.y₀) (tabZHJ s.dj s.y₀) s.vb (reg s.σ) (cont s.σ) s.k s.Rw s.M s.t' ∧
-    (∀ u, RowsCRZC execArith hs512 s.P (planZHJ s.dj s.y₀) (tabZHJ s.dj s.y₀) s.vb (reg s.σ) (cont s.σ)
-      (s.rdU u).isRead (s.wo u) s.k s.Rw s.t') ∧
-    (∀ u, (StrictCR.oneRun s.G s.τ fun o => (s.rdU u).pick o.1 (regPathsHJ s.I s.c s.pub o.2.2 (s.rdU u).port)).CR
-      H512 s.qR)
-
-/-- `ε_bind`'s closed form (also `δ_rows`'). -/
-def εbind : ℝ :=
-  (∑ p : s.vb.Pos,
-      (Fintype.card (ΩcZ execArith s.P (planZHJ s.dj s.y₀) (tabZHJ s.dj s.y₀) s.vb s.L p) : ℝ) / Fintype.card s.L.Ω) *
-    (2 * (s.t' * (1 + s.k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * s.M) + s.k / (Real.exp 1 * s.Rw)) / (1 - s.ρ)
-
-/-- **`EndToEndRegisteredRows`' bound**: `ε_ks + ε_bind + δ_rows + q_R²/2^513`. -/
-def bound : ℝ≥0∞ :=
-  ksAvgStrictZ (planZHJ s.dj s.y₀) s.L s.k s.qF s.qS (reg s.σ) + ENNReal.ofReal s.εbind + ENNReal.ofReal s.εbind +
-    ENNReal.ofReal (s.qR ^ 2 / 2 ^ (513 : ℝ))
 
 end RowsSession
 

@@ -1,7 +1,6 @@
 module
 
 public import Proofs.Pouw.TS.Session.Group.Layer
-public import Proofs.Pouw.TS.Session.Assumptions
 public import Proofs.Flock.SoundAtBridge.Served
 public import Proofs.Pouw.TS.Session.Lanes.Decode
 public import Proofs.Flock.EndToEndRegistered
@@ -104,13 +103,13 @@ end Flock.SoundAtBridge.RowsSession
 
 namespace ResourceAccounting.TS.Lanes
 
-open ResourceAccounting.TS.Checked Flock.SoundAtBridge
+open Flock.SoundAtBridge
 
 end ResourceAccounting.TS.Lanes
 
 namespace ResourceAccounting.TS.Group
 
-open ResourceAccounting.TS ResourceAccounting.TS.Checked ResourceAccounting.TS.Lanes Flock.SoundAtBridge FlockSoundness.Discharge.ZkReg
+open ResourceAccounting.TS ResourceAccounting.TS.Lanes Flock.SoundAtBridge FlockSoundness.Discharge.ZkReg
 open Pouw.RelativeSecurity (Paths)
 open scoped ENNReal
 

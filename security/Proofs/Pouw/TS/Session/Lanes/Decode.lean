@@ -65,7 +65,7 @@ known values' content is verity-verify-proof's to check (`Lanes.KnownRead`).
 
 namespace ResourceAccounting.TS.Lanes
 
-open PouwWindow.Lanes Flock.SoundAtBridge ResourceAccounting.TS.Checked
+open PouwWindow.Lanes Flock.SoundAtBridge
 open FlockSoundness.Discharge.Layout (keyN keyRowOf portRowW)
 
 open Classical in

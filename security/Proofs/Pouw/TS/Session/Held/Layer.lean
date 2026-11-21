@@ -1,7 +1,11 @@
 module
 
 public import Proofs.Flock.SoundAtBridge.Session
-public import Proofs.Pouw.TS.Session.Assumptions
+public import Proofs.Flock.C3.Compose.RowsReg
+public import Proofs.Flock.EndToEndRegistered
+public import Proofs.Flock.SoundAtBridge.Reduce
+public import Proofs.Flock.SoundAtBridge.Served
+public import Proofs.Flock.SoundAtBridge.Statement
 public import Proofs.Pouw.TS.Session.Held.Known
 public import Definitions.ResourceAccounting.Served
 public import Batteries.Data.ByteArray
@@ -38,34 +42,23 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
 /-!
-# A checked unit's proof layer with its served checks, through its Flock sessions
+# A checked unit's `ok` rows at its Flock sessions
 
-`ResourceAccounting.TS.Checked.checkedLayer`'s relation asks only that a port named `ok` exist. This layer, at the same
-sessions, takes two steps further:
-
-* (a) **The `ok` rows are the verifier's.** verity-verify-proof `--registered F` registers the `ok` port at known content
-  (`Registered.KNOWN_KEY`: h1_prove's rows, each the one word `1` under the public `ok_salt`), and refuses a file whose
-  `ok` root is not the root of those rows (`Registered.checkKnownAll`). The layer's acceptance is verity-verify-proof's,
-  that check included. On an accepted session the registrant's row at every read of a port named `ok` has the
-  `sha512/row/v2` bytes of the word `1` (`OkVal`), or the registrant's openings exhibit a SHA-512 collision
-  (`OkColl`, a fact of the session's commit-time openings, with both preimages in hand: `FlockC3.RegLevels.knownColl`);
-* (b) **The served checks hold.** The relation (`HeldRel`) is `CheckedRel` and, unless `OkColl`, an assignment the
-  circuit's evaluation agrees with on every sampled proof block's wires at which every sampled proof block's checks hold in the registered
-  circuit (`ResourceAccounting.Served.Held` of `Cd`, at the unit `unitOf u` and the values `dec vals`).
-
-What ties the Flock circuit to `Cd` is the premise `ResourceAccounting.Assumptions.TS.OkRealizes`: on an assignment the key
-program's evaluation agrees with at unit `u`, whose `ok` wires carry the `ok` row, `Cd`'s checks of `unitOf u` hold.
-Unit `u` of the session is one unit of `Cd`, and its partials are proof-layer values.
+verity-verify-proof `--registered F` registers the `ok` port at known content (`Registered.KNOWN_KEY`: h1_prove's rows,
+each the one word `1` under the public `ok_salt`), and refuses a file whose `ok` root is not the root of those rows
+(`Registered.checkKnownAll`). On an accepted session the registrant's row at every read of a port named `ok` has the
+`sha512/row/v2` bytes of the word `1` (`OkVal`), or the registrant's openings exhibit a SHA-512 collision (`OkColl`, a
+fact of the session's commit-time openings, with both preimages in hand: `FlockC3.RegLevels.knownColl`).
 
 These definitions read `RowsSession`, in the proofs package, so they sit here under `reads_exempt`'s
-`Proofs.Pouw.TS.Session`, as `ResourceAccounting.TS.Checked`'s do.
+`Proofs.Pouw.TS.Session`.
 -/
 
 @[expose] public section
 
 namespace ResourceAccounting.TS.Held
 
-open ResourceAccounting.TS ResourceAccounting.TS.Checked Flock.SoundAtBridge FlockSoundness.Discharge.ZkReg
+open ResourceAccounting.TS Flock.SoundAtBridge FlockSoundness.Discharge.ZkReg
 open Pouw.RelativeSecurity (Paths)
 open FlockSoundness.Refine (H512)
 

@@ -70,11 +70,11 @@ a token, so `Proofs/ResourceAccounting.lean` imports it.
 
 namespace ResourceAccounting.TS.Lanes
 
-open ResourceAccounting.TS.Checked Flock.SoundAtBridge
+open Flock.SoundAtBridge
 
 end ResourceAccounting.TS.Lanes
 
-open ResourceAccounting.TS ResourceAccounting.TS.Checked ResourceAccounting.TS.Lanes Flock.SoundAtBridge PouwWindow.Lanes
+open ResourceAccounting.TS ResourceAccounting.TS.Lanes Flock.SoundAtBridge PouwWindow.Lanes
 
 /-- **Option A's known content is the group layer's form**: statement `k`'s known rows at the public inputs `P`
 (`knownOf`, `PouwWindow.Lanes.knownRows`) are its other known rows (lane `l`'s `admit` and `pub`, the combine's none)
