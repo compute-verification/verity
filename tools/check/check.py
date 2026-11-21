@@ -2933,7 +2933,7 @@ def _env_key(e: dict[str, str]) -> dict[str, str]:
 
 def agreement_key(e: dict[str, str]) -> str | None:
     """What the agreement job reads: the tracked files `agreement_closure` names (verity/protocols/proof/flock/prover/agreement/: `ci.py` and the scripts
-    it runs, which import only the standard library and each other, `upstream.json` pinning the upstream build,
+    it runs, which import only the standard library and each other and load `AGREEMENT_READS` by path, `upstream.json` pinning the upstream build,
     the inputs and the job's settings; and the Lean packages `verity-verify-proof` is built from, verity/protocols/proof/flock/verifier/ and
     the packages of the tree it requires by path, their sources and toolchain pins), the interpreter and the platform.  None
     when the tree's files cannot be listed."""
@@ -2998,8 +2998,13 @@ def lints_key(e: dict[str, str]) -> str | None:
 STEP_KEYS = {"lean-agreement": agreement_key, "flock-rust-tests": rust_tests_key, "preflight-lints": lints_key}
 
 
+#: what the agreement's scripts read from outside verity/protocols/proof/flock/prover/agreement/, each by path
+#: (`agreement/record_text.py` loads it)
+AGREEMENT_READS = ("verity/protocols/proof/flock/prover/python/verity_flock/record_text.py",)
+
+
 def agreement_closure(files: list[str]) -> list[str]:
-    """The tracked files the agreement job can read: verity/protocols/proof/flock/prover/agreement/, the verifier's Lean package and the
+    """The tracked files the agreement job can read: verity/protocols/proof/flock/prover/agreement/, `AGREEMENT_READS`, the verifier's Lean package and the
     packages of the tree it requires by path (`required_in_tree`), which its executable is built from; less any Lake package
     nested in the verifier's directory that the verifier doesn't require (the σ-lift check's difftest, `sigma/`, which
     requires the verifier), since Lake builds the verifier without reading it; less each of those packages'
@@ -3015,8 +3020,8 @@ def agreement_closure(files: list[str]) -> list[str]:
                    if (ROOT / (d := f.rsplit("/", 1)[0] + "/")).resolve() not in required)
     packages = (lean, *required_in_tree(lean))
     locks = {p + "lean-audit.json" for p in packages}
-    return [f for f in files if f.startswith((pre, *packages)) and f not in locks and not f.startswith(nested or ("\0",))
-            and not f.endswith(".md")]
+    return [f for f in files if (f.startswith((pre, *packages)) and f not in locks and not f.startswith(nested or ("\0",))
+            and not f.endswith(".md")) or f in AGREEMENT_READS]
 
 
 #: the repository-wide lints the preflight runs: each fails a whole check, and together they take seconds

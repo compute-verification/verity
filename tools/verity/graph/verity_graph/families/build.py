@@ -55,6 +55,9 @@ SUITES_DISK_GB = 60
 #: where lean-build's output holding the rest of its build (`lean_build.TREE`: each `.lake/build` but the executables) is in a work
 #: directory
 TREE_PATH = "lean-build/lake-build.tar.gz"
+#: what the agreement's scripts read from outside their directory, by path: `check.AGREEMENT_READS`, which
+#: `tests/tools/verity/graph/test_build.py` holds this to
+AGREEMENT_READS = ("verity/protocols/proof/flock/prover/python/verity_flock/record_text.py",)
 #: what `check.py --lean-agreement` reads of the tree outside the verifier's directory: check.py, the modules it loads as it
 #: starts (suites.py's suite layout rule among them) and the job declaration and policy they read, with the Slack registry the
 #: declaration checks its handles against (`tests/test_build.py` holds this list to what an audit hook sees it open)
@@ -215,7 +218,7 @@ def tasks(root: Path, files: list[str]) -> list[dict]:
                     "about": "agree with upstream's Rust verifier on the pinned upstream build and inputs (ci.py)",
                     "vars": {"verify": f"{bin_}/verity-verify-proof"},
                     "inputs": sorted({*(f for f in files if f.startswith(VERIFIER + "/") and not f.endswith(".md")),
-                                      *(f for f in CHECK_READS if f in files)}),
+                                      *(f for f in (*AGREEMENT_READS, *CHECK_READS) if f in files)}),
                     "reads": [{"task": build, "output": "verity-verify-proof"}],
                     "outputs": [{"name": "sets", "path": "flock-agreement/ci/sets.json"}]})
     return out + suite_tasks(root, files, build, bin_, exes)
