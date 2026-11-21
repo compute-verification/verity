@@ -1551,6 +1551,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     result["checks_before_draw"] = checks
     result["case_v2"] = case_written(out)
     members_lean(out, result, pm)
+    one_statement_held(result, rec, members, pm)
     if after:
         result["checks_after_draw"] = after
     (out / "audit.json").write_text(json.dumps(result, indent=1, sort_keys=True, default=str))
@@ -1747,6 +1748,24 @@ def case_written(out: Path) -> dict:
         return {"written": True}
     said = next((out / f for f in ("case-v2-error.txt", "case-error.txt") if (out / f).is_file()), None)
     return {"written": False, "why": said.read_text().strip() if said is not None else "the audit wrote none, and no reason"}
+
+
+def one_statement_held(result: dict, rec: dict, members: Sequence[dict], pm: dict | str | None) -> None:
+    """The one statement's public file held to the registration as the executable holds it (`docket.public_held`,
+    `OneStageZkStatement.publicHeld`), at the verifier's registered file its case names (`v2_proof`): an audit of one
+    member whose case is the one statement's (``pm`` none) accepts only where it holds, its verdict
+    ``result["checks"]["one_statement_public"]``."""
+    if pm is not None or len(members) != 1:
+        return
+    mm = members[0]
+    f = mm["st"].get("registered_file")
+    try:
+        v = R.public_held(rec, mm["header"], json.loads(f.read_text()) if f else None).to_json()
+    except ValueError as e:
+        v = {"ok": False, "codes": ["public"], "detail": str(e)}
+    result.setdefault("checks", {})["one_statement_public"] = v
+    if not v["ok"]:
+        result["accepted"] = False
 
 
 def members_lean(out: Path, result: dict, pm: dict | str | None,

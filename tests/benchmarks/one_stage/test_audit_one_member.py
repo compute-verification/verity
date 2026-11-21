@@ -25,6 +25,7 @@ import pytest
 
 from verity.circuits.evaluation import evaluate_batch
 from verity.commitments.periods import interface as IF
+from verity.protocols.proof.spot.verifier.one_stage import docket as R
 from verity.protocols.proof.spot.verifier.one_stage import proofs as PF
 from verity.protocols.proof.spot.prover import docket as DK
 from verity.commitments import randomness as RND
@@ -90,8 +91,38 @@ def test_one_member_on_the_windows_challenger_session_is_accepted_by_the_compile
              "commitment.bin": bytes.fromhex(case["commitment"]), "evidence.json": bytes.fromhex(case["evidence"])}
     for name, b in files.items():
         (d / name).write_bytes(b)
-    p = subprocess.run([str(PF.v2_executable()), "check", *(str(d / n) for n in files), *case["blobs"]],
-                       capture_output=True, text=True)
-    answer = json.loads(p.stdout.strip().splitlines()[-1])
-    assert (p.returncode, answer["verdict"]) == (0, "accept"), (answer, p.stderr[-2000:])
+
+    def check(params_: dict) -> tuple[int, dict, str]:
+        files["params.json"] = json.dumps(params_, sort_keys=True, separators=(",", ":")).encode()
+        (d / "params.json").write_bytes(files["params.json"])
+        p = subprocess.run([str(PF.v2_executable()), "check", *(str(d / n) for n in files), *case["blobs"]],
+                           capture_output=True, text=True)
+        return p.returncode, json.loads(p.stdout.strip().splitlines()[-1]), p.stderr[-2000:]
+
+    rc, answer, err = check(params)
+    assert (rc, answer["verdict"]) == (0, "accept"), (answer, err)
     assert answer["public"]["drawn"] == answer["public"]["proved"] == [0], answer
+
+    # the public file names the run input ports, which the registration holds only at their one tree each, and both
+    # verifiers leave each out only as the registered file reads it there
+    rec = json.loads(bytes.fromhex(case["commitment"]))
+    registered = params["proofs"]["registered"]
+    pub, = (Path(b) for b in case["blobs"] if PF.file_sha512(Path(b)) == params["proofs"]["public"])
+    header = json.loads(pub.read_bytes().split(b"\n", 1)[0])
+    fresh = [q for q in R.fresh_reads(registered) if q in header["frame_v3"]["roots"]]
+    assert fresh, registered
+    audit = json.loads((out / "window" / "audit.json").read_text())
+    assert audit["checks"]["one_statement_public"]["ok"] is True and R.public_held(rec, header, registered).ok, audit["checks"]
+
+    # with no registered file to read them, both refuse the public file on its roots
+    assert R.public_held(rec, header, None).codes == ("roots",)
+    rc, answer, err = check({**params, "proofs": {**params["proofs"], "registered": None}})
+    assert answer["verdict"] != "accept" and "public file: not the registration's: roots" in answer["reason"], (answer, err)
+
+    # a registered file opening a run input port under another root than its tree's, so a header root over other rows
+    # than the registration's: refused by name
+    q = fresh[0]
+    other = {**registered, "ports": {**registered["ports"], q: {**registered["ports"][q], "root": "0" * 128}}}
+    rc, answer, err = check({**params, "proofs": {**params["proofs"], "registered": other}})
+    want = f"port {q} opens the committed tree {registered['ports'][q]['value']} at another root than the registration's"
+    assert answer["verdict"] != "accept" and want in answer["reason"], (answer, err)
