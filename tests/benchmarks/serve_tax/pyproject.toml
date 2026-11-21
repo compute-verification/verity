@@ -140,6 +140,8 @@ inputs = ["verity/lean_process.py", "benchmarks/serve_tax", "benchmarks/producti
     "verity/runtime",
     "verity/protocols/run/__init__.py",
     "verity/protocols/run/schemes.py",
+    # the CLI's table runs a period through `run`'s one function
+    "verity/protocols/run/period.py",
     "verity/protocols/registration",
     "verity/protocols/policy",
     "verity/protocols/accounting/compute/pouw/prover/serving/__init__.py",
