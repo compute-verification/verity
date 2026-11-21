@@ -66,7 +66,7 @@ theorem wipeMissing_spec {N k s : ℕ} (hk : 0 < k) :
 /-- **`StreamedWipeResidual`**: `streamed_wipe` at `g = N − wipeMissing N k s`, with the error split
 `2^-(s+1) + 2^-(s+1)`. -/
 theorem streamed_wipe_residual : Pous.Guarantees.StreamedWipeResidual := by
-  intro N k b s q E κ prf P hN hk hlt hq
+  intro N k b s q E κ prf P hN hk ⟨hlt, hq⟩
   obtain ⟨D, hD⟩ : ∃ D, wipeMissing N k s = D := ⟨_, rfl⟩
   have hceil := wipeMissing_spec (N := N) (s := s) hk
   unfold wipeResidual at hlt hq
