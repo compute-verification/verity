@@ -19,7 +19,6 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.evaluation import bits as EB
 from verity.circuits.defs import bind
 from verity.commitments import registered_value as RV
-from verity.commitments.crypto import lms as R
 from verity.commitments.gates.embedding import MAX_V, opening
 from verity.commitments.periods.interface import Circuit, Read, Registered, Table, TableOpening, TableRead, Window, Wire
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
@@ -28,12 +27,13 @@ from . import session_circuit
 from . import setup_circuit as SC
 from .setup_proof import SALT, SALT_MARK, payload_bytes, place, setup_unit, unit_inputs
 
-#: the store, one registered value, and its table of one block a row; W's rows; the memory attester's public key
-STORE, STORE_TABLE, WEIGHTS, ATTESTER_KEY = "store", "store/blocks", "weights", "attester-key"
+#: the store, one registered value, and its table of one block a row; W's rows; the session record's salt, the memory
+#: attester's draw, which the prover commits as it receives it
+STORE, STORE_TABLE, WEIGHTS, SESSION_SALT = "store", "store/blocks", "weights", "session-salt"
 #: the units of a proof block of the setup's C: one store block each
 CAP = 1
 #: the session's supplied inputs (`coin_bound`): round j's coin value is ``ROUND_COIN/j``
-ROUND_COIN, SESSION_HEADER, SESSION_CONTEXT = "round-coin", "session-header", "session-context"
+ROUND_COIN, SESSION_HEADER, SESSION_CONTEXT, SESSION_MESSAGE = "round-coin", "session-header", "session-context", "session-message"
 
 
 def store_table(blocks: int, words: int) -> Table:
@@ -139,15 +139,19 @@ def coin_bound(k: int, head: int, rounds: Sequence[str], opener: str, digest: st
     j, 96 bits, ``u32be(j) ‖ u64be(i_j)``) under ``halves``, three 32-bit leaves (``j``, ``ihi``, ``ilo``), since the
     opening's key is a 32-bit leaf: round j's unit reads them whole as its ``j``, ``ihi`` and ``ilo`` and round j's
     opening reads ``ilo`` (16-bit leaves 4 and 5) as its key; and the signed header (``pous.session.header/v1`` at
-    its ``head`` bytes) and context (``pous.session.context/v1``, 848 bits) under ``le``, which the digest's unit reads.
+    its ``head`` bytes), context (``pous.session.context/v1``, 848 bits) and message (``pous.session.message/v1``, the
+    512-bit m the auditor verified the signature over) under ``le``, which the digest's unit reads.
     ``rounds`` is the round templates' ids by slot. `session_units` passes the marks as the registration's
     ``supplied``, so the verifier computes each value and the prover chooses none of it."""
-    params = {SESSION_HEADER: session_circuit.head_bytes(head) // 2, SESSION_CONTEXT: session_circuit.CTX_BYTES // 2}
-    reads = [Read(digest, "head", SESSION_HEADER, 0, (1,), 0, (0,)), Read(digest, "ctx", SESSION_CONTEXT, 0, (1,), 0, (0,))]
+    params = {SESSION_HEADER: session_circuit.head_bytes(head) // 2, SESSION_CONTEXT: session_circuit.CTX_BYTES // 2,
+              SESSION_MESSAGE: 32}
+    reads = [Read(digest, "head", SESSION_HEADER, 0, (1,), 0, (0,)), Read(digest, "ctx", SESSION_CONTEXT, 0, (1,), 0, (0,)),
+             Read(digest, "m", SESSION_MESSAGE, 0, (1,), 0, (0,))]
     marks = {SESSION_HEADER: {"supplied": "pous.session.header/v1", "args": {"head": head}, "layout": "le",
                               "bits": 8 * session_circuit.head_bytes(head)},
              SESSION_CONTEXT: {"supplied": "pous.session.context/v1", "args": {}, "layout": "le",
-                               "bits": 8 * session_circuit.CTX_BYTES}}
+                               "bits": 8 * session_circuit.CTX_BYTES},
+             SESSION_MESSAGE: {"supplied": "pous.session.message/v1", "args": {}, "layout": "le", "bits": 512}}
     for j in range(k):
         p = f"{ROUND_COIN}/{j}"
         params[p] = 6
@@ -158,37 +162,37 @@ def coin_bound(k: int, head: int, rounds: Sequence[str], opener: str, digest: st
     return params, tuple(reads), marks, formats
 
 
-def session_units(k: int, head: int, limit_ns: int, block_bytes: int, blocks: int, params: R.Params = R.DEPLOYED) -> Circuit:
+def session_units(k: int, head: int, limit_ns: int, block_bytes: int, blocks: int) -> Circuit:
     """A session of ``k`` rounds over a store of ``blocks`` blocks of ``block_bytes`` bytes, as units of the registered
     circuit, in the order its wires run (each writer before its readers):
 
-        PousSessionDigest_v1{k, head, limit_ns}  1 unit    (head, ctx, the records rows) -> (ok, m, the records rows)
-        PousSessionSig_v1{N, W, H}               1 unit    key: the registered key; m: the digest's m by wire
+        PousSessionDigest_v2{k, head, limit_ns}  1 unit    (head, ctx, salt, m, the records rows) -> (ok, the records rows)
         EmbeddingRead_v3{blocks, block_bytes/2}  k units   round j's opening of the store's table at its index
-        PousRound_v2{block_bytes, 0}             ⌈k/2⌉     round j = 2u: records row u by wire, row and verdict from opening j
-        PousRound_v2{block_bytes, 1}             ⌊k/2⌋     round j = 2u + 1: the same, at the record's second slot
+        PousRound_v3{block_bytes, 0}             ⌈k/2⌉     round j = 2u: records row u by wire, row and verdict from opening j
+        PousRound_v3{block_bytes, 1}             ⌊k/2⌋     round j = 2u + 1: the same, at the record's second slot
 
-    The store (`store_table`, the setup's one) and the key are registered values; the coins' are `coin_bound`'s. An
-    index past the store's blocks, or a row that doesn't open, gives its opening a verdict word of 0 (`gates.embedding`),
-    which the round requires to be 1; the verifier also holds every round's index below the store's blocks in the clear
-    (`session_proofs.clear_reasons`)."""
+    The store (`store_table`, the setup's one) and the record's salt (``session-salt``, 32 words) are registered values;
+    the coins', the header's, the context's and m's are `coin_bound`'s. The digest's unit holds m, which the auditor
+    verified the signature over in the clear under the pinned key (`session_proofs.clear_reasons`), to the salt and the
+    records the rounds read. An index past the store's blocks, or a row that doesn't open, gives its opening a verdict word
+    of 0 (`gates.embedding`), which the round requires to be 1; the verifier also holds every round's index below the
+    store's blocks in the clear (`session_proofs.clear_reasons`)."""
     dig = bind(session_circuit.PousSessionDigest, K=k, HEAD=head, LIMIT=limit_ns)
-    sig = bind(session_circuit.PousSessionSig, N=params.N, W=params.W, H=params.H)
     opener = opening(blocks, block_bytes // 2)
     slots = [(bind(session_circuit.PousRound, N=block_bytes, SLOT=s), (k - s + 1) // 2) for s in (0, 1)]
     slots = [(t, n) for t, n in slots if n]
-    d, g, o = (descriptor_id(t) for t in (dig, sig, opener))
-    wires = [Wire(g, "m", d, "o1", 0, (1,), 0, (0,))]
+    d, o = (descriptor_id(t) for t in (dig, opener))
+    wires = []
     for s, (t, n) in enumerate(slots):
         r = descriptor_id(t)
-        wires += [Wire(r, "records", d, f"o{2 + u}", u, (1,), 0, (0,)) for u in range(n)]
+        wires += [Wire(r, "records", d, f"o{1 + u}", u, (1,), 0, (0,)) for u in range(n)]
         wires += [Wire(r, "row", o, "o0", 0, (n,), s, (2,)), Wire(r, "ok", o, "o1", 0, (n,), s, (2,))]
     coins, reads, marks, formats = coin_bound(k, head, [descriptor_id(t) for t, _ in slots], o, d)
     registered = Registered(
-        {STORE: blocks * block_bytes // 2, ATTESTER_KEY: (16 + params.N) // 2, **coins},
+        {STORE: blocks * block_bytes // 2, SESSION_SALT: session_circuit.SALT_BYTES // 2, **coins},
         tables=(store_table(blocks, block_bytes // 2),),
-        reads=(Read(g, "key", ATTESTER_KEY, 0, (1,), 0, (0,)), *reads),
+        reads=(Read(d, "salt", SESSION_SALT, 0, (1,), 0, (0,)), *reads),
         roots=(TableRead(o, "root", STORE_TABLE, "root", 0, k), TableRead(o, "domain", STORE_TABLE, "domain", 0, k)),
         openings=(TableOpening(o, STORE_TABLE, "tok", ("row", "salt", "path"), "o1", 0, k, row="o0"),), formats=formats,
         supplied=marks)
-    return Circuit("pous-session", ((dig, 1), (sig, 1), (opener, k), *slots), wires=tuple(wires), registered=registered)
+    return Circuit("pous-session", ((dig, 1), (opener, k), *slots), wires=tuple(wires), registered=registered)

@@ -41,6 +41,7 @@ import functools
 import json
 import os
 import re
+import signal
 import subprocess
 import tempfile
 from collections.abc import Callable, Iterator, Sequence
@@ -137,8 +138,18 @@ def build(package: Path, exe: str) -> Path:
         except FileNotFoundError:
             raise BuildError(f"lake is not on the PATH, so {exe} in {package} cannot be built") from None
     if p.returncode != 0:
-        raise BuildError(f"lake build {exe} in {package} failed ({p.returncode}):\n{p.stdout}{p.stderr}")
+        raise BuildError(f"lake build {exe} in {package} failed ({p.returncode}); the last {BUILD_TAIL} bytes of its stdout:\n"
+                         f"{_tail(p.stdout)}\nand of its stderr:\n{_tail(p.stderr)}")
     return package / ".lake" / "build" / "bin" / exe
+
+
+#: how much of each of Lake's output streams a failed build's error keeps, from its end
+BUILD_TAIL = 4000
+
+
+def _tail(text: str) -> str:
+    raw = text.encode("utf-8", "replace")
+    return raw.decode("utf-8", "replace") if len(raw) <= BUILD_TAIL else "…" + raw[-BUILD_TAIL:].decode("utf-8", "replace")
 
 
 #: a line Lean's runtime writes on a panic or an abort: ``PANIC at DECL MODULE:LINE:COL: MSG`` (`mkPanicMessageWithDecl`),
@@ -149,7 +160,15 @@ PANIC = re.compile(r"^(?:(?:INTERNAL )?PANIC\b.*|Error: index out of bounds|Erro
                    r"|`Task\.get` called from a `\(sync := true\)` task|Stack overflow detected\. Aborting\."
                    r"|LEAN ASSERTION VIOLATION)$", re.M)
 LEAN_PANIC = "lean-panic: the Lean verifier wrote a panic: its answer is not read"
+LEAN_EXIT = "lean-exit: the Lean verifier ended with a status it does not document: its answer is not read"
 ABORT_ON_PANIC = "LEAN_ABORT_ON_PANIC"
+
+
+def _exit_why(code: int) -> str:
+    """`LEAN_EXIT`, then how a Lean process that did not end with status 0 ended: killed by a signal, or at a status."""
+    if code < 0 and -code in signal.valid_signals():
+        return f"{LEAN_EXIT}: killed by {signal.Signals(-code).name}"
+    return f"{LEAN_EXIT}: status {code}{' (abort)' if code == 128 + signal.SIGABRT else ''}"
 
 
 class Server:
@@ -161,6 +180,7 @@ class Server:
         self.argv = list(argv)
         self._proc: subprocess.Popen | None = None
         self._stderr = None
+        self._exit_why: str | None = None
 
     def _start(self) -> subprocess.Popen:
         self._stderr = tempfile.TemporaryFile("a+b")
@@ -184,7 +204,8 @@ class Server:
             self._dead()
             raise ProtocolError(f"{LEAN_PANIC}: {panic.group(0)}")
         if not reply.endswith("\n"):
-            raise ProtocolError(f"{self.argv[0]} ended on {line}: {self._dead()}")
+            dead = self._dead()
+            raise ProtocolError(f"{self.argv[0]} ended on {line}: {self._exit_why or ''}{dead}")
         reply = reply[:-1]
         try:
             msg = json.loads(reply)
@@ -217,6 +238,7 @@ class Server:
         if proc.stdin:
             proc.stdin.close()
         code = proc.wait()
+        self._exit_why = None if code == 0 else _exit_why(code) + "; "
         self._stderr.seek(0)
         err = self._stderr.read().decode("utf-8", "replace")
         self._stderr.close()
@@ -225,6 +247,25 @@ class Server:
     def close(self) -> None:
         if self._proc is not None:
             self._dead()
+
+    def close_checked(self) -> None:
+        """End of input, then the process's end, waited for (an event, no clock): refused by name (`ProtocolError`) where
+        the process wrote a panic line while it ended, or ended with a status but 0, whatever it answered before. For a
+        caller that reads a verdict from this server and uses it only once the server has ended cleanly; `close` is for
+        one that does not."""
+        proc, self._proc = self._proc, None
+        if proc is None:
+            return
+        proc.stdin.close()
+        proc.stdout.read()
+        code = proc.wait()
+        self._stderr.seek(0)
+        err = self._stderr.read().decode("utf-8", "replace")
+        self._stderr.close()
+        if (panic := PANIC.search(err)) is not None:
+            raise ProtocolError(f"{LEAN_PANIC}: {panic.group(0)}")
+        if code != 0:
+            raise ProtocolError(_exit_why(code))
 
     def __enter__(self) -> Server:
         return self

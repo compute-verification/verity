@@ -37,7 +37,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "advice": ("verity_vllm.pipeline.advice", "a served run's advice (I1) for the precommitted compiler, from its step trace and Commit record"),
     "block-counts": ("verity_vllm.program.predict.block_counts", "a day's (c, k)-inference blocks from its served windows' circuit records, judged against its declared n: the judgment public, the counts private"),
     "build": ("verity_vllm.pipeline.build", "derive one request wrapper's Program (Build step)"),
-    "commit-arb": ("verity_vllm.pipeline.commit_arb", "the served Commit under seeded varied traffic, each request's record held to its streamed ids"),
+    "close-record": ("verity_vllm.program.predict.close_plan", "a served window's record after the card is released, from the handoff its close left"),
     "epoch": ("verity_vllm.pipeline.epoch", "the re-baseline epoch's row job (job, resolve, row-state, word-check, digests, ...)"),
     "fa2-tap-apply": ("verity_vllm.acquire.fa2_tap_src.apply_fa2_tap", "patch a pinned vllm-flash-attn tree into the FA2 tapped tree"),
     "fa2-tap-build": ("verity_vllm.acquire.fa2_tap_src.build_ext", "build one FA2 forward variant extension"),
@@ -55,7 +55,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "predict": ("verity_vllm.program.predict.cli", "ahead-of-time Program prediction from φ, compared with the traced Builds; a switched row's Build"),
     "served-match": ("verity_vllm.pipeline.served_match", "the Match of a served-compiled row on live data: serve committed, Build from the process's own artifact, check"),
     "served-pin": ("verity_vllm.acquire.served_artifact", "a served row's pinned compile artifact: seed a fresh Inductor dir with its autotune winners (seed), check a dir's (check)"),
-    "serve-openai": ("verity_vllm.pipeline.serve_openai", "an OpenAI-compatible HTTP server on the in-process engine, every step committed"),
+    "serve-openai": ("verity_vllm.program.predict.serve", "an OpenAI-compatible HTTP server on the in-process engine, every step committed"),
     "records": ("verity_vllm.pipeline.circuit_db",
                 ("the circuit database: a row's record and its Programs, by row id (publish, pull, capture, show, programs, fetch, "
                  "switch), and a checkpoint's staging (staged)")),

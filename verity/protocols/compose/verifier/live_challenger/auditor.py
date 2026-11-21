@@ -404,7 +404,7 @@ from verity.commitments.crypto import lms  # noqa: E402
 ZERO = "0" * 128
 PORTS = range(7811, 7900)
 MINUTES = (1, 720)
-#: the most a period-open's sample K may be (PoUW's `credit.MAX_K`)
+#: the most a period-open's sample K may be (PoUW's `window.MAX_K`)
 MAX_DRAW_K = 1 << 24
 ROOT = re.compile(r"[0-9a-f]{128}")
 PINNED = re.compile(r"[0-9a-f]{40}")

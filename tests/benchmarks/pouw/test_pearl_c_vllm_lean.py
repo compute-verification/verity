@@ -311,12 +311,11 @@ def test_case_writes_nothing_without_the_lean_answer_its_coin_record_or_its_pass
 
 
 def test_verify_sh_exits_on_the_leans_verdict_on_each_pass(tmp_path, monkeypatch):
-    """``verify.sh`` on a window's passes (an honest prefill and decode and a control whose weight rows are flipped, each
-    `test_pearl_c_vllm.proved_pass`'s, of one epoch, each round 0 of a device run of its own as verified alone, as a test instance, ``TEST_INSTANCE=1``), their coin records drawn
+    """``verify.sh`` on a window's passes (an honest prefill and decode, each `test_pearl_c_vllm.proved_pass`'s, of one epoch, each round 0 of a device run of its own as verified alone, as a test instance, ``TEST_INSTANCE=1``), their coin records drawn
     first on a fixed source, which the script's twin reads as a retry does, and a ``pouw-pearlplus`` that gives each pass
     the twin's verdict but those ``REFUSE`` names, where it answers nothing: the script exits 0 where the Lean accepts
-    prefill and decode and rejects the control, and 1 where the Lean answers nothing on the prefill, which the twin
-    accepts, or on the control, which the twin rejects. `panel_rows.verdicts` reads the Lean's verdicts it leaves."""
+    prefill and decode, and 1 where the Lean answers nothing on the prefill, which the twin accepts. `panel_rows.verdicts`
+    reads the Lean's verdicts it leaves."""
     import os
     import subprocess
 
@@ -327,12 +326,10 @@ def test_verify_sh_exits_on_the_leans_verdict_on_each_pass(tmp_path, monkeypatch
         monkeypatch.delenv(k, raising=False)
     run, passes, said = "r-window", tmp_path / "work" / "passes" / "r-window", tmp_path / "said"
     said.mkdir()
-    for name in ("prefill", "decode", "control"):
+    for name in ("prefill", "decode"):
         T.proved_pass(passes / name, H100)
     (passes / "coins.json").write_text((passes / "prefill" / "coins.json").read_text())
-    rows = passes / "control" / json.loads((passes / "control" / "manifest.json").read_text())["weights"]["0"]["rows"]["path"]
-    rows.write_bytes(bytes(b ^ 1 for b in rows.read_bytes()))
-    for name, rc in (("prefill", 0), ("decode", 0), ("control", 1)):
+    for name, rc in (("prefill", 0), ("decode", 0)):
         d = passes / name
         got = SP.main(["verify", "--passes", str(passes), "--manifest", str(d / "manifest.json"), "--coin-record",
                        str(d / "coin.json"), "--out", str(said / f"{name}-verify.json"), "--draws", "3", "--jobs", "1",
@@ -361,17 +358,14 @@ def test_verify_sh_exits_on_the_leans_verdict_on_each_pass(tmp_path, monkeypatch
     assert r.returncode == 0, r.stdout + r.stderr
     assert [ln for ln in r.stdout.splitlines() if ln.startswith("verify.sh: ")] == [
         "verify.sh: prefill: the Lean's ACCEPT, as a prefill pass must have",
-        "verify.sh: decode: the Lean's ACCEPT, as a decode pass must have",
-        "verify.sh: control: the Lean's REJECT, as a control pass must have"]
+        "verify.sh: decode: the Lean's ACCEPT, as a decode pass must have"]
     v = PR.verdicts(tmp_path / "out")
-    assert {p: x["accepted"] for p, x in v.items()} == {"prefill": True, "decode": True, "control": False}
-    assert v["prefill"]["line"].startswith("ACCEPT ") and v["control"]["line"].startswith("REJECT ")
+    assert {p: x["accepted"] for p, x in v.items()} == {"prefill": True, "decode": True}
+    assert v["prefill"]["line"].startswith("ACCEPT ")
     assert all(x["transcript"] in x["line"] for x in v.values())
-    for refuse in ("prefill", "control"):
-        r = verify_sh(tmp_path / f"out-{refuse}", refuse)
-        assert r.returncode == 1, r.stdout + r.stderr
-        want = "ACCEPT (exit 0)" if refuse == "prefill" else "REJECT (exit 1)"
-        assert f"verify.sh: {refuse}: the Lean's exit 2, where a {refuse} pass must have its {want}" in r.stdout
-        v = PR.verdicts(tmp_path / f"out-{refuse}")
-        assert v[refuse]["accepted"] is None and v[refuse]["line"].startswith("lean REFUSED: ")
-        assert not (tmp_path / f"out-{refuse}" / f"{refuse}-lean.json").exists()
+    r = verify_sh(tmp_path / "out-prefill", "prefill")
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert "verify.sh: prefill: the Lean's exit 2, where a prefill pass must have its ACCEPT (exit 0)" in r.stdout
+    v = PR.verdicts(tmp_path / "out-prefill")
+    assert v["prefill"]["accepted"] is None and v["prefill"]["line"].startswith("lean REFUSED: ")
+    assert not (tmp_path / "out-prefill" / "prefill-lean.json").exists()

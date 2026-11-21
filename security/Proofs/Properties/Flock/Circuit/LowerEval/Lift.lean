@@ -14,8 +14,8 @@ open Flock Flock.Lower Flock.Tmpl Flock.TmplValue Flock.Chain.LowerDef
 open Flock.Program hiding Form
 
 /-- **`UnitWidths`** holds. -/
-theorem unitWidths : UnitWidths := fun bytes P hd hr hov hG g k m hu hR =>
-  ⟨unitArgs_widths hd hr hov hG hu hR, unitOuts_widths hd hr hov hG hu hR⟩
+theorem unitWidths : UnitWidths := fun bytes P hd hr hG g k m hu hR =>
+  ⟨unitArgs_widths hd hr hG hu hR, unitOuts_widths hd hr hG hu hR⟩
 
 /-- **`LowerGateBodies`**: where the block's lowering (`blockTmpl`) succeeds, each Boolean Definition the nodes of a
 composite reached from the template `admitted` gives lead to evaluates through gates alone. -/
@@ -29,7 +29,7 @@ def LowerGateBodies : Prop :=
 
 /-- **`UnitComputes`**, on `UnitWordComputes`, `LiftWordEval` and `LowerGateBodies`. -/
 theorem unitComputes_of (hW : UnitWordComputes) (hL : LiftWordEval) (hLG : LowerGateBodies) : UnitComputes := by
-  intro bytes P partition cuts units S a L e t hd hr hs ha hab hl hbt hov hG hRs g hg k m hu hda Y hY
+  intro bytes P partition cuts units S a L e t hd hr hs ha hab hl hbt hG hRs g hg k m hu hda Y hY
   obtain ⟨x, f, h1, h2, -⟩ := admittedBlock_callee hab g hg k m hu
   have hdx : (P.child P.rootScope k m).d = x.fn := by
     rw [child_d]
@@ -39,9 +39,9 @@ theorem unitComputes_of (hW : UnitWordComputes) (hL : LiftWordEval) (hLG : Lower
     rw [← hda, hdx]
     exact (Array.getElem?_eq_some_iff.1 h2).1
   have hgb := hLG bytes P partition cuts units S a L e t hd hr hs ha hlt hl hbt
-  have ho := hW bytes P hd hr hov hG g k m hu (hRs g hg) (by rw [hda]; exact hgb) Y hY
+  have ho := hW bytes P hd hr hG g k m hu (hRs g hg) (by rw [hda]; exact hgb) Y hY
   have hw : (argWords Y g).map List.length = leafWidths (P.defs[(P.child P.rootScope k m).d]!) := by
-    rw [← (unitWidths bytes P hd hr hov hG g k m hu (hRs g hg)).1]
+    rw [← (unitWidths bytes P hd hr hG g k m hu (hRs g hg)).1]
     simp [argWords, Function.comp_def, portWord_length]
   rw [hda] at hw ho
   unfold outBits argBits
@@ -51,20 +51,20 @@ theorem unitComputes_of (hW : UnitWordComputes) (hL : LiftWordEval) (hLG : Lower
 
 /-- **`BlockEvalDoor`**, on `UnitComputes`. -/
 theorem blockEvalDoor_of (hU : UnitComputes) : BlockEvalDoor := by
-  intro bytes P partition cuts units S a fr L e t hd hr hs ha hab hf _ hl hbt hov hG hRs blocks u hB X g hg Y
+  intro bytes P partition cuts units S a fr L e t hd hr hs ha hab hf _ hl hbt hG hRs blocks u hB X g hg Y
   obtain ⟨k, m, hu, hin⟩ := frontUnitRanges P units fr hf g hg
   have hY : ∀ h : Fin (Flock.OfProgram.ofProgram P).N, InUnit P k m h.val → Flock.OfProgram.inputAt P h = false →
       Y h = (Flock.OfProgram.ofProgram P).op h Y :=
     fun h h1 h2 => Verity.Partition.localEval_of_mem _ X ((hB h).2 ⟨hin h.val h1, h2⟩)
-  exact (hU bytes P partition cuts units S a L e t hd hr hs ha hab hl hbt hov hG hRs g hg k m hu
+  exact (hU bytes P partition cuts units S a L e t hd hr hs ha hab hl hbt hG hRs g hg k m hu
     (admitCallee bytes P partition cuts units S a hd hs ha hab g hg k m hu) Y hY).symm
 
 /-- **`DoorLengths`** holds. -/
 theorem doorLengths : DoorLengths := by
-  intro bytes P partition cuts units S a fr hd hr hs ha hab hf _ hov hG hRs X g hg
+  intro bytes P partition cuts units S a fr hd hr hs ha hab hf _ hG hRs X g hg
   obtain ⟨k, m, hu, -⟩ := frontUnitRanges P units fr hf g hg
   have hda := admitCallee bytes P partition cuts units S a hd hs ha hab g hg k m hu
-  obtain ⟨hwa, hwo⟩ := unitWidths bytes P hd hr hov hG g k m hu (hRs g hg)
+  obtain ⟨hwa, hwo⟩ := unitWidths bytes P hd hr hG g k m hu (hRs g hg)
   obtain ⟨x, f, h1, h2, -⟩ := admittedBlock_callee hab g hg k m hu
   have hdx : (P.child P.rootScope k m).d = x.fn := by
     rw [child_d]

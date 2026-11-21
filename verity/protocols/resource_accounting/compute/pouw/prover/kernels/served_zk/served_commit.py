@@ -7,9 +7,10 @@ judged through the proof system (`spot.service`, P1: a `Stream`'s `register`, `s
   python served_commit.py commit PASS_DIR PARAMS OUT [--calls N | --call I ...]   the committer: the execution phase, salted and committed
   python served_commit.py register COMMIT_DIR PARAMS OUT [--extra ITEM=JSON]  the committer: the record, the public items only
   python served_commit.py edit REGISTRATION OUT KEY=JSON ...                  a control's registration, a field changed
-  python served_commit.py challenger PARAMS LOG [--lean F --epoch E --state S] the challenger: one JSON request a line on stdin
+  python served_commit.py challenger PARAMS LOG [--lean F --verify F --lean-jobs N --epoch E --state S]
+                                                                              the challenger: one JSON request a line on stdin
                                                                               (`handle`), one reply a line on stdout
-  python served_commit.py replay PARAMS LOG OUT [--lean F]                    its requests again, from its recorded coins
+  python served_commit.py replay PARAMS LOG OUT [--lean F --verify F]         its requests again, from its recorded coins
   (challenger, replay and check take --python-record: PoUW's checks by their Python references alone)
   python served_commit.py coin-variant MANIFEST COINS OPENING OUT CASE        a control's pass, its salt coin CASE
   python served_commit.py check PARAMS REGISTRATION DRAW UNIT PUB OPENING     the verifier: the proof's rows are the unit's
@@ -63,7 +64,9 @@ verity imports; run from this file, the commands that reach either refuse (NotIm
   verdict's ``witness``), and a disagreement refuses as ``lean-python-disagree: <check>``.  The service's public-items
   rule is Lean's too (``public``, `Service.checkPublic` beside `service.check_public`), and `check`'s reading of the
   registration before an opening may refuse only what the opening refuses (``prelude``); the stream's own state stays
-  Python's.
+  Python's.  The outcome's verdict of record on each sampled proof block is the challenger's own run of the Lean verifier
+  (``--verify``: `verify --zk` on the block's circuit, public file and delivered session, `run_lean`), never a verdict
+  a job hands it.
 - **The coins** are the execution phase's (`pouw.coins`): the challenger process that holds the Streams holds the execution phase's coin
   challenger.  When the process starts, before it reads a request, that challenger samples the execution phase's salt and sampling coins
   and their hm96 salts from the Lean verifier (`pouw.verifier.coins`: `pouw-check-difftest`'s ``coins``,
@@ -148,8 +151,9 @@ from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D
 from verity.protocols.proofs.spot.verifier.one_stage import partition as PT
-from verity.protocols.proofs.spot.verifier.one_stage import caller as CA
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+from verity.protocols.proofs.spot.verifier.one_stage import lean_child as LC
+from verity.protocols.proofs.spot.verifier.one_stage.proofs import verifier_env
 from verity.protocols.proofs.spot.prover import docket as DK
 from verity.protocols.proofs.spot.verifier.one_stage.verdict import Verdict, _Collect
 
@@ -158,7 +162,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.kernels.served_zk 
 SCHEMA = "verity-pouw/served-zk-window/v1"
 CHALLENGER = "served-zk/challenger"
 #: the execution phase sample's key, from the execution phase's sampling coin (`draw_key`)
-DRAW_DOMAIN = CC.DRAW_DOMAIN
+DRAW_DOMAIN = Wd.DRAW_DOMAIN
 #: the execution phase root's port: the execution phase's entries
 PORT = "entries"
 #: an execution phase stream's failure budget: its first failure stops it
@@ -525,7 +529,7 @@ def path(levels, index: int) -> list[str]:
     return out
 
 
-verify_path = CC.verify_path
+verify_path = Wd.verify_path
 
 
 def side_leaves(dom: CommitmentDomain, schema: str, bcs: list[bytes]) -> list[bytes]:
@@ -712,14 +716,14 @@ def _session_digest(session: Any) -> str | None:
     return hashlib.sha512(record.read_bytes()).hexdigest()
 
 
-def lean_verdict(path_: Path) -> dict:
-    """The Lean verifier's verdict from its output (one `VERDICT {…}` line per session it verified), of record: accepted
-    when every session's is, null when it printed none; ``sessions`` the SHA-512 of each session record it covers, in
-    order (None for one it names but this process can't read), which `service.Stream.outcome` holds to the delivery; null
-    too, saying why, when its output doesn't read."""
+def lean_verdict(out: str) -> dict:
+    """The Lean verifier's verdict from its output ``out`` (one `VERDICT {…}` line per session it verified), of record:
+    accepted when every session's is, null when it printed none; ``sessions`` the SHA-512 of each session record it
+    covers, in order (None for one it names but this process can't read), which `service.Stream.outcome` holds to the
+    delivery; null too, saying why, when its output doesn't read."""
     try:
-        lines = [json.loads(x[8:]) for x in path_.read_text().splitlines() if x.startswith("VERDICT ")]
-    except (OSError, ValueError) as e:
+        lines = [json.loads(x[8:]) for x in out.splitlines() if x.startswith("VERDICT ")]
+    except ValueError as e:
         return {"of_record": True, "accepted": None, "why": f"its output does not read ({type(e).__name__}: {e})",
                 "verifier": "lean verity-verify-proof verify --zk", "sessions": []}
     if not lines:
@@ -742,6 +746,54 @@ def rust_verdict(path_: Path | None) -> dict | None:
     v = lines[0].get("verdict", lines[0]) if lines else None
     return {"of_record": False, "accepted": None if v is None else bool(v.get("accepted")), "why": (v or {}).get("why", ""),
             "verifier": "rust flock-circuit --zk (live)"}
+
+
+#: the outcome's refusal when the challenger has no verdict of record of its own: it runs no Lean verifier, or its run
+#: of it panicked or ended with a status `verify` does not document
+LEAN_RUN = "lean-run"
+#: the outcome's refusal when the Lean verifier's verdict names a public file other than the challenger's copy
+PUBLIC_HEADER = "public-header"
+
+
+def _header_sha512(pub: bytes) -> str:
+    """The SHA-512 of a public file's header as the Lean verifier names it (``public_header_sha512``: the canonical JSON
+    of its first line). A first line that is no JSON raises ``ValueError``."""
+    return hashlib.sha512(canonical_json(json.loads(pub.split(b"\n", 1)[0]))).hexdigest()
+
+
+def run_lean(verify: str, row: Mapping[str, Any], pub: Path) -> dict:
+    """The Lean verifier's verdict of record on one sampled proof block, from the challenger's own run of it: ``verify
+    --zk`` on the row's ``circuit`` (with its ``partition`` and ``program`` where the row names them), the public file
+    ``pub`` (the challenger's copy of the bytes its statement digests) and the delivered session (the directory of the
+    row's ``session`` record), in the verifier's environment through `lean_child` (`lean_verdict` of what it printed, and
+    ``output_sha512`` the SHA-512 of its ``VERDICT`` lines as it printed them, the part of its output a replay
+    reproduces byte for byte). ``public_headers`` is each ``VERDICT`` line's ``public_header_sha512``: one that names a
+    header other than the copy's, or an accepting line that names none, or any verdict on a copy whose header is no
+    JSON, is refused by name (`PUBLIC_HEADER`), so the
+    verdict is about the file the opening check reads. The session's digest rests on a host the prover does not
+    control: the challenger's, which reads the delivered record itself (`deliver`). Refused by name (`LEAN_RUN`) where
+    the run wrote a panic line or ended with a status `verify` does not document: its answer is not read."""
+    cmd = [verify, "verify", "--zk", "--circuit", str(row["circuit"]),
+           *(a for k in ("partition", "program") if row.get(k) for a in (f"--{k}", str(row[k]))),
+           "--statement", "verity/flock-circuit", "--public", str(pub), "--session", f"{Path(row['session']).parent}/"]
+    try:
+        p = LC.run(cmd, env=verifier_env(), ok_statuses=LC.VERIFY_EXITS)
+    except LC.LeanPanic as e:
+        raise _refused(LEAN_RUN, {"unit": row["unit"], "why": str(e)}) from None
+    printed = "".join(f"{x}\n" for x in p.stdout.splitlines() if x.startswith("VERDICT "))
+    got = lean_verdict(p.stdout)
+    sha = hashlib.sha512(printed.encode()).hexdigest()
+    if got["accepted"] is None:
+        return {**got, "output_sha512": sha, "public_headers": []}
+    lines = [json.loads(x[8:]) for x in printed.splitlines()]
+    try:
+        want = _header_sha512(pub.read_bytes())
+    except ValueError as e:
+        raise _refused(PUBLIC_HEADER, {"unit": row["unit"], "why": f"the copy's header is no JSON: {e}"}) from None
+    named = [x.get("public_header_sha512") if isinstance(x, dict) else None for x in lines]
+    if any(h != want and (h is not None or (isinstance(x, dict) and x.get("accepted"))) for x, h in zip(lines, named)):
+        raise _refused(PUBLIC_HEADER, {"unit": row["unit"], "copy": want, "named": named})
+    return {**got, "output_sha512": sha, "public_headers": named}
 
 
 def statement(stage: dict, pub: bytes) -> dict:
@@ -795,18 +847,18 @@ Sampler = Callable[[Mapping[str, Any], int, bytes], list[int]]
 
 def draw_key(coin: bytes, stream: S.Stream, reg: S.WindowCommitmentRecord) -> Key:
     """The execution phase sample's key: the execution phase's sampling coin, under the stream and the registration and receipt it was opened after."""
-    return derive(coin, DRAW_DOMAIN, CC.draw_key_context(stream.digest, reg.digest, dict(reg.receipt)))
+    return derive(coin, DRAW_DOMAIN, Wd.draw_key_context(stream.digest, reg.digest, dict(reg.receipt)))
 
 
 def draw_bytes(key: Key, sampling_design: Mapping[str, Any], n: int) -> bytes:
     """The bytes a subset:k sample over N reads (Lean's ``2 k · width(N) + 64``)."""
     if sampling_design.get("law") != "subset":
         raise _refused("law", f"the window's draw is a subset sampling design's, not {dict(sampling_design)}")
-    return key.stream("draw", 2 * sampling_design["k"] * CC.width(n) + 64)
+    return key.stream("draw", 2 * sampling_design["k"] * Wd.width(n) + 64)
 
 
 def python_sampler(sampling_design: Mapping[str, Any], n: int, src: bytes) -> list[int]:
-    units = CC.stream_subset(sampling_design["k"], n, src)
+    units = Wd.stream_subset(sampling_design["k"], n, src)
     if units is None:
         raise _refused("sampler", "the draw's stream ran out")
     return units
@@ -839,7 +891,7 @@ def _signed_coins(path: str | os.PathLike | None, key: Ch.ChallengerKey | None) 
                          "(`coin_record`, the path it was written to) under the challenger key its deployment pins "
                          "(`Deployment.challenger_key`)")
     try:
-        trusted = Ch.trusted_commitment(path, key, CC.lms_verify)
+        trusted = Ch.trusted_commitment(path, key, Wd.lms_verify)
         doc = json.loads(Path(path).read_text(encoding="utf-8"))
         same = Ch.ChallengerRecord.from_json(doc).commitment == trusted
     except (Ch.CoinError, OSError, ValueError) as e:
@@ -906,13 +958,15 @@ class Challenger:
     it, and the sample's check of record verifies the record again under the key the deployment pins, not the one the
     record's coins name (``coin-key``).  `opens` is the deployment's `salt.WindowOpens`,
     shared by its challengers.  Each registered execution phase's salt, the one its pass was checked against, is held
-    (`salts`), and `check` opens its sampled proof blocks under it."""
+    (`salts`), and `check` opens its sampled proof blocks under it.  `verify` is the Lean verifier the outcome request
+    runs itself on each sampled proof block (`_units`, ``lean_jobs`` runs at a time); without it that request is refused."""
 
     def __init__(self, params: dict, coins: Any, sampler: Sampler = python_sampler, budget: int = BUDGET,
                  clock: Callable[[], float] | None = None, *, record: OR.Record,
                  predates_deadline: bool = False, certifier: Any = None, prover: bytes | None = None,
                  coin_record: str | os.PathLike | None = None, deployment: Deployment | None = None,
-                 opens: PS.WindowOpens | None = None) -> None:
+                 opens: PS.WindowOpens | None = None, verify: str | None = None, lean_jobs: int = 1) -> None:
+        self.verify, self.lean_jobs = verify, lean_jobs
         self.trusted: Ch.LiveCommitment | None = None
         self.signed: dict | None = None
         self.deployment: Deployment | None = None
@@ -1035,17 +1089,16 @@ class Challenger:
 
     def r1_r6(self, name: str, st: S.Stream, rec: Mapping[str, Any], ports_: dict) -> None:
         """One-stage's R1-R6 against the challenger's own copies, then where they pass the caller's check
-        (`caller.check`, `Caller.gate`), and the service's public-items rule over the Stream's Spec, as `Stream.register`
-        runs them, each of record.  Raises `Refused`."""
+        (`VStar.Recursive.Caller.check`), and the service's public-items rule over the Stream's Spec, as `Stream.register`
+        runs them, each of record: the first two Lean's alone.  Raises `Refused`."""
         n = rec["population"]
         sampling_design = S.selection_sampling_design(st.spec.selection, n)
         prog = PN.population_program(st.unit, n)
         q = st.spec.check.query
         params = OR.registration_params(prog, q, sampling_design, S.SCHEME, ports_, list(st.log), self.params["delta"])
-        args = (rec, prog, q, sampling_design, S.SCHEME, ports_, None, (), list(st.log), None, None, None)
-        codes = self._of_record(name, self.record.registration, params, dict(rec), lambda: R.check(*args))
+        codes = self._of_record(name, self.record.registration, params, dict(rec))
         if not codes:
-            codes = self._of_record(name, self.record.caller, params, dict(rec), lambda: CA.check(*args))
+            codes = self._of_record(name, self.record.caller, params, dict(rec))
         public = self._of_record(name, self.record.public, OR.public_params(st.spec, rec, S.SCHEME),
                                  lambda: S.check_public(st.spec, rec).to_json())
         codes = list(codes) + [c for c in public.get("codes", ["public"]) if c not in codes]
@@ -1171,10 +1224,14 @@ class Challenger:
 
     def check(self, name: str, unit: int, pub: bytes, op: dict, drawn: bool = True) -> str | None:
         """`check` of execution phase `name`'s unit `unit` against its registration and sample, of record (`record`), under the salt
-        its pass was checked against when it is certified (`salts`)."""
+        its pass was checked against when it is certified (`salts`), both verdicts kept in `name`'s witness."""
         _, reg = self._held(name)
-        return check(self.params, dict(reg.record), self._drawn(name).draw, unit, pub, op, drawn, record=self.record,
-                     salt=self.salts.get(name))
+        at = len(self.record.witness)
+        try:
+            return check(self.params, dict(reg.record), self._drawn(name).draw, unit, pub, op, drawn, record=self.record,
+                         salt=self.salts.get(name))
+        finally:
+            self.witness.setdefault(name, []).extend(self.record.witness[at:])
 
     def select(self, name: str) -> S.Draw:
         """The sample, once: an execution phase's opens the execution phase's sampling coin after its registration and samples over `draw_key`;
@@ -1225,8 +1282,7 @@ class Challenger:
         if [u["unit"] for u in units] != D.proved(d.draw):
             raise _refused("units", {"given": [u["unit"] for u in units][:16], "drawn": D.proved(d.draw)[:16]})
         verdicts = {k: v for n in sorted({n for u in units for n in u["verdicts"]}) for k, v in _all(units, n).items()}
-        o = st.outcome(d, verdicts, {"units": [{"unit": u["unit"], **u["statement"]} for u in units]},
-                       session_roots=session_roots(units))
+        o = st.outcome(d, verdicts, {"units": [{"unit": u["unit"], **u["statement"]} for u in units]})
         public = {**reg.record["window"]["public"], "verdict": o.accepted, "drawn": d.units}
         body = st.records[-1]
         ans = OR.service_answer(o.accepted, list(o.verdict.codes), o.profile.to_json() if o.profile else None, reg.digest,
@@ -1246,51 +1302,36 @@ def _sessions(units: list[dict]) -> list[str]:
     return [hashlib.sha512(Path(u["session"]).read_bytes()).hexdigest() for u in units]
 
 
-#: the outcome's refusal when its sessions' roots can't be held to the record's
-SESSION_ROOTS = "session-roots"
+#: the verifier an outcome's opening verdict names: the challenger's own run of the opening check
+OPENING_CHECK = "the challenger's opening check"
 
 
-def live_roots(path_: Path | None) -> dict[str, str] | None:
-    """The roots a unit's --zk session committed, ``{port: root}`` from its prover's first ``LIVE`` line; None when
-    there is no output, it doesn't read, or it carries no roots."""
-    if path_ is None:
-        return None
-    try:
-        lines = [json.loads(x[5:]) for x in path_.read_text().splitlines() if x.startswith("LIVE\t")]
-    except (OSError, ValueError):
-        return None
-    roots = lines[0].get("roots") if lines else None
-    return dict(roots) if isinstance(roots, Mapping) and roots else None
+def _units(rows: list[dict], verify: str | None, opening: Callable[[int, bytes, dict], str | None],
+           jobs: int = 1) -> list[dict]:
+    """The outcome's units from the job's rows (each unit's stage, public file, circuit, delivered session, the prover's
+    opening of its rows and its live log): the Lean verdict of record the challenger's own run of ``verify``
+    (`run_lean`, ``jobs`` at a time) on a copy of the public file whose bytes the statement digests, and the opening
+    verdict its own run of `opening` (`Challenger.check`) on that copy and the row's opening. A row's handed-in Lean
+    output and opening verdict are never read; with no ``verify`` the outcome is refused by name (`LEAN_RUN`)."""
+    import tempfile
+    from concurrent.futures import ThreadPoolExecutor
 
-
-def session_roots(units: list[dict]) -> dict[str, str]:
-    """``{port: root}`` the sampled proof blocks' sessions committed, which the stream holds port by port to the record's
-    roots. Refused by name (`SESSION_ROOTS`) when a block's session reports none, or two report different roots: the
-    outcome is never decided with that check skipped."""
-    first: dict[str, str] | None = None
-    for u in units:
-        if not u.get("roots"):
-            raise _refused(SESSION_ROOTS, {"unit": u["unit"], "why": "its session reports no roots"})
-        if first is None:
-            first = dict(u["roots"])
-        elif dict(u["roots"]) != first:
-            raise _refused(SESSION_ROOTS, {"unit": u["unit"], "why": "its session reports roots other than another's",
-                                           "ports": sorted(set(first) ^ set(u["roots"]) | {
-                                               p for p in set(first) & set(u["roots"]) if first[p] != u["roots"][p]})})
-    return first or {}
-
-
-def _units(rows: list[dict]) -> list[dict]:
-    """The outcome's units from the job's rows (each unit's stage, public file, Lean output, opening verdict, live log),
-    each with the roots its session committed (`live_roots`)."""
-    out = []
-    for u in rows:
-        pub = Path(u["pub"]).read_bytes()
-        out.append({"unit": u["unit"], "statement": statement(_json(u["stage"]), pub),
-                    "verdicts": {"lean": lean_verdict(Path(u["lean"])), "opening": _json(u["opening"]),
-                                 **({"rust": rust_verdict(Path(u["rust"]))} if u.get("rust") else {})},
-                    "roots": live_roots(Path(u["rust"]) if u.get("rust") else None)})
-    return out
+    if verify is None:
+        raise _refused(LEAN_RUN, "the challenger runs no Lean verifier (--verify), so it has no verdict of record of its "
+                                 "own, and it reads none a job hands it")
+    with tempfile.TemporaryDirectory(prefix="outcome-") as tmp:
+        pubs = [Path(u["pub"]).read_bytes() for u in rows]
+        copies = [Path(tmp) / f"{i}.pub.bin" for i in range(len(rows))]
+        for c, b in zip(copies, pubs):
+            c.write_bytes(b)
+        with ThreadPoolExecutor(max_workers=max(1, jobs)) as ex:
+            leans = list(ex.map(lambda a: run_lean(verify, *a), zip(rows, copies)))
+    whys = [opening(u["unit"], pub, _json(u["opening"])) for u, pub in zip(rows, pubs)]
+    return [{"unit": u["unit"], "statement": statement(_json(u["stage"]), pub),
+             "verdicts": {"lean": lean, "opening": {"of_record": False, "accepted": why is None, "why": why or "",
+                                                    "verifier": OPENING_CHECK},
+                          **({"rust": rust_verdict(Path(u["rust"]))} if u.get("rust") else {})}}
+            for u, pub, lean, why in zip(rows, pubs, leans, whys)]
 
 
 def _put(p: str | None, obj: Any) -> None:
@@ -1330,7 +1371,8 @@ def handle(ch: Challenger, cmd: Mapping[str, Any]) -> tuple[str, dict]:
             o = ch.deliver(name, _sessions(_json(cmd["units"])))
             return ("DELIVERED", {"sessions": len(ch.sessions[name])}) if o is None else (o.verdict.codes[0].upper(), {})
         if op == "outcome":
-            o, public, body = ch.outcome(name, _units(_json(cmd["units"])))
+            o, public, body = ch.outcome(name, _units(_json(cmd["units"]), ch.verify,
+                                                      lambda unit, pub, op: ch.check(name, unit, pub, op), ch.lean_jobs))
             if cmd.get("out"):
                 _put(f"{cmd['out']}/outcome.json", {"accepted": o.accepted, "verdict": o.verdict.to_json(), "public": public,
                                                     "profile": o.profile.to_json() if o.profile else None,
@@ -1360,7 +1402,7 @@ def _pass(pass_dir: Path):
     PD = _pd()
     raw = (pass_dir / "manifest.json").read_bytes()
     man = json.loads(raw)
-    if man.get("schema") not in (CC.MANIFEST_SCHEMA, CC.MANIFEST_RECORDED):
+    if man.get("schema") not in (Wd.MANIFEST_SCHEMA, Wd.MANIFEST_RECORDED):
         raise SystemExit(f"{pass_dir}: not a retained pass ({man.get('schema')!r})")
     calls = [u for u in man["matmuls"] if u["k"] == K and u["n"] == K]
     if not calls:
@@ -1552,7 +1594,7 @@ def cmd_challenger(a) -> int:
     coins = Coins(a.epoch, entropy)
     (log / "coins.json").write_text(json.dumps(coins.commitment.to_json(), sort_keys=True))
     ch = Challenger(_json(a.params), coins, lean_sampler(a.lean, log / "draws.jsonl") if a.lean else python_sampler,
-                    record=record)
+                    record=record, verify=a.verify, lean_jobs=a.lean_jobs)
     for line in sys.stdin:
         if not line.strip():
             continue
@@ -1578,16 +1620,19 @@ def _files(p: Path) -> dict[str, bytes]:
     return {q.relative_to(p).as_posix(): q.read_bytes() for q in sorted(p.rglob("*")) if q.is_file()} if p.is_dir() else {}
 
 
-def replay(params: dict, log: Path, out: Path, sampler: Sampler = python_sampler, *, record: OR.Record) -> list[str]:
+def replay(params: dict, log: Path, out: Path, sampler: Sampler = python_sampler, *, record: OR.Record,
+           verify: str | None = None, lean_jobs: int = 1) -> list[str]:
     """The challenger's requests again (LOG/requests.jsonl) from its records alone: the published commitment and the
-    coins it opened (`Recorded`), each request's ``out`` under OUT.  Every difference from the record: a reply, or a file
+    coins it opened (`Recorded`), each request's ``out`` under OUT, each outcome's Lean verdicts from its own run of
+    ``verify`` (`Challenger`'s).  Every difference from the record: a reply, or a file
     a request wrote; empty when the replay is byte-identical.  A record whose parameters predate the registration
     deadline replays as it ran (`Challenger`'s `predates_deadline`): the deadline is in the Spec's digest, which keys the
     sample, so it can't be added to a recorded execution phase."""
     coins = Recorded(CoinCommitment.from_json(_json(log / "coins.json")),
                      [CoinOpening.from_json(json.loads(x)) for x in
                       ((log / "openings.jsonl").read_text().splitlines() if (log / "openings.jsonl").exists() else ()) if x])
-    ch = Challenger(params, coins, sampler, record=record, predates_deadline=params.get("registration_deadline") is None)
+    ch = Challenger(params, coins, sampler, record=record, predates_deadline=params.get("registration_deadline") is None,
+                    verify=verify, lean_jobs=lean_jobs)
     diffs = []
     for i, x in enumerate((log / "requests.jsonl").read_text().splitlines()):
         entry = json.loads(x)
@@ -1607,7 +1652,7 @@ def replay(params: dict, log: Path, out: Path, sampler: Sampler = python_sampler
 def cmd_replay(a) -> int:
     record = a.record(lean=False if a.python_record else None)
     diffs = replay(_json(a.params), Path(a.log), Path(a.out), lean_sampler(a.lean) if a.lean else python_sampler,
-                   record=record)
+                   record=record, verify=a.verify, lean_jobs=a.lean_jobs)
     n = len((Path(a.log) / "requests.jsonl").read_text().splitlines())
     out = {"requests": n, "diffs": diffs[:8], **({"predates_deadline": True} if "registration_deadline" not in _json(a.params) else {})}
     print(f"{'SAME' if not diffs else 'DIFFERENT'} {json.dumps(out)}", flush=True)
@@ -1635,7 +1680,7 @@ def coin_variant(man: dict, coins: CoinCommitment, opening: CoinOpening, case: s
     elif case != "resalted":
         raise ValueError(f"a coin variant is one of {', '.join(CASES)}")
     out = {k: v for k, v in man.items() if k != "beacon"}
-    return {**out, "schema": CC.MANIFEST_SCHEMA, "coins": coins.to_json(), "salt_opening": o.to_json()}
+    return {**out, "schema": Wd.MANIFEST_SCHEMA, "coins": coins.to_json(), "salt_opening": o.to_json()}
 
 
 def cmd_coin_variant(a) -> int:
@@ -1765,6 +1810,11 @@ def main(argv=None, *, record: Callable[..., OR.Record] = lean_record,
         p.add_argument(x)
     p.add_argument("--lean", help="Lean verity-verify-proof, the sample's sampler (default: its Python twin)")
     p.add_argument("--python-record", action="store_true", help=PYTHON_RECORD)
+    for p in (sub.choices["challenger"], sub.choices["replay"]):
+        p.add_argument("--verify", help="Lean verity-verify-proof, which the outcome request runs itself (verify --zk) on "
+                                        "each sampled proof block for its verdict of record; without it that request is "
+                                        "refused (lean-run)")
+        p.add_argument("--lean-jobs", type=int, default=1, help="how many of those runs at a time (default 1)")
     p = sub.add_parser("coin-variant")
     for x in ("manifest", "coins", "opening", "out"):
         p.add_argument(x)

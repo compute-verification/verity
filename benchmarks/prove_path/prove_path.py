@@ -36,11 +36,11 @@ The committed run, and the only one (``--tp-commit`` is refused by name: the TP 
 
     prove_path.py advice --workload F --out FILE
     prove_path.py commit (--serve-run DIR --window K --row-dir DIR [--hf-config F] [--target F]) [--advice FILE] [--opening FILE] --partition F \\
-        --out WINDOWS [--cap-bits L] [--ranks 0,1] [--jobs N] [--forge MEMBER:UNIT] [--transfer-gate T ...] \\
+        --out WINDOWS [--cap-bits L] [--ranks 0,1] [--jobs N] [--transfer-gate T ...] \\
         [--serving-rows-tables REGISTRATION] [--checkpoint-dir DIR]
     prove_path.py audit (the same committed run) [--opening FILE] --windows WINDOWS --partition F --template-sets DIR \\
         --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof --zk-server flock-zk-server --out DIR [--cap-bits L] \\
-        [--ranks 0,1] [--jobs N] [--forged] [--plain] [--transfer-gate T ...] --challenger local|gate:USER@HOST --main FILE
+        [--ranks 0,1] [--jobs N] [--plain] [--transfer-gate T ...] --challenger local|gate:USER@HOST --main FILE
         [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--builds DIR]
     prove_path.py compiler (--serve-run DIR | --serve FILE) [--hf-config F] [--target F] [--cap-bits L] [--transfer-gate T ...]
     prove_path.py weights-registration --serve-run DIR --checkpoint-dir DIR --out FILE [--checkpoints F] \\
@@ -63,9 +63,7 @@ The committed run, and the only one (``--tp-commit`` is refused by name: the TP 
   A served run's comes from its step trace instead (ADVICE-SRC); `compile_advice` reads either.
 * **commit** (the prover): the advice compiled (`compile_advice`) and committed, its opening (the advice and its salts) written to
   ``--opening``, the prover's private file, never under the run's out/; then each window from its bundle over the compiler's
-  Programs for it, ``WINDOWS/rank<r>/``. ``--forge MEMBER:UNIT`` commits that unit with bit 0 of its first output word flipped
-  (`forging`): its rows, commit strings and roots all agree with the flipped word, so only the proof can refuse it.
-  ``--serving-rows-tables`` (with its key) gives each window the committer's registration of the per-expert cut's tables
+  Programs for it, ``WINDOWS/rank<r>/``. ``--serving-rows-tables`` (with its key) gives each window the committer's registration of the per-expert cut's tables
   (`tables_of`), without which a partition of table reads or fused blocks is refused, and ``--checkpoint-dir`` the checkpoint
   it composes the registered weights its rows read from (`checkpoint_of`): a bundle carries none a checkpoint holds, so
   without one a row reading such a weight is refused by the weight's name.
@@ -73,10 +71,7 @@ The committed run, and the only one (``--tp-commit`` is refused by name: the TP 
   a served window's Programs from its own Builds, written into ``--builds``, default ``OUT/builds``),
   audited by a5 on the verifier's coins with the advice negatives beside it (`more_negatives`), then `advice_before_draw` on the
   sample's receipt and the advice-root-after-the-draw negative (`advice_after_sample`); ``OUT/summary.json`` over the windows.
-  ``--forged``: the prover runs with its self-check skipped (``FC_ZK_SELF_CHECK=skip``) so it proves the false
-  witness, and a window passes when its docket passed every check before the sample, the outcome is a reject and
-  the forged unit's member was stopped (`forged_row`): the ZK server released no proof of it, or under ``--plain``, where
-  the proof leaves, Lean refused it. ``--plain``: the sessions are plain Flock, not `--zk` (a5's ``--plain``: a stratified sample, the partition's
+  ``--plain``: the sessions are plain Flock, not `--zk` (a5's ``--plain``: a stratified sample, the partition's
   sampling design ``stratified-rate:NUM/DEN``, over a window of one member, no registered reads or shared rows, Lean `verify --coins tree
   --stratified K`, no ZK server), and the summary names the interim (``plain``, `PLAIN_INTERIM`). Each window's row carries the charge terms of an accepted audit
   (``charge``, `charge_terms`): ``advice_bits``; ``c``, the advice's bits where the window's leak count
@@ -163,13 +158,12 @@ FILE`` (`a5_coins`: the run root's one session, committed to each docket before 
 read; ``local`` is a development session on this machine, pinned on ``--main``, the verifier's copy of main's first-parent
 history; ``gate:USER@HOST`` is the auditor device through its SSH gate with the lane's gate key ``--gate-key``, its challenger on
 ``--peer``'s 127.0.0.1, so the audit runs on that peer, under the deployment's key record ``--challenger-key``). The gate opens
-a root once, ever, and a window's honest and forged commits share the run root, so only one of them samples there.
+a root once, ever.
 `advice_before_draw` holds the advice to the receipt of the stream that sampled.
 """
 from __future__ import annotations
 
 import argparse
-import contextlib
 import functools
 import hashlib
 import importlib
@@ -188,13 +182,11 @@ from typing import Any
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 
-from records_audit import PORTS, REFUSED, forged_outcome, free_ports, leak_count, pin_arg, pins_of, registration_roots, why_not_pearl  # noqa: E402, F401
+from records_audit import PORTS, REFUSED, free_ports, leak_count, pin_arg, pins_of, registration_roots, why_not_pearl  # noqa: E402, F401
 from verity.commitments import docket_digest as DD
-from verity.commitments import randomness as RND  # noqa: E402
 from verity.protocols.proofs.spot.verifier.consumers import exfiltration_bound, location_bits  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import audit as AU  # noqa: E402
 from verity.circuits import partition_query as PQ  # noqa: E402
-from verity.protocols.proofs.spot.prover import docket as DK  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
 from verity.commitments.periods import interface as IF, rows as RW  # noqa: E402
 from verity_vllm.pipeline import advice_windows as AW  # noqa: E402
@@ -202,6 +194,8 @@ from verity_vllm.pipeline import deferred_rows as DRW  # noqa: E402
 from verity_vllm.pipeline import edge as E  # noqa: E402
 from verity_vllm.pipeline import window_advice as WA  # noqa: E402
 from verity_vllm.pipeline.advice_windows import CAP_BITS, CAPPED, Capped  # noqa: E402
+from verity_vllm.program.predict import window_record as WREC  # noqa: E402
+from verity_vllm.program.predict.window_record import place_slots, window_design  # noqa: E402
 from verity_vllm.commit import step_rows  # noqa: E402
 
 I2 = "verity/prove-path/i2-compile-steps/v0"
@@ -365,27 +359,6 @@ def ran_with(challenger: str, key_record: Mapping[str, Any] | None = None) -> st
     key = Ch.key_of_record(dict(key_record))
     word = "deployed" if (key.W, key.H) == (dep.W, dep.H) else "development"
     return f"ran with: {coins}; parameters {word} (the challenger's LMS key at W={key.W}, H={key.H}, its key record's)"
-
-
-def served_forged_partition(honest: Mapping[str, Any], forged: Mapping[str, Any] | None, design: str) -> dict[str, Any]:
-    """The served arm's forged partition. A forgery is the forged run's own commit with one unit's value flipped (``commit
-    --forge``), so it needs that unit in its window and sampled, not other units than the honest run's: by default the honest
-    partition's templates and scope, every unit sampled (``DESIGN:1/1``), at steps the honest run already holds to the window.
-    A given one whose steps fall outside the honest partition's is refused here, before any build, rather than by its commit
-    after the honest arm ran."""
-    from verity.protocols.proofs.spot.verifier.one_stage.verdict_record import DESIGN
-
-    if forged is None:
-        return {"templates": list(honest["templates"]), DESIGN: f"{design}:1/1",
-                **({"scope": dict(honest["scope"])} if "scope" in honest else {})}
-    inside = (honest.get("scope") or {}).get("steps")
-    steps = (forged.get("scope") or {}).get("steps")
-    if inside is not None and (steps is None or steps[0] < inside[0] or steps[1] > inside[1]):
-        raise SystemExit(f"PP_FORGED_PARTITION names steps {steps if steps is not None else 'unscoped'}, outside the honest "
-                         f"partition's {inside}, the steps of the window this run proves: its commit would find no unit "
-                         f"there to forge. Unset PP_FORGED_PARTITION, and the served arm forges a unit of the honest "
-                         f"partition's own steps with every unit sampled ({design}:1/1), or give one inside steps {inside}")
-    return dict(forged)
 
 
 def code_identity() -> str:
@@ -562,41 +535,18 @@ def serve_ingress(requests: list[Mapping[str, Any]]) -> dict[str, dict]:
 
 
 def phi_of_serve(serve: Mapping[str, Any], hf_config: str | None = None, target: str | None = None) -> Any:
-    """φ of a served engine as vllm's registered compiler registers it (`predict.phi.served_phi`, the one formula: `advice_compile`
-    compiles the row dir's Builds under it too, so they hold the Programs I2 compiles): the pinned model (``serve.json``'s
-    ``model`` and ``revision``, and the checkpoint's ``config.json``: ``hf_config``, else the pin's config of record, as
-    `advice_compile` reads it (`dense_generic.pinned_hf_config`), else for a model no manifest pins unsloth/Llama-3.2-1B's), the
-    serving device's target profile (``serve.json``'s ``target``, the int8 scope its layers ran included, else the file
-    ``target``), the engine's execution label (``execution``, else ``engine.execution``), and from its engine record
-    (``engine``) its tensor-parallel world and the engine args class G states, ``max_model_len`` among them, which each
-    request Program's length rule reads; no workload. A ``serve.json`` with no engine record states none of those args."""
+    """`predict.phi.phi_of_serve`, the one formula of a served engine's φ, for a model no manifest pins with
+    unsloth/Llama-3.2-1B's config."""
     from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
-    from verity_vllm.program.predict.phi import served_phi
+    from verity_vllm.program.predict.phi import phi_of_serve as of_serve
 
-    prof = json.loads(Path(target).read_text()) if target else serve.get("target")
-    if not isinstance(prof, Mapping):
-        raise ValueError("serve.json records no target profile (the serving device's TargetProfile.to_json()), so φ can't be read: "
-                         "--target F gives it")
-    execution = serve.get("execution") or (serve.get("engine") or {}).get("execution")
-    if not isinstance(execution, str) or not execution:
-        raise ValueError("serve.json records no execution label (execution, engine.execution), so φ can't be read")
-    hf = json.loads(Path(hf_config or pinned_hf_config(serve["model"], serve["revision"]) or LLAMA32_1B_CONFIG).read_text())
-    engine = serve.get("engine")
-    return served_phi({"model": serve["model"], "revision": serve["revision"], "target": prof, "execution": execution,
-                       "engine_record": engine if isinstance(engine, Mapping) else None}, hf)
+    return of_serve(serve, hf_config or pinned_hf_config(serve["model"], serve["revision"]) or str(LLAMA32_1B_CONFIG), target)
 
 
 def registered_seed(serve: Mapping[str, Any]) -> int:
-    """The default seed a served window's docket fixes, `engine.served_seed.DEFAULT_SEED` (as vllm's registered compiler takes
-    it); a ValueError when ``serve.json`` says the server filled in another (or says none), since a request that sent no
-    seed would be compiled under a seed its sample didn't use."""
-    from verity_vllm.engine.served_seed import DEFAULT_SEED
+    from verity_vllm.program.predict.phi import registered_seed as seed
 
-    seed = serve.get("default_seed")
-    if type(seed) is not int or seed != DEFAULT_SEED:
-        raise ValueError(f"serve.json: the run's server filled in default seed {seed!r}, and the registered one is "
-                         f"engine.served_seed.DEFAULT_SEED ({DEFAULT_SEED}): serve it under that rule")
-    return DEFAULT_SEED
+    return seed(serve)
 
 
 def registered_of_serve(serve: Mapping[str, Any], hf_config: str | None, target: str | None, cap_bits: int) -> Any:
@@ -950,27 +900,6 @@ def i2_against_record(a: argparse.Namespace, requests: list[dict], compiler: Map
             "equal": theirs == dict(compiler) and len(units) == len(of) and all(u["equal"] for u in units.values())}
 
 
-@contextlib.contextmanager
-def forging(member: int, unit: int) -> Iterator[None]:
-    """Inside, serving rows commit member ``member``'s unit ``unit`` with bit 0 of its first output word flipped, before its commit
-    strings and roots are made over it."""
-    from verity_vllm.pipeline import serving_rows as SRW
-
-    real = SRW.read_all
-
-    def read_all(ms, rows, store, weights, *rest, **kw):
-        got = real(ms, rows, store, weights, *rest, **kw)
-        port = ms[member].outs[0][0]
-        got[member][0]["outs"][port][unit, 0] ^= 1
-        return got
-
-    SRW.read_all = read_all
-    try:
-        yield
-    finally:
-        SRW.read_all = real
-
-
 def ranks_of(a: argparse.Namespace) -> tuple[int, list[int]]:
     """The run's world and the windows to commit or audit (``--ranks``, default all); a served run's one window is rank 0."""
     world = 1
@@ -1001,11 +930,7 @@ def in_processes(fn, jobs: int, items: list) -> Iterator[tuple[Any, Any]]:
 def commit_rank(job: tuple[argparse.Namespace, int, list[dict], dict]) -> dict:
     a, r, requests, bound = job
     compiler = compiler_of_args(a)
-    forge = [int(x) for x in a.forge.split(":")] if a.forge else None
-    out = Path(a.out) / f"rank{r}"
-    with forging(*forge) if forge else contextlib.nullcontext():
-        got = commit1(a, compiler, requests, bound, out)
-    return {**got, "forged": {"member": forge[0], "unit": forge[1]} if forge else None}
+    return commit1(a, compiler, requests, bound, Path(a.out) / f"rank{r}")
 
 
 def commit(a: argparse.Namespace) -> int:
@@ -1066,7 +991,7 @@ def more_negatives(a: argparse.Namespace, r: int, world: int, compiler: Capped, 
 
 
 def advice_before_draw(receipt: Mapping[str, Any], rec: Mapping[str, Any], bound: Mapping[str, Any]) -> dict:
-    """That the advice was fixed before the coins, checked rather than assumed, as `pouw.credit.draw_root` checks the credit bits:
+    """That the advice was fixed before the coins, checked rather than assumed, as `pouw.window.draw_root` checks the credit bits:
     the digest of the docket the verifier holds the opening to (`registration.digest`, which covers the window's
     ``compiler`` and ``advice`` root) must be the one the sample's receipt names, the receipt the stream wrote when it received the
     docket and before its select read any coin (the challenger's coins are committed to that digest before any is
@@ -1095,18 +1020,6 @@ def advice_after_sample(compiler: Capped, receipt: Mapping[str, Any], rec: Mappi
     src = source(late_rec["window"], mine, {**held, **bound})
     v = advice_before_draw(receipt, late_rec, bound)
     return {"refused": not v["ok"], "codes": v["codes"], "before_draw_checks_pass": src["ok"]}
-
-
-def forged_row(s: dict, forged: dict | None, wdir: Path) -> dict:
-    """A forged window's verdict (`records_audit.forged_outcome`, over its audit directory ``wdir``): its docket passed
-    every check before the sample, the forged unit was sampled, the outcome is a reject, and the forged unit's member was
-    stopped. Behind the ZK server, that is no proof of it released (``no_proof_released``); in a plain audit, which has no
-    ZK server, Lean's verifier refusing the proof it read (``lean_refused``)."""
-    unit = None
-    if forged is not None:
-        unit = next(m["base"] for m in s.get("members") or [] if m["k"] == forged["member"]) + forged["unit"]
-    return forged_outcome(s, wdir, None if forged is None else forged["member"],
-                          {"forged_unit_drawn": unit is not None and unit in (s.get("draw") or [])})
 
 
 def per_unit(s: dict) -> dict[str, dict]:
@@ -1203,10 +1116,6 @@ def rank_audit(a: argparse.Namespace, world: int, r: int) -> dict:
     else:
         ordered = False
     row["ok"] = ok and ordered
-    if a.forged:
-        forged = ((json.loads((Path(a.windows) / "commit.json").read_text())["ranks"]).get(str(r)) or {}).get("forged")
-        row["forged"] = {"unit": forged, **forged_row(s, forged, out)}
-        row["ok"] = row["forged"]["ok"] and ordered
     return row
 
 
@@ -1228,8 +1137,6 @@ def audit(a: argparse.Namespace) -> int:
     root = run_root_of(a)
     a.coins, a.window_root = None, root
     a.rule = json.loads(Path(a.partition).read_text()).get("law")
-    if a.forged:
-        os.environ["FC_ZK_SELF_CHECK"] = "skip"
     a.jobs = len(ranks) if a.jobs is None else a.jobs
     if len(ranks) > 1 and a.jobs < len(ranks):
         raise SystemExit(f"--challenger draws every rank from the run root's one session, which ends once every rank has drawn: "
@@ -1246,7 +1153,7 @@ def audit(a: argparse.Namespace) -> int:
                      "gap": "the advice is opened to the verifier until the compile slice's proof block exists (README.md)",
                      **({"i2": i2_against_record(a, requests, bound["compiler"])} if served(a) else {}),
                      **({"serve": {"run": str(a.serve_run), "window": int(a.window), **serve_check_of(a, bound)}} if served(a) else {}),
-                     "requests": requests, "rule": a.rule, "delta": a.delta, "forged": a.forged, "coins": coins_of(a), "ranks": {},
+                     "requests": requests, "rule": a.rule, "delta": a.delta, "coins": coins_of(a), "ranks": {},
                      **({"plain": {"scope": A5.PLAIN_SCOPE, "interim": PLAIN_INTERIM}} if a.plain else {})}
     manager, a.coins, finisher = AC.start(a.challenger, root, ranks, out / "challenger", a.main, ssh_key=a.gate_key,
                                           peer=a.peer, key_record=a.challenger_key, local=LC.Local)
@@ -1266,13 +1173,13 @@ def audit(a: argparse.Namespace) -> int:
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     shown = {r: {x: s.get(x) for x in ("ok", "population", "draw", "draw_counts", "seconds", "per_unit")}
              | {"advice_before_draw": (s.get("advice_before_draw") or {}).get("ok")}
-             | ({"forged": s["forged"]} if a.forged else {"accepted": (s.get("audit") or {}).get("accepted"),
-                                                         "negatives_refused": all((s.get("negatives") or {"none": False}).values())})
+             | {"accepted": (s.get("audit") or {}).get("accepted"),
+                "negatives_refused": all((s.get("negatives") or {"none": False}).values())}
              | {"charge": {x: (s.get("charge") or {}).get(x) for x in ("c", "bound", "location_bits", "harm_bound",
                                                                       "exfiltration_bound")}
                 | {"wrong_units_bound": ((s.get("charge") or {}).get("wrong_units") or {}).get("bound")}}
              for r, s in summary["ranks"].items()}
-    print("PROVE-PATH " + json.dumps({"run_root" if served(a) else "tp_run_root": root, "forged": a.forged, "ok": summary["ok"],
+    print("PROVE-PATH " + json.dumps({"run_root" if served(a) else "tp_run_root": root, "ok": summary["ok"],
                                       "proof": "plain" if a.plain else "zk", **({"plain": summary["plain"]} if a.plain else {}),
                                       "advice_bits": bound["advice"]["bits"], "delta": a.delta,
                                       "coins": summary["coins"]["source"], "transfer_gates": summary["transfer_gates"],
@@ -1547,57 +1454,6 @@ def scan_state_opening(value: Any, path: Path) -> Path:
     return path
 
 
-def place_slots(cls: Any, served: Sequence[str], ingress: Mapping[str, Mapping[str, Any]],
-                scan: tuple[Sequence[str | None], Sequence[tuple[Sequence[int], Sequence[int]]]] | None = None,
-                ) -> list[tuple[str | None, list[int], int]]:
-    """Each slot of a window of class ``cls`` serving the requests of I1 ids ``served``, whose bodies ``ingress`` holds:
-    its request (None for an empty slot), its row (occupancy, prompt length, ids) and its ``max_tokens``. Without a
-    scan, slot k holds the k-th served request, its row its prompt's. With one, ``scan`` is the scan's starts
-    (`kept_scan`'s) and each slot's row and head (`window_rows.scan_slots`'s): slot k holds the request the scan starts
-    there, its row and ``max_tokens`` the scan's. Refused where the scan starts one request in two slots, a served
-    request in none, or a request that wasn't served, and where a slot's prompt or ``max_tokens`` isn't its served
-    request's."""
-    if scan is None:
-        placed, heads = [served[k] if k < len(served) else None for k in range(cls.slots)], None
-    else:
-        placed, heads = list(scan[0]), scan[1]
-        named = [s for s in placed if s is not None]
-        if len(set(named)) != len(named):
-            raise ValueError("the scan starts one request in two slots of the window")
-        if unplaced := set(served) - set(named):
-            raise ValueError(f"{len(unplaced)} of the window's {len(set(served))} served requests start in none of its "
-                             "slots: the scan anchors them in another window")
-        if extra := sorted(set(named) - set(served)):
-            raise ValueError(f"the scan starts certified requests in the window that it didn't serve: {extra[:4]}")
-    out = []
-    for k, u in enumerate(placed):
-        row, max_tokens = [0] * (cls.prompt + 2), 0
-        if heads is not None:
-            row, max_tokens = list(heads[k][0]), int(heads[k][1][1])
-        if u is not None:
-            body = ingress[u]
-            ids = [int(x) for x in body["prompt"]]
-            want = [1, len(ids), *ids, *[0] * (cls.prompt - len(ids))]
-            if heads is None:
-                row, max_tokens = want, int(body["max_tokens"])
-            elif row[:len(ids) + 2] != want[:len(ids) + 2] or max_tokens != int(body["max_tokens"]):
-                raise ValueError(f"slot {k}: the scan's request isn't the served one: its prompt or max_tokens differ")
-        out.append((u, row, max_tokens))
-    return out
-
-
-def window_design(rule: str, circuit: IF.Circuit) -> dict[str, Any]:
-    """The sampling design a window of ``circuit`` is committed under (``window-commit --sampling-design``): the one the rate ``rule``,
-    which the window's audit states to its stream, names over the circuit's proof blocks (`service.params_sampling_design`), so the
-    window registers the design the stream holds it to. A fixed count is refused by name (`service.SamplingDesign`): no stream
-    takes it, and the audit would hold the window to another design."""
-    from verity.protocols.proofs.spot.verifier import service as S
-
-    S.SamplingDesign(rule)
-    program, query = circuit.program()
-    return dict(S.params_sampling_design(rule, program, query, None)[0])
-
-
 def window_commit_of_advice(a: argparse.Namespace, kept_ingress: KeptIngress | None = None,
                             scan_state_file: str | None = None) -> dict[str, Any]:
     """A served window committed as its circuit (module docstring): its requests lowered (`window_circuit.lower`,
@@ -1717,20 +1573,10 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
               else state}
     held = sorted(p for p, e in reg.values.items() if p in values and values[p].entry() == dict(e))
     lap("weights")
-    filled = WRS.Rows(low, slots, values)
-    lap("rows")
-    win = IF.Window(low.circuit, run, window_design(a.sampling_design, low.circuit), a.cap, advice=bound, registered=values,
-                    forms=WRS.FORMS)
-    win.supply()
-    filled.record(win)
-    lap("record")
-    key = RND.derive(os.urandom(64), "verity/window-commit/salts/v1", {"window": run})
-    c = win.close(workers=a.workers or min(16, os.cpu_count() or 1), strings=WRS.leaf_strings(win, key))
-    lap("close")
-    prov = {"window_circuit": {"class": [cls.slots, cls.prompt, cls.outputs, cls.lanes, cls.every], "window": int(a.window)}}
-    win.write(c, a.out, prov, registrar=DK)
+    filled, win = WREC.commit(low, cls, slots, values, run, window_design(a.sampling_design, low.circuit), a.cap, bound, a.out,
+                              int(a.window), strings=WRS.leaf_strings, workers=a.workers or min(16, os.cpu_count() or 1), lap=lap)
     scan_state_opening(values[SS.SCAN_STATE], Path(a.out) / scan_state_file)
-    lap("write")
+    lap("scan_state")
     sources = {s: int(sum((x == i).sum() for x in filled.source.values())) for i, s in enumerate(WRS.SOURCES)}
     return {"run": run, "circuit": hashlib.sha512((Path(a.out) / "circuit.json").read_bytes()).hexdigest(),
             "population": sum(filled.n.values()), "members": len(win.window.members), "sources": sources,
@@ -1781,7 +1627,6 @@ def main(argv: list[str] | None = None, kept_ingress: KeptIngress | None = None,
     p = sub.choices["commit"]
     p.add_argument("--advice", help="the advice's file: I1's canonical encoding (the prover's, private); a served window's is the "
                    "server's (advice/w<K>/private/advice.bin)")
-    p.add_argument("--forge", help="MEMBER:UNIT: commit that unit with bit 0 of its first output word flipped")
     p.add_argument("--workers", type=int, default=None, help="commit workers per rank (default min(16, CPUs))")
     p.add_argument("--serving-rows-tables", metavar="REGISTRATION_JSON", help="the per-expert cut's tables registration (verity-vllm "
                    "tp-register-tables --out; {rank} in its path its rank's): each window commits the tables its reads read under it")
@@ -1798,7 +1643,6 @@ def main(argv: list[str] | None = None, kept_ingress: KeptIngress | None = None,
     p.add_argument("--port", type=int, default=None, help="the sessions' base port, rank r's from base + a5.RANK_PORTS·r "
                    "(default a base whose ports are free now, `free_ports`)")
     p.add_argument("--session-timeout", type=float, default=14400)
-    p.add_argument("--forged", action="store_true", help="the windows hold a forged unit (commit --forge): every window must be refused")
     p.add_argument("--plain", action="store_true", help="plain Flock sessions, not --zk (a5's --plain): the partition's sampling design "
                    "stratified (stratified-rate:NUM/DEN), each window one member with no registered reads or shared rows "
                    "(a5.PLAIN_SCOPE)")
@@ -1815,10 +1659,6 @@ def main(argv: list[str] | None = None, kept_ingress: KeptIngress | None = None,
     p = sub.add_parser("ran-with", help="the line naming the coins and the parameters a run's sessions are sampled under (`ran_with`)")
     p.add_argument("--challenger", required=True, help="run.sh's PP_CHALLENGER: local, loopback:HOST:PORT or gate:USER@HOST")
     p.add_argument("--challenger-key", help="with gate:USER@HOST: the challenger's key record (challenger-key/v1)")
-    p = sub.add_parser("forged-partition", help="the served arm's forged partition, or its refusal (`served_forged_partition`)")
-    p.add_argument("--honest", required=True, help="the honest run's partition file")
-    p.add_argument("--forged", help="run.sh's PP_FORGED_PARTITION, held to the honest partition's steps (default derived)")
-    p.add_argument("--design", required=True, choices=("rate", "stratified-rate"), help="run.sh's sampling design")
     p = sub.add_parser("compiler", help="a served run's registered compiler: what verity-vllm advice --compiler-name/--compiler-digest takes")
     g = p.add_mutually_exclusive_group(required=True)
     g.add_argument("--serve-run")
@@ -1908,10 +1748,6 @@ def main(argv: list[str] | None = None, kept_ingress: KeptIngress | None = None,
     a = ap.parse_args(argv)
     if a.cmd == "ran-with":
         print(ran_with(a.challenger, json.loads(Path(a.challenger_key).read_text()) if a.challenger_key else None))
-        return 0
-    if a.cmd == "forged-partition":
-        forged = json.loads(Path(a.forged).read_text()) if a.forged else None
-        print(json.dumps(served_forged_partition(json.loads(Path(a.honest).read_text()), forged, a.design), sort_keys=True))
         return 0
     if a.cmd == "compiler":
         print(json.dumps(compiler_doc(a.serve_run, a.hf_config, a.target, a.cap_bits, a.transfer_gate, a.serve), sort_keys=True))

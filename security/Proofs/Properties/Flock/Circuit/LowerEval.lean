@@ -861,10 +861,10 @@ theorem refOf_refOk {P : Prog} {d n : ℕ} (hB : Resolve.BodyOk P d) (hn : n < (
     rw [if_neg hb] at hop
     exact (hB.1 n hn).2.1 i t hop
 
-/-- **`UnitWordComputes` for a template of word-primitive calls and axis-0 batches**, on `Batch0Typed`: where C is topological, its gates
+/-- **`UnitWordComputes` for a template of word-primitive calls and axis-0 batches**, on `Batch0Typed`: where C's gates
 are located and unit `g` resolves. -/
 theorem unitWordComputes_batch0 (hT : Batch0Typed) {bytes : ByteArray} {P : Prog} (hd : decode bytes = .ok P)
-    (hr : (P.defs[P.root]!).body.recut = #[]) (hov : P.orderViolation = none)
+    (hr : (P.defs[P.root]!).body.recut = #[])
     (hG : ∀ h < InferenceOnlyVerifier.Properties.gates P, InferenceOnlyVerifier.Properties.GateOk P h)
     {g k m : ℕ} (hu : Spot.BlockFront.unitAt P g = .ok (k, m)) (hR : UnitResolves P g)
     (hb0 : Batch0 P (P.child P.rootScope k m).d) (hgb : GateBodies P (P.child P.rootScope k m).d)
@@ -885,10 +885,7 @@ theorem unitWordComputes_batch0 (hT : Batch0Typed) {bytes : ByteArray} {P : Prog
   have hD : ∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1
   obtain ⟨hrt, hrp, -⟩ := BodiesOk.decode_root bytes P hd hr
   have hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false := ⟨hrt, hrp⟩
-  obtain ⟨S, hS0, hS⟩ := BodiesOk.order_closed P hov
-  have hB : ∀ sc, Resolve.Good P sc → Resolve.BodyOk P sc.d := fun sc hg => by
-    obtain ⟨hSd, hpd⟩ := BodiesOk.good_closed P S hS0 hrp (fun d hd hp => (hS d hd hp).2) sc hg
-    exact BodiesOk.body_ok P hD sc.d (hS sc.d hSd hpd).1
+  have hB : ∀ sc, Resolve.Good P sc → Resolve.BodyOk P sc.d := fun sc _ => BodiesOk.decoded_bodyOk bytes P hd hr sc.d
   have hL := OperandWidths.decoded_laid bytes P hd hr
   obtain ⟨hsh, hmem⟩ := unitAt_shape hu
   have hc0 : (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = false := hb0.1
@@ -1161,17 +1158,17 @@ theorem unitWordComputes_batch0 (hT : Batch0Typed) {bytes : ByteArray} {P : Prog
       (M := fun i => ((P.defs[(P.child P.rootScope k m).d]!).body.nodes[i]!).members) hO' hNres hx' hRef hretq hqN]
     rw [portWord_lt Y hqN, portWord_lt Y hqN]
 
-/-- **`UnitWordComputes` for a template of word-primitive calls**, on `Batch0Typed`: where C is topological, its gates
+/-- **`UnitWordComputes` for a template of word-primitive calls**, on `Batch0Typed`: where C's gates
 are located and unit `g` resolves. -/
 theorem unitWordComputes_calls (hT : Batch0Typed) {bytes : ByteArray} {P : Prog} (hd : decode bytes = .ok P)
-    (hr : (P.defs[P.root]!).body.recut = #[]) (hov : P.orderViolation = none)
+    (hr : (P.defs[P.root]!).body.recut = #[])
     (hG : ∀ h < InferenceOnlyVerifier.Properties.gates P, InferenceOnlyVerifier.Properties.GateOk P h)
     {g k m : ℕ} (hu : Spot.BlockFront.unitAt P g = .ok (k, m)) (hR : UnitResolves P g)
     (hco : CallsOnly P (P.child P.rootScope k m).d) (hgb : GateBodies P (P.child P.rootScope k m).d) (Y : (Flock.OfProgram.ofProgram P).Trace)
     (hY : ∀ h : Fin (Flock.OfProgram.ofProgram P).N, InUnit P k m h.val → Flock.OfProgram.inputAt P h = false →
       Y h = (Flock.OfProgram.ofProgram P).op h Y) :
     outWords Y g = wordEval P (P.child P.rootScope k m).d (argWords Y g) :=
-  unitWordComputes_batch0 hT hd hr hov hG hu hR (batch0_of_calls hco) hgb Y hY
+  unitWordComputes_batch0 hT hd hr hG hu hR (batch0_of_calls hco) hgb Y hY
 
 /-- A word primitive's value on bits is its Boolean Definition's, where that evaluates. -/
 theorem evalBool_word {bytes : ByteArray} {P : Prog} (h : decode bytes = .ok P)
@@ -1878,7 +1875,7 @@ theorem scope_words {bytes : ByteArray} {P : Prog} (hd : decode bytes = .ok P)
 topological, its gates are located, unit `g` resolves and each Boolean Definition its callee's reached composites lead to
 evaluates through gates alone. -/
 theorem unitWordComputes_nested {bytes : ByteArray} {P : Prog} (hd : decode bytes = .ok P)
-    (hr : (P.defs[P.root]!).body.recut = #[]) (hov : P.orderViolation = none)
+    (hr : (P.defs[P.root]!).body.recut = #[])
     (hG : ∀ h < InferenceOnlyVerifier.Properties.gates P, InferenceOnlyVerifier.Properties.GateOk P h)
     {g k m : ℕ} (hu : Spot.BlockFront.unitAt P g = .ok (k, m)) (hR : UnitResolves P g)
     (hn : BatchNested P (P.child P.rootScope k m).d) (hgd : GateBodiesDeep P (P.child P.rootScope k m).d)
@@ -1899,10 +1896,7 @@ theorem unitWordComputes_nested {bytes : ByteArray} {P : Prog} (hd : decode byte
   have hD : ∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1
   obtain ⟨hrt, hrp, -⟩ := BodiesOk.decode_root bytes P hd hr
   have hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false := ⟨hrt, hrp⟩
-  obtain ⟨S, hS0, hS⟩ := BodiesOk.order_closed P hov
-  have hB : ∀ sc, Resolve.Good P sc → Resolve.BodyOk P sc.d := fun sc hg => by
-    obtain ⟨hSd, hpd⟩ := BodiesOk.good_closed P S hS0 hrp (fun d hd hp => (hS d hd hp).2) sc hg
-    exact BodiesOk.body_ok P hD sc.d (hS sc.d hSd hpd).1
+  have hB : ∀ sc, Resolve.Good P sc → Resolve.BodyOk P sc.d := fun sc _ => BodiesOk.decoded_bodyOk bytes P hd hr sc.d
   have hL := OperandWidths.decoded_laid bytes P hd hr
   obtain ⟨hsh, hmem⟩ := unitAt_shape hu
   have hc0 : (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = false := by
@@ -2011,7 +2005,7 @@ theorem unitComputes_nested (bytes : ByteArray) (P : Prog) (partition : Lean.Jso
     (e : ℕ) (t : Tmpl.Tmpl) (hd : decode bytes = .ok P) (hr : (P.defs[P.root]!).body.recut = #[])
     (hs : Spot.Restrict.restrict P units = .ok S) (ha : Spot.OneStageZk.admitted partition cuts S = .ok a)
     (hab : Spot.OneStageZk.admittedBlock P units a.key = .ok ()) (hl : Flock.Lift.lift S a.d = .ok (L, e))
-    (hbt : Spot.OneStageZk.blockTmpl S a = .ok t) (hov : P.orderViolation = none)
+    (hbt : Spot.OneStageZk.blockTmpl S a = .ok t)
     (hG : ∀ h < InferenceOnlyVerifier.Properties.gates P, InferenceOnlyVerifier.Properties.GateOk P h)
     (hRs : ∀ g ∈ units, UnitResolves P g) (hn : BatchNested P a.d)
     (g : ℕ) (hg : g ∈ units) (k m : ℕ) (hu : Spot.BlockFront.unitAt P g = .ok (k, m))
@@ -2028,9 +2022,9 @@ theorem unitComputes_nested (bytes : ByteArray) (P : Prog) (partition : Lean.Jso
     rw [← hda, hdx]
     exact (Array.getElem?_eq_some_iff.1 h2).1
   have hgb := lowerGateBodies bytes P partition cuts units S a L e t hd hr hs ha hlt hl hbt
-  have ho := unitWordComputes_nested hd hr hov hG hu (hRs g hg) (by rw [hda]; exact hn) (by rw [hda]; exact hgb) Y hY
+  have ho := unitWordComputes_nested hd hr hG hu (hRs g hg) (by rw [hda]; exact hn) (by rw [hda]; exact hgb) Y hY
   have hw : (argWords Y g).map List.length = leafWidths (P.defs[(P.child P.rootScope k m).d]!) := by
-    rw [← (unitWidths bytes P hd hr hov hG g k m hu (hRs g hg)).1]
+    rw [← (unitWidths bytes P hd hr hG g k m hu (hRs g hg)).1]
     simp [argWords, Function.comp_def, portWord_length]
   rw [hda] at hw ho
   unfold outBits argBits
@@ -2047,7 +2041,7 @@ theorem blockEvalDoor_nested (bytes : ByteArray) (P : Prog) (partition : Lean.Js
     (ha : Spot.OneStageZk.admitted partition cuts S = .ok a)
     (hab : Spot.OneStageZk.admittedBlock P units a.key = .ok ()) (hf : Spot.BlockFront.front P units = .ok fr)
     (_ : units.toList.Pairwise (· < ·)) (hl : Flock.Lift.lift S a.d = .ok (L, e))
-    (hbt : Spot.OneStageZk.blockTmpl S a = .ok t) (hov : P.orderViolation = none)
+    (hbt : Spot.OneStageZk.blockTmpl S a = .ok t)
     (hG : ∀ h < InferenceOnlyVerifier.Properties.gates P, InferenceOnlyVerifier.Properties.GateOk P h)
     (hRs : ∀ g ∈ units, UnitResolves P g) (hn : BatchNested P a.d)
     (blocks : Array (Array (ℕ × ℕ))) (u : Fin blocks.size) (hB : BlockIs P blocks u fr)
@@ -2059,7 +2053,7 @@ theorem blockEvalDoor_nested (bytes : ByteArray) (P : Prog) (partition : Lean.Js
   have hY : ∀ h : Fin (Flock.OfProgram.ofProgram P).N, InUnit P k m h.val → Flock.OfProgram.inputAt P h = false →
       Y h = (Flock.OfProgram.ofProgram P).op h Y :=
     fun h h1 h2 => Verity.Partition.localEval_of_mem _ X ((hB h).2 ⟨hin h.val h1, h2⟩)
-  exact (unitComputes_nested bytes P partition cuts units S a L e t hd hr hs ha hab hl hbt hov hG hRs hn g hg k m hu
+  exact (unitComputes_nested bytes P partition cuts units S a L e t hd hr hs ha hab hl hbt hG hRs hn g hg k m hu
     (admitCallee bytes P partition cuts units S a hd hs ha hab g hg k m hu) Y hY).symm
 
 end UnitWordProof

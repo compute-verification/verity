@@ -126,7 +126,7 @@ inputs = [
     # the harness and the benchmarks whose doors it runs import the vLLM adapter through its public interface only, which a
     # test checks against the interface's list of public modules
     "benchmarks/overhead", "benchmarks/prove", "benchmarks/exfiltration", "benchmarks/recursion_e2e",
-    "benchmarks/recursion_figures", "tests/test_vllm_public_api.py",
+    "tests/test_vllm_public_api.py",
     # `verity bench compute` and `verity bench memory` print and write through the kit's report, which a test holds
     # each to on its own suite's fixtures and stand-in store, and they read what their own suites declare
     "benchmarks/compute", "benchmarks/memory", "benchmarks/poub_session/summary.py", "verity/protocol.py",
@@ -152,7 +152,7 @@ inputs = [
 [[tool.verity.tests.reads]]
 tests = ["test_bench.py", "test_bench_engines.py", "test_bench_results.py",
          "test_bench_resume.py", "test_bench_served.py"]
-paths = ["verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/models.json"]
+paths = ["verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/models.json", "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/h1_tiles.json"]
 
 [[tool.verity.tests.reads]]
 tests = ["test_breakdown.py", "test_overhead_command.py", "test_overhead_node.py",

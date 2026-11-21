@@ -184,7 +184,7 @@ SETTINGS: dict[str, Setting] = _declare(
     S("NATIVE_GATHER_BLOCKS", int, None, VALUE, "thread blocks per staged descriptor in the gather kernel; unset, 1024 size-adaptive, "
       "32 with native hooks, else 4"),
     S("NATIVE_GATHER_AUTO_BYTES", int, 32768, VALUE, "staged bytes per thread block of the size-adaptive gather"),
-    # ---- the Commit (pipeline/commit.py and its helpers)
+    # ---- the Commit
     S("VERITY_ADMIT_HIDDEN_FACTOR", float, 1.05, VALUE, "admission: the planned hidden-class bytes' safety factor"),
     S("VERITY_ADMIT_OTHER_FACTOR", float, 2.0, VALUE, "admission: the other planned bytes' safety factor"),
     S("VERITY_ADMIT_OVER_BOUND", one, False, VALUE, "admission: 1 runs a Commit whose plan is over its bound (recorded as an override)"),
@@ -325,7 +325,7 @@ ELSEWHERE = frozenset((
     "VERITY_REGRESSION_TIERS", "VERITY_REGRESSION_VERIFY_ALL", "VERITY_REPIN", "VERITY_RESEARCH_POSTGRES", "VERITY_RMS_TABLES",
     "VERITY_SESSION_SO", "VERITY_SKIP_STORE", "VERITY_SLOW", "VERITY_STORE_REQUIRED", "VERITY_TC_PROBE_FP4_NVCC", "VERITY_TEST_CACHE",
     "VERITY_TEST_CACHE_MIN_S", "VERITY_TRACE_DIR", "VERITY_VEC_IN", "VERITY_VEC_OUT", "VERITY_VLLM_BOOLEAN_NORMS_FULL",
-    "VERITY_VLLM_BOOLEAN_SWEEPS", "VERITY_VLLM_CLASS_G_WINDOW", "VERITY_VLLM_INT8_K_SCALES", "VERITY_VLLM_TANH_EXHAUSTIVE",
+    "VERITY_VLLM_BOOLEAN_SWEEPS", "VERITY_VLLM_CLASS_G_WINDOW", "VERITY_VLLM_TANH_EXHAUSTIVE",
     "VERITY_VSTAR_STAGE", "VERITY_VSTAR_STAGE_OUT",
 ))
 

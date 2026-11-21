@@ -5,7 +5,7 @@ named twice, the GEMM chain with the catalog's Boolean bodies, and `tests/verity
 (each the smallest that trips one refusal of the Python decoder; three it takes against its registry, Lean's decoder having none, `LEAN_TAKES`). Both answer an accept with the program's digest and its
 Boolean map, and a refusal with its first `E_` code, which must be the same code. Lean's encoder
 (`Flock.Program.Prog.encode`) of what Lean decodes is held to `codec.descriptor_chunks` of what the codec decodes, byte for
-byte."""
+byte, and Lean's builder (`Flock.Program.Build`) to `Program` on the word equality `I32Eq` and on the product `Gemm_v2{K=32, N=2}`."""
 
 from __future__ import annotations
 
@@ -97,12 +97,12 @@ def test_lean_takes_what_the_registry_refuses(server, name):
     assert json.loads(server.call("decode", {"descriptor": text})[1])["ok"] is True
 
 
-def codec_encoding(text: str, registry) -> bytes | None:
-    """`codec.descriptor_chunks` of the Program `codec.decode_program` reads from ``text``, or None where it refuses."""
+def codec_encoding(text: str, registry) -> bytes | Exception:
+    """`codec.descriptor_chunks` of the Program `codec.decode_program` reads from ``text``, or its refusal."""
     try:
         program = codec.decode_program(json.loads(text), registry)
-    except Exception:  # noqa: BLE001
-        return None
+    except Exception as e:  # noqa: BLE001
+        return e
     return b"".join(codec.descriptor_chunks(program))
 
 
@@ -116,10 +116,13 @@ def test_encode_writes_the_codecs_bytes(server, name):
     decoded = json.loads(server.call("decode", {"descriptor": text})[1])
     assert lean["ok"] == decoded["ok"], lean.get("message")
     if not lean["ok"]:
+        assert lean["message"] == TEXTS.get(name), REWRITE
         return
     encoded = lean["encoded"].encode()
     python = codec_encoding(text, REGISTRY[text])
-    if python is not None:
+    if name not in LEAN_TAKES:
+        assert isinstance(python, bytes), f"the codec no longer decodes an accepted case, so no bytes were compared: {python!r}"
+    if isinstance(python, bytes):
         assert encoded == python
     again = json.loads(server.call("decode", {"descriptor": lean["encoded"]})[1])
     assert again == {"ok": True, "program_digest": hashlib.sha512(encoded).hexdigest(), "boolean": decoded["boolean"]}
@@ -190,3 +193,32 @@ def test_cases_reach_accepts_and_every_body_refusal():
     assert any(v["ok"] and v["boolean"] for v in seen)
     codes = {v.get("error") for v in seen if not v["ok"]}
     assert {"E_SCHEMA", "E_BODY_KEY", "E_BODY_MISSING", "E_BODY_NOT_BOOLEAN"} <= codes, codes
+
+
+def lean_built(server, fn: str, value: dict) -> dict:
+    answer = json.loads(server.call(fn, value)[1])
+    assert answer["ok"], answer.get("message")
+    return answer
+
+
+def test_builder_writes_i32eqs_bytes(server):
+    """`Build.eqBits 5`, the builder's word equality on 32 bits, is `Program(I32Eq)`: 159 gates, built from the Boolean primitives."""
+    from verity.circuits.ops.boolean import scalar as BS
+    from verity.circuits.program import Program
+    text = b"".join(codec.descriptor_chunks(Program(BS.I32Eq))).decode()
+    d = json.loads(text)
+    lean = lean_built(server, "build_eq", {"k": 5, "root": d["root"], "program_fn": d["program_fn"]})
+    assert lean["encoded"] == text
+
+
+@pytest.mark.parametrize(("k", "n"), [(32, 2)])
+def test_builder_writes_products_bytes(server, k, n):
+    """The benchmark's product `Gemm_v2{K, N}`, built in Lean with its primitives and their Boolean Definitions adopted from the GEMM
+    chain's Program (`Gemm_v2{K=16, N=16}`), is `Program(bind(Gemm, K, N))` byte for byte."""
+    from verity.circuits.defs import bind
+    from verity.circuits.ops import gemm as G
+    from verity.circuits.program import Program
+    text = b"".join(codec.descriptor_chunks(Program(bind(G.Gemm, K=k, N=n, **G.GEMM_AMPERE)))).decode()
+    lean = lean_built(server, "build_product", {"registry": C.chain(), "K": k, "N": n})
+    assert lean["encoded"] == text
+    assert lean["program_digest"] == hashlib.sha512(text.encode()).hexdigest()

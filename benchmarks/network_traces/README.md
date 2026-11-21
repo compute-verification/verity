@@ -313,7 +313,7 @@ The terms, in the generator reading of the scan's statement (each proof block's 
   (`ingress_scan.entry_bits`) an execution phase; or an entry's 33 + KO·IDB bits a request if `prog` is an input only at
   its anchored entries.
 - No term for incorrect proof blocks with every proof block sampled.
-- The jitter term is charged at D_j = 2 (`scan_answer.JITTER_BOUND`): one bit a bucket, T bits an execution phase (the
+- The jitter term is charged at D_j = 2 (`leak_bounds.JITTER_BOUND`): one bit a bucket, T bits an execution phase (the
   record's `terms.jitter_per_block`). J assumed at D_j = 2; at D_j = 1 not met (next-bucket host-state channel). J is
   one bound over every step (`NetTiming.JitterBounded`), so every bucket pays its bit. The network attester hands each bucket
   to a pacer that releases it at a time fixed before the bucket is made (`network_attester.NetworkAttester(paced=…)`, `network_attester_serve.py
@@ -340,10 +340,10 @@ each leaf but the first the o1 of the proof block that computes it and the sin o
 a state tree that skips or alters a transition is refused at that proof block's o1; the block round's registration
 names it as `scan/state`.
 A scan proof block's public word, o0, is its ok bit. scan_zk commits a member's o0 rows under the verifier's public
-salts (`ok_salts`, `scan_ok.salt`: row i's from its index alone), so the o0 root of a member whose every proof block is
+salts (`ok_salts`, `ScanOk.salt`: row i's from its index alone), so the o0 root of a member whose every proof block is
 ok is a constant of its template and count, and one execution phase's members are a function of the schedule's T
-(`scan_ok.members`: `ingress-0`, `last` and `egress-0`; the start proof block, `start`, has no ok bit). The check computes those constants once a period
-(`scan_ok.constants`, Lean `ScanOk.consts`) and refuses, last, by name, an execution phase whose scan's registration
+(`ScanOk.members`: `ingress-0`, `last` and `egress-0`; the start proof block, `start`, has no ok bit). The check computes those constants once a period
+(Lean `ScanOk.consts`) and refuses, last, by name, an execution phase whose scan's registration
 names a member's `<member>/o0` at another root, leaf count or domain, names none for it, or names another port ending
 `/o0` (`held`): comparisons alone, no hash an execution phase. An ok bit is then the verifier's own computation from
 public parameters, never a row the prover's registered file states. Two members of one template and one count (at

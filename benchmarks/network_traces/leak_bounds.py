@@ -136,7 +136,12 @@ from verity.protocols.resource_accounting.network.prover import stop_verdicts as
 from verity.protocols.resource_accounting.network.verifier import class_charge as CC
 from verity.protocols.resource_accounting.network.verifier import network_attester as W
 from verity import protocol
-from verity.protocols.resource_accounting.network.verifier.scan_answer import JITTER_BOUND
+
+#: the jitter bound D_j that K is charged at (`NetTiming.JitterBounded`, one bound over every step): a statement of k
+#: steps, one a bucket, pays ⌈log2 D_j^k⌉ = k bits. Each bucket leaves at a time fixed before it is made
+#: (`network_attester.NetworkAttester(paced=…)`), yet the host's state after the server's writes for the next
+#: bucket still moves a bucket's arrival offset, so J isn't met at D_j = 1
+JITTER_BOUND = 2
 
 #: the monitoring periods' seconds, by name
 PERIODS: dict[str, int] = dict(protocol.MONITORING_PERIODS)

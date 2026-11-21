@@ -1212,7 +1212,7 @@ def UnitComputes : Prop :=
     Spot.Restrict.restrict P units = .ok S → Spot.OneStageZk.admitted partition cuts S = .ok a →
     Spot.OneStageZk.admittedBlock P units a.key = .ok () → Flock.Lift.lift S a.d = .ok (L, e) →
     Spot.OneStageZk.blockTmpl S a = .ok t →
-    P.orderViolation = none → (∀ h < InferenceOnlyVerifier.Properties.gates P, InferenceOnlyVerifier.Properties.GateOk P h) →
+    (∀ h < InferenceOnlyVerifier.Properties.gates P, InferenceOnlyVerifier.Properties.GateOk P h) →
     (∀ g ∈ units, UnitResolves P g) →
     ∀ g ∈ units, ∀ k m, Spot.BlockFront.unitAt P g = .ok (k, m) → (P.child P.rootScope k m).d = a.d →
     ∀ Y : (Flock.OfProgram.ofProgram P).Trace,
@@ -1510,24 +1510,22 @@ theorem portBits_length {P : Prog} (X : (Flock.OfProgram.ofProgram P).Trace) (po
   simp [portBits_eq, List.length_flatten, Function.comp_def, portWord_length]
 
 /-- **`UnitWidths`**: unit `g`'s arguments, as `portBits` lays them, have its callee's parameter leaf widths, and its
-return leaves its callee's return widths, for every trace alike, where C is topological (`Prog.orderViolation`), every
-gate of C is located (`GateOk`) and `g` resolves (`UnitResolves`). Without the order it is false: `decode` checks no
-width of a reference to a later node, so a Value<8> parameter can read a later Value<16> leaf. Without gates located
-it is false: a gate `Prog.gate` cannot locate has width 0. -/
+return leaves its callee's return widths, for every trace alike, where every gate of C is located (`GateOk`) and `g`
+resolves (`UnitResolves`). Without gates located it is false: a gate `Prog.gate` cannot locate has width 0. -/
 def UnitWidths : Prop :=
   ∀ (bytes : ByteArray) (P : Prog), decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] →
-    P.orderViolation = none → (∀ h < InferenceOnlyVerifier.Properties.gates P, InferenceOnlyVerifier.Properties.GateOk P h) →
+    (∀ h < InferenceOnlyVerifier.Properties.gates P, InferenceOnlyVerifier.Properties.GateOk P h) →
     ∀ (g k m : ℕ), Spot.BlockFront.unitAt P g = .ok (k, m) → UnitResolves P g →
       (unitArgs P g).toList.map (leafWidth P) = leafWidths (P.defs[(P.child P.rootScope k m).d]!) ∧
         (unitOuts P g).toList.map (leafWidth P) = (P.defs[(P.child P.rootScope k m).d]!).ret.widths.toList
 
 /-- **`UnitWordComputes`** (open): in a trace of C whose every computed gate of unit `g` is its operation on the trace,
-`g`'s return leaves' words are its callee's value on its arguments' words (`wordEval`), where C is topological, its gates
+`g`'s return leaves' words are its callee's value on its arguments' words (`wordEval`), where C's gates
 are located, `g` resolves, as `UnitWidths` reads, and each Boolean Definition the nodes of a composite reached from its
 callee lead to evaluates through gates alone (`GateBodiesDeep`). -/
 def UnitWordComputes : Prop :=
   ∀ (bytes : ByteArray) (P : Prog), decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] →
-    P.orderViolation = none → (∀ h < InferenceOnlyVerifier.Properties.gates P, InferenceOnlyVerifier.Properties.GateOk P h) →
+    (∀ h < InferenceOnlyVerifier.Properties.gates P, InferenceOnlyVerifier.Properties.GateOk P h) →
     ∀ (g k m : ℕ), Spot.BlockFront.unitAt P g = .ok (k, m) → UnitResolves P g →
       GateBodiesDeep P (P.child P.rootScope k m).d →
       ∀ Y : (Flock.OfProgram.ofProgram P).Trace,
@@ -1671,7 +1669,7 @@ theorem leafWidth_of_gate {P : Prog} (hG : ∀ h < InferenceOnlyVerifier.Propert
 /-- **`UnitWidths`, the arguments**: each operand of unit `g` that `operandsW` gives is as wide in C as its callee's
 parameter leaf. -/
 theorem unitArgs_widths {bytes : ByteArray} {P : Prog} (hd : decode bytes = .ok P)
-    (hr : (P.defs[P.root]!).body.recut = #[]) (hov : P.orderViolation = none)
+    (hr : (P.defs[P.root]!).body.recut = #[])
     (hG : ∀ h < InferenceOnlyVerifier.Properties.gates P, InferenceOnlyVerifier.Properties.GateOk P h)
     {g k m : ℕ} (hu : Spot.BlockFront.unitAt P g = .ok (k, m)) (hR : UnitResolves P g) :
     (unitArgs P g).toList.map (leafWidth P) = leafWidths (P.defs[(P.child P.rootScope k m).d]!) := by
@@ -1692,10 +1690,7 @@ theorem unitArgs_widths {bytes : ByteArray} {P : Prog} (hd : decode bytes = .ok 
   have hD : ∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1
   obtain ⟨hrt, hrp, -⟩ := BodiesOk.decode_root bytes P hd hr
   have hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false := ⟨hrt, hrp⟩
-  obtain ⟨S, hS0, hS⟩ := BodiesOk.order_closed P hov
-  have hB : ∀ sc, Resolve.Good P sc → Resolve.BodyOk P sc.d := fun sc hg => by
-    obtain ⟨hSd, hpd⟩ := BodiesOk.good_closed P S hS0 hrp (fun d hd hp => (hS d hd hp).2) sc hg
-    exact BodiesOk.body_ok P hD sc.d (hS sc.d hSd hpd).1
+  have hB : ∀ sc, Resolve.Good P sc → Resolve.BodyOk P sc.d := fun sc _ => BodiesOk.decoded_bodyOk bytes P hd hr sc.d
   have hL := OperandWidths.decoded_laid bytes P hd hr
   have hW := LeafWidths.decoded_wide bytes P hd hr
   obtain ⟨hsh, hmem⟩ := unitAt_shape hu
@@ -1715,7 +1710,7 @@ theorem unitArgs_widths {bytes : ByteArray} {P : Prog} (hd : decode bytes = .ok 
 /-- **`UnitWidths`, the return leaves**: each return leaf of unit `g` resolves to a gate of C as wide as its callee's
 return leaf. -/
 theorem unitOuts_widths {bytes : ByteArray} {P : Prog} (hd : decode bytes = .ok P)
-    (hr : (P.defs[P.root]!).body.recut = #[]) (hov : P.orderViolation = none)
+    (hr : (P.defs[P.root]!).body.recut = #[])
     (hG : ∀ h < InferenceOnlyVerifier.Properties.gates P, InferenceOnlyVerifier.Properties.GateOk P h)
     {g k m : ℕ} (hu : Spot.BlockFront.unitAt P g = .ok (k, m)) (hR : UnitResolves P g) :
     (unitOuts P g).toList.map (leafWidth P) = (P.defs[(P.child P.rootScope k m).d]!).ret.widths.toList := by
@@ -1750,10 +1745,7 @@ theorem unitOuts_widths {bytes : ByteArray} {P : Prog} (hd : decode bytes = .ok 
   have hD : ∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1
   obtain ⟨hrt, hrp, -⟩ := BodiesOk.decode_root bytes P hd hr
   have hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false := ⟨hrt, hrp⟩
-  obtain ⟨S, hS0, hS⟩ := BodiesOk.order_closed P hov
-  have hB : ∀ sc, Resolve.Good P sc → Resolve.BodyOk P sc.d := fun sc hg => by
-    obtain ⟨hSd, hpd⟩ := BodiesOk.good_closed P S hS0 hrp (fun d hd hp => (hS d hd hp).2) sc hg
-    exact BodiesOk.body_ok P hD sc.d (hS sc.d hSd hpd).1
+  have hB : ∀ sc, Resolve.Good P sc → Resolve.BodyOk P sc.d := fun sc _ => BodiesOk.decoded_bodyOk bytes P hd hr sc.d
   have hL := OperandWidths.decoded_laid bytes P hd hr
   have hW := LeafWidths.decoded_wide bytes P hd hr
   obtain ⟨hsh, hmem⟩ := unitAt_shape hu

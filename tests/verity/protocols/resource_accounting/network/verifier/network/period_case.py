@@ -13,10 +13,10 @@ session's signed start (`attester.certificate`'s `CertifiedStart.refusal`, under
 is refused by name, `NOT_SIGNED`, and one whose shown start its session did not certify, `UNCERTIFIED`), one-stage's
 `registration.digest` (a registration record is ASCII-only, where its canonical JSON is Lean's), the schedule
 (`network_attester.NetworkAttesterParams`), the verifier's read of each row registration
-(`network_attester_rows.check_registration`) and the scan's ok bits' constants, computed once a period and compared an execution
-phase (`scan_ok.constants` and `held`), and the scan's terms read off its Program's descriptor (`_scan`), as each compute
+(`network_attester_rows.check_registration`), and the scan's terms read off its Program's descriptor (`_scan`), as each compute
 audit's units and their committed bits are read off its own (`_audit`). Its verdict,
-public, profile and digest are Lean's exactly; its reason is its own. The period is in the rows form, the one form the
+public, profile and digest are Lean's exactly; its reason is its own. The scan's ok bits (`okChecks`) are Lean's
+alone: the mirror doesn't hold a registration to the schedule's constants, so `LEAN_ONLY`'s changes are not in `EXPECT`. The period is in the rows form, the one form the
 check reads: parameters naming a `sync_set` (the clock form's) are refused before anything else is read. Public is `K`
 and its terms over `MonitoringPeriodLeakAccepted`'s windows (the execution phases' scans, all at one δ), each with its
 `delta`, and `eps`, the union of those deltas as an exact ratio string, and the schedule's response cap
@@ -124,7 +124,7 @@ import verity_difftest as D
 from verity_difftest import protocol as P
 from verity.commitments import docket_digest as DD
 from verity.commitments import domains as DM
-from verity.protocols.resource_accounting.network.verifier import content_rows, io_request, scan_ok
+from verity.protocols.resource_accounting.network.verifier import content_rows, io_request
 from verity.protocols.resource_accounting.network.verifier import network_attester_rows as WR
 from verity.protocols.resource_accounting.network.verifier.certificate import (Certificate, CertifiedStart, Direction, LmsKey,
                                                                         start_digest, start_link)
@@ -145,6 +145,10 @@ from verity.circuits.ops.boolean import versions as V
 from verity.circuits.refs import Coll, Explicit, array_of, coll_concat, tuple_of
 from verity.circuits.types import Array, Tuple, Value
 from verity.commitments import advice as ADV
+from verity.commitments import hm96
+from verity.commitments.identity import identity_digest_sha512
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as ROW_SCHEMA
+from verity.commitments.rowleaf import bit_row
 from verity.commitments.frame_v3 import BitRowLeaf
 from verity.commitments.identity import tagged_sha512
 from verity.commitments.merkle import CommitmentDomain
@@ -606,9 +610,11 @@ def _walkable(j: dict) -> bool:
     return (acts + 1) * (depth + 2) <= FUEL // 2 and not empty
 
 
-def _topological(j: dict) -> bool:
-    """`Prog.orderViolation` is none: each argument of a body the root reaches names only the body's parameters and
-    its earlier nodes (an affine or strided part of no leaves names nothing; the returns aren't read)."""
+def _order_violation(j: dict) -> str | None:
+    """`Prog.orderViolation`'s first finding, as the refusal of the decoder, which Lean runs first: an argument of a body
+    the root reaches naming its own node or a later one (`codec.forward_refusal`), or a parameter the body lacks; None when
+    each names only the body's parameters and its earlier nodes (a part of no leaves names nothing; the returns aren't
+    read)."""
     defs, callees = j["definitions"], j["callees"]
     seen, todo = set(), [j["root"]]
     while todo:
@@ -622,10 +628,13 @@ def _topological(j: dict) -> bool:
                 for q in _parts(a["refs"], body["nodes"]):
                     r = q.get("affine") or q.get("strided")
                     names = [(s, i) for s, i, _ in q["explicit"]] if "explicit" in q else [r[:2]] if r[-1] else []
-                    if any(not i < (len(body["params"]) if s == "p" else k) for s, i in names):
-                        return False
+                    for s, i in names:
+                        if s != "p" and i >= k:
+                            return codec.forward_refusal(k, i)
+                        if s == "p" and i >= len(body["params"]):
+                            return f"node {k} names parameter {i}, past its body's {len(body['params'])}"
             todo.append(callees[x["fn"]])
-    return True
+    return None
 
 
 def slot_entry_digest(j: dict, key: str) -> str:
@@ -674,9 +683,8 @@ def _scan(j, program: str, s: NetworkAttesterParams) -> Scan:
     own input node of its slot entries (`_reads_entries`), the row, state and egress arguments' input nodes
     pairwise distinct and none a lane's slot entries' (`argsApart`), each of those arguments all its node's leaves,
     each lane's slot entries' node its entries' leaves and no other input node (`inputsRead`), and the Program
-    topological (`_topological`). It reads
-    the descriptor's nodes, signatures and returns; Flock's decoder, which Lean runs on it, refuses no descriptor
-    this module writes."""
+    topological (`_order_violation`, in the decoder's words, since Lean's decoder refuses it before any of these). It
+    reads the descriptor's nodes, signatures and returns."""
     if not isinstance(j, dict) or j.get("schema") != SCHEMA:
         raise D.Reject("scan: not a Program's descriptor")
     if program_sha512(j) != program:
@@ -763,9 +771,8 @@ def _scan(j, program: str, s: NetworkAttesterParams) -> Scan:
                        f"its input node's leaves, a lane's slot entries' node of other leaves than its {nb} entries' "
                        "(each of at least a bit), or an input node that is neither's "
                        "(NetworkVerifier.Period.inputsRead)")
-    if not _topological(j):
-        raise D.Reject("scan: a body names a later node (Flock.Program.Prog.orderViolation): the Program is not "
-                       "topological, so a gate's operands could be gates after it")
+    if (why := _order_violation(j)) is not None:
+        raise D.Reject(f"scan: {why}")
     return Scan(T, 0, bits_of(bi["ret_type"]), bits_of(be["ret_type"]), L * nb * bits_of(ety),
                 bits_of(bs["params"][0][1]))
 
@@ -1587,16 +1594,6 @@ def check(p: Params, c: Commitment, e) -> tuple:
                  for i, x in enumerate(windows) if not tied_input_wired(p.schedule, x.answer)]
     findings += [Finding(REJECT, f"window {p.first + i}: {why}") for i, reg in enumerate(c.windows)
                  if (why := _start_refusal(p.first + i, i, reg))]
-    # `okChecks`: the schedule's constants, hashed once a period, and each registration compared to them; a
-    # schedule with none refuses every registration
-    try:
-        consts = scan_ok.constants(p.schedule.window)
-    except scan_ok.FewTicks as few:
-        findings += [Finding(REJECT, f"execution phase {p.first + i}: {UNCOMPUTED}: {few}")
-                     for i in range(len(c.windows))]
-    else:
-        findings += [Finding(REJECT, f"execution phase {p.first + i}: {UNOK}") for i, reg in enumerate(c.windows)
-                     if not scan_ok.held(consts, reg)]
     findings += [Finding(REJECT, f"execution phase {p.first + i}: {UNHELD}") for i, reg in enumerate(c.windows)
                  if not _held(p, c.audits, reg)]
     if rejected := next((f for f in findings if f.verdict == REJECT), None):
@@ -1654,7 +1651,7 @@ EXPECT = {
     "rows-answer-unsampled": REJECT, "rows-answer-unregistered": REJECT, "rows-delta": REJECT, "rows-units": REJECT,
     "rows-prog-untied": REJECT, "rows-prog-unwired": REJECT, "rows-state-untied": REJECT, "rows-state-misindexed": REJECT,
     "rows-start-unpinned": REJECT, "rows-start-carried": REJECT, "rows-start-charged": ACCEPT, "rows-circuit-swapped": REJECT,
-    "rows-ok-unheld": REJECT, "rows-ok-equal": ACCEPT, "rows-one-tick": REJECT,
+    "rows-ok-equal": ACCEPT,
     "rows-audit-other": REJECT, "rows-audit-reject": REJECT, "rows-audit-undecided": UNDECIDED,
     "rows-audit-profile": REJECT, "rows-audit-bound": REJECT, "rows-audit-program": REJECT, "rows-audit-units": REJECT,
     "rows-audit-oversampled": REJECT, "rows-audit-unsampled": REJECT, "rows-audit-unregistered": REJECT,
@@ -1664,6 +1661,8 @@ EXPECT = {
     "rows-params": REJECT, "rows-commitment": REJECT, "rows-evidence": REJECT, "case": REJECT,
 }
 MUTATIONS = list(EXPECT)
+#: The changes only Lean refuses, the scan's ok bits (`okChecks`), each by its reason
+LEAN_ONLY = {"rows-ok-unheld": UNOK, "rows-one-tick": f"{UNCOMPUTED}: T = 1: a scan has at least two ticks"}
 #: The changes to which entries the parameters list and which of them sign (`rows-…`). Accepted: the
 #: signer's entry the second of two, and two entries whose stretches each hold some of the period's execution phases,
 #: each execution phase signed by its own entry at its own number. Refused: two listed entries that sign in turn, each
@@ -1756,7 +1755,7 @@ LENGTHS_CELL = HEADER.size + io_request.layout(1 << 12).start + ID_FIELD_BYTES
 
 def _small_schedule(r: random.Random, small: bool, capped: bool = False, T: int | None = None) -> NetworkAttesterParams:
     """A schedule of small rows: B just past a cell's header, S = lanes · slots at most 4, T 2 or 3 (2 if
-    `small`: the least a scan has, `scan_ok.constants`) or the `T` asked for, and a timestep `every` that divides T;
+    `small`: the least a scan has, `_ok_constants`) or the `T` asked for, and a timestep `every` that divides T;
     `capped`: with a response cap, B just past the least cell that holds an id request's `max_tokens`
     (`CAPPED_CELL`)."""
     T = r.randint(2, 2 if small else 3) if T is None else T
@@ -2087,6 +2086,29 @@ EQUAL_T = 2
 ONE_TICK = 1
 
 
+#: the start unit's first output: the state it copies, no ok bit
+OK_START = "start/o0"
+
+
+def _ok_entry(name: str, template: str, n: int) -> dict:
+    """The `<name>/o0` entry of a scan member of `n` proof blocks of `template`, every one ok, as Lean's
+    `ScanOk.constOf` computes it: `n` rows 1 in a 16-bit word, row i under the public salt of index i."""
+    binding = identity_digest_sha512(DM.FLOCK_CIRCUIT_BINDING, {"set": f"unit-scan-{template}", "lo": 0, "hi": n,
+                                                                "port": "o0", "schema": ROW_SCHEMA})
+    tag = DM.CERTIFIER_SCAN_OK_ROW_SALT.encode() + b"\0"
+    salts = [b"".join(hashlib.sha512(tag + i.to_bytes(8, "big") + c.to_bytes(4, "big")).digest()
+                      for c in range(hm96.SHA512.salt_bytes // 64)) for i in range(n)]
+    tree = ADV.commit([bit_row(((1,), 16))[0]] * n, 16, binding, salts=salts)
+    return {"domain": ADV.domain(tree.binding, n).domain_id.hex(), "leaves": n, "port": f"{name}/o0",
+            "root": tree.root.hex()}
+
+
+def _ok_constants(T: int) -> list[dict]:
+    """Each ok member's entry at a schedule of `T` ≥ 2 ticks: `ingress-0`, buckets 0 … T − 2; `last`, bucket T − 1;
+    `egress-0`, the T egress buckets."""
+    return [_ok_entry(*m) for m in (("ingress-0", "ingress", T - 1), ("last", "ingress", 1), ("egress-0", "egress", T))]
+
+
 def PAIR(T: int) -> tuple[tuple[str, str, int], ...]:
     """The members with an ok bit (name, template, proof blocks) of one scan over a group of two execution phases of
     `T` ticks: `ingress-0`, buckets 0 … T − 1, and `ingress-1`, buckets T … 2T − 2; `last`, bucket 2T − 1; and
@@ -2226,11 +2248,10 @@ def _state_entries(rp: random.Random, states: dict, i: int, where: str, unstate:
 
 def _ok_entries(ro: random.Random, T: int, unok: str | None) -> tuple[str, list[dict]]:
     """The scan's registration's entries for its members' ok bits, and the list they go in: each member's
-    `<member>/o0` in `roots` at the schedule's constant (`scan_ok.constants`), broken as `unok` says, and at times
-    the start unit's `start/o0` (`scan_ok.START`), a state and no ok bit, at any root. A schedule of one tick has no
+    `<member>/o0` in `roots` at the schedule's constant (`_ok_constants`), broken as `unok` says, and at times
+    the start unit's `start/o0` (`OK_START`), a state and no ok bit, at any root. A schedule of one tick has no
     constants: its registration names those of two ticks."""
-    es = [{"domain": c.domain, "leaves": c.leaves, "port": c.port, "root": c.root}
-          for c in scan_ok.constants(max(T, 2))]
+    es = _ok_constants(max(T, 2))
     hit = ro.randrange(len(es))
     e, member = es[hit], es[hit]["port"].removesuffix("/o0")
     if unok == "root":
@@ -2249,17 +2270,15 @@ def _ok_entries(ro: random.Random, T: int, unok: str | None) -> tuple[str, list[
         es.append(ro.choice([e | {"root": ro.randbytes(64).hex()}, e | {"port": "other/o0"},
                              e | {"port": entries_port(SLOT_KEY)}]))
     elif unok == "other":
-        es = [{"domain": c.domain, "leaves": c.leaves, "port": c.port, "root": c.root}
-              for c in scan_ok.constants(T + ro.choice([1, 2]))]
+        es = _ok_constants(T + ro.choice([1, 2]))
     elif unok == "untyped":
         e[ro.choice(["root", "domain"])] = ro.choice([None, 7, False])
     elif unok == "registered":
         return "registered", [{("value" if k == "port" else k): v for k, v in x.items()} for x in es]
     elif unok == "group":
-        es = [{"domain": c.domain, "leaves": c.leaves, "port": c.port, "root": c.root}
-              for c in (scan_ok.constant(*m) for m in PAIR(T))]
+        es = [_ok_entry(*m) for m in PAIR(T)]
     if ro.random() < 0.5:
-        es.append({"domain": ro.randbytes(64).hex(), "leaves": 1, "port": scan_ok.START, "root": ro.randbytes(64).hex()})
+        es.append({"domain": ro.randbytes(64).hex(), "leaves": 1, "port": OK_START, "root": ro.randbytes(64).hex()})
     ro.shuffle(es)
     return "roots", [_present(x) for x in es]
 
@@ -3272,7 +3291,7 @@ def scan_negatives(p: dict) -> dict[str, tuple[dict, str]]:
             a["refs"] = moved(a["refs"])
     r["ret"] = moved(r["ret"])
     nodes.append(nodes.pop(kr))
-    out["topological"] = own(d), "a body names a later node"
+    out["topological"] = own(d), _order_violation(d)
     return out
 
 

@@ -78,3 +78,109 @@ def test_a_warning_on_the_error_stream_is_no_panic(tmp_path):
         assert json.loads(server.call("verdict", {})[1]) == ACCEPT
     finally:
         server.close()
+
+
+#: the runtime's lines with no ``PANIC`` (`verity.lean_process.PANIC`): an index past the end, `String.get!` off a character,
+#: `Task.get` in a sync task, a stack overflow and a debug build's assertion
+OTHER_PANICS = ["Error: index out of bounds", "Error: invalid `String.Pos` at `String.get!`",
+                "`Task.get` called from a `(sync := true)` task", "Stack overflow detected. Aborting.",
+                "LEAN ASSERTION VIOLATION"]
+
+
+def _replying(stderr_line: str | None, then: str = "") -> str:
+    """A server that answers accept to every request, with ``stderr_line`` before each reply and ``then`` after it."""
+    out = json.dumps({"output": ACCEPT}, sort_keys=True, separators=(",", ":"))
+    return (f"for line in sys.stdin:\n"
+            f"    {'print(%r, file=sys.stderr, flush=True)' % stderr_line if stderr_line else 'pass'}\n"
+            f"    print({out!r}, flush=True)\n    {then or 'pass'}\n")
+
+
+@pytest.mark.parametrize("line", OTHER_PANICS)
+def test_an_accept_beside_a_runtime_line_with_no_panic_word_is_refused_by_name(tmp_path, line):
+    server = _fake(tmp_path, _replying(line))
+    try:
+        with pytest.raises(D.ProtocolError) as e:
+            server.call("verdict", {})
+        assert str(e.value) == f"{D.LEAN_PANIC}: {line}"
+    finally:
+        server.close()
+
+
+def test_a_server_that_ends_134_silently_after_an_accept_is_refused_by_name_at_its_next_request(tmp_path):
+    server = _fake(tmp_path, _replying(None, "sys.exit(134)"))
+    try:
+        assert server.call("verdict", {})[0] == "output"
+        with pytest.raises(D.ProtocolError, match=f"{D.LEAN_EXIT}: status 134 \\(abort\\)"):
+            server.call("verdict", {})
+    finally:
+        server.close()
+
+
+def test_a_server_killed_by_a_signal_after_an_accept_is_refused_by_name_at_its_next_request(tmp_path):
+    server = _fake(tmp_path, _replying(None, "import signal; os.kill(os.getpid(), signal.SIGKILL)"))
+    try:
+        assert server.call("verdict", {})[0] == "output"
+        with pytest.raises(D.ProtocolError, match=f"{D.LEAN_EXIT}: killed by SIGKILL"):
+            server.call("verdict", {})
+    finally:
+        server.close()
+
+
+def test_a_refusal_sentence_that_contains_the_runtimes_text_is_no_panic(tmp_path):
+    sentence = "the record is refused: Error: index out of bounds is what its field says, not the runtime"
+    server = _fake(tmp_path, _replying(sentence))
+    try:
+        assert json.loads(server.call("verdict", {})[1]) == ACCEPT
+    finally:
+        server.close()
+
+
+#: what the stand-in does at end of input, after every reply: the verdict it gave was an accept
+AT_END = {"a panic line": f"print({PANIC_LINE!r}, file=sys.stderr, flush=True)",
+          "exit 134": "sys.exit(134)",
+          "a signal": "import signal; os.kill(os.getpid(), signal.SIGKILL)"}
+REFUSED_AT_END = {"a panic line": f"^{D.LEAN_PANIC}: {PANIC_LINE}$", "exit 134": f"^{D.LEAN_EXIT}: status 134 \\(abort\\)$",
+                  "a signal": f"^{D.LEAN_EXIT}: killed by SIGKILL$"}
+
+
+def _answering(at_end: str) -> str:
+    out = json.dumps({"output": ACCEPT}, sort_keys=True, separators=(",", ":"))
+    return f"for line in sys.stdin:\n    print({out!r}, flush=True)\n{at_end}\n"
+
+
+@pytest.mark.parametrize("how", AT_END)
+def test_a_server_that_answers_accept_and_ends_unclean_is_refused_at_its_checked_close(tmp_path, how):
+    server = _fake(tmp_path, _answering(AT_END[how]))
+    assert server.call("verdict", {})[0] == "output"
+    with pytest.raises(D.ProtocolError, match=REFUSED_AT_END[how]):
+        server.close_checked()
+
+
+def test_a_server_that_ends_clean_passes_its_checked_close(tmp_path):
+    server = _fake(tmp_path, _answering("pass"))
+    assert server.call("verdict", {})[0] == "output"
+    server.close_checked()
+    server.close_checked()
+
+
+@pytest.mark.parametrize("how", AT_END)
+@pytest.mark.parametrize("module, call", [
+    (V, lambda: V.verdict(None, None, [], lambda i: b"", trusted=set())),
+    (WV, lambda: WV.verdict(None, None, trusted=set()))], ids=["memory_attester", "wipe"])
+def test_a_verdict_is_refused_at_the_end_of_the_verdicts_where_its_server_ended_unclean(tmp_path, monkeypatch, how, module,
+                                                                                        call):
+    import functools
+
+    monkeypatch.setattr(module, "record", lambda *a, **k: {})
+    monkeypatch.setattr(module, "server", functools.cache(lambda: _fake(tmp_path, _answering(AT_END[how]))))
+    call()
+    with pytest.raises(D.ProtocolError, match=REFUSED_AT_END[how]):
+        module.finish()
+    module.finish()
+
+
+def test_the_end_of_the_verdicts_is_nothing_where_no_server_started(monkeypatch):
+    import functools
+
+    monkeypatch.setattr(V, "server", functools.cache(lambda: pytest.fail("a server was started")))
+    V.finish()

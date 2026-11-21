@@ -355,7 +355,12 @@ its word's with each `Value<w>` an `Array<w, Value<1>>` (`Value<1>` stays a bit)
 - `E_BODY_MISSING`: a word primitive among `definitions` has no entry;
 - `E_BODY_KEY`: it names an id that is no word primitive among `definitions`;
 - `E_BODY_NOT_BOOLEAN`: taking the keys in order, an entry names no definition, or one that is not Boolean or not of its
-  word's bit signature.
+  word's bit signature, or an input primitive. An input body would make its word an input node wherever it is called
+  (§5.2), a value no claim registers: where a definition other than the root calls the word, the refusal names that
+  definition's first such node (the least such definition key), as §5.2's does; otherwise it names the body. A constant
+  bit stays a body: it is a gate. Nor is a body the root or a definition that reaches a call of the root, which would read
+  the root's input nodes (§5.2): no definition calls the root. Such a body is Boolean only where the root is, so the
+  decoder looks for one only then; otherwise the body is refused as not Boolean.
 
 A writer walks the bodies last (§4.6), after the root and `program_fn`'s functions, in key order, so what only they call
 enters `callees` and `types` after the rest. A key named twice keeps its last value, in either parser.
@@ -398,7 +403,8 @@ so `Input016_v1`, `Input0_v1`, `Input16_v2`, `Input16` and `Input16_v1\n` are no
 Each input primitive of width w has no parameters and returns `Value<w>`: a gate whose value is prescribed (asserted equal to
 the claimed input), not computed, and never held by the program. The decoder materializes it from the id, ahead of any
 registry entry. An input node appears only in the root's body: `Program` and the decoder (§4.6) refuse one in any other
-definition, where no parameter would bind it.
+definition, where no parameter would bind it, and the decoder refuses an input primitive, the root or a call of the root
+as or in a word primitive's Boolean body (§4.9).
 
 The Program's Calls (`partition_object.calls`, the proof blocks of `Q_word`) are the root body's nodes that are not input nodes, in
 body order.
@@ -439,7 +445,7 @@ No statement or table claims that a Program's values are always hidden until the
 The format does not refuse a program that holds data: a descriptor's bytes and digests mean what they meant, and programs move
 to registered inputs under new ids.
 
-### 5.4 Supplied inputs and held outputs
+### 5.4 Supplied inputs
 
 A *supplied* input is a parameter of the program function whose value the verifier computes, by a public function C names,
 from public things only: live coins (the proof service's, or a trusted device's signed coin) with their openings against a
@@ -481,6 +487,7 @@ list names whose body is not there yet.
 | `pous.session.round_coin/v1` (u32be(j) ‖ u64be(i_j)) | coin, commitment | supplied | `round` | 96 |
 | `pous.session.header/v1` (the compact header) | commitment | supplied | `head` (its registered bytes) | 8 (head + head mod 2) |
 | `pous.session.context/v1` | commitment | supplied | | 848 |
+| `pous.session.message/v1` | commitment | supplied | | 512 |
 | `pous.setup.salt/v1` | coin | supplied | | 192 |
 | `poub.read.pass_seed/v1` (the named exception to live coins: seeds inside a window) | coin, commitment | supplied | `window`, `pass` | 512 |
 | `poub.read.pass_root/v1` (released before the openings' coin) | commitment | supplied | `window`, `pass` | 512 |
@@ -491,20 +498,29 @@ list names whose body is not there yet.
 | `log.base/v1` (the first position after the log's records) | commitment | supplied | | 64 |
 | `const.u16/v1` | constant | supplied | `value` | 16 |
 
-The storage session's three functions read the session in two entries by when each of its parts exists. The verifier holds,
+The storage session's four functions read the session in two entries by when each of its parts exists. The verifier holds,
 by function name, what exists before the first coin as a commitment (`commitments`: JSON `{commitment, key, place}`: the
-header's fields, which hold the coin key by its hash, the registered LMS public key's hex and the place the verifier
-registered it at), and what the session releases after it as a coin (`coins`: JSON `{openings, coin_key}` for the round coin
-and `{ended, rounds}` for the header). A commitment is registered before any coin, so the order rule counts `coins` alone as
-coins and holds each commitment's place before the place of every coin read beside it. `pous.session.round_coin/v1` is
-`u32be(round) ‖ u64be(index)` of the round's last opening, which opens its committed coin at an index below the
-commitment's blocks under the coin root of the commitment the verifier holds (a coin that carries one is refused), with the
-coin key that hashes to the commitment's; `pous.session.header/v1` is the header of a session that ended complete with all `k`
-rounds, which the coin's `ended` and `rounds` are compared with, so a late or short session has no statement;
-`pous.session.context/v1` is the 106 bytes the signature's message hashes before the record. The session id is 32 bytes.
-Each number they read is a canonical natural (no sign, fraction, exponent or leading zero) within its field's width. Each
-refuses, by the name "no statement", what the held commitment or coin lacks or the arguments don't fit. Nothing reads these
-bodies through the door yet.
+header's fields, which hold the coin key by its hash, the LMS public key's hex and the place the verifier registered it at),
+and what the session releases after it as a coin (`coins`: JSON `{openings, coin_key}` for the round coin, `{ended, rounds}`
+for the header and `{message, signature}` for the message). A commitment is registered before any coin, so the order rule
+counts `coins` alone as coins and holds each commitment's place before the place of every coin read beside it.
+`pous.session.round_coin/v1` is `u32be(round) ‖ u64be(index)` of the round's last opening, which opens its committed coin at
+an index below the commitment's blocks under the coin root of the commitment the verifier holds (a coin that carries one is
+refused), with the coin key that hashes to the commitment's; `pous.session.header/v1` is the header of a session that ended
+complete with all `k` rounds, which the coin's `ended` and `rounds` are compared with, so a late or short session has no
+statement; `pous.session.context/v1` is the 106 bytes the signature's message hashes before the record, of a key whose
+SHA-512 is one the verifier's `attester_keys` pin (the configuration's pins of the memory attester; no body takes the key
+the session's own object names); `pous.session.message/v1` is the 64-byte message m, under a pinned key and only when the
+coin's signature verifies over it there. The key, m and the signature are public; the signature's leaf shows how many
+signatures the attester has made. The record's salt is the memory attester's own draw, `RECORD_SALT_BYTES` (64) bytes
+from its coins source as the session opens (`challenger_party.Challenger._coins`,
+`wipe_challenger.MemoryAttesterParty.start`; `os.urandom` in `MemoryAttester.__init__` when none is given; in Lean the
+device's own coins, `Session.Params.salt`), outside the session's commitment and before its first index is revealed,
+and read once, when `close()` signs; it makes the signed digest m a hiding commitment to the guessable header and
+records, and nothing in soundness rests on its being random or fresh: a salt the prover could choose would still leave
+the signature binding the same records. The session id is 32 bytes. Each number they read is a canonical natural (no sign,
+fraction, exponent or leading zero) within its field's width. Each refuses, by the name "no statement", what the held
+commitment or coin lacks or the arguments don't fit. Nothing reads these bodies through the door yet.
 
 **A supplied value is short.** No supplied input is as long as a population: where a unit's row is a function of its index
 and a short value, the verifier supplies the short value and the units compute the row inside. Either each unit reads the
@@ -522,7 +538,8 @@ So a storage round's index, its session's header and context, the setup's salt, 
 PoUW block's salt, its log's base and its operands' roots, which its seed Definition hashes inside the block, are one kind
 of input, with no case per scheme.
 
-**What the decoder refuses**, after §5.1's `E_INPUTS*`, in this order (`supplied.check_entry`, `check_held`):
+**What the decoder refuses**, after §5.1's `E_INPUTS*`, in this order (a mark's form is `supplied.mark_of`'s; a mark's
+function and nodes are `Spot/Supplied.lean`'s `markOf` and `marks`):
 
 - `E_SUPPLIED_MARK`: an entry's third element is not a mark of exactly these four keys of these forms;
 - `E_INPUTS_MIXED`: a marked parameter's nodes are not all supplied-input nodes, or an unmarked one's include one. So a
@@ -531,25 +548,18 @@ of input, with no case per scheme.
 - `E_SUPPLIED_FN`: the function is not in the registry;
 - `E_SUPPLIED_ARGS`: the args are not the function's, or the function has no value at them;
 - `E_SUPPLIED_WIDTH`: the parameter's leaves are not of one width w, `bits` is not the function's length at `args`, or the
-  leaves' `n · w` bits are not `bits` read whole by `layout`;
-- `E_HELD`: a held output (below) names no run of leaves of a supplied input of its width whose length divides the row's.
+  leaves' `n · w` bits are not `bits` read whole by `layout`.
 
 A supplied leaf's origin (§12) is `coin` when its function's is (the value is the coin itself: `window.salt/v1`), and
 `supplied` otherwise. §12's rules read `coin` as they do for a coin input, so a salt reaches only noise primitives, receipt
 folds and seeds, and a value computed from a coin (a round's index) reaches any port but a coin port. A supplied node's port
 is never `"kind": "static"` or `"kind": "position"`, and it is `"kind": "coin"` exactly when its origin is (`E_PORT_KIND`).
 
-**Held outputs.** A root `ret` port row may carry `"equals": [name, at, n]`: leaf `lo + i` of the row is held to leaf
-`at + (i mod n)` of the supplied input `name`, of the same width. With `const.u16/v1` at 1 and `n` = 1 it holds every
-unit's verdict word to 1, which is what an opening's verdict and a check's `ok` are; a block whose held output differs is
-refused inside the proof, since its row opens no root the verifier holds.
-
 **A block** (`restrict`). A maximal run of in(S) of one width whose gates are supplied-input gates of one parameter of C is
 a parameter of the block bound `supplied`, named `<name>/p<i>`; a run ends where the parameter does or skips a leaf. Its
 entry carries C's mark with `"of": [name, lo, hi]`, the leaves of C's parameter it covers (`0 <= lo < hi`, inside the
 value's bits), and `bits` the part's (`supplied.part`); a block's decoder checks the part as it checks C's mark, with
-`bits` the part's in place of the value's (`E_SUPPLIED_MARK`, `E_SUPPLIED_WIDTH`). The leaves a block's
-held outputs are held to join in(S) as such a part. The listing's binding of such an input bit is `supplied`. A block
+`bits` the part's in place of the value's (`E_SUPPLIED_MARK`, `E_SUPPLIED_WIDTH`). The listing's binding of such an input bit is `supplied`. A block
 whose one expanding unit reads the input and whose other units read that unit's outputs has the part in in(S) once, and
 the expansion's rows are the block's own gates; a block that holds only readers of the rows reads them as wires. A block that
 reads one leaf of an input reads that leaf alone: the key of an opening reads i_j's low half, leaf 2 of
@@ -559,7 +569,7 @@ reads one leaf of an input reads that leaf alone: the key of an opening reads i_
 leaves as the units read them, at the positions C gives (`OneCircuit.pos`, as for a registered input), row i salted by the
 public salt `registered_value.supplied_salts(<program digest>, <name>, i)` and committed under the value's registered
 domain. The verifier computes the root from the rows it computed (`Flock.Registered.checkKnown`), and the statement's rows
-open it as any registered read's do; a held output is a registered read of an output row against such a value. The base
+open it as any registered read's do. The base
 verifier is handed no other kind of public input. A supplied value is public, so each part's tree is listed in what the
 statement reveals (`Flock.Registered.knownList`). A value the verifier cannot compute (a coin's opening fails, a commitment
 it reads is missing) makes no statement, refused in the clear.

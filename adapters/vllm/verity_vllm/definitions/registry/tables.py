@@ -16,13 +16,10 @@ A table of 2^IB entries of EW u16 words (an entry's low word first) is the regis
                            the multiplexer tree over the 2^IB entries, (2^IB - 1) 16 EW ANDs, by which Flock lowers the
                            read; `gelu_tanh_bf16` and `tanh_rn` are past it, so a read of either stays a NoPiece
 
-`GeluTanhMulBf16_v3` is `GeluTanhMulBf16_v1` with the activation read from the registered `gelu_tanh_bf16` rather than computed
-by the primitive's evaluator.  `TanhF32Rn_v2` is `TanhF32Rn_v1` with |x| in [LO, HI) read from the registered `tanh_rn`, as
-Flock's piece computes it (`verity_flock.tail_pieces.tanh_rn`); its 2^28 words are read lazily
-(`verity.circuits.evaluation.RegisteredTable`, `tanh_rn_table`), never flattened.  No rule binds either: the Boolean versions
-of `TanhF32Rn_v1` and `GeluTanhMul_v1` compute both tables' entries by arithmetic (`registry.boolean_tanh`: `TanhF32Rn_v3`,
-`GeluTanhMul_v4`), so a Program on bits reads neither.  They stay as the Lean evaluator's examples of a table named in the
-request (`verity/circuits/evaluate`'s difftest).
+`tanh_rn`'s 2^28 words are read lazily (`verity.circuits.evaluation.RegisteredTable`, `tanh_rn_table`), never flattened.  No
+Definition here reads either table: the Boolean versions of `TanhF32Rn_v1` and `GeluTanhMul_v1` compute both tables' entries by
+arithmetic (`registry.boolean_tanh`: `TanhF32Rn_v3`, `GeluTanhMul_v4`).  The tables stay for the Lean evaluator (`Evaluate/Act.lean`)
+and Flock's pieces (`verity_flock.tail_pieces`), which read them.
 """
 from __future__ import annotations
 
@@ -30,23 +27,16 @@ from functools import lru_cache
 
 from verity.circuits.boolean import table as BT
 from verity.circuits.codec import register_lazy_family
-from verity.circuits.defs import PrimitiveDefinition, composite
+from verity.circuits.defs import PrimitiveDefinition
 from verity.circuits.evaluation import RegisteredTable
-from verity.circuits.ops import scalar as SC
-from verity.circuits.ops.prims import const
 from verity.circuits.types import Array, Value
 
 from verity_vllm.definitions.registry import dense
-from verity_vllm.definitions.registry import prims as P
-from verity_vllm.definitions.registry.prims import BF16
 
 ROW_WORDS, WORD_BITS = 64, 16
 TABLES = {"gelu_tanh_bf16": (16, 1), "tanh_rn": (27, 2), "exp2_lut127": (8, 2)}
 #: `tanh_rn`'s region: identity below LO, ±1 from HI (`verity_flock.tail_pieces.TANH_BOUNDS["tanh_rn"]`)
 TANH_RN_LO, TANH_RN_HI = 0x39B89BA3, 0x41102CB4
-#: `tanh_rn`'s entries by where their words come from: the words 0x40000000 | i below HI's index, none (0) up to LO's, then the
-#: words 0x38000000 | i
-TANH_RN_REGIONS = ((0, TANH_RN_HI & 0x7FFFFFF), (TANH_RN_HI & 0x7FFFFFF, TANH_RN_LO & 0x7FFFFFF), (TANH_RN_LO & 0x7FFFFFF, 1 << 27))
 
 
 def table_type(name: str) -> Array:
@@ -121,33 +111,6 @@ def tanh_rn_table() -> RegisteredTable:
 
 
 GELU_TABLE = table_type("gelu_tanh_bf16")
-TANH_RN_TABLE = table_type("tanh_rn")
 
-
-@composite("GeluTanhMulBf16", 3, [], lambda S: ((("g", BF16), ("u", BF16), ("gelu_tanh_bf16", GELU_TABLE)), BF16),
-           conformance="exact-model-tested: GeluTanhMulBf16_v1 with the activation word read from the registered table")
-def GeluTanhMulBf16V3(B, S, g, u, gelu_tanh_bf16):
-    """`bf16(f32(gelu_tanh_bf16[g]) * (f32(u) + 0.0f))` (`cvt.rn.bf16.f32`, NaN -> 0x7FFF): `GeluTanhMulBf16_v1`."""
-    act = B.call(table_read(16, 1), g, gelu_tanh_bf16)
-    uf = B.call(P.F32Add, B.call(P.Bf16ToF32, u), B.call(const(32, dense.ZERO_BITS)))
-    return B.call(P.F2fpBf16, B.call(P.F32Mul, B.call(P.Bf16ToF32, act), uf))
-
-
-@composite("TanhF32Rn", 2, [], lambda S: ((("x", P.F32), ("tanh_rn", TANH_RN_TABLE)), P.F32),
-           conformance="exact-model-tested: TanhF32Rn_v1 with |x| in [LO, HI) read from the registered table")
-def TanhF32RnV2(B, S, x, tanh_rn):
-    """NaN -> 0x7FC00000, |x| >= HI -> ±1, |x| < LO -> x, else `tanh_rn[|x|'s low 27 bits]` with x's sign: `TanhF32Rn_v1`."""
-    def c(w):
-        return B.call(const(32, w))
-
-    a = B.call(SC.F32Fabs, x)
-    t = B.call(table_read(27, 2), x, tanh_rn)
-    neg = B.call(P.I32Le, x, c(0xFFFFFFFF))
-    r = B.call(P.SelectF32, B.call(P.I32Le, a, c(TANH_RN_LO - 1)), x, B.call(P.SelectF32, neg, B.call(SC.F32Neg, t), t))
-    r = B.call(P.SelectF32, B.call(P.I32Le, c(TANH_RN_HI), a), B.call(P.SelectF32, neg, c(0xBF800000), c(0x3F800000)), r)
-    return B.call(P.SelectF32, B.call(P.I32Le, c(0x7F800001), a), c(P.F32_NAN), r)
-
-
-__all__ = ["GELU_TABLE", "GeluTanhMulBf16V3", "ROW_WORDS", "TABLES", "TANH_RN_HI", "TANH_RN_LO", "TANH_RN_REGIONS",
-           "TANH_RN_TABLE", "TanhF32RnV2", "WORD_BITS", "gelu_tanh_bf16_words", "table_read", "table_type", "table_words",
-           "tanh_rn_entry", "tanh_rn_table"]
+__all__ = ["GELU_TABLE", "ROW_WORDS", "TABLES", "TANH_RN_HI", "TANH_RN_LO", "WORD_BITS", "gelu_tanh_bf16_words",
+           "table_read", "table_type", "table_words", "tanh_rn_entry", "tanh_rn_table"]

@@ -45,22 +45,28 @@ import fcntl
 import functools
 import json
 import math
+import os
 import secrets
 import subprocess
+import sys
 import tempfile
 import threading
 from fractions import Fraction
 from pathlib import Path
-from typing import Any, Iterable, Mapping, NoReturn, Sequence
+from typing import Any, Iterable, Mapping, Sequence
 
 from verity.circuits import codec
 from verity.circuits.codec import canonical_json
 from verity.circuits.program import Program
 
 from verity.protocols.proofs.spot.verifier.one_stage import audit, caller as C, draw as D, hello as H, link_points as LP, docket as R
-from .lean_child import LEAN_PANIC, panic_line
+from .lean_child import LEAN_EXIT, LEAN_PANIC, OK, exit_why, panic_line
 from .settings import lean_env
 from .verdict import Verdict
+
+#: the statuses a `Difftest.serve` process ends with: 0, at the end of its input, after its last answer; while it
+#: answers, it hasn't ended
+SERVE_EXITS = OK
 
 RECORD_VERDICT = "lean"
 """Whose verdict is the record's: `"lean"` (`spot-verifier`) or `"python"` (this package's, the reference)."""
@@ -122,19 +128,40 @@ def _dumps(value: Any) -> str:
 class _Server:
     """One serving process of `exe` per Python process (`Difftest.serve`: a request line, an answer line), started at
     the first call and again after it dies, in `lean_env`: a panic ends it, and a panic line on its standard error refuses
-    the call it answered."""
+    the call it answered. Its end is a check of its answers: one between calls refuses the next call, and one other than
+    as `SERVE_EXITS` documents raises at `close`."""
 
     def __init__(self, exe: str = EXE, package: Path = PACKAGE) -> None:
         self.exe, self.package = exe, package
         self._proc: subprocess.Popen | None = None
+        self._owner: int | None = None
         self._stderr: Any = None
         self._lock = threading.Lock()
 
+    def _forked(self) -> None:
+        """A forked process's copy of its parent's handle is dropped: the parent's process is the parent's to check."""
+        if self._proc is not None and self._owner != os.getpid():
+            self._proc = None
+
+    def _ended(self) -> str | None:
+        """Why the process, which ended, ended other than as documented: a panic line, a signal, or a status outside
+        `SERVE_EXITS`; None where it ended at one."""
+        self._stderr.seek(0)
+        panic = panic_line(self._stderr.read().decode("utf-8", "replace"))
+        return f"{LEAN_PANIC}: {panic}" if panic is not None else exit_why(self._proc.returncode, SERVE_EXITS)
+
     def call(self, fn: str, value: Any) -> tuple[str, Any]:
-        """`("output", JSON)` or `("reject", reason)`; anything else raises `LeanError`."""
+        """`("output", JSON)` or `("reject", reason)`; anything else raises `LeanError`, and so does the call after an
+        answer where the process ended in between, which its input never asked it to."""
         line = _dumps({"fn": fn, "input": value})
         with self._lock:
-            if self._proc is None or self._proc.poll() is not None:
+            self._forked()
+            if self._proc is not None and self._proc.poll() is not None:
+                why = self._ended() or f"{LEAN_EXIT}: status {self._proc.returncode}"
+                self._proc = None
+                raise LeanError(f"{self.exe} ended after its last answer, before {fn}: {why}")
+            if self._proc is None:
+                self._owner = os.getpid()
                 self._stderr = tempfile.TemporaryFile()
                 self._proc = subprocess.Popen([str(executable(self.exe, self.package))], stdin=subprocess.PIPE,
                                               stdout=subprocess.PIPE, stderr=self._stderr, text=True, encoding="utf-8",
@@ -154,11 +181,15 @@ class _Server:
                 panic = panic_line(err)
                 raise LeanError(f"{LEAN_PANIC}: {panic}" if panic else f"{self.exe} ended on {fn}: {err}")
             self._stderr.seek(0)
-            if (panic := panic_line(self._stderr.read())) is not None:
+            if (panic := panic_line(self._stderr.read().decode("utf-8", "replace"))) is not None:
                 self._proc.kill()
                 self._proc.wait()
                 self._proc = None
                 raise LeanError(f"{LEAN_PANIC}: {panic}")
+            if self._proc.poll() is not None:
+                why = self._ended() or f"{LEAN_EXIT}: status {self._proc.returncode}"
+                self._proc = None
+                raise LeanError(f"{self.exe} ended with its answer to {fn}: {why}")
         try:
             msg = json.loads(reply)
         except ValueError:
@@ -170,18 +201,46 @@ class _Server:
         raise LeanError(f"{self.exe} on {fn}: {reply[:500]}")
 
     def close(self) -> None:
-        """End the server: `Difftest.serve` stops at the end of its input."""
+        """End the server: `Difftest.serve` stops at the end of its input. Raises `LeanError` where the process it
+        answered from did not then end as documented: an answer already read is refused at the close."""
         with self._lock:
-            if self._proc is not None and self._proc.poll() is None:
-                self._proc.stdin.close()
-                self._proc.wait()
+            self._forked()
+            proc, self._proc = self._proc, None
+            if proc is None:
+                return
+            unread = None
+            if proc.poll() is None:
+                try:
+                    proc.stdin.close()
+                except BrokenPipeError as e:
+                    unread = e
+                proc.wait()
+            self._proc = proc
+            why = self._ended()
             self._proc = None
+            if why is not None:
+                if unread is not None:
+                    why += " (its input was closed before what it was handed was written whole)"
+                raise LeanError(f"{self.exe} did not end as documented at its close: {why}")
 
 
 _server = _Server()
-atexit.register(_server.close)
 _caller_server = _Server(CALLER_EXE, CALLER_PACKAGE)
-atexit.register(_caller_server.close)
+
+
+@atexit.register
+def _close_at_exit() -> None:
+    """The servers' close is a check of every answer they gave: one that fails ends the process with status 70."""
+    failed = []
+    for server in (_caller_server, _server):
+        try:
+            server.close()
+        except LeanError as e:
+            failed.append(str(e))
+    if failed:
+        print("\n".join(failed), file=sys.stderr, flush=True)
+        sys.stdout.flush()
+        os._exit(70)
 
 
 def lean(fn: str, value: Any) -> dict[str, Any]:
@@ -194,16 +253,6 @@ def lean(fn: str, value: Any) -> dict[str, Any]:
     except LeanError as e:
         return {"refused": str(e), "answered": False}
     return body if kind == "output" else {"refused": body}
-
-
-#: the goal under which a check `not_written` stands for gets its Lean interface
-GOAL = "proofs/spot-two-stage-sound"
-
-
-def not_written(fn: str, lean: str) -> NoReturn:
-    """The verdict of record of `fn`, the Lean `lean`'s, which no interface here reaches yet: raises
-    `NotImplementedError` naming `GOAL`. The Python twin beside `fn` answers the difftest only, never in its place."""
-    raise NotImplementedError(GOAL)
 
 
 #: The most bytes one `coins` request takes (the Lean's `COINS_MAX`).
@@ -443,21 +492,6 @@ def select(python: Mapping[str, Any], read: bytes, rule: Mapping[str, Any], prog
     return dict(got["draw"] if RECORD_VERDICT == "lean" else python), Verdict(True, (), {}, verifiers)
 
 
-def select_second(python: Mapping[str, Any], read: bytes, sample: Sequence[int], ns: Sequence[int],
-                  ks: Sequence[int]) -> tuple[dict[str, Any], Verdict]:
-    """A two-stage design's second stage by the verifier: the Lean's `Select.selectSecond` on `read`, the bytes of the
-    challenger's coins that the Python sample `python` (`service.select_second`'s) read in order, over the replay sample
-    `sample`, each template's `ns[t]` proof blocks in each replay block, its cell, and `ks[t]` of them sampled in each;
-    compared as `select` compares."""
-    got = lean("select_second", {"sample": list(sample), "ns": list(ns), "ks": list(ks), "source": read.hex()})
-    mine = {"draw": dict(python), "read": len(read)}
-    verifiers = {"of_record": RECORD_VERDICT, "lean": {"refused": got["refused"]} if "refused" in got else
-                 {"read": got.get("read")}, "python": {"read": len(read)}}
-    if "refused" in got or got.get("read") != len(read) or not _same(got.get("draw"), python):
-        return dict(python), Verdict(False, (DISAGREE,), {DISAGREE: {"lean": dict(got), "python": mine}}, verifiers)
-    return dict(got["draw"] if RECORD_VERDICT == "lean" else python), Verdict(True, (), {}, verifiers)
-
-
 def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, query: Mapping[str, Any],
         sampling_design: Mapping[str, Any], scheme: str, ports: Mapping[str, Mapping[str, Any]], leaf_layer: str | None,
         anchors: Sequence[Any], log: Iterable[Mapping[str, Any]], work_table: Mapping[str, Any] | None,
@@ -657,6 +691,6 @@ def audit_record(docket: Mapping[str, Any], receipt: Mapping[str, Any], draw: Ma
     return rec
 
 
-__all__ = ["BUILD_LOCK", "COINS_MAX", "DISAGREE", "EXE", "GOAL", "LeanError", "PACKAGE", "RECORD_VERDICT", "audit_record",
+__all__ = ["BUILD_LOCK", "COINS_MAX", "DISAGREE", "EXE", "LeanError", "PACKAGE", "RECORD_VERDICT", "audit_record",
            "check", "check_draw", "check_proved", "check_public", "check_verdicts", "coins", "executable", "fleet", "lean",
-           "matches_public", "not_written", "run", "select", "select_second", "stream"]
+           "matches_public", "run", "select", "stream"]

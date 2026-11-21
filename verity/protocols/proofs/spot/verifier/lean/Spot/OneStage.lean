@@ -298,7 +298,8 @@ coins and the commitments the verifier holds (`coins` and `commitments`, `{funct
 coin and as a released commitment, which the order rule counts the first of alone): refused where the verifier registers no read of the input (a
 supplied input is read only through a port of its own registered reads), where the scheme supplies rows for it too, and
 where its layout is `digest` and its parameter's leaves aren't whole digests or the other way round; and refused by the
-order rule (`Supplied.order`) at `released`, the verifier's place of each coin, after `records` records of the log. -/
+order rule (`Supplied.order`) at `released`, the verifier's place of each coin, after `records` records of the log; the
+storage session's key read only when its SHA-512 is one of `attester_keys` (`Supplied.attesterKeys`). -/
 def markedRows (j : Json) (registered : Array (String × Nat)) (params : Array Registered.Param)
     (supplied : Array (String × Supplied.Rows)) (records : Nat) : V (Array (String × Supplied.Rows)) := do
   let marked ← Supplied.marks (getD j "program")
@@ -318,6 +319,7 @@ def markedRows (j : Json) (registered : Array (String × Nat)) (params : Array R
         pure (f, ← Flock.unhex s)
       | _ => throw s!"commitments: {f}'s commitment is not hex"
     | _ => throw "commitments are an object of hex by supplied function"
+  let pinned ← Supplied.attesterKeys j
   let rows ← marked.mapM fun (v, m) => do
     if !registered.any (·.1 == v) then
       throw s!"supplied input {v}: the verifier registers no read of it: a supplied input is read only through a port of the verifier's own registered reads"
@@ -326,7 +328,7 @@ def markedRows (j : Json) (registered : Array (String × Nat)) (params : Array R
     let some p := params.find? (·.name == v) | throw s!"supplied input {v} is not a parameter of the program"
     if (m.layout == "digest") != Supplied.digests p.ty then
       throw s!"supplied input {v}: layout {m.layout} reads whole digests only into a parameter of whole digests"
-    return (v, ← Supplied.ofMark coins commitments v m)
+    return (v, ← Supplied.ofMark coins commitments v m pinned)
   Supplied.order marked rows coins commitments (getD j "released") records
   return rows
 

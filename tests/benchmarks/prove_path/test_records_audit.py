@@ -2,7 +2,9 @@
 (`verity.commitments.periods.interface`) under core's docket:
 
 * the verifier's window is the circuit record's, each template a Definition a catalog registers, and the record must be the one
-  the docket binds; a window with row tables is refused until its records carry their segment roots;
+  the docket binds; a window with row tables is refused until its records carry their segment roots; Pearl+'s tile and
+  credit reader resolve in a fresh audit process to the body registered under their id, and a Definition of that id with
+  another body is refused by name;
 * the compile check runs the registered compiler as the verifier's table names it, on advice that opens the registered root,
   and refuses by name a compiler it doesn't hold, an opening of another root, a compiler that refuses the advice, one whose
   circuit is another or that writes none, and a length other than the registered one or none;
@@ -184,6 +186,56 @@ assert descriptor_id(RA.catalog_resolve(sys.argv[1])) == sys.argv[1]
 """
     p = subprocess.run([sys.executable, "-c", code, tid], capture_output=True, text=True)
     assert p.returncode == 0, p.stderr[-3000:]
+
+
+PEARL_PLUS_IDS = ("PearlPlusTileSeed_v4{K=256,TN=1}", "PearlPlusTileLine_v4{SIDE=0,FACTOR=1,G=32}")
+
+
+def test_pearl_plus_templates_resolve_in_a_fresh_audit_process_to_their_registered_body():
+    """Pearl+'s tile (`pearl_plus_tile`) and its credit reader (`pearl_plus_credited`) are a later place's than
+    `interface`, whose walk can't import them: in a fresh process, which has loaded nothing else, `catalog_resolve`
+    resolves each id to the Definition that module registered under it, its body and definition digest that one's,
+    where `interface.resolve` alone refuses it ("names no Definition a catalog registers")."""
+    code = f"""
+import sys
+sys.path.insert(0, {str(HERE.parents[2] / "benchmarks" / "prove_path")!r})
+from verity.commitments.periods import interface as IF
+for tid in sys.argv[1:]:
+    try:
+        IF.resolve(tid)
+    except ValueError as e:
+        assert "names no Definition a catalog registers" in str(e), e
+    else:
+        raise AssertionError(f"{{tid}} resolved with no catalog of Pearl+'s loaded")
+import records_audit as RA
+from verity.circuits.codec import definition_digest, definition_entry, descriptor_id
+from verity.circuits.defs import REGISTRY, bind
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_credited as PC, pearl_plus_tile as PT
+for tid in sys.argv[1:]:
+    fn = RA.catalog_resolve(tid)
+    assert descriptor_id(fn) == tid and fn.defn is REGISTRY[tid.partition("{{")[0]], tid
+    assert fn.defn.body.__module__ == PT.__name__, fn.defn.body.__module__
+seed = bind(PT.PearlPlusTileSeed, K=256, TN=1)
+assert definition_digest(definition_entry(RA.catalog_resolve(sys.argv[1]))) == definition_digest(definition_entry(seed))
+assert REGISTRY[PC.PearlPlusTileCoreWired.id] is PC.PearlPlusTileCoreWired
+"""
+    p = subprocess.run([sys.executable, "-c", code, *PEARL_PLUS_IDS], capture_output=True, text=True)
+    assert p.returncode == 0, p.stderr[-3000:]
+
+
+def test_a_definition_of_a_pearl_plus_id_with_another_body_is_refused_by_name():
+    """A Definition named as Pearl+'s tile seed but with another body never stands for it: the registry refuses it under
+    that id, and as a template it is refused as no Definition a catalog registers, by its id."""
+    from verity.circuits.defs import CompositeDefinition
+    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_tile as PT
+
+    seed = PT.PearlPlusTileSeed
+    with pytest.raises(ValueError, match=f"registry already has a different definition for {seed.id}"):
+        CompositeDefinition(seed.name, seed.version, seed.statics, seed.signature, lambda *a, **k: None)
+    other = CompositeDefinition(seed.name, seed.version, seed.statics, seed.signature, lambda *a, **k: None, register=False)
+    with pytest.raises(ValueError, match=f"{seed.id}: not a Definition a catalog registers"):
+        IF.catalog(bind(other, K=256, TN=1))
+    assert IF.resolve(PEARL_PLUS_IDS[0]).defn is seed
 
 
 def test_the_compile_check_runs_the_registered_compiler_on_the_opened_advice(written, tmp_path):
@@ -650,7 +702,7 @@ def test_a_listed_records_registered_weight_reads_are_audited_and_counted_as_a_s
 def test_a_tie_pins_the_circuits_values_at_the_earlier_registrations_tables():
     """`tie_of`: a circuit whose program takes values (a served window's H1 tables, by their Commit names) is tied to the
     earlier docket W that registered them first: one-stage's ``log`` is W, each value's ``registered`` words are W's
-    entry's, its ``outputs`` W's table of it under the prefix (`credit.window_table`) and its schema v2, and the audit pins
+    entry's, its ``outputs`` W's table of it under the prefix (`window.window_table`) and its schema v2, and the audit pins
     each at W's     entry under the value's own name. With neither values nor W there's no tie; values without W, W without values, a
     value W registers other than once (with no prefix, by its own name: told to give H1's) and a value that is no Commit
     table are refused."""
@@ -1507,15 +1559,12 @@ def test_the_audit_reserves_a_port_for_every_session_its_sample_can_open(tmp_pat
         assert seen == want
 
 
-def test_the_audit_passes_a_refused_window_on_the_check_for_what_its_caller_says_it_forges(written, tmp_path, monkeypatch, capsys):
-    """`audit` is told what a window that must be refused forges, ``--forged`` a false unit or ``--forged-read`` a
-    registered read that opens no pinned root, and passes it on that kind's check alone (`forged_outcome`). The sessions
-    (`a5.audit`) are stubbed and leave the record of a window of no false unit whose read opens no root: its proof left,
-    and Lean refused its session at setup on a row of the read. As a forged read it passes, its prover run as an honest
-    window's; as a forged unit it fails, its prover run with its self-check skipped; told neither it fails as any
-    rejected audit does, and told both the command refuses its arguments before any session. The summary of a window
-    that passes as a forged read carries that verdict under ``forged``, as a forged unit's does, so no reader of it
-    takes the pass for an accepting audit (the weights tie's pins refuse a summary that holds it)."""
+def test_the_audit_passes_a_refused_window_on_the_check_for_a_forged_unit(written, tmp_path, monkeypatch, capsys):
+    """`audit` told ``--forged`` passes a window that must be refused on the check for a false unit alone
+    (`forged_outcome`), its prover run with its self-check skipped. The sessions (`a5.audit`) are stubbed and leave the
+    record of a window of no false unit whose read opens no root: its proof left, and Lean refused its session at setup
+    on a row of the read, which is no check of a false unit, so it fails; told nothing it fails as any rejected audit
+    does."""
     import a5 as A5
     from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
 
@@ -1555,12 +1604,6 @@ def test_the_audit_passes_a_refused_window_on_the_check_for_what_its_caller_says
         assert list(checks.values()) == [True, True], row
         return got
 
-    rc, row = run("--forged-read")
-    assert rc == 0 and row["ok"] is True and row["accepted"] is False, row
-    assert (row["forged"]["ok"], row["forged"]["passes_on"]) == (True, "read_refused"), row
-    assert stopped(row) == {"no_proof_released": False, "lean_refused": None, "read_refused": True}, row
-    summary = json.loads((tmp_path / "out--forged-read" / "summary.json").read_text())
-    assert summary["ok"] is True and summary["forged"] == row["forged"] and summary["audit"]["accepted"] is False, summary
     rc, row = run()
     assert rc == 1 and row["ok"] is False and "forged" not in row, row
     assert "forged" not in json.loads((tmp_path / "out" / "summary.json").read_text())
@@ -1568,10 +1611,7 @@ def test_the_audit_passes_a_refused_window_on_the_check_for_what_its_caller_says
     assert rc == 1 and row["ok"] is False, row
     assert (row["forged"]["ok"], row["forged"]["passes_on"]) == (False, "no_proof_released"), row
     assert stopped(row) == {"no_proof_released": False, "lean_refused": None, "read_refused": True}, row
-    assert self_checks == ["stop", "stop", "skip"]
-    with pytest.raises(SystemExit) as refused:
-        RA.main([*args, "--out", str(tmp_path / "both"), "--forged", "--forged-read"])
-    assert refused.value.code == 2 and len(self_checks) == 3
+    assert self_checks == ["stop", "skip"]
 
 
 def test_the_audit_counts_a_listed_record_with_window_ingress_and_prints_its_window_figure_with_its_premise(

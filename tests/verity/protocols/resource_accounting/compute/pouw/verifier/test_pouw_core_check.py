@@ -230,7 +230,7 @@ def test_the_digest_is_one_stages():
         b = bytes.fromhex(_instance(seed)["commitment"])
         c = CC.commitment(b)
         assert CC.digest(c).hex() == DD.digest(json.loads(b))
-    assert CC.ONE_STAGE == DM.ONE_STAGE_PROTOCOL and CC.SCHEME == S.SCHEME and CC.FORMATS == (DM.REGISTRATION_V1, DM.REGISTRATION)
+    assert Wd.ONE_STAGE == DM.ONE_STAGE_PROTOCOL and CC.SCHEME == S.SCHEME and CC.FORMATS == (DM.REGISTRATION_V1, DM.REGISTRATION)
 
 
 def test_ratios_have_one_spelling():
@@ -346,6 +346,9 @@ OPENING_EXPECT = {
     "salted-a-index": "side a: the opening is of row", "salted-b-row": "side b: the proof's committed row is not",
     "salted-pub-swapped": "side b: the proof's committed row is not",
     "salted-circuit": "the proof's circuit is not the one the verifier pins",
+    **{n: "…" + CC.header_root_why("x").split(": ", 1)[1] for n in (
+        "header-root", "header-root-missing", "header-domain", "header-binding", "header-owner", "salted-root")},
+    "salted-pub-root": CC.header_root_why("pub"),
 }
 
 
@@ -426,52 +429,52 @@ OK_SALT_3 = "41da7caf12c48dda02c2fc5ca1aba62e7c7325eb26fdc32e56a3e50d5a8a322b"
 
 
 def test_the_ok_salt_is_sha512_in_counter_mode():
-    """`core_check.ok_salt` is `SALT_BYTES` bytes of SHA-512 in counter mode over `OK_SALT_TAG` ‖ context ‖ 0 ‖
+    """`window.ok_salt` is `SALT_BYTES` bytes of SHA-512 in counter mode over `OK_SALT_TAG` ‖ context ‖ 0 ‖
     u64be(position), each block's counter a u32 big-endian (one hash, SHA-512, whole outputs), pinned so the Lean
     `Credit.okSalt` and every registered ok row move with it."""
-    salt = CC.ok_salt("ab" * 64, 3)
+    salt = Wd.ok_salt("ab" * 64, 3)
     assert salt[:32].hex() == OK_SALT_3
     head = b"verity/pouw/h1-prove/ok-row-salt/v1\0" + b"ab" * 64 + b"\0" + (3).to_bytes(8, "big")
     assert salt == b"".join(hashlib.sha512(head + c.to_bytes(4, "big")).digest() for c in range(3))
-    assert len({CC.ok_salt("ab" * 64, 4), salt, CC.ok_salt("cd" * 64, 3), CC.public_row_salt("ab" * 64, 3)}) == 4
+    assert len({Wd.ok_salt("ab" * 64, 4), salt, Wd.ok_salt("cd" * 64, 3), Wd.public_row_salt("ab" * 64, 3)}) == 4
 
 
 def test_the_public_row_is_the_compiled_programs_salt_position_and_roots():
-    """`core_check.public_row`'s bits are the leaves `Compiled.inputs` fills for one unit: `pouw.salt`, the unit's
+    """`window.public_row`'s bits are the leaves `Compiled.inputs` fills for one unit: `pouw.salt`, the unit's
     position, then its group's two roots (`seeds.leaves`, `seeds.position_leaves`, Boolean), bit t of the row bit t % 8
     of byte t // 8."""
     salt, roots = hashlib.sha512(b"s").digest(), (hashlib.sha512(b"a").digest(), hashlib.sha512(b"b").digest())
     for pos in (0, 1, 5, 1 << 39, (1 << 64) - 1):
-        bits = np.unpackbits(np.frombuffer(CC.public_row(salt, pos, roots), np.uint8), bitorder="little").tolist()
-        assert len(bits) == CC.PUBLIC_ROW_BITS
+        bits = np.unpackbits(np.frombuffer(Wd.public_row(salt, pos, roots), np.uint8), bitorder="little").tolist()
+        assert len(bits) == Wd.PUBLIC_ROW_BITS
         assert bits == SD.leaves(salt, True) + SD.position_leaves(pos, True) + SD.leaves(roots[0] + roots[1], True), pos
 
 
 def test_a_j10r_public_row_is_then_its_call_and_blocks():
-    """A J10-R unit's public row (`core_check.public_row` with ``j10r``) is the leaves `PouwH1Tile_v5`'s public parameters
+    """A J10-R unit's public row (`window.public_row` with ``j10r``) is the leaves `PouwH1Tile_v5`'s public parameters
     take, in order: today's row, then its ``call`` and its two ``blocks``, each a position's leaves
     (`seeds.position_leaves`, `seeds.POS_BITS`)."""
     salt, roots = hashlib.sha512(b"s").digest(), (hashlib.sha512(b"a").digest(), hashlib.sha512(b"b").digest())
     for pos, call, blocks in ((5, 0, (0, 64)), (1 << 39, 7, (3, (1 << 33) + 1)), ((1 << 64) - 1, 1 << 63, (1, 2))):
-        row = CC.public_row(salt, pos, roots, (call, blocks))
+        row = Wd.public_row(salt, pos, roots, (call, blocks))
         bits = np.unpackbits(np.frombuffer(row, np.uint8), bitorder="little").tolist()
-        assert len(bits) == CC.PUBLIC_ROW_J10R_BITS == CC.PUBLIC_ROW_BITS + 3 * len(SD.position_leaves(0, True))
+        assert len(bits) == Wd.PUBLIC_ROW_J10R_BITS == Wd.PUBLIC_ROW_BITS + 3 * len(SD.position_leaves(0, True))
         assert bits == (SD.leaves(salt, True) + SD.position_leaves(pos, True) + SD.leaves(roots[0] + roots[1], True)
                         + SD.position_leaves(call, True) + SD.position_leaves(blocks[0], True)
                         + SD.position_leaves(blocks[1], True)), pos
-        assert row[:CC.PUBLIC_ROW_BITS // 8] == CC.public_row(salt, pos, roots)
-        assert len(CC.public_words(salt, pos, roots, (call, blocks))) == CC.PUBLIC_ROW_J10R_BITS // 16 == 112
+        assert row[:Wd.PUBLIC_ROW_BITS // 8] == Wd.public_row(salt, pos, roots)
+        assert len(Wd.public_words(salt, pos, roots, (call, blocks))) == Wd.PUBLIC_ROW_J10R_BITS // 16 == 112
 
 
 def test_the_verifiers_j10r_blocks_are_the_tiles():
-    """`core_check.j10r_blocks`, the verifier's arithmetic, is `h1tile.j10r_blocks` (`h1tile.Layout`'s row and column
-    blocks at call scale) at every slot, K, tile and unit tried, and `core_check.n_digits` is `segment.n_digits`."""
+    """`window.j10r_blocks`, the verifier's arithmetic, is `h1tile.j10r_blocks` (`h1tile.Layout`'s row and column
+    blocks at call scale) at every slot, K, tile and unit tried, and `window.n_digits` is `segment.n_digits`."""
     for k in (32, 64, 384, 416, 896, 4096, 14336, 1 << 20):
-        assert CC.n_digits(k) == H.SG.n_digits(k // 32), k
+        assert Wd.n_digits(k) == H.SG.n_digits(k // 32), k
         for m, (r, c) in ((4, (4, 8)), (8, (4, 8)), (32, (32, 32)), (64, (32, 32))):
             for i in range(m // r):
                 for j in range(3):
-                    assert CC.j10r_blocks(m, k, (r, c), i, j) == H.j10r_blocks(m, k, (r, c), i, j), (m, k, r, c, i, j)
+                    assert Wd.j10r_blocks(m, k, (r, c), i, j) == H.j10r_blocks(m, k, (r, c), i, j), (m, k, r, c, i, j)
 
 
 def test_the_opening_reads_what_served_zk_writes():
@@ -534,7 +537,7 @@ PASS_EXPECT = {
     "not-json": ("manifest", "the pass's manifest is not a JSON object"),
     "not-object": ("manifest", "the pass's manifest is not a JSON object"),
     "constant": ("manifest", "the pass's manifest is not a JSON object"),
-    "recorded-unread": ("coin", f"the pass's manifest is {CC.MANIFEST_RECORDED}, recorded before epoch coins"),
+    "recorded-unread": ("coin", f"the pass's manifest is {Wd.MANIFEST_RECORDED}, recorded before epoch coins"),
     "schema-other": ("coin", "schema "), "schema-missing": ("manifest", "the pass's manifest names no schema"),
     "matmuls-form": ("manifest", "the pass's matmuls are not"), "matmuls-not-list": ("manifest", "the pass's matmuls are not"),
     "shape": ("coin", "a shape has m, k, n >= 1"), "ids-64-bit": ("coin", "a matmul's index and weight id are 64-bit"),
@@ -671,10 +674,10 @@ def _live_draw(sk: lms.PrivateKey, coins: str, reg: str, stream: str, receipt: d
     message = Ch.record_message(lms.public_key(sk)[:16], "provers-node", ch.commitment)
     record = Ch.ChallengerRecord(ch.commitment, "provers-node", lms.sign_at(sk, 0, message).encode())
     o = ch.open(Wd.DRAW, 0, bytes.fromhex(reg))
-    ctx, size = CC.draw_key_context(stream, reg, receipt), 2 * k * CC.width(n) + 64
+    ctx, size = Wd.draw_key_context(stream, reg, receipt), 2 * k * Wd.width(n) + 64
     return {"coins": {"key": Ch.ChallengerKey(4, 2, lms.public_key(sk)).to_json(), "record": record.to_json()},
             "recorded": False, "opening": o.to_json(), "stream": stream, "registration": reg, "receipt": receipt, "k": k,
-            "population": n, "units": CC.stream_subset(k, n, derive(o.coin, CC.DRAW_DOMAIN, ctx).stream("draw", size)),
+            "population": n, "units": Wd.stream_subset(k, n, derive(o.coin, Wd.DRAW_DOMAIN, ctx).stream("draw", size)),
             "key": pinned}
 
 
@@ -816,7 +819,7 @@ def test_every_salt_mutation_hits_its_refusal():
 #: the refusal each live salt mutation aims at: (code, a part of the reason)
 LIVE_SALT_EXPECT = {
     "honest": None, "not-object": ("manifest", "the pass's manifest is not a JSON object"),
-    "schema": ("coin", f"not {CC.MANIFEST_SCHEMA}"), "no-schema": ("manifest", "the pass's manifest names no schema"),
+    "schema": ("coin", f"not {Wd.MANIFEST_SCHEMA}"), "no-schema": ("manifest", "the pass's manifest names no schema"),
     "matmuls-form": ("manifest", "the pass's matmuls are not"),
     "weights-set": ("coin", "every weight of the workload is committed, and only those"),
     "call-range": ("manifest", CC.CALL_RANGE), "pass-index": ("manifest", CC.PASS_FORM),

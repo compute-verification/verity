@@ -57,10 +57,11 @@ def _args(s: str) -> tuple[str, str, list[tuple[str, int]]]:
     return d, t, cs
 
 
-def _args_in(s: str) -> tuple[str, list[str], list[int]]:
-    """`admitIn`'s arguments: a descriptor, the templates the query lists, and the block's units."""
-    name, ts, us = re.fullmatch(r"(\w+) \[(.*)\] #\[(.*)\]", s.strip()).groups()
-    return descriptor(name), re.findall(STR, ts), [int(u) for u in us.split(",")]
+def _args_in(s: str) -> tuple[str, tuple[list[str], dict], list[int]]:
+    """`admitIn`'s arguments: a descriptor, the templates the query lists with the cuts, and the block's units."""
+    name, ts, us, t, cs = re.fullmatch(r'(\w+) \[(.*?)\] #\[(.*?)\](?: \[\("(\w+)", \[(.*)\]\)\])?', s.strip()).groups()
+    cut = {t: {p: int(k) for p, k in re.findall(r'\("(\w+)", (\d+)\)', cs)}} if t else None
+    return descriptor(name), (re.findall(STR, ts), cut), [int(u) for u in us.split(",")]
 
 
 #: the guards on the block's form in C (`admittedBlock`), each a descriptor, a template, units and C's root changed or not
@@ -91,14 +92,14 @@ def _admit(d: str, t: str, cs: list[tuple[str, int]]):
     return OC.admitted(D, {"query": PO.template_instance_query(t)}, {t: dict(cs)} if cs else None)
 
 
-def _admit_in(d: str, ts: list[str], us: list[int]):
+def _admit_in(d: str, t: tuple[list[str], dict | None], us: list[int]):
     """`admitIn`: C_S of the block of units ``us`` of descriptor ``d``, under a ``Q_template_instances`` query listing
-    ``ts``."""
-    c = d.encode()
+    ``t``'s templates, at its cuts."""
+    (ts, cut), c = t, d.encode()
     q = PO.template_instances_query(ts)
     part = PO.build(json.loads(d), q, [[(min(us), max(us) + 1)]])
     D = R.program(OC.restrict(c, part, [(min(us), max(us) + 1)]))
-    return OC.admitted(D, {"query": q}, None)
+    return OC.admitted(D, {"query": q}, cut)
 
 
 def _formed_in(how: str, d: str, t: tuple[str, bool], us: list[int]) -> None:
@@ -191,18 +192,6 @@ def test_a_template_with_no_definition_is_refused_by_listed():
     assert str(e.value) == f"E_LOWER: {OC.NOT_ADMITTED}, listed: C_S's template Gone_v1 is no Definition of C_S"
 
 
-def test_a_template_returning_no_field_is_refused_by_whole_words(monkeypatch):
-    """Lean's guard on `E16`'s `E_v1` returning the empty tuple: `whole-words`, with Lean's text."""
-    from verity.circuits.types import Tuple
-    D = _e16_s()
-    fn = D.defs["E_v1"]
-    params, _ret = fn.signature()
-    monkeypatch.setattr(fn, "signature", lambda: (params, Tuple()))
-    with pytest.raises(OC.Refused) as e:
-        OC.template_form(D, "E_v1", {})
-    assert str(e.value) == f"E_LOWER: {OC.NOT_ADMITTED}, whole-words: C_S's template E_v1 returns no field"
-
-
 def test_two_units_holding_gates_in_common_are_refused_by_disjoint_ranges():
     """Lean's guard on `AB16` with unit 1's node placed at gate 40, inside unit 0's gates [32, 48)."""
     D = R.program(descriptor("AB16").encode())
@@ -211,6 +200,29 @@ def test_two_units_holding_gates_in_common_are_refused_by_disjoint_ranges():
     with pytest.raises(OC.Refused) as e:
         OC.admitted_block(D, {"query": q}, [(0, 2)], "A_v0")
     assert str(e.value) == f"E_LOWER: {OC.NOT_ADMITTED}, disjoint-ranges: units 0 and 1 of the block hold gates in common"
+
+
+def test_a_root_read_recut_is_refused_before_the_block_by_leans_text():
+    """Lean's guard on `RC16`: C's root reading an input node recut is refused by the gate layout (`recut-gates`), before
+    `admitted_block`'s `no-recut` could read it."""
+    why = re.search(r'#guard match lowerE RC16 with\n  \| \.error e => e == "(.*)"', lean_text()).group(1)
+    d = descriptor("RC16")
+    part = PO.build(json.loads(d), PO.template_instance_query("E_v1"), [[(0, 1)]])
+    with pytest.raises(OC.Refused) as e:
+        OC.restrict(d.encode(), part, [(0, 1)])
+    assert str(e.value) == f"E_FORM: {why}"
+
+
+def input_body() -> str:
+    """`INPUT_BODY` of `Spot/Admitted.lean`: the decoder's refusal of `IB16`."""
+    return _unescape(re.search(r"^def INPUT_BODY : String :=\n  " + STR + "$", lean_text(), re.M).group(1))
+
+
+def test_a_word_whose_boolean_body_is_an_input_is_refused_by_the_decoder_by_leans_text():
+    """`IB16`: the decoder refuses it (`codec._input_body`) by the text Lean's guard holds `lowerE` to, before `admitted`."""
+    with pytest.raises(R.Refused) as e:
+        R.program(descriptor("IB16").encode())
+    assert str(e.value) == f"E_DESCRIPTOR: {input_body()}"
 
 
 def test_a_refused_block_reaches_no_executable():

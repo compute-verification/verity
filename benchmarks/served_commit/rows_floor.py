@@ -1,9 +1,9 @@
 """The rows-sha512 floor on one GPU: the windowed worker's kernels (native_rows.cu, built here with nvcc and the JIT's CUDA flags into
 one shared library per leaf-kernel __launch_bounds__ form) over one window of rows (the leaves and the window's whole tree), alone and
 beside a busy stream (bf16 GEMM loops, a square one and decode's skinny one, a device copy loop; at default and at the highest stream
-priority, and in launches capped at a number of CTAs), and commit_gpu's raw SHA-512 compression rate on the same device.  Each form's
-root of a small padded domain is checked against step_rows before it is timed.  Measurement only; JSON to $OUT/rows_floor.json,
-and the served form's rate alone at each row size (`metrics.toml`) into the run's result.
+priority, and in launches capped at a number of CTAs).  Each form's root of a small padded domain is checked against step_rows
+before it is timed.  Measurement only; JSON to $OUT/rows_floor.json, and the served form's rate alone at each row size
+(`metrics.toml`) into the run's result.
 
     bash benchmarks/served_commit/rows_floor.sh     (ROWS: row bytes, default 256 1024 4096; WINDOW_MB, default 256; REPS, default 9;
                                                      MINB: the leaf kernel's min CTAs per SM, default 1 2 3;
@@ -33,7 +33,6 @@ ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "adapters/vllm/verity_vllm/commit/committer/native_rows.cu"
 #: the directory of the headers SRC includes by name (the JIT stages them beside it)
 KERNELS = ROW_COMMIT.parent
-COMMIT_GPU = ROOT / "verity/commitments/cuda/commit_gpu/commit_gpu.cu"
 c_p, c_u64 = ctypes.c_void_p, ctypes.c_uint64
 RATE = "circuits/commitment-hash-rate"
 #: native_rows.cu's VERITY_ROWS_MIN_BLOCKS default, the form the worker builds
@@ -154,18 +153,6 @@ def beside(hash_fn: Callable, busy_fn: Callable, n_busy: int, hs: torch.cuda.Str
     return {"commit_done_ms": round(statistics.median(hd), 4), "busy_done_ms": round(statistics.median(bd), 4)}
 
 
-def raw_rate(tmp: Path, gencode: str) -> dict:
-    """`commit_gpu.cu`'s `sha` mode (each thread chains compressions) built for this device."""
-    exe = tmp / "commit_gpu"
-    stubs = [f"-L{os.environ['CUDA_HOME']}/lib64/stubs"] if os.environ.get("CUDA_HOME") else []
-    rc, log = nvcc(["-O3", "-std=c++17", f"-gencode={gencode}", "-o", str(exe), str(COMMIT_GPU), *stubs,
-                    "-lcublasLt", "-lnvidia-ml"])
-    if rc:
-        return {"build_rc": rc, "log": log[-2000:]}
-    p = subprocess.run([str(exe), "sha", "20"], capture_output=True, text=True, check=False)
-    return json.loads(p.stdout.strip().splitlines()[-1])["sha"] if p.returncode == 0 else {"rc": p.returncode, "log": p.stderr[-2000:]}
-
-
 def compressions(m: int, row_bytes: int) -> int:
     """SHA-512 compressions of m leaves (row after P's midstate, salt 3, c 2, h 2, frame leaf 2) and their m - 1 nodes (2 each)."""
     return m * (math.ceil((row_bytes + 17) / 128) + 9) + 2 * (m - 1)
@@ -188,8 +175,6 @@ def main() -> None:
     res: dict[str, Any] = {"device": prop.name, "sms": prop.multi_processor_count, "arch": arch, "window_bytes": window,
                            "cuda_cflags": list(CUDA_CFLAGS), "forms": {}}
     tmp = Path(tempfile.mkdtemp(prefix="rows-floor-"))
-    res["raw"] = raw_rate(tmp, gencode)
-    print("raw", json.dumps(res["raw"]), flush=True)
 
     hs, hs_hi, bs = torch.cuda.Stream(), torch.cuda.Stream(priority=-100), torch.cuda.Stream()   # -100: clamped to the highest
     a = torch.randn(8192, 8192, dtype=torch.bfloat16, device="cuda")

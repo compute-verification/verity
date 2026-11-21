@@ -69,7 +69,7 @@ H1 tables, or each Pearl+ call's A rows and y, which its proof blocks make where
 first by an earlier record W (``--tie W``: PoUW H1's docket of the window, fixed before H1's sample coin, or Pearl+'s
 window record of its retained timed rounds, written after the retention and before the verifier's coin), and the window's
 docket, chained right after W, registers each as
-W's entry of it (one-stage's ``outputs``, `tie_of`): H1's table `credit.window_table` of it under ``--tie-prefix``, or
+W's entry of it (one-stage's ``outputs``, `tie_of`): H1's table `window.window_table` of it under ``--tie-prefix``, or
 Pearl+'s by the value's own name. R7 takes its domain and root from W's entry, so the proof blocks read the values at W's
 roots (each pinned at W's entry, `interface.registered_file`) and nothing of them is registered afresh. Their readers are
 sampled like any other proof block (under a stratified rate, a stratum a table), never proved whole as an output class.
@@ -107,7 +107,7 @@ circuit's text in the cache. The warm starts no compose, and stops, where the ca
 
     records_audit.py audit --window DIR --sampling-design L (--opening FILE --compilers FILE [--repo DIR] | --circuit SHA512) --run HEX \\
         [--template-sets DIR] [--outputs FILE] --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof --zk-server flock-zk-server \\
-        --lower flock-lower-check --out DIR [--delta D] [--port P] [--ports N] [--forged | --forged-read] [--challenger local|loopback:HOST:PORT|gate:USER@HOST --main FILE] \\
+        --lower flock-lower-check --out DIR [--delta D] [--port P] [--ports N] [--forged] [--challenger local|loopback:HOST:PORT|gate:USER@HOST --main FILE] \\
         [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--registered FILE] [--tie W [--tie-prefix P]] [--skip-negatives] \\
         [--compose-cache DIR] [--jobs N] [--keep-circuits] [--min-free-gb G] [--day N --day-log LOG [--day-params FILE] | --day-ledger LEDGER] \\
         [--lean-workers N] [--audit-mem-gb G] [--negative-workers N]
@@ -164,13 +164,6 @@ deployment's key record ``--challenger-key``. The gate opens a root once, ever.
 ``--forged``: the window holds a forged unit, and the audit passes when every check before the sample passed, the audit
 record rejects and the ZK server released no proof of the false member (`forged_outcome`). The prover runs with its
 self-check skipped, ``FC_ZK_SELF_CHECK=skip``, so it proves the false witness, and the ZK server holds the proof back.
-
-``--forged-read``: the window holds no false unit and a registered read that opens no pinned root (values served as the
-registered ones that are not), and the audit passes when every check before the sample passed, the audit record rejects
-and the Lean verifier refused a session while setting its statement up, on a row of that read not opening the root the
-verifier holds (`forged_outcome`'s ``read_refused``, `READ_OPENS_NO_ROOT`). The window's units are their Definitions',
-so its prover runs as an honest window's does and its proofs may leave: the audit passes on that refusal alone, never
-on a proof held back or refused, and under ``--forged`` never on that refusal.
 """
 from __future__ import annotations
 
@@ -201,7 +194,7 @@ sys.path.insert(0, str(HERE.parent / "one_stage"))
 from verity.commitments import docket_digest as DD
 from verity import device as ST  # noqa: E402
 from verity.protocols.registration.verifier import registration as G  # noqa: E402
-from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd  # noqa: E402
 from verity.protocols.compose import schemes  # noqa: E402
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
 from verity.commitments import registered_value as RV  # noqa: E402
@@ -232,9 +225,12 @@ PHASE_OWN = frozenset({port_value(schemes.get("network-attester"), "scan-state")
 
 def catalog_resolve(tid: str) -> Any:
     """`interface.resolve` over every catalog's Definitions, the registry's loaded too (a window's io shell and
-    its blocks, which `interface`'s own walk can't import); a refusal names the registry modules that failed to import."""
+    its blocks), and Pearl+'s, its scheme's ``catalog`` (the tile's blocks and its credit reader), which `interface`'s
+    own walk can't import, being a later place's; a refusal names the registry modules that failed to import."""
     from verity_vllm.definitions.registry.catalog import load
 
+    for part in schemes.get("pearl-plus").catalog:
+        schemes.catalog("pearl-plus", part)
     _, errors = load()
     try:
         return IF.resolve(tid)
@@ -594,7 +590,7 @@ def tie_of(circuit: Mapping[str, Any], w: Mapping[str, Any] | None, prefix: str 
     words), ``outputs`` (each value W's entry of it) and ``schemas`` (each value's rows, `interface.value_format`), and the
     pins of the values, each W's entry under the value's name, which `interface.registered_file` holds to the rows the
     value's readers read. W names a value under ``prefix``, its descriptor's ``PREFIX``, as its table
-    `credit.window_table` (PoUW H1's docket of the window, each value a Commit table in ``row/v2`` rows), or, with
+    `window.window_table` (PoUW H1's docket of the window, each value a Commit table in ``row/v2`` rows), or, with
     no prefix, by the value's own name (Pearl+'s window record, `pearl_c.window`: each call's A rows and y, FP32 words in
     ``row-seg/v1`` rows, beside each weight's B rows, which the circuit doesn't take). ``({}, {})`` for a circuit that
     takes no values with no W. A value of ``own`` (`phase_values`) that is the execution phase's own (`PHASE_OWN`) is
@@ -606,7 +602,7 @@ def tie_of(circuit: Mapping[str, Any], w: Mapping[str, Any] | None, prefix: str 
     mine = {v: own[v] for v in values if v in (own or {}) and v in PHASE_OWN}
     values = tuple(v for v in values if v not in mine)
     named = {e.get("value") for e in ((w or {}).get("registered") or ()) if isinstance(e, Mapping)}
-    if both := sorted(v for v in mine if (v if prefix is None else CR.window_table(v, prefix)) in named or v in named):
+    if both := sorted(v for v in mine if (v if prefix is None else Wd.window_table(v, prefix)) in named or v in named):
         raise ValueError(f"the execution phase registers {both} afresh, and the earlier registration registers them too")
     fresh = {"registered": {v: int(e["words"]) for v, e in mine.items()},
              "schemas": {v: IF.value_format(reg, v)[0] for v in mine}}
@@ -622,7 +618,7 @@ def tie_of(circuit: Mapping[str, Any], w: Mapping[str, Any] | None, prefix: str 
         entries.setdefault(e.get("value") if isinstance(e, Mapping) else None, []).append(dict(e))
     pins, outputs, d = {}, {}, DD.digest(w)
     for v in values:
-        name = v if prefix is None else CR.window_table(v, prefix)
+        name = v if prefix is None else Wd.window_table(v, prefix)
         if len(got := entries.get(name, [])) != 1:
             raise ValueError(f"the earlier registration registers the circuit's value {v!r} as {name!r} {len(got)} times, "
                              "not once" + ("" if prefix is not None else " (a W naming its tables under its descriptor's "
@@ -1022,12 +1018,10 @@ def session_proofs(sdir: Path) -> dict[str, Any]:
     return {"proofs": None if listed is None else len(listed), "prover_stopped": live.get("prover_stopped")}
 
 
-def forged_outcome(s: dict, wdir: Path, member: int | None = None, more: Mapping[str, bool] | None = None,
-                   read: bool = False) -> dict[str, Any]:
+def forged_outcome(s: dict, wdir: Path, member: int | None = None, more: Mapping[str, bool] | None = None) -> dict[str, Any]:
     """A forged window's verdict, from a5's summary ``s`` and its audit directory ``wdir`` (``audit.json``, each sampled
     member's ``session-m<k>``). Every check before the sample passed, ``more`` (the caller's own checks) holds, the audit
-    record rejects, and the window was stopped where what it forges is. The caller says what that is, a false unit or
-    (``read``) a registered read, and the window passes on the one check that calls for, never on another's:
+    record rejects, and the window was stopped where its false unit is, on the one check that calls for, never on another's:
 
     * a false unit behind the ZK server (the summary's ``arm`` is ``fw``, which a5 writes where the sessions ran behind
       its binary and nowhere else), no proof of which may leave the prover:
@@ -1038,13 +1032,10 @@ def forged_outcome(s: dict, wdir: Path, member: int | None = None, more: Mapping
     * a false unit behind none (a plain audit), whose proof leaves, and Lean's own verdict must refuse it:
       ``lean_refused``, the Lean verifier refused a proof it read (`a0.lean_refused`, and not for want of the session's
       files, `NO_SESSION_FILES`).
-    * ``read``, a registered read that opens no pinned root, in a window of no false unit: ``read_refused``, some
-      session's Lean verdict is a refusal naming a row of a registered read that does not open the verifier's root,
-      which Lean checks at setup (`a0.lean_refused` naming `READ_OPENS_NO_ROOT`). The units are their Definitions', so
-      the sessions' proofs may leave, and none is refused: neither is asked of the window, or held against it.
 
-    ``checks`` holds the three, and the window passes on the one named (``passes_on``); the other two are shown and not
-    counted. A check with nothing to read has no value, and ``no_value`` says why: ``no_proof_released`` behind no ZK
+    ``checks`` holds those two and ``read_refused``, some session's Lean verdict refusing at setup a row of a registered
+    read that does not open the verifier's root (`READ_OPENS_NO_ROOT`); the window passes on the one named
+    (``passes_on``), and the others are shown and not counted. A check with nothing to read has no value, and ``no_value`` says why: ``no_proof_released`` behind no ZK
     server, and ``lean_refused`` where Lean refused only sessions it read no proof of (False where it refused none).
     ``sessions`` is what each session read records (`session_proofs`), and ``why`` the audit's reasons."""
     import a0
@@ -1068,7 +1059,7 @@ def forged_outcome(s: dict, wdir: Path, member: int | None = None, more: Mapping
         no_value["no_proof_released"] = "the sessions ran behind no ZK server"
     stopped = {"no_proof_released": no_proof_released, "lean_refused": refused,
                "read_refused": any(a0.lean_refused(v, READ_OPENS_NO_ROOT) for v in lean.values())}
-    on = "read_refused" if read else "no_proof_released" if behind else "lean_refused"
+    on = "no_proof_released" if behind else "lean_refused"
     checks = {"checks_before_draw": bool(s.get("checks_before_draw")) and all(s["checks_before_draw"].values()), **(more or {}),
               "rejected": audit.get("accepted") is False, **stopped}
     return {"ok": all(v is True for c, v in checks.items() if c == on or c not in stopped), "checks": checks, "passes_on": on,
@@ -1084,6 +1075,7 @@ def audit(a: argparse.Namespace) -> int:
 
     t0, wdir, out = time.time(), Path(a.window), Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
+    a.compose_cache = a.compose_cache or str(out / "compose-cache")
     try:
         mine, doc, sets = verifier_window(wdir, a.sampling_design, Path(a.template_sets) if a.template_sets else None)
         pins = pinned(json.loads(Path(a.registered).read_text())) if a.registered else {}
@@ -1109,7 +1101,7 @@ def audit(a: argparse.Namespace) -> int:
         if twice := sorted(set(histories) & set(pins)):
             raise ValueError(f"values {twice} are both pinned and the window's history tables")
         pins |= histories
-        reads = IF.registered_file(doc, mine, pins)
+        reads = IF.registered_file(doc, mine, pins, docket.get("roots") or ())
         if a.day_ledger:
             from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch, remote as SPR
             key = Ch.key_of_record(json.loads(Path(a.challenger_key).read_text()))
@@ -1202,8 +1194,8 @@ def audit(a: argparse.Namespace) -> int:
             ordered = ordered and row["after_draw"]["refused"]
     else:
         ordered = False
-    if a.forged or a.forged_read:
-        row["forged"] = forged_outcome(s, out / "window", read=a.forged_read)
+    if a.forged:
+        row["forged"] = forged_outcome(s, out / "window")
         row["ok"] = row["forged"]["ok"] and ordered
     else:
         row["ok"] = ok and ordered and (compiled is None or compiled["ok"])
@@ -1296,10 +1288,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--session-jobs", type=A5.one_session, default=1, help="1 only: a5 runs the sessions one at a time (a5.ONE_AT_A_TIME)")
     p.add_argument("--archive-link", action="store_true", help=A5.ARCHIVE_LINK_HELP)
     A5.lean_options(p)
-    forges = p.add_mutually_exclusive_group()
-    forges.add_argument("--forged", action="store_true", help="the window holds a forged unit: it must be refused")
-    forges.add_argument("--forged-read", action="store_true", help="the window holds a registered read that opens no pinned "
-                        "root, and no forged unit: the Lean verifier must refuse it at setup on that read")
+    p.add_argument("--forged", action="store_true", help="the window holds a forged unit: it must be refused")
     p.add_argument("--flip-proofs", type=int, default=0, metavar="N",
                    help="after an accepted audit, at most N one-bit edits of its first drawn session's proof, each of which "
                    "Lean verify must refuse (`proof_edits`)")
@@ -1322,7 +1311,7 @@ def main(argv: list[str] | None = None) -> int:
                    "record) that registered first the values the circuit's program takes, which the window's registration "
                    "registers as W's, chained right after it (`tie_of`); a circuit with values needs it")
     p.add_argument("--tie-prefix", help="with --tie: W's descriptor's PREFIX, which its tables' names take "
-                   "(`credit.window_table`; h1/ for PoUW H1's window). Without it, W names each value as the circuit does "
+                   "(`window.window_table`; h1/ for PoUW H1's window). Without it, W names each value as the circuit does "
                    "(Pearl+'s)")
     p.add_argument("--day", type=int, default=None, help="the window's day, by its index among the monitoring period's days: "
                    "R2 holds the registration's program to the day's one declaration in --day-log (`declared_day`)")

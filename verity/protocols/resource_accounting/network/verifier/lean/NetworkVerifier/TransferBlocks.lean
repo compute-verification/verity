@@ -34,8 +34,8 @@ kind ``advised`` is refused by name (`caseOf`): no advised link has a verdict of
 
 `transferBlocksFn` is the `link-window` function of `network-records verdicts` (`Difftest.serve`), which `service.py` calls
 through `lean_audit.SERVER`. `certificatesFn` is its `certificates` function, the client's check of one window's
-certificates as a reveal endpoint served them (`refusals`), which `lean_audit.certificate_refusals` calls with
-`audit.certificate_refusals` as its reference. Both read a certificate as v4's check does (`Check.Certificate`) and
+certificates as a reveal endpoint served them (`refusals`), which `lean_audit.certificate_refusals` calls. Both
+read a certificate as v4's check does (`Check.Certificate`) and
 verify it with its one LMS check (`Check.Certificate.signs`). Code: it imports only Lean, Flock's verifier
 (`Flock.Hash`, `Flock.Bytes`, `Flock.Canon`, `Flock.Hm96`, `Flock.FV3`), the identity hash, the LMS port and v4's
 certificate and its encodings (`NetworkCheck.Check`).
@@ -452,7 +452,7 @@ def transferBlocksFn (j : Json) : Except String Json := do
 /-! ## The client's certificates -/
 
 /-- One window's certificates and clock certificates as a reveal endpoint served them, which the client holds to the
-certifier's key in its session (`audit.certificate_refusals`): the LMS key and session, the link and window they must
+certifier's key in its session (`lean_audit.certificate_refusals`): the LMS key and session, the link and window they must
 name, the certificates and the clock certificates in the answer's order, and the digests that earlier windows' kept
 clock certificates sign. -/
 structure Served where

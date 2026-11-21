@@ -138,7 +138,7 @@ Current terms and notation, one line each, ``- **Term** (area): definition. Code
 - **Session** (Flock): one run of Flock's prover against its verifier on one staged statement, under its own live coins, its openings released once at close.
 - **Site**: the registered hardware as one public object: its devices' data sheets, a tree of owned locations, and links with their ends, β and latency. Code: `Verity.Site`.
 - **Size**: a circuit's or a region's AND-gate count, what Flock pays for and what every protocol credits and every result reports; (c, k) budgets and `Circuit.size` count every gate.
-- **Slot** (vLLM adapter): one sequence of a served batch, one row of a step's activations. Code: `commit_slots`.
+- **Slot** (vLLM adapter): one sequence of a served batch, one row of a step's activations.
 - **Slowdown** (training): ρ := nc/|C| for a training circuit that is also a (c,k,n)-inference circuit; the training slowdown theorem gives ρ ≥ cν/μ. Code: `Slowdown.Cut.Guarantees.Bound`, `Slowdown.Cut.Guarantees.HE`, `Slowdown.Cut.Guarantees.HEShared`.
 - **Slowdown lower bound**: the bound on hidden training beside verified compute, in counted operations, the one place 𝓜's resources appear. Code: `Slowdown.Guarantees.Slowdown`.
 - **Spec** (Lean): every declaration of a Lean package that a reader must trust to read its guarantees.

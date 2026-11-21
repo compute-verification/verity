@@ -57,6 +57,9 @@ NOT_SCANNED = {
 PUBLIC = {
     "verity_vllm": "I1: the pinned engine (LLM), its pin, its spec, its target and the serving device's target and execution",
     "verity_vllm.engine.spec": "I1: engine spec documents",
+    "verity_vllm.inputs.serves": "I1: what the adapter serves (SERVES: its model, vocabulary and window class) and the door "
+                                 "an input dataset passes before it is sent, which `verity run` reads an application's "
+                                 "dataset through",
     "verity_vllm.settings": "I1: the record of the value settings in force in an environment (record): each variable set "
                             "there that can change what is computed or committed, a credential by name only, and their "
                             "digest, which benchmarks/serve_tax writes into an arm's meta.json and a replay's replay.json",
@@ -68,8 +71,6 @@ PUBLIC = {
                                 "SamplingParams and its version",
     "verity_vllm.engine.served_seed": "I1: the seed a served request is sampled under (its own, the public default for a greedy "
                                       "one, or derived from its window's seed coin and its id) and the windows' seed coins",
-    "verity_vllm.engine.moe_align": "I1: the served Marlin MoE path's moe_align_block_size, each expert's pairs in pair-index "
-                                    "order: its reference, kernels and install",
     "verity_vllm.engine.step_trace": "I2: the scheduler's step trace of an in-process engine core (StepTrace) and its "
                                      "reader, which serve-openai records and benchmarks/serve_tax times and replays",
     "verity_vllm.engine.sampler_capture": "I2: chosen requests' logits rows and ids at a replaying engine's sampler, held "
@@ -142,6 +143,9 @@ PUBLIC = {
                                                 "benchmarks/commitments times",
     "verity_vllm.program.predict.window_rows": "I7: a window's rows, the window circuit's units filled from a served window's "
                                                "values",
+    "verity_vllm.program.predict.window_record": "I7: a served window's record, which the serve's close and prove_path's "
+                                                 "window commit both make: its sampling design, its slots and its units "
+                                                 "committed under the window's key",
     "verity_vllm.program.predict.scan_state": "I7: the network certifier's scan state as a window class's Programs read it: "
                                               "the registered value, its class, its words and a slot's bridge",
     "verity_vllm.program.predict.window_class": "I7: a window class, and the layouts of PoUW's tables a window circuit reads "
@@ -231,6 +235,8 @@ PUBLIC = {
                                "no name",
     "verity_vllm.definitions.registry.catalog": "I7: the registry with every module loaded (load) and the packages it "
                                                 "loads by scope (SCOPES), which SPOT's audit and the benchmarks read",
+    "verity_vllm.definitions.registry.boolean_gate_ops": "I7: general word primitives on bits, which a lane outside the adapter "
+                                                         "builds cases from (benchmarks/property_redteam)",
     "verity_vllm.commit.committer.native_host": "I7: the reference committer of the values a served engine materialises, hashed "
                                                 "on the host (NativeHostCommitter), its GPU chunk size and its bound on a "
                                                 "schedule's stream (schedule_stream_bound), which benchmarks/served_commit, the "
@@ -249,8 +255,6 @@ PUBLIC = {
     "verity_vllm.commit.row_tables_device": "I7: a step's row tables hashed on the GPU on a side stream, and their host twin "
                                             "(step_roots, host_step, plan), which benchmarks/commitments times and "
                                             "benchmarks/serve_tax's plugin installs",
-    "verity_vllm.commit.scheme": "I7: the Commit path's vllm-v1 commitment scheme: its leaves, folds and roots (pos_leaf, "
-                                 "POS_LEAF_TAG), which benchmarks/commitments prices",
     "verity_vllm.commit.step_rows": "I7: the Commit's rows-sha512 scheme over a step's stream: its row and key sizes, domains, "
                                     "levels and roots (ROW_BYTES, KEY_BYTES, fresh_tensor_salts, tensor_root, run_program_digest), "
                                     "which benchmarks/served_commit times and benchmarks/serve_tax and benchmarks/one_stage "
@@ -302,13 +306,11 @@ KNOWN = frozenset({
     "verity_vllm.compiler.served_statics",
     "verity_vllm.compiler.served_tie",
     # the served circuits (`verity_vllm.definitions`), which code outside the adapter imports
-    "verity_vllm.definitions.numerics._jit",
     "verity_vllm.definitions.numerics.cublas_gemm_rows",
     "verity_vllm.definitions.numerics.deepgemm_twins",
     "verity_vllm.definitions.numerics.derived_rows",
     "verity_vllm.definitions.numerics.fp8_moe_rows",
     "verity_vllm.definitions.numerics.glm53_rows",
-    "verity_vllm.definitions.numerics.int8_rows",
     "verity_vllm.definitions.numerics.kernel_registry",
     "verity_vllm.definitions.numerics.rows",
     "verity_vllm.definitions.numerics.serve3_reference",
@@ -335,7 +337,6 @@ KNOWN = frozenset({
     "verity_vllm.definitions.registry.dsa_topk",
     "verity_vllm.definitions.registry.dsa_topk_mask",
     "verity_vllm.definitions.registry.dsa_topk_reads",
-    "verity_vllm.definitions.registry.dsv4_qnorm_insert",
     "verity_vllm.definitions.registry.flashmla",
     "verity_vllm.definitions.registry.fp8",
     "verity_vllm.definitions.registry.fp8_moe",
@@ -344,7 +345,6 @@ KNOWN = frozenset({
     "verity_vllm.definitions.registry.hopper",
     "verity_vllm.definitions.registry.int8_exact",
     "verity_vllm.definitions.registry.io_shell",
-    "verity_vllm.definitions.registry.marlin_moe",
     "verity_vllm.definitions.registry.moe",
     "verity_vllm.definitions.registry.pouw_rows",
     "verity_vllm.definitions.registry.prims",
@@ -375,8 +375,6 @@ KNOWN = frozenset({
     "verity_vllm.pipeline.chunk_rows",
     "verity_vllm.pipeline.cpu_replay",
     "verity_vllm.pipeline.deferred_rows",
-    "verity_vllm.pipeline.serve_openai",
-    "verity_vllm.pipeline.serve_protocol",
     "verity_vllm.pipeline.serving_rows",
     "verity_vllm.pipeline.slice_rows",
     "verity_vllm.pipeline.window_advice",
@@ -412,7 +410,6 @@ _SHARED_WORDS = "until the shared word primitives move below both adapters"
 KNOWN_SITES = {
     ("tests/adapters/torch/tests/frontend/test_train_embedding.py", "verity_vllm.definitions.numerics.torch_kernels"): _SHARED_WORDS,
     ("tests/adapters/torch/tests/frontend/test_train_embedding.py", "verity_vllm.definitions.registry.torch_embedding_f32"): _SHARED_WORDS,
-    ("tests/adapters/torch/tests/frontend/test_train_matmul.py", "verity_vllm.definitions.numerics.mhc_twin"): _SHARED_WORDS,
     ("tests/adapters/torch/tests/frontend/test_train_quant.py", "verity_vllm.definitions.numerics.torch_kernels"): _SHARED_WORDS,
     ("tests/adapters/torch/tests/frontend/test_train_reduce.py", "verity_vllm.definitions.numerics.torch_kernels"): _SHARED_WORDS,
     ("tests/adapters/torch/tests/frontend/test_train_sdpa.py", "verity_vllm.definitions.registry.fa2_train"): _SHARED_WORDS,

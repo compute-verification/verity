@@ -1,7 +1,7 @@
 """`verity_config.verity_settings`, the settings machinery (`EnvSettings`) and the distribution's own registry: every variable declared once (a
-type, a role, a doc), read at the read, an undeclared ``VERITY_ML_*`` variable refused by name, a ``debug`` setting refused on
-a run of record, a program's startup check (`EnvSettings.check`), the run's record of the value settings, and `direct_uses`,
-which a suite's ratchet counts with.  And the circuits area, on the soundness path, reads the environment through it alone:
+type, a role, a doc), an undeclared ``VERITY_ML_*`` variable refused by name at a read, a program's startup check
+(`EnvSettings.check`) and `direct_uses`, which a suite's ratchet counts with; `tests/tools/config/test_settings.py` holds the
+machinery's reads, records and run-of-record refusal.  And the circuits area, on the soundness path, reads the environment through it alone:
 its direct reads are held at today's count, none."""
 from __future__ import annotations
 
@@ -50,24 +50,6 @@ def test_flag_reads_both_spellings_and_refuses_the_rest() -> None:
         S.flag("2")
 
 
-def test_a_read_parses_the_environment_at_the_read(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("VERITY_ML_BOOLEAN_EXHAUSTIVE", raising=False)
-    assert S.VERITY_ML_BOOLEAN_EXHAUSTIVE is False
-    monkeypatch.setenv("VERITY_ML_BOOLEAN_EXHAUSTIVE", "1")
-    assert S.VERITY_ML_BOOLEAN_EXHAUSTIVE is True and S.get("VERITY_ML_BOOLEAN_EXHAUSTIVE", {}) is False
-    for off in ("", "0", "off"):
-        monkeypatch.setenv("VERITY_ML_BOOLEAN_EXHAUSTIVE", off)
-        assert S.VERITY_ML_BOOLEAN_EXHAUSTIVE is False
-    monkeypatch.setenv("VERITY_ML_BOOLEAN_EXHAUSTIVE", "2")
-    with pytest.raises(ValueError, match="VERITY_ML_BOOLEAN_EXHAUSTIVE='2': not a flag"):
-        _ = S.VERITY_ML_BOOLEAN_EXHAUSTIVE
-    with pytest.raises(AttributeError):
-        _ = S.VERITY_ML_NOT_A_SETTING
-    with pytest.raises(AttributeError, match="not a declared setting"):
-        S.get("VERITY_ML_NOT_A_SETTING")
-    assert "VERITY_ML_BOOLEAN_EXHAUSTIVE" in dir(S)
-
-
 def test_an_unknown_prefixed_variable_is_refused_by_name(monkeypatch: pytest.MonkeyPatch) -> None:
     """A misspelt setting fails the run that carries it, at its first read, instead of running with the default."""
     typo = {"VERITY_ML_BOOLEAN_EXHAUSTVE": "1", "VERITY_ML_BOOLEAN_EXHAUSTIVE": "0", "VERITY_SLOW": "1", "PATH": "/bin"}
@@ -83,27 +65,6 @@ def test_an_unknown_prefixed_variable_is_refused_by_name(monkeypatch: pytest.Mon
     monkeypatch.setenv("VERITY_ML_BOOLEAN_EXHAUSTVE", "1")
     with pytest.raises(S.UnknownSetting, match="VERITY_ML_BOOLEAN_EXHAUSTVE"):
         _ = S.VERITY_ML_BOOLEAN_EXHAUSTIVE
-
-
-def _synthetic(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A registry with one setting of each role, and two credentials: today's declares a ``where`` setting alone."""
-    monkeypatch.setattr(S, "REGISTRY", S.EnvSettings(
-        S.__file__, ("VERITY_ML_",),
-        S.Setting("VERITY_ML_TEST_WIDTH", int, 32, S.VALUE, "a test's value"),
-        S.Setting("VERITY_ML_TEST_SEED", str, "", S.VALUE, "a test's credential, by declaration", secret=True),
-        S.Setting("VERITY_ML_TEST_API_KEY", str, "", S.VALUE, "a test's credential, by name"),
-        S.Setting("VERITY_ML_TEST_SLOW", S.flag, False, S.WHERE, "a test's telemetry"),
-        S.Setting("VERITY_ML_TEST_DUMP", str, "", S.DEBUG, "a test's diagnostic"),
-        schema=S.RECORD_SCHEMA))
-
-
-def test_a_debug_setting_is_refused_on_a_run_of_record(monkeypatch: pytest.MonkeyPatch) -> None:
-    _synthetic(monkeypatch)
-    env = {"VERITY_ML_TEST_DUMP": "/tmp/dump", "VERITY_ML_TEST_WIDTH": "8"}
-    S.REGISTRY.validate_environ(env)
-    with pytest.raises(S.DebugOnRecord, match="VERITY_ML_TEST_DUMP: debug setting, refused on a run of record"):
-        S.REGISTRY.of_record(env)
-    S.REGISTRY.of_record({**env, "VERITY_ML_TEST_DUMP": ""})
 
 
 def test_check_refuses_an_unknown_name_a_value_that_doesnt_parse_and_a_debug_setting_on_a_run_of_record() -> None:
@@ -125,20 +86,6 @@ def test_direct_uses_sees_each_form() -> None:
            "e = {**os.environ}\nf = os.getpid()\nx.os.environ\n")
     assert S.direct_uses(src) == [(4, "os.environ"), (5, "os.environ"), (6, "os.environ"), (7, "os.getenv"),
                                   (8, "os.environ"), (9, "os.environ")]
-
-
-def test_the_record_carries_the_value_settings_in_force_and_names_a_credential(monkeypatch: pytest.MonkeyPatch) -> None:
-    assert S.record({"VERITY_ML_BOOLEAN_EXHAUSTIVE": "1"})["values"] == {}
-    _synthetic(monkeypatch)
-    secret = "dummy-not-a-real-key"
-    rec = S.record({"VERITY_ML_TEST_WIDTH": "8", "VERITY_ML_TEST_SEED": secret, "VERITY_ML_TEST_API_KEY": secret,
-                    "VERITY_ML_TEST_SLOW": "1", "VERITY_ML_TEST_DUMP": "/tmp/dump", "PATH": "/bin"})
-    assert rec["schema"] == "verity/settings/v1"
-    assert rec["values"] == {"VERITY_ML_TEST_API_KEY": S.REDACTED, "VERITY_ML_TEST_SEED": S.REDACTED, "VERITY_ML_TEST_WIDTH": "8"}
-    assert secret not in repr(rec)
-    assert rec["digest"] == ("dad12bc28e94a6fcac3667bb83cf251f080616014aad3b66f10120d373c81c0b"
-                             "d3821538af55f059ab09b5e49fc510a2ec6d827dd93f61841aa41b46d34dcd23")
-    assert S.record({"VERITY_ML_TEST_WIDTH": "16"})["digest"] != rec["digest"] and S.record({})["values"] == {}
 
 
 def _area() -> list[tuple[str, str]]:

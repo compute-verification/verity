@@ -23,7 +23,6 @@ markers = [
 # tracer (conftest.py's `_untraced`), so that `check`'s circuit-check takes the record it stores.
 untraced = [
     "test_ambient.py",
-    "test_attention_split.py",
     "test_cache.py",
     "test_cache_expiry.py",
     "test_cache_imports_and_moves.py",
@@ -34,7 +33,6 @@ untraced = [
     "test_metadata_listings.py",
     "test_named_targets.py",
     "test_shard.py",
-    "test_split_prims_serve.py",
     "test_units.py",
 ]
 # a pass can take up to an hour, past suites.py's SUITE_TIMEOUT_S
@@ -65,18 +63,18 @@ workers = 14
 # its unit reads it, and the catalog's records digest it as an import site of the PoUW modules they hold
 # (`units._unchanged`).
 # Read only to check the catalog's records (conftest.py):
-# spot/service.py, which the records digest as such an import site too and which a whole build never imports, with
-# spot/second_stage.py, which service.py imports, and spot/schedule.py, which second_stage.py imports.
+# spot/service.py, which the records digest as such an import site too and which a whole build never imports.
 # pouw/weights.py and spot/__init__.py: h1zy reads an
 # H1 lane's chunks along K from weights (`chunks`), and weights imports one_stage. spot/challenger.py:
 # pouw/coins.py names its entropy's claim instance through the challenger's `coin_claim`.
 # verity_config: conftest.py reads the session's variables through the suite's registry (settings.py), built on its registry.
 # spot/prover/__init__.py, produced.py and served.py: pouw's h1 rows and network's charge rows import produced, and the
 # catalog's records digest served.py as an import site.
+# pous/prover/setup_proof.py: PoUS's setup sidecar binds its unit through it.
 # spot/prover/docket.py: verity_vllm's boundary rows, which a process the cache and superseded-versions tests start imports,
 # build the docket's record with it.
 inputs_only = true
-inputs = ["tools/verity/circuit_check", "verity/__init__.py", "tools/config/verity_config/verity_settings.py", "verity/errors.py", 
+inputs = ["verity/lean_process.py", "tools/verity/circuit_check", "verity/__init__.py", "tools/config/verity_config/verity_settings.py", "verity/errors.py", 
           "tools/config/verity_config",
           "verity/protocols/proofs/spot/verifier/__init__.py",
           "verity/protocols/proofs/spot/prover/__init__.py", "verity/protocols/proofs/spot/prover/produced.py",
@@ -131,7 +129,7 @@ inputs = ["tools/verity/circuit_check", "verity/__init__.py", "tools/config/veri
           "verity/protocols/resource_accounting/network/verifier/io_tie.circuit-check.json",
           "verity/protocols/resource_accounting/network/prover/egress.py", "verity/protocols/resource_accounting/network/prover/egress.circuit-check.py",
           "verity/protocols/resource_accounting/network/prover/egress.circuit-check.json",
-          "verity/protocols/resource_accounting/network/verifier/audit.py", "verity/protocols/resource_accounting/network/verifier/commitment.py",
+          "verity/protocols/resource_accounting/network/verifier/commitment.py",
           "verity/protocols/proofs/spot/verifier/profile.py",
           "verity/protocols/proofs/spot/verifier/challenger/challenger.py", "verity/protocols/proofs/spot/verifier/challenger/coins.py",
           "verity/protocols/proofs/spot/verifier/challenger/remote.py",
@@ -144,8 +142,6 @@ inputs = ["tools/verity/circuit_check", "verity/__init__.py", "tools/config/veri
           "verity/protocols/resource_accounting/network/prover/io_ids.circuit-check.json",
           "verity/protocols/resource_accounting/network/prover/ingress_scan.py", "verity/protocols/resource_accounting/network/prover/ingress_scan.circuit-check.py",
           "verity/protocols/resource_accounting/network/prover/ingress_scan.circuit-check.json", "verity/protocols/resource_accounting/network/prover/ingress_scan.circuit-check.unkeyed.json",
-          "verity/protocols/resource_accounting/network/verifier/head_check.py", "verity/protocols/resource_accounting/network/verifier/head_check.circuit-check.py",
-          "verity/protocols/resource_accounting/network/verifier/head_check.circuit-check.json", "verity/protocols/resource_accounting/network/verifier/head_check.circuit-check.unkeyed.json",
           # the compiler's package, which importing any of its Definitions below runs
           "adapters/vllm/verity_vllm/compiler/__init__.py",
           "adapters/vllm/verity_vllm/compiler/replay_step.py", "adapters/vllm/verity_vllm/compiler/replay_step.circuit-check.py",
@@ -170,7 +166,6 @@ inputs = ["tools/verity/circuit_check", "verity/__init__.py", "tools/config/veri
           "adapters/vllm/verity_vllm/compiler/served_statics.circuit-check.json",
           "verity/protocols/proofs/spot/verifier/one_stage",
           "verity/protocols/resource_accounting/compute/pouw/verifier/window.py", "verity/protocols/proofs/spot/verifier/service.py",
-          "verity/protocols/proofs/spot/verifier/second_stage.py", "verity/protocols/proofs/spot/verifier/schedule.py",
           "verity/protocols/proofs/spot/verifier/window_place.py",
           "verity/protocols/proofs/spot/verifier/__init__.py", "verity/protocols/resource_accounting/compute/pouw/verifier/weights.py",
           "adapters/vllm/verity_vllm/settings.py", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/config.py", "adapters/vllm/verity_vllm/program",
@@ -257,7 +252,7 @@ tests = ["test_cache_redteam.py", "test_cache_imports_and_moves.py", "test_catal
 paths = ["tools/verity/circuit_check/src/circuit_check"]
 
 [[tool.verity.tests.reads]]
-tests = ["test_attention_split.py", "test_attention_split_digests_*.py", "test_metadata_files.py"]
+tests = ["test_metadata_files.py"]
 paths = [
     "benchmarks/numerical/python/verity_numerical/bench",
     "tools/verity/circuit_check/src/circuit_check",
@@ -269,9 +264,9 @@ paths = [
 ]
 
 [[tool.verity.tests.reads]]
-tests = ["test_attention_split.py", "test_attention_split_digests_*.py", "test_bodies.py",
+tests = ["test_bodies.py",
          "test_declared_tables.py", "test_metadata_files.py", "test_named_targets.py",
-         "test_pinned_targets.py", "test_ranges.py", "test_split_prims_serve.py",
+         "test_pinned_targets.py", "test_ranges.py",
          "test_structural.py", "test_structural_slots.py", "test_superseded_versions.py",
          "test_targets.py"]
 paths = [
@@ -290,7 +285,7 @@ tests = ["test_targets.py"]
 paths = ["verity/protocols/proofs/flock/prover/python/verity_flock/struct_slots.circuit-check.py"]
 
 [[tool.verity.tests.reads]]
-tests = ["test_shard.py", "test_split_prims_serve.py"]
+tests = ["test_shard.py"]
 paths = [
     "verity/protocols/proofs/flock/prover/python/verity_flock/subcircuit_templates.circuit-check.py",
     "tools/verity/circuit_check/src/circuit_check",

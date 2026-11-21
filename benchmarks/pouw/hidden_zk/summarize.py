@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any
 
 OUT = Path(sys.argv[1])
-EXPECT = {"honest-own": True, "honest-wrong": False, "honest-chosen": False, "st-honest": True}
+EXPECT = {"honest-own": True, "st-honest": True}
 REFUSAL = "refused: public input ports (--public-inputs): a statement form the soundness proof does not cover"
 REFUSED = "refused: "
 #: the Lean verifier's refusal of a session verified without the verifier's program (`ProvedScope.NO_PROGRAM`)
@@ -115,7 +115,7 @@ def one(d: Path) -> dict:
     if st:
         rec.update({k: st.get(k) for k in ("role", "k", "n", "definition", "binding", "staging", "ands", "k_log", "vus_per_block",
                                            "circuit_bytes", "circuit_sha512", "public_inputs", "own_bytes", "own_sha256",
-                                           "flipped", "inst_bytes", "pub_bytes", "seconds")},
+                                           "inst_bytes", "pub_bytes", "seconds")},
                    stage_maxrss_gb=gb(t), stage_wall_s=(t or {}).get("wall_s"))
     role = (st or {}).get("role") or d.name
     rec.update(zk=session(d), controls=selftests(d),

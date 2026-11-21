@@ -1,21 +1,18 @@
 """PoUS's setup as one circuit (`window.Setup`, `setup_proof` on both sides): the claim and the proof layer's draw, a
-block's place and inputs, the setup's C over every store block through the door, the prover's commitments, the two
-places the verifier stops: the units' constants and held ok (`setup_proof.bound`) and the door's restriction of a block
-that reads the supplied salt, and the order of the weights' commitment before the salt, which no refusal reaches yet."""
+block's place and inputs, the setup's C over every store block through the door, the prover's commitments, where the
+verifier stops at the units' constants and held ok (`setup_proof.bound`), and the order of the weights' commitment before
+the salt, which no refusal reaches yet."""
 
 from __future__ import annotations
 
 import functools
 import random
-import tempfile
-from pathlib import Path
 
 import numpy as np
 import pytest
 
 from verity.circuits.codec import descriptor_chunks, program_digest
 from verity.commitments import rowleaf as RL
-from verity.commitments.crypto import lms as R
 from verity.commitments.periods import interface as I
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
@@ -140,7 +137,7 @@ def test_the_setup_and_the_session_read_one_store():
     _, _, setup = setup_case()
     reg = setup.registered("00" * 64)[WIN.STORE]
     assert reg.schema == RL.SCHEMA_HM96_SHA512_ROW_SEG and reg.rows == WIN.commit_store("00" * 64, setup.store).rows
-    session = WIN.session_units(3, 8, 1000, 8, 12, R.Params(R.TOY_N, 1, 1, toy=True))
+    session = WIN.session_units(3, 8, 1000, 8, 12)
     assert setup.circuit().registered.tables == session.registered.tables
     with pytest.raises(ValueError, match="1 to 2\\^31 blocks"):
         WIN.store_table((1 << 31) + 1, 4)
@@ -198,6 +195,17 @@ def test_a_drawn_block_has_exactly_one_accepted_session():
         _drawn(lambda k: [_finding(k, "a"), _finding(k, "b")])
 
 
+def test_a_refusal_of_the_door_is_reported_for_its_block():
+    """A drawn block the door refuses is refused by name, the door's reason and its part beside the block."""
+    params, salt, _ = setup_case()
+    door = lambda proof, **kw: ([_finding(0, "s0")], None) if proof == 0 else (None, ("circuit", "E_FORM: why"))  # noqa: E731
+    with pytest.raises(ValueError, match=r"^setup block 11: the door refused \(circuit\): E_FORM: why$"):
+        with pytest.MonkeyPatch.context() as m:
+            m.setattr(V, "bound", lambda *a: None)
+            V.check(lambda *a: None, door, {0: 0, 11: 11}, b"", {}, {"supplied": {V.SALT: V.SALT_MARK}}, DRAW, params,
+                    salt, 16)
+
+
 def test_the_verifier_refuses_at_the_units_constants():
     """The verifier reads the partition's blocks for the proof layer's draw and holds C's salt to the supplied
     ``pous.setup.salt/v1``, then stops where each unit's place and slot are constants of C and its ok held to 1, which
@@ -213,26 +221,6 @@ def test_the_verifier_refuses_at_the_units_constants():
         V.check(OC.block, PF.verify, proofs, c, part, {**reg, "supplied": {}}, DRAW, params, salt, 16)
     with pytest.raises(OC.Refused, match="E_BLOCKS"):
         V.check(OC.block, PF.verify, proofs, c, {**part, "blocks": [part["blocks"][0][:-1]]}, reg, DRAW, params, salt, 16)
-
-
-@pytest.mark.slow
-def test_the_door_stops_at_the_supplied_salt_on_a_setup_block(monkeypatch):
-    """Past the binding, the door's verdict on a drawn block: it restricts C to the block itself (C_S, never the
-    prover's circuit file) and stops there, by name, where the block reads the supplied salt bit by bit: restrict keeps a
-    registered input's leaves (`restrict.py`'s ``registered``) and no supplied input's part (`supplied.part`) yet, so
-    the salt's 16-bit leaves read as bits are refused (recut-boundary, circuits'). Slow: restricting the setup's C takes
-    about half a minute, and no smaller circuit is the setup's."""
-    params, salt, _ = setup_case()
-    c, _win, part, reg = registered()
-    monkeypatch.setattr(V, "bound", lambda *a: None)
-    with tempfile.TemporaryDirectory() as d:
-        cf, pub, s = Path(d, "circuit.txt"), Path(d, "pub.bin"), Path(d, "s0")
-        cf.write_bytes(b"")
-        pub.write_text('{"units": {"indices": [5]}}\n')
-        s.mkdir()
-        (s / "session.json").write_text("{}")
-        with pytest.raises(ValueError, match=r"^recut-boundary: .* reads an input node of 16-bit leaves in 1-bit leaves "):
-            V.check(OC.block, PF.verify, {5: PF.Proof(cf, pub, (s,))}, c, part, reg, draw([5]), params, salt, 16)
 
 
 @pytest.mark.slow

@@ -3,6 +3,7 @@ module
 public import Proofs.Pous.Accounting.Memory
 public import Proofs.Registration.Device
 public import Proofs.ResourceAccounting.Gates
+public import Proofs.ResourceAccounting.BlockProperties
 public import Proofs.Pouw.FillerLuck
 public import Proofs.Pouw.Headline
 public import Proofs.Pouw.HeadlineDc

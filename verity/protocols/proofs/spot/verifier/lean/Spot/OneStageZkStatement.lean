@@ -1108,7 +1108,7 @@ held to the registration (`publicHeld`), the committed trees its registered file
 roots (`registeredTreesHeld`), then the session's verdict on the blobs, then v1's `checkAt` at `ξ` on it. v1
 accepts only verdicts that all accepted (`VerdictsAccept`); the run's own `all` says it again, so an acceptance reads
 the run rather than the verdicts' JSON. -/
-def checkOneAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
+def checkOneBody (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
     Core.Outcome OneStage.Public Core.Integrity :=
   let r : V Run := do
     oneSession e.sessions
@@ -1126,6 +1126,38 @@ def checkOneAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evid
     match OneStage.checkAt p.base c (some ξ) { e.base with verdicts := r.out } with
     | .accept pub prof => if r.all then .accept pub prof else .reject "proofs: a session's verifier did not accept"
     | o => o
+
+/-- The refusal of evidence with no session roots object: `Record.checks` skips its `roots` check on a null. -/
+def NO_SESSION_ROOTS : String := "roots: the evidence names no session roots object"
+/-- The refusal of evidence with no served units: `Record.checks` skips its `served` check on a null. -/
+def NO_SERVED : String := "served: the evidence names no served units"
+
+/-- The one statement's check at `ξ`: no session roots (`NO_SESSION_ROOTS`) or served units (`NO_SERVED`), then `checkOneBody`. -/
+def checkOneAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
+    Core.Outcome OneStage.Public Core.Integrity :=
+  if e.base.sessionRoots.isNone then .reject NO_SESSION_ROOTS else
+  if e.base.served.isNone then .reject NO_SERVED else
+  checkOneBody p c ξ e bs
+
+/-- What the one statement's check accepts, `checkOneBody` accepts. -/
+theorem checkOneAt_body {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence} {bs : Core.Blobs}
+    {pub : OneStage.Public} {prof : Core.Integrity} (h : checkOneAt p c ξ e bs = .accept pub prof) :
+    checkOneBody p c ξ e bs = .accept pub prof := by
+  unfold checkOneAt at h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  exact h
+
+/-- The one statement's check refuses evidence naming no session roots object, whatever else it names. -/
+theorem checkOneAt_noRoots {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence} {bs : Core.Blobs}
+    (h : e.base.sessionRoots = none) : checkOneAt p c ξ e bs = .reject NO_SESSION_ROOTS := by simp [checkOneAt, h]
+
+/-- The one statement's check refuses evidence naming session roots and no served units, whatever else it names. -/
+theorem checkOneAt_noServed {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence} {bs : Core.Blobs}
+    {roots : Lean.Json} (hr : e.base.sessionRoots = some roots) (h : e.base.served = none) :
+    checkOneAt p c ξ e bs = .reject NO_SERVED := by simp [checkOneAt, hr, h]
 
 /-! ## The per-member form (module docstring, **per member**) -/
 
@@ -1408,7 +1440,7 @@ checks on the header as parsed, before it drops any port. -/
 def POPULATION_WHY : String := "public file: not the registration's: population"
 
 /-- The refusal of a member's public file whose port `p` is held in `tree`, its template's field tree that every member of
-the template shares, where the member's registered reads open no row of it at `tree` and the header's root there is not
+the template shares or a run input node's `input/n<w>` that every unit reading the node shares, where the member's registered reads open no row of it at `tree` and the header's root there is not
 the registration's (`headerHeldAt`). -/
 def SHARED_UNREAD (p tree : String) : String :=
   s!"public file: port {p} is held in the shared tree {tree}, and the member's registered reads open no row of it " ++

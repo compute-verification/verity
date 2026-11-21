@@ -42,24 +42,6 @@ def kernels() -> list[Any]:
     return kernel_registry.registered()
 
 
-def table_probes() -> dict[str, tuple[int, Any, int, tuple[tuple[int, int], ...], Any]]:
-    """`tanh_rn` (2^27 entries of two words) as parameter 1 of the Definitions that read it, probed at its ends and its
-    regions' edges (`TANH_RN_REGIONS`); `TanhF32Rn_v2` reads entry i through the word of its region whose low 27 bits are i
-    (past HI where no region word has them)."""
-    from verity_vllm.definitions.registry import tables
-
-    lo = tables.TANH_RN_LO
-
-    def word(i: int) -> int:
-        return 0x38000000 | i if (0x38000000 | i) >= lo else 0x40000000 | i
-
-    return {
-        "TableRead27x2_v1": (1, tables.tanh_rn_table, 2, tables.TANH_RN_REGIONS, lambda i: [[i], [i | 0xF8000000]]),
-        "TanhF32Rn_v2": (1, tables.tanh_rn_table, 2, tables.TANH_RN_REGIONS,
-                         lambda i: [[word(i)], [word(i) | 0x80000000]]),
-    }
-
-
 def lazy_operands() -> dict[str, tuple[str, ...]]:
     """The parameters over the input budget that are operands, not a registered table, by the id of their Definition without
     statics."""
@@ -73,8 +55,6 @@ def lazy_operands() -> dict[str, tuple[str, ...]]:
         "FlashInferFp8Linear_v1": ("w",),
         "GemmF32Out_v1": ("w",),
         "Gemm_v2": ("w",),
-        "MarlinMoeExpertGemm_v1": ("wq", "ws"),
-        "MarlinMoeExpertGemmW_v1": ("wq", "ws"),
         "MoeExpertFp8Gemm_v1": ("w",),
         "MoeExpertFp8GemmW_v1": ("w",),
         "ScaledMmFp8BlockGrouped_v1": ("w",),
@@ -95,8 +75,6 @@ def operand_probes() -> dict[str, Any]:
     return {
         "Embedding_v1": lambda S: [{"tok": 0}, {"tok": S["V"] - 1}],
         "EmbeddingShard_v1": lambda S: [{"tok": S["START"]}, {"tok": S["START"] + S["VS"] - 1}],
-        "MarlinMoeExpertGemm_v1": lambda S: [{"e": S["E"] - 1}],
-        "MarlinMoeExpertGemmW_v1": lambda S: [{"e": S["E"] - 1}],
         "MoeExpertFp8Gemm_v1": lambda S: [{"e": S["E"] - 1}],
         "MoeExpertFp8GemmW_v1": lambda S: [{"e": S["E"] - 1}],
     }

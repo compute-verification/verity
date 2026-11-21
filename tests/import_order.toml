@@ -40,6 +40,7 @@ order = [
     ["verity/protocols/compose/verifier/onsite"],
     ["verity/protocols/compose"],
     ["security"],
+    ["input_datasets"],
     ["adapters"],
     ["tools"],
     ["applications"],
@@ -297,7 +298,6 @@ loads = [
 paths = [
     "verity/commitments",
     "verity/commitments/gates/attest.py",
-    "verity/commitments/gates/block_key.py",
     "verity/protocols/resource_accounting/memory/poub/verifier/commitments/gates/block_check.circuit-check.py",
     "verity/protocols/resource_accounting/memory/poub/verifier/commitments/gates/block_check.py",
 ]
@@ -504,7 +504,6 @@ reaches = [
 ]
 loaded_by = [
     "verity/protocols/proofs/flock/prover/pod/rec_inner.py",
-    "verity/protocols/proofs/flock/prover/pod/rec_reprice.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/inner_registered.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/rec_bindings.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/rec_cap.py",
@@ -569,7 +568,6 @@ loads = [
     "verity/commitments/randomness",
     "verity/protocols/proofs/spot/prover/docket.py",
     "verity/protocols/proofs/spot/verifier",
-    "verity/protocols/resource_accounting/compute/pouw/prover",
     "verity/protocols/resource_accounting/compute/pouw/scheme.py",
     "verity/protocols/resource_accounting/compute/pouw/verifier",
     "verity/protocols/resource_accounting/scheme.py",
@@ -583,7 +581,6 @@ paths = [
 loads = [
     "verity/circuits",
     "verity/protocols/resource_accounting/compute/pouw/prover",
-    "verity/protocols/resource_accounting/compute/pouw/verifier",
     "verity/protocols/resource_accounting/scheme.py",
     "verity/runtime",
 ]

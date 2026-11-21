@@ -1305,7 +1305,8 @@ def _lean_agreement(out: Path, upstream: Path, inputs: Path, verify: Path | None
         print(f"check: lean-agreement: error: cannot run here: {why}", file=sys.stderr)
         return 1
     ci = pin.get("ci", {})
-    sets = json.loads((FLOCK_VERIFIER / "vectors.json").read_text())["replayable"]["sets"]    # ci.py --jobs: sets at once
+    v = json.loads((FLOCK_VERIFIER / "vectors.json").read_text())
+    sets = v["replayable"]["sets"] + [s for s in v.get("live", {}).get("sets", []) if s.get("check")]    # ci.py --jobs: sets at once
     argv = [sys.executable, str(FLOCK_VERIFIER / "ci.py"), "--lean", str(verify or FLOCK_LEAN / ".lake" / "build" / "bin" / "verity-verify-proof"),
             *ups, "--work", str(w / "work"), "--inputs", str(w / "inputs"), "--jobs", str(max(1, min(cores(), len(sets)))),
             "--session-jobs", str(session_jobs()),
@@ -1326,15 +1327,50 @@ def _lean_agreement(out: Path, upstream: Path, inputs: Path, verify: Path | None
 def agreement_outcome(sets: list[dict]) -> str:
     """The agreement's outcome in one line, from `ci.py`'s sets: how many sessions the two verifiers decide alike, how many
     the Lean verifier accepts (with no disagreement, upstream accepts them too), and, when it accepts none, that the
-    agreement is on refusals only: a run of refusals agreeing says nothing about a session both verifiers accept."""
+    agreement is on refusals only: a run of refusals agreeing says nothing about a session both verifiers accept. Then the
+    fields `agree.py` and `ci.py` name: `both_refuse`, `second_alone_accepts` (each kind with its `reason`),
+    `lean_alone_accepts`, the refusals by the check the vectors name, `second` and `lean_failed`."""
     ran = [r for r in sets if "skipped" not in r]
     n, agree = sum(r.get("sessions", 0) for r in ran), sum(r.get("agree", 0) for r in ran)
     disagree, accepted = sum(len(r.get("disagree") or ()) for r in ran), sum(r.get("accepted", 0) for r in ran)
     last = sum(r.get("passed_every_check", 0) for r in ran)
+    seconds: dict[str, list] = {}
+    for r in ran:
+        seconds.setdefault(r.get("second", AGREEMENT_UPSTREAM), []).append(r)
+    by = " and by upstream" if set(seconds) <= {AGREEMENT_UPSTREAM} else " and by each set's second verifier"
     line = (f"{len(ran)} sets: {agree} of {n} sessions agree, {disagree} disagree; {accepted} accepted by the Lean verifier"
-            f"{' and by upstream' if accepted and not disagree else ''}, {last} pass every Lean check before the form's and "
+            f"{by if accepted and not disagree else ''}, {last} pass every Lean check before the form's and "
             "are refused at it")
-    return line + ("; NO SESSION IS ACCEPTED: the verifiers agree on refusals only" if n and not accepted else "")
+    line += agreement_fields(ran, seconds, last)
+    return line + ("; NO SESSION IS ACCEPTED: the verifiers agree on refusals only" if n and not accepted and not last else
+                   f"; NO SESSION IS ACCEPTED: {accepted} accepted" if n and not accepted else "")
+
+
+#: the second verifier of a set whose result names none
+AGREEMENT_UPSTREAM = "upstream's pinned verifier"
+
+
+def agreement_fields(ran: list[dict], seconds: dict[str, list], last: int) -> str:
+    """The clauses `agreement_outcome` adds to ci's sentence, from the fields `sets.json` names."""
+    def c(k, rs=ran):
+        return sum(r.get(k, 0) for r in rs)
+    kinds: dict[str, int] = {}
+    for r in ran:
+        for k in r.get("second_alone_accepts") or ():
+            kinds[k["reason"]] = kinds.get(k["reason"], 0) + len(k["sessions"])
+    s = (f" (for those {last}, 'agree' is both verifiers' verdict on every check before the form's)" if last else "")
+    s += (f"; {c('both_refuse')} both refuse; {sum(kinds.values())} the second verifier alone accepts"
+          + (" (" + "; ".join(f"{k}: {why}" for why, k in kinds.items()) + ")" if kinds else "")
+          + f"; {c('lean_alone_accepts')} the Lean verifier alone accepts; Lean's refusals: "
+          f"{c('refused_at_named_check')} at the check the vectors name, {c('refused_at_another_check')} at another, "
+          f"{c('refused_where_none_named')} where they name none; compared with "
+          + "; ".join(f"{v}: sets {', '.join(str(r['set']) for r in rs)} ({c('accepted', rs)} accepted by the Lean verifier)"
+                      for v, rs in seconds.items()))
+    if alone := c("lean_alone_accepts"):
+        s += f"; FAILED: the Lean verifier alone accepts {alone}"
+    if failed := [f for r in ran for f in r.get("lean_failed") or ()]:
+        s += f"; ERROR: {len(failed)} Lean runs not read: " + "; ".join(failed)
+    return s
 
 
 #: the waits before each further fetch of a pinned file the agreement could not fetch, in seconds: it has no other copy to fall
@@ -1980,6 +2016,27 @@ OPT_IN = {
     "adapters/vllm": {
         "VERITY_VLLM_HISTORY_E2E": (
             "pipeline/test_serving_rows_history.py::test_the_window_commits_the_writers_rows_as_its_tables_strings_and_the_verifier_pins_each_root",)},
+    "verity/circuits/evaluate": {"VERITY_SLOW": (
+        "test_difftest.py::test_random_boolean_composites",
+        "test_difftest.py::test_layout_gates_sampled",
+        "test_difftest.py::test_scalar_primitives_sampled",
+        "test_difftest.py::test_the_fmas_on_their_edge_grids",
+        "test_difftest.py::test_float_primitives_sampled",
+        "test_difftest.py::test_tc_steps_on_their_edge_grids",
+        "test_difftest.py::test_tc_steps_on_the_accumulator_sweep",
+        "test_difftest.py::test_tc_steps_sampled",
+        "test_difftest.py::test_the_sm120_captures",
+        "test_difftest.py::test_word_primitives_on_their_families",
+        "test_difftest.py::test_word_primitives_sampled",
+        "test_difftest.py::test_sampler_primitives_on_their_grids",
+        "test_difftest.py::test_the_logs_on_sampled_words",
+        "test_difftest.py::test_sampler_primitives_sampled",
+        "test_difftest.py::test_mufu_primitives_on_their_grids",
+        "test_difftest.py::test_the_tanh_table_is_the_library_table",
+        "test_difftest.py::test_mufu_primitives_sampled",
+        "test_difftest.py::test_decimal_primitives_sampled",
+        "test_difftest.py::test_activations_on_their_grids",
+        "test_difftest.py::test_activations_sampled")},
     "benchmarks/prove_path": {"VERITY_SLOW": (
         "test_prove_path.py::test_a_served_windows_fused_cut_is_the_row_drivers_window_given_the_tables_and_the_checkpoint",
         "test_prove_path.py::test_a_served_windows_fused_cut_is_refused_without_the_tables_or_the_checkpoint")},

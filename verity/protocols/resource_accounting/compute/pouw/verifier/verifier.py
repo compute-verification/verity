@@ -25,7 +25,7 @@ execution phase's and a credit period's verdicts are `pouw-check serve`'s and `p
 `RECORD_VERDICT` doesn't switch them. Building takes the lock `verity_difftest.build` takes (its `BUILD_LOCK`): Lake builds
 the path requires in place, and two builds at once would rewrite one module's C under each other.
 
-This module imports only the standard library and one-stage's `lean_child` (standard library only), the rule every launch of
+This module imports only the standard library and `verity.lean_process` (standard library only), the rule every launch of
 a Lean verifier whose answer can become a verdict runs under, so what decides an execution phase never depends on
 `verity.ml`."""
 from __future__ import annotations
@@ -41,7 +41,7 @@ import threading
 from pathlib import Path
 from typing import Any, NoReturn
 
-from verity.protocols.proofs.spot.verifier.one_stage import lean_child as LC
+from verity import lean_process as LC
 
 RECORD_VERDICT = "lean"
 #: the refusal code of an answer of record the Lean and its Python twin disagree on, or the Lean can't give
@@ -101,8 +101,8 @@ class _Server:
 
     def exchange(self, request: Any, what: str) -> Any:
         """The JSON line `exe` answers to `request`'s canonical line; raises `LeanError` where it writes a panic line
-        (`lean_child.LEAN_PANIC`, whatever its answer: it runs in `lean_child`'s `lean_env`, so a panic aborts it), is
-        killed by a signal or ends with a status outside `SERVE_EXITS` (`lean_child.LEAN_EXIT`), ends before its
+        (`lean_process.LEAN_PANIC`, whatever its answer: it runs in `lean_process.lean_env`, so a panic aborts it), is
+        killed by a signal or ends with a status outside `SERVE_EXITS` (`lean_process.LEAN_EXIT`), ends before its
         answer line, or answers a line that is not JSON."""
         line = _canonical(request)
         with self._lock:
@@ -118,11 +118,12 @@ class _Server:
             except BrokenPipeError:
                 reply = ""
             answered = reply.endswith("\n")
+            unread = None
             if not answered:
                 try:
                     self._proc.stdin.close()
-                except BrokenPipeError:
-                    pass
+                except BrokenPipeError as e:
+                    unread = e
             status = self._proc.poll() if answered else self._proc.wait()
             self._stderr.seek(0)
             err = self._stderr.read().decode("utf-8", "replace")
@@ -136,6 +137,8 @@ class _Server:
             if (panic := LC.panic_line(err)) is not None:
                 raise LeanError(f"{LC.LEAN_PANIC}: {self.exe} on {what}: {panic}")
             why = why or f"{LC.LEAN_EXIT}: status {status} before its answer line"
+            if unread is not None:
+                why += " (its input was closed before the request was written whole)"
             raise LeanError(f"{why}: {self.exe} on {what}: {err[-2000:]}")
 
     def _loads(self, reply: str, what: str) -> Any:

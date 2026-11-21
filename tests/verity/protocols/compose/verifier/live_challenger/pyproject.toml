@@ -17,7 +17,7 @@ untraced = [
 ]
 # The load's verbs read and write the store with `verity/protocols/resource_accounting/network/attester/load_relay.py`, which commits with the
 # network attester's transfer rows and PoUS's P2 scheme. The rehearsal unit's RuntimeMaxSec bounds the gate's --minutes.
-inputs = ["verity/protocols/resource_accounting/network/attester/load_relay.py", "verity/protocols/resource_accounting/network", "verity/protocols/resource_accounting/memory/pous",
+inputs = ["verity/lean_process.py", "verity/protocols/resource_accounting/network/attester/load_relay.py", "verity/protocols/resource_accounting/network", "verity/protocols/resource_accounting/memory/pous",
           "verity/channel.py", "verity/release.py",
           "tools/research/src/research/pods/nebius/challenger/vy-certifier@.service",
           "verity/__init__.py", "verity/errors.py", 
@@ -29,8 +29,8 @@ inputs = ["verity/protocols/resource_accounting/network/attester/load_relay.py",
           # `scan_zk`, which proves through SPOT's service
           "verity/config.py", "verity/party.py", "verity/protocol.py",
           "verity/protocols/proofs/spot/verifier/parties.py", "verity/protocols/proofs/spot/verifier/service.py",
-          "verity/protocols/proofs/spot/verifier/consumers.py", "verity/protocols/proofs/spot/verifier/schedule.py",
-          "verity/protocols/proofs/spot/verifier/second_stage.py", "verity/protocols/proofs/spot/verifier/window_place.py", "verity/protocols/proofs/spot/verifier/levels.py",
+          "verity/protocols/proofs/spot/verifier/consumers.py",
+          "verity/protocols/proofs/spot/verifier/window_place.py", "verity/protocols/proofs/spot/verifier/levels.py",
           "verity/protocols/proofs/spot/verifier/one_stage", "verity/circuits",
           "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness", "verity/protocols/resource_accounting/compute/pouw/verifier",
           "verity/circuits/kernels/__init__.py", "verity/circuits/kernels/tc.py",

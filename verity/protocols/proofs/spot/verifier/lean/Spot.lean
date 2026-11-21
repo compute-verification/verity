@@ -20,7 +20,9 @@ public import Spot.OneStage
 public import Spot.PublicUnits
 public import Spot.CircuitKept
 public import Spot.OneStageZkStatement
+public import Spot.MembersWires
 public import Spot.OneStageZk
+public import Spot.PortsOnce
 public import Spot.MembersParse
 public import Spot.Rate
 public import Spot.HiddenSample
@@ -68,5 +70,7 @@ public import Spot.BlockFile
 public import Spot.Restrict
 public import Spot.HeaderHeldAt
 public import Spot.Test.Admitted
+public import Spot.Test.Docket
+public import Spot.Test.Refusals
 
 @[expose] public section

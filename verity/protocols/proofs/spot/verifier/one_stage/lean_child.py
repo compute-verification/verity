@@ -7,6 +7,6 @@ from __future__ import annotations
 
 from verity.lean_process import (ABORTED, CHECK_EXITS, COMPOSE_EXITS, KS_FORM_EXITS, LEAN_EXIT, LEAN_PANIC, OK, PANIC,
                                  V2_EXITS, VERIFY_EXITS, LeanExit, LeanPanic, exit_why, panic_line, refuse_exit,
-                                 refuse_panic, run)
+                                 lean_env, refuse_panic, run)
 
-__all__ = ['ABORTED', 'CHECK_EXITS', 'COMPOSE_EXITS', 'KS_FORM_EXITS', 'LEAN_EXIT', 'LEAN_PANIC', 'LeanExit', 'LeanPanic', 'OK', 'PANIC', 'V2_EXITS', 'VERIFY_EXITS', 'exit_why', 'panic_line', 'refuse_exit', 'refuse_panic', 'run']
+__all__ = ['ABORTED', 'CHECK_EXITS', 'COMPOSE_EXITS', 'KS_FORM_EXITS', 'LEAN_EXIT', 'LEAN_PANIC', 'LeanExit', 'LeanPanic', 'OK', 'PANIC', 'V2_EXITS', 'VERIFY_EXITS', 'exit_why', 'lean_env', 'panic_line', 'refuse_exit', 'refuse_panic', 'run']

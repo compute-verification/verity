@@ -8,13 +8,13 @@ module docstring), which has no word view either: its gates read the row's bits.
 ratio's seven digits and its point, top_p's bounds, and the seed field: `io_shell.field_checks`' checks, its value a 64-bit sum
 of the same constant selects, and ``null`` as nineteen bytes.
 
-A step is `boolean_dsv4_indices.GateOps`' gates for the word primitive `io_shell.WORD` names (`forms`' integer add and signed
+A step is `boolean_gate_ops.SelectGateOps`' gates for the word primitive `io_shell.WORD` names (`forms`' integer add and signed
 compare, a select as `forms.mux`, an AND and a NOT of bits), and bit i of a byte as that wire.  A constant word is constant bits,
 so a field's selects of constant words are ANDs with one wire and its sums fold above the field's largest value.  No table or
 lookup gate.  Every byte of the body reaches ``ok``.
 
 `ScanSlots_v5` takes the row as the u16 words it is registered as and gives its lane's fields as the i32s its readers take:
-the token `EmbeddingRead_v2`'s, the slot, occupancy word and head `TokenFeed_v1`'s, `SelectEntry_v1`'s and
+the token `EmbeddingRead_v3`'s, the slot, occupancy word and head `TokenFeed_v1`'s, `SelectEntry_v1`'s and
 `SelectCollect_v1`'s. Its words become bits through `WordBits{16}`, which is wiring, and one call of
 `ScanSlotsBits_v1{NS,NP,IDB,K0,K,OCC,LP,MAX,IDS}` on those bits: it copies the lane's fields out of the row as they are, its
 ids zero-extended, computes one thing, the slot its first position carries on, whose count is the prompt's length minus one
@@ -39,7 +39,7 @@ from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array, Tuple, Value
 
 from verity_vllm.definitions.registry import io_shell as X
-from verity_vllm.definitions.registry.boolean_dsv4_indices import GateOps
+from verity_vllm.definitions.registry.boolean_gate_ops import SelectGateOps as GateOps
 
 BITS = SimpleNamespace(U8=Array(8, BL.BIT), BIT=BL.BIT, I32=Array(32, BL.BIT), I64=Array(64, BL.BIT))
 

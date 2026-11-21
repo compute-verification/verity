@@ -70,6 +70,10 @@ path = "tools/"
 means = "the `verity` command, the check's steps and the test harnesses"
 
 [[tree]]
+path = "input_datasets/"
+means = "the input datasets a workload reads its circuits' inputs from: one read API, a definition a dataset and the generators; no protocol imports it"
+
+[[tree]]
 path = "tests/"
 means = "every test: invariants of the whole tree at its top, and the tests of X under tests/X, each suite where its pyproject is"
 
@@ -158,6 +162,10 @@ means = "a loopback port the OS has free"
 [[tree]]
 path = "verity/hooks.py"
 means = "the events a served run emits and the requests a scheme files, in the circuit's words"
+
+[[tree]]
+path = "verity/lean_process.py"
+means = "how a compiled Lean verifier is started and when its answer is read: the panic switch, a panic line refused, an undocumented exit refused"
 
 [[tree]]
 path = "verity/runtime/"

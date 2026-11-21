@@ -432,11 +432,11 @@ def test_case_members_names_every_member_and_a_statement_for_each_sampled_one(tm
     got = a5.case_members(case, **proof)
     assert got["commitment"] == "ab"
     assert got["params"] == {"delta": "1/100", "proofs": {"members": {
-        "t/c0": {"public": mms[0]["st"]["public"], "registered": None, "units": [[0, 3]],
+        "t/c0": {"public": mms[0]["st"]["public"], "registered": None, "block": 0,
                  "vus_per_block": 4},
-        "t/c1": {"public": mms[1]["st"]["public"], "registered": None, "units": [[3, 5]],
+        "t/c1": {"public": mms[1]["st"]["public"], "registered": None, "block": 1,
                  "vus_per_block": 4},
-        "u/c0": {"public": mms[2]["st"]["public"], "registered": None, "units": [[5, 9]],
+        "u/c0": {"public": mms[2]["st"]["public"], "registered": None, "block": 2,
                  "vus_per_block": 4}}}}
     e = json.loads(bytes.fromhex(got["evidence"]))
     assert "verdicts" not in e and e["sessions"] == names and e["proved_units"] == [1, 6]
@@ -587,10 +587,14 @@ def test_an_audit_with_no_per_member_case_says_leans_members_check_did_not_run_a
 @pytest.mark.slow
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_leans_members_check_refuses_a_stand_in_case_the_python_accepted(tmp_path):
-    """The executable's own ``check`` (`members.case_check`) on a stand-in case: Lean refuses its parameters, so an
-    audit the Python accepted is refused as a disagreement, Lean's reason beside the Python's verdict."""
+    """The executable's own ``check`` (`members.case_check_out`) on a stand-in case: Lean refuses its parameters, so an
+    audit the Python accepted is refused as a disagreement, Lean's reason beside the Python's verdict, and its printed
+    line beside its SHA-512."""
     r = _audited(tmp_path, True)
     a5.members_lean(tmp_path, r, PM)
     got = r["checks"]["members_lean"]
     assert not r["accepted"] and got["ran"] is True and got["codes"] == [a5.MEMBERS_DISAGREE], got
     assert got["detail"]["lean"]["verdict"] == "reject" and got["detail"]["lean"]["reason"], got
+    lean = got["detail"]["lean"]
+    assert json.loads(lean["output"])["verdict"] == "reject"
+    assert lean["output_sha512"] == hashlib.sha512(lean["output"].encode()).hexdigest()

@@ -1,15 +1,14 @@
 """Supplied inputs (PROTOCOL.md §5.4): an input of C whose value the verifier computes, from public things only, by a
-function C names under its digest; and a public output C holds to one.
+function C names under its digest.
 
 A supplied parameter lowers to `SuppliedInput<w>_v1` nodes (`SUPPLIED_ID`), and its `inputs` entry carries its mark:
 ``[name, n, {"supplied": fn, "args": {...}, "layout": layout, "bits": bits}]``. ``fn`` is a function of `FUNCTIONS`, which
 says what it reads (`READS`), the origin its leaves take (`ORIGINS`), its static arguments and its value's length in bytes at
-them; ``layout`` (`LAYOUTS`) reads those bytes as the parameter's leaves; ``bits`` is the value's length in bits. A root
-`ret` row ``[lo, hi, {"equals": [name, at, n]}]`` holds each of its leaves to a leaf of a supplied input (`check_held`).
+them; ``layout`` (`LAYOUTS`) reads those bytes as the parameter's leaves; ``bits`` is the value's length in bits.
 
-This module holds what the decoder checks of a mark and of a held row, how a block's parameter over part of a supplied
-input is marked (`part`), and the order rule the verifier holds every evaluation to (`check_order`). The functions' bodies
-are the verifier's, not this module's.
+This module holds a mark's form (`mark_of`), how a block's parameter over part of a supplied input is marked (`part`), and
+the order rule the verifier holds every evaluation to (`check_order`). The functions' bodies are the verifier's, not this
+module's.
 """
 from __future__ import annotations
 
@@ -18,8 +17,8 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-__all__ = ["FUNCTIONS", "Function", "LAYOUTS", "ORIGINS", "READS", "SUPPLIED", "SUPPLIED_ID", "SuppliedError", "check_entry",
-           "check_held", "check_order", "layout_fits", "leaves", "mark_of", "part"]
+__all__ = ["FUNCTIONS", "Function", "LAYOUTS", "ORIGINS", "READS", "SUPPLIED", "SUPPLIED_ID", "SuppliedError", "check_order",
+           "layout_fits", "leaves", "mark_of", "part"]
 
 SUPPLIED = "supplied"
 #: the ids that denote `SuppliedInput<w>`: a node is a supplied-input node exactly when its callee's id matches
@@ -41,7 +40,7 @@ MARK_KEYS = frozenset({"supplied", "args", "layout", "bits"})
 
 
 class SuppliedError(ValueError):
-    """A refusal of a supplied input or a held output, its code first (`E_SUPPLIED_*`, `E_HELD`, or `E_INPUTS_MIXED`)."""
+    """A refusal of a supplied input, its code first (`E_SUPPLIED_*`)."""
 
     def __init__(self, code: str, what: str) -> None:
         super().__init__(f"{code}: {what}")
@@ -86,6 +85,9 @@ FUNCTIONS: dict[str, Function] = {f.name: f for f in (
     # is `head` bytes, fixed by the registered blocks, k, limit and block bytes, read as whole u16 words
     Function("pous.session.header/v1", "supplied", ("commitment",), ("head",), _bits(lambda a: 8 * (a["head"] + a["head"] % 2))),
     Function("pous.session.context/v1", "supplied", ("commitment",), (), _fixed(106)),
+    # storage session: m, the digest the memory attester signed, released in the clear beside its signature, which the
+    # verifier checks under the pinned key and the session's digest unit recomputes from its committed salt and records
+    Function("pous.session.message/v1", "supplied", ("commitment",), (), _fixed(64)),
     # storage setup: the memory attester's salt, drawn after the weights' commitment and before the store's; a unit's
     # prefix is the keys' tag, the framed protocol id, the framed prime's id and this salt framed, zero-padded to 128
     # bytes, the first three registered constants
@@ -106,7 +108,7 @@ FUNCTIONS: dict[str, Function] = {f.name: f for f in (
     Function("record.root/v1", "supplied", ("commitment",), ("port",), _fixed(64)),
     # the first position after every unit of the log's records, a u64 big-endian: a unit's position adds its index
     Function("log.base/v1", "supplied", ("commitment",), (), _fixed(8)),
-    # a constant u16 word, what a held output is held to (an opening's verdict, a check's ok)
+    # a constant u16 word
     Function("const.u16/v1", "supplied", ("constant",), ("value",), lambda a: 2 if a["value"] < 1 << 16 else None),
 )}
 
@@ -155,57 +157,6 @@ def mark_of(entry: Sequence[Any]) -> Mapping[str, Any] | None:
                                                f"with of = [input, lo, hi], not "
                                                f"{entry[2:]!r}")
     return m
-
-
-def check_entry(entry: Sequence[Any], nodes: Sequence[tuple[str, int, int]],
-                functions: Mapping[str, Function] = FUNCTIONS) -> Mapping[str, Any] | None:
-    """Refuse (`SuppliedError`) an `inputs` entry whose mark does not hold of its input nodes ``nodes``, each ``(binding,
-    width, leaves)``: a marked entry's nodes are all supplied (`E_INPUTS_MIXED`: a registered or run input under a mark,
-    so a value the verifier makes is never opened as the prover's registration), its function is one ``functions`` holds
-    (`E_SUPPLIED_FN`), its args are that function's (`E_SUPPLIED_ARGS`), and its leaves are one width, the value's bits
-    by its layout (`E_SUPPLIED_WIDTH`); an unmarked entry holds no supplied node (`E_INPUTS_MIXED`). Returns the mark."""
-    name, m = entry[0], mark_of(entry)
-    supplied = [b == SUPPLIED for b, _w, _n in nodes]
-    if m is None:
-        if any(supplied):
-            raise SuppliedError("E_INPUTS_MIXED", f"input {name!r}: supplied input nodes and no mark naming their function")
-        return None
-    if not all(supplied):
-        raise SuppliedError("E_INPUTS_MIXED", f"input {name!r}: marked supplied, and its nodes are "
-                                              f"{sorted({b for b, _w, _n in nodes})}")
-    f = functions.get(m["supplied"])
-    if f is None:
-        raise SuppliedError("E_SUPPLIED_FN", f"input {name!r}: {m['supplied']!r} is no supplied function")
-    if set(m["args"]) != set(f.args):
-        raise SuppliedError("E_SUPPLIED_ARGS", f"input {name!r}: {f.name} takes the args {sorted(f.args)}, not "
-                                               f"{sorted(m['args'])}")
-    nbytes = f.nbytes(m["args"])
-    if nbytes is None:
-        raise SuppliedError("E_SUPPLIED_ARGS", f"input {name!r}: {f.name} has no value at {dict(m['args'])}")
-    widths = {w for _b, w, _n in nodes}
-    leaves = sum(n for _b, _w, n in nodes)
-    w = next(iter(widths)) if len(widths) == 1 else None
-    lo, hi = m["of"][1:] if "of" in m else (0, leaves)
-    if (w is None or leaves * w != m["bits"] or hi - lo != leaves or hi * w > 8 * nbytes
-            or not layout_fits(m["layout"], w, nbytes) or "of" not in m and m["bits"] != 8 * nbytes):
-        raise SuppliedError("E_SUPPLIED_WIDTH", f"input {name!r}: {f.name}'s value is {8 * nbytes} bits, read by "
-                                                f"{m['layout']} as whole leaves of one width; the mark says {m['bits']} and "
-                                                f"its nodes hold {leaves} leaves of widths {sorted(widths)}")
-    return m
-
-
-def check_held(row: Sequence[Any], width: int, inputs: Mapping[str, tuple[Mapping[str, Any], int, int]]) -> None:
-    """Refuse (`E_HELD`) a root `ret` row ``[lo, hi, {"equals": [name, at, n]}]`` of leaves of ``width`` bits unless
-    ``name`` is a supplied input of ``inputs`` (by name: its mark, leaf width and leaf count), of that width, ``n`` at least
-    1 dividing ``hi - lo``, and ``[at, at + n)`` its leaves: leaf ``lo + i`` is held to its leaf ``at + i mod n``."""
-    lo, hi, port = row
-    eq = port.get("equals") if isinstance(port, Mapping) else None
-    ok = isinstance(eq, list) and len(eq) == 3 and isinstance(eq[0], str) and all(type(x) is int for x in eq[1:])
-    got = inputs.get(eq[0]) if ok else None
-    if not (ok and got is not None and got[1] == width and eq[2] >= 1 and (hi - lo) % eq[2] == 0 and eq[1] >= 0
-            and eq[1] + eq[2] <= got[2]):
-        raise SuppliedError("E_HELD", f"output row [{lo}, {hi}) of {width}-bit leaves: held to {eq!r}, which is no run of "
-                                      "leaves of a supplied input of that width whose length divides the row's")
 
 
 def part(name: str, mark: Mapping[str, Any], lo: int, hi: int, w: int) -> dict[str, Any]:
