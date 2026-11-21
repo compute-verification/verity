@@ -288,7 +288,7 @@ class Exchange:
 
 def providing(role: str) -> schemes.Scheme:
     """The one declared scheme that provides ``role`` (`Scheme.provides`), the only one imported; `LookupError` naming
-    those that do otherwise (`compose.schemes.named`)."""
+    those that do otherwise (`run.schemes.named`)."""
     return declarations.get(declarations.named("provides", role))
 
 
@@ -303,7 +303,7 @@ def option(entry: str | None) -> schemes.Scheme | None:
 
 def declaring(port: str) -> schemes.Scheme:
     """The one declared scheme with a port named ``port`` (`Scheme.ports`), the only one imported; `LookupError` naming
-    those that have otherwise (`compose.schemes.named`)."""
+    those that have otherwise (`run.schemes.named`)."""
     return declarations.get(declarations.named("ports", port))
 
 
@@ -431,7 +431,7 @@ _TYPES: tuple[int, MessageTypes] | None = None
 def types() -> MessageTypes:
     """The message types on disk: the proof layer's, useful work's workload list (which no scheme declares), and
     those of every scheme registered so far (`Scheme.messages`); `body` loads every declaration only for a type none
-    of them declares (`compose.schemes.workload_messages`)."""
+    of them declares (`run.schemes.workload_messages`)."""
     global _TYPES
     registry = schemes.SCHEMES
     if _TYPES is None or _TYPES[0] != len(registry):

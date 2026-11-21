@@ -24,7 +24,7 @@ same sessions, which no second session replaces. With neither, one process does 
    the window's serve ended. The rest of the checkpoint is outside ``W`` (the profile's ``outside``), and so is what
    serving adds: the KV cache's pages and the activations, which the weights-only obligation doesn't cover and an honest
    run doesn't need.
-2. **Setup** by PoUS's scheme, ``compose.schemes.get("pous")`` attached on an exchange (`verity_vllm.messages.Exchange`)
+2. **Setup** by PoUS's scheme, ``run.schemes.get("pous")`` attached on an exchange (`verity_vllm.messages.Exchange`)
    with ``W`` registered as its weight operands (`memory/pous/prover/served.py`): the commitment to ``W``, then the
    salt, which the memory attester samples after it from its own host's OS and logs under the window's binding (`binding`; `challenger_session.salt`, the gate's ``challenger_party``
    verb on a salt request), ``C*`` encoded on the card (``libp2v1.so``, ``--p2-lib``), the memory attester's table and
@@ -63,7 +63,7 @@ same sessions, which no second session replaces. With neither, one process does 
    is `challenger_session.SETUP`: the tie ran on the developer's node, so every verdict rests on setup checked by the
    developer, not the auditor, which the ``POUS`` line prints after the premise.
 
-6. **The bandwidth session**: the bandwidth audit, ``compose.schemes.get("bandwidth")``, attached by name on the same
+6. **The bandwidth session**: the bandwidth audit, ``run.schemes.get("bandwidth")``, attached by name on the same
    exchange after PoUS's scheme, reads the store PoUS binds (`p2_stage.bandwidth.Attached`); once PoUS's session
    completed, before either is answered and before ``C*`` is released, it runs PoUB-P2's session over that store on
    the card (`Attached.session`), so both audits are of one store and no second one is encoded. The session's request carried setup's published outputs and P2's parameters (`challenger_session.request_of`'s

@@ -35,7 +35,7 @@
 # the machine's toolkit at 13.0's nvcc), adding e2e.py's pearlc-zk mode, each decode forward's rows committed in the ZK statement's format too.
 # PEARLC_KERNEL=verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm90 runs every mode on an H100 or H200 instead (identity: the card's name and cc 9.0),
 # under `gpu-lease 1`: the ship is pearl_c_sm90/ship.sh's tree tarred as pearl-c-sm90-ship.tar, its device check runs
-# VARIANTS=h100, SCHEME defaults to the kernel scheme Pearl+ declares (compose.schemes' pearl-plus option), and the Python is VERITY_BENCH_VENV's (default /workspace/cp/venv312)
+# VARIANTS=h100, SCHEME defaults to the kernel scheme Pearl+ declares (run.schemes' pearl-plus option), and the Python is VERITY_BENCH_VENV's (default /workspace/cp/venv312)
 # with no setup.sh: no ready.json and no FlashInfer build, since every request e2e.py serves samples greedily. MODEL (the
 # checkpoint's directory) is given, TAG names it in e2e.py's shape names, and WORK defaults to /workspace/research/pearl-c-sm90
 # (the research user's, where those nodes keep a run's data).
