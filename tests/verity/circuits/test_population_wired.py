@@ -219,6 +219,34 @@ def test_a_tables_openings_are_one_parameter_each_openings_units_after_the_one_b
         wired_population_program([(A, 2)], _opened((0, 2), (1, 1)))
 
 
+DIGEST = Array(8, Array(64, Value(1)))
+T = bind(CompositeDefinition("TWiredAnchored", 1, (),
+                             lambda S: ((("x", Array(2, V16)), ("root", DIGEST), ("domain", DIGEST), ("k", Array(2, V16))),
+                                        Array(2, V16)),
+                             lambda B_, S, x, r, d, k: B_.batch(Add, x, k, axes=(0, 0)), register=False))
+
+
+def _anchored(ports=("root", "domain")):
+    return {"templates": [[descriptor_id(T), 2]], "wires": [], "external": [f"{descriptor_id(T)}/x"],
+            "registered": {"params": {"e@4/table": 8}, "tables": [{"name": "tab", "param": "e@4/table"}], "reads": [],
+                           "roots": [{"reader": descriptor_id(T), "port": p, "table": "tab", "of": of, "at": 0, "units": 2}
+                                     for p, of in zip(ports, ("root", "domain"))], "openings": []}}
+
+
+def test_a_tables_root_and_domain_are_supplied_by_the_tables_registered_name():
+    prog = wired_population_program([(T, 2)], _anchored())[0]
+    assert prog.supplied == {f"e@4/table/{of}": {"supplied": f"registered.{of}/v1", "args": {"value": "e@4/table"},
+                                                 "layout": "digest", "bits": 512} for of in ("root", "domain")}
+    assert {n.name: (n.fn.id, n.n) for n in prog.root.body.nodes if n.fn.id.startswith("Supplied")} == {
+        f"e@4/table/{of}": ("SuppliedInput1_v1", 512) for of in ("root", "domain")}
+    with pytest.raises(ValueError, match="a table's domain is a Digest"):
+        wired_population_program([(T, 2)], _anchored(("root", "k")))
+    rec = _anchored()
+    rec["registered"]["supplied"] = {"e@4/table/root": {**prog.supplied["e@4/table/root"], "args": {"value": "f"}}}
+    with pytest.raises(ValueError, match="marked other than by its table read"):
+        wired_population_program([(T, 2)], rec)
+
+
 @pytest.mark.parametrize("w", [16, 32])
 def test_word_bits_and_bits_word_are_each_others_inverse_bit_i_leaf_i(w):
     x = 0x8001 | 0x5A << 4

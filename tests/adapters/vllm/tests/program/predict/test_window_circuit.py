@@ -669,6 +669,23 @@ def test_the_weights_and_the_embedding_are_registered_reads(window):
                         (WB.weight_param(cs, 16), 12, (2, 4), 0, (0, 0)), (WB.weight_param(cs, 16), 20, (2, 2), 0, (0, 0))]
 
 
+def test_the_tables_root_and_domain_are_its_only_supplied_inputs_and_every_registered_one_a_16_bit_node(window):
+    """The class Program binds the embedding table's root and domain id, read off its table read, as supplied inputs
+    (`SuppliedInput1_v1`, 512 leaves) marked `registered.<root or domain>/v1` of the table's registered name, and nothing
+    else supplied; every registered parameter's node is a `RegisteredInput16_v1`, but the table's own, which the opening
+    reads through its run input ports and no node of its own."""
+    circuit, _ = window
+    prog, _ = circuit.program()
+    table = WB.table_param("model.embed_tokens.weight", 64)
+    assert prog.supplied == {f"{table}/{of}": {"supplied": f"registered.{of}/v1", "args": {"value": table},
+                                               "layout": "digest", "bits": 512} for of in ("root", "domain")}
+    nodes = {nd.name: nd for nd in prog.root.body.nodes if is_input(nd.fn)}
+    assert {v: (nodes[v].fn.id, nodes[v].n) for v in prog.supplied} == {v: ("SuppliedInput1_v1", 512) for v in prog.supplied}
+    assert {n for n, nd in nodes.items() if nd.fn.id.startswith("Supplied")} == set(prog.supplied)
+    assert set(circuit.registered.params) - set(nodes) == {table}
+    assert {nodes[v].fn.id for v in circuit.registered.params if v != table} == {"RegisteredInput16_v1"}
+
+
 def _whole_rows(circuit: IF.Circuit) -> None:
     """Every registered read of ``circuit`` reads whole rows of its parameter, a weight's named for the port's width (the
     scan state's rows are its NS words)."""
