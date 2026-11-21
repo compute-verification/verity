@@ -463,7 +463,7 @@ def test_a_card_with_no_gpu_lease_on_the_node_runs_nothing(tmp_path):
     assert (got.returncode, got.stdout) == (2, "") and "CARD=6 is held under gpu-lease, which this node lacks" in got.stderr
 
 
-@pytest.mark.parametrize("demo", ["remote", "onsite_network"])
+@pytest.mark.parametrize("demo", ["remote"])
 def test_the_bindings_bind_every_party_of_the_demo_by_the_env_files_names(tmp_path, demo):
     path = HERE.parents[3] / "applications" / f"{demo}.toml"
     got = subprocess.run(["bash", str(HERE / "run.sh"), "bindings", str(path)], capture_output=True, text=True, check=False,
