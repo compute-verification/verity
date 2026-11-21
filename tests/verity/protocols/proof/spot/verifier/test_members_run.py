@@ -696,7 +696,8 @@ def test_a_members_run_input_ports_are_held_at_their_nodes_trees_derived_from_c(
     (`run_tree_held`), which the writer commits under its run root; under another window's root the domain is refused
     by name; a root of a member's own at one refuses by name, and so does a record of no run input's tree. Inside a tied
     parameter's gates, two members reading the node under two roots are refused by name (`tied_roots_why`), under one
-    root they are not."""
+    root they are not, and a reader with no root at its port beside one with a root is refused by name
+    (`tied_no_root_why`)."""
     TI = _periods_interface_tests()
     got = {}
 
@@ -752,17 +753,23 @@ def test_a_members_run_input_ports_are_held_at_their_nodes_trees_derived_from_c(
     assert str(e.value).startswith(f"member {first}: port ")
     offs = program.root.body.offsets
     tied = [range(offs[w], offs[w + 1])]
-    two = list(members)[:2]
+    names = list(members)
+    assert len(names) >= 2
 
     def mine(*rs: str) -> list[dict]:
-        return [{"domain": "dd", "leaves": 4, "port": f"{n}/x", "root": r} for n, r in zip(two, rs)]
+        return [{"domain": "dd", "leaves": 4, "port": f"{n}/x", "root": r} for n, r in zip(names, rs)]
+    rest = ["aa" * 64] * (len(names) - 2)
     with pytest.raises(ValueError) as e:
-        M.slices(members, {**rec, "roots": [*roots, *mine("aa" * 64, "bb" * 64)]}, program=program, query=query,
-                 window_root=root, tied=tied)
+        M.slices(members, {**rec, "roots": [*roots, *mine("aa" * 64, "bb" * 64, *rest)]}, program=program,
+                 query=query, window_root=root, tied=tied)
     assert str(e.value) == M.tied_roots_why(w)
-    sl = M.slices(members, {**rec, "roots": [*roots, *mine("aa" * 64, "aa" * 64)]}, program=program,
+    sl = M.slices(members, {**rec, "roots": [*roots, *mine("aa" * 64, "aa" * 64, *rest)]}, program=program,
                   query=query, window_root=root, tied=tied)
-    assert [next(r["root"] for r in sl[n]["roots"] if r["port"] == "x") for n in two] == ["aa" * 64] * 2
+    assert [next(r["root"] for r in sl[n]["roots"] if r["port"] == "x") for n in names] == ["aa" * 64] * len(names)
+    with pytest.raises(ValueError) as e:
+        M.slices(members, {**rec, "roots": [*roots, *mine("aa" * 64)]}, program=program, query=query,
+                 window_root=root, tied=tied)
+    assert str(e.value) == M.tied_no_root_why(names[1], "x", w)
 
 
 def test_the_registered_reads_refusals_are_leans_word_for_word():
@@ -770,6 +777,8 @@ def test_the_registered_reads_refusals_are_leans_word_for_word():
     refusals, which Lean's guards (`OneStageZk`, `Flock.OneCircuit.READ_FORM_WHY`) hold too."""
     assert M.tied_roots_why(3) == ("members: C's tied run input node 3 is read under two roots: every reader of a tied "
                                    "node opens one tree")
+    assert M.tied_no_root_why("a", "p", 3) == ("member a: port p reads C's tied run input node 3, and its slice "
+                                               "holds no root there: every reader of a tied node opens one tree")
     assert M.pinned_read_why("a", "p", "w", "root") == (
         "registered: member a's port p reads the registered input w at another root than its pin of record: a "
         "registered input the weights' registration of record pins is read at the pin's root, leaf count and domain")
