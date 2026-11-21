@@ -6,7 +6,7 @@ import os
 
 def host_var(node: str) -> str:
     """The variable that holds `node`'s address: the node's name in capitals, ``-`` as ``_``, then ``_HOST``
-    (vy-nebius-1's is ``VY_NEBIUS_1_HOST``)."""
+    (vy-nebius-2's is ``VY_NEBIUS_2_HOST``)."""
     return node.upper().replace("-", "_") + "_HOST"
 
 

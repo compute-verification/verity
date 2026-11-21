@@ -132,7 +132,10 @@ lead is an agent that holds a handle in the Slack registry, or has the id `infra
 registered handle at a generation from 1 to 50 (`task_hook.leads`); every other agent is a worker. The refusal says to
 end the turn and say what started it, to be resumed or launched again on `claude-opus-5-5-medium`. A lead's turn, a turn
 whose payload names no model, and every turn while the registry can't be read pass; a worker launched on Fable is not
-told its other turns run on another model.
+told its other turns run on another model. One worker is let through (`design_worker`): a design worker of @top's on
+Fable 5.2 Medium. The agent that holds @top permits it by a command that carries `AGENT_GUARD_FABLE_DESIGN=1`
+(`permit_design`), and the first worker of that machine whose turn names that model within fifteen minutes takes the
+permit and keeps it; it only reads, so its `git commit` and `git push` are refused.
 
 Before an allowed `git merge` or `git merge-tree`, it sets the repository's merge drivers (`.gitattributes` names them; git keeps
 them only in a clone's config) from origin/main's `research.clone.RECORD_DRIVER`, each whose value differs, as boot.sh and
@@ -156,8 +159,9 @@ import time
 from pathlib import Path
 
 import settings
-from settings import (EVENT_LOG, EVENT_VALUE_MAX, INBOX, INBOX_POLL_S, MODEL_OK, MODEL_PASS, MODEL_REFUSAL,
-                      agent_events, launch_model, model_family, record_event)
+from settings import (EVENT_LOG, EVENT_VALUE_MAX, FABLE_CLAIM, FABLE_DESIGN, FABLE_PERMIT, FABLE_PERMIT_S, INBOX,
+                      INBOX_POLL_S, MODEL_OK, MODEL_PASS, MODEL_REFUSAL, agent_events, launch_model, model_family,
+                      named_events, record_event)
 
 PATTERN = re.compile(r"KEY|TOKEN|SECRET|PASSW|CREDENTIAL|PRIVATE", re.I)
 WRAPPERS = {"sudo", "doas", "command", "builtin", "exec", "nohup", "time", "nice", "stdbuf", "timeout", "setsid", "taskset"}
@@ -1473,16 +1477,68 @@ def worker(agent: str) -> bool | None:
         return None
 
 
-def fable_reason(event: dict) -> str | None:
+#: the one worker the Fable rule lets run Fable 5.2: a design worker of @top's, on this model alone, that the holder
+#: of this handle permitted (`permit_design`), and what such a worker may not run, since it only reads: git's `commit`
+#: and `push` as the subcommand, after any of git's own options, never a path or a pattern that holds the word
+DESIGN_MODEL, DESIGN_HANDLE = "claude-fable-5-2-medium", "top"
+DESIGN_WRITES = re.compile(r"\bgit(?:\s+(?:-[Cc]\s+\S+|--?[A-Za-z][\w-]*(?:=\S+)?))*\s+(?:commit|push)\b")
+DESIGN_READ_ONLY = ("Refused by tools/agent-guard/shell_hook.py: you run Fable 5.2 Medium on @top's permit for a design "
+                    "worker, which reads and commits nothing: no `git commit` and no `git push`. Give what you found "
+                    "in your last message; @top lands it, or launches a worker on `claude-opus-5-5-medium` to write it.")
+
+
+def permit_design(event: dict, command: str) -> bool:
+    """Record one permit in EVENT_LOG when `command` carries FABLE_DESIGN and its agent holds @top (`task_hook.holders`):
+    the next worker of this machine whose turn names DESIGN_MODEL takes it (`design_worker`). Whether it recorded one;
+    any other agent's command records none, and neither does a turn the payload doesn't name."""
+    agent, turn = event.get("conversation_id"), event.get("generation_id")
+    if FABLE_DESIGN not in command or not (isinstance(agent, str) and isinstance(turn, str) and turn):
+        return False
+    if guard("task_hook").holders().get(agent) != DESIGN_HANDLE:
+        return False
+    now = int(time.time())
+    with open(EVENT_LOG, "a") as log:
+        fcntl.flock(log, fcntl.LOCK_EX)
+        log.write(json.dumps({"t": now, "hook": "shell_hook.py", "event": FABLE_PERMIT, "conversation_id": agent,
+                              "permit": f"{now}:{turn[:EVENT_VALUE_MAX]}"}) + "\n")
+    return True
+
+
+def design_worker(agent: str) -> bool:
+    """Whether the worker `agent` holds a permit of @top's: one it took in an earlier command, or the oldest permit no
+    worker has taken and that is no older than FABLE_PERMIT_S, which it takes now by a line in EVENT_LOG. The lock makes
+    the look and the line one step, so one permit lets one worker through."""
+    with open(EVENT_LOG, "a") as log:
+        fcntl.flock(log, fcntl.LOCK_EX)
+        events = named_events(FABLE_PERMIT, FABLE_CLAIM)
+        claims = {e.get("permit"): e.get("conversation_id") for e in events if e.get("event") == FABLE_CLAIM}
+        if agent in claims.values():
+            return True
+        now = time.time()
+        for e in events:
+            permit, t = e.get("permit"), e.get("t")
+            if (e.get("event") == FABLE_PERMIT and isinstance(permit, str) and permit not in claims
+                    and isinstance(t, (int, float)) and 0 <= now - t <= FABLE_PERMIT_S):
+                log.write(json.dumps({"t": int(now), "hook": "shell_hook.py", "event": FABLE_CLAIM,
+                                      "conversation_id": agent, "permit": permit}) + "\n")
+                return True
+    return False
+
+
+def fable_reason(event: dict, command: str = "") -> str | None:
     """The Fable rule: the refusal's text for every command of a cloud worker's turn on Fable 5.2, each time; else None.
     Never refused: a lead's turn, a turn whose payload names no model, and every turn while the registry can't be read,
-    which says so on stderr, since a lead the guard can't tell from a worker must not be locked out."""
+    which says so on stderr, since a lead the guard can't tell from a worker must not be locked out. One worker is let
+    through: on DESIGN_MODEL exactly, holding a permit of @top's (`design_worker`), and then only to read: its
+    `git commit` and `git push` are refused (DESIGN_READ_ONLY)."""
     agent, model = event.get("conversation_id"), event.get("model")
     if not (isinstance(agent, str) and CLOUD_AGENT.fullmatch(agent) and isinstance(model, str)
             and model_family(model) == FABLE):
         return None
     if not worker(agent):
         return None
+    if model == DESIGN_MODEL and design_worker(agent):
+        return DESIGN_READ_ONLY if DESIGN_WRITES.search(command) else None
     return FABLE_REFUSED.format(model="".join(c for c in model[:EVENT_VALUE_MAX] if c.isprintable()))
 
 
@@ -1631,7 +1687,8 @@ def main() -> int:
                           "agent_message": "Refused by tools/agent-guard/shell_hook.py (.cursor/hooks.json): " + reason}))
     else:
         try:
-            told = fable_reason(event) or model_reason(event, command)
+            permit_design(event, command)
+            told = fable_reason(event, command) or model_reason(event, command)
         except (OSError, LookupError, TypeError, ValueError,
                 AttributeError) as e:                   # a bug in the model rules must not stop every command
             print(f"shell_hook: model rule failed: {type(e).__name__}: {e}", file=sys.stderr)

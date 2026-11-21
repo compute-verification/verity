@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""`vy-lean-sandbox`: a Lean build on vy-nebius-1 as user `lean-build`, in a transient systemd unit with no network, none of the
+"""`vy-lean-sandbox`: a Lean build on vy-nebius-cpu-4 as user `lean-build`, in a transient systemd unit with no network, none of the
 node's credentials and nothing writable outside its build tree, probed from inside before every build.
 
     vy-lean-sandbox checkout SHA [--repo DIR] [--main REF] [--tree DIR]
@@ -14,7 +14,7 @@ the few below), --elan DIR (default ~research/.elan, read-only at /opt/elan), --
 --memory SIZE, --max-sec N, --user NAME (default lean-build; never root, research or a member of research, sudo, docker or
 adm). Every DEST must exist: systemd would make a missing one on the host's disk (`vy-lean-build-setup` makes /opt/elan).
 
-Run it as root (`sudo -n`). `run` takes a slot of the `build` pool in node 1's Lean slot file, in `tools/check/lean_slot.py`'s
+Run it as root (`sudo -n`). `run` takes a slot of the `build` pool in the node's Lean slot file, in `tools/check/lean_slot.py`'s
 format (`lean-build-I.lock` and `.who` beside the file, waiting in arrival order in `lean-line-build`), unless the caller holds
 one (`--held-slot`, which must be held). The lock directory is research's, so root opens nothing there through a link, takes
 only regular files with one name, and gives research only what it made itself; anything else there is refused. It holds the
@@ -23,7 +23,7 @@ Before the command, the probes run in a unit of their own with the same properti
 network, the host's Unix sockets, the credentials, writes outside the tree, a private /tmp, /var/tmp and /dev/shm, its
 environment and other users' processes. If one gets through, nothing is built.
 
-`checkout` makes the tree a fresh clone of SHA, which must be on REF (default refs/heads/main) of DIR (default node 1's bare
+`checkout` makes the tree a fresh clone of SHA, which must be on REF (default refs/heads/main) of DIR (default the node's bare
 repository): root owns the sources and the build's user only each Lake package's `.lake`. `clean` is what a publisher waits
 on: it passes when no process of the build's user is alive and no sandbox unit is active; when nothing in a `.lake` directory
 is a link, a FIFO, socket or device, a file with a second name, setuid, writable by group or others, or owned by anyone but

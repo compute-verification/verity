@@ -314,7 +314,7 @@ def test_attempt_publish_refuses_a_custody_run_and_names_custody_publish_which_t
 
 
 def test_a_local_run_with_run_record_preserves_the_files_its_workload_left_in_the_run_dir(tmp_path, monkeypatch):
-    """A pod's `research run` (sky/jobs/port-capture.yaml): without --run-record a capture's out/ stayed on the host's disk."""
+    """A pod's `research run`: without --run-record a capture's out/ stayed on the host's disk."""
     vault = tmp_path / "vault"
     cfg = tmp_path / "store.toml"
     cfg.write_text(f'[remote]\ntype = "fs"\npath = "{vault}"\n')
