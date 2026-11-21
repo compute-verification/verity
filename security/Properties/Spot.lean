@@ -147,10 +147,11 @@ def R5 (rec : Json) (v : Docket.Verifier) : Prop := jeq (getD rec "anchors") (.a
 are one interval of run Input nodes (`Docket.tiedBad`); and the program's registered inputs are held to the weights'
 registration of record (`Docket.weightsCodes`): its digest and form, each pin's domain and shape, a template query
 that applies wherever the program has a registered input or the verifier a registration, and no input bound at
-registration that a template parameter reads unless pinned or expected registered. R8 says nothing of how many proof
-blocks read a run Input: the per-member form's check holds every reader of a run Input node outside the tied gates to
-the record's one tree of it (`OneStageZk.runInputRootsAt`), and R7 refuses a registered value at a run Input node
-(`R7Pins`). R8 claims nothing of a tied value's rows: its Input is outside the claim, and the registration piece names
+registration that a template parameter reads unless pinned or expected registered. Under the per-member variant R8
+says nothing of how many proof blocks read a run Input: that variant's check holds every reader of a run Input node
+outside the tied gates to the record's one tree of it (`OneStageZk.runInputRootsAt`, stated as
+`Properties.Spot.RunInputsAtOneTree`), and R7 refuses a registered value at a run Input node (`R7Pins`). R8 claims
+nothing of a tied value's rows: its Input is outside the claim, and the registration piece names
 each one it let through (`Docket.tiedThrough`, published as `rests_on_period_check`). The network period check holds them:
 `Properties.NetworkPeriod.RowsProgWired` equates the scan's `scan/prog` entry's root and domain with an audit's entries
 port. It accepts that audit at any sample and charges one sampled in part: `Properties.NetworkPeriod.RowsTiedCharged`
@@ -162,7 +163,8 @@ piece let through, and that the name `prog<j>` is the Input the entry `scan/prog
 That the rows under that root are the outputs of the proof blocks that computed them (one-stage's ports and the
 commitment's binding) is not composed with those into a theorem: unproved. -/
 def R8 (v : Docket.Verifier) : Prop :=
-  (Docket.tiedBad v).isEmpty = true ∧ Docket.weightsCodes v = #[]
+  (Docket.tiedBad v).isEmpty = true ∧
+  Docket.weightsCodes v = #[]
 
 /-- The record's window names the seed salt the verifier read from the challenger's log (`seedSalt`), and none when it
 read none. -/
@@ -298,7 +300,8 @@ def R7 (rec : Json) (v : Docket.Verifier) : Prop :=
 /-- R7's holds beside its entries, for a v2 record: no registered value, a supplied one included, whose parameter's
 gates hold a run Input node (`Docket.runInputNamed`: a run Input's rows are committed once, in its one tree); no
 supplied anchor whose value neither the verifier's `pinned` nor the weights' registration of record pins
-(`Docket.anchorUnpinned`); and every value the weights' registration of record pins has the record's entry that pin in
+(`Docket.anchorUnpinned`, which reads a field no circuit description carries yet, so it refuses nothing today); and
+every value the weights' registration of record pins has the record's entry that pin in
 root, leaf count, words and domain, and an anchor's value it pins an entry (`Docket.offPin`). -/
 def R7Pins (rec : Json) (v : Docket.Verifier) : Prop :=
   (Docket.runInputNamed v).isEmpty = true ∧ (Docket.anchorUnpinned v).isEmpty = true ∧

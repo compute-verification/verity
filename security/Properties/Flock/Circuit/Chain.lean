@@ -569,22 +569,65 @@ def RunInputGate (P : Prog) (g : ℕ) : Prop :=
     (((P.defs[P.root]?).map (·.body.offsets)).getD #[]).getD i 0 ≤ g ∧
     g < (((P.defs[P.root]?).map (·.body.offsets)).getD #[]).getD (i + 1) 0
 
-/-- **`RunReadsAtOneTree`** (placeholder, open until the checks that give it are named): on an accept, each read by a
-member of a gate of a run Input node is a port of the member's file (`Own.registered`, laid by
-`Flock.OneCircuit.pos`) whose value is the one tree of that node (`Flock.Registered.freshValue`). -/
+/-- Gate `g` of C lies in the gates of a tied value the verifier lets through (`Spot.Docket.tiedGates`). -/
+def TiedGate (v : Spot.Docket.Verifier) (g : ℕ) : Prop :=
+  ∃ fc ∈ Spot.Docket.tiedGates v, fc.1 ≤ g ∧ g < fc.1 + fc.2
+
+/-- Member `m` reads gate `g` of C at its input row `row`: an argument of one of its units' copies is `g`, at `row` in
+the template `admOf` admits. -/
+def ReadAt (P : Prog) (m : Spot.OneStageZk.Member) (g : ℕ) (row : String) : Prop :=
+  ∃ (a : Spot.OneStageZk.Admit) (j x s : ℕ), admOf P m = some a ∧ j < m.indices.size ∧
+    ((unitArgs P m.indices[j]!)[x]?).map Spot.BlockFront.Port.gate = some g ∧
+    rowAt a.ins.toList (argOff P m.indices[j]! x) = some (row, s)
+
+/-- The roots of member `m`'s slice of the record `rec`, at the roots `membersRootsOf` gave (`Member.slice`). -/
+def sliceRoots (rec : Lean.Json) (roots : Std.HashMap String (Array Lean.Json)) (m : Spot.OneStageZk.Member) :
+    Array Lean.Json :=
+  match Spot.getD (m.slice rec roots) "roots" with | .arr rs => rs | _ => #[]
+
+/-- **`RunReadsAtOneTree`** (stated, open): on an accepted run of the per-member variant, (1) each read by a member of a
+gate of a run Input node outside the tied gates is a port of the member's file (`Own.registered`, laid by
+`Flock.OneCircuit.pos`) whose value is the record's one tree of that node (`Flock.Registered.freshValue`), which
+`OneStageZk.runInputRootsAt` holds; and (2) any two reads of gates of one tied run Input node, by one member or two,
+are at slice roots with one root. Half (2) rests on the refusal of two readers of a tied node at two roots that
+`OneStageZk.runInputRootsAt` is to hold (its constant: TO FILL from the verifier's commit that adds it); until that
+refusal exists the verifier gives no such fact. -/
 def RunReadsAtOneTree : Prop :=
   ∀ p ms c Pp rs, MembersAccept p ms c Pp rs →
-    ∀ m ∈ ms, ∀ (a : Spot.OneStageZk.Admit) (j x g : ℕ) (row : String) (s : ℕ),
+    (∀ m ∈ ms, ∀ (a : Spot.OneStageZk.Admit) (j x g : ℕ) (row : String) (s : ℕ),
       admOf Pp.prog m = some a → j < m.indices.size →
       ((unitArgs Pp.prog m.indices[j]!)[x]?).map Spot.BlockFront.Port.gate = some g →
-      RunInputGate Pp.prog g →
+      RunInputGate Pp.prog g → ¬ TiedGate p.base.verifier g →
       rowAt a.ins.toList (argOff Pp.prog m.indices[j]! x) = some (row, s) →
       ∃ q i, readsOf Pp.prog m row = some (.registered q) ∧
-        Flock.OfProgram.rootNode Pp.prog g = some i ∧ q.value = Flock.Registered.freshValue i
+        Flock.OfProgram.rootNode Pp.prog g = some i ∧ q.value = Flock.Registered.freshValue i) ∧
+    ∀ roots, Spot.OneStageZk.membersRootsOf p ms c.record = .ok roots →
+      ∀ m ∈ ms, ∀ m' ∈ ms, ∀ (g g' i : ℕ) (row row' : String),
+        ReadAt Pp.prog m g row → ReadAt Pp.prog m' g' row' →
+        Flock.OfProgram.rootNode Pp.prog g = some i → Flock.OfProgram.rootNode Pp.prog g' = some i →
+        TiedGate p.base.verifier g →
+        ∀ r ∈ sliceRoots c.record roots m, Spot.getD r "port" = .str row →
+          ∀ r' ∈ sliceRoots c.record roots m', Spot.getD r' "port" = .str row' →
+            Spot.getD r "root" = Spot.getD r' "root"
 
-/-- **`TreeMapOneOfOneTree`** (stated, open): every reader of a run Input node opening its one tree
-(`RunReadsAtOneTree`) gives `TreeMapOne`. -/
-def TreeMapOneOfOneTree : Prop := RunReadsAtOneTree → TreeMapOne
+/-- **`TiedReadsAtRecordedRows`** (stated, open; the period test's link): on an accepted run of the per-member variant,
+the one root the readers of a tied run Input node open is the record's root of that tied value's entry, under its name
+`t`, which the network period test ties to the rows the registration that computed them committed
+(`Properties.NetworkPeriod.RowsProgWired`, `RowsTiedInputWired`). That the record's entry of `t` is named `t` is this
+statement's. -/
+def TiedReadsAtRecordedRows : Prop :=
+  ∀ p ms c Pp rs, MembersAccept p ms c Pp rs →
+    ∀ roots, Spot.OneStageZk.membersRootsOf p ms c.record = .ok roots →
+      ∀ m ∈ ms, ∀ (g : ℕ) (row : String), ReadAt Pp.prog m g row → TiedGate p.base.verifier g →
+        ∀ r ∈ sliceRoots c.record roots m, Spot.getD r "port" = .str row →
+          ∃ t ∈ Spot.Docket.tiedThrough p.base.verifier, ∃ first count r0,
+            Spot.Docket.tiedGate p.base.verifier t = some (first, count) ∧ first ≤ g ∧ g < first + count ∧
+            (Spot.OneStageZk.rootsByPort c.record).get? t = some r0 ∧ Spot.getD r "root" = Spot.getD r0 "root"
+
+/-- **`TreeMapOneOfOneTree`** (stated, open): every reader of an untied run Input node at its one tree and every reader
+of a tied one at one root (`RunReadsAtOneTree`), that root the recorded rows' (`TiedReadsAtRecordedRows`), give
+`TreeMapOne`. -/
+def TreeMapOneOfOneTree : Prop := RunReadsAtOneTree → TiedReadsAtRecordedRows → TreeMapOne
 
 /-- **`TreeMapInjective`**: on an accept, two gates of C at one tree leaf are one gate. -/
 def TreeMapInjective : Prop :=
