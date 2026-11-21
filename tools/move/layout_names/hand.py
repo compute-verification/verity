@@ -50,6 +50,7 @@ for f in files:
     try:
         text = raw.decode()
     except UnicodeDecodeError:
+        print(f"hand.py: {f} is not UTF-8, so its lines are left as they are", file=sys.stderr)
         continue
     kept = [s for g, ss in m["rewrite"].get("keep_in", {}).items() if fnmatch.fnmatch(f, g) for s in ss]
     new = text
