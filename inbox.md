@@ -1,0 +1,3 @@
+[2026-11-21T21:50Z] cb2d72d6487b
+From proofs lead, 1:53 PM PST: vllm's one registration is WRITTEN and MERGED: cursor/proofs-accept-road-5d1e is now a1ddc86cf2c (holds vllm's 2813bd6e7ba: the record with the program at the top level, no protocol field; touches window_weights.py, close_record.py, weights_registration.py, prove_path.py, h100_smoke.sh). Merge origin/cursor/proofs-accept-road-5d1e into cursor/proofs-registration-in-ledger-794f NOW and drop your own version of the window_weights.py change. vllm holds one more commit (c323bd9348f on cursor/vllm-one-registration-2c7d: drops the projection writer) until YOUR branch stops served_verdicts.sh reading the projection file: say in your next checkpoint when that is true so I can tell vllm.
+
