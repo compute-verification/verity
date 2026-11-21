@@ -1539,8 +1539,9 @@ class Verifier:
         (`timing_parts`) when the calibration has a bare read of each tier covering the registered store and a window
         had two roots.  Each reading's γ terms are the Lean verifier's, held to the ledger's (`gamma_answer`).  A
         reading the ledger refuses, or whose terms the Lean's don't hold, carries why, and the session then declares
-        nothing; a node whose figures refuse a squaring ceiling at the record's codec refuses the whole ledger, which
-        then carries only that refusal (`refused`), in each reading and in `declared`.  Of what `declared` carries beside them, a paced session's fixed windows (`ledger.Gamma.windows`) and
+        nothing; a node whose figures refuse the card's maximum squaring rate at the record's codec, or the link burst
+        its charged links read, refuses the whole ledger, which then carries only that refusal (`refused`), in each
+        reading and in `declared`.  Of what `declared` carries beside them, a paced session's fixed windows (`ledger.Gamma.windows`) and
         the sketch's and the sample's terms in its errors (`sketch`, `draw`) are the Python ledger's.  With the
         session's plans, `memory` is the node's HBM it shows held by kind (`memory`), KV credited on no verdict yet.
         `delta` is the memory line's δ in its six parts (`ledger.delta_parts`, each ratio text), whose sum `declared`'s
@@ -1552,16 +1553,24 @@ class Verifier:
         (`slack_log2`); a record without it was charged `UNRECORDED_SLACK_LOG2`."""
         cal = self.calibration
         reported = float(cal["read_bytes_per_s"])
-        stated = ledger.Node.stated(
-            self.figures, disk_bytes_per_s=self.disk_bytes_per_s, link_bytes_per_s=self.link_bytes_per_s,
-            disk_burst_bytes=self.disk_burst_bytes, link_burst_bytes=self.link_burst_bytes).raised(reported)
+        def refused(why: str, spec: float, measured: float) -> dict:
+            return {"refused": why, "declared": {"refused": why},
+                    **{name: {"capacity_bytes_per_s": r, "refused": why}
+                       for name, r in (("spec", spec), ("measured", measured))}}
+
+        try:
+            stated = ledger.Node.stated(
+                self.figures, disk_bytes_per_s=self.disk_bytes_per_s, link_bytes_per_s=self.link_bytes_per_s,
+                disk_burst_bytes=self.disk_burst_bytes, link_burst_bytes=self.link_burst_bytes)
+        except ValueError as e:
+            measured = max(self.figures.read_bytes_per_s, reported)
+            return refused(str(e), max(self.figures.spec_bytes_per_s, measured), measured)
+        stated = stated.raised(reported)
         spec, measured = stated.spec_bytes_per_s, stated.read_bytes_per_s
         try:
             rebuild = stated.rebuild(record.codec)
         except ValueError as e:
-            return {"refused": str(e), "declared": {"refused": str(e)},
-                    **{name: {"capacity_bytes_per_s": r, "refused": str(e)}
-                       for name, r in (("spec", spec), ("measured", measured))}}
+            return refused(str(e), spec, measured)
         hbm, dram = stated.tiers["hbm"], stated.tiers["dram"]
         node = {"gpus": hbm.devices, "gpu_spec_bytes_per_s": hbm.spec_bytes_per_s,
                 "gpu_read_bytes_per_s": hbm.read_bytes_per_s, "host_spec_bytes_per_s": dram.spec_bytes_per_s,
