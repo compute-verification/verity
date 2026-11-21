@@ -19,7 +19,7 @@ v2 live Program (``not-live``, a v1 Program among them), and leave a live table 
 refuse it (``refused``), reject one session (``rejected``), and prove another unit than its round's (``unit-other``).
 
 `tests/test_live_verified_difftest.py` samples them for the harness, replaying `runs` as the verifier
-(`pouw_verified_cases.replay`).
+(`replay`).
 """
 from __future__ import annotations
 
@@ -29,6 +29,7 @@ import random
 import pouw_credit_cases as C
 from verity.protocols.accounting.compute.pouw.verifier import credit as Cr
 from verity.protocols.accounting.compute.pouw.verifier import live_reads as LR
+from verity.protocols.proof.spot.verifier.one_stage import proofs as PF
 
 PRE_NAMES = ["files-form", "files-lanes", "no-live-file", "statements-form", "round-past", "twice", "not-live",
              "no-table"]
@@ -211,3 +212,18 @@ def reference_asks(case: dict) -> list[dict]:
         return []
     return Cr._live_asks(case["files"], case["statements"], raw, got, roots, case["ms"], case["program"],
                          case["window"], case["session"], case["max_tokens"])[0]
+
+
+def replay(runs: list) -> Cr.Run:
+    """A verifier that answers `runs` in turn, as `credit._answer` reads its run."""
+    answers = iter(runs)
+
+    def run(_proof, **_inputs):
+        a = next(answers)
+        if "error" in a:
+            raise ValueError(a["error"])
+        if "refused" in a:
+            return None, tuple(a["refused"])
+        return [PF.Finding(f["session"], f["accepted"], f["why"], f["program"], f["registered"], tuple(f["units"]))
+                for f in a["findings"]], None
+    return run
