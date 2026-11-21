@@ -1,0 +1,3 @@
+[2026-11-21T13:31Z] 8eb01b751ee8
+From proofs lead, 5:45 AM PST: SOUNDNESS on the window root (TOP-448, 5:22 and 5:25 AM PST; read both): YES to R = the window's run root PROVIDED the verifier holds it to the challenger's signed ledger on the accepting path. Of your two forms it PREFERS (i): R taken from the ledger the verifier verifies, with the record's run compared against it; (ii) refuse a run-input tree where no signed ledger names R is acceptable for the rehearsal if (i) is not small: then say in the piece which path sets R and that the compare is coinsCode's, so a reader of the Lean finds the one line. Another worker (JOIN) drafts a verdict-tree check in OneStageZk.membersRun beside heldRootsOf on cursor/proofs-verdict-tree-*: keep your hunks there small.
+
