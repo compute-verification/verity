@@ -15,7 +15,7 @@ ROOT = (Path(__file__).resolve().parents[4] / "adapters" / "vllm")
 PREFIX = "verity.protocols."
 TRUSTED = ("verifier", "attester")
 LANES = {
-    "proofs.": "proofs",
+    "proof.": "proofs",
     "registration.": "proofs",
     "accounting.compute.": "compute-accounting",
     "accounting.network.": "network-accounting",
