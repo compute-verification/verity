@@ -143,7 +143,7 @@ def liveDrawReason (h : CoinRecord) (root : ByteArray) (live : Json) : Option St
   let k ← match Spot.Challenger.ChallengerKey.ofJson (g "key") with
     | .ok k => pure k
     | .error e => return some s!"the draw session's challenger key is malformed: {e}"
-  if let some why := keyPinReason live k then return some s!"the draw session's {why}"
+  if let some why := keyPinReason live k then return some s!"the sample session's {why}"
   let window := Json.mkObj [("root", .str (Flock.hexOf root))]
   let (c, log) ← match Spot.Challenger.trustedChallengePhaseOf (g "ledger") window k (g "pins") (g "main") (g "session") with
     | .ok p => pure p

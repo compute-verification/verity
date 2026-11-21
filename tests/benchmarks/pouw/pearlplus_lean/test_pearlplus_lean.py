@@ -549,7 +549,7 @@ def test_a_challenger_draw_its_draw_session_does_not_hold_is_refused_by_the_lean
     key = {"H": 5, "W": 4, "public": "ab" * 80}
     pin = hashlib.sha512(bytes.fromhex(key["public"])).hexdigest()
     for doc, why in ((live, "the draw session's challenger key is malformed: "),
-                     ({**live, "key": key}, "the draw session's challenger key is not the one the verifier pins"),
+                     ({**live, "key": key}, "the sample session's challenger key is not the one the verifier pins"),
                      ({**live, "key": key, "key_sha512": pin}, "the draw session is not trusted: ")):
         (f := tmp_path / "live.json").write_text(json.dumps(doc))
         for of_record in (False, True):
