@@ -12008,21 +12008,6 @@
    "type_hash": "d89dfaa9fb4585e06a1be4a2f55a76528c71ecfbed8da42f979c2d201cf6a51f",
    "unfolded_hash": "a50d982b662e2e57c32e150c9082e27783287a046365596bf8d83947bfff16ba"
   },
-  "Properties.Spot.SecurityProofs.tablesRegistered_honest": {
-   "owner": "@soundness",
-   "signature": [
-    "Properties.Spot.SecurityProofs.tablesRegistered_honest :",
-    "  Eq (Spot.OneStageZk.tablesHeld Properties.Spot.witnessOwn Properties.Spot.honestBlobs) (Except.ok Unit.unit)"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "b4c11386cd1194ba0ead00976716a7304975626924d0a2177c6fc8a0ab7a892c"
-  },
   "Properties.Spot.SecurityProofs.tablesRegistered_nontrivial": {
    "owner": "@soundness",
    "signature": [
