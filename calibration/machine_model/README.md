@@ -1,8 +1,9 @@
 # The ACCEL model of each measured card
 
-`machine-model` prices every warp instruction class, and useful work's designs, on the measured ceilings of a card: it
-establishes how much cheaper than the reference any program on that card could do a design's work (its ε). It measures
-nothing and needs no GPU: its inputs are the card's figures and the probes' censuses, as data.
+`machine-model` prices every warp instruction class, and useful work's designs, on the measured ceilings of a card,
+and reports a design's ε: an accepted window's node performed at least 1 − ε of the work the window credits
+(`data/headline.toml`'s `scope` says what a per-GPU reading needs). It measures nothing and needs no GPU: its inputs
+are the card's figures and the probes' censuses, as data.
 
 ## Pieces
 
