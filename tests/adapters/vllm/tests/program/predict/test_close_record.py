@@ -198,7 +198,7 @@ def test_a_deployment_registers_once_and_each_epochs_close_reads_its_registratio
     from verity.commitments import salt_file as SF
 
     from tests.program.predict.test_window_circuit import GRAIN, S, _checkpoint
-    from verity_vllm.program.predict.close_record import DEPLOYMENT, REGISTRATION, register
+    from verity_vllm.program.predict.window_weights import DEPLOYMENT_RECORD, REGISTRATION, register
     from verity_vllm.records.weights_registration import OF_RECORD
 
     monkeypatch.setattr(WW, "weights_registration", functools.partial(WW.weights_registration, grain=GRAIN))
@@ -214,9 +214,9 @@ def test_a_deployment_registers_once_and_each_epochs_close_reads_its_registratio
         return {str(f.relative_to(out)): f.read_bytes() for f in sorted(out.rglob("*")) if f.is_file()}
 
     files = held()
-    assert {REGISTRATION, DEPLOYMENT, OF_RECORD, "serve.json"} < set(files)
-    assert all(f.startswith(SF.beside(out / REGISTRATION).name + "/") for f in set(files) - {REGISTRATION, DEPLOYMENT, OF_RECORD, "serve.json"})
-    doc, rec = json.loads(files[REGISTRATION]), json.loads(files[DEPLOYMENT])
+    assert {REGISTRATION, DEPLOYMENT_RECORD, OF_RECORD, "serve.json"} < set(files)
+    assert all(f.startswith(SF.beside(out / REGISTRATION).name + "/") for f in set(files) - {REGISTRATION, DEPLOYMENT_RECORD, OF_RECORD, "serve.json"})
+    doc, rec = json.loads(files[REGISTRATION]), json.loads(files[DEPLOYMENT_RECORD])
     assert DD.digest(rec) == digest and rec == WW.deployment_record(doc) and "protocol" not in rec
     assert (rec["format"], rec["program"], rec["previous"]) == (DM.REGISTRATION, doc["program"], None)
     assert "weights/model.embed_tokens.weight@64/table" in [e["value"] for e in rec["registered"]]
