@@ -146,8 +146,9 @@ def main (argv : List String) : IO UInt32 := do
   let ans ← match a.drawLive, held, pl? with
     | some f, some h, some pl => do
       match liveDrawReason h pl.root (← readJson f) with
-      | some why => pure { ans with accept := false, reason := some s!"{DRAW_SESSION_REFUSED}: {why}",
-                           refused := some (DRAW_SESSION_REFUSED, why), work := none }
+      | some why =>
+        let reason := s!"{DRAW_SESSION_REFUSED}: {why}"
+        pure { ans with accept := false, reason := some reason, refused := some (DRAW_SESSION_REFUSED, why), work := none }
       | none => pure ans
     | _, _, _ => pure ans
   IO.println (output ans (published input ans)).compress
