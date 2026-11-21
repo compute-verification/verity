@@ -31,7 +31,7 @@ no gate and no unregistered input bit. `main` counts a record only beside the re
 (`interface.tied_record`: its SHA-512, program, partition and run), so the program digest `pinned` holds the Definitions
 to is the registered one.
 
-**The judgment** (`judge`). A window adds m blocks to its class, and the day's blocks are the classes' summed, exactly. The
+**The judgment** (`records.block_counts.judge`). A window adds m blocks to its class, and the day's blocks are the classes' summed, exactly. The
 declaration (``--declaration``, a JSON object with natural ``c``, ``k`` and ``n``, such as the inference-only policy) is
 named by its SHA-512. Its rules, in `InferenceOnlyCheck.Count`'s order: every class's block at most c gates (undecided where a block
 reaches an unpriced primitive, its gates then a lower bound, unless that bound already passes c) and k fresh bits, and the
@@ -167,21 +167,6 @@ def declaration(doc: Any) -> tuple[str, int, int, int]:
     return hashlib.sha512(codec.canonical_json(doc)).hexdigest(), c, k, n
 
 
-def judge(classes: tuple[RBC.BlockClass, ...] | list[RBC.BlockClass], total: int, c: int, k: int, n: int) -> tuple[dict[str, str], str | None]:
-    """`InferenceOnlyCheck.Count`'s rules on ``classes`` (each with a block) and the day's exact ``total``: each rule's outcome, and
-    the first that doesn't accept as a sentence naming c, k or n, never a count (None when every rule accepts)."""
-    checks = {**RBC.shape_checks(classes, c, k), "count": "accept" if total <= n else "refuse"}
-    over = next((x for x in classes if x.gates > c), None)
-    unpriced = sorted({p for x in classes for p in x.unpriced})
-    fat = next((x for x in classes if x.fresh > k), None)
-    reasons = {"gates": (f"a block of {over.gates} gates, more than c = {c}" if over else
-                         f"undecided: a block reaches {', '.join(unpriced)}, which the gate table can't price, so its "
-                         f"gates are a lower bound against c = {c}"),
-               "fresh": f"a block of {fat.fresh} fresh bits, more than k = {k}" if fat else "",
-               "count": f"the blocks' exact count is more than n = {n}"}
-    return checks, next((reasons[r] for r in RBC.RULES if checks[r] != "accept"), None)
-
-
 @dataclass
 class Day:
     """A day's served windows, counted one at a time (`add`), as `judgment` judges them."""
@@ -221,7 +206,7 @@ class Day:
                                           unpriced=dict(sorted(miss.items())), fresh=x["fresh"]))
             exact[d] = x["count"]
         total = sum(exact.values())
-        checks, reason = judge(classes, total, c, k, n)
+        checks, reason = RBC.judge(classes, total, c, k, n)
         pub = RBC.BlockJudgment(day=self.day, declaration=digest, c=c, k=k, n=n, table=table, classes=tuple(classes),
                                 checks=checks, verdict="accept" if reason is None else "refuse", reason=reason)
         return pub, {**pub.dump(), "blocks": exact, "total": total, "windows": self._windows}
@@ -286,5 +271,5 @@ def main(a: Options) -> int:
     return 0
 
 
-__all__ = ["Day", "Options", "declaration", "fresh", "gates", "judge", "judgment", "main", "resolve", "session",
+__all__ = ["Day", "Options", "declaration", "fresh", "gates", "judgment", "main", "resolve", "session",
            "write_private"]

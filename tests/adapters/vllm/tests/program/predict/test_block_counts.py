@@ -296,11 +296,11 @@ def test_a_block_with_an_unpriced_primitive_leaves_the_gates_undecided():
     """Its gates are a lower bound: under c the gates rule is undecided and the day refused, naming the primitive and c; a
     lower bound already over c refuses on the gates."""
     cls = RBC.BlockClass(definition="ab" * 64, slots=2, steps=3, gates=100, unpriced={"BitAtx32_v1": 1}, fresh=7)
-    checks, reason = BC.judge([cls], 2, 10 ** 6, 10, 2)
+    checks, reason = RBC.judge([cls], 2, 10 ** 6, 10, 2)
     assert checks == {"gates": "undecided", "fresh": "accept", "count": "accept"}
     assert reason == ("undecided: a block reaches BitAtx32_v1, which the gate table can't price, so its gates are a lower "
                       "bound against c = 1000000")
-    assert BC.judge([cls], 2, 99, 10, 2) == ({"gates": "refuse", "fresh": "accept", "count": "accept"},
+    assert RBC.judge([cls], 2, 99, 10, 2) == ({"gates": "refuse", "fresh": "accept", "count": "accept"},
                                              "a block of 100 gates, more than c = 99")
 
 
