@@ -1031,6 +1031,15 @@ def test_a_policy_refusal_shows_in_the_period_s_outcome_after_accounting_ended_2
     assert (T.worse(20, 0), T.worse(0, 20), T.worse(20, 3), T.worse(3, 20)) == (20, 20, 3, 3)
 
 
+def test_the_accounting_and_policy_lists_name_every_step_the_runner_knows_once():
+    """`run`'s two lists against the runner's step arms (`road_step_named`'s case): a step added on one side alone fails."""
+    text = (ROOT / T.RUNNER).read_text()
+    body = text[text.index("road_step_named() {"):]
+    arms = re.findall(r"^    ([a-z][a-z-]*)\)", body[:body.index("\n}\n")], re.M)
+    listed = [*T.ACCOUNTING, *T.POLICY]
+    assert len(arms) == len(set(arms)) and sorted(listed) == sorted(arms), (listed, arms)
+
+
 NETWORK = ROOT / "applications" / "onsite_network.toml"
 NETWORK_PIN = next(p["key-sha512"] for p in tomllib.loads(NETWORK.read_text())["pin"] if p["protocol"] == "wipe")
 NETWORK_BINDINGS = {"memory-challenger": {"wipe": {"address": "192.0.2.1:7001", "host": "auditor-1",

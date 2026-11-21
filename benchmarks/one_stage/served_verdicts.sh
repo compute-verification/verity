@@ -2061,8 +2061,16 @@ EOF
       else step_not_run inference-only "its verdict reads the circuits step's window circuit and the inference-only policy, and one of them did not run"; fi ;;
     record) step_not_run record "served_verdicts.py record reads step 3's sampled proofs, which did not run" ;;
     composite) step_not_run composite "V3c, the composite and the hand-off read the record, which was not made" ;;
-    *) say "PREFLIGHT: the window has no step $1"; exit 3 ;;
   esac
+}
+steps_named() {  # every name in "$@" is a step road_step_named knows, and none is named twice: refused by name otherwise
+  local step seen=" " known
+  known=" $(declare -f road_step_named | sed -n 's/^ *\([a-z][a-z-]*\))$/\1/p' | tr '\n' ' ')"
+  for step in "$@"; do
+    [[ $known = *" $step "* ]] || { say "PREFLIGHT: the window has no step $step: nothing run"; return 3; }
+    [[ $seen = *" $step "* ]] && { say "PREFLIGHT: the step $step is named twice: nothing run"; return 3; }
+    seen+="$step "
+  done
 }
 circuits_counted() {  # every class of CLASSES counted (`circuit` writes its public count only then)
   local c
@@ -2160,6 +2168,7 @@ else
     || { say "PREFLIGHT: the runner is verity run's: no application was named (APPLICATION_PROTOCOLS), so what it lists cannot be checked"; exit 3; }
   [ "${1:-}" = steps ] && [ $# -gt 1 ] \
     || { say "PREFLIGHT: the runner's steps and their order are verity run's stages': none was named (served_verdicts.sh steps STEP...)"; exit 3; }
+  steps_named "${@:2}" || exit 3
   window_preflight || exit 3
   KN=$K CLASSES=$WINDOW_CLASS
   logs_dir

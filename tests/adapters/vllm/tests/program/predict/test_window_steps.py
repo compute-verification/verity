@@ -228,12 +228,17 @@ def test_a_run_naming_no_application_is_refused_by_name(tmp_path):
 
 
 def test_a_run_naming_no_step_is_refused_by_name(tmp_path):
-    """The steps and their order are `verity run`'s stages': a run naming none is refused before the window's preflight."""
+    """The steps and their order are `verity run`'s stages': a run naming none, an unknown one or one twice is refused
+    before the window's preflight and any step."""
     for steps in ((), ("steps",)):
         rc, out = _preflight(tmp_path, steps, APPLICATION_PROTOCOLS="sampled-proofs", POUW="")
         assert rc == 3 and out.strip().splitlines()[-1] == (
             "PREFLIGHT: the runner's steps and their order are verity run's stages': none was named (served_verdicts.sh "
             "steps STEP...)"), out
+    for steps, line in ((("steps", "preflight", "seal", "preflight"), "the step preflight is named twice"),
+                        (("steps", "seal", "audit"), "the window has no step audit")):
+        rc, out = _preflight(tmp_path, steps, APPLICATION_PROTOCOLS="sampled-proofs", POUW="")
+        assert rc == 3 and out.strip().splitlines()[-1] == f"PREFLIGHT: {line}: nothing run", out
 
 
 def _sealed(tmp_path, window, drop=()):
