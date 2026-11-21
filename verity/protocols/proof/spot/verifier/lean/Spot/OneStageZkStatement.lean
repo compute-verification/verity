@@ -267,7 +267,9 @@ def SUBSET_ONLY (kind : String) : String :=
     subset sampling design"
 
 /-- The one statement's parameters as parsed, before `paramsOfJson`'s refusal of a sampling design that is no `subset`
-one. The per-member form's parameters read them (`membersParamsOfJson`), under any sampling design v1 parses. -/
+one, refused where the partition object's query is not v1's `query` (`OneStage.PARTITION_QUERY`), in either form; v1
+refuses a null `query` and a partition naming no object `query` first (`OneStage.paramsParsed`). The per-member form's
+parameters read them (`membersParamsOfJson`), under any sampling design v1 parses. -/
 def paramsParsed (j : Json) : V Params := do
   let some pr := field? j "proofs"
     | throw ("the parameters name no proofs (the auditor's public file's digest and the verifier's " ++
@@ -280,6 +282,7 @@ def paramsParsed (j : Json) : V Params := do
   if !deployedKey key then throw KEY_PARAMS
   let some partition := base.verifier.partition
     | throw "partition is null: the sessions are verified against the verifier's own partition object"
+  if !jeq (getD partition "query") base.verifier.query then throw OneStage.PARTITION_QUERY
   let programJ := getD rest "program"
   pure { base, own := { programJ, program := (← Flock.canon programJ).toUTF8, partition, pub, registered },
          members := none }
