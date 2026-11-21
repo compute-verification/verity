@@ -340,7 +340,8 @@ def assumptions(o: dict, a: dict, b: dict, why: list[str], candidate: list[str],
     entry, each one's hand-written fields (`id` and `owner`; an open premise's `issue` and `due`, a domain hypothesis's
     `why` and `cites`) apart from its `digest` (the build's: the hash its `reads` record holds), which merges as `derived`; a field
     both sides changed differently is theirs' (`one`).  An entry one side removed and the other changed is kept: the lock
-    run drops it when no guarantee of the merged tree reads it (`assumptions.unread`, `open.unread`, `domain.unread`)."""
+    run drops it when no guarantee of the merged tree reads it (`assumptions.unread`, `domain.unread`; `open.unread` only
+    once its `Prop` is gone from the build, `check.open_lines`)."""
     out = {}
     for k in keys(section, a, b):
         x, y, z = o.get(k, MISSING), a.get(k, MISSING), b.get(k, MISSING)

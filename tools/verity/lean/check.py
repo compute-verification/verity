@@ -3476,13 +3476,16 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
     stay once a statement takes the `Prop`, since the guarantees that only read it still rest on it: the entry owes its
     issue, its due date and its `why` either way, and fails when no guarantee reads the `Prop` without taking it.  Each
     entry has an `owner` and a `digest`, so a changed premise
-    shows as its own record, and an entry no guarantee takes or reads fails.  The digest is the one its `reads` record
+    shows as its own record, and an entry no guarantee takes or reads fails, but for an `open` entry whose `Prop` the
+    build still declares (``walked``): that one stays as written, its digest the build's, and `open_lines` names it on
+    every run.  The digest is the one its `reads` record
     holds, where the definitions it reads have records of their own; for a premise no `reads` record holds, whatever
     module defines it (a Proofs or Properties module, outside `meaning`), it is ``walked``'s ({premise: (its module, the
     digest of it and every definition it reads in `meaning` and this repository's modules)}, `Facts.lean`'s
     `assumption_reads`), so a change to its statement or to anything it reads changes its record.  An entry may carry
     `id`, the claim id that names the premise, written by hand and kept by an update (`claim_ids.py` writes the table
-    from each id to its Lean names from these).  An update writes the digests, drops an entry no guarantee reads, and converts a list of assumption modules into the definitions the
+    from each id to its Lean names from these).  An update writes the digests, drops an entry no guarantee reads (an `open` one only once
+    its `Prop` is gone from the build), and converts a list of assumption modules into the definitions the
     guarantees read there, each owned by the one owner of the guarantees that read its module (``read_by``, `readers`;
     or ``owner``).
     ``premised`` ({definition: the guarantees whose statements take it}, from `Facts.lean`'s `premises`) names the premises
@@ -3632,6 +3635,15 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
             fails.append(Failure("open.digest" if "digest" in rec else "open.unrecorded", d, f"open: {d}'s definition "
                                  f"in {module(d)} changed; run `check.py --update` and commit the record"))
 
+    def still_declared(d: str, rec: dict, h: str | None) -> None:
+        """An `open` entry no guarantee takes, of a `Prop` the build still declares: kept as written, its digest the
+        build's, and named by `open_lines` on every run, never dropped by one."""
+        opens[d] = {k: rec[k] for k in ("id", "owner") if k in rec} | ({"digest": h} if h is not None else {}) | {
+            k: v for k, v in rec.items() if k not in ("id", "owner", "digest")}
+        if not update and h is not None and rec.get("digest") != h:
+            fails.append(Failure("open.digest" if "digest" in rec else "open.unrecorded", d, f"open: {d}'s definition "
+                                 f"in {module(d)} changed; run `check.py --update` and commit the record"))
+
     for a, rec in sorted((domained | opened | assumed).items()):
         section = "assumptions" if a in assumed else "open" if a in opened else "domain"
         if len(twice := [s for s, x in (("assumptions", assumed), ("domain", domained), ("open", opened)) if a in x]) > 1:
@@ -3649,6 +3661,9 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
             what = f"{a}'s definition in {m}, or a definition it reads,"
         elif a in (premised or {}):
             m, h, what = None, None, None
+        elif section == "open" and isinstance(rec, dict) and a in walked:
+            still_declared(a, rec, walked[a][1])
+            continue
         else:
             if not update:
                 fails.append(Failure(f"{section}.unread", a, f"{section}: {a} is listed, but no guarantee reads it; remove "
@@ -3831,6 +3846,31 @@ def regenerated(policy: dict, facts: dict, files: dict[str, str], fails: list[st
     new = judge(policy, facts, files, update=True)[1]
     return policy | {k: new[k] for k in ("guarantees", "reads", "assumptions", "domain", "open", "shape", "trust_gap", "ids")
                      if k in new}
+
+
+def open_lines(was: dict, now: dict, facts: dict) -> list[str]:
+    """One line for each `open` entry of ``was`` that ``now``, the lock a run leaves, keeps though no guarantee takes it,
+    its `Prop` still declared and no `waits` or `why` given, and one for each it drops, no premise section listing it any
+    more: the entry, where the build declares it or that it is gone, and the guarantees whose records listed it."""
+    def listers(lock: dict, a: str, kinds=PREMISE_KINDS) -> list[str]:
+        return sorted(g for g, r in (lock.get("guarantees") or {}).items() if isinstance(r, dict) and
+                      isinstance(p := r.get("premises"), dict) and any(a in name_list(p.get(k)) for k in kinds))
+
+    old, new = (x.get("open") if isinstance(x.get("open"), dict) else {} for x in (was, now))
+    listed = {p for k in ("assumptions", "domain", "open") if isinstance(now.get(k), dict) for p in now[k]}
+    walks = facts.get("assumption_reads") or {}
+    out = []
+    for a in sorted(old):
+        before = ", ".join(listers(was, a)) or "no guarantee"
+        if a not in listed:
+            out.append(f"open: {a} dropped: no module the build reads declares it any more (listed before by {before})")
+        elif a in new and isinstance(e := new[a], dict) and "waits" not in e and "why" not in e and \
+                not listers(now, a, ("assumptions", "domain", "open")):
+            m = next((r.get("module") for r in walks.get(a) or () if r.get("name") == a), None)
+            out.append(f"open: {a} kept: still declared{' in ' + m if m else ''}, and no guarantee takes it now (listed "
+                       f"before by {before}); give it `waits` on the guarantee whose conclusion waits on it, or delete the "
+                       f"entry with its declaration")
+    return out
 
 
 def bookkeeping_ticket(policy: dict, due: str) -> dict:
@@ -7385,6 +7425,7 @@ def _finish(pkg: Path, work: Path, policy: dict, new: dict, facts: dict, files: 
     if moved and (back := move_refusals(moved, policy, base or ())):
         fails = [*fails, *(Failure(c, None, f"moved: {e}") for c, e in back)]
     refused = [f for f in fails if (code_of(f) or "").startswith("moved.")]
+    fixed = regen = None
     if bookkeeping is not None and fails and not update:
         ticket = bookkeeping_ticket(policy, bookkeeping)
         fixed = repaired(policy, facts, files, fails, ticket)
@@ -7439,6 +7480,9 @@ def _finish(pkg: Path, work: Path, policy: dict, new: dict, facts: dict, files: 
         rep.setdefault("notes", []).append(
             f"{len(unread)} definitions of the spec ({', '.join(spec_of(policy))}) are read by no guarantee, candidates to "
             f"move out of it: {', '.join(unread[:8])}{more} (`unread_spec` in its report.json)")
+    left_lock = new if update and not refused else fixed if "repairs" in rep else regen if regen is not None else policy
+    if lines := open_lines(policy, left_lock, facts):
+        rep.setdefault("notes", []).extend(lines)
     rep |= {"lean": facts["lean"], "modules": len(facts["modules"]), "declarations": facts["declarations"],
             "axioms": facts["axioms"], "escapes": facts["escapes"], "guarantees": new.get("guarantees", {}), "reads": new.get("reads", {}),
             "readers": readers(guarantee_reads(facts)), "failures": fails}

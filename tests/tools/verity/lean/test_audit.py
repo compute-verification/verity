@@ -4522,10 +4522,61 @@ def test_an_open_entry_that_waits_on_a_guarantee_lists_a_prop_no_guarantee_takes
                       (entry | {"why": "two\nlines"}, "open.form"), (entry | {"waits": "P.w"}, "open.waits")]:
         assert [x.code for x in A.judge(kept | {"open": {"P.Wired": bad}}, now, FILES)[0]] == [code], bad
     plain = {k: v for k, v in entry.items() if k not in ("waits", "why")}
-    assert [x.code for x in A.judge(kept | {"open": {"P.Wired": plain}}, now, FILES)[0]] == ["open.unread"]
+    assert A.judge(kept | {"open": {"P.Wired": plain}}, now, FILES)[0] == [], "declared, it is kept (`open_lines`)"
+    assert A.open_lines(kept, kept, now) == [], "an entry that waits gets no line"
     taken = taking(now) | {"pins": {n: p | {"premises": [{"binder": "s", "head": "P.Wired", "module": "P.Defs"}]}
                                     if n == "P.u" else p for n, p in now["pins"].items()}}
     assert "open.waits-taken" in {x.code for x in A.judge(kept, taken, FILES)[0]}
+
+
+def unread_open(declared: bool) -> tuple[dict, dict]:
+    """A lock whose `P.u` took `P.Wired`, listed under `open`, and facts in which no guarantee takes or reads it, with
+    `P.Wired` still declared in `P.Defs` or gone from the build."""
+    walk = {"P.Wired": [{"name": "P.Wired", "kind": "def", "module": "P.Defs", "sha256": "7" * 64}]}
+    now = holding() | ({"assumption_reads": walk} if declared else {})
+    pol = A.judge(TWO, now, FILES, update=True)[1]
+    took = pol["guarantees"]["P.u"] | {"premises": pol["guarantees"]["P.u"]["premises"] | {"open": ["P.Wired"]}}
+    entry = {"owner": "@lean", "digest": "6" * 64, "issue": "LEAN-238", "due": "2026-11-24"}
+    return pol | {"open": {"P.Wired": entry}, "guarantees": pol["guarantees"] | {"P.u": took}}, now
+
+
+def test_an_open_entry_whose_prop_is_still_declared_is_kept_by_an_update_though_no_guarantee_takes_it():
+    """No run drops an `open` entry whose `Prop` the build still declares: its taker's record changes, its digest is the
+    build's walk, and the rest of the entry stays as written, under `--update` and in the regenerated record alike."""
+    was, now = unread_open(declared=True)
+    fails = A.judge(was, now, FILES)[0]
+    assert [(x.code, x.entry) for x in fails] == [("open.digest", "P.Wired"), ("guarantees.premises-changed", "P.u")]
+    new = A.regenerated(was, now, FILES, fails)
+    assert new == A.judge(was, now, FILES, update=True)[1]
+    entry = new["open"]["P.Wired"]
+    assert entry == was["open"]["P.Wired"] | {"digest": entry["digest"]} and entry["digest"] != "6" * 64
+    assert A.judge(new, now, FILES) == ([], new) and A.judge(new, now, FILES, update=True) == ([], new)
+
+
+def test_an_open_entry_whose_prop_is_gone_from_the_build_is_dropped():
+    """With no module the build reads declaring the `Prop`, the entry is a record difference the update settles by
+    dropping it."""
+    was, now = unread_open(declared=False)
+    fails = A.judge(was, now, FILES)[0]
+    assert [(x.code, x.entry) for x in fails] == [("open.unread", "P.Wired"), ("guarantees.premises-changed", "P.u")]
+    new = A.regenerated(was, now, FILES, fails)
+    assert "P.Wired" not in new.get("open", {}) and A.judge(new, now, FILES)[0] == []
+
+
+def test_the_line_a_run_prints_names_the_open_entry_it_kept_or_dropped_and_what_listed_it():
+    """`open_lines`, which the report's notes print: the entry, where it is still declared or that it is gone, the
+    guarantees whose records listed it before; on a run that changes nothing too; none for an entry a guarantee takes."""
+    was, now = unread_open(declared=True)
+    new = A.judge(was, now, FILES, update=True)[1]
+    kept = ("open: P.Wired kept: still declared in P.Defs, and no guarantee takes it now (listed before by P.u); give it "
+            "`waits` on the guarantee whose conclusion waits on it, or delete the entry with its declaration")
+    assert A.open_lines(was, new, now) == [kept]
+    assert A.open_lines(new, new, now) == [kept.replace("by P.u", "by no guarantee")]
+    was, now = unread_open(declared=False)
+    new = A.judge(was, now, FILES, update=True)[1]
+    assert A.open_lines(was, new, now) == [
+        "open: P.Wired dropped: no module the build reads declares it any more (listed before by P.u)"]
+    assert A.open_lines(was, was, now) == [] and A.open_lines(new, new, now) == []
 
 
 def test_an_open_entry_that_rests_on_a_read_gives_its_issue_its_due_date_its_owner_and_one_line_of_why():
