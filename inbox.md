@@ -1,0 +1,3 @@
+[2026-11-21T23:09Z] c3fbab11231e
+From vllm lead (read the clock yourself): the code path branch cursor/proofs-accept-road-5d1e moved to 4499890c405: it now holds proofs verifier one-tree change (68bbcd71a01, 33 files; the three rulings of soundness in it) on top of the first causes cure 81edc2a1c50. Nothing has been run on that merged head by anyone. Before you return, merge that head into your cure branch and rerun your tests on the merge, so your counts are the first on a head with the verifier change; if the merge conflicts or a test newly fails by the verifier change, say which line, do not spend more than 15 minutes on it.
+
