@@ -385,12 +385,16 @@ def stage(a) -> int:
         words = [int(x) for r in pv[v].rows for x in r]
         assert len(gates) == len(words), (v, len(gates), len(words))
         cone.at.update(zip(gates, words))
-    kw_a, mw_a, _f = fed["a"]
-    norm_args = cone.arg_gates(kw_a, mw_a)
-    x_gates = next(gs for gs in norm_args if not set(gs) <= set(cone.at))
-    assert len(x_gates) == K, len(x_gates)
-    cone.at.update(zip(x_gates, emb))
-    x = cone.member(kw_a, mw_a)
+    from verity.circuits.evaluation import evaluate
+    (norm_fn,) = [fn for fn, _n in sv.circuit.templates if fn.id.startswith("RMSNormTriton_v5")]
+    x = [int(v) for v in evaluate(norm_fn, emb, [int(v) for r in pv[nparam].rows for v in r])]
+    if "a" in fed:
+        kw_a, mw_a, _f = fed["a"]
+        norm_args = cone.arg_gates(kw_a, mw_a)
+        x_gates = next(gs for gs in norm_args if not set(gs) <= set(cone.at))
+        assert len(x_gates) == K, len(x_gates)
+        cone.at.update(zip(x_gates, emb))
+        assert cone.member(kw_a, mw_a) == x
     a_rows = [[v << 16 for v in x]]
     b_rows = [[v << 16 for v in r] for r in w16]
     cert = cert_of(tile, a_rows, b_rows, salt, root)
@@ -421,17 +425,26 @@ def stage(a) -> int:
 
     got = run_core(None)
     nd_ = 512
-    digest = bytes(sum(got[8 * i + j] << j for j in range(8)) for i in range(64))
-    rec["evaluate"] = {"ok": got[-1], "y": got[nd_:nd_ + TN], "reference_ok": ref[2],
-                       "reference_agrees": (digest, got[nd_:nd_ + TN], got[-1]) == (ref[0], ref[1][0], ref[2]),
-                       "x_is_the_norm_on_token": TOKEN}
+    ret_d = program.root.body.nodes[node].fn.signature()[1]
+    starts_d = CI._field_starts(ret_d)
+    widths_d = ret_d.leaf_widths()
+    if is_core:
+        digest = bytes(sum(got[8 * i + j] << j for j in range(8)) for i in range(64))
+        rec["evaluate"] = {"ok": got[-1], "y": got[nd_:nd_ + TN], "reference_ok": ref[2],
+                           "reference_agrees": (digest, got[nd_:nd_ + TN], got[-1]) == (ref[0], ref[1][0], ref[2]),
+                           "x_is_the_norm_on_token": TOKEN}
+    else:
+        rec["evaluate"] = {"block": drawn_tid, "leaves": len(got), "of": "the block's template on its cone's values"}
     print("EVALUATE " + json.dumps(rec["evaluate"]), flush=True)
     phase("evaluate")
-    assert rec["evaluate"]["reference_agrees"] and got[-1] == 1, rec["evaluate"]
+    assert not is_core or (rec["evaluate"]["reference_agrees"] and got[-1] == 1), rec["evaluate"]
 
     def fields_of(g: list[int]) -> dict[str, list[int]]:
-        return {"o0": g[:nd_], "o1": [(w >> j) & 1 for w in g[nd_:nd_ + TN] for j in range(16)],
-                "o2": [(g[-1] >> j) & 1 for j in range(16)]}
+        if is_core:
+            return {"o0": g[:nd_], "o1": [(w >> j) & 1 for w in g[nd_:nd_ + TN] for j in range(16)],
+                    "o2": [(g[-1] >> j) & 1 for j in range(16)]}
+        return {f"o{f}": [(w >> j) & 1 for w, wd in zip(g[lo:hi], widths_d[lo:hi]) for j in range(wd)]
+                for f, (lo, hi) in enumerate(zip(starts_d, starts_d[1:]))}
 
     nodes = program.root.body.nodes
 
@@ -475,7 +488,6 @@ def stage(a) -> int:
     rec["reads"] = {p: [v, j] for p, (v, j) in at.items()}
     print("READS " + json.dumps(rec["reads"]), flush=True)
     allregs = {wparam: pv[wparam], **regs}
-    b_port = next(p for p, (v, _j) in at.items() if v == wparam)
 
     def write(tag: str, g: list[int], table_override: dict) -> None:
         d = Path(a.out) / tag
@@ -515,18 +527,22 @@ def stage(a) -> int:
         (d / "draw.json").write_text(json.dumps({"units": [block_no]}))
 
     write("honest", got, {})
-    flip_row = list(row)
-    flip_row[5] ^= 1 << 7
-    g2 = run_core(flip_row)
-    honest_b = allregs[wparam].statement([at[b_port][1]])[0]
-    tb = np.asarray([RV.row_words(r, allregs[wparam].word_bits, RV.SCHEMA_HM96_SHA512_ROW_V2) for r in honest_b],
-                    dtype=np.uint16)
-    if tb.shape != (1, len(row)) or tb[0].tolist() != row:
-        raise SystemExit(f"FLIP: the table row of {b_port} ({tb.shape}) is not the weight row's {len(row)} words")
-    fb = tb.copy()
-    fb[0, 5] ^= 1 << 7
-    write("flipped", g2, {b_port: fb})
-    rec["flipped"] = {"word": 5, "bit": 7, "port": b_port, "ok": g2[-1], "y": g2[nd_:nd_ + TN]}
+    if any(v == wparam for v, _j in at.values()):
+        flip_row = list(row)
+        flip_row[5] ^= 1 << 7
+        g2 = run_core(flip_row)
+        b_port = next(p for p, (v, _j) in at.items() if v == wparam)
+        honest_b = allregs[wparam].statement([at[b_port][1]])[0]
+        tb = np.asarray([RV.row_words(r, allregs[wparam].word_bits, RV.SCHEMA_HM96_SHA512_ROW_V2) for r in honest_b],
+                        dtype=np.uint16)
+        if tb.shape != (1, len(row)) or tb[0].tolist() != row:
+            raise SystemExit(f"FLIP: the table row of {b_port} ({tb.shape}) is not the weight row's {len(row)} words")
+        fb = tb.copy()
+        fb[0, 5] ^= 1 << 7
+        write("flipped", g2, {b_port: fb})
+        rec["flipped"] = {"word": 5, "bit": 7, "port": b_port, "ok": g2[-1], "y": g2[nd_:nd_ + TN]}
+    else:
+        rec["flipped"] = {"staged": False, "why": f"{drawn_tid} reads no weight row"}
     print("FLIPPED " + json.dumps(rec["flipped"]), flush=True)
     phase("stage")
     Path(a.out, "stage.json").write_text(json.dumps(rec, indent=1, default=str))
