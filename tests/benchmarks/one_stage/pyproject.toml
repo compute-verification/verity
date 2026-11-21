@@ -35,6 +35,7 @@ untraced = [
     "test_served_verdicts.py",
     "test_served_door_prove.py",
     "test_door_walls.py",
+    "test_one_linear.py",
 ]
 # The Lean verifier, the ZK server's Lean and the door's lowering check, which `test_audit_one_member` and
 # `test_audit_two_members` run and skip without: check's lean-build step builds them, the verifier's defaultTargets, before
