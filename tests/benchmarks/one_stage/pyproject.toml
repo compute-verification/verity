@@ -35,12 +35,14 @@ untraced = [
     "test_served_door_prove.py",
     "test_door_walls.py",
 ]
-# The Lean verifier and the ZK server's Lean, which `test_audit_two_members` runs and skips without: check's lean-build step
-# builds them before this suite (`AFTER_LEAN`). Its flock-circuit is `verity/protocols/proof/flock/prover/check_build.sh bin`'s,
+# The Lean verifier, the ZK server's Lean and the door's lowering check, which `test_audit_one_member` and
+# `test_audit_two_members` run and skip without: check's lean-build step builds them, the verifier's defaultTargets, before
+# this suite (`AFTER_LEAN`), and fails the suite if one is missing. Its flock-circuit is `verity/protocols/proof/flock/prover/check_build.sh bin`'s,
 # from the live crate and the patches under `verity`, on the Flock checkout check's flock-circuit-build step leaves on a
 # machine: the test skips on a machine without one, since its build fetches nothing.
 artifacts = ["verity/protocols/proof/flock/verifier/.lake/build/bin/verity-verify-proof",
-             "verity/protocols/proof/flock/verifier/.lake/build/bin/flock-zk-server"]
+             "verity/protocols/proof/flock/verifier/.lake/build/bin/flock-zk-server",
+             "verity/protocols/proof/flock/verifier/.lake/build/bin/flock-lower-check"]
 # What the suite's test process may reach with the processes it starts, past the runner's default for one:
 # `test_audit_two_members`' audit holds a session's prover and verifier and the ZK server's Lean at once.
 worker_gb = 6
