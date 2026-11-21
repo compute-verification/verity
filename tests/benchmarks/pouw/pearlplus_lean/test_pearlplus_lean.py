@@ -74,8 +74,9 @@ def exe() -> Path:
 
 def lean(exe: Path, paths: list[Path], draws: int, source: bytes | None = SOURCE, record: Path | None = None,
          coins: Path | None = None, over_cap: str | None = None, test_instance: bool = False, tie: Path | None = None,
-         of_record: bool = False, load: tuple[int, int, int] | None = None) -> dict:
+         of_record: bool = False, load: tuple[int, int, int] | None = None, draw_live: Path | None = None) -> dict:
     argv = [str(exe), "--coins", str(coins or paths[0].parent / "coins.json"), "--draws", str(draws)]
+    argv += [] if draw_live is None else ["--draw-live", str(draw_live)]
     argv += [] if source is None else ["--source", source.hex()]
     argv += [] if record is None else ["--record", str(record)]
     argv += [] if over_cap is None else ["--over-cap", over_cap]
@@ -528,6 +529,25 @@ def test_a_challenger_draw_that_is_not_the_runs_coin(exe, tmp_path):
             got = lean(exe, [path], 3, None, bad, test_instance=True, of_record=of_record)
             assert (got["verdict"], got["refused"][0], got["verdicts"]) == ("reject", "draw", []), why
             assert got["refused"][1].startswith(why) and got["reason"] == f"draw: {got['refused'][1]}"
+
+
+def test_a_challenger_draw_its_draw_session_does_not_hold_is_refused_by_the_lean(exe, tmp_path):
+    """``--draw-live`` holds a challenger sample to its draw session (`Coins.liveDrawReason`): a challenger key that doesn't
+    parse, or a ledger that opens no session on the run's commitment, rejects (`draw-session`) the run the Lean accepts
+    without it, of record or not; a node's sample is no draw session's, and the verdict on it is the same with or without."""
+    path = T.proved_pass(tmp_path, H100, live=0)[0]
+    good, node = tmp_path / "good.json", tmp_path / "node.json"
+    assert same(exe, [path], 3, None, good, draw=challenger_sample())["verdict"] == "accept"
+    live = {"key": None, "ledger": [], "pins": [], "main": [], "session": {}}
+    for doc, why in ((live, "the draw session's challenger key is malformed: "),
+                     ({**live, "key": {"H": 5, "W": 4, "public": "ab" * 64}}, "the draw session ")):
+        (f := tmp_path / "live.json").write_text(json.dumps(doc))
+        for of_record in (False, True):
+            got = lean(exe, [path], 3, None, good, test_instance=True, of_record=of_record, draw_live=f)
+            assert (got["verdict"], got["refused"][0], got["work"]) == ("reject", "draw-session", None), why
+            assert got["refused"][1].startswith(why) and got["reason"] == f"draw-session: {got['refused'][1]}"
+    plain = same(exe, [path], record=node)
+    assert lean(exe, [path], 3, record=node, test_instance=True, draw_live=f) == plain
 
 
 def test_a_run_tied_to_its_window_record(exe, tmp_path):
