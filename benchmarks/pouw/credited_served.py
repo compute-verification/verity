@@ -553,6 +553,7 @@ def door(a) -> int:
 
 
 def main() -> int:
+    global TN, GEMM_WORDS, K_MAX
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd")
     st = sub.add_parser("stage")
@@ -569,7 +570,6 @@ def main() -> int:
     dr.add_argument("--session", nargs=2, action="append", metavar=("PROOF", "DIR"), required=True)
     a = ap.parse_args()
     if a.cmd == "stage":
-        global TN, GEMM_WORDS, K_MAX
         TN, GEMM_WORDS, K_MAX = a.tn, K * a.tn, a.k_max
     if a.cmd == "door":
         a.session = {t_: [s for u, s in a.session if u == t_] for t_, _ in a.session}
