@@ -8,9 +8,6 @@ public import Proofs.Spot.Leakage
 public import Proofs.Spot.Work
 public import Proofs.Spot.Sampling.Scheme
 public import Proofs.Spot.Sampling.RegScheme
-public import Proofs.Spot.Sampling.PeriodRate
-public import Proofs.Spot.Sampling.AmountRate
-public import Proofs.Spot.Sampling.RegRate
 public import Proofs.Spot.Sampling.Levels
 public import Proofs.Spot.LimitsLevels
 public import Proofs.Spot.Instance
