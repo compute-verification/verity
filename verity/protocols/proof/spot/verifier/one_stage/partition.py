@@ -95,15 +95,22 @@ def in_order(program: Program, query: Mapping[str, Any], n: int) -> bool:
     return us == list(range(n)) and all(u < len(gates) for u in us)
 
 
-def cover(strata: Sequence[tuple[str, Sequence[Sequence[int]]]]) -> int | None:
-    """`FilePart.cover`: N where the strata's ranges ``[lo, hi)``, all strata together and in any order, are a disjoint
-    cover of ``0, ..., N - 1`` (a range with ``hi <= lo`` holding no unit), else None."""
+def cover_ranges(rs: Iterable[Sequence[int]]) -> int | None:
+    """`FilePart.coverRanges`: N where the ranges ``[lo, hi)``, in any order, are a disjoint cover of ``0, ..., N - 1``
+    (a range with ``hi <= lo`` holding no unit), else None."""
     at = 0
-    for lo, hi in sorted(((lo, hi) for _t, s in strata for lo, hi in s if lo < hi), key=lambda r: r[0]):
+    for lo, hi in sorted(((lo, hi) for lo, hi in rs if lo < hi), key=lambda r: r[0]):
         if lo != at:
             return None
         at = hi
     return at
+
+
+def cover(strata: Sequence[tuple[str, Sequence[Sequence[int]]]]) -> int | None:
+    """`FilePart.cover`: `cover_ranges` of every stratum's ranges together, None too where a range ends before it
+    starts."""
+    rs = [(lo, hi) for _t, s in strata for lo, hi in s]
+    return None if any(hi < lo for lo, hi in rs) else cover_ranges(rs)
 
 
 def covers(program: Program, query: Mapping[str, Any], n: int) -> bool:
@@ -114,7 +121,7 @@ def covers(program: Program, query: Mapping[str, Any], n: int) -> bool:
         ss, gates = strata(program, query), unit_gates(program, query)
     except (QueryRefused, ValueError):
         return False
-    return cover(ss) == n and n <= len(gates)
+    return cover_ranges(r for _t, s in ss for r in s) == n and n <= len(gates)
 
 
 def _once(inner: int, outer_stride: int, inner_stride: int, count: int) -> bool:
@@ -277,6 +284,6 @@ def _merged(rs: Sequence[tuple[int, int]]) -> list[tuple[int, int]]:
     return out
 
 
-__all__ = ["template_id", "FORMAT", "QueryRefused", "cover", "covers", "digest", "evaluate", "fanout", "in_order", "is_template_query", "partition",
+__all__ = ["template_id", "FORMAT", "QueryRefused", "cover", "cover_ranges", "covers", "digest", "evaluate", "fanout", "in_order", "is_template_query", "partition",
            "program_digest", "program_sha512", "ranges", "run_inputs", "shared_inputs", "strata", "template_instance_query",
            "template_instances_query", "unit_gates", "units", "within", "QUERY_X"]

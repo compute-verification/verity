@@ -1506,6 +1506,14 @@ private def unitsJ (us : Array Nat) : Json := Json.mkObj [("units", Json.mkObj [
   #[("PAIR", #[(0, 2), (6, 8)]), ("TRIPLE", #[(2, 5)])] (unitsJ #[2, 3, 7])) == MEMBER_COVER
 #guard refusal ({ memberT "m" #[(2, 4), (7, 9)] with subset := true }.heldAt
   #[("PAIR", #[(0, 2), (5, 8)]), ("TRIPLE", #[(2, 5)])] (unitsJ #[2, 3, 7, 8])) == MEMBER_COVER
+-- strata in order: a subset design's member is on the walk, as `popHeld` takes it first
+#guard refusal ({ memberT "m" #[(2, 4), (7, 9)] with subset := true }.heldAt #[("a", #[(0, 3)]), ("b", #[(3, 8)])]
+  (unitsJ #[2, 3, 7, 8])) == MEMBER_STRATA
+-- a range that ends before it starts: refused under a subset design, as the walk refuses it
+#guard refusal ({ memberT "m" #[(2, 4), (7, 8)] with subset := true }.heldAt
+  #[("PAIR", #[(0, 2), (5, 8), (8, 7)]), ("TRIPLE", #[(2, 5)])] (unitsJ #[2, 3, 7])) == MEMBER_COVER
+#guard refusal ((memberT "m" #[(2, 4), (7, 8)]).heldAt
+  #[("a", #[(0, 3)]), ("b", #[(3, 8), (8, 7)])] (unitsJ #[2, 3, 7])) == MEMBER_STRATA
 #guard refusal ({ memberT "m" #[(2, 4), (7, 8)] with subset := true }.heldAt #[("a", #[(0, 3)]), ("b", #[(3, 8)])]
   (unitsJ #[2, 3, 7])) == ""
 #guard refusal ((memberT "m" #[(2, 4), (7, 8)]).population Json.null

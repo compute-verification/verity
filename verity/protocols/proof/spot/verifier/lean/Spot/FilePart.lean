@@ -163,9 +163,10 @@ def coverRanges (rs : List (Nat × Nat)) : Option Nat :=
 /-- **The strata's cover** (`coverRanges` of every stratum's ranges together): the registration's strata's ranges are
 a disjoint cover of its units `0, 1, …, N − 1`, in whatever order the strata and a stratum's ranges come. `N`, or none.
 What a subset sampling design's draw needs of the strata (`sizes`' walk is what a stratified one needs): it reads no
-stratum, and slot `u` is unit `u`. -/
+stratum, and slot `u` is unit `u`. None too where a range ends before it starts, which `sizes` refuses. -/
 def cover (strata : Array (String × Array (Nat × Nat))) : Option Nat :=
-  coverRanges (strata.toList.flatMap (·.2.toList))
+  if strata.any (·.2.any fun r => decide (r.2 < r.1)) then none
+  else coverRanges (strata.toList.flatMap (·.2.toList))
 
 /-- The refusal of a registration whose strata are a disjoint cover of its units (`cover`) and not its units in order
 stratum by stratum (`sizes`), under a sampling design of kind `kind` that is no `subset` one: a stratified or work draw
@@ -241,7 +242,9 @@ def piece (j : Json) : V Json := do
 #guard cover #[("PAIR", #[(0, 2), (5, 7)]), ("TRIPLE", #[(2, 6)])] == none
 #guard cover #[("PAIR", #[(0, 2), (6, 7)]), ("TRIPLE", #[(2, 5)])] == none
 #guard cover #[("PAIR", #[(0, 2), (5, 7)]), ("TRIPLE", #[(2, 5), (4, 4)])] == some 7
-#guard cover #[("PAIR", #[(0, 2), (5, 7)]), ("TRIPLE", #[(2, 5), (5, 4)])] == some 7
+#guard cover #[("PAIR", #[(0, 2), (5, 7)]), ("TRIPLE", #[(2, 5), (5, 4)])] == none
+#guard coverRanges [(0, 2), (5, 7), (2, 5), (5, 4)] == some 7
+#guard sizes #[("PAIR", #[(0, 2), (2, 1)])] == none
 #guard cover #[("PAIR", #[(1, 2)])] == none
 #guard cover #[("PAIR", #[(0, 2), (0, 2)])] == none
 #guard cover #[] == some 0
