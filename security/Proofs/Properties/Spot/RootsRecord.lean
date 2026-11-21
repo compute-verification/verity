@@ -342,7 +342,9 @@ theorem runInputRootsAt_mem {P : Flock.Program.Prog} {rs : Array Flock.TemplateQ
   · cases hf; exact hgot
   · split at hf
     · rename_i r hr
-      obtain ⟨⟨⟩, -, hf⟩ := ebind_ok hf
+      split at hf
+      · obtain ⟨⟨⟩, ht, -⟩ := ebind_ok hf
+        cases ht
       obtain ⟨⟨⟩, -, hf⟩ := ebind_ok hf
       cases hf
       intro x hx
@@ -365,7 +367,7 @@ theorem runInputRoots_mem {v : Docket.Verifier} {P : Flock.Program.Prog} {rs : A
   cases h
   rw [← Array.forIn_toList] at hacc
   refine forIn_yield_inv (fun acc => ∀ n, ∀ x ∈ acc.getD n #[], x ∈ roots.getD n #[] ∨
-    RunTree (OneStageZk.rootsByPort rec) x) ?_ _ roots acc (fun n x hx => Or.inl hx) hacc
+    RunTree (OneStageZk.rootsByPort rec) x) ?_ _ roots _ (fun n x hx => Or.inl hx) hacc
   intro m acc r hacc hf
   try dsimp only at hf
   obtain ⟨o, ho, hf⟩ := ebind_ok hf
