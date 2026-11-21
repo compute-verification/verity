@@ -64,8 +64,8 @@
    "why": "4,000 random declarations and divisions, the description-sized difftest's 335 on E_REINTERPRET (references naming leaves of other widths than their types give them, which both sides refuse as program, and their well-typed neighbours, expanded gate by gate where the Program decodes), and three pinned ones (θ with an input bound per run, refused theta-not-registered, θ the registered input, accepted, and a declaration with a Const8 gate, which reads nothing, accepted), on which InferenceOnlyVerifier.check gives what scripts/inference_only_reference.py computes from InferenceOnly.Complies' definitions: per IU its size and novel reads, the verdict and the first failing IU with its rule, or the first malformation's code",
    "args": ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", "4338"],
    "data": {
-    "difftest/instances.jsonl": "b9e24d5488d8098cd829535a697033ad3574b3db3545e84d4adfe41b268580f5",
-    "difftest/python.jsonl": "6c1afeabbc17328b5f64fde48e518c18742a70ef295216ff00c181751a464e8b"
+    "difftest/instances.jsonl": "2ebd44374dee25c1404cc06cf912c1b42636e1e5e7d921fdb8e79608bce83f56",
+    "difftest/python.jsonl": "1a3782b9a027cbccaa2b39d37355859a9911ec0621764b08434fdd8bf07aeef0"
    },
    "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]
   },
