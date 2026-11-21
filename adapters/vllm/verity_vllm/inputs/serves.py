@@ -136,4 +136,4 @@ def door_line(name: str, said: str) -> str:
     return f"DOOR {name}: {n} records the class {SERVES.window_class} takes; identity {timed.identity}"
 
 
-__all__ = ["SERVES", "TIMINGS", "Refused", "Serves", "application", "door", "door_line", "refusal", "served", "timing"]
+__all__ = ["SERVES", "TIMINGS", "Refused", "Serves", "application", "door", "door_line", "refusal", "served", "timing", "window_class_parts"]
