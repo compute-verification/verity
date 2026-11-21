@@ -283,9 +283,14 @@ def declared(a: argparse.Namespace) -> dict[str, Any]:
 
 
 def weighed(a: argparse.Namespace) -> dict[str, Any]:
-    """The weights' registration of record (records_audit's ``--registered``), as `verifier.check` takes it; empty
-    without."""
-    return {"weights_of_record": a.weights_of_record} if getattr(a, "weights_of_record", None) is not None else {}
+    """The deployment's registration record (records_audit's ``--registration``, `registration_param`) and, on the
+    ledger's path, the challenger whose key reads it, as `verifier.check` takes them; empty without."""
+    reg = getattr(a, "registration_json", None)
+    if reg is None:
+        return {}
+    from verity.protocols.proof.spot.verifier.challenger import challenger_session as AC
+    ch = getattr(a, "registration_challenger", None)
+    return {"registration": reg, **({"challenger": ch, "verify": AC.lms_verify, "window_root": a.window_root} if ch else {})}
 
 
 def registering(a: argparse.Namespace, history: dict | None = None) -> dict[str, Any]:
@@ -1212,7 +1217,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     hist = history(publics) if history is not None else None
     checks["registration"] = V.check(rec, program, query, sampling_design, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table,
                                      partition=part, history=hist, members=link_members(members) if per_member(members, not plain(a)) else (),
-                                     **verifying(a), **declared(a), **weighed(a)).to_json()
+                                     **{**verifying(a), **declared(a), **weighed(a)}).to_json()
     progress("registration", t_audit, ok=checks["registration"].get("ok"))
     if mine.row_tables:
         bad = TB.check_row_tables(mine, publics, {r["port"]: r["root"] for r in rec["roots"]}, step_roots)

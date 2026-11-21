@@ -914,8 +914,10 @@ lane (`laneOf` its open) signed before the epoch's first entry (its reserve, els
 deployment's registration record, the registration log's first record, as the challenger signed it before the first
 coin. Refused by name with none (`NO_REGISTRATION`), and when another period-open of the lane before that entry names
 another head (`SECOND_REGISTRATION`): every epoch is held to the lane's first registration. The lane is what "the same
-deployment" means here, and the developer names it: nothing here stops a new lane from carrying a registration of its
-own, so every accepted run names the registration's digest it was held to. -/
+deployment" means here. Two limits stand on soundness's page. A new lane is a fresh registration: nothing here stops a
+developer from using one, so every accepted run names the registration's digest it was held to, and what closes it is
+the lane named by the auditor in the signed entry. No run today has a ledger carrying a registration: the signed case
+is tested with a test key only. -/
 def registrationOf (key : ChallengerKey) (window ledger : Json) : V String := do
   unless isRun window do throw s!"the window's identity is malformed: {RUN_FORM}"
   let (wins, _) ← checked ledger key

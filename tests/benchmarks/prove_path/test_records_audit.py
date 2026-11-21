@@ -343,18 +343,36 @@ def test_prover_circuit_takes_the_registered_circuit_holds_its_compiler_and_advi
     assert "compiled: not checked (the circuit is the one the prover registered)" in line
 
 
-@pytest.mark.parametrize("given", [[], ["--registered-digest", "ab" * 64], ["--registered-digest-source", "stand-in"],
-                                   ["--registered-digest", "ab" * 64, "--registered-digest-source", "tree-pin"],
-                                   ["--registered-digest", "ab" * 64, "--registered-digest-source", "ledger"]])
-def test_registered_is_refused_by_name_without_its_digest_and_a_built_source(written, tmp_path, given):
-    reg = tmp_path / "registered.json"
-    reg.write_text(json.dumps({"program": "aa" * 64, "values": {}}))
+def _deployment_record(tmp_path: Path) -> Path:
+    rec = tmp_path / "deployment-registration.json"
+    rec.write_text(json.dumps({"format": DM.REGISTRATION, "program": "aa" * 64, "deployment": {"kind": "test"},
+                               "registered": [], "previous": None}))
+    return rec
+
+
+@pytest.mark.parametrize("given", [[], ["--registration-ledger", "ledger.txt"]])
+def test_registration_is_refused_by_name_without_a_ledger_or_the_development_path_named(written, tmp_path, given):
+    """No challenger and no ledger refuses: the development path is taken only where the parameters name it."""
     with pytest.raises(SystemExit) as e:
-        RA.main([*_audit_args(written), "--out", str(tmp_path / "o"), "--registered", str(reg), *given])
-    source = given[-1] if len(given) == 4 else None
-    assert e.value.code == (RA.REGISTERED_DIGEST_WHY if source is None
-                            else f"--registered-digest-source {source}: {RA.WEIGHTS_SOURCES_NOT_BUILT[source]}")
+        RA.main([*_audit_args(written), "--out", str(tmp_path / "o"), "--registration", str(_deployment_record(tmp_path)),
+                 *given])
+    assert e.value.code == RA.REGISTRATION_NEEDS
     assert not (tmp_path / "o").exists()
+
+
+def test_the_development_path_says_first_that_the_digest_is_the_serving_nodes_own_and_publishes_it(
+        written, tmp_path, monkeypatch, capsys):
+    """An accepted run on the development path says first, in plain words, that the digest was taken from the serving
+    node's own file and is held by no one else, and that it states no bound from the sample; its summary publishes the
+    registration's digest and source."""
+    rec = _deployment_record(tmp_path)
+    rc, _seen = _prover_circuit_audit(written, monkeypatch, tmp_path, ["--prover-circuit", "--development",
+                                      "--registration", str(rec), "--registration-head", "development"])
+    assert rc == 0
+    first = next(x for x in capsys.readouterr().out.splitlines() if x.strip())
+    assert first == "REGISTRATION " + R.DEVELOPMENT_WHY
+    summary = json.loads((tmp_path / "o" / "summary.json").read_text())
+    assert summary["registration"] == {"digest": DD.digest(json.loads(rec.read_text())), "source": "development"}
 
 
 def test_prover_circuit_is_refused_by_name_without_development(written, tmp_path, monkeypatch, capsys):

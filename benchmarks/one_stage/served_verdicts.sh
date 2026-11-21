@@ -603,7 +603,7 @@ case $COMPOSE_OFF_NODE in 0 | 1) ;; *) say "PREFLIGHT: COMPOSE_OFF_NODE is 1 (th
 CKPT=${CKPT:-$HF_HOME/hub/models--${REPO//\//--}/snapshots/$REV} WREG=$D/weights_registration.json
 # the registration of record ({program, values}) the serve's first close writes beside WREG, which the audits hand the check
 WOR=$D/weights_of_record.json
-NO_WOR="the weights' registration of record (weights_of_record.json, {program, values}) is absent: the serve's first close writes it beside weights_registration.json"
+NO_DREG="the deployment's registration record (deployment-registration.json) is absent: the serve writes it before its first request"
 # the serve's first registration record: the weights registration as a record of the log, which Pearl+'s W is chained after
 DREG=$D/deployment-registration.json
 NO_WEIGHTS="NO WEIGHTS REGISTRATION: no window registers a weight's root, so every weight read counts free"
@@ -828,8 +828,8 @@ v3c_compose_args() {  # the warm's and the audit's disk floor and text keeping, 
   grep -q -- '--min-free-gb' "$TREE/benchmarks/prove_path/records_audit.py" || return 0
   printf '%s\n' --min-free-gb "$V3C_MIN_FREE_GB" ${V3C_KEEP_CIRCUITS:+--keep-circuits}
 }
-wreg_args() {  # --registered $WOR held to its file's own digest: no pin precedes the serve's registration, so a stand-in
-  printf '%s\n' --registered "$WOR" --registered-digest "$(sha512sum "$WOR" | cut -c1-128)" --registered-digest-source stand-in
+wreg_args() {  # the deployment's registration record on the development path, named: no challenger here signs its digest
+  printf '%s\n' --registration "$DREG" --registration-head development
 }
 v3c_warm() {  # every template of the committed window composed into $VW/compose-cache, V3C_WARM_JOBS at a time
   local ca; mapfile -t ca < <(v3c_compose_args)
@@ -851,7 +851,7 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
   [ -n "${DAY:-}" ] && day=(--day "$DAY" --day-log "$DAY_LOG" ${DAY_PARAMS:+--day-params "$DAY_PARAMS"})
   run=$("$PY" -c 'import json, sys; print(next(json.loads(l)["run_root"] for l in open(sys.argv[1]) if l.strip() and json.loads(l)["window"] == int(sys.argv[2])))' \
     "$D/windows.jsonl" "$K") || { say "V3C-AUDIT: no run root for the window in windows.jsonl"; return 1; }
-  [ -f "$WOR" ] || { say "V3C-AUDIT: $NO_WOR"; return 1; }
+  [ -f "$DREG" ] || { say "V3C-AUDIT: $NO_DREG"; return 1; }
   mkdir -p "$OUT/v3c-audit"
   if [ -n "${MAIN_FILE:-}" ]; then  # main's first-parent line, which the audit's challenger session pins on
     [ -s "$MAIN_FILE" ] || { say "V3C-AUDIT: MAIN_FILE $MAIN_FILE, main's first-parent line its challenger session pins on, is missing or empty"; return 1; }
@@ -2029,8 +2029,8 @@ road_sampled() {  # step 3 on the window's road: the window's record, its Lean c
   # the commit verdict's run root, which the seal step held to the record's
   run=$("$PY" -c 'import json, sys; print(json.load(open(sys.argv[1]))["run_root"])' "$D/windows/w$K/commit/verdict.json") \
     || { step_not_run sampled-proofs "the window's commit verdict has no run root"; return; }
-  # the registration of record pins the roots a window's registered weight reads open against
-  [ -f "$WOR" ] || { step_not_run sampled-proofs "$NO_WOR"; return; }
+  # the deployment's registration record pins the roots a window's registered weight reads open against
+  [ -f "$DREG" ] || { step_not_run sampled-proofs "$NO_DREG"; return; }
   mapfile -t regs < <(wreg_args)
   (umask 077; mkdir -p "$s") && mkdir -p "$OUT/sampled-proofs" "$LOGS/sampled-proofs"
   git -C "$TREE" rev-list --first-parent "${MAIN_SHA:-HEAD}" > "$main" 2>/dev/null && [ -s "$main" ] \

@@ -60,8 +60,10 @@ SPOT's one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_record`, wit
   and `domain` a string, which R7 holds the record's entries for those values to (`Docket.certifiedHeld`),
   with which it expects a v2 record whatever it expects registered (`Docket.Verifier.v2`), refused in any
   other form, and which only the registration check and the run of record read: `paramsOfJson` refuses the key;
-  and it may add `weights_of_record`, `{"digest", "document"}`: the weights' registration of record, its document's bytes
-  in hex and the SHA-512 the auditor's side holds for it, which needs `parameters` and which R8 holds the program's
+  and it may add `registration`, `{"record", "ledger"}` or `{"record", "head": "development"}`: the deployment's
+  registration record's bytes in hex, with the auditor's ledger whose challenger signed its digest for the epoch's lane
+  before its first coin, or the development path named, where its digest is its own (`registrationParsed`), which
+  needs `parameters` and which R8 holds the program's
   registered inputs to (`Docket.weightsCodes`) and whose accepted pins the members' check holds each member's
   registered reads to (`OneStageZk.pinsHeld`), refused in any other form;
   and it may add `window_values`, a list of strings its caller names (one-stage names none): values the record commits in
@@ -116,6 +118,14 @@ namespace Spot.OneStage
 open Lean (Json)
 open Flock (V)
 
+/-- Where the deployment's registration record's digest was taken (`registrationParsed`). -/
+inductive RegistrationSource where
+  /-- the registration the challenger signed for the epoch's lane before its first coin (`Challenger.registrationOf`) -/
+  | ledger
+  /-- the record's own digest, taken from the serving node's own file and held by no one else -/
+  | development
+  deriving DecidableEq, Inhabited, Repr
+
 structure Params where
   verifier : Docket.Verifier
   delta : Core.Ratio
@@ -132,6 +142,11 @@ structure Params where
   `verity.protocols.accounting.scheme.credited` returns them; the check refuses them unless each is a block of the first level and of
   every later one -/
   credited : Array Nat := #[]
+  /-- where the deployment's registration record's digest was taken (`registrationParsed`): `ledger`, the registration
+  the challenger signed for the epoch's lane before its first coin, or `development`, the record's own; none where the
+  parameters carry no record. A guarantee about accepted runs takes `registration ≠ some .development` as a hypothesis:
+  on that path nobody but the prover's side attests that the registration was fixed before the coins. -/
+  registration : Option RegistrationSource := none
 
 structure Commitment where
   record : Json
@@ -342,16 +357,61 @@ def PARTITION_QUERY : String :=
   "the partition object's query is not the parameters' query: the sample is drawn over the query's population and " ++
     "every session's proof block is the partition's"
 
+/-- The parameters' name of the development path (`registrationParsed`). -/
+def DEVELOPMENT : String := "development"
+
+/-- What an accepted run on the development path says first: the registration's digest is the record's own. -/
+def DEVELOPMENT_WHY : String :=
+  "the registration's digest was taken from the serving node's own file and is held by no one else: nobody but the " ++
+    "prover's side attests that the registration was fixed before the coins, so this run states no bound from the sample"
+
+def REGISTRATION_FORM : String :=
+  "the registration is {record, ledger} or {record, head: \"development\"}: the deployment's registration record's " ++
+    "bytes in hex, with the auditor's ledger (its lines) or the development path named"
+
+/-- The refusal of a record the parameters carry with no challenger or ledger and no development path named. -/
+def NO_SIGNED_HEAD_WHY : String :=
+  "registration: the parameters carry the deployment's registration record and no challenger and ledger that sign " ++
+    "its digest, and name no development path: the challenger signs the registration before the first coin"
+
+/-- The refusal of a record whose digest is not the registration the challenger signed for the epoch's lane. -/
+def REGISTRATION_DIGEST_WHY : String :=
+  "registration: the record's digest is not the registration the challenger signed for this epoch's lane"
+
+/-- The parameters' `registration` (module docstring): the deployment's registration record, the registration it is
+held to and where that was taken. With `ledger`, the registration `Challenger.registrationOf` reads from the
+auditor's ledger under the parameters' challenger key for the epoch (`window_root`), which the record's digest
+(`Flock.WindowRecord.digestHex`, the inference-only check's `Theta.digest`) must be (`REGISTRATION_DIGEST_WHY`);
+with no challenger or epoch, refused (`NO_SIGNED_HEAD_WHY`). The development path is taken only where the
+parameters name it (`head: "development"`): the record is held to its own digest (`DEVELOPMENT_WHY`). -/
+def registrationParsed (j : Json) (challenger : Option (Challenger.ChallengerKey × String))
+    (windowRoot : Option String) : V (Option (ByteArray × String × RegistrationSource)) := do
+  let some r := field? j "registration" | return none
+  let .str hex := getD r "record" | throw REGISTRATION_FORM
+  let body ← (Flock.unhex hex).mapError fun _ => REGISTRATION_FORM
+  let some text := String.fromUTF8? body | throw REGISTRATION_FORM
+  let .ok rec := Json.parse text | throw REGISTRATION_FORM
+  let digest ← (Flock.WindowRecord.digestHex rec).mapError fun _ => REGISTRATION_FORM
+  if keys? r == some #["head", "record"] then
+    unless jsonStrIs (getD r "head") DEVELOPMENT do throw REGISTRATION_FORM
+    return some (body, digest, .development)
+  unless keys? r == some #["ledger", "record"] do throw REGISTRATION_FORM
+  let (some (key, _), some w) := (challenger, windowRoot) | throw NO_SIGNED_HEAD_WHY
+  let head ← (Challenger.registrationOf key (Json.mkObj [("root", Json.str w)]) (getD r "ledger")).mapError
+    (s!"registration: {·}")
+  unless head == digest do throw REGISTRATION_DIGEST_WHY
+  return some (body, head, .ledger)
+
 /-- The parameters as parsed, before `paramsOfJson`'s refusal of the sampling design: the stream's run reads them and
 refuses the sampling design its rule names itself (`Run.run`, `bernoulli`). A partition object in any form but the
 pre-canonical `{program, query}` names `query` itself or is refused (`PARTITION_QUERY`). -/
 def paramsParsed (j : Json) : V Params := do
   let v2 := !(getD j "registered" matches .null)
   let tiedGiven := (field? j "tied").isSome
-  let weightsGiven := (field? j "weights_of_record").isSome
+  let weightsGiven := (field? j "registration").isSome
   let paramsGiven := (field? j "parameters").isSome
   let keys := if v2 || tiedGiven || weightsGiven || paramsGiven then PARAM_KEYS.push "parameters" else PARAM_KEYS
-  let keys := if weightsGiven then keys.push "weights_of_record" else keys
+  let keys := if weightsGiven then keys.push "registration" else keys
   let keys := if tiedGiven then keys.push "tied" else keys
   let keys := if (field? j "supplied").isSome then keys.push "supplied" else keys
   let keys := if (field? j "coins").isSome then keys.push "coins" else keys
@@ -408,13 +468,6 @@ def paramsParsed (j : Json) : V Params := do
   if needed && !paramsGiven then
     throw "parameters: the program binds inputs at registration, or the verifier expects or pins values, and no parameters name them"
   let params ← if needed || paramsGiven then Registered.params program.desc (getD j "parameters") else pure #[]
-  let weightsOfRecord ← match field? j "weights_of_record" with
-    | none => pure none
-    | some w => do
-      exactly w #["digest", "document"] "the weights' registration of record"
-      match getD w "digest", getD w "document" with
-      | .str d, .str doc => pure (some (← Flock.unhex doc, d))
-      | _, _ => throw "the weights' registration of record is its document's bytes in hex and a digest, both strings"
   let tied ← match getD j "tied" with
     | .null => pure #[]
     | .arr ts => ts.mapM fun t => match t with
@@ -506,6 +559,8 @@ def paramsParsed (j : Json) : V Params := do
       let key ← Challenger.ChallengerKey.ofJson (getD ch "key")
       if windowRoot.isNone then throw "a draw from the challenger's coins needs the window's open root (window_root)"
       pure (some (key, label))
+  let registration ← registrationParsed j challenger windowRoot
+  let weightsOfRecord := registration.map fun (body, head, _) => (body, head)
   let held ← match getD j "held" with
     | .null => pure #[]
     | .arr vs => vs.mapM fun v => match v with
@@ -551,7 +606,7 @@ def paramsParsed (j : Json) : V Params := do
   let p : Params := { verifier := { program, query, samplingDesign, workTable, scheme, ports, leafLayer, anchors, log, partition,
                                     registered, params, supplied, pinned, outputs, binding, schemas, windowRoot, held,
                                     declared, seedSalt, pool, verdicts, tied, compiler, certified, weightsOfRecord, marks },
-                      delta, challenger, tables, windowValues }
+                      delta, challenger, tables, windowValues, registration := registration.map (·.2.2) }
   let again := Docket.unwindowed p.verifier
   if !again.isEmpty then
     throw (s!"registered values {again.toList} were registered by an earlier record of the log under the domains they " ++
