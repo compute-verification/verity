@@ -1400,7 +1400,7 @@ def test_the_weights_registration_declares_the_reads_of_its_planned_class(tmp_pa
     for reads in ([], reg["reads"][1:]):
         (why, got), = refusals(canonical_json({"program": reg["program"], "values": reg["values"],
                                                 **({"reads": reads} if reads else {})}))
-        assert why == "R8-undeclared" and got == {"undeclared": [r for r in reg["reads"] if r not in reads], "unread": []}
+        assert why == "R8-undeclared" and got == {"undeclared": [r for r in reg["reads"] if r not in reads]}
 
 
 def test_an_int8_served_runs_weights_registration_roots_its_scales_fused_linears_and_tied_embedding(tmp_path, capsys, monkeypatch):
