@@ -1098,7 +1098,6 @@ def audit(a: argparse.Namespace) -> int:
         pins |= ties | untied
         w_tie = json.loads(Path(a.tie_file).read_text()) if a.tie_file else None
         decl = IF.declarations(doc)[2]
-        a.declared_reads = [(r.reader, r.port, r.param) for r in decl.reads] if decl else []
         tied, tie_pins = tie_of(doc, w_tie, a.tie_prefix, phase_values(docket, decl.values if decl else ()))
         if twice := sorted(set(tie_pins) & set(pins)):
             raise ValueError(f"values {twice} are both pinned and the earlier registration's")

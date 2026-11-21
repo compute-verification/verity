@@ -281,9 +281,9 @@ def declared(a: argparse.Namespace) -> dict[str, Any]:
 
 
 def weighed(a: argparse.Namespace) -> dict[str, Any]:
-    """The weights' registration of record and the window's declared registered reads (records_audit's ``--registered``
-    and the circuit record's declarations), as `verifier.check` takes them; empty without."""
-    return {k: getattr(a, k) for k in ("weights_of_record", "declared_reads") if getattr(a, k, None) is not None}
+    """The weights' registration of record (records_audit's ``--registered``), as `verifier.check` takes it; empty
+    without."""
+    return {"weights_of_record": a.weights_of_record} if getattr(a, "weights_of_record", None) is not None else {}
 
 
 def registering(a: argparse.Namespace, history: dict | None = None) -> dict[str, Any]:

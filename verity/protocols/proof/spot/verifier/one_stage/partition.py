@@ -172,8 +172,7 @@ def fanout(program: Program, query: Mapping[str, Any]) -> int:
     return max([1, *held.values()])
 
 
-def shared_inputs(program: Program, query: Mapping[str, Any], held: Iterable[range] = (),
-                  unheld: Iterable[range] = ()) -> list[int]:
+def shared_inputs(program: Program, query: Mapping[str, Any], held: Iterable[range] = ()) -> list[int]:
     """The run Input nodes of `program` (`program.INPUT_ID`; a registered input, and an Input node whose gates lie in one
     of `held`, the gates of the parameters the verifier expects registered, are registered values, held by R7) whose
     leaves a template query's proof blocks don't each read alone, in node order: a batch of more than one member reading
@@ -183,12 +182,10 @@ def shared_inputs(program: Program, query: Mapping[str, Any], held: Iterable[ran
     whatever it reads twice. A strided run is taken at its span, and one that names a leaf twice, or two of a batch's
     runs that overlap, count as shared. A served port's rows reach a proof block either as its own leaves or through a
     registered value: a run Input two proof blocks read could hold rows one of them computed, which `fanout` can't see.
-    A registered input inside one of `unheld` (one nothing pins) is read as a run Input.
     `QueryRefused` for a query other than a template query."""
     part = _template(program, query, "an Input's readers")
-    nodes, offsets, held, unheld = program.root.body.nodes, program.root.body.offsets, list(held), list(unheld)
-    run_input = {k for k, node in enumerate(nodes) if is_input(node.fn)
-                 and (not is_registered(node.fn) or any(within(program, u, k) for u in unheld))
+    nodes, offsets, held = program.root.body.nodes, program.root.body.offsets, list(held)
+    run_input = {k for k, node in enumerate(nodes) if is_input(node.fn) and not is_registered(node.fn)
                  and not any(h.start <= offsets[k] and offsets[k + 1] <= h.stop for h in held)}
     shared: set[int] = set()
     spans: dict[int, list[tuple[int, int]]] = {}

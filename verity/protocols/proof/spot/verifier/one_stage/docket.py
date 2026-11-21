@@ -179,15 +179,20 @@ SHARED_WHY = ("a run Input node whose leaves two proof blocks read, or a batch b
 WEIGHTS_WHY = {
     "R8-weights-digest": "the weights' registration is not the one of record: its SHA-512 is not the digest the "
                          "auditor's side holds for it",
-    "R8-weights-form": "the weights' registration is not {program, values: {value: {value, root, leaves, words, domain}}}",
+    "R8-weights-form": "the weights' registration is not {program, values: {value: {value, root, leaves, words, domain}}, "
+                       "reads: [[template, parameter, value]]}, reads optional",
     "R8-weights-domain": "a pin names another value, a root that is not 64 bytes of hex, or a domain other than the one "
                          "its own program, value and shape make",
     "R8-weights-shape": "a registered input's leaves, words or width are not its pin's",
-    "R8-unpinned": "a registered input of the program that several proof blocks read, which the weights' registration "
-                   "of record does not pin and the verifier does not expect registered: nothing holds its root",
-    "R8-undeclared": "the window's registered reads of the pinned registered inputs are not the template parameters the "
-                     "program reads them at: a read the description shows and the record does not declare would be "
-                     "committed afresh, and a declared one it does not show reads nothing the program reads",
+    "R8-unpinned": "a registered input of the program that the weights' registration of record does not pin and the "
+                   "verifier does not expect registered: nothing fixes its root before the coin",
+    "R8-weights-query": "the program has a registered input, or the verifier holds a weights' registration of record, "
+                        "under a query that is no template query that applies: R8 can't read which proof blocks read "
+                        "the input",
+    "R8-undeclared": "the reads the weights' registration of record declares of a pinned registered input are not the "
+                     "template parameters the program reads it at: a read the description shows and the registration "
+                     "does not declare would be committed afresh, and a declared one it does not show reads nothing "
+                     "the program reads",
 }
 _KEYS = {"format", "protocol", "program", "query", "partition", "population", "law", "scheme", "roots", "leaf_layer",
          "anchors", "window", "previous"}
@@ -199,24 +204,29 @@ def query_digest(query: Mapping[str, Any]) -> str:
     return hashlib.sha512(canonical_json(dict(query))).hexdigest()
 
 
-def _of_record(of_record: tuple[bytes, str]) -> tuple[list[tuple[str, Any]], dict[str, dict[str, Any]]]:
+def _of_record(of_record: tuple[bytes, str]) -> tuple[list[tuple[str, Any]], dict[str, dict[str, Any]], set[tuple]]:
     """The weights' registration of record's pins, by value, after its digest, its form and each pin's domain, which
-    the pin's own program, value and shape make (`registered_value.domain`); the refusals, and the pins that pass."""
+    the pin's own program, value and shape make (`registered_value.domain`), and its declared reads; the refusals, the
+    pins that pass and the reads."""
     body, digest = of_record
     if not (isinstance(body, bytes) and isinstance(digest, str) and hashlib.sha512(body).hexdigest() == digest):
         got = hashlib.sha512(body).hexdigest() if isinstance(body, bytes) else None
-        return [("R8-weights-digest", {"registration": got, "of_record": digest})], {}
+        return [("R8-weights-digest", {"registration": got, "of_record": digest})], {}, set()
     try:
-        doc = json.loads(body)
+        doc = json.loads(body.decode("utf-8"))
         docs = doc if isinstance(doc, list) else [doc]
-        if not all(isinstance(d, dict) and isinstance(d["program"], str) and isinstance(d["values"], dict) and all(
+        if not all(isinstance(d, dict) and set(d) in ({"program", "values"}, {"program", "values", "reads"})
+                   and isinstance(d["program"], str) and isinstance(d["values"], dict) and all(
                 isinstance(e, dict) and set(RV.ENTRY_KEYS) <= set(e) <= {*RV.ENTRY_KEYS, RV.WIDTH_KEY}
-                and all(type(e[k]) is int for k in ("leaves", "words")) for e in d["values"].values()) for d in docs):
+                and all(type(e[k]) is int and e[k] >= 0 for k in ("leaves", "words") + ((RV.WIDTH_KEY,) if RV.WIDTH_KEY in e else ()))
+                for e in d["values"].values()) and isinstance(d.get("reads", []), list) and all(
+                isinstance(r, list) and len(r) == 3 and all(isinstance(x, str) for x in r) for r in d.get("reads", []))
+                   for d in docs):
             raise TypeError("an entry")
         if len(names := [v for d in docs for v in d["values"]]) != len(set(names)):
             raise ValueError("a value pinned twice")
     except (ValueError, KeyError, TypeError) as e:
-        return [("R8-weights-form", f"{type(e).__name__}: {e}")], {}
+        return [("R8-weights-form", f"{type(e).__name__}: {e}")], {}, set()
     bad, pins = [], {}
     for program, v, e in sorted((d["program"], v, e) for d in docs for v, e in d["values"].items()):
         try:
@@ -228,29 +238,34 @@ def _of_record(of_record: tuple[bytes, str]) -> tuple[list[tuple[str, Any]], dic
             bad.append(v)
         else:
             pins[v] = e
-    return ([("R8-weights-domain", {"values": bad})] if bad else []), pins
+    reads = {tuple(r) for d in docs for r in d.get("reads", [])}
+    return ([("R8-weights-domain", {"values": bad})] if bad else []), pins, reads
 
 
 def weights_held(program: Program, query: Mapping[str, Any], registered: Iterable[str],
-                 of_record: tuple[bytes, str] | None, declared: Iterable[Sequence[str]] = ()) -> list[tuple[str, Any]]:
+                 of_record: tuple[bytes, str] | None) -> tuple[list[tuple[str, Any]], dict[str, dict[str, Any]]]:
     """R8's hold on the program's registered inputs (the parameters it binds at registration), which `partition.shared_inputs`
-    passes by kind: one is excused only where the verifier expects it registered (R7 holds it) or the weights'
-    registration of record pins it, both marked and pinned. `of_record`: the registration's bytes and the SHA-512 the
-    auditor's side holds for it, None where it hands none; a pin's domain is its own program's (`_of_record`). A registered
-    input that neither pins nor expects is read as a run Input, refused by name where several proof blocks read it
-    (`R8-unpinned`); a pinned one whose leaves, words or width are not the program's is refused (`R8-weights-shape`).
-    Under a template query, the template parameters whose arguments read a pinned registered input (`partition.input_reads`,
-    a root node at a time, never its blocks) must be exactly the ones `declared` names for that value, the window's
-    registered reads in the record made before its coin as ``(template, parameter, value)``, in either direction
-    (`R8-undeclared`): a declared read is opened at its pinned root on the sample. A pin of no registered input excuses
-    nothing. The refusals, in `WEIGHTS_WHY`'s order; none for a program with no registered input and no registration."""
+    passes by kind: each must be expected registered by the verifier (R7 holds it) or pinned by the weights'
+    registration of record. `of_record`: the registration's bytes and the SHA-512 the auditor's side holds for it, None
+    where it hands none; a pin's domain is its own program's (`_of_record`). A registered input neither pins nor expects
+    that any template parameter reads is refused by name, at one reader as at several (`R8-unpinned`): nothing fixes
+    its root before the coin. A program with
+    a registered input, or a verifier holding a registration, under a query that is no template query that applies is
+    refused (`R8-weights-query`); a pinned input whose leaves, words or width are not the program's is refused
+    (`R8-weights-shape`). Under a template query, the template parameters whose arguments read a pinned registered input
+    (`partition.input_reads`, a root node at a time, never its blocks) must be exactly the reads the registration
+    declares of that value, ``(template, parameter, value)``, in either direction (`R8-undeclared`). A pin of no
+    registered input excuses nothing. The refusals, in `WEIGHTS_WHY`'s order, and the accepted pins, `{value: {"root",
+    "leaves", "words", "word_bits", "domain"}}` of each pinned input the verifier does not expect, which `check` holds
+    the record's registered entries to as certified entries (R7)."""
     bindings = getattr(program, "bindings", ())
-    marked = [n for (n, _), b in zip(program.fn.signature()[0], bindings) if b == REGISTRATION] if bindings else []
+    marked = [n for (n, _), b in zip(program.fn.signature()[0], bindings)
+              if b == REGISTRATION and G.held_gates(program, [n])] if bindings else []
     if not marked and of_record is None:
-        return []
-    out, pins = _of_record(of_record) if of_record is not None else ([], {})
+        return [], {}
+    out, pins, declared = _of_record(of_record) if of_record is not None else ([], {}, set())
     if out and out[0][0] in ("R8-weights-digest", "R8-weights-form"):
-        return out
+        return out, {}
     expected = set(registered)
     shape = []
     for v in marked:
@@ -265,28 +280,30 @@ def weights_held(program: Program, query: Mapping[str, Any], registered: Iterabl
             shape.append(v)
     if shape:
         out.append(("R8-weights-shape", {"values": shape}))
-    unpinned = {v: g for v in marked if v not in pins and v not in expected for g in G.held_gates(program, [v])}
-    if unpinned and P.is_template_query(query):
-        try:
-            nodes = P.shared_inputs(program, query, unheld=unpinned.values())
-        except P.QueryRefused:
-            nodes = []
-        if read := sorted({v for v, g in unpinned.items() for k in nodes if P.within(program, g, k)}):
-            out.append(("R8-unpinned", {"values": read}))
+    try:
+        templated = P.is_template_query(query) and P.units(program, query) >= 0
+    except P.QueryRefused:
+        templated = False
+    if not templated:
+        if of_record is not None or marked:
+            out.append(("R8-weights-query", {"query": dict(query)}))
+        return out, {}
+    if unpinned := [v for v in marked if v not in pins and v not in expected
+                    and P.input_reads(program, query, G.held_gates(program, [v]))]:
+        out.append(("R8-unpinned", {"values": unpinned}))
     excused = {v: g for v in marked if v in pins and v not in shape for g in G.held_gates(program, [v])}
-    if excused and P.is_template_query(query):
-        have = {tuple(d) for d in declared}
-        try:
-            reads = P.input_reads(program, query, excused.values())
-        except P.QueryRefused:
-            reads = []
+    if excused:
+        reads = P.input_reads(program, query, excused.values())
         by_gates = {g: v for v, g in excused.items()}
         read = {(t, p, by_gates[g]) for t, p, g in reads}
-        said = {d for d in have if len(d) == 3 and d[2] in excused}
+        said = {d for d in declared if d[2] in excused}
         if read != said:
             out.append(("R8-undeclared", {"undeclared": [list(m) for m in sorted(read - said)],
                                           "unread": [list(m) for m in sorted(said - read)]}))
-    return out
+    accepted = {v: {"root": pins[v]["root"], "leaves": pins[v]["leaves"], "words": pins[v]["words"],
+                    "word_bits": pins[v].get(RV.WIDTH_KEY, RV.WORD_BITS), "domain": pins[v]["domain"]}
+                for v in excused if v not in expected}
+    return out, accepted
 
 
 def held_roots(log: Iterable[Mapping[str, Any]]) -> dict[tuple[str, str], str]:
@@ -359,8 +376,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
           verdicts: Mapping[str, bool] | None = None,
           coins: Mapping[str, str] | None = None, released: Mapping[str, int] | None = None,
           commitments: Mapping[str, str] | None = None, attester_keys: Sequence[str] = (),
-          weights_of_record: tuple[bytes, str] | None = None,
-          declared_reads: Iterable[Sequence[str]] = ()) -> Verdict:
+          weights_of_record: tuple[bytes, str] | None = None) -> Verdict:
     """R1-R8 against the verifier's own copies: its program and query, its sampling design and scheme, the ports its layout derives
     (`{port: {"leaves", "domain"}}`), the digest of its copy of the leaf layer, its anchors, its log of this prover's
     earlier records, the parameters it expects registered (`registered`: `{parameter: words}`), of those the ones it
@@ -420,9 +436,9 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
     (the scan's slot entries, which the network period check ties to the blocks that registered them), which R8 lets
     through though several proof blocks read them, on that later check alone: the verdict publishes the ones it let
     through (`Verdict.rests_on_period_check`), and refuses a name that isn't a parameter of `program`, one `registered`
-    or `held` names, or one whose gates aren't one interval of run Input nodes (`R8-tied`).  `weights_of_record` and
-    `declared_reads`: the weights' registration of record and the window's declared registered reads, which R8 holds
-    the program's registered inputs to (`weights_held`).  `members`: the per-member
+    or `held` names, or one whose gates aren't one interval of run Input nodes (`R8-tied`).  `weights_of_record`:
+    the weights' registration of record, which R8 holds the program's registered inputs to (`weights_held`); each pin it
+    accepts is a certified entry R7 holds the record's registered entry to, so the record is v2.  `members`: the per-member
     form's members, each its units (`[lo, hi)` ranges) and its circuit's units a proof block; after R8, `link-points`
     refuses the record when a member's fewest and most sampled proof blocks give different link points
     (`link_points.refused`), no sample under the sampling design ends (`link_points.NEVER_ENDS`), or the members or the
@@ -451,7 +467,9 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
     _registered_compiler(compiler)
     refuse_unwindowed(unwindowed(program, registered or {}, formats, window, fixed, log))
     fan, shared, through, bad = _readers(program, query, registered or {}, held or (), tied or ())
-    weights = weights_held(program, query, registered or {}, weights_of_record, declared_reads)
+    weights, accepted = weights_held(program, query, registered or {}, weights_of_record)
+    cert = {**cert, **accepted}
+    v2 = v2 or bool(accepted)
     keys = _KEYS | {"registered"} if v2 else _KEYS
     if not isinstance(rec, Mapping) or set(rec) != keys:
         c.fail("keys", sorted(set(rec) ^ keys) if isinstance(rec, Mapping) else rec)
