@@ -36,6 +36,7 @@ import subprocess
 import sys
 from fractions import Fraction
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 import settings
@@ -59,6 +60,9 @@ def _module(name: str, path: Path):
     return sys.modules[name]
 
 
+CASES = ROOT / "tests" / "verity" / "protocols" / "accounting" / "compute" / "pouw" / "verifier" / "lean" / "check"
+RC = _module("pouw_rounds_cases", CASES / "pouw_rounds_cases.py")
+PC = _module("pouw_pass_cases", CASES / "pouw_pass_cases.py")
 T = _module("test_pearl_c_vllm", ROOT / "tests" / "benchmarks" / "pouw" / "test_pearl_c_vllm.py")
 VR = T.VR
 Wd = T.Wd
@@ -74,9 +78,11 @@ def exe() -> Path:
 
 def lean(exe: Path, paths: list[Path], draws: int, source: bytes | None = SOURCE, record: Path | None = None,
          coins: Path | None = None, over_cap: str | None = None, test_instance: bool = False, tie: Path | None = None,
-         of_record: bool = False, load: tuple[int, int, int] | None = None, draw_live: Path | None = None) -> dict:
+         of_record: bool = False, load: tuple[int, int, int] | None = None, draw_live: Path | None = None,
+         salt_live: Path | None = None) -> dict:
     argv = [str(exe), "--coins", str(coins or paths[0].parent / "coins.json"), "--draws", str(draws)]
     argv += [] if draw_live is None else ["--draw-live", str(draw_live)]
+    argv += [] if salt_live is None else ["--salt-live", str(salt_live)]
     argv += [] if source is None else ["--source", source.hex()]
     argv += [] if record is None else ["--record", str(record)]
     argv += [] if over_cap is None else ["--over-cap", over_cap]
@@ -549,6 +555,71 @@ def test_a_challenger_draw_its_draw_session_does_not_hold_is_refused_by_the_lean
             assert got["refused"][1].startswith(why) and got["reason"] == f"draw-session: {got['refused'][1]}"
     plain = same(exe, [path], record=node)
     assert lean(exe, [path], 3, record=node, test_instance=True, draw_live=f) == plain
+
+
+def salt_session_pass(tmp_path: Path, k: int = 0) -> tuple[Path, dict]:
+    """A test instance's pass salted by a signed salt session (`pouw_pass_cases.honest_live`'s): the session S of the
+    auditor's challenger, its salt coin opened after salt epoch `k`'s root R over the pass's fixed operands' root W, the
+    pass proved under that coin, the auditor's ledger reserving S, opening it on R and ending it complete, and the
+    manifest carrying the gate's answer; with ``{man, r, s, w, live}``, ``live`` what ``--salt-live`` reads."""
+    rng, held, real = random.Random(k + 5), {}, T.weights_root
+
+    def weights_root(roots):
+        held["w"] = real(roots)
+        return held["w"]
+
+    def coin(after: bytes):
+        held["s"], held["r"] = PC.salt_session(rng, after, 0, RC.session_id(rng)), after
+        return held["s"].ch.commitment, held["s"].salt[0]
+    with patch.object(T, "weights_root", weights_root), patch.object(T, "live_coin", coin):
+        path = T.proved_pass(tmp_path, H100, live=k)[0]
+    s = held["s"]
+    h = {"man": json.loads(path.read_text()), "r": held["r"], "s": s, "w": held["w"],
+         "live": {"key": s.key(), "ledger": None, "pins": list(RC.PINS), "main": list(RC.MAIN), "session": s.files()}}
+    PC.live_ledger(rng, h)
+    path.write_text(json.dumps(h["man"]))
+    return path, h
+
+
+def test_a_live_pass_is_held_to_its_signed_salt_session(exe, tmp_path):
+    """``--salt-live`` holds each live pass's salt to its salt session (`Coins.liveSaltReason`, `core_check.live_salt`'s
+    session half): a pass salted by a signed session's coin, opened after its salt epoch's root R over the fixed operands'
+    root W, gets the verdict it gets without it, and is refused (`salt-session`) when the auditor's ledger is signed under
+    another key than the pinned one, when the session's salt coin followed another root than R (so was released before
+    W was logged), when the ledger opened the session on another salt epoch's root over W, when the challenger key
+    doesn't parse, and when the manifest carries another session than the gate's answer."""
+    path, h = salt_session_pass(tmp_path)
+    plain = lean(exe, [path], 3, test_instance=True)
+    assert plain["verdict"] == "accept"
+
+    def held(live: dict) -> dict:
+        (f := tmp_path / "salt-live.json").write_text(json.dumps(live))
+        return lean(exe, [path], 3, test_instance=True, salt_live=f)
+
+    def ledger(s=None, **kw) -> dict:
+        g = {**h, "s": s or h["s"], "live": {**h["live"]}, "man": {**h["man"]}}
+        if s is not None:
+            g["live"]["session"] = s.files()
+        PC.live_ledger(random.Random(9), g, **kw)
+        return g["live"]
+
+    assert held(h["live"]) == plain
+    rng, sid = random.Random(11), h["s"].sid
+    other = T.PS.epoch_open_root(h["w"], 1)
+    cases = [(ledger(k=1), "the salt session is not trusted: "),
+             (ledger(PC.salt_session(rng, rng.randbytes(64), 0, sid)),
+              "the challenger's log does not show the epoch's root as the one root its salt coin followed"),
+             (ledger(PC.salt_session(rng, other, 0, sid), root=other), "the salt session is not trusted: "),
+             ({**h["live"], "key": None}, "the salt session's challenger key is malformed: ")]
+    for live, why in cases:
+        got = held(live)
+        assert (got["verdict"], got["refused"][0], got["work"]) == ("reject", "salt-session", None), why
+        assert got["refused"][1].startswith(f"pass 0: {why}") and got["reason"] == f"salt-session: {got['refused'][1]}"
+    edit(path, lambda m: m["session"].update(secret="00" * 32))
+    got = held(h["live"])
+    assert got["refused"] == ["salt-session", "pass 0: the pass's session is not the gate's answer, without its secret, for "
+                              "the session the auditor's ledger opened on its epoch's root: its session, seq, root and "
+                              "commitment"]
 
 
 def test_a_run_tied_to_its_window_record(exe, tmp_path):

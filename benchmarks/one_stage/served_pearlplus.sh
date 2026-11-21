@@ -394,9 +394,17 @@ if [ -n "$GO" ] && [ -s "$P/verify.json" ]; then
     DL=$Q/pearlplus-draw-live.json
   fi
   say "lean: draw session: $(tail -1 "$Q/draw-live.log" 2>/dev/null | cut -c1-300)"
+  SL=  # the epoch's salt session, which the Lean holds each live pass's salt to (served_verdicts.py pearlplus-salt-live)
+  if [ -n "${PEARLC_CHALLENGER_GATE:-}" ] && [ -n "${H1_KEY_SHA512:-}" ] && [ -n "${MAIN_FILE:-}" ] \
+     && "$TPY" benchmarks/one_stage/served_verdicts.py pearlplus-salt-live "$Q" --served "$SERVED" \
+          --gate "$PEARLC_CHALLENGER_GATE" --key-sha512 "$H1_KEY_SHA512" --main "$MAIN_FILE" > "$Q/salt-live.log" 2>&1 \
+     && [ -s "$Q/pearlplus-salt-live.json" ]; then
+    SL=$Q/pearlplus-salt-live.json
+  fi
+  say "lean: salt session: $(tail -1 "$Q/salt-live.log" 2>/dev/null | cut -c1-300)"
   "$VENV/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py lean --passes "$Q/passes" --verify "$P/verify.json" \
     --exe "${LX:-none}" --out "$P/pearlplus-lean.json" --timeout "${PEARLPLUS_LEAN_TIMEOUT:-3600}" \
-    ${DL:+--draw-live "$DL"} > "$Q/lean.log" 2>&1
+    ${DL:+--draw-live "$DL"} ${SL:+--salt-live "$SL"} > "$Q/lean.log" 2>&1
   say "lean: served_passes.py lean exit $? after $(took "$t"): $(tail -1 "$Q/lean.log" | cut -c1-400)"
 fi
 if [ -s "$P/pearlplus-lean.json" ]; then

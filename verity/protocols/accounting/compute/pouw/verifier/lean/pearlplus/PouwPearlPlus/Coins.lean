@@ -172,7 +172,7 @@ opened at ledger entry `seq` on `root` under the commitment whose root is `commi
 def carriesSession (s : Json) (sid : String) (seq : Nat) (root : ByteArray) (commitment : String) : Bool :=
   match s with
   | .obj _ => (get? s "secret").isNone && fieldIs (get? s "session") sid &&
-      ((get? s "seq").bind PouwWindow.intOf?) == some (seq : Int) && fieldIs (get? s "root") (Flock.hexOf root) &&
+      ((get? s "seq").bind jsonInt?) == some (seq : Int) && fieldIs (get? s "root") (Flock.hexOf root) &&
       fieldIs (get? s "commitment") commitment
   | _ => false
 
@@ -203,8 +203,9 @@ def liveSaltReason (m : Json) (weightsRoot : ByteArray) (live : Json) : Option S
     | .ok p => pure p
     | .error e => return some s!"the salt session is not trusted: {e}"
   if let some why := PouwWindow.saltEpochReason c then return some s!"the salt session's signed coins: {why}"
-  let named := ((match g "ledger" with | .arr ls => ls.toList | _ => []).filterMap Spot.Challenger.ledgerEntry?).filter
-    (·.session == a.session)
+  let named : List Spot.Challenger.LedgerEntry :=
+    ((match g "ledger" with | .arr ls => ls.toList | _ => []).filterMap Spot.Challenger.ledgerEntry?).filter
+      (fun e : Spot.Challenger.LedgerEntry => e.session == a.session)
   let (some reserve, some opened, some ended) :=
       (named.find? (·.kind == "reserve"), named.find? (·.kind == "open"), named.find? (·.kind == "end"))
     | return some SALT_NO_RESERVE
