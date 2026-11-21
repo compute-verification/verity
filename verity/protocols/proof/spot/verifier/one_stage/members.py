@@ -159,6 +159,13 @@ def subset_design(law: Any) -> bool:
     return law.get("law") == "subset" if isinstance(law, dict) else isinstance(law, str) and law.startswith("rate:")
 
 
+def subset_designs(law: Any, record: Any) -> bool:
+    """`OneStageZk.subsetDesign`: the parameters' `law` is of the subset kind (`subset_design`) and so is the
+    registration `record`'s."""
+    rl = record.get("law") if isinstance(record, dict) else None
+    return subset_design(law) and isinstance(rl, dict) and rl.get("law") == "subset"
+
+
 def _kind(law: Any) -> str:
     """`OneStageZk.designKind` of the parameters' `law`, a rate resolved as `OneStage.design` resolves it."""
     if isinstance(law, dict):
@@ -1227,7 +1234,7 @@ def _members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence:
             if not P.covers(program, params["query"], record["population"]):
                 raise _Refused(POPULATION_ORDER)
             law = record.get("law")
-            if not (subset_design(params.get("law")) and isinstance(law, dict) and law.get("law") == "subset"):
+            if not subset_designs(params.get("law"), record):
                 raise _Refused(strata_design(_kind((law if isinstance(law, dict) else {}) if subset_design(params.get("law"))
                                                    else params.get("law"))))
         _laid(ms, record)
@@ -1281,4 +1288,4 @@ __all__ = ["EXITS", "Form", "MEMBERS_LAID", "MEMBER_COVER", "MEMBER_STRATA", "ME
            "TABLE_PORT", "UNREAD", "blobs_of", "case_check", "check", "files_why", "flock_form", "flock_verdict",
            "field_trees_why", "members_run", "population_why", "POPULATION_WHY", "registered_at", "registered_reads",
            "return_fields", "run_reason", "shared_unread", "unregistered_why", "unwired_why", "own_root_why",
-           "port_twice_why", "run_own_root_why", "slice_no_port_why", "strata_design", "subset_design", "wired_tree_why"]
+           "port_twice_why", "run_own_root_why", "slice_no_port_why", "strata_design", "subset_design", "subset_designs", "wired_tree_why"]
