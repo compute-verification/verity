@@ -1244,7 +1244,7 @@ def audit(a: argparse.Namespace) -> int:
     row = {"seconds": round(time.time() - t0, 1), "verifier_window_s": window_s, "circuit": held["circuit"],
            "compiler": held["compiler"], "advice": held["advice"], "compile": compiled, "law": a.sampling_design,
            "sampling_design": a.sampling_design, **({"compiled": NOT_CHECKED} if a.prover_circuit else {}),
-           **{x: s.get(x) for x in ("run_root", "population", "members", "registration", "source", "refused", "checks_before_draw",
+           **{x: s.get(x) for x in ("run_root", "population", "members", "source", "refused", "checks_before_draw",
                                     "audit", "draw", "draw_counts", "negatives", "negatives_skipped", "coins",
                                     "timing", "outputs", "negative_workers", "plain", "arm", "coin_trees")}}
     bits = int((held["advice"] or {}).get("bits", 0))
@@ -1255,6 +1255,7 @@ def audit(a: argparse.Namespace) -> int:
         row["registered"] = {"pins": counted, "roots": roots, "members": len(reads), "own": {**ties, **untied}}
     if tied.get("log"):
         row["tie"] = tie_row(tied)
+    row["circuit_registration"] = s.get("registration")
     if a.registration:
         row["registration"] = {"digest": a.registration_digest,
                                "source": "ledger" if a.registration_ledger else DK.DEVELOPMENT}
@@ -1295,7 +1296,8 @@ def audit(a: argparse.Namespace) -> int:
     print("RECORDS " + json.dumps({x: row.get(x) for x in ("ok", "circuit", "population", "draw", "draw_counts", "outputs", "seconds")}
                                   | {"compile": PROVER_CIRCUIT if a.prover_circuit else (compiled or {}).get("ok"),
                                      "fixed_before_draw": (row.get("fixed_before_draw") or {}).get("ok"),
-                                     "registration": row.get("registration"),
+                                     "circuit_registration": row["circuit_registration"],
+                                     **({"registration": row["registration"]} if "registration" in row else {}),
                                      "accepted": (s.get("audit") or {}).get("accepted"),
                                      "negatives_refused": all((row.get("negatives") or {"none": False}).values()),
                                      "definitions": row["definitions"], "loaded": row["loaded"],

@@ -311,7 +311,7 @@ def _prover_circuit_audit(w: SimpleNamespace, monkeypatch, tmp_path: Path, flags
         (out / "registration.json").write_text(json.dumps(w.rec))
         (out / "receipt.json").write_text(json.dumps({"registration": DD.digest(w.rec), "verifier": A5.CHALLENGER}))
         seen.update(source=source(w.rec["window"]), negatives=more, summary=summary)
-        return {"audit": {"accepted": True}, "draw": {"units": [0]}}, seen["source"]["ok"]
+        return {"audit": {"accepted": True}, "draw": {"units": [0]}, "registration": DD.digest(w.rec)}, seen["source"]["ok"]
 
     session = SimpleNamespace(skip=lambda r: None, join=lambda: None, evidence=lambda: {}, shutdown=lambda: None)
     monkeypatch.setattr(RA, "free_ports", lambda span: 20000)
@@ -338,6 +338,7 @@ def test_prover_circuit_takes_the_registered_circuit_holds_its_compiler_and_advi
                                                                                               "not checked")
     assert summary["fixed_before_draw"]["ok"] and (summary["compiler"], summary["advice"]) == (
         written.bound["compiler"], written.bound["advice"])
+    assert summary["circuit_registration"] == DD.digest(written.rec) and "registration" not in summary
     assert seen["summary"]["compiled"] == "not checked" and not (tmp_path / "o" / "compile").exists()
     line, = (x for x in capsys.readouterr().out.splitlines() if x.startswith("RECORDS "))
     assert "compiled: not checked (the circuit is the one the prover registered)" in line
@@ -373,6 +374,7 @@ def test_the_development_path_says_first_that_the_digest_is_the_serving_nodes_ow
     assert first == "REGISTRATION " + R.DEVELOPMENT_WHY
     summary = json.loads((tmp_path / "o" / "summary.json").read_text())
     assert summary["registration"] == {"digest": DD.digest(json.loads(rec.read_text())), "source": "development"}
+    assert summary["circuit_registration"] == DD.digest(written.rec)
 
 
 def test_prover_circuit_is_refused_by_name_without_development(written, tmp_path, monkeypatch, capsys):
