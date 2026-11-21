@@ -1672,6 +1672,9 @@
   "Properties.Poub.Shared.openingsUnreadUntilSampled": {
    "honest": ["Properties.Poub.Line.SecurityProofs.lineHeld_honest"]
   },
+  "Properties.Spot.PortsHeldProof.membersPortsHeld": {
+   "nontrivial": "Properties.Spot.PortsHeldProof.membersPortsHeld_nontrivial"
+  },
   "Properties.Poub.acceptChecksOpenings": {
    "honest": ["Properties.Poub.acceptChecksOpenings_honest"],
    "nontrivial": "Properties.Poub.acceptChecksOpenings_nontrivial"
@@ -2323,7 +2326,8 @@
   },
   "Properties.Spot.PortsHeldProof.membersPortsHeld": {
    "type_hash": "ec99409435abd5be30cba68bdd5e5a80b91e6a8f1f2735d5233454f7eab4382e",
-   "why": "no honest instance in Lean: the kernel does not reduce SHA-512, and an accept computes the record's digest, the coins, the program's hash and each member's sessions. The honest accept is the compiled verifier's, on the benchmark's honest arm at the entry's head. Its nontrivial witness's statement reads a proofs-tree definition (Properties.Spot.PortsHeldProof.bareParams), so it is not listed; it returns when that definition is stated in the properties tree.",
+   "missing": "honest",
+   "why": "no honest instance in Lean: the kernel does not reduce SHA-512, and an accept computes the record's digest, the coins, the program's hash and each member's sessions. The honest accept is the compiled verifier's, on the benchmark's honest arm at the entry's head.",
    "unfolded_hash": "c235304ef74eaacce0a52361f947ae912522bb584df518d7cfcddb47c7fe54b2"
   },
   "Properties.Spot.SecurityProofs.designWellFormed": {
@@ -11226,6 +11230,9 @@
    "type_hash": "8263b94dc12fe4a55ace70430d46d6ea1c47a7ec462b25d34b5a4f2791be9d68"
   },
   "Properties.Spot.PortsHeldProof.membersPortsHeld": {
+   "owner": "@proofs"
+  },
+  "Properties.Spot.PortsHeldProof.membersPortsHeld_nontrivial": {
    "owner": "@proofs"
   },
   "Properties.Spot.SecurityProofs.boundLnBoundSound": {
