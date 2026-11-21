@@ -55,7 +55,7 @@ names, `Session*` means a run of a subprotocol.
 | SPOT ([README](../../../proof/spot/verifier/README.md)) | the committed values satisfy the registered circuit outside the blocks the sample misses | `VStar.Recursive.Sampled.protocol` (`verity/protocols/proof/spot_flock/verifier/lean`), one-stage, recursive or two-stage by its `form` | `verity/sampled-proofs/v1` |
 | PoUW ([README](../../../accounting/compute/pouw/verifier/README.md)) | a run's credited MACs at Pearl's assumption, at δ over a work-weighted sample | `PouwVerifier.PearlPlus.Protocol.protocol` (`verity/protocols/accounting/compute/pouw/verifier/lean/pearlplus`) | `verity/pouw/pearl-plus/v1` |
 | PoUW, v0 | the period's credited work, execution phases all or nothing | `PouwVerifier.Period.protocol` (`verity/protocols/accounting/compute/pouw/verifier/lean/check`) | `verity/pouw/period/v1` |
-| The inference-only policy ([README](../../../policy/training_detection/inference_only/verifier/README.md)) | the registered circuit divides into inference blocks within their gate and fresh-input budgets; θ is registered | `InferenceOnlyCheck.Protocol.protocol` (`verity/protocols/policy/training_detection/inference_only/verifier/lean`) | `verity/inference-only/v0` |
+| The inference-only policy ([README](../../../policy/training_detection/inference_only/verifier/README.md)) | the registered circuit divides into inference blocks within their gate and unregistered-input budgets; θ is registered | `InferenceOnlyCheck.Protocol.protocol` (`verity/protocols/policy/training_detection/inference_only/verifier/lean`) | `verity/inference-only/v0` |
 
 The code is `CoreRemote.lean`: `V1.protocol = tiedSameB "verity/remote/v1" tied ties components`
 (`ties = [run, executionPhase]`; the executable `remote-v1`, `RemoteV1Main.lean`), which
@@ -282,7 +282,7 @@ part 6's premises say why that shape trains little.
 4. *`CompliesRate` ⇒ the (c, k)-partition the local bounds read:* `InferenceOnly.Guarantees.CompliesCK`, and through the
    bit-level expansion `InferenceOnly.Guarantees.ExpandComplies`, **proved**. `PolicyMet` holds both of the
    case's circuit, its constants registered; of the committed files' circuit they wait on link 1's two statements.
-5. *A block's effective fresh input:* k plus k_F, the bits incorrect proof blocks inject into it, plus k_a, the advice bits
+5. *A block's effective unregistered input:* k plus k_F, the bits incorrect proof blocks inject into it, plus k_a, the advice bits
    its structure depends on. SPOT bound the incorrect proof blocks and the advice's length is public, but no
    statement bounds either per inference block yet: **open**.
 6. *The displayed bound reading the result instead of assuming `CompliesRate`:* **open** (part 6).
