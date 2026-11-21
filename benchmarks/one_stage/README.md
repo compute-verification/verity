@@ -78,7 +78,7 @@ input. What the guarantee rests on: `verity/protocols/proof/spot/verifier/README
   SPOT: the window's advice under that docket (`--weights-of-record`) and its request Programs, V3b's window
   circuit at each class of `CLASSES` (V2's 4,32,4 by default), with its weight reads counted registered at the docket's
   pins. The run needs every one of those counts; the class of record is counted only where `CLASSES` names `record`.
-  Then comes the records audit (`benchmarks/prove_path/run.sh`, `PP_RECORDS=1`), which is Flock `--zk` on the sampled proof blocks
+  Then comes the records audit (`benchmarks/prove_path/records_audit.py audit`), which is Flock `--zk` on the sampled proof blocks
   and the Lean verifier. Then come PoUW, PoUS, the bandwidth audit and the network attester. Each runs its piece where
   `POUW_CMD`, `POUS_CMD`, `BANDWIDTH_CMD` or `CERTIFIER_CMD` names one, within its own limit; otherwise its `MISSING` line
   names the command it lacks and its owner, and it gets no verdict. The script sets each owner's command by default where

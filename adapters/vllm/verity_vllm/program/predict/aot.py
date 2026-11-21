@@ -7,7 +7,7 @@ of the trace:
 
     descriptor.json.gz   the predicted Program, under the trace's annotations: the runtime correspondence (per Call, the fx occurrence
                          it was lowered from, its module, views and slots), which only the trace yields
-    instances.json.gz    the predicted Program's instance sequence (`pipeline.build.write_instances`), with the Call and weight
+    instances.json.gz    the predicted Program's instance sequence (`pipeline.build_instances.write_instances`), with the Call and weight
                          names the trace gave it (`traced_names`), which no digest covers and Match reads, and
                          the predictor's checks (`BuildResult.checks`), which the replay reads
     the rest (CARRIED)   as the trace wrote them, with `aot` in result.json and construction_manifest.json: what predicted the
@@ -114,7 +114,7 @@ def emit(phi: Phi, wrapper: str, trace: str, out: str, *, M: int = 1, pos0: int 
          aot: dict | None = None) -> dict:
     """One derive dir of a switched row's Build at `out`: the predicted Program, with the data `trace` (the traced derive dir at the
     same rank and shape) holds about it.  Returns the `aot` block it records."""
-    from verity_vllm.pipeline.build import write_instances
+    from verity_vllm.pipeline.build_instances import write_instances
     res = json.loads(Path(trace, "result.json").read_text())
     recorded = res.get("program")   # the trace's record of its Program; a result without it names no digest, and is refused below
     traced = recorded if recorded else {}

@@ -7,8 +7,6 @@
     {"file": ".agents/skills/testing/SKILL.md", "count": 1},
     {"file": ".agents/skills/writing-goals/SKILL.md", "count": 1},
     {"file": "AGENTS.md", "count": 6},
-    {"file": "adapters/vllm/tools/advice_compile.py", "count": 3},
-    {"file": "adapters/vllm/tools/advice_run.py", "count": 3},
     {"file": "adapters/vllm/tools/ratchet_gate.py", "count": 1},
     {"file": "adapters/vllm/tools/served_run/placement.toml", "count": 2},
     {"file": "adapters/vllm/tools/served_run/serve_load.py", "count": 2},
