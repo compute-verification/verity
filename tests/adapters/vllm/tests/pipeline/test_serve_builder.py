@@ -144,8 +144,7 @@ def test_a_run_that_declared_no_day_registers_nothing(tmp_path):
 
 
 def test_a_log_with_site_entries_takes_the_item_under_the_day_params_auditor_and_is_refused_without_it(tmp_path):
-    """The served path's `verity-vllm advice` (`served_verdicts.sh`'s ``advice_of``, which passes ``--day-params`` under
-    ``DAY``) on a day declared in a log whose site entries only ``--day-params``' auditor accepts: without the parameters
+    """`verity-vllm advice` with ``--day-params`` on a day declared in a log whose site entries only ``--day-params``' auditor accepts: without the parameters
     the call is refused by name and writes nothing; with them it registers the item and binds the advice."""
     params = tmp_path / "site-params.json"
     params.write_text(json.dumps(G.params("onsite", AUDITOR)))

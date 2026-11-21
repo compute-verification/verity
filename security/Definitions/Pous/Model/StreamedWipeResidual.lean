@@ -35,4 +35,13 @@ nothing. -/
 def wipeResidual (N k b s : ℕ) : ℕ :=
   (k.log2 + 1) + (N.log2 + 1 + b) * (wipeMissing N k s - 1) + (s + 1)
 
+/-- **The wipe residual is covered**: the two bounds `Pous.Guarantees.StreamedWipeResidual` is stated at, named as one
+`Prop`, for a wipe of `N` labels of `b` bits, `k` challenges, soundness exponent `s`, `q` bits of prior content kept and
+`E` bits of egress. The first, the residual below the fill (`wipeResidual N k b s < N · b`), keeps the bound from being
+vacuous: at or above the `N · b` bits the wipe fills, every prover keeps that much and the bound says nothing. The
+second, the prior content's budget covering the egress plus the residual (`E + wipeResidual N k b s ≤ q`), is the
+prover the bound is about: one that keeps at least that much prior content through the wipe. -/
+def Covers (N k b s q E : ℕ) : Prop :=
+  wipeResidual N k b s < N * b ∧ E + wipeResidual N k b s ≤ q
+
 end Pous.StreamedWipe
