@@ -1185,6 +1185,34 @@ def ran_by(key: str, row: Mapping[str, Any], product: str) -> dict[str, Any]:
     return out
 
 
+def _salt_live(served: Mapping[str, Any], out: Path, gate: str | None, key: str | None, main: Path | None,
+               fetch: Callable[..., bytes] | None = None) -> dict[str, Any]:
+    """The live salt session the served run's ``coins`` names, ``{key, key_sha512, ledger, pins, main, session}``: the
+    challenger key whose public key's SHA-512 is `key` (`challenger.pinned_key`) and that pin, the auditor's ledger and the host's pins log as the
+    gate `gate` answers now, main's first-parent line `main` (`remote.main_lines`) and the session's files from the
+    gate's ``fetch``, each written to `out`. `fetch` replaces the gate's answers (tests)."""
+    from verity.protocols.proof.spot.verifier.challenger import remote
+    from verity.protocols.accounting.compute.pouw.prover.serving.coins import challenger as PHC
+
+    sid = ((served.get("coins") or {}).get("session") or {}).get("session")
+    if not (gate and key and main) and fetch is None:
+        raise ValueError("no gate, key pin or main's first-parent line to check the session by (--gate, --key-sha512, "
+                         "--main)")
+    if not sid:
+        raise ValueError("the served run names no live session")
+    ask = fetch or (lambda *words: _gate_out(gate, *words))
+    tgz, tree = out / "session.tgz", out / "session"
+    tgz.write_bytes(ask("fetch", sid))
+    with tarfile.open(tgz) as t:
+        t.extractall(tree, filter="data")
+    for name in ("ledger", "pins"):
+        (out / f"{name}.jsonl").write_bytes(ask(name))
+    d = tree / sid / "out"
+    return {"key": PHC.pinned_key(d / remote.KEY, key).to_json(), "key_sha512": key,
+            "ledger": remote.ledger_lines(out / "ledger.jsonl"), "pins": remote.ledger_lines(out / "pins.jsonl"),
+            "main": remote.main_lines(main), "session": remote.session_files(d)}
+
+
 def pearlplus_coins(served: Mapping[str, Any], out: Path, gate: str | None, key: str | None,
                     main: Path | None) -> dict[str, Any]:
     """Whether every pass with calls of Pearl+'s served run (``served``, `served_passes.py serve`'s document) has its
@@ -1194,28 +1222,12 @@ def pearlplus_coins(served: Mapping[str, Any], out: Path, gate: str | None, key:
     `core_check.live_salt` under the challenger key whose public key's SHA-512 is `key` (`challenger.pinned_key`).
     ``{session, closed, passes, reason}``: the passes checked, and None or the first refusal."""
     from verity.protocols.accounting.compute.pouw.verifier import core_check as CC
-    from verity.protocols.proof.spot.verifier.challenger import remote
-    from verity.protocols.accounting.compute.pouw.prover.serving.coins import challenger as PHC
 
     coins = served.get("coins") or {}
     sid = (coins.get("session") or {}).get("session")
     got: dict[str, Any] = {"session": sid, "closed": coins.get("closed"), "passes": 0, "reason": None}
     try:
-        if not (gate and key and main):
-            raise ValueError("no gate, key pin or main's first-parent line to check the session by (--gate, --key-sha512, "
-                             "--main)")
-        if not sid:
-            raise ValueError("the served run names no live session")
-        tgz, tree = out / "session.tgz", out / "session"
-        tgz.write_bytes(_gate_out(gate, "fetch", sid))
-        with tarfile.open(tgz) as t:
-            t.extractall(tree, filter="data")
-        for name in ("ledger", "pins"):
-            (out / f"{name}.jsonl").write_bytes(_gate_out(gate, name))
-        d = tree / sid / "out"
-        live = {"key": PHC.pinned_key(d / remote.KEY, key).to_json(), "ledger": remote.ledger_lines(out / "ledger.jsonl"),
-                "pins": remote.ledger_lines(out / "pins.jsonl"), "main": remote.main_lines(main),
-                "session": remote.session_files(d)}
+        live = _salt_live(served, out, gate, key, main)
         for p in served.get("passes") or ():
             if not p.get("units"):
                 continue
@@ -1233,23 +1245,53 @@ def pearlplus_coins(served: Mapping[str, Any], out: Path, gate: str | None, key:
     return got
 
 
+def _draw_live(record: Path, out: Path, gate: str | None, key: str | None, main: Path | None,
+               fetch: Callable[..., bytes] | None = None) -> dict[str, Any] | None:
+    """The draw session of the verifier's challenger sample in its coin record `record`, ``{key, key_sha512, ledger,
+    pins, main, session}``: the challenger key whose public key's SHA-512 is `key` (`challenger.pinned_key`) and that
+    pin, the auditor's ledger and the host's pins log as the gate `gate` answers now, main's first-parent line `main` and
+    the session's tree from the gate's ``fetch``, each written to `out` (the tree at ``out/session/<id>``, beside the
+    salt session's). None for a node's sample, which has no session. `fetch` replaces the gate's answers (tests)."""
+    from verity.protocols.accounting.compute.pouw.verifier import salt as PS
+    from verity.protocols.proof.spot.verifier.challenger import remote
+    from verity.protocols.accounting.compute.pouw.prover.serving.coins import challenger as PHC
+
+    draw = json.loads(record.read_text()).get("draw") or {}
+    if draw.get("from") != "challenger":
+        return None
+    sid = (draw.get("reserved") or {}).get("session")
+    if not (gate and key and main) and fetch is None:
+        raise ValueError("no gate, key pin or main's first-parent line to check the draw session by (--gate, "
+                         "--key-sha512, --main)")
+    if not (isinstance(sid, str) and PS.SESSION.fullmatch(sid)):
+        raise ValueError(f"the record's draw names no gate session ({sid!r})")
+    ask = fetch or (lambda *words: _gate_out(gate, *words))
+    tgz, tree = out / f"draw-{sid}.tgz", out / "session"
+    tgz.write_bytes(ask("fetch", sid))
+    with tarfile.open(tgz) as t:
+        t.extractall(tree, filter="data")
+    for name in ("ledger", "pins"):
+        (out / f"{name}.jsonl").write_bytes(ask(name))
+    d = tree / sid / "out"
+    return {"key": PHC.pinned_key(d / remote.KEY, key).to_json(), "key_sha512": key,
+            "ledger": remote.ledger_lines(out / "ledger.jsonl"), "pins": remote.ledger_lines(out / "pins.jsonl"),
+            "main": remote.main_lines(main), "session": remote.session_files(d)}
+
+
 def pearlplus_draw(record: Path, out: Path, gate: str | None, key: str | None, main: Path | None,
                    fetch: Callable[..., bytes] | None = None) -> dict[str, Any]:
     """Whether the verifier's sample in its coin record `record` (`verify_run`'s "The coin record") is its sample session's:
-    for a challenger sample, the session's tree as the gate `gate`'s ``fetch`` gives it, and the auditor's ledger and the
-    host's pins log as it answers now, written to `out` (the session's tree at ``out/session/<id>``, beside the salt
-    session's), the ledger opening that session alone on the run's commitment C under the challenger key `key` pins, run
-    from a commit on main's line `main` (`challenger.trusted_session_of`), withheld (`challenger.withheld_on`), its signed
-    commitment the record's and of a sample session's layout (`window.draw_epoch_reason`), its log showing C as the one
-    root its coin followed, and the record's opening its coin ``pouw/draw`` 0 after C (`challenger.live_reason`) with
-    the record's source its coin. `fetch` replaces the gate's answers (tests). ``{from, session, reason}``: the sample's
-    origin, its session and None or the first refusal; a node's sample has no session and no refusal here (the compose
-    refuses it, `pearlplus_live_sample`)."""
-    from verity.protocols.accounting.compute.pouw.verifier import salt as PS
+    for a challenger sample, its session as `_draw_live` fetches it, the ledger opening that session alone on the run's
+    commitment C under the challenger key `key` pins, run from a commit on main's line `main`
+    (`challenger.trusted_session_of`), withheld (`challenger.withheld_on`), its signed commitment the record's and of a
+    sample session's layout (`window.draw_epoch_reason`), its log showing C as the one root its coin followed, and the
+    record's opening its coin ``pouw/draw`` 0 after C (`challenger.live_reason`) with the record's source its coin.
+    `fetch` replaces the gate's answers (tests). ``{from, session, reason}``: the sample's origin, its session and None
+    or the first refusal; a node's sample has no session and no refusal here (the compose refuses it,
+    `pearlplus_live_sample`)."""
     from verity.protocols.accounting.compute.pouw.verifier import window as Wd
     from verity.protocols.proof.spot.verifier.challenger import challenger as Ch
-    from verity.protocols.proof.spot.verifier.challenger import remote
-    from verity.protocols.accounting.compute.pouw.prover.serving.coins import challenger as PHC
+    from verity.protocols.proof.spot.verifier.challenger import challenger_session as CS
 
     got: dict[str, Any] = {"from": None, "session": None, "reason": None}
     try:
@@ -1258,27 +1300,14 @@ def pearlplus_draw(record: Path, out: Path, gate: str | None, key: str | None, m
         got["from"] = draw.get("from")
         if got["from"] != "challenger":
             return got
-        sid = got["session"] = (draw.get("reserved") or {}).get("session")
-        if not (gate and key and main) and fetch is None:
-            raise ValueError("no gate, key pin or main's first-parent line to check the draw session by (--gate, "
-                             "--key-sha512, --main)")
-        if not (isinstance(sid, str) and PS.SESSION.fullmatch(sid)):
-            raise ValueError(f"the record's draw names no gate session ({sid!r})")
-        ask = fetch or (lambda *words: _gate_out(gate, *words))
-        tgz, tree = out / f"draw-{sid}.tgz", out / "session"
-        tgz.write_bytes(ask("fetch", sid))
-        with tarfile.open(tgz) as t:
-            t.extractall(tree, filter="data")
-        for name in ("ledger", "pins"):
-            (out / f"{name}.jsonl").write_bytes(ask(name))
-        d, c = tree / sid / "out", rec["commitment"]
-        ck = PHC.pinned_key(d / remote.KEY, key)
-        lines = remote.ledger_lines(out / "ledger.jsonl")
-        trusted, log = Ch.trusted_session_of(lines, {"root": c}, ck, remote.ledger_lines(out / "pins.jsonl"),
-                                             remote.main_lines(main), remote.session_files(d), PHC.lms_verify)
+        got["session"] = (draw.get("reserved") or {}).get("session")
+        live = _draw_live(record, out, gate, key, main, fetch)
+        c = rec["commitment"]
+        trusted, log = Ch.trusted_session_of(live["ledger"], {"root": c}, Ch.ChallengerKey.from_json(live["key"]),
+                                             live["pins"], live["main"], live["session"], CS.lms_verify)
         received = Ch.by_family(trusted, log)
         opening = Ch.LiveOpening.from_json(draw.get("opening"))
-        if not Ch.withheld_on(lines, c):
+        if not Ch.withheld_on(live["ledger"], c):
             raise ValueError(f"the run's draw session: {Ch.WITHHELD}")
         if (why := Wd.draw_epoch_reason(trusted)) is not None:
             raise ValueError(f"the draw session's signed coins: {why}")
@@ -1294,6 +1323,41 @@ def pearlplus_draw(record: Path, out: Path, gate: str | None, key: str | None, m
     except (OSError, RuntimeError, ValueError, KeyError, TypeError, AttributeError, tarfile.TarError, Ch.CoinError) as e:
         got["reason"] = f"{type(e).__name__}: {e}"[:600]
     return got
+
+
+#: The draw session `pouw-pearlplus --draw-live` holds a challenger sample to (`pearlplus_draw_live`), in the piece's dir.
+PEARLPLUS_DRAW_LIVE = "pearlplus-draw-live.json"
+
+
+def pearlplus_draw_live(record: Path, out: Path, gate: str | None, key: str | None, main: Path | None,
+                        fetch: Callable[..., bytes] | None = None) -> Path | None:
+    """The draw session of the verifier's challenger sample in its coin record `record`, as `pouw-pearlplus --draw-live`
+    reads it (`Coins.liveDrawReason`): `_draw_live`'s, the files `pearlplus_draw` checks, written to
+    ``out/PEARLPLUS_DRAW_LIVE``. None for a node's sample, which has no session; a fetch that fails raises, so the Lean
+    step is given no session and its ``--of-record`` refuses."""
+    live = _draw_live(record, out, gate, key, main, fetch)
+    if live is None:
+        return None
+    (path := out / PEARLPLUS_DRAW_LIVE).write_text(json.dumps(live) + "\n")
+    return path
+
+
+#: The salt session `pouw-pearlplus --salt-live` holds each live pass's salt to (`pearlplus_salt_live`), in the piece's dir.
+PEARLPLUS_SALT_LIVE = "pearlplus-salt-live.json"
+
+
+def pearlplus_salt_live(served: Mapping[str, Any], out: Path, gate: str | None, key: str | None, main: Path | None,
+                        fetch: Callable[..., bytes] | None = None) -> Path | None:
+    """The live salt session of Pearl+'s served run (``served``, `served_passes.py serve`'s document), as
+    `pouw-pearlplus --salt-live` reads it (`Coins.liveSaltReason`): `_salt_live`'s ``{key, key_sha512, ledger, pins,
+    main, session}``, the files `pearlplus_coins` fetches, written to ``out/PEARLPLUS_SALT_LIVE``. None for a run on an
+    in-process challenger's coins, which has no session; a fetch that fails raises, so the Lean step is given no session
+    and its ``--of-record`` refuses a live run."""
+    if not (served.get("coins") or {}).get("session"):
+        return None
+    live = _salt_live(served, out, gate, key, main, fetch)
+    (path := out / PEARLPLUS_SALT_LIVE).write_text(json.dumps(live) + "\n")
+    return path
 
 
 def custody_of(copy: Path, run: str | None, run_dir: Path | None) -> dict[str, str] | None:
@@ -2574,6 +2638,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     pp.add_argument("--coin", type=Path, help=f"the verifier's coin as `coin` published it (its {COIN_PUT})")
     pp.add_argument("--tie", type=Path, help="under PEARLPLUS_TIE, the window record W the window's passes are held to "
                                              "(retain --window-record's): --served is then the window's own epoch's")
+    dl = sub.add_parser("pearlplus-draw-live")
+    dl.add_argument("out", type=Path)
+    dl.add_argument("--record", type=Path, required=True, help="the verifier's coin record (served_passes.py verify's)")
+    dl.add_argument("--gate", required=True)
+    dl.add_argument("--key-sha512", required=True)
+    dl.add_argument("--main", type=Path, required=True)
+    sl = sub.add_parser("pearlplus-salt-live")
+    sl.add_argument("out", type=Path)
+    sl.add_argument("--served", type=Path, required=True, help="served_passes.py serve's document")
+    sl.add_argument("--gate", required=True)
+    sl.add_argument("--key-sha512", required=True)
+    sl.add_argument("--main", type=Path, required=True)
     cn = sub.add_parser("coin")
     cn.add_argument("out", type=Path)
     cn.add_argument("--record", type=Path, required=True, help="the verifier's coin record (served_passes.py verify's "
@@ -2768,6 +2844,22 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"POUW-REFUSED {e}", flush=True)
             return 2
         print(f"POUW-DEV {json.dumps(development_line(doc), sort_keys=True, default=str)}", flush=True)
+        return 0
+    if a.cmd == "pearlplus-draw-live":
+        try:
+            path = pearlplus_draw_live(a.record, a.out, a.gate, a.key_sha512, a.main)
+        except (OSError, RuntimeError, ValueError, KeyError, TypeError, tarfile.TarError) as e:
+            print(f"DRAW-LIVE refused: {type(e).__name__}: {e}"[:800], flush=True)
+            return 2
+        print(f"DRAW-LIVE {path or "none: the sample is the node's"}", flush=True)
+        return 0
+    if a.cmd == "pearlplus-salt-live":
+        try:
+            path = pearlplus_salt_live(json.loads(a.served.read_text()), a.out, a.gate, a.key_sha512, a.main)
+        except (OSError, RuntimeError, ValueError, KeyError, TypeError, tarfile.TarError) as e:
+            print(f"SALT-LIVE refused: {type(e).__name__}: {e}"[:800], flush=True)
+            return 2
+        print(f"SALT-LIVE {path or "none: the run's coins are an in-process challenger's"}", flush=True)
         return 0
     if a.cmd == "pearlplus-period":
         try:
