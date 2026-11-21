@@ -243,3 +243,101 @@ class DevBase:
         f, t = sz(), sz()
         self.ck("cuMemGetInfo_v2", C.byref(f), C.byref(t))
         return f.value, t.value
+
+
+class PipelineBase:
+    """What both runners' pipelines share: the hiding commitments' salts and trees, the forming alternatives' check, and the steps' run, on the subclass's buffers, steps and kernels."""
+
+    def salts(self, tag: str, count: int) -> int:
+        """The device address of tree `tag`'s hm96 salts, read at each launch: ``salts_<tag>``, `HM_SALT` bytes a leaf in leaf
+        order, which the caller has filled.  A tree whose salts nobody gave is refused: a caller's buffers without
+        ``salts_<tag>``, or the pipeline's own before `put_salts`.  So is a buffer whose stated length (the pipeline's own
+        size, or what a caller's ``bufs`` says) is not the `count` leaves' this launch reads, and a caller's with none
+        stated (`salts_at`)."""
+        at = self.b.get(f"salts_{tag}")
+        if not at or tag in getattr(self, "unsalted", ()):
+            raise NotImplementedError(
+                f"tree {tag!r}'s hm96 leaves read their salts from the buffer salts_{tag} ({HM_SALT} bytes a leaf, in leaf "
+                "order), and this pipeline's caller gave none.  The kernels derive no salt: the caller hands in fresh "
+                "operating-system bytes for a call's trees and a registered row's salt from its registration's salt file "
+                "(compute-accounting's goal: Pearl+ hands the leaf kernels their salts)")
+        return salts_at(at, f"salts_{tag}", count, self.salt_bytes.get(tag))
+
+    def lent(self) -> dict:
+        """This pipeline's buffers as another pipeline's ``bufs``: each address, a salts buffer with its stated length."""
+        return {**self.b, **{x: (self.b[x], n) for t, n in self.salt_bytes.items() if (x := f"salts_{t}") in self.b}}
+
+    def put_salts(self, tag: str, salts: bytes) -> None:
+        """`salts` from the host into tree `tag`'s ``salts_<tag>``, whole: a check's or a bench's bytes (a serving caller
+        writes its own buffer on the device)."""
+        if len(salts) != self.size[f"salts_{tag}"]:
+            raise ValueError(f"tree {tag!r} takes {self.size[f'salts_{tag}']} bytes of salts ({HM_SALT} a leaf), not {len(salts)}")
+        self.dev.ck("cuMemcpyHtoD_v2", u64(self.b[f"salts_{tag}"]), C.c_char_p(salts), len(salts))
+        self.unsalted.discard(tag)
+
+    def root(self, tag: str) -> int:
+        """The device address of a tree's root, its last node."""
+        return self.b[f"tree_{tag}"] + self.size[f"tree_{tag}"] - NB
+
+    def levels(self, tag: str, count: int, dom: str | None = None) -> None:
+        """A tree's levels above level 0 (leaves and pads written): s512_nodes a level at a time down to S512_SMALL nodes,
+        then s512_tree_small for the rest in one launch, under the domain id `dom` (default dom_<tag>)."""
+        d, base, di = self.dev, self.b[f"tree_{tag}"], self.keys[dom or f"dom_{tag}"]
+        width, off, level = pow2(count), 0, 0
+        while width > S512_SMALL:
+            d.launch("s512_nodes", cdiv(width // 2, 64), 64, p=(base + NB * off, base + NB * (off + width), di),
+                     i=(level, width // 2))
+            off, width, level = off + width, width // 2, level + 1
+        if width > 1:
+            d.launch("s512_tree_small", 1, 64, p=(base + NB * off, di), i=(width, level))
+
+    def tree_setup(self, tag: str, count: int, dom: str) -> list[tuple[str, object]]:
+        """A tree's pads (s512_pads): its domain's alone, so once per unit."""
+        d, b, width = self.dev, self.b, pow2(count)
+        if width == count:
+            return []
+        return [(f"pad_{tag}", lambda: d.launch("s512_pads", cdiv(width - count, 64), 64, p=(b[f"tree_{tag}"], self.keys[dom]),
+                                                i=(count, width)))]
+
+    def tile_leaves(self) -> None:
+        """The tile leaves over C~ and U into `leaves`: s512_tile_leaves, or with `segdig_t` s512_tile_segs then s512_folds
+        (the full row blocks' tiles at 32 segments, the last block's at its rows / 2)."""
+        d, b, mr, n = self.dev, self.b, self.m_real, self.n
+        if self.sha == "ref" or not b.get("segdig_t"):
+            d.launch("s512_tile_leaves", self.tiles, 32, p=(b["c"], b["u"], b["leaves"]), i=(mr, n))
+            return
+        full, last = mr // TILE * (n // TILE), mr % TILE // 2
+        d.launch("s512_tile_segs", cdiv(32 * full + n // TILE * last, RS_FAST_NT), RS_FAST_NT, p=(b["c"], b["u"], b["segdig_t"]),
+                 i=(mr, n))
+        d.launch("s512_folds", cdiv(self.tiles, RS_FOLD_NT), RS_FOLD_NT, p=(b["segdig_t"], b["leaves"]), i=(self.tiles, 32, full, last))
+
+    def form_alt_launch(self, tag: str, kernel: str) -> None:
+        """`kernel` (one of FORM_ALTS) over one side's rows into at2."""
+        b, rows = self.b, self.m if tag == "a" else self.n
+        self.dev.launch(kernel, (self.k // 128, rows // 64), 128,
+                        p=(b[f"x{tag}"], b[f"alpha_{tag}"], b[f"ep{tag}_codes"], b[f"f{tag}_codes"], b["at2"]), i=(rows, self.k))
+
+    def form_alt(self, tag: str, kernel: str) -> int:
+        """`kernel` over one side's rows into at2, and the words where form_s5's codes (at or bt) differ from it."""
+        self.form_alt_launch(tag, kernel)
+        self.dev.sync()
+        return self.diff(f"{tag}t", "at2")
+
+    def free(self) -> None:
+        for name, p in self.b.items():
+            if self.owned and name not in ("xa", "xb") or name in self.allocated:
+                self.dev.free(p)
+
+    def run_all(self) -> None:
+        for _, _, f in self.steps():
+            f()
+        self.dev.sync()
+
+
+def compare(dev: DevBase, pipe: PipelineBase, name: str, want: bytes, alias: str | None = None) -> dict:
+    got = dev.read(pipe.b[alias or name], len(want))
+    if got == want:
+        return {"ok": True, "bytes": len(want)}
+    bad = [i for i in range(0, len(want), 4) if got[i:i + 4] != want[i:i + 4]]
+    return {"ok": False, "bytes": len(want), "words_differing": len(bad),
+            "first": [{"offset": i, "got": got[i:i + 4].hex(), "want": want[i:i + 4].hex()} for i in bad[:6]]}

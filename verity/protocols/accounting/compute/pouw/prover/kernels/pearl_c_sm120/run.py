@@ -77,7 +77,7 @@ uuid_str, Nvml, cdiv, TILE, NB, RS_FAST_NT = D.uuid_str, D.Nvml, D.cdiv, D.TILE,
 RS_FOLD_NT, SEGDIG, HM_SALT, S512_SMALL, SALTED = D.RS_FOLD_NT, D.SEGDIG, D.HM_SALT, D.S512_SMALL, D.SALTED
 rs_fold_counts, pow2, depth, salts_at, stated_salts = D.rs_fold_counts, D.pow2, D.depth, D.salts_at, D.stated_salts
 PLAIN_BUFFERS, GEMM_RERUNS, ALIASES, PD_OUTPUTS = D.PLAIN_BUFFERS, D.GEMM_RERUNS, D.ALIASES, D.PD_OUTPUTS
-POISON, CALL_PHASES, TIMING_KEYS, parse_shape = D.POISON, D.CALL_PHASES, D.TIMING_KEYS, D.parse_shape
+POISON, CALL_PHASES, TIMING_KEYS, parse_shape, compare = D.POISON, D.CALL_PHASES, D.TIMING_KEYS, D.parse_shape, D.compare
 NAME_PREFIX = "NVIDIA RTX PRO 6000 Blackwell"
 SM_COUNT, MAX_DYN, CC_MAJOR, CC_MINOR, MAX_SHARED_OPTIN, SHARED_SIZE = 16, 8, 75, 76, 97, 1
 NORM_256, NORM_16 = 0x4600, 0x4400      # bf16(32 x the line norm): E's lines, and F's under v1
@@ -304,7 +304,7 @@ def is_ml(name: str) -> bool:
     return gemm_tile(name) == (BM, BM)
 
 
-class Pipeline:
+class Pipeline(D.PipelineBase):
     """One (shape, variant) instance: its buffers and its kernels in order, each a (name, phase, launch) step.  Phases:
     `epoch` (B's row tree, whose root the epoch's salt and seed_B follow), `unit` (the pads of A's tree and the tile tree,
     which depend on their domains alone), `job` (the weight side, once per weight and epoch), then the call: `commit` (A's
@@ -438,57 +438,6 @@ class Pipeline:
             "segdig_a": 64 * (k // 256) * m_real, "segdig_b": 64 * (k // 256) * n, "segdig_t": 64 * 32 * tiles,
         }
 
-    def salts(self, tag: str, count: int) -> int:
-        """The device address of tree `tag`'s hm96 salts, read at each launch: ``salts_<tag>``, `HM_SALT` bytes a leaf in leaf
-        order, which the caller has filled.  A tree whose salts nobody gave is refused: a caller's buffers without
-        ``salts_<tag>``, or the pipeline's own before `put_salts`.  So is a buffer whose stated length (the pipeline's own
-        size, or what a caller's ``bufs`` says) is not the `count` leaves' this launch reads, and a caller's with none
-        stated (`salts_at`)."""
-        at = self.b.get(f"salts_{tag}")
-        if not at or tag in getattr(self, "unsalted", ()):
-            raise NotImplementedError(
-                f"tree {tag!r}'s hm96 leaves read their salts from the buffer salts_{tag} ({HM_SALT} bytes a leaf, in leaf "
-                "order), and this pipeline's caller gave none.  The kernels derive no salt: the caller hands in fresh "
-                "operating-system bytes for a call's trees and a registered row's salt from its registration's salt file "
-                "(compute-accounting's goal: Pearl+ hands the leaf kernels their salts)")
-        return salts_at(at, f"salts_{tag}", count, self.salt_bytes.get(tag))
-
-    def lent(self) -> dict:
-        """This pipeline's buffers as another pipeline's ``bufs``: each address, a salts buffer with its stated length."""
-        return {**self.b, **{x: (self.b[x], n) for t, n in self.salt_bytes.items() if (x := f"salts_{t}") in self.b}}
-
-    def put_salts(self, tag: str, salts: bytes) -> None:
-        """`salts` from the host into tree `tag`'s ``salts_<tag>``, whole: a check's or a bench's bytes (a serving caller
-        writes its own buffer on the device)."""
-        if len(salts) != self.size[f"salts_{tag}"]:
-            raise ValueError(f"tree {tag!r} takes {self.size[f'salts_{tag}']} bytes of salts ({HM_SALT} a leaf), not {len(salts)}")
-        self.dev.ck("cuMemcpyHtoD_v2", u64(self.b[f"salts_{tag}"]), C.c_char_p(salts), len(salts))
-        self.unsalted.discard(tag)
-
-    def root(self, tag: str) -> int:
-        """The device address of a tree's root, its last node."""
-        return self.b[f"tree_{tag}"] + self.size[f"tree_{tag}"] - NB
-
-    def levels(self, tag: str, count: int, dom: str | None = None) -> None:
-        """A tree's levels above level 0 (leaves and pads written): s512_nodes a level at a time down to S512_SMALL nodes,
-        then s512_tree_small for the rest in one launch, under the domain id `dom` (default dom_<tag>)."""
-        d, base, di = self.dev, self.b[f"tree_{tag}"], self.keys[dom or f"dom_{tag}"]
-        width, off, level = pow2(count), 0, 0
-        while width > S512_SMALL:
-            d.launch("s512_nodes", cdiv(width // 2, 64), 64, p=(base + NB * off, base + NB * (off + width), di),
-                     i=(level, width // 2))
-            off, width, level = off + width, width // 2, level + 1
-        if width > 1:
-            d.launch("s512_tree_small", 1, 64, p=(base + NB * off, di), i=(width, level))
-
-    def tree_setup(self, tag: str, count: int, dom: str) -> list[tuple[str, object]]:
-        """A tree's pads (s512_pads): its domain's alone, so once per unit."""
-        d, b, width = self.dev, self.b, pow2(count)
-        if width == count:
-            return []
-        return [(f"pad_{tag}", lambda: d.launch("s512_pads", cdiv(width - count, 64), 64, p=(b[f"tree_{tag}"], self.keys[dom]),
-                                                i=(count, width)))]
-
     def row_tree(self, tag: str, x: str, count: int, dom: str) -> list[tuple[str, object]]:
         """A tree over `count` FP32 rows of x: their row digests (s512_rows, a CTA a row), the HM96 leaves over them, then
         its levels."""
@@ -509,18 +458,6 @@ class Pipeline:
             return
         d.launch("s512_row_segs", cdiv(count * segs, RS_FAST_NT), RS_FAST_NT, p=(x, scratch), i=(count, self.k))
         d.launch("s512_folds", cdiv(count, RS_FOLD_NT), RS_FOLD_NT, p=(scratch, out), i=(count, segs, count, segs))
-
-    def tile_leaves(self) -> None:
-        """The tile leaves over C~ and U into `leaves`: s512_tile_leaves, or with `segdig_t` s512_tile_segs then s512_folds
-        (the full row blocks' tiles at 32 segments, the last block's at its rows / 2)."""
-        d, b, mr, n = self.dev, self.b, self.m_real, self.n
-        if self.sha == "ref" or not b.get("segdig_t"):
-            d.launch("s512_tile_leaves", self.tiles, 32, p=(b["c"], b["u"], b["leaves"]), i=(mr, n))
-            return
-        full, last = mr // TILE * (n // TILE), mr % TILE // 2
-        d.launch("s512_tile_segs", cdiv(32 * full + n // TILE * last, RS_FAST_NT), RS_FAST_NT, p=(b["c"], b["u"], b["segdig_t"]),
-                 i=(mr, n))
-        d.launch("s512_folds", cdiv(self.tiles, RS_FOLD_NT), RS_FOLD_NT, p=(b["segdig_t"], b["leaves"]), i=(self.tiles, 32, full, last))
 
     def pd_commit(self, mode: int = 0) -> None:
         """A's commitment under pd (`FUSED`'s steps), pd_commit in mode 0: a CTA a real row, E_A's lines for all m rows (row
@@ -565,23 +502,6 @@ class Pipeline:
     def tree_leaves(self, tag: str, values: int, count: int, dom: str) -> None:
         """A tree's level 0 over `count` 64-byte values at device address `values` (the tile leaves): `hm_level0`."""
         Pipeline.hm_level0(self, tag, values, count, dom)
-
-    def form_alt_launch(self, tag: str, kernel: str) -> None:
-        """`kernel` (one of FORM_ALTS) over one side's rows into at2."""
-        b, rows = self.b, self.m if tag == "a" else self.n
-        self.dev.launch(kernel, (self.k // 128, rows // 64), 128,
-                        p=(b[f"x{tag}"], b[f"alpha_{tag}"], b[f"ep{tag}_codes"], b[f"f{tag}_codes"], b["at2"]), i=(rows, self.k))
-
-    def form_alt(self, tag: str, kernel: str) -> int:
-        """`kernel` over one side's rows into at2, and the words where form_s5's codes (at or bt) differ from it."""
-        self.form_alt_launch(tag, kernel)
-        self.dev.sync()
-        return self.diff(f"{tag}t", "at2")
-
-    def free(self) -> None:
-        for name, p in self.b.items():
-            if self.owned and name not in ("xa", "xb") or name in self.allocated:
-                self.dev.free(p)
 
     def gemm(self, name: str, a: str, b: str, M: int, N: int, grid: int | None = None, out=("c",), pa=0, pb=0, rs=0, cs=0,
              dg=0, key=0, live: int | None = None):
@@ -753,11 +673,6 @@ class Pipeline:
             out += tag("plain_job", plain_job) + tag("plain", plain) + tag("adopted_job", adopted_job) + tag("adopted", adopted)
         return out
 
-    def run_all(self) -> None:
-        for _, _, f in self.steps():
-            f()
-        self.dev.sync()
-
     def diff(self, x: str, y: str) -> int:
         return self.diff_at(self.b[x], self.b[y], self.size[x])
 
@@ -801,15 +716,6 @@ SMALL_RERUNS = GEMM_RERUNS[:2] + (("af", ("af",)), ("af_warps", ("af",)), ("stat
 #: chain's one output at a time: c2, where the replaced step's land, holds one m x n FP32 product)
 SPLITS = (("af", "af_warps", ("af",)), ("stats_a", "stats_a_warps", STATS_A),
           *(("gemm_pearlc", alt, (o,)) for alt in ("gemm_pearlc_full", "gemm_pearlc_bk64") for o in ("c", "u", "y")))
-
-
-def compare(dev: Dev, pipe: Pipeline, name: str, want: bytes, alias: str | None = None) -> dict:
-    got = dev.read(pipe.b[alias or name], len(want))
-    if got == want:
-        return {"ok": True, "bytes": len(want)}
-    bad = [i for i in range(0, len(want), 4) if got[i:i + 4] != want[i:i + 4]]
-    return {"ok": False, "bytes": len(want), "words_differing": len(bad),
-            "first": [{"offset": i, "got": got[i:i + 4].hex(), "want": want[i:i + 4].hex()} for i in bad[:6]]}
 
 
 def check_pd(dev: Dev, pipe: Pipeline, want) -> dict:
