@@ -28,10 +28,9 @@ are for the public path. Where the original names `setupH`, this one names `setu
 
 * `AcceptsZKSetupOne`, `AcceptsZKOneAny`, `AcceptsZKRetainedAny`: ZkExec's `AcceptsZKSetupH`, `AcceptsZKOne`,
   `AcceptsZKRetained` without `hh`.
-* `TablesAtZKHLive`: ZkLink's `TablesAtZKLive` under `hh = true`, at `tablesAtZKH`, with HiddenExec's
-  `TableAtHOfAccepts` hypotheses on the circuit (`HmOut.parse` accepts it, at the `--zk` tags; its unit returns the
-  outputs). `TablesAtZKHLiveI` is it without the unit returning the outputs. `TablesAtZKHLiveSt` and
-  `TablesAtZKHLiveISt` are them at the statement circuit (`HmOut.parseStmt`, a templated file's template unrolled), and
+* `TablesAtZKHLiveI`: ZkLink's `TablesAtZKLive` under `hh = true`, at `tablesAtZKH`, with HiddenExec's
+  `TableAtHOfAccepts` hypothesis on the circuit (`HmOut.parse` accepts it, at the `--zk` tags). `TablesAtZKHLiveSt`
+  (where the unit returns the outputs) and `TablesAtZKHLiveISt` are it at the statement circuit (`HmOut.parseStmt`, a templated file's template unrolled), and
   `TablesAtZKHLiveU` is the conclusion with no circuit hypothesis, which the session's committed circuit discharges.
 * `AcceptsZKAcceptedH`: lp-zkbind's `acceptsZK_accepted` (the placement every `--zk` table's binding is read at) for
   one hidden-output table, with HiddenExec's `AcceptedH` for `Placed.Accepted`.
@@ -110,7 +109,8 @@ def ZkSchedOK : Prop :=
 
 variable {n : ℕ} {mPts : ℕ} {Reg : Type}
 
-/-- **`TablesAtZKHLive` wherever the outputs are returned**: its conclusion on every circuit `HmOut.parse` accepts. -/
+/-- **ZkLink's `TablesAtZKLive` under hidden outputs, wherever the outputs are returned**: its conclusion on every
+circuit `HmOut.parse` accepts. -/
 def TablesAtZKHLiveI : Prop :=
   ∀ (I : Inputs) (_ht : I.tags.typed = false) {c : Flock.Circuit}
     (_hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
@@ -127,8 +127,9 @@ def TablesAtZKHLiveI : Prop :=
             ExtraRealizes (Setup.ofCircuit st) y.table.S points
               (Model.extraClaims y.table.S y.table.ptLocal mPts (ptsOf mPts points))
 
-/-- **`TablesAtZKHLive` at the statement circuit**: its conclusion on every circuit `HmOut.parseStmt` reads at the `--zk`
-tags (a templated file's template unrolled, `HmOut.unrolled`) whose unit returns the outputs. -/
+/-- **`TablesAtZKHLiveI` at the statement circuit, where the unit returns the outputs**: its conclusion on every
+circuit `HmOut.parseStmt` reads at the `--zk` tags (a templated file's template unrolled, `HmOut.unrolled`) whose unit
+returns the outputs. -/
 def TablesAtZKHLiveSt : Prop :=
   ∀ (I : Inputs) (_ht : I.tags.typed = false) {c : Flock.Circuit}
     (_hc : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c) (_ho : c.outNet = c.unitNet)

@@ -29,12 +29,9 @@ every sample of the live subset sampling design (`hDraw`); the record and its sa
 verity-verify-proof's own arithmetic:
 
 * `sampleOkZKHJ_of_sizeG`: from `SampleFileZK` under any sampling design, at a sample whose file decodes only to `kd` units, with `nTab I`
-  dividing `kd`, `SampleOkZKHJ` holds at `mPtsOf g (kd / nTab I)` link points, at any `g` every table's session has;
-  `sampleOkZKHJ_of_size` is it at the circuit file's `HmOut.parse`, `sampleOkZKHJ_of_fileG` at the subset sampling design.
-* `sampleOkZKHJ_of_size`: from `SampleFileZK` under any sampling design, at a sample whose file decodes only to `kd` units, with `nTab I`
-  dividing `kd`, `SampleOkZKHJ` holds at `mPtsOf c.g (kd / nTab I)` link points, `c` the circuit file's `HmOut.parse`
-  (setupHidden's `m_pts`, `setupHidden_mPts_sampled` and `setupHidden_mPts_of_proved`).
-* `sampleOkZKHJ_of_file`: `sampleOkZKJ_of_file` at setupHidden, `sampleOkZKHJ_of_size` at `SampleFileZK dj (subset kd) pop`,
+  dividing `kd`, `SampleOkZKHJ` holds at `mPtsOf g (kd / nTab I)` link points, at any `g` every table's session has
+  (setupHidden's `m_pts`, `setupHidden_mPts_sampled`); `sampleOkZKHJ_of_fileG` is it at the subset sampling design.
+* `sampleOkZKHJ_of_file`: `sampleOkZKJ_of_file` at setupHidden, `sampleOkZKHJ_of_sizeG` at `SampleFileZK dj (subset kd) pop`,
   at every sample `S`; `sampleOkZKHJ_of_fileSt` at the statement circuit (`HmOut.parseStmt`).
 * `zk_session_soundHJ_custody`: `zk_session_soundHJ` with `RecordCustodyZKJ` (`live-verifier`) for `hRec` and `hDraw`,
   at `mPtsOf c.g (kd / nTab I)` link points and `nTab I ∣ kd`.

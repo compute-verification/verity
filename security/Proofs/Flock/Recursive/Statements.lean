@@ -208,7 +208,7 @@ def zkServerCommits {nh : ℕ} (msgs : (i : Fin nh) → (Fin i → ByteArray) �
     (i : Fin nh) : ByteArray :=
   ZkView.leafH (zkServerPairs msgs y i)
 
-/-- Obligation (the outer session is zero knowledge, `RecursiveZK`'s `_hOuter`): at every auditor's tape `a`,
+/-- Obligation (the outer session is zero knowledge): at every auditor's tape `a`,
 developer's randomness `p` and ZK server salts `y`, the auditor's view of the outer session, `view a h p y` at the
 ZK server's commitments `h` to the messages `msgs a p` (`zkServerLeaf`), and the simulator `sim a h`, which reads the
 auditor's tape and the commitments only, give every event probabilities within `ε_o`, over the session's randomness and

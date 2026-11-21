@@ -41,8 +41,6 @@ at the whole sample has the whole sample's count, and none exists at the tables'
 * `zk_session_soundHJ_nonvacuous`, `zk_session_soundHJ_custody_nonvacuous`,
   `zk_session_soundHJ_custody_json_nonvacuous`, `zk_session_composedHJ_nonvacuous`, `zk_session_viewHJ_nonvacuous`: each
   statement's `y₀` and sample hypotheses at one accepted session, each proof applying its statement to the `y₀` it builds.
-* `sampleSetupZKH_whole_mPts`, `sampleSetupZKH_whole_empty_16_2_1`, `y0_binderH_16_2_1`: the whole-draw binder's count, its
-  emptiness at 16 sampled proof blocks, two tables and `g = 1`, and the statements' `y₀` at the same sample.
 
 What none of this covers: that a session `verify --zk` accepts exists at a sample of the file, `RecordsLiveZKJ`, `hpub`,
 `hpt`, `hkd`, A3, the count curve's parameters, `TableCRZ`, `zk_session_composedHJ`'s and `zk_session_viewHJ`'s `hdm`

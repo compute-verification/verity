@@ -25,25 +25,12 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
-# One Flock session with a registrant's opening per unit (trusted)
+# One Flock session with registered reads, as a value (trusted)
 
-`RowsSession` is `Flock.Guarantees.EndToEndRegisteredRows`' setting as a value, its binders in its order, with its one
-registrant's opening `rd` replaced by one per unit (`rdU u`); its circuit `c` is the one its descriptor `D` unrolls
-to. `EndToEndRegisteredRows` reads the input rows only where the verifier owns every registered read of `rd` at the
-outcome's sample (`OwnReadsHJ` is one condition over all of them), so at an `rd` covering every unit's reads it links no input row on a sample that leaves one out. With `rdU u` the
-opening of unit `u`'s reads alone (`Registered.ReadsX.restrict`, in `Proofs.Flock.Recursive.ZkReg.Off`), a sampled
-proof block's input rows are linked wherever its own reads are owned, whatever else is sampled; the cost is a union bound over
-the `n` units (`Flock.SoundAtBridge.RowsSession.prob_badU_le`), `n` times `EndToEndRegisteredRows`' bound.
-
-The session's game, prover, value layer and events are those `EndToEndRegisteredRows` reads, at `rdU u` for unit
-`u`:
-
-* `G`, `τ`: the live audit and its prover; `Out`: its outcome (the registration, the sample and the transcript);
-* `Xv`: the plurality value layer the rows extraction finds at the registration (`XplurZC`);
-* `IncorrectAt u`: sampled proof block `u` is wrong on the registration (`incorrectRegZ`);
-* `RowsAt o u`: unit `u`'s rows are right at `Xv` (`RowsRightZC`) at its own owned registered reads;
-* `BadU o`: verity-verify-proof accepts and some sampled proof block is wrong or its rows are off;
-* `CR`: `EndToEndRegisteredRows`' named assumptions at every unit's opening; `bound`: its bound.
+`RowsSession` is a `verity-verify-proof verify --zk --registered F` session's setting as a value: the roots `own`, the
+statement `I` with its coin, and the live prover `τ`, with one registrant's opening per unit (`rdU u`); its circuit `c`
+is the one its descriptor `D` unrolls to (`RowsSession.hc`). PoUW's live credit (`Proofs.Pouw.LiveCredit`) and its lanes
+(`Proofs.Pouw.TS.Session.Lanes.Layer`) read its circuit and key program.
 -/
 
 @[expose] public section
@@ -57,9 +44,8 @@ open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 open Classical
 
-/-- **One Flock session in `EndToEndRegisteredRows`' setting, with a registrant's opening per unit**: its binders,
-in its order (the roots `own`, then the statement `I` with its coin, then the live prover `τ`), with its one `rd`
-replaced by `rdU u` for each unit `u`. -/
+/-- **One Flock session with registered reads, with a registrant's opening per unit**: the roots `own`, then the
+statement `I` with its coin, then the live prover `τ`, with an opening `rdU u` for each unit `u`. -/
 structure RowsSession where
   n : ℕ
   Reg : Type

@@ -24,14 +24,10 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.PublicJ
 import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched
 
 /-!
-# Proof of Flock's end-to-end guarantee under hidden outputs
+# Flock's end-to-end statements under hidden outputs: the per-test form and the reference setup
 
-`Flock.SecurityProofs.EndToEndHidden : Flock.Guarantees.EndToEndHidden` is `zk_session_soundHJ_custody_reg` with its
-first and last terms in closed form, as `EndToEnd` is `zk_session_soundJ_custody_reg`'s (`Spot.Sampling.SamplingDesign.subset_miss`, and
-`linkBoundZC` at A2). `Flock.SecurityProofs.EndToEndHiddenSampled : Flock.Guarantees.EndToEndHiddenSampled` is
-`zk_session_soundHJ_custody_sampled_reg` with its last term in closed form. Each reads the circuit the descriptor
-unrolls to, which `HmOut.parse` reads from the file (`Flock.Desc.parse_flat`). `EndToEndHiddenFlat` and
-`EndToEndHiddenDrawnFlat` are the two at the flat descriptor `Desc.single c` (`Flock.Desc.parse_single`).
+`EndToEndHiddenPerTestFlat_of`: `EndToEndHiddenPerTest` gives its flat form, at the flat descriptor `Desc.single c`
+(`Flock.Desc.parse_single`).
 
 `EndToEndHidden_refSetup` shows the hidden-output statements' reference setup `y₀` (theirs and `EndToEndRegistered`'s)
 is no extra condition: every sample verity-verify-proof accepts gives one, at any number of tables.
@@ -56,7 +52,7 @@ tables.** `EndToEnd_refSetup` under hidden outputs: on untyped inputs under `Tag
 `HmOut.parse` accepts as `c` (`hU`, `hscope`: its unit returns the outputs), at the record's sample file
 (`SampleFileZK dj (subset kd) pop`), the session's tables dividing `kd`, at a transcript verity-verify-proof `--zk` accepts whose
 record's sample is `dj S`, table 0 has a `SampleSetupZHJ` at `mPtsOf c.g (kd / nTab I)` link points, at its part of `S` and
-its sample: the `y₀` of `EndToEndHidden`, `EndToEndHiddenSampled`, `EndToEndRegistered` and `EndToEndRegisteredSampled`, at
+its sample: the `y₀` of `EndToEndHidden`, `EndToEndRegistered` and `EndToEndRegisteredSampled`, at
 `S₀ = partS I (dj S) S 0` and `d₀ = drawJ I (dj S) 0`. -/
 theorem EndToEndHidden_refSetup {n : ℕ} (I : Inputs) (ht : I.tags.typed = false) (hT : TagsOkZHJ I)
     {c : Flock.Circuit} (hc : Flock.HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)

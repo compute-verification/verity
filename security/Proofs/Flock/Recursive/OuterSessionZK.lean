@@ -19,27 +19,13 @@ import Proofs.Flock.Recursive.OuterZK
 import Proofs.Flock.Soundness.CROnly.Hiding
 
 /-!
-# Recursion: the committed-coin statements' `_hOuter` at V*'s sessions
+# Recursion: the committed-coin case's commitments
 
-`RecursiveZK`, `RecursiveCircuitPrivate`, `RecursiveCircuitIndist` and `RecursiveCircuitPrivateLeaves` take the outer
-session's zero knowledge as an obligation on the view and simulator they range over (`Flock.Guarantees.OuterViewZK`,
-`Flock.Guarantees.OuterSessionsZK`). Here it is at V*'s outer `--zk` sessions as `Proofs.Flock.Recursive.Sessions`
-models them, run by the honest prover's code (`proverExe`, whatever a stopped run sends), with the commitments the
-ZK server sends when every message is fixed by the auditor's tape before the first commitment (the committed-coin case).
+When every message is fixed by the auditor's tape before the first commitment (the committed-coin case), the ZK
+server's commitments are each message's own:
 
 * `committed`, `zkServerCommits_committed`: messages that read none of the commit strings before them, at which the
   ZK server's commitments are `zkServerLeaf` of each message under its own salt.
-* `recursiveZK_of_sessionZK`: `OuterSessionsZK` at `Sessions.view` and `Sessions.sim`, with `ε_o` V*'s sessions' error
-  at the pinned key's hiding gap (`errAt`), from Flock's zero knowledge of one `--zk` table at every coin vector
-  (`ZkEveryCoin.coin_close_le`, through `OuterZK.vstar_outer_zk`), on V*'s staging, each a named obligation:
-  `SessionsPublic` and `SessionsHonest` at `committed msgs`, and `SessionsCoined`. V*'s sizes are `Sessions`' fields
-  `hz`, `hR`, `hS`. `outerViewZK_of_sessionZK` is `RecursiveZK`'s `OuterViewZK` at one honest witness and registration.
-
-What this does not cover: that the deployed outer sessions send `Sessions.view`, the honest prover's view at coins the
-auditor's tape fixes before each session (`Sessions.coin`). `Loop` gives `OuterSessionsZK` at V*'s statements run by the
-session loop's switched prover (`outerSessionsZK_loop`). Flock's session-loop bound (`SessionLoopZKAt`) is about the
-deployed loop against every `V*`, but it bounds the real view by twice the simulated one plus its error, so it doesn't
-give `OuterViewZK`'s additive form.
 -/
 
 @[expose] public section

@@ -130,7 +130,7 @@ noncomputable def link : ℝ≥0∞ :=
 end SamplingBlock
 
 /-- What a period's run records of sampling block `idx`: whether verity-verify-proof accepted it, how many of its units are
-incorrect (`SamplingBlock.incorrectSet`), and whether a sampled proof block is one of them. -/
+incorrect, and whether a sampled proof block is one of them. -/
 structure SamplingBlockRec where
   idx : ℕ
   accepted : Prop

@@ -37,9 +37,7 @@ as a second conjunct, and `EndToEndRegisteredSampled` is the same statement with
 
 Each is stated over the circuit's descriptor `D` (`Flock.Desc`), which `Desc.parseStmt` reads from the circuit file, a
 flat file or a templated statement, at the circuit it unrolls to (`HmOut.parseStmt`'s, `Desc.parseStmt_stmt`), through
-`ZkHidden`'s statement-circuit rows (`rsZHJSt`, `layShHJSt`, `rsShHJSt`), whose fit `HiddenExec.rowsFit_of_stmt` gives;
-`EndToEndRegisteredFlat`, `EndToEndRegisteredPerTestFlat` and `EndToEndRegisteredSampledFlat` are the same statements at
-a flat circuit file, over the circuit `HmOut.parse` reads, through its rows (`rsZHJS`, `layShHJ`, `rsShHJS`).
+`ZkHidden`'s statement-circuit rows (`rsZHJSt`, `layShHJSt`, `rsShHJSt`), whose fit `HiddenExec.rowsFit_of_stmt` gives.
 
 Flock's definitions are still in its proofs package, so this module imports
 `Proofs.Flock.Soundness.Discharge.ZkReg.PublicHJ`, and `Definitions.lean`, which the `security` package builds without

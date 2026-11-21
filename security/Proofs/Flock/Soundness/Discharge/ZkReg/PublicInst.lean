@@ -39,14 +39,11 @@ set_option Elab.async false
 /-!
 # One hidden-output `--zk --registered` sampled session of `J` tables, at the template instance's program
 
-`checked_of_acceptsHJ`, `zk_session_soundHJR_custody_reg` and `zk_session_soundHJR_custody_sampled_reg` at `instProg c n`
-in place of `Placed.keyProg c hU n` (`ZkHidden.SoundInst`), with the circuit conditions `hrf`, `hpr` and `hw` in place
-of `scopeOkH`.
+`checked_of_acceptsHJ` at `instProg c n` in place of `Placed.keyProg c hU n` (`ZkHidden.SoundInst`), with the circuit
+conditions `hrf`, `hpr` and `hw` in place of `scopeOkH`.
 
 * `checked_of_acceptsHJI`: the registered reads are checked at every accepted outcome. The registered leaf at a row of
   `instLayoutH` is the public file's, as at `keyLayoutH`, so `checked_of_acceptsHJ`'s argument reads unchanged.
-* `zk_session_soundHJR_custody_regI`, `zk_session_soundHJR_custody_sampled_regI`: the session's bound with "wrong"
-  `incorrectRegZ` at `rsZHJI`, and the registered check at every accepted outcome.
 -/
 
 namespace FlockSoundness.Discharge.ZkReg

@@ -22,18 +22,14 @@ import Proofs.Spot.Sampling.SamplingDesign
 import Proofs.Flock.Soundness.Game
 
 /-!
-# Proof of the integrity audit over a period, per sampling block and pooled
+# A sampling block's sample misses its incorrect proof blocks
 
-* `Flock.SecurityProofs.IntegrityMonitoringPeriod`: `monitoringPeriod_union` over the sampling blocks, each sampling block's bound
-  `Flock.SecurityProofs.EndToEndHidden` at the strategy that plays it (`SamplingBlock.accepted_incorrect_le`), with its
-  knowledge term at the worst registration.
-* `Flock.SecurityProofs.IntegrityPooled`: a run in which every sampling block is accepted and the incorrect proof blocks total at
-  least `M` either has a sampling block accepted with a sampled proof block incorrect, at most `Σ_w (ε_ks,w + ε_bind,w)` by
-  `monitoringPeriod_union` over `Flock.SecurityProofs.EndToEndHiddenSampled` (`SamplingBlock.accepted_drawnIncorrect_le`), or every
-  sampling block's sample misses its incorrect proof blocks with at least `M` of them in all, at most `(1 − q)^M` by
-  `monitoringPeriod_horizon`: sampling block `w`'s sample misses its `|W|` incorrect proof blocks with probability at most
-  `C(n − |W|, kd)/C(n, kd) ≤ (1 − kd/n)^{|W|}` under A3 (`SamplingBlock.sampleMiss_le`; `SamplingDesign.execOS_subset_missProb_le`,
-  `SamplingDesign.choose_div_le_one_sub_pow`). At `M = ⌈ln(1/δ)/q⌉`, `(1 − q)^M ≤ e^{−qM} ≤ δ`.
+* `SamplingBlock.prob_sampleMiss`: the probability that the sampling block's live sample misses a set `W` of its proof
+  blocks, as an average over the sample's coins.
+* `SamplingBlock.sampleMiss_le`: that is at most `C(n − |W|, kd)/C(n, kd) ≤ (1 − kd/n)^{|W|}` under A3
+  (`SamplingDesign.execOS_subset_missProb_le`, `SamplingDesign.choose_div_le_one_sub_pow`).
+* `SamplingBlock.one_sub_le`: a sample covering a fraction `q` of the units has `1 − kd/n ≤ 1 − q`, and at
+  `M = ⌈ln(1/δ)/q⌉`, `(1 − q)^M ≤ e^{−qM} ≤ δ`.
 -/
 
 @[expose] public section

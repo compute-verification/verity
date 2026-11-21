@@ -24,12 +24,11 @@ import Mathlib.Tactic.NormNum.RealSqrt
 # Flock's one-stage audit, end to end, under hidden outputs (trusted)
 
 `EndToEndHidden` is `EndToEnd`'s statement under hidden outputs, the configuration the prover's `--zk` runs (the default
-`--statement`, whose tables `Stmt.setupHidden` sets up), and `EndToEndHiddenSampled` is `EndToEndSampled`'s, the same
-statement at the sampled proof blocks. Both read the circuit through its descriptor (`Flock.Desc`): the circuit file is read as
-a descriptor `D` and the units are `D.unroll`'s. `EndToEndHiddenFlat` and `EndToEndHiddenDrawnFlat` are the two at a
-flat circuit file, `D = Desc.single c`, stated over the circuit `c` that `HmOut.parse` reads. Their proofs are
-`Flock.SecurityProofs.EndToEndHidden : Flock.Guarantees.EndToEndHidden`,
-`Flock.SecurityProofs.EndToEndHiddenSampled : Flock.Guarantees.EndToEndHiddenSampled` and the two `Flat` corollaries.
+`--statement`, whose tables `Stmt.setupHidden` sets up). It reads the circuit through its descriptor (`Flock.Desc`): the
+circuit file is read as a descriptor `D` and the units are `D.unroll`'s. `EndToEndHiddenFlat` is it at a flat circuit
+file, `D = Desc.single c`, stated over the circuit `c` that `HmOut.parse` reads. `EndToEndHiddenPerTest` and
+`EndToEndHiddenPerTestFlat` read A3 per test. No guarantee lists these statements; the per-test forms read the first
+two.
 
 Flock's definitions are still in its proofs package, so this module imports
 `Proofs.Flock.Soundness.Discharge.ZkHidden.PublicJ`, and `Definitions.lean`, which the `security` package builds without

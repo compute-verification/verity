@@ -21,19 +21,15 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
 
 /-!
-# The challenger's sample at every sample of the live sampling design, at hidden-output `--zk`
+# setupHidden's link points at a sample
 
-`zk_session_soundH` takes `SampleOkZKH I dj mPts` at each of `SamplingDesign.execOS`'s samples: the sample file `dj S` proves `S`'s units,
-and setupHidden, under the `--zk` tags, sets up at `mPts` link points. As at public outputs (`ZkLink/SampleOk.lean`), the
-first half is custody (`SampleFileZK`) and the second is verity-verify-proof's own arithmetic.
+setupHidden, under the `--zk` tags, sets up at `mPtsOf` of the circuit's `g` and the units the sample proves, as at
+public outputs (`ZkLink/SampleOk.lean`):
 
-* `setupHidden_mPts_sampled`, `setupHidden_mPts_of_proved`: setupHidden's `m_pts` at a sample is `mPtsOf` of the circuit's
-  `g` and the units the sample proves, as setupH's (`Exec.setupH_mPts_sampled`, `Exec.setupH_mPts_of_proved`), from
-  `Hidden.setupHidden_spec`. `setupHidden_mPts_of_provedG` reads `g` off the session, and
-  `setupHidden_mPts_of_provedSt` off the statement circuit (`HmOut.parseStmt`, a templated file's template unrolled).
-* `sampleOkZKH_of_exec`: from `SampleFileZK` at the live sampling design's own stratified sampling design, `SampleOkZKH` at every sample of
-  `SamplingDesign.execOS`, at `mPtsOf c.g (∑ s, ks s)`: `ZkLink.sampleOkZK_of_exec`'s proof at setupHidden. `sampleOkZKH_of_execG` is
-  it at any `g` every session has, and `sampleOkZKH_of_execSt` at the statement circuit's.
+* `setupHidden_mPts_sampled`: setupHidden's `m_pts` at a sample is `mPtsOf` of the circuit's `g` and the units the sample
+  proves, as setupH's (`Exec.setupH_mPts_sampled`), from `Hidden.setupHidden_spec`.
+* `setupHidden_mPts_of_provedG` reads `g` off the session, and `setupHidden_mPts_of_provedSt` off the statement circuit
+  (`HmOut.parseStmt`, a templated file's template unrolled), at a sample file proving `N₀` units.
 -/
 
 @[expose] public section
@@ -58,14 +54,15 @@ theorem setupHidden_mPts_sampled {d : Json}
   rw [s.mPts, s.nbl, s.blocksReal, s.n, hn]
   rfl
 
-/-- `setupHidden_mPts_of_proved` at the session's own `g`. -/
+/-- `setupHidden_mPts_sampled` at the session's own `g`, at a sample file proving `N₀` units. -/
 theorem setupHidden_mPts_of_provedG {g : ℕ} {d : Json} {N₀ : ℕ} (hg : st.c.g = g)
     (hD : ∀ D, Draw.UnitSample.ofJson d = .ok D → D.proved.size = N₀)
     (h : Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st) : st.mPts = mPtsOf g N₀ := by
   obtain ⟨ud, hud, hm⟩ := setupHidden_mPts_sampled h
   rw [hm, hg, hD ud hud]
 
-/-- `setupHidden_mPts_of_proved` at the statement circuit (`HmOut.parseStmt`), on untyped tags. -/
+/-- `setupHidden_mPts_sampled` at the statement circuit (`HmOut.parseStmt`), on untyped tags, at a sample file proving
+`N₀` units. -/
 theorem setupHidden_mPts_of_provedSt {c : Circuit} {d : Json} {N₀ : ℕ} (ht : tags.typed = false)
     (hc : HmOut.parseStmt tags cf tables = .ok c) (hD : ∀ D, Draw.UnitSample.ofJson d = .ok D → D.proved.size = N₀)
     (h : Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st) : st.mPts = mPtsOf c.g N₀ :=

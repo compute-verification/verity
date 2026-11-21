@@ -29,10 +29,9 @@ set_option Elab.async false
 /-!
 # The custody forms at the session's statement circuit
 
-`zk_session_soundH_custody`, `zk_session_soundHJ_custody` and `zk_session_soundHJ_custody_json` at `HmOut.parseStmt`
-(`hcS`, a templated file's committed circuit unrolled), with the rows' fit `hv1` given: `zk_session_soundHSt` and
-`zk_session_soundHJSt` with the record's custody in place of `hRec` and `hDraw`, the samples from `sampleOkZKH_of_execSt`
-and `sampleOkZKHJ_of_fileSt`.
+`zk_session_soundHJ_custody` and `zk_session_soundHJ_custody_json` at `HmOut.parseStmt` (`hcS`, a templated file's
+committed circuit unrolled), with the rows' fit `hv1` given: `zk_session_soundHJSt` with the record's custody in place of
+`hRec` and `hDraw`, the samples from `sampleOkZKHJ_of_fileSt`.
 -/
 
 namespace FlockSoundness.Discharge.ZkHidden

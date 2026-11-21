@@ -23,8 +23,8 @@ import Proofs.Flock.Soundness.Game
 /-!
 # `zk_session_soundHJ_custody`, "wrong" measured against the public file
 
-`Composed/PublicJ.lean` under hidden outputs. `zk_session_soundHJ_custody_reg` is `zk_session_soundHJ_custody` with its
-event's "wrong" `incorrectRegZ` at the prover's registration in place of `Partition.wrong`, at the same bound: a unit counts
+`Composed/PublicJ.lean` under hidden outputs, with the event's "wrong" `incorrectRegZ` at the prover's registration in
+place of `Partition.wrong`: a unit counts
 as wrong unless it is correct in the committed transcript and one opening per commit string makes the key program's
 evaluation on the committed inputs, on every committed wire the unit reads or computes, the bit of an opening of that
 wire's registered commit string. Under hidden outputs every row, input or output, is registered under the public file's
@@ -34,10 +34,9 @@ transcript.
 
 * `rsZHJ_incorrectRegZ`: the registered commit strings are the public file's (`keyLayoutH`'s population is `fun _ => pub`),
   so `incorrectRegZ` is one set at every registration.
-* `zk_session_soundHJ_custody_sampled_reg`: `Composed.zk_session_soundJ_custody_sampled_reg` under hidden outputs, the
-  sampled proof blocks' form: `Pr[verity-verify-proof accepts ∧ some drawn unit in incorrectRegZ] ≤ ε_ks + ε_bind`, without A3;
-  `zk_session_soundHJ_custody_sampled_at` is the same at the value layer of any values, with the binding errors against
-  them for `ε_bind`.
+* `zk_session_soundHJ_custody_sampled_at`: `Composed.zk_session_soundJ_custody_sampled_reg` under hidden outputs, the
+  sampled proof blocks' form at the value layer of any values: `Pr[verity-verify-proof accepts ∧ some drawn unit in
+  incorrectRegZ] ≤ ε_ks + ε_bind`, without A3, with the binding errors against those values for `ε_bind`.
 -/
 
 @[expose] public section
@@ -66,7 +65,7 @@ theorem rsZHJ_incorrectRegZ (dj : Finset (Fin n) → Lean.Json) {I : Inputs} {mP
   intro p
   rfl
 
-/-- **`zk_session_soundHJ_custody_sampled_reg` at the value layer of any values `Xv`**: "wrong" is `incorrectRegZ` at
+/-- **`zk_session_soundHJ_custody` at the sampled proof blocks, at the value layer of any values `Xv`**: "wrong" is `incorrectRegZ` at
 `XlayerZC (Xv R τ)`, and the binding error is the binding errors' against `Xv` (`errBoundZC`), with no hypothesis on the
 link finders. -/
 theorem zk_session_soundHJ_custody_sampled_at

@@ -23,12 +23,10 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.Count
 set_option Elab.async false
 
 /-!
-# The rows at the hidden-output `--zk` tables, with or without shared rows
+# The hidden-output shadow sites, with or without shared rows
 
-`ZkHidden.rsZH` takes `pub.tables = none`, as `ZkBind.rsZAt` does (`Bind.lean`), so here are `rsShH`, `rsZH`, their
-`Computes` and `zk_flock_countC_execOS_atH` without it: `sitesShH_bcSiteS` is `sitesShH_bcSite` from
-`HiddenExec.tableH_bcSiteS`. `layShH` is the shadow layout `layZH` moves to the `--zk` tables, where the registered reads
-(`Registered.ReadsX`) are read.
+`sitesShH_bcSiteS`: the sites of the hidden-output shadow table (`ZkHidden.sitesShH`) without `pub.tables = none`, from
+`HiddenExec.tableH_bcSiteS`.
 -/
 
 namespace FlockSoundness.Discharge.ZkReg

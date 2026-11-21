@@ -30,7 +30,7 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
 the verifier's own at the outcome's sample (`OwnReads`) are `Checked` at the outcome's registration, through `regPaths`.
 The one table's statement is setupH's at the record's sample `d`, over `HmRow.drawn c pub d` (`setupH_sampled`);
 `checkRegistered` accepting it is `Registered.check` accepting it (`checkRegistered_ok`), at a circuit naming each port
-once (`dupName_of_checkRegistered`, `names_once_of_dupName`), which opens each sampled
+once (`Registered.namesOnce`), which opens each sampled
 instance's row of each of `own`'s ports at the position `own` gives for its unit, through the path the header gives
 (`check_tables`, `checkPort_at`: `FlockProofs.Registered.check_ok` keeping the positions and paths). The sampled
 instance at `u`'s rank holds the population's row of `u` (`Hidden.sampled_digestW`), whose leaf is the layout's

@@ -42,8 +42,7 @@ import Proofs.Flock.Soundness.Discharge.ZkEveryCoin.Headline
 /-!
 # Recursion: the committed-coin statements' `_hOuter` at V*'s statements run by the session loop
 
-`OuterSessionZK` gives `Flock.Guarantees.OuterSessionsZK` at V*'s sessions as `Sessions` models them. Here V*'s
-statements are run by the session loop: at the public context, statement `j` of `m` is one `--zk` session at the loop's
+V*'s statements run by the session loop: at the public context, statement `j` of `m` is one `--zk` session at the loop's
 own frames, link and `Finish` (`loopRef`, `SessionLoopZKDeployed`'s session), run by its switched prover at the workers'
 values `vs`, one after another, each on its own tape.
 
@@ -55,14 +54,10 @@ values `vs`, one after another, each on its own tape.
   and the ZK server's commitments.
 * `LoopSessions.simAt_pubStmts`: the simulator reads only V*'s public statements (`LoopSessions.pubStmts`), never a
   witness.
-* `outerSessionsZK_of`: `OuterSessionsZK` at those statements, with `ε_o` the supremum over contexts of their errors and
-  the composed prover's fork term, on V*'s staging (`LoopSessions.Public`, `LoopSessions.Honest`).
 * `loop_zkmalR`: the loop's session is `ZKmalR` at its switched prover, `Flock.zk_deployZk_sw_stops`'s bound under
   the deployed tables' side, which takes `SessionsCoined`'s role: the switched round encoding causal at `Loop.SwOk`'s
   coins (`SwCausalOn`), where the loop's stops compute (`LeanRelease.stopsOk_swOk`).
-* `outerSessionsZK_loop`: `outerSessionsZK_of` at `loop_zkmalR`.
-* `outerViewZK_loop`: `RecursiveZK`'s `_hOuter` (`OuterViewZK`) at one worker's statements, the simulator their public
-  statements'.
+* `outerViewZK_loop`: `OuterViewZK` at one worker's statements, the simulator their public statements'.
 -/
 
 @[expose] public section
@@ -418,7 +413,7 @@ theorem loop_zkmalR (vs : Claims.ZKServer.Loop.finS.SwVals) (t : ℕ) (ht : 0 < 
   rw [ENNReal.toReal_ofReal (CROnly.hidingGap_nonneg ZkView.My ZkView.saltHash)] at h
   exact h.2
 
-/-- **`RecursiveZK`'s `_hOuter` at V*'s statements run by the session loop** (`OuterViewZK`), at one worker whose
+/-- **The outer session's zero knowledge at V*'s statements run by the session loop** (`OuterViewZK`), at one worker whose
 messages `msgs` are fixed before the first commitment (the committed-coin case): the view is V*'s statements at the tape
 and the ZK server's commitments (`LoopSessions.atWorker`), each run in turn by the loop's switched prover at the workers'
 values `vs`, against `V*` at its tape `θ` of the tape and the commitments; the simulator is their public statements'

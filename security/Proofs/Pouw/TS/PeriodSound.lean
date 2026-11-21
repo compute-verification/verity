@@ -25,8 +25,7 @@ public import Proofs.Pouw.MonitoringPeriod.Honest
 `ResourceAccounting.SecurityProofs.Bridge.CheckProofSystemSound` is a union bound over a window's sessions: where the check
 accepts a window and some sampled proof block `u` fails its relation, the session `sessOf x w u` that proves `u` is accepted and
 its statement fails at its opening, so the event lies in the union of the window's `n_π` unsound sessions, each at most
-`δ`. `serviceSound_of_sessions` composes it with `ResourceAccounting.SecurityProofs.TS.SessionSoundAt`: a window's sessions
-that are Flock sessions meeting that guarantee's named premises give `ServiceSound` at `n_π · (δ_s + δ)`.
+`δ`.
 
 The witnesses' statements name no instance. Each proof takes H1's honest live-salt period
 (`Properties.Pouw.MonitoringPeriod.SecurityProofs.HonestH1`), one window and one session: there the check accepts every window on

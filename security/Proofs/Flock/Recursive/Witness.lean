@@ -35,8 +35,7 @@ state. Each check passing is the model's predicate holding, at `toExec I`, the m
   object and program;
 * `shapeOf_eq`, `outerStatementsAt_ok`: the printed inner shape is `innerAt`, and `outer_parts` is `outerStatementsAt`;
 * `acceptsDescription_ok`: `Recursion.AcceptsDescription`, at each of the verifier's own registered reads;
-* `hr_inv_exp`, `inv_exp_lt_one`: `PublicAudit`'s rate premise `_hr` at `k = 2^23` and `ρ = 1/e < 1`, for every `zr`
-  (`_hr := hr_inv_exp zr`).
+* `inv_exp_lt_one`: `ρ = 1/e < 1`.
 
 On `test_lean_witness.py`'s run the checks pass with V*'s sessions verified as `verity/flock-circuit`, the
 verifier's `--zk` identity with the OS's masks in it, which the gate's sessions were proved with. So

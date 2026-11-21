@@ -518,7 +518,7 @@ theorem carry_le (I : Finset ℕ)
   rw [hsplit, ENNReal.ofReal_sum_of_nonneg hnn]
   exact Finset.sum_le_sum fun x _ => S.sum_monitoringPeriodE_le s I x (hA2 x)
 
-/-- **`integrity_on` with the sampling rate read only at sessions with units**: a session with `n = 0` has no proof
+/-- **The integrity audit on a set of sessions, the sampling rate read only at sessions with units**: a session with `n = 0` has no proof
 block, so no incorrect one, and its sample misses with probability at most `1 = (1 - q)^0`. -/
 theorem integrity_on_units (I : Finset ℕ) {q : ℝ} (hq : 0 < q)
     (hqt : ∀ t ∈ I, 0 < (S.W t).n → q ≤ ((S.W t).kd : ℝ) / (S.W t).n)

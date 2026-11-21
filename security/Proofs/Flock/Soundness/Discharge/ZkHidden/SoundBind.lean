@@ -36,13 +36,8 @@ lp-zkbind's `sitesZAt`, `layZAt`, `rsZAt` and `rsZAt_computes` (`ZkBind/At.lean`
 * `tableShH`: the public hidden-output table (`HiddenExec.TableH`) at the same sample: the `SampleSetupZKH`'s
   `SampleSetupH` at `zkInputs I` and its `table`, or `y₀`'s refused one. Its statement is the `--zk` table's
   (`tableAtZKH_S`, both `stmtOf` of setupHidden's statement at the same regions).
-* `sitesShH`, `layShH`, `rsShH`, `rsShH_computes`: HiddenExec's `keyLayoutH` and `keyRowsH` at `tableShH`'s sites.
-* `placeZH`: each sampled proof block's place in its `--zk` table, `keyPlaceH`'s along `tableAtZKH_S`; `decAgreeH`: the two
-  decoders read one witness alike.
-* `layZH`, `rsZH`, `rsZH_computes`: the public layout and rows moved to the `--zk` tables (`LayoutZ.ofShadow`,
-  `HmRowsZX.ofShadow`).
-* `zk_flock_countC_execOS_atH`: the compiled `--zk` count curve at `planAtZKH` (`zk_flock_countC_execOS_crH`) with
-  those.
+* `sitesShH`: HiddenExec's sites at `tableShH`.
+* `placeZH`: each sampled proof block's place in its `--zk` table, `keyPlaceH`'s along `tableAtZKH_S`.
 -/
 
 namespace FlockSoundness.Discharge.ZkHidden
