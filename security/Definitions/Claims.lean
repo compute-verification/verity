@@ -19,7 +19,7 @@ stated over Core's interaction model (`Definitions.Core.Interaction`, with the s
   the sampling compiler's relation `Claims.Sampling.RelS` (`Definitions.Claims.Sampling`) only with bounded
   probability. It is SPOT's row in `security/README.md`.
 * `Flock.Guarantees.SampledKSLiveV5` (`Proofs.Flock.Bridge.V5.Statement`): the same at the verifier's public inputs,
-  under the sampling design. Both are in the lock's `deployed`.
+  under the sampling design. Neither is in the lock's `deployed`.
 * `Flock.Guarantees.ClaimsStated` (`Definitions.Flock.Guarantees.Claims`) reads every claim here but `Flock.ZK`, and
   `Flock.Guarantees.MaskedZK` (`Proofs.Flock.Masked.Statement`) states `Flock.ZK` at the deployed masked record. The
   lock records each one's text under `reads`, so a changed claim is a changed record.
