@@ -30,6 +30,8 @@ import pytest
 from verity.circuits import codec, partition_object as PO, supplied as SU
 from verity.circuits.codec import canonical_json, descriptor_id
 from verity.circuits.defs import CATALOG_PACKAGES, REGISTRY, CompositeDefinition, bind, catalog_package
+from verity.circuits.program import Program
+from verity.circuits.refs import array_of
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.evaluation.bits import evaluate_words
 from verity.circuits.ops import gemm as G
@@ -535,6 +537,56 @@ def test_a_close_that_cant_commit_a_run_inputs_tree_refuses_naming_it():
     with pytest.raises(ValueError, match=rf"run input {re.escape(x.param)}: .* {x.port} is recorded by reference.*refuses "
                                          "to close"):
         win.close()
+
+
+def test_a_run_input_read_by_several_ranges_is_one_read_in_unit_order():
+    """A template whose units C puts in several ranges reads its run input nodes across them, unit i the node's row i:
+    one read of each node's tree, as one range, and the verifier's period from the record is the prover's."""
+    order = ((TID, 0, 2), (AID, 0, 2), (TID, 2, 1))
+    win = I.Window(I.Circuit("test", ((COORD, 3), (ACC, 2)), order=order), RUN, SAMPLING_DESIGN, 2)
+    reads = [r for r in win.runs if r.reader == TID]
+    assert [(r.port, r.at, r.radix, r.base) for r in reads] == [(p, 0, (3,), 0) for p in ("x", "sx", "wrow", "sw")]
+    assert len({r.param for r in win.runs}) == len(win.runs)
+    rec = json.loads(I.circuit_bytes(win.circuit_record()))
+    assert I.window_of_record(rec, SAMPLING_DESIGN, BY_ID.__getitem__).members == win.window.members
+
+
+def test_a_run_input_beside_a_registered_value_read_recut_is_read_from_cs_references():
+    """C reading a registered value recut has no gate layout (`recut-gates`); its run input ports are still read, from C's
+    references: one read of each node's tree, unit i its row i."""
+    reg = I.Registered({"w": 6 * K // 2}, reads=(I.Read(TID, "wrow", "w", 2, (5, 2), 0, (K // 2, 0)),))
+    win = I.Window(I.Circuit("part", ((COORD, 12),), registered=reg), RUN, SAMPLING_DESIGN, 4)
+    assert [(r.port, r.radix) for r in win.runs] == [("x", (12,)), ("sx", (12,)), ("sw", (12,))]
+    assert len({r.param for r in win.runs}) == 3
+
+
+def permuted(rows: Sequence[int], m: int) -> Program:
+    """C batching COORD over its four ports' run input nodes of ``m`` rows each, unit u reading row ``rows[u]``."""
+    sig = COORD.signature()[0]
+    body = CompositeDefinition("RunInputsTestPermuted", 0, (), lambda S: (tuple((p, Array(m, t)) for p, t in sig),
+                                                                          Array(len(rows), COORD.signature()[1])),
+                               lambda B, S, *xs: B.batch(COORD, *(array_of([x[r] for r in rows]) for x in xs),
+                                                         axes=(0,) * len(sig)), register=False)
+    return Program(bind(body))
+
+
+@pytest.mark.parametrize("rows, m, why", [
+    ([0, 1, 2], 3, None),
+    ([0, 2], 3, "x: row 1 of run input node 0's 3 is read by no unit"),
+    ([0, 1, 1], 3, "x: unit 2 reads row 1 of run input node 0, which unit 1 reads too"),
+    ([0, 2, 1], 3, "x: unit 1 reads row 2 of run input node 0, not row 1: its units read the node's rows in unit order"),
+])
+def test_a_run_inputs_rows_are_read_each_once_in_unit_order(rows, m, why):
+    """`run_input_reads` takes a port whose units read its run input node's rows each once, none skipped, unit i row i,
+    and refuses, by unit and row, a row skipped, a row read twice and rows out of unit order."""
+    prog = permuted(rows, m)
+    go = lambda: I.run_input_reads([(COORD, len(rows))], prog, PO.template_instances_query([COORD]), ())
+    if why is None:
+        assert [(r.port, r.param, r.radix) for r in go()] == [(p, f"input/n{w}", (3,))
+                                                               for w, p in enumerate(("x", "sx", "wrow", "sw"))]
+    else:
+        with pytest.raises(ValueError, match=re.escape(f"run inputs: {TID} {why}")):
+            go()
 
 
 @pytest.mark.parametrize("templates", [((COORD, 10),), ((COORD, 3), (ACC, 2))])
@@ -1985,8 +2037,9 @@ def test_a_period_registers_its_circuits_values_by_their_entries_chained_after_t
 
 def test_a_registration_names_the_values_its_period_outputs_after_its_ports(tmp_path):
     """`rows.registration` names each value the period ``outputs`` for a later record among the record's roots, after the
-    period's own ports and by its port, root, leaves and domain alone; with none, the roots are the ports'. An output named
-    like a port is refused, and `rows.write` hands its ``outputs`` to the record it writes."""
+    period's own ports and by its port, root, leaves and domain alone; with none, the roots are the ports', and
+    `Window.write`'s are the ports' then its run inputs' trees (``input/n<w>``). An output named like a port is refused,
+    and `rows.write` hands its ``outputs`` to the record it writes."""
     roots: list = []
 
     def record(*x, **_k):
@@ -2008,20 +2061,21 @@ def test_a_registration_names_the_values_its_period_outputs_after_its_ports(tmp_
         CS.registration(c, {"by": "test"}, registrar=reg, outputs=[{**out, "port": taken}])
     roots.clear()
     win.write(c, tmp_path / "none", {"by": "test"}, registrar=reg)
-    assert roots == ports
+    assert roots[:len(ports)] == ports and sorted(r["port"] for r in roots[len(ports):]) == sorted(win.inputs) != []
     CS.write(c, tmp_path / "one", {"by": "test"}, win.labels(), registered=win._entries, registrar=reg, outputs=[out])
     assert roots == [*ports, out]
 
 
 def test_a_read_covers_whole_members_and_reads_whole_rows():
     """Members are cut where a read's units begin or end, as where a wire's do, so a read covers whole members: units 2..11
-    read the weight's rows as registered values and units 0 and 1 hold their own rows, each a shared-row member of a
-    template of several."""
+    read the weight's rows as registered values, and every unit reads its run inputs from their nodes' trees, each a
+    shared-row member of a template of several."""
     reg = lambda r: I.Registered({"w": 6 * K // 2}, reads=(r,))  # noqa: E731
     win = I.Window(I.Circuit("part", ((COORD, 12),), registered=reg(I.Read(TID, "wrow", "w", 2, (5, 2), 0, (K // 2, 0)))),
                    RUN, SAMPLING_DESIGN, 4)
     assert [(m.base, m.n, bool(m.tables), m.values) for m in win.window.members] == [
-        (0, 2, True, ()), (2, 4, True, ("wrow",)), (6, 4, True, ("wrow",)), (10, 2, True, ("wrow",))]
+        (0, 2, True, ("x", "sx", "sw")), (2, 4, True, ("x", "sx", "wrow", "sw")), (6, 4, True, ("x", "sx", "wrow", "sw")),
+        (10, 2, True, ("x", "sx", "wrow", "sw"))]
     with pytest.raises(ValueError, match="whole registered rows"):
         I.Window(I.Circuit("half", ((COORD, 12),), registered=reg(I.Read(TID, "wrow", "w", 0, (12,), 0, (K // 8,)))),
                  RUN, SAMPLING_DESIGN, 4)
@@ -2032,15 +2086,17 @@ def test_a_read_covers_whole_members_and_reads_whole_rows():
 
 def test_the_period_commits_each_read_port_as_a_table_of_the_registered_rows_under_their_salts():
     """A member a read covers is a shared-row member: its read port's table the distinct rows its units read, under the
-    registered value's salts, each unit's ref its row; its other ports its units' own rows. The header names the rows'
-    positions (`write`), and the verifier derives the same members from the record."""
+    registered value's salts, each unit's ref its row; its other ports, run inputs, read from their nodes' trees
+    (``input/n<w>``). The header names the rows' positions (`write`), and the verifier derives the same members from the
+    record."""
     win, w = registered()
     c = win.close(salts_of=fixed(win))
     m1 = win.window.members[1]
     assert m1.tables == (("x", 4), ("sx", 4), ("wrow", 2), ("sw", 4))
     assert np.array_equal(c.rows[m1.port("wrow")], w.rows[[2, 3]]) and c.salts[m1.port("wrow")] == w.salts[2] + w.salts[3]
     assert c.refs[1][:, 2].tolist() == [0, 0, 1, 1] and c.refs[1][:, 0].tolist() == [0, 1, 2, 3]
-    assert win._entries[m1.key] == {"wrow": w.statement([2, 3])[2]} and w.statement([2, 3])[2]["paths"][1] == w.path(3).hex()
+    assert sorted(win._entries[m1.key]) == ["sw", "sx", "wrow", "x"] and win._entries[m1.key]["wrow"] == w.statement([2, 3])[2]
+    assert w.statement([2, 3])[2]["paths"][1] == w.path(3).hex()
     doc = json.loads(I.circuit_bytes(win.circuit_record()))
     mine = I.window_of_record(doc, SAMPLING_DESIGN, BY_ID.__getitem__)
     assert mine.members == win.window.members
