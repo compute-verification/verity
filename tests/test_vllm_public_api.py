@@ -341,7 +341,6 @@ KNOWN = frozenset({
     "verity_vllm.definitions.registry.fp8",
     "verity_vllm.definitions.registry.fp8_moe",
     "verity_vllm.definitions.registry.fp8_moe_experts",
-    "verity_vllm.definitions.registry.greedy_stages",
     "verity_vllm.definitions.registry.hopper",
     "verity_vllm.definitions.registry.int8_exact",
     "verity_vllm.definitions.registry.io_shell",
