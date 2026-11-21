@@ -344,6 +344,66 @@ theorem liftDef_arg_ax (D : Defn) (fnOf : ℕ → ℕ) (primOf : ℕ → Bool) (
   rw [hg _ hi', hg _ hi]
   simp [Flock.Lift.liftDef, hf, hax]
 
+/-- Iteration `m` of a scan's sequence argument on bits, the slice `[m·L, (m+1)·L)` of its lifted references, is the
+bits of the slice of its word references: `axisBits` at `t < L`. -/
+theorem scanSliceBits {D : Defn} {x : List (List Bool)} (hx : x.map List.length = leafWidths D)
+    {outs : Array (List (List Bool))} (ho : OutsOk D outs) {s : Seq}
+    (hr : ∀ r ∈ s.toArray.toList, RefIn D outs.size r) {n m : ℕ} (hm : m < n) {ew : List ℕ}
+    (hw : s.toArray.toList.map (fun r => (tyAt D r).widths[r.j]!) = (List.replicate n ew).flatten) :
+    (List.range ew.sum).map (fun t =>
+      Flock.Program.refVal x.flatten (Flock.Program.paramStarts (D.params.map fun (n, t) => (n, Ty.bitType t)))
+        (outs.map List.flatten) ((Flock.Lift.liftSeq (atOf D) (homoOf D) s).toArray.getD (t + m * ew.sum) default)) =
+      ((List.range ew.length).map fun t =>
+        Flock.Program.refVal x (Flock.Program.paramStarts D.params) outs
+          (s.toArray.getD (t + m * ew.length) default)).flatten := by
+  have key : ∀ L t : ℕ, t < L → t / L * n * L + t % L + m * L = t + m * L := fun L t h => by
+    rw [Nat.div_eq_of_lt h, Nat.mod_eq_of_lt h, Nat.zero_mul, Nat.zero_mul, Nat.zero_add]
+  refine (List.map_congr_left fun t ht => ?_).trans ((axisBits hx ho hr hm hw).trans ?_)
+  · simp only [key _ t (List.mem_range.1 ht)]
+  · congr 1
+    exact List.map_congr_left fun t ht => by simp only [key _ t (List.mem_range.1 ht)]
+
+theorem flatten_take_drop {α : Type} : ∀ (o : List (List α)) (k : ℕ),
+    o.flatten.take ((o.take k).map List.length).sum = (o.take k).flatten ∧
+      o.flatten.drop ((o.take k).map List.length).sum = (o.drop k).flatten
+  | [], _ => by simp
+  | a :: o, 0 => by simp
+  | a :: o, k + 1 => by
+    obtain ⟨h1, h2⟩ := flatten_take_drop o k
+    simp only [List.take_succ_cons, List.drop_succ_cons, List.map_cons, List.sum_cons, List.flatten_cons]
+    exact ⟨by rw [List.take_append, List.take_of_length_le (Nat.le_add_right _ _), Nat.add_sub_cancel_left, h1],
+      by rw [List.drop_append, List.drop_of_length_le (Nat.le_add_right _ _), List.nil_append,
+        Nat.add_sub_cancel_left, h2]⟩
+
+/-- **A scan's fold on words and on bits agree step by step**: where each iteration's step, from a carry of the
+widths `cw`, returns words of the widths `ow` (the carry's first) and on bits their bits, the fold on bits from the
+bits of a word carry and outputs ends at the bits of the fold on words, its carry of the widths `cw`. -/
+theorem scanFold (cw ow : List ℕ) (hk : ow.take cw.length = cw)
+    (stepW : List (List Bool) → ℕ → Option (List (List Bool))) (stepB : List Bool → ℕ → Option (List Bool))
+    (h : ∀ carry m, carry.map List.length = cw → ∃ o, stepW carry m = some o ∧ o.map List.length = ow ∧
+      stepB carry.flatten m = some o.flatten) :
+    ∀ (ms : List ℕ) (carry ys : List (List Bool)), carry.map List.length = cw →
+      ∃ cr ys', ms.foldlM (fun (st : List (List Bool) × List (List Bool)) m => do
+          let o ← stepW st.1 m; pure (o.take cw.length, st.2 ++ o.drop cw.length)) (carry, ys) = some (cr, ys') ∧
+        cr.map List.length = cw ∧
+        ms.foldlM (fun (st : List Bool × List Bool) m => do
+          let o ← stepB st.1 m; pure (o.take cw.sum, st.2 ++ o.drop cw.sum)) (carry.flatten, ys.flatten) =
+          some (cr.flatten, ys'.flatten)
+  | [], carry, ys, hc => ⟨carry, ys, rfl, hc, rfl⟩
+  | m :: ms, carry, ys, hc => by
+    obtain ⟨o, hw, hl, hb⟩ := h carry m hc
+    have hc' : (o.take cw.length).map List.length = cw := by rw [List.map_take, hl, hk]
+    obtain ⟨cr, ys', h1, h2, h3⟩ := scanFold cw ow hk stepW stepB h ms (o.take cw.length) (ys ++ o.drop cw.length) hc'
+    have hs : cw.sum = ((o.take cw.length).map List.length).sum := by rw [hc']
+    obtain ⟨ht, hd⟩ := flatten_take_drop o cw.length
+    rw [← hs] at ht hd
+    refine ⟨cr, ys', ?_, h2, ?_⟩
+    · simp only [List.foldlM_cons, hw, Option.bind_eq_bind, Option.bind_some]
+      exact h1
+    · simp only [List.foldlM_cons, hb, Option.bind_eq_bind, Option.bind_some]
+      rw [ht, hd, ← List.flatten_append]
+      exact h3
+
 /-- **A batch member's arguments' bits, on any axis**, `C` its callee on words and `C'` on bits: member `m` of a lifted
 batch node reads, on bits, the bits of the words its word node's member reads. -/
 theorem batchBits_ax {D : Defn} {fnOf : ℕ → ℕ} {primOf : ℕ → Bool} {gatesOf : ℕ → ℕ} {x : List (List Bool)}
