@@ -1170,6 +1170,9 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             # Lean's members check reads them off that file (`Member.reads`)
             opened |= {(p, e["value"]) for p, e in ((registered or {}).get(m.key) or {}).get("ports", {}).items()
                        if REG.is_fresh_value(e.get("value"))}
+            # and at the writers' field trees its wired rows open (`OneStageZk.fieldRoots`' `tree`, `portTreeHeld`)
+            opened |= {(p, e["value"]) for p, e in ((registered or {}).get(m.key) or {}).get("ports", {}).items()
+                       if MB.field_tree_name(e.get("value") or "")}
             why = form if isinstance(form, str) else MB.population_why([[m.base, m.base + m.n]], form[0], header, form[1][m.key],
                                                                         opened, subset=MB.subset_designs(mine.law, rec))
             ok = {"pin": header.get("circuit_sha512") == made["pin"],

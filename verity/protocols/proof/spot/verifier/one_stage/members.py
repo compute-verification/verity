@@ -220,11 +220,12 @@ def own_root_why(member: str, port: str) -> str:
 
 def wired_tree_why(name: str, port: str) -> str:
     """`OneStageZk.WIRED_TREE_WHY`: the refusal of member ``name``'s registered port whose value is a field tree's
-    name that is not its own output at its template's tree."""
-    return f"registered: member {name}'s port {port}: a wired port's tree is not derived from C yet"
+    name that is neither its own output at its template's tree nor a row C wires into it from that tree."""
+    return (f"registered: member {name}'s port {port}: the field tree it opens is neither its own output's nor one C "
+            "wires into it at this row")
 
 
-def _field_tree_name(v: str) -> bool:
+def field_tree_name(v: str) -> bool:
     """`OneStageZk.fieldTreeName`: ``v`` is ``<template>/o<j>`` (`Flock.Registered.fieldTree`)."""
     parts = v.split("/")
     j = parts[-1][1:]
@@ -590,21 +591,24 @@ def _own_fields(ft: Mapping[str, Sequence[tuple[str, Mapping[str, Any]]]], name:
     return got
 
 
-def _tree_ports_held(ms: Mapping[str, Any], record: Mapping[str, Any]) -> None:
-    """`OneStageZk.treePortsHeld`: every port of a member's registered file that opens a committed tree, a value
-    ``committed/<port>`` or a run input node's ``input/n<w>``, is the record's root of it, its root, domain and leaf
-    count (`OneStageZk.portTreeHeld`); a port whose value is a field tree's name is opened only as the member's own
-    output, ``<template>/<port>``, and any other refuses first (`wired_tree_why`)."""
+def _tree_ports_held(ms: Mapping[str, Any], record: Mapping[str, Any],
+                     wired: Mapping[str, set[tuple[str, str]]] | None = None) -> None:
+    """`OneStageZk.treePortsHeldAt`: every port of a member's registered file that opens a committed tree, a value
+    ``committed/<port>``, a run input node's ``input/n<w>`` or a field tree's name, is the record's root of it, its
+    root, domain and leaf count (`OneStageZk.portTreeHeld`); a port whose value is a field tree's name is opened only
+    as the member's own output, ``<template>/<port>``, or at a reader row ``wired`` holds for the member at that tree
+    (`_wired_rows`), and any other refuses first (`wired_tree_why`)."""
     roots = record.get("roots")
     by_port = {r["port"]: r for r in (roots if isinstance(roots, list) else ())
                if isinstance(r, dict) and type(r.get("port")) is str}
     for name, m in ms.items():
         reg, tmpl = m["registered"], _template_of(name)
+        mine = (wired or {}).get(name, set())
         for port in sorted(reg["ports"]) if reg is not None else ():
             e = reg["ports"][port]
             value = e["value"]
-            field = not value.startswith(COMMITTED) and _field_tree_name(value)
-            if field and (tmpl is None or f"{tmpl[0]}/{port}" != value):
+            field = not value.startswith(COMMITTED) and field_tree_name(value)
+            if field and (tmpl is None or f"{tmpl[0]}/{port}" != value) and (port, value) not in mine:
                 raise _Refused(wired_tree_why(name, port))
             t = value[len(COMMITTED):] if value.startswith(COMMITTED) else value if G.is_fresh_value(value) or field \
                 else None
@@ -822,6 +826,7 @@ def _wired_roots(desc: Mapping[str, Any], ranges: Sequence[Sequence[Any]], ms: M
         raise Outside(f"C's wiring: {e}") from None
     if "refusal" in got:
         raise Outside(f"C's wiring: {got['refusal']}")
+    cuts = EG.io_cuts(desc, ranges)
     lbase = _local_bases(ranges)
     reach = _reaching(ranges, lbase, got["wires"])
     out = {}
@@ -829,17 +834,44 @@ def _wired_roots(desc: Mapping[str, Any], ranges: Sequence[Sequence[Any]], ms: M
         first, n = m["units"][0][0], _count(m)
         own = roots.get(name, [])
         wires = reach(first, n) if n >= 1 else [w for w in got["wires"] if _wire_reaches(ranges, lbase, first, n, w)]
-        if (w := next((w for w in wires if any(r.get("port") == w["port"] for r in own)), None)):
-            raise _Refused(own_root_why(name, w["port"]))
+        if (w := next((w for w in wires if any(r.get("port") == _wire_row(cuts, w) for r in own)), None)):
+            raise _Refused(own_root_why(name, _wire_row(cuts, w)))
         mine = list(own)
         for w in wires:
-            if not any(r.get("port") == w["port"] for r in mine):
+            row = _wire_row(cuts, w)
+            if not any(r.get("port") == row for r in mine):
                 e = next((e for f, e in ft.get(w["writer"], ()) if f == w["out"]), None)
                 if e is not None:
-                    mine.append({"domain": e.get("domain"), "leaves": e.get("leaves"), "port": w["port"],
-                                 "root": e.get("root")})
+                    mine.append({"domain": e.get("domain"), "leaves": e.get("leaves"), "port": row,
+                                 "root": e.get("root"), "tree": f"{w['writer']}/{w['out']}"})
         out[name] = mine
     return out
+
+
+def _wire_row(cuts: Mapping[str, Mapping[str, int]], w: Mapping[str, Any]) -> str:
+    """`OneStageZk.wireRow`: the reader row the wire ``w`` covers, as the public file names it (`interface.row_name`):
+    its port uncut, else ``<port>#<j>``, ``j`` its first cut row."""
+    return w["port"] if cuts.get(w["reader"], {}).get(w["port"], 1) <= 1 else f"{w['port']}#{w['cut'][0]}"
+
+
+def _wired_rows(program: Program, query: Mapping[str, Any], desc: Mapping[str, Any],
+                ms: Mapping[str, Any]) -> dict[str, set[tuple[str, str]]]:
+    """`OneStageZk.wiredRowsOf`: for each member, ``(row, <writer>/o<j>)`` for each wire C states into it
+    (`_wire_reaches`, `_wire_row`); none for every member where no member has a registered file, C states no edge, or
+    C, the partition or the wiring is refused, which `_wired` refuses by name later."""
+    if all(m.get("registered") is None for m in ms.values()) or not EG.has_edge(desc):
+        return {}
+    try:
+        ranges = P._template(program, query, "the members' partition").ranges
+        cuts = EG.io_cuts(desc, ranges)
+        got = EG.edges(desc, ranges, {"templates": {t: {} for _k, t, _a, _c in ranges}, "cuts": cuts})
+    except (ValueError, P.QueryRefused):
+        return {}
+    if "refusal" in got:
+        return {}
+    lbase = _local_bases(ranges)
+    return {name: {(_wire_row(cuts, w), f"{w['writer']}/{w['out']}") for w in got["wires"]
+                   if _wire_reaches(ranges, lbase, m["units"][0][0], _count(m), w)} for name, m in ms.items()}
 
 
 def slices(members: Mapping[str, Sequence[Sequence[int]]], record: Mapping[str, Any], *, program: Program,
@@ -970,7 +1002,7 @@ def registered_at(held: Mapping[str, Any], p: str, v: str) -> bool:
     ``v``, which names no committed tree, run input's tree or field tree."""
     e = held.get(p)
     return (isinstance(e, dict) and e.get("value") == v and not v.startswith(COMMITTED) and not G.is_fresh_value(v)
-            and not _field_tree_name(v))
+            and not field_tree_name(v))
 
 
 def unregistered_why(p: str, v: str) -> str:
@@ -1275,7 +1307,7 @@ def _members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence:
         _laid(ms, record)
         _held_read(ms, params, program)
         _class(ms)
-        _tree_ports_held(ms, record)
+        _tree_ports_held(ms, record, _wired_rows(program, params["query"], params["program"], ms))
         roots, ft = _members_roots(ms, record)
         roots = _wired(program, params["query"], params["program"], ms, record, roots, ft)
         _ports_once(ms, roots)

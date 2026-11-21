@@ -557,10 +557,11 @@ def treePortOf (q : Flock.Registered.Port) : Option String :=
   if q.value.startsWith COMMITTED then some (q.value.drop COMMITTED.length).toString
   else if Flock.Registered.isFreshValue q.value || fieldTreeName q.value then some q.value else none
 
-/-- The refusal of a registered port `port` of `who` whose value is a field tree's name (`fieldTreeName`) that is not
-`who`'s own output at its template's tree: a wired input's writer tree is not opened here yet. -/
+/-- The refusal of a registered port `port` of `who` whose value is a field tree's name (`fieldTreeName`) that is
+neither `who`'s own output at its template's tree nor a row C wires into `who` from that tree (`portTreeHeld`). -/
 def WIRED_TREE_WHY (who port : String) : String :=
-  s!"registered: {who}'s port {port}: a wired port's tree is not derived from C yet"
+  s!"registered: {who}'s port {port}: the field tree it opens is neither its own output's nor one C wires into it " ++
+    "at this row"
 
 /-- The refusal of a registered port `port` of `who` that opens a committed tree `tree` the record holds no root of
 (`registeredTreesHeld`). -/
