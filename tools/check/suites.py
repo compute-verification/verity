@@ -859,6 +859,19 @@ def _on_path(d: Path) -> None:
     os.environ["PATH"] = os.pathsep.join([str(d), SETTINGS.PATH])
 
 
+def verifier_exes(suite: Suite) -> list[str]:
+    """The verifier's executables `suite` declares under `artifacts` (`flock_lean()`'s `.lake/build/bin/NAME`), by name."""
+    bin_ = (flock_lean() / ".lake" / "build" / "bin").relative_to(ROOT).as_posix() + "/"
+    return [a[len(bin_):] for a in suite.artifacts if a.startswith(bin_) and "/" not in a[len(bin_):]]
+
+
+def unbuilt_exes(suite: Suite) -> list[str]:
+    """The verifier's executables `suite` declares that lean-build (`lake build`, the package's `defaultTargets`) left unbuilt:
+    its tests that run one would skip in every check."""
+    bin_ = flock_lean() / ".lake" / "build" / "bin"
+    return [e for e in verifier_exes(suite) if not (bin_ / e).is_file()]
+
+
 def lean_build(log: Path) -> str | None:
     """check's `lean-build` step, `lake build` in the verifier: None when it built (or the tree has no verifier), else why not."""
     lean = flock_lean()
@@ -2982,6 +2995,13 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"failed  {s.name:28} {why} (log: {logs / 'lean-build.log'})")
                 results.append(Result(s, "failed", log=logs / "lean-build.log"))
         todo = [t for t in todo if t[0].name not in AFTER_LEAN]
+    if (build_lean or a.lean_built) and not (a.list or a.explain) and (flock_lean() / "lakefile.toml").exists():
+        unbuilt = {s: gone for s, *_ in todo if s.name in AFTER_LEAN and (gone := unbuilt_exes(s))}
+        for s, gone in unbuilt.items():
+            print(f"failed  {s.name:28} lean-build left {', '.join(gone)} unbuilt, which it declares under `artifacts`, so its "
+                  "tests would skip: add it to the verifier's defaultTargets (its lakefile.toml)")
+            results.append(Result(s, "failed", log=logs / "lean-build.log"))
+        todo = [t for t in todo if t[0] not in unbuilt]
     here = kept_passes() if todo else {}
     forced = {s: forced_by(s, components(s, ids_of[s], env, args_of[s], deps), here.get(s.name, []),
                            any(map(cached, keys)), a.fresh) for s, _paths, keys, deps in todo}
