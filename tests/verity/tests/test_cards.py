@@ -339,7 +339,8 @@ def test_the_drift_an_auditor_reads_for_a_provider_virtual_machine() -> None:
     in that host; and the reading beside it is 31.2 ppm."""
     drift = load_card("nebius-vm-monotonic-raw", directory=CARD_FILES)["drift"]
     assert S.number(drift["max"]) == Fraction(1, 2000) and drift["max"]["mark"] == "premise"
-    assert "ClockRateWithin(host, 5e-4)" in drift["max"]["source"] and "trusted-device" in drift["max"]["source"]
+    source = drift["max"]["source"]
+    assert "Verity.Assumptions.ClockWithin at the drift 5e-4" in source and "trusted-device" in source
     assert S.number(drift["read"]) == Fraction(312, 10 ** 7)
 
 
