@@ -830,8 +830,8 @@ theorem foldl_addCode_nil (xs c : Array String) : xs.foldl addCode c = #[] ↔ c
 theorem r8Codes_nil (v : Docket.Verifier) (c : Array String) :
     Docket.r8Codes v c = #[] ↔ c = #[] ∧ R8 v := by
   unfold Docket.r8Codes R8
-  rw [foldl_addCode_nil, kept_nil]
-  exact ⟨fun ⟨⟨h, t⟩, w⟩ => ⟨h, t, w⟩, fun ⟨h, t, w⟩ => ⟨⟨h, t⟩, w⟩⟩
+  rw [foldl_addCode_nil, kept_nil, kept_nil]
+  exact ⟨fun ⟨⟨⟨h, t⟩, a⟩, w⟩ => ⟨h, t, a, w⟩, fun ⟨h, t, a, w⟩ => ⟨⟨⟨h, t⟩, a⟩, w⟩⟩
 
 theorem any_false_iff {α : Type} (xs : Array α) (p : α → Bool) : xs.any p = false ↔ ∀ x ∈ xs, p x = false := by
   rw [Bool.eq_false_iff, ne_eq, Array.any_eq_true']

@@ -144,7 +144,9 @@ def R4 (rec : Json) (v : Docket.Verifier) : Prop :=
 def R5 (rec : Json) (v : Docket.Verifier) : Prop := jeq (getD rec "anchors") (.arr v.anchors)
 
 /-- R8: every name the verifier lists as tied is a parameter of the program, neither registered nor held, whose gates
-are one interval of run Input nodes (`Docket.tiedBad`); and the program's registered inputs are held to the weights'
+are one interval of run Input nodes (`Docket.tiedBad`); in the variant with no members, no run Input node is read by
+more than one proof block outside the held and tied gates (`Partition.readAlone` over `Docket.heldGates` and
+`Docket.tiedGates`, refused as `R8-shared-input`); and the program's registered inputs are held to the weights'
 registration of record (`Docket.weightsCodes`): its digest and form, each pin's domain and shape, a template query
 that applies wherever the program has a registered input or the verifier a registration, and no input bound at
 registration that a template parameter reads unless pinned or expected registered. Under the per-member variant R8
@@ -164,6 +166,7 @@ That the rows under that root are the outputs of the proof blocks that computed 
 commitment's binding) is not composed with those into a theorem: unproved. -/
 def R8 (v : Docket.Verifier) : Prop :=
   (Docket.tiedBad v).isEmpty = true ∧
+  (!v.members.isEmpty || Partition.readAlone v.program v.query (Docket.heldGates v ++ Docket.tiedGates v)) = true ∧
   Docket.weightsCodes v = #[]
 
 /-- The record's window names the seed salt the verifier read from the challenger's log (`seedSalt`), and none when it
