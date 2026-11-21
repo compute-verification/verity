@@ -379,9 +379,9 @@ def test_the_challenger_holds_every_item_to_its_own(served):
         unfixed = json.loads(json.dumps(rec))
         unfixed["window"]["public"]["length"] = SC.served_length(record)
         assert refused(unfixed) == {"window-form"}
-    legacy = json.loads(json.dumps(rec))
-    del legacy["window"]["public"]["length"]
-    assert refused(legacy) == {"window-form"}
+    no_length = json.loads(json.dumps(rec))
+    del no_length["window"]["public"]["length"]
+    assert refused(no_length) == {"public-items"}
     assert "x" not in ch.regs
     reg = _held(ch, "honest", rec)
     assert reg.receipt["registration"] == DD.digest(rec) == reg.digest and reg.order == 0
