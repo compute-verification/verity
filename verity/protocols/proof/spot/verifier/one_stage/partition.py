@@ -215,7 +215,7 @@ def shared_inputs(program: Program, query: Mapping[str, Any], held: Iterable[ran
     node's one tree instead. `QueryRefused` for a query other than a template query."""
     part = _template(program, query, "an Input's readers")
     nodes, offsets, held = program.root.body.nodes, program.root.body.offsets, list(held)
-    run_input = {k for k, node in enumerate(nodes) if is_input(node.fn) and not is_registered(node.fn)
+    run_input = {k for k, node in enumerate(nodes) if _run_bound(node.fn)
                  and not any(h.start <= offsets[k] and offsets[k + 1] <= h.stop for h in held)}
     shared: set[int] = set()
     spans: dict[int, list[tuple[int, int]]] = {}
@@ -351,7 +351,12 @@ def run_inputs(program: Program, gates: range) -> bool:
     through as tied is one the run binds. The Lean's `Partition.runInputs` is this."""
     nodes = program.root.body.nodes
     inside = [k for k in range(len(nodes)) if within(program, gates, k)]
-    return bool(inside) and all(is_input(nodes[k].fn) and not is_registered(nodes[k].fn) for k in inside)
+    return bool(inside) and all(_run_bound(nodes[k].fn) for k in inside)
+
+
+def _run_bound(fn: Any) -> bool:
+    """Whether `fn` is an input the run binds, neither registered nor supplied (Lean's `binding == RUN`)."""
+    return is_input(fn) and (i := input_id(fn.id)) is not None and i[0] == RUN
 
 
 def _merged(rs: Sequence[tuple[int, int]]) -> list[tuple[int, int]]:
