@@ -84,7 +84,7 @@ EIGHT = ([(1 + i % 4, 2, G2) for i in range(8)], [[(i, 0, 1 + i % 4) for i in ra
 #: three requests: two at step 0, the third (one output) arriving at step 1
 THREE = ([(4, 2, G2), (2, 2, G2), (3, 1, {**S.GREEDY, "max_tokens": 1})], [[(0, 0, 4), (1, 0, 2)], [(0, 4, 1), (1, 2, 1), (2, 0, 3)]])
 EMB, GROUPS = "EmbeddingRead_v3{V=256,H=64}", "TokenSelectGroups_v1{C=64,G=16}"
-FEED, FEED1 = "TokenFeed_v1{NP=4,FIRST=false}", "TokenFeed_v1{NP=4,FIRST=true}"
+FEED, FEED1 = "TokenFeed_v2{NP=4,FIRST=false}", "TokenFeed_v2{NP=4,FIRST=true}"
 #: a served Program's collectors at a prompt position's dead select (the first position's and every later one's) and its entry
 OUT0, OUT, SLOT_ENTRY = "OutCollect_v2{KO=2,FIRST=true}", "OutCollect_v2{KO=2,FIRST=false}", "SlotEntry_v2{KO=2,IDB=17,NP=1}"
 #: each position's select with its collector (the first position's, every later one's) and the last's with the slot's entry
@@ -160,7 +160,7 @@ def test_a_served_window_is_its_requests_programs_and_no_padded_unit():
     """A served window's circuit is a Program a request of the request's own positions (prompt + outputs - 1), longest
     first: WINDOW's requests of 5 and 4 positions hold exactly the units of each alone but its empty lane's scan unit,
     collector and entry, template by template, 9 embeddings against the class's 10, and its blocks are its 2 Programs over 5 steps. A
-    prompt position before the last feeds its prompt's id (`TokenFeed_v1{FIRST=True}`) and collects it with no select
+    prompt position before the last feeds its prompt's id (`TokenFeed_v2{FIRST=True}`) and collects it with no select
     (`OutCollect_v1`); the entries (`SlotEntry_v1{NP=1}`) are one allocation in slot order, each an inference entry at its
     slot's last step."""
     low = _lowered(WINDOW)
@@ -454,7 +454,7 @@ def test_the_circuit_is_a_class_program_a_slot_in_units_by_template_and_wire_pat
     down_proj's 8 at K 128, its RoPE a unit a head, its attention a unit a head a Call of `AttentionHead_v19`'s body
     (position p's first key block of p + 1 keys, `AttnBlockFirst_v1{NVIS=p + 1}`, and its end), its token select four
     units of four groups each and a combine, its first position's token, slot, occupancy word and head its lane's of the scan state row
-    (its unit of its lane's `ScanSlots_v5`, a slot a unit of each lane's), positions 1..3's tokens `TokenFeed_v1` units, each position's combine its select collected
+    (its unit of its lane's `ScanSlots_v5`, a slot a unit of each lane's), positions 1..3's tokens `TokenFeed_v2` units, each position's combine its select collected
     (`SelectCollect_v1`), and its last position's its entry too (`SelectEntry_v1`). A port read as m writer rows is cut m ways, each
     row its writer's as it is (a key block's keys and values a row a position, the fused norm's ``x`` a row a slice), and
     the wiring is a pattern per run, the two slots' one, not a wire per unit, but for the scan's, a template a lane. The external rows are the scan state rows the slots read and their entries."""
@@ -475,7 +475,7 @@ def test_the_circuit_is_a_class_program_a_slot_in_units_by_template_and_wire_pat
         ("AttnBlockFirst_v1", "k", "RoPEHead_v1", "o0"): 5, ("AttnBlockFirst_v1", "q", "RoPEHead_v1", "o0"): 5,
         ("AttnBlockFirst_v1", "v", "Gemm_v2", "o0"): 5, ("AttnHeadEnd_v1", "l", "AttnBlockFirst_v1", "o1"): 5,
         ("AttnHeadEnd_v1", "o", "AttnBlockFirst_v1", "o2"): 5, ("EmbeddingRead_v3", "tok", "ScanSlots_v5", "o0"): 2,
-        ("EmbeddingRead_v3", "tok", "TokenFeed_v1", "o0"): 1,
+        ("EmbeddingRead_v3", "tok", "TokenFeed_v2", "o0"): 1,
         ("EmbeddingRead_v3", "tok", "SelectCollect_v1", "o0"): 1, ("Gemm_v2", "x", "AttnHeadEnd_v1", "o0"): 1,
         ("Gemm_v2", "x", "RMSNormFusedCuda_v2", "o0"): 21, ("Gemm_v2", "x", "RMSNormTriton_v5", "o0"): 10,
         ("Gemm_v2", "x", "SiluMul_v2", "o0"): 1, ("RMSNormFusedCuda_v2", "res", "EmbeddingRead_v3", "o0"): 5,
@@ -487,9 +487,9 @@ def test_the_circuit_is_a_class_program_a_slot_in_units_by_template_and_wire_pat
         ("SelectEntry_v1", "best", "TokenSelectGroups_v1", "o0"): 1, ("SelectEntry_v1", "idx", "TokenSelectGroups_v1", "o1"): 1,
         ("SelectEntry_v1", "occ", "ScanSlots_v5", "o2"): 2,
         ("SelectEntry_v1", "state", "SelectCollect_v1", "o1"): 1, ("SelectEntry_v1", "x0", "Gemm_v2", "o0"): 1,
-        ("SiluMul_v2", "gu", "Gemm_v2", "o0"): 1, ("TokenFeed_v1", "sel", "SelectCollect_v1", "o0"): 2,
-        ("TokenFeed_v1", "slot", "ScanSlots_v5", "o1"): 2,
-        ("TokenFeed_v1", "slot", "TokenFeed_v1", "o1"): 1, ("TokenSelectGroups_v1", "x", "Gemm_v2", "o0"): 1}
+        ("SiluMul_v2", "gu", "Gemm_v2", "o0"): 1, ("TokenFeed_v2", "sel", "SelectCollect_v1", "o0"): 2,
+        ("TokenFeed_v2", "slot", "ScanSlots_v5", "o1"): 2,
+        ("TokenFeed_v2", "slot", "TokenFeed_v2", "o1"): 1, ("TokenSelectGroups_v1", "x", "Gemm_v2", "o0"): 1}
     assert circuit.external == (*(f"{ids[s]}/state" for s in SCANS), f"{ids[ENTRY]}/o0")
 
 
@@ -497,7 +497,7 @@ def test_a_positions_token_is_its_feed_below_the_prompt_bound_and_the_previous_s
     """Each slot's request is its lane's of the scan state row before its anchor (both slots at bucket 0, lanes 0 and 1, row 0
     of the registered scan state), read by its unit of its lane's `ScanSlots_v5` (unit k of each lane's template is slot
     k's), whose outputs ``o0`` to ``o3`` are the first
-    position's token and slot (its `TokenFeed_v1`'s), the occupancy word and the head. Position 0's embedding reads
+    position's token and slot (its `TokenFeed_v2`'s), the occupancy word and the head. Position 0's embedding reads
     its lane's token and position 1's feed its lane's slot; each later feed reads its predecessor's slot and the previous
     position's select, and position p's embedding reads its feed's token for p < 4 and position p - 1's select at p = 4. A
     template's units are a position's slots side by side (slot k's position p at 2p + k)."""
