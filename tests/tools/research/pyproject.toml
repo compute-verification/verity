@@ -35,7 +35,6 @@ untraced = [
     "test_commitmap.py",
     "test_conftest.py",
     "test_console_status_export.py",
-    "test_console_usage.py",
     "test_cores.py",
     "test_dirty_capture.py",
     "test_disk_hold.py",
@@ -131,8 +130,7 @@ untraced = [
 # sits). test_pythonpath and test_notes derive every workspace member's import root from the
 # workspace's pyproject.toml files (research/pythonpath.py) and find each package in an untraced child, so those files are
 # listed: moving a member's root selects this suite. tools/check/tool.py stays: the candidates' gate (`jobs/trains.py`) parses it on main, and
-# test_jobs_vectors checks that it still can. infra/cluster: the console computes its usage rows with cluster.usage, and
-# `research usage` runs `cluster usage`. tools/check/slot.py and lean_slot.py: the quick tier and the Lean sandbox ship
+# test_jobs_vectors checks that it still can. tools/check/slot.py and lean_slot.py: the quick tier and the Lean sandbox ship
 # them to the node (test_queue, test_merge_gate, test_nebius_lean_sandbox). tools/verity/lean/merge.py and check.py: test_queue
 # commits them into its origin so the queue's clone runs the `lean-audit` record driver it configures.
 # tools/check/merge_map.py and merge_rows.py: test_check_merge_drivers merges through them at either layout's place.
@@ -167,8 +165,9 @@ inputs = ["tools/research", ".agents/skills", "verity/README.md", ".gitignore", 
           "tools/verity/lean/settings.py", "tools/check/common.py",
           "tools/verity/graph/verity_graph/contract.py",
           "tools/verity/graph/verity_graph/__init__.py",
-          # the cards' registry, which pods/nebius/fleet.py reads by path for each platform's machine class
-          "tools/config/verity_config/registry/gpus.toml", "calibration/hardware", "benchmarks/poub_session/sheets.py",
+          # the cards' registry, which pods/nebius/fleet.py reads by path for each platform's machine class and
+          # launch.sh, through verity_config's reader, for a clock-locking platform's card file
+          "tools/config/verity_config", "calibration/hardware", "benchmarks/poub_session/sheets.py",
           "tools/check/merge_map.py", "tools/check/merge_rows.py",
           "tools/check/added_lines.py", "tests/lint/retired_terms.md", "tests/lint/test_repo_lane_text.py",
           "tests/lint/test_repo_retired_terms.py",
@@ -195,7 +194,7 @@ tests = [
 paths = ["tools/check/gates"]
 
 [[tool.verity.tests.reads]]
-tests = ["test_cli.py", "test_usage_cli.py"]
+tests = ["test_cli.py"]
 paths = ["infra/cluster/src/cluster"]
 
 [[tool.verity.tests.reads]]
@@ -242,10 +241,6 @@ paths = ["tools/research/src/research/pods/nebius/lockout"]
 [[tool.verity.tests.reads]]
 tests = ["test_monitors.py"]
 paths = ["tests/lint/test_repo_silent_excepts.py"]
-
-[[tool.verity.tests.reads]]
-tests = ["test_nebius_sky.py"]
-paths = ["adapters/vllm/verity_vllm/pipeline"]
 
 # the tree's private names, which store/private.py reads as custody's floor, and their adapter's own matcher, loaded by path
 [[tool.verity.tests.reads]]

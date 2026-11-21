@@ -1,7 +1,7 @@
 """Disk admission for a queued run (`research run --queue --disk-gb N`), on the machine, ahead of the run's allocation.
 
 `research disk-hold --gb N --path P -- CMD...` admits CMD at once when the filesystem holding P would stay at or under HOLD_PCT
-(80, node 1's `vy-disk-guard` level) of its size with N more GB used and no run is held for it; otherwise it holds CMD in a FIFO
+(80) of its size with N more GB used and no run is held for it; otherwise it holds CMD in a FIFO
 queue, then execs CMD in its own process, so the run's pid is unchanged. The launch doesn't wait: the hold happens in the detached
 process the machine starts, and its lines go to the run's launcher.log. With `--ack FIFO` (the launch's, remote.LAUNCH_ACK) a hold
 acknowledges the launch as it starts, since the runner's own acknowledgement comes only after it. Requests other runs have declared
