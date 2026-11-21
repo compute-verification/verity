@@ -7,14 +7,18 @@ protocol's parties in the order its table gives.
 
 Its Lean statement: `Properties.Composition.AcceptMeans` (`security/Properties/Composition.lean`).
 
-Not yet: one function holding the period's order (`period.py`: the memory wipe, registration, then for each window the accounting layer, compilation first, and the policy layer, then the period's result); today a window's steps run in `window_road`'s order (`benchmarks/one_stage/served_verdicts.sh`).
+A period runs in the order `run_period` (`period.py`) writes once: the memory wipe, registration, then for each window
+the accounting layer, compilation first, and the policy layer on what accounting returned, then the period's result.
+
+Not yet: compilation accepts every circuit, the wipe is the adapter's launcher's, and each step's body is the runner's (`benchmarks/one_stage/served_verdicts.sh`).
 
 ## Pieces
 
 | piece | what it is | where |
 | --- | --- | --- |
 | `verity run` | reads an application, places its parties on machines and runs them for each period | `tools/verity/cli/verity_cli/run.py` |
-| the parties' table | each listed protocol's entry for each party of the served window | `tools/verity/cli/verity_cli/served_table.py` |
+| the period's order | `run_period`: the stages in their order, the public parameters, the state between windows | `period.py` |
+| the parties' table | each listed protocol's entry for each party of the served window, each stage's body and the steps' two lists (`ACCOUNTING`, `POLICY`) | `tools/verity/cli/verity_cli/served_table.py` |
 | the accounting protocols' declarations | each protocol's name to the module that declares it | `schemes.py` |
 | the Lean verifier | the composition: one verdict rule over any list of protocols | `verifier/lean/` |
 | its two composites | onsite's and remote's lists of protocols | `verifier/onsite/`, `verifier/remote/` |
@@ -41,7 +45,9 @@ rule: any protocol's reject rejects, and an accept needs every protocol's accept
   `params` (each protocol's, by its id), `party`, `pin`, `channel`; the hosts come in `--bindings`, which change no hash.
 - To each protocol: its `params`, its parties on their machines, and the run's state directory.
 - It gives: each period's `VERDICT` line (the composite's verdict, each protocol's under `components`), printed and
-  appended to `STATE/record/verdicts.jsonl`; exit 0 when every period accepts, 1 when one rejects, 2 otherwise.
+  appended to `STATE/record/verdicts.jsonl`; exit 0 when every period accepts, 1 when one rejects, 2 otherwise; and
+  last, the period's `PERIOD` line: each stage's end, the outcome over both, and what compilation, the wipe and
+  registration said.
 
 ## Try it
 
