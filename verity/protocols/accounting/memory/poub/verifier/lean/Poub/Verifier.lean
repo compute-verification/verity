@@ -446,4 +446,33 @@ def serve : IO UInt32 := do
     emit out
   return 0
 
+/-! A one-window session, started, its one root in and its boundary left, whose close at `now` 3 is before its
+deadline (102), so its roots are not final: that close is refused and keeps none of the coins it came with, and a later
+close past the deadline sets other coins and samples from them. -/
+
+private def toySession : Option Session.State := do
+  let codec ← Codec.Codec.make? "p512" 2 false
+  let reg ← (Registration.make? (ByteArray.mk #[7]) 1 (ByteArray.mk (Array.replicate 64 1))
+    (ByteArray.mk (Array.replicate 32 2)) codec .block false LAYOUT 0).toOption
+  let params : Session.Params :=
+    { deadlineNs := 100, windows := 1, samples := 1, minPasses := 1, windowNs := 1, lifetime := 4 }
+  let s := Session.State.init params reg #[ByteArray.empty, ByteArray.empty] #[] 0
+  let (_, s) ← (eventOn 2 1 s (.start 0) (some (ByteArray.mk (Array.replicate 32 3)))).toOption
+  let (_, s) ← (eventOn 2 1 s (.receive 0 0 (ByteArray.mk (Array.replicate 64 4)) none none (some 0) 1) none).toOption
+  let (_, s) ← (eventOn 2 1 s (.boundary 2) none).toOption
+  pure s
+
+private def toyCoins (b : UInt8) : ByteArray := ByteArray.mk (Array.replicate (Session.sampleBytes 1 1) b)
+
+private def toyCloses : Option (Bool × Bool × Option (Array (Nat × Nat))) := do
+  let s ← toySession
+  let (r, s) ← (eventOn 2 1 s (.close 0 3) (some (toyCoins 5))).toOption
+  let early := s.coins[1]!.isEmpty
+  let (r', s) ← (eventOn 2 1 s (.close 0 200) (some (toyCoins 6))).toOption
+  let refused := match r with | .refused _ => true | _ => false
+  let drawn := match r' with | .sampled d => some d | _ => none
+  pure (refused && early, s.coins[1]! == toyCoins 6, drawn)
+
+#guard (receiptSample 1 (toyCoins 6) #[1]).isSome && toyCloses == some (true, true, receiptSample 1 (toyCoins 6) #[1])
+
 end Poub.Verifier
