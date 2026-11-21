@@ -62,9 +62,11 @@ def record_of(out: Path, opts: Any) -> Any:
 def plan_of(out: Path, opts: Any, flush: Callable[[], Any]) -> Any:
     """The serve's `close_plan.ClosePlan`, at the window class ``--window-class`` declares (none: each window says so)."""
     from .close_plan import ClosePlan
+    from verity_vllm.inputs.serves import window_class_parts
+
     from .window_class import WindowClass
 
-    cls = WindowClass(*(int(p) for p in opts.window_class.split(","))) if opts.window_class else None
+    cls = WindowClass(*window_class_parts(opts.window_class)) if opts.window_class else None
     r = getattr(opts, "record", None)
     return ClosePlan(out, cls, flush=flush, record=record_of(out, opts), in_lease=bool(r is not None and r.record_in_lease))
 

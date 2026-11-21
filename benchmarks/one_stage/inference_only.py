@@ -273,9 +273,10 @@ def capacity(work: int, lease_min: int, utilization: Fraction, clock: str = CLOC
 
 def window_class(arg: str) -> Any:
     """``--class``'s SLOTS,PROMPT,OUTPUTS as a `window_circuit.WindowClass` (`prove_path.window_class_of`'s)."""
+    from verity_vllm.inputs.serves import window_class_parts
     from verity_vllm.program.predict.window_circuit import WindowClass
 
-    return WindowClass(*(int(x) for x in arg.split(",")))
+    return WindowClass(*window_class_parts(arg))
 
 
 def policy(cls_arg: str, model: str, revision: str, lease_min: int, utilization: Fraction, source: str,
