@@ -249,7 +249,7 @@ def test_the_servers_copy_keeps_the_release_and_asks_for_the_token_ids():
     assert b"x-verity" not in bare and REL.release_of(bare.partition(b"\r\n\r\n")[0] + b"\r\n\r\n") is None
 
 
-@@pytest.mark.parametrize("payload", [P, REL.ID_PAYLOAD])
+@pytest.mark.parametrize("payload", [P, REL.ID_PAYLOAD])
 def test_an_id_request_is_answered_in_the_id_form_from_the_servers_stream(payload):
     """Before a server that streams each sampled id in its own chunk: the network attester's id request comes back as
     each id one event of P bytes, then the trailer, with no HTTP head, no usage and no text. The record has the release,
