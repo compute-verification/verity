@@ -307,7 +307,6 @@ theorem membersRun_ok {p : _root_.Spot.OneStageZk.Params} {ms : Array _root_.Spo
   unfold _root_.Spot.OneStageZk.membersRun at h
   obtain ⟨⟨⟩, hst, h⟩ := ebind_ok h
   obtain ⟨roots, hroots, h⟩ := ebind_ok h
-  obtain ⟨⟨⟩, -, h⟩ := ebind_ok h
   exact ⟨hst, roots, hroots, runMembers_ok h hall⟩
 
 /-! ## The statement read under a member's name -/

@@ -818,12 +818,20 @@ theorem kept_nil (b : Bool) (c : Array String) (x : String) :
     Docket.kept b c x = #[] ↔ c = #[] ∧ b = true := by
   cases b <;> simp [Docket.kept, addCode_ne_nil]
 
+theorem foldl_addCode_nil (xs c : Array String) : xs.foldl addCode c = #[] ↔ c = #[] ∧ xs = #[] := by
+  have key : ∀ (l : List String) (c : Array String), l.foldl addCode c = #[] ↔ c = #[] ∧ l = [] := by
+    intro l
+    induction l with
+    | nil => intro c; simp
+    | cons x l ih => intro c; rw [List.foldl_cons, ih]; simp [addCode_ne_nil]
+  rw [← Array.foldl_toList, key, Array.toList_eq_nil_iff]
+
 /-- R8's codes (`Docket.r8Codes`) add none exactly when R8 holds. -/
 theorem r8Codes_nil (v : Docket.Verifier) (c : Array String) :
     Docket.r8Codes v c = #[] ↔ c = #[] ∧ R8 v := by
   unfold Docket.r8Codes R8
-  rw [kept_nil, kept_nil]
-  exact ⟨fun ⟨⟨h, t⟩, r⟩ => ⟨h, t, r⟩, fun ⟨h, t, r⟩ => ⟨⟨h, t⟩, r⟩⟩
+  rw [foldl_addCode_nil, kept_nil]
+  exact ⟨fun ⟨⟨h, t⟩, w⟩ => ⟨h, t, w⟩, fun ⟨h, t, w⟩ => ⟨⟨h, t⟩, w⟩⟩
 
 theorem any_false_iff {α : Type} (xs : Array α) (p : α → Bool) : xs.any p = false ↔ ∀ x ∈ xs, p x = false := by
   rw [Bool.eq_false_iff, ne_eq, Array.any_eq_true']
@@ -906,21 +914,26 @@ theorem docket_nil (rec : Json) (v : Docket.Verifier) :
   unfold Docket.checkRef
   extract_lets v2 get c0 w program part partDigest mine roots previous j14 j12 j11 j10 j9 j8 distinct j7 j6 j5 j4 j3 j2
     j1 j0 c1
-  have h14 : ∀ c, j14 () c = #[] ↔ c = #[] ∧ R8 v ∧ RL v := fun c =>
+  have h14 : ∀ c, j14 () c = #[] ↔ c = #[] ∧ SuppliedSourced v ∧ R8 v ∧ RL v := fun c =>
     (step_ite (P := True) (RL v)
       (fun _ c => (pure (if Docket.linkRefused v = true then addCode c "link-points" else c) : Id (Array String)))
       (fun _ c => (pure c : Id (Array String))) (Docket.linkRefused v) "link-points"
       (fun c => ⟨fun h => ⟨h, trivial⟩, fun h => h.1⟩) (fun _ => rfl) (linkRefused_false_iff v)
-      (Docket.r8Codes v c)).trans
-      ⟨fun ⟨h, l, _⟩ => ⟨((r8Codes_nil v c).1 h).1, ((r8Codes_nil v c).1 h).2, l⟩,
-        fun ⟨h, r, l⟩ => ⟨(r8Codes_nil v c).2 ⟨h, r⟩, l, trivial⟩⟩
-  have h12 : ∀ c, j12 () c = #[] ↔ c = #[] ∧ (v2 = true → R7 rec v ∧ CertifiedHeld rec v) ∧ R8 v ∧ RL v := by
+      (Docket.r8Codes v (Docket.kept (Docket.unsourced v).isEmpty c "R7-supplied-source"))).trans
+      ⟨fun ⟨h, l, _⟩ =>
+          have ⟨h', r⟩ := (r8Codes_nil v _).1 h
+          have ⟨hc, s⟩ := (kept_nil _ _ _).1 h'
+          ⟨hc, s, r, l⟩,
+        fun ⟨hc, s, r, l⟩ => ⟨(r8Codes_nil v _).2 ⟨(kept_nil _ _ _).2 ⟨hc, s⟩, r⟩, l, trivial⟩⟩
+  have h12 : ∀ c, j12 () c = #[] ↔
+      c = #[] ∧ (v2 = true → R7 rec v ∧ CertifiedHeld rec v ∧ R7Pins rec v) ∧ SuppliedSourced v ∧ R8 v ∧ RL v := by
     intro c
     simp only [j12]
     by_cases hv : v2 = true
     · simp only [hv, ↓reduceIte, true_implies]
-      rw [h14, kept_nil, checkOutputs_nil, certifiedHeld_iff]
-      exact ⟨fun ⟨⟨⟨a, b⟩, ch⟩, e⟩ => ⟨a, ⟨b, ch⟩, e⟩, fun ⟨a, ⟨b, ch⟩, e⟩ => ⟨⟨⟨a, b⟩, ch⟩, e⟩⟩
+      rw [h14, kept_nil, kept_nil, kept_nil, kept_nil, checkOutputs_nil, certifiedHeld_iff]
+      exact ⟨fun ⟨⟨⟨⟨⟨⟨a, b⟩, ch⟩, r1⟩, r2⟩, r3⟩, e⟩ => ⟨a, ⟨b, ch, r1, r2, r3⟩, e⟩,
+        fun ⟨a, ⟨b, ch, r1, r2, r3⟩, e⟩ => ⟨⟨⟨⟨⟨⟨a, b⟩, ch⟩, r1⟩, r2⟩, r3⟩, e⟩⟩
     · simp only [hv, Bool.false_eq_true, ↓reduceIte, false_implies, h14]
       exact ⟨fun ⟨a, e⟩ => ⟨a, trivial, e⟩, fun ⟨a, _, e⟩ => ⟨a, e⟩⟩
   have h11 := step_ite (∀ e ∈ v.log, jeq (getD e "window") (getD rec "window") = false) j11 j12 _ _ h12
@@ -1084,21 +1097,22 @@ theorem docket_nil (rec : Json) (v : Docket.Verifier) :
         (.str (if v.registered.isEmpty && v.certified.isEmpty then Docket.FORMAT else Docket.FORMAT_V2)) =
         true := by
     rw [hv2]; generalize (v.registered.isEmpty && v.certified.isEmpty) = e; cases e <;> exact Iff.rfl
-  have e7 : (v2 = true → R7 rec v ∧ CertifiedHeld rec v) ↔ (ExpectsV2 v → R7 rec v ∧ CertifiedHeld rec v) := by
+  have e7 : (v2 = true → R7 rec v ∧ CertifiedHeld rec v ∧ R7Pins rec v) ↔
+      (ExpectsV2 v → R7 rec v ∧ CertifiedHeld rec v ∧ R7Pins rec v) := by
     unfold ExpectsV2; rw [hv2]; generalize (v.registered.isEmpty && v.certified.isEmpty) = e; cases e <;> simp
   rw [ek, ef, e7]
   constructor
   · rintro ⟨hk, ⟨hf, hp⟩, ⟨samplingDesign, hd, hl⟩, _, ⟨hw1, hw2⟩, hprog, ⟨d, hd'⟩, hloop, hpop, _, hsch, hroots, hports,
-      h7', h4', h5', h6a, h6b, h7r, h8, hrl⟩
+      h7', h4', h5', h6a, h6b, h7r, hs, h8, hrl⟩
     have ⟨l1, l2, l3⟩ := (r2loop get _ _ _).1 hloop
     exact ⟨samplingDesign, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3 d hd'⟩, hpop⟩,
       ⟨hsch, hroots.1, hroots.2, hports.1, hports.2.1, hports.2.2, h7'⟩, h4', h5',
-      ⟨h6a, h6b⟩, fun hv => ⟨(h7r hv).1, pinnedHeld_of_R7 (h7r hv).1, (h7r hv).2⟩, h8, hrl⟩
+      ⟨h6a, h6b⟩, fun hv => ⟨(h7r hv).1, pinnedHeld_of_R7 (h7r hv).1, (h7r hv).2⟩, hs, h8, hrl⟩
   · rintro ⟨samplingDesign, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3⟩, hpop⟩,
-      ⟨hsch, hr1, hr2, hp1, hp2, hp3, h7'⟩, h4', h5', ⟨h6a, h6b⟩, h7r, h8, hrl⟩
+      ⟨hsch, hr1, hr2, hp1, hp2, hp3, h7'⟩, h4', h5', ⟨h6a, h6b⟩, h7r, hs, h8, hrl⟩
     refine ⟨hk, ⟨hf, hp⟩, ⟨samplingDesign, hd, hl⟩, rfl, ⟨hw1, hw2⟩, hprog, ⟨d, hd'⟩,
       (r2loop get _ _ _).2 ⟨l1, l2, fun d' hd'' => ?_⟩, hpop, rfl, hsch, ⟨hr1, hr2⟩, ⟨hp1, hp2, hp3⟩, h7',
-      h4', h5', h6a, h6b, fun hv => ⟨(h7r hv).1, (h7r hv).2.2⟩, h8, hrl⟩
+      h4', h5', h6a, h6b, fun hv => ⟨(h7r hv).1, (h7r hv).2.2⟩, hs, h8, hrl⟩
     have : some d' = some d := hd''.symm.trans hd'
     cases this
     exact l3

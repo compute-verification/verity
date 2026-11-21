@@ -143,7 +143,6 @@ theorem membersRun_wf {p : Spot.OneStageZk.Params} {ms : Array Spot.OneStageZk.M
   unfold Spot.OneStageZk.membersRun at h
   obtain ⟨_, -, h⟩ := bind_ok' h
   obtain ⟨_, -, h⟩ := bind_ok' h
-  obtain ⟨_, -, h⟩ := bind_ok' h
   exact runMembers_wf h
 
 end SpotFlock.RunsAs
