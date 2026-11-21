@@ -19,6 +19,7 @@ population's units are `0, …, n − 1`, each once, in any order.
 * `popCovers_of_popMatches`: the population in order (`PopMatches`) is a cover.
 * `nsOf_sum_of_popCovers`: at `PopCovers`, the strata sum to `n`.
 * `IsSubsetDesign`: the sampling design is `subset k`, the uniform subset (`All` is `subset n`).
+* `PopHeld`: the population in order, or covered under a uniform subset: the one population hypothesis.
 * `samplingDesignOn_samplesUnder_cover`: at `PopCovers`, a subset sampling design the verifier samples under is on the
   registration's strata (`SamplingDesignOn`), which reads only their sum.
 -/
@@ -42,6 +43,13 @@ instance instDecidablePopCovers (desc : Hash.Msg) (q : Lean.Json) (n : ℕ) : De
 
 /-- **The uniform-subset sampling design**: `subset k`; `All` is `subset n`. -/
 def IsSubsetDesign (samplingDesign : Flock.Draw.SamplingDesign) : Prop := ∃ k, samplingDesign = .subset k
+
+/-- **The registration's population is held**: its units are the `n` proof blocks in order (`PopMatches`), or the strata
+cover them (`PopCovers`) and the sampling design the verifier samples under (`designAt`) is a uniform subset. A check
+the verifier runs at registration (`Spot.Slots.popOk`, or `Spot.Slots.popCoverOk` under a subset design), which the
+bridge concludes from an accept; not an assumption. -/
+def PopHeld (desc : Hash.Msg) (q lj : Lean.Json) (tb : Option Lean.Json) (n : ℕ) : Prop :=
+  PopMatches desc q n ∨ (PopCovers desc q n ∧ IsSubsetDesign (designAt desc q lj tb n))
 
 theorem popCovers_iff {desc : Hash.Msg} {q : Lean.Json} {n : ℕ} :
     PopCovers desc q n ↔ ∃ p l, Spot.Program.parse ⟨desc.toArray⟩ = .ok p ∧

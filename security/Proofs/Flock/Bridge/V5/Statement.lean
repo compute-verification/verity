@@ -410,8 +410,7 @@ def SampledKSLiveV5 : Prop :=
     -- the statement's descriptor, the registration's query, and its sampling design object and work table
     (desc : Hash.Msg) (qr : Lean.Json) (lj : Lean.Json) (tb : Option Lean.Json)
     -- the population is the game's n proof blocks in order, or the strata cover them under a uniform subset
-    (_hpop : Bridge.PopMatches desc qr n ∨
-      (Bridge.PopCovers desc qr n ∧ Bridge.IsSubsetDesign (Bridge.designAt desc qr lj tb n))),
+    (_hpop : Bridge.PopHeld desc qr lj tb n),
     -- the sampling design the verifier samples under from them, sampling kd proof blocks
     let samplingDesign := Bridge.designAt desc qr lj tb n
     let kd := Bridge.samplingDesignK samplingDesign

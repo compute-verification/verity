@@ -156,7 +156,7 @@ theorem Flock.SecurityProofs.SampledKSLiveV5 : Flock.Guarantees.SampledKSLiveV5 
     exact hTags (Flock.Bridge.tagsOkZHJ_of_ksScope hk)
   rename_i hTags
   intro L P vb σ Xr Cc Lm rows roots Cd κ r ns δ hTab hLink
-  have hns : ns.sum = n := hpop.elim Flock.Bridge.nsOf_sum fun h => Flock.Bridge.nsOf_sum_of_popCovers h.1
+  have hns : ns.sum = n := Or.elim hpop Flock.Bridge.nsOf_sum fun h => Flock.Bridge.nsOf_sum_of_popCovers h.1
   rcases Flock.Bridge.designAt_cases desc qr lj tb n with hlaw | h0
   · refine Flock.Bridge.le_add_ecrBoundL (FlockSoundness.Game.prob_le_one _ _ τ) fun hroots => ?_
     rcases hpop with hm | ⟨hc, hsub⟩
