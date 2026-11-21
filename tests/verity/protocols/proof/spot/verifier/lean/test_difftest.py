@@ -2595,7 +2595,8 @@ def subset_only(kind: str) -> str:
 def parsed_params_v2(j) -> dict:
     """`OneStageZk.paramsParsed`'s refusals of v1's part of the parameters: v1's (`covered_params`,
     `OneStage.paramsOfJson`), then parameters naming no challenger (`NO_CHALLENGER`), or one whose key is at other LMS
-    parameters than the deployed ones (`KEY_PARAMS`). Its sampling design is the sampling design v1 resolved, under any kind v1
+    parameters than the deployed ones (`KEY_PARAMS`), or a partition object whose query is not `query`
+    (`PARTITION_QUERY`). Its sampling design is the sampling design v1 resolved, under any kind v1
     parses."""
     rest = {k: v for k, v in j.items() if k != "proofs"}
     p = covered_params(rest)
@@ -2604,6 +2605,8 @@ def parsed_params_v2(j) -> dict:
     key = ChallengerKey.from_json(rest["challenger"]["key"])
     if (key.W, key.H) != DEPLOYED:
         raise D.Reject(KEY_PARAMS)
+    if rest["partition"] is not None and R.query_digest(rest["partition"]["query"]) != R.query_digest(rest["query"]):
+        raise D.Reject(M.PARTITION_QUERY)
     return p
 
 

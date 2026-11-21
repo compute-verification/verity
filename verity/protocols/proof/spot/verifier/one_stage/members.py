@@ -126,6 +126,9 @@ TABLES: dict[str, int | None] = {"circuit": None}
 #: `OneStageZk.NO_CHALLENGER`
 NO_CHALLENGER = ("the parameters name no challenger: the draw's coins are the auditor's challenger's signed release "
                  "(challenger, with window_root), never the prover's record")
+#: `OneStageZk.PARTITION_QUERY`
+PARTITION_QUERY = ("the partition object's query is not the parameters' query: the sample is drawn over the query's "
+                   "population and every session's proof block is the partition's")
 #: `OneStageZk.POPULATION_ORDER`
 POPULATION_ORDER = ("population-order: the program's proof blocks under the query are not the registration's "
                     "population units in order")
@@ -1187,6 +1190,8 @@ def members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence: 
     ms, sts = _parsed(params, evidence)
     if P.program_sha512(program) != params["partition"].get("program"):
         raise Outside("the program is not the one the parameters' partition object names")
+    if DK.query_digest(params["partition"].get("query") or {}) != DK.query_digest(params["query"]):
+        raise Outside(PARTITION_QUERY)
     descriptor = json.dumps(params["program"], sort_keys=True, separators=(",", ":")).encode()
     decoded = OC.Decoded(descriptor)
     ms = {name: {**m, "units": _block(name, m, descriptor, params["partition"], decoded)} for name, m in ms.items()}
@@ -1259,7 +1264,7 @@ def run_reason(run: Run | None, refused: str | None) -> str | None:
     return None if run is not None else f"proofs: {refused}"
 
 
-__all__ = ["EXITS", "Form", "MEMBERS_LAID", "MEMBER_STRATA", "MEMBER_UNITS", "NO_CHALLENGER",
+__all__ = ["EXITS", "Form", "MEMBERS_LAID", "MEMBER_STRATA", "MEMBER_UNITS", "NO_CHALLENGER", "PARTITION_QUERY",
            "Outside", "POPULATION_ORDER", "PROVED_UNITS", "ROW_TABLES", "Run", "Statement", "TABLES",
            "TABLE_PORT", "UNREAD", "blobs_of", "case_check", "check", "files_why", "flock_form", "flock_verdict",
            "field_trees_why", "members_run", "population_why", "POPULATION_WHY", "registered_at", "registered_reads",

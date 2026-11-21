@@ -46,6 +46,10 @@ def params (law : Json := Json.mkObj [("law", "subset"), ("k", (1 : Nat))]) (k :
 #guard why? (OneStageZk.paramsOfJson (params (k := key 2 5))) == OneStageZk.KEY_PARAMS
 #guard why? (OneStageZk.paramsOfJson (params (Json.mkObj [("law", "stratified"), ("k", (1 : Nat))]))) ==
   OneStageZk.SUBSET_ONLY "stratified"
+#guard why? (OneStageZk.paramsOfJson (Spot.Test.Docket.put params "partition" (some (Partition.build
+    (Flock.hexOf (program Spot.OneStageZk.E3).sha512)
+    ((Flock.JsonParse.parse "{\"name\":\"Q_template_instance\",\"params\":{\"template\":\"F_v1\"},\"version\":0}").toOption.getD
+      .null))))) == OneStageZk.PARTITION_QUERY
 
 /-- The challenger session's release log after its head: the family `draw`'s root `ab` recorded, a coin tree's round
 opened on the link's stream, then the coin released: a coin of the sample released after a round opened. -/
