@@ -127,6 +127,23 @@ def test_a_run_input_port_is_held_only_by_a_read_of_its_nodes_tree(reads, want, 
 
 
 @needs_lake
+def test_a_run_input_port_at_its_nodes_own_root_is_refused_without_a_read(pieces):
+    """`Spot.HeaderHeldAt`'s guard on the run input slice at the node's own root and domain: with no read the session
+    would hold the member's rows to the tree's leaves in order, not the rows C gives, so both refuse by
+    `SHARED_UNREAD`; a read of ``w`` at ``input/n0`` holds it."""
+    for reads, want in (([], M.shared_unread("w", "input/n0")), ([["w", "input/n0"]], "")):
+        j = case(reads, None, {"w": "ee"}, 2, RUN_SLICE)
+        assert reference(j) == want
+        assert pieces.call("header_held_at", j) == ("output", D.canonical(want))
+
+
+def test_a_wired_row_named_as_its_writers_field_is_refused_by_name():
+    assert M.wired_as_field_why("R/c0", "y") == (
+        "member R/c0: its row y of in(S) is named as the writer's output field it reads, and a member's slice names a "
+        "field tree's field only at the member's own output")
+
+
+@needs_lake
 def test_the_header_held_at_piece_agrees(pieces):
     stats = D.run(HELD, examples=600, server=pieces)
     assert stats.outputs > 100, stats

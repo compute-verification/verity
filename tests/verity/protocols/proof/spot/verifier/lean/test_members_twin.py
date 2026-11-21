@@ -450,8 +450,9 @@ def test_a_wired_port_is_held_by_a_registered_read_of_its_writers_tree_and_refus
     its slice (`fieldRoots`' ``tree``, `members._wired_roots`), and its header root there is rebuilt from the reader's
     own rows, so it is not the record's. Both drop the port by a registered read of ``x`` at that tree
     (`OneStageZk.headerHeldAt`, `members.population_why`), and refuse it by name with no read or a read of another
-    tree (`SHARED_UNREAD`). The slice without the tree is the slice before it was named, refused by both as a root that
-    is not the registration's."""
+    tree (`SHARED_UNREAD`), even with the writer's tree's own root and domain there, which would hold the reader's rows
+    to the tree's leaves in order rather than C's. The slice without the tree is the slice before it was named, refused
+    by both as a root that is not the registration's."""
     c0, c1 = list(WIRED)[:2]
     program, query = TI.chain().program()
     a = Audit("members-twin-wired-held", ports=(f"{c0}/out", f"{c1}/out"), opened=(c0,), closed=(c0,),
@@ -467,13 +468,16 @@ def test_a_wired_port_is_held_by_a_registered_read_of_its_writers_tree_and_refus
     h = {"frame_v3": {"domain_ids": domains, "roots": roots}, "instances": 2, "scheme": SCHEME}
     strata = P.strata(program, query)
     before = {**got, "roots": [{k: v for k, v in r.items() if k != "tree"} for r in got["roots"]]}
-    for slice_, reads, want in [(got, [["x", tree]], ""), (got, [], M.shared_unread("x", tree)),
+    for slice_, reads, want, *extra in [(got, [["x", tree]], ""), (got, [], M.shared_unread("x", tree)),
                                 (got, [["x", f"{TI.GID}/o1"]], M.shared_unread("x", tree)),
                                 (got, [["x", f"committed/{tree}"]], M.shared_unread("x", tree)),
-                                (before, [["x", tree]], "public file: not the registration's: roots, domains")]:
+                                (before, [["x", tree]], "public file: not the registration's: roots, domains"),
+                                (got, [], M.shared_unread("x", tree), x)]:
+        hx = h if not extra else {**h, "frame_v3": {"domain_ids": domains | {"x": extra[0]["domain"]},
+                                                    "roots": roots | {"x": extra[0]["root"]}}}
         held = {p: {"domain": "dd" * 64, "leaves": 8, "root": "aa" * 64, "value": v} for p, v in reads}
-        assert (M.population_why(WIRED[c1], strata, h | {"units": {"indices": [2, 3]}}, slice_, {tuple(r) for r in reads},
-                                 held or None) or "") == want, (reads, want)
-        j = {"reads": sorted(reads), "slice": slice_, "header": h,
+        assert (M.population_why(WIRED[c1], strata, hx | {"units": {"indices": [2, 3]}}, slice_,
+                                 {tuple(r) for r in reads}, held or None) or "") == want, (reads, want)
+        j = {"reads": sorted(reads), "slice": slice_, "header": hx,
              "registered": {"format": "verity/registered-reads/v2", "ports": held} if held else None}
         assert pieces.call("header_held_at", j) == ("output", D.canonical(want)), (reads, want)

@@ -834,6 +834,8 @@ def _wired_roots(desc: Mapping[str, Any], ranges: Sequence[Sequence[Any]], ms: M
         first, n = m["units"][0][0], _count(m)
         own = roots.get(name, [])
         wires = reach(first, n) if n >= 1 else [w for w in got["wires"] if _wire_reaches(ranges, lbase, first, n, w)]
+        if (w := next((w for w in wires if _wire_row(cuts, w) == w["out"]), None)):
+            raise _Refused(wired_as_field_why(name, w["out"]))
         if (w := next((w for w in wires if any(r.get("port") == _wire_row(cuts, w) for r in own)), None)):
             raise _Refused(own_root_why(name, _wire_row(cuts, w)))
         mine = list(own)
@@ -846,6 +848,12 @@ def _wired_roots(desc: Mapping[str, Any], ranges: Sequence[Sequence[Any]], ms: M
                                  "root": e.get("root"), "tree": f"{w['writer']}/{w['out']}"})
         out[name] = mine
     return out
+
+
+def wired_as_field_why(member: str, row: str) -> str:
+    """`OneStageZk.WIRED_AS_FIELD_WHY`: the refusal of a member's wired row named as its writer's output field."""
+    return (f"member {member}: its row {row} of in(S) is named as the writer's output field it reads, and a member's "
+            "slice names a field tree's field only at the member's own output")
 
 
 def _wire_row(cuts: Mapping[str, Mapping[str, int]], w: Mapping[str, Any]) -> str:
@@ -991,7 +999,7 @@ POPULATION_WHY = "public file: not the registration's: population"
 
 def shared_unread(port: str, tree: str) -> str:
     """`OneStageZk.SHARED_UNREAD`: the refusal of a member's header port ``port`` held in its template's shared field tree
-    ``tree``, that its registered reads open no row of there and whose header root is not the registration's."""
+    ``tree``, that its registered reads open no row of there."""
     return (f"public file: port {port} is held in the shared tree {tree}, and the member's registered reads open no row "
             "of it there: a member's rows of a tree other members' rows share are held to the registration's root by "
             "opening it at the leaves C gives, and the header's own root there is no commitment to them")
@@ -1017,8 +1025,9 @@ def _held_at(reads: Collection[tuple[str, str]], held: Mapping[str, Any], slice_
     """`OneStageZk.headerHeldAt` before `headerHeld`: the slice and the header without each port the slice holds at a
     template's field tree (its entry's ``tree``) that ``reads`` opens there, and each it holds no root of, that the
     header names and ``reads`` names at a value the verifier's registered file's ports ``held`` hold there as a
-    registered value (`registered_at`); `_Refused` (`shared_unread`) for one ``reads`` doesn't open whose header root
-    or domain is not the registration's, and (`unregistered_why`) for one read at any other value."""
+    registered value (`registered_at`); `_Refused` (`shared_unread`) for one the header names that ``reads`` doesn't
+    open whose header root or domain is not the registration's, or that is a wired row or a run input's tree (its
+    port not the tree's field) whatever its root, and (`unregistered_why`) for one read at any other value."""
     h = header if isinstance(header, dict) else {}
     if not _same(h.get("instances"), slice_.get("population")):
         raise _Refused(POPULATION_WHY)
@@ -1032,7 +1041,8 @@ def _held_at(reads: Collection[tuple[str, str]], held: Mapping[str, Any], slice_
             continue
         if (p, t) in reads:
             drop.add(p)
-        elif roots.get(p) is not None and (roots[p] != r.get("root") or domains.get(p) != r.get("domain")):
+        elif roots.get(p) is not None and (not t.endswith(f"/{p}") or G.is_fresh_value(t) or roots[p] != r.get("root")
+                                           or domains.get(p) != r.get("domain")):
             raise _Refused(shared_unread(p, t))
     ported = {r.get("port") for r in slice_["roots"]}
     for p, v in sorted(reads):

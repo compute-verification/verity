@@ -10,9 +10,9 @@ A member's header held to its slice (`OneStageZk.headerHeldAt`), the difftest's 
 member's ports at C's run input nodes' trees (`OneStageZk.runInputRootsAt`) on `Flock.Test.WiredPorts`' programs: on
 `runP`, unit 0 reads its parameter `w` from run input node 0, so its slice holds `w` at the record's root of
 `input/n0`, with that tree; on `regP`, where node 0 is a registered input, it holds none; a root of the member's own at
-`w` is refused by name where the record holds `input/n0`, and kept where it does not. At that slice, a header whose root at `w` is not the registration's is held only by a read of
-`w` at `input/n0`: no read, a read at another run input's tree and a read at the member's own committed tree each
-refuse by `SHARED_UNREAD`.
+`w` is refused by name where the record holds `input/n0`, and kept where it does not. At that slice, a header naming `w`, at the registration's root or another, is held only by a
+read of `w` at `input/n0`: no read, a read at another run input's tree and a read at the member's own committed tree
+each refuse by `SHARED_UNREAD`.
 -/
 
 @[expose] public section
@@ -75,6 +75,11 @@ def heldRun (reads : Array (String × String)) : String :=
 #guard heldRun #[] == OneStageZk.SHARED_UNREAD "w" "input/n0"
 #guard heldRun #[("w", "input/n1")] == OneStageZk.SHARED_UNREAD "w" "input/n0"
 #guard heldRun #[("w", "committed/w")] == OneStageZk.SHARED_UNREAD "w" "input/n0"
+-- the node's own root and domain with no read: the rows C gives are not the tree's leaves in order, refused too
+#guard (match OneStageZk.headerHeldAt #[] #[] runSlice (runHeader.setObjVal! "frame_v3" (Json.mkObj
+    [("roots", Json.mkObj [("w", "ee")]), ("domain_ids", Json.mkObj [("w", "dee")])])) with
+  | .ok () => ""
+  | .error e => e) == OneStageZk.SHARED_UNREAD "w" "input/n0"
 #guard OneStageZk.SHARED_UNREAD "w" "input/n0" == "public file: port w is held in the shared tree input/n0, and the " ++
   "member's registered reads open no row of it there: a member's rows of a tree other members' rows share are held " ++
   "to the registration's root by opening it at the leaves C gives, and the header's own root there is no commitment " ++

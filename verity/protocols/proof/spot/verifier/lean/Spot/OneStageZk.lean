@@ -345,14 +345,20 @@ def OWN_ROOT_WHY (member port : String) : String :=
   s!"member {member}: port {port} is a row of in(S) (C wires it from another block's outputs), and the registration " ++
     "holds a root of its own for it: a crossing wire is committed once, in its writer's output field's tree"
 
+/-- The refusal of a member's row `row` C wires into it that is named as its writer's output field: the slice holds
+a member's own output and a wired row each at a field tree, and `headerHeldAt` tells them apart by that name. -/
+def WIRED_AS_FIELD_WHY (member row : String) : String :=
+  s!"member {member}: its row {row} of in(S) is named as the writer's output field it reads, and a member's slice " ++
+    "names a field tree's field only at the member's own output"
+
 /-- **The members' roots with their wired ports'**: each member's roots (`roots`), then, for each wire of the wiring
 `W` whose reader units meet the member's (a wire's are its template's own count, so a range's are those of its
 template's earlier ranges on), its writer's output field's tree among the window's trees `ft` (`fieldTreesOf`,
 `fieldRootIn`) under the reader row the wire covers (`wireRow`: the port, or its cut row `<port>#<j>`), the first
-wire's of each row, so every cut row of a wire gets its writer's tree. A wired row the member holds a root of its own
-of is refused by name
-(`OWN_ROOT_WHY`). A reader's wired rows are references with paths into that tree; one whose writer's field the record
-names no tree of gets none, so its member's public file naming it is refused by name (`UNWIRED_WHY`). Its cost is the
+wire's of each row, so every cut row of a wire gets its writer's tree. A wired row named as its writer's field
+(`WIRED_AS_FIELD_WHY`) and one the member holds a root of its own of (`OWN_ROOT_WHY`) are refused by name. A
+reader's wired rows are references with paths into that tree; one whose writer's field the record names no tree of
+gets none, so its member's public file naming it is refused by name (`UNWIRED_WHY`). Its cost is the
 members' and the wires' numbers, each lookup among one template's fields. -/
 def fieldRoots (W : Spot.Wires.Wiring) (rs : Array (String × Nat × Nat)) (ms : Array Member)
     (ft : Std.HashMap String (Array (String × Json))) (roots : Std.HashMap String (Array Json)) :
@@ -361,6 +367,8 @@ def fieldRoots (W : Spot.Wires.Wiring) (rs : Array (String × Nat × Nat)) (ms :
   ms.foldlM (fun acc m => do
     let inRange := wireReaches rs lbase m
     let own := roots.getD m.name #[]
+    if let some w := W.wires.find? fun w => inRange w && wireRow W w == w.out then
+      throw (WIRED_AS_FIELD_WHY m.name w.out)
     if let some w := W.wires.find? fun w => inRange w && own.any (getD · "port" == Json.str (wireRow W w)) then
       throw (OWN_ROOT_WHY m.name (wireRow W w))
     let mine := W.wires.foldl (fun (got : Array Json) w =>
@@ -1618,6 +1626,16 @@ private def wiredSliceT (W : Spot.Wires.Wiring) : Json :=
   SHARED_UNREAD "x" "W/y"
 #guard refusal (headerHeldAt #[("x", "W/z")] #[] (wiredSliceT (wiringT true)) (headerT 2 [("x", "cc"), ("z", "bb")])) ==
   SHARED_UNREAD "x" "W/y"
+-- the writer's own root at the wired row, with no read: the session would hold the reader's rows to the tree's leaves
+-- in order, not C's, so it is refused by name too
+#guard refusal (headerHeldAt #[] #[] (wiredSliceT (wiringT true)) (headerT 2 [("x", "aa"), ("z", "bb")])) ==
+  SHARED_UNREAD "x" "W/y"
+-- a wired row named as the writer's output field it reads: refused, so a slice's field-named entry is an own output
+#guard whyT (fieldRoots { wiringT true with wires := (wiringT true).wires.map ({ · with port := "y" }) }
+    #[("W", 0, 2), ("R", 2, 2)] wiredMs (fieldTreesOf (templatesOf ["W/c0", "R/c0"]) (recordT 4 [("W/y", "aa")])) {}) ==
+  WIRED_AS_FIELD_WHY "R/c0" "y"
+#guard WIRED_AS_FIELD_WHY "R/c0" "y" == "member R/c0: its row y of in(S) is named as the writer's output field it " ++
+  "reads, and a member's slice names a field tree's field only at the member's own output"
 
 /-- A row of 16 `v16` leaves, a `Gemm{K=16, N=16}` unit's `x` and its output. -/
 private def rowT : Flock.Program.Ty := .array 16 (.value 16)

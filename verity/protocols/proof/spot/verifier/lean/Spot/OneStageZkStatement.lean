@@ -1487,8 +1487,8 @@ checks on the header as parsed, before it drops any port. -/
 def POPULATION_WHY : String := "public file: not the registration's: population"
 
 /-- The refusal of a member's public file whose port `p` is held in `tree`, its template's field tree that every member of
-the template shares or a run input node's `input/n<w>` that every unit reading the node shares, where the member's registered reads open no row of it at `tree` and the header's root there is not
-the registration's (`headerHeldAt`). -/
+the template shares or a run input node's `input/n<w>` that every unit reading the node shares, where the member's
+registered reads open no row of it at `tree` (`headerHeldAt`). -/
 def SHARED_UNREAD (p tree : String) : String :=
   s!"public file: port {p} is held in the shared tree {tree}, and the member's registered reads open no row of it " ++
     "there: a member's rows of a tree other members' rows share are held to the registration's root by opening it at " ++
@@ -1518,8 +1518,12 @@ def UNREGISTERED_WHY (p v : String) : String :=
 /-- `headerHeld` at a member's registered reads `reads` (`(port, value)` each): a port the slice `rec` holds at a
 template's field tree (its entry's `tree`, `fieldTreesOf`) that `reads` opens at that tree is held by those reads
 (`Flock.Registered.checkPort` opens every row the header's root is over at the leaf C gives, under the registration's
-root, `portTreeHeld`), so the header's own root and domain there are not compared; one `reads` does not open there
-whose header root or domain is not the registration's refuses by name (`SHARED_UNREAD`). A port the slice holds no
+root, `portTreeHeld`), so the header's own root and domain there are not compared; one the header names that
+`reads` does not open there refuses by name (`SHARED_UNREAD`) where its header root or domain is not the
+registration's, and at a wired row or a run input's tree (a port not the tree's field, `fieldRoots` naming no wired
+row as its writer's field) even where they are: a session opens only the ports its registered file names at the
+leaves C gives, and a root over the member's own rows equal to the tree's holds them at the tree's leaves in order,
+which is C's only for a member's own output. A port the slice holds no
 root of that `reads` names and the header names is held by those reads too where the verifier's registered file's
 ports `held` hold it at that value as a registered value (`registeredAt`): `checkPort` opens every row of it under
 that file's root at the position C gives, and `OneCircuit.pos` reads such a value only at an input port whose units
@@ -1536,8 +1540,8 @@ def headerHeldAt (reads : Array (String × String)) (held : Array Flock.Register
   for (p, t, r) in shared do
     if reads.contains (p, t) then
       cur := dropPort cur.1 cur.2 p
-    else if !(getD (getD fv "roots") p matches .null)
-        && (getD (getD fv "roots") p != getD r "root" || getD (getD fv "domain_ids") p != getD r "domain") then
+    else if !(getD (getD fv "roots") p matches .null) && (!t.endsWith s!"/{p}" || Flock.Registered.isFreshValue t
+        || getD (getD fv "roots") p != getD r "root" || getD (getD fv "domain_ids") p != getD r "domain") then
       throw (SHARED_UNREAD p t)
   for (p, v) in reads do
     if !(Record.byPort rec).any (·.1 == p) && !(getD (getD fv "roots") p matches .null) then
