@@ -12,7 +12,8 @@ their work subprotocol:
 
 The id bumps with the work subprotocol, because an accepted answer of each means something different: v0's work is a
 period's credit, every execution phase credited all or nothing and named on the run's record, and v1's is one run's credit at
-Pearl's assumption at δ, published as Pearl+'s `Credit`; a caller that read a v0 answer as v1's would read an H1 period
+Pearl's assumption at δ, published as Pearl+'s `Published` (its `Credit` and its fixed operands' standing); a caller that
+read a v0 answer as v1's would read an H1 period
 credit as a Pearl+ run's. The cases each takes are different too (v1's work case is `verity/pouw/pearl-plus/v1`'s), so
 neither accepts the other's input.
 
@@ -28,7 +29,10 @@ a version-2 W that registers no weight is refused, so PoUW's credited work reads
 that states no version is version 1, written before W registered the weights, and Pearl+'s verdict on it names its
 weights untied (`PouwVerifier.PearlPlus.WEIGHTS_UNTIED`): there the tie is by the record alone, nothing holds PoUW's
 committed weights to the weights the record registers, and remote doesn't establish that PoUW's credited work and the
-audited inference read the same weights. The audited circuit, cut at its linears, reads no B row.
+audited inference read the same weights. The audited circuit, cut at its linears, reads no B row. Pearl+'s published
+answer, which remote publishes unchanged, says which: its `operands` is ``committed-before-coin`` at version 2 and
+``not-committed`` at version 1 (`PouwVerifier.PearlPlus.Operands`), and its `compared_with_registered_weights` is false
+at both, since at neither is a fixed operand compared with the weights the audited inference reads.
 
 v0's subprotocols are the inference-only policy (`InferenceOnlyCheck.Protocol.protocol`, `verity/inference-only/v0`: the registered
 circuit divides into inference blocks within their gate and fresh-input budgets, which reads only the registered circuit

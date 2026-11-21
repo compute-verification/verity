@@ -333,7 +333,7 @@ variable {ι α : Type} [Fintype α] {d : Device ι} (V : Vocab d α)
 /-- **PoUW's claim where composite `k` lists Pearl+'s id is Pearl+'s**, in MACs at the credit its check published. -/
 theorem holds_pouw_of_mem {k : Verity.Registration.Composite} (hk : PouwVerifier.PearlPlus.Protocol.protocolId ∈ k)
     {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {σ : Game.Strategy (V.game θ F c)} {o : Exchange} :
-    V.Holds k θ F c σ .pouw o ↔ ∃ w, PearlPlusCredits k o.sent w ∧
+    V.Holds k θ F c σ .pouw o ↔ ∃ w op, PearlPlusCredits k o.sent w op ∧
       (1 - (w.rho : ℝ)) * (1 - (w.epsilon : ℝ)) * w.macs ≤ V.macs θ F c σ o := by
   simp only [Holds, if_pos hk]
 
@@ -477,7 +477,7 @@ theorem pouw_fails (k : Verity.Registration.Composite) (θ : ByteArray) (F : Arr
     (ho : o.params = θ ∧ o.files = F ∧ o.commitment = .empty) : ¬ exact.Holds k θ F .empty σ .pouw o := by
   intro h
   by_cases hk : PouwVerifier.PearlPlus.Protocol.protocolId ∈ k
-  · obtain ⟨_, ⟨_, c', _, ⟨_, hc, _⟩, _⟩, _⟩ := (exact.holds_pouw_of_mem hk).1 h
+  · obtain ⟨_, _, ⟨_, c', _, ⟨_, hc, _⟩, _⟩, _⟩ := (exact.holds_pouw_of_mem hk).1 h
     have h64 : ¬ ByteArray.empty.size = 64 := by decide
     change Composition.decodeCommitment o.commitment = .ok c' at hc
     rw [ho.2.2, Composition.decodeCommitment, if_neg h64] at hc

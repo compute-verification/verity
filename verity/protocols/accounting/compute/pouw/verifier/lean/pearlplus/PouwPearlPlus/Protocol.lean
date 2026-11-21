@@ -49,7 +49,11 @@ that digest, held to its manifest entry (`held`); a path the object doesn't name
 **The check** is `check` on them: it accepts with the run's credit at its scheme's named assumption at δ = `DELTA`, or rejects with
 `check`'s reason. It never leaves a run undecided.
 
-**Public**, on acceptance: the credit (`credited`, `credited_tiles`, `checked_macs`, `rho`, `epsilon`) and `delta`.
+**Public**, on an accepted run (`Published`): the credit (`credited`, `credited_tiles`, `checked_macs`, `rho`,
+`epsilon`) and `delta`; `operands`, whether the fixed operands the credited tiles read were committed before the salt
+coin (`Operands`: ``committed-before-coin`` where W is at version 2 and registers every fixed operand the tiles read,
+``not-committed`` where W is at version 1); and `compared_with_registered_weights`, always false: no fixed operand is
+compared with the weights the audited circuit reads, so neither value says the credited work read them.
 
 **Profile**: the samples asked for, the tiles sampled and the passes.
 -/
@@ -57,6 +61,17 @@ that digest, held to its manifest entry (`held`); a path the object doesn't name
 @[expose] public section
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
+
+namespace PouwVerifier.PearlPlus
+
+/-- Whether the fixed operands an accepted run's tiles read were committed before the salt coin: registered among the
+``pearl-b/`` values of a version-2 epoch record W (`Tie.tieOf`), or not, under a version-1 W (`WEIGHTS_UNTIED`). -/
+inductive Operands where
+  | committedBeforeCoin
+  | notCommitted
+  deriving DecidableEq, Repr
+
+end PouwVerifier.PearlPlus
 
 namespace PouwVerifier.PearlPlus.Protocol
 
@@ -94,6 +109,26 @@ structure Profile where
   draws : Nat
   drawn : Nat
   passes : Nat
+
+/-- What an accepted run publishes: its credit and its fixed operands' standing. -/
+structure Published where
+  credit : Credit
+  operands : Operands
+
+/-- The standing of the fixed operands an accepted run's tie names: committed before the coin where the tie names no
+untied weights (a version-2 W), not committed where it does (a version-1 W); none without a tie. -/
+def operandsOf : Option Tied → Option Operands
+  | some t => some (if t.weights.isSome then .notCommitted else .committedBeforeCoin)
+  | none => none
+
+/-- `verify_run.OPERANDS_COMMITTED` -/
+def OPERANDS_COMMITTED : String := "committed-before-coin"
+/-- `verify_run.OPERANDS_NOT_COMMITTED` -/
+def OPERANDS_NOT_COMMITTED : String := "not-committed"
+
+def operandsName : Operands → String
+  | .committedBeforeCoin => OPERANDS_COMMITTED
+  | .notCommitted => OPERANDS_NOT_COMMITTED
 
 def keys? : Json → Option (List String)
   | .obj kvs => some ((kvs.toArray.map (·.1)).qsort (· < ·)).toList
@@ -165,7 +200,7 @@ def opener (c : Commitment) (e : Evidence) (bs : Core.Blobs) (pl : Plan) (i tid 
     held spec (← bs.get d f)
   opening (c.manifests.getD i .null) pl.passes[i]! file tid
 
-def checkBlobs (p : Params) (c : Commitment) (e : Evidence) (bs : Core.Blobs) : Core.Outcome Credit Profile :=
+def checkBlobs (p : Params) (c : Commitment) (e : Evidence) (bs : Core.Blobs) : Core.Outcome Published Profile :=
   let i := inputOf p c
   if e.files.length != c.manifests.length then
     .reject s!"evidence: {e.files.length} passes' files for {c.manifests.length} passes"
@@ -174,13 +209,17 @@ def checkBlobs (p : Params) (c : Commitment) (e : Evidence) (bs : Core.Blobs) : 
     | .error r => .reject r.reason
     | .ok pl =>
       let ans := check i (opener c e bs pl)
-      match ans.accept, ans.work with
-      | true, some w => .accept w { draws := p.draws, drawn := pl.drawn, passes := pl.passes.length }
-      | _, _ => .reject (ans.reason.getD "the run is not accepted")
+      match ans.accept, ans.work, operandsOf ans.tie with
+      | true, some w, some op =>
+        .accept ⟨w, op⟩ { draws := p.draws, drawn := pl.drawn, passes := pl.passes.length }
+      | true, some _, none => .reject "the accepted run is tied to no epoch record"
+      | _, _, _ => .reject (ans.reason.getD "the run is not accepted")
 
-def publicJson (w : Credit) : Json :=
+def publicJson (pub : Published) : Json :=
+  let w := pub.credit
   Json.mkObj [("credited", toJson w.credited), ("credited_tiles", toJson w.creditedTiles), ("delta", .str (toString DELTA)),
-    ("epsilon", .str (toString w.epsilon)), ("checked_macs", toJson w.macs), ("rho", .str (toString w.rho))]
+    ("epsilon", .str (toString w.epsilon)), ("checked_macs", toJson w.macs), ("rho", .str (toString w.rho)),
+    ("operands", .str (operandsName pub.operands)), ("compared_with_registered_weights", .bool false)]
 
 def profileJson (pr : Profile) : Json :=
   Json.mkObj [("draws", toJson pr.draws), ("drawn", toJson pr.drawn), ("passes", toJson pr.passes)]
@@ -190,7 +229,7 @@ def protocol : Core.BlobProtocol where
   Params := Params
   Commitment := Commitment
   Evidence := Evidence
-  Public := Credit
+  Public := Published
   Profile := Profile
   params := paramsOf
   commitment := commitmentOf
@@ -258,6 +297,20 @@ private def run (manifests : String) : ByteArray := runIn manifests (executionPh
     pure (i.ofRecord && h.schema == COIN_SCHEMA && fieldIs (get? h.draw "from") DRAW_NODE &&
       ((ofRecordReason i.coins i.source i.held).getD "").startsWith "the epoch's coins are an in-process")).toOption ==
   some true
+-- an accepted run publishes its fixed operands' standing: committed before the coin under a version-2 W, whose tie names
+-- no untied weights, not committed under a version-1 W; never compared with a registered weight
+#guard operandsOf (some { record := "", tables := 0 }) == some .committedBeforeCoin
+#guard operandsOf (some { record := "", tables := 0, weights := some WEIGHTS_UNTIED }) == some .notCommitted
+#guard operandsOf none == none
+private def credit : Credit :=
+  { credited := 3, creditedTiles := 1, macs := 4, rho := 1 / 400, epsilon := 1 / 100, overInertBoundDraws := 0 }
+#guard (publicJson ⟨credit, .notCommitted⟩).compress ==
+  "{\"checked_macs\":4,\"compared_with_registered_weights\":false,\"credited\":3,\"credited_tiles\":1," ++
+  "\"delta\":\"1/100\",\"epsilon\":\"1/100\",\"operands\":\"not-committed\",\"rho\":\"1/400\"}"
+#guard (get? (publicJson ⟨credit, .committedBeforeCoin⟩) "operands") == some (.str "committed-before-coin")
+-- a commitment without W, an absent epoch record, is refused before any pass is read
+#guard reasonOf (params record) (runIn "[{}]" "{\"dropped\":[],\"rounds\":null}") "{\"files\":[{}]}".toUTF8 ==
+  some "commitment: window: keys are not dropped, record, rounds"
 -- well-formed inputs reach the run's verdict, whose refusal is the run's
 #guard (reasonOf (params record) (run "[{}]") "{\"files\":[{}]}".toUTF8).isSome
 #guard (protocol.answer (params record) (run "[{}]") "{\"files\":[{}]}".toUTF8 #[]).verdict == .reject

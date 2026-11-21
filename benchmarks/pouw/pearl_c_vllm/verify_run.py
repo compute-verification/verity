@@ -53,6 +53,12 @@ match, but the run's B is no registered value, so it never reads as a tie. A W t
 written before W registered the fixed operands: it is held to the calls alone, as it was then, and the tie names its fixed operands
 untied (``"weights": WEIGHTS_UNTIED``, in the answer's tie and the verdict's line), so its accept never reads as a tie of
 the fixed operands; a version-1 W that registers a ``pearl-b/`` value is refused (`V1_WEIGHTS`).
+An accepted run publishes its fixed operands' standing (``public.operands``, `operands_of`, as
+`PouwVerifier.PearlPlus.Protocol` publishes it): `OPERANDS_COMMITTED` under a version-2 W, `OPERANDS_NOT_COMMITTED` under a
+version-1 W or with no W, and ``"compared_with_registered_weights": false`` beside it, since no fixed operand is compared
+with the weights the audited circuit reads. With no W this verdict accepts untied, where Pearl+'s protocol
+(`PouwVerifier.PearlPlus.Protocol`, the composites' Pearl+) refuses a commitment that names no W: such an accepted run is
+this verdict's alone, never Pearl+'s protocol's.
 With the execution phase's class too (``window_class``, `served_passes.py verify --class`), the tied passes must be the class's fixed load
 (`held_to_load`: a pass a round of the class's outputs, each call's rows `window_class.PearlTables`'), or the run is
 refused before the coin in the class's own words (`off_load`); W's header names no class, so the verdict takes it as
@@ -535,6 +541,9 @@ UNTIED_WEIGHTS = "W registers no weight's B rows (no pearl-b/ value: a window re
 #: the tie's ``weights`` for a version-1 W (`pearl_c.window.version_of`), which ties the calls alone: named in the
 #: verdict, never read as a tie of the fixed operands
 WEIGHTS_UNTIED = "weights untied (W v1)"
+#: an accepted run's ``public.operands`` (`operands_of`, `PouwVerifier.PearlPlus.Protocol.publicJson`'s): its fixed operands
+#: committed before the salt coin, or not
+OPERANDS_COMMITTED, OPERANDS_NOT_COMMITTED = "committed-before-coin", "not-committed"
 #: why `tie` refuses a version-1 W that registers a fixed operand's B rows
 V1_WEIGHTS = "W states no version (version 1), whose values are the calls' alone, and registers"
 #: the coin record's schema (module docstring, "The coin record")
@@ -628,6 +637,13 @@ def tie(w: dict, passes: list[Pass], rounds: list[int] | None = None, dropped: t
         if bad := [k for k in x if type(have.get(k)) is not type(x[k]) or have[k] != x[k]]:
             raise ValueError(f"W's {v}: its {', '.join(bad)} not the {_owner(v)}'s")
     return {"record": DD.digest(w), "tables": len(want), **({} if tied else {"weights": WEIGHTS_UNTIED})}
+
+
+def operands_of(tied: dict | None) -> str:
+    """What an accepted run publishes of its fixed operands (``public.operands``, `Protocol.operandsOf`):
+    `OPERANDS_COMMITTED` where its tie names no untied weights (a version-2 W registered every fixed operand the tiles
+    read before the salt coin), else `OPERANDS_NOT_COMMITTED` (a version-1 W, or no W at all)."""
+    return OPERANDS_COMMITTED if tied is not None and "weights" not in tied else OPERANDS_NOT_COMMITTED
 
 
 def load_class(load: Any) -> tuple[int, int, int]:
@@ -994,6 +1010,7 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
               "passes": [{"transcript": p.man["commitment"]["root"], "records": p.man["records_root"], "salt": p.epoch.salt.hex(),
                           "activations": [u["root_a"] for u in p.man["matmuls"]], "y": y_roots(p)} for p in passes],
               **({"tie": tied} if tied is not None else {}),
+              "operands": operands_of(tied), "compared_with_registered_weights": False,
               **({"rounds": list(rounds), "dropped": list(dropped)} if rounds is not None else {})}
     profile = {"delta": str(delta), "draws": draws, "draw": "work-weighted, with replacement", "source": source.hex(),
                "source_from": out["draw"], "over_cap": over_cap, **({"test_instance": True} if test_instance else {}),

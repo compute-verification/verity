@@ -53,7 +53,7 @@ names, `Session*` means a run of a subprotocol.
 | Subprotocol | What it establishes | Lean check | id |
 |---|---|---|---|
 | SPOT ([README](../../../proof/spot/verifier/README.md)) | the committed values satisfy the registered circuit outside the blocks the sample misses | `VStar.Recursive.Sampled.protocol` (`verity/protocols/proof/spot_flock/verifier/lean`), one-stage, recursive or two-stage by its `form` | `verity/sampled-proofs/v1` |
-| PoUW ([README](../../../accounting/compute/pouw/verifier/README.md)) | a run's credited MACs at Pearl's assumption, at δ over a work-weighted sample | `PouwVerifier.PearlPlus.Protocol.protocol` (`verity/protocols/accounting/compute/pouw/verifier/lean/pearlplus`) | `verity/pouw/pearl-plus/v1` |
+| PoUW ([README](../../../accounting/compute/pouw/verifier/README.md)) | a run's credited MACs at Pearl's assumption, at δ over a work-weighted sample, and whether its fixed operands were committed before the salt coin (`operands`), none compared with the audited circuit's weights | `PouwVerifier.PearlPlus.Protocol.protocol` (`verity/protocols/accounting/compute/pouw/verifier/lean/pearlplus`) | `verity/pouw/pearl-plus/v1` |
 | PoUW, v0 | the period's credited work, execution phases all or nothing | `PouwVerifier.Period.protocol` (`verity/protocols/accounting/compute/pouw/verifier/lean/check`) | `verity/pouw/period/v1` |
 | The inference-only policy ([README](../../../policy/training_detection/inference_only/verifier/README.md)) | the registered circuit divides into inference blocks within their gate and unregistered-input budgets; θ is registered | `InferenceOnlyCheck.Protocol.protocol` (`verity/protocols/policy/training_detection/inference_only/verifier/lean`) | `verity/inference-only/v0` |
 
