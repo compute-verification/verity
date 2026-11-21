@@ -596,10 +596,12 @@ class Rows:
         for k, ((ct, cu), tok) in enumerate(zip(P.collects, toks)):
             a = IO.collect_reference(a, tok, KO, k == 0)
             self._put(ct, cu, "o0" if self.fns[ct].name == "OutCollect" else "o1", _i32(a), EVALUATED)
+            self._pad(ct, cu)
         e = P.entry.bindings
         entry = IO.entry_reference(S.row[0], a, KO, e["IDB"], e["NP"], e["STOP"])
         et, eu = P.entry_unit
         self._put(et, eu, "o0", np.array([entry], dtype=np.uint16), EVALUATED)
+        self._pad(et, eu)
 
     def _empty(self, P: Any, scan: tuple[str, int], s: int, collect: tuple[str, int], entry: tuple[str, int]) -> None:
         """Empty slot ``s``'s collector and entry (`_Program.place_empty`), on its lane's ``scan`` unit's read of the scan
@@ -611,6 +613,12 @@ class Rows:
         self._put(*collect, "o0", _i32(a), EVALUATED)
         self._put(*entry, "o0", np.array([IO.entry_reference(row[0], a, KO, e["IDB"], e["NP"], e["STOP"])], dtype=np.uint16),
                   EVALUATED)
+        self._pad(*collect)
+        self._pad(*entry)
+
+    def _pad(self, tid: str, unit: int) -> None:
+        if self.fns[tid].name in ("OutCollect", "SlotEntry") and self.fns[tid].version == 2:
+            self._put(tid, unit, "o1", np.zeros((1, IO.PAD_WORDS), dtype=np.uint16), EVALUATED)
 
     def _heads(self, node: Any, plan: Any, calls: Sequence[tuple[str, int]], S: Slot) -> None:
         """An attention cut by key block: every Call but its last (whose output is the node's) its Definition on the node's

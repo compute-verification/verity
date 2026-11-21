@@ -254,7 +254,7 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
         scans = SS.bridge(cls.scan, cls.prompt)
     except ValueError as e:
         raise Unexpressible(f"{cls}: its slots aren't a scan state row's lanes ({e})") from None
-    entry = bind(IO.SlotEntry, KO=cls.outputs, IDB=cls.scan.IDB, NP=1 if requests is not None else cls.prompt,
+    entry = bind(IO.SlotEntryV2, KO=cls.outputs, IDB=cls.scan.IDB, NP=1 if requests is not None else cls.prompt,
                  STOP=stop_ids(registered))
     b = _Builder(grain, programs)
     if order is None:
@@ -308,7 +308,7 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
         filled = [by.get((cls.anchor(s), cls.lane(s))) for s in range(cls.slots)]
         gaps = [s for s, k in enumerate(filled) if k is None]
         if gaps:
-            ctid, cu = b.allocation(bind(IO.OutCollect, KO=cls.outputs, FIRST=True),
+            ctid, cu = b.allocation(bind(IO.OutCollectV2, KO=cls.outputs, FIRST=True),
                                     [progs[host[cls.anchor(s)]].entry_label for s in gaps])
         etid, eu = b.allocation(entry, [progs[k if k is not None else host[cls.anchor(s)]].entry_label
                                         for s, k in enumerate(filled)])

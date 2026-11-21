@@ -628,4 +628,33 @@ def SelectEntry(B, S, x0, best, idx, a, occ):
     return B.call(bind(SlotEntry, KO=S.KO, IDB=S.IDB, NP=S.NP, STOP=S.STOP), occ, state)
 
 
-IO_SHELL_COMPOSITES = [IngressPrompt, TokenFeed, OutCollect, SlotEntry, SelectCollect, SelectEntry, SelectCollectV2]
+PAD_WORDS = 56
+
+
+def _padded(sig):
+    def padded_sig(S):
+        ins, ret = sig(S)
+        return ins, Tuple(ret, Array(PAD_WORDS, Array(16, BIT)))
+    return padded_sig
+
+
+def _pad(B):
+    return Coll(Array(PAD_WORDS, Array(16, BIT)), concat([broadcast(*B.call(const(1, 0)).refs[0], 16 * PAD_WORDS)]))
+
+
+@composite("OutCollect", 2, ["KO", "FIRST"], _padded(collect_sig), refuse=collect_refuse,
+           conformance="not-yet-established: OutCollect_v1, with a zero row of 896 bits")
+def OutCollectV2(B, S, a, tok):
+    """`OutCollect_v1{KO, FIRST}`'s state, and a zero row of `PAD_WORDS` u16 words."""
+    return tuple_of(B.call(bind(OutCollect, KO=S.KO, FIRST=S.FIRST), a, tok), _pad(B))
+
+
+@composite("SlotEntry", 2, ["KO", "IDB", "NP", "STOP"], _padded(entry_sig), refuse=entry_refuse,
+           conformance="not-yet-established: SlotEntry_v1, with a zero row of 896 bits")
+def SlotEntryV2(B, S, occ, state):
+    """`SlotEntry_v1{KO, IDB, NP, STOP}`'s entry, and a zero row of `PAD_WORDS` u16 words."""
+    return tuple_of(B.call(bind(SlotEntry, KO=S.KO, IDB=S.IDB, NP=S.NP, STOP=S.STOP), occ, state), _pad(B))
+
+
+IO_SHELL_COMPOSITES = [IngressPrompt, TokenFeed, OutCollect, SlotEntry, SelectCollect, SelectEntry, SelectCollectV2,
+                       OutCollectV2, SlotEntryV2]

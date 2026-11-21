@@ -20,6 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 BOOKKEEPING = {
     "tests/lint/test_device_figures.py": ("test_no_new_device_figures", "test_the_list_is_current"),
     "tests/lint/test_lean_bar.py": ("test_no_new_findings",),
+    "tests/lint/test_readme_pattern.py": ("test_the_list_only_shrinks",),
     "tests/lint/test_repo_ruff.py": ("test_no_new_findings",),
     "tests/lint/test_repo_lane_text.py": ("test_no_new_lane_text", "test_pinned_files_hold_none",
                                           "test_the_list_is_well_formed_and_an_entry_moves_with_its_file"),

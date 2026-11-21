@@ -97,9 +97,9 @@ theorem descEvaluate_ok (j out : Json) (h : Desc.evaluate j = .ok out) :
   by_cases h4w : (!Desc.walkable P) = true
   · simp only [h4w, ite_true, throw, throwThe, MonadExceptOf.throw] at h; cases h
   simp only [h4w, Bool.false_eq_true, ite_false] at h
-  rcases hg : Desc.gridWalk P with e | u <;> simp only [hg] at h
-  · cases h
   rcases h5 : Desc.analyze P with e | reads <;> simp only [h5] at h
+  · cases h
+  rcases h5w : Desc.readsWalk reads with e | u <;> simp only [h5w] at h
   · cases h
   rcases h6 : nodeThetaFold P i.theta with e | mask <;> simp only [nodeThetaFold, inputs, registered, rootBody, nodeCount] at h6 <;> simp only [h6] at h
   · cases h
@@ -115,7 +115,10 @@ theorem descEvaluate_ok (j out : Json) (h : Desc.evaluate j = .ok out) :
   simp only [h9, ite_false] at h
   by_cases h10 : (!(List.range (iuCount own)).all (usedOf own).contains) = true
   · simp only [h10, ite_true, throw, throwThe, MonadExceptOf.throw] at h; cases h
-  simp only [h10, Bool.false_eq_true, ite_false, Except.ok.injEq] at h
+  simp only [h10, Bool.false_eq_true, ite_false] at h
+  split at h
+  · cases h
+  simp only [Except.ok.injEq] at h
   refine ⟨i, P, reads, mask, own, rfl, h2, ?_, ?_, ?_, by simpa using h4w, h5, h6, ?_, h8, by simp [nodeCount, rootBody]; omega, ?_, h.symm⟩
   · simpa using h3
   · simp at h4; exact h4.1

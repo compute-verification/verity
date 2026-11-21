@@ -90,6 +90,10 @@ path = "GLOSSARY.md"
 means = "the Glossary: terms and notation"
 
 [[tree]]
+path = "README.template.md"
+means = "the form of a protocol's or subsystem's README, its architecture on one screen"
+
+[[tree]]
 path = "pyproject.toml"
 means = "the distribution `verity` and the workspace"
 

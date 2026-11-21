@@ -54,7 +54,7 @@ declaration's blocks and name the one that failed, and stay in the private recor
 
 In the order checked: `instance` (a field missing or of the wrong JSON kind), `params` (`c`, `k` or `n` not a natural, an
 entry of `blocks` not a string, a value of `table` not a natural), then the Program's refusals in `InferenceOnlyCheck.Desc`'s order
-(`program`, `recut-unread`, `not-topological`, `program` for `rootLaidOut`, `inputsAtRoot` and `walkable`, `unwalked` for `Desc.gridWalk`, and `program` or `unwalked`
+(`program`, `recut-unread`, `not-topological`, `program` for `rootLaidOut`, `inputsAtRoot` and `walkable`, and `program` or `unwalked`
 from the summaries), then θ entry by entry as `InferenceOnlyCheck.Desc` reads it (`theta-unknown`, `theta-not-input`,
 `theta-not-registered`, `theta-duplicate`), then `blocks` entry by entry (`block-unknown`: no Definition the root
 reaches, `block-root`, `block-input`: an input primitive, `block-duplicate`), then `gate-in-no-block`, then `gate-table`
@@ -194,7 +194,7 @@ private theorem sizeOf_snd_lt_of_mem {fs : Array (String × Ty)} {f : String × 
   omega
 
 /-- The total width of `t`'s leaves `lo … hi - 1`, from the type's structure: an Array's whole elements as one element's
-times their number. -/
+times their number, that element taken once, so a range costs the square of the type's depth, never its leaves. -/
 def widthSum (t : Ty) (lo hi : Nat) : Nat :=
   match t with
   | .value w => if lo == 0 && 0 < hi then w else 0
@@ -205,7 +205,10 @@ def widthSum (t : Ty) (lo hi : Nat) : Nat :=
       let a := lo / L
       let b := (hi - 1) / L
       if a == b then widthSum e (lo - a * L) (hi - a * L)
-      else widthSum e (lo - a * L) L + (b - a - 1) * widthSum e 0 L + widthSum e 0 (hi - b * L)
+      else
+        let whole := widthSum e 0 L
+        (if lo == a * L then whole else widthSum e (lo - a * L) L) + (b - a - 1) * whole +
+          (if hi == (b + 1) * L then whole else widthSum e 0 (hi - b * L))
   | .tuple fs => (fs.foldl (fun (acc : Nat × Nat) f =>
       let o := acc.2
       let m := f.leaves
@@ -262,7 +265,6 @@ def evaluate (j : Json) : Except String Json := do
   if P.orderViolation.isSome then throw "not-topological"
   if !(Desc.rootLaidOut P && Desc.inputsAtRoot P) then throw "program"
   if !Desc.walkable P then throw "program"
-  Desc.gridWalk P
   let memo ← match summaries P with
     | .ok m => pure m
     | .error e => throw (Desc.analyzeCode e)
