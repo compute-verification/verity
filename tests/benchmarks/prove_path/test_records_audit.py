@@ -119,13 +119,12 @@ print(a.say if a.say is not None else json.dumps({"bits": 8 * len(data) if a.bit
 '''
 
 
-def _write(d: Path, n: int = 5, cap: int = 4, advice: bool = True, compiler: dict = COMPILER,
-           ingress: tuple[IF.Ingress, ...] = ()) -> SimpleNamespace:
+def _write(d: Path, n: int = 5, cap: int = 4, advice: bool = True, compiler: dict = COMPILER) -> SimpleNamespace:
     """A window of ``n`` coordinates in members of ``cap``, its advice committed under ``compiler`` (or none), written and
-    registered through the interface under core's docket; ``ingress``, its circuit's ingress."""
+    registered through the interface under core's docket."""
     reg = IF.commit_advice(compiler, ADVICE)
     bound = IF.advice_binding(compiler, reg.root.hex(), 8 * len(ADVICE)) if advice else None
-    win = IF.Window(IF.Circuit("test", ((COORD, n),), ingress=ingress), RUN, RND.parse_design(SAMPLING_DESIGN), cap, advice=bound)
+    win = IF.Window(IF.Circuit("test", ((COORD, n),)), RUN, RND.parse_design(SAMPLING_DESIGN), cap, advice=bound)
     rng = np.random.default_rng(0)
     x, w = (rng.integers(-128, 128, (n, K)).astype(np.int8) for _ in range(2))
     sx, sw = ((np.abs(rng.standard_normal(n)) / 127).astype(np.float32) for _ in range(2))
@@ -1687,9 +1686,9 @@ def test_the_audit_passes_a_refused_window_on_the_check_for_a_forged_unit(writte
 
 
 def test_the_audit_counts_a_listed_record_with_window_ingress_and_prints_its_window_figure_with_its_premise(
-        tmp_path, monkeypatch, capsys):
+        written, tmp_path, monkeypatch, capsys):
     """A record that lists its members and declares its window's ingress (here each coordinate's ``x`` and ``sx``, rows
-    before the window, which its circuit's ingress fills, so neither is a run input) is counted by `declared_count`, not `leak_count`: the audit's ``RECORDS`` line and ``summary.json``
+    before the window, so its members read them as their own rows and not as run inputs) is counted by `declared_count`, not `leak_count`: the audit's ``RECORDS`` line and ``summary.json``
     carry the run figure, the window ingress still free in it, and beside it the window figure with its premise
     (`WINDOW_PREMISE`). The sessions (`a5.audit`) are stubbed and sample nothing, so the audit doesn't pass; its leak count
     is the records' alone. a5's workers' flags (`a5.lean_options`) reach the stub as given, a5's defaults otherwise, and
@@ -1697,9 +1696,10 @@ def test_the_audit_counts_a_listed_record_with_window_ingress_and_prints_its_win
     import a5 as A5
     from verity.protocols.proof.spot.verifier.challenger import challenger_session as AC
 
-    written = _write(tmp_path / "w", ingress=tuple(IF.Ingress(TID, p, 0, 5, 0) for p in ("x", "sx")))
     mine, stated, _sets = RA.verifier_window(written.dir, RND.parse_design(SAMPLING_DESIGN), None)
     mine = _listed(mine)
+    mine = replace(mine, members=tuple(replace(m, values=tuple(p for p in m.values if p not in ("x", "sx")))
+                                       for m in mine.members))
     ingress = [{"reader": TID, "port": p, "at": 0, "units": 5, "step": 0} for p in ("x", "sx")]
     doc = IF.circuit_record(mine, stated["name"], stated["templates"], stated["statements"], stated["external"],
                             declared={IF.WINDOW_INGRESS: ingress})
