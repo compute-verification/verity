@@ -93,5 +93,5 @@ def test_one_member_on_the_windows_challenger_session_is_accepted_by_the_compile
     p = subprocess.run([str(PF.v2_executable()), "check", *(str(d / n) for n in files), *case["blobs"]],
                        capture_output=True, text=True)
     answer = json.loads(p.stdout.strip().splitlines()[-1])
-    assert (p.returncode, answer["verdict"]) == (0, "accept"), (answer, p.stderr[-2000:])
+    assert (p.returncode, answer["verdict"]) == (0, "accept"), (answer.get("reason"), p.stderr[-2000:])
     assert answer["public"]["drawn"] == answer["public"]["proved"] == [0], answer
