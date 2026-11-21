@@ -160,7 +160,7 @@ from verity.commitments.window import WINDOW_DOMAIN, window_domain
 from verity.circuits import partition_object as PO
 from verity.circuits.codec import canonical_json, descriptor_chunks
 from verity.circuits.program import REGISTRATION, Program
-from verity.circuits.supplied import SUPPLIED
+from verity.circuits.supplied import SUPPLIED, registered_values
 
 from . import draw as D, link_points as LP, partition as P, registered as G
 from verity.commitments import registered_value as RV
@@ -625,19 +625,20 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
     if any(e.get("window") == rec["window"] for e in earlier):
         c.fail("R6-window", rec["window"])
     # R7
+    marks = G.marks(json.loads(b"".join(descriptor_chunks(program))))
     if v2:
         _check_registered(c, rec["registered"], program, registered or {}, pins, rec, sup, earlier, bound, outs, formats,
-                          window, fixed, cert)
+                          window, fixed, cert, table_entries(program, registered or {}, weights_of_record),
+                          held_tables(weights_of_record))
         _certified_held(c, rec, cert)
         if named := run_input_named(program, registered or {}):
             c.fail("R7-run-input", {"values": named, "why": RUN_INPUT_WHY})
-        marks = G.marks(json.loads(b"".join(descriptor_chunks(program))))
         if loose := anchor_unpinned(marks, pinned, weights_of_record):
             c.fail("R7-anchor-unpinned", {"values": loose, "why": ANCHOR_UNPINNED_WHY})
         if off := off_pin(marks, rec["registered"], weights_of_record):
             c.fail("R7-pin", {"values": off, "why": PIN_WHY})
     # a supplied input's rows have a source whatever the record registers
-    if unsourced := unsourced_supplied(program, sup, outputs):
+    if unsourced := unsourced_supplied(program, sup, outputs, marks, weights_of_record):
         c.fail("R7-supplied-source", {"values": unsourced, "why": SUPPLIED_SOURCE_WHY})
     # R8
     if bad:
@@ -688,7 +689,7 @@ def anchor_unpinned(marks: Mapping[str, Mapping[str, Any]], pinned: Mapping[str,
     """The values V of C's supplied anchors (`marks`, `registered.marks`: a mark of a function of `ANCHOR_FUNCTIONS`)
     that are neither in the verifier's `pinned` nor pinned by the weights' registration of record (`_of_record`'s
     pins), each once, in the marks' order; R7 refuses them (`R7-anchor-unpinned`). C's marks come from a descriptor's
-    `inputs`, a field no circuit description carries today (`codec` writes none), so it refuses nothing yet. The Lean's `Docket.anchorUnpinned` is this."""
+    `inputs`. The Lean's `Docket.anchorUnpinned` is this."""
     held = set(pinned or {}) | (set(_of_record(of_record)[1]) if of_record is not None else set())
     out: list[str] = []
     for m in marks.values():
@@ -716,13 +717,41 @@ def off_pin(marks: Mapping[str, Mapping[str, Any]], got: Any, of_record: tuple[b
     return out
 
 
-def unsourced_supplied(program: Program, supplied: Mapping[str, Any], outputs: Mapping[str, Any] | None = None) -> list[str]:
+def held_tables(of_record: tuple[bytes, str] | None) -> dict[str, dict[str, str]]:
+    """Each table the weights' registration of record pins (`_of_record`'s pins), its ``root`` and ``domain``: the only
+    source of a table input's rows (`registered.HELD_ROOT`, `registered.HELD_DOMAIN`), never the record's entry. The
+    Lean's `Docket.heldTables` is this."""
+    pins = _of_record(of_record)[1] if of_record is not None else {}
+    return {v: {"root": e["root"], "domain": e["domain"]} for v, e in pins.items()}
+
+
+def table_entries(program: Program, registered: Mapping[str, int],
+                  of_record: tuple[bytes, str] | None) -> dict[str, dict[str, Any]]:
+    """R7's expected entry of each table a table input of C names (`supplied.registered_values` past the values the
+    verifier expects registered) that the weights' registration of record pins, built from that pin: its leaves, words,
+    word bits and domain (which `_of_record` holds to the derived one). A pin no mark names adds nothing, so the record
+    registering it is refused `R7-values`. The Lean's `Docket.tableEntries` is this."""
+    pins = _of_record(of_record)[1] if of_record is not None else {}
+    names = registered_values(program, list(registered))[len(registered):]
+    return {x: {"leaves": pins[x]["leaves"], "words": pins[x]["words"],
+                "word_bits": pins[x].get(RV.WIDTH_KEY, RV.WORD_BITS), "domain": pins[x]["domain"]}
+            for x in names if x in pins}
+
+
+def unsourced_supplied(program: Program, supplied: Mapping[str, Any], outputs: Mapping[str, Any] | None = None,
+                       marks: Mapping[str, Mapping[str, Any]] | None = None,
+                       of_record: tuple[bytes, str] | None = None) -> list[str]:
     """The program's parameters bound as supplied inputs (`SuppliedInput<w>_v1`) that hold gates, that the parameters'
-    ``supplied`` (C's marked rows among them) gives no source and that are no output of an earlier record (``outputs``,
-    a pool's reused ``pin`` among them); R7 refuses them (`R7-supplied-source`). The Lean's `Docket.unsourced` is this."""
-    bindings, outputs = getattr(program, "bindings", ()), outputs or {}
+    ``supplied`` (C's marked rows among them) gives no source, or that are a table input (``marks``, a mark of
+    `ANCHOR_FUNCTIONS`) whose table the registration of record pins not (`held_tables`: a mark is no source), and that
+    are no output of an earlier record (``outputs``, a pool's reused ``pin`` among them); R7 refuses them
+    (`R7-supplied-source`). The Lean's `Docket.unsourced` is this."""
+    bindings, outputs, held = getattr(program, "bindings", ()), outputs or {}, held_tables(of_record)
+    unheld = {n for n, m in (marks or {}).items()
+              if m["supplied"] in ANCHOR_FUNCTIONS and m["args"].get("value") not in held}
     return [n for (n, _), b in zip(program.fn.signature()[0], bindings)
-            if b == SUPPLIED and G.held_gates(program, [n]) and n not in supplied and n not in outputs] if bindings else []
+            if b == SUPPLIED and G.held_gates(program, [n]) and (n not in supplied or n in unheld)
+            and n not in outputs] if bindings else []
 
 
 def marked_gates(program: Program) -> list[tuple[str, range]]:
@@ -1127,7 +1156,9 @@ def _check_registered(c: _Collect, got: Any, program: Program, values: Mapping[s
                       binding: Mapping[str, str] | None = None,
                       outputs: Mapping[str, tuple[str, str, str]] | None = None,
                       schemas: Mapping[str, str] | None = None, window: str | None = None,
-                      fixed: Sequence[str] = (), certified: Mapping[str, Mapping[str, Any]] | None = None) -> None:
+                      fixed: Sequence[str] = (), certified: Mapping[str, Mapping[str, Any]] | None = None,
+                      tables: Mapping[str, Mapping[str, Any]] | None = None,
+                      held_tables: Mapping[str, Mapping[str, str]] | None = None) -> None:
     try:
         mine = G.registered_entries(program, values, schemas, window, fixed)
     except ValueError as e:
@@ -1136,6 +1167,8 @@ def _check_registered(c: _Collect, got: Any, program: Program, values: Mapping[s
     logged = held_roots(log)
     held = {v: logged[(v, m["domain"])] for v, m in mine.items() if (v, m["domain"]) in logged}
     held.update(pinned)
+    # the tables C's table inputs name, built from their pins: R7's expected entries after the verifier's own
+    mine.update({v: dict(e) for v, e in (tables or {}).items()})
     for v, (d, kind, name) in sorted((outputs or {}).items()):
         if v not in mine:
             continue
@@ -1181,7 +1214,7 @@ def _check_registered(c: _Collect, got: Any, program: Program, values: Mapping[s
             continue
         try:
             root = G.supplied_root(program, v, supplied[v], rec, want, sorted(supplied), log, prog, binding,
-                                   (schemas or {}).get(v, RV.SCHEMA))
+                                   (schemas or {}).get(v, RV.SCHEMA), held_tables)
         except ValueError as err:
             c.fail("R7-supplied", {"value": v, "verifier": str(err)})
             continue
@@ -1269,9 +1302,61 @@ def matches_public(rec: Mapping[str, Any], scheme: str, roots: Mapping[str, str]
     return c.verdict()
 
 
+#: `OneStageZkStatement.COMMITTED`
+COMMITTED = "committed/"
+
+
+def field_tree_name(v: str) -> bool:
+    """`OneStageZkStatement.fieldTreeName`."""
+    parts = v.split("/")
+    return len(parts) >= 2 and parts[-1].startswith("o") and len(parts[-1]) > 1 and parts[-1][1:].isdigit()
+
+
+def registered_trees_held(rec: Mapping[str, Any], who: str, registered: Mapping[str, Any] | None,
+                          tmpl: str | None = None) -> str | None:
+    """`OneStageZkStatement.registeredTreesHeld`'s refusal, none where it holds: each port of the registered file of
+    ``who`` that opens a committed tree (`portTreeHeld`'s `treePortOf`) held to the record's root, domain and leaf
+    count at that tree's port, at the member's template ``tmpl`` (none for the one statement)."""
+    by = {r["port"]: r for r in rec.get("roots", []) if isinstance(r.get("port"), str)}
+    for name, e in sorted(((registered or {}).get("ports") or {}).items()):
+        v = e.get("value", "")
+        if not v.startswith(COMMITTED) and field_tree_name(v) and (tmpl is None or f"{tmpl}/{name}" != v):
+            return f"registered: {who}'s port {name}: a wired port's tree is not derived from C yet"
+        t = v[len(COMMITTED):] if v.startswith(COMMITTED) else v if G.is_fresh_value(v) or field_tree_name(v) else None
+        if t is None:
+            continue
+        if (r := by.get(t)) is None:
+            return (f"registered: {who}'s port {name} opens the committed tree {t}, and the registration holds no root "
+                    f"{t}: a committed tree a statement opens is one its window registered before any coin")
+        for what, k in (("root", "root"), ("domain", "domain"), ("leaf count", "leaves")):
+            mine = e.get(k).lower() if k != "leaves" else e.get(k)
+            if r.get(k) != mine:
+                return (f"registered: {who}'s port {name} opens the committed tree {t} at another {what} than the "
+                        "registration's: a statement opens its window's registered tree, never another window's or "
+                        "another member's")
+    return None
+
+
+def fresh_reads(registered: Mapping[str, Any] | None) -> list[str]:
+    """`OneStageZkStatement.freshReads`: the ports the verifier's registered file reads at a run input node's tree."""
+    return [p for p, e in ((registered or {}).get("ports") or {}).items() if G.is_fresh_value(e.get("value"))]
+
+
+def public_held(rec: Mapping[str, Any], header: Mapping[str, Any], registered: Mapping[str, Any] | None = None) -> Verdict:
+    """`OneStageZkStatement.publicHeld`'s comparison: the one statement's public file's ``header`` against the record at
+    `public_ports`, each port the registration holds no root of that the verifier's ``registered`` file reads at a run
+    input node's tree (`fresh_reads`) left out of its roots and domains. Raises `ValueError` where `public_ports` does."""
+    reg = public_ports(rec)
+    fv = header.get("frame_v3") or {}
+    drop = {p for p in fresh_reads(registered) if p not in reg}
+    roots = {p: r for p, r in (fv.get("roots") or {}).items() if p not in drop}
+    domains = {p: d for p, d in (fv.get("domain_ids") or {}).items() if p not in drop}
+    return matches_public(rec, header.get("scheme"), roots, domains, header.get("instances"), reg=reg)
+
+
 registered_entries = G.registered_entries
 
 __all__ = ["NOT_ONE_MEMBER", "PARTITION_QUERY", "POOL_KEYS", "RECEIPT", "ROW_TABLES", "TABLE_PORT", "WEIGHTS_UNREGISTERED_WHY", "read_pins",
-           "WINDOW_DOMAIN", "check", "held_roots", "marked_inputs", "matches_public", "partition_query_refused", "pool_chains", "pool_open", "pool_refused",
-           "pool_spent_before", "pool_values", "public_ports", "query_digest", "receipt",
+           "WINDOW_DOMAIN", "check", "fresh_reads", "held_roots", "marked_inputs", "matches_public", "partition_query_refused", "pool_chains", "pool_open", "pool_refused",
+           "pool_spent_before", "pool_values", "public_held", "public_ports", "query_digest", "receipt", "registered_trees_held",
            "refuse_unwindowed", "refused", "registered_entries", "unwindowed", "weights_held", "window_domain"]
