@@ -937,6 +937,45 @@ def registrationOf (key : ChallengerKey) (window ledger : Json) : V String := do
     throw s!"{SECOND_REGISTRATION} (entry {e.seq} names {(strOf (getD e.body "registration")).take 16}..., entry {h.seq} {r.take 16}...)"
   return r
 
+/-- The refusal of an epoch whose challenger session is on another lane than the one the auditor names. -/
+def REGISTRATION_LANE : String :=
+  "the epoch's challenger session is on another lane than the one the auditor names for the registration"
+
+/-- The refusal of a run whose record before the draw is not the registration the ledger after it holds the epoch to. -/
+def REGISTRATION_TWICE : String :=
+  "the registration the ledger after the draw holds the epoch to is not the record's digest the run was held to " ++
+    "before it: a run is held to one registration"
+
+/-- `registration_head`, the half before the draw: the registration the auditor's ledger `ledger` (its lines, as
+published before the epoch's session opens) signs for the lane `lane` the auditor names, under the pinned key `key`: the
+`registration` of the lane's one registering `period-open`. Refused by name with none (`NO_REGISTRATION`), a malformed
+one (`REGISTRATION_FORM`) and a second (`SECOND_REGISTRATION`). It is an early refusal only: that the registration was
+signed before the epoch's first entry is `registrationHeld`'s, on the ledger that holds the session. -/
+def registrationHead (key : ChallengerKey) (lane : String) (ledger : Json) : V String := do
+  let _ ← checked ledger key
+  let es := (match ledger with | .arr ls => ls | _ => #[]).filterMap ledgerEntry?
+  let heads := es.filter fun e => e.kind == "period-open" && jsonStrIs (getD e.body "lane") lane &&
+    (field? e.body "registration").isSome
+  let some h := heads[0]? | throw NO_REGISTRATION
+  if let some e := heads.find? (fun e => !isDigest (getD e.body "registration")) then
+    throw s!"the auditor's ledger entry {e.seq}: {REGISTRATION_FORM}"
+  let r := strOf (getD h.body "registration")
+  if let some e := heads[1]? then
+    throw s!"{SECOND_REGISTRATION} (entry {e.seq} names {(strOf (getD e.body "registration")).take 16}..., entry {h.seq} {r.take 16}...)"
+  return r
+
+/-- `registration_held`, the half after the draw: the epoch whose open root is `window` is held, on the ledger the
+challenger handed out at the session's end, to the registration `digest` the run was held to before the draw
+(`registrationOf`, which takes the order from the signed chain), and its session is on the lane `lane` the auditor
+names (`REGISTRATION_LANE`); a registration other than `digest` refuses (`REGISTRATION_TWICE`). -/
+def registrationHeld (key : ChallengerKey) (lane digest : String) (window ledger : Json) : V Unit := do
+  let r ← registrationOf key window ledger
+  let (wins, _) ← checked ledger key
+  let root := strOf (getD window "root")
+  let some w := wins.find? (·.root == root) | throw "the auditor's ledger opens no challenger session for this window"
+  unless laneOf w.opened.body == lane do throw REGISTRATION_LANE
+  unless r == digest do throw REGISTRATION_TWICE
+
 /-- `extends`: whether `ledger` is `published` with entries appended. -/
 def extendsHead (published ledger : Array Json) : Bool :=
   published.size ≤ ledger.size && ledger.extract 0 published.size == published
@@ -1127,6 +1166,22 @@ def ledgerPiece (j : Json) : V Json := do
   request j #["key", "ledger", "window"]
   pure <| refusing do
     return auditedJson (← auditedChallengePhase (getD j "ledger") (getD j "window") (← ChallengerKey.ofJson (getD j "key")))
+
+/-- `{"key", "lane", "ledger"}` to `registration_head`'s `{registration}`. -/
+def registrationHeadPiece (j : Json) : V Json := do
+  request j #["key", "lane", "ledger"]
+  pure <| refusing do
+    let .str lane := getD j "lane" | throw "the lane is not a string"
+    return Json.mkObj [("registration",
+      Json.str (← registrationHead (← ChallengerKey.ofJson (getD j "key")) lane (getD j "ledger")))]
+
+/-- `{"digest", "key", "lane", "ledger", "window"}` to `registration_held`'s `{held: true}`. -/
+def registrationHeldPiece (j : Json) : V Json := do
+  request j #["digest", "key", "lane", "ledger", "window"]
+  pure <| refusing do
+    let (.str lane, .str digest) := (getD j "lane", getD j "digest") | throw "the lane or digest is not a string"
+    registrationHeld (← ChallengerKey.ofJson (getD j "key")) lane digest (getD j "window") (getD j "ledger")
+    return Json.mkObj [("held", Json.bool true)]
 
 /-- `{"key", "ledger", "window"}` to `declared_day`'s `{day, declarations}`. -/
 def dayPiece (j : Json) : V Json := do

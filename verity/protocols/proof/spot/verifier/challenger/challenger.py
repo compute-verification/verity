@@ -1792,6 +1792,47 @@ def registration_of(ledger: Any, window: Any, key: ChallengerKey, verify: Verify
     return r
 
 
+REGISTRATION_LANE = "the epoch's challenger session is on another lane than the one the auditor names for the registration"
+REGISTRATION_TWICE = ("the registration the ledger after the draw holds the epoch to is not the record's digest the run was "
+                      "held to before it: a run is held to one registration")
+
+
+def registration_head(ledger: Any, lane: str, key: ChallengerKey, verify: Verify) -> str:
+    """Lean `Challenger.registrationHead`, the half before the draw: the `registration` of the one registering period-open
+    the auditor's ledger (as published before the epoch's session opens) signs for the auditor's ``lane``. Raises
+    `CoinError` with none (`NO_REGISTRATION`), a malformed one or a second (`SECOND_REGISTRATION`); that it preceded the
+    epoch's first entry is `registration_held`'s."""
+    _checked(ledger, key, verify)
+    es = [e for e in map(_ledger_entry, ledger)]
+    heads = [e for e in es if e["kind"] == "period-open" and e["body"].get("lane") == lane and "registration" in e["body"]]
+    if not heads:
+        raise CoinError(NO_REGISTRATION)
+    if (e := next((e for e in heads if not _digest_hex(e["body"]["registration"])), None)) is not None:
+        raise CoinError(f"the auditor's ledger entry {e['seq']}: {REGISTRATION_FORM}")
+    h = heads[0]
+    r = h["body"]["registration"]
+    if len(heads) > 1:
+        e = heads[1]
+        raise CoinError(f"{SECOND_REGISTRATION} (entry {e['seq']} names {e['body']['registration'][:16]}..., entry "
+                        f"{h['seq']} {r[:16]}...)")
+    return r
+
+
+def registration_held(ledger: Any, window: Any, lane: str, digest: str, key: ChallengerKey, verify: Verify) -> None:
+    """Lean `Challenger.registrationHeld`, the half after the draw: on the ledger handed out at the session's end, the
+    epoch is held to ``digest`` (`registration_of`) and its session is on the auditor's ``lane``; raises `CoinError`
+    naming why (`REGISTRATION_LANE`, `REGISTRATION_TWICE`)."""
+    r = registration_of(ledger, window, key, verify)
+    windows, _ = _checked(ledger, key, verify)
+    w = windows.get(window["root"])
+    if w is None:
+        raise CoinError("the auditor's ledger opens no challenger session for this window")
+    if lane_of(w["open"]) != lane:
+        raise CoinError(REGISTRATION_LANE)
+    if r != digest:
+        raise CoinError(REGISTRATION_TWICE)
+
+
 def ledger_head(heads: Any, key: ChallengerKey, verify: Verify) -> list[str]:
     """The auditor's ledger as the auditor device's operator published it: every head of `heads` (each its lines; None
     when the verifier has none)
