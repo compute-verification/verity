@@ -589,9 +589,10 @@ def sliceRoots (rec : Lean.Json) (roots : Std.HashMap String (Array Lean.Json)) 
 gate of a run Input node outside the tied gates is a port of the member's file (`Own.registered`, laid by
 `Flock.OneCircuit.pos`) whose value is the record's one tree of that node (`Flock.Registered.freshValue`), which
 `OneStageZk.runInputRootsAt` holds; and (2) any two reads of gates of one tied run Input node, by one member or two,
-are at slice roots with one root. Half (2) rests on the refusal of two readers of a tied node at two roots that
-`OneStageZk.runInputRootsAt` is to hold (its constant: TO FILL from the verifier's commit that adds it); until that
-refusal exists the verifier gives no such fact. -/
+are at slice roots with one root. Half (2) rests on `OneStageZk.tiedRootsAt`, which `OneStageZk.runInputRoots` runs
+on each member before its run input roots: a second root for a tied node, among the roots the members hold of their own
+at the ports that read it, is refused (`OneStageZk.TIED_ROOTS_WHY`); a member that holds no root of its own at such a
+port is let through. -/
 def RunReadsAtOneTree : Prop :=
   ∀ p ms c Pp rs, MembersAccept p ms c Pp rs →
     (∀ m ∈ ms, ∀ (a : Spot.OneStageZk.Admit) (j x g : ℕ) (row : String) (s : ℕ),
@@ -613,8 +614,9 @@ def RunReadsAtOneTree : Prop :=
 /-- **`TiedReadsAtRecordedRows`** (stated, open; the period test's link): on an accepted run of the per-member variant,
 the one root the readers of a tied run Input node open is the record's root of that tied value's entry, under its name
 `t`, which the network period test ties to the rows the registration that computed them committed
-(`Properties.NetworkPeriod.RowsProgWired`, `RowsTiedInputWired`). That the record's entry of `t` is named `t` is this
-statement's. -/
+(`Properties.NetworkPeriod.RowsProgWired`, `RowsTiedInputWired`). The verifier does not hold it: a reader's root is the
+record's entry `<member>/<port>` (`OneStageZk.rootsOf`), and `OneStageZk.tiedRootsAt` compares the readers' roots with
+each other, never with an entry named `t`. -/
 def TiedReadsAtRecordedRows : Prop :=
   ∀ p ms c Pp rs, MembersAccept p ms c Pp rs →
     ∀ roots, Spot.OneStageZk.membersRootsOf p ms c.record = .ok roots →

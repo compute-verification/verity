@@ -366,10 +366,12 @@ theorem runInputRoots_mem {v : Docket.Verifier} {P : Flock.Program.Prog} {rs : A
   obtain ⟨acc, hacc, h⟩ := ebind_ok h
   cases h
   rw [← Array.forIn_toList] at hacc
-  refine forIn_yield_inv (fun acc => ∀ n, ∀ x ∈ acc.getD n #[], x ∈ roots.getD n #[] ∨
-    RunTree (OneStageZk.rootsByPort rec) x) ?_ _ roots _ (fun n x hx => Or.inl hx) hacc
-  intro m acc r hacc hf
+  refine forIn_yield_inv (fun s : Std.HashMap String (Array Json) × Array (Nat × Json) =>
+    ∀ n, ∀ x ∈ s.1.getD n #[], x ∈ roots.getD n #[] ∨ RunTree (OneStageZk.rootsByPort rec) x) ?_ _ (roots, #[]) _
+    (fun n x hx => Or.inl hx) hacc
+  intro m s r hacc hf
   try dsimp only at hf
+  obtain ⟨_, -, hf⟩ := ebind_ok hf
   obtain ⟨o, ho, hf⟩ := ebind_ok hf
   cases hf
   refine ⟨_, rfl, ?_⟩
@@ -482,18 +484,20 @@ theorem runInputRoots_has {v : Docket.Verifier} {P : Flock.Program.Prog} {rs : A
   obtain ⟨acc, hacc, h⟩ := ebind_ok h
   cases h
   rw [← Array.forIn_toList] at hacc
-  have key := forIn_collect _ (fun a b : Std.HashMap String (Array Json) => ∀ n, ∀ y ∈ a.getD n #[], y ∈ b.getD n #[])
-    (fun m acc => ∃ ins, OneStageZk.memberInputs P rs m = .ok ins ∧
+  have key := forIn_collect _ (fun a b : Std.HashMap String (Array Json) × Array (Nat × Json) =>
+      ∀ n, ∀ y ∈ a.1.getD n #[], y ∈ b.1.getD n #[])
+    (fun m (s : Std.HashMap String (Array Json) × Array (Nat × Json)) => ∃ ins, OneStageZk.memberInputs P rs m = .ok ins ∧
       ∀ (port : String) (w len : Nat), (port, w, len) ∈ ins → Flock.Registered.runNode P w = true →
         ((Docket.tiedGates v).any fun (first, count) => Partition.within P first count w) = false →
-        ∃ r ∈ acc.getD m.name #[], RunRootAt (OneStageZk.rootsByPort rec) port w r)
+        ∃ r ∈ s.1.getD m.name #[], RunRootAt (OneStageZk.rootsByPort rec) port w r)
     (fun _ _ _ hy => hy) (fun _ _ _ h1 h2 n y hy => h2 n y (h1 n y hy))
     (fun _ _ _ ⟨ins, hins, hg⟩ hle => ⟨ins, hins, fun port w len hx hrun ht => by
       obtain ⟨r, hr, hq⟩ := hg port w len hx hrun ht
-      exact ⟨r, hle _ r hr, hq⟩⟩) ?_ ms.toList roots _ hacc
+      exact ⟨r, hle _ r hr, hq⟩⟩) ?_ ms.toList (roots, #[]) _ hacc
   · exact fun m hm => key.2 m (Array.mem_toList_iff.2 hm)
-  · intro m acc r hf
+  · intro m s r hf
     try dsimp only at hf
+    obtain ⟨_, -, hf⟩ := ebind_ok hf
     obtain ⟨o, ho, hf⟩ := ebind_ok hf
     cases hf
     obtain ⟨hsub, hhas⟩ := runInputRootsAt_has ho

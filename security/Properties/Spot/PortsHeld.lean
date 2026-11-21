@@ -149,8 +149,9 @@ def RunInputsAtOneTree : Prop :=
 /-- **On an accepted run of the per-member variant, all readers of a tied run input node have one root**: for any two
 members `m`, `m'` (one or two) whose units read a run input node `w` of C inside the tied values' gates at their
 parameters `port`, `port'` (`OneStageZk.memberInputs`), their slices' roots under those ports have one root. It rests
-on the refusal of two readers of a tied node at two roots that `OneStageZk.runInputRootsAt` is to hold (its constant:
-TO FILL from the verifier's commit that adds it); until that refusal exists the verifier gives no such fact. -/
+on `OneStageZk.tiedRootsAt`, which `OneStageZk.runInputRoots` runs on each member before its run input roots, refusing
+a second root for a tied node among the roots the members hold of their own at the ports that read it
+(`OneStageZk.TIED_ROOTS_WHY`). -/
 def TiedInputsAtOneRoot : Prop :=
   ∀ (p : OneStageZk.Params) (ms : Array OneStageZk.Member) (c : OneStage.Commitment) (ξ : ByteArray)
     (e : OneStageZk.Evidence) (sts : Array OneStageZk.StatementFiles) (bs : Core.Blobs) (pub : OneStage.Public)
