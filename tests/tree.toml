@@ -194,6 +194,10 @@ path = "verity/protocols/proof/"
 means = "flock, with spot and recursion on it, spot_flock on those and spot_flock_recursion on top: what the other protocols call to prove; it uses neither layer"
 
 [[tree]]
+path = "verity/protocols/proof/README.md"
+means = "the proof layer's architecture on one screen, for its five protocols"
+
+[[tree]]
 path = "verity/protocols/accounting/"
 means = "the resource accounting layer: compute/pouw, memory/pous, memory/poub and network, on the proofs"
 
@@ -304,6 +308,10 @@ protocol = true
 path = "verity/protocols/run/"
 means = "the protocol on top of the audits that holds several quantities on one registration, their named values tied by key; remote's and onsite's lists of protocols inside it"
 protocol = true
+
+[[tree]]
+path = "verity/protocols/run/period.py"
+means = "one monitoring period's order of stages, written once (`run_period`), with its public parameters and the state between windows"
 
 [[tree]]
 path = "verity/protocols/run/schemes.py"

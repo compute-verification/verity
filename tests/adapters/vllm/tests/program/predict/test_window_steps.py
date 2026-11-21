@@ -1,5 +1,5 @@
-"""The runner's window road (`served_verdicts.sh`, a plain run's) through `verity run`'s own call (`served_table.served_window`)
-on a window's record made on the processor."""
+"""The runner's window steps (`served_verdicts.sh steps`, a plain run's) through `verity run`'s own calls
+(`served_table.served_window`) on a window's record made on the processor."""
 from __future__ import annotations
 
 import hashlib
@@ -64,16 +64,22 @@ def _serve_dir(tmp_path, monkeypatch, application):
     return d
 
 
-def _road(tmp_path, monkeypatch, application, d, **env):
-    """``application``'s runner as `verity run` launches it on a node whose environment names the serve dir: its exit, its
-    lines and its public record (``state/out``)."""
+def _road(tmp_path, monkeypatch, application, d, law=None, **env):
+    """``application``'s runner as `verity run`'s accounting and policy stages launch it on a node whose environment names
+    the serve dir, the auditor's sampling design ``law`` where given: the accounting call's exit, both calls' lines in that
+    order and its public record (``state/out``)."""
     cfg = RUN.load(ROOT / "applications" / f"{application}.toml", RUN.registry())
+    if law is not None:
+        cfg = {**cfg, "service": {**cfg["service"], "law": law}}
     for k, v in {"D": str(d), "PRED": str(tmp_path / "predicted"), "SERVE_ROOT": str(tmp_path), "WINDOW_CLASS": "2,4,2",
                  "VENV": sys.prefix, "CUDA_HOME": str(tmp_path / "no-cuda"), "HF_HOME": str(tmp_path / "hf"), **env}.items():
         monkeypatch.setenv(k, v)
     state = tmp_path / f"state-{application}"
-    rc = ST.served_window(cfg, state, {})
-    return rc, (state / "logs" / "served-window.log").read_text(), state / "out"
+    rc = ST.served_window(cfg, state, {}, ST.ACCOUNTING, "served-window")
+    if rc in ST.ENDED:
+        ST.served_window(cfg, state, {}, ST.POLICY, "policy")
+    logs = [state / "logs" / f"{x}.log" for x in ("served-window", "policy")]
+    return rc, "".join(f.read_text() for f in logs if f.is_file()), state / "out"
 
 
 def _digests(doc, path=""):
@@ -122,9 +128,9 @@ UNSAID = ("compiled by the registered compiler", "charged", "bounded by", "cappe
 
 
 @pytest.mark.slow
-def test_the_window_road_runs_remote_from_the_record_and_publishes_no_description(tmp_path, monkeypatch):
+def test_the_window_steps_runs_remote_from_the_record_and_publishes_no_description(tmp_path, monkeypatch):
     """remote through the preflight on the window's record (no ROW read), its seal held to the record and predict row's
-    compiler, each step after it run or refused by name: the sampled proofs as proofs', Pearl+ as needing a card (a processor has no gpu-lease), the
+    compiler, each step after it run or refused by name: the sampled proofs refused or not run on this fixture, each saying why, and never an accept, Pearl+ as needing a card (a processor has no gpu-lease), the
     record and the composite after them; the block counts count the record's circuit beside the registration that binds
     it. The end line counts what ran, what refused or was undecided and what did not run, and neither it nor any
     published file names a template or carries the description's digest. What no cheaper test reaches: the runner itself
@@ -132,7 +138,8 @@ def test_the_window_road_runs_remote_from_the_record_and_publishes_no_descriptio
     d = _serve_dir(tmp_path, monkeypatch, "remote")
     (tmp_path / "run").mkdir()
     path = os.pathsep.join(x for x in os.environ["PATH"].split(os.pathsep) if not (Path(x) / "gpu-lease").exists())
-    rc, log, out = _road(tmp_path, monkeypatch, "remote", d, RESEARCH_RUN_DIR=str(tmp_path / "run"), PATH=path)
+    rc, log, out = _road(tmp_path, monkeypatch, "remote", d, law="rate:1/4", RESEARCH_RUN_DIR=str(tmp_path / "run"), PATH=path,
+                         DEVELOPMENT="1")
     lines = log
     err = "\n".join(f.read_text()[-2000:] for f in sorted(d.glob("window-circuit-*.err")))
     log += f"\n(the window circuit's log, which stays on the node:)\n{err}"
@@ -143,14 +150,17 @@ def test_the_window_road_runs_remote_from_the_record_and_publishes_no_descriptio
             "(candidate 135)") in log and "its circuit registered by the prover" in log, log
     published = lines + "".join(text for _, text in _published(out))
     assert not [p for p in UNSAID if p in published.lower()], [p for p in UNSAID if p in published.lower()]
-    assert ("sampled-proofs: not run: step 3's prove path (prove_path/run.sh) proves the units a partition file names "
-            "(PP_PARTITION), and the window's record has none: its proof of the window's circuit is proofs'") in log, log
+    sampled = [x for x in lines.splitlines() if x.startswith("sampled-proofs: ")]
+    assert sampled and sampled[0].startswith(("sampled-proofs: refused: ", "sampled-proofs: not run: ")) and not sampled[0].endswith(
+        (": refused: ", ": not run: ")), log
+    assert not [x for x in lines.splitlines() if "the Lean checks pass" in x or x.startswith("WINDOW-RECORD accept")], log
     assert ("pearl-plus: not run: needs a card: its piece takes its own gpu-lease, and this node has no gpu-lease: "
             "compute accounting's") in log, log
-    assert "record: not run:" in log and "composite: not run:" in log, log
+    assert re.search(r"^record: (refused|not run): ", lines, re.M) and "composite: not run:" in log, log
     end = _end(log)
+    ran = set(end.split("; refused ")[0].split("(")[1].rstrip(")").split(","))
     assert end.startswith("ROAD END (the window's record): ran ") and "pearl-plus" in end and rc == 20, log
-    assert "no verdict stands for a step that did not run" in end
+    assert not {"sampled-proofs", "record"} & ran and "no verdict stands for a step that did not run" in end, end
     assert end.endswith("no proof is made, and Lean verifies nothing; no sampled verdict, so no δ or ε: the sampled proofs did not run; the circuit digest is kept private and NO public value fixes it before the coins"), end
     assert [x for x in lines.splitlines() if x.startswith("CLASS ")] == [
         "CLASS 2,4,2: 8.00 bits leave with it (its prompt length, one of the 256 that fit 2 slots in 512 tokens a step; its "
@@ -166,12 +176,13 @@ def test_the_window_road_runs_remote_from_the_record_and_publishes_no_descriptio
     assert {"plans.jsonl", "handoff/", "circuit.json", "predicted.json"} <= set(names), names
 
 
-def _preflight(tmp_path, **env):
+def _preflight(tmp_path, steps=("steps", "preflight"), **env):
     (tmp_path / "serve").mkdir(exist_ok=True)
     env = {**os.environ, "D": str(tmp_path / "serve"), "PRED": str(tmp_path / "predicted"), "OUT": str(tmp_path / "out"),
            "SERVE_ROOT": str(tmp_path), "VENV": sys.prefix, "PRODUCT": "remote", "CUDA_HOME": str(tmp_path),
            "PEARLC_CHALLENGER_GATE": "", **env}
-    p = subprocess.run(["bash", "benchmarks/one_stage/served_verdicts.sh"], cwd=ROOT, env=env, capture_output=True, text=True)
+    p = subprocess.run(["bash", "benchmarks/one_stage/served_verdicts.sh", *steps], cwd=ROOT, env=env, capture_output=True,
+                       text=True)
     return p.returncode, p.stdout + p.stderr
 
 
@@ -188,7 +199,7 @@ def test_compute_accounting_is_held_to_the_application_list_both_ways(tmp_path):
         assert "compute accounting" not in out and "the window's record lacks" in out, out
 
 
-def test_the_window_road_refuses_by_name_each_thing_its_record_lacks(tmp_path):
+def test_the_window_steps_refuses_by_name_each_thing_its_record_lacks(tmp_path):
     """An empty serve dir: the preflight names every file it wanted, and nothing named ROW."""
     rc, out = _preflight(tmp_path, POUW="pearlplus", APPLICATION_PROTOCOLS="sampled-proofs pearl-plus")
     assert rc == 3, out
@@ -203,10 +214,24 @@ def test_a_run_naming_no_application_is_refused_by_name(tmp_path):
     the run is refused before the window's preflight, compute accounting's scheme set or not."""
     for pouw in ("", "pearlplus"):
         env = {k: v for k, v in os.environ.items() if k != "APPLICATION_PROTOCOLS"}
-        rc, out = _preflight(tmp_path, **env, POUW=pouw)
+        rc, out = _preflight(tmp_path, (), **env, POUW=pouw)
         assert rc == 3 and out.strip().splitlines()[-1] == (
             "PREFLIGHT: the runner is verity run's: no application was named (APPLICATION_PROTOCOLS), so what it lists "
             "cannot be checked"), out
+
+
+def test_a_run_naming_no_step_is_refused_by_name(tmp_path):
+    """The steps and their order are `verity run`'s stages': a run naming none, an unknown one or one twice is refused
+    before the window's preflight and any step."""
+    for steps in ((), ("steps",)):
+        rc, out = _preflight(tmp_path, steps, APPLICATION_PROTOCOLS="sampled-proofs", POUW="")
+        assert rc == 3 and out.strip().splitlines()[-1] == (
+            "PREFLIGHT: the runner's steps and their order are verity run's stages': none was named (served_verdicts.sh "
+            "steps STEP...)"), out
+    for steps, line in ((("steps", "preflight", "seal", "preflight"), "the step preflight is named twice"),
+                        (("steps", "seal", "audit"), "the window has no step audit")):
+        rc, out = _preflight(tmp_path, steps, APPLICATION_PROTOCOLS="sampled-proofs", POUW="")
+        assert rc == 3 and out.strip().splitlines()[-1] == f"PREFLIGHT: {line}: nothing run", out
 
 
 def _sealed(tmp_path, window, drop=()):
@@ -331,3 +356,14 @@ def test_a_listed_pearl_plus_whose_piece_refuses_is_refused_by_its_sentence_and_
     assert f"  REFUSED pearl-plus: {sentence}" in out.splitlines(), out
     rc, out = _steps(tmp_path / "b", f"{piece}RAN+=(seal); road_pieces; road_end 20", "exit 9")
     assert rc == 0 and "pearl-plus" not in out and "ran 1 (seal)" in out, out
+
+
+def test_a_count_an_earlier_call_left_is_cleared_by_the_circuits_step_so_inference_only_does_not_run(tmp_path):
+    """The circuits step removes the window's public counts before it counts: one that fails leaves none, and the
+    inference-only step, which reads them, does not run on an earlier call's."""
+    body = ('touch "$OUT/window-circuit-2-4-2.json"; circuits() { echo "WINDOW-CIRCUIT class 2,4,2 refused"; return 1; }\n'
+            "road_step_named circuits; RAN+=(inference-policy); road_step_named inference-only; road_end 20")
+    rc, out = _steps(tmp_path, f"{_fns('road_step_named', 'circuits_counted')}\n{body}", "exit 9")
+    assert rc == 20 and not (tmp_path / "out" / "window-circuit-2-4-2.json").exists(), out
+    assert ("  NOT RUN inference-only: its verdict reads the circuits step's window circuit and the inference-only policy, "
+            "and one of them did not run") in out.splitlines(), out
