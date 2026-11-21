@@ -60,6 +60,10 @@ SPOT's one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_record`, wit
   and `domain` a string, which R7 holds the record's entries for those values to (`Docket.certifiedHeld`),
   with which it expects a v2 record whatever it expects registered (`Docket.Verifier.v2`), refused in any
   other form, and which only the registration check and the run of record read: `paramsOfJson` refuses the key;
+  and it may add `weights_of_record`, `{"digest", "document"}`: the weights' registration of record, its document's bytes
+  in hex and the SHA-512 the auditor's side holds for it, which needs `parameters` and which R8 holds the program's
+  registered inputs to (`Docket.weightsCodes`) and whose accepted pins R7 holds the record's entries to
+  (`Docket.Verifier.weighed`), refused in any other form;
   and it may add `window_values`, a list of strings its caller names (one-stage names none): values the record commits in
   its window's `activations.values`, whose reads a verifier of record reports the record's checks hold to that entry's
   root (`Record.windowReads`), refused in any other form and where one is a port or a value it expects registered;
@@ -337,7 +341,9 @@ refuses the sampling design its rule names itself (`Run.run`, `bernoulli`). -/
 def paramsParsed (j : Json) : V Params := do
   let v2 := !(getD j "registered" matches .null)
   let tiedGiven := (field? j "tied").isSome
-  let keys := if v2 || tiedGiven then PARAM_KEYS.push "parameters" else PARAM_KEYS
+  let weightsGiven := (field? j "weights_of_record").isSome
+  let keys := if v2 || tiedGiven || weightsGiven then PARAM_KEYS.push "parameters" else PARAM_KEYS
+  let keys := if weightsGiven then keys.push "weights_of_record" else keys
   let keys := if tiedGiven then keys.push "tied" else keys
   let keys := if (field? j "supplied").isSome then keys.push "supplied" else keys
   let keys := if (field? j "coins").isSome then keys.push "coins" else keys
@@ -389,7 +395,14 @@ def paramsParsed (j : Json) : V Params := do
     (entries (← obj (getD j "registered") "registered")).mapM fun (v, w) => match nat? w with
       | some w => pure (v, w)
       | none => throw s!"registered: the words of {v} are not a natural number"
-  let params ← if v2 || tiedGiven then Registered.params program.desc (getD j "parameters") else pure #[]
+  let params ← if v2 || tiedGiven || weightsGiven then Registered.params program.desc (getD j "parameters") else pure #[]
+  let weightsOfRecord ← match field? j "weights_of_record" with
+    | none => pure none
+    | some w => do
+      exactly w #["digest", "document"] "the weights' registration of record"
+      match getD w "digest", getD w "document" with
+      | .str d, .str doc => pure (some (← Flock.unhex doc, d))
+      | _, _ => throw "the weights' registration of record is its document's bytes in hex and a digest, both strings"
   let tied ← match getD j "tied" with
     | .null => pure #[]
     | .arr ts => ts.mapM fun t => match t with
@@ -524,7 +537,7 @@ def paramsParsed (j : Json) : V Params := do
   if delta.num == 0 || delta.den ≤ delta.num then throw "delta is not in (0, 1)"
   let p : Params := { verifier := { program, query, samplingDesign, workTable, scheme, ports, leafLayer, anchors, log, partition,
                                     registered, params, supplied, pinned, outputs, binding, schemas, windowRoot, held,
-                                    declared, seedSalt, pool, verdicts, tied, compiler, certified },
+                                    declared, seedSalt, pool, verdicts, tied, compiler, certified, weightsOfRecord },
                       delta, challenger, tables, windowValues }
   let again := Docket.unwindowed p.verifier
   if !again.isEmpty then
