@@ -1,22 +1,24 @@
 """`credit.window` on one honest window over a pinned circuit with a SUPPLIED verifier: the verifier `run` here is not
 `proofs.verify` but a stand-in that answers every session the Lean names with the outcome this test chooses, accepted
-(its findings built from the ``--registered`` file credit hands it) or one sampled proof block's session rejected. So these tests
-show the Lean's judgement of the verifier outcomes it is handed, on the served path (`verifier.RECORD_VERDICT` is
-``"lean"``): that the Lean `credit-verified` (`credit._lean_verified`), the Lean `credit-live-verified`
-(`credit._lean_live_verified`) and the Lean `window` of record (`credit._of_record`) are each called, and what each
-answers. They do NOT show that a tampered proof is caught: no proof is read, and a supplied verifier accepts whatever
-it is told to. The real-proof case, a kept proof of a pinned H1 unit made with its window verified by `proofs.verify`
-inside `credit.window`, is CMP-451; it waits on that kept proof.
+(its findings built from the ``--registered`` file credit hands it) or one sampled proof block's session rejected. So
+these tests show the Lean's judgement of the verifier outcomes it is handed, on the served path
+(`verifier.RECORD_VERDICT` is ``"lean"``): that the Lean `credit-verified` (`credit._lean_verified`), the Lean
+`credit-live-verified` (`credit._lean_live_verified`) and the Lean `window` of record (`credit._of_record`) are each
+called, and what each answers. They do NOT show that a tampered proof is caught: no proof is read, and a supplied
+verifier accepts whatever it is told to. The real-proof case, `proofs.verify` inside `credit.window` on a kept proof of
+a pinned H1 unit made with its window, is CMP-451, and it waits on that kept proof.
 
 The circuit is the registry's window at K = 64 over J10-R's ``PouwH1Tile_v5``, named ``h1/``
-(`pouw_credit_cases.registry_window`), `test_period_real`'s, which `credit.TILE_PINS` pins: over a stand-in window
-`credit.layout_of` refuses at the layout before any proof is asked, so no cheaper circuit reaches the Lean verifiers.
-The Lean calls are counted by wrapping `verifier.lean`, which `verifier.of_record` also calls; `credit.py` is unchanged.
+(`pouw_credit_cases.registry_window`, `test_period_real`'s), a template `credit.TILE_PINS` pins. The Lean calls are
+counted by wrapping `verifier.lean`, which `verifier.of_record` also calls.
 
-Runtime: about two minutes on a node, what no stand-in window can cover. The window is built once a module (about ten
-seconds, five GB), and each case carries its 60 MB descriptor to the Lean three times in the honest case (twice to
-`credit-verified`, once to `window`) and twice in the rejected one, each a parse of the whole descriptor, beside
-`credit.layout_of`'s own read of it."""
+It takes about four and a half minutes on a node (9.5 GB at its peak): about a minute to build the window once a
+module, two minutes for the honest case and one for the rejected one. What only it catches: over a stand-in window
+`credit.layout_of` refuses at the layout before any proof is asked, so `credit.window` never reaches the Lean
+`credit-verified` or `credit-live-verified` there, and the Lean `window` of record judges no outcome. It cannot be
+cheaper: the smallest descriptor a pin holds is this window, about 60 MB, which `credit.window` reads itself and hands
+the Lean whole on each call (twice to `credit-verified` and once to `window` in the honest case, twice in the rejected
+one), and the Lean parses it each time."""
 from __future__ import annotations
 
 import copy
@@ -49,8 +51,8 @@ ARGS = tuple(x for a in credit_cases.WINDOW_ARGS
 @functools.cache
 def _window() -> dict:
     """An honest window (`honest_window`) whose circuit is the registry's window at K = 64 over v5, named ``h1/``, its
-    ledger signed as `window_instance` signs an honest one's."""
-    rng = random.Random("supplied/0")
+    ledger signed as `window_instance` signs an honest one's: at this seed its one call's credit bit is set."""
+    rng = random.Random("supplied/1")
     desc = credit_cases.desc_bytes(credit_cases.registry_window(64, "v5", "h1/")).hex()
     d, s = credit_cases.honest_window(rng, lay=copy.deepcopy(credit_cases.REGISTRY_LAYOUT), desc=desc, prefix="h1/")
     signed = {**credit_cases.signs(d["weights"]), Cr.LENGTH_FIELD: dict(d["length"])}
@@ -134,7 +136,7 @@ def test_supplied_verifier_accepting_honest_window_is_credited_by_the_lean_of_re
     credited, why = _credit(d, _supplied(asked))
     fns = Counter(fn for fn, _got in lean_calls)
     answers = {fn: [got for f, got in lean_calls if f == fn] for fn in fns}
-    assert why is None and credited, (why, fns)
+    assert why is None and credited == [i for i, row in enumerate(d["calls"]) if row["credit"]] != [], (why, fns)
     assert fns == {"credit-verified": 2, "credit-live-verified": 2, "window": 1}, fns
     named, judged = answers["credit-verified"]
     assert [a["statement"] for a in named["run"]] == list(range(len(statements))), named
