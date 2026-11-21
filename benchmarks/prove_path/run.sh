@@ -40,8 +40,6 @@
 #     states a fixed design (subset:K, stratified:K or work:K) is refused at the rule check, before any session opens, by
 #     either audit, by name. tests/benchmarks/prove_path/test_run_rules.py holds the stand-in's rules to what a stream takes
 #     and lists the partition files, this benchmark's and the one-stage audit's, that still state a fixed design.
-#   PP_KEEP_WINDOWS=DIR: each run's committed windows copied whole to DIR/<name>-windows (the prover's files with them, so
-#   DIR stays on the node, under `research keep`).
 #   PP_JOBS=N ranks at once (a GLM-5.3 rank: its bundle window ~2.5 min and ~11 GB, its audit ~10 GB); PP_RANKS=0,3 those ranks
 #   only; PP_FLOCK_WORK=DIR keeps M0's
 #   build across runs. A served Llama window's audit peaks at ~20 GB (one process).
@@ -196,11 +194,6 @@ run() {  # NAME RUN ADVICE PARTITION RANKS: the prover's windows, then the verif
     [ ! -e $d/circuit.json ] || { mkdir -p $O/$name/windows/$(basename $d) && cp $d/circuit.json $O/$name/windows/$(basename $d)/; }
   done
   cp $W/$name-windows/commit.json $K/$name/windows/
-  if [ -n "${PP_KEEP_WINDOWS:-}" ]; then   # the windows whole, the prover's files included, for a later job on this node
-    mkdir -p "$PP_KEEP_WINDOWS" && rm -rf "$PP_KEEP_WINDOWS/$name-windows" && cp -a $W/$name-windows "$PP_KEEP_WINDOWS/" || return 1
-    R keep "$PP_KEEP_WINDOWS" --owner @proofs --expires 7d --priority low \
-      --why "prove_path.sh PP_KEEP_WINDOWS: committed windows (rows and salts) a later job stages from" >> $K/keep.log 2>&1
-  fi
   if [ -n "${PP_RECORDS:-}" ] && [ -n "${REC_RUN:-}" ]; then   # the window's audit from its records alone
     records $name $part
     local rc=$?
