@@ -15,7 +15,12 @@ ledger's and session's signatures under the pinned key, and the served road does
 in Lean holds it; only the node's Python does. So no coin of a Pearl+ verdict of record is held to the challenger
 against a prover that controls the node. Grinding (a steer needing m noised coordinates succeeds with probability at
 most μ^m a try) is stated nowhere: Pearl+'s one seed is `seedB` over the salt and B's root, and GRIND's priced premium
-is H1's, proved and in no lock.
+is H1's, proved and in no lock. Deletable: nothing in PoUW's Python, data or kernel sources (each thing that looks dead
+has one reader); the FP4, FP8 and INT8 roads, the filler and Dither are kept paths. Of our 754 Lean modules, 139 are
+imported by no listed guarantee's module, 106 of them on kept paths; of the other 33 none is deletable: 16 hold what no
+lock lists (honest twins of unwitnessed guarantees, the grinding and steering theorems the composition's spec cites,
+single reductions such as `sakMatmul_of_residual`), 9 are empty roots lake or the Lean check needs, 8 are not
+established (read at `one-circuit` `38285e72851`).
 
 ## Pieces
 

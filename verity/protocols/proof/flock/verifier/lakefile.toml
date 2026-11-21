@@ -1,7 +1,7 @@
 name = "flock_verifier"
 version = "0.1.0"
 defaultTargets = ["verity-verify-proof", "flock-rows", "flock-zk-server", "flock-witness", "flock-rec-opening",
-  "flock-rec-sparse", "flock-frame-tape", "flock-rec-links", "flock-read-tmpl"]
+  "flock-rec-sparse", "flock-frame-tape", "flock-rec-links", "flock-read-tmpl", "flock-lower-check"]
 
 [leanOptions]
 autoImplicit = false
