@@ -125,12 +125,15 @@ and held to the names and SHA-256s
 that document gives them, the epoch's ``DIR/coins.json``, that document's samples, over-cap rule and test instance, the
 verifier's coin record it wrote (``DIR/coin.json``), which pins the Lean's source to the Python's, the W ``verify --tie``
 held the passes to with the class ``verify --class`` held them at, and, on a live session's coins, ``--of-record``, under which the Lean takes only a challenger sample
-(`lean_argv`, the one place the Lean's command line is written). It holds the Lean's printout to the Python's verdict on
-every field both give (`LEAN_HELD`: the verdict, its reason and refusal, the run's commitment and source, the over-cap
+(`lean_argv`, the one place the Lean's command line is written). It compares the Lean's printout with the Python's verdict
+on every field both give (`LEAN_HELD`: the verdict, its reason and refusal, the run's commitment and source, the over-cap
 rule, each opened tile's verdict, an accepted run's work and, where a class is held, the exact credit its grid form
-replaces, ``exact_work``), and its ``tie`` to the Python's: the same W at the same class's load, or none on both. Where they agree it writes the Lean's answer to ``--out`` (`lean_answer`: the
-printout with W at ``tie``), the file `served_verdicts.pearlplus_of_record` reads; where they don't, or the Lean doesn't
-answer within ``--timeout`` seconds, it writes none and removes any there. Either way both verdicts, the Lean's command
+replaces, ``exact_work``), and its ``tie`` with the Python's (the same W at the same class's load, or none on both), and
+records the fields that differ (``differ``) as a measurement that gates nothing: wherever the Lean gives a verdict it
+writes the Lean's answer to ``--out`` (`lean_answer`: the printout with W at ``tie``), the file
+`served_verdicts.pearlplus_of_record` reads, whatever the Python's says. Where the Lean gives none (the verify document
+recorded no coin or read other passes, the executable doesn't build or isn't there, or it doesn't answer within
+``--timeout`` seconds), it writes none and removes any there. Either way both verdicts, the Lean's command
 line, the executable's SHA-256, the line printed and, once the executable ran, its cost (``check_cost``, `check_cost`:
 its wall seconds on the node it ran on) go to ``--check`` (default `LEAN_CHECK` beside ``--out``). Prints one line and
 exits 0 on a written accept, 1 on a written reject and 2 when it wrote no answer. A written verdict's line starts
@@ -143,12 +146,12 @@ found by the SHA-256s ``--verify``'s document names, so a renamed DIR still serv
 ``DIR/coins.json``, at that document's samples, δ and samples over the inert-work bound. It samples nothing and judges
 nothing. It writes ``{schema, verify, commitment, records, uncredited}`` to ``--out`` and exits 0 only where the
 document accepted, the passes are its run's (their commitment is its ``commitment``, `verify_run.run_commitment`) and
-the totals are its credit's exactly (``checked_macs`` its ``macs``, ``credited`` its ``credited``); else it prints why
+the totals are its credit's exactly (``checked_macs`` its ``checked_macs``, ``credited`` its ``credited``); else it prints why
 and exits 1, writing nothing.  A run held to its class's fixed load publishes its work in the grid form instead
-(``give_up`` among it, `verify_run.grid_work`): its ``macs`` are the passes' whole MACs, each call's real MACs less its
+(``give_up`` among it, `verify_run.grid_work`): its ``checked_macs`` are the passes' whole MACs, each call's real MACs less its
 side channels, and its ``credited`` the whole passes' credit less ``give_up``, the give-up padded up to H1's window
 grid.  There the totals' whole MACs (``checked_macs`` and the ``excluded_a``, ``excluded_b`` and ``voluntary`` cells')
-are its ``macs``, and their ``credited`` is at least its ``credited`` and at most that plus ``give_up``; what the
+are its ``checked_macs``, and their ``credited`` is at least its ``credited`` and at most that plus ``give_up``; what the
 padding takes off past the totals' credit is the cause ``grid``.
 
 ``case`` writes, from the Lean verdict of record ``lean`` wrote (``--lean``), the parts of the run's case in the form
@@ -204,8 +207,8 @@ OVER_INERT_BOUND = ("reject", "uncredited")
 UNRETAINED = ("unretained", "the serve retained no pass (serve --no-retain), so there is nothing to replay")
 #: the verifier's record of its coin (`verify_run.verify_passes`' ``record``) and the prover's retention, in DIR
 COIN, RETENTION = "coin.json", "retention.json"
-#: the fields of the Lean `PouwVerifier.PearlPlus` printout `lean` holds to the Python's verdict, as its difftest does
-#: (`benchmarks/pouw/pearlplus_lean`'s ``answer``)
+#: the fields of the Lean `PouwVerifier.PearlPlus` printout `lean` compares with the Python's verdict, as its difftest does
+#: (`benchmarks/pouw/pearlplus_lean`'s ``answer``): a measurement in the check's ``differ``, never a gate on the answer
 LEAN_HELD = ("verdict", "reason", "refused", "commitment", "source", "over_cap", "verdicts", "work", "exact_work")
 #: the statuses ``pouw-pearlplus`` ends with on a verdict (`PouwPearlPlus.Main.main`): 0 accept, 1 reject (an uncaught
 #: refusal of its arguments or files is 1 too); any other is no verdict (`lean_child.run`)
@@ -217,8 +220,6 @@ BUILD = "build"
 LEAN_PACKAGE = HERE.parents[2] / "verity" / "protocols" / "accounting" / "compute" / "pouw" / "verifier" / "lean" / "pearlplus"
 LEAN_EXE = LEAN_PACKAGE / ".lake" / "build" / "bin" / "pouw-pearlplus"
 LEAN_SCHEMA = "verity-pouw/pearl-plus-lean-check/v1"
-#: why the step refuses where the two verdicts disagree
-LEAN_DISAGREES = "the Lean verdict and the Python's disagree, so no Lean answer is written"
 #: `case`'s parts of the run's case, and its directory of the files they name, each under the SHA-512 of its bytes
 CASE_SCHEMA = "verity-pouw/pearl-plus-case-parts/v1"
 #: the coin record's fields the protocol's params name (`PouwVerifier.PearlPlus.Protocol.recordKeys`)
@@ -496,7 +497,7 @@ def timed_credit(served: dict, work: dict, coins, rounds: list[int] | None = Non
     held = held if rounds is None else [held[s] for s in rounds]
     form = VR.whole_pass if "give_up" in work else (lambda p: p)
     warm = sum(VR.pass_macs(form(VR.load(Path(p["manifest"]), coins))) for p in held if not p.get("timed", True))
-    return {"passes": sum(1 for p in held if p.get("timed", True)), "macs": work["macs"] - warm,
+    return {"passes": sum(1 for p in held if p.get("timed", True)), "macs": work["checked_macs"] - warm,
             "credited": max(0, work["credited"] - math.ceil((1 - Fraction(work["rho"])) * warm))}
 
 
@@ -662,8 +663,6 @@ def verify(args: argparse.Namespace) -> int:
                                     over_cap=over_inert_bound_rule(VR.verify_passes, args.over_cap),
                                     test_instance=args.test_instance, window_class=args.cls))
         doc["check_cost"] = check_cost(CLOCK() - t0, jobs=args.jobs)
-        if served is not None and not args.manifest and doc["answer"]["verdict"] == "accept":
-            doc["timed"] = timed_credit(served, doc["answer"]["public"]["work"], coins, rounds)
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(doc, indent=1) + "\n")
@@ -740,7 +739,7 @@ def lean(args: argparse.Namespace) -> int:
     out.unlink(missing_ok=True)
     doc = json.loads(Path(args.verify).read_text())
     rec = {"schema": LEAN_SCHEMA, "verify": str(args.verify), "exe": str(exe), "exe_sha256": None, "argv": None, "rc": None,
-           "stderr": None, "lean": None, "python": python_answer(doc), "differ": None, "answer": None, "reason": None,
+           "stderr": None, "lean": None, "python": python_answer(doc), "differ": None, "answer": None, "timed": None, "reason": None,
            "check_cost": None, "line": None}
 
     def done(reason: str | None, rc: int) -> int:
@@ -748,8 +747,10 @@ def lean(args: argparse.Namespace) -> int:
         if reason is None:
             got = rec["lean"]
             why = "" if got["verdict"] == "accept" else f" ({got.get('reason')})"
-            rec["line"] = (f"{got['verdict'].upper()} {VR.PROTOCOL}{why}: the Lean PouwVerifier.PearlPlus verdict, the "
-                           f"Python's on {', '.join(LEAN_HELD)}; run {str(got['commitment'])[:16]}, W "
+            held = (f"the Python's differs in {', '.join(rec['differ'])}" if rec["differ"]
+                    else f"the Python's on {', '.join(LEAN_HELD)}")
+            rec["line"] = (f"{got['verdict'].upper()} {VR.PROTOCOL}{why}: the Lean PouwVerifier.PearlPlus verdict, "
+                           f"{held}; run {str(got['commitment'])[:16]}, W "
                            f"{str((rec['answer']['tie'] or {}).get('record'))[:16]} -> {out.name}; transcript "
                            + "; ".join(doc.get("passes") or []))
         else:
@@ -764,7 +765,8 @@ def lean(args: argparse.Namespace) -> int:
         return done("the Python verdict recorded no coin (verify's coin record), so nothing pins the Lean's source", 2)
     served = json.loads((passes / "served.json").read_text()) if (passes / "served.json").exists() else None
     try:
-        paths = args.manifest or (retention(passes, served)[0] if served is not None else manifests(passes)[0])
+        paths, rounds = ((args.manifest, None) if args.manifest else retention(passes, served)[:2] if served is not None
+                         else (manifests(passes)[0], None))
         named = [VR.read(p)[2] for p in paths]
     except (KeyError, OSError, TypeError, ValueError) as e:
         return done(f"the retained passes can't be read: {type(e).__name__}: {e}", 2)
@@ -816,9 +818,12 @@ def lean(args: argparse.Namespace) -> int:
                                                               for k in ("record", "weights", "load")):
         differ.append("tie")
     rec["differ"] = differ
-    if differ:
-        return done(f"{LEAN_DISAGREES}: they differ in {', '.join(differ)}", 2)
     rec["answer"] = answer
+    if served is not None and not args.manifest and got["verdict"] == "accept":
+        try:
+            rec["timed"] = timed_credit(served, got["work"], VR.epoch_coins(passes / "coins.json"), rounds)
+        except (KeyError, OSError, TypeError, ValueError) as e:
+            rec["timed"] = {"error": f"{type(e).__name__}: {e}"[:400]}
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(answer, indent=1) + "\n")
     return done(None, 0 if got["verdict"] == "accept" else 1)
@@ -849,13 +854,13 @@ def uncredited(args: argparse.Namespace) -> int:
     t = got["totals"]
     if "give_up" in work:
         whole = t["checked_macs"] + sum(t.get(x, 0) for x in ("excluded_a", "excluded_b", "voluntary"))
-        if whole != work["macs"] or not work["credited"] <= t["credited"] <= work["credited"] + work["give_up"]:
+        if whole != work["checked_macs"] or not work["credited"] <= t["credited"] <= work["credited"] + work["give_up"]:
             return refused(f"the calls credit {t['credited']:,} of {whole:,} whole MACs, and the verdict's grid form "
-                           f"{work['credited']:,} of {work['macs']:,} less a give-up of {work['give_up']:,}")
+                           f"{work['credited']:,} of {work['checked_macs']:,} less a give-up of {work['give_up']:,}")
         held_to = f"the verdict's grid form, {t['credited'] - work['credited']:,} past its credit (grid)"
-    elif (t["checked_macs"], t["credited"]) != (work["macs"], work["credited"]):
+    elif (t["checked_macs"], t["credited"]) != (work["checked_macs"], work["credited"]):
         return refused(f"the calls sum to {t['checked_macs']:,} checked and {t['credited']:,} "
-                       f"credited MACs, and the verdict's credit is {work['macs']:,} and {work['credited']:,}")
+                       f"credited MACs, and the verdict's credit is {work['checked_macs']:,} and {work['credited']:,}")
     else:
         held_to = "the verdict's credit exactly"
     out = Path(args.out)
@@ -920,8 +925,8 @@ def case(args: argparse.Namespace) -> int:
     except (OSError, ValueError):
         return refuse("the Python verdict held the passes to no window record W (verify --tie) this can read, and the "
                       "case's commitment names W")
-    if not isinstance(w, dict) or DD.digest(w) != (doc.get("tie") or {}).get("record"):
-        return refuse("the window record W is not the one the Python verdict held the passes to")
+    if not isinstance(w, dict) or DD.digest(w) != (lean.get("tie") or {}).get("record"):
+        return refuse("the window record W is not the one the Lean verdict held the passes to")
     coins = VR.epoch_coins(passes / "coins.json")
     loaded = [VR.load(p, coins) for p in paths]
     files: list[dict[str, str]] = [{} for _ in paths]
@@ -1031,7 +1036,7 @@ def main(argv: list[str] | None = None) -> int:
     n.add_argument("--verify", required=True, help="verify's --out document")
     n.add_argument("--exe", required=True, help=f"PouwVerifier.PearlPlus's pouw-pearlplus, built, or {BUILD!r}: built first "
                    "in its package (LEAN_PACKAGE)")
-    n.add_argument("--out", required=True, help="where the Lean's answer goes where it agrees with the Python's")
+    n.add_argument("--out", required=True, help="where the Lean's answer goes, whatever the Python's")
     n.add_argument("--check", help=f"where both verdicts go (default: {LEAN_CHECK} beside --out)")
     n.add_argument("--timeout", type=float, default=3600, help="seconds the Lean has to answer (default 3,600)")
     u = sub.add_parser("uncredited")

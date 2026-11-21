@@ -179,8 +179,8 @@ def test_the_verifier_accepts_the_heads_call_opens_its_last_column_tile_and_cred
     assert public["tie"]["tables"] == 3 and "weights" not in public["tie"]
     work = public["work"]
     eps, rho = Fraction(work["epsilon"]), T.pouw_schemes.get(SCHEME).cap
-    assert work["macs"] == REAL * (N - 64) * K and work["credited_tiles"] == 2_003
-    assert work["credited"] == int((1 - rho) * (1 - eps) * work["macs"]) and eps == T.VR.epsilon(DRAWS, T.VR.DELTA)
+    assert work["checked_macs"] == REAL * (N - 64) * K and work["credited_tiles"] == 2_003
+    assert work["credited"] == int((1 - rho) * (1 - eps) * work["checked_macs"]) and eps == T.VR.epsilon(DRAWS, T.VR.DELTA)
     entry = next(e for e in T.window_record(head)["registered"] if e["value"] == f"pearl-b/{WEIGHT}")
     assert entry["leaves"] == N and entry["words"] == K
 
