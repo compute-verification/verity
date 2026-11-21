@@ -39,12 +39,6 @@ import Proofs.Flock.Soundness.Registered.Binding
 
 @[expose] public section
 
-namespace FlockSoundness.Registered
-
-open Game Refine Binding Spot.Sampling
-
-end FlockSoundness.Registered
-
 namespace FlockC3.RegLevels
 
 open Flock

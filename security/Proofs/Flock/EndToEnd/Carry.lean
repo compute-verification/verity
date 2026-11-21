@@ -22,28 +22,22 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.PublicJ
 import Proofs.Flock.Soundness.Game
 
 /-!
-# Proof of the integrity audit over a monitoring period of blocks, with carried state
+# Proof of the integrity audit with carried state, at sessions that prove every unit
 
 * `SamplingBlock.accepted_sampledIncorrect_le_at`: one session's bound at the value layer of any values `Xv`
   (`zk_session_soundHJ_custody_sampled_at`): `ε_ks` and the binding errors against `Xv` (`errBoundZC`).
 * `CarriedBlocks.errBound_le`: at the values `Xcar`, the binding errors are `ε_bind`'s at every commit string no carried
   leaf sits at, and at a carried leaf's commit string the leaf's trial's binding error at the pulled-back value
   (`CarriedBlocks.carriedE`).
-* `CarriedBlocks.monitoringPeriodE_errX_le`: that trial's binding error, averaged over the monitoring period up to the session, is the
-  binding error of the leaf's trial in that session played after the monitoring period before it (`expect_compTo`), at most `m`
-  times the mixture's (`errAt_le_mix`), which `ecr/sha-512` at the leaf's finder bounds (`link_mass_le`), with the
-  finder's cost at most `Σ_{t ∈ ℓ} (Σ_{j < t} t'_j + t'_t(1 + k_t))/m`.
-* `Flock.SecurityProofs.IntegrityPooledCarried`: `IntegrityPooled`'s proof, `monitoringPeriod_unionE` in place of
-  `monitoringPeriod_union` for the sessions accepted with a sampled proof block incorrect, each carried leaf's term summed over the monitoring period.
-* `CarriedBlocks.integrity_on`: the same on a set `I` of the sessions, as `Flock.SecurityProofs.integrity_on`, each
-  carried leaf's term weighing only its sessions in `I` (`CarriedLeaf.carryOn`); `CarriedBlocks.integrity_on_units`
-  reads the rate `q` only at sessions with units.
-* `Flock.SecurityProofs.IntegrityBlockCarried`: `CarriedBlocks.integrity_on` at block `b`'s sessions.
+* `CarriedBlocks.monitoringPeriodE_errX_le`: that trial's binding error, averaged over the monitoring period up to the
+  session, is the binding error of the leaf's trial in that session played after the monitoring period before it
+  (`expect_compTo`), at most `m` times the mixture's (`errAt_le_mix`), which `ecr/sha-512` at the leaf's finder bounds
+  (`link_mass_le`), with the finder's cost at most `Σ_{t ∈ ℓ} (Σ_{j < t} t'_j + t'_t(1 + k_t))/m`.
+* `CarriedBlocks.integrity_on_units`: on a set `I` of the sessions, the probability that every one is accepted and `I`'s
+  incorrect proof blocks total at least `M` is at most `(1 − q)^M + Σ_{t ∈ I} (ε_ks,t + ε_bind,t) + Σ_ℓ δ_carry,ℓ,I`,
+  the rate `q` read only at sessions with units: `monitoringPeriod_unionE` over the sessions accepted with a sampled
+  proof block incorrect, each carried leaf's term weighing only its sessions in `I` (`CarriedLeaf.carryOn`).
 * `Flock.SecurityProofs.IntegrityAllProvedCarried`: `CarriedBlocks.integrity_on_units` at `q = 1`, `M = 1`.
-* `CarriedBlocks.run_ofServer`: with no carried leaf the run is `ServerBlocks.run`, so the carried statements read
-  `ServerBlocks`' records there.
-* `Flock.SecurityProofs.IntegrityBlock_of_IntegrityBlockCarried`: `IntegrityBlockCarried` at `CarriedBlocks.ofServer`
-  is `IntegrityBlock`, so the carried form strengthens it.
 -/
 
 @[expose] public section
@@ -591,26 +585,6 @@ theorem integrity_on_units (I : Finset ℕ) {q : ℝ} (hq : 0 < q)
         add_le_add (hA.trans (add_le_add hε (S.carry_le s I hA2))) hB
     _ = xq ^ M + ∑ t ∈ I, ((S.W t).ks + (S.W t).link) + ∑ x, (S.leaf x).carryOn I := by ring
 
-/-- A monitoring period of server-time blocks with no carried leaf. -/
-def ofServer (S : ServerBlocks) : CarriedBlocks := { S with nL := 0, leaf := Fin.elim0, hin := fun x => x.elim0 }
-
-/-- **With no carried leaf, a session's record is `ServerBlocks`'**: each value is its plurality. -/
-theorem record_ofServer (S : ServerBlocks) (s : Strategy S.game) (t : ℕ) :
-    (ofServer S).record s t = (S.W t).record t := by
-  funext τ o
-  have hw : (ofServer S).incorrectSet s t τ = (S.W t).incorrectSet τ := by
-    unfold CarriedBlocks.incorrectSet SamplingBlock.incorrectSet
-    congr 1
-  unfold CarriedBlocks.record SamplingBlock.record
-  rw [hw]
-  rfl
-
-/-- **With no carried leaf, the run is `ServerBlocks`'**, so `IntegrityBlockCarried` there is `IntegrityBlock`. -/
-theorem run_ofServer (S : ServerBlocks) (s : Strategy S.game) : (ofServer S).run s = S.run s := by
-  unfold CarriedBlocks.run ServerBlocks.run Period.run
-  simp only [record_ofServer]
-  rfl
-
 end CarriedBlocks
 
 end Flock.Guarantees
@@ -630,17 +604,5 @@ theorem IntegrityAllProvedCarried : Flock.Guarantees.IntegrityAllProvedCarried :
     rw [hall t ht, div_self (Nat.cast_ne_zero.2 hn.ne')]
   have h := S.integrity_on_units s I one_pos hqt hA3 hs hA2 1
   rwa [sub_self, ENNReal.ofReal_zero, pow_one, zero_add] at h
-
-/-- **`IntegrityBlockCarried` is `IntegrityBlock` with no carried leaf**: at `CarriedBlocks.ofServer S` the run is
-`S.run` (`CarriedBlocks.run_ofServer`), the carried term is `0` and the finder premise is vacuous. -/
-theorem IntegrityBlock_of_IntegrityBlockCarried (h : Flock.Guarantees.IntegrityBlockCarried) :
-    Flock.Guarantees.IntegrityBlock := by
-  intro S b q δ hq hδ hqt hA3 s hT hL
-  have hc := h (CarriedBlocks.ofServer S) b q δ hq hδ hqt hA3 s hT hL fun x => absurd x.2 (Nat.not_lt_zero _)
-  rw [CarriedBlocks.run_ofServer] at hc
-  have h0 : (CarriedBlocks.ofServer S).carry b = 0 :=
-    Finset.sum_eq_zero fun x _ => absurd x.2 (Nat.not_lt_zero _)
-  rw [h0, add_zero] at hc
-  exact hc
 
 end Flock.SecurityProofs

@@ -4,30 +4,15 @@ public import Proofs.Flock.EndToEndHidden.Statement
 public import Proofs.Flock.EndToEnd.Period.Run
 
 /-!
-# The integrity audit over a period, per sampling block and pooled (trusted)
+# A period of sampling blocks (trusted)
 
 A period's integrity audit is a sequence of sampling blocks, each one `--zk` session under hidden outputs with a fresh
-live subset sample, as in `EndToEndHidden` (a `SamplingBlock`: every binder of `EndToEndHidden` but the prover). One
-prover strategy plays the whole period (`Period.game`), adaptively: the strategy each sampling block is played with may
-depend on everything before it. `Period.run` records, for each sampling block, whether verity-verify-proof accepted it, its
-incorrect proof blocks in the committed transcript fixed at its registration (`incorrectRegZ` at `XplurZC`, as in `EndToEndHidden`),
-and whether a sampled proof block is one of them.
-
-* `IntegrityMonitoringPeriod`: the probability that some sampling block is accepted with at least its `K₀` units incorrect is at most
-  `Σ_w (miss_w + ε_ks,w + ε_bind,w)`, each sampling block's `EndToEndHidden` bound. So outside that probability, if
-  verity-verify-proof accepts every sampling block, every sampling block has fewer than its `K₀` units incorrect.
-* `IntegrityMonitoringPeriodLog`: `IntegrityMonitoringPeriod` with each sampling block's threshold `K₀ ≥ ln(1/δ)/q`, where its sample covers a
-  fraction `q` of its units, so each sampling block's sampling term is at most `δ`.
-* `IntegrityPooled`: over `T` sampling blocks whose samples each cover at least a fraction `q` of their units, the
-  probability that every sampling block is accepted and the incorrect proof blocks total at least `ln(1/δ)/q` is at most
-  `δ + Σ_w (ε_ks,w + ε_bind,w)`.
-
-`ε_ks,w` is the sampling block's knowledge term at the worst registration (`SamplingBlock.ks`), since the registration
-is the prover's; `miss_w` and `ε_bind,w` are `EndToEndHidden`'s. The named assumptions are `EndToEndHidden`'s, at every
-sampling block: A3 (`uniform/io-getrandombytes`) for the sampling block's sample bytes, `live-verifier`
-(`SamplingBlock.hCust`), and `cr/sha-512` and `ecr/sha-512` (`TableCRZ` and `LinkCRZC`) at every strategy the period's
-prover plays the sampling block with on some run (`Period.Plays`), stated flat as `EndToEndHidden` states them. The
-proofs are `Flock.SecurityProofs.IntegrityMonitoringPeriod`, `IntegrityMonitoringPeriodLog` and `IntegrityPooled`.
+live subset sample (a `SamplingBlock`: every binder of `EndToEndHidden` but the prover). One prover strategy plays the
+whole period (`Period.game`), adaptively: the strategy each sampling block is played with may depend on everything
+before it, and `Period.Plays` says which strategies a sampling block is played with on some run. `SamplingBlock.ks` is
+the sampling block's knowledge term at the worst registration, since the registration is the prover's, and
+`SamplingBlock.link` its binding term; `SamplingBlockRec` is what a run records of a sampling block: whether
+verity-verify-proof accepted it, its incorrect proof blocks and whether a sampled proof block is one of them.
 
 Flock's definitions are still in its proofs package, so, like `EndToEndHidden`, this module imports them.
 -/
@@ -125,12 +110,6 @@ noncomputable def sim (τ : Strategy w.game) :=
         w.wr _ w.hTags w.hCust.1
         fun _ => sampleOkZKHJ_of_file w.I w.ht (Flock.Desc.parse_flat w.hD) w.kd w.n w.hdiv w.dj w.hCust.2 _)) τ
 
-/-- **The sampling block's incorrect proof blocks** at the strategy `τ`: `incorrectRegZ` in the committed transcript fixed at
-registration (`XplurZC`), as in `EndToEndHidden`. -/
-noncomputable def incorrectSet (τ : Strategy w.game) : Finset (Fin w.n) :=
-  incorrectRegZ execArith w.P (planZHJ w.dj w.y₀) (tabZHJ w.dj w.y₀) w.vb (reg (w.sim τ))
-    (XplurZC execArith hs512 w.P (planZHJ w.dj w.y₀) (tabZHJ w.dj w.y₀) w.vb (reg (w.sim τ)) (cont (w.sim τ)) w.k w.Rw)
-
 /-- **`cr/sha-512` and `ecr/sha-512` at the strategy `τ`**: `EndToEndHidden`'s hypotheses `TableCRZ`, for the knowledge
 finders of each table the prover's session runs, and `LinkCRZC`, for its link finders. -/
 def CR (τ : Strategy w.game) : Prop :=
@@ -162,11 +141,6 @@ namespace SamplingBlock
 
 open Classical
 
-/-- Sampling block `t`'s record, at the strategy `τ` that played it and its output `o`. -/
-noncomputable def record (w : SamplingBlock) (t : ℕ) (τ : Strategy w.game)
-    (o : w.Reg × Finset (Fin w.n) × Discharge.Exec.Transcript) : SamplingBlockRec :=
-  ⟨t, LiveAcceptsZK w.I o, (w.incorrectSet τ).card, ∃ u ∈ o.2.1, u ∈ w.incorrectSet τ⟩
-
 end SamplingBlock
 
 namespace Period
@@ -174,10 +148,6 @@ namespace Period
 /-- **A period of `T` sampling blocks**, sampling block `t`'s audit after sampling block `t − 1`'s, against one
 prover. -/
 noncomputable def game (W : ℕ → SamplingBlock) (T : ℕ) : Game Unit := monitoringPeriodG (fun t => (W t).game) 0 T
-
-/-- The period's run at the prover strategy `s`: each sampling block's record, in order. -/
-noncomputable def run (W : ℕ → SamplingBlock) (T : ℕ) (s : Strategy (game W T)) : Game (List SamplingBlockRec) :=
-  monitoringPeriodRun (fun t => (W t).game) (fun t => (W t).record t) 0 T s
 
 /-- **The strategies the period plays sampling block `t` with**: `τ` plays sampling block `t` on some run of the period
 at `s`. -/
