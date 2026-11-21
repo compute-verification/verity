@@ -32,8 +32,16 @@ def params (p : Program) : Array Registered.Param :=
   let bit := Json.arr #["Value", (1 : Nat)]
   (Registered.params p.desc (Json.arr #[Json.arr #["x", Json.arr #["Array", (3 : Nat), bit]], Json.arr #["y", bit]])).toOption.getD #[]
 
+/-- The descriptor `d` with `x`'s node a registered input and `y`'s a run Input. -/
+def regX (d : String) : String :=
+  ((d.replace r#""callees":["Input1_v1","Not_v1","E_v1"]"# r#""callees":["RegisteredInput1_v1","Not_v1","E_v1","Input1_v1"]"#).replace
+    r#""Input1_v1":{"form":"primitive","id":"Input1_v1","params":[],"ret":["Value",1]}"#
+    (r#""Input1_v1":{"form":"primitive","id":"Input1_v1","params":[],"ret":["Value",1]},"# ++
+      r#""RegisteredInput1_v1":{"form":"primitive","id":"RegisteredInput1_v1","params":[],"ret":["Value",1]}"#)).replace
+    r#"{"args":[],"fn":0,"form":"primitive","out":0}"# r#"{"args":[],"fn":3,"form":"primitive","out":0}"#
+
 /-- A v2 verifier of the descriptor `d`: `x` registered in rows of one word, one port, a uniform sample of one. -/
-def verifier (d : String := Spot.OneStageZk.E3) : Verifier :=
+def verifier (d : String := regX Spot.OneStageZk.E3) : Verifier :=
   let p := program d
   { program := p, query := QE, samplingDesign := Json.mkObj [("law", "subset"), ("k", (1 : Nat))], workTable := none,
     scheme := "s", ports := #[("o", Json.mkObj [("leaves", (4 : Nat)), ("domain", "d")])], leafLayer := none,
@@ -129,7 +137,11 @@ def V3 : Verifier := verifier
 #guard codes { V3 with certified := #[({ value := "c", leaves := 1, words := 1, wordBits := 16, domain := "d" }, OTHER)] }
   (withCertified "c" "d") == #["R7-certified"]
 #guard codes { V3 with tied := #["nope"] } == #["R8-tied"]
-#guard codes (verifier E3S) == #["R8-shared-input"]
+-- two proof blocks reading a run Input is no refusal of the docket's: its rows are one tree the members' check holds
+#guard codes (verifier (regX E3S)) == #[]
+-- a registered value at a run Input node: refused by name
+#guard codes (verifier Spot.OneStageZk.E3) == #["R7-run-input"]
+#guard codes (verifier E3S) == #["R7-run-input"]
 -- a member's units past the population of one: `bounds` refuses it
 #guard codes { V3 with members := #[(#[(0, 2)], 1)] } == #["link-points"]
 
@@ -186,8 +198,8 @@ def weighedCodes (v : Verifier) : Array String :=
 #guard weighedCodes { weighed E3R with weightsOfRecord := some ((ofRecord PINS).1, OTHER) } == #["R8-weights-digest"]
 -- a marked input with no pin is refused
 #guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord [pin "x"]) } == #["R8-unpinned"]
--- a pin of a parameter the program doesn't mark registered excuses nothing
-#guard weighedCodes { weighed E3S with weightsOfRecord := some (ofRecord PINS) } == #["R8-shared-input"]
+-- a pin of a parameter the program doesn't mark registered is not read
+#guard weighedCodes { weighed E3S with weightsOfRecord := some (ofRecord PINS) } == #[]
 #guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord [pin "x", pin "y" 0 (some OTHER)]) } ==
   #["R8-weights-domain", "R8-unpinned"]
 #guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord [pin "x" 1, pin "y"]) } == #["R8-weights-shape"]

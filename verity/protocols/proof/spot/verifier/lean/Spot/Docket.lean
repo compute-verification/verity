@@ -93,14 +93,14 @@ accepted). The caller then refuses a record with an output value that reads a po
 included. A record it holds no verdict for is not refused, as for the pool. A registered value an output value reuses
 (`Earlier.value`, the pool's `pin` among them) is not held to it: the pool restarts by its own lag (`Pool.refused`).
 
-Under a template query that applies, R8 refuses a run Input node whose leaves the proof blocks don't each read alone,
-unless it is a parameter's the verifier expects registered (`heldGates`), which is a registered value, or a tied value's
-(`tiedGates`) (`Partition.readAlone`, `R8-shared-input`): a value another proof block writes that the program takes as an
-Input joins no proof blocks in the fan-out (`Partition.fanout`, which the registration piece publishes). A tied value
+Under a template query that applies, the fan-out joins no proof blocks through a value another proof block writes that
+the program takes as an Input (`Partition.fanout`, which the registration piece publishes). A tied value
 is a run Input whose rows a later check ties to the registrations that computed them; R8 refuses a tied name that isn't
 a parameter of the program, neither registered nor held, whose gates are one interval of run Input nodes (`R8-tied`),
 and the registration piece publishes, beside the fan-out, the tied names it let through (`tiedThrough`), since
-acceptance rests on that later check.
+acceptance rests on that later check. R7 refuses a registered value, a supplied one included (a table opening's root
+and domain), whose parameter's gates hold a run Input node (`runInputNamed`, `R7-run-input`): a run Input's rows are
+committed once, in its one tree, and are never a registered value.
 
 R8 then holds the program's registered inputs (the parameters it binds at registration, `Partition.regInputs`) to the
 weights' registration of record the auditor's side hands it (`weightsOfRecord`: its bytes and the SHA-512 it holds; a
@@ -297,10 +297,12 @@ def optStr : Option String → Json
   | some s => Json.str s
   | none => Json.null
 
-/-- The Input gates `(first, count)` of the parameters `v` expects registered, which R8 reads as registered values
-(`registered.held_gates`). -/
-def heldGates (v : Verifier) : Array (Nat × Nat) :=
-  v.params.filterMap fun p => if v.registered.any (·.1 == p.name) then p.gates else none
+/-- The registered names, supplied ones included, whose parameter's gates hold a run Input node
+(`Partition.anyRunInput`; `registration._run_input_named`), which R7 refuses (`R7-run-input`). -/
+def runInputNamed (v : Verifier) : Array String :=
+  (v.registered.map (·.1)).filter fun t =>
+    ((v.params.find? (·.name == t)).bind (·.gates)).any fun (first, count) =>
+      Partition.anyRunInput v.program.prog first count
 
 /-- The Input gates `(first, count)` of tied name `t` where R8 may let it through: a parameter of the program that `v`
 neither expects registered nor holds, whose gates are one non-empty interval of run Input nodes
@@ -316,14 +318,9 @@ def tiedGates (v : Verifier) : Array (Nat × Nat) := v.tied.filterMap (tiedGate 
 /-- The tied names R8 can't let through (`R8-tied`). -/
 def tiedBad (v : Verifier) : Array String := v.tied.filter fun t => (tiedGate v t).isNone
 
-/-- The tied names R8 let through: each whose gates hold a run Input node the proof blocks don't each read alone outside
-the registered parameters' gates (`Partition.shared?`). The registration piece publishes them beside the fan-out:
-acceptance rests on the later check that ties their rows. -/
-def tiedThrough (v : Verifier) : Array String :=
-  let shared := Partition.shared? v.program v.query (heldGates v)
-  v.tied.filter fun t => match tiedGate v t with
-    | some (first, count) => shared.any (Partition.within v.program.prog first count)
-    | none => false
+/-- The tied names R8 let through (`tiedGate`). The registration piece publishes them beside the fan-out: acceptance
+rests on the later check that ties their rows. -/
+def tiedThrough (v : Verifier) : Array String := v.tied.filter fun t => (tiedGate v t).isSome
 
 /-- A pin of the weights' registration of record: its value, leaves, words, word bits, domain and root. -/
 structure Pin where
@@ -489,6 +486,11 @@ def readPins (v : Verifier) : Option ReadPins :=
 (`WEIGHTS_UNREGISTERED_WHY`). -/
 def readPinsWhy (v : Verifier) : String :=
   if (Partition.templateRanges? v.program v.query).isNone then WEIGHTS_QUERY_WHY else WEIGHTS_UNREGISTERED_WHY
+
+/-- Every marked parameter's gates, `(value, first, count)` each, the expected ones' with the loose ones'
+(`docket.marked_gates`): the members' check holds each port reading one to its entry of record. -/
+def markedGates (v : Verifier) : Array (String × Nat × Nat) :=
+  (v.params.filter (marked v)).flatMap fun p => (p.gates.map fun (first, count) => #[(p.name, first, count)]).getD #[]
 
 /-- R8's codes on the program's registered inputs (`weightsOf`). -/
 def weightsCodes (v : Verifier) : Array String := (weightsOf v).1
@@ -748,14 +750,11 @@ def linkRefused (v : Verifier) : Bool :=
 twice, so `check_eq_checkRef`'s `simp`, which leaves it folded, doesn't copy the codes before it into both cases. -/
 def kept (ok : Bool) (c : Array String) (code : String) : Array String := if ok then c else addCode c code
 
-/-- R8's codes added to `c`: a tied name it can't let through (`R8-tied`, `tiedBad`), then a run Input node the proof
-blocks don't each read alone outside the registered and tied parameters' gates (`R8-shared-input`,
-`Partition.readAlone`), then R8's hold on the program's registered inputs (`weightsCodes`). One term rather than two lines, since `check_eq_checkRef`'s `simp` copies every line after a
-join point into each of its branches. -/
+/-- R8's codes added to `c`: a tied name it can't let through (`R8-tied`, `tiedBad`), then R8's hold on the program's
+registered inputs (`weightsCodes`). One term rather than two lines, since `check_eq_checkRef`'s `simp` copies every
+line after a join point into each of its branches. -/
 def r8Codes (v : Verifier) (c : Array String) : Array String :=
-  (weightsCodes v).foldl addCode
-    (kept (Partition.readAlone v.program v.query (heldGates v ++ tiedGates v)) (kept (tiedBad v).isEmpty c "R8-tied")
-      "R8-shared-input")
+  (weightsCodes v).foldl addCode (kept (tiedBad v).isEmpty c "R8-tied")
 
 /-- `registration.check`'s failure codes, R1–R8 in order, then `link-points` (`linkRefused`): empty when the record
 holds. -/
@@ -818,6 +817,7 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
         v.schemas)
       v.outputs v.log (v.certified.map (·.1))
     c := kept (certifiedHeld rec v) c "R7-certified"
+    c := kept (runInputNamed v).isEmpty c "R7-run-input"
   -- R8
   c := r8Codes v c
   return if linkRefused v then addCode c "link-points" else c
@@ -885,6 +885,7 @@ def checkRef (rec : Json) (v : Verifier) : Array String := Id.run do
         v.schemas)
       v.outputs v.log (v.certified.map (·.1))
     c := kept (certifiedHeld rec v) c "R7-certified"
+    c := kept (runInputNamed v).isEmpty c "R7-run-input"
   -- R8
   c := r8Codes v c
   return if linkRefused v then addCode c "link-points" else c

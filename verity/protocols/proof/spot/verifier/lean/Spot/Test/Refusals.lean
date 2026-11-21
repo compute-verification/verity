@@ -75,9 +75,6 @@ def evidence (log : Json) : OneStageZk.Evidence :=
 
 #guard why? (OneStageZk.popHeld V3 (Json.mkObj [("population", (2 : Nat))])) == OneStageZk.POPULATION_ORDER
 
-#guard why? (OneStageZk.heldReadsOf { V3 with query := Json.mkObj [("name", "Q_unit"), ("params", Json.mkObj []),
-  ("version", (0 : Nat))] }) == OneStageZk.HELD_QUERY_WHY
-
 /-- A circuit of `upv` units, each returning `leaves` output leaves. -/
 def circuit (upv leaves : Nat) : Flock.Circuit :=
   { name := "c", sha := ByteArray.empty, nets := #[], ranges := #[], ports := #[], outPorts := #[], g := 0, kLog := 0,
