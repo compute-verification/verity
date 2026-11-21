@@ -23,13 +23,15 @@ BOUND = {"host": "auditor", "address": "auditor:7000", "command": ["ssh", "audit
 
 
 def test_its_settings_and_facts_are_period_json_s_wipe_with_none_unset() -> None:
-    """Every key of `period.json`'s ``wipe`` but the pin is a parameter or a fact, none both, and their defaults are
-    CONFIG's but for the served store: a card's (``cuda``), streamed natively. The declaration writes its own defaults,
-    since loading it loads no prover file; this holds them to CONFIG and UNSET."""
+    """Every key of `period.json`'s ``wipe`` but the verifier's (the pin and the fill floor) is a parameter or a
+    fact, none both, and their defaults are CONFIG's but for the served store: a card's (``cuda``), streamed natively.
+    The declaration writes its own defaults, since loading it loads no prover file; this holds them to CONFIG and
+    UNSET."""
     assert not set(WIPE.settings) & set(WS.FACTS) and WIPE.settings["limit_ns"] == LIMIT_NS
     got = WS.period_wipe(WIPE.settings | WS.FACTS)
-    assert set(got) | {"trusted_sha512"} == set(wipe_run.CONFIG)
-    assert got | {"trusted_sha512": None} == wipe_run.CONFIG | {"store": "cuda", "streamer": "native"}
+    verifiers = {"trusted_sha512": None, "fill_bytes": None}
+    assert set(got) | set(verifiers) == set(wipe_run.CONFIG)
+    assert got | verifiers == wipe_run.CONFIG | {"store": "cuda", "streamer": "native"}
     assert WS.period_wipe(WIPE.settings | WS.FACTS | {"foreign_past_bound": True, "simulated": True}) == got | {
         "foreign_bytes": "fM", "placement": "simulated"}
 
@@ -75,7 +77,7 @@ def _ctx(tmp_path, given=None, **launcher):
     given = given or {}
     return ({"settings": S.settings(WIPE, {k: v for k, v in given.items() if k in WIPE.settings}), "private": tmp_path,
              "process": H.PIECE, "side_of": lambda *a: None, "pins": [PIN],
-             "party": MEMORY_ATTESTER}
+             "party": MEMORY_ATTESTER, "fill": 1 << 25}
             | WS.FACTS | {k: v for k, v in given.items() if k in WS.FACTS} | launcher)
 
 
@@ -88,6 +90,7 @@ def _ctx(tmp_path, given=None, **launcher):
     (BOUND, {"pins": [PIN | {"protocol": "pous"}]}, "the pins handed to it give the memory-challenger no key for the wipe"),
     (BOUND, {"wipe_stream": "/exec/wipe_stream"}, "wipe_stream is the streamer of a memory attester on this node; one on "
                                                   "its own host (host, address, command) builds its own"),
+    (BOUND, {"fill": None}, "no fill floor for the card (ctx['fill'], the card file's store.wipe_fill)"),
     ({}, {}, "no challenger binding (host, address, command) and run_keys unset")])
 def test_the_attach_refuses_by_name_before_any_session(tmp_path, monkeypatch, settings, launcher, why) -> None:
     monkeypatch.setattr(wipe_run, "subprotocol", lambda *a, **kw: pytest.fail("a session started"))

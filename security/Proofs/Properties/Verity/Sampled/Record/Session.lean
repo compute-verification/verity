@@ -190,6 +190,21 @@ theorem sessionAt_ok {I : Flock.Witness.Inputs} {rd : Spot.OneStageZk.Reads} {dr
   obtain rfl : r = (spec, sts) := Except.ok.inj h
   exact ⟨hprog, hinner, hb, hsc, hsh, hrc⟩
 
+/-- **A one-table session with hidden outputs checks the circuit `ProvedScope.circuitOf` parses**: every table
+`sessionAt` sets up at `I` is `Stmt.setupHiddenOf`'s on that parse (`Stmt.setupTablesOf_one`), whose circuit it is. -/
+theorem sessionAt_circuitOf {I : Flock.Witness.Inputs} {rd : Spot.OneStageZk.Reads} {draw : Option Json}
+    {spec : SessionSpec} {sts : Array Stmt} (h : Spot.OneStageZk.sessionAt I rd draw = .ok (spec, sts))
+    (hh : (Flock.Witness.zkTags I).hiddenOutputs = true) (hc : I.count ≤ 1) :
+    ∀ st ∈ sts, Flock.ProvedScope.circuitOf (Flock.Witness.zkTags I) I.circuitFile I.tables = .ok st.c := by
+  obtain ⟨-, -, hb, -⟩ := sessionAt_ok h
+  obtain ⟨-, hs, -⟩ := setupTables_of_build hb
+  rw [Flock.Stmt.setupTables_eq] at hs
+  obtain ⟨st, hst, ho⟩ := Flock.Stmt.setupTablesOf_one hh hc hs
+  intro st' hst'
+  obtain rfl : st' = st := by simpa [show sts = #[st] from hst] using hst'
+  simp only [Flock.ProvedScope.circuitOf, hh, ↓reduceIte]
+  exact (FlockSoundness.Discharge.Hidden.setupHiddenOf_spec ho).parse
+
 /-- **`setupAt`, unfolded**: `sessionAt`'s session `(spec, sts)`, whose tables' verifier-side setups are the model's
 (`FlockDeploy.tabsOf`), and the sample's sampling design where there is a sample. -/
 theorem setupAt_ok {I : Flock.Witness.Inputs} {rd : Spot.OneStageZk.Reads} {draw : Option Json}

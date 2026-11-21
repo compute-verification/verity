@@ -5,9 +5,9 @@ it is of.
     python verity/protocols/proofs/spot/verifier/one_stage/verdict_record.py PIECE --first F --summary F --serve RUN --run RUN --out DIR \\
       [--stream F] [--commit SHA] [--control id|max_tokens]
 
-``--first`` is the class's first-stage file, the one `two_stage.py first` writes for it: the class's boundary record
-and its digest and, for a stop class, its stop record and that one's (its ``stop``). ``--stream`` is the docket of the verdict's own stream where the first-stage file does not hold it: the second stage's interior
-docket, which its command writes as ``interior/registration.json`` under its ``--out``.
+``--first`` is the class's first-stage file: the class's boundary record and its digest and, for a stop class, its
+stop record and that one's (its ``stop``). ``--stream`` is the docket of the verdict's own stream where the first-stage
+file does not hold it.
 
 A stop class's response lengths are held by a verdict on each of its pieces, each accepted and complete, and a reader
 of those verdicts has to be able to refuse a set that is not one class's: verdicts of different classes, serves or
@@ -28,8 +28,7 @@ verdict's own stream to that class:
   proof blocks its docket registers, which the verifier holds to its own sampling design and count (R1,
   R2), written NUM/DEN in lowest terms. A population whose every block is proved reads ``1/1``.
 * ``stream_registration``: the digest of the docket of the verdict's own stream, the one its verifier
-  sampled and proved on: the stop record for the stop audit, the interior docket for the second stage. Null
-  only on a second stage that refused before it registered an interior.
+  sampled and proved on: the stop record for the stop audit.
 * ``stream_names_boundary``: true where that record is the one with that digest and its ``previous`` is the class's
   boundary record, so the stream was registered after this class's boundary record and no other's; null beside a
   null ``stream_registration``. A stream registered after another record gets no verdict record: a verdict that
@@ -40,21 +39,14 @@ verdict's own stream to that class:
 * ``stop_record``: the stop audit (`stop_audit.py`), whose stream's docket is the stop record (the first-stage
   file's ``stop.record``), which registers the rate too. ``accept`` when its audit record accepted and is complete,
   ``not complete`` when it accepted with entries that did not run, else ``refuse``.
-* ``second_stage``: the compute audit's second stage (`two_stage.py second`), whose stream's docket is the
-  interior docket (``--stream``), held to the digest its summary names. Its rate is the class's boundary
-  record's, the replay sample's: the interior docket registers every proof block of the sampled spans.
-  ``refuse`` unless the second stage held (`two_stage.held`). Then ``accept`` or ``not complete`` as its outcome
-  accepted with or without ``complete`` (an outcome that carries no ``complete`` is not complete), and ``withheld``
-  when its outcome did not accept.
-
-``proved_by`` is null on both: no Lean guarantee covers either command, and ``open`` says what stands between its
+``proved_by`` is null: no Lean guarantee covers the command, and ``open`` says what stands between its
 verdict and proved (`Piece.open`).
 
 **Refused** (`record`, `append`): a summary that does not name this class's docket, so a command that refused
 before it registered gets no record, since nothing ties what it wrote to the class; a boundary or stop record that is
 not the one whose digest the first-stage file names; a stream's docket that is not the one its summary
-names, or whose ``previous`` is not the class's boundary record; a second stage that held and names no interior
-docket; and a second record on one piece and control in one file."""
+names, or whose ``previous`` is not the class's boundary record; and a second record on one piece and control in one
+file."""
 from __future__ import annotations
 
 import argparse
@@ -74,7 +66,7 @@ HERE = Path(__file__).resolve().parent
 FILE = "verdicts.jsonl"
 #: the negative controls: a run on the same path with one thing changed (null on the honest run)
 CONTROLS = ("id", "max_tokens")
-ACCEPT, NOT_COMPLETE, REFUSE, WITHHELD = "accept", "not complete", "refuse", "withheld"
+ACCEPT, NOT_COMPLETE, REFUSE = "accept", "not complete", "refuse"
 #: a docket's key for its sampling design, and that design's key for its kind
 DESIGN = "law"
 
@@ -128,37 +120,6 @@ def _stop_record(first: Mapping[str, Any], summary: Mapping[str, Any], boundary:
     return word, rec, stop
 
 
-def _second_stage(first: Mapping[str, Any], summary: Mapping[str, Any], boundary: Mapping[str, Any], digest: str,
-                  stream: Mapping[str, Any] | None) -> tuple[str, Mapping[str, Any], str | None]:
-    named = summary.get("first_stage")
-    if not isinstance(named, Mapping) or named.get("registration") != digest:
-        raise ValueError("the second stage's summary does not name this class's boundary record as its first stage's "
-                         f"`registration`, but {named!r}: nothing ties it to the class")
-    outcome = summary.get("outcome")
-    outcome = outcome if isinstance(outcome, Mapping) else {}
-    if summary.get("held") is not True:
-        word = REFUSE
-    elif outcome.get("accepted") is True:
-        word = ACCEPT if outcome.get("complete") is True else NOT_COMPLETE
-    else:
-        word = WITHHELD
-    second = summary.get("second_stage")
-    own = second.get("registration") if isinstance(second, Mapping) else None
-    if own is None:
-        if word != REFUSE or stream is not None:
-            raise ValueError("the second stage's summary names no interior registration (`second_stage.registration`)"
-                             + (", and a second stage that held registered one" if stream is None else
-                                " for the record handed"))
-        return word, boundary, None
-    if not isinstance(stream, Mapping) or DD.digest(stream) != own:
-        raise ValueError("the second stage's summary names its interior registration, and the record handed "
-                         "(`--stream`: its `interior/registration.json`) is "
-                         + ("none" if stream is None else "not the record with that digest"))
-    if stream.get("previous") != digest:
-        raise ValueError("the interior registration's `previous` is not the class's boundary record")
-    return word, boundary, own
-
-
 @dataclass(frozen=True)
 class Piece:
     """A verdict on a stop class. `module`: the verifier's command, as a record names it. `open`: what stands between
@@ -177,8 +138,6 @@ PIECES = {
     "stop_record": Piece("benchmarks/one_stage/stop_audit.py",
                          "no Lean guarantee covers the stop audit's command, which is Python around Lean's verdicts",
                          _stop_record),
-    "second_stage": Piece("benchmarks/one_stage/two_stage.py", "the two-stage form's soundness is not proved",
-                          _second_stage),
 }
 
 
@@ -228,10 +187,10 @@ def _head() -> str:
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("piece", choices=list(PIECES))
-    ap.add_argument("--first", required=True, help="the class's first-stage file, which two_stage.py first writes")
+    ap.add_argument("--first", required=True, help="the class's first-stage file")
     ap.add_argument("--summary", required=True, help="the verifier's command's summary.json on that class")
     ap.add_argument("--stream", help="the registration record of the verdict's own stream where the first-stage file "
-                                     "does not hold it: the second stage's interior/registration.json")
+                                     "does not hold it")
     ap.add_argument("--serve", required=True, help="the id of the served run the class came from")
     ap.add_argument("--run", required=True, help="the id of the run that produced the verdict")
     ap.add_argument("--commit", help="the commit the verifier ran at (this tree's HEAD)")

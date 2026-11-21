@@ -20,9 +20,8 @@ residual, `encodings/derived.py`) and the prove path's audit of a committed run'
   chain of windows rebuilt from its attested I/O under the config read off the endpoint's records
   (`endpoint_config`), its bits placed in the run's execution phases.
 * **The prove path** (`prove_path`, a directory or a gzipped tar): `prove_path.py audit`'s output adopted (`run.sh`'s ``$OUT``,
-  each arm a directory with its ``summary.json``): an honest arm passes when every rank's audit accepted on the verifier's
-  coins and every negative was refused; a forged arm when the forged unit it sampled was stopped (`prove_path.forged_row`:
-  the ZK server released no proof of it, or in a plain audit Lean refused the proof it read). The advice the arm
+  each arm a directory with its ``summary.json``): an arm
+  passes when every rank's audit accepted on the verifier's coins and every negative was refused. The advice the arm
   committed is held to the given advice's ``total_bits`` alone, its commitment being hiding. That holds it to the
   advice, not to these runs: the prove path is bound to them only when the advice is theirs and the Commit it proves is
   theirs, and only a bound prove path counts in the OK.
@@ -30,7 +29,7 @@ residual, `encodings/derived.py`) and the prove path's audit of a committed run'
   it proves (`served_commit`); the prove path is bound to these runs when every arm's Commit is the endpoint's (its
   ``windows.jsonl``) and sealed while serving, every arm's committed advice is held by content to the report's advice
   of its window (`held_to`: its root registered under that Commit, its opening opening it to that advice, which the
-  report's OK requires), and an honest arm's is one of the honest run's own Commit windows. When each was registered is
+  report's OK requires), and an arm's is one of the honest run's own Commit windows. When each was registered is
   read off the registration and the endpoint's trace (`closes`), never the job's.
 """
 from __future__ import annotations
@@ -488,7 +487,7 @@ def prove_path(src: Path | list[Path], info: dict | None, advice_bound: bool | N
     an arm of ``prove_path.py audit --serve-run`` names the served run's Commit window it proves (`served_commit`, named
     ``w<k> <arm>``), and the prove path is bound to these runs when every arm's is the endpoint's and sealed while
     serving, every arm's committed advice is held by content to the report's advice of its window (`held_to`: ``tied``,
-    which the report's OK requires of every such arm), and an honest arm's is one of the honest run's."""
+    which the report's OK requires of every such arm), and an arm's is one of the honest run's."""
     srcs = [src] if isinstance(src, Path) else list(src)
     served = info is not None and bool(info.get("served"))
     commits = {int(d["window"]): d for d in _jsonl(ep / "windows.jsonl")} if served and ep is not None else {}
@@ -510,10 +509,9 @@ def prove_path(src: Path | list[Path], info: dict | None, advice_bound: bool | N
                             "drawn": len(x.get("draw") or ()),
                             "wrong_units_bound": (a.get("wrong_units") or {}).get("bound"),
                             "negatives_refused": bool(x.get("negatives")) and all(map(_refused, x["negatives"].values())),
-                            "forged_refused": (x.get("forged") or {}).get("ok") if s.get("forged") else None,
                             "seconds": x.get("seconds"), "source": x.get("source"), "per_unit": per_unit(x)}
             committed = s.get("advice") or {}
-            arm = {"ok": s.get("ok") is True and bool(ranks), "forged": bool(s.get("forged")),
+            arm = {"ok": s.get("ok") is True and bool(ranks),
                    "world": s.get("world"), "rule": s.get("rule"), "delta": s.get("delta"),
                    "compiler": (s.get("compiler") or {}).get("name"),
                    "tp_run_root": s.get("tp_run_root") or s.get("run_root"),
@@ -549,13 +547,12 @@ def prove_path(src: Path | list[Path], info: dict | None, advice_bound: bool | N
         untied = [f"{n}: {a['commit']['tied_why']}" for n, a in arms.items() if not a["commit"]["tied"]]
         tied, tied_why = not untied, "; ".join(untied) or None
         problems += untied
-        if not any(a["commit"]["of_the_honest_run"] for a in arms.values() if not a["forged"]):
-            problems.append("no honest arm proves one of the honest run's Commit windows")
+        if not any(a["commit"]["of_the_honest_run"] for a in arms.values()):
+            problems.append("no arm proves one of the honest run's Commit windows")
         bound, why = not problems, "; ".join(problems) or None
     return {"dir": ", ".join(map(str, srcs)), "arms": arms, "committed_is_the_advice_file": committed, "bound": bound,
             "bound_why": why, "tied": tied, "tied_why": tied_why,
-            "ok": all(a["ok"] for a in arms.values()) and any(not a["forged"] for a in arms.values())
-            and False not in given}
+            "ok": all(a["ok"] for a in arms.values()) and False not in given}
 
 
 def _read_json(path: Path):

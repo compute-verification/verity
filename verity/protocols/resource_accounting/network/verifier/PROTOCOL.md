@@ -752,7 +752,7 @@ Lean as a core protocol: `NetworkCheck.Check` (`verity/network-certificate/v4`, 
 `NetworkCheck.Records` (`verity/network-records/v3`, raw, committed and attested records). Their module docstrings give
 the acceptance conditions and the violations, the first that applies naming it (`no-verdict`, `duplicate`, `signature`,
 `status:<reason>`, `advice`, `mismatch`), and `tests/verity/protocols/resource_accounting/network/verifier/network/test_network_check_protocol.py` and
-`test_network_records_protocol.py` hold them to `audit.py`. A violation is recorded and the run rejected; there is no
+`test_network_records_protocol.py` run each on the Lean check. A violation is recorded and the run rejected; there is no
 halt, and later execution phases are still checked.
 
 **One clock per spatial unit.** Every egress link of the unit reads the same sync in an execution phase. The audit keeps
@@ -1527,15 +1527,9 @@ the replay's cost at served shapes and its split into proof blocks.
 check the Lean statements on examples and prove nothing. A test that mirrors a statement of the analysis carries its
 name, and each test module's docstring says what it holds.
 
-**The difftest** checks the definitions the analysis's statements are about, not the statements. On 10,000 random instances,
-the network attester's program (`lean/`, `NetworkAttester`), evaluated, gives what this package gives. The Lean side is
-`expectedRow`, with `Accepted` of `constantRate` and `StatusComplete` decided per prefix of whole execution phases. The Python
-side is `expected_grids`, `check_link`'s verdicts with the first differing bucket, `check_ingress_link`, and each
-prefix's acceptance. `../attester/program/lean/scripts/difftest_vectors.py` writes the instances and this package's results, and the Lean
-audit runs `../attester/program/lean/NetworkAttester/DifftestMain.lean` on them (`runs` in `../attester/program/lean/lean-audit.json`).
-`test_network_attester_lean_difftest.py` checks that the data the record pins is still this package's. The program's
-definitions are List forms of `NetTiming`'s `Finset` ones, and three theorems prove them equal on everything the
-difftest compares (`NetTiming.SecurityProofs.Code`): `CodeExpectedRow` (the reference's row of the program's frames,
+**The program.** The network attester's program (`../attester/program/lean/`, `NetworkAttester`) holds the definitions
+the analysis's statements are about in List form, `NetTiming`'s `Finset` ones, and three theorems prove them equal
+(`NetTiming.SecurityProofs.Code`): `CodeExpectedRow` (the reference's row of the program's frames,
 sent at the program's hand ticks), `CodeAcceptedConstantRate` (the program's `Accepted` is the reference's, one
 execution block of the W execution phases, whose advice names each sync's δ and ρ) and `CodeStatusComplete`.
 

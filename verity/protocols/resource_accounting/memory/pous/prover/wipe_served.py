@@ -33,6 +33,9 @@ the facts:
 - ``trusted``: a key the run pins for the wipe itself (the launcher's ``WIPE_KEY_SHA512``), trusted in place of the pins'
   key; the pins still decide the premise, so a key they don't give reads rehearsal (`wipe_party.placement`);
 - ``node``: the wiped server's id (this host's name by default);
+- ``fill``: the fill floor the card file gives for this node's card (its ``store.wipe_fill``, a floor on the fill and
+  not the card's memory), `period.json`'s ``wipe.fill_bytes``, which the judge holds the session's fill to; a ``cuda``
+  store without it is refused;
 - ``judge``: the Lean ``wipe-protocol`` executable. Without it the wipe is undecided (`wipe_period.NO_JUDGE`);
 - ``wipe_stream``: the native streamer (``wipe_stream.c``) its launcher built where programs run, `period.json`'s
   ``tools.wipe-stream``, which the memory attester on this node gates and runs in place of building one beside its key
@@ -75,7 +78,7 @@ FACTS = {k: wipe_run.CONFIG[k] for k in ("device", "links", "foreign_bytes")} | 
 DEVELOPMENT = ("run_keys", "simulated", "foreign_bytes", "foreign_past_bound")
 BINDING = ("host", "address", "command")
 #: what a launcher hands the wipe in ``ctx``, beside ``settings``, ``private`` and ``process``
-LAUNCHER = ("side_of", "pins", "configuration", "trusted", "node", "judge", "wipe_stream", "ready")
+LAUNCHER = ("side_of", "pins", "configuration", "trusted", "node", "fill", "judge", "wipe_stream", "ready")
 
 
 def period_wipe(settings: Mapping[str, Any]) -> dict[str, Any]:
@@ -188,6 +191,9 @@ def refusals(ctx: Mapping[str, Any]) -> tuple[str, ...]:
         out.append("no private directory was handed to it, where its case goes")
     if "party" not in ctx:
         out.append("no party was handed to it (ctx['party'], the memory challenger's, which the scheme hands)")
+    if s["store"] == "cuda" and not (type(ctx.get("fill")) is int and ctx["fill"] > 0):
+        out.append("no fill floor for the card (ctx['fill'], the card file's store.wipe_fill), which the judge "
+                   "holds a cuda store's fill to")
     if ctx.get("wipe_stream") and s["host"]:
         out.append("wipe_stream is the streamer of a memory attester on this node; one on its own host (host, address, "
                    "command) builds its own")
@@ -238,7 +244,7 @@ def attach(exchange: Any, ctx: Mapping[str, Any]) -> Wiped:
     node = ctx.get("node") or socket.gethostname()
     doc: dict[str, Any] = {
         "tools": {t: str(ctx[k]) for t, k in (("wipe-protocol", "judge"), ("wipe-stream", "wipe_stream")) if ctx.get(k)},
-        NAME: period_wipe(s) | {"trusted_sha512": key},
+        NAME: period_wipe(s) | {"trusted_sha512": key, "fill_bytes": ctx.get("fill")},
         "deployment": {"configuration": ctx.get("configuration"), "pins": pins}}
     if s["host"]:
         doc |= {"challenger_host": s["host"], "challenger": {NAME: {"command": list(s["command"]),
@@ -255,7 +261,7 @@ def attach(exchange: Any, ctx: Mapping[str, Any]) -> Wiped:
                                       side_of=ctx["side_of"], ready=ctx.get("ready") or built)
     (private / "wipe.case.json").chmod(0o600)
     pin = pin_of(pins, ctx["party"])
-    served = {"server": node, "card": card, "key_pin": "configuration" if key and key == pin else "run",
+    served = {"server": node, "fill": ctx.get("fill"), "card": card, "key_pin": "configuration" if key and key == pin else "run",
               "development": development_of(key, {pin} - {None}, [k for k in DEVELOPMENT if s[k]])}
     record = json.loads((private / "wipe.json").read_text()) | {"served": served}
     (private / "wipe.json").write_text(json.dumps(record, indent=1, sort_keys=True))
