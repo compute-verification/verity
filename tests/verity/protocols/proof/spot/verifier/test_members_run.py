@@ -669,7 +669,7 @@ def test_a_members_run_input_ports_are_held_at_their_nodes_trees_derived_from_c(
         return {"leaf_layer": "l"}
 
     reg = type("R", (), {"KINDS": ("served",), "record": staticmethod(record), "digest": staticmethod(lambda rec: "d")})
-    win = TI.I.Window(TI.I.Circuit("test", ((TI.COORD, 10),), run_inputs=True), TI.RUN, TI.SAMPLING_DESIGN, 4)
+    win = TI.I.Window(TI.I.Circuit("test", ((TI.COORD, 10),)), TI.RUN, TI.SAMPLING_DESIGN, 4)
     ins, outs = TI.values(10)
     win.record(TI.COORD, ins, outs)
     win.write(win.close(), tmp_path, {"by": "test"}, registrar=reg)

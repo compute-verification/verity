@@ -1212,7 +1212,8 @@ def test_a_served_runs_weights_registration_is_the_committers_under_fresh_salts(
     against its manifest. Written to ``--out``: a root for each weight parameter but the rotary table's, what `verity-vllm
     advice --weights-of-record` records and ``window-circuit --pins`` takes (the embedding's table its own, its ``row-seg``
     rows), and what the verifier holds to its own weights
-    record's shapes (`registration_pins`) without computing a root. With the engine's served rotary table in the run's
+    record's shapes (`registration_pins`) without computing a root. Beside it, its registration of record, exactly
+    ``{program, values}`` in canonical JSON, which the check's pins read whole and whose SHA-512 the command says. With the engine's served rotary table in the run's
     ``private/cos_sin_cache.npy`` (serve-openai's) it roots that too, and refuses by name a table outside the analytic
     table's bound. Registering again gives other roots for every weight; a checkpoint the manifest pins as another model
     than the run served, or a shard other than the one the manifest pins, is refused by name, nothing registered."""
@@ -1244,6 +1245,9 @@ def test_a_served_runs_weights_registration_is_the_committers_under_fresh_salts(
     capsys.readouterr()
     assert register() == 0
     reg, said = json.loads(out.read_text()), json.loads(capsys.readouterr().out)
+    body = (tmp_path / "weights_of_record.json").read_bytes()
+    assert body == canonical_json({"program": reg["program"], "values": reg["values"]})
+    assert said["of_record"] == hashlib.sha512(body).hexdigest() and RA.pinned(json.loads(body)) == reg["values"]
     assert salts.stat().st_mode & 0o777 == 0o700 and set(SF.params(salts)) == set(reg["values"])
     assert all(SF.read(salts, q, [0]).hex() not in out.read_text() for q in reg["values"])
     pins = ADV.registered_weights(reg, serve)
