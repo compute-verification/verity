@@ -2747,9 +2747,11 @@ def served_program(templates: Sequence[tuple[Any, int]], record: Mapping[str, An
 
 def program_of_record(doc: Mapping[str, Any], resolve: Callable[[str], Any]) -> tuple[Any, dict[str, Any]]:
     """The Program and template query a period's ``circuit.json`` registers (`Circuit.program`, `served_program`; a
-    record that lists its members, `listed_program`), each template's Definition by ``resolve``."""
+    record that lists its members, `listed_program`), each template's Definition by ``resolve``. Neither reads ``cap``,
+    which fixes only the members (`members`), so a record that states no cap (`Circuit.description`) builds the same
+    Program as one that does."""
     defs = _templates_of(doc, resolve)
-    return served_program(defs, doc) if "cap" in doc else listed_program(defs, doc["external"])
+    return listed_program(defs, doc["external"]) if "members" in doc else served_program(defs, doc)
 
 
 def listed_program(templates: Sequence[tuple[Any, int]], external: Sequence[str]) -> tuple[Any, dict[str, Any]]:

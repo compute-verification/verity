@@ -74,9 +74,6 @@ def _window(out) -> tuple[I.Window, Table, dict]:
     return win, table, json.loads((out / "registration.json").read_text())
 
 
-@pytest.mark.xfail(strict=True, reason="the window's program binds the table's root and domain per run, and R7 refuses a "
-                   "supplied name whose gates are run Input nodes (R7-run-input) until the population program binds "
-                   "them supplied")
 def test_a_tables_supplied_rows_are_the_rows_r7_recomputes_from_the_programs_digest(tmp_path):
     """The window's root and domain rows, registered in a docket whose `supplied` names the table's root and domain id
     (`bytes`, the sources today's R7 reads), are the rows both verifiers compute: their salts are the program's, and R7 holds
