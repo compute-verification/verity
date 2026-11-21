@@ -319,7 +319,8 @@ three byte strings decode, Pearl+'s case decodes under the parameters `k` names 
 sent accepts it with the credit `w` and the standing `op` (`PouwVerifier.PearlPlus.Protocol.checkBlobs`), whose `macs`,
 `rho` and `epsilon` and whose `op` its answer publishes: `.committedBeforeCoin` where the run's epoch record is at
 version 2 and registered every fixed operand Pearl+'s tiles read before the salt coin, `.notCommitted` where it is at
-version 1. In both, no fixed operand is compared with a registered weight. -/
+version 1. In both, no fixed operand is compared with a registered weight. The standing is published, and the claim
+does not yet rest on it: `Holds` binds `op` existentially, so the same work bound is claimed at `.notCommitted`. -/
 def PearlPlusCredits (k : Verity.Registration.Composite) (s : Sent) (w : PouwVerifier.PearlPlus.Credit)
     (op : PouwVerifier.PearlPlus.Operands) : Prop :=
   ∃ ps c ev, Decoded s ps c ev ∧ ∃ x ∈ Properties.Composition.triples (s.components k) ps ev,
