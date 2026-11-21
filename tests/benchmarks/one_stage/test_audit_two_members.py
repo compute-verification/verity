@@ -32,8 +32,8 @@ stops included (`_kept_prover`).
 Slow, and past a minute in `check`: about 150 s on a node, about 210 s where the audit builds the coins' Lean first,
 and about 5 GB at its peak, which the suite's ``worker_gb`` declares. Of it the changed member's audit is about 50 s:
 it alone shows a false member stopped (the ZK server lets no proof of it out, and the Lean verifier refuses its
-session), where the audit's own negatives change the record around honest sessions. The audit on the window's
-challenger session is a third run of the window, under a key made for it at the deployed parameters: it alone runs Flock's own
+session), where the audit's own negatives change the record around honest sessions. The audits on the window's
+challenger session, under a key made for it at the deployed parameters, run Flock's own
 `serve --tree-from` client against the relay, the challenger's service on a session held open through the proving,
 and Lean's whole per-member check (`OneStageZk.membersRun`, then v1's check at the challenger's coins) on a window's
 real files, where every other test of those gives one of them a stand-in. A pass is reused while the suite's
@@ -212,17 +212,22 @@ def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_
     (`records_audit.verifier_window`), and the stream sampled by it accepts its outcome on the challenger's coins. The
     audit record names whose coins those are, the key and the session the challenger's ledger opens on the run's root,
     and says it wrote the case in the per-member form; SPOT's answer on the audit accepts with both in its public
-    outputs."""
+    outputs. The audit runs as the application's road runs it (`served_door_prove.sh`): on the local challenger's
+    session under a key at the deployed parameters, which the per-member case names, and Lean's check of that case
+    (`a5.members_lean`) accepts with the Python's verdict."""
     window = _window(tmp_path / "window")
     assert RA.verifier_window(window, RULE, None)[0].law == RND.parse_design(DESIGN) and S.SamplingDesign(RULE).text == RULE
     with pytest.raises(ValueError, match="a fixed count"):
         RA.verifier_window(window, DESIGN, None)
-    rc, row, out, said = _audit(tmp_path, window, binaries, more={"FLOCK_CHALLENGER": "0"})
+    rc, row, out, said = _audit(tmp_path, window, binaries, "--deployed-key")
     assert rc == 0 and row.get("ok") is True, said
     assert row["refused"] is None and row["population"] == 2 and row["draw"] == [0, 1], row
     assert [(m["template"], m["n"]) for m in row["members"]] == [(descriptor_id(t), 1) for t in TEMPLATES]
     assert row["audit"]["accepted"] is True, row["audit"]
-    assert row["audit"]["verdicts"] == {f"{v}/m{k}": True for v in VERDICTS for k in (0, 1)}
+    assert row["audit"]["verdicts"] == {f"{v}/m{k}": True for v in (*VERDICTS, "challenger") for k in (0, 1)}
+    agreed = row["audit"]["members_lean"]
+    assert (agreed["ok"], agreed["ran"], agreed["codes"]) == (True, True, []), agreed
+    assert (agreed["detail"]["lean"]["verdict"], agreed["detail"]["python"]["accepted"]) == ("accept", True), agreed
     assert _kept_prover(out) == ["session-m0", "session-m1"]
     assert row["negatives"] and all(row["negatives"].values()), row["negatives"]
     outcome = row["coins"]["outcome"]
@@ -246,13 +251,11 @@ def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_
         session, = sorted((out / "window" / f"session-m{k}" / "sessions").glob("*/session.json"))
         assert json.loads(session.read_text())["verdict"]["accepted"] is True
     assert _kept_verifier(out) == [(0, True), (1, True)]
-    # with FLOCK_CHALLENGER=0, a development run's, each verifier samples its session's coin tree itself, and the
-    # summary says whose it is
-    assert _coin_trees(out) == ("own", False)
+    assert _coin_trees(out) == ("window", True)
     missing = [f for f in RECORD if not (out / f).is_file()]
     assert not missing, missing
     case = json.loads((out / "window" / "case-v2.json").read_text())
-    assert len(case["params"]["proofs"]["members"]) == 2 and "challenger" not in case["params"]
+    assert len(case["params"]["proofs"]["members"]) == 2 and sorted(case["params"]["challenger"]) == ["key", "label"]
     assert json.loads((out / "window" / "case-sampled.json").read_text())["params"]["levels"] == 1
 
 
