@@ -19,7 +19,7 @@
   "adapters/torch",
   "adapters/vllm",
   "applications",
-  "input_datasets"
+  "library/datasets"
  ],
  "allowed": {
   "adapters/torch/README.md": "no README yet",
