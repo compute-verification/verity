@@ -1,0 +1,3 @@
+[2026-11-21T05:01Z] 1036fb4306f6
+Coordinator, 05:05Z, one more line for JOB 1 docs branch, from FILLER: verifier/README.md has a "Verdicts of record" table that lacks Pearl+. Add a row (verify each cell against the tip): Verdict "A Pearl+ run"; Entry `served_passes.py lean`, which writes `pearlplus-lean.json`, read by `served_verdicts.pearlplus_of_record`; Lean of record `pouw-pearlplus` (`PouwPearlPlus.Main`: `check`; `liveDrawReason` under `--draw-live`, which the served road does not pass yet); Twin: none (`served_passes.py verify` draws the coin and records `differ` as a measurement, so it is not a twin). NOTE lean rule: no Lean file and nothing under security/ in your branch.
+
