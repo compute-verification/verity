@@ -55,14 +55,16 @@ theorem _root_.Flock.Bridge.constsOfP_isInput {c : Flock.Circuit} {hU : Built c.
         (Discharge.Aliased.keyIdxP c pi (Discharge.Layout.keyB c hU)))
       n g hg)
 
-/-- **V5's assembly** (`Bridge.AssemblyTargetV5`). -/
-theorem _root_.Flock.Bridge.assemblyTargetV5 : Bridge.AssemblyTargetV5 := by
-  intro hT hF hE n Reg I own ht D hD hU pi hpi pub hpub hscope hv2 hdup hroots desc qr hpop lj tb samplingDesign kd hlaw hb hdiv dj
-    S₀ d₀ y₀ wr dg N Ω _ _ Lb src hA3 hTags hCust k Rw M hk hRw hM ρ hρ hr t' ht' B τ qF qS q L P vb σ Xr Cc Lm rows
-    roots Cd κ r ns δ hTab hLink
+/-- **V5's assembly at its strata's facts** (`Bridge.SampledKSLiveV5On`, from the three targets): the registration's
+strata sum to `n` and the sampling design is on them, which is all the assembly reads of the population. -/
+theorem _root_.Flock.Bridge.assemblyTargetV5On (hT : Bridge.TransportsLiveV5) (hF : Bridge.FaultyRightTargetC)
+    (hE : Bridge.EndToEndHiddenV5) : Bridge.SampledKSLiveV5On := by
+  intro n Reg I own ht D hD hU pi hpi pub hpub hscope hv2 hdup hroots desc qr lj tb samplingDesign kd hlaw hb hns₀ hon₀
+    hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hA3 hTags hCust k Rw M hk hRw hM ρ hρ hr t' ht' B τ qF qS q L P vb σ Xr Cc Lm
+    rows roots Cd κ r ns δ hTab hLink
   classical
-  have hns : ns.sum = n := Bridge.nsOf_sum hpop
-  have hon : Bridge.SamplingDesignOn samplingDesign ns kd := Bridge.samplingDesignOn_samplesUnder hpop hlaw hb
+  have hns : ns.sum = n := hns₀
+  have hon : Bridge.SamplingDesignOn samplingDesign ns kd := hon₀
   by_cases hrel : Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ r desc q roots)
       (Bridge.partOf P κ ns) (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr)
   · exact (FlockSoundness.Game.prob_mono (q := fun _ => False) (fun o ho => ho.2 hrel) _ τ).trans
@@ -79,8 +81,8 @@ theorem _root_.Flock.Bridge.assemblyTargetV5 : Bridge.AssemblyTargetV5 := by
     · rintro ⟨u, hu, rfl⟩; exact ⟨hu, u.isLt⟩
     · rintro ⟨hv, hlt⟩; exact ⟨⟨v, hlt⟩, hv, rfl⟩
   rw [Bridge.pa_partOf_window P hns, Bridge.window_zero_filter, ← hW] at hle
-  have hTu := hT n Reg I own ht D hD hU pi hpi pub hpub hscope hv2 hdup hroots samplingDesign kd hdiv dj S₀ d₀ y₀ wr dg N L hTags
-    hCust (Bridge.samplingDesignSized_size (Bridge.samplingDesignSized_samplesUnder hlaw hb) hCust.2) τ
+  have hTu := hT n Reg I own ht D hD hU pi hpi pub hpub hscope hv2 hdup hroots samplingDesign kd hdiv dj S₀ d₀ y₀ wr dg N L
+    hTags hCust (Bridge.samplingDesignSized_size (Bridge.samplingDesignSized_samplesUnder hlaw hb) hCust.2) τ
   have hκin : ∀ g b, κ g = some b → (Cc.op g).isInput = true := fun g b h =>
     Bridge.constsOfP_isInput (Discharge.Layout.outsOfP D.unroll hU n pi) h
   have hsub : (Finset.univ.filter fun u : Fin n => u.val ∈ F) ⊆ incorrectRegZc execArith P (planZHJP dj y₀)
@@ -99,10 +101,16 @@ theorem _root_.Flock.Bridge.assemblyTargetV5 : Bridge.AssemblyTargetV5 := by
     intro g hg b hb
     obtain ⟨-, hbit, hcan⟩ := hop g hg
     exact hbit.symm.trans (hcan.1 b hb)
-  have hE' := hE n Reg I own ht D hD hU pi hpi pub hpub hscope samplingDesign kd ns hns hon hdiv dj S₀ d₀ y₀ wr dg N Ω Lb src hA3
-    hTags hCust k Rw M hk hRw hM ρ hρ hr t' ht' (Finset.univ.filter fun u : Fin n => u.val ∈ F) τ qF qS hTab hLink
+  have hE' := hE n Reg I own ht D hD hU pi hpi pub hpub hscope samplingDesign kd ns hns hon hdiv dj S₀ d₀ y₀ wr dg N Ω Lb
+    src hA3 hTags hCust k Rw M hk hRw hM ρ hρ hr t' ht' (Finset.univ.filter fun u : Fin n => u.val ∈ F) τ qF qS hTab hLink
   refine le_trans (FlockSoundness.Game.prob_mono ?_ _ τ) (hE'.trans ?_)
   · exact fun o ho => ⟨ho.1, hsub⟩
   · exact add_le_add (add_le_add (ENNReal.ofReal_le_ofReal hle) le_rfl) le_rfl
+
+/-- **V5's assembly** (`Bridge.AssemblyTargetV5`): `assemblyTargetV5On` at the strata's facts `PopMatches` gives. -/
+theorem _root_.Flock.Bridge.assemblyTargetV5 : Bridge.AssemblyTargetV5 := by
+  intro hT hF hE n Reg I own ht D hD hU pi hpi pub hpub hscope hv2 hdup hroots desc qr hpop lj tb samplingDesign kd hlaw hb
+  exact Bridge.assemblyTargetV5On hT hF hE n Reg I own ht D hD hU pi hpi pub hpub hscope hv2 hdup hroots desc qr lj tb
+    samplingDesign kd hlaw hb (Bridge.nsOf_sum hpop) (Bridge.samplingDesignOn_samplesUnder hpop hlaw hb)
 
 end Flock.Guarantees
