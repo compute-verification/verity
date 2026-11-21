@@ -679,6 +679,12 @@ def _held_naming(named: Mapping[str, Any], day: int, digests: set[str], where: s
 DAY_SOURCES = {"device": "the challenger's signed ledger (--day-ledger)",
                "development": "development: --day and the prover's --day-log, not device-bound"}
 
+#: where R8's weights' registration of record's digest came from, as the summary's ``weights_of_record`` says
+WEIGHTS_SOURCES = {"auditor": "the auditor's side (--registered-digest)",
+                   "development": "development: the SHA-512 of --registered's own file, a stand-in for the auditor's "
+                                  "digest; condition (1) is UNMET and such a run tests the code and is reported as that: "
+                                  "NOT a first accept of record"}
+
 
 def device_day(lines: list[str], root: str, key: Any, verify: Callable[[Any, bytes, bytes], bool],
                w: Mapping[str, Any] | None = None) -> dict[str, Any]:
@@ -1078,7 +1084,10 @@ def audit(a: argparse.Namespace) -> int:
     a.compose_cache = a.compose_cache or str(out / "compose-cache")
     try:
         mine, doc, sets = verifier_window(wdir, a.sampling_design, Path(a.template_sets) if a.template_sets else None)
-        pins = pinned(json.loads(Path(a.registered).read_text())) if a.registered else {}
+        weights = Path(a.registered).read_bytes() if a.registered else None
+        pins = pinned(json.loads(weights)) if weights is not None else {}
+        if weights is not None:
+            a.weights_of_record = (weights, a.registered_digest or hashlib.sha512(weights).hexdigest())
         def resolve(t: str) -> Any:
             return sets[t][1] if t in sets else catalog_resolve(t)
         docket = json.loads((wdir / "registration.json").read_text())
@@ -1089,6 +1098,7 @@ def audit(a: argparse.Namespace) -> int:
         pins |= ties | untied
         w_tie = json.loads(Path(a.tie_file).read_text()) if a.tie_file else None
         decl = IF.declarations(doc)[2]
+        a.declared_reads = [(r.reader, r.port, r.param) for r in decl.reads] if decl else []
         tied, tie_pins = tie_of(doc, w_tie, a.tie_prefix, phase_values(docket, decl.values if decl else ()))
         if twice := sorted(set(tie_pins) & set(pins)):
             raise ValueError(f"values {twice} are both pinned and the earlier registration's")
@@ -1174,6 +1184,9 @@ def audit(a: argparse.Namespace) -> int:
         row["registered"] = {"pins": counted, "roots": roots, "members": len(reads), "own": {**ties, **untied}}
     if tied.get("log"):
         row["tie"] = tie_row(tied)
+    if a.registered:
+        row["weights_of_record"] = {"digest": a.weights_of_record[1],
+                                    "source": WEIGHTS_SOURCES["auditor" if a.registered_digest else "development"]}
     if day:
         row["day"] = {"day": day["day"], "declared": [d["program"] for d in day["declarations"] if d["day"] == day["day"]],
                       "source": DAY_SOURCES["device" if a.day_ledger else "development"]}
@@ -1307,6 +1320,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--main", help="with --challenger: the verifier's copy of main's first-parent history")
     p.add_argument("--registered", help="the registered values' entries the verifier pinned before the run, {program, "
                    "values} (`pinned`), for a circuit that reads them")
+    p.add_argument("--registered-digest", help="with --registered: the SHA-512 the auditor's side holds for that file, which "
+                   "R8 refuses it without (`docket.weights_held`); without it, the file's own, a development stand-in "
+                   "(`WEIGHTS_SOURCES`)")
     p.add_argument("--tie", dest="tie_file", help="the earlier registration W (PoUW H1's of the window, or Pearl+'s window "
                    "record) that registered first the values the circuit's program takes, which the window's registration "
                    "registers as W's, chained right after it (`tie_of`); a circuit with values needs it")

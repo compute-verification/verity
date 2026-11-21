@@ -377,7 +377,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
           pool: Mapping[str, Any] | None = None, tied: Sequence[str] | None = None,
           history: Mapping[str, Any] | None = None, members: Sequence[LP.Member] = (),
           compiler: Any = R.UNREAD, certified: Mapping[str, Mapping[str, Any]] | None = None,
-          verdicts: Mapping[str, bool] | None = None) -> Verdict:
+          verdicts: Mapping[str, bool] | None = None, weights_of_record: tuple[bytes, str] | None = None,
+          declared_reads: Iterable[Sequence[str]] = ()) -> Verdict:
     """`docket.check` (R1-R8) by the verifier, then, where it passes, the caller's check (`caller.check`, `Caller.gate`):
     the declared day when it passes `day` and `declarations`, the binding when it passes `binding`, the seed salt when it
     passes `seed_salt`, the registered compiler when it passes `compiler`, and the pool's reset, week and spent mark, a
@@ -392,14 +393,17 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
     per-member form's (each its units' ``[lo, hi)`` ranges and its circuit's units a proof block), both hold them to
     `link-points` after R8 (`registration.check`'s ``members``, `Docket.linkRefused`: a sample that ends gives each
     member one count of link points), as the compiled check of that form does the members its parameters
-    name (`OneStageZk.membersParamsOfJson`); with none, the one-statement form's, neither does."""
+    name (`OneStageZk.membersParamsOfJson`); with none, the one-statement form's, neither does. `weights_of_record`
+    and `declared_reads` reach the Python alone (`docket.weights_held`): the Lean takes neither yet, so a refusal of
+    theirs is a disagreement, and an accept rests on the Lean's R8, which passes a registered input by kind."""
     log, members = list(log), [([list(r) for r in us], g) for us, g in members]
     try:
         py: Verdict | None = R.check(rec, program, query, sampling_design, scheme, ports, leaf_layer, anchors, log, partition,
                                      work_table, registered, supplied, pinned, binding, outputs=outputs, schemas=schemas,
                                      window_root=window_root, held=held, members=members, day=day,
                                      declarations=declarations, seed_salt=seed_salt, pool=pool, tied=tied, history=history,
-                                     compiler=compiler, certified=certified, verdicts=verdicts)
+                                     compiler=compiler, certified=certified, verdicts=verdicts,
+                                     weights_of_record=weights_of_record, declared_reads=declared_reads)
         why = None
     except R.HistoryRefused as e:
         py, why = None, str(e)

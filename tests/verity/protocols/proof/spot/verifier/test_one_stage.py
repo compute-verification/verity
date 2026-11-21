@@ -853,6 +853,61 @@ def test_r8_lets_a_tied_run_input_through_and_publishes_it():
     assert v.ok and v.rests_on_period_check == ()
 
 
+def _weights(prog, value="t", words=2, program="aa" * 64, leaves=None, domain=None):
+    """A weights' registration of record pinning `value` of `prog`, its bytes and their SHA-512."""
+    from verity.commitments import registered_value as RV
+    leaves = G.shape(prog, value, words) if leaves is None else leaves
+    width = G.width(prog, value)
+    entry = {"value": value, "root": "ab" * 64, "leaves": leaves, "words": words,
+             "domain": domain or RV.domain(program, value, words, leaves, width).domain_id.hex()}
+    if width != RV.WORD_BITS:
+        entry[RV.WIDTH_KEY] = width
+    body = json.dumps({"program": program, "values": {value: entry}}).encode()
+    return body, hashlib.sha512(body).hexdigest()
+
+
+def _weighed(prog, q, **kw):
+    n = P.units(prog, q)
+    ports = _ports(prog, q, n)
+    rec = DK.record(prog, q, SAMPLING_DESIGN, SCHEME, [{"port": p, "root": ROOTS[p], **ports[p]} for p in ports], SERVED,
+                    leaf_layer="ee" * 64)
+    return _check(rec, prog, q, **kw)
+
+
+def test_r8_excuses_a_registered_weight_only_where_it_is_marked_pinned_and_declared():
+    """R8 under a weights' registration of record (`docket.weights_held`): a registered input two proof blocks read
+    passes with the registration and the SHA-512 the auditor's side holds for it, and the window's declared reads of it;
+    without the registration it is read as a run Input and refused by name (`R8-unpinned`), and at a wrong digest, a
+    wrong domain or a wrong shape the registration is refused. A pin of a parameter the program doesn't mark registered
+    is ignored: it excuses nothing, and R8 refuses the run Input as before. Declared reads that are not the template
+    parameters reading the pinned value, either way, are refused (`R8-undeclared`)."""
+    q = P.template_instance_query(PAIR.id)
+    for marked, unmarked in zip(_two_programs(registered=("t",)), _two_programs()):
+        reads = sorted({(t, p, "t") for t, p, _ in P.input_reads(marked, q, G.held_gates(marked, ["t"]))})
+        assert reads and {t for t, _, _ in reads} == {PAIR.id}
+        weights = _weights(marked)
+        v = _weighed(marked, q, weights_of_record=weights, declared_reads=reads)
+        assert v.ok, v.codes
+        v = _weighed(marked, q, declared_reads=reads)
+        assert v.codes == ("R8-unpinned",) and v.detail["R8-unpinned"]["refused"] == {"values": ["t"]}
+        v = _weighed(marked, q, weights_of_record=(weights[0], "00" * 64), declared_reads=reads)
+        assert v.codes == ("R8-weights-digest",)
+        bad = _weights(marked, domain="11" * 64)
+        v = _weighed(marked, q, weights_of_record=bad, declared_reads=reads)
+        assert v.codes == ("R8-weights-domain", "R8-unpinned")
+        bad = _weights(marked, leaves=G.shape(marked, "t", 2) + 1)
+        v = _weighed(marked, q, weights_of_record=bad, declared_reads=reads)
+        assert v.codes == ("R8-weights-shape",)
+        v = _weighed(marked, q, weights_of_record=weights)
+        assert v.codes == ("R8-undeclared",) and v.detail["R8-undeclared"]["refused"]["undeclared"] == [list(r) for r in reads]
+        v = _weighed(marked, q, weights_of_record=weights, declared_reads=[*reads, (PAIR.id, "nope", "t")])
+        assert v.codes == ("R8-undeclared",)
+        assert v.detail["R8-undeclared"]["refused"]["unread"] == [[PAIR.id, "nope", "t"]]
+        v = _weighed(unmarked, q, weights_of_record=_weights(unmarked), declared_reads=reads)
+        assert v.codes == ("R8-shared-input",)
+        assert _weighed(unmarked, q).codes == ("R8-shared-input",)
+
+
 def test_a_member_reading_a_held_or_tied_run_input_carries_a_registered_file():
     """`members._held_read` (Lean's `OneStageZk.heldReadsFiled`): where R8 lets a run Input through as tied or held, a
     member whose units meet a range reading it and that carries no registered file is refused by name; with every
