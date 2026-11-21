@@ -11,8 +11,9 @@ torch's current stream, in the device's primary context:
 
 * **The trees** are -h3's (the kernel schemes' ``pearl-c`` family): `audit.HM96`, frame-v3-sha512 over hm96-sha512 leaves (64-byte nodes), each leaf
   over a row's SHA-512 row digest and the row's salt.  The kernels derive no salt: each tree's are bytes in its
-  ``salts_<tree>`` buffer.  B's are the weights' registration's (``weight_salts``, `pearl_c.weight_row_salts`; a bench's
-  `fresh_weight_salts`), put once a weight; A's are the next leaves of the pass's keyed stream, filled on the card before the
+  ``salts_<tree>`` buffer.  B's are the caller's (``weight_salts``): fresh bytes each epoch on the served arm
+  (`pouw.scheme`'s ``open``, `fresh_salts`, since the served checkpoint is not registered) and a bench's
+  (`fresh_weight_salts`), put once a weight; A's are the next leaves of the pass's keyed stream, filled on the card before the
   call's launches or its graph's replay (`host.fresh_into`, under the pass's own key, `_Pass.salts`, drawn fresh at its first
   fill and dropped at its end); the tiles' are the stream's at the pass's end (`ends`); y's are fresh and kept
   beside its tree (`served_y_device`).  A retained pass keeps every salt beside the rows it salts.
@@ -197,7 +198,7 @@ def _weight_salts(weight_salts: dict[int, bytes], w: int, n: int) -> bytes:
     got = weight_salts.get(w)
     if got is None or len(got) != HM96_SALT * n:
         raise ValueError(f"weight {w}'s {n} B rows take {HM96_SALT * n} bytes of salts ({HM96_SALT} a row), "
-                         f"not {'none' if got is None else len(got)}: its registration's (`pearl_c.weight_row_salts`)")
+                         f"not {'none' if got is None else len(got)}: the salts its B tree was committed under")
     return got
 
 
@@ -215,7 +216,8 @@ def weight_roots(kernel: Kernel, weights: dict[int, Any], scheme: str = kernel_n
                  weight_salts: dict[int, bytes]) -> dict[int, bytes]:
     """Each weight's B-row tree root (phase ``epoch`` alone), before any salt: the composition's weight phase, under the scheme
     `scheme` names: its device record is the pipeline variant, and its hashing format gives the tree hash.  B's rows are
-    salted with `weight_salts`' (each weight's, `HM96_SALT` bytes a row: its registration's), which its run is given too."""
+    salted with `weight_salts`' (each weight's, `HM96_SALT` bytes a row: on the served arm fresh each epoch), which its run
+    is given too."""
     s = pouw_schemes.get(scheme)
     variant, hash = s.device.name, hash_format(s).tree_hash
     R, out = kernel.run, {}
