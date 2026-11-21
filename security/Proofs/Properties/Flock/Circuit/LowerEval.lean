@@ -1442,27 +1442,110 @@ theorem batchArgs_widths {bytes : ByteArray} {P : Prog} (h : decode bytes = .ok 
   exact arg_widths hpar hps (hcnt i hi)
     (hR _ (by rw [getElem!_pos x.args i hi]; exact Array.getElem_mem_toList hi)).2 (hW i hi)
 
+theorem form_of_ne_scan {f : Flock.Program.Form} (h : f ≠ .scan) : f = .prim ∨ f = .call ∨ f = .batch := by
+  cases f with
+  | prim => exact Or.inl rfl
+  | call => exact Or.inr (Or.inl rfl)
+  | batch => exact Or.inr (Or.inr rfl)
+  | scan => exact absurd rfl h
+
+/-- A decoded node calling a primitive is no scan. -/
+theorem ne_scan_of_prim {bytes : ByteArray} {P : Prog} (h : decode bytes = .ok P)
+    (hr : (P.defs[P.root]!).body.recut = #[]) {d : ℕ} (hd : d < P.defs.size) {k : ℕ}
+    (hk : k < (P.defs[d]!).body.nodes.size) (hpt : (P.defs[((P.defs[d]!).body.nodes[k]).fn]!).prim = true) :
+    ((P.defs[d]!).body.nodes[k]).form ≠ .scan := by
+  obtain ⟨st, hP, hinv, -⟩ := BodiesOk.decode_spec bytes P h hr
+  have hok : ∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1
+  obtain ⟨-, hno, -⟩ := (hok d hd).2.1 k hk
+  rw [getElem!_pos _ k hk] at hno
+  intro hs
+  rw [hno.2.2.2.1 (Or.inr hs)] at hpt
+  cases hpt
+
+theorem widths_pair (a b : Ty) : (Ty.tuple #[a, b]).widths.toList = a.widths.toList ++ b.widths.toList := by
+  simp only [Ty.widths]
+  rw [← Array.foldl_toList]
+  simp
+
+/-- **A decoded scan's typing**: it calls a composite of one parameter per argument, at least one; its carry argument
+has the carry parameter's widths, a sequence argument its parameter's `n` times and any other its parameter's; the
+callee returns the carry and then `yw`, and the node outputs the carry and then `yw` `n` times. -/
+theorem scanFacts {bytes : ByteArray} {P : Prog} (h : decode bytes = .ok P)
+    (hr : (P.defs[P.root]!).body.recut = #[]) {d : ℕ} (hd : d < P.defs.size) (hp : (P.defs[d]!).prim = false) {k : ℕ}
+    (hk : k < (P.defs[d]!).body.nodes.size) (hs : ((P.defs[d]!).body.nodes[k]).form = .scan) :
+    (P.defs[((P.defs[d]!).body.nodes[k]).fn]!).prim = false ∧
+    ((P.defs[d]!).body.nodes[k]).args.size = (P.defs[((P.defs[d]!).body.nodes[k]).fn]!).params.size ∧
+    0 < (P.defs[((P.defs[d]!).body.nodes[k]).fn]!).params.size ∧
+    (((P.defs[d]!).body.nodes[k]).args.getD 0 default).seq.toArray.toList.map
+        (fun r => (tyAt (P.defs[d]!) r).widths[r.j]!) =
+      ((P.defs[((P.defs[d]!).body.nodes[k]).fn]!).params.getD 0 default).2.widths.toList ∧
+    (∀ i < ((P.defs[d]!).body.nodes[k]).args.size, 1 ≤ i →
+      (((P.defs[d]!).body.nodes[k]).args.getD i default).seq.toArray.toList.map
+          (fun r => (tyAt (P.defs[d]!) r).widths[r.j]!) =
+        if i ≤ ((P.defs[d]!).body.nodes[k]).nxs then
+          (List.replicate ((P.defs[d]!).body.nodes[k]).n
+            ((P.defs[((P.defs[d]!).body.nodes[k]).fn]!).params.getD i default).2.widths.toList).flatten
+        else ((P.defs[((P.defs[d]!).body.nodes[k]).fn]!).params.getD i default).2.widths.toList) ∧
+    ∃ yw, (P.defs[((P.defs[d]!).body.nodes[k]).fn]!).ret.widths.toList =
+        ((P.defs[((P.defs[d]!).body.nodes[k]).fn]!).params.getD 0 default).2.widths.toList ++ yw ∧
+      ((P.defs[d]!).body.nodes[k]).out.widths.toList =
+        ((P.defs[((P.defs[d]!).body.nodes[k]).fn]!).params.getD 0 default).2.widths.toList ++
+          (List.replicate ((P.defs[d]!).body.nodes[k]).n yw).flatten := by
+  obtain ⟨st, hP, hinv, -⟩ := BodiesOk.decode_spec bytes P h hr
+  have hok : ∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1
+  obtain ⟨hcal, hnodes, -⟩ := hok d hd
+  have hpar := (hcal.2 hp).1
+  have hR := (refs_comp h hr hd hp).1 k hk
+  have hW := ((LeafWidths.decoded_wide bytes P h hr d hd hp).2).1 k hk
+  obtain ⟨-, hno, hargs⟩ := hnodes k hk
+  have hk' : (P.defs[d]!).body.nodes[k] = (P.defs[d]!).body.nodes[k]! := (getElem!_pos _ k hk).symm
+  rw [hk'] at hR hs ⊢
+  generalize (P.defs[d]!).body.nodes[k]! = x at hno hargs hR hW hs ⊢
+  obtain ⟨hsz, hcnt, -, hpc, hsh, -⟩ := hno
+  rw [hs] at hsh
+  obtain ⟨carry, yy, hret, hout, hp0, ha0, hrest, hpos⟩ := hsh
+  have hwid : ∀ i < x.args.size, (x.args.getD i default).seq.toArray.toList.map
+      (fun r => (tyAt (P.defs[d]!) r).widths[r.j]!) = (x.args[i]!).ty.widths.toList := fun i hi => by
+    simp only [← Array.getElem!_eq_getD]
+    obtain ⟨⟨ps, hps, -⟩, -⟩ := hargs i hi
+    exact arg_widths hpar hps (hcnt i hi)
+      (hR _ (by rw [getElem!_pos x.args i hi]; exact Array.getElem_mem_toList hi)).2 (hW i hi)
+  have hc0 : ((P.defs[x.fn]!).params.getD 0 default).2 = carry := by
+    rw [← Array.getElem!_eq_getD]; exact hp0
+  refine ⟨hpc (Or.inr hs), hsz, by omega, ?_, fun i hi hi1 => ?_, yy.widths.toList, ?_, ?_⟩
+  · rw [hwid 0 hpos, ha0, hc0]
+  · rw [hwid i hi]
+    simp only [← Array.getElem!_eq_getD]
+    by_cases hx : i ≤ x.nxs
+    · rw [if_pos hx]
+      obtain ⟨e, hty, he, -⟩ := (hrest i hi (by omega)).1 hx
+      rw [hty, widths_array_flat, he]
+    · rw [if_neg hx, (hrest i hi (by omega)).2 hx]
+  · rw [hret, widths_pair, hc0]
+  · rw [hout, widths_pair, widths_array_flat, hc0]
+
 /-- **`NestedTyped`** holds: each fact is the decoder's (`BodiesOk.DefOk`, `LeafWidths.decoded_wide`), and a node's
 word-primitive callee's Boolean body evaluates through gates alone (`GateBodiesDeep` at the template). -/
 theorem nestedTyped : NestedTyped := by
   intro bytes P h hr d hd hn hgd
   cases hn with
-  | mk hp hform _ _ hgate _ =>
+  | mk hp _ _ hgate _ =>
   obtain ⟨st, hP, hinv, -⟩ := BodiesOk.decode_spec bytes P h hr
   have hok : ∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1
   refine ⟨(refs_comp h hr hd hp).1, (refs_comp h hr hd hp).2, ret_widths h hr hd hp, fun nd hnd => ?_,
-    fun k hk hpt ys hys => ?_, fun k hk hpc => outWidths_comp h hr hd hk hpc (hform _ (Array.getElem_mem hk)),
+    fun k hk hpt ys hys => ?_, fun k hk hpc hs => outWidths_comp h hr hd hk hpc (form_of_ne_scan hs),
     fun k hk hb i hi => ⟨axes_comp_ax h hr hd hp k hk hb i hi, (axes_comp h hr hd hp k hk hb i hi).2⟩,
     fun k hk _ hf => callArgs_widths h hr hd hp hk hf,
-    fun k hk _ hb => batchArgs_widths h hr hd hp hk hb⟩
+    fun k hk _ hb => batchArgs_widths h hr hd hp hk hb,
+    fun k hk hs => scanFacts h hr hd hp hk hs⟩
   · obtain ⟨k, hk, rfl⟩ := Array.mem_iff_getElem.1 hnd
     rw [← getElem!_pos _ k hk]
     exact ((hok d hd).2.1 k hk).1
-  · by_cases hwp : isWordPrim (P.defs[((P.defs[d]!).body.nodes[k]).fn]!).prim
+  · have hf3 := form_of_ne_scan (ne_scan_of_prim h hr hd hk hpt)
+    by_cases hwp : isWordPrim (P.defs[((P.defs[d]!).body.nodes[k]).fn]!).prim
         (P.defs[((P.defs[d]!).body.nodes[k]).fn]!).key = true
-    · exact outWidths_word h hr hd (hgd d .root hp) hk (hform _ (Array.getElem_mem hk)) hwp ys hys
-    · exact outWidths_gate h hr hd hk (hform _ (Array.getElem_mem hk))
-        (hgate _ (Array.getElem_mem hk) hpt (by simpa using hwp)) ys hys
+    · exact outWidths_word h hr hd (hgd d .root hp) hk hf3 hwp ys hys
+    · exact outWidths_gate h hr hd hk hf3 (hgate _ (Array.getElem_mem hk) hpt (by simpa using hwp)) ys hys
 
 /-- **`LiftWordEval` for a template of batches on any axis over word primitives, gates and earlier such templates**: the lift of a
 template of a C `decode` accepts whose root has no recut, each of whose reached Boolean Definitions evaluates through gates

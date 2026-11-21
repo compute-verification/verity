@@ -321,13 +321,13 @@ theorem prim_lt {P : Prog} {i : ℕ} (h : (P.defs[i]!).prim = true) : i < P.defs
 theorem wordPrim_lt {P : Prog} {i : ℕ} (h : isWordPrim (P.defs[i]!).prim (P.defs[i]!).key = true) : i < P.defs.size :=
   prim_lt (by simp only [isWordPrim, Bool.and_eq_true] at h; exact h.1.1)
 
-/-- A template of batches over word primitives, gates and earlier such templates reaches a word primitive, read in any
-`S` that keeps `P`'s Definitions. -/
-theorem reachesWord_of_nested {P S : Prog} (hpre : ∀ i < P.defs.size, S.defs[i]! = P.defs[i]!) {y : ℕ}
-    (h : BatchNested P y) (hy : y < P.defs.size) : ReachesWord S y := by
+/-- A template of batches and scans over word primitives, gates and earlier such templates reaches a word primitive,
+read in any `S` that keeps `P`'s Definitions. -/
+theorem reachesWord_of_scanNested {P S : Prog} (hpre : ∀ i < P.defs.size, S.defs[i]! = P.defs[i]!) {y : ℕ}
+    (h : ScanNested P y) (hy : y < P.defs.size) : ReachesWord S y := by
   revert hy
   induction h with
-  | @mk d hp _ hlt _ _ hex ih =>
+  | @mk d hp hlt _ _ hex ih =>
     intro hy
     obtain ⟨nd, hmem, hc⟩ := hex
     have hpS : (S.defs[d]!).prim = false := by rw [hpre d hy]; exact hp
@@ -335,6 +335,10 @@ theorem reachesWord_of_nested {P S : Prog} (hpre : ∀ i < P.defs.size, S.defs[i
     rcases hc with hc | hw
     · exact .comp hpS hmemS (ih _ hmem hc (by have := hlt _ hmem hc; omega))
     · exact .comp hpS hmemS (.word (by rw [hpre _ (wordPrim_lt hw)]; exact hw))
+
+theorem reachesWord_of_nested {P S : Prog} (hpre : ∀ i < P.defs.size, S.defs[i]! = P.defs[i]!) {y : ℕ}
+    (h : BatchNested P y) (hy : y < P.defs.size) : ReachesWord S y :=
+  reachesWord_of_scanNested hpre (scanNested_of_batchNested h) hy
 
 /-- **`closure_placesAll` through `lift`**: the lift of `d` returns where its closure places `d`. -/
 theorem liftPlacesAll {S L : Prog} {d e : ℕ} (h : Flock.Lift.lift S d = .ok (L, e)) :
