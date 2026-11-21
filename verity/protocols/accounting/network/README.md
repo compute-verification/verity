@@ -37,7 +37,7 @@ Fixed for every implementation: the grid, the signed records, the scan's Definit
 
 - From the workload: the served bytes at the attester's ports and, under `ids`, requests as token ids.
 - From `run`: the session and its key, the period's execution phases, the coins that sample the scan's blocks.
-- It gives: the period's verdict and its leak bound in bits, which compose's verdict reads.
+- It gives: the period's verdict and its leak bound in bits, which `run`'s verdict reads.
 
 ## Try it
 
