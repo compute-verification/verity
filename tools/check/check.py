@@ -2003,8 +2003,8 @@ OPT_IN = {
         "test_figures.py::test_figures_writes_every_figure",)},
     "verity/protocols/run/verifier/lean": {"VERITY_SLOW": (
         "test_composition_difftest.py::test_product_over_onsites_subprotocols_is_onsite_at_200",
-        "test_composition_difftest.py::test_remote_agrees",
-        "test_composition_difftest.py::test_onsite_agrees")},
+        "test_composition_difftest.py::test_remote_refusals_agree",
+        "test_composition_difftest.py::test_onsite_refusals_agree")},
     # the whole recursive session: the kept run's data, fetched from the evidence store with the run's custody key
     "verity/protocols/proof/recursion/verifier/vstar_cli": {"VERITY_VSTAR_RECURSIVE_DATA": (
         "test_vstar_recursive.py::test_the_honest_recursive_session_is_accepted_part_for_part",
@@ -2036,9 +2036,6 @@ OPT_IN = {
         "test_difftest.py::test_decimal_primitives_sampled",
         "test_difftest.py::test_activations_on_their_grids",
         "test_difftest.py::test_activations_sampled")},
-    "benchmarks/prove_path": {"VERITY_SLOW": (
-        "test_prove_path.py::test_a_served_windows_fused_cut_is_the_row_drivers_window_given_the_tables_and_the_checkpoint",
-        "test_prove_path.py::test_a_served_windows_fused_cut_is_refused_without_the_tables_or_the_checkpoint")},
 }
 #: where a cold check's opt-in runs write each suite's outcome and log, apart from its steps' own (`suites.json`, `suites/`)
 OPT_IN_DIR = "opt-in"

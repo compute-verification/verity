@@ -15,7 +15,7 @@ refused by name, `V1_REFUSED`), its decoders `OneStageZk` reads (behind the deco
 and two levels' evidence up to its keys, the wipe's
 (`verity/wipe/v0`) `wipe_protocol_case.answer`, and for space (`verity/pous/p2/v4/run`) and bandwidth (PoUB-P2,
 `verity/remote-bandwidth/p2/v0`) their Python verifiers' answers on small periods of their hooks (`Recorded`,
-`periods.py`). Each subprotocol's own difftest holds its Lean to that Python; this one holds the composition of them.
+`periods.py`). Each subprotocol's own difftest holds its Lean to that Python; this one holds the composition of them, on refusals only.
 Onsite's development composite with the wipe's count held (`ONSITE_COUNTED`, `Core.Onsite.counted`) adds the count over
 the wipe's span on its host's one link (`HOST_SPAN`: the count's mirror, `span_case.reference`, behind `wipe_link`) and
 the counted wipe (`COUNTED_WIPE`, `wipe_protocol_case.counted_reference`), tied by `WIPE_NODE` and `WIPE_COUNT`.

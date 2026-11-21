@@ -257,6 +257,8 @@ def main() -> None:
     here = Path(verity.circuits.__file__).resolve()
     if not here.is_relative_to(a.verity.resolve()):
         raise SystemExit(f"verity.circuits comes from {here}, not from the checkout {a.verity}")
+    from verity.circuits.ops.boolean.stand_in import register
+    register()
     write(a.out, a.count)
 
 

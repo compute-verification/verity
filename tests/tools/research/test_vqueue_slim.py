@@ -589,7 +589,7 @@ def test_every_shard_of_a_candidates_check_leaves_out_the_tests_the_loops_list_n
     h, base, sha, _ = _harness(world, monkeypatch)
     h.d.on, listed = "m1,m2,m3", tmp_path / "deselect"
     ids = ["tests/tools/verity/circuit_check/test_circuit_check.py::test_every_call_the_suite_checks_is_partitioned",
-           "tests/verity/protocols/run/verifier/lean/test_composition_difftest.py::test_remote_agrees"]
+           "tests/verity/protocols/run/verifier/lean/test_composition_difftest.py::test_remote_refusals_agree"]
     listed.write_text(f"# over 5 minutes\n\n{ids[0]}\nnot a node id\n/abs/test_x.py::t\n{ids[1]}\n{ids[0]}\n")
     start(h.d, sha, base, shards=3, deselect=listed)
     sent = tmp_path / "deselect.sent"

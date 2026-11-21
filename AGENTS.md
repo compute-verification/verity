@@ -289,10 +289,14 @@ deleted, not rerun. A test that adds more than about a minute to `check` says in
 cheaper test can't.
 
 **No dishonest runs** (Daniel, 20 Nov). That a cheating prover fails is what the guarantees say and the Lean proofs
-establish; nobody runs a cheating prover end to end to see it. No benchmark, application or served run has a dishonest
-arm, no gate asks for one, and none is a goal. An end-to-end run is one honest run the verifier accepts: a smoke test
-that the code runs together, and a benchmark measures. A verifier's named refusal keeps one small test or Lean `#guard`
-in its package's suite, where it costs seconds. A demo that shows a cheat refused is built when Daniel asks for one.
+establish; nobody runs one end to end to see it. No benchmark, application or served run has a dishonest arm, no gate
+asks for one, and none is a goal. An end-to-end run is one honest run the verifier accepts, a smoke test; a benchmark
+measures. A verifier's named refusal keeps one small test or Lean `#guard` in its package's suite. A demo that shows a
+cheat refused is built when Daniel asks for one.
+
+**A test run shows that the code runs; its size carries no guarantee** (Daniel, 21 Nov). Run each variant at the smallest
+size that executes its code: a sample that takes every proof block is no reason to hold a run back or enlarge it. The
+proofs give the guarantee, and a result extrapolates it to all compute.
 
 Bookkeeping warns and a later PR fixes it: what can be put right after landing without any claim being false meanwhile. The root suite's bookkeeping tests (`BOOKKEEPING` in `tests/conftest.py`: lane text, retired terms, doc
 paths, naming, stale allowlists, Markdown caps) and ruff's style findings warn. Ruff's errors, a crashed scan and
@@ -356,10 +360,10 @@ that holds it. Nobody is asked first, and a superseded PR is not left open as a 
 
 - **Soundness is one theorem.** Protocol soundness (`Verity.Soundness`) is to be one theorem over everything the compiled
   Lean verifier accepts, for arbitrary Boolean circuits, with no hypothesis on the circuit file or the statement's form;
-  this is a requirement, not a claim that `main` proves it. The verifier refuses any form its proof does not cover, except
-  the two-stage form, which runs ahead of its proof: the verifier accepts a two-stage run whose every check passes, and
-  the accept's record says what is not covered, so nothing quotes a guarantee for such a run. Circuit inputs and outputs
-  use one canonical format, proved in general, so a new workload needs no verifier or proof change.
+  this is a requirement, not a claim that `main` proves it. The verifier refuses any form its proof does not cover: the
+  two-stage form is built and refused by name (`Spot.Levels.TWO_LEVELS_REFUSED`) until a soundness theorem covers its
+  accept. Circuit inputs and outputs use one canonical format, proved in general, so a new workload needs no verifier or
+  proof change.
 - **The math is modular.** Soundness and zero knowledge are each one theorem in layers, each layer proved once over the
   guarantee of the layer below: one session's knowledge soundness for sampling, sampling's for recursion and for an
   audit, an audit's for an accounting bound, and every protocol's for `run`'s verdict. Each configuration

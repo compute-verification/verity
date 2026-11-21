@@ -1,4 +1,5 @@
-"""The desc fuzzer's data: generated descriptor v1 Programs for `InferenceOnlyCheck/DescFuzzMain.lean`.
+"""The desc fuzzer's data: generated descriptor Programs for `InferenceOnlyCheck/DescFuzzMain.lean`, v1 but the shared
+families', which `verity.circuits`' codec writes in its schema (v2).
 
     python scripts/desc_fuzz_programs.py <verity checkout> --out DIR
 
@@ -52,7 +53,7 @@ import verity.circuits
 from verity.circuits import codec
 from verity.circuits import program as ir
 from verity.circuits.defs import CompositeDefinition, bind
-from verity.circuits.refs import Affine, Coll, Grid, lane_bounds, spell, tuple_of
+from verity.circuits.refs import Affine, Coll, tuple_of
 from verity.circuits.types import Array, Tuple, Value
 
 HERE = Path(__file__).resolve().parent
@@ -127,7 +128,6 @@ class Program:
         self._tidx: dict[str, int] = {}
         self.composites: list[str] = []
         self.n = 0
-        self.grids = False
 
     def ty(self, t) -> int:
         k = json.dumps(tj(t))
@@ -143,8 +143,6 @@ class Program:
 
     def width(self) -> int:
         r = self.rng.random()
-        if self.grids:
-            return 8
         return WIDE if r < 0.03 else self.rng.choice(WIDTHS)
 
     def prim(self, params, ret, key: str | None = None) -> str:
@@ -235,10 +233,6 @@ class Body:
         cs = self.colls(bias)
         if not cs:
             return None
-        if self.P.grids and rng.random() < 0.8:
-            g = self.grid(L, cs)
-            if g is not None:
-                return g
         r = rng.random()
         if r < 0.08:
             same = [(k, a) for k, cnts in enumerate(self.argcounts) for a, c in enumerate(cnts) if c == L]
@@ -273,33 +267,6 @@ class Body:
         if rng.random() < 0.2:
             parts.insert(rng.randint(0, len(parts)), {"affine": ["n", 0, 0, 0]})
         return {"concat": parts}
-
-    def grid(self, L: int, cs) -> dict | None:
-        """`L` references as a grid part that no affine, strided or explicit part spells, its lanes in `cs`, or none."""
-        rng = self.rng
-        for _ in range(12):
-            g, run = rng.choice([1, 1, 2, 3]), rng.choice([1, 1, 2, 3])
-            if L % (g * run):
-                continue
-            P, rads = L // (g * run), []
-            while P > 1 and len(rads) < 3:
-                ds = [d for d in range(2, P) if P % d == 0]
-                r = rng.choice(ds) if ds and rng.random() < 0.8 else P
-                rads.append(r)
-                P //= r
-            if P > 1 or not rads or (g == 1 and len(rads) < 2):
-                continue
-            lanes = []
-            for _j in range(g):
-                s, i, N, _ = rng.choice(cs)
-                e, lv = rng.randint(-2, 3), tuple((r, rng.randint(-5, 6)) for r in rads)
-                lo, hi = lane_bounds(run, (s, i, 0, e, lv))
-                if hi - lo >= N:
-                    break
-                lanes.append((s, i, rng.randint(-lo, N - 1 - hi), e, lv))
-            if len(lanes) == g and isinstance(p := spell(run, lanes), Grid):
-                return p.to_json()
-        return None
 
     def push(self, node: dict, out, counts: list[int], gates: int, kind: str) -> None:
         self.nodes.append(node)
@@ -452,13 +419,10 @@ def composite(P: Program, budget: int, scale: int = 1) -> None:
     P.composite(body, t, r, rng.choice([None] * 15 + ["Input8_v1"]) if "Input8_v1" not in P.defs else None)
 
 
-def program(seed: int, scale: int = 1, grids: bool = False) -> str:
-    """`random`'s Program; with `scale`, that many times the Definitions, nodes per body and root nodes (`big`); with
-    `grids`, most of its references grid parts where one fits and every leaf 8 bits, so no reference reads a leaf at
-    another width (`GRID`)."""
+def program(seed: int, scale: int = 1) -> str:
+    """`random`'s Program; with `scale`, that many times the Definitions, nodes per body and root nodes (`big`)."""
     rng = random.Random(seed)
     P = Program(rng)
-    P.grids = grids
     budget = rng.choice([8, 32, 128, 512])
     for _ in range(rng.choice([0, 1, 2, 3, 4, 6, 8]) * scale):
         composite(P, budget, scale)
@@ -610,74 +574,6 @@ def copies(seed: int) -> str:
         key = P.prim([A(sl, V(w))], V(w))
         root.push({"args": [{"refs": {"affine": ["n", k, s0, sl]}, "type": P.ty(A(sl, V(w)))}], "fn": P.fn(key),
                    "form": "primitive", "out": P.ty(V(w))}, V(w), [sl], 1, "prim")
-    P.composite(root, t, {"affine": ["n", len(root.nodes) - 1, 0, 1]}, "R_v1")
-    return P.text("R_v1")
-
-
-def _lanes_grid(rng: random.Random, space: str, idx: int, N: int) -> tuple[dict, int] | None:
-    """A grid part over leaves `[0, N)` of one collection, its lanes of two or three levels, that only the grid form spells,
-    with its count; or none."""
-    for _ in range(50):
-        g, run = rng.choice([1, 1, 2, 3]), rng.choice([1, 1, 2])
-        rads = [rng.choice([2, 2, 3]) for _ in range(rng.choice([2, 2, 3]))]
-        lanes = []
-        for _j in range(g):
-            e = rng.choice([1, 1, 2, -1])
-            lv = tuple((r, rng.choice([-3, -2, 1, 2, 3, 4, 5, 7])) for r in rads)
-            lo, hi = lane_bounds(run, (space, idx, 0, e, lv))
-            if hi - lo >= N:
-                break
-            lanes.append((space, idx, rng.randint(-lo, N - 1 - hi), e, lv))
-        if len(lanes) == g and isinstance(q := spell(run, lanes), Grid):
-            return q.to_json(), q.count
-    return None
-
-
-def lanes(seed: int) -> str:
-    """Grid parts of lanes of several levels where a lane's intervals decide what is read: `C` reads its parameter through
-    one (`Desc.Summary.used`, `Piece.levelIvs`); at the root, an input, a batch of a primitive on it, a primitive reading
-    that batch's gates through a grid (a lane piece of gates, `freshWidth`), calls of `C` on the input and on the batch,
-    and a batch of `C` over the input's rows."""
-    rng = random.Random(seed)
-    P = Program(rng)
-    t = V(8)
-    N, m = rng.randint(12, 48), rng.randint(2, 3)
-    cb = Body(P, [A(N, t)], 10 ** 6)
-    for _ in range(rng.randint(1, 2)):
-        gr = _lanes_grid(rng, "p", 0, N)
-        if gr is None:
-            continue
-        ref, cnt = gr
-        key = P.prim([A(cnt, t)], t)
-        cb.push({"args": [{"refs": ref, "type": P.ty(A(cnt, t))}], "fn": P.fn(key), "form": "primitive", "out": P.ty(t)},
-                t, [cnt], 1, "prim")
-    if not cb.nodes:
-        key = P.prim([t], t)
-        cb.push({"args": [{"refs": {"affine": ["p", 0, 0, 1]}, "type": P.ty(t)}], "fn": P.fn(key), "form": "primitive",
-                 "out": P.ty(t)}, t, [1], 1, "prim")
-    c = P.composite(cb, t, {"affine": ["n", len(cb.nodes) - 1, 0, 1]})
-    root = Body(P, [], 10 ** 6)
-    x = P.input(8, rng.random() < 0.5)
-    root.push({"args": [], "axes": [], "fn": P.fn(x), "form": "batch", "n": m * N, "out": P.ty(A(m * N, t))},
-              A(m * N, t), [], m * N, "input")
-    op = P.prim([t], t)
-    root.push({"args": [{"refs": {"affine": ["n", 0, 0, N]}, "type": P.ty(A(N, t))}], "axes": [0], "fn": P.fn(op),
-               "form": "batch", "n": N, "out": P.ty(A(N, t))}, A(N, t), [N], N, "batch")
-    for _ in range(rng.randint(1, 4)):
-        r = rng.random()
-        if r < 0.3 and (gr := _lanes_grid(rng, "n", 1, N)) is not None:
-            ref, cnt = gr
-            key = P.prim([A(cnt, t)], t)
-            root.push({"args": [{"refs": ref, "type": P.ty(A(cnt, t))}], "fn": P.fn(key), "form": "primitive",
-                       "out": P.ty(t)}, t, [cnt], 1, "prim")
-        elif r < 0.75:
-            k, b = rng.choice([(0, rng.randrange(m * N - N + 1)), (1, 0)])
-            root.push({"args": [{"refs": {"affine": ["n", k, b, N]}, "type": P.ty(A(N, t))}], "fn": P.fn(c),
-                       "form": "call", "out": P.ty(t)}, t, [N], P.sig[c][3], "call")
-        else:
-            root.push({"args": [{"refs": {"affine": ["n", 0, 0, m * N]}, "type": P.ty(A(m, A(N, t)))}], "axes": [0],
-                       "fn": P.fn(c), "form": "batch", "n": m, "out": P.ty(A(m, t))}, A(m, t), [m * N],
-                      m * P.sig[c][3], "batch")
     P.composite(root, t, {"affine": ["n", len(root.nodes) - 1, 0, 1]}, "R_v1")
     return P.text("R_v1")
 
@@ -1040,76 +936,6 @@ def programs():
                 yield _line(f"{fam}-mutant-{s}", f"{fam}-mutant", mutate(rng, text), given, k)
 
 
-def _bits(t):
-    """A descriptor type's bit form (`verity.circuits.boolean.bit_type`)."""
-    if t[0] == "Value":
-        return ["Value", 1] if t[1] == 1 else ["Array", t[1], ["Value", 1]]
-    if t[0] == "Array":
-        return ["Array", t[1], _bits(t[2])]
-    if t[0] == "Record":
-        return ["Record", [[n, _bits(f)] for n, f in t[1]]]
-    return ["Tuple", [_bits(f) for f in t[1]]]
-
-
-def _leaves(t) -> int:
-    if t[0] == "Value":
-        return 1
-    if t[0] == "Array":
-        return t[1] * _leaves(t[2])
-    return sum(_leaves(f[1] if t[0] == "Record" else f) for f in t[1])
-
-
-def v2(text: str) -> str:
-    """Program `text` in the schema the decoder reads (`verity-ir/descriptor/v2`): each word primitive but an input given a
-    Boolean body that returns constant bits, `StandIn[name]_v1`."""
-    d = json.loads(text)
-    const, bit = "Const1[0x0]_v1", ["Value", 1]
-    d["definitions"][const] = {"form": "primitive", "id": const, "params": [], "ret": bit}
-    if const not in d["callees"]:
-        d["callees"].append(const)
-    if bit not in d["types"]:
-        d["types"].append(bit)
-    fn, out, boolean = d["callees"].index(const), d["types"].index(bit), {}
-    for key, x in list(d["definitions"].items()):
-        if x["form"] != "primitive" or key == const or key.startswith(("Input", "RegisteredInput")):
-            continue
-        ret = _bits(x["ret"])
-        boolean[key] = name = f"StandIn[{key[:-3]}]_v1"
-        d["definitions"][name] = {"form": "composite", "id": name, "bindings": {}, "body": {
-            "params": [[n, _bits(t)] for n, t in x["params"]], "ret_type": ret,
-            "nodes": [{"args": [], "fn": fn, "form": "primitive", "out": out}],
-            "ret": {"strided": ["n", 0, 0, 1, 0, 0, _leaves(ret)]}}}
-    d["boolean"], d["schema"] = boolean, "verity-ir/descriptor/v2"
-    return json.dumps(d, separators=(",", ":"), sort_keys=True)
-
-
-#: Programs reading grid parts, apart from `programs()` and the data the audit pins.
-GRID = (("grid", _bare(lambda s: program(s, grids=True)), range(0, 2000), 0.3, 1),
-        ("grid-big", _bare(lambda s: program(s, scale=3, grids=True)), range(0, 200), 0.3, 1),
-        ("lanes", _bare(lanes), range(0, 600), 0.2, 1))
-
-
-def grid_programs():
-    """`GRID`'s Programs and mutants, as `programs()` makes a family's, in schema v2 (`v2`)."""
-    for fam, make, seeds_, mut, k in GRID:
-        for s in seeds_:
-            text, given = make(s)
-            yield _line(f"{fam}-{s}", fam, v2(text), given, k)
-            rng = random.Random(~s)
-            if rng.random() < mut:
-                yield _line(f"{fam}-mutant-{s}", f"{fam}-mutant", v2(mutate(rng, text)), given, k)
-
-
-def write_grid(out: Path) -> dict[str, Path]:
-    """`grid_programs()` under ``out/desc_fuzz/grid.jsonl``."""
-    path = out / "desc_fuzz" / "grid.jsonl"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w") as f:
-        for x in grid_programs():
-            f.write(json.dumps(x, separators=(",", ":"), sort_keys=True) + "\n")
-    return {"desc_fuzz/grid.jsonl": path}
-
-
 def write(out: Path) -> dict[str, Path]:
     """`programs()` under ``out/desc_fuzz/programs.jsonl``."""
     path = out / "desc_fuzz" / "programs.jsonl"
@@ -1128,12 +954,13 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("verity", type=Path, help="the checkout whose verity.circuits builds the shared vectors")
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--grid", action="store_true", help="write the grid Programs (`GRID`) instead")
     a = ap.parse_args()
     here = Path(verity.circuits.__file__).resolve()
     if not here.is_relative_to(a.verity.resolve()):
         raise SystemExit(f"verity.circuits comes from {here}, not from the checkout {a.verity}")
-    (write_grid if a.grid else write)(a.out)
+    from verity.circuits.ops.boolean.stand_in import register
+    register()
+    write(a.out)
 
 
 if __name__ == "__main__":

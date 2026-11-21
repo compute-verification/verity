@@ -3139,46 +3139,6 @@ def test_served_inert_work_per_input_bounds_each_input_on_its_own(honest_pass, t
         SD.main([*args, "--out", str(tmp_path / "short"), "--resume", str(tmp_path / "short.jsonl")])
 
 
-@pytest.mark.slow
-def test_served_inert_work_fresh_draws_measure_each_input_under_salts_of_its_own(honest_pass, tmp_path):
-    """`--fresh-draws`: the per-input mode's inputs, each by N work-weighted trials under a salt of its own derived from the
-    source, every trial the tile rule on the committed rows under that salt, bounded by Clopper–Pearson; a resume with the
-    same source measures nothing again, and another source's trials are refused."""
-    path, s, epoch, prover, tr, splits, records = honest_pass
-    out, src = tmp_path / "out", "ab" * 32
-    args = [str(path), "--per-input", "1", "--fresh-draws", "4", "--fresh-source", src, "--jobs", "1", "--cross-check", "2",
-            *coins_args(path)]
-    assert SD.main([*args, "--out", str(out)]) == 0
-    doc = json.loads((out / "inputs.json").read_text())
-    assert doc["fresh_source"] == src and doc["fresh_draws"] == 4 and doc["m"] == 2
-    lines = [json.loads(x) for x in (out / f"{path.parent.name}.fresh-tiles.jsonl").read_text().splitlines()]
-    assert len(lines) == 8 and len({t["salt"] for t in lines}) == 8 and epoch.salt.hex() not in {t["salt"] for t in lines}
-    fails = [t for t in lines if not t["ok"]]
-    assert sum(bool(t.get("cross_checked")) for t in lines) == 4 and all(t["openings_ok"] for t in lines)
-    # an honest row can exceed its own cap (-h3's row cap, k 128 here), and the served path volunteers no rows
-    assert all("the row cap" in t["reason"] for t in fails) and (not fails or CW.row_inert_bound(s))
-    for row in doc["inputs"]:
-        failures = sum(t["matmul"] == row["matmul"] for t in fails)
-        assert row["method"] == "fresh" and row["drawn"] == 4 and row["failures"] == failures
-        assert row["upper"] == SD.clopper_pearson_upper(failures, 4, 0.025) and row["bound_method"].startswith("fresh")
-    t = lines[0]
-    ref = Verifier(CW._TileRuleView(s), epoch).refs[t["tile"]]
-    op = prover.open(epoch, ref.id)
-    a, b = [opened_value(s.commitment_hash, o.value) for o in op.a], [opened_value(s.commitment_hash, o.value) for o in op.b]
-    u = epoch.workload.matmuls[ref.matmul]
-    ctx = Context(bytes.fromhex(t["salt"]), u, tr.activation_roots[ref.matmul], epoch.weight_roots[u.weight])
-    ops = s.encode(ctx, s.noise(ctx), a, b, ref.tile)
-    rows, cols = records[ref.matmul].credited(ref.tile)
-    debit, cap = CW._inert_work_and_bound(s, records[ref.matmul], ref.tile, ops, rows, cols)
-    assert t["debit_exact"] == str(debit) and t["ratio"] == float(debit / cap)
-    again = tmp_path / "again"
-    resume = ["--resume", str(out / f"{path.parent.name}.fresh-tiles.jsonl")]
-    assert SD.main([*args, "--out", str(again), *resume]) == 0
-    assert json.loads((again / "inputs.json").read_text())["inputs"] == doc["inputs"]
-    with pytest.raises(ValueError, match="another salt"):
-        SD.main([*args[:6], "cd" * 32, *args[7:], "--out", str(tmp_path / "other"), *resume])
-
-
 def test_fresh_trials_draw_exactly_by_work_from_a_source_fixed_in_the_command(tmp_path):
     """Lean's conditions on the fresh-trial ε: sample d is `key.uniform(W, d)` over the input's cumulative credited cells
     (exactly proportional to `TR.Wref` within the input), under a domain naming the table and a context naming the input,

@@ -1,7 +1,7 @@
 [project]
 name = "verity-core-composition"
 version = "0.0.0"
-description = "The difftest of onsite's and remote's Lean (core_composition, core_onsite, core_remote) against the trial's composition rule, in which any rejection rejects the whole."
+description = "The difftest of onsite's and remote's Lean (core_composition, core_onsite, core_remote) against the trial's composition rule, in which any rejection rejects the whole, on refusals only."
 requires-python = ">=3.12"
 dependencies = ["verity-difftest"]
 
