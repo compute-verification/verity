@@ -307,7 +307,8 @@ def spec_of(layout: BR.Layout, rule: Rule) -> S.Spec:
               *(S.Public(f"{k}:{v}", "structure", f"{v}'s {k}: a replay-block parameter's rows, from the sample")
                 for v in linked for k in ("leaves", "words", "domain")))
     digests = tuple(P.program_digest(Program(t)) for t in layout.templates)
-    window = len(digests) > 1 or bool(linked)
+    # a parameter round 1 commits is a root parameter of the interior's TemplatePopulations (`Design.window`)
+    window = len(digests) > 1 or bool(linked) or bool(design(layout, unlinked=True).inputs)
     check = S.Check(digests if window else digests[0],
                     P.template_instances_query(layout.templates) if window else layout.query,
                     proof_deadline=rule.proof_deadline)
