@@ -121,9 +121,17 @@ def drawReason (h : CoinRecord) (root : ByteArray) : Option String := Id.run do
   if o.coin != h.source then return some "the record's source is not its draw session's coin"
   return none
 
+/-- `challenger.pinned_key`'s pin: why `key` is not the challenger key whose public key's SHA-512 the verifier pins,
+`live`'s ``key_sha512`` (`H1_KEY_SHA512`); `none` when it is. The ledger's opens name the key they were signed under, so
+without the pin any key the ledger was signed under would hold. -/
+def keyPinReason (live : Json) (key : Spot.Challenger.ChallengerKey) : Option String :=
+  if fieldIs (get? live "key_sha512") (Flock.hexOf (Flock.Sha512.hash key.pub)) then none
+  else some "challenger key is not the one the verifier pins (key_sha512, the SHA-512 of its public key)"
+
 /-- `served_verdicts.pearlplus_draw`: why the record's challenger sample is not its draw session's, read from the auditor's
-ledger and the session's own files (`{key, ledger, pins, main, session}`); `none` when it is, or when the record names no
-challenger sample. The session is the one the ledger opens on the run's commitment `root` under the pinned challenger key,
+ledger and the session's own files (`{key, key_sha512, ledger, pins, main, session}`); `none` when it is, or when the
+record names no challenger sample. The key is the one `key_sha512` pins (`keyPinReason`). The session is the one the
+ledger opens on the run's commitment `root` under that key,
 run from a commit the host's pins log records on main's first-parent line, from its files
 (`Spot.Challenger.trustedChallengePhaseOf`, which verifies the ledger's and the session's signatures under that key); the
 ledger opens it withheld (`withheldOn`); its signed commitment is a sample session's (`drawEpochReason`) and the
@@ -135,6 +143,7 @@ def liveDrawReason (h : CoinRecord) (root : ByteArray) (live : Json) : Option St
   let k ← match Spot.Challenger.ChallengerKey.ofJson (g "key") with
     | .ok k => pure k
     | .error e => return some s!"the draw session's challenger key is malformed: {e}"
+  if let some why := keyPinReason live k then return some s!"the draw session's {why}"
   let window := Json.mkObj [("root", .str (Flock.hexOf root))]
   let (c, log) ← match Spot.Challenger.trustedChallengePhaseOf (g "ledger") window k (g "pins") (g "main") (g "session") with
     | .ok p => pure p
@@ -178,10 +187,11 @@ def carriesSession (s : Json) (sid : String) (seq : Nat) (root : ByteArray) (com
 
 /-- `served_verdicts.pearlplus_coins` (`core_check.live_salt`, `PouwVerifier.liveSaltCheck`'s session half): why a live
 pass's salt is not its salt session's, read from the auditor's ledger and the session's own files
-(`{key, ledger, pins, main, session}`); `none` when it is. `m` is a pass `check` loaded, its salt opened by `liveSalt`
-against the manifest's coins after R = `epochOpenRoot weightsRoot k` (k its ``pass_index``). The session is the one the
-ledger opens on `{root: R}` under the pinned challenger key, run from a commit the host's pins log records on main's
-first-parent line (`pinnedChallengePhase`), from its files (`challengePhaseNamed`), each signature verified under that key;
+(`{key, key_sha512, ledger, pins, main, session}`); `none` when it is. `m` is a pass `check` loaded, its salt opened
+by `liveSalt` against the manifest's coins after R = `epochOpenRoot weightsRoot k` (k its ``pass_index``). The key is
+the one `key_sha512` pins (`keyPinReason`). The session is the one the ledger opens on `{root: R}` under that key, run
+from a commit the host's pins log records on main's first-parent line (`pinnedChallengePhase`), from its files
+(`challengePhaseNamed`), each signature verified under that key;
 its signed commitment is a Pearl-C salt session's (`PouwWindow.saltEpochReason`); the ledger reserved it for that
 layout, opened it binding that reserve and ended it complete, having released its salt coin and nothing else; its log
 shows R alone as the root its salt coin followed; the manifest's coins are its signed commitment; and the manifest's
@@ -195,6 +205,7 @@ def liveSaltReason (m : Json) (weightsRoot : ByteArray) (live : Json) : Option S
   let key ← match Spot.Challenger.ChallengerKey.ofJson (g "key") with
     | .ok k => pure k
     | .error e => return some s!"the salt session's challenger key is malformed: {e}"
+  if let some why := keyPinReason live key then return some s!"the salt session's {why}"
   let window := Json.mkObj [("root", .str (Flock.hexOf r))]
   let a ← match Spot.Challenger.pinnedChallengePhase (g "ledger") window key (g "pins") (g "main") with
     | .ok a => pure a

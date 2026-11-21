@@ -546,8 +546,11 @@ def test_a_challenger_draw_its_draw_session_does_not_hold_is_refused_by_the_lean
     good, node = tmp_path / "good.json", tmp_path / "node.json"
     assert same(exe, [path], 3, None, good, draw=challenger_sample())["verdict"] == "accept"
     live = {"key": None, "ledger": [], "pins": [], "main": [], "session": {}}
+    key = {"H": 5, "W": 4, "public": "ab" * 80}
+    pin = hashlib.sha512(bytes.fromhex(key["public"])).hexdigest()
     for doc, why in ((live, "the draw session's challenger key is malformed: "),
-                     ({**live, "key": {"H": 5, "W": 4, "public": "ab" * 80}}, "the draw session is not trusted: ")):
+                     ({**live, "key": key}, "the draw session's challenger key is not the one the verifier pins"),
+                     ({**live, "key": key, "key_sha512": pin}, "the draw session is not trusted: ")):
         (f := tmp_path / "live.json").write_text(json.dumps(doc))
         for of_record in (False, True):
             got = lean(exe, [path], 3, None, good, test_instance=True, of_record=of_record, draw_live=f)
@@ -575,7 +578,8 @@ def salt_session_pass(tmp_path: Path, k: int = 0) -> tuple[Path, dict]:
         path = T.proved_pass(tmp_path, H100, live=k)[0]
     s = held["s"]
     h = {"man": json.loads(path.read_text()), "r": held["r"], "s": s, "w": held["w"],
-         "live": {"key": s.key(), "ledger": None, "pins": list(RC.PINS), "main": list(RC.MAIN), "session": s.files()}}
+         "live": {"key": s.key(), "key_sha512": hashlib.sha512(bytes.fromhex(s.key()["public"])).hexdigest(),
+                  "ledger": None, "pins": list(RC.PINS), "main": list(RC.MAIN), "session": s.files()}}
     PC.live_ledger(rng, h)
     path.write_text(json.dumps(h["man"]))
     return path, h
@@ -587,7 +591,8 @@ def test_a_live_pass_is_held_to_its_signed_salt_session(exe, tmp_path):
     root W, gets the verdict it gets without it, and is refused (`salt-session`) when the auditor's ledger is signed under
     another key than the pinned one, when the session's salt coin followed another root than R (so was released before
     W was logged), when the ledger opened the session on another salt epoch's root over W, when the challenger key
-    doesn't parse, and when the manifest carries another session than the gate's answer."""
+    doesn't parse or isn't the one ``key_sha512`` pins, and when the manifest carries another session than the gate's
+    answer."""
     path, h = salt_session_pass(tmp_path)
     plain = lean(exe, [path], 3, test_instance=True)
     assert plain["verdict"] == "accept"
@@ -610,7 +615,8 @@ def test_a_live_pass_is_held_to_its_signed_salt_session(exe, tmp_path):
              (ledger(PC.salt_session(rng, rng.randbytes(64), 0, sid)),
               "the challenger's log does not show the epoch's root as the one root its salt coin followed"),
              (ledger(PC.salt_session(rng, other, 0, sid), root=other), "the salt session is not trusted: "),
-             ({**h["live"], "key": None}, "the salt session's challenger key is malformed: ")]
+             ({**h["live"], "key": None}, "the salt session's challenger key is malformed: "),
+             ({**h["live"], "key_sha512": "ab" * 64}, "the salt session's challenger key is not the one the verifier pins")]
     for live, why in cases:
         got = held(live)
         assert (got["verdict"], got["refused"][0], got["work"]) == ("reject", "salt-session", None), why

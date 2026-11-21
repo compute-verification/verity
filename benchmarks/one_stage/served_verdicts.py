@@ -1186,8 +1186,8 @@ def ran_by(key: str, row: Mapping[str, Any], product: str) -> dict[str, Any]:
 
 def _salt_live(served: Mapping[str, Any], out: Path, gate: str | None, key: str | None, main: Path | None,
                fetch: Callable[..., bytes] | None = None) -> dict[str, Any]:
-    """The live salt session the served run's ``coins`` names, ``{key, ledger, pins, main, session}``: the challenger key
-    whose public key's SHA-512 is `key` (`challenger.pinned_key`), the auditor's ledger and the host's pins log as the
+    """The live salt session the served run's ``coins`` names, ``{key, key_sha512, ledger, pins, main, session}``: the
+    challenger key whose public key's SHA-512 is `key` (`challenger.pinned_key`) and that pin, the auditor's ledger and the host's pins log as the
     gate `gate` answers now, main's first-parent line `main` (`remote.main_lines`) and the session's files from the
     gate's ``fetch``, each written to `out`. `fetch` replaces the gate's answers (tests)."""
     from verity.protocols.proof.spot.verifier.challenger import remote
@@ -1207,9 +1207,9 @@ def _salt_live(served: Mapping[str, Any], out: Path, gate: str | None, key: str 
     for name in ("ledger", "pins"):
         (out / f"{name}.jsonl").write_bytes(ask(name))
     d = tree / sid / "out"
-    return {"key": PHC.pinned_key(d / remote.KEY, key).to_json(), "ledger": remote.ledger_lines(out / "ledger.jsonl"),
-            "pins": remote.ledger_lines(out / "pins.jsonl"), "main": remote.main_lines(main),
-            "session": remote.session_files(d)}
+    return {"key": PHC.pinned_key(d / remote.KEY, key).to_json(), "key_sha512": key,
+            "ledger": remote.ledger_lines(out / "ledger.jsonl"), "pins": remote.ledger_lines(out / "pins.jsonl"),
+            "main": remote.main_lines(main), "session": remote.session_files(d)}
 
 
 def pearlplus_coins(served: Mapping[str, Any], out: Path, gate: str | None, key: str | None,
@@ -1314,9 +1314,9 @@ PEARLPLUS_DRAW_LIVE = "pearlplus-draw-live.json"
 def pearlplus_draw_live(record: Path, out: Path, gate: str | None, key: str | None, main: Path | None,
                         fetch: Callable[..., bytes] | None = None) -> Path | None:
     """The draw session of the verifier's challenger sample in its coin record `record`, as `pouw-pearlplus --draw-live`
-    reads it (`Coins.liveDrawReason`): ``{key, ledger, pins, main, session}``, the pinned challenger key, the auditor's
-    ledger and the host's pins log as the gate `gate` answers now, main's first-parent line `main` and the session's files,
-    fetched as `pearlplus_draw` fetches them, written to ``out/PEARLPLUS_DRAW_LIVE``. None for a node's sample, which has
+    reads it (`Coins.liveDrawReason`): ``{key, key_sha512, ledger, pins, main, session}``, the pinned challenger key and
+    its pin `key`, the auditor's ledger and the host's pins log as the gate `gate` answers now, main's first-parent line
+    `main` and the session's files, fetched as `pearlplus_draw` fetches them, written to ``out/PEARLPLUS_DRAW_LIVE``. None for a node's sample, which has
     no session; a fetch that fails raises, so the Lean step is given no session and its ``--of-record`` refuses."""
     from verity.protocols.accounting.compute.pouw.verifier import salt as PS
     from verity.protocols.proof.spot.verifier.challenger import remote
@@ -1339,9 +1339,9 @@ def pearlplus_draw_live(record: Path, out: Path, gate: str | None, key: str | No
     for name in ("ledger", "pins"):
         (out / f"{name}.jsonl").write_bytes(ask(name))
     d = tree / sid / "out"
-    live = {"key": PHC.pinned_key(d / remote.KEY, key).to_json(), "ledger": remote.ledger_lines(out / "ledger.jsonl"),
-            "pins": remote.ledger_lines(out / "pins.jsonl"), "main": remote.main_lines(main),
-            "session": remote.session_files(d)}
+    live = {"key": PHC.pinned_key(d / remote.KEY, key).to_json(), "key_sha512": key,
+            "ledger": remote.ledger_lines(out / "ledger.jsonl"), "pins": remote.ledger_lines(out / "pins.jsonl"),
+            "main": remote.main_lines(main), "session": remote.session_files(d)}
     (path := out / PEARLPLUS_DRAW_LIVE).write_text(json.dumps(live) + "\n")
     return path
 
@@ -1353,8 +1353,8 @@ PEARLPLUS_SALT_LIVE = "pearlplus-salt-live.json"
 def pearlplus_salt_live(served: Mapping[str, Any], out: Path, gate: str | None, key: str | None, main: Path | None,
                         fetch: Callable[..., bytes] | None = None) -> Path | None:
     """The live salt session of Pearl+'s served run (``served``, `served_passes.py serve`'s document), as
-    `pouw-pearlplus --salt-live` reads it (`Coins.liveSaltReason`): `_salt_live`'s ``{key, ledger, pins, main,
-    session}``, the files `pearlplus_coins` fetches, written to ``out/PEARLPLUS_SALT_LIVE``. None for a run on an
+    `pouw-pearlplus --salt-live` reads it (`Coins.liveSaltReason`): `_salt_live`'s ``{key, key_sha512, ledger, pins,
+    main, session}``, the files `pearlplus_coins` fetches, written to ``out/PEARLPLUS_SALT_LIVE``. None for a run on an
     in-process challenger's coins, which has no session; a fetch that fails raises, so the Lean step is given no session
     and its ``--of-record`` refuses a live run."""
     if not (served.get("coins") or {}).get("session"):
