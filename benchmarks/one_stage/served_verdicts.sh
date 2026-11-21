@@ -2062,8 +2062,28 @@ public = {"ok": row.get("ok"), "audit": {"accepted": audit.get("accepted"),
           "sampled": len(draw), "draw": draw, "unprovable_sampled": bad, "compiled": row.get("compiled", "not stated by the audit"),
           "circuit": "registered by the prover", "coins": "the local challenger's (DEVELOPMENT=1)"}
 Path(sys.argv[4]).write_text(json.dumps(public, indent=1, sort_keys=True))
+
+
+def reasons(checks):
+    """The window's failing checks before the draw: each member check's code with its count, its lowest member and that
+    member's reason, then the registration's codes with their detail."""
+    ms = sorted((int(k[1:]), v) for k, v in checks.items() if k[:1] == "m" and k[1:].isdigit() and isinstance(v, dict))
+    codes = {}
+    for k, v in ms:
+        if v.get("ok") is False:
+            for c in v.get("codes") or ["no code"]:
+                codes.setdefault(c, [k, 0, (v.get("detail") or {}).get(c)])[1] += 1
+    out = [f"{c}: {n} of {len(ms)} members, first m{k}: {why}" for c, (k, n, why) in codes.items()]
+    reg = checks.get("registration")
+    if isinstance(reg, dict) and reg.get("ok") is False:
+        d = reg.get("detail") or {}
+        out += [f"registration {c}: {json.dumps(d.get(c), sort_keys=True)}" for c in reg.get("codes") or ["no code"]]
+    return "; ".join(out)
+
+
 if row.get("refused") or not isinstance(row.get("draw"), list):
-    print(f"REFUSED before the sample: {json.dumps(row.get('refused'), sort_keys=True)[:600]}")
+    why = row.get("refused") or reasons(inner.get("checks") or {}) or "the audit's summary names no failing check"
+    print(f"REFUSED before the sample: {why if isinstance(why, str) else json.dumps(why, sort_keys=True)}"[:2000])
     sys.exit(2)
 if not draw:
     print("the law samples no block of this window: nothing would be proved")
