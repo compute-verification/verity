@@ -6,7 +6,7 @@ tie's (`response_tie`), each with a circuit-check sidecar (`<module>.circuit-che
 the tip proves their blocks: the network attester's piece writes NOT RUN.
 
 It also holds the engine's admission and the request framing the scheme attaches to a serve (`admission`, `id_relay`,
-`ids_protocol`, `serve_head`), which are the adapter's.
+`ids_protocol`), which are the adapter's.
 
 Try it:
 

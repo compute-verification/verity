@@ -43,7 +43,7 @@ The engine is `verity_vllm.LLM` (in-process engine core, Model Runner V2), stepp
 thread (`serve_loop.EngineLoop`): each HTTP request is admitted with ``add_request`` under the engine id ``cmpl-<hex>-0`` (vLLM's
 ``f"{request_id}-{i}"``), and vLLM's scheduler batches whatever is admitted; each engine output goes back to its
 request's connection as it comes. The HTTP side is an asyncio server on its own thread, one request per connection. It
-takes a request's first line only as the network attester does (`serve_head.request_line`), and answers 400 to any other:
+takes a request's first line only as the network attester does (`verity.release.with_release`), and answers 400 to any other:
 those are the bytes the network attester passes on without its release.
 The admission's settings are ``--protocols-config``'s entry under the name of the scheme that provides admission
 (`admission_settings`), and their ``order`` (`admission_order`) decides it: requests reach the engine in the order the
@@ -162,6 +162,15 @@ def request_line(line: str) -> tuple[str, str] | None:
             and parts[1] and all(c.isprintable() and not c.isspace() for c in parts[1])):
         return None
     return parts[0], parts[1]
+
+
+def header_fields(fields: Sequence[bytes]) -> dict[str, str]:
+    """A request's header fields by name, the last of a name. A name is the field's bytes before its colon, lower-cased,
+    less the ASCII whitespace around it: what the network attester names a field when it drops a client's own release
+    headers (`verity.release.with_release`). Named more loosely (`str.strip` takes ``\\xa0`` too, for one), a field the
+    network attester kept would be read here as its release, after its own."""
+    return {k.strip().lower().decode("latin-1"): v.strip().decode("latin-1")
+            for k, _, v in (f.partition(b":") for f in fields if f)}
 
 
 PRECISIONS = ("verity_int8", "int8_exact", "pin", "bfloat16")
@@ -300,8 +309,7 @@ class Server:
             if first is None:
                 return await self._json(writer, 400, error_body(NO_REQUEST_LINE, 400, "BadRequestError"))
             method, path = first
-            headers = {k.strip().lower().decode("latin-1"): v.strip().decode("latin-1")
-                       for k, _, v in (f.partition(b":") for f in fields if f)}
+            headers = header_fields(fields)
             served = self.ex.route(path.split("?", 1)[0])
             if served is not None:
                 return await self.serve_route(served[1], first_line, headers, reader, writer)
