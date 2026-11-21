@@ -100,6 +100,7 @@ from verity_vllm.pipeline.advice_code import pool as P
 from verity_vllm.pipeline.advice_code import replay as R
 from verity_vllm.pipeline.advice_code import schedule as S
 from verity_vllm.pipeline.advice_code import window_code as CV
+from verity_vllm.pipeline.advice_windows import CAP_BITS
 
 __all__ = ["advice_of_replay", "AdviceCodeError", "arrival_order", "bits_by_window", "book_of", "CAPS", "charged",
     "check_record", "Decision", "decode", "decode_bits", "decode_full", "Decoded", "encode", "kept_terms", "length_tails",
@@ -305,7 +306,7 @@ class Registered:
     row_order: str = "batch"
     T: int = 600
     book: Any = None
-    cap_bits: int = 1 << 23
+    cap_bits: int = CAP_BITS
     tick: Any = None  # replay.Tick
     send_lengths: bool = True
 
