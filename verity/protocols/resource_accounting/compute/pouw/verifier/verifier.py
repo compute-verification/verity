@@ -1,19 +1,19 @@
 """PoUW's verifier. Lean is the definition and the verifier (AGENTS.md "Design
 rules"), and PoUW has switched to it: the served execution phase's checks
-are its Lean's, `lean/check` (`pouw-check`), `lean/commit` (`pouw-commit`) and `lean/window` (`pouw-window`), whose
+are its Lean's, `lean/check` (`pouw-verifier`), `lean/commit` (`pouw-commit`) and `lean/window` (`pouw-window`), whose
 verdicts `verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/of_record.py` publishes. The Python beside them (`core_check`, `coins`, `window`) is kept
 as the reference, and the difftests hold it to the Lean: a disagreement fails with the Lean's verdict. A served H1
 execution phase's statements are judged here too: `credit.window` and `credit.period_credit` take each sampled proof block's outcome from
-`lean("credit-verified", …)` (`PouwCheck.Verified`), with `credit._verified` the reference, and each round's live
-outcome from `lean("credit-live-verified", …)` (`PouwCheck.LiveVerified`), with `credit._live_verified` the reference,
-on the circuit files its credit period's open committed, `lean("credit-committed-files", …)` (`PouwCheck.CommittedFiles`),
+`lean("credit-verified", …)` (`PouwVerifier.Verified`), with `credit._verified` the reference, and each round's live
+outcome from `lean("credit-live-verified", …)` (`PouwVerifier.LiveVerified`), with `credit._live_verified` the reference,
+on the circuit files its credit period's open committed, `lean("credit-committed-files", …)` (`PouwVerifier.CommittedFiles`),
 with `credit.committed_files` the reference. The verdicts acted on are the Lean's only (`of_record`, no Python
 answer beside it): `credit.window`'s and `credit.period_credit`'s, `lean("window", …)` and `lean("period", …)`
 (`PouwVerifier.Credit.executionPhase`, `Credit.periodCredit`) on those outcomes, and where the Lean gives no answer
-the refusal is `NO_ANSWER`. The challenger's salt check, `lean("salt", …)` (`PouwCheck.saltCheck`,
+the refusal is `NO_ANSWER`. The challenger's salt check, `lean("salt", …)` (`PouwVerifier.saltCheck`,
 `core_check.salt_of_record`), is the verifier's program, run by the developer's side (`pouw_h1_gpu
 --check-challenger`, from `served_verdicts pouw`); no entry of the auditor's runs it yet, and `pouw-period` does not
-call it. An execution phase's and a credit period's verdicts are `pouw-check serve`'s and `pouw-period serve`'s
+call it. An execution phase's and a credit period's verdicts are `pouw-verifier serve`'s and `pouw-period serve`'s
 (`serve_of_record`, `core_check.case`, `period_check.case`), and a verdict whose Lean no interface here reaches yet
 raises (`not_written`) rather than fall back on its twin; the README's "Verdicts of record" lists each. The Python
 twins (`*_twin`) answer the difftests only.
@@ -21,7 +21,7 @@ twins (`*_twin`) answer the difftests only.
 `RECORD_VERDICT` switches what `of_record` doesn't read: the sampled blocks' and live rounds' runs and the committed
 circuit files; setting it to ``"python"`` is the one line that undoes those.
 
-`coins` is the challenger's entropy: bytes the Lean verifier reads from the operating system (`pouw-check-difftest`'s
+`coins` is the challenger's entropy: bytes the Lean verifier reads from the operating system (`pouw-verifier-difftest`'s
 ``coins``, `IO.getRandomBytes`, A3's `uniform/io-getrandombytes`), which a served `coins.Challenger` and
 `window.live_challenger` flip every coin and hm96 salt from. Python never reads them from the operating system itself, and
 `RECORD_VERDICT` doesn't switch them. Building takes the lock `verity_difftest.build` takes (its `BUILD_LOCK`): Lake builds
@@ -72,7 +72,7 @@ SERVE_EXES = ("pouw-verifier", "pouw-period")
 
 @functools.cache
 def executable(exe: str = EXE) -> Path:
-    """`lake build EXE` (`pouw-check-difftest` by default), once per process and executable, under `BUILD_LOCK`; the
+    """`lake build EXE` (`pouw-verifier-difftest` by default), once per process and executable, under `BUILD_LOCK`; the
     executable's path."""
     BUILD_LOCK.parent.mkdir(parents=True, exist_ok=True)
     with open(BUILD_LOCK, "a") as lock:
@@ -93,7 +93,7 @@ def _canonical(x: Any) -> str:
 
 class _Server:
     """One process of `exe` with `args` per Python process (a request line, an answer line), started at the first call
-    and again after it dies: `pouw-check-difftest` by default, or a core protocol's `serve`."""
+    and again after it dies: `pouw-verifier-difftest` by default, or a core protocol's `serve`."""
 
     def __init__(self, exe: str = EXE, args: tuple[str, ...] = ()) -> None:
         self.exe, self.args = exe, args
@@ -174,7 +174,7 @@ for _s in _serves.values():
 
 
 def lean(fn: str, value: Any) -> Any:
-    """`pouw-check-difftest`'s answer to function `fn` on `value`, a check of record whose verdict the caller takes (a
+    """`pouw-verifier-difftest`'s answer to function `fn` on `value`, a check of record whose verdict the caller takes (a
     refusal is part of that answer, never a reject). Raises `LeanError` where the Lean can't run or rejects the
     input."""
     kind, body = _server.call(fn, value)
@@ -189,7 +189,7 @@ def _said(x: Any) -> str:
 
 
 def of_record(fn: str, value: Any) -> Any:
-    """The answer of record to `fn` on `value` (`pouw-check-difftest`'s inputs): the Lean's (`lean`), and
+    """The answer of record to `fn` on `value` (`pouw-verifier-difftest`'s inputs): the Lean's (`lean`), and
     ``{"refused": [NO_ANSWER, why]}`` where the Lean can't give one. No Python answers in its place."""
     try:
         return lean(fn, value)

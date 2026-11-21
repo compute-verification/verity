@@ -769,7 +769,7 @@ KNOWN: dict[str, str] = {
     "verity/party.py::Record": "homonym, a party's log entry: rename (proofs)",
     "verity/protocols/resource_accounting/memory/pous/attester/lean/MemoryAttester/Records.lean::MemoryAttester.CoinTree":
         "duplicate of the live coins (`Verity.Coins`; `Spot.Challenger.LiveCommitment` in code): becomes a reading of it (memory-accounting)",
-    "verity/protocols/resource_accounting/network/verifier/audit.py::Verdict":
+    "verity/protocols/resource_accounting/network/verifier/lean_audit.py::Verdict":
         "duplicate of `Core.Verdict`: becomes a reading of it (network-accounting)",
     "verity/protocols/resource_accounting/network/attester/program/lean/NetworkAttester/Run.lean::NetworkAttester.Program":
         "homonym, a Program's egress prediction: rename (network-accounting)",

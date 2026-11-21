@@ -20,7 +20,7 @@ from typing import Any
 #: ``draw_counts``, ``per_unit``'s ``units`` and its means over them are held: a template proved whole counts every unit
 #: the compiler made of the advice, so the count grows with the advice and the means divide the public totals by it.
 ALLOWED: dict[str, dict[str, Any]] = {
-    "PROVE-PATH ": {"forged": True, "ok": True, "proof": True, "coins": True, "ranks": {"*": {
+    "PROVE-PATH ": {"ok": True, "proof": True, "coins": True, "ranks": {"*": {
         "accepted": True, "per_unit": {"*": {"proof_bytes": True}}}}},
     "RECORDS ": {"ok": True, "accepted": True, "negatives_refused": True},
     "A5 ": {"audit": {"accepted": True, "verdicts": {"*": True}}},
@@ -34,7 +34,7 @@ SUMMARIES: dict[str, dict[str, Any]] = {
         "timing": {"proof_bytes": [True], "prove_total_s": True}, "lean_verify_s": True, "gpus": True, "device": True}}},
 }
 SUMMARIES["window/summary.json"] = SUMMARIES["rank*/summary.json"]
-#: a traceback's last line, which a forged arm's reader names its failure by
+#: a traceback's last line, which leaves as its exception's class alone
 ERROR = re.compile(r"(\w+(Error|Exception)): ")
 HELD = "held in the kept log"
 

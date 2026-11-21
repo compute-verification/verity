@@ -1,16 +1,16 @@
 """Lean is the served window's verifier (`verity.protocols.resource_accounting.compute.pouw.verifier.verifier`). Each of PoUW's checks on the
 challenger's path is its Lean's alone, with no Python answer beside it:
 
-* ``registered``: PoUW's rule over the registration (`pouw-check-difftest registered`);
+* ``registered``: PoUW's rule over the registration (`pouw-verifier-difftest registered`);
 * ``registration``: one-stage's R1-R8 against the challenger's own copies (`spot-difftest registration`), with the
   fan-out and tied values its verdict publishes; a PoUW window registers no values;
 * ``caller``: the caller's codes (`spot-flock-caller caller`, `VStar.Recursive.Caller.check`);
 * ``public``: the service's public-items rule over the Stream's Spec (`spot-difftest check_public`);
-* ``pass``: the pass's epoch under the challenger's coins (`pouw-check-difftest pass`);
+* ``pass``: the pass's epoch under the challenger's coins (`pouw-verifier-difftest pass`);
 * ``draw``: the sampled proof blocks are the sampling coin's, under the challenger key the window's parameters pin when it is
-  certified (`pouw-check-difftest draw`);
-* ``opening``: a sampled proof block's opening (`pouw-check-difftest opening`);
-* ``answer``: PoUW's check over the stream's outcome (`pouw-check serve`).
+  certified (`pouw-verifier-difftest draw`);
+* ``opening``: a sampled proof block's opening (`pouw-verifier-difftest opening`);
+* ``answer``: PoUW's check over the stream's outcome (`pouw-verifier serve`).
 
 Each verdict goes in the witness (`Record.witness`, one entry per check). The Python twins in `core_check`
 (`registered_twin`, `opening_twin`, `pass_epoch_twin`, `draw_twin`, `case_twin`) answer the difftests only.

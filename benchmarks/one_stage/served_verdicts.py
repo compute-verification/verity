@@ -94,7 +94,7 @@ only where `pearlplus_of_record` holds it to the piece's own check of live coins
 node only: the compose holds just the key file the piece hands to ``--key-sha512``), the lane ``--lane``'s own reserve and
 Pearl-C period, a sample session the lane reserved first after that period closed and opened on the run's commitment, the
 window's docket chained after Pearl+'s window record and its records audit tied to it accepted, that period's circuit the window-circuit record V3c held the
-window's circuit to, and the Lean `PouwCheck.PearlPlus` verdict on the same run; else its row stays missing, naming the
+window's circuit to, and the Lean `PouwVerifier.PearlPlus` verdict on the same run; else its row stays missing, naming the
 first condition it fails.
 
 ``pearlplus-period open``: the lane's Pearl-C period P, opened at ``--gate`` before Pearl+'s serve with cap 1 (the serve's

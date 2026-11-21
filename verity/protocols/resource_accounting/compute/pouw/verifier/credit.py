@@ -1,12 +1,12 @@
 """A served window's credited set, its sampled proof blocks and their outcome, its A rows, and the period it counts toward, as
 PoUW's verifier reads them. `_window_outcomes` and `_period_outcomes` are the Python
-reference of the Lean `PouwCheck.Credit` (`lean/check`), held to it by the difftest (`lean/check/tests/test_difftest.py`);
+reference of the Lean `PouwVerifier.Credit` (`lean/check`), held to it by the difftest (`lean/check/tests/test_difftest.py`);
 `window` and `period_credit` are they with each sampled proof block's outcome from the verifier's own run, which the
-Lean `PouwVerifier.Credit.executionPhase` takes as given. Those outcomes are the Lean's (`PouwCheck.Verified`,
+Lean `PouwVerifier.Credit.executionPhase` takes as given. Those outcomes are the Lean's (`PouwVerifier.Verified`,
 `_lean_verified`):
 the Lean decides which statements the verifier runs on, with which inputs, and what its answers credit; `_verified` is
 its Python reference, held to it by the difftest (`lean/check/tests/test_verified_difftest.py`). Each round's live
-outcome is the Lean's too (`PouwCheck.LiveVerified`, `_lean_live_verified`), with `_live_verified` its reference
+outcome is the Lean's too (`PouwVerifier.LiveVerified`, `_lean_live_verified`), with `_live_verified` its reference
 (`lean/check/tests/test_live_verified_difftest.py`). And so are the verdicts `window` and `period_credit` return: the Lean
 `Credit.executionPhase`'s and `Credit.periodCredit`'s on those outcomes (`_of_record`, `verifier.of_record`), with no
 Python answer beside them; where the Lean gives none the refusal is ``verifier.NO_ANSWER``.
@@ -28,7 +28,7 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   statement's public file names one, and the call's ``--registered`` file credit builds from the descriptor and the
   window's entries (`registered_file`, `h1window.table_reads_file`'s, main's per-call tables). A rejected session
   refuses the window, and so does a verifier that can't run. The verdict over the statements is the Lean's
-  (`PouwCheck.Verified.verified`, through `verifier.lean`): it names each statement to verify and the inputs (`_asks`: up
+  (`PouwVerifier.Verified.verified`, through `verifier.lean`): it names each statement to verify and the inputs (`_asks`: up
   to the first statement a check before the verifier refuses), this module only runs the verifier on them, and the
   Lean judges the answers (`_lean_verified`).
 * **A leaf past the cap credits nothing** (`leaf_lanes`, the lanes form): at a K the open commits as ``lane<K>`` and
@@ -37,7 +37,7 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   partials ``<prefix>partials@<u>`` against one produced record under the sample root (`_leaf_asks`), then refused at the
   file credit builds at the leaf's served place (`leaf_registered_file`: a leaf statement reads rows in full, which
   proofs' verifier cannot mark). A leaf outside what `LeafLanesSound` covers is ``lanes-shape`` (`lanes_shape`). The
-  verdict is the Lean's here too (`PouwCheck.Lanes`, through `PouwCheck.Verified`).
+  verdict is the Lean's here too (`PouwVerifier.Lanes`, through `PouwVerifier.Verified`).
 * **The seed's inputs are the verifier's** (`registered_file`'s ``pub``): each unit's public row, the salt, position
   and roots its seed and its receipt's fold keys are derived from, is a row of its call's public table
   ``<prefix>pub@<c>``, which credit builds itself from the window's Program salt, the unit's position and the call's
@@ -1528,7 +1528,7 @@ def _verified(statements: Any, files: Any, raw: bytes, layout: dict, entries: li
     sampled leaves' statements are checked before any run (`_leaf_asks`) and each is refused at its ``--registered``
     file (`leaf_registered_file`: every leaf statement reads an A, B or partials row in full, which proofs' verifier
     cannot mark), so no leaf statement is verified and none credits. The Python reference of the Lean's
-    `PouwCheck.Lanes`."""
+    `PouwVerifier.Lanes`."""
     asks, refused = _asks(statements, files, raw, layout, entries, window, units, steps, salt, draw)
     lanes = statements if isinstance(statements, dict) and sorted(statements) == list(LANES_KEYS) else None
     listed = lanes["statements"] if lanes is not None else statements
@@ -1560,7 +1560,7 @@ def _files(files: Any) -> bool:
 
 def _files_refusal(files: Any) -> tuple[str, str] | None:
     """The refusal (``circuit``) of committed circuit files `files` that are not `_files`', or None (Lean's
-    `PouwCheck.Verified.filesRefusal`): `lanes_files`' reason when it has one, else `FILES_FORM`."""
+    `PouwVerifier.Verified.filesRefusal`): `lanes_files`' reason when it has one, else `FILES_FORM`."""
     if _files(files):
         return None
     return "circuit", (isinstance(files, dict) and all(type(x) is str for x in files) and lanes_files(files)) or FILES_FORM
@@ -1577,7 +1577,7 @@ def _asks(statements: Any, files: Any, raw: bytes, layout: dict, entries: list, 
     refuses, and that refusal (or None): each ``{statement, draw, registered, partition}``, the statement's
     index among `statements` and the verifier's inputs for it: the draw ``{"units": units}`` over the partition's
     one-unit blocks (`partition_of`), of which the statement's public file names one. The Python reference of the Lean's
-    `PouwCheck.Verified.asks`, which `_lean_verified` runs the verifier on.
+    `PouwVerifier.Verified.asks`, which `_lean_verified` runs the verifier on.
 
     `statements` is a list of call statements (`STATEMENT_KEYS`), or the lanes evidence (`LANES_KEYS`) whose
     ``statements`` hold call statements and sampled leaves' (`LEAF_STATEMENT_KEYS`); the sampled leaves' checks follow
@@ -1955,7 +1955,7 @@ def _leaf_asks(lanes: dict | None, leafs: list[tuple[int, dict]], files: dict, r
 
 
 def _finding_json(f: PF.Finding) -> dict:
-    """A verifier finding as `PouwCheck.Verified` reads it: ``{session, accepted, why, program, registered, units,
+    """A verifier finding as `PouwVerifier.Verified` reads it: ``{session, accepted, why, program, registered, units,
     openings}``, its ``openings`` (the rows it reports opening, `produced.shared`'s) None when it reports none."""
     return {"session": f.session, "accepted": f.accepted, "why": f.why, "program": f.program,
             "registered": f.registered, "units": list(f.units), "openings": getattr(f, "openings", None)}
@@ -1964,7 +1964,7 @@ def _finding_json(f: PF.Finding) -> dict:
 def _answer(run: Run, s: dict, ask: dict, raw: bytes) -> dict:
     """The verifier's answer for one of the Lean's asks (`_asks`'s form, or `_live_asks`') on statement `s`'s proof
     files, against the descriptor `raw` (the window's, or its live Program's): its findings, its refusal, or why it could
-    not run, as `PouwCheck.Verified` reads them."""
+    not run, as `PouwVerifier.Verified` reads them."""
     try:
         got, why = run(PF.Proof(Path(s["circuit"]), Path(s["public"]), tuple(map(Path, s["sessions"]))),
                        program=raw, partition=ask["partition"], draw=ask["draw"], registered=ask["registered"])
@@ -1975,7 +1975,7 @@ def _answer(run: Run, s: dict, ask: dict, raw: bytes) -> dict:
 
 def _lean_verified(statements: Any, files: Any, raw: bytes, entries: list, window: str, units: list[int], steps: int,
                    run: Run, salt: str, draw: Any = None) -> tuple[list[dict] | None, tuple[str, str] | None]:
-    """`_verified`'s verdict from the Lean verifier (`PouwCheck.Verified.verified`, `verifier.lean`): the Lean
+    """`_verified`'s verdict from the Lean verifier (`PouwVerifier.Verified.verified`, `verifier.lean`): the Lean
     names the verifier runs (`_asks`), this runs `run` on each in order until an answer the Lean will refuse at
     (an error, a refusal or a rejected session), and the Lean judges the answers. A Lean that can't run leaves the
     window refused (``proof``)."""
@@ -2210,7 +2210,7 @@ def _live_verified(files: Any, run: Run) -> Lived:
     its own proof block), the draw of every round's unit and the ``--registered`` file credit builds itself (`live_reads.reads_file`, under the window
     Program's digest, its open root and its session, at the step's m_s and the period's committed max_tokens). A
     session the verifier rejects refuses the window (``live``), and so does one that proved another unit than its
-    round's. The Python reference of the Lean's `PouwCheck.LiveVerified` (`_lean_live_verified`), held to it by the
+    round's. The Python reference of the Lean's `PouwVerifier.LiveVerified` (`_lean_live_verified`), held to it by the
     difftest (`lean/check/tests/test_live_verified_difftest.py`)."""
     def lived(live: dict, raw: bytes, got: dict, roots: dict, ms: list[int], program: str, window: str, session: str,
               max_tokens: list[int]) -> tuple[list | None, tuple[str, str] | None]:
@@ -2245,7 +2245,7 @@ def _live_asks(files: Any, statements: Any, raw: bytes, got: dict, roots: dict, 
     verifier refuses, and that refusal (or None): each ``{statement, draw, registered, partition}``, the
     statement's index among `statements` and the verifier's inputs for it, its ``--registered`` file at the period's
     committed `max_tokens`, its draw every round's unit (``{"units": [0, ..., S - 1]}``, one block a round). The Python
-    reference of the Lean's `PouwCheck.LiveVerified.asks`, which `_lean_live_verified` runs the verifier on."""
+    reference of the Lean's `PouwVerifier.LiveVerified.asks`, which `_lean_live_verified` runs the verifier on."""
     why = _files_refusal(files)
     if why is not None:
         return [], why
@@ -2275,7 +2275,7 @@ def _live_asks(files: Any, statements: Any, raw: bytes, got: dict, roots: dict, 
 
 
 def _lean_live_verified(files: Any, entries: Any, run: Run) -> Lived:
-    """`_live_verified`'s `lived` from the Lean verifier (`PouwCheck.LiveVerified.liveVerified`,
+    """`_live_verified`'s `lived` from the Lean verifier (`PouwVerifier.LiveVerified.liveVerified`,
     `verifier.lean`), over the window's registered `entries`: the Lean names the verifier runs (`_live_asks`), this runs
     `run` on each in order until an answer the Lean will refuse at (an error, a refusal or a rejected session), and the
     Lean judges the answers. A Lean that can't run leaves the window refused (``live``)."""
@@ -2525,7 +2525,7 @@ def window(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: An
 
 class _Outcomes:
     """One window's statement runs (`_runner`'s `proved`, `_live_runner`'s `lived`), each run's outcomes kept in the form
-    the Lean `PouwCheck.Credit` reads (`PROOF_KEYS`: the sampled proof blocks' ``proofs``, the live rounds' ``live``),
+    the Lean `PouwVerifier.Credit` reads (`PROOF_KEYS`: the sampled proof blocks' ``proofs``, the live rounds' ``live``),
     none where a run never came, and the refusal a run made itself (the Lean's `Verified` or `LiveVerified` under the
     Lean record), which no outcome carries."""
 
@@ -2724,7 +2724,7 @@ def committed_weights(ledger: list, name: str) -> tuple[str | None, tuple[str, s
 def committed_files(ledger: list, name: str) -> tuple[dict | None, tuple[str, str] | None]:
     """The circuit files period `name`'s open committed (`CIRCUIT_FILES`, ``{k<K>: SHA-512}``: each K's template's
     circuit file, as the auditor's lowering built it) in the auditor's ledger `ledger`, one `period` has trusted, and
-    None; or None and the refusal (``circuit``). The Python reference of the Lean's `PouwCheck.CommittedFiles`
+    None; or None and the refusal (``circuit``). The Python reference of the Lean's `PouwVerifier.CommittedFiles`
     (`_lean_committed_files`), which `period_credit` reads when `verifier.RECORD_VERDICT` is ``"lean"``."""
     body = next(e["body"] for e in map(json.loads, ledger)
                 if e["kind"] == "period-open" and e["body"]["period"] == name)
@@ -2770,7 +2770,7 @@ def lanes_files(files: dict) -> str | None:
 
 
 def _lean_committed_files(ledger: list, name: str) -> tuple[dict | None, tuple[str, str] | None]:
-    """`committed_files` from the Lean verifier (`PouwCheck.CommittedFiles.committedFiles`, `verifier.lean`).
+    """`committed_files` from the Lean verifier (`PouwVerifier.CommittedFiles.committedFiles`, `verifier.lean`).
     A Lean that can't run leaves the period refused (``circuit``)."""
     try:
         got = V.lean("credit-committed-files", {"ledger": ledger, "name": name})
@@ -2993,7 +2993,7 @@ def period(key: Any, ledger: Any, name: Any, roots: Any, verify: Ch.Verify) -> t
 
 def passes_distinct(passes: Any) -> tuple[str, str] | None:
     """The verdict of record on passes credited together, (code, why) or None: Pearl+'s Lean
-    `PouwCheck.PearlPlus.passesDistinct`'s, the one its run verdict reads (`verifier.of_record` on ``passes-distinct``),
+    `PouwVerifier.PearlPlus.passesDistinct`'s, the one its run verdict reads (`verifier.of_record` on ``passes-distinct``),
     `passes_distinct_twin` is its Python twin, for the difftest."""
     said = V.of_record("passes-distinct", {"passes": passes})
     return None if said is None else tuple(said["refused"])
@@ -3011,7 +3011,7 @@ def period_credit(key: Any, ledger: Any, pins: Any, main: Any, name: Any, window
     """Period `name`'s credit and None, or None and the refusal: `_period_outcomes`' rules, each window's evidence
     (`PERIOD_KEYS`) carrying its statements' proof files, which `window` verifies on the circuit files the period's
     open committed (`committed_files`, else ``circuit``) with the verifier `run`. The verdict is the Lean
-    `PouwCheck.Credit.periodCredit`'s on the outcomes those runs gave (`_of_record`). `_period_of` drives the runs, and
+    `PouwVerifier.Credit.periodCredit`'s on the outcomes those runs gave (`_of_record`). `_period_of` drives the runs, and
     its own verdict is the difftest's, never the record's; a refusal of the windows' or their live evidence's
     statements' form, of the committed circuit files or of a run itself stands as that step's."""
     kept: list[_Outcomes] = []
@@ -3032,7 +3032,7 @@ def _formed(windows: Any, keys: tuple[str, ...]) -> bool:
 def _period_outcomes(key: Any, ledger: Any, pins: Any, main: Any, name: Any, windows: Any, verify: Ch.Verify
                      ) -> tuple[dict | None, tuple[str, str] | None]:
     """`period_credit` on each window's sampled proof blocks' proof outcomes (`PROVED_KEYS`) in place of its statements, by
-    `_window_outcomes`: the form the Lean `PouwCheck.Credit.periodCredit` reads until it runs the verifier
+    `_window_outcomes`: the form the Lean `PouwVerifier.Credit.periodCredit` reads until it runs the verifier
     itself. Period `name`'s credit and None, or None and the refusal. The credit is ``{windows, work, k, delta, eps}``:
     each window's credited calls in the close's order (a call with m_s = 0 served rows is none), each window's credited
     served work (`credited_work`, m_s·n·K a credited call, never its M slot rows'), the K the period's open committed
@@ -3055,7 +3055,7 @@ def _period_outcomes(key: Any, ledger: Any, pins: Any, main: Any, name: Any, win
 def _once(verify: Ch.Verify) -> Ch.Verify:
     """`verify`, each answer held by its key, message and signature: a period's check reads its ledger 5W + 1 times
     (`period`, then each window's two `credited_session`s, `_credited`, the rounds and `_period_weights`), all at the
-    verifier's one key, so each entry's signature is verified once. Lean's `PouwCheck.Credit.Once.periodCreditOnce`
+    verifier's one key, so each entry's signature is verified once. Lean's `PouwVerifier.Credit.Once.periodCreditOnce`
     replays the ledger once."""
     held: dict[tuple[Ch.ChallengerKey, bytes, bytes], bool] = {}
 

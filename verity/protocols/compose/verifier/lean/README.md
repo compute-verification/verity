@@ -139,7 +139,7 @@ of `C*` PoUS's setup published (its commitment's `root`) and the root PoUB-P2's 
 root is its own salted tree's, is not a subprotocol. Once the log exists, both read the store's hardware entry.
 Remote's one tie, `Core.Remote.windows`, puts every window of PoUW's period on the policy's record: the digest of the
 record the policy's commitment is, and the digest of each window's Commit record as the period's credit reads it
-(`PouwCheck.Credit.commitOf?`). The period's own commitment is the auditor's ledger, so it can't join `same`.
+(`PouwVerifier.Credit.commitOf?`). The period's own commitment is the auditor's ledger, so it can't join `same`.
 
 ## The difftest
 
@@ -155,7 +155,7 @@ Lean to:
   `check`, on v2's audits whose sample at the challenger's coins is empty, those with one break each (`V2_BREAKS`, among
   them v1's params or evidence, refused by name) and v1's audits with one or two changes under the form `one-stage`
   (refused as v1's), the recursive form's params refused by name, whether or not they name its files, and the
-  two-stage form's params through its own difftest's twin (`sampled_two.py`) and its evidence up to its keys;
+  two-stage form's evidence up to its keys (its params are outside the mirror);
 - network attestation: its period difftest's `reference`, the Python mirror over the network attester's certificates and
   one-stage's answers, on small signed periods from its `build`;
 - the inference-only policy: its protocol difftest's `reference`, the policy's Python check (`check_theta`) behind

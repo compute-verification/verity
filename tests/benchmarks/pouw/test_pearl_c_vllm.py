@@ -2895,7 +2895,7 @@ def test_volunteer_words_ranks_a_units_rows_over_their_inert_bounds_in_one_scan(
 
 
 def test_verify_run_refuses_a_v1_manifest(honest_pass):
-    """A v1 manifest (a pass recorded before the execution phase's coins) is refused, as the Lean `PouwCheck.PearlPlus`
+    """A v1 manifest (a pass recorded before the execution phase's coins) is refused, as the Lean `PouwVerifier.PearlPlus`
     refuses it, and so is a manifest of another schema; there is no ``--recorded`` reading of one."""
     path, *_ = honest_pass
     man = json.loads(path.read_text())

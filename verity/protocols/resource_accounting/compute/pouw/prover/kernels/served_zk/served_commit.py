@@ -65,7 +65,7 @@ verity imports; run from this file, the commands that reach either refuse (NotIm
   a job hands it.
 - **The coins** are the execution phase's (`pouw.coins`): the challenger process that holds the Streams holds the execution phase's coin
   challenger.  When the process starts, before it reads a request, that challenger samples the execution phase's salt and sampling coins
-  and their hm96 salts from the Lean verifier (`pouw.verifier.coins`: `pouw-check-difftest`'s ``coins``,
+  and their hm96 salts from the Lean verifier (`pouw.verifier.coins`: `pouw-verifier-difftest`'s ``coins``,
   `IO.getRandomBytes`, A3) and commits to them, and the process publishes the commitment (``LOG/coins.json``) before
   any request; with ``--state`` the entropy is instead the file the serving controller wrote from the same Lean coins
   before it served the pass (`state_entropy`), so the pass's salt coin is one it opens.  No coin is read from
@@ -675,7 +675,7 @@ def core_params(params: dict) -> dict:
 def check(params: dict, rec: dict, draw: dict, unit: int, pub: bytes, op: dict, drawn: bool = True, *,
           record: OR.Record, salt: bytes | None = None) -> str | None:
     """None if the proof's public file opens unit `unit`'s rows under the registered execution phase root, else why not: PoUW's
-    rule on the opening (`pouw-check-difftest opening`, the unit sampled unless not `drawn`), of record (`record`: an
+    rule on the opening (`pouw-verifier-difftest opening`, the unit sampled unless not `drawn`), of record (`record`: an
     `of_record.Record`, whose Lean side `of_record_lean.Record` supplies).  `salt` is a certified execution phase's salt, the one
     its pass was checked against (`core_check.certified_salt`, which `Challenger.check` passes); the opening refuses
     every unit of a certified execution phase without it."""
@@ -915,7 +915,7 @@ def state_entropy(path: str):
 
 
 class Challenger:
-    """The challenger of one deployment's execution phases over P1's `Stream`: PoUW's rule (`pouw-check-difftest registered`), the pass's
+    """The challenger of one deployment's execution phases over P1's `Stream`: PoUW's rule (`pouw-verifier-difftest registered`), the pass's
     execution phase under its own coins, then the stream's, each of PoUW's checks of record in `record` (Lean's).  `coins` is the execution phase's coin challenger (`pouw.coins.Challenger`, or
     `Recorded` in a replay); the execution phase's sampling coin keys `sampler` (Lean's sample, or its twin `python_sampler`).  A Spec
     fixes one sampling design and K′ is a function of the registered level, so it holds one Stream per (stream name, level); each
@@ -1044,7 +1044,7 @@ class Challenger:
             self.witness.setdefault(name, []).extend(self.record.witness[at:])
 
     def registered(self, name: str, rec: Mapping[str, Any]) -> None:
-        """PoUW's rule over the registration (`pouw-check-difftest registered`), of record.  Raises `Refused`."""
+        """PoUW's rule over the registration (`pouw-verifier-difftest registered`), of record.  Raises `Refused`."""
         try:
             x = {"params": self.core, "commitment": self.record.hexed(rec)}
         except TypeError as e:
@@ -1255,7 +1255,7 @@ class Challenger:
     def outcome(self, name: str, units: list[dict]) -> tuple[S.Outcome, dict, dict]:
         """The final outcome from each sampled proof block's ``{"unit", "statement", "verdicts"}``, ascending, and PoUW's public
         items of it (exactly `pouw.window.PUBLIC`) and the stream's record of it.  PoUW's check over the stream's answer
-        is of record: the stream's outcome is final once given, so a refusal here (``pouw-check``, or a disagreement)
+        is of record: the stream's outcome is final once given, so a refusal here (``pouw-verifier``, or a disagreement)
         leaves the execution phase with no published outcome."""
         st, reg = self._held(name)
         d = self._drawn(name)
