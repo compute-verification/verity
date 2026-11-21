@@ -175,7 +175,6 @@
         "security/Definitions/Flock/Statement.lean",
         "security/Definitions/Flock/ZK/",
         "security/Definitions/Flock/Guarantees/Claims.lean",
-        "security/Definitions/Flock/Guarantees/RecursionClaims.lean",
         "security/Definitions/Flock/Guarantees/SamplingClaims.lean",
         "security/Proofs/Core.lean",
         "security/Proofs/Flock.lean",
