@@ -1942,13 +1942,13 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
     if not isinstance(lean, dict) or lean.get("verdict") != "accept":
         v = lean.get("verdict") if isinstance(lean, dict) else None
         return None, f"the Lean PouwVerifier.PearlPlus verdict is {v}: {lean.get('reason') if isinstance(lean, dict) else lean}"
-    if (lean.get("commitment"), lean.get("source")) != (coin.get("commitment"), coin.get("source")):
-        return None, (f"the Lean verdict is on run {str(lean.get('commitment'))[:16]}... at source "
-                      f"{str(lean.get('source'))[:16]}..., not the verifier's coin record's")
     work = lean.get("work") or {}
     credited, tiles = work.get("credited"), work.get("credited_tiles")
     if not (type(credited) is int and credited > 0 and type(tiles) is int and tiles > 0):
         return None, f"the Lean verdict credits {credited!r} MACs over {tiles!r} tiles: nothing"
+    if (lean.get("commitment"), lean.get("source")) != (coin.get("commitment"), coin.get("source")):
+        return None, (f"the Lean verdict is on run {str(lean.get('commitment'))[:16]}... at source "
+                      f"{str(lean.get('source'))[:16]}..., not the verifier's coin record's")
     w = (lean.get("tie") or {}).get("record")
     if not isinstance(w, str):
         return None, ("the Lean verdict holds its passes to no window record W (served_passes.py lean, the Lean's --tie W), "

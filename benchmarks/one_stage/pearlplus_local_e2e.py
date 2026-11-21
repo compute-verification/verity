@@ -318,6 +318,11 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
             "verdict": answer.get("verdict"), "reason": None, "commitment": answer.get("commitment"),
             "source": (answer.get("profile") or {}).get("source"), "drawn": verified.get("draws"), "work": work,
             "tie": {"record": tie}, "stand_in": True}))
+        # `served_passes.timed_credit` over the one pass, which is timed: the whole work
+        (piece / S.PEARLPLUS_LEAN_CHECK).write_text(json.dumps({
+            "line": verified.get("line"), "stand_in": True,
+            "timed": {"passes": 1, "macs": work.get("checked_macs"), "credited": work.get("credited")}
+            if answer.get("verdict") == "accept" else None}))
     else:
         exe = lean
         if lean == "build":

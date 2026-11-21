@@ -2833,9 +2833,9 @@ def test_the_record_reads_pearlpluss_tie_from_the_window_tied_to_w_under_window_
     ("unpublished coin", "the verdict is not held to the coin published at its draw: none published"),
     ("no Lean", f"no Lean PouwVerifier.PearlPlus verdict ({S.PEARLPLUS_LEAN}: FileNotFoundError"),
     ("Lean rejects", "the Lean PouwVerifier.PearlPlus verdict is reject: the live session's coins are out of scope"),
+    ("Lean credits nothing", "the Lean verdict credits 0 MACs over 40 tiles: nothing"),
     ("Lean other run", f"the Lean verdict is on run {'c2' * 8}... at source {SAMPLE_COIN[:16]}..., not the verifier's "
                        "coin record's"),
-    ("Lean credits nothing", "the Lean verdict credits 0 MACs over 40 tiles: nothing"),
     ("Lean untied", "the Lean verdict holds its passes to no window record W (served_passes.py lean, the Lean's --tie W), "
                     "so nothing ties them to the window"),
     ("R not after W", f"the window's registration R is chained after {'ab' * 8}..., not right after Pearl+'s window "
