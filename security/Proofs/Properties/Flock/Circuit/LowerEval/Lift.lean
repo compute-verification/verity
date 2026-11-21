@@ -983,15 +983,6 @@ inductive BatchNested (P : Prog) : ℕ → Prop
         (P.defs[nd.fn]!).prim = false ∨ isWordPrim (P.defs[nd.fn]!).prim (P.defs[nd.fn]!).key = true) →
       BatchNested P d
 
-theorem batchNested_of_batch0Nested {P : Prog} {d : ℕ} (h : Batch0Nested P d) : BatchNested P d := by
-  induction h with
-  | mk hp hform hlt _ hgate hex ih =>
-    refine .mk hp (fun nd hnd => ?_) hlt ih hgate hex
-    rcases hform nd hnd with h | h | ⟨h, -⟩
-    · exact Or.inl h
-    · exact Or.inr (Or.inl h)
-    · exact Or.inr (Or.inr h)
-
 def noScan : Flock.Program.Form → Bool
   | .scan => false
   | _ => true
