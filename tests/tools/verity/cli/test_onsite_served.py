@@ -137,11 +137,11 @@ def test_the_configuration_is_the_tables_byte_for_byte():
 @pytest.mark.parametrize("demo", sorted(set(T.HEADERS) - {"onsite_full"}))
 def test_each_smaller_demo_is_the_tables_byte_for_byte_and_its_own_composite(demo):
     """Each other application's file is the table's configuration of its subprotocols, at onsite_full's commit, whose composite
-    (or onsite's smaller set) is its own id; only the subprotocols it lists have parameters and pins."""
+    is its own id; only the subprotocols it lists have parameters and pins."""
     path = ROOT / "applications" / f"{demo}.toml"
     cfg = T.configuration(K.parse(CONFIG.read_text())["program"]["commit"], demo)
     assert K.render(cfg, T.HEADERS[demo]) == path.read_text()
-    assert K.composite(cfg["protocols"], REG.components) in {**K.COMPOSITES, **K.UNACCEPTED}
+    assert K.composite(cfg["protocols"], REG.components) in K.COMPOSITES
     assert K.composite(cfg["protocols"], REG.components) != T.ONSITE
     assert {p["protocol"] for p in cfg["pin"]} == {"pous", "wipe"} & set(T.listed(demo))
 
@@ -157,29 +157,13 @@ TIED_WORKLOAD = {"REPO": "unsloth/Llama-3.2-1B", "PRECISION": "bfloat16", "SLOTS
 TIE_VARIABLES = {"PEARLPLUS_TIE", "PEARLPLUS_TIE_UNIFORM"}
 
 
-def test_remote_and_onsite_full_have_their_workload_values_pearl_plus_untied_and_the_smaller_sets_keep_the_defaults():
+def test_remote_and_onsite_full_have_their_workload_values_pearl_plus_untied():
     for name in ("remote", "onsite_full"):
         cfg = R.load(ROOT / "applications" / f"{name}.toml", REG)
         assert cfg["workload"]["params"] == TIED, name
         assert cfg["params"]["verity/pouw/pearl-plus/v1"] == T.schemes.get("pearl-plus").settings, name
         assert T.SERVE.variables(cfg, {}).items() >= TIED_WORKLOAD.items(), name
         assert T.variables(cfg, {}).items() >= TIED_WORKLOAD.items() and not TIE_VARIABLES & set(T.variables(cfg, {})), name
-    for name in set(T.HEADERS) - {"remote", "onsite_full"}:
-        cfg = R.load(ROOT / "applications" / f"{name}.toml", REG)
-        assert cfg["workload"]["params"] == {**T.SERVED.default_params, **T.DEMO_VALUES.get(name, {})}, name
-        assert "pearl-plus" not in cfg["protocols"], name
-
-
-def test_the_front_application_is_the_networks_with_the_fronts_load_and_the_split_attester():
-    """`onsite_network_front.toml` is `onsite_network.toml` but for its load: served_verdicts.sh's LOAD=front, the
-    front's group the run's one load and its audited window, with the network attester's piece split around V3c."""
-    front = R.load(ROOT / "applications" / "onsite_network_front.toml", REG)
-    network = R.load(NETWORK, REG)
-    assert front["protocols"] == network["protocols"] and front["params"] == network["params"]
-    assert front["workload"]["params"] == {**network["workload"]["params"], "load": "front"}
-    hooks = T.variables(front, {})
-    assert T.SERVE.variables(front, {})["LOAD"] == "front"
-    assert {"CERTIFIER_FRONT", "CERTIFIER_CHAIN_CMD", "CERTIFIER_PERIOD_CMD"} <= set(hooks) and "CERTIFIER_CMD" not in hooks
 
 
 def test_the_configuration_states_no_host_or_address():
@@ -357,17 +341,6 @@ def test_a_dry_run_without_bindings_names_every_one_it_lacks(capsys):
                 if e["component"] == "pous") == "--run-keys --rounds 320"
 
 
-@pytest.mark.parametrize("demo", ["onsite_network", "onsite_compute"])
-def test_a_dry_run_of_a_smaller_onsite_demo_resolves_every_party_and_channel(capsys, demo):
-    path = ROOT / "applications" / f"{demo}.toml"
-    rc, got, err = dry(capsys, config=path)
-    cfg = R.load(path, REG)
-    assert rc == 0, err
-    assert K.composite(cfg["protocols"], REG.components) in K.UNACCEPTED
-    assert sorted(x["party"] for x in got["plan"]) == sorted(p["name"] for p in cfg["party"])
-    assert len(got["channel"]) == len(cfg["channel"]) and got["dry"][0]["configuration"] == K.digest(cfg)
-
-
 def test_a_dry_run_on_a_machine_resolves_its_parties(capsys):
     rc, got, _ = dry(capsys, "--on", T.PROVER_NODE)
     assert rc == 0 and [x["party"] for x in got["plan"]] == ["workers", "firewall", "prover"]
@@ -432,14 +405,6 @@ def test_with_pearl_plus_listed_the_attesters_piece_is_whole_sets_no_class_and_f
     assert REG.parties["network-attester"][NC.WORKERS].variables(cfg, BINDINGS) == {
         "SERVE_ARGS": NS.ID_FORM, "CERTIFIER_CMD": VARIABLES["CERTIFIER_CMD"],
         "CERTIFIER_FRONT": SPLIT["CERTIFIER_FRONT"] + f" --tokens {S.outputs}"}
-
-
-def test_without_pearl_pluss_tie_the_attesters_piece_is_split_at_the_scan_class():
-    cfg = R.load(ROOT / "applications" / "onsite_network.toml", REG)
-    assert "pearl-plus" not in cfg["protocols"]
-    assert REG.parties["network-attester"][NC.WORKERS].variables(cfg, BINDINGS) == SPLIT
-    got = T.variables(cfg, BINDINGS)
-    assert {k: got[k] for k in SPLIT} == SPLIT and "CERTIFIER_CMD" not in got
 
 
 def test_two_pieces_setting_different_classes_are_refused_by_name(monkeypatch):
@@ -1023,9 +988,8 @@ def test_the_onsite_check_without_the_published_phase_or_record_is_refused_by_na
     assert refused == ("window" if left == T.PHASE else "record")
 
 
-NETWORK = ROOT / "applications" / "onsite_network.toml"
-NETWORK_PIN = next(p["key-sha512"] for p in tomllib.loads(NETWORK.read_text())["pin"] if p["protocol"] == "wipe")
-NETWORK_BINDINGS = {"memory-challenger": {"wipe": {"address": "192.0.2.1:7001", "host": "auditor-1",
+WIPE_PIN = next(p["key-sha512"] for p in tomllib.loads(CONFIG.read_text())["pin"] if p["protocol"] == "wipe")
+WIPE_BINDINGS = {"memory-challenger": {"wipe": {"address": "192.0.2.1:7001", "host": "auditor-1",
                                                    "command": "ssh auditor-1"}},
                     "network-attester": {"network-attester": {"gate": "user@gate-1", "peer": "peer-1"}}}
 
@@ -1034,11 +998,11 @@ def test_the_wipe_runs_in_the_workload_under_the_configurations_pin_and_no_party
     monkeypatch.setattr(T, "RUNNER", stand_in(tmp_path, "runner.sh", RUNNER))
     state = tmp_path / "state"
     state.mkdir()
-    (state / T.BINDINGS).write_text(json.dumps(NETWORK_BINDINGS))
-    got = T.live(R.load(NETWORK, REG), state, [T.WORKERS, T.PROVER]).outcomes
+    (state / T.BINDINGS).write_text(json.dumps(WIPE_BINDINGS))
+    got = T.live(R.load(CONFIG, REG), state, [T.WORKERS, T.PROVER]).outcomes
     assert got[T.PROVER] == got[T.WORKERS] == {"outcome": {"served-window": 0}, "refused": None}
     hooks = dict(x.split("=", 1) for x in (state / "out" / "hooks.txt").read_text().splitlines())
-    assert (hooks["WIPE_CMD"], hooks["WIPE_KEY_SHA512"]) == (f'bash {PL.WIPE_SCRIPT} "$1" "$2" "$3"', NETWORK_PIN)
+    assert (hooks["WIPE_CMD"], hooks["WIPE_KEY_SHA512"]) == (f'bash {PL.WIPE_SCRIPT} "$1" "$2" "$3"', WIPE_PIN)
     assert (hooks["WIPE_ADDRESS"], hooks["WIPE_CHALLENGER"], hooks["WIPE_COMMAND"]) == (
         "192.0.2.1:7001", "auditor-1", "ssh auditor-1")
 
@@ -1075,8 +1039,8 @@ def test_a_foreign_piece_command_beside_onsite_fulls_hooks_is_refused_by_name(tm
 
 @pytest.mark.parametrize("pinned", [True, False])
 def test_served_wipe_gets_the_configurations_pin_and_no_other(tmp_path, pinned):
-    cfg = R.load(NETWORK, REG)
-    hooks = T.PIECES["wipe"][T.PROVER].variables(cfg if pinned else {**cfg, "pin": []}, NETWORK_BINDINGS)
+    cfg = R.load(CONFIG, REG)
+    hooks = T.PIECES["wipe"][T.PROVER].variables(cfg if pinned else {**cfg, "pin": []}, WIPE_BINDINGS)
     cmd = hooks.pop("WIPE_CMD")
     executable(tmp_path, "ip", IP)
     executable(tmp_path, "lake", LAKE)
@@ -1398,41 +1362,6 @@ def test_the_wipes_run_keys_beside_a_pin_or_an_attester_is_refused_before_the_ca
     p, log = served_wipe(tmp_path, {}, **{name: ""})
     assert p.returncode == 3 and not log.exists()
     assert f"and {name} is set: unset {name}" in (tmp_path / "wipe" / "refused.txt").read_text()
-
-
-@pytest.mark.parametrize("rows, composed, source, verdict, reason", [
-    ({}, "accept", None, "undecided", written("network-attester", "sampled-proofs", "wipe", composed=True)),
-    ({}, "accept", NOT_WRITTEN[0], "undecided", written("network-attester", "sampled-proofs", "wipe", composed=True)),
-    ({"communication": "reject"}, "reject", None, "reject", "network-attester reject"),
-])
-def test_a_set_no_lean_verifier_takes_reads_the_published_record_and_no_python_verdict(tmp_path, monkeypatch, rows,
-                                                                                      composed, source, verdict, reason):
-    monkeypatch.setenv("VERITY_HOLD_PLACEMENT", "1")
-    state = tmp_path / "state"
-    published(state, rows, composed, source=source)
-    line = T.onsite_check(R.load(NETWORK, REG), state)
-    assert (line["verdict"], line["reason"], line["product"]) == (verdict, reason, "verity/onsite-network/v0")
-    assert "combined_by" not in line
-
-
-@pytest.mark.parametrize("hold, rows, composed, reason", [
-    ("1", {}, "accept", written("network-attester", "sampled-proofs", "wipe", composed=True)),
-    ("1", {"communication": "reject"}, "reject", "network-attester reject"),
-    (None, {}, "accept", "no composite takes verity/onsite-network/v0"),
-    (None, {"communication": "reject"}, "reject", "network-attester reject"),
-])
-def test_a_set_no_lean_verifier_takes_is_undecided_under_its_own_id(tmp_path, capsys, monkeypatch, hold, rows, composed,
-                                                                    reason):
-    """Python never accepts where a Lean verifier is written: with the placement hold or without it."""
-    if hold:
-        monkeypatch.setenv("VERITY_HOLD_PLACEMENT", hold)
-    else:
-        monkeypatch.delenv("VERITY_HOLD_PLACEMENT", raising=False)
-    state = tmp_path / "state"
-    published(state, rows, composed)
-    assert R.run_main([str(NETWORK), "--on", T.AUDITOR_HOST, "--party", "verifier", "--state", str(state)], REG) == 2
-    (line,) = said(capsys.readouterr().out, "VERDICT")
-    assert (line["product"], line["verdict"], line["reason"]) == ("verity/onsite-network/v0", "undecided", reason)
 
 
 def test_the_workloads_bindings_are_the_runners_settings_under_the_pieces_hooks(tmp_path, capsys, monkeypatch):
