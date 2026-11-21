@@ -1628,7 +1628,8 @@ def run(j):
     `service.selection_sampling_design` over it (a rate sampling design's count of none or more than N: `rate`), a bernoulli sampling design at
     any p (`service.bernoulli`: `bernoulli`), a program whose units read stratum by stratum are not its N in order
     nor a disjoint cover of them (`partition.covers`: `population-order`), or a cover under a design not subset at both
-    the rule and the docket (`members.subset_designs`: `strata-design`), and the receipt; `select`: a closure map refused (`closure`), then the
+    the rule and the docket (`members.subset_designs`: `strata-design`) or under a two-stage rule (`population-order`), and
+    the receipt; `select`: a closure map refused (`closure`), then the
     sample from the source's bytes (`select`), the challenger's coins with their evidence when it read any, held to
     the run's `family`, its challenger key (`key`) and its copy of main's history (`main`) (`_coins_code`: code `coins`,
     or `family`; a `coin_source` other than the challenger is refused
@@ -1697,6 +1698,8 @@ def run(j):
             return {"codes": ["population-order"], "step": "register"}
         if not M.subset_designs(sampling_design, rec):
             return {"codes": ["strata-design"], "step": "register"}
+        if isinstance(rule, service.TwoStage):
+            return {"codes": ["population-order"], "step": "register"}
     receipt = _receipt(rec, j["challenger"], j["received"])
     try:
         derived = DR.derive(p["program"], p["query"], sampling_design, table)
@@ -2782,7 +2785,7 @@ def test_v2_takes_a_cover_of_the_population_under_a_subset_design(server, server
     """v2's population check (`OneStageZk.popHeld`) takes a docket whose program's proof blocks, read stratum by
     stratum, are not its population's units in order but a disjoint cover of them (`Slots.popCovers`) under its subset
     design, as the service's run does (`test_the_run_takes_a_cover_of_the_units_only_under_a_subset_design`):
-    `SETUPS[4]`'s and `SETUPS[5]`'s audits go on to their session's verdict, as `BLOCKED`'s, in order, does. v2's one
+    `SETUPS[4]`'s and `SETUPS[5]`'s audits go on past it, as `BLOCKED`'s, in order, does to its session's verdict. v2's one
     statement takes no stratified or work design (`subset_only`)."""
     circuit = STAND_IN_CIRCUIT
     for s, ok in ((SETUPS[4], False), (SETUPS[5], False), (BLOCKED, True)):
@@ -2793,8 +2796,10 @@ def test_v2_takes_a_cover_of_the_population_under_a_subset_design(server, server
         case = {"blobs": [circuit.hex(), public.hex(), record.hex()], "commitment": _hex(rec), "evidence": _hex(v2),
                 "params": params | {"proofs": {"public": _sha(public), "registered": None}}}
         out = server_v2.exchange(_json(case))
-        assert P.covers(s.program, s.query, s.population)
-        assert (out["verdict"], out["reason"]) == ("reject", "verdict flock-verify/s did not accept"), (s.templates, out)
+        assert P.covers(s.program, s.query, s.population) and out["verdict"] == "reject", (s.templates, out)
+        assert POPULATION_ORDER not in out["reason"] and "partition: the registration's strata" not in out["reason"], out
+        if ok:
+            assert out["reason"] == "verdict flock-verify/s did not accept", (s.templates, out)
 
 
 def test_the_per_member_form_as_written_is_what_v2_parses_and_its_check_reads(tmp_path, server, server_v2):
@@ -6802,6 +6807,21 @@ def test_the_run_takes_a_cover_of_the_units_only_under_a_subset_design(pieces):
                 assert (out.get("step"), out.get("codes")) == ("register", ["strata-design"]), (kind, out)
     assert not P.in_order(SETUPS[3].program, SETUPS[3].query, SETUPS[3].population + 1)
     assert not P.covers(SETUPS[3].program, SETUPS[3].query, SETUPS[3].population + 1)
+
+
+def test_a_two_stage_run_takes_no_cover(pieces):
+    """Under a two-stage rule the run takes the units in order only, Lean's the Python's whole: the interleaved layout
+    `SETUPS[4]` under a subset design is refused at its grain (`grain`: its query is two templates', and a grain is one
+    template's, whose units are in order), before the cover branch's `population-order`; the contiguous `SETUPS[1]`
+    passes the population check and goes on to its sample (`coins`: this case carries no coins' evidence)."""
+    source = hashlib.shake_256(b"run").hexdigest(600)
+    for s, want in ((SETUPS[4], ("register", ["grain"])), (SETUPS[1], ("select", ["coins"]))):
+        case = _run_case(_v1_audit("subset", s), source, 2, ["credited"])
+        case["rule"] = {"grain": P.template_instance_query(PAIR.id), "k": 1, "replay": f"rate:3/{s.population}",
+                        "rule": "two-stage"}
+        out = run(copy.deepcopy(case))
+        assert D.replay(RUN, case, pieces) == ("output", D.canonical(out)), (s, out)
+        assert (out.get("step"), out.get("codes")) == want, out
 
 
 #: The public files Flock's producers wrote, recorded in `tests/verity/protocols/proof/flock/prover`' fetched fixtures

@@ -352,7 +352,8 @@ def test_a_statement_of_a_member_the_sample_missed_is_refused_by_both_before_any
 def test_strata_that_cover_the_units_out_of_order_pass_both_population_checks_under_a_subset_design(tmp_path):
     """PAIR, TRIPLE, PAIR: the strata `PAIR [0, 2) [5, 7)` and `TRIPLE [2, 5)` are a cover of the units, not the units in
     order stratum by stratum. Under the parameters' subset design both sides take them (`Slots.popCovers`,
-    `members.subset_design`) and end, as on an in-order window, at the first member's stand-in public file; under a
+    `members.subset_design`) and end, as on an in-order window, at the first member's stand-in public file, the law
+    stated as the rate `rate:2/7` as the subset object it resolves to (`OneStage.design`, `members.resolved`); under a
     registration whose law is stratified both refuse it by name, the registration's law named (`STRATA_DESIGN`)."""
     c = f"{PAIR.id}/c1"
     ports = (f"{A}/out", f"{B}/out", f"{c}/out")
@@ -364,6 +365,8 @@ def test_strata_that_cover_the_units_out_of_order_pass_both_population_checks_un
     why, (run, refused) = a.ask(tmp_path / "cover")
     assert run is None and why == M.run_reason(run, refused), (why, refused)
     assert M.POPULATION_ORDER not in why and "partition:" not in why, why
+    rated, (run, refused) = a.ask(tmp_path / "cover-rate", params=a.params | {"law": "rate:2/7"})
+    assert run is None and rated == M.run_reason(run, refused) == why, (rated, refused)
     a = Audit("members-twin-cover-law", ports=ports, setup=s, units={A: [[0, 2]], B: [[2, 5]], c: [[5, 7]]},
               trees={PAIR.id: 4, TRIPLE.id: 3}, law={"k": 2, "law": "stratified"})
     why, (run, refused) = a.ask(tmp_path / "cover-law")
