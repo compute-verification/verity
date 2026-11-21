@@ -991,7 +991,7 @@ def stage(served: Path, mm: dict, files: tuple[dict, dict], tmpl_unit_bin: str |
             raise RuntimeError(f"member {mm['k']}'s prover's file is not under the header its public file was held to")
 
 
-def member_form(mine: CS.Binding, rec: dict) -> tuple[list, dict[str, dict]] | str:
+def member_form(a: argparse.Namespace, mine: CS.Binding, rec: dict) -> tuple[list, dict[str, dict]] | str:
     """What the per-member form holds each member's public file to (`members.population_why`), read off the verifier's
     window ``mine`` and the docket ``rec``: the docket's strata and each member's slice of the record
     (`members.slices`, Lean's `OneStageZk.Member.slice`: its units, the roots the record names under its name, the
@@ -1005,7 +1005,9 @@ def member_form(mine: CS.Binding, rec: dict) -> tuple[list, dict[str, dict]] | s
     record = {**rec, "roots": [r for r in rec["roots"] if r.get("port") != CS.TABLE_PORT]} if mine.row_tables else rec
     try:
         return P.strata(mine.program, mine.query), MB.slices({m.key: [[m.base, m.base + m.n]] for m in mine.members}, record,
-                                                         program=mine.program, query=mine.query)
+                                                         program=mine.program, query=mine.query,
+                                                         window_root=a.window_root,
+                                                         tied=MB.tied_gates(mine.program, verifying(a)))
     except (P.QueryRefused, ValueError) as e:
         return str(e)
 
@@ -1076,7 +1078,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     files = (json.loads((served / "window.json").read_text()), rec)
     roots = {r["port"]: r for r in rec["roots"]}
     progress("written", t_audit, members=len(mine.members), population=n_all)
-    form = member_form(mine, rec)
+    form = member_form(a, mine, rec)
     progress("member-form", t_audit, members=len(mine.members), why=form if isinstance(form, str) else None)
     members, publics, checks, composed, programs_ok, kept, read, makes = [], {}, {}, {}, {}, {}, set(), {}
     door = getattr(a, "door_lower", None)
