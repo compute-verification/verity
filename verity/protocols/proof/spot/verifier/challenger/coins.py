@@ -17,9 +17,7 @@ coins are another family's, and a prover that reads a sample and commits again h
 of a verifier that names the family and the window's root itself, which nothing here can check: a verifier that read either
 from a file the prover wrote would give the prover its pick among the families it reserved.  So a caller that builds its
 stream again from a prover's hand-off names both from the docket's record and layout and refuses a hand-off that
-names another.  vLLM's legacy replay
-challenge derives its own (`verity_vllm.commit.challenge.replay_key`, under the domain
-`verity/sampled-proofs/vu-sample/v1`) until its re-baseline.
+names another.
 
 A window's seed salt is a family of its own (`SEED_SALT_FAMILY`), which no sample reads: one coin, released after the
 window's open root, before the window serves (`draw_seed_salt`), and read back by the verifier from the challenger's log

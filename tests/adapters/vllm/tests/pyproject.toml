@@ -137,10 +137,6 @@ parts = 3
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
 
 [[tool.verity.tests.reads]]
-tests = ["check/test_challenge_seeds.py"]
-paths = ["adapters/vllm/verity_vllm", "verity/circuits"]
-
-[[tool.verity.tests.reads]]
 tests = [
     "check/test_g4_addressed_instances.py",
     "check/test_verdict.py",
