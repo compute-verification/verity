@@ -6,7 +6,7 @@ script:
 * that arm takes a tie's pins as given or refused only on `weights-tie pins`' own answer, never on a traceback;
 * each partition file (`partitions`: this benchmark's, the one-stage audit's and each one the script names) states a
   rate a stream takes or is listed as still stating a fixed design (`FIXED`), which an audit on a challenger's coins
-  (`prove_path.py audit`, `a5.py --challenger`) refuses at the rule check and a served window's audit from its records
+  (`a5.py --challenger`) refuses at the rule check and a served window's audit from its records
   (`records_audit.py audit`) refuses by name. The list only shrinks."""
 from __future__ import annotations
 
@@ -73,7 +73,7 @@ def test_the_weights_ties_arm_states_the_rate_of_every_unit_of_the_tie():
     states the rate that names it, ``work-rate:N/N`` with N the units its verifier's tie names: a rate a stream takes,
     whose sampling design over N proof blocks is work with K = N, every unit sampled, at any N. A rate of fewer would name
     another design than the tie's window registers, and leave units unproved."""
-    arm = RUN_SH.read_text().split('elif [ -n "${PP_WEIGHTS_TIE:-}" ]; then', 1)[1].split("\nelse\n", 1)[0]
+    arm = RUN_SH.read_text().split('if [ -n "${PP_WEIGHTS_TIE:-}" ]; then', 1)[1].split("\nfi\n", 1)[0]
     rules = re.findall(r"records_audit\.py audit [^\n]*--sampling-design (\S+)", arm)
     assert rules == ["work-rate:$units/$units"], (
         f"{RUN_SH.name}'s weights tie arm no longer states the rate of every unit of the tie to its records audit "
@@ -104,7 +104,7 @@ PINS = {
 def test_the_weights_ties_arm_takes_only_pins_own_answer_and_a_traceback_is_no_refusal(tmp_path):
     """The tie passes only on status 0, its ``{"pinned": true, ...}`` line and the pins. A refusal, a traceback or a
     kill is not that, and the arm says PINS ERROR."""
-    arm = RUN_SH.read_text().split('elif [ -n "${PP_WEIGHTS_TIE:-}" ]; then', 1)[1].split("\nelse\n", 1)[0]
+    arm = RUN_SH.read_text().split('if [ -n "${PP_WEIGHTS_TIE:-}" ]; then', 1)[1].split("\nfi\n", 1)[0]
     fn = re.search(r"^  pins_answered\(\) \{.*?^  \}$", arm, re.M | re.S)
     assert fn and "pins_answered $pinned " in arm and "PINS ERROR" in arm, (
         f"{RUN_SH.name}'s weights tie arm no longer judges `weights-tie pins` by `pins_answered`")
