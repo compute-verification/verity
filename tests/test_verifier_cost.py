@@ -25,6 +25,11 @@ iterations, as `InferenceOnlyCheck.Desc` does (its docstring), so a Definition's
 The scan is a net for the forms that have occurred, and no regex sees every spelling: the cost rule is held finally by the
 cost measurements and the count theorems.
 
+A `walkAtMost` bounds one loop and not the product of loops: `InferenceOnlyVerifier.Desc`'s bounded walks nest (a
+node's members, a member's runs, each resolved through `down` again), so this scan passing on it says that no single
+walk passes `WALK`, and its total work is still not bounded in the description's size. That stays open until its
+recursion spends one step budget.
+
 What may stay is listed in ``ALLOWED``, one line of reason each: the gate-by-gate references a description-sized
 verifier is difftested against, and the walks still open. An entry that no longer matches anything fails too.
 
