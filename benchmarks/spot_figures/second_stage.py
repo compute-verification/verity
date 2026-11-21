@@ -1,6 +1,6 @@
 """The coins a two-stage design's second stage reads, and the chance it refuses an honest run.
 
-The second stage (Lean's `Spot.Select.selectSecond`) samples `ks[t]` of the `ns[t]` proof
+The second stage (`service.select_second`, Lean's `Spot.Select.selectSecond`) samples `ks[t]` of the `ns[t]` proof
 blocks of each cell: template `t` of the check, in each sampled replay block.  A cell's sampler first reads
 `2 k_t · width(n_t) + 64` bytes of the stage's coins (`coins.draw_first`, Lean's `Flock.Draw.Stratum.need`), and as
 many again only where it rejects a word, which it does a uniform word with probability under 2^-64.  Lean bounds what

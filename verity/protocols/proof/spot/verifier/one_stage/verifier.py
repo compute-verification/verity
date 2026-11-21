@@ -53,7 +53,7 @@ import tempfile
 import threading
 from fractions import Fraction
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Iterable, Mapping, NoReturn, Sequence
 
 from verity.circuits import codec
 from verity.circuits.codec import canonical_json
@@ -253,6 +253,16 @@ def lean(fn: str, value: Any) -> dict[str, Any]:
     except LeanError as e:
         return {"refused": str(e), "answered": False}
     return body if kind == "output" else {"refused": body}
+
+
+#: the goal under which a check `not_written` stands for gets its Lean interface
+GOAL = "proofs/spot-two-stage-sound"
+
+
+def not_written(fn: str, lean: str) -> NoReturn:
+    """The verdict of record of `fn`, the Lean `lean`'s, which no interface here reaches yet: raises
+    `NotImplementedError` naming `GOAL`. The Python twin beside `fn` answers the difftest only, never in its place."""
+    raise NotImplementedError(GOAL)
 
 
 #: The most bytes one `coins` request takes (the Lean's `COINS_MAX`).
@@ -492,6 +502,21 @@ def select(python: Mapping[str, Any], read: bytes, rule: Mapping[str, Any], prog
     return dict(got["draw"] if RECORD_VERDICT == "lean" else python), Verdict(True, (), {}, verifiers)
 
 
+def select_second(python: Mapping[str, Any], read: bytes, sample: Sequence[int], ns: Sequence[int],
+                  ks: Sequence[int]) -> tuple[dict[str, Any], Verdict]:
+    """A two-stage design's second stage by the verifier: the Lean's `Select.selectSecond` on `read`, the bytes of the
+    challenger's coins that the Python sample `python` (`service.select_second`'s) read in order, over the replay sample
+    `sample`, each template's `ns[t]` proof blocks in each replay block, its cell, and `ks[t]` of them sampled in each;
+    compared as `select` compares."""
+    got = lean("select_second", {"sample": list(sample), "ns": list(ns), "ks": list(ks), "source": read.hex()})
+    mine = {"draw": dict(python), "read": len(read)}
+    verifiers = {"of_record": RECORD_VERDICT, "lean": {"refused": got["refused"]} if "refused" in got else
+                 {"read": got.get("read")}, "python": {"read": len(read)}}
+    if "refused" in got or got.get("read") != len(read) or not _same(got.get("draw"), python):
+        return dict(python), Verdict(False, (DISAGREE,), {DISAGREE: {"lean": dict(got), "python": mine}}, verifiers)
+    return dict(got["draw"] if RECORD_VERDICT == "lean" else python), Verdict(True, (), {}, verifiers)
+
+
 def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, query: Mapping[str, Any],
         sampling_design: Mapping[str, Any], scheme: str, ports: Mapping[str, Mapping[str, Any]], leaf_layer: str | None,
         anchors: Sequence[Any], log: Iterable[Mapping[str, Any]], work_table: Mapping[str, Any] | None,
@@ -691,6 +716,6 @@ def audit_record(docket: Mapping[str, Any], receipt: Mapping[str, Any], draw: Ma
     return rec
 
 
-__all__ = ["BUILD_LOCK", "COINS_MAX", "DISAGREE", "EXE", "LeanError", "PACKAGE", "RECORD_VERDICT", "audit_record",
+__all__ = ["BUILD_LOCK", "COINS_MAX", "DISAGREE", "EXE", "GOAL", "LeanError", "PACKAGE", "RECORD_VERDICT", "audit_record",
            "check", "check_draw", "check_proved", "check_public", "check_verdicts", "coins", "executable", "fleet", "lean",
-           "matches_public", "run", "select", "stream"]
+           "matches_public", "not_written", "run", "select", "select_second", "stream"]

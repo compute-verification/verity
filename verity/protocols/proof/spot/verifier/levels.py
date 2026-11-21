@@ -19,7 +19,7 @@ BUILT = (1, 2)
 NOT_PROVED = "levels-not-proved"
 TWO_LEVELS_REFUSED = (f"{NOT_PROVED}: the parameters name 2 levels: the two-level audit is built and refused, since no "
                       "soundness theorem covers its accept; an audit is accepted at one level")
-#: the parameters only two levels' have (`VStar.Recursive.SampledTwo`): the boundary docket, the interior and the rule
+#: the parameters only two levels' have (`sampled_two_case.assemble`): the boundary docket, the interior and the rule
 TWO_LEVEL_KEYS = ("boundary", "interior", "rule")
 #: the boundary commitment's record format (`verity_vllm.records.boundary_commit.SCHEMA`), whose spans are outer blocks
 BOUNDARY_RECORD = "verity-vllm/boundary-rows/v1"

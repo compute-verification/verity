@@ -112,7 +112,7 @@ def two(cells: Iterable[Cell], k: Mapping[int, float], replay_blocks: float, q: 
     With `served`, `fanout` is the registered Program's, as its docket verdict publishes it
     (`Verdict.fanout`, `WindowCommitmentRecord.fanout`, `partition.fanout`), and has no default (`ValueError` without
     it); the sets' form reads none.  So is `returned`, the bits one replay block of the registered Program returns, as
-    its docket publishes them (`WindowCommitmentRecord.returned`, Lean's `SecondStage.returnedBits`): they are what
+    its docket publishes them (`WindowCommitmentRecord.returned`, `second_stage.returned_bits`): they are what
     its request is served, so a cap below them is refused, and so is the patterns' form at any other `served`, since
     it reads each replay block as returning exactly `served` bits rounded up (`ValueError`, ``served-cover``:
     `Properties.Spot.ServedCover`, `RequestsCover`).  Lean searches θ from `theta` unless `search` is None."""

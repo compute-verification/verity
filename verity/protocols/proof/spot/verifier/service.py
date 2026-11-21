@@ -50,8 +50,35 @@ verifier's `Spot.Select` ports, held to them by its difftest on fixed coins.
 
 **A two-stage sampling design** (`TwoStage(grain, replay, k)`, `Stream(replay=)`). The docket is the boundary
 commitment: its population is the replay blocks, the instances of the replay block's Definition under the replay grain's
-query. `register` refuses every such docket after R1 to R8, before any coin, by name (`levels-not-proved`,
-`levels.TWO_LEVELS_REFUSED`): the two-level audit is built and refused.
+query, and its roots are the boundary values (phase `serve`). The first stage (`select`) samples replay blocks by the
+`replay` sampling design, a rate sampling design: the replay sample. The prover then replays each sampled replay block and commits its
+interior (phase `interior`) in the interior docket (`register_interiors`), over the Q·n_rho proof blocks of the Q
+sampled replay blocks, registered after the docket (`previous`) and before the second stage's coins. A replay
+block holds n_t instances of each template t of the check (`replay_cells`, the check naming them in the order of their
+first instance), and the interior is template-major (`Stream.interior_program`): template t's Q·n_t proof blocks from
+off_t = Q·Σ_{t'<t} n_t', replay block `sample[i]`'s instances of it [off_t + i·n_t, off_t + (i+1)·n_t), one cell. The
+second stage (the second `select`, on the interior docket) samples k_t proof blocks in each cell of template t on
+fresh coins (`second_sampling_design`: one stratum per cell; `second_counts`), and its sample is proved. The outcome holds both
+audit records and accepts when both do; its profile counts incorrect proof blocks at each replay block's footprint,
+which the boundary commitment fixes before any coin (`IntegrityProfile`'s two levels). One-stage is `SamplingDesign`: a two-stage design whose replay blocks are single proof blocks is
+refused, so each design has one form. Both stages' samples are the Lean verifier's (`Select.select`,
+`Select.selectSecond`), and its knowledge soundness at Flock's masked record is `SamplingDeploy.ksTwo_code`'s, under
+the premises that theorem takes.
+
+**The circuit files.** A two-stage run's second-stage sessions each verify against their template's circuit file: the
+flat Flock circuit file of one instance of it (`verity_flock.class_statement.UnitStager`, `unit_lowering` at
+`structural=False`, as one-stage's sessions verify against theirs), which binds the interior docket's partition
+and program digests. The auditor names each file by its SHA-512 in the run's interior params, `proofs.templates`
+(`template_circuits`), beside the header of the template's registered reference statement and the registered reads it
+reads, which round 2 takes as given and holds each statement's header and registered reads to but for the run's fields
+(`second_stage.RUN_FIELDS`, `second_stage.blank_reads`), and, for a template that reads a table, the record that the
+template check accepted the file as that read (``read``, `template_reads`: ``flock-read-tmpl check V H`` on the file,
+run where the params are made), and reproduces the file from public data
+alone: the template's Definition and rows, the interior's
+partition and program digests, the values it reads (`reads`), its AND gates per stage (`stage_ands`) and the leaf
+scheme, in a process where `FLOCK_PACK_WORDS`, `FLOCK_CORE_ROWS`, `FLOCK_PLAIN_LEAVES`, `FLOCK_OWN_ROWS` and
+`FLOCK_GEMM_TILE` are unset, since each changes the file. The interior's digests depend on Q, which a rate sampling design samples, so
+the names are each run's and are handed to `outcome`.
 
 **The salt and the docket deadline.** `Stream.salt` issues the epoch's salt coin once, from the challenger's own
 coins, and reads its release on the challenger's clock (`salted_at`). `Stream.salt_released` instead records a salt
@@ -138,16 +165,19 @@ import math
 import re
 import time
 from dataclasses import dataclass, field
+from fractions import Fraction
 from typing import Any, Callable, Iterable, Mapping, NoReturn, Sequence, TypeVar
 
 from verity.commitments import docket_digest as DD
 from verity.circuits import population as PN
-from verity.circuits.codec import canonical_json
+from verity.circuits.codec import canonical_json, descriptor_id
 from verity.circuits.defs import SpecializedDefinition
+from verity.circuits.partition import Level
 from verity.circuits.program import Program
-from verity.protocols.proof.spot.verifier.profile import IntegrityProfile
+from verity.commitments import history as HT
+from verity.protocols.proof.spot.verifier.profile import Bernoulli, IntegrityProfile, Subset
 
-from . import levels as LV, window_place as WP
+from . import levels as LV, second_stage as SS, window_place as WP
 from verity.protocols.proof.spot.verifier.one_stage import (
     audit as A,
     draw as D,
@@ -328,8 +358,9 @@ class TwoStage:
     docket's program are its replay blocks. `replay`: the first stage's sampling design over them, a rate sampling design.
     `k`: the proof blocks the second stage samples in each cell (a sampled replay block's instances of one template), on
     fresh coins after the interior docket: one count for every template, or `{template's descriptor id: k_t}`
-    naming each of the check's templates once. A `Stream` refuses replay blocks of one proof block (`SamplingDesign` is
-    that design)."""
+    naming each of the check's templates once. A cell of fewer proof blocks than its count is proved whole
+    (`second_counts`); a `Stream` refuses a design that proves every cell whole, which would prove whole replay blocks,
+    and replay blocks of one proof block (`SamplingDesign` is that design)."""
 
     grain: Mapping[str, Any]
     replay: str
@@ -358,6 +389,11 @@ def boundary_values(values: Sequence[Value]) -> tuple[Value, ...]:
     """The values a docket commits: under a two-stage design, the boundary commitment's, every phase but
     `interior`."""
     return tuple(v for v in values if v.phase != "interior")
+
+
+def interior_values(values: Sequence[Value]) -> tuple[Value, ...]:
+    """The values a two-stage design's interior docket commits: phase `interior`, and the registered ones."""
+    return tuple(v for v in values if v.phase == "interior" or v.registered)
 
 
 @dataclass(frozen=True)
@@ -518,8 +554,10 @@ class WindowCommitmentRecord:
     is the fan-out F its docket verdict published on the challenger's program (R8, `Verdict.fanout`): a two-stage
     docket's is its replay grain's, the N at which `plancheck.two` prices it in the capped form.
     `rests_on_period_check` is the tied values its verdict let through (`Verdict.rests_on_period_check`): its acceptance
-    rests on the network period check. `returned` is the bits one replay block of a two-stage docket returns, which
-    `plancheck.two` prices; a stream sets none, since it refuses every two-stage docket."""
+    rests on the network period check. `returned` is the bits one replay block of a two-stage docket returns,
+    counted on the challenger's own program (`second_stage.replay_returned`): no served cap S below it prices the
+    docket (`plancheck.two`'s `returned`). None for a one-stage docket, an interior one, and a replay
+    block whose links can't be derived."""
 
     record: Mapping[str, Any]
     receipt: Mapping[str, Any]
@@ -535,11 +573,14 @@ class WindowCommitmentRecord:
 @dataclass(frozen=True)
 class Draw:
     """The challenger's one sample for a docket: `sampling_design` (its sampling design, expanded over the challenger's own program) and
-    `draw`, one-stage's sample object (with a work sample's `closure`), which goes to the ZK server."""
+    `draw`, one-stage's sample object (with a work sample's `closure`), which goes to the ZK server. A two-stage design's
+    second stage is the sample of its interior docket, and `replay_sample` is the first stage's, the sample of
+    the docket it follows."""
 
     docket: WindowCommitmentRecord
     law: Mapping[str, Any]
     draw: Mapping[str, Any]
+    replay_sample: Draw | None = None
 
     @property
     def units(self) -> list[int]:
@@ -911,8 +952,8 @@ def _table_entry(p: str, e: Any) -> bool:
 def pinned_tables(proofs: Mapping[str, Any] | None) -> tuple[tuple[str, Any], ...]:
     """The registered tables the auditor's params ``proofs`` pin, ``(parameter, entry)`` each, in the parameters' order,
     for params `template_circuits` accepted: the entries the tables' registration names, which the auditor pinned
-    before any coin and round 2 takes a read's table from beside round 1's record. The Lean verifier's
-    `Run.pinnedTables` is this."""
+    before any coin and round 2 takes a read's table from beside round 1's record (`second_stage.Own.tables`,
+    `second_stage._one_table`). The Lean verifier's `Run.pinnedTables` is this."""
     ts = (proofs or {}).get("tables")
     return tuple(sorted(ts.items())) if isinstance(ts, Mapping) else ()
 
@@ -944,6 +985,76 @@ def tables_served(record: Any, tables: Iterable[tuple[str, bytes, bytes]]) -> bo
                for name, root, domain in tables)
 
 
+def second_counts(k: int | Mapping[str, Any], ids: Sequence[str], ns: Sequence[int]) -> tuple[int, ...]:
+    """The second stage's count in each cell of template t, in the check's order: the rule's `k` (or its k_t), and n_t for
+    a cell of fewer proof blocks (proved whole). Raises `ValueError` for a map that doesn't name each of the check's
+    templates `ids` once. The Lean verifier's `Select.Counts.over` is this."""
+    if isinstance(k, Mapping):
+        if set(k) != set(ids):
+            raise ValueError(f"a two-stage rule's counts name each of the check's templates once: {sorted(k)} vs {list(ids)}")
+        return tuple(min(k[t], n) for t, n in zip(ids, ns))
+    return tuple(min(k, n) for n in ns)
+
+
+def _offsets(q: int, ns: Sequence[int]) -> list[int]:
+    """Each template's first interior proof block, over a replay sample of `q`: Q·Σ_{t'<t} n_t'."""
+    return [q * sum(ns[:t]) for t in range(len(ns))]
+
+
+def cell_parts(q: int, ids: Sequence[str], ns: Sequence[int]) -> tuple[SS.Part, ...]:
+    """The parts a replay block's cells give a sample of `q` replay blocks: the check's templates `ids`, in that order,
+    template t the q·n_t slots from q·Σ_{t'<t} n_t'. An interior docket's strata are these parts, each one range
+    (`interior-parts`). The Lean verifier's `Run.cellParts` is this."""
+    return tuple(SS.Part(t, q * sum(ns[:i]), ns[i] if i < len(ns) else 0) for i, t in enumerate(ids))
+
+
+def second_sampling_design(sample: Sequence[int], ns: Sequence[int], ks: Sequence[int]) -> dict[str, Any]:
+    """The second stage's sampling design over the interior's len(sample)·Σ n_t proof blocks, template-major: template
+    t's being [off_t, off_t + Q·n_t), off_t = Q·Σ_{t'<t} n_t', and sampled replay block `sample[i]`'s instances of it
+    [off_t + i·n_t, off_t + (i+1)·n_t), one cell. One stratum per cell, template by template and in each by sampled
+    replay block, named `r/t` (replay block r of the docket, template t of the check's), `ks[t]` of the cell's
+    `ns[t]` proof blocks in each; the strata tile [0, Q·Σ n_t) in order. The stratified sampling design sizes each stratum's count
+    in proportion to its size, which cells of several templates' sizes don't follow, so the sampling design is the work sampling design at
+    k = 1 and unit work: its rule (`draw.work_k`) gives each stratum max(floor, 1) capped at its size, and each cell's
+    floor is its count. The Lean verifier's `Select.secondSamplingDesign` is this."""
+    off = _offsets(len(sample), ns)
+    return {"law": "work", "k": 1,
+            "strata": [{"template": f"{r}/{t}", "units": [[off[t] + i * n, off[t] + (i + 1) * n]], "work": 1,
+                        "floor": ks[t], "k": ks[t]}
+                       for t, n in enumerate(ns) for i, r in enumerate(sample)]}
+
+
+def select_second(sample: Sequence[int], ns: Sequence[int], ks: Sequence[int], coins: Callable[[int], bytes], *,
+                  sampler: Sampler | None = None) -> dict[str, Any]:
+    """The second stage: `second_sampling_design`'s sample object over the replay sample's proof blocks, `sampler`'s sample or
+    `coins.draw_first` on `coins` (the challenger's, opened after the interior docket's digest), held to
+    `draw.check_draw`. Raises `ValueError` for a replay sample that isn't ascending replay blocks, each once, cells that
+    aren't one or more templates' of at least one proof block each, a replay block of fewer than two proof blocks (its
+    design is `SamplingDesign`'s), a count not in [1, n_t], counts that prove every cell whole (whole replay blocks), a sample not
+    well formed under its sampling design, and where `draw_first` does. The Lean verifier's `Select.selectSecond` is
+    this."""
+    if not (sample and all(type(r) is int and r >= 0 for r in sample) and all(a < b for a, b in zip(sample, sample[1:]))):
+        raise ValueError("a replay sample is one or more replay blocks, ascending, each once")
+    if not (ns and len(ks) == len(ns) and all(type(n) is int and n >= 1 for n in ns)):
+        raise ValueError("a replay block's cells are one or more templates', each of at least one proof block, with a "
+                         "count each")
+    if sum(ns) < 2:
+        raise ValueError(f"a replay block of {sum(ns)} proof blocks is a proof block: its rule is 'law'")
+    if not all(type(k) is int and 1 <= k <= n for k, n in zip(ks, ns)):
+        raise ValueError(f"the second stage samples 1 to n_t of each cell's n_t proof blocks: counts {list(ks)} over "
+                         f"cells of {list(ns)}")
+    if list(ks) == list(ns):
+        raise ValueError(f"counts {list(ks)} prove every cell of {list(ns)} whole, and so whole replay blocks")
+    sampling_design, m = second_sampling_design(sample, ns, ks), len(sample) * sum(ns)
+    units = sorted(int(u) for u in (sampler(dict(sampling_design), m) if sampler is not None
+                                    else draw_first(OwnRandomness(coins), sampling_design, m)["units"]))
+    obj = {**sampling_design, "population": m, "units": units}
+    v = D.check_draw(obj, {"population": m}, sampling_design)
+    if not v.ok:
+        raise ValueError(f"the second stage's draw is not well formed under its law: {list(v.codes)}")
+    return obj
+
+
 @dataclass
 class _Entry:
     docket: WindowCommitmentRecord
@@ -968,6 +1079,16 @@ class _Entry:
     sessions: list[str] | None = None
     outcome: Outcome | None = None
     session: ProofRun | None = None
+    #: under a two-stage design: the interior docket, its population program and what `register_interiors`
+    #: handed R1-R8 (as `copies`, `seed_salt` and `history`), then the second stage's sample and the coins it read
+    interior: WindowCommitmentRecord | None = None
+    interior_program: Program | None = None
+    interior_copies: tuple[Any, ...] = ()
+    interior_seed_salt: str | None = None
+    interior_history: Mapping[str, Any] | None = None
+    second: Draw | None = None
+    second_read: bytes | None = None
+    second_family: str | None = None
 
 
 def _reading(x: Any) -> float | None:
@@ -1043,8 +1164,8 @@ def _need(op: Mapping[str, Any], k: str) -> Any:
 
 
 #: The ops of a stream's rules, each `_Control`'s method of that name.
-_OPS = ("ready", "salt", "salt_released", "register", "select", "session", "deliver", "deliver_session", "outcome",
-        "halt")
+_OPS = ("ready", "salt", "salt_released", "register", "select", "interiors", "second", "session", "deliver",
+        "deliver_session", "outcome", "halt")
 #: What the stream's rules hold of an empty stream.
 _EMPTY = {"size": 0, "opened": [], "failures": 0, "salted_at": None, "ended": None, "halted": None, "entries": []}
 
@@ -1058,6 +1179,7 @@ class _Control:
 
     def __init__(self, params: Mapping[str, Any], state: Mapping[str, Any]) -> None:
         self.params = params
+        self.two_stage = params.get("two_stage") is True
         self.deadline = float(params["proof_deadline"])
         rd = params["registration_deadline"]
         self.registration_deadline = None if rd is None else float(rd)
@@ -1167,6 +1289,34 @@ class _Control:
         e.update(draw=draw, proved=proved, drawn_at=at)
         return {"ok": None}
 
+    def _staged(self, op: Mapping[str, Any]) -> dict[str, Any]:
+        if not self.two_stage:
+            _no("rule", "a one-stage stream has no interior registration or second stage")
+        e = self._drawn(op)
+        if e["final"]:
+            _no("final", {"order": op["order"]})
+        if e["delivered"]:
+            _no("delivered", {"order": op["order"]})
+        return e
+
+    def _interiors(self, op: Mapping[str, Any]) -> dict[str, Any]:
+        e = self._staged(op)
+        if e.get("interior") is not None:
+            _no("interior-registered", {"order": op["order"]})
+        self._checks(op)
+        e["interior"] = _token(_need(op, "interior"), "interior")
+        return {"ok": None}
+
+    def _second(self, op: Mapping[str, Any]) -> dict[str, Any]:
+        e = self._staged(op)
+        if e.get("interior") != _token(op.get("interior"), "interior"):
+            _no("no-interior", {"order": op["order"]})
+        if e.get("second") is not None:
+            _no("drawn", {"order": op["order"]})
+        self._checks(op)
+        e["second"] = _token(_need(op, "second"), "second")
+        return {"ok": None}
+
     @staticmethod
     def _draws(op: Mapping[str, Any]) -> list[list[Any]]:
         ds = op.get("draws")
@@ -1185,6 +1335,8 @@ class _Control:
             _no("covered", {"order": order, "rounds": [d[0] for d in e["session"]]})
 
     def _session(self, op: Mapping[str, Any]) -> dict[str, Any]:
+        if self.two_stage:
+            _no("rule", "each sample of a two-stage stream is proved after its own interior registration")
         draws = self._draws(op)
         if not 1 <= len(draws) <= self.params["rounds"]:
             _no("rounds", {"rounds": len(draws), "most": self.params["rounds"]})
@@ -1225,6 +1377,11 @@ class _Control:
         self._open_entry(e, op["order"])
         self._sessions(op)
         late = self._late(e, _float(_need(op, "now"), "now"))
+        if self.two_stage and not late:
+            if e.get("second") is None:
+                _no("second", {"order": op["order"]})
+            if op.get("second") != e["second"]:
+                _no("not-drawn", {"order": op["order"]})
         e["delivered"] = True
         return {"ok": self._finish(e, LATE) if late else None}
 
@@ -1447,7 +1604,7 @@ class Stream:
     selection reads coins refuses any other source (`NO_OWN_COINS`). Every outcome's run by the verifier needs the
     coins' evidence (`outcome`'s `coins`), refusing a sample without it, and holds it to the family the stream read the
     sample from (`family`: the coins' `label` at the sample; a family's coins follow one docket, so each
-    docket's sample reads a family of its own). `key` is the challenger's key and `main`
+    docket's sample, and a second stage's, reads a family of its own). `key` is the challenger's key and `main`
     the verifier's copy of main's first-parent history, which the stream is made with and holds every outcome's evidence
     to: the evidence names no key, and the copy of main's history it carries must be the stream's
     (`coins.coins_reason`), so whoever wrote it, an accepted sample's coins are a session's under the key the stream
@@ -1492,8 +1649,16 @@ class Stream:
     `outputs`), say: the stream's log starts with them, in order, so R6 and R7 read them, and none of them is sampled.
 
     Under a two-stage design, `replay` is the challenger's own copy of the replay block's Definition: the grain is its
-    template query, each docket's population program is its N instances, and `register` refuses each docket by name
-    (the module docstring).
+    template query, each docket's population program is its N instances, and its `n_rho` proof blocks are the
+    instances of `unit` (a window's templates) in its own Program under the check's query, `cells` of them each
+    template's (n_t, `replay_cells`) and `counts` the second stage's in each of its cells (k_t, `second_counts`). A
+    docket is then the boundary commitment and its `select` the first stage; `register_interiors` takes the
+    interior docket (`interior_program`), a second `select` on it is the second stage, and `deliver` and
+    `outcome` take that sample (the module docstring). A window's `values` are then the interior's, and so are its
+    `span_values`, `(name, leaves, width)` each in `values`' form with `leaves` a sampled span's: the interior program
+    over a replay sample of Q takes each at `leaves * Q`, after `values`, since under a rate sampling design Q is what the
+    first stage's coins chose (a table read's supplied root, one `Digest` a sampled span, say); the stream's digest names
+    them.
     """
 
     def __init__(self, spec: Spec, unit: SpecializedDefinition | Sequence[SpecializedDefinition], *, budget: int, delta: float, challenger: str,
@@ -1501,7 +1666,8 @@ class Stream:
                  clock: Callable[[], float] = time.monotonic,
                  sampler: Sampler | None = None, rounds: int = 1, prover: str | None = None,
                  values: Sequence[tuple[str, int, int | Sequence[int]]] = (), log: Sequence[Mapping[str, Any]] = (),
-                 replay: SpecializedDefinition | None = None, program: Program | None = None) -> None:
+                 replay: SpecializedDefinition | None = None, program: Program | None = None,
+                 span_values: Sequence[tuple[str, int, int | Sequence[int]]] = ()) -> None:
         if spec.check.window is not None or spec.check.deadline is not None:
             raise ValueError("the service doesn't prove a window statement or run a timed session yet")
         if spec.check.proof_deadline is None:
@@ -1529,12 +1695,15 @@ class Stream:
             raise ValueError("a stream drawing from the challenger's coins takes no sampler, which would draw instead")
         if not (isinstance(coins, ChallengerCoins) or sampler is not None or isinstance(spec.selection, All)):
             raise ValueError(NO_OWN_COINS)
-        values = _stream_values(values)
+        values, span_values = _stream_values(values), _stream_values(span_values)
         if values and isinstance(unit, SpecializedDefinition):
             raise ValueError("a stream of one template's instances takes no values: a window with values is a mixed "
                              "population of its templates (give its unit as a sequence of them)")
-        if values:
-            PN.mixed_population_program([(u, 1) for u in units], values=values)
+        if span_values and (isinstance(unit, SpecializedDefinition) or replay is None):
+            raise ValueError("a stream's per-span values are a two-stage window's interior values: give its unit as a "
+                             "sequence of templates and its replay block")
+        if values or span_values:
+            PN.mixed_population_program([(u, 1) for u in units], values=values + span_values)
         if program is not None:
             if isinstance(unit, SpecializedDefinition) or values or replay is not None:
                 raise ValueError("a stream's program is a window's, of its templates, given in place of their mixed "
@@ -1554,15 +1723,16 @@ class Stream:
         except (AttributeError, KeyError, TypeError, ValueError) as e:
             raise ValueError("a stream's earlier log is the prover's records, each a JSON object whose registered "
                              f"entries name their value, domain and root: {type(e).__name__}: {e}") from None
-        self.replay, self.n_rho = replay, None
+        self.replay, self.n_rho, self.cells, self.counts = replay, None, (), ()
         if isinstance(spec.selection, TwoStage):
-            self.n_rho = sum(self._replay_blocks(spec, replay, rounds))
+            self.cells, self.counts = self._replay_blocks(spec, units, replay, rounds)
+            self.n_rho = sum(self.cells)
         elif replay is not None:
             raise ValueError("only a two-stage stream has a replay block (Stream(replay=))")
         self.spec, self.unit, self.budget, self.delta, self.challenger = spec, unit, budget, delta, challenger
         self.query = spec.selection.grain if isinstance(spec.selection, TwoStage) else spec.check.query
         self.templates = None if isinstance(unit, SpecializedDefinition) else units
-        self.rounds, self.values, self.program = rounds, values, program
+        self.rounds, self.values, self.span_values, self.program = rounds, values, span_values, program
         self._coins, self._clock, self._sampler = coins, clock, sampler
         self.key, self.main = key, tuple(main)
         self.digest = _sha512({"format": STREAM, "spec": spec.digest(), "budget": budget, "delta": delta,
@@ -1570,11 +1740,13 @@ class Stream:
                                **({"prover": prover} if prover is not None else {}),
                                **({"coins": "challenger"} if isinstance(coins, ChallengerCoins) else {}),
                                **({"values": [list(v) for v in values]} if values else {}),
+                               **({"span_values": [list(v) for v in span_values]} if span_values else {}),
                                **({"program": P.program_digest(program)} if program is not None else {})})
         self.binding = None if prover is None else R._binding({"stream": self.digest, "prover": prover})
         self._params = {"budget": budget, "rounds": rounds,
                         "registration_deadline": _reading(spec.check.registration_deadline),
-                        "proof_deadline": float(spec.check.proof_deadline), "stream": self.digest}
+                        "proof_deadline": float(spec.check.proof_deadline), "stream": self.digest,
+                        **({"two_stage": True} if self.n_rho is not None else {})}
         self._rules: dict[str, Any] = {k: v for k, v in _EMPTY.items() if k != "entries"}
         self._rule_entries: list[dict[str, Any]] = []
         self._broken: Verdict | None = None
@@ -1594,9 +1766,11 @@ class Stream:
             self._logged(r, d)
 
     @staticmethod
-    def _replay_blocks(spec: Spec, replay: Any, rounds: int) -> tuple[int, ...]:
+    def _replay_blocks(spec: Spec, units: Sequence[SpecializedDefinition], replay: Any,
+                       rounds: int) -> tuple[tuple[int, ...], tuple[int, ...]]:
         """A two-stage stream's cells, each template's proof blocks in one replay block (`replay_cells`, n_t in the
-        check's order), once its copies fit the design; raises `ValueError` otherwise."""
+        check's order), and the second stage's count in each (`second_counts`), once its copies fit the design; raises
+        `ValueError` otherwise."""
         rule = spec.selection
         assert isinstance(rule, TwoStage)
         if not isinstance(replay, SpecializedDefinition):
@@ -1613,9 +1787,13 @@ class Stream:
             raise ValueError("a proof block of the replay block has no gates of its own") from e
         if len(gates) != sum(ns):
             raise ValueError("a proof block of the replay block has no gates of its own")
+        ks = second_counts(rule.k, [P.template_id(u) for u in units], ns)
+        if ks == ns:
+            raise ValueError(f"the second stage's counts {list(rule.k.values()) if isinstance(rule.k, Mapping) else rule.k}"
+                             f" prove every cell of {list(ns)} whole, and so whole replay blocks")
         if rounds != 1:
             raise ValueError("each sample of a two-stage stream is proved after its own interior registration: one round")
-        return ns
+        return ns, ks
 
     @property
     def failures(self) -> int:
@@ -1771,14 +1949,15 @@ class Stream:
         """The window's seed salt, sampled at the window's open, before it serves (`coins.draw_seed_salt`): the first coin
         of the challenger's seed-salt family (`coins`, a `coins.ChallengerCoins` over that family of the window's
         session), released after the window's open root `window_root`. Its release is read on the challenger's clock
-        (`seeded_at`) and logged (`epoch_log`). Each docket of the window (`register`'s `window_root`) is then held to
-        it by both verifiers: its window names it (`registration.SEED_SALT`), and a
+        (`seeded_at`) and logged (`epoch_log`). Each docket of the window (`register`'s and `register_interiors`'
+        `window_root`) is then held to it by both verifiers: its window names it (`registration.SEED_SALT`), and a
         window that names another, or none, is refused (`R6-seed-salt`), as is a seed salt where the stream drew none.
         Raises `Refused`: `seed-salted` (the window has its salt: nothing resamples it) or `seed-salt-late` (the stream
         received a docket of the window already); and `CoinError` where the sample fails."""
         if isinstance(window_root, str) and window_root in self._seed_salts:
             raise _refuse("seed-salted", {"window_root": window_root})
-        if isinstance(window_root, str) and any(window_root in e.copies[8:9] for e in self._entries):
+        if isinstance(window_root, str) and any(window_root in (*e.copies[8:9], *e.interior_copies[8:9])
+                                                for e in self._entries):
             raise _refuse("seed-salt-late", {"window_root": window_root})
         salt = draw_seed_salt(coins, window_root)
         seeded_at = self._clock()
@@ -1879,7 +2058,7 @@ class Stream:
                 return list(v.codes)
             salted_at = None if deadline is None else self._salted_at
             got["registration"] = self._registration(record, len(self._entries), salted_at, got.get("received_at"),
-                                                     v.fanout, v.rests_on_period_check)
+                                                     v.fanout, v.rests_on_period_check, self._returned(got["program"]))
             op["registration"] = _docket_token(got["registration"])
             return None
         d = self._decide(op, {"received_at": received, "checks": checks})
@@ -1917,20 +2096,30 @@ class Stream:
             return self.program if ranges == dict(counts) else None
         return PN.mixed_population_program([(t, counts[i]) for t, i in zip(self.templates, ids)], values=self.values)
 
-    def _public(self, record: Mapping[str, Any]) -> Verdict:
-        """`check_public` by the verifier (`verifier.check_public`) on a docket's values under its query."""
-        values = self._values()
-        return V.check_public(check_public(self.spec, record, values, self.query), record, SCHEME, self.query,
+    def _public(self, record: Mapping[str, Any], interior: bool = False) -> Verdict:
+        """`check_public` by the verifier (`verifier.check_public`): on a docket's values under its query, or on
+        a two-stage design's interior values under the check's."""
+        values = self._values(interior)
+        query = self.spec.check.query if interior else self.query
+        return V.check_public(check_public(self.spec, record, values, query), record, SCHEME, query,
                               [(v.name, v.registered) for v in values], [p.item for p in self.spec.public])
 
-    def _values(self) -> tuple[Value, ...]:
+    def _values(self, interior: bool = False) -> tuple[Value, ...]:
+        if interior:
+            return interior_values(self.spec.values)
         return boundary_values(self.spec.values) if self.n_rho is not None else self.spec.values
 
     def _registration(self, record: Mapping[str, Any], order: int, salted_at: float | None = None,
                       received_at: float | None = None, fanout: int | None = None,
-                      rests_on_period_check: tuple[str, ...] = ()) -> WindowCommitmentRecord:
+                      rests_on_period_check: tuple[str, ...] = (), returned: int | None = None) -> WindowCommitmentRecord:
         return WindowCommitmentRecord(dict(record), R.receipt(record, self.challenger, received=str(len(self._log))),
-                                      DD.digest(record), order, salted_at, received_at, fanout, rests_on_period_check)
+                                      DD.digest(record), order, salted_at, received_at, fanout, rests_on_period_check,
+                                      returned)
+
+    def _returned(self, program: Program) -> int | None:
+        """The bits one replay block of a two-stage stream's docket returns (`second_stage.replay_returned`, on
+        the challenger's own `program`, its replay blocks' population); None for a one-stage stream's."""
+        return None if self.replay is None else SS.replay_returned(program, descriptor_id(self.replay))
 
     def _append(self, reg: WindowCommitmentRecord) -> None:
         self._logged(dict(reg.record), reg.digest)
@@ -1968,9 +2157,112 @@ class Stream:
             at.add(len(self._log) - 1)
         return [self._log[i] for i in sorted(at)]
 
+    def register_interiors(self, draw: Draw, record: Mapping[str, Any], ports: Mapping[str, Mapping[str, Any]], *,
+                           leaf_layer: str | None = None, anchors: Sequence[Any] = (),
+                           registered: Mapping[str, int] | None = None, supplied: Mapping[str, Any] | None = None,
+                           pinned: Mapping[str, str] | None = None, schemas: Mapping[str, str] | None = None,
+                           window_root: str | None = None, held: Sequence[str] | None = None,
+                           outputs: Mapping[str, Mapping[str, str]] | None = None,
+                           history: Mapping[str, Any] | None = None,
+                           partition: Mapping[str, Any] | None = None) -> WindowCommitmentRecord:
+        """Receive a two-stage design's interior docket, once, after the first stage `draw` and before its second
+        stage: the interiors of the replay sample's Q replay blocks, over their Q·n_rho proof blocks, template-major
+        (`interior_program`): template t's Q·n_t from off_t = Q·Σ_{t'<t} n_t', replay block `draw.units[i]`'s instances
+        of it [off_t + i·n_t, off_t + (i+1)·n_t). The public-items rule on the interior values under the check's
+        query, its population (`interior-population`: Q·n_rho), its strata (`interior-parts`: those of the interior
+        program under the check's query are the parts the cells give, `cell_parts`, the check's templates in its order
+        and each one range; `ValueError` where the query doesn't apply to it), its window (`interior-window`:
+        `window_root` is the boundary docket's, or the root the verifier computes from its digest and the
+        replay sample, `second_stage.interior_root`, so the second stage is sampled on one session with the first or
+        on the session on that one root), then one-stage's R1-R8 against the challenger's own copies
+        (`interior_program`, the check's query, `subset:Q·n_rho`, every one committed, `SCHEME`, the log, whose last
+        record is the docket it follows, and the copies given here, as `register` takes them), `population-order`,
+        and each history table `history` names being a port of the boundary docket at the root and domain it computed
+        for it (`tables_served`: `interior-table`). R2 holds the docket's partition digest to `partition`'s, its
+        proof blocks included, over the interior program and the check's query (without it, the blockless default). Its receipt follows the log as a docket's does, and it is logged; it
+        reads no clock.
+        It names no links, wires or rows, nor what the block returns: the verifier derives them from the replay
+        block's Definition (`second_stage.replay_links`, `second_stage.replay_wires`, `second_stage.replay_rows`,
+        `second_stage.replay_returns`).
+        Raises `Refused`: `rule` (a one-stage stream), `unknown`, `not-drawn`, `final`, `delivered`,
+        `interior-registered` (it has one), or either check failing."""
+        first = draw.replay_sample or draw
+        op: dict[str, Any] = {"op": "interiors", **self._sampled_op(first)}
+        got: dict[str, Any] = {}
+        seed_salt = self._seed_salt_of(window_root)
+
+        def checks() -> list[str] | None:
+            q, query = len(first.units), self.spec.check.query
+            m = q * self.n_rho
+            v = self._public(record, interior=True)
+            if v.ok and not (type(n := record.get("population")) is int and n == m):
+                v = _refuse("interior-population", {"population": n, "replay_sample": q, "n_rho": self.n_rho}).verdict
+            program = self.interior_program(q) if v.ok else None
+            if program is not None:
+                try:
+                    strata = P.strata(program, query)
+                except (P.QueryRefused, ValueError) as e:
+                    raise ValueError(f"the check's query doesn't apply to the interior program: {e}") from None
+                cells = cell_parts(q, _check_ids(query) or (), self.cells)
+                if SS.parts(q, strata) != cells:
+                    v = _refuse("interior-parts", {"strata": [[t, [list(r) for r in rs]] for t, rs in strata],
+                                                   "cells": [[p.template, p.lo, p.n] for p in cells]}).verdict
+            boundary = self._entries[first.docket.order].copies[8]
+            if v.ok and window_root != boundary and (window_root is None or window_root != SS.interior_root(
+                    first.docket.digest, D.proved(first.draw))):
+                v = _refuse("interior-window", {"window_root": window_root, "boundary": boundary}).verdict
+            if v.ok and program is not None:
+                earlier = self._earlier(record, supplied, outputs)
+                v = V.check(record, program, query, {"law": "subset", "k": m}, SCHEME, ports, leaf_layer, anchors,
+                            earlier, partition, None, registered, supplied, pinned, self.binding, schemas, window_root, held,
+                            outputs=outputs, seed_salt=seed_salt, history=history)
+                if v.ok and not P.in_order(program, query, m):
+                    v = _refuse("population-order", {"population": m}).verdict
+                tables = {} if history is None or not v.ok else HT.roots_of(leaf_layer, history)
+                served = first.docket.record
+                unserved = [n for n, rd in sorted(tables.items()) if not tables_served(served, [(n, *rd)])]
+                if unserved:
+                    v = _refuse("interior-table", {"tables": unserved}).verdict
+                got.update(program=program, earlier=earlier)
+            got["checks"] = v
+            if not v.ok:
+                return list(v.codes)
+            got["registration"] = self._registration(record, first.docket.order, fanout=v.fanout)
+            op["interior"] = _docket_token(got["registration"])
+            return None
+        self._held(self._decide(op, {"checks": checks}), got.get("checks"))
+        reg, earlier = got["registration"], got["earlier"]
+        if earlier is self._log:
+            earlier = self._log[:]
+        self._append(reg)
+        e = self._entries[first.docket.order]
+        e.interior, e.interior_program = reg, got["program"]
+        e.interior_copies = (ports, leaf_layer, anchors, earlier, registered, supplied, pinned, schemas, window_root, held,
+                             outputs)
+        e.interior_seed_salt, e.interior_history = seed_salt, history
+        return reg
+
+    def interior_program(self, q: int) -> Program:
+        """The challenger's interior program over a replay sample of `q`: `unit`'s Q·n_rho instances, or a window's mixed
+        population of its templates at Q·n_t each, in the check's order, taking the stream's `values` (which its proof
+        blocks read as registered values, an earlier record's among them: `register_interiors`' `outputs`), then its
+        `span_values`, each at its leaves times Q."""
+        assert self.n_rho is not None
+        if self.templates is None:
+            return PN.population_program(self.unit, q * self.n_rho)
+        spans = tuple((name, leaves * q, width) for name, leaves, width in self.span_values)
+        return PN.mixed_population_program([(t, q * n) for t, n in zip(self.templates, self.cells)],
+                                          values=self.values + spans)
+
     def _sampled_op(self, draw: Draw) -> dict[str, Any]:
-        """What an op names a sample by: its docket's order and token and its token."""
-        return {"order": _order(draw.docket), "registration": _docket_token(draw.docket), "draw": _draw_token(draw)}
+        """What an op names a sample by: its docket's order and token and its token; for a two-stage design's
+        second stage, the first stage's, with `second`, its own token."""
+        first = draw.replay_sample or draw
+        op = {"order": _order(first.docket), "registration": _docket_token(first.docket),
+              "draw": _draw_token(first)}
+        if draw.replay_sample is not None:
+            op["second"] = _draw_token(draw)
+        return op
 
     def select(self, docket: WindowCommitmentRecord, *, closure: Mapping[int, Sequence[int]] | None = None) -> Draw:
         """The sample, once per docket, from the challenger's own randomness after the receipt: indices in [0, N) by
@@ -1982,7 +2274,16 @@ class Stream:
         (nothing resamples), a closure map (before any coin is read), the challenger's coins of another family than the
         place the record's window names (`place`, before any coin is read: `_placed`), the two verifiers sampling
         differently (`disagree`), and a sample that isn't well formed under the sampling design (`draw.check_draw`, by
-        `verifier.check_draw`)."""
+        `verifier.check_draw`).
+
+        Under a two-stage design, `select` of a docket is the first stage, and of its interior docket
+        (`register_interiors`) the second (`select_second`, by `verifier.select_second`): `k` proof blocks in each
+        sampled replay block, on the coins opened after the interior docket's digest, once (`drawn`), and only
+        on the entry's own interior docket (`no-interior`)."""
+        o = docket.order
+        if self.n_rho is not None and _nat(o) and o < len(self._entries) and self._entries[o].interior is not None \
+                and self._entries[o].interior == docket:
+            return self._select_second(self._entries[o])
         op: dict[str, Any] = {"op": "select", "order": _order(docket),
                               "registration": _docket_token(docket)}
         got: dict[str, Any] = {}
@@ -2041,11 +2342,48 @@ class Stream:
         return self._coins.label if read and isinstance(self._coins, ChallengerCoins) else None
 
     def family(self, draw: Draw) -> str | None:
-        """The challenger's family the stream read `draw`'s coins from, as it names it to the verifier's run with the
-        coins' evidence (`outcome`); None for a sample that read none, and for one the stream doesn't hold."""
+        """The challenger's family the stream read `draw`'s coins from (the second stage's own for a second-stage
+        sample), as it names it to the verifier's run with the coins' evidence (`outcome`); None for a sample that read
+        none, and for one the stream doesn't hold."""
         o = draw.docket.order
         e = self._entries[o] if _nat(o) and o < len(self._entries) else None
-        return None if e is None else e.family
+        if e is None:
+            return None
+        return e.second_family if draw.replay_sample is not None else e.family
+
+    def _select_second(self, e: _Entry) -> Draw:
+        first, reg = e.draw, e.interior
+        assert first is not None and reg is not None and isinstance(self.spec.selection, TwoStage)
+        op: dict[str, Any] = {"op": "second", **self._sampled_op(first), "interior": _docket_token(reg)}
+        ns, ks, got = self.cells, self.counts, {}
+
+        def checks() -> list[str] | None:
+            read = bytearray()
+
+            def coins(n: int) -> bytes:
+                b = self._coins(n)
+                read.extend(b)
+                return b
+            sampling_design = second_sampling_design(first.units, ns, ks)
+            try:
+                obj = select_second(first.units, ns, ks, coins, sampler=self._sampler)
+                if self._sampler is None:
+                    obj, v = V.select_second(obj, bytes(read), first.units, ns, ks)
+                    if not v.ok:
+                        raise Refused(v)
+                v = V.check_draw(obj, reg.record, sampling_design)
+                if not v.ok:
+                    raise Refused(v)
+            except Refused as r:
+                got["checks"] = r.verdict
+                return list(r.verdict.codes)
+            got.update(draw=Draw(reg, sampling_design, obj, first), read=None if self._sampler is not None else bytes(read))
+            op["second"] = _draw_token(got["draw"])
+            return None
+        self._held(self._decide(op, {"checks": checks}), got.get("checks"))
+        e.second, e.second_read = got["draw"], got["read"]
+        e.second_family = self._family(e.second_read)
+        return e.second
 
     def session(self, draws: Sequence[Draw]) -> ProofRun:
         """Open one proof session over `draws`, the samples of 1 to `rounds` consecutive dockets in order, each
@@ -2080,7 +2418,9 @@ class Stream:
         on the verifier (`outcome`). A `ProofRun`'s proof is delivered as the session, once, for every sample it
         covers (`covered`, delivering one of them alone): each binds the same `sessions`, and past the first covered
         sample's deadline each is `late`, returned in order. Raises `Refused` (`not-session`) for a session the stream
-        didn't open."""
+        didn't open. Under a two-stage design the proof is the second stage's sample's, and the deadline counts from the
+        first stage: before it, the first stage's sample is refused (`second` before the second stage, `not-drawn`
+        after)."""
         if isinstance(draw, ProofRun):
             return self._deliver_session(draw, sessions)
         d = self._held(self._decide({"op": "deliver", **self._sampled_op(draw), "sessions": _session_digests(sessions)},
@@ -2091,7 +2431,9 @@ class Stream:
 
     def outcome(self, draw: Draw, verdicts: Mapping[str, Mapping[str, Any]], statement: Mapping[str, Any], *,
                 proved_units: Sequence[int] | None = None, instances: int | None = None, served: Sequence[int] | None = None,
-                session_roots: Mapping[str, str] | None = None, coins: Mapping[str, Any] | None = None) -> Outcome:
+                session_roots: Mapping[str, str] | None = None, coins: Mapping[str, Any] | None = None,
+                interior_coins: Mapping[str, Any] | None = None,
+                statements: Sequence[Mapping[str, Any]] | None = None, proofs: Mapping[str, Any] | None = None) -> Outcome:
         """The sample's final outcome, once. With no proof delivered: a reject (`late`) once the deadline has passed, and
         `Pending` before. With one: `Pending` until every verdict of record has run (`accepted` not null); each verdict of
         record names the delivered `sessions` and reports the public outputs alike (`check_verdicts`, by the verifier,
@@ -2111,13 +2453,41 @@ class Stream:
         commitment and every one read, the family's log showing no other root; missing evidence, or a docket
         without its window root, is a reject failing `run` too, never a skip. Raises `Refused` for a second outcome, a verdict of record about
         other sessions, public outputs the verdicts of record don't report alike, or `coins` for a sample that read no
-        coins."""
-        op: dict[str, Any] = {"op": "outcome", **self._sampled_op(draw)}
+        coins.
+
+        Under a two-stage design `draw` is the second stage's sample (or, once the proof is late, the first stage's):
+        `proved_units`, `instances` and `served` are its, `session_roots` is held port by port to the docket
+        whose port it names (the boundary values the sessions opened to the docket's audit record, when they
+        opened any, and the rest to the interior docket's), `coins` is the first stage's evidence and
+        `interior_coins` the second stage's, held to the stream's key and history too: both stages' sessions are one
+        challenger's. `statements` are the second-stage sessions' (`second_stage`), which round 2
+        holds to the verdicts of record that checked them (each one's header, registered reads and sample, by the digests
+        and sample a verdict names), the interior docket and the second stage's cells as the interior
+        docket's audit record's `statements` check: a two-stage outcome without them fails it. `proofs` is the auditor's params naming each template's
+        circuit file and the reference header and registered reads round 2 holds its statements to (`template_circuits`;
+        without them every statement fails ``second-header`` and ``second-values``), which the run of record reads from
+        its interior params. The outcome accepts
+        when the run of record (`Run.run`) accepts, which the docket's audit record (over the replay sample) and
+        the interior docket's (over the sample) are held to; no Python joins them into a verdict (`_audit_two`). Raises `Refused` for `statements` on a one-stage outcome, and
+        (`proofs`) for `proofs` on a one-stage stream or in any form `template_circuits` refuses, before anything is
+        decided."""
+        if statements is not None and self.n_rho is None:
+            raise _refuse("statements", "second-stage statements are a two-stage outcome's")
+        if proofs is not None:
+            if self.n_rho is None:
+                raise _refuse("proofs", "a one-stage run's params name no template circuit files")
+            try:
+                template_circuits(proofs, self.spec.check.query)
+            except ValueError as e:
+                raise _refuse("proofs", str(e)) from None
+        op: dict[str, Any] = {"op": "outcome", **{k: v for k, v in self._sampled_op(draw).items() if k != "second"}}
         got: dict[str, Any] = {}
         o = op["order"]
         held_entry = self._entries[o] if o is not None and o < len(self._entries) else None
-        if coins is not None and held_entry is not None and held_entry.read is None:
-            raise _refuse("coins", "coin evidence is for a draw read from the challenger's coins, and this draw read none")
+        for evidence, read in ((coins, held_entry and held_entry.read), (interior_coins, held_entry and held_entry.second_read)):
+            if evidence is not None and held_entry is not None and read is None:
+                raise _refuse("coins",
+                              "coin evidence is for a draw read from the challenger's coins, and this draw read none")
 
         def held() -> list[str] | None:
             e = self._entries[draw.docket.order]
@@ -2127,6 +2497,12 @@ class Stream:
             got["verdicts"] = v
             if not v.ok:
                 return list(v.codes)
+            if self.n_rho is not None:
+                got.update(zip(("audit", "public", "replay", "accepted"),
+                               self._audit_two(e, verdicts, statement, proved_units, instances, served, session_roots,
+                                               coins, interior_coins, statements, proofs)))
+                op["accepted"] = got["accepted"]
+                return None
             got.update(zip(("audit", "public"), self._audit(e, draw, verdicts, statement, proved_units, instances, served,
                                                             session_roots, coins)))
             op["accepted"] = got["audit"]["accepted"]
@@ -2135,7 +2511,8 @@ class Stream:
         e = self._entries[draw.docket.order]
         if d["ok"] == LATE:
             return self._reported(self._finish(e, LATE, None, {}))
-        return self._reported(self._finish(e, d["ok"], got["audit"], got["public"] if d["ok"] == ACCEPT else {}))
+        return self._reported(self._finish(e, d["ok"], got["audit"], got["public"] if d["ok"] == ACCEPT else {},
+                                           replay_audit=got.get("replay")))
 
     def _reported(self, outcome: _O) -> _O:
         """`outcome`, one or a session's, once the stream's fleet has its failures (`Fleet`): at the stream's budget the
@@ -2189,14 +2566,115 @@ class Stream:
                 rec = _run_failed(rec, v)
         return rec, public
 
+    def _audit_two(self, e: _Entry, verdicts: Mapping[str, Mapping[str, Any]], statement: Mapping[str, Any],
+                   proved_units: Sequence[int] | None, instances: int | None, served: Sequence[int] | None,
+                   session_roots: Mapping[str, str] | None, coins: Mapping[str, Any] | None,
+                   interior_coins: Mapping[str, Any] | None, statements: Sequence[Mapping[str, Any]] | None,
+                   proofs: Mapping[str, Any] | None = None
+                   ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], bool]:
+        """`outcome`'s audit records under a two-stage design, once the verdicts hold: the interior registration's over
+        the second stage's sample, with round 2's check of `statements` (`second_stage.check_twin`, over the parts the
+        interior program's strata make, the design's links and wires and their rows, which it derives from the replay
+        block's Definition (`second_stage.replay_links`, `second_stage.replay_wires`, `second_stage.replay_rows`), the
+        reads the verdicts report, what they name of each session they accepted (`second_stage.verified_of`), the
+        reference header and registered reads the params `proofs` give each template, `template_circuits`, and its
+        own copies of the interior docket's values it holds without the prover: those it fills, with their
+        sources as the docket's check read them (`registration.resolved`: a history table's root and domain
+        id as bytes), and those it pinned or holds to an earlier record, the templates the params record as table
+        reads, `template_reads`, and the registered tables they pin, `pinned_tables`), and the docket's over the
+        replay sample,
+        each taking the sessions' reads of its own ports at their own roots (`audit.less_own_reads`), both failing `run`
+        where the whole run isn't the verifier's, the docket's holding each value its certified entries name to
+        have a reported read; the public outputs; and whether the outcome accepts, which is `Run.run`'s symbol alone
+        (`verifier.run`, held whole to the records above, their join the Python side it is compared with). A run whose
+        stages read no coin bytes gives `Run.run` nothing to read, so it raises (`verifier.not_written`): no Python
+        decides a two-stage outcome."""
+        assert e.sessions is not None and e.draw is not None and e.interior is not None and e.second is not None
+        reg, first, ireg, second = e.docket, e.draw, e.interior, e.second
+        outputs = self.spec.check.public_outputs
+        of_record = sorted(k for k in verdicts if verdicts[k].get("of_record"))
+        public = dict(verdicts[of_record[0]]["public"]) if outputs else {}
+        boundary_ports = {r["port"] for r in reg.record["roots"]}
+        replay_session_roots = None if session_roots is None else \
+            {p: r for p, r in session_roots.items() if p in boundary_ports} or None
+        if session_roots is not None:
+            session_roots = {p: r for p, r in session_roots.items() if p not in boundary_ports}
+        proved = list(proved_units) if proved_units is not None else D.proved(second.draw)
+        replayed = D.proved(first.draw)
+        rec = V.audit_record(ireg.record, ireg.receipt, second.draw, second.law, proved,
+                             len(proved) if instances is None else instances, statement, verdicts, self.delta,
+                             e.sessions, served, session_roots)
+        named = template_circuits(proofs, self.spec.check.query)
+        own = SS.Own(tuple(replayed), SS.parts(len(replayed), P.strata(e.interior_program, self.spec.check.query)),
+                     ireg.record, reg.record, tuple(D.proved(second.draw)),
+                     SS.replay_links(e.program, descriptor_id(self.replay), reg.record),
+                     A.session_registered(verdicts), SS.verified_of(verdicts),
+                     tuple((t, h) for t, _c, h, _r in named), tuple((t, r) for t, _c, _h, r in named),
+                     wires=SS.replay_wires(e.program, descriptor_id(self.replay)),
+                     rows=SS.replay_rows(e.program, descriptor_id(self.replay)),
+                     widths=SS.replay_widths(e.program, descriptor_id(self.replay)),
+                     returns=SS.replay_returns(e.program, descriptor_id(self.replay), reg.record),
+                     supplied=SS.supplied_of(R.resolved(e.interior_copies[5], e.interior_history)),
+                     fixed=(*(e.interior_copies[6] or ()), *(e.interior_copies[10] or ())),
+                     reads=template_reads(proofs), tables=pinned_tables(proofs),
+                     held=SS.held_of(P.program_digest(e.interior_program), e.interior_copies[8], e.interior_copies[9],
+                                     e.interior_copies[6], e.interior_copies[5], e.interior_copies[10]))
+        rec = SS.attach(rec, SS.check_twin(own, statements), SS.interior_reads(own, statements or ()))
+        boundary = V.audit_record(reg.record, reg.receipt, first.draw, first.law, replayed, len(replayed), statement,
+                                  verdicts, self.delta, e.sessions, None, replay_session_roots,
+                                  certified=sorted(e.certified or ()))
+        joined = rec["accepted"] and boundary["accepted"]
+        if e.read is None or e.second_read is None:
+            V.not_written("_audit_two", "Spot.Run.run")
+        accepted = False
+        if rec["verifiers"]["agree"] and boundary["verifiers"]["agree"]:
+            ports, leaf_layer, anchors, earlier, registered, supplied, pinned, schemas, window_root, held, given = e.copies
+            within = {k: x for k, x in rec.items() if k != "verifiers"}
+            v = V.run({"receipt": dict(reg.receipt), "draw": dict(first.draw), "read": len(e.read),
+                       "symbol": ACCEPT if joined else REJECT, "public": public if joined else {},
+                       "audit": {k: x for k, x in boundary.items() if k != "verifiers"},
+                       "interior": {"receipt": dict(ireg.receipt), "draw": dict(second.draw),
+                                    "read": len(e.second_read), "audit": within}},
+                      reg.record, e.program, self.query,
+                      selection_sampling_design(self.spec.selection, reg.record["population"],
+                                    selection_sizes(self.spec.selection, e.program, self.query)),
+                      SCHEME, ports, leaf_layer, anchors, earlier, e.work_table, registered,
+                      self.spec.selection.to_json(), [(x.name, x.registered) for x in self._values()],
+                      [p.item for p in self.spec.public], self.challenger, reg.receipt["received"], e.read, e.closure,
+                      e.sessions, verdicts, outputs, statement, self.delta, None, None, None, replay_session_roots,
+                      supplied=supplied, pinned=pinned, binding=self.binding, schemas=schemas, window_root=window_root,
+                      held=held, coins=coins, value_outputs=given, seed_salt=e.seed_salt, history=e.history,
+                      tied=self.spec.check.tied or None, family=e.family, key=self.key and self.key.to_json(),
+                      main=self.main, certified=e.certified, partition=e.partition,
+                      interior={"program": e.interior_program, "query": self.spec.check.query,
+                                "law": {"law": "subset", "k": ireg.record["population"]}, "copies": e.interior_copies,
+                                "seed_salt": e.interior_seed_salt, "history": e.interior_history,
+                                "replay": Program(self.replay),
+                                "values": [(x.name, x.registered) for x in self._values(interior=True)],
+                                "record": ireg.record, "received": ireg.receipt["received"], "read": e.second_read,
+                                "coins": interior_coins, "family": e.second_family, "proved_units": proved_units,
+                                "instances": instances,
+                                "served": served, "session_roots": session_roots, "statements": statements,
+                                "proofs": proofs})
+            if not v.ok:
+                rec, boundary = _run_failed(rec, v), _run_failed(boundary, v)
+            accepted = v.ok and v.verifiers["lean"].get("symbol") == ACCEPT
+        return rec, public, boundary, accepted
+
     def _finish(self, e: _Entry, symbol: str, audit: Mapping[str, Any] | None, public: Mapping[str, Any], *,
-                halt: Mapping[str, Any] | None = None) -> Outcome:
+                halt: Mapping[str, Any] | None = None, replay_audit: Mapping[str, Any] | None = None) -> Outcome:
         reg, draw = e.docket, e.draw
         assert draw is not None or symbol == HALTED
+        sample = draw if self.n_rho is None else e.second
         body = {"format": OUTCOME, "stream": self.digest, "order": reg.order, "registration": reg.digest,
-                "receipt": _sha512(dict(reg.receipt)), "draw": None if draw is None else _sha512(dict(draw.draw)),
+                "receipt": _sha512(dict(reg.receipt)), "draw": None if sample is None else _sha512(dict(sample.draw)),
                 "sessions": e.sessions or [],
                 "symbol": symbol, "public": dict(public), "audit": None if audit is None else dict(audit)}
+        if self.n_rho is not None:
+            body["replay_sample"] = None if draw is None else {
+                "draw": _sha512(dict(draw.draw)), "audit": None if replay_audit is None else dict(replay_audit)}
+            body["interior"] = None if e.interior is None else {
+                "registration": e.interior.digest, "receipt": _sha512(dict(e.interior.receipt))}
         if e.session is not None:
             body["session"] = {"rounds": [{"order": d.docket.order, "registration": d.docket.digest,
                                            "draw": _sha512(dict(d.draw))} for d in e.session.draws]}
@@ -2206,10 +2684,11 @@ class Stream:
         exhaustive = isinstance(self.spec.selection, All)
         profile = None
         if accepted and not exhaustive:
-            profile = A.profile(reg.record, draw.draw, self.delta)
+            profile = A.profile(reg.record, draw.draw, self.delta) if self.n_rho is None else self._footprint(e)
         e.outcome = Outcome(
             accepted=accepted,
-            verdict=Verdict(True) if accepted else Verdict(False, (symbol,), {symbol: _why(symbol, audit, halt)}),
+            verdict=Verdict(True) if accepted else Verdict(False, (symbol,), {symbol: _why(symbol, audit, halt,
+                                                                                         replay_audit)}),
             profile=profile,
             exhaustive=Exhaustive(len(draw.draw["units"])) if accepted and exhaustive else None,
             terms=Terms(None if exhaustive else self.delta),
@@ -2218,24 +2697,51 @@ class Stream:
         self._records.append(body)
         return e.outcome
 
+    def _footprint(self, e: _Entry) -> IntegrityProfile:
+        """An accepted two-stage outcome's integrity profile: two levels, the replay blocks (`replay`, the docket's
+        partition) and their proof blocks (`A.LEVEL`, the interior docket's). The first stage's
+        uniform Q-subset of the N replay blocks is bounded by `Bernoulli(Q/N)` (`Design.Two.Pa_le_bernoulli_pop`: it
+        misses a set T with probability C(N − |T|, Q)/C(N, Q) ≤ (1 − Q/N)^|T|). The second stage samples k_t of each
+        cell's n_t, and a replay block of T templates misses m incorrect proof blocks with probability at most
+        `Subset(K)`'s over T·n_max at K = min_t k_t: ∏_t C(n_t − w_t, k_t)/C(n_t, k_t) ≤ C(T·n_max − m, K)/C(T·n_max, K)
+        for Σ_t w_t = m, factor by factor, since ∏_t (1 − w_t/(n_t − j)) ≤ 1 − max_t w_t/(n_max − j)
+        ≤ 1 − m/(T·n_max − j). With one template that is `Subset(k)` over n_rho, exactly. Its `accept(m)` is a replay
+        block's at footprint m, the fewest incorrect proof blocks of any interior consistent with its boundary
+        commitment, which is fixed before any coin; the prover's choice of interior after the first stage only raises
+        it."""
+        assert e.draw is not None and e.interior is not None and e.second is not None
+        reg, ireg = e.docket.record, e.interior.record
+        assert self.n_rho is not None
+        q, n = len(e.draw.units), reg["population"]
+        return IntegrityProfile(levels=(Level(REPLAY, reg["partition"]), Level(A.LEVEL, ireg["partition"])),
+                                sizes=(n, len(self.cells) * max(self.cells)),
+                                draws={REPLAY: Bernoulli(Fraction(q, n)), A.LEVEL: Subset(min(self.counts))},
+                                delta=self.delta, programs=(reg["program"], ireg["program"]),
+                                drawn={REPLAY: q, A.LEVEL: len(e.second.units)})
+
+
 def _run_failed(rec: Mapping[str, Any], v: Verdict) -> dict[str, Any]:
     """An audit record failing `run`: the whole run is not the verifier's."""
     return {**rec, "accepted": False, "profile": None, "integrity_profile": None, "wrong_units": None,
             "checks": {**rec["checks"], "run": {"ok": False, "codes": list(v.codes), "detail": v.detail}}}
 
 
-def _why(symbol: str, audit: Mapping[str, Any] | None, halt: Mapping[str, Any] | None = None) -> Any:
+def _why(symbol: str, audit: Mapping[str, Any] | None,
+         halt: Mapping[str, Any] | None = None, replay_audit: Mapping[str, Any] | None = None) -> Any:
     if symbol == HALTED:
         return dict(halt or {})
     if symbol == LATE:
         return "the proof was not delivered by the proof deadline"
     assert audit is not None
-    return {"checks": [k for k, c in audit["checks"].items() if not c["ok"]],
-            "verdicts": {k: v.get("accepted") for k, v in audit["verdicts"].items()}}
+    why = {"checks": [k for k, c in audit["checks"].items() if not c["ok"]],
+           "verdicts": {k: v.get("accepted") for k, v in audit["verdicts"].items()}}
+    if replay_audit is not None:
+        why["replay_sample"] = [k for k, c in replay_audit["checks"].items() if not c["ok"]]
+    return why
 
 
 __all__ = ["ACCEPT", "All", "Check", "Draw", "Exhaustive", "Fleet", "HALTED", "HIDING", "KINDS", "LATE", "SamplingDesign", "Outcome",
            "PHASES", "Pending", "ProofRun", "Public", "REJECT", "REPLAY", "ROOTS", "ROUNDS", "Refused", "SCHEME",
            "SOURCES", "Selection", "Spec", "Stream", "Terms", "TwoStage", "Value",
-           "WindowCommitmentRecord", "boundary_values", "check_public", "check_verdicts", "replay_cells", "select_draw",
-           "selection_sampling_design"]
+           "WindowCommitmentRecord", "boundary_values", "check_public", "check_verdicts", "interior_values",
+           "replay_cells", "second_counts", "second_sampling_design", "select_draw", "select_second", "selection_sampling_design"]
