@@ -1,15 +1,10 @@
-"""`audit.Audit` with every verdict computed by the Lean check, `verity/network-records/v3` (`NetworkCheck.Records`, the
-`network-records` executable of `verity/protocols/resource_accounting/network/verifier/lean`), which `audit.py` is the reference for.
-
-`Audit` here has `audit.Audit`'s interface and returns its `Verdict`s, so a caller switches by its import line alone.
-`audit.Audit` keeps running beside the Lean check as its reference, on every call with the same arguments: the verdicts
-are the Lean's, the Python's are kept (`Audit.reference`), an execution phase where the two differ is a `disagreement`
-violation, and a call that one answers and the other raises on raises. Each call is one unit of the Lean protocol, sent
-to one `network-records verdicts` process kept open across calls and audits:
+"""The records check's launcher: every verdict is the Lean check's, `verity/network-records/v3` (`NetworkCheck.Records`,
+the `network-records` executable of `verity/protocols/resource_accounting/network/verifier/lean`). Each call is one unit
+of the Lean protocol, sent to one `network-records verdicts` process kept open across calls and audits:
 
 - `check_link`: egress links `["", link]` (`"clock"` when `link` is empty) over windows 0 … len(syncs) − 1, the first
   link carrying no frames and the spatial unit's clock as its syncs (`Audit.syncs`, each window's set by the first call
-  that checked it, as `audit.Audit` sets it), since the Lean check reads the unit's sync from the first egress link; the
+  that checked it), since the Lean check reads the unit's sync from the first egress link; the
   commitment holds this call's records of `link`, an attested one only if it is egress. With `grid` True it is the
   Lean's `verdicts`; with `grid` False (N2's head check holds the grid) `verdicts-no-grid`, every test of `verdicts`
   but the egress grid comparison (`Records.evaluateNoGrid`);
@@ -20,13 +15,12 @@ The grid parameters, Σ_sync, key and session the call doesn't read (the ingress
 and the session when no attested record of the link is in it) are placeholders. Anything the Lean protocol can't
 state (a key other than an `LmsKey` for an attested record, a raw grid that isn't a tuple of tuples of bytes or `None`,
 a window or a grid field outside its integer width, a frame of other than B bytes, a session id not 32 bytes) raises
-`ValueError`, as does a call `audit.Audit` refuses; the exe missing, or `lake` to build it, raises `FileNotFoundError`. Nothing is computed in Python instead.
+`ValueError`; the exe missing, or `lake` to build it, raises `FileNotFoundError`. Nothing is computed in Python instead.
 `VERITY_NETWORK_RECORDS_EXE` names the executable, and then nothing but `verity` and the stdlib is needed besides it; by
 default the first request runs `lake build network-records` in that package and starts what it builds. A process forked
 after a request starts its own executable at its first; `SERVER`'s is closed at exit. The same process answers
 `link-window` (`Server.call`), N2's verdict on one execution phase's proof, which no caller here sends,
-`certificates`, the client's check of one window's served attestations (`certificate_refusals`, with
-`audit.certificate_refusals` beside it as the reference), and `load`, the check of a run's load's registrations
+`certificates`, the client's check of one window's served attestations (`certificate_refusals`), and `load`, the check of a run's load's registrations
 (`relay_check.check_load`, `NetworkVerifier.Load.loadCheck`), with `transfer-registration`, its read of one
 registration, which the load's agreement test holds to `transfer_rows.check_registration`.
 
@@ -43,15 +37,13 @@ import struct
 import subprocess
 import tempfile
 import threading
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from verity.commitments.crypto import lms
 from verity.protocols.proofs.spot.verifier.one_stage import lean_child as LC
-from verity.protocols.resource_accounting.network.verifier import audit
-from verity.protocols.resource_accounting.network.verifier.audit import Published, Verdict
 from verity.protocols.resource_accounting.network.verifier.certificate import (STATUS_CODES, Certificate, CertifiedRecord,
                                                         Direction, LmsKey, PublicKey)
 from verity.protocols.resource_accounting.network.verifier.commitment import CommittedRecord
@@ -63,10 +55,24 @@ EXE = PACKAGE / ".lake" / "build" / "bin" / "network-records"
 # `verity_difftest.build`'s lock: no two `lake build`s of a package overlap, across processes and suites.
 BUILD_LOCK = Path(__file__).resolve().parents[5] / "verity/circuits/difftest" / ".lake" / "harness-build.lock"
 RAW, COMMITTED, CERTIFIED = 0, 1, 2
-DISAGREEMENT = "disagreement"
 _KEY = LmsKey(lms.Params(8, 8, 1, toy=True), bytes(24))
 _SESSION = bytes(lms.SESSION_BYTES)
 _SYNC_SET = SyncSet((0,), (1,))
+
+Published = BlockGrid | CommittedRecord | CertifiedRecord
+
+
+@dataclass(frozen=True, slots=True)
+class Verdict:
+    link: str
+    window: int
+    # None when accepted; otherwise the Lean check's violation: "status:<reason>", "advice", "mismatch", "duplicate",
+    # "no-verdict" or "signature"
+    violation: str | None
+
+    @property
+    def accepted(self) -> bool:
+        return self.violation is None
 
 
 def _text(s: str, what: str) -> bytes:
@@ -273,37 +279,19 @@ def _verdicts(out: list[dict], direction: Direction, link: str, windows: int) ->
 
 @dataclass
 class Audit:
-    """`audit.Audit`, each verdict the Lean check's, with `audit.Audit` (`python`) run beside it on every call as the
-    reference: `lean` holds the Lean check's verdicts and `reference` the Python's, and an execution phase where they
-    differ is a `disagreement` violation in `verdicts`. A call where one raises and the other answers raises."""
+    """Every verdict of a run, each the Lean check's, and the spatial unit's clock: each window's sync, set by the first
+    egress link checked for that window. The run is accepted only if every execution phase is."""
 
     verdicts: list[Verdict] = field(default_factory=list)
     syncs: dict[int, ClockSync] = field(default_factory=dict)
     server: Server = field(default=SERVER, repr=False, compare=False)
-    python: audit.Audit = field(default_factory=audit.Audit, repr=False, compare=False)
-    lean: list[Verdict] = field(default_factory=list, repr=False, compare=False)
-    reference: list[Verdict] = field(default_factory=list, repr=False, compare=False)
-
-    def _beside(self, lean: list[Verdict], reference: Callable[[], list[Verdict]]) -> list[Verdict]:
-        try:
-            ref = reference()
-        except Exception as e:
-            raise RuntimeError(f"the reference audit raised where the Lean check answered: {e!r}") from e
-        if [(v.link, v.window) for v in ref] != [(v.link, v.window) for v in lean]:
-            raise RuntimeError(f"the reference audit gave execution phases {[(v.link, v.window) for v in ref]}, "
-                               f"the Lean check {[(v.link, v.window) for v in lean]}")
-        vs = [l if l == r else Verdict(l.link, l.window, DISAGREEMENT) for l, r in zip(lean, ref)]
-        self.lean.extend(lean)
-        self.reference.extend(ref)
-        self.verdicts.extend(vs)
-        return vs
 
     def check_link(self, link: str, records: Sequence[Published], frames: Sequence[LogicalFrame],
                    syncs: Sequence[ClockSync], sync_set: SyncSet, params: GridParams,
                    key: PublicKey | None = None, session: bytes | None = None, grid: bool = True) -> list[Verdict]:
-        """`audit.Audit.check_link`. With `grid` False it is the Lean's `verdicts-no-grid`, which computes no Program
-        grid (N2 gives no `frames`); a raw or committed record of `link` then raises `ValueError` here, with or without
-        windows, as `audit.Audit` raises and `verdicts-no-grid` refuses."""
+        """One egress link's verdicts for windows 0 … len(syncs) − 1. With `grid` False it is the Lean's
+        `verdicts-no-grid`, which computes no Program grid (N2 gives no `frames`); a raw or committed record of `link`
+        then raises `ValueError` here, with or without windows, as `verdicts-no-grid` refuses."""
         _need_key(records, key, session)
         frames, syncs = list(frames), list(syncs)
         mine = _mine(link, records, Direction.EGRESS)
@@ -317,11 +305,10 @@ class Audit:
                                             sync_set, *_lean_key(mine, key, session), mine),
                                        "verdicts" if grid else "verdicts-no-grid")
             lean = _verdicts(out, Direction.EGRESS, link, len(syncs))
-        vs = self._beside(lean, lambda: self.python.check_link(link, records, frames, syncs, sync_set, params, key,
-                                                               session, grid))
         for w, s in enumerate(syncs):
             self.syncs.setdefault(w, s)
-        return vs
+        self.verdicts.extend(lean)
+        return lean
 
     def check_ingress_link(self, link: str, records: Sequence[Published], windows: int, key: PublicKey | None = None,
                            params: GridParams | None = None, session: bytes | None = None) -> list[Verdict]:
@@ -335,8 +322,8 @@ class Audit:
             out = self.server.verdicts(case([], [link], windows, grid, grid, _SYNC_SET, *_lean_key(mine, key, session),
                                             mine))
             lean = _verdicts(out, Direction.INGRESS, link, windows)
-        return self._beside(lean, lambda: self.python.check_ingress_link(link, records, windows, key, params,
-                                                                         session))
+        self.verdicts.extend(lean)
+        return lean
 
     @property
     def accepted(self) -> bool:
@@ -358,11 +345,9 @@ def _attestation_json(c: Certificate) -> dict:
 def certificate_refusals(key: PublicKey, session: bytes, link: str, window: int, certificates: Sequence[Certificate],
                          clocks: Sequence[Certificate], seen: Sequence[bytes] = (), server: Server | None = None
                          ) -> tuple[list[str | None], list[str | None]]:
-    """`audit.certificate_refusals`, each refusal the Lean's (`NetworkCheck.TransferBlocks.refusals`, `network-records
-    verdicts`' ``certificates``), with `audit.certificate_refusals` run beside it as the reference: where the two differ
-    on any attestation or clock attestation, every one of the window is refused as `disagreement`. A key other than an
-    `LmsKey`, an attestation of ill-typed fields, or anything else the Lean refuses to read raises `ValueError`; a
-    reference that raises where the Lean answers raises `RuntimeError`."""
+    """Each attestation's refusal in one window's answer, then each clock attestation's, None where the client keeps it:
+    the Lean's (`NetworkCheck.TransferBlocks.refusals`, `network-records verdicts`' ``certificates``). A key other than
+    an `LmsKey`, an attestation of ill-typed fields, or anything else the Lean refuses to read raises `ValueError`."""
     if not isinstance(key, LmsKey):
         raise ValueError(f"outside the Lean audit's domain: certificates under a {type(key).__name__}, not an LmsKey")
     p = key.params
@@ -371,11 +356,4 @@ def certificate_refusals(key: PublicKey, session: bytes, link: str, window: int,
             "certificates": [_attestation_json(c) for c in certificates],
             "clocks": [_attestation_json(c) for c in clocks], "seen": [bytes(d).hex() for d in seen]}
     out = (server or SERVER).call("certificates", case)
-    lean = (out["certificates"], out["clocks"])
-    try:
-        ref = audit.certificate_refusals(key, session, link, window, certificates, clocks, seen)
-    except Exception as e:
-        raise RuntimeError(f"the reference raised where the Lean check answered: {e!r}") from e
-    if lean != ref:
-        return [DISAGREEMENT] * len(certificates), [DISAGREEMENT] * len(clocks)
-    return lean
+    return out["certificates"], out["clocks"]

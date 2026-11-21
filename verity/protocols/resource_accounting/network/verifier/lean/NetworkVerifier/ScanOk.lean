@@ -33,7 +33,7 @@ states.
 row digest, salt digest, hm96 leaf and frame leaf, then the frame's pads and nodes, and three for each member's domain.
 `held` makes none: it reads the registration's `roots` once and compares strings and counts.
 
-`verity.protocols.accounting.certifier.verifier.scan_ok` mirrors it. Code: it imports Flock's registered reads at known
+Code: it imports Flock's registered reads at known
 content (`Flock.RegKnown`) and core's identity hash and table of domain separators.
 -/
 
@@ -155,8 +155,7 @@ def rootCalls (n : Nat) : Nat :=
 /-- SHA-512 calls of `consts T`: each member's domain (its binding, its range's identity and its id) and root. -/
 def calls (T : Nat) : Nat := (members T).foldl (fun acc m => acc + 3 + rootCalls m.2.2) 0
 
--- the salt rule and the roots are `scan_ok`'s: `scan_ok.salt(0)[:8]`, `scan_ok.salt(7)[184:]`, and `scan_ok.constants`
--- at T = 16 and T = 3, and at T = 2, where `ingress-0` and `last` are one proof block of one template each, at one
+-- the salt rule and the roots, pinned: `salt 0`'s first 8 bytes, `salt 7`'s last 8, and `consts` at T = 16 and T = 3, and at T = 2, where `ingress-0` and `last` are one proof block of one template each, at one
 -- domain and root
 #guard Flock.hexOf ((salt 0).extract 0 8) == "f61f80289735b3b6"
 #guard (salt 7).size == 192 && Flock.hexOf ((salt 7).extract 184 192) == "27e9fc9788b62bae"

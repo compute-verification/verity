@@ -112,9 +112,7 @@ theorem withPositions_reads {c : _root_.Flock.Circuit} {pub : _root_.Flock.Publi
     obtain ⟨reg', hreg', hf⟩ := array_mapM_ok_mem (map_some_ok h) reg hreg
     refine ⟨reg', hreg', ?_⟩
     split at hf
-    · split at hf
-      · exact outReads_reads hf
-      · exact ins_reads hf
+    · exact outReads_reads hf
     · exact ins_reads hf
 
 /-- **`withPositions` derives some ports from some ports.** -/

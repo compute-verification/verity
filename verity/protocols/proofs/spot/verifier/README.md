@@ -97,7 +97,7 @@ it stays refused by name.
 - **Each level's partition and sampling design** are the integrity profile's `levels`, coarse to fine
   (`profile.IntegrityProfile.to_json`). Their length is the count.
 - **A command that can't run the count it is given refuses it** (`levels-no-path`) rather than running another:
-  `a5.py` runs one level, `two_stage.py` two.
+  `a5.py` runs one level, and no command runs two.
 
 ## Outline
 
@@ -144,38 +144,18 @@ doing a fraction `ε` of the credited work have miss probability at most `(1 −
 has at most `2^-40`. The proof system adds, per proof block, its knowledge-soundness and binding errors (ε_ks and ε_bind).
 
 **Two-stage designs** (`TwoStage`). Those above are one-stage. A two-stage design commits only replay-block boundaries
-while serving and, once a sampled replay block's interior is committed (`Stream.register_interiors`; `GLOSSARY.md`,
-"Two-stage design"), samples `k_t` of its `n_t` instances of each template `t` of the check, one cell (the claims'
-`cell`; the rule's `k`, one count or one per template, capped at the cell's size; counts proving every cell whole are
-refused). The check names the replay block's templates in the order of their first instance in it and the interior is
-template-major, so each cell is a range of the interior's proof blocks and the second stage is one stratum per cell
-(`second_law`). A cell of `n` proof blocks and footprint `w` is missed with probability at most
-`C(n − w, k) / C(n, k)`, a replay block's cells independently; the profile at the footprint reads a replay block as
-`Subset(min k_t)` over `T·n_max` proof blocks, which bounds that product. The verifier samples both stages
-(`Select.select`, `Select.selectSecond`), and the two-stage certificate's knowledge soundness at Flock's masked record
-holds of that code under the premises `SamplingDeploy.ksTwo_code` states.
-A bound of S served bits charges a replay block at most F S, F the grain's fan-out (`partition.fanout`; the capped form at N = F),
-1 when every replay block is closed. S is at least the bits one replay block returns, which the verifier counts from its
-Definition's return (`second_stage.returned_bits`, Lean `SecondStage.returnedBits`: each returned output field of each
-proof block on 16-bit words of its own) and a two-stage docket carries (`ExecutionPhaseCommitmentRecord.returned`);
-`plancheck.two` refuses a served cap below them.
-Round 2: `second_stage` (Lean `SecondStage`); its `FORM` is on: a two-stage run whose every check passes is accepted, ahead of the form's proof. A boundary record may commit a
-step schedule (`schedule`, Lean `Schedule`: its replay blocks as runs of its requests' positions), which round 2
-refuses unless it covers the replay blocks, and each request's positions, in order (`second-schedule`). What a replay
-block returns is read only at the boundary record's port for it: an interior docket that registers a value of
-that name is refused (`second-return`). It refuses an interior docket that registers a value the verifier
-doesn't hold, unless the value is the opened row of a read against a table round 1's record registers (its root and
-domain id those of one port of that record, its leaves the read's rows), at a key that is a port of that record or a
-value the verifier holds, its verdict held to 1 (`second-inputs`): any other is the prover's choice after the first
-stage's sample. A read is a template the auditor's params record as one (`"read": {"V", "H"}` beside its circuit
-file's SHA-512, `template_reads`): the record that `flock-read-tmpl check V H` accepted that file, made where the
-params are; round 2 runs no template check.
+while serving (`GLOSSARY.md`, "Two-stage design"); `Stream.register` refuses its boundary docket by name after R1-R8,
+before any coin (`levels-not-proved`, `levels.TWO_LEVELS_REFUSED`), as the Lean's `Pieces.runOfRecord` does. The
+Lean's second stage (`Select.selectSecond`, `SecondStage`, `Schedule`, `Run.run`'s two-stage branch) has no Python
+twin; its `#guard`s hold it. A bound of S served bits charges a replay block at most F S, F the grain's fan-out
+(`partition.fanout`; the capped form at N = F), 1 when every replay block is closed, and S is at least the bits one
+replay block returns (`SecondStage.returnedBits`), so `plancheck.two` refuses a served cap below them.
 
 Not built yet: the security function and its review, and composition checks such as PoUW's tiles
 per proof block matching this partition (a tile family built with `each` over the proof blocks nests in them by construction).
 
-Serving's record is not yet the scheme the audit proves: the benchmark's first run (`benchmarks/one_stage/a0.py`)
-registers a stand-in, a fresh commitment to values captured from serving, and says so (`window.kind = "stand-in"`). Its
+Serving's record is not yet the scheme the audit proves: a template audit's stand-in (`stand_in` in
+`benchmarks/one_stage/a0.py`) is a fresh commitment to values captured from serving, and says so (`window.kind = "stand-in"`). The
 served run (`benchmarks/one_stage/a5.py`) registers a stand-in too: a deferred Commit's serving rows, written after serving from its sealed replay bundle opened against the run's record
 (`verity-vllm serving-rows`), whose `of` names the record's vllm-v1 run root and the bundle's manifest digest; the link from
 those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the in-Commit hook writes before any sample are
@@ -304,20 +284,13 @@ Tests: `uv run tools/check/suites.py protocols/spot`.
 
 No function here returns a verdict of its own. Each verdict SPOT acts on is the Lean's: `one_stage.verifier` asks
 `spot-verifier` and computes the Python twin beside it, and a disagreement, or no answer from the Lean, is a
-refusal (`DISAGREE`). A verdict whose Lean no interface here reaches yet (a two-stage outcome's completeness) raises
-`NotImplementedError("proofs/spot-two-stage-sound")` (`verifier.not_written`), and its twin answers the difftest only.
+refusal (`DISAGREE`).
 
 | Verdict | Entry | Lean of record | Twin |
 | --- | --- | --- | --- |
 | R1-R8 on a docket | `verifier.check` | `registration` (`OneStage`) | `registration.check` |
 | The audit record | `verifier.audit_record` | `Record.record` | `audit.audit_record` |
 | A docket's whole run | `verifier.run` | `Run.run` | the stream's own outcome |
-| A two-stage outcome | `Stream.outcome` (`_audit_two`) | `Run.run`'s symbol; it accepts a two-stage run (levels 2) whose every check passes, ahead of its proof | the two records' join |
-| Round 2's statements | `second_stage.check` | `SecondStage.checkAny`, which only `Run.run` reaches | `check_twin` |
-| A two-stage outcome's completeness | `second_stage.complete` | none yet | `complete_twin` |
-
-A two-stage run whose stages read no coin bytes gives `Run.run` nothing to read, so `_audit_two` raises rather than
-join its records.
 
 ### Guards
 
@@ -445,8 +418,8 @@ A program's weights, constants and tables are values: committed once, under hidi
 - **R7** holds the entries to the verifier's own (`registered_entries`, from its own program). It holds each value to a
   root it already has, when it has one: its pinned root (`pinned`: the weights' root recorded before the salt), the root
   an earlier record of the log registered under the same domain (`held_roots`), or, for an output or reused value, the
-  earlier record's port or entry (`outputs`). `Stream.register` and `register_interiors` take `outputs`, keep the record
-  each one names in the log R7 reads, and pass them to the run of record: this is how a record reads the state an
+  earlier record's port or entry (`outputs`). `Stream.register` takes `outputs`, keeps the record
+  each one names in the log R7 reads, and passes them to the run of record: this is how a record reads the state an
   earlier one left, such as a request carried from one run's serving into the next.
 - **Per-run values.** Given the run's open root R, from the challenger's signed open of it, every
   value's domain binds R, except the ones the verifier holds across runs (`held`, and its pinned, supplied and output
@@ -566,12 +539,7 @@ One-stage's answer of an accepted record (`audit.answer`, as Lean's `OneStage.ch
 is the record's own: whether every verdict ran. An accept waits on the verdicts of record and on those that ran, so an
 accept can say `complete` is false, and then a verdict that is not of record did not run. A reader that wants a
 complete audit reads `complete`, never the verdict alone; the stop audit's verdict record (`verdict_record`) words
-an accept whose record is not complete `not complete`. A two-stage
-outcome says it only under `second_stage.complete`, which raises until its Lean is written (`verifier.not_written`,
-goal `proofs/spot-two-stage-sound`); its twin `complete_twin` holds when the two-stage form is allowed, the replay block
-is the registered request Definition, and each audit record accepted and is complete. A two-stage outcome's accept is
-`Run.run`'s symbol alone: round 2's check (`second_stage.check`) is its twin `check_twin` held to the codes the Lean's
-run gave (`DISAGREE` where they differ).
+an accept whose record is not complete `not complete`.
 
 Pinned by `tests/test_one_stage.py` (the profile, audit record, answer and incorrect-block bound tests, under each
 sampling design).
