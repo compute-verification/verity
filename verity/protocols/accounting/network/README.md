@@ -5,11 +5,17 @@ its bytes on a grid of buckets and signs each window's records. The scan's Defin
 the registered circuit lets leave, and the period check in Lean decides a monitoring period from the signed records and
 the scan's sampled blocks.
 
-Not yet: on the tip the network audit is not run: the attester's piece writes NOT RUN, nothing proves a scan block, and no window's verdict reads the scan or the period check.
+Not yet: on the tip the network audit is not run: the attester's piece writes NOT RUN, nothing proves a scan block, and
+no window's verdict reads the scan or the period check. A period whose schedule has connection rows has no Lean verdict
+at all: the Lean period check refuses it, and only a Python check reads those rows.
+Even when run, under a uniform sample the scan's few blocks may all go unsampled, so the bound holds for a window only at
+the sample's chance of hitting them, until accounting blocks can always be proved.
 
 The guarantee, stated: `NetTiming.Guarantees.MonitoringPeriodLeakAccepted` (`security/Definitions/Certifier/Guarantees/MonitoringPeriod.lean`),
 on what a period the check accepts can leak; the lock lists it as deployed, but its honest witness is a toy code that
-accepts no run, and it rests on open premises (`Compiled.KS`, `CertifierRegisters`, `ScopeAcc`).
+accepts no run, and it rests on four open premises (`Compiled.KS`, `CertifierRegisters`, `ScopeAcc`, `TrustedDevice`).
+The network attester is the auditor's hardware on a machine the developer does not control; trust in it and its host is
+the named assumption `trusted-device`.
 
 ## Pieces
 
