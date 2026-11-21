@@ -24,14 +24,15 @@ pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean to
 
 
 @cache
-def chain():
-    """The one-circuit chain's descriptor text and its template query."""
+def chain(registered: bool = True):
+    """The one-circuit chain's descriptor text and its template query: its layers' weights theta's registered reads,
+    `RegisteredInput16_v1` nodes of C, or, without ``registered``, the chain alone, which reads no registered value."""
     path = HERE.parents[1] / "test_one_circuit_chain.py"
     spec = importlib.util.spec_from_file_location("one_circuit_chain_for_restrict", path)
     mod = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = mod
     spec.loader.exec_module(mod)
-    program, _query = mod.circuit().program()
+    program, _query = (mod.circuit() if registered else mod.TI.chain()).program()
     query = {"name": "Q_template_instances", "version": 0, "params": {"templates": [mod.TI.GID]}}
     return b"".join(descriptor_chunks(program)).decode(), query
 
@@ -52,9 +53,9 @@ def toy_cases() -> list[tuple[str, int, list[tuple[int, int]]]]:
 
 
 @cache
-def python(units: tuple[int, ...]) -> str:
-    """Python's `restrict` bytes for the block of ``units``, consecutive units of the chain."""
-    text, query = chain()
+def python(units: tuple[int, ...], registered: bool = True) -> str:
+    """Python's `restrict` bytes for the block of ``units``, consecutive units of the chain (`chain`)."""
+    text, query = chain(registered)
     c = text.encode()
     return R.restrict(c, {"query": query}, [(units[0], units[-1] + 1)], R.Bits(R.program(c))).descriptor.decode()
 
@@ -67,6 +68,10 @@ pieces = D.server_fixture(pieces_port())
 
 #: the chain's first block, an interior block (each the window's member of two units) and a unit block
 BLOCKS = {"first": (0, 1), "interior": (4, 5), "unit": (6,)}
+
+#: `Spot.Restrict.ported`'s refusal of a block whose input nodes include a registered one, at its width
+PORTED_REGISTERED = ("ported: the block reads a registered value (RegisteredInput{w}_v1), and a parameter does not carry "
+                     "that it is registered: its rows would be committed afresh")
 
 
 @pytest.mark.parametrize("name", BLOCKS)
@@ -140,7 +145,20 @@ def test_another_blocks_program_differs(pieces):
 
 @pytest.mark.parametrize("units", list(BLOCKS.values()), ids=list(BLOCKS))
 def test_the_block_lowers(pieces, units):
-    """`Flock.Lower.lower` takes the block's Program with its input nodes as parameters (`Spot.Restrict.ported`)."""
+    """`Flock.Lower.lower` takes the block's Program with its input nodes as parameters (`Spot.Restrict.ported`), on the
+    chain that reads no registered value. `ported`, the reference the `blockAgrees` guards (through `portedOf`) and this
+    difference test read, does not yet carry a parameter's registration binding, so neither covers a block that reads a
+    registered value; the door's own lowering (`restrictOn`, then `lowerBlock`) does not go through `ported`."""
+    text, _ = chain(registered=False)
+    out = json.loads(pieces.call("restrict", {"descriptor": text, "units": list(units),
+                                              "python": python(units, registered=False)})[1])
+    assert out["lowers"] is None, out["lowers"]
+
+
+@pytest.mark.parametrize("units", list(BLOCKS.values()), ids=list(BLOCKS))
+def test_a_block_reading_a_registered_value_is_refused_by_ported(pieces, units):
+    """The chain whose weights are theta's registered reads, `RegisteredInput16_v1` nodes of C: `ported` refuses each
+    of its blocks by name, as `test_the_block_lowers` says it does."""
     text, _ = chain()
     out = json.loads(pieces.call("restrict", {"descriptor": text, "units": list(units), "python": python(units)})[1])
-    assert out["lowers"] is None, out["lowers"]
+    assert out["lowers"] == PORTED_REGISTERED.format(w=16), out["lowers"]
