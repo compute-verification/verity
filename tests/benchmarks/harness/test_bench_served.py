@@ -138,8 +138,9 @@ def test_the_h200_pearl_c_setup_serves_without_batch_invariance_and_with_sm90s_b
     root = Path(__file__).resolve().parents[3]
     stand_in = tmp_path / "stand-in"
     stand_in.mkdir()
-    (stand_in / "bash").write_text(f'#!/bin/sh\ncase "$1" in */pearl_c_sm90/build.sh) mkdir -p "$2" && '
-                                   f': > "$2/pearl_c_sm90.cubin"; exit 0 ;; esac\nexec {shutil.which("bash")} "$@"\n')
+    (stand_in / "bash").write_text(f'#!/bin/sh\ncase "$1" in */pearl_c_sm90/build.sh) mkdir -p "$2/debit" && '
+                                   f': > "$2/pearl_c_sm90.cubin" && : > "$2/debit/debit_sm90.cubin" && : > "$2/sources.txt"; '
+                                   f'exit 0 ;; esac\nexec {shutil.which("bash")} "$@"\n')
     python = tmp_path / "venv312" / "bin" / "python"
     python.parent.mkdir(parents=True)
     python.write_text('#!/bin/sh\necho "${VLLM_BATCH_INVARIANT-unset} $PEARLC_BF16_ROWS ${PEARLC_CUBIN#$RESEARCH_RUN_DIR/}"\n')
