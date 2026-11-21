@@ -1209,14 +1209,14 @@ def test_a_class_too_small_to_prove_is_refused_naming_each_template_c_flock_woul
     """Flock's composer refuses a proof block none of whose rows is over 111 bytes (no row then has a compression before its
     last SHA-512 block, so the block's SHA range holds no slot), one of more than 256 rows, or one past 2^27 bits
     (`interface.check_proof_block`), and `check_provable` refuses such a unit of a lowered circuit, naming each. TINY's
-    class is too small to prove: 12 templates have no wider row, its heads' of 16 values (RoPE, the key blocks, the head
-    end), the token select's group units at 64 logits a unit (4 groups), its combines with the I/O shell's words at 4
-    prompt ids and 2 outputs (the collectors, the entry) and the feed, so its tests lower it and don't check it. Every
-    other template has a wider row."""
+    class is too small to prove: 11 templates have no wider row, its heads' of 16 values (RoPE, the key blocks, the head
+    end), the token select's group units at 64 logits a unit (4 groups) and its combines with the I/O shell's words at 4
+    prompt ids and 2 outputs (the collectors, the entry), so its tests lower it and don't check it. Every other template
+    has a wider row."""
     circuit, _ = window
     short = {lab: b for lab, b in _widest_row(circuit).items() if b <= 111}
     assert short == {"RoPEHead_v1{D=16}": 32, **{f"AttnBlockFirst_v1{{D=16,NVIS={t},BN=128}}": 64 for t in range(1, 6)},
-                     "AttnHeadEnd_v1{D=16}": 64, GROUPS: 32, COLLECT0: 16, COLLECT: 16, FEED: 20, ENTRY: 16}
+                     "AttnHeadEnd_v1{D=16}": 64, GROUPS: 32, COLLECT0: 16, COLLECT: 16, ENTRY: 16}
     with pytest.raises(Unexpressible) as refused:
         check_provable(class_circuit(S._registered(), CLASS, None, GRAIN))
     why = str(refused.value)
@@ -1477,7 +1477,7 @@ def test_the_tiny_class_circuit_is_one_wired_program_of_registered_rows_with_no_
     circuit, prog, query = tiny_wired
     assert prog.annotations["free"] == []
     assert root_kinds(circuit, prog) == {"read": 17, "table read": 2, "opening": 3}
-    assert prog.fn.gates == 110_338_486
+    assert prog.fn.gates == 110_338_492
     assert query["params"]["templates"] == circuit.ids
 
 
