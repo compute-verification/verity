@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Properties.Flock.Circuit.LowerEval.Places
-public import Proofs.Properties.Flock.Circuit.LowerEval.Nested
+public import Proofs.Properties.Flock.Circuit.LowerEval.GateWords
 public import Proofs.Core.QSort
 
 /-! `UnitWordComputes` for templates of word-primitive calls and axis-0 batches. -/
@@ -1556,7 +1556,7 @@ theorem liftWordEval_nested :
       d < P.defs.size → ScanNested P d → GateBodiesDeep P d → Flock.Lift.lift S d = .ok (L, e) →
       ∀ x : List (List Bool), x.map List.length = leafWidths (P.defs[d]!) →
         Prog.evalBool L e x.flatten = (wordEval P d x).flatten :=
-  liftWordEval_scanNested_of nestedTyped
+  liftWordEval_scanNested_of nestedTyped (gateWords_of nestedTyped)
 
 /-- **`Batch0Typed`** holds: a template of word-primitive calls and axis-0 batches in a C `decode` accepts whose root has
 no recut, whose nodes' Boolean bodies evaluate through gates alone, has its references, callees, output widths,

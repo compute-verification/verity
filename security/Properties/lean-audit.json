@@ -351,6 +351,30 @@
    "issue": "TRN-103",
    "due": "2026-11-30"
   },
+  "InferenceOnlyVerifier.Record.SecurityProofs.EdgeFreeReads": {
+   "owner": "@lean",
+   "digest": "7cd98059132acf87bd14441c25138b437e0d648c2b17a702b514ab94afa83af3",
+   "issue": "LEAN-186",
+   "due": "2026-11-30",
+   "waits": "InferenceOnlyVerifier.SecurityProofs.ServedComplies",
+   "why": "ServedComplies takes Record.LaidOut and Record.Counts, which form_laidOut and form_counts prove from it"
+  },
+  "InferenceOnlyVerifier.Record.SecurityProofs.FinishTemplates": {
+   "owner": "@lean",
+   "digest": "dc042cebba9492d66b8f90e04c476416813d109b8bf2d0a6416c5c464366d6f6",
+   "issue": "LEAN-186",
+   "due": "2026-11-30",
+   "waits": "InferenceOnlyVerifier.SecurityProofs.ServedComplies",
+   "why": "ServedComplies takes Record.LaidOut and Record.Counts, which form_laidOut and form_counts prove from it"
+  },
+  "InferenceOnlyVerifier.Record.SecurityProofs.OwnRowsEdges": {
+   "owner": "@lean",
+   "digest": "64a7bfcac47f049ea671a449263f210b1e46fa74773e1a851d1790476d77b20d",
+   "issue": "LEAN-186",
+   "due": "2026-11-30",
+   "waits": "InferenceOnlyVerifier.SecurityProofs.ServedComplies",
+   "why": "ServedComplies takes Record.LaidOut and Record.Counts, which form_laidOut and form_counts prove from it"
+  },
   "MemoryAttester.Properties.CountRan": {
    "owner": "@network-accounting",
    "digest": "d434ab65e32b6c16ceb04058891eae6f56894487f5893ba83192d2da1fa1c83b",
@@ -931,6 +955,14 @@
    "digest": "0a60981392f438a2bfc08c5989f3ff49c86ef53a15b10cc5e9a074dad8d30d80",
    "issue": "LEAN-186",
    "due": "2026-11-30"
+  },
+  "Verity.Vocab.ReadsByPath": {
+   "owner": "@lean",
+   "digest": "4b1190adc2485e92681dc156007ace4d9269c94561de97786f2c3ca5bff55f7a",
+   "issue": "LEAN-238",
+   "due": "2026-11-24",
+   "waits": "Verity.remote_soundness_of_subprotocols",
+   "why": "remote soundness concludes the policy on the case as sent; its conclusion on the committed files waits on it"
   },
   "Verity.Vocab.SpotSound": {
    "owner": "@proofs",
@@ -7222,6 +7254,24 @@
    "type_hash": "72932ebcdc9d0dac150fe57d860e5c28e27873cfbb4ad0c1d1004e4a23cf6630",
    "unfolded_hash": "e8427bfa412b5db30c5837701ffe2ae0b43f97ca2f831794310b961b98d77736"
   },
+  "Properties.Poub.Shared.acceptSamplesOpenable_honest": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.Poub.Shared.acceptSamplesOpenable_honest :",
+    "  Exists fun coin =>",
+    "    Exists fun sampled =>",
+    "      Eq (Poub.receiptSample 1 coin (Properties.Poub.Shared.lengthsOf (List.cons Properties.Poub.window0 List.nil)))",
+    "        (Option.some sampled)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "40eca6e59c47875d35de0cd2a6b728c238bfda7d79eb25a2cfe3e6e43a144051"
+  },
   "Properties.Poub.Shared.acceptSamplesOpenable_nontrivial": {
    "owner": "@memory-accounting",
    "signature": [
@@ -7913,6 +7963,30 @@
    "type_hash": "4fbeddbfd8ebc3764ce443b7a3bd3accf8712775a2ea153e91dd73497ffabba3",
    "unfolded_hash": "a46eb5ea87d1167dc83f62b562e3147752003d7b55c338d6c8108d5e5ed88ca3"
   },
+  "Properties.Poub.acceptChecksOpenings_honest": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.Poub.acceptChecksOpenings_honest :",
+    "  Exists fun reg =>",
+    "    Exists fun w =>",
+    "      Exists fun coin =>",
+    "        Exists fun openings =>",
+    "          And",
+    "            (Eq",
+    "              (Poub.Registration.make? (Poub.zeros 1) 1 reg.payloadRoot (Poub.zeros Poub.Codec.SEED_BYTES)",
+    "                Properties.Poub.honestCodec Poub.Kind.sketch Bool.false Poub.LAYOUT 16)",
+    "              (Except.ok reg))",
+    "            (Eq (Poub.verifyWindow reg List.nil.toArray w coin 1 openings) (Option.some Poub.Verdict.accept))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "a023cd02fbf4c1aadec9a332188c3ccc1e2908385ee681035962d6901d0c442b"
+  },
   "Properties.Poub.acceptChecksOpenings_nontrivial": {
    "owner": "@memory-accounting",
    "signature": [
@@ -7941,6 +8015,30 @@
    "type_hash": "0824e125486350cbca90c13f408e9a32fe9bad346667d3234f62693b9a83b368",
    "unfolded_hash": "8dce49548ff266fa526b5c2e7c4a5891bc460ad2fbca7e940b82098c5a3969cb"
   },
+  "Properties.Poub.acceptOpensSamples_honest": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.Poub.acceptOpensSamples_honest :",
+    "  Exists fun reg =>",
+    "    Exists fun w =>",
+    "      Exists fun coin =>",
+    "        Exists fun openings =>",
+    "          And",
+    "            (Eq",
+    "              (Poub.Registration.make? (Poub.zeros 1) 1 reg.payloadRoot (Poub.zeros Poub.Codec.SEED_BYTES)",
+    "                Properties.Poub.honestCodec Poub.Kind.sketch Bool.false Poub.LAYOUT 16)",
+    "              (Except.ok reg))",
+    "            (Eq (Poub.verifyWindow reg List.nil.toArray w coin 1 openings) (Option.some Poub.Verdict.accept))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "a023cd02fbf4c1aadec9a332188c3ccc1e2908385ee681035962d6901d0c442b"
+  },
   "Properties.Poub.acceptOpensSamples_nontrivial": {
    "owner": "@memory-accounting",
    "signature": [
@@ -7968,6 +8066,30 @@
    },
    "type_hash": "23efc3674e2e53558d10237762e2aef44fad5fae02091016cd49a3d264198c6d",
    "unfolded_hash": "0627a953d7b79ff14a48151aa6c1d7407b4b928b34b79bd1598322975b27ea27"
+  },
+  "Properties.Poub.acceptSamplesOpenable_honest": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.Poub.acceptSamplesOpenable_honest :",
+    "  Exists fun reg =>",
+    "    Exists fun w =>",
+    "      Exists fun coin =>",
+    "        Exists fun openings =>",
+    "          And",
+    "            (Eq",
+    "              (Poub.Registration.make? (Poub.zeros 1) 1 reg.payloadRoot (Poub.zeros Poub.Codec.SEED_BYTES)",
+    "                Properties.Poub.honestCodec Poub.Kind.sketch Bool.false Poub.LAYOUT 16)",
+    "              (Except.ok reg))",
+    "            (Eq (Poub.verifyWindow reg List.nil.toArray w coin 1 openings) (Option.some Poub.Verdict.accept))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "a023cd02fbf4c1aadec9a332188c3ccc1e2908385ee681035962d6901d0c442b"
   },
   "Properties.Poub.acceptSamplesOpenable_nontrivial": {
    "owner": "@memory-accounting",
@@ -8009,6 +8131,54 @@
    },
    "type_hash": "c48ed9f56bac401f1424ec8c1d301d878459fbd7f571eba05213f38f456f752b",
    "unfolded_hash": "ef1530ccdd345492b3f0f4c85994fc35aada8306956da682e1e0d6082438ff85"
+  },
+  "Properties.Poub.appendsInOrder_honest": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.Poub.appendsInOrder_honest :",
+    "  Exists fun reg =>",
+    "    Exists fun coins =>",
+    "      Exists fun events =>",
+    "        Exists fun rs =>",
+    "          Exists fun s =>",
+    "            And",
+    "              (Eq",
+    "                (Poub.Registration.make? (Poub.zeros 1) 1 reg.payloadRoot (Poub.zeros Poub.Codec.SEED_BYTES)",
+    "                  Properties.Poub.honestCodec Poub.Kind.sketch Bool.false Poub.LAYOUT 16)",
+    "                (Except.ok reg))",
+    "              (And",
+    "                (Eq",
+    "                  (Poub.Session.run",
+    "                    (Poub.Session.State.init Properties.Poub.Line.Honest.params1 reg coins List.nil.toArray 0) events)",
+    "                  (Except.ok { fst := rs, snd := s }))",
+    "                (Eq s.outcome (Option.some \"accepted\")))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "d836de306384750f0efad70e4b4de7d9c7eba6da22618b9e21dd6ed4c9e7999c"
+  },
+  "Properties.Poub.appendsInOrder_nontrivial": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.Poub.appendsInOrder_nontrivial :",
+    "  Not",
+    "    (Eq Properties.Poub.overrun.extent",
+    "      (instHAdd.hAdd Properties.Poub.Line.Honest.reg1.blocks",
+    "        (List.map (fun x => x.count) Properties.Poub.overrun.appends.toList).sum))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "4dfe31f5e0d7e7775b3ddb67395aa97bdce5917e358b5b892cdb07c119134d0c"
   },
   "Properties.Poub.changedReadsDistinct": {
    "owner": "@memory-accounting",
@@ -8406,6 +8576,24 @@
    },
    "type_hash": "2478dc895508127d69a4cf3b2926faa65c0f79f6b9ad55350c96dd409ee1a99c",
    "unfolded_hash": "c4fbc1d75f11591dfcf914072ef6d624bb4caf4b98673697af22a7db982e2da0"
+  },
+  "Properties.Poub.sampleIsSubset_honest": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.Poub.sampleIsSubset_honest :",
+    "  Exists fun src =>",
+    "    Exists fun sampled =>",
+    "      Eq (Poub.receiptSample 1 src (Array.map (fun x => x.plan.length) Properties.Poub.window0.passes))",
+    "        (Option.some sampled)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "db6d022df2573bb2e1968445a4eeacec5faaa3ebb8fd4f69271014e98dd01f51"
   },
   "Properties.Poub.sampleIsSubset_nontrivial": {
    "owner": "@memory-accounting",
@@ -13675,162 +13863,6 @@
     ]
    },
    "type_hash": "7be5722effd046f635964f023dca25c90e739fb055dc677bb81837a5fcb7709d"
-  },
-  "Properties.Poub.Shared.acceptSamplesOpenable_honest": {
-   "owner": "@memory-accounting",
-   "signature": [
-    "Properties.Poub.Shared.acceptSamplesOpenable_honest :",
-    "  Exists fun coin =>",
-    "    Exists fun sampled =>",
-    "      Eq (Poub.receiptSample 1 coin (Properties.Poub.Shared.lengthsOf (List.cons Properties.Poub.window0 List.nil)))",
-    "        (Option.some sampled)"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "40eca6e59c47875d35de0cd2a6b728c238bfda7d79eb25a2cfe3e6e43a144051"
-  },
-  "Properties.Poub.appendsInOrder_honest": {
-   "owner": "@memory-accounting",
-   "signature": [
-    "Properties.Poub.appendsInOrder_honest :",
-    "  Exists fun reg =>",
-    "    Exists fun coins =>",
-    "      Exists fun events =>",
-    "        Exists fun rs =>",
-    "          Exists fun s =>",
-    "            And",
-    "              (Eq",
-    "                (Poub.Registration.make? (Poub.zeros 1) 1 reg.payloadRoot (Poub.zeros Poub.Codec.SEED_BYTES)",
-    "                  Properties.Poub.honestCodec Poub.Kind.sketch Bool.false Poub.LAYOUT 16)",
-    "                (Except.ok reg))",
-    "              (And",
-    "                (Eq",
-    "                  (Poub.Session.run",
-    "                    (Poub.Session.State.init Properties.Poub.Line.Honest.params1 reg coins List.nil.toArray 0) events)",
-    "                  (Except.ok { fst := rs, snd := s }))",
-    "                (Eq s.outcome (Option.some \"accepted\")))"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "d836de306384750f0efad70e4b4de7d9c7eba6da22618b9e21dd6ed4c9e7999c"
-  },
-  "Properties.Poub.appendsInOrder_nontrivial": {
-   "owner": "@memory-accounting",
-   "signature": [
-    "Properties.Poub.appendsInOrder_nontrivial :",
-    "  Not",
-    "    (Eq Properties.Poub.overrun.extent",
-    "      (instHAdd.hAdd Properties.Poub.Line.Honest.reg1.blocks",
-    "        (List.map (fun x => x.count) Properties.Poub.overrun.appends.toList).sum))"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "4dfe31f5e0d7e7775b3ddb67395aa97bdce5917e358b5b892cdb07c119134d0c"
-  },
-  "Properties.Poub.sampleIsSubset_honest": {
-   "owner": "@memory-accounting",
-   "signature": [
-    "Properties.Poub.sampleIsSubset_honest :",
-    "  Exists fun src =>",
-    "    Exists fun sampled =>",
-    "      Eq (Poub.receiptSample 1 src (Array.map (fun x => x.plan.length) Properties.Poub.window0.passes))",
-    "        (Option.some sampled)"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "db6d022df2573bb2e1968445a4eeacec5faaa3ebb8fd4f69271014e98dd01f51"
-  },
-  "Properties.Poub.acceptChecksOpenings_honest": {
-   "owner": "@memory-accounting",
-   "signature": [
-    "Properties.Poub.acceptChecksOpenings_honest :",
-    "  Exists fun reg =>",
-    "    Exists fun w =>",
-    "      Exists fun coin =>",
-    "        Exists fun openings =>",
-    "          And",
-    "            (Eq",
-    "              (Poub.Registration.make? (Poub.zeros 1) 1 reg.payloadRoot (Poub.zeros Poub.Codec.SEED_BYTES)",
-    "                Properties.Poub.honestCodec Poub.Kind.sketch Bool.false Poub.LAYOUT 16)",
-    "              (Except.ok reg))",
-    "            (Eq (Poub.verifyWindow reg List.nil.toArray w coin 1 openings) (Option.some Poub.Verdict.accept))"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "a023cd02fbf4c1aadec9a332188c3ccc1e2908385ee681035962d6901d0c442b"
-  },
-  "Properties.Poub.acceptOpensSamples_honest": {
-   "owner": "@memory-accounting",
-   "signature": [
-    "Properties.Poub.acceptOpensSamples_honest :",
-    "  Exists fun reg =>",
-    "    Exists fun w =>",
-    "      Exists fun coin =>",
-    "        Exists fun openings =>",
-    "          And",
-    "            (Eq",
-    "              (Poub.Registration.make? (Poub.zeros 1) 1 reg.payloadRoot (Poub.zeros Poub.Codec.SEED_BYTES)",
-    "                Properties.Poub.honestCodec Poub.Kind.sketch Bool.false Poub.LAYOUT 16)",
-    "              (Except.ok reg))",
-    "            (Eq (Poub.verifyWindow reg List.nil.toArray w coin 1 openings) (Option.some Poub.Verdict.accept))"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "a023cd02fbf4c1aadec9a332188c3ccc1e2908385ee681035962d6901d0c442b"
-  },
-  "Properties.Poub.acceptSamplesOpenable_honest": {
-   "owner": "@memory-accounting",
-   "signature": [
-    "Properties.Poub.acceptSamplesOpenable_honest :",
-    "  Exists fun reg =>",
-    "    Exists fun w =>",
-    "      Exists fun coin =>",
-    "        Exists fun openings =>",
-    "          And",
-    "            (Eq",
-    "              (Poub.Registration.make? (Poub.zeros 1) 1 reg.payloadRoot (Poub.zeros Poub.Codec.SEED_BYTES)",
-    "                Properties.Poub.honestCodec Poub.Kind.sketch Bool.false Poub.LAYOUT 16)",
-    "              (Except.ok reg))",
-    "            (Eq (Poub.verifyWindow reg List.nil.toArray w coin 1 openings) (Option.some Poub.Verdict.accept))"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "a023cd02fbf4c1aadec9a332188c3ccc1e2908385ee681035962d6901d0c442b"
   }
  },
  "shape": {
@@ -15486,8 +15518,8 @@
    "Flock.Chain.lowerEvalDoor": "frozen (no-function): a link of the chain from an accept to block correctness in C, stated over the circuit, its lowering and the commitments, not a property of one function's acceptance.",
    "Flock.Chain.doorLengths": "frozen (no-function): a link of the chain from an accept to block correctness in C, stated over the circuit, its lowering and the commitments, not a property of one function's acceptance.",
    "Flock.Chain.restrictBodyAgrees": "frozen (no-function): a link of the chain from an accept to block correctness in C, stated over the circuit, its lowering and the commitments, not a property of one function's acceptance.",
-   "Spot.Challenger.CutMeans": "unstated: on a log releasedLogOf accepts, cut accepting gives Log.Cut at the commitments (the code's challenger log is the core's log); a stated link, not proved; no theorem states it yet.",
-   "Spot.Challenger.KeyedBySlotMeans": "unstated: on a log releasedLogOf accepts, every family's coins are keyed by slot (Log.KeyedBySlot); a stated link, not proved; no theorem states it yet."
+   "Spot.Challenger.CutMeans": "unstated: on a log releasedLogOf accepts, cut accepting gives Log.Cut at the commitments (the code's challenger log is the core's log); a stated link, not proved; no theorem states it yet. Waits on the remote guarantee that was to read it, or its deletion as dead; owner @lean, issue LEAN-186, due 2026-11-30.",
+   "Spot.Challenger.KeyedBySlotMeans": "unstated: on a log releasedLogOf accepts, every family's coins are keyed by slot (Log.KeyedBySlot); a stated link, not proved; no theorem states it yet. Waits on the remote guarantee that was to read it, or its deletion as dead; owner @lean, issue LEAN-186, due 2026-11-30."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -27251,6 +27283,22 @@
     "Properties.Poub.Subprotocol.HonestLog.registration": "3e1befdcb53507f9ae736b3a4403445cf4d9750edf833ebeaff7ef8e187ee2e7"
    }
   },
+  "Properties.Poub.Remote.Instances": {
+   "digest": "567390da234d6924a2ed9740b683b94da27c109305564b7c9c14dc722048019f",
+   "definitions": {
+    "Properties.Poub.Line.Honest.leaf1": "b27a889df6bb4f4b238a679bbb8d09629ba4fbc9c94f2e80a4230556f8e8644d",
+    "Properties.Poub.Line.Honest.params1": "901a5b588a103ee23d96082d3300e89477857e4a1f6a6345e2cdfb3983fd1d9f",
+    "Properties.Poub.Line.Honest.reg1": "760ccee9de03cbd4418eb48ecd230f1bfc9ad8f97c928a891a297565a8917095",
+    "Properties.Poub.Line.Honest.root1": "145e4068330973f39c9cfdf2494920d743d4464bf0d1431c7fe77e1c5b92d0cf",
+    "Properties.Poub.Line.Honest.window1": "3813d8fdb47f736148116c056b8f395486fc4d402d28466d274b91109d2fed68",
+    "Properties.Poub.honestCodec": "1f56327573fbd371bcd5ed5fc141f587da640598378418aa35af1e155a7b7b15",
+    "Properties.Poub.overrun": "0c42c0c9a21a2f4c27db9293b80545c272cdc1d2f25b6815f0fb241cb0f9d4be",
+    "Properties.Poub.window0": "15b74121854812706f73fcd11d94fb5fbf557023e512039903a1768bbd79b955",
+    "Properties.Poub.zeroPath": "38b01c5ec8a70fc02bccb3d959e419b96a5c278117595ca06e3a1973e4c4743b",
+    "Properties.Poub.zeroPayload": "21c0be08473fbecff361e2cb483b06f2024ecdcb7c9fca231ca180e404189063",
+    "Properties.Poub.zeroRoot": "2e0f1dc7605f1275814b631c2730db7801eb226f42ac1d3d7d815ecbefaaae3d"
+   }
+  },
   "Properties.Poub.Remote.Line": {
    "digest": "f32269b591b10232961682e9fcedd7dbdf19e7021406a03231ccda2611e8dcd4",
    "definitions": {
@@ -31627,22 +31675,6 @@
     "Core.ZkServer.Run.ok": "febf1548e39779f46ccb93994636ed6cd61d8974928b45e030bbfe9921d7d0f5",
     "Core.ZkServer.Run.rec": "b7ca411a3f27e7dfd105e4b628a4dd614003f75af0356e9841534c2e6ba57059",
     "Core.ZkServer.faultWhy": "d4341b90cac9fe17d24ce135630c3fc78304e9c5fd5e10d017600c6a35ae9589"
-   }
-  },
-  "Properties.Poub.Remote.Instances": {
-   "digest": "567390da234d6924a2ed9740b683b94da27c109305564b7c9c14dc722048019f",
-   "definitions": {
-    "Properties.Poub.Line.Honest.leaf1": "b27a889df6bb4f4b238a679bbb8d09629ba4fbc9c94f2e80a4230556f8e8644d",
-    "Properties.Poub.Line.Honest.params1": "901a5b588a103ee23d96082d3300e89477857e4a1f6a6345e2cdfb3983fd1d9f",
-    "Properties.Poub.Line.Honest.reg1": "760ccee9de03cbd4418eb48ecd230f1bfc9ad8f97c928a891a297565a8917095",
-    "Properties.Poub.Line.Honest.root1": "145e4068330973f39c9cfdf2494920d743d4464bf0d1431c7fe77e1c5b92d0cf",
-    "Properties.Poub.Line.Honest.window1": "3813d8fdb47f736148116c056b8f395486fc4d402d28466d274b91109d2fed68",
-    "Properties.Poub.honestCodec": "1f56327573fbd371bcd5ed5fc141f587da640598378418aa35af1e155a7b7b15",
-    "Properties.Poub.overrun": "0c42c0c9a21a2f4c27db9293b80545c272cdc1d2f25b6815f0fb241cb0f9d4be",
-    "Properties.Poub.window0": "15b74121854812706f73fcd11d94fb5fbf557023e512039903a1768bbd79b955",
-    "Properties.Poub.zeroPath": "38b01c5ec8a70fc02bccb3d959e419b96a5c278117595ca06e3a1973e4c4743b",
-    "Properties.Poub.zeroPayload": "21c0be08473fbecff361e2cb483b06f2024ecdcb7c9fca231ca180e404189063",
-    "Properties.Poub.zeroRoot": "2e0f1dc7605f1275814b631c2730db7801eb226f42ac1d3d7d815ecbefaaae3d"
    }
   }
  },
