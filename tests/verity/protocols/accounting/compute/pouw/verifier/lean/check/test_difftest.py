@@ -487,9 +487,13 @@ def _swept(port: D.Port, instance, names: list[str], server) -> dict[tuple[str, 
 def test_window_drawn(pass_server, pinned_windows):
     """`window-drawn` over the registry's pinned windows (`pinned_windows`, today's tiles and J10-R's), then each mutation
     over a few seeds (`replay`): each honest case is drawn, past the layout, and each mutation refused for itself, past
-    the layout but ``descriptor-hex``'s. A descriptor no pin holds is refused at the layout before the draw, so a stand-in
-    window's case would compare two refusals. Each descriptor is about 60 MB, so it samples fewer cases than
-    `test_credit`'s ports."""
+    the layout but ``descriptor-hex``'s.
+
+    It catches a port that only ever compares two refusals: a descriptor no pin holds is refused at the layout before
+    the draw, on both sides, so over stand-in windows `credit._window_drawn` is never called and a defect in it (as
+    `credit.registered_file` once raised on every call, unseen) passes. It cannot be cheaper: the smallest descriptor a
+    pin holds is the registry's window at K = 64, about 60 MB, which each case carries to both sides, so it samples fewer
+    cases than `test_credit`'s ports."""
     port, instance = _pinned(WINDOW_DRAWN, credit_cases.window_drawn_instance, credit_cases.WINDOW_DRAWN_NAMES,
                              pinned_windows)
     CREDITED.clear()
@@ -508,8 +512,14 @@ def test_registered_file(pass_server, pinned_windows):
     few seeds (`replay`): each honest case's whole ``--registered`` file is the compiled `Credit.registeredFile`'s, with
     the public rows `credit.public_table` builds (at v5 each unit's call and blocks too, `window.j10r_blocks`) and the
     ok rows `credit.ok_table` builds at their known rows, and each mutation is refused at the registration, past the
-    layout. A descriptor no pin holds is refused at the layout before the file is built, so a stand-in window's case
-    would compare two refusals. Each descriptor is about 60 MB, so it samples fewer cases than `test_credit`'s ports."""
+    layout.
+
+    It catches a port that only ever compares two refusals: a descriptor no pin holds is refused at the layout before
+    the file is built, on both sides, so over stand-in windows `credit.registered_file` is never called, and it passed
+    while `credit.registered_file` raised AttributeError on every call (it read the public and ok rows' names from
+    `core_check`, which binds none of them). It cannot be cheaper: the smallest descriptor a pin holds is the registry's
+    window at K = 64, about 60 MB, which each case carries to both sides, so it samples fewer cases than `test_credit`'s
+    ports."""
     port, instance = _pinned(REGISTERED_FILE, credit_cases.registered_file_instance, credit_cases.REGISTERED_FILE_NAMES,
                              pinned_windows)
     CREDITED.clear()
