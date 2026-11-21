@@ -26,8 +26,8 @@ Knowledge soundness enters at its largest call's constant: whatever the sample, 
 and that call's extraction fails from the state the window brings with probability at most `κ_c + g_c(state)`. The
 state terms are one window-level collision term, in expectation over the window's run. The binding errors add: each bounds
 the picked unit's disagreement with the window's committed transcript on the samples where the unit is its call's. So
-`ExecutionPhaseDelta` gives gap (4)'s premises (`ExecutionPhaseBoundOfService` on `cursor/pouw-work-bound-stmt2-c7a9`, `KnowledgeSound εks`
-and `BindSound εbind`) at `εks R τ := max_c κ_c + coll R τ` with `coll := Pouw.Window.coll`, and `εbind := ∑_c εbind_c`.
+`ExecutionPhaseDelta` gives gap (4)'s premises (`KnowledgeSound εks` and `BindSound εbind`; gap (4)'s statement at the
+service's sample, `ExecutionPhaseBoundOfService`, is not in the tree) at `εks R τ := max_c κ_c + coll R τ` with `coll := Pouw.Window.coll`, and `εbind := ∑_c εbind_c`.
 
 **The deployed sample** (decision 102, `verity/protocols/accounting/pouw/verifier/window.py`). The window's calls are the service's
 sessions and its units the `N` tiles in each (`serviceSamplingDesign`): after the receipt the verifier samples one uniform
@@ -48,10 +48,11 @@ decision 101's keyed sample) is retired.
 * `CallAnalysis.cover`: each session's tile instances at the public input `t` from the verifier's own sample, the window
   root and domains from the registration (`PUBLIC_PORTS`, `public_inputs`), and the tile's place, rows and roots from
   `X`'s entries under that root (`tile_at`), so a unit's seed inputs are `UnitStmts.seedIn X ⟨σ, t⟩`.
-* `CallAnalysis.KnowledgeSound (κ σ) (g σ)`: each sampled proof block's compiled `--zk` session over hm96 hiding leaves
-  (`analysisZC` at `ksBoundAccZ`, its joint inequality `jointZC_ksBound`), pointwise in the state, with `κ = 0` and
-  `g = ⨆_j ksBoundAccZ_j/(1 − rateZ_j)` at the session's strategy, `ksBoundAccZ = ε_c⁻ + √(k·adv₀)` and
-  `rateZ = N₀/(ek)` (`Pouw.Window.flockKnowledgeSound_analysisZC`, proved, read through Flock's analysis below).
+* `CallAnalysis.KnowledgeSound (κ σ) (g σ)`: a hypothesis of `ExecutionPhaseDelta`, one per call. Its instance at each
+  sampled proof block's compiled `--zk` session over hm96 hiding leaves (`analysisZC` at `ksBoundAccZ`, its joint
+  inequality `jointZC_ksBound`) is pointwise in the state, with `κ = 0` and `g = ⨆_j ksBoundAccZ_j/(1 − rateZ_j)` at
+  the session's strategy, `ksBoundAccZ = ε_c⁻ + √(k·adv₀)` and `rateZ = N₀/(ek)`; that instance is not stated and not
+  in the tree (Flock's analysis below).
   `ksJoint_le` (`κ = 2^logLen/(e·Kr)`) is the non-ZK plain-leaf table's, which main's window doesn't run.
 * `BindSoundIn … σ (εbind σ)`: Flock's link finder at the window's state, over the window's run.
 * `coll`: the random-oracle claim's collision bound at the sessions' counted queries (`CollCounted`, premise, open), on
@@ -65,11 +66,11 @@ decision 101's keyed sample) is retired.
 * The harm family's first term: `k_prime`'s `K′`, at most `δ` where `K′ < N`. Where `K′ = N` (levels 87 to 100 at
   `(ε, δ) = (0.1%, 2^-40)` and level 87 at `(1%, 2^-128)`, the
   recheck's probe 2), the product distribution, one uniform pick per session, misses up to `2^-13.0` (`2^-118.8`), while the service's sample
-  misses nothing. PoUW's reading there takes the service's own missProb (gap (4)'s `ExecutionPhaseBoundOfService`, the subset
+  misses nothing. PoUW's reading there takes the service's own missProb (gap (4)'s `ExecutionPhaseBoundOfService`, not in the tree, the subset
   sampling design's miss, `0` at `K′ = N`).
 
 **PoUW's reading: three links.** `ExecutionPhaseDelta` bounds the committed transcript's incorrect proof blocks. PoUW's reading of it needs
-three more links, each stated:
+three more links, the first two stated:
 * **The deployed incorrect sets are copy-closed** (`IncorrectCopyClosed`), so `ServiceMissProb`'s `η = 0` applies to them. The
   service's units' statements are the tiles' read in every session (`UnitStmts.copies`: an instance's public inputs are
   its tile and the window's common words, never the session), and their incorrect sets are copy-closed, proved
@@ -89,14 +90,15 @@ three more links, each stated:
   (`Proofs/Spot/Sampling/OneStage.lean`). PoUW's event, the window accepting while its committed transcript
   isn't anchored, served and outside `𝓑`, is then at most `ExecutionPhaseDelta`'s bound plus `δ_in`
   (`Pouw.Window.executionPhase_served_le`, proved).
-* **Flock's analysis** (`Proofs/Pouw/Window/Flock.lean`): Flock's sessions are games of core's one game
-  (`Verity.Game`), so a Flock `ExtractionAnalysis` of a session is a `CallAnalysis` of its call with the same `ks`,
-  `link` and `cover` (`CallAnalysis.ofFlock`), and Flock's pointwise knowledge bound (`FlockKnowledgeSound`) is the
-  call's `KnowledgeSound` (`ofFlock_knowledgeSound`, proved). The bound reads the
-  session's own coins and the extractor's `k` accepted reruns, at the state the registration, the sample and the earlier
-  sessions left, never the sample's coin. At main's `--zk` sessions it is proved (`flockKnowledgeSound_analysisZC`, from
-  `jointZC_ksBound`), with `κ_c = 0` and `g_c = ⨆_j ksBoundAccZ_j/(1 − rateZ_j)`; `εbind_c` is Flock's link finder at
-  the window's state.
+* **Flock's analysis** (not stated, not in the tree): Flock's sessions are games of core's one game (`Verity.Game`),
+  so a Flock `ExtractionAnalysis` of a session would be a `CallAnalysis` of its call with the same `ks`, `link` and
+  `cover`, and Flock's pointwise knowledge bound the call's `KnowledgeSound`, at main's `--zk` sessions with `κ_c = 0`
+  and `g_c = ⨆_j ksBoundAccZ_j/(1 − rateZ_j)` from `jointZC_ksBound`. The bound reads the session's own coins and the
+  extractor's `k` accepted reruns, at the state the registration, the sample and the earlier sessions left, never the
+  sample's coin. `ExecutionPhaseDelta` takes the calls' knowledge soundness as a hypothesis, so its instance at Flock's
+  `--zk` analysis is a statement of its own, which no guarantee states; the bridge that last held it, read by no
+  guarantee, is `Proofs/Pouw/Window/Flock.lean` at `e637bd47ef5`. `εbind_c` is Flock's link finder at the window's
+  state.
 
 Each unit's statement carries its position: its seed inputs (tag, salt, position, root(A_j), root(B_j)) are
 `UnitStmts.seedIn X v`, the tag and salt public, and the position and roots functions of the place `v` and `X`, bound
