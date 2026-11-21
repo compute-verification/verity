@@ -521,6 +521,27 @@ def test_a_run_input_trees_domain_is_its_nodes_rows_under_the_windows_root():
         I.run_input_domain(prog, digest, other, 1, RUN)
 
 
+def test_a_run_input_nodes_value_is_committed_whole_from_its_slice_and_broadcast_reads():
+    """A run input node read by slices and a broadcast is committed once, whole: each unit's row at the node's row its
+    read's source names; refused by name where two readers record two values of a row, a row is read by no reader, or
+    the readers' rows are of two widths."""
+    from types import SimpleNamespace as NS
+
+    prog = NS(root=NS(body=NS(offsets=[0, 8]), gates=8))
+    node = np.arange(8, dtype=np.uint16).reshape(4, 2) + 100
+    a = I.Read("A", "x", "input/n0", 0, (2,), 0, (2,))
+    b = I.Read("B", "x", "input/n0", 0, (2,), 4, (2,))
+    c = I.Read("C", "x", "input/n0", 0, (3,), 2, (0,))
+    reads = [(a, 2, 2, node[:2]), (b, 2, 2, node[2:]), (c, 2, 2, np.repeat(node[1:2], 3, axis=0))]
+    assert np.array_equal(I.run_input_value(prog, "input/n0", reads), node)
+    with pytest.raises(ValueError, match="run input node 0: C x and an earlier reader record two values of one row"):
+        I.run_input_value(prog, "input/n0", [*reads[:2], (c, 2, 2, np.repeat(node[2:3], 3, axis=0))])
+    with pytest.raises(ValueError, match=r"run input node 0: rows \[2, 3\] of its 4 are read by no member"):
+        I.run_input_value(prog, "input/n0", [reads[0], reads[2]])
+    with pytest.raises(ValueError, match="not one width"):
+        I.run_input_value(prog, "input/n0", [reads[0], (b, 4, 4, node[2:].reshape(1, 4))])
+
+
 def test_a_close_that_cant_commit_a_run_inputs_tree_refuses_naming_it():
     """A run input whose rows the period doesn't hold in full has no ``input/n<w>`` tree: the close refuses, naming it,
     and never falls through to a tree of the member's own."""

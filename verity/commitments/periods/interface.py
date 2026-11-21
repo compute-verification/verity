@@ -1851,6 +1851,44 @@ def run_input_node(param: str) -> int:
     return int(param[7:])
 
 
+def run_input_value(program: Any, param: str, reads: Sequence[tuple[Read, int, int, np.ndarray | None]]) -> np.ndarray:
+    """Run input node ``w``'s whole value (``param`` its tree ``input/n<w>``) as rows of its readers' words: ``reads``, each
+    of its reads with its port's leaves and words a row and the reader's recorded rows over the read's units (None where
+    recorded by reference). Each unit's row lands at the node's row its read's source names; a row two reads place is the
+    same in both. Refused (ValueError, naming the node) where its readers' rows are of two widths, recorded by
+    reference, out of the node, disagree, or leave a row of the node no reader places: its one tree is its value whole."""
+    w = run_input_node(param)
+    body = program.root.body
+    offs = list(body.offsets)
+    gates = (offs[w + 1] if w + 1 < len(offs) else program.root.gates) - offs[w]
+    shapes = {(leaves, words) for _r, leaves, words, _x in reads}
+    if len(shapes) != 1:
+        raise ValueError(f"run input node {w}: its readers' rows are of (leaves, words) {sorted(shapes)}, not one width; "
+                         f"its tree {param} is one row width")
+    (leaves, words), = shapes
+    if gates % leaves:
+        raise ValueError(f"run input node {w}: its {gates} leaves are no whole number of its readers' {leaves}-leaf rows")
+    out = np.zeros((gates // leaves, words), dtype=np.uint16)
+    placed = np.full(gates // leaves, -1, dtype=np.int64)
+    for k, (r, _leaves, _words, rows) in enumerate(reads):
+        if rows is None:
+            raise ValueError(f"run input {param}: {r.reader} {r.port} is recorded by reference; the close commits the "
+                             "node's whole value, which its readers record in full, and refuses to close")
+        at = r.source(np.arange(r.units)) // words
+        if (at < 0).any() or (at >= len(out)).any():
+            raise ValueError(f"run input node {w}: {r.reader} {r.port} reads rows {sorted(set(at.tolist()))[:8]} outside "
+                             f"its {len(out)}")
+        rows = np.asarray(rows, dtype=np.uint16).reshape(r.units, words)
+        again = placed[at] >= 0
+        if again.any() and not (out[at[again]] == rows[again]).all():
+            raise ValueError(f"run input node {w}: {r.reader} {r.port} and an earlier reader record two values of one row")
+        out[at], placed[at] = rows, k
+    if (unread := np.flatnonzero(placed < 0)).size:
+        raise ValueError(f"run input node {w}: rows {unread[:8].tolist()} of its {len(out)} are read by no member, so the "
+                         f"close can't commit its tree {param} whole and refuses")
+    return out
+
+
 def run_inputs_of(doc: Mapping[str, Any]) -> tuple[Read, ...]:
     """A stated record's ``run_inputs`` (`Window.circuit_record`), each a `Read`."""
     return tuple(Read.of(x) for x in doc.get("run_inputs", ()))
@@ -3139,23 +3177,25 @@ class Window:
         return data, salts_of, strings_of, need, unplaced
 
     def _inputs(self) -> dict[str, Any]:
-        """``inputs``: each of ``runs``' values committed once (core's ``registered_value.Registered``, fresh salts) under
-        the period's program digest and its run root (``window``), every unit's row of its port in unit order, in the
-        domain C gives its node (`run_input_domain`). Refused (ValueError, naming the node) where a run input read has no
+        """``inputs``: each run input node's whole value (`run_input_value`, from every read of it) committed once (core's
+        ``registered_value.Registered``, fresh salts) under the period's program digest and its run root (``window``), in
+        the domain C gives its node (`run_input_domain`). Refused (ValueError, naming the node) where a run input read has no
         such tree: the period then refuses to close."""
         if self.runs and not self.inputs:
-            prog = program_digest(self.window.program)
+            prog, by = program_digest(self.window.program), {}
             for r in self.runs:
-                rows = self._words(r.reader)[[p for p, _ in self.circuit._by_id[r.reader][1].rows].index(r.port)]
-                if rows is None:
-                    raise ValueError(f"run input {r.param}: {r.reader} {r.port} is recorded by reference, and a run input's "
-                                     "rows are recorded in full; the period commits no tree of it and refuses to close")
-                v = RV.Registered.commit(prog, r.param, np.asarray(rows).tolist(), schema=V2, window=self.run)
-                want = run_input_domain(self.window.program, prog, run_input_node(r.param), v.words, self.run)
+                fn, lay, _n = self.circuit._by_id[r.reader]
+                rows = self._words(r.reader)[[p for p, _ in lay.rows].index(r.port)]
+                by.setdefault(r.param, []).append((r, len(dict(fn.signature()[0])[r.port].leaf_widths()), dict(lay.rows)[r.port],
+                                                   None if rows is None else rows[r.at:r.at + r.reader_units]))
+            for param, reads in by.items():
+                value = run_input_value(self.window.program, param, reads)
+                v = RV.Registered.commit(prog, param, value.tolist(), schema=V2, window=self.run)
+                want = run_input_domain(self.window.program, prog, run_input_node(param), v.words, self.run)
                 if v.domain.domain_id != want.domain_id:
-                    raise ValueError(f"run input {r.param}: {r.reader} {r.port}'s {v.leaves} rows are not C's node's "
-                                     f"{want.count}; the period commits no tree of it and refuses to close")
-                self.inputs[r.param] = v
+                    raise ValueError(f"run input {param}: its {v.leaves} rows are not C's node's {want.count}; the period "
+                                     "commits no tree of it and refuses to close")
+                self.inputs[param] = v
         if missing := sorted({r.param for r in self.runs} - set(self.inputs)):
             raise ValueError(f"run inputs {missing}: read by members and committed in no tree of the period; it refuses "
                              "to close")
