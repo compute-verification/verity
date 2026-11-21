@@ -19,7 +19,7 @@ from verity.commitments.merkle import CommitmentDomain
 from verity.commitments.periods import interface as I
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2, bit_row
 from verity.protocols.proof.spot.prover import docket as DK
-from verity.protocols.proof.spot.verifier.one_stage import docket as R, verifier as V
+from verity.protocols.proof.spot.verifier.one_stage import docket as R, registered as G, verifier as V
 
 EMB = I.resolve("EmbeddingRead_v2{V=4,H=16}")
 EID = descriptor_id(EMB)
@@ -95,3 +95,25 @@ def test_a_tables_supplied_rows_are_the_rows_r7_recomputes_from_the_programs_dig
     for of in ("root", "domain", "opened"):
         row = win.registered[f"embed/{of}"]
         assert row.program == pd and list(row.salts) == RV.supplied_salts(pd, f"embed/{of}", 1), of
+
+
+def test_a_tables_root_and_domain_marks_give_the_rows_the_record_commits():
+    """`registered.root/v1` and `registered.domain/v1` with the table's registered name as `value`, read off the record's
+    `registered` entry of that name, give the 64 bytes `supplied` commits for the table's root and domain id: as a
+    `Digest`'s 512 leaves packed into its 32 words (`row/v2`), the same row, and under the program's salts the same root."""
+    table = Table()
+    reg = I.Registered({"embed": 64}, (I.Table("embed", "embed", 0, 16, 4),), (),
+                       (I.TableRead(EID, "root", "embed", "root", 0, 3), I.TableRead(EID, "domain", "embed", "domain", 0, 3)),
+                       (I.TableOpening(EID, "embed", "tok", ("row", "salt", "path"), "o1", 0, 3),))
+    prog = "cd" * 64
+    committed = I.supplied(reg, {"embed": table.entry()}, prog)
+    rec = {"registered": [table.entry()]}
+    for of, want in (("root", table.tree.root), ("domain", table.dom.domain_id)):
+        name = I.supplied_param(reg.readable["embed"], of)
+        mark = {"supplied": f"registered.{of}/v1", "args": {"value": "embed"}, "layout": "digest", "bits": 512}
+        (row,) = G.of_mark({}, {}, name, mark)
+        leaves = G.row_leaves_of(row, lambda k, n: G._source_bytes(rec, name, k, n, [name], [], None), 1, True)
+        words = G.bit_words(leaves, 1, 16)
+        assert leaves == G.digest_leaves(want) and words == I.digest_words(want) == list(committed[name].rows[0]), of
+        mine = RV.Registered.commit(prog, name, [words], RV.supplied_salts(prog, name, 1), schema=V2)
+        assert mine.root == committed[name].root and mine.entry() == committed[name].entry(), of

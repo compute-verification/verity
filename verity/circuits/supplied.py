@@ -104,6 +104,8 @@ FUNCTIONS: dict[str, Function] = {f.name: f for f in (
     Function("pouw.pearlplus.salt/v1", "coin", ("coin",), (), _fixed(32)),
     # the root the registration holds for registered value `value`: the verifier's pin of it, never a prover's row
     Function("registered.root/v1", "supplied", ("commitment",), ("value",), _fixed(64)),
+    # the domain id the registration holds for registered value `value`, beside its root
+    Function("registered.domain/v1", "supplied", ("commitment",), ("value",), _fixed(64)),
     # the root the record names for port `port`, registered before the coin
     Function("record.root/v1", "supplied", ("commitment",), ("port",), _fixed(64)),
     # the first position after every unit of the log's records, a u64 big-endian: a unit's position adds its index

@@ -85,14 +85,17 @@ def reference(j):
 
 
 JUNK = st.one_of(st.none(), st.booleans(), st.text(max_size=3), st.integers(-3, 3), st.lists(st.integers(-1, 3), max_size=2))
-RECORD = {"population": 3, "window": {"start": 0}, "registered": [{"value": "w", "root": "11" * 64}],
+RECORD = {"population": 3, "window": {"start": 0}, "registered": [{"value": "w", "root": "11" * 64, "domain": "33" * 64},
+                                                                  {"value": "v", "root": "44" * 64}],
           "roots": [{"port": "p", "root": "22" * 64}]}
 BINDING = {"stream": "aa", "prover": "bb"}
 ROOTS = [{"supplied": "registered.root/v1", "args": {"value": "w"}, "layout": "digest", "bits": 512},
          {"supplied": "record.root/v1", "args": {"port": "p"}, "layout": "halves", "bits": 512},
          {"supplied": "record.root/v1", "args": {"port": "q"}, "layout": "halves", "bits": 512},
          {"supplied": "window.salt/v1", "args": {}, "layout": "halves", "bits": 512},
-         {"supplied": "log.base/v1", "args": {}, "layout": "halves", "bits": 64}]
+         {"supplied": "log.base/v1", "args": {}, "layout": "halves", "bits": 64},
+         {"supplied": "registered.domain/v1", "args": {"value": "w"}, "layout": "digest", "bits": 512},
+         {"supplied": "registered.domain/v1", "args": {"value": "v"}, "layout": "digest", "bits": 512}]
 PEARL = {"supplied": "pouw.pearlplus.salt/v1", "args": {}, "layout": "le", "bits": 256}
 MARKS = st.one_of(st.just(SALT), st.just(ONE), st.just(PEARL), st.sampled_from(ROOTS), st.builds(lambda v: {**ONE, "args": {"value": v}}, st.integers(0, 70000)),
                   st.builds(lambda f, lay, b: {"supplied": f, "args": {}, "layout": lay, "bits": b},
@@ -210,6 +213,14 @@ def test_the_order_rule_names_the_commitments_registered_after_the_coin():
                                                                           [2, 2]),
         "widths": {"salt": 16, "base": 16}, "released": {"pous.setup.salt/v1": 2}},
      {"salt": [[0x0100 + 0x0202 * i for i in range(12)]], "base": [[0, 0, 5, 0]]}),
+    ("the domain id the record registers for w", lambda j: {**j, "program": desc([["dw", 1, ROOTS[5]]], [3]),
+                                                           "widths": {"dw": 1}},
+     {"dw": [G.digest_leaves(bytes.fromhex("33" * 64))]}),
+    ("a registered entry with no domain id", lambda j: {**j, "program": desc([["dv", 1, ROOTS[6]]], [3]),
+                                                       "widths": {"dv": 1}}, None),
+    ("the root and the domain id of w", lambda j: {**j, "program": desc([["rw", 1, ROOTS[0]], ["dw", 1, ROOTS[5]]], [3, 3]),
+                                                   "widths": {"rw": 1, "dw": 1}},
+     {"rw": [G.digest_leaves(bytes.fromhex("11" * 64))], "dw": [G.digest_leaves(bytes.fromhex("33" * 64))]}),
     ("a window salt with no binding", lambda j: {**j, "binding": None, "coins": {"window.salt/v1": "07"},
                                                  "program": desc([["s", 1, ROOTS[3]]], [2]), "widths": {"s": 16}}, None),
 ], ids=lambda x: x if isinstance(x, str) else "")
