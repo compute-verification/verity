@@ -142,21 +142,30 @@ def E3R : String := E3S.replace "Input1_v1" "RegisteredInput1_v1"
 /-- A v1 verifier of `d` that expects nothing registered, its program function's parameters given. -/
 def weighed (d : String) : Verifier := let v := verifier d; { v with registered := #[] }
 
-/-- A pin of `value` at `leaves` rows of one 1-bit word, its domain at `program`'s digest `"pp"` unless `domain` names
-one. -/
-def pin (value : String) (leaves : Nat) (domain : Option String := none) : String × Json :=
-  (value, Json.mkObj [("value", value), ("root", ROOT), ("leaves", leaves), ("words", (1 : Nat)), ("word_bits", (1 : Nat)),
-    ("domain", domain.getD ((Registered.domain "pp" value 1 leaves 1).toOption.map Flock.hexOf |>.getD ""))])
+/-- The verifier's own entry for `E3R`'s parameter `value` at one word a row (`Registered.entries`). -/
+def ownEntry (value : String) : Registered.Entry :=
+  match Registered.entries (program E3R).desc (params (program E3R)) #[(value, 1)] with
+  | .ok #[e] => e
+  | _ => { value, leaves := 0, words := 0, wordBits := 0, domain := "" }
+
+/-- A pin of `value` at its own entry's shape, `more` leaves past it, its domain at the registration's program digest
+`ROOT` unless `domain` names one. -/
+def pin (value : String) (more : Nat := 0) (domain : Option String := none) : String × Json :=
+  let e := ownEntry value
+  let leaves := e.leaves + more
+  (value, Json.mkObj ([("value", value), ("root", ROOT), ("leaves", leaves), ("words", e.words),
+    ("domain", domain.getD ((Registered.domain ROOT value e.words leaves e.wordBits).toOption.map Flock.hexOf |>.getD ""))] ++
+    (if e.wordBits == Registered.WORD_BITS then [] else [(Registered.WIDTH_KEY, Lean.toJson e.wordBits)])))
 
 def READS : Array (String × String × String) := #[("E_v1", "x", "x"), ("E_v1", "y", "y")]
 
 /-- The registration of record of `pins`, declaring `reads`, and its SHA-512. -/
 def ofRecord (pins : List (String × Json)) (reads : Array (String × String × String) := READS) : ByteArray × String :=
   let rs := Json.arr (reads.map fun (t, p, x) => Json.arr #[t, p, x])
-  let b := (Json.compress (Json.mkObj [("program", "pp"), ("reads", rs), ("values", Json.mkObj pins)])).toUTF8
+  let b := (Json.compress (Json.mkObj [("program", ROOT), ("reads", rs), ("values", Json.mkObj pins)])).toUTF8
   (b, Flock.hexOf (Flock.Sha512.hash b))
 
-def PINS : List (String × Json) := [pin "x" 3, pin "y" 1]
+def PINS : List (String × Json) := [pin "x", pin "y"]
 
 /-- The check's codes on the honest record of `v` with the pins R8 accepts (`Verifier.weighed`), each registered at
 its pin's entry under `ROOT`, changed by `f`. -/
@@ -165,7 +174,8 @@ def weighedCodes (v : Verifier) (f : Json → Json := id) : Array String :=
   match honest w with
   | .ok r =>
     let es := w.certified.map fun (e, _) => Json.mkObj [("value", e.value), ("root", ROOT), ("leaves", Lean.toJson e.leaves),
-      ("words", Lean.toJson e.words), ("word_bits", Lean.toJson e.wordBits), ("domain", e.domain)]
+      ("words", Lean.toJson e.words), ("domain", e.domain)] |> fun j => if e.wordBits == Registered.WORD_BITS then j
+        else put j Registered.WIDTH_KEY (some (Lean.toJson e.wordBits))
     check (f (if es.isEmpty then r else put r "registered" (some (Json.arr es)))) v
   | .error e => #[s!"fixture: {e}"]
 
@@ -180,17 +190,17 @@ def weighedCodes (v : Verifier) (f : Json → Json := id) : Array String :=
 #guard weighedCodes (weighed E3R) == #["R8-unpinned"]
 #guard weighedCodes { weighed E3R with weightsOfRecord := some ((ofRecord PINS).1, OTHER) } == #["R8-weights-digest"]
 -- a marked input with no pin is refused
-#guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord [pin "x" 3]) } == #["R8-unpinned"]
+#guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord [pin "x"]) } == #["R8-unpinned"]
 -- a pin of a parameter the program doesn't mark registered excuses nothing
 #guard weighedCodes { weighed E3S with weightsOfRecord := some (ofRecord PINS) } == #["R8-shared-input"]
-#guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord [pin "x" 3, pin "y" 1 (some OTHER)]) } ==
+#guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord [pin "x", pin "y" 0 (some OTHER)]) } ==
   #["R8-weights-domain", "R8-unpinned"]
-#guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord [pin "x" 2, pin "y" 1]) } == #["R8-weights-shape"]
+#guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord [pin "x" 1, pin "y"]) } == #["R8-weights-shape"]
 -- the declared reads are the reads the description shows, in either direction
 #guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord PINS #[]) } == #["R8-undeclared"]
 #guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord PINS (READS.push ("E_v1", "z", "x"))) } ==
   #["R8-undeclared"]
 -- a registered input under a query that is no template query that applies
-#guard weighedCodes { weighed E3R with query := Json.mkObj [("name", "Q_all")] } |>.contains "R8-weights-query"
+#guard weightsCodes { weighed E3R with query := Json.mkObj [("name", "Q_all")] } == #["R8-weights-query"]
 
 end Spot.Test.Docket

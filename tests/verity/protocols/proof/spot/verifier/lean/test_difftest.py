@@ -5070,16 +5070,16 @@ def test_link_points_holds_the_per_member_forms_members_as_the_python_does(piece
 
 
 def _pin(program: Program, v: str, leaves: int | None = None, domain: str | None = None) -> dict:
-    """A pin of `program`'s parameter `v` at one word a row, its domain at program digest ``pp`` unless `domain` names one."""
+    """A pin of `program`'s parameter `v` at one word a row, its domain at program digest ``aa`` * 64 unless `domain` names one."""
     n, b = G.shape(program, v, 1) if leaves is None else leaves, G.width(program, v)
     return {"value": v, "root": "ab" * 64, "leaves": n, "words": 1, **({} if b == RV.WORD_BITS else {RV.WIDTH_KEY: b}),
-            "domain": domain or RV.domain("pp", v, 1, n, b).domain_id.hex()}
+            "domain": domain or RV.domain("aa" * 64, v, 1, n, b).domain_id.hex()}
 
 
 def _weights_doc(pins: list[dict], reads) -> dict:
     """The weights' registration of record pinning `pins` and declaring `reads`, as `weights_of_record` names it: its
     document in hex and its SHA-512."""
-    body = json.dumps({"program": "pp", "values": {e["value"]: e for e in pins}, "reads": [list(r) for r in reads]}).encode()
+    body = json.dumps({"program": "aa" * 64, "values": {e["value"]: e for e in pins}, "reads": [list(r) for r in reads]}).encode()
     return {"digest": hashlib.sha512(body).hexdigest(), "document": body.hex()}
 
 
