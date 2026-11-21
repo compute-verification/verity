@@ -124,7 +124,7 @@ UNSAID = ("compiled by the registered compiler", "charged", "bounded by", "cappe
 @pytest.mark.slow
 def test_the_window_road_runs_remote_from_the_record_and_publishes_no_description(tmp_path, monkeypatch):
     """remote through the preflight on the window's record (no ROW read), its seal held to the record and predict row's
-    compiler, each step after it run or refused by name: the sampled proofs as proofs', Pearl+ as needing a card (a processor has no gpu-lease), the
+    compiler, each step after it run or refused by name: the sampled proofs not run without DEVELOPMENT=1, which says why, Pearl+ as needing a card (a processor has no gpu-lease), the
     record and the composite after them; the block counts count the record's circuit beside the registration that binds
     it. The end line counts what ran, what refused or was undecided and what did not run, and neither it nor any
     published file names a template or carries the description's digest. What no cheaper test reaches: the runner itself
@@ -143,8 +143,9 @@ def test_the_window_road_runs_remote_from_the_record_and_publishes_no_descriptio
             "(candidate 135)") in log and "its circuit registered by the prover" in log, log
     published = lines + "".join(text for _, text in _published(out))
     assert not [p for p in UNSAID if p in published.lower()], [p for p in UNSAID if p in published.lower()]
-    assert ("sampled-proofs: not run: step 3's prove path (prove_path/run.sh) proves the units a partition file names "
-            "(PP_PARTITION), and the window's record has none: its proof of the window's circuit is proofs'") in log, log
+    assert ("sampled-proofs: not run: its circuit is the one the prover registered, and its coins the local challenger's: "
+            "a development run's alone (DEVELOPMENT=1) until proofs' compile check runs and the auditor's challenger is "
+            "wired") in log and "the Lean checks pass" not in log, log
     assert ("pearl-plus: not run: needs a card: its piece takes its own gpu-lease, and this node has no gpu-lease: "
             "compute accounting's") in log, log
     assert "record: not run:" in log and "composite: not run:" in log, log
