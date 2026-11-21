@@ -1042,7 +1042,7 @@ def test_the_members_check_holds_a_marked_programs_reads_only_to_pins_r8_accepte
         assert R.weights_held(marked, q, {"t": 2}, None)[0] == [("R8-unpinned", {"values": ["t"]})]
         assert R.weights_held(marked, q, {"t": 2}, None, own[4])[0] == []
         body = _weights([pin])[0]
-        for reg, why in (({"record": body.hex(), "ledger": []}, R.NO_SIGNED_HEAD_WHY),
+        for reg, why in (({"record": body.hex(), "ledger": [], "lane": "circuits"}, R.NO_SIGNED_HEAD_WHY),
                          ({"record": body.hex()}, R.REGISTRATION_FORM),
                          ({"record": body.hex(), "head": "served"}, R.REGISTRATION_FORM),
                          ({"record": body.hex().upper(), "head": R.DEVELOPMENT}, R.REGISTRATION_FORM)):
@@ -1061,8 +1061,22 @@ def test_the_registration_is_the_challengers_signed_head_or_the_development_path
         body, digest, R.DEVELOPMENT)
     for challenger, root in ((None, "ab" * 64), ({"key": {}}, None)):
         with pytest.raises(R.RegistrationRefused) as e:
-            R.registration_parsed({"record": body.hex(), "ledger": []}, challenger, root, lambda *a: True)
+            R.registration_parsed({"record": body.hex(), "ledger": [], "lane": "circuits"}, challenger, root, lambda *a: True)
         assert str(e.value) == R.NO_SIGNED_HEAD_WHY
+    with pytest.raises(R.RegistrationRefused) as e:
+        R.registration_parsed({"record": body.hex(), "ledger": []}, None, "ab" * 64, lambda *a: True)
+    assert str(e.value) == R.REGISTRATION_FORM
+
+
+def test_the_half_after_the_draw_refuses_by_name_what_it_cannot_test():
+    """`docket.registration_after_draw` (`OneStage.registrationAfterDraw`): no epoch or challenger key, or no lane the
+    auditor names, refuses by name; the ledger's own refusals are `challenger.registration_held`'s, held to the Lean's by
+    the challenger difftest."""
+    for registration, challenger, root, why in (({"lane": "circuits"}, {"key": {}}, "ab" * 64, R.NO_SIGNED_HEAD_WHY),
+                                                ({"lane": "circuits"}, None, None, R.NO_SIGNED_HEAD_WHY)):
+        with pytest.raises(R.RegistrationRefused) as e:
+            R.registration_after_draw(registration, challenger, root, "cd" * 64, {"ledger": []}, lambda *a: True)
+        assert str(e.value) == why
 
 
 def _held(prog, q, rp):

@@ -228,8 +228,9 @@ DEVELOPMENT = "development"
 DEVELOPMENT_WHY = ("the registration's digest was taken from the serving node's own file and is held by no one else: "
                    "nobody but the prover's side attests that the registration was fixed before the coins, so this run "
                    "states no bound from the sample")
-REGISTRATION_FORM = ("the registration is {record, ledger} or {record, head: \"development\"}: the deployment's "
-                     "registration record's bytes in hex, with the auditor's ledger (its lines) or the development path named")
+REGISTRATION_FORM = ("the registration is {record, ledger, lane} or {record, head: \"development\"}: the deployment's "
+                     "registration record's bytes in hex, with the auditor's ledger (its lines) and the lane the auditor "
+                     "names, or the development path named")
 NO_SIGNED_HEAD_WHY = ("registration: the parameters carry the deployment's registration record and no challenger and ledger "
                       "that sign its digest, and name no development path: the challenger signs the registration before "
                       "the first coin")
@@ -249,8 +250,9 @@ def registration_parsed(registration: Any, challenger: Any, window_root: Any,
                         verify: Ch.Verify | None) -> tuple[bytes, str, str] | None:
     """`OneStage.registrationParsed`: the deployment's registration record's bytes, the registration it is held to and
     its source (``"ledger"`` or `DEVELOPMENT`), from the parameters' ``registration``; None without one. With
-    ``ledger``, the head the challenger signed for the epoch's lane (`challenger.registration_of`) under ``challenger``'s
-    key for the epoch ``window_root``, which the record's digest must be; the development path only where named."""
+    ``ledger``, the half before the draw: the head the ledger signs for the auditor's ``lane`` under ``challenger``'s key
+    (`challenger.registration_head`), which the record's digest must be; that it preceded the epoch's first entry is
+    `registration_after_draw`'s. The development path only where named."""
     if registration is None:
         return None
     r = registration if isinstance(registration, dict) else {}
@@ -267,7 +269,7 @@ def registration_parsed(registration: Any, challenger: Any, window_root: Any,
         if r["head"] != DEVELOPMENT:
             raise RegistrationRefused(REGISTRATION_FORM)
         return body, digest, DEVELOPMENT
-    if sorted(r) != ["ledger", "record"]:
+    if sorted(r) != ["lane", "ledger", "record"] or not isinstance(r["lane"], str):
         raise RegistrationRefused(REGISTRATION_FORM)
     if not isinstance(window_root, str) or verify is None:
         raise RegistrationRefused(NO_SIGNED_HEAD_WHY)
@@ -276,12 +278,33 @@ def registration_parsed(registration: Any, challenger: Any, window_root: Any,
     except (Ch.CoinError, KeyError, TypeError):
         raise RegistrationRefused(NO_SIGNED_HEAD_WHY) from None
     try:
-        head = Ch.registration_of(r["ledger"], {"root": window_root}, key, verify)
+        head = Ch.registration_head(r["ledger"], r["lane"], key, verify)
     except Ch.CoinError as e:
         raise RegistrationRefused(f"registration: {e}") from None
     if head != digest:
         raise RegistrationRefused(REGISTRATION_DIGEST_WHY)
     return body, head, "ledger"
+
+
+def registration_after_draw(registration: Any, challenger: Any, window_root: Any, digest: str, coins: Any,
+                            verify: Ch.Verify) -> None:
+    """`OneStage.registrationAfterDraw` for a registration `registration_parsed` took from the ledger and held the run
+    to ``digest``: on the ledger the epoch's session ends with (``coins``' ``ledger``), the epoch is held to ``digest``,
+    signed for the auditor's lane before the session's first entry (`challenger.registration_held`)."""
+    if not isinstance(window_root, str):
+        raise RegistrationRefused(NO_SIGNED_HEAD_WHY)
+    try:
+        key = Ch.ChallengerKey.from_json(challenger["key"])
+    except (Ch.CoinError, KeyError, TypeError):
+        raise RegistrationRefused(NO_SIGNED_HEAD_WHY) from None
+    lane = registration.get("lane") if isinstance(registration, dict) else None
+    if not isinstance(lane, str):
+        raise RegistrationRefused(REGISTRATION_FORM)
+    ledger = coins.get("ledger") if isinstance(coins, dict) else None
+    try:
+        Ch.registration_held(ledger, {"root": window_root}, lane, digest, key, verify)
+    except Ch.CoinError as e:
+        raise RegistrationRefused(f"registration, after the draw: {e}") from None
 
 
 def _of_record(of_record: tuple[bytes, str]) -> tuple[list[tuple[str, Any]], dict[str, dict[str, Any]]]:

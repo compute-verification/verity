@@ -5200,7 +5200,7 @@ def test_the_parameters_registration_is_refused_by_name_as_python_does(pieces):
     hex, and a record that is no JSON are each refused before any check, by name, in Lean as in Python."""
     s = Setup(_readers(2, (("call", 2, _X0 + _X00),) * 2, True), READER_SETUPS[0].query)
     body = _record_body([_pin(s.program, "x")]).hex()
-    for reg, why in (({"record": body, "ledger": []}, R.NO_SIGNED_HEAD_WHY),
+    for reg, why in (({"record": body, "ledger": [], "lane": "circuits"}, R.NO_SIGNED_HEAD_WHY),
                      ({"record": body}, R.REGISTRATION_FORM),
                      ({"record": body, "head": "served"}, R.REGISTRATION_FORM),
                      ({"record": body.upper(), "head": R.DEVELOPMENT}, R.REGISTRATION_FORM),

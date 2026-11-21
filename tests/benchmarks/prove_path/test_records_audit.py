@@ -351,7 +351,8 @@ def _deployment_record(tmp_path: Path) -> Path:
     return rec
 
 
-@pytest.mark.parametrize("given", [[], ["--registration-ledger", "ledger.txt"]])
+@pytest.mark.parametrize("given", [[], ["--registration-ledger", "ledger.txt"],
+                                   ["--registration-ledger", "ledger.txt", "--challenger-key", "key.json"]])
 def test_registration_is_refused_by_name_without_a_ledger_or_the_development_path_named(written, tmp_path, given):
     """No challenger and no ledger refuses: the development path is taken only where the parameters name it."""
     with pytest.raises(SystemExit) as e:

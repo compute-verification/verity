@@ -367,8 +367,9 @@ def DEVELOPMENT_WHY : String :=
     "prover's side attests that the registration was fixed before the coins, so this run states no bound from the sample"
 
 def REGISTRATION_FORM : String :=
-  "the registration is {record, ledger} or {record, head: \"development\"}: the deployment's registration record's " ++
-    "bytes in hex, with the auditor's ledger (its lines) or the development path named"
+  "the registration is {record, ledger, lane} or {record, head: \"development\"}: the deployment's registration " ++
+    "record's bytes in hex, with the auditor's ledger (its lines) and the lane the auditor names, or the development " ++
+    "path named"
 
 /-- The refusal of a record the parameters carry with no challenger or ledger and no development path named. -/
 def NO_SIGNED_HEAD_WHY : String :=
@@ -380,10 +381,12 @@ def REGISTRATION_DIGEST_WHY : String :=
   "registration: the record's digest is not the registration the challenger signed for this epoch's lane"
 
 /-- The parameters' `registration` (module docstring): the deployment's registration record, the registration it is
-held to and where that was taken. With `ledger`, the registration `Challenger.registrationOf` reads from the
-auditor's ledger under the parameters' challenger key for the epoch (`window_root`), which the record's digest
-(`Flock.WindowRecord.digestHex`, the inference-only check's `Theta.digest`) must be (`REGISTRATION_DIGEST_WHY`);
-with no challenger or epoch, refused (`NO_SIGNED_HEAD_WHY`). The development path is taken only where the
+held to and where that was taken. With `ledger`, the half before the draw: the registration the auditor's ledger, as
+it stands before the epoch's session opens, signs for the auditor's `lane` under the parameters' challenger key
+(`Challenger.registrationHead`), which the record's digest (`Flock.WindowRecord.digestHex`, the inference-only check's
+`Theta.digest`) must be (`REGISTRATION_DIGEST_WHY`); with no challenger or epoch, refused (`NO_SIGNED_HEAD_WHY`). It
+only refuses early: that the registration preceded the epoch's first entry is `registrationAfterDraw`'s, which the
+executable's `check` runs on the ledger the session ends with. The development path is taken only where the
 parameters name it (`head: "development"`): the record is held to its own digest (`DEVELOPMENT_WHY`). -/
 def registrationParsed (j : Json) (challenger : Option (Challenger.ChallengerKey × String))
     (windowRoot : Option String) : V (Option (ByteArray × String × RegistrationSource)) := do
@@ -396,12 +399,24 @@ def registrationParsed (j : Json) (challenger : Option (Challenger.ChallengerKey
   if keys? r == some #["head", "record"] then
     unless jsonStrIs (getD r "head") DEVELOPMENT do throw REGISTRATION_FORM
     return some (body, digest, .development)
-  unless keys? r == some #["ledger", "record"] do throw REGISTRATION_FORM
-  let (some (key, _), some w) := (challenger, windowRoot) | throw NO_SIGNED_HEAD_WHY
-  let head ← (Challenger.registrationOf key (Json.mkObj [("root", Json.str w)]) (getD r "ledger")).mapError
-    (s!"registration: {·}")
+  unless keys? r == some #["lane", "ledger", "record"] do throw REGISTRATION_FORM
+  let .str lane := getD r "lane" | throw REGISTRATION_FORM
+  let (some (key, _), some _) := (challenger, windowRoot) | throw NO_SIGNED_HEAD_WHY
+  let head ← (Challenger.registrationHead key lane (getD r "ledger")).mapError (s!"registration: {·}")
   unless head == digest do throw REGISTRATION_DIGEST_WHY
   return some (body, head, .ledger)
+
+/-- The half after the draw of a registration taken from the ledger (`registrationParsed`), the one an accepted
+run's registration rests on: on the auditor's ledger the epoch's session ends with (`coins`' `ledger`), the epoch is
+held to the digest the run was held to before the draw, signed for the auditor's lane before the session's first entry
+(`Challenger.registrationHeld`). Nothing to test on the development path or with no record. -/
+def registrationAfterDraw (p : Params) (j coins : Json) : V Unit := do
+  let some .ledger := p.registration | return ()
+  let (some (key, _), some w, some (_, digest)) := (p.challenger, p.verifier.windowRoot, p.verifier.weightsOfRecord)
+    | throw NO_SIGNED_HEAD_WHY
+  let .str lane := getD (getD j "registration") "lane" | throw REGISTRATION_FORM
+  (Challenger.registrationHeld key lane digest (Json.mkObj [("root", Json.str w)]) (getD coins "ledger")).mapError
+    (s!"registration, after the draw: {·}")
 
 /-- The parameters as parsed, before `paramsOfJson`'s refusal of the sampling design: the stream's run reads them and
 refuses the sampling design its rule names itself (`Run.run`, `bernoulli`). A partition object in any form but the

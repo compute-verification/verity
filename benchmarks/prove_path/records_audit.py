@@ -714,18 +714,19 @@ DAY_SOURCES = {"device": "the challenger's signed ledger (--day-ledger)",
 REGISTRATION_SOURCES = {"ledger": "the registration log's head the challenger signed for the epoch's lane before its first "
                                   "coin (--registration-ledger)",
                         DK.DEVELOPMENT: DK.DEVELOPMENT_WHY}
-REGISTRATION_NEEDS = ("--registration needs --registration-ledger (with --challenger-key) or --registration-head "
-                      "development: the registration's digest is read from the challenger's signed ledger, and the "
+REGISTRATION_NEEDS = ("--registration needs --registration-ledger (with --challenger-key and --registration-lane) or "
+                      "--registration-head development: the registration's digest is read from the challenger's signed "
+                      "ledger for the auditor's lane, and the "
                       "development path is taken only where named")
 
 
 def registration_param(a: argparse.Namespace) -> dict[str, Any]:
     """The parameters' ``registration`` (`docket.registration_parsed`) of ``--registration``: the record's bytes in hex,
-    with the ledger's lines or the development path named."""
+    with the ledger's lines and the auditor's lane, or the development path named."""
     from verity.protocols.proof.spot.verifier.challenger import remote as SPR
     body = Path(a.registration).read_bytes().hex()
     if a.registration_ledger:
-        return {"record": body, "ledger": SPR.ledger_lines(a.registration_ledger)}
+        return {"record": body, "ledger": SPR.ledger_lines(a.registration_ledger), "lane": a.registration_lane}
     return {"record": body, "head": DK.DEVELOPMENT}
 
 
@@ -1120,7 +1121,8 @@ def audit(a: argparse.Namespace) -> int:
     """The audit (module docstring) into ``a.out``: ``summary.json`` and a ``RECORDS`` line, its ``definitions`` the module
     each member template's Definition is in and ``loaded`` the ``verity*`` packages the process loaded. -> 0 when it passed."""
     taken = "ledger" if a.registration_ledger else a.registration_head
-    if a.registration and taken not in REGISTRATION_SOURCES or (a.registration_ledger and not a.challenger_key):
+    if a.registration and taken not in REGISTRATION_SOURCES or (a.registration_ledger and not (a.challenger_key
+                                                                                               and a.registration_lane)):
         raise SystemExit(REGISTRATION_NEEDS)
     if a.registration:
         print("REGISTRATION " + REGISTRATION_SOURCES[taken], flush=True)
@@ -1259,6 +1261,14 @@ def audit(a: argparse.Namespace) -> int:
     if a.registration:
         row["registration"] = {"digest": a.registration_digest,
                                "source": "ledger" if a.registration_ledger else DK.DEVELOPMENT}
+    if a.registration_ledger:
+        row["registration_halves"] = ["before the draw"]
+        try:
+            DK.registration_after_draw(a.registration_json, a.registration_challenger, mine.run, a.registration_digest,
+                                       published, AC.lms_verify)
+            row["registration_halves"].append("after the draw")
+        except DK.RegistrationRefused as e:
+            row["registration_after_draw"] = str(e)
     if day:
         row["day"] = {"day": day["day"], "declared": [d["program"] for d in day["declarations"] if d["day"] == day["day"]],
                       "source": DAY_SOURCES["device" if a.day_ledger else "development"]}
@@ -1291,6 +1301,7 @@ def audit(a: argparse.Namespace) -> int:
             row["ok"] = row["ok"] and pe["edits"] > 0 and pe["refused"] == pe["edits"]
             print("PROOF-EDITS " + json.dumps({x: pe.get(x) for x in ("edits", "refused", "member", "session")}))
     row["ok"] = row["ok"] and not row["coins_session"]["error"]
+    row["ok"] = row["ok"] and (not a.registration_ledger or "after the draw" in row["registration_halves"])
     row["ok"] = row["ok"] and (acts is None or acts["ok"])
     (out / "summary.json").write_text(json.dumps(row, indent=1, sort_keys=True, default=str))
     print("RECORDS " + json.dumps({x: row.get(x) for x in ("ok", "circuit", "population", "draw", "draw_counts", "outputs", "seconds")}
@@ -1298,6 +1309,7 @@ def audit(a: argparse.Namespace) -> int:
                                      "fixed_before_draw": (row.get("fixed_before_draw") or {}).get("ok"),
                                      "circuit_registration": row["circuit_registration"],
                                      **({"registration": row["registration"]} if "registration" in row else {}),
+                                     **({x: row[x] for x in ("registration_halves", "registration_after_draw") if x in row}),
                                      "accepted": (s.get("audit") or {}).get("accepted"),
                                      "negatives_refused": all((row.get("negatives") or {"none": False}).values()),
                                      "definitions": row["definitions"], "loaded": row["loaded"],
@@ -1405,6 +1417,8 @@ def main(argv: list[str] | None = None) -> int:
                    "registered entries R8 holds the circuit's registered inputs to (`docket.registration_parsed`)")
     p.add_argument("--registration-ledger", help="with --registration and --challenger-key: the auditor's ledger, whose "
                    "challenger signed the record's digest for the epoch's lane before its first coin")
+    p.add_argument("--registration-lane", help="with --registration-ledger: the lane the auditor names, whose "
+                   "period-open signs the registration; the session the audit draws on must be on it")
     p.add_argument("--registration-head", choices=[DK.DEVELOPMENT],
                    help="with --registration, no ledger: the development path, named; the audit's first line says the "
                    "digest was taken from the serving node's own file and is held by no one else")
