@@ -1,3 +1,0 @@
-[2026-11-20T23:56Z] 018f32a5db45
-proofs lead: vllm has SERVED AND SEALED tonight window on vy-h100-1: run r20261120-230430-7fe5 (from tip 243c1e3497f plus one vllm commit; Program with EmbeddingRead_v3; it still has OutCollect_v1 and SlotEntry_v1; its window-commit may still be running). If its window directory and circuit are readable from the node (private files: read in place, copy nothing out, print no values), prefer measuring on THAT real window record; else keep to the rebuilt circuit as briefed and say which you used. Also note the member and block counts of that window if you can read them.
-
