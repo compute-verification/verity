@@ -1121,16 +1121,40 @@ def run_input_roots_at(R: EG._Root, program: Program, ranges: Sequence[Sequence[
     return got
 
 
+def tied_roots_why(w: int) -> str:
+    """`OneStageZk.TIED_ROOTS_WHY`: the refusal of two roots for one tied run input node ``w``."""
+    return f"members: C's tied run input node {w} is read under two roots: every reader of a tied node opens one tree"
+
+
+def tied_roots_at(R: EG._Root, program: Program, ranges: Sequence[Sequence[Any]], tied: Sequence[range], name: str,
+                  m: Mapping[str, Any], own: Sequence[Mapping[str, Any]], seen: dict[int, Any]) -> dict[int, Any]:
+    """`OneStageZk.tiedRootsAt`: ``seen``, the root each tied run input node is read under so far, with each node inside
+    the tied gates ``tied`` that member ``name`` reads (`member_inputs`) at the root ``own`` holds for its port; refused
+    (`tied_roots_why`) where ``seen`` holds another root for the node. That the root is the right one is the later
+    period check's."""
+    for p, w, _ln in member_inputs(R, ranges, name, m["units"]):
+        if not _input(R, w, run=True) or not any(P.within(program, g, w) for g in tied):
+            continue
+        if (e := next((e for e in own if e.get("port") == p), None)) is None:
+            continue
+        if seen.setdefault(w, e.get("root")) != e.get("root"):
+            raise _Refused(tied_roots_why(w))
+    return seen
+
+
 def _run_input_roots(program: Program, desc: Mapping[str, Any], ranges: Sequence[Sequence[Any]], window: str | None,
                      tied: Sequence[range], ms: Mapping[str, Any], record: Mapping[str, Any],
                      roots: dict[str, list[dict[str, Any]]]) -> dict[str, list[dict[str, Any]]]:
     """`OneStageZk.runInputRoots`: `run_input_roots_at` for each member, under the program's digest, the window's open
-    root ``window`` and the tied parameters' gates ``tied``."""
+    root ``window`` and the tied parameters' gates ``tied``, each tied node read under one root across the members
+    (`tied_roots_at`)."""
     R = EG._Root(desc)
     by_port = {r.get("port"): r for r in record.get("roots") or () if isinstance(r, Mapping)}
     prog = P.program_digest(program)
     out = dict(roots)
+    seen: dict[int, Any] = {}
     for name, m in ms.items():
+        tied_roots_at(R, program, ranges, tied, name, m, roots.get(name, []), seen)
         out[name] = run_input_roots_at(R, program, ranges, prog, window, tied, name, m, roots.get(name, []), by_port)
     return out
 
@@ -1544,4 +1568,4 @@ __all__ = ["EXITS", "Form", "MEMBERS_LAID", "MEMBER_COVER", "MEMBER_STRATA", "ME
            "TABLE_PORT", "UNREAD", "blobs_of", "case_check", "check", "files_why", "flock_form", "flock_verdict",
            "field_trees_why", "members_run", "population_why", "POPULATION_WHY", "registered_at", "registered_reads",
            "return_fields", "run_reason", "shared_unread", "unregistered_why", "unwired_why", "own_root_why",
-           "pinned_read_why", "pins_held", "port_twice_why", "read_pins", "unpinned_read_why", "run_own_root_why", "run_tree_missing_why", "run_tree_why", "run_tree_unbound_why", "run_input_roots_at", "run_tree_held", "member_inputs", "reg_rows", "read_form_why", "two_reads_why", "slice_no_port_why", "strata_design", "resolved", "subset_design", "subset_designs", "wired_tree_why"]
+           "pinned_read_why", "pins_held", "port_twice_why", "read_pins", "unpinned_read_why", "run_own_root_why", "run_tree_missing_why", "run_tree_why", "run_tree_unbound_why", "run_input_roots_at", "run_tree_held", "tied_roots_at", "tied_roots_why", "member_inputs", "reg_rows", "read_form_why", "two_reads_why", "slice_no_port_why", "strata_design", "resolved", "subset_design", "subset_designs", "wired_tree_why"]
