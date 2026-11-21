@@ -2,6 +2,7 @@ module
 
 public import Std.Sync.Mutex
 public import Poub.Difftest
+meta import Poub.Difftest
 
 /-!
 # The verifier's process: `poub-verifier`
