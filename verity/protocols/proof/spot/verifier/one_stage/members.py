@@ -534,6 +534,13 @@ def read_unnamed_why(member: str, param: str, value: str) -> str:
             f"registered file has no port {param} naming {value}: a marked input is read only at a pin R8 accepted")
 
 
+def port_other_why(member: str, port: str, param: str, value: str) -> str:
+    """`OneStageZk.PORT_OTHER_WHY`: member ``member``'s registered port ``port`` at ``param``, where its units read
+    marked inputs, names ``value``, none of them."""
+    return (f"registered: member {member}'s port {port} at parameter {param} names {value}, which its units don't read "
+            "there: a marked input is read only at a pin R8 accepted")
+
+
 ReadPins = tuple[list[str], list[tuple[str, range]], list[tuple[int, str, int, int]], dict[str, dict[str, Any]]]
 
 
@@ -570,24 +577,35 @@ def _port_param(port: str, e: Mapping[str, Any]) -> str:
     return head if sep and tail.endswith("]") and tail[:-1].isdigit() and "[" not in tail else name
 
 
+def _tree_port(v: str) -> bool:
+    """`OneStageZk.treePortOf` is some: ``v`` opens a committed, fresh or field tree."""
+    return v.startswith(COMMITTED) or G.is_fresh_value(v) or _field_tree_name(v)
+
+
 def pins_held(ms: Mapping[str, Any], program: Program, rp: ReadPins) -> None:
     """`OneStageZk.pinsHeld`: each member has, for each ``(parameter, value)`` its own units read of a marked input
     (`own_reads`), a registered port of that parameter naming that value (`read_unnamed_why`); every member's
     registered port whose value is marked names the pin R8 accepted of it, its root, leaf count and domain, each
-    member's ports in name order; refused by name, a value with no pin (`unpinned_read_why`) or the first field that
-    differs (`pinned_read_why`)."""
+    member's ports in name order, each at such a parameter that opens no tree of its own naming one of the values its
+    units read there (`port_other_why`); refused by name, a value with no pin (`unpinned_read_why`) or the first field
+    that differs (`pinned_read_why`)."""
     loose, pins = set(rp[0]), rp[3]
     if not loose:
         return
     for name, m in ms.items():
         ports = (m["registered"] or {}).get("ports") or {}
         own = [(_port_param(q, e), e.get("value")) for q, e in ports.items() if isinstance(e, dict)]
-        for p, v in own_reads(program, rp, m["units"]):
+        reads = own_reads(program, rp, m["units"])
+        for p, v in reads:
             if (p, v) not in own:
                 raise _Refused(read_unnamed_why(name, p, v))
+        read_at = {p for p, _ in reads}
         for port in sorted(ports):
             e = ports[port]
             value = e.get("value") if isinstance(e, dict) else None
+            p = _port_param(port, e) if isinstance(e, dict) else port
+            if (isinstance(value, str) and not _tree_port(value) and p in read_at and (p, value) not in reads):
+                raise _Refused(port_other_why(name, port, p, value))
             pin = pins.get(value)
             if pin is None and value in loose:
                 raise _Refused(unpinned_read_why(name, port, value))

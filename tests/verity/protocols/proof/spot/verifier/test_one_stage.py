@@ -953,7 +953,8 @@ def test_a_batch_chunk_names_exactly_the_marked_inputs_its_own_members_read():
     """A batch of four PAIR members over two marked weights, members 0 and 1 reading ``w0``'s leaves and 2 and 3
     ``w1``'s, cut into chunks (`partition.member_reads`, `members.pins_held`; `OneStageZk`'s `batchToy` guards): each
     honest chunk naming its own value passes and is not asked to name the other chunk's; one without its value's port,
-    with the port under the other value or at its own root, or one over both naming one, is refused by name."""
+    with the port under the other value or at its own root, one over both naming one, or one with a second port at
+    its parameter under a value its units don't read there, is refused by name."""
     from verity.protocols.proof.spot.verifier.one_stage import members as M
     row = Array(2, Array(2, Value(8)))
     defn = CompositeDefinition("OneStageTestChunks", 0, (), lambda S: ((("w0", row), ("w1", row)), Array(4, Value(8))),
@@ -983,6 +984,12 @@ def test_a_batch_chunk_names_exactly_the_marked_inputs_its_own_members_read():
         with pytest.raises(M._Refused) as e:
             M.pins_held({"c": m}, prog, rp)
         assert str(e.value) == why
+    c0 = chunk(0, 2, "w0")
+    for other in ("w1", "e"):
+        ports = {**c0["registered"]["ports"], "x[0]": {**c0["registered"]["ports"]["x"], "value": other}}
+        with pytest.raises(M._Refused) as e:
+            M.pins_held({"c": {**c0, "registered": {"ports": ports}}}, prog, rp)
+        assert str(e.value) == M.port_other_why("c", "x[0]", "x", other)
 
 
 def test_r8_refuses_a_registered_input_under_a_query_it_cannot_read_readers_under():

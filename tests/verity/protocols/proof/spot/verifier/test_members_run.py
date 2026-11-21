@@ -711,6 +711,9 @@ def test_a_members_read_of_a_pinned_registered_input_is_held_to_the_pin_by_name(
     assert M.unpinned_read_why("a", "p", "u") == (
         "registered: member a's port p reads the registered input u, which the program marks and R8 accepted no pin "
         "of: a marked input is read only at a pin R8 accepted")
+    assert M.port_other_why("a", "p[0]", "p", "e") == (
+        "registered: member a's port p[0] at parameter p names e, which its units don't read there: a marked input is "
+        "read only at a pin R8 accepted")
     assert M.read_unnamed_why("a", "p", "w") == (
         "registered: member a's units read the registered input w at parameter p, and its registered file has no port "
         "p naming w: a marked input is read only at a pin R8 accepted")
