@@ -4326,7 +4326,7 @@ def test_an_untied_launch_goes_on_where_the_cut_reads_a_template_a_shape(tmp_pat
     ("rate:0/977", False), ("rate:978/977", False)])
 def test_the_rehearsals_settings_state_the_tied_windows_sampling_design_a_stratified_rate(tmp_path, design, held,
                                                                                            uniform):
-    """`rehearsal.sh settings FILE`, what `rehearsal.sh serve` holds its settings to before the harness runs, refuses a
+    """`rehearsal.sh settings FILE`, the rehearsal's hold on its settings before the harness runs, refuses a
     Pearl+-tied serve's settings that state no sampling design, or one that is no ``stratified-rate:NUM/DEN`` with
     0 < NUM <= DEN: the tied window's sampling design has no default, and the harness's preflight refuses such a launch
     (`NO_PEARL_RULE`), which the rehearsal would learn only on the serve node. The refusal names the design and the form

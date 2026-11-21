@@ -17,8 +17,9 @@ Verity itself knows nothing of vLLM.
   `--protocols pearl-plus` attaches Pearl+ by its declared name, and
   `--remote-verifier` proves the engine's store to PoUB's verifier as it serves. Its module docstring documents every
   flag and record.
-- **The served run** (`bash adapters/vllm/tools/served_run/run.sh`) starts the served-verdicts launcher,
-  `benchmarks/one_stage/served_verdicts.sh`, on the node `adapters/vllm/tools/served_run/placement.toml` names. It runs
+- **The served run** (`bash adapters/vllm/tools/served_run/run.sh`) starts `verity run` on the node
+  `adapters/vllm/tools/served_run/placement.toml` names, which runs the served-verdicts launcher's steps
+  (`benchmarks/one_stage/served_verdicts.sh steps`). It runs
   the Build of record, then the endpoint with `--seal` under a GPU lease, and a load. Then comes SPOT on one sealed window:
   its advice through the registered compiler (`tools/advice_compile.py`), Flock `--zk` behind the Lean ZK server, and the
   Lean verifier's verdict. PoUW, PoUS, the bandwidth audit and the network attester follow where each has its piece,

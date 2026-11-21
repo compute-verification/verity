@@ -10,12 +10,10 @@
 #                         $OUT/logs/STEP.log, its exit status and seconds a line of
 #                         $OUT/steps.txt, and the exit status is 0 only where every step's is. The steps: this tree's
 #                         environment (uv sync); the filter around a stand-in harness (a made-up secret, an exit status
-#                         carried, a TERM waited out); the settings file as `serve` holds it (a one-output class needs
+#                         carried, a TERM waited out); the settings file as `settings` holds it (a one-output class needs
 #                         its own PP_PARTITION: its window has no step 1; the tied window's sampling design is stated, a
 #                         stratified-rate:NUM/DEN, which the harness gives no default; the record form's pair is
-#                         stated, HELD_ALPHA and HELD_GAMMA in the form the limits-held step writes); `serve` around a
-#                         stand-in harness (the deferral's copy asked once, only after a serve that exited 0 or 2,
-#                         pending, and never after one that exited 1 or any other status); the class's
+#                         stated, HELD_ALPHA and HELD_GAMMA in the form the limits-held step writes); the class's
 #                         circuit cut at Pearl+'s linears from the serve's phi (a stand-in for `serve-phi`, which
 #                         reads the card: the H200's compute capability and SMs); a stand-in window of the class at
 #                         the settings' engine args through what a served window's close reads of it
@@ -34,16 +32,7 @@
 #                         piece against this tree's own gate code (`pearlplus_local_e2e.py`), whose piece then holds
 #                         the execution phase and each check's cost.
 #                         The whole verb runs inside one memory scope (MEM_GB, default 64) where the node makes one.
-#   rehearsal.sh serve    the serve node, one card: the harness at SETTINGS (default the run's sent record.env), after
-#                         the settings are held to what the rehearsal serves (`settings_ok`). Where the serve deferred
-#                         its audit and COPY_TO names HOST[:DIR], the deferral's files go there before the run ends
-#                         (`served_verdicts.sh copy deferred`), since the serve dir is gone with the node. A serve
-#                         went well where the harness exits 2, its record `pending` and composed off the node, which
-#                         is what a harness whose exit is the record's verdict says of every served node, or 0, which
-#                         is what one that exits by its steps alone says: after either the copy is asked. 1 (a
-#                         record that rejects, a step that failed) and every other status stop the verb there, with
-#                         no copy. The exit status is the harness's where the copy went or none was asked, 2
-#                         included, and a failed copy's own otherwise (1 where that is 2, which says pending).
+#                         The serve itself is `verity run`'s (`adapters/vllm/tools/served_run/window.sh`).
 #   rehearsal.sh audit    the audit node, D the deferral's copy at the serve dir's own path: `served_verdicts.sh v3c`,
 #                         the follow-on, at the deferral's settings. PP_PEER is this node's name in the gate's peers
 #                         file. MAIN_FILE and PP_CHALLENGER_KEY default to the run's sent main.txt and
@@ -62,7 +51,7 @@
 #                         gate's `pubkey` held to PP_CHALLENGER_KEY's record. Exit 0 only where the lane has no open
 #                         period, the pin is a line of MAIN_FILE and the key is the record's.
 #   rehearsal.sh filter CMD...   CMD through the filter alone, with its exit status (`filter-test DIR`, `settings FILE`,
-#                         `serve-test DIR`, `link-test LEAN DIR` and `probe-test DIR` are `check`'s steps of those
+#                         `link-test LEAN DIR` and `probe-test DIR` are `check`'s steps of those
 #                         names).
 #
 # A follow-on's settings come from the serve dir (deferred.env, compose.env), which carry no POUW: `audit` and `compose`
@@ -79,7 +68,7 @@ filtered() {  # CMD...: its output through the filter; the exit status is CMD's
 refuse() { echo "REHEARSAL refused: $*" >&2; exit 3; }
 user_scope() { command -v systemd-run > /dev/null && systemd-run --user --scope --quiet --collect true > /dev/null 2>&1; }
 
-settings_ok() {  # $1, the settings file: what the rehearsal's serve is, held before the harness's own preflight
+settings_ok() {  # $1, the settings file: what the rehearsal serves, held before the harness's own preflight
   [ -f "$1" ] && [ -r "$1" ] || { echo "SETTINGS refused: $1 is not a readable file"; return 3; }
   (
     set -a
@@ -157,34 +146,6 @@ settings_class() {  # $1, the settings file: the class its serve commits the win
 settings_engine() {  # $1, the settings file: the engine args its serve states, MAX_MODEL_LEN,T (the harness's 512 each
   # where the settings name none)
   bash -c 'set -a; . "$0" > /dev/null 2>&1; set +a; printf %s "${MAX_MODEL_LEN:-512},${T:-512}"' "$1"
-}
-
-serve() {
-  export SETTINGS=${SETTINGS:-${RESEARCH_RUN_DIR:?no SETTINGS and no run dir}/inputs/record.env}
-  settings_ok "$SETTINGS" || exit 3
-  local rc d out=${OUT:-${RESEARCH_RUN_DIR:-.}/out}
-  local crc
-  filtered bash "$HARNESS" "$@"
-  rc=$?
-  case $rc in
-    0) ;;
-    2) echo "REHEARSAL: the serve exited 2: its record is pending, composed off this node, so the verb goes on" ;;
-    *) return "$rc" ;;
-  esac
-  [ -n "${COPY_TO:-}" ] || return "$rc"
-  d=$(sed -n 's/^serve dir //p' "$out/machine.txt" 2> /dev/null | tail -1)
-  if [ -n "$d" ] && [ -f "$d/private/deferred/deferred.env" ]; then
-    filtered env D="$d" bash "$HARNESS" copy deferred "$COPY_TO"
-    crc=$?
-    if [ "$crc" != 0 ]; then
-      echo "REHEARSAL: the deferral's copy to $COPY_TO failed (exit $crc) after a serve that exited $rc"
-      [ "$crc" != 2 ] || crc=1
-      return "$crc"
-    fi
-  else
-    echo "REHEARSAL: COPY_TO is $COPY_TO, and the serve dir ${d:-(not named in $out/machine.txt)} holds no deferral: nothing copied"
-  fi
-  return "$rc"
 }
 
 audit() {
@@ -277,54 +238,6 @@ EOF
   echo "the same harness without the wrapper: made-up secrets in its log $(count "$scr/log3")"
   [ "$(count "$scr/log3")" = 2 ]
 }
-serve_test() {  # `serve` around a stand-in harness, at SETTINGS: the deferral's copy is asked once, after a serve that
-  # exited 0 or 2 (pending) and deferred, of the serve dir the harness named, and after no other; the exit status is the
-  # serve's where the copy went or none was asked, and a failed copy's otherwise, never 2
-  local scr=$1 rc n=0 ok=0
-  mkdir -p "$scr/out" "$scr/d/private/deferred"
-  export SCR=$scr
-  cat > "$scr/harness.sh" <<'EOF'
-#!/usr/bin/env bash
-if [ "${1:-}" = copy ]; then echo "D=$D $*" >> "$SCR/copies"; exit "${COPY_RC:-0}"; fi
-echo "serve dir $SCR/d" > "$OUT/machine.txt"
-rm -f "$SCR/d/private/deferred/deferred.env"
-[ -z "${DEFERS:-}" ] || : > "$SCR/d/private/deferred/deferred.env"
-exit "${SERVE_RC:-0}"
-EOF
-  : > "$scr/copies"
-  try() {  # WHAT WANT_RC WANT_COPIES ENV...: one serve under ENV
-    local what=$1 want=$2 copies=$3
-    shift 3
-    env OUT="$scr/out" HARNESS="$scr/harness.sh" "$@" bash "$SELF" serve > "$scr/log" 2>&1; rc=$?
-    n=$(grep -c . "$scr/copies")
-    echo "$what: the wrapper exits $rc (want $want); copies asked so far $n (want $copies)"
-    [ "$rc" = "$want" ] && [ "$n" = "$copies" ] || ok=1
-  }
-  try "a serve that deferred, with COPY_TO" 0 1 DEFERS=1 COPY_TO=host:dir
-  [ "$(tail -1 "$scr/copies")" = "D=$scr/d copy deferred host:dir" ] \
-    || { echo "the copy was asked as: $(tail -1 "$scr/copies")"; ok=1; }
-  try "a serve that deferred, with no COPY_TO" 0 1 DEFERS=1
-  try "a serve that exits 7, with COPY_TO" 7 1 DEFERS=1 SERVE_RC=7 COPY_TO=host:dir
-  try "a serve that deferred nothing, with COPY_TO" 0 1 COPY_TO=host:dir
-  grep -q 'holds no deferral: nothing copied' "$scr/log" || { echo "no line says nothing was copied"; ok=1; }
-  try "a copy that exits 5" 5 2 DEFERS=1 COPY_RC=5 COPY_TO=host:dir
-  # a harness whose exit is the record's verdict: 2 on the served node, where the record is pending
-  try "a serve that exits 2, pending, and deferred, with COPY_TO" 2 3 DEFERS=1 SERVE_RC=2 COPY_TO=host:dir
-  [ "$(tail -1 "$scr/copies")" = "D=$scr/d copy deferred host:dir" ] \
-    || { echo "the copy was asked as: $(tail -1 "$scr/copies")"; ok=1; }
-  grep -q 'the serve exited 2: its record is pending' "$scr/log" || { echo "no line says the record is pending"; ok=1; }
-  try "a serve that exits 2 and deferred nothing, with COPY_TO" 2 3 SERVE_RC=2 COPY_TO=host:dir
-  grep -q 'holds no deferral: nothing copied' "$scr/log" || { echo "no line says nothing was copied"; ok=1; }
-  try "a serve that exits 2 and deferred, with no COPY_TO" 2 3 DEFERS=1 SERVE_RC=2
-  try "a serve that exits 1, a record that rejects, and deferred, with COPY_TO" 1 3 DEFERS=1 SERVE_RC=1 COPY_TO=host:dir
-  try "a serve that exits 3, a refusal, and deferred, with COPY_TO" 3 3 DEFERS=1 SERVE_RC=3 COPY_TO=host:dir
-  try "a serve that exits 2 and a copy that exits 5" 5 4 DEFERS=1 SERVE_RC=2 COPY_RC=5 COPY_TO=host:dir
-  grep -q "the deferral's copy to host:dir failed (exit 5) after a serve that exited 2" "$scr/log" \
-    || { echo "no line says the copy failed"; ok=1; }
-  try "a serve that exits 2 and a copy that exits 2, which is no pending" 1 5 DEFERS=1 SERVE_RC=2 COPY_RC=2 COPY_TO=host:dir
-  return "$ok"
-}
-
 link_test() {  # LEAN DIR: the real Lean verifier at LEAN on a circuit file linked into its archive, in the tree
   "${PY:-$HERE/../../.venv/bin/python}" - "$1" "$2" "$HERE" <<'EOF'
 import hashlib, json, os, subprocess, sys
@@ -442,7 +355,6 @@ check() {
   step filter 2m bash "$SELF" filter-test "$scratch/filter"
   cp "$OUT/logs/filter.log" "$OUT/filter.txt"
   step settings 1m env WANT_CLASS="$WANT_CLASS" bash "$SELF" settings "$SETTINGS"
-  step serve-copy 1m env SETTINGS="$SETTINGS" bash "$SELF" serve-test "$scratch/serve-copy"
   step gate-probe 2m env SETTINGS="$SETTINGS" PY="$PY" bash "$SELF" probe-test "$scratch/probe"
 
   # the class's circuit from phi, as PEARLPLUS-CIRCUIT's command makes it on the serve node
@@ -580,15 +492,13 @@ EOF
 
 case ${1:-} in
   check) check ;;
-  serve) shift; serve "$@" ;;
   audit) audit ;;
   compose) compose ;;
   filter) shift; filtered "$@" ;;
   filter-test) filter_test "${2:?a scratch directory}" ;;
   settings) settings_ok "${2:?a settings file}" ;;
-  serve-test) serve_test "${2:?a scratch directory}" ;;
   probe) probe ;;
   probe-test) probe_test "${2:?a scratch directory}" ;;
   link-test) link_test "${2:?the Lean verifier}" "${3:?a scratch directory}" ;;
-  *) refuse "rehearsal.sh check|serve|audit|compose|probe|filter CMD..., not ${1:-nothing}" ;;
+  *) refuse "rehearsal.sh check|audit|compose|probe|filter CMD..., not ${1:-nothing}" ;;
 esac

@@ -40,8 +40,9 @@ meets. Onsite's chain has a gap of its own: network attestation's `NetTiming.Gua
 Llama-3.2-1B INT8 (`verity-int8/Llama-3.2-1B-INT8` at `15b0976d400d796ee589e7737d03a919526bf800`, the workload's `model`
 and `engine.revision`) with int8 linears (`--precision verity_int8`, the workload's quantization), batch-invariant eager.
 vLLM serves it on the endpoint's H200 node through `verity_vllm`'s committing OpenAI endpoint. Its values are committed as
-it serves (`--scheme rows-sha512`), and every closed execution phase is sealed. The chain is
-`benchmarks/one_stage/served_verdicts.sh`'s, whose header gives each step:
+it serves (`--scheme rows-sha512`), and every closed execution phase is sealed. The chain is `verity run`'s on the
+prover's node (`window.sh`): `benchmarks/one_stage/served_verdicts.sh steps` on the accounting's steps, then on the
+policy's, the script's header giving each step:
 
 1. the endpoint, under a GPU lease, with the committer's weights registration before the first request;
 2. greedy requests from network attestation's traffic generator (`serve_load.py --varied`), closed into one execution phase;
@@ -62,10 +63,11 @@ defers V3c's audit off the node (`V3C_AUDIT_MEM_GB` above node A's memory) to `r
 `run.sh audit`. Its sampling design is a setting of the launch's environment (`[run.window.tie]`), by default the benchmark's
 `stratified-rate:1/2097152`.
 
-`served_verdicts.sh`'s exit is its record's verdict: 0 when the compiled Lean composite of record accepted, which with
+The accounting call's exit is its record's verdict: 0 when the compiled Lean composite of record accepted, which with
 neither `VERITY_HOLD_PLACEMENT=1` nor `COMPOSE_OFF_NODE=1` set is the composite computed on the served node, and under
 either only a composite computed off the served node, on an auditor device; 2 pending; 1 a rejection, a refused
-composite or a failed step. A window on the served node can only end pending, so `window.sh` exits 0 when it does, its last line
+composite or a failed step. Either call ends 20 where a step was refused or not run, and `verity run`'s exit for the
+window is the worse of the two calls'. A window on the served node can only end pending, so `window.sh` exits 0 when it does, its last line
 `pending: composed off this node` (or, under a deferral, audited and composed off it), and with `PREFLIGHT_ONLY=1`
 exits 0 when the preflight passed.
 
@@ -132,7 +134,7 @@ run starts. FLAGs go to the recorder (`--timeout 200m` to end with the row); `--
    both taps, each replaced one kept beside it as `.replaced`, and name the commit to set `TAPS_AT` to. Nothing holds a
    traced Build to the live taps, so after the taps change rerun setup whole for each row (its Build step always runs)
    and name the new runs in `builds`.
-2. `CARD=N CORES=A-B END=UTC run.sh [--tie]` (`window`, the default): `window.sh`, which runs `served_verdicts.sh` on
+2. `CARD=N CORES=A-B END=UTC run.sh [--tie]` (`window`, the default): `window.sh`, which runs `verity run` on
    that card under its own lease and packs the compose hand-off into the run's `out/handoff/`; 75 with nothing run when
    the card is in use or `END` leaves under an hour (or under `LEASE_MIN`, a short window's length in minutes, which
    also bounds its lease). The gate gives coins only to a commit on `main`'s first-parent line, so from a branch not yet
@@ -151,7 +153,7 @@ run starts. FLAGs go to the recorder (`--timeout 200m` to end with the row); `--
    row that serves MODEL (its venv, taps, traced Build, weights, peer and disk floor, and the tied form's for the BF16
    base) as `NAME=value` lines, which name no address; with `-- CMD`, CMD run under them wherever its environment sets
    none, after the node's env files (`env_files`, each mode 600) are read and each `${NAME}` they or the environment
-   set is filled in, the INT8 pin linked and the venv's CUDA headers found. The window run's `served_verdicts.sh` runs
+   set is filled in, the INT8 pin linked and the venv's CUDA headers found. The window run's `verity run` runs
    so. The settings name no `COMPOSE_OFF_NODE`, so where an application's record is composed is `served_verdicts.sh`'s
    default, by its product and `VERITY_HOLD_PLACEMENT`. An application's command takes no bindings: every party runs on node A, the challenger with coins of its own. For a run
    on the auditor's coins, `uv run bash run.sh bindings applications/X.toml` prints `verity run --bindings` for that application:
