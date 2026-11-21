@@ -559,6 +559,7 @@ class Rows:
                 assert nxt is not None, f"{P.name}: position {p} has a token feed unit, and its slot carries nothing on"
                 self._put(tid, unit, "o0", _i32([t]), EVALUATED)
                 self._put(tid, unit, "o1", _i32(nxt), EVALUATED)
+                self._pad(tid, unit)
         picks = []
         for j, (groups, x0) in P.selects.items():
             logits = S.operand(nodes[j].args[0])
@@ -617,8 +618,8 @@ class Rows:
         self._pad(*entry)
 
     def _pad(self, tid: str, unit: int) -> None:
-        if self.fns[tid].name in ("OutCollect", "SlotEntry") and self.fns[tid].version == 2:
-            self._put(tid, unit, "o1", np.zeros((1, IO.PAD_WORDS), dtype=np.uint16), EVALUATED)
+        if self.fns[tid].name in ("OutCollect", "SlotEntry", "TokenFeed") and self.fns[tid].version == 2:
+            self._put(tid, unit, f"o{len(self.lays[tid].outs) - 1}", np.zeros((1, IO.PAD_WORDS), dtype=np.uint16), EVALUATED)
 
     def _heads(self, node: Any, plan: Any, calls: Sequence[tuple[str, int]], S: Slot) -> None:
         """An attention cut by key block: every Call but its last (whose output is the node's) its Definition on the node's

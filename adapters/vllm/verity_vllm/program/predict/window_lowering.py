@@ -281,7 +281,7 @@ class _Program:
             self.tokens.append(None)
             rows = self.rows(tok.refs)
         else:
-            tid, u = self.b.unit(bind(IO.TokenFeed, NP=NP, FIRST=self.served))
+            tid, u = self.b.unit(bind(IO.TokenFeedV2, NP=NP, FIRST=self.served))
             assert self.slot is not None, f"{self.name}: position {p}'s token before position 0's, which carries its slot"
             self.b.feed(tid, "slot", u, 1, (self.slot,))
             if not self.served:

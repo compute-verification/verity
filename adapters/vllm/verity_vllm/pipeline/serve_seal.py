@@ -140,7 +140,7 @@ def class_refusal(opts: Any) -> str | None:
     (``--window-class``), and the engine's limits admit no more than it, slots a step and positions a sequence."""
     if not opts.window_class:
         return (f"--scheme {ROWS} sizes the Commit's arena from the window class the application declares: pass --window-class "
-                "S,P,O (the remote application's 4,27,2)")
+                "S,P,O (the class verity_vllm.inputs.serves.SERVES states)")
     try:
         cls = window_class_of(opts)
     except ValueError as e:

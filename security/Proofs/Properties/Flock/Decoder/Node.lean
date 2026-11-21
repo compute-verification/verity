@@ -46,9 +46,9 @@ def Shape (c : Defn) (form : Form) (args : Array Arg) (out : Ty) (n nxs : ℕ) :
       ∃ ax mt, (args[i]!).ty.removeAxis ax = some (n, mt) ∧ mt = (c.params[i]!).2 ∧
         (args[i]!).dims = (args[i]!).ty.axisDims ax
   | .scan => ∃ carry y, c.ret = .tuple #[carry, y] ∧ out = .tuple #[carry, .array n y] ∧
-      (c.params[0]!).2 = carry ∧ (args[0]!).ty = carry ∧ ∀ i < args.size, i ≠ 0 →
+      (c.params[0]!).2 = carry ∧ (args[0]!).ty = carry ∧ (∀ i < args.size, i ≠ 0 →
         (i ≤ nxs → ∃ e, (args[i]!).ty = .array n e ∧ e = (c.params[i]!).2 ∧ (args[i]!).dims = some (n, e.leaves)) ∧
-        (¬ i ≤ nxs → (args[i]!).ty = (c.params[i]!).2)
+        (¬ i ≤ nxs → (args[i]!).ty = (c.params[i]!).2)) ∧ 0 < args.size
 
 theorem len_eq (L : Array ℕ) (n ln : ℕ) (hm : ln ∈ L) (h1 : ¬ L.size > 1)
     (h2 : ¬ (L.size == 1 && L[0]! != n) = true) : ln = n := by
@@ -305,7 +305,7 @@ theorem buildNode_spec (fid : String) (k : ℕ) (form : Form) (callee : Defn) (a
       rcases hl with ⟨hO, hO0, hl⟩ | hl
       · have hOs : O.size = args.size := by omega
         refine ⟨hOs, fun i hi => ?_, hsz'.symm, fun i hi e L hd hL => ?_, a, b, by rw [hR], rfl,
-          ty_beq (by simpa using hcarry), ?_, fun i hi hi0 => ?_⟩
+          ty_beq (by simpa using hcarry), ?_, fun i hi hi0 => ?_, by rw [hOs]; exact hpos⟩
         · rcases Nat.eq_zero_or_pos i with rfl | hi0
           · rw [hO0]; exact ⟨rfl, rfl⟩
           · obtain ⟨h1, h2, -⟩ := hl i (by omega) (by omega)
@@ -504,7 +504,7 @@ theorem up_ok (c : Defn) (nd : Node) (hc : CalleeOk c) (hn : NodeOk c nd) : Reso
       · obtain ⟨L, hax, hlv, -, hb⟩ := axis_spec ax _ _ _ hrm
         simp only [Resolve.memberIdx, hd, hax]; rw [hcnt i hia]
         exact hb j (by rw [hmt]; exact hj) m hm
-    · obtain ⟨carry, y, hret, -, hp0, ha0, hrest⟩ := hsh
+    · obtain ⟨carry, y, hret, -, hp0, ha0, ⟨hrest, -⟩⟩ := hsh
       change m < n at hm
       dsimp only
       split
