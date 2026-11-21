@@ -1238,9 +1238,10 @@ def test_nothing_the_agreements_key_covers_reads_the_markdown_it_leaves_out():
 
 
 def test_the_agreement_scripts_import_only_the_standard_library_and_each_other():
-    """`agreement_key` covers verity/protocols/proof/flock/prover/agreement/ and the interpreter only: an import from elsewhere in `ci.py` or the scripts
-    it runs would be an input the key misses, so one fails here until the key covers it.  The key also leaves out the Lean
-    package's `lean-audit.json` (`agreement_closure`), so neither those scripts nor the package's lakefile may mention it."""
+    """`agreement_key` covers verity/protocols/proof/flock/prover/agreement/, `AGREEMENT_READS` and the interpreter only: an
+    import from elsewhere in `ci.py` or the scripts it runs, or a file loaded by path but `record_text.py`'s one, would be an
+    input the key misses, so one fails here until the key covers it.  The key also leaves out the Lean package's
+    `lean-audit.json` (`agreement_closure`), so neither those scripts nor the package's lakefile may mention it."""
     import ast
     import re
     import sys
@@ -1260,8 +1261,18 @@ def test_the_agreement_scripts_import_only_the_standard_library_and_each_other()
                     todo.append(top)
                 else:
                     assert top in sys.stdlib_module_names or top == "__future__", f"{m}.py imports {n}"
-    assert {"agree", "fuzz", "redigest", "transcript_check"} <= seen
-    readers = [here / f"{m}.py" for m in sorted(seen)] + [CHECK.FLOCK_LEAN / "lakefile.toml"]
+    assert {"agree", "fuzz", "redigest", "transcript_check", "record_text"} <= seen
+    assert [m for m in sorted(seen) if "spec_from_file_location" in (here / f"{m}.py").read_text()] == ["record_text"]
+    spec = importlib.util.spec_from_file_location("agreement_record_text_shim", here / "record_text.py")
+    shim = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(shim)
+    outside = {Path(shim.session_text.__code__.co_filename).resolve().relative_to(ROOT).as_posix()}
+    assert outside == set(CHECK.AGREEMENT_READS) and outside <= set(CHECK.agreement_closure(CHECK.tracked_files()))
+    for f in outside:
+        for node in ast.walk(ast.parse((ROOT / f).read_text())):
+            names = [a.name for a in node.names] if isinstance(node, ast.Import) else [node.module] if isinstance(node, ast.ImportFrom) and node.module else []
+            assert all(n.split(".")[0] in sys.stdlib_module_names or n == "__future__" for n in names), f"{f} imports {names}"
+    readers = [here / f"{m}.py" for m in sorted(seen)] + [ROOT / f for f in outside] + [CHECK.FLOCK_LEAN / "lakefile.toml"]
     assert not (named := [p.name for p in readers if "lean-audit" in p.read_text()]), (
         f"{', '.join(named)} mention lean-audit, which agreement_closure leaves out of the agreement's cache key")
 

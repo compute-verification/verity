@@ -41,9 +41,7 @@ build_all() {
   shift
   while [ "$1" != -- ]; do card+=("$1"); shift; done
   shift
-  NVCC=${NVCC:-$(python3 "$ROOT/benchmarks/kernels/machine.py" toolkit 13.0)/bin/nvcc} \
-    || { echo "emp.sh: no CUDA 13.0 (machine.py, above)" >&2; exit 2; }
-  [ -x "$NVCC" ] || { echo "emp.sh: no nvcc at $NVCC" >&2; exit 2; }
+  . "$HERE/../nvcc.sh"
   export NVCC PATH="$(dirname "$NVCC"):$PATH"
   mkdir -p "$bin" "$OUT/sass"
   "$NVCC" --version >"$OUT/nvcc.txt" 2>&1

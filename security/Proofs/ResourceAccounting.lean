@@ -12,7 +12,6 @@ public import Proofs.ResourceAccounting.Gates.Rows
 public import Proofs.ResourceAccounting.Gates.Bitwise
 public import Proofs.ResourceAccounting.Gates.ToCircuit
 public import Proofs.Poub.Bandwidth
-public import Proofs.Pouw.ChainWork
 public import Proofs.ResourceAccounting.Prob
 public import Proofs.Compose.Joint
 public import Proofs.Certifier.JointBridge.WorkOfCreditedWords

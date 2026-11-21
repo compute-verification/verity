@@ -25,8 +25,7 @@ fi
 export O=${RESEARCH_RUN_DIR:?run under research run}/out
 mkdir -p "$O"
 HERE=calibration/pouw/dc
-NVCC=${NVCC:-$(python3 "$HERE/../../../benchmarks/kernels/machine.py" toolkit 13.0)/bin/nvcc} || { echo "s8_mma.sh: no CUDA 13.0 (machine.py, above)" >&2; exit 2; }
-[ -x "$NVCC" ] || { echo "s8_mma.sh: no nvcc at $NVCC" >&2; exit 2; }
+. "$HERE/../nvcc.sh"
 export PATH="$(dirname "$NVCC"):$PATH" PYTHONPATH=$PWD PYTHONDONTWRITEBYTECODE=1 OMP_NUM_THREADS=8
 PY=${PY:-python3}
 ARCH=$("$PY" "$HERE/../opcode_probe/probe.py" arch "${CARD[@]}") || exit 2

@@ -10,6 +10,7 @@ import input_datasets
 import pytest
 
 from verity_vllm.inputs import serves
+from verity_vllm.pipeline.advice_windows import CAP_BITS
 
 ROOT = Path(__file__).resolve().parents[5]
 INPUTS = str(ROOT / "adapters/vllm/tools/served_run/inputs.py")
@@ -63,7 +64,7 @@ def test_an_application_the_statement_is_not_and_a_timing_it_cannot_read_are_ref
 def test_the_command_prints_the_statement_and_the_doors_answer():
     run = lambda *a: subprocess.run([sys.executable, INPUTS, *a], capture_output=True, text=True)  # noqa: E731
     p = run("statement")
-    assert p.returncode == 0 and p.stdout.split() == [S.model, S.revision, "bfloat16", S.window_class]
+    assert p.returncode == 0 and p.stdout.split() == [S.model, S.revision, "bfloat16", S.window_class, str(CAP_BITS)]
     p = run("door", DATASET, "at-once")
     identity = input_datasets.open(DATASET).timed("at-once").identity
     assert p.returncode == 0 and p.stdout == f"DOOR {DATASET}: {len(input_datasets.open(DATASET))} records the class {S.window_class} takes; identity {identity}\n"
@@ -78,7 +79,7 @@ def test_an_application_gives_its_dataset_and_timing_once_the_statement_takes_it
     assert serves.application(str(good)) == (DATASET, "rate:2")
     p = subprocess.run([sys.executable, INPUTS, "application", str(good)], capture_output=True, text=True)
     first, door, _ = p.stdout.split("\n")
-    assert p.returncode == 0 and first.split()[3:] == [S.window_class, DATASET, "rate:2"] and door.startswith(f"DOOR {DATASET}: ")
+    assert p.returncode == 0 and first.split()[3:] == [S.window_class, DATASET, "rate:2", str(CAP_BITS)] and door.startswith(f"DOOR {DATASET}: ")
     varied = tmp_path / "varied.toml"
     varied.write_text(good.read_text().replace(f'dataset = "{DATASET}"\ntiming = "rate:2"\n', 'load = "varied"\n'))
     with pytest.raises(serves.Refused) as e:
