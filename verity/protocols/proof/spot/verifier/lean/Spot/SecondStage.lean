@@ -1416,6 +1416,32 @@ def tableRowsFailures (own : Own) (ss : List Json) : List (String × Json) :=
           ("port", .str port), ("why", .str why)])
     | none => []
 
+/-- The entry round 1 holds for value `v` a link names: the interior registration's entry of `v`, a value the
+verifier holds (`namesOk` keeps the name round 1's alone), else the boundary registration's record's port `v`. -/
+def linkedEntry (own : Own) (v : String) : Option Json :=
+  match registeredEntry own.interior v with
+  | some x => some x
+  | none => ((Record.byPort own.boundary).find? (·.1 == v)).map (·.2)
+
+def LINK_ROOT_WHY : String :=
+  "a port a link names reads the rows round 1 committed, at round 1's root, domain and leaves: a tree committed " ++
+  "after the first stage's sample (a run input's input/n<w> among them) holds rows nothing ties to round 1's"
+
+/-- `second-link-root` for each registered read of statements `ss` at a port a link names that is not at the root,
+domain and leaves round 1 holds for the link's value (`linkedEntry`, `sameAt`), whatever value the read names; naming
+the statement, its template and the port. -/
+def linkRootFailures (own : Own) (ss : List Json) : List (String × Json) :=
+  (List.range ss.length).flatMap fun i =>
+    match Stmt.ofJson? (ss.getD i .null) with
+    | some s => (entries (getD s.registered "ports")).toList.filterMap fun (port, e) =>
+      match linkOf own s.template port with
+      | some l =>
+        if (linkedEntry own l.value).any (sameAt e) then none
+        else some ("second-link-root", Json.mkObj [("statement", Lean.toJson i), ("template", .str s.template),
+          ("port", .str port), ("why", .str LINK_ROOT_WHY)])
+      | none => none
+    | none => []
+
 /-- **The interior record's order**: the replay sample the interior record names (`window.replay_sample`, which the
 proof server writes) is the verifier's own, `own.sample`, in its order, each entry a natural number (`nat?`, never a
 boolean). -/
@@ -1598,6 +1624,7 @@ def placingFailures (own : Own) (ps : Array Part) : List (String × Json) :=
 def failures (own : Own) (ps : Array Part) (ss : List Json) : List (String × Json) :=
   interiorFailures own ++ (List.range ss.length).flatMap (stmtFailures own ps ss) ++
     orderFailures ps ss ++ coverFailures ps ss ++ reportedFailures own ss ++ tableRowsFailures own ss ++
+    linkRootFailures own ss ++
     placingFailures own ps
 
 /-- The design is derived over parts `ps`: its links (`linksOk`) and its wires (`wiresOk`). -/
@@ -1655,6 +1682,7 @@ def sampledFailures (own : Own) (ps : Array Part) (ss : List Json) (i : Nat) : L
 def failuresSampled (own : Own) (ps : Array Part) (ss : List Json) : List (String × Json) :=
   interiorFailures own ++ (List.range ss.length).flatMap (sampledFailures own ps ss) ++
     orderFailures ps ss ++ coverFailures ps ss ++ reportedFailures own ss ++ tableRowsFailures own ss ++
+    linkRootFailures own ss ++
     placingFailures own ps
 
 /-- **Round 2's statement check of either shape of statement**: `check` itself where every statement is of every slot

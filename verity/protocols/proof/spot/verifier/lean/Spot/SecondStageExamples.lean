@@ -212,7 +212,14 @@ private def exAt (per : Nat) (runs : Array Run) (reads : List Nat) (held : Nat :
 #guard (exCheck (exReported "bx" 5 exLinked) #[exReading "bx" 5 6 4 [1, 1, 1, 3, 3, 2]]).codes == #["second-read"]
 #guard (exCheck (exReported "bx" 5) #[exReading "bx" 5 6 4 [1, 1, 1, 3, 3, 3]]).codes == #["second-read"]
 #guard (exCheck (exReported "bx" 5 exLinked) #[exReading "bx" 5 6 4 [1, 1, 1, 3, 3, 3]]).codes.isEmpty
-#guard (exCheck (exReported "x" 1 exLinked) #[exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5]]).codes == #["second-read"]
+#guard (exCheck (exReported "x" 1 exLinked) #[exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5]]).codes ==
+  #["second-read", "second-link-root"]
+-- a port a link names reads round 1's rows at round 1's root, whatever value it names: a run input's tree committed
+-- after the sample (`input/n0`) at another root is refused by name; at round 1's root only `second-read` holds the name
+#guard (exCheck (exReported "input/n0" 7 exLinked) #[exReading "input/n0" 7 8 4 [1, 1, 1, 3, 3, 3]]).codes ==
+  #["second-read", "second-link-root"]
+#guard (exCheck (exReported "input/n0" 5 exLinked) #[exReading "input/n0" 5 6 4 [1, 1, 1, 3, 3, 3]]).codes ==
+  #["second-read"]
 #guard (exCheck exLinked #[exHonest]).codes == #["second-read"]
 #guard (exCheck { exOwn with links := none } #[exHonest]).codes == #["second-links"]
 #guard (check { exOwn with links := none } none).codes == #["second-links"]
@@ -226,7 +233,7 @@ private def exAt (per : Nat) (runs : Array Run) (reads : List Nat) (held : Nat :
 #guard exAt 3 #[⟨0, 3, 1, 1⟩] [4, 5, 6, 10, 11, 12] == #["second-read"]
 -- the boundary port holds its population's rows a block, and the read is at its leaves
 #guard exAt 3 #[⟨0, 3, 0, 1⟩] [3, 4, 5, 9, 10, 11] (held := 4) == #["second-read"]
-#guard exAt 3 #[⟨0, 3, 0, 1⟩] [3, 4, 5, 9, 10, 11] (leaves := 16) == #["second-read"]
+#guard exAt 3 #[⟨0, 3, 0, 1⟩] [3, 4, 5, 9, 10, 11] (leaves := 16) == #["second-read", "second-link-root"]
 -- rows that don't place the part's units, or no rows, make no links
 #guard (check (exLinkedAt 3 #[⟨0, 2, 0, 1⟩]) none).codes == #["second-links"]
 #guard (check (exLinkedAt 3 #[⟨0, 3, 0, 1⟩, ⟨3, 1, 0, 0⟩]) none).codes == #["second-links"]

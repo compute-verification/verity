@@ -1214,7 +1214,40 @@ def _failures(own: Own, ps: Sequence[Part], ss: Sequence[Any]) -> list[tuple[str
     if not _same_dict(own.reported or {}, statement_reads(ss)):
         found.append(("second-reported", REPORTED_WHY))
     found += table_rows_failures(own, ss)
+    found += link_root_failures(own, ss)
     return found + placing_failures(own, ps)
+
+
+LINK_ROOT_WHY = ("a port a link names reads the rows round 1 committed, at round 1's root, domain and leaves: a tree "
+                 "committed after the first stage's sample (a run input's input/n<w> among them) holds rows nothing "
+                 "ties to round 1's")
+
+
+def _linked_entry(own: Own, v: str) -> Any:
+    """`SecondStage.linkedEntry`: the entry round 1 holds for value `v` a link names: the interior docket's registered
+    value `v`, else the boundary docket's record's port `v`."""
+    x = _registered_entry(own.interior, v)
+    return x if x is not None else _by_port(own.boundary).get(v)
+
+
+def link_root_failures(own: Own, ss: Sequence[Any]) -> list[tuple[str, Any]]:
+    """`SecondStage.linkRootFailures`: ``second-link-root`` for each registered read of statements `ss` at a port a link
+    names that is not at the root, domain and leaves round 1 holds for the link's value (`_linked_entry`, `_same_at`),
+    whatever value the read names; naming the statement, its template and the port."""
+    out: list[tuple[str, Any]] = []
+    for i, j in enumerate(ss):
+        s = _stmt(j)
+        if s is None:
+            continue
+        for port, e in _entries(_get(s.registered, "ports")):
+            link = _link_of(own, s.template, port)
+            if link is None:
+                continue
+            x = _linked_entry(own, link.value)
+            if x is None or not _same_at(e, x):
+                out.append(("second-link-root", {"statement": i, "template": s.template, "port": port,
+                                                 "why": LINK_ROOT_WHY}))
+    return out
 
 
 def placing_failures(own: Own, ps: Sequence[Part]) -> list[tuple[str, Any]]:

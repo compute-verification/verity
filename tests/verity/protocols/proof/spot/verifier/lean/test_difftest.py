@@ -8968,13 +8968,15 @@ def test_the_designs_rows_place_each_callers_units(pieces):
     the other way round, and writes row `j` of the output; ID8 over the second PAIR's output reads PAIR's unit 1 of two,
     its own output a field of one row; ID8 over DUO's second output reads it at DUO's `o1`. PAIR's callers reading two
     parameters, or a slice not one of its rows, or one the parameter and the other SWAP's output, make no links, and
-    their rows are then only those of the others. DUO over each of two rows, returned one field of each, links
+    the last no wires either; an ID8 batch mapped over a PAIR batch's outputs, or PAIR over two ID8 outputs, makes no
+    wires; the rows are then only those of the others. DUO over each of two rows, returned one field of each, links
     that field's port (`o<f>`), each field returned its own; its first output at one caller and its second at the other
     links neither. A token select inlined over two tokens, its combine gathering one output of each of a token's two
-    chunks, has links that read the logits at two row widths, the chunk's four rows a block and, for logits[0], the
-    combine's eight; by units, the combine reading each output of each of a token's two units whole, each unit of the
-    combine reads its token's units' rows, the logits at the unit's width alone; by chunk position, each chunk a
-    Definition of its own, every template reads its own row of its token's three."""
+    chunks, makes no wires, and its links read the logits at two row widths, the chunk's four rows a block and, for
+    logits[0], the combine's eight; by units, the combine reading each output of each of a token's two units whole, it
+    makes five wires, each unit of the combine at its token's units' rows, the logits read at the unit's width alone;
+    by chunk position, each chunk a Definition of its own, it makes one wire a chunk, each to that chunk's one output at
+    its token's unit, and every template reads its own row of its token's three."""
     pair, id8, duo, merge, unit, join, swap, keep, last = (
         codec.descriptor_id(d) for d in (PAIR, ID8, DUO, MERGE, UNIT, JOIN, SWAP, KEEP, LAST))
     (pairs, crossed, fan, field, apart, askew, members, kinds, gathered, heads, tails, halves, uneven, select,
@@ -8987,32 +8989,37 @@ def test_the_designs_rows_place_each_callers_units(pieces):
         return [{"per": per, "port": port, "runs": runs, "template": t} for t, port, per, runs in rs]
     one, two = [[0, 1, 0, 0]], [[0, 2, 0, 1]]
     cases = [
-        (BLOCK, [link(pair, "x", "x"), link(pair, "o0", "o0")],
+        (BLOCK, [link(pair, "x", "x"), link(pair, "o0", "o0")], [],
          rows((pair, "x", 3, [[0, 3, 0, 1]]), (pair, "o0", 3, [[0, 3, 0, 1]]))),
-        (pairs, [link(pair, "x", "x"), link(pair, "o0", "o0")], rows((pair, "x", 2, two), (pair, "o0", 2, two))),
-        (crossed, [link(pair, "x", "x"), link(pair, "o0", "o0")],
+        (pairs, [link(pair, "x", "x"), link(pair, "o0", "o0")], [], rows((pair, "x", 2, two), (pair, "o0", 2, two))),
+        (crossed, [link(pair, "x", "x"), link(pair, "o0", "o0")], [],
          rows((pair, "x", 2, [[0, 1, 1, 0], [1, 1, 0, 0]]), (pair, "o0", 2, two))),
         (fan, [link(pair, "x", "x"), link(pair, "o0", "o0"), link(id8, "o0", "o1")],
+         [{"port": "y", "template": id8, "wport": "o0", "writer": pair}],
          rows((pair, "x", 2, two), (pair, "o0", 2, two), (id8, "o0", 1, one), (id8, "y", 2, [[0, 1, 1, 0]]))),
         (field, [link(duo, "x", "x"), link(id8, "o0", "o0")],
+         [{"port": "y", "template": id8, "wport": "o1", "writer": duo}],
          rows((duo, "x", 1, one), (id8, "o0", 1, one), (id8, "y", 1, one))),
-        (apart, None, []),
-        (askew, None, []),
-        (members, [link(pair, "x", "x"), link(id8, "o0", "o0")], rows((pair, "x", 2, two), (id8, "o0", 2, two))),
-        (kinds, None, []),
-        (gathered, [link(id8, "y", "x"), link(pair, "o0", "o0")], rows((id8, "y", 2, two), (pair, "o0", 1, one))),
-        (heads, [link(duo, "x", "x"), link(duo, "o0", "o0")], rows((duo, "x", 2, two), (duo, "o0", 2, two))),
-        (tails, [link(duo, "x", "x"), link(duo, "o1", "o0")], rows((duo, "x", 2, two), (duo, "o1", 2, two))),
-        (halves, [link(duo, "x", "x"), link(duo, "o0", "o0"), link(duo, "o1", "o1")],
+        (apart, None, [], []),
+        (askew, None, [], []),
+        (members, [link(pair, "x", "x"), link(id8, "o0", "o0")], None, rows((pair, "x", 2, two), (id8, "o0", 2, two))),
+        (kinds, None, None, []),
+        (gathered, [link(id8, "y", "x"), link(pair, "o0", "o0")], None, rows((id8, "y", 2, two), (pair, "o0", 1, one))),
+        (heads, [link(duo, "x", "x"), link(duo, "o0", "o0")], [], rows((duo, "x", 2, two), (duo, "o0", 2, two))),
+        (tails, [link(duo, "x", "x"), link(duo, "o1", "o0")], [], rows((duo, "x", 2, two), (duo, "o1", 2, two))),
+        (halves, [link(duo, "x", "x"), link(duo, "o0", "o0"), link(duo, "o1", "o1")], [],
          rows((duo, "x", 2, two), (duo, "o0", 2, two), (duo, "o1", 2, two))),
-        (uneven, None, []),
-        (select, [link(duo, "x", "x"), link(merge, "x0", "x"), link(merge, "o0", "o0")],
+        (uneven, None, [], []),
+        (select, [link(duo, "x", "x"), link(merge, "x0", "x"), link(merge, "o0", "o0")], None,
          rows((duo, "x", 4, [[0, 4, 0, 1]]), (merge, "x0", 8, [[0, 2, 0, 4]]), (merge, "o0", 2, two))),
         (units, [link(unit, "x", "x"), link(join, "o0", "o0")],
+         [{"port": port, "template": join, "wport": wport, "writer": unit}
+          for port, wport in (("x0", "o2"), ("best0", "o0"), ("best1", "o0"), ("idx0", "o1"), ("idx1", "o1"))],
          rows((unit, "x", 4, [[0, 4, 0, 1]]), (join, "o0", 2, two), (join, "x0", 4, [[0, 2, 0, 2]]),
               (join, "best0", 4, [[0, 2, 0, 2]]), (join, "best1", 4, [[0, 2, 1, 2]]),
               (join, "idx0", 4, [[0, 2, 0, 2]]), (join, "idx1", 4, [[0, 2, 1, 2]]))),
         (places, [link(swap, "x", "x"), link(keep, "x", "x"), link(last, "x", "x"), link(last, "o0", "o0")],
+         [{"port": port, "template": last, "wport": "o0", "writer": writer} for port, writer in (("r0", swap), ("r1", keep))],
          rows((swap, "x", 6, [[0, 2, 0, 3]]), (keep, "x", 6, [[0, 2, 1, 3]]), (last, "x", 6, [[0, 2, 2, 3]]),
               (last, "o0", 2, two), (last, "r0", 2, two), (last, "r1", 2, two))),
     ]
