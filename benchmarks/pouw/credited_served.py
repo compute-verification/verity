@@ -207,7 +207,7 @@ class Cone:
         out = []
         for arg, ax in zip(nd.args, axes):
             rs = member_refs(arg, ax, m) if nd.form == "batch" else arg.refs
-            out.append([resolve(self.scope, rs[j]) for j in range(rs.count)])
+            out.append([resolve(self.scope, rs[j]) for j in range(len(rs))])
         return out
 
     def member(self, k: int, m: int) -> list[int]:
