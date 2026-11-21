@@ -66,7 +66,7 @@ UNBOUND = sorted(k for k in (f"{p}.{c}.{k}" for p, cs in BINDINGS.items() if p n
 VARIABLES = {
     "CERTIFIER_CMD": '.venv/bin/python benchmarks/network_traces/attester_piece.py piece "$@"',
     "CERTIFIER_FRONT": '.venv/bin/python benchmarks/network_traces/attester_piece.py front "$1" "$2" "$3" '
-                       "--gate user@gate-1 --peer peer-1 --tokens 2",
+                       f"--gate user@gate-1 --peer peer-1 --tokens {S.outputs}",
     "H1_KEY_SHA512": KEY, "LOAD": "dataset", "DATASET": DATASET, "TIMING": "at-once",
     "V3C_CLASS": S.window_class, "CLASSES": S.window_class, "PEARLC_CHALLENGER_GATE": "gate-command",
     "PEARLC_CHALLENGER_PEER": "peer-1", "POUW": "pearlplus", "PRODUCT": "onsite",
@@ -298,7 +298,7 @@ def test_a_dry_run_resolves_every_party_channel_and_piece(tmp_path, capsys):
     assert (hooks["PEARLC_CHALLENGER_GATE"], hooks["PEARLC_CHALLENGER_PEER"], hooks["H1_KEY_SHA512"]) == (
         "gate-command", "peer-1", KEY)
     assert hooks["POUW"] == "pearlplus" and not TIE_VARIABLES & set(hooks) and "H1_GATE" not in hooks
-    assert hooks["CERTIFIER_FRONT"].endswith("--gate user@gate-1 --peer peer-1 --tokens 2") and "PP_CHALLENGER" not in hooks
+    assert hooks["CERTIFIER_FRONT"].endswith(f"--gate user@gate-1 --peer peer-1 --tokens {S.outputs}") and "PP_CHALLENGER" not in hooks
     assert "DEVELOPMENT" not in hooks
 
 
@@ -384,7 +384,7 @@ def test_the_runners_variables_and_the_bindings_keys_are_these():
     unbound = T.variables(cfg, {})
     assert set(unbound) == set(VARIABLES) - {"WIPE_ADDRESS", "WIPE_KEY_SHA512", "H1_KEY_SHA512"} | set(deployed) | {"DEVELOPMENT"} | set(spot)
     assert unbound["CERTIFIER_FRONT"].endswith("--gate '<network-attester.network-attester.gate>' "
-                                               "--peer '<network-attester.network-attester.peer>' --tokens 2")
+                                               f"--peer '<network-attester.network-attester.peer>' --tokens {S.outputs}")
     assert unbound["CERTIFIER_CMD"] == VARIABLES["CERTIFIER_CMD"]
 
 
@@ -428,10 +428,10 @@ def test_with_pearl_plus_listed_the_attesters_piece_is_whole_sets_no_class_and_f
     assert not TIE_VARIABLES & set(got)
     assert got["CERTIFIER_CMD"] == VARIABLES["CERTIFIER_CMD"]
     assert not {"CERTIFIER_CHAIN_CMD", "CERTIFIER_PERIOD_CMD"} & set(got)
-    assert got["CERTIFIER_FRONT"].endswith("--gate user@gate-1 --peer peer-1 --tokens 2")
+    assert got["CERTIFIER_FRONT"].endswith(f"--gate user@gate-1 --peer peer-1 --tokens {S.outputs}")
     assert REG.parties["network-attester"][NC.WORKERS].variables(cfg, BINDINGS) == {
         "SERVE_ARGS": NS.ID_FORM, "CERTIFIER_CMD": VARIABLES["CERTIFIER_CMD"],
-        "CERTIFIER_FRONT": SPLIT["CERTIFIER_FRONT"] + " --tokens 2"}
+        "CERTIFIER_FRONT": SPLIT["CERTIFIER_FRONT"] + f" --tokens {S.outputs}"}
 
 
 def test_without_pearl_pluss_tie_the_attesters_piece_is_split_at_the_scan_class():
@@ -481,7 +481,7 @@ def test_the_network_attester_starts_first_as_the_local_gate_on_the_workloads_ma
     R.bind(tmp_path, NC.NETWORK_ATTESTER, written)
     assert side.variables(cfg, T.bindings_of(tmp_path)) == {
         **BOUND_FRONT, "CERTIFIER_FRONT": '.venv/bin/python benchmarks/network_traces/attester_piece.py front "$1" "$2" '
-                                          f'"$3" --gate local --peer {T.PROVER_NODE} --tokens 2'}
+                                          f'"$3" --gate local --peer {T.PROVER_NODE} --tokens {S.outputs}'}
     rc, got, err = dry(capsys, "--bindings", bindings(tmp_path, NO_NETWORK_ATTESTER))
     assert rc == 0 and got["dry"][0]["unbound"] == [], err
     assert {x["party"]: x.get("writes") for x in got["plan"]}[NC.NETWORK_ATTESTER] == {"network-attester": ["gate", "peer"]}
@@ -1441,7 +1441,7 @@ def test_the_workloads_bindings_are_the_runners_settings_under_the_pieces_hooks(
     state = tmp_path / "state"
     assert R.run_main([str(CONFIG), "--on", T.PROVER_NODE, *SERVED_PARTIES, "--bindings", bindings(tmp_path, tables),
                        "--state", str(state)], REG) == 0, capsys.readouterr().err
-    assert (state / "out" / "node.txt").read_text() == "/workspace/venv312|4\n"
+    assert (state / "out" / "node.txt").read_text() == f"/workspace/venv312|{S.slots}\n"
 
 
 @pytest.mark.parametrize("component", ["pouw", "pearl-plus"])

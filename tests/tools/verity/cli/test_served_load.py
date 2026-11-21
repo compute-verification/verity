@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import dataclasses
+import re
 from pathlib import Path
 
 import pytest
@@ -63,9 +64,13 @@ def test_a_dataset_the_adapter_does_not_take_is_refused_by_the_doors_name(params
     assert e.value.name == name and "[workload.params] dataset" in e.value.detail, e.value.detail
 
 
-def test_the_dry_run_refuses_a_dataset_past_the_class_before_any_node(monkeypatch, capsys):
+def test_the_dry_run_refuses_a_dataset_past_the_class_before_any_node(monkeypatch, capsys, tmp_path):
+    """The four-request fixed load against a class of 16 prompt ids, under an application of four slots and two steps."""
+    text = re.sub(r'^(slots|window-steps|dataset) = .*$', lambda m: {"slots": "slots = 4", "window-steps": "window-steps = 2"}.get(
+        m[1], 'dataset = "llama32_1b_fixed_4_27_2"'), REMOTE.read_text(), flags=re.M)
+    (app := tmp_path / "app.toml").write_text(text)
     monkeypatch.setattr(serves, "SERVES", dataclasses.replace(serves.SERVES, window_class="4,16,2"))
-    rc = R.run_main([str(REMOTE), "--dry-run"], REG)
+    rc = R.run_main([str(app), "--dry-run"], REG)
     err = capsys.readouterr().err
     assert rc == 2 and "refused positions:" in err and "past the class 4,16,2's 16" in err, err
 
