@@ -24,7 +24,7 @@ theorem widths_one {t : Ty} (h : isBit t = true) : ∀ w ∈ t.widths.toList, w 
 
 theorem ones_of_map {l : List (List Bool)} {ws : List ℕ} (h : l.map List.length = ws) (h1 : ∀ u ∈ ws, u = 1) :
     ∀ w ∈ l, w.length = 1 :=
-  fun w hw => h1 _ (h ▸ List.mem_map_of_mem (f := List.length) hw)
+  fun _ hw => h1 _ (h ▸ List.mem_map_of_mem (f := List.length) hw)
 
 theorem sum_ones : ∀ {l : List ℕ}, (∀ u ∈ l, u = 1) → l.sum = l.length
   | [], _ => rfl
@@ -178,13 +178,11 @@ theorem batchIns_one {D : Defn} (hb : BitTyped D) {x : List (List Bool)} (hx : x
     rw [batchArg_none _ _ _ _ _ ((hbat i hi').2 hn0)] at hw'
     exact argIns_one hb hx ho ⟨hcnt, hrefs'⟩ w hw'
 
-/-- **A scan node's step on words and on bits**, in a bit-typed Definition `D` walked on bits as it is: `scanStep` with
-the node unlifted. -/
-theorem scanStepG {D : Defn} (hb : BitTyped D) {x : List (List Bool)}
+/-- `scanStep`'s bit node as the node itself, in a bit-typed Definition `D` walked on bits as it is: the carry width
+and the bits its carry and rest arguments read. -/
+theorem scanBitArgs {D : Defn} (hb : BitTyped D) {x : List (List Bool)}
     (hx : x.map List.length = leafWidths D) {outs : Array (List (List Bool))} (ho : OutsOk D outs) {n : ℕ}
-    (hnD : n < D.body.nodes.size) (hsz : outs.size = n) (hf : (D.body.nodes[n]).form = .scan) {P L : Prog} {y : ℕ}
-    {C : Defn} (hlt : (D.body.nodes[n]).fn < y) (hc : P.defs[(D.body.nodes[n]).fn]? = some C)
-    (hc' : L.defs[(D.body.nodes[n]).fn]? = some C) (hC1 : ∀ u ∈ leafWidths C, u = 1)
+    (hnD : n < D.body.nodes.size) (hsz : outs.size = n) {C : Defn} (hC1 : ∀ u ∈ leafWidths C, u = 1)
     (hargs : ∀ a ∈ (D.body.nodes[n]).args.toList,
       a.seq.count = a.seq.toArray.size ∧ ∀ r ∈ a.seq.toArray.toList, RefIn D n r)
     (hcs : (D.body.nodes[n]).args.size = C.params.size) (h0 : 0 < C.params.size)
@@ -194,17 +192,18 @@ theorem scanStepG {D : Defn} (hb : BitTyped D) {x : List (List Bool)}
       ((D.body.nodes[n]).args.getD i default).seq.toArray.toList.map (fun r => (tyAt D r).widths[r.j]!) =
         if i ≤ (D.body.nodes[n]).nxs then
           (List.replicate (D.body.nodes[n]).n (C.params.getD i default).2.widths.toList).flatten
-        else (C.params.getD i default).2.widths.toList)
-    {yw : List ℕ} (hret : C.ret.widths.toList = (C.params.getD 0 default).2.widths.toList ++ yw)
-    (EW : ℕ → List (List Bool) → Option (List (List Bool))) (EB : ℕ → List Bool → Option (List Bool))
-    (hev : ∀ ws : List (List Bool), ws.map List.length = leafWidths C → ∃ o,
-      EW (D.body.nodes[n]).fn ws = some o ∧ o.map List.length = C.ret.widths.toList ∧
-      EB (D.body.nodes[n]).fn ws.flatten = some o.flatten) :
-    ∃ w, nodeStep wordWires P EW y x D outs (D.body.nodes[n]) = some (outs.push w) ∧
-      nodeStep Flock.Program.Wires.bool L EB y x.flatten D (outs.map List.flatten) (D.body.nodes[n]) =
-        some ((outs.push w).map List.flatten) ∧
-      w.map List.length = (C.params.getD 0 default).2.widths.toList ++
-        (List.replicate (D.body.nodes[n]).n yw).flatten := by
+        else (C.params.getD i default).2.widths.toList) :
+    (C.params.getD 0 default).2.leaves = ((C.params.getD 0 default).2.widths.toList).sum ∧
+      Flock.Program.argVals (Flock.Program.refVal x.flatten (Flock.Program.paramStarts D.params)
+          (outs.map List.flatten)) ((D.body.nodes[n]).args.getD 0 default) (C.params.getD 0 default).2.leaves id =
+        (Flock.Program.argVals (Flock.Program.refVal x (Flock.Program.paramStarts D.params) outs)
+          ((D.body.nodes[n]).args.getD 0 default) (C.params.getD 0 default).2.leaves id).flatten ∧
+      ∀ m < (D.body.nodes[n]).n,
+        ((List.range (D.body.nodes[n]).args.size).drop 1).flatMap
+          (scanArg (Flock.Program.refVal x.flatten (Flock.Program.paramStarts D.params) (outs.map List.flatten)) C
+            (D.body.nodes[n]) m) =
+        (((List.range (D.body.nodes[n]).args.size).drop 1).flatMap
+          (scanArg (Flock.Program.refVal x (Flock.Program.paramStarts D.params) outs) C (D.body.nodes[n]) m)).flatten := by
   have hx1 := words_one hb hx
   have ho1 := outs_one hb ho (by omega)
   have ha0 : 0 < (D.body.nodes[n]).args.size := by omega
@@ -213,59 +212,17 @@ theorem scanStepG {D : Defn} (hb : BitTyped D) {x : List (List Bool)}
     obtain ⟨h1, h2⟩ := hargs a ha
     exact ⟨h1, fun r hr' => by rw [hsz]; exact h2 r hr'⟩
   have hmem0 : (D.body.nodes[n]).args.getD 0 default ∈ (D.body.nodes[n]).args.toList := by simp [Array.getD, ha0]
-  have hr0 := (hargs' _ hmem0).2
-  have hinitW := argSharedWords hx ho hr0 hw0
+  have hinitW := argSharedWords hx ho (hargs' _ hmem0).2 hw0
   have hE0 : ∀ u ∈ (C.params.getD 0 default).2.widths.toList, u = 1 := fun u hu =>
     hC1 u (by rw [leafWidths_scan C h0]; exact List.mem_append_left _ hu)
-  have hinitB : Flock.Program.argVals (Flock.Program.refVal x.flatten (Flock.Program.paramStarts D.params)
-        (outs.map List.flatten)) ((D.body.nodes[n]).args.getD 0 default) (C.params.getD 0 default).2.leaves id =
-      (Flock.Program.argVals (Flock.Program.refVal x (Flock.Program.paramStarts D.params) outs)
-        ((D.body.nodes[n]).args.getD 0 default) (C.params.getD 0 default).2.leaves id).flatten := by
-    rw [argVals_ones hx1 ho1, flatten_ones (ones_of_map hinitW hE0)]
   have hcl : (C.params.getD 0 default).2.leaves = ((C.params.getD 0 default).2.widths.toList).length := by
     rw [Array.length_toList, hb_widths_size]
-  rw [nodeStep_scan wordWires (fun _ => rfl) P EW y x D outs _ hf hlt hc,
-    nodeStep_scan Flock.Program.Wires.bool (fun _ => rfl) L EB y x.flatten _ _ _ hf hlt hc', hinitB, hcl]
-  rw [hcl] at hinitW
-  have hk : (C.ret.widths.toList).take ((C.params.getD 0 default).2.widths.toList).length =
-      (C.params.getD 0 default).2.widths.toList := by
-    simp [hret]
-  have hrest : ∀ m < (D.body.nodes[n]).n,
-      ((List.range (D.body.nodes[n]).args.size).drop 1).flatMap
-        (scanArg (Flock.Program.refVal x.flatten (Flock.Program.paramStarts D.params) (outs.map List.flatten)) C
-          (D.body.nodes[n]) m) =
-      (((List.range (D.body.nodes[n]).args.size).drop 1).flatMap
-        (scanArg (Flock.Program.refVal x (Flock.Program.paramStarts D.params) outs) C (D.body.nodes[n]) m)).flatten := by
-    intro m hm
-    have hl := scanRestWords hx ho hargs' hw hm
-    rw [flatten_ones (ones_of_map hl fun u hu => hC1 u (by
-      rw [leafWidths_scan C h0, ← hcs]; exact List.mem_append_right _ hu)), List.map_flatMap]
-    exact List.flatMap_congr fun i _ => scanArg_ones hx1 ho1 C _ m i
-  obtain ⟨cr, ys', g1, g2, g4, g3⟩ := scanFold ((C.params.getD 0 default).2.widths.toList) C.ret.widths.toList hk
-    (D.body.nodes[n]).n
-    (fun carry m => EW (D.body.nodes[n]).fn (carry ++ ((List.range (D.body.nodes[n]).args.size).drop 1).flatMap
-      (scanArg (Flock.Program.refVal x (Flock.Program.paramStarts D.params) outs) C (D.body.nodes[n]) m)))
-    (fun cb m => EB (D.body.nodes[n]).fn
-      (cb ++ ((List.range (D.body.nodes[n]).args.size).drop 1).flatMap
-        (scanArg (Flock.Program.refVal x.flatten (Flock.Program.paramStarts D.params) (outs.map List.flatten))
-          C (D.body.nodes[n]) m)))
-    (fun carry m hm hcar => by
-      obtain ⟨o, h1, h2, h3⟩ := hev (carry ++ ((List.range (D.body.nodes[n]).args.size).drop 1).flatMap
-          (scanArg (Flock.Program.refVal x (Flock.Program.paramStarts D.params) outs) C (D.body.nodes[n]) m)) (by
-        rw [List.map_append, hcar, scanRestWords hx ho hargs' hw hm, leafWidths_scan C h0, hcs])
-      refine ⟨o, h1, h2, ?_⟩
-      rw [hrest m hm, ← List.flatten_append]
-      exact h3)
-    (List.range (D.body.nodes[n]).n) _ [] (fun m hm => List.mem_range.1 hm) hinitW
-  rw [sum_ones hE0] at g3
-  simp only [List.flatten_nil, List.map_nil, List.nil_append, List.length_range] at g3 g4
-  refine ⟨cr ++ ys', ?_, ?_, ?_⟩
-  · rw [g1]
-    rfl
-  · rw [g3]
-    simp [Array.map_push, List.flatten_append]
-  · rw [List.map_append, g2, g4]
-    simp [hret]
+  refine ⟨by rw [hcl, sum_ones hE0],
+    by rw [argVals_ones hx1 ho1, flatten_ones (ones_of_map hinitW hE0)], fun m hm => ?_⟩
+  have hl := scanRestWords hx ho hargs' hw hm
+  rw [flatten_ones (ones_of_map hl fun u hu => hC1 u (by
+    rw [leafWidths_scan C h0, ← hcs]; exact List.mem_append_right _ hu)), List.map_flatMap]
+  exact List.flatMap_congr fun i _ => scanArg_ones hx1 ho1 C _ m i
 
 /-- **`GateWords` holds**, on `NestedTyped`. -/
 theorem gateWords_of (hT : NestedTyped) : GateWords := by
@@ -407,8 +364,9 @@ theorem gateWords_of (hT : NestedTyped) : GateWords := by
           wordDef? P ((D.body.nodes[n]).fn + 1) (D.body.nodes[n]).fn ws := fun ws => wordDef_fuel P _ c ws hlt
       by_cases hs : (D.body.nodes[n]).form = .scan
       · obtain ⟨-, hcs, h0, hw0, hw, yw, hretc, hout'⟩ := hscan n hnD hs
-        obtain ⟨w, g1, g2, g3⟩ := scanStepG hbt hz ho hnD hsz hs hlt hcal hcalL (leaf_ones hbtc) (hargs n hnD) hcs h0
-          hw0 hw hretc (wordDef? P c) (Flock.Program.evalDef? L f') (fun ws hws => by
+        obtain ⟨hsum, hinitB, hrest⟩ := scanBitArgs hbt hz ho hnD hsz (leaf_ones hbtc) (hargs n hnD) hcs h0 hw0 hw
+        obtain ⟨w, g1, g2, g3⟩ := scanStep hz ho hnD hsz hs hs rfl hlt hcal hlt hcalL (hargs n hnD) hcs h0 hw0 hw hretc
+          hsum hinitB hrest (wordDef? P c) (Flock.Program.evalDef? L f') (fun ws hws => by
             obtain ⟨vs, hv1, hv2, hv3⟩ := IH ws hws
             exact ⟨vs, by rw [hWc]; exact hv1, hv2, hv3 f' (by omega)⟩)
         refine ⟨w, g1, g2, ?_⟩
