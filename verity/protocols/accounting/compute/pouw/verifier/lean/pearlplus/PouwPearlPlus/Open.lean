@@ -154,13 +154,13 @@ def output (ans : RunAnswer) (pub : Option Published := ans.work.map fun w => { 
       | some p =>
         let c := p.work
         Json.mkObj (([("credited", (c.credited : Nat)), ("credited_tiles", (c.creditedTiles : Nat)),
-          ("macs", (c.macs : Nat)), ("rho", jstr (toString c.rho)), ("epsilon", jstr (toString c.epsilon)),
+          ("checked_macs", (c.macs : Nat)), ("rho", jstr (toString c.rho)), ("epsilon", jstr (toString c.epsilon)),
           ("over_cap_draws", (c.overInertBoundDraws : Nat))] : List (String × Json)) ++
           (p.giveUp.map fun g => [("give_up", Json.num ⟨g, 0⟩)]).getD [])
       | none => .null),
     ("exact_work", match pub.bind (·.exact) with
       | some c => Json.mkObj [("credited", (c.credited : Nat)), ("credited_tiles", (c.creditedTiles : Nat)),
-          ("macs", (c.macs : Nat))]
+          ("checked_macs", (c.macs : Nat))]
       | none => .null),
     ("tie", match ans.tie with
       | some t => Json.mkObj (([("record", jstr t.record), ("tables", (t.tables : Nat))] : List (String × Json)) ++

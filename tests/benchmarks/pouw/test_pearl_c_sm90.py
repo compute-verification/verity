@@ -4,7 +4,7 @@ fixture against the scheme on the H100 record, and run.py's identity refusal and
 (pearl_c/fake_cuda.c, with pearl_c_sm120/fake_tma.c's tensor maps; an H200's name, SM count, compute capability, UUID
 and shared-memory limit), every launch's pointers and sizes checked against each kernel's footprint as pearl_c_sm90.cu
 states it, and each GEMM's operands against the tensor maps encoded for them at its tile's boxes.  With VERITY_POUW_NVCC
-naming a CUDA >= 12.8 toolkit, the real sm_90a build passes the gate."""
+naming the toolkit sm_90a's pins name (nvcc V13.0.88), the real sm_90a build passes the gate."""
 
 from __future__ import annotations
 
@@ -505,7 +505,31 @@ def test_the_build_says_its_one_target_with_no_toolkit():
     assert (HERE.parents[7] / "calibration" / "hardware" / "architectures" / f"{arch}.toml").is_file()
 
 
-@pytest.mark.skipif(not of(__file__).VERITY_POUW_NVCC, reason="VERITY_POUW_NVCC names a CUDA >= 12.8 toolkit (about 30 s)")
+def test_the_build_refuses_an_nvcc_its_sm90a_pins_do_not_name(tmp_path):
+    """build.sh builds with no nvcc but the one whose ptxas `sass_pins.json` pins for sm_90a, so its harness gate (enforced)
+    has pins to read: another release is refused by name before anything is built, and the pinned one is let through to
+    the compile (here a stand-in nvcc that refuses it)."""
+    pins = json.loads((HERE.parents[1] / "sass_pins.json").read_text())["toolkits"]
+    pinned = sorted({t["version"] for t in pins.values() if any(a.split()[:2] == ["-arch", "sm_90a"] for a in t["args"])})
+    assert pinned == ["Cuda compilation tools, release 13.0, V13.0.88"]
+
+    def build(said: str) -> subprocess.CompletedProcess:
+        kit = tmp_path / said.rsplit(" ", 1)[-1]
+        (kit / "bin").mkdir(parents=True)
+        (kit / "bin" / "nvcc").write_text(f"#!/bin/sh\n[ \"$1\" = --version ] && {{ echo 'nvcc: NVIDIA (R) Cuda compiler driver'; "
+                                          f"echo '{said}'; exit 0; }}\necho 'stand-in nvcc: no compile' >&2; exit 1\n")
+        (kit / "bin" / "nvcc").chmod(0o755)
+        env = dict(os.environ, CUDA_HOME=str(kit), GENCODE="arch=compute_90a,code=sm_90a")
+        return subprocess.run(["bash", str(HERE / "build.sh"), str(kit / "out")], capture_output=True, text=True, env=env)
+
+    r = build("Cuda compilation tools, release 12.9, V12.9.86")
+    assert r.returncode == 1 and "builds only with the nvcc" in r.stderr and pinned[0] in r.stderr, r.stderr
+    assert "V12.9.86" in r.stderr and not (tmp_path / "V12.9.86" / "out").exists()
+    r = build(pinned[0])
+    assert r.returncode == 1 and "builds only with" not in r.stderr and "stand-in nvcc: no compile" in r.stderr, r.stderr
+
+
+@pytest.mark.skipif(not of(__file__).VERITY_POUW_NVCC, reason="VERITY_POUW_NVCC names the toolkit sm_90a's pins name, nvcc V13.0.88 (about 30 s)")
 def test_the_sm90a_build_passes_the_gate(tmp_path):
     cuda = Path(of(__file__).VERITY_POUW_NVCC)
     cubin, ptxas, sass = tmp_path / "k.cubin", tmp_path / "ptxas.txt", tmp_path / "k.sass"

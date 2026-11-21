@@ -11,7 +11,7 @@
 #     python             the Python the tests run with has torch, numpy and pytest
 #     pearl_c.build      Pearl-C for sm_90a, `pearl_c_sm90/build.sh`: refused on a stack frame or spill (ptxas) and by its
 #                        SASS gate; the debit cubin with its two gates
-#     pearl_c.gate       the harness's SASS gate (.FTZ, FP32 MUFU) on both cubins, enforced here (build.sh only records it)
+#     pearl_c.gate       the harness's SASS gate (.FTZ, FP32 MUFU) on both cubins, enforced here (build.sh enforces it on pearl_c_sm90.cubin alone)
 #     pearl_c.fixture    the check's fixture, regenerated: it carries the salts the kernels read
 #     pearl_c.host       tests/benchmarks/pouw's Pearl-C sm_90a, hash and key tests. None of them reads a card: they hold
 #                        the host twins, and one builds the cubin with the toolkit and takes its gate
