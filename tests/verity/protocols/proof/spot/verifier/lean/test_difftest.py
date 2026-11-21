@@ -50,9 +50,11 @@ import sys
 from fractions import Fraction
 from math import gcd
 from pathlib import Path
+from dataclasses import replace
 from types import SimpleNamespace
 from unittest import mock
 
+import numpy as np
 import pytest
 from hypothesis import note, strategies as st
 
@@ -3358,6 +3360,57 @@ UNIT_GATES = D.Port(PIECES, "unit_gates", unit_gates, st.one_of(
 FANOUT = D.Port(PIECES, "fanout", fanout, st.one_of(fanout_cases(), JSON), package=PACKAGE)
 RUN_INPUT_ROOTS = D.Port(PIECES, "run_input_roots", run_input_roots, st.one_of(*[run_input_cases()] * 6, JSON),
                          package=PACKAGE)
+
+
+@functools.cache
+def _periods_tests():
+    """The periods tests' module, for its run input programs (`node_slice`)."""
+    spec = importlib.util.spec_from_file_location(
+        "periods_test_interface_rows", Path(__file__).resolve().parents[7] / "tests/verity/commitments/periods/test_interface.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _slice_rows(starts, n, ranges):
+    """`node_slice`'s program, its ``x`` port's run input read (`interface.run_input_reads`), and the node's row each unit
+    reads by that read, and the piece's input asking the Lean for the same rows."""
+    TI = _periods_tests()
+    prog = TI.node_slice(starts, n, ranges)
+    (read,) = [r for r in TI.I.run_input_reads([(TI.COORD, len(starts))], prog, PO.template_instances_query([TI.COORD]), ())
+               if r.port == "x"]
+    words = dict(TI.I.layout(TI.COORD).rows)["x"]
+    rows = [int(i) // words for i in read.source(np.arange(read.units))]
+    case = {"program": json.loads(D.canonical(codec.encode_program(prog))), "indices": list(range(len(starts))),
+            "port": "x", "value": read.param, "leaves": n // 64}
+    return prog, read, words, rows, case
+
+
+@pytest.mark.parametrize("starts, n, ranges", [([64, 192, 320], 512, (3,)), ([128, 320, 512, 704], 768, (1, 3))])
+def test_a_run_input_slice_reads_the_rows_lean_derives(pieces, starts, n, ranges):
+    """A port whose units read its run input node at a first row above zero and a stride above one (rows 1, 3, 5 of 8;
+    rows 2, 5, 8, 11 of 12 across two ranges): the rows its `Read` names (``base`` and ``step``) are the rows
+    `Flock.OneCircuit.pos` derives from C, at the tree the read names; a `Read` of another stride names other rows, which
+    the verifier never opens, and the Lean refuses another tree or another row count."""
+    _prog, read, words, rows, case = _slice_rows(starts, n, ranges)
+    assert rows == [s // 64 for s in starts] and read.base > 0 and read.step[0] > words
+    assert pieces.call("run_input_rows", case) == ("output", D.canonical({"rows": rows, "from": 0}))
+    wrong = replace(read, step=(read.step[0] + words,))
+    assert [int(i) // words for i in wrong.source(np.arange(wrong.units))] != rows
+    assert pieces.call("run_input_rows", {**case, "value": "input/n1"})[0] == "reject"
+    assert pieces.call("run_input_rows", {**case, "leaves": n // 64 + 1})[0] == "reject"
+
+
+def test_a_run_input_read_off_one_stride_is_refused_by_the_read_and_derived_by_the_lean(pieces):
+    """Units at rows 1, 3, 4: `run_input_reads` refuses them (no one stride, so no one `Read`), and the Lean derives
+    each unit's row from C all the same, so its verdict rests on no `Read`."""
+    TI = _periods_tests()
+    prog = TI.node_slice([64, 192, 256], 512, (3,))
+    with pytest.raises(ValueError, match="not row 5: its units read the node's rows at one stride"):
+        TI.I.run_input_reads([(TI.COORD, 3)], prog, PO.template_instances_query([TI.COORD]), ())
+    case = {"program": json.loads(D.canonical(codec.encode_program(prog))), "indices": [0, 1, 2], "port": "x",
+            "value": "input/n0", "leaves": 8}
+    assert pieces.call("run_input_rows", case) == ("output", D.canonical({"rows": [1, 3, 4], "from": 0}))
 _X0, _X00 = ((0, 0, 0), (0, 0, 1)), ((0, 0, 0),) * 4
 #: Programs R8 reads past a population's: two calls of `PAIR` on `x`'s first pair, a batch of three broadcasting it (a
 #: run Input two proof blocks read), and a call reading the first's result whose result a batch of two maps (F 4).
