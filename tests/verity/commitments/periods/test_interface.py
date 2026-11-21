@@ -551,6 +551,15 @@ def test_a_run_input_read_by_several_ranges_is_one_read_in_unit_order():
     assert I.window_of_record(rec, SAMPLING_DESIGN, BY_ID.__getitem__).members == win.window.members
 
 
+def test_a_run_input_beside_a_registered_value_read_recut_is_read_from_cs_references():
+    """C reading a registered value recut has no gate layout (`recut-gates`); its run input ports are still read, from C's
+    references: one read of each node's tree, unit i its row i."""
+    reg = I.Registered({"w": 6 * K // 2}, reads=(I.Read(TID, "wrow", "w", 2, (5, 2), 0, (K // 2, 0)),))
+    win = I.Window(I.Circuit("part", ((COORD, 12),), registered=reg), RUN, SAMPLING_DESIGN, 4)
+    assert [(r.port, r.radix) for r in win.runs] == [("x", (12,)), ("sx", (12,)), ("sw", (12,))]
+    assert len({r.param for r in win.runs}) == 3
+
+
 def permuted(rows: Sequence[int], m: int) -> Program:
     """C batching COORD over its four ports' run input nodes of ``m`` rows each, unit u reading row ``rows[u]``."""
     sig = COORD.signature()[0]

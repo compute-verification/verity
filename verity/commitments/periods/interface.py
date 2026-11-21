@@ -135,8 +135,9 @@ from verity.circuits.defs import (CATALOG_PACKAGES, REGISTRY, CompositeDefinitio
                                   bind)
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.population import wired_population_program
+from verity.circuits.cut import member_refs
 from verity.circuits.program import RUN, input_id
-from verity.circuits.refs import recut
+from verity.circuits.refs import recut, runs as ref_runs
 from verity.circuits.types import Array
 from verity.commitments import advice as AC, history as HT, registered_value as RV
 from verity.commitments.domains import REGISTERED_READS_V2
@@ -1783,8 +1784,12 @@ def run_input_reads(templates: Sequence[tuple[Any, int]], program: Any, query: M
     taken across all its template's ranges of C's root in their order. Refused (ValueError) where such a port is cut, a
     unit's row is not whole leaves of one run input node, or its units don't read one such node's rows each once, none
     skipped, in unit order (named by unit and row): `Flock.OneCircuit.pos` reads that position and no other."""
+    free = {descriptor_id(fn): [p for p, _ in fn.signature()[0] if (descriptor_id(fn), p) not in filled]
+            for fn, _ in templates}
+    if not any(free.values()):
+        return ()
     tp = PO.TemplatePartition(program, query)
-    body, total = program.root.body, program.root.gates
+    body = program.root.body
     offs = list(body.offsets)
     ranges: dict[str, list[tuple[int, int]]] = {}
     for _k, tid, a, n in tp.ranges:
@@ -1793,29 +1798,29 @@ def run_input_reads(templates: Sequence[tuple[Any, int]], program: Any, query: M
     for fn, n in templates:
         tid = descriptor_id(fn)
         ports = [(p, len(t.leaf_widths())) for p, t in fn.signature()[0]]
-        free = [p for p, _ in ports if (tid, p) not in filled]
-        if not free:
+        if not free[tid]:
             continue
-        for p in free:
+        for p in free[tid]:
             if int((cuts or {}).get(tid, {}).get(p, 1)) != 1:
                 raise ValueError(f"run inputs: {tid} {p} is cut; a run input's row is the port's whole")
-        words, rows = dict(layout(fn).rows), {p: [] for p in free}
+        words, rows = dict(layout(fn).rows), {p: [] for p in free[tid]}
         for u, g in enumerate(g for a, k in ranges.get(tid, ()) for g in range(a, a + k)):
-            gates, at = list(tp.inputs(g)), 0
-            for p, leaves in ports:
-                g0, at = gates[at], at + leaves
+            k, j = tp.locate(g)
+            node = body.nodes[k]
+            axes = node.axes if node.form == "batch" else (None,) * len(node.args)
+            for (p, leaves), arg, ax in zip(ports, node.args, axes):
                 if p not in rows:
                     continue
-                w = bisect.bisect_right(offs, g0) - 1
+                got = ref_runs(member_refs(arg, ax, j) if node.form == "batch" else arg.refs)
+                sp, w, lo, hi = got[0] if len(got) == 1 else ("", 0, 0, 0)
                 fw = body.nodes[w].fn
-                if (kind := input_id(getattr(fw, "id", ""))) is not None and kind[0] != RUN:
+                kind = input_id(getattr(fw, "id", "")) if sp == "n" else None
+                if kind is not None and kind[0] != RUN:
                     raise ValueError(f"run inputs: {tid} {p} reads C's node {w}, {fw.id}, bound at {kind[0]}, and no read "
                                      "fills it: a port of a registered or supplied node is read at its registered root, "
                                      "never in a tree of the period's")
-                r, q = divmod(g0 - offs[w], leaves)
-                end = offs[w + 1] if w + 1 < len(offs) else total
-                if (kind is None or q or g0 + leaves > end
-                        or gates[at - leaves:at] != list(range(g0, g0 + leaves))):
+                r, q = divmod(lo, leaves)
+                if kind is None or w in body.recut or q or hi - lo != leaves or hi > offs[w + 1] - offs[w]:
                     raise ValueError(f"run inputs: {tid} {p}: unit {u}'s row is not one row of a run input node's leaves, "
                                      f"in rows of its {leaves}")
                 if rows[p] and rows[p][0][0] != w:
@@ -1826,7 +1831,7 @@ def run_input_reads(templates: Sequence[tuple[Any, int]], program: Any, query: M
             if not rows.get(p):
                 continue
             w, read = rows[p][0][0], [r for _, r in rows[p]]
-            m = -(-((offs[w + 1] if w + 1 < len(offs) else total) - offs[w]) // leaves)
+            m = -(-(offs[w + 1] - offs[w]) // leaves)
             first: dict[int, int] = {}
             for u, r in enumerate(read):
                 if r in first:
