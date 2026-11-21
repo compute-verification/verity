@@ -234,10 +234,7 @@ adapters/
 applications/             one file per application, the configuration `verity run` reads. An application holds no code
   README.md        one table: the file, what it shows, its command, how far it runs and is proved
   remote.toml      SPOT, PoUW and the inference-only policy
-  onsite_network.toml    the network attester, SPOT and the memory wipe
-  onsite_network_front.toml  the same, its one load the network attester's front
-  onsite_compute.toml    the default: those three, PoUW and the inference-only policy
-  onsite_full.toml       those five, PoUS and PoUB
+  onsite_full.toml       SPOT, PoUW, the inference-only policy, the network attester, the memory wipe, PoUS and PoUB
 security/          Lean: what each protocol guarantees, and the proofs
 benchmarks/        every measurement, each one command, each on the dashboard
 tools/             the verity command, the check, the test harnesses
@@ -293,7 +290,7 @@ Each difference's owner and day are in `tests/tree.toml` (its `[[not_yet]]` line
 | The messages between workload and prover as one stated list | Function calls and files; 15 files with no settled name or place |
 | PoUW's serving code and GPU kernels in one package under `verity/protocols/resource_accounting/compute/pouw/`, reached by one call | The serving code is in `verity/protocols/resource_accounting/compute/pouw/prover/serving/` (12,000 lines), reached by `run_matmul`. The adapter keeps the option with its H1 hooks, the serve loops (`serve_h1`, `serve_tie`), Pearl's row GEMM (`gemm_rows`), H1's commit at acquire, the ncp-v2 replay check and the GPU row-table commit (3,500 lines); the last two still import modules below `serving`. Kernel checks are under `benchmarks/` |
 | Benchmarks and applications reach the adapter through its public interface only | 133 modules are reached past it |
-| Each application is one file under `applications/` that `verity run` starts: `remote.toml`, `onsite_network.toml`, `onsite_network_front.toml`, `onsite_compute.toml` (the default) and `onsite_full.toml` | The five files are there and `applications/` holds nothing else. `verity run` resolves `onsite_full.toml`, `remote.toml` and the two smaller onsite files, as dry runs with no party live, and records a smaller file's verdict under its own id, undecided unless the line says who combined it. Its table writes each file and reads back only the pins, where the file should be the source the code reads |
+| Each application is one file under `applications/` that `verity run` starts: `remote.toml` and `onsite_full.toml` | The two files are there and `applications/` holds nothing else. `verity run` resolves both, as dry runs with no party live. Its table writes each file and reads back only the pins, where the file should be the source the code reads |
 | Dither and the FP4 variant (Pearl-C4) are protocols being tried, under `verity/protocols/experimental/` | Dither's kernels and circuit are there, and Pearl-C4's scheme, circuit and vectors, research only with no kernel; PoUW's own circuits share its row schemas and word primitives |
 | The team's platform is in its own repository, today's `compute-verification/infra` | `infra/`, the run recorder and the agents' guard are in this one until their day in `tests/tree.toml`. The move tool stays, since its maps are this tree's records |
 | Python never returns accept or reject | Several protocols still decide in Python. SPOT's two-stage outcome is joined in Python; its Lean verifier accepts the form ahead of its proof, and the accept's record says its form is not yet proved |

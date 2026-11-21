@@ -449,9 +449,9 @@ def test_every_measurement_carries_its_metrics_version_and_no_caller_gives_one(t
     assert research_result.check_doc(tmp_path, _result(tmp_path), RUN).valid
 
 
-PARAMETERS = {"epsilon": {"value": 0.0123, "from": "applications/onsite_compute.toml",
+PARAMETERS = {"epsilon": {"value": 0.0123, "from": "applications/onsite_full.toml",
                           "basis": "window.eps_at(K=64, δ=0.01, C=60, W=64, 1)"}, "delta": {"value": "1/100",
-                                                                                         "from": "onsite_compute"}}
+                                                                                         "from": "onsite_full"}}
 CALIBRATION = [{"path": "calibration/census/hardware.json", "key": "h100-sxm5-80gb/e4m3.flop_per_second"}]
 
 
