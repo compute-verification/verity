@@ -1,8 +1,7 @@
-"""The id request has two writers: the verifier's `id_form.id_request` and the workload's declaration
-(`attester.prover.workload.id_request`), which the adapter imports so it reads nothing of the verifier. They write
-the same bytes in the network attester's cells (``offset=0``) and refuse the same fields, and the link frame's header
-is one format on both sides. The same holds for a response's id events (`io_tie.id_event`) and its last bytes
-(`io_tie.TRAILER`), which the workload declares beside them."""
+"""The id request has two writers: the verifier's `id_form.id_request` and the adapter's (`ids_protocol.id_request`),
+which reads nothing of the verifier. They write the same bytes in the network attester's cells (``offset=0``) and refuse
+the same fields, and the link frame's header is one format on both sides. The same holds for a response's id events
+(`io_tie.id_event`) and its last bytes (`io_tie.TRAILER`), which the adapter declares beside them."""
 
 from __future__ import annotations
 
@@ -10,9 +9,9 @@ import random
 
 import pytest
 
-from verity.protocols.accounting.network.prover import workload as WL
 from verity.protocols.accounting.network.verifier import id_form as IDF, io_tie as IT
 from verity.protocols.accounting.network.verifier.link_frame import HEADER
+from verity_vllm.pipeline import ids_protocol as WL
 
 U32 = (0, 1, 9, 10, 4095, (1 << 31), (1 << 32) - 1)
 RATIOS = (0, 0.0, 0.5, 1, 1.0, 0.000001, 0.7, 2.25, 9.999999)

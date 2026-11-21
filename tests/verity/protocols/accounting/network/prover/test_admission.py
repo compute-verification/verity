@@ -121,8 +121,8 @@ def test_a_step_that_computes_nothing_leaves_the_tick_where_it_was():
     assert g.steps == 1 and g.T == NA.Tick(**TICK).step(True)
 
 
-def test_the_schemes_attach_installs_the_admission_its_context_configures_else_starts_the_id_relay():
-    from verity.protocols.accounting.network.scheme import NETWORK_ATTESTER, START_ID_RELAY
+def test_the_schemes_attach_installs_the_admission_its_context_configures_else_nothing():
+    from verity.protocols.accounting.network.scheme import NETWORK_ATTESTER
     q: list[Any] = []
     ex = Exchange()
     a = NETWORK_ATTESTER.attach(ex, {"settings": {"order": "tick", "hold_ms": 1000, **TICK}, "submit": q.append,
@@ -130,4 +130,4 @@ def test_the_schemes_attach_installs_the_admission_its_context_configures_else_s
     assert type(a) is NA.Admitter and a.installed and a.front.take == q.append
     assert ex.requests[0] == (NETWORK_ATTESTER.name, H.StartOnBoundary(a.gate))
     ex = Exchange()
-    assert NETWORK_ATTESTER.attach(ex, {}) is None and ex.requests == [(NETWORK_ATTESTER.name, START_ID_RELAY)]
+    assert NETWORK_ATTESTER.attach(ex, {}) is None and ex.requests == []

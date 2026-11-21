@@ -8,7 +8,7 @@ A new scheme adds its name here, one line; `get` imports its module on first use
 `load` imports every module and returns the registry.
 
 `KEYS` is a second copy of declared facts: beside each name, the values a reader looks a scheme up by before anything
-is attached (its option, the roles it provides, its ports', framings' and processes' names), so that such a lookup
+is attached (its option, the roles it provides, its ports' and processes' names), so that such a lookup
 (`named`) imports the one scheme it finds and not every scheme; a test holds it equal to the declarations both ways.
 
 A shell script reads a declaration through this module's one command, run from the tree's root (the standard library
@@ -53,14 +53,12 @@ def workload_messages() -> tuple:
     return tuple(m for module in WORKLOAD_MESSAGES for m in import_module(module).MESSAGES)
 
 
-#: the fields `named` looks a scheme up by: `Scheme.option`, `provides`, and the names of its `ports`, `framings` and
-#: `processes`
-LOOKUPS = ("option", "provides", "ports", "framings", "processes")
+#: the fields `named` looks a scheme up by: `Scheme.option`, `provides`, and the names of its `ports` and `processes`
+LOOKUPS = ("option", "provides", "ports", "processes")
 
 #: beside each name, the values of `LOOKUPS` its declaration states (a field it leaves empty is left out)
 KEYS: Mapping[str, Mapping[str, tuple[str, ...]]] = MappingProxyType({
-    "network-attester": {"provides": ("admission",), "ports": ("released", "scan-state"), "framings": ("ids",),
-                         "processes": ("id-relay",)},
+    "network-attester": {"provides": ("admission",), "ports": ("released", "scan-state")},
     "pearl-plus": {"option": ("pouw:pearl-c-h100-v1-h3",), "provides": ("cut",)},
     "poub": {"processes": ("poub-session",)},
     "pous": {"option": ("pous:p2-16448/v4",)},
@@ -70,8 +68,7 @@ KEYS: Mapping[str, Mapping[str, tuple[str, ...]]] = MappingProxyType({
 def keys(scheme: Scheme) -> dict[str, tuple[str, ...]]:
     """What `KEYS` holds for ``scheme``, read from its declaration."""
     got = {"option": (scheme.option,) if scheme.option else (), "provides": tuple(scheme.provides),
-           "ports": tuple(sorted(p.name for p in scheme.ports)), "framings": tuple(sorted(scheme.framings)),
-           "processes": tuple(sorted(scheme.processes))}
+           "ports": tuple(sorted(p.name for p in scheme.ports)), "processes": tuple(sorted(scheme.processes))}
     return {f: v for f, v in got.items() if v}
 
 

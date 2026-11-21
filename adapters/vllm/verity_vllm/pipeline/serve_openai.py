@@ -19,7 +19,7 @@ is the reference: under ``--protocol vllm`` (the default) a request is parsed by
 validation, ``to_sampling_params``) and every chunk is its ``CompletionStreamResponse``, serialized the way its
 ``completion_stream_generator`` does; ``max_tokens`` is bounded by its ``get_max_tokens`` rule. `serve_protocol.PlainProtocol`
 (``--protocol plain``) is the same framing without vLLM, for the CPU tests; `serve_protocol.framing_agrees` holds the two to
-each other and the server records the result at start. ``--protocol ids`` (the network attester's declared framing, `serve_protocol.framings`) answers a network
+each other and the server records the result at start. ``--protocol ids`` (the network attester's id form, `ids_protocol.IdsProtocol`) answers a network
 attester's id request (exactly ``id_form.id_request`` in its ``--id-payload`` + 9-byte cells, its release headers aside) in the
 scan's id form: no HTTP head, one ``io_tie.id_event`` of ``--id-payload`` bytes a token, no usage chunk, then ``data: [DONE]``; a stream the
 engine fails stops after its ids so far and the connection closes, with no ``[DONE]`` and no text (its reason only in
@@ -195,8 +195,7 @@ class Options:
     run_id: str = option("--run-id", env="RESEARCH_RUN_ID", default="local", help="the Commit's run id (default $RESEARCH_RUN_ID)")
     protocol: str = option("--protocol", choices=tuple(framings()), default="vllm",
                            help="vllm: vLLM's own request and response classes; plain: the same framing without them; ids: a "
-                                "network attester's id requests streamed in the scan's id form, raw, and every other request as vllm "
-                                "(the network attester's declared framing, Scheme.framings)")
+                                "network attester's id requests streamed in the scan's id form, raw, and every other request as vllm")
     id_payload: int | None = option("--id-payload", type=int, default=None,
                              help="--protocol ids: each id event's bytes, the network attester's cell payload B − 9 (default 503: the scan's "
                                   "B = 512)")

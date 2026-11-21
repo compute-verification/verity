@@ -1,7 +1,7 @@
 """`verity-vllm serve-openai`'s completion protocol: each ``/v1/completions`` request parsed and each response framed as vLLM's
 OpenAI server does it. `VllmProtocol` is that server's own classes; `PlainProtocol` is the same framing without vLLM, for the
-CPU tests; `framing_agrees` holds the two to each other. A declared scheme's framings (`Scheme.framings`, the network
-attester's ``ids``) are built over `VllmProtocol` (`framings`)."""
+CPU tests; `framing_agrees` holds the two to each other. The network attester's id form (`ids_protocol.IdsProtocol`, ``ids``) is
+built over `VllmProtocol` (`framings`)."""
 from __future__ import annotations
 
 import json
@@ -9,8 +9,8 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from verity.protocols.run import schemes as declarations
 
+from verity_vllm.pipeline.ids_protocol import IdsProtocol
 from verity_vllm.pipeline.serve_commit import SAMPLING_FIELDS
 
 
@@ -218,19 +218,16 @@ class VllmProtocol(PlainProtocol):
                                        token_ids=token_ids, prompt_token_ids=prompt_token_ids)]).model_dump_json()
 
 
-#: the adapter's own completion framings, by their ``--protocol`` name
+#: the completion framings that take no settings, by their ``--protocol`` name
 PROTOCOLS = {"vllm": VllmProtocol, "plain": PlainProtocol}
 
 
 def framings() -> dict[str, Callable[..., Any]]:
     """Each completion framing by its ``--protocol`` name, called with ``force_include_usage``: the adapter's own
-    (`PROTOCOLS`) and each declared scheme's (`Scheme.framings`) over `VllmProtocol`, given its settings by keyword. The
-    names are `run.schemes.KEYS`', so no scheme is imported until its framing is called."""
-    out: dict[str, Callable[..., Any]] = dict(PROTOCOLS)
-    for name in sorted({f for k in declarations.KEYS.values() for f in k.get("framings", ())}):
-        out[name] = (lambda n: lambda force_include_usage=False, **given: declarations.get(declarations.named("framings", n))
-                     .framings[n](base=VllmProtocol(force_include_usage), **given))(name)
-    return out
+    (`PROTOCOLS`) and the network attester's id form over `VllmProtocol` (``ids``), given its settings by keyword."""
+    def ids(force_include_usage: bool = False, **given: Any) -> Any:
+        return IdsProtocol(base=VllmProtocol(force_include_usage), **given)
+    return {**PROTOCOLS, IdsProtocol.name: ids}
 
 
 FRAMING_BASE = {"request_id": "cmpl-0123-0", "created": 1, "model": "m"}

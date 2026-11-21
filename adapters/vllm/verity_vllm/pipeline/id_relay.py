@@ -1,7 +1,7 @@
 """The network attester's id egress relay: a process of the server's side, on its host, between the network attester and
 a server that answers in HTTP, which takes the HTTP off the server's answers to the network attester's id requests.
 
-* **An id request** (a connection's first request, exactly `workload.id_request` in the network attester's P + 9-byte
+* **An id request** (a connection's first request, exactly `ids_protocol.id_request` in the network attester's P + 9-byte
   cells, its release headers aside: `ids_protocol.id_request_fields`) goes to the server as the request ``request_of``
   builds of its fields, on a connection of its own, under the release headers it came with. Of the server's answer only
   the token ids come back, as ``stream_ids`` reads them, each one id event written as its chunk arrives, then the trailer
@@ -28,23 +28,15 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import functools
 import time
-from collections.abc import AsyncIterator, Callable, Coroutine
+from collections.abc import AsyncIterator, Callable
 from typing import Any
 
 from verity import hooks as H
-from verity_vllm.pipeline.ids_protocol import (
-    ID_PAYLOAD,
-    id_request_fields,
-)
-from verity.protocols.accounting.network.prover.workload import (
-    TRAILER,
-    id_event,
-)
 from verity import release as REL
+from verity_vllm.pipeline.ids_protocol import ID_PAYLOAD, TRAILER, id_event, id_request_fields
 
-__all__ = ["BLANK", "BODY_BYTES", "COMPLETIONS", "GONE", "READ_BYTES", "Broken", "Front", "RequestOf", "READERS", "StreamIds", "process", "run", "serve"]
+__all__ = ["BLANK", "BODY_BYTES", "COMPLETIONS", "GONE", "READ_BYTES", "Broken", "Front", "RequestOf", "StreamIds", "run", "serve"]
 
 READ_BYTES = 1 << 16
 #: the longest body the relay reads whole to tell an id request: a connection whose request says more is relayed
@@ -58,9 +50,6 @@ GONE = "the network attester's side ended before the server's stream"
 RequestOf = Callable[[dict[str, Any], bytes, bytes], bytes]
 #: each chunk's token ids, in order, of the server's answer read from its connection; `Broken` where it doesn't end whole
 StreamIds = Callable[[asyncio.StreamReader], AsyncIterator[list[int]]]
-#: the readers `run` takes from the serving system, by name: ``server-request`` a `RequestOf`, ``stream-token-ids`` a
-#: `StreamIds`
-READERS = ("server-request", "stream-token-ids")
 
 
 #: why the server's stream of an id request ends without its trailer: the workload's readers' error
@@ -233,9 +222,3 @@ async def run(upstream: tuple[str, int], listen: tuple[str, int], payload: int =
     `stop` is set; `ValueError` for a `payload` below an id event, before it listens."""
     front = Front(upstream, payload, request_of=server_request, stream_ids=stream_token_ids, log=log)
     await serve(front, listen, announce=announce, stop=stop)
-
-
-def process(server_request: RequestOf, stream_token_ids: StreamIds) -> Callable[..., Coroutine[Any, Any, None]]:
-    """The relay as the process `verity.hooks.StartBeside` starts: called with the serving system's readers in `READERS`'
-    order, it is `run` with them given."""
-    return functools.partial(run, server_request=server_request, stream_token_ids=stream_token_ids)

@@ -43,8 +43,7 @@ is a line of `verity.protocols.run.schemes.DECLARATIONS`, from which every reade
   and ``commitment()``, what it committed to, read after ``release``), and
   ``processes``, what it starts beside the workload by name (`verity.hooks.StartBeside`, entered in `PROCESSES`), and
   ``messages``, the message types its workload writes and reads on disk (`verity.channel.Schema`s), which an adapter's
-  codec reads by the scheme's name, and ``framings``, the completion framings it serves by name, each built over the
-  adapter's own framing (``framing(base=..., **settings)``), and ``provides``, the roles an adapter asks a scheme for
+  codec reads by the scheme's name, and ``provides``, the roles an adapter asks a scheme for
   by role rather than by name (``admission``: with ``admit`` in its ``ctx``, `attach` installs and returns its gate;
   ``cut``: an execution phase's circuit is cut at the blocks it computes, reading the values each call commits there in
   place of their computation).
@@ -400,7 +399,6 @@ class Scheme:
     attach: Callable[[Any, Any], Any] = _attaches_nothing
     processes: Mapping[str, Callable[..., Any]] = field(default_factory=dict)
     messages: tuple[Any, ...] = ()
-    framings: Mapping[str, Callable[..., Any]] = field(default_factory=dict)
     provides: tuple[str, ...] = ()
     parties: tuple[Any, ...] | Lacks = UNDECLARED
     channels: tuple[Any, ...] | Lacks = UNDECLARED
