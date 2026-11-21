@@ -133,10 +133,9 @@ def lifted_definitions(audit: dict, lean: Path) -> dict[str, str]:
     `tools/verity/lean/check.py --lift` writes a lifted statement into a module under `Guarantees`), with whitespace
     collapsed: `def G : Prop :=` and the indented lines after it, in `namespace` G's prefix, or `def _root_.G : Prop :=`
     in any namespace (how `--lift` writes it). The audit's `reads` aren't read: a merged lock's are a candidate until the
-    Lean check regenerates them (`tools/verity/lean/merge.py`). A guarantee listed ahead of the records run that writes its
-    signature is lifted to nothing."""
+    Lean check regenerates them (`tools/verity/lean/merge.py`)."""
     names = {m[2] for name, pin in guarantees(audit).items()
-             if (m := _LIFTED.fullmatch(" ".join(" ".join(pin.get("signature", ())).split()))) and m[1] == name}
+             if (m := _LIFTED.fullmatch(" ".join(" ".join(pin["signature"]).split()))) and m[1] == name}
     dirs = [lean / root / "Pouw" / "Guarantees" for root in audit["trees"]["definitions"]]
     texts = [p.read_text() for d in dirs if d.is_dir() for p in sorted(d.rglob("*.lean"))] if names else []
     out = {}
