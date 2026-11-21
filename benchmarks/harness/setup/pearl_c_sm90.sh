@@ -15,5 +15,5 @@ CUDA_HOME=$CUDA_HOME GENCODE=$PC_GENCODE bash verity/protocols/accounting/comput
   || { echo "setup: verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm90/build.sh failed" >&2; exit 4; }
 # shellcheck disable=SC2046  # sources.txt's paths hold no space
 sha256sum $(cat "$PC_OUT/sources.txt") verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm90/run.py verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm90/grouped.py \
-  "$PC_OUT/pearl_c_sm90.cubin" "$PC_OUT/debit/debit_sm90.cubin" > "$PC_OUT/sha256.txt"
+  verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c/driver.py "$PC_OUT/pearl_c_sm90.cubin" "$PC_OUT/debit/debit_sm90.cubin" > "$PC_OUT/sha256.txt"
 export PEARLC_KERNEL=$PWD/verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm90 PEARLC_CUBIN=$PC_OUT/pearl_c_sm90.cubin

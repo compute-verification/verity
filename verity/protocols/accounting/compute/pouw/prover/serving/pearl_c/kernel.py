@@ -1,6 +1,7 @@
 """The Pearl-C device path's kernel (`pouw_pearl_c_device`): GPU 1's pipeline loaded from its directory (``run.py`` and the
 cubin), once per process per (sources, cubin), and the digests that name what ran.  A unit's keys are the scheme's
-(`pearl_c.keys_of`), so the loader executes no other file of the directory but ``grouped.py``, which `grouped.module` loads.
+(`pearl_c.keys_of`), so the loader executes no other file of the directory but ``grouped.py``, which `grouped.module` loads,
+and none outside it but the ``pearl_c/driver.py`` ``run.py`` loads.
 """
 from __future__ import annotations
 
@@ -48,8 +49,8 @@ def source_digest(files: dict[str, str]) -> str:
 @dataclass
 class Kernel:
     """GPU 1's pipeline, loaded once per process per (sources, cubin): ``run.py`` (as `run`), the device (`dev`), and what
-    names what ran, which the manifest records: the cubin's SHA-256, each of `SOURCES` the directory holds by its SHA-256
-    (`files`), and their `source_digest`."""
+    names what ran, which the manifest records: the cubin's SHA-256, each of `SOURCES` the directory holds and the
+    ``driver.py`` ``run.py`` loaded (its `DRIVER_SHA256`) by its SHA-256 (`files`), and their `source_digest`."""
 
     run: Any
     dev: Any
@@ -63,6 +64,8 @@ class Kernel:
         run, run_sha = _load("pearl_c_run", d / "run.py")
         files = {"run.py": run_sha} | {n: hashlib.sha256((d / n).read_bytes()).hexdigest()
                                        for n in SOURCES[1:] if (d / n).is_file()}
+        if (driver := getattr(run, "DRIVER_SHA256", None)) is not None:
+            files["driver.py"] = driver
         raw = Path(cubin or _the_cubin(d)).read_bytes()
         key = (source_digest(files), hashlib.sha256(raw).hexdigest())
         if key not in _KERNELS:

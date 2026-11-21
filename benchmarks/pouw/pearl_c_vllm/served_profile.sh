@@ -39,7 +39,8 @@ print(kernel_directory(sys.argv[1] or SCHEME, card_short(sys.argv[2].strip())).n
 UNPACK=$(mktemp -d); trap 'rm -rf "$UNPACK"' EXIT
 tar -xf "${SHIP_TAR:?}" -C "$UNPACK"
 SHIP=$(dirname "$(find "$UNPACK" -name MANIFEST.sha256 | head -1)")
-(cd "$SHIP" && sha256sum -c --quiet MANIFEST.sha256) && cmp -s "$SHIP/run.py" "$KERNEL/run.py" || { echo "ship"; exit 3; }
+(cd "$SHIP" && sha256sum -c --quiet MANIFEST.sha256) && cmp -s "$SHIP/run.py" "$KERNEL/run.py" \
+  && cmp -s "$SHIP/driver.py" "$KERNEL/../pearl_c/driver.py" || { echo "ship"; exit 3; }
 PEARLC_EXPECT_UUID=$UUID SHAPES="" VARIANTS=sm120 "$PY" "$SHIP/run.py" "$SHIP/check/check.json" > "$OUT/gpu1-check.jsonl"
 ARGS=(--model "$MODEL" --kernel "$KERNEL" --cubin "$SHIP/$K.cubin" --out "$OUT/e2e.json"
       --reps "${REPS:-2}" ${SCHEDULE:+--schedule "$SCHEDULE"} ${SCHEME:+--scheme "$SCHEME"} ${GRAPHS:+--graphs} ${FP8_GRAPHS:+--fp8-graphs} ${WHOLE_STEP:+--whole-step}
