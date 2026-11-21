@@ -4,7 +4,7 @@ fixture against the scheme on the H100 record, and run.py's identity refusal and
 (pearl_c/fake_cuda.c, with pearl_c_sm120/fake_tma.c's tensor maps; an H200's name, SM count, compute capability, UUID
 and shared-memory limit), every launch's pointers and sizes checked against each kernel's footprint as pearl_c_sm90.cu
 states it, and each GEMM's operands against the tensor maps encoded for them at its tile's boxes.  With VERITY_POUW_NVCC
-naming a CUDA >= 12.8 toolkit, the real sm_90a build passes the gate."""
+naming the toolkit sm_90a's pins name (nvcc V13.0.88), the real sm_90a build passes the gate."""
 
 from __future__ import annotations
 
@@ -529,7 +529,7 @@ def test_the_build_refuses_an_nvcc_its_sm90a_pins_do_not_name(tmp_path):
     assert r.returncode == 1 and "builds only with" not in r.stderr and "stand-in nvcc: no compile" in r.stderr, r.stderr
 
 
-@pytest.mark.skipif(not of(__file__).VERITY_POUW_NVCC, reason="VERITY_POUW_NVCC names a CUDA >= 12.8 toolkit (about 30 s)")
+@pytest.mark.skipif(not of(__file__).VERITY_POUW_NVCC, reason="VERITY_POUW_NVCC names the toolkit sm_90a's pins name, nvcc V13.0.88 (about 30 s)")
 def test_the_sm90a_build_passes_the_gate(tmp_path):
     cuda = Path(of(__file__).VERITY_POUW_NVCC)
     cubin, ptxas, sass = tmp_path / "k.cubin", tmp_path / "ptxas.txt", tmp_path / "k.sass"
