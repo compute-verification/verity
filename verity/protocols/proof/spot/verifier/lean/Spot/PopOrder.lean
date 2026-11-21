@@ -322,15 +322,14 @@ theorem foldlM_chain : ∀ (ss : List (Nat × Nat)) (a b : Nat), (∀ s ∈ ss, 
     obtain ⟨lo, hi⟩ := s
     have hlt : lo < hi := hs (lo, hi) (by simp)
     have hrest : ∀ s ∈ ss, s.1 < s.2 := fun s h => hs s (by simp [h])
-    rw [List.foldlM_cons]
-    simp only [chain, show ¬ hi ≤ lo by omega, if_false, Bool.and_eq_true, beq_iff_eq]
+    have hc : chain ((lo, hi) :: ss) a b = (lo == a && chain ss hi b) := by
+      simp only [chain, show ¬ hi ≤ lo by omega, ↓reduceIte]
+    rw [List.foldlM_cons, hc]
     by_cases h : lo = a
     · subst h
-      simp only [beq_self_eq_true, if_true, Option.bind_eq_bind, Option.bind_some, true_and]
+      simp only [beq_self_eq_true, ite_true, Option.bind_eq_bind, Option.bind_some, Bool.true_and]
       exact ih hi b hrest
-    · have : (lo == a) = false := by simp [h]
-      simp only [this, Bool.false_eq_true, if_false, h, false_and, iff_false]
-      simp [bind, Option.bind]
+    · simp [h]
 
 theorem segUnits_filter : ∀ (ss : List (Nat × Nat)),
     segUnits (ss.filter fun r => decide (r.1 < r.2)) = segUnits ss := by
@@ -340,9 +339,9 @@ theorem segUnits_filter : ∀ (ss : List (Nat × Nat)),
   | cons s ss ih =>
     obtain ⟨lo, hi⟩ := s
     by_cases h : lo < hi
-    · simp only [List.filter_cons, h, decide_true, if_true, segUnits, List.flatMap_cons] at ih ⊢
+    · simp only [List.filter_cons, h, decide_true, ite_true, segUnits, List.flatMap_cons] at ih ⊢
       rw [ih]
-    · simp only [List.filter_cons, h, decide_false, Bool.false_eq_true, if_false, segUnits, List.flatMap_cons] at ih ⊢
+    · simp only [List.filter_cons, h, decide_false, Bool.false_eq_true, ite_false, segUnits, List.flatMap_cons] at ih ⊢
       rw [ih, show hi - lo = 0 by omega, List.range'_zero, List.nil_append]
 
 /-- Nonempty segments sorted by start whose units are a permutation of `a, …, a + m - 1` chain from `a` to `a + m`. -/
@@ -395,9 +394,9 @@ theorem coverRanges_iff (ss : List (Nat × Nat)) (n : Nat) :
     have := (List.mem_filter.1 (hperm.mem_iff.1 h)).2
     simpa using this
   have hsort : ts.Pairwise (fun x y => x.1 ≤ y.1) :=
-    (List.sorted_mergeSort (le := fun x y : Nat × Nat => decide (x.1 ≤ y.1))
+    (List.pairwise_mergeSort (le := fun x y : Nat × Nat => decide (x.1 ≤ y.1))
       (fun a b c h1 h2 => by simp only [decide_eq_true_eq] at *; omega)
-      (fun a b h => by simp only [Bool.not_eq_true', decide_eq_false_iff_not, decide_eq_true_eq] at *; omega)
+      (fun a b => by simp only [Bool.or_eq_true, decide_eq_true_eq]; omega)
       fs).imp (fun h => by simpa using h)
   have hunits : (segUnits ts).Perm (segUnits ss) := by
     rw [← segUnits_filter ss]

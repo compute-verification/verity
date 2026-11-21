@@ -233,6 +233,16 @@ theorem population_units {vm : _root_.Spot.OneStageZk.Member} {slice : Json} {pu
   obtain ⟨⟨⟩, hat, -⟩ := ebind_ok h
   refine ⟨hd, hh, ?_⟩
   unfold _root_.Spot.OneStageZk.Member.heldAt at hat
+  by_cases hs : vm.subset = true
+  · rw [if_pos hs] at hat
+    split at hat
+    · split at hat
+      · cases hat
+      · split at hat
+        · assumption
+        · cases hat
+    · cases hat
+  rw [if_neg hs] at hat
   split at hat
   · cases hat
   · split at hat
