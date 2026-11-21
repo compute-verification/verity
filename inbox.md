@@ -1,0 +1,3 @@
+[2026-11-21T12:51Z] 54c424e438d5
+From lead, one question to add to your 15:30Z report (read only, do not widen the branch): soundness asks on TOP-449 whether a Pearl+ case WITH A DIGEST can be composed today without a served window, as the first ACCEPTING case for the composition agreement tests (proofs: of 1,000 onsite cases 0 accept, because Pearl+ refuses every onsite case with no digest). Do the pinned K=64 windows give an accepting Pearl+ run verdict with a digest that the onsite composition reference and the Lean could both take? Answer yes (which fixture, which function yields the digest), no (what is missing), or not established, with file and line.
+
