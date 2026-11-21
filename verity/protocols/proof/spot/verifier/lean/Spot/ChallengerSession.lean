@@ -930,10 +930,10 @@ def registrationOf (key : ChallengerKey) (window ledger : Json) : V String := do
   let heads := es.filter fun e => e.kind == "period-open" && e.seq < first && jsonStrIs (getD e.body "lane") lane &&
     (field? e.body "registration").isSome
   let some h := heads[0]? | throw NO_REGISTRATION
-  if let some e := heads.find? (!isDigest <| getD ·.body "registration") then
+  if let some e := heads.find? (fun e => !isDigest (getD e.body "registration")) then
     throw s!"the auditor's ledger entry {e.seq}: {REGISTRATION_FORM}"
   let r := strOf (getD h.body "registration")
-  if let some e := heads.find? (!jsonStrIs (getD ·.body "registration") r) then
+  if let some e := heads.find? (fun e => !jsonStrIs (getD e.body "registration") r) then
     throw s!"{SECOND_REGISTRATION} (entry {e.seq} names {(strOf (getD e.body "registration")).take 16}..., entry {h.seq} {r.take 16}...)"
   return r
 
