@@ -1,7 +1,0 @@
-Branch cursor/proofs-one-tree-verifier-a3c7 at 3d2f581b878: (A), (B) and (C) are in. Branches cut from this one can merge it now.
-
-(A) Tied nodes: OneStageZk.tiedRootsAt (line 344), called from runInputRoots (line 359), and members.tied_roots_at (line 1129). Each tied run input node is read under one root across the members; a second root is refused by name (TIED_ROOTS_WHY). Tests: Lean #guards in Test/OneTree.lean, and a Python test of two members under two roots in test_members_run.py. Lean check r20261121-210146-37f6, exit 0.
-(B) R8-shared-input is back on the variant with no members only: Docket.r8Codes (line 833) reads Partition.readAlone (Partition.lean line 497) under `!v.members.isEmpty ||`. Python: docket.py line 646. Lean check r20261121-204822-1c0a, exit 0.
-(C) The four R7 refusals (Docket.lean check / checkRef): R7-run-input 899/971, R7-anchor-unpinned 900/972, R7-pin 901/973, R7-supplied-source 903/975. R7-anchor-unpinned's docstring says it reads a field no circuit description carries today, so it refuses nothing yet.
-
-Runs in flight at 3d2f581b878: one-linear r20261121-210243-c543; build and tests r20261121-210426-34d6. I declare the commit when they return, about 22:00Z (2:00 PM PST); I stand behind 23:15Z at the latest.
