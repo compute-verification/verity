@@ -20,7 +20,9 @@ public import Spot.OneStage
 public import Spot.PublicUnits
 public import Spot.CircuitKept
 public import Spot.OneStageZkStatement
+public import Spot.OneStageZkKept
 public import Spot.MembersWires
+public import Spot.OneStageZkRun
 public import Spot.OneStageZk
 public import Spot.OneTree
 public import Spot.PortsOnce
