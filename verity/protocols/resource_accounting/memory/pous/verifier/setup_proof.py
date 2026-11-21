@@ -50,7 +50,7 @@ def salted(registered: Mapping[str, Any]) -> None:
 
 def bound(params: P2Params, salt: bytes, row_bytes: int) -> None:
     """Each unit's place and slot bound to its constants and its ok word held to 1 (`CONSTANTS`): refused, `NotBound`,
-    until C's format has constants of a unit and held outputs."""
+    until C's format has constants of a unit."""
     raise NotBound(f"{NOT_BOUND}{CONSTANTS}")
 
 

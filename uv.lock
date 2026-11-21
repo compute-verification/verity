@@ -24,6 +24,8 @@ members = [
     "cluster",
     "cluster-tests",
     "core-identity",
+    "input-datasets",
+    "input-datasets-tests",
     "memory-attester-lean",
     "pous-verifier",
     "research",
@@ -679,6 +681,22 @@ sdist = { url = "https://files.pythonhosted.org/packages/72/34/14ca021ce8e5dfedc
 wheels = [
     { url = "https://files.pythonhosted.org/packages/cb/b1/3846dd7f199d53cb17f49cba7e651e9ce294d8497c8c150530ed11865bb8/iniconfig-2.3.0-py3-none-any.whl", hash = "sha256:f631c04d2c48c52b84d0d0549c99ff3859c98df65b3101406327ecc7d53fbf12", size = 7484, upload-time = "2025-10-18T21:55:41.639Z" },
 ]
+
+[[package]]
+name = "input-datasets"
+version = "0.1.0"
+source = { editable = "input_datasets" }
+
+[[package]]
+name = "input-datasets-tests"
+version = "0.0.0"
+source = { virtual = "tests/input_datasets" }
+dependencies = [
+    { name = "input-datasets" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "input-datasets", editable = "input_datasets" }]
 
 [[package]]
 name = "jinja2"
@@ -3000,6 +3018,7 @@ name = "verity-vllm"
 version = "0.1.0"
 source = { editable = "adapters/vllm" }
 dependencies = [
+    { name = "input-datasets" },
     { name = "numpy" },
     { name = "verity" },
     { name = "verity-config" },
@@ -3016,6 +3035,7 @@ torch = [
 
 [package.metadata]
 requires-dist = [
+    { name = "input-datasets", editable = "input_datasets" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "research", marker = "extra == 'research'", editable = "tools/research" },
     { name = "torch", marker = "extra == 'torch'", specifier = ">=2.4" },

@@ -411,6 +411,11 @@ def test_malformed_interval_declarations():
         P.bind_ports("T", (("x", V8),), V8, Ports(params={"y": In(bound=(0, 1))}))
 
 
+def test_a_return_port_of_no_ports_keys_is_refused():
+    with pytest.raises(PortError, match="E_PORT_DECL: Root\\[X_v1\\]_v1 return: a port is a non-empty object with keys from"):
+        P.PortTypes.from_json("Root[X_v1]_v1", {"ret": [[0, 1, {"equals": ["seed", 0, 1]}]]}, [], V16, [V16])
+
+
 # --- rule 3: sinks ------------------------------------------------------------------------------------------------------------
 
 def test_a_sink_reaches_a_receipt_port_or_the_outputs():

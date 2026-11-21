@@ -304,7 +304,7 @@ Each difference's owner and day are in `tests/tree.toml` (its `[[not_yet]]` line
 | The circuit checker is handed the served circuits and names none | It names them |
 | The compiler cuts a period's circuit into pieces wired to each other | For the applications' model the pieces are wired only where the eight GPUs combine results, so the audit's second round runs over a stand-in |
 | A wire that crosses a block boundary has one commitment, which every block reading or writing it shares | Each block commits its own rows, and a wiring check (`HmLinks`) ties them only where an audit's case names a wiring; an accept without one covers each sampled block on its own inputs |
-| SPOT has one form, with levels the auditor fixes before any coin: one level the basic form, two the default | SPOT's one-stage and two-stage forms are separate code (`verifier/one_stage/`, `second_stage.py`), and no two-level audit is accepted in Lean |
+| SPOT has one form, with levels the auditor fixes before any coin: one level the basic form, two the default | SPOT's Python runs one stage (`verifier/one_stage/`) and refuses a two-stage docket by name; the Lean's two-stage form is separate code, and no two-level audit is accepted in Lean |
 | Each deployed guarantee is an instance of a layer theorem (session, sampling, recursion, compose), for soundness and for zero knowledge | Most are proved on their own |
 | The ZK, sampling and recursion layers are each a generic compiler, generic in the argument system and the circuit type | Flock over Boolean circuits is the one instance |
 | Every kernel the serving settings run has a circuit held to the kernel on an H200 | Three of five on `main` (the cache's write and both its reads) |
@@ -317,5 +317,5 @@ Each difference's owner and day are in `tests/tree.toml` (its `[[not_yet]]` line
 
 ## Documentation
 
-- Specifications: the [program format](verity/circuits/PROTOCOL.md), the commitment schemes ([frame-v3](verity/commitments/frame_v3/PROTOCOL.md), [vllm-v1](adapters/vllm/verity_vllm/commitments/vllm_v1/PROTOCOL.md)), the protocols, stated in Lean (`security/`) with each one's README as its outline, and Flock's verifier, stated in Lean (`verity/protocols/proofs/flock/verifier/`), with [its outline](verity/protocols/proofs/flock/prover/agreement/README.md).
+- Specifications: the [program format](verity/circuits/PROTOCOL.md), the commitment scheme ([frame-v3](verity/commitments/frame_v3/PROTOCOL.md)), the protocols, stated in Lean (`security/`) with each one's README as its outline, and Flock's verifier, stated in Lean (`verity/protocols/proofs/flock/verifier/`), with [its outline](verity/protocols/proofs/flock/prover/agreement/README.md).
 - Each subprotocol's README; [AGENTS.md](AGENTS.md) for contributors (the map, the rules, how a change lands).

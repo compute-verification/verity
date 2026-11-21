@@ -35,6 +35,10 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
         ),
         "verity_vllm/pipeline/serve_day.py": ("registration.verifier.registration",),
         "verity_vllm/pipeline/serving_rows.py": ("proofs.spot.verifier.service",),
+        # SamplingDesign and params_sampling_design from SPOT's verifier service: owner proofs, gone by Tue 24 Nov to a home
+        # the adapter may import (top's ruling, Fri 20 Nov 9:02 AM PST, TOP-447)
+        "verity_vllm/program/predict/serve.py": ("proofs.spot.verifier.service",),
+        "verity_vllm/program/predict/window_record.py": ("proofs.spot.verifier.service",),
     },
     "network-accounting": {},
     "memory-accounting": {},

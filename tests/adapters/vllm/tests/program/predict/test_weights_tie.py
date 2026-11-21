@@ -18,7 +18,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from verity.commitments import salt_file as SF
-from verity.circuits.codec import descriptor_id
+from verity.circuits.codec import descriptor_id, program_digest
 from verity.commitments.gates import sha512_stream as SS
 from verity.commitments.gates.sha512 import IV
 from verity.commitments.periods import interface as IF
@@ -27,6 +27,7 @@ from verity.protocols.proofs.spot.verifier import service as SV
 from verity.protocols.proofs.spot.prover import docket as DK
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D
 from verity.commitments import randomness as RND
+from verity.commitments import registered_value as RV
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
 from tests.check.test_weights_of_record import write_safetensors
@@ -142,7 +143,12 @@ def test_the_tie_is_the_checkpoints_public_bytes_and_commits_no_weight(x, monkey
     assert got["registered"][0] == {"program": registration["program"], "values": registration["values"]}
     assert set(got["registered"][1]["values"]) == {n for c in t.chains for n in c.supplied()}
     assert got["circuit"] == t.digest(DESIGN, CAP) != WT.tie(reg, d, man, grain=GRAIN, run_id="other").digest(DESIGN, CAP)
-    w = t.window(DESIGN, CAP).window
+    win = t.window(DESIGN, CAP)
+    pd = program_digest(win.window.program)
+    assert got["registered"][1]["program"] == pd != win.window.partition_digest
+    assert all(win.registered[n].program == pd and list(win.registered[n].salts) == RV.supplied_salts(pd, n, 1)
+               for n in got["registered"][1]["values"])
+    w = win.window
     rated = D.derive(w.program, w.query, *SV.params_sampling_design("work-rate:613/613", w.program, w.query, w.work_table))
     assert D.same_design(D.derive(w.program, w.query, DESIGN, w.work_table), rated)
     assert all(s["k"] == s["floor"] == sum(hi - lo for lo, hi in s["units"]) for s in rated["strata"])

@@ -1,6 +1,6 @@
 """A served window's record: at its close (`ClosePlan`) the card's part, the strings of the units the serve acquired made
 where it committed them under the window's key (`Record.handoff`, left in ``windows/w<k>/handoff/``); then, at the close
-or after the card is released (`finish`), its circuit's units recorded from its served values, its registered values,
+or after the card is released (`close_plan.finish`), its circuit's units recorded from its served values, its registered values,
 closed with those strings and the rest from the host (`window_strings`), and written by `window_record.commit` under
 ``windows/w<k>/record/``."""
 from __future__ import annotations
@@ -13,7 +13,7 @@ from typing import Any
 
 from verity_vllm.pipeline import advice as ADV
 
-__all__ = ["DEPLOYMENT", "REGISTRATION", "Record", "finish"]
+__all__ = ["DEPLOYMENT", "REGISTRATION", "Record"]
 
 REGISTRATION = "weights_registration.json"
 DEPLOYMENT = "deployment-registration.json"
@@ -170,22 +170,13 @@ class Record:
                 "scan_state": "stand-in", "weights": "checkpoint of record", "strings": cost, "seconds": seconds}
 
 
-#: The δ a development design's statement is at: records_audit.py's default.
-DEVELOPMENT_DELTA = 0.5
-
-
-def development_of(design: dict[str, Any], n: int, delta: float = DEVELOPMENT_DELTA) -> dict[str, Any]:
-    """A development sampling design's statement: what an accept of its draw of the window's ``n`` proof blocks
-    establishes at ``delta`` (`profile.Stratified.count_bound` of the uniform draw), so no accept under it reads as one at
-    the rate of record. Refused for a design that is not a uniform draw."""
-    from verity.protocols.proofs.spot.verifier import profile as PR
-
+def development_of(design: dict[str, Any], n: int) -> dict[str, Any]:
+    """A development sampling design's statement: its draw of the window's ``n`` proof blocks, so no accept under it reads
+    as one at the rate of record (what an accept establishes, ε at δ, the verifier reports). Refused for a design that is
+    not a uniform draw."""
     if design.get("law") != "subset":
         raise ValueError(f"a development sampling design is a uniform draw (rate:NUM/DEN), not {design.get('law')!r}")
-    k = int(design["k"])
-    bound = PR.Stratified.uniform(n, k).count_bound(delta)
-    return {"says": "DEVELOPMENT: a development sampling design, not the rate of record", "draws": k, "of": n,
-            "delta": delta, "incorrect_at_most": bound, "epsilon": bound / n}
+    return {"says": "DEVELOPMENT: a development sampling design, not the rate of record", "draws": int(design["k"]), "of": n}
 
 
 def served_tables(out: Path) -> dict[str, Any] | None:
@@ -219,70 +210,7 @@ def arch() -> str:
 
 def nvcc() -> str | None:
     """``$CUDA_HOME/bin/nvcc`` where it is, else None (the one on the path)."""
-    import os
+    from verity_vllm import settings
 
-    tool = Path(os.environ.get("CUDA_HOME") or "/nonexistent") / "bin" / "nvcc"
+    tool = Path(settings.get("CUDA_HOME") or "/nonexistent") / "bin" / "nvcc"
     return str(tool) if tool.is_file() else None
-
-
-def finish(serve: Path, window: int, record: Record, cls: Any) -> dict[str, Any]:
-    """Window ``window``'s record after the card is released, on the processor, from what the serve under ``serve`` left: its
-    sealed bundle opened against its record (`deferred_rows.of_record`), its served values read from it, its circuit
-    compiled again from the advice its close committed, and closed with the card's strings (`Record.handoff`'s directory).
-    -> `Record.make`'s outcome, with the seconds of its own parts."""
-    from types import SimpleNamespace
-
-    from verity_vllm.check.oracle_compare import OpenedReader
-    from verity_vllm.pipeline import deferred_rows as DR
-
-    from . import window_circuit as WC
-    from .close_plan import ClosePlan, served_slots
-    from .window_plan import Plan
-
-    t0, serve = time.perf_counter(), Path(serve)
-    wdir = serve / "windows" / f"w{window}"
-    r = DR.of_record(json.loads((wdir / "commit" / "verdict.json").read_text())["replay_deferred"]["bundles"][0]["path"], str(wdir))
-    plan = ClosePlan(serve, cls, record=record)
-    plan.compiler = ADV.registered_compiler()
-    advice = (serve / "advice" / f"w{window}" / "private" / "advice.bin").read_bytes()
-    compiled, low = WC.served_lowering(plan._registered(), cls, advice, ADV.bodies(serve, window), plan.grain, named=True)
-    opened = time.perf_counter()
-    bmap = json.loads((r.out / f"binding_map_p{r.pair}.json").read_text())
-    binding = SimpleNamespace(rc=r.run, com=None, bmap=bmap, aliases=r.aliases)
-    served = served_slots(low, cls, compiled, binding, wdir, OpenedReader(r.store, r.run))
-    units = Plan(low, served)
-    planned = time.perf_counter()
-    got = record.make(plan, window, compiled, low, units, served, binding, handoff=wdir / "handoff")
-    got["seconds"] = {"open_and_lower": round(opened - t0, 3), "served_and_plan": round(planned - opened, 3), **got["seconds"]}
-    return got
-
-
-if __name__ == "__main__":
-    import argparse
-    import sys
-
-    from .window_class import WindowClass
-
-    ap = argparse.ArgumentParser(description="A served window's record after the card is released (`finish`), from the "
-                                             "handoff its close left: one WINDOW-RECORD line.")
-    ap.add_argument("--serve-run", required=True)
-    ap.add_argument("--window", type=int, required=True)
-    ap.add_argument("--class", dest="cls", required=True, help="the window class S,P,O[,LANES,EVERY] the serve declared")
-    ap.add_argument("--sampling-design", required=True)
-    ap.add_argument("--development-design", action="store_true", help="the sampling design is a development one")
-    ap.add_argument("--checkpoint-dir", required=True)
-    ap.add_argument("--checkpoints")
-    ap.add_argument("--cap", type=int, default=64)
-    ap.add_argument("--workers", type=int, default=8)
-    ap.add_argument("--twin-ports", type=int, default=8)
-    ap.add_argument("--out", required=True, help="the record's outcome, as JSON")
-    ap.add_argument("--parse-only", action="store_true", help="parse, print the arguments and stop")
-    a = ap.parse_args()
-    if a.parse_only:
-        print(json.dumps({"parsed": sorted(k for k, v in vars(a).items() if v not in (None, False))}))
-        sys.exit(0)
-    rec = Record(a.sampling_design, a.checkpoint_dir, Path(a.serve_run) / "private" / "salt_stream", checkpoints=a.checkpoints,
-                 cap=a.cap, workers=a.workers, sample=a.twin_ports, development=a.development_design)
-    out = finish(Path(a.serve_run), a.window, rec, WindowClass(*(int(x) for x in a.cls.split(","))))
-    Path(a.out).write_text(json.dumps(out) + "\n")
-    sys.stderr.write("WINDOW-RECORD " + json.dumps({"window": a.window, **out}) + "\n")

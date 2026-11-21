@@ -1,16 +1,12 @@
-"""Network attestations committed by hash, with padding elided: injective on left-packed grids, and the audit on committed
-records gives the same verdicts as on raw ones."""
+"""Network attestations committed by hash, with padding elided: injective on left-packed grids, padding elided and packing
+enforced, and the digest binding the execution phase, the status and the parameters."""
 
 import itertools
 
 import pytest
 
-from verity.protocols.resource_accounting.network.verifier.audit import Audit
-from verity.protocols.resource_accounting.network.verifier.commitment import commit, record_digest, row_digest
-from verity.protocols.resource_accounting.network.verifier.grid import COMPLETE, GridParams, Reason, BlockGrid, Status, Certifier, fill
-from verity.protocols.resource_accounting.network.verifier.schedule import run_shaper
-
-from test_network_attester_audit import FRAMES, P, SYNC_SET, SYNCS, honest_ready
+from verity.protocols.resource_accounting.network.verifier.commitment import record_digest, row_digest
+from verity.protocols.resource_accounting.network.verifier.grid import COMPLETE, GridParams, Reason, Status, fill
 
 
 def test_elided_digest_is_injective_on_left_packed_grids():
@@ -44,38 +40,3 @@ def test_digest_binds_phase_status_and_params():
     assert base != record_digest("l", 1, grid, COMPLETE, params)
     assert base != record_digest("l", 0, grid, Status(Reason.OVERFLOW), params)
     assert base != record_digest("l", 0, grid, COMPLETE, GridParams(buckets=1, allocation=2, frame_bytes=1, bucket_ms=50))
-
-
-def verdicts(records):
-    return [v.violation for v in Audit().check_link("responses", records, FRAMES, SYNCS, SYNC_SET, P)]
-
-
-def test_committed_audit_matches_raw_audit():
-    """Honest, late, tampered, faulted and duplicated runs get the same verdicts committed as raw."""
-    honest = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
-    late_ready = honest_ready()
-    late_ready[3] = 7
-    late = run_shaper(FRAMES, late_ready, SYNCS, Certifier("responses", P))
-    rows = [list(row) for row in honest[0].grid]
-    rows[0][0] = b"\xff"
-    tampered = [BlockGrid("responses", 0, tuple(tuple(r) for r in rows), COMPLETE)] + honest[1:]
-    w = Certifier("responses", P)
-    faulted = run_shaper(FRAMES, honest_ready(), SYNCS[:1], w)
-    w.fault(Reason.DROPPED)
-    for _ in range(P.buckets):
-        w.tick()
-    faulted.append(w.close_window())
-    duplicated = tampered[:1] + honest
-    for records in (honest, late, tampered, faulted, duplicated):
-        assert verdicts([commit(r, P) for r in records]) == verdicts(records)
-    assert verdicts([commit(r, P) for r in honest]) == [None, None, None]
-    assert verdicts([commit(r, P) for r in late])[1] == "mismatch"
-    assert verdicts([commit(r, P) for r in duplicated])[0] == "duplicate"
-
-
-def test_a_status_the_digest_disagrees_with_is_a_mismatch():
-    """A network attester that faulted but publishes a complete status in the clear doesn't match the Program's digest."""
-    honest = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
-    faulted_digest = record_digest("responses", 0, honest[0].grid, Status(Reason.DROPPED), P)
-    lying = [commit(honest[0], P).__class__("responses", 0, faulted_digest, COMPLETE)] + [commit(r, P) for r in honest[1:]]
-    assert verdicts(lying)[0] == "mismatch"

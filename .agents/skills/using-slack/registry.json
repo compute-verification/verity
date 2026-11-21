@@ -911,7 +911,6 @@
         "benchmarks/overhead/",
         "benchmarks/prove/",
         "benchmarks/recursion_e2e/",
-        "benchmarks/recursion_figures/",
         "benchmarks/exfiltration/",
         "benchmarks/application_census/",
         "benchmarks/serving_cost/", "tests/benchmarks/serving_cost/",

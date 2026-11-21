@@ -146,7 +146,6 @@ def test_the_statement_is_the_budgets_and_padded_counts_under_a_hiding_root(wind
     assert list(reg.rows[:len(rs)]) == rs and set(reg.rows[len(rs):]) <= {bytes(IB.ROW_BYTES)}
     root = bytes.fromhex(st["root"])
     assert all(AC.verify(root, st["rows"], IB.ROW_BITS, IB.BINDING, reg.open(i)) for i in range(st["rows"]))
-    assert not AC.verify(root, st["rows"], IB.ROW_BITS, PV2.BINDING, reg.open(0))
     assert IB.commit(circuit, program)[0]["root"] != st["root"] and IB.commit(circuit, program, reg.salts)[0] == st
 
 

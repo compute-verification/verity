@@ -86,6 +86,10 @@ from verity.protocols.resource_accounting.compute.pouw.verifier import coins as 
 from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
 from verity.protocols.resource_accounting.compute.pouw.verifier import verifier as V
 from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
+from verity.protocols.resource_accounting.compute.pouw.verifier.window import (
+    DRAW_DOMAIN, MANIFEST_RECORDED, MANIFEST_SCHEMA, ONE_STAGE, PUBLIC_ROW_BITS, SALT_BYTES, draw_key_context,
+    lms_verify, plain, public_row, public_row_salt, stream_subset, verify_path, width,
+)
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
 from verity.commitments import registered_value as RV
 from verity.protocols.proofs.spot.verifier.profile import Work, WorkStratum
@@ -94,16 +98,14 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import 
 from verity.commitments import Commitment, Opening, VerificationLimits, domains, verify_opening
 from verity.commitments.identity import identity_digest_sha512
 from verity.commitments.indexed import RangeIndexedDomain
-from verity.commitments.merkle import CommitmentDomain, merkle_depth
+from verity.commitments.merkle import CommitmentDomain
 from verity.commitments.rowleaf import row_leaf, sha512_row_v2_digest
 from verity.commitments.scheme import DIGEST_BYTES
-from verity.commitments.crypto import lms
 from verity.commitments.randomness import derive, frame
 
 ID = domains.POUW_PROTOCOL
 #: the Lean core protocol whose `serve` gives an execution phase's verdict of record
 EXE = "pouw-verifier"
-ONE_STAGE = domains.ONE_STAGE_PROTOCOL
 SCHEME = "frame-v3-sha512/hm96-sha512"
 FORMATS = (domains.REGISTRATION_V1, domains.REGISTRATION)
 LEVEL = "unit"
@@ -125,15 +127,8 @@ SERVED_DOMAIN = domains.ONE_STAGE_SERVED_DOMAIN
 OPENED = (("a", domains.HM96_SHA512_ROW_SEG), ("b", domains.HM96_SHA512_ROW))
 #: the ports of those rows, the pinned circuit's first two (`served_zk/stage_tile.py`'s ``in_rows``)
 PC8_PORTS = ("a0", "b0")
-SALT_BYTES = 192
 BC_BYTES = 128
 ROW_V2 = domains.HM96_SHA512_ROW
-#: a salted unit's public row: the execution phase's certified salt, the unit's position (a u64) and its entry's side roots
-PUBLIC_ROW_BITS = 8 * (PS.SALT_BYTES + 8 + 2 * DIGEST_BYTES["sha512"])
-#: a J10-R unit's public row (`h1tile.PouwH1Tile5`'s): `PUBLIC_ROW_BITS`, then its call's first position ``call`` and its
-#: ``blocks``, its first row block and its first column block in its call's stream, each a u64
-PUBLIC_ROW_J10R_BITS = PUBLIC_ROW_BITS + 8 * 3 * 8
-PUBLIC_ROW_SALT_DOMAIN = domains.POUW_PUBLIC_ROW_SALT.encode() + b"\0"
 
 
 class Salted(NamedTuple):
@@ -687,17 +682,6 @@ def window_domain(p: dict, rec: dict) -> CommitmentDomain:
     return CommitmentDomain(binding, Wd.OWNER, RangeIndexedDomain(0, n), hash="sha512")
 
 
-def verify_path(dom: CommitmentDomain, root: bytes, index: int, leaf: bytes, sibs: list[bytes]) -> bool:
-    """Leaf `index` with siblings `sibs` (leaf level first) hashes up to `root` in `dom`."""
-    if not 0 <= index < dom.count or len(sibs) != merkle_depth(dom.count):
-        return False
-    digest = leaf
-    for level, s in enumerate(sibs):
-        digest = dom.node(level, index >> 1, *((digest, s) if index % 2 == 0 else (s, digest)))
-        index >>= 1
-    return digest == root
-
-
 def _fromhex(s: Any, n: int) -> bytes | None:
     """`bytes.fromhex(s)` when `s` is a string of `n` bytes' hex, else None."""
     b = _hex(s)
@@ -715,78 +699,6 @@ def _int(x: Any) -> bool:
 
 def _no_constant(s: str) -> Any:
     raise ValueError(f"{s} is not JSON")
-
-
-def public_row(salt: bytes, position: int, roots: tuple[bytes, bytes],
-               j10r: tuple[int, tuple[int, int]] | None = None) -> bytes:
-    """A salted unit's public row, its `PUBLIC_ROW_BITS` bits as `ml.circuits.seeds` lays them out:
-    `salt`, `position` as a u64 and the two roots, each 32 bits a u32 low bit first. With `j10r` ``(call, blocks)``, a
-    J10-R unit's (`PUBLIC_ROW_J10R_BITS`): then its call's first position and its two blocks (`j10r_blocks`), each a u64
-    in the same layout."""
-    x = salt + position.to_bytes(8, "big") + roots[0] + roots[1]
-    if j10r is not None:
-        x += b"".join(v.to_bytes(8, "big") for v in (j10r[0], *j10r[1]))
-    if len(x) * 8 != (PUBLIC_ROW_BITS if j10r is None else PUBLIC_ROW_J10R_BITS):
-        raise ValueError(f"a public row is {PUBLIC_ROW_BITS} bits, a J10-R unit's {PUBLIC_ROW_J10R_BITS}")
-    return b"".join(x[i:i + 4][::-1] for i in range(0, len(x), 4))
-
-
-def public_words(salt: bytes, position: int, roots: tuple[bytes, bytes],
-                 j10r: tuple[int, tuple[int, int]] | None = None) -> list[int]:
-    """`public_row` as a ``row/v2`` row of 16-bit leaves: word w its bits 16 w .. 16 w + 15, low byte first."""
-    x = public_row(salt, position, roots, j10r)
-    return [x[i] | x[i + 1] << 8 for i in range(0, len(x), 2)]
-
-
-def n_digits(k: int) -> int:
-    """H1's digit count m at contraction `k` (`segment.n_digits` of KS = k / 32): the least m with 128 KS <= 128^m and
-    127 KS // 128^(m - 1) <= 127."""
-    ks, m = k // 32, 1
-    while not (128 * ks <= 128 ** m and 127 * ks // 128 ** (m - 1) <= 127):
-        m += 1
-    return m
-
-
-def j10r_blocks(m: int, k: int, tile: tuple[int, int], i: int, j: int) -> tuple[int, int]:
-    """`h1tile.j10r_blocks`: unit (I, J) = (`i`, `j`)'s first row block and first column block of its call's one stream at
-    call scale, row block R I at R I RB and column block C J at M RB + C J CB, for a call of slot `m` (its A rows), an
-    R × C `tile` and K = `k`: RB = ⌈(K + 32 (m_K - 1)) / 512⌉ a row's blocks and CB = ⌈(K + 256) / 512⌉ a column's
-    (`h1tile.Layout`'s). Every input is the execution phase's public structure, so the verifier derives them."""
-    r, c = tile
-    rb, cb = -(-(k + 32 * (n_digits(k) - 1)) // 512), -(-(k + 256) // 512)
-    return r * i * rb, m * rb + c * j * cb
-
-
-def public_row_salt(context: str, position: int) -> bytes:
-    """The public row's hm96 salt, which anyone derives from the execution phase's context and the unit's position: three SHA-512
-    blocks of `PUBLIC_ROW_SALT_DOMAIN` ‖ u64be(len) ‖ context ‖ u64be(position) ‖ u8(i)."""
-    ctx = context.encode()
-    head = PUBLIC_ROW_SALT_DOMAIN + len(ctx).to_bytes(8, "big") + ctx + position.to_bytes(8, "big")
-    return b"".join(hashlib.sha512(head + bytes([i])).digest() for i in range(SALT_BYTES // DIGEST_BYTES["sha512"]))
-
-
-#: the ok row the verifier accepts: a unit's one output bit, 1, in its one word
-OK_ROW = (1,)
-#: the ok row's hm96 salt tag
-OK_SALT_TAG = domains.POUW_H1_OK_ROW_SALT.encode() + b"\0"
-
-
-def ok_salt(context: str, position: int) -> bytes:
-    """The ok row's hm96 salt, which anyone derives from the execution phase's context and the unit's position: its content is
-    the one the verifier accepts (`OK_ROW`), so the salt hides nothing. `SALT_BYTES` bytes of SHA-512 in counter mode
-    (`SHA-512(m ‖ u32be c)` for c < 3, each output whole) over m = `OK_SALT_TAG` ‖ context ‖ 0 ‖ u64be(position)."""
-    head = OK_SALT_TAG + context.encode() + b"\0" + int(position).to_bytes(8, "big")
-    return b"".join(hashlib.sha512(head + c.to_bytes(4, "big")).digest() for c in range(SALT_BYTES // 64))
-
-
-def call_reads(u0: int, rows: list[int | None]) -> dict[str, Any]:
-    """A ``--registered`` port's reads (`registered.READS_V1`) for a statement over one call's units from unit `u0`:
-    ``reads_from`` `u0` and ``reads`` the row each of the call's units reads, in unit order, trailing nones dropped, so
-    the file is as long as the call, not the execution phase (Flock's `Registered.Port.readAt`: none below ``reads_from``)."""
-    rows = list(rows)
-    while rows and rows[-1] is None:
-        rows.pop()
-    return {RV.READS_FROM: u0, "reads": rows}
 
 
 def port_reads(entry: dict[str, Any]) -> list[int | None]:
@@ -977,9 +889,6 @@ def opening_twin(p: dict, c: dict, units: list[int] | None, unit: int, pub: byte
 
 # ---- the pass's execution phase and the execution phase's sample --------------------------------------------------------------------------------
 
-MANIFEST_SCHEMA = domains.VLLM_PEARL_C_RUN
-#: a pass recorded before the execution phase's coins, salted from a beacon: only a replay of a recorded pass reads it
-MANIFEST_RECORDED = domains.VLLM_PEARL_C_RUN_V1
 #: a pass salted by the network attester, `salt.pouw_salt` of its PoUW execution phase's reveal: only a certified execution phase's
 #: verifier, which holds the reveal, reads it, and that verifier reads no other
 MANIFEST_CERTIFIED = domains.VLLM_PEARL_C_RUN_CERTIFIED
@@ -993,7 +902,6 @@ COIN_VERSIONS = {Co.SCHEME: (DIGEST_BYTES["sha512"], domains.POUW_WEIGHTS_ROOT),
 #: was then: bound by `tagged_sha256`, and the sample's key and stream `derive_v1`'s.  Only a replay of a recorded sample
 #: reads it, after the current binding (none of their passes was retained, so the pass's rule doesn't)
 COIN_EARLY = Co.SCHEME
-DRAW_DOMAIN = domains.POUW_SERVED_ZK_SAMPLING
 _OPENING = "a coin opening is {epoch, label, after, coin, salt, path}: an integer, a string, hex, and SHA-512 digests"
 _MATMULS = "the pass's matmuls are not a list of objects with integer index, m, k, n and weight"
 _WEIGHTS = "the pass's weights are not an object from each weight, in decimal, to an object with a hex root"
@@ -1312,55 +1220,6 @@ def pass_epoch_twin(coins: Any, raw: bytes | None, context: str, recorded: bool 
     return how, None
 
 
-def width(n: int) -> int:
-    """Bytes per word of an exact uniform sample below `n` (Lean's ``Draw.width``, `Key.uniform`'s)."""
-    return (n.bit_length() + 64 + 7) // 8
-
-
-def _uniform(n: int, src: bytes, pos: int) -> tuple[int, int] | None:
-    w = width(n)
-    space = 1 << (8 * w)
-    while pos + w <= len(src):
-        x, pos = int.from_bytes(src[pos:pos + w], "big"), pos + w
-        if x < space - space % n:
-            return x % n, pos
-    return None
-
-
-def stream_subset(k: int, n: int, src: bytes) -> list[int] | None:
-    """Lean's ``Draw.subset`` on one stream (``verity-verify-proof draw --stream``): partial Fisher-Yates, each step an exact
-    uniform word of `width` bytes; None when the stream runs out."""
-    swapped: dict[int, int] = {}
-    pos = 0
-    for i in range(k):
-        r = _uniform(n - i, src, pos)
-        if r is None:
-            return None
-        j, pos = i + r[0], r[1]
-        swapped[i], swapped[j] = swapped.get(j, j), swapped.get(i, i)
-    return sorted(swapped.get(i, i) for i in range(k))
-
-
-def _plain(s: Any) -> bool:
-    return _str(s) and all(" " <= c <= "~" and c not in '"\\' for c in s)
-
-
-def draw_key_context(stream: str, registration: str, receipt: dict) -> dict:
-    """The sample key's context: the stream, the registration and its receipt (as canonical JSON's SHA-512)."""
-    if not all(_plain(x) and _plain(v) for x, v in receipt.items()):
-        raise ValueError("a receipt is an object of printable ASCII strings")
-    body = "{" + ",".join(f'"{k}":"{receipt[k]}"' for k in sorted(receipt)) + "}"
-    return {"stream": stream, "registration": registration, "receipt": hashlib.sha512(body.encode()).hexdigest()}
-
-
-def lms_verify(key: Ch.ChallengerKey, message: bytes, signature: bytes) -> bool:
-    """`challenger.Verify` under the verifier's challenger key: LMS over SHA-512 at (64, W, H) (`verity.commitments.crypto.lms`).
-    A signature that doesn't decode raises `ValueError`, which `challenger.record_reason` reads as one that doesn't
-    verify."""
-    p = lms.Params(DIGEST_BYTES["sha512"], key.W, key.H)
-    return lms.verify(p, key.public, message, lms.Signature.decode(p, signature))
-
-
 #: a live execution phase's coins as the sample's check of record reads them
 SIGNED_LIVE = ("a live window's coins are its challenger's signed record and the verifier's key for it, {key, record} "
                "(`challenger.trusted_commitment`), not a bare commitment")
@@ -1423,7 +1282,7 @@ def draw_twin(coins: Any, recorded: bool, opening: Any, stream: Any, registratio
             return "coin", f"the verifier's coins are malformed: {e}"
     if not (_str(registration) and _DIGEST.fullmatch(registration)) or not _str(stream):
         return "draw", "the registration is not a SHA-512 digest, or the stream's digest not a string"
-    if not (isinstance(receipt, dict) and all(_plain(x) and _plain(v) for x, v in receipt.items())):
+    if not (isinstance(receipt, dict) and all(plain(x) and plain(v) for x, v in receipt.items())):
         return "draw", "the receipt is not an object of printable ASCII strings"
     if not (_nat(k) and _nat(population) and 1 <= population and k <= population):
         return "draw", "the law is not subset:k over N with k <= N and N >= 1"
@@ -1939,10 +1798,10 @@ def line(a: dict) -> str:
     return _canon(a)
 
 
-__all__ = ["ANSWER_KEYS", "COIN_KEY", "EXE", "FORMATS", "ID", "LEVEL", "LIVE", "ONE_STAGE", "SCHEME", "SIGNED_LIVE",
+__all__ = ["ANSWER_KEYS", "COIN_KEY", "EXE", "FORMATS", "ID", "LEVEL", "LIVE", "SCHEME", "SIGNED_LIVE",
            "VALUES_TAG", "WINDOW_VALUES", "Refused", "answer", "answer_of", "answer_twin", "canonical", "case",
            "case_twin", "check_twin", "commitment", "digest", "draw_twin", "evidence", "integrity", "integrity_json",
-           "sampling_design_name", "line", "live_epoch", "live_salt", "live_salt_twin", "lms_verify", "opening_twin", "params",
+           "sampling_design_name", "line", "live_epoch", "live_salt", "live_salt_twin", "opening_twin", "params",
            "pass_epoch_twin", "ratio", "recorded_reason", "registered_twin", "rounds", "rounds_twin", "salt_of_record",
-           "salt_twin", "serve_case", "unit_draw", "values_root", "verify_path", "window_anchors", "window_domain",
+           "salt_twin", "serve_case", "unit_draw", "values_root", "window_anchors", "window_domain",
            "window_salt", "work_k", "work_units"]

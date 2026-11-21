@@ -2979,6 +2979,8 @@
     "Definitions.Core",
     "Properties.Flock",
     "Spot.Restrict",
+    "Spot.OneStageZk",
+    "Spot.OneStageZkStatement",
     "InferenceOnlyVerifier.Desc",
     "Properties.InferenceOnly"
    ],
@@ -2988,7 +2990,7 @@
   "Properties.Spot.PortsHeld": {
    "imports": ["Spot", "Properties.Spot"],
    "except": [],
-   "why": "what the per-member form's acceptance holds of every port is stated against its own check (`Spot.OneStageZk`) and the one-stage properties' vocabulary of a held port (`Properties.Spot`), never a proof"
+   "why": "what the members check's accept holds of each member's ports and roots (`MembersPortsHeld`, `MembersRootsRecord`) is stated against the check's own functions (`Spot.OneStageZk`) and the accept's vocabulary (`Properties.Spot`), never a proof"
   }
  },
  "reads_exempt": {

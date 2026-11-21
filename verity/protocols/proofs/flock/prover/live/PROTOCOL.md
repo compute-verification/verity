@@ -1224,8 +1224,6 @@ to decide after the fact.
 
 The inner phase's controls are V*'s: `rec_inner.py forge --what top` (a clear top that does not open the salted one the challenger's
 live-coin part received) and `--what unsalted` (a record of clear tops), refused `ZK-SERVER-REFUSED: tree top: …` by `rec_vstar`.
-`85-rec-reprice.sh` runs both phases (`STEP=icheck`; `STEP=oprove MODES=zk_server WARM=0 RUNS=1 CONTROLS=L6`, one
-session per staged statement, and `MODES=dev,host` in a job of its own for the ZK server's cost).
 
 ### 10.5 What a stop reveals: the whole recursive session
 
@@ -1347,8 +1345,7 @@ it. If the worker chose which V* statements come and in what order, each outer s
 stopped, and the order in which the challenger's `serve`s are reached would come on top, if the challenger can see it: the
 second row. So the statements and their order are fixed when the recursive session opens, and `admit` serves only the
 next statement not yet released, once: a statement never opened is a stop where it stands, and nothing after it is
-served. `85-rec-reprice.sh` runs neither ZK server: it proves each V* statement against its own `serve`, so its sessions are
-the third row's.
+served.
 
 **A stream stops at its failure budget.** `rec_live --zk-server DIR --budget b` opens each recursive session on its stream
 with the failure budget b, a public parameter of the deployment and at least 1 (`zk_server.open` and Lean's `openSession`

@@ -4583,6 +4583,10 @@
   "Pous.SecurityProofs.StreamedWipeMeets96GiB": {
    "honest": ["Pous.SecurityProofs.StreamedWipeMeets96GiB_honest"],
    "nontrivial": "Pous.SecurityProofs.StreamedWipeMeets96GiB_nontrivial"
+  },
+  "Pous.SecurityProofs.StreamedWipeResidual": {
+   "honest": ["Pous.SecurityProofs.StreamedWipeResidual_honest"],
+   "nontrivial": "Pous.SecurityProofs.StreamedWipeResidual_nontrivial"
   }
  },
  "unwitnessed": {
@@ -14287,6 +14291,15 @@
    },
    "type_hash": "6d52bba05419a102487e5c42fdb09b253307186f9ac6328693929fe349dae5d8",
    "unfolded_hash": "3ad4dba7ae60c5f40ffc98633c8c95e1e89b53ca443c386daf173201e8a4f391"
+  },
+  "Pous.SecurityProofs.StreamedWipeResidual": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.SecurityProofs.StreamedWipeResidual_honest": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.SecurityProofs.StreamedWipeResidual_nontrivial": {
+   "owner": "@memory-accounting"
   },
   "Pous.SecurityProofs.StreamedWipe_honest": {
    "owner": "@memory-accounting",
@@ -26070,7 +26083,8 @@
    "Spot.Sampling.Adaptive.harm_count": "frozen (obligation,no-function): It states the cumulative harm budget over an abstract adaptive play (`Adaptive.Play.prEv`, security/Proofs/Spot/Sampling/HarmBudget.lean) under per-round design and drawn-unit hypotheses (`Play.Laws`, `Play.Drawn`), rather than the acceptance of a Lean function.",
    "Spot.Sampling.Adaptive.harm_count_kstar": "frozen (obligation,no-function): It states the cumulative harm budget over an abstract adaptive play (`Adaptive.Play.prEv`, security/Proofs/Spot/Sampling/HarmBudget.lean) under per-round design and drawn-unit hypotheses (`Play.Laws`, `Play.Drawn`), rather than the acceptance of a Lean function.",
    "Spot.Sampling.Adaptive.life_harm_budget": "frozen (obligation,no-function): It takes KnowledgeSound and BindSound (security/Proofs/Spot/Sampling/OneStage.lean:85, :94), open obligations of the backend, as hypotheses, and it is about the abstract lifetime of one-stage audits rather than a Lean function.",
-   "Spot.Sampling.audit_executionPhase_split_of_record": "frozen (obligation,no-function): It takes KnowledgeSound and BindSound (security/Proofs/Spot/Sampling/OneStage.lean:85, :94), open obligations of the backend, as hypotheses, and it is about the abstract one-stage audit rather than a Lean function."
+   "Spot.Sampling.audit_executionPhase_split_of_record": "frozen (obligation,no-function): It takes KnowledgeSound and BindSound (security/Proofs/Spot/Sampling/OneStage.lean:85, :94), open obligations of the backend, as hypotheses, and it is about the abstract one-stage audit rather than a Lean function.",
+   "Pous.SecurityProofs.StreamedWipeResidual": "frozen (no-function): A bound in the streamed-label wipe's game (security/Definitions/Pous/Model/StreamedWipe.lean) at any fill of N labels of b bits and any k reads, at the wipe residual wipeResidual N k b s (security/Definitions/Pous/Model/StreamedWipeResidual.lean), whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryAttester.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
