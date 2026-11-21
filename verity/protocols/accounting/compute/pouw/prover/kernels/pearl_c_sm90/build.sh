@@ -13,25 +13,16 @@
 #                        unless ptxas reports no spill or stack frame and its every MMA is a QGMMA.64x32x32.F32.E4M3.E4M3
 #                        (debit_ptxas.txt, debit_mma.txt), in a directory of its own: one Kernel.load reads holds one cubin
 #   ptxas.txt, toolchain.txt (nvcc --version and the full nvcc command line)
+#   sources.txt          the repository's files the cubins are made from (../pearl_c/build.sh's pearl_c_sources)
 # ship.sh adds the check and what the card runs it with.  Needs no uv.
 # Usage: bash verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm90/build.sh [OUT]   (default /tmp/pearl-c-sm90-ship; CUDA_HOME names the toolkit and
 #        GENCODE the target, which callers read from the machine and its card; a card of another target is refused)
 #        bash .../build.sh --arch   prints the target the tree's kernels are built for and builds nothing (needs no toolkit)
 set -euo pipefail
-HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/../../../../../../../.." && pwd)
+HERE=$(cd "$(dirname "$0")" && pwd)
 ARCH=sm_90a   # pearl_c_sm90.cu's and debit_sm90.cu's kernels are this target's alone (sass_gate.json holds its MMA forms)
 [ "${1:-}" = --arch ] && { echo "$ARCH"; exit 0; }
-CUDA=${CUDA_HOME:?set CUDA_HOME to a CUDA toolkit of nvcc 12.8 or later}; OUT=${1:-/tmp/pearl-c-sm90-ship}
-GENCODE=${GENCODE:?set GENCODE to the -gencode value of the target (benchmarks/kernels/machine.py gencode ARCH)}
-case $GENCODE in *,code=$ARCH) ;; *) echo "pearl_c_sm90 is $ARCH's: GENCODE=$GENCODE is another card's target" >&2; exit 2 ;; esac
-[ -x "$CUDA/bin/nvcc" ] || { echo "no nvcc at $CUDA" >&2; exit 1; }
-"$CUDA/bin/nvcc" --version | grep -Eq "release 12\.(8|9)|release 1[3-9]\." || { echo "$CUDA's nvcc is older than 12.8" >&2; exit 1; }
-rm -rf "$OUT"; mkdir -p "$OUT"
-. "$HERE/../cubin_flags.sh"; cubin_flags "$GENCODE" || exit 1
-"$CUDA/bin/nvcc" "${FLAGS[@]}" -o "$OUT/pearl_c_sm90.cubin" "$HERE/pearl_c_sm90.cu" 2> "$OUT/ptxas.txt" || { cat "$OUT/ptxas.txt" >&2; exit 1; }
-PATH="$CUDA/bin:$PATH" "$CUDA/bin/cuobjdump" -sass "$OUT/pearl_c_sm90.cubin" > "$OUT/pearl_c_sm90.sass"
-python3 "$HERE/../../build_gate.py" "$HERE/sass_gate.json" "$OUT/ptxas.txt" "$OUT/pearl_c_sm90.sass" "$OUT/sass.json"
-rm "$OUT/pearl_c_sm90.sass"
+. "$HERE/../pearl_c/build.sh"; pearl_c_build "$HERE" "$ARCH" "${1:-}"
 POUW_SASS_GATE_CACHE=none python3 "$ROOT/verity/protocols/accounting/compute/pouw/prover/sass_gate.py" --cuda-bin "$CUDA/bin" "$OUT/pearl_c_sm90.cubin" \
   --json "$OUT/harness_gate.json" && echo "harness gate: pass" || echo "harness gate: FAIL (recorded in harness_gate.json)"
 B=$OUT/debit; mkdir -p "$B"
@@ -41,4 +32,4 @@ awk '/stack frame/ && !/ 0 bytes stack frame, 0 bytes spill stores, 0 bytes spil
 "$CUDA/bin/cuobjdump" -sass "$B/debit_sm90.cubin" | grep -oE "[A-Z]*MMA[.A-Z0-9x]*" | sort | uniq -c > "$B/debit_mma.txt"
 awk '$2 != "QGMMA.64x32x32.F32.E4M3.E4M3" { bad = 1 } { n += $1 } END { exit bad || n < 36 }' "$B/debit_mma.txt" \
   || { echo "debit_sm90: an MMA other than QGMMA.64x32x32.F32.E4M3.E4M3, or fewer than its 36 atoms:" >&2; cat "$B/debit_mma.txt" >&2; exit 1; }
-{ "$CUDA/bin/nvcc" --version; echo "nvcc ${FLAGS[*]} -o pearl_c_sm90.cubin pearl_c_sm90.cu"; } > "$OUT/toolchain.txt"
+pearl_c_sources "$HERE/debit_sm90.cu"
