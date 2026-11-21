@@ -606,9 +606,8 @@ WOR=$D/weights_of_record.json
 NO_WOR="the weights' registration of record (weights_of_record.json, {program, values}) is absent: the serve's first close writes it beside weights_registration.json"
 # the digest the audit holds WOR to: the file's own SHA-512, a stand-in, until the one registration a monitoring period is made
 # before any serve and its digest is pinned
-wor_held() {  # $1 the step's label; sets regs, the audit's arguments
+wor_held() {  # sets regs, the audit's arguments; the audit's first line and summary say the digest is a stand-in
   local h; h=$(sha512sum "$WOR" | cut -c1-128) && [ ${#h} = 128 ] || return 1
-  say "$1: WEIGHTS REGISTRATION, A STAND-IN: held to its own SHA-512 $h, written at this serve's start and pinned by no one"
   regs=(--registered "$WOR" --registered-digest "$h" --registered-digest-source stand-in)
 }
 # the serve's first registration record: the weights registration as a record of the log, which Pearl+'s W is chained after
@@ -856,7 +855,7 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
   run=$("$PY" -c 'import json, sys; print(next(json.loads(l)["run_root"] for l in open(sys.argv[1]) if l.strip() and json.loads(l)["window"] == int(sys.argv[2])))' \
     "$D/windows.jsonl" "$K") || { say "V3C-AUDIT: no run root for the window in windows.jsonl"; return 1; }
   [ -f "$WOR" ] || { say "V3C-AUDIT: $NO_WOR"; return 1; }
-  local regs; wor_held V3C-AUDIT || { say "V3C-AUDIT: no SHA-512 of $WOR"; return 1; }
+  local regs; wor_held || { say "V3C-AUDIT: no SHA-512 of $WOR"; return 1; }
   mkdir -p "$OUT/v3c-audit"
   if [ -n "${MAIN_FILE:-}" ]; then  # main's first-parent line, which the audit's challenger session pins on
     [ -s "$MAIN_FILE" ] || { say "V3C-AUDIT: MAIN_FILE $MAIN_FILE, main's first-parent line its challenger session pins on, is missing or empty"; return 1; }
@@ -2035,7 +2034,7 @@ road_sampled() {  # step 3 on the window's road: the window's record, its Lean c
     || { step_not_run sampled-proofs "the window's commit verdict has no run root"; return; }
   # the registration of record pins the roots a window's registered weight reads open against
   [ -f "$WOR" ] || { step_not_run sampled-proofs "$NO_WOR"; return; }
-  wor_held SAMPLED-PROOFS || { step_not_run sampled-proofs "no SHA-512 of $WOR"; return; }
+  wor_held || { step_not_run sampled-proofs "no SHA-512 of $WOR"; return; }
   (umask 077; mkdir -p "$s") && mkdir -p "$OUT/sampled-proofs" "$LOGS/sampled-proofs"
   git -C "$TREE" rev-list --first-parent "${MAIN_SHA:-HEAD}" > "$main" 2>/dev/null && [ -s "$main" ] \
     || { step_not_run sampled-proofs "no first-parent line of main for its challenger session to pin on (${MAIN_SHA:-HEAD} has none in this tree)"; return; }
