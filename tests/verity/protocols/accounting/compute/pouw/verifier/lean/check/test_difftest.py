@@ -470,6 +470,28 @@ def test_the_tile_name_over_another_body_is_refused(pass_server, window_k64):
     assert outs["registry"].get("refused", [None])[0] != "layout", outs["registry"]
 
 
+@pytest.mark.slow
+@pytest.mark.parametrize("tile", ["v1", "v5"])
+def test_a_pinned_windows_registered_file_is_leans(pass_server, tmp_path_factory, tile):
+    """`credit.registered_file` of the registry's window at K = 64 (`shared_window`, its template one `credit.TILE_PINS`
+    pins) over the H1 tile `tile`, J10-R's at v5, held to the compiled `Credit.registeredFile`: the whole file, with the
+    public rows `credit.public_table` builds (at v5 each unit's call and blocks too, `window.j10r_blocks`) and the ok rows
+    `credit.ok_table` builds, each at its known rows, salts and root. `test_credit`'s ``registered-file`` cases are
+    stand-in layouts no pin holds, which `layout_of` refuses before the file is built, so only this case reaches those
+    rows. Each descriptor is about 60 MB."""
+    raw = credit_cases.shared_window(tmp_path_factory.getbasetemp().parent, 64, tile)
+    rng, lay = random.Random(f"registered-file/{tile}"), credit_cases.REGISTRY_LAYOUT
+    values = (f"a/64@{Cr.step_row(lay, 1, 0)[0]}", "zy@0", "b/64")
+    case = {"descriptor": raw.hex(), "call": 0, "roots": {v: [credit_cases._hex(rng)] for v in values},
+            "window": credit_cases._hex(rng), "steps": 1, "salt": credit_cases._hex(rng)}
+    kind, out = D.replay(REGISTERED_FILE, case, pass_server)
+    assert kind == "output", out
+    ports = json.loads(out)["file"]["ports"]
+    width = (Wd.PUBLIC_ROW_J10R_BITS if tile == "v5" else Wd.PUBLIC_ROW_BITS) // 16
+    assert [len(row) for row in ports[Cr.PUB_PORT]["known"]["rows"]] == [width], ports[Cr.PUB_PORT]
+    assert ports[Cr.OK_PORT]["known"]["rows"] == [list(Wd.OK_ROW)], ports[Cr.OK_PORT]
+
+
 def commit_parsers(case: dict) -> dict:
     """A Commit record's text read once (`json.loads`, as `credit._loads` reads it): the value each of the Lean's two
     JSON parsers reads it as, or none when the record is not bytes in lowercase hex of UTF-8 JSON."""
