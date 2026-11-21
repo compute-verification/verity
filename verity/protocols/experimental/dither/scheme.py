@@ -1,4 +1,4 @@
-"""Dither as a resource scheme (`verity.protocols.resource_accounting.scheme`), registered as ``dither``.
+"""Dither as a resource scheme (`verity.protocols.accounting.scheme`), registered as ``dither``.
 
 Dither has no verifier yet, so its protocol id is a placeholder (``verity/pouw/dither/v0``). `PROTOCOL.md` credits an
 output cell K − L MACs, its noised segments s < S; a block's cost is the multiply-adds it checks of a credited segment:
@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from verity.protocols.resource_accounting.scheme import Block, Charge, Lacks, Order, Scheme, register
+from verity.protocols.accounting.scheme import Block, Charge, Lacks, Order, Scheme, register
 
 #: why dither fills no field a configuration, a launcher or a record reads
 _NOT_RUN = Lacks("experimental: no application lists dither and it has no verifier")

@@ -21,10 +21,10 @@ from verity_config.settings import DEBUG, VALUE, WHERE, Registry, Setting as S, 
 
 #: the files that run outside the tree, relative to this one; `tools/move/layout.py` follows a `./` path to a file it
 #: moves, and a bare one only in a file it moves too
-STANDALONE = ("../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120/run.py",
-              "../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90/run.py",
-              "../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90/grouped.py",
-              "../../verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py")
+STANDALONE = ("../../verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm120/run.py",
+              "../../verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm90/run.py",
+              "../../verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm90/grouped.py",
+              "../../verity/protocols/accounting/compute/pouw/prover/sass_gate.py")
 
 
 def places(raw: str) -> frozenset[str]:

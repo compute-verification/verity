@@ -191,11 +191,11 @@ sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
 from verity.commitments import docket_digest as DD
-from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC  # noqa: E402
-from verity.protocols.proofs.spot.verifier import levels as LV  # noqa: E402
+from verity.protocols.proof.spot.verifier.challenger import challenger_session as AC  # noqa: E402
+from verity.protocols.proof.spot.verifier import levels as LV  # noqa: E402
 import a5_memo as AM  # noqa: E402
-from verity.protocols.proofs.spot.prover.audit import local_challenger as LC  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import member_trees as MT  # noqa: E402
+from verity.protocols.proof.spot.prover.audit import local_challenger as LC  # noqa: E402
+from verity.protocols.proof.spot.verifier.one_stage import member_trees as MT  # noqa: E402
 import r2_population as R2  # noqa: E402
 from verity.circuits.codec import canonical_json, definition_digest, descriptor_chunks, encode_program  # noqa: E402
 from verity.circuits.program import Program  # noqa: E402
@@ -203,17 +203,17 @@ from verity_flock import circuit as FC  # noqa: E402
 from verity_flock.input_sets import InputSet  # noqa: E402
 from verity_flock.proof_server import ProofServer, ProofServerError, Session, Statement  # noqa: E402
 from verity.commitments import row_table as RT  # noqa: E402
-from verity.protocols.proofs.spot.verifier.challenger import coins as CC
-from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import (
+from verity.protocols.proof.spot.verifier.challenger import coins as CC
+from verity.protocols.proof.spot.verifier import service as S  # noqa: E402
+from verity.protocols.proof.spot.verifier.one_stage import (
     draw as D,
     members as MB,
     partition as P,
     docket as R,
     verifier as V,
 )  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import registered as REG  # noqa: E402
+from verity.protocols.proof.spot.verifier.one_stage import one_circuit as OC  # noqa: E402
+from verity.protocols.proof.spot.verifier.one_stage import registered as REG  # noqa: E402
 from verity.commitments import registered_value as RV  # noqa: E402
 from verity.commitments.periods import flock_inputs as FI, interface as IF, rows as CS, tables as TB  # noqa: E402
 
@@ -1804,7 +1804,7 @@ def case_v2(case: dict, sessions: Sequence[str], *, proof, public: str, register
     digest as the kept window's own v2 case names it, or, for a window that keeps none, the kept file's own, taken
     after the audit."""
     RP = own_replay()
-    from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+    from verity.protocols.proof.spot.verifier.one_stage import proofs as PF
 
     pr, blobs = PF.evidence_v2(proof, sessions)
     evidence = {k: v for k, v in json.loads(bytes.fromhex(case["evidence"])).items() if k != "verdicts"} | {"proofs": pr}
@@ -1826,7 +1826,7 @@ def case_members(case: dict, *, members: Sequence, tables: Sequence[Path]) -> di
     `OneStageZk.checkMembersAt` (`members.case_check`); `proofs.members_parsed` is what its parsers read of the
     case."""
     RP = own_replay()
-    from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+    from verity.protocols.proof.spot.verifier.one_stage import proofs as PF
 
     names = {m.name: [PF.file_sha512(s / "session.json") for s in m.proof.sessions] for m in members}
     pm, pe, blobs = PF.members_v2(members, names)
@@ -1901,7 +1901,7 @@ def link_points(sampling_design: dict, population: int, members: Sequence[dict])
     why it refuses them all, a sampling design no sample of which ends among them (`link_points.NEVER_ENDS`).
     Recorded here for every window; the docket's check refuses them where the audit's case is of the per-member
     form (`per_member`)."""
-    from verity.protocols.proofs.spot.verifier.one_stage import link_points as LP
+    from verity.protocols.proof.spot.verifier.one_stage import link_points as LP
 
     ms = link_members(members)
     try:
@@ -1920,7 +1920,7 @@ def link_points(sampling_design: dict, population: int, members: Sequence[dict])
 def v2_proof(done: Sequence[dict], zk: bool) -> dict | str:
     """`case_v2`'s files from the sampled members' sessions (`member_checks`'s), or why the audit has no v2 case: v2 verifies
     one table's one `--zk` session on its circuit and public file."""
-    from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+    from verity.protocols.proof.spot.verifier.one_stage import proofs as PF
 
     if not zk:
         return "v2 verifies --zk sessions; this audit's are plain"
@@ -1943,7 +1943,7 @@ def looked_up_tables(st_dir: Path) -> list[Path]:
     """The pinned MUFU tables under a staged member's ``st_dir`` that its circuit looks up (`proofs.circuit_lookups`):
     v2 holds the blobs' tables to exactly those, and in the per-member form a member's statement to those among the
     blobs'."""
-    from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+    from verity.protocols.proof.spot.verifier.one_stage import proofs as PF
 
     tdir = st_dir / "tables"
     looked_up = PF.circuit_lookups(st_dir / "circuit.txt") if tdir.is_dir() else []
@@ -1960,7 +1960,7 @@ def members_proof(members: Sequence[dict], done: Sequence[dict], zk: bool, one: 
     template's tables are staged beside the circuit file its first member composed. None for a window of one member,
     whose form is the one statement's (`v2_proof`), unless ``one`` (its sessions ran on a caller's stage's challenger
     session, `stage_trees`); or why the audit has no per-member case."""
-    from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+    from verity.protocols.proof.spot.verifier.one_stage import proofs as PF
 
     if len(members) < 2 and not one:
         return None

@@ -27,7 +27,7 @@ prediction. The package's docstring lists every module.
   `verity/circuits/requirement`; the command line (`pipeline.cli`) loads `cli`, `block_counts` and `weights_tie` by
   name. No module of the Build, the Match or the Commit imports it.
 - **Loads:** `verity.circuits`, `verity_vllm.definitions`, `verity.commitments.periods` and `verity.commitments`;
-  SPOT's modules under `verity.protocols.proofs.spot.verifier` (the network attester's scan state only through its
+  SPOT's modules under `verity.protocols.proof.spot.verifier` (the network attester's scan state only through its
   declared scheme's port, `scan_state.PORT`); and the integration's `program`, `config`, `pipeline`, `engine`, `check`,
   `records`, `observe`, `acquire`, `query`, `protocols`, `correspondence`, `target_family` and `errors`, with `commit`
   inside a function.

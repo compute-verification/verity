@@ -14,7 +14,7 @@ import pytest
 import settings
 from test_pous_served_piece import RUN_EXE, TEST_PROTOCOL, _run, run_exe, served  # noqa: F401  (fixtures)
 
-from verity.protocols.resource_accounting.memory.pous.verifier import period
+from verity.protocols.accounting.memory.pous.verifier import period
 
 
 def _digest(exe) -> str:

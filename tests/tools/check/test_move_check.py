@@ -1061,7 +1061,7 @@ def test_a_pin_whose_digest_is_not_its_file_is_refused(tmp_path):
     assert f["path"] == "p/TRUSTED.sha256"
 
 
-MANIFEST_PIN = "tests/verity/protocols/proofs/flock/prover/fixtures/randomness_lean.json"
+MANIFEST_PIN = "tests/verity/protocols/proof/flock/prover/fixtures/randomness_lean.json"
 MANIFEST = '{"packages": [{"type": "path", "dir": "../pkg/old/lean"}]}\n'
 
 

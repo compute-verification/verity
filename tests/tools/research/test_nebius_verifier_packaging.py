@@ -1,5 +1,5 @@
 """The verifier host's packaging (`pods/nebius/verifier/`) against the gate it deploys
-(`verity/protocols/resource_accounting/memory/poub/attester/live_verifier/host.py`): the sshd and tunnel files open the gate's ports and no
+(`verity/protocols/accounting/memory/poub/attester/live_verifier/host.py`): the sshd and tunnel files open the gate's ports and no
 others, `pin.sh` runs no unpinned code, `setup.sh` gives a tunnel key a pty only where its client forces one, the
 deployed `verifier.json` is one the gate runs a peer from, and each peer's figures are what this tree's data sheets give
 (`figures.py`, which `pin.sh` runs)."""
@@ -16,7 +16,7 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[3]
 PACKAGING = REPO / "tools/research/src/research/pods/nebius/verifier"
-LIVE_VERIFIER = REPO / "verity/protocols/resource_accounting/memory/poub/attester/live_verifier"
+LIVE_VERIFIER = REPO / "verity/protocols/accounting/memory/poub/attester/live_verifier"
 _spec = importlib.util.spec_from_file_location("live_verifier_host", LIVE_VERIFIER / "host.py")
 H = sys.modules[_spec.name] = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(H)
@@ -61,7 +61,7 @@ def test_a_tunnel_key_gets_a_pty_only_while_the_challengers_pinned_client_forces
     (`ssh -T`), has no `pty`, and the challenger's keeps it only while serve.py forces one."""
     setup = (PACKAGING / "setup.sh").read_text()
     assert "opts=restrict,port-forwarding\n" in setup and '[ "$acct" = prover ] || opts+=,pty\n' in setup
-    serve = (REPO / "verity/protocols/compose/verifier/live_challenger/serve.py").read_text()
+    serve = (REPO / "verity/protocols/run/verifier/live_challenger/serve.py").read_text()
     assert re.search(r'^SSH = \["ssh", "-tt"', serve, re.M), (
         "serve.py no longer forces a pty: drop `pty` from the challenger's tunnel key in verifier/setup.sh, and this check")
 
@@ -72,7 +72,7 @@ def test_the_deployed_verifier_json_has_the_shape_the_gates_tests_run_on_and_the
             return {k: shape(x) for k, x in v.items()}
         return float if isinstance(v, (int, float)) and not isinstance(v, bool) else type(v)
 
-    tested = json.loads((LIVE_VERIFIER.parents[6] / "tests" / "verity" / "protocols" / "resource_accounting" / "memory" / "poub" / "attester" / "live_verifier" / "verifier.json").read_text())
+    tested = json.loads((LIVE_VERIFIER.parents[6] / "tests" / "verity" / "protocols" / "accounting" / "memory" / "poub" / "attester" / "live_verifier" / "verifier.json").read_text())
     assert shape({k: v for k, v in TEMPLATE.items() if k != "peers"}) == shape({k: v for k, v in tested.items() if k != "peers"})
     host = H.Host(root=tmp_path, main=tmp_path / "main-first-parent.txt")
     host.main.write_text("")

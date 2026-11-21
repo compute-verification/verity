@@ -1,8 +1,8 @@
-"""The top-level protocol `run`'s one monitoring period (`verity.protocols.compose.period`)."""
+"""The top-level protocol `run`'s one monitoring period (`verity.protocols.run.period`)."""
 
 from __future__ import annotations
 
-from verity.protocols.compose import period as P
+from verity.protocols.run import period as P
 
 PUBLIC = P.PublicParameters(hardware=None, limits=None, window="4,27,2", sampling_design="rate:1/4")
 

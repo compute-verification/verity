@@ -34,7 +34,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 CARD_FILES = ROOT / "calibration/hardware/cards"
-sys.path.insert(0, str((ROOT / "verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.py").parent))
+sys.path.insert(0, str((ROOT / "verity/protocols/accounting/memory/poub/prover/word_codec/kv.py").parent))
 
 sys.path.append(str(ROOT))
 

@@ -192,8 +192,8 @@ class Scheme:
         return False if self.control_family is not None else self._declared("y_committed")
 
     def _declared(self, field: str) -> Any:
-        from verity.protocols.compose import schemes
-        from verity.protocols.resource_accounting.scheme import declared
+        from verity.protocols.run import schemes
+        from verity.protocols.accounting.scheme import declared
 
         return declared(schemes.get(self.id), field)
 

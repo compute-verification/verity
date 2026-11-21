@@ -92,7 +92,7 @@ def preflight(opts: Any, *, card: bool) -> dict[str, Any]:
         raise UsageError("the close plans no circuit without --window-class S,P,O")
     got: dict[str, Any] = {"class": [plan.cls.slots, plan.cls.prompt, plan.cls.outputs], "record": plan.record is not None}
     if (rec := plan.record) is not None:
-        from verity.protocols.proofs.spot.verifier import service as S
+        from verity.protocols.proof.spot.verifier import service as S
 
         S.SamplingDesign(rec.rule)
         ck = Path(rec.checkpoint_dir)

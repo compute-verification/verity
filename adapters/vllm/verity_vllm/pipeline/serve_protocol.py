@@ -9,7 +9,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from verity.protocols.compose import schemes as declarations
+from verity.protocols.run import schemes as declarations
 
 from verity_vllm.pipeline.serve_commit import SAMPLING_FIELDS
 

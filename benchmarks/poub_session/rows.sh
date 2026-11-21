@@ -38,12 +38,12 @@
 #   ... env BUILD_ONLY=1 ARCH=120a CUDA_HOME="$(python3 benchmarks/kernels/machine.py toolkit 13.0)" BASE_REV=REV bash benchmarks/poub_session/rows.sh
 #   ... env CARDS=0 CORES=0-7 ARCH=120a STEPS=rows ROWS='64 16' GIB=62 CTAS_AT='64=96,128,188' ...
 set -uo pipefail
-TREE=$PWD LEAN=verity/protocols/resource_accounting/memory/poub/verifier/lean
+TREE=$PWD LEAN=verity/protocols/accounting/memory/poub/verifier/lean
 CARDS=${CARDS:-0} CORES=${CORES:-}
 if [ -n "$CORES" ] && [ -z "${ROWS_PINNED:-}" ]; then
   exec env ROWS_PINNED=1 taskset -c "$CORES" bash "$TREE/benchmarks/poub_session/rows.sh" "$@"
 fi
-export RS=benchmarks/poub_session PR=verity/protocols/resource_accounting/memory/poub/prover O=${OUT:-${RESEARCH_RUN_DIR:?}/out}
+export RS=benchmarks/poub_session PR=verity/protocols/accounting/memory/poub/prover O=${OUT:-${RESEARCH_RUN_DIR:?}/out}
 export LEAN_ABORT_ON_PANIC=1  # one_stage/settings.py's ABORT_ON_PANIC, for every Lean verifier below and every process it starts
 mkdir -p "$O"
 say() { echo "$(date -u +%H:%M:%SZ) $*" | tee -a "$O/rows.txt"; }
@@ -60,7 +60,7 @@ session() {  # under the lease: PLAN's sessions, the verifier's process beside t
   "$PY" benchmarks/poub_session/sheets.py "${NODE_KIND:-$kind}" > "$O/session/figures.json" \
     || { say "SESSION: no figures for its verifier (NODE_KIND names a node file)"; return 3; }
   sessions=$(($(tr -cd , <<< "$PLAN" | wc -c) + 1))
-  pinned "${VERIFIER_CORES:-}" "$PY" verity/protocols/resource_accounting/memory/poub/verifier/poub_session/verifier_process.py \
+  pinned "${VERIFIER_CORES:-}" "$PY" verity/protocols/accounting/memory/poub/verifier/poub_session/verifier_process.py \
     --port "$port" --out "$O/session" --windows "$WINDOWS" --window-ms "$WINDOW_MS" --samples "$SAMPLES" \
     --jitter-ms "$JITTER_MS" --sessions "$sessions" --lean-exe "$TREE/$LEAN/.lake/build/bin/poub-verifier" --figures "$O/session/figures.json" \
     > "$O/session/verifier.log" 2>&1 & v=$!

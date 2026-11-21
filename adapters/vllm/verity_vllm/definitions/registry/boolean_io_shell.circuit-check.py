@@ -7,7 +7,7 @@ from typing import Any, Callable
 
 def _scan_slots(ns: int, firsts: tuple[int, int, int, int], stride: int, lane: int, np_: int, fn: str = "ScanSlotsV5") -> Any:
     """`ScanSlots_v5` (or ``fn``, its `ScanSlotsBits_v1`) over the network attester's scan state row at the scan's cells of record
-    (`verity.protocols.resource_accounting.network.prover.ingress_scan.layout`): its ``ns`` words, lane 0's occupancy, prompt length, max_tokens
+    (`verity.protocols.accounting.network.prover.ingress_scan.layout`): its ``ns`` words, lane 0's occupancy, prompt length, max_tokens
     and ids bit offsets (``firsts``), the lane ``stride``, at lane ``lane`` of ``np_`` prompt ids."""
     from verity.circuits.defs import bind
 

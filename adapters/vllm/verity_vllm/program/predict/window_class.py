@@ -35,13 +35,13 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+from verity.protocols.accounting.compute.pouw.prover.serving import (
     NCP_SCHEMES as SCHEMES,
 )
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+from verity.protocols.accounting.compute.pouw.prover.serving import (
     PEARL_C_ROW_ALIGN as ROW_ALIGN,
 )
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+from verity.protocols.accounting.compute.pouw.prover.serving import (
     a_value,
     b_value,
     y_value,

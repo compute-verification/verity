@@ -4,8 +4,8 @@ from fractions import Fraction
 
 import pytest
 import second_stage as s2
-from verity.protocols.proofs.spot.verifier.challenger.challenger import COIN_BYTES, MAX_COINS
-from verity.protocols.proofs.spot.prover.optimize import Cell
+from verity.protocols.proof.spot.verifier.challenger.challenger import COIN_BYTES, MAX_COINS
+from verity.protocols.proof.spot.prover.optimize import Cell
 
 
 def test_a_word_is_the_population_s_bits_and_64_more():

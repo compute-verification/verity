@@ -21,11 +21,11 @@ from conftest import load
 
 from verity.commitments import MerkleTree, hm96
 from verity.commitments.merkle import tree_levels
-from verity.protocols.resource_accounting.compute.pouw.verifier import audit
-from verity.protocols.resource_accounting.compute.pouw.verifier.audit import ROW_SCHEMA, activation_binding, rows_domain
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
+from verity.protocols.accounting.compute.pouw.verifier import audit
+from verity.protocols.accounting.compute.pouw.verifier.audit import ROW_SCHEMA, activation_binding, rows_domain
+from verity.protocols.accounting.compute.pouw.prover.schemes import pearl_c as C
 
-HERE = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "kernels" / "pearl_c"
+HERE = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "compute" / "pouw" / "prover" / "kernels" / "pearl_c"
 FAST = HERE.parent / "pearl_c_sm120" / "hash_fast.cuh"
 WIDE = HERE / "hash_wide.cuh"
 R = load("pearl_c_sm120/run.py")
@@ -443,7 +443,7 @@ def test_a_caller_without_the_scratch_runs_the_reference_kernels(host, monkeypat
 def y_trees(host, monkeypatch):
     """served_y's `DeviceTrees` over the host build, for a run of the sm120 variant whose salt is fixed."""
     torch = pytest.importorskip("torch")
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
+    from verity.protocols.accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
     from verity_torch.pouw.pearl_c import served_y_device as SYD
     run = SimpleNamespace(kernel=SimpleNamespace(run=R, dev=host), device=torch.device("cpu"), variant="sm120",
                           salt=bytes(range(64)), salt_key=bytes(range(100, 132)),

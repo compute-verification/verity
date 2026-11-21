@@ -1,5 +1,5 @@
-"""The memory attester's process in the harness's timed audit (`p2-v3-mc-gpu`): `verity.protocols.resource_accounting.memory.pous.verifier.
-memory_attester` against the responder, over the harness's responder wire (`verity/protocols/resource_accounting/memory/pous/attester/timed_audit.py`).
+"""The memory attester's process in the harness's timed audit (`p2-v3-mc-gpu`): `verity.protocols.accounting.memory.pous.verifier.
+memory_attester` against the responder, over the harness's responder wire (`verity/protocols/accounting/memory/pous/attester/timed_audit.py`).
 
     python benchmarks/pous/memory_attester/live.py --ready READY.json --leaves DIGESTS.bin --out AUDIT.json [--audits N]
         [--pings N] [--k K] [--verifier-cpu C] [--limit-ns N] [--calibrate-only] [--clock logical] [--strict]
@@ -69,7 +69,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from verity.commitments import session_coins as SC
-from verity.protocols.resource_accounting.memory.pous.attester.timed_audit import (  # noqa: E402
+from verity.protocols.accounting.memory.pous.attester.timed_audit import (  # noqa: E402
     ALLOWANCE_KIND,
     HEADER,
     OP_CHALLENGE,
@@ -85,8 +85,8 @@ from verity.protocols.resource_accounting.memory.pous.attester.timed_audit impor
 )
 
 ROOT = Path(__file__).resolve().parents[3]
-TEST_SIGNER = ROOT / "tests" / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "verifier" / "pous_test_signer.py"
-LEAN_VERDICT = ROOT / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "attester" / "lean" / "verdict.py"
+TEST_SIGNER = ROOT / "tests" / "verity" / "protocols" / "accounting" / "memory" / "pous" / "verifier" / "pous_test_signer.py"
+LEAN_VERDICT = ROOT / "verity" / "protocols" / "accounting" / "memory" / "pous" / "attester" / "lean" / "verdict.py"
 WARMUP_PINGS = 8
 """Pings before each session's first round, after the previous session's signature: a session's round 0 otherwise follows
 the challenger's own Python work (one measured round 0 took 655.8 µs, 26 µs of it at the responder)."""
@@ -143,7 +143,7 @@ def write_sessions(path: str | os.PathLike, sig: Any, sessions: list[dict[str, A
 
 
 def rtt_cap_ns() -> int:
-    from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2
+    from verity.protocols.accounting.memory.pous.verifier.schemes import p2
     return p2.RTT_ALLOWANCE_CAP_NS
 
 
@@ -151,7 +151,7 @@ def lms_signer(directory: str | os.PathLike, workers: int = 1, params: Any = Non
     """The memory attester's S1 signer whose key is in `directory`, made there first when absent; at `params` other than
     `lms.DEPLOYED` (tests), under a `test/` id."""
     from verity.commitments.crypto import lms
-    from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
+    from verity.protocols.accounting.memory.pous.attester import memory_attester as mc
 
     p = params or lms.DEPLOYED
     d = Path(directory)
@@ -188,7 +188,7 @@ def lms_signer(directory: str | os.PathLike, workers: int = 1, params: Any = Non
 
 def session_log(path: str | os.PathLike, new_key: bool) -> Any:
     """The memory attester's used-session log at `path` (`memory_attester.SessionLog`), made there when the key is new."""
-    from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
+    from verity.protocols.accounting.memory.pous.attester import memory_attester as mc
 
     if new_key and not Path(path).exists():
         mc.SessionLog.create(path)
@@ -198,7 +198,7 @@ def session_log(path: str | os.PathLike, new_key: bool) -> Any:
 def signer_schemes(scheme: str) -> Mapping[str, Any]:
     """The mapping a session signed under `scheme` is judged by beside `memory_attester.SCHEMES`: that one for S1's
     scheme, the test signer's for a test one."""
-    from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
+    from verity.protocols.accounting.memory.pous.attester import memory_attester as mc
 
     return mc.SCHEMES if scheme in mc.SCHEMES else test_signer().SCHEMES
 
@@ -206,7 +206,7 @@ def signer_schemes(scheme: str) -> Mapping[str, Any]:
 def setup_root(params: Any, salt: bytes, digests: bytes) -> bytes:
     """What a session audits: the root the setup publishes for the `C*` whose block digests are `digests`, under `salt`
     (`VerifierKey.root`)."""
-    from verity.protocols.resource_accounting.memory.pous.verifier.verifier import VerifierKey
+    from verity.protocols.accounting.memory.pous.verifier.verifier import VerifierKey
 
     return VerifierKey.from_row_digests(params, salt, [digests[64 * i:64 * (i + 1)] for i in range(params.blocks)]).root
 
@@ -214,7 +214,7 @@ def setup_root(params: Any, salt: bytes, digests: bytes) -> bytes:
 def verdict(s: dict[str, Any], expected: Callable[[int], bytes], trusted: set[bytes],
             schemes: Mapping[str, Any] | None = None) -> Any:
     """Session `s` judged by the Lean verdict; a record it refuses to read (`ValueError`) is its rejection."""
-    from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
+    from verity.protocols.accounting.memory.pous.attester import memory_attester as mc
 
     kw = {"trusted": trusted, **({} if schemes is None else {"schemes": schemes})}
     try:
@@ -251,7 +251,7 @@ def signature_control(doc: dict[str, Any], expected: Callable[[int], bytes]) -> 
     """The bad-signature control, on the honest audit's signed sessions: each with one signature bit flipped, and each with
     one round's receipt time moved 1 ns earlier after signing (an on-time bit forged), judged under the signer's own
     mapping (`signer_schemes`); every one must be rejected for its signature, and the unedited sessions must pass."""
-    from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
+    from verity.protocols.accounting.memory.pous.attester import memory_attester as mc
 
     schemes = signer_schemes(doc["signer"]["scheme"])
     out = {"sessions": 0, "unedited_accepted": 0, "flipped_rejected": 0, "edited_rejected": 0}
@@ -295,9 +295,9 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
     test signer), in a temporary directory with the test signer's leaf state, removed once the sessions are signed.  Each
     session's live coins and session id are `os.urandom`'s, or `seeded_session(seed, j)` with `seed`, which only a
     test-signed audit on the logical clock takes (`SEEDED_ONLY`)."""
-    from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
-    from verity.protocols.resource_accounting.memory.pous.verifier import audit as pous_audit
-    from verity.protocols.resource_accounting.memory.pous.verifier.protocol import StorageProfile
+    from verity.protocols.accounting.memory.pous.attester import memory_attester as mc
+    from verity.protocols.accounting.memory.pous.verifier import audit as pous_audit
+    from verity.protocols.accounting.memory.pous.verifier.protocol import StorageProfile
 
     if seed is not None and not (isinstance(clock, LogicalClock) and signer == "test"):
         raise ValueError(SEEDED_ONLY)
@@ -412,7 +412,7 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
 
 
 def main(argv: list[str] | None = None) -> int:
-    from verity.protocols.resource_accounting.memory.pous.verifier import audit as pous_audit
+    from verity.protocols.accounting.memory.pous.verifier import audit as pous_audit
 
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--ready", required=True)

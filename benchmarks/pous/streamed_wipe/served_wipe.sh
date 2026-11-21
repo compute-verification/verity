@@ -63,12 +63,12 @@ attach() { "$PY" - "$@" "$DIR" "$SERVE_DIR" "$WINDOW" "$SETTINGS" "${WIPE_NODE:-
 import json, os, shutil, socket, sys, tempfile
 from pathlib import Path
 from verity import device, hooks as H
-from verity.protocols.compose import schemes
-from verity.protocols.resource_accounting import scheme as S
-from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
-from verity.protocols.resource_accounting.memory.pous.prover import wipe_served as WS
-from verity.protocols.resource_accounting.memory.pous.verifier import period
-from verity.protocols.resource_accounting.memory.pous.scheme import MEMORY_ATTESTER
+from verity.protocols.run import schemes
+from verity.protocols.accounting import scheme as S
+from verity.protocols.accounting.memory.pous.attester import memory_attester as mc
+from verity.protocols.accounting.memory.pous.prover import wipe_served as WS
+from verity.protocols.accounting.memory.pous.verifier import period
+from verity.protocols.accounting.memory.pous.scheme import MEMORY_ATTESTER
 from verity.runtime.stream import Side
 from verity_vllm.messages import Exchange
 
@@ -274,7 +274,7 @@ rm -rf "$K" && (umask 077 && mkdir -p "$K") \
 X=
 if [ "$STREAMS" = here ]; then
   X=$(mktemp -d)
-  cc -O3 -pthread "$ROOT/verity/protocols/resource_accounting/memory/pous/attester/wipe_stream.c" -o "$X/wipe_stream" \
+  cc -O3 -pthread "$ROOT/verity/protocols/accounting/memory/pous/attester/wipe_stream.c" -o "$X/wipe_stream" \
     || { rm -rf "$K" "$X"; echo "WIPE FAILED: wipe_stream doesn't build"; stamp "wipe_stream didn't build"; exit 7; }
 fi
 rc=0

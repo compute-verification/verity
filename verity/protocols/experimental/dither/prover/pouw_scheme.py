@@ -1,5 +1,5 @@
 """Dither v3.2 (`verity/protocols/experimental/dither/PROTOCOL.md`) as a
-`verity.protocols.resource_accounting.compute.pouw.verifier.protocol.PoUWScheme`, on its CPU reference (`dither`): the
+`verity.protocols.accounting.compute.pouw.verifier.protocol.PoUWScheme`, on its CPU reference (`dither`): the
 tile-level entry points of the resource scheme ``dither`` (`verity.protocols.experimental.dither.scheme`).
 
 A tile is one of the value root's 128 × 128 output tiles at full K (`dither.Shape.tile_of`, row-major). Its operands
@@ -13,7 +13,7 @@ The parameters are an (L, L′) pair of `PARAMETERS`, keyed by the card's short 
 ``calibration/hardware/cards``) and whether registration pins B: the pairs the protocol settles for the RTX PRO 6000
 ("The segment and the noise period"), L = 1,024 with L′ = 128 when registration pins B, and L = 768 with L′ = 256 for
 weights the prover chooses. No pair is settled for the H200. PoUW builds it by name at a card's pair
-(`verity.protocols.resource_accounting.compute.pouw.prover.schemes.get` with ``card`` and ``pinned``).
+(`verity.protocols.accounting.compute.pouw.prover.schemes.get` with ``card`` and ``pinned``).
 
 Three methods ask for what Dither has no code for, and raise `NotImplementedError` naming it:
 
@@ -31,7 +31,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from fractions import Fraction
 
-from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import (
+from verity.protocols.accounting.compute.pouw.verifier.protocol import (
     Certificate, Context, DomainError, Matmul, Shape, Tile, grid_tiles)
 
 from . import dither as D

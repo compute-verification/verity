@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from verity.protocols.proofs.spot.verifier.one_stage import lean_child as LC
+from verity.protocols.proof.spot.verifier.one_stage import lean_child as LC
 
 #: the stack limit the executable runs under, where its caller's is lower: Linux's limit on arguments is then its own
 STACK = 24 << 20

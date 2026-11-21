@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 from typing import Any, cast
 
 import numpy as np
-from verity.protocols.resource_accounting.compute.pouw.verifier.audit import HM96_SALT
+from verity.protocols.accounting.compute.pouw.verifier.audit import HM96_SALT
 
 from verity_torch.pouw.pearl_c.ends import _RunState, _Stages
 from verity_torch.pouw.pearl_c.host import (

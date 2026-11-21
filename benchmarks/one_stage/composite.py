@@ -63,7 +63,7 @@ from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from verity.protocols.proofs.spot.verifier.one_stage import lean_child as LC
+from verity.protocols.proof.spot.verifier.one_stage import lean_child as LC
 
 # `served_composite.sh` runs this file with an interpreter that may not import `verity`: the standard library and this
 # tree's `lean_child` and the `verity.lean_process` it re-exports, whose own imports are the standard library's, only.

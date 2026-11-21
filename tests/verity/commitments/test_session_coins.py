@@ -11,7 +11,7 @@ from pathlib import Path
 from verity.commitments import domains as D
 from verity.commitments import session_coins as SC
 from verity.commitments.crypto import lms
-from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as MA
+from verity.protocols.accounting.memory.pous.attester import memory_attester as MA
 
 LEAN = Path(__file__).resolve().parents[3] / "verity/commitments/lean/Commitments/SessionCoins.lean"
 DEF = re.compile(r'^def ([A-Z_0-9]+) : (?:String|ByteArray) := "([^"\\]*)"(\.toUTF8\.push 0)?$', re.M)

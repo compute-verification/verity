@@ -38,9 +38,9 @@ from pathlib import Path
 import transformer as X
 from inputs import CARDS, I, cap
 
-from verity.protocols.proofs.spot.verifier.profile import Stratified, Stratum
-from verity.protocols.proofs.spot.prover.candidates import shape_of
-from verity.protocols.proofs.spot.prover.optimize import row_ands
+from verity.protocols.proof.spot.verifier.profile import Stratified, Stratum
+from verity.protocols.proof.spot.prover.candidates import shape_of
+from verity.protocols.proof.spot.prover.optimize import row_ands
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.ops import fp32 as F, gemm as G

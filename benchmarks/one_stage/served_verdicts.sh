@@ -219,7 +219,7 @@
 # `served_verdicts.sh gate-compose PIECES [VERDICT [HOST]]`, with D and OUT, on the node that holds the serve dir, writes
 # the hand-off from PIECES and the inference-only VERDICT (on a deferral's serve dir, at its settings, HOST as
 # `handoff`'s) and sends it to the compose gate on COMPOSE_NODE
-# (`verity/protocols/resource_accounting/memory/poub/attester/live_verifier/host.py`'s `compose`: COMPOSE_GATE, default lane vllm's gate key as research@
+# (`verity/protocols/accounting/memory/poub/attester/live_verifier/host.py`'s `compose`: COMPOSE_GATE, default lane vllm's gate key as research@
 # the address VY_AUDITOR_2_HOST holds, vy-auditor-2's public one, where the gate admits senders (set it for any other COMPOSE_NODE;
 # with neither, the preflight refuses), the one word `compose`), a tar of the files its inputs.txt lists on the gate's stdin; the gate composes there at its
 # pinned tree (COMPOSE_BUILT: built at its pin; SAMPLED_EXE its prebuilt SPOT Lean; COMPOSE_TREE_ON the branch
@@ -475,7 +475,7 @@ if [ -n "$PEARLPLUS_TIE" ]; then  # the window served under Pearl+: Llama 3.2 1B
   HB=/workspace/research/vllm-pearlc-h200bf16
   ROW=${ROW:-$HB/r20261104-084130-0f59/llama32-1b__bf16__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager}
   REPO=${REPO:-unsloth/Llama-3.2-1B} REV=${REV:-9535bd9b1d1dea6acafbdc4813b728796aeb28da} PRECISION=${PRECISION:-bfloat16}
-  LOAD=${LOAD:-dataset} PEARLPLUS_ARM=${PEARLPLUS_ARM:-$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../.." && python3 -m verity.protocols.compose.schemes pearl-plus option)} || { echo "PREFLIGHT: PEARLPLUS_ARM unset and the declared schemes name no Pearl+ option (python3 -m verity.protocols.compose.schemes pearl-plus option, above)" >&2; exit 3; }
+  LOAD=${LOAD:-dataset} PEARLPLUS_ARM=${PEARLPLUS_ARM:-$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../.." && python3 -m verity.protocols.run.schemes pearl-plus option)} || { echo "PREFLIGHT: PEARLPLUS_ARM unset and the declared schemes name no Pearl+ option (python3 -m verity.protocols.run.schemes pearl-plus option, above)" >&2; exit 3; }
   # the class's fixed load, at whose rows the circuit cut at Pearl+'s linears reads its tables
   IFS=, read -r slots _ <<< "${V3C_CLASS-4,32,4}"
   SLOTS=${SLOTS:-$slots}
@@ -539,7 +539,7 @@ SERVED_COMPARE=$D/served-compare/served_compare.json
 FW=${FLOCK_WORK:-$ROOT/flock-work}
 export PY=$VENV/bin/python HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1
 export CUDA_HOME=${CUDA_HOME:-$(python3 "$TREE/benchmarks/kernels/machine.py" toolkit 13.0)}
-export PYTHONPATH=$TREE:$TREE/input_datasets:$TREE/adapters/vllm:$TREE/adapters/torch:$TREE/tools/config:$TREE/verity/protocols/proofs/flock/prover/python:$TREE/tools/research/src:$TREE/benchmarks/harness
+export PYTHONPATH=$TREE:$TREE/input_datasets:$TREE/adapters/vllm:$TREE/adapters/torch:$TREE/tools/config:$TREE/verity/protocols/proof/flock/prover/python:$TREE/tools/research/src:$TREE/benchmarks/harness
 export TORCH_EXTENSIONS_DIR=$ROOT/cache/torch-extensions TRITON_CACHE_DIR=$ROOT/cache/triton VLLM_CACHE_ROOT=$ROOT/cache/vllm
 export VLLM_BATCH_INVARIANT=1 VERITY_RETAIN=host NATIVE_COLLECT_BUILD=$ROOT/cache/jit/nc
 export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:$PATH
@@ -839,7 +839,7 @@ v3c_warm() {  # every template of the committed window composed into $VW/compose
   fi
   say "V3C-WARM class $V3C (records_audit.py warm exit $rc, $V3C_WARM_JOBS at a time): $why"
 }
-v3c_cuda() { FLOCK_WORK=$FW . "$TREE/verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh" >&2 && { [ -n "${CUDA_TK:-}" ] && echo "$CUDA_TK" || python3 "$TREE/benchmarks/kernels/machine.py" toolkit 13.3; }; }
+v3c_cuda() { FLOCK_WORK=$FW . "$TREE/verity/protocols/proof/flock/prover/pod/cuda-13.3.sh" >&2 && { [ -n "${CUDA_TK:-}" ] && echo "$CUDA_TK" || python3 "$TREE/benchmarks/kernels/machine.py" toolkit 13.3; }; }
 v3c_audit() {  # the committed window audited from its records alone: its circuit and run root the verifier's, the weights pinned
   local run leanb m0 rc gl tk tie=() day=() cache=() ca=() ch=(--challenger "$V3C_CHALLENGER") ports=${V3C_PORTS:-16} main=$OUT/v3c-audit/main.txt
   [ -n "${DAY:-}" ] && day=(--day "$DAY" --day-log "$DAY_LOG" ${DAY_PARAMS:+--day-params "$DAY_PARAMS"})
@@ -858,8 +858,8 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
     [ -n "${V3C_PORTS:-}" ] || [[ $V3C_LAW == rate:* ]] || ports=$("$PY" -c 'import json, sys; print(sum(int(s["k"]) for s in json.load(open(sys.argv[1]))["law"]["strata"]))' \
       "$VW/window/registration.json") || { say "V3C-AUDIT: R, the window's registration, has no strata to size the audit's ports by: set V3C_PORTS"; return 1; }
   fi
-  leanb=$TREE/verity/protocols/proofs/flock/verifier/.lake/build/bin
-  m0=$TREE:$TREE/benchmarks/numerical/python:$TREE/verity/protocols/proofs/flock/prover/python:$TREE/adapters/vllm
+  leanb=$TREE/verity/protocols/proof/flock/verifier/.lake/build/bin
+  m0=$TREE:$TREE/benchmarks/numerical/python:$TREE/verity/protocols/proof/flock/prover/python:$TREE/adapters/vllm
   if [ -n "${V3C_WARM_JOBS:-}" ]; then
     v3c_warm
     cache=(--compose-cache "${V3C_COMPOSE_CACHE:-$VW/compose-cache}")
@@ -910,7 +910,7 @@ print(f"the audit read its records tied to W {w}…, R chained right after it: {
 v3c_period() {  # V3c's audit as one compute audit of the network certifier's period: $VW/period.json
   (cd "$TREE" && env -u PYTHONPATH "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py period --window "$VW/window" \
     --audit "$VW/audit" --pins "$WREG" --out "$VW/period.json" --tied "$("$TREE/.venv/bin/python" -c \
-    'from verity.protocols.resource_accounting.network.verifier.blocks import SCAN_STATE; print(SCAN_STATE)')") > "$LOGS/v3c-audit/period.log" 2>&1
+    'from verity.protocols.accounting.network.verifier.blocks import SCAN_STATE; print(SCAN_STATE)')") > "$LOGS/v3c-audit/period.log" 2>&1
   local rc=$?
   [ "$rc" = 0 ] && cp "$VW/period.json" "$OUT/v3c-audit/"
   say "V3C-PERIOD (records_audit.py period exit $rc): $(said "$rc" "$LOGS/v3c-audit/period.log" | cut -c1-800)"
@@ -993,7 +993,7 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   while [ "$i" -lt "${#pw[@]}" ]; do
     if [ "${pw[$i]}" = --protocols-config ]; then cfg=${pw[$((i + 1))]}; i=$((i + 2)); else rest+=("${pw[$i]}"); i=$((i + 1)); fi
   done
-  "$PY" -m verity.protocols.compose.schemes network-attester settings > /dev/null || return 9
+  "$PY" -m verity.protocols.run.schemes network-attester settings > /dev/null || return 9
   pw=("${rest[@]}" --protocols-config "$("$PY" -c 'import json, sys; v, n = sys.argv[1:]; d = (json.loads(v) if v.lstrip().startswith("{") else json.load(open(v))) if v else {}; print(json.dumps({**d, n: {**d.get(n, {}), "order": "release-order"}}))' "$cfg" network-attester)")
   local polls=450
   if [ -n "${WIPE_CMD:-}" ]; then  # the wipe of this card, before its engine loads
@@ -1167,7 +1167,7 @@ block_counts() {  # in TREE: the picked window's (c, k)-inference blocks at each
   return "$bad"
 }
 IO_POLICY=${IO_POLICY:-$OUT/inference-only-policy.json}
-IO_LEAN=$TREE/verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/.lake/build/bin/inference-only-verifier
+IO_LEAN=$TREE/verity/protocols/policy/training_detection/inference_only/verifier/lean/.lake/build/bin/inference-only-verifier
 io_class() {  # the inference-only verdict's class: IO_CLASS, else the first of CLASSES but `record`
   local c
   [ -z "${IO_CLASS:-}" ] || { echo "$IO_CLASS"; return 0; }
@@ -2006,7 +2006,7 @@ road_network() {  # the network attester's own piece, called as step 4 or 6 call
   else step_refused network-attester "$(failed "$rc" "$dir/road.log")"; fi
 }
 road_sampled() {  # step 3 on the window's road: the window's record, its Lean checks run from its own files (records_audit.py audit), its circuit the prover's
-  local rec=$D/windows/w$K/record leanb=$TREE/verity/protocols/proofs/flock/verifier/.lake/build/bin bin=$FW/flock-gpu-link/flock/target/release/flock-circuit
+  local rec=$D/windows/w$K/record leanb=$TREE/verity/protocols/proof/flock/verifier/.lake/build/bin bin=$FW/flock-gpu-link/flock/target/release/flock-circuit
   local s=$D/private/sampled-proofs main=$OUT/sampled-proofs/main.txt unit=${TMPL_UNIT_BIN:-$FW/lean-bin/flock-tmpl-unit} how="bash $TREE/benchmarks/one_stage/build_sampled_step.sh" m0 law run rc b line regs
   [ "$DEVELOPMENT" = 1 ] || { step_not_run sampled-proofs "its circuit is the one the prover registered, and its coins the local challenger's: a development run's alone (DEVELOPMENT=1) until proofs' compile check runs and the auditor's challenger is wired"; return; }
   for b in "$bin" "$leanb/verity-verify-proof" "$leanb/flock-zk-server" "$leanb/flock-lower-check"; do
@@ -2028,7 +2028,7 @@ road_sampled() {  # step 3 on the window's road: the window's record, its Lean c
   (umask 077; mkdir -p "$s") && mkdir -p "$OUT/sampled-proofs" "$LOGS/sampled-proofs"
   git -C "$TREE" rev-list --first-parent "${MAIN_SHA:-HEAD}" > "$main" 2>/dev/null && [ -s "$main" ] \
     || { step_not_run sampled-proofs "no first-parent line of main for its challenger session to pin on (${MAIN_SHA:-HEAD} has none in this tree)"; return; }
-  m0=$TREE:$TREE/benchmarks/numerical/python:$TREE/verity/protocols/proofs/flock/prover/python:$TREE/adapters/vllm
+  m0=$TREE:$TREE/benchmarks/numerical/python:$TREE/verity/protocols/proof/flock/prover/python:$TREE/adapters/vllm
   (cd "$TREE" && env PYTHONPATH="$m0${PYTHONPATH:+:$PYTHONPATH}" DEVELOPMENT=1 RAYON_NUM_THREADS="$(nproc)" RUST_MIN_STACK=$((64 << 20)) timeout -k 1m "$V3C_AUDIT_TIMEOUT" \
     "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py audit --window "$rec" --sampling-design "$law" \
     --prover-circuit --development --run "$run" ${regs[@]+"${regs[@]}"} \
@@ -2354,21 +2354,21 @@ build() {  # what prove_path.sh builds, here while the endpoint serves; prove_pa
   command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
   uv sync --all-packages --extra torch-cpu || return 5
-  (cd verity/protocols/proofs/flock/verifier && lake build verity-verify-proof flock-zk-server flock-read-tmpl) || return 7
-  (cd verity/protocols/proofs/spot/verifier/lean && lake build spot-verifier) || return 7
+  (cd verity/protocols/proof/flock/verifier && lake build verity-verify-proof flock-zk-server flock-read-tmpl) || return 7
+  (cd verity/protocols/proof/spot/verifier/lean && lake build spot-verifier) || return 7
   mkdir -p "$LOGS/m0-build"
   # FW is the node's, every run's: two builds in it at once break each other's crates
-  RESEARCH_RUN_DIR=$LOGS/m0-build FLOCK_WORK=$FW MODE=build GPU=0 flock "$FW/.build.lock" bash verity/protocols/proofs/flock/prover/pod/60-circuit.sh || return 6
+  RESEARCH_RUN_DIR=$LOGS/m0-build FLOCK_WORK=$FW MODE=build GPU=0 flock "$FW/.build.lock" bash verity/protocols/proof/flock/prover/pod/60-circuit.sh || return 6
   # in a work dir of its own: step 3's run.sh builds $FW's again with GPU=0 before V3c's audit
   if [ -n "${V3C_GPUS:-}" ]; then
     local tk
     tk=$(v3c_cuda) || return 6
     RESEARCH_RUN_DIR=$LOGS/m0-build-gpu FLOCK_WORK=$FW/gpu CUDA_TK=$tk MODE=build GPU=1 flock "$FW/.build.lock" \
-      bash verity/protocols/proofs/flock/prover/pod/60-circuit.sh || return 6
+      bash verity/protocols/proof/flock/prover/pod/60-circuit.sh || return 6
   fi
   # after verity-verify-proof's build, whose package it requires by path: the inference-only verdict's `inference-only-verifier --count`,
   # without which the verdict is the Python count's alone
-  (cd verity/protocols/workload_classification/training_detection/inference_only/verifier/lean && lake build inference-only-verifier) || echo "inference-only-verifier didn't build"
+  (cd verity/protocols/policy/training_detection/inference_only/verifier/lean && lake build inference-only-verifier) || echo "inference-only-verifier didn't build"
 }
 if [ -n "$COMPOSE" ]; then ( unset PYTHONPATH; compose_build ) > "$LOGS/build.log" 2>&1 &
 else ( unset PYTHONPATH; build ) > "$LOGS/build.log" 2>&1 &

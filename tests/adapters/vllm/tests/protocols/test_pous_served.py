@@ -22,16 +22,16 @@ from typing import Any
 import pytest
 import torch
 from verity import hooks as H
-from verity.protocols.compose import schemes
-from verity.protocols.resource_accounting.memory.pous.attester import challenger_party as CP
-from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
-from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
-from verity.protocols.resource_accounting.memory.pous.prover import challenger_prover as CR
-from verity.protocols.resource_accounting.memory.pous.prover import period_prover
-from verity.protocols.resource_accounting.memory.pous.prover import served
-from verity.protocols.resource_accounting.memory.pous.prover import weight_store as ws
-from verity.protocols.resource_accounting.memory.pous.verifier import period, setup
-from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import P2Params
+from verity.protocols.run import schemes
+from verity.protocols.accounting.memory.pous.attester import challenger_party as CP
+from verity.protocols.accounting.memory.pous.attester import challenger_session as CS
+from verity.protocols.accounting.memory.pous.attester import memory_attester as mc
+from verity.protocols.accounting.memory.pous.prover import challenger_prover as CR
+from verity.protocols.accounting.memory.pous.prover import period_prover
+from verity.protocols.accounting.memory.pous.prover import served
+from verity.protocols.accounting.memory.pous.prover import weight_store as ws
+from verity.protocols.accounting.memory.pous.verifier import period, setup
+from verity.protocols.accounting.memory.pous.verifier.schemes.p2 import P2Params
 from verity.runtime.stream import Side
 
 from verity_vllm import messages
@@ -45,7 +45,7 @@ ROOT = Path(__file__).resolve().parents[5]
 
 
 def _signer_module():
-    path = ROOT / "tests" / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "verifier" / "pous_test_signer.py"
+    path = ROOT / "tests" / "verity" / "protocols" / "accounting" / "memory" / "pous" / "verifier" / "pous_test_signer.py"
     spec = importlib.util.spec_from_file_location("pous_test_signer", path)
     assert spec is not None and spec.loader is not None, path
     mod = importlib.util.module_from_spec(spec)
@@ -355,9 +355,9 @@ def test_a_dropped_block_rejects(toy, tmp_path):
 def test_attaching_pous_by_name_loads_no_selector_and_no_other_scheme():
     """Attaching PoUS by name imports neither the adapter's selector nor any module of another scheme's package:
     useful work's, the network attester's or PoUB's."""
-    ra = "verity.protocols.resource_accounting."
+    ra = "verity.protocols.accounting."
     probe = ("import sys\n"
-             "from verity.protocols.compose import schemes\n"
+             "from verity.protocols.run import schemes\n"
              "from verity_vllm import messages\n"
              "messages.Exchange().attach(schemes.get(schemes.named('option', 'pous:p2-16448/v4')), {},\n"
              "                           salt_source='a5' * 32, experimental=True)\n"

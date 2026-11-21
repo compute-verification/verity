@@ -7,7 +7,7 @@
 #           own (a slot's): every step pinned to them, the prover built by the steady harness's setup
 #           (benchmarks/harness/setup/flock_prover.sh) in FLOCK_WORK on the node's disk with CUDA 13.3, CUDA_HOME
 #           where given, else the run's machine's [properties]' (benchmarks/kernels/machine.py, which the setup reads too),
-#           unpacked by the setup (verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh, from the node's apt source) where
+#           unpacked by the setup (verity/protocols/proof/flock/prover/pod/cuda-13.3.sh, from the node's apt source) where
 #           the record lists none, and refused before any lease where there is no record or its toolkit is unread; the statement
 #           fetched from the store into a scratch where server_rate.py looks (z/NAME/c{n}/stage) and its circuit held to
 #           its pin; then one gpu-lease of the card CARD (else of one card near those CPUs), pinned to them, for LEASE_MIN (100) minutes,

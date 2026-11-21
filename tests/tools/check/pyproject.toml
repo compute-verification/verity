@@ -73,11 +73,11 @@ untraced = [
 # the `verity` command, whose `verity check` the cold-start smoke runs, and
 # the test files of the one-stage audit's two longest tests (benchmarks/one_stage's and the vLLM adapter's), which ci.toml's
 # plans place by their parts.
-inputs = ["tools/check", ".agents/skills/using-slack/registry.json", "READY.json", "tools/move/rename.py", "tools/move/layout.py", "verity/protocols/proofs/flock/prover/check_build.sh", "verity/protocols/proofs/flock/prover/flock-glue-b684b12.patch",
-          "verity/protocols/proofs/flock/prover/flock-gpu-link-b684b12.patch", "verity/protocols/proofs/flock/prover/flock-link-b684b12.patch",
-          "verity/protocols/proofs/flock/prover/flock-sha512-b684b12.patch", "verity/protocols/proofs/flock/prover/flock-vtime-b684b12.patch",
-          "verity/protocols/proofs/flock/prover/flock-wide-b684b12.patch",
-          "verity/protocols/proofs/flock/prover/flock-zk-b684b12.patch", "verity/protocols/proofs/flock/prover/agreement", "verity/protocols/proofs/flock/verifier",
+inputs = ["tools/check", ".agents/skills/using-slack/registry.json", "READY.json", "tools/move/rename.py", "tools/move/layout.py", "verity/protocols/proof/flock/prover/check_build.sh", "verity/protocols/proof/flock/prover/flock-glue-b684b12.patch",
+          "verity/protocols/proof/flock/prover/flock-gpu-link-b684b12.patch", "verity/protocols/proof/flock/prover/flock-link-b684b12.patch",
+          "verity/protocols/proof/flock/prover/flock-sha512-b684b12.patch", "verity/protocols/proof/flock/prover/flock-vtime-b684b12.patch",
+          "verity/protocols/proof/flock/prover/flock-wide-b684b12.patch",
+          "verity/protocols/proof/flock/prover/flock-zk-b684b12.patch", "verity/protocols/proof/flock/prover/agreement", "verity/protocols/proof/flock/verifier",
           "verity/circuits/base", "verity/circuits/lean", "verity/commitments/lean",
           "tests/test_no_wall_clock.py", "tests/test_repository.py",
           "tools/verity/lean", "tools/verity/graph/verity_graph/contract.py", "security/Proofs/lake-manifest.json", "security/Proofs/lean-audit.json",

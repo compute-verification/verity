@@ -560,12 +560,12 @@ def test_a_cards_session_builds_kv_cu_and_registers_at_codec(node, codec, define
                  CUDA_HOME=str(node.tmp / "cuda" / "cuda-13.0"),
                  PROVER_CPUS=",".join(map(str, sorted(os.sched_getaffinity(0)))))
     assert p.returncode == 0, said(p)
-    kv = "verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.cu"
+    kv = "verity/protocols/accounting/memory/poub/prover/word_codec/kv.cu"
     (nvcc,) = [c for c in node.calls() if c.startswith("nvcc ") and c.endswith(kv)]
     assert nvcc.startswith("nvcc -O3 -gencode arch=compute_90a,code=sm_90a ")
     assert nvcc.split(" -o ")[0].endswith(f"-Xptxas -v {defines}")
     (prover,) = [c for c in node.calls() if c.startswith("card prover ")]
-    from verity.protocols.resource_accounting.memory.poub.verifier import codec as deployed
+    from verity.protocols.accounting.memory.poub.verifier import codec as deployed
     assert prover.split("--gib 16 ")[1].startswith(f"--codec {codec or deployed.DEFAULT.name}")
 
 
@@ -683,14 +683,14 @@ def test_a_red_prover_under_role_prover_ends_the_verifier_itself(node, tmp_path)
     """The same against the verifier's own process, started as by hand with the Lean verifier built: the connection
     `run.sh` opens and drops is the one it accepts, and it ends red at the closed stream rather than listening on.
     The verifier's output is read to its end, so one that listened on would hang here."""
-    from verity.protocols.resource_accounting.memory.poub.verifier.session import lean_verifier as lv
+    from verity.protocols.accounting.memory.poub.verifier.session import lean_verifier as lv
 
     port = str(free_port())
-    line = [sys.executable, str(ROOT / "verity/protocols/resource_accounting/memory/poub/verifier/poub_session/verifier_process.py"),
+    line = [sys.executable, str(ROOT / "verity/protocols/accounting/memory/poub/verifier/poub_session/verifier_process.py"),
             "--host", "127.0.0.1", "--port", port, "--out", str(tmp_path / "verifier"), "--windows", "3",
             "--window-ms", "2000", "--samples", "2773", "--jitter-ms", "5000", "--sessions", "1", "--check-workers", "1",
             "--lean-exe", str(lv.build()),
-            "--figures", str(ROOT / "tests/verity/protocols/resource_accounting/memory/poub/figures.json")]
+            "--figures", str(ROOT / "tests/verity/protocols/accounting/memory/poub/figures.json")]
     verifier = subprocess.Popen(line, cwd=ROOT, env=os.environ | {"HOME": str(tmp_path / "home")},
                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     try:

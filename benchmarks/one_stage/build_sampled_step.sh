@@ -17,14 +17,14 @@ mkdir -p "$FW" "$LOCK"
 cd "$TREE"
 (
   flock 9
-  (cd verity/protocols/proofs/flock/verifier && lake build verity-verify-proof flock-zk-server flock-lower-check)
+  (cd verity/protocols/proof/flock/verifier && lake build verity-verify-proof flock-zk-server flock-lower-check)
   rm -rf "$FW/lean-src"
-  src=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py copy verity/protocols/proofs/flock/verifier "$FW/lean-src")
-  cp tests/verity/protocols/proofs/flock/prover/lean/TmplUnit.lean "$src/"
+  src=$(python3 verity/protocols/proof/flock/prover/pod/lake_closure.py copy verity/protocols/proof/flock/verifier "$FW/lean-src")
+  cp tests/verity/protocols/proof/flock/prover/lean/TmplUnit.lean "$src/"
   printf '\n[[lean_exe]]\nname = "flock-tmpl-unit"\nroot = "TmplUnit"\n' >> "$src/lakefile.toml"
   (cd "$src" && lake build flock-tmpl-unit)
   mkdir -p "$FW/lean-bin" && cp "$src/.lake/build/bin/flock-tmpl-unit" "$FW/lean-bin/"
 ) 9> "$LOCK/harness-build.lock"
 mkdir -p "$FW/build-log"
-RESEARCH_RUN_DIR=$FW/build-log FLOCK_WORK=$FW MODE=build GPU=0 flock "$FW/.build.lock" bash verity/protocols/proofs/flock/prover/pod/60-circuit.sh
+RESEARCH_RUN_DIR=$FW/build-log FLOCK_WORK=$FW MODE=build GPU=0 flock "$FW/.build.lock" bash verity/protocols/proof/flock/prover/pod/60-circuit.sh
 ls -l "$FW/flock-gpu-link/flock/target/release/flock-circuit" "$FW/lean-bin/flock-tmpl-unit"

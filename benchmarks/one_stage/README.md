@@ -1,6 +1,6 @@
 # One-stage audit runs
 
-The one-stage audit (`verity.protocols.proofs.spot.verifier.one_stage`) end to end: serving's committed values through docket, the verifier's
+The one-stage audit (`verity.protocols.proof.spot.verifier.one_stage`) end to end: serving's committed values through docket, the verifier's
 sample, Flock's circuit prover and the Lean verifier, to the audit record with its integrity profile, then the
 negatives.
 
@@ -10,11 +10,11 @@ Figure 1 prices); and the challenger's live coins, its signed log and the Lean v
 server and no recursion on that path. The core protocols' path, every prover behind the Lean ZK server's send check, is
 `--zk-server` on SPOT's window audit (`a5.py`), its variants here, and `ZK_SERVER=1` on their shell entry points. The network
 attester, where a run has one (`a5_network_attester.py`), is a layer of its own, whose signed stamp SPOT[Flock] reads as a certified
-input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/README.md`.
+input. What the guarantee rests on: `verity/protocols/proof/spot/verifier/README.md`.
 
 - `a<N>.py`: the driver of run A<N>; its docstring says what the run adds and how to call it. A5's is SPOT's window audit,
   here because it loads the adapter, Flock's prover and the benchmarks' scripts
-  (`verity/protocols/proofs/spot/prover/audit/README.md`). `a0.py` drives no run: it holds the steps A5 and the other runs
+  (`verity/protocols/proof/spot/prover/audit/README.md`). `a0.py` drives no run: it holds the steps A5 and the other runs
   share.
 - `stage_subset.py`: a helper that runs inside the circuit prover's tree (its `verity_flock`), as `compose_circuit.py` does.
 - `a5_tp.sh` (`STANDIN=ENTRY ...`, required): A5 over the stand-in windows below, one entry a stand-in script, on a CPU machine.
@@ -124,7 +124,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   is a private directory (0700, files 0600) holding one subprotocol's `case.json` (its `serve` line, with `blobs` the
   paths of the files it reads) and its own Lean answer on it, `answer.json`, whose `commitment` is its digest (or a
   directory of such directories); for onsite, the inference-only policy's case is the docket. The composed params, commitment and
-  evidence (the composition's formats, `verity/protocols/compose/verifier/lean/README.md`) and every answer go to
+  evidence (the composition's formats, `verity/protocols/run/verifier/lean/README.md`) and every answer go to
   `--private-out` (0700, files 0600), since a case's evidence and params are witness, and so are an answer's query,
   digests and profile. `--public-out` gets only the verdict lines (each piece's and Lean's id, verdict and refusal's
   name), the composite's commitment, and each case's params digest and commitment, and is refused when it shares a
@@ -185,7 +185,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   CUDA and OS calls traced, and an A/B of base and new.
   `phase_profile.py` cuts each rep's phase at the prover's synchronizes and splits it into GPU time by kernel family and the
   host's time with the GPU idle: its OS calls (a live coin's round trip), its CUDA calls and its own compute.
-- `forged_proofs.sh`: the fixture of Flock's forged-proof negatives (`tests/verity/protocols/proofs/flock/prover/test_lean_forged_proofs.py`),
+- `forged_proofs.sh`: the fixture of Flock's forged-proof negatives (`tests/verity/protocols/proof/flock/prover/test_lean_forged_proofs.py`),
   on hidden_zk's cached builds (`forged_proofs.py`). A small A8 proof block (`LlBf16DotprodDot_v1` at K = 128) staged bound to its partition,
   with one honest sampled `--zk` session and two whose committed output word is wrong, proved with the prover's self-check
   skipped (`FC_ZK_SELF_CHECK=skip`), so the Lean verifier gets a well-formed proof of a false statement.

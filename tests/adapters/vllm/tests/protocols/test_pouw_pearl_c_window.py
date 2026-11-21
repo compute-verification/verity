@@ -20,11 +20,11 @@ from verity.commitments import docket_digest as DD
 from verity.commitments import domains as DM
 from verity.commitments import MerkleTree
 from verity.commitments.merkle import tree_levels
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.manifest import _write
-from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
+from verity.protocols.accounting.compute.pouw.prover.serving import pearl_c as PPD
+from verity.protocols.accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
+from verity.protocols.accounting.compute.pouw.prover.serving.pearl_c import window as PWR
+from verity.protocols.accounting.compute.pouw.prover.serving.pearl_c.manifest import _write
+from verity.protocols.accounting.compute.pouw.verifier.audit import (
     HM96,
     ROW_SCHEMA,
     activation_binding,
@@ -32,7 +32,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     rows_domain,
     weight_binding,
 )
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.protocols.proof.spot.verifier.one_stage import registered as G
 from verity.commitments import registered_value as RV
 
 from verity_vllm.program.predict.window_class import PearlTables

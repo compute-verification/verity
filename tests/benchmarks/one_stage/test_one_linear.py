@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "benchmarks" / "one
 import one_linear as OL  # noqa: E402
 from verity.circuits import laying  # noqa: E402
 from verity.commitments.periods import interface as I  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC  # noqa: E402
+from verity.protocols.proof.spot.verifier.one_stage import one_circuit as OC  # noqa: E402
 
 
 def test_one_template_its_blocks_between_the_floor_and_the_cap():

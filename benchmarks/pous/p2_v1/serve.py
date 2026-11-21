@@ -37,15 +37,15 @@ import numpy as np
 
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/store.py").parents[1]))
+sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "verity/protocols/accounting/memory/pous/prover/p2/p2_store/store.py").parents[1]))
 
 from p2_store import store as S
 
-from verity.protocols.resource_accounting.memory.pous.verifier import setup
-from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import expand_prefix
-from verity.protocols.resource_accounting.memory.poub.prover import audit_prover
-from verity.protocols.resource_accounting.memory.poub.prover import p2_prover
-from verity.protocols.resource_accounting.memory.poub.verifier import audit, coins, p2, receipts
+from verity.protocols.accounting.memory.pous.verifier import setup
+from verity.protocols.accounting.memory.pous.verifier.schemes.p2 import expand_prefix
+from verity.protocols.accounting.memory.poub.prover import audit_prover
+from verity.protocols.accounting.memory.poub.prover import p2_prover
+from verity.protocols.accounting.memory.poub.verifier import audit, coins, p2, receipts
 
 FIXTURE_SCHEMA = "verity-remote-bandwidth/p2-sketch-fixture/v0"
 FIXTURE_SHA512 = ("24105e1575ed49793c2eaec7f765ea71303686601c8e29bc514fd5cb6fd277c8"
