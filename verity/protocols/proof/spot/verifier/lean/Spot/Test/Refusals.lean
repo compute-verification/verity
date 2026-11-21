@@ -65,10 +65,18 @@ def v1With (o : Json) : Json :=
 #guard why? (OneStage.paramsOfJson (v1With (Json.mkObj [("program", Flock.hexOf (program Spot.OneStageZk.E3).sha512),
   ("query", otherQ)]))) == "ok"
 
-#guard (do jeq (← Flock.JsonParse.parse "{\"b\":1,\"a\":{\"d\":2,\"c\":3}}")
-  (← Flock.JsonParse.parse "{\"a\":{\"c\":3,\"d\":2},\"b\":1}")) matches .ok true
-#guard (do jeq (← Flock.JsonParse.parse "{\"v\":1.0}") (← Flock.JsonParse.parse "{\"v\":1.0}")) matches .ok false
-#guard (["{\"v\":1.0}", "{\"v\":1e0}", "{\"v\":10e-1}"].all fun s => (Core.canonicalJson s.toUTF8 matches .error _))
+/-- `jeq` of the parsed texts `a` and `b`, none where either doesn't parse. -/
+def jeqText (a b : String) : Option Bool :=
+  match Flock.JsonParse.parse a, Flock.JsonParse.parse b with
+  | .ok x, .ok y => some (jeq x y)
+  | _, _ => none
+
+#guard jeqText "{\"b\":1,\"a\":{\"d\":2,\"c\":3}}" "{\"a\":{\"c\":3,\"d\":2},\"b\":1}" == some true
+#guard jeqText "{\"v\":1.0}" "{\"v\":1.0}" == some false
+#guard ["{\"v\":1.0}", "{\"v\":1e0}", "{\"v\":10e-1}"].all fun s =>
+  match Core.canonicalJson s.toUTF8 with
+  | .error _ => true
+  | .ok _ => false
 
 /-- The challenger session's release log after its head: the family `draw`'s root `ab` recorded, a coin tree's round
 opened on the link's stream, then the coin released: a coin of the sample released after a round opened. -/
