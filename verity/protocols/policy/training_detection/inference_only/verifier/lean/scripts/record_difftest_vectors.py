@@ -1777,7 +1777,8 @@ def _break(rng, made: dict, how: str) -> bool:
             found = [(r, types.index(types[nodes[r[0]]["args"][r[1]]["type"]][2])) for r in runs
                      if types[nodes[r[0]]["args"][r[1]]["type"]][2] in types]
         elif how == "row-computed":
-            found = [(r, k) for r in runs for k in range(r[0]) if nodes[k]["args"] and r[3] % 2 == 0
+            # A grid of one run per lane is an explicit part's, which the decoder refuses as a grid (`grid-spelled`).
+            found = [(r, k) for r in runs for k in range(r[0]) if nodes[k]["args"] and r[3] % 2 == 0 and r[3] >= 4
                      and len(set(_leaves(types[nodes[r[2]]["out"]])[:r[3]])) == 1
                      and _leaves(types[nodes[k]["out"]])[:r[3]] == _leaves(types[nodes[r[2]]["out"]])[:r[3]]]
         else:
