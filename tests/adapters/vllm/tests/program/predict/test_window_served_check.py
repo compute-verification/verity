@@ -6,7 +6,6 @@ from __future__ import annotations
 import json
 import re
 from collections import Counter
-from dataclasses import replace
 
 import pytest
 from verity.circuits import partition_object as PO
@@ -63,7 +62,7 @@ def test_a_tiny_window_the_older_composer_refuses_passes_and_names_its_small_tem
 def test_run_inputs_of_the_tiny_window_are_read_across_its_ranges():
     """About a minute, the population's Program built: the one class here whose run input nodes are each read by several
     ranges of C's root, which `interface.run_input_reads` takes as one read a node, unit i its row i."""
-    circuit = replace(_window(S._registered(), CLASS, *WHOLE, GRAIN), run_inputs=True)
+    circuit = _window(S._registered(), CLASS, *WHOLE, GRAIN)
     built = circuit.program()
     tp = PO.TemplatePartition(*built)
     filled = IF.filled_ports(circuit.registered, circuit.wires, circuit.ingress, circuit.boundary_reads)
