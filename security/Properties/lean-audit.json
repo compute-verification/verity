@@ -15196,8 +15196,6 @@
    "Properties.Poub.CoinBySlot": "unstated: one of refresh's code-side statements (Properties.Poub.Remote.Refresh), proved by Properties.Poub.coinBySlot; it gets a guarantee entry, with its shape and record, after tonight's landing",
    "Flock.Chain.V5Rows": "unstated: the adapter from a unit correct in the templated statement's key circuit to its rows; no theorem states it yet.",
    "Flock.Chain.LowerEval": "unstated: the lowered net's rows, where they hold, evaluate as the Definition bit for bit; no theorem states it yet.",
-   "Flock.Chain.BlockEval": "unstated: the block's lifted Program evaluates, on C's input port values, to the block's local evaluation at its output ports; no theorem states it yet.",
-   "Flock.Chain.BlockCorrect": "unstated: rows of the block's lowered net agreeing with a trace of C at the ports make the block correct in C; no theorem states it yet.",
    "Flock.Chain.PortsBind": "unstated: a block's openings and the statement's at one commitment give C's port values as the statement's port columns, or a SHA-512 collision; no theorem states it yet.",
    "Flock.Chain.DescEqPartOf": "unstated: the inference-only check's three counts are partOf's; no theorem states it yet.",
    "Flock.OfProgram.InlineEval": "unstated: the inlining's bit gates compute C's gates' bits on every description; no theorem states it yet.",
