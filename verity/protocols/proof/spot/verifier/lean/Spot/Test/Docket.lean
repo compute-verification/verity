@@ -296,8 +296,8 @@ def supX : String := (regX Spot.OneStageZk.E3).replace "RegisteredInput1_v1" "Su
   "R7-supplied-source"
 -- a table input's mark is no source: with no held table its rows have none, with the table pinned they do
 #guard unsourced { verifier supX with supplied := #[("x", #[])], marks := #[("x", anchorMark "t")] } == #["x"]
-#guard unsourced { verifier supX with supplied := #[("x", #[])], marks := #[("x", anchorMark "y")],
-  weightsOfRecord := some (ofRecord PINS) } == #[]
+def supT : Verifier := { verifier supX with supplied := #[("x", #[])], marks := #[("x", anchorMark "y")] }
+#guard unsourced { supT with weightsOfRecord := some (ofRecord PINS) } == #[]
 
 /-! A table named by a table input of C (`tableEntries`): its pin is R7's expected entry and the table inputs' source
 (`heldTables`), never the record's entry. `t` is no parameter of C, pinned by the registration of record and named by
@@ -328,9 +328,9 @@ def addEntry (e : Json) (j : Json) : Json := match getD j "registered" with
 #guard ((tableEntries VT).map fun e => (e.value, e.leaves, e.words, e.domain)) == #[("t", 4, 1, TDOMAIN)]
 #guard heldTables VT == #[("t", ROOT, TDOMAIN)]
 -- a pin no mark names, a mark of a value nothing pins, a value already expected: no entry
-#guard tableEntries { VT with marks := #[] } == #[]
-#guard tableEntries { VT with marks := #[("a", anchorMark "z")] } == #[]
-#guard tableEntries { VT with marks := #[("a", anchorMark "x")], weightsOfRecord := some (ofRecord [tablePin "x"]) } == #[]
+#guard (tableEntries { VT with marks := #[] }).isEmpty
+#guard (tableEntries { VT with marks := #[("a", anchorMark "z")] }).isEmpty
+#guard (tableEntries { VT with marks := #[("a", anchorMark "x")], weightsOfRecord := some (ofRecord [tablePin "x"]) }).isEmpty
 -- the table registered at its pin passes; left out, or at another root or domain, it is refused
 #guard codes VT == #[]
 #guard codes { VT with marks := #[("a", anchorMark "t"), ("b", anchorMark "t" "registered.domain/v1")] } == #[]
