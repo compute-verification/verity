@@ -28,7 +28,7 @@ are empty roots lake or the Lean check needs, 8 are not established (read at `on
 | --- | --- | --- |
 | the scheme | how a product's operands become committed, checked values | `prover/schemes/` |
 | the build | `build.sh`, refused unless `build_gate.py` passes its `sass_gate.json` | `prover/kernels/pearl_c_sm90/` |
-| the device driver | not yet one: each kernel tree's own `run.py`, run by `run_device.py` | `prover/kernels/` |
+| the device driver | not yet one: each kernel tree's own `run.py`, run by `run_device.py` | [`prover/kernels/`](prover/kernels/README.md) |
 | the hardware seam | GPU arithmetic, Python and Lean | `verity/circuits/silicon/`, `verity/circuits/evaluate/` |
 | the commitment seam | hm96 rows in frame-v3-sha512 trees; PoUW's tagged bindings | `verifier/lean/commit/` |
 | the prover | serves beside the model, noises and commits each registered product | `prover/serving/` |

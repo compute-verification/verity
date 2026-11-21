@@ -2,6 +2,7 @@
 
 The served path's exact kernels and what a kernel build ships with. Each kernel is held bit for bit to its CPU reference or
 Definition before anything is timed; nothing here changes a committed format, and nothing a verifier runs reads this code.
+PoUW's GPU kernels themselves are [`verity/protocols/accounting/compute/pouw/prover/kernels/`](../../verity/protocols/accounting/compute/pouw/prover/kernels/README.md).
 
 | Directory or file | What it holds |
 |---|---|
