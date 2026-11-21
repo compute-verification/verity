@@ -13,9 +13,9 @@ import sys
 from pathlib import Path
 
 from verity.circuits import codec
-from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P
-from verity.protocols.proofs.spot.prover import docket as DK
+from verity.protocols.proof.spot.verifier import service as S
+from verity.protocols.proof.spot.verifier.one_stage import partition as P
+from verity.protocols.proof.spot.prover import docket as DK
 
 HERE = Path(__file__).resolve().parent
 

@@ -46,7 +46,7 @@ fi
 if on flock && { [ -n "${STEPS:-}" ] || [ ! -x "$FLOCK_WORK/flock-gpu-link/flock/target/release/flock-circuit" ]; }; then
   mkdir -p "$FLOCK_WORK" "$OUT/m0-build"
   (unset PYTHONPATH; RESEARCH_RUN_DIR=$OUT/m0-build MODE=build GPU=0 flock "$FLOCK_WORK/.build.lock" \
-     bash verity/protocols/proofs/flock/prover/pod/60-circuit.sh) > "$R/flock-build.log" 2>&1 \
+     bash verity/protocols/proof/flock/prover/pod/60-circuit.sh) > "$R/flock-build.log" 2>&1 \
     || { tail -n 20 "$R/flock-build.log" | cut -c1-300 > "$OUT/flock_tail.txt"; log "flock: NOT built (out/flock_tail.txt)"; exit 3; }
   log "flock: built"
 fi

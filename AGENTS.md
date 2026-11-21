@@ -49,7 +49,7 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
     `protocol.py`, `config.py`, which reads a configuration, and `errors.py`) and `verity/runtime/`, which runs parties
     over channels. `verity_config`, its own distribution, is `tools/config/`.
   - `tools/difftest/`: the differential tests that hold the Python to each Lean (`verity_difftest`).
-    `verity/protocols/compose/verifier/live_challenger/`: the auditor device's challenger service, from `benchmarks/` too.
+    `verity/protocols/run/verifier/live_challenger/`: the auditor device's challenger service, from `benchmarks/` too.
 - `calibration/`: the cards, the probes and the measurements that choose parameters. `calibration/hardware/` is the
   data sheets, and data only: `cards/` (one TOML data sheet per GPU, host or server model, or time
   base) and `nodes/` (one per kind of node). The Site's readers (`verity.device`'s `load_card` and `load_node`) read them.
@@ -336,8 +336,8 @@ that holds it. Nobody is asked first, and a superseded PR is not left open as a 
   which every area and protocol reads; an area defines only its own, and no new Lean or Python adds a second definition
   (`tests/test_lean_vocabulary.py`).
 - **Lean is code or security analysis.** Code stays with its subsystem and never requires `security/`: Flock's
-  executable verifier and the ZK server (`verity/protocols/proofs/flock/verifier/`, with the release side in
-  `verity/protocols/proofs/recursion/verifier/zk_server/`), the PoUS grader, the network attester's program, the inference-only policy's check and
+  executable verifier and the ZK server (`verity/protocols/proof/flock/verifier/`, with the release side in
+  `verity/protocols/proof/recursion/verifier/zk_server/`), the PoUS grader, the network attester's program, the inference-only policy's check and
   PoUB's verifier, each in its protocol's `lean/` with a difftest. Under `FC_ZK_SERVER=1` every byte that leaves is
   computed by `Flock.ZkServer`; the ZK theorem (`Flock.zk_server_lean_loop`) still reads the released bytes through
   hypotheses not yet proved about the live path. The analysis is `security/`, three trees: definitions

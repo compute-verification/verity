@@ -708,7 +708,7 @@ def test_the_ran_with_line_names_the_coins_and_the_parameters_of_their_key(tmp_p
     """A local challenger's key is at its development parameters; a gate's is its key record's, deployed only at
     `lms.DEPLOYED`'s, and without the record no word is stated. The challenger party's host on this machine, which
     `verity run` hands the path prover as ``loopback:HOST:PORT``, is named a development session's, never an auditor's."""
-    from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
+    from verity.protocols.proof.spot.verifier.challenger import challenger as Ch
 
     assert PP.ran_with("local") == ("ran with: coins local challenger; parameters development (the local challenger's LMS key "
                                     "at W=4, H=5, not the deployed W=1, H=20)")
@@ -1247,7 +1247,7 @@ def test_window_commits_design_is_the_one_its_rate_names_over_the_circuit_and_a_
     refused by name."""
     from verity.circuits.defs import bind
     from verity.circuits.ops import gemm as G
-    from verity.protocols.proofs.spot.verifier import service as S
+    from verity.protocols.proof.spot.verifier import service as S
 
     small, large = (bind(G.ScaledMmS8Coordinate, K=k, **G.GEMM_SM120_S8) for k in (64, 128))
     circuit = IF.Circuit("test", ((small, 3), (large, 37)))

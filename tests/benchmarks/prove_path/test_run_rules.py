@@ -16,7 +16,7 @@ import subprocess
 from pathlib import Path
 
 from verity.commitments.periods.population import population_program
-from verity.protocols.proofs.spot.verifier import service as S
+from verity.protocols.proof.spot.verifier import service as S
 from verity_vllm.pipeline import serving_rows as SRW
 
 BENCH = ((Path(__file__).resolve().parents[3] / "benchmarks" / "prove_path"))

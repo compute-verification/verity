@@ -24,14 +24,14 @@ from verity.circuits.evaluation import evaluate_batch
 from verity.commitments.gates import embedding as E
 from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
-from verity.protocols.proofs.spot.prover import docket as DK
-from verity.protocols.proofs.spot.verifier.one_stage import registered as CR
+from verity.protocols.proof.spot.prover import docket as DK
+from verity.protocols.proof.spot.verifier.one_stage import registered as CR
 from verity.commitments import registered_value as RV
-from verity.protocols.resource_accounting.compute.pouw.verifier.audit import hm96_salt
-from verity.protocols.resource_accounting.network.prover import ingress_scan as IS
-from verity.protocols.resource_accounting.network.prover import scan_state_rows as SR
-from verity.protocols.resource_accounting.network.verifier import network_attester as W
-from verity.protocols.resource_accounting.network.verifier.id_form import id_request
+from verity.protocols.accounting.compute.pouw.verifier.audit import hm96_salt
+from verity.protocols.accounting.network.prover import ingress_scan as IS
+from verity.protocols.accounting.network.prover import scan_state_rows as SR
+from verity.protocols.accounting.network.verifier import network_attester as W
+from verity.protocols.accounting.network.verifier.id_form import id_request
 
 from tests.program.predict import test_steps as S
 from tests.program.predict.test_window_circuit import (
@@ -295,7 +295,7 @@ def _traffic(cls: WC.WindowClass, prompts, arrivals) -> tuple[list[bytes], dict[
     import sys
     from pathlib import Path
 
-    spec = importlib.util.spec_from_file_location("scan_traffic", Path(__file__).parents[6] / "tests" / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "scan_traffic.py")
+    spec = importlib.util.spec_from_file_location("scan_traffic", Path(__file__).parents[5] / "verity" / "protocols" / "accounting" / "network" / "verifier" / "scan_traffic.py")
     assert spec is not None and spec.loader is not None
     ST = sys.modules["scan_traffic"] = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(ST)

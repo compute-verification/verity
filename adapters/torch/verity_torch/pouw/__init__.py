@@ -1,4 +1,4 @@
-"""PoUW's serving code over PyTorch: what `verity.protocols.resource_accounting.compute.pouw.prover.serving` leaves to the workload.
+"""PoUW's serving code over PyTorch: what `verity.protocols.accounting.compute.pouw.prover.serving` leaves to the workload.
 
 `hand_in` hands its implementations in (`serving.tensors.use`, `use_pearl_c`), and importing it does too:
 `tensors_device.TENSORS`, the tensors on the device (pinned host copies, streams, raw pointers), and Pearl-C's run with
@@ -21,7 +21,7 @@ import importlib
 from types import SimpleNamespace
 from typing import Any
 
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import tensors as _tensors
+from verity.protocols.accounting.compute.pouw.prover.serving import tensors as _tensors
 
 __all__ = ["PearlCDeviceRun", "RowTableLibrary", "hand_in", "hook_steps", "pearl_c_weight_roots", "row_table_side_stream"]
 

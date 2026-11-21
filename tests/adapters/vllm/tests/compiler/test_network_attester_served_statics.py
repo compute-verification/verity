@@ -13,7 +13,7 @@ from types import SimpleNamespace
 
 import pytest
 from verity.commitments import advice as ADV
-from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
+from verity.protocols.proof.spot.verifier.one_stage import registered as REG
 
 from verity_vllm.compiler import compile_slice as CS
 from verity_vllm.compiler import served_rows as SR

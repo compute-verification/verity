@@ -271,8 +271,8 @@ def ran_with(challenger: str, key_record: Mapping[str, Any] | None = None) -> st
     development session: its parameters read ``development`` whatever its key's W and H, which a key record adds as detail,
     so no reader of the line takes its coins for a deployed challenger's."""
     from verity.commitments.crypto import lms
-    from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
-    from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
+    from verity.protocols.proof.spot.verifier.challenger import challenger as Ch
+    from verity.protocols.proof.spot.verifier.challenger import challenger_session as AC
 
     dep = lms.DEPLOYED
     if challenger == "local":
@@ -841,7 +841,7 @@ def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str], *, kept_ingress: 
     (`KeptIngress`): the caller passes it, since SPOT reads the attester's record as a certified input and imports
     neither the attester nor a benchmark. None where the front kept no run; ValueError, naming why, where the kept run
     doesn't give the window's scan or the caller passed no reader."""
-    from verity.protocols.resource_accounting.network.prover import ingress_scan as IS, scan_state_rows as SR
+    from verity.protocols.accounting.network.prover import ingress_scan as IS, scan_state_rows as SR
 
     if kept_ingress is None:
         raise ValueError("a window's scan reads the network attester run its serve kept, or that it kept none, by the "
@@ -933,11 +933,11 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
     from verity_vllm.program.predict import scan_state as SS
     from verity_vllm.program.predict import window_circuit as WC
     from verity_vllm.program.predict import window_rows as WRS
-    from verity.protocols.resource_accounting.network.prover import scan_state_rows as SR
+    from verity.protocols.accounting.network.prover import scan_state_rows as SR
     from verity_vllm.program.predict import window_weights as WW
     from verity_vllm.program.predict.build import Unexpressible
     from verity_vllm.program.predict.steps import compile_steps
-    from verity.protocols.proofs.spot.verifier import service as S
+    from verity.protocols.proof.spot.verifier import service as S
     from verity.circuits.codec import program_digest
 
     seconds: dict[str, float] = {}

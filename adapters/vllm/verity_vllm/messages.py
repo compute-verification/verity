@@ -25,9 +25,9 @@ from typing import Any, NamedTuple
 
 from verity import hooks as H
 from verity.channel import Message, MessageTypes, Refused
-from verity.protocols.proofs.spot.prover import workload as spot
-from verity.protocols.compose import schemes as declarations
-from verity.protocols.resource_accounting import scheme as schemes
+from verity.protocols.proof.spot.prover import workload as spot
+from verity.protocols.run import schemes as declarations
+from verity.protocols.accounting import scheme as schemes
 from verity_vllm import settings
 
 __all__ = ["Exchange", "append", "attach_listed", "body", "build", "close", "current", "declaring", "line", "lines", "listed_refusals",
@@ -85,7 +85,7 @@ class Exchange:
     def attach(self, scheme: schemes.Scheme, given: Mapping[str, Any] | None = None, *,
                gate: Callable[..., Mapping[str, Any]] | None = None, private: str | Path | None = None,
                **launcher: Any) -> Any:
-        """Attach ``scheme`` with ``ctx`` (`verity.protocols.resource_accounting.scheme`) ``{"settings": its settings,
+        """Attach ``scheme`` with ``ctx`` (`verity.protocols.accounting.scheme`) ``{"settings": its settings,
         ``given`` over its defaults; "build": this build's key; "gate": ``gate``; "private"; **launcher}``: its
         ``attach(self, ctx)``, then each of its ``requests(ctx)`` its attach did not file; returns what attach returns.
         ``gate`` is the auditor device's challenger gate in its own words, ``gate(*words) -> answer``

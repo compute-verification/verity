@@ -1,6 +1,6 @@
 # Attacks on the stacking property
 
-The encode bound of the bandwidth audit (PoUB, `verity/protocols/resource_accounting/memory/poub/verifier`) rests on
+The encode bound of the bandwidth audit (PoUB, `verity/protocols/accounting/memory/poub/verifier`) rests on
 the stacking property (property/v1) and on the gate model's unit counts. This directory attacks both: a refusal suite
 of Programs property/v1 must refuse or fully budget, beside the honest shapes it must pass, and constructions against
 the gate model's conjectures.

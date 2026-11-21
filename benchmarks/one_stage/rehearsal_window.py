@@ -101,7 +101,7 @@ def cut(PP: Any, serve: dict, cls: Any, tables: Any, scheme: str, w: Path) -> di
     takes (`check_provable`): ``rehearsal_limits.py`` and ``prove_path.py``'s class-circuit refuse that class."""
     import served_compare as SC
     from verity_vllm.program.predict import window_circuit as WC
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR
+    from verity.protocols.accounting.compute.pouw.prover.serving.pearl_c import window as PWR
 
     facts = SC.facts(WC.lower(PP.registered_of_serve(serve, None, None, PP.CAP_BITS), cls, tables=tables))
     params, calls = facts["params"], facts["calls"]

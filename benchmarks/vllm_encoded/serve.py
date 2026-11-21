@@ -620,7 +620,7 @@ def main() -> None:
     binder = None
     if args.store:
         from verity_vllm import messages
-        from verity.protocols.compose import schemes
+        from verity.protocols.run import schemes
         window = {}
         if args.store_window:
             window = {"challenge": lambda t: hashlib.sha512(b"vllm_encoded store window" + t.to_bytes(8, "big")).digest()[:32],

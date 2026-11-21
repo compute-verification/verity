@@ -15,8 +15,8 @@ import numpy as np
 import pytest
 from verity.circuits.types import Array, Value
 from verity.commitments.periods import interface as IF
-from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import IDENTIFIED
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import (
+from verity.protocols.accounting.compute.pouw.verifier.kernel_schemes import IDENTIFIED
+from verity.protocols.accounting.compute.pouw.prover.serving.pearl_c import (
     ROW_ALIGN,
 )
 

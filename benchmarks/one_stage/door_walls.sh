@@ -16,27 +16,27 @@ UV=$(command -v uv || echo $HOME/.local/bin/uv)
 export PATH=$HOME/.elan/bin:$PATH
 command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
 L=${DOOR_WALLS_CACHE:-$HOME/.cache/door-walls}; mkdir -p $L
-LSHA=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py key verity/protocols/proofs/flock/verifier)
+LSHA=$(python3 verity/protocols/proof/flock/prover/pod/lake_closure.py key verity/protocols/proof/flock/verifier)
 LOW=$L/lean-$LSHA/flock-lower-check
 (
   exec 9>$L/lean.lock; flock 9
   if [ ! -x $LOW ]; then
     S=$(mktemp -d); trap 'rm -rf $S' EXIT
-    SRC=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py copy verity/protocols/proofs/flock/verifier $S) \
+    SRC=$(python3 verity/protocols/proof/flock/prover/pod/lake_closure.py copy verity/protocols/proof/flock/verifier $S) \
       && (cd $SRC && lake build flock-lower-check) && mkdir -p $L/lean-$LSHA && cp $SRC/.lake/build/bin/flock-lower-check $LOW
   fi
 ) > $O/build-lean.log 2>&1 || { tail -30 $O/build-lean.log; exit 1; }
 echo "LOWER $LOW $(sha256sum $LOW | cut -c1-16)"
 PIECE_ARG=""
 if [ "${PIECE:-0}" = 1 ]; then
-  SPOT=verity/protocols/proofs/spot/verifier/lean
-  PSHA=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py key $SPOT)
+  SPOT=verity/protocols/proof/spot/verifier/lean
+  PSHA=$(python3 verity/protocols/proof/flock/prover/pod/lake_closure.py key $SPOT)
   PEX=$L/spot-$PSHA/spot-difftest
   (
     exec 9>$L/spot.lock; flock 9
     if [ ! -x $PEX ]; then
       S=$(mktemp -d); trap 'rm -rf $S' EXIT
-      SRC=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py copy $SPOT $S) \
+      SRC=$(python3 verity/protocols/proof/flock/prover/pod/lake_closure.py copy $SPOT $S) \
         && (cd $SRC && lake build spot-difftest) && mkdir -p $L/spot-$PSHA && cp $SRC/.lake/build/bin/spot-difftest $PEX
     fi
   ) > $O/build-spot.log 2>&1 || { tail -30 $O/build-spot.log; exit 1; }

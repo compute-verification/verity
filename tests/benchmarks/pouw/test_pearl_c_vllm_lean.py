@@ -47,7 +47,7 @@ pytestmark = pytest.mark.slow
 @pytest.fixture(scope="module")
 def run(tmp_path_factory) -> tuple[Path, Path, dict]:
     """The serve dir, ``verify``'s document's path and the document, accepted."""
-    from verity.protocols.resource_accounting.compute.pouw.verifier import verifier as PV
+    from verity.protocols.accounting.compute.pouw.verifier import verifier as PV
 
     tmp = tmp_path_factory.mktemp("lean")
     with pytest.MonkeyPatch.context() as mp:
@@ -157,8 +157,8 @@ def test_the_lean_is_given_w_and_on_live_coins_is_asked_for_a_verdict_of_record(
     `window.LIVE_SCHEME`) adds ``--of-record``; both after the rule on a tile over its inert-work bound and the test
     instance and before the passes, which stay last."""
     import shutil
-    from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
-    from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
+    from verity.protocols.accounting.compute.pouw.verifier import window as Wd
+    from verity.protocols.proof.spot.verifier.challenger import challenger as Ch
 
     d, verify, doc = run
     (wfile := tmp_path / "w.json").write_text("{}")
@@ -197,7 +197,7 @@ def test_a_lean_that_panics_beside_an_agreeing_accept_with_exit_0_is_refused_by_
     """A ``pouw-pearlplus`` that writes a panic line (a ``PANIC`` one, or an out-of-range index's with none) and prints the
     Python's own accept with exit 0 gives no answer: the step runs it under `lean_child` and refuses it by
     `lean_child.LEAN_PANIC`, whatever it printed."""
-    from verity.protocols.proofs.spot.verifier.one_stage import lean_child as LC
+    from verity.protocols.proof.spot.verifier.one_stage import lean_child as LC
 
     d, verify, doc = run
     exe = stub(tmp_path, printout(doc), 0)
@@ -212,7 +212,7 @@ def test_a_lean_killed_by_a_signal_or_with_no_verdicts_exit_status_is_refused_by
     """A ``pouw-pearlplus`` that prints the Python's own accept, then ends by a signal or with a status that is no
     verdict's (`served_passes.PEARLPLUS_EXITS`: 0 accept, 1 reject; 134 an abort's) gives no answer:
     `lean_child.LEAN_EXIT`, whatever it printed."""
-    from verity.protocols.proofs.spot.verifier.one_stage import lean_child as LC
+    from verity.protocols.proof.spot.verifier.one_stage import lean_child as LC
 
     d, verify, doc = run
     exe = stub(tmp_path, printout(doc), 0)
@@ -319,7 +319,7 @@ def test_verify_sh_exits_on_the_leans_verdict_on_each_pass(tmp_path, monkeypatch
     import os
     import subprocess
 
-    from verity.protocols.resource_accounting.compute.pouw.verifier import verifier as PV
+    from verity.protocols.accounting.compute.pouw.verifier import verifier as PV
 
     monkeypatch.setattr(PV, "coins", lambda n: SOURCE[:n])
     for k in ("PEARLC_CHALLENGER_GATE", "PEARLC_CHALLENGER_PEER"):

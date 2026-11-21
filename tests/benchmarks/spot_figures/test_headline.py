@@ -822,7 +822,7 @@ def test_a_planner_row_is_priced_at_a_steady_row_through_its_map(tmp_path):
 def test_a_row_is_a_case_under_a_plan():
     """Every case comes under every plan, the planner's own under the case's bare name; a plan's keywords are the
     planner's, and a held κ is one of its grid."""
-    from verity.protocols.proofs.spot.prover.optimize import KAPPAS
+    from verity.protocols.proof.spot.prover.optimize import KAPPAS
 
     assert set(H.ROWS) == {case + more for case in H.CASES for more in H.PLANS}
     for case in H.CASES:
