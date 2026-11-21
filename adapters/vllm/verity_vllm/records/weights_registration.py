@@ -11,6 +11,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from verity.circuits.codec import canonical_json
+
 from verity_vllm.records.fields import RecordError, only, required
 
 __all__ = ["WeightsRegistration"]
@@ -29,6 +31,7 @@ class WeightsRegistration:
     grain: Mapping[str, int]                          # the window grain its weight parameters are cut at
     values: Mapping[str, Mapping[str, Any]]           # each weight parameter's entry, `ENTRY`'s fields
     unrooted: Mapping[str, str]                       # each weight parameter with no root, and why
+    reads: tuple[tuple[str, str, str], ...] = ()      # (template, parameter, value) the planned classes read, sorted, once each
 
     @classmethod
     def of(cls, doc: Any, where: str) -> WeightsRegistration:
@@ -40,7 +43,7 @@ class WeightsRegistration:
         if doc.get("schema") != SCHEMA:
             raise RecordError(where, "schema", f"is {doc.get('schema')!r}, not {SCHEMA}: a committer's weights registration, "
                                                "never a weights record")
-        only(doc, ("schema", "program", "model", "grain", "values", "unrooted"), where)
+        only(doc, ("schema", "program", "model", "grain", "values", "unrooted", "reads"), where)
         model, values = required(doc, "model", where, Mapping), required(doc, "values", where, Mapping)
         if not values:
             raise RecordError(where, "values", "is empty: a registration registers at least one weight")
@@ -49,14 +52,27 @@ class WeightsRegistration:
             only(e, ENTRY, where, f"values.{p}.")
             if e.get("value") != p or not (isinstance(e.get("root"), str) and ROOT.fullmatch(e["root"])):
                 raise RecordError(where, f"values.{p}", "doesn't name its parameter with a root of 64 bytes in hex")
+        reads = doc.get("reads", [])
+        if not (isinstance(reads, list) and all(isinstance(r, list) and len(r) == 3 and all(isinstance(x, str) for x in r)
+                                                for r in reads)):
+            raise RecordError(where, "reads", "is not a list of [template, parameter, value] strings")
+        if [tuple(r) for r in reads] != sorted(set(map(tuple, reads))):
+            raise RecordError(where, "reads", "is not sorted by (template, parameter, value) with each read once")
         return cls(program=required(doc, "program", where, str), repo=required(model, "repo", where, str, "model.repo"),
                    revision=required(model, "revision", where, str, "model.revision"),
-                   grain=required(doc, "grain", where, Mapping), values=values, unrooted=required(doc, "unrooted", where, Mapping))
+                   grain=required(doc, "grain", where, Mapping), values=values, unrooted=required(doc, "unrooted", where, Mapping),
+                   reads=tuple(tuple(r) for r in reads))
 
     def dump(self) -> dict[str, Any]:
         return {"schema": SCHEMA, "program": self.program, "model": {"repo": self.repo, "revision": self.revision},
                 "grain": dict(self.grain), "values": {p: dict(e) for p, e in sorted(self.values.items())},
-                "unrooted": dict(sorted(self.unrooted.items()))}
+                "unrooted": dict(sorted(self.unrooted.items())), **({"reads": [list(r) for r in self.reads]} if self.reads else {})}
+
+    def of_record(self) -> bytes:
+        """The weights' registration of record as the verifier's check reads it (`docket.weights_held`): ``{program, values,
+        reads}`` in canonical JSON, whose SHA-512 is the digest the auditor's side holds."""
+        return canonical_json({"program": self.program, "values": {p: dict(e) for p, e in sorted(self.values.items())},
+                               "reads": [list(r) for r in self.reads]})
 
     @property
     def roots(self) -> dict[str, str]:

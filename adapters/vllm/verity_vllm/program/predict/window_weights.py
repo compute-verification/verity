@@ -269,7 +269,8 @@ def record_words(registered: Any, checkpoint_dir: str, checkpoints_manifest: str
 
 def weights_registration(registered: Any, salts_to: str | Path, checkpoint_dir: str, served: Any = None,
                          checkpoints_manifest: str | None = None, kv_cache_dtype: str = "auto",
-                         grain: Grain = _GRAIN, tables: Any = None, served_params: Any = ()) -> dict[str, Any]:
+                         grain: Grain = _GRAIN, tables: Any = None, served_params: Any = (),
+                         reads: Any = ()) -> dict[str, Any]:
     """The committer's registration of the weights it serves (`records.weights_registration`), written once per model
     before the first window's coins and pinned by the verifier (core's ``registration.check(pinned=...)``,
     ``records_audit.py --registered`` and ``--pins``, `registration_pins`): each weight parameter the class circuit
@@ -286,7 +287,11 @@ def weights_registration(registered: Any, salts_to: str | Path, checkpoint_dir: 
 
     A field the weights record holds to an analytic table is registered at ``tables``' words for that table (the words the
     engine serves, by the record's table name: ``cos_sin``, the rotary table), refused by name unless they are within its
-    bound (`_table_words`); a table ``tables`` doesn't name leaves its parameters unrooted."""
+    bound (`_table_words`); a table ``tables`` doesn't name leaves its parameters unrooted.
+
+    Its ``reads`` are those of ``reads``, ``(template, parameter, value)``, of a value it roots: the verifier's walk of the
+    marked Programs of the classes the serve registers, planned before it is written (``prove_path.py weights-registration
+    --class``); the check refuses a read a window's Program shows and the registration doesn't declare (`R8-undeclared`)."""
     r, fields, params, of = _weights(registered, grain, served_params)
     entries: dict[str, dict[str, Any]] = {}
     salts: dict[str, bytes] = {}
@@ -333,7 +338,8 @@ def weights_registration(registered: Any, salts_to: str | Path, checkpoint_dir: 
                          "shards hold it, an analytic table only within its bound)")
     SF.write(salts_to, salts)
     return WeightsRegistration(program=r.digest, repo=model["repo"], revision=model["revision"], grain=asdict(grain),
-                               values=entries, unrooted=_unrooted(rec, of, entries)).dump()
+                               values=entries, unrooted=_unrooted(rec, of, entries),
+                               reads=tuple(sorted({(t, p, v) for t, p, v in reads if v in entries}))).dump()
 
 
 def registration_pins(registration: Any, record: dict[str, Any]) -> dict[str, str]:
