@@ -2037,6 +2037,11 @@
    "type_hash": "5b54858ae0e0b60f1cce64bc64ccc7200488e9d62ca1a448730e815fe0306fb8",
    "unfolded_hash": "a3991fa16761604e232fa86364a9440fd4fe15d17a17094a23da0123f4898053"
   },
+  "Properties.Poub.liveIsRun": {
+   "type_hash": "99abc2a28cc4a83999bc3628c74714b50f97284441c49bb7c05e92c1cbc906c3",
+   "unfolded_hash": "916bea63f3cae6b67229adeb78424aa0f0091576ae7fd6e4ccdda6b5f2aa11c5",
+   "why": "honest: its premise is a run of the verifier's process (`Live.run`) on a session's requests, and no lemma yet evaluates `Live.run` (its events through `Verifier.eventOn`, its checks through `Verifier.windowCheck`) on any process; nontrivial: its conclusion is an equation of `Shared.run`'s results and state with the process's, and no lemma yet shows `Shared.run` on a transcript differing from a process's replies"
+  },
   "Properties.Poub.openingsUnreadUntilSampled": {
    "type_hash": "ae32e5651947015de3a81a1afe4e0d8da22e56f083a82c409afc8eaca2aa6d65",
    "unfolded_hash": "59bbe61b14e80114facacdacbec6872b75e4fada532d6674a5091d39039855b7",
