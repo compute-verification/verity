@@ -7,7 +7,9 @@ the scan's sampled blocks.
 
 Not yet: on the tip the network audit is not run: the attester's piece writes NOT RUN, nothing proves a scan block, and
 no window's verdict reads the scan or the period check. A period whose schedule has connection rows has no Lean verdict
-at all: the Lean period check refuses it, and only a Python check reads those rows.
+at all: the Lean period check refuses it, and only a Python check reads those rows. The period check adds each audit's
+count of unregistered input (`free`) into its bound as its caller hands it, without computing it from the registered
+circuit; and the jitter bound it uses is not in the attester's signed schedule, so any value of at least 1 is accepted.
 Even when run, under a uniform sample the scan's few blocks may all go unsampled, so the bound holds for a window only at
 the sample's chance of hitting them, until accounting blocks can always be proved.
 
