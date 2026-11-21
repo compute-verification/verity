@@ -153,6 +153,28 @@ def sizes (strata : Array (String × Array (Nat × Nat))) : Option (Array Nat) :
     out := out.push (at_ - lo)
   return out
 
+/-- **The ranges' cover**: the ranges `rs`, a range `[a, b)` with `b ≤ a` holding no unit, are a disjoint cover of
+`[0, N)`: the nonempty ones, sorted by start, each start where the last ended, from 0. `N`, or none. The order `rs`
+lists them in is not read (`Slots.coverRanges_iff`: their units are a permutation of `0, …, N - 1`). -/
+def coverRanges (rs : List (Nat × Nat)) : Option Nat :=
+  ((rs.filter fun r => decide (r.1 < r.2)).mergeSort fun x y => decide (x.1 ≤ y.1)).foldlM
+    (fun at_ r => if r.1 == at_ then some r.2 else none) 0
+
+/-- **The strata's cover** (`coverRanges` of every stratum's ranges together): the registration's strata's ranges are
+a disjoint cover of its units `0, 1, …, N − 1`, in whatever order the strata and a stratum's ranges come. `N`, or none.
+What a subset sampling design's draw needs of the strata (`sizes`' walk is what a stratified one needs): it reads no
+stratum, and slot `u` is unit `u`. None too where a range ends before it starts, which `sizes` refuses. -/
+def cover (strata : Array (String × Array (Nat × Nat))) : Option Nat :=
+  if strata.any (·.2.any fun r => decide (r.2 < r.1)) then none
+  else coverRanges (strata.toList.flatMap (·.2.toList))
+
+/-- The refusal of a registration whose strata are a disjoint cover of its units (`cover`) and not its units in order
+stratum by stratum (`sizes`), under a sampling design of kind `kind` that is no `subset` one: a stratified or work draw
+reads a stratum's units as consecutive slots. -/
+def STRATA_DESIGN (kind : String) : String :=
+  s!"partition: the registration's strata are a disjoint cover of its units, not its units in order stratum by " ++
+    s!"stratum, and the sampling design is {kind}: only a subset design's draw reads no stratum"
+
 /-- **Why the registration's population is not the circuit file's units in order** (module docstring), none when it is:
 `strata` the registration's (`Partition.strata`), `indices` the public file's `units.indices`. -/
 def why (strata : Array (String × Array (Nat × Nat))) (indices : Array Nat) : Option String :=
@@ -189,7 +211,8 @@ def unitIndices (pubB : ByteArray) : V (Array Nat) := do
   indicesOf (← header pubB)
 
 /-- **The population check on the files** (`why`): the registration's strata over the verifier's program (its
-descriptor's bytes) and query, against the public file's units. -/
+descriptor's bytes) and query, against the public file's units. It takes only the units in order, never a `cover`: the
+one-statement form it checks is a one-member window's, whose population is one stratum. -/
 def check (program : ByteArray) (query : Json) (pubB : ByteArray) : V Unit := do
   let strata ← Partition.strata (← Program.parse program) query
   if let some w := why strata (← unitIndices pubB) then throw w
@@ -213,6 +236,18 @@ def piece (j : Json) : V Json := do
 #guard sizes #[("a", #[(0, 3)]), ("b", #[(3, 5)])] == some #[3, 2]
 #guard sizes #[("a", #[(0, 1), (2, 3)]), ("b", #[(1, 2)])] == none
 #guard sizes #[] == some #[]
+#guard cover #[("PAIR", #[(0, 2)]), ("TRIPLE", #[(2, 5)])] == some 5
+#guard sizes #[("PAIR", #[(0, 2), (5, 7)]), ("TRIPLE", #[(2, 5)])] == none
+#guard cover #[("PAIR", #[(0, 2), (5, 7)]), ("TRIPLE", #[(2, 5)])] == some 7
+#guard cover #[("PAIR", #[(0, 2), (5, 7)]), ("TRIPLE", #[(2, 6)])] == none
+#guard cover #[("PAIR", #[(0, 2), (6, 7)]), ("TRIPLE", #[(2, 5)])] == none
+#guard cover #[("PAIR", #[(0, 2), (5, 7)]), ("TRIPLE", #[(2, 5), (4, 4)])] == some 7
+#guard cover #[("PAIR", #[(0, 2), (5, 7)]), ("TRIPLE", #[(2, 5), (5, 4)])] == none
+#guard coverRanges [(0, 2), (5, 7), (2, 5), (5, 4)] == some 7
+#guard sizes #[("PAIR", #[(0, 2), (2, 1)])] == none
+#guard cover #[("PAIR", #[(1, 2)])] == none
+#guard cover #[("PAIR", #[(0, 2), (0, 2)])] == none
+#guard cover #[] == some 0
 #guard why #[("a", #[(0, 2)])] #[0, 1] == none
 #guard (why #[("a", #[(0, 2)])] #[0]).isSome
 #guard (why #[("a", #[(0, 2)])] #[1, 0]).isSome

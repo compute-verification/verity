@@ -122,6 +122,7 @@ theorem run_path {i : Spot.Run.Input} {j : Json} (h : Spot.Run.run i = .ok j) :
     | exact Or.inr ⟨_, _, _, _, _, _, _, _, by assumption, by assumption, by assumption, by assumption,
         by assumption, by assumption, by assumption, by assumption, by assumption,
         _, _, _, _, _, _, _, by assumption, by assumption, (Except.ok.inj h).symm, fun hs => by simp at hs⟩
+    | (obtain ⟨_, h⟩ | ⟨_, h⟩ := Spot.Run.ite_eq_cases h)
 
 /-- **The second stage under a two-stage rule with an interior** is the interior's steps. -/
 theorem secondStage_two {i : Spot.Run.Input} {sample : Array ℕ} {grain : Json} {replay : String}

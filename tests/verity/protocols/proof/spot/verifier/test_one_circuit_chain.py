@@ -119,7 +119,7 @@ def own_root_public(k: int) -> bytes:
     (``frame_v3``'s roots), neither its writer's ``o0`` root nor its staged one."""
     with tempfile.TemporaryDirectory() as d, pytest.MonkeyPatch.context() as mp:
         d = Path(d)
-        _w, _c, doc = TI._held_window(d, mp)
+        _w, _c, doc, _win = TI._held_window(d, mp)
         head, body = TI._staged(d, doc["members"][k], k, d / "out")
         writer, _ = TI._staged(d, doc["members"][k - 1], k - 1, d / "writer")
     assert doc["members"][k]["base"] >= TI.REQUESTS, "cheat (a) needs a member whose x is wired"
