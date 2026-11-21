@@ -246,9 +246,9 @@ def share(verdicts: Mapping[str, Any], policy: Mapping[str, Any], before: Any) -
         return {**said, "share": 1.0, "C": None, "development": "development" in row, "tie": None,
                 "why": str(row.get("why") or row.get("reason") or "it gives no reason")}
     q = row.get("quantity") or {}
-    C, macs = (q.get("work") or {}).get("credited"), (q.get("work") or {}).get("macs")
+    C, macs = (q.get("work") or {}).get("credited"), (q.get("work") or {}).get("checked_macs")
     if type(C) is not int or type(macs) is not int:
-        raise Refused(f"PoUW's accept of record states no whole credited MACs and MACs (quantity.work): {C!r}, {macs!r}")
+        raise Refused(f"PoUW's accept of record states no whole credited MACs and checked MACs (quantity.work): {C!r}, {macs!r}")
     if macs != slots * work["linears"]:
         raise Refused(f"PoUW's accept counts {macs:,} MACs of linears, not the record's class.slots × "
                       f"n_inputs.work.linears = {slots} × {work['linears']:,} = {slots * work['linears']:,}")
