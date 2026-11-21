@@ -1,5 +1,59 @@
 {
   "rule": "circuit templates whose returned rows don't gate on their opener's verdict (tests/lint/test_repo_openers_gated.py)",
   "entries": [
+    {
+      "file": "verity/protocols/accounting/memory/poub/verifier/commitments/gates/block_check.py",
+      "kind": "ungated",
+      "symbol": "BlockOpeningCheck_v1",
+      "detail": "returns its verdict word (bit 0 accepted, bits 1-4 a check's failure, which read the opened payload); its o0 is a public verdict word the verifier reads (poub.verifier.span, Poub.Span.checkSpan)"
+    },
+    {
+      "file": "verity/protocols/accounting/memory/poub/verifier/commitments/gates/block_check.py",
+      "kind": "ungated",
+      "symbol": "BlockOpeningCheck_v2",
+      "detail": "returns its verdict word (bit 0 accepted, bits 1-4 a check's failure, which read the opened payload); its o0 is a public verdict word the verifier reads (poub.verifier.span, Poub.Span.checkSpan)"
+    },
+    {
+      "file": "verity/protocols/accounting/memory/poub/verifier/commitments/gates/block_check.py",
+      "kind": "ungated",
+      "symbol": "BlockOpeningUnit_v2",
+      "detail": "returns its verdict word (bit 0 accepted, bits 1-4 a check's failure, which read the opened payload); its o0 is a public verdict word the verifier reads (poub.verifier.span, Poub.Span.checkSpan)"
+    },
+    {
+      "file": "adapters/vllm/verity_vllm/definitions/registry/dsa_topk_reads.py",
+      "kind": "ungated",
+      "symbol": "DsaTopKReadRows_v1",
+      "detail": "its ok is DsaTopKReadRowsCut_v1's return, which the long row commits as its replay block's verdict rows (boundary_rows.Layout.verdicts); no TableOpening names it"
+    },
+    {
+      "file": "verity/commitments/gates/embedding.py",
+      "kind": "ungated",
+      "symbol": "EmbeddingRead_v2",
+      "detail": "its verdict o1 is named by a TableOpening, whose supplied 1 the epoch's record holds it to (window_lowering, expert_rows.declarations, history_rows)"
+    },
+    {
+      "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_fp8_moe.py",
+      "kind": "ungated",
+      "symbol": "MoeExpertFp8ReadGemmW_v1",
+      "detail": "its verdict o1 is named by a TableOpening, whose supplied 1 the epoch's record holds it to (expert_rows.declarations)"
+    },
+    {
+      "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_fp8_moe.py",
+      "kind": "ungated",
+      "symbol": "MoeExpertFp8ReadGemm_v1",
+      "detail": "its verdict o1 is named by a TableOpening, whose supplied 1 the epoch's record holds it to (expert_rows.declarations)"
+    },
+    {
+      "file": "verity/protocols/accounting/memory/poub/verifier/commitments/gates/block_check.py",
+      "kind": "ungated",
+      "symbol": "RekeyOpeningCheck_v1",
+      "detail": "returns its verdict word (bit 0 accepted, bits 1-4 a check's failure, which read the opened payload); its o0 is a public verdict word the verifier reads (poub.verifier.span, Poub.Span.checkSpan)"
+    },
+    {
+      "file": "verity/protocols/accounting/memory/poub/verifier/commitments/gates/block_check.py",
+      "kind": "ungated",
+      "symbol": "RekeyOpeningUnit_v1",
+      "detail": "returns its verdict word (bit 0 accepted, bits 1-4 a check's failure, which read the opened payload); its o0 is a public verdict word the verifier reads (poub.verifier.span, Poub.Span.checkSpan)"
+    }
   ]
 }

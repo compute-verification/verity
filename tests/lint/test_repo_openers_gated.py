@@ -86,6 +86,7 @@ class Gating:
         self.AND = BL.AND
         self.reach = reach
         self.memo: dict[tuple, tuple[tuple, tuple, int]] = {}
+        self.raised: set[str] = set()
 
     def body(self, spec: Any) -> Any:
         return self.BD.compile_body(spec)
@@ -137,8 +138,8 @@ class Gating:
                     elif all(o is not None for o in ops):
                         try:
                             val = prim.evaluate(*ops)
-                        except Exception:  # noqa: BLE001
-                            val = None
+                        except Exception as e:  # noqa: BLE001
+                            self.raised.add(f"{getattr(prim, 'id', prim)}: {type(e).__name__}")
                     elif prim is self.AND and any(o == 0 for o in ops):
                         val = 0
                     V[out + m] = val
@@ -231,7 +232,8 @@ def classes() -> tuple[dict[str, list[tuple[str, str]]], dict[str, str], dict[st
             undecided[fid] = f"its body doesn't compile: {type(e).__name__}: {str(e)[:160]}"
     stats = {"walked": len(found), "templates": sum(1 for f in found.values() if hasattr(f, "base_id")),
              "reaching": len(reach), "openers": sorted(i for i in reach if found[i].base_id in OPENERS),
-             "build_s": round(built), "classify_s": round(time.monotonic() - t0 - built)}
+             "build_s": round(built), "classify_s": round(time.monotonic() - t0 - built),
+             "unknown_where_evaluate_raised": sorted(G.raised)}
     return got, undecided, found, stats
 
 
