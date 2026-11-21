@@ -28,8 +28,8 @@ Every other unit holds its Definition's function of the window's values:
   range, and the earlier Calls' running state.
 
 `Rows.record` gives a `Window` each template's units in runs of one step, one slot and one form (`FORMS`: a node's value,
-or its Definition's function of the window's values), every input by reference but an opening's ports. The lowering
-fixes all three, so a label is class structure and never a value: which slots are occupied, at what lengths, and where a
+or its Definition's function of the window's values), every input by reference but an opening's ports and a scan unit's
+state row (a run input, its row the scan state's at its anchor). The lowering fixes all three, so a label is class structure and never a value: which slots are occupied, at what lengths, and where a
 node's value came from (`SOURCES`) are the scan state's and the rows' own, committed hiding, and the labels show none of
 them. The window takes `FORMS` as its ``forms`` (`interface.Window.record`). The index they make is the prover's, bound
 by its hiding leaf under the salt `Window.write` draws from the OS and keeps in ``index-salt.bin``.
@@ -502,11 +502,15 @@ class Rows:
         self.source = {t: np.full(n[t], EVALUATED, dtype=np.int8) for t in self.lays}
         self.node = {t: np.zeros(n[t], dtype=bool) for t in self.lays}
         ports = {(o.reader, p) for o in (c.registered.openings if c.registered else ()) for p in o.ports}
+        run = SS.SCAN_STATE in (c.registered.run if c.registered else ())
+        ports |= {(tid, "state") for _a, _j, (tid, _u) in lowered.scans} if run else set()
         self.inputs = {t: {p: np.zeros((n[t], w), dtype=np.uint16) for p, w in lay.rows if (t, p) in ports}
                        for t, lay in self.lays.items()}
         for P, S in zip(lowered.programs, slots):
             self._slot(P, S)
         for a, _j, (tid, u) in lowered.scans:
+            if run:
+                self.inputs[tid]["state"][u] = np.asarray(self.state[a], dtype=np.uint16).reshape(-1)
             for i, v in enumerate(_lane(self.fns[tid], self.state, a, IO.scan_reference)):
                 self._put(tid, u, f"o{i}", _i32(v if isinstance(v, list) else [v]), EVALUATED)
         units = {(a, j): unit for a, j, unit in lowered.scans}
