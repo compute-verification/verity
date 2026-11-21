@@ -1,0 +1,3 @@
+[2026-11-21T13:19Z] 1558988a9d36
+From proofs lead, 5:27 AM PST: ADD to your piece (read my F comment on Linear TOP-448, 5:2x AM PST, whole): on the marked 1,1,1 Program the embedding table's root and domain (nodes 5, 6) are RUN nodes read by EmbeddingRead_v3; under the one tree their ports would be the prover's input/n5, input/n6 with nothing tying them to the registered table's root (Flock/Registered.lean 302, 410-416). Add, beside OneCircuit.pos, both twins, by name with a guard: refuse an opening whose anchor ports (root, domain) read a run Input node, stated for any opening. circuits is asked to type those nodes SuppliedInput<512>_v1 in the marking. Also find and say: where the one-circuit road holds the opening's verdict word ok to 1 (or that nothing does).
+
