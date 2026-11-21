@@ -22,7 +22,7 @@ REAL_ROOTS = ["tools/research/src", "tools/config", "infra/cluster/src", "infra/
               "benchmarks/harness", "adapters/vllm", "verity/protocols/proof/flock/prover/python", "tools/verity/circuit_check/src",
               "calibration/machine_model", "tools/verity/cli", "tools/verity/graph",
               "tools/difftest/python",
-              "benchmarks/pouw/exact_kit", "benchmarks/proof_throughput", "adapters/torch", "input_datasets"]
+              "benchmarks/pouw/exact_kit", "benchmarks/proof_throughput", "adapters/torch", "library/datasets"]
 
 
 def test_this_repository_resolves_every_workspace_package_inside_the_tree(tmp_path):
