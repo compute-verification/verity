@@ -1,6 +1,6 @@
 """The Nebius server's bootstrap check: is this the machine we pay for, and is its weight cache fast enough?
 
-    research run --on vy-nebius-1 --project verity --source . --cwd source -- \
+    research run --on vy-nebius-2 --project verity --source . --cwd source -- \
         python3 tools/research/src/research/pods/nebius/check.py
 
 Checks, each PASS or FAIL on one line (exit 1 on any FAIL; with RESEARCH_RUN_DIR, result.json carries every number):

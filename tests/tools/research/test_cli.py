@@ -299,7 +299,7 @@ def test_queue_placement_places_with_each_nodes_live_stop_and_falls_back_to_the_
     assert "vy-nebius-2's live deadline is unread (no answer)" in capsys.readouterr().err
     asked.clear()
     remote.queue_placement(root, "r3", {**spec, "node": None}, now=stop - 3 * 86400)
-    assert [name for name, _ in asked] == ["vy-nebius-1", "vy-nebius-2"], "an unpinned job asks every node"
+    assert [name for name, _ in asked] == ["vy-nebius-2"], "an unpinned job asks every node"
 
 
 def test_live_stop_reads_the_nodes_deadline_file_over_ssh(monkeypatch):
