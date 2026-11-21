@@ -908,6 +908,32 @@ def test_what_the_prover_chose_of_an_execution_phase(random_cases, shaped):
             > ref.check_detail(accepted["case"]["instance"], accepted["case"]["trusted"])["fresh"])
 
 
+def test_a_parameter_bound_for_each_run_is_never_theta(shaped):
+    """`registered.run` names registered parameters C reads from run input nodes: the form takes it, and a parameter it
+    names is never θ, so its bits move from θ to the prover's (its reads `unregistered`, an opening of a table in it
+    no longer held); a name that is no registered
+    parameter, a name twice or no list is refused (`inputs`)."""
+    case = shaped["2x3 registered"]["case"]
+    held = ref.chosen(case["instance"], case["trusted"])
+
+    def chosen(run) -> dict:
+        rec = json.loads(case["instance"]["record"])
+        rec["registered"]["run"] = run
+        c = copy.deepcopy(case)
+        vectors._commit(c, json.dumps(rec, separators=(",", ":"), sort_keys=True))
+        return ref.chosen(c["instance"], c["trusted"])
+    params = sorted(json.loads(case["instance"]["record"])["registered"]["params"])
+    assert chosen([]) == held
+    moved = [p for p in params if chosen([p]) != held]
+    assert moved, params
+    for p in moved:
+        c = chosen([p])
+        assert c["theta"] < held["theta"] and c["unregistered"] > held["unregistered"]
+        assert c["chosen"] - held["chosen"] == held["theta"] - c["theta"] and c["inputs"] == held["inputs"]
+    for bad in (["no such parameter"], [params[0], params[0]], params[0]):
+        assert chosen(bad) == {"error": "inputs"}, bad
+
+
 def test_an_opening_may_declare_its_row(shaped):
     """An opening may declare its `row`, the output of its reader that returns the row opened. The form holds it to
     the row a table read returns, the first of its reader's two outputs, the second its verdict, of a reader of six

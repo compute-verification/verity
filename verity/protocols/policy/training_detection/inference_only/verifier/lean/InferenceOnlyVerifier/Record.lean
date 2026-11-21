@@ -764,7 +764,7 @@ def finish (f : Front) (pin : String → Option String) : Except String Case := 
   let pins ← rolesOf f.P f.ts pin x
   let gridsAt := fun (tid : String) => (grids.lookup tid).getD []
   let inside := (wired.wires.map fun w => sameSlot S (gridsAt w.reader) (gridsAt w.writer) w).toArray
-  let theta := x.params.map fun (p, leaves) => (p, isTheta f.T leaves (widthOf f.doc p) p)
+  let theta := x.params.map fun (p, leaves) => (p, isTheta f.T leaves (widthOf f.doc p) p && !(runOf f.doc).contains p)
   let thetaAt := fun (p : String) => (theta.lookup p).getD false
   let held := (x.openings.map (openingHeld (fun tid => (pins.lookup tid).isSome) thetaAt x)).toArray
   return { f, W, wired, x, S, grids, inside, theta, held, pins }
