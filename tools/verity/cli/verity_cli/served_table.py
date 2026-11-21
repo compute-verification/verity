@@ -288,7 +288,7 @@ def listed(demo: str) -> tuple[str, ...]:
 #: `Scheme.tie` over its parameters' defaults; remote and onsite both serve Pearl+ untied at this workload and its input
 #: dataset, the other three name their load, and onsite_network_front only the front's
 _TIED = {"model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da",
-         "precision": "bfloat16", "slots": 4, "window-steps": 2, "dataset": "llama32_1b_fixed_4_27_2", "timing": "at-once"}
+         "precision": "bfloat16", "slots": 1, "window-steps": 1, "dataset": "llama32_1b_fixed_1_1_1", "timing": "at-once"}
 DEMO_VALUES = {"remote": _TIED, "onsite_full": _TIED, "onsite_compute": {"load": "varied"},
                "onsite_network": {"load": "varied"}, "onsite_network_front": {"load": "front"}}
 

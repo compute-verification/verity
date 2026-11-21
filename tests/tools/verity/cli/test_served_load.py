@@ -30,8 +30,8 @@ def loaded(**params) -> dict:
 
 def test_the_remote_application_names_an_input_dataset_and_its_timing():
     params = K.parse(REMOTE.read_text())["workload"]["params"]
-    assert (params["dataset"], params["timing"]) == ("llama32_1b_fixed_4_27_2", "at-once") and "load" not in params
-    assert loaded()["workload"]["params"]["dataset"] == "llama32_1b_fixed_4_27_2"
+    assert params["timing"] == "at-once" and "load" not in params
+    assert loaded()["workload"]["params"]["dataset"] == params["dataset"] == serves.application(str(REMOTE))[0]
 
 
 @pytest.mark.parametrize("params, said", [
@@ -55,7 +55,7 @@ def test_the_retired_fixed_load_is_refused_with_the_dataset_to_name():
 @pytest.mark.parametrize("params, name", [
     ({"dataset": "nothing_by_this_name"}, "unknown-dataset"),
     ({"timing": "soon"}, "timing"),
-    ({"slots": 8}, "not-served"),
+    ({"slots": serves.SERVES.slots + 4}, "not-served"),
 ], ids=["unknown-dataset", "timing", "not-served"])
 def test_a_dataset_the_adapter_does_not_take_is_refused_by_the_doors_name(params, name):
     with pytest.raises(Refused) as e:
@@ -74,4 +74,5 @@ def test_a_dataset_application_runs_its_class_from_the_adapters_statement():
     cfg = loaded()
     hooks = T.SERVE.variables(cfg, {})
     assert {k: hooks[k] for k in ("LOAD", "DATASET", "TIMING", "V3C_CLASS")} == {
-        "LOAD": "dataset", "DATASET": "llama32_1b_fixed_4_27_2", "TIMING": "at-once", "V3C_CLASS": serves.SERVES.window_class}
+        "LOAD": "dataset", "DATASET": serves.application(str(REMOTE))[0], "TIMING": "at-once",
+        "V3C_CLASS": serves.SERVES.window_class}
