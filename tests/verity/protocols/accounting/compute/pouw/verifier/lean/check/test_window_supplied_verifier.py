@@ -28,6 +28,7 @@ from collections import Counter
 from pathlib import Path
 
 import pouw_credit_cases as credit_cases
+import pouw_rounds_cases as rc
 import pytest
 
 from verity.protocols.accounting.compute.pouw.verifier import credit as Cr
@@ -47,10 +48,13 @@ ARGS = tuple(x for a in credit_cases.WINDOW_ARGS
 
 @functools.cache
 def _window() -> dict:
-    """An honest window (`honest_window`) whose circuit is the registry's window at K = 64 over v5, named ``h1/``."""
+    """An honest window (`honest_window`) whose circuit is the registry's window at K = 64 over v5, named ``h1/``, its
+    ledger signed as `window_instance` signs an honest one's."""
+    rng = random.Random("supplied/0")
     desc = credit_cases.desc_bytes(credit_cases.registry_window(64, "v5", "h1/")).hex()
-    d, _s = credit_cases.honest_window(random.Random("supplied/0"), lay=copy.deepcopy(credit_cases.REGISTRY_LAYOUT),
-                                       desc=desc, prefix="h1/")
+    d, s = credit_cases.honest_window(rng, lay=copy.deepcopy(credit_cases.REGISTRY_LAYOUT), desc=desc, prefix="h1/")
+    signed = {**credit_cases.signs(d["weights"]), Cr.LENGTH_FIELD: dict(d["length"])}
+    d["ledger"] = rc.ledger_lines(rc.ledger_events(rng, d["window"], s, period=signed), rc._key(0))
     return d
 
 
@@ -115,7 +119,7 @@ def lean_calls(monkeypatch) -> list[tuple[str, dict]]:
 def _credit(d: dict, run: Cr.Run) -> tuple[list[int] | None, tuple[str, str] | None]:
     statements, live, files, _sampled = _evidence(d)
     args = {**d, "statements": statements, "live": live, "circuit_files": files}
-    return Cr.window(*(args[x] for x in ARGS), credit_cases.rc.lms_verify, run)
+    return Cr.window(*(args[x] for x in ARGS), rc.lms_verify, run)
 
 
 @pytest.mark.slow
