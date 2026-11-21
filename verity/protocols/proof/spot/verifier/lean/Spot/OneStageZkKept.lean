@@ -1,6 +1,7 @@
 module
 
 public import Spot.OneStageZkStatement
+import all Init.Util
 meta import Flock
 meta import Spot.Restrict
 meta import Spot.Edges
