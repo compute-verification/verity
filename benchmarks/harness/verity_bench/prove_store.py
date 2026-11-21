@@ -36,7 +36,6 @@ from verity_bench.prove_common import (
     card,
     of_record,
 )
-from verity_bench.steady import _ABSENT, _field
 from verity_bench.prove_rows import (
     off_node,
     own_verdict,
