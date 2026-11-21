@@ -1120,7 +1120,7 @@ theorem membersParamsOfJson_linked {j : Json} {p : Params} (h : membersParamsOfJ
     try dsimp only at h
     obtain ⟨ms, -, h⟩ := Flock.HmNets.bind_ok h
     cases h
-    exact ⟨ms, rfl, rfl⟩
+    exact ⟨_, rfl, rfl⟩
   · cases h
 
 /-- **The per-member form's parameters name members**: whatever `membersParamsOfJson` returns names some. -/
