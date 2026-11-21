@@ -871,7 +871,7 @@ PORTS = {
                                 need_rejects=False, of_record=V.RECORD_VERDICT), 1),
     "constants": (D.Port(EXE, "constants", reference=lambda _: {
         "PUBLIC": [list(p) for p in Wd.PUBLIC], "REGISTERED": list(Wd.REGISTERED),
-        "LEGACY_REGISTERED": list(Wd.LEGACY_REGISTERED), "KINDS": list(Wd.KINDS), "GRID_BITS": Wd.GRID_BITS,
+        "KINDS": list(Wd.KINDS), "GRID_BITS": Wd.GRID_BITS,
         "STOP_FIXED": Wd.STOP_FIXED}, inputs=st.just({}), package=LEAN, need_rejects=False,
         of_record=V.RECORD_VERDICT), 1),
 }

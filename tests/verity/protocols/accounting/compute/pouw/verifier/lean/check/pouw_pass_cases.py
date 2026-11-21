@@ -1,10 +1,10 @@
 """The pass and sample difftest's cases: `core_check.pass_epoch_twin`'s arguments, ``{"coins", "raw": hex | null, "context",
 "recorded", "reveal", "committed", "stream", "prover", "live"}`` (the four before ``live`` hex or null, ``live`` the
 verifier's `core_check.LIVE` inputs or null), `core_check.live_salt_twin`'s, ``{"key", "ledger", "pins", "main", "session",
-"manifest"}``, and `core_check.draw_twin`'s, ``{"coins", "recorded", "opening", "stream", "registration", "receipt", "k",
-"population", "units"}``.
+"manifest"}``, and `core_check.draw_twin`'s, ``{"coins", "opening", "stream", "registration", "receipt", "k", "population",
+"units"}``.
 
-A pass case is an honest pass (a small workload, its weights' roots, an execution phase's coins committed under one of
+A pass case is an honest pass (a small workload, its weights' roots, an execution phase's coins committed under
 `core_check.COIN_VERSIONS` and its salt coin opened after the weights' root, a recorded pass salted by a beacon, a
 certified pass under a stream and a prover, salted by the network attester's reveal for the PoUW execution phase its context
 names, over the weights' root the network attester recorded with the stream and the prover before it sampled that salt, or a live
@@ -41,13 +41,11 @@ CERTIFIED = ("reveal", "committed", "stream", "prover")
 
 
 class Coins:
-    """An execution phase's challenger under a coin scheme of `core_check.COIN_VERSIONS` (`coins.Challenger`'s, any version)."""
+    """An execution phase's challenger under a coin scheme of `core_check.COIN_VERSIONS` (`coins.Challenger`'s)."""
 
-    def __init__(self, rng: random.Random, epoch: int, scheme: str = Co.SCHEME, early: bool = False) -> None:
+    def __init__(self, rng: random.Random, epoch: int, scheme: str = Co.SCHEME) -> None:
         keep = CC.COIN_VERSIONS[scheme][0]
-        binding = CC.tagged_sha256(scheme, epoch) if early else tagged(scheme, epoch)[:keep]
-        dom = CommitmentDomain(binding, -1, RangeIndexedDomain(len(Co.LABELS)), hash="sha512")
-        self.early = early
+        dom = CommitmentDomain(tagged(scheme, epoch)[:keep], -1, RangeIndexedDomain(len(Co.LABELS)), hash="sha512")
         self.coins = {label: (rng.randbytes(Co.COIN_BYTES), rng.randbytes(Co.HM96.salt_bytes)) for label in Co.LABELS}
         self.tree = MerkleTree(dom, {i: Co.leaf_value(*self.coins[label]) for i, label in enumerate(Co.LABELS)},
                                lambda _: scheme)
@@ -176,12 +174,11 @@ def _live_manifest(rng: random.Random) -> dict:
 
 
 def honest_pass(rng: random.Random, kind: str | None = None) -> dict:
-    """An honest pass: ``coin`` (the current coins), ``recorded-coin`` (the e2e-service passes' coins, in a replay),
-    ``beacon`` (a recorded pass's), ``certified`` (salted by the network attester's reveal for its PoUW execution phase, which
-    the verifier holds) or ``live`` (a live Pearl-C pass's, `honest_live`: its salt coin from a salt-only session of the
+    """An honest pass: ``coin`` (the current coins), ``beacon`` (a recorded pass's), ``certified`` (salted by the
+    network attester's reveal for its PoUW execution phase, which the verifier holds) or ``live`` (a live Pearl-C pass's, `honest_live`: its salt coin from a salt-only session of the
     auditor's challenger opened on its salt execution phase's root, which the verifier holds as `core_check.LIVE`), as a case with
     its manifest and the challenger beside it."""
-    kind = kind or rng.choice(["coin", "coin", "recorded-coin", "beacon", "certified", "live"])
+    kind = kind or rng.choice(["coin", "coin", "beacon", "certified", "live"])
     man = _live_manifest(rng) if kind == "live" else _pass_manifest(rng)
     roots = _roots(man)
     reveal = window = committed = stream = prover = None
@@ -203,13 +200,13 @@ def honest_pass(rng: random.Random, kind: str | None = None) -> dict:
                 "live": h["live"]}
         return {"case": case, "man": man, "ch": h["s"].ch, "kind": kind, "live": h}
     else:
-        ch = Coins(rng, rng.randrange(4), Co.SCHEME if kind == "coin" else CC.COINS_RECORDED)
+        ch = Coins(rng, rng.randrange(4))
         root = CC.weights_root(ch.scheme, roots)
         opening = ch.open("salt", root)
         salt = derive(bytes.fromhex(opening["coin"]), EPOCH_SALT_DOMAIN, {"epoch": ch.epoch, "coins": ch.tree.commitment.root,
                                                                           "weights": root}).stream("salt", 32)
         man.update(coins=ch.commitment, salt_opening=opening, salt=salt.hex())
-    case = {"coins": ch.commitment, "recorded": kind not in ("coin", "certified") or rng.random() < 0.3, "run": man["run"],
+    case = {"coins": ch.commitment, "recorded": kind == "beacon" or rng.random() < 0.3, "run": man["run"],
             "prefix": f"served-zk/{man['run']}", "window": window, "live": None,
             **{k: None if v is None else v.hex() for k, v in zip(CERTIFIED, (reveal, committed, stream, prover))}}
     return {"case": case, "man": man, "ch": ch, "kind": kind}
@@ -303,8 +300,6 @@ def _mutate_pass(h: dict, name: str, rng: random.Random) -> bytes | None:
             c = man["coins"]
             man["coins"] = rng.choice([{**c, "scheme": "verity/pouw/epoch-coins/v0"}, {**c, "epoch": -2},
                                        {**c, "root": c["root"][:64]}, {**c, "root": 7}, None])
-        case "recorded-scheme":
-            case["recorded"] = False
         case "not-the-epochs":
             other = Coins(rng, h["ch"].epoch, h["ch"].scheme).commitment
             man["coins"] = other
@@ -421,15 +416,15 @@ PASS_MUTATIONS = {
     "no-pass": None, "not-utf8": None, "not-json": None, "not-object": None, "constant": None,
     "recorded-unread": ("beacon",), "schema-other": None, "schema-missing": None, "matmuls-form": None,
     "matmuls-not-list": None, "shape": None, "ids-64-bit": None, "weights-form": None, "weights-not-object": None,
-    "no-salt-coin": ("coin", "recorded-coin"), "no-verifier-coins": ("coin", "recorded-coin"),
-    "verifier-coins": ("coin", "recorded-coin"), "opening-form": ("coin", "recorded-coin"),
-    "pass-coins-form": ("coin", "recorded-coin"), "recorded-scheme": ("recorded-coin",),
-    "not-the-epochs": ("coin", "recorded-coin"), "indices": None, "dims": None, "weights-set": None,
-    "coin-epoch": ("coin", "recorded-coin"), "coin-label": ("coin", "recorded-coin"), "coin-size": ("coin", "recorded-coin"),
-    "coin-foreign": ("coin", "recorded-coin"), "coin-tampered": ("coin", "recorded-coin"),
-    "coin-path": ("coin", "recorded-coin"), "coin-early": ("coin", "recorded-coin"), "resalted": None, "salt-missing": None,
+    "no-salt-coin": ("coin",), "no-verifier-coins": ("coin",),
+    "verifier-coins": ("coin",), "opening-form": ("coin",),
+    "pass-coins-form": ("coin",),
+    "not-the-epochs": ("coin",), "indices": None, "dims": None, "weights-set": None,
+    "coin-epoch": ("coin",), "coin-label": ("coin",), "coin-size": ("coin",),
+    "coin-foreign": ("coin",), "coin-tampered": ("coin",),
+    "coin-path": ("coin",), "coin-early": ("coin",), "resalted": None, "salt-missing": None,
     "beacon-empty": ("beacon",), "no-beacon": ("beacon",), "not-named": None, "spaced-hex": None,
-    "certified-unread": ("certified",), "uncertified-pass": ("coin", "recorded-coin", "beacon"),
+    "certified-unread": ("certified",), "uncertified-pass": ("coin", "beacon"),
     "reveal-size": ("certified",), "no-window": ("certified",), "other-window": ("certified",),
     "other-reveal": ("certified",), "raw-reveal": ("certified",), "weights-unrecorded": ("certified",),
     "weights-after-salt": ("certified",), "binding-form": ("certified",), "stream-other": ("certified",),
@@ -603,13 +598,9 @@ def _receipt(rng: random.Random, reg: str) -> dict:
             "verifier": f"served-zk/challenger/{rng.choice(['window', 'ctl-x'])}"}
 
 
-def honest_draw(rng: random.Random, scheme: str | None = None, many: bool = False, early: bool | None = None
-                ) -> tuple[dict, Coins]:
-    """An honest sample under `scheme` (any version by default, `CC.COIN_EARLY`'s binding included, `early`);
-    `many` samples at least one unit of at least 50."""
-    scheme = scheme or rng.choice([Co.SCHEME, Co.SCHEME, CC.COINS_RECORDED, Co.SCHEME])
-    early = (scheme == Co.SCHEME and rng.random() < 0.3) if early is None else early
-    ch = Coins(rng, rng.randrange(4), scheme, early)
+def honest_draw(rng: random.Random, many: bool = False) -> tuple[dict, Coins]:
+    """An honest sample under seeded coins; `many` samples at least one unit of at least 50."""
+    ch = Coins(rng, rng.randrange(4))
     reg, stream = rng.randbytes(64).hex(), rng.randbytes(64).hex()
     receipt = _receipt(rng, reg)
     n = rng.choice([50, rng.randint(50, 5000), rng.randint(50, 1 << 40)] + ([] if many else [1, 2, 7]))
@@ -617,10 +608,8 @@ def honest_draw(rng: random.Random, scheme: str | None = None, many: bool = Fals
     opening = ch.open("draw", bytes.fromhex(reg))
     ctx, size = CC.draw_key_context(stream, reg, receipt), 2 * k * CC.width(n) + 64
     coin = bytes.fromhex(opening["coin"])
-    src = CC.stream_v1(CC.derive_v1(coin, CC.DRAW_DOMAIN, ctx), "draw", size) if ch.early else \
-        derive(coin, CC.DRAW_DOMAIN, ctx).stream("draw", size)
-    units = CC.stream_subset(k, n, src)
-    return {"coins": ch.commitment, "recorded": ch.scheme != Co.SCHEME or ch.early or rng.random() < 0.3, "opening": opening,
+    units = CC.stream_subset(k, n, derive(coin, CC.DRAW_DOMAIN, ctx).stream("draw", size))
+    return {"coins": ch.commitment, "opening": opening,
             "stream": stream, "registration": reg, "receipt": receipt, "k": k, "population": n, "units": units,
             "key": None}, ch
 
@@ -630,8 +619,6 @@ def _mutate_draw(d: dict, ch: Coins, name: str, rng: random.Random) -> None:
     match name:
         case "verifier-coins":
             d["coins"] = rng.choice([None, {**d["coins"], "root": "00"}, {**d["coins"], "scheme": "x"}])
-        case "recorded-scheme" | "early-coins-live":
-            d["recorded"] = False
         case "registration":
             d["registration"] = rng.choice([d["registration"].upper(), d["registration"][:-2], None, 5])
         case "stream":
@@ -652,7 +639,7 @@ def _mutate_draw(d: dict, ch: Coins, name: str, rng: random.Random) -> None:
         case "epoch":
             d["opening"] = {**o, "epoch": o["epoch"] + 1}
         case "foreign":
-            d["opening"] = Coins(rng, ch.epoch, ch.scheme, ch.early).open("draw", bytes.fromhex(d["registration"]))
+            d["opening"] = Coins(rng, ch.epoch, ch.scheme).open("draw", bytes.fromhex(d["registration"]))
         case "tampered":
             d["opening"] = {**o, "salt": _flip(o["salt"])}
         case "early":
@@ -710,7 +697,7 @@ def honest_live_draw(rng: random.Random, many: bool = False) -> tuple[dict, Ch.L
     ctx, size = CC.draw_key_context(stream, reg, receipt), 2 * k * CC.width(n) + 64
     units = CC.stream_subset(k, n, derive(o.coin, CC.DRAW_DOMAIN, ctx).stream("draw", size))
     coins = signed(ch.commitment, rng)
-    return {"coins": coins, "recorded": rng.random() < 0.3, "opening": o.to_json(), "stream": stream,
+    return {"coins": coins, "opening": o.to_json(), "stream": stream,
             "registration": reg, "receipt": receipt, "k": k, "population": n, "units": units, "key": coins["key"]}, ch
 
 
@@ -779,9 +766,8 @@ def _mutate_live_draw(d: dict, ch: Ch.LiveChallenger, name: str, rng: random.Ran
 LIVE_DRAW_NAMES = ["live-coins", "live-not-epoch", "live-bare", "live-key", "live-no-record", "live-unsigned",
                    "live-own-key", "live-pinned-other", "live-no-pin", "live-moved", "live-opening-form", "live-label",
                    "live-epoch", "live-foreign", "live-tampered", "live-early", "live-units"]
-DRAW_NAMES = ["verifier-coins", "recorded-scheme", "registration", "stream", "receipt", "law", "opening-form", "label",
-              "epoch", "foreign", "tampered", "early", "units", "other-key", "early-coins-live", "seeded-pinned",
-              *LIVE_DRAW_NAMES]
+DRAW_NAMES = ["verifier-coins", "registration", "stream", "receipt", "law", "opening-form", "label", "epoch", "foreign",
+              "tampered", "early", "units", "other-key", "seeded-pinned", *LIVE_DRAW_NAMES]
 
 
 def draw_instance(rng: random.Random, name: str = "honest") -> dict:
@@ -792,13 +778,11 @@ def draw_instance(rng: random.Random, name: str = "honest") -> dict:
         if name != "honest":
             _mutate_live_draw(d, live, name, rng)
         return d
-    d, ch = honest_draw(rng, CC.COINS_RECORDED if name == "recorded-scheme" else Co.SCHEME if name == "early-coins-live" else None,
-                        name in ("units", "other-key"), True if name == "early-coins-live" else None)
+    d, ch = honest_draw(rng, name in ("units", "other-key"))
     if name != "honest":
         _mutate_draw(d, ch, name, rng)
     return d
 
 
 def draw_args(d: dict) -> tuple:
-    return tuple(d[k] for k in ("coins", "recorded", "opening", "stream", "registration", "receipt", "k", "population", "units",
-                                "key"))
+    return tuple(d[k] for k in ("coins", "opening", "stream", "registration", "receipt", "k", "population", "units", "key"))

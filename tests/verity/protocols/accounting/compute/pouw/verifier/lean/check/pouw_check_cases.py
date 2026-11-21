@@ -164,7 +164,7 @@ MUTATIONS = [
     ("params-length-stop", "params", "length.stop", "eos"), ("params-length-empty", "params", "length.max_tokens", []),
     ("params-length-zero", "params", "length.max_tokens", [0]), ("params-length-keys", "params", "length.served", [1]),
     ("params-length-other", "params", "length.max_tokens", None),
-    ("record-legacy", "record", "window.public.length", _DROP), ("record-eos-row", "record", "window.public.length.stop", "eos"),
+    ("record-eos-row", "record", "window.public.length.stop", "eos"),
     ("record-length-mismatch", "record", "window.public.length.served", None),
     ("record-length-count", "record", "window.public.length.served", None),
     ("record-max-tokens", "record", "window.public.length.max_tokens", None),

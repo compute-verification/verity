@@ -114,7 +114,7 @@ def periodCode (roots : Array Json) : Option String :=
   | .ok (some (c, _)) => some c
   | _ => none) == some "lanes-shape"
 
-#guard code? (drawCheck .null false .null .null .null .null .null .null .null (.str "k")) == some "coin-key"
+#guard code? (drawCheck .null .null .null .null .null .null .null .null (.str "k")) == some "coin-key"
 #guard code? (executionPhaseSaltCheck .null
   ⟨.empty, "", "", "", "", "", 0, .null, #[], ⟨"", "", .null, none, none⟩⟩ .null) == some "salt"
 

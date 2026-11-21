@@ -28,8 +28,7 @@ tiles, so a sample of K′ without replacement misses it with probability at mos
 **The fixed length**: correct tokens served past the honest run's end of sequence are not useful work.  A workload of record serves its slot's public max_tokens whatever it samples (vLLM's ``ignore_eos``), so W_use is
 public: the `length` item is ``{"stop": "fixed", "max_tokens": [...], "served": [...]}``, one entry a slot, and
 `length_problem` refuses an EOS-keyed workload (`window-form: eos-keyed-row`) and a slot that served another length
-(`window-form: length-mismatch`).  An execution phase commitment record made before the rule carries `LEGACY_REGISTERED`, without
-the item, and is not of record.
+(`window-form: length-mismatch`).
 
 **The advice** (L2): one entry per committed call, then one filler entry, then empty entries up to the public bound P, each
 an `Entry` row committed in one execution phase root registered before the sample.  A call's sides are dense: each side tree holds only
@@ -121,8 +120,6 @@ PUBLIC = (
 )
 #: the items an execution phase's execution phase commitment record carries; the verdict and the sample come after it
 REGISTERED = ("work", "check", "sampling", "length", "root_W")
-#: what an execution phase commitment record made before the fixed-length rule carries, `REGISTERED` without `length`: not of record
-LEGACY_REGISTERED = tuple(i for i in REGISTERED if i != "length")
 KINDS = ("call", "filler", "none")
 #: the check item's coin mode (`mode`), Compose's `CoinMode`
 COINS = "coins"
@@ -1081,7 +1078,7 @@ def lms_verify(key: Ch.ChallengerKey, message: bytes, signature: bytes) -> bool:
 
 __all__ = ["COINS", "CREDIT", "DELTA", "DEPTHS", "DRAW", "DRAW_DOMAIN", "DRAW_FAMILIES", "DRAW_TAG", "ENTRY_BITS",
            "ENTRY_BYTES", "ENTRY_SCHEMA", "ENTRY_WORDS", "EPS_BITS", "EXACT_BITS", "Entry", "GRID_BITS", "KINDS",
-           "KIND_CODE", "K_FIELD", "LEGACY_REGISTERED", "LENGTH_FIELD", "LENGTH_KEYS", "LIVE_SCHEME",
+           "KIND_CODE", "K_FIELD", "LENGTH_FIELD", "LENGTH_KEYS", "LIVE_SCHEME",
            "MANIFEST_RECORDED", "MANIFEST_SCHEMA", "MAX_K", "MODES", "M_MAX", "OK_ROW", "OK_SALT_TAG", "ONE_STAGE",
            "OWNER", "PORT", "PUBLIC", "PUBLIC_INPUTS_FORMAT", "PUBLIC_PORTS", "PUBLIC_ROW_BITS", "PUBLIC_ROW_J10R_BITS",
            "PUBLIC_ROW_SALT_DOMAIN", "REGISTERED", "ROUND", "ROUND_NOISE_DOMAIN", "ROUND_TAG", "ROWS_FIELD", "ROW_STEP",

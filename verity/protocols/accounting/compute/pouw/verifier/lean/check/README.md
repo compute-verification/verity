@@ -37,7 +37,7 @@ Python reference held to it.
 | field | here |
 | --- | --- |
 | `Params` | the verifier's own: the check item (`entries`, `scheme`, `template`, `tile_work`, and optionally `coins`, the execution phase's coin mode, `live` or `seeded`), `eps` and `delta` as ratio strings, `grid_bits`, the declared `range` of tile counts, the execution phase's `context`, the check query's SHA-512; the template one `PouwVerifier.tiles` pins, with its tile work and query; and the rows' fixed `length` (`{max_tokens, stop}`, stop `fixed`) |
-| `Commitment` | the execution phase's registration, one-stage's record (`registration.record`) as canonical JSON, its execution phase `{kind, context, public}` holding `window.REGISTERED`, whose `length` item must be a fixed-length execution phase's at the verifier's max_tokens (`PouwWindow.lengthProblem`; an execution phase without one, registered before the rule, is refused as `window-form: no-fixed-length`) |
+| `Commitment` | the execution phase's registration, one-stage's record (`registration.record`) as canonical JSON, its execution phase `{kind, context, public}` holding `window.REGISTERED`, whose `length` item must be a fixed-length execution phase's at the verifier's max_tokens (`PouwWindow.lengthProblem`) |
 | `digest` | the record's own: SHA-512(format ‖ 0 ‖ the canonical record), `registration.digest` |
 | `Evidence` | the proof system's answer for a registration, read by `Core.Answer.ofJson` (protocol one-stage's): on acceptance the profile, read by `Core.Integrity.ofJson`, and the public outputs `{"draw": d}`, `d` the verifier's sample as one-stage's `draw.py` writes it (`subset`, `bernoulli`, `stratified` or `work`, with exactly `check_draw`'s keys) |
 | `check` | `PouwVerifier.check`: PoUW's rule over the registration (`registered`), then the service's answer to it (`outcome`); every refusal is the first rule it breaks, with `core_check.py`'s reason |
@@ -101,9 +101,7 @@ and its input carries the challenger key the execution phase's parameters pin (`
 key, a live sample with no pin, and seeded coins under a pin (`coin-key`), verifies the record's signature under the
 pinned key (`Spot.Challenger.recordReason`, `challenger.record_reason`) and reads the commitment from it,
 refuses a bare commitment, and checks the opening against it
-(`Spot.Challenger.liveReason`). Both read the current coin version and, only
-in a replay of a recorded pass, the e2e-service passes' (`epoch-coins/v2`, whose binding and weights' root keep the
-first 32 bytes of `tagged`).
+(`Spot.Challenger.liveReason`). Both read the current coin version.
 
 `PouwVerifier.Credit` holds a served execution phase's credit to what it fixed before each coin (`credit.py`, the Python reference).
 Its entries are `window` and `periodCredit`; the steps they compose are internal (`Credit.Internal`, which only the
@@ -171,7 +169,7 @@ undecided. The same suite puts `pouw-verifier-difftest`'s `opening` against `cor
 reasons, over `tests/verity/protocols/accounting/compute/pouw/verifier/lean/check/pouw_opening_cases.py`: honest openings and one mutation per refusal (or per reading both sides
 share: hex as `bytes.fromhex` reads it, the header's keys sorted), every mutation also replayed over a few seeds, and
 every reason reached. Its `pass` and `draw` go against `core_check.pass_epoch_twin` and `core_check.draw_twin` the same way, over
-`tests/verity/protocols/accounting/compute/pouw/verifier/lean/check/pouw_pass_cases.py`: honest passes of each coin version and a recorded beacon's, honest samples, and one mutation
+`tests/verity/protocols/accounting/compute/pouw/verifier/lean/check/pouw_pass_cases.py`: honest passes under seeded coins and a recorded beacon's, honest samples, and one mutation
 per refusal. Its `rounds` goes against `core_check.rounds` over `tests/verity/protocols/accounting/compute/pouw/verifier/lean/check/pouw_rounds_cases.py`: an honest live execution phase's
 round roots and coins, read through the challenger's session (its record and close signed under the execution phase's pinned key,
 its release log, and the auditor's signed ledger opening and ending it for the execution phase), and one mutation per refusal (an
