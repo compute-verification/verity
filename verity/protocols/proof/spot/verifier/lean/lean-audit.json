@@ -3,7 +3,7 @@
  "roots": ["Spot"],
  "exempt": {
   "Spot.Main": "the spot-one-stage executable's entry point, one line; its command is Core.Protocol.main over Spot.OneStage.protocol, audited under Spot",
-  "Spot.DifftestMain": "the spot-difftest executable's entry point, one definition; it serves Spot.Pieces.table, Spot.SecondWires.piece, Spot.CertifiedRows.piece and Spot.BlockFront.piece among them, all audited under Spot",
+  "Spot.DifftestMain": "the spot-difftest executable's entry point, one definition; it serves Spot.Pieces.table, Spot.SecondWires.piece and Spot.BlockFront.piece among them, all audited under Spot",
   "Spot.ZkMain": "the spot-one-stage-zk executable's entry point, one line; its command is Spot.OneStageZk.membersMain, audited under Spot",
   "Spot.VerifierMain": "the spot-verifier executable's entry point, one line; it serves Spot.Pieces.verifier, audited under Spot",
   "Spot.PlanCheckMain": "the spot-plancheck executable's entry point: it reads JSON lines into Spot.PlanCheck's designs and answers leakBound and checkWork, audited under Spot",
