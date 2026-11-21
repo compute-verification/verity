@@ -91,7 +91,7 @@ class Audit:
     def __init__(self, seed: str, ports: tuple[str, str] = (f"{A}/out", f"{B}/out"), opened: tuple[str, ...] = (A, B),
                  closed: tuple[str, ...] = (A, B), together: bool = False, sampled: tuple[str, ...] = (A, B),
                  setup: Setup | None = None, units: dict | None = None, trees: dict | None = None,
-                 extra: tuple[str, ...] = (), twice: tuple[str, ...] = ()):
+                 extra: tuple[str, ...] = (), twice: tuple[str, ...] = (), law: dict | None = None):
         rng = random.Random(seed)
         units = UNITS if units is None else units
         names = tuple(units)
@@ -105,6 +105,8 @@ class Audit:
         self.partition = PO.build(s.program, s.query, [[units[n][0] for n in names]])
         self.rec = DK.record(s.program, s.query, DESIGN, SCHEME, roots, WINDOW, leaf_layer=LEAF,
                              partition=self.partition)
+        if law is not None:
+            self.rec = {**self.rec, "law": law}
         held = None
         while held != set(sampled):
             ch, sample, _ = _challenger_sample(rng, s, DESIGN, self.rec, trees=0)
@@ -345,6 +347,31 @@ def test_a_statement_of_a_member_the_sample_missed_is_refused_by_both_before_any
         assert run is None and why == M.run_reason(run, refused), (k, why, refused)
         assert why == (f"proofs: member {missed}: the sample holds none of its units, and a member the sample missed "
                        "has no statement")
+
+
+def test_strata_that_cover_the_units_out_of_order_pass_both_population_checks_under_a_subset_design(tmp_path):
+    """PAIR, TRIPLE, PAIR: the strata `PAIR [0, 2) [5, 7)` and `TRIPLE [2, 5)` are a cover of the units, not the units in
+    order stratum by stratum. Under the parameters' subset design both sides take them (`Slots.popCovers`,
+    `members.subset_design`) and end, as on an in-order window, at the first member's stand-in public file, the law
+    stated as the rate `rate:2/7` as the subset object it resolves to (`OneStage.design`, `members.resolved`); under a
+    registration whose law is stratified both refuse it by name, the registration's law named (`STRATA_DESIGN`)."""
+    c = f"{PAIR.id}/c1"
+    ports = (f"{A}/out", f"{B}/out", f"{c}/out")
+    s = Setup(PN.mixed_population_program([(PAIR, 2), (TRIPLE, 3), (PAIR, 2)]),
+              P.template_instances_query([PAIR.id, TRIPLE.id]), names=ports)
+    assert not P.in_order(s.program, s.query, 7) and P.covers(s.program, s.query, 7)
+    a = Audit("members-twin-cover", ports=ports, setup=s, units={A: [[0, 2]], B: [[2, 5]], c: [[5, 7]]},
+              trees={PAIR.id: 4, TRIPLE.id: 3})
+    why, (run, refused) = a.ask(tmp_path / "cover")
+    assert run is None and why == M.run_reason(run, refused), (why, refused)
+    assert M.POPULATION_ORDER not in why and "partition:" not in why, why
+    rated, (run, refused) = a.ask(tmp_path / "cover-rate", params=a.params | {"law": "rate:2/7"})
+    assert run is None and rated == M.run_reason(run, refused) == why, (rated, refused)
+    a = Audit("members-twin-cover-law", ports=ports, setup=s, units={A: [[0, 2]], B: [[2, 5]], c: [[5, 7]]},
+              trees={PAIR.id: 4, TRIPLE.id: 3}, law={"k": 2, "law": "stratified"})
+    why, (run, refused) = a.ask(tmp_path / "cover-law")
+    assert run is None and why == M.run_reason(run, refused), (why, refused)
+    assert M.strata_design("stratified") in why, why
 
 
 def test_leans_parse_and_the_twin_take_a_members_units_from_its_block_and_refuse_the_same_parameters(tmp_path):

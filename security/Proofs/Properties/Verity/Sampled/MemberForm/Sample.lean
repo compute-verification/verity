@@ -233,11 +233,8 @@ theorem population_units {vm : _root_.Spot.OneStageZk.Member} {slice : Json} {pu
   obtain ⟨⟨⟩, hat, -⟩ := ebind_ok h
   refine ⟨hd, hh, ?_⟩
   unfold _root_.Spot.OneStageZk.Member.heldAt at hat
-  split at hat
-  · cases hat
-  · split at hat
-    · assumption
-    · cases hat
+  repeat' split at hat
+  all_goals first | assumption | cases hat
 
 /-- **A header whose unit indices are held to `us` reads as `us`**: `unitsHeld` compares the header's
 `units.indices`, entry by entry as natural numbers, to `us`, and `FilePart.indicesOf` reads them the same way. -/

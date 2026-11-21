@@ -1629,7 +1629,9 @@ def run(j):
     order. `register`: `check_public` on the values and declared items, the population, R1-R7 under
     `service.selection_sampling_design` over it (a rate sampling design's count of none or more than N: `rate`), a bernoulli sampling design at
     any p (`service.bernoulli`: `bernoulli`), a program whose units read stratum by stratum are not its N in order
-    (`partition.in_order`: `population-order`), and the receipt; `select`: a closure map refused (`closure`), then the
+    nor a disjoint cover of them (`partition.covers`: `population-order`), or a cover under a design not subset at both
+    the rule and the docket (`members.subset_designs`: `strata-design`) or under a two-stage rule (`population-order`), and
+    the receipt; `select`: a closure map refused (`closure`), then the
     sample from the source's bytes (`select`), the challenger's coins with their evidence when it read any, held to
     the run's `family`, its challenger key (`key`) and its copy of main's history (`main`) (`_coins_code`: code `coins`,
     or `family`; a `coin_source` other than the challenger is refused
@@ -1694,7 +1696,12 @@ def run(j):
     if service.bernoulli(sampling_design):
         return {"codes": ["bernoulli"], "step": "register"}
     if not P.in_order(p["program"], p["query"], n):
-        return {"codes": ["population-order"], "step": "register"}
+        if not P.covers(p["program"], p["query"], n):
+            return {"codes": ["population-order"], "step": "register"}
+        if not M.subset_designs(sampling_design, rec):
+            return {"codes": ["strata-design"], "step": "register"}
+        if isinstance(rule, service.TwoStage):
+            return {"codes": ["population-order"], "step": "register"}
     receipt = _receipt(rec, j["challenger"], j["received"])
     try:
         derived = DR.derive(p["program"], p["query"], sampling_design, table)
@@ -2795,13 +2802,12 @@ def _audit_v1_accepts(s: Setup, seed: str, server) -> tuple:
     return rec, ch, base, params
 
 
-def test_v2_refuses_a_population_out_of_order(server, server_v2):
-    """v2 refuses a docket whose program's proof blocks, read stratum by stratum, are not its population's units
-    in order (`OneStageZk.popHeld`, `Slots.popOk`), before any session is verified, as the service's run refuses it at
-    docket (`population-order`): the session's knowledge soundness reads slot `u` as proof block `u`. v1, whose
-    R2 holds only the population's count, accepts the same audit on its verdicts. `SETUPS[4]` and `SETUPS[5]` are out
-    of order (`test_the_run_refuses_a_population_out_of_order`); `BLOCKED`'s audit goes on to its session's
-    verdict."""
+def test_v2_takes_a_cover_of_the_population_under_a_subset_design(server, server_v2):
+    """v2's population check (`OneStageZk.popHeld`) takes a docket whose program's proof blocks, read stratum by
+    stratum, are not its population's units in order but a disjoint cover of them (`Slots.popCovers`) under its subset
+    design, as the service's run does (`test_the_run_takes_a_cover_of_the_units_only_under_a_subset_design`):
+    `SETUPS[4]`'s and `SETUPS[5]`'s audits go on past it, as `BLOCKED`'s, in order, does to its session's verdict. v2's one
+    statement takes no stratified or work design (`subset_only`)."""
     circuit = STAND_IN_CIRCUIT
     for s, ok in ((SETUPS[4], False), (SETUPS[5], False), (BLOCKED, True)):
         assert P.in_order(s.program, s.query, s.population) is ok, s.templates
@@ -2811,8 +2817,10 @@ def test_v2_refuses_a_population_out_of_order(server, server_v2):
         case = {"blobs": [circuit.hex(), public.hex(), record.hex()], "commitment": _hex(rec), "evidence": _hex(v2),
                 "params": params | {"proofs": {"public": _sha(public), "registered": None}}}
         out = server_v2.exchange(_json(case))
-        want = "verdict flock-verify/s did not accept" if ok else f"proofs: {POPULATION_ORDER}"
-        assert (out["verdict"], out["reason"]) == ("reject", want), (s.templates, out)
+        assert P.covers(s.program, s.query, s.population) and out["verdict"] == "reject", (s.templates, out)
+        assert POPULATION_ORDER not in out["reason"] and "partition: the registration's strata" not in out["reason"], out
+        if ok:
+            assert out["reason"] == "verdict flock-verify/s did not accept", (s.templates, out)
 
 
 def test_the_per_member_form_as_written_is_what_v2_parses_and_its_check_reads(tmp_path, server, server_v2):
@@ -6802,22 +6810,40 @@ def test_the_audit_refuses_what_soundness_does_not_cover(server, server_v2):
             assert not (out["reason"] or "").startswith("params: "), (kind, out)
 
 
-def test_the_run_refuses_a_population_out_of_order(pieces):
-    """A docket whose program's units, read stratum by stratum, are not its N units in order is refused at its
-    docket (`population-order`, `Slots.popOk`), Lean's the Python's whole: `SETUPS[4]` puts PAIR's units 0, 3 and 4
-    in one stratum ahead of TRIPLE's 1 and 2, and `SETUPS[5]`'s Calls put PAIR's units 0 and 4 ahead of the Fork's. The
-    sampled audit's knowledge soundness reads slot `u` as unit `u`. Programs whose strata are blocks in order go on."""
+def test_the_run_takes_a_cover_of_the_units_only_under_a_subset_design(pieces):
+    """A docket whose program's units, read stratum by stratum, are not its N units in order but whose strata are a
+    disjoint cover of them passes the run's population check under a subset design (`Slots.popCovers`) and is refused
+    at its docket under a stratified one (`strata-design`, `OneStageZk.subsetDesign`), Lean's the Python's whole:
+    `SETUPS[4]` puts PAIR's units 0, 3 and 4 in one stratum beside TRIPLE's 1 and 2, and `SETUPS[5]`'s Calls put
+    PAIR's units 0 and 4 beside the Fork's. Programs whose strata are blocks in order go on under either."""
     source = hashlib.shake_256(b"run").hexdigest(600)
     for s, ok in ((SETUPS[4], False), (SETUPS[5], False), (SETUPS[3], True), (SETUPS[2], True), (SETUPS[6], True)):
-        assert P.in_order(s.program, s.query, s.population) is ok, s.templates
-        case = _run_case(_v1_audit("subset", s), source, 2, ["credited"])
-        out = run(copy.deepcopy(case))
-        assert D.replay(RUN, case, pieces) == ("output", D.canonical(out)), out
-        if ok:
-            assert out.get("codes") != ["population-order"], out
-        else:
-            assert (out.get("step"), out.get("codes")) == ("register", ["population-order"]), out
+        assert P.in_order(s.program, s.query, s.population) is ok and P.covers(s.program, s.query, s.population)
+        for kind in ("subset", "stratified") if s is SETUPS[4] or ok and s is SETUPS[3] else ("subset",):
+            case = _run_case(_v1_audit(kind, s), source, 2, ["credited"])
+            out = run(copy.deepcopy(case))
+            assert D.replay(RUN, case, pieces) == ("output", D.canonical(out)), (kind, out)
+            if ok or kind == "subset":
+                assert out.get("codes") not in (["population-order"], ["strata-design"]), (kind, out)
+            else:
+                assert (out.get("step"), out.get("codes")) == ("register", ["strata-design"]), (kind, out)
     assert not P.in_order(SETUPS[3].program, SETUPS[3].query, SETUPS[3].population + 1)
+    assert not P.covers(SETUPS[3].program, SETUPS[3].query, SETUPS[3].population + 1)
+
+
+def test_a_two_stage_run_takes_no_cover(pieces):
+    """Under a two-stage rule the run takes the units in order only, Lean's the Python's whole: the interleaved layout
+    `SETUPS[4]` under a subset design is refused at its grain (`grain`: its query is two templates', and a grain is one
+    template's, whose units are in order), before the cover branch's `population-order`; the contiguous `SETUPS[1]`
+    passes the population check and goes on to its sample (`coins`: this case carries no coins' evidence)."""
+    source = hashlib.shake_256(b"run").hexdigest(600)
+    for s, want in ((SETUPS[4], ("register", ["grain"])), (SETUPS[1], ("select", ["coins"]))):
+        case = _run_case(_v1_audit("subset", s), source, 2, ["credited"])
+        case["rule"] = {"grain": P.template_instance_query(PAIR.id), "k": 1, "replay": f"rate:3/{s.population}",
+                        "rule": "two-stage"}
+        out = run(copy.deepcopy(case))
+        assert D.replay(RUN, case, pieces) == ("output", D.canonical(out)), (s, out)
+        assert (out.get("step"), out.get("codes")) == want, out
 
 
 #: The public files Flock's producers wrote, recorded in `tests/verity/protocols/proof/flock/prover`' fetched fixtures

@@ -186,12 +186,14 @@ def Own.circuitFile (p : Own) : V ByteArray :=
   restrictOn (pure p.programJ) p.prog.get p.blocks.get p.cuts.get p.partition p.first
 
 /-- A member of the per-member form: its name, its units as `[lo, hi)` ranges, ascending, its circuit's units a proof
-block (META `vus_per_block`) and its statement's own inputs. -/
+block (META `vus_per_block`), its statement's own inputs, and whether the verifier's sampling design is a subset one
+(`subset`, `membersParamsOfJson`), under which its strata need only cover the units (`Member.heldAt`). -/
 structure Member where
   name : String
   units : Array (Nat × Nat)
   g : Nat
   own : Own
+  subset : Bool := false
 
 /-- The parameters: v1's, the verifier's own inputs, and in the per-member form (module docstring, **per member**)
 its members, `own` then holding C and the partition every member's statement reads and no file. -/
@@ -1079,15 +1081,35 @@ def oneSession (sessions : Array RunFiles) : V Unit :=
 def POPULATION_ORDER : String :=
   "population-order: the program's proof blocks under the query are not the registration's population units in order"
 
+/-- The sampling design's kind, its `law`'s text (`subset`, `stratified`, `work`, `bernoulli`), for a refusal. -/
+def designKind (d : Json) : String :=
+  match getD d "law" with
+  | .str t => t
+  | _ => "unnamed"
+
+/-- **The subset design** (module docstring, **population**): the verifier's sampling design (`OneStage.design`'s, a
+rate resolved) and the registration's `law` are both of the `subset` kind, All among them. The one design whose
+draw reads no stratum (`Flock.Draw.drawWith`'s `subset`: the drawn indices are the units), so the strata need only be
+a disjoint cover of the population (`Slots.popCovers`, `Member.heldAt`). -/
+def subsetDesign (v : Docket.Verifier) (record : Json) : Bool :=
+  jsonStrIs (getD v.samplingDesign "law") "subset" && jsonStrIs (getD (getD record "law") "law") "subset"
+
 /-- The registration's population held to the verifier's program (module docstring, **population**): the record names
 a population `n`, and under the verifier's query the program's proof blocks are its `n` units in order
-(`Slots.popOk`). This module imports `Spot.PopOrder`, so the call runs from the query's ranges
+(`Slots.popOk`), or under a subset design (`subsetDesign`) they are its units in any order (`Slots.popCovers`); a cover that is not the units in order is refused by name under any other design
+(`FilePart.STRATA_DESIGN`). This module imports `Spot.PopOrder`, so the call runs from the query's ranges
 (`Slots.popOk_eq_popOkRanges`) and builds no proof block: without the import it would run `Slots.layout`, a proof block
 for every input gate of the root. -/
 def popHeld (v : Docket.Verifier) (record : Json) : V Unit :=
   match nat? (getD record "population") with
   | none => throw "the record names no population"
-  | some n => if Slots.popOk v.program v.query n then pure () else throw POPULATION_ORDER
+  | some n =>
+    if Slots.popOk v.program v.query n then pure ()
+    else if Slots.popCovers v.program v.query n then
+      if subsetDesign v record then pure ()
+      else throw (FilePart.STRATA_DESIGN (designKind (if jsonStrIs (getD v.samplingDesign "law") "subset"
+        then getD record "law" else v.samplingDesign)))
+    else throw POPULATION_ORDER
 
 /-- The challenger session's release log in the evidence's `coins`, a line each, as `Challenger.trustedTreesOf` reads
 it. -/
@@ -1271,7 +1293,8 @@ def membersParamsOfJson (j : Json) : V Params := do
   let one := Json.mkObj [("public", Json.str NO_FILE), ("registered", Json.null)]
   let p ← paramsParsed (Json.mkObj (without j "proofs" ++ [("proofs", one)]))
   let own := { p.own with pub := "" }
-  let ms ← membersOf own (getD pr "members")
+  let subset := jsonStrIs (getD p.base.verifier.samplingDesign "law") "subset"
+  let ms := (← membersOf own (getD pr "members")).map fun m => { m with subset }
   pure { p with base := { p.base with verifier := { p.base.verifier with members := ms.map fun m => (m.units, m.g) } },
                 own, members := some ms }
 
@@ -1374,10 +1397,26 @@ def MEMBER_STRATA : String :=
   "partition: the registration's strata, read stratum by stratum, are not its units in order, or a unit of the " ++
     "member's is past them: a member's strata are the registration's, each restricted to the member's units"
 
+/-- The refusal of a member, under a subset design, whose registration's strata are no disjoint cover of its units,
+hold a range that ends before it starts, or with a unit past them (`Member.heldAt`). -/
+def MEMBER_COVER : String :=
+  "partition: the registration's strata's ranges are not a disjoint cover of its units 0, 1, …, N - 1, a range of " ++
+    "them ends before it starts, or a unit of the member's is past them"
+
 /-- A member's population check at the registration's `strata` and its public file's header `h`: the member's strata
-are the registration's restricted to its units (`Member.sizes`), and the header's units are exactly the member's, in
-order (`unitsHeld`). -/
+are the registration's restricted to its units (`Member.sizes`), or, under a subset design (`m.subset`) and only where
+the registration's strata are not its units in order (`FilePart.sizes`), as `popHeld` takes the walk first, the
+registration's strata are a disjoint cover of its units and the member's are among them (`FilePart.cover`); and the
+header's units are exactly the member's, in order (`unitsHeld`). `m.subset` is the verifier's law; R1-law
+(`Docket.check`) holds the registration's to the design it derives, so on a check that accepts both are subset
+(`subsetDesign`). -/
 def Member.heldAt (m : Member) (strata : Array (String × Array (Nat × Nat))) (h : Json) : V Unit :=
+  if m.subset && (FilePart.sizes strata).isNone then
+    match FilePart.cover strata with
+    | some n => if !m.units.all (·.2 ≤ n) then throw MEMBER_COVER
+                else if unitsHeld m.indices h then pure () else throw MEMBER_UNITS
+    | none => throw MEMBER_COVER
+  else
   match m.sizes strata with
   | none => throw MEMBER_STRATA
   | some _ => if unitsHeld m.indices h then pure () else throw MEMBER_UNITS
