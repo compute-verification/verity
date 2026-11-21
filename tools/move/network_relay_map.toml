@@ -1,0 +1,21 @@
+# The network attester's id relay and the id form's completion framing are the adapter's: the serving side's code that
+# answers the network attester's id requests from a server, which no verifier reads.
+
+[roots]
+old = { verity = "verity", verity_vllm = "adapters/vllm/verity_vllm" }
+new = { verity = "verity", verity_vllm = "adapters/vllm/verity_vllm" }
+
+[paths]
+"verity/protocols/accounting/network/prover/id_relay.py" = "adapters/vllm/verity_vllm/pipeline/id_relay.py"
+"verity/protocols/accounting/network/prover/ids_protocol.py" = "adapters/vllm/verity_vllm/pipeline/ids_protocol.py"
+"tests/verity/protocols/accounting/network/prover/test_id_relay.py" = "tests/adapters/vllm/tests/pipeline/test_id_relay.py"
+
+[modules]
+"tests.verity.protocols.accounting.network.prover.test_id_relay" = "tests.adapters.vllm.tests.pipeline.test_id_relay"
+"verity.protocols.accounting.network.prover.id_relay" = "verity_vllm.pipeline.id_relay"
+"verity.protocols.accounting.network.prover.ids_protocol" = "verity_vllm.pipeline.ids_protocol"
+
+[rewrite]
+# Never rewritten: records of what was, and files whose bytes a digest pins.
+exclude = ["*.lean", "fixtures/**", "**/fixtures/**", "**/CHANGELOG.md", "*.patch", "**/TRUSTED.sha256", "uv.lock",
+           "**/*.lock", "tools/move/**", "tools/research/src/research/store/moves.json"]
