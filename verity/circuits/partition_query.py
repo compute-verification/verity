@@ -125,8 +125,7 @@ def evaluate(program: Program, query: Mapping[str, Any]) -> PO.TemplatePartition
 
 
 def is_template_query(query: Mapping[str, Any]) -> bool:
-    """Whether `query` names a template query, whose proof blocks are the root nodes' instances (`fanout`,
-    `shared_inputs`)."""
+    """Whether `query` names a template query, whose proof blocks are the root nodes' instances (`fanout`)."""
     return isinstance(query, Mapping) and (query.get("name"), query.get("version")) in (PO.Q_TEMPLATE_INSTANCE,
                                                                                          PO.Q_TEMPLATE_INSTANCES)
 

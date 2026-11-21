@@ -23,8 +23,7 @@ and `Q_call` v1 at `X <= 16`, and the programs this protocol builds for the temp
   `Q_word` and `Q_call`), and `unit_gates` gives
   each proof block's root gates. `in_order` holds when the proof blocks read stratum by stratum are the population in order.
   `fanout` gives a template query's fan-out F, at least the most proof blocks one group joined by reads of each other's
-  results holds, and `shared_inputs` the run Input nodes its proof blocks don't each read alone, both a root node at a
-  time (R8, `registration.check`).
+  results holds, a root node at a time (`registration.check`).
 * **Programs**: a partition's program is built by `verity.circuits.population`.
 
 The verifier holds its own copy of the program and applies the query itself (`units`); it never takes a population or a
@@ -41,7 +40,7 @@ from verity.circuits.codec import descriptor_id, program_digest
 from verity.circuits.partition_object import (FORMAT, QueryRefused, program_sha512, template_id,
                                         template_instance_query, template_instances_query)
 from verity.circuits.partition_query import QUERY_X, evaluate, is_template_query, ranges, strata
-from verity.circuits.program import Program, is_input, is_registered
+from verity.circuits.program import RUN, Program, input_id, is_input, is_registered
 from verity.circuits.refs import Affine, Concat, Grid, Strided
 from verity.circuits.types import axis_runs
 
@@ -147,8 +146,8 @@ def fanout(program: Program, query: Mapping[str, Any]) -> int:
     is the group's size exactly where every joined node is a call, and at least it where a joined batch's members read
     other proof blocks' results in parts. It reads each node's references once, never its members or its gates. A
     read of another proof block's values counts only as a reference to that block's result: a value another proof block
-    writes that the program takes as an Input node joins nothing, which is why `shared_inputs` refuses a run Input two
-    proof blocks read. `QueryRefused` for a query other than a template query."""
+    writes that the program takes as an Input node joins nothing: a run Input's rows are one tree the members' check
+    holds. `QueryRefused` for a query other than a template query."""
     part = _template(program, query, "fan-out")
     nodes = program.root.body.nodes
     members = {k: n for k, _t, _lo, n in part.ranges}
@@ -171,64 +170,6 @@ def fanout(program: Program, query: Mapping[str, Any]) -> int:
     for k in joined:
         held[group(k)] += members[k]
     return max([1, *held.values()])
-
-
-def shared_inputs(program: Program, query: Mapping[str, Any], held: Iterable[range] = ()) -> list[int]:
-    """The run Input nodes of `program` (`program.INPUT_ID`; a registered input, and an Input node whose gates lie in one
-    of `held`, the gates of the parameters the verifier expects registered, are registered values, held by R7) whose
-    leaves a template query's proof blocks don't each read alone, in node order: a batch of more than one member reading
-    one whole (an argument it broadcasts), or two proof blocks reading one of its leaves, as the summary sees them a root
-    node at a time. A batch's members read disjoint elements of each argument it maps (`cut.member_refs`), so a batch
-    reads an Input node's leaves alone when no two of its references to them name one leaf; a call is one proof block,
-    whatever it reads twice. A strided run is taken at its span, and one that names a leaf twice, or two of a batch's
-    runs that overlap, count as shared. A served port's rows reach a proof block either as its own leaves or through a
-    registered value: a run Input two proof blocks read could hold rows one of them computed, which `fanout` can't see.
-    `QueryRefused` for a query other than a template query."""
-    part = _template(program, query, "an Input's readers")
-    nodes, offsets, held = program.root.body.nodes, program.root.body.offsets, list(held)
-    run_input = {k for k, node in enumerate(nodes) if is_input(node.fn) and not is_registered(node.fn)
-                 and not any(h.start <= offsets[k] and offsets[k + 1] <= h.stop for h in held)}
-    shared: set[int] = set()
-    spans: dict[int, list[tuple[int, int]]] = {}
-    for k, _t, _lo, n in part.ranges:
-        node = nodes[k]
-        axes = node.axes if node.form == "batch" else (None,) * len(node.args)
-        mine: dict[int, list[tuple[int, int]]] = {}
-        for a, ax in zip(node.args, axes):
-            for i, lo, hi, once in _runs(a.refs):
-                if i not in run_input:
-                    continue
-                if n > 1 and (ax is None or not once):
-                    shared.add(i)
-                mine.setdefault(i, []).append((lo, hi))
-        for i, rs in mine.items():
-            rs.sort()
-            if n > 1 and any(b[0] < a[1] for a, b in zip(rs, rs[1:])):
-                shared.add(i)
-            spans.setdefault(i, []).extend(_merged(rs))
-    for i, rs in spans.items():
-        rs.sort()
-        top = None
-        for lo, hi in rs:
-            if top is not None and lo < top:
-                shared.add(i)
-            top = hi if top is None else max(top, hi)
-    return sorted(shared)
-
-
-def held_reads(program: Program, query: Mapping[str, Any], held: Iterable[range]) -> list[tuple[range, int]]:
-    """The units of each template query range with each run Input node inside one of `held` its instance node reads, in
-    the order its arguments' runs name them, never its members or its gates. The Lean's `Partition.heldReads`
-    is this. `QueryRefused` for a query other than a template query."""
-    part = _template(program, query, "an Input's readers")
-    nodes, held = program.root.body.nodes, list(held)
-    inside = {k for k, node in enumerate(nodes) if is_input(node.fn) and not is_registered(node.fn)
-              and any(within(program, h, k) for h in held)}
-    out: list[tuple[range, int]] = []
-    for k, _t, lo, n in part.ranges:
-        ws = dict.fromkeys(i for a in nodes[k].args for i, *_ in _runs(a.refs) if i in inside)
-        out.extend((range(lo, lo + n), i) for i in ws)
-    return out
 
 
 def input_reads(program: Program, query: Mapping[str, Any], held: Iterable[range]) -> list[tuple[str, str, range]]:
@@ -324,6 +265,14 @@ def within(program: Program, gates: range, k: int) -> bool:
     return gates.start <= offsets[k] and offsets[k + 1] <= gates.stop
 
 
+def any_run_input(program: Program, gates: range) -> bool:
+    """Whether a root node whose gates lie in `gates` is a run Input node: a registered or supplied value's gates hold
+    none (`R7-run-input`). The Lean's `Partition.anyRunInput` is this."""
+    nodes = program.root.body.nodes
+    return any(within(program, gates, k) and input_id(nodes[k].fn.id) is not None and input_id(nodes[k].fn.id)[0] == RUN
+               for k in range(len(nodes)) if is_input(nodes[k].fn))
+
+
 def run_inputs(program: Program, gates: range) -> bool:
     """Whether the root's nodes whose gates lie in `gates` are run Input nodes, and one does: a parameter R8 may let
     through as tied is one the run binds. The Lean's `Partition.runInputs` is this."""
@@ -332,17 +281,6 @@ def run_inputs(program: Program, gates: range) -> bool:
     return bool(inside) and all(is_input(nodes[k].fn) and not is_registered(nodes[k].fn) for k in inside)
 
 
-def _merged(rs: Sequence[tuple[int, int]]) -> list[tuple[int, int]]:
-    """Sorted spans `rs` with the overlapping ones merged."""
-    out: list[tuple[int, int]] = []
-    for lo, hi in rs:
-        if out and lo < out[-1][1]:
-            out[-1] = (out[-1][0], max(out[-1][1], hi))
-        else:
-            out.append((lo, hi))
-    return out
-
-
 __all__ = ["template_id", "FORMAT", "QueryRefused", "digest", "evaluate", "fanout", "in_order", "is_template_query", "partition",
-           "program_digest", "program_sha512", "held_of", "held_value", "member_nodes", "member_reads", "ranges", "run_inputs", "shared_inputs", "strata", "template_instance_query",
+           "program_digest", "program_sha512", "held_of", "held_value", "member_nodes", "member_reads", "ranges", "any_run_input", "run_inputs", "strata", "template_instance_query",
            "template_instances_query", "unit_gates", "units", "within", "QUERY_X"]
