@@ -3139,6 +3139,78 @@ def test_served_inert_work_per_input_bounds_each_input_on_its_own(honest_pass, t
         SD.main([*args, "--out", str(tmp_path / "short"), "--resume", str(tmp_path / "short.jsonl")])
 
 
+#: `--fresh-draws 4` on `proved_pass`'s pass with y's salts seeded too (`FRESH_Y_SEED`), so the manifest's bytes are fixed:
+#: its sha256, the source, each input's picked (matmul, tile) by sample, and the rejected samples' reasons.  The trials
+#: derive from the manifest's digest, so a change to the manifest's bytes re-pins them from a sweep of sources on the new
+#: one.  Honest tiles fail at a rate, so the outcomes are pinned, not assumed clean: under sm120 the 4-row partial tile 1
+#: is over the tile cap (`inertBoundOK`) in about 1 trial in 2,000 of it, and -h3's row cap fails more often, h100's most.
+FRESH_Y_SEED = 453
+FRESH_PINNED = {
+    "pearl-c-sm120-v1-h3": (
+        "a541a57836de0fd13ed4ee2c0b0190a3b032d35bc21238aecd58f410085d8732",
+        "f26a4852a15a8a3dd2c318801d1835e243a40b8b73888fd79c5de35eb41d6acd",
+        [(0, 1), (0, 1), (0, 0), (0, 1), (1, 2), (1, 3), (1, 3), (1, 3)],
+        {(0, 0): "the replayed debit 102 exceeds the cap 53 (ρ·the credited cells' credit)"}),
+    "pearl-c-h100-v1-h3": (
+        "04c68304bda06244db702945bfc3f58f589acd0368cdaeea7adb9f73a1b9ea5b",
+        "d6aa55078fe9524bd276f407541f1fa74b16073a69908eed749bc31601515457",
+        [(0, 0), (0, 1), (0, 1), (0, 1), (1, 3), (1, 3), (1, 2), (1, 2)],
+        {(1, 0): "A row 12's replayed debit 120 exceeds its cap 26 (the row cap: ρ·its credited cells' credit)"}),
+}
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("scheme", sorted(FRESH_PINNED))
+def test_served_inert_work_fresh_draws_on_a_fixed_pass_give_their_pinned_outcomes(scheme, tmp_path, capsys):
+    """`--fresh-draws` end to end on a pass whose bytes are fixed: each input by N work-weighted trials under salts of its
+    own derived from the source and the manifest, each trial the tile rule on the committed rows under its salt, exactly
+    the pinned picks and rejections (sm120's a tile-cap one, h100's a row-cap one), the batch replay cross-checked on the
+    even samples, every rejected trial's debit and reason recomputed on the scalar reference, Clopper–Pearson per input;
+    a resume with the same source measures nothing again, and another source's trials are refused."""
+    with patch.object(SY, "fresh_salts", seeded_salts(FRESH_Y_SEED)):
+        path, s, epoch, prover, tr, splits, records = proved_pass(tmp_path, scheme)
+    sha, src, picks, rejected = FRESH_PINNED[scheme]
+    assert hashlib.sha256(path.read_bytes()).hexdigest() == sha, "the pass's manifest bytes changed: re-pin FRESH_PINNED"
+    out = tmp_path / "out"
+    args = [str(path), "--per-input", "1", "--fresh-draws", "4", "--fresh-source", src, "--jobs", "1", "--cross-check", "2",
+            *coins_args(path)]
+    assert SD.main([*args, "--out", str(out)]) == 0
+    doc = json.loads((out / "inputs.json").read_text())
+    assert doc["fresh_source"] == src and doc["fresh_draws"] == 4 and doc["m"] == 2
+    lines = sorted((json.loads(x) for x in (out / f"{path.parent.name}.fresh-tiles.jsonl").read_text().splitlines()),
+                   key=lambda t: (t["matmul"], t["draw"]))
+    assert [(t["matmul"], t["draw"]) for t in lines] == [(m, d) for m in (0, 1) for d in range(4)]
+    assert [(t["matmul"], t["tile"]) for t in lines] == picks
+    assert {(t["matmul"], t["draw"]): t["reason"] for t in lines if not t["ok"]} == rejected
+    assert len({t["salt"] for t in lines}) == 8 and epoch.salt.hex() not in {t["salt"] for t in lines}
+    assert all(t["openings_ok"] and t["replay"] == "batch" and "cross_check_failed" not in t for t in lines)
+    assert [t["draw"] for t in lines if t.get("cross_checked")] == [0, 2, 0, 2]
+    for row in doc["inputs"]:
+        failures = sum(m == row["matmul"] for m, _ in rejected)
+        assert row["method"] == "fresh" and row["drawn"] == 4 and row["failures"] == failures
+        assert row["upper"] == SD.clopper_pearson_upper(failures, 4, 0.025) and row["bound_method"].startswith("fresh")
+    verifier = Verifier(CW._TileRuleView(s), epoch)
+    for t in (t for t in lines if not t["ok"]):
+        ref = verifier.refs[t["tile"]]
+        op = prover.open(epoch, ref.id)
+        a, b = [opened_value(s.commitment_hash, o.value) for o in op.a], [opened_value(s.commitment_hash, o.value) for o in op.b]
+        u = epoch.workload.matmuls[ref.matmul]
+        ctx = Context(bytes.fromhex(t["salt"]), u, tr.activation_roots[ref.matmul], epoch.weight_roots[u.weight])
+        ops = s.encode(ctx, s.noise(ctx), a, b, ref.tile)
+        rows, cols = records[ref.matmul].credited(ref.tile)
+        debit, cap = CW._inert_work_and_bound(s, records[ref.matmul], ref.tile, ops, rows, cols)
+        assert t["debit_exact"] == str(debit) and t["ratio"] == float(debit / cap)
+        assert CW.check_opened(s, records[ref.matmul], ref.tile, a, b, ops) == t["reason"]
+    capsys.readouterr()
+    again = tmp_path / "again"
+    resume = ["--resume", str(out / f"{path.parent.name}.fresh-tiles.jsonl")]
+    assert SD.main([*args, "--out", str(again), *resume]) == 0
+    assert f"{path.parent.name}: 8 of 8 tiles resumed, 0 to measure" in capsys.readouterr().out
+    assert json.loads((again / "inputs.json").read_text())["inputs"] == doc["inputs"]
+    with pytest.raises(ValueError, match="another salt"):
+        SD.main([*args[:6], "cd" * 32, *args[7:], "--out", str(tmp_path / "other"), *resume])
+
+
 def test_fresh_trials_draw_exactly_by_work_from_a_source_fixed_in_the_command(tmp_path):
     """Lean's conditions on the fresh-trial ε: sample d is `key.uniform(W, d)` over the input's cumulative credited cells
     (exactly proportional to `TR.Wref` within the input), under a domain naming the table and a context naming the input,
