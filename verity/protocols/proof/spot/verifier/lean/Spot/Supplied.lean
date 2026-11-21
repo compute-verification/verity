@@ -220,6 +220,15 @@ def cut (got : Array (Array Nat)) (n k : Nat) : Array (Array Nat) :=
 #guard cut #[#[1, 2, 3]] 2 1 == #[#[1, 2, 3]]
 #guard cut #[#[1, 2], #[3, 4]] 4 1 == #[#[1, 2], #[3, 4]]
 
+/-- `registered_value.public_root`: the frame-v3-sha512 root over the domain id `dom` of `rows` in `schema` at
+`wordBits`, row `i` hidden under its public salt `salt program value i` (hm96-sha512 under the default key). -/
+def rowsRoot (program value schema : String) (dom : ByteArray) (rows : Array (Array Nat)) (wordBits : Nat) :
+    ByteArray :=
+  let leaves := rows.mapIdx fun i r =>
+    Flock.Registered.leafAs schema dom i (Flock.Hm96.Default512.treeLeaf
+      (Flock.Hm96.Default512.commitString (rowDigest schema r wordBits) (salt program value i)))
+  Flock.FV3.root dom leaves Flock.Sha512.hash
+
 /-- `registered.supplied_root`: the root R7 holds a supplied value's entry to (hex), the rows of `rs` in the value's row
 format of `schemas` committed under `salt` at the verifier's own entry `want`, a value given as one row of all their
 leaves (a mark's, `ofMark`) cut into them (`cut`); an error where a source names nothing or the rows are not its
@@ -237,10 +246,7 @@ def root (rec : Json) (log : Array Json) (binding : Option (String × String)) (
   let [w] := Registered.widthSet p.ty | throw s!"parameter {value}: its leaves are not one width"
   let packed := if schema == Registered.SCHEMA then got else got.map (pack w want.wordBits)
   let dom ← Registered.domain program value want.words want.leaves want.wordBits
-  let leaves := packed.mapIdx fun i r =>
-    Flock.Registered.leafAs schema dom i (Flock.Hm96.Default512.treeLeaf
-      (Flock.Hm96.Default512.commitString (rowDigest schema r want.wordBits) (salt program value i)))
-  return Flock.hexOf (Flock.FV3.root dom leaves Flock.Sha512.hash)
+  return Flock.hexOf (rowsRoot program value schema dom packed want.wordBits)
 
 /-! The registry (`verity/circuits/PROTOCOL.md` §5.4): every function a supplied input of C may name, and the bodies the
 verifier evaluates. C names the function in its input's mark, under its digest, so no scheme passes one. -/

@@ -72,5 +72,6 @@ public import Spot.HeaderHeldAt
 public import Spot.Test.Admitted
 public import Spot.Test.Docket
 public import Spot.Test.Refusals
+public import Spot.Test.VerdictTrees
 
 @[expose] public section

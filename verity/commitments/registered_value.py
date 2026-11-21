@@ -10,7 +10,7 @@ from typing import Any
 from verity.commitments import hm96
 from verity.commitments.identity import identity_digest_sha512
 from verity.commitments.indexed import RangeIndexedDomain
-from verity.commitments.merkle import CommitmentDomain, tree_levels
+from verity.commitments.merkle import _LEAF, CommitmentDomain, _uint, frame_hash, root_from_subtrees, tree_levels
 from verity.commitments.rowleaf import (ROLE_X, SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2,
                                         bit_row, row_leaf, sha512_row_digest, sha512_row_seg_digest, sha512_row_v2_digest)
 
@@ -138,6 +138,22 @@ def supplied_salts(program: str, value: str, n: int) -> list[bytes]:
                      for c in range(_INST.salt_bytes // 64)) for i in range(n)]
 
 
+def commit_strings(rows: Sequence[Sequence[int]], salts: Sequence[bytes], word_bits: int = WORD_BITS,
+                   schema: str = SCHEMA_HM96_SHA512_ROW) -> tuple[bytes, ...]:
+    """Each row's `b || c` under its salt, hm96-sha512 under the default key."""
+    return tuple(_INST.commit_string(_INST.default_key, row_digest(r, word_bits, schema), s) for r, s in zip(rows, salts))
+
+
+def public_root(program: str, value: str, domain_id: bytes, rows: Sequence[Sequence[int]], word_bits: int = WORD_BITS,
+                schema: str = SCHEMA_HM96_SHA512_ROW) -> bytes:
+    """`Supplied.rowsRoot`: the root over the domain id `domain_id` of `rows`, row i under `supplied_salts`' salt i."""
+    s = known_schema(schema)
+    bcs = commit_strings(rows, supplied_salts(program, value, len(rows)), word_bits, schema)
+    return root_from_subtrees(domain_id, len(bcs), {
+        (0, i): frame_hash(_LEAF, domain_id, _uint(i), _uint(i), s.encode(), _INST.tree_leaf(_INST.default_key, bc))
+        for i, bc in enumerate(bcs)})
+
+
 @dataclass(frozen=True)
 class Registered:
     """The prover's side of one registered value: its rows and salts (private), every row's `b || c`, the tree."""
@@ -173,7 +189,7 @@ class Registered:
             raise ValueError(f"one {_INST.salt_bytes}-byte salt per row")
         if len(set(salts)) != len(salts):
             raise ValueError("a salt is never reused: equal salts on two rows reveal the XOR of their digests")
-        bcs = tuple(_INST.commit_string(_INST.default_key, row_digest(r, word_bits, schema), s) for r, s in zip(rows, salts))
+        bcs = commit_strings(rows, salts, word_bits, schema)
         dom = domain(program, value, words, len(rows), word_bits, window, produced, session)
         return cls(program, value, words, int(word_bits), rows, salts, bcs,
                    tree_levels(dom, [leaf(dom, i, bc, schema) for i, bc in enumerate(bcs)]), schema, window, produced,
@@ -215,5 +231,5 @@ class Registered:
 
 
 __all__ = ["BLOCK", "ENTRY_KEYS", "OWNER", "PRODUCED_KEY", "READS_FROM", "REGISTERED_DOMAIN", "Registered", "SCHEMA", "SCHEMAS", "SCHEMA_KEY",
-           "SESSION_KEY", "SUPPLIED_SALT", "WIDTHS", "WIDTH_KEY", "WINDOW_KEY", "WORD_BITS", "domain", "known_schema", "leaf",
-           "port", "row_digest", "row_words", "schema_entry", "supplied_salts", "width_entry", "window_root"]
+           "SESSION_KEY", "SUPPLIED_SALT", "WIDTHS", "WIDTH_KEY", "WINDOW_KEY", "WORD_BITS", "commit_strings", "domain", "known_schema",
+           "leaf", "port", "public_root", "row_digest", "row_words", "schema_entry", "supplied_salts", "width_entry", "window_root"]

@@ -748,6 +748,84 @@ def fieldTreesHeld (want : Array (String × Nat)) (ts : Std.HashSet String) (rec
   if let some (port, _) := got.find? fun (port, _) => !want.any (·.1 == port) then
     throw (FIELD_TREES_WHY s!"it holds {port}, no output field's tree")
 
+/-- **The opening verdicts**, each `(name, version, field)`: Definition `name_vversion` opens a committed tree and returns
+its verdict word, 1 where the opening holds, as its output field `field`. A list, because C marks no output a verdict;
+a verdict kind in C's format, read off each Definition's return, would replace it. A Definition of C that takes an
+opening (`opensTree`) and is on no entry refuses (`UNLISTED_OPENING_WHY`). -/
+def VERDICTS : List (String × Nat × Nat) := [("EmbeddingRead", 3, 1)]
+
+/-- The Definitions that open a frame-v3 tree at a hidden position (`gates.frame_v3`): a Definition that calls one,
+directly or through others, takes an opening. -/
+def OPENERS : List String := ["FrameV3Read_v1", "FrameV3ReadAt_v1"]
+
+/-- Definition `f`'s verdict field on `VERDICTS`; none where it is on no entry. -/
+def verdictField (f : Flock.Program.Defn) : Option Nat :=
+  (VERDICTS.find? fun (n, v, _) => f.id == s!"{n}_v{v}").map (·.2.2)
+
+/-- Which Definitions of `P` call one of `OPENERS`, directly or through others: a pass over every body for each level
+of nesting, at most as many passes as `P` has Definitions. -/
+def opensTree (P : Flock.Program.Prog) : Array Bool := Id.run do
+  let mut r := P.defs.map fun f => OPENERS.contains f.id
+  for _ in [0:P.defs.size] do
+    let next := P.defs.mapIdx fun i f => r.getD i false || f.body.nodes.any fun x => r.getD x.fn false
+    if next == r then break
+    r := next
+  return r
+
+/-- The refusal of C's Definition `key` that takes an opening (`opensTree`) and is on no entry of `VERDICTS`. -/
+def UNLISTED_OPENING_WHY (key : String) : String :=
+  s!"roots: C's Definition {key} opens a committed tree and is no opening verdict the verifier holds (VERDICTS): " ++
+    "an opening binds its row only where its verdict is held to 1"
+
+/-- The refusal of a verdict tree `tree` whose root is not the verifier's (`verdictTreesHeld`). -/
+def VERDICT_TREE_WHY (tree : String) : String :=
+  s!"roots: {tree} is an opening's verdict, and the registration's root of it is not the verifier's: every unit's " ++
+    "verdict row is 1, under the public salts of a supplied value"
+
+/-- **The window's verdict trees, from C and the partition**: refuses a root node of C whose Definition takes an
+opening and is on no entry of `VERDICTS` (`UNLISTED_OPENING_WHY`); then the trees of `derivedFieldTrees`, each at its
+rows there, that are a verdict field's tree (`Flock.Registered.fieldTree`) of a member's template whose Definition in C
+(`Member.tidIn`) is on an entry. -/
+def verdictTrees (P : Flock.Program.Prog) (rs : Array Flock.TemplateQuery.TRange) (ms : Array Member) :
+    V (Array (String × Nat)) := do
+  let opens := opensTree P
+  for x in Flock.Registered.rootNodes P do
+    if let some f := P.defs[x.fn]? then
+      if opens.getD x.fn false && (verdictField f).isNone then throw (UNLISTED_OPENING_WHY f.key)
+  let want ← derivedFieldTrees P rs ms
+  return want.filter fun (tree, _) => ms.any fun m =>
+    match templateOf m.name, m.tidIn rs with
+    | some (t, _), some tid =>
+      ((P.index[tid]? >>= (P.defs[·]?)) >>= verdictField).any (tree == Flock.Registered.fieldTree t ·)
+    | _, _ => false
+
+/-- The root of a verdict tree `tree` of `n` rows over the domain id `dom` (hex): each row the one 16-bit word 1,
+under its public salt for `tree` of the program of SHA-512 hex `program` (`Supplied.rowsRoot`). -/
+def verdictRoot (program tree : String) (dom : ByteArray) (n : Nat) : String :=
+  Flock.hexOf (Supplied.rowsRoot program tree Spot.Registered.SCHEMA dom (Array.replicate n #[1]) 16)
+
+/-- `verdictTreesHeld` over C's decoded `P`, its SHA-512 hex `program` and its partition's ranges `rs`. -/
+def verdictTreesHeldAt (P : Flock.Program.Prog) (program : String) (rs : Array Flock.TemplateQuery.TRange)
+    (ms : Array Member) (rec : Json) : V Unit := do
+  let byPort := rootsByPort rec
+  for (tree, n) in ← verdictTrees P rs ms do
+    let some e := byPort.get? tree | throw (VERDICT_TREE_WHY tree)
+    let .str d := getD e "domain" | throw (VERDICT_TREE_WHY tree)
+    let .ok dom := Flock.unhex d | throw (VERDICT_TREE_WHY tree)
+    if getD e "root" != .str (verdictRoot program tree dom n) then throw (VERDICT_TREE_WHY tree)
+
+/-- **Every unit's verdict is a committed 1**: each verdict tree (`verdictTrees`, its rows counted from C and the
+partition, never from the record) has the record's root the verifier computes itself (`verdictRoot`), over the
+record's domain id for it, refused by name (`VERDICT_TREE_WHY`). With `outReadsAt` (every unit's output port of the
+field reads `<template>/o<j>` and no other tree) and `fieldTreesHeld` (that tree is a root of the record once), a
+sampled unit's proof shows its verdict equal to a committed 1, so its opening holds. It rests on the opening's anchors
+(its root and domain) being supplied inputs of C, never the prover's, and on the refusal of an anchor port at a run
+input node: without both, a verdict of 1 opens a tree the prover chose. An honest unit's verdict is 1 where every
+prompt id is below the table's `V`; one at or above it gives 0, and the window is refused. -/
+def verdictTreesHeld (p : Params) (ms : Array Member) (rec : Json) : V Unit := do
+  let P ← Program.parse p.own.program
+  verdictTreesHeldAt P.prog (Flock.hexOf P.desc.sha512) (← Partition.evaluate P (getD p.own.partition "query")) ms rec
+
 /-- The refusal of a member's root of its own at a port whose argument C reads from a run input node `w`
 (`runInputRootsAt`): the node's rows are committed once, in `input/n<w>`, which every unit reading them opens. -/
 def RUN_OWN_ROOT_WHY (member port : String) (w : Nat) : String :=
@@ -853,6 +931,7 @@ def membersRun (p : Params) (ms : Array Member) (c : OneStage.Commitment) (e : E
     (bs : Core.Blobs) : V Run :=
   membersStructure p ms c e sts bs >>= fun _ =>
   membersRootsOf p ms c.record >>= fun roots =>
+  verdictTreesHeld p ms c.record >>= fun _ =>
   heldRootsOf p.base.verifier ms roots >>= fun _ =>
   runMembers (fun m => m.slice c.record roots) ms sts e.base.provedUnits bs
 
@@ -867,6 +946,7 @@ theorem membersRun_files {p : Params} {ms : Array Member} {c : OneStage.Commitme
   obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
   obtain ⟨roots, hr, h⟩ := Flock.HmNets.bind_ok h
   obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
+  obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
   exact ⟨roots, hr, runMembers_files h⟩
 
 /-- **Where the per-member form's run returns with every session accepted, the units the sessions proved are the
@@ -879,6 +959,7 @@ theorem membersRun_proved {p : Params} {ms : Array Member} {c : OneStage.Commitm
   obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
   obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
   obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
+  obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
   exact runMembers_proved h hall
 
 /-- **Where the per-member form's run returns, every statement is of a member the sample holds**
@@ -888,6 +969,7 @@ theorem membersRun_sampled {p : Params} {ms : Array Member} {c : OneStage.Commit
     {sts : Array StatementFiles} {bs : Core.Blobs} {r : Run} (h : membersRun p ms c e sts bs = .ok r) :
     ∃ held, membersHeld ms sts = .ok held ∧ ∀ m ∈ held, m.sampled e.base.provedUnits = true := by
   unfold membersRun at h
+  obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
   obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
   obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
   obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h

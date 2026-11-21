@@ -59,6 +59,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import tempfile
 from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
@@ -688,6 +689,72 @@ def _field_trees_held(want: Sequence[tuple[str, int]], ts: set[str], record: Map
         raise _Refused(field_trees_why(f"it holds {port}, no output field's tree"))
 
 
+#: `OneStageZk.VERDICTS`: each opening Definition's ``(name, version, field)``, its verdict word as output field `field`.
+VERDICTS: tuple[tuple[str, int, int], ...] = (("EmbeddingRead", 3, 1),)
+#: `OneStageZk.OPENERS`.
+OPENERS: tuple[str, ...] = ("FrameV3Read_v1", "FrameV3ReadAt_v1")
+
+
+def unlisted_opening_why(key: str) -> str:
+    """`OneStageZk.UNLISTED_OPENING_WHY`."""
+    return (f"roots: C's Definition {key} opens a committed tree and is no opening verdict the verifier holds (VERDICTS): "
+            "an opening binds its row only where its verdict is held to 1")
+
+
+def verdict_tree_why(tree: str) -> str:
+    """`OneStageZk.VERDICT_TREE_WHY`."""
+    return (f"roots: {tree} is an opening's verdict, and the registration's root of it is not the verifier's: every unit's "
+            "verdict row is 1, under the public salts of a supplied value")
+
+
+def _verdict_field(fn: Any) -> int | None:
+    return next((j for n, v, j in VERDICTS if fn.id == f"{n}_v{v}"), None)
+
+
+def _opens(fn: Any, memo: dict[str, bool]) -> bool:
+    """`OneStageZk.opensTree`: `fn` is one of `OPENERS` or calls one, directly or through others."""
+    k = PO.descriptor_id(fn)
+    if k not in memo:
+        body = getattr(fn, "body", None)
+        memo[k] = fn.id in OPENERS or any(_opens(x.fn, memo) for x in (body.nodes if body is not None else ()))
+    return memo[k]
+
+
+def _verdict_trees(program: Program, query: Mapping[str, Any], ms: Mapping[str, Any]) -> list[tuple[str, int]]:
+    """`OneStageZk.verdictTrees`."""
+    memo: dict[str, bool] = {}
+    for x in program.root.body.nodes:
+        if _opens(x.fn, memo) and _verdict_field(x.fn) is None:
+            raise _Refused(unlisted_opening_why(PO.descriptor_id(x.fn)))
+    want = _derived_field_trees(program, query, ms)
+    ranges = P._template(program, query, "the members' partition").ranges
+    fns = {PO.descriptor_id(fn): fn for _k, fn in PO.calls(program)}
+    trees = set()
+    for name, m in ms.items():
+        t = _template_of(name)
+        met = list(dict.fromkeys(tid for lo, hi in m["units"] for _k, tid, first, n in ranges
+                                 if first < hi and lo < first + n))
+        if t is not None and len(met) == 1 and (j := _verdict_field(fns[met[0]])) is not None:
+            trees.add(f"{t[0]}/o{j}")
+    return [(tree, n) for tree, n in want if tree in trees]
+
+
+def _verdict_trees_held(program: Program, query: Mapping[str, Any], ms: Mapping[str, Any],
+                        record: Mapping[str, Any]) -> None:
+    """`OneStageZk.verdictTreesHeld`: each verdict tree's root in `record` is `RV.public_root` of its rows, each the one
+    word 1, over the record's domain id for it."""
+    roots = record.get("roots")
+    by_port = {r["port"]: r for r in (roots if isinstance(roots, list) else ())
+               if isinstance(r, dict) and type(r.get("port")) is str}
+    prog = P.program_sha512(program)
+    for tree, n in _verdict_trees(program, query, ms):
+        d = by_port.get(tree, {}).get("domain")
+        if type(d) is not str or not re.fullmatch(r"(?:[0-9a-f]{2})*", d):
+            raise _Refused(verdict_tree_why(tree))
+        if by_port[tree].get("root") != RV.public_root(prog, tree, bytes.fromhex(d), [[1]] * n).hex():
+            raise _Refused(verdict_tree_why(tree))
+
+
 def _slice(m: Mapping[str, Any], roots: Sequence[Mapping[str, Any]], record: Mapping[str, Any]) -> dict[str, Any]:
     """`OneStageZk.Member.slice`: the member's count of units, its roots of the docket and its scheme."""
     return {"population": _count(m), "roots": list(roots), "scheme": record.get("scheme")}
@@ -1220,6 +1287,7 @@ def _members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence:
         roots, ft = _members_roots(ms, record)
         roots = _wired(program, params["query"], params["program"], ms, record, roots, ft)
         _ports_once(ms, roots)
+        _verdict_trees_held(program, params["query"], ms, record)
         _held_roots(ms, _held_reads(params, program), roots)
         _sampled(ms, held, evidence["proved_units"])
         try:
