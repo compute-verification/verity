@@ -1,6 +1,7 @@
 """The session's node figures, read from the node's data sheets: its node file and the GPU and host cards it names
 (`verity.device`'s `load_node` and `load_card`), through `timing.Figures.of_sheets`, with the figures no sheet states
-(`UNSHEETED`) and each GPU's squaring ceiling, a function of its card's clock readings (`squaring_ceilings`).  `python sheets.py NODE` writes them as the verifier's `--figures` reads them, and `python sheets.py --sha512
+(`UNSHEETED`) and each GPU's share of the card's maximum squaring rate, a function of its card's clock readings
+(`squaring_ceilings`).  `python sheets.py NODE` writes them as the verifier's `--figures` reads them, and `python sheets.py --sha512
 NODE` their digest, as its `--figures-sha512` pins it."""
 
 from __future__ import annotations
@@ -29,53 +30,65 @@ UNSHEETED = {
         "link_burst_bytes": 6_291_456,
     },
 }
-# No figure here is measured on an H200 or H100 node, nor its card's on-chip storage counted: their sessions read the
-# RTX PRO 6000 node's SHA-512 rate and link burst (its card's `store.chip` for the GPU's), as the measured node's. No
-# squaring ceiling is borrowed: theirs is refused (`squaring_ceilings`).
-UNSHEETED |= {kind: UNSHEETED["rtx-pro-6000-server-x8"]
-              | {"gpu_chip_bytes": int(number(load_card("rtx-pro-6000-server", directory=CARD_FILES)["store"]["chip"]))}
-              for kind in ("h200-sxm-141gb-x1", "h100-sxm-80gb-x1")}
-"""Per node kind, the figures a session's ledger reads that no data sheet states, but its squaring ceiling."""
+BORROWED = ("h200-sxm-141gb-x1", "h100-sxm-80gb-x1")
+"""The node kinds with a node file and no SHA-512 rate, link burst or squaring rate measured on them."""
 
-P512_FORM = 1.567
-"""One RTX PRO 6000's squaring rate at 512 bits over codec-mix's reference (`gamma.REF` squarings a second at
-`gamma.REF_MHZ`), at the reference's clock, as it was typed: s·(1 + h), s the best form on the GPU less its MOV and SEL
-and h the host's 128 cores at their IFMA bound over 8 reference GPUs.  Its source (the form, the run behind it and its
-split between s and h) is not in the tree, and it is none of `gamma.GPU`'s forms.  `squaring_ceilings` takes it whole
-as the GPU's part, so the host share beside it counts the host again: the higher ceiling."""
 
-FORMS = {"rtx-pro-6000-server-x8": {"p512": P512_FORM}}
-"""Per node kind, per codec width, one GPU's squaring rate over `gamma.REF` at the same clock, where a ceiling is
-established.  Only the node `gamma.py` reads has one: its host is the one `HOST_SQUARINGS_PER_S` counts."""
+def _sku(kind: str) -> str:
+    return load_node(kind, directory=NODE_FILES, cards_directory=CARD_FILES)["device"]["sku"]
+
+
+# Each figure below bounds what the audited node can do from above (its compressions a second, the bytes its links land
+# at once), so another node's figure is not its bound: each is refused by name.  Its GPUs' on-chip storage is the RTX
+# PRO 6000 card's `store.chip`.
+UNSHEETED |= {kind: {
+    "gpu_sha512_per_s": f"no SHA-512 rate is established for {_sku(kind)}: none is measured on it, and another card's "
+                        "rate is not its bound, since the rate bounds the prover's compressions a second from above: "
+                        "measure block-sha512 on it and state it in benchmarks/poub_session/sheets.py's UNSHEETED",
+    "link_burst_bytes": f"no link burst is established for the node kind {kind}: none is read on it, and another node's "
+                        "is not its bound, since the burst bounds the bytes its links land at once from above: read "
+                        "`net.ipv4.tcp_rmem`'s max on it and state it in benchmarks/poub_session/sheets.py's UNSHEETED",
+    "gpu_chip_bytes": int(number(load_card("rtx-pro-6000-server", directory=CARD_FILES)["store"]["chip"]))}
+    for kind in BORROWED}
+"""Per node kind, the figures a session's ledger reads that no data sheet states, but the card's maximum squaring
+rate, each a number or the refusal that says none is established."""
+
+FORMS = {"rtx-pro-6000-server-x8": {"p512": max(gamma.GPU.values())}}
+"""Per node kind, per codec width, one GPU's squaring rate over `gamma.REF` (squarings a second) at `gamma.REF_MHZ`
+(MHz), dimensionless, where the card's maximum squaring rate is established.  At 512 bits it is the largest of
+`gamma.GPU`'s variants, measured and modelled alike, every one a 512-bit rate (mod 2^512 - 569) taken at `gamma.MHZ`
+and scaled to `gamma.REF_MHZ`: a maximum squaring rate is an upper bound, so the fastest variant stated is taken.  The
+premise that stays open: no variant faster than the fastest `gamma.py` states exists.  Only the node `gamma.py` reads
+has one: its host is the one `HOST_SQUARINGS_PER_S` counts."""
 
 WIDTHS = ("p512", "p1024")
-"""The codec widths a node's figures state a squaring ceiling at, or refuse one."""
+"""The codec widths a node's figures state the card's maximum squaring rate at, or refuse one."""
 
 CLOCK_READINGS = ("sm", "sm_boost")
-"""The readings of a GPU card's SM clock its squaring ceiling is scaled to, each where the card states it: `clock.sm`
-and the data sheet's `clock.sm_boost`."""
+"""The readings of a GPU card's SM clock the card's maximum squaring rate is scaled to, each where the card states it:
+`clock.sm` and the data sheet's `clock.sm_boost`."""
 
 HOST_SQUARINGS_PER_S = max(gamma.HOST.values())
 """The host's squarings a second, the larger of `gamma.HOST`'s readings: its cores at their IFMA-only port bound,
 above their measured rate a core.  No GPU clock scales it."""
 
 REFUSED = {"p1024": "the clock of the run behind its reference rate at this width (`kv.cu`'s) is stated nowhere, so the "
-                    "ceiling can't be scaled to the card's clock readings: state that run's clock, or measure the best "
-                    "form at this width at a stated clock, and give it a form in benchmarks/poub_session/sheets.py's "
-                    "FORMS"}
-"""Per codec width, why a node kind in `FORMS` has no ceiling at it."""
+                    "rate can't be scaled to the card's clock readings: state that run's clock, or measure the fastest "
+                    "variant at this width at a stated clock, and give it in benchmarks/poub_session/sheets.py's FORMS"}
+"""Per codec width, why a node kind in `FORMS` has no maximum squaring rate at it."""
 
 
 def squaring_ceilings(node: str, gpu: dict, gpus: int) -> dict[str, float | str]:
-    """One GPU's squaring ceiling per codec width on a node of kind `node` with `gpus` GPUs of card `gpu`, or the
-    refusal that names why none is established.  In squarings a second per GPU at a width, the node's ceiling over its
-    GPUs, the largest over the card's clock readings f (MHz, `CLOCK_READINGS`):
+    """One GPU's share of the card's maximum squaring rate per codec width on a node of kind `node` with `gpus` GPUs of
+    card `gpu`, or the refusal that names why none is established.  In squarings a second per GPU at a width, the
+    largest over the card's clock readings f (MHz, `CLOCK_READINGS`):
 
         C_w = max_f (s_w · REF · f / REF_MHZ) + H / gpus
 
-    s_w the form over the reference at its clock (`FORMS`, dimensionless), REF the reference (`gamma.REF`, squarings
-    a second per GPU) at REF_MHZ (`gamma.REF_MHZ`, MHz), and H the host's (`HOST_SQUARINGS_PER_S`, squarings a second),
-    which the GPUs' clock doesn't scale.  The node's ceiling is gpus·C_w."""
+    s_w the fastest variant over the reference at its clock (`FORMS`, dimensionless), REF the reference (`gamma.REF`,
+    squarings a second per GPU) at REF_MHZ (`gamma.REF_MHZ`, MHz), and H the host's (`HOST_SQUARINGS_PER_S`,
+    squarings a second), which the GPUs' clock doesn't scale.  s_w is the GPU's alone, so the host is added once, in
+    H / gpus.  The node's rate is gpus·C_w."""
     readings = [float(number(gpu["clock"][r])) for r in CLOCK_READINGS if r in gpu["clock"]]
     out: dict[str, float | str] = {}
     for width in WIDTHS:
@@ -84,10 +97,10 @@ def squaring_ceilings(node: str, gpu: dict, gpus: int) -> dict[str, float | str]
             out[width] = gpu_part + HOST_SQUARINGS_PER_S / gpus
         else:
             why = REFUSED[width] if node in FORMS else (
-                "no squaring rate is measured on it, and another card's ceiling is not its bound: measure the best "
-                "form on it at a stated clock (calibration/rate_squaring) and give it a form in "
+                "no squaring rate is measured on it, and another card's is not its bound: measure the fastest "
+                "variant on it at a stated clock (calibration/rate_squaring) and give it in "
                 "benchmarks/poub_session/sheets.py's FORMS")
-            out[width] = f"no squaring ceiling is established for {gpu['sku']} at {width[1:]} bits: {why}"
+            out[width] = f"no maximum squaring rate is established for {gpu['sku']} at {width[1:]} bits: {why}"
     return out
 
 
@@ -129,7 +142,7 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-__all__ = ["FORMS", "UNSHEETED", "figures", "main", "squaring_ceilings"]
+__all__ = ["BORROWED", "FORMS", "UNSHEETED", "figures", "main", "squaring_ceilings"]
 
 if __name__ == "__main__":
     sys.exit(main())

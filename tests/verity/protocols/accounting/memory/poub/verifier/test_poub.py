@@ -363,7 +363,8 @@ def test_the_ledger_counts_every_gamma_term(store) -> None:
 
 def test_the_rebuild_term_is_the_record_s_codec_at_the_stated_ceiling() -> None:
     """μ_rebuild is the stated squaring ceiling over the record's codec's encode, `C_sq · 4096 / (E_sq · R)`: at the
-    node's ceiling and measured R 0.42% under p512/k2, and at p1024 the node's figures refuse a ceiling by name.  A
+    card's maximum squaring rate and measured R 0.52% under p512/k2, and at p1024 the node's figures refuse a rate by
+    name.  A
     model of another codec than the record's, a bare fraction, or a ceiling that isn't a finite nonnegative rate is
     refused."""
     p512 = codec.Codec(codec.P512, 2, False)
@@ -373,10 +374,10 @@ def test_the_rebuild_term_is_the_record_s_codec_at_the_stated_ceiling() -> None:
     for c in (codec.DEFAULT, p512):
         assert ((c.field.p + 1) // 4).bit_length() - 1 == c.field.n - 3
     for c in (codec.DEFAULT, codec.FALLBACK):
-        with pytest.raises(ValueError, match="no squaring ceiling is established for rtx-pro-6000-server at 1024 bits"):
+        with pytest.raises(ValueError, match="no maximum squaring rate is established for rtx-pro-6000-server at 1024 bits"):
             FIGURES.squaring_ceiling(c.field.name)
     assert audit.Rebuild(p512, FIGURES.squaring_ceiling("p512")).fraction(FIGURES.read_bytes_per_s) == pytest.approx(
-        4.2140e-3, rel=1e-4)
+        5.2174e-3, rel=1e-4)
     r = synthetic((100, 100, 60), 5, 1e-6)
     assert r.codec == codec.DEFAULT
     rebuild = audit.Rebuild(codec.DEFAULT, CEILING)
@@ -1063,7 +1064,7 @@ def test_the_stated_reading_in_every_window_and_for_the_horizons_sampling_term()
     `1 − (1 − γ)·R/R_spec`, 5.9–6.0%: R cancels in what is certified.  The same 94 GB a GPU in HBM alone leaves host
     DRAM's 4.7% of R idle, 5.67–5.71%.  The 20 s option at 28,004 openings has μ_sample under 0.25% and a γ_t over
     1%, and the 1 s option's μ_sample alone is under 1%, at 7,001."""
-    with pytest.raises(ValueError, match="no squaring ceiling is established for rtx-pro-6000-server at 1024 bits"):
+    with pytest.raises(ValueError, match="no maximum squaring rate is established for rtx-pro-6000-server at 1024 bits"):
         timing.stated(10 ** 12, audit.WINDOW_NS, 10, figures=FIGURES, rtt_ns=timing.MS, samples=audit.SAMPLES)
     s, store = audit.SAMPLES, timing.spanning(94 * 10 ** 9, UNREBUILT)
     assert 789.0e9 < store < 789.1e9
@@ -1110,15 +1111,15 @@ def test_the_write_ceilings_are_the_sheets_above_every_write_measured() -> None:
     """One GPU's and the host DRAM's write ceilings are their data sheets' rates, which bound every prover where a
     measurement bounds only the kernels tried, each above every write its bench measured: the card's 1,528.98 GB/s on
     the device and 56.39 streamed in (`write.cu`), the host's 207.69 (`write_host.c`).  A fill of derived codec labels
-    is bounded by the labeller, about 6.8 GB/s a GPU under p512/k2; under the default codec the node's figures refuse
+    is bounded by the labeller, about 8.4 GB/s a GPU under p512/k2; under the default codec the node's figures refuse
     the squaring ceiling that would bound it, and no DPU's is stated."""
     assert FIGURES.gpu_write_bytes_per_s == FIGURES.gpu_spec_bytes_per_s == 1.597568e12 > 1528.98e9 > 56.39e9
     assert FIGURES.host_write_bytes_per_s == FIGURES.host_spec_bytes_per_s == 819.2e9 > 207.69e9
     assert "a measured rate bounds only the kernels tried" in " ".join(timing.Figures.__doc__.split())
     p512 = codec.Codec(codec.P512, 2, False)
     labels = FIGURES.gpu_squarings_per_s["p512"] * codec.BLOCK_BYTES / p512.encode_squarings
-    assert labels == pytest.approx(6.8e9, rel=0.01)
-    with pytest.raises(ValueError, match="no squaring ceiling is established"):
+    assert labels == pytest.approx(8.4e9, rel=0.01)
+    with pytest.raises(ValueError, match="no maximum squaring rate is established"):
         FIGURES.squaring_ceiling(codec.DEFAULT.field.name)
     assert not [name for name in vars(timing) if name.startswith("DPU_")]
 
@@ -1165,7 +1166,7 @@ def test_below_the_store_floor_no_window_meets_one_percent() -> None:
     and ends are under 0.01%, is over 1% just below the floor at g = 50 µs and under it just above.  At g = 0 the floor
     is μ_chip, λ and μ_rebuild alone.  The node's figures refuse a squaring ceiling at the default codec's p1024, so
     its floor is refused by name, and with μ_rebuild left out it is about 373 GB over the node's every tier."""
-    with pytest.raises(ValueError, match="no squaring ceiling is established for rtx-pro-6000-server at 1024 bits"):
+    with pytest.raises(ValueError, match="no maximum squaring rate is established for rtx-pro-6000-server at 1024 bits"):
         timing.store_floor(figures=FIGURES)
     assert 373.1e9 < timing.store_floor(figures=UNREBUILT) < 373.3e9
     assert 449.5e9 < timing.store_floor(50 * timing.US, figures=UNREBUILT) < 449.7e9

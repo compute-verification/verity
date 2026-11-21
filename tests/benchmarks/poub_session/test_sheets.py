@@ -33,26 +33,38 @@ def test_the_command_writes_the_figures_the_verifier_reads(capsys):
     assert capsys.readouterr().out == sheets.figures(RTX).sha512() + "\n"
 
 
-def test_the_handed_squaring_ceiling_is_the_formula_at_the_cards_highest_clock_reading():
-    """One GPU's squaring ceiling at 512 bits is `s·REF·f/REF_MHZ + H/gpus` at the highest clock reading f its card
+def test_the_handed_squaring_rate_is_the_fastest_variant_at_the_cards_highest_clock_reading():
+    """One GPU's share of the card's maximum squaring rate at 512 bits, in squarings a second, is
+    `s·REF·f/REF_MHZ + H/gpus` with s the fastest of `gamma.GPU`'s variants and f the highest clock reading its card
     file states, so at least that at every reading."""
     clock, gpus = load_card("rtx-pro-6000-server", directory=CARD_FILES)["clock"], 8
     readings = [float(number(clock[r])) for r in sheets.CLOCK_READINGS]
-    at = [sheets.P512_FORM * sheets.gamma.REF * f / sheets.gamma.REF_MHZ + sheets.HOST_SQUARINGS_PER_S / gpus
-          for f in readings]
+    s = max(sheets.gamma.GPU.values())
+    at = [s * sheets.gamma.REF * f / sheets.gamma.REF_MHZ + sheets.HOST_SQUARINGS_PER_S / gpus for f in readings]
     handed = sheets.figures(RTX).gpu_squarings_per_s["p512"]
     assert readings == [2430, 2617] and handed == at[readings.index(max(readings))]
     assert all(handed >= x for x in at)
 
 
 def test_an_h200_nodes_rebuild_share_is_refused_by_name():
-    """No squaring rate is measured on an H200, and the RTX PRO 6000's ceiling is not its bound: the session's ledger
-    refuses its rebuild share at each width, naming the card, the width and the fix."""
+    """No squaring rate is measured on an H200, and the RTX PRO 6000's is not its bound: the session's ledger refuses
+    its rebuild share at each width, naming the card, the width and the fix."""
     node = ledger.Node.stated(sheets.figures("h200-sxm-141gb-x1"))
     for c in (codec.DEFAULT, codec.Codec(codec.P512, 2, False)):
-        with pytest.raises(ValueError, match=f"no squaring ceiling is established for h200-sxm-141gb at {c.field.n} "
-                                             "bits: no squaring rate is measured on it.*FORMS"):
+        with pytest.raises(ValueError, match=f"no maximum squaring rate is established for h200-sxm-141gb at "
+                                             f"{c.field.n} bits: no squaring rate is measured on it.*FORMS"):
             node.rebuild(c)
+
+
+def test_an_h200_nodes_borrowed_sha512_rate_and_link_burst_are_refused_by_name():
+    """Each bounds what the node can do from above, so the RTX PRO 6000 node's is not the H200 node's: its SHA-512
+    rate is refused where it is read, and its link burst where its links are charged."""
+    fig = sheets.figures("h200-sxm-141gb-x1")
+    with pytest.raises(ValueError, match="no SHA-512 rate is established for h200-sxm-141gb: .*UNSHEETED"):
+        fig.sha512_per_s
+    with pytest.raises(ValueError, match="no link burst is established for the node kind h200-sxm-141gb-x1: .*UNSHEETED"):
+        ledger.Node.stated(fig, link_bytes_per_s=1e9)
+    assert ledger.Node.stated(fig).link_burst_bytes == 0
 
 
 def test_a_node_kind_without_a_node_file_is_refused_by_name(capsys):
@@ -91,7 +103,7 @@ def test_a_verifier_started_without_figures_is_refused_by_name(tmp_path, monkeyp
 def test_a_figures_file_not_the_one_its_pinned_digest_names_is_refused_and_a_record_names_the_figures_it_read(
         tmp_path, monkeypatch, capsys):
     """`--figures-sha512` holds the file to the digest the verifier's configuration pins: a lenient file (half the
-    squaring ceiling, half S_chip, half the host's DRAM) is refused before the process listens.  The pinned file is
+    card's maximum squaring rate, half S_chip, half the host's DRAM) is refused before the process listens.  The pinned file is
     read, and the record the process writes, here a refused registration's, carries the figures whole and their
     digest, the ingress rate beside them, and says whether they were pinned: unpinned, as where both parties run on
     the developer's machine, it says they weren't."""
