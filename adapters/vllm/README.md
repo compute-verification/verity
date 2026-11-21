@@ -20,7 +20,7 @@ Verity itself knows nothing of vLLM.
 - **The served run** (`bash adapters/vllm/tools/served_run/run.sh`) starts the served-verdicts launcher,
   `benchmarks/one_stage/served_verdicts.sh`, on the node `adapters/vllm/tools/served_run/placement.toml` names. It runs
   the Build of record, then the endpoint with `--seal` under a GPU lease, and a load. Then comes SPOT on one sealed window:
-  its advice through the registered compiler (`tools/advice_compile.py`), Flock `--zk` behind the Lean ZK server, and the
+  its circuit from the registered compiler (`benchmarks/prove_path/prove_path.py window-commit`), Flock `--zk` behind the Lean ZK server, and the
   Lean verifier's verdict. PoUW, PoUS, the bandwidth audit and the network attester follow where each has its piece,
   and it ends with one record of every verdict. The launcher's header gives each step, and
   `adapters/vllm/tools/served_run/README.md` says what the run establishes.
@@ -135,7 +135,7 @@ verity_vllm/
                      of another build of engine.stock.BUILDS beside it); each workload's served pin per device
 workloads/           workload files, each a fixture in the evidence store, read through config.workload_file
 manifests/           checkpoint pins (checkpoints.json), workloads of record (records.json), Definitions, capture maps
-tools/               scripts run by path: advice_compile.py, ratchet_gate.py
+tools/               scripts run by path: ratchet_gate.py
 ~~~
 
 The suite, `verity-vllm`, is under the root's tests: `tests/adapters/vllm/tests/`, a directory for each subpackage, with the

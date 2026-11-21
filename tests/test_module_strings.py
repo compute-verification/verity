@@ -240,6 +240,6 @@ def test_the_scan_sees_each_kind_and_catches_a_dangling_one():
     seen = {(p, k, m + (f":{a}" if a else "")) for p, k, m, a in scan()}
     registry = "tools/research/src/research/store/tools_registry.py"
     assert {(registry, "attr", "tools.check.tool:CHECK"), ("tools/research/pyproject.toml", "attr", "research.cli:main"),
-            ("adapters/vllm/tools/advice_compile.py", "main", "verity_vllm.pipeline.cli"),
+            ("adapters/vllm/tools/served_run/setup.sh", "main", "verity_vllm.pipeline.cli"),
             ("tests/adapters/vllm/tests/engine/test_cov_difr_b0.py", "import", "verity_vllm.observe.fold.profiles.derived_B0_ovs"),
             ("benchmarks/numerical/python/verity_numerical/bench/drivers/c_interactive.py", "main", "verity_flock.register")} <= seen
