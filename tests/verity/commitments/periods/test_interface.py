@@ -476,7 +476,7 @@ def test_run_inputs_are_committed_once_each_in_its_run_input_nodes_tree(tmp_path
         return {"leaf_layer": "l"}
 
     reg = type("R", (), {"KINDS": ("served",), "record": staticmethod(record), "digest": staticmethod(lambda rec: "d")})
-    win = I.Window(I.Circuit("test", ((COORD, 10),), run_inputs=True), RUN, SAMPLING_DESIGN, 4)
+    win = I.Window(I.Circuit("test", ((COORD, 10),)), RUN, SAMPLING_DESIGN, 4)
     assert codec.program_digest(win.window.program) == codec.program_digest(I.Circuit("test", ((COORD, 10),)).program()[0])
     names = [r.param for r in win.runs]
     assert [r.port for r in win.runs] == ["x", "sx", "wrow", "sw"] and len(set(names)) == 4

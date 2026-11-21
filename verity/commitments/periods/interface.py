@@ -1614,9 +1614,9 @@ class Circuit:
     ports read as several rows (`RowLayout.cut`); ``registered`` and ``ingress``, what fills its other inputs
     (`check_inputs`); ``blocks``, its proof and inference blocks (`Blocks`); ``order``, the order of its units'
     ranges its wires follow (`check_order`), or None for each template one range; ``boundary_reads``, its rows read from or
-    written to the fields of its replay Definition's signature (`Read`, each ``param`` a field: `check_inputs`);
-    ``run_inputs``, each input port nothing else fills committed once, in its run input node's one tree
-    (`run_input_reads`), never a tree of a member's."""
+    written to the fields of its replay Definition's signature (`Read`, each ``param`` a field: `check_inputs`). Each
+    input port nothing else fills is a run input, committed once in its run input node's one tree (`run_input_reads`),
+    never a tree of a member's."""
     name: str
     templates: tuple[tuple[Any, int], ...]
     external: tuple[str, ...] = ()
@@ -1630,7 +1630,6 @@ class Circuit:
     boundary_reads: tuple[Read, ...] = ()
     ranks: Ranks | None = None
     free: tuple[Free, ...] = ()
-    run_inputs: bool = False
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "templates", tuple((fn, int(n)) for fn, n in self.templates))
@@ -1796,7 +1795,9 @@ def run_input_reads(templates: Sequence[tuple[Any, int]], program: Any, query: M
         if all((tid, p) in filled for p, _ in ports):
             continue
         if len(ranges.get(tid, ())) != 1:
-            raise ValueError(f"run inputs: {tid} is {len(ranges.get(tid, ()))} ranges of C's root, not one")
+            raise ValueError(f"run inputs: {tid} reads run input nodes at {[p for p, _ in ports if (tid, p) not in filled]} "
+                             f"but is {len(ranges.get(tid, ()))} ranges of C's root, not one; the period commits no "
+                             "input/n<w> tree for them and refuses to close")
         a, got = ranges[tid][0]
         gates, at, words = list(tp.inputs(a)), 0, dict(layout(fn).rows)
         for p, leaves in ports:
@@ -1824,13 +1825,13 @@ def run_inputs_of(doc: Mapping[str, Any]) -> tuple[Read, ...]:
 def run_input_ports(doc: Mapping[str, Any], w: CS.Binding) -> dict[str, dict[str, Any]]:
     """The registration's trees of C's run input nodes that the record ``doc`` names (``run_inputs``), as
     ``registration.check`` takes a port (`rows.expected_ports`): ``{input/n<w>: {leaves, domain}}``, a leaf per unit of
-    its reader, each `registered_value.domain` over the period's program digest at the reader's port's words, as
-    `Window` commits it."""
+    its reader, each `registered_value.domain` over the period's program digest at the reader's port's words and the
+    window's run root (``window``), as `Window` commits it."""
     prog = program_digest(w.program)
     out: dict[str, dict[str, Any]] = {}
     for r in run_inputs_of(doc):
         n, words = int(r.radix[0]), int(r.step[0])
-        out.setdefault(r.param, {"leaves": n, "domain": RV.domain(prog, r.param, words, n).domain_id.hex()})
+        out.setdefault(r.param, {"leaves": n, "domain": RV.domain(prog, r.param, words, n, window=w.run).domain_id.hex()})
     return out
 
 
@@ -2842,9 +2843,8 @@ class Window:
                                  f"declaration's {(h.program, h.name, h.words, h.capacity)}")
         program, query = self.circuit.program()
         c = self.circuit
-        if c.run_inputs:
-            self.runs = run_input_reads(c.templates, program, query,
-                                        filled_ports(c.registered, c.wires, c.ingress, c.boundary_reads), c.cuts)
+        self.runs = run_input_reads(c.templates, program, query,
+                                    filled_ports(c.registered, c.wires, c.ingress, c.boundary_reads), c.cuts)
         self.window = CS.Binding(program, query, dict(self.law), self.run,
                                  members(self.circuit, self.cap, (program, query), self.runs),
                                 work_table=None if self.work_table is None else dict(self.work_table))
@@ -3091,14 +3091,20 @@ class Window:
 
     def _inputs(self) -> dict[str, Any]:
         """``inputs``: each of ``runs``' values committed once (core's ``registered_value.Registered``, fresh salts) under
-        the period's program digest, every unit's row of its port in unit order."""
+        the period's program digest and its run root (``window``), every unit's row of its port in unit order. Refused
+        (ValueError, naming the node) where a run input read has no tree: the period then refuses to close."""
         if self.runs and not self.inputs:
             prog = program_digest(self.window.program)
             for r in self.runs:
                 rows = self._words(r.reader)[[p for p, _ in self.circuit._by_id[r.reader][1].rows].index(r.port)]
                 if rows is None:
-                    raise ValueError(f"{r.reader} {r.port}: a run input's rows are recorded in full")
-                self.inputs[r.param] = RV.Registered.commit(prog, r.param, np.asarray(rows).tolist(), schema=V2)
+                    raise ValueError(f"run input {r.param}: {r.reader} {r.port} is recorded by reference, and a run input's "
+                                     "rows are recorded in full; the period commits no tree of it and refuses to close")
+                self.inputs[r.param] = RV.Registered.commit(prog, r.param, np.asarray(rows).tolist(), schema=V2,
+                                                            window=self.run)
+        if missing := sorted({r.param for r in self.runs} - set(self.inputs)):
+            raise ValueError(f"run inputs {missing}: read by members and committed in no tree of the period; it refuses "
+                             "to close")
         return self.inputs
 
     def _output(self, w: WI.Wired, cat: dict[str, Any]) -> np.ndarray:
