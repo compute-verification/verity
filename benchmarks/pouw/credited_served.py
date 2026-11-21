@@ -191,6 +191,7 @@ class Cone:
         self.order = sorted(range(len(self.nodes)), key=lambda k: self.base[k])
         self.starts = [self.base[k] for k in self.order]
         self.done: set = set()
+        self.out: dict = {}
 
     def per(self, k: int) -> int:
         return self.nodes[k].fn.signature()[1].leaves
@@ -212,30 +213,43 @@ class Cone:
 
     def member(self, k: int, m: int) -> list[int]:
         from verity.circuits.codec import descriptor_id
+        from verity.circuits.cut import member_refs
         from verity.circuits.evaluation import evaluate_batch
+        from verity.circuits.layout import resolve
         from verity.circuits.program import is_input
-        per, b0 = self.per(k), self.base[k] + m * self.per(k)
         if (k, m) not in self.done:
             nd = self.nodes[k]
             if is_input(nd.fn):
                 raise SystemExit(f"CONE: parameter node {k} ({nd.fn.id}) is read and was not preset")
+            params = nd.fn.signature()[0]
+            axes = nd.axes if nd.form == "batch" else (None,) * len(nd.args)
             args = []
-            for gs in self.arg_gates(k, m):
-                for g in gs:
-                    if g not in self.at:
-                        wk, wm = self.writer(g)
-                        if (wk, wm) == (k, m):
-                            raise SystemExit(f"CONE: node {k} reads its own output")
-                        self.member(wk, wm)
-                args.append(np.asarray([[self.at[g] for g in gs]], dtype=np.int64))
+            for j, (arg, ax) in enumerate(zip(nd.args, axes)):
+                rs = member_refs(arg, ax, m) if nd.form == "batch" else arg.refs
+                want = params[j][1].leaves
+                if len(rs) != want:
+                    raise SystemExit(f"CONE: node {k} member {m} argument {j}: {len(rs)} references of {want} leaves "
+                                     f"({arg.refs!r}, axis {ax}, {arg.type})")
+                row = []
+                for r in rs:
+                    g = resolve(self.scope, r)
+                    if g in self.at:
+                        row.append(self.at[g])
+                        continue
+                    if r[0] != "n":
+                        raise SystemExit(f"CONE: node {k} reads {r}, not a root node's leaf")
+                    wk, wm = r[1], r[2] // self.per(r[1])
+                    if (wk, wm) == (k, m):
+                        raise SystemExit(f"CONE: node {k} reads its own output")
+                    row.append(self.member(wk, wm)[r[2] % self.per(wk)])
+                args.append(np.asarray([row], dtype=np.int64))
             t = time.perf_counter()
             got = np.asarray(evaluate_batch(nd.fn, *args)).reshape(-1).tolist()
             print(f"CONE {descriptor_id(nd.fn)[:48]} node {k} member {m}: {len(got)} leaves, "
                   f"{time.perf_counter() - t:.1f} s", flush=True)
-            self.at.update(zip(range(b0, b0 + per), got))
+            self.out[(k, m)] = got
             self.done.add((k, m))
-        return [self.at[g] for g in range(b0, b0 + per)]
-
+        return self.out[(k, m)]
 
 def units_count(program, tid: str) -> int:
     from verity.circuits.codec import descriptor_id
