@@ -138,6 +138,11 @@ def supplied_salts(program: str, value: str, n: int) -> list[bytes]:
                      for c in range(_INST.salt_bytes // 64)) for i in range(n)]
 
 
+#: `OneStageZk.VERDICTS`: each opening Definition's ``(name, version, field)``, its verdict word as output field `field`,
+#: whose tree is a supplied value: every row the word 1, under `supplied_salts`.
+VERDICTS: tuple[tuple[str, int, int], ...] = (("EmbeddingRead", 3, 1),)
+
+
 def commit_strings(rows: Sequence[Sequence[int]], salts: Sequence[bytes], word_bits: int = WORD_BITS,
                    schema: str = SCHEMA_HM96_SHA512_ROW) -> tuple[bytes, ...]:
     """Each row's `b || c` under its salt, hm96-sha512 under the default key."""
@@ -231,5 +236,5 @@ class Registered:
 
 
 __all__ = ["BLOCK", "ENTRY_KEYS", "OWNER", "PRODUCED_KEY", "READS_FROM", "REGISTERED_DOMAIN", "Registered", "SCHEMA", "SCHEMAS", "SCHEMA_KEY",
-           "SESSION_KEY", "SUPPLIED_SALT", "WIDTHS", "WIDTH_KEY", "WINDOW_KEY", "WORD_BITS", "commit_strings", "domain", "known_schema",
+           "SESSION_KEY", "SUPPLIED_SALT", "VERDICTS", "WIDTHS", "WIDTH_KEY", "WINDOW_KEY", "WORD_BITS", "commit_strings", "domain", "known_schema",
            "leaf", "port", "public_root", "row_digest", "row_words", "schema_entry", "supplied_salts", "width_entry", "window_root"]

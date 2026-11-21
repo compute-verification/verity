@@ -689,8 +689,7 @@ def _field_trees_held(want: Sequence[tuple[str, int]], ts: set[str], record: Map
         raise _Refused(field_trees_why(f"it holds {port}, no output field's tree"))
 
 
-#: `OneStageZk.VERDICTS`: each opening Definition's ``(name, version, field)``, its verdict word as output field `field`.
-VERDICTS: tuple[tuple[str, int, int], ...] = (("EmbeddingRead", 3, 1),)
+VERDICTS = RV.VERDICTS
 #: `OneStageZk.OPENERS`.
 OPENERS: tuple[str, ...] = ("FrameV3Read_v1", "FrameV3ReadAt_v1")
 
