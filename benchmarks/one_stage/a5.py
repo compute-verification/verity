@@ -1767,7 +1767,7 @@ def one_statement_held(result: dict, rec: dict, members: Sequence[dict], pm: dic
         v = R.public_held(rec, mm["header"], reads).to_json()
     except ValueError as e:
         v = {"ok": False, "codes": ["public"], "detail": str(e)}
-    if (why := R.registered_trees_held(rec, "the verifier", reads)) is not None:
+    if (why := R.registered_trees_held(rec, "the verifier", reads, R.one_template(rec))) is not None:
         v = {**v, "ok": False, "codes": [*v["codes"], "registered-trees"], "detail": {"registered-trees": why}}
     result.setdefault("checks", {})["one_statement_public"] = v
     if not v["ok"]:

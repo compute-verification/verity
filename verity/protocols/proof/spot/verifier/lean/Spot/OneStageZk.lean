@@ -1010,6 +1010,10 @@ private def xReadT (value : String) : Json :=
       ("domain", Json.str ("".pushn 'd' 128)), ("leaves", Lean.toJson (2 : Nat)), ("root", Json.str ("".pushn 'a' 128)),
       ("value", Json.str value)])])]
 
+#guard oneTemplate (portsRecord ["T{K=1}/c0/x", "T{K=1}/c0/y", "input/n3"]) == some "T{K=1}"
+#guard oneTemplate (portsRecord ["x", "y"]) == none
+#guard oneTemplate (portsRecord ["T/c0/x", "T/c1/x"]) == none
+
 -- a header port the registration holds no root of is not compared only where the verifier's registered file reads it
 -- at a run input node's tree
 #guard refusal (publicHeld (portsRecord ["y", "input/n3"]) (portsPublic ["y", "x"])) ==

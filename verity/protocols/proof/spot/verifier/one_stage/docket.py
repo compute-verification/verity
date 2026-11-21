@@ -1038,6 +1038,20 @@ def registered_trees_held(rec: Mapping[str, Any], who: str, registered: Mapping[
     return None
 
 
+def one_template(rec: Mapping[str, Any]) -> str | None:
+    """`OneStageZkStatement.oneTemplate`: the template of the one member the record's roots name, as `public_ports`
+    finds it; none where the roots are bare or no one member's."""
+    ports = [r["port"] for r in rec.get("roots", []) if isinstance(r.get("port"), str) and not G.is_fresh_value(r["port"])]
+    if all("/" not in p for p in ports):
+        return None
+    ts = {n.rsplit("/", 1)[0] for p in ports if "/" in p and "/" in (n := p.rsplit("/", 1)[0])}
+    names = {p.rsplit("/", 1)[0] if "/" in p else None for p in ports if "/" not in p or p.rsplit("/", 1)[0] not in ts}
+    if None in names or len(names) != 1:
+        return None
+    name, = names
+    return name.rsplit("/", 1)[0] if "/" in name else None
+
+
 def fresh_reads(registered: Mapping[str, Any] | None) -> list[str]:
     """`OneStageZkStatement.freshReads`: the ports the verifier's registered file reads at a run input node's tree."""
     return [p for p, e in ((registered or {}).get("ports") or {}).items() if G.is_fresh_value(e.get("value"))]
@@ -1059,5 +1073,5 @@ registered_entries = G.registered_entries
 
 __all__ = ["NOT_ONE_MEMBER", "PARTITION_QUERY", "POOL_KEYS", "RECEIPT", "ROW_TABLES", "TABLE_PORT",
            "WINDOW_DOMAIN", "check", "fresh_reads", "held_roots", "matches_public", "partition_query_refused", "pool_chains", "pool_open", "pool_refused",
-           "pool_spent_before", "pool_values", "public_held", "public_ports", "registered_trees_held", "query_digest", "receipt",
+           "pool_spent_before", "pool_values", "public_held", "one_template", "public_ports", "registered_trees_held", "query_digest", "receipt",
            "refuse_unwindowed", "refused", "registered_entries", "unwindowed", "window_domain"]
