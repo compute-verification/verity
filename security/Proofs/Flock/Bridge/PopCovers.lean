@@ -48,7 +48,7 @@ def IsSubsetDesign (samplingDesign : Flock.Draw.SamplingDesign) : Prop := ∃ k,
 cover them (`PopCovers`) and the sampling design the verifier samples under (`designAt`) is a uniform subset. A check
 the verifier runs at registration (`Spot.Slots.popOk`, or `Spot.Slots.popCoverOk` under a subset design), which the
 bridge concludes from an accept; not an assumption. -/
-def PopHeld (desc : Hash.Msg) (q lj : Lean.Json) (tb : Option Lean.Json) (n : ℕ) : Prop :=
+@[reducible] def PopHeld (desc : Hash.Msg) (q lj : Lean.Json) (tb : Option Lean.Json) (n : ℕ) : Prop :=
   PopMatches desc q n ∨ (PopCovers desc q n ∧ IsSubsetDesign (designAt desc q lj tb n))
 
 theorem popCovers_iff {desc : Hash.Msg} {q : Lean.Json} {n : ℕ} :
