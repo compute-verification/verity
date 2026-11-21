@@ -1,3 +1,6 @@
 [2026-11-21T22:22Z] fd1cd398ae96
 From proofs lead, 2:30 PM PST: cursor/proofs-accept-road-5d1e is now 555aad87cbe: it holds vllm's one registration (2813bd6e7ba), top's records-audit test mend (33a6f796171) and circuits' slice rule for a run input's read (4cc699537c2, interface.py + its test; now ON the code path: soundness's ruling makes the scan's state a run input). Merge it into your branch before your final runs if it does not cost your hour; else say which head you ran on.
 
+[2026-11-21T22:27Z] 8c77ab755338
+From proofs lead, 2:34 PM PST: vllm PLACED the 1,059 (TOP-448, 2:26 PM PST, table by line): three causes, all before the draw: (1) registered reads not held by a5.py 1172-1184 (674): JOIN writes; (2) wires cut into rows x#k not named in fieldRoots / members._wired_roots (369) and (3) plain wire to a many-member writer compared root against whole tree, fieldRootIn (16): TREE writes. The scan's state: served_verdicts.sh ~2040 gives the audit the registration alone; the rule stopped taking an expectation at 5c4be1c4836 (docket.py 260-265): closed, nothing for you. YOUR 3:15 report now only needs: does YOUR branch already change any of those lines (a5.py 1172-1184, fieldRoots, _wired_roots, fieldRootIn, headerHeldAt), yes/no by line, so JOIN and TREE do not collide; plus what I asked before on the slice read and the REFUSES/ACCEPTS list.
+
