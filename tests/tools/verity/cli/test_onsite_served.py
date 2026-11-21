@@ -750,15 +750,17 @@ def test_the_served_window_runs_once_with_every_piece_s_hooks(tmp_path, capsys, 
 SERVED_PARTIES = ("--party", "workers", "--party", "firewall")
 
 
-def test_the_workloads_piece_is_the_prover_nodes_first_and_each_verb_it_names_is_the_runners(capsys):
+def test_the_workloads_piece_is_the_prover_nodes_first(capsys):
     rc, got, _ = dry(capsys, "--on", T.PROVER_NODE)
     first = got["plan"][0]["entries"][0]
     assert rc == 0 and (got["plan"][0]["party"], first["component"]) == (T.WORKERS, T.SERVED_WINDOW)
-    assert first["verbs"] == ["predict", "serve", "seal", "window", "advice", "circuits", "publish"]
-    runner = (ROOT / T.RUNNER).read_text()
-    assert [v for v in first["verbs"] if f'if [ "${{1:-}}" = {v} ]; then' not in runner] == []
-    assert first["writes"] and all(w.split("/", 1)[0] in ("D", "OUT") for w in first["writes"])
-    assert all("verbs" not in e for x in got["plan"] for e in x["entries"] if e is not first)
+
+
+def test_an_application_stating_no_law_is_refused_by_name_and_its_window_is_the_adapters_class():
+    with pytest.raises(Refused) as e:
+        T.public({"workload": {"params": {}}, "service": {}})
+    assert (e.value.name, e.value.detail) == ("params", "the application file states no [service] law")
+    assert T.public(R.load(ROOT / "applications" / "remote.toml", REG)).window == "4,27,2"
 
 
 #: what the adapter's `run.sh settings MODEL -- verity run ...` sets of the node the workload runs on
@@ -986,6 +988,24 @@ def test_the_onsite_check_without_the_published_phase_or_record_is_refused_by_na
     assert R.run_main([str(CONFIG), "--on", T.AUDITOR_HOST, "--party", "verifier", "--state", str(state)], REG) == 2
     refused = {x["party"]: x["refused"] for x in said(capsys.readouterr().out, "PARTY")}["verifier"]
     assert refused == ("window" if left == T.PHASE else "record")
+
+
+def test_a_policy_refusal_shows_in_the_period_s_outcome_after_accounting_ended_20(tmp_path, monkeypatch):
+    """Both calls end 20 on a step refused or not run: the policy's refusal is the outcome's ``policy``, beside the
+    worse of the two exits."""
+    monkeypatch.setattr(T, "RUNNER", stand_in(tmp_path, "runner.sh", 'mkdir -p "$OUT"\nexit 20\n'))
+    got = T.live(R.load(ROOT / "applications" / "remote.toml", REG), tmp_path / "state", [T.WORKERS]).outcomes
+    assert got[T.WORKERS] == {"outcome": {"served-window": 20, "policy": 20}, "refused": T.SERVED_WINDOW}
+    assert (T.worse(20, 0), T.worse(0, 20), T.worse(20, 3), T.worse(3, 20)) == (20, 20, 3, 3)
+
+
+def test_the_accounting_and_policy_lists_name_every_step_the_runner_knows_once():
+    """`run`'s two lists against the runner's step arms (`road_step_named`'s case): a step added on one side alone fails."""
+    text = (ROOT / T.RUNNER).read_text()
+    body = text[text.index("road_step_named() {"):]
+    arms = re.findall(r"^    ([a-z][a-z-]*)\)", body[:body.index("\n}\n")], re.M)
+    listed = [*T.ACCOUNTING, *T.POLICY]
+    assert len(arms) == len(set(arms)) and sorted(listed) == sorted(arms), (listed, arms)
 
 
 WIPE_PIN = next(p["key-sha512"] for p in tomllib.loads(CONFIG.read_text())["pin"] if p["protocol"] == "wipe")
