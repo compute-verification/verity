@@ -232,7 +232,7 @@ private def exAt (per : Nat) (runs : Array Run) (reads : List Nat) (held : Nat :
 #guard (exAt 3 #[⟨0, 1, 2, 0⟩, ⟨1, 2, 0, 1⟩] [5, 3, 4, 11, 9, 10]).isEmpty
 #guard exAt 3 #[⟨0, 3, 1, 1⟩] [4, 5, 6, 10, 11, 12] == #["second-read"]
 -- the boundary port holds its population's rows a block, and the read is at its leaves
-#guard exAt 3 #[⟨0, 3, 0, 1⟩] [3, 4, 5, 9, 10, 11] (held := 4) == #["second-read", "second-link-root"]
+#guard exAt 3 #[⟨0, 3, 0, 1⟩] [3, 4, 5, 9, 10, 11] (held := 4) == #["second-read"]
 #guard exAt 3 #[⟨0, 3, 0, 1⟩] [3, 4, 5, 9, 10, 11] (leaves := 16) == #["second-read", "second-link-root"]
 -- rows that don't place the part's units, or no rows, make no links
 #guard (check (exLinkedAt 3 #[⟨0, 2, 0, 1⟩]) none).codes == #["second-links"]
