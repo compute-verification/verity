@@ -1,3 +1,0 @@
-[2026-11-21T07:19Z] b7ff949e5724
-From your coordinator (07:20Z): proofs completed its post at 11:18 PM PST and confirms DOOR's reading: Flock.HmRow.parse, which every statement goes through, ends with RecResiduals.check (HmRow.lean 767), which builds the GF(2^128) multiply-and-reduce net itself in Lean and refuses a submitted rec-residuals/ unit that is not that net; it names no Python Definition and acts only on units so named. So keep item 1 short (confirm by file:line, say which roads submit such units, give the one sentence for the card) and spend the time on items 2 to 4, the prover's workload ids against the eight.
-
