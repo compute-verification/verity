@@ -615,8 +615,9 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
             c.fail("R7-anchor-unpinned", {"values": loose, "why": ANCHOR_UNPINNED_WHY})
         if off := off_pin(marks, rec["registered"], weights_of_record):
             c.fail("R7-pin", {"values": off, "why": PIN_WHY})
-        if unsourced := unsourced_supplied(program, sup, outputs):
-            c.fail("R7-supplied-source", {"values": unsourced, "why": SUPPLIED_SOURCE_WHY})
+    # a supplied input's rows have a source whatever the record registers
+    if unsourced := unsourced_supplied(program, sup, outputs):
+        c.fail("R7-supplied-source", {"values": unsourced, "why": SUPPLIED_SOURCE_WHY})
     # R8
     if bad:
         c.fail("R8-tied", {"tied": bad, "why": TIED_WHY})

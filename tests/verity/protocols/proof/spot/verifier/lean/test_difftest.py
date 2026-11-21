@@ -5171,6 +5171,49 @@ def test_r8_refuses_a_marked_input_expected_by_name_alone_as_python_does(pieces)
         assert D.replay(REGISTRATION, given, pieces) == ("output", D.canonical(reg)), pinned
 
 
+def _registration_case(s: Setup, entries: list, **more) -> dict:
+    named, expanded = service.params_sampling_design("rate:1/2", s.program, s.query, None)
+    roots = [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports]
+    rec = DK.record(s.program, s.query, named, SCHEME, roots, WINDOW, leaf_layer=LEAF, work_table=expanded,
+                    registered=entries)
+    sig = _json([[name, t.to_json()] for name, t in s.program.fn.signature()[0]])
+    params = {"anchors": [], "delta": "1/1000", "law": "rate:1/2", "leaf_layer": LEAF, "log": [], "partition": None,
+              "ports": s.ports, "program": s.desc, "query": s.query, "registered": None, "scheme": SCHEME,
+              "work_table": None, "parameters": sig, **more}
+    return _json({"params": params, "record": rec})
+
+
+def test_r7_refuses_a_supplied_input_with_no_mark_and_no_source_as_python_does(pieces):
+    """R7 on C whose root holds a SuppliedInput node with no mark in C (no `inputs` entry) and no source in the
+    parameters' `supplied` (`docket.unsourced_supplied`, `Docket.unsourced`), on a record that registers nothing: refused
+    by name (`R7-supplied-source`), Lean's codes the Python's. A source is a registered value's (`supplied`), so its
+    case is a v2 record's (`test_one_stage`, `Spot/Test/Docket.lean`)."""
+    plain = _readers(2, (("call", 2, _X0 + _X00),) * 2, False)
+    s = Setup(Program(plain.fn, supplied=("x",)), READER_SETUPS[0].query)
+    PROGRAMS[s.sha512] = s.program
+    assert G.marks(s.desc) == {} and R.unsourced_supplied(s.program, {}) == ["x"]
+    given = _registration_case(s, [])
+    reg = registration(given)
+    assert "R7-supplied-source" in reg["codes"], reg
+    assert D.replay(REGISTRATION, given, pieces) == ("output", D.canonical(reg))
+
+
+def test_r7_refuses_a_pinned_values_entry_whose_domain_alone_differs_as_python_does(pieces):
+    """R7 on a value the weights' registration of record pins (`docket.off_pin`, `Docket.offPin`): the record's entry
+    equal to the pin in root, leaf count and words, its domain alone another, is refused by name (`R7-pin`), Lean's codes
+    the Python's; the entry that is the pin is not."""
+    s = Setup(_readers(2, (("call", 2, _X0 + _X00),) * 2, True), READER_SETUPS[0].query)
+    pin = _pin(s.program, "x")
+    entry = {k: pin[k] for k in ("value", "root", "leaves", "words", "domain")}
+    for e, refused in ((entry, False), ({**entry, "domain": "11" * 64}, True)):
+        assert R.off_pin({}, [e], (bytes.fromhex(_weights_doc([pin])["document"]), _weights_doc([pin])["digest"])) == (
+            ["x"] if refused else [])
+        given = _registration_case(s, [e], registered={"x": 1}, weights_of_record=_weights_doc([pin]))
+        reg = registration(given)
+        assert ("R7-pin" in reg["codes"]) == refused, (e, reg)
+        assert D.replay(REGISTRATION, given, pieces) == ("output", D.canonical(reg)), e
+
+
 def test_r8_reads_the_readers_python_does(pieces):
     """R8 past a population program, Lean's answers the Python's: two calls of `PAIR` on one pair of `x`, or a batch
     broadcasting it, at F 1, and a call reading another's result, whose result a batch of two maps, joining all three at

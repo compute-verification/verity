@@ -274,6 +274,9 @@ def pinX : Json := (pin "x").2
 #guard offPin (recOf #[put pinX "root" (some (Json.str OTHER))]) { VX with marks := #[] } == #["x"]
 #guard offPin (recOf #[]) { VX with weightsOfRecord := none } == #[]
 #guard ANCHOR_FUNCTIONS.all fun fn => offPin (recOf #[]) { VX with marks := #[("a", anchorMark "x" fn)] } == #["x"]
+-- the whole check names it: an entry equal to the pin but in its domain is refused `R7-pin`, the pin itself is not
+#guard (codes VX (put · "registered" (some (Json.arr #[put pinX "domain" (some (Json.str OTHER))])))).contains "R7-pin"
+#guard !(codes VX (put · "registered" (some (Json.arr #[pinX])))).contains "R7-pin"
 
 /-! R7's refusal of a supplied input with no source (`unsourced`, `R7-supplied-source`): `x`'s node a supplied input
 and no source for it in the parameters' `supplied`. -/
@@ -284,5 +287,10 @@ def supX : String := (regX Spot.OneStageZk.E3).replace "RegisteredInput1_v1" "Su
 #guard unsourced { verifier supX with supplied := #[("x", #[])] } == #[]
 #guard unsourced V3 == #[]
 #guard (codes { verifier supX with pinned := #[] }).contains "R7-supplied-source"
+-- C marks no supplied input here, and a record that registers nothing is refused all the same
+#guard (verifier supX).marks.isEmpty
+#guard (codes { verifier supX with pinned := #[], registered := #[] }).contains "R7-supplied-source"
+#guard !(codes { verifier supX with pinned := #[], registered := #[], supplied := #[("x", #[])] }).contains
+  "R7-supplied-source"
 
 end Spot.Test.Docket

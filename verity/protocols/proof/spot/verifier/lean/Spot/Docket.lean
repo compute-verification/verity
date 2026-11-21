@@ -887,7 +887,8 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
     c := kept (runInputNamed v).isEmpty c "R7-run-input"
     c := kept (anchorUnpinned v).isEmpty c "R7-anchor-unpinned"
     c := kept (offPin rec v).isEmpty c "R7-pin"
-    c := kept (unsourced v).isEmpty c "R7-supplied-source"
+  -- a supplied input's rows have a source whatever the record registers
+  c := kept (unsourced v).isEmpty c "R7-supplied-source"
   -- R8
   c := r8Codes v c
   return if linkRefused v then addCode c "link-points" else c
@@ -958,7 +959,8 @@ def checkRef (rec : Json) (v : Verifier) : Array String := Id.run do
     c := kept (runInputNamed v).isEmpty c "R7-run-input"
     c := kept (anchorUnpinned v).isEmpty c "R7-anchor-unpinned"
     c := kept (offPin rec v).isEmpty c "R7-pin"
-    c := kept (unsourced v).isEmpty c "R7-supplied-source"
+  -- a supplied input's rows have a source whatever the record registers
+  c := kept (unsourced v).isEmpty c "R7-supplied-source"
   -- R8
   c := r8Codes v c
   return if linkRefused v then addCode c "link-points" else c
