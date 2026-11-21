@@ -3,8 +3,9 @@
 PoUW, proof of useful work, tells the auditor how much of a developer's GPU time went into the matrix products of the
 model the developer registered. The developer serves as usual, but each registered matrix product runs under a scheme
 that noises it with a salt the developer learns only once its weights are committed, and commits what a check will need.
-After each execution phase the challenger flips coins that sample its tiles, and the developer proves each sampled
-tile in zero knowledge.
+After each execution phase the challenger flips coins that sample its tiles. On the served scheme, Pearl+, the developer
+opens each sampled tile's A and B rows to the Lean check, which recomputes the tile's words from them; the
+zero-knowledge path, which would prove the sampled tiles without opening them, is not served.
 
 In the protocol's own words: "An accepted run establishes a credited size S of noised matrix products, at least
 (1 − ε)·S of their AND gates computed right, except with probability δ." The statements that carry it, and their
@@ -12,8 +13,10 @@ assumptions, are under What is proved, below.
 
 PoUW is one protocol with several schemes. A scheme decides how a matrix product's committed operands become checked
 values; the commitments, the salt, the sample and the openings are the protocol's, the same for every scheme. The
-verifier is Lean, under `lean/`. The Python in this directory is its reference, held to it by difftests, and returns no
-verdict of its own.
+verifier is Lean, under `lean/`: Pearl+'s verdict of record is `pouw-pearlplus`'s answer. The Python in this directory
+is its reference, held to it by difftests. On the served road it still draws the run's sample and writes the coin record
+(`coin.json`), and its own verify still runs, but its verdict decides nothing: `served_passes.py lean` writes the Lean
+answer whatever the Python's says and keeps the Python's beside it as a measurement of where they differ.
 
 ## Try it
 
@@ -37,9 +40,9 @@ It needs no GPU.
 
 | Party | Where it runs | What it does |
 | --- | --- | --- |
-| Prover | The developer's machines | Serves, commits, and proves the sampled proof blocks through Flock behind the ZK server. Nothing it runs is trusted. |
+| Prover | The developer's machines | Serves, commits, and opens the sampled tiles' A and B rows; proving them through Flock behind the ZK server is not served. Nothing it runs is trusted. |
 | Challenger | The auditor's device | Commits each execution phase's challenges before it begins, and opens each one once. |
-| Verifier | The auditor's own check | The Lean `pouw-verifier`: decides each execution phase on its proofs. |
+| Verifier | The auditor's own check | The Lean `pouw-pearlplus`: decides each Pearl+ run on its opened tiles. H1's `pouw-verifier` is not served. |
 
 | Scheme | What it is |
 | --- | --- |
@@ -51,7 +54,7 @@ It needs no GPU.
 ## What is proved
 
 - **The top-level guarantees**, stated under `security/Definitions/` and proved as `SecurityProofs.G` under
-  `security/Proofs/`. W is the credited reference work, t the work-weighted samples and ε_s the share of W a sample may
+  `security/Proofs/`. Each is listed in `security/lean-audit.json` and none is deployed. W is the credited reference work, t the work-weighted samples and ε_s the share of W a sample may
   miss. Items 1 and 2 hold for every in-domain workload (`Pouw.Workload.InDomain`: at most 2^64 proof blocks, a layout in the
   domain D, int7 weight entries) under the Ω_max bound (each proof block's reference work at most Ω_max times its matrix
   products'), with at most 2^64 oracle calls. That bound is where TT is conjectured, and the reduction does not use it;
@@ -68,7 +71,7 @@ It needs no GPU.
      κ is not yet bounded, and no deployed |L| is stated.
   4. `Pouw.Guarantees.RelativeSecurity.TheoremSStaged` and `TheoremSOverlap` (`Pouw/Guarantees/RelativeSecurity.lean`):
      a play whose errors are of degree at most 2 is accepted with deficiency at least D with probability at most
-     e^{−D/4}. No assumption.
+     e^{−D/4}. Its open premise is `Pouw.RelativeSecurity.CubeQuad`.
 
 ## PoUW in the remote protocol
 
