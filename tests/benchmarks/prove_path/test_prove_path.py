@@ -1811,8 +1811,8 @@ def test_window_commit_fills_the_served_circuits_slots_and_rows_from_its_served_
     lower, weight_values, rows_of = WC.lower, WW.weight_values, WRS.Rows
     widths, zeros = {8: np.uint8, 16: np.uint16, 32: np.uint32}, {}
 
-    def lowered(r, c, requests=None):
-        low = lower(r, c, None, grain, requests=requests)
+    def lowered(r, c, programs=None, g=grain, requests=None):
+        low = lower(r, c, programs, g, requests=requests)
         zeros.update({label: np.zeros(ty.leaves, dtype=widths[next(iter(ty.width_set()))])
                       for label, ty in dict(low.fn.signature()[0])[WC.WEIGHTS].fields})
         return low

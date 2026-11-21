@@ -13,7 +13,7 @@ from typing import Any
 
 from verity_vllm.records.fields import RecordError, objects, only, required
 
-__all__ = ["BlockClass", "BlockJudgment", "RULES", "shape_checks"]
+__all__ = ["BlockClass", "BlockJudgment", "RULES", "judge", "shape_checks"]
 
 SCHEMA = "verity-vllm/inference-block-judgment/v1"
 FIELDS = ("format", "day", "declaration", "c", "k", "n", "table", "classes", "checks", "verdict", "reason")
@@ -61,12 +61,30 @@ class BlockClass:
                 "unpriced": dict(self.unpriced), "fresh": self.fresh}
 
 
+def _over(classes: tuple[BlockClass, ...] | list[BlockClass], c: int, k: int) -> tuple[BlockClass | None, BlockClass | None]:
+    return next((x for x in classes if x.gates > c), None), next((x for x in classes if x.fresh > k), None)
+
+
 def shape_checks(classes: tuple[BlockClass, ...] | list[BlockClass], c: int, k: int) -> dict[str, str]:
     """The gates and fresh rules' outcomes on ``classes`` (every one holds a block): a block over c gates or k fresh bits
     refuses; else a block whose gates are a lower bound (an unpriced primitive) leaves the gates undecided."""
-    gates = ("refuse" if any(x.gates > c for x in classes) else
-             "undecided" if any(x.unpriced for x in classes) else "accept")
-    return {"gates": gates, "fresh": "refuse" if any(x.fresh > k for x in classes) else "accept"}
+    over, fat = _over(classes, c, k)
+    gates = "refuse" if over else "undecided" if any(x.unpriced for x in classes) else "accept"
+    return {"gates": gates, "fresh": "refuse" if fat else "accept"}
+
+
+def judge(classes: tuple[BlockClass, ...] | list[BlockClass], total: int, c: int, k: int, n: int) -> tuple[dict[str, str], str | None]:
+    """`InferenceOnlyCheck.Count`'s rules on ``classes`` (each with a block) and the day's exact ``total``: each rule's outcome, and
+    the first that doesn't accept as a sentence naming c, k or n, never a count (None when every rule accepts)."""
+    checks = {**shape_checks(classes, c, k), "count": "accept" if total <= n else "refuse"}
+    over, fat = _over(classes, c, k)
+    unpriced = sorted({p for x in classes for p in x.unpriced})
+    reasons = {"gates": (f"a block of {over.gates} gates, more than c = {c}" if over else
+                         f"undecided: a block reaches {', '.join(unpriced)}, which the gate table can't price, so its "
+                         f"gates are a lower bound against c = {c}"),
+               "fresh": f"a block of {fat.fresh} fresh bits, more than k = {k}" if fat else "",
+               "count": f"the blocks' exact count is more than n = {n}"}
+    return checks, next((reasons[r] for r in RULES if checks[r] != "accept"), None)
 
 
 @dataclass(frozen=True)
