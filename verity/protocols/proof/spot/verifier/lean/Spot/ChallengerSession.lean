@@ -894,6 +894,47 @@ def declaredDay (ledger window : Json) (key : ChallengerKey) : V Json := do
   return Json.mkObj [("day", Lean.toJson day), ("declarations", Json.arr (mine.toArray.map fun e =>
     Json.mkObj [("blocks", getD e.body "blocks"), ("day", getD e.body "day"), ("program", getD e.body "program")]))]
 
+/-- The refusal of an epoch whose lane the auditor's ledger signs no registration for before the epoch's first entry. -/
+def NO_REGISTRATION : String :=
+  "the auditor's ledger signs no registration for this epoch's lane before the epoch's first entry: the challenger " ++
+    "signs the registration log's head (a period-open's registration) before the first coin of any epoch held to it"
+
+/-- The refusal of an epoch whose lane the ledger signs a second, different registration for before the epoch. -/
+def SECOND_REGISTRATION : String :=
+  "a second registration: the auditor's ledger signs another head for this epoch's lane after its first, and an " ++
+    "epoch is held to the lane's first registration alone"
+
+/-- What a period-open's `registration` is. -/
+def REGISTRATION_FORM : String :=
+  "a period-open's registration is the digest of the deployment's registration record, a SHA-512 in 128 lowercase hex"
+
+/-- `registration_of`: the registration the epoch whose open root is `window` (`{root}`) is held to, from the auditor's
+ledger `ledger` (its lines) under the pinned key `key`: the `registration` of the first `period-open` of the epoch's
+lane (`laneOf` its open) signed before the epoch's first entry (its reserve, else its open). That is the digest of the
+deployment's registration record, the registration log's first record, as the challenger signed it before the first
+coin. Refused by name with none (`NO_REGISTRATION`), and when another period-open of the lane before that entry names
+another head (`SECOND_REGISTRATION`): every epoch is held to the lane's first registration. The lane is what "the same
+deployment" means here, and the developer names it: nothing here stops a new lane from carrying a registration of its
+own, so every accepted run names the registration's digest it was held to. -/
+def registrationOf (key : ChallengerKey) (window ledger : Json) : V String := do
+  unless isRun window do throw s!"the window's identity is malformed: {RUN_FORM}"
+  let (wins, _) ← checked ledger key
+  let root := strOf (getD window "root")
+  let some w := wins.find? (·.root == root) | throw "the auditor's ledger opens no challenger session for this window"
+  let o := w.opened
+  let lane := laneOf o.body
+  let es := (match ledger with | .arr ls => ls | _ => #[]).filterMap ledgerEntry?
+  let first := es.foldl (fun m e => if e.session == o.session && e.seq < m then e.seq else m) o.seq
+  let heads := es.filter fun e => e.kind == "period-open" && e.seq < first && jsonStrIs (getD e.body "lane") lane &&
+    (field? e.body "registration").isSome
+  let some h := heads[0]? | throw NO_REGISTRATION
+  if let some e := heads.find? (!isDigest <| getD ·.body "registration") then
+    throw s!"the auditor's ledger entry {e.seq}: {REGISTRATION_FORM}"
+  let r := strOf (getD h.body "registration")
+  if let some e := heads.find? (!jsonStrIs (getD ·.body "registration") r) then
+    throw s!"{SECOND_REGISTRATION} (entry {e.seq} names {(strOf (getD e.body "registration")).take 16}..., entry {h.seq} {r.take 16}...)"
+  return r
+
 /-- `extends`: whether `ledger` is `published` with entries appended. -/
 def extendsHead (published ledger : Array Json) : Bool :=
   published.size ≤ ledger.size && ledger.extract 0 published.size == published
@@ -1090,6 +1131,13 @@ def dayPiece (j : Json) : V Json := do
   request j #["key", "ledger", "window"]
   pure <| refusing do
     declaredDay (getD j "ledger") (getD j "window") (← ChallengerKey.ofJson (getD j "key"))
+
+/-- `{"key", "ledger", "window"}` to `registration_of`'s `{registration}`. -/
+def registrationPiece (j : Json) : V Json := do
+  request j #["key", "ledger", "window"]
+  pure <| refusing do
+    return Json.mkObj [("registration",
+      Json.str (← registrationOf (← ChallengerKey.ofJson (getD j "key")) (getD j "window") (getD j "ledger")))]
 
 /-- `{"descriptor", "key", "ledger", "main", "pins", "window"}` to `credited_session`'s `Audited`, the descriptor in
 lowercase hex. -/
