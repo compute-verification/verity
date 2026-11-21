@@ -601,10 +601,9 @@ case $COMPOSE_OFF_NODE in 0 | 1) ;; *) say "PREFLIGHT: COMPOSE_OFF_NODE is 1 (th
 [ -z "${V3C_GPUS:-}" ] || command -v gpu-lease > /dev/null \
   || { say "PREFLIGHT: V3C_GPUS's cards are held under gpu-lease while V3c's audit proves on them, and this node has no gpu-lease"; exit 3; }
 CKPT=${CKPT:-$HF_HOME/hub/models--${REPO//\//--}/snapshots/$REV} WREG=$D/weights_registration.json
-# the registration of record ({program, values}) the serve's first close writes beside WREG, which the audits hand the check
-WOR=$D/weights_of_record.json
 NO_DREG="the deployment's registration record (deployment-registration.json) is absent: the serve writes it before its first request"
-# the serve's first registration record: the weights registration as a record of the log, which Pearl+'s W is chained after
+# the deployment's registration record, the registration log's first record, written once before the first request:
+# the audits hand it to the verifier on the development path, and Pearl+'s W is chained after it
 DREG=$D/deployment-registration.json
 NO_WEIGHTS="NO WEIGHTS REGISTRATION: no window registers a weight's root, so every weight read counts free"
 weights() {  # under the lease (its commit hashes on the leased GPU), before the first request: the committer's registration
@@ -613,11 +612,11 @@ weights() {  # under the lease (its commit hashes on the leased GPU), before the
   local rc=$? log=$LOGS/weights_registration.txt
   grep -o '"deployment": "[0-9a-f]\{128\}"' "$log" | tail -1 > "$OUT/weights_registration.txt"
   if [ "$rc" != 0 ] || [ ! -f "$WREG" ]; then
-    rm -f "$DREG" "$WOR"
+    rm -f "$DREG"
     say "$NO_WEIGHTS (weights-registration $(failed "$rc" "$log"))"
     return
   fi
-  cp "$WREG" "$WOR" "$OUT/"
+  cp "$WREG" "$OUT/"
   say "WEIGHTS $("$PY" - "$WREG" <<'EOF'
 import json, sys
 r = json.load(open(sys.argv[1]))
@@ -1353,7 +1352,7 @@ private_pieces() {
 # follow-on runs at. Each is listed where it exists.
 deferred_inputs() {
   {
-    printf '%s\n' weights_registration.json weights_of_record.json deployment-registration.json "$(v3c_record)" windows.jsonl seals.jsonl \
+    printf '%s\n' weights_registration.json deployment-registration.json "$(v3c_record)" windows.jsonl seals.jsonl \
       requests.jsonl declaration.json \
       "$SERVED_ARM/summary.json" "$SERVED_ARM/window/audit.json" \
       "$SERVED_ARM/window/registration.json" "$SERVED_ARM/runs.json" \

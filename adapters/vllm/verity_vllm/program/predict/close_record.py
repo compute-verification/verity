@@ -168,13 +168,11 @@ def register(registered: Any, out: str | Path, checkpoint_dir: str, checkpoints:
              tables: Any = None) -> str:
     """The deployment's one registration, written into ``out`` before its first epoch: the committer's weights
     registration (`REGISTRATION`, `window_weights.weights_registration`), its salts beside it, under which every later
-    epoch commits its weights, its projection (`weights_registration.OF_RECORD`) and its record (`DEPLOYMENT`,
+    epoch commits its weights, and its record (`DEPLOYMENT`,
     `window_weights.deployment_record`). -> the record's digest (`docket_digest.digest`). Refused (ValueError) where
     ``out`` holds a registration, naming its digest."""
     from verity.commitments import docket_digest as DD
     from verity.commitments import salt_file as SF
-
-    from verity_vllm.records import weights_registration as WRG
 
     from . import window_weights as WW
 
@@ -186,7 +184,6 @@ def register(registered: Any, out: str | Path, checkpoint_dir: str, checkpoints:
                                   tables=tables)
     rec = WW.deployment_record(doc)
     (out / REGISTRATION).write_text(json.dumps(doc, indent=1) + "\n")
-    WRG.write_of_record(out / REGISTRATION)
     (out / DEPLOYMENT).write_text(json.dumps(rec, indent=1) + "\n")
     return DD.digest(rec)
 
