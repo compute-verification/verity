@@ -5140,6 +5140,29 @@ def test_r8_holds_registered_inputs_to_the_weights_of_record_as_python_does(piec
         assert D.replay(REGISTRATION, given, pieces) == ("output", D.canonical(reg)), weights
 
 
+def test_r8_refuses_a_marked_input_expected_by_name_alone_as_python_does(pieces):
+    """R8 on a marked input the verifier expects registered by name (`docket.weights_held`, `Docket.weightsHeld`), Lean's
+    codes the Python's: with no pin R8 accepted and no root the verifier holds itself it is refused (`R8-unpinned`)
+    whatever root the record names; pinned by the verifier (`pinned`) it passes."""
+    marked = _readers(2, (("call", 2, _X0 + _X00),) * 2, True)
+    s = Setup(marked, READER_SETUPS[0].query)
+    for pinned, want in ((None, ["R8-unpinned"]), ({"x": "ab" * 64}, [])):
+        named, expanded = service.params_sampling_design("rate:1/2", s.program, s.query, None)
+        roots = [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports]
+        mine = G.registered_entries(s.program, {"x": 1}, None, None, ("x",) if pinned else ())
+        entries = [{"value": v, "root": "ab" * 64, **e} for v, e in mine.items()]
+        rec = DK.record(s.program, s.query, named, SCHEME, roots, WINDOW, leaf_layer=LEAF, work_table=expanded,
+                        registered=entries)
+        sig = _json([[name, t.to_json()] for name, t in s.program.fn.signature()[0]])
+        params = {"anchors": [], "delta": "1/1000", "law": "rate:1/2", "leaf_layer": LEAF, "log": [], "partition": None,
+                  "ports": s.ports, "program": s.desc, "query": s.query, "registered": {"x": 1}, "scheme": SCHEME,
+                  "work_table": None, "parameters": sig, **({} if pinned is None else {"pinned": pinned})}
+        given = _json({"params": params, "record": rec})
+        reg = registration(given)
+        assert reg["codes"] == want, (pinned, reg)
+        assert D.replay(REGISTRATION, given, pieces) == ("output", D.canonical(reg)), pinned
+
+
 def test_r8_reads_the_readers_python_does(pieces):
     """R8 past a population program, Lean's answers the Python's: two calls of `PAIR` on one pair of `x`, or a batch
     broadcasting it, at F 1, and a call reading another's result, whose result a batch of two maps, joining all three at
