@@ -1672,8 +1672,10 @@ private def readerT (name : String) (reg : Json) : Member :=
 #guard (whyT (classHeld #[memberT "a" #[(0, 1)], readerT "c" Json.null])).startsWith "member c: "
 
 /-- The pin of `w` R8 accepts in these guards: root `a…`, 2 leaves, domain `d…`. -/
-private def pinT : Array (Spot.Registered.Entry × String) :=
-  #[({ value := "w", leaves := 2, words := 1, wordBits := 16, domain := "".pushn 'd' 128 }, "".pushn 'a' 128)]
+private def pinEntryT : Spot.Registered.Entry :=
+  { value := "w", leaves := 2, words := 1, wordBits := 16, domain := "".pushn 'd' 128 }
+
+private def pinT : Array (Spot.Registered.Entry × String) := #[(pinEntryT, "".pushn 'a' 128)]
 
 -- a member reading the pinned input at the pin's own entry, and one reading only other values: accepted
 #guard refusal (pinsHeld pinT #[readerT "a" (regT [("p", "w", 'a', 2)]), readerT "b" (regT [("q", "v", 'b', 3)]),
@@ -1682,7 +1684,7 @@ private def pinT : Array (Spot.Registered.Entry × String) :=
 #guard whyT (pinsHeld pinT #[readerT "a" (regT [("p", "w", 'b', 2)])]) == PINNED_READ_WHY "a" "p" "w" "root"
 #guard whyT (pinsHeld pinT #[readerT "a" (regT [("p", "w", 'a', 3)])]) == PINNED_READ_WHY "a" "p" "w" "leaf count"
 -- another domain: refused by name
-#guard whyT (pinsHeld #[({ (pinT[0]!).1 with domain := "".pushn 'e' 128 }, (pinT[0]!).2)]
+#guard whyT (pinsHeld #[({ pinEntryT with domain := "".pushn 'e' 128 }, "".pushn 'a' 128)]
   #[readerT "a" (regT [("p", "w", 'a', 2)])]) == PINNED_READ_WHY "a" "p" "w" "domain"
 -- the refusal's text, which `members.pinned_read_why` prints word for word
 #guard PINNED_READ_WHY "a" "p" "w" "root" == "registered: member a's port p reads the registered input w at another " ++
