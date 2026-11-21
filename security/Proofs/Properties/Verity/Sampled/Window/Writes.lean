@@ -90,7 +90,10 @@ theorem SessionVerdict.accepts_member {nJ : ℕ} {a : StepAt} {m : Member nJ} (h
     hm.stratified hm.closure
   rw [hz] at hs
   rw [hm.own]
-  have hp := circuitOf_flat ((ZkExec.zkTags_typed m.I).trans m.ht) (Flock.Desc.parse_flat m.hD)
+  obtain ⟨c, hc, -⟩ := Flock.Desc.parseStmt_commit m.hD
+  have hp : Flock.ProvedScope.circuitOf (ZkExec.zkTags m.I) m.I.circuitFile m.I.tables = .ok c := by
+    rw [Flock.ProvedScope.circuitOf_hidden ((ZkExec.zkTags_hiddenOutputs m.I).trans m.hTags.1)]
+    exact hc
   exact ⟨sts, setupOfP_back hm.tables m.hcount m.ht hp none record _ hs,
     acceptsZKP_back hm.tables m.hcount m.ht hp ((acceptsZKP_congr hz).1 hat)⟩
 

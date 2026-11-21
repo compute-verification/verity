@@ -213,7 +213,7 @@ cost. -/
 theorem FilesPass.checked {nJ : ℕ} {m : Member nJ} (h : FilesPass m) (hfix : m.RootsFix) (t : ℕ) :
     (m.toV5 t).Checked := by
   obtain ⟨pubO, hp, hn⟩ := h.loads
-  have hparsed := Flock.Bridge.parsedOf_eq (Flock.Desc.parseStmt_of_parse m.hD) hp m.hU
+  have hparsed := Flock.Bridge.parsedOf_eq m.hD hp m.hU
   rw [hn] at hparsed
   exact ⟨rfl, hparsed, h.distinct, hfix⟩
 

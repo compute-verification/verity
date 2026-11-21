@@ -81,7 +81,7 @@ structure Member (nJ : ℕ) where
   own : Option ByteArray
   ht : I.tags.typed = false
   D : Flock.Desc
-  hD : Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D
+  hD : Flock.Desc.parseStmt (zkTags I) I.circuitFile I.tables = .ok D
   hU : FlockSoundness.Built D.unroll.unit
   /-- the circuit names no public input port -/
   hpi : Flock.HmIn.parse D.unroll = .ok {}

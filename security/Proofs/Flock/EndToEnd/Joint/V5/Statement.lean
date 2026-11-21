@@ -75,7 +75,7 @@ structure MemberV5 (Reg : Type) (nJ : ℕ) where
   own : Option ByteArray
   ht : I.tags.typed = false
   D : Flock.Desc
-  hD : Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D
+  hD : Flock.Desc.parseStmt (zkTags I) I.circuitFile I.tables = .ok D
   hU : Built D.unroll.unit
   pi : HmIn.Ports
   hpi : HmIn.parse D.unroll = .ok pi
@@ -136,7 +136,7 @@ noncomputable def P := (keyProgP m.D.unroll m.pi m.hU m.n).partition (Discharge.
 
 /-- The member's descriptor read as a statement (`Desc.parseStmt`), from its flat parse. -/
 theorem hDS : Flock.Desc.parseStmt (zkTags m.I) m.I.circuitFile m.I.tables = .ok m.D :=
-  Flock.Desc.parseStmt_of_parse m.hD
+  m.hD
 
 /-- The member's circuit file read as its statement circuit (`HmOut.parseStmt`), from its descriptor's flat parse. -/
 theorem hcS : HmOut.parseStmt (zkTags m.I) m.I.circuitFile m.I.tables = .ok m.D.unroll :=

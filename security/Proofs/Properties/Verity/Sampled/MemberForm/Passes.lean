@@ -159,6 +159,24 @@ theorem load_count {vm : _root_.Spot.OneStageZk.Member} {rec : Json} {roots : St
 
 /-! ## The member's files pass -/
 
+/-- **`v5Files_of_checksStmt` at hidden-output tags**: the ports check at the circuit `ProvedScope.circuitOf` reads gives
+the statement circuit's distinct domains and `RootFixesDomainL`, flat or templated. -/
+theorem v5Files_of_checksH {tags : Flock.Tags} {cf pf : ByteArray} {tables : List (String × ByteArray)}
+    {D : Flock.Desc} {pi : Flock.HmIn.Ports} {pub : Flock.Public} {n : ℕ} (hty : tags.typed = false)
+    (hh : tags.hiddenOutputs = true) (hD : Flock.Desc.parseStmt tags cf tables = .ok D)
+    (hpub : Flock.HmIn.loadPublic tags D.unroll pi pf = .ok pub) (hn : pub.n = n)
+    (hck : Flock.PortRoots.checkOf (Flock.ProvedScope.circuitOf tags cf tables) tags pf = .ok ()) :
+    Flock.PortRoots.dupId D.unroll pub = false ∧
+      Flock.Bridge.RootFixesDomainL D.unroll (Flock.Bridge.LeafMap.ofPublic D.unroll pub n) := by
+  obtain ⟨cs, hcs, he⟩ := FlockSoundness.commit_of_parseStmt hty (Flock.Desc.parseStmt_stmt hD)
+  have hC := FlockSoundness.Discharge.Hidden.committed_of_commit hcs
+  rw [Flock.ProvedScope.circuitOf_hidden hh, hcs] at hck
+  rw [he, FlockSoundness.Discharge.Hidden.loadPublicIn_commit hty hC] at hpub
+  have hcs' := Flock.Bridge.v5Files_of_checks hpub hn hck
+  obtain ⟨nets, hu⟩ := hC.unrolled_eq hty
+  rw [he, hu]
+  exact hcs'
+
 /-- **A member whose files the per-member form's run held has its files pass, at the window's member**: on the
 blobs sent `s`, where v2 reads the member's files among the files `R` and each pinned table the blobs hold is its
 registered file in `T`, the parameters' member `vm` whose files the run held at its slice of the registration
@@ -180,19 +198,30 @@ theorem filesPass_of_held {T : PinnedTables} {R : Array ByteArray} {s : Verity.S
     unfold FlockSoundness.Discharge.ZkExec.zkTags Flock.Witness.zkTags
     rw [htags, hcf, hcount]
   have hty : (zkTags m.I).typed = false := (FlockSoundness.Discharge.ZkExec.zkTags_typed m.I).trans m.ht
-  have hflat := Flock.Desc.parse_flat m.hD
-  have hports : Flock.PortRoots.checkOf (.ok m.D.unroll) (zkTags m.I) m.I.publicFile = .ok () := by
-    rw [eks, hz, hcf, hpf, circuitOf_back hext hty hflat] at hks
+  have hh : (zkTags m.I).hiddenOutputs = true :=
+    (FlockSoundness.Discharge.ZkExec.zkTags_hiddenOutputs m.I).trans m.hTags.1
+  obtain ⟨cs, hcs, he⟩ := FlockSoundness.commit_of_parseStmt hty (Flock.Desc.parseStmt_stmt m.hD)
+  have hC := FlockSoundness.Discharge.Hidden.committed_of_commit hcs
+  have hcirc : Flock.ProvedScope.circuitOf (zkTags m.I) m.I.circuitFile m.I.tables = .ok cs := by
+    rw [Flock.ProvedScope.circuitOf_hidden hh]
+    exact hcs
+  have hports : Flock.PortRoots.checkOf (.ok cs) (zkTags m.I) m.I.publicFile = .ok () := by
+    rw [eks, hz, hcf, hpf, Flock.ProvedScope.circuitOf_hidden hh, parseCommit_okLe hext _ _ cs hcs] at hks
     exact hks
   obtain ⟨pubO, hO⟩ := Flock.PortRoots.checkOf_load hports
+  have hO' : Flock.HmOut.loadPublic (zkTags m.I) m.D.unroll m.I.publicFile = .ok pubO := by
+    rw [he, FlockSoundness.Discharge.HiddenExec.loadPublic_unrolled hty hC]
+    exact hO
   have hn : m.pub.n = m.n := by
     rw [hon.units]
     rw [epop, hpf] at hpop
     exact load_count hpop m.hpub
-  refine ⟨⟨pubO, hO, (Flock.Bridge.loadPublic_inOut m.hpub hO).1.trans hn⟩,
-    (Flock.Bridge.v5Files_of_checks m.hpub hn hports).1, ?_⟩
-  rw [circuitOf_flat hty hflat]
-  exact hports
+  have hports' : Flock.PortRoots.checkOf (Flock.ProvedScope.circuitOf (zkTags m.I) m.I.circuitFile m.I.tables)
+      (zkTags m.I) m.I.publicFile = .ok () := by
+    rw [hcirc]
+    exact hports
+  exact ⟨⟨pubO, hO', (Flock.Bridge.loadPublic_inOut m.hpub hO').1.trans hn⟩,
+    (v5Files_of_checksH hty hh m.hD m.hpub hn hports').1, hports'⟩
 
 /-- **Every member of a window has its files pass, where the run held every member's**: at a window that is the
 parameters' members on the registered files, on blobs sent where v2 reads each member's files among the registered
@@ -224,10 +253,10 @@ the member's file parses to, refuses two ports of one root and different publish
 theorem FilesPass.rootsFix {nJ : ℕ} {m : Member nJ} (h : FilesPass m) : m.RootsFix := by
   obtain ⟨pubO, hO, hnO⟩ := h.loads
   have hty : (zkTags m.I).typed = false := (FlockSoundness.Discharge.ZkExec.zkTags_typed m.I).trans m.ht
-  have hports := h.ports
-  rw [circuitOf_flat hty (Flock.Desc.parse_flat m.hD)] at hports
+  have hh : (zkTags m.I).hiddenOutputs = true :=
+    (FlockSoundness.Discharge.ZkExec.zkTags_hiddenOutputs m.I).trans m.hTags.1
   have hn : m.pub.n = m.n := (Flock.Bridge.loadPublic_inOut m.hpub hO).1.symm.trans hnO
-  exact (Flock.Bridge.v5Files_of_checks m.hpub hn hports).2
+  exact (v5Files_of_checksH hty hh m.hD m.hpub hn h.ports).2
 
 /-- **A member whose files pass is `Checked` as Flock's member**, at every cost (`FilesPass.checked` at
 `FilesPass.rootsFix`). -/
