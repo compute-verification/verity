@@ -97,12 +97,9 @@ def in_order(program: Program, query: Mapping[str, Any], n: int) -> bool:
 
 def cover(strata: Sequence[tuple[str, Sequence[Sequence[int]]]]) -> int | None:
     """`FilePart.cover`: N where the strata's ranges ``[lo, hi)``, all strata together and in any order, are a disjoint
-    cover of ``0, ..., N - 1`` (a range with ``hi < lo`` refused, one with ``hi == lo`` holding no unit), else None."""
-    rs = [(lo, hi) for _t, s in strata for lo, hi in s]
-    if any(hi < lo for lo, hi in rs):
-        return None
+    cover of ``0, ..., N - 1`` (a range with ``hi <= lo`` holding no unit), else None."""
     at = 0
-    for lo, hi in sorted((r for r in rs if r[0] < r[1]), key=lambda r: r[0]):
+    for lo, hi in sorted(((lo, hi) for _t, s in strata for lo, hi in s if lo < hi), key=lambda r: r[0]):
         if lo != at:
             return None
         at = hi

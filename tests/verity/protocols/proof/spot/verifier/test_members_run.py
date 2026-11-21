@@ -340,8 +340,8 @@ def test_under_a_subset_design_the_strata_need_only_cover_the_units():
     assert M.population_why(UNITS[B], strata, header(B), slice_, subset=True) is None
     assert M.population_why(UNITS[B], strata, header(B), slice_) == M.MEMBER_STRATA
     assert M.population_why(UNITS[B], strata, "no header", slice_, subset=True) == M.MEMBER_UNITS
-    for bad in ([("p", [[0, 3], [5, 7]]), ("t", [[2, 5]])], [("p", [[0, 2], [6, 7]]), ("t", [[2, 5]])],
-                [("p", [[0, 2], [5, 7]]), ("t", [[2, 5], [5, 4]])]):
+    assert P.cover([("p", [[0, 2], [5, 7]]), ("t", [[2, 5], [5, 4]])]) == 7
+    for bad in ([("p", [[0, 3], [5, 7]]), ("t", [[2, 5]])], [("p", [[0, 2], [6, 7]]), ("t", [[2, 5]])]):
         assert P.cover(bad) is None
         assert M.population_why(UNITS[B], bad, header(B), slice_, subset=True) == M.MEMBER_COVER
     assert M.population_why([[2, 8]], strata, header(B), slice_, subset=True) == M.MEMBER_COVER

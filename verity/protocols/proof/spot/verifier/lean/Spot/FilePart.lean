@@ -153,12 +153,11 @@ def sizes (strata : Array (String × Array (Nat × Nat))) : Option (Array Nat) :
     out := out.push (at_ - lo)
   return out
 
-/-- **The ranges' cover**: the ranges `rs`, a range `[a, b)` with `b < a` refused and one with `b = a` holding no
-unit, are a disjoint cover of `[0, N)`: the nonempty ones, sorted by start, each start where the last ended, from 0.
-`N`, or none. The order `rs` lists them in is not read. -/
+/-- **The ranges' cover**: the ranges `rs`, a range `[a, b)` with `b ≤ a` holding no unit, are a disjoint cover of
+`[0, N)`: the nonempty ones, sorted by start, each start where the last ended, from 0. `N`, or none. The order `rs`
+lists them in is not read (`Slots.coverRanges_iff`: their units are a permutation of `0, …, N - 1`). -/
 def coverRanges (rs : List (Nat × Nat)) : Option Nat :=
-  if rs.any (fun r => decide (r.2 < r.1)) then none
-  else ((rs.filter fun r => decide (r.1 < r.2)).mergeSort fun x y => decide (x.1 ≤ y.1)).foldlM
+  ((rs.filter fun r => decide (r.1 < r.2)).mergeSort fun x y => decide (x.1 ≤ y.1)).foldlM
     (fun at_ r => if r.1 == at_ then some r.2 else none) 0
 
 /-- **The strata's cover** (`coverRanges` of every stratum's ranges together): the registration's strata's ranges are
@@ -241,7 +240,7 @@ def piece (j : Json) : V Json := do
 #guard cover #[("PAIR", #[(0, 2), (5, 7)]), ("TRIPLE", #[(2, 6)])] == none
 #guard cover #[("PAIR", #[(0, 2), (6, 7)]), ("TRIPLE", #[(2, 5)])] == none
 #guard cover #[("PAIR", #[(0, 2), (5, 7)]), ("TRIPLE", #[(2, 5), (4, 4)])] == some 7
-#guard cover #[("PAIR", #[(0, 2), (5, 7)]), ("TRIPLE", #[(2, 5), (5, 4)])] == none
+#guard cover #[("PAIR", #[(0, 2), (5, 7)]), ("TRIPLE", #[(2, 5), (5, 4)])] == some 7
 #guard cover #[("PAIR", #[(1, 2)])] == none
 #guard cover #[("PAIR", #[(0, 2), (0, 2)])] == none
 #guard cover #[] == some 0
