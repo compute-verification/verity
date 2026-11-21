@@ -1,9 +1,9 @@
 # Pearl-C on sm_90a
 
-The build of `pearl-c-h100-v1-h3` (G = 4, hashing format -h3) for the H100 and H200: `pearl_c_sm90.cu`'s main loop
-and atoms on wgmma, `debit_sm90.cu`'s second binary, and `run.py` and `grouped.py`, the vLLM adapter's served kernel on
-these cards. `build.sh` builds only with the nvcc sm_90a's pins name, and refuses a binary its instruction gate or its
-numeric gate refuses. The subsystem is [`../README.md`](../README.md).
+The build of `pearl-c-h100-v1-h3` (G = 4, hashing format -h3) for the H100 and H200: `pearl_c_sm90.cu`'s main loop and
+atoms on wgmma, a second binary for each word's inert-work counts, and `run.py` and `grouped.py`, the vLLM adapter's
+served kernel on these cards. `build.sh` builds only with the nvcc sm_90a's pins name, and refuses a binary its
+instruction gate or its numeric gate refuses. The subsystem is [`../README.md`](../README.md).
 
 ## Try it
 
