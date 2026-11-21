@@ -19,8 +19,10 @@ statement holds for every such value, so what an accept means is only as good as
   and window (`R1`); its program, query, partition and population (`R2`); its scheme, ports, roots, leaves and domains
   (`R3`); its leaf layer (`R4`), anchors (`R5`), previous record and
   window (`R6`); for a v2 record its registered values, the verifier's own and the ones it holds certified entries for
-  (`R7`, `CertifiedHeld`); and under a template query, no run Input its proof blocks don't each read alone (`R8`); and
-  in the per-member form each member's one count of link points (`RL`);
+  (`R7`, `CertifiedHeld`), none at a run Input node, every supplied anchor pinned and every pin of record its entry
+  (`R7Pins`); every supplied input with a source (`SuppliedSourced`); every tied name one R8 can let through and the
+  program's registered inputs held to the weights' registration of record (`R8`); and in the per-member form each
+  member's one count of link points (`RL`);
 * **the sample** is a sample of the registered sampling design over the registered population (`Drawn`): its shape, its units and, for a
   stratified or work sampling design, its strata and closure;
 * **the units**: the proved units and the served units the evidence states are the sampled ones, and the session roots
@@ -142,14 +144,14 @@ def R4 (rec : Json) (v : Docket.Verifier) : Prop :=
 def R5 (rec : Json) (v : Docket.Verifier) : Prop := jeq (getD rec "anchors") (.arr v.anchors)
 
 /-- R8: every name the verifier lists as tied is a parameter of the program, neither registered nor held, whose gates
-are one interval of run Input nodes (`Docket.tiedBad`); and under a template query that applies to the verifier's
-program, its proof blocks each read their own leaves of every run Input node but a parameter's the verifier expects
-registered or lists as tied (`Partition.readAlone`, of `Partition.sharedInputs`, outside `Docket.heldGates` and
-`Docket.tiedGates`): no batch of more than one member broadcasts one or reads a leaf of one twice, and no two
-instance nodes read one leaf. A value one proof block computes that the program takes as an Input joins no proof
-blocks in the fan-out (`Partition.fanout`), so a run Input two proof blocks read could hold rows one of them computed.
-R8 claims nothing of a tied value's rows: its Input is outside the claim, and the registration piece names each one it
-let through (`Docket.tiedThrough`, published as `rests_on_period_check`). The network period check holds them:
+are one interval of run Input nodes (`Docket.tiedBad`); and the program's registered inputs are held to the weights'
+registration of record (`Docket.weightsCodes`): its digest and form, each pin's domain and shape, a template query
+that applies wherever the program has a registered input or the verifier a registration, and no input bound at
+registration that a template parameter reads unless pinned or expected registered. R8 says nothing of how many proof
+blocks read a run Input: the per-member form's check holds every reader of a run Input node outside the tied gates to
+the record's one tree of it (`OneStageZk.runInputRootsAt`), and R7 refuses a registered value at a run Input node
+(`R7Pins`). R8 claims nothing of a tied value's rows: its Input is outside the claim, and the registration piece names
+each one it let through (`Docket.tiedThrough`, published as `rests_on_period_check`). The network period check holds them:
 `Properties.NetworkPeriod.RowsProgWired` equates the scan's `scan/prog` entry's root and domain with an audit's entries
 port. It accepts that audit at any sample and charges one sampled in part: `Properties.NetworkPeriod.RowsTiedCharged`
 has its δ in the period's ε and, where its bound is at least one incorrect proof block, every slot entry bit of each
@@ -160,8 +162,7 @@ piece let through, and that the name `prog<j>` is the Input the entry `scan/prog
 That the rows under that root are the outputs of the proof blocks that computed them (one-stage's ports and the
 commitment's binding) is not composed with those into a theorem: unproved. -/
 def R8 (v : Docket.Verifier) : Prop :=
-  (Docket.tiedBad v).isEmpty = true ∧
-    Partition.readAlone v.program v.query (Docket.heldGates v ++ Docket.tiedGates v) = true
+  (Docket.tiedBad v).isEmpty = true ∧ Docket.weightsCodes v = #[]
 
 /-- The record's window names the seed salt the verifier read from the challenger's log (`seedSalt`), and none when it
 read none. -/
@@ -294,6 +295,19 @@ def R7 (rec : Json) (v : Docket.Verifier) : Prop :=
     SuppliedIs es (mine' ++ v.certified.map (·.1)) v.supplied
       (Supplied.root rec v.log v.binding v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1)) v.schemas)
 
+/-- R7's holds beside its entries, for a v2 record: no registered value, a supplied one included, whose parameter's
+gates hold a run Input node (`Docket.runInputNamed`: a run Input's rows are committed once, in its one tree); no
+supplied anchor whose value neither the verifier's `pinned` nor the weights' registration of record pins
+(`Docket.anchorUnpinned`); and every value the weights' registration of record pins has the record's entry that pin in
+root, leaf count, words and domain, and an anchor's value it pins an entry (`Docket.offPin`). -/
+def R7Pins (rec : Json) (v : Docket.Verifier) : Prop :=
+  (Docket.runInputNamed v).isEmpty = true ∧ (Docket.anchorUnpinned v).isEmpty = true ∧
+    (Docket.offPin rec v).isEmpty = true
+
+/-- Every parameter bound as a supplied input has a source, whatever the record registers: the parameters' `supplied`
+or an earlier record's output (`Docket.unsourced`). -/
+def SuppliedSourced (v : Docket.Verifier) : Prop := (Docket.unsourced v).isEmpty = true
+
 /-- The pool chain the caller's check holds (`VStar.Recursive.Caller.poolChained`), a caller's fact (`CallerHeld`): for a verifier with a
 pool, the record's entry for the value its window
 opens the pool from (`pin`; `Docket.entryOf`, the last entry naming it) has the domain and root of the pool the
@@ -343,12 +357,13 @@ def RL (v : Docket.Verifier) : Prop :=
 
 /-- The registration keeps R1–R8 against the copies the caller gives as the verifier's (the ports, the leaf layer and the
 anchors among them), with `samplingDesign` the agreed sampling design as derived; R7, its
-pinned roots (`PinnedHeld`) and its certified roots (`CertifiedHeld`) when the verifier expects values registered or
-holds certified entries; and the per-member form's members' link points (`RL`). The caller's facts are `CallerHeld`'s,
-not these. -/
+pinned roots (`PinnedHeld`), its certified roots (`CertifiedHeld`) and its pins (`R7Pins`) when the verifier expects
+values registered or holds certified entries; every supplied input with a source (`SuppliedSourced`); and the
+per-member form's members' link points (`RL`). The caller's facts are `CallerHeld`'s, not these. -/
 def Registered (v : Docket.Verifier) (rec samplingDesign : Json) : Prop :=
   R1 rec v samplingDesign ∧ R2 rec v ∧ R3 rec v ∧ R4 rec v ∧ R5 rec v ∧ R6 rec v ∧
-    (ExpectsV2 v → R7 rec v ∧ PinnedHeld rec v ∧ CertifiedHeld rec v) ∧ R8 v ∧ RL v
+    (ExpectsV2 v → R7 rec v ∧ PinnedHeld rec v ∧ CertifiedHeld rec v ∧ R7Pins rec v) ∧ SuppliedSourced v ∧ R8 v ∧
+    RL v
 
 /-- The caller's facts: what the caller's check (`VStar.Recursive.Caller.check`) holds the record to against what SPOT's
 caller hands the verifier beside the record and SPOT's own log. The record names its day's declared program (`DeclaredDay`, the registration
