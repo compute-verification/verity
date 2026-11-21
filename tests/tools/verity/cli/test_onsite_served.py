@@ -1005,7 +1005,8 @@ def test_the_period_s_line_states_both_stages_ends_and_the_outcome_over_both(tmp
                                               'verdict stands for a step that did not run"\nexit 20\n'))
     got = T.live(R.load(ROOT / "applications" / "remote.toml", REG), tmp_path / "state", [T.WORKERS]).period
     assert got == {"accounting": {"exit": 20, "end": end}, "policy": {"exit": 20, "end": end}, "outcome": 20,
-                   "compilation": "compilation not verified", "wipe": "the wipe is started by the adapter's launcher today",
+                   "compilation": "compilation not verified",
+                   "wipe": "the wipe is started by the adapter's launcher today",
                    "registration": T.REGISTRATION_PERFORMS_NOTHING}
     monkeypatch.setattr(T, "RUNNER", stand_in(tmp_path, "runner.sh", 'mkdir -p "$OUT"\nexit 3\n'))
     got = T.live(R.load(ROOT / "applications" / "remote.toml", REG), tmp_path / "state", [T.WORKERS]).period

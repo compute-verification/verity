@@ -1251,7 +1251,8 @@ def _end(state: Path, log: str) -> str | None:
 
 def _period(w: ServedWorkload, state: period.PeriodState) -> dict[str, Any]:
     """The period's one line (``PERIOD``): each stage's runner exit and ROAD END, the outcome, the `worse` of the two
-    exits (the workload's ``served-window``), and what the wipe, compilation and registration said. It decides nothing."""
+    exits (the workload's ``served-window``), and what the wipe, compilation and registration said. It decides
+    nothing."""
     # the period has one window today: a later window's would replace an earlier one's
     acc = pol = None
     for x in state.windows:
