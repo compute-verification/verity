@@ -1541,7 +1541,7 @@ class Verifier:
         reading the ledger refuses, or whose terms the Lean's don't hold, carries why, and the session then declares
         nothing; a node whose figures refuse the card's maximum squaring rate at the record's codec, its GPUs' on-chip
         storage, or the link burst its charged links read, refuses the whole ledger, which then carries only that refusal (`refused`), in each
-        reading and in `declared`.  Of what `declared` carries beside them, a paced session's fixed windows (`ledger.Gamma.windows`) and
+        reading and in `declared`.  Of what `declared` carries beside them, a paced session's fixed epochs (`ledger.Gamma.windows`) and
         the sketch's and the sample's terms in its errors (`sketch`, `draw`) are the Python ledger's.  With the
         session's plans, `memory` is the node's HBM it shows held by kind (`memory`), KV credited on no verdict yet.
         `delta` is the memory line's δ in its six parts (`ledger.delta_parts`, each ratio text), whose sum `declared`'s

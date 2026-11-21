@@ -58,7 +58,7 @@ class Figures:
     SHA-512 rate and squaring ceiling per width, the disks' measured read rate and one link burst.  Each unprefixed property is the node's, the
     sum over its devices.  A read rate is of plain reads: the encoded store's words are never constant, so the GPU's
     compression engine reads it no faster than plain bytes.  A write ceiling is its tier's specified rate: a ceiling
-    must bound every prover, and a measured rate bounds only the kernels tried.  A width whose squaring ceiling is not
+    must bound every prover, and a measured rate bounds only the kernels tried.  A width whose maximum squaring rate is not
     established maps to the refusal that says so, which `squaring_ceiling` raises: no rate stands in for it.  So may
     the SHA-512 rate, the link burst and one GPU's on-chip storage, each a bound from above on what the node can do,
     which `sha512_per_s`, `ledger.Node.stated` and `chip_bytes` raise.  A session's figures are a parameter of its verifier, handed in as `to_json` writes them (`--figures`)."""
@@ -114,9 +114,9 @@ class Figures:
                 for width, rate in self.gpu_squarings_per_s.items()}
 
     def squaring_ceiling(self, width: str) -> float:
-        """The node's squaring ceiling at `width`, refused by its figures' reason where none is established."""
+        """The node's maximum squaring rate at `width`, refused by its figures' reason where none is established."""
         if width not in self.gpu_squarings_per_s:
-            raise ValueError(f"the node's figures state no squaring ceiling at {width}")
+            raise ValueError(f"the node's figures state no maximum squaring rate at {width}")
         rate = self.squarings_per_s[width]
         if type(rate) is str:
             raise ValueError(rate)
@@ -139,7 +139,7 @@ class Figures:
             raise ValueError(f"a node's figures are an object of exactly {', '.join(sorted(FIGURES))}")
         squarings = j["gpu_squarings_per_s"]
         if type(squarings) is not dict or not all(type(w) is str for w in squarings):
-            raise ValueError("gpu_squarings_per_s maps each codec width to one GPU's squaring ceiling or its refusal")
+            raise ValueError("gpu_squarings_per_s maps each codec width to one GPU's maximum squaring rate or its refusal")
         for k in FIGURES:
             for v in squarings.values() if k == "gpu_squarings_per_s" else (j[k],):
                 if k in REFUSABLE and type(v) is str and v:
@@ -157,7 +157,7 @@ class Figures:
         """A node's figures from its registration's data sheets, each as parsed TOML (`verity.device`'s `load_node`
         and `load_card`): the node's `device.count` and `memory.dram.bytes`, the host's DRAM; its GPU card's
         `memory.read`, `memory.bandwidth`, `store.chip` and `store.dram`; its host card's `memory.read`,
-        `memory.bandwidth`, `store.chip` and `disk.read`.  The figures no sheet states are handed in: one GPU's SHA-512 rate, its squaring ceiling or that ceiling's refusal per width, and one link burst; and one
+        `memory.bandwidth`, `store.chip` and `disk.read`.  The figures no sheet states are handed in: one GPU's SHA-512 rate, its maximum squaring rate or that rate's refusal per width, and one link burst; and one
         GPU's on-chip storage where its card states no `store.chip`."""
         for part, card in (("device", gpu), ("host", host)):
             if node[part]["sku"] != card["sku"]:

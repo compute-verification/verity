@@ -32,9 +32,9 @@ from verity.protocols.proof.spot.verifier.profile import IntegrityProfile, Subse
 
 FIGURES = timing.Figures.of_json(json.loads((Path(__file__).resolve().parents[7] / "tests/verity/protocols/accounting/memory/poub/figures.json").read_text()))
 CEILING = 2e11
-"""A squaring ceiling at p1024 for the tests of the ledger's terms, in squarings a second: the node's figures refuse one."""
+"""A maximum squaring rate at p1024 for the tests of the ledger's terms, in squarings a second: the node's figures refuse one."""
 UNREBUILT = dataclasses.replace(FIGURES, gpu_squarings_per_s={**FIGURES.gpu_squarings_per_s, "p1024": 0.0})
-"""The node's figures with μ_rebuild left out at p1024, where they refuse a squaring ceiling: every other term's."""
+"""The node's figures with μ_rebuild left out at p1024, where they refuse a maximum squaring rate: every other term's."""
 
 N = 20
 NODE = b"node-under-test"
@@ -365,7 +365,7 @@ def test_the_rebuild_term_is_the_record_s_codec_at_the_stated_ceiling() -> None:
     """μ_rebuild is the stated squaring ceiling over the record's codec's encode, `C_sq · 4096 / (E_sq · R)`: at the
     card's maximum squaring rate and measured R 0.52% under p512/k2, and at p1024 the node's figures refuse a rate by
     name.  A
-    model of another codec than the record's, a bare fraction, or a ceiling that isn't a finite nonnegative rate is
+    model of another codec than the record's, a bare fraction, or a maximum squaring rate that isn't a finite nonnegative rate is
     refused."""
     p512 = codec.Codec(codec.P512, 2, False)
     assert [c.encode_squarings for c in (codec.DEFAULT, codec.FALLBACK, p512)] == [32 * 3 * 1021, 32 * 2 * 1021,
@@ -1056,9 +1056,9 @@ def test_the_closed_wrong_bound_is_above_the_profiles_exact_one(units, samples) 
 
 def test_the_stated_reading_in_every_window_and_for_the_horizons_sampling_term() -> None:
     """`PROTOCOL.md` §1 and §10's reading through the ledger, on one node whose store spans every tier, 94 GB of each
-    GPU's HBM and host DRAM's share, at the node's R and S_chip.  The node's figures refuse a squaring ceiling at the
+    GPU's HBM and host DRAM's share, at the node's R and S_chip.  The node's figures refuse a maximum squaring rate at the
     default codec's p1024, so the reading is refused by name, and the terms below are every term but μ_rebuild.  At the
-    stated T = 60 s and 33,273 openings a window (555 a second) at δ = 2^-101, a 10 min session's worst window has its
+    stated T = 60 s and 33,273 openings an epoch (555 a second) at δ = 2^-101, a 10 min session's worst epoch has its
     γ_t at 1.00–1.04%, over 1%, its μ_sample 0.21%; over the horizon the pooled μ_sample is under 0.03% and γ about
     0.67%, over 0.15%, which μ_chip and λ (0.164%) each exceed alone.  At spec every reading is
     `1 − (1 − γ)·R/R_spec`, 5.9–6.0%: R cancels in what is certified.  The same 94 GB a GPU in HBM alone leaves host
@@ -1112,7 +1112,7 @@ def test_the_write_ceilings_are_the_sheets_above_every_write_measured() -> None:
     measurement bounds only the kernels tried, each above every write its bench measured: the card's 1,528.98 GB/s on
     the device and 56.39 streamed in (`write.cu`), the host's 207.69 (`write_host.c`).  A fill of derived codec labels
     is bounded by the labeller, about 8.4 GB/s a GPU under p512/k2; under the default codec the node's figures refuse
-    the squaring ceiling that would bound it, and no DPU's is stated."""
+    the maximum squaring rate that would bound it, and no DPU's is stated."""
     assert FIGURES.gpu_write_bytes_per_s == FIGURES.gpu_spec_bytes_per_s == 1.597568e12 > 1528.98e9 > 56.39e9
     assert FIGURES.host_write_bytes_per_s == FIGURES.host_spec_bytes_per_s == 819.2e9 > 207.69e9
     assert "a measured rate bounds only the kernels tried" in " ".join(timing.Figures.__doc__.split())
@@ -1164,7 +1164,7 @@ def test_auditros_slack_adds_at_most_2_to_the_minus_110_over_2_to_the_30_passes(
 def test_below_the_store_floor_no_window_meets_one_percent() -> None:
     """`store_floor`'s closed form against the ledger: a single 20 min window at 555 openings a second, whose μ_sample
     and ends are under 0.01%, is over 1% just below the floor at g = 50 µs and under it just above.  At g = 0 the floor
-    is μ_chip, λ and μ_rebuild alone.  The node's figures refuse a squaring ceiling at the default codec's p1024, so
+    is μ_chip, λ and μ_rebuild alone.  The node's figures refuse a maximum squaring rate at the default codec's p1024, so
     its floor is refused by name, and with μ_rebuild left out it is about 373 GB over the node's every tier."""
     with pytest.raises(ValueError, match="no maximum squaring rate is established for rtx-pro-6000-server at 1024 bits"):
         timing.store_floor(figures=FIGURES)

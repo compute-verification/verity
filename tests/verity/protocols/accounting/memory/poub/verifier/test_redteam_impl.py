@@ -63,7 +63,7 @@ def test_rb2_the_record_names_its_codec(store) -> None:
     assert store.registration.codec.name == "p1024/k2/masked"
     assert store.registration.codec.name in s.record().public().values()
     assert s.record().public()["codec_params"] == {"c": 105, "field": "p1024", "masked": True, "n": 1024, "rounds": 2}
-    stated = 2e11  # a squaring ceiling at p1024 for the test, in squarings a second: the node's figures refuse one
+    stated = 2e11  # a maximum squaring rate at p1024 for the test, in squarings a second: the node's figures refuse one
     with pytest.raises(ValueError, match="record's codec p1024/k2/masked"):
         audit.ledger(s.record(), capacity_bytes_per_s=CAPACITY, chip_bytes=0,
                      rebuild=audit.Rebuild(codec.DEFAULT, stated))

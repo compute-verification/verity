@@ -182,7 +182,7 @@ def test_the_sketch_charges_the_provers_budget() -> None:
         2 * 2.0 ** receipts.HM96.statistical_distance_log2(p, key_failure_log2=keys), rel=1e-12)
     total = sum(parts.values(), Fraction(0))
     stated = ledger.Node.stated(FIGURES)
-    node = dataclasses.replace(stated, squarings_per_s={**stated.squarings_per_s, "p1024": 2e11})  # δ reads no ceiling
+    node = dataclasses.replace(stated, squarings_per_s={**stated.squarings_per_s, "p1024": 2e11})  # δ reads no maximum squaring rate
     assert [x.delta for x in ledger.memory(record, node)] == [total] * 3
     assert round(math.log2(total), 2) == -15.12, "the ledger's, typed to check it"
     for bad in (0, -1, 1.5, 2.0 ** 80):

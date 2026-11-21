@@ -26,7 +26,7 @@ what the session ran with. `verity bench memory --help` lists its other ways in.
 - **A Linux machine with an NVIDIA GPU whose card file (`calibration/hardware/cards/`) lists the name nvidia-smi
   gives it in `driver`.** The share is of the card's node file (`calibration/hardware/nodes/`), the one whose
   `device.sku` is that card (`LOCAL_NODE` names another): an H200 or an RTX PRO 6000 Blackwell today. A share also
-  needs the node's squaring ceiling at the session's codec width (`benchmarks/poub_session/sheets.py`'s
+  needs the node's maximum squaring rate at the session's codec width (`benchmarks/poub_session/sheets.py`'s
   `squaring_ceilings`): none is established on an H200, nor at the deployed codec's 1,024 bits on an RTX PRO 6000, so
   there the session runs and prints the ledger's refusal, naming the card, the width and the fix, and no share. On a
   card with a card file and no node file, such as an H100, the session runs and prints no share, since the node's read
