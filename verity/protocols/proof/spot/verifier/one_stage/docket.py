@@ -269,12 +269,12 @@ def registration_parsed(registration: Any, challenger: Any, window_root: Any,
         return body, digest, DEVELOPMENT
     if sorted(r) != ["ledger", "record"]:
         raise RegistrationRefused(REGISTRATION_FORM)
+    if not isinstance(window_root, str) or verify is None:
+        raise RegistrationRefused(NO_SIGNED_HEAD_WHY)
     try:
         key = Ch.ChallengerKey.from_json(challenger["key"])
     except (Ch.CoinError, KeyError, TypeError):
-        key = None
-    if key is None or not isinstance(window_root, str) or verify is None:
-        raise RegistrationRefused(NO_SIGNED_HEAD_WHY)
+        raise RegistrationRefused(NO_SIGNED_HEAD_WHY) from None
     try:
         head = Ch.registration_of(r["ledger"], {"root": window_root}, key, verify)
     except Ch.CoinError as e:
@@ -296,8 +296,8 @@ def _of_record(of_record: tuple[bytes, str]) -> tuple[list[tuple[str, Any]], dic
         return [("R8-weights-form", f"{type(e).__name__}: {e}")], {}
     try:
         got = DD.digest(rec) if isinstance(rec, dict) else None
-    except (ValueError, KeyError, TypeError):
-        got = None
+    except (ValueError, KeyError, TypeError) as e:
+        return [("R8-weights-digest", {"registration": None, "of_record": digest, "why": f"{type(e).__name__}: {e}"})], {}
     if got is None or got != digest:
         return [("R8-weights-digest", {"registration": got, "of_record": digest})], {}
     try:

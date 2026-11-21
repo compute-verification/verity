@@ -104,6 +104,7 @@ public import CoreProtocol.Cli
 public import CoreProtocol.Profile
 public import CoreProtocol.Live
 public import Spot.Docket
+public import Flock.JsonParse
 public import Spot.Record
 public import Spot.ChallengerSample
 public import Spot.Select
@@ -390,7 +391,7 @@ def registrationParsed (j : Json) (challenger : Option (Challenger.ChallengerKey
   let .str hex := getD r "record" | throw REGISTRATION_FORM
   let body ← (Flock.unhex hex).mapError fun _ => REGISTRATION_FORM
   let some text := String.fromUTF8? body | throw REGISTRATION_FORM
-  let .ok rec := Json.parse text | throw REGISTRATION_FORM
+  let .ok rec := Flock.JsonParse.parse text | throw REGISTRATION_FORM
   let digest ← (Flock.WindowRecord.digestHex rec).mapError fun _ => REGISTRATION_FORM
   if keys? r == some #["head", "record"] then
     unless jsonStrIs (getD r "head") DEVELOPMENT do throw REGISTRATION_FORM

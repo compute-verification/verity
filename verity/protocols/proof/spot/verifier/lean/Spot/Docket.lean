@@ -132,6 +132,7 @@ each member's sampled proof blocks one count, and one that runs out of coins fai
 module
 
 public import Flock.WindowRecord
+public import Flock.JsonParse
 public import Spot.Draw
 public import Spot.Registered
 public import Spot.Supplied
@@ -381,7 +382,7 @@ root is not its own (`R8-weights-domain`): its domain is the one the record's pr
 (`Registered.domain`), its root lowercase hex of 64 bytes. The codes and the pins that pass. -/
 def pinsOf (body : ByteArray) (digest : String) : Except String (Array String × Array Pin) := do
   let some text := String.fromUTF8? body | throw "R8-weights-form"
-  let .ok doc := Json.parse text | throw "R8-weights-form"
+  let .ok doc := Flock.JsonParse.parse text | throw "R8-weights-form"
   unless (Flock.WindowRecord.digestHex doc).toOption == some digest do throw "R8-weights-digest"
   let some docs := pinDocs doc | throw "R8-weights-form"
   let mut bad := false
