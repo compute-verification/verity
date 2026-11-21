@@ -43,7 +43,7 @@ its TR real rows' TN words of the linear's y (Pearl+'s served product, `pearl_pl
 which every reader of the linear takes by wire, a row of y the concatenation of its column tiles' words in column order.
 Its ``ok`` is one u16 word held to 1; its digest is a committed value no unit reads. A unit's amount is its credited
 MACs, TR · TN · K (`scheme.tile_macs` over its statics, `PEARL_PLUS.blocks`), credited to the tile as a whole over every
-proof block laying makes of it (`scheme.laid_tiles`, `scheme.credited_tiles`). The core and the noise's lines
+proof block laying makes of it (`scheme.laid_tiles`; the credit is the Lean's `creditAtAssumption`). The core and the noise's lines
 and Gram rows are registered on bits only (their word bodies are unregistered), and C's values are words, so this is the
 tile's one word form C names.
 

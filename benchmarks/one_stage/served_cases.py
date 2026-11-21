@@ -155,7 +155,7 @@ PEARL_PLUS_PARTS = {"params", "manifests", "window", "evidence", "lean", "delta"
 PEARL_PLUS_WINDOW = {"dropped", "record", "rounds"}
 #: the work the protocol's check publishes (`PouwVerifier.PearlPlus.Protocol.publicJson`, δ aside): the exact credit, which
 #: holds no class, so where the verdict of record printed the grid form, its exact work in that form's place
-PEARL_PLUS_PUBLIC = ("credited", "credited_tiles", "epsilon", "macs", "rho")
+PEARL_PLUS_PUBLIC = ("checked_macs", "credited", "credited_tiles", "epsilon", "rho")
 DIRS = {V1: "sampled-proofs-v1", SAMPLED: "sampled-proofs", INFERENCE_ONLY: "inference-only",
         PEARL_PLUS: "pouw-pearl-plus", V2: "sampled-proofs-v2"}
 PEARL_PLUS_PIECE = Path("private/pearlplus/case")
