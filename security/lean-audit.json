@@ -53540,12 +53540,6 @@
     "ResourceAccounting.TS.Lanes.sgnBits": "e84a374cfe38f799cb48da5c8f3cfbabb44436b812e2f17161c8a102e9e727ca"
    }
   },
-  "Proofs.Pouw.TS.Session.Lanes.KnownOf": {
-   "digest": "a94a847481f00a8ef795ee5910d3da08c2e3adca5a1f530508ea22af7a477a12",
-   "definitions": {
-    "ResourceAccounting.TS.Lanes.knownOf": "9a356c804d26c8fbe0c530bb5c9af357d468793cbfcc7c07ad6c0280188ec4bc"
-   }
-  },
   "Proofs.Pouw.TS.Session.Lanes.Layer": {
    "digest": "0064e730975302b4fe71d385415b210b5938a58e96f20571ddea340076f248ba",
    "definitions": {
