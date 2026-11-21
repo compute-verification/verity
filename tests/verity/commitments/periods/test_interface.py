@@ -30,6 +30,8 @@ import pytest
 from verity.circuits import codec, partition_object as PO, supplied as SU
 from verity.circuits.codec import canonical_json, descriptor_id
 from verity.circuits.defs import CATALOG_PACKAGES, REGISTRY, CompositeDefinition, bind, catalog_package
+from verity.circuits.program import Program
+from verity.circuits.refs import array_of
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.evaluation.bits import evaluate_words
 from verity.circuits.ops import gemm as G
@@ -529,6 +531,47 @@ def test_a_close_that_cant_commit_a_run_inputs_tree_refuses_naming_it():
     with pytest.raises(ValueError, match=rf"run input {re.escape(x.param)}: .* {x.port} is recorded by reference.*refuses "
                                          "to close"):
         win.close()
+
+
+def test_a_run_input_read_by_several_ranges_is_one_read_in_unit_order():
+    """A template whose units C puts in several ranges reads its run input nodes across them, unit i the node's row i:
+    one read of each node's tree, as one range, and the verifier's period from the record is the prover's."""
+    order = ((TID, 0, 2), (AID, 0, 2), (TID, 2, 1))
+    win = I.Window(I.Circuit("test", ((COORD, 3), (ACC, 2)), order=order), RUN, SAMPLING_DESIGN, 2)
+    reads = [r for r in win.runs if r.reader == TID]
+    assert [(r.port, r.at, r.radix, r.base) for r in reads] == [(p, 0, (3,), 0) for p in ("x", "sx", "wrow", "sw")]
+    assert len({r.param for r in win.runs}) == len(win.runs)
+    rec = json.loads(I.circuit_bytes(win.circuit_record()))
+    assert I.window_of_record(rec, SAMPLING_DESIGN, BY_ID.__getitem__).members == win.window.members
+
+
+def permuted(rows: Sequence[int], m: int) -> Program:
+    """C batching COORD over its four ports' run input nodes of ``m`` rows each, unit u reading row ``rows[u]``."""
+    sig = COORD.signature()[0]
+    body = CompositeDefinition("RunInputsTestPermuted", 0, (), lambda S: (tuple((p, Array(m, t)) for p, t in sig),
+                                                                          Array(len(rows), COORD.signature()[1])),
+                               lambda B, S, *xs: B.batch(COORD, *(array_of([x[r] for r in rows]) for x in xs),
+                                                         axes=(0,) * len(sig)), register=False)
+    return Program(bind(body))
+
+
+@pytest.mark.parametrize("rows, m, why", [
+    ([0, 1, 2], 3, None),
+    ([0, 2], 3, "x: row 1 of run input node 0's 3 is read by no unit"),
+    ([0, 1, 1], 3, "x: unit 2 reads row 1 of run input node 0, which unit 1 reads too"),
+    ([0, 2, 1], 3, "x: unit 1 reads row 2 of run input node 0, not row 1: its units read the node's rows in unit order"),
+])
+def test_a_run_inputs_rows_are_read_each_once_in_unit_order(rows, m, why):
+    """`run_input_reads` takes a port whose units read its run input node's rows each once, none skipped, unit i row i,
+    and refuses, by unit and row, a row skipped, a row read twice and rows out of unit order."""
+    prog = permuted(rows, m)
+    go = lambda: I.run_input_reads([(COORD, len(rows))], prog, PO.template_instances_query([COORD]), ())
+    if why is None:
+        assert [(r.port, r.param, r.radix) for r in go()] == [(p, f"input/n{w}", (3,))
+                                                               for w, p in enumerate(("x", "sx", "wrow", "sw"))]
+    else:
+        with pytest.raises(ValueError, match=re.escape(f"run inputs: {TID} {why}")):
+            go()
 
 
 @pytest.mark.parametrize("templates", [((COORD, 10),), ((COORD, 3), (ACC, 2))])
