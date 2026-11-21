@@ -41,7 +41,7 @@ from verity.commitments import domains as DM, history as HT, registered_value as
 from verity.commitments.gates import embedding as E
 from verity.commitments.gates import sha512_stream as SS
 from verity.commitments.indexed import RangeIndexedDomain
-from verity.commitments.merkle import CommitmentDomain
+from verity.commitments.merkle import CommitmentDomain, tree_levels
 from verity.commitments.rowleaf import (SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2, bit_row,
                                            row_leaf)
 from verity.commitments.periods import flock_inputs as FI, history as HW, interface as I, rows as CS, wiring as WI
@@ -217,7 +217,9 @@ def test_close_commits_every_unit_under_the_window_domain_rule():
     assert again.roots == c.roots
     changed, _, _ = window()
     changed._recorded[TID][1].words[0][0, 0] ^= 1
-    assert changed.close(salts_of=fixed(changed)).roots[win.window.members[1].port("x")] != c.roots[m1.port("x")]
+    changed.close(salts_of=fixed(changed))
+    assert changed.inputs["input/n0"].rows[6] != win.inputs["input/n0"].rows[6]
+    assert changed.inputs["input/n0"].rows[:6] == win.inputs["input/n0"].rows[:6]
 
 
 def _leaf_strings(win: I.Window, seed: int = 0) -> tuple[dict, dict[str, bytes]]:
@@ -270,25 +272,29 @@ def test_a_handed_string_not_its_rows_is_closed_and_opens_no_root():
     the door hashes them) doesn't make the root."""
     win, *_ = window()
     handed, _ = _leaf_strings(win)
-    lr = handed[(TID, "x")]
+    lr = handed[(TID, "o0")]
     bad = bytearray(lr[1])
     bad[CS.BC_BYTES * 5] ^= 1
-    c = win.close(strings={**handed, (TID, "x"): (lr[0], bytes(bad))})
+    c = win.close(strings={**handed, (TID, "o0"): (lr[0], bytes(bad))})
     honest = win.close(strings=handed)
     m = win.window.members[1]
-    p = m.port("x")
-    assert c.window.tree(m, "x") == p and c.roots[p] != honest.roots[p]
-    assert CS.row_strings(c.rows[p], c.salts[p], m.schema("x")) == honest.bc[p] != c.bc[p]
-    remade, _ = CS.commit_ports({p: c.domains[p]}, {p: np.asarray(c.rows[p])}, {}, {p: c.salts[p]}, schemas={p: m.schema("x")})
-    assert remade[p] == honest.roots[p] != c.roots[p]
+    p, t = m.port("o0"), c.window.tree(m, "o0")
+    assert c.roots[t] != honest.roots[t]
+    assert CS.row_strings(c.rows[p], c.salts[p], m.schema("o0")) == honest.bc[p] != c.bc[p]
+    bc = b"".join(CS.row_strings(c.rows[q.port("o0")], c.salts[q.port("o0")], q.schema("o0")) for q in win.window.members)
+    leaves = [row_leaf(c.domains[t], i, CS.INST.tree_leaf(CS.INST.default_key, bc[CS.BC_BYTES * i:CS.BC_BYTES * (i + 1)]),
+                       m.schema("o0")) for i in range(c.domains[t].count)]
+    assert tree_levels(c.domains[t], leaves)[-1][0] == honest.roots[t] != c.roots[t]
 
 
 def test_a_periods_salts_are_the_operating_systems_bytes_one_draw_a_port(monkeypatch):
     """Unless a test hands salts in, `rows.commit` takes every row's salt from the OS generator, 192 bytes a row in one sample a port in
     the ports' order, and stretches none from a key: each port's salts are the bytes the generator gave for it. Two closes
-    of one period sample other salts, so other roots; salts a test hands in (``salts_of``) are taken as given."""
+    of one period sample other salts, so other roots; salts a test hands in (``salts_of``) are taken as given. The run
+    input nodes' trees draw theirs first, once a period."""
     win, _ins, _outs = window()
-    ports = [m.port(p) for m in win.window.members for p, _ in m.all_rows]
+    win.close()
+    ports = list(CS.full_ports(win.window))
     sampled = []
 
     def urandom(n: int) -> bytes:
@@ -309,14 +315,14 @@ def test_a_periods_salts_are_the_operating_systems_bytes_one_draw_a_port(monkeyp
 
 def test_close_concatenates_each_templates_words_once(monkeypatch):
     """Every member's rows are views of one array per port, not each a copy of its whole template's words: close's memory
-    was members × units (249 GB at the decoder's 353,092 units)."""
+    was members × units (249 GB at the decoder's 353,092 units). A run input port's rows are each member's rows of its
+    node's one committed value."""
     seen = []
     monkeypatch.setattr(CS, "commit", lambda window, data, **kw: seen.extend(data))
     win, *_ = window(10, 2)
     win.close()
-    for p in ("x", "o0"):
-        group = "outs" if p == "o0" else "rows"
-        assert len({id(d[group][p].base) for d in seen}) == 1
+    assert len({id(d["outs"]["o0"].base) for d in seen}) == 1
+    assert {id(d["rows"]["x"].value) for d in seen} == {id(win.inputs["input/n0"])}
 
 
 def test_a_period_closes_over_every_unit():
@@ -604,7 +610,7 @@ def test_a_circuit_record_its_templates_dont_make_is_refused():
     with pytest.raises(ValueError, match="not the partition's units"):
         I.window_of_record({**listed, "templates": [[TID, 11]]}, SAMPLING_DESIGN, BY_ID.__getitem__)
     for bad in ({**doc, "templates": [[TID, 11]]}, {**doc, "partition": "00" * 64}, {**listed, "partition": "00" * 64}):
-        with pytest.raises(ValueError, match="not the ones its templates make"):
+        with pytest.raises(ValueError, match="not the (ones|reads of C's run input nodes) its templates make"):
             I.window_of_record(bad, SAMPLING_DESIGN, BY_ID.__getitem__)
     with pytest.raises(ValueError, match="resolves"):
         I.window_of_record(doc, SAMPLING_DESIGN, lambda t: ACC)
@@ -710,24 +716,25 @@ def test_a_wired_port_commits_no_tree_and_its_table_is_its_writers_leaves(monkey
 
 
 def _leaves_and_reroots(win: I.Window, c: CS.Committed) -> tuple[int, int]:
-    """The period's hidden leaves (its trees' leaves, `Binding.trees`) and its members' header roots that are no tree of
-    the period (`Committed.frame_entry`'s roots made again from a member's public strings)."""
+    """The period's hidden leaves (its trees' leaves, `Binding.trees`, and its run input nodes' trees') and its members'
+    header roots that are no tree of the period (`Committed.frame_entry`'s roots made again from a member's public
+    strings)."""
     w = win.window
     roots = {r.hex() for r in c.roots.values()}
-    return (sum(w.trees[t][1] for t in c.roots),
+    return (sum(w.trees[t][1] for t in c.roots) + sum(v.leaves for v in win.inputs.values()),
             sum(r not in roots for k in range(len(w.members)) for r in c.frame_entry(k)["roots"].values()))
 
 
 def test_a_boundary_value_is_committed_once_at_its_writer_and_the_header_roots_left_counted():
-    """`chain`: the wired ``x`` commits no leaf of its readers, so the period's leaves are member 0's ``x``, each member's
-    ``w`` and the one ``o0`` tree; each layer's weight declared a registered value its units read (`Read`) commits no
-    leaf of the period. Each member's header still names a root made again from its public strings for every port
-    that is not its own tree: ``x`` of each reader, ``o0`` of each member of the 4-member template, and ``w`` read from
-    the registered value."""
+    """`chain`: the wired ``x`` commits no leaf of its readers, so the period's leaves are member 0's ``x``, the one ``o0``
+    tree and ``w``'s run input tree, a row each unit; each layer's weight declared a registered value its units read
+    (`Read`) commits no leaf of the period. Each member's header still names a root made again from its public strings
+    for every port that is not its own tree: ``x`` of each reader, ``o0`` of each member of the 4-member template, and
+    ``w``, read from the run input tree or the registered value."""
     (xs, ws), outs = chain_values()
     win = I.Window(chain(), RUN, SAMPLING_DESIGN, 2)
     win.record(GEMM, [xs, ws], outs, {"chain": 0})
-    assert _leaves_and_reroots(win, win.close(salts_of=fixed(win))) == (2 + 4 * 2 + 8, 3 + 4)
+    assert _leaves_and_reroots(win, win.close(salts_of=fixed(win))) == (2 + 8 + 8, 3 + 4 + 4)
     weights = np.stack([ws[layer * REQUESTS].reshape(256) for layer in range(LAYERS)])
     theta = I.Registered({"weights": LAYERS * 256},
                          reads=(I.Read(GID, "w", "weights", 0, (STEPS, LAYERS, REQUESTS), 0, (0, 256, 0)),))
@@ -737,17 +744,23 @@ def test_a_boundary_value_is_committed_once_at_its_writer_and_the_header_roots_l
     assert _leaves_and_reroots(win, win.close(salts_of=fixed(win))) == (2 + 8, 3 + 4 + 4)
 
 
-def _held_window(d: Path, monkeypatch) -> tuple[CS.Binding, CS.Committed, dict]:
+def _held_window(d: Path, monkeypatch) -> tuple[CS.Binding, CS.Committed, dict, I.Window]:
     """`chain_given`, each wired member a shared-row one reading its ``x`` in its writer template's tree (a table of the
-    leaves it reads, each unit's ref its leaf's row) and its ``w`` a table of its own: committed and written under ``d`` ->
-    its window, commitment and ``window.json``."""
+    leaves it reads, each unit's ref its leaf's row) and its ``w`` in its run input node's tree: committed and written
+    under ``d`` -> its window, commitment, ``window.json`` and the period."""
     win, given = chain_given(monkeypatch)
     w = win.window
     c = CS.commit(w, given, salts_of=fixed(w))
     reg = type("R", (), {"KINDS": ("served",), "FORMAT": "f", "digest": staticmethod(lambda rec: "d"),
                          "record": staticmethod(lambda *x, **k: {"leaf_layer": "l", "window": x[5]})})
     CS.write(c, d, {"by": "test"}, {}, registrar=reg)
-    return w, c, json.loads((d / "window.json").read_text())
+    return w, c, json.loads((d / "window.json").read_text()), win
+
+
+def run_input_roots(win: I.Window) -> list[dict]:
+    """The registration's entry of each of ``win``'s run input trees, as `Window.write` registers it."""
+    return [{"port": v.value, "root": v.root.hex(), "leaves": v.leaves, "domain": v.domain.domain_id.hex()}
+            for v in win.inputs.values()]
 
 
 def _staged(d: Path, mem: dict, k: int, out: Path, **kw: object) -> tuple[dict, bytes]:
@@ -768,7 +781,7 @@ def test_a_sparse_header_gives_the_table_rows_the_instances_read_and_changes_no_
     byte; one whose instances read one row of its held table (its refs edited on disk, which no root or header field
     reads) differs only in that entry, its ``frame_v3`` roots and body untouched. An entry of another length, a ref past
     its table and a body of another size are refused."""
-    w, c, doc = _held_window(tmp_path, monkeypatch)
+    w, c, doc, _win = _held_window(tmp_path, monkeypatch)
     k = next(j for j, m in enumerate(w.members) if m.wired)
     mem = doc["members"][k]
     full_head, full_body = _staged(tmp_path, mem, k, tmp_path / "full")
@@ -810,7 +823,7 @@ def test_a_sparse_header_lists_no_table_rows_for_a_read_at_a_hidden_key_and_refu
     ports and its verdict) is chosen by a committed value, so its sparse entry is the full form's, never ``table_rows``,
     though its instances read one row; an entry that lists them for it is refused by name, and so is ``sparse`` with no
     say of which ports are keyed. The same body's public-position read is listed, as `read_rows` lists it."""
-    w, c, doc = _held_window(tmp_path, monkeypatch)
+    w, c, doc, _win = _held_window(tmp_path, monkeypatch)
     k = next(j for j, m in enumerate(w.members) if m.wired)
     mem = doc["members"][k]
     full_head, _ = _staged(tmp_path, mem, k, tmp_path / "full")
@@ -850,11 +863,13 @@ def test_a_port_held_in_its_writers_tree_is_registered_at_the_root_and_rows_the_
     (`rows.Binding.leaves`), each path climbing to the tree's root, and the verifier's read of it (`rows.own_reads`, seeded
     with no port) names the same value and root, its reads those leaves from the member's first unit, as the served
     route's Program has the wire cut to an input row (`interface.served_program`). A member with no wired port gets no
-    ``x`` entry."""
-    w, c, doc = _held_window(tmp_path, monkeypatch)
+    ``x`` entry. Each ``w``, a run input, is read at its node's tree (`interface.registered_file`)."""
+    w, c, doc, win = _held_window(tmp_path, monkeypatch)
     ms, tree = w.members, WI.tree(GID, "o0")
     roots = {q: {"root": r.hex(), "domain": c.domains[q].domain_id.hex(), "leaves": c.domains[q].count} for q, r in c.roots.items()}
-    files = CS.own_reads({m.key: {"format": REG.READS_V1, "ports": {}} for m in ms}, w, roots, registered=REG)
+    runs = I.registered_file(json.loads(I.circuit_bytes(win.circuit_record())), w, {}, run_input_roots(win))
+    assert {m.key: list(f["ports"]) for m, f in zip(ms, runs.values())} == {m.key: ["w"] for m in ms}
+    files = CS.own_reads(runs, w, roots, registered=REG)
     assert "x" not in CS.shared_ports(doc, 0)
     dom, bc = c.domains[tree], b"".join(c.bc[m.port("o0")] for m in ms)
     for k, m in enumerate(ms[1:], 1):
@@ -2208,8 +2223,11 @@ def _same_commit(full: I.Window, refd: I.Window, tmp_path) -> None:
     """``refd`` (some inputs recorded by reference) commits what ``full`` does: every root, string, salt and row, the files
     `write` writes under one index salt byte for byte, and each member's prover body as the files make it
     (`rows.read_private`), where ``refd``'s leave a registered value's rows and salts out of the member's own file
-    (``value_rows``); both leave a wired port's (``wired_rows``)."""
-    a, b = full.close(salts_of=fixed(full)), refd.close(salts_of=fixed(refd))
+    (``value_rows``); both leave a wired port's (``wired_rows``). A run input's tree is drawn under fresh salts, so
+    ``refd`` commits in ``full``'s."""
+    a = full.close(salts_of=fixed(full))
+    refd.inputs = dict(full.inputs)
+    b = refd.close(salts_of=fixed(refd))
     assert list(a.roots.items()) == list(b.roots.items()) and a.bc == b.bc and a.salts == b.salts
     assert list(a.rows) == list(b.rows) and all(np.array_equal(a.rows[p], b.rows[p]) for p in a.rows)
     def record(_program, *x, **k):
@@ -2345,7 +2363,7 @@ def test_a_periods_commit_is_linear_in_its_members(tmp_path):
 def test_wired_and_registered_rows_recorded_by_reference_commit_as_their_rows_given_in_full(tmp_path):
     """`fed_chain`'s units recorded with no inputs at all: a wired ``x`` row is its writer's output row and a ``w`` the
     value's, so the commitment, the rows and every file are the full record's, and the mismatch check gathers the inputs it
-    evaluates on (`Window.input_words`)."""
+    evaluates on (`Window.input_words`). The feed's ``x``, a run input, recorded by reference is refused."""
     circuit, w, (sx, sw), feed, ins, outs = fed_chain()
     full, refd = (I.Window(circuit, RUN, SAMPLING_DESIGN, 2, registered={"w": w}) for _ in range(2))
     for win, given in ((full, ins), (refd, [None, None])):
@@ -2354,7 +2372,7 @@ def test_wired_and_registered_rows_recorded_by_reference_commit_as_their_rows_gi
     assert all(np.array_equal(a, b.reshape(8, -1)) for a, b in zip(refd.input_words(GID, 0, 8), ins))
     assert refd.mismatches() == full.mismatches() == {}
     _same_commit(full, refd, tmp_path)
-    with pytest.raises(ValueError, match="no wire or registered read fills it"):
+    with pytest.raises(ValueError, match="is recorded by reference, and a run input's rows are recorded in full"):
         free = I.Window(circuit, RUN, SAMPLING_DESIGN, 2, registered={"w": w})
         free.record(SRC, [None, sw], feed)
         free.record(GEMM, ins, outs)
@@ -2383,7 +2401,8 @@ def test_a_periods_registered_rows_are_each_sampled_once(monkeypatch, tmp_path):
     win.record(SRC, feed_ins, feed)
     win.record(GEMM, [None, None], outs)
     c = win.close(salts_of=fixed(win))
-    reads = [e["w"]["positions"] for e in win._entries.values()]
+    chained = {m.key for m in win.window.members if m.template == GID}
+    reads = [e["w"]["positions"] for k, e in win._entries.items() if k in chained]
     assert w.salts.reads == LAYERS and len(reads) == 2 * LAYERS and sorted(reads) == [[0], [0], [1], [1]]
     reg = type("R", (), {"KINDS": ("served",), "FORMAT": "f", "record": staticmethod(lambda *x, **k: {"leaf_layer": "l"}),
                          "digest": staticmethod(lambda rec: "d")})
@@ -2393,8 +2412,8 @@ def test_a_periods_registered_rows_are_each_sampled_once(monkeypatch, tmp_path):
 
 def test_a_periods_value_rows_and_paths_are_written_once_and_a_sampled_members_body_is_made_from_them(tmp_path):
     """`fed_chain` recorded by reference: each chain member's ``m<k>-private.bin`` leaves out its ``w`` rows and salts and
-    its wired ``x``'s, ``v0-private.bin`` holds each row of ``w`` the period reads once, then its salt, and ``window.json``
-    each row's path once; each member's prover body as the files make it (`rows.read_private`: a wired row and its salt off
+    its wired ``x``'s, and the feed's its run inputs' ``x`` and ``w``; a ``v<j>-private.bin`` holds each row of a value
+    the period reads once (``w`` and each run input node's), then its salt, and ``window.json`` each row's path once; each member's prover body as the files make it (`rows.read_private`: a wired row and its salt off
     its writer's own file; `rows.Bodies`, with as few as one file mapped at a time) and its header (`rows.registered_header`) are the committed ones, and so is the circuit prover's
     file staged from them (`flock_inputs.flock_input_files`). The 4,32,4 class's bodies held 3,200,960 rows of 32,768
     words, 22,864 of them distinct, 9,657,548 wired rows of 3,750,680 output rows, and its ``window.json`` 5,282,638 paths,
@@ -2412,16 +2431,21 @@ def test_a_periods_value_rows_and_paths_are_written_once_and_a_sampled_members_b
     doc, ms = json.loads((tmp_path / "window.json").read_text()), win.window.members
     chained = [k for k, m in enumerate(ms) if m.template == GID]
     assert len(chained) == 2 * LAYERS and [doc["members"][k].get("value_rows") for k in range(len(ms))] == [
-        ["w"] if k in chained else None for k in range(len(ms))]
+        ["w"] if k in chained else ["x", "w"] for k in range(len(ms))]
     assert [doc["members"][k].get("wired_rows") for k in range(len(ms))] == [["x"] if m.wired else None for m in ms]
     assert all(m.wired for k, m in enumerate(ms) if k in chained)
-    assert doc["value_rows"] == {"w": {"words": 256, "positions": [0, 1], "file": "v0-private.bin"}}
-    assert (tmp_path / "v0-private.bin").read_bytes() == w.rows[[0, 1]].astype("<u2").tobytes() + w.salts[0] + w.salts[1]
-    assert doc["registered_paths"] == {"w": {"0": w.path(0).hex(), "1": w.path(1).hex()}}
+    runs = {r.param: r.port for r in win.runs}
+    assert sorted(runs.values()) == ["w", "x"] and all(r.reader == SID for r in win.runs)
+    assert doc["value_rows"] == {"w": {"words": 256, "positions": [0, 1], "file": f"v{len(runs)}-private.bin"},
+                                 **{p: {"words": win.inputs[p].words, "positions": [0, 1], "file": f"v{j}-private.bin"}
+                                    for j, p in enumerate(sorted(runs))}}
+    assert (tmp_path / f"v{len(runs)}-private.bin").read_bytes() == w.rows[[0, 1]].astype("<u2").tobytes() + w.salts[0] + w.salts[1]
+    assert doc["registered_paths"] == {"w": {"0": w.path(0).hex(), "1": w.path(1).hex()},
+                                       **{p: {str(i): win.inputs[p].path(i).hex() for i in (0, 1)} for p in runs}}
     files = CS.Bodies(tmp_path, doc)
     for k, m in enumerate(ms):
         body, leaves = c.private_body(k), CS.port_leaves(m)
-        left = {"w", "x"} if k in chained else {w.port for w in m.wired}
+        left = {"w", "x"}
         assert CS.read_private(tmp_path, doc, k) == body
         out = io.BytesIO()
         files.copy(k, out)
@@ -2591,9 +2615,9 @@ def _produced(data: list[dict], asked: list):
 
 
 def _by_reference_windows() -> dict[str, tuple[I.Window, CS.Binding, list[dict], dict]]:
-    """The fixtures a commit into a directory takes, each with what `Window.close` hands `rows.commit`: `window`'s plain
-    members; and `fed_chain` and `sliced` recorded by reference, their wired ports read in their writers' trees, and ``w``
-    a registered value's rows."""
+    """The fixtures a commit into a directory takes, each with what `Window.close` hands `rows.commit`: `window`'s
+    members, every input a run input's rows; and `fed_chain` and `sliced` recorded by reference, their wired ports read
+    in their writers' trees, and ``w`` a registered value's rows (`fed_chain`) or a run input's (`sliced`)."""
     plain = window()[0]
     circuit, w, feed_ins, feed, _ins, outs = fed_chain()
     fed = _cut(circuit, registered={"w": w})
@@ -2647,7 +2671,7 @@ def test_a_commit_into_a_directory_is_the_whole_commit_a_run_at_a_time(monkeypat
         files.append((got, {k: v for k, v in doc.items() if k != "seconds"},
                       [CS.read_private(d, doc, k) for k in ks]))
     assert files[0] == files[1] and files[1][2] == [whole.private_body(k) for k in ks]
-    assert any(f.startswith("v") for f in files[1][0]) == (name == "fed")
+    assert any(f.startswith("v") for f in files[1][0])
 
 
 def test_a_commit_into_a_directory_refuses_what_it_would_hold_whole(monkeypatch, tmp_path):
@@ -2693,51 +2717,6 @@ def test_a_commit_into_a_directory_refuses_what_it_would_hold_whole(monkeypatch,
         CS.write(c, tmp_path / "into", {}, {}, registrar=reg)
 
 
-def test_a_commit_into_a_directory_holds_a_run_and_never_the_window(monkeypatch, tmp_path):
-    """The peak, pinned: committing 2,048 coordinates' rows into a directory, a run of 64 units at a time from a producer
-    that makes each run when it is asked, allocates at its peak under a quarter of the bytes the window commits (its
-    rows, salts and ``b || c``, `rows.window_bytes`), where the whole commit of the same rows, given as arrays, holds
-    more than all of them but the salts it is handed; the roots are the same. Both are measured after a first streamed
-    commit of the window, which builds what does not grow with its rows (its partition, whose Program digest reads the
-    descriptor with its Boolean bodies)."""
-    import tracemalloc
-
-    n, chunk = 2048, 64
-    monkeypatch.setattr(CS, "VALUE_CHUNK", 1)
-    w = _cut(I.Circuit("test", ((COORD, n),)), n).window
-    size = CS.window_bytes(w.members)
-    total = size["public"] + size["private"]
-
-    class Made:
-        def __init__(self, words: int) -> None:
-            self.shape = (n, words)
-
-        def __getitem__(self, at: slice) -> np.ndarray:
-            rows = np.arange(*at.indices(n), dtype=np.uint32)[:, None]
-            return ((rows * 31 + np.arange(self.shape[1], dtype=np.uint32)) % 65521).astype(np.uint16)
-
-    def made():
-        yield from ({"rows": {p: Made(words) for p, words in m.rows}, "outs": {p: Made(words) for p, words in m.outs}}
-                    for m in w.members)
-
-    def peak(commit) -> tuple[CS.Committed, int]:
-        tracemalloc.start()
-        try:
-            c = commit()
-            return c, tracemalloc.get_traced_memory()[1]
-        finally:
-            tracemalloc.stop()
-
-    ys = fixed(w)
-    CS.commit(w, made(), into=tmp_path / "first", chunk=chunk, salts_of=ys)
-    c, streamed = peak(lambda: CS.commit(w, made(), into=tmp_path / "second", chunk=chunk, salts_of=ys))
-    whole, held = peak(lambda: CS.commit(w, [{k: {p: a[:] for p, a in d[k].items()} for k in d} for d in made()],
-                                         chunk=chunk, salts_of=ys))
-    assert c.roots == whole.roots and len(w.members) == 1
-    given = sum(len(y) for y in ys.values())
-    assert 4 * streamed < total and total - given < held, (streamed, total, given, held)
-
-
 def given_by_reference(monkeypatch) -> tuple[CS.Binding, list[dict], Bound]:
     """`fed_chain` with every chain input recorded by reference: the period and each member's rows as `Window.close` hands
     them to `rows.commit` (each wired ``x`` `rows.WIRED`, each ``w`` a `rows.ValueRows` of the registered value)."""
@@ -2773,19 +2752,22 @@ def _value_rows(value=None, positions=None, salts=None):
 
 
 def _feed_x_wired(window: CS.Binding, data: list[dict]) -> CS.Binding:
-    """The feed's external ``x``, which no wire writes, given as `rows.WIRED`."""
+    """The feed's ``x``, a run input's rows, given as `rows.WIRED`."""
     data[_first(window, SID)]["rows"]["x"] = CS.WIRED
     return window
 
 
 def _beside_a_row_table(window: CS.Binding, data: list[dict]) -> CS.Binding:
-    """The feed's ``x`` made the one row of a row table both its units read, the chain's rows still by reference."""
+    """The feed's ``x``, a run input's rows, made the one row of a row table both its units read, the chain's rows still
+    by reference."""
     k = _first(window, SID)
     m = window.members[k]
-    data[k]["rows"][CS.LINKED] = data[k]["rows"][CS.LINKED][:1]
+    x = data[k]["rows"][CS.LINKED]
+    data[k]["rows"][CS.LINKED] = x[:1] if isinstance(x, np.ndarray) else CS.value_rows(x.value, x.positions[:1])
     data[k]["refs"] = np.stack([np.zeros(m.n, dtype=np.int64) if p == CS.LINKED else np.arange(m.n) for p, _ in m.rows], axis=1)
     linked = replace(m, tables=tuple((p, 1 if p == CS.LINKED else m.n) for p, _ in m.rows), links=((0, 0),),
-                     link_units=(m.n,), schemas=tuple((p, CS.TABLE_SCHEMA if p == CS.LINKED else s) for p, s in m.schemas))
+                     link_units=(m.n,), schemas=tuple((p, CS.TABLE_SCHEMA if p == CS.LINKED else s) for p, s in m.schemas),
+                     values=tuple(p for p in m.values if p != CS.LINKED))
     table = CS.RowTable(0, "feed", m.template, dict(m.rows)[CS.LINKED], ((0,),))
     return replace(window, members=(*window.members[:k], linked, *window.members[k + 1:]), row_tables=(table,),
                    context="cd" * RT.DIGEST_BYTES)
@@ -2802,7 +2784,7 @@ REFUSED = {
     "a negative position": (_value_rows(positions=(-1,)), f"positions outside its {LAYERS} rows"),
     "two rows for the port's one": (_value_rows(positions=(0, 1)), "2 rows, not 1"),
     "salts short of its rows": (_value_rows(salts=lambda s: s[:-1]), f"salts not one {CS.SALT_BYTES}-byte salt a row"),
-    "wired rows on a port no wire writes": (_feed_x_wired, f"given as {CS.WIRED} rows, but no wire writes it"),
+    "wired rows on a run input's port": (_feed_x_wired, "given as a ValueRows, and only such a port"),
     "rows by reference in a period with row tables": (_beside_a_row_table, "in a period with row tables"),
 }
 
@@ -2812,7 +2794,7 @@ def test_rows_given_by_reference_are_refused_unless_their_source_is_the_ports(mo
     """`rows.commit` refuses rows given by reference, naming why: a registered value's rows of a row width the port's
     doesn't divide (`refs.recut`'s recut-width) or recuts into several of its rows (recut-rows),
     schema or leaf width, at a position outside the value (a negative one included, which indexing would wrap) or of another count
-    than the port's rows, or salts given that aren't one a row; `rows.WIRED` rows on a port no wire writes; and a port by
+    than the port's rows, or salts given that aren't one a row; `rows.WIRED` rows on a run input's port; and a port by
     reference in a period with row tables,
     whose linked members' rows are read off their ``x`` tables. The rows as `Window.close` gives them commit; each one edit
     is refused."""
@@ -2995,8 +2977,8 @@ def test_an_opening_may_declare_the_output_that_returns_its_row():
 
 @pytest.mark.slow
 def test_a_period_commits_its_table_reads_and_verdicts_as_registered_reads():
-    """A table's registered reads committed: each table read and verdict a registered read of its supplied value, the opening's row,
-    salt and path the units' own; and the verifier derives the same members from the record, stated or listing the same
+    """A table's registered reads committed: each table read and verdict a registered read of its supplied value, the token
+    and the opening's row, salt and path each read from its run input node's tree; and the verifier derives the same members from the record, stated or listing the same
     members, which no cheaper test reaches. Slow (about 140 s on one core)
     for the two population Programs of `EmbeddingRead_v2` it builds, the prover's and the verifier's, its Merkle path
     traced in each; the cheap check of the reads themselves is `test_a_tables_reads_and_verdicts_take_its_supplied_values`."""
@@ -3014,7 +2996,10 @@ def test_a_period_commits_its_table_reads_and_verdicts_as_registered_reads():
     assert np.array_equal(c.rows[m0.port("root")], root.rows) and c.salts[m0.port("root")] == root.salts[0]
     assert c.salts[m0.port("o1")] == opened.salts[0] * 2 and c.salts[m1.port("o1")] == opened.salts[0]
     assert table.salts[3] not in c.salts[m0.port("row")]
-    assert win._entries[m0.key]["o1"]["positions"] == [0, 0] and sorted(win._entries[m1.key]) == ["domain", "o1", "root"]
+    runs = {r.port for r in win.runs}
+    assert runs == {"tok", "row", "salt", "path"}
+    assert win._entries[m0.key]["o1"]["positions"] == [0, 0] and sorted(win._entries[m1.key]) == sorted(
+        {"domain", "o1", "root"} | runs)
 
     doc = json.loads(I.circuit_bytes(win.circuit_record()))
     mine = I.window_of_record(doc, SAMPLING_DESIGN, {EID: EMB}.__getitem__)
