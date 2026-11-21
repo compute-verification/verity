@@ -88,7 +88,7 @@ from typing import Any
 from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.circuits.ops.prims import BF16, Bf16ToF32
 from verity.circuits.population import BitsWord, WordBits
-from verity.circuits.refs import Coll, tuple_of
+from verity.circuits.refs import Coll, concat, tuple_of
 from verity.circuits.types import Array, Tuple, Value
 from verity.protocols.accounting.compute.pouw.prover import schemes as PS
 from verity.protocols.accounting.compute.pouw.prover.circuit import pearl_plus_tile as PT
@@ -144,7 +144,7 @@ def _word_ret(S):
     return Tuple(digest, Array(S.TR, Array(S.TN, BF16)), BF16)
 
 
-def _wired_body(B, S, *xs, widened: tuple[str, ...] = _WIDENED[2]):
+def _wired_body(B, S, *xs, widened: tuple[str, ...] = _WIDENED[2], y_calls: bool = False):
     bits, bt = {}, _bit_params(S)
     for (p, t), x in zip(_word_params(S, widened) + _noise_params(S), xs):
         if p in widened:
@@ -153,8 +153,13 @@ def _wired_body(B, S, *xs, widened: tuple[str, ...] = _WIDENED[2]):
         bits[p] = Coll(bt[p], B.batch(bind(WordBits, W=w), Coll(Array(t.leaves, Value(w)), x.refs), axes=(0,)).refs)
     out = B.call(_core(S), *(bits[p] for p in _CORE_OWN + _NOISE_PORTS))
     n = S.TR * S.TN
-    y = B.batch(bind(BitsWord, W=16), Coll(Array(n, Array(16, Value(1))), out[1].refs), axes=(0,))
-    return tuple_of(out[0], Coll(Array(S.TR, Array(S.TN, BF16)), y.refs), U.ok_word(U._Emit(B), out[2]))
+    ys = Coll(Array(n, Array(16, Value(1))), out[1].refs)
+    if y_calls:
+        # a batch reading y out of the core's one output steps through part of a node, which the door's lowering refuses
+        y = concat([B.call(bind(BitsWord, W=16), ys[i]).refs for i in range(n)])
+    else:
+        y = B.batch(bind(BitsWord, W=16), ys, axes=(0,)).refs
+    return tuple_of(out[0], Coll(Array(S.TR, Array(S.TN, BF16)), y), U.ok_word(U._Emit(B), out[2]))
 
 
 _STATICS = tuple(PT.PearlPlusTileCoreV3.statics)
@@ -172,10 +177,11 @@ PearlPlusTileCoreWired = CompositeDefinition(
 PearlPlusTileCoreWiredV3 = CompositeDefinition(
     "PearlPlusTileCoreWired", 3, _STATICS,
     lambda S: (_word_params(S, _WIDENED[3]) + _noise_params(S), _word_ret(S)),
-    lambda B, S, *xs: _wired_body(B, S, *xs, widened=_WIDENED[3]), refuse=PT.PearlPlusTileCoreV3.refuse,
+    lambda B, S, *xs: _wired_body(B, S, *xs, widened=_WIDENED[3], y_calls=True), refuse=PT.PearlPlusTileCoreV3.refuse,
     conformance=PT.PearlPlusTileCoreV3.conformance,
     doc="`PearlPlusTileCoreWired_v2` with a's rows in BF16 words too, widened (`Bf16ToF32`) as b's are: a served linear's "
-        "x as its writer holds it, read by wire")
+        "x as its writer holds it, read by wire; y's words each one `BitsWord{16}` call on its 16 bits of the core's "
+        "output")
 
 
 def _node_params(S, widened: tuple[str, ...] = _WIDENED[2]) -> tuple:
