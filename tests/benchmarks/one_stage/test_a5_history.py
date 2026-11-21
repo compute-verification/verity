@@ -113,8 +113,8 @@ def test_the_verifier_holds_the_registered_history_root_to_the_writers_bodies(tm
 
     files = I.registered_file(doc, mine, {}, rec["roots"])
     sts = {}
-    for k, f in files.items():
-        sts[k] = {"registered_file": tmp_path / f"registered-{k}.json"}
+    for i, (k, f) in enumerate(files.items()):
+        sts[k] = {"registered_file": tmp_path / f"registered-{i}.json"}
         sts[k]["registered_file"].write_text(json.dumps(f, sort_keys=True))
 
     def register(h: dict | None) -> S.WindowCommitmentRecord:
