@@ -295,9 +295,10 @@ def weighed(a: argparse.Namespace) -> dict[str, Any]:
 
 def registering(a: argparse.Namespace, history: dict | None = None) -> dict[str, Any]:
     """`tie` as a stream's `register` takes it (the log is the stream's, `stream_of`), with the window's history tables
-    (``history``, `audit`'s), which the run of record holds the window's registered roots to, and `weighed`."""
+    (``history``, `audit`'s), which the run of record holds the window's registered roots to, and `weighed` but its
+    ``window_root``, which `register` takes as its own."""
     return {**{k: v for k, v in tie(a).items() if k != "log"}, **({"history": history} if history is not None else {}),
-            **weighed(a)}
+            **{k: v for k, v in weighed(a).items() if k != "window_root"}}
 
 
 def program_values(program: Program) -> tuple[tuple[str, int, int], ...]:
