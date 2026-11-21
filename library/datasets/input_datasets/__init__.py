@@ -14,7 +14,7 @@ from input_datasets.generators import GENERATORS
 DEFINITIONS = Path(__file__).resolve().parents[1] / "definitions"
 #: where a recorded dataset's bytes are read from: the checkout, where `research data fetch-fixtures` puts each entry of
 #: `artifacts.json` at its path
-CACHE = Path(__file__).resolve().parents[2]
+CACHE = Path(__file__).resolve().parents[3]
 DIGESTS = ("sha256", "sha512")
 
 
