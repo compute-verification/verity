@@ -179,8 +179,8 @@ RUN_INPUT_WHY = ("a run Input's rows are committed once, in its one tree, before
 WEIGHTS_WHY = {
     "R8-weights-digest": "the weights' registration is not the one of record: its SHA-512 is not the digest the "
                          "auditor's side holds for it",
-    "R8-weights-form": "the weights' registration is not {program, values: {value: {value, root, leaves, words, domain}}, "
-                       "reads: [[template, parameter, value]]}, reads optional",
+    "R8-weights-form": "the weights' registration is not {program, values: {value: {value, root, leaves, words, domain}}}, "
+                       "one object or a list of them, with no other key",
     "R8-weights-domain": "a pin names another value, a root that is not 64 bytes of hex, or a domain other than the one "
                          "its own program, value and shape make",
     "R8-weights-shape": "a registered input's leaves, words or width are not its pin's",
@@ -189,9 +189,6 @@ WEIGHTS_WHY = {
     "R8-weights-query": "the program has a registered input, or the verifier holds a weights' registration of record, "
                         "under a query that is no template query that applies: R8 can't read which proof blocks read "
                         "the input",
-    "R8-undeclared": "a template parameter the program reads a pinned registered input at is not among the reads the "
-                     "weights' registration of record declares: a read the description shows and the registration does "
-                     "not declare would be committed afresh",
 }
 _KEYS = {"format", "protocol", "program", "query", "partition", "population", "law", "scheme", "roots", "leaf_layer",
          "anchors", "window", "previous"}
@@ -203,29 +200,26 @@ def query_digest(query: Mapping[str, Any]) -> str:
     return hashlib.sha512(canonical_json(dict(query))).hexdigest()
 
 
-def _of_record(of_record: tuple[bytes, str]) -> tuple[list[tuple[str, Any]], dict[str, dict[str, Any]], set[tuple]]:
+def _of_record(of_record: tuple[bytes, str]) -> tuple[list[tuple[str, Any]], dict[str, dict[str, Any]]]:
     """The weights' registration of record's pins, by value, after its digest, its form and each pin's domain, which
-    the pin's own program, value and shape make (`registered_value.domain`), and its declared reads; the refusals, the
-    pins that pass and the reads."""
+    the pin's own program, value and shape make (`registered_value.domain`); the refusals and the pins that pass."""
     body, digest = of_record
     if not (isinstance(body, bytes) and isinstance(digest, str) and hashlib.sha512(body).hexdigest() == digest):
         got = hashlib.sha512(body).hexdigest() if isinstance(body, bytes) else None
-        return [("R8-weights-digest", {"registration": got, "of_record": digest})], {}, set()
+        return [("R8-weights-digest", {"registration": got, "of_record": digest})], {}
     try:
         doc = json.loads(body.decode("utf-8"))
         docs = doc if isinstance(doc, list) else [doc]
-        if not all(isinstance(d, dict) and set(d) in ({"program", "values"}, {"program", "values", "reads"})
+        if not all(isinstance(d, dict) and set(d) == {"program", "values"}
                    and isinstance(d["program"], str) and isinstance(d["values"], dict) and all(
                 isinstance(e, dict) and set(RV.ENTRY_KEYS) <= set(e) <= {*RV.ENTRY_KEYS, RV.WIDTH_KEY}
                 and all(type(e[k]) is int and e[k] >= 0 for k in ("leaves", "words") + ((RV.WIDTH_KEY,) if RV.WIDTH_KEY in e else ()))
-                for e in d["values"].values()) and isinstance(d.get("reads", []), list) and all(
-                isinstance(r, list) and len(r) == 3 and all(isinstance(x, str) for x in r) for r in d.get("reads", []))
-                   for d in docs):
+                for e in d["values"].values()) for d in docs):
             raise TypeError("an entry")
         if len(names := [v for d in docs for v in d["values"]]) != len(set(names)):
             raise ValueError("a value pinned twice")
     except (ValueError, KeyError, TypeError) as e:
-        return [("R8-weights-form", f"{type(e).__name__}: {e}")], {}, set()
+        return [("R8-weights-form", f"{type(e).__name__}: {e}")], {}
     bad, pins = [], {}
     for program, v, e in sorted((d["program"], v, e) for d in docs for v, e in d["values"].items()):
         try:
@@ -237,8 +231,7 @@ def _of_record(of_record: tuple[bytes, str]) -> tuple[list[tuple[str, Any]], dic
             bad.append(v)
         else:
             pins[v] = e
-    reads = {tuple(r) for d in docs for r in d.get("reads", [])}
-    return ([("R8-weights-domain", {"values": bad})] if bad else []), pins, reads
+    return ([("R8-weights-domain", {"values": bad})] if bad else []), pins
 
 
 def marked_inputs(program: Program) -> list[str]:
@@ -246,15 +239,6 @@ def marked_inputs(program: Program) -> list[str]:
     bindings = getattr(program, "bindings", ())
     return [n for (n, _), b in zip(program.fn.signature()[0], bindings)
             if b == REGISTRATION and G.held_gates(program, [n])] if bindings else []
-
-
-def declared_reads(program: Program, query: Mapping[str, Any], values: Iterable[str]) -> list[list[str]]:
-    """The reads a weights' registration of record declares of the registered inputs `values` under the template query
-    `query`, as R8 derives them (`weights_held`): each ``[template, parameter, value]`` whose template parameter's argument
-    reads one of the value's input nodes (`partition.input_reads`), sorted, each once. A writer of the registration calls
-    this; `QueryRefused` under a query that is no template query."""
-    gates = {g: v for v in values for g in G.held_gates(program, [v])}
-    return [list(r) for r in sorted({(t, p, gates[g]) for t, p, g in P.input_reads(program, query, gates)})] if gates else []
 
 
 def weights_held(program: Program, query: Mapping[str, Any], registered: Iterable[str],
@@ -266,17 +250,13 @@ def weights_held(program: Program, query: Mapping[str, Any], registered: Iterabl
     its root before the coin. A program with
     a registered input, or a verifier holding a registration, under a query that is no template query that applies is
     refused (`R8-weights-query`); a pinned input whose leaves, words or width are not the program's is refused
-    (`R8-weights-shape`). Under a template query, the template parameters whose arguments read a pinned registered input
-    (`partition.input_reads`, a root node at a time, never its blocks) must be among the reads the registration
-    declares, ``(template, parameter, value)`` (`R8-undeclared`); a declared read the program does not show is let
-    through, so one registration may declare the reads of every class it serves. A pin of no
-    registered input excuses nothing. The refusals, in `WEIGHTS_WHY`'s order, and the accepted pins, `{value: {"root",
+    (`R8-weights-shape`). A pin of no registered input excuses nothing. The refusals, in `WEIGHTS_WHY`'s order, and the accepted pins, `{value: {"root",
     "leaves", "words", "word_bits", "domain"}}` of each pinned input the verifier does not expect, which the members'
     check holds each member's registered read of it to (`members.pins_held`)."""
     marked = marked_inputs(program)
     if not marked and of_record is None:
         return [], {}
-    out, pins, declared = _of_record(of_record) if of_record is not None else ([], {}, set())
+    out, pins = _of_record(of_record) if of_record is not None else ([], {})
     if out and out[0][0] in ("R8-weights-digest", "R8-weights-form"):
         return out, {}
     expected = set(registered)
@@ -306,9 +286,6 @@ def weights_held(program: Program, query: Mapping[str, Any], registered: Iterabl
     if unpinned := [v for v, g in loose.items() if g in read]:
         out.append(("R8-unpinned", {"values": unpinned}))
     excused = [v for v in marked if v in pins and v not in shape]
-    if excused:
-        if undeclared := [r for r in declared_reads(program, query, excused) if tuple(r) not in declared]:
-            out.append(("R8-undeclared", {"undeclared": undeclared}))
     accepted = {v: {"root": pins[v]["root"], "leaves": pins[v]["leaves"], "words": pins[v]["words"],
                     "word_bits": pins[v].get(RV.WIDTH_KEY, RV.WORD_BITS), "domain": pins[v]["domain"]}
                 for v in excused if v not in expected}

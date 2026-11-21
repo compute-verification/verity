@@ -865,9 +865,9 @@ def _pin(prog, value="t", words=2, program="aa" * 64, leaves=None, domain=None):
     return entry
 
 
-def _weights(pins, reads=None, program="aa" * 64):
-    """A weights' registration of record pinning `pins` and declaring `reads`, its bytes and their SHA-512."""
-    doc = {"program": program, "values": {e["value"]: e for e in pins}, **({} if reads is None else {"reads": reads})}
+def _weights(pins, program="aa" * 64, **more):
+    """A weights' registration of record pinning `pins`, with the keys `more` beside its own, its bytes and their SHA-512."""
+    doc = {"program": program, "values": {e["value"]: e for e in pins}, **more}
     body = json.dumps(doc).encode()
     return body, hashlib.sha512(body).hexdigest()
 
@@ -880,20 +880,18 @@ def _weighed(prog, q, entries=(), **kw):
     return _check(rec, prog, q, **kw)
 
 
-def test_r8_excuses_a_registered_weight_only_where_it_is_marked_pinned_and_declared():
+def test_r8_excuses_a_registered_weight_only_where_it_is_marked_and_pinned():
     """R8 under a weights' registration of record (`docket.weights_held`): a registered input two proof blocks read
-    passes with the registration, the SHA-512 the auditor's side holds for it and the reads it declares
-    (`docket.declared_reads`, the walk R8 runs), on a v1 record: the pin it accepts is no entry R7 reads. Without the
-    registration it is refused by name (`R8-unpinned`), and at a wrong digest, a wrong domain or a wrong shape the
-    registration is refused. A pin of a parameter the program doesn't mark registered is not read. A template parameter reading the pinned value that the registration does
-    not declare is refused (`R8-undeclared`); a declared read the program does not show is let through."""
+    passes with the registration and the SHA-512 the auditor's side holds for it, on a v1 record: the pin it accepts is
+    no entry R7 reads. Without the registration it is refused by name (`R8-unpinned`), and at a wrong digest, a wrong
+    domain or a wrong shape the registration is refused. A document with any key beside `program` and `values`, `reads`
+    among them, is another form (`R8-weights-form`). A pin of a parameter the program doesn't mark registered is not read."""
     q = P.template_instance_query(PAIR.id)
     for marked, unmarked in zip(_two_programs(registered=("t",)), _two_programs()):
         reads = sorted({(t, p, "t") for t, p, _ in P.input_reads(marked, q, G.held_gates(marked, ["t"]))})
         assert reads and {t for t, _, _ in reads} == {PAIR.id}
-        assert R.declared_reads(marked, q, ["t"]) == [list(r) for r in reads]
         pin = _pin(marked)
-        weights = _weights([pin], R.declared_reads(marked, q, ["t"]))
+        weights = _weights([pin])
         v = _weighed(marked, q, weights_of_record=weights)
         assert v.ok, v.codes
         assert R.weights_held(marked, q, (), weights)[1] == {"t": {k: pin[k] for k in ("root", "leaves", "words", "domain")}
@@ -903,14 +901,13 @@ def test_r8_excuses_a_registered_weight_only_where_it_is_marked_pinned_and_decla
         assert v.codes == ("R8-unpinned",) and v.detail["R8-unpinned"]["refused"] == {"values": ["t"]}
         v = _weighed(marked, q, weights_of_record=(weights[0], "00" * 64))
         assert v.codes == ("R8-weights-digest",)
-        bad = _weights([_pin(marked, domain="11" * 64)], [list(r) for r in reads])
+        bad = _weights([_pin(marked, domain="11" * 64)])
         assert _weighed(marked, q, weights_of_record=bad).codes == ("R8-weights-domain", "R8-unpinned")
-        bad = _weights([_pin(marked, leaves=G.shape(marked, "t", 2) + 1)], [list(r) for r in reads])
+        bad = _weights([_pin(marked, leaves=G.shape(marked, "t", 2) + 1)])
         assert _weighed(marked, q, weights_of_record=bad).codes == ("R8-weights-shape",)
-        v = _weighed(marked, q, weights_of_record=_weights([pin]))
-        assert v.codes == ("R8-undeclared",) and v.detail["R8-undeclared"]["refused"]["undeclared"] == [list(r) for r in reads]
-        assert _weighed(marked, q, weights_of_record=_weights([pin], [*map(list, reads), [PAIR.id, "nope", "t"]])).ok
-        assert _weighed(unmarked, q, weights_of_record=_weights([_pin(unmarked)], [list(r) for r in reads])).ok
+        for more in ({"reads": [list(r) for r in reads]}, {"reads": []}):
+            assert _weighed(marked, q, weights_of_record=_weights([pin], **more)).codes == ("R8-weights-form",)
+        assert _weighed(unmarked, q, weights_of_record=_weights([_pin(unmarked)])).ok
         assert _weighed(unmarked, q).ok
 
 
@@ -928,15 +925,16 @@ def test_the_members_check_holds_a_marked_programs_reads_only_to_pins_r8_accepte
                 **({} if weights is None else {"weights_of_record": {"document": weights[0].hex(), "digest": weights[1]}})}
 
     for marked, unmarked in zip(_two_programs(registered=("t",)), _two_programs()):
-        pin, reads = _pin(marked), R.declared_reads(marked, q, ["t"])
-        for p in (params(), params(_weights([pin]))):
+        pin = _pin(marked)
+        reads = sorted({(t, p, "t") for t, p, _ in P.input_reads(marked, q, G.held_gates(marked, ["t"]))})
+        for p in (params(), params(_weights([_pin(marked, domain="11" * 64)]))):
             with pytest.raises(M._Refused) as e:
                 M.read_pins(p, marked)
             assert str(e.value) == R.WEIGHTS_UNREGISTERED_WHY
         with pytest.raises(M._Refused) as e:
-            M.read_pins({**params(_weights([pin], reads)), "query": {"name": "Q_all", "version": 0}}, marked)
+            M.read_pins({**params(_weights([pin])), "query": {"name": "Q_all", "version": 0}}, marked)
         assert str(e.value) == R.WEIGHTS_QUERY_WHY
-        loose, held, ranges, pins = rp = M.read_pins(params(_weights([pin], reads)), marked)
+        loose, held, ranges, pins = rp = M.read_pins(params(_weights([pin])), marked)
         at = sorted({(t, p, v) for k, t, _lo, n in ranges for p, v in P.member_reads(marked, held, k, 0, n)})
         assert loose == ["t"] and at == [tuple(r) for r in reads]
         assert set(pins) == {"t"} and pins["t"]["root"] == pin["root"]
@@ -972,7 +970,7 @@ def _chunked(second: str, marked: tuple[str, ...]):
                                register=False)
     prog, q = Program(bind(defn), registered=marked), P.template_instance_query(PAIR.id)
     pins = [_pin(prog, v) for v in marked]
-    body, digest = _weights(pins, R.declared_reads(prog, q, list(marked)))
+    body, digest = _weights(pins)
     params = {"query": q, "registered": None, "weights_of_record": {"document": body.hex(), "digest": digest}}
     return prog, q, {e["value"]: e for e in pins}, M.read_pins(params, prog)
 

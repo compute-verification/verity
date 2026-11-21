@@ -109,9 +109,7 @@ domain the one its own document's program makes (`R8-weights-domain`) and its sh
 (`R8-weights-shape`). A program with a registered input, or a verifier with a registration, under a query that is no
 template query that applies is refused (`R8-weights-query`). An input bound at registration that is neither pinned nor
 expected registered and that a template parameter reads is refused at one reader as at several (`R8-unpinned`), and a pin
-of no registered input excuses nothing. The template parameters that read an excused input, one pass over the root's
-nodes (`Partition.inputReads`), are among the reads the registration declares (`R8-undeclared`); a declared read
-the program does not show is let through, so one registration may declare the reads of every class it serves. The pins it accepts of inputs the verifier does not expect registered (`weightsOf`) are no entry
+of no registered input excuses nothing. The pins it accepts of inputs the verifier does not expect registered (`weightsOf`) are no entry
 R7 reads: the members' check holds each member's registered read of such an input to its pin's root, leaf count and
 domain (`OneStageZk.pinsHeld`).
 
@@ -342,43 +340,32 @@ def pinForm (e : Json) : Option (Nat × Nat × Nat) :=
     | some l, some w, some b => some (l, w, b)
     | _, _, _ => none
 
-/-- A declared read `[template, parameter, value]`, three strings. -/
-def readOf : Json → Option (String × String × String)
-  | .arr #[.str t, .str p, .str x] => some (t, p, x)
-  | _ => none
-
-/-- The documents of the weights' registration of record, each `(program, values, reads)`: one object, or a list of
-them, each exactly a string `program`, an object `values` of well-formed entries (`pinForm`) and, optionally, a list
-`reads` of declared reads (`readOf`), no value in two; none otherwise. -/
-def pinDocs (doc : Json) :
-    Option (Array (String × Array (String × Json) × Array (String × String × String))) := do
+/-- The documents of the weights' registration of record, each `(program, values)`: one object, or a list of them,
+each exactly a string `program` and an object `values` of well-formed entries (`pinForm`), no value in two; none
+otherwise. -/
+def pinDocs (doc : Json) : Option (Array (String × Array (String × Json))) := do
   let docs := match doc with | .arr ds => ds | d => #[d]
   let docs ← docs.mapM fun d => do
-    let ks ← keys? d
-    let reads ← if ks == #["program", "values"] then some #[]
-      else if ks == #["program", "reads", "values"] then
-        match getD d "reads" with | .arr rs => rs.mapM readOf | _ => none
-      else none
+    if keys? d != some #["program", "values"] then none
     match getD d "program", getD d "values" with
-    | .str p, .obj kvs => if kvs.toArray.all (fun (_, e) => (pinForm e).isSome) then some (p, kvs.toArray, reads) else none
+    | .str p, .obj kvs => if kvs.toArray.all (fun (_, e) => (pinForm e).isSome) then some (p, kvs.toArray) else none
     | _, _ => none
-  let names := docs.flatMap fun (_, vs, _) => vs.map (·.1)
+  let names := docs.flatMap fun (_, vs) => vs.map (·.1)
   if (sortStrings names).toList.eraseDups.length != names.size then none
   return docs
 
 /-- `docket._of_record`: the weights' registration of record's pins, after its digest (`R8-weights-digest`), its form
 (`R8-weights-form`), each one refused by the first code; then each pin whose value, domain or root is not its own
 (`R8-weights-domain`): its domain is the one its own document's program, value and shape make
-(`Registered.domain`), its root lowercase hex of 64 bytes. The codes, the pins that pass and the declared reads. -/
-def pinsOf (body : ByteArray) (digest : String) :
-    Except String (Array String × Array Pin × Array (String × String × String)) := do
+(`Registered.domain`), its root lowercase hex of 64 bytes. The codes and the pins that pass. -/
+def pinsOf (body : ByteArray) (digest : String) : Except String (Array String × Array Pin) := do
   if Flock.hexOf (Flock.Sha512.hash body) != digest then throw "R8-weights-digest"
   let some text := String.fromUTF8? body | throw "R8-weights-form"
   let .ok doc := Json.parse text | throw "R8-weights-form"
   let some docs := pinDocs doc | throw "R8-weights-form"
   let mut bad := false
   let mut pins := #[]
-  for (program, vs, _) in docs do
+  for (program, vs) in docs do
     for (v, e) in vs do
       let some (leaves, words, wordBits) := pinForm e | throw "R8-weights-form"
       let pin := match Registered.domain program v words leaves wordBits, getD e "root" with
@@ -390,7 +377,7 @@ def pinsOf (body : ByteArray) (digest : String) :
       match pin with
       | some x => pins := pins.push x
       | none => bad := true
-  return (if bad then #["R8-weights-domain"] else #[], pins, docs.flatMap (·.2.2))
+  return (if bad then #["R8-weights-domain"] else #[], pins)
 
 /-- Whether parameter `p` is a registered input of the program: its gates are one interval of root input nodes bound at
 registration (`Partition.regInputs`). -/
@@ -410,12 +397,11 @@ def pinShaped (v : Verifier) (p : Registered.Param) (x : Pin) : Bool :=
 registration of record's (`pinsOf`), `R8-weights-shape` for a pinned registered input whose shape isn't its pin's, then
 `R8-weights-query` for a registered input or a registration of record under a query that is no template query that
 applies; else `R8-unpinned` for a registered input the verifier neither expects registered nor finds pinned that a
-template parameter reads (`Partition.inputReads`), at one reader as at several, and `R8-undeclared` where the template
-parameters reading the inputs it excuses (marked, pinned and shaped) are not all among the registration's declared
-reads (one pass over the root's nodes). Then the accepted pins, each an excused input the
+template parameter reads (`Partition.inputReads`), at one reader as at several. Then the accepted pins, each an
+excused input (marked, pinned and shaped) the
 verifier does not expect registered as an entry and its root, which the members' check holds each member's registered
 read of it to (`OneStageZk.pinsHeld`). None for a verifier with no registration of record and no registered input. -/
-def weightsHeld (v : Verifier) (codes : Array String) (pins : Array Pin) (said : Array (String × String × String)) :
+def weightsHeld (v : Verifier) (codes : Array String) (pins : Array Pin) :
     Array String × Array (Registered.Entry × String) :=
   let P := v.program.prog
   let marks := v.params.filter (marked v)
@@ -429,8 +415,6 @@ def weightsHeld (v : Verifier) (codes : Array String) (pins : Array Pin) (said :
     let loose := marks.filter fun p => !(pins.any (·.value == p.name)) && !expected p
     let codes := if (Partition.inputReads P rs (loose.flatMap gated)).isEmpty then codes else codes.push "R8-unpinned"
     let excused := pinned.filter fun (p, x) => pinShaped v p x
-    let read := Partition.inputReads P rs (excused.flatMap fun (p, _) => gated p)
-    let codes := if read.all said.contains then codes else codes.push "R8-undeclared"
     (codes, (excused.filter fun (p, _) => !expected p).map fun (_, x) =>
       ({ value := x.value, leaves := x.leaves, words := x.words, wordBits := x.wordBits, domain := x.domain }, x.root))
 
@@ -438,10 +422,10 @@ def weightsHeld (v : Verifier) (codes : Array String) (pins : Array Pin) (said :
 and no pin accepted. -/
 def weightsOf (v : Verifier) : Array String × Array (Registered.Entry × String) :=
   match v.weightsOfRecord with
-  | none => weightsHeld v #[] #[] #[]
+  | none => weightsHeld v #[] #[]
   | some (body, digest) => match pinsOf body digest with
     | .error code => (#[code], #[])
-    | .ok (codes, pins, said) => weightsHeld v codes pins said
+    | .ok (codes, pins) => weightsHeld v codes pins
 
 /-- The members' check's refusal of a program marking a registered input the verifier does not expect, under parameters
 whose weights' registration of record is absent or one R8 refuses (`readPins`). -/
