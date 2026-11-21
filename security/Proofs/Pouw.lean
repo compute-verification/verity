@@ -89,9 +89,7 @@ public import Proofs.Pouw.PearlC
 public import Proofs.Pouw.PearlC.AccumProofs
 public import Proofs.Pouw.PearlC.AtomErr
 public import Proofs.Pouw.PearlC.InertBound
-public import Proofs.Pouw.PearlC.InertBoundLoopGap
 public import Proofs.Pouw.PearlC.ChainInertBoundKernelGap
-public import Proofs.Pouw.PearlC.ChainInertBoundLoopGap
 public import Proofs.Pouw.PearlC.ChainOnlyGap
 public import Proofs.Pouw.PearlC.Completeness
 public import Proofs.Pouw.PearlC.DeadlineWitness
@@ -105,7 +103,6 @@ public import Proofs.Pouw.PearlC.DeviceRev1Gap
 public import Proofs.Pouw.PearlC.DeviceSm120InertBoundRev1Gap
 public import Proofs.Pouw.PearlC.DeviceSm120Gap
 public import Proofs.Pouw.PearlC.DeviceSm120KernelGap
-public import Proofs.Pouw.PearlC.DeviceSm120LoopGap
 public import Proofs.Pouw.PearlC.EncChecks
 public import Proofs.Pouw.PearlC.FlockTile
 public import Proofs.Pouw.PearlC.Forming
@@ -140,7 +137,6 @@ public import Proofs.Pouw.PearlC.RowPrimChecks
 public import Proofs.Pouw.PearlC.RowInertBoundAtGap
 public import Proofs.Pouw.PearlC.RowSeedCode
 public import Proofs.Pouw.PearlC.RowSeedGap
-public import Proofs.Pouw.PearlC.RowSeedKGap
 public import Proofs.Pouw.PearlC.RowSeedSkip
 public import Proofs.Pouw.PearlC.ServedFadd8Rev1Gap
 public import Proofs.Pouw.PearlC.ServedH100Rev1Gap
@@ -150,14 +146,12 @@ public import Proofs.Pouw.PearlC.ServedMixedRev1Gap
 public import Proofs.Pouw.PearlC.ServedRev1Gap
 public import Proofs.Pouw.PearlC.Sm120Checks
 public import Proofs.Pouw.PearlC.Tile4Circuit
-public import Proofs.Pouw.PearlC.TileInertBoundRev1Gap
 public import Proofs.Pouw.PearlC.TileCircuit
 public import Proofs.Pouw.PearlC.TileValues
 public import Proofs.Pouw.PearlC.TileGapTol
 public import Proofs.Pouw.PearlC.TileSampleGap
 public import Proofs.Pouw.PearlC.TileGap
 public import Proofs.Pouw.PearlC.UOnlyGap
-public import Proofs.Pouw.PearlC.UOnlyLoopGap
 public import Proofs.Pouw.PearlC.W1BudgetAbort
 public import Proofs.Pouw.PearlC.W1Checks
 public import Proofs.Pouw.PearlC.Records
@@ -174,7 +168,6 @@ public import Proofs.Pouw.PearlC.RowStats
 public import Proofs.Pouw.PearlC.PeelExists
 public import Proofs.Pouw.PearlC.PeelExists4
 public import Proofs.Pouw.PearlC.TileCheckWords
-public import Proofs.Pouw.PearlC.TileCheckWordsRev1
 public import Proofs.Pouw.PearlPlus
 public import Proofs.Pouw.Pool
 public import Proofs.Pouw.PoolWitness

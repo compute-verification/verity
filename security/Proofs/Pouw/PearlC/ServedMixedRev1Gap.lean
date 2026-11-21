@@ -7,9 +7,9 @@ public import Definitions.Pouw.PearlC.DeviceWithin
 # v1 under rev1 on a served step's layout, every linear at once (compute accounting's file)
 
 * **A set of linears at any `m`:** `pearlCDomainDevShapes d nks` holds a layout whose units are any linears in `nks`,
-  each at any mix of batch sizes, as a served step's layout is. `pearlCGapDevRev1KShapes`,
-  `pearlCSampledDevRev1KShapes` and `pearlCSampledDevRev1KShapes_of_inert_bound` are `ServedRev1Gap`'s one-linear theorems
-  with `ω` any bound on the ratio `wrefDevRev1K/((1 − ρ)·creditDevRev1)` over `nks`.
+  each at any mix of batch sizes, as a served step's layout is. `pearlCGapDevRev1KShapes` and
+  `pearlCSampledDevRev1KShapes` are `ServedRev1Gap`'s one-linear theorems with `ω` any bound on the ratio
+  `wrefDevRev1K/((1 − ρ)·creditDevRev1)` over `nks`.
 * **Any set of shapes:** `pearlCGapDevRev1KOn` and `pearlCSampledDevRev1KOn_gen` are the same on the domain restricted
   to any shapes `Ss` (`pearlCDomainDevOn`). The theorems on `nks` are them at the shapes whose `(n, k)` is in `nks`, and
   the guarantees over every device record (`Proofs.Pouw.PearlC.DevGap`) are them at W1.
@@ -24,7 +24,7 @@ public import Definitions.Pouw.PearlC.DeviceWithin
   Llama-3.1-8B's four linears (6144, 4096) qkv, (4096, 4096) o, (28672, 4096) gate_up, (4096, 14336) down, and
   Qwen3-8B's (6144, 4096), (4096, 4096), (24576, 4096) gate_up, (4096, 12288) down. Each model's max is its down
   projection's: per unit and per audit tile from TT_OUT at 1/1,000, and per unit from TT_OUT at 1/400, 0.38912%
-  (Llama-3.1-8B) and 0.38907% (Qwen3-8B); per tile from TT_OUT per tile at 1/400, 0.53869% and 0.53864%.
+  (Llama-3.1-8B) and 0.38907% (Qwen3-8B).
 -/
 
 @[expose] public section
@@ -146,43 +146,6 @@ theorem pearlCSampledDevRev1KShapes [Fintype Q] [DecidableEq Q] [Fintype R] [Fin
       (g : ℝ) δPearlC := by
   have key := pearlCSampledDevRev1KShapes_gen CM d sem ρ c nks ω (1 / 400) (by norm_num) hω0 hw0 hω hTT
   have e : (g : ℝ) = 1 - (1 - 1 / 400) / (ω : ℝ) := by rw [hg]; push_cast; ring
-  rw [e]
-  exact key
-
-/-- `pearlCSampledDevRev1KNK_of_inert_bound` on a set of linears at any `m`: the sampled g at a cap `ρ' ≤ ρ < 1` from TT_OUT
-rev1 per tile at `ρ` is the g at `ρ`, `1 − (399/400)/ω` where `0 ≤ wrefDevRev1K d c ≤ ω·(1 − ρ)·creditDevRev1` at every
-`m × n × k` with `(n, k) ∈ nks`. -/
-theorem pearlCSampledDevRev1KShapes_of_inert_bound [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
-    (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ ρ' c : ℚ) (nks : Finset (ℕ × ℕ)) (ω g : ℚ)
-    (hadd : 0 ≤ d.prices.add) (hbf : 0 ≤ d.prices.bf16) (hle : ρ' ≤ ρ) (hρ1 : ρ < 1) (hω0 : 0 < ω)
-    (hw0 : ∀ nk ∈ nks, ∀ m : ℕ, 0 ≤ wrefDevRev1K d c ⟨m, nk.1, nk.2⟩)
-    (hω : ∀ nk ∈ nks, ∀ m : ℕ,
-      wrefDevRev1K d c ⟨m, nk.1, nk.2⟩ ≤ ω * ((1 - ρ) * creditDevRev1 d ⟨m, nk.1, nk.2⟩))
-    (hg : g = 1 - (1 - 1 / 400) / ω) (hTT : TTOutTilePearlCDevRev1 CM d sem ρ) :
-    GGapSampled CM (pearlCProtocolDevRev1K d sem ρ' c) (pearlCTilesDevRev1K d sem ρ' c) (pearlCDomainDevShapes d nks)
-      (g : ℝ) δPearlC := by
-  have hr : (0 : ℚ) < 1 - ρ := by linarith
-  have hr' : (0 : ℚ) < 1 - ρ' := by linarith
-  have key := pearlCSampledDevRev1KShapes_gen CM d sem ρ' c nks (ω * ((1 - ρ) / (1 - ρ'))) _
-    (by
-      have : (0 : ℝ) < (((1 - ρ) / (1 - ρ') : ℚ) : ℝ) := by exact_mod_cast div_pos hr hr'
-      nlinarith)
-    (mul_pos hω0 (div_pos hr hr')) hw0
-    (fun nk hnk m => by
-      have e : ω * ((1 - ρ) / (1 - ρ')) * ((1 - ρ') * creditDevRev1 d ⟨m, nk.1, nk.2⟩) =
-          ω * ((1 - ρ) * creditDevRev1 d ⟨m, nk.1, nk.2⟩) := by field_simp
-      rw [e]
-      exact hω nk hnk m)
-    (ttOutTilePearlCDevRev1_inert_bound_transfer CM d sem ρ ρ' (1 / 400) δPearlC hadd hbf hle hρ1 hTT)
-  have e : (g : ℝ) = 1 - (1 - (1 - (1 - 1 / 400) * (((1 - ρ) / (1 - ρ') : ℚ) : ℝ))) /
-      ((ω * ((1 - ρ) / (1 - ρ')) : ℚ) : ℝ) := by
-    rw [hg]
-    have h1 : ((1 - ρ : ℚ) : ℝ) ≠ 0 := by exact_mod_cast hr.ne'
-    have h2 : ((1 - ρ' : ℚ) : ℝ) ≠ 0 := by exact_mod_cast hr'.ne'
-    have h3 : ((ω : ℚ) : ℝ) ≠ 0 := by exact_mod_cast hω0.ne'
-    push_cast at h1 h2 ⊢
-    field_simp
-    ring
   rw [e]
   exact key
 

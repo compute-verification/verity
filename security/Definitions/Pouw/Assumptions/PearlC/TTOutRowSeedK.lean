@@ -9,8 +9,7 @@ public import Definitions.Pouw.PearlC.DeviceKernelWref
 The served line's record is rev1 with `W_ref` at `wrefDevRev1K d c`, the record's `W_ref` plus `c` per activation
 element (`DeviceKernelWref.lean`). These are (C2)'s per-row cap protocol and tiles (`TTOutRowSeed.lean`) with that
 `W_ref`, and change nothing else: the credit, the debit, the per-row cap and the checks are (C2)'s, so the row-seeded
-TT_OUT reads the same game, and rev1's TT_OUT on the split workload bounds it as it does (C2)'s
-(`RowSeedKGap.lean`).
+TT_OUT reads the same game, and rev1's TT_OUT on the split workload bounds it as it does (C2)'s.
 -/
 
 @[expose] public section
