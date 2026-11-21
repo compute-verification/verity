@@ -62,7 +62,7 @@ SCRIPT = (".py", ".sh")
 #: an architecture (`sm_120a`, `sm90`, or one built by hand, `sm_$SM`) or a card's printed name in a shell line; not a
 #: card's id (`h100-sxm-80gb`), and not a longer name holding one (`pearl_c_sm90`, `sm90_wgmma.cu`, `pearl-c-sm120-v1`)
 SHELL_CARD = re.compile(r"(?<![\w-])sm_?\d{2,3}a?(?![\w-])|(?<![\w-])sm_\$\{?\w|\b(?:H100|H200|B200)\b|RTX PRO 6000")
-SCHEME_IMPORT = re.compile(r"^\s*(?:from|import)\s+verity\.protocols\.(?:resource_accounting\.(?:compute|memory|network)"
+SCHEME_IMPORT = re.compile(r"^\s*(?:from|import)\s+verity\.protocols\.(?:accounting\.(?:compute|memory|network)"
                            r"|experimental\.dither)\b")
 SCHEME_IMPORTERS = ("benchmarks/", "calibration/", "tools/", "applications/")
 #: {file: the scheme names that are another word there}: a rounding mode or a design called dither, a card's memory bandwidth
@@ -554,7 +554,7 @@ def _flagged(ratchet: str, files: dict[str, str]) -> dict[str, int]:
     ("scheme_name_tables", "benchmarks/a.py", '"""keys: {"pous": 1}, s == "pous"."""\n# s == "pous"\nNAME = "pous"\n'
                                               'f(protocol="pous")\nx = ["pous", "dither"]\n'
                                               'for p in ("pous", "dither"):\n    pass\n', 0),
-    ("scheme_name_tables", "benchmarks/a.py", 'P = schemes.get("pous").protocol\nq = compose.schemes.get("dither")\n', 0),
+    ("scheme_name_tables", "benchmarks/a.py", 'P = schemes.get("pous").protocol\nq = run.schemes.get("dither")\n', 0),
     ("scheme_name_tables", "benchmarks/a.py", 'S = declarations.get("pous")\nt = table.get("pous")\n', 1),
     ("scheme_name_tables", "benchmarks/ppl/steps.py", 'if mode == "dither":\n    pass\nif s == "pous":\n    pass\n', 1),
     ("scheme_name_tables", "verity/protocols/x/scheme.py", 'if s == "pous":\n    pass\n', 0),

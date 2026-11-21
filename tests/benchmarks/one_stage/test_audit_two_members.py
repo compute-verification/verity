@@ -86,7 +86,7 @@ def fixed(w, seed: int = 0) -> dict[str, bytes]:
 
 STATE = next(iter(RA.PHASE_OWN))
 
-LEAN = ROOT / "verity" / "protocols" / "proofs" / "flock" / "verifier" / ".lake" / "build" / "bin"
+LEAN = ROOT / "verity" / "protocols" / "proof" / "flock" / "verifier" / ".lake" / "build" / "bin"
 BUILD = ROOT / "verity" / "protocols" / "proof" / "flock" / "prover" / "check_build.sh"
 TMPL_UNIT = ROOT / "tests" / "verity" / "protocols" / "proof" / "flock" / "prover" / "lean" / "TmplUnit.lean"
 #: `check_build.sh bin`'s exit where the machine has no Flock checkout, not its toolchain or not its crates

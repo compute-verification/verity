@@ -250,7 +250,7 @@ def prompts(vocab: int, requests: int, tokens: int) -> list[list[int]]:
 
 
 def undeclared(entries) -> str | None:
-    """Why a served arm of ``entries`` can't run: the first entry that is no declared scheme's name (`compose.schemes`), as
+    """Why a served arm of ``entries`` can't run: the first entry that is no declared scheme's name (`run.schemes`), as
     the RTX PRO 6000's Pearl-C and Pearl-C4's are none, which no served path serves; None when there is none."""
     from verity.protocols.run import schemes
 

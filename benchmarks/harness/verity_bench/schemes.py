@@ -16,8 +16,8 @@ __all__ = ["arch", "attached", "kernel_scheme", "served", "useful_work"]
 
 
 def useful_work(name: str) -> registry.Scheme:
-    """The compute scheme declared under ``name`` (`compose.schemes.get`); ValueError naming the declared compute schemes
-    otherwise, every declaration loaded only to name them (`compose.schemes.load`)."""
+    """The compute scheme declared under ``name`` (`run.schemes.get`); ValueError naming the declared compute schemes
+    otherwise, every declaration loaded only to name them (`run.schemes.load`)."""
     from verity.protocols.run import schemes
 
     try:

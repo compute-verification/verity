@@ -298,7 +298,7 @@ def test_a_flock_file_whose_name_git_quotes_still_requires_the_agreement(tmp_pat
     _git(repo, "commit", "-q", "-m", "base")
     base = _git(repo, "rev-parse", "HEAD")
     (repo / "verity" / "protocols" / "proof" / "flock" / "prover").mkdir(parents=True)
-    (repo / "verity" / "protocols" / "proofs" / "flock" / "prover" / "é.py").write_text("x = 1\n")
+    (repo / "verity" / "protocols" / "proof" / "flock" / "prover" / "é.py").write_text("x = 1\n")
     _git(repo, "add", "-A")
     _git(repo, "commit", "-q", "-m", "é")
     assert required_steps(repo, base, _git(repo, "rev-parse", "HEAD"), "mytools.agree:T") == {"lean-agreement": ["verity/protocols/proof/flock/prover/"]}
@@ -323,7 +323,7 @@ def test_the_bases_declaration_requires_the_agreement_when_the_checkout_holds_an
     _git(repo, "commit", "-q", "-am", "the move")
     base = _git(repo, "rev-parse", "HEAD")
     (repo / "verity" / "protocols" / "proof" / "flock" / "verifier").mkdir(parents=True)
-    (repo / "verity" / "protocols" / "proofs" / "flock" / "verifier" / "Hello.lean").write_text("-- a verifier change\n")
+    (repo / "verity" / "protocols" / "proof" / "flock" / "verifier" / "Hello.lean").write_text("-- a verifier change\n")
     _git(repo, "add", "-A")
     _git(repo, "commit", "-q", "-m", "a verifier change")
     tip = _git(repo, "rev-parse", "HEAD")

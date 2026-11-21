@@ -6,7 +6,7 @@ card's prover under a key of its own from the operating system (`store_salt`), n
 
 ~~~text
 pin        the checkpoint's files with their SHA-512s, in the auditor's model registry's shape (`verity/protocols/
-           compose/verifier/live_challenger/models.py`): {name, checkpoint: {file: SHA-512 hex}, checkpoint_sha512},
+           run/verifier/live_challenger/models.py`): {name, checkpoint: {file: SHA-512 hex}, checkpoint_sha512},
            checkpoint_sha512 the SHA-512 of checkpoint's canonical JSON, or a role's entry of core's pin
            (`models.json`, `read_pin`); every file is held to it before anything reads it (`check`)
 arena      one engine's weights (one GPU, tensor parallelism 1): every parameter of vLLM's model with two or more
