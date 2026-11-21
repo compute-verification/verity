@@ -210,7 +210,8 @@ def unitIndices (pubB : ByteArray) : V (Array Nat) := do
   indicesOf (← header pubB)
 
 /-- **The population check on the files** (`why`): the registration's strata over the verifier's program (its
-descriptor's bytes) and query, against the public file's units. -/
+descriptor's bytes) and query, against the public file's units. It takes only the units in order, never a `cover`: the
+one-statement form it checks is a one-member window's, whose population is one stratum. -/
 def check (program : ByteArray) (query : Json) (pubB : ByteArray) : V Unit := do
   let strata ← Partition.strata (← Program.parse program) query
   if let some w := why strata (← unitIndices pubB) then throw w
