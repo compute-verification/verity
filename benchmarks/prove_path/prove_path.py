@@ -1227,6 +1227,7 @@ def weights_registration_of_serve(a: argparse.Namespace) -> dict[str, Any]:
     from verity_vllm.pipeline.advice import registered_weights
     from verity.commitments import salt_file as SF
     from verity_vllm.program.predict.window_weights import deployment_record, weights_registration
+    from verity_vllm.records.weights_registration import write_of_record
 
     serve = json.loads((Path(a.serve_run) / "serve.json").read_text())
     cos_sin = Path(a.tables or Path(a.serve_run) / "private") / "cos_sin_cache.npy"
@@ -1236,9 +1237,10 @@ def weights_registration_of_serve(a: argparse.Namespace) -> dict[str, Any]:
     roots = registered_weights(doc, serve)
     first = deployment_record(doc) if a.deployment_record else None
     Path(a.out).write_text(json.dumps(doc, indent=1) + "\n")
+    of_record = write_of_record(a.out)
     if first is not None:
         Path(a.deployment_record).write_text(json.dumps(first, indent=1) + "\n")
-    return {"roots": len(roots), "unrooted": sorted(doc["unrooted"]), "out": a.out,
+    return {"roots": len(roots), "unrooted": sorted(doc["unrooted"]), "out": a.out, "of_record": of_record,
             **({"deployment": DD.digest(first)} if first is not None else {})}
 
 
