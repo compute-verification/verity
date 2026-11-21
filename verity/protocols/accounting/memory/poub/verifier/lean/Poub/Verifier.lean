@@ -28,8 +28,9 @@ line on stdin, each answered by one line on stdout, `{"answer": JSON}` or `{"err
   (`Difftest.resultJ`); `coin` (or `null`) is the coin the challenger released for the event,
   set first (`withCoin`): a start's or a boundary's the challenge of the window it releases, a close's window t's
   sample's coins, `W + t / g`, which only the sample's last window's close releases, an append's the session's
-  append coin of the append's slot. A coin set is never replaced by another, and an event that releases a challenge or
-  samples a window's openings from a coin never set is an error (`unset`);
+  append coin of the append's slot. A coin set is never replaced by another, an event the session refuses keeps
+  none of its challenges' or samples' coins, and an event that releases a challenge or samples a window's openings
+  from a coin never set is an error (`unset`);
 * `{"op": "openings", "node", "session", "t", "bytes": n}` and then n bytes: one frame of window t's openings as the
   wire carries them (`Wire.decodeOpenings`), kept until the window is verified;
 * `{"op": "verify", "node", "session", "t", "id"}`: window t's openings, every frame in the order it came, checked on
@@ -200,17 +201,24 @@ def unset (g : Nat) (s : Session.State) (e : Session.Event) (res : Option Sessio
     else none
   | _, _ => none
 
+/-- The session `s'` an event with result `res` left, from `s` before the event's coin was set: an event the session
+refused (`.refused`) keeps none of the challenges' or samples' coins it came with, the coins as they were in `s`. -/
+def kept (s : Session.State) : Session.Result → Session.State → Session.State
+  | .refused _, s' => { s' with coins := s.coins }
+  | _, s' => s'
+
 /-- Event `e` through running session `s` at its `f` windows in flight and `g` windows a sample's coins
 (`Flight.step f g`, as `Registry.step` steps it), the challenger's coin for it set first (`withCoin`), refused as
-`unset` refuses an event that read a coin never sent. -/
+`unset` refuses an event that read a coin never sent, and kept only if the session takes the event (`kept`): a close
+refused for roots not yet final holds no sample coin, and a later close sets its own. -/
 def eventOn (f g : Nat) (s : Session.State) (e : Session.Event) (coin : Option ByteArray) :
     Except String (Session.Result × Session.State) := do
-  let s ← match coin with
+  let s₁ ← match coin with
     | some c => withCoin g s e c
     | none => pure s
-  let (res, s) ← Flight.step f g s e
-  if let some why := unset g s e (some res) then throw why
-  pure (res, s)
+  let (res, s₂) ← Flight.step f g s₁ e
+  if let some why := unset g s₂ e (some res) then throw why
+  pure (res, kept s res s₂)
 
 private def merge (a : Json) (extra : List (String × Json)) : Json :=
   match a with
