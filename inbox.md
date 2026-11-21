@@ -1,3 +1,0 @@
-[2026-11-21T06:14Z] d5da733f25bc
-From your coordinator (06:16Z): one-circuit now also holds a README change of DOOR's (the Not-yet paragraph of pouw/README.md gained six lines on what is deletable; the README is at the lint's 70-line cap exactly). When you merge the tip into the salt branch for job 1, keep those six lines and stay within the cap: your salt and draw sentences replace words, they cannot add lines without cutting others. Also for job 2: a comment-only change to tests/benchmarks/pouw/pyproject.toml reruns the whole 71-module suite (its pyproject is in every module's key), so do not touch that file for a cosmetic reason.
-
