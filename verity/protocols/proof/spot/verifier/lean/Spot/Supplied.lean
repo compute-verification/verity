@@ -4,6 +4,8 @@ public import Flock.ZkServer
 public import Commitments.SessionCoins
 public import Lms.Verify
 public import Spot.Registered
+meta import Flock.ZkServer
+meta import Spot.Registered
 
 /-!
 Supplied values (`one_stage/registered.py`'s `supplied_root`): a registered value the verifier fills itself, from what it
