@@ -5,14 +5,14 @@ public import Definitions.Compose.Assumptions.Compose
 public import PouwVerifier
 
 /-!
-# A period's work over the windows PoUW's deployed check accepts (`PouwCheck.protocol.check`)
+# A period's work over the windows PoUW's deployed check accepts (`PouwVerifier.protocol.check`)
 
 PoUW's per-period statement about its deployed Lean code, for the all-protocols period (one loop audited every period by
 each protocol, composed in the causal game, `ResourceAccounting.Guarantees.JointPeriodLive`). `ResourceAccounting.Guarantees.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod`
 is stated over the accounting model's abstract proofs (`Outcomes`): whether window `w`'s proof of its `i`-th sampled tile
 was accepted is a parameter. Here it is the deployed check's verdict on the window: `protocol.check` (`verity/pouw/v1`,
 `core_check.py`'s port, the `Core.Protocol` that `CoreRemote` composes; onsite composes the period's,
-`PouwCheck.Period.protocol`) on the window's registration and the proof
+`PouwVerifier.Period.protocol`) on the window's registration and the proof
 system's answer. The check gives no partial credit (`Properties.Pouw.Check.AcceptMeans`: it accepts only when one-stage
 accepted the window's every sampled proof block), so its verdict is every sampled proof's (`checkedRun`). The period is credited up
 to its first window the check refuses (`Executions.prefixLen`), on those windows' live words (`checkedLive`).
@@ -50,7 +50,7 @@ check doesn't discharge it:
 * `Scope Sc Cd δs` and the static numbers (`ρ`, `w_max`, the lucks `p, p0`, `SplitRate`), and `DeadConeDead`: facts of the
   registered circuit and the scheme. They need a `Declared` built from the registered Program, which nothing builds yet
   (`Properties.Compose.UnitsOfLayout`, `Properties.Served.IsServed`, the extractor). `Scope`'s `LayerCommitted` also needs
-  the live schedule, a coin a round after its root (`PouwCheck.roundsCheck`, `PouwCheck.saltCheck`), which
+  the live schedule, a coin a round after its root (`PouwVerifier.roundsCheck`, `PouwVerifier.saltCheck`), which
   `protocol.check` doesn't read: under PoUW's seeded salt-and-draw schedule it fails on every circuit an activation
   feeds (`Properties.Served.SeededScheduleNotLive`, proved).
 * The game identity (`Pl.game = monitoringPeriodGame …`) and `PrefixOf`: protocol structure, the play's ideal game and its pass at
@@ -81,7 +81,7 @@ check doesn't discharge it:
   `1/2`; ncp-v2 has no Compose `Scheme`, and its receipt bound is a time-tradeoff form
   (`ResourceAccounting.Guarantees.TileUnpredictableOfNCPU`), not lucks.
 
-`PouwCheck.Credit.periodCredit`, served H1's period credit, is another verdict: its windows' (`PouwCheck.Credit.window`),
+`PouwVerifier.Credit.periodCredit`, served H1's period credit, is another verdict: its windows' (`PouwVerifier.Credit.window`),
 refusing the whole period on any refused window. A loop credited through it takes these statements with `Accepts` at
 `Credit.window`'s verdict; a period it credits is one whose windows are all accepted, `Executions.prefixLen = n`.
 
@@ -90,7 +90,7 @@ two-layer MLP at `H = 128` serves 4 requests × 2 decode steps a window, and eac
 tiles `PouwH1Tile_v1` (`K = 64`, `R = 4`, `C = 8`, `core_check.TILES`): 2 steps × 2 linears × 16 column blocks × 2
 halves of `K` = 128 real tiles a window, in a population of `N_p = 144` (the grid's 16 fillers, of zero rows and no
 words, so `ρ = 128/144 = 8/9`), `K_d = 24` of them sampled at the subprotocol's check (`ε = 1/2`, `δ = 10⁻⁶`, `window.k_prime`).
-Every tile's noise reads the window's one salt (its public row, `PouwCheck.publicBc`), so the window is one round
+Every tile's noise reads the window's one salt (its public row, `PouwVerifier.publicBc`), so the window is one round
 (`Cd.rounds = 1`, `w_max = 1`): a coin a decode step would need a salt a step, which the pinned tile and the check don't
 take. At H1's lucks (`p = 7/8`, `p0 = ½`, the floors `OperandHMu`, `ReceiptLuckAt` and `GuessLuckAt` claim), `a = b = 1`
 and `SplitRateClosed`'s rate there, `Λ = max(67/8, 67/32) = 67/8`, an accepted period is credited `(1 − ε(j))₊` of its
@@ -105,11 +105,11 @@ What H1's instance takes that the deployed path doesn't give, each a named premi
   opening the service gives is bound to nothing fixed before the sample. Discharge path: the loop's anchors
   committed before the sampling coin with ALLP-H1LOOP's binding of the tiles' rows to them (above).
 * `SaltIsLiveCoin`: each window's salt is its round's live coin. The check reads it: a live window (`coins` live in its
-  check item) carries its salt in its service answer, and `PouwCheck.executionPhaseSaltReason`
+  check item) carries its salt in its service answer, and `PouwVerifier.executionPhaseSaltReason`
   (`Properties.Pouw.Check.SaltKept`) accepts it only as the round-0 salt of a salt-only live session's coin, opened on
   the salt epoch's root `anchoredEpochRoot W X k` of the registration's weights' root `W` and the root `X` of the
   activations its window committed before the salt (`executionPhaseAnchors`). That session counts as a live Pearl-C pass's
-  does (`PouwCheck.liveSaltCheck`, `Properties.Pouw.LiveSalt`). A window whose check item names no coin mode is seeded,
+  does (`PouwVerifier.liveSaltCheck`, `Properties.Pouw.LiveSalt`). A window whose check item names no coin mode is seeded,
   its answer carries no salt, and `Scope`'s `Declared.Live` and `LayerCommitted` fail of the circuit it runs. No path
   that serves H1 windows takes its salt from such a session yet: `window_salt.issue` opens one, on the auditor's
   challenger (a `trusted-device` machine) or on a development gate on the issuing machine, and the H200 per-call tiles
@@ -315,9 +315,9 @@ def CheckedCreditMonitoringPeriod : Prop :=
 /-! ## H1's tile unit on the torch loop -/
 
 /-- **Each window's salt is its live coin** (H1's instance). On every path, window `w`'s salt (`salt x w`: the 64-byte
-salt the verifier holds for the window, which every tile's noise reads through its public row, `PouwCheck.publicBc`, and
+salt the verifier holds for the window, which every tile's noise reads through its public row, `PouwVerifier.publicBc`, and
 every sampled proof block's proof is held to) is `enc` of the window's round-0 coin, the model's coin, released after the
-round's values are committed. The check holds a live window to it: `PouwCheck.executionPhaseSaltReason` accepts a live
+round's values are committed. The check holds a live window to it: `PouwVerifier.executionPhaseSaltReason` accepts a live
 window's salt only as its salt session's live coin (`Properties.Pouw.Check.SaltKept`), opened after the window's
 committed activations (`anchoredEpochRoot W X k`). The served windows don't meet it yet: no path that serves H1 windows
 takes its salt from such a session, and the proved tiles' salt port is a value the prover records. A named assumption

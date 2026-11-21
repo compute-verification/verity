@@ -139,7 +139,7 @@ of `C*` PoUS's setup published (its commitment's `root`) and the root PoUB-P2's 
 root is its own salted tree's, is not a subprotocol. Once the log exists, both read the store's hardware entry.
 Remote's one tie, `Core.Remote.windows`, puts every window of PoUW's period on the policy's record: the digest of the
 record the policy's commitment is, and the digest of each window's Commit record as the period's credit reads it
-(`PouwCheck.Credit.commitOf?`). The period's own commitment is the auditor's ledger, so it can't join `same`.
+(`PouwVerifier.Credit.commitOf?`). The period's own commitment is the auditor's ledger, so it can't join `same`.
 
 ## The difftest
 
