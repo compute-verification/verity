@@ -295,6 +295,8 @@ def pubC : Circuit :=
   { (default : Circuit) with
     ports := #[oPort "x" 64, oPort "cs" 64], outPorts := #[("out", 64)], outRowPorts := #[1], metaJ := oMeta "T" }
 #guard HmOut.nIn pubC == 1 && outRow? pubC 1 == none && outRow? pubC 0 == none
+-- and so with a forged `input_ports`: 0 (not the rows before one output row each) or 1 (`cs` is no output port's row)
+#guard [0, 1, 2].all fun k => [0, 1].all fun q => outRow? { pubC with metaJ := hidMeta k } q == none
 #guard (outWhy outC regP 1 #[0] o0).startsWith "registered reads: output row o0: the circuit has 1 output rows"
 
 -- (d) the derived position held at the instances: an instance at a row of another leaf than its unit's is refused
