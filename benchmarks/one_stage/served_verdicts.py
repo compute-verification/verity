@@ -1306,9 +1306,9 @@ def pearlplus_draw_live(record: Path, out: Path, gate: str | None, key: str | No
     ledger and the host's pins log as the gate `gate` answers now, main's first-parent line `main` and the session's files,
     fetched as `pearlplus_draw` fetches them, written to ``out/PEARLPLUS_DRAW_LIVE``. None for a node's sample, which has
     no session; a fetch that fails raises, so the Lean step is given no session and its ``--of-record`` refuses."""
-    from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
-    from verity.protocols.proofs.spot.verifier.challenger import remote
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import challenger as PHC
+    from verity.protocols.accounting.compute.pouw.verifier import salt as PS
+    from verity.protocols.proof.spot.verifier.challenger import remote
+    from verity.protocols.accounting.compute.pouw.prover.serving.coins import challenger as PHC
 
     draw = json.loads(record.read_text()).get("draw") or {}
     if draw.get("from") != "challenger":
