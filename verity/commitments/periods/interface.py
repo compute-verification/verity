@@ -2684,8 +2684,10 @@ def window_of_record(doc: Mapping[str, Any], sampling_design: Mapping[str, Any],
 def served_program(templates: Sequence[tuple[Any, int]], record: Mapping[str, Any]) -> tuple[Any, dict[str, Any]]:
     """C, the Program and template query the served route registers, commits and proves for the circuit record
     ``record`` over ``templates``: its wired Program (`wired_population_program`, which refuses wires that don't fit its
-    templates), whose wires are its edges. The inference-only reader reads the same record's wires."""
-    return wired_population_program(templates, record)[:2]
+    templates), whose wires are its edges, its registered parameters but the supplied ones bound at registration. The
+    inference-only reader reads the same record's wires."""
+    reg = record.get("registered") or {}
+    return wired_population_program(templates, record, set(reg.get("params", {})) - set(reg.get("supplied") or {}))[:2]
 
 
 def program_of_record(doc: Mapping[str, Any], resolve: Callable[[str], Any]) -> tuple[Any, dict[str, Any]]:
