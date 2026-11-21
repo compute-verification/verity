@@ -20,7 +20,6 @@ from verity_bench import prove as P
 from verity_bench import prove_flock as PF
 from verity_bench.boolean import boolean_version
 from verity_bench.prove_common import (
-    _ABSENT,
     ART_RATES,
     CENSUS,
     CUT,
@@ -32,12 +31,12 @@ from verity_bench.prove_common import (
     WARMED,
     Workload,
     _count,
-    _field,
     _input,
     _read,
     card,
     of_record,
 )
+from verity_bench.steady import _ABSENT, _field
 from verity_bench.prove_rows import (
     off_node,
     own_verdict,
