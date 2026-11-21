@@ -760,7 +760,7 @@ def test_an_application_stating_no_law_is_refused_by_name_and_its_window_is_the_
     with pytest.raises(Refused) as e:
         T.public({"workload": {"params": {}}, "service": {}})
     assert (e.value.name, e.value.detail) == ("params", "the application file states no [service] law")
-    assert T.public(R.load(ROOT / "applications" / "remote.toml", REG)).window == "4,27,2"
+    assert T.public(R.load(ROOT / "applications" / "remote.toml", REG)).window == "1,1,1"
 
 
 #: what the adapter's `run.sh settings MODEL -- verity run ...` sets of the node the workload runs on
