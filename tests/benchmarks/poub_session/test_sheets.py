@@ -1,6 +1,7 @@
 """The session's node figures are its data sheets', value for value the shared fixture the tests read, and a verifier
 started without them is refused by name."""
 
+import dataclasses
 import json
 import sys
 from pathlib import Path
@@ -49,22 +50,28 @@ def test_the_handed_squaring_rate_is_the_fastest_variant_at_the_cards_highest_cl
 def test_an_h200_nodes_rebuild_share_is_refused_by_name():
     """No squaring rate is measured on an H200, and the RTX PRO 6000's is not its bound: the session's ledger refuses
     its rebuild share at each width, naming the card, the width and the fix."""
-    node = ledger.Node.stated(sheets.figures("h200-sxm-141gb-x1"))
+    node = ledger.Node.stated(dataclasses.replace(sheets.figures("h200-sxm-141gb-x1"), gpu_chip_bytes=1))
     for c in (codec.DEFAULT, codec.Codec(codec.P512, 2, False)):
         with pytest.raises(ValueError, match=f"no maximum squaring rate is established for h200-sxm-141gb at "
                                              f"{c.field.n} bits: no squaring rate is measured on it.*FORMS"):
             node.rebuild(c)
 
 
-def test_an_h200_nodes_borrowed_sha512_rate_and_link_burst_are_refused_by_name():
+def test_an_h200_nodes_borrowed_sha512_rate_link_burst_and_on_chip_storage_are_refused_by_name():
     """Each bounds what the node can do from above, so the RTX PRO 6000 node's is not the H200 node's: its SHA-512
-    rate is refused where it is read, and its link burst where its links are charged."""
+    rate is refused where it is read, its link burst where its links are charged, and its GPUs' on-chip storage, which
+    its own card file doesn't state, wherever S_chip is read, the session's ledger first."""
     fig = sheets.figures("h200-sxm-141gb-x1")
+    chip = "no on-chip storage is established for h200-sxm-141gb: its card file states no store.chip.*h200-sxm-141gb.toml"
+    with pytest.raises(ValueError, match=chip):
+        fig.chip_bytes
+    with pytest.raises(ValueError, match=chip):
+        ledger.Node.stated(fig)
     with pytest.raises(ValueError, match="no SHA-512 rate is established for h200-sxm-141gb: .*UNSHEETED"):
         fig.sha512_per_s
     with pytest.raises(ValueError, match="no link burst is established for the node kind h200-sxm-141gb-x1: .*UNSHEETED"):
-        ledger.Node.stated(fig, link_bytes_per_s=1e9)
-    assert ledger.Node.stated(fig).link_burst_bytes == 0
+        ledger.Node.stated(dataclasses.replace(fig, gpu_chip_bytes=1), link_bytes_per_s=1e9)
+    assert ledger.Node.stated(dataclasses.replace(fig, gpu_chip_bytes=1)).link_burst_bytes == 0
 
 
 def test_a_node_kind_without_a_node_file_is_refused_by_name(capsys):

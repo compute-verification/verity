@@ -1539,8 +1539,8 @@ class Verifier:
         (`timing_parts`) when the calibration has a bare read of each tier covering the registered store and a window
         had two roots.  Each reading's γ terms are the Lean verifier's, held to the ledger's (`gamma_answer`).  A
         reading the ledger refuses, or whose terms the Lean's don't hold, carries why, and the session then declares
-        nothing; a node whose figures refuse the card's maximum squaring rate at the record's codec, or the link burst
-        its charged links read, refuses the whole ledger, which then carries only that refusal (`refused`), in each
+        nothing; a node whose figures refuse the card's maximum squaring rate at the record's codec, its GPUs' on-chip
+        storage, or the link burst its charged links read, refuses the whole ledger, which then carries only that refusal (`refused`), in each
         reading and in `declared`.  Of what `declared` carries beside them, a paced session's fixed windows (`ledger.Gamma.windows`) and
         the sketch's and the sample's terms in its errors (`sketch`, `draw`) are the Python ledger's.  With the
         session's plans, `memory` is the node's HBM it shows held by kind (`memory`), KV credited on no verdict yet.
@@ -1768,7 +1768,11 @@ def main(argv: Sequence[str] | None = None, *, verify: Verify | None = None,
                      "--figures-sha512 pins: the figures are the verifier's configuration's, never the prover's")
     if a.memory_of is not None:
         v = json.loads(a.memory_of.read_text())
-        print(json.dumps([{"k": s["k"], "memory": recorded_memory(s, chip_bytes=figures.chip_bytes,
+        try:
+            chip_bytes = figures.chip_bytes
+        except ValueError as e:
+            ap.error(f"--memory-of {a.memory_of}: {e}")
+        print(json.dumps([{"k": s["k"], "memory": recorded_memory(s, chip_bytes=chip_bytes,
                                                                   host_bytes=figures.host_dram_bytes)} | (
             {"paced": recorded_paced(s, v["registration"], figures=figures, host_bytes=figures.host_dram_bytes,
                                      ingress_bytes_per_s=a.ingress_bytes_per_s)} if s.get("pace") else {})

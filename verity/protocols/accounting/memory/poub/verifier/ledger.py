@@ -154,15 +154,16 @@ class Node:
         by the figures' reason where none is established and none is handed in.  Its tiers are every GPU's HBM and the
         host's DRAM, which no reported read raises."""
         f = figures
+        chip = f.chip_bytes
         disk = disk_bytes_per_s if disk_burst_bytes is None else disk_burst_bytes
         link = (f.link_burst_bytes if link_bytes_per_s else 0.0) if link_burst_bytes is None else link_burst_bytes
         if type(link) is str:
             raise ValueError(link)
         tiers = {"hbm": Tier(f.gpus, f.gpu_spec_bytes_per_s, f.gpu_read_bytes_per_s, f.gpu_chip_bytes),
                  "dram": Tier(1, f.host_spec_bytes_per_s, f.host_read_bytes_per_s, f.host_chip_bytes)}
-        return cls(f.spec_bytes_per_s, f.read_bytes_per_s, f.chip_bytes, f.squarings_per_s,
+        return cls(f.spec_bytes_per_s, f.read_bytes_per_s, chip, f.squarings_per_s,
                    f.gpu_write_bytes_per_s, f.host_write_bytes_per_s, disk_bytes_per_s, link_bytes_per_s,
-                   float(f.chip_bytes), disk, link, tiers).raised(reported_read_bytes_per_s)
+                   float(chip), disk, link, tiers).raised(reported_read_bytes_per_s)
 
     def raised(self, reported_read_bytes_per_s: float) -> Node:
         """The node with R measured raised to the prover's reported read and R at spec to that, which a report can

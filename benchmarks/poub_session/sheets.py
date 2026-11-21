@@ -38,9 +38,18 @@ def _sku(kind: str) -> str:
     return load_node(kind, directory=NODE_FILES, cards_directory=CARD_FILES)["device"]["sku"]
 
 
+def _chip(sku: str) -> int | str:
+    store = load_card(sku, directory=CARD_FILES).get("store", {})
+    if "chip" in store:
+        return int(number(store["chip"]))
+    return (f"no on-chip storage is established for {sku}: its card file states no store.chip, and another card's is "
+            "not its bound, since S_chip bounds the bytes the node's GPUs hold on chip from above: state store.chip in "
+            f"calibration/hardware/cards/{sku}.toml with its source")
+
+
 # Each figure below bounds what the audited node can do from above (its compressions a second, the bytes its links land
-# at once), so another node's figure is not its bound: each is refused by name.  Its GPUs' on-chip storage is the RTX
-# PRO 6000 card's `store.chip`.
+# at once, the bytes its GPUs hold on chip), so another node's figure is not its bound: each is refused by name, the
+# on-chip storage only where the node's own card states no `store.chip`.
 UNSHEETED |= {kind: {
     "gpu_sha512_per_s": f"no SHA-512 rate is established for {_sku(kind)}: none is measured on it, and another card's "
                         "rate is not its bound, since the rate bounds the prover's compressions a second from above: "
@@ -48,7 +57,7 @@ UNSHEETED |= {kind: {
     "link_burst_bytes": f"no link burst is established for the node kind {kind}: none is read on it, and another node's "
                         "is not its bound, since the burst bounds the bytes its links land at once from above: read "
                         "`net.ipv4.tcp_rmem`'s max on it and state it in benchmarks/poub_session/sheets.py's UNSHEETED",
-    "gpu_chip_bytes": int(number(load_card("rtx-pro-6000-server", directory=CARD_FILES)["store"]["chip"]))}
+    "gpu_chip_bytes": _chip(_sku(kind))}
     for kind in BORROWED}
 """Per node kind, the figures a session's ledger reads that no data sheet states, but the card's maximum squaring
 rate, each a number or the refusal that says none is established."""

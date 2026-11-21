@@ -60,12 +60,12 @@ class Figures:
     compression engine reads it no faster than plain bytes.  A write ceiling is its tier's specified rate: a ceiling
     must bound every prover, and a measured rate bounds only the kernels tried.  A width whose squaring ceiling is not
     established maps to the refusal that says so, which `squaring_ceiling` raises: no rate stands in for it.  So may
-    the SHA-512 rate and the link burst, each a bound from above on what the node can do, which `sha512_per_s` and
-    `ledger.Node.stated` raise.  A session's figures are a parameter of its verifier, handed in as `to_json` writes them (`--figures`)."""
+    the SHA-512 rate, the link burst and one GPU's on-chip storage, each a bound from above on what the node can do,
+    which `sha512_per_s`, `ledger.Node.stated` and `chip_bytes` raise.  A session's figures are a parameter of its verifier, handed in as `to_json` writes them (`--figures`)."""
     gpus: int
     gpu_read_bytes_per_s: float
     gpu_spec_bytes_per_s: float
-    gpu_chip_bytes: int
+    gpu_chip_bytes: int | str
     gpu_hbm_bytes: int
     gpu_sha512_per_s: float | str
     gpu_squarings_per_s: dict[str, float | str]
@@ -94,6 +94,8 @@ class Figures:
 
     @property
     def chip_bytes(self) -> int:
+        if type(self.gpu_chip_bytes) is str:
+            raise ValueError(self.gpu_chip_bytes)
         return self.gpus * self.gpu_chip_bytes + self.host_chip_bytes
 
     @property
@@ -131,8 +133,8 @@ class Figures:
     @classmethod
     def of_json(cls, j: object) -> Figures:
         """A node's figures handed in, in `to_json`'s form: exactly its keys, counts and byte sizes integers, rates
-        positive numbers; the card's maximum squaring rate at a width, the SHA-512 rate and the link burst each a number
-        or the nonempty refusal of one."""
+        positive numbers; the card's maximum squaring rate at a width, the SHA-512 rate, the link burst and one GPU's
+        on-chip storage each a number or the nonempty refusal of one."""
         if type(j) is not dict or sorted(j) != sorted(FIGURES):
             raise ValueError(f"a node's figures are an object of exactly {', '.join(sorted(FIGURES))}")
         squarings = j["gpu_squarings_per_s"]
@@ -151,7 +153,7 @@ class Figures:
     @classmethod
     def of_sheets(cls, node: Mapping, gpu: Mapping, host: Mapping, *, gpu_sha512_per_s: float | str,
                   gpu_squarings_per_s: Mapping[str, float | str], link_burst_bytes: int | str,
-                  gpu_chip_bytes: int | None = None) -> Figures:
+                  gpu_chip_bytes: int | str | None = None) -> Figures:
         """A node's figures from its registration's data sheets, each as parsed TOML (`verity.device`'s `load_node`
         and `load_card`): the node's `device.count` and `memory.dram.bytes`, the host's DRAM; its GPU card's
         `memory.read`, `memory.bandwidth`, `store.chip` and `store.dram`; its host card's `memory.read`,
@@ -177,7 +179,7 @@ class Figures:
 
 
 FIGURES = tuple(Figures.__dataclass_fields__)
-REFUSABLE = ("gpu_sha512_per_s", "gpu_squarings_per_s", "link_burst_bytes")
+REFUSABLE = ("gpu_chip_bytes", "gpu_sha512_per_s", "gpu_squarings_per_s", "link_burst_bytes")
 
 
 def deadline(pass_ns: int, *, gap_ns: int = 0, down_ns: int, up_ns: int, jitter_ns: int = 0) -> int:
