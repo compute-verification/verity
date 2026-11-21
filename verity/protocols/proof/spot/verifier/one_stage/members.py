@@ -154,9 +154,20 @@ def strata_design(kind: str) -> str:
 
 
 def subset_design(law: Any) -> bool:
-    """Whether the parameters' `law` is `OneStage.design`'s subset kind (`OneStageZk.subsetDesign`'s verifier half): a
-    subset object, All among them, or a rate ``rate:NUM/DEN[:T]``, which it resolves to one."""
-    return law.get("law") == "subset" if isinstance(law, dict) else isinstance(law, str) and law.startswith("rate:")
+    """`OneStageZk.subsetDesign`'s verifier half: the resolved sampling design `law` (`resolved`) is a subset object, All
+    among them."""
+    return isinstance(law, dict) and law.get("law") == "subset"
+
+
+def resolved(params: Mapping[str, Any], program: Program) -> Any:
+    """The parameters' `law` as Lean's `OneStage.design` resolves it before any check reads it
+    (`service.params_sampling_design`): a rate to its sampling design over the program's population, an object as given;
+    None where it does not resolve, which the parameters' check refuses."""
+    from verity.protocols.proof.spot.verifier.service import params_sampling_design
+    try:
+        return params_sampling_design(params.get("law"), program, params["query"], params.get("work_table"))[0]
+    except ValueError:
+        return None
 
 
 def subset_designs(law: Any, record: Any) -> bool:
@@ -167,10 +178,8 @@ def subset_designs(law: Any, record: Any) -> bool:
 
 
 def _kind(law: Any) -> str:
-    """`OneStageZk.designKind` of the parameters' `law`, a rate resolved as `OneStage.design` resolves it."""
-    if isinstance(law, dict):
-        return law["law"] if isinstance(law.get("law"), str) else "unnamed"
-    return {"stratified-rate": "stratified", "work-rate": "work"}.get(str(law).split(":")[0], "subset")
+    """`OneStageZk.designKind` of a resolved sampling design `law`."""
+    return law["law"] if isinstance(law, dict) and isinstance(law.get("law"), str) else "unnamed"
 
 
 #: `OneStageZk.MEMBER_UNITS`
@@ -1233,10 +1242,9 @@ def _members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence:
         if not P.in_order(program, params["query"], record["population"]):
             if not P.covers(program, params["query"], record["population"]):
                 raise _Refused(POPULATION_ORDER)
-            law = record.get("law")
-            if not subset_designs(params.get("law"), record):
-                raise _Refused(strata_design(_kind((law if isinstance(law, dict) else {}) if subset_design(params.get("law"))
-                                                   else params.get("law"))))
+            mine = resolved(params, program)
+            if not subset_designs(mine, record):
+                raise _Refused(strata_design(_kind(record.get("law") if subset_design(mine) else mine)))
         _laid(ms, record)
         _held_read(ms, params, program)
         _class(ms)
@@ -1252,7 +1260,7 @@ def _members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence:
             strata = e
         files = {name: _files(name, m, blobs, descriptor, params["partition"], strata,
                               {"population": _count(m), "roots": roots[name], "scheme": record.get("scheme")}, form,
-                              derived, decoded, subset_design(params.get("law")))
+                              derived, decoded, subset_design(resolved(params, program)))
                  for name, m in ms.items()}
         findings: list[PF.Finding] = []
         for st, name in zip(sts, held):
@@ -1288,4 +1296,4 @@ __all__ = ["EXITS", "Form", "MEMBERS_LAID", "MEMBER_COVER", "MEMBER_STRATA", "ME
            "TABLE_PORT", "UNREAD", "blobs_of", "case_check", "check", "files_why", "flock_form", "flock_verdict",
            "field_trees_why", "members_run", "population_why", "POPULATION_WHY", "registered_at", "registered_reads",
            "return_fields", "run_reason", "shared_unread", "unregistered_why", "unwired_why", "own_root_why",
-           "port_twice_why", "run_own_root_why", "slice_no_port_why", "strata_design", "subset_design", "subset_designs", "wired_tree_why"]
+           "port_twice_why", "run_own_root_why", "slice_no_port_why", "strata_design", "resolved", "subset_design", "subset_designs", "wired_tree_why"]

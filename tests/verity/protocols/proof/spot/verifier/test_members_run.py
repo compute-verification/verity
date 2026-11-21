@@ -351,9 +351,12 @@ def test_under_a_subset_design_the_strata_need_only_cover_the_units():
     assert M.population_why([[2, 8]], in_order, header(B), slice_, subset=True) == M.MEMBER_STRATA
     assert P.cover(in_order) == 5 and P.in_order(PROGRAM, QUERY, 5) and P.covers(PROGRAM, QUERY, 5)
     assert all(M.population_why(UNITS[B], in_order, header(B), slice_, subset=s) is None for s in (False, True))
-    assert M.subset_design({"law": "subset", "k": 1}) and M.subset_design("rate:1/8")
-    assert not any(map(M.subset_design, ({"law": "stratified", "k": 1}, {"law": "work", "k": 1}, "stratified-rate:1/8",
-                                         "work-rate:1/8")))
+    assert M.subset_design({"law": "subset", "k": 1})
+    assert not any(map(M.subset_design, ({"law": "stratified", "k": 1}, {"law": "work", "k": 1}, "rate:1/7",
+                                         "stratified-rate:1/2")))
+    rate, strat = (M.resolved({"law": law, "query": QUERY}, program) for law in ("rate:2/7", "stratified-rate:1/2"))
+    assert M.subset_design(rate) and not M.subset_design(strat) and M._kind(strat) == "stratified"
+    assert M.resolved({"law": "rate:9/7", "query": QUERY}, program) is None
     assert "stratified" in M.strata_design("stratified")
 
 
