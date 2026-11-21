@@ -41,10 +41,7 @@ def anew(name: str, path: Path):
 
 
 F = load("pearl_c_sm90/fixture.py")
-BUILD_GATE = importlib.util.spec_from_file_location("pouw_build_gate", HERE.parents[1] / "build_gate.py")
-BG = importlib.util.module_from_spec(BUILD_GATE)
-BUILD_GATE.loader.exec_module(BG)
-S = BG.load(HERE / "sass_gate.json")
+S = anew("pouw_build_gate", HERE.parents[1] / "build_gate.py").load(HERE / "sass_gate.json")
 RUN = load("pearl_c_sm90/run.py")
 
 SOURCE = (HERE / "pearl_c_sm90.cu").read_text()
