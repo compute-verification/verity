@@ -167,7 +167,7 @@ def session_units(k: int, head: int, limit_ns: int, block_bytes: int, blocks: in
     circuit, in the order its wires run (each writer before its readers):
 
         PousSessionDigest_v2{k, head, limit_ns}  1 unit    (head, ctx, salt, m, the records rows) -> (ok, the records rows)
-        EmbeddingRead_v3{blocks, block_bytes/2}  k units   round j's opening of the store's table at its index
+        EmbeddingRead_v4{blocks, block_bytes/2}  k units   round j's opening of the store's table at its index
         PousRound_v3{block_bytes, 0}             ⌈k/2⌉     round j = 2u: records row u by wire, row and verdict from opening j
         PousRound_v3{block_bytes, 1}             ⌊k/2⌋     round j = 2u + 1: the same, at the record's second slot
 

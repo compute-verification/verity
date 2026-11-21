@@ -336,8 +336,15 @@ def markedRows (j : Json) (registered : Array (String × Nat)) (params : Array R
   Supplied.order marked rows coins commitments (getD j "released") records
   return rows
 
+/-- The refusal of parameters whose partition object's query is not their `query`: the sample is drawn over `query`'s
+population and every session's proof block is the partition's (`OneStageZk.Own.circuitFile`). -/
+def PARTITION_QUERY : String :=
+  "the partition object's query is not the parameters' query: the sample is drawn over the query's population and " ++
+    "every session's proof block is the partition's"
+
 /-- The parameters as parsed, before `paramsOfJson`'s refusal of the sampling design: the stream's run reads them and
-refuses the sampling design its rule names itself (`Run.run`, `bernoulli`). -/
+refuses the sampling design its rule names itself (`Run.run`, `bernoulli`). A partition object in any form but the
+pre-canonical `{program, query}` names `query` itself or is refused (`PARTITION_QUERY`). -/
 def paramsParsed (j : Json) : V Params := do
   let v2 := !(getD j "registered" matches .null)
   let tiedGiven := (field? j "tied").isSome
@@ -391,6 +398,7 @@ def paramsParsed (j : Json) : V Params := do
       let p ← obj p "partition"
       if !(getD p "program" matches .str _) || !(getD p "query" matches .obj _) then
         throw "partition names no program digest or query"
+      if keys? p != some #["program", "query"] && !jeq (getD p "query") query then throw PARTITION_QUERY
       pure (some p)
   let registered ← if !v2 then pure #[] else
     (entries (← obj (getD j "registered") "registered")).mapM fun (v, w) => match nat? w with

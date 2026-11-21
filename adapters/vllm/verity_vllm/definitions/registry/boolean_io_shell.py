@@ -14,7 +14,7 @@ so a field's selects of constant words are ANDs with one wire and its sums fold 
 lookup gate.  Every byte of the body reaches ``ok``.
 
 `ScanSlots_v5` takes the row as the u16 words it is registered as and gives its lane's fields as the i32s its readers take:
-the token `EmbeddingRead_v3`'s, the slot, occupancy word and head `TokenFeed_v1`'s, `SelectEntry_v1`'s and
+the token `EmbeddingRead_v4`'s, the slot, occupancy word and head `TokenFeed_v1`'s, `SelectEntry_v1`'s and
 `SelectCollect_v1`'s. Its words become bits through `WordBits{16}`, which is wiring, and one call of
 `ScanSlotsBits_v1{NS,NP,IDB,K0,K,OCC,LP,MAX,IDS}` on those bits: it copies the lane's fields out of the row as they are, its
 ids zero-extended, computes one thing, the slot its first position carries on, whose count is the prompt's length minus one
