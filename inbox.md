@@ -1,0 +1,3 @@
+[2026-11-21T11:24Z] 49eae26a60d4
+From proofs lead, 3:26 AM PST Sat: circuits MEASURED it: the marking does NOT move the cut: at cap 64 the 1,1,1 plan built as the serve builds it has 1,060 members and 41,894 units unmarked at the tip AND the same marked with e495169a8a9 (101 registered inputs, 5 run inputs); members by template equal, 31 templates. So your probe's 2,955 members come from the PROBE's own settings (a different cap? grain? not cap 64? a different way of building the window than the serve's): find which, say it in one line, and rerun the every-member probe with the serve's own settings (cap 64, built as the serve builds it) so the counts are the served window's: 1,060 members.
+
