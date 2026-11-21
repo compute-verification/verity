@@ -11,7 +11,7 @@
 #     python             the Python the tests run with has torch, numpy and pytest
 #     pearl_c.build      Pearl-C for sm_90a, `pearl_c_sm90/build.sh`: refused on a stack frame or spill (ptxas) and by its
 #                        SASS gate; the debit cubin with its two gates
-#     pearl_c.gate       the harness's SASS gate (.FTZ, FP32 MUFU) on both cubins, enforced here (build.sh only records it)
+#     pearl_c.gate       the harness's SASS gate (.FTZ, FP32 MUFU) on both cubins, enforced here (build.sh enforces it on pearl_c_sm90.cubin alone)
 #     pearl_c.fixture    the check's fixture, regenerated: it carries the salts the kernels read
 #     pearl_c.host       tests/benchmarks/pouw's Pearl-C sm_90a, hash and key tests. None of them reads a card: they hold
 #                        the host twins, and one builds the cubin with the toolkit and takes its gate
@@ -184,7 +184,7 @@ p_pearl_build() {
   CUDA_HOME=$CUDA GENCODE=$GENCODE bash "$PEARL/build.sh" "$SCRATCH/pearl_c" || { REASON="build.sh refused the build (the target, ptxas, the SASS gate or the debit cubin's gates)"; return 1; }
   mkdir -p "$O/pearl_c"
   cp "$SCRATCH/pearl_c"/{sass.json,ptxas.txt,toolchain.txt} "$SCRATCH/pearl_c/debit"/{debit_ptxas.txt,debit_mma.txt} "$O/pearl_c/"
-  cp "$PEARL/run.py" "$SCRATCH/pearl_c/"
+  cp "$PEARL/run.py" "$PEARL/../pearl_c/driver.py" "$SCRATCH/pearl_c/"
   SHA=$(sha "$SCRATCH/pearl_c/pearl_c_sm90.cubin")
   REASON="nvcc $NVCC_VERSION: no stack frame or spill, the SASS gate passes; debit cubin $(sha "$SCRATCH/pearl_c/debit/debit_sm90.cubin" | cut -c1-16)"
 }

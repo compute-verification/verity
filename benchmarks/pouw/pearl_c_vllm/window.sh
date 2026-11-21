@@ -13,7 +13,7 @@
 #     retained pass, its directory gets a retention record (`research keep`, priority keep, never expiring, owned by
 #     the benchmark's handle; KEEP_PRIORITY, KEEP_EXPIRES and KEEP_OWNER override them), and the window fails KEEP
 #     without one.
-# The verdicts run after the window, on the CPU (verify.sh <run id>: the Lean's, held to the Python twin); an ACCEPT is
+# The verdicts run after the window, on the CPU (verify.sh <run id>: the Lean's, beside the Python twin's); an ACCEPT is
 # replay-verified (development shortcut; the protocol's check is a ZK proof, PouwVerifier).  Needs setup.sh's $WORK.
 # The venv's tools (ninja, which FlashInfer's JIT calls) come first on PATH, and FLASHINFER_CUDA_ARCH_LIST is setup.sh's, so
 # FlashInfer finds the sampling module setup.sh built, with the same flags, in the build's own cache (flashinfer_env.sh; a
@@ -101,6 +101,7 @@ mkdir -p "$OUT/ship" && tar -xf "${SHIP_TAR:-${RESEARCH_RUN_DIR:-$OUT}/inputs/${
 SHIP=$(dirname "$(find "$OUT/ship" -name MANIFEST.sha256 | head -1)")
 (cd "$SHIP" && sha256sum -c --quiet MANIFEST.sha256) || fail SHIP "MANIFEST.sha256 does not hold"
 cmp -s "$SHIP/run.py" "$KERNEL/run.py" || fail SHIP "the ship's run.py is not the run tree's"
+cmp -s "$SHIP/driver.py" "$KERNEL/../pearl_c/driver.py" || fail SHIP "the ship's driver.py is not the run tree's"
 
 PEARLC_EXPECT_UUID=$UUID SHAPES="" VARIANTS=$VARIANTS "$PY" "$SHIP/run.py" "$SHIP/check/check.json" > "$OUT/gpu1-check.jsonl" \
   || fail GPU1_CHECK "run.py's device check failed (exit $?); see gpu1-check.jsonl"

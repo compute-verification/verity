@@ -2730,6 +2730,22 @@ def test_the_verifiers_lake_build_holds_the_trees_build_lock_so_two_runs_of_one_
     assert log.read_text().strip() == "locked"
 
 
+def test_a_declared_verifier_executable_lean_build_left_unbuilt_is_named(tmp_path, monkeypatch):
+    """lean-build is `lake build`, the verifier's `defaultTargets`: an executable a suite declares under `artifacts` that isn't
+    one of them stays unbuilt, and the tests that run it skipped in every check. `unbuilt_exes` names each one still absent
+    after the build, and its suite fails rather than skips; another package's build outputs are not lean-build's."""
+    S = _suites(monkeypatch, tmp_path)
+    lean = tmp_path / "verity" / "protocols" / "proof" / "flock" / "verifier"
+    monkeypatch.setattr(S, "flock_lean", lambda: lean)
+    bin_ = "verity/protocols/proof/flock/verifier/.lake/build/bin/"
+    suite = S.Suite("one", "one", (), (), artifacts=(bin_ + "dflt", bin_ + "lower", "other/.lake/build/bin/x"))
+    assert S.verifier_exes(suite) == ["dflt", "lower"]
+    assert S.unbuilt_exes(suite) == ["dflt", "lower"]
+    (lean / ".lake" / "build" / "bin").mkdir(parents=True)
+    (lean / ".lake" / "build" / "bin" / "dflt").write_text("")
+    assert S.unbuilt_exes(suite) == ["lower"]
+
+
 def test_a_fetch_that_prints_no_report_names_its_error_and_keeps_its_own_log(tmp_path, monkeypatch, capsys):
     """check's pytest and lean-suites steps fetch into one logs directory: each call's log stays its own, and a fetch that
     crashed says why in the step's output."""

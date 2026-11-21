@@ -70,8 +70,8 @@ commitments, is refused earlier, for its form (`ProvedScope.check`).
   (`security/Proofs/Flock/Soundness/Discharge/FailClosed/One.lean`); per table at `fast100`, 2^-205 without `--zk`:
   `flock_verify_sound_205` (`FailClosed/Numeric.lean`); the public ties: `flock_verify_public_ties`
   (`FailClosed/PublicTies.lean`).
-- The guarantee statements: `security/Definitions/Flock/Guarantees/` (`ClaimsStated`, `SamplingClaimsStated`,
-  `RecursionClaimsStated`, and the record sizing in `Audit.lean`); the proved ones are the `Flock.SecurityProofs.*`
+- The guarantee statements: `security/Definitions/Flock/Guarantees/` (`ClaimsStated`, `SamplingClaimsStated`
+  and the record sizing in `Audit.lean`); the proved ones are the `Flock.SecurityProofs.*`
   entries of `security/lean-audit.json`, among them `EndToEnd`, `EndToEndHidden`, `ZeroKnowledgeHidden`, `MaskedZK`,
   `RecursiveKS`, `RecursiveZK`, `PublicAudit` and `IntegrityPooled`, each stated in a `Statement.lean` (or
   `KSStatement.lean`, `PublicAudit.lean`) of its area under `security/Proofs/Flock/`.
