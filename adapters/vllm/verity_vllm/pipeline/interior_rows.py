@@ -395,7 +395,7 @@ def interior_window(members: Members, n_rho: Cells, boundary: str, sample: Seque
         return len(WI.table(WI.reads(h[p], 0, n))[0]) if p in h else n
 
     return CS.Binding(program, query, {"law": "subset", "k": sum(sizes)}, interior_run(boundary, sample),
-                      tuple(replace(m, n=n, base=o, name="", wired=tuple(x for ps in h.values() for x in ps),
+                      tuple(replace(m, n=n, base=o, name=f"{m.template}/c0", wired=tuple(x for ps in h.values() for x in ps),
                                     tables=tuple((p, table(h, p, n)) for p, _ in m.rows), values=v)
                             for m, n, o, h, v in zip(ms, sizes, offs, held, valued, strict=True)))
 
