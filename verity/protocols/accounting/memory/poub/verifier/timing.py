@@ -58,15 +58,16 @@ class Figures:
     SHA-512 rate and squaring ceiling per width, the disks' measured read rate and one link burst.  Each unprefixed property is the node's, the
     sum over its devices.  A read rate is of plain reads: the encoded store's words are never constant, so the GPU's
     compression engine reads it no faster than plain bytes.  A write ceiling is its tier's specified rate: a ceiling
-    must bound every prover, and a measured rate bounds only the kernels tried.  A session's figures are a parameter of
-    its verifier, handed in as `to_json` writes them (`--figures`)."""
+    must bound every prover, and a measured rate bounds only the kernels tried.  A width whose squaring ceiling is not
+    established maps to the refusal that says so, which `squaring_ceiling` raises: no rate stands in for it.  A
+    session's figures are a parameter of its verifier, handed in as `to_json` writes them (`--figures`)."""
     gpus: int
     gpu_read_bytes_per_s: float
     gpu_spec_bytes_per_s: float
     gpu_chip_bytes: int
     gpu_hbm_bytes: int
     gpu_sha512_per_s: float
-    gpu_squarings_per_s: dict[str, float]
+    gpu_squarings_per_s: dict[str, float | str]
     host_read_bytes_per_s: float
     host_spec_bytes_per_s: float
     host_chip_bytes: int
@@ -103,8 +104,18 @@ class Figures:
         return self.gpus * self.gpu_sha512_per_s
 
     @property
-    def squarings_per_s(self) -> dict[str, float]:
-        return {width: self.gpus * rate for width, rate in self.gpu_squarings_per_s.items()}
+    def squarings_per_s(self) -> dict[str, float | str]:
+        return {width: rate if type(rate) is str else self.gpus * rate
+                for width, rate in self.gpu_squarings_per_s.items()}
+
+    def squaring_ceiling(self, width: str) -> float:
+        """The node's squaring ceiling at `width`, refused by its figures' reason where none is established."""
+        if width not in self.gpu_squarings_per_s:
+            raise ValueError(f"the node's figures state no squaring ceiling at {width}")
+        rate = self.squarings_per_s[width]
+        if type(rate) is str:
+            raise ValueError(rate)
+        return rate
 
     def to_json(self) -> dict:
         return {f: dict(getattr(self, f)) if f == "gpu_squarings_per_s" else getattr(self, f) for f in FIGURES}
@@ -117,14 +128,16 @@ class Figures:
     @classmethod
     def of_json(cls, j: object) -> Figures:
         """A node's figures handed in, in `to_json`'s form: exactly its keys, counts and byte sizes integers, rates
-        positive numbers."""
+        positive numbers, a squaring ceiling or the nonempty refusal of one."""
         if type(j) is not dict or sorted(j) != sorted(FIGURES):
             raise ValueError(f"a node's figures are an object of exactly {', '.join(sorted(FIGURES))}")
         squarings = j["gpu_squarings_per_s"]
         if type(squarings) is not dict or not all(type(w) is str for w in squarings):
-            raise ValueError("gpu_squarings_per_s maps each codec width to one GPU's squaring ceiling")
+            raise ValueError("gpu_squarings_per_s maps each codec width to one GPU's squaring ceiling or its refusal")
         for k in FIGURES:
             for v in squarings.values() if k == "gpu_squarings_per_s" else (j[k],):
+                if k == "gpu_squarings_per_s" and type(v) is str and v:
+                    continue
                 whole = k == "gpus" or k.endswith("_bytes")
                 if type(v) is bool or type(v) not in ((int,) if whole else (int, float)) or not v > 0:
                     raise ValueError(f"{k} is a positive {'integer' if whole else 'number'}, not {v!r}")
@@ -133,12 +146,12 @@ class Figures:
 
     @classmethod
     def of_sheets(cls, node: Mapping, gpu: Mapping, host: Mapping, *, gpu_sha512_per_s: float,
-                  gpu_squarings_per_s: Mapping[str, float], link_burst_bytes: int,
+                  gpu_squarings_per_s: Mapping[str, float | str], link_burst_bytes: int,
                   gpu_chip_bytes: int | None = None) -> Figures:
         """A node's figures from its registration's data sheets, each as parsed TOML (`verity.device`'s `load_node`
         and `load_card`): the node's `device.count` and `memory.dram.bytes`, the host's DRAM; its GPU card's
         `memory.read`, `memory.bandwidth`, `store.chip` and `store.dram`; its host card's `memory.read`,
-        `memory.bandwidth`, `store.chip` and `disk.read`.  The figures no sheet states are handed in: one GPU's SHA-512 rate and squaring ceiling per width, and one link burst; and one
+        `memory.bandwidth`, `store.chip` and `disk.read`.  The figures no sheet states are handed in: one GPU's SHA-512 rate, its squaring ceiling or that ceiling's refusal per width, and one link burst; and one
         GPU's on-chip storage where its card states no `store.chip`."""
         for part, card in (("device", gpu), ("host", host)):
             if node[part]["sku"] != card["sku"]:
@@ -360,7 +373,7 @@ def stated(store_bytes: int, window_ns: int, windows: int, *, figures: Figures, 
     `capacity_bytes_per_s` (by default R measured; `figures.spec_bytes_per_s`, the headline): a pass is the store's
     read at `read_bytes_per_s` (by default R measured), `samples` openings a window at `delta` bound its wrong receipts
     (`wrong_bound`), the node's chips hold `figures.chip_bytes`, and μ_rebuild is the default codec at
-    `figures.squarings_per_s`.  A store that spans every tier (`spanning`) reads at R; one in HBM alone reads at its
+    `figures.squaring_ceiling` of its width, refused where the figures establish none.  A store that spans every tier (`spanning`) reads at R; one in HBM alone reads at its
     GPUs' measured rate, and μ_timing charges the idle host DRAM.  μ_chip is about `chip_bytes/store_bytes`, and a
     window's μ_timing about `(RTT + 2p)/T`, the pass in flight at its challenge and the one its boundary cuts short: a
     larger store trades the one for the other."""
@@ -376,7 +389,7 @@ def stated(store_bytes: int, window_ns: int, windows: int, *, figures: Figures, 
             ("receipt",), (blocks * n,), {"receipt": Subset(samples)}, delta, drawn={"receipt": samples}))
         for t, (n, b, d) in enumerate(zip(st.passes, starts, st.deadlines))))
     return audit.ledger(record, capacity_bytes_per_s=capacity_bytes_per_s, chip_bytes=figures.chip_bytes,
-                        rebuild=audit.Rebuild(codec.DEFAULT, figures.squarings_per_s["p1024"]),
+                        rebuild=audit.Rebuild(codec.DEFAULT, figures.squaring_ceiling(codec.DEFAULT.field.name)),
                         wrong=lambda pr: wrong_bound(pr.sizes[0], pr.drawn["receipt"], pr.delta))
 
 
@@ -388,7 +401,7 @@ def store_floor(gap_ns: int = 0, target: float = 0.01, *, figures: Figures) -> f
     block's share of them depending on the store's size, solved for by iteration) and μ_rebuild.  At `gap_ns` = 0 it
     is μ_chip, λ and μ_rebuild alone."""
     r, chip = figures.read_bytes_per_s, figures.chip_bytes
-    rebuild = audit.Rebuild(codec.DEFAULT, figures.squarings_per_s["p1024"]).fraction(r)
+    rebuild = audit.Rebuild(codec.DEFAULT, figures.squaring_ceiling(codec.DEFAULT.field.name)).fraction(r)
     lam, g, blocks = audit.QUERIES_LOG2 / (8 * BLOCK_BYTES), gap_ns / S, 0
     while True:
         store = r * (g * (1 - target + rebuild) + chip / r) / (target - lam - rebuild)
@@ -635,4 +648,7 @@ if __name__ == "__main__":
         sys.exit("usage: python -m verity.protocols.accounting.memory.poub.verifier.timing FIGURES_JSON "
                  "(a node's figures, `benchmarks/poub_session/sheets.py NODE` writes them)")
     with open(sys.argv[1]) as f:
-        _grid(Figures.of_json(json.load(f)))
+        try:
+            _grid(Figures.of_json(json.load(f)))
+        except ValueError as e:
+            sys.exit(f"timing: {e}")
