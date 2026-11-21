@@ -336,8 +336,6 @@ def vu_partition_text(gates: dict) -> str:
     max_seen, w_max = field_of(width, "max_seen"), field_of(width, "w_max")
     txt = (f"{field_of(part, 'status')}, {count if count is not None else 'n/a'} sets, max w_out {max_seen if max_seen is not None else 'n/a'}"
            f"/{w_max if w_max is not None else 'n/a'}")
-    if st == "unsupported":                        # undecided: neither PASS nor FAIL; the reason names what was undecidable
-        return f"unsupported ({str(g8.get('reason') or '').removeprefix('unsupported (').removesuffix(')')[:120]}); {txt}"
     if st == "fail":
         codes = field_of(part, "codes")   # the partition's failure codes; a detail that lists none names none
         extra = [f"codes {list(codes)[:4]}"] if codes else []
