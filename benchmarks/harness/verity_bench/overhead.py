@@ -167,7 +167,7 @@ WITHOUT_Y = "without y's commitment (y tree not timed)"
 
 @dataclass(frozen=True)
 class Scheme:
-    """A scheme the door times against stock: the declared scheme `id` (`compose.schemes.get`) and the benchmark's own
+    """A scheme the door times against stock: the declared scheme `id` (`run.schemes.get`) and the benchmark's own
     binding of it. `arm` is its PoUW harness arm (`module:Class` in `arm_path`, as `bench.py --arm` and `--arm-path` take
     them), timed beside stock kernels of `family`, the stock scaling its useful output's quantization matches: the
     declaration's ``product_family``. `epsilon` (`module:function` in `arm_path`) is its soundness error at a shape on a

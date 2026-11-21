@@ -1,5 +1,5 @@
 /-
-The integrity profile: what an accepted check established, as `verity.protocols.proofs.spot.verifier.profile.IntegrityProfile`
+The integrity profile: what an accepted check established, as `verity.protocols.proof.spot.verifier.profile.IntegrityProfile`
 records it. These are the facts checked exhaustively, the verifier's sampling design over named levels of a partition
 hierarchy (coarse to fine; the finest level is the checked one), the members sampled at each level, and δ. The JSON is
 `IntegrityProfile.to_json`'s, except that δ is an exact ratio string (`Core.Ratio`) and not a float.

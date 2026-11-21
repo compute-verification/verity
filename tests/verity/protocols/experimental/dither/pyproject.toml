@@ -7,7 +7,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 inputs = ["verity/__init__.py", "verity/errors.py",
-          # resource_accounting/scheme.py (and PoUW's scheme.py) import verity.hooks, and verity.protocol
+          # accounting/scheme.py (and PoUW's scheme.py) import verity.hooks, and verity.protocol
           "verity/hooks.py", "verity/protocol.py", "verity/protocols/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/accounting/compute/__init__.py",
           "verity/protocols/accounting/scheme.py",
           "verity/protocols/experimental/__init__.py",

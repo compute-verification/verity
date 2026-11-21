@@ -166,7 +166,7 @@ def split_card(spec: str | Path) -> tuple[str, str | None]:
 
 
 def declared_schemes() -> tuple[str, ...]:
-    """The declared schemes' names (`compose.schemes`), each an arm id that attaches it by name."""
+    """The declared schemes' names (`run.schemes`), each an arm id that attaches it by name."""
     from verity.protocols.run import schemes
 
     return tuple(schemes.load())

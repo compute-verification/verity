@@ -12,12 +12,12 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
 
 - `verity/`: the distribution `verity` (the root `pyproject.toml`; `verity/README.md` outlines it). Import from the
   owning module (`from verity.circuits import Program`); `verity` re-exports nothing.
-  - `verity/protocols/`: the protocols in three group directories, two layers on the proofs: `proofs/` holds `flock`, with
+  - `verity/protocols/`: the protocols in three group directories, two layers on the proofs: `proof/` holds `flock`, with
     `spot` and `recursion` on it, `spot_flock` on those and `spot_flock_recursion` on top, what the other protocols call
-    to prove; `resource_accounting/`
+    to prove; `accounting/`
     holds `compute/pouw`, `memory/pous`, `memory/poub` and `network` (compute, memory and network), and `registration/` (the
     registration log, checked once, before any challenge; its site log's types are still in `interface/`) sits beside the layers;
-    `workload_classification/` holds `training_detection/inference_only`, on resource accounting. Both layers use the proofs, and the proofs use neither. On top of the audits, `compose/` is a twelfth
+    `policy/` holds `training_detection/inference_only`, on resource accounting. Both layers use the proofs, and the proofs use neither. On top of the audits, `run/` is a twelfth
     protocol. Its `verifier/` holds its Lean (`lean/`) and the two lists of protocols it accepts: `remote/` is what an
     auditor with no devices at the datacenter runs, and `onsite/` what an auditor with devices there runs. Its
     `verifier/live_challenger/` holds the auditor device's challenger service. `experimental/` holds the protocols being
