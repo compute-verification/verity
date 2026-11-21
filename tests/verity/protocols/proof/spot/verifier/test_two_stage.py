@@ -1,6 +1,5 @@
-"""A two-stage sampling design on the proof system's `Stream`: refused by name at registration (the two-level
-audit, `levels.TWO_LEVELS_REFUSED`); what the stream's spec, params and rule state and its first stage samples before
-that; and its replay grain's fan-out."""
+"""A two-stage sampling design on the proof system's `Stream`: what the stream's spec, params and rule state and its
+first stage samples; and its replay grain's fan-out."""
 
 from __future__ import annotations
 
@@ -22,7 +21,7 @@ from verity.circuits.program import Program
 from verity.circuits.refs import array_of, tuple_of
 from verity.circuits.types import Array, Tuple, Value as Bits
 from verity.protocols.proof.spot.prover import optimize as O, plancheck as PC
-from verity.protocols.proof.spot.verifier import levels as LV, second_stage as SS, service as S
+from verity.protocols.proof.spot.verifier import second_stage as SS, service as S
 from verity.protocols.proof.spot.verifier.one_stage import draw as D, partition as P, docket as R, verifier as V
 from verity.protocols.proof.spot.prover import docket as DK
 
@@ -141,18 +140,6 @@ def _refused(f) -> tuple[str, ...]:
     with pytest.raises(S.Refused) as e:
         f()
     return e.value.verdict.codes
-
-
-def test_a_two_stage_stream_is_refused_by_name_at_registration():
-    """By design, a two-stage stream is the two-level audit, refused by name at its boundary docket's registration,
-    before any coin (`levels.TWO_LEVELS_REFUSED`, the Lean's `VStar.Recursive.Sampled.TWO_LEVELS_REFUSED`): the docket
-    passes R1-R8 and is refused after them, and nothing is logged."""
-    stream = _stream()
-    with pytest.raises(S.Refused) as e:
-        stream.register(*_boundary())
-    assert e.value.verdict.codes == (LV.NOT_PROVED,)
-    assert e.value.verdict.detail[LV.NOT_PROVED] == {"reason": LV.TWO_LEVELS_REFUSED}
-    assert stream._log == [] and stream._entries == []
 
 
 def test_a_two_stage_outcome_is_complete_only_on_the_request_definition_and_its_records():

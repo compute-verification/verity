@@ -297,8 +297,7 @@ def _two_stage_evidence(rest: dict) -> dict:
 def _form_params(j: Any) -> dict:
     n, rest = _split(j, "parameters", params=True)
     if n == 2:
-        raise ValueError("outside the mirror: two levels' parameters, which the Lean parses before it refuses them by "
-                         "name (`VStar.Recursive.Sampled.twoLevels`)")
+        raise ValueError("outside the mirror: two levels' parameters (`VStar.Recursive.SampledTwo.paramsOfJson`)")
     return _one_stage_params(rest)
 
 

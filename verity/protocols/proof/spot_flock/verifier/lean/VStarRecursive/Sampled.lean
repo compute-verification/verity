@@ -19,8 +19,6 @@ executable's root, not here.
 -/
 module
 
-public import Spot.Levels
-meta import Spot.Levels
 public import VStarRecursive.SampledTwo
 meta import VStarRecursive.SampledTwo
 
@@ -78,18 +76,9 @@ private def split (j : Json) (what : String) (params : Bool) : V (Nat × Json) :
     if s != n then throw s!"levels-params-mismatch: the parameters name {n} level(s), and their shape is {s}'s"
   pure (n, Json.mkObj (kvs.toArray.filter (fun kv => kv.1 != "levels")).toList)
 
-/-- The refusal of parameters that parse at two levels: the two-level audit is built, and no soundness theorem covers
-its accept, so the parameters are refused at registration, before any coin. -/
-def TWO_LEVELS_REFUSED : String := Spot.Levels.TWO_LEVELS_REFUSED
-
-/-- Two levels' parameters, parsed by `parse` so its refusals keep their reasons, then refused by name. -/
-def twoLevels {α : Type} (parse : V α) : V Params := do
-  discard parse
-  throw TWO_LEVELS_REFUSED
-
 def paramsOfJson (j : Json) : V Params := do
   let (n, rest) ← split j "parameters" true
-  if n == 2 then return (← twoLevels (SampledTwo.paramsOfJson j))
+  if n == 2 then return .inr (← SampledTwo.paramsOfJson j)
   if (field? rest "proofs").isNone then throw s!"the parameters name no proofs: {V1_REFUSED}"
   return .inl (← OneStageZk.paramsEitherOfJson rest)
 
@@ -210,12 +199,6 @@ def protocol : Core.BlobProtocol where
 #guard match paramsOfJson (Json.mkObj [("levels", Json.num 2), ("boundary", Json.mkObj []),
     ("interior", Json.mkObj []), ("rule", Json.mkObj [])]) with
   | .error e => e.startsWith "the keys of the parameters"
-  | .ok _ => false
-#guard match twoLevels (pure () : V Unit) with
-  | .error e => e == TWO_LEVELS_REFUSED
-  | .ok _ => false
-#guard match twoLevels (throw "the keys of the parameters" : V Unit) with
-  | .error e => e == "the keys of the parameters"
   | .ok _ => false
 #guard match paramsOfJson (Json.mkObj [("levels", Json.num 3)]) with
   | .error e => e.startsWith "levels-not-built"

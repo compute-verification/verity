@@ -34,7 +34,6 @@ from verity.protocols.proof.spot.verifier.one_stage import (
     verifier as V,
 )
 from verity.protocols.proof.spot.prover import docket as DK
-from verity.protocols.proof.spot.verifier import levels as LV
 from verity.commitments import registered_value as RV
 from verity.commitments import randomness as RND
 
@@ -1154,19 +1153,6 @@ def test_a_history_source_is_the_root_the_verifier_computes():
         got = V.check(rec, **args)
         assert not got.ok and got.codes == (R.HISTORY,), (change, got)
         assert got.verifiers["lean"] == got.verifiers["python"] == {"ok": False, "codes": [R.HISTORY]}, (change, got)
-
-
-def test_the_verifier_refuses_a_two_stage_run_by_name():
-    """`spot-verifier`'s `run` (`Pieces.runOfRecord`) refuses a two-stage rule with `levels.TWO_LEVELS_REFUSED`, and
-    `run` reports it as a failed verdict whatever the Python's twin says, never an accept."""
-    rec, check, _, _ = _seeded_case()
-    p, q, design, ports = check["program"], check["query"], check["sampling_design"], check["ports"]
-    rule = {"rule": "two-stage", "replay": "rate:1/2", "k": 1,
-            "grain": {"name": "Q_template_instance", "version": 0, "params": {"template": "t"}}}
-    got = V.run({"symbol": "accept"}, rec, p, q, design, check["scheme"], ports, None, (), [], None, None, rule, [], [],
-                "c", "r", b"", None, [], {}, [], {}, 0.5)
-    assert not got.ok and got.codes == (V.DISAGREE,)
-    assert got.verifiers["lean"] == {"refused": LV.TWO_LEVELS_REFUSED}, got.verifiers
 
 
 def test_the_run_of_record_takes_each_registrations_history_tables(monkeypatch):

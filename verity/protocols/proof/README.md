@@ -7,7 +7,7 @@ rows, and every byte the workers send the auditor leaves through the ZK server.
 
 The guarantee: `Flock.Guarantees.SampledKSLiveV5` (`security/Proofs/Flock/Bridge/V5/Statement.lean`).
 
-Not yet: the outer (recursive) proof, which the first version leaves out; a two-stage audit, which the verifier refuses by name (`Spot.Levels.TWO_LEVELS_REFUSED`); the guarantee as an instance of the sampling layer's `Spot.Sampling.Sound` rather than proved on its own; the cover form for subset designs, without which a window whose templates interleave (every real model's) is refused; the check reading the weights' registration of record, without which a weight several blocks read is refused.
+Not yet: the outer (recursive) proof, which the first version leaves out; a soundness theorem for the two-stage audit, which runs unproved; the guarantee as an instance of the sampling layer's `Spot.Sampling.Sound` rather than proved on its own; the cover form for subset designs, without which a window whose templates interleave (every real model's) is refused; the check reading the weights' registration of record, without which a weight several blocks read is refused.
 
 ## Pieces
 
