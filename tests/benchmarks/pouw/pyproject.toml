@@ -51,8 +51,7 @@ untraced = [
 # builds (`artifacts`), and the C++ the tests compile is this suite's own but for the SHA-512 pearl_c/sha512.cuh includes
 # (verity/commitments/cuda/sha512.cuh). verity/protocols/accounting/compute/pouw/verifier/receipts, filler and
 # machine_model are suites of their own, which this suite's tests read (test_receipts_adopters, test_opcode_probe),
-# so they're named here. The theory scripts (`theory/`) import the exact kit's package. test_contents reads the README,
-# which holds no table (`contents.py` prints them).
+# so they're named here. The theory scripts (`theory/`) import the exact kit's package.
 # test_served_units_summarize runs served_units' summarize.py, which scores the hidden_zk controls its job.sh sources.
 # pouw_h1 imports its table commits' module and pouw_h1_served its word encodings' module, each named at its path
 # before and after vllm's layout move. bench_arm's live coins open their session through verity_vllm.pipeline.commit_coins.
