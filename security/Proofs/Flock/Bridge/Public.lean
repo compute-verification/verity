@@ -38,7 +38,6 @@ import Proofs.Flock.Bridge.EndToEndHiddenC
 import Proofs.Flock.Bridge.FaultyRightC
 import Proofs.Flock.Bridge.OpeningsCanon
 import Proofs.Flock.Bridge.Refused
-import Flock.KsScope
 import Proofs.Flock.Bridge.Transports
 
 /-!

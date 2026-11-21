@@ -2,7 +2,6 @@ module
 
 public import Properties.Certifier.JointBridge.ServiceSoundOfSessions
 public import Proofs.Flock.EndToEndRegistered
-public import Flock.Desc
 public import Proofs.Flock.Soundness.Assumptions.Zk
 public import Proofs.Flock.Soundness.Discharge.ZkLink.Public
 public import Proofs.Flock.Soundness.Discharge.ZkLink.Rows
@@ -13,7 +12,6 @@ public import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJCustody
 public import Proofs.Flock.Soundness.Registered.ReadsX
 public import Proofs.Flock.Soundness.Discharge.Composed.PublicJ
 public import Proofs.Flock.Soundness.Discharge.Composed.SampledJ
-public import Mathlib.Combinatorics.Matroid.Init
 public import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 public import Proofs.Flock.Soundness.Registered.Binding
 public import Proofs.Flock.SoundAtBridge.Reduce

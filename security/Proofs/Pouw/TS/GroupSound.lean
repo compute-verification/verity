@@ -4,8 +4,6 @@ public import Proofs.Pouw.TS.Session.Group.Layer
 public import Proofs.Pouw.TS.Session.Assumptions
 public import Proofs.Flock.SoundAtBridge.Served
 public import Proofs.Pouw.TS.Session.Lanes.Decode
-public import Flock.KnownRead
-public import Mathlib.Data.String.Basic
 public import Proofs.Flock.EndToEndRegistered
 public import Proofs.Flock.Soundness.Discharge.ZkLink.Rows
 public import Proofs.Flock.SoundAtBridge.Reduce
