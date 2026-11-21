@@ -1,1 +1,1 @@
-{"FlockSoundness.Audit": "Spot.Sampling"}
+{"Claims.Msg": "Hash.Msg", "FlockSoundness.Audit": "Spot.Sampling", "FlockSoundness.Audit.SamplingDesign.bernoulli": "Verity.SamplingDesign.bernoulli"}
