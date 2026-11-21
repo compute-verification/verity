@@ -254,4 +254,23 @@ def V3X : Verifier := { V3 with pinned := #[] }
 -- another function's mark is no anchor
 #guard anchorUnpinned { V3 with marks := #[("a", { anchorMark "w" with fn := "record.root/v1" })] } == #[]
 
+/-! R7's hold on an anchor's record entry (`anchorOffPin`): the record's entry of a value the registration of record pins
+is that pin in root, leaf count, words and domain; no entry, or any other, is refused. -/
+
+def VX : Verifier := { V3 with marks := #[("a", anchorMark "x")], weightsOfRecord := some (ofRecord PINS) }
+def recOf (es : Array Json) : Json := Json.mkObj [("registered", Json.arr es)]
+def pinX : Json := (pin "x").2
+
+#guard anchorOffPin (recOf #[pinX]) VX == #[]
+#guard anchorOffPin (recOf #[]) VX == #["x"]
+#guard anchorOffPin (recOf #[put pinX "root" (some (Json.str OTHER))]) VX == #["x"]
+#guard anchorOffPin (recOf #[put pinX "domain" (some (Json.str OTHER))]) VX == #["x"]
+#guard anchorOffPin (recOf #[put pinX "leaves" (some (Lean.toJson (99 : Nat)))]) VX == #["x"]
+#guard anchorOffPin (recOf #[put pinX "words" (some (Lean.toJson (99 : Nat)))]) VX == #["x"]
+-- the last entry of the value is the one read
+#guard anchorOffPin (recOf #[pinX, put pinX "root" (some (Json.str OTHER))]) VX == #["x"]
+-- a value the registration of record does not pin is not this check's (`anchorUnpinned`, R7-held)
+#guard anchorOffPin (recOf #[]) { VX with weightsOfRecord := none } == #[]
+#guard ANCHOR_FUNCTIONS.all fun fn => anchorOffPin (recOf #[]) { VX with marks := #[("a", anchorMark "x" fn)] } == #["x"]
+
 end Spot.Test.Docket

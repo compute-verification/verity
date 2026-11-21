@@ -839,6 +839,23 @@ def test_r7_refuses_a_supplied_anchor_whose_value_no_pin_holds():
     assert R.anchor_unpinned({"a": mark("record.root/v1", port="t")}, None, None) == []
 
 
+def test_r7_holds_an_anchors_record_entry_to_its_pin():
+    """`docket.anchor_off_pin` (Lean's `Docket.anchorOffPin`, `R7-anchor-pin`, its guards in `Spot/Test/Docket.lean`):
+    the record's last entry of an anchor's value that the weights' registration of record pins is that pin in root,
+    leaf count, words and domain; no entry, or another, is named; a value the registration does not pin is not."""
+    pin = _pin(_two_programs(registered=("t",))[0])
+    weights = _weights([pin])
+    entry = {k: pin[k] for k in ("value", "root", "leaves", "words", "domain")}
+    for fn in R.ANCHOR_FUNCTIONS:
+        marks = {"a": {"supplied": fn, "args": {"value": "t"}, "layout": "digest", "bits": 512}}
+        assert R.anchor_off_pin(marks, [entry], weights) == []
+        assert R.anchor_off_pin(marks, [], weights) == ["t"]
+        for k, x in (("root", "bb" * 64), ("domain", "bb" * 64), ("leaves", 99), ("words", 99), ("leaves", True)):
+            assert R.anchor_off_pin(marks, [{**entry, k: x}], weights) == ["t"]
+        assert R.anchor_off_pin(marks, [entry, {**entry, "root": "bb" * 64}], weights) == ["t"]
+        assert R.anchor_off_pin(marks, [], None) == []
+
+
 def test_r8_lets_a_tied_run_input_through_and_publishes_it():
     """R8's tied values (`registration.check`'s `tied`): a run Input named tied is let through, and the verdict
     publishes it beside F (`Verdict.rests_on_period_check`), since its acceptance rests on the network period check that

@@ -102,7 +102,8 @@ acceptance rests on that later check. R7 refuses a registered value, a supplied 
 and domain), whose parameter's gates hold a run Input node (`runInputNamed`, `R7-run-input`): a run Input's rows are
 committed once, in its one tree, and are never a registered value. R7 refuses a supplied anchor, a mark of
 `registered.root/v1` or `registered.domain/v1`, whose value V neither the verifier's `pinned` nor the weights'
-registration of record pins (`anchorUnpinned`, `R7-anchor-unpinned`).
+registration of record pins (`anchorUnpinned`, `R7-anchor-unpinned`), and one the registration of record pins whose
+record entry is not that pin in root, leaf count, words and domain (`anchorOffPin`, `R7-anchor-pin`).
 
 R8 then holds the program's registered inputs (the parameters it binds at registration, `Partition.regInputs`) to the
 weights' registration of record the auditor's side hands it (`weightsOfRecord`: its bytes and the SHA-512 it holds; a
@@ -466,22 +467,42 @@ def weightsOf (v : Verifier) : Array String × Array (Registered.Entry × String
 /-- The supplied functions whose value is a registered value's root or domain (`anchorUnpinned`). -/
 def ANCHOR_FUNCTIONS : Array String := #["registered.root/v1", "registered.domain/v1"]
 
+/-- The weights' registration of record's pins (`pinsOf`), none where it is absent or refused. -/
+def recordPins (v : Verifier) : Array Pin :=
+  match v.weightsOfRecord with
+  | some (body, digest) => match pinsOf body digest with
+    | .ok (_, pins) => pins
+    | .error _ => #[]
+  | none => #[]
+
+/-- The values V of C's supplied anchors (a mark of `ANCHOR_FUNCTIONS`), each once, in the marks' order. -/
+def anchorValues (v : Verifier) : Array String :=
+  v.marks.foldl (init := (#[] : Array String)) fun out (mk : String × Supplied.Mark) =>
+    let value : Option Json := (mk.2.args.find? (·.1 == "value")).map Prod.snd
+    match ANCHOR_FUNCTIONS.contains mk.2.fn, value with
+    | true, some (Json.str x) => if out.contains x then out else out.push x
+    | _, _ => out
+
 /-- `docket.anchor_unpinned`: the values V of C's supplied anchors (a mark of `ANCHOR_FUNCTIONS`) that are neither in
 the verifier's `pinned` nor pinned by the weights' registration of record (`pinsOf`'s pins), each once, in the marks'
 order; R7 refuses them (`R7-anchor-unpinned`). -/
 def anchorUnpinned (v : Verifier) : Array String :=
-  let ofRecord : Array String := match v.weightsOfRecord with
-    | some (body, digest) => match pinsOf body digest with
-      | .ok (_, pins) => pins.map fun (p : Pin) => p.value
-      | .error _ => #[]
-    | none => #[]
-  v.marks.foldl (init := (#[] : Array String)) fun out (mk : String × Supplied.Mark) =>
-    let m := mk.2
-    let value : Option Json := (m.args.find? (·.1 == "value")).map Prod.snd
-    match ANCHOR_FUNCTIONS.contains m.fn, value with
-    | true, some (Json.str x) =>
-      if v.pinned.any (·.1 == x) || ofRecord.contains x || out.contains x then out else out.push x
-    | _, _ => out
+  let ofRecord := (recordPins v).map (·.value)
+  (anchorValues v).filter fun x => !(v.pinned.any (·.1 == x) || ofRecord.contains x)
+
+/-- `docket.anchor_off_pin`: the values V of C's supplied anchors (`anchorValues`) the weights' registration of record
+pins whose record entry (`rec`'s last `registered` entry of V, none counting as another) is not that pin in root, leaf
+count, words and domain; R7 refuses them (`R7-anchor-pin`): a supplied function reads V's entry of the record, so the
+entry is the pin. A value the verifier's `pinned` names is held by `R7-held` and R7's own entry (`checkRegistered`). -/
+def anchorOffPin (rec : Json) (v : Verifier) : Array String :=
+  let pins := recordPins v
+  let got : Array Json := match getD rec "registered" with | .arr es => es | _ => #[]
+  (anchorValues v).filter fun x => match pins.find? (·.value == x) with
+    | none => false
+    | some p => match got.reverse.find? (fun e => getD e "value" == Json.str x) with
+      | none => true
+      | some e => !(getD e "root" == Json.str p.root && nat? (getD e "leaves") == some p.leaves
+          && nat? (getD e "words") == some p.words && getD e "domain" == Json.str p.domain)
 
 /-- The members' check's refusal of a program marking a registered input the verifier does not expect, under parameters
 whose weights' registration of record is absent or one R8 refuses (`readPins`). -/
@@ -842,6 +863,7 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
     c := kept (certifiedHeld rec v) c "R7-certified"
     c := kept (runInputNamed v).isEmpty c "R7-run-input"
     c := kept (anchorUnpinned v).isEmpty c "R7-anchor-unpinned"
+    c := kept (anchorOffPin rec v).isEmpty c "R7-anchor-pin"
   -- R8
   c := r8Codes v c
   return if linkRefused v then addCode c "link-points" else c
@@ -911,6 +933,7 @@ def checkRef (rec : Json) (v : Verifier) : Array String := Id.run do
     c := kept (certifiedHeld rec v) c "R7-certified"
     c := kept (runInputNamed v).isEmpty c "R7-run-input"
     c := kept (anchorUnpinned v).isEmpty c "R7-anchor-unpinned"
+    c := kept (anchorOffPin rec v).isEmpty c "R7-anchor-pin"
   -- R8
   c := r8Codes v c
   return if linkRefused v then addCode c "link-points" else c

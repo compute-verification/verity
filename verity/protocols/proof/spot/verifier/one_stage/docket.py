@@ -179,6 +179,8 @@ RUN_INPUT_WHY = ("a run Input's rows are committed once, in its one tree, before
                  "one included, is no run Input node")
 #: the supplied functions whose value is a registered value's root or domain (`anchor_unpinned`)
 ANCHOR_FUNCTIONS = ("registered.root/v1", "registered.domain/v1")
+ANCHOR_PIN_WHY = ("a supplied anchor's value is read from the record's registered entry, which must be the weights' "
+                  "registration of record's pin of it in root, leaf count, words and domain")
 ANCHOR_UNPINNED_WHY = ("a supplied anchor reads a registered value's root or domain, and the verifier holds that value "
                        "to no pin: neither its own pinned roots nor a pin of the weights' registration of record")
 #: R8's refusals of the program's registered inputs against the weights' registration of record (`weights_held`)
@@ -190,8 +192,9 @@ WEIGHTS_WHY = {
     "R8-weights-domain": "a pin names another value, a root that is not 64 bytes of hex, or a domain other than the one "
                          "its own program, value and shape make",
     "R8-weights-shape": "a registered input's leaves, words or width are not its pin's",
-    "R8-unpinned": "a registered input of the program that the weights' registration of record does not pin and the "
-                   "verifier does not expect registered: nothing fixes its root before the coin",
+    "R8-unpinned": "a registered input of the program that the weights' registration of record does not pin and whose "
+                   "root the verifier does not hold itself, whatever it expects by name: nothing fixes its root before "
+                   "the coin",
     "R8-weights-query": "the program has a registered input, or the verifier holds a weights' registration of record, "
                         "under a query that is no template query that applies: R8 can't read which proof blocks read "
                         "the input",
@@ -603,8 +606,11 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
         _certified_held(c, rec, cert)
         if named := run_input_named(program, registered or {}):
             c.fail("R7-run-input", {"values": named, "why": RUN_INPUT_WHY})
-        if loose := anchor_unpinned(G.marks(json.loads(b"".join(descriptor_chunks(program)))), pinned, weights_of_record):
+        marks = G.marks(json.loads(b"".join(descriptor_chunks(program))))
+        if loose := anchor_unpinned(marks, pinned, weights_of_record):
             c.fail("R7-anchor-unpinned", {"values": loose, "why": ANCHOR_UNPINNED_WHY})
+        if off := anchor_off_pin(marks, rec["registered"], weights_of_record):
+            c.fail("R7-anchor-pin", {"values": off, "why": ANCHOR_PIN_WHY})
     # R8
     if bad:
         c.fail("R8-tied", {"tied": bad, "why": TIED_WHY})
@@ -656,6 +662,25 @@ def anchor_unpinned(marks: Mapping[str, Mapping[str, Any]], pinned: Mapping[str,
     for m in marks.values():
         x = m["args"].get("value") if m["supplied"] in ANCHOR_FUNCTIONS else None
         if x is not None and x not in held and x not in out:
+            out.append(x)
+    return out
+
+
+def anchor_off_pin(marks: Mapping[str, Mapping[str, Any]], got: Any, of_record: tuple[bytes, str] | None) -> list[str]:
+    """The values V of C's supplied anchors (`marks`) the weights' registration of record pins whose record entry (the
+    record's last ``registered`` entry of V, none counting as another) is not that pin in root, leaf count, words and
+    domain, each once; R7 refuses them (`R7-anchor-pin`): a supplied function reads V's entry of the record, so the
+    entry is the pin. A value the verifier's `pinned` names is held by `R7-held` and R7's own entry. The Lean's
+    `Docket.anchorOffPin` is this."""
+    pins = _of_record(of_record)[1] if of_record is not None else {}
+    entries = [e for e in got if isinstance(e, Mapping)] if isinstance(got, list) else []
+    out: list[str] = []
+    for m in marks.values():
+        x = m["args"].get("value") if m["supplied"] in ANCHOR_FUNCTIONS else None
+        if x is None or x in out or (pin := pins.get(x)) is None:
+            continue
+        e = next((e for e in reversed(entries) if e.get("value") == x), None)
+        if e is None or any(e.get(k) != pin[k] or type(e.get(k)) is bool for k in ("root", "leaves", "words", "domain")):
             out.append(x)
     return out
 
