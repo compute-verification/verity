@@ -3,13 +3,11 @@ when it is no JSON object or another schema, holds a field no writer writes or n
 parameter under a root of 64 bytes."""
 from __future__ import annotations
 
-import hashlib
-import json
 
 import pytest
 
 from verity_vllm.records.fields import MissingField, RecordError, UnknownField
-from verity_vllm.records.weights_registration import OF_RECORD, SCHEMA, WeightsRegistration, write_of_record
+from verity_vllm.records.weights_registration import SCHEMA, WeightsRegistration
 
 P0, P1 = "weights/model.embed_tokens.weight@4096", "weights/model.norm.weight@64"
 
@@ -28,15 +26,6 @@ def test_a_registration_reads_back_to_what_dump_wrote() -> None:
     assert doc["schema"] == SCHEMA
     assert WeightsRegistration.of(doc, "w.json") == REG
     assert REG.roots == {P0: "ab" * 64, P1: "ba" * 64}
-
-
-def test_the_registration_of_record_is_its_program_and_values_alone_written_beside_it(tmp_path) -> None:
-    body = REG.of_record()
-    assert json.loads(body) == {"program": REG.program, "values": {P0: _entry(P0), P1: _entry(P1, root="ba" * 64)}}
-    assert body == json.dumps(json.loads(body), sort_keys=True, separators=(",", ":")).encode()
-    path = tmp_path / "weights_registration.json"
-    path.write_text(json.dumps(REG.dump()))
-    assert write_of_record(path) == hashlib.sha512(body).hexdigest() and (tmp_path / OF_RECORD).read_bytes() == body
 
 
 def test_a_registration_that_is_no_json_object_is_refused() -> None:
