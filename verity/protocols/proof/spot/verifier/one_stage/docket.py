@@ -158,7 +158,7 @@ from verity.commitments import domains as DM
 from verity.commitments import history as HT
 from verity.commitments.window import WINDOW_DOMAIN, window_domain
 from verity.circuits import partition_object as PO
-from verity.circuits.codec import canonical_json, descriptor_chunks
+from verity.circuits.codec import canonical_json, closure_digest, descriptor_chunks, encode_program
 from verity.circuits.program import REGISTRATION, Program
 from verity.circuits.supplied import SUPPLIED, registered_values
 
@@ -194,6 +194,14 @@ SUPPLIED_SOURCE_WHY = ("a supplied input's rows are the verifier's own: the para
                        "mark its function, or it is an earlier record's output; with none, nothing fixes its root")
 ANCHOR_UNPINNED_WHY = ("a supplied anchor reads a registered value's root or domain, and the verifier holds that value "
                        "to no pin: neither its own pinned roots nor a pin of the weights' registration of record")
+#: the circuit templates that open a commitment and return its verdict (`ungated_openers`)
+OPENERS = ("FrameV3Read_v1", "FrameV3ReadAt_v1", "MerkleRead_v1", "LmsVerify_v1")
+#: the circuit templates whose returned rows are gated on their opener's verdict, each `(id, closure digest)` at a binding a
+#: registered circuit names: Lean's `Docket.GATED`, which only shrinks with circuits' lint's gated entries
+GATED: tuple[tuple[str, str], ...] = ()
+UNGATED_OPENER_WHY = ("a circuit template that calls an opener and returns rows whether or not its opening held lets the "
+                      "prover commit rows of its choice: C reaches an opener only inside a gated template the verifier "
+                      "holds by its closure digest")
 #: R8's refusals of the program's registered inputs against the weights' registration of record (`weights_held`)
 WEIGHTS_WHY = {
     "R8-weights-digest": "the weights' registration is not the one of record: its SHA-512 is not the digest the "
@@ -647,6 +655,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
         c.fail("R8-shared-input", {"inputs": shared, "why": SHARED_WHY})
     for code, d in weights:
         c.fail(code, {"refused": d, "why": WEIGHTS_WHY[code]})
+    if ungated := ungated_openers(GATED, encode_program(program)):
+        c.fail("R9-ungated-opener", {"templates": ungated, "why": UNGATED_OPENER_WHY})
     if members:
         try:
             refused = LP.refused(*LP.sampling_design_of(program, query, sampling_design, work_table), members)
@@ -656,6 +666,29 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
             if refused:
                 c.fail("link-points", {"members": refused})
     return c.verdict(fanout=fan, rests_on_period_check=through)
+
+
+def ungated_openers(gated: Iterable[tuple[str, str]], desc: Mapping[str, Any]) -> list[str]:
+    """The keys of descriptor `desc`'s definitions that call an opener (`OPENERS`) and that the root reaches through its
+    nodes' callees and word primitives' Boolean definitions without passing a gated one, a definition whose id and
+    `closure_digest` are a pair of `gated`, sorted (Lean's `Docket.ungatedOpeners`). Each definition is read once."""
+    gated, defs, callees, boolean = set(gated), desc["definitions"], desc["callees"], desc.get("boolean", {})
+    ids = {i for i, _ in gated}
+    seen, out, todo = set(), [], [desc["root"]]
+    while todo:
+        k = todo.pop()
+        if k in seen:
+            continue
+        seen.add(k)
+        e = defs[k]
+        if e["id"] in OPENERS or (e["id"] in ids and (e["id"], closure_digest(desc, k)) in gated):
+            continue
+        kids = ([callees[n["fn"]] for n in e["body"]["nodes"]] if e["form"] == "composite"
+                else [boolean[e["id"]]] if e["id"] in boolean else [])
+        if any(defs[c]["id"] in OPENERS for c in kids):
+            out.append(k)
+        todo += kids
+    return sorted(out)
 
 
 def _readers(program: Program, query: Mapping[str, Any], registered: Iterable[str], held: Iterable[str],
