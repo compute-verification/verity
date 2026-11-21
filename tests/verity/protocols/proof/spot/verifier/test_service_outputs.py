@@ -95,11 +95,14 @@ def _left(rec: Mapping, port: str = "next") -> dict:
     return {"value": "state", "root": e["root"], "leaves": e["leaves"], "words": 2, "domain": e["domain"]}
 
 
-def _lean(registered: Mapping[str, str] | None = None) -> dict:
-    """The verdict of record, reporting the registered roots its session's reads opened against."""
+def _lean(registered: Mapping[str, str] | None = None, checked: Mapping | None = None) -> dict:
+    """The verdict of record, reporting the registered roots its session's reads opened against, and naming what it
+    checked of the session of second-stage statement `checked` (`fake_challenger.checked`)."""
     lean = {"of_record": True, "accepted": True, "digest": "dd" * 64, "sessions": [SESSION]}
     if registered:
         lean["registered"] = {v: {"value": v, "root": r} for v, r in registered.items()}
+    if checked is not None:
+        lean |= FC.checked(checked)
     return {"lean": lean}
 
 

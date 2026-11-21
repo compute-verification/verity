@@ -207,18 +207,23 @@ def test_every_shard_runs_lean_suites_after_the_lean_build_they_need(tmp_path, n
                 f"tools/check/ci.toml's {n}-pod plan")
 
 
-def test_the_one_stage_audits_longest_test_runs_on_its_part():
-    """The one-stage audit's longest test, served_cases' inference-only case on the 4,32,4 class (benchmarks/one_stage),
-    is most of its suite's time. By test id it hashes to its part 5 of seven, which every plan runs beside the security
-    analysis's audit; a rename that moves it fails here, and the plans are placed again."""
+def test_the_one_stage_audits_two_longest_tests_run_on_two_shards():
+    """The one-stage audit's two longest tests, served_cases' inference-only case on the 4,32,4 class and the two-stage
+    driver's round 2 (both benchmarks/one_stage), are most of their suite's time.  By test id they hash to its parts 5 and
+    3 of seven, and every plan runs the first beside the security analysis's audit and the second with the Rust build, so
+    no shard runs both; a rename that moves either fails here, and the plans are placed again."""
     GUARD = _module("verity_suite_guard_for_shards", ROOT / "tools" / "check" / "guard" / "verity_suite_guard.py")
-    suite, m, part, nodeid = ("tests/benchmarks/one_stage", 7, ONE_STAGE[4],
-                              "test_served_cases.py::test_the_inference_only_case_on_the_4_32_4_class_is_accepted_at_its_budgets")
-    path, _, name = nodeid.partition("::")
-    assert f"def {name}(" in (ROOT / suite / path).read_text(), nodeid
-    assert part.endswith(f":{GUARD.id_part(nodeid, m)}/{m}"), (nodeid, part)
+    longest = (("tests/benchmarks/one_stage", 7, ONE_STAGE[4],
+                "test_served_cases.py::test_the_inference_only_case_on_the_4_32_4_class_is_accepted_at_its_budgets"),
+               ("tests/benchmarks/one_stage", 7, ONE_STAGE[2], "test_two_stage_driver.py::"
+                "test_round_2_reads_a_served_classs_tables_root_and_domain_under_its_replay_blocks_name"))
+    for suite, m, part, nodeid in longest:
+        path, _, name = nodeid.partition("::")
+        assert f"def {name}(" in (ROOT / suite / path).read_text(), nodeid
+        assert part.endswith(f":{GUARD.id_part(nodeid, m)}/{m}"), (nodeid, part)
     for n in sorted(D.plans()):
-        assert sum(part in CHECK.shard(f"{k}/{n}", False)["parts"] for k in range(1, n + 1)) == 1, n
+        shards = [CHECK.shard(f"{k}/{n}", False)["parts"] for k in range(1, n + 1)]
+        assert len({k for k, s in enumerate(shards) for _, _, p, _ in longest if p in s}) == 2, n
 
 
 @pytest.mark.parametrize("n", sorted(D.plans()))

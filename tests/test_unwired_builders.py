@@ -33,6 +33,7 @@ CALLERS: dict[str, str] = {
     "benchmarks/one_stage/r2_population.py": "both",
     "benchmarks/one_stage/replay.py": "replay",
     "benchmarks/one_stage/served_cases.py": "replay",
+    "benchmarks/one_stage/toy.py": "new-run",
     "benchmarks/proof_throughput/verity_proof_throughput/population.py": "replay",
     "verity/circuits/ops/boolean/gemm.circuit-check.py": "check",
     "verity/circuits/population.circuit-check.py": "check",

@@ -15,7 +15,9 @@
 testpaths = ["."]
 pythonpath = ["../../.."]   # the repository root: its tests import others' as `tests.X`, the tests of X
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
-# The suite also tests v2's case (`v2_case.py`, on a served window's compose.log).
+# The suite also tests v2's case (`v2_case.py`, on a served window's compose.log), and the two-stage audit's second stage on
+# a toy replay block (`toy.py`, `test_toy.py`; `audit.py` proves it on a node), and, opt-in (`VERITY_TWO_STAGE_GUARD`;
+# `guard_node.py --pytest` on a node), SPOT[Flock]'s two-stage Lean model on a run's guard export (`test_guard.py`).
 
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
@@ -34,6 +36,7 @@ untraced = [
     "test_served_verdicts.py",
     "test_served_door_prove.py",
     "test_door_walls.py",
+    "test_toy.py", "test_guard.py",
 ]
 # The Lean verifier, the ZK server's Lean and the door's lowering check, which `test_audit_one_member` and
 # `test_audit_two_members` run and skip without: check's lean-build step builds them, the verifier's defaultTargets, before
@@ -89,6 +92,8 @@ parts = 7
 # `security/lean-audit.json` and `security/Properties/lean-audit.json`: onsite_record's guarantees the tight K rests on
 # and the discharges of its premises, each at the statement whose hypotheses and antecedents it names (`RESTS_ON`,
 # `DISCHARGES`), which the locks record by digest and no other way.
+# `tests/benchmarks/one_stage/test_two_stage_driver.py`: the stop class and sessions `test_stop_audit` drives, the
+# adapter's test of the two-stage driver on its dockets.
 # block_record derives the record's subprotocols from the onsite application
 # `adapters/vllm/workloads/SHA256SUMS`: the workloads' digests verity_vllm's config reads as the served window's circuit loads
 # the serve step's reach walks `verity_vllm.inputs.serves`, whose door imports the input datasets
@@ -123,7 +128,7 @@ inputs = ["tests/verity/circuits/stand_in.py", "library/datasets/input_datasets"
           "verity/protocols/proof/flock/prover/python/verity_flock/input_sets.py",
           "verity/protocols/proof/flock/prover/python/verity_flock/subcircuit_templates.py",
           "verity/protocols/policy/training_detection/inference_only/verifier/lean/lakefile.toml", "adapters/vllm/verity_vllm", "adapters/vllm/workloads/SHA256SUMS",
-          "benchmarks/kernels/machine.py",
+          "tests/benchmarks/one_stage/test_two_stage_driver.py", "benchmarks/kernels/machine.py",
           "adapters/torch/verity_torch", "benchmarks/network_traces",
           "benchmarks/pous/p2_v1", "benchmarks/pous/onsite_pieces.sh",
           "verity/protocols/accounting/memory/pous/prover/p2/p2_store/store.py", "verity/protocols/accounting/memory/pous/prover/p2/p2_store/tensors.py", "verity/protocols/accounting/memory/pous/prover/p2/p2_store/gpu.py", "verity/protocols/accounting/memory/pous/verifier/p2_v1/reference.py",
