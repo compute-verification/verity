@@ -94,7 +94,10 @@ included. A record it holds no verdict for is not refused, as for the pool. A re
 (`Earlier.value`, the pool's `pin` among them) is not held to it: the pool restarts by its own lag (`Pool.refused`).
 
 Under a template query that applies, the fan-out joins no proof blocks through a value another proof block writes that
-the program takes as an Input (`Partition.fanout`, which the registration piece publishes). A tied value
+the program takes as an Input (`Partition.fanout`, which the registration piece publishes). In the variant with no members, R8
+refuses a run Input node whose leaves the proof blocks don't each read alone, unless it is a parameter's the verifier
+expects registered (`heldGates`) or a tied value's (`tiedGates`) (`Partition.readAlone`, `R8-shared-input`); the
+per-member variant holds each reader to the node's one tree instead. A tied value
 is a run Input whose rows a later check ties to the registrations that computed them; R8 refuses a tied name that isn't
 a parameter of the program, neither registered nor held, whose gates are one interval of run Input nodes (`R8-tied`),
 and the registration piece publishes, beside the fan-out, the tied names it let through (`tiedThrough`), since
@@ -304,6 +307,11 @@ def optStr : Option String → Json
   | some s => Json.str s
   | none => Json.null
 
+/-- The Input gates `(first, count)` of the parameters `v` expects registered, which R8 reads as registered values
+(`registered.held_gates`). -/
+def heldGates (v : Verifier) : Array (Nat × Nat) :=
+  v.params.filterMap fun p => if v.registered.any (·.1 == p.name) then p.gates else none
+
 /-- The registered names, supplied ones included, whose parameter's gates hold a run Input node
 (`Partition.anyRunInput`; `registration._run_input_named`), which R7 refuses (`R7-run-input`). -/
 def runInputNamed (v : Verifier) : Array String :=
@@ -489,8 +497,8 @@ def anchorValues (v : Verifier) : Array String :=
 
 /-- `docket.anchor_unpinned`: the values V of C's supplied anchors (a mark of `ANCHOR_FUNCTIONS`) that are neither in
 the verifier's `pinned` nor pinned by the weights' registration of record (`pinsOf`'s pins), each once, in the marks'
-order; R7 refuses them (`R7-anchor-unpinned`). It reads C's marks (`Verifier.marks`), which no program descriptor
-carries until circuits writes them into C: until then it refuses nothing. -/
+order; R7 refuses them (`R7-anchor-unpinned`). It reads C's marks (`Verifier.marks`), a field no circuit description
+carries today, so it refuses nothing yet. -/
 def anchorUnpinned (v : Verifier) : Array String :=
   let ofRecord := (recordPins v).map (·.value)
   (anchorValues v).filter fun x => !(v.pinned.any (·.1 == x) || ofRecord.contains x)
@@ -817,11 +825,15 @@ def linkRefused (v : Verifier) : Bool :=
 twice, so `check_eq_checkRef`'s `simp`, which leaves it folded, doesn't copy the codes before it into both cases. -/
 def kept (ok : Bool) (c : Array String) (code : String) : Array String := if ok then c else addCode c code
 
-/-- R8's codes added to `c`: a tied name it can't let through (`R8-tied`, `tiedBad`), then R8's hold on the program's
-registered inputs (`weightsCodes`). One term rather than two lines, since `check_eq_checkRef`'s `simp` copies every
-line after a join point into each of its branches. -/
+/-- R8's codes added to `c`: a tied name it can't let through (`R8-tied`, `tiedBad`), then, in the variant with no
+members, a run Input node the proof blocks don't each read alone outside the registered and tied parameters' gates
+(`R8-shared-input`, `Partition.readAlone`), then R8's hold on the program's registered inputs (`weightsCodes`). One
+term rather than two lines, since `check_eq_checkRef`'s `simp` copies every line after a join point into each of its
+branches. -/
 def r8Codes (v : Verifier) (c : Array String) : Array String :=
-  (weightsCodes v).foldl addCode (kept (tiedBad v).isEmpty c "R8-tied")
+  (weightsCodes v).foldl addCode
+    (kept (!v.members.isEmpty || Partition.readAlone v.program v.query (heldGates v ++ tiedGates v))
+      (kept (tiedBad v).isEmpty c "R8-tied") "R8-shared-input")
 
 /-- `registration.check`'s failure codes, R1–R8 in order, then `link-points` (`linkRefused`): empty when the record
 holds. -/

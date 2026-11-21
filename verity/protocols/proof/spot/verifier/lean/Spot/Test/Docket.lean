@@ -140,11 +140,13 @@ def V3 : Verifier := verifier
 #guard codes { V3 with certified := #[({ value := "c", leaves := 1, words := 1, wordBits := 16, domain := "d" }, OTHER)] }
   (withCertified "c" "d") == #["R7-certified"]
 #guard codes { V3 with tied := #["nope"] } == #["R8-tied"]
--- two proof blocks reading a run Input is no refusal of the docket's: its rows are one tree the members' check holds
-#guard codes (verifier (regX E3S)) == #[]
+-- two proof blocks reading a run Input: the variant with no members refuses it; the per-member variant holds its
+-- readers to the node's one tree
+#guard codes (verifier (regX E3S)) == #["R8-shared-input"]
+#guard !(codes { verifier (regX E3S) with members := #[(#[(0, 1)], 1), (#[(1, 2)], 1)] }).contains "R8-shared-input"
 -- a registered value at a run Input node: refused by name
 #guard codes (verifier Spot.OneStageZk.E3) == #["R7-run-input"]
-#guard codes (verifier E3S) == #["R7-run-input"]
+#guard codes (verifier E3S) == #["R7-run-input", "R8-shared-input"]
 -- a member's units past the population of one: `bounds` refuses it
 #guard codes { V3 with members := #[(#[(0, 2)], 1)] } == #["link-points"]
 
@@ -198,8 +200,8 @@ def weighedCodes (v : Verifier) : Array String :=
 #guard weighedCodes { weighed E3R with weightsOfRecord := some ((ofRecord PINS).1, OTHER) } == #["R8-weights-digest"]
 -- a marked input with no pin is refused
 #guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord [pin "x"]) } == #["R8-unpinned"]
--- a pin of a parameter the program doesn't mark registered is not read
-#guard weighedCodes { weighed E3S with weightsOfRecord := some (ofRecord PINS) } == #[]
+-- a pin of a parameter the program doesn't mark registered excuses nothing
+#guard weighedCodes { weighed E3S with weightsOfRecord := some (ofRecord PINS) } == #["R8-shared-input"]
 #guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord [pin "x", pin "y" 0 (some OTHER)]) } ==
   #["R8-weights-domain", "R8-unpinned"]
 #guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord [pin "x" 1, pin "y"]) } == #["R8-weights-shape"]
