@@ -189,10 +189,9 @@ WEIGHTS_WHY = {
     "R8-weights-query": "the program has a registered input, or the verifier holds a weights' registration of record, "
                         "under a query that is no template query that applies: R8 can't read which proof blocks read "
                         "the input",
-    "R8-undeclared": "the reads the weights' registration of record declares of a pinned registered input are not the "
-                     "template parameters the program reads it at: a read the description shows and the registration "
-                     "does not declare would be committed afresh, and a declared one it does not show reads nothing "
-                     "the program reads",
+    "R8-undeclared": "a template parameter the program reads a pinned registered input at is not among the reads the "
+                     "weights' registration of record declares: a read the description shows and the registration does "
+                     "not declare would be committed afresh",
 }
 _KEYS = {"format", "protocol", "program", "query", "partition", "population", "law", "scheme", "roots", "leaf_layer",
          "anchors", "window", "previous"}
@@ -269,8 +268,9 @@ def weights_held(program: Program, query: Mapping[str, Any], registered: Iterabl
     a registered input, or a verifier holding a registration, under a query that is no template query that applies is
     refused (`R8-weights-query`); a pinned input whose leaves, words or width are not the program's is refused
     (`R8-weights-shape`). Under a template query, the template parameters whose arguments read a pinned registered input
-    (`partition.input_reads`, a root node at a time, never its blocks) must be exactly the reads the registration
-    declares of that value, ``(template, parameter, value)``, in either direction (`R8-undeclared`). A pin of no
+    (`partition.input_reads`, a root node at a time, never its blocks) must be among the reads the registration
+    declares, ``(template, parameter, value)`` (`R8-undeclared`); a declared read the program does not show is let
+    through, so one registration may declare the reads of every class it serves. A pin of no
     registered input excuses nothing. The refusals, in `WEIGHTS_WHY`'s order, and the accepted pins, `{value: {"root",
     "leaves", "words", "word_bits", "domain"}}` of each pinned input the verifier does not expect, which the members'
     check holds each member's registered read of it to (`members.pins_held`)."""
@@ -308,11 +308,8 @@ def weights_held(program: Program, query: Mapping[str, Any], registered: Iterabl
         out.append(("R8-unpinned", {"values": unpinned}))
     excused = [v for v in marked if v in pins and v not in shape]
     if excused:
-        read = {tuple(r) for r in declared_reads(program, query, excused)}
-        said = {d for d in declared if d[2] in excused}
-        if read != said:
-            out.append(("R8-undeclared", {"undeclared": [list(m) for m in sorted(read - said)],
-                                          "unread": [list(m) for m in sorted(said - read)]}))
+        if undeclared := [r for r in declared_reads(program, query, excused) if tuple(r) not in declared]:
+            out.append(("R8-undeclared", {"undeclared": undeclared}))
     accepted = {v: {"root": pins[v]["root"], "leaves": pins[v]["leaves"], "words": pins[v]["words"],
                     "word_bits": pins[v].get(RV.WIDTH_KEY, RV.WORD_BITS), "domain": pins[v]["domain"]}
                 for v in excused if v not in expected}

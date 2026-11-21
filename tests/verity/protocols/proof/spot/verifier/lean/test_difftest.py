@@ -5093,8 +5093,8 @@ def test_r8_holds_registered_inputs_to_the_weights_of_record_as_python_does(piec
     Python's: `x` registered and read by two calls passes with the registration, its digest and the reads it declares
     (`docket.declared_reads`), on a v1 record (the accepted pin is no entry R7 reads, and a v2 record is refused
     `keys`); it is refused without the registration (`R8-unpinned`, the case where Lean once passed what Python refused,
-    handed no `parameters`), at another digest, at a pin's wrong domain or shape, and with its declared reads missing or past
-    what the program reads (`R8-undeclared`); a pin of the unregistered `x` excuses nothing
+    handed no `parameters`), at another digest, at a pin's wrong domain or shape, and with a read the program shows left
+    undeclared (`R8-undeclared`), and passes with a declared read the program does not show; a pin of the unregistered `x` excuses nothing
     (`R8-shared-input`); and a registered input under a query no template query applies to is refused
     (`R8-weights-query`)."""
     marked = _readers(2, (("call", 2, _X0 + _X00),) * 2, True)
@@ -5112,7 +5112,7 @@ def test_r8_holds_registered_inputs_to_the_weights_of_record_as_python_does(piec
              (s, _weights_doc([_pin(marked, "x", domain="11" * 64)], reads), [], ["R8-weights-domain", "R8-unpinned"]),
              (s, _weights_doc([_pin(marked, "x", leaves=pin["leaves"] + 1)], reads), [], ["R8-weights-shape"]),
              (s, _weights_doc([pin], []), [], ["R8-undeclared"]),
-             (s, _weights_doc([pin], [*reads, (reads[0][0], "nope", "x")]), [], ["R8-undeclared"]),
+             (s, _weights_doc([pin], [*reads, (reads[0][0], "nope", "x")]), [], []),
              (plain, doc, [], ["R8-shared-input"]),
              (Setup(marked, PO.query()), None, [], None)]
     for setup, weights, entries, want in cases:

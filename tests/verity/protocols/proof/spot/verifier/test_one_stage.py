@@ -886,8 +886,8 @@ def test_r8_excuses_a_registered_weight_only_where_it_is_marked_pinned_and_decla
     (`docket.declared_reads`, the walk R8 runs), on a v1 record: the pin it accepts is no entry R7 reads. Without the
     registration it is refused by name (`R8-unpinned`), and at a wrong digest, a wrong domain or a wrong shape the
     registration is refused. A pin of a parameter the program doesn't mark registered is ignored: it excuses nothing,
-    and R8 refuses the run Input as before. Declared reads that are not the template parameters reading the pinned
-    value, either way, are refused (`R8-undeclared`)."""
+    and R8 refuses the run Input as before. A template parameter reading the pinned value that the registration does
+    not declare is refused (`R8-undeclared`); a declared read the program does not show is let through."""
     q = P.template_instance_query(PAIR.id)
     for marked, unmarked in zip(_two_programs(registered=("t",)), _two_programs()):
         reads = sorted({(t, p, "t") for t, p, _ in P.input_reads(marked, q, G.held_gates(marked, ["t"]))})
@@ -910,9 +910,7 @@ def test_r8_excuses_a_registered_weight_only_where_it_is_marked_pinned_and_decla
         assert _weighed(marked, q, weights_of_record=bad).codes == ("R8-weights-shape",)
         v = _weighed(marked, q, weights_of_record=_weights([pin]))
         assert v.codes == ("R8-undeclared",) and v.detail["R8-undeclared"]["refused"]["undeclared"] == [list(r) for r in reads]
-        v = _weighed(marked, q, weights_of_record=_weights([pin], [*map(list, reads), [PAIR.id, "nope", "t"]]))
-        assert v.codes == ("R8-undeclared",)
-        assert v.detail["R8-undeclared"]["refused"]["unread"] == [[PAIR.id, "nope", "t"]]
+        assert _weighed(marked, q, weights_of_record=_weights([pin], [*map(list, reads), [PAIR.id, "nope", "t"]])).ok
         v = _weighed(unmarked, q, weights_of_record=_weights([_pin(unmarked)], [list(r) for r in reads]))
         assert v.codes == ("R8-shared-input",)
         assert _weighed(unmarked, q).codes == ("R8-shared-input",)

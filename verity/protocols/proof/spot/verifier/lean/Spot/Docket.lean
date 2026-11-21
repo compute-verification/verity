@@ -110,8 +110,8 @@ domain the one its own document's program makes (`R8-weights-domain`) and its sh
 template query that applies is refused (`R8-weights-query`). An input bound at registration that is neither pinned nor
 expected registered and that a template parameter reads is refused at one reader as at several (`R8-unpinned`), and a pin
 of no registered input excuses nothing. The template parameters that read an excused input, one pass over the root's
-nodes (`Partition.inputReads`), are exactly the reads the registration declares of it, in either direction
-(`R8-undeclared`). The pins it accepts of inputs the verifier does not expect registered (`weightsOf`) are no entry
+nodes (`Partition.inputReads`), are among the reads the registration declares (`R8-undeclared`); a declared read
+the program does not show is let through, so one registration may declare the reads of every class it serves. The pins it accepts of inputs the verifier does not expect registered (`weightsOf`) are no entry
 R7 reads: the members' check holds each member's registered read of such an input to its pin's root, leaf count and
 domain (`OneStageZk.pinsHeld`).
 
@@ -414,8 +414,8 @@ registration of record's (`pinsOf`), `R8-weights-shape` for a pinned registered 
 `R8-weights-query` for a registered input or a registration of record under a query that is no template query that
 applies; else `R8-unpinned` for a registered input the verifier neither expects registered nor finds pinned that a
 template parameter reads (`Partition.inputReads`), at one reader as at several, and `R8-undeclared` where the template
-parameters reading the inputs it excuses (marked, pinned and shaped) are not exactly the registration's declared reads
-of those values, in either direction (one pass over the root's nodes). Then the accepted pins, each an excused input the
+parameters reading the inputs it excuses (marked, pinned and shaped) are not all among the registration's declared
+reads (one pass over the root's nodes). Then the accepted pins, each an excused input the
 verifier does not expect registered as an entry and its root, which the members' check holds each member's registered
 read of it to (`OneStageZk.pinsHeld`). None for a verifier with no registration of record and no registered input. -/
 def weightsHeld (v : Verifier) (codes : Array String) (pins : Array Pin) (said : Array (String × String × String)) :
@@ -433,9 +433,7 @@ def weightsHeld (v : Verifier) (codes : Array String) (pins : Array Pin) (said :
     let codes := if (Partition.inputReads P rs (loose.flatMap gated)).isEmpty then codes else codes.push "R8-unpinned"
     let excused := pinned.filter fun (p, x) => pinShaped v p x
     let read := Partition.inputReads P rs (excused.flatMap fun (p, _) => gated p)
-    let said := said.filter fun (_, _, x) => excused.any (·.1.name == x)
-    let codes := if excused.isEmpty || (read.all said.contains && said.all read.contains) then codes
-      else codes.push "R8-undeclared"
+    let codes := if read.all said.contains then codes else codes.push "R8-undeclared"
     (codes, (excused.filter fun (p, _) => !expected p).map fun (_, x) =>
       ({ value := x.value, leaves := x.leaves, words := x.words, wordBits := x.wordBits, domain := x.domain }, x.root))
 

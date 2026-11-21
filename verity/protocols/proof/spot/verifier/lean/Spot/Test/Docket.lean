@@ -191,10 +191,10 @@ def weighedCodes (v : Verifier) : Array String :=
 #guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord [pin "x", pin "y" 0 (some OTHER)]) } ==
   #["R8-weights-domain", "R8-unpinned"]
 #guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord [pin "x" 1, pin "y"]) } == #["R8-weights-shape"]
--- the declared reads are the reads the description shows, in either direction
+-- every read the description shows is declared; a declared read it does not show is let through
 #guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord PINS #[]) } == #["R8-undeclared"]
-#guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord PINS (READS.push ("E_v1", "z", "x"))) } ==
-  #["R8-undeclared"]
+#guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord PINS #[READS[0]!]) } == #["R8-undeclared"]
+#guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord PINS (READS.push ("E_v1", "z", "x"))) } == #[]
 -- a registered input under a query that is no template query that applies
 #guard weightsCodes { weighed E3R with query := Json.mkObj [("name", "Q_all")] } == #["R8-weights-query"]
 
