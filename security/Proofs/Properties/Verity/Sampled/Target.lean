@@ -18,9 +18,9 @@ session): the sampled verdict in the period's game is at most as likely as Flock
 live audit at the projected strategy, plus the messages' two-continuation finders, the coin trees' hiding term, the read
 finder's collision and the forger's forgery (the sample read from the log).
 
-What the proof reads that is proved: Flock's knowledge soundness of the live session (`SampledKSLiveV5`), applied at the
-session's sample (`Live.v5_at`, along `Live.L_eq`), A3 and `live-verifier` at the deployed device (`Live.deployed`,
-`Live.hCust`), the sampling design's miss (`Flock.Bridge.pa_partOf`, `Flock.Bridge.nsOf_sum`), the bridge from the
+What the proof reads that is proved: Flock's knowledge soundness of the live session at the strata's cover under its
+subset design (`SampledKSLiveV5` at `PopCovers`), applied at the session's sample (`Live.v5_at`, along `Live.L_eq`), A3 and `live-verifier` at the deployed device (`Live.deployed`,
+`Live.hCust`), the sampling design's miss (`Flock.Bridge.pa_partOf`, `Flock.Bridge.nsOf_sum_of_popCovers`), the bridge from the
 committed files' unbound units to the session's incorrect proof blocks (`Live.unbound_subset_faulty_part`), and, at
 parameters that don't name the one-stage form, the open premise `TwoStageBound` (`recursiveForm_bound`).
 
@@ -81,7 +81,7 @@ namespace Live
 variable (A : Live)
 
 open Classical in
-/-- **V5 at the session, at any sample equal to V5's**: `SampledKSLiveV5` at the session's binders, the link finders
+/-- **V5 at the session, at any sample equal to V5's**: `SampledKSLiveV5` at the session's binders and its cover, the link finders
 charged `t + w` per run and the tables' finders at `2t + 2v` and `t + v`, at a sample `L` that is `Flock.Bridge.execSel`
 at the session's bytes and sampling design; at `L = A.L` (`Live.L_eq`) its simulator and extractor are the session's
 (`Live.sim`, `Live.Xr`). The session's `--zk` tags are in `TagsOkZHJ` (`Live.hTags`), so V5's bound is the one it states
@@ -116,8 +116,8 @@ theorem v5_at (L : Spot.Sampling.SamplingDesign A.n) (hL : Flock.Bridge.execSel 
       (mPts := mPtsOf A.D.unroll.g (A.kd / nTab A.I)) A.I A.own A.dj
       (fun S R => (planZHJP (Reg := A.Reg) A.dj A.y₀ S R).length) A.wr fun _ => l) A.hsub).mpr A.hCust
   have h := Flock.SecurityProofs.SampledKSLiveV5 A.n A.Reg A.I A.own A.ht A.D A.hD
-    {} A.hpi A.pub A.hpub A.hscope (Flock.Bridge.rowsOk_of_scopeOkH A.hscope) A.hdup A.desc A.qr A.hpop A.lj A.tb
-    A.hdiv A.dj A.S₀ A.d₀ A.y₀ A.wr A.dg A.N A.Ω A.Lb A.src A.hA3 hCust A.k A.Rw A.M A.hk A.hRw A.hM A.ρ A.hρ A.hr
+    {} A.hpi A.pub A.hpub A.hscope (Flock.Bridge.rowsOk_of_scopeOkH A.hscope) A.hdup A.desc A.qr A.lj A.tb
+    (Or.inr ⟨A.hpop, _, A.hsub⟩) A.hdiv A.dj A.S₀ A.d₀ A.y₀ A.wr A.dg A.N A.Ω A.Lb A.src A.hA3 hCust A.k A.Rw A.M A.hk A.hRw A.hM A.ρ A.hρ A.hr
     (A.tL t) (by unfold Live.tL; positivity) B τ (A.qF t) (A.qS t) ⟨"", 0, []⟩
   rw [dif_pos A.hTags] at h
   exact h
@@ -138,7 +138,7 @@ theorem ks {r : Verity.ExecutionPhaseFiles} (hr : r = Verity.ExecutionPhaseFiles
   classical
   subst hr
   obtain rfl := eq_of_heq htr
-  have hns : (Flock.Bridge.nsOf A.desc A.qr).sum = A.n := Flock.Bridge.nsOf_sum A.hpop
+  have hns : (Flock.Bridge.nsOf A.desc A.qr).sum = A.n := Flock.Bridge.nsOf_sum_of_popCovers A.hpop
   let w := Flock.Bridge.witDep A.Cc A.Cd Claims.Sampling.sha512Msg A.roots (A.Xr τ)
   let Fs := Claims.Sampling.faulty Claims.Sampling.sha512Msg A.Cd A.stmt A.part w
   have hFs : Fs ⊆ Finset.range A.n := by

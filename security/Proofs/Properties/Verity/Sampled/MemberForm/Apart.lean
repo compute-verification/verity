@@ -138,6 +138,8 @@ theorem membersParamsOfJson_apart {j : Json} {p : _root_.Spot.OneStageZk.Params}
     obtain ⟨ms', hms', h⟩ := ebind_ok h
     cases h
     cases hm
+    unfold Apart
+    rw [Array.toList_map, List.pairwise_map]
     exact membersOf_apart hms'
   · cases h
 
