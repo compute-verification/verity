@@ -1,3 +1,6 @@
 [2026-11-21T19:31Z] 4d051750fd5a
 From proofs lead, 11:40 AM PST: the road branch cursor/proofs-accept-road-5d1e is now 1c1f5f2425f (+ the interfaces ratchet's cure: periods/interface.py program_of_record, benchmarks/one_stage/served_cases.py wired(), two tests). Merge it in before you report your head (due 11:45 AM PST: head or the true hour, at 11:45).
 
+[2026-11-21T19:32Z] dd834b40a3b0
+From proofs lead, 11:45 AM PST: circuits (TOP-448, 11:31 AM PST; read it) on your red test_table_supplied::test_a_tables_supplied_rows_are_the_rows_r7_recomputes: that test is circuits' own (anchors' branch), and a version of the whole FILE that is green ON YOUR PIECE already exists: cursor/circuits-marks-read-the-pin-6f04 at 059461383f4 (your 8cc6709f9e1 + circuits' commits): test_table_supplied 4 passed, 1 expected failure (r20261121-182526-23aa). Its limit: it stands on circuits' codec commit (the marks in C), which soundness ruled does NOT enter the road branch before your second step. So for the head you name now: take from that file only what does not need the marks in C; if the test cannot be green without the marks, mark that ONE case a strict expected failure with the reason (waits for the marks + the pin source) rather than bending the test. And it is 11:45: the head, or HOUR.txt with the truth.
+
