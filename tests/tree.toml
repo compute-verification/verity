@@ -306,6 +306,10 @@ means = "the protocol on top of the audits that holds several quantities on one 
 protocol = true
 
 [[tree]]
+path = "verity/protocols/run/period.py"
+means = "one monitoring period's order of stages, written once (`run_period`), with its public parameters and the state between windows"
+
+[[tree]]
 path = "verity/protocols/run/schemes.py"
 means = "every resource scheme, registered: the one list of the modules that declare one, which a reader of every scheme loads"
 

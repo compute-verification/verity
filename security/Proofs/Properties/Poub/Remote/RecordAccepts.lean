@@ -132,18 +132,6 @@ theorem leafReceipt_one {R : ByteArray} (hR : R.size = 64) : leafReceipt R 0 1 =
   · show some (R.extract 0 64) = some R
     rw [← hR, ByteArray.extract_zero_size]
 
-/-- The receipt of the zero block under seed `s`: position 0's leaf, the plan's only one. -/
-def leaf1 (reg : Registration) (s : ByteArray) : ByteArray :=
-  (receipter reg.receipt s reg.rows).receipt 0 (zeros Codec.BLOCK_BYTES)
-
-/-- The receipt tree's root of a pass over the one-block store under seed `s`. -/
-def root1 (reg : Registration) (s : ByteArray) : ByteArray :=
-  zeroRoot (treeDomain s (Plan.whole 1)) 0 (hidden (leaf1 reg s) (zeros SALT_BYTES))
-
-/-- Window 0 under challenge `c`, one pass over the whole store, chained to the registration. -/
-def window1 (reg : Registration) (c root : ByteArray) : WindowRecord :=
-  ⟨0, c, reg.digest, #[⟨root, Plan.whole 1, none⟩]⟩
-
 /-- The opening of position 0 of pass 0 under challenge `c`. -/
 def opening1 (reg : Registration) (c : ByteArray) : Opening :=
   let s := seed c 0 reg.digest
@@ -202,10 +190,6 @@ theorem checkWindow_one (reg : Registration) (c : ByteArray) (hB : reg.blocks = 
 
 /-! ## The session -/
 
-/-- One window of one pass, one sample of one receipt; no deadline, no stated length, no pace. -/
-def params1 : _root_.Poub.Session.Params :=
-  { deadlineNs := 0, windows := 1, samples := 1, minPasses := 1, windowNs := 0, lifetime := 1 }
-
 /-- Start at 0; receive window 0's one root, over the whole store at step 0, at 1; end window 0 at 1; sample it at 2;
 verify its opening. -/
 def events1 (root : ByteArray) (o : Opening) : Array _root_.Poub.Session.Event :=
@@ -239,14 +223,6 @@ theorem run_accepts (reg : Registration) (hB : reg.blocks = 1) (c0 root : ByteAr
     rfl
 
 /-! ## The instance -/
-
-/-- The one-block registration of node `zeros 1` under the zero codec seed and the deployed codec, sketch-sha512
-receipts of 16 rows, its payload tree holding `zeroPayload` at block 0. -/
-def reg1 : Registration :=
-  let key := Codec.key (zeros Codec.SEED_BYTES) honestCodec
-  let pd := Flock.FV3.Sha512.Domain.make (Poub.sha512 (PAYLOAD_DOMAIN ++ frameBytes (zeros 1))) 0 0 1
-  { node := zeros 1, blocks := 1, payloadRoot := zeroRoot pd 0 (hidden (zeroPayload key) (zeros SALT_BYTES)),
-    codecSeed := zeros Codec.SEED_BYTES, codec := honestCodec, receipt := .sketch, rows := 16, key }
 
 /-- The node: `params1` at one window a sample over `reg1`; the line's other fields are arbitrary. -/
 def node1 : Node :=
@@ -458,9 +434,6 @@ theorem sampleValues_empty (us : Array ℕ) : ¬ SampleValues 1 1 ByteArray.empt
   · rw [show min 1 1 = 1 from rfl, sampleUnits_empty] at h
     cases h
 
-/-- `RecordAccepts`'s window 0 under challenge `zeros 64`. -/
-def window0 : WindowRecord := window1 reg1 (zeros 64) (root1 reg1 (seed (zeros 64) 0 reg1.digest))
-
 theorem window0_lengths : window0.passes.map (·.plan.length) = #[1] := by
   simp [window0, window1, plan_length]
 
@@ -539,10 +512,6 @@ theorem appendsInOrder_honest :
   obtain ⟨rs, s, hr, ho, -⟩ :=
     run_accepts reg1 rfl (zeros 64) _ hroot _ (checkWindow_one reg1 (zeros 64) rfl rfl rfl)
   exact ⟨reg1, _, _, rs, s, reg1_make, hr, ho⟩
-
-/-- A state of the one-block registration whose store ends at block 2, with no appends. -/
-def overrun : _root_.Poub.Session.State :=
-  { _root_.Poub.Session.State.init params1 reg1 #[] #[] 0 with extent := 2 }
 
 /-- **`AppendsInOrder` fails without the session's checks.** A state whose store ends past its registration's one block
 with no appends, which a verifier that accepted every session would leave, has its store not ending where its
