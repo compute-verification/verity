@@ -397,29 +397,61 @@ def pinShaped (v : Verifier) (p : Registered.Param) (x : Pin) : Bool :=
   | .ok #[e] => e.leaves == x.leaves && e.wordBits == x.wordBits
   | _ => false
 
+/-- The values whose domain leaves the window's open root out: `held`, then the pinned, supplied and output values. -/
+def fixedOf (v : Verifier) : Array String :=
+  v.held ++ v.pinned.map (·.1) ++ v.supplied.map (·.1) ++ v.outputs.map (·.1)
+
+/-- The verifier's own entries (`registration._check_registered`'s `registered_entries`): each value's domain under the
+window's open root, but `fixedOf`'s. -/
+def ownEntries (v : Verifier) : V (Array Registered.Entry) :=
+  Registered.entries v.program.desc v.params v.registered v.schemas v.windowRoot (fixedOf v)
+
+/-- `registration.held_roots`, read at the verifier's own entries (`mine`, none where they don't compute): `(value,
+root)` for each of its values an earlier record of the log registered under the domain `mine` gives it, the root of
+its first registration under that domain. -/
+def heldRoots (log : Array Json) (mine : V (Array Registered.Entry)) : Array (String × String) :=
+  let mine := match mine with | .ok m => m | .error _ => #[]
+  log.foldl (fun held rec => match getD rec "registered" with
+    | .arr es => es.foldl (fun held e => match getD e "value", getD e "root", getD e "domain" with
+      | .str v, .str r, .str d =>
+        if held.any (·.1 == v) || !mine.any (fun w => w.value == v && w.domain == d) then held else held.push (v, r)
+      | _, _, _ => held) held
+    | _ => held) #[]
+
+/-- The roots the verifier itself holds of its values, as R7 holds them (`R7-held`): its `pinned`, then those an earlier
+record of the log registered under the domain each takes now (`heldRoots`). -/
+def ownHeld (v : Verifier) : Array (String × String) := v.pinned ++ heldRoots v.log (ownEntries v)
+
+/-- `docket.held_entries`: each of the verifier's own entries whose root it holds itself (`ownHeld`), with that root;
+none where its entries don't compute. -/
+def heldEntries (v : Verifier) : Array (Registered.Entry × String) :=
+  match ownEntries v with
+  | .error _ => #[]
+  | .ok mine => mine.filterMap fun e => ((ownHeld v).find? (·.1 == e.value)).map fun (_, r) => (e, r)
+
 /-- **R8's hold on the program's registered inputs** (`docket.weights_held`): its codes in order, the weights'
 registration of record's (`pinsOf`), `R8-weights-shape` for a pinned registered input whose shape isn't its pin's, then
 `R8-weights-query` for a registered input or a registration of record under a query that is no template query that
-applies; else `R8-unpinned` for a registered input the verifier neither expects registered nor finds pinned that a
-template parameter reads (`Partition.inputReads`), at one reader as at several. Then the accepted pins, each an
-excused input (marked, pinned and shaped) the
-verifier does not expect registered as an entry and its root, which the members' check holds each member's registered
-read of it to (`OneStageZk.pinsHeld`). None for a verifier with no registration of record and no registered input. -/
+applies; else `R8-unpinned` for a registered input neither pinned nor one whose root the verifier itself holds
+(`heldEntries`) that a template parameter reads (`Partition.inputReads`), at one reader as at several: that the verifier
+expects it registered by name excuses nothing. Then the accepted pins, each an excused input (marked, pinned and
+shaped) as an entry and its root, which the members' check holds each member's registered read of it to
+(`OneTree.pinsHeld`). None for a verifier with no registration of record and no registered input. -/
 def weightsHeld (v : Verifier) (codes : Array String) (pins : Array Pin) :
     Array String × Array (Registered.Entry × String) :=
   let P := v.program.prog
   let marks := v.params.filter (marked v)
   let pinned := marks.filterMap fun p => (pins.find? (·.value == p.name)).map (p, ·)
   let codes := if pinned.all fun (p, x) => pinShaped v p x then codes else codes.push "R8-weights-shape"
-  let expected (p : Registered.Param) := v.registered.any (·.1 == p.name)
+  let held := (heldEntries v).map (·.1.value)
   match Partition.templateRanges? v.program v.query with
   | none => (if v.weightsOfRecord.isSome || !marks.isEmpty then codes.push "R8-weights-query" else codes, #[])
   | some rs =>
     let gated (p : Registered.Param) := (p.gates.map fun (first, count) => #[(p.name, first, count)]).getD #[]
-    let loose := marks.filter fun p => !(pins.any (·.value == p.name)) && !expected p
+    let loose := marks.filter fun p => !(pins.any (·.value == p.name)) && !held.contains p.name
     let codes := if (Partition.inputReads P rs (loose.flatMap gated)).isEmpty then codes else codes.push "R8-unpinned"
     let excused := pinned.filter fun (p, x) => pinShaped v p x
-    (codes, (excused.filter fun (p, _) => !expected p).map fun (_, x) =>
+    (codes, excused.map fun (_, x) =>
       ({ value := x.value, leaves := x.leaves, words := x.words, wordBits := x.wordBits, domain := x.domain }, x.root))
 
 /-- `weightsHeld` after the weights' registration of record's own refusals (`pinsOf`), a digest or form refusal alone
@@ -474,13 +506,17 @@ structure ReadPins where
   ranges : Array Flock.TemplateQuery.TRange
   /-- R8's accepted pins -/
   pins : Array (Registered.Entry × String)
+  /-- the roots the verifier itself holds (`heldEntries`) -/
+  roots : Array (Registered.Entry × String)
 
 /-- What the members' check holds each registered read to, on the docket's own derivation (`weightsOf v`, of the one
-parameters' verifier). None where the program marks an input the verifier does not expect and the verifier holds no
-weights' registration of record, or R8 refuses it; all empty where every marked input is one the verifier expects. -/
+parameters' verifier), with the roots the verifier itself holds (`heldEntries`). None where the program marks an input
+the verifier does not expect and the verifier holds no weights' registration of record, or R8 refuses it; the first
+three empty where every marked input is one the verifier expects. -/
 def readPins (v : Verifier) : Option ReadPins :=
   let loose := (v.params.filter (marked v)).filter fun p => !v.registered.any (·.1 == p.name)
-  if loose.isEmpty then some ⟨#[], #[], #[], #[]⟩ else
+  let roots := heldEntries v
+  if loose.isEmpty then some ⟨#[], #[], #[], (weightsOf v).2, roots⟩ else
   let (codes, pins) := weightsOf v
   if v.weightsOfRecord.isNone || !codes.isEmpty then none else
   match Partition.templateRanges? v.program v.query with
@@ -488,7 +524,7 @@ def readPins (v : Verifier) : Option ReadPins :=
   | some rs =>
     let held := loose.flatMap fun p => (p.gates.map fun (first, count) => #[(p.name, first, count)]).getD #[]
     some ⟨loose.map (·.name), held,
-      rs.filter fun r => !(Partition.memberReads v.program.prog held r 0 r.count).isEmpty, pins⟩
+      rs.filter fun r => !(Partition.memberReads v.program.prog held r 0 r.count).isEmpty, pins, roots⟩
 
 /-- Why `readPins v` is none: no template query applying (`WEIGHTS_QUERY_WHY`), else no registration R8 accepts
 (`WEIGHTS_UNREGISTERED_WHY`). -/
@@ -502,27 +538,6 @@ def markedGates (v : Verifier) : Array (String × Nat × Nat) :=
 
 /-- R8's codes on the program's registered inputs (`weightsOf`). -/
 def weightsCodes (v : Verifier) : Array String := (weightsOf v).1
-
-/-- The values whose domain leaves the window's open root out: `held`, then the pinned, supplied and output values. -/
-def fixedOf (v : Verifier) : Array String :=
-  v.held ++ v.pinned.map (·.1) ++ v.supplied.map (·.1) ++ v.outputs.map (·.1)
-
-/-- The verifier's own entries (`registration._check_registered`'s `registered_entries`): each value's domain under the
-window's open root, but `fixedOf`'s. -/
-def ownEntries (v : Verifier) : V (Array Registered.Entry) :=
-  Registered.entries v.program.desc v.params v.registered v.schemas v.windowRoot (fixedOf v)
-
-/-- `registration.held_roots`, read at the verifier's own entries (`mine`, none where they don't compute): `(value,
-root)` for each of its values an earlier record of the log registered under the domain `mine` gives it, the root of
-its first registration under that domain. -/
-def heldRoots (log : Array Json) (mine : V (Array Registered.Entry)) : Array (String × String) :=
-  let mine := match mine with | .ok m => m | .error _ => #[]
-  log.foldl (fun held rec => match getD rec "registered" with
-    | .arr es => es.foldl (fun held e => match getD e "value", getD e "root", getD e "domain" with
-      | .str v, .str r, .str d =>
-        if held.any (·.1 == v) || !mine.any (fun w => w.value == v && w.domain == d) then held else held.push (v, r)
-      | _, _, _ => held) held
-    | _ => held) #[]
 
 /-- `registration.unwindowed`: for a verifier that names no window root, its values it doesn't hold across windows
 (`fixedOf`) that an earlier record of the log registered under the domain it takes now, a window-independent program's

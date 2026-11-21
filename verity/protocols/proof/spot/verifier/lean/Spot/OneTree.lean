@@ -27,10 +27,11 @@ def PINNED_READ_WHY (member port value what : String) : String :=
     "record: a registered input the weights' registration of record pins is read at the pin's root, leaf count and domain"
 
 /-- The refusal of member `member`'s registered port `port` reading the registered input `value`, which the program marks,
-the verifier does not expect and R8 accepted no pin of (`pinsHeld`). -/
+R8 accepted no pin of and whose root the verifier holds none of (`pinsHeld`). -/
 def UNPINNED_READ_WHY (member port value : String) : String :=
-  s!"registered: member {member}'s port {port} reads the registered input {value}, which the program marks and R8 " ++
-    "accepted no pin of: a marked input is read only at a pin R8 accepted"
+  s!"registered: member {member}'s port {port} reads the registered input {value}, which the program marks, R8 " ++
+    "accepted no pin of and the verifier holds no root of: a marked input is read only at a pin R8 accepted or a " ++
+    "root the verifier holds"
 
 /-- The refusal of member `member`, whose units read its parameter `param` at the two input nodes `w0` and `w1` of C
 (`memberInputs`). -/
@@ -50,10 +51,16 @@ def paramInput (P : Flock.Program.Prog) (k m0 n : Nat) (p : String) (ty : Flock.
     | _ => throw e
   | .error e, _ => throw e
 
+/-- The refusal of member `member`'s units meeting a range the partition gives at root node `k`, which C does not have
+(`memberInputs`). -/
+def RANGE_NODE_WHY (member : String) (k : Nat) : String :=
+  s!"member {member}: its units meet a range the partition gives at C's root node {k}, which C does not have: a " ++
+    "range is of C's root nodes"
+
 /-- **The input nodes member `m`'s units read**, each `(parameter, node, row leaves)` once: over every range of `rs`
 its units meet, each parameter of the range's node's Definition that its units there read at an input node of C,
 registered or run (`paramInput`), all of them at once; a form `regRows?` refuses is refused, and so are two input nodes
-at one parameter (`TWO_READS_WHY`). Every proof block the member holds, from C and the partition, never its files. Its
+at one parameter (`TWO_READS_WHY`), and a range at a root node C does not have (`RANGE_NODE_WHY`). Every proof block the member holds, from C and the partition, never its files. Its
 work is the member's ranges times their Definitions' parameters. -/
 def memberInputs (P : Flock.Program.Prog) (rs : Array Flock.TemplateQuery.TRange) (m : Member) :
     V (Array (String × Nat × Nat)) :=
@@ -61,8 +68,8 @@ def memberInputs (P : Flock.Program.Prog) (rs : Array Flock.TemplateQuery.TRange
     let a := max lo r.first
     let b := min hi (r.first + r.count)
     if b ≤ a then return acc
-    let some x := (Flock.Registered.rootNodes P)[r.node]? | return acc
-    let some f := P.defs[x.fn]? | return acc
+    let some x := (Flock.Registered.rootNodes P)[r.node]? | throw (RANGE_NODE_WHY m.name r.node)
+    let some f := P.defs[x.fn]? | throw (RANGE_NODE_WHY m.name r.node)
     f.params.foldlM (init := acc) fun acc (p, ty) => do
       match ← (paramInput P r.node (a - r.first) (b - a) p ty).mapError (s!"member {m.name}: {·}") with
       | none => pure acc
@@ -75,19 +82,13 @@ def memberInputs (P : Flock.Program.Prog) (rs : Array Flock.TemplateQuery.TRange
 def portParam (q : Flock.Registered.Port) : String :=
   (Flock.Registered.paramRow (if q.param.isEmpty then q.name else q.param)).1
 
-/-- The registration of record's entry of the registered input `v`: R8's accepted pin (`rp.pins`), else the record
-`rec`'s `registered` entry, which R7 held to the verifier's own; as `(root, leaves, domain)`. -/
-def pinOf (rp : Docket.ReadPins) (rec : Json) (v : String) : Option (String × Nat × String) :=
+/-- The registration of record's entry of the registered input `v`: R8's accepted pin (`rp.pins`), else the root the
+verifier itself holds of it (`rp.roots`, `Docket.heldEntries`); as `(root, leaves, domain)`. No arm reads a root the
+record names: a root the prover registers is held to nothing but itself. -/
+def pinOf (rp : Docket.ReadPins) (v : String) : Option (String × Nat × String) :=
   match rp.pins.find? (·.1.value == v) with
   | some (e, root) => some (root, e.leaves, e.domain)
-  | none => match getD rec "registered" with
-    | .arr es => es.reverse.findSome? fun e =>
-      if getD e "value" == .str v then
-        match getD e "root", nat? (getD e "leaves"), getD e "domain" with
-        | .str r, some l, .str d => some (r, l, d)
-        | _, _, _ => none
-      else none
-    | _ => none
+  | none => (rp.roots.find? (·.1.value == v)).map fun (e, root) => (root, e.leaves, e.domain)
 
 /-- **Every port of a registered input is at its registration of record**: for each member, at each parameter its
 units read at a registered input node of C (`memberInputs`) whose gates are a marked value `v`'s
@@ -97,7 +98,7 @@ entry of record (`pinOf`): its root, leaf count and domain, refused by name othe
 (`rp.loose`) is at its pin. So no port of a registered node is exempt as a tree port. Every member, sampled or not,
 before any coin. -/
 def pinsHeld (P : Flock.Program.Prog) (rs : Array Flock.TemplateQuery.TRange) (marks : Array (String × Nat × Nat))
-    (rp : Docket.ReadPins) (rec : Json) (ms : Array Member) : V Unit :=
+    (rp : Docket.ReadPins) (ms : Array Member) : V Unit :=
   ms.forM fun m => do
     let own ← match m.own.registered with
       | none => pure #[]
@@ -108,7 +109,7 @@ def pinsHeld (P : Flock.Program.Prog) (rs : Array Flock.TemplateQuery.TRange) (m
       let v := v.orElse fun _ => if rp.loose.contains q.value then some q.value else none
       match v with
       | none => pure ()
-      | some v => match pinOf rp rec v with
+      | some v => match pinOf rp v with
         | none => throw (UNPINNED_READ_WHY m.name q.name v)
         | some (root, leaves, domain) =>
           if Flock.hexOf q.root != root then throw (PINNED_READ_WHY m.name q.name v "root")

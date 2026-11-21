@@ -723,8 +723,12 @@ def test_the_registered_reads_refusals_are_leans_word_for_word():
         "registered: member a's port p reads the registered input w at another root than its pin of record: a "
         "registered input the weights' registration of record pins is read at the pin's root, leaf count and domain")
     assert M.unpinned_read_why("a", "p", "u") == (
-        "registered: member a's port p reads the registered input u, which the program marks and R8 accepted no pin "
-        "of: a marked input is read only at a pin R8 accepted")
+        "registered: member a's port p reads the registered input u, which the program marks, R8 accepted no pin of "
+        "and the verifier holds no root of: a marked input is read only at a pin R8 accepted or a root the verifier "
+        "holds")
+    assert M.range_node_why("a", 9) == (
+        "member a: its units meet a range the partition gives at C's root node 9, which C does not have: a range is of "
+        "C's root nodes")
     assert M.two_reads_why("a", "p", 1, 2) == (
         "registered reads: member a's units read parameter p at C's input nodes 1 and 2: a parameter that reads an "
         "input reads one node, each port one tree")

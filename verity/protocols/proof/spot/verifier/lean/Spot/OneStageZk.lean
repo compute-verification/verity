@@ -214,7 +214,7 @@ def membersStructure (p : Params) (ms : Array Member) (c : OneStage.Commitment) 
   let v := p.base.verifier
   match Docket.readPins v with
   | none => throw (Docket.readPinsWhy v)
-  | some rp => pinsHeld v.program.prog (← Partition.evaluate v.program v.query) (Docket.markedGates v) rp c.record ms
+  | some rp => pinsHeld v.program.prog (← Partition.evaluate v.program v.query) (Docket.markedGates v) rp ms
 
 /-- The refusal of a member's root of its own at a port C wires into it (`fieldRoots`): a crossing wire is committed
 once, in its writer's output field's tree, and the reader's row opens that tree by path. -/

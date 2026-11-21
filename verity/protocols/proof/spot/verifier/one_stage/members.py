@@ -467,10 +467,10 @@ def pinned_read_why(member: str, port: str, value: str, what: str) -> str:
 
 
 def unpinned_read_why(member: str, port: str, value: str) -> str:
-    """`OneStageZk.UNPINNED_READ_WHY`: member ``member``'s registered port ``port`` reads ``value``, which the program
-    marks, the verifier does not expect and R8 accepted no pin of."""
-    return (f"registered: member {member}'s port {port} reads the registered input {value}, which the program marks and "
-            "R8 accepted no pin of: a marked input is read only at a pin R8 accepted")
+    """`OneTree.UNPINNED_READ_WHY`."""
+    return (f"registered: member {member}'s port {port} reads the registered input {value}, which the program marks, R8 "
+            "accepted no pin of and the verifier holds no root of: a marked input is read only at a pin R8 accepted or a "
+            "root the verifier holds")
 
 
 def two_reads_why(member: str, param: str, w0: int, w1: int) -> str:
@@ -486,7 +486,8 @@ def read_form_why(k: int, param: str, what: str) -> str:
             "parameter that reads an input reads one node, each row in one lane's run")
 
 
-ReadPins = tuple[list[str], list[tuple[str, range]], list[tuple[int, str, int, int]], dict[str, dict[str, Any]]]
+ReadPins = tuple[list[str], list[tuple[str, range]], list[tuple[int, str, int, int]], dict[str, dict[str, Any]],
+                 Mapping[str, Mapping[str, Any]]]
 
 
 def read_pins(params: Mapping[str, Any], program: Program) -> ReadPins:
@@ -494,8 +495,12 @@ def read_pins(params: Mapping[str, Any], program: Program) -> ReadPins:
     where the program marks an input the verifier does not expect and the partition is no template query applying to
     it, or the parameters carry no weights' registration of record R8 accepts."""
     w = params.get("weights_of_record")
-    got = DK.read_pins(program, params["query"], params.get("registered") or {},
-                       None if w is None else (bytes.fromhex(w["document"]), w["digest"]))
+    registered = params.get("registered") or {}
+    roots = DK.held_entries(program, registered, params.get("row_schemas"), params.get("window_root"),
+                            params.get("held"), params.get("supplied") or {}, params.get("pinned") or {},
+                            params.get("outputs") or {}, params.get("log") or [])
+    got = DK.read_pins(program, params["query"], registered,
+                       None if w is None else (bytes.fromhex(w["document"]), w["digest"]), roots)
     if got is None:
         raise _Refused(DK.read_pins_why(program, params["query"]))
     return got
@@ -604,16 +609,25 @@ def _param_input(R: EG._Root, k: int, m0: int, n: int, p: str, ty: Any) -> tuple
         raise
 
 
+def range_node_why(member: str, k: int) -> str:
+    """`OneTree.RANGE_NODE_WHY`."""
+    return (f"member {member}: its units meet a range the partition gives at C's root node {k}, which C does not have: a "
+            "range is of C's root nodes")
+
+
 def member_inputs(R: EG._Root, ranges: Sequence[Sequence[Any]], name: str,
                   units: Iterable[Sequence[int]]) -> list[tuple[str, int, int]]:
     """`OneStageZk.memberInputs`: each ``(parameter, node, row leaves)`` member ``name``'s units read at an input node
-    of C, once, over every range they meet; two nodes at one parameter refused (`two_reads_why`)."""
+    of C, once, over every range they meet; two nodes at one parameter refused (`two_reads_why`), and a range at a root
+    node C does not have (`range_node_why`)."""
     out: list[tuple[str, int, int]] = []
     for lo, hi in units:
         for k, _t, first, count in ranges:
             a, b = max(lo, first), min(hi, first + count)
-            if b <= a or not 0 <= k < len(R.nodes):
+            if b <= a:
                 continue
+            if not 0 <= k < len(R.nodes):
+                raise _Refused(range_node_why(name, k))
             for p, ty in R.nodes[k]["params"]:
                 try:
                     got = _param_input(R, k, a - first, b - a, p, ty)
@@ -637,20 +651,15 @@ def _port_param(port: str, e: Mapping[str, Any]) -> str:
     return head if sep and tail.endswith("]") and tail[:-1].isdigit() and "[" not in tail else name
 
 
-def _pin_of(rp: ReadPins, record: Mapping[str, Any], v: str) -> tuple[str, int, str] | None:
-    """`OneStageZk.pinOf`: R8's accepted pin of ``v``, else the record's last ``registered`` entry of it, as
-    ``(root, leaves, domain)``."""
-    if (pin := rp[3].get(v)) is not None:
-        return pin["root"], pin["leaves"], pin["domain"]
-    for e in reversed(record.get("registered") or []):
-        if isinstance(e, Mapping) and e.get("value") == v:
-            r, n, d = e.get("root"), e.get("leaves"), e.get("domain")
-            return (r, n, d) if type(r) is str and _nat(n) and type(d) is str else None
-    return None
+def _pin_of(rp: ReadPins, v: str) -> tuple[str, int, str] | None:
+    """`OneTree.pinOf`: R8's accepted pin of ``v``, else the root the verifier itself holds of it (`docket.held_entries`),
+    as ``(root, leaves, domain)``; never a root the record names."""
+    pin = rp[3].get(v) or rp[4].get(v)
+    return None if pin is None else (pin["root"], pin["leaves"], pin["domain"])
 
 
 def pins_held(ms: Mapping[str, Any], R: EG._Root, ranges: Sequence[Sequence[Any]], program: Program,
-              marks: Sequence[tuple[str, range]], rp: ReadPins, record: Mapping[str, Any]) -> None:
+              marks: Sequence[tuple[str, range]], rp: ReadPins) -> None:
     """`OneStageZk.pinsHeld`: each member's registered port at a parameter its units read at a registered input node
     whose gates are a marked value's (`member_inputs`, `partition.held_value` over ``marks``), a tree's or not, and each
     port naming a marked input the verifier does not expect, is at that value's entry of record (`_pin_of`): its root,
@@ -669,7 +678,7 @@ def pins_held(ms: Mapping[str, Any], R: EG._Root, ranges: Sequence[Sequence[Any]
                 v = e.get("value")
             if v is None:
                 continue
-            pin = _pin_of(rp, record, v)
+            pin = _pin_of(rp, v)
             if pin is None:
                 raise _Refused(unpinned_read_why(name, port, v))
             for got, want, what in ((e.get("root"), pin[0], "root"), (e.get("leaves"), pin[1], "leaf count"),
@@ -1428,7 +1437,7 @@ def _members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence:
         _tree_ports_held(ms, record)
         rp = read_pins(params, program)
         pins_held(ms, EG._Root(params["program"]), P._template(program, params["query"], "the members' partition").ranges,
-                  program, DK.marked_gates(program), rp, record)
+                  program, DK.marked_gates(program), rp)
         roots, ft = _members_roots(ms, record)
         roots = _wired(program, params["query"], params["program"], ms, record, roots, ft, params.get("window_root"),
                        tied_gates(program, params))

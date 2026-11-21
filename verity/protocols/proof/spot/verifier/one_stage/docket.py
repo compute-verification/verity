@@ -248,24 +248,26 @@ def marked_inputs(program: Program) -> list[str]:
 
 
 def weights_held(program: Program, query: Mapping[str, Any], registered: Iterable[str],
-                 of_record: tuple[bytes, str] | None) -> tuple[list[tuple[str, Any]], dict[str, dict[str, Any]]]:
-    """R8's hold on the program's registered inputs (the parameters it binds at registration): each must be expected registered by the verifier (R7 holds it) or pinned by the weights'
-    registration of record. `of_record`: the registration's bytes and the SHA-512 the auditor's side holds for it, None
+                 of_record: tuple[bytes, str] | None, held: Iterable[str] = ()
+                 ) -> tuple[list[tuple[str, Any]], dict[str, dict[str, Any]]]:
+    """R8's hold on the program's registered inputs (the parameters it binds at registration): each must be pinned by
+    the weights' registration of record or one whose root the verifier itself holds (``held``, `held_entries`); that
+    the verifier expects it registered by name excuses nothing, since R7 holds such a value's root only where it is held. `of_record`: the registration's bytes and the SHA-512 the auditor's side holds for it, None
     where it hands none; a pin's domain is its own program's (`_of_record`). A registered input neither pins nor expects
     that any template parameter reads is refused by name, at one reader as at several (`R8-unpinned`): nothing fixes
-    its root before the coin. A program with
+    its root before the coin, at one expected by name as at one not. A program with
     a registered input, or a verifier holding a registration, under a query that is no template query that applies is
     refused (`R8-weights-query`); a pinned input whose leaves, words or width are not the program's is refused
     (`R8-weights-shape`). A pin of no registered input excuses nothing. The refusals, in `WEIGHTS_WHY`'s order, and the accepted pins, `{value: {"root",
-    "leaves", "words", "word_bits", "domain"}}` of each pinned input the verifier does not expect, which the members'
-    check holds each member's registered read of it to (`members.pins_held`)."""
+    "leaves", "words", "word_bits", "domain"}}` of each pinned input, which the members' check holds each member's
+    registered read of it to (`members.pins_held`)."""
     marked = marked_inputs(program)
     if not marked and of_record is None:
         return [], {}
     out, pins = _of_record(of_record) if of_record is not None else ([], {})
     if out and out[0][0] in ("R8-weights-digest", "R8-weights-form"):
         return out, {}
-    expected = set(registered)
+    held = set(held)
     shape = []
     for v in marked:
         if v not in pins:
@@ -287,14 +289,14 @@ def weights_held(program: Program, query: Mapping[str, Any], registered: Iterabl
         if of_record is not None or marked:
             out.append(("R8-weights-query", {"query": dict(query)}))
         return out, {}
-    loose = {v: g for v in marked if v not in pins and v not in expected for g in G.held_gates(program, [v])}
+    loose = {v: g for v in marked if v not in pins and v not in held for g in G.held_gates(program, [v])}
     read = {g for _, _, g in P.input_reads(program, query, loose.values())} if loose else set()
     if unpinned := [v for v, g in loose.items() if g in read]:
         out.append(("R8-unpinned", {"values": unpinned}))
     excused = [v for v in marked if v in pins and v not in shape]
     accepted = {v: {"root": pins[v]["root"], "leaves": pins[v]["leaves"], "words": pins[v]["words"],
                     "word_bits": pins[v].get(RV.WIDTH_KEY, RV.WORD_BITS), "domain": pins[v]["domain"]}
-                for v in excused if v not in expected}
+                for v in excused}
     return out, accepted
 
 
@@ -314,19 +316,23 @@ def read_pins_why(program: Program, query: Mapping[str, Any]) -> str:
     return WEIGHTS_UNREGISTERED_WHY if templated else WEIGHTS_QUERY_WHY
 
 
-def read_pins(program: Program, query: Mapping[str, Any], registered: Iterable[str], of_record: tuple[bytes, str] | None
-              ) -> tuple[list[str], list[tuple[str, range]], list[tuple[int, str, int, int]], dict[str, dict[str, Any]]] | None:
+def read_pins(program: Program, query: Mapping[str, Any], registered: Iterable[str], of_record: tuple[bytes, str] | None,
+              roots: Mapping[str, Mapping[str, Any]] | None = None
+              ) -> tuple[list[str], list[tuple[str, range]], list[tuple[int, str, int, int]], dict[str, dict[str, Any]],
+                         Mapping[str, Mapping[str, Any]]] | None:
     """`Docket.readPins`: what the members' check holds each registered read to, on R8's own derivation
     (`weights_held`): the marked inputs the verifier does not expect, their gates as ``(value, gates)``, the template
-    ranges some member of which reads one (`partition.member_reads`), and the accepted pins. None where there is such an
-    input and no registration of record, or R8 refuses it; all empty where every marked input is expected."""
+    ranges some member of which reads one (`partition.member_reads`), the accepted pins, and the roots the verifier
+    itself holds (``roots``, `held_entries`). None where there is such an input and no registration of record, or R8
+    refuses it; the first three empty where every marked input is expected."""
+    roots = roots or {}
     expected = set(registered)
     loose = [v for v in marked_inputs(program) if v not in expected]
     if not loose:
-        return [], [], [], {}
+        return [], [], [], weights_held(program, query, registered, of_record, roots)[1], roots
     if of_record is None:
         return None
-    codes, pins = weights_held(program, query, registered, of_record)
+    codes, pins = weights_held(program, query, registered, of_record, roots)
     if codes:
         return None
     part = P.evaluate(program, query)
@@ -334,7 +340,28 @@ def read_pins(program: Program, query: Mapping[str, Any], registered: Iterable[s
         return None
     held = [(v, g) for v in loose for g in G.held_gates(program, [v])]
     ranges = [r for r in part.ranges if P.member_reads(program, held, r[0], 0, r[3])]
-    return loose, held, ranges, pins
+    return loose, held, ranges, pins, roots
+
+
+def held_entries(program: Program, registered: Mapping[str, int], schemas: Mapping[str, str] | None,
+                 window_root: str | None, held: Sequence[str] | None, supplied: Mapping[str, Any],
+                 pinned: Mapping[str, str], outputs: Mapping[str, Any], log: Iterable[Mapping[str, Any]]
+                 ) -> dict[str, dict[str, Any]]:
+    """`Docket.heldEntries`: ``{value: {"root", "leaves", "domain"}}`` for each value the verifier expects registered
+    whose root it holds itself, its ``pinned`` root, else the one an earlier record of the log registered under the
+    domain it takes now (`held_roots`), as R7 holds it; none where its entries don't compute."""
+    try:
+        window, fixed = _window(window_root, held, registered, supplied, pinned, outputs)
+        mine = G.registered_entries(program, registered, schemas, window, fixed)
+    except ValueError:
+        return {}
+    logged = held_roots(log)
+    out = {}
+    for v, m in mine.items():
+        r = pinned.get(v) or logged.get((v, m["domain"]))
+        if r is not None:
+            out[v] = {"root": r, "leaves": m["leaves"], "domain": m["domain"]}
+    return out
 
 
 def held_roots(log: Iterable[Mapping[str, Any]]) -> dict[tuple[str, str], str]:
@@ -499,7 +526,9 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
     _registered_compiler(compiler)
     refuse_unwindowed(unwindowed(program, registered or {}, formats, window, fixed, log))
     fan, through, bad = _readers(program, query, registered or {}, held or (), tied or ())
-    weights, _accepted = weights_held(program, query, registered or {}, weights_of_record)
+    weights, _accepted = weights_held(program, query, registered or {}, weights_of_record,
+                                      held_entries(program, registered or {}, formats, window_root, held, sup, pins,
+                                                   outs, log))
     keys = _KEYS | {"registered"} if v2 else _KEYS
     if not isinstance(rec, Mapping) or set(rec) != keys:
         c.fail("keys", sorted(set(rec) ^ keys) if isinstance(rec, Mapping) else rec)

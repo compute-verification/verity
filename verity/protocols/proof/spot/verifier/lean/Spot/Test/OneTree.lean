@@ -49,7 +49,7 @@ private def pinT : Array (Spot.Registered.Entry × String) := #[(pinEntryT, "".p
 /-- `pinsHeld` with nothing derived to read, `loose` marked and `pins` accepted. -/
 private def heldNoReads (loose : Array String) (pins : Array (Spot.Registered.Entry × String)) (ms : Array Member) :
     V Unit :=
-  pinsHeld default #[] #[] ⟨loose, #[], #[], pins⟩ Json.null ms
+  pinsHeld default #[] #[] ⟨loose, #[], #[], pins, #[]⟩ ms
 
 -- a member reading the pinned input at the pin's own entry, and one reading only other values: accepted
 #guard refusal (heldNoReads #["w"] pinT #[readerT "a" (regT [("p", "w", 'a', 2)]), readerT "b" (regT [("q", "v", 'b', 3)]),
@@ -94,11 +94,15 @@ private def batchHeldT : Array (String × Nat × Nat) := #[("w0", 0, 4), ("w1", 
 
 private def batchRangeT : Flock.TemplateQuery.TRange := ⟨2, "A", 0, 4⟩
 
-/-- `pinsHeld` over `batchToy` with `w0` and `w1` marked and pinned at root `a…`, 2 leaves, domain `d…`. -/
-private def batchHeld (ms : Array Member) : V Unit :=
-  pinsHeld (batchToy) #[batchRangeT] batchHeldT ⟨#["w0", "w1"], batchHeldT, #[batchRangeT],
-    #[({ pinEntryT with value := "w0" }, "".pushn 'a' 128), ({ pinEntryT with value := "w1" }, "".pushn 'a' 128)]⟩
-    Json.null ms
+/-- `w0` and `w1` at root `a…`, 2 leaves, domain `d…`. -/
+private def batchPinsT : Array (Spot.Registered.Entry × String) :=
+  #[({ pinEntryT with value := "w0" }, "".pushn 'a' 128), ({ pinEntryT with value := "w1" }, "".pushn 'a' 128)]
+
+/-- `pinsHeld` over `batchToy` with `w0` and `w1` marked, R8's pins `pins` (by default `batchPinsT`) and the
+verifier's own held roots `roots`. -/
+private def batchHeld (ms : Array Member) (pins : Array (Spot.Registered.Entry × String) := batchPinsT)
+    (roots : Array (Spot.Registered.Entry × String) := #[]) (loose : Array String := #["w0", "w1"]) : V Unit :=
+  pinsHeld (batchToy) #[batchRangeT] batchHeldT ⟨loose, batchHeldT, #[batchRangeT], pins, roots⟩ ms
 
 /-- The chunk `name` over the units `us` of `batchToy`'s range, its registered file `reg`. -/
 private def chunkT (name : String) (lo hi : Nat) (reg : Option Json) (us : Array (Nat × Nat) := #[(lo, hi)]) : Member :=
@@ -111,6 +115,8 @@ private def chunkT (name : String) (lo hi : Nat) (reg : Option Json) (us : Array
 #guard whyT (memberInputs (batchToy) #[batchRangeT] (chunkT "A/c" 1 3 none)) ==
   s!"member A/c: {Flock.OneCircuit.READ_FORM_WHY 2 "w" "its members read root nodes [0, 1]"}"
 #guard whyT (memberInputs (batchToy) #[batchRangeT] (chunkT "A/c" 0 0 none #[(0, 1), (2, 3)])) == TWO_READS_WHY "A/c" "w" 0 1
+-- a range at a root node C does not have: refused by name, not skipped
+#guard whyT (memberInputs (batchToy) #[{ batchRangeT with node := 9 }] (chunkT "A/c0" 0 2 none)) == RANGE_NODE_WHY "A/c0" 9
 -- a parameter mixing the marked weight with a run input: refused by name
 #guard whyT (memberInputs (batchToy true) #[batchRangeT] (chunkT "A/c" 1 3 none)) ==
   s!"member A/c: {Flock.OneCircuit.READ_FORM_WHY 2 "w" "its members read root nodes [0, 1]"}"
@@ -131,6 +137,13 @@ private def chunkT (name : String) (lo hi : Nat) (reg : Option Json) (us : Array
   PINNED_READ_WHY "A/c0" "w[1]" "w0" "root"
 #guard whyT (batchHeld #[chunkT "A/c1" 2 4 (regT [("w", "committed/A/w", 'a', 3)])]) ==
   PINNED_READ_WHY "A/c1" "w" "w1" "leaf count"
+-- a marked input the verifier expects by name, with no pin R8 accepted and no root it holds itself: refused by name,
+-- whatever root the record names; at a root the verifier holds, accepted there and refused at another
+#guard whyT (batchHeld #[chunkT "A/c0" 0 2 (regT [("w", "w0", 'a', 2)])] #[] #[] #[]) ==
+  UNPINNED_READ_WHY "A/c0" "w" "w0"
+#guard refusal (batchHeld #[chunkT "A/c0" 0 2 (regT [("w", "w0", 'a', 2)])] #[] batchPinsT #[]) == ""
+#guard whyT (batchHeld #[chunkT "A/c0" 0 2 (regT [("w", "w0", 'b', 2)])] #[] batchPinsT #[]) ==
+  PINNED_READ_WHY "A/c0" "w" "w0" "root"
 
 /-- The window open root of these guards. -/
 private def rootT : String := "".pushn 'f' 128
@@ -187,7 +200,10 @@ private def runRootsT (R : Option String) (rec : Json) (m : Member) (own : Array
   "off: a marked input is read only at a pin R8 accepted"
 -- the refusals' text, which `members.unpinned_read_why` and `docket.WEIGHTS_UNREGISTERED_WHY` print word for word
 #guard UNPINNED_READ_WHY "a" "p" "u" == "registered: member a's port p reads the registered input u, which the program " ++
-  "marks and R8 accepted no pin of: a marked input is read only at a pin R8 accepted"
+  "marks, R8 accepted no pin of and the verifier holds no root of: a marked input is read only at a pin R8 accepted " ++
+  "or a root the verifier holds"
+#guard RANGE_NODE_WHY "a" 9 == "member a: its units meet a range the partition gives at C's root node 9, which C " ++
+  "does not have: a range is of C's root nodes"
 #guard Docket.WEIGHTS_UNREGISTERED_WHY == "registered: the program marks registered inputs the verifier does not expect, and " ++
   "the parameters carry no weights' registration of record R8 accepts: a marked input is read only at a pin R8 accepted"
 -- the refusal's text, which `members.pinned_read_why` prints word for word

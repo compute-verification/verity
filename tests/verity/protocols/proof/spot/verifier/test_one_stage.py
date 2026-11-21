@@ -953,7 +953,7 @@ def test_the_members_check_holds_a_marked_programs_reads_only_to_pins_r8_accepte
         with pytest.raises(M._Refused) as e:
             M.read_pins({**params(_weights([pin])), "query": {"name": "Q_all", "version": 0}}, marked)
         assert str(e.value) == R.WEIGHTS_QUERY_WHY
-        loose, held, ranges, pins = rp = M.read_pins(params(_weights([pin])), marked)
+        loose, held, ranges, pins, _roots = rp = M.read_pins(params(_weights([pin])), marked)
         at = sorted({(t, p, v) for k, t, _lo, n in ranges for p, v in P.member_reads(marked, held, k, 0, n)})
         assert loose == ["t"] and at == [tuple(r) for r in reads]
         assert set(pins) == {"t"} and pins["t"]["root"] == pin["root"]
@@ -965,18 +965,26 @@ def test_the_members_check_holds_a_marked_programs_reads_only_to_pins_r8_accepte
         with pytest.raises(M._Refused) as e:
             held({"a": {"units": [[first, first + 1]], "registered": {"ports": {at[0][1]: {**port, "root": "bb" * 64}}}}})
         assert str(e.value) == M.pinned_read_why("a", at[0][1], "t", "root")
-        assert M.read_pins(params(), unmarked) == ([], [], [], {})
-        assert M.read_pins(params(registered={"t": 2}), marked) == ([], [], [], {})
+        assert M.read_pins(params(), unmarked) == ([], [], [], {}, {})
+        assert M.read_pins(params(registered={"t": 2}), marked) == ([], [], [], {}, {})
+        # expected by name alone: no root to read the port at, whatever root the record names; at the verifier's
+        # own held root (its pinned), read there
+        by_name = M.read_pins(params(registered={"t": 2}), marked)
+        with pytest.raises(M._Refused) as e:
+            _held(marked, q, by_name)({"a": {"units": [[first, first + 1]], "registered": {"ports": {at[0][1]: port}}}})
+        assert str(e.value) == M.unpinned_read_why("a", at[0][1], "t")
+        own = M.read_pins({**params(registered={"t": 2}), "pinned": {"t": pin["root"]}}, marked)
+        assert set(own[4]) == {"t"} and own[4]["t"]["root"] == pin["root"]
+        assert R.weights_held(marked, q, {"t": 2}, None)[0] == [("R8-unpinned", {"values": ["t"]})]
+        assert R.weights_held(marked, q, {"t": 2}, None, own[4])[0] == []
 
 
-def _held(prog, q, rp, record=None):
-    """`members.pins_held` over `prog`'s own descriptor and `q`'s ranges, every marked parameter's gates, `rp` and the
-    record `record`."""
+def _held(prog, q, rp):
+    """`members.pins_held` over `prog`'s own descriptor and `q`'s ranges, every marked parameter's gates and `rp`."""
     from verity.protocols.proof.spot.verifier.one_stage import members as M
     from verity.circuits import edges as EG
     desc = json.loads(json.dumps(codec.encode_program(prog)))
-    return lambda ms: M.pins_held(ms, EG._Root(desc), P._template(prog, q, "q").ranges, prog, R.marked_gates(prog), rp,
-                                  record or {})
+    return lambda ms: M.pins_held(ms, EG._Root(desc), P._template(prog, q, "q").ranges, prog, R.marked_gates(prog), rp)
 
 
 def _chunked(second: str, marked: tuple[str, ...]):
@@ -1019,6 +1027,9 @@ def test_a_batch_chunk_reads_one_input_node_a_parameter_and_every_port_there_is_
     held({"c0": chunk(0, 2, "w0"), "c1": chunk(2, 4, "w1")})
     w0, w1 = (M.member_inputs(Rt, ranges, "c", [(lo, hi)])[0][1] for lo, hi in ((0, 2), (2, 4)))
     assert w0 != w1
+    with pytest.raises(M._Refused) as e:
+        M.member_inputs(Rt, [(len(Rt.nodes), *r[1:]) for r in ranges], "c", [(0, 2)])
+    assert str(e.value) == M.range_node_why("c", len(Rt.nodes))
     for m, why in ((chunk(0, 2, "w0", "bb" * 64), M.pinned_read_why("c", "x[0]", "w0", "root")),
                    (chunk(1, 3, "w0"), f"member c: {M.read_form_why(k, 'x', f'its members read root nodes [{w0}, {w1}]')}"),
                    ({"units": [[0, 1], [2, 3]], "registered": None}, M.two_reads_why("c", "x", w0, w1))):
