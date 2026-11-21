@@ -1022,6 +1022,15 @@ def test_the_onsite_check_without_the_published_phase_or_record_is_refused_by_na
     assert refused == ("window" if left == T.PHASE else "record")
 
 
+def test_a_policy_refusal_shows_in_the_period_s_outcome_after_accounting_ended_20(tmp_path, monkeypatch):
+    """Both calls end 20 on a step refused or not run: the policy's refusal is the outcome's ``policy``, beside the
+    worse of the two exits."""
+    monkeypatch.setattr(T, "RUNNER", stand_in(tmp_path, "runner.sh", 'mkdir -p "$OUT"\nexit 20\n'))
+    got = T.live(R.load(ROOT / "applications" / "remote.toml", REG), tmp_path / "state", [T.WORKERS]).outcomes
+    assert got[T.WORKERS] == {"outcome": {"served-window": 20, "policy": 20}, "refused": T.SERVED_WINDOW}
+    assert (T.worse(20, 0), T.worse(0, 20), T.worse(20, 3), T.worse(3, 20)) == (20, 20, 3, 3)
+
+
 NETWORK = ROOT / "applications" / "onsite_network.toml"
 NETWORK_PIN = next(p["key-sha512"] for p in tomllib.loads(NETWORK.read_text())["pin"] if p["protocol"] == "wipe")
 NETWORK_BINDINGS = {"memory-challenger": {"wipe": {"address": "192.0.2.1:7001", "host": "auditor-1",
