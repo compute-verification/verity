@@ -1493,6 +1493,21 @@ private def unitsJ (us : Array Nat) : Json := Json.mkObj [("units", Json.mkObj [
   MEMBER_UNITS
 #guard refusal ((memberT "m" #[(2, 4), (7, 8)]).heldAt #[("a", #[(0, 3)]), ("b", #[(3, 7)])] (unitsJ #[2, 3, 7])) ==
   MEMBER_STRATA
+-- the strata PAIR, TRIPLE, PAIR: a cover, not the units in order stratum by stratum
+#guard refusal ({ memberT "m" #[(2, 4), (7, 8)] with subset := true }.heldAt
+  #[("PAIR", #[(0, 2), (5, 8)]), ("TRIPLE", #[(2, 5)])] (unitsJ #[2, 3, 7])) == ""
+#guard refusal ((memberT "m" #[(2, 4), (7, 8)]).heldAt
+  #[("PAIR", #[(0, 2), (5, 8)]), ("TRIPLE", #[(2, 5)])] (unitsJ #[2, 3, 7])) == MEMBER_STRATA
+#guard refusal ({ memberT "m" #[(2, 4), (7, 8)] with subset := true }.heldAt
+  #[("PAIR", #[(0, 2), (5, 8)]), ("TRIPLE", #[(2, 5)])] (unitsJ #[0, 1, 2])) == MEMBER_UNITS
+#guard refusal ({ memberT "m" #[(2, 4), (7, 8)] with subset := true }.heldAt
+  #[("PAIR", #[(0, 3), (5, 8)]), ("TRIPLE", #[(2, 5)])] (unitsJ #[2, 3, 7])) == MEMBER_COVER
+#guard refusal ({ memberT "m" #[(2, 4), (7, 8)] with subset := true }.heldAt
+  #[("PAIR", #[(0, 2), (6, 8)]), ("TRIPLE", #[(2, 5)])] (unitsJ #[2, 3, 7])) == MEMBER_COVER
+#guard refusal ({ memberT "m" #[(2, 4), (7, 9)] with subset := true }.heldAt
+  #[("PAIR", #[(0, 2), (5, 8)]), ("TRIPLE", #[(2, 5)])] (unitsJ #[2, 3, 7, 8])) == MEMBER_COVER
+#guard refusal ({ memberT "m" #[(2, 4), (7, 8)] with subset := true }.heldAt #[("a", #[(0, 3)]), ("b", #[(3, 8)])]
+  (unitsJ #[2, 3, 7])) == ""
 #guard refusal ((memberT "m" #[(2, 4), (7, 8)]).population Json.null
   "{\"units\":{\"indices\":[2,3,7]}}\nrest".toUTF8) != ""
 #guard (runMembers (fun _ => Json.null) #[] #[] #[] ⟨#[]⟩).toOption.map (·.all) == some true
