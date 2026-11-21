@@ -1242,6 +1242,12 @@ def test_a_served_runs_weights_registration_is_the_committers_under_fresh_salts(
         return PP.main(["weights-registration", "--serve-run", str(run), "--checkpoint-dir", str(ck), "--checkpoints",
                         str(man), "--hf-config", str(hf), "--out", str(out)])
 
+    def clear() -> None:
+        """Another deployment's registration at the same path: a deployment registers once."""
+        for f in (out, out.with_name("deployment-registration.json"), out.with_name("weights_of_record.json")):
+            f.unlink(missing_ok=True)
+        shutil.rmtree(salts, ignore_errors=True)
+
     capsys.readouterr()
     assert register() == 0
     reg, said = json.loads(out.read_text()), json.loads(capsys.readouterr().out)
@@ -1257,6 +1263,7 @@ def test_a_served_runs_weights_registration_is_the_committers_under_fresh_salts(
     registered = PP.registered_of_serve(serve, str(hf), None, PP.CAP_BITS)
     record = WW.weights_record(registered, str(ck), str(man), grain=grain)
     assert WW.registration_pins(reg, record) == pins
+    clear()
     assert register() == 0
     again = ADV.registered_weights(json.loads(out.read_text()), serve)
     assert sorted(again) == sorted(pins) and all(again[q] != pins[q] for q in pins)
@@ -1266,16 +1273,17 @@ def test_a_served_runs_weights_registration_is_the_committers_under_fresh_salts(
     table.parent.mkdir()
     np.save(table, M.cos_sin_table(C))
     capsys.readouterr()
+    clear()
     assert register() == 0
     rooted, said = json.loads(out.read_text()), json.loads(capsys.readouterr().out)
     assert said["roots"] == 17 and said["unrooted"] == [] == list(rooted["unrooted"])
     assert set(rooted["values"]) == set(reg["values"]) | set(reg["unrooted"])
     assert WW.registration_pins(rooted, record) == ADV.registered_weights(rooted, serve)
     np.save(table, M.cos_sin_table({**C, "ROPE_THETA": 2 * C["ROPE_THETA"]}))
+    clear()
     assert register() == PP.REFUSED
     assert "served words outside the analytic table's bound" in capsys.readouterr().err
     table.unlink()
-    out.unlink()
     (run / "serve.json").write_text(json.dumps({**serve, "model": "org/other"}))
     assert register() == PP.REFUSED
     assert f"manifest entry is {serve['model']}@{serve['revision']}, not the registered model org/other@" in capsys.readouterr().err
@@ -1290,14 +1298,15 @@ def test_a_served_runs_weights_registration_is_the_committers_under_fresh_salts(
 
 
 def test_the_weights_registration_is_also_the_first_record_of_the_serves_registration_log(tmp_path, capsys, monkeypatch):
-    """``weights-registration --deployment-record FILE`` writes the committer's registration also as the first record of the
-    serve's registration log (`window_weights.deployment_record`): a `verity/registration/v2` record chained after nothing
-    that registers each rooted weight parameter's entry as the docket states it, by name, and names the unrooted
-    ones in its header, with none of its salts; the command says its digest (`registration.digest`), which Pearl+'s W
-    names as its ``previous`` on a serve tied to it. So each weight's root is in the log's first record under its value's
-    name, where the inference-only policy's check looks a registered parameter up, by name and root, in the log it is
-    given (its Lean's `isTheta`). Without the flag no such record is
-    written; a docket with a value that is no weight parameter gives none, and a name under a weight's with a
+    """``weights-registration`` writes the committer's registration also as the deployment's record beside it
+    (`window_weights.deployment_record`): a `verity/registration/v2` record chained after nothing, its program at the top
+    level and no protocol, that registers each rooted weight parameter's entry as the docket states it, by name, and
+    names the unrooted ones in its header, with none of its salts; the command says its digest (`registration.digest`),
+    which Pearl+'s W names as its ``previous`` on a serve tied to it. So each weight's root is in the log's first record
+    under its value's name, where the inference-only policy's check looks a registered parameter up, by name and root, in
+    the log it is given (its Lean's `isTheta`). A second registration of the deployment is refused, naming the first's
+    digest, and a record named anywhere but beside the registration is refused;
+    a docket with a value that is no weight parameter gives none, and a name under a weight's with a
     suffix `_param` takes no form of (``/bnk``, ``/b<b>/table``, ``/b<b>/vocab``) is such a value: the record is refused
     whole, never written without the name."""
     import functools
@@ -1314,19 +1323,22 @@ def test_the_weights_registration_is_also_the_first_record_of_the_serves_registr
     (run / "serve.json").write_text(json.dumps(serve))
     hf.write_text(json.dumps(TINY))
     man = _tiny_checkpoint(ck, serve["model"], serve["revision"])
-    out, first = tmp_path / "weights_registration.json", tmp_path / "first.json"
+    out, first = tmp_path / "weights_registration.json", tmp_path / "deployment-registration.json"
     argv = ["weights-registration", "--serve-run", str(run), "--checkpoint-dir", str(ck), "--checkpoints", str(man),
             "--hf-config", str(hf), "--out", str(out)]
     capsys.readouterr()
-    assert PP.main(argv) == 0 and "deployment" not in json.loads(capsys.readouterr().out) and not first.exists()
+    assert PP.main([*argv, "--deployment-record", str(tmp_path / "first.json")]) == PP.REFUSED and not out.exists()
+    assert "with its record deployment-registration.json beside it" in capsys.readouterr().err
     assert PP.main([*argv, "--deployment-record", str(first)]) == 0
     reg, rec, said = json.loads(out.read_text()), json.loads(first.read_text()), json.loads(capsys.readouterr().out)
     assert rec == WW.deployment_record(reg) and said["deployment"] == DD.digest(rec) and said["roots"] == 16
-    assert (rec["format"], rec["protocol"], rec["previous"]) == (DM.REGISTRATION, DM.ONE_STAGE_PROTOCOL, None)
+    assert (rec["format"], rec["program"], rec["previous"]) == (DM.REGISTRATION, reg["program"], None) and "protocol" not in rec
+    assert PP.main(argv) == PP.REFUSED and f"registration already ({said['deployment']})" in capsys.readouterr().err
+    assert json.loads(first.read_text()) == rec
     assert [e["value"] for e in rec["registered"]] == sorted(reg["values"])
     assert {e["value"]: e for e in rec["registered"]} == reg["values"]
     assert all(set(e) == {"value", "root", "leaves", "words", "domain"} for e in rec["registered"])
-    assert rec["deployment"] == {"kind": WW.DEPLOYMENT, "program": reg["program"], "grain": reg["grain"],
+    assert rec["deployment"] == {"kind": WW.DEPLOYMENT, "grain": reg["grain"],
                                  "model": {"repo": serve["model"], "revision": serve["revision"]},
                                  "unrooted": sorted(reg["unrooted"])}
     assert rec["deployment"]["unrooted"] and not {e["value"] for e in rec["registered"]} & set(reg["unrooted"])
