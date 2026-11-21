@@ -1,5 +1,5 @@
 """What `predict.steps.compile_steps` costs on a class-G window, with the one part of `Compiled.summary()` that walks every node
-(`transfer_gates`), as `advice_compile` runs them: GLM-5.3 at TP8 on the card `--card` names, one rank's request Programs, GP-01 over them and the
+(`transfer_gates`): GLM-5.3 at TP8 on the card `--card` names, one rank's request Programs, GP-01 over them and the
 batch rules, by phase, in wall seconds and resident memory.
 
 A window is its requests' (arrival step, prompt length, max_tokens), greedy, scheduled as vLLM V1 schedules them (no preemption,
