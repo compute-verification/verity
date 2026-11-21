@@ -71,13 +71,6 @@ open scoped ENNReal
 
 variable {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type}
 
-/-- **Gap 1, the window's sampling design** (open): at each round `w` and
-proof `i`, the window's coins, read through the session proof `i` runs and its outcome, have the sessions' sampling design
-(`SessionSamplingDesign`): the session's coins are the path's, fresh and uniform given its setting and its prover. -/
-def ExecutionPhaseSamplingDesign (sess : Paths Ω S → Fin S → Fin nπ → RowsSession) (out : ∀ x w i, (sess x w i).Out) : Prop :=
-  ∀ w i, SessionSamplingDesign (Out := fun s : RowsSession => s.Out) (fun s => s.G) (fun s => s.τ) (fun x => sess x w i)
-    (fun x => out x w i)
-
 /-- **Gap 1, acceptance** (open): the layer accepts proof `i` of round `w` only
 where verity-verify-proof accepts its session's outcome (`LiveAcceptsZKR`). -/
 def AcceptedLive (pf : ProofLayer Ω S nπ V) (sess : Paths Ω S → Fin S → Fin nπ → RowsSession)
@@ -108,28 +101,5 @@ namespace Flock.Guarantees
 open Flock.SoundAtBridge ResourceAccounting.TS
 open Pouw.RelativeSecurity (Paths)
 open scoped ENNReal
-
-/-- **PoUW's proof premise from Flock's rows link, at `δ_ZK = δo + δ`.** For any window of proofs
-(`pf : ResourceAccounting.TS.ProofLayer Ω S nπ V`, its relation on the path) whose proof `i` of round `w` on the
-path `x` is the Flock session `sess x w i` (`EndToEndRegisteredRows`' setting with one registrant's opening per
-unit, `RowsSession`) with outcome `out x w i`, and a reading `rows s` of a session's value layer as a layer value:
-given `EndToEndRegisteredRows`' named assumptions at every session and every unit's opening (`RowsSession.CR`), the
-window's sampling design (`ExecutionPhaseSamplingDesign`), acceptance (`AcceptedLive`), the opening's agreement with the plurality outside `δo`
-(`OpenedPlurAt`) and the relation's reading of the sampled proof blocks (`RelOfRows`), and `δ ≥ 0` with
-$$n \cdot (\varepsilon_{ks} + \delta_{link} + \delta_{rows} + q_R^2/2^{513}) \le \delta$$
-at every session a path runs (`RowsSession.bound`, `n` its units), each proof is accepted with an opening that fails
-its relation on the path with probability at most `δo + δ` (`pf.SoundAt (δo + δ)`). -/
-def SoundAtBridge : Prop :=
-  ∀ {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type} (pf : ProofLayer Ω S nπ V)
-    (sess : Paths Ω S → Fin S → Fin nπ → RowsSession) (out : ∀ x w i, (sess x w i).Out)
-    (rows : ∀ s : RowsSession, (Fin s.Circ.N → Bool) → V) (δo δ : ℝ),
-    -- cr/sha-512 and ecr/sha-512 as EndToEndRegisteredRows takes them, at every session and every unit's opening
-    (∀ x w i, (sess x w i).CR) →
-    ExecutionPhaseSamplingDesign sess out →
-    AcceptedLive pf sess out →
-    OpenedPlurAt pf sess rows δo →
-    RelOfRows pf sess out rows →
-    (∀ x w i, ((sess x w i).n : ℝ≥0∞) * (sess x w i).bound ≤ ENNReal.ofReal δ) → 0 ≤ δ →
-    pf.SoundAt (δo + δ)
 
 end Flock.Guarantees

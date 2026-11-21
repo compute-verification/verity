@@ -1,7 +1,6 @@
 module
 
 public import Definitions.Pouw.H1Zy.Lane
-public import Definitions.Pouw.H1Zy.CombineBits
 
 /-!
 # `PouwH1LaneZy_v1{PouwH1Tile_v1}` on bits (trusted)
@@ -63,9 +62,6 @@ def immaS8Bits (acc : Fin 32 → Bool) (a b : Fin 32 → Fin 8 → Bool) : Fin 3
   let ovf := xor (s 31) (s 32)
   fun i => if h : i.val < 31 then xor (s ⟨i.val, by omega⟩) (ovf && xor (!s 32) (s ⟨i.val, by omega⟩)) else s 32
 
-/-- A word from its bits, LSB first. -/
-def ofBits {n : ℕ} (f : Fin n → Bool) : BitVec n := (BitVec.ofBoolListLE (List.ofFn f)).cast (List.length_ofFn)
-
 /-- `GemmAccumulatorS8_v2`'s lowering after its first `n` steps: step `s` is `immaS8Bits` on codes `32 s .. 32 s + 31`,
 from the zero accumulator (`gemm._steps`). -/
 def gemmStepsBits {K : ℕ} (x w : Fin K → Fin 8 → Bool) : ℕ → Fin 32 → Bool
@@ -73,89 +69,5 @@ def gemmStepsBits {K : ℕ} (x w : Fin K → Fin 8 → Bool) : ℕ → Fin 32 �
   | n + 1 => immaS8Bits (gemmStepsBits x w n)
       (fun j => if h : 32 * n + j.val < K then x ⟨32 * n + j.val, h⟩ else fun _ => false)
       (fun j => if h : 32 * n + j.val < K then w ⟨32 * n + j.val, h⟩ else fun _ => false)
-
-/-- **`GemmAccumulatorS8_v2{K, BlackwellS8ImmaDot32_v2}`'s lowering**: `K/32` steps. -/
-def gemmAccS8Bits {K : ℕ} (x w : Fin K → Fin 8 → Bool) : Fin 32 → Bool := gemmStepsBits x w (K / 32)
-
-/-- `PouwMuxBit_v2`'s lowering: `a xor (s and (a xor b))`. -/
-def muxBit (s a b : Bool) : Bool := xor a (s && xor a b)
-
-/-- `PouwMask32_v2`'s lowering: each bit AND `live`. -/
-def mask32Bits (w : Fin 32 → Bool) (live : Bool) : Fin 32 → Bool := fun i => w i && live
-
-/-- `PouwZyCell_v2`'s lowering: `and_reduce` of the XNORs of `zr ++ yr` against `z ++ y`. -/
-def zyCellBits (zr : Fin 32 → Bool) (yr : Fin 16 → Bool) (z : Fin 32 → Bool) (y : Fin 16 → Bool) : Bool :=
-  tree andBit true ((List.ofFn fun i => !(xor (zr i) (z i))) ++ List.ofFn fun i => !(xor (yr i) (y i)))
-
-/-- `PouwZyCheck_v1{R, C}` on bits, at a dequant on bits `dqB`. -/
-def zyCheckBits {R C : ℕ} (dqB : (Fin 32 → Bool) → (Fin 32 → Bool) → (Fin 32 → Bool) → Fin 16 → Bool)
-    (zr : Fin R → Fin C → Fin 32 → Bool) (yr : Fin R → Fin C → Fin 16 → Bool) (z : Fin R → Fin C → Fin 32 → Bool)
-    (sa : Fin R → Fin 32 → Bool) (sw : Fin C → Fin 32 → Bool) : Bool :=
-  tree andBit true
-    (List.ofFn fun i => List.ofFn fun j => zyCellBits (zr i j) (yr i j) (z i j) (dqB (z i j) (sa i) (sw j))).flatten
-
-/-- `h1zy._pick` at a candidate's mux `f`. -/
-def pickBy {α : Type} (f : Bool → α → α → α) (d : α) (sel : List Bool) (cands : List α) : α :=
-  (sel.foldl (fun cs s => pairs (f s) cs) cands).headD d
-
-/-- A record candidate's mux on bits: `muxBit` at each of its 48 bits (z's 32, then y's 16). -/
-def muxCand (s : Bool) (p q : (Fin 32 → Bool) × (Fin 16 → Bool)) : (Fin 32 → Bool) × (Fin 16 → Bool) :=
-  (fun i => muxBit s (p.1 i) (q.1 i), fun i => muxBit s (p.2 i) (q.2 i))
-
-/-- **A lane's inputs on bits**, each word's bits LSB first. -/
-structure LaneInBits (K nw : ℕ) (P : Type) where
-  a : Fin 4 → Fin K → Fin 8 → Bool
-  sa : Fin 4 → Fin 32 → Bool
-  b : Fin 8 → Fin K → Fin 8 → Bool
-  sw : Fin 8 → Fin 32 → Bool
-  admit : Fin 32 → Bool
-  zr : Fin 32 → Fin 32 → Fin 32 → Bool
-  yr : Fin 32 → Fin 32 → Fin 16 → Bool
-  partials : Fin nw → Fin 32 → Bool
-  pub : P
-  lane : Fin 16 → Bool
-
-/-- A lane's word inputs as bits. -/
-def LaneIn.bits {K nw : ℕ} {P : Type} (x : LaneIn K nw P) : LaneInBits K nw P where
-  a s k := bv (x.a s k)
-  sa s := bv (x.sa s)
-  b t k := bv (x.b t k)
-  sw t := bv (x.sw t)
-  admit := x.admit
-  zr i j := bv (x.zr i j)
-  yr i j := bv (x.yr i j)
-  partials w := bv (x.partials w)
-  pub := x.pub
-  lane := x.lane
-
-/-- **`PouwH1LaneZy_v1{PouwH1Tile_v1}`'s `ok` on bits** at a 32 × 32 leaf (`h1zy._lane_body`): `laneOk` with each
-piece at its lowering, the dequant `dqB` and the chain's words `chainB` on bits. -/
-def laneBits {K nw : ℕ} {P : Type}
-    (chainB : P → Fin 32 → (Fin 4 → Fin K → Fin 8 → Bool) → (Fin 8 → Fin K → Fin 8 → Bool) → Fin nw → Fin 32 → Bool)
-    (dqB : (Fin 32 → Bool) → (Fin 32 → Bool) → (Fin 32 → Bool) → Fin 16 → Bool) (x : LaneInBits K nw P) : Bool :=
-  let sel := List.ofFn fun t : Fin 5 => x.lane (Fin.castLE (by omega) t)
-  let l : Fin 32 := ⟨bitsVal sel, by simpa [sel] using bitsVal_lt sel⟩
-  let picked : Fin 4 → Fin 8 → (Fin 32 → Bool) × (Fin 16 → Bool) := fun s t =>
-    pickBy muxCand (fun _ => false, fun _ => false) sel
-      (List.ofFn fun ln : Fin 32 => (x.zr (laneRow ln s) (laneCol ln t), x.yr (laneRow ln s) (laneCol ln t)))
-  let ok := zyCheckBits dqB (fun s t => (picked s t).1) (fun s t => (picked s t).2)
-    (fun s t => gemmAccS8Bits (x.a s) (x.b t)) x.sa x.sw
-  let live := tree orBit false (List.ofFn x.admit)
-  let eq := List.ofFn fun w => eq32Bits (x.partials w) (mask32Bits (chainB x.pub l x.a x.b w) live)
-  let high := tree orBit false (List.ofFn fun t : Fin 11 => x.lane ⟨5 + t.val, by omega⟩)
-  muxBit high (tree andBit true (ok :: eq)) false
-
-/-- The dequant on bits at its word view `dqW` (`PouwZyDequant_v1`): its lowering (`S32ToF32Rn_v2`, two `F32Mul_v4`,
-`F2fpBf16_v2`, 5,230 ANDs) is not restated here. -/
-def liftDq (dqW : BitVec 32 → BitVec 32 → BitVec 32 → BitVec 16) :
-    (Fin 32 → Bool) → (Fin 32 → Bool) → (Fin 32 → Bool) → Fin 16 → Bool :=
-  fun z sa sw => bv (dqW (ofBits z) (ofBits sa) (ofBits sw))
-
-/-- The chain's words on bits at their word view `chain`: their lowering (the seeds, the noise blocks, fx1's chain) is
-not restated here. -/
-def liftChain {K nw : ℕ} {P : Type}
-    (chain : P → Fin 32 → (Fin 4 → Fin K → BitVec 8) → (Fin 8 → Fin K → BitVec 8) → Fin nw → BitVec 32) :
-    P → Fin 32 → (Fin 4 → Fin K → Fin 8 → Bool) → (Fin 8 → Fin K → Fin 8 → Bool) → Fin nw → Fin 32 → Bool :=
-  fun p l a b w => bv (chain p l (fun s k => ofBits (a s k)) (fun t k => ofBits (b t k)) w)
 
 end Pouw.H1Zy

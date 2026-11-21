@@ -116,48 +116,4 @@ def IntegrityBlock : Prop :=
         (reg ((S.W t).sim τ)) (cont ((S.W t).sim τ)) (S.W t).k (S.W t).Rw (S.W t).M (S.W t).t') →
     value (S.BlockMissProb q δ b) (S.run s) ≤ ENNReal.ofReal δ + S.err b
 
-/-- **The integrity audit per server-time block, over a monitoring period of `B` blocks.** In a monitoring period as in
-`IntegrityBlock` whose samples each cover at least a fraction `q > 0` of their session's units, the probability that some
-block is accepted with at least `ln(1/δ)/q` incorrect proof blocks is at most
-$$\sum_{b < B} \Big(\delta + \sum_{t \in b} (\varepsilon_{ks,t} + \delta_{link,t})\Big).$$
-Its named assumptions are `IntegrityPooled`'s.
-The share `q` is a hypothesis: the count a `rate:NUM/DEN` rule names meets it at `q = NUM/DEN` over whatever
-population a window registers (`Flock.Bridge.samplingBlock_rate`), while under a fixed count the largest `q` that
-holds falls as the prover pads a window's population. -/
-def IntegrityBlocks : Prop :=
-  ∀ (S : ServerBlocks) (q δ : ℝ), 0 < q → 0 < δ →
-    (∀ t < S.T, q ≤ ((S.W t).kd : ℝ) / (S.W t).n) →
-    (∀ t < S.T, Assumptions.UniformRandomBytes (S.W t).Lb (S.W t).src) →
-    ∀ s : Strategy S.game,
-    (∀ t (τ : Strategy (S.W t).game), Period.Plays S.W S.T s t τ → ∀ ω j,
-      TableCRZ execArith hs512 (planZHJ (S.W t).dj (S.W t).y₀ ((S.W t).L.draw ω) (reg ((S.W t).sim τ))) j
-        (zcStrat execArith hs512 (planZHJ (S.W t).dj (S.W t).y₀) (cont ((S.W t).sim τ) ω)) (S.W t).qF (S.W t).qS) →
-    (∀ t (τ : Strategy (S.W t).game), Period.Plays S.W S.T s t τ →
-      LinkCRZC execArith hs512 (S.W t).P (planZHJ (S.W t).dj (S.W t).y₀) (tabZHJ (S.W t).dj (S.W t).y₀) (S.W t).vb
-        (reg ((S.W t).sim τ)) (cont ((S.W t).sim τ)) (S.W t).k (S.W t).Rw (S.W t).M (S.W t).t') →
-    value (fun l => ∃ b < S.B, S.BlockMissProb q δ b l) (S.run s) ≤
-      ∑ b ∈ Finset.range S.B, (ENNReal.ofReal δ + S.err b)
-
-/-- **The integrity audit over a monitoring period of `B` server-time blocks, pooled.** In a monitoring period as in
-`IntegrityBlocks`, the probability that every session of every block is accepted and the incorrect proof blocks over the monitoring
-period total at least `ln(1/δ)/q` is at most
-$$\delta + \sum_{b < B} \sum_{t \in b} (\varepsilon_{ks,t} + \delta_{link,t}).$$
-Its named assumptions are `IntegrityPooled`'s.
-The share `q` is a hypothesis: the count a `rate:NUM/DEN` rule names meets it at `q = NUM/DEN` over whatever
-population a window registers (`Flock.Bridge.samplingBlock_rate`), while under a fixed count the largest `q` that
-holds falls as the prover pads a window's population. -/
-def IntegrityPooledBlocks : Prop :=
-  ∀ (S : ServerBlocks) (q δ : ℝ), 0 < q → 0 < δ →
-    (∀ t < S.T, q ≤ ((S.W t).kd : ℝ) / (S.W t).n) →
-    (∀ t < S.T, Assumptions.UniformRandomBytes (S.W t).Lb (S.W t).src) →
-    ∀ s : Strategy S.game,
-    (∀ t (τ : Strategy (S.W t).game), Period.Plays S.W S.T s t τ → ∀ ω j,
-      TableCRZ execArith hs512 (planZHJ (S.W t).dj (S.W t).y₀ ((S.W t).L.draw ω) (reg ((S.W t).sim τ))) j
-        (zcStrat execArith hs512 (planZHJ (S.W t).dj (S.W t).y₀) (cont ((S.W t).sim τ) ω)) (S.W t).qF (S.W t).qS) →
-    (∀ t (τ : Strategy (S.W t).game), Period.Plays S.W S.T s t τ →
-      LinkCRZC execArith hs512 (S.W t).P (planZHJ (S.W t).dj (S.W t).y₀) (tabZHJ (S.W t).dj (S.W t).y₀) (S.W t).vb
-        (reg ((S.W t).sim τ)) (cont ((S.W t).sim τ)) (S.W t).k (S.W t).Rw (S.W t).M (S.W t).t') →
-    value (fun l => (∀ r ∈ l, r.accepted) ∧ Real.log (1 / δ) / q ≤ ((l.map SamplingBlockRec.incorrect).sum : ℝ)) (S.run s) ≤
-      ENNReal.ofReal δ + ∑ b ∈ Finset.range S.B, S.err b
-
 end Flock.Guarantees

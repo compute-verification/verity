@@ -355,10 +355,4 @@ theorem sampledKSLiveV2_of (h : SampledKSLive) : SampledKSLiveV2 := by
     hM ρ hρ hr (t' + v) (add_nonneg ht' hv) K₀ hK₀ τ (2 * (t' + v)) (t' + v) (Bridge.nsOf desc qr) (Bridge.nsOf_sum hpop)
     desc q
 
-/-- **The assembly, with canonical openings**: canonical transport, M1's core over `RightRegZc`, the slot count and the
-count lemma turn `EndToEndHiddenC` into `SampledKSLive` at `RowsOk` circuit files (`SampledKSLiveV2`). -/
-def _root_.Flock.Bridge.AssemblyTargetC : Prop :=
-  Bridge.TransportsLiveC → Bridge.FaultyRightTargetC → Bridge.PartBlocksTarget → Bridge.CountTarget →
-    Bridge.EndToEndHiddenC → SampledKSLiveV2
-
 end Flock.Guarantees

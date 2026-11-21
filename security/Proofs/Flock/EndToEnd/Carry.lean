@@ -261,10 +261,6 @@ theorem out_spec (z : (Σ _ : x.Ses, TrialAt W) × List (Σ _ : x.Ses, TrialAt W
           ((x.registered t' ht' R').symm.trans ((W t').leaf_of_com (x.row t' ht') o' hR').symm))
       exact hm96Pair_spec _ _ _ _ (x.enc_ne (v := (W t).vb.val o) (v' := (W t').vb.val o') ht ht' hne) hl
 
-theorem carryOn_of_sub {I : Finset ℕ} (hI : x.sessions ⊆ I) : x.carryOn I = x.carry := by
-  unfold carryOn carry
-  rw [Finset.inter_eq_left.2 hI]
-
 end CarriedLeaf
 
 namespace CarriedBlocks
@@ -595,21 +591,6 @@ theorem integrity_on_units (I : Finset ℕ) {q : ℝ} (hq : 0 < q)
         add_le_add (hA.trans (add_le_add hε (S.carry_le s I hA2))) hB
     _ = xq ^ M + ∑ t ∈ I, ((S.W t).ks + (S.W t).link) + ∑ x, (S.leaf x).carryOn I := by ring
 
-/-- **`IntegrityPooledCarried` on a set `I` of the monitoring period's sessions**, at `M` incorrect proof blocks: as
-`Flock.SecurityProofs.integrity_on`, with each session of `I`'s carried term. -/
-theorem integrity_on (I : Finset ℕ) {q : ℝ} (hq : 0 < q)
-    (hqt : ∀ t ∈ I, q ≤ ((S.W t).kd : ℝ) / (S.W t).n)
-    (hA3 : ∀ t ∈ I, Assumptions.UniformRandomBytes (S.W t).Lb (S.W t).src)
-    (hs : MonitoringPeriodGood (fun t => (S.W t).game) (fun t => (S.W t).CR) 0 S.T s)
-    (hA2 : ∀ x, Assumptions.SHA512CRExpected H512 (finderG (S.mix s x) (S.leaf x).M)
-      (finderStrat (S.mix s x) (S.mixS s x) (S.leaf x).M)
-      (outOf (rdSig fun _ => (S.leaf x).rd) (S.leaf x).op (S.leaf x).col)
-      (finderCost (rdSig fun _ => (S.leaf x).rd) (S.leaf x).costMix)) (M : ℕ) :
-    value (fun l => (∀ r ∈ l, r.idx ∈ I → r.accepted) ∧
-        M ≤ ((l.filter fun r => r.idx ∈ I).map SamplingBlockRec.incorrect).sum) (S.run s) ≤
-      ENNReal.ofReal (1 - q) ^ M + ∑ t ∈ I, ((S.W t).ks + (S.W t).link) + ∑ x, (S.leaf x).carryOn I :=
-  S.integrity_on_units s I hq (fun t ht _ => hqt t ht) hA3 hs hA2 M
-
 /-- A monitoring period of server-time blocks with no carried leaf. -/
 def ofServer (S : ServerBlocks) : CarriedBlocks := { S with nL := 0, leaf := Fin.elim0, hin := fun x => x.elim0 }
 
@@ -638,62 +619,6 @@ namespace Flock.SecurityProofs
 
 open FlockSoundness FlockSoundness.Game Flock.Guarantees
 open scoped ENNReal
-
-/-- **The integrity audit over a monitoring period of server-time blocks, with carried state.** -/
-theorem IntegrityPooledCarried : Flock.Guarantees.IntegrityPooledCarried := by
-  intro S q δ hq hδ hqt hA3 s hT hL hA2
-  classical
-  have hs : MonitoringPeriodGood (fun t => (S.W t).game) (fun t => (S.W t).CR) 0 S.T s :=
-    monitoringPeriodGood_of_plays _ _ S.T 0 s fun t τ hp => And.intro (hT t τ hp) (hL t τ hp)
-  set M : ℕ := ⌈Real.log (1 / δ) / q⌉₊
-  set xq : ℝ≥0∞ := ENNReal.ofReal (1 - q)
-  have hx : xq ≤ 1 := ENNReal.ofReal_le_one.2 (by linarith)
-  have hfac : ∀ t < S.T, ∀ m : ℕ, (1 - ((S.W t).kd : ℝ≥0∞) / (S.W t).n) ^ m ≤ xq ^ m :=
-    fun t ht m => pow_le_pow_left₀ zero_le ((S.W t).one_sub_le hq (hqt t ht)) m
-  have hgood := monitoringPeriodGood_mono _ S.T 0 s (fun j τ _ hj hcr => (⟨by omega, hcr⟩ : j < S.T ∧ (S.W j).CR τ)) hs
-  -- some session accepted with a sampled proof block incorrect, each carried leaf read at its value
-  have hA := monitoringPeriod_unionE (fun t => (S.W t).game) (fun t => S.record s t) (fun r => r.accepted ∧ r.sampledWrong)
-    (fun t τ => t < S.T ∧ (S.W t).CR τ) (fun t => (S.W t).ks + (S.W t).link) (S.carriedOn s (Finset.range S.T))
-    (S.carriedOn_nonneg s _) (fun t τ hτ => by
-      simp only [CarriedBlocks.carriedOn, Finset.mem_range.2 hτ.1, ↓reduceIte]
-      exact S.stage_le s t τ hτ.2) S.T 0 s hgood
-  -- every sample misses, with at least `M` incorrect proof blocks in all
-  have hB := monitoringPeriod_horizon (fun t => (S.W t).game) (fun t => S.record s t) (fun r => ¬ r.sampledWrong)
-    SamplingBlockRec.incorrect (fun t τ => t < S.T ∧ (S.W t).CR τ) xq hx
-    (fun t τ hτ => ⟨(S.incorrectSet s t τ).card, fun _ => rfl,
-      ((S.W t).sampleMiss_le (hA3 t hτ.1) _ τ).trans (hfac t hτ.1 _)⟩) S.T 0 s M hgood
-  have hxM : xq ^ M ≤ ENNReal.ofReal δ := one_sub_pow_le_of_log hq hδ (Nat.le_ceil _)
-  have hε : ∑ t ∈ Finset.range S.T, (fun t => (S.W t).ks + (S.W t).link) (0 + t) =
-      ∑ b ∈ Finset.range S.B, S.err b := by
-    simp only [zero_add]
-    exact sum_range_start S.toServerBlocks (fun t => (S.W t).ks + (S.W t).link) S.B
-  calc value (fun l => (∀ r ∈ l, r.accepted) ∧ Real.log (1 / δ) / q ≤ ((l.map SamplingBlockRec.incorrect).sum : ℝ)) (S.run s)
-      ≤ value (fun l => (∃ r ∈ l, r.accepted ∧ r.sampledWrong) ∨
-          ((∀ r ∈ l, ¬ r.sampledWrong) ∧ M ≤ (l.map SamplingBlockRec.incorrect).sum)) (S.run s) := by
-        refine value_mono (fun l hl => ?_) _
-        by_cases hd : ∃ r ∈ l, r.sampledWrong
-        · obtain ⟨r, hr, hdr⟩ := hd
-          exact Or.inl ⟨r, hr, hl.1 r hr, hdr⟩
-        · exact Or.inr ⟨fun r hr hdr => hd ⟨r, hr, hdr⟩, Nat.ceil_le.2 hl.2⟩
-    _ ≤ value (fun l => ∃ r ∈ l, r.accepted ∧ r.sampledWrong) (S.run s) +
-          value (fun l => (∀ r ∈ l, ¬ r.sampledWrong) ∧ M ≤ (l.map SamplingBlockRec.incorrect).sum) (S.run s) :=
-        value_or_le _ _ _
-    _ ≤ (∑ b ∈ Finset.range S.B, S.err b + ∑ x, (S.leaf x).carry) + ENNReal.ofReal δ := by
-        refine add_le_add ?_ (hB.trans hxM)
-        refine hA.trans ?_
-        rw [hε]
-        exact add_le_add le_rfl ((S.carry_le s _ hA2).trans_eq (Finset.sum_congr rfl fun x _ =>
-          (S.leaf x).carryOn_of_sub fun d hd => Finset.mem_range.2 (S.hin x d hd)))
-    _ = ENNReal.ofReal δ + ∑ b ∈ Finset.range S.B, S.err b + ∑ x, (S.leaf x).carry := by ring
-
-/-- **The integrity audit of one server-time block, with carried state.** -/
-theorem IntegrityBlockCarried : Flock.Guarantees.IntegrityBlockCarried := by
-  intro S b q δ hq hδ hqt hA3 s hT hL hA2
-  have hs : MonitoringPeriodGood (fun t => (S.W t).game) (fun t => (S.W t).CR) 0 S.T s :=
-    monitoringPeriodGood_of_plays _ _ S.T 0 s fun t τ hp => And.intro (hT t τ hp) (hL t τ hp)
-  refine (value_mono (fun l hl => ⟨hl.1, Nat.ceil_le.2 hl.2⟩) _).trans
-    ((S.integrity_on s (S.sessions b) hq hqt hA3 hs hA2 ⌈Real.log (1 / δ) / q⌉₊).trans ?_)
-  exact add_le_add (add_le_add (one_sub_pow_le_of_log hq hδ (Nat.le_ceil _)) le_rfl) le_rfl
 
 /-- **Sessions that prove every unit and share registered values, with no proof block incorrect**: `integrity_on_units`
 at `q = 1` and `M = 1`, whose sampling term `(1 - q)^M` is then `0`; a session with no units reads no rate. -/

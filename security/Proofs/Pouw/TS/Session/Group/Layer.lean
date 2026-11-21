@@ -70,10 +70,6 @@ open Pouw.RelativeSecurity (Paths)
 combine (`none`). -/
 abbrev Ix (L n : ℕ) : Type := Option (Fin L × Fin n)
 
-/-- A group of `L` lanes of `n` chunks and a combine is `L n + 1` statements. -/
-theorem card_ix (L n : ℕ) : Fintype.card (Ix L n) = L * n + 1 := by
-  simp [Ix, Fintype.card_option, Fintype.card_prod, Fintype.card_fin]
-
 /-- **What the leaf verifier asks of one of a group's sessions**: verity-verify-proof `--zk --registered` accepts its outcome
 `o`, its known-content check at `known`, its complete check and its known-read check at `known` and the ports `full`
 it reads in full included, and `pouw-leaf-own`'s checks of its registered file (the ports `want`), of its sample (every
@@ -92,9 +88,6 @@ def SessionChecks (s : RowsSession) (o : s.Out) (known : Known) (full : Array St
 salt (`PouwWindow.Lanes.knownRows`' last entry at every statement). -/
 def okKnown (known : Known) (salt : ByteArray) : Known :=
   known ++ #[("o0", #[(PouwWindow.Lanes.okRow, salt)])]
-
-theorem okKnown_names (known : Known) (salt : ByteArray) : ∃ ks, ("o0", ks) ∈ okKnown known salt :=
-  ⟨#[(PouwWindow.Lanes.okRow, salt)], Array.mem_append.2 (Or.inr (by simp))⟩
 
 /-- **The leaf's proof layer through its group of sessions**: for a tile `T` whose `T.lanes` lanes take `n` chunks
 each, proof `i` of round `w` is accepted where the leaf verifier's check of the tile and its chunks passes

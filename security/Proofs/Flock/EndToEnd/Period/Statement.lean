@@ -139,9 +139,6 @@ def CR (τ : Strategy w.game) : Prop :=
     LinkCRZC execArith hs512 w.P (planZHJ w.dj w.y₀) (tabZHJ w.dj w.y₀) w.vb (reg (w.sim τ)) (cont (w.sim τ)) w.k w.Rw
       w.M w.t'
 
-/-- The sampling term, `C(n − K₀, kd)/C(n, kd)`. -/
-noncomputable def miss : ℝ≥0∞ := ((w.n - w.K₀).choose w.kd : ℝ≥0∞) / (w.n.choose w.kd : ℝ≥0∞)
-
 /-- The knowledge term `ε_ks`, `ksAvgStrictZ` at the worst registration. -/
 noncomputable def ks : ℝ≥0∞ := ⨆ R : w.Reg, ksAvgStrictZ (planZHJ w.dj w.y₀) w.L w.k w.qF w.qS R
 
@@ -188,82 +185,5 @@ def Plays (W : ℕ → SamplingBlock) (T : ℕ) (s : Strategy (game W T)) (t : �
   MonitoringPeriodPlays (fun t => (W t).game) 0 T s t τ
 
 end Period
-
-/-- **The integrity audit over a period.** In a period of `T` sampling blocks `W t`, each a `--zk` session under hidden
-outputs with a fresh live uniform `kd`-subset sample, played by one adaptive prover `s`, the probability that some
-sampling block is accepted by verity-verify-proof with at least its `K₀` units incorrect is at most the sum of the sampling blocks'
-`EndToEndHidden` bounds,
-$$\Pr[\exists t,\ \text{sampling block } t \text{ accepted} \wedge K_{0,t} \le \text{incorrect}_t] \le
-  \sum_t \left(\frac{\binom{n_t-K_{0,t}}{kd_t}}{\binom{n_t}{kd_t}} + \varepsilon_{ks,t} + \delta_{link,t}\right).$$
-Its named assumptions, at every sampling block: A3 (`Assumptions.UniformRandomBytes`) for the sampling block's sample
-bytes, `live-verifier` (`SamplingBlock.hCust`), and `cr/sha-512` (`TableCRZ`) and `ecr/sha-512` (`LinkCRZC`),
-`EndToEndHidden`'s hypotheses, at every strategy a sampling block is played with on some run (`Period.Plays`).
-
-**Every committed window is presented.** The statement, like the two below it, is of every sampling block of the
-period's run, so a record is held to it only where the record presents every one. That each root a lane committed
-in a monitoring period under this registration is presented, once, with its one accepted audit, is stated of the
-accept of SPOT's period check, over the auditor's ledger (`Properties.Spot.MonitoringPeriod.CommittedOnce`, with
-`Properties.Spot.MonitoringPeriod.AcceptMeans` for the audit); a root the lane committed under another circuit is published
-by that circuit and not audited (`Properties.Spot.MonitoringPeriod.OthersElsewhere`). No statement here reads them, and a
-reader who holds a record to this one takes them beside it. -/
-def IntegrityMonitoringPeriod : Prop :=
-  ∀ (W : ℕ → SamplingBlock) (T : ℕ),
-    (∀ t < T, Assumptions.UniformRandomBytes (W t).Lb (W t).src) →
-    ∀ s : Strategy (Period.game W T),
-    (∀ t (τ : Strategy (W t).game), Period.Plays W T s t τ → ∀ ω j,
-      TableCRZ execArith hs512 (planZHJ (W t).dj (W t).y₀ ((W t).L.draw ω) (reg ((W t).sim τ))) j
-        (zcStrat execArith hs512 (planZHJ (W t).dj (W t).y₀) (cont ((W t).sim τ) ω)) (W t).qF (W t).qS) →
-    (∀ t (τ : Strategy (W t).game), Period.Plays W T s t τ →
-      LinkCRZC execArith hs512 (W t).P (planZHJ (W t).dj (W t).y₀) (tabZHJ (W t).dj (W t).y₀) (W t).vb
-        (reg ((W t).sim τ)) (cont ((W t).sim τ)) (W t).k (W t).Rw (W t).M (W t).t') →
-    value (fun l => ∃ r ∈ l, r.accepted ∧ (W r.idx).K₀ ≤ r.incorrect) (Period.run W T s) ≤
-      ∑ t ∈ Finset.range T, ((W t).miss + (W t).ks + (W t).link)
-
-/-- **The integrity audit over a period, at `δ`.** In a period as in `IntegrityMonitoringPeriod` whose sampling blocks' samples each
-cover at least a fraction `q > 0` of their units (`q ≤ kd_t/n_t`), with each sampling block's threshold
-`K₀,t ≥ ln(1/δ)/q`, the probability that some sampling block is accepted with at least its `K₀` units incorrect is at most
-$$\sum_t (\delta + \varepsilon_{ks,t} + \delta_{link,t}),$$
-each sampling block's sampling term `C(n − K₀, kd)/C(n, kd) ≤ (1 − q)^{K₀}` being at most `δ`. Its named assumptions are
-`IntegrityMonitoringPeriod`'s.
-The share `q` is a hypothesis: the count a `rate:NUM/DEN` rule names meets it at `q = NUM/DEN` over whatever
-population a window registers (`Flock.Bridge.samplingBlock_rate`), while under a fixed count the largest `q` that
-holds falls as the prover pads a window's population. -/
-def IntegrityMonitoringPeriodLog : Prop :=
-  ∀ (W : ℕ → SamplingBlock) (T : ℕ) (q δ : ℝ), 0 < q → 0 < δ →
-    (∀ t < T, q ≤ ((W t).kd : ℝ) / (W t).n) →
-    (∀ t < T, Real.log (1 / δ) / q ≤ (W t).K₀) →
-    (∀ t < T, Assumptions.UniformRandomBytes (W t).Lb (W t).src) →
-    ∀ s : Strategy (Period.game W T),
-    (∀ t (τ : Strategy (W t).game), Period.Plays W T s t τ → ∀ ω j,
-      TableCRZ execArith hs512 (planZHJ (W t).dj (W t).y₀ ((W t).L.draw ω) (reg ((W t).sim τ))) j
-        (zcStrat execArith hs512 (planZHJ (W t).dj (W t).y₀) (cont ((W t).sim τ) ω)) (W t).qF (W t).qS) →
-    (∀ t (τ : Strategy (W t).game), Period.Plays W T s t τ →
-      LinkCRZC execArith hs512 (W t).P (planZHJ (W t).dj (W t).y₀) (tabZHJ (W t).dj (W t).y₀) (W t).vb
-        (reg ((W t).sim τ)) (cont ((W t).sim τ)) (W t).k (W t).Rw (W t).M (W t).t') →
-    value (fun l => ∃ r ∈ l, r.accepted ∧ (W r.idx).K₀ ≤ r.incorrect) (Period.run W T s) ≤
-      ∑ t ∈ Finset.range T, (ENNReal.ofReal δ + (W t).ks + (W t).link)
-
-/-- **The integrity audit over a period, pooled.** In `T` sampling blocks as in `IntegrityMonitoringPeriod`, each sampling
-block's sample covering at least a fraction `q > 0` of its units (`q ≤ kd_t/n_t`), the probability that every sampling
-block is accepted and the incorrect proof blocks total at least `ln(1/δ)/q` is at most
-$$\delta + \sum_t (\varepsilon_{ks,t} + \delta_{link,t}).$$
-Its named assumptions are `IntegrityMonitoringPeriod`'s.
-The share `q` is a hypothesis: the count a `rate:NUM/DEN` rule names meets it at `q = NUM/DEN` over whatever
-population a window registers (`Flock.Bridge.pooledIntegrity_rate` is this statement at that rate), while
-under a fixed count the largest `q` that holds falls as the prover pads a window's population. -/
-def IntegrityPooled : Prop :=
-  ∀ (W : ℕ → SamplingBlock) (T : ℕ) (q δ : ℝ), 0 < q → 0 < δ →
-    (∀ t < T, q ≤ ((W t).kd : ℝ) / (W t).n) →
-    (∀ t < T, Assumptions.UniformRandomBytes (W t).Lb (W t).src) →
-    ∀ s : Strategy (Period.game W T),
-    (∀ t (τ : Strategy (W t).game), Period.Plays W T s t τ → ∀ ω j,
-      TableCRZ execArith hs512 (planZHJ (W t).dj (W t).y₀ ((W t).L.draw ω) (reg ((W t).sim τ))) j
-        (zcStrat execArith hs512 (planZHJ (W t).dj (W t).y₀) (cont ((W t).sim τ) ω)) (W t).qF (W t).qS) →
-    (∀ t (τ : Strategy (W t).game), Period.Plays W T s t τ →
-      LinkCRZC execArith hs512 (W t).P (planZHJ (W t).dj (W t).y₀) (tabZHJ (W t).dj (W t).y₀) (W t).vb
-        (reg ((W t).sim τ)) (cont ((W t).sim τ)) (W t).k (W t).Rw (W t).M (W t).t') →
-    value (fun l => (∀ r ∈ l, r.accepted) ∧ Real.log (1 / δ) / q ≤ ((l.map SamplingBlockRec.incorrect).sum : ℝ))
-        (Period.run W T s) ≤
-      ENNReal.ofReal δ + ∑ t ∈ Finset.range T, ((W t).ks + (W t).link)
 
 end Flock.Guarantees

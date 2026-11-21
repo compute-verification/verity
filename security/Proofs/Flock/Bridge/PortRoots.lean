@@ -245,13 +245,6 @@ def RootFixesDomain (c : Flock.Circuit) (pub : Flock.Public) (nl : ℕ) : Prop :
   ∀ q q' : ℕ, q' < q → q < c.ports.size →
     (rootsOf c pub nl).getD q' [] = (rootsOf c pub nl).getD q [] → domOf c pub q' = domOf c pub q
 
-/-- **The distinct-roots form of the guard**, `TransportsLiveCS`'s hypothesis: from `RootFixesDomain`, at a public
-file whose ports' published domains are pairwise distinct (`PortRoots.dupId`, which the verifier refuses). -/
-theorem rootsDistinct_of_fixes {c : Flock.Circuit} {pub : Flock.Public} {nl : ℕ}
-    (hn : Flock.PortRoots.dupId c pub = false) (hf : RootFixesDomain c pub nl) :
-    ∀ q q' : ℕ, q' < q → q < c.ports.size → (rootsOf c pub nl).getD q' [] ≠ (rootsOf c pub nl).getD q [] :=
-  fun q q' hlt hq he => Flock.PortRoots.idOf_ne_of_dupId_false hn hlt hq (hf q q' hlt hq he)
-
 /-! ## The finder, and the term in `ecr/sha-512` -/
 
 /-- Pairs `(q', q)` of ports, `q' < q < m`. -/
@@ -302,15 +295,6 @@ theorem fixes_of_none {c : Flock.Circuit} {pub : Flock.Public} {nl : ℕ} (h : r
   have := List.find?_eq_none.mp hc (q', q) (mem_pairs.mpr ⟨hlt, hq⟩)
   simp only [decide_eq_true_eq, not_and, not_not] at this
   exact this he
-
-/-- **The decidable form of the guard**: no colliding pair of ports (`rootsColl c pub nl = none`) iff an earlier port
-with a port's root has its domain. -/
-theorem rootsColl_none_iff {c : Flock.Circuit} {pub : Flock.Public} {nl : ℕ} :
-    rootsColl c pub nl = none ↔ RootFixesDomain c pub nl := by
-  refine ⟨fixes_of_none, fun h => Option.map_eq_none_iff.mpr (List.find?_eq_none.mpr fun ⟨a, b⟩ hp => ?_)⟩
-  obtain ⟨hlt, hq⟩ := mem_pairs.mp hp
-  simp only [decide_eq_true_eq, not_and, not_not]
-  exact h b a hlt hq
 
 theorem finderPr_one {H : Msg → Msg} {F : Claims.Finder}
     (h : ∀ s, ∃ u v, F.out s = some (u, v) ∧ Claims.Collision H u v) : F.Pr H = 1 := by

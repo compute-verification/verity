@@ -172,9 +172,4 @@ def _root_.Flock.Bridge.TransportsLive : Prop :=
     ∀ u, ∀ g ∈ P.io u, ∀ o : vb.Opening, vb.com o = vb.cs (reg σ) (vb.pos g) →
       ∃ d : Hash.Msg, Cd.Opens Claims.Sampling.sha512Msg roots ⟨Bridge.posOf Cc g, vb.bit (vb.val o) g, d⟩ = true
 
-/-- **`SampledKSLive` is stated**: it, and the definitions it reads, equal to itself. -/
-def SampledKSLiveStated : Prop :=
-  let s := SampledKSLive
-  s = s
-
 end Flock.Guarantees

@@ -1,7 +1,6 @@
 module
 
 public import Proofs.Flock.SoundAtBridge.Statement
-public import Proofs.Flock.EndToEndRegisteredRows.Statement
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -56,26 +55,6 @@ open scoped ENNReal
 
 namespace RowsSession
 
-/-- **The per-unit link, by a union bound over the units** (gap 3): `EndToEndRegisteredRows` at each unit's opening
-`rdU u` bounds its event by the session's `bound`; a sampled proof block wrong or off at its own reads is in its own opening's
-event, so the per-unit event is at most `n · bound`. -/
-theorem prob_badU_le (hE : Flock.Guarantees.EndToEndRegisteredRows) (s : RowsSession) (hs : s.CR) :
-    Game.prob s.BadU s.G s.τ ≤ (s.n : ℝ≥0∞) * s.bound := by
-  obtain ⟨hCR, hA2, hRows, hReg⟩ := hs
-  have hU : ∀ u : Fin s.n, Game.prob (s.EvAt u) s.G s.τ ≤ s.bound := fun u =>
-    hE s.n s.Reg s.own s.I s.ht s.D s.hD s.hU s.pub s.hpub s.hscope s.kd s.hdiv s.dj s.S₀ s.d₀ s.y₀ (s.rdU u) s.wr
-      s.dg s.N s.Ω s.Lb s.src s.hTags s.hCust s.k s.Rw s.M s.hk s.hRw s.hM s.ρ s.hρ s.hr s.t' s.ht' s.τ s.qF s.qS
-      s.qR hCR hA2 (hRows u) (hReg u)
-  have hsub : ∀ o, s.BadU o → ∃ u ∈ (Finset.univ : Finset (Fin s.n)), s.EvAt u o := by
-    rintro o ⟨hA, u, hu, h⟩
-    exact ⟨u, Finset.mem_univ u, hA, u, hu, h⟩
-  calc Game.prob s.BadU s.G s.τ
-      ≤ Game.prob (fun o => ∃ u ∈ (Finset.univ : Finset (Fin s.n)), s.EvAt u o) s.G s.τ :=
-        Game.prob_mono hsub _ _
-    _ ≤ ∑ u : Fin s.n, Game.prob (s.EvAt u) s.G s.τ := game_prob_exists_le _ _ _ _
-    _ ≤ ∑ _u : Fin s.n, s.bound := Finset.sum_le_sum fun u _ => hU u
-    _ = (s.n : ℝ≥0∞) * s.bound := by rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
-
 end RowsSession
 
 variable {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type}
@@ -115,25 +94,5 @@ theorem rowsLayer_premises (sess : Paths Ω S → Fin S → Fin nπ → RowsSess
     AcceptedLive (rowsLayer sess out rows right) sess out ∧ OpenedPlurAt (rowsLayer sess out rows right) sess rows 0 ∧
     RelOfRows (rowsLayer sess out rows right) sess out rows :=
   ⟨fun _ _ _ => Iff.rfl, fun _ _ _ h => h, openedPlur_zero _ sess rows fun _ _ _ _ => rfl, fun _ _ _ h => h⟩
-
-/-- **`SoundAtBridge` from `EndToEndRegisteredRows`**: an unsound proof whose opening is the value layer's reading
-fails its relation there, so by `RelOfRows` some sampled proof block of its session is wrong or off at its own reads, and by
-`AcceptedLive` verity-verify-proof accepted: the per-unit event, at most `n · bound ≤ δ` in every session
-(`RowsSession.prob_badU_le`); one whose opening isn't is in `OpenedPlurAt`'s event, at most `δo`. `ExecutionPhaseSamplingDesign` carries
-the sessions' bound to the window's paths (`soundAt_of_sessions`). -/
-theorem soundAtBridge_of_rows (hE : Flock.Guarantees.EndToEndRegisteredRows) : Flock.Guarantees.SoundAtBridge := by
-  intro Ω _ S nπ V pf sess out rows δo δ hCR hSamplingDesign hAcc hOpen hRel hδ hδ0
-  refine soundAt_of_sessions pf (Out := fun s : RowsSession => s.Out) (fun s => s.G) (fun s => s.τ)
-    (fun s => s.BadU) sess out
-    (fun x w i => pf.accepted x w i ∧ pf.opened x w i ≠ rows (sess x w i) (sess x w i).Xv) δo δ hSamplingDesign hOpen
-    (fun x w i => (RowsSession.prob_badU_le hE _ (hCR x w i)).trans (hδ x w i)) hδ0 ?_
-  rintro x w i ⟨hA, hR⟩
-  by_cases hO : pf.opened x w i = rows (sess x w i) (sess x w i).Xv
-  · refine Or.inr ⟨hAcc x w i hA, ?_⟩
-    by_contra hno
-    have hrel := hRel x w i fun u hu =>
-      ⟨fun hw => hno ⟨u, hu, Or.inl hw⟩, Classical.byContradiction fun hr => hno ⟨u, hu, Or.inr hr⟩⟩
-    exact hR (by rw [hO]; exact hrel)
-  · exact Or.inl ⟨hA, hO⟩
 
 end Flock.SoundAtBridge

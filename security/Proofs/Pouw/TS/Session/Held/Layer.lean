@@ -1,6 +1,7 @@
 module
 
-public import Proofs.Pouw.TS.Session.Checked.Layer
+public import Proofs.Flock.SoundAtBridge.Session
+public import Proofs.Pouw.TS.Session.Assumptions
 public import Proofs.Pouw.TS.Session.Held.Known
 public import Definitions.ResourceAccounting.Served
 public import Batteries.Data.ByteArray
@@ -92,35 +93,5 @@ def OkColl (s : RowsSession) (ok : String) (ks : Array (Array ℕ × ByteArray))
   ∃ (u : Fin s.n) (p : s.vb.Pos), (s.rdU u).isRead p ∧ ((s.rdU u).port p).name = ok ∧ ∃ a b,
     FlockC3.RegLevels.knownColl ((s.rdU u).port p) ks ((s.rdU u).readAt p) ((rsOf s).enc p ((s.rdU u).wv p))
       ((s.rdU u).ws p) ((s.rdU u).wpath p) = some (a, b) ∧ a ≠ b ∧ H512 a = H512 b
-
-/-- **The checked unit's relation with its served checks**: `CheckedRel`, and the layer value `v` is the registered
-reads of one assignment the circuit's evaluation agrees with on every wire of every sampled proof block of `o`, at which every
-sampled proof block `u`'s checks hold in the registered circuit `Cd` (`ResourceAccounting.Served.Held` at `unitOf u` and `dec vals`); or
-the `ok` tie collides (`OkColl`) at the `ok` port's known rows in `known`. -/
-def HeldRel {ι : Type} (s : RowsSession) (o : s.Out) (ok : String) (Cd : ResourceAccounting.Compose.Declared ι)
-    (cls : ℕ → ResourceAccounting.Served.Cls) (unitOf : Fin s.n → ℕ) (dec : (Fin s.Circ.N → Bool) → ι → ℤ)
-    (known : Array (String × Array (Array ℕ × ByteArray))) (v : ℕ → ℕ → Option Bool) : Prop :=
-  CheckedRel s o ok v ∧
-    ((∃ vals : Fin s.Circ.N → Bool, v = rowsReg s vals ∧
-        (∀ u ∈ o.2.1, ∀ g ∈ s.P.io u, s.Circ.eval vals g = vals g) ∧
-        ∀ u ∈ o.2.1, ResourceAccounting.Served.Held Cd cls (unitOf u) (dec vals)) ∨
-      ∃ ks, (ok, ks) ∈ known ∧ OkColl s ok ks)
-
-/-- **The held layer through its Flock sessions**: proof `i` of round `w` is accepted where verity-verify-proof
-`--zk --registered` accepts its session at the registered file's known content `known x w i` (`LiveAcceptsZKR`, and
-`Registered.checkKnownAll`, which `verity-verify-proof` runs on `--registered F`), opens the committed rows at the registered
-reads (`openedReg`), and its relation is `HeldRel` at round `w`'s registered circuit `Cd w`. -/
-noncomputable def heldLayer {ι Ω : Type} {S nπ : ℕ} (sess : Paths Ω S → Fin S → Fin nπ → RowsSession)
-    (out : ∀ x w i, (sess x w i).Out) (ok : String)
-    (known : Paths Ω S → Fin S → Fin nπ → Array (String × Array (Array ℕ × ByteArray)))
-    (Cd : Fin S → ResourceAccounting.Compose.Declared ι) (cls : Fin S → ℕ → ResourceAccounting.Served.Cls)
-    (unitOf : ∀ x w i, Fin (sess x w i).n → ℕ) (dec : ∀ x w i, (Fin (sess x w i).Circ.N → Bool) → ι → ℤ)
-    (right : Paths Ω S → (Fin S → Fin nπ → ℕ → ℕ → Option Bool) → Prop) :
-    ProofLayer Ω S nπ (ℕ → ℕ → Option Bool) where
-  accepted x w i := LiveAcceptsZKR (sess x w i).I (sess x w i).own (out x w i) ∧
-    Flock.Registered.checkKnownAll (sess x w i).own (known x w i) = .ok ()
-  opened x w i := openedReg (sess x w i)
-  rel x w i v := HeldRel (sess x w i) (out x w i) ok (Cd w) (cls w) (unitOf x w i) (dec x w i) (known x w i) v
-  right := right
 
 end ResourceAccounting.TS.Held

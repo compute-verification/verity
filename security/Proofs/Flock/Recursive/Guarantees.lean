@@ -155,15 +155,6 @@ theorem recursiveZK_le {Ωa Ωp Ωo Ωs V : Type} [Fintype Ωa] [Nonempty Ωa] [
   refine h1.trans ((add_le_add h2 (le_refl εo)).trans (le_of_eq ?_))
   rw [h3, add_right_comm]
 
-/-- **The recursive audit is zero knowledge, up to where it stops**, at the pinned key's hiding gap, where hm96 hiding
-holds with no premise (`CROnly.hm96Hiding_gap`): the whole view's bound (`recursiveZK_le`), then the stop's count
-(`prCoin_cut_le`), with the gaps added once. -/
-theorem RecursiveZK : Flock.Guarantees.RecursiveZK := by
-  intro Ωa Ωp Ωo Ωs V St Ωk W _ _ _ _ _ _ _ _ _ _ _ _ nh msgs view sim εo hOuter cut stop E
-  refine (prCoin_cut_le (Flock.Guarantees.recView nh msgs view) (Flock.Guarantees.recIdeal nh sim) cut stop
-    (fun E => (recursiveZK_le nh msgs view sim hOuter (CROnly.hm96Hiding_gap ZkView.My ZkView.saltHash) E).trans
-      (le_of_eq (add_assoc _ _ _))) E).trans (le_of_eq (add_assoc _ _ _).symm)
-
 /-- **`RecursiveZK` at one stop is the whole view's bound**: at `St = Ωk = Unit` and `cut` the identity,
 `Flock.Guarantees.RecursiveZK` gives `recursiveZK_le` at the pinned key's hiding gap. -/
 theorem recursiveZK_whole (h : Flock.Guarantees.RecursiveZK) {Ωa Ωp Ωo Ωs V : Type} [Fintype Ωa] [Nonempty Ωa]

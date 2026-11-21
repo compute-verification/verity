@@ -1,7 +1,23 @@
 module
 
 public import Properties.Certifier.JointBridge.ServiceSoundOfSessions
-public import Proofs.Pouw.TS.SessionSound
+public import Proofs.Flock.EndToEndRegistered
+public import Flock.Desc
+public import Proofs.Flock.Soundness.Assumptions.Zk
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Public
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Rows
+public import Proofs.Flock.Soundness.Discharge.ZkReg.BindHJ
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Defs
+public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsHJ
+public import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJCustody
+public import Proofs.Flock.Soundness.Registered.ReadsX
+public import Proofs.Flock.Soundness.Discharge.Composed.PublicJ
+public import Proofs.Flock.Soundness.Discharge.Composed.SampledJ
+public import Mathlib.Combinatorics.Matroid.Init
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
+public import Proofs.Flock.Soundness.Registered.Binding
+public import Proofs.Flock.SoundAtBridge.Reduce
+public import Proofs.Pouw.TS.Session.Assumptions
 public import Proofs.Pouw.FillerLuck
 public import Proofs.Pouw.MonitoringPeriod.Honest
 

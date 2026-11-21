@@ -160,43 +160,6 @@ def hashArg (s : Schedule) (ℓ : ℕ) : ℕ := 2 ^ (lvOf s ℓ).logLen * (lvOf 
 /-- The hash-sum coefficient, rounded up: `Σ_{1 ≤ ℓ ≤ L} rootUp (2^{log N_ℓ}·Q_ℓ)`. -/
 def hashUp (s : Schedule) : ℕ := ∑ ℓ ∈ Finset.Icc 1 s.levels.length, rootUp (hashArg s ℓ)
 
-/-- **The per-`m` check for the knowledge term**: at `m1Schedule m`, `25 ≤ m ≤ 35`, each `rootUp` is at least its
-square root, the hash-sum coefficient is at most `25638` (`√` summed exactly: `25632.6`, at `m = 35`), and level 0's
-codeword has length at most `2^23`. -/
-theorem m1Ks_all : ∀ m, 25 ≤ m → m ≤ 35 →
-    (∀ ℓ ∈ Finset.Icc 1 (m1Schedule wideLeaf m).levels.length,
-      hashArg (m1Schedule wideLeaf m) ℓ ≤ rootUp (hashArg (m1Schedule wideLeaf m) ℓ) * rootUp (hashArg (m1Schedule wideLeaf m) ℓ)) ∧
-    hashUp (m1Schedule wideLeaf m) ≤ 25638 ∧ (lvOf (m1Schedule wideLeaf m) 0).logLen ≤ 23 := by
-  intro m h1 h2
-  cases wideLeaf <;> interval_cases m <;> decide +kernel
-
-theorem sqrt_cast_le_of_le_mul {n r : ℕ} (h : n ≤ r * r) : Real.sqrt n ≤ r :=
-  Real.sqrt_le_iff.2 ⟨Nat.cast_nonneg _, by rw [sq]; exact_mod_cast h⟩
-
-/-- **The hash sum at Flock ZK's schedules**: `Σ_{1 ≤ ℓ ≤ L} √(2^{log N_ℓ}·Q_ℓ·x) ≤ 25638·√x`. -/
-theorem hashSum_le_m1 (m : ℕ) (h1 : 25 ≤ m) (h2 : m ≤ 35) (x : ℝ) :
-    ∑ ℓ ∈ Finset.Icc 1 (m1Schedule wideLeaf m).levels.length,
-        Real.sqrt (2 ^ (lvOf (m1Schedule wideLeaf m) ℓ).logLen * (lvOf (m1Schedule wideLeaf m) ℓ).queries * x) ≤
-      25638 * Real.sqrt x := by
-  obtain ⟨hr, hc, -⟩ := m1Ks_all (wideLeaf := wideLeaf) m h1 h2
-  calc ∑ ℓ ∈ Finset.Icc 1 (m1Schedule wideLeaf m).levels.length,
-          Real.sqrt (2 ^ (lvOf (m1Schedule wideLeaf m) ℓ).logLen * (lvOf (m1Schedule wideLeaf m) ℓ).queries * x)
-      ≤ ∑ ℓ ∈ Finset.Icc 1 (m1Schedule wideLeaf m).levels.length,
-          (rootUp (hashArg (m1Schedule wideLeaf m) ℓ) : ℝ) * Real.sqrt x := by
-        refine Finset.sum_le_sum fun ℓ hℓ => ?_
-        have e : (2 : ℝ) ^ (lvOf (m1Schedule wideLeaf m) ℓ).logLen * ((lvOf (m1Schedule wideLeaf m) ℓ).queries : ℝ) * x =
-            (hashArg (m1Schedule wideLeaf m) ℓ : ℝ) * x := by
-          unfold hashArg
-          push_cast
-          ring
-        rw [e, Real.sqrt_mul (Nat.cast_nonneg _)]
-        exact mul_le_mul_of_nonneg_right (sqrt_cast_le_of_le_mul (hr ℓ hℓ)) (Real.sqrt_nonneg _)
-    _ = (hashUp (m1Schedule wideLeaf m) : ℝ) * Real.sqrt x := by
-        rw [← Finset.sum_mul, hashUp, Nat.cast_sum]
-    _ ≤ 25638 * Real.sqrt x := by
-        have hc' : (hashUp (m1Schedule wideLeaf m) : ℝ) ≤ 25638 := by exact_mod_cast hc
-        exact mul_le_mul_of_nonneg_right hc' (Real.sqrt_nonneg _)
-
 end FlockSoundness.Accounting
 
 namespace FlockSoundness.Discharge.ZkSession
@@ -301,65 +264,6 @@ noncomputable def ksClosedM1 (k : ℕ) (qF qS : ℝ) : ℝ :=
 
 /-- The level-0 rate cap at Flock ZK's parameters: `2^23/(ek)`, level 0's codeword at most `2^23` long. -/
 noncomputable def rateM1 (k : ℕ) : ℝ := 2 ^ 23 / (Real.exp 1 * k)
-
-theorem ksClosedM1_nonneg (k : ℕ) (qF qS : ℝ) : 0 ≤ ksClosedM1 k qF qS := by
-  unfold ksClosedM1
-  positivity
-
-theorem ksStrictZm1_le_closed (ts : List (TabZK F mPts)) (j : Fin ts.length) (hT : (ts.get j).M1W) (k : ℕ)
-    (qF qS : ℝ) : ksStrictZm1 ts j k qF qS ≤ ksClosedM1 k qF qS := by
-  unfold ksStrictZm1 ksClosedM1
-  obtain ⟨wideLeaf, m, h1, h2, hsch, -, -, -, hN, -, -⟩ := hT
-  set x := qF ^ 2 / 2 ^ (513 : ℝ) with hxdef
-  have hsx := Real.sqrt_nonneg x
-  have hH : ∑ _r ∈ Finset.range 2, ∑ ℓ ∈ Finset.Icc 1 (ts.get j).sch.levels.length,
-      Real.sqrt (2 ^ (lvOf (ts.get j).sch ℓ).logLen * (lvOf (ts.get j).sch ℓ).queries * x) ≤
-        2 * 25638 * Real.sqrt x := by
-    rw [Finset.sum_const, Finset.card_range, nsmul_eq_mul, hsch]
-    have := hashSum_le_m1 (wideLeaf := wideLeaf) m h1 h2 x
-    push_cast
-    linarith
-  have hNt : ∑ _r ∈ Finset.range 2, Real.sqrt ((ts.get j).N * (ts.get j).N * x) ≤ 2 ^ 14 * Real.sqrt x := by
-    rw [Finset.sum_const, Finset.card_range, nsmul_eq_mul,
-      Real.sqrt_mul (mul_self_nonneg _), Real.sqrt_mul_self (Nat.cast_nonneg _)]
-    have hN' : ((ts.get j).N : ℝ) ≤ 2 ^ 13 := by exact_mod_cast hN
-    calc ((2 : ℕ) : ℝ) * (((ts.get j).N : ℝ) * Real.sqrt x) ≤ 2 * (2 ^ 13 * Real.sqrt x) := by
-          push_cast
-          gcongr
-      _ = 2 ^ 14 * Real.sqrt x := by ring
-  have hτ : ∑ _r ∈ Finset.range 2, Real.sqrt x = 2 * Real.sqrt x := by
-    rw [Finset.sum_const, Finset.card_range, nsmul_eq_mul]
-    push_cast
-    ring
-  linarith
-
-/-- At `M1W`, the level-0 rate `N₀/(ek)` is at most `rateM1 k`. -/
-theorem rateZ_le_m1w (ts : List (TabZK F mPts)) (j : Fin ts.length) (hT : (ts.get j).M1W) (k : ℕ) :
-    rateZ ts j k ≤ rateM1 k := by
-  obtain ⟨wideLeaf, m, h1, h2, hsch, -⟩ := hT
-  have hc := (m1Ks_all (wideLeaf := wideLeaf) m h1 h2).2.2
-  unfold rateZ rateM1
-  rw [hsch]
-  exact div_le_div_of_nonneg_right (pow_le_pow_right₀ (by norm_num) hc) (by positivity)
-
-/-- **The compiled `--zk` knowledge term at Flock ZK's parameters, as one number**: with every table of the plan at
-`M1W` and `2^23 < ek`, `ksAvgStrictZ ≤ ksClosedM1/(1 − 2^23/(ek))`. -/
-theorem ksAvgStrictZ_le_closed (hF : Fintype.card F = 2 ^ 128) {n : ℕ} {Reg : Type}
-    (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
-    (hW : ∀ S R (j : Fin (planZ S R).length), ((planZ S R).get j).M1W) (L : SamplingDesign n) (k : ℕ) (qF qS : ℝ) (R : Reg)
-    (hk : rateM1 k < 1) :
-    ksAvgStrictZ planZ L k qF qS R ≤ ENNReal.ofReal (ksClosedM1 k qF qS / (1 - rateM1 k)) := by
-  have hc : ∀ ω : L.Ω, (⨆ j : Fin (planZ (L.draw ω) R).length,
-      ENNReal.ofReal (ksStrictZ (planZ (L.draw ω) R) j k qF qS / (1 - rateZ (planZ (L.draw ω) R) j k))) ≤
-        ENNReal.ofReal (ksClosedM1 k qF qS / (1 - rateM1 k)) := fun ω => iSup_le fun j => by
-    have hS := (ksStrictZ_le_m1w hF _ j (hW _ R j) k qF qS).trans (ksStrictZm1_le_closed _ j (hW _ R j) k qF qS)
-    have hr := rateZ_le_m1w _ j (hW _ R j) k
-    rcases le_or_gt (1 - rateZ (planZ (L.draw ω) R) j k) 0 with h0 | h0
-    · exact (le_of_eq (ENNReal.ofReal_of_nonpos
-        (div_nonpos_of_nonneg_of_nonpos (ksStrictZ_nonneg _ j k qF qS) h0))).trans zero_le
-    · refine ENNReal.ofReal_le_ofReal ((div_le_div_of_nonneg_right hS h0.le).trans ?_)
-      exact div_le_div_of_nonneg_left (ksClosedM1_nonneg k qF qS) (by linarith) (by linarith)
-  exact (avg_mono hc).trans (avg_const _).le
 
 /-! ## `Q_s`, the expected number of commit strings the sampled proof blocks read -/
 
@@ -495,11 +399,5 @@ theorem planZHJ_M1W :
 theorem ksAvgStrictZ_planZHJ_le_m1 (L : SamplingDesign n) (k : ℕ) (qF qS : ℝ) (R : Reg) :
     ksAvgStrictZ (planZHJ dj y₀) L k qF qS R ≤ ksAvgStrictZm1 (planZHJ dj y₀) L k qF qS R :=
   ksAvgStrictZ_le_m1w execArith_correct.card_F (planZHJ dj y₀) (planZHJ_M1W dj y₀) L k qF qS R
-
-/-- **`ε_ks` at the hidden-output plan in closed form**: at most `ksClosedM1/(1 − 2^23/(ek))` once `2^23 < ek`, a
-number that reads no table (`ksAvgStrictZ_le_closed` at `planZHJ_M1W`). -/
-theorem ksAvgStrictZ_planZHJ_le_closed (L : SamplingDesign n) (k : ℕ) (qF qS : ℝ) (R : Reg) (hk : rateM1 k < 1) :
-    ksAvgStrictZ (planZHJ dj y₀) L k qF qS R ≤ ENNReal.ofReal (ksClosedM1 k qF qS / (1 - rateM1 k)) :=
-  ksAvgStrictZ_le_closed execArith_correct.card_F (planZHJ dj y₀) (planZHJ_M1W dj y₀) L k qF qS R hk
 
 end FlockSoundness.Discharge.ZkHidden

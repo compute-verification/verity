@@ -121,10 +121,6 @@ variable (w : StratifiedBlockMT)
 units. -/
 def L : SamplingDesign w.n := SamplingDesign.execOS (n := w.n) w.src (.stratified w.Kd (Array.ofFn w.St)) w.pop
 
-/-- The stratified sampling design the sample is held to under A3 (`SamplingDesign.execOS_missProb_le`): `ks s` of stratum `s`'s units, uniform
-without replacement, independently across strata. -/
-def ideal : SamplingDesign w.n := SamplingDesign.stratified w.sub w.ks w.hks
-
 /-- The sampling block's audit as it runs: `EndToEndHidden`'s game at the stratified sample. -/
 noncomputable def game : Game (w.Reg × Finset (Fin w.n) × Discharge.Exec.Transcript) :=
   auditLive w.L w.Reg (liveOfZJ w.dg (planZHJ w.dj w.y₀) w.N w.wr)
@@ -154,55 +150,7 @@ noncomputable def incorrectSet (τ : Strategy w.game) : Finset (Fin w.n) :=
   incorrectRegZ execArith w.P (planZHJ w.dj w.y₀) (tabZHJ w.dj w.y₀) w.vb (reg (w.sim τ))
     (XplurZC execArith hs512 w.P (planZHJ w.dj w.y₀) (tabZHJ w.dj w.y₀) w.vb (reg (w.sim τ)) (cont (w.sim τ)) w.k w.Rw)
 
-/-- The knowledge term `ε_ks`, `ksAvgStrictZ` at the worst registration. -/
-noncomputable def epsKs : ℝ≥0∞ := ⨆ R : w.Reg, ksAvgStrictZ (planZHJ w.dj w.y₀) w.L w.k w.qF w.qS R
-
-/-- The binding term `ε_bind`, `ε_bind = Q_s/(1 − ρ)·(2t'(1 + k)/2^256 + 1/(eM) + k/(eR_w))`, as in `EndToEndHidden`. -/
-noncomputable def link : ℝ≥0∞ :=
-  ENNReal.ofReal ((∑ p : w.vb.Pos,
-      (Fintype.card (ΩcZ execArith w.P (planZHJ w.dj w.y₀) (tabZHJ w.dj w.y₀) w.vb w.L p) : ℝ) / Fintype.card w.L.Ω) *
-    (2 * (w.t' * (1 + w.k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * w.M) + w.k / (Real.exp 1 * w.Rw)) / (1 - w.ρ))
-
-/-- **The detection budget an incorrect set `B` spends**, `Σ_s k_s·x_s/n_s` over every stratum of every table, with
-`x_s` its units in stratum `s`. -/
-noncomputable def spend (B : Finset (Fin w.n)) : ℝ :=
-  ∑ s, (w.ks s : ℝ) * (B.filter (w.sub · = s)).card / (SamplingDesign.stratum w.sub s).card
-
-/-- **The most harm in the confidence set**: the largest total weight `Σ_{u ∈ B} h u` over the incorrect sets `B` the
-stratified sample misses with probability at least `δ`. -/
-noncomputable def maxHarm (h : Fin w.n → ℕ) (δ : ℝ) : ℝ :=
-  ⨆ B : {B : Finset (Fin w.n) // ENNReal.ofReal δ ≤ w.ideal.missProb B}, ((∑ u ∈ B.1, h u : ℕ) : ℝ)
-
-/-- **`B` is within the sampling block's one budget at `δ`**: the stratified sample misses it with probability at least
-`δ`, so it spends at most `ln(1/δ)` of the detection budget across every stratum of every table, and its ANDs and its
-output bits are each at most the most any set in the confidence set holds. -/
-def Within (δ : ℝ) (ands bits : Fin w.n → ℕ) (B : Finset (Fin w.n)) : Prop :=
-  ENNReal.ofReal δ ≤ w.ideal.missProb B ∧ w.spend B ≤ Real.log (1 / δ) ∧
-    ((∑ u ∈ B, ands u : ℕ) : ℝ) ≤ w.maxHarm ands δ ∧ ((∑ u ∈ B, bits u : ℕ) : ℝ) ≤ w.maxHarm bits δ
-
 end StratifiedBlockMT
-
-/-- **The joint stratified bound, per sampling block of `J` tables.** For a sampling block as in `StratifiedBlockMT`,
-proved in `nTab I` tables, whose one live stratified sample takes `k_s` of the `n_s` units of each stratum `s` across the
-tables, every `δ > 0` and every per-unit weights `ands` (each unit's ANDs) and `bits` (its output bits), and every live
-prover `τ`, the probability that verity-verify-proof accepts and the sampling block's incorrect proof blocks `B` are not within its one
-budget is at most
-$$\delta + \varepsilon_{ks} + \varepsilon_{bind}:$$
-outside it, an accepted sampling block's incorrect proof blocks missProb the stratified sample with probability at least `δ`, spend
-`Σ_s k_s·x_s/n_s ≤ ln(1/δ)` across all its strata, and hold at most `maxHarm ands δ` ANDs and at most
-`maxHarm bits δ` output bits. Its named assumptions: A3 (`Assumptions.UniformRandomBytes`) for the sample's bytes,
-`live-verifier` (`StratifiedBlockMT.hCust`, `RecordCustodyZKJS`), and `cr/sha-512` (`TableCRZ`) and `ecr/sha-512`
-(`LinkCRZC`) at `τ`. -/
-def JointStratifiedMT : Prop :=
-  ∀ (w : StratifiedBlockMT) (δ : ℝ) (ands bits : Fin w.n → ℕ), 0 < δ →
-    Assumptions.UniformRandomBytes w.Lb w.src →
-    ∀ τ : Strategy w.game,
-    (∀ ω j, TableCRZ execArith hs512 (planZHJ w.dj w.y₀ (w.L.draw ω) (reg (w.sim τ))) j
-      (zcStrat execArith hs512 (planZHJ w.dj w.y₀) (cont (w.sim τ) ω)) w.qF w.qS) →
-    LinkCRZC execArith hs512 w.P (planZHJ w.dj w.y₀) (tabZHJ w.dj w.y₀) w.vb (reg (w.sim τ)) (cont (w.sim τ)) w.k
-      w.Rw w.M w.t' →
-    prob (fun o => LiveAcceptsZK w.I o ∧ ¬ w.Within δ ands bits (w.incorrectSet τ)) w.game τ ≤
-      ENNReal.ofReal δ + w.epsKs + w.link
 
 /-- What a period's run records of sampling block `idx`: whether verity-verify-proof accepted it, its incorrect proof blocks
 (`StratifiedBlockMT.incorrectSet`), and whether a sampled proof block is one of them. -/
@@ -216,12 +164,6 @@ namespace BlockRecMT
 
 variable {W : ℕ → StratifiedBlockMT}
 
-/-- The probability that the record's sampling block's stratified sample misses its incorrect proof blocks. -/
-noncomputable def missProb (r : BlockRecMT W) : ℝ≥0∞ := (W r.idx).ideal.missProb r.incorrect
-
-/-- The detection budget the record's incorrect proof blocks spend, `Σ_s k_s·x_s/n_s` over its sampling block's strata. -/
-noncomputable def spend (r : BlockRecMT W) : ℝ := (W r.idx).spend r.incorrect
-
 /-- The record's incorrect proof blocks' total weight `Σ_{u ∈ B} h u`, with `h t` sampling block `t`'s per-unit weights. -/
 def harm (h : (t : ℕ) → Fin (W t).n → ℕ) (r : BlockRecMT W) : ℕ := ∑ u ∈ r.incorrect, h r.idx u
 
@@ -231,72 +173,10 @@ namespace StratifiedBlockMT
 
 open Classical
 
-/-- Sampling block `t`'s record, at the strategy `τ` that played it and its output `o`. -/
-noncomputable def record (W : ℕ → StratifiedBlockMT) (t : ℕ) (τ : Strategy (W t).game)
-    (o : (W t).Reg × Finset (Fin (W t).n) × Discharge.Exec.Transcript) : BlockRecMT W :=
-  ⟨t, LiveAcceptsZK (W t).I o, (W t).incorrectSet τ, ∃ u ∈ o.2.1, u ∈ (W t).incorrectSet τ⟩
-
 end StratifiedBlockMT
 
 namespace StratifiedMT
 
-/-- **A period of `T` sampling blocks of `J` tables**, sampling block `t`'s audit after sampling block `t − 1`'s,
-against one prover. -/
-noncomputable def game (W : ℕ → StratifiedBlockMT) (T : ℕ) : Game Unit := monitoringPeriodG (fun t => (W t).game) 0 T
-
-/-- The period's run at the prover strategy `s`: each sampling block's record, in order. -/
-noncomputable def run (W : ℕ → StratifiedBlockMT) (T : ℕ) (s : Strategy (game W T)) : Game (List (BlockRecMT W)) :=
-  monitoringPeriodRun (fun t => (W t).game) (StratifiedBlockMT.record W) 0 T s
-
-/-- **The strategies the period plays sampling block `t` with**: `τ` plays sampling block `t` on some run of the period
-at `s`. -/
-def Plays (W : ℕ → StratifiedBlockMT) (T : ℕ) (s : Strategy (game W T)) (t : ℕ) (τ : Strategy (W t).game) : Prop :=
-  MonitoringPeriodPlays (fun t => (W t).game) 0 T s t τ
-
-/-- **The most harm in the period's confidence set**: the largest total weight over every choice of an incorrect set
-in each of the run's sampling blocks that their samples miss together with probability at least `δ`. -/
-noncomputable def maxHarm (W : ℕ → StratifiedBlockMT) (h : (t : ℕ) → Fin (W t).n → ℕ) (δ : ℝ)
-    (l : List (BlockRecMT W)) : ℝ :=
-  ⨆ B : {B : (i : Fin l.length) → Finset (Fin (W l[i].idx).n) //
-      ENNReal.ofReal δ ≤ ∏ i, (W l[i].idx).ideal.missProb (B i)},
-    ((∑ i, ∑ u ∈ B.1 i, h l[i].idx u : ℕ) : ℝ)
-
-/-- **The run's incorrect proof blocks are within the period's one budget at `δ`**: the sampling blocks' samples miss them together
-with probability at least `δ`, so they spend at most `ln(1/δ)` of the detection budget across every stratum of every
-sampling block, and their ANDs and their output bits in all are each at most the most any choice in the period's
-confidence set holds. -/
-def Within (W : ℕ → StratifiedBlockMT) (δ : ℝ) (ands bits : (t : ℕ) → Fin (W t).n → ℕ) (l : List (BlockRecMT W)) :
-    Prop :=
-  ENNReal.ofReal δ ≤ (l.map BlockRecMT.missProb).prod ∧ (l.map BlockRecMT.spend).sum ≤ Real.log (1 / δ) ∧
-    (((l.map (BlockRecMT.harm ands)).sum : ℕ) : ℝ) ≤ maxHarm W ands δ l ∧
-    (((l.map (BlockRecMT.harm bits)).sum : ℕ) : ℝ) ≤ maxHarm W bits δ l
-
 end StratifiedMT
-
-/-- **The joint stratified bound over a period of sampling blocks of `J` tables, pooled.** In a period of `T` sampling
-blocks `W t` as in `StratifiedBlockMT`, each proved in its session's tables with a fresh live stratified sample, played by
-one adaptive prover `s`, for every `δ > 0` and every per-unit weights `ands t` (each unit's ANDs) and `bits t` (its
-output bits), the probability that verity-verify-proof accepts every sampling block and their incorrect proof blocks are not within the
-period's one budget is at most
-$$\delta + \sum_t (\varepsilon_{ks,t} + \varepsilon_{bind,t}):$$
-outside it, when every sampling block is accepted, their samples miss their incorrect proof blocks together with probability at
-least `δ`, the incorrect proof blocks spend `Σ_t Σ_s k_{t,s}·x_{t,s}/n_{t,s} ≤ ln(1/δ)` across every stratum of every sampling
-block, and their ANDs and output bits in all are at most the period's `maxHarm`. The sampling term is `δ` however many
-sampling blocks and tables the period has. Its named assumptions, at every sampling block: A3
-(`Assumptions.UniformRandomBytes`) for its sample's bytes, `live-verifier` (`StratifiedBlockMT.hCust`,
-`RecordCustodyZKJS`), and `cr/sha-512` (`TableCRZ`) and `ecr/sha-512` (`LinkCRZC`) at every strategy it is played with
-on some run (`StratifiedMT.Plays`). -/
-def JointStratifiedPooledMT : Prop :=
-  ∀ (W : ℕ → StratifiedBlockMT) (T : ℕ) (δ : ℝ) (ands bits : (t : ℕ) → Fin (W t).n → ℕ), 0 < δ →
-    (∀ t < T, Assumptions.UniformRandomBytes (W t).Lb (W t).src) →
-    ∀ s : Strategy (StratifiedMT.game W T),
-    (∀ t (τ : Strategy (W t).game), StratifiedMT.Plays W T s t τ → ∀ ω j,
-      TableCRZ execArith hs512 (planZHJ (W t).dj (W t).y₀ ((W t).L.draw ω) (reg ((W t).sim τ))) j
-        (zcStrat execArith hs512 (planZHJ (W t).dj (W t).y₀) (cont ((W t).sim τ) ω)) (W t).qF (W t).qS) →
-    (∀ t (τ : Strategy (W t).game), StratifiedMT.Plays W T s t τ →
-      LinkCRZC execArith hs512 (W t).P (planZHJ (W t).dj (W t).y₀) (tabZHJ (W t).dj (W t).y₀) (W t).vb
-        (reg ((W t).sim τ)) (cont ((W t).sim τ)) (W t).k (W t).Rw (W t).M (W t).t') →
-    value (fun l => (∀ r ∈ l, r.accepted) ∧ ¬ StratifiedMT.Within W δ ands bits l) (StratifiedMT.run W T s) ≤
-      ENNReal.ofReal δ + ∑ t ∈ Finset.range T, ((W t).epsKs + (W t).link)
 
 end Flock.Guarantees

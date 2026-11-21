@@ -2,12 +2,15 @@ module
 
 public import Proofs.Pouw.H1Zy.ChainVectors
 public import Proofs.Pouw.H1Zy.Combine
-public import Proofs.Pouw.H1Zy.CombineBits
 public import Proofs.Pouw.H1Zy.DequantVectors
 public import Proofs.Pouw.H1Zy.Lane
-public import Proofs.Pouw.H1Zy.LaneBits
+public import Definitions.Pouw.H1Zy.LaneBits
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Tactic.Linarith
+public import Mathlib.Tactic.LinearCombination
+public import Mathlib.Tactic.Ring
 public import Definitions.Pouw.H1Zy.Stream
-public import Proofs.Pouw.H1Zy.Tile
+public import Mathlib.Algebra.BigOperators.Ring.Finset
 public import Proofs.Pouw.H1Zy.LaneChunk
 import Mathlib.Data.Rat.Cast.Order
 import Mathlib.Tactic.NormNum.Abs

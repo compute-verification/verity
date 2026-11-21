@@ -288,33 +288,6 @@ def IntegrityBlockCarried : Prop :=
       (finderCost (rdSig fun _ => (S.leaf x).rd) (S.leaf x).costMix)) →
     value (S.BlockMissProb q δ b) (S.run s) ≤ ENNReal.ofReal δ + S.err b + S.carry b
 
-/-- **The integrity audit over a monitoring period of server-time blocks, with carried state.** In a monitoring period as in
-`IntegrityPooledBlocks` with carried leaves (`CarriedBlocks`), whose samples each cover at least a fraction `q > 0` of
-their session's units, the probability that every session is accepted and the incorrect proof blocks over the monitoring period, each
-carried leaf read at its one value in every session that shares it, total at least `ln(1/δ)/q` is at most
-$$\delta + \sum_{b < B} \sum_{t \in b} (\varepsilon_{ks,t} + \delta_{link,t}) + \sum_\ell \delta_{carry,\ell}.$$
-Its named assumptions are `IntegrityPooledBlocks`', and `ecr/sha-512` (`Assumptions.SHA512CRExpected`) at each carried
-leaf's finder, whose cost counts `t'_j` for each session `j` it plays before the one it picked.
-The share `q` is a hypothesis: the count a `rate:NUM/DEN` rule names meets it at `q = NUM/DEN` over whatever
-population a window registers (`Flock.Bridge.pooledIntegrityCarried_rate` is this statement at that rate), while
-under a fixed count the largest `q` that holds falls as the prover pads a window's population. -/
-def IntegrityPooledCarried : Prop :=
-  ∀ (S : CarriedBlocks) (q δ : ℝ), 0 < q → 0 < δ →
-    (∀ t < S.T, q ≤ ((S.W t).kd : ℝ) / (S.W t).n) →
-    (∀ t < S.T, Assumptions.UniformRandomBytes (S.W t).Lb (S.W t).src) →
-    ∀ s : Strategy S.game,
-    (∀ t (τ : Strategy (S.W t).game), Period.Plays S.W S.T s t τ → ∀ ω j,
-      TableCRZ execArith hs512 (planZHJ (S.W t).dj (S.W t).y₀ ((S.W t).L.draw ω) (reg ((S.W t).sim τ))) j
-        (zcStrat execArith hs512 (planZHJ (S.W t).dj (S.W t).y₀) (cont ((S.W t).sim τ) ω)) (S.W t).qF (S.W t).qS) →
-    (∀ t (τ : Strategy (S.W t).game), Period.Plays S.W S.T s t τ →
-      LinkCRZC execArith hs512 (S.W t).P (planZHJ (S.W t).dj (S.W t).y₀) (tabZHJ (S.W t).dj (S.W t).y₀) (S.W t).vb
-        (reg ((S.W t).sim τ)) (cont ((S.W t).sim τ)) (S.W t).k (S.W t).Rw (S.W t).M (S.W t).t') →
-    (∀ x, Assumptions.SHA512CRExpected H512 (finderG (S.mix s x) (S.leaf x).M)
-      (finderStrat (S.mix s x) (S.mixS s x) (S.leaf x).M) (outOf (rdSig fun _ => (S.leaf x).rd) (S.leaf x).op (S.leaf x).col)
-      (finderCost (rdSig fun _ => (S.leaf x).rd) (S.leaf x).costMix)) →
-    value (fun l => (∀ r ∈ l, r.accepted) ∧ Real.log (1 / δ) / q ≤ ((l.map SamplingBlockRec.incorrect).sum : ℝ)) (S.run s) ≤
-      ENNReal.ofReal δ + ∑ b ∈ Finset.range S.B, S.err b + ∑ x, (S.leaf x).carry
-
 /-- **Sessions that prove every unit and share registered values, with no proof block incorrect.** In a monitoring period
 with carried leaves (`CarriedBlocks`), on a set `I` of its sessions each of which proves every one of its units
 (`kd = n`), the probability that every session of `I` is accepted and at least one proof block of `I` is incorrect,

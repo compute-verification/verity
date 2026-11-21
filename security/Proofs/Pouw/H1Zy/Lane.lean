@@ -178,11 +178,6 @@ theorem gemmAccS8_eq {K : ℕ} (x w : Fin K → BitVec 8) (hK32 : 32 ∣ K) (hK 
     gemmAccS8 x w = BitVec.ofInt 32 (∑ k, (x k).toInt * (w k).toInt) := by
   rw [← gemmAccS8_toInt x w hK32 hK, BitVec.ofInt_toInt]
 
-/-- At such a `K` the dot is within s32, so its s32 word reads back as the dot. -/
-theorem toInt_ofInt_dot {K : ℕ} (x w : Fin K → BitVec 8) (hK32 : 32 ∣ K) (hK : K < 2 ^ 17) :
-    (BitVec.ofInt 32 (∑ k, (x k).toInt * (w k).toInt)).toInt = ∑ k, (x k).toInt * (w k).toInt := by
-  rw [← gemmAccS8_eq x w hK32 hK, gemmAccS8_toInt x w hK32 hK]
-
 /-! ### The lane -/
 
 theorem LaneIn.sel_length {K nw : ℕ} {P : Type} (x : LaneIn K nw P) : x.sel.length = 5 := by simp [LaneIn.sel]

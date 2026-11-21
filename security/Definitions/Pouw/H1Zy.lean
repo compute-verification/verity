@@ -2,8 +2,7 @@ module
 
 public import Definitions.Pouw.H1Zy.Chain
 public import Definitions.Pouw.H1Zy.Combine
-public import Definitions.Pouw.H1Zy.CombineBits
-public import Definitions.Pouw.H1Zy.Dequant
+public import Mathlib.Data.Int.Notation
 public import Definitions.Pouw.H1Zy.Lane
 public import Definitions.Pouw.H1Zy.LaneBits
 public import Definitions.Pouw.H1Zy.Stream

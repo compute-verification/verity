@@ -43,34 +43,6 @@ namespace Flock.SecurityProofs
 
 open FlockSoundness Spot.Sampling
 
-/-- **Flock's one-stage audit, end to end, under hidden outputs.** -/
-theorem EndToEndHidden : Flock.Guarantees.EndToEndHidden := by
-  intro n Reg I ht D hD hU pub hpub hpt hscope kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hA3 hTags hCust k Rw M hk
-    hRw hM ρ hρ hr t' ht' K₀ hK₀ τ qF qS L P vb σ hCR hA2
-  have h := Discharge.ZkHidden.zk_session_soundHJ_custody_reg I ht (Flock.Desc.parse_flat hD) hU hpub hpt hscope kd hkd hdiv dj y₀ wr dg N Lb
-    src hA3 hTags hCust hk hRw hM hρ hr ht' K₀ τ (qF := qF) (qS := qS) hCR
-  rw [SamplingDesign.subset_miss hkd hK₀, Discharge.ZkLink.linkBoundZC, ite_eq_left hA2] at h
-  exact h
-
-/-- **Flock's one-stage audit, end to end, under hidden outputs, at the sampled proof blocks.** -/
-theorem EndToEndHiddenSampled : Flock.Guarantees.EndToEndHiddenSampled := by
-  intro n Reg I ht D hD hU pub hpub hpt hscope kd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hTags hCust k Rw M hk hRw hM ρ
-    hρ hr t' ht' τ qF qS L P vb σ hCR hA2
-  have h := Discharge.ZkHidden.zk_session_soundHJ_custody_sampled_reg I ht (Flock.Desc.parse_flat hD) hU hpub hpt hscope kd hdiv dj y₀ wr dg N
-    Lb src hTags hCust hk hRw hM hρ hr ht' τ (qF := qF) (qS := qS) hCR
-  rw [Discharge.ZkLink.linkBoundZC, ite_eq_left hA2] at h
-  exact h
-
-/-- **Flock's one-stage audit, end to end, under hidden outputs, at a flat circuit file.** -/
-theorem EndToEndHiddenFlat : Flock.Guarantees.EndToEndHiddenFlat := by
-  intro n Reg I ht c hc
-  exact EndToEndHidden n Reg I ht (.single c) (Flock.Desc.parse_single hc)
-
-/-- **Flock's one-stage audit, end to end, under hidden outputs, at the sampled proof blocks, at a flat circuit file.** -/
-theorem EndToEndHiddenDrawnFlat : Flock.Guarantees.EndToEndHiddenDrawnFlat := by
-  intro n Reg I ht c hc
-  exact EndToEndHiddenSampled n Reg I ht (.single c) (Flock.Desc.parse_single hc)
-
 /-- `EndToEndHiddenPerTest` gives its flat form, at `Desc.single c`. -/
 theorem EndToEndHiddenPerTestFlat_of (h : Flock.Guarantees.EndToEndHiddenPerTest) :
     Flock.Guarantees.EndToEndHiddenPerTestFlat := by

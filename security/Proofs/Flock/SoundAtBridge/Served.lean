@@ -89,15 +89,6 @@ def ServedRegistered (u : Fin s.n) : Prop :=
             (s.ownPort q).reads[idx.getD (D.proved.idxOf u.val) 0]? = some (some pos) →
               (s.rdU u).readAt (.inl (u, q)) = pos
 
-/-- **At an owned read, the value layer is the registrant's row**: where every read of `rdU u` is the verifier's own
-at the outcome (`OwnReadsHJ`), a unit whose rows are right there (`RowsAt`) has, on each of its wires at a registered
-read, the registrant's row's bit. -/
-theorem xv_eq_of_rowsAt {o : s.Out} {u : Fin s.n}
-    (hown : OwnReadsHJ s.I s.own s.c s.pub o.2.2 (s.rdU u).isRead (s.rdU u).port (s.rdU u).readAt)
-    (h : s.RowsAt o u) {g} (hg : g ∈ s.P.io u) (hr : (s.rdU u).isRead (s.vb.pos g)) :
-    s.Xv g = s.vb.bit (s.vb.val (s.wo u (s.vb.pos g))) g :=
-  (h g hg).1 ⟨hown, hr⟩
-
 end RowsSession
 
 end
@@ -112,19 +103,5 @@ open FlockSoundness FlockSoundness.Game Spot.Sampling FlockSoundness.Discharge.E
   FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden FlockSoundness.Discharge.ZkReg
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open Classical
-
-/-- **Flock's rows link at served roots.** At a Flock session (`RowsSession`), at every outcome of its live audit
-(sample `S`, registration `R`, the record `wr` writes) that verity-verify-proof `--zk --registered` accepts, a sampled proof block `u`
-whose served roots are registered (`ServedRegistered`: its opening `rdU u` reads exactly its rows at the ports `own`
-names, as `own` gives them) and whose rows are right at its owned reads (`RowsAt`) has, on each of its wires at a served
-read, the committed tree's row: the value layer's bit (`Xv`) is the registrant's row's. Acceptance names each port of
-the circuit once (`Registered.namesOnce`), so nothing is asked of the circuit's names. With `RelOfRows`, a relation that
-reads its operand leaves and receipt at served reads then reads the committed trees'. -/
-def ServedRowsLinked : Prop :=
-  ∀ (s : RowsSession) (S : Finset (Fin s.n)) (R : s.Reg)
-      (o : LiveOutJ (planZHJ (Reg := s.Reg) s.dj s.y₀ S R).length (mPtsOf s.c.g (s.kd / nTab s.I))) (u : Fin s.n),
-      LiveAcceptsZKR s.I s.own (R, S, s.wr S R o) → u ∈ S → s.ServedRegistered u →
-      s.RowsAt (R, S, s.wr S R o) u →
-      ∀ g ∈ s.P.io u, (s.rdU u).isRead (s.vb.pos g) → s.Xv g = s.vb.bit (s.vb.val (s.wo u (s.vb.pos g))) g
 
 end Flock.Guarantees

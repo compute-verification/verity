@@ -1,6 +1,12 @@
 module
 
-public import Proofs.Flock.SoundAtBridge
+public import Proofs.Flock.EndToEndRegistered
+public import Proofs.Flock.Soundness.Discharge.Composed.PublicJ
+public import Proofs.Flock.Soundness.Discharge.Composed.SampledJ
+public import Proofs.Flock.SoundAtBridge.Reduce
+public import Proofs.Flock.SoundAtBridge.Served
+public import Proofs.Flock.C3.Compose.RowsReg
+public import Proofs.Flock.SoundAtBridge.Statement
 public import Proofs.Flock.SoundAtBridge.Session
 public import Proofs.Flock.SoundAtBridge.Union
 import Mathlib.Algebra.Order.Floor.Extended

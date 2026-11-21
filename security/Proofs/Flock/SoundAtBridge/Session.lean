@@ -165,19 +165,6 @@ def RowsAt (o : s.Out) (u : Fin s.n) : Prop :=
     (fun p => OwnReadsHJ s.I s.own s.c s.pub o.2.2 (s.rdU u).isRead (s.rdU u).port (s.rdU u).readAt ∧
       (s.rdU u).isRead p) (s.wo u) s.k s.Rw u
 
-/-- **The per-unit event**: verity-verify-proof accepts, and some sampled proof block is wrong, or its rows are off at its own
-registered reads. -/
-def BadU (o : s.Out) : Prop := LiveAcceptsZKR s.I s.own o ∧ ∃ u ∈ o.2.1, s.IncorrectAt u ∨ ¬ s.RowsAt o u
-
-/-- `EndToEndRegisteredRows`' event at unit `u`'s opening `rdU u`. -/
-def EvAt (u : Fin s.n) (o : s.Out) : Prop :=
-  LiveAcceptsZKR s.I s.own o ∧ ∃ u' ∈ o.2.1,
-    u' ∈ incorrectRegZ execArith s.P (planZHJ s.dj s.y₀) (tabZHJ s.dj s.y₀) s.vb (reg s.σ)
-      (XplurZC execArith hs512 s.P (planZHJ s.dj s.y₀) (tabZHJ s.dj s.y₀) s.vb (reg s.σ) (cont s.σ) s.k s.Rw) ∨
-    ¬ RowsRightZC execArith hs512 s.P (planZHJ s.dj s.y₀) (tabZHJ s.dj s.y₀) s.vb (reg s.σ) (cont s.σ)
-      (fun p => OwnReadsHJ s.I s.own s.c s.pub o.2.2 (s.rdU u).isRead (s.rdU u).port (s.rdU u).readAt ∧
-        (s.rdU u).isRead p) (s.wo u) s.k s.Rw u'
-
 /-- **`EndToEndRegisteredRows`' named assumptions at every unit's opening**: `cr/sha-512` for each table's knowledge
 finders (`TableCRZ`), `ecr/sha-512` for the link finders (`LinkCRZC`), and, at each unit's opening `rdU u`,
 `ecr/sha-512` for its rows finders (`RowsCRZC`) and `cr/sha-512` at `qR` for its registered reads' finder. -/

@@ -198,21 +198,4 @@ def streamZ {R C K : ℕ} {P : Type} (n : TileNoise R C K) (x : TileIn R C K P) 
   segFold (fun s acc => peelSeg acc (seg (xOf n x i) s) (seg (bitAt (n.bd i)) s) (seg xa s)
     (seg (codeAt (x.b j)) s) (seg (bitAt (n.cc j)) s)) zw (K / 32)
 
-/-- **TILE**: `PouwH1Tile_v1`, whose z is EXACT, or `PouwH1Tile_v3` at its noise, a function of the public inputs. -/
-inductive TileForm (R C K : ℕ) (P : Type) where
-  | exact : TileForm R C K P
-  | stream (noise : P → TileNoise R C K) : TileForm R C K P
-
-/-- **TILE's z** of cell `(i, j)`: v1's `GemmAccumulatorS8_v2{K, sm120}` on row `i`'s and column `j`'s codes, or v3's
-`streamZ` at the noise of the public inputs. -/
-def TileForm.z {R C K : ℕ} {P : Type} : TileForm R C K P → TileIn R C K P → Fin R → Fin C → BitVec 32
-  | .exact, x, i, j => gemmAccS8 (x.a i) (x.b j)
-  | .stream noise, x, i, j => streamZ (noise x.pub) x i j
-
-/-- **`PouwH1TileZy_v1{TILE}`'s `ok`** (`h1zy._body`) at the dequant `dqW`: `PouwZyCheck_v1{R, C}` of the record against
-TILE's z at the A rows' and B rows' scales. -/
-def tileOk {R C K : ℕ} {P : Type} (form : TileForm R C K P) (dqW : BitVec 32 → BitVec 32 → BitVec 32 → BitVec 16)
-    (x : TileIn R C K P) : Bool :=
-  zyCheck dqW x.zr x.yr (form.z x) x.sa x.sw
-
 end Pouw.H1Zy

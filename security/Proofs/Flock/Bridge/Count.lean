@@ -66,8 +66,6 @@ theorem blocks_length_partOf (P : Spot.Sampling.Partition C n) {ns : List ℕ} (
     (partOf P κ ns).blocks.length = n := by
   simp [blocks_partOf P hns]
 
-theorem partBlocks : PartBlocksTarget := fun P _ _ hns => blocks_length_partOf P hns
-
 theorem window_zero_filter (n : ℕ) (B : Finset ℕ) : Claims.Sampling.window 0 n B = B.filter (· < n) := by
   ext v
   simp [Claims.Sampling.window]
@@ -112,38 +110,6 @@ theorem pa_partOf (P : Spot.Sampling.Partition C n) {ns : List ℕ} (hns : ns.su
   rw [pa_partOf_window P hns, Claims.Sampling.EndToEndSample.window_zero fun v hv => Finset.mem_range.1 (hB hv)]
 
 theorem pa : PaTarget := fun P κ _ hns r B hB => pa_partOf (κ := κ) P hns r B hB
-
-/-- `C(·, k)` is strictly increasing from `k` on. -/
-theorem choose_lt_of_lt {a b k : ℕ} (hk : 1 ≤ k) (hab : a < b) (hkb : k ≤ b) : a.choose k < b.choose k := by
-  obtain ⟨m, rfl⟩ : ∃ m, b = m + 1 := ⟨b - 1, by omega⟩
-  obtain ⟨j, rfl⟩ : ∃ j, k = j + 1 := ⟨k - 1, by omega⟩
-  rw [Nat.choose_succ_succ']
-  have h1 : a.choose (j + 1) ≤ m.choose (j + 1) := Nat.choose_le_choose _ (by omega)
-  have h2 : 0 < m.choose j := Nat.choose_pos (by omega)
-  omega
-
-theorem count : CountTarget := by
-  classical
-  intro C n P ns hns kd K₀ hkd hkdn H Cm κ desc q roots w h
-  have hle : (designOf (.subset kd)).Pa (partOf P κ ns)
-      (Claims.Sampling.faulty H Cm (stmtOf P κ (.subset kd) desc q roots) (partOf P κ ns) w) ≤
-      ((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ) := not_lt.1 h
-  rw [pa_partOf_subset P hns, window_zero_filter] at hle
-  have hFn : ((Claims.Sampling.faulty H Cm (stmtOf P κ (.subset kd) desc q roots) (partOf P κ ns) w).filter
-      (· < n)).card ≤ n := by
-    calc _ ≤ (Finset.range n).card :=
-          Finset.card_le_card fun v hv => Finset.mem_range.2 (Finset.mem_filter.1 hv).2
-      _ = n := Finset.card_range n
-  generalize (Claims.Sampling.faulty H Cm (stmtOf P κ (.subset kd) desc q roots) (partOf P κ ns) w).filter (· < n) = F
-    at hle hFn ⊢
-  have hpos : (0 : ℝ) < (n.choose kd : ℝ) := by exact_mod_cast Nat.choose_pos hkdn
-  have hc : (n - F.card).choose kd ≤ (n - K₀).choose kd := by
-    exact_mod_cast (div_le_div_iff_of_pos_right hpos).1 hle
-  by_contra hlt
-  rw [not_le, lt_min_iff] at hlt
-  obtain ⟨h1, h2⟩ := hlt
-  have := choose_lt_of_lt hkd (show n - K₀ < n - F.card by omega) (show kd ≤ n - F.card by omega)
-  omega
 
 /-! ## Scope -/
 

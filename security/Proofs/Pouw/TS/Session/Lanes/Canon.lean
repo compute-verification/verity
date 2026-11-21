@@ -117,22 +117,6 @@ def canonReads (op : s.Openings) (u : Fin s.n) : Registered.ReadsX s.canonLay s.
 (`canonReads`). -/
 def canon (op : s.Openings) : RowsSession := { s with rdU := s.canonReads op }
 
-/-- **At one read per port, the reads built from `own` register the served roots**: where every port of `own` has one
-read, each unit of `canon s op` reads exactly its rows of the ports `own` names, through `ownPort`, at the position
-`ownPort` gives it at every sample that proves it (only index `0` has a position). -/
-theorem servedRegistered_canon (op : s.Openings) (h1 : ∀ pt ∈ s.own, pt.reads.size = 1) (u : Fin s.n) :
-    (s.canon op).ServedRegistered u := by
-  refine ⟨fun _ => Iff.rfl, fun q hn => ⟨rfl, ?_⟩⟩
-  intro d D dp idx _ _ _ _ pos hpos
-  have hs : (s.ownPort q).reads.size = 1 := h1 _ (FlockC3.Compose.portOf_spec hn).1
-  have hpos' : (s.ownPort q).reads[idx.getD (D.proved.idxOf u.val) 0]? = some (some pos) := hpos
-  have hlt := (Array.getElem?_eq_some_iff.mp hpos').1
-  have h0 : idx.getD (D.proved.idxOf u.val) 0 = 0 := by omega
-  rw [h0] at hpos'
-  show oneRead (s.ownPort q) = pos
-  unfold oneRead
-  rw [hpos']
-
 end
 
 end Flock.SoundAtBridge.RowsSession

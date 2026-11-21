@@ -125,22 +125,6 @@ def laneA {K : ℕ} (L : Leaf K) (l : Fin 32) : Fin 4 → Row K := fun s => L.a 
 /-- Lane `l`'s B rows by column slot. -/
 def laneB {K : ℕ} (L : Leaf K) (l : Fin 32) : Fin 8 → Row K := fun t => L.b (colOf l t)
 
-/-- The XOR, in lane order, of 32 rows of `nw` words, word by word. -/
-def xorAll {nw : ℕ} (p : Fin 32 → Fin nw → BitVec 32) : Fin nw → BitVec 32 :=
-  fun w => (List.ofFn fun l => p l w).foldl (· ^^^ ·) 0
-
-/-- **Cell `(i, j)` of a leaf is served right**: its `z` is the dot of its A row's and B row's codes, and its `y` is
-`dq` of its `z` at the A row's and the B row's scales. -/
-def CellOk {K : ℕ} (dq : List ℤ → ℤ) (L : Leaf K) (i j : Fin 32) : Prop :=
-  L.z i j = ∑ k, (L.a i).codes k * (L.b j).codes k ∧ L.y i j = dq [L.z i j, (L.a i).scale, (L.b j).scale]
-
-/-- **The unit's served checks**: every cell of the leaf is right (`CellOk`), and its receipt is the XOR, in lane order,
-of its lanes' honest partials (`part` at the public inputs `pub`, each lane's index and its rows). -/
-def UnitServed {K nw : ℕ} {Pub : Type} (dq : List ℤ → ℤ)
-    (part : Pub → Fin 32 → (Fin 4 → Row K) → (Fin 8 → Row K) → Fin nw → BitVec 32) (pub : Pub)
-    (receipt : Fin nw → BitVec 32) (L : Leaf K) : Prop :=
-  (∀ i j, CellOk dq L i j) ∧ receipt = xorAll fun l => part pub l (laneA L l) (laneB L l)
-
 /-- **What lane `l`'s statement reads**: its A rows by row slot, its B rows by column slot, the leaf's record, its
 partials row, the public inputs (admit, salt, position, roots), its index and its `ok` word. -/
 structure LaneView (K nw : ℕ) (Pub : Type) where
@@ -153,14 +137,6 @@ structure LaneView (K nw : ℕ) (Pub : Type) where
   lane : Fin 32
   ok : Bool
 
-/-- **Lane `ok = 1`**: its partials row is the honest one at its rows, the public inputs and its index, and each of its
-32 cells, `(rowOf lane s, colOf lane t)`, has `z` the dot of its rows' codes and `y` its `dq`. -/
-def LaneOk {K nw : ℕ} {Pub : Type} (dq : List ℤ → ℤ)
-    (part : Pub → Fin 32 → (Fin 4 → Row K) → (Fin 8 → Row K) → Fin nw → BitVec 32) (v : LaneView K nw Pub) : Prop :=
-  v.part = part v.pub v.lane v.a v.b ∧
-    ∀ s t, v.z (rowOf v.lane s) (colOf v.lane t) = ∑ k, (v.a s).codes k * (v.b t).codes k ∧
-      v.y (rowOf v.lane s) (colOf v.lane t) = dq [v.z (rowOf v.lane s) (colOf v.lane t), (v.a s).scale, (v.b t).scale]
-
 /-- Lane `l`'s view of a leaf `L`, its public inputs `pub` and its partials row `p`, with its `ok` word `1`. -/
 def laneView {K nw : ℕ} {Pub : Type} (L : Leaf K) (pub : Pub) (p : Fin nw → BitVec 32) (l : Fin 32) :
     LaneView K nw Pub :=
@@ -171,9 +147,6 @@ structure CombineView (nw : ℕ) where
   parts : Fin 32 → Fin nw → BitVec 32
   receipt : Fin nw → BitVec 32
   ok : Bool
-
-/-- **Combine `ok = 1`**: the rows' XOR, in lane order, is the receipt word by word. -/
-def CombineOk {nw : ℕ} (v : CombineView nw) : Prop := xorAll v.parts = v.receipt
 
 /-- **Wire `g` is a bit of one of unit `u`'s port rows**: its commit string is `u`'s row of some port `q` of the
 circuit, an input port or an output row, not a single gate's own string (`Readers.ofRows`). -/
@@ -221,62 +194,10 @@ def LeafColl {ι : Type} (sess : ι → RowsSession) : Prop :=
 /-- A registered file's known content (`Registered.KNOWN_KEY`): each port it names, with its rows' u16 words and salts. -/
 abbrev Known := Array (String × Array (Array ℕ × ByteArray))
 
-/-- **The known rows hold at a session**: at every registered read `p` of every unit's registrant whose registered port
-is one the known content `known` names, `p`'s position is one of the known rows' and the registrant's row bytes there
-(`rsOf`'s encoding) are the `sha512/row/v2` bytes of the known row at that position. -/
-def KnownHeld (s : RowsSession) (known : Known) : Prop :=
-  ∀ nm ks, (nm, ks) ∈ known → ∀ (u : Fin s.n) (p : s.vb.Pos), (s.rdU u).isRead p → ((s.rdU u).port p).name = nm →
-    (s.rdU u).readAt p < ks.size ∧
-      (rsOf s).enc p ((s.rdU u).wv p) = (Flock.Registered.rowBytesV2 ks[(s.rdU u).readAt p]!.1).data.toList
-
 /-- **A leaf's known-content tie collides**: at one of its sessions `k`, at a port `nm` its known content names with
 rows `ks`, the known-content extractor outputs two different SHA-512 inputs with one digest
 (`ResourceAccounting.TS.Held.OkColl` at `nm`, the `ok` tie at any known port). -/
 def LeafKnownColl {ι : Type} (sess : ι → RowsSession) (known : ι → Known) : Prop :=
   ∃ k nm ks, (nm, ks) ∈ known k ∧ ResourceAccounting.TS.Held.OkColl (sess k) nm ks
-
-/-- **The leaf's proof layer through its 33 sessions**: proof `i` of round `w` is accepted where verity-verify-proof
-`--zk --registered` accepts every one of its sessions (`sess x w i (some l)` lane `l`'s, `sess x w i none` the
-combine's), its known-content check at the session's known content `known x w i k` included
-(`Registered.checkKnownAll`, which `verity-verify-proof` runs on `--registered F`), its complete check
-(`Registered.checkComplete`, which it runs on every statement of `--registered F`: every port of the circuit is a port
-of `own`) and
-its known-read check (`KnownRead.check`, which it runs on every statement at `F`'s known content, then at each port
-`full x w i k` names, the ports `F` marks `read_in_full`, as one row of its registered row's words
-(`KnownRead.fullRows`): each such port is a `sha512/row/v2` row of those words, and a computed row of the unit reads each
-bit of such an input row, a copy returns each bit of such an output row) and the leaf verifier's check of its file
-(`PouwWindow.Lanes.checkOwn`, which `pouw-leaf-own` runs: the file holds the ports `want x w i k`, the statement's data
-ports at the accepted registration's and produced record's roots) and of its session's sample
-(`PouwWindow.Lanes.checkFull`, which `pouw-leaf-own` runs on the session's record: the sample is `subset` of every unit of
-a non-empty population, the verifier's sample policy for a leaf's statements) and of its file's reads
-(`PouwWindow.Lanes.checkOneRead`, which `pouw-leaf-own` runs too: every port of the file has one read) and of the
-leaf's tile (`PouwWindow.Lanes.Tile.check` at 32 × 32 and `K`, which `pouw-leaf-own` runs first, in `lane?` and
-`combine?`: among others `32 ∣ K` and `K < 2^17`, where the lanes' s8 accumulator binds),
-opens the leaf's values committed before σ_w (`leaf`), and its relation is the unit's served checks (`UnitServed`) at
-the path's public inputs and receipt, or
-two of its sessions' registrants' records clash (`LeafColl`), or a session's known-content tie collides
-(`LeafKnownColl`). -/
-noncomputable def leafLayer {Ω : Type} {S nπ K nw : ℕ} {Pub : Type}
-    (sess : Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → RowsSession) (out : ∀ x w i k, (sess x w i k).Out)
-    (known : Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → Known)
-    (full : Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → Array String)
-    (want : Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → List Flock.Registered.Port)
-    (dq : List ℤ → ℤ) (part : Pub → Fin 32 → (Fin 4 → Row K) → (Fin 8 → Row K) → Fin nw → BitVec 32)
-    (pub : Paths Ω S → Fin S → Fin nπ → Pub) (receipt : Paths Ω S → Fin S → Fin nπ → Fin nw → BitVec 32)
-    (leaf : Paths Ω S → Fin S → Fin nπ → Leaf K)
-    (right : Paths Ω S → (Fin S → Fin nπ → Leaf K) → Prop) : ProofLayer Ω S nπ (Leaf K) where
-  accepted x w i := ∀ k, LiveAcceptsZKR (sess x w i k).I (sess x w i k).own (out x w i k) ∧
-    Flock.Registered.checkKnownAll (sess x w i k).own (known x w i k) = .ok () ∧
-    Flock.Registered.checkComplete (sess x w i k).c (sess x w i k).own = .ok () ∧
-    Flock.KnownRead.check (sess x w i k).c
-      (known x w i k ++ Flock.KnownRead.fullRows (sess x w i k).own (full x w i k)) = .ok () ∧
-    PouwWindow.Lanes.checkOwn (want x w i k) (sess x w i k).own = .ok () ∧
-    PouwWindow.Lanes.checkFull (out x w i k).2.2.record = .ok () ∧
-    PouwWindow.Lanes.checkOneRead (sess x w i k).own = .ok () ∧
-    PouwWindow.Lanes.Tile.check ⟨32, 32, K⟩ = .ok ()
-  opened := leaf
-  rel x w i v := UnitServed dq part (pub x w i) (receipt x w i) v ∨ LeafColl (sess x w i) ∨
-    LeafKnownColl (sess x w i) (known x w i)
-  right := right
 
 end ResourceAccounting.TS.Lanes
