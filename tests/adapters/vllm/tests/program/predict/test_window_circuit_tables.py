@@ -21,7 +21,6 @@ from tests.program.predict.test_window_circuit import (
     held,
 )
 from tests.program.predict.test_window_circuit_int8 import GRAIN, _registered
-from verity_vllm.program.predict import scan_state as SS
 from verity_vllm.program.predict import window_circuit as WC
 from verity_vllm.program.predict import window_rows as WR
 from verity_vllm.program.predict.build import Unexpressible

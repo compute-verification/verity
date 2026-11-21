@@ -17,7 +17,6 @@ from typing import Any
 import numpy as np
 import torch
 import pytest
-from verity.commitments import domains as DM
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
