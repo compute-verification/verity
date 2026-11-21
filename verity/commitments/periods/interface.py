@@ -1780,9 +1780,10 @@ def run_input_reads(templates: Sequence[tuple[Any, int]], program: Any, query: M
                     ) -> tuple[Read, ...]:
     """Each template's input port no wire, registered read, ingress or boundary read fills (``filled``, by (template,
     port)) as a read of the one value its rows are committed in, C's run input node ``w``'s tree ``input/n<w>``
-    (`Flock.Registered.freshValue`): the node's leaves in rows of the port's, unit i's row the node's row i. Refused
-    (ValueError) where such a port is cut, its template is more than one range, or its rows are not one run input node's
-    leaves whole, in unit order: `Flock.OneCircuit.pos` reads that position and no other."""
+    (`Flock.Registered.freshValue`): the node's leaves in rows of the port's, unit i's row the node's row i, its units
+    taken across all its template's ranges of C's root in their order. Refused (ValueError) where such a port is cut, a
+    unit's row is not whole leaves of one run input node, or its units don't read one such node's rows each once, none
+    skipped, in unit order (named by unit and row): `Flock.OneCircuit.pos` reads that position and no other."""
     tp = PO.TemplatePartition(program, query)
     body, total = program.root.body, program.root.gates
     offs = list(body.offsets)
@@ -1793,25 +1794,49 @@ def run_input_reads(templates: Sequence[tuple[Any, int]], program: Any, query: M
     for fn, n in templates:
         tid = descriptor_id(fn)
         ports = [(p, len(t.leaf_widths())) for p, t in fn.signature()[0]]
-        if all((tid, p) in filled for p, _ in ports):
+        free = [p for p, _ in ports if (tid, p) not in filled]
+        if not free:
             continue
-        if len(ranges.get(tid, ())) != 1:
-            raise ValueError(f"run inputs: {tid} is {len(ranges.get(tid, ()))} ranges of C's root, not one")
-        a, got = ranges[tid][0]
-        gates, at, words = list(tp.inputs(a)), 0, dict(layout(fn).rows)
-        for p, leaves in ports:
-            g0, at = gates[at], at + leaves
-            if (tid, p) in filled:
-                continue
+        for p in free:
             if int((cuts or {}).get(tid, {}).get(p, 1)) != 1:
                 raise ValueError(f"run inputs: {tid} {p} is cut; a run input's row is the port's whole")
-            w = bisect.bisect_right(offs, g0) - 1
-            node = (offs[w + 1] if w + 1 < len(offs) else total) - offs[w]
-            fw = body.nodes[w].fn
-            if (not is_input(fw) or is_registered(fw) or g0 != offs[w] or node != got * leaves
-                    or gates[at - leaves:at] != list(range(g0, g0 + leaves))):
-                raise ValueError(f"run inputs: {tid} {p}: its rows are not run input node {w}'s {node} leaves, in rows of "
-                                 f"its {leaves}, unit by unit")
+        words, rows = dict(layout(fn).rows), {p: [] for p in free}
+        for u, g in enumerate(g for a, k in ranges.get(tid, ()) for g in range(a, a + k)):
+            gates, at = list(tp.inputs(g)), 0
+            for p, leaves in ports:
+                g0, at = gates[at], at + leaves
+                if p not in rows:
+                    continue
+                w = bisect.bisect_right(offs, g0) - 1
+                fw = body.nodes[w].fn
+                r, q = divmod(g0 - offs[w], leaves)
+                end = offs[w + 1] if w + 1 < len(offs) else total
+                if (not is_input(fw) or is_registered(fw) or q or g0 + leaves > end
+                        or gates[at - leaves:at] != list(range(g0, g0 + leaves))):
+                    raise ValueError(f"run inputs: {tid} {p}: unit {u}'s row is not one row of a run input node's leaves, "
+                                     f"in rows of its {leaves}")
+                if rows[p] and rows[p][0][0] != w:
+                    raise ValueError(f"run inputs: {tid} {p}: unit {u} reads run input node {w}, not unit 0's node "
+                                     f"{rows[p][0][0]}")
+                rows[p].append((w, r))
+        for p, leaves in ports:
+            if not rows.get(p):
+                continue
+            w, read = rows[p][0][0], [r for _, r in rows[p]]
+            m = -(-((offs[w + 1] if w + 1 < len(offs) else total) - offs[w]) // leaves)
+            first: dict[int, int] = {}
+            for u, r in enumerate(read):
+                if r in first:
+                    raise ValueError(f"run inputs: {tid} {p}: unit {u} reads row {r} of run input node {w}, which unit "
+                                     f"{first[r]} reads too")
+                first[r] = u
+            if len(read) != m:
+                r = min(set(range(m)) - set(read))
+                raise ValueError(f"run inputs: {tid} {p}: row {r} of run input node {w}'s {m} is read by no unit")
+            u = next((u for u, r in enumerate(read) if r != u), None)
+            if u is not None:
+                raise ValueError(f"run inputs: {tid} {p}: unit {u} reads row {read[u]} of run input node {w}, not row "
+                                 f"{u}: its units read the node's rows in unit order")
             out.append(Read(tid, p, f"input/n{w}", 0, (n,), 0, (words[p],)))
     return tuple(out)
 
