@@ -244,31 +244,13 @@ def unitGates (j : Json) : V Json := do
   let range := fun ((lo, hi) : Nat × Nat) => Json.arr #[Lean.toJson lo, Lean.toJson hi]
   return Json.arr #[Json.arr ((← Partition.unitGates p q).map range), Json.arr ((← Partition.unitGatesRef p q).map range)]
 
-/-- `{"program", "query", "held"?}`, a program object, a template query and the gates `[[first, count], ...]` of the
-parameters a verifier expects registered, to `{"fanout", "shared", "reads"}`: its fan-out, the run Input nodes outside
-`held` its proof blocks don't each read alone (`Partition.fanout`, `Partition.sharedInputs`), and `[first, count, node]`
-for each range reading a run Input inside `held` (`Partition.heldReads`); refused for another query or one that doesn't
-apply. -/
-private def heldOf (j : Json) : V (Array (Nat × Nat)) := do
-  let bad : V (Nat × Nat) := throw "held is not a list of [first, count]"
-  match getD j "held" with
-    | .null => pure #[]
-    | .arr xs => xs.mapM fun x => match x with
-      | .arr #[a, b] => match nat? a, nat? b with
-        | some first, some count => pure (first, count)
-        | _, _ => bad
-      | _ => bad
-    | _ => throw "held is not a list of [first, count]"
-
+/-- `{"program", "query"}`, a program object and a template query, to `{"fanout"}` (`Partition.fanout`); refused for
+another query or one that doesn't apply. -/
 def fanout (j : Json) : V Json := do
   let .obj _ := getD j "program" | throw "program is not an object"
   let p ← Program.parse (← Flock.canon (getD j "program")).toUTF8
-  let held ← heldOf j
   let some rs := Partition.templateRanges? p (getD j "query") | throw "not a template query that applies"
-  return Json.mkObj [("fanout", Lean.toJson (Partition.fanout p.prog rs)),
-    ("shared", Lean.toJson (Partition.sharedInputs p.prog rs held)),
-    ("reads", Json.arr ((Partition.heldReads p.prog rs held).map fun (r, i) =>
-      Json.arr #[Lean.toJson r.first, Lean.toJson r.count, Lean.toJson i]))]
+  return Json.mkObj [("fanout", Lean.toJson (Partition.fanout p.prog rs))]
 
 /-- A member of the per-member form named `name` at the units `units`, with no files. -/
 private def unitsMember (name : String) (units : Array (Nat × Nat)) : OneStageZk.Member :=
@@ -276,31 +258,40 @@ private def unitsMember (name : String) (units : Array (Nat × Nat)) : OneStageZ
     { programJ := .null, program := .empty, partition := .null, pub := "", registered := none }
   { name := name, units := units, g := 1, own := own }
 
-/-- `{"program", "query", "members", "roots", "held"?}`, a program object, a template query, the members
-`[[name, [[first, end], ...]], ...]`, the record's roots and `fanout`'s `held`, to `{"roots", "held"}`: each member's
-`[port, tree]` at C's run input nodes' trees (`OneStageZk.runInputRoots`, the member holding no root of its own), and
-`OneStageZk.heldRootsHeld`'s refusal over them, or null; refused for another query or one that doesn't apply. -/
+/-- `{"program", "query", "members", "roots", "window_root"?, "tied"?}`, a program object, a template query, the
+members `[[name, [[first, end], ...]], ...]`, the record's roots, the window's open root and the tied parameters' gates
+`[[first, count], ...]`, to `{"roots", "refused"}`: each member's `[port, tree]` at C's run input nodes' trees
+(`OneStageZk.runInputRoots`, under the program's digest), or null and the refusal; refused for another query or one
+that doesn't apply. -/
 def runInputRoots (j : Json) : V Json := do
   let .obj _ := getD j "program" | throw "program is not an object"
   let p ← Program.parse (← Flock.canon (getD j "program")).toUTF8
-  let held ← heldOf j
+  let pair : Json → V (Nat × Nat)
+    | .arr #[a, b] => match nat? a, nat? b with
+      | some x, some y => pure (x, y)
+      | _, _ => throw "a range is [first, end] or [first, count]"
+    | _ => throw "a range is [first, end] or [first, count]"
+  let tied ← match getD j "tied" with
+    | .null => pure #[]
+    | .arr xs => xs.mapM pair
+    | _ => throw "tied is not a list of [first, count]"
+  let R ← match getD j "window_root" with
+    | .null => pure none
+    | .str s => pure (some s)
+    | _ => throw "window_root is not a string"
   let some rs := Partition.templateRanges? p (getD j "query") | throw "not a template query that applies"
   let .arr xs := getD j "members" | throw "members is not a list"
   let ms ← xs.mapM fun
-    | .arr #[.str name, .arr us] => do
-      let units ← us.mapM fun
-        | .arr #[a, b] => match nat? a, nat? b with
-          | some lo, some hi => pure (lo, hi)
-          | _, _ => throw "a member's units are [first, end]"
-        | _ => throw "a member's units are [first, end]"
-      pure (unitsMember name units)
+    | .arr #[.str name, .arr us] => do pure (unitsMember name (← us.mapM pair))
     | _ => throw "a member is [name, [[first, end], ...]]"
-  let roots ← OneStageZk.runInputRoots p.prog rs ms (Json.mkObj [("roots", getD j "roots")]) {}
-  let why := match OneStageZk.heldRootsHeld (Partition.heldReads p.prog rs held) ms roots with
-    | .ok () => Json.null
-    | .error e => .str e
-  return Json.mkObj [("roots", Json.arr (ms.map fun m => Json.arr #[.str m.name,
-    Json.arr ((roots.getD m.name #[]).map fun r => Json.arr #[getD r "port", getD r "tree"])])), ("held", why)]
+  let byPort := OneStageZk.rootsByPort (Json.mkObj [("roots", getD j "roots")])
+  let prog := Flock.hexOf p.desc.sha512
+  let got : V (Array (String × Array Json)) := ms.mapM fun m => do
+    pure (m.name, ← OneStageZk.runInputRootsAt p.prog rs prog R tied m #[] byPort)
+  return match got with
+    | .ok rs => Json.mkObj [("roots", Json.arr (rs.map fun (n, r) => Json.arr #[.str n,
+        Json.arr (r.map fun r => Json.arr #[getD r "port", getD r "tree"])])), ("refused", .null)]
+    | .error e => Json.mkObj [("roots", .null), ("refused", .str e)]
 
 /-- `{"program", "indices", "port", "value", "leaves"}`, a program object, units, and a port read at the tree ``value`` of
 ``leaves`` rows, to `{"rows", "from"}`: the row each unit reads from the first (`Flock.OneCircuit.pos`, from C), or its

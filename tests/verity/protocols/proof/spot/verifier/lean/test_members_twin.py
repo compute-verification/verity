@@ -35,7 +35,7 @@ from pathlib import Path
 import pytest
 
 import verity_difftest as D
-from verity.circuits import partition_object as PO, population as PN
+from verity.circuits import edges as EG, partition_object as PO, population as PN
 from verity.commitments import coin_tree as CT
 from verity.protocols.proof.spot.verifier.challenger import challenger as Ch
 from verity.protocols.proof.spot.verifier.one_stage import (
@@ -46,6 +46,7 @@ from verity.protocols.proof.spot.verifier.one_stage import (
     proofs as PF,
     docket as R,
 )
+from verity.commitments import registered_value as RV
 from verity.protocols.proof.spot.prover import docket as DK
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -70,6 +71,24 @@ WIRED = {f"{TI.GID}/c{k}": [[2 * k, 2 * k + 2]] for k in range(4)}
 
 def _sha(b: bytes) -> str:
     return hashlib.sha512(b).hexdigest()
+
+
+def _run_trees(s: Setup, units: dict, window: str, rng: random.Random) -> list[dict]:
+    """A root of each run input node's one tree ``input/n<w>`` the members of `units` read, at C's leaf count and the
+    domain under `window` (`members.run_tree_held`)."""
+    R, prog = EG._Root(s.desc), P.program_digest(s.program)
+    ranges, trees = P._template(s.program, s.query, "the members' partition").ranges, {}
+    for name, us in units.items():
+        for _p, w, ln in M.member_inputs(R, ranges, name, us):
+            if M._input(R, w, run=True):
+                trees.setdefault(w, ln)
+    out = []
+    for w, ln in sorted(trees.items()):
+        node = R.nodes[w]
+        rows, words = node["out_leaves"] * node["members"] // ln, ln * (EG._bits(node["ret"]) // node["out_leaves"]) // 16
+        out.append({"port": f"input/n{w}", "root": rng.randbytes(64).hex(), "leaves": rows,
+                    "domain": RV.domain(prog, f"input/n{w}", words, rows, 16, window=window).domain_id.hex()})
+    return out
 
 
 def _never(_):
@@ -102,6 +121,8 @@ class Audit:
         s.ports |= {p: s.ports[ports[1]] for p in extra}
         roots = [{"port": p, "root": rng.randbytes(64).hex(), **s.ports[p]} for p in s.ports]
         roots += [{**r, "root": rng.randbytes(64).hex()} for r in roots if r["port"] in twice]
+        window = {"root": rng.randbytes(64).hex()}
+        roots += _run_trees(s, units, window["root"], rng)
         self.partition = PO.build(s.program, s.query, [[units[n][0] for n in names]])
         self.rec = DK.record(s.program, s.query, DESIGN, SCHEME, roots, WINDOW, leaf_layer=LEAF,
                              partition=self.partition)
@@ -135,7 +156,7 @@ class Audit:
         for t, after in late:
             ch.s.lines += close(t, after)
         ch.s.close = ch.s.signed(None)
-        ch.ledger = Ledger(rng, ch.s, withheld=True)
+        ch.ledger = Ledger(rng, ch.s, withheld=True, window=window)
         ch.pins, ch.main = _pinned(rng, ch.ledger, "honest")
         proved = DR.proved(sample)
         statements = [{"member": name, "sessions": [sessions[name]]} for name in names if name in sessions]
@@ -422,7 +443,7 @@ pieces = D.server_fixture(HELD)
 def test_a_wired_port_whose_writers_tree_the_record_names_none_of_is_refused_at_its_readers_header(tmp_path, pieces):
     """`WIRED`'s window with its members named under a template ``g`` that is not C's Definition id: the record's
     tree of the field is ``g/o0``, so `fieldRoots` (`members._wired_roots`) finds no tree of the writer's field and
-    gives the second member's wired port ``x`` no root, which neither run refuses there (both end at the first member's
+    gives the second member's wired port ``x`` no root (its run input ``w`` has its node's tree), which neither run refuses there (both end at the first member's
     stand-in public file). The reader's public file must name ``x`` (`Flock.HmRow.checkPublic` reads a root of every
     port of the block circuit), and its header held to that slice is refused by both by name (`UNWIRED_WHY`:
     `OneStageZk.headerHeld`'s `unwired`, `members.population_why`)."""
@@ -434,8 +455,8 @@ def test_a_wired_port_whose_writers_tree_the_record_names_none_of_is_refused_at_
               trees={"g": 8})
     why, (run, refused) = a.ask(tmp_path / "unrooted")
     assert run is None and why == M.run_reason(run, refused) and why.startswith(f"proofs: member {g0}: "), (why, refused)
-    got = M.slices(units, a.rec, program=program, query=query)[g1]
-    assert sorted(r["port"] for r in got["roots"]) == ["o0", "out"], got
+    got = M.slices(units, a.rec, program=program, query=query, window_root=a.params["window_root"])[g1]
+    assert sorted(r["port"] for r in got["roots"]) == ["o0", "out", "w"], got
     roots = {r["port"]: r["root"] for r in got["roots"]} | {"x": "aa" * 64}
     domains = {r["port"]: r["domain"] for r in got["roots"]} | {"x": "dd" * 64}
     h = {"frame_v3": {"domain_ids": domains, "roots": roots}, "instances": 2, "scheme": SCHEME}

@@ -439,7 +439,8 @@ def spanLt (a b : Nat × Nat × Nat) : Bool :=
 `Program.inputId?`; a registered input, and an input node whose gates lie in one of `held`, the gates `(first, count)`
 of the parameters the verifier expects registered, are registered values) whose leaves the proof blocks don't each
 read alone, ascending: a batch of more than one member reading one whole (an argument it broadcasts) or by a run that
-names a leaf twice, two of a batch's runs that overlap, or two instance nodes' runs that overlap. -/
+names a leaf twice, two of a batch's runs that overlap, or two instance nodes' runs that overlap. The variant with no
+members refuses such a node (`R8-shared-input`); the per-member variant holds each reader to the node's one tree. -/
 def sharedInputs (P : Flock.Program.Prog) (rs : Array TRange) (held : Array (Nat × Nat) := #[]) : Array Nat := Id.run do
   let nodes := Flock.Registered.rootNodes P
   let offs := ((P.defs[P.root]?).map (·.body.offsets)).getD #[]
@@ -496,11 +497,6 @@ alone (`sharedInputs`). -/
 def readAlone (p : Program) (query : Json) (held : Array (Nat × Nat) := #[]) : Bool :=
   ((templateRanges? p query).map (sharedInputs p.prog · held)).all (·.isEmpty)
 
-/-- The run Input nodes of a template query's partition, outside the gates `held`, that its proof blocks don't each
-read alone (`sharedInputs`); none for another query or one that doesn't apply. -/
-def shared? (p : Program) (query : Json) (held : Array (Nat × Nat) := #[]) : Array Nat :=
-  ((templateRanges? p query).map (sharedInputs p.prog · held)).getD #[]
-
 /-- Whether root node `i`'s gates lie in `[first, first + count)` (`partition.within`). -/
 def within (P : Flock.Program.Prog) (first count i : Nat) : Bool :=
   let offs := ((P.defs[P.root]?).map (·.body.offsets)).getD #[]
@@ -515,17 +511,83 @@ def runInputs (P : Flock.Program.Prog) (first count : Nat) : Bool :=
     | some f => f.prim && f.binding == some Flock.Program.RUN
     | none => false
 
-/-- Each range of `rs` with each run Input node inside the gates `held` its instance node reads, in the order its
-arguments' runs name them (`partition.held_reads`): its arguments' runs, never its members or its gates. -/
-def heldReads (P : Flock.Program.Prog) (rs : Array TRange) (held : Array (Nat × Nat)) : Array (TRange × Nat) :=
+/-- Whether a root node whose gates lie in `[first, first + count)` is a run Input node (`partition.any_run_input`): a
+registered or supplied value's gates hold none (`R7-run-input`). -/
+def anyRunInput (P : Flock.Program.Prog) (first count : Nat) : Bool :=
   let nodes := Flock.Registered.rootNodes P
-  let inHeld := fun (i : Nat) => held.any (fun (first, count) => within P first count i) &&
-    match nodes[i]? >>= fun x => P.defs[x.fn]? with
-    | some f => f.prim && f.binding == some Flock.Program.RUN
+  (List.range nodes.size).any fun i => within P first count i && Flock.Registered.runNode P i
+
+/-- Whether the root's nodes whose gates lie in `[first, first + count)` are inputs bound at registration, and one does:
+the gates of a registered input of the program (`docket.weights_held`'s marked parameters). -/
+def regInputs (P : Flock.Program.Prog) (first count : Nat) : Bool :=
+  let nodes := Flock.Registered.rootNodes P
+  let inside := (List.range nodes.size).filter (within P first count)
+  !inside.isEmpty && inside.all fun i => match nodes[i]? >>= fun x => P.defs[x.fn]? with
+    | some f => f.prim && f.binding == some Flock.Program.REGISTRATION
     | none => false
+
+/-- Whether a root node of `P` is a primitive input bound at registration (`docket.marked_inputs`). -/
+def bindsRegistration (P : Flock.Program.Prog) : Bool :=
+  (Flock.Registered.rootNodes P).any fun x => (P.defs[x.fn]?).any fun f =>
+    f.prim && f.binding == some Flock.Program.REGISTRATION
+
+/-- `partition.input_reads` over a template query's ranges `rs`: each `(template, parameter, value)` whose template
+parameter's argument reads an input node inside the gates `(value, first, count)` of `held`, a root node at a time,
+never its members or its gates. -/
+def inputReads (P : Flock.Program.Prog) (rs : Array TRange) (held : Array (String × Nat × Nat)) :
+    Array (String × String × String) :=
+  let nodes := Flock.Registered.rootNodes P
+  let valueOf := fun (i : Nat) =>
+    if (nodes[i]? >>= fun x => P.defs[x.fn]?).any fun f => f.prim && (Flock.Program.inputId? f.id).isSome then
+      (held.find? fun (_, first, count) => within P first count i).map (·.1)
+    else none
   rs.foldl (init := #[]) fun out r =>
-    let ws := (nodes.getD r.node default).args.foldl (init := (#[] : Array Nat)) fun ws a =>
-      (runs a.seq).foldl (init := ws) fun ws (i, _) => if inHeld i && !ws.contains i then ws.push i else ws
-    ws.foldl (init := out) fun out i => out.push (r, i)
+    let x := nodes.getD r.node default
+    let names := ((P.defs[x.fn]?).map fun f => f.params.map (·.1)).getD #[]
+    (names.zip x.args).foldl (init := out) fun out (p, a) =>
+      (runs a.seq).foldl (init := out) fun out (i, _) => match valueOf i with
+        | some v => if out.contains (r.template, p, v) then out else out.push (r.template, p, v)
+        | none => out
+
+/-- The value of `held` (`(value, first, count)` each) whose gates hold root node `i`, an input node; none for another
+node or one outside them (`partition.held_value`). -/
+def heldValue (P : Flock.Program.Prog) (held : Array (String × Nat × Nat)) (i : Nat) : Option String :=
+  let nodes := Flock.Registered.rootNodes P
+  if (nodes[i]? >>= fun x => P.defs[x.fn]?).any fun f => f.prim && (Flock.Program.inputId? f.id).isSome then
+    (held.find? fun (_, first, count) => within P first count i).map (·.1)
+  else none
+
+/-- The `(parameter, node)`s the members `[m0, m1)` of range `r`'s instance node read (`partition.member_nodes`): each
+parameter whose argument has a part holding a leaf one of those members reads (a batch member's leaves at its axis,
+`Ty.axisDims`: leaf `ℓ` of member `m` is `((ℓ / L) · d + m) · L + ℓ % L`; every leaf of a broadcast argument), with
+each root node that part names, once each. From the node's arguments' parts, never its members: a part is met where
+its leaves meet the members' period, `[m0 · L, m1 · L)` modulo `d · L`. -/
+def memberNodes (P : Flock.Program.Prog) (r : TRange) (m0 m1 : Nat) : Array (String × Nat) :=
+  let x := (Flock.Registered.rootNodes P).getD r.node default
+  let names := ((P.defs[x.fn]?).map fun f => f.params.map (·.1)).getD #[]
+  (names.zip x.args).foldl (init := #[]) fun out (p, a) =>
+    let meets := fun (s n : Nat) => match a.dims with
+      | none => true
+      | some (d, L) =>
+        let per := d * L
+        let o := s % per
+        per == 0 || n ≥ per || (o < m1 * L && m0 * L < o + n) || m0 * L + per < o + n
+    (a.seq.parts.zip a.seq.starts).foldl (init := out) fun out (q, s) =>
+      if q.count == 0 || !meets s q.count then out else
+      (Flock.Registered.partNodes q).foldl (init := out) fun out w => if out.contains (p, w) then out else out.push (p, w)
+
+/-- The `(parameter, value)`s of `memberNodes` whose node is an input inside the gates of a value of `held`
+(`heldValue`), once each (`partition.member_reads`). -/
+def heldOf (P : Flock.Program.Prog) (held : Array (String × Nat × Nat)) (ns : Array (String × Nat)) :
+    Array (String × String) :=
+  ns.foldl (init := #[]) fun out (p, w) => match heldValue P held w with
+    | some v => if out.contains (p, v) then out else out.push (p, v)
+    | none => out
+
+/-- The `(parameter, value)`s the members `[m0, m1)` of range `r`'s instance node read of `held`
+(`memberNodes`, `heldOf`; `partition.member_reads`). -/
+def memberReads (P : Flock.Program.Prog) (held : Array (String × Nat × Nat)) (r : TRange) (m0 m1 : Nat) :
+    Array (String × String) :=
+  heldOf P held (memberNodes P r m0 m1)
 
 end Spot.Partition

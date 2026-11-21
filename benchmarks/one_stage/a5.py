@@ -282,10 +282,17 @@ def declared(a: argparse.Namespace) -> dict[str, Any]:
     return dict(getattr(a, "declared", None) or {})
 
 
+def weighed(a: argparse.Namespace) -> dict[str, Any]:
+    """The weights' registration of record (records_audit's ``--registered``), as `verifier.check` takes it; empty
+    without."""
+    return {"weights_of_record": a.weights_of_record} if getattr(a, "weights_of_record", None) is not None else {}
+
+
 def registering(a: argparse.Namespace, history: dict | None = None) -> dict[str, Any]:
     """`tie` as a stream's `register` takes it (the log is the stream's, `stream_of`), with the window's history tables
-    (``history``, `audit`'s), which the run of record holds the window's registered roots to."""
-    return {**{k: v for k, v in tie(a).items() if k != "log"}, **({"history": history} if history is not None else {})}
+    (``history``, `audit`'s), which the run of record holds the window's registered roots to, and `weighed`."""
+    return {**{k: v for k, v in tie(a).items() if k != "log"}, **({"history": history} if history is not None else {}),
+            **weighed(a)}
 
 
 def program_values(program: Program) -> tuple[tuple[str, int, int], ...]:
@@ -984,7 +991,7 @@ def stage(served: Path, mm: dict, files: tuple[dict, dict], tmpl_unit_bin: str |
             raise RuntimeError(f"member {mm['k']}'s prover's file is not under the header its public file was held to")
 
 
-def member_form(mine: CS.Binding, rec: dict) -> tuple[list, dict[str, dict]] | str:
+def member_form(a: argparse.Namespace, mine: CS.Binding, rec: dict) -> tuple[list, dict[str, dict]] | str:
     """What the per-member form holds each member's public file to (`members.population_why`), read off the verifier's
     window ``mine`` and the docket ``rec``: the docket's strata and each member's slice of the record
     (`members.slices`, Lean's `OneStageZk.Member.slice`: its units, the roots the record names under its name, the
@@ -998,7 +1005,9 @@ def member_form(mine: CS.Binding, rec: dict) -> tuple[list, dict[str, dict]] | s
     record = {**rec, "roots": [r for r in rec["roots"] if r.get("port") != CS.TABLE_PORT]} if mine.row_tables else rec
     try:
         return P.strata(mine.program, mine.query), MB.slices({m.key: [[m.base, m.base + m.n]] for m in mine.members}, record,
-                                                         program=mine.program, query=mine.query)
+                                                         program=mine.program, query=mine.query,
+                                                         window_root=a.window_root,
+                                                         tied=MB.tied_gates(mine.program, verifying(a)))
     except (P.QueryRefused, ValueError) as e:
         return str(e)
 
@@ -1069,7 +1078,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     files = (json.loads((served / "window.json").read_text()), rec)
     roots = {r["port"]: r for r in rec["roots"]}
     progress("written", t_audit, members=len(mine.members), population=n_all)
-    form = member_form(mine, rec)
+    form = member_form(a, mine, rec)
     progress("member-form", t_audit, members=len(mine.members), why=form if isinstance(form, str) else None)
     members, publics, checks, composed, programs_ok, kept, read, makes = [], {}, {}, {}, {}, {}, set(), {}
     door = getattr(a, "door_lower", None)
@@ -1203,7 +1212,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     hist = history(publics) if history is not None else None
     checks["registration"] = V.check(rec, program, query, sampling_design, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table,
                                      partition=part, history=hist, members=link_members(members) if per_member(members, not plain(a)) else (),
-                                     **verifying(a), **declared(a)).to_json()
+                                     **verifying(a), **declared(a), **weighed(a)).to_json()
     progress("registration", t_audit, ok=checks["registration"].get("ok"))
     if mine.row_tables:
         bad = TB.check_row_tables(mine, publics, {r["port"]: r["root"] for r in rec["roots"]}, step_roots)

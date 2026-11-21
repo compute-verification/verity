@@ -60,13 +60,13 @@ import json
 import math
 import os
 import tempfile
-from collections.abc import Callable, Collection, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from verity.circuits import codec, edges as EG, partition_object as PO
-from verity.circuits.program import Program, is_input, is_registered
+from verity.circuits.program import RUN, Program, input_id
 from verity.protocols.proof.spot.verifier.challenger import challenger as Ch
 from verity.protocols.proof.spot.verifier.challenger.coins import DRAW_FORM
 
@@ -444,60 +444,6 @@ def _laid(ms: Mapping[str, Any], record: Mapping[str, Any]) -> None:
         raise _Refused(MEMBERS_LAID)
 
 
-def held_read_why(member: str, node: int) -> str:
-    """`OneStageZk.HELD_READ_WHY`."""
-    return (f"member {member}: its units read run Input node {node}, a held or tied parameter's, which R8 lets several "
-            "proof blocks read only as one registered tree, and it carries no registered file: a reader of a held or "
-            "tied parameter opens its rows by its registered reads")
-
-
-#: `OneStageZk.HELD_QUERY_WHY`.
-HELD_QUERY_WHY = ("the per-member form's partition is no template query that applies to the program (Q_template_instance, "
-                  "Q_template_instances), whose ranges its members' reads of a held or tied parameter are read off")
-
-
-def _held_reads(params: Mapping[str, Any], program: Program) -> list[tuple[range, int]]:
-    """`OneStageZk.heldReadsOf`: the readers of a held or tied parameter's run Input (`registered.held_gates`,
-    `docket._tied`, `partition.held_reads`), refused under a partition that is no template query applying to the
-    program (`HELD_QUERY_WHY`)."""
-    if not P.is_template_query(params["query"]):
-        raise _Refused(HELD_QUERY_WHY)
-    registered = list(params.get("registered") or {})
-    tied = [g for g in DK._tied(program, params.get("tied") or (), registered, params.get("held") or ()) if g is not None]
-    try:
-        return P.held_reads(program, params["query"], [*G.held_gates(program, registered), *tied])
-    except P.QueryRefused:
-        raise _Refused(HELD_QUERY_WHY) from None
-
-
-def _held_read(ms: Mapping[str, Any], params: Mapping[str, Any], program: Program) -> None:
-    """`OneStageZk.heldReadsFiled`: each member whose units meet a template range whose instance node reads a held or
-    tied parameter's run Input carries a registered file."""
-    reads = _held_reads(params, program)
-    for name, m in ms.items():
-        if m.get("registered") is None:
-            for units, i in reads:
-                if any(lo < units.stop and units.start < hi for lo, hi in m["units"]):
-                    raise _Refused(held_read_why(name, i))
-
-
-def held_root_why(member: str, w: int) -> str:
-    """`OneStageZk.HELD_ROOT_WHY`."""
-    return (f"member {member}: its units read C's run input node {w}, a held or tied parameter's, and its slice holds no "
-            f"port at input/n{w}: every reader of a held or tied parameter opens the record's one tree of its rows")
-
-
-def _held_roots(ms: Mapping[str, Any], reads: Sequence[tuple[range, int]],
-                roots: Mapping[str, Sequence[Mapping[str, Any]]]) -> None:
-    """`OneStageZk.heldRootsHeld`: each member whose units meet a range of `reads` reading a held or tied parameter's run
-    Input node ``w`` has an entry of tree ``input/n<w>`` among its slice's roots."""
-    for name, m in ms.items():
-        for units, w in reads:
-            if (any(lo < units.stop and units.start < hi for lo, hi in m["units"])
-                    and not any(r.get("tree") == f"input/n{w}" for r in roots.get(name, ()))):
-                raise _Refused(held_root_why(name, w))
-
-
 def _sampled(ms: Mapping[str, Any], held: Sequence[str], want: Sequence[int]) -> None:
     """`OneStageZk.sampledHeld`: each statement's member, in the statements' order, has a unit among the evidence's
     ``proved_units`` `want`; the first that has none refuses (`OneStageZk.unsampled`)."""
@@ -552,6 +498,235 @@ def _class(ms: Mapping[str, Any]) -> None:
                 raise _Refused(f"registered: members {first} and {name} read the registered value {q['value']} as two "
                                f"({k} {a}, against {b}): a value the window registers is one tree, read by every "
                                "member at one root")
+
+
+def pinned_read_why(member: str, port: str, value: str, what: str) -> str:
+    """`OneStageZk.PINNED_READ_WHY`: the refusal of member ``member``'s registered port ``port`` reading the registered
+    input ``value`` at another ``what`` (root, leaf count or domain) than the pin the docket's R8 accepted."""
+    return (f"registered: member {member}'s port {port} reads the registered input {value} at another {what} than its "
+            "pin of record: a registered input the weights' registration of record pins is read at the pin's root, leaf "
+            "count and domain")
+
+
+def unpinned_read_why(member: str, port: str, value: str) -> str:
+    """`OneTree.UNPINNED_READ_WHY`."""
+    return (f"registered: member {member}'s port {port} reads the registered input {value}, which the program marks, R8 "
+            "accepted no pin of and the verifier holds no root of: a marked input is read only at a pin R8 accepted or a "
+            "root the verifier holds")
+
+
+def two_reads_why(member: str, param: str, w0: int, w1: int) -> str:
+    """`OneStageZk.TWO_READS_WHY`: member ``member``'s units read ``param`` at C's input nodes ``w0`` and ``w1``."""
+    return (f"registered reads: member {member}'s units read parameter {param} at C's input nodes {w0} and {w1}: a "
+            "parameter that reads an input reads one node, each port one tree")
+
+
+def read_form_why(k: int, param: str, what: str) -> str:
+    """`Flock.OneCircuit.READ_FORM_WHY`: root node ``k``'s members read ``param`` in a form with no closed form here
+    (``what``) where its argument reads an input node."""
+    return (f"registered reads: parameter {param} of root node {k}: {what}, and its argument reads an input node: a "
+            "parameter that reads an input reads one node, each row in one lane's run")
+
+
+ReadPins = tuple[list[str], list[tuple[str, range]], list[tuple[int, str, int, int]], dict[str, dict[str, Any]],
+                 Mapping[str, Mapping[str, Any]]]
+
+
+def read_pins(params: Mapping[str, Any], program: Program) -> ReadPins:
+    """`Docket.readPins` on the parameters' own verifier (`docket.read_pins`): refused by name (`docket.read_pins_why`)
+    where the program marks an input the verifier does not expect and the partition is no template query applying to
+    it, or the parameters carry no weights' registration of record R8 accepts."""
+    w = params.get("weights_of_record")
+    registered = params.get("registered") or {}
+    roots = DK.held_entries(program, registered, params.get("row_schemas"), params.get("window_root"),
+                            params.get("held"), params.get("supplied") or {}, params.get("pinned") or {},
+                            params.get("outputs") or {}, params.get("log") or [])
+    got = DK.read_pins(program, params["query"], registered,
+                       None if w is None else (bytes.fromhex(w["document"]), w["digest"]), roots)
+    if got is None:
+        raise _Refused(DK.read_pins_why(program, params["query"]))
+    return got
+
+
+def _param_row(param: str) -> tuple[str, int | None]:
+    """`Flock.Registered.paramRow`: ``p[i]`` as ``(p, i)``, any other name as itself and None."""
+    head, sep, tail = param.partition("[")
+    if sep and tail.endswith("]") and "[" not in tail and "]" not in tail[:-1] and tail[:-1].isdigit():
+        return head, int(tail[:-1])
+    return param, None
+
+
+def _input(R: EG._Root, w: int, run: bool = False) -> bool:
+    """Whether root node ``w`` is an input node of C, registered, supplied or run (`Flock.Registered.regNode`,
+    `runNode`); with ``run``, a run input node alone."""
+    if not (0 <= w < len(R.nodes) and R.nodes[w]["input"]):
+        return False
+    return not run or input_id(R.nodes[w]["key"])[0] == RUN
+
+
+def _part_nodes(q: tuple) -> list[int]:
+    """`Flock.Registered.partNodes`: the root nodes a reference part reads."""
+    return [i for p, i, *_ in (q[1] if q[0] == "e" else q[2]) if not p]
+
+
+def reg_rows(R: EG._Root, k: int, m0: int, n: int, param: str) -> tuple[int, int] | None:
+    """`Flock.OneCircuit.regRows?`: the input node every member of ``[m0, m0 + n)`` of root node ``k`` reads ``param``
+    at, with a row's leaves; None where they read only root nodes that are no input; `_Refused` (`read_form_why`) where
+    the argument reads an input node and the members' rows have no closed form here or read two nodes."""
+    node = R.nodes[k]
+    p, row = _param_row(param)
+    i = next((i for i, (q, _t) in enumerate(node["params"]) if q == p), None)
+    if i is None:
+        raise _Refused(f"registered reads: parameter {param} of root node {k}: {node['key']} has no parameter {p}")
+    ty = node["params"][i][1]
+    if row is None:
+        t0, ln = 0, EG._leaves(ty)
+    elif ty[0] == "Array" and row < ty[1]:
+        t0, ln = row * EG._leaves(ty[2]), EG._leaves(ty[2])
+    elif ty[0] == "Array":
+        raise _Refused(f"registered reads: parameter {param} of root node {k}: row {row} of {ty[1]}")
+    else:
+        raise _Refused(f"registered reads: parameter {param} of root node {k}: a row of a parameter that is no array")
+    a = node["args"][i]
+    parts = a["parts"]
+    inputs = any(_input(R, w) for q in parts for w in _part_nodes(q))
+
+    def edge(what: str) -> None:
+        if inputs:
+            raise _Refused(read_form_why(k, param, what))
+        return None
+
+    dims = a["dims"]
+    L = 0 if dims is None else dims[1]
+    if dims is not None and (dims[1] == 0 or t0 % dims[1] + ln > dims[1]):
+        return edge("a row across members")
+    starts = [0]
+    for q in parts:
+        starts.append(starts[-1] + EG._count(q))
+
+    def x_of(m: int) -> int:
+        return t0 if dims is None else (t0 // dims[1] * dims[0]) * dims[1] + t0 % dims[1] + m * dims[1]
+
+    def wire(x: int, c: int, L: int) -> int | None:
+        j = next((j for j, q in enumerate(parts) if starts[j] <= x < starts[j] + EG._count(q)), None)
+        if j is None or x + (c - 1) * L + ln > starts[j] + EG._count(parts[j]) or parts[j][0] != "g":
+            return None
+        try:
+            return EG._lane_wire(parts[j], x - starts[j], L, ln, c)[0]
+        except EG.Refusal:
+            return None
+
+    if (w := wire(x_of(m0), max(n, 1), L)) is not None:
+        return (w, ln) if _input(R, w) else None
+    got: list[int] = []
+    for m in range(max(n, 1)):
+        w = wire(x_of(m0 + m), 1, 0)
+        if w is None:
+            return edge("a row of no lane's run (an explicit part, or across parts or lanes)")
+        if w not in got:
+            got.append(w)
+    if len(got) == 1:
+        return (got[0], ln) if _input(R, got[0]) else None
+    if any(_input(R, w) for w in got):
+        raise _Refused(read_form_why(k, param, f"its members read root nodes [{', '.join(map(str, got))}]"))
+    return None
+
+
+def _param_input(R: EG._Root, k: int, m0: int, n: int, p: str, ty: Any) -> tuple[int, int] | None:
+    """`OneStageZk.paramInput`: `reg_rows` of the whole parameter, else, for an array, of each row, which must be one;
+    the whole parameter's refusal otherwise."""
+    try:
+        return reg_rows(R, k, m0, n, p)
+    except _Refused:
+        if ty[0] != "Array" or ty[1] == 0:
+            raise
+        rows = []
+        for i in range(ty[1]):
+            try:
+                rows.append(reg_rows(R, k, m0, n, f"{p}[{i}]"))
+            except _Refused:
+                rows.append(_Refused)
+        if rows[0] is not _Refused and all(r == rows[0] for r in rows):
+            return rows[0]
+        raise
+
+
+def range_node_why(member: str, k: int) -> str:
+    """`OneTree.RANGE_NODE_WHY`."""
+    return (f"member {member}: its units meet a range the partition gives at C's root node {k}, which C does not have: a "
+            "range is of C's root nodes")
+
+
+def member_inputs(R: EG._Root, ranges: Sequence[Sequence[Any]], name: str,
+                  units: Iterable[Sequence[int]]) -> list[tuple[str, int, int]]:
+    """`OneStageZk.memberInputs`: each ``(parameter, node, row leaves)`` member ``name``'s units read at an input node
+    of C, once, over every range they meet; two nodes at one parameter refused (`two_reads_why`), and a range at a root
+    node C does not have (`range_node_why`)."""
+    out: list[tuple[str, int, int]] = []
+    for lo, hi in units:
+        for k, _t, first, count in ranges:
+            a, b = max(lo, first), min(hi, first + count)
+            if b <= a:
+                continue
+            if not 0 <= k < len(R.nodes):
+                raise _Refused(range_node_why(name, k))
+            for p, ty in R.nodes[k]["params"]:
+                try:
+                    got = _param_input(R, k, a - first, b - a, p, ty)
+                except _Refused as e:
+                    raise _Refused(f"member {name}: {e}") from None
+                if got is None:
+                    continue
+                w0 = next((w for q, w, _ in out if q == p), None)
+                if w0 is None:
+                    out.append((p, *got))
+                elif w0 != got[0]:
+                    raise _Refused(two_reads_why(name, p, w0, got[0]))
+    return out
+
+
+def _port_param(port: str, e: Mapping[str, Any]) -> str:
+    """`OneStageZk.portParam`: the template parameter a registered port reads, its ``param`` (else its name) without a
+    row index ``[i]``."""
+    name = e.get(G.PARAM_KEY) or port
+    head, sep, tail = name.partition("[")
+    return head if sep and tail.endswith("]") and tail[:-1].isdigit() and "[" not in tail else name
+
+
+def _pin_of(rp: ReadPins, v: str) -> tuple[str, int, str] | None:
+    """`OneTree.pinOf`: R8's accepted pin of ``v``, else the root the verifier itself holds of it (`docket.held_entries`),
+    as ``(root, leaves, domain)``; never a root the record names."""
+    pin = rp[3].get(v) or rp[4].get(v)
+    return None if pin is None else (pin["root"], pin["leaves"], pin["domain"])
+
+
+def pins_held(ms: Mapping[str, Any], R: EG._Root, ranges: Sequence[Sequence[Any]], program: Program,
+              marks: Sequence[tuple[str, range]], rp: ReadPins) -> None:
+    """`OneStageZk.pinsHeld`: each member's registered port at a parameter its units read at a registered input node
+    whose gates are a marked value's (`member_inputs`, `partition.held_value` over ``marks``), a tree's or not, and each
+    port naming a marked input the verifier does not expect, is at that value's entry of record (`_pin_of`): its root,
+    leaf count and domain; refused by name (`pinned_read_why`, `unpinned_read_why`)."""
+    for name, m in ms.items():
+        reads = member_inputs(R, ranges, name, m["units"])
+        ports = (m["registered"] or {}).get("ports") or {}
+        for port in sorted(ports):
+            e = ports[port]
+            if not isinstance(e, dict):
+                continue
+            p = _port_param(port, e)
+            w = next((w for q, w, _ in reads if q == p), None)
+            v = None if w is None else P.held_value(program, marks, w)
+            if v is None and e.get("value") in rp[0]:
+                v = e.get("value")
+            if v is None:
+                continue
+            pin = _pin_of(rp, v)
+            if pin is None:
+                raise _Refused(unpinned_read_why(name, port, v))
+            for got, want, what in ((e.get("root"), pin[0], "root"), (e.get("leaves"), pin[1], "leaf count"),
+                                    (e.get("domain"), pin[2], "domain")):
+                if got != want:
+                    raise _Refused(pinned_read_why(name, port, v, what))
 
 
 def _template_of(name: str) -> tuple[str, str] | None:
@@ -844,12 +1019,14 @@ def _wired_roots(desc: Mapping[str, Any], ranges: Sequence[Sequence[Any]], ms: M
 
 
 def slices(members: Mapping[str, Sequence[Sequence[int]]], record: Mapping[str, Any], *, program: Program,
-           query: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
+           query: Mapping[str, Any], window_root: str | None = None, tied: Sequence[range] = ()
+           ) -> dict[str, dict[str, Any]]:
     """Each member's slice of the docket `record` (`OneStageZk.Member.slice`), for the members `members` by name,
     each its units as ranges ``[lo, hi)``: ``{name: {population, roots, scheme}}``, the member's count of units, the
     docket's roots that are its own, its name taken off each port (`OneStageZk.rootsOf`), its template's fields' trees at
     the output ports it has no root of (`OneStageZk.ownFieldsOf`), the docket's scheme, each port C reads from a run
-    input node at the docket's ``input/n<w>`` (`_run_input_roots`), and each wired port at its writer's tree under the verifier's `program` and `query` (`_wired`, Lean's `fieldRoots`). `population_why` holds a member's
+    input node at the docket's ``input/n<w>`` under the window's open root ``window_root`` outside the tied gates
+    ``tied`` (`_run_input_roots`), and each wired port at its writer's tree under the verifier's `program` and `query` (`_wired`, Lean's `fieldRoots`). `population_why` holds a member's
     public file to its slice. `ValueError` with Lean's reason where the members are not laid over the docket's
     population (`OneStageZk.laidHeld`), a root of the docket is not one member's, or a slice names a port twice
     (`_ports_once`): an audit outside the per-member
@@ -858,7 +1035,8 @@ def slices(members: Mapping[str, Sequence[Sequence[int]]], record: Mapping[str, 
     try:
         _laid(ms, record)
         roots, ft = _members_roots(ms, record)
-        roots = _wired(program, query, json.loads(json.dumps(codec.encode_program(program))), ms, record, roots, ft)
+        roots = _wired(program, query, json.loads(json.dumps(codec.encode_program(program))), ms, record, roots, ft,
+                       window_root, tied)
         _ports_once(ms, roots)
     except _Refused as e:
         raise ValueError(str(e)) from None
@@ -867,13 +1045,15 @@ def slices(members: Mapping[str, Sequence[Sequence[int]]], record: Mapping[str, 
 
 def _wired(program: Program, query: Mapping[str, Any], desc: Mapping[str, Any], ms: Mapping[str, Any],
            record: Mapping[str, Any], roots: dict[str, list[dict[str, Any]]],
-           ft: Mapping[str, Sequence[tuple[str, Mapping[str, Any]]]]) -> dict[str, list[dict[str, Any]]]:
+           ft: Mapping[str, Sequence[tuple[str, Mapping[str, Any]]]], window: str | None,
+           tied: Sequence[range]) -> dict[str, list[dict[str, Any]]]:
     """`OneStageZk.membersRootsOf` past `_members_roots`: the window's field trees held to C's (`_field_trees_held`),
     each member's ports at C's run input nodes' trees (`_run_input_roots`), then each member's wired ports at their
     writers' trees (`_wired_roots`)."""
     _field_trees_held(_derived_field_trees(program, query, ms), _templates(ms), record)
-    roots = _run_input_roots(program, query, ms, record, roots)
-    return _wired_roots(desc, P._template(program, query, "the members' partition").ranges, ms, ft, roots)
+    ranges = P._template(program, query, "the members' partition").ranges
+    roots = _run_input_roots(program, desc, ranges, window, tied, ms, record, roots)
+    return _wired_roots(desc, ranges, ms, ft, roots)
 
 
 def run_own_root_why(member: str, port: str, w: int) -> str:
@@ -883,44 +1063,107 @@ def run_own_root_why(member: str, port: str, w: int) -> str:
             f"for it: a run input node's rows are committed once, in input/n{w}")
 
 
-def _run_input_roots(program: Program, query: Mapping[str, Any], ms: Mapping[str, Any], record: Mapping[str, Any],
-                     roots: dict[str, list[dict[str, Any]]]) -> dict[str, list[dict[str, Any]]]:
-    """`OneStageZk.runInputRoots`: for each member, each input port its first unit reads whole from one run input node
-    ``w`` of C at a row of the node (its first leaf a multiple of the port's leaves, as `regRow` reads it), the
-    record's root of ``input/n<w>`` with that tree; a tree the record holds no root of gives none, and where it holds
-    one, a member's own root at the port refuses (`run_own_root_why`)."""
-    tp = PO.TemplatePartition(program, query)
-    body, total = program.root.body, program.root.gates
-    offs = list(body.offsets)
-    by_port = {r.get("port"): r for r in record.get("roots") or () if isinstance(r, Mapping)}
-    out = dict(roots)
-    for name, m in ms.items():
-        u = m["units"][0][0]
-        k = next((k for k, _t, a, n in tp.ranges if a <= u < a + n), None)
-        if k is None:
+def run_tree_missing_why(member: str, port: str, w: int) -> str:
+    """`OneStageZk.RUN_TREE_MISSING_WHY`."""
+    return (f"member {member}: port {port} reads C's run input node {w}, and the record holds no root of input/n{w}: a "
+            "run input node's rows are committed once, in its one tree, before any coin")
+
+
+def run_tree_why(w: int, what: str) -> str:
+    """`OneStageZk.RUN_TREE_WHY`."""
+    return (f"registered: the record's input/n{w} has another {what} than C's run input node {w} and the window's open "
+            "root give it: a run input node's one tree binds its window")
+
+
+def run_tree_unbound_why(w: int) -> str:
+    """`OneStageZk.RUN_TREE_UNBOUND_WHY`."""
+    return (f"registered: C's run input node {w} is read from its one tree input/n{w}, and the verifier names no window "
+            "open root (window_root) for its domain to bind")
+
+
+def run_tree_held(R: EG._Root, prog: str, window: str | None, w: int, ln: int, r: Mapping[str, Any]) -> None:
+    """`OneStageZk.runTreeHeld`: the record's entry ``r`` of ``input/n<w>`` has C's node's rows (out leaves times
+    members over ``ln``) and the domain under the program digest ``prog``, a row's 16-bit words (``ln`` leaves of the
+    node's leaf width, as the writer packs a port's row), and the window's open root ``window``. The domain's schema is a constant of the domain, not the rows' format."""
+    if window is None:
+        raise _Refused(run_tree_unbound_why(w))
+    node = R.nodes[w]
+    rows = node["out_leaves"] * node["members"] // ln if ln else 0
+    leaves = r.get("leaves")
+    if not (_nat(leaves) and leaves == rows):
+        raise _Refused(run_tree_why(w, "leaf count"))
+    try:
+        words = ln * (EG._bits(node["ret"]) // node["out_leaves"]) // 16 if node["out_leaves"] else 0
+        d = RV.domain(prog, f"input/n{w}", words, rows, 16, window=window).domain_id.hex()
+    except ValueError as e:
+        raise _Refused(str(e)) from None
+    if r.get("domain") != d:
+        raise _Refused(run_tree_why(w, "domain"))
+
+
+def run_input_roots_at(R: EG._Root, program: Program, ranges: Sequence[Sequence[Any]], prog: str, window: str | None,
+                       tied: Sequence[range], name: str, m: Mapping[str, Any], own: Sequence[Mapping[str, Any]],
+                       by_port: Mapping[str, Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """`OneStageZk.runInputRootsAt`: for each parameter member ``name``'s units read at a run input node ``w`` of C
+    (`member_inputs`: every proof block it holds) outside the tied gates ``tied``, the record's root of
+    ``input/n<w>`` under the port; refused by name where the record holds none (`run_tree_missing_why`), the member
+    holds a root of its own there (`run_own_root_why`) or the tree is not C's and the window's (`run_tree_held`)."""
+    got = list(own)
+    for p, w, ln in member_inputs(R, ranges, name, m["units"]):
+        if not _input(R, w, run=True) or any(P.within(program, g, w) for g in tied):
             continue
-        own, at = list(roots.get(name, [])), 0
-        gates = list(tp.inputs(u))
-        for p, t in body.nodes[k].fn.signature()[0]:
-            leaves = len(t.leaf_widths())
-            g = gates[at:at + leaves]
-            at += leaves
-            if not g:
-                continue
-            w = bisect.bisect_right(offs, g[0]) - 1
-            fw = body.nodes[w].fn
-            end = offs[w + 1] if w + 1 < len(offs) else total
-            if (not is_input(fw) or is_registered(fw) or g != list(range(g[0], g[0] + leaves)) or g[-1] >= end
-                    or (g[0] - offs[w]) % leaves):
-                continue
-            if (r := by_port.get(f"input/n{w}")) is None:
-                continue
-            if any(e.get("port") == p for e in own):
-                raise _Refused(run_own_root_why(name, p, w))
-            own.append({"domain": r.get("domain"), "leaves": r.get("leaves"), "port": p, "root": r.get("root"),
-                        "tree": f"input/n{w}"})
-        out[name] = own
+        t = f"input/n{w}"
+        if (r := by_port.get(t)) is None:
+            raise _Refused(run_tree_missing_why(name, p, w))
+        if any(e.get("port") == p for e in own):
+            raise _Refused(run_own_root_why(name, p, w))
+        run_tree_held(R, prog, window, w, ln, r)
+        got.append({"domain": r.get("domain"), "leaves": r.get("leaves"), "port": p, "root": r.get("root"), "tree": t})
+    return got
+
+
+def tied_roots_why(w: int) -> str:
+    """`OneStageZk.TIED_ROOTS_WHY`: the refusal of two roots for one tied run input node ``w``."""
+    return f"members: C's tied run input node {w} is read under two roots: every reader of a tied node opens one tree"
+
+
+def tied_roots_at(R: EG._Root, program: Program, ranges: Sequence[Sequence[Any]], tied: Sequence[range], name: str,
+                  m: Mapping[str, Any], own: Sequence[Mapping[str, Any]], seen: dict[int, Any]) -> dict[int, Any]:
+    """`OneStageZk.tiedRootsAt`: ``seen``, the root each tied run input node is read under so far, with each node inside
+    the tied gates ``tied`` that member ``name`` reads (`member_inputs`) at the root ``own`` holds for its port; refused
+    (`tied_roots_why`) where ``seen`` holds another root for the node. That the root is the right one is the later
+    period check's."""
+    for p, w, _ln in member_inputs(R, ranges, name, m["units"]):
+        if not _input(R, w, run=True) or not any(P.within(program, g, w) for g in tied):
+            continue
+        if (e := next((e for e in own if e.get("port") == p), None)) is None:
+            continue
+        if seen.setdefault(w, e.get("root")) != e.get("root"):
+            raise _Refused(tied_roots_why(w))
+    return seen
+
+
+def _run_input_roots(program: Program, desc: Mapping[str, Any], ranges: Sequence[Sequence[Any]], window: str | None,
+                     tied: Sequence[range], ms: Mapping[str, Any], record: Mapping[str, Any],
+                     roots: dict[str, list[dict[str, Any]]]) -> dict[str, list[dict[str, Any]]]:
+    """`OneStageZk.runInputRoots`: `run_input_roots_at` for each member, under the program's digest, the window's open
+    root ``window`` and the tied parameters' gates ``tied``, each tied node read under one root across the members
+    (`tied_roots_at`)."""
+    R = EG._Root(desc)
+    by_port = {r.get("port"): r for r in record.get("roots") or () if isinstance(r, Mapping)}
+    prog = P.program_digest(program)
+    out = dict(roots)
+    seen: dict[int, Any] = {}
+    for name, m in ms.items():
+        tied_roots_at(R, program, ranges, tied, name, m, roots.get(name, []), seen)
+        out[name] = run_input_roots_at(R, program, ranges, prog, window, tied, name, m, roots.get(name, []), by_port)
     return out
+
+
+def tied_gates(program: Program, params: Mapping[str, Any]) -> list[range]:
+    """`Docket.tiedGates` on the parameters: the gates of the tied names R8 lets through."""
+    return [g for g in DK._tied(program, params.get("tied") or (), list(params.get("registered") or {}),
+                                params.get("held") or ()) if g is not None]
 
 
 def _meta(circuit: Path) -> Any:
@@ -1274,13 +1517,15 @@ def _members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence:
             if not subset_designs(mine, record):
                 raise _Refused(strata_design(_kind(record.get("law") if subset_design(mine) else mine)))
         _laid(ms, record)
-        _held_read(ms, params, program)
         _class(ms)
         _tree_ports_held(ms, record)
+        rp = read_pins(params, program)
+        pins_held(ms, EG._Root(params["program"]), P._template(program, params["query"], "the members' partition").ranges,
+                  program, DK.marked_gates(program), rp)
         roots, ft = _members_roots(ms, record)
-        roots = _wired(program, params["query"], params["program"], ms, record, roots, ft)
+        roots = _wired(program, params["query"], params["program"], ms, record, roots, ft, params.get("window_root"),
+                       tied_gates(program, params))
         _ports_once(ms, roots)
-        _held_roots(ms, _held_reads(params, program), roots)
         _sampled(ms, held, evidence["proved_units"])
         try:
             strata: Any = P.strata(program, params["query"])
@@ -1324,4 +1569,4 @@ __all__ = ["EXITS", "Form", "MEMBERS_LAID", "MEMBER_COVER", "MEMBER_STRATA", "ME
            "TABLE_PORT", "UNREAD", "blobs_of", "case_check", "check", "files_why", "flock_form", "flock_verdict",
            "field_trees_why", "members_run", "population_why", "POPULATION_WHY", "registered_at", "registered_reads",
            "return_fields", "run_reason", "shared_unread", "unregistered_why", "unwired_why", "own_root_why",
-           "port_twice_why", "run_own_root_why", "slice_no_port_why", "strata_design", "resolved", "subset_design", "subset_designs", "wired_tree_why"]
+           "pinned_read_why", "pins_held", "port_twice_why", "read_pins", "unpinned_read_why", "run_own_root_why", "run_tree_missing_why", "run_tree_why", "run_tree_unbound_why", "run_input_roots_at", "run_tree_held", "tied_roots_at", "tied_roots_why", "member_inputs", "reg_rows", "read_form_why", "two_reads_why", "slice_no_port_why", "strata_design", "resolved", "subset_design", "subset_designs", "wired_tree_why"]
