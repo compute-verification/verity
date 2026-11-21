@@ -27,10 +27,10 @@ lease's command line itself.
 | path | h100 | h200 | rtx-pro-6000 | b200 | arms it times |
 | --- | --- | --- | --- | --- | --- |
 | served arms (`specs/`) | served | served | served | never written | stock, commit, pearl-plus, pouw-pearl-c-whole, bandwidth audit |
-| steady proof-server path | never written | served | never written | never written | one to four provers |
+| steady proof-server path | never written | served | never written | never written | 1, 2 or 4 provers |
 | overhead door | exists | exists | exists | never written | PoUW schemes against stock |
-| served table | exists | exists | exists | exists | whatever a stored result names |
-| `prove` | never written | exists | never written | never written | a proof system on a workload |
+| served table (reads the store) | — | — | — | — | reads whatever card a stored result names |
+| `prove` (reads the store) | — | exists | — | — | a proof system on a workload, priced at h200 by default |
 
 A new benchmark supplies: a metric row with its command, unit and basis, and a spec or a runner that calls `measurement()`.
 Fixed for every benchmark: one record per run; the card is read from the machine's record, never typed; a trial
