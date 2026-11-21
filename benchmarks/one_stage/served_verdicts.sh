@@ -2005,6 +2005,111 @@ road_network() {  # the network attester's own piece, called as step 4 or 6 call
   elif [ "$rc" = 0 ]; then RAN+=(network-attester)
   else step_refused network-attester "$(failed "$rc" "$dir/road.log")"; fi
 }
+road_sampled() {  # step 3 on the window's road: the window's record, its Lean checks run from its own files (records_audit.py audit), its circuit the prover's
+  local rec=$D/windows/w$K/record leanb=$TREE/verity/protocols/proof/flock/verifier/.lake/build/bin bin=$FW/flock-gpu-link/flock/target/release/flock-circuit
+  local s=$D/private/sampled-proofs main=$OUT/sampled-proofs/main.txt unit=${TMPL_UNIT_BIN:-$FW/lean-bin/flock-tmpl-unit} how="bash $TREE/benchmarks/one_stage/build_sampled_step.sh" m0 law run rc b line regs
+  [ "$DEVELOPMENT" = 1 ] || { step_not_run sampled-proofs "its circuit is the one the prover registered, and its coins the local challenger's: a development run's alone (DEVELOPMENT=1) until proofs' compile check runs and the auditor's challenger is wired"; return; }
+  for b in "$bin" "$leanb/verity-verify-proof" "$leanb/flock-zk-server" "$leanb/flock-lower-check"; do
+    [ -x "$b" ] || { step_not_run sampled-proofs "proofs' $(basename "$b") is not built at $b: build it, with the other programs this step runs, by: $how"; return; }
+  done
+  [ -x "$unit" ] || { step_not_run sampled-proofs "proofs' flock-tmpl-unit, which places a templated member's unit rows, is not built at $unit (TMPL_UNIT_BIN): build it, with the other programs this step runs, by: $how"; return; }
+  grep -q -- '"--prover-circuit"' "$TREE/benchmarks/prove_path/records_audit.py" \
+    || { step_not_run sampled-proofs "proofs' records_audit.py takes no --prover-circuit, the audit of a circuit the prover registered with its compile check not run"; return; }
+  law=$("$PY" -c 'import json, sys; r = json.load(open(sys.argv[1])); print(r.get("rule") or (r.get("law") or {}).get("rule") or "")' "$rec/registration.json") || law=
+  law=${law:-$V3C_LAW}
+  [ -n "$law" ] || { step_not_run sampled-proofs "the window's record registers no rule of its sampling design, and the configuration states none (V3C_LAW): proofs' audit holds the record to one"; return; }
+  # the commit verdict's run root, which the seal step held to the record's
+  run=$("$PY" -c 'import json, sys; print(json.load(open(sys.argv[1]))["run_root"])' "$D/windows/w$K/commit/verdict.json") \
+    || { step_not_run sampled-proofs "the window's commit verdict has no run root"; return; }
+  # the weights registration pins the roots a window's registered weight reads open against: given only where it holds some
+  regs=()
+  "$PY" -c 'import json, sys; sys.exit(0 if (json.load(open(sys.argv[1])) or {}).get("values") else 1)' "$WREG" 2> /dev/null \
+    && regs=(--registered "$WREG")
+  (umask 077; mkdir -p "$s") && mkdir -p "$OUT/sampled-proofs" "$LOGS/sampled-proofs"
+  git -C "$TREE" rev-list --first-parent "${MAIN_SHA:-HEAD}" > "$main" 2>/dev/null && [ -s "$main" ] \
+    || { step_not_run sampled-proofs "no first-parent line of main for its challenger session to pin on (${MAIN_SHA:-HEAD} has none in this tree)"; return; }
+  m0=$TREE:$TREE/benchmarks/numerical/python:$TREE/verity/protocols/proof/flock/prover/python:$TREE/adapters/vllm
+  (cd "$TREE" && env PYTHONPATH="$m0${PYTHONPATH:+:$PYTHONPATH}" DEVELOPMENT=1 RAYON_NUM_THREADS="$(nproc)" RUST_MIN_STACK=$((64 << 20)) timeout -k 1m "$V3C_AUDIT_TIMEOUT" \
+    "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py audit --window "$rec" --sampling-design "$law" \
+    --prover-circuit --development --run "$run" ${regs[@]+"${regs[@]}"} \
+    --challenger local --main "$main" --m0-pythonpath "$m0" --bin "$bin" --lean "$leanb/verity-verify-proof" \
+    --zk-server "$leanb/flock-zk-server" --lower "$leanb/flock-lower-check" --tmpl-unit-bin "$unit" \
+    --lean-workers "${V3C_LEAN_WORKERS:-1}" --stage-workers "${V3C_STAGE_WORKERS:-1}" --stage-worker-gb "${V3C_STAGE_WORKER_GB:-20}" \
+    --audit-mem-gb "$V3C_AUDIT_MEM_GB" --ports "${V3C_PORTS:-16}" --out "$s/audit") \
+    > "$LOGS/sampled-proofs/audit.log" 2> "$LOGS/sampled-proofs/audit.err"
+  rc=$?
+  grep -m1 '^RECORDS' "$LOGS/sampled-proofs/audit.log" > "$s/records.txt"
+  cp "$s/audit/summary.json" "$s/" 2>/dev/null
+  [ -s "$s/records.txt" ] && [ -s "$s/summary.json" ] \
+    || { step_refused sampled-proofs "ERROR: the records audit stopped with no RECORDS row $(failed "$rc" "$LOGS/sampled-proofs/audit.err")"; return; }
+  # $OUT/summary.json is the audit's public summary, which the record step reads; the full one names templates and stays in $s
+  line=$("$PY" - "$s/summary.json" "$s/audit/window/summary.json" "$law" "$OUT/summary.json" <<'EOF'
+import json, sys
+from pathlib import Path
+row, inner = json.load(open(sys.argv[1])), (json.load(open(sys.argv[2])) if Path(sys.argv[2]).is_file() else {})
+draw = row.get("draw") if isinstance(row.get("draw"), list) else []
+audit = row.get("audit") or {}
+lean = audit.get("members_lean") or {}
+accepted = audit.get("accepted") is True and row.get("ok") is True
+bad = sorted(u for u in draw for x in (inner.get("unlowered") or {}).values() if x["base"] <= u < x["base"] + x["n"])
+verdict = ((lean.get("detail") or {}).get("lean") or {}) if isinstance(lean.get("detail"), dict) else {}
+wrong = audit.get("wrong_units") if isinstance(audit.get("wrong_units"), dict) else {}
+public = {"ok": row.get("ok"), "audit": {"accepted": audit.get("accepted"),
+                                         "members_lean": {**{k: lean[k] for k in ("ok", "ran", "codes") if k in lean},
+                                                          "detail": {"lean": {k: verdict[k] for k in ("verdict", "output_sha512")
+                                                                              if k in verdict}}} if lean else None,
+                                         **({"wrong_units": {k: wrong[k] for k in ("bound", "delta") if k in wrong}} if wrong else {})},
+          "sampled": len(draw), "draw": draw, "unprovable_sampled": bad, "compiled": row.get("compiled", "not stated by the audit"),
+          "circuit": "registered by the prover", "coins": "the local challenger's (DEVELOPMENT=1)"}
+Path(sys.argv[4]).write_text(json.dumps(public, indent=1, sort_keys=True))
+
+
+def reasons(checks):
+    """The window's failing checks before the draw: each member check's code with its count, its lowest member and that
+    member's reason, then the registration's codes with their detail."""
+    ms = sorted((int(k[1:]), v) for k, v in checks.items() if k[:1] == "m" and k[1:].isdigit() and isinstance(v, dict))
+    codes = {}
+    for k, v in ms:
+        if v.get("ok") is False:
+            for c in v.get("codes") or ["no code"]:
+                codes.setdefault(c, [k, 0, (v.get("detail") or {}).get(c)])[1] += 1
+    out = [f"{c}: {n} of {len(ms)} members, first m{k}: {why}" for c, (k, n, why) in codes.items()]
+    reg = checks.get("registration")
+    if isinstance(reg, dict) and reg.get("ok") is False:
+        d = reg.get("detail") or {}
+        out += [f"registration {c}: {json.dumps(d.get(c), sort_keys=True)}" for c in reg.get("codes") or ["no code"]]
+    return "; ".join(out)
+
+
+if row.get("refused") or not isinstance(row.get("draw"), list):
+    why = row.get("refused") or reasons(inner.get("checks") or {}) or "the audit's summary names no failing check"
+    print(f"REFUSED before the sample: {why if isinstance(why, str) else json.dumps(why, sort_keys=True)}"[:2000])
+    sys.exit(2)
+if not draw:
+    print("the law samples no block of this window: nothing would be proved")
+    sys.exit(3)
+said = (f"under the DEVELOPMENT law {sys.argv[3]}, {len(draw)} sampled block(s) {draw}, on the local challenger's coins (DEVELOPMENT=1); "
+        "its circuit registered by the prover; the compile check did not run, so compilation is not verified")
+if bad:
+    print(f"REJECTED: {said}; sampled unit(s) {bad} of a block the door refuses to lower: a failed proof, not resampled "
+          "(its Definition in the serve dir's private/sampled-proofs/summary.json)")
+    sys.exit(1)
+print(f"the Lean checks pass on the sampled blocks' proofs (run on the prover's node): {said}" if accepted else f"REJECTED: {said}")
+sys.exit(0 if accepted else 1)
+EOF
+)
+  case $? in
+    0) RAN+=(sampled-proofs)
+       say "sampled-proofs: $line"
+       if [ -f "$TREE/benchmarks/one_stage/accept_line.py" ]; then
+         (cd "$TREE/benchmarks/one_stage" && env -u PYTHONPATH PYTHONPATH="$TREE" "$TREE/.venv/bin/python" accept_line.py "$s/summary.json" - -) 2>&1 \
+           | while IFS= read -r b; do say "sampled-proofs: $b"; done
+       else say "sampled-proofs: the bound: not stated (accept_line.py absent)"; fi ;;
+    1 | 2) step_refused sampled-proofs "$line" ;;
+    3) step_not_run sampled-proofs "$line" ;;
+    *) step_refused sampled-proofs "ERROR: the records audit's summary (records_audit.py exit $rc) has no public form" ;;
+  esac
+}
 road_step_named() {  # in TREE: the window's step $1, from its record or refused by name; the steps' order is the caller's
   case $1 in
     preflight)
@@ -2041,15 +2146,19 @@ EOF
       for c in $CLASSES; do rm -f "$OUT/window-circuit-${c//,/-}.json"; done
       road_step circuits circuits ;;
     block-counts) road_step block-counts block_counts ;;
-    sampled-proofs) step_not_run sampled-proofs "step 3's prove path (prove_path/run.sh) proves the units a partition file names (PP_PARTITION), and the window's record has none: its proof of the window's circuit is proofs'" ;;
+    sampled-proofs) road_sampled ;;
     pieces) road_pieces ;;
     wipe) road_wipe ;;
     network-attester) road_network ;;
     inference-only)  # the circuits step may have run in another call: its public count is what it leaves in OUT
       if circuits_counted && [[ " ${RAN[*]} " = *" inference-policy "* ]]; then road_step inference-only inference_only
       else step_not_run inference-only "its verdict reads the circuits step's window circuit and the inference-only policy, and one of them did not run"; fi ;;
-    record) step_not_run record "served_verdicts.py record reads step 3's sampled proofs, which did not run" ;;
-    composite) step_not_run composite "V3c, the composite and the hand-off read the record, which was not made" ;;
+    record)  # the sampled-proofs step may have run in another call: what it leaves in OUT is its public summary
+      if [ ! -f "$OUT/summary.json" ]; then
+        step_not_run record "its verdict of record is Lean's members check in the sampled proofs' summary ($OUT/summary.json), which the sampled-proofs step did not write"
+      elif rec=$("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" window-record "$OUT/summary.json" 2>&1); then RAN+=(record); say "$rec"
+      else step_refused record "$rec"; fi ;;
+    composite) step_not_run composite "served_composite.sh reads the audit's cases under D/private/logs/sampled-proofs/keep/served or D/v3c-w*/audit and, where compute accounting is listed, Pearl+'s run case, and the window road writes neither: no input of the composite's stands, so its verdict is not made" ;;
   esac
 }
 steps_named() {  # every name in "$@" is a step road_step_named knows, and none is named twice: refused by name otherwise
