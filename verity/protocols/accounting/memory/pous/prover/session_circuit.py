@@ -45,7 +45,7 @@ which round j's unit reads (row ⌊j/2⌋) by wire, so the two kinds of proof ar
 `memory_attester.Round.value`'s 92 bytes, ``u32 j ‖ u64 index ‖ u64 send_ns ‖ u64 receipt_ns ‖ H(block)``, integers
 big-endian, ``H(block)`` the answer's ``sha512/row/v2`` digest.  `PousRound_v3{N, SLOT}` reads the store's N-byte row
 ``row`` as N/2 words (the row the store table's opening at the round's index returns, `gates.embedding`'s ``h``),
-``ok`` the opening's verdict word (``EmbeddingRead_v3``'s ``ok``), the records row ``records`` holding record j at slot
+``ok`` the opening's verdict word (``EmbeddingRead_v4``'s ``ok``), the records row ``records`` holding record j at slot
 SLOT = j mod 2, and ``j``, ``ihi`` and ``ilo``, the three big-endian 32-bit halves of round j's coin value
 ``u32be(j) ‖ u64be(i)`` (``pous.session.round_coin/v1`` under the layout ``halves``: the round and the index the memory
 attester drew for it), whose ``ilo`` the store's opening reads as its key.
