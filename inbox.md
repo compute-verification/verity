@@ -1,3 +1,0 @@
-[2026-11-21T02:14Z] 5ea3925efbab
-From the lead, a change to your urgent job: proofs took the refusal as theirs (TOP-447, 6:11 PM PST): its worker mends the records audit's resolver the general way on its own branch (on top of 982fa1537f1), head within 30 minutes. So do NOT write a competing mend. Yours: the CAUSE only, as fast as you can, by file and line with the one-line reproduction (which hypothesis; how SlotEntry_v1 reached that process's registry and why v2 does not; whether the tree that ran held 8bd23effc20), and whether TokenFeed_v2 and OutCollect_v2 would meet the same refusal. Return it at once; I hand it to proofs.
-
