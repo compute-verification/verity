@@ -177,8 +177,7 @@ ATTESTER_PIECE = "benchmarks/network_traces/attester_piece.py"
 #: 503-byte payload of the front's 512-byte cells; every other request is answered as before
 ID_FORM = "--protocol ids --id-payload 503"
 #: network attestation's scan class (`attester_piece.V3C_SCAN_CLASS`, w63k4) as served_verdicts.sh's SLOTS,PROMPT,OUTPUTS,
-#: LANES,EVERY, V3c's class, so the period check's compute audit is V3c's of the served window; CLASSES holds it beside
-#: served_verdicts.sh's default class
+#: LANES,EVERY
 SCAN_CLASS = "8,32,4,4,16"
 #: the most output tokens a front request asks for (`attester_piece.TOKENS`): its group stays in one execution phase
 FRONT_TOKENS = 4
@@ -186,22 +185,14 @@ FRONT_TOKENS = 4
 
 def _attester_hooks(cfg, params, bound, pinned):
     """The network attester's developer side: its front before the requests (CERTIFIER_FRONT, which the served window
-    runs), and its piece split around V3c: the chain on V3c's committed window (CERTIFIER_CHAIN_CMD), then the period
-    check on V3c's period.json (CERTIFIER_PERIOD_CMD). Under Pearl+'s tie (``pearl-plus`` listed, whose piece sets
-    ``PEARLPLUS_TIE``) the tied class is Pearl+'s and V3c runs after the pieces, so the piece is whole
-    (``CERTIFIER_CMD``) on the front's own window, sets no class, and the front's requests ask for at most the
-    window's steps, so each is in one window."""
+    runs), whose requests ask for at most the window's steps, so each is in one window, and its piece
+    (``CERTIFIER_CMD``) on the front's own window, which sets no class."""
     py = ".venv/bin/python"
     gate = f'--gate {shlex.quote(bound["gate"])} --peer {shlex.quote(bound["peer"])}'
-    front = f'{py} {ATTESTER_PIECE} front "$1" "$2" "$3" {gate}'
-    if "pearl-plus" in cfg["protocols"]:
-        tokens = min(FRONT_TOKENS, cfg["workload"]["params"]["window-steps"])
-        return {"SERVE_ARGS": ID_FORM, "CERTIFIER_FRONT": f"{front} --tokens {tokens}",
-                "CERTIFIER_CMD": f'{py} {ATTESTER_PIECE} piece "$@"'}
-    return {"SERVE_ARGS": ID_FORM, "CERTIFIER_FRONT": front,
-            "CERTIFIER_CHAIN_CMD": f'{py} {ATTESTER_PIECE} chain "$@"',
-            "CERTIFIER_PERIOD_CMD": f'{py} {ATTESTER_PIECE} period "$@"',
-            "V3C_CLASS": SCAN_CLASS, "CLASSES": f"4,32,4 {SCAN_CLASS}"}
+    tokens = min(FRONT_TOKENS, cfg["workload"]["params"]["window-steps"])
+    return {"SERVE_ARGS": ID_FORM,
+            "CERTIFIER_FRONT": f'{py} {ATTESTER_PIECE} front "$1" "$2" "$3" {gate} --tokens {tokens}',
+            "CERTIFIER_CMD": f'{py} {ATTESTER_PIECE} piece "$@"'}
 
 
 def launch_attester(declaration: Scheme) -> tuple[Any, tuple[str, ...]]:
