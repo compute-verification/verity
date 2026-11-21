@@ -96,7 +96,7 @@ def test_one_mathlib():
 # their nontrivial witnesses; their honest ones are due with the two-stage layout and the deployed check pinning CheckedUnique;
 # Flock.SecurityProofs.SessionLoopZKAnyDeployed carries its honest one, and its nontrivial one is due with the lemma
 # restated at the deployed session its domain hypothesis fixes
-UNWITNESSED = {"security": 191, "security/Properties": 169, "verity/protocols/proof/flock/verifier": 7}
+UNWITNESSED = {"security": 158, "security/Properties": 169, "verity/protocols/proof/flock/verifier": 7}
 
 
 def test_the_unwitnessed_list_only_shrinks():
@@ -111,7 +111,7 @@ def test_the_unwitnessed_list_only_shrinks():
 #: the count of each lock's `unwitnessed` entries that exempt both witnesses with no reason (a bare hash, or {type_hash,
 #: unfolded_hash}), carried from before {type_hash, why} was the form: each owner gives its guarantee a witness, a
 #: reason or its removal from the listed guarantees
-UNREASONED = {"security": 185, "security/Properties": 161, "verity/protocols/proof/flock/verifier": 7}
+UNREASONED = {"security": 150, "security/Properties": 150, "verity/protocols/proof/flock/verifier": 7}
 
 
 def test_no_exemption_is_written_without_a_reason():
@@ -335,7 +335,7 @@ def test_every_open_conjecture_names_a_test_that_exists():
 #: the 398 premises of the lemmas and completeness theorems the lock stopped listing and the guarantees deleted with the
 #: falsified conjectures they rest on; a renamed or restated premise counts twice, under both texts, until `--update`
 #: drops the one no tree prints
-INLINE = {"security": 829, "security/Properties": 132, "verity/protocols/proof/flock/verifier": 6}
+INLINE = {"security": 725, "security/Properties": 132, "verity/protocols/proof/flock/verifier": 6}
 
 
 def test_the_inline_list_only_shrinks():
@@ -399,7 +399,7 @@ def _held(name: str, caps: dict[str, int], got: dict[str, int], what: str, fix: 
 #: the size of each lock's `trees.except`: the modules whose statements may read a definition of the proofs tree, almost
 #: all Flock's until its spec is extracted; a moved module keeps its exception, as an entry of its own where its new
 #: prefix also holds modules never excepted (`Proofs.Spot.Sampling`'s seven, moved from `Proofs.Flock.Soundness.Audit`)
-TREES_EXCEPT = {"security": 34}
+TREES_EXCEPT = {"security": 28}
 
 
 def test_the_trees_except_list_only_shrinks():
@@ -411,7 +411,7 @@ def test_the_trees_except_list_only_shrinks():
 
 #: the size of each lock's `four_names_except`: the guarantees under a root `four_names` lists that weren't in the four-name
 #: form, frozen or a witness when the rule came to every root
-FOUR_NAMES_EXCEPT = {"security": 3}
+FOUR_NAMES_EXCEPT = {"security": 1}
 
 
 def test_the_four_names_exceptions_only_shrink():
@@ -552,7 +552,7 @@ def undocumented(read: dict[str, set[str]], sources: dict[str, tuple[str, str]])
 
 #: the definitions of the spec (`security`) that a lock-listed guarantee's statement reads (a lock's `reads`) and no doc
 #: comment heads
-UNDOCUMENTED = {"security": 62}
+UNDOCUMENTED = {"security": 52}
 
 
 def test_every_definition_a_guarantee_reads_says_what_it_means():
@@ -586,7 +586,7 @@ def test_the_spec_states_no_new_lemma():
 #: the lines a module may run to: one module is one unit of rebuild, so a long one costs every check and train its build
 LONG = 2000
 #: the lines past `LONG` of each package's modules, summed
-OVERLONG = {"security": 963, "security/Proofs": 53427, "verity/protocols/accounting/compute/pouw/verifier/lean/check": 282, "verity/protocols/proof/flock/verifier": 690}
+OVERLONG = {"security": 963, "security/Proofs": 52726, "verity/protocols/accounting/compute/pouw/verifier/lean/check": 282, "verity/protocols/proof/flock/verifier": 690}
 
 
 def overlong(lines: dict[str, int]) -> dict[str, int]:
