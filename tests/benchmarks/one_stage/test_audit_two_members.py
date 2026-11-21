@@ -335,9 +335,10 @@ class AfreshRefused(Exception):
 @pytest.mark.xfail(strict=True, raises=AfreshRefused,
                    reason="the members check's header rule for a port that reads a registered value; any other "
                    "failure, or the refusal gone, fails this test")
-def test_a_value_the_program_takes_registered_afresh_with_no_earlier_record_passes_the_audit(tmp_path, binaries):
+def test_a_value_the_program_takes_registered_afresh_is_refused_only_by_the_members_header_rule(tmp_path, binaries):
     """No other test runs a value the Program takes, registered afresh under the run root with no earlier record (no
-    ``--tie``), through the stream's registration, the prover and the Lean verifier's registered reads."""
+    ``--tie``), through the stream's registration, the prover and the Lean verifier's registered reads. The audit
+    refuses it at the members check's header rule alone (`OneStageZk.UNWIRED_WHY`); past that rule it is to pass."""
     window = _window(tmp_path / "window", own=STATE)
     rec = json.loads((window / "registration.json").read_text())
     (entry,) = rec["registered"]
