@@ -2309,14 +2309,14 @@ def test_a_pearlplus_piece_holds_its_accept_to_the_coin_it_published(tmp_path, c
                    "--coin", str(pub / S.COIN_PUT)]) == 0
     line = json.loads(capsys.readouterr().out.removeprefix("POUW-DEV "))
     assert (line["verdict"], line["coin"], line["load"]) == ("accept", coin, load)
-    for other in ({"commitment": "c2" * 64}, {"profile": {"source": "77" * 32}}):
-        doc = _pearlplus(tmp_path / "a", served, {**verified, "answer": {**answer, **other}}, **given)
+    for i, other in enumerate(({"commitment": "c2" * 64}, {"profile": {"source": "77" * 32}})):
+        doc = _pearlplus(tmp_path / f"other{i}", served, {**verified, "answer": {**answer, **other}}, **given)
         assert doc["verdict"] == "reject" and doc["reasons"] == [f"coin: {doc['coin']['reason']}"]
         assert doc["coin"]["reason"].startswith("the verdict's run commitment or draw source is not the published coin record's")
     unpublished = {**given, "coin": tmp_path / "none" / S.COIN_PUT}
     doc = _pearlplus(tmp_path / "a", served, held, **unpublished)
     assert doc["verdict"] == "reject" and doc["reasons"][0].startswith("coin: the verifier's coin was not published: FileNotFoundError")
-    doc = _pearlplus(tmp_path / "a", served, _pearlplus_run(accepted=False)[1], **unpublished)
+    doc = _pearlplus(tmp_path / "rejected", served, _pearlplus_run(accepted=False)[1], **unpublished)
     assert doc["reasons"] == ["Pearl+'s verdict rejects the run: pass 1 tile 7: B opening"] and doc["coin"]["reason"]
     (pub / S.COIN_RECORD).write_bytes(_coin_record(source="77" * 32))
     doc = _pearlplus(tmp_path / "a", served, held, **given)
