@@ -524,6 +524,11 @@ def regInputs (P : Flock.Program.Prog) (first count : Nat) : Bool :=
     | some f => f.prim && f.binding == some Flock.Program.REGISTRATION
     | none => false
 
+/-- Whether a root node of `P` is a primitive input bound at registration (`docket.marked_inputs`). -/
+def bindsRegistration (P : Flock.Program.Prog) : Bool :=
+  (Flock.Registered.rootNodes P).any fun x => (P.defs[x.fn]?).any fun f =>
+    f.prim && f.binding == some Flock.Program.REGISTRATION
+
 /-- `partition.input_reads` over a template query's ranges `rs`: each `(template, parameter, value)` whose template
 parameter's argument reads an input node inside the gates `(value, first, count)` of `held`, a root node at a time,
 never its members or its gates. -/

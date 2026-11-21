@@ -323,13 +323,14 @@ def _params(program: Program, query: Mapping[str, Any], sampling_design: Mapping
             verdicts: Mapping[str, bool] | None = None, weights_of_record: tuple[bytes, str] | None = None) -> dict[str, Any]:
     """`registration.check`'s copies as the Lean's parameters (`OneStage.paramsOfJson`), `pool` as the verifier holds it:
     the Lean adds its `pin` to the supplied or output values itself. The program function's parameters go with
-    `registered`, `tied` or `weights_of_record`, which name them; the certified entries name none."""
+    `registered`, `tied` or `weights_of_record`, which name them, and with a program binding inputs at registration;
+    the certified entries name none."""
     p = {"anchors": list(anchors), "delta": REGISTRATION_DELTA, "law": dict(sampling_design), "leaf_layer": leaf_layer,
          "log": [dict(r) for r in log], "partition": None if partition is None else dict(partition),
          "ports": {k: dict(v) for k, v in ports.items()}, "program": codec.encode_program(program), "query": dict(query),
          "registered": None if registered is None else dict(registered), "scheme": scheme,
          "work_table": None if work_table is None else dict(work_table)}
-    if registered is not None or tied is not None or weights_of_record is not None:
+    if registered is not None or tied is not None or weights_of_record is not None or R.marked_inputs(program):
         p["parameters"] = [[name, t.to_json()] for name, t in program.fn.signature()[0]]
     if tied is not None:
         p["tied"] = list(tied)

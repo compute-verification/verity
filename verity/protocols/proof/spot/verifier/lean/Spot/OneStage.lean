@@ -342,7 +342,8 @@ def paramsParsed (j : Json) : V Params := do
   let v2 := !(getD j "registered" matches .null)
   let tiedGiven := (field? j "tied").isSome
   let weightsGiven := (field? j "weights_of_record").isSome
-  let keys := if v2 || tiedGiven || weightsGiven then PARAM_KEYS.push "parameters" else PARAM_KEYS
+  let paramsGiven := (field? j "parameters").isSome
+  let keys := if v2 || tiedGiven || weightsGiven || paramsGiven then PARAM_KEYS.push "parameters" else PARAM_KEYS
   let keys := if weightsGiven then keys.push "weights_of_record" else keys
   let keys := if tiedGiven then keys.push "tied" else keys
   let keys := if (field? j "supplied").isSome then keys.push "supplied" else keys
@@ -395,7 +396,10 @@ def paramsParsed (j : Json) : V Params := do
     (entries (← obj (getD j "registered") "registered")).mapM fun (v, w) => match nat? w with
       | some w => pure (v, w)
       | none => throw s!"registered: the words of {v} are not a natural number"
-  let params ← if v2 || tiedGiven || weightsGiven then Registered.params program.desc (getD j "parameters") else pure #[]
+  let needed := v2 || tiedGiven || weightsGiven || Partition.bindsRegistration program.prog
+  if needed && !paramsGiven then
+    throw "parameters: the program binds inputs at registration, or the verifier expects or pins values, and no parameters name them"
+  let params ← if needed || paramsGiven then Registered.params program.desc (getD j "parameters") else pure #[]
   let weightsOfRecord ← match field? j "weights_of_record" with
     | none => pure none
     | some w => do

@@ -572,7 +572,8 @@ def decode_params(j) -> dict:
     v2 = isinstance(j, dict) and j.get("registered") is not None
     tied = isinstance(j, dict) and "tied" in j
     weighed = isinstance(j, dict) and "weights_of_record" in j
-    keys = PARAM_KEYS | {"parameters"} if v2 or tied or weighed else PARAM_KEYS
+    given = isinstance(j, dict) and "parameters" in j
+    keys = PARAM_KEYS | {"parameters"} if v2 or tied or weighed or given else PARAM_KEYS
     keys = keys | {"tied"} if tied else keys
     keys = keys | {"weights_of_record"} if weighed else keys
     keys = keys | {"supplied"} if isinstance(j, dict) and "supplied" in j else keys
@@ -615,7 +616,11 @@ def decode_params(j) -> dict:
         raise D.Reject("partition names no program digest or query")
     if v2 and not all(map(_nat, _obj(j["registered"], "registered").values())):
         raise D.Reject("registered: words that are not a natural number")
-    if v2 or tied or weighed:
+    needed = v2 or tied or weighed or bool(R.marked_inputs(PROGRAMS[sha]))
+    if needed and not given:
+        raise D.Reject("parameters: the program binds inputs at registration, or the verifier expects or pins values, "
+                       "and no parameters name them")
+    if needed or given:
         _parameters(desc, PROGRAMS[sha], j["parameters"])
     if weighed:
         w = j["weights_of_record"]
@@ -5116,7 +5121,7 @@ def test_r8_holds_registered_inputs_to_the_weights_of_record_as_python_does(piec
         sig = _json([[name, t.to_json()] for name, t in setup.program.fn.signature()[0]])
         params = {"anchors": [], "delta": "1/1000", "law": "rate:1/2", "leaf_layer": LEAF, "log": [], "partition": None,
                   "ports": setup.ports, "program": setup.desc, "query": setup.query, "registered": None, "scheme": SCHEME,
-                  "work_table": None, **({} if weights is None else {"parameters": sig, "weights_of_record": weights})}
+                  "work_table": None, "parameters": sig, **({} if weights is None else {"weights_of_record": weights})}
         given = _json({"params": params, "record": rec})
         reg = registration(given)
         assert reg["codes"] == want if want is not None else "R8-weights-query" in reg["codes"], (weights, reg)
