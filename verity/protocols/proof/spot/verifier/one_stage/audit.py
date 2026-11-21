@@ -9,7 +9,7 @@ t: exact for `subset` and `stratified`, the linear relaxation for `bernoulli`. A
 
 The record states the profile three ways, in the forms its recorded runs hold: `profile`, the profile's JSON (a stratified
 sampling design's in its v0 form: the sampling design's JSON with delta and the count sampled per template); `wrong_units`, its bounds; and
-`integrity_profile`, `verity/integrity-profile/v1` (README "The audit record and the profile"): the partition, the docket it
+`integrity_profile`, `verity/integrity-profile/v1` (Lean `Spot.Record`): the partition, the docket it
 counts against, the sampling design and which proof blocks were sampled and proved, and the evidence by digest. The v1 form's non-sampling
 terms (ε) come from the soundness analysis, not from the run, so the run leaves them null.
 

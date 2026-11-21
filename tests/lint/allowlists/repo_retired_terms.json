@@ -2459,7 +2459,7 @@
     {"file": "verity/protocols/proof/spot/prover/costfit.py", "count": 8},
     {"file": "verity/protocols/proof/spot/prover/optimize.py", "count": 53},
     {"file": "verity/protocols/proof/spot/prover/plancheck.py", "count": 8},
-    {"file": "verity/protocols/proof/spot/verifier/README.md", "count": 49},
+    {"file": "verity/protocols/proof/spot/verifier/README.md", "count": 3},
     {"file": "verity/protocols/proof/spot/verifier/challenger/challenger.py", "count": 50},
     {"file": "verity/protocols/proof/spot/verifier/challenger/challenger_session.py", "count": 65},
     {"file": "verity/protocols/proof/spot/verifier/challenger/coins.py", "count": 75},
