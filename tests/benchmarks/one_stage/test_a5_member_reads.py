@@ -10,7 +10,7 @@ from pathlib import Path
 from verity.protocols.proof.spot.verifier.one_stage import members as MB
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "benchmarks" / "one_stage"))
-import a5 as A5  # noqa: E402
+import a5 as A5
 
 SLICE = {"population": 2, "scheme": "s", "roots": [{"domain": "dx", "port": "x", "root": "rx"}]}
 
