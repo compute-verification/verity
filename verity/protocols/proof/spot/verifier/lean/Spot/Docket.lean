@@ -519,10 +519,12 @@ def suppliedInputs (P : Flock.Program.Prog) (first count : Nat) : Bool :=
     | none => false
 
 /-- `docket.unsourced_supplied`: the parameters bound as supplied inputs (`suppliedInputs`) that the parameters'
-`supplied` (C's marked rows among them) gives no source; R7 refuses them (`R7-supplied-source`). -/
+`supplied` (C's marked rows among them) gives no source and that is no output of an earlier record (`outputs`, a pool's
+reused `pin` among them); R7 refuses them (`R7-supplied-source`). -/
 def unsourced (v : Verifier) : Array String :=
   (v.params.filter fun p => match p.gates with
     | some (first, count) => suppliedInputs v.program.prog first count && !v.supplied.any (·.1 == p.name)
+        && !v.outputs.any (·.1 == p.name)
     | none => false).map (·.name)
 
 /-- The members' check's refusal of a program marking a registered input the verifier does not expect, under parameters

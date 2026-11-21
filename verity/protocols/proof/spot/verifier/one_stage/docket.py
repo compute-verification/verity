@@ -183,8 +183,8 @@ ANCHOR_FUNCTIONS = ("registered.root/v1", "registered.domain/v1")
 PIN_WHY = ("a value the weights' registration of record pins is registered in the record at that pin, in root, leaf count, "
            "words and domain, and a supplied anchor's value, which a supplied function reads from the record's entry, "
            "is registered there")
-SUPPLIED_SOURCE_WHY = ("a supplied input's rows are the verifier's own: the parameters' supplied names its source, or C's "
-                       "mark its function; with neither, nothing fixes its root")
+SUPPLIED_SOURCE_WHY = ("a supplied input's rows are the verifier's own: the parameters' supplied names its source, C's "
+                       "mark its function, or it is an earlier record's output; with none, nothing fixes its root")
 ANCHOR_UNPINNED_WHY = ("a supplied anchor reads a registered value's root or domain, and the verifier holds that value "
                        "to no pin: neither its own pinned roots nor a pin of the weights' registration of record")
 #: R8's refusals of the program's registered inputs against the weights' registration of record (`weights_held`)
@@ -615,7 +615,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
             c.fail("R7-anchor-unpinned", {"values": loose, "why": ANCHOR_UNPINNED_WHY})
         if off := off_pin(marks, rec["registered"], weights_of_record):
             c.fail("R7-pin", {"values": off, "why": PIN_WHY})
-        if unsourced := unsourced_supplied(program, sup):
+        if unsourced := unsourced_supplied(program, sup, outputs):
             c.fail("R7-supplied-source", {"values": unsourced, "why": SUPPLIED_SOURCE_WHY})
     # R8
     if bad:
@@ -691,13 +691,13 @@ def off_pin(marks: Mapping[str, Mapping[str, Any]], got: Any, of_record: tuple[b
     return out
 
 
-def unsourced_supplied(program: Program, supplied: Mapping[str, Any]) -> list[str]:
-    """The program's parameters bound as supplied inputs (`SuppliedInput<w>_v1`) that hold gates and that the
-    parameters' ``supplied`` (C's marked rows among them) gives no source; R7 refuses them (`R7-supplied-source`). The
-    Lean's `Docket.unsourced` is this."""
-    bindings = getattr(program, "bindings", ())
+def unsourced_supplied(program: Program, supplied: Mapping[str, Any], outputs: Mapping[str, Any] | None = None) -> list[str]:
+    """The program's parameters bound as supplied inputs (`SuppliedInput<w>_v1`) that hold gates, that the parameters'
+    ``supplied`` (C's marked rows among them) gives no source and that are no output of an earlier record (``outputs``,
+    a pool's reused ``pin`` among them); R7 refuses them (`R7-supplied-source`). The Lean's `Docket.unsourced` is this."""
+    bindings, outputs = getattr(program, "bindings", ()), outputs or {}
     return [n for (n, _), b in zip(program.fn.signature()[0], bindings)
-            if b == SUPPLIED and G.held_gates(program, [n]) and n not in supplied] if bindings else []
+            if b == SUPPLIED and G.held_gates(program, [n]) and n not in supplied and n not in outputs] if bindings else []
 
 
 def marked_gates(program: Program) -> list[tuple[str, range]]:
