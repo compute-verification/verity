@@ -540,7 +540,7 @@ def test_a_challenger_draw_its_draw_session_does_not_hold_is_refused_by_the_lean
     assert same(exe, [path], 3, None, good, draw=challenger_sample())["verdict"] == "accept"
     live = {"key": None, "ledger": [], "pins": [], "main": [], "session": {}}
     for doc, why in ((live, "the draw session's challenger key is malformed: "),
-                     ({**live, "key": {"H": 5, "W": 4, "public": "ab" * 64}}, "the draw session ")):
+                     ({**live, "key": {"H": 5, "W": 4, "public": "ab" * 80}}, "the draw session is not trusted: ")):
         (f := tmp_path / "live.json").write_text(json.dumps(doc))
         for of_record in (False, True):
             got = lean(exe, [path], 3, None, good, test_instance=True, of_record=of_record, draw_live=f)
