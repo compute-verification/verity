@@ -1,14 +1,17 @@
 """Pearl+'s tile in the served circuit, through the door.
 
 The served circuit is WIDE's (TINY at hidden size 256, `test_steps.WIDE`) at class 1,1,1 and the test grain
-(`test_window_circuit.GRAIN`), lowered by `window_circuit.class_circuit` with one change: unit 0 of layer 0's qkv
-projection, `Gemm_v2{K=256,N=4}` over columns 0 to 3, is `PearlPlusTileCoreWords_v6` (`pearl_plus_credited.served_product`
-at TM 1, TN 4). It reads its ``a`` by wire from the writer that unit read x from (the first norm), its ``b`` as that unit
-read ``w`` (row 0 of ``weights/model.layers.0.self_attn.qkv_proj.weight@1024``), its ``cert`` and the public row
-(`pearl_plus_credited.PUBLIC`) as registered values of the epoch (``pearlplus/<port>``), and it writes columns 0 to 3 of
-the linear's y as its ``o1``, which every reader of those columns reads by wire. Every other unit is the served lowering's.
+(`test_window_circuit.GRAIN`, its GEMM unit K · TN words), lowered by `window_circuit.class_circuit` with one change: unit 0
+of layer 0's qkv projection, `Gemm_v2{K=256,N=TN}` over columns 0 to TN − 1, is `PearlPlusTileCoreWords_v6`
+(`pearl_plus_credited.served_product` at TM 1). It reads its ``a`` by wire from the writer that unit read x from (the first
+norm), its ``b`` as that unit read ``w`` (row 0 of ``weights/model.layers.0.self_attn.qkv_proj.weight@<K·TN>``), its
+``cert`` and the public row (`pearl_plus_credited.PUBLIC`) as registered values of the epoch (``pearlplus/<port>``), and it
+writes columns 0 to TN − 1 of the linear's y as its ``o1``, which every reader of those columns reads by wire. Every other
+unit is the served lowering's. At TN 4 the door's lowering refuses the core block (Lean's compose: 2^29 bits, past
+2^27), and at TN 1 the served lowering refuses the grain (GEMM units of 256 words).
 
-The tile is laid (`verity.circuits.laying`'s ``_laid`` on the tile's root node alone, under `credited_in_c.fits`) until each
+The tile is laid (`verity.circuits.laying`'s ``_laid`` on the tile's root node alone, under `fits`, which is
+`credited_in_c.fits` within 2^`K_MAX`: Python's estimate of a block, which Lean's compose does not match) until each
 of its units is one proof block; every other unit of C is one block as lowered. ``stage`` reports the laid tile's blocks
 and their sizes (``LAID``), samples one of the core's blocks (``--steer``), cuts it out (`restrict`), lowers it by the door
 (`one_circuit.lower` under `one_circuit.cuts`) and stages two proofs of it: ``honest``, on the served values (x the first
