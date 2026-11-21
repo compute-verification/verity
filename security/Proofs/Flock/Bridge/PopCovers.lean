@@ -77,4 +77,22 @@ theorem nsOf_sum_of_popCovers {desc : Hash.Msg} {q : Lean.Json} {n : ℕ} (h : P
   rw [nsOf_eq hp hl, sum_strata_popOf]
   simpa only [List.length_map, List.length_range] using hu.length_eq
 
+/-- **A subset sampling design the verifier samples under is on the strata at `PopCovers`**: `SamplingDesignOn` at
+`nsOf` and the `kd` units it samples, which for `subset k` reads only that `k ≤` the strata's sum, `n`
+(`sampledDesign_cases`: a derived sampling design is stratified or work, never a subset). -/
+theorem samplingDesignOn_samplesUnder_cover {desc : Hash.Msg} {q lj : Lean.Json} {tb : Option Lean.Json} {n : ℕ}
+    {samplingDesign : Flock.Draw.SamplingDesign} {kd : ℕ} (hpop : PopCovers desc q n)
+    (h : SamplesUnder desc q lj tb n samplingDesign kd) (hs : IsSubsetDesign samplingDesign) :
+    SamplingDesignOn samplingDesign (nsOf desc q) kd := by
+  obtain ⟨k, rfl⟩ := hs
+  obtain ⟨h, rfl⟩ := h
+  have hsum := nsOf_sum_of_popCovers hpop
+  rcases sampledDesign_cases h with ⟨k', hk', hk⟩ | ⟨a, b, h'⟩ | ⟨p, S, k', -, -, hder | ⟨tab, hwork⟩⟩
+  · cases hk'
+    exact ⟨rfl, by rw [hsum]; exact hk⟩
+  · cases h'
+  · cases Properties.Spot.SecurityProofs.derive_ok k' S _ hder
+  · obtain ⟨ws, -, h'⟩ := Properties.Spot.SecurityProofs.deriveWork_ok k' S tab _ hwork
+    cases h'
+
 end Flock.Bridge
