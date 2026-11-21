@@ -7,17 +7,19 @@ execution phase's statements are judged here too: `credit.window` and `credit.pe
 `lean("credit-verified", …)` (`PouwVerifier.Verified`), with `credit._verified` the reference, and each round's live
 outcome from `lean("credit-live-verified", …)` (`PouwVerifier.LiveVerified`), with `credit._live_verified` the reference,
 on the circuit files its credit period's open committed, `lean("credit-committed-files", …)` (`PouwVerifier.CommittedFiles`),
-with `credit.committed_files` the reference. The verdicts acted on are the Lean's too (`of_record`): `credit.window`'s
-and `credit.period_credit`'s, `lean("window", …)` and `lean("period", …)` (`PouwVerifier.Credit.executionPhase`,
-`Credit.periodCredit`) on those outcomes, each with its Python twin beside it, and a disagreement between them is a
-refusal. The challenger's salt check, `lean("salt", …)` (`PouwVerifier.saltCheck`, `core_check.salt_of_record`, with its
-twin), is the verifier's program, run by the developer's side (`pouw_h1_gpu --check-challenger`, from `served_verdicts
-pouw`); no entry of the auditor's runs it yet, and `pouw-period` does not call it. An
-execution phase's and a credit period's verdicts are `pouw-verifier serve`'s and `pouw-period serve`'s (`serve_of_record`,
-`core_check.case`, `period_check.case`), and a verdict whose Lean no interface here reaches yet raises
-(`not_written`) rather than fall back on its twin; the README's "Verdicts of record" lists each.
+with `credit.committed_files` the reference. The verdicts acted on are the Lean's only (`of_record`, no Python
+answer beside it): `credit.window`'s and `credit.period_credit`'s, `lean("window", …)` and `lean("period", …)`
+(`PouwVerifier.Credit.executionPhase`, `Credit.periodCredit`) on those outcomes, and where the Lean gives no answer
+the refusal is `NO_ANSWER`. The challenger's salt check, `lean("salt", …)` (`PouwVerifier.saltCheck`,
+`core_check.salt_of_record`), is the verifier's program, run by the developer's side (`pouw_h1_gpu
+--check-challenger`, from `served_verdicts pouw`); no entry of the auditor's runs it yet, and `pouw-period` does not
+call it. An execution phase's and a credit period's verdicts are `pouw-verifier serve`'s and `pouw-period serve`'s
+(`serve_of_record`, `core_check.case`, `period_check.case`), and a verdict whose Lean no interface here reaches yet
+raises (`not_written`) rather than fall back on its twin; the README's "Verdicts of record" lists each. The Python
+twins (`*_twin`) answer the difftests only.
 
-`RECORD_VERDICT` is the switch, and setting it to ``"python"`` is the one line that undoes it.
+`RECORD_VERDICT` switches what `of_record` doesn't read: the sampled blocks' and live rounds' runs and the committed
+circuit files; setting it to ``"python"`` is the one line that undoes those.
 
 `coins` is the challenger's entropy: bytes the Lean verifier reads from the operating system (`pouw-verifier-difftest`'s
 ``coins``, `IO.getRandomBytes`, A3's `uniform/io-getrandombytes`), which a served `coins.Challenger` and
@@ -44,8 +46,8 @@ from typing import Any, NoReturn
 from verity import lean_process as LC
 
 RECORD_VERDICT = "lean"
-#: the refusal code of an answer of record the Lean and its Python twin disagree on, or the Lean can't give
-DISAGREE = "disagree"
+#: the refusal code of an answer of record the Lean can't give
+NO_ANSWER = "no-answer"
 
 PACKAGE = Path(__file__).resolve().parent / "lean" / "check"
 EXE = "pouw-verifier-difftest"
@@ -186,42 +188,24 @@ def _said(x: Any) -> str:
     return s if len(s) <= 600 else s[:600] + "…"
 
 
-def of_record(fn: str, value: Any, python: Any) -> Any:
-    """The answer of record to `fn` on `value` (`pouw-verifier-difftest`'s inputs), whose Python twin answered `python`
-    in the difftest's JSON form: `python` under ``RECORD_VERDICT = "python"``; else the Lean's (`lean`) when it is
-    that same answer, and ``{"refused": [DISAGREE, why]}`` naming both when it isn't or the Lean can't give one. The
-    Python is the twin the Lean is held to, never its fallback."""
-    if RECORD_VERDICT != "lean":
-        return python
+def of_record(fn: str, value: Any) -> Any:
+    """The answer of record to `fn` on `value` (`pouw-verifier-difftest`'s inputs): the Lean's (`lean`), and
+    ``{"refused": [NO_ANSWER, why]}`` where the Lean can't give one. No Python answers in its place."""
     try:
-        got = lean(fn, value)
+        return lean(fn, value)
     except (LeanError, TypeError, ValueError) as e:
-        return {"refused": [DISAGREE, f"the Lean verifier gave no answer to {fn}, so it stands refused: {e}"]}
-    if got != json.loads(json.dumps(python)):
-        return {"refused": [DISAGREE, f"the Lean verifier and its Python twin disagree on {fn}, so it "
-                                      f"stands refused: the Lean answered {_said(got)}, the Python {_said(python)}"]}
-    return got
+        return {"refused": [NO_ANSWER, f"the Lean verifier gave no answer to {fn}, so it stands refused: {e}"]}
 
 
-def serve_of_record(exe: str, case: Any, python: dict) -> dict:
-    """The outcome of record (`Core.Answer`'s JSON) of core protocol `exe`'s `serve` on `case`, whose Python twin
-    answered `python`: `python` under ``RECORD_VERDICT = "python"``; else the Lean's when it is that same outcome, its
-    reason included, and a rejection whose reason starts ``disagree:`` naming both when it isn't or the Lean can't give
-    one. The Python is the twin the Lean is held to, never its fallback."""
-    if RECORD_VERDICT != "lean":
-        return python
-    refuse = {"protocol": python.get("protocol"), "verdict": "reject", "commitment": python.get("commitment"),
-              "public": None, "profile": None}
+def serve_of_record(exe: str, case: Any, protocol: str) -> dict:
+    """The outcome of record (`Core.Answer`'s JSON) of core protocol `protocol`'s `serve`, Lean executable `exe`, on
+    `case`: the Lean's, and a rejection whose reason starts ``no-answer:`` where the Lean can't give one. No Python
+    answers in its place."""
     try:
-        got = _serves[exe].exchange(case, "a serve case")
+        return _serves[exe].exchange(case, "a serve case")
     except (LeanError, TypeError, ValueError) as e:
-        return {**refuse, "reason": f"{DISAGREE}: the Lean verifier ({exe} serve) gave no answer, so the "
-                                    f"case stands refused: {e}"}
-    if _canonical(got) != _canonical(python):
-        return {**refuse, "reason": f"{DISAGREE}: the Lean verifier ({exe} serve) and its Python twin "
-                                    f"disagree, so the case stands refused: the Lean answered {_said(got)}, the "
-                                    f"Python {_said(python)}"}
-    return got
+        return {"protocol": protocol, "verdict": "reject", "commitment": None, "public": None, "profile": None,
+                "reason": f"{NO_ANSWER}: the Lean verifier ({exe} serve) gave no answer, so the case stands refused: {e}"}
 
 
 #: the goal under which a check `not_written` stands for gets its Lean interface
@@ -253,5 +237,5 @@ CLAIM = "uniform/io-getrandombytes"
 coins.claim = CLAIM  # type: ignore[attr-defined]
 
 
-__all__ = ["CLAIM", "COINS_MAX", "DISAGREE", "GOAL", "RECORD_VERDICT", "SERVE_EXES", "LeanError", "coins", "executable",
+__all__ = ["CLAIM", "COINS_MAX", "GOAL", "NO_ANSWER", "RECORD_VERDICT", "SERVE_EXES", "LeanError", "coins", "executable",
            "lean", "not_written", "of_record", "serve_of_record"]

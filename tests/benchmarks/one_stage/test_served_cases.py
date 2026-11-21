@@ -933,9 +933,9 @@ def pearlplus_parts(serve: Path, w: dict | None = None) -> tuple[Path, dict]:
                         "record": w or {"window": {"version": 2}, "registered": [], "previous": None}},
              "evidence": {"files": [{"pearl/w0/rows.bin": hashlib.sha512(blob).hexdigest()}]},
              "lean": {"verdict": "accept", "reason": None, "drawn": 3,
-                      "work": {"credited": 4, "credited_tiles": 2, "macs": 16, "rho": "1/4", "epsilon": "1/8",
+                      "work": {"credited": 4, "credited_tiles": 2, "checked_macs": 16, "rho": "1/4", "epsilon": "1/8",
                                "over_cap_draws": 0, "give_up": 8},
-                      "exact_work": {"credited": 7, "credited_tiles": 1, "macs": 9}}}
+                      "exact_work": {"credited": 7, "credited_tiles": 1, "checked_macs": 9}}}
     (piece / "parts.json").write_text(json.dumps(parts, sort_keys=True))
     return piece, parts
 
@@ -971,7 +971,7 @@ def test_pearl_plus_s_case_is_its_piece_s_parts_naming_the_records_digest(tmp_pa
     assert json.loads((got / "answer.json").read_text()) == {
         "protocol": SC.PEARL_PLUS, "verdict": "accept", "reason": None,
         "commitment": hashlib.sha512(b"verity/pouw/pearl-plus/manifests/v1\0" + commitment).hexdigest(),
-        "public": {"credited": 7, "credited_tiles": 1, "macs": 9, "rho": "1/4", "epsilon": "1/8", "delta": "1/100"},
+        "public": {"credited": 7, "credited_tiles": 1, "checked_macs": 9, "rho": "1/4", "epsilon": "1/8", "delta": "1/100"},
         "profile": {"draws": 3, "drawn": 3, "passes": 1}}
     assert case["commitment"] not in out
     assert SALTS.hex() not in out and hashlib.sha256(SALTS).hexdigest() not in out and "salts_t" not in out
