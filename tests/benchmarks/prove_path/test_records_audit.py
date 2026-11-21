@@ -678,7 +678,9 @@ def _registered(d: Path, n: int = 8, cap: int = 4, name: str = "w", own: bool = 
     win = IF.Window(circuit, RUN, RND.parse_design(SAMPLING_DESIGN), cap, registered={name: value})
     if listed:
         stated = win.circuit_record()
-        win.window = _listed(win.window)
+        built = (prog := _listed(win.window)).program, prog.query
+        win.runs = IF.run_input_reads(circuit.templates, *built, IF.filled_ports(circuit.registered, (), (), ()))
+        win.window = replace(prog, members=IF.members(circuit, cap, built, win.runs))
         win.circuit_record = lambda: IF.circuit_record(win.window, stated["name"], stated["templates"], stated["statements"],
                                                        declared={"registered": stated["registered"]})
     x = rng.integers(-128, 128, (n, K)).astype(np.int8)
@@ -694,12 +696,12 @@ def test_registered_reads_are_audited_against_the_pinned_entries_and_leave_the_f
     got = _registered(tmp_path / "w")
     mine, doc, _sets = RA.verifier_window(got.dir, RND.parse_design(SAMPLING_DESIGN), None)
     pins = RA.pinned(got.pin)
-    files = IF.registered_file(doc, mine, pins)
+    rec = json.loads((got.dir / "registration.json").read_text())
+    files = IF.registered_file(doc, mine, pins, rec["roots"])
     assert {f["format"] for f in files.values()} == {IF.REGISTERED_FILE} and len(files) == 2
     assert not any({"reads", "reads_from"} & set(port) for f in files.values() for port in f["ports"].values())
     assert all(f["ports"]["wrow"]["root"] == got.value.root.hex() for f in files.values())
     per_unit = sum(16 * w for _p, w in IF.layout(COORD).rows)
-    rec = json.loads((got.dir / "registration.json").read_text())
     roots, pin = RA.registration_roots(rec), {v: e["root"] for v, e in pins.items()}
     assert roots == rec["window"]["registered_roots"] == pin == {"w": got.value.root.hex()}
     count = RA.declared_count(doc, 0, pins=pin, roots=roots)
@@ -749,7 +751,7 @@ def test_an_expert_tables_registration_is_a_pin_as_written():
 def test_a_listed_records_registered_weight_reads_are_audited_and_counted_as_a_stated_records(tmp_path, capsys):
     """A record that lists its members (a served window's form) declares its registered reads beside them, as a served
     window reads its model's weights: the verifier's window takes it, each member's ``--registered`` file is the one the
-    stated record of the same window makes, and its count is the stated record's, the reads registered where the verifier
+    stated record of the same window makes but for its run inputs, which a listed record doesn't carry, and its count is the stated record's, the reads registered where the verifier
     pinned the parameter at the root the window's docket records. Without a pin the audit refuses the window before
     any sample; the count names the parameter ``unpinned`` and counts its reads free, as it does for a pin of another root
     or a docket that records none."""
@@ -760,7 +762,8 @@ def test_a_listed_records_registered_weight_reads_are_audited_and_counted_as_a_s
     assert ml.members == ms.members and all(dict(m.tables)["wrow"] == 4 for m in ml.members)
     pins = RA.pinned(listed.pin)
     files = IF.registered_file(ldoc, ml, pins)
-    assert files == IF.registered_file(sdoc, ms, pins) and len(files) == 2
+    full = IF.registered_file(sdoc, ms, pins, json.loads((stated.dir / "registration.json").read_text())["roots"])
+    assert files == {k: {**f, "ports": {"wrow": f["ports"]["wrow"]}} for k, f in full.items()} and len(files) == 2
     pin = RA.pin_roots(pins)
     roots = RA.registration_roots(json.loads((listed.dir / "registration.json").read_text()))
     count = RA.declared_count(ldoc, 0, pins=pin, roots=roots)
@@ -1699,7 +1702,7 @@ def test_the_audit_passes_a_refused_window_on_the_check_for_a_forged_unit(writte
 def test_the_audit_counts_a_listed_record_with_window_ingress_and_prints_its_window_figure_with_its_premise(
         written, tmp_path, monkeypatch, capsys):
     """A record that lists its members and declares its window's ingress (here each coordinate's ``x`` and ``sx``, rows
-    before the window) is counted by `declared_count`, not `leak_count`: the audit's ``RECORDS`` line and ``summary.json``
+    before the window, so its members read them as their own rows and not as run inputs) is counted by `declared_count`, not `leak_count`: the audit's ``RECORDS`` line and ``summary.json``
     carry the run figure, the window ingress still free in it, and beside it the window figure with its premise
     (`WINDOW_PREMISE`). The sessions (`a5.audit`) are stubbed and sample nothing, so the audit doesn't pass; its leak count
     is the records' alone. a5's workers' flags (`a5.lean_options`) reach the stub as given, a5's defaults otherwise, and
@@ -1709,6 +1712,8 @@ def test_the_audit_counts_a_listed_record_with_window_ingress_and_prints_its_win
 
     mine, stated, _sets = RA.verifier_window(written.dir, RND.parse_design(SAMPLING_DESIGN), None)
     mine = _listed(mine)
+    mine = replace(mine, members=tuple(replace(m, values=tuple(p for p in m.values if p not in ("x", "sx")))
+                                       for m in mine.members))
     ingress = [{"reader": TID, "port": p, "at": 0, "units": 5, "step": 0} for p in ("x", "sx")]
     doc = IF.circuit_record(mine, stated["name"], stated["templates"], stated["statements"], stated["external"],
                             declared={IF.WINDOW_INGRESS: ingress})

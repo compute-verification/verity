@@ -1,4 +1,4 @@
-"""The checkpoint tie of the committer's weights registration: a zero-knowledge proof, once per model and key, that the rows
+"""The checkpoint tie of the committer's weights registration: a zero-knowledge proof, once per deployment, that the rows
 committed under each registered weight root (`window_weights.weights_registration`: hm96 rows under the committer's secret
 salts, a hiding commitment) are checkpoint X's, which the verifier checks before it pins those roots (`checked_pins`). It
 never commits a weight: what it computes from X is X's public digests.
