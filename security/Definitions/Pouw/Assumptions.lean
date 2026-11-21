@@ -8,13 +8,8 @@ public import Definitions.Pouw.Assumptions.Dimension.Forest
 public import Definitions.Pouw.Assumptions.Dimension.Fp8Mma
 public import Definitions.Pouw.Assumptions.Dimension.H100
 public import Definitions.Pouw.Assumptions.Dimension.H100Assumptions
-public import Definitions.Pouw.Assumptions.Dimension.H100Cite
 public import Definitions.Pouw.Assumptions.Dimension.H100Dense
-public import Definitions.Pouw.Assumptions.Dimension.H100Floor
 public import Definitions.Pouw.Assumptions.Dimension.H100Frag
-public import Definitions.Pouw.Assumptions.Dimension.H100LoopFree
-public import Definitions.Pouw.Assumptions.Dimension.H100Measured
-public import Definitions.Pouw.Assumptions.Dimension.H100PeakTc
 public import Definitions.Pouw.Assumptions.Dimension.H100W
 public import Definitions.Pouw.Assumptions.Dimension.Mixing
 public import Definitions.Pouw.Assumptions.Dimension.OpenPipe

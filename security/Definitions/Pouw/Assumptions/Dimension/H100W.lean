@@ -42,9 +42,9 @@ instructions at `pr.tc` or more per register, FFMA, FADD and FMUL at `pr.ffma`, 
   `DenseCert`'s `r`.
 * **Targets are 32-bit words**. A target is one register's function, and the credit is per
   register. A trace word narrower than 32 bits counts only through the 32-bit slot holding it, so with `κ` codes per
-  slot a code earns `32/κ`: 16 with each two-code word in its own slot, and 8 packed four codes to a slot
-  (`DistinctWritesPacked`, `Pouw.Dimension.H100Cite`). A plain whole-word store is a free `move`, so storing a register
-  adds no target, and padding a register's codes into separate slots is sub-word extraction, `other`.
+  slot a code earns `32/κ`: 16 with each two-code word in its own slot, and 8 packed four codes to a slot. A plain
+  whole-word store is a free `move`, so storing a register adds no target, and padding a register's codes into
+  separate slots is sub-word extraction, `other`.
 
 * **`DistinctWritesMH100`**: under `H32`, a program whose registers include a finite set `T` of target functions, none
   of them free, costs at least `32·|T|`. Equal targets share one write through a free copy; distinct ones cannot.
@@ -68,8 +68,8 @@ definition here is looser. The measurements:
 
 * **Price table**: 232 probes, each through the SASS gate (the timed loop holds only the instructions it names), with
   sparse `wgmma` in its own run and the table replicated in a third. Each class's cheapest writer is within 1% above
-  32: tc 32.003, ffma 32.255, int32 32.277, fp64 32.003 and other 32.279. So the H200's table is `h100Floor` entry
-  for entry, and `H32` holds there with no slack.
+  32: tc 32.003, ffma 32.255, int32 32.277, fp64 32.003 and other 32.279. So the H200's table, rounded down, is 32
+  in every class, and `H32` holds there with no slack.
 * **Opcode census**: every one of 963 `sm_90` SASS forms, each timed alone. None costs under 32 a register; the
   least is DMUL at 32.00. 26 forms are unpriced: 21 `LDGMC`, 4 `LDL` and `LEPC`.
 * **Lane forms**: each of 58 integer forms, warp forms included, captured on 65,536 inputs against its documented
@@ -176,7 +176,7 @@ values `F` containing the constants, and FP32 semantics, a well-formed `MH100w` 
 registers include every target of a finite set `T`, none of them free, costs at least `32·|T|`.
 
 The targets are 32-bit register functions, so the credit is 32 per register. For code words packed `κ` to a register it
-is `32/κ` per code (`DistinctWritesPacked`). -/
+is `32/κ` per code. -/
 def DistinctWritesMH100 : Prop :=
   ∀ pr : Prices100, H32 pr →
     ∀ (G : Type) (F : Set (G → ℚ)), (∀ q : ℚ, (fun _ : G => q) ∈ F) →

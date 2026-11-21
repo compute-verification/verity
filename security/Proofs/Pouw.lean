@@ -19,9 +19,6 @@ public import Proofs.Pouw.SakLb
 public import Proofs.Pouw.Dimension.CausalProofs
 public import Proofs.Pouw.Dimension.EmbedProofs
 public import Proofs.Pouw.Dimension.ForestProofs
-public import Proofs.Pouw.Dimension.H100FloorProofs
-public import Proofs.Pouw.Dimension.H100MeasuredProofs
-public import Proofs.Pouw.Dimension.H100PeakTcProofs
 public import Proofs.Pouw.Dimension.H100Proofs
 public import Proofs.Pouw.Dimension.H100WProofs
 public import Proofs.Pouw.Dimension.Lifting
@@ -61,7 +58,6 @@ public import Proofs.Pouw.MerkleExtract
 public import Proofs.Pouw.OnsiteFreed
 public import Proofs.Pouw.ShaRealize
 public import Proofs.Pouw.ShaRealizeWitness
-public import Proofs.Pouw.Milestone
 public import Proofs.Pouw.NCP
 public import Proofs.Pouw.NCP.ChainProofs
 public import Proofs.Pouw.NCP.ExtraIdentityProofs
@@ -196,12 +192,10 @@ public import Definitions.Pouw.TileBound.Defs
 public import Mathlib.Tactic.IntervalCases
 public import Definitions.Pouw.TileBound.Fp8Defs
 public import Proofs.Pouw.TileBound.Proofs
-public import Proofs.Pouw.TileBound.Witness
 public import Proofs.Pouw.Window.Copies
 public import Proofs.Pouw.Window.Served
 public import Proofs.Pouw.Witness
 public import Proofs.Pouw.Lemmas.Game
-public import Proofs.Pouw.Dimension.H100LoopFreeProofs
 public import Proofs.Pouw.PearlC.RowSeedFragment
 
 /-!
