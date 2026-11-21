@@ -1163,7 +1163,7 @@ def measurements(r: dict) -> list[dict]:
     the bits charged a request (`ADVICE_UNIT`), where the advice line is measured. A line's id (``metric``) is None
     but for the default arms' ours on a model `MATCH` and `ADVICE` name. Each is read from the run's own
     record, so each has the mark ``measured``, as its ``mark`` and at the head of its first input, where the Metrics tab
-    reads it (benchmarks/README.md, "Metrics"), and names the ``model`` and the ``hardware`` it was measured on and,
+    reads it (tests/test_metrics_registry.py's docstring), and names the ``model`` and the ``hardware`` it was measured on and,
     where given, its ``member`` (`member`): a metric's points are of every model, card and arm."""
     t, a, ours, load = r["tokens"], r.get("advice") or {}, r["arms"]["ours"], r["load"]
     on = {"load": load, "ours": ours, "commit": r["commit"], "run": r["run"], "model": r.get("model"),

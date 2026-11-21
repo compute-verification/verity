@@ -1,5 +1,5 @@
-# This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
-# enforces it.
+# This directory's numbers, one [[metric]] each, by the rules of tests/test_metrics_registry.py,
+# which enforces them.
 
 # `table` reads the labelled runs of record from the evidence store, so any CPU node with a --store-read key runs it; a γ
 # changes only when a new run of record is labelled (`verity bench overhead run --record RUN`)
