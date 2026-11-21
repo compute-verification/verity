@@ -50,9 +50,9 @@ caller's check accepted (`Properties.Remote.StageHeld`), which reads them off th
 (`Properties.Remote.CallerCheckMeans`).
 
 The digest the receipt is held to is the commitment's own (`Commitment.digest`), which `OneStage.commitmentOf` computes
-as the window record's digest of the record it decodes (`Flock.WindowRecord.digest`, `DigestIsRecord's`). A Bernoulli sampling design is accepted as the code accepts
-it: its sample is checked as any other, its profile's sample is `bernoulli p`, and it publishes the largest `M` of the
-profile's units with `(1 − p)^M ≥ δ` (`BernoulliBounds`, `Bound.bernoulliBound`).
+as the window record's digest of the record it decodes (`Flock.WindowRecord.digest`, `DigestIsRecord's`). A Bernoulli
+sampling design is refused at every `p` (`OneStage.paramsOfJson`, `Draw.BERNOULLI`), so no accept has one;
+`BernoulliBounds` states what such an accept's profile would bound (`Bound.bernoulliBound`).
 -/
 
 @[expose] public section
