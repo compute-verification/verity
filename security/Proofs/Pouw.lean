@@ -22,8 +22,6 @@ public import Proofs.Pouw.Dimension.ForestProofs
 public import Proofs.Pouw.Dimension.H100Proofs
 public import Proofs.Pouw.Dimension.H100WProofs
 public import Proofs.Pouw.Dimension.Lifting
-public import Proofs.Pouw.Dimension.MinRankProofs
-public import Proofs.Pouw.Dimension.MixingProofs
 public import Proofs.Pouw.Dimension.OpenPipeProofs
 public import Proofs.Pouw.Dimension.PipeProofs
 public import Proofs.Pouw.Dimension.Proofs

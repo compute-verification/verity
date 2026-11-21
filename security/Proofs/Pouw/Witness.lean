@@ -128,25 +128,9 @@ theorem zero_actOK (sh : Shape) : ActOK sh (0 : Mat) := fun _ _ _ _ => by unfold
 
 theorem salt_nonempty : Nonempty Salt := ⟨⟨0, Nat.two_pow_pos 128⟩⟩
 
-/-- The honest reference as an adversary of the free model: no preprocessing, activation input 0. -/
-def freeHonest {Q R : Type} (P : D1.Params Q R Salt) : Adversary (freeModel Q R Salt) :=
-  ⟨done [], fun U act _ s => honestProg P U act s, fun _ => 0⟩
-
-theorem freeHonest_bounded {Q R : Type} (P : D1.Params Q R Salt) {c : ℕ} (hc : P.QueryBound c) (U : Workload) :
-    (freeHonest P).Bounded U 0 (U.layout.N * c) := fun H s =>
-  ⟨le_rfl, (Nat.zero_add _).le.trans (calls_honestProg P H U _ s hc)⟩
-
 theorem pricedHonest_bounded {Q R : Type} (P : D1.Params Q R Salt) {c : ℕ} (hc : P.QueryBound c) (U : Workload) :
     (pricedHonest P).Bounded U (∑ u ∈ range U.layout.N, ((U.layout.shape u).Wmm : ℝ)) (U.layout.N * c) :=
   fun H s => ⟨outputPriced_cost_le _ H U _ _ s, (Nat.zero_add _).le.trans (calls_honestProg P H U _ s hc)⟩
-
-theorem freeHonest_trace {Q R : Type} (P : D1.Params Q R Salt) (U : Workload) (H : Q → R) (s : Salt) :
-    (freeHonest P).trace U H s = honestTrace P.toProtocol H s U fun _ => 0 :=
-  eval_honestProg P H U _ s
-
-theorem pricedHonest_trace {Q R : Type} (P : D1.Params Q R Salt) (U : Workload) (H : Q → R) (s : Salt) :
-    (pricedHonest P).trace U H s = honestTrace P.toProtocol H s U fun _ => 0 :=
-  eval_honestProg P H U _ s
 
 theorem sum_Wmm_sixteen : ∑ u ∈ range M1.sixteen.layout.N, ((M1.sixteen.layout.shape u).Wmm : ℝ) = 16 * 2 ^ 44 := by
   show ∑ u ∈ range 16, ((milestoneShape.Wmm : ℕ) : ℝ) = 16 * 2 ^ 44

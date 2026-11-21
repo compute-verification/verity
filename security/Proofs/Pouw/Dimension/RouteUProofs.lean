@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Pouw.Assumptions.Dimension.RouteU
-public import Proofs.Pouw.Dimension.MixingProofs
+public import Definitions.Pouw.Assumptions.Dimension.Mixing
 import Mathlib.LinearAlgebra.FiniteDimensional.Lemmas
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Dimension.CausalProofs
@@ -15,13 +15,11 @@ import Proofs.Pouw.NCP.RouteUWordProofs
 
 * `wordUSubV0`, `wordCUSubV0`: the shift is a function of `F₁` alone (`NCP.RouteUWordProofs.checkedUPos_sub`).
 * `combUV0Iff`, `secondDifferenceU`, `indepModShift` (generic), `indepModU`.
-* `pricedCountU`, `algBoundU`, `ttNCPAlgU`, `algBoundCausalU`, `mixingLemmaU`: `count_le` (and the
-  mixing lemma's own argument) on the route-U family, whose independence modulo `V₀` is `indepModShift` applied to
-  the unbiased family's (`indep_sub`, `indep_subC`).
+* `pricedCountU`, `algBoundU`, `ttNCPAlgU`, `algBoundCausalU`: `count_le` on the route-U family, whose independence
+  modulo `V₀` is `indepModShift` applied to the unbiased family's (`indep_sub`, `indep_subC`).
 * `algBoundWrappedU`, `algBoundWrappedUUnsigned`: the wrap is the identity for a signed `R` and `k ≤ 2^15`, or a
   permutation matrix and `k ≤ 2^16` (`wrapped_eq_wordU`, `NCP.RouteUWordProofs.int7Int32UPos`).
-* `a1U`: both spans are complements of `V₀` in `T ⊔ V₀` (the modular identity), so A1 transfers; then `algBound4090U`.
-* `algWitnessU`, `algSharpU`, `alg4090WitnessU`, `algWrappedWitnessU`: one priced instruction at 16 per route-U word.
+* `algWitnessU`, `algSharpU`, `algWrappedWitnessU`: one priced instruction at 16 per route-U word.
 -/
 
 @[expose] public section
@@ -166,42 +164,6 @@ theorem algBoundCausalU : AlgBoundCausalU := by
   have := h16_cost hH
   omega
 
-theorem finrank_targetU (β : ℤ) {k m n N : ℕ} {R : Mat} (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat)
-    {U : Finset ℕ} (hind : CheckpointIndependent k 16 R) (hU : U ⊆ range N) :
-    Module.finrank ℚ (targetSpanU β k m n N R A B U) = U.card * (m * n) * (3 * k / 16 - 1) := by
-  have hli : LinearIndependent ℚ
-      (fun x : ↥(U ×ˢ range (nonFinal k m n)) => wordU β k m n N R A B x.1.1 x.1.2) :=
-    Fintype.linearIndependent_iff.2 fun c hc => indep_subU β A B hind hU c (hc ▸ Submodule.zero_mem _)
-  rw [targetSpanU, finrank_span_eq_card hli, Fintype.card_coe, card_product, card_range, nonFinal]
-  ring
-
-/-- **The mixing lemma on route U.** -/
-theorem mixingLemmaU : MixingLemmaU := by
-  intro β k m n N R A B U L P cs hind hU hL hH hout
-  have hD := finrank_targetU (m := m) (N := N) β A B hind hU
-  refine ⟨hD, h4090_cost hH, ?_, ?_⟩
-  · set T := targetSpanU β k m n N R A B U
-    set Sb := Submodule.span ℚ {f | f ∈ bigOuts P}
-    set X := Submodule.span ℚ {f | f ∈ prodOuts P} ⊔ V0 N m n k
-    have hT : T ≤ X ⊔ Sb := by
-      have h1 : T ≤ span1 (slots P L) := by
-        refine Submodule.span_le.2 ?_
-        rintro _ ⟨x, rfl⟩
-        exact Submodule.subset_span (Set.mem_insert_of_mem _
-          (hout x.1.1 (mem_product.1 x.2).1 x.1.2 (mem_range.1 (mem_product.1 x.2).2)))
-      refine h1.trans ((span1_slots_le P L).trans ?_)
-      exact sup_le (sup_le ((span1_le_V0 hL).trans (le_sup_right.trans le_sup_left)) le_sup_right)
-        (le_sup_left.trans le_sup_left)
-    have e1 := Submodule.finrank_sup_add_finrank_inf_eq T X
-    have e2 := Submodule.finrank_mono (sup_le hT (le_sup_left : X ≤ X ⊔ Sb))
-    have e3 := Submodule.finrank_add_le_finrank_add_finrank X Sb
-    have e4 : Module.finrank ℚ Sb ≤ (bigOuts P).length := finrank_span_list_le (bigOuts P)
-    rw [← hD]
-    omega
-  · refine Nat.sInf_le ⟨fun i => (prodOuts P).get i, prodFree_get hH, ?_⟩
-    rw [range_get_prodOuts]
-    exact inf_le_right
-
 /-- In the int32-exact range, the wrapped non-final route-U word is the word. -/
 theorem wrapped_eq_wordU {β : ℤ} {k m n N : ℕ} {R : Mat} {A : (Fin k → Fin n → Fin 64) → ℕ → Mat} {B : ℕ → Mat}
     {U : Finset ℕ} (hβ1 : 127 ≤ β) (hβ2 : β ≤ 129) (hR : SignedPerm k R ∧ k ≤ 2 ^ 15 ∨ Unsigned k R ∧ k ≤ 2 ^ 16)
@@ -228,88 +190,7 @@ theorem algBoundWrappedUUnsigned : AlgBoundWrappedUUnsigned := by
   rw [← wrapped_eq_wordU hβ1 hβ2 (Or.inr ⟨hR, hk⟩) hA hB hu hp]
   exact hout u hu p hp
 
-/-! ## A1 and AlgM_4090 on route U -/
-
-theorem target_inf_V0 {k m n N : ℕ} {R : Mat} (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat)
-    {U : Finset ℕ} (hind : CheckpointIndependent k 16 R) (hU : U ⊆ range N) :
-    targetSpan k m n N R A B U ⊓ V0 N m n k = ⊥ := by
-  rw [eq_bot_iff]
-  rintro x ⟨hxT, hxV⟩
-  obtain ⟨c, rfl⟩ := (Submodule.mem_span_range_iff_exists_fun ℚ).1 hxT
-  have hc := indep_sub A B hind hU c hxV
-  simp [hc]
-
-theorem targetU_inf_V0 (β : ℤ) {k m n N : ℕ} {R : Mat} (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat)
-    {U : Finset ℕ} (hind : CheckpointIndependent k 16 R) (hU : U ⊆ range N) :
-    targetSpanU β k m n N R A B U ⊓ V0 N m n k = ⊥ := by
-  rw [eq_bot_iff]
-  rintro x ⟨hxT, hxV⟩
-  obtain ⟨c, rfl⟩ := (Submodule.mem_span_range_iff_exists_fun ℚ).1 hxT
-  have hc := indep_subU β A B hind hU c hxV
-  simp [hc]
-
-/-- The unbiased and the route-U spans span the same space with `V₀`. -/
-theorem target_sup_V0 (β : ℤ) (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat)
-    (U : Finset ℕ) : targetSpan k m n N R A B U ⊔ V0 N m n k = targetSpanU β k m n N R A B U ⊔ V0 N m n k := by
-  apply le_antisymm
-  · refine sup_le (Submodule.span_le.2 ?_) le_sup_right
-    rintro _ ⟨x, rfl⟩
-    have h1 : wordU β k m n N R A B x.1.1 x.1.2 ∈ targetSpanU β k m n N R A B U ⊔ V0 N m n k :=
-      Submodule.mem_sup_left (Submodule.subset_span ⟨x, rfl⟩)
-    have := Submodule.sub_mem _ h1 (Submodule.mem_sup_right (wordUSubV0 β k m n N R A B x.1.1 x.1.2))
-    rwa [sub_sub_cancel] at this
-  · refine sup_le (Submodule.span_le.2 ?_) le_sup_right
-    rintro _ ⟨x, rfl⟩
-    have h1 : word k m n N R A B x.1.1 x.1.2 ∈ targetSpan k m n N R A B U ⊔ V0 N m n k :=
-      Submodule.mem_sup_left (Submodule.subset_span ⟨x, rfl⟩)
-    have := Submodule.add_mem _ h1 (Submodule.mem_sup_right (wordUSubV0 β k m n N R A B x.1.1 x.1.2))
-    rwa [add_sub_cancel] at this
-
-/-- **A1 on route U's span.** -/
-theorem a1U : A1U := by
-  intro β c γ₁ k R hind hA1 m n N A B U hU V hV r p hp hVX
-  set T := targetSpan k m n N R A B U
-  set W0 := V0 N m n k
-  set V' := (V ⊔ W0) ⊓ T with hV'
-  have hV'T : V' ≤ T := inf_le_right
-  have hV'X : V' ≤ Submodule.span ℚ (Set.range p) ⊔ W0 := inf_le_left.trans (sup_le hVX le_sup_right)
-  have hA := hA1 m n N A B U hU V' hV'T r p hp hV'X
-  have hle : V ⊔ W0 ≤ T ⊔ W0 := by
-    rw [target_sup_V0]
-    exact sup_le_sup_right hV _
-  have hsup : V' ⊔ W0 = V ⊔ W0 := by
-    calc V' ⊔ W0 = W0 ⊔ T ⊓ (V ⊔ W0) := by rw [hV', sup_comm ((V ⊔ W0) ⊓ T) W0, inf_comm (V ⊔ W0) T]
-      _ = (W0 ⊔ T) ⊓ (V ⊔ W0) := (sup_inf_assoc_of_le T le_sup_right).symm
-      _ = V ⊔ W0 := by rw [sup_comm W0 T]; exact inf_eq_right.2 hle
-  have hi1 : V' ⊓ W0 = ⊥ := eq_bot_iff.2 ((inf_le_inf_right _ hV'T).trans (target_inf_V0 A B hind hU).le)
-  have hi2 : V ⊓ W0 = ⊥ := eq_bot_iff.2 ((inf_le_inf_right _ hV).trans (targetU_inf_V0 β A B hind hU).le)
-  have e1 := Submodule.finrank_sup_add_finrank_inf_eq V' W0
-  have e2 := Submodule.finrank_sup_add_finrank_inf_eq V W0
-  rw [hi1, finrank_bot, hsup] at e1
-  rw [hi2, finrank_bot] at e2
-  have e : Module.finrank ℚ V' = Module.finrank ℚ V := by omega
-  rw [← e]
-  exact hA
-
-/-- **Theorem D in AlgM_4090 on route U.** -/
-theorem algBound4090U : AlgBound4090U := by
-  intro β k m n N R A B U L P cs c γ₁ hind hU hL hH hout hA1 hc hγ0 hγ1
-  obtain ⟨hD, hcost, hB, -⟩ := mixingLemmaU β k m n N R A B U L P cs hind hU hL hH hout
-  set T := targetSpanU β k m n N R A B U
-  set W := T ⊓ (Submodule.span ℚ {f | f ∈ prodOuts P} ⊔ V0 N m n k)
-  have hA := a1U β c γ₁ k R hind hA1 m n N A B U hU W inf_le_left (prodOuts P).length
-    (fun i => (prodOuts P).get i) (prodFree_get hH) (by rw [range_get_prodOuts]; exact inf_le_right)
-  have hWT : Module.finrank ℚ W ≤ Module.finrank ℚ T := Submodule.finrank_mono inf_le_left
-  set D := U.card * (m * n) * (3 * k / 16 - 1)
-  have hcostR : (16 : ℝ) * (bigOuts P).length + cs * (prodOuts P).length ≤ cost P := by exact_mod_cast hcost
-  have hBR : (D : ℝ) ≤ (bigOuts P).length + Module.finrank ℚ W := by exact_mod_cast hB
-  have hWD : (Module.finrank ℚ W : ℝ) ≤ D := by rw [← hD]; exact_mod_cast hWT
-  have h1 : (cs : ℝ) * (c * (1 - γ₁) * Module.finrank ℚ W) ≤ cs * (prodOuts P).length :=
-    mul_le_mul_of_nonneg_left hA (Nat.cast_nonneg _)
-  have h2 : 16 * ((1 - γ₁) * Module.finrank ℚ W) ≤ (c * cs) * ((1 - γ₁) * Module.finrank ℚ W) :=
-    mul_le_mul_of_nonneg_right hc (mul_nonneg (by linarith) (Nat.cast_nonneg _))
-  have h3 : γ₁ * Module.finrank ℚ W ≤ γ₁ * D := mul_le_mul_of_nonneg_left hWD hγ0
-  linarith
+/-! ## The honest program on route U -/
 
 /-- One priced instruction at price `c` per non-final route-U word of the units in `U`. -/
 noncomputable def honestU (β : ℤ) (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat)
@@ -376,27 +257,6 @@ theorem algSharpU : AlgSharpU := by
     linarith
   rw [div_lt_iff₀ hpos]
   nlinarith [mul_lt_mul_of_pos_left hg' hX]
-
-/-- **AlgM_4090's hypotheses on route U hold jointly.** -/
-theorem alg4090WitnessU : Alg4090WitnessU := by
-  intro β k hk h16 m n N A B U _
-  obtain ⟨R, hadm, hind⟩ := RelationWitness.independentWitness k hk h16
-  have hbig : ∀ p f, Instr.priced p f ∈ honestU β k m n N R A B U 16 → 16 ≤ p := fun p f hm => by
-    obtain ⟨u, _, q, _, heq⟩ := mem_honestU.1 hm
-    exact (Instr.priced.inj heq).1.le
-  refine ⟨R, honestU β k m n N R A B U 16 ++ [Instr.priced 8 1], hadm, hind, ?_, ?_, ?_, ?_⟩
-  · intro p f hm
-    rcases List.mem_append.1 hm with hm | hm
-    · exact Or.inl (hbig p f hm)
-    · simp only [List.mem_singleton, Instr.priced.injEq] at hm
-      obtain ⟨rfl, rfl⟩ := hm
-      exact Or.inr ⟨le_rfl, 1, one_mem_V0, 1, one_mem_V0, (mul_one 1).symm⟩
-  · intro u hu p hp
-    exact mem_slots_of_priced (List.mem_append_left _ (mem_honestU.2 ⟨u, hu, p, hp, rfl⟩)) _
-  · rw [prodOuts_append, prodOuts_eq_nil hbig]
-    simp [prodOuts]
-  · rw [cost_append, honestU_cost]
-    simp [cost, Instr.price]
 
 /-- **`AlgBoundWrappedU`'s hypotheses hold jointly, and its bound is attained.** -/
 theorem algWrappedWitnessU : AlgWrappedWitnessU := by

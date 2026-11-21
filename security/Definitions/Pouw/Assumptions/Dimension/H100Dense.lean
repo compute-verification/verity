@@ -33,7 +33,7 @@ reading it could then write any word. What bounds `K` is that the accumulator en
 **Scope.** `AccIn` with `LaneFns` covers cheap instructions whose multiplicands are lane words. A
 legacy `mma` reading computed registers is outside it, and `LegacyGap` bounds `γ` only over `AccIn` programs.
 `Pouw.Dimension.H100Frag` extends the lemma to computed multiplicands. It is cited only against adversaries whose cheap
-tensor-core multiplicands meet the named hypothesis `FragLanes`. At Round 8's loop-free prices, where the H100 SXM's
+tensor-core multiplicands meet its lane bound. At Round 8's loop-free prices, where the H100 SXM's
 legacy k8 costs 32.00 and `H32` holds, none of this is needed.
 
 **The witness.** `DenseLaneWitness` is at `β = 0` on `ℚ^(m+1)`. It shows that the definitions are

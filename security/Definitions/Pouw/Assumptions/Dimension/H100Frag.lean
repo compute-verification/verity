@@ -25,9 +25,9 @@ increment still depends on few lanes:
 * **`FragShareGain`**: the lane bound cannot be dropped. With one multiplicand that depends on every lane, `n` dense,
   pairwise apart words cost `32 + 31·n` at `h100Legacy`'s prices, below `32·n` once `n > 32`.
 
-The lane bound on the multiplicands is the named hypothesis `FragLanes S p q W` (`Pouw.Dimension.H100Assumptions`).
-The k8 lemma is cited only against adversaries whose cheap tensor-core multiplicands meet it. It is not needed at
-Round 8's loop-free prices, where `H32` holds.
+The lane bound on the multiplicands, `∀ w ∈ W, ∃ J, J.card ≤ q ∧ DependsOn S p J w`, is a hypothesis of `AccInOfFrag`
+and `DenseWritesFrag`. The k8 lemma is cited only against adversaries whose cheap tensor-core multiplicands meet it.
+It is not needed at Round 8's loop-free prices, where `H32` holds.
 -/
 
 @[expose] public section
