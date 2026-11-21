@@ -1,4 +1,4 @@
-"""The docket (README "The registration record"): what a window is committed to, fixed before the verifier samples.
+"""The docket (Lean `Spot.Docket.check`): what a window is committed to, fixed before the verifier samples.
 
     {"format": "verity/registration/v1", "protocol": "verity/sampled-proofs/one-stage/v1",
      "program": "<SHA-512 of the program>", "query": "<SHA-512 of the query>", "partition": "<partition digest>",
