@@ -197,6 +197,7 @@ from verity.protocols.registration.verifier import registration as G  # noqa: E4
 from verity.protocols.accounting.compute.pouw.verifier import window as Wd  # noqa: E402
 from verity.protocols.run import schemes  # noqa: E402
 from verity.protocols.proof.spot.verifier import service as S  # noqa: E402
+from verity.protocols.proof.spot.verifier.one_stage import docket as DK  # noqa: E402
 from verity.commitments import registered_value as RV  # noqa: E402
 from verity.circuits.codec import program_digest  # noqa: E402
 from verity.commitments.periods import history as HW, interface as IF  # noqa: E402
@@ -1088,6 +1089,9 @@ def audit(a: argparse.Namespace) -> int:
         pins = pinned(json.loads(weights)) if weights is not None else {}
         if weights is not None:
             a.weights_of_record = (weights, a.registered_digest or hashlib.sha512(weights).hexdigest())
+            marks = set(DK.marked_inputs(mine.program))
+            held = DK.weights_held(mine.program, mine.query, (), a.weights_of_record)[1]
+            pins = {v: e for v, e in pins.items() if v not in marks} | {v: {"value": v, **e} for v, e in held.items()}
         def resolve(t: str) -> Any:
             return sets[t][1] if t in sets else catalog_resolve(t)
         docket = json.loads((wdir / "registration.json").read_text())

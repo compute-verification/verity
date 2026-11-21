@@ -242,6 +242,13 @@ def _of_record(of_record: tuple[bytes, str]) -> tuple[list[tuple[str, Any]], dic
     return ([("R8-weights-domain", {"values": bad})] if bad else []), pins, reads
 
 
+def marked_inputs(program: Program) -> list[str]:
+    """The program's registered inputs: the parameters it binds at registration that hold gates."""
+    bindings = getattr(program, "bindings", ())
+    return [n for (n, _), b in zip(program.fn.signature()[0], bindings)
+            if b == REGISTRATION and G.held_gates(program, [n])] if bindings else []
+
+
 def weights_held(program: Program, query: Mapping[str, Any], registered: Iterable[str],
                  of_record: tuple[bytes, str] | None) -> tuple[list[tuple[str, Any]], dict[str, dict[str, Any]]]:
     """R8's hold on the program's registered inputs (the parameters it binds at registration), which `partition.shared_inputs`
@@ -258,9 +265,7 @@ def weights_held(program: Program, query: Mapping[str, Any], registered: Iterabl
     registered input excuses nothing. The refusals, in `WEIGHTS_WHY`'s order, and the accepted pins, `{value: {"root",
     "leaves", "words", "word_bits", "domain"}}` of each pinned input the verifier does not expect, which `check` holds
     the record's registered entries to as certified entries (R7)."""
-    bindings = getattr(program, "bindings", ())
-    marked = [n for (n, _), b in zip(program.fn.signature()[0], bindings)
-              if b == REGISTRATION and G.held_gates(program, [n])] if bindings else []
+    marked = marked_inputs(program)
     if not marked and of_record is None:
         return [], {}
     out, pins, declared = _of_record(of_record) if of_record is not None else ([], {}, set())
@@ -288,8 +293,9 @@ def weights_held(program: Program, query: Mapping[str, Any], registered: Iterabl
         if of_record is not None or marked:
             out.append(("R8-weights-query", {"query": dict(query)}))
         return out, {}
-    if unpinned := [v for v in marked if v not in pins and v not in expected
-                    and P.input_reads(program, query, G.held_gates(program, [v]))]:
+    loose = {v: g for v in marked if v not in pins and v not in expected for g in G.held_gates(program, [v])}
+    read = {g for _, _, g in P.input_reads(program, query, loose.values())} if loose else set()
+    if unpinned := [v for v, g in loose.items() if g in read]:
         out.append(("R8-unpinned", {"values": unpinned}))
     excused = {v: g for v in marked if v in pins and v not in shape for g in G.held_gates(program, [v])}
     if excused:

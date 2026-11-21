@@ -429,9 +429,8 @@ def weightsHeld (v : Verifier) (codes : Array String) (pins : Array Pin) (said :
   | none => (if v.weightsOfRecord.isSome || !marks.isEmpty then codes.push "R8-weights-query" else codes, #[])
   | some rs =>
     let gated (p : Registered.Param) := (p.gates.map fun (first, count) => #[(p.name, first, count)]).getD #[]
-    let unpinned := marks.filter fun p => !(pins.any (·.value == p.name)) && !expected p &&
-      !(Partition.inputReads P rs (gated p)).isEmpty
-    let codes := if unpinned.isEmpty then codes else codes.push "R8-unpinned"
+    let loose := marks.filter fun p => !(pins.any (·.value == p.name)) && !expected p
+    let codes := if (Partition.inputReads P rs (loose.flatMap gated)).isEmpty then codes else codes.push "R8-unpinned"
     let excused := pinned.filter fun (p, x) => pinShaped v p x
     let read := Partition.inputReads P rs (excused.flatMap fun (p, _) => gated p)
     let said := said.filter fun (_, _, x) => excused.any (·.1.name == x)
