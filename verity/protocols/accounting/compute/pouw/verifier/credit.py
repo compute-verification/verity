@@ -1112,13 +1112,13 @@ def registered_file(program: str, layout: dict, shape: dict, call: int, roots: d
                                         window=None if is_held(v) else window).domain_id.hex(),
                      **RV.schema_entry(G.SCHEMA_V2)}
     pv = f"{prefix}pub@{call}"
-    blocks = [CC.j10r_blocks(m, k, (r, c), t // per, t % per) for t in range(size)] if tile["j10r"] else None
+    blocks = [Wd.j10r_blocks(m, k, (r, c), t // per, t % per) for t in range(size)] if tile["j10r"] else None
     rows, salts, reg = public_table(program, pv, salt, window, u0, size, (roots[a][0], roots[b][0]), blocks)
     out[PUB_PORT] = {"value": pv, "root": reg.root.hex(), "leaves": size, "words": len(rows[0]), "word_bits": RV.WORD_BITS,
                      "domain": reg.domain.domain_id.hex(), **RV.schema_entry(G.SCHEMA_V2),
                      "known": {"rows": rows, "salts": [x.hex() for x in salts]}}
     rows, salts, reg = ok_table(program, ov, window, sum(sizes))
-    out[OK_PORT] = {"value": ov, "root": reg.root.hex(), "leaves": sum(sizes), "words": len(CC.OK_ROW),
+    out[OK_PORT] = {"value": ov, "root": reg.root.hex(), "leaves": sum(sizes), "words": len(Wd.OK_ROW),
                     "word_bits": RV.WORD_BITS, "domain": reg.domain.domain_id.hex(), **RV.schema_entry(G.SCHEMA_V2),
                     "known": {"rows": rows, "salts": [x.hex() for x in salts]}}
     return {"format": G.READS_V2, "ports": out}, None
@@ -1132,8 +1132,8 @@ def public_table(program: str, value: str, salt: str, window: str, u0: int, n: i
     u's blocks, under `window.public_row_salt` of the window's open root `window` and u, registered under the
     descriptor's SHA-512 `program` binding `window`."""
     s, rs = bytes.fromhex(salt), (bytes.fromhex(roots[0]), bytes.fromhex(roots[1]))
-    rows = [CC.public_words(s, u0 + t, rs, None if blocks is None else (u0, blocks[t])) for t in range(n)]
-    salts = [CC.public_row_salt(window, u) for u in range(u0, u0 + n)]
+    rows = [Wd.public_words(s, u0 + t, rs, None if blocks is None else (u0, blocks[t])) for t in range(n)]
+    salts = [Wd.public_row_salt(window, u) for u in range(u0, u0 + n)]
     return rows, salts, RV.Registered.commit(program, value, rows, salts, RV.WORD_BITS, G.SCHEMA_V2, window=window)
 
 
@@ -1143,8 +1143,8 @@ def ok_table(program: str, value: str, window: str, population: int) -> tuple[li
     registration: row u the one word 1 (`window.OK_ROW`) under `window.ok_salt` of
     the window's open root `window` and u, registered under the descriptor's SHA-512 `program` binding `window`. Every
     input is public, so the verifier and the prover compute the same root."""
-    rows = [list(CC.OK_ROW) for _u in range(population)]
-    salts = [CC.ok_salt(window, u) for u in range(population)]
+    rows = [list(Wd.OK_ROW) for _u in range(population)]
+    salts = [Wd.ok_salt(window, u) for u in range(population)]
     return rows, salts, RV.Registered.commit(program, value, rows, salts, RV.WORD_BITS, G.SCHEMA_V2, window=window)
 
 
@@ -1846,7 +1846,7 @@ def leaf_registered_file(program: str, layout: dict, shape: dict, u: int, statem
     call_blocks = {}
     if j10r:
         per = {name: nn for name, _kk, nn in layout["linears"]}[layout["calls"][call][0]] // c
-        call_blocks = {"j10r": k, "call": u - t, "blocks": CC.j10r_blocks(m, k, (r, c), t // per, t % per)}
+        call_blocks = {"j10r": k, "call": u - t, "blocks": Wd.j10r_blocks(m, k, (r, c), t // per, t % per)}
     rows = LL.known_rows(r, c, kind, ln, ch, admit=[1] * r, salt=bytes.fromhex(salt), position=u,
                          roots=(bytes.fromhex(roots[a][0]), bytes.fromhex(roots[b][0])), **call_blocks)
     known, openings = {}, {}
