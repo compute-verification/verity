@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Bridge.PopMatches
 public import Proofs.Flock.Bridge.SampledDesign
+public import Spot.PopOrder
 
 /-!
 # The registration's strata cover the population's units (`Bridge.PopCovers`)
@@ -13,6 +14,8 @@ population's units are `0, …, n − 1`, each once, in any order.
 
 * `popCovers_iff`: `PopCovers` is that the parse and the layout succeed and the population's units are a permutation
   of `0, …, n − 1`.
+* `popCovers_iff_ranges`: `PopCovers` is the check the verifier runs, the ranges form (`Spot.Slots.popCoverOk`,
+  through `Spot.Slots.popCovers_eq_popCoverOk`).
 * `popCovers_of_popMatches`: the population in order (`PopMatches`) is a cover.
 * `nsOf_sum_of_popCovers`: at `PopCovers`, the strata sum to `n`.
 * `IsSubsetDesign`: the sampling design is `subset k`, the uniform subset (`All` is `subset n`).
@@ -60,6 +63,18 @@ theorem popCovers_iff {desc : Hash.Msg} {q : Lean.Json} {n : ℕ} :
       | .ok l => decide (((popOf l).map (·.unit)).Perm ((List.range n).map some))) = true
     rw [hl]
     exact decide_eq_true h
+
+/-- **`PopCovers` is the ranges form the verifier runs**: `desc` parses to a program whose query's ranges are a
+disjoint cover of `0, …, n − 1` with every unit's gates (`Spot.Slots.popCoverOk`), which `Spot.Slots.popCovers` runs
+as (`Spot.Slots.popCovers_eq_popCoverOk`). -/
+theorem popCovers_iff_ranges {desc : Hash.Msg} {q : Lean.Json} {n : ℕ} :
+    PopCovers desc q n ↔ ∃ p, Spot.Program.parse ⟨desc.toArray⟩ = .ok p ∧ Spot.Slots.popCoverOk p q n = true := by
+  unfold PopCovers popCoverCheck
+  rw [Spot.Slots.popCovers_eq_popCoverOk]
+  split
+  · simp_all
+  · rename_i p hp
+    exact ⟨fun h => ⟨p, hp, h⟩, fun ⟨_, hp', h⟩ => by rw [hp] at hp'; cases hp'; exact h⟩
 
 /-- **The population in order is a cover**: `PopMatches` gives `PopCovers`. -/
 theorem popCovers_of_popMatches {desc : Hash.Msg} {q : Lean.Json} {n : ℕ} (h : PopMatches desc q n) :
