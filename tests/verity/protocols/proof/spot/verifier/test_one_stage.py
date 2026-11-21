@@ -340,6 +340,16 @@ def test_the_one_statement_leaves_out_a_port_only_where_its_registered_file_read
     assert R.public_held(record(["y", "input/n3"]), header(["y", "x"]), reads("w")).codes == ("roots",)
     assert R.public_held(record(["input/n3", "x"]), header(["x"]), reads("input/n3")).codes == ("roots", "domains")
 
+    def tree(c):
+        return {"roots": [{"domain": "d" * 128, "leaves": 2, "port": "input/n3", "root": c * 128}]}
+
+    assert R.registered_trees_held(tree("a"), "the verifier", reads("input/n3")) is None
+    assert R.registered_trees_held(tree("c"), "the verifier", reads("input/n3")) == (
+        "registered: the verifier's port x opens the committed tree input/n3 at another root than the registration's: a "
+        "statement opens its window's registered tree, never another window's or another member's")
+    assert R.registered_trees_held(tree("a"), "the verifier", reads("input/n4")).startswith(
+        "registered: the verifier's port x opens the committed tree input/n4, and the registration holds no root")
+
 
 def test_the_window_says_served_or_stand_in():
     prog, q, rec = _registration(6, window={"kind": "stand-in", "of": "vllm-v1 run root", "root": "7a" * 32})

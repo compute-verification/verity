@@ -126,3 +126,6 @@ def test_one_member_on_the_windows_challenger_session_is_accepted_by_the_compile
     rc, answer, err = check({**params, "proofs": {**params["proofs"], "registered": other}})
     want = f"port {q} opens the committed tree {registered['ports'][q]['value']} at another root than the registration's"
     assert answer["verdict"] != "accept" and want in answer["reason"], (answer, err)
+    why = R.registered_trees_held(rec, "the verifier", other)
+    assert why is not None and why in answer["reason"], (why, answer["reason"])
+    assert R.registered_trees_held(rec, "the verifier", registered) is None

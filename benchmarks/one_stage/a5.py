@@ -1754,17 +1754,21 @@ def case_written(out: Path) -> dict:
 
 def one_statement_held(result: dict, rec: dict, members: Sequence[dict], pm: dict | str | None) -> None:
     """The one statement's public file held to the registration as the executable holds it (`docket.public_held`,
-    `OneStageZkStatement.publicHeld`), at the verifier's registered file its case names (`v2_proof`): an audit of one
-    member whose case is the one statement's (``pm`` none) accepts only where it holds, its verdict
+    `OneStageZkStatement.publicHeld`), and that file's committed trees held to the registration's
+    (`docket.registered_trees_held`), at the verifier's registered file its case names (`v2_proof`): an audit of one
+    member whose case is the one statement's (``pm`` none) accepts only where both hold, its verdict
     ``result["checks"]["one_statement_public"]``."""
     if pm is not None or len(members) != 1:
         return
     mm = members[0]
     f = mm["st"].get("registered_file")
+    reads = json.loads(f.read_text()) if f else None
     try:
-        v = R.public_held(rec, mm["header"], json.loads(f.read_text()) if f else None).to_json()
+        v = R.public_held(rec, mm["header"], reads).to_json()
     except ValueError as e:
         v = {"ok": False, "codes": ["public"], "detail": str(e)}
+    if (why := R.registered_trees_held(rec, "the verifier", reads)) is not None:
+        v = {**v, "ok": False, "codes": [*v["codes"], "registered-trees"], "detail": {"registered-trees": why}}
     result.setdefault("checks", {})["one_statement_public"] = v
     if not v["ok"]:
         result["accepted"] = False
