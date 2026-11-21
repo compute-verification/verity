@@ -673,7 +673,7 @@ def test_the_tables_root_and_domain_are_its_only_supplied_inputs_and_every_regis
     """The class Program binds the embedding table's root and domain id, read off its table read, as supplied inputs
     (`SuppliedInput1_v1`, 512 leaves) marked `registered.<root or domain>/v1` of the table's registered name, and nothing
     else supplied; every registered parameter's node is a `RegisteredInput16_v1`, but the table's own, which the opening
-    reads through its run input ports and no node of its own."""
+    reads through its run input ports and no node of its own, and the scan state's, a run input (`Input16_v1`)."""
     circuit, _ = window
     prog, _ = circuit.program()
     table = WB.table_param("model.embed_tokens.weight", 64)
@@ -683,7 +683,9 @@ def test_the_tables_root_and_domain_are_its_only_supplied_inputs_and_every_regis
     assert {v: (nodes[v].fn.id, nodes[v].n) for v in prog.supplied} == {v: ("SuppliedInput1_v1", 512) for v in prog.supplied}
     assert {n for n, nd in nodes.items() if nd.fn.id.startswith("Supplied")} == set(prog.supplied)
     assert set(circuit.registered.params) - set(nodes) == {table}
-    assert {nodes[v].fn.id for v in circuit.registered.params if v != table} == {"RegisteredInput16_v1"}
+    run = set(circuit.registered.run)
+    assert {nodes[v].fn.id for v in circuit.registered.params if v != table and v not in run} == {"RegisteredInput16_v1"}
+    assert run == {SS.SCAN_STATE} and {nodes[v].fn.id for v in run} == {"Input16_v1"}
 
 
 def _whole_rows(circuit: IF.Circuit) -> None:
