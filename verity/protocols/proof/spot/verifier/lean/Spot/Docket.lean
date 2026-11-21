@@ -438,14 +438,16 @@ def ANCHOR_FUNCTIONS : Array String := #["registered.root/v1", "registered.domai
 the verifier's `pinned` nor pinned by the weights' registration of record (`pinsOf`'s pins), each once, in the marks'
 order; R7 refuses them (`R7-anchor-unpinned`). -/
 def anchorUnpinned (v : Verifier) : Array String :=
-  let ofRecord := match v.weightsOfRecord with
+  let ofRecord : Array String := match v.weightsOfRecord with
     | some (body, digest) => match pinsOf body digest with
-      | .ok (_, pins) => pins.map (·.value)
+      | .ok (_, pins) => pins.map fun (p : Pin) => p.value
       | .error _ => #[]
     | none => #[]
-  v.marks.foldl (init := #[]) fun out (_, m) =>
-    match ANCHOR_FUNCTIONS.contains m.fn, (m.args.find? (·.1 == "value")).map (·.2) with
-    | true, some (.str x) =>
+  v.marks.foldl (init := (#[] : Array String)) fun out (mk : String × Supplied.Mark) =>
+    let m := mk.2
+    let value : Option Json := (m.args.find? (·.1 == "value")).map Prod.snd
+    match ANCHOR_FUNCTIONS.contains m.fn, value with
+    | true, some (Json.str x) =>
       if v.pinned.any (·.1 == x) || ofRecord.contains x || out.contains x then out else out.push x
     | _, _ => out
 
