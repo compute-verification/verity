@@ -11,7 +11,8 @@ check the stream ran on it, in the stream's order.
   design at any `p` (`Draw.bernoulli`: `bernoulli`), a
   program and query whose population is not the registration's units in order (`Slots.popOk`) nor a disjoint cover of
   them (`Slots.popCovers`: `population-order`), or a cover under a design that is not subset at both the verifier and
-  the registration (`OneStageZk.subsetDesign`: `strata-design`), as `OneStageZk.popHeld` holds it, and the receipt
+  the registration (`OneStageZk.subsetDesign`: `strata-design`), as `OneStageZk.popHeld` holds it, or a cover under a
+  two-stage rule (`population-order`: its chain reads slot ρ as unit ρ), and the receipt
   (`registration.receipt`);
 * `select`: a closure map, refused before any coin is read (`closure`: a work sample widened by one is outside the
   sampled audit's soundness statement); the sample of record on the bytes of the challenger's coins (`Select.select`,
@@ -390,6 +391,7 @@ def run (i : Input) : V Json := do
   if !Slots.popOk v.program v.query n then
     if !Slots.popCovers v.program v.query n then return refused "register" #["population-order"]
     if !OneStageZk.subsetDesign v i.record then return refused "register" #["strata-design"]
+    if i.rule matches .twoStage .. then return refused "register" #["population-order"]
   let receipt ← receipt i.record i.challenger i.received
   let derived ← Draw.derive v.program v.query samplingDesign v.workTable
   if i.closure.isSome then return refused "select" #["closure"]
