@@ -64,8 +64,6 @@ class Exchange:
         self.declared: H.Declared | None = None
         self.fixed = False
         self._step: int | None = None
-        #: the workload's readers a launcher offers a process beside it, by what they do; none: no launcher
-        self.readers: Mapping[str, Callable[..., Any]] = {}
         #: the adapter's answer to a refused input (`RefuseInput`), called as it is filed with the input and the reason
         self.refuse: Callable[[str, str], None] | None = None
         #: the schemes `attach` attached, by name, each with its settings: `Declared.schemes` and `Declared.settings`
@@ -173,7 +171,7 @@ class Exchange:
             return
         if isinstance(request, H.ServeRoute) and (other := self.route(request.path)) is not None:
             raise Refused(name, f"serves route {request.path}, which {other[0]} serves")
-        if self.declared is not None and isinstance(request, (H.RequireProperty, H.StartBeside)):
+        if self.declared is not None and isinstance(request, H.RequireProperty):
             raise Refused(name, f"files {kind} after the build was answered; file it before the engine is built")
         if self._step is not None:
             raise Refused(name, f"files {kind} after serving began (step {self._step}); file it before the first step")
@@ -188,12 +186,6 @@ class Exchange:
         why: dict[str, list[str]] = {}
         for name, r in H.unmet(self.requests, declared.properties):
             why.setdefault(name, []).append(f"requires {r.property} = {r.value!r}: {r.why}")
-        for name, r in self.requests:
-            if isinstance(r, H.StartBeside) and (r.process not in schemes.PROCESSES or set(r.readers) - set(self.readers)):
-                missing = sorted(set(r.readers) - set(self.readers))
-                why.setdefault(name, []).append(
-                    f"starts {r.process} beside the workload, which no scheme registered" if r.process not in schemes.PROCESSES
-                    else f"starts {r.process} beside the workload with readers {missing} no launcher here offers")
         if why:
             name, reasons = next(iter(why.items()))
             raise Refused(name, "; ".join(reasons))
@@ -275,15 +267,6 @@ class Exchange:
     def oldest_freed_first(self) -> bool:
         """Whether a freed range is handed out again only after every range freed before it (`ReuseOldestFreed`)."""
         return bool(self._filed(H.ReuseOldestFreed))
-
-    def beside(self) -> list[tuple[str, Callable[[], Any]]]:
-        """The processes schemes asked to start beside the workload, each by its name and bound to the readers it
-        named, for the launcher to call before serving."""
-        out = []
-        for _, r in self._filed(H.StartBeside):
-            start, readers = schemes.PROCESSES[r.process], [self.readers[k] for k in r.readers]
-            out.append((r.process, (lambda f, a: lambda: f(*a))(start, readers)))
-        return out
 
 
 def providing(role: str) -> schemes.Scheme:
