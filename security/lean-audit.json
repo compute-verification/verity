@@ -4726,7 +4726,7 @@
   },
   "Flock.SecurityProofs.SampledKSLiveV5": {
    "type_hash": "1da5c430cbb43b0232626e9ac21f59025a435c8829d4500927b3bd052f108f35",
-   "unfolded_hash": "58bb5cbb8cc0b48501c5e640ec5d267fa0dcd20534db6c40d7a4c98ee183d90f",
+   "unfolded_hash": "9d4bc43aecd8fb01272759d3478e432fa5670b21d457d77c9c478754adeb74bc",
    "missing": "nontrivial",
    "why": "nontrivial instance needs a fixture the kernel builds, or the statement restated to conclude a claims predicate over the record's verifier"
   },
