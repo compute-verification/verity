@@ -1,5 +1,6 @@
 """The served table reads what a listed scheme's declaration states, never a scheme's name: what a party's start writes
-(`Launch.starts`, `served_table.started`) and the device premise a piece's answer places (`served_table.attested`)."""
+(`Launch.starts`, `served_table.started`), what a tied application states over a scheme's defaults (`Scheme.tie`,
+`served_table.tied`), and the device premise a piece's answer places (`served_table.attested`)."""
 from __future__ import annotations
 
 import dataclasses
@@ -36,6 +37,15 @@ def test_the_declared_starts_are_what_the_challenger_and_the_network_attester_wr
     assert T.STARTS[T.CHALLENGER].optional == {("sampled-proofs", "loopback"), ("sampled-proofs", "main-file"),
                                                ("pearl-plus", "lane"), ("pearl-plus", "main-file")}
     assert not T.STARTS[T.NETWORK_ATTESTER].optional
+
+
+def test_a_tied_application_states_each_listed_schemes_declared_tie(monkeypatch):
+    real = T.schemes.get
+    monkeypatch.setattr(T.schemes, "get", lambda n: dataclasses.replace(real(n), tie={"order": "fifo"})
+                        if n == "network-attester" else real(n))
+    got = T.tied(("sampled-proofs", "pearl-plus", "network-attester"))
+    assert got[T.MANIFESTS["network-attester"].id] == {"order": "fifo"}
+    assert T.MANIFESTS["pearl-plus"].id not in got and T.MANIFESTS["sampled-proofs"].id not in got
 
 
 def test_each_declared_read_is_a_run_of_a_party_its_scheme_declares():

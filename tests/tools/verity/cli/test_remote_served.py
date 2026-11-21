@@ -108,12 +108,12 @@ ONSITE_UNBOUND = [k for k in T.unbound(R.load(ONSITE, REG), {}) if k.split(".")[
 
 def onsite_pearlplus(tmp: Path) -> Path:
     f = tmp / "onsite.toml"
-    f.write_text(ONSITE.read_text())
+    f.write_text(K.render(T.configuration(K.parse(ONSITE.read_text())["program"]["commit"])))
     return f
 
 
 def test_under_onsite_pearl_plus_takes_h1s_place_with_its_product_and_no_compute_key_blocks(tmp_path, capsys):
-    assert "pearl-plus" in (listed := K.parse(ONSITE.read_text())["protocols"]) and "pouw" not in listed
+    assert "pearl-plus" in T.listed("onsite_full") and "pouw" not in T.listed("onsite_full")
     f = onsite_pearlplus(tmp_path)
     rc, got, err = dry(capsys, config=f)
     written = {f"{p}.{c}.{k}" for p, s in T.STARTS.items() for c, ks in s.writes.items() for k in ks}
@@ -255,7 +255,7 @@ def written(base: Path, line: dict | None, rows: dict | None, inference_only: di
 ACCEPTED = {"integrity": {"verdict": "accept"}, "work": {"verdict": "accept"}}
 #: inference-only's row as a verifier-side run would write it: its answer recomputed off the served node
 CHECKED = {"verdict": "accept", "answer_from": "recomputed on this host by its Lean verifier"}
-ALL_ACCEPTED = {c: "accept" for c in K.parse(CONFIG.read_text())["protocols"]}
+ALL_ACCEPTED = {c: "accept" for c in T.listed("remote")}
 YES = {"composed": "accept", "product": "remote"}
 
 

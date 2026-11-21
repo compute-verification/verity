@@ -1,8 +1,7 @@
 <!-- A protocol's or subsystem's README, in its own directory: its architecture on one screen. -->
 <!-- The title and these four sections, in this order, and no other heading at level 2: at most 70 lines and 6,000 bytes. -->
 <!-- No history, dates, results, run ids, lists of refusals or security argument: the guarantee is its Lean statement, named in one line. -->
-<!-- What is not yet true is one line beginning "Not yet:". Each cell of the grid is served, exists, removed or never written. -->
-<!-- removed: written once and taken out; the line under the grid names the commit whose parent last holds it. -->
+<!-- What is not yet true is one line beginning "Not yet:". Each cell of the grid is served, exists or never written. -->
 <!-- A sub-directory's README is at most 25 lines (what the directory is, one thing to try) or it goes. -->
 <!-- Nested code uses ~~~ fences. `tests/lint/test_readme_pattern.py` holds the form; delete these comment lines. -->
 # <name>
@@ -28,7 +27,7 @@ Not yet: <what is not yet true, in one line>.
 
 | implementation | <number format> | <GPU architecture> | <codec, store ...> |
 | --- | --- | --- | --- |
-| <name> | served / exists / removed / never written | ... | ... |
+| <name> | served / exists / never written | ... | ... |
 
 A new implementation supplies: <what it brings>.
 Fixed for every implementation: <what none changes>.

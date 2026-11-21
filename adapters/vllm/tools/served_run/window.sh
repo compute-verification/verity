@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
-# The served window on its node (`run.sh window`): `verity run` of APPLICATION's workers under the card's lease, then
-# its hand-off packed.
+# The served window on its node (`run.sh window`): served_verdicts.sh under the card's lease, then its hand-off packed.
 set -uo pipefail
-for v in APPLICATION CARD CORES END COMPOSE_OFF_NODE COMPOSE_NODE ROW REPO REV VENV CUDA_HOME HF_HOME SERVE_ROOT FLOCK_WORK HIDDEN_SO; do
+for v in CARD CORES END COMPOSE_OFF_NODE COMPOSE_NODE ROW REPO REV VENV CUDA_HOME HF_HOME SERVE_ROOT FLOCK_WORK HIDDEN_SO; do
   [ -n "${!v:-}" ] || { echo "window.sh: no $v: start it with \`adapters/vllm/tools/served_run/run.sh window\`"; exit 2; }
 done
 IN=${RESEARCH_RUN_DIR:?run under research run}/inputs OUT=$RESEARCH_RUN_DIR/out
@@ -35,13 +34,11 @@ mkdir -p "$SERVE_ROOT" /dev/shm/vllm-served-run && chmod 700 "$SERVE_ROOT" /dev/
 D=/dev/shm/vllm-served-run/${RESEARCH_RUN_ID:?run under research run}; export D
 echo "$D" > "$OUT/serve_dir.txt"
 t0=$(date +%s)
-# its state is the run dir, so the runner's public record (its state's out/) is OUT
-bash adapters/vllm/tools/served_run/run.sh settings "$REPO" -- uv run verity run "$APPLICATION" --on prover-node \
-  --party workers --state "$RESEARCH_RUN_DIR" ${BINDINGS:+--bindings "$BINDINGS"} > "$OUT/verity_run.log" 2>&1
+bash adapters/vllm/tools/served_run/run.sh settings "$REPO" -- bash benchmarks/one_stage/served_verdicts.sh > "$OUT/served_verdicts.log" 2>&1
 rc=$?
-log "verity run exit $rc after $(( ($(date +%s) - t0) / 60 )) min; its lines in out/verdicts.txt, the runner's in logs/"
+log "served_verdicts.sh exit $rc after $(( ($(date +%s) - t0) / 60 )) min; its lines in out/verdicts.txt"
 if [ "${PREFLIGHT_ONLY:-}" = 1 ] && [ "$rc" = 0 ]; then
-  log "the preflight passed, nothing served: $(grep -h -m1 'PREFLIGHT passed' "$RESEARCH_RUN_DIR/logs/served-window.log" | cut -c1-300)"; exit 0
+  log "the preflight passed, nothing served: $(grep -h -m1 'PREFLIGHT passed' "$OUT/served_verdicts.log" | cut -c1-300)"; exit 0
 fi
 . adapters/vllm/tools/served_run/handoff.sh
 window_exit "$rc"
