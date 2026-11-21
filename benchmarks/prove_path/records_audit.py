@@ -195,9 +195,37 @@ from typing import Any
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
+
+
+def own_tree(tree: Path = HERE.parents[1]) -> Path | None:
+    """Import Verity from ``tree``, the checkout this file is in: a venv shared between checkouts (a node's vLLM venv) has
+    editable installs of whichever tree last installed into it, so the audit would run another commit's verifier, its
+    registry missing the window's templates. Each `sys.path` entry under that other tree is put ahead at the same path under
+    ``tree``, and `PYTHONPATH` too, for the processes the audit starts; -> the other tree, or None where it is ``tree``."""
+    import importlib.util
+
+    spec = importlib.util.find_spec("verity")
+    other = Path(spec.origin).resolve().parents[1] if spec is not None and spec.origin else tree
+    if other == tree:
+        return None
+    ahead = [str(tree)]
+    for p in sys.path:
+        try:
+            rel = Path(p).resolve().relative_to(other)
+        except ValueError:
+            continue
+        if (tree / rel).is_dir() and str(tree / rel) not in ahead:
+            ahead.append(str(tree / rel))
+    sys.path[:0] = ahead
+    os.environ["PYTHONPATH"] = os.pathsep.join([*ahead, *filter(None, [os.environ.get("PYTHONPATH")])])
+    print(f"TREE the venv's editable installs are {other}'s; importing {tree}'s ahead of them", file=sys.stderr)
+    return other
+
+
+own_tree()
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 
-from verity.commitments import docket_digest as DD
+from verity.commitments import docket_digest as DD  # noqa: E402
 from verity import device as ST  # noqa: E402
 from verity.protocols.registration.verifier import registration as G  # noqa: E402
 from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd  # noqa: E402
