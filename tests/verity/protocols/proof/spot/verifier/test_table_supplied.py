@@ -1,23 +1,21 @@
 """A table's supplied rows (`Window.supply`: its root, its domain id and the opening verdict's 1) are the rows R7 recomputes
-from the program's digest: a docket whose `supplied` names the table's root and domain id by `bytes` accepts the window's
-own rows in both verifiers, and each row's public salts are the program's (`registered_value.supplied_salts`), the digest
-`Window.give` and the verifier's `Supplied.root` salt with, never the partition's. It runs Lean's registration check beside
+from the program's digest: with the anchors' values from C's marks alone (`registered.root/v1`, `registered.domain/v1` of
+the table's own registered entry), both verifiers accept the window's own rows, and each row's public salts are the
+program's (`registered_value.supplied_salts`), the digest `Window.give` and the verifier's `Supplied.root` salt with, never
+the partition's. It runs Lean's registration check beside
 the Python twin (minutes, with the executable built): no cheaper test holds a window's own committed rows to Lean's R7."""
 from __future__ import annotations
 
-import hashlib
 import json
 
 import numpy as np
 import pytest
 
-from verity.circuits.codec import descriptor_id, program_digest
+from verity.circuits.codec import descriptor_chunks, descriptor_id, program_digest
 from verity.circuits.evaluation.batch import evaluate_batch
 from verity.commitments import registered_value as RV
 from verity.commitments import row_table as RT
 from verity.commitments.gates import embedding as E
-from verity.commitments.indexed import RangeIndexedDomain
-from verity.commitments.merkle import CommitmentDomain
 from verity.commitments.periods import interface as I
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2, bit_row
 from verity.protocols.proof.spot.prover import docket as DK
@@ -28,6 +26,7 @@ EID = descriptor_id(EMB)
 RUN = "ab" * 64
 DESIGN = {"law": "stratified", "k": 2}
 SCHEME = "frame-v3-sha512/hm96-sha512"
+WEIGHTS_RECORD = "cd" * 64
 
 
 class Table:
@@ -37,7 +36,7 @@ class Table:
         rng = np.random.default_rng(7)
         self.rows = rng.integers(0, 1 << 16, (4, 16), dtype=np.uint16)
         self.salts = [bytes(rng.integers(0, 256, E.SALT_BYTES, dtype=np.uint8)) for _ in range(4)]
-        self.dom = CommitmentDomain(hashlib.sha512(b"embed").digest(), -2, RangeIndexedDomain(0, 4), hash="sha512")
+        self.dom = RV.domain(WEIGHTS_RECORD, "embed", 16, 4)
         self.tree = RT.commit(self.dom, [bit_row((r.tolist(), 16)) for r in self.rows], self.salts)
         self.name = self.value = "embed"
         self.root, self.words, self.leaves, self.word_bits = self.tree.root, 16, 4, 16
@@ -74,32 +73,37 @@ def _window(out) -> tuple[I.Window, Table, dict]:
     return win, table, json.loads((out / "registration.json").read_text())
 
 
-@pytest.mark.xfail(strict=True, reason="the window's program binds the table's root and domain per run, and R7 refuses a "
-                   "supplied name whose gates are run Input nodes (R7-run-input) until the population program binds "
-                   "them supplied")
-def test_a_tables_supplied_rows_are_the_rows_r7_recomputes_from_the_programs_digest(tmp_path):
-    """The window's root and domain rows, registered in a docket whose `supplied` names the table's root and domain id
-    (`bytes`, the sources today's R7 reads), are the rows both verifiers compute: their salts are the program's, and R7 holds
-    the record's roots to them. Salted with the partition's digest, R7 refuses them."""
+def test_a_tables_anchors_from_cs_marks_alone_are_the_rows_r7_recomputes_from_the_programs_digest(tmp_path):
+    """C marks the table's root and domain anchors with `registered.root/v1` and `registered.domain/v1` of the table's
+    registered value; the record registers the table's own entry under that value, and no scheme or parameter supplies
+    rows for the anchors: R7 recomputes their rows from the marks, the rows `interface.supplied` commits, in both
+    verifiers, salted with the program's digest. A scheme that also supplies rows for a marked anchor is refused (one
+    source for a supplied value)."""
     win, table, window = _window(tmp_path / "window")
     prog, query = win.window.program, win.window.query
     pd = program_digest(prog)
     assert pd == window["program"] != win.window.partition_digest
+    assert G.marks(json.loads(b"".join(descriptor_chunks(prog)))) == {
+        f"embed/{of}": {"supplied": f"registered.{of}/v1", "args": {"value": "embed"}, "layout": "digest", "bits": 512}
+        for of in ("root", "domain")}
     values = {f"embed/{of}": win.registered[f"embed/{of}"] for of in ("root", "domain")}
     rec = DK.record(prog, query, DESIGN, SCHEME, window["roots"], {"kind": "served", "row": 7, "run": "r-table"},
-                    leaf_layer=window["leaf_layer"], registered=[v.entry() for v in values.values()])
+                    leaf_layer=window["leaf_layer"], registered=[table.entry(), *(v.entry() for v in values.values())])
     check = {"program": prog, "query": query, "sampling_design": DESIGN, "scheme": SCHEME,
              "ports": {r["port"]: {"leaves": r["leaves"], "domain": r["domain"]} for r in window["roots"]},
              "leaf_layer": window["leaf_layer"], "registered": {v: x.words for v, x in values.items()},
-             "schemas": {v: V2 for v in values},
-             "supplied": {"embed/root": [[{"bytes": table.tree.root.hex()}]],
-                          "embed/domain": [[{"bytes": table.dom.domain_id.hex()}]]}}
+             "schemas": {v: V2 for v in values}}
     got = V.check(rec, **check)
     assert got.ok and got.codes == (), got
     assert R.check(rec, **check).ok
     for of in ("root", "domain", "opened"):
         row = win.registered[f"embed/{of}"]
         assert row.program == pd and list(row.salts) == RV.supplied_salts(pd, f"embed/{of}", 1), of
+    both = {**check, "supplied": {"embed/root": [[{"bytes": table.tree.root.hex()}]],
+                                  "embed/domain": [[{"bytes": table.dom.domain_id.hex()}]]}}
+    for verifier in (V, R):
+        with pytest.raises(ValueError, match="C's mark names its function, and the scheme supplies rows for it too"):
+            verifier.check(rec, **both)
 
 
 def test_a_tables_root_and_domain_marks_give_the_rows_the_record_commits():
