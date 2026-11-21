@@ -902,7 +902,8 @@ def verifier_reads(d: Design, window: CS.Binding, interior: Mapping[str, Any], b
             ports[p] = {"value": x.value, "root": e["root"], "leaves": int(e["leaves"]), "words": int(words),
                         "word_bits": RV.WORD_BITS, "domain": e["domain"], RV.SCHEMA_KEY: m.schema(p),
                         "reads": [s * x.per + a for s in range(q) for a in x.at], RV.READS_FROM: m.base}
-        out[m.key] = LK.reads_file(ports, registered=REG)
+        out[m.key] = {"format": REG.READS_V2,
+                      "ports": {p: {k: v for k, v in e.items() if k not in ("reads", RV.READS_FROM)} for p, e in ports.items()}}
     return out
 
 
