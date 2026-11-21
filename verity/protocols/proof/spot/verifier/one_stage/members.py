@@ -159,6 +159,13 @@ def subset_design(law: Any) -> bool:
     return law.get("law") == "subset" if isinstance(law, dict) else isinstance(law, str) and law.startswith("rate:")
 
 
+def subset_designs(law: Any, record: Any) -> bool:
+    """`OneStageZk.subsetDesign`: the parameters' `law` is of the subset kind (`subset_design`) and so is the
+    registration `record`'s."""
+    rl = record.get("law") if isinstance(record, dict) else None
+    return subset_design(law) and isinstance(rl, dict) and rl.get("law") == "subset"
+
+
 def _kind(law: Any) -> str:
     """`OneStageZk.designKind` of the parameters' `law`, a rate resolved as `OneStage.design` resolves it."""
     if isinstance(law, dict):
@@ -981,6 +988,17 @@ def registered_reads(registered: Mapping[str, Any] | None) -> tuple[set[tuple[st
     return {(p, e["value"]) for p, e in held.items()}, held
 
 
+def _walk(strata: Sequence[tuple[str, Sequence[Sequence[int]]]]) -> int | None:
+    """`FilePart.sizes`' walk: N where the strata read stratum by stratum are the units ``0, ..., N - 1`` in order."""
+    at = 0
+    for _t, rs in strata:
+        for lo, hi in rs:
+            if lo != at or hi < lo:
+                return None
+            at = hi
+    return at
+
+
 def population_why(units: Sequence[Sequence[int]], strata: Sequence[tuple[str, Sequence[Sequence[int]]]], header: Any,
                    slice_: Mapping[str, Any], reads: Collection[tuple[str, str]] = (),
                    held: Mapping[str, Any] | None = None, subset: bool = False) -> str | None:
@@ -992,19 +1010,13 @@ def population_why(units: Sequence[Sequence[int]], strata: Sequence[tuple[str, S
     member's units in order (`MEMBER_UNITS`), a port of its ``frame_v3`` roots the slice holds no root of is refused
     by name, the first in key order (`unwired_why`), and its scheme, ``frame_v3`` roots, their ``domain_ids`` and its
     ``instances`` are the slice's (`Record.matchesPublic`'s codes)."""
-    if subset:
+    walk = _walk(strata)
+    if subset and walk is None:
         n = P.cover(strata)
         if n is None or not all(hi <= n for _lo, hi in units):
             return MEMBER_COVER
-    else:
-        at = 0
-        for _t, rs in strata:
-            for lo, hi in rs:
-                if lo != at or hi < lo:
-                    return MEMBER_STRATA
-                at = hi
-        if not all(hi <= at for _lo, hi in units):
-            return MEMBER_STRATA
+    elif walk is None or not all(hi <= walk for _lo, hi in units):
+        return MEMBER_STRATA
     h = header if isinstance(header, dict) else {}
     indices = h["units"].get("indices") if isinstance(h.get("units"), dict) else None
     mine = [u for lo, hi in units for u in range(lo, hi)]
@@ -1222,8 +1234,9 @@ def _members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence:
             if not P.covers(program, params["query"], record["population"]):
                 raise _Refused(POPULATION_ORDER)
             law = record.get("law")
-            if not (subset_design(params.get("law")) and isinstance(law, dict) and law.get("law") == "subset"):
-                raise _Refused(strata_design(_kind(params.get("law"))))
+            if not subset_designs(params.get("law"), record):
+                raise _Refused(strata_design(_kind((law if isinstance(law, dict) else {}) if subset_design(params.get("law"))
+                                                   else params.get("law"))))
         _laid(ms, record)
         _held_read(ms, params, program)
         _class(ms)
@@ -1275,4 +1288,4 @@ __all__ = ["EXITS", "Form", "MEMBERS_LAID", "MEMBER_COVER", "MEMBER_STRATA", "ME
            "TABLE_PORT", "UNREAD", "blobs_of", "case_check", "check", "files_why", "flock_form", "flock_verdict",
            "field_trees_why", "members_run", "population_why", "POPULATION_WHY", "registered_at", "registered_reads",
            "return_fields", "run_reason", "shared_unread", "unregistered_why", "unwired_why", "own_root_why",
-           "port_twice_why", "run_own_root_why", "slice_no_port_why", "strata_design", "subset_design", "wired_tree_why"]
+           "port_twice_why", "run_own_root_why", "slice_no_port_why", "strata_design", "subset_design", "subset_designs", "wired_tree_why"]

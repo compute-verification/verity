@@ -1104,7 +1104,9 @@ def popHeld (v : Docket.Verifier) (record : Json) : V Unit :=
   | some n =>
     if Slots.popOk v.program v.query n then pure ()
     else if Slots.popCovers v.program v.query n then
-      if subsetDesign v record then pure () else throw (FilePart.STRATA_DESIGN (designKind v.samplingDesign))
+      if subsetDesign v record then pure ()
+      else throw (FilePart.STRATA_DESIGN (designKind (if jsonStrIs (getD v.samplingDesign "law") "subset"
+        then getD record "law" else v.samplingDesign)))
     else throw POPULATION_ORDER
 
 /-- The challenger session's release log in the evidence's `coins`, a line each, as `Challenger.trustedTreesOf` reads
@@ -1394,17 +1396,20 @@ def MEMBER_STRATA : String :=
     "member's is past them: a member's strata are the registration's, each restricted to the member's units"
 
 /-- The refusal of a member, under a subset design, whose registration's strata are no disjoint cover of its units,
-or with a unit past them (`Member.heldAt`). -/
+hold a range that ends before it starts, or with a unit past them (`Member.heldAt`). -/
 def MEMBER_COVER : String :=
-  "partition: the registration's strata's ranges are not a disjoint cover of its units 0, 1, …, N - 1, or a unit of " ++
-    "the member's is past them"
+  "partition: the registration's strata's ranges are not a disjoint cover of its units 0, 1, …, N - 1, a range of " ++
+    "them ends before it starts, or a unit of the member's is past them"
 
 /-- A member's population check at the registration's `strata` and its public file's header `h`: the member's strata
-are the registration's restricted to its units (`Member.sizes`), or, under a subset design (`m.subset`), the
+are the registration's restricted to its units (`Member.sizes`), or, under a subset design (`m.subset`) and only where
+the registration's strata are not its units in order (`FilePart.sizes`), as `popHeld` takes the walk first, the
 registration's strata are a disjoint cover of its units and the member's are among them (`FilePart.cover`); and the
-header's units are exactly the member's, in order (`unitsHeld`). -/
+header's units are exactly the member's, in order (`unitsHeld`). `m.subset` is the verifier's law; R1-law
+(`Docket.check`) holds the registration's to the design it derives, so on a check that accepts both are subset
+(`subsetDesign`). -/
 def Member.heldAt (m : Member) (strata : Array (String × Array (Nat × Nat))) (h : Json) : V Unit :=
-  if m.subset then
+  if m.subset && (FilePart.sizes strata).isNone then
     match FilePart.cover strata with
     | some n => if !m.units.all (·.2 ≤ n) then throw MEMBER_COVER
                 else if unitsHeld m.indices h then pure () else throw MEMBER_UNITS

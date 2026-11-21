@@ -340,12 +340,15 @@ def test_under_a_subset_design_the_strata_need_only_cover_the_units():
     assert M.population_why(UNITS[B], strata, header(B), slice_, subset=True) is None
     assert M.population_why(UNITS[B], strata, header(B), slice_) == M.MEMBER_STRATA
     assert M.population_why(UNITS[B], strata, "no header", slice_, subset=True) == M.MEMBER_UNITS
+    assert P.cover([("p", [[0, 2], [5, 7]]), ("t", [[2, 5], [5, 5]])]) == 7
+    assert P.cover_ranges([[0, 2], [5, 7], [2, 5], [5, 4]]) == 7
     for bad in ([("p", [[0, 3], [5, 7]]), ("t", [[2, 5]])], [("p", [[0, 2], [6, 7]]), ("t", [[2, 5]])],
-                [("p", [[0, 2], [5, 7]]), ("t", [[2, 5], [5, 4]])]):
+                [("p", [[0, 2], [5, 7], [7, 6]]), ("t", [[2, 5]])]):
         assert P.cover(bad) is None
         assert M.population_why(UNITS[B], bad, header(B), slice_, subset=True) == M.MEMBER_COVER
     assert M.population_why([[2, 8]], strata, header(B), slice_, subset=True) == M.MEMBER_COVER
     in_order = P.strata(PROGRAM, QUERY)
+    assert M.population_why([[2, 8]], in_order, header(B), slice_, subset=True) == M.MEMBER_STRATA
     assert P.cover(in_order) == 5 and P.in_order(PROGRAM, QUERY, 5) and P.covers(PROGRAM, QUERY, 5)
     assert all(M.population_why(UNITS[B], in_order, header(B), slice_, subset=s) is None for s in (False, True))
     assert M.subset_design({"law": "subset", "k": 1}) and M.subset_design("rate:1/8")
