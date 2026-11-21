@@ -1601,7 +1601,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             name = "program-not-the-days-declared (R2)"
             parts.append(workers.submit(name, functools.partial(registration, name, program, want, leaf_layer,
                                                                 day=day["day"], declarations=moved)))
-        other = ports_at(replace(mine, run="00" * 32))
+        other = ports_at(replace(mine, run="00" * 64))
         name = "domains-bound-to-another-run-root (R3)"
         parts.append(workers.submit(name, functools.partial(registration, name, program, other, leaf_layer)))
         first = members[0]["m"].key
