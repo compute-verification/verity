@@ -184,6 +184,17 @@ def query_digest(query: Mapping[str, Any]) -> str:
     return hashlib.sha512(canonical_json(dict(query))).hexdigest()
 
 
+#: `OneStage.PARTITION_QUERY`
+PARTITION_QUERY = ("the partition object's query is not the parameters' query: the sample is drawn over the query's "
+                   "population and every session's proof block is the partition's")
+
+
+def partition_query_refused(partition: Mapping[str, Any], query: Mapping[str, Any]) -> bool:
+    """`OneStage.paramsParsed`'s refusal: a partition object in any form but the pre-canonical `{program, query}` whose
+    query is not `query`."""
+    return set(partition) != {"program", "query"} and query_digest(partition.get("query") or {}) != query_digest(query)
+
+
 def held_roots(log: Iterable[Mapping[str, Any]]) -> dict[tuple[str, str], str]:
     """`{(value, domain): root}` for every value an earlier record of the log registered, the root of its first
     docket under that domain: R7 holds a value to the root registered under the domain it takes now, so a
@@ -269,7 +280,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
     that format (`registered_entries`), and a supplied one's it commits in it (`registered.supplied_root`); ValueError without `registered`, or in another form.  `binding`: the stream and prover the verifier registers this record for
     (`{"stream", "prover"}`, `_binding`), which the caller's check holds the window to name and a window salt binds.  `partition`: the
     verifier's own partition object when it isn't the canonical one (a record made before the canonical envelope); its
-    program must still be `program`'s, and the population is `query`'s.  R1 holds the registered sampling design to the verifier's own
+    program must still be `program`'s, and the population is `query`'s; a ValueError (`PARTITION_QUERY`) where it is in any
+    form but the pre-canonical `{program, query}` and its query is not `query`.  R1 holds the registered sampling design to the verifier's own
     sampling design expanded over its program and query (`draw.derive`): for `stratified`, the strata by template descriptor id and
     each stratum's k by the rule; for `work`, also its own `work_table`.  R7 holds the registered values to the verifier's
     own (`registered_entries`), a pinned value to its pinned root, and a value an earlier record of the log registered
@@ -359,6 +371,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
     if not isinstance(rec["window"], Mapping) or rec["window"].get("kind") not in DD.KINDS:
         c.fail("window", rec["window"])
     # R2
+    if partition is not None and partition_query_refused(partition, query):
+        raise ValueError(PARTITION_QUERY)
     part = dict(partition) if partition is not None else P.partition(program, query)
     if part["program"] != P.program_digest(program):
         c.fail("R2-program", {"partition": part["program"], "verifier": P.program_digest(program)})
@@ -991,7 +1005,7 @@ def matches_public(rec: Mapping[str, Any], scheme: str, roots: Mapping[str, str]
 
 registered_entries = G.registered_entries
 
-__all__ = ["NOT_ONE_MEMBER", "POOL_KEYS", "RECEIPT", "ROW_TABLES", "TABLE_PORT",
-           "WINDOW_DOMAIN", "check", "held_roots", "matches_public", "pool_chains", "pool_open", "pool_refused",
+__all__ = ["NOT_ONE_MEMBER", "PARTITION_QUERY", "POOL_KEYS", "RECEIPT", "ROW_TABLES", "TABLE_PORT",
+           "WINDOW_DOMAIN", "check", "held_roots", "matches_public", "partition_query_refused", "pool_chains", "pool_open", "pool_refused",
            "pool_spent_before", "pool_values", "public_ports", "query_digest", "receipt",
            "refuse_unwindowed", "refused", "registered_entries", "unwindowed", "window_domain"]

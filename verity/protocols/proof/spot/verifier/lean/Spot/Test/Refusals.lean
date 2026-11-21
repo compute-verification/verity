@@ -49,7 +49,26 @@ def params (law : Json := Json.mkObj [("law", "subset"), ("k", (1 : Nat))]) (k :
 #guard why? (OneStageZk.paramsOfJson (Spot.Test.Docket.put params "partition" (some (Partition.build
     (Flock.hexOf (program Spot.OneStageZk.E3).sha512)
     ((Flock.JsonParse.parse "{\"name\":\"Q_template_instance\",\"params\":{\"template\":\"F_v1\"},\"version\":0}").toOption.getD
-      .null))))) == OneStageZk.PARTITION_QUERY
+      .null))))) == OneStage.PARTITION_QUERY
+
+/-- The template query over `F_v1`, another query than `params`'s. -/
+def otherQ : Json :=
+  (Flock.JsonParse.parse "{\"name\":\"Q_template_instance\",\"params\":{\"template\":\"F_v1\"},\"version\":0}").toOption.getD
+    .null
+
+/-- `params` as v1 reads them, with the partition object `o`. -/
+def v1With (o : Json) : Json :=
+  Spot.Test.Docket.put (Spot.Test.Docket.put params "proofs" none) "partition" (some o)
+
+#guard why? (OneStage.paramsOfJson (v1With (Partition.build (Flock.hexOf (program Spot.OneStageZk.E3).sha512) otherQ))) ==
+  OneStage.PARTITION_QUERY
+#guard why? (OneStage.paramsOfJson (v1With (Json.mkObj [("program", Flock.hexOf (program Spot.OneStageZk.E3).sha512),
+  ("query", otherQ)]))) == "ok"
+
+#guard (do jeq (← Flock.JsonParse.parse "{\"b\":1,\"a\":{\"d\":2,\"c\":3}}")
+  (← Flock.JsonParse.parse "{\"a\":{\"c\":3,\"d\":2},\"b\":1}")) matches .ok true
+#guard (do jeq (← Flock.JsonParse.parse "{\"v\":1.0}") (← Flock.JsonParse.parse "{\"v\":1.0}")) matches .ok false
+#guard (["{\"v\":1.0}", "{\"v\":1e0}", "{\"v\":10e-1}"].all fun s => (Core.canonicalJson s.toUTF8 matches .error _))
 
 /-- The challenger session's release log after its head: the family `draw`'s root `ab` recorded, a coin tree's round
 opened on the link's stream, then the coin released: a coin of the sample released after a round opened. -/

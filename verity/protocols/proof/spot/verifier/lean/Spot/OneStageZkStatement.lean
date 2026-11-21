@@ -60,11 +60,6 @@ example : STATEMENT = Flock.Tags.tmplName := rfl
 def NO_CHALLENGER : String :=
   "the parameters name no challenger: the draw's coins are the auditor's challenger's signed release (challenger, " ++
     "with window_root), never the prover's record"
-/-- The refusal of parameters whose partition object's query is not their `query`: the sample is drawn over `query`'s
-population (`OneStage.paramsParsed`) and every session's proof block is the partition's (`Own.circuitFile`). -/
-def PARTITION_QUERY : String :=
-  "the partition object's query is not the parameters' query: the sample is drawn over the query's population and " ++
-    "every session's proof block is the partition's"
 /-- The refusal of a challenger key at other LMS parameters than the deployed ones (`Lms.deployed`), the only ones the
 game's signature verifier (`Verity.lmsVerify`) reads. -/
 def KEY_PARAMS : String :=
@@ -271,7 +266,8 @@ def SUBSET_ONLY (kind : String) : String :=
     subset sampling design"
 
 /-- The one statement's parameters as parsed, before `paramsOfJson`'s refusal of a sampling design that is no `subset`
-one, refused where the partition object's query is not v1's `query` (`PARTITION_QUERY`). The per-member form's
+one, refused where the partition object's query is not v1's `query` (`OneStage.PARTITION_QUERY`), in either form; v1
+refuses a null `query` and a partition naming no object `query` first (`OneStage.paramsParsed`). The per-member form's
 parameters read them (`membersParamsOfJson`), under any sampling design v1 parses. -/
 def paramsParsed (j : Json) : V Params := do
   let some pr := field? j "proofs"
@@ -285,7 +281,7 @@ def paramsParsed (j : Json) : V Params := do
   if !deployedKey key then throw KEY_PARAMS
   let some partition := base.verifier.partition
     | throw "partition is null: the sessions are verified against the verifier's own partition object"
-  if !jeq (getD partition "query") base.verifier.query then throw PARTITION_QUERY
+  if !jeq (getD partition "query") base.verifier.query then throw OneStage.PARTITION_QUERY
   let programJ := getD rest "program"
   pure { base, own := { programJ, program := (← Flock.canon programJ).toUTF8, partition, pub, registered },
          members := none }

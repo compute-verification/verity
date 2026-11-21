@@ -126,9 +126,7 @@ TABLES: dict[str, int | None] = {"circuit": None}
 #: `OneStageZk.NO_CHALLENGER`
 NO_CHALLENGER = ("the parameters name no challenger: the draw's coins are the auditor's challenger's signed release "
                  "(challenger, with window_root), never the prover's record")
-#: `OneStageZk.PARTITION_QUERY`
-PARTITION_QUERY = ("the partition object's query is not the parameters' query: the sample is drawn over the query's "
-                   "population and every session's proof block is the partition's")
+PARTITION_QUERY = DK.PARTITION_QUERY
 #: `OneStageZk.POPULATION_ORDER`
 POPULATION_ORDER = ("population-order: the program's proof blocks under the query are not the registration's "
                     "population units in order")

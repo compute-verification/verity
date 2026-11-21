@@ -611,6 +611,8 @@ def decode_params(j) -> dict:
     if part is not None and not (isinstance(part, dict) and isinstance(part.get("program"), str)
                                  and isinstance(part.get("query"), dict)):
         raise D.Reject("partition names no program digest or query")
+    if part is not None and R.partition_query_refused(part, j["query"]):
+        raise D.Reject(R.PARTITION_QUERY)
     if v2 and not all(map(_nat, _obj(j["registered"], "registered").values())):
         raise D.Reject("registered: words that are not a natural number")
     if v2 or tied:
@@ -2035,7 +2037,9 @@ PARAMS = [
     _set("params", "program", lambda a, x: [_other_setup(a, x), {}, 5, "program"][x % 4]),
     _set("params", "partition", lambda a, x: [{"program": 5, "query": {}}, {"program": "p"}, None,
                                               P.partition(PROGRAMS[PO.program_sha512(a["params"]["program"])], a["params"]["query"]),
-                                              {"program": "0" * 128, "query": a["params"]["query"]}][x % 5]),
+                                              {"program": "0" * 128, "query": a["params"]["query"]},
+                                              {"format": PO.FORMAT, "program": PO.program_sha512(a["params"]["program"]),
+                                               "query": {**a["params"]["query"], "version": 99}}][x % 6]),
     _set("params", "scheme", lambda a, x: [5, "frame-v3/blake3"][x % 2]),
     _set("params", "leaf_layer", lambda a, x: [5, None, "ff" * 64][x % 3]),
     _set("params", "anchors", lambda a, x: ["x", ["weights"], []][x % 3]),
@@ -2592,6 +2596,20 @@ def subset_only(kind: str) -> str:
             "it covers a subset sampling design")
 
 
+def _reversed(j):
+    """`j` with every object's keys in reverse order."""
+    return {k: _reversed(j[k]) for k in reversed(list(j))} if isinstance(j, dict) else j
+
+
+def test_the_parameters_gate_refuses_every_number_form_but_an_integer():
+    """`Core.canonicalJson` refuses the other forms of a number, so the query `jeq` and `query_digest` compare is the one
+    canonical text."""
+    for text in (b'{"v":1.0}', b'{"v":1e0}', b'{"v":10e-1}'):
+        with pytest.raises(PR.Reject):
+            PR.canonical_json(text)
+    assert R.query_digest(_reversed({"b": 1, "a": {"d": 2, "c": 3}})) == R.query_digest({"a": {"c": 3, "d": 2}, "b": 1})
+
+
 def parsed_params_v2(j) -> dict:
     """`OneStageZk.paramsParsed`'s refusals of v1's part of the parameters: v1's (`covered_params`,
     `OneStage.paramsOfJson`), then parameters naming no challenger (`NO_CHALLENGER`), or one whose key is at other LMS
@@ -3059,6 +3077,7 @@ def test_v2_reads_its_sample_from_the_challengers_coins(server_v2):
         again = {shape: _challenger_sample(rng, s, sampling_design, rec, **{shape: True}) for shape in ("before", "later")}
         undeployed = {**d.s.key.to_json(), **rng.choice([{"H": 6}, {"W": 2}, {"W": 4, "H": 10}])}
         cases = {
+            "a partition object in another key order": ("verdict", audit_of(d, draw, coins, partition=_reversed(s.partition))),
             "no challenger": ("params", audit_of(d, draw, coins, challenger=None)),
             "no challenger, no coins": ("params", audit_of(d, draw, None, challenger=None)),
             "no window": ("params", audit_of(d, draw, coins, window_root=None)),
