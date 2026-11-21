@@ -1824,13 +1824,13 @@ def run_inputs_of(doc: Mapping[str, Any]) -> tuple[Read, ...]:
 def run_input_ports(doc: Mapping[str, Any], w: CS.Binding) -> dict[str, dict[str, Any]]:
     """The registration's trees of C's run input nodes that the record ``doc`` names (``run_inputs``), as
     ``registration.check`` takes a port (`rows.expected_ports`): ``{input/n<w>: {leaves, domain}}``, a leaf per unit of
-    its reader, each `registered_value.domain` over the period's program digest at the reader's port's words, as
-    `Window` commits it."""
+    its reader, each `registered_value.domain` over the period's program digest at the reader's port's words and the
+    window's open root, the period's run root, as `Window` commits it."""
     prog = program_digest(w.program)
     out: dict[str, dict[str, Any]] = {}
     for r in run_inputs_of(doc):
         n, words = int(r.radix[0]), int(r.step[0])
-        out.setdefault(r.param, {"leaves": n, "domain": RV.domain(prog, r.param, words, n).domain_id.hex()})
+        out.setdefault(r.param, {"leaves": n, "domain": RV.domain(prog, r.param, words, n, window=w.run).domain_id.hex()})
     return out
 
 
@@ -3091,14 +3091,16 @@ class Window:
 
     def _inputs(self) -> dict[str, Any]:
         """``inputs``: each of ``runs``' values committed once (core's ``registered_value.Registered``, fresh salts) under
-        the period's program digest, every unit's row of its port in unit order."""
+        the period's program digest and the window's open root, the period's run root, every unit's row of its port in
+        unit order."""
         if self.runs and not self.inputs:
             prog = program_digest(self.window.program)
             for r in self.runs:
                 rows = self._words(r.reader)[[p for p, _ in self.circuit._by_id[r.reader][1].rows].index(r.port)]
                 if rows is None:
                     raise ValueError(f"{r.reader} {r.port}: a run input's rows are recorded in full")
-                self.inputs[r.param] = RV.Registered.commit(prog, r.param, np.asarray(rows).tolist(), schema=V2)
+                self.inputs[r.param] = RV.Registered.commit(prog, r.param, np.asarray(rows).tolist(), schema=V2,
+                                                            window=self.run)
         return self.inputs
 
     def _output(self, w: WI.Wired, cat: dict[str, Any]) -> np.ndarray:
