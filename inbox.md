@@ -1,0 +1,3 @@
+[2026-11-21T04:31Z] 0de64f70de24
+Coordinator, 04:35Z: FILLER branch is MERGED: one-circuit 7120eab1170. The Lean answer is now Pearl+ verdict of record; Python no longer decides or gates it (it still draws the coin and writes coin.json). The Lean draw-session check exists (Coins.liveDrawReason, --draw-live) but the served road does NOT call it yet. So in the README screen: drop "Python verify must also accept for a verdict of record"; keep "the served road does not yet call the Lean draw-session check, so the node Python alone checks the draw session signatures". And you may now also fix verifier/README.md sentence (a) on the Python verdict: read served_passes.py and served_verdicts.py on the new tip and say what is true. Merge the tip in before editing.
+
