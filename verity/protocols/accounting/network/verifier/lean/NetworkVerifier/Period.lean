@@ -1326,7 +1326,7 @@ def protocol : Core.Protocol where
 -- and its eps is the scan's δ = 2^-64 and δ_i: 2^-63
 #guard
   let scan : Scan := ⟨32, 0, 300, 512, 8 * 112, 0⟩
-  let p : Params := ⟨#[⟨0, 0, "", 16, #[]⟩], #[], 0, 1, "", Lms.deployed, #[], "",
+  let p : Params := ⟨#[⟨0, "", 16, #[]⟩], #[], 0, 1, "", Lms.deployed, #[], "",
     .rows ⟨0, 0, 0, 0, 16, 0, 0, 4, 0, 0, 32, none, none, none, false⟩ .empty scan, 1, none⟩
   let at_ := fun (q : String) => Json.mkObj [("roots", Json.arr #[
     Json.mkObj [("port", .str q), ("root", .str "r"), ("domain", .str "d")]])]
