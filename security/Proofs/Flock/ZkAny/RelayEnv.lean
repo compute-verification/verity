@@ -334,9 +334,10 @@ def BoundOwned (R : Array Slot) : Prop := ∀ s ∈ R, ∀ sid t, s.bound = some
 /-- Each live session has its count of tables. -/
 def Named (R : Slots) : Prop := ∀ x ∈ R.sessions, ∃ y ∈ R.tables, y.1 = x.2
 
-/-- **The loop's level-0 slots**, as its four updates of them leave them, from none (`Session.run`'s `l0s`): a session
-named at its `Hello` (`Session.relay`), a level-0 request's sample (`Session.level0`), a `Commit` (`Session.relay`) and a
-session's end (`Session.run`). An update that fails leaves them as they were. -/
+/-- **The loop's level-0 slots**, as its four updates of them leave them, from none (the `l0s` that `Session.run` and
+`Session.kept` make, which a kept loop's change of member makes none again): a session named at its `Hello`
+(`Session.relay`), a level-0 request's sample (`Session.level0`), a `Commit` (`Session.relay`) and a session's end
+(`Session.listenAt`). An update that fails leaves them as they were. -/
 inductive SlotsReach : Slots → Prop
   | empty : SlotsReach {}
   | name {R : Slots} (n : String) (sid k : Nat) : SlotsReach R → SlotsReach (R.name n sid k)

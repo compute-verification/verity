@@ -19,13 +19,11 @@ PATTERN = re.compile(r"(?:^|[-_.])(?:n1_|n2_|vy-n1-|vy-n2-|vy-node1-|pool_n1|neb
 MACHINE_DIRS = ("infra/vcf/",)
 
 ALLOWED = {
-    "infra/cluster/src/cluster/nebius1.py",
     "infra/cluster/src/cluster/nebius2.py",
     "infra/vcf/payload.sh",
     "infra/vcf/vcf-bench.sh",
     "infra/vcf/vcf-job-run.sh",
     "infra/vcf/vcf-publish.sh",
-    "tests/infra/cluster/test_nebius1.py",
     "tests/infra/cluster/test_nebius2.py",
     "tools/research/src/research/pods/nebius/n2_custody.sh",
 }

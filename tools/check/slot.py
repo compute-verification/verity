@@ -1310,7 +1310,7 @@ def allowed() -> set[int]:
     return os.sched_getaffinity(0)
 
 
-DIRECT_CPUS_FIX = "a `research run` starts on /etc/vy/direct-cpus, so add the slot's cores there (`0-159` on node 1)"
+DIRECT_CPUS_FIX = "a `research run` starts on /etc/vy/direct-cpus, so add the slot's cores there"
 
 
 def usable(slots: list[dict]) -> list[dict]:
@@ -1331,7 +1331,7 @@ def reread(slots: list[dict]) -> list[dict]:
 
 
 def peers(path: Path | None = None) -> dict[str, list[str]]:
-    """PEERS, one line per machine: its name, then ssh's options and destination for reaching it (`vy-nebius-1 -i KEY research@IP`)."""
+    """PEERS, one line per machine: its name, then ssh's options and destination for reaching it (`vy-nebius-2 -i KEY research@IP`)."""
     try:
         text = (path or PEERS).read_text()
     except OSError:
