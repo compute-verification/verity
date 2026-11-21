@@ -74,7 +74,6 @@
   "verity/protocols/resource_accounting/memory/pous/attester/README.md": "not yet in the pattern",
   "verity/protocols/resource_accounting/memory/pous/attester/lean/README.md": "not yet in the pattern",
   "verity/protocols/resource_accounting/memory/pous/verifier/README.md": "not yet in the pattern",
-  "verity/protocols/resource_accounting/network/README.md": "no README yet",
   "verity/protocols/resource_accounting/network/attester/README.md": "not yet in the pattern",
   "verity/protocols/resource_accounting/network/prover/README.md": "not yet in the pattern",
   "verity/protocols/resource_accounting/network/verifier/README.md": "not yet in the pattern",
