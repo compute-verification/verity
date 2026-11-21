@@ -3,4 +3,10 @@ each. Its Lean is `lean/` (the Lake package `core_memory_challenger`), whose dif
 `memory_attester`; its timed audit's process is `timed_audit`, a client of a responder's wire whose verdict PoUS's
 Lean check (`pous_check`'s `pous-timed-audit`) is held to. `challenger_party` is its party on the challenger host, over
 the messages and ids PoUS holds (`challenger_session`); `wipe_challenger` is the streamed wipe's, over `wipe_parties`'s
-messages. `continuous` is the continuous audit's memory attester."""
+messages. `continuous` is the continuous audit's memory attester.
+
+Trust in the device and its host is the named assumption `trusted-device` (`TrustedDevice`,
+`security/Definitions/Core/Assumptions.lean`). What its verdicts mean is stated against the Lean's functions:
+`MemoryAttester.Properties.VerdictAccepts` and `VerdictSigned` (`security/Properties/Pous/MemoryAttester.lean`) for the
+timed rounds, `MemoryAttester.Properties.WipeSurvivorBound` (`security/Properties/Pous/Wipe.lean`) and
+`Pous.Component.WipeAccepts` (`security/Properties/Pous/Component.lean`) for the wipe."""
