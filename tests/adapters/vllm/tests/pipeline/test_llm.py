@@ -26,7 +26,7 @@ import pytest
 import verity_vllm
 from tests import fake_vllm
 from verity import hooks as H
-from verity.protocols.resource_accounting.scheme import Lacks
+from verity.protocols.accounting.scheme import Lacks
 from verity_vllm import config, messages
 from verity_vllm import llm as L
 from verity_vllm.config import EnginePin

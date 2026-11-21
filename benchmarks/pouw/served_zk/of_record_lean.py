@@ -7,7 +7,7 @@ from typing import Any
 
 import verity_difftest as D
 
-from verity.protocols.resource_accounting.compute.pouw.prover.kernels.served_zk import of_record as _of_record
+from verity.protocols.accounting.compute.pouw.prover.kernels.served_zk import of_record as _of_record
 
 
 class Record(_of_record.Record):

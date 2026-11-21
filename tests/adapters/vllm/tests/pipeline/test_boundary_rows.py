@@ -24,7 +24,7 @@ import pytest
 from verity.commitments import docket_digest as DD
 from verity.circuits import population as PN
 from verity.circuits import replay_links as RL
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R, verifier as V
+from verity.protocols.proof.spot.verifier.one_stage import partition as P, docket as R, verifier as V
 from verity.circuits import partition_object as PO
 from verity.circuits.codec import definitions, descriptor_id
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind

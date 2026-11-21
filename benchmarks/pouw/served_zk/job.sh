@@ -49,13 +49,13 @@
 #        replay-twin           the same, stream_subset (Lean's sample's Python twin) sampling                    SAME
 set -uo pipefail
 SRC=$(pwd)
-Z=$SRC/verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk   # not J: hidden_zk/job.sh sets J to its own directory
+Z=$SRC/verity/protocols/accounting/compute/pouw/prover/kernels/served_zk   # not J: hidden_zk/job.sh sets J to its own directory
 export HZ_CONFIGS=served HZ_N=1 HZ_MEM_GB=${HZ_MEM_GB:-96} HZ_RUNS=${HZ_RUNS:-1} HZ_WARM=${HZ_WARM:-0}
 # shellcheck source=../hidden_zk/job.sh
 source "$SRC/benchmarks/pouw/hidden_zk/job.sh"
 WORK=${WORK:-/workspace/pouw/mvp-e2e}
 PASSES=$WORK/passes/${SERVED_RUN:?serve.sh run id}
-export PYTHONPATH=$SRC:$SRC/tools/config:$SRC/adapters/vllm:$SRC/benchmarks/pouw:$SRC/verity/protocols/proofs/flock/prover/python:$SRC/tools/difftest/python
+export PYTHONPATH=$SRC:$SRC/tools/config:$SRC/adapters/vllm:$SRC/benchmarks/pouw:$SRC/verity/protocols/proof/flock/prover/python:$SRC/tools/difftest/python
 SC="$SRC/benchmarks/pouw/served_zk/served_commit_run.py"   # served_commit.py with the checks of record's Lean side
 VPY=${SZ_PYTHON:-$WORK/venv312/bin/python}
 
@@ -71,9 +71,9 @@ jq_() { "$PY" -c "import json, sys; d = json.load(open(sys.argv[1])); print(eval
 mkdir -p "$OUT/request"
 # the Lean checks of record (of_record.Record), built here so a failure stops the job before the challenger asks for them
 command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
-{ (cd "$SRC/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check" && lake build pouw-verifier pouw-verifier-difftest) \
-  && (cd "$SRC/verity/protocols/proofs/spot/verifier/lean" && lake build spot-difftest) \
-  && (cd "$SRC/verity/protocols/proofs/spot_flock/verifier/lean" && lake build spot-flock-caller); } > "$OUT/lean-record-build.log" 2>&1 \
+{ (cd "$SRC/verity/protocols/accounting/compute/pouw/verifier/lean/check" && lake build pouw-verifier pouw-verifier-difftest) \
+  && (cd "$SRC/verity/protocols/proof/spot/verifier/lean" && lake build spot-difftest) \
+  && (cd "$SRC/verity/protocols/proof/spot_flock/verifier/lean" && lake build spot-flock-caller); } > "$OUT/lean-record-build.log" 2>&1 \
   || { log "Lean of record build FAILED: $(tail -5 "$OUT/lean-record-build.log")"; exit 3; }
 log "Lean of record: pouw-verifier, pouw-verifier-difftest, spot-difftest, spot-flock-caller built"
 
@@ -131,7 +131,7 @@ if [ "$V1" != True ]; then
     "$OUT/challenger/coins.json" "$PASSES/coins.json" 2>/dev/null)
   expect coins-pass SAME "${v:-ERROR}"
 fi
-WR=$("$PY" -c "import json, sys; from verity.protocols.resource_accounting.compute.pouw.verifier.audit import weights_root; m = json.load(open(sys.argv[1])); \
+WR=$("$PY" -c "import json, sys; from verity.protocols.accounting.compute.pouw.verifier.audit import weights_root; m = json.load(open(sys.argv[1])); \
 print(weights_root({int(w): bytes.fromhex(v['root']) for w, v in m['weights'].items()}).hex())" "$MAN")
 ask coin-salt "$(req op salt after "$WR" out "$OUT/salt-opening.json")"
 expect coin-salt OPENED "$REPLY"

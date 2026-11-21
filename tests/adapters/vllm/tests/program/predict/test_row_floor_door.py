@@ -11,8 +11,8 @@ import pytest
 from verity.circuits import partition_object as PO
 from verity.circuits.codec import descriptor_chunks
 from verity.commitments.periods import interface as IF
-from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
-from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+from verity.protocols.proof.spot.verifier.one_stage import one_circuit as OC
+from verity.protocols.proof.spot.verifier.one_stage import proofs as PF
 
 from tests.program.predict import test_steps as S
 from tests.program.predict.test_window_circuit import CLASS, GRAIN, WHOLE

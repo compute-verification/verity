@@ -7,9 +7,9 @@ from __future__ import annotations
 import hashlib
 import types
 
-from verity.protocols.resource_accounting.memory.poub.prover.p2_stage import bandwidth as BW
-from verity.protocols.resource_accounting.memory.pous.prover.p2.p2_store import store as ST
-from verity.protocols.resource_accounting.memory.pous.verifier import verifier as V
+from verity.protocols.accounting.memory.poub.prover.p2_stage import bandwidth as BW
+from verity.protocols.accounting.memory.pous.prover.p2.p2_store import store as ST
+from verity.protocols.accounting.memory.pous.verifier import verifier as V
 
 SALT, S, N = bytes(range(1, 25)), 5, 16
 ROWS = b"".join(hashlib.sha512(b"row %d" % v).digest() for v in range(N))

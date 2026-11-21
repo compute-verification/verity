@@ -21,5 +21,5 @@ if [ -e "$IN/glm53-b1-node.descriptor.json.gz" ]; then
   a+=(--node "$IN/glm53-b1-node.descriptor.json.gz")
 fi
 uv sync -q --all-packages --extra torch-cpu
-(cd verity/protocols/workload_classification/training_detection/inference_only/verifier/lean && lake build inference-only-verifier) > "$O/build.log" 2>&1 || { tail -40 "$O/build.log" >&2; exit 1; }
+(cd verity/protocols/policy/training_detection/inference_only/verifier/lean && lake build inference-only-verifier) > "$O/build.log" 2>&1 || { tail -40 "$O/build.log" >&2; exit 1; }
 uv run python benchmarks/verifier_cost/inference_only_glm.py measure --out "$O" --scratch "$d" "${a[@]}" "$@"

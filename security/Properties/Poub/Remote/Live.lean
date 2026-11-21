@@ -22,7 +22,7 @@ settled window as a `verify` of its frames, read by the same `Wire.openingsOf`.
   challenger sent (every coin the session holds that is not empty, and every append coin): every result the same,
   and the same session but for its coins. So its outcome and record (`State.outcome`, `State.summary`, which read no
   coin) are `Shared.run g`'s, and a transcript that pads the coins never sent
-  (`verity/protocols/resource_accounting/memory/poub/verifier/session/lean_verifier.py`) replays to the process's
+  (`verity/protocols/accounting/memory/poub/verifier/session/lean_verifier.py`) replays to the process's
   verdict. At `g = 1` that is `Session.run` (`Poub.Shared.run_one`).
 
 It needs `1 ≤ g` and `1 ≤ min_passes` (`Properties.Poub.Coins`: with none, an empty window sampled at its deadline

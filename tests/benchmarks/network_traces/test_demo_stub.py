@@ -14,20 +14,20 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.resource_accounting.network.verifier import id_form as IDF, io_tie as IT
-from verity.protocols.resource_accounting.network.verifier.link_frame import HEADER
+from verity.protocols.accounting.network.verifier import id_form as IDF, io_tie as IT
+from verity.protocols.accounting.network.verifier.link_frame import HEADER
 from verity.release import RUN_ID_BYTES, with_release
 
 HERE = (Path(__file__).resolve().parents[3] / "benchmarks" / "network_traces")
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/compose/verifier/live_challenger"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/run/verifier/live_challenger"))
 sys.path.append(str(Path(__file__).resolve().parents[3]))  # the root, for benchmarks.network_traces
 import auditor as G  # noqa: E402
 import demo_stub as S  # noqa: E402
-from verity.protocols.resource_accounting.network.attester import network_attester_serve as ws  # noqa: E402
-from verity.protocols.resource_accounting.network.verifier import network_attester as W  # noqa: E402
+from verity.protocols.accounting.network.attester import network_attester_serve as ws  # noqa: E402
+from verity.protocols.accounting.network.verifier import network_attester as W  # noqa: E402
 
-from tests.verity.protocols.resource_accounting.network.attester.relay_runs import _run  # noqa: E402
+from tests.verity.protocols.accounting.network.attester.relay_runs import _run  # noqa: E402
 
 P = S.ID_PAYLOAD
 NAME = S.Shape().name
@@ -325,7 +325,7 @@ def test_the_gates_demo_traffic_through_the_network_attester_is_the_demo_stand_i
     given exactly what the network attester sent the server (its release headers on), serves every request and answers
     the bytes the network attester attested, every connection ends within the two execution phases 24 tokens take at D
     = 27, and the check accepts the run."""
-    from verity.protocols.resource_accounting.network.verifier import relay_check as RC
+    from verity.protocols.accounting.network.verifier import relay_check as RC
     from verity.release import release_of
     prompts = S.prompts(4)
     req = {"device": "warden", "requests": None, "tokens": 24, "height": 10, "minutes": 4, "scan": True,

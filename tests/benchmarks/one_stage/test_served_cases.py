@@ -44,15 +44,15 @@ import pytest
 from verity.commitments import docket_digest as DD
 from verity.circuits import population as PN
 from verity.commitments import domains as DM
-from verity.protocols.resource_accounting.compute.pouw.verifier import credit as Cr
-from verity.protocols.resource_accounting.compute.pouw.verifier import weights as PW
-from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import draw as DR
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P
-from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
-from verity.protocols.proofs.spot.prover import docket as DK
+from verity.protocols.accounting.compute.pouw.verifier import credit as Cr
+from verity.protocols.accounting.compute.pouw.verifier import weights as PW
+from verity.protocols.proof.spot.verifier import service as S
+from verity.protocols.proof.spot.verifier.one_stage import draw as DR
+from verity.protocols.proof.spot.verifier.one_stage import partition as P
+from verity.protocols.proof.spot.verifier.one_stage import proofs as PF
+from verity.protocols.proof.spot.verifier.one_stage import registered as G
+from verity.protocols.proof.spot.verifier.one_stage import docket as R
+from verity.protocols.proof.spot.prover import docket as DK
 from verity.circuits import codec, partition_object as PO
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program

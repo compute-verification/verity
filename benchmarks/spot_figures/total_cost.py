@@ -96,9 +96,9 @@ from textwrap import fill
 import cards as spot_cards
 import figure1 as f1
 import second_stage
-from verity.protocols.proofs.spot.prover import plancheck
-from verity.protocols.proofs.spot.verifier.challenger import challenger
-from verity.protocols.proofs.spot.prover.optimize import (Cell, leak_count, two_stage_counts, two_stage_design, two_stage_exfil,
+from verity.protocols.proof.spot.prover import plancheck
+from verity.protocols.proof.spot.verifier.challenger import challenger
+from verity.protocols.proof.spot.prover.optimize import (Cell, leak_count, two_stage_counts, two_stage_design, two_stage_exfil,
                                             two_stage_price, two_stage_statements)
 
 SCHEMA = "spot-figure1/v2"

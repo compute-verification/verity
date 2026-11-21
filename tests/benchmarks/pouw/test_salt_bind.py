@@ -21,25 +21,25 @@ from pathlib import Path
 import numpy as np
 import pytest
 from verity.commitments.crypto import lms
-from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
-from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
-from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
-from verity.protocols.resource_accounting.compute.pouw.verifier.audit import Epoch, Workload, weights_root
-from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Context, Matmul, Shape
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_device import DEVICES
-from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
+from verity.protocols.accounting.compute.pouw.verifier import core_check as CC
+from verity.protocols.accounting.compute.pouw.verifier import salt as PS
+from verity.protocols.accounting.compute.pouw.verifier import window as Wd
+from verity.protocols.accounting.compute.pouw.verifier.audit import Epoch, Workload, weights_root
+from verity.protocols.accounting.compute.pouw.verifier.protocol import Context, Matmul, Shape
+from verity.protocols.accounting.compute.pouw.prover.schemes import pearl_c as C
+from verity.protocols.accounting.compute.pouw.prover.schemes.pearl_c_device import DEVICES
+from verity.protocols.proof.spot.verifier.challenger import challenger as Ch
 
 import served_commit as SC
 import of_record_lean as ORL
 
-_CASES = Path(__file__).resolve().parents[2] / "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check"
+_CASES = Path(__file__).resolve().parents[2] / "verity/protocols/accounting/compute/pouw/verifier/lean/check"
 for _name in ("pouw_rounds_cases", "pouw_pass_cases", "pouw_check_cases", "pouw_opening_cases"):
     _spec = importlib.util.spec_from_file_location(_name, _CASES / f"{_name}.py")
     sys.modules[_name] = importlib.util.module_from_spec(_spec)
     _spec.loader.exec_module(sys.modules[_name])
 openings, canon = sys.modules["pouw_opening_cases"], sys.modules["pouw_check_cases"]._canon
-_spec = importlib.util.spec_from_file_location("certified_salt", Path(__file__).resolve().parents[2] / "verity/protocols/resource_accounting/compute/pouw/verifier/certified_salt.py")
+_spec = importlib.util.spec_from_file_location("certified_salt", Path(__file__).resolve().parents[2] / "verity/protocols/accounting/compute/pouw/verifier/certified_salt.py")
 CS = sys.modules["certified_salt"] = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(CS)
 
@@ -134,7 +134,7 @@ def _pub(priv, advice, t: int) -> bytes:
     from verity.commitments.indexed import RangeIndexedDomain
     from verity.commitments.merkle import CommitmentDomain
     from verity.commitments.rowleaf import row_leaf
-    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import leaves as L
+    from verity.protocols.accounting.compute.pouw.prover.circuit import leaves as L
     e, i, j = Wd.tile_at(SC.entries_of(advice), t)
     schemas = {"a0": L.ROW_SCHEMA["fp8-pi", SC.SIDES["a"]], "b0": L.ROW_SCHEMA["fp8-pi", SC.SIDES["b"]],
                "o0": L.ROW_SCHEMA["tile", SC.SIDES["a"]]}

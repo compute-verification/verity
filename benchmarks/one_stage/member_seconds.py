@@ -65,7 +65,7 @@ from decimal import Decimal
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from verity.protocols.proofs.spot.verifier.one_stage import lean_child as LC
+from verity.protocols.proof.spot.verifier.one_stage import lean_child as LC
 
 #: the audit's three programs by role, which names each one's wrapper and its stamps, whatever its binary is called:
 #: the prover, Lean's verifier and the ZK server's Lean loop

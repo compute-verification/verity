@@ -43,12 +43,12 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-from verity.protocols.resource_accounting.network.verifier import io_tie as IT
-from verity.protocols.resource_accounting.network.verifier import service as SVC
-from verity.protocols.resource_accounting.network.verifier import network_attester as W
-from verity.protocols.resource_accounting.network.verifier.id_form import id_request
-from verity.protocols.resource_accounting.network.verifier.certificate import Direction
-from verity.protocols.resource_accounting.network.verifier import record_files as RF, relay_check as RC
+from verity.protocols.accounting.network.verifier import io_tie as IT
+from verity.protocols.accounting.network.verifier import service as SVC
+from verity.protocols.accounting.network.verifier import network_attester as W
+from verity.protocols.accounting.network.verifier.id_form import id_request
+from verity.protocols.accounting.network.verifier.certificate import Direction
+from verity.protocols.accounting.network.verifier import record_files as RF, relay_check as RC
 from verity.commitments.crypto import lms
 
 HERE = Path(__file__).resolve().parent

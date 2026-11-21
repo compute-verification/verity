@@ -1673,8 +1673,8 @@ def test_from_a_records_directory_reads_it_with_nothing_of_ours(store, capsys, t
 def test_the_verifiers_node_is_the_one_card_of_the_tree_sheets():
     """`--local`'s share is of the card it ran on and its host: the verifier's node is one card of the node sheet,
     read from the tree's data sheets, not the eight-card node."""
-    from verity.protocols.resource_accounting.memory.poub.verifier import ledger, timing
-    figures = timing.Figures.of_json(json.loads((HERE.parents[2] / "tests/verity/protocols/resource_accounting/memory/poub/figures.json").read_text()))
+    from verity.protocols.accounting.memory.poub.verifier import ledger, timing
+    figures = timing.Figures.of_json(json.loads((HERE.parents[2] / "tests/verity/protocols/accounting/memory/poub/figures.json").read_text()))
     eight = ledger.Node.stated(figures)
     rtx, rtx_hbm = M.one_card("rtx-pro-6000-server-x8")
     assert rtx["spec_bytes_per_s"] == pytest.approx(eight.spec_bytes_per_s - 7 * figures.gpu_spec_bytes_per_s)

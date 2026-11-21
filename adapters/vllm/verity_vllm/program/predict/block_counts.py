@@ -10,7 +10,7 @@ a window circuit, and a window is m activations of it. A block class is that Def
 SHA-512 (`partition_v2.id_digest`).
 
 **Gates** are counted as `InferenceOnlyCheck.Count` counts a block Definition's (``boolGates``,
-`verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyCheck/Count.lean`): once per specialized Definition, callees first, a
+`verity/protocols/policy/training_detection/inference_only/verifier/lean/InferenceOnlyCheck/Count.lean`): once per specialized Definition, callees first, a
 primitive's from the gate table and a composite's the sum over its nodes of members times the callee's (`gates`). The gate
 table is each word primitive's body in the session Program's own Boolean map, counted (`verity.circuits.count.table`:
 an n-input And or Xor n - 1 two-input gates, a Not 1, a constant bit or an input 0), and it is published with the judgment.

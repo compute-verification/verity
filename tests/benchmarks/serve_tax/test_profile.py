@@ -13,7 +13,7 @@ from types import MappingProxyType
 
 import pytest
 from verity import ports
-from verity.protocols.resource_accounting.compute.pouw import scheme as PS
+from verity.protocols.accounting.compute.pouw import scheme as PS
 
 import serve_tax as S
 
@@ -109,7 +109,7 @@ def test_sampled_proofs_at_two_levels_is_the_two_stage_arm_once_the_component_de
     assert S.ARMS["two-stage"].feature == S.Feature("sampled-proofs", (("levels", 2),))
     with pytest.raises(SystemExit, match=r"^--feature sampled-proofs: unknown-key: .*\['levels'\]$"):
         FEATURE(["sampled-proofs", "levels=2"], "compiled")
-    from verity.protocols.proofs.spot.verifier import parties as SP
+    from verity.protocols.proof.spot.verifier import parties as SP
 
     table = dict(S.components())
     table["sampled-proofs"] = replace(table["sampled-proofs"], params=lambda p: {
