@@ -205,8 +205,11 @@ PROOF_DEADLINE_S = 86400.0
 
 def interior_values(window: CS.Binding) -> tuple[tuple[str, str], ...]:
     """The interior values of a replay side that commits the check template's units as one interior window: each of
-    the window's trees (`Binding.trees`) and its schema, in the window's order."""
-    return tuple((t, s) for t, (s, _n) in window.trees.items())
+    the window's trees (`Binding.trees`) and its schema, in the window's order, then each run input node's tree
+    (`interior_rows.run_inputs`) in its reader's schema."""
+    by = {m.template: m for m in window.members}
+    return tuple((t, s) for t, (s, _n) in window.trees.items()) + tuple(
+        dict.fromkeys((r.param, by[r.reader].schema(r.port)) for r in IR.run_inputs(window)))
 
 
 @dataclass(frozen=True)
