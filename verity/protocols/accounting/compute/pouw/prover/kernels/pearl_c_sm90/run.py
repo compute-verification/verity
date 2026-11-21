@@ -148,7 +148,7 @@ CUDA = {
 }
 
 
-class Dev:
+class Dev(D.DevBase):
     def __init__(self, cubin: bytes):
         self.cu = bind(C.CDLL(os.environ.get("PEARLC_LIBCUDA", "libcuda.so.1")), CUDA)
         self.ck("cuInit", 0)
@@ -205,50 +205,10 @@ class Dev:
             self.cu.cuGetErrorString(r, C.byref(s))
             raise RuntimeError(f"{f} returned CUresult {r} ({s.value.decode() if s.value else 'unknown'})")
 
-    def get(self, f: str, *a) -> int:
-        v = i32()
-        self.ck(f, C.byref(v), *a)
-        return v.value
-
-    def fn(self, name: str) -> vp:
-        if name not in self.fns:
-            f = vp()
-            self.ck("cuModuleGetFunction", C.byref(f), self.mod, name.encode())
-            self.fns[name] = f
-        return self.fns[name]
-
     def has(self, name: str) -> bool:
         """Whether the cubin has the kernel `name` (an older cubin may not)."""
         f = vp()
         return name in self.fns or self.cu.cuModuleGetFunction(C.byref(f), self.mod, name.encode()) == 0
-
-    def alloc(self, n: int) -> int:
-        p = u64()
-        self.ck("cuMemAlloc_v2", C.byref(p), max(n, 16))
-        self.ck("cuMemsetD8_v2", p, 0, max(n, 16))
-        self.live.add(p.value)
-        return p.value
-
-    def free(self, p: int) -> None:
-        if p in self.live:
-            self.live.discard(p)
-            self.ck("cuMemFree_v2", u64(p))
-
-    def put(self, data: bytes) -> int:
-        p = self.alloc(len(data))
-        self.ck("cuMemcpyHtoD_v2", u64(p), C.c_char_p(data), len(data))
-        return p
-
-    def read(self, p: int, n: int) -> bytes:
-        buf = C.create_string_buffer(n)
-        self.ck("cuMemcpyDtoH_v2", buf, u64(p), n)
-        return buf.raw
-
-    def copy(self, dst: int, src: int, n: int) -> None:
-        self.ck("cuMemcpyDtoD_v2", u64(dst), u64(src), n)
-
-    def copy_async(self, dst: int, src: int, n: int, stream=None) -> None:
-        self.ck("cuMemcpyDtoDAsync_v2", u64(dst), u64(src), n, self.stream if stream is None else stream)
 
     def launch(self, name: str, grid, block: int, smem: int = 0, p=(), i=(), stream=None, pdl: bool = True) -> None:
         """`name` on `stream` (else `stream`'s attribute); one of `pdl_names` programmatically unless `pdl` is False.  A
@@ -269,9 +229,6 @@ class Dev:
         else:
             self.ck("cuLaunchKernel", self.fn(name), g[0], g[1], g[2], block, 1, 1, smem, s, params, None)
 
-    def sync(self) -> None:
-        self.ck("cuCtxSynchronize")
-
     def tmap(self, ptr: int, depth: int, rows: int, box_rows: int = BM) -> bytes:
         """A CUtensorMap over a row-major (rows x depth) byte matrix as pearl_c_sm90.cu's GEMMs load it: UINT8, rank 2,
         boxes of box_rows x 128 bytes, SWIZZLE_128B, L2 promotion 128B, no fill."""
@@ -284,29 +241,6 @@ class Dev:
         self.ck("cuTensorMapEncodeTiled", vp(at), TMAP_UINT8, 2, vp(ptr), dims, strides, box, estr, 0, TMAP_SWIZZLE_128B,
                 TMAP_L2_128B, 0)
         return C.string_at(at, TMAP_BYTES)
-
-    def timed(self, body, reps: int) -> list[float]:
-        body()
-        self.sync()
-        out = []
-        for _ in range(reps):
-            a, b, ms = vp(), vp(), C.c_float()
-            self.ck("cuEventCreate", C.byref(a), 0)
-            self.ck("cuEventCreate", C.byref(b), 0)
-            self.ck("cuEventRecord", a, None)
-            body()
-            self.ck("cuEventRecord", b, None)
-            self.ck("cuEventSynchronize", b)
-            self.ck("cuEventElapsedTime", C.byref(ms), a, b)
-            self.cu.cuEventDestroy_v2(a)
-            self.cu.cuEventDestroy_v2(b)
-            out.append(ms.value)
-        return out
-
-    def free_mem(self) -> tuple[int, int]:
-        f, t = sz(), sz()
-        self.ck("cuMemGetInfo_v2", C.byref(f), C.byref(t))
-        return f.value, t.value
 
 
 #: s512_rows' most segments a row (hash_h3.cuh's RS_MAX_SEGS), 1 KiB each, and hash_fast.cuh's header tables'; a wider row
