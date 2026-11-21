@@ -26,7 +26,7 @@ namespace Properties.Poub
 def zeroPath (d : Flock.FV3.Sha512.Domain) : Array ByteArray := Array.replicate (Flock.log2ceil d.count) (zeros 64)
 
 /-- The root `value` at `position` climbs to along `zeroPath`. -/
-def zeroRoot (d : Flock.FV3.Sha512.Domain) (position : ℕ) (value : ByteArray) : ByteArray :=
+def zeroRoot (d : Flock.FV3.Sha512.Domain) (position : Nat) (value : ByteArray) : ByteArray :=
   d.climb position SCHEMA value (zeroPath d)
 
 /-- The zero block's decoding under `k`. -/
