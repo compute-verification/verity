@@ -146,9 +146,9 @@ def test_another_blocks_program_differs(pieces):
 @pytest.mark.parametrize("units", list(BLOCKS.values()), ids=list(BLOCKS))
 def test_the_block_lowers(pieces, units):
     """`Flock.Lower.lower` takes the block's Program with its input nodes as parameters (`Spot.Restrict.ported`), on the
-    chain that reads no registered value. `ported`, the reference the BlockEval property reads through `portedOf`, does
-    not yet carry a parameter's registration binding, so that property covers no block that reads a registered value;
-    the door's own lowering (`restrictOn`, then `lowerBlock`) does not go through `ported`."""
+    chain that reads no registered value. `ported`, the reference the `blockAgrees` guards (through `portedOf`) and this
+    difference test read, does not yet carry a parameter's registration binding, so neither covers a block that reads a
+    registered value; the door's own lowering (`restrictOn`, then `lowerBlock`) does not go through `ported`."""
     text, _ = chain(registered=False)
     out = json.loads(pieces.call("restrict", {"descriptor": text, "units": list(units),
                                               "python": python(units, registered=False)})[1])
