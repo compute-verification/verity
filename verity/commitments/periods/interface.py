@@ -3351,6 +3351,10 @@ class Window:
         if missing := [v for v in program_values(self.circuit.registered) if v[0] not in held]:
             raise ValueError(f"the circuit's values {[v for v, _n, _w in missing]} have no committed value: give each in "
                              "the period's registered")
+        values = SU.registered_values(self.window.program, [v for v, _n, _w in program_values(self.circuit.registered)])
+        if unheld := [v for v in values if v not in held]:
+            raise ValueError(f"C's supplied anchors name {unheld}, whose tables the period holds no committed value of: "
+                             "give each in the period's registered")
         d = Path(out_dir)
         d.mkdir(parents=True, exist_ok=True)
         body = circuit_bytes(self.circuit_record())
@@ -3361,7 +3365,7 @@ class Window:
                  **({"registered_roots": roots} if roots else {})}
         return CS.write(c, d, bound, self.labels(), kind=kind, registered=self._entries, registrar=registrar,
                         index_salt=index_salt, previous=previous,
-                        entries=[held[v].entry() for v, _n, _w in program_values(self.circuit.registered)],
+                        entries=[held[v].entry() for v in values],
                         outputs=[{"port": v.value, "root": v.root.hex(), "leaves": v.leaves,
                                   "domain": v.domain.domain_id.hex()} for v in self._inputs().values()])
 

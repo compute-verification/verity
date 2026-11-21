@@ -88,6 +88,26 @@ def test_a_row_two_fill_is_refused():
         wired_population_program([(A, 2), (B, 2)], rec)
 
 
+def test_a_programs_supplied_marks_are_its_descriptors_inputs_and_round_trip():
+    mark = {"supplied": "const.u16/v1", "args": {"value": 1}, "layout": "le", "bits": 16}
+    rec = _record()
+    rec["registered"]["supplied"] = {"w": mark}
+    prog = wired_population_program([(A, 2), (B, 2)], rec)[0]
+    desc = json.loads(json.dumps(encode_program(prog)))
+    assert desc["inputs"] == [["w", 1, mark], ["0.x", 1], ["0.k", 1]]
+    assert program_digest(prog) == program_digest(desc)
+    reg = DefinitionTable()
+    reg.add(Add)
+    reg.add(Mul)
+    back = decode_program(desc, reg)
+    assert back.supplied == {"w": mark} and encode_program(back) == desc and program_digest(back) == program_digest(prog)
+    plain = wired_population_program([(A, 2), (B, 2)], _record())[0]
+    assert "inputs" not in encode_program(plain)
+    anchored = wired_population_program([(T, 2)], _anchored())[0]
+    assert [e[:2] for e in encode_program(anchored)["inputs"]] == [["e@4/table/domain", 1], ["e@4/table/root", 1],
+                                                                   ["0.x", 1], ["0.k", 1]]
+
+
 def test_a_program_with_no_width_changing_wire_keeps_its_digest():
     assert program_digest(wired_population_program([(A, 2), (B, 2)], _record())[0]) == (
         "576af2e56b9dfe625143d2f38bddf49c1e12b0ed77462fe94cea34322432042f97a527f91f1b21f88fd9f0d6f0faacbfea92b570bab2079dbcd2db7a7a0e7138")
