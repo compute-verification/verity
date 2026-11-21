@@ -446,6 +446,29 @@ def weightsOf (v : Verifier) : Array String × Array (Registered.Entry × String
     | .error code => (#[code], #[])
     | .ok (codes, pins, said) => weightsHeld v codes pins said
 
+/-- The members' check's refusal of a program marking a registered input the verifier does not expect, under parameters
+whose weights' registration of record is absent or one R8 refuses (`readPins`). -/
+def WEIGHTS_UNREGISTERED_WHY : String :=
+  "registered: the program marks registered inputs the verifier does not expect, and the parameters carry no weights' " ++
+    "registration of record R8 accepts: a marked input is read only at a pin R8 accepted"
+
+/-- What the members' check holds each registered read to, on the docket's own derivation (`weightsOf v`, of the one
+parameters' verifier): the marked inputs the verifier does not expect, the template query's ranges with each
+`(parameter, value)` whose argument reads one (`Partition.rangeReads`), and R8's accepted pins. None where there is
+such an input and the verifier holds no weights' registration of record, or R8 refuses it; all empty where every marked
+input is one the verifier expects. -/
+def readPins (v : Verifier) :
+    Option (Array String × Array (Flock.TemplateQuery.TRange × String × String) × Array (Registered.Entry × String)) :=
+  let loose := (v.params.filter (marked v)).filter fun p => !v.registered.any (·.1 == p.name)
+  if loose.isEmpty then some (#[], #[], #[]) else
+  let (codes, pins) := weightsOf v
+  if v.weightsOfRecord.isNone || !codes.isEmpty then none else
+  match Partition.templateRanges? v.program v.query with
+  | none => none
+  | some rs =>
+    let gated := loose.flatMap fun p => (p.gates.map fun (first, count) => #[(p.name, first, count)]).getD #[]
+    some (loose.map (·.name), Partition.rangeReads v.program.prog rs gated, pins)
+
 /-- R8's codes on the program's registered inputs (`weightsOf`). -/
 def weightsCodes (v : Verifier) : Array String := (weightsOf v).1
 

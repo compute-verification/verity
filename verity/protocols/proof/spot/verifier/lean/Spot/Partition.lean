@@ -547,6 +547,24 @@ def inputReads (P : Flock.Program.Prog) (rs : Array TRange) (held : Array (Strin
         | some v => if out.contains (r.template, p, v) then out else out.push (r.template, p, v)
         | none => out
 
+/-- `inputReads` with each read's range: each range of `rs` with each `(parameter, value)` whose argument reads an input
+node inside the gates `(value, first, count)` of `held`, once a range (`partition.range_reads`). -/
+def rangeReads (P : Flock.Program.Prog) (rs : Array TRange) (held : Array (String × Nat × Nat)) :
+    Array (TRange × String × String) :=
+  let nodes := Flock.Registered.rootNodes P
+  let valueOf := fun (i : Nat) =>
+    if (nodes[i]? >>= fun x => P.defs[x.fn]?).any fun f => f.prim && (Flock.Program.inputId? f.id).isSome then
+      (held.find? fun (_, first, count) => within P first count i).map (·.1)
+    else none
+  rs.foldl (init := #[]) fun out r =>
+    let x := nodes.getD r.node default
+    let names := ((P.defs[x.fn]?).map fun f => f.params.map (·.1)).getD #[]
+    (names.zip x.args).foldl (init := out) fun out (p, a) =>
+      let vs := (runs a.seq).foldl (init := (#[] : Array String)) fun vs (i, _) => match valueOf i with
+        | some v => if vs.contains v then vs else vs.push v
+        | none => vs
+      vs.foldl (init := out) fun out v => out.push (r, p, v)
+
 /-- Each range of `rs` with each run Input node inside the gates `held` its instance node reads, in the order its
 arguments' runs name them (`partition.held_reads`): its arguments' runs, never its members or its gates. -/
 def heldReads (P : Flock.Program.Prog) (rs : Array TRange) (held : Array (Nat × Nat)) : Array (TRange × Nat) :=

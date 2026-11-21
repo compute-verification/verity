@@ -60,7 +60,7 @@ import json
 import math
 import os
 import tempfile
-from collections.abc import Callable, Collection, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -520,28 +520,57 @@ def pinned_read_why(member: str, port: str, value: str, what: str) -> str:
             "count and domain")
 
 
-def accepted_pins(params: Mapping[str, Any], program: Program) -> dict[str, dict[str, Any]]:
-    """`OneStageZk.pinsOf`: the pins the docket's R8 accepts on the parameters' weights' registration of record
-    (`docket.weights_held`), none where they hand none."""
+def unpinned_read_why(member: str, port: str, value: str) -> str:
+    """`OneStageZk.UNPINNED_READ_WHY`: member ``member``'s registered port ``port`` reads ``value``, which the program
+    marks, the verifier does not expect and R8 accepted no pin of."""
+    return (f"registered: member {member}'s port {port} reads the registered input {value}, which the program marks and "
+            "R8 accepted no pin of: a marked input is read only at a pin R8 accepted")
+
+
+def read_unnamed_why(member: str, param: str, value: str) -> str:
+    """`OneStageZk.READ_UNNAMED_WHY`: member ``member``'s units meet a range the program shows reading the marked input
+    ``value`` at parameter ``param``, and its registered file has no port ``param`` naming ``value``."""
+    return (f"registered: member {member}'s units read the registered input {value} at parameter {param}, and its "
+            f"registered file has no port {param} naming {value}: a marked input is read only at a pin R8 accepted")
+
+
+def read_pins(params: Mapping[str, Any], program: Program
+              ) -> tuple[list[str], list[tuple[range, str, str]], dict[str, dict[str, Any]]]:
+    """`Docket.readPins` on the parameters' own verifier (`docket.read_pins`): refused by name (`docket.WEIGHTS_UNREGISTERED_WHY`)
+    where the program marks an input the verifier does not expect and the parameters carry no weights' registration of
+    record R8 accepts."""
     w = params.get("weights_of_record")
-    if w is None:
-        return {}
-    return DK.weights_held(program, params["query"], params.get("registered") or (),
-                           (bytes.fromhex(w["document"]), w["digest"]))[1]
+    got = DK.read_pins(program, params["query"], params.get("registered") or {},
+                       None if w is None else (bytes.fromhex(w["document"]), w["digest"]))
+    if got is None:
+        raise _Refused(DK.WEIGHTS_UNREGISTERED_WHY)
+    return got
 
 
-def pins_held(ms: Mapping[str, Any], pins: Mapping[str, Mapping[str, Any]]) -> None:
-    """`OneStageZk.pinsHeld`: every member's registered port reading a value the docket accepted a pin of
-    (`accepted_pins`) names the pin's root, leaf count and domain, each member's ports in name order; refused by name
-    (`pinned_read_why`), the first port and field that differ."""
+def pins_held(ms: Mapping[str, Any], loose: Iterable[str], reads: Iterable[tuple[range, str, str]],
+              pins: Mapping[str, Mapping[str, Any]]) -> None:
+    """`OneStageZk.pinsHeld`: each member whose units meet a range of ``reads`` has a registered port named for its
+    parameter naming its value (`read_unnamed_why`); every member's registered port whose value is one of ``loose`` names
+    the pin R8 accepted of it, its root, leaf count and domain, each member's ports in name order; refused by name, a
+    value with no pin (`unpinned_read_why`) or the first field that differs (`pinned_read_why`)."""
+    loose, reads = set(loose), list(reads)
+    if not loose:
+        return
     for name, m in ms.items():
         ports = (m["registered"] or {}).get("ports") or {}
+        for units, p, v in reads:
+            if (any(lo < units.stop and units.start < hi for lo, hi in m["units"])
+                    and not (isinstance(ports.get(p), dict) and ports[p].get("value") == v)):
+                raise _Refused(read_unnamed_why(name, p, v))
         for port in sorted(ports):
             e = ports[port]
-            pin = pins.get(e.get("value")) if isinstance(e, dict) else None
+            value = e.get("value") if isinstance(e, dict) else None
+            pin = pins.get(value)
+            if pin is None and value in loose:
+                raise _Refused(unpinned_read_why(name, port, value))
             for k, what in (("root", "root"), ("leaves", "leaf count"), ("domain", "domain")) if pin else ():
                 if e.get(k) != pin[k]:
-                    raise _Refused(pinned_read_why(name, port, e["value"], what))
+                    raise _Refused(pinned_read_why(name, port, value, what))
 
 
 def _template_of(name: str) -> tuple[str, str] | None:
@@ -1225,7 +1254,7 @@ def _members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence:
         _held_read(ms, params, program)
         _class(ms)
         _tree_ports_held(ms, record)
-        pins_held(ms, accepted_pins(params, program))
+        pins_held(ms, *read_pins(params, program))
         roots, ft = _members_roots(ms, record)
         roots = _wired(program, params["query"], params["program"], ms, record, roots, ft)
         _ports_once(ms, roots)
@@ -1273,4 +1302,4 @@ __all__ = ["EXITS", "Form", "MEMBERS_LAID", "MEMBER_STRATA", "MEMBER_UNITS", "NO
            "TABLE_PORT", "UNREAD", "blobs_of", "case_check", "check", "files_why", "flock_form", "flock_verdict",
            "field_trees_why", "members_run", "population_why", "POPULATION_WHY", "registered_at", "registered_reads",
            "return_fields", "run_reason", "shared_unread", "unregistered_why", "unwired_why", "own_root_why",
-           "pinned_read_why", "pins_held", "port_twice_why", "run_own_root_why", "slice_no_port_why", "wired_tree_why"]
+           "pinned_read_why", "pins_held", "port_twice_why", "read_pins", "read_unnamed_why", "unpinned_read_why", "run_own_root_why", "slice_no_port_why", "wired_tree_why"]

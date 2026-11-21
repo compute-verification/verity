@@ -234,14 +234,25 @@ def input_reads(program: Program, query: Mapping[str, Any], held: Iterable[range
     """Each template parameter whose argument reads an Input node inside one of `held`, as ``(template, parameter, the
     range of `held` it reads)``, a root node at a time, never its members or its gates. `QueryRefused` for a query other
     than a template query."""
+    return [(t, p, h) for t, _units, p, h in _input_reads(program, query, held)]
+
+
+def range_reads(program: Program, query: Mapping[str, Any], held: Iterable[range]) -> list[tuple[range, str, range]]:
+    """`input_reads` with each read's template range: ``(its units, parameter, the range of `held` it reads)``. The
+    Lean's `Partition.rangeReads` is this."""
+    return [(units, p, h) for _t, units, p, h in _input_reads(program, query, held)]
+
+
+def _input_reads(program: Program, query: Mapping[str, Any], held: Iterable[range]) -> list[tuple[str, range, str, range]]:
     part = _template(program, query, "an Input's readers")
     nodes, held = program.root.body.nodes, list(held)
     inside = {k: h for k, node in enumerate(nodes) if is_input(node.fn) for h in held if within(program, h, k)}
-    out: list[tuple[str, str, range]] = []
-    for k, t, _lo, _n in part.ranges:
+    out: list[tuple[str, range, str, range]] = []
+    for k, t, lo, n in part.ranges:
         params = [p for p, _ in nodes[k].fn.signature()[0]]
         for p, a in zip(params, nodes[k].args):
-            out.extend((t, p, inside[i]) for i in dict.fromkeys(i for i, *_ in _runs(a.refs) if i in inside))
+            out.extend((t, range(lo, lo + n), p, inside[i])
+                       for i in dict.fromkeys(i for i, *_ in _runs(a.refs) if i in inside))
     return out
 
 
@@ -271,5 +282,5 @@ def _merged(rs: Sequence[tuple[int, int]]) -> list[tuple[int, int]]:
 
 
 __all__ = ["template_id", "FORMAT", "QueryRefused", "digest", "evaluate", "fanout", "in_order", "is_template_query", "partition",
-           "program_digest", "program_sha512", "ranges", "run_inputs", "shared_inputs", "strata", "template_instance_query",
+           "program_digest", "program_sha512", "range_reads", "ranges", "run_inputs", "shared_inputs", "strata", "template_instance_query",
            "template_instances_query", "unit_gates", "units", "within", "QUERY_X"]

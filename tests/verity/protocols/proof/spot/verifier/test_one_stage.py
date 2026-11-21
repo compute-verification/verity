@@ -916,6 +916,38 @@ def test_r8_excuses_a_registered_weight_only_where_it_is_marked_pinned_and_decla
         assert _weighed(unmarked, q).codes == ("R8-shared-input",)
 
 
+def test_the_members_check_holds_a_marked_programs_reads_only_to_pins_r8_accepted():
+    """`members.read_pins` (`Docket.readPins`, its guards in `Spot/Test/Docket.lean`) on the one parameters' verifier: a
+    program marking an input the verifier does not expect, with no weights' registration of record or one R8 refuses, is
+    refused by name (`docket.WEIGHTS_UNREGISTERED_WHY`); with one R8 accepts, the members' check holds each member whose
+    units meet a range reading it to a port naming it at the pin (`members.pins_held`); a program marking nothing, or
+    only inputs the verifier expects, holds nothing."""
+    from verity.protocols.proof.spot.verifier.one_stage import members as M
+    q = P.template_instance_query(PAIR.id)
+
+    def params(weights=None, registered=None):
+        return {"query": q, "registered": registered,
+                **({} if weights is None else {"weights_of_record": {"document": weights[0].hex(), "digest": weights[1]}})}
+
+    for marked, unmarked in zip(_two_programs(registered=("t",)), _two_programs()):
+        pin, reads = _pin(marked), R.declared_reads(marked, q, ["t"])
+        for p in (params(), params(_weights([pin]))):
+            with pytest.raises(M._Refused) as e:
+                M.read_pins(p, marked)
+            assert str(e.value) == R.WEIGHTS_UNREGISTERED_WHY
+        loose, at, pins = M.read_pins(params(_weights([pin], reads)), marked)
+        assert loose == ["t"] and sorted({(PAIR.id, p, v) for _, p, v in at}) == [tuple(r) for r in reads]
+        assert set(pins) == {"t"} and pins["t"]["root"] == pin["root"]
+        units, p, _ = at[0]
+        port = {"value": "t", "root": pin["root"], "leaves": pin["leaves"], "domain": pin["domain"]}
+        M.pins_held({"a": {"units": [[units.start, units.start + 1]], "registered": {"ports": {p: port}}}}, loose, at, pins)
+        with pytest.raises(M._Refused) as e:
+            M.pins_held({"a": {"units": [[units.start, units.start + 1]], "registered": None}}, loose, at, pins)
+        assert str(e.value) == M.read_unnamed_why("a", p, "t")
+        assert M.read_pins(params(), unmarked) == ([], [], {})
+        assert M.read_pins(params(registered={"t": 2}), marked) == ([], [], {})
+
+
 def test_r8_refuses_a_registered_input_under_a_query_it_cannot_read_readers_under():
     """A program marking a registered input, or a verifier holding a weights' registration of record, under a query that
     is no template query that applies is refused by name (`R8-weights-query`), never passed unread."""

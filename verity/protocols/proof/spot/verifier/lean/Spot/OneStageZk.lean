@@ -506,18 +506,38 @@ def PINNED_READ_WHY (member port value what : String) : String :=
   s!"registered: member {member}'s port {port} reads the registered input {value} at another {what} than its pin of " ++
     "record: a registered input the weights' registration of record pins is read at the pin's root, leaf count and domain"
 
-/-- **A member reads a pinned registered input at its pin**: every port of a member's registered file whose value is
-one the docket's R8 accepted a pin of (`pins`, `Docket.weightsOf`'s, from the same parameters' weights' registration of
-record) names the pin's root, leaf count and domain, each member's ports in name order; refused by name otherwise
-(`PINNED_READ_WHY`), the first port and field that differ. One pass over the members' registered files. -/
-def pinsHeld (pins : Array (Spot.Registered.Entry × String)) (ms : Array Member) : V Unit :=
-  if pins.isEmpty then pure () else
-  ms.forM fun m => match m.own.registered with
-    | none => pure ()
-    | some j => do
-      let own ← (Flock.Registered.ofJson j).mapError (s!"member {m.name}: {·}")
-      own.forM fun q => match pins.find? (·.1.value == q.value) with
-        | none => pure ()
+/-- The refusal of member `member`'s registered port `port` reading the registered input `value`, which the program marks,
+the verifier does not expect and R8 accepted no pin of (`pinsHeld`). -/
+def UNPINNED_READ_WHY (member port value : String) : String :=
+  s!"registered: member {member}'s port {port} reads the registered input {value}, which the program marks and R8 " ++
+    "accepted no pin of: a marked input is read only at a pin R8 accepted"
+
+/-- The refusal of member `member`, whose units meet a range the program shows reading the marked input `value` at its
+template parameter `param`, with no registered port `param` naming `value` (`pinsHeld`). -/
+def READ_UNNAMED_WHY (member param value : String) : String :=
+  s!"registered: member {member}'s units read the registered input {value} at parameter {param}, and its registered " ++
+    s!"file has no port {param} naming {value}: a marked input is read only at a pin R8 accepted"
+
+/-- **A member reads a marked registered input only at its pin**: each member whose units meet a range of `reads` (the
+program's reads of the marked inputs the verifier does not expect, `Docket.readPins`, from the description and never a
+member's file) has a registered port named for that range's parameter that names its value, refused by name otherwise
+(`READ_UNNAMED_WHY`: no registered file, no such port, the port under another value); and every port of a member's
+registered file whose value is one of `loose` names the pin the docket's R8 accepted of it (`pins`), its root, leaf
+count and domain, each member's ports in name order; refused by name otherwise, a value with no pin
+(`UNPINNED_READ_WHY`) or the first field that differs (`PINNED_READ_WHY`). One pass over the members, each against
+the ranges. -/
+def pinsHeld (loose : Array String) (reads : Array (Flock.TemplateQuery.TRange × String × String))
+    (pins : Array (Spot.Registered.Entry × String)) (ms : Array Member) : V Unit :=
+  if loose.isEmpty then pure () else
+  ms.forM fun m => do
+    let mine := reads.filter fun (r, _, _) => m.units.any fun (lo, hi) => r.first < hi && lo < r.first + r.count
+    let own ← match m.own.registered with
+      | none => pure #[]
+      | some j => (Flock.Registered.ofJson j).mapError (s!"member {m.name}: {·}")
+    mine.forM fun (_, p, v) =>
+      if own.any fun q => q.name == p && q.value == v then pure () else throw (READ_UNNAMED_WHY m.name p v)
+    own.forM fun q => match pins.find? (·.1.value == q.value) with
+        | none => if loose.contains q.value then throw (UNPINNED_READ_WHY m.name q.name q.value) else pure ()
         | some (e, root) =>
           if Flock.hexOf q.root != root then throw (PINNED_READ_WHY m.name q.name q.value "root")
           else if q.leaves != e.leaves then throw (PINNED_READ_WHY m.name q.name q.value "leaf count")
@@ -665,7 +685,9 @@ tree closed after its session's evidence before the next is opened (`treesOf`, `
 registration's population held to the program (`popHeld`) and the members laid over it (`laidHeld`), each reader of
 a held or tied parameter with a registered file (`heldReadsFiled`), each registered value the members read one tree
 (`classHeld`), each committed tree a member's registered file opens
-its window's (`treePortsHeld`), and each read of a pinned registered input at the pin R8 accepted (`pinsHeld`). -/
+its window's (`treePortsHeld`), and, the program marking a registered input the verifier does not expect, a weights'
+registration of record R8 accepts on these parameters (`Docket.readPins`, else `Docket.WEIGHTS_UNREGISTERED_WHY`) and each
+read of a marked input at the pin R8 accepted (`pinsHeld`). -/
 def membersStructure (p : Params) (ms : Array Member) (c : OneStage.Commitment) (e : Evidence)
     (sts : Array StatementFiles) (bs : Core.Blobs) : V Unit := do
   namesOnce ms
@@ -680,7 +702,9 @@ def membersStructure (p : Params) (ms : Array Member) (c : OneStage.Commitment) 
   heldReadsFiled p.base.verifier ms
   classHeld ms
   treePortsHeld ms c.record
-  pinsHeld (Docket.weightsOf p.base.verifier).2 ms
+  match Docket.readPins p.base.verifier with
+  | none => throw Docket.WEIGHTS_UNREGISTERED_WHY
+  | some (loose, reads, pins) => pinsHeld loose reads pins ms
 
 /-- The refusal of a member's root of its own at a port C wires into it (`fieldRoots`): a crossing wire is committed
 once, in its writer's output field's tree, and the reader's row opens that tree by path. -/
@@ -1678,14 +1702,35 @@ private def pinEntryT : Spot.Registered.Entry :=
 private def pinT : Array (Spot.Registered.Entry × String) := #[(pinEntryT, "".pushn 'a' 128)]
 
 -- a member reading the pinned input at the pin's own entry, and one reading only other values: accepted
-#guard refusal (pinsHeld pinT #[readerT "a" (regT [("p", "w", 'a', 2)]), readerT "b" (regT [("q", "v", 'b', 3)]),
+#guard refusal (pinsHeld #["w"] #[] pinT #[readerT "a" (regT [("p", "w", 'a', 2)]), readerT "b" (regT [("q", "v", 'b', 3)]),
   memberT "c" #[(1, 2)]]) == ""
 -- another root, another leaf count: refused by name
-#guard whyT (pinsHeld pinT #[readerT "a" (regT [("p", "w", 'b', 2)])]) == PINNED_READ_WHY "a" "p" "w" "root"
-#guard whyT (pinsHeld pinT #[readerT "a" (regT [("p", "w", 'a', 3)])]) == PINNED_READ_WHY "a" "p" "w" "leaf count"
+#guard whyT (pinsHeld #["w"] #[] pinT #[readerT "a" (regT [("p", "w", 'b', 2)])]) == PINNED_READ_WHY "a" "p" "w" "root"
+#guard whyT (pinsHeld #["w"] #[] pinT #[readerT "a" (regT [("p", "w", 'a', 3)])]) ==
+  PINNED_READ_WHY "a" "p" "w" "leaf count"
 -- another domain: refused by name
-#guard whyT (pinsHeld #[({ pinEntryT with domain := "".pushn 'e' 128 }, "".pushn 'a' 128)]
+#guard whyT (pinsHeld #["w"] #[] #[({ pinEntryT with domain := "".pushn 'e' 128 }, "".pushn 'a' 128)]
   #[readerT "a" (regT [("p", "w", 'a', 2)])]) == PINNED_READ_WHY "a" "p" "w" "domain"
+-- a marked input R8 accepted no pin of: refused by name; with nothing marked, no read is held
+#guard whyT (pinsHeld #["w", "u"] #[] pinT #[readerT "a" (regT [("p", "u", 'a', 2)])]) == UNPINNED_READ_WHY "a" "p" "u"
+#guard refusal (pinsHeld #[] #[] #[] #[readerT "a" (regT [("p", "u", 'b', 3)])]) == ""
+/-- The program's read of `w` at template `T`'s parameter `p` over units `[0, 1)`. -/
+private def readT : Array (Flock.TemplateQuery.TRange × String × String) :=
+  #[({ node := 0, template := "T", first := 0, count := 1 }, "p", "w")]
+
+-- a member whose units meet the read with port `p` naming `w` at the pin, and one whose units don't: accepted
+#guard refusal (pinsHeld #["w"] readT pinT #[readerT "a" (regT [("p", "w", 'a', 2)]), memberT "c" #[(1, 2)]]) == ""
+-- a reader with no registered file, with port `p` under another value, or with its own root for `w`: refused by name
+#guard whyT (pinsHeld #["w"] readT pinT #[memberT "a" #[(0, 1)]]) == READ_UNNAMED_WHY "a" "p" "w"
+#guard whyT (pinsHeld #["w"] readT pinT #[readerT "a" (regT [("p", "v", 'a', 2)])]) == READ_UNNAMED_WHY "a" "p" "w"
+#guard whyT (pinsHeld #["w"] readT pinT #[readerT "a" (regT [("p", "w", 'b', 2)])]) == PINNED_READ_WHY "a" "p" "w" "root"
+#guard READ_UNNAMED_WHY "a" "p" "w" == "registered: member a's units read the registered input w at parameter p, and " ++
+  "its registered file has no port p naming w: a marked input is read only at a pin R8 accepted"
+-- the refusals' text, which `members.unpinned_read_why` and `docket.WEIGHTS_UNREGISTERED_WHY` print word for word
+#guard UNPINNED_READ_WHY "a" "p" "u" == "registered: member a's port p reads the registered input u, which the program " ++
+  "marks and R8 accepted no pin of: a marked input is read only at a pin R8 accepted"
+#guard Docket.WEIGHTS_UNREGISTERED_WHY == "registered: the program marks registered inputs the verifier does not expect, and " ++
+  "the parameters carry no weights' registration of record R8 accepts: a marked input is read only at a pin R8 accepted"
 -- the refusal's text, which `members.pinned_read_why` prints word for word
 #guard PINNED_READ_WHY "a" "p" "w" "root" == "registered: member a's port p reads the registered input w at another " ++
   "root than its pin of record: a registered input the weights' registration of record pins is read at the pin's " ++

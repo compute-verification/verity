@@ -316,6 +316,29 @@ def weights_held(program: Program, query: Mapping[str, Any], registered: Iterabl
     return out, accepted
 
 
+WEIGHTS_UNREGISTERED_WHY = ("registered: the program marks registered inputs the verifier does not expect, and the parameters "
+                    "carry no weights' registration of record R8 accepts: a marked input is read only at a pin R8 accepted")
+
+
+def read_pins(program: Program, query: Mapping[str, Any], registered: Iterable[str], of_record: tuple[bytes, str] | None
+              ) -> tuple[list[str], list[tuple[range, str, str]], dict[str, dict[str, Any]]] | None:
+    """`Docket.readPins`: what the members' check holds each registered read to, on R8's own derivation
+    (`weights_held`): the marked inputs the verifier does not expect, each template range's units with each
+    ``(parameter, value)`` whose argument reads one (`partition.range_reads`), and the accepted pins. None where there
+    is such an input and no registration of record, or R8 refuses it; all empty where every marked input is expected."""
+    expected = set(registered)
+    loose = [v for v in marked_inputs(program) if v not in expected]
+    if not loose:
+        return [], [], {}
+    if of_record is None:
+        return None
+    codes, pins = weights_held(program, query, registered, of_record)
+    if codes:
+        return None
+    gates = {g: v for v in loose for g in G.held_gates(program, [v])}
+    return loose, [(units, p, gates[g]) for units, p, g in P.range_reads(program, query, gates)], pins
+
+
 def held_roots(log: Iterable[Mapping[str, Any]]) -> dict[tuple[str, str], str]:
     """`{(value, domain): root}` for every value an earlier record of the log registered, the root of its first
     docket under that domain: R7 holds a value to the root registered under the domain it takes now, so a
@@ -1129,7 +1152,7 @@ def matches_public(rec: Mapping[str, Any], scheme: str, roots: Mapping[str, str]
 
 registered_entries = G.registered_entries
 
-__all__ = ["NOT_ONE_MEMBER", "POOL_KEYS", "RECEIPT", "ROW_TABLES", "TABLE_PORT",
+__all__ = ["NOT_ONE_MEMBER", "POOL_KEYS", "RECEIPT", "ROW_TABLES", "TABLE_PORT", "WEIGHTS_UNREGISTERED_WHY", "read_pins",
            "WINDOW_DOMAIN", "check", "declared_reads", "held_roots", "marked_inputs", "matches_public", "pool_chains", "pool_open", "pool_refused",
            "pool_spent_before", "pool_values", "public_ports", "query_digest", "receipt",
            "refuse_unwindowed", "refused", "registered_entries", "unwindowed", "weights_held", "window_domain"]
