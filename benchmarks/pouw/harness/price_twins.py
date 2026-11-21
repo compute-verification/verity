@@ -343,8 +343,11 @@ def _jsonable(row: dict) -> dict:
 
 
 def guarantees(doc: dict) -> dict[str, dict]:
-    """A Lean audit record's guarantees; the store's files, written before they were called that, hold them as `pins`."""
-    return doc["guarantees"] if "guarantees" in doc else doc["pins"]
+    """A Lean audit record's recorded guarantees; the store's files, written before they were called that, hold them as
+    `pins`. A guarantee listed with its owner only, which `check.py --update` hasn't recorded yet (`guarantees.unrecorded`),
+    states nothing and isn't one."""
+    pins = doc["guarantees"] if "guarantees" in doc else doc["pins"]
+    return {name: pin for name, pin in pins.items() if "signature" in pin}
 
 
 def repository(repo_audit: Path, pinned: dict[str, str]) -> list[tuple[str, list[dict]]]:

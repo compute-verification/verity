@@ -37,7 +37,7 @@ def params (law : Json := Json.mkObj [("law", "subset"), ("k", (1 : Nat))]) (k :
   Json.mkObj [("anchors", Json.arr #[]), ("delta", "1/1000"), ("law", law), ("leaf_layer", Json.null),
     ("log", Json.arr #[]), ("partition", Partition.build (Flock.hexOf p.sha512) QE),
     ("ports", Json.mkObj [("o", Json.mkObj [("domain", "d"), ("leaves", (4 : Nat))])]),
-    ("program", (Json.parse Spot.OneStageZk.E3).toOption.getD Json.null), ("query", QE), ("registered", Json.null),
+    ("program", (Flock.JsonParse.parse Spot.OneStageZk.E3).toOption.getD Json.null), ("query", QE), ("registered", Json.null),
     ("scheme", "s"), ("work_table", Json.null), ("challenger", Json.mkObj [("key", k), ("label", "draw")]),
     ("window_root", ROOT), ("proofs", Json.mkObj [("public", ROOT), ("registered", Json.null)])]
 
