@@ -2,4 +2,4 @@
 import pathlib
 import runpy
 
-runpy.run_path(str(pathlib.Path(__file__).resolve().parents[3] / "proofs/spot/verifier/conftest.py"))
+runpy.run_path(str(pathlib.Path(__file__).resolve().parents[3] / "proof/spot/verifier/conftest.py"))

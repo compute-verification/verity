@@ -307,7 +307,7 @@ def credited_tiles(tiles: Sequence[LaidTile], strata: Sequence[tuple[str, Sequen
                    verdicts: Mapping[int, bool], counts: Mapping[str, int]) -> list[LaidTile]:
     """The window's tiles credited: all of them or none, each its ``amount``, which C fixes before any coin. A credited
     unit is a public set of blocks with one amount, credited on one event; the shared interface
-    (`resource_accounting.scheme.Block`) does not yet express it, and this stands in.
+    (`accounting.scheme.Block`) does not yet express it, and this stands in.
 
     S, the strata holding a block of any tile, is fixed by the laying. ``verdicts`` are the drawn blocks, each with
     whether its proof verified, and ``counts`` each stratum's registered count of drawn blocks. Unless every stratum of
