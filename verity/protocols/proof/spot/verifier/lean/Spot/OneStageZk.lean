@@ -787,12 +787,14 @@ under the verifier `v`'s program digest, window open root and tied parameters' g
 is the members' ranges times their Definitions' parameters. -/
 def runInputRoots (v : Docket.Verifier) (P : Flock.Program.Prog) (rs : Array Flock.TemplateQuery.TRange)
     (ms : Array Member) (rec : Json) (roots : Std.HashMap String (Array Json)) :
-    V (Std.HashMap String (Array Json)) :=
+    V (Std.HashMap String (Array Json)) := do
   let byPort := rootsByPort rec
   let prog := Flock.hexOf v.program.desc.sha512
   let tied := Docket.tiedGates v
-  ms.foldlM (fun acc m => do return acc.insert m.name
-    (← runInputRootsAt P rs prog v.windowRoot tied m (acc.getD m.name #[]) byPort)) roots
+  let mut acc := roots
+  for m in ms do
+    acc := acc.insert m.name (← runInputRootsAt P rs prog v.windowRoot tied m (acc.getD m.name #[]) byPort)
+  return acc
 
 /-- **The registration's roots each member's statement reads**: `rootsOf`'s, the window's trees of its templates'
 output fields held to the ones C and the partition give (`fieldTreesHeld`, `derivedFieldTrees`), each member's own
