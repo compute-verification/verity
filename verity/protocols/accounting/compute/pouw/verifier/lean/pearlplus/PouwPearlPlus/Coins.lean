@@ -23,9 +23,10 @@ public import Spot.ChallengerCoins
 * **The challenger key.** `check` reads no challenger key: an opening is checked only against the commitment it is
   handed. `liveDrawReason` (`pouw-pearlplus --draw-live`) reads the pinned key, the auditor's ledger and the draw
   session's files, and holds a challenger sample to its draw session, the ledger's and the session's signatures verified
-  under the key. The salt session's are `served_verdicts.pearlplus_coins`' (`core_check.live_salt`), outside this
-  executable; the compose side reads copies the node hands it, and no composite and no compose-side code verifies a
-  signature.
+  under the key. `liveSaltReason` (`--salt-live`) does the same for each live pass's salt session
+  (`served_verdicts.pearlplus_coins`, `core_check.live_salt`): the session the ledger opened on the pass's salt epoch's
+  open root, its signed commitment the manifest's coins. The compose side reads copies the node hands it, and no
+  composite and no compose-side code verifies a signature.
 * **Of record** (`--of-record`), the verdict takes only a challenger sample on live epoch coins: `ofRecordReason` refuses
   the node's sample, a v1 record (which names no sample), no record, a source given on the command line, and an in-process
   challenger's epoch coins. Without it they are read as development runs.
@@ -149,8 +150,81 @@ def liveDrawReason (h : CoinRecord) (root : ByteArray) (live : Json) : Option St
     return some "the draw session's log does not show the run's commitment as the one root its draw coin followed"
   return none
 
+/-- `core_check.NO_RESERVE`, `RESERVE_LAYOUT`, `INCOMPLETE`, `LIVE_NOT_RECEIVED`, `LIVE_NOT_SIGNED` and `LIVE_SESSION`, as
+`PouwVerifier.liveSaltCheck` words them. -/
+def SALT_NO_RESERVE : String :=
+  "the auditor's ledger opens the window's session without reserving it: a window's open root binds the session a " ++
+    "signed reserve entry names"
+def SALT_RESERVE_LAYOUT : String :=
+  "the auditor's ledger reserves the pass's session for another layout than a Pearl-C salt session's, its salt coin " ++
+    "alone"
+def SALT_INCOMPLETE : String :=
+  "the auditor's ledger does not end the pass's session complete, having released its salt coin and nothing else"
+def SALT_NOT_RECEIVED : String :=
+  "the challenger's log does not show the epoch's root as the one root its salt coin followed"
+def SALT_NOT_SIGNED : String := "the pass's coin commitment is not the one its session's challenger signed"
+def SALT_SESSION_CARRIED : String :=
+  "the pass's session is not the gate's answer, without its secret, for the session the auditor's ledger opened on " ++
+    "its epoch's root: its session, seq, root and commitment"
+
+/-- `core_check._carries`: `s`, the session a pass's manifest carries, is the gate's open answer for session `sid`,
+opened at ledger entry `seq` on `root` under the commitment whose root is `commitment` (hex), without its `secret`. -/
+def carriesSession (s : Json) (sid : String) (seq : Nat) (root : ByteArray) (commitment : String) : Bool :=
+  match s with
+  | .obj _ => (get? s "secret").isNone && fieldIs (get? s "session") sid &&
+      ((get? s "seq").bind PouwWindow.intOf?) == some (seq : Int) && fieldIs (get? s "root") (Flock.hexOf root) &&
+      fieldIs (get? s "commitment") commitment
+  | _ => false
+
+/-- `served_verdicts.pearlplus_coins` (`core_check.live_salt`, `PouwVerifier.liveSaltCheck`'s session half): why a live
+pass's salt is not its salt session's, read from the auditor's ledger and the session's own files
+(`{key, ledger, pins, main, session}`); `none` when it is. `m` is a pass `check` loaded, its salt opened by `liveSalt`
+against the manifest's coins after R = `epochOpenRoot weightsRoot k` (k its ``pass_index``). The session is the one the
+ledger opens on `{root: R}` under the pinned challenger key, run from a commit the host's pins log records on main's
+first-parent line (`pinnedChallengePhase`), from its files (`challengePhaseNamed`), each signature verified under that key;
+its signed commitment is a Pearl-C salt session's (`PouwWindow.saltEpochReason`); the ledger reserved it for that
+layout, opened it binding that reserve and ended it complete, having released its salt coin and nothing else; its log
+shows R alone as the root its salt coin followed; the manifest's coins are its signed commitment; and the manifest's
+session is the gate's answer for it without its secret (`carriesSession`). Since R hashes the fixed operands' root W, the
+ledger logged W before the session opened, and the salt coin was released after it. -/
+def liveSaltReason (m : Json) (weightsRoot : ByteArray) (live : Json) : Option String := Id.run do
+  let g := fun k => (get? live k).getD .null
+  let some n := ((get? m "pass_index").bind jsonInt?).filter (fun i => decide (0 ≤ i) && decide (i < 2 ^ 64))
+    | return some "the pass's manifest names no epoch: `pass_index` is an integer in [0, 2^64)"
+  let r := epochOpenRoot weightsRoot n.toNat
+  let key ← match Spot.Challenger.ChallengerKey.ofJson (g "key") with
+    | .ok k => pure k
+    | .error e => return some s!"the salt session's challenger key is malformed: {e}"
+  let window := Json.mkObj [("root", .str (Flock.hexOf r))]
+  let a ← match Spot.Challenger.pinnedChallengePhase (g "ledger") window key (g "pins") (g "main") with
+    | .ok a => pure a
+    | .error e => return some s!"the salt session is not trusted: {e}"
+  let (c, log) ← match Spot.Challenger.challengePhaseNamed a key (g "session") with
+    | .ok p => pure p
+    | .error e => return some s!"the salt session is not trusted: {e}"
+  if let some why := PouwWindow.saltEpochReason c then return some s!"the salt session's signed coins: {why}"
+  let named := ((match g "ledger" with | .arr ls => ls.toList | _ => []).filterMap Spot.Challenger.ledgerEntry?).filter
+    (·.session == a.session)
+  let (some reserve, some opened, some ended) :=
+      (named.find? (·.kind == "reserve"), named.find? (·.kind == "open"), named.find? (·.kind == "end"))
+    | return some SALT_NO_RESERVE
+  if !Spot.jeq (Spot.getD reserve.body "families") (Spot.Challenger.familiesJson PouwWindow.SALT_FAMILIES) then
+    return some SALT_RESERVE_LAYOUT
+  if Spot.int? (Spot.getD opened.body "reserve") != some (reserve.seq : Int) then return some SALT_NO_RESERVE
+  let complete := match Spot.getD ended.body "complete" with | .bool true => true | _ => false
+  if !(complete && Spot.jeq (Spot.getD ended.body "released") (Json.mkObj [(PouwWindow.SALT, toJson (1 : Nat))])) then
+    return some SALT_INCOMPLETE
+  if Spot.Challenger.byFamily c log != [(PouwWindow.SALT, [r])] then return some SALT_NOT_RECEIVED
+  let .ok claimed := LiveCommitment.ofJson ((get? m "coins").getD .null)
+    | return some "the pass's coins are malformed"
+  if !sameLive claimed c then return some SALT_NOT_SIGNED
+  if !carriesSession ((get? m "session").getD .null) a.session opened.seq r a.commitment then
+    return some SALT_SESSION_CARRIED
+  return none
+
 def DRAW_REFUSED : String := "draw"
 def DRAW_SESSION_REFUSED : String := "draw-session"
+def SALT_SESSION_REFUSED : String := "salt-session"
 def NOT_OF_RECORD : String := "of-record"
 
 /-- Why a verdict on these coins is no verdict of record; `none` when the epoch's coins are a live session's and the

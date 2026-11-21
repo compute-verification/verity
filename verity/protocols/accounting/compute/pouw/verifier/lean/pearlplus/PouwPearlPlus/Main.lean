@@ -48,6 +48,7 @@ structure Args where
   load : Option LoadClass := none
   ofRecord : Bool := false
   drawLive : Option String := none
+  saltLive : Option String := none
   manifests : List String := []
 
 /-- `--class`'s `SLOTS,PROMPT,OUTPUTS`, each a positive integer. -/
@@ -74,6 +75,7 @@ def parse : List String → Args → Except String Args
     | none => throw s!"--class {v}: SLOTS,PROMPT,OUTPUTS, each a positive integer"
   | "--of-record" :: rest, a => parse rest { a with ofRecord := true }
   | "--draw-live" :: v :: rest, a => parse rest { a with drawLive := some v }
+  | "--salt-live" :: v :: rest, a => parse rest { a with saltLive := some v }
   | m :: rest, a => if m.startsWith "--" then throw s!"unknown option {m}" else parse rest { a with manifests := a.manifests ++ [m] }
 
 def readJson (path : String) : IO Json := do
@@ -152,6 +154,20 @@ def main (argv : List String) : IO UInt32 := do
     | none, some h, some _ =>
       pure (if a.ofRecord && fieldIs (get? h.draw "from") DRAW_CHALLENGER && ans.accept then
         refuse "no draw session was given (--draw-live), so nothing checked the challenger's signatures on it"
+      else ans)
+    | _, _, _ => pure ans
+  let refuseSalt (why : String) : RunAnswer :=
+    { ans with accept := false, reason := some s!"{SALT_SESSION_REFUSED}: {why}",
+               refused := some (SALT_SESSION_REFUSED, why), work := none }
+  let ans ← match a.saltLive, pl?, coins with
+    | some f, some pl, .live _ => do
+      let live ← readJson f
+      let why := ((mans.zip pl.passes).zipIdx.findSome? fun ((m, p), i) =>
+        (liveSaltReason m p.weightsRoot live).map (s!"pass {i}: " ++ ·))
+      pure (if ans.accept then (why.map refuseSalt).getD ans else ans)
+    | none, some _, .live _ =>
+      pure (if a.ofRecord && ans.accept then
+        refuseSalt "no salt session was given (--salt-live), so nothing checked the challenger's signatures on it"
       else ans)
     | _, _, _ => pure ans
   IO.println (output ans (published input ans)).compress
