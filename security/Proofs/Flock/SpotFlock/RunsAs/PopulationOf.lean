@@ -20,8 +20,11 @@ namespace SpotFlock.RunsAs
 
 open Lean (Json)
 
--- `run` unfolds to one `match` or `if` per step; the walk stops at the population check, the register step's last.
-set_option maxHeartbeats 12000000 in
+private theorem true_of_not {b : Bool} (h : ¬(!b) = true) : b = true := by simpa using h
+
+-- `run` unfolds to about 50 decided leaves under one `match` or `if` per step, as `Spot.Run.run_decided`'s walk;
+-- `split` takes `matches .twoStage ..` apart, whose `twoStage` branch leaves `¬true = true`.
+set_option maxHeartbeats 4000000 in
 /-- **A run that does not refuse passed its population check** (the run's bridge): `Run.run` either refuses at a step
 (a `{"step", "codes"}` object) or, at the population its boundary record states, the params' program and query lay
 it out as its units in order (`Slots.popOk`), or as a disjoint cover of them (`Slots.popCovers`) under a one-stage rule
@@ -32,21 +35,22 @@ theorem run_popHeld {i : Spot.Run.Input} {j : Json} (h : Spot.Run.run i = .ok j)
     ∃ n, Spot.nat? (Spot.getD i.record "population") = some n ∧
       (Spot.Slots.popOk i.params.verifier.program i.params.verifier.query n = true ∨
         (Spot.Slots.popCovers i.params.verifier.program i.params.verifier.query n = true ∧
-          (i.rule matches .twoStage ..) = false ∧
+          (∀ g r k, i.rule ≠ .twoStage g r k) ∧
           ∃ sd wt, Spot.OneStageZk.subsetDesign { i.params.verifier with samplingDesign := sd, workTable := wt }
             i.record = true)) := by
   unfold Spot.Run.run at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat'
     first
-    | exact Or.inr ⟨_, by assumption, Or.inl (by simpa using ‹¬(!Spot.Slots.popOk _ _ _) = true›)⟩
-    | exact Or.inr ⟨_, by assumption, Or.inr ⟨by simpa using ‹¬(!Spot.Slots.popCovers _ _ _) = true›,
-        by simpa using ‹¬(i.rule matches .twoStage ..) = true›, _, _,
-        by simpa using ‹¬(!Spot.OneStageZk.subsetDesign _ _) = true›⟩⟩
+    | exact absurd rfl ‹¬true = true›
     | split at h
     | focus (cases h; done)
     | (obtain ⟨_, h⟩ | ⟨_, h⟩ := Spot.Run.ite_eq_ok h; exact Or.inl ⟨_, _, h.symm⟩)
     | exact Or.inl ⟨_, _, (Except.ok.inj h).symm⟩
+    | exact Or.inr ⟨_, by assumption, Or.inl (true_of_not ‹¬(!Spot.Slots.popOk _ _ _) = true›)⟩
+    | exact Or.inr ⟨_, by assumption, Or.inr ⟨true_of_not ‹¬(!Spot.Slots.popCovers _ _ _) = true›,
+        by assumption, _, _,
+        true_of_not ‹¬(!Spot.OneStageZk.subsetDesign _ _) = true›⟩⟩
     | (obtain ⟨_, h⟩ | ⟨_, h⟩ := Spot.Run.ite_eq_cases h)
 
 /-- **An accepted two-stage run passed its population check** at the population its boundary record states: the run
@@ -60,8 +64,7 @@ theorem population_of_accepted {i : Spot.Run.Input} {it : Spot.Run.Interior} {j 
     cases hs
   · exact ⟨n, hn, hp⟩
   · obtain ⟨g, r, k, hr⟩ := ha.two
-    rw [hr] at ht
-    cases ht
+    exact absurd hr (ht g r k)
 
 /-- **An accepted two-stage run passed its population check at `n`**, wherever `n` is the population its boundary
 record states. -/

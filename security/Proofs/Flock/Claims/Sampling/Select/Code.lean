@@ -122,7 +122,7 @@ theorem ite_eq_cases {c : Prop} [Decidable c] {a b : V Json} {j : Json}
   · right; rw [ite_eq_right_of_eq_false _ _ (eq_false hc)] at h; exact ⟨hc, h⟩
 
 -- `run` unfolds to about 50 decided leaves under one `match` or `if` per step, hence the heartbeat budget.
-set_option maxHeartbeats 12000000 in
+set_option maxHeartbeats 4000000 in
 /-- **A decided run passed its registration and ran the sample of record**: `run` either refuses at a step or passed the
 population, R1–R7 under the sampling design of the rule over it and the program's strata (`Rule.over`, `strataSizes`, a
 rate sampling design's `subset:K`) and the work table it expands (`Rule.tableOver`, a work rate sampling design's), and the sample's own check,

@@ -255,7 +255,7 @@ theorem run_bridge {i : _root_.Spot.Run.Input} {j : Json} {desc : Hash.Msg}
       j = Json.mkObj [("step", Json.str step), ("codes", Json.arr (codes.map Json.str))]) ∨
     ∃ n, _root_.Spot.nat? (_root_.Spot.getD i.record "population") = some n ∧
       (Flock.Bridge.PopMatches desc i.params.verifier.query n ∨
-        ((i.rule matches .twoStage ..) = false ∧ Flock.Bridge.PopCovers desc i.params.verifier.query n ∧
+        ((∀ g r k, i.rule ≠ .twoStage g r k) ∧ Flock.Bridge.PopCovers desc i.params.verifier.query n ∧
           ∃ sd wt, Flock.Bridge.IsSubsetDesign (Flock.Bridge.designAt desc i.params.verifier.query sd wt n))) := by
   rcases SpotFlock.RunsAs.run_popHeld h with hr | ⟨n, hn, hp | ⟨hc, ht, sd, wt, hs⟩⟩
   · exact Or.inl hr
