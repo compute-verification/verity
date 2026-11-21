@@ -53,7 +53,7 @@ def test_pin_sh_runs_no_unpinned_code_and_logs_each_pin_before_current_names_it(
 
 def test_the_pinned_archive_holds_what_the_figures_are_made_from():
     archive = re.search(r"git archive COMMIT (.*?)\|", (PACKAGING / "pin.sh").read_text(), re.S).group(1)
-    assert {"verity", "benchmarks/poub_session", "calibration/hardware"} <= set(archive.replace("#", " ").replace("\\", " ").split())
+    assert {"verity", "benchmarks/poub_session", "calibration/hardware", "calibration/rate_squaring/gamma.py"} <= set(archive.replace("#", " ").replace("\\", " ").split())
 
 
 def test_a_tunnel_key_gets_a_pty_only_while_the_challengers_pinned_client_forces_one():

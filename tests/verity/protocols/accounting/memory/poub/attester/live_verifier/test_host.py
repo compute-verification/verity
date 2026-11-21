@@ -240,7 +240,8 @@ def test_a_peers_figures_file_that_is_not_the_one_its_digest_pins_is_refused_bef
     lenient = tmp_path / "lenient.json"
     lenient.write_text(json.dumps({**FIGURES.to_json(), "gpu_chip_bytes": FIGURES.gpu_chip_bytes // 2,
                                    "host_dram_bytes": FIGURES.host_dram_bytes // 2,
-                                   "gpu_squarings_per_s": {w: r / 2 for w, r in FIGURES.gpu_squarings_per_s.items()}}))
+                                   "gpu_squarings_per_s": {w: r if type(r) is str else r / 2
+                                                           for w, r in FIGURES.gpu_squarings_per_s.items()}}))
     settings = json.loads(svc.config.read_text())
     settings["peers"]["gpu-node"]["figures"] = str(lenient)
     svc.config.write_text(json.dumps(settings))

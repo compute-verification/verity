@@ -11,8 +11,8 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "benchmarks" / "poub_session"))
 
 import sheets  # noqa: E402
-from verity.device import load_card, load_node  # noqa: E402
-from verity.protocols.accounting.memory.poub.verifier import timing  # noqa: E402
+from verity.device import load_card, load_node, number  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier import codec, ledger, timing  # noqa: E402
 from verity.protocols.accounting.memory.poub.verifier.poub_session import verifier_process as VP  # noqa: E402
 
 CARD_FILES = ROOT / "calibration/hardware/cards"
@@ -33,6 +33,28 @@ def test_the_command_writes_the_figures_the_verifier_reads(capsys):
     assert capsys.readouterr().out == sheets.figures(RTX).sha512() + "\n"
 
 
+def test_the_handed_squaring_ceiling_is_the_formula_at_the_cards_highest_clock_reading():
+    """One GPU's squaring ceiling at 512 bits is `s·REF·f/REF_MHZ + H/gpus` at the highest clock reading f its card
+    file states, so at least that at every reading."""
+    clock, gpus = load_card("rtx-pro-6000-server", directory=CARD_FILES)["clock"], 8
+    readings = [float(number(clock[r])) for r in sheets.CLOCK_READINGS]
+    at = [sheets.P512_FORM * sheets.gamma.REF * f / sheets.gamma.REF_MHZ + sheets.HOST_SQUARINGS_PER_S / gpus
+          for f in readings]
+    handed = sheets.figures(RTX).gpu_squarings_per_s["p512"]
+    assert readings == [2430, 2617] and handed == at[readings.index(max(readings))]
+    assert all(handed >= x for x in at)
+
+
+def test_an_h200_nodes_rebuild_share_is_refused_by_name():
+    """No squaring rate is measured on an H200, and the RTX PRO 6000's ceiling is not its bound: the session's ledger
+    refuses its rebuild share at each width, naming the card, the width and the fix."""
+    node = ledger.Node.stated(sheets.figures("h200-sxm-141gb-x1"))
+    for c in (codec.DEFAULT, codec.Codec(codec.P512, 2, False)):
+        with pytest.raises(ValueError, match=f"no squaring ceiling is established for h200-sxm-141gb at {c.field.n} "
+                                             "bits: no squaring rate is measured on it.*FORMS"):
+            node.rebuild(c)
+
+
 def test_a_node_kind_without_a_node_file_is_refused_by_name(capsys):
     assert sheets.main(["cpu"]) == 3
     assert "no node file cpu.toml" in capsys.readouterr().err
@@ -42,7 +64,8 @@ def test_a_card_the_node_does_not_name_is_refused():
     node = load_node(RTX, directory=NODE_FILES, cards_directory=CARD_FILES)
     with pytest.raises(ValueError, match="hand in the device card the node names"):
         timing.Figures.of_sheets(node, load_card("h200-sxm-141gb", directory=CARD_FILES),
-                                 load_card(node["host"]["sku"], directory=CARD_FILES), **sheets.UNSHEETED[RTX])
+                                 load_card(node["host"]["sku"], directory=CARD_FILES), **sheets.UNSHEETED[RTX],
+                                 gpu_squarings_per_s={})
 
 
 @pytest.mark.parametrize("change, why", [
@@ -78,7 +101,8 @@ def test_a_figures_file_not_the_one_its_pinned_digest_names_is_refused_and_a_rec
     lenient = tmp_path / "lenient.json"
     lenient.write_text(json.dumps({**fixture.to_json(), "gpu_chip_bytes": fixture.gpu_chip_bytes // 2,
                                    "host_dram_bytes": fixture.host_dram_bytes // 2,
-                                   "gpu_squarings_per_s": {w: r / 2 for w, r in fixture.gpu_squarings_per_s.items()}}))
+                                   "gpu_squarings_per_s": {w: r if type(r) is str else r / 2
+                                                           for w, r in fixture.gpu_squarings_per_s.items()}}))
     out = tmp_path / "out"
     pinned = ["verifier_process.py", "--out", str(out), "--check-workers", "0", "--ingress-bytes-per-s", "4.4e9",
               "--figures-sha512", fixture.sha512()]

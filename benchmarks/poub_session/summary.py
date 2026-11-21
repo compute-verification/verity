@@ -38,7 +38,7 @@ def summarize(out: Path) -> dict:
                "opening_bytes": sum(o["bytes"] for o in ps["opened"]), "device": ps.get("device")}
         if ps["mode"] == "honest":
             lg = vs.get("ledger", {})
-            row.update({"gamma_spec": lg.get("spec", {}).get("gamma"), "gamma_measured": lg.get("measured", {}).get("gamma"),
+            row.update({"ledger_refused": lg.get("refused"), "gamma_spec": lg.get("spec", {}).get("gamma"), "gamma_measured": lg.get("measured", {}).get("gamma"),
                         "terms_spec": lg.get("spec", {}).get("terms"), "horizon_spec": lg.get("spec", {}).get("horizon"),
                         "inputs": lg.get("inputs"), "sketch_failure_log2": lg.get("sketch_failure", {}).get("log2"),
                         "slack_ms_min": min(w["slack_ns"] for w in vs["windows_seen"] if w["slack_ns"] is not None) / 1e6,

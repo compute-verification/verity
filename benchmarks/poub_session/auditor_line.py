@@ -1055,6 +1055,10 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
         row["T"] = t
         if not s["accepted"]:
             continue
+        if (why := (s.get("ledger") or {}).get("refused")) is not None:
+            row["refused"] = f"its ledger is refused, so no share: {why}"
+            row["credit"] = {**row["credit"], "ok": False, "zero": [*row["credit"]["zero"], row["refused"]]}
+            continue
         seen, row["named"] = auditor_seen(log, s["windows_seen"], s.get("groups_per_coin", 1))
         a = copy.deepcopy(s)
         a["lean_record"], a["windows_seen"] = V.lean_record(s), seen
