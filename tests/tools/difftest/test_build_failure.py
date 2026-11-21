@@ -16,7 +16,7 @@ def _lake(tmp_path: Path, monkeypatch, body: str) -> Path:
     lake = bin_dir / "lake"
     lake.write_text("#!/bin/sh\n" + body)
     lake.chmod(lake.stat().st_mode | stat.S_IXUSR)
-    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.defpath}")
     monkeypatch.setattr(D, "BUILD_LOCK", tmp_path / ".lake" / "harness-build.lock")
     D.build.cache_clear()
     return tmp_path / "pkg"

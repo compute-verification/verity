@@ -91,12 +91,8 @@ finish inside one served window. The parts, in the order they run:
   `PYTHONHASHSEED=0` and request ids not randomized, because the scheduler iterates sets of request ids. A model whose
   sparse attention selects positions by a top-k over more keys than it keeps is served and replayed with the
   canonical top-k plugin (`benchmarks/dsa_topk/`), since the stock kernels' selection can vary from run to run.
-- **The stages around it** (`benchmarks/one_stage/two_stage.py`). `first` registers each size class's boundary
-  commitment, names the window's advice registration (`--advice`) and samples the class's replay blocks once on the
-  challenger's coins. `resume` gives the replay side the same stream for the interior registration and the second
-  stage. The verifier accepts a two-stage run whose every check passes (`FORM` in
-  `verity/protocols/proofs/spot/verifier/second_stage.py`), ahead of the soundness proof of that form, and the accept's
-  record says its form is not yet proved.
+- **The stages around it.** The verifier's stream refuses a size class's boundary commitment, a two-stage docket, by
+  name at its registration, before any coin (`levels.TWO_LEVELS_REFUSED`).
 
 The commands are `benchmarks/serve_tax/run.sh`'s, and its header documents each variable. `ARMS=two-stage` serves with
 the boundary commitment, which it writes under `PRIVATE/two-stage/boundary`. `REPLAY=LOAD REPLAY_FROM=ARM_DIR
@@ -131,7 +127,6 @@ verity_vllm/
   observe/           the observer's capture of an engine run, folded back into a Program (fold/) for the Match
   acquire/           value acquisition: the acquisition plan, and the hooks and native taps it installs
   commit/            the Commit: the GPU committer (committer/) and the rows-sha512 scheme (step_rows.py)
-  commitments/       the vllm-v1 scheme's hashlib reference, PROTOCOL.md and vectors (vllm_v1/); its leaf tree (leaves.py)
   check/             the checks: the Match (match/), replay, coverage, weights of record; a Commit's verdict (verdict.py)
   protocols/         the subprotocols' adapters: SPOT, PoUS, PoUB's node store on the engine (poub/)
     linear/          the linear-layer executor's interface
@@ -158,33 +153,6 @@ path for this user (`${XDG_STATE_HOME:-$HOME/.local/state}/verity-bench/venv`, w
 `--record-venv PATH` records one a machine bootstrapped before it already has. The tools read their inputs
 relative to this directory, so run them from here. The suite runs from its own directory, remotely like every suite
 (`uv run tools/check/suites.py verity-vllm` from the root).
-
-To serve on a machine of your own, clone this repository without the history's file contents and run the script from the
-clone's root (`--dry-run` first shows every path and step):
-
-```bash
-git clone --filter=blob:none https://github.com/compute-verification/verity && cd verity
-bash adapters/vllm/verity_vllm/ops/serve_fresh.sh
-```
-
-It builds the environment, fetches the public Llama 3.2 1B and makes its INT8 checkpoint, serves
-one request with every value committed, and seals it, all under `./.verity-work` (or `--work DIR`), whatever your environment
-names. `--gpu N` picks the card by its `nvidia-smi` index; without it the script takes `CUDA_VISIBLE_DEVICES`, else the
-first card of compute capability 9.0. The tree does not make the machine:
-- an H100 or H200 (the row is H200's, compute capability 9.0) and an NVIDIA driver that runs CUDA 12.9;
-- the CUDA 12.9 toolkit with `nvcc`, where `CUDA_HOME` names it (the script refuses without it; where it
-  lacks the math headers the script takes them from the environment's NVIDIA wheels), and a C++ compiler (`g++`) for it;
-- `uv` ([its installer](https://docs.astral.sh/uv/getting-started/installation/)) and `curl` 7.66 or later on the `PATH`;
-- 35 GB free at the work directory (the install holds the environment twice until it removes its cache, where the disk
-  can't hardlink);
-- network access to GitHub, PyPI, download.pytorch.org, Hugging Face (no token) and the store's public site, from which
-  the workload step fetches the workload file with no key: its address is `research.store.fetchset.PUBLIC_URL`, which
-  `RESEARCH_PUBLIC_URL` overrides.
-
-Building the six CUDA taps is the longest step: it builds the attention taps for the row's head size (64) only, with one
-compile job per CPU the script may run on (`MAX_JOBS`, which the dry run prints), so its time falls with the CPUs you give
-it. Each step's log is in `DIR/logs`. The last line is the result: `SERVE-FRESH SERVED AND SEALED window 0, root <hex>`, with
-the seal in `DIR/serve/seals.jsonl`, or `SERVE-FRESH FAILED <step>: <why>`.
 
 ## Vocabulary
 

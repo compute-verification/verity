@@ -1,6 +1,7 @@
 """Served variants and protocol arms: their checkpoints, settings and execution, and the Pearl-C arms' gates."""
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
 import subprocess
@@ -133,13 +134,15 @@ def test_pearlpluss_h200_spec_serves_the_1bs_bf16_checkpoint_through_sm90s_kerne
 def test_the_h200_pearl_c_setup_serves_without_batch_invariance_and_with_sm90s_bf16_rows_off(tmp_path):
     """The H200 spec's point, launched as `run_point.sh` launches it (its setup sourced, then the point's Python), with
     only the off-card build stood in: the serve gets no VLLM_BATCH_INVARIANT even when the job has one, and
-    PEARLC_BF16_ROWS=0 unless the job sets it."""
+    PEARLC_BF16_ROWS=0 unless the job sets it. Its sha256.txt names the runner's Python by its bytes: run.py, grouped.py and
+    the shared pearl_c/driver.py."""
 
     root = Path(__file__).resolve().parents[3]
     stand_in = tmp_path / "stand-in"
     stand_in.mkdir()
-    (stand_in / "bash").write_text(f'#!/bin/sh\ncase "$1" in */pearl_c_sm90/build.sh) mkdir -p "$2" && '
-                                   f': > "$2/pearl_c_sm90.cubin"; exit 0 ;; esac\nexec {shutil.which("bash")} "$@"\n')
+    (stand_in / "bash").write_text(f'#!/bin/sh\ncase "$1" in */pearl_c_sm90/build.sh) mkdir -p "$2/debit" && '
+                                   f': > "$2/pearl_c_sm90.cubin" && : > "$2/debit/debit_sm90.cubin" && : > "$2/sources.txt"; '
+                                   f'exit 0 ;; esac\nexec {shutil.which("bash")} "$@"\n')
     python = tmp_path / "venv312" / "bin" / "python"
     python.parent.mkdir(parents=True)
     python.write_text('#!/bin/sh\necho "${VLLM_BATCH_INVARIANT-unset} $PEARLC_BF16_ROWS ${PEARLC_CUBIN#$RESEARCH_RUN_DIR/}"\n')
@@ -161,6 +164,10 @@ def test_the_h200_pearl_c_setup_serves_without_batch_invariance_and_with_sm90s_b
 
     assert served() == "unset 0 out/setup/pearl_c_sm90/pearl_c_sm90.cubin"
     assert served(PEARLC_BF16_ROWS="1") == "unset 1 out/setup/pearl_c_sm90/pearl_c_sm90.cubin"
+    kernels = "verity/protocols/accounting/compute/pouw/prover/kernels"
+    hashed = set((tmp_path / "run" / "out" / "setup" / "pearl_c_sm90" / "sha256.txt").read_text().splitlines())
+    assert {f"{hashlib.sha256((root / f).read_bytes()).hexdigest()}  {f}"
+            for f in (f"{kernels}/pearl_c_sm90/run.py", f"{kernels}/pearl_c_sm90/grouped.py", f"{kernels}/pearl_c/driver.py")} <= hashed
 
 
 def test_served_passes_arm_writes_that_arm_as_serve_openais_protocols_config(monkeypatch, tmp_path):
@@ -169,8 +176,8 @@ def test_served_passes_arm_writes_that_arm_as_serve_openais_protocols_config(mon
     (the server flips each epoch's); an unset ``$`` value is refused, naming it."""
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3]))
     from benchmarks.pouw.pearl_c_vllm import served_passes as SP
-    from verity.protocols.resource_accounting.compute.pouw.verifier import verifier
-    from verity.protocols.resource_accounting.scheme import settings
+    from verity.protocols.accounting.compute.pouw.verifier import verifier
+    from verity.protocols.accounting.scheme import settings
     from verity_vllm import messages as M
 
     def flipped(n):
@@ -210,7 +217,7 @@ def test_served_passes_serve_attaches_pearl_plus_by_name_with_its_settings_and_a
     directory in its ctx, and refused by name without PEARLC_PRIVATE."""
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3]))
     from benchmarks.pouw.pearl_c_vllm import served_passes as SP
-    from verity.protocols.resource_accounting.scheme import settings
+    from verity.protocols.accounting.scheme import settings
     from verity_vllm import messages as M
 
     arm = SP.pearl_c_arm(resolve_spec("llama32-1b-1gpu-pouw-protocol-served@h200"))

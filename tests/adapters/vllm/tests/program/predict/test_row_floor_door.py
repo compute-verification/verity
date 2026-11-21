@@ -11,8 +11,8 @@ import pytest
 from verity.circuits import partition_object as PO
 from verity.circuits.codec import descriptor_chunks
 from verity.commitments.periods import interface as IF
-from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
-from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+from verity.protocols.proof.spot.verifier.one_stage import one_circuit as OC
+from verity.protocols.proof.spot.verifier.one_stage import proofs as PF
 
 from tests.program.predict import test_steps as S
 from tests.program.predict.test_window_circuit import CLASS, GRAIN, WHOLE
@@ -68,3 +68,5 @@ def test_the_plans_row_floor_is_composes_refusal_on_every_template():
     refused = {t for t in compared if door[t] is not None}
     assert set(named) == refused, (f"named by the plan, composed by Lean: {sorted(set(named) - refused)}; "
                                    f"refused by Lean, not named: {sorted(refused - set(named))}")
+    padded = {t for t in door if t.startswith(("OutCollect_v2{", "SlotEntry_v2{"))}
+    assert len(padded) == 3 and all(door[t] is None for t in padded), {t: door[t] for t in padded}

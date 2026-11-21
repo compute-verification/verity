@@ -177,15 +177,15 @@ PARTITION_OWNERS = "verity/partition/v1/owners"
 FLOCK_PUBLIC_INPUTS = "verity/flock-public-inputs/v1"
 IR_DESCRIPTOR = "verity-ir/descriptor/v1"
 
-# Shared: the served path's PoUW manifests (`verity_vllm.protocols.pouw`)
+# Shared: the served path's PoUW manifests
 VLLM_PEARL_C_RUN_V1 = "verity-vllm/pouw-pearl-c-run/v1"
 VLLM_PEARL_C_RUN = "verity-vllm/pouw-pearl-c-run/v2"
 VLLM_PEARL_C_RUN_CERTIFIED = "verity-vllm/pouw-pearl-c-run/v3"
 
-# The network attester's mark certificate (`verity.protocols.resource_accounting.network.verifier.certificate`)
+# The network attester's mark certificate (`verity.protocols.accounting.network.verifier.certificate`)
 CERTIFIER_MARK = "verity-network-certifier/mark/v1"
 
-# The network attester's count over a span between two marks (`verity.protocols.resource_accounting.network.verifier.span`)
+# The network attester's count over a span between two marks (`verity.protocols.accounting.network.verifier.span`)
 CERTIFIER_SPAN = "verity-network-certifier/span/v0"
 CERTIFIER_SPAN_PROTOCOL = "verity/certifier/span/v0"
 
@@ -195,24 +195,17 @@ BLAKE3_KEYED_ROW = "blake3-keyed/row/v2"
 SHA256_ROW_NVFP4_DIGEST = "sha256/row-nvfp4/v1"
 SHA256_ROW_DIGEST = "sha256/row/v1"
 VLLM_EMPTY = "verity-vllm/empty/v1"
-VLLM_IDS = "verity-vllm/ids/v1"
-VLLM_LEAF = "verity-vllm/leaf/v1"
 VLLM_LIFT = "verity-vllm/lift/v1"
 VLLM_NODE = "verity-vllm/node/v1"
 BLAKE3_LEAF = "verity/blake3-leaf/v1/"
 CMT_INTEG_RUN_ROOT = "verity/cmt-integ/run-root/v0"
 CMT_INTEG_WEIGHTS_ROOT = "verity/cmt-integ/weights-root/v0"
-COMMITMENTS_LAYOUT_JSON = "verity/commitments/layout-json/v1"
-FA2_HIDDEN_ROOT = "verity/fa2-hidden/root/v7"
-FA2_HIDDEN_THREAD_ROOT = "verity/fa2-hidden/thread-root/v7"
 FA2C_ROOT = "verity/fa2c/root/v0"
 POS_LEAF = "verity/pos-leaf/v0"
 ROW_TABLE_STEP = "verity/row-table/step/v1"
 ROW_TABLE_TABLE = "verity/row-table/table/v1"
-SEMANTIC_ROOT = "verity/semantic-root/v0"
 SHA256_ROW_NVFP4 = "verity/sha256-row-nvfp4/v1"
 SHA256_ROW = "verity/sha256-row/v1"
-VLLM_V1_DOMAIN = "verity/vllm-v1/domain/v1"
 WORD_CODEC_KV = "verity/word-codec/kv/v0"
 
 # Not yet read from here: signatures and AEAD (`verity.commitments.crypto`, `Lms`)

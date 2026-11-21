@@ -19,7 +19,7 @@ import pytest
 HERE = (Path(__file__).resolve().parent)
 sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
 import a5  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF  # noqa: E402
+from verity.protocols.proof.spot.verifier.one_stage import proofs as PF  # noqa: E402
 
 
 @pytest.fixture
@@ -328,7 +328,7 @@ def test_a5_records_the_members_whose_link_points_the_registration_refuses():
     assert a5.link_points({"k": 39, "law": "subset"}, 40, ms) == {"members": 3, "refused": []}
     got = a5.link_points({"k": 41, "law": "subset"}, 40, ms)
     assert got == {"members": 3, "error": "a subset draw of 41 exceeds the population of 40"}
-    from verity.protocols.proofs.spot.verifier.one_stage import link_points as LP
+    from verity.protocols.proof.spot.verifier.one_stage import link_points as LP
 
     assert a5.link_members(ms) == [([[0, 28]], 1), ([[28, 36]], 1), ([[36, 40]], 2)]
     assert LP.refused({"k": 20, "law": "subset"}, 40, a5.link_members(ms)) == [0]
@@ -341,7 +341,7 @@ def test_a5_records_a_sampling_design_none_of_whose_samples_ends(monkeypatch):
     """`a5.link_points` records the docket's refusal of a sampling design no sample of which ends (`link_points.NEVER_ENDS`),
     which `coins.sampling_design_problem` refuses first for every sampling design it reads: past it, `subset:41` over 40 units is refused for
     every member."""
-    from verity.protocols.proofs.spot.verifier.one_stage import link_points as LP
+    from verity.protocols.proof.spot.verifier.one_stage import link_points as LP
 
     monkeypatch.setattr(a5.CC, "sampling_design_problem", lambda sampling_design, population: None)
     m = {"k": 0, "m": SimpleNamespace(template="t", base=0, n=40), "st": {"meta": {"vus_per_block": 1}}}
@@ -587,10 +587,14 @@ def test_an_audit_with_no_per_member_case_says_leans_members_check_did_not_run_a
 @pytest.mark.slow
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_leans_members_check_refuses_a_stand_in_case_the_python_accepted(tmp_path):
-    """The executable's own ``check`` (`members.case_check`) on a stand-in case: Lean refuses its parameters, so an
-    audit the Python accepted is refused as a disagreement, Lean's reason beside the Python's verdict."""
+    """The executable's own ``check`` (`members.case_check_out`) on a stand-in case: Lean refuses its parameters, so an
+    audit the Python accepted is refused as a disagreement, Lean's reason beside the Python's verdict, and its printed
+    line beside its SHA-512."""
     r = _audited(tmp_path, True)
     a5.members_lean(tmp_path, r, PM)
     got = r["checks"]["members_lean"]
     assert not r["accepted"] and got["ran"] is True and got["codes"] == [a5.MEMBERS_DISAGREE], got
     assert got["detail"]["lean"]["verdict"] == "reject" and got["detail"]["lean"]["reason"], got
+    lean = got["detail"]["lean"]
+    assert json.loads(lean["output"])["verdict"] == "reject"
+    assert lean["output_sha512"] == hashlib.sha512(lean["output"].encode()).hexdigest()

@@ -131,12 +131,17 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, NamedTuple
 
-from verity.protocols.resource_accounting.network.prover import ingress_scan as IS
-from verity.protocols.resource_accounting.network.prover import stop_verdicts as SV
-from verity.protocols.resource_accounting.network.verifier import class_charge as CC
-from verity.protocols.resource_accounting.network.verifier import network_attester as W
+from verity.protocols.accounting.network.prover import ingress_scan as IS
+from verity.protocols.accounting.network.prover import stop_verdicts as SV
+from verity.protocols.accounting.network.verifier import class_charge as CC
+from verity.protocols.accounting.network.verifier import network_attester as W
 from verity import protocol
-from verity.protocols.resource_accounting.network.verifier.scan_answer import JITTER_BOUND
+
+#: the jitter bound D_j that K is charged at (`NetTiming.JitterBounded`, one bound over every step): a statement of k
+#: steps, one a bucket, pays ⌈log2 D_j^k⌉ = k bits. Each bucket leaves at a time fixed before it is made
+#: (`network_attester.NetworkAttester(paced=…)`), yet the host's state after the server's writes for the next
+#: bucket still moves a bucket's arrival offset, so J isn't met at D_j = 1
+JITTER_BOUND = 2
 
 #: the monitoring periods' seconds, by name
 PERIODS: dict[str, int] = dict(protocol.MONITORING_PERIODS)
@@ -533,7 +538,7 @@ RESPONSE_IDS, ID_BITS, BUCKETS = 4096, 18, 1280
 #: the scan's slot stride in buckets, the scan class's default
 EVERY: int = IS.Class.__dataclass_fields__["EVERY"].default
 #: the lengths rows' cost runner, whose default schedule (`cost`'s) the count's inputs are read at
-COST_RUNNER = "verity/protocols/resource_accounting/network/attester/connection_rows_run.py"
+COST_RUNNER = "verity/protocols/accounting/network/attester/connection_rows_run.py"
 #: that schedule: its content classes, its delay D in buckets, which its ingress buckets equal, its lanes and its
 #: execution phase's buckets. The count is at the first two where a caller names none; the last two are the schedule
 #: `render` prints the count at beside the command's own

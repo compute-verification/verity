@@ -22,7 +22,6 @@ KINDS = {
 CALLERS: dict[str, str] = {
     "adapters/vllm/verity_vllm/pipeline/boundary_rows.py": "new-run",
     "benchmarks/flock_s8_block/program.py": "new-run",
-    "benchmarks/one_stage/a0.py": "new-run",
     "benchmarks/one_stage/a2.py": "new-run",
     "benchmarks/one_stage/a3.py": "new-run",
     "benchmarks/one_stage/a5_network_attester.py": "new-run",
@@ -39,12 +38,12 @@ CALLERS: dict[str, str] = {
     "verity/circuits/population.circuit-check.py": "check",
     "verity/commitments/periods/population.py": "new-run",
     "verity/commitments/periods/rows.py": "new-run",
-    "verity/protocols/proofs/flock/prover/python/verity_flock/rec_bindings.py": "replay",
-    "verity/protocols/proofs/flock/prover/python/verity_flock/rec_outer.py": "replay",
-    "verity/protocols/proofs/spot/verifier/service.py": "new-run",
-    "verity/protocols/resource_accounting/compute/pouw/prover/circuit/h1tile.circuit-check.py": "check",
-    "verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/served_commit.py": "replay",
-    "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/scripts/record_difftest_vectors.py":
+    "verity/protocols/proof/flock/prover/python/verity_flock/rec_bindings.py": "replay",
+    "verity/protocols/proof/flock/prover/python/verity_flock/rec_outer.py": "replay",
+    "verity/protocols/proof/spot/verifier/service.py": "new-run",
+    "verity/protocols/accounting/compute/pouw/prover/circuit/h1tile.circuit-check.py": "check",
+    "verity/protocols/accounting/compute/pouw/prover/kernels/served_zk/served_commit.py": "replay",
+    "verity/protocols/policy/training_detection/inference_only/verifier/lean/scripts/record_difftest_vectors.py":
         "new-run",
 }
 

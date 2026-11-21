@@ -64,7 +64,7 @@ def test_wall_sums_loads_and_on_loop_closes(tmp_path):
 def test_credited_share_is_pearl_plus_credited_macs(tmp_path):
     d = _dir(tmp_path / "s", _prefill(0.0, 1.0), model="verity-fp8/Llama-3.2-1B-FP8")
     answer = {"protocol": "verity/pouw/pearl-plus/v1", "verdict": "accept", "reason": None, "commitment": "00",
-              "public": {"work": {"credited": 3 * 10**12, "credited_tiles": 9, "macs": 4 * 10**12}}, "profile": {"delta": "1/100"}}
+              "public": {"work": {"credited": 3 * 10**12, "credited_tiles": 9, "checked_macs": 4 * 10**12}}, "profile": {"delta": "1/100"}}
     got = S.shares(d, answer)
     tensor = got["readings"]["tensor"]
     assert tensor["credited"] == pytest.approx(3e12 / RHO) and got["credit"]["of_linears"] == 3e12 / got["macs"]["linears"]

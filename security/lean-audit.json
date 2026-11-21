@@ -4511,6 +4511,10 @@
   "Pous.SecurityProofs.StreamedWipeMeets96GiB": {
    "honest": ["Pous.SecurityProofs.StreamedWipeMeets96GiB_honest"],
    "nontrivial": "Pous.SecurityProofs.StreamedWipeMeets96GiB_nontrivial"
+  },
+  "Pous.SecurityProofs.StreamedWipeResidual": {
+   "honest": ["Pous.SecurityProofs.StreamedWipeResidual_honest"],
+   "nontrivial": "Pous.SecurityProofs.StreamedWipeResidual_nontrivial"
   }
  },
  "unwitnessed": {
@@ -14430,6 +14434,15 @@
    },
    "type_hash": "6d52bba05419a102487e5c42fdb09b253307186f9ac6328693929fe349dae5d8",
    "unfolded_hash": "3ad4dba7ae60c5f40ffc98633c8c95e1e89b53ca443c386daf173201e8a4f391"
+  },
+  "Pous.SecurityProofs.StreamedWipeResidual": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.SecurityProofs.StreamedWipeResidual_honest": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.SecurityProofs.StreamedWipeResidual_nontrivial": {
+   "owner": "@memory-accounting"
   },
   "Pous.SecurityProofs.StreamedWipe_honest": {
    "owner": "@memory-accounting",
@@ -26215,6 +26228,7 @@
    "ResourceAccounting.Guarantees.LeakPartsRegistered": "unstated: the registered site's leak bound, whose guarantee ResourceAccounting.SecurityProofs.LeakPartsRegistered left the lock by name until its honest lemma concludes RatedOn; it is listed again with that lemma (owner @network-accounting).",
    "Slowdown.Cut.SecurityProofs.HECharged": "frozen (no-function): Like HE, it is about an arbitrary registered circuit, its charged work and the values its words carry (ValuesInjective, NoSharedPair), under the named (H) and (E) (security/Definitions/Assumptions.lean), with the fresh-input budget k on a set G of a partition's blocks only: the blocks outside G are charged whole, at the MACs each holds whole, and what all the blocks read outside θ is a total T. It is not about the code of the inference-only policy's check; nothing joins it to a verdict yet.",
    "Pous.SecurityProofs.StreamedWipeMeets96GiB": "frozen (no-function): A bound in the streamed-label wipe's game (security/Definitions/Pous/Model/StreamedWipe.lean) at k = 2152 reads, the figure verity/wipe/v0 publishes, on any card whose device memory fills a segment or more, the 96 GiB device among them, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryAttester.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
+   "Pous.SecurityProofs.StreamedWipeResidual": "frozen (no-function): A bound in the streamed-label wipe's game (security/Definitions/Pous/Model/StreamedWipe.lean) at any fill of N labels of b bits and any k reads, at the wipe residual wipeResidual N k b s (security/Definitions/Pous/Model/StreamedWipeResidual.lean), whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryAttester.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
    "Spot.Sampling.Partition.audit_exfiltration": "frozen (obligation,no-function): It takes KnowledgeSound and BindSound (security/Proofs/Spot/Sampling/OneStage.lean:85, :94), open obligations of the backend, as hypotheses, and it is about the abstract one-stage audit rather than a Lean function.",
    "Spot.Sampling.audit_profile": "frozen (obligation,no-function): It takes KnowledgeSound and BindSound (security/Proofs/Spot/Sampling/OneStage.lean:85, :94), open obligations of the backend, as hypotheses, and it is about the abstract one-stage audit rather than a Lean function.",
    "Spot.Sampling.audit_work_floor": "frozen (obligation,no-function): It takes KnowledgeSound and BindSound (security/Proofs/Spot/Sampling/OneStage.lean:85, :94), open obligations of the backend, as hypotheses, and it is about the abstract one-stage audit rather than a Lean function.",
@@ -26229,22 +26243,22 @@
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
     "status": "open",
-    "test": "tests/verity/protocols/resource_accounting/memory/pous/verifier/test_pous_p2_ring.py::test_p2_ring_audit_secure_at_a_scaled_point",
+    "test": "tests/verity/protocols/accounting/memory/pous/verifier/test_pous_p2_ring.py::test_p2_ring_audit_secure_at_a_scaled_point",
     "why": "P2 in the ring model at the deployed point accepts a rho-bounded, (D, Q, L)-bounded responder with probability at most 1% + 2^-129 + 2^-130; open, and, if p is prime, false at D >= 32,894 (Q >= 2, L >= 65,789) for every k (PousP2Ring.tight_p16448, security/Proofs/Pous/P2/RingTight.lean), and at L >= 2^30 for k <= 88 (PousP2Ring.not_meetsOn_b19_k88, security/Proofs/Pous/P2/RingTrunc.lean); and, at k = 105, from L >= 2^169 with D >= 2 and Q >= 2 (Pous.Period.SecurityProofs.not_p2RingAuditSecure_trunc, security/Proofs/Pous/PeriodDeployed.lean: 501,819 blocks without their low 168 bits), so the deployed budget (16,446, 2^20, 2^64) lies outside every refuted region. Its test plays the ring-model audit at a scaled point (w = 184, 16 blocks, lambda = 9) with those two attacks and seeded bounded responders."
    },
    "Pous.P2.Assumptions.P2RingReducesToM1p": {
     "status": "open",
-    "test": "tests/verity/protocols/resource_accounting/memory/pous/verifier/test_pous_p2_ring.py::test_p2_ring_audit_secure_at_a_scaled_point",
+    "test": "tests/verity/protocols/accounting/memory/pous/verifier/test_pous_p2_ring.py::test_p2_ring_audit_secure_at_a_scaled_point",
     "why": "Every ring-model responder against P2 at k = 105 is matched up to 2^-130 by an m1p responder with 128 more bits per block (P2-M1-SGI); open, and it implies P2RingAuditSecure, so a refutation of that is one of this."
    },
    "Pouw.Fp8Atom.H1T.DistinctLiveH1T": {
     "status": "open",
-    "test": "tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_h1t_conjectures.py::test_distinct_live_h1t",
+    "test": "tests/verity/protocols/accounting/compute/pouw/verifier/test_h1t_conjectures.py::test_distinct_live_h1t",
     "why": "On every legal unit, H-1T's credited words are pairwise distinct functions of the unit's salt and none is free; open, with no counterexample on the legal units its test enumerates or samples."
    },
    "Pous.P2.Assumptions.P2RingRoundSecure": {
     "status": "open",
-    "test": "tests/verity/protocols/resource_accounting/memory/pous/verifier/test_pous_p2_ring.py::test_p2_ring_round_secure_at_a_scaled_point",
+    "test": "tests/verity/protocols/accounting/memory/pous/verifier/test_pous_p2_ring.py::test_p2_ring_round_secure_at_a_scaled_point",
     "why": "P2 in the ring model per round, at every block count from 2^19 to 2^25: at a boundary held at most rho*|C| bits, outside an event of mass k*eps0 over k rounds, a uniform challenge is answered with probability at most 1 - p given the earlier answers; open, and, if p is prime, it forces p = 0 at D >= 32,894 (Q >= 2, L >= 65,789) whenever eps0 < 1 and m/N <= 1 - p + eps0 at L >= 2^(t+1) for m blocks kept without t low bits (p = 0.043 false from L >= 2^167 at 2^19 when eps0 <= 2^-130), which security/Proofs/Pous/P2/RoundTests.lean proves."
    },
    "ResourceAccounting.Assumptions.TS.FoldOptFoldedAt": {
@@ -26254,17 +26268,17 @@
    },
    "ResourceAccounting.Assumptions.SquaringFloor": {
     "status": "open",
-    "test": "tests/verity/protocols/resource_accounting/memory/poub/verifier/test_encode_chain.py::test_squaring_floor_known_constructions",
+    "test": "tests/verity/protocols/accounting/memory/poub/verifier/test_encode_chain.py::test_squaring_floor_known_constructions",
     "why": "In the circuit model's nonlinear units (Definitions/ResourceAccounting/Gates: window proven by interval analysis; the only free operations are linear maps with coefficients fixed before the coins, so a cost is the budgeted units and a unit per data product, an s8-family lane whose two multiplicands both depend on run or coin data, whatever their range), one squaring mod p from a word's canonical bytes to n/8 byte-format limbs congruent to its square, right on more than ε of the words, costs at least e nonlinear units, at ε ≥ 2^−64 and p ≥ 2^66; open, priced e = (2L − 1) + (L − d(ε)), d(ε) = 4 + ⌈log₂(1/ε)/8⌉ (374 at p1024 and ε = 2^−40): the 2L − 1 column sums' multiplicative complexity (sketched) plus the red team's Lemma R at c = 0. Every known construction sits above it (ripple carries 16,896, 3-limb look-ahead 16,726). Its test builds them and checks each costs at least e, its column sums L² data products."
    },
    "ResourceAccounting.Assumptions.ChainSum": {
     "status": "open",
-    "test": "tests/verity/protocols/resource_accounting/memory/poub/verifier/test_encode_chain.py::test_chain_sum_known_chains",
+    "test": "tests/verity/protocols/accounting/memory/poub/verifier/test_encode_chain.py::test_chain_sum_known_chains",
     "why": "In the circuit model's nonlinear units, if one squaring mod p costs e nonlinear units (SquaringFloor), the masked k-round codec's words cost k·S·e nonlinear units each (S = Field.squarings, 1,021 at p1024), less a word per n − 1 run-input bits (Gates.EncodeBound at E = k·S·e), at ε ≥ 2^−64, k ≥ 1, p ≥ 2^66 and p ≡ 3 mod 4: Sloth's sequentiality (Lenstra–Wesolowski) in the model, the roots' squarings in sequence and no work shared across words; open. Its test chains the known squarings at p1024 and checks the chain costs their sum, and the bitwise codec's data products are measured in tests/benchmarks/property_redteam/test_bitwise_codec.py."
    },
    "Pous.P2.Assumptions.P2RingRoundSecureWide": {
     "status": "open",
-    "test": "tests/verity/protocols/resource_accounting/memory/pous/verifier/test_pous_p2_ring.py::test_p2_ring_round_secure_at_a_scaled_point",
+    "test": "tests/verity/protocols/accounting/memory/pous/verifier/test_pous_p2_ring.py::test_p2_ring_round_secure_at_a_scaled_point",
     "why": "P2RingRoundSecure's statement at every block count from 2^19 to 2^27, so that it reaches the demo's 1038*2^16 blocks; open and unchecked in N above 2^25 (nobody has checked the eps0 a proof would give against N there); it implies P2RingRoundSecure (Pous.SecurityProofs.roundSecure_of_wide), so every refutation of that one (PousP2Rounds.round_tight and round_trunc, security/Proofs/Pous/P2/RoundTests.lean) refutes it, and its falsification test is that one's, whose scaled point doesn't depend on N."
    },
    "Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1S8": {

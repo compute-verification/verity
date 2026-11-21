@@ -6,8 +6,8 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-FLOCK = "verity/protocols/proofs/flock/verifier"
-PROVER = ROOT / "verity/protocols/proofs/flock/prover/python/verity_flock"
+FLOCK = "verity/protocols/proof/flock/verifier"
+PROVER = ROOT / "verity/protocols/proof/flock/prover/python/verity_flock"
 AUDITING = ["benchmarks/one_stage/served_verdicts.sh", "benchmarks/prove_path/run.sh"]
 
 

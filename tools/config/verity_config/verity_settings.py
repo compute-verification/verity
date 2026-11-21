@@ -423,12 +423,9 @@ REGISTRY = EnvSettings(
     # ---- verity_flock's suite
     Setting("VERITY_ML_FLOCK_CUDA_GHASH", stripped, "", WHERE, "a Flock b684b12 checkout's cuda-ghash directory, which "
             "test_zerocheck_fused and test_ring_switch build their kernels against where a GPU is present: which tests run"),
-    # ---- verity.protocols.compose.verifier.lean's suite
+    # ---- verity.protocols.run.verifier.lean's suite
     Setting("VERITY_COMPOSITION_SERVED", stripped, "", WHERE, "a directory holding a served Pearl+ run, which the composition "
             "suite's opt-in served test reads: which tests run, never what a verdict says"),
-    Setting("VERITY_SAMPLED_TWO_CASE", stripped, "", WHERE, "a directory holding one honest two-stage play's case "
-            "(sampled_two_small.sh's $OUT/form), which the composition suite's opt-in accept test reads: which tests run, "
-            "never what a verdict says"),
     # ---- PoUW's prover suite
     Setting("VERITY_SUITE_ROOT", stripped, "", WHERE, "the tree the suite runner (tools/check/suites.py) runs a suite in, "
             "set under check, where a test that builds on the CPU fails without a C++ compiler instead of skipping: "

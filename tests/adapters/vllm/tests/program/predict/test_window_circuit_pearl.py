@@ -15,8 +15,8 @@ import numpy as np
 import pytest
 from verity.circuits.types import Array, Value
 from verity.commitments.periods import interface as IF
-from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import IDENTIFIED
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import (
+from verity.protocols.accounting.compute.pouw.verifier.kernel_schemes import IDENTIFIED
+from verity.protocols.accounting.compute.pouw.prover.serving.pearl_c import (
     ROW_ALIGN,
 )
 
@@ -312,7 +312,7 @@ def test_the_tiny_pearl_class_circuit_is_one_wired_program_of_registered_rows(pe
     circuit, prog, query = pearl_wired
     assert prog.annotations["free"] == []
     assert root_kinds(circuit, prog) == {"read": 41, "table read": 2, "opening": 3}
-    assert prog.fn.gates == 110_288_566
+    assert prog.fn.gates == 110_288_572  # six TokenFeed_v2 units, each one constant bit its zero row is broadcast from
     assert query["params"]["templates"] == circuit.ids
 
 

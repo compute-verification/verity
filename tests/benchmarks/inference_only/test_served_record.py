@@ -119,7 +119,7 @@ def made(case: dict, where: Path, *, accept: bool = False, credited: float = 0.9
         macs = CLASS[0] * work["linears"] if macs is None else macs
         window = {"same": tr["log"][-1]["previous"], "other": "ab" * 64, None: None}[tie]
         answer = {"protocol": SV.PEARLPLUS_PROTOCOL, "verdict": "accept", "reason": None, "commitment": "cd" * 64,
-                  "public": {"work": {"credited": round(credited * macs), "macs": macs},
+                  "public": {"work": {"credited": round(credited * macs), "checked_macs": macs},
                              **({"tie": {"record": window}} if window else {})},
                   "profile": {"source": "ef" * 64}}
         row = {**SV.row_of("compute-accounting", answer, out), "answer_from": SV.PEARLPLUS_FROM}

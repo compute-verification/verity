@@ -10,18 +10,18 @@ from typing import Any
 
 from verity.commitments import randomness as RND
 from verity.commitments.periods import interface as IF
-from verity.protocols.proofs.spot.prover import docket as DK
+from verity.protocols.proof.spot.prover import docket as DK
 
 from . import window_rows as WRS
 
-__all__ = ["SALTS", "commit", "key_of", "place_slots", "window_design"]
+__all__ = ["SALTS_DOMAIN", "commit", "key_of", "place_slots", "window_design"]
 
-SALTS = "verity/window-commit/salts/v1"
+SALTS_DOMAIN = "verity/window-commit/salts/v1"
 
 
 def key_of(run: str) -> RND.Key:
     """A window's salt key, drawn fresh for the one window under ``run``."""
-    return RND.derive(os.urandom(64), SALTS, {"window": run})
+    return RND.derive(os.urandom(64), SALTS_DOMAIN, {"window": run})
 
 
 def window_design(rule: str, circuit: IF.Circuit) -> dict[str, Any]:
@@ -29,7 +29,7 @@ def window_design(rule: str, circuit: IF.Circuit) -> dict[str, Any]:
     states to its stream, names over the circuit's proof blocks (`service.params_sampling_design`), so the window registers
     the design the stream holds it to. A fixed count is refused by name (`service.SamplingDesign`): no stream takes it, and
     the audit would hold the window to another design."""
-    from verity.protocols.proofs.spot.verifier import service as S
+    from verity.protocols.proof.spot.verifier import service as S
 
     S.SamplingDesign(rule)
     program, query = circuit.program()

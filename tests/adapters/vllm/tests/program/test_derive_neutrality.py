@@ -4,8 +4,7 @@ on every change.  The TP toy's ranks at world 2 and 8, the DSA indexer and Index
 at vLLM's sm_90 defaults, and RMSNorm (unfused, and fused with the residual) at GLM-5.3's width under the declared non-BI H200.
 
 A refactor that is meant to be neutral keeps every pin.  A change that moves a circuit on purpose re-pins in its own PR
-(`VERITY_REPIN=1 uv run pytest tests/program/test_derive_neutrality.py`), and the real rows of record are then rebuilt on a CPU pod:
-`verity-vllm neutrality --tier fast|heavy` (`pipeline/neutrality.py`)."""
+(`VERITY_REPIN=1 uv run pytest tests/program/test_derive_neutrality.py`)."""
 from __future__ import annotations
 
 import json

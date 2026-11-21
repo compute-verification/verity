@@ -24,10 +24,10 @@ from verity.circuits.silicon import fp32
 from verity.circuits.silicon.models import HOPPER_BF16_M16N8K16
 from verity.protocols.experimental.pearl_c4.prover import pc4
 from verity.circuits.ops import words as W
-from verity.protocols.resource_accounting.compute.pouw.prover.circuit.anchors import TileAnchors, region_bytes
+from verity.protocols.accounting.compute.pouw.prover.circuit.anchors import TileAnchors, region_bytes
 from verity.protocols.experimental.pearl_c4.prover import pearl_c4 as F
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_kw as P
-from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import DomainError
+from verity.protocols.accounting.compute.pouw.prover.schemes import pearl_kw as P
+from verity.protocols.accounting.compute.pouw.verifier.protocol import DomainError
 
 K = 128
 CASE = next(c for c in json.loads(V.OUT.read_text())["cases"] if c["case"] == "test-16-nvfp4")

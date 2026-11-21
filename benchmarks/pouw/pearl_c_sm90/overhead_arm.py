@@ -1,5 +1,5 @@
 """Pearl+ for `verity bench overhead`: the PoUW harness's arm (`benchmarks/pouw/harness/arm.py`, v0.6) over the served
-Pearl-C call on an H100 or H200 (`verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c` under the
+Pearl-C call on an H100 or H200 (`verity.protocols.accounting.compute.pouw.prover.serving.pearl_c` under the
 kernel scheme Pearl+ declares on the run's card, `PearlPlus.served`, on the kernel's, the
 serial schedule), and its ε. The door registers both in `verity_bench.overhead.SCHEMES`; the three names it fixes are each
 one definition here: `SCHEME` (Pearl+'s id in the door), `verifier` (the verifier's declaration, whose verdict is the
@@ -58,7 +58,7 @@ __all__ = ["PearlPlus", "epsilon"]
 
 HERE = Path(__file__).resolve().parent
 #: the kernel the arm builds and loads
-KERNEL = HERE.parents[2] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "kernels" / "pearl_c_sm90"
+KERNEL = HERE.parents[2] / "verity" / "protocols" / "accounting" / "compute" / "pouw" / "prover" / "kernels" / "pearl_c_sm90"
 #: Pearl+'s id in the door (`verity_bench.overhead.SCHEMES`), and the arm's name in its transcripts' paths
 SCHEME = "pearl-plus"
 #: the stock scaling the door times beside it, its useful output's (`baselines.FAMILIES`)
@@ -91,8 +91,9 @@ def verifier() -> dict:
     shape's ``{verdicts}`` (the run's ``verdicts/``; the pass stays in the private passes directory); its
     line names no transcript, so the harness never reads it as a verdict, and a twin that rejects ends the shape's commands
     unaccepted. Then the Lean step (`served_passes.py lean`, PouwVerifier.PearlPlus's ``pouw-pearlplus`` built in the tree)
-    judges the same pass, coins, samples and coin record, held to the twin's verdict: only its line starts ``ACCEPT`` or
-    ``REJECT`` and names the manifest's sha256, and where the Lean refuses or disagrees it names none. The no-write
+    judges the same pass, coins, samples and coin record, its verdict compared with the twin's as a measurement that gates
+    nothing: only its line starts ``ACCEPT`` or ``REJECT`` and names the manifest's sha256, and where the Lean gives no
+    verdict it names none. The no-write
     control's at the same path under ``negative/``, which the Lean must reject."""
     pass_ = ["--passes", "{dir}", "--manifest", "{transcript}"]
     return {"name": "served_passes.py lean: Pearl+'s verdict in Lean (PouwVerifier.PearlPlus) on a retained Pearl-C pass, "
@@ -116,7 +117,7 @@ def epsilon(m: int, n: int, k: int, card: str, delta: Fraction = DELTA) -> dict:
                           f"(window.eps_at), and {PINNED.name} states no window of record")
     if w["card"] != card:
         raise ValueError(f"the window of record ({w['basis']}) ran on the {w['card']}, not the {card}")
-    from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
+    from verity.protocols.accounting.compute.pouw.verifier import window as Wd
 
     eps = Wd.eps_at(w["k"], Fraction(delta), w["credited"], w["work"], 1)
     return {"epsilon": float(eps), "delta": float(delta),
@@ -210,7 +211,7 @@ class PearlPlus:
                 "verifier": verifier()}
 
     def domain(self, shape: Shape) -> str | None:
-        from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
+        from verity.protocols.accounting.compute.pouw.prover.serving import pearl_c as PPD
 
         bad = PPD.refusals(self.served, {0: (shape.n, shape.k)})
         if bad:
@@ -230,8 +231,8 @@ class PearlPlus:
         rows (FP32 words), the tile leaves (C̃ and U, FP32 words, over the m₁₆ rows a partial row tile has) and y's m real
         rows (FP32 words) the call hashes, and B's rows its weight side does."""
         from arm import Work
-        from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Shape as Unit
-        from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
+        from verity.protocols.accounting.compute.pouw.verifier.protocol import Shape as Unit
+        from verity.protocols.accounting.compute.pouw.prover import schemes as pouw_schemes
 
         s, m = pouw_schemes.get(self.served), m16(shape.m)
         unit = Unit(m, shape.k, shape.n)
@@ -260,7 +261,7 @@ class PearlPlus:
     def kernel(self) -> Any:
         """The served path's kernel on the built cubin, loaded once."""
         if self._kernel is None:
-            from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
+            from verity.protocols.accounting.compute.pouw.prover.serving import pearl_c as PPD
 
             if self.cubin is None:
                 raise RuntimeError("prepare before build: the harness builds an arm first")
@@ -316,11 +317,11 @@ class _Held:
 
     def __init__(self, arm: PearlPlus, key: tuple, operands, shape):
         import torch
-        from verity.protocols.resource_accounting.compute.pouw.verifier import verifier as PV
-        from verity.protocols.resource_accounting.compute.pouw.verifier.audit import weights_root
-        from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger
-        from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
-        from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
+        from verity.protocols.accounting.compute.pouw.verifier import verifier as PV
+        from verity.protocols.accounting.compute.pouw.verifier.audit import weights_root
+        from verity.protocols.accounting.compute.pouw.verifier.coins import Challenger
+        from verity.protocols.accounting.compute.pouw.prover.serving import pearl_c as PPD
+        from verity.protocols.accounting.compute.pouw.prover import schemes as pouw_schemes
         from verity_torch.pouw.pearl_c import run_device as PPDR
         from verity_torch.pouw.pearl_c.served_y_device import DeviceTrees
 
@@ -392,7 +393,7 @@ class _YTree:
 
     def __init__(self, trees: Any, m: int, n: int, index: int) -> None:
         from verity_torch.pouw.pearl_c import run_device as PPDR
-        from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
+        from verity.protocols.accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
         from verity_torch.pouw.pearl_c.served_y_device import y_salts
 
         run = trees.run
@@ -511,8 +512,8 @@ class _Call:
         """The pass the launch wrote, ended as a retained served pass ends, into `out`, and the epoch's coin commitment
         beside it."""
         import torch
-        from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul
-        from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Shape as Unit
+        from verity.protocols.accounting.compute.pouw.verifier.protocol import Matmul
+        from verity.protocols.accounting.compute.pouw.verifier.protocol import Shape as Unit
         from verity_torch.pouw.pearl_c import run_device as PPDR
 
         if not self.hashing:

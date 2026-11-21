@@ -24,14 +24,14 @@ from verity.circuits.evaluation import evaluate_batch
 from verity.commitments.gates import embedding as E
 from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
-from verity.protocols.proofs.spot.prover import docket as DK
-from verity.protocols.proofs.spot.verifier.one_stage import registered as CR
+from verity.protocols.proof.spot.prover import docket as DK
+from verity.protocols.proof.spot.verifier.one_stage import registered as CR
 from verity.commitments import registered_value as RV
-from verity.protocols.resource_accounting.compute.pouw.verifier.audit import hm96_salt
-from verity.protocols.resource_accounting.network.prover import ingress_scan as IS
-from verity.protocols.resource_accounting.network.prover import scan_state_rows as SR
-from verity.protocols.resource_accounting.network.verifier import network_attester as W
-from verity.protocols.resource_accounting.network.verifier.id_form import id_request
+from verity.protocols.accounting.compute.pouw.verifier.audit import hm96_salt
+from verity.protocols.accounting.network.prover import ingress_scan as IS
+from verity.protocols.accounting.network.prover import scan_state_rows as SR
+from verity.protocols.accounting.network.verifier import network_attester as W
+from verity.protocols.accounting.network.verifier.id_form import id_request
 
 from tests.program.predict import test_steps as S
 from tests.program.predict.test_window_circuit import (
@@ -295,7 +295,7 @@ def _traffic(cls: WC.WindowClass, prompts, arrivals) -> tuple[list[bytes], dict[
     import sys
     from pathlib import Path
 
-    spec = importlib.util.spec_from_file_location("scan_traffic", Path(__file__).parents[6] / "tests" / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "scan_traffic.py")
+    spec = importlib.util.spec_from_file_location("scan_traffic", Path(__file__).parents[5] / "verity" / "protocols" / "accounting" / "network" / "verifier" / "scan_traffic.py")
     assert spec is not None and spec.loader is not None
     ST = sys.modules["scan_traffic"] = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(ST)
@@ -893,7 +893,7 @@ def test_a_windows_rows_are_what_its_definitions_compute_on_its_committed_inputs
             t = ins[0].view("<u4").reshape(-1)
             for u in range(n):
                 path = np.ascontiguousarray(ins[5][u]).view("<u8").astype(">u8").tobytes()
-                h, ok = E.reference(256, int(t[u]), *(np.ascontiguousarray(ins[g][u]).view("<u8").astype(">u8").tobytes()
+                h, ok = E.reference_opening(256, int(t[u]), *(np.ascontiguousarray(ins[g][u]).view("<u8").astype(">u8").tobytes()
                                                       for g in (1, 2)), ins[3][u].tolist(),
                                     np.ascontiguousarray(ins[4][u]).view("<u8").astype(">u8").tobytes(),
                                     [path[k:k + 64] for k in range(0, len(path), 64)])

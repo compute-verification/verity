@@ -2,7 +2,7 @@
 
 This is the byte format of a Program and the rules that turn it into a circuit: from the canonical bytes of a descriptor, a
 reader obtains every gate, its primitive and its operand gates, and nothing else is needed. It is written for a second
-implementation, such as the Lean port of `Q_word` (`verity/protocols/proofs/spot/verifier/lean/`). It describes the bytes the codec writes and moves no digest.
+implementation, such as the Lean port of `Q_word` (`verity/protocols/proof/spot/verifier/lean/`). It describes the bytes the codec writes and moves no digest.
 
 - Reference: `verity.circuits.codec` (`encode_program`, `decode_program`, `canonical_json`, `jcs_domain_error`, `program_digest`,
   `definition_digest`),
@@ -355,7 +355,12 @@ its word's with each `Value<w>` an `Array<w, Value<1>>` (`Value<1>` stays a bit)
 - `E_BODY_MISSING`: a word primitive among `definitions` has no entry;
 - `E_BODY_KEY`: it names an id that is no word primitive among `definitions`;
 - `E_BODY_NOT_BOOLEAN`: taking the keys in order, an entry names no definition, or one that is not Boolean or not of its
-  word's bit signature.
+  word's bit signature, or an input primitive. An input body would make its word an input node wherever it is called
+  (§5.2), a value no claim registers: where a definition other than the root calls the word, the refusal names that
+  definition's first such node (the least such definition key), as §5.2's does; otherwise it names the body. A constant
+  bit stays a body: it is a gate. Nor is a body the root or a definition that reaches a call of the root, which would read
+  the root's input nodes (§5.2): no definition calls the root. Such a body is Boolean only where the root is, so the
+  decoder looks for one only then; otherwise the body is refused as not Boolean.
 
 A writer walks the bodies last (§4.6), after the root and `program_fn`'s functions, in key order, so what only they call
 enters `callees` and `types` after the rest. A key named twice keeps its last value, in either parser.
@@ -398,7 +403,8 @@ so `Input016_v1`, `Input0_v1`, `Input16_v2`, `Input16` and `Input16_v1\n` are no
 Each input primitive of width w has no parameters and returns `Value<w>`: a gate whose value is prescribed (asserted equal to
 the claimed input), not computed, and never held by the program. The decoder materializes it from the id, ahead of any
 registry entry. An input node appears only in the root's body: `Program` and the decoder (§4.6) refuse one in any other
-definition, where no parameter would bind it.
+definition, where no parameter would bind it, and the decoder refuses an input primitive, the root or a call of the root
+as or in a word primitive's Boolean body (§4.9).
 
 The Program's Calls (`partition_object.calls`, the proof blocks of `Q_word`) are the root body's nodes that are not input nodes, in
 body order.
@@ -439,7 +445,7 @@ No statement or table claims that a Program's values are always hidden until the
 The format does not refuse a program that holds data: a descriptor's bytes and digests mean what they meant, and programs move
 to registered inputs under new ids.
 
-### 5.4 Supplied inputs and held outputs
+### 5.4 Supplied inputs
 
 A *supplied* input is a parameter of the program function whose value the verifier computes, by a public function C names,
 from public things only: live coins (the proof service's, or a trusted device's signed coin) with their openings against a
@@ -532,7 +538,8 @@ So a storage round's index, its session's header and context, the setup's salt, 
 PoUW block's salt, its log's base and its operands' roots, which its seed Definition hashes inside the block, are one kind
 of input, with no case per scheme.
 
-**What the decoder refuses**, after §5.1's `E_INPUTS*`, in this order (`supplied.check_entry`, `check_held`):
+**What the decoder refuses**, after §5.1's `E_INPUTS*`, in this order (a mark's form is `supplied.mark_of`'s; a mark's
+function and nodes are `Spot/Supplied.lean`'s `markOf` and `marks`):
 
 - `E_SUPPLIED_MARK`: an entry's third element is not a mark of exactly these four keys of these forms;
 - `E_INPUTS_MIXED`: a marked parameter's nodes are not all supplied-input nodes, or an unmarked one's include one. So a
@@ -541,25 +548,18 @@ of input, with no case per scheme.
 - `E_SUPPLIED_FN`: the function is not in the registry;
 - `E_SUPPLIED_ARGS`: the args are not the function's, or the function has no value at them;
 - `E_SUPPLIED_WIDTH`: the parameter's leaves are not of one width w, `bits` is not the function's length at `args`, or the
-  leaves' `n · w` bits are not `bits` read whole by `layout`;
-- `E_HELD`: a held output (below) names no run of leaves of a supplied input of its width whose length divides the row's.
+  leaves' `n · w` bits are not `bits` read whole by `layout`.
 
 A supplied leaf's origin (§12) is `coin` when its function's is (the value is the coin itself: `window.salt/v1`), and
 `supplied` otherwise. §12's rules read `coin` as they do for a coin input, so a salt reaches only noise primitives, receipt
 folds and seeds, and a value computed from a coin (a round's index) reaches any port but a coin port. A supplied node's port
 is never `"kind": "static"` or `"kind": "position"`, and it is `"kind": "coin"` exactly when its origin is (`E_PORT_KIND`).
 
-**Held outputs.** A root `ret` port row may carry `"equals": [name, at, n]`: leaf `lo + i` of the row is held to leaf
-`at + (i mod n)` of the supplied input `name`, of the same width. With `const.u16/v1` at 1 and `n` = 1 it holds every
-unit's verdict word to 1, which is what an opening's verdict and a check's `ok` are; a block whose held output differs is
-refused inside the proof, since its row opens no root the verifier holds.
-
 **A block** (`restrict`). A maximal run of in(S) of one width whose gates are supplied-input gates of one parameter of C is
 a parameter of the block bound `supplied`, named `<name>/p<i>`; a run ends where the parameter does or skips a leaf. Its
 entry carries C's mark with `"of": [name, lo, hi]`, the leaves of C's parameter it covers (`0 <= lo < hi`, inside the
 value's bits), and `bits` the part's (`supplied.part`); a block's decoder checks the part as it checks C's mark, with
-`bits` the part's in place of the value's (`E_SUPPLIED_MARK`, `E_SUPPLIED_WIDTH`). The leaves a block's
-held outputs are held to join in(S) as such a part. The listing's binding of such an input bit is `supplied`. A block
+`bits` the part's in place of the value's (`E_SUPPLIED_MARK`, `E_SUPPLIED_WIDTH`). The listing's binding of such an input bit is `supplied`. A block
 whose one expanding unit reads the input and whose other units read that unit's outputs has the part in in(S) once, and
 the expansion's rows are the block's own gates; a block that holds only readers of the rows reads them as wires. A block that
 reads one leaf of an input reads that leaf alone: the key of an opening reads i_j's low half, leaf 2 of
@@ -569,7 +569,7 @@ reads one leaf of an input reads that leaf alone: the key of an opening reads i_
 leaves as the units read them, at the positions C gives (`OneCircuit.pos`, as for a registered input), row i salted by the
 public salt `registered_value.supplied_salts(<program digest>, <name>, i)` and committed under the value's registered
 domain. The verifier computes the root from the rows it computed (`Flock.Registered.checkKnown`), and the statement's rows
-open it as any registered read's do; a held output is a registered read of an output row against such a value. The base
+open it as any registered read's do. The base
 verifier is handed no other kind of public input. A supplied value is public, so each part's tree is listed in what the
 statement reveals (`Flock.Registered.knownList`). A value the verifier cannot compute (a coin's opening fails, a commitment
 it reads is missing) makes no statement, refused in the clear.
@@ -830,7 +830,7 @@ block's port is follows from the Program's description alone: the SPOT verifier 
 over the root's nodes in order, each call or batch of a template marking it taking one row per member, and refuses a mark
 that is not one whole parameter or one whole field of the return (the output port `o<j>` of field `j`, or `o0` of a
 return that is no tuple or record), a label on two ports of one template, and a mark on a Definition any node but a root
-call or batch calls (`Spot.CertifiedRows`, `verity/protocols/proofs/spot/verifier/one_stage/certified_rows.py`).
+call or batch calls (`Spot.CertifiedRows`, `verity/protocols/proof/spot/verifier/one_stage/certified_rows.py`).
 
 An interval `[a, b]` has integers `a ≤ b`. It types leaves of one width `w`, and reads them as signed when `a < 0` and as
 unsigned otherwise, so it lies within `[-2^(w-1), 2^(w-1) - 1]` or within `[0, 2^w - 1]`. A *full* interval is one of those
@@ -912,7 +912,7 @@ as declared, so a composite over exact steps declares the intervals its operands
   check: PoUW's compile pass holds a proof block's z to read none of them (`noise-in-z`), or under a one-stream scheme to be made
   from the words its receipt folds by the Definitions that peel the noise back out (`stream`). No dataflow rule can tell
   a peeled value from a noised one: the peel removes the noise by its arithmetic. So a seed is minted only by PoUW's
-  `verity/protocols/resource_accounting/compute/pouw/prover/circuit/seeds.py`, and a `"kind": "position"` port is declared only there, beside a proof block's
+  `verity/protocols/accounting/compute/pouw/prover/circuit/seeds.py`, and a `"kind": "position"` port is declared only there, beside a proof block's
   sink return, as a padded proof block's key count with no coin port beside it (never a seed), or in a test named with its reason
   (`tests/test_seed_ports.py`).
 - **`E_COIN_REUSE`** (one use): in the flattened Program (every call, batch member and scan iteration counted), an input leaf

@@ -5,7 +5,7 @@ public import Spot.OneStage
 /-!
 # SPOT's one-stage audit: what its Lean verdict means (`Spot.OneStage.check`)
 
-The property of the executable audit (`verity/protocols/proofs/spot/verifier/lean/`, the port of `one_stage.audit.audit_record`
+The property of the executable audit (`verity/protocols/proof/spot/verifier/lean/`, the port of `one_stage.audit.audit_record`
 with `registration.check` before it), stated against `OneStage.check` as it runs, for every input of the types its
 decoders produce. It takes no premise: the check is a function of its three inputs, and `AcceptMeans` says what it accepts.
 Among those inputs are the ports, the leaf layer and the anchors the caller gives as the verifier's, and the verdicts,
@@ -442,9 +442,9 @@ def OpenedRegistered (opened registered : Array (String × Json)) : Prop :=
 
 /-- The units, as the record holds them (`audit_record`'s checks after the sample's): the proved statement's instances are
 exactly the units the sample proves (its units and a work sample's closure, ascending); the receipt names the commitment's
-digest; the sessions were served exactly the sampled proof blocks, when they were handed the sample; the sessions' roots, when
-given, name at least one port, each port's root the one the record registers for it (`Record.byPort`, the last root of
-each port); and each of the record's own values and of the window values `named` the verifiers report a read of, less
+digest; the sessions were served exactly the sampled proof blocks, when they were handed the sample; each of the sessions' roots,
+when given, is the root the record registers for its port (`Record.byPort`, the last root of each port), which says no
+port is covered: that every port of every proved member's statement is held is `OneStageZk.headerHeldAt`'s; and each of the record's own values and of the window values `named` the verifiers report a read of, less
 those of its own ports at their own roots and those of a window value at its window entry's root (`openedRoots`), is a
 value the record registers, the read opened against the record's root for it
 (`Record.registeredRoots`, each value's last entry). A registered value no verifier reports a read of is not required
@@ -454,7 +454,7 @@ def UnitsProved (named : Array String) (c : Commitment) (e : Evidence) : Prop :=
   Receipt c e ∧
   (∀ served, e.served = some served →
     (served.map fun n : Nat => (n : Int)).qsort (· < ·) = (sampledInts e.draw).qsort (· < ·)) ∧
-  (∀ roots, e.sessionRoots = some roots → entries roots ≠ #[] ∧
+  (∀ roots, e.sessionRoots = some roots →
     ∀ pr ∈ entries roots, ∃ reg, (Record.byPort c.record).find? (·.1 == pr.1) = some reg ∧ jeq (getD reg.2 "root") pr.2) ∧
   OpenedRegistered ((openedRoots named c.record e.verdicts).getD #[]) (Record.registeredRoots c.record)
 

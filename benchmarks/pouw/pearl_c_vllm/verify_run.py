@@ -130,7 +130,7 @@ import numpy as np
 from verity.commitments import docket_digest as DD
 from verity.commitments import domains as DM
 from verity.commitments import Commitment, Opening, VerificationLimits, verify_opening
-from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
+from verity.protocols.accounting.compute.pouw.verifier.audit import (
     HM96,
     ROW_SCHEMA,
     Epoch,
@@ -141,28 +141,28 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     Workload,
     tile_refs,
 )
-from verity.protocols.resource_accounting.compute.pouw.verifier import verifier as PV
-from verity.protocols.resource_accounting.compute.pouw.verifier.coins import CoinCommitment
-from verity.protocols.resource_accounting.compute.pouw.verifier.credit import CALL_RANGE_CODE, REPEATED_CALL, passes_distinct
-from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import DomainError, Matmul, Shape, Tile, call_place, tagged
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_u as PCU
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_work as PW
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c import H100, K_MIN, TILE
-from verity.protocols.resource_accounting.compute.pouw.verifier.window import LIVE_SCHEME, pad as grid_pad
-from verity.protocols.compose import schemes
-from verity.protocols.resource_accounting.scheme import declared
-from verity.protocols.proofs.spot.verifier.challenger.challenger import LiveCommitment
+from verity.protocols.accounting.compute.pouw.verifier import verifier as PV
+from verity.protocols.accounting.compute.pouw.verifier.coins import CoinCommitment
+from verity.protocols.accounting.compute.pouw.verifier.credit import CALL_RANGE_CODE, REPEATED_CALL, passes_distinct
+from verity.protocols.accounting.compute.pouw.verifier.protocol import DomainError, Matmul, Shape, Tile, call_place, tagged
+from verity.protocols.accounting.compute.pouw.prover.schemes import pearl_c_u as PCU
+from verity.protocols.accounting.compute.pouw.prover.schemes import pearl_c_work as PW
+from verity.protocols.accounting.compute.pouw.prover.schemes.pearl_c import H100, K_MIN, TILE
+from verity.protocols.accounting.compute.pouw.verifier.window import LIVE_SCHEME, pad as grid_pad
+from verity.protocols.run import schemes
+from verity.protocols.accounting.scheme import declared
+from verity.protocols.proof.spot.verifier.challenger.challenger import LiveCommitment
 from verity.commitments import registered_value as RV
 from verity.errors import ProtocolError
 from verity.commitments.randomness import derive
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PD
-from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import opened as PO, window as PWR
+from verity.protocols.accounting.compute.pouw.prover.serving import pearl_c as PD
+from verity.protocols.accounting.compute.pouw.prover import schemes as pouw_schemes
+from verity.protocols.accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
+from verity.protocols.accounting.compute.pouw.prover.serving.pearl_c import opened as PO, window as PWR
 from verity_config.settings import of
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "clear"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "compute" / "pouw" / "prover" / "clear"))
 import fast_tile as FT
 import clear_work as CW
 from clear_audit import TileOpening, Transcript, Verifier
@@ -693,7 +693,7 @@ def credited_cells(scheme: Any, r: PW.UnitRecord) -> list[int]:
 
 
 def pass_macs(p: Pass) -> int:
-    """One pass's credited cells' MACs, each cell at its record's kept K (`credit_at_assumption`'s ``macs`` over it alone;
+    """One pass's credited cells' MACs, each cell at its record's kept K (`credit_at_assumption`'s ``checked_macs`` over it alone;
     over `whole_pass`, `structural_credit`'s)."""
     return sum(sum(credited_cells(p.scheme, r)) * r.k_kept for r in p.records)
 
@@ -736,12 +736,12 @@ def credit_at_assumption(passes: list[Pass], t: int, delta: Fraction, over: int 
     tiles = sum(1 for cells, _ in taken.values() for c in cells if c)
     wrong, rho = sum((w for _, w in taken.values()), Fraction(0)), passes[0].scheme.cap
     credited = (1 - rho) * max(macs - wrong, Fraction(0))
-    return {"credited": math.floor(credited), "credited_tiles": tiles, "macs": macs, "rho": str(rho), "epsilon": str(eps),
+    return {"credited": math.floor(credited), "credited_tiles": tiles, "checked_macs": macs, "rho": str(rho), "epsilon": str(eps),
             "over_cap_draws": over}
 
 
 #: the exact credit's fields the grid form replaces (`grid_work`), kept as the profile's ``exact_work``
-EXACT_WORK = ("credited", "credited_tiles", "macs")
+EXACT_WORK = ("credited", "credited_tiles", "checked_macs")
 
 
 def whole(r: PW.UnitRecord) -> PW.UnitRecord:
@@ -803,7 +803,7 @@ def uncredited_cells(r: PW.UnitRecord) -> tuple[int, dict[str, int]]:
 def uncredited_calls(passes: list[Pass], t: int, delta: Fraction, over: int = 0) -> dict:
     """Where an accepted run's linears' MACs go uncredited, call by call (the verify document's ``uncredited``): each call's
     real MACs (its real rows × n × its weight's k), the MACs its credited cells hold at |K| (``checked_macs``, summing to
-    the credit's ``macs``), its real MACs the credit leaves out by cause (`uncredited_cells` at |K|, and ``kept_width``,
+    the credit's ``checked_macs``), its real MACs the credit leaves out by cause (`uncredited_cells` at |K|, and ``kept_width``,
     its real rows × n × the k − |K| side channels), and the credit's three terms on it: ``epsilon_macs``, what
     `credit_at_assumption`'s deduction takes off it at ε with no sample over the inert-work bound; ``over_bound_macs``, what
     the ``over`` samples on tiles over it add; ``rho_macs``, ρ of the rest; and ``credited_macs``, (1 − ρ) of the rest.  The
@@ -882,7 +882,7 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
     Held to a class, the work the verdict publishes (``public.work``, and the line's credit) is in the grid form
     (`grid_work`): the class's structural credit, MACs and credited tiles (`structural_credit`), the credit less the
     give-up padded up to H1's execution phase grid (``give_up``), so at most the exact credit. The exact one
-    (`credit_at_assumption`'s ``credited``, ``credited_tiles`` and ``macs``) is the profile's ``exact_work``, held on the
+    (`credit_at_assumption`'s ``credited``, ``credited_tiles`` and ``checked_macs``) is the profile's ``exact_work``, held on the
     node. Without a class the structural credit is not defined, and ``public.work`` is the exact credit.
 
     ``paths`` are the passes the prover retained, pass i the served run's round ``rounds[i]`` (default i), each of its calls

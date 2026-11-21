@@ -32,6 +32,9 @@
                                     lean has an error on its own lines (on a project machine with
                                     --on auto); --siblings: then fail on a name another module of its package declares too;
                                     --on MACHINE --tree NAME: on the tree NAME that machine keeps (a branch's kept tree)
+    verity lean judge [PKG ...]     the Lean check's source judge, no build and no Lean: each package's (by default every
+                                    one with a lean-audit.json) failures its audit would refuse before any build, with
+                                    their fixes where known; exits 1 on any (judge.py)
     verity lean deployed [--rev REV] [--today YYYY-MM-DD]
                                     the deployed guarantees' rows as JSON, read from the Lean locks at REV by git alone:
                                     each one's gap as the running checkout's Lean check computes it, and each open or gap
@@ -58,6 +61,7 @@ ROOT = HERE.parents[1]
 CHECK = ROOT / "tools" / "check"
 LAKEFILES = ("lakefile.lean", "lakefile.toml")
 USAGE = ("verity lean try FILE [--siblings] [--on auto | --on MACHINE [--pool P] [--as LANE] [--tree NAME]]\n"
+         "verity lean judge [PKG ...]\n"
          "verity lean deployed [--rev REV] [--today YYYY-MM-DD]")
 #: `research run --on`'s line naming the run it started (or refused) and the machine it is on, which `--on auto` chose
 LAUNCHED = re.compile(r"^research: run (\S+) (?:launched|refused) on (\S+)", re.M)
@@ -65,7 +69,7 @@ LAUNCHED = re.compile(r"^research: run (\S+) (?:launched|refused) on (\S+)", re.
 MOVED = re.compile(r"^research: run \S+ left its line without starting \S+; its late twin (\S+) on (\S+) is the run now", re.M)
 #: Flock's Lean verifier, which `verity verify proof` runs: its Lake package and the root module of the executable `lake
 #: build` writes there, whose name the package's lakefile gives (`verify_proof_exe`)
-VERIFIER = "verity/protocols/proofs/flock/verifier"
+VERIFIER = "verity/protocols/proof/flock/verifier"
 VERIFY_PROOF_ROOT = "FlockVerify"
 
 
@@ -218,6 +222,10 @@ def _lean_here(file: str, siblings: bool = False) -> int:
 
 
 def _lean(args: list[str]) -> int:
+    if args and args[0] == "judge":
+        from . import judge
+
+        return judge.main(args[1:])
     if args and args[0] == "deployed":
         from . import deployed
 

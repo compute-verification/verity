@@ -32,10 +32,10 @@ from verity.commitments.rowleaf import (
 )
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
-from verity.protocols.proofs.spot.prover import docket as DK
+from verity.protocols.proof.spot.verifier.one_stage import docket as R
+from verity.protocols.proof.spot.prover import docket as DK
 from verity.commitments import randomness as RND
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+from verity.protocols.proof.spot.verifier.one_stage import partition as P
 
 from verity_vllm.commit import index as IX
 from verity_vllm.definitions.registry import b1  # noqa: F401  (registers RoPEHead_v1 and SiluMul_v1)

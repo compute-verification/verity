@@ -53,7 +53,7 @@ from pathlib import Path
 import a5
 from composite import canonical, write_private
 
-from verity.protocols.proofs.spot.verifier.one_stage import lean_child as LC, proofs as PF
+from verity.protocols.proof.spot.verifier.one_stage import lean_child as LC, proofs as PF
 from verity.commitments.domains import ONE_STAGE_PROTOCOL_V2
 
 ID = ONE_STAGE_PROTOCOL_V2

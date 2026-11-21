@@ -1,7 +1,7 @@
 """`served_verdicts.sh`'s advice call (`advice_of`, `verity-vllm advice`) under DAY: the call registers the compiler in the
 day's registration log (`serve_day.register_compiler`), which a log with site entries checks under DAY_PARAMS' auditor, so
 it passes ``--day-params`` whenever the run declared a day with them, and nothing new otherwise. The call comes before
-every coin that samples what the compiler builds: in the main flow before step 3's SPOT and step 6's window commit and V3c's audit. A PoUW H1
+every coin that samples what the compiler builds: in the main flow before step 6's window commit and V3c's audit. A PoUW H1
 window's own coins, flipped at its close while the endpoint serves, sample H1's blocks, not the circuit the compiler
 builds, and without the tie they come before the call."""
 from __future__ import annotations
@@ -43,6 +43,5 @@ def test_the_advice_call_comes_before_each_coin_that_samples_what_the_compiler_b
     text = SCRIPT.read_text()
     main = text[text.index("\nCA=$(compiler_args)\n"):]
     first = main.index('advice_of "$k" "$CA"')
-    for later in ("bash benchmarks/prove_path/run.sh", "v3c_commit", "v3c_proved"):
+    for later in ("v3c_commit", "v3c_proved"):
         assert first < main.index(later), later
-    assert text.count("bash benchmarks/prove_path/run.sh") == 1

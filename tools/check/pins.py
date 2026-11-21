@@ -124,18 +124,18 @@ class Pin:
         return f"cd {self.under} && {self._sha256sum(root)} > {Path(self.path).name}"
 
 
-NCP = "tests/verity/protocols/resource_accounting/compute/pouw/verifier/ncp_lean.py"
+NCP = "tests/verity/protocols/accounting/compute/pouw/verifier/ncp_lean.py"
 PINS = (
     Pin("tools/pous_grader/TRUSTED.sha256", None, "tools/pous_grader", None),
-    Pin("tests/verity/protocols/proofs/flock/prover/fixtures/randomness_lean.json", "inputs", "", "bash tests/verity/protocols/proofs/flock/prover/lean/generate.sh",
+    Pin("tests/verity/protocols/proof/flock/prover/fixtures/randomness_lean.json", "inputs", "", "bash tests/verity/protocols/proof/flock/prover/lean/generate.sh",
         "security/Proofs"),
-    Pin("tests/verity/protocols/proofs/spot/verifier/fixtures/exfiltration_lean.json", "inputs", "",
-        "bash tests/verity/protocols/proofs/spot/verifier/lean/generate.sh", "security/Proofs"),
-    Pin("tests/verity/protocols/proofs/spot/verifier/fixtures/exfiltration_two_lean.json", "inputs", "",
-        "bash tests/verity/protocols/proofs/spot/verifier/lean/generate.sh", "security/Proofs"),
-    Pin("tests/verity/protocols/proofs/flock/prover/fixtures/inner_claims.json", "inputs", "",
-        "bash tests/verity/protocols/proofs/flock/prover/lean/generate_inner_claims.sh", "verity/protocols/proofs/flock/verifier"),
-    Pin("tests/verity/protocols/resource_accounting/compute/pouw/verifier/vectors/ncp_lean.json", "sources_sha256", "security",
+    Pin("tests/verity/protocols/proof/spot/verifier/fixtures/exfiltration_lean.json", "inputs", "",
+        "bash tests/verity/protocols/proof/spot/verifier/lean/generate.sh", "security/Proofs"),
+    Pin("tests/verity/protocols/proof/spot/verifier/fixtures/exfiltration_two_lean.json", "inputs", "",
+        "bash tests/verity/protocols/proof/spot/verifier/lean/generate.sh", "security/Proofs"),
+    Pin("tests/verity/protocols/proof/flock/prover/fixtures/inner_claims.json", "inputs", "",
+        "bash tests/verity/protocols/proof/flock/prover/lean/generate_inner_claims.sh", "verity/protocols/proof/flock/verifier"),
+    Pin("tests/verity/protocols/accounting/compute/pouw/verifier/vectors/ncp_lean.json", "sources_sha256", "security",
         f"uv run python {NCP} write security/ && (cd security/ && lake build Definitions.Pouw.NCP.RouteU && "
         f"lake env lean NcpCheck.lean > ncp_lean.out) && uv run python {NCP} pin security/ncp_lean.out security/; "
         f"s=$?; rm -f security/NcpCheck.lean security/ncp_lean.out; exit $s", "security"),
@@ -156,13 +156,12 @@ class Writer:
 
 
 CIRCUITS_TESTS, VLLM_PROGRAM_TESTS = "tests/verity/circuits/", "tests/adapters/vllm/tests/program/"
-POUW_PROVER_TESTS = "tests/verity/protocols/resource_accounting/compute/pouw/prover/"
+POUW_PROVER_TESTS = "tests/verity/protocols/accounting/compute/pouw/prover/"
 WRITERS = (
     *(Writer(CIRCUITS_TESTS + f, CIRCUITS_TESTS + m) for f, m in (
         ("boolean_vectors.json", "test_boolean.py"),
         ("count_vectors.jsonl", "test_count.py"),
         ("format_vectors.json", "test_format_spec.py"),
-        ("partition_v2_vectors.json", "test_partition_v2.py"),
         ("qcall_vectors.json", "test_qcall_vectors.py"),
         ("qword_vectors.json", "test_qword_vectors.py"),
         ("template_instance_vectors.json", "test_template_instance.py"),

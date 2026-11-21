@@ -145,7 +145,8 @@ def linear(k: int, m: int, n: int, tile: tuple[int, int], reader: bool = True) -
     from verity.circuits.program import Program
     from verity.circuits.refs import Coll, concat, tuple_of
     from verity.circuits.types import Array
-    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_credited as PC
+    from verity.protocols.run import schemes
+    PC = schemes.catalog("pearl-plus", "credited")
 
     tm, tn = tile
     ts = PC.tiles(SCHEME, k, m, n, tile)
@@ -198,7 +199,8 @@ def linear(k: int, m: int, n: int, tile: tuple[int, int], reader: bool = True) -
 def public_values(ln: Linear, k: int, unit: int, salt: bytes, root: bytes) -> dict:
     """The public row of call ``unit`` as C's values (`pearl_plus_credited.public` of each tile): ``salt``, ``root`` and
     ``unit`` one row each, ``rows`` a row tile's, ``col`` a column tile's."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_credited as PC
+    from verity.protocols.run import schemes
+    PC = schemes.catalog("pearl-plus", "credited")
 
     pub: dict = {"rows": {}, "col": {}}
     for t in ln.tiles:
@@ -213,10 +215,10 @@ def honest(k: int, m: int, n: int, ln: Linear, unit: int, seed: str, salt: bytes
     registered root (``root_of`` of W's values), the residual stream's rows and the public row, every value as C holds
     it, a row a port's read (x a row tile's rows, W a column tile's); and beside them the linear's served y
     (`PearlC.checked`'s U unscaled, BF16, `pearl_c_u.y`), M rows of N words, which C's tiles must write."""
-    from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
-    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import inert_bound
-    from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
-    from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_u as CU
+    from verity.protocols.accounting.compute.pouw.prover import schemes as pouw_schemes
+    from verity.protocols.accounting.compute.pouw.prover.circuit import inert_bound
+    from verity.protocols.accounting.compute.pouw.prover.schemes import pearl_c as C
+    from verity.protocols.accounting.compute.pouw.prover.schemes import pearl_c_u as CU
 
     rng = random.Random(seed)
 
@@ -253,7 +255,8 @@ def honest(k: int, m: int, n: int, ln: Linear, unit: int, seed: str, salt: bytes
 def reference(ln: Linear, index: int, vals: dict, unit: int) -> list[int]:
     """`pearl_plus_tile.reference`'s (digest, y, ok) of unit ``index`` on ``vals``: the digest's 64 bytes, its real rows'
     TN y words, then ok."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_tile as PT
+    from verity.protocols.run import schemes
+    PT = schemes.catalog("pearl-plus", "tile")
     t = ln.tiles[index]
     r, s = t.rows[0] // len(t.rows), t.core.bindings
     b = [[v << 16 for v in row] for row in vals["w"][t.col]]
@@ -269,7 +272,7 @@ MANY = ("x", "w", "cert", "r", "rows", "col")
 def rows_of(ln: Linear, values: dict) -> dict[str, list[list[int]]]:
     """Each value's registered rows (a many-row value's rows, a one-row value its one), each its leaves packed into the
     value's registered width (`registered.width`, `registered.bit_words`)."""
-    from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
+    from verity.protocols.proof.spot.verifier.one_stage import registered as REG
     out = {}
     for v, x in values.items():
         w, b = REG.width(ln.program, v), ln.types[v].leaf_widths()[0]
@@ -282,7 +285,7 @@ def register(program, rows: dict, supplied: tuple[str, ...]) -> dict:
     ones under their public salts (`supplied_salts`), so their roots are a function of content the verifier computes."""
     from verity.circuits.codec import program_digest
     from verity.commitments import registered_value as RV
-    from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
+    from verity.protocols.proof.spot.verifier.one_stage import registered as REG
     prog = program_digest(program)
     out = {}
     for v, rs in rows.items():
@@ -351,7 +354,7 @@ def node_outputs(program, values: dict, skip: set[str], at: dict | None = None) 
     from verity.circuits.codec import descriptor_id
     from verity.circuits.layout import resolve
     from verity.circuits.program import is_input
-    from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
+    from verity.protocols.proof.spot.verifier.one_stage import registered as REG
     scope, at = program.circuit.root_scope, {} if at is None else at
     for v, x in values.items():
         gates = REG.parameter_gates(program, v)
@@ -456,7 +459,7 @@ def reads(program, partition, rows: dict, roots: dict[str, str], outs: dict, tem
     position-free (`registered.reads_file`), with each committed field of ``outs`` (an output row's or a wired input
     row's)."""
     from verity.commitments import registered_value as RV
-    from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
+    from verity.protocols.proof.spot.verifier.one_stage import registered as REG
     f = REG.reads_file(program, partition["query"], {v: len(rs[0]) for v, rs in rows.items()}, roots, ports=ports,
                        schemas={v: RV.SCHEMA_HM96_SHA512_ROW_V2 for v in rows}, positions=False, template=template)
     for p, out in outs.items():
@@ -476,12 +479,13 @@ def stage(a) -> int:
     from verity.circuits.evaluation import evaluate_batch
     from verity.circuits.program import input_id
     from verity.circuits.ops.rows import Bf16AddRow
-    from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
-    from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
-    from verity.protocols.resource_accounting.compute.pouw import scheme as PS
-    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_credited as PC
+    from verity.protocols.proof.spot.verifier.one_stage import one_circuit as OC
+    from verity.protocols.proof.spot.verifier.one_stage import registered as REG
+    from verity.protocols.accounting.compute.pouw import scheme as PS
+    from verity.protocols.run import schemes
     from verity.commitments import registered_value as RV
     from verity_flock import circuit as FC
+    PC = schemes.catalog("pearl-plus", "credited")
 
     rec: dict = {"size": {"K": k, "TM": tm, "TN": tn, "N": n, "M": m}, "scheme": SCHEME, "phases": {}}
     t = time.perf_counter()
@@ -743,8 +747,8 @@ def stage(a) -> int:
 def door(a) -> int:
     """`proofs.verify` on each staged proof with the verifier's own program, partition, draw and registered file, its
     lowering the door's (`one_circuit.lower`), and no ``inputs``: the door holds nothing of Pearl+'s."""
-    from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
-    from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+    from verity.protocols.proof.spot.verifier.one_stage import one_circuit as OC
+    from verity.protocols.proof.spot.verifier.one_stage import proofs as PF
     os.environ[PF.TMPL_SWITCH] = "1"
     PF.executable = lambda: Path(a.lean)
     PF.lower_executable = lambda: Path(a.lower)
@@ -811,8 +815,8 @@ def window(a) -> int:
     from verity.circuits.program import is_input
     from verity.commitments import docket_digest as DD
     from verity.commitments.periods import interface as IF
-    from verity.protocols.proofs.spot.prover import docket as DK
-    from verity.protocols.proofs.spot.verifier import service as S
+    from verity.protocols.proof.spot.prover import docket as DK
+    from verity.protocols.proof.spot.verifier import service as S
 
     t0, out = time.perf_counter(), Path(a.out)
     ln = linear(k, m, n, (tm, tn), reader=False)

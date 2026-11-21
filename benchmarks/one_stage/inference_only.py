@@ -1,5 +1,5 @@
 """A served run's inference-only verdict: its registered circuit accepted as at most n (c, k)-inference blocks, or refused,
-by `InferenceOnlyCheck.Count`'s rule (`verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyCheck/Count.lean`), against a policy the run
+by `InferenceOnlyCheck.Count`'s rule (`verity/protocols/policy/training_detection/inference_only/verifier/lean/InferenceOnlyCheck/Count.lean`), against a policy the run
 registered before it served.
 
     inference_only.py policy --class S,P,O --model REPO --revision REV --lease-min M [--utilization U]
@@ -104,7 +104,7 @@ THETA = ("the inputs the session Program names registered and in θ, chosen by t
          "not held to a pinned root by the Lean verifier's call")
 WIRED = ("the Lean verifier counts the rows the record's wires fill and the pinned tables' openings as fresh, because "
          "the session Program it is given carries no wires")
-INFERENCE_ONLY_PACKAGE = ROOT / "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean"
+INFERENCE_ONLY_PACKAGE = ROOT / "verity/protocols/policy/training_detection/inference_only/verifier/lean"
 INFERENCE_ONLY_REFERENCE = INFERENCE_ONLY_PACKAGE / "scripts" / "inference_only_reference.py"
 #: `prove_path.py window-circuit`'s default ``--cap``: the units a stated member holds in the class's record
 CAP = 64
@@ -166,15 +166,14 @@ def class_doc(serve: Mapping[str, Any], cls: Any, scheme: str | None = None) -> 
     counts hold its templates to, and the parameters it registers; `Undecided` where the vocabulary can't express it."""
     sys.path.insert(0, str(ROOT / "benchmarks" / "prove_path"))
     import prove_path as PP
+    import rehearsal_limits as RL
     from verity.commitments.periods import interface as IF
     from verity_vllm.program.predict.common import Unexpressible
-    from verity_vllm.program.predict.window_circuit import check_provable, class_circuit
     from verity_vllm.program.predict.window_class import PearlTables
 
     try:
-        circuit = class_circuit(PP.registered_of_serve(serve, None, None, PP.CAP_BITS), cls,
-                                tables=PearlTables(scheme) if scheme else None)
-        check_provable(circuit)
+        circuit = RL.class_circuit_of(PP.registered_of_serve(serve, None, None, PP.CAP_BITS), cls,
+                                      PearlTables(scheme) if scheme else None)
     except Unexpressible as e:
         raise Undecided(f"the class's circuit under the policy's φ: {e}") from e
     doc = IF.descriptor_record(circuit, 64)
@@ -193,7 +192,7 @@ def kind_of(param: str) -> str | None:
     """The kind (`KINDS`) of the fresh bits a registered parameter's reads fill: ``linears`` for Pearl+'s y of a cut
     linear (`window.y_value`), ``scan_state`` for the scan state row (`scan_state.SCAN_STATE`), else none."""
     from verity_vllm.program.predict import scan_state
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR
+    from verity.protocols.accounting.compute.pouw.prover.serving.pearl_c import window as PWR
 
     if param == scan_state.SCAN_STATE:
         return "scan_state"

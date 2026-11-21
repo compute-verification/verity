@@ -21,10 +21,11 @@ from verity_config.settings import DEBUG, VALUE, WHERE, Registry, Setting as S, 
 
 #: the files that run outside the tree, relative to this one; `tools/move/layout.py` follows a `./` path to a file it
 #: moves, and a bare one only in a file it moves too
-STANDALONE = ("../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120/run.py",
-              "../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90/run.py",
-              "../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90/grouped.py",
-              "../../verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py")
+STANDALONE = ("../../verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm120/run.py",
+              "../../verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm90/run.py",
+              "../../verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm90/grouped.py",
+              "../../verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c/driver.py",
+              "../../verity/protocols/accounting/compute/pouw/prover/sass_gate.py")
 
 
 def places(raw: str) -> frozenset[str]:
@@ -79,7 +80,7 @@ REGISTRY = Registry(
                                          "the card (bench_arm.kernel_directory)"),
     S("PEARLC_CUBIN", str, None, VALUE, "the cubin the arm loads; unset, the kernel directory's build.sh cubin"),
     S("PEARLC_SCHEME", str, None, VALUE, "the kernel scheme served_pearlplus.sh's Pearl-C period names; unset, "
-                                         "the one Pearl+ declares (compose.schemes pearl-plus option)"),
+                                         "the one Pearl+ declares (run.schemes pearl-plus option)"),
     S("PEARLC_SCHEDULE", str, "deferred", VALUE, "when the arm's hashes run: deferred (the served schedule) or serial"),
     S("PEARLC_BENCH_EPOCH", int, 20261014, VALUE, "the arm's PoUW epoch"),
     S("PEARLC_CHALLENGER_GATE", str, None, WHERE, "infra's gate as an ssh command: with PEARLC_CHALLENGER_PEER, the salt coin "

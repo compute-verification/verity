@@ -32,12 +32,12 @@ import pytest
 
 from verity.commitments import docket_digest as DD
 from verity.commitments import domains as DM
-from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
-from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
+from verity.protocols.accounting.compute.pouw.verifier import core_check as CC
+from verity.protocols.proof.spot.verifier.challenger import challenger as Ch
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
-from verity.protocols.proofs.spot.verifier.one_stage import served_integrity as I  # noqa: E402
+from verity.protocols.proof.spot.verifier.one_stage import served_integrity as I  # noqa: E402
 from served_verdicts import check_answer, epsilon  # noqa: E402
 
 REG = {"format": DM.REGISTRATION_V1, "protocol": DM.ONE_STAGE_PROTOCOL, "program": "aa" * 64, "partition": "bb" * 64, "population": 1024,

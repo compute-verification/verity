@@ -1,0 +1,241 @@
+"""PoUW's verifier. Lean is the definition and the verifier (AGENTS.md "Design
+rules"), and PoUW has switched to it: the served execution phase's checks
+are its Lean's, `lean/check` (`pouw-verifier`), `lean/commit` (`pouw-commit`) and `lean/window` (`pouw-window`), whose
+verdicts `verity/protocols/accounting/compute/pouw/prover/kernels/served_zk/of_record.py` publishes. The Python beside them (`core_check`, `coins`, `window`) is kept
+as the reference, and the difftests hold it to the Lean: a disagreement fails with the Lean's verdict. A served H1
+execution phase's statements are judged here too: `credit.window` and `credit.period_credit` take each sampled proof block's outcome from
+`lean("credit-verified", …)` (`PouwVerifier.Verified`), with `credit._verified` the reference, and each round's live
+outcome from `lean("credit-live-verified", …)` (`PouwVerifier.LiveVerified`), with `credit._live_verified` the reference,
+on the circuit files its credit period's open committed, `lean("credit-committed-files", …)` (`PouwVerifier.CommittedFiles`),
+with `credit.committed_files` the reference. The verdicts acted on are the Lean's only (`of_record`, no Python
+answer beside it): `credit.window`'s and `credit.period_credit`'s, `lean("window", …)` and `lean("period", …)`
+(`PouwVerifier.Credit.executionPhase`, `Credit.periodCredit`) on those outcomes, and where the Lean gives no answer
+the refusal is `NO_ANSWER`. The challenger's salt check, `lean("salt", …)` (`PouwVerifier.saltCheck`,
+`core_check.salt_of_record`), is the verifier's program, run by the developer's side (`pouw_h1_gpu
+--check-challenger`, from `served_verdicts pouw`); no entry of the auditor's runs it yet, and `pouw-period` does not
+call it. An execution phase's and a credit period's verdicts are `pouw-verifier serve`'s and `pouw-period serve`'s
+(`serve_of_record`, `core_check.case`, `period_check.case`), and a verdict whose Lean no interface here reaches yet
+raises (`not_written`) rather than fall back on its twin; the README's "Verdicts of record" lists each. The Python
+twins (`*_twin`) answer the difftests only.
+
+`RECORD_VERDICT` switches what `of_record` doesn't read: the sampled blocks' and live rounds' runs and the committed
+circuit files; setting it to ``"python"`` is the one line that undoes those.
+
+`coins` is the challenger's entropy: bytes the Lean verifier reads from the operating system (`pouw-verifier-difftest`'s
+``coins``, `IO.getRandomBytes`, A3's `uniform/io-getrandombytes`), which a served `coins.Challenger` and
+`window.live_challenger` flip every coin and hm96 salt from. Python never reads them from the operating system itself, and
+`RECORD_VERDICT` doesn't switch them. Building takes the lock `verity_difftest.build` takes (its `BUILD_LOCK`): Lake builds
+the path requires in place, and two builds at once would rewrite one module's C under each other.
+
+This module imports only the standard library and `verity.lean_process` (standard library only), the rule every launch of
+a Lean verifier whose answer can become a verdict runs under, so what decides an execution phase never depends on
+`verity.ml`."""
+from __future__ import annotations
+
+import atexit
+import fcntl
+import functools
+import json
+import os
+import subprocess
+import tempfile
+import threading
+from pathlib import Path
+from typing import Any, NoReturn
+
+from verity import lean_process as LC
+
+RECORD_VERDICT = "lean"
+#: the refusal code of an answer of record the Lean can't give
+NO_ANSWER = "no-answer"
+
+PACKAGE = Path(__file__).resolve().parent / "lean" / "check"
+EXE = "pouw-verifier-difftest"
+BUILD_LOCK = Path(__file__).resolve().parents[6] / "verity/circuits/difftest" / ".lake" / "harness-build.lock"
+#: The most bytes one `coins` request takes (the Lean's `COINS_MAX`).
+COINS_MAX = 1 << 24
+
+
+class LeanError(RuntimeError):
+    """The Lean verifier can't be built or run, or answered outside its protocol."""
+
+
+#: the statuses a `_Server`'s process documents: `serve` (`CoreProtocol.Cli.serveLoop`) and `pouw-verifier-difftest`
+#: (`Difftest.serve`) end 0 at the end of their input, after their last answer (`serve` ends 70 on an answer it can't
+#: write, 64 on its usage); while it answers, it hasn't ended
+SERVE_EXITS = LC.OK
+
+#: the core protocols' executables of `PACKAGE` whose `serve` answers a case (`Core.Protocol.main`): one execution
+#: phase's check (`verity/pouw/v1`) and a credit period's (`verity/pouw/period/v1`)
+SERVE_EXES = ("pouw-verifier", "pouw-period")
+
+
+@functools.cache
+def executable(exe: str = EXE) -> Path:
+    """`lake build EXE` (`pouw-verifier-difftest` by default), once per process and executable, under `BUILD_LOCK`; the
+    executable's path."""
+    BUILD_LOCK.parent.mkdir(parents=True, exist_ok=True)
+    with open(BUILD_LOCK, "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            p = subprocess.run(["lake", "build", exe], cwd=PACKAGE, capture_output=True, text=True)
+        except FileNotFoundError:
+            raise LeanError(f"lake is not on the PATH ({os.pathsep.join(os.get_exec_path())}), so {exe} in {PACKAGE} cannot be "
+                            "built: put elan's bin on the PATH (tools/verity/lean/setup.sh installs it in ~/.elan/bin)") from None
+    if p.returncode != 0:
+        raise LeanError(f"lake build {exe} in {PACKAGE} failed ({p.returncode}):\n{p.stdout[-2000:]}{p.stderr[-2000:]}")
+    return PACKAGE / ".lake" / "build" / "bin" / exe
+
+
+def _canonical(x: Any) -> str:
+    return json.dumps(x, sort_keys=True, separators=(",", ":"))
+
+
+class _Server:
+    """One process of `exe` with `args` per Python process (a request line, an answer line), started at the first call
+    and again after it dies: `pouw-verifier-difftest` by default, or a core protocol's `serve`."""
+
+    def __init__(self, exe: str = EXE, args: tuple[str, ...] = ()) -> None:
+        self.exe, self.args = exe, args
+        self._proc: subprocess.Popen | None = None
+        self._stderr: Any = None
+        self._lock = threading.Lock()
+
+    def exchange(self, request: Any, what: str) -> Any:
+        """The JSON line `exe` answers to `request`'s canonical line; raises `LeanError` where it writes a panic line
+        (`lean_process.LEAN_PANIC`, whatever its answer: it runs in `lean_process.lean_env`, so a panic aborts it), is
+        killed by a signal or ends with a status outside `SERVE_EXITS` (`lean_process.LEAN_EXIT`), ends before its
+        answer line, or answers a line that is not JSON."""
+        line = _canonical(request)
+        with self._lock:
+            if self._proc is None or self._proc.poll() is not None:
+                self._stderr = tempfile.TemporaryFile()
+                self._proc = subprocess.Popen([str(executable(self.exe)), *self.args], stdin=subprocess.PIPE,
+                                              stdout=subprocess.PIPE, stderr=self._stderr, text=True, encoding="utf-8",
+                                              env=LC.lean_env())
+            try:
+                self._proc.stdin.write(line + "\n")
+                self._proc.stdin.flush()
+                reply = self._proc.stdout.readline()
+            except BrokenPipeError:
+                reply = ""
+            answered = reply.endswith("\n")
+            unread = None
+            if not answered:
+                try:
+                    self._proc.stdin.close()
+                except BrokenPipeError as e:
+                    unread = e
+            status = self._proc.poll() if answered else self._proc.wait()
+            self._stderr.seek(0)
+            err = self._stderr.read().decode("utf-8", "replace")
+            why = None if status is None else LC.exit_why(status, SERVE_EXITS)
+            if answered and LC.panic_line(err) is None and why is None:
+                return self._loads(reply, what)
+            if status is None:
+                self._proc.kill()
+            self._proc.wait()
+            self._proc = None
+            if (panic := LC.panic_line(err)) is not None:
+                raise LeanError(f"{LC.LEAN_PANIC}: {self.exe} on {what}: {panic}")
+            why = why or f"{LC.LEAN_EXIT}: status {status} before its answer line"
+            if unread is not None:
+                why += " (its input was closed before the request was written whole)"
+            raise LeanError(f"{why}: {self.exe} on {what}: {err[-2000:]}")
+
+    def _loads(self, reply: str, what: str) -> Any:
+        try:
+            return json.loads(reply)
+        except ValueError:
+            raise LeanError(f"{self.exe} on {what} answered a line that is not JSON: {reply[:500]}") from None
+
+    def call(self, fn: str, value: Any) -> tuple[str, Any]:
+        """`("output", JSON)` or `("reject", reason)`; anything else raises `LeanError`."""
+        msg = self.exchange({"fn": fn, "input": value}, fn)
+        if isinstance(msg, dict) and len(msg) == 1:
+            (kind, body), = msg.items()
+            if kind == "output" or (kind == "reject" and isinstance(body, str)):
+                return kind, body
+        raise LeanError(f"{self.exe} on {fn}: {_said(msg)}")
+
+    def close(self) -> None:
+        with self._lock:
+            if self._proc is not None and self._proc.poll() is None:
+                self._proc.stdin.close()
+                self._proc.wait()
+            self._proc = None
+
+
+_server = _Server()
+atexit.register(_server.close)
+_serves = {exe: _Server(exe, ("serve",)) for exe in SERVE_EXES}
+for _s in _serves.values():
+    atexit.register(_s.close)
+
+
+def lean(fn: str, value: Any) -> Any:
+    """`pouw-verifier-difftest`'s answer to function `fn` on `value`, a check of record whose verdict the caller takes (a
+    refusal is part of that answer, never a reject). Raises `LeanError` where the Lean can't run or rejects the
+    input."""
+    kind, body = _server.call(fn, value)
+    if kind != "output":
+        raise LeanError(f"{EXE} rejected {fn}'s input: {body}")
+    return body
+
+
+def _said(x: Any) -> str:
+    s = json.dumps(x, sort_keys=True, separators=(",", ":"))
+    return s if len(s) <= 600 else s[:600] + "…"
+
+
+def of_record(fn: str, value: Any) -> Any:
+    """The answer of record to `fn` on `value` (`pouw-verifier-difftest`'s inputs): the Lean's (`lean`), and
+    ``{"refused": [NO_ANSWER, why]}`` where the Lean can't give one. No Python answers in its place."""
+    try:
+        return lean(fn, value)
+    except (LeanError, TypeError, ValueError) as e:
+        return {"refused": [NO_ANSWER, f"the Lean verifier gave no answer to {fn}, so it stands refused: {e}"]}
+
+
+def serve_of_record(exe: str, case: Any, protocol: str) -> dict:
+    """The outcome of record (`Core.Answer`'s JSON) of core protocol `protocol`'s `serve`, Lean executable `exe`, on
+    `case`: the Lean's, and a rejection whose reason starts ``no-answer:`` where the Lean can't give one. No Python
+    answers in its place."""
+    try:
+        return _serves[exe].exchange(case, "a serve case")
+    except (LeanError, TypeError, ValueError) as e:
+        return {"protocol": protocol, "verdict": "reject", "commitment": None, "public": None, "profile": None,
+                "reason": f"{NO_ANSWER}: the Lean verifier ({exe} serve) gave no answer, so the case stands refused: {e}"}
+
+
+#: the goal under which a check `not_written` stands for gets its Lean interface
+GOAL = "compute-accounting/pouw-verdict-from-main"
+
+
+def not_written(fn: str, lean: str) -> NoReturn:
+    """The verdict of record of `fn`, the Lean `lean`'s, which no interface here reaches yet: raises
+    `NotImplementedError` naming `GOAL`. The Python twin beside `fn` answers the difftest only, never in its place."""
+    raise NotImplementedError(GOAL)
+
+
+def coins(n: int) -> bytes:
+    """`n` bytes of the operating system's randomness, read by the Lean verifier (`IO.getRandomBytes`, A3's
+    `uniform/io-getrandombytes`): a served challenger's entropy. Raises `LeanError` where the Lean can't run, refuses or
+    answers other than `n` bytes: no coins, so no commitment and no sample."""
+    if not (type(n) is int and 0 <= n <= COINS_MAX):
+        raise ValueError(f"coins are 0 to {COINS_MAX} bytes a request, not {n!r}")
+    kind, body = _server.call("coins", n)
+    if kind != "output":
+        raise LeanError(f"{EXE} refused {n} coin bytes: {body}")
+    if not (isinstance(body, str) and len(body) == 2 * n and all(c in "0123456789abcdef" for c in body)):
+        raise LeanError(f"{EXE} answered other than {n} coin bytes in hex")
+    return bytes.fromhex(body)
+
+
+#: the claim instance naming `coins`'s bytes, which a served challenger reads (`spot.challenger.coin_claim`)
+CLAIM = "uniform/io-getrandombytes"
+coins.claim = CLAIM  # type: ignore[attr-defined]
+
+
+__all__ = ["CLAIM", "COINS_MAX", "GOAL", "NO_ANSWER", "RECORD_VERDICT", "SERVE_EXES", "LeanError", "coins", "executable",
+           "lean", "not_written", "of_record", "serve_of_record"]

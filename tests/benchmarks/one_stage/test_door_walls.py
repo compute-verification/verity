@@ -304,14 +304,14 @@ def _drawn(rng: random.Random) -> W.Spec:
 def _predicate(text: str) -> str | None:
     """The door predicate's refusal in ``text``, from its prefix (or not derived's, before its clauses) to the line's
     end; None where it holds."""
-    from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
+    from verity.protocols.proof.spot.verifier.one_stage import one_circuit as OC
     i = min((j for j in (text.find(OC.NOT_ADMITTED), text.find(OC.PREFIX)) if j >= 0), default=-1)
     return None if i < 0 else text[i:].splitlines()[0]
 
 
 def _clause(text: str) -> str | None:
     """The name of the door predicate's clause refusing in ``text``; None where it holds."""
-    from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
+    from verity.protocols.proof.spot.verifier.one_stage import one_circuit as OC
     p = _predicate(text)
     if p is None or p.startswith(OC.PREFIX):
         return None if p is None else "not-derived"
@@ -319,7 +319,7 @@ def _clause(text: str) -> str | None:
 
 
 def _admitted_lean() -> str:
-    from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
+    from verity.protocols.proof.spot.verifier.one_stage import one_circuit as OC
     return (Path(OC.__file__).resolve().parents[1] / "lean" / "Spot" / "Admitted.lean").read_text()
 
 
@@ -369,18 +369,9 @@ def _site(clause: str, text: str) -> tuple[str, str] | None:
     return None
 
 
-def _input_body() -> list[str]:
-    """`Spot.OneStageZk.INPUT_BODY`: what refuses `IB16`, the lowering's name or the decoder's."""
-    import re
-    m = re.search(r"^def INPUT_BODY : List String := \[(.*?)\]$", _admitted_lean(), re.M | re.S)
-    return [x.replace('\\"', '"') for x in re.findall(r'"((?:[^"\\]|\\.)*)"', m.group(1))]
-
-
 def _outside(text: str) -> str:
-    """A refusal outside the door predicate by the case it is: `recut-gates`, `input-body`, else its text."""
-    if "recut-gates: " in text:
-        return "recut-gates"
-    return "input-body" if any(n in text for n in _input_body()) else text
+    """A refusal outside the door predicate by the case it is: `recut-gates`, else its text."""
+    return "recut-gates" if "recut-gates: " in text else text
 
 
 def _q(t: str) -> dict:
@@ -404,7 +395,6 @@ CONSTRUCTED = [
     ("a parameter cut into rows of two widths", "MIX", None, ("A_v1", "X_v1"), [(0, 1), (1, 2)],
      ("whole-words", "cut-rows")),
     ("a root reading an input recut", "RC16", None, ("E_v1",), [(0, 1)], "recut-gates"),
-    ("a word whose Boolean body is an input", "IB16", None, ("E_v1",), [(0, 1)], "input-body"),
 ]
 
 
@@ -431,8 +421,8 @@ GATELESS = ({"templates": [{"params": [-16, 32, -2048], "steps": [[6, [1, 1]], [
 def test_a_template_of_no_gate_anywhere_in_c_is_refused_by_both_doors_alike(tmp_path):
     """On every block of `GATELESS`, Lean's door (`spot-one-stage-zk restrict`, `Partition.checkTemplates`) and Python's
     steps (`one_circuit.cuts`) refuse the query with one text, the last block's own template having gates."""
-    from verity.protocols.proofs.spot.verifier.one_stage import lean_child as LC
-    from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+    from verity.protocols.proof.spot.verifier.one_stage import lean_child as LC
+    from verity.protocols.proof.spot.verifier.one_stage import proofs as PF
     W._catalog()
     s = W.Spec(**GATELESS[0])
     c, q, _fns = W.realise(s)
@@ -456,11 +446,11 @@ def test_lean_and_python_give_one_verdict_on_each_drawn_blocks_form(tmp_path):
     `admittedBlock` from `BlockFront.unitAt` and `operandsW`) and Python's (`admitted` and `admitted_block` from
     `TemplatePartition`'s gates and inputs) refuse the same blocks with the same text, and between them every clause
     a decoded C can reach refuses: each refusal of `admitted` and `admittedBlock` is reached or is `UNREACHED`'s. A C
-    refused outside the predicate (`RC16`, `IB16`) is refused by both doors alike, `lower` reading Lean's
+    refused outside the predicate (`RC16`) is refused by both doors alike, `lower` reading Lean's
     `flock-lower-check`."""
     from verity.circuits import partition_object as PO
-    from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
-    from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+    from verity.protocols.proof.spot.verifier.one_stage import one_circuit as OC
+    from verity.protocols.proof.spot.verifier.one_stage import proofs as PF
     W._catalog()
     stub, lean, lower = _stub(tmp_path), PF.v2_executable(), W._exe(None)()
     seen: dict[str, int] = {}
@@ -476,7 +466,7 @@ def test_lean_and_python_give_one_verdict_on_each_drawn_blocks_form(tmp_path):
         q = _q(ts[0]) if len(ts) == 1 else PO.template_instances_query(list(ts))
         cases.append((what, c, q, blocks, None, clause))
     for case, c, q, blocks, doc, want in cases:
-        exe = lower if want in ("recut-gates", "input-body") else stub
+        exe = lower if want == "recut-gates" else stub
         door = W.Door(c, q, blocks, lambda: exe)
         for k, (lo, hi) in enumerate(blocks):
             r = door.run(k, lo, hi)
@@ -495,7 +485,7 @@ def test_lean_and_python_give_one_verdict_on_each_drawn_blocks_form(tmp_path):
             assert want in (None, got) or (isinstance(want, tuple) and want[k] == got), (case, k, py)
             seen[got] = seen.get(got, 0) + 1
     assert set(seen) == {"holds", "operands-outside", "whole-words", "port-names", "on-bits", "one-template",
-                         "cut-rows", "recut-gates", "input-body"}, seen
+                         "cut-rows", "recut-gates"}, seen
     unreached = {s for s in _sites() if not any(c == s[0] and t in s[1] for c, t in UNREACHED)}
     assert reached == unreached, (sorted(reached - unreached), sorted(unreached - reached))
     assert all(sum(c == s[0] and t in s[1] for s in _sites()) == 1 for c, t in UNREACHED), UNREACHED
@@ -507,7 +497,7 @@ def test_lean_and_python_give_one_verdict_on_each_drawn_blocks_form(tmp_path):
 def test_a_partition_whose_query_does_not_name_cs_template_is_refused_by_both_doors(tmp_path, query):
     """The partition object of E3's unit 0 with its query swapped: Python's door refuses it at its block, before C_S, and
     Lean's refuses it too; `listed` and not derived are held clause by clause in `test_door_form`."""
-    from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+    from verity.protocols.proof.spot.verifier.one_stage import proofs as PF
     W._catalog()
     c = _lean_descriptor("E3")
     door = W.Door(c, _q("E_v1"), [(0, 1)], lambda: _stub(tmp_path))
@@ -543,7 +533,7 @@ def _lean_stub(tmp_path: Path, name: str, refusal: str | None) -> Path:
 def test_restrict_of_spot_one_stage_zk_decides_and_a_difference_is_reported_as_one(tmp_path):
     """Lean's door, asked as the accepting path asks it, labels every block and its class; Python's verdict stays
     beside it, and where the two disagree the block carries the difference, both texts kept."""
-    from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
+    from verity.protocols.proof.spot.verifier.one_stage import one_circuit as OC
     W._catalog()
     exe = _stub(tmp_path)
     c, q = W.internal_read()
@@ -569,8 +559,8 @@ def test_restrict_of_spot_one_stage_zk_decides_and_a_difference_is_reported_as_o
 def test_spot_one_stage_zk_restrict_refuses_the_internal_read_where_python_is_stubbed_off(monkeypatch):
     """On the built executable: Lean's door refuses the internal read by `operands-outside` as Python's predicate does;
     with Python's predicate stubbed off, the census reports the block as a difference (Python admits, Lean refuses)."""
-    from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
-    from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+    from verity.protocols.proof.spot.verifier.one_stage import one_circuit as OC
+    from verity.protocols.proof.spot.verifier.one_stage import proofs as PF
     W._catalog()
     c, q = W.internal_read()
     agreed, = W.census(c, q, "0-2", W._exe(None), rows=False, lean=PF.v2_executable)

@@ -21,8 +21,8 @@ Every other unit holds its Definition's function of the window's values:
   `SelectEntry_v1` the slot's entry (`io_shell.entry_reference`);
 - each token select's group units each group's first maximum above -inf of its logits and its index in the group
   (`chunk_best`), and its ``x0`` unit ``logits[0]``;
-- each embedding read's verdict 1, its opening the table's row, salt and path at the token (the table's registered value,
-  ``registered_value.Registered`` of ``row-seg`` rows or one like it);
+- each embedding read's verdict word, 1 below V and 0 at or past it (`EmbeddingRead_v3`), its opening the table's row, salt
+  and path at the token (the table's registered value, ``registered_value.Registered`` of ``row-seg`` rows or one like it);
 - each attention cut by key block (`window_circuit.CUTS`), every Call of a head but its last (the node's output) its
   Definition on the node's operands (`evaluate_batch`): the head's query, its KV group's keys and values in the Call's
   range, and the earlier Calls' running state.
@@ -547,8 +547,9 @@ class Rows:
         emb = [j for j, node in enumerate(nodes) if node_family(node.fn) == "Embedding"]
         for p, (j, feed) in enumerate(zip(emb, P.tokens)):
             r, t = P.outs[j][0][2], S.tokens[p]
-            self._put(r.tid, r.unit, "o1", np.ones((1, 1), dtype=np.uint16), EVALUATED)
-            if t < nodes[j].fn.bindings["V"]:
+            inside = t < nodes[j].fn.bindings["V"]
+            self._put(r.tid, r.unit, "o1", np.full((1, 1), int(inside), dtype=np.uint16), EVALUATED)
+            if inside:
                 ins, table = self.inputs[r.tid], self.tables[r.tid]
                 ins["row"][r.unit] = np.asarray(table.rows[t], dtype=np.uint16)
                 ins["salt"][r.unit] = _be_words(table.salts[t])
@@ -558,6 +559,7 @@ class Rows:
                 assert nxt is not None, f"{P.name}: position {p} has a token feed unit, and its slot carries nothing on"
                 self._put(tid, unit, "o0", _i32([t]), EVALUATED)
                 self._put(tid, unit, "o1", _i32(nxt), EVALUATED)
+                self._pad(tid, unit)
         picks = []
         for j, (groups, x0) in P.selects.items():
             logits = S.operand(nodes[j].args[0])
@@ -595,10 +597,12 @@ class Rows:
         for k, ((ct, cu), tok) in enumerate(zip(P.collects, toks)):
             a = IO.collect_reference(a, tok, KO, k == 0)
             self._put(ct, cu, "o0" if self.fns[ct].name == "OutCollect" else "o1", _i32(a), EVALUATED)
+            self._pad(ct, cu)
         e = P.entry.bindings
         entry = IO.entry_reference(S.row[0], a, KO, e["IDB"], e["NP"], e["STOP"])
         et, eu = P.entry_unit
         self._put(et, eu, "o0", np.array([entry], dtype=np.uint16), EVALUATED)
+        self._pad(et, eu)
 
     def _empty(self, P: Any, scan: tuple[str, int], s: int, collect: tuple[str, int], entry: tuple[str, int]) -> None:
         """Empty slot ``s``'s collector and entry (`_Program.place_empty`), on its lane's ``scan`` unit's read of the scan
@@ -610,6 +614,12 @@ class Rows:
         self._put(*collect, "o0", _i32(a), EVALUATED)
         self._put(*entry, "o0", np.array([IO.entry_reference(row[0], a, KO, e["IDB"], e["NP"], e["STOP"])], dtype=np.uint16),
                   EVALUATED)
+        self._pad(*collect)
+        self._pad(*entry)
+
+    def _pad(self, tid: str, unit: int) -> None:
+        if self.fns[tid].name in ("OutCollect", "SlotEntry", "TokenFeed") and self.fns[tid].version == 2:
+            self._put(tid, unit, f"o{len(self.lays[tid].outs) - 1}", np.zeros((1, IO.PAD_WORDS), dtype=np.uint16), EVALUATED)
 
     def _heads(self, node: Any, plan: Any, calls: Sequence[tuple[str, int]], S: Slot) -> None:
         """An attention cut by key block: every Call but its last (whose output is the node's) its Definition on the node's

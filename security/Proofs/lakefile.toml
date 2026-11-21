@@ -20,11 +20,11 @@ path = ".."
 
 [[require]]
 name = "flock_verifier"
-path = "../../verity/protocols/proofs/flock/verifier"
+path = "../../verity/protocols/proof/flock/verifier"
 
 [[require]]
 name = "certifier_program"
-path = "../../verity/protocols/resource_accounting/network/attester/program/lean"
+path = "../../verity/protocols/accounting/network/attester/program/lean"
 
 [[require]]
 name = "core_randomness"
@@ -33,18 +33,18 @@ path = "../../verity/commitments/randomness"
 # V*'s circuits as core code (`VStar`), which the bridge (`Proofs.Flock.VBridge.OfVStar`) is stated over
 [[require]]
 name = "core_vstar"
-path = "../../verity/protocols/proofs/recursion/verifier/vstar_cli"
+path = "../../verity/protocols/proof/recursion/verifier/vstar_cli"
 
 # SPOT[Flock]'s sampled check and its two-stage form (`VStar.Recursive.Sampled`, `VStar.Recursive.SampledTwo`)
 [[require]]
 name = "core_vstar_recursive"
-path = "../../verity/protocols/proofs/spot_flock/verifier/lean"
+path = "../../verity/protocols/proof/spot_flock/verifier/lean"
 
 # SPOT's recursive configuration (`VStar.Recursive`), whose acceptance `Proofs.Properties.Verity.Recursive` relates to
 # `RecursiveKSAt`'s event
 [[require]]
 name = "spot_flock_recursion"
-path = "../../verity/protocols/proofs/spot_flock_recursion/verifier/lean"
+path = "../../verity/protocols/proof/spot_flock_recursion/verifier/lean"
 
 # The properties a proof here proves (`Properties`), stated against the code where that proof needs this package.
 [[require]]
@@ -89,7 +89,7 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.InferenceOnly", "Proofs.Slowd
   "Proofs.Properties.InferenceOnly.OperandsResolve", "Proofs.Properties.InferenceOnly.Agrees",
   "Proofs.Properties.Spot", "Proofs.Properties.Spot.Halt", "Proofs.Properties.Spot.Interval",
   "Proofs.Properties.Spot.FactorUpper", "Proofs.Properties.Spot.TwoStageCheck", "Proofs.Properties.Spot.Bits",
-  "Proofs.Properties.Spot.Wires", "Proofs.Properties.Spot.Edges", "Proofs.Properties.Spot.Tables", "Proofs.Properties.Core.Evaluate",
+  "Proofs.Properties.Spot.Wires", "Proofs.Properties.Spot.Edges", "Proofs.Properties.Spot.Tables", "Proofs.Properties.Verity.Sampled.PortsHeld", "Proofs.Properties.Spot.RootsRecord", "Proofs.Properties.Core.Evaluate",
   "Proofs.Properties.Certifier.Records", "Proofs.Properties.Spot.PlanCheck", "Proofs.Properties.Spot.Units",
   "Proofs.Properties.Certifier.Registered",
   "Proofs.Properties.Spot.Credited", "Proofs.Properties.Spot.HistoryTable", "Proofs.Properties.Core.Period",
@@ -116,7 +116,7 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.InferenceOnly", "Proofs.Slowd
   "Proofs.Properties.Challenger.ChallengePhase", "Proofs.Properties.Challenger.CanonRead",
   "Proofs.Properties.Challenger.Window", "Proofs.Properties.Challenger.Lines", "Proofs.Properties.Challenger.Coins",
   "Proofs.Properties.Pous.WipeSigned", "Proofs.Properties.Pous.WipeCount", "Proofs.Properties.Challenger", "Proofs.Properties.Challenger.CanonLine",
-  "Proofs.Properties.Challenger.Drawn", "Proofs.Properties.ZkServer", "Proofs.Properties.Flock.Nets", "Proofs.Properties.Flock.EvalBool", "Proofs.Properties.Flock.Circuit.Inline", "Proofs.Properties.InferenceOnly.OperandWidths", "Proofs.Properties.Flock.DecodeBoolean",
+  "Proofs.Properties.Challenger.Drawn", "Proofs.Properties.ZkServer", "Proofs.Properties.Flock.Nets", "Proofs.Properties.Flock.EvalBool", "Proofs.Properties.Flock.Circuit.Inline", "Proofs.Properties.Flock.Circuit.Chain", "Proofs.Properties.Flock.Circuit.LowerDef", "Proofs.Properties.Flock.Circuit.LowerAsm", "Proofs.Properties.Flock.Circuit.LowerEval", "Proofs.Properties.InferenceOnly.OperandWidths", "Proofs.Properties.Flock.DecodeBoolean",
   "Proofs.Properties.Core.Site", "Proofs.Properties.InferenceOnly.Protocol",
   "Proofs.Properties.InferenceOnly.RecordRead", "Proofs.Properties.InferenceOnly.RecordForm",
   "Proofs.Properties.InferenceOnly.RecordCounts", "Proofs.Properties.Flock.Decoder.Walk", "Proofs.Properties.Flock.Decoder.Resolve", "Proofs.Properties.Flock.Decoder.Basic", "Proofs.Properties.Flock.Decoder.Nonneg", "Proofs.Properties.Flock.Decoder.Node", "Proofs.Properties.Flock.Decoder.Decode", "Proofs.Properties.Flock.Decoder.Composite", "Proofs.Properties.Flock.Decoder.Decoded",

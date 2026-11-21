@@ -14,7 +14,7 @@ set -euo pipefail
 O=${OUT:?run under research run, which sets OUT}
 [ $# -gt 0 ] || { echo "usage: replays.sh W..." >&2; exit 2; }
 H=benchmarks/verifier_cost/ledger_replay
-P=$PWD/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check
+P=$PWD/verity/protocols/accounting/compute/pouw/verifier/lean/check
 S=$(mktemp -d)
 trap 'rm -rf "$S"' EXIT
 uv sync -q --all-packages --extra torch-cpu
@@ -24,15 +24,15 @@ export PATH="$HOME/.elan/bin:$PATH"
 B=$P/.lake/build/bin/pouw-period
 sym=$(nm "$B" | awk '$3 ~ /Spot_Challenger_checked$/ { print $3 }' | head -1)
 [ -n "$sym" ] || { echo "replays.sh: $B has no function Spot.Challenger.checked to count" >&2; exit 1; }
-. verity/protocols/proofs/spot/verifier/one_stage/verifier_env.sh
+. verity/protocols/proof/spot/verifier/one_stage/verifier_env.sh
 uv run python "$H/replays.py" "$S/in" "$@" > "$S/reference.jsonl"
 for w in "$@"; do
   $(verifier_env) python3 "$H/calls.py" "$B" "$sym" "$S/in/period-$w.json" "$S/reply-$w.json" serve \
     > "$S/calls-$w.json" 2> "$S/stderr-$w.txt" || { tail -40 "$S/stderr-$w.txt" >&2; exit 1; }
   uv run python - "$w" "$S/reference.jsonl" "$S/reply-$w.json" "$S/calls-$w.json" "$S/stderr-$w.txt" <<'PY' | tee -a "$O/replays.jsonl"
 import json, sys
-from verity.protocols.proofs.spot.verifier.one_stage import lean_child
-from verity.protocols.resource_accounting.compute.pouw.verifier import verifier as PV
+from verity.protocols.proof.spot.verifier.one_stage import lean_child
+from verity.protocols.accounting.compute.pouw.verifier import verifier as PV
 w, reference, reply, calls, stderr = sys.argv[1:]
 traced = json.load(open(calls))
 try:

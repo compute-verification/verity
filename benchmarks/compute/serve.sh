@@ -25,7 +25,7 @@
 #   7. python-verify: Pearl+'s verdict in Python (`served_passes.py verify --tie W --class CLASS`), the passes held to the class's
 #      fixed load, a sample of DRAWS work-weighted tiles at DELTA, on fast_tile's batch forms (FAST, default on);
 #   8. lean: the Lean verdict (`served_passes.py lean`, pouw-pearlplus built here unless PEARLPLUS_LEAN_EXE names one),
-#      written only where it is the Python's;
+#      written whatever the Python's says (`served_passes.py lean`'s check names where they differ);
 #   9. publish and piece: the verifier's coin into pieces/pouw/ (coin.json, coin-put.json: put in no store) and PoUW's
 #      development piece (`served_verdicts.py pearlplus`: development.json, its coin_source);
 #  10. policy: the inference-only policy at CLASS, from this card's serve-phi cut at Pearl+'s linears
@@ -63,7 +63,7 @@
 # the share.
 set -euo pipefail
 # the one path under verity/ this names, which a layout move may change
-AUDITOR=verity/protocols/compose/verifier/live_challenger/auditor.py
+AUDITOR=verity/protocols/run/verifier/live_challenger/auditor.py
 cd "$(dirname "$0")/../.." || exit 3
 TREE=$PWD
 RUN=${RUN_DIR:-${RESEARCH_RUN_DIR:-$TREE/compute-run}}

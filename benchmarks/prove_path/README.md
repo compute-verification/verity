@@ -35,8 +35,7 @@ proof blocks on live coins, proves them with Flock `--zk` behind the Lean ZK ser
 served execution phase's the server committed) and each rank's execution phase over the compiler's Programs for it, and the verifier audits each
 rank through the one-stage audit's per-rank `service.Stream` on a challenger's coins (`--challenger local` by default in
 `run.sh`, `../one_stage/a5.py`); the verifier has no coins of its own. `run.sh` builds the prover and the Lean verifier and runs it on the CPU TP stand-in, on a
-deferred TP Commit (`PP_TP`) or on a served execution phase (`PP_SERVE_RUN`), with one forged run that must be
-refused. Row dirs and serve runs are the node's own, never fetched from the
+deferred TP Commit (`PP_TP`) or on a served execution phase (`PP_SERVE_RUN`). Row dirs and serve runs are the node's own, never fetched from the
 store, since their bundles and requests hold request values. The docstrings say how.
 
 The served arm reads the serve run's own records and the sealed execution phase's row dir, whose Builds of I2's Programs
@@ -48,26 +47,16 @@ K=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["window"])'
 # Flock (plain sessions, a stratified sample of every unit of layer 0's SiluMul_v2 at step 1)
 OUT=$RESEARCH_RUN_DIR/flock/out PP_SERVE_RUN=$D PP_WINDOW=$K PP_SERVE_ROWS=$D/windows/w$K PP_PLAIN=1 \
   PP_PARTITION=benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step1_all_stratified.json \
-  PP_FORGED_PARTITION=benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step1_all_stratified.json \
   env -u PYTHONPATH bash benchmarks/prove_path/run.sh
 # zero knowledge (--zk behind the Lean ZK server, every unit sampled, audited from the window's records alone)
 OUT=$RESEARCH_RUN_DIR/zk/out PP_SERVE_RUN=$D PP_WINDOW=$K PP_SERVE_ROWS=$D/windows/w$K PP_RECORDS=1 \
   PP_PARTITION=benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step1_all.json \
-  PP_FORGED_PARTITION=benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step1_all.json \
   env -u PYTHONPATH bash benchmarks/prove_path/run.sh
 ~~~
 
 `PP_PLAIN=1` goes without `PP_RECORDS=1`: `records_audit.py` runs `--zk` sessions only, so a plain run is audited by
 `prove_path.py audit --plain`, whose partition's rule must be a stratified rate. Each run writes `$OUT/ran_with.txt`, the
 line naming its coins and parameters (`prove_path.py ran-with`).
-
-The forged run commits its own execution phase with one proof block's value flipped (`--forge`, default member 0's
-proof block 0), so its partition needs that proof block in the execution phase and sampled, not proof blocks other than
-the honest run's. A served execution phase of steps 1 to 2 has no proof block at step 24, so the forged partition above
-is the honest one's steps with every proof block sampled, which is also
-what the served arm derives when `PP_FORGED_PARTITION` is unset (`prove_path.py forged-partition`, kept as
-`$OUT/forged-partition.json`). One naming steps outside the honest partition's is refused before any build. A run with
-`PP_ONLY=honest` prints `PROVE-PATH {"name": "…-forged", "ran": false, "why": "PP_ONLY=honest: no forged run"}`.
 
 ## What changes when Programs come from advice
 
@@ -92,7 +81,7 @@ commitments and never published.
    (`advice_windows.window_of_advice`, reading no committed value), and holds the docket to it
    (`tp.serving_rows.source`: `served_programs`, `compiler` and `advice` among its codes, with R2 against the recompiled
    population). The compile slice's proof block below replaces the opening and the recompile. Nothing else in the audit changes.
-4. **The advice is fixed before the coins, and the verifier checks it** (`advice_before_draw`), as `pouw.credit.draw_root`
+4. **The advice is fixed before the coins, and the verifier checks it** (`advice_before_draw`), as `pouw.window.draw_root`
    checks that the credit bits came before the sampling coin. The digest of the docket the verifier opens the advice under
    covers its `compiler` and `advice` root. That digest must be the one the sample's receipt names: the stream writes the receipt
    when it receives the docket, and its `select` reads the challenger's coins only after that: a select on a docket the
@@ -189,11 +178,11 @@ history would discharge, and doesn't discharge them yet.
   and a partial execution phase, which lacks a writer's template, so the wire from it is not made and its port is free. No figure
   states the leak bound there. Over several execution phases, c is their sum, and null if any one's is.
 - δ is `delta`. Per rank, `ranks.<r>.audit.wrong_units` is `{delta, of, bound, rule, per_template}` (the
-  `wrong_units` function in `verity/protocols/proofs/spot/verifier/one_stage/audit.py`). Except with probability δ, at most
+  `wrong_units` function in `verity/protocols/proof/spot/verifier/one_stage/audit.py`). Except with probability δ, at most
   `bound` of the `of` proof blocks are incorrect, and at most `per_template[t]` of them are in template t (`Stratified.count_bound`,
   `stratum_bounds`).
 - β_δ is `harm_bound`: the profile's `harm_bound`, each template's proof blocks weighted by its committed bits (`_template_bits`
-  in `verity/protocols/proofs/spot/verifier/one_stage/partition.py`). λ_δ is `location_bits` (`consumers.location_bits`):
+  in `verity/protocols/proof/spot/verifier/one_stage/partition.py`). λ_δ is `location_bits` (`consumers.location_bits`):
   log2 of the at most Σ_{j ≤ bound} C(n, j) incorrect sets. `exfiltration_bound` is β_δ + λ_δ.
 - The run doesn't print ε_ks or ε_bind (the profile's `epsilon_log2` is null), or n·log2 D, which is the network attester's term.
 

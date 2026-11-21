@@ -16,7 +16,7 @@ import torch
 
 from verity import hooks as H
 from verity.channel import Refused
-from verity.protocols.compose import schemes as declarations
+from verity.protocols.run import schemes as declarations
 from tests.pipeline.test_serve_learn import SHAPE, parse, stand_ins
 from verity_vllm import messages as M
 from verity_vllm.pipeline import scheme_plugin as SP
@@ -57,8 +57,8 @@ def serve(monkeypatch):
     handed to PoUW (`tensors.use_pearl_c`) before that import."""
     import verity_torch
     import verity_vllm
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving import tensors
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import kernel
+    from verity.protocols.accounting.compute.pouw.prover.serving import tensors
+    from verity.protocols.accounting.compute.pouw.prover.serving.pearl_c import kernel
     from verity_torch.pouw.pearl_c import passes, run_device
 
     monkeypatch.setattr(run_device, "PearlCDeviceRun", _Run)

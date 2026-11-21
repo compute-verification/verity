@@ -10,8 +10,8 @@ import cards
 import figure1 as f
 import pytest
 from render import _fit, _lines, _zeros, appendix_stem, render, render_appendix, stem
-from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams
-from verity.protocols.proofs.spot.prover.optimize import Cell
+from verity.protocols.accounting.network.verifier.network_attester import NetworkAttesterParams
+from verity.protocols.proof.spot.prover.optimize import Cell
 
 SCOPES = ("world year", "datacenter week")
 #: the designs every bit charged, which plan in about a second; the capped ones take seconds a point

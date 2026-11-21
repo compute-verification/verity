@@ -42,7 +42,7 @@ from verity.circuits.program import NoBooleanBody, Program
 from verity.circuits.types import Value
 from verity.commitments.periods import interface as IF
 
-REFERENCE = Path(__file__).resolve().parents[6] / "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/scripts/inference_only_reference.py"
+REFERENCE = Path(__file__).resolve().parents[6] / "verity/protocols/policy/training_detection/inference_only/verifier/lean/scripts/inference_only_reference.py"
 GEMM = 'Gemm_v2{K=64,N=8,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}'
 ROPE = "RoPEHead_v1{D=16}"
 DAY = "2026-11-01"

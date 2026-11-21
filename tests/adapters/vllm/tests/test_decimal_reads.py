@@ -1,17 +1,14 @@
 """A digit `int` does not read is no number: one case for each kind of place in `verity_vllm` that asks whether a string
 is one (`tests/lint/test_isdecimal.py` holds the rule for every place). `²` is a digit to `str.isdigit` and none to
-`str.isdecimal`, and `int("²")` raises a bare `ValueError`. A place that refuses "no number" by name refuses `²` by that
-name, one that answers None answers None, and one that sorts by the number sorts it where it sorts a name with none.
+`str.isdecimal`, and `int("²")` raises a bare `ValueError`.
 A place that reads bytes asks their text: `bytes` has no `isdecimal`, and its `²` is a byte no number is written with."""
 from __future__ import annotations
 
 import asyncio
 
 import pytest
-from verity_vllm.commitments.leaves import parse_shape_text
 
-from verity.errors import InvalidArtifact
-from verity.protocols.resource_accounting.network.prover import id_relay
+from verity.protocols.accounting.network.prover import id_relay
 
 NO_DECIMAL = "²"
 
@@ -20,12 +17,6 @@ def test_the_digit_is_one_int_does_not_read() -> None:
     assert NO_DECIMAL.isdigit() and not NO_DECIMAL.isdecimal()
     with pytest.raises(ValueError, match="invalid literal for int"):
         int(NO_DECIMAL)
-
-
-@pytest.mark.parametrize("text", [f"[{NO_DECIMAL}]", f"[4,{NO_DECIMAL}]", f"[{NO_DECIMAL}8]"])
-def test_a_place_that_refuses_no_number_by_name_refuses_it_by_that_name(text: str) -> None:
-    with pytest.raises(InvalidArtifact, match="malformed shape text"):
-        parse_shape_text(text)
 
 
 @pytest.mark.parametrize("length", [NO_DECIMAL.encode("latin-1"), NO_DECIMAL.encode(), b"4" + NO_DECIMAL.encode("latin-1"), b"x", b""])

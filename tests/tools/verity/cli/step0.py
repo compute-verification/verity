@@ -1,7 +1,7 @@
 """The step-0 table `verity run`'s tests run (`verity_cli.run.Registry`, read with `verity_cli.run.registry`): the eight
 subprotocols' declarations to a configuration (`MANIFESTS`), the ``toy`` workload's declaration (`TOY`), each party's
 entry or `LIVE` (`PIECES`), and the live run of SPOT's core parties (`live`,
-`verity.protocols.proofs.spot.verifier.parties`) on a machine (`Machine`).
+`verity.protocols.proof.spot.verifier.parties`) on a machine (`Machine`).
 
 No workload serves here: `Machine`'s ``serve``, ``pin``, ``host`` and ``audit`` are `SP.Unavailable` until a test's
 stand-in gives them, and the network attester's entry (`network_attester`) and every other subprotocol's period check
@@ -23,10 +23,10 @@ from typing import Any
 from verity.runtime import runner as runtime
 from verity.config import Component, Workload
 from verity.protocol import Channel, Role
-from verity.protocols.resource_accounting.network.verifier import parties as NC
-from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams
-from verity.protocols.workload_classification.training_detection.inference_only.verifier import parties as IO
-from verity.protocols.proofs.spot.verifier import parties as SP
+from verity.protocols.accounting.network.verifier import parties as NC
+from verity.protocols.accounting.network.verifier.network_attester import NetworkAttesterParams
+from verity.protocols.policy.training_detection.inference_only.verifier import parties as IO
+from verity.protocols.proof.spot.verifier import parties as SP
 from verity.commitments.randomness import parse_design
 from verity.channel import Refused
 from verity.circuits.codec import canonical_json

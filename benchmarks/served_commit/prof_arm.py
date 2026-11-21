@@ -218,7 +218,7 @@ class NativeDrainArm(RootsArm):
 
 
 class RowsArm(NativeDrainArm):
-    """`NativeDrainArm` committing under rows-sha512, `verity/commitments/cuda/commit_gpu/`'s leaves and trees on the windowed worker."""
+    """`NativeDrainArm` committing under rows-sha512, `step_rows`' leaves and trees on the windowed worker."""
 
 
 class RowsBaseArm(RowsArm):

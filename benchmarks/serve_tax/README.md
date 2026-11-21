@@ -595,7 +595,7 @@ ours (Pearl+'s kernel is sm_90's), and the find-load and the pair run on the sam
    ~~~text
    uv run python -c 'import json, sys
    from verity_vllm.pipeline.commit_coins import ChallengerGate
-   from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins.window import reserve_salt
+   from verity.protocols.accounting.compute.pouw.prover.serving.coins.window import reserve_salt
    g = ChallengerGate(sys.argv[1]); print(json.dumps(reserve_salt(g.call, g.ledger, sys.argv[2], sys.argv[3], 0)[0]))' \
      "$GATE" LANE PEER
    ~~~
@@ -608,7 +608,7 @@ ours (Pearl+'s kernel is sm_90's), and the find-load and the pair run on the sam
 
    ~~~text
    research run --on NODE --source . --cwd source \
-     --env 'SCHEME_SETTINGS=[{"gate": "GATE", "pearl-plus": {"kernel": "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90", "challenger": "127.0.0.1:0", "session": RESERVE_1}}, {"gate": "GATE", "pearl-plus": {"kernel": "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90", "challenger": "127.0.0.1:0", "session": RESERVE_2}}]' \
+     --env 'SCHEME_SETTINGS=[{"gate": "GATE", "pearl-plus": {"kernel": "verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm90", "challenger": "127.0.0.1:0", "session": RESERVE_1}}, {"gate": "GATE", "pearl-plus": {"kernel": "verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm90", "challenger": "127.0.0.1:0", "session": RESERVE_2}}]' \
      -- bash benchmarks/serve_tax/run.sh --model llama32-1b --profile coding-agent --feature pearl-plus
    ~~~
 

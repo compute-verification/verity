@@ -62,13 +62,14 @@
 #      id, its answer in PIECE_DIR/coin-put.json, which names the run's Attempt carrying out/'s copy as its custody);
 #      the RULE line then reads the ledger again: whether the sample session was the lane's first reserve after the
 #      period's close (`served_verdicts.py pearlplus-period rule`, kept as period.json's rule);
-#   4b. once verify wrote its document, `served_passes.py lean` takes the Lean verdict of record, PouwCheck.PearlPlus's
+#   4b. once verify wrote its document, `served_passes.py lean` takes the Lean verdict of record, PouwVerifier.PearlPlus's
 #      pouw-pearlplus (PEARLPLUS_LEAN_EXE, else built here, its log
 #      pouw-pearlplus-build.log; one that doesn't build answers nothing), on the same passes, epoch coins, samples, coin
 #      record and W (--tie), of record (--of-record) on a live session's coins, within PEARLPLUS_LEAN_TIMEOUT seconds
 #      (default 3,600), and writes its answer to PIECE_DIR/pearlplus-lean.json,
-#      the file `served_verdicts.pearlplus_of_record` reads, only where it is the Python verdict's; both verdicts, its
-#      command line and the executable's SHA-256 go to PIECE_DIR/pearlplus-lean-check.json either way;
+#      the file the piece's verdict and `served_verdicts.pearlplus_of_record` read, whatever the Python's verdict says
+#      (verify's verdict decides nothing: its coin and its timed credit are what is read of it); both verdicts, where
+#      they differ, its command line and the executable's SHA-256 go to PIECE_DIR/pearlplus-lean-check.json either way;
 #   4c. where the Lean answered, `served_passes.py case` writes the parts of the run's case as remote's composite of
 #      record reads it that need no docket, and the pass files its opened tiles read, to
 #      SERVE_DIR/private/pearlplus/case, where served_cases.py makes the case once the window's record R is made;
@@ -379,8 +380,8 @@ if [ -n "$GO" ] && [ -s "$P/verify.json" ]; then
   t=$(date +%s)
   LX=${PEARLPLUS_LEAN_EXE:-}
   if [ -z "$LX" ]; then
-    LX=$TREE/verity/protocols/resource_accounting/compute/pouw/verifier/lean/pearlplus/.lake/build/bin/pouw-pearlplus
-    (cd verity/protocols/resource_accounting/compute/pouw/verifier/lean/pearlplus && lake build pouw-pearlplus) > "$Q/pouw-pearlplus-build.log" 2>&1 || {
+    LX=$TREE/verity/protocols/accounting/compute/pouw/verifier/lean/pearlplus/.lake/build/bin/pouw-pearlplus
+    (cd verity/protocols/accounting/compute/pouw/verifier/lean/pearlplus && lake build pouw-pearlplus) > "$Q/pouw-pearlplus-build.log" 2>&1 || {
       say "lean: pouw-pearlplus doesn't build (its log in the serve dir's private/pearlplus), so no Lean answer is written"
       LX=; }
   fi

@@ -188,6 +188,7 @@ class Light:
     members: tuple[Any, ...]
     row_tables: tuple[Any, ...] = ()
     partition_digest: str = "ef" * 64
+    program_digest: str = PROGRAM
 
 
 def light(ms) -> Light:

@@ -47,7 +47,7 @@ Programs longest first, each a prefix of the longest): node j's units of slot 0,
 allocation's slots side by side in its template (`window_builder`, which holds
 the units, their feeds and weight reads, and wires them). Every unit reads its writers' rows as they hold them:
 
-- `Embedding_v1{V, H}` is the registered read `EmbeddingRead_v2{V, H}` (`commitments.gates.embedding`): its ``root`` and
+- `Embedding_v1{V, H}` is the registered read `EmbeddingRead_v3{V, H}` (`commitments.gates.embedding`): its ``root`` and
   ``domain`` are the embedding table's (a `Table` over the weights record, read by `TableRead`), its ``row``, ``salt`` and
   ``path`` a `TableOpening` at the hidden key ``tok``, pinned by its verdict ``o1``. Its ``tok`` is its position's feed.
 - `Gemm_v2{K, N}` is ⌈N / n⌉ slices `Gemm_v2{K, n}`, each reading its weight rows from the weights record (`Read`) and
@@ -254,7 +254,7 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
         scans = SS.bridge(cls.scan, cls.prompt)
     except ValueError as e:
         raise Unexpressible(f"{cls}: its slots aren't a scan state row's lanes ({e})") from None
-    entry = bind(IO.SlotEntry, KO=cls.outputs, IDB=cls.scan.IDB, NP=1 if requests is not None else cls.prompt,
+    entry = bind(IO.SlotEntryV2, KO=cls.outputs, IDB=cls.scan.IDB, NP=1 if requests is not None else cls.prompt,
                  STOP=stop_ids(registered))
     b = _Builder(grain, programs)
     if order is None:
@@ -308,7 +308,7 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
         filled = [by.get((cls.anchor(s), cls.lane(s))) for s in range(cls.slots)]
         gaps = [s for s, k in enumerate(filled) if k is None]
         if gaps:
-            ctid, cu = b.allocation(bind(IO.OutCollect, KO=cls.outputs, FIRST=True),
+            ctid, cu = b.allocation(bind(IO.OutCollectV2, KO=cls.outputs, FIRST=True),
                                     [progs[host[cls.anchor(s)]].entry_label for s in gaps])
         etid, eu = b.allocation(entry, [progs[k if k is not None else host[cls.anchor(s)]].entry_label
                                         for s, k in enumerate(filled)])

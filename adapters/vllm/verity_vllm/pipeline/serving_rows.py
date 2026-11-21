@@ -127,8 +127,8 @@ from typing import Any
 
 import numpy as np
 
-from verity.protocols.proofs.spot.verifier import service as SV
-from verity.protocols.proofs.spot.prover import docket as DK
+from verity.protocols.proof.spot.verifier import service as SV
+from verity.protocols.proof.spot.prover import docket as DK
 from verity.circuits import partition_object as PO
 from verity_vllm.check.replay.index import ProgramIndex, index_of
 from verity_vllm.check.replay.opening import CommittedStore, alias_table
@@ -695,13 +695,13 @@ def window_values(window: CS.Binding, rows: Sequence[list[Row]], store: Any, wei
     reg = registered(ms, rows, hreg) if weight_values else merged(EX.declarations(plan), hreg)
     if tables is not None:
         made = EX.commit_tables(plan, store, weights, arrivals, _slices, tables)
-        values |= made | IF.supplied(reg, {p: v.entry() for p, v in made.items()}, window.partition_digest)
+        values |= made | IF.supplied(reg, {p: v.entry() for p, v in made.items()}, window.program_digest)
     by_t, at = dict(zip(tmpls, rows, strict=True)), {}
     first, apart = ([m for m in ms if (template(m.template).layout == "history") == a] for a in (False, True))
     got = read_all(first, [by_t[t] for t in dict.fromkeys(m.template for m in first)], store, weights, arrivals, values)
     if histories is not None:
         at = HR.append(hp, first, got, histories)
-        values |= IF.supplied(hreg, {H.name(*k): histories.tables[k].entry() for k in hp}, window.partition_digest)
+        values |= IF.supplied(hreg, {H.name(*k): histories.tables[k].entry() for k in hp}, window.program_digest)
     if apart:
         read = dict(zip([m.key for m in first], got, strict=True))
         read |= zip([m.key for m in apart], read_all(apart, [by_t[t] for t in dict.fromkeys(m.template for m in apart)], store,

@@ -19,7 +19,6 @@ SPOT, and the one record of every verdict (the block record).
     served_verdicts.py rebase SERVE_DIR SERVED_DIR < PATHS
     served_verdicts.py composed ANSWER DIR [--gate-exit RC]
     served_verdicts.py public-registration REGISTRATION
-    served_verdicts.py sampled-line LOG [--partition FILE] [--challenger C --summary FILE]
     served_verdicts.py coin-trees --challenger C --summary FILE
     served_verdicts.py coins --challenger C --summary FILE
     served_verdicts.py front-line SESSION
@@ -37,10 +36,7 @@ is done, in full under DIR where it names or counts a window or holds a load's o
 its place. The class's padded counts, the period's declared T and S, the bench Build's requests and the
 verifier's coins and samples are public. ``public-registration`` prints what the run publishes of a window's advice
 docket (`public_registration`: its compiler's cap in place of the advice's length, which the advice tree's row count
-states all the same), ``sampled-line`` the
-SAMPLED-PROOFS line from the records audit's log
-(`sampled_line`: the partition the sample was over, the members it drew, whose challenger's coins they were and where
-its sessions' coin trees came from, and no length of the advice or count of the scope's members), ``coin-trees`` why an
+states all the same), ``coin-trees`` why an
 audit on the gate's coins took its sessions' coin trees from elsewhere (`coin_trees_refusal`, exit 1), ``coins`` the
 V3C-AUDIT line's account of whose coins its audit's were and its coin trees (`coins_said`), and
 ``front-line`` the CERTIFIER-FRONT line from the front's session (`front_line`: `FRONT_PUBLIC`), ``failed`` a tool's
@@ -49,7 +45,7 @@ failure by its exception's class and exit status (`failed`) and ``said`` its las
 ``window``: the sealed window to audit, from a serve-openai run's ``seals.jsonl``, ``windows.jsonl`` and ``requests.jsonl``
 (`pick`): sealed without error, its Commit passed, each of its requests checked and in no other window (V3b's window
 circuit refuses a request carried across windows), at most ``--slots`` of them (its class's); the most requests, then the
-earliest. ``--window K`` holds K to the same rules. ``--of-load FILE`` (a fixed load's lines, `serve_load.py`'s
+earliest. ``--window K`` holds K to the same rules. ``--of-load FILE`` (a fixed load's lines, `verity_vllm.inputs.sender`'s
 ``--out``) takes the one window whose requests are that load's and no other, and ``--attested`` the one whose requests
 are all the network attester's: neither a count nor a setting chooses it, and either refuses unless one window fits. Prints the pick (`pick`): ``{window, requests, users, steps,
 refused}``, which the run keeps in the serve dir's ``private/window.json``.
@@ -98,7 +94,7 @@ only where `pearlplus_of_record` holds it to the piece's own check of live coins
 node only: the compose holds just the key file the piece hands to ``--key-sha512``), the lane ``--lane``'s own reserve and
 Pearl-C period, a sample session the lane reserved first after that period closed and opened on the run's commitment, the
 window's docket chained after Pearl+'s window record and its records audit tied to it accepted, that period's circuit the window-circuit record V3c held the
-window's circuit to, and the Lean `PouwCheck.PearlPlus` verdict on the same run; else its row stays missing, naming the
+window's circuit to, and the Lean `PouwVerifier.PearlPlus` verdict on the same run; else its row stays missing, naming the
 first condition it fails.
 
 ``pearlplus-period open``: the lane's Pearl-C period P, opened at ``--gate`` before Pearl+'s serve with cap 1 (the serve's
@@ -412,9 +408,14 @@ WITNESS_NAMES = {"inst*.bin": "a prover's instance file (its rows)", "*-private.
 DEV_VERDICT = "development run, credits nothing"
 #: Pearl+'s verdict's protocol (`verify_run.PROTOCOL`)
 PEARLPLUS_PROTOCOL = "verity/pouw/pearl-plus/v1"
-#: Pearl+'s verdict's core answer in its piece (`served_pearlplus.sh`'s step 4), and the Lean `PouwCheck.PearlPlus`
-#: verdict on the same passes and coin record there (`pouw-pearlplus`'s printout)
+#: the Python verify's core answer in its piece (`served_pearlplus.sh`'s step 4, a measurement that decides nothing), and
+#: the Lean `PouwVerifier.PearlPlus` verdict on the passes and coin record there (`pouw-pearlplus`'s printout), Pearl+'s
+#: verdict
 PEARLPLUS_ANSWER, PEARLPLUS_LEAN = "pearlplus-answer.json", "pearlplus-lean.json"
+#: the δ the Lean verdict's ε is at (`PouwVerifier.PearlPlus.DELTA`, which `pouw-pearlplus` doesn't print)
+PEARLPLUS_DELTA = "1/100"
+#: why the piece rejects where the Lean wrote no verdict
+PEARLPLUS_NO_LEAN = "no Lean PouwVerifier.PearlPlus verdict, so Pearl+ has none"
 #: the window's docket R as its records audit under ``--sampled-proofs`` sampled against (a5's copy), and that
 #: audit's summary (`spot_row`)
 WINDOW_REGISTRATION, AUDIT_SUMMARY = "window/registration.json", "summary.json"
@@ -779,31 +780,6 @@ def coin_trees_refusal(challenger: str, summary: Mapping[str, Any] | None) -> st
             "with FLOCK_CHALLENGER unset")
 
 
-def sampled_line(records: Mapping[str, Any], partition: Mapping[str, Any] | None, challenger: str | None = None,
-                 summary: Mapping[str, Any] | None = None) -> str:
-    """The SAMPLED-PROOFS line's account of the records audit's ``RECORDS`` row: what the sample was over (the partition's
-    templates, its scope's op path and sampling design), which members it drew, and the row with no length of the advice
-    (``leak.advice_bits``) and with how many proof blocks were sampled (``sampled``). Its ``population``, the scope's
-    unpadded member count, counts the execution phase's tokens: the private copy keeps it and the published one cuts it
-    (`public_line`). The scope's ``steps``, the window's engine steps, stay on the node too. With the audit's
-    ``challenger``, whose coins they were (`challenger_coins`), and the row its ``summary``'s ``coin_trees``, so no reader
-    takes a development session's run for the auditor's."""
-    row = dict(records)
-    if isinstance(row.get("draw"), list):
-        row["sampled"] = len(row["draw"])
-    if isinstance(row.get("leak"), Mapping):
-        row["leak"] = {k: v for k, v in row["leak"].items() if k != "advice_bits"}
-    if summary is not None:
-        row["coin_trees"] = summary.get("coin_trees")
-    part = partition or {}
-    scope = part.get("scope") or {}
-    over = (f"over {', '.join(part.get('templates') or ['?'])} at {scope.get('op_path_prefix', '?')} "
-            f"(law {part.get('law', '?')})")
-    drawn = f"drawn members {row.get('draw')}" if row.get("draw") is not None else "no draw"
-    coins = f", coins {challenger_coins(challenger)}" if challenger is not None else ""
-    return f"{over}, {drawn}{coins}: RECORDS {json.dumps(row, sort_keys=True)}"
-
-
 #: The network attester front's session fields the CERTIFIER-FRONT line says. The rest (its prompts, request, kept fetch, gate
 #: and verdict's cells) count or name the group's requests, and stay in the serve dir.
 FRONT_PUBLIC = ("rc", "run", "ended", "session_s", "pinned", "leaked_removed")
@@ -938,7 +914,7 @@ def development_line(doc: Mapping[str, Any]) -> dict[str, Any]:
                 "coin_source": doc.get("coin_source"), "session": check.get("session"),
                 "coins": check.get("reason", "unchecked"),
                 **{k: doc.get(k) for k in ("scheme", "load", "passes", "dropped", "served_tokens", "generate_s", "tie")},
-                "credit": None if credit is None else {k: credit.get(k) for k in ("credited", "macs", "epsilon")},
+                "credit": None if credit is None else {k: credit.get(k) for k in ("credited", "checked_macs", "epsilon")},
                 "coin": None if published is None else {k: published.get(k) for k in ("art", "preserved", "error", "sha512")},
                 "give_up": doc.get("give_up"),
                 "shares_at_tensor_clock": {k: at.get(k) for k in ("declared_linears", "credited")},
@@ -972,8 +948,8 @@ def gate_ready(gate: str, lane: str, main: Path | None = None, root: str | None 
     """Whether this run may reserve its windows' sessions at `gate` (the ``gate`` subcommand), and its ``GATE`` line; with
     `root`, the run root a session of this run opens on, also refused once an open in the ledger names it: the gate opens
     a root once, ever."""
-    from verity.protocols.proofs.spot.verifier.challenger import challenger as CH
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as PHW
+    from verity.protocols.proof.spot.verifier.challenger import challenger as CH
+    from verity.protocols.accounting.compute.pouw.prover.serving.coins import window as PHW
 
     ledger = _gate_out(gate, "ledger").decode().splitlines()
     pins = [json.loads(x) for x in _gate_out(gate, "pins").decode().splitlines() if x.strip()]
@@ -1136,7 +1112,7 @@ def pearlplus_period_rule(piece_dir: Path, gate: str, lane: str, record: Path) -
     closed (`bench_arm.LiveDraw` held it to before asking its coin, and
     `pearlplus_live_sample` holds the record to). Whether it held, and its ``RULE`` line; kept as the PERIOD document's
     ``rule``."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as PHW
+    from verity.protocols.accounting.compute.pouw.prover.serving.coins import window as PHW
 
     doc = json.loads((piece_dir / PERIOD).read_text())
     name = doc["name"]
@@ -1188,7 +1164,7 @@ def graded_by(row: Mapping[str, Any]) -> str | None:
 def declared_unchecked(protocol: Any, said: str = "") -> str:
     """What of its run no auditor-side entry checks, as the scheme declared under ``protocol`` says (its declaration's
     ``unchecked``, each sentence alone, `scheme.sentences`), less what ``said`` says already, or empty."""
-    from verity.protocols.compose import schemes
+    from verity.protocols.run import schemes
 
     declared = next((schemes.S.sentences(s) for n in schemes.DECLARATIONS
                      if (s := schemes.get(n)).protocol == protocol), ())
@@ -1216,9 +1192,9 @@ def pearlplus_coins(served: Mapping[str, Any], out: Path, gate: str | None, key:
     `out`, with main's first-parent line `main` (`remote.main_lines`), each pass's manifest held by
     `core_check.live_salt` under the challenger key whose public key's SHA-512 is `key` (`challenger.pinned_key`).
     ``{session, closed, passes, reason}``: the passes checked, and None or the first refusal."""
-    from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
-    from verity.protocols.proofs.spot.verifier.challenger import remote
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import challenger as PHC
+    from verity.protocols.accounting.compute.pouw.verifier import core_check as CC
+    from verity.protocols.proof.spot.verifier.challenger import remote
+    from verity.protocols.accounting.compute.pouw.prover.serving.coins import challenger as PHC
 
     coins = served.get("coins") or {}
     sid = (coins.get("session") or {}).get("session")
@@ -1268,11 +1244,11 @@ def pearlplus_draw(record: Path, out: Path, gate: str | None, key: str | None, m
     the record's source its coin. `fetch` replaces the gate's answers (tests). ``{from, session, reason}``: the sample's
     origin, its session and None or the first refusal; a node's sample has no session and no refusal here (the compose
     refuses it, `pearlplus_live_sample`)."""
-    from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
-    from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
-    from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
-    from verity.protocols.proofs.spot.verifier.challenger import remote
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import challenger as PHC
+    from verity.protocols.accounting.compute.pouw.verifier import salt as PS
+    from verity.protocols.accounting.compute.pouw.verifier import window as Wd
+    from verity.protocols.proof.spot.verifier.challenger import challenger as Ch
+    from verity.protocols.proof.spot.verifier.challenger import remote
+    from verity.protocols.accounting.compute.pouw.prover.serving.coins import challenger as PHC
 
     got: dict[str, Any] = {"from": None, "session": None, "reason": None}
     try:
@@ -1511,15 +1487,18 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
               gate: str | None = None, key: str | None = None, main: Path | None = None,
               coin: Path | None = None, tie: Path | None = None) -> dict[str, Any]:
     """PoUW's development piece under POUW=pearlplus (``served_pearlplus.sh``), its document written to
-    ``out/development.json``: Pearl+'s own served run (``served``, `served_passes.py serve`'s document) and Pearl+'s
-    verdict over every pass it retained (``verified``, its ``verify``'s; None where either wrote none). Where either is
+    ``out/development.json``: Pearl+'s own served run (``served``, `served_passes.py serve`'s document), the Python
+    verify over every pass it retained (``verified``, its ``verify``'s; None where either wrote none), which drew the
+    verifier's coin and whose verdict decides nothing, and Pearl+'s verdict, the Lean's (``out/pearlplus-lean.json``,
+    `PEARLPLUS_LEAN`, `served_passes.py lean`'s answer). Where ``served`` or ``verified`` is
     None there is no verdict, so it writes no document: it refuses (`PEARLPLUS_NO_VERDICT`), its sentence in
     ``out/refused.txt`` (`REFUSED`), and raises `PearlplusRefused`. Its verdict is
-    accept when the run served within its caps across at least two pass boundaries, Pearl+'s verdict accepts, and its
+    accept when the run served within its caps across at least two pass boundaries, the Lean verdict accepts (none written
+    rejects, `PEARLPLUS_NO_LEAN`), and its
     epoch's salt coin is its live session's (`pearlplus_coins` through the gate `gate`, the key pin `key` and main's line
     `main`; `pearlplus_coins_from`, naming the challenger as `challenger_of`); with an in-process challenger's coins (`PEARLPLUS_COINS_IN_PROCESS`) a run where nothing
-    failed is `UNCLAIMED`, and a run served under the gate whose coins are not live rejects. It carries that verdict's
-    line, credit at the scheme's named assumption (``credit``, the answer's ``public.work``) and the rounds the prover dropped from
+    failed is `UNCLAIMED`, and a run served under the gate whose coins are not live rejects. It carries the Lean check's
+    line, the Lean verdict's credit at the scheme's named assumption (``credit``, its ``work``) and the rounds the prover dropped from
     its retention before the coin (``dropped``, which credit nothing and stay declared), its shares are
     `served_shares.pearlplus_shares`'s wherever the run served within its caps, whatever the verdict (a rejected or
     missing one credits 0), and it credits nothing (`pearlplus_why`, or `PEARLPLUS_WHY_IN_PROCESS`). ``unretained``, the
@@ -1568,9 +1547,16 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
                        if tie is not None else
                        f"the served run crossed fewer than two pass boundaries or ran over its caps (passes over their "
                        f"caps: {served.get('over_caps')})")
-    answer = verified.get("answer") or {}
-    if answer.get("verdict") != "accept":
-        reasons.append(f"Pearl+'s verdict rejects the run: {answer.get('reason')}"[:800])
+    try:
+        lean = _json(out / PEARLPLUS_LEAN)
+    except ValueError as e:
+        lean = f"{type(e).__name__}: {e}"
+    if not isinstance(lean, dict):
+        reasons.append(f"{PEARLPLUS_NO_LEAN} ({PEARLPLUS_LEAN}: {lean or 'none written'})"[:800])
+        lean = {}
+    elif lean.get("verdict") != "accept":
+        reasons.append(f"Pearl+'s verdict rejects the run: {lean.get('reason')}"[:800])
+    answer = {"verdict": lean.get("verdict"), "commitment": lean.get("commitment"), "profile": {"source": lean.get("source")}}
     challenger = challenger_of(served)
     coins: dict[str, Any] = dict(pearlplus_coins_from(challenger) if live else PEARLPLUS_COINS_IN_PROCESS)
     if tie is not None:
@@ -1614,7 +1600,9 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
             doc["tie"] = {"record": DD.digest(json.loads(tie.read_text()))}
         except (OSError, ValueError, AttributeError) as e:
             doc["tie"] = {"record": None, "why": f"W can't be read: {type(e).__name__}: {e}"[:400]}
-    doc.update(line=verified.get("line"), credit=(answer.get("public") or {}).get("work"), dropped=verified.get("dropped"))
+    checked = _json(out / PEARLPLUS_LEAN_CHECK)
+    doc.update(line=checked.get("line") if isinstance(checked, Mapping) else None, credit=lean.get("work"),
+               dropped=verified.get("dropped"))
     if coin is not None:
         doc["coin"] = pearlplus_coin(coin, answer)
         if doc["coin"]["reason"] is not None and answer.get("verdict") == "accept":
@@ -1626,7 +1614,10 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
                                  "generate call of its own"}
     elif served.get("ok"):
         try:
-            doc["shares"] = SS.pearlplus_shares(dict(served), dict(verified))
+            doc["shares"] = SS.pearlplus_shares(dict(served), {
+                "answer": {"verdict": lean.get("verdict"), "public": {"work": lean.get("work")}},
+                "timed": checked.get("timed") if isinstance(checked, Mapping) else None,
+                "delta": verified.get("delta"), "draws": verified.get("draws")})
         except (KeyError, TypeError, ValueError) as e:
             reasons.append(f"no shares: {type(e).__name__}: {e}"[:600])
         if doc["shares"] is not None and unretained is not None:
@@ -1652,7 +1643,7 @@ def check_answer(a: Any) -> dict[str, Any]:
     """``a`` when it is an answer in the shapes `Answer.ofJson` reads (`pouw.core_check.answer_of`, the Python mirror of
     the core interface's decoder): an accept has no reason and both its public outputs and its profile, a refusal a
     reason and neither. Anything else is a ValueError, which the row reports as the subprotocol's error."""
-    from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
+    from verity.protocols.accounting.compute.pouw.verifier import core_check as CC
 
     try:
         CC.answer_of(a)
@@ -1677,7 +1668,7 @@ def row_of(owner: str, a: Any, out: Path, run: str | None = None) -> dict[str, A
     one-stage accept whose public ``complete`` is not true is `NOT_COMPLETE`, its reason naming the entries its audit
     record under ``out`` left without a verdict."""
     from verity.commitments.domains import ONE_STAGE_PROTOCOL
-    from verity.protocols.proofs.spot.verifier.one_stage.verdict_record import NOT_COMPLETE
+    from verity.protocols.proof.spot.verifier.one_stage.verdict_record import NOT_COMPLETE
 
     a = check_answer(a)
     runs = json.loads((out / "runs.json").read_text()) if (out / "runs.json").exists() else []
@@ -1702,7 +1693,7 @@ def row_of(owner: str, a: Any, out: Path, run: str | None = None) -> dict[str, A
 
 def spot_row(audit_dir: Path, run: str | None = None) -> dict[str, Any]:
     """SPOT's row from the records audit kept under ``audit_dir`` (module docstring)."""
-    from verity.protocols.proofs.spot.verifier.one_stage import served_integrity as SI
+    from verity.protocols.proof.spot.verifier.one_stage import served_integrity as SI
 
     reg = audit_dir / WINDOW_REGISTRATION
     try:
@@ -1821,11 +1812,11 @@ def pearlplus_live_sample(record: Mapping[str, Any], piece_dir: Path, key: str, 
     first reserve of lane `lane` after its Pearl-C period `period` closed, withheld with a sample session's layout alone,
     and the one session opened on C, so a prover who samples again under another session holds a sample no compose takes;
     and the record's opening its coin ``pouw/draw`` 0 after C (`challenger.live_reason`), the record's source that coin."""
-    from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
-    from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
-    from verity.protocols.proofs.spot.verifier.challenger import remote
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import challenger as PHC
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as PHW
+    from verity.protocols.accounting.compute.pouw.verifier import window as Wd
+    from verity.protocols.proof.spot.verifier.challenger import challenger as Ch
+    from verity.protocols.proof.spot.verifier.challenger import remote
+    from verity.protocols.accounting.compute.pouw.prover.serving.coins import challenger as PHC
+    from verity.protocols.accounting.compute.pouw.prover.serving.coins import window as PHW
 
     if record.get("schema") != COIN_KIND:
         return f"the verifier's coin record is {record.get('schema')!r}, not {COIN_KIND}, which carries its draw"
@@ -1867,16 +1858,6 @@ def pearlplus_live_sample(record: Mapping[str, Any], piece_dir: Path, key: str, 
     return None
 
 
-#: a rational as JSON carries ε: an integer, a fraction with a nonzero denominator, or a decimal
-_RATIONAL = re.compile(r"[+-]?\d+/0*[1-9]\d*|[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?")
-
-
-def _rational(x: Any) -> Fraction | None:
-    """``x`` as a `Fraction` when its text is a rational (`_RATIONAL`), else None."""
-    s = str(x).strip()
-    return Fraction(s) if not isinstance(x, bool) and _RATIONAL.fullmatch(s) else None
-
-
 def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | None, key: str | None,
                         lane: str | None) -> tuple[dict[str, Any] | None, str | None]:
     """Whether Pearl+'s accepted development piece `doc` (`pearlplus`'s, in `piece_dir`) is PoUW's verdict of record: its
@@ -1892,25 +1873,26 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
        session in no other). The verifier's sample source is a sample session's coin opened on the run's commitment, that
        session the lane's first reserve after the period closed (`pearlplus_live_sample` over `pearlplus_draw`'s check),
        and the verdict is over the coin published at its sample (`pearlplus_coin`).
-       Pearl+'s verdict (`PEARLPLUS_ANSWER`) held its passes to a window record W (``verify --tie W``), the
+       Pearl+'s verdict, the Lean `PouwVerifier.PearlPlus` one (`PEARLPLUS_LEAN`, ``served_passes.py lean``'s answer),
+       accepts, credits work over tiles, and held its passes to a window record W (the Lean's ``--tie W``), the
        window's docket R under `spot` is chained right after W, and its records audit is tied to W
        (``records_audit --tie W``) and accepted (its summary's ``audit.accepted``), so the window SPOT audited reads the roots Pearl+ credits. The rule that audit's
        summary states is the sampling design R commits (its kind, and its K unless stratified), and only a stratified
        rate's leaves the answer without a weaker tie. The period's
        open (in the signed ledger) committed the SHA-512 of the window-circuit record V3c held R's circuit to
        (`CIRCUIT_RECORD` beside R), so the period holds the salt session to the circuit of the window served.
-    4. **Lean.** The Lean `PouwCheck.PearlPlus` verdict (`PEARLPLUS_LEAN`) accepts the same run commitment on the same
-       sample source, holds the passes to the same W, and credits work over tiles at the reference's ε.
 
-    The answer is Pearl+'s, its work the Lean's (in the grid form, with its ``give_up``, where the verdict held the
-    passes to their class's fixed load), its profile the reference's with the lane, pin, period, session and the Lean
-    verdict. Nothing here decides anew: each condition reads what a check or a verifier answered."""
-    from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
-    from verity.protocols.proofs.spot.verifier.challenger import remote
-    from verity.protocols.proofs.spot.verifier.one_stage import draw as D
+    The answer is the Lean's, in core's answer form: its run commitment, its work (in the grid form, with its
+    ``give_up``, where it held the passes to their class's fixed load) and W, the coin record's rounds and dropped rounds
+    it read, and a profile of its source, over-cap rule, exact work and opened tiles at `PEARLPLUS_DELTA`, with the lane,
+    pin, period and sessions. The Python verify's answer (`PEARLPLUS_ANSWER`) is not read. Nothing here decides anew:
+    each condition reads what a check or a verifier answered."""
+    from verity.protocols.accounting.compute.pouw.verifier import window as Wd
+    from verity.protocols.proof.spot.verifier.challenger import remote
+    from verity.protocols.proof.spot.verifier.one_stage import draw as D
     from verity.commitments import randomness as RND
-    from verity.protocols.proofs.spot.verifier.one_stage.verdict_record import DESIGN
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import challenger as PHC
+    from verity.protocols.proof.spot.verifier.one_stage.verdict_record import DESIGN
+    from verity.protocols.accounting.compute.pouw.prover.serving.coins import challenger as PHC
 
     if doc.get("coin_source") != LIVE_SOURCE:
         return None, f"its epoch's coins come from {doc.get('coin_source')!r}, not a live session on the auditor device's challenger"
@@ -1940,7 +1922,7 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
     if period is None:
         return None, f"the live session joined no period of lane {lane}"
     name = period.get("period")
-    if h1 := [f for f in (CR.K_FIELD, CR.ROWS_FIELD, CR.LENGTH_FIELD) if f in period]:
+    if h1 := [f for f in (Wd.K_FIELD, Wd.ROWS_FIELD, Wd.LENGTH_FIELD) if f in period]:
         return None, (f"the live session joined period {name}, a non-Pearl-C one (its open commits {', '.join(h1)}): a Pearl-C salt "
                       "session is credited in a Pearl-C period alone")
     try:
@@ -1954,15 +1936,23 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
     if not published or published.get("reason") is not None:
         return None, f"the verdict is not held to the coin published at its draw: {published.get('reason') or 'none published'}"
     try:
-        answer = check_answer(json.loads((piece_dir / PEARLPLUS_ANSWER).read_text()))
+        lean = json.loads((piece_dir / PEARLPLUS_LEAN).read_text())
     except (OSError, ValueError) as e:
-        return None, f"Pearl+'s verdict's answer ({PEARLPLUS_ANSWER}) can't be read ({type(e).__name__}: {e})"
-    if (answer["protocol"], answer["verdict"]) != (PEARLPLUS_PROTOCOL, "accept"):
-        return None, f"Pearl+'s verdict's answer is {answer['protocol']}'s {answer['verdict']}, not {PEARLPLUS_PROTOCOL}'s accept"
-    w = ((answer["public"] or {}).get("tie") or {}).get("record")
+        return None, f"no Lean PouwVerifier.PearlPlus verdict ({PEARLPLUS_LEAN}: {type(e).__name__}: {e})"
+    if not isinstance(lean, dict) or lean.get("verdict") != "accept":
+        v = lean.get("verdict") if isinstance(lean, dict) else None
+        return None, f"the Lean PouwVerifier.PearlPlus verdict is {v}: {lean.get('reason') if isinstance(lean, dict) else lean}"
+    work = lean.get("work") or {}
+    credited, tiles = work.get("credited"), work.get("credited_tiles")
+    if not (type(credited) is int and credited > 0 and type(tiles) is int and tiles > 0):
+        return None, f"the Lean verdict credits {credited!r} MACs over {tiles!r} tiles: nothing"
+    if (lean.get("commitment"), lean.get("source")) != (coin.get("commitment"), coin.get("source")):
+        return None, (f"the Lean verdict is on run {str(lean.get('commitment'))[:16]}... at source "
+                      f"{str(lean.get('source'))[:16]}..., not the verifier's coin record's")
+    w = (lean.get("tie") or {}).get("record")
     if not isinstance(w, str):
-        return None, ("Pearl+'s verdict holds its passes to no window record W (served_passes.py verify --tie W), so "
-                      "nothing ties them to the window")
+        return None, ("the Lean verdict holds its passes to no window record W (served_passes.py lean, the Lean's --tie W), "
+                      "so nothing ties them to the window")
     if spot is None:
         return None, "the compose names no window registration to tie W to (--window-tie, else --sampled-proofs)"
     try:
@@ -1996,32 +1986,16 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
                       "SHA-512 of the window-circuit record V3c held R's circuit to: its salt session counts toward "
                       "another circuit than the window served")
 
-    try:
-        lean = json.loads((piece_dir / PEARLPLUS_LEAN).read_text())
-    except (OSError, ValueError) as e:
-        return None, f"no Lean PouwVerifier.PearlPlus verdict ({PEARLPLUS_LEAN}: {type(e).__name__}: {e})"
-    if not isinstance(lean, dict) or lean.get("verdict") != "accept":
-        v = lean.get("verdict") if isinstance(lean, dict) else None
-        return None, f"the Lean PouwVerifier.PearlPlus verdict is {v}: {lean.get('reason') if isinstance(lean, dict) else lean}"
-    source = (answer["profile"] or {}).get("source")
-    if (lean.get("commitment"), lean.get("source")) != (answer["commitment"], source):
-        return None, (f"the Lean verdict is on run {str(lean.get('commitment'))[:16]}... at source "
-                      f"{str(lean.get('source'))[:16]}..., not Pearl+'s verdict's run and source")
-    if ((lean.get("tie") or {}).get("record")) != w:
-        return None, f"the Lean verdict doesn't hold the passes to Pearl+'s window record W {w[:16]}..."
-    work, ref = lean.get("work") or {}, (answer["public"] or {}).get("work") or {}
-    credited, tiles = work.get("credited"), work.get("credited_tiles")
-    if not (type(credited) is int and credited > 0 and type(tiles) is int and tiles > 0):
-        return None, f"the Lean verdict credits {credited!r} MACs over {tiles!r} tiles: nothing"
-    eps = _rational(work.get("epsilon"))
-    if eps is None or eps != _rational(ref.get("epsilon")):
-        return None, f"the Lean verdict's ε {work.get('epsilon')!r} is not the reference's {ref.get('epsilon')!r}"
     weaker = {} if kind == "stratified" else {"weaker_tie": WEAKER_TIE.format(design=design)}
-    return {**answer, "public": {**answer["public"], "work": {k: work.get(k) for k in
-                                                              ("credited", "credited_tiles", "macs", "rho", "epsilon")}
-                                 | ({"give_up": work["give_up"]} if "give_up" in work else {})},
-            "profile": {**answer["profile"], "lane": lane, "key_sha512": key, "period": name, "session": session,
-                        "draw_session": drew.get("session"), "reference_work": ref,
+    return {"protocol": PEARLPLUS_PROTOCOL, "verdict": "accept", "reason": None, "commitment": lean.get("commitment"),
+            "public": {"work": {k: work.get(k) for k in ("credited", "credited_tiles", "checked_macs", "rho", "epsilon")}
+                       | ({"give_up": work["give_up"]} if "give_up" in work else {}),
+                       "unit": "MAC", "tie": lean["tie"],
+                       **{k: coin[k] for k in ("rounds", "dropped") if k in coin}},
+            "profile": {"delta": PEARLPLUS_DELTA, "source": lean.get("source"), "over_cap": lean.get("over_cap"),
+                        "tiles": [[v.get("pass"), v.get("tile")] for v in lean.get("verdicts") or () if isinstance(v, dict)],
+                        "lane": lane, "key_sha512": key, "period": name, "session": session,
+                        "draw_session": drew.get("session"),
                         "lean": {k: lean.get(k) for k in ("verdict", "commitment", "source", "drawn", "work", "tie")},
                         **weaker}}, None
 
@@ -2546,7 +2520,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     w.add_argument("serve_dir", type=Path)
     w.add_argument("--slots", type=int, default=8)
     w.add_argument("--window", type=int)
-    w.add_argument("--of-load", type=Path, help="the fixed load's lines (serve_load.py --out): the window of its requests")
+    w.add_argument("--of-load", type=Path, help="the fixed load's lines (verity_vllm.inputs.sender --out): the window of its requests")
     w.add_argument("--attested", action="store_true", help="the window of the network attester's requests alone")
     g = sub.add_parser("gate")
     g.add_argument("--gate", default=os.environ.get("H1_GATE"))
@@ -2596,11 +2570,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     pb = sub.add_parser("publish")
     pb.add_argument("out", type=Path)
     pb.add_argument("--private", type=Path, required=True)
-    sl = sub.add_parser("sampled-line")
-    sl.add_argument("log", type=Path)
-    sl.add_argument("--partition", type=Path)
-    sl.add_argument("--challenger")
-    sl.add_argument("--summary", type=Path)
     for name in ("coin-trees", "coins"):
         ct = sub.add_parser(name)
         ct.add_argument("--challenger", required=True)
@@ -2692,14 +2661,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     if a.cmd == "public-registration":
         print(json.dumps(public_registration(json.loads(a.registration.read_text())), indent=1, sort_keys=True))
         return 0
-    if a.cmd == "sampled-line":
-        rows = [x[len("RECORDS "):] for x in a.log.read_text().splitlines() if x.startswith("RECORDS ")]
-        if not rows:
-            print("no RECORDS line")
-            return 1
-        print(sampled_line(json.loads(rows[0]), json.loads(a.partition.read_text()) if a.partition else None,
-                           a.challenger, _summary(a.summary) if a.summary else None))
-        return 0
     if a.cmd == "coins":
         print(coins_said(a.challenger, _summary(a.summary)))
         return 0
@@ -2780,7 +2741,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 return 0
             if not a.name:
                 raise ValueError("pearlplus-period open needs --name")
-            from verity.protocols.compose import schemes
+            from verity.protocols.run import schemes
 
             scheme = a.scheme or schemes.get("pearl-plus").option.partition(":")[2]
             doc = pearlplus_period_open(a.piece_dir, a.gate, a.name, scheme, a.cubin, a.circuit_record)

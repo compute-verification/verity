@@ -52,6 +52,7 @@ theorem compression_le_log {N D k b q M E LN Lk t : ℕ} (hD : 1 ≤ D) (hDN : D
 theorem wipeMissing_spec {N k s : ℕ} (hk : 0 < k) :
     (s + 1) * 6931471808 * N ≤ wipeMissing N k s * (k * 10 ^ 10) := by
   unfold wipeMissing
+  rw [if_neg (Nat.pos_iff_ne_zero.mp hk)]
   generalize (s + 1) * 6931471808 * N = A
   have hB : 0 < k * 10 ^ 10 := by positivity
   generalize k * 10 ^ 10 = B at hB ⊢
@@ -115,6 +116,10 @@ example : wipeResidual 2319974400 2152 512 128 = 52439071629 ∧
     10000 * wipeResidual 2319974400 2152 512 128 ≤ 442 * (2319974400 * 512) ∧
     441 * (2319974400 * 512) ≤ 10000 * wipeResidual 2319974400 2152 512 128 ∧
     wipeResidual 40625000000 74000 512 128 = 26900316210 := by
+  decide
+
+/-- At no challenge the wipe residual is at least the fill: 40,625,000,000 labels of 512 bits and `2^-40`. -/
+example : 40625000000 * 512 ≤ wipeResidual 40625000000 0 512 40 := by
   decide
 
 end PousStreamedWipe

@@ -318,7 +318,7 @@ def test_the_gates_token_term_keeps_the_references_clock(asy: bool) -> None:
     (`tick_step.circuit-check.py`'s ``RULES[1]``, in nanoseconds), stepped as the scan steps from the empty engine: its
     T in µs and its nanosecond carry are the reference's clock after every step."""
     from verity import hooks as H
-    from verity.protocols.resource_accounting.network.prover import admission as na
+    from verity.protocols.accounting.network.prover import admission as na
 
     rule = SC.Rule(bucket=10**8, sat=6_303_000, free=6_303_000, token=18_126)
     e = SC.Engine(max_num_seqs=4, max_num_batched_tokens=64, max_model_len=256, num_gpu_blocks=8, block_size=16,

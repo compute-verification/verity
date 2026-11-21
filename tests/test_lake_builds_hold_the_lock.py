@@ -17,7 +17,7 @@ import re
 
 from test_repository import ROOT, _tracked
 
-HELPERS = ("`verity_difftest.build(package, exe)`, or `verity.protocols.proofs.spot.verifier.one_stage.verifier."
+HELPERS = ("`verity_difftest.build(package, exe)`, or `verity.protocols.proof.spot.verifier.one_stage.verifier."
            "executable(exe, package)` in a module that imports only `verity`")
 LOCK = "harness-build.lock"
 #: what a file holding either form contains, which most files don't: only those are parsed
@@ -30,7 +30,7 @@ ALLOWED: dict[str, str] = {
     "tests/tools/": "the tools' tests: command lines the tools classify, stub `lake`s and scratch copies of fixtures",
     "tools/check/pins.py": "a pin's regeneration command, run by hand (`pins.py --write`), never by a suite",
     "adapters/vllm/tools/served_run/local_gate.py": "builds in the tree it extracts for the gate, which nothing else builds in",
-    **{f"tests/verity/protocols/proofs/flock/prover/{f}": FLOCK_SUITE for f in (
+    **{f"tests/verity/protocols/proof/flock/prover/{f}": FLOCK_SUITE for f in (
         "test_flock_rows_vectors.py", "test_lean_coin_open.py", "test_lean_coin_tree.py",
         "test_lean_forged_proofs.py", "test_lean_hello.py", "test_lean_hidden_outputs.py", "test_lean_identifier.py",
         "test_lean_ks_form.py", "test_lean_out_group_slot.py", "test_lean_plain_hidden_tables.py",
@@ -41,8 +41,7 @@ ALLOWED: dict[str, str] = {
         "test_lean_verify_members.py", "test_lean_width_refusals.py", "test_lean_zk_mask.py",
         "test_lean_zk.py", "test_pouw_rows.py", "test_read_tmpl.py", "test_read_tmpl_stager.py", "test_rec_algebra.py",
         "test_stream_zk_server.py",
-        "test_universal_same_shape.py", "test_wired_links.py", "test_zk_server_agreement.py", "test_zk_server_contract.py",
-        "test_zk_server_frame.py")},
+        "test_universal_same_shape.py", "test_zk_server_contract.py", "test_zk_server_frame.py")},
 }
 
 

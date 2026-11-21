@@ -8,7 +8,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from verity.protocols.compose import schemes
+from verity.protocols.run import schemes
 
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPTS = ("benchmarks/pous/served_piece.sh", "benchmarks/pous/streamed_wipe/served_wipe.sh")

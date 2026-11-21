@@ -1,6 +1,6 @@
 # network_traces
 
-The network attester (`verity/protocols/resource_accounting/network/`) on real served traffic: per-token timing traces for its
+The network attester (`verity/protocols/accounting/network/`) on real served traffic: per-token timing traces for its
 calibration, the network attester in front of a served endpoint as a relay of the egress record's one form (`network_attester`), the
 zero-knowledge proofs of their proof blocks, and the served session's runbook. Each driver's docstring says what it runs, what it publishes and what its verifier receives.
 
@@ -22,7 +22,7 @@ zero-knowledge proofs of their proof blocks, and the served session's runbook. E
 - **Endpoints besides vLLM.** `demo_stub.py` stands in for the gate's serving endpoint, and `demo_endpoint.py` is
   the OpenAI endpoint in front of a decoder that isn't vLLM, whose scheduler and records the stub serves through.
 - **The network attester as a relay.** Its `attester/network_attester_serve.py` runs
-  `verity.protocols.resource_accounting.network.verifier.network_attester` in front of any
+  `verity.protocols.accounting.network.verifier.network_attester` in front of any
   TCP server and checks what it published offline: `serve` releases only the egress record's id form by default, and
   `rehearse` names its traffic's (`--egress`: id with `--ids`, else bytes); `connection_rows_run.py`, beside it, is a
   run's connection rows (`--lengths 1|2 [--content P,O[,ROWS] ...]`: the schedule's flags, the publisher's keep of each
@@ -49,7 +49,7 @@ zero-knowledge proofs of their proof blocks, and the served session's runbook. E
 ## The gate's load
 
 The gate's `--shape h200` serves plain INT8 weights generated from the public seed `verity/cmp92/h200/weights/v1`
-(`verity.protocols.resource_accounting.memory.pous.prover.served_weights`). They are relayed to the H200 once per serving run and committed as they cross, through
+(`verity.protocols.accounting.memory.pous.prover.served_weights`). They are relayed to the H200 once per serving run and committed as they cross, through
 two gate verbs on the auditor's machine:
 
 - `vy-challenger-gate weights-write [--shape h200|tiny]` writes the shape's weights stream onto the auditor's store disk
@@ -114,8 +114,7 @@ listens, the caller's command (`LOAD_CMD`, given the session's `relay.json` and 
 client address that file names, and `close` (`CERTIFIER_CLOSE`) waits for the session's end and keeps its fetch where a
 rehearsal's is. The runner refuses a session without all three, and under any other `LOAD` each of them. A session's
 records cover the connections that crossed the relay; that no other route reaches the endpoint is the placement's.
-Its `piece` (`CERTIFIER_CMD`), and the split's `chain` and `period` around V3c (`CERTIFIER_CHAIN_CMD` and
-`CERTIFIER_PERIOD_CMD`), write `refused.txt` with the one text (`NOT_RUN`) and exit 3 before any step runs, and the
+Its `piece` (`CERTIFIER_CMD`) writes `refused.txt` with the one text (`NOT_RUN`) and exits 3 before any step runs, and the
 served window reads the network audit as pending: never an accept, and never a reject. The attester launches and serves;
 its rows and its Lean program are checked by their own programs (`network-rows`, the network verifier's suites).
 `kind_scan.py DIR` reads a piece's files field by field and reports each one that is of none of the four public kinds
@@ -313,7 +312,7 @@ The terms, in the generator reading of the scan's statement (each proof block's 
   (`ingress_scan.entry_bits`) an execution phase; or an entry's 33 + KO·IDB bits a request if `prog` is an input only at
   its anchored entries.
 - No term for incorrect proof blocks with every proof block sampled.
-- The jitter term is charged at D_j = 2 (`scan_answer.JITTER_BOUND`): one bit a bucket, T bits an execution phase (the
+- The jitter term is charged at D_j = 2 (`leak_bounds.JITTER_BOUND`): one bit a bucket, T bits an execution phase (the
   record's `terms.jitter_per_block`). J assumed at D_j = 2; at D_j = 1 not met (next-bucket host-state channel). J is
   one bound over every step (`NetTiming.JitterBounded`), so every bucket pays its bit. The network attester hands each bucket
   to a pacer that releases it at a time fixed before the bucket is made (`network_attester.NetworkAttester(paced=…)`, `network_attester_serve.py
@@ -340,10 +339,10 @@ each leaf but the first the o1 of the proof block that computes it and the sin o
 a state tree that skips or alters a transition is refused at that proof block's o1; the block round's registration
 names it as `scan/state`.
 A scan proof block's public word, o0, is its ok bit. scan_zk commits a member's o0 rows under the verifier's public
-salts (`ok_salts`, `scan_ok.salt`: row i's from its index alone), so the o0 root of a member whose every proof block is
+salts (`ok_salts`, `ScanOk.salt`: row i's from its index alone), so the o0 root of a member whose every proof block is
 ok is a constant of its template and count, and one execution phase's members are a function of the schedule's T
-(`scan_ok.members`: `ingress-0`, `last` and `egress-0`; the start proof block, `start`, has no ok bit). The check computes those constants once a period
-(`scan_ok.constants`, Lean `ScanOk.consts`) and refuses, last, by name, an execution phase whose scan's registration
+(`ScanOk.members`: `ingress-0`, `last` and `egress-0`; the start proof block, `start`, has no ok bit). The check computes those constants once a period
+(Lean `ScanOk.consts`) and refuses, last, by name, an execution phase whose scan's registration
 names a member's `<member>/o0` at another root, leaf count or domain, names none for it, or names another port ending
 `/o0` (`held`): comparisons alone, no hash an execution phase. An ok bit is then the verifier's own computation from
 public parameters, never a row the prover's registered file states. Two members of one template and one count (at

@@ -32,12 +32,12 @@ sys.path.append(str(ROOT))  # for benchmarks.network_traces
 
 import attester_piece as CP  # noqa: E402
 import chain_record as CR  # noqa: E402
-from verity.protocols.resource_accounting.network import scheme as NS  # noqa: E402
+from verity.protocols.accounting.network import scheme as NS  # noqa: E402
 import served_verdicts as S  # noqa: E402
 from test_served_session import CHALLENGER_HOST, LIVE_GATE, RUN, STUB  # noqa: E402
 from test_network_attester_chain import WC, gate_run  # noqa: E402
-from verity.protocols.resource_accounting.network.verifier import relay_check as RC  # noqa: E402
-from verity.protocols.resource_accounting.network.verifier.certificate import Direction  # noqa: E402
+from verity.protocols.accounting.network.verifier import relay_check as RC  # noqa: E402
+from verity.protocols.accounting.network.verifier.certificate import Direction  # noqa: E402
 
 K = 3
 #: the gate's end of a rehearsal its check passed, and of one whose every request was late past the network attester's
@@ -141,24 +141,21 @@ def _refused_leg(rec: dict | None, line: dict, why: str) -> None:
     assert "the network certifier" not in line["missing"] and "certifier" not in line["record_missing"]
 
 
-@pytest.mark.parametrize("name", ["onsite_network", "onsite_network_front", "onsite_compute", "onsite_full"])
+@pytest.mark.parametrize("name", ["onsite_full"])
 def test_each_configuration_listing_the_network_attester_gets_not_run_from_the_pieces_own_entry(
         name, tmp_path, network_attester, capsys, monkeypatch):
-    """Each command the launch hands the piece (whole under Pearl+'s tie, else split around V3c) refuses with
-    `NOT_RUN` before any step: DIR holds `REFUSED` alone and no answer. The record reads it as the attester refused by
-    that sentence: undecided, the window pending, never accepted and never a reject."""
+    """The command the launch hands the piece refuses with `NOT_RUN` before any step: DIR holds `REFUSED` alone and
+    no answer. The record reads it as the attester refused by that sentence: undecided, the window pending, never
+    accepted and never a reject."""
     cfg = tomllib.loads((ROOT / "applications" / f"{name}.toml").read_text())
     assert "network-attester" in cfg["protocols"]
     hooks = NS._attester_hooks(cfg, {}, {"gate": "local", "peer": "node"}, {})
-    subs = [shlex.split(hooks[k])[2] for k in ("CERTIFIER_CMD", "CERTIFIER_CHAIN_CMD", "CERTIFIER_PERIOD_CMD")
-            if k in hooks]
-    assert subs == (["piece"] if "pearl-plus" in cfg["protocols"] else ["chain", "period"]), hooks
+    assert shlex.split(hooks["CERTIFIER_CMD"])[2] == "piece" and "CERTIFIER_CHAIN_CMD" not in hooks, hooks
     d = _serve_dir(tmp_path / "serve", network_attester)
-    for sub in subs:
-        piece = tmp_path / "pieces" / "certifier"
-        assert CP.main([sub, str(d), str(K), str(piece), *([] if sub == "piece" else [str(tmp_path / "v3c")])]) == 3
-        assert {p.name for p in piece.iterdir()} == {CP.REFUSED}
-        assert (piece / CP.REFUSED).read_text() == CP.NOT_RUN + "\n"
+    piece = tmp_path / "pieces" / "certifier"
+    assert CP.main(["piece", str(d), str(K), str(piece)]) == 3
+    assert {p.name for p in piece.iterdir()} == {CP.REFUSED}
+    assert (piece / CP.REFUSED).read_text() == CP.NOT_RUN + "\n"
     assert _refused_row(tmp_path / "pieces", CP.NOT_RUN)
     rec, line = _record(monkeypatch, capsys, d, tmp_path / "pieces")
     _refused_leg(rec, line, CP.NOT_RUN)
@@ -768,8 +765,8 @@ def test_the_launchers_scan_class_is_v3cs_setup_in_scan_zk():
     """The network attester's launcher's `SCAN_CLASS` is `V3C_SCAN_CLASS`'s setup (`scan_zk.W63K4`) as
     served_verdicts.sh's SLOTS,PROMPT,OUTPUTS,LANES,EVERY: a slot stride's Program slots over an execution phase's
     strides, KI, KO, the lanes and EVERY."""
-    from verity.protocols.resource_accounting.network import scheme as NS
-    from tests.verity.protocols.resource_accounting.network.verifier import scan_traffic as ST
+    from verity.protocols.accounting.network import scheme as NS
+    from tests.verity.protocols.accounting.network.verifier import scan_traffic as ST
 
     setup = ST.SETUPS[CP.V3C_SCAN_CLASS]
     c = setup.cls

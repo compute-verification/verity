@@ -126,7 +126,7 @@ def test_the_window_road_runs_remote_from_the_record_and_publishes_no_descriptio
     """remote through the preflight on the window's record (no ROW read), its seal held to the record and predict row's
     compiler, each step after it run or refused by name: the sampled proofs as proofs', Pearl+ as needing a card (a processor has no gpu-lease), the
     record and the composite after them; the block counts count the record's circuit beside the registration that binds
-    it. The end line counts what ran, refused and failed, and neither it nor any
+    it. The end line counts what ran, what refused or was undecided and what did not run, and neither it nor any
     published file names a template or carries the description's digest. What no cheaper test reaches: the runner itself
     on a real window's record. Slow (minutes) for the close."""
     d = _serve_dir(tmp_path, monkeypatch, "remote")
@@ -164,20 +164,6 @@ def test_the_window_road_runs_remote_from_the_record_and_publishes_no_descriptio
     assert not [(f, s) for f, text in _published(out) for s in secret if s in f or s in text or s[:16] in text]
     names = json.loads((tmp_path / "run" / "private-paths.json").read_text())["names"]
     assert {"plans.jsonl", "handoff/", "circuit.json", "predicted.json"} <= set(names), names
-
-
-@pytest.mark.slow
-def test_the_window_road_runs_an_onsite_application_without_compute_accounting(tmp_path, monkeypatch):
-    """onsite_network lists no compute accounting, so POUW is empty and the preflight passes it; the network attester's
-    own piece refuses in its own words (`attester_piece.NOT_RUN`), and the wipe, whose answer the card launcher did not
-    write, refuses as that launcher's. Slow (minutes) for the close."""
-    d = _serve_dir(tmp_path, monkeypatch, "onsite_network")
-    rc, log, _ = _road(tmp_path, monkeypatch, "onsite_network", d)
-    assert "POUW" not in log and "pearl-plus" not in log, log
-    assert "network-attester: the network audit is not run: its checks are being moved into the workload's circuit" in log, log
-    assert ("wipe: not run: D/pieces/wipe/answer.json is absent: the card launcher did not run the wipe under the serve's "
-            "lease (vllm's h100_smoke.sh)") in log, log
-    assert rc == 20 and "network-attester" in _end(log), log
 
 
 def _preflight(tmp_path, **env):
@@ -261,3 +247,87 @@ def test_the_seal_reads_each_field_at_its_path_in_the_registration_and_refuses_a
     assert rc == 1 and "the seal's run root" in out, out
     rc, out = _sealed(tmp_path / "e", {}, drop=("compiler",))
     assert rc == 1 and "the record's registration has no window.compiler" in out, out
+
+
+SCRIPT = ROOT / "benchmarks" / "one_stage" / "served_verdicts.sh"
+#: what the road's steps call beyond the functions under test, stood in: our tools' public lines, and the counted
+#: circuit's paths
+STUBS = """say() { printf '%s\\n' "$*" | tee -a "$OUT/verdicts.txt"; }
+failed() { echo "(a tool's refusal, exit $1)"; }
+said() { echo "counted"; }
+counted_pair() { echo "$D/circuit.json $D/registration.json"; }
+io_class() { echo 2,4,2; }
+gpu-lease() { :; }
+nvidia-smi() { echo "GPU 0: a card"; }
+RAN=() REFUSED=() NOT_RUN=()
+declare -A WHY=()
+"""
+
+
+def _fns(*names):
+    """The definitions of ``names`` as `served_verdicts.sh` holds them, one-line or to their closing brace."""
+    lines, out = SCRIPT.read_text().splitlines(), []
+    for n in names:
+        i = next(i for i, x in enumerate(lines) if x.startswith(f"{n}() {{"))
+        j = i if not re.match(rf"{re.escape(n)}\(\) \{{\s*(#.*)?$", lines[i]) else lines.index("}", i)
+        out += lines[i:j + 1]
+    return "\n".join(out)
+
+
+def _steps(tmp_path, body, py, **env):
+    """``body`` after the road's step functions, with ``py`` (bash) as the venv's python where it is not ``-c`` or one of
+    our tools: its exit and what it said."""
+    d, out = tmp_path / "serve", tmp_path / "out"
+    d.mkdir(parents=True)
+    out.mkdir()
+    (d / "serve.json").write_text(json.dumps({"clocks": {"time": 1_700_000_000}}))
+    (d / "circuit.json").write_text("{}")
+    (tmp_path / "policy.json").write_text("{}")
+    stub = tmp_path / "python"
+    stub.write_text(f'#!/bin/bash\n[ "$1" = -c ] && exec {sys.executable} "$@"\n{py}\n')
+    stub.chmod(0o755)
+    env = {**os.environ, "D": str(d), "OUT": str(out), "PY": str(stub), "CLASSES": "2,4,2", "WREG": str(d / "none.json"),
+           "IO_POLICY": str(tmp_path / "policy.json"), "IO_LEAN": str(tmp_path / "no-lean"), "BASIS_129": "basis",
+           "POUW": "", "POUS_CMD": "", "BANDWIDTH_CMD": "", **env}
+    fns = _fns("step_not_run", "step_refused", "road_step", "road_end", "block_counts", "inference_only", "road_pieces")
+    p = subprocess.run(["bash", "-c", f"{STUBS}\n{fns}\n{body}"], cwd=ROOT, env=env, capture_output=True, text=True)
+    return p.returncode, p.stdout + p.stderr
+
+
+def test_a_step_whose_command_refuses_is_refused_by_its_first_line_and_one_that_counts_nothing_did_not_run(tmp_path):
+    """block-counts' command exits 1 on the window's record: the step is refused, by the line it said, and not among
+    what ran; with no policy declared it did not run, and says why; either way the road's exit is not 0."""
+    refuse = 'echo "ValueError: verity-vllm/window: no one session Definition" >&2; exit 1'
+    rc, out = _steps(tmp_path / "a", "RAN+=(seal); road_step block-counts block_counts; road_end 20", refuse)
+    assert rc == 20, out
+    assert ("ROAD END (the window's record): ran 1 (seal); refused or undecided 1 (block-counts); not run 0 ()") in out, out
+    assert "  REFUSED block-counts: BLOCK-COUNTS class 2,4,2 refused (a tool's refusal, exit 1) (exit 1)" in out.splitlines(), out
+    rc, out = _steps(tmp_path / "b", "road_step block-counts block_counts; road_end 20", refuse, IO_POLICY="")
+    assert rc == 20 and "not run 1 (block-counts)" in out, out
+    assert "  NOT RUN block-counts: the run declares no c, k and n" in out.splitlines(), out
+
+
+def test_an_undecided_verdict_is_refused_by_its_own_line_and_a_decided_refusal_ran(tmp_path):
+    """inference-only's command ends 0 on an undecided verdict: the step is refused or undecided, its line verbatim; a
+    verdict that refuses on a count is decided, so the step ran."""
+    undecided = ("INFERENCE-ONLY refuse: undecided: the policy was written at 1, not before the serve began at 2")
+    rc, out = _steps(tmp_path / "a", "road_step inference-only inference_only; road_end 20", f'echo "{undecided}"')
+    assert rc == 20 and "refused or undecided 1 (inference-only)" in out and "ran 0 ()" in out, out
+    assert f"  REFUSED inference-only: {undecided} (exit 0)" in out.splitlines(), out
+    decided = "INFERENCE-ONLY refuse: the blocks' exact count is more than n = 3"
+    rc, out = _steps(tmp_path / "b", "road_step inference-only inference_only; road_end 20", f'echo "{decided}"')
+    assert rc == 0 and "ran 1 (inference-only); refused or undecided 0 (); not run 0 ()" in out, out
+
+
+def test_a_listed_pearl_plus_whose_piece_refuses_is_refused_by_its_sentence_and_an_unlisted_one_is_no_step(tmp_path):
+    """Pearl+ is a step where the application lists it (POUW=pearlplus): a piece that answers no verdict is refused by
+    its own sentence (its refused.txt), not hidden; with POUW empty it is no step at all, and a road whose every step ran
+    exits 0."""
+    sentence = "pearlplus-no-verdict: served_passes.py serve wrote no document"
+    piece = (f'pieces() {{ mkdir -p "$OUT/pieces/pouw"; echo \'{{"rc": 2}}\' > "$OUT/pieces/pouw/piece.json"; '
+             f'echo "{sentence}" > "$OUT/pieces/pouw/refused.txt"; }}\n')
+    rc, out = _steps(tmp_path / "a", f"{piece}RAN+=(seal); road_pieces; road_end 20", "exit 9", POUW="pearlplus")
+    assert rc == 20 and "refused or undecided 1 (pearl-plus)" in out, out
+    assert f"  REFUSED pearl-plus: {sentence}" in out.splitlines(), out
+    rc, out = _steps(tmp_path / "b", f"{piece}RAN+=(seal); road_pieces; road_end 20", "exit 9")
+    assert rc == 0 and "pearl-plus" not in out and "ran 1 (seal)" in out, out

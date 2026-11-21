@@ -125,7 +125,7 @@ def test_the_pouw_h1_tile_roots_parse_from_their_ids(monkeypatch):
     TG.load_registries()
     _no_catalog(monkeypatch)
     (make,) = [make for units, make in TG._root_bindings("_pouw_roots") if units[0].startswith(
-        "verity.protocols.resource_accounting.compute.pouw.prover.circuit.h1tile.circuit-check#")]
+        "verity.protocols.accounting.compute.pouw.prover.circuit.h1tile.circuit-check#")]
     roots = make()
     if not roots:
         pytest.skip("PouwH1Tile is not registered on this tree (no circuit.segment)")
@@ -224,7 +224,8 @@ def test_each_hook_is_read_from_the_one_sidecar_that_defines_it(monkeypatch, nam
     which is then empty."""
     from circuit_check import sidecars as SC
 
-    assert len(SC.handing(name)) == 1, [mod for mod, _m in SC.handing(name)]
+    handed = SC.handing(name)
+    assert len(handed) == 1 or (name in TG.OPTIONAL and not handed), [mod for mod, _m in handed]
     hand = object()
     for found, want in (([("a", types.SimpleNamespace(**{name: hand}))], hand),
                         ([], dict if name in TG.OPTIONAL else "0 that .* do: none"),

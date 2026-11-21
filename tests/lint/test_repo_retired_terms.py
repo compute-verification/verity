@@ -136,11 +136,11 @@ OTHER_SENSES = re.compile("|".join((OTHER_NAMES, *CAP_SENSES.values())))
 #: the live proof block's files, which name no Pearl term: each request's cap, its public ``max_tokens``, in the table
 #: ``caps`` with ports ``cap_<i>``, and in capitals the table's role ``CAPS`` and the request's index ``CAP``; and the
 #: tests of a PoUW session's cap, which name none either, with their vectors' cap ``CAP``
-LIVE_CAPS = ("verity/protocols/resource_accounting/compute/pouw/prover/circuit/live.py",
-             "verity/protocols/resource_accounting/compute/pouw/verifier/live_reads.py",
-             "tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_circuit_live.py",
-             "tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_pouw_window.py",
-             "tests/verity/protocols/resource_accounting/compute/pouw/verifier/window_vectors.py")
+LIVE_CAPS = ("verity/protocols/accounting/compute/pouw/prover/circuit/live.py",
+             "verity/protocols/accounting/compute/pouw/verifier/live_reads.py",
+             "tests/verity/protocols/accounting/compute/pouw/verifier/test_circuit_live.py",
+             "tests/verity/protocols/accounting/compute/pouw/verifier/test_pouw_window.py",
+             "tests/verity/protocols/accounting/compute/pouw/verifier/window_vectors.py")
 
 #: The retired terms `research msg` warns on, and what to write instead (`tools/research/src/research/vocabulary.py`
 #: reads these assignments): `TERMS`, retired everywhere but the Lean, and `DOC_TERMS`, retired in the maintained docs'
@@ -312,8 +312,8 @@ CAPITALS = LIVE_CAPS + REQUEST_CAPS + SOFTCAP_CAPS
 #: the files whose "cap" is their own, by path prefix, with each reason; Pearl's spellings still count there, and
 #: ``PEARL_CAP`` too outside ``CAPITALS``
 OWN_CAPS = {
-    "verity/protocols/resource_accounting/memory/pous/": "PoUS's caps (an audit's duration, its schemes' bounds); Pearl's is PoUW's",
-    "verity/protocols/resource_accounting/memory/poub/": "PoUB's lifetime cap on a schedule's bits; Pearl's is PoUW's",
+    "verity/protocols/accounting/memory/pous/": "PoUS's caps (an audit's duration, its schemes' bounds); Pearl's is PoUW's",
+    "verity/protocols/accounting/memory/poub/": "PoUB's lifetime cap on a schedule's bits; Pearl's is PoUW's",
     **dict.fromkeys(tuple(f"security/{tree}/{area}"
                           for tree in ("Definitions", "Properties", "Proofs", "Proofs/Properties")
                           for area in ("Pous", "Poub")),
@@ -326,14 +326,13 @@ OWN_CAPS = {
                           for b in ("pous", "poub_session", "vllm_encoded", "kv_filler", "codec_tensor")),
                     "PoUS's and PoUB's benchmarks' caps (an RTT allowance, a period's cap, a buffer's rows, a fill's "
                     "CTAs); Pearl's is PoUW's"),
-    "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/row_table": "a row table's `cap` counts its leaves",
-    "verity/protocols/resource_accounting/compute/pouw/verifier/window.py": "a session's cap, the most tile instances one session holds",
-    "verity/protocols/resource_accounting/compute/pouw/verifier/lean/window/": "`window.py`'s session cap in its Lean port",
-    "tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/window/": "`window.py`'s session cap in its Lean port's tests",
-    "verity/protocols/proofs/flock/": "Flock's caps (a Merkle cap, the nodes a proof's rows open to; its bounds on runs and tables)",
-    "verity/protocols/proofs/recursion/": "Flock's Merkle caps, as the recursion's verifier checks them",
+    "verity/protocols/accounting/compute/pouw/prover/kernels/pouw_cuda/row_table": "a row table's `cap` counts its leaves",
+    "verity/protocols/accounting/compute/pouw/verifier/window.py": "a session's cap, the most tile instances one session holds",
+    "verity/protocols/accounting/compute/pouw/verifier/lean/window/": "`window.py`'s session cap in its Lean port",
+    "tests/verity/protocols/accounting/compute/pouw/verifier/lean/window/": "`window.py`'s session cap in its Lean port's tests",
+    "verity/protocols/proof/flock/": "Flock's caps (a Merkle cap, the nodes a proof's rows open to; its bounds on runs and tables)",
+    "verity/protocols/proof/recursion/": "Flock's Merkle caps, as the recursion's verifier checks them",
     "benchmarks/recursion_e2e/": "Flock's Merkle caps, the V* statements the recursion's benchmark proves and times",
-    "benchmarks/recursion_figures/": "Flock's Merkle caps, the V* parts the recursion's figures name",
     "security/Proofs/Flock/": "Flock's caps in its proofs: the Merkle cap, and its bounds on runs, tables and samples",
     "security/Definitions/Claims/": "the bound on an extractor's reruns that Flock's claims state (`Deploy.cap`, `Arg.cap`)",
     **dict.fromkeys(LIVE_CAPS, "the live proof block's caps, its requests' public `max_tokens`; a session's cap"),
@@ -396,8 +395,8 @@ HELD_KEYS = {
                           "tests/benchmarks/harness/test_bench.py", "benchmarks/harness/verity_bench/vllm/commit_arm.py"),
                          "a stored run's arm key, vllm's"),
     "coin_source": (("benchmarks/harness/verity_bench/vllm/runner.py", "tests/benchmarks/harness/test_bench.py",
-                     "verity/protocols/resource_accounting/compute/pouw/prover/serving/coins/challenger.py",
-                     "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/window.py"),
+                     "verity/protocols/accounting/compute/pouw/prover/serving/coins/challenger.py",
+                     "verity/protocols/accounting/compute/pouw/prover/serving/pearl_c/window.py"),
                     "the PoUW commitment's key, compute-accounting's"),
 }
 #: a character of an identifier a held key stands in
@@ -871,7 +870,7 @@ def test_a_draw_in_a_comment_or_string_of_a_composite_body_is_still_the_sample()
             '    """Each unit we draw, one by one."""\n'
             '    k = draw(st.integers(0, 3))  # draw the count, then the units\n'
             '    return [draw(st.just(i)) for i in range(k)]  # draw\n')
-    assert said(text, "verity/protocols/proofs/spot/tests/test_units.py") == [(6, "draw"), (7, "draw"), (8, "draw")]
+    assert said(text, "verity/protocols/proof/spot/tests/test_units.py") == [(6, "draw"), (7, "draw"), (8, "draw")]
 
 
 def test_a_composite_shown_in_markdown_keeps_every_bare_draw_of_its_body() -> None:
@@ -881,11 +880,11 @@ def test_a_composite_shown_in_markdown_keeps_every_bare_draw_of_its_body() -> No
     text = ("# Units\n\n```python\nfrom hypothesis import strategies as st\n\n\n@st.composite\ndef units(draw):\n"
             "    k = draw(st.integers(0, 3))  # draw the count\n    return [draw(st.just(i)) for i in range(k)]\n```\n\n"
             "It's the sample that counts past the example: one draw.\n")
-    assert said(text, "verity/protocols/proofs/spot/README.md") == [(13, "draw")]
+    assert said(text, "verity/protocols/proof/spot/README.md") == [(13, "draw")]
 
 
 def test_a_python_file_that_doesn_t_tokenize_stops_the_scan_naming_itself() -> None:
-    path = "verity/protocols/proofs/spot/tests/test_broken.py"
+    path = "verity/protocols/proof/spot/tests/test_broken.py"
     text = 'from hypothesis import given, strategies as st\n\n\n@given(st.data())\ndef test_it(data):\n    data.draw(st.just("x))\n'
     try:
         said(text, path)
@@ -909,7 +908,7 @@ def test_the_stacking_property_s_caps_and_nvidia_smi_s_compute_cap_are_other_sen
 def test_a_kernel_s_grid_cap_is_another_sense_and_pearl_s_cap_beside_it_is_not() -> None:
     """A kernel's ``grid_cap`` as the identifier it is; Pearl's spellings beside it, and a longer name built on it, still
     count in the same file."""
-    path = "verity/protocols/resource_accounting/compute/pouw/prover/kernels/masked_gemm/lpgemm.cu"
+    path = "verity/protocols/accounting/compute/pouw/prover/kernels/masked_gemm/lpgemm.cu"
     theirs = "static void ssetup(SProb& P, int grid_cap) {\n  P.grid = std::min(tiles, grid_cap > 0 ? grid_cap : nsm);\n"
     assert said(theirs, path) == []
     assert said(theirs + "// grid_cap, then Pearl's cap, CAP and capOK; grid_capOK, grid_cap_check\n", path) == [
@@ -946,10 +945,10 @@ def test_a_cap_of_pous_or_poub_is_another_sense_and_pearl_s_beside_it_is_not() -
     theirs = "the cap: `Params.schedule_cap`, SCHEDULE_CAP, `RTT_ALLOWANCE_CAP_NS`, cap_ns, `AUDIT_CAP`, `auditCap`; v.cap, caps"
     pearls = "\nPearl's: capOK, Device.cap, CAP, an over-cap tile, the cap check"
     pearl = [(2, "capOK"), (2, "Device.cap"), (2, "CAP"), (2, "over-cap"), (2, "cap check")]
-    for path in ("verity/protocols/resource_accounting/memory/pous/verifier/audit.py", "verity/protocols/resource_accounting/memory/poub/verifier/audit.py"):
+    for path in ("verity/protocols/accounting/memory/pous/verifier/audit.py", "verity/protocols/accounting/memory/poub/verifier/audit.py"):
         assert said(theirs + pearls, path) == pearl
-    assert said(theirs + pearls, "verity/protocols/resource_accounting/compute/pouw/verifier/pearl.py") == [(1, "cap"), (1, "cap"), (1, "caps"), *pearl]
-    assert [w.split("'")[1] for _, w in sites(pearls, "verity/protocols/resource_accounting/memory/poub/verifier/audit.py")] == [o for _, o in pearl]
+    assert said(theirs + pearls, "verity/protocols/accounting/compute/pouw/verifier/pearl.py") == [(1, "cap"), (1, "cap"), (1, "caps"), *pearl]
+    assert [w.split("'")[1] for _, w in sites(pearls, "verity/protocols/accounting/memory/poub/verifier/audit.py")] == [o for _, o in pearl]
 
 
 def test_the_unread_ratchet_s_cap_is_the_lean_check_s_own_and_pearl_s_beside_it_is_not() -> None:
@@ -968,12 +967,12 @@ def test_a_row_table_s_cap_is_its_number_of_leaves_and_pearl_s_beside_it_is_not(
     table = "uint64_t cap;  // its leaves\nif (p < t->cap) return 2 * cap;"
     pearls = "\n// Pearl's: capOK, CAP, an over-cap tile"
     pearl = [(3, "capOK"), (3, "CAP"), (3, "over-cap")]
-    for path in ("verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/row_table.cu",
-                 "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/row_table.cuh",
-                 "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/row_table_host.cpp"):
+    for path in ("verity/protocols/accounting/compute/pouw/prover/kernels/pouw_cuda/row_table.cu",
+                 "verity/protocols/accounting/compute/pouw/prover/kernels/pouw_cuda/row_table.cuh",
+                 "verity/protocols/accounting/compute/pouw/prover/kernels/pouw_cuda/row_table_host.cpp"):
         assert Path(ROOT, path).is_file(), f"{path} is gone: move its line of OWN_CAPS with it"
         assert said(table + pearls, path) == pearl
-    beside = "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/pearl_tile.cu"
+    beside = "verity/protocols/accounting/compute/pouw/prover/kernels/pouw_cuda/pearl_tile.cu"
     assert said(table + pearls, beside) == [(1, "cap"), (2, "cap"), (2, "cap"), *pearl]
 
 
@@ -1013,7 +1012,7 @@ def test_the_live_block_s_caps_are_its_own_in_capitals_too_and_pearl_s_other_spe
     for path in LIVE_CAPS:
         assert Path(ROOT, path).is_file(), f"{path} is gone: move its line of LIVE_CAPS with it"
         assert said(live + pearls, path) == pearl
-    credit = "verity/protocols/resource_accounting/compute/pouw/verifier/credit.py"
+    credit = "verity/protocols/accounting/compute/pouw/verifier/credit.py"
     assert said(live + pearls, credit) == [(1, "CAPS"), (1, "caps"), (2, "CAP"), (3, "cap"), (3, "CAPS"), (3, "cap"),
                                            *pearl]
 
@@ -1026,7 +1025,7 @@ def test_a_session_s_cap_is_its_own_and_pearl_s_other_spellings_there_are_not() 
                "CAP = 2\nWd.public_inputs(reg, SAMPLED, s, V.CAP, domain_h3)\n")
     pearls = "# Pearl's: capOK, Device.cap, an over-cap tile, the cap check\n"
     pearl = [(4, "capOK"), (4, "Device.cap"), (4, "over-cap"), (4, "cap check")]
-    window = "verity/protocols/resource_accounting/compute/pouw/verifier/"
+    window = "verity/protocols/accounting/compute/pouw/verifier/"
     for path in ("test_pouw_window.py", "window_vectors.py"):
         assert Path(ROOT, "tests", window, path).is_file(), f"tests/{window}{path} is gone: move its line of LIVE_CAPS with it"
         assert said(session + pearls, f"tests/{window}{path}") == pearl
@@ -1133,8 +1132,8 @@ def test_a_word_of_two_kept_senses_the_lint_tells_apart_still_counts_in_its_reti
     assert "draw" not in {t.old for t in terms_of(SENSES_EXAMPLE + two.replace("Cap", "Draw"))}
     assert "cap" in {t.old for t in terms()[0]}, f"{TABLE}'s two-senses list no longer stops Pearl's cap from counting"
     kept = "a served cap S charges each replay block at most F S; `NetworkAttesterParams.max_tokens_cap`\n"
-    assert said(kept, "verity/protocols/proofs/spot/prover/plancheck.py") == []
-    assert said(kept + "Pearl's cap, a tile over the cap\n", "verity/protocols/proofs/spot/prover/plancheck.py") == [
+    assert said(kept, "verity/protocols/proof/spot/prover/plancheck.py") == []
+    assert said(kept + "Pearl's cap, a tile over the cap\n", "verity/protocols/proof/spot/prover/plancheck.py") == [
         (2, "cap"), (2, "cap")]
 
 

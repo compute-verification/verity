@@ -244,7 +244,7 @@ theorem tile_of_nodeOk (c : Defn) (nd : Node) (hc : CalleeOk c) (hn : NodeOk c n
       simp [Node.members, show (Form.scan == Form.scan) = true from rfl]
     rw [hmem] at hm ⊢
     have hn0 : 0 < n := Nat.pos_of_ne_zero hm
-    obtain ⟨carry, y, -, -, hp0, ha0, hrest⟩ := hsh
+    obtain ⟨carry, y, -, -, hp0, ha0, ⟨hrest, -⟩⟩ := hsh
     by_cases hi0 : i = 0
     · subst hi0
       refine ⟨0, hn0, t, by rw [hp0, ← ha0]; exact ht, ?_⟩
@@ -317,7 +317,7 @@ theorem compShape_reads (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.dec
   obtain ⟨hbp, -, -⟩ := hc.2 hp
   unfold ReadsExact.CompShape
   exact ⟨hbp.symm, by rw [hbp]; exact hnd.1.symm,
-    fun i hi e L h h0 => by rw [hbp]; exact hnd.2.2.2.2.2 i hi e L h h0,
+    fun i hi e L h h0 => by rw [hbp]; exact hnd.2.2.2.2.2.1 i hi e L h h0,
     lo_of_nodeOk _ node hc hnd hp, tile_of_nodeOk _ node hc hnd hp, carry_le_of_nodeOk _ node hc hnd hp⟩
 
 /-- **`ReadsExact.RootSet`**, from the decoder's facts (`rootFacts`, `widthFacts`, `cover_reads`, `compShape_reads`):

@@ -34,19 +34,19 @@ import pytest
 
 from verity.channel import Refused
 from verity.runtime.stream import Side
-from verity.protocols.resource_accounting.memory.pous.prover import weight_store as ws
-from verity.protocols.resource_accounting.memory.pous.attester import challenger_party as CP
-from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
-from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
-from verity.protocols.resource_accounting.memory.pous.prover import challenger_prover as CR
-from verity.protocols.resource_accounting import scheme as resource_scheme
-from verity.protocols.resource_accounting.memory.pous import scheme as pous_scheme
-from verity.protocols.resource_accounting.memory.pous.prover import served as pous_served
-from verity.protocols.resource_accounting.memory.pous.verifier import period
-from verity.protocols.resource_accounting.memory.pous.verifier import setup as pous_setup
-from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import POINT, P2Params
-from verity.protocols.resource_accounting.memory.poub.verifier import ledger, p2_case, p2_lean
-from verity.protocols.resource_accounting.memory.poub.prover.p2_stage import bandwidth as BW
+from verity.protocols.accounting.memory.pous.prover import weight_store as ws
+from verity.protocols.accounting.memory.pous.attester import challenger_party as CP
+from verity.protocols.accounting.memory.pous.attester import challenger_session as CS
+from verity.protocols.accounting.memory.pous.attester import memory_attester as mc
+from verity.protocols.accounting.memory.pous.prover import challenger_prover as CR
+from verity.protocols.accounting import scheme as resource_scheme
+from verity.protocols.accounting.memory.pous import scheme as pous_scheme
+from verity.protocols.accounting.memory.pous.prover import served as pous_served
+from verity.protocols.accounting.memory.pous.verifier import period
+from verity.protocols.accounting.memory.pous.verifier import setup as pous_setup
+from verity.protocols.accounting.memory.pous.verifier.schemes.p2 import POINT, P2Params
+from verity.protocols.accounting.memory.poub.verifier import ledger, p2_case, p2_lean
+from verity.protocols.accounting.memory.poub.prover.p2_stage import bandwidth as BW
 from verity.commitments import advice
 from verity.commitments.identity import canonical_json_bytes
 
@@ -82,8 +82,8 @@ def _load(name: str, path: Path):
 
 SP = _load("pous_served_piece", ROOT / "benchmarks" / "pous" / "served_piece.py")
 SV = _load("served_verdicts", ROOT / "benchmarks" / "one_stage" / "served_verdicts.py")
-fakes = _load("pous_fakes", ROOT / "tests" / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "verifier" / "pous_fakes.py")
-ts = _load("pous_test_signer", ROOT / "tests" / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "verifier" / "pous_test_signer.py")
+fakes = _load("pous_fakes", ROOT / "tests" / "verity" / "protocols" / "accounting" / "memory" / "pous" / "verifier" / "pous_fakes.py")
+ts = _load("pous_test_signer", ROOT / "tests" / "verity" / "protocols" / "accounting" / "memory" / "pous" / "verifier" / "pous_test_signer.py")
 BR = _load("pous_served_block_record", ROOT / "benchmarks" / "one_stage" / "interfaces" / "verity_e2e_demo" / "block_record.py")
 
 
@@ -819,7 +819,7 @@ def _script(directory: Path, name: str, body: str) -> Path:
 def run_exe(tmp_path_factory) -> Path:
     """`pous-run-protocol`, built in the run protocol's package, behind a script of its name that runs it under
     ``--test``: the protocol of the test signers' schemes, which the deployed one refuses."""
-    real = _built(ROOT / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "verifier" / "check", RUN_EXE)
+    real = _built(ROOT / "verity" / "protocols" / "accounting" / "memory" / "pous" / "verifier" / "check", RUN_EXE)
     return _script(tmp_path_factory.mktemp("lean"), RUN_EXE, f'exec {real} --test "$@"\n')
 
 
@@ -1301,7 +1301,7 @@ def test_the_bandwidth_answer_names_who_graded_it_where_the_launcher_reads_it(tm
     of: what no auditor-side entry checks of the memory attester (`memory_attester.UNCHECKED`) and who graded it
     (`GRADED_BY`), which the launcher ends the bandwidth row's ``answer_from`` with (`served_verdicts.ran_by`), in place
     of its general sentence. The placement names no premise, so nothing reads it as holding."""
-    from verity.protocols.resource_accounting.memory.poub.verifier import p2_parties
+    from verity.protocols.accounting.memory.poub.verifier import p2_parties
 
     session = {"verdict": "accept", "delta": "1/1099511627776", "span_ns": 16448, "q_bytes": 8224, "draws": [0],
                "receipts": 1, "unit_bytes": 8224, "units": 1, "windows": [0], "wrong_at_most": 0}

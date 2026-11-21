@@ -13,6 +13,9 @@ from verity_vllm.pipeline.serve_openai import main as serve
 
 __all__ = ["Options", "RecordOptions", "main", "plan_of", "preflight"]
 
+#: the preflight's random rows, under a key drawn from the OS for the one check
+PREFLIGHT_ROWS_DOMAIN = "verity/vllm/preflight-rows/v1"
+
 
 @dataclass(frozen=True, kw_only=True)
 class RecordOptions:
@@ -81,7 +84,7 @@ def preflight(opts: Any, *, card: bool) -> dict[str, Any]:
     from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2
 
     from . import window_strings as WS
-    from .window_record import SALTS
+    from .window_record import SALTS_DOMAIN
 
     out = Path(tempfile.mkdtemp(prefix="plan-preflight-"))
     plan = plan_of(out, opts, lambda: None)
@@ -89,17 +92,17 @@ def preflight(opts: Any, *, card: bool) -> dict[str, Any]:
         raise UsageError("the close plans no circuit without --window-class S,P,O")
     got: dict[str, Any] = {"class": [plan.cls.slots, plan.cls.prompt, plan.cls.outputs], "record": plan.record is not None}
     if (rec := plan.record) is not None:
-        from verity.protocols.proofs.spot.verifier import service as S
+        from verity.protocols.proof.spot.verifier import service as S
 
         S.SamplingDesign(rec.rule)
         ck = Path(rec.checkpoint_dir)
         if card and not ((ck / "config.json").is_file() and any(ck.glob("*.safetensors"))):
             raise UsageError(f"--checkpoint-dir {ck} holds no config.json and safetensors shards")
     twin = WS.HostTwin(host_lib(Path(rec.build if rec else out / "salt_stream") / "host"))
-    rng = np.random.default_rng(int.from_bytes(os.urandom(8), "little"))
-    key = RND.derive(os.urandom(64), SALTS, {"window": "preflight"})
+    rows_of = RND.derive(os.urandom(64), PREFLIGHT_ROWS_DOMAIN, {})
+    key = RND.derive(os.urandom(64), SALTS_DOMAIN, {"window": "preflight"})
     for words in (1, 7, 64):
-        rows = rng.integers(0, 1 << 16, size=(5, words), dtype=np.uint16)
+        rows = np.frombuffer(rows_of.stream(words, 10 * words), dtype="<u2").astype(np.uint16).reshape(5, words)
         lr = _Leaf(3, 2, rows, SCHEMA_HM96_SHA512_ROW_V2)
         strings, _ = WS.leaf_strings({("t", "p"): lr}, key, twin, {})
         ys = strings[("t", "p")][0]

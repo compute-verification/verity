@@ -45,7 +45,7 @@ checkout. It starts its own `research run` in a slot of the research pool `resea
 nodes' check slots take train checks only), so inside a `research run` it is refused, naming this command.
 
 Locally, while editing, one named test file or `-k` selection of under about a minute and 1 GB is fine:
-`uv run pytest tests/verity/protocols/proofs/flock/prover/test_layouts.py -k round_trip`, from the root (pytest takes the
+`uv run pytest tests/verity/protocols/proof/flock/prover/test_layouts.py -k round_trip`, from the root (pytest takes the
 suite's own configuration; `uv run` inside a suite's directory can find a workspace of its own). It doesn't cache and doesn't load the read guard. The shell
 hook refuses a local pytest that names no file or `-k`; `AGENT_GUARD_LOCAL_OK=1` is the opt-in.
 
