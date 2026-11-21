@@ -113,7 +113,3 @@ inputs = ["verity/lean_process.py", "verity/protocols/proofs/spot/verifier/one_s
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
-
-[[tool.verity.tests.reads]]
-tests = ["test_pous_wipe_resume.py"]
-paths = ["verity/config.py", "verity/party.py", "verity/protocol.py", "verity/runtime", "verity/protocols/resource_accounting/memory/pous", "verity/channel.py", "tests/verity/tests/test_channel.py"]

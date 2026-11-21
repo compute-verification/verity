@@ -332,10 +332,7 @@ A spec-level reference for network attestation's timing channel:
   proof block, never truncated: a prompt of more than `KI` ids (1,024 at w63's class) at its cell, a Program's n over `KO` at
   its anchor. An execution phase whose network attester refused a connection, traffic past its slots, has no attested record, and the
   period check refuses it. `Class.serves` names the network attester parameters it takes every run of.
-  `verity/protocols/resource_accounting/network/prover/scan_zk.py` proves both sides of a group of execution phases in one registration: ingress proof block
-  t's state and view outputs are committed as registered reads of the scan's state and view rows t, which ingress proof block
-  t + 1 and egress proof block t read, and egress proof block t's row as a registered read of the network attester's egress row t, so the
-  chains are wires through the registered roots.
+  The scan's sample is the proof layer's, and the network attester's piece writes NOT RUN.
 
 The attestation's signature scheme is a parameter: the network attester's
 `certificate.Issuer` takes a `Signer`, and the audit a `PublicKey`.

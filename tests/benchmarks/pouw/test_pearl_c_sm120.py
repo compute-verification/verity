@@ -29,7 +29,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Coi
 HERE = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "kernels" / "pearl_c_sm120"
 
 
-#: by `load`: other directories have a fixture.py, a sass_gate.py and a run.py too
+#: by `load`: other directories have a fixture.py and a run.py too
 F = load("pearl_c_sm120/fixture.py")
 
 
@@ -44,7 +44,7 @@ def kernel(file: str):
     return sys.modules[name]
 
 
-S = kernel("sass_gate.py")
+S = kernel("../../build_gate.py").load(HERE / "sass_gate.json")
 RUN = kernel("run.py")
 
 SOURCE = (HERE / "pearl_c_sm120.cu").read_text()
@@ -130,7 +130,7 @@ def test_gemms_fit_sm120_shared_memory():
     assert ML_SMEM == 98352 and gemm_smem("M_PEARLC", 64, 64) == 49152 and gemm_smem("M_PEARLC", 64, 64, 128) == 81920
     assert form_kernels() == ["form_s5", "form_s5_r144", "form_s5_scalar", "form_rate", "form_rate_r144", "form_rate_scalar",
                               "form_rate_nocast", "form_rate_nocast_r144", "form_rate_atoms"]
-    assert set(S.WANT) - {"words", "words_u", "words_k", *form_kernels()} == names
+    assert set(S.want) - {"words", "words_u", "words_k", *form_kernels()} == names
     assert set(RUN.FORM_RATES) == set(form_rates()) and set(RUN.FORM_ALTS) == {"form_s5_scalar", "form_s5_r144"}
 
 
@@ -221,7 +221,7 @@ PTXAS_OK = ("ptxas info    : Compiling entry function 'gemm_x' for 'sm_120a'\n"
 
 
 def test_sass_gate_refuses_what_it_should(monkeypatch):
-    monkeypatch.setattr(S, "WANT", {"gemm_x": (1, 1)})
+    monkeypatch.setattr(S, "want", {"gemm_x": [1, 1]})
     funcs, problems = S.gate(PTXAS_OK, SASS_OK)
     assert not problems and funcs["gemm_x"]["QMMA"] == 1 and funcs["gemm_x"]["HMMA"] == 1 and funcs["gemm_x"]["regs"] == 96
     bad = {

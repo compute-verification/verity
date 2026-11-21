@@ -407,16 +407,18 @@ def fieldSlot : List Ty → ℕ → ℕ × ℕ
 
 /-- **Where the verifier opens unit `v`'s return leaf `l`, as member `m`'s output**, at the statement's Circuit `cc`: the
 verifier's opening of a unit's output (`Flock.Registered.outReadsAt`) of output row `j`, the field of the circuit's
-template (`Flock.HmRow.queryTemplate`) holding the leaf (`fieldSlot`), at the port of `m`'s registered file named as
-the circuit's port `nIn + j` (`Flock.HmOut.nIn`), as `Flock.Registered.withPositions` dispatches it: the tree is that
-port's value, which `outReadsAt` accepts only as the field's tree (`Flock.Registered.fieldTree`), the leaf the one it
-gives `v`, the slot the leaf's index in the field. -/
+template (`Flock.HmRow.queryTemplate`) holding the leaf (`fieldSlot`), at the port of `m`'s registered file that
+`Flock.Registered.withPositions` dispatches to output row `j` (`Flock.Registered.outRow?` at the circuit's first port
+of its name): the tree is that port's value, which `outReadsAt` accepts only as the field's tree
+(`Flock.Registered.fieldTree`), the leaf the one it gives `v`, the slot the leaf's index in the field. -/
 def outTree (P : Prog) (m : Spot.OneStageZk.Member) (cc : Flock.Circuit) (v l : ℕ) : Option TreeLeaf := do
   let (t, _) ← Flock.HmRow.queryTemplate cc
   let f ← (Flock.Registered.rootNodes P).findSome? fun x => (P.defs[x.fn]?).filter (·.key == t)
   let (j, s) := fieldSlot (fieldsOf f.ret) l
   let some (.ok own) := m.own.registered.map Flock.Registered.ofJson | none
-  let reg ← own.find? (·.name == (cc.ports.getD (Flock.HmOut.nIn cc + j) default).name)
+  let reg ← own.find? fun reg =>
+    ((List.range cc.ports.size).find? fun q => (cc.ports.getD q default).name == reg.name).bind
+      (Flock.Registered.outRow? cc) == some j
   let (rel, first) ← (Flock.Registered.outReadsAt cc P m.indices j reg).toOption
   let leaf ← (rel[v - first]?).join
   pure ⟨reg.value, leaf, s⟩
