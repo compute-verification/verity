@@ -90,7 +90,7 @@ The committed run, and the only one (``--tp-commit`` is refused by name: the TP 
   rotary table at the engine's served words once they are within the analytic table's bound (``--tables``), the
   document ``verity-vllm advice --weights-of-record`` records in each window's registration; its roots are what
   ``window-circuit --pins`` and ``records_audit.py count --pins`` take. The verifier pins them before the first window's
-  coins and never recomputes one from the checkpoint. It is the deployment's one registration (`close_record.register`):
+  coins and never recomputes one from the checkpoint. It is the deployment's one registration (`window_weights.register`):
   written once, with its record (`window_weights.deployment_record`) beside ``--out``, and refused where one is there.
 * **circuit**: a served window's registered compiler as a command (`circuit_of_advice`), what ``records_audit.py audit``'s
   compile check runs: the circuit record the advice compiles to, over its own Build of each Program (`own_builds`; it takes
@@ -1216,8 +1216,8 @@ def weights_registration_of_serve(a: argparse.Namespace) -> dict[str, Any]:
     within the analytic table's bound; with no such file it stays unrooted. Written to ``--out``: what the server's
     ``verity-vllm advice --weights-of-record`` records in each window's registration, and the roots the verifier pins
     before the first window's coins (``window-circuit --pins``, ``records_audit.py count --pins``); the verifier never
-    recomputes one. It is the deployment's one registration (`close_record.register`): ``--out`` is its `REGISTRATION`,
-    its record (`window_weights.deployment_record`) is written beside it as `DEPLOYMENT` (``--deployment-record``, where
+    recomputes one. It is the deployment's one registration (`window_weights.register`): ``--out`` is its `REGISTRATION`,
+    its record (`window_weights.deployment_record`) is written beside it as `DEPLOYMENT_RECORD` (``--deployment-record``, where
     given, names that file), and a second registration of the deployment is refused, naming the first's digest. Refused
     (ValueError) too for a checkpoint not of record or one the manifest pins as another model than ``serve.json``'s, a
     served rotary table outside its bound, and as `advice.registered_weights` refuses it. -> how many roots it registers,
@@ -1225,12 +1225,11 @@ def weights_registration_of_serve(a: argparse.Namespace) -> dict[str, Any]:
     import numpy as np
 
     from verity_vllm.pipeline.advice import registered_weights
-    from verity_vllm.program.predict.close_record import DEPLOYMENT, REGISTRATION, register
-    from verity_vllm.records.weights_registration import OF_RECORD
+    from verity_vllm.program.predict.window_weights import DEPLOYMENT_RECORD, OF_RECORD, REGISTRATION, register
 
     out = Path(a.out)
-    if out.name != REGISTRATION or (a.deployment_record and Path(a.deployment_record) != out.with_name(DEPLOYMENT)):
-        raise ValueError(f"a deployment's registration is {REGISTRATION} with its record {DEPLOYMENT} beside it, not {a.out} "
+    if out.name != REGISTRATION or (a.deployment_record and Path(a.deployment_record) != out.with_name(DEPLOYMENT_RECORD)):
+        raise ValueError(f"a deployment's registration is {REGISTRATION} with its record {DEPLOYMENT_RECORD} beside it, not {a.out} "
                          f"and {a.deployment_record}")
     serve = json.loads((Path(a.serve_run) / "serve.json").read_text())
     cos_sin = Path(a.tables or Path(a.serve_run) / "private") / "cos_sin_cache.npy"

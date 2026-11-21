@@ -162,26 +162,35 @@ def test_the_verdicts_log_and_records_are_the_whole_logs():
 
 def test_r8_lets_a_tied_value_through_on_both_verifiers():
     """R8's tied values on both verifiers, which compare the tied values a verdict publishes: a v1 record whose members
-    all read `W`, named tied, is let through and its verdict publishes `W`; not named, or a name that isn't a parameter
-    named instead, it is refused; and `W` named tied while expected registered is refused (`R8-tied`), since a tied value
-    is never a registered value."""
-    prog = _program()
+    all read the run Input `W`, named tied, is let through and its verdict publishes `W`; not named, the variant with no
+    members refuses it (`R8-shared-input`), where the per-member variant holds its readers to the period's run Input
+    tree; a name that isn't a parameter is refused, and so is `W` named tied
+    while expected registered (`R8-tied`), since a tied value is never a registered value. `W` marked registered, a v1
+    record is refused whether or not `W` is named tied or expected by name: nothing pins its root (`R8-unpinned`)."""
+    prog, marked = _program(registered=()), _program()
     first, ports = _registered_record(prog, _registered(prog))
     v1 = DK.record(prog, Q, SAMPLING_DESIGN, SCHEME, first["roots"], SERVED)
     for rec, registered, tied, codes, through in (
             (v1, None, ["W"], (), ("W",)), (v1, None, None, ("R8-shared-input",), ()),
-            (v1, None, ["nope"], ("R8-tied", "R8-shared-input"), ()), (first, {"W": 2}, ["W"], ("R8-tied",), ()),
-            (first, {"W": 2}, None, (), ())):
+            (v1, None, ["nope"], ("R8-tied", "R8-shared-input"), ()),
+            (first, {"W": 2}, ["W"], ("R7-run-input", "R8-tied"), ())):
         v = V.check(rec, prog, Q, SAMPLING_DESIGN, SCHEME, ports, None, (), (), None, None, registered, tied=tied)
         assert v.codes == codes and v.rests_on_period_check == through, (tied, v)
         assert v.verifiers["lean"]["codes"] == list(codes), (tied, v)
+    first, ports = _registered_record(marked, _registered(marked))
+    v1 = DK.record(marked, Q, SAMPLING_DESIGN, SCHEME, first["roots"], SERVED)
+    for rec, registered, tied, codes in ((v1, None, None, ("R8-unpinned",)), (v1, None, ["W"], ("R8-tied", "R8-unpinned")),
+                                         (first, {"W": 2}, None, ("R8-unpinned",))):
+        v = V.check(rec, marked, Q, SAMPLING_DESIGN, SCHEME, ports, None, (), (), None, None, registered, tied=tied)
+        assert v.codes == codes and v.verifiers["lean"]["codes"] == list(codes), (tied, v)
 
 
 def test_r7_reads_each_values_first_registration():
     """Registered values: a log of 24 records, two in three registering `W` under its first root and the rest v1. A
     candidate's check gets the last record and the first docket, and the verifier gives it the verdict the
     whole log gives: the held root, a fresh root (R7-held), a window logged before, a wrong previous, a v1 record. The
-    program's members all read `W`, so a v1 record, whose `W` no verifier holds, is refused for it (R8-shared-input)."""
+    program's members all read its registered input `W`, so a v1 record, whose `W` nothing pins, is refused for it
+    (R8-unpinned)."""
     prog = _program()
     reg = _registered(prog)
     first, ports = _registered_record(prog, reg)
@@ -202,8 +211,8 @@ def test_r7_reads_each_values_first_registration():
             (at(row, last, _registered(prog).entry()), {"W": 2}, ("R7-held",)),
             (at(SERVED["row"] + 5, last, reg.entry()), {"W": 2}, ("R6-window",)),
             (at(row, "ab" * 64, reg.entry()), {"W": 2}, ("R6-previous",)),
-            (at(row, last, None), None, ("R8-shared-input",)),
-            (at(SERVED["row"], last, None), None, ("R6-window", "R8-shared-input"))):
+            (at(row, last, None), None, ("R8-unpinned",)),
+            (at(SERVED["row"], last, None), None, ("R6-window", "R8-unpinned"))):
         earlier = stream._earlier(cand)
         assert earlier == [first, stream._log[-1]] or (cand["window"]["row"] != row and len(earlier) == 3)
         held = ["W"] if registered else None

@@ -65,7 +65,8 @@ def _program() -> Program:
     def body(B, S, x, W, hist):
         return coll_concat(sig(S)[1], [B.call(MIX, x[i], W[p]) for i, p in enumerate(POS)])
 
-    return Program(bind(CompositeDefinition("HistoryReadTestProgram", 0, (), sig, body, register=False)))
+    return Program(bind(CompositeDefinition("HistoryReadTestProgram", 0, (), sig, body, register=False)),
+                   registered=("W",), supplied=("hist",))
 
 
 def _case(hist_rows=None):
@@ -89,7 +90,7 @@ def _case(hist_rows=None):
         hist = RV.Registered.commit(pd, "hist", hist_rows, RV.supplied_salts(pd, "hist", 2), word_bits=16)
     rec = DK.record(prog, Q, SAMPLING_DESIGN, SCHEME, served, SERVED, registered=[w.entry(), hist.entry()], leaf_layer=leaf)
     check = {"program": prog, "query": Q, "sampling_design": SAMPLING_DESIGN, "scheme": SCHEME, "ports": ports, "leaf_layer": leaf,
-             "registered": {"W": 2, "hist": 512}, "supplied": SUPPLIED, "history": history}
+             "registered": {"W": 2, "hist": 512}, "supplied": SUPPLIED, "history": history, "pinned": {"W": w.root.hex()}}
     return rec, check, hist, root, dom
 
 
@@ -126,9 +127,10 @@ def test_a_held_run_table_resolves_into_a_reads_root_and_domain():
 
     other = HT.domain(P.program_digest(check["program"]), TABLE_NAME, 5, 8).domain_id
     for rows in ([G.bytes_leaves(root, 1), G.bytes_leaves(dom.domain_id, 1)], [digest_bits(root), digest_bits(other)]):
-        bad = _case(hist_rows=rows)[0]
-        assert R.check(bad, **check).codes == ("R7-supplied",)
-        got = V.check(bad, **check)
+        bad, own = _case(hist_rows=rows)[:2]
+        pinned = {**check, "pinned": own["pinned"]}
+        assert R.check(bad, **pinned).codes == ("R7-supplied",)
+        got = V.check(bad, **pinned)
         assert got.codes == ("R7-supplied",) and got.verifiers["lean"]["codes"] == ["R7-supplied"], got
 
     history = check["history"]

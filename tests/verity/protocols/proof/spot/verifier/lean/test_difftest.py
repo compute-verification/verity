@@ -50,9 +50,11 @@ import sys
 from fractions import Fraction
 from math import gcd
 from pathlib import Path
+from dataclasses import replace
 from types import SimpleNamespace
 from unittest import mock
 
+import numpy as np
 import pytest
 from hypothesis import note, strategies as st
 
@@ -91,7 +93,7 @@ from verity.protocols.proof.spot.verifier.challenger.coins import ran_out as dra
 from verity.protocols.proof.spot.verifier.one_stage.proofs import order_why
 from verity.protocols.proof.spot.verifier.one_stage.verdict import Verdict
 from verity.circuits import codec, partition_object as PO, partition_query as PQ
-from verity.circuits import replay_links as RL
+from verity.circuits import edges as EG, replay_links as RL
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program, input_id, is_input
 from verity.circuits.refs import array_of, record_of, tuple_of
@@ -328,17 +330,17 @@ class SuppliedSetup(RegisteredSetup):
 #: Programs whose root parameters a verifier may expect registered: 16-bit ones (`W`, and `D` of 12-bit leaves) and ones
 #: `registered_entries` refuses (`E` has no gates, `M` two widths, `V` is 40 bits), 32-bit ones (`T`, and `U` of
 #: 20-bit leaves), and bit rows (`A`, 8-bit leaves two to a u16 word in `row/v2` rows, as H1's A, and `B` in
-#: `row-seg/v1` rows); `x`, bound per run, reads as a 16-bit value too.
+#: `row-seg/v1` rows); `x`, bound per run, is a run Input, which no verifier expects registered (`R7-run-input`).
 REGISTERED_SETUPS = [
     RegisteredSetup(_registered_program("CoreSpotRegistered16", 3, (
         ("W", Array(6, Value(16))), ("D", Array(4, Value(12))), ("E", Array(0, Value(16))), ("M", Tuple(Value(8), Value(16))),
-        ("V", Value(40))), ("W", "D")), [{"W": 2}, {"D": 1, "W": 3}, {"D": 4}, {"W": 6, "x": 2}]),
+        ("V", Value(40))), ("W", "D")), [{"W": 2}, {"D": 1, "W": 3}, {"D": 4}]),
     RegisteredSetup(_registered_program("CoreSpotRegistered32", 2, (
         ("T", Array(4, Value(32))), ("U", RecordType(("a", Array(3, Value(20))),))), ("T", "U")),
-        [{"T": 2}, {"T": 1, "U": 3}, {"U": 1}, {"T": 4, "x": 1}]),
+        [{"T": 2}, {"T": 1, "U": 3}, {"U": 1}]),
     RegisteredSetup(_registered_program("CoreSpotRegisteredBits", 2, (
         ("A", Array(8, Value(8))), ("B", Array(4, Value(16)))), ("A", "B")),
-        [{"A": 2}, {"A": 1, "B": 2}, {"B": 4}, {"A": 4, "x": 2}], {"A": G.SCHEMA_V2, "B": G.SCHEMA_SEG})]
+        [{"A": 2}, {"A": 1, "B": 2}, {"B": 4}], {"A": G.SCHEMA_V2, "B": G.SCHEMA_SEG})]
 #: Programs with a value the verifier fills itself, as PoUW's `pouw.roots`: `S`, each row a pair of digests of 32-bit
 #: leaves (rows of x's root and W's registered root, and W's and out's) or of 1-bit leaves (out's root and bytes of its own),
 #: or, in a bit-row format, one `Digest` a row in `row/v2` (out's root, then bytes of its own: 32 u16 words a row) or
@@ -351,20 +353,20 @@ SUPPLIED_SETUPS = [
         {"S": [[{"port": "x"}, {"value": "W"}], [{"value": "W"}, {"port": "out"}]]}),
     SuppliedSetup(_registered_program("CoreSpotSupplied1", 2, (
         ("S", Array(1, Array(2, Array(512, Value(1))))),), ("S",)),
-        [{"S": 1024}, {"x": 2, "S": 1024}], {"S": [[{"port": "out"}, {"bytes": "5a" * 64}]]}),
+        [{"S": 1024}, {"S": 1024}], {"S": [[{"port": "out"}, {"bytes": "5a" * 64}]]}),
     SuppliedSetup(_registered_program("CoreSpotSuppliedPW", 3, (
         ("S", Array(2, Array(2, Array(16, Value(32))))), ("W", Array(6, Value(16)))), ("S", "W")),
         [{"S": 32, "W": 2}, {"W": 3, "S": 32}],
         {"S": [[{"window": COIN}] + [{"position": "0"}] * 8, [{"position": "2"}] * 8 + [{"window": COIN}]]}),
     SuppliedSetup(_registered_program("CoreSpotSuppliedDigestV2", 2, (
         ("S", Array(2, Array(8, Array(64, Value(1))))),), ("S",)),
-        [{"S": 32}, {"x": 2, "S": 32}], {"S": [[{"port": "out"}], [{"bytes": "5a" * 64}]]}, {"S": G.SCHEMA_V2}),
+        [{"S": 32}, {"S": 32}], {"S": [[{"port": "out"}], [{"bytes": "5a" * 64}]]}, {"S": G.SCHEMA_V2}),
     SuppliedSetup(_registered_program("CoreSpotSuppliedBitsSeg", 2, (
         ("S", Array(2, Array(512, Value(1)))),), ("S",)),
-        [{"S": 32}, {"x": 2, "S": 32}], {"S": [[{"port": "x"}], [{"bytes": "a5" * 64}]]}, {"S": G.SCHEMA_SEG}),
+        [{"S": 32}, {"S": 32}], {"S": [[{"port": "x"}], [{"bytes": "a5" * 64}]]}, {"S": G.SCHEMA_SEG}),
     SuppliedSetup(_registered_program("CoreSpotSuppliedHalf", 2, (
         ("O", Array(2, Value(16))),), ("O",)),
-        [{"O": 1}, {"x": 2, "O": 1}], {"O": [[{"bytes": "0001"}], [{"bytes": "0001"}]]})]
+        [{"O": 1}, {"O": 1}], {"O": [[{"bytes": "0001"}], [{"bytes": "0001"}]]})]
 REGISTERED_SETUPS += SUPPLIED_SETUPS
 #: A program whose window opens a pool from `pin` and leaves it in `pout`, each one SHA-512 digest of 32-bit leaves, and
 #: the empty pool's root a chain restarts from.
@@ -571,8 +573,11 @@ def _log_record(e) -> None:
 def decode_params(j) -> dict:
     v2 = isinstance(j, dict) and j.get("registered") is not None
     tied = isinstance(j, dict) and "tied" in j
-    keys = PARAM_KEYS | {"parameters"} if v2 or tied else PARAM_KEYS
+    weighed = isinstance(j, dict) and "weights_of_record" in j
+    given = isinstance(j, dict) and "parameters" in j
+    keys = PARAM_KEYS | {"parameters"} if v2 or tied or weighed or given else PARAM_KEYS
     keys = keys | {"tied"} if tied else keys
+    keys = keys | {"weights_of_record"} if weighed else keys
     keys = keys | {"supplied"} if isinstance(j, dict) and "supplied" in j else keys
     keys = keys | {"pinned"} if isinstance(j, dict) and "pinned" in j else keys
     keys = keys | {"outputs"} if isinstance(j, dict) and "outputs" in j else keys
@@ -615,8 +620,18 @@ def decode_params(j) -> dict:
         raise D.Reject(R.PARTITION_QUERY)
     if v2 and not all(map(_nat, _obj(j["registered"], "registered").values())):
         raise D.Reject("registered: words that are not a natural number")
-    if v2 or tied:
+    needed = v2 or tied or weighed or bool(R.marked_inputs(PROGRAMS[sha]))
+    if needed and not given:
+        raise D.Reject("parameters: the program binds inputs at registration, or the verifier expects or pins values, "
+                       "and no parameters name them")
+    if needed or given:
         _parameters(desc, PROGRAMS[sha], j["parameters"])
+    if weighed:
+        w = j["weights_of_record"]
+        _exactly(w, {"digest", "document"}, "the weights' registration of record")
+        if not (isinstance(w["digest"], str) and isinstance(w["document"], str)
+                and re.fullmatch("(?:[0-9a-f]{2})*", w["document"])):
+            raise D.Reject("the weights' registration of record is its document's bytes in hex and a digest, both strings")
     if tied and not (j["tied"] is None or isinstance(j["tied"], list) and all(isinstance(t, str) for t in j["tied"])):
         raise D.Reject("tied values are a list of the program's parameters")
     raw = j
@@ -765,7 +780,9 @@ def _docket_verdict(p: dict, rec) -> Verdict:
                    p.get("binding"), p.get("outputs"), p.get("row_schemas"), p.get("window_root"), p.get("held"),
                    p.get("link_members", ()), seed_salt=p.get("seed_salt"), pool=p.get("pool"), tied=p.get("tied"),
                    compiler=p.get("compiler", R.UNREAD), certified=p.get("certified"), verdicts=p.get("verdicts"),
-                   coins=p.get("coins"), commitments=p.get("commitments"), released=p.get("released"))
+                   coins=p.get("coins"), commitments=p.get("commitments"), released=p.get("released"),
+                   weights_of_record=None if "weights_of_record" not in p else (
+                       bytes.fromhex(p["weights_of_record"]["document"]), p["weights_of_record"]["digest"]))
 
 
 def _registration(p: dict, rec) -> tuple[str, ...]:
@@ -3177,18 +3194,12 @@ def unit_gates(j):
 
 
 def fanout(j):
-    """A template query's fan-out and the run Input nodes outside `held`, the gates `[[first, count], ...]` of the
-    parameters a verifier expects registered, its proof blocks don't each read alone over a program (`partition.fanout`,
-    `partition.shared_inputs`; `Partition.fanout`, `Partition.sharedInputs`), refused for another query or one that
-    doesn't apply."""
+    """A template query's fan-out over a program (`partition.fanout`, `Partition.fanout`), refused for another query or
+    one that doesn't apply."""
     j = _json(j)
     if not isinstance(j, dict):
         raise D.Reject("not an object")
     desc = _obj(j.get("program"), "program")
-    held = [] if j.get("held") is None else j["held"]
-    if not isinstance(held, list) or not all(isinstance(h, list) and len(h) == 2 and all(_nat(x) for x in h)
-                                             for h in held):
-        raise D.Reject("held is not a list of [first, count]")
     query = _obj(j.get("query"), "query")
     sha = PO.program_sha512(desc)
     if sha not in PROGRAMS:
@@ -3196,25 +3207,29 @@ def fanout(j):
     if not P.is_template_query(query):
         raise D.Reject("not a template query")
     try:
-        gates = [range(f, f + n) for f, n in held]
-        return {"fanout": P.fanout(PROGRAMS[sha], query), "shared": P.shared_inputs(PROGRAMS[sha], query, gates),
-                "reads": [[r.start, len(r), i] for r, i in P.held_reads(PROGRAMS[sha], query, gates)]}
+        return {"fanout": P.fanout(PROGRAMS[sha], query)}
     except (P.QueryRefused, ValueError) as e:
         raise D.Reject(str(e)) from None
 
 
+def _ranges(x, what: str) -> list:
+    if not isinstance(x, list) or not all(isinstance(h, list) and len(h) == 2 and all(_nat(v) for v in h) for h in x):
+        raise D.Reject(f"{what} is not a list of [first, count]")
+    return x
+
+
 def run_input_roots(j):
-    """Each member's `[port, tree]` at C's run input nodes' trees and the refusal of a reader of a held or tied
-    parameter's node whose roots hold no entry at its tree (`members._run_input_roots`, `members._held_roots`;
-    `OneStageZk.runInputRoots`, `OneStageZk.heldRootsHeld`), refused for another query or one that doesn't apply."""
+    """Each member's `[port, tree]` at C's run input nodes' trees, or the refusal by name (`members.run_input_roots_at`;
+    `OneStageZk.runInputRootsAt`), under the window's open root and the tied gates the case names; refused for another
+    query or one that doesn't apply."""
     j = _json(j)
     if not isinstance(j, dict):
         raise D.Reject("not an object")
     desc = _obj(j.get("program"), "program")
-    held = [] if j.get("held") is None else j["held"]
-    if not isinstance(held, list) or not all(isinstance(h, list) and len(h) == 2 and all(_nat(x) for x in h)
-                                             for h in held):
-        raise D.Reject("held is not a list of [first, count]")
+    tied = [] if j.get("tied") is None else _ranges(j["tied"], "tied")
+    window = j.get("window_root")
+    if window is not None and not isinstance(window, str):
+        raise D.Reject("window_root is not a string")
     query = _obj(j.get("query"), "query")
     sha = PO.program_sha512(desc)
     if sha not in PROGRAMS:
@@ -3223,24 +3238,23 @@ def run_input_roots(j):
         raise D.Reject("not a template query")
     members = j.get("members")
     if not isinstance(members, list) or not all(
-            isinstance(m, list) and len(m) == 2 and isinstance(m[0], str) and isinstance(m[1], list) and m[1]
+            isinstance(m, list) and len(m) == 2 and isinstance(m[0], str) and isinstance(m[1], list)
             and all(isinstance(u, list) and len(u) == 2 and all(_nat(x) for x in u) for u in m[1]) for m in members):
         raise D.Reject("members is not a list of [name, [[first, end], ...]]")
-    ms = {n: {"units": us} for n, us in members}
-    if len(ms) != len(members):
-        raise RuntimeError("the strategy drew two members of one name")
     program = PROGRAMS[sha]
     try:
-        reads = P.held_reads(program, query, [range(f, f + n) for f, n in held])
-        roots = M._run_input_roots(program, query, ms, {"roots": j.get("roots")}, {})
+        ranges = P._template(program, query, "the members' partition").ranges
     except (P.QueryRefused, ValueError) as e:
         raise D.Reject(str(e)) from None
+    R = EG._Root(desc)
+    by_port = {r.get("port"): r for r in j.get("roots") or () if isinstance(r, dict)}
     try:
-        M._held_roots(ms, reads, roots)
-        why = None
+        got = [[n, [[r["port"], r["tree"]] for r in M.run_input_roots_at(
+            R, program, ranges, P.program_digest(program), window, [range(f, f + c) for f, c in tied], n,
+            {"units": us}, [], by_port)]] for n, us in members]
     except M._Refused as e:
-        why = str(e)
-    return {"roots": [[n, [[r["port"], r["tree"]] for r in roots.get(n, [])]] for n in ms], "held": why}
+        return {"roots": None, "refused": str(e)}
+    return {"roots": got, "refused": None}
 
 
 @functools.cache
@@ -3306,7 +3320,8 @@ def fanout_cases(draw) -> dict:
 @st.composite
 def run_input_cases(draw) -> dict:
     """`fanout_cases`' programs and queries, the units of a template query that applies split among one to four members
-    in runs, and the record's roots at a random set of `input/n<w>` trees."""
+    in runs, the record's roots at a random set of `input/n<w>` trees, each at C's leaf count and domain under the
+    window's open root or not, the window's open root or none, and the first parameter's gates tied or none."""
     case = draw(fanout_cases())
     program = PROGRAMS[PO.program_sha512(case["program"])]
     try:
@@ -3318,9 +3333,22 @@ def run_input_cases(draw) -> dict:
     cuts = sorted(set(draw(st.lists(st.integers(1, n - 1), max_size=3)))) if n > 1 else []
     bounds = [0, *cuts, max(n, 1)]
     case["members"] = [[f"T/m{i}", [[lo, hi]]] for i, (lo, hi) in enumerate(zip(bounds, bounds[1:]))]
-    nodes = len(program.root.body.nodes)
-    case["roots"] = [{"port": f"input/n{w}", "root": "aa" * 64, "domain": "dd" * 64, "leaves": 1}
-                     for w in sorted(set(draw(st.lists(st.integers(0, nodes - 1), max_size=nodes))))]
+    nodes = EG._Root(case["program"]).nodes
+    window = draw(st.sampled_from([WROOT, WROOT, None]))
+    if window is not None:
+        case["window_root"] = window
+    prog = P.program_digest(program)
+
+    def entry(w: int) -> dict:
+        ln = draw(st.integers(1, 4))
+        rows = nodes[w]["out_leaves"] * nodes[w]["members"] // ln
+        honest = draw(st.booleans())
+        return {"port": f"input/n{w}", "root": "aa" * 64, "leaves": rows if honest else rows + 1,
+                "domain": RV.domain(prog, f"input/n{w}", ln, rows, 16, window=window or WROOT).domain_id.hex()
+                if honest else "dd" * 64}
+    case["roots"] = [entry(w) for w in sorted(set(draw(st.lists(st.integers(0, len(nodes) - 1), max_size=len(nodes)))))]
+    if draw(st.booleans()):
+        case["tied"] = [[g.start, len(g)] for g in G.held_gates(program, [program.fn.signature()[0][0][0]])]
     return case
 
 
@@ -3358,6 +3386,57 @@ UNIT_GATES = D.Port(PIECES, "unit_gates", unit_gates, st.one_of(
 FANOUT = D.Port(PIECES, "fanout", fanout, st.one_of(fanout_cases(), JSON), package=PACKAGE)
 RUN_INPUT_ROOTS = D.Port(PIECES, "run_input_roots", run_input_roots, st.one_of(*[run_input_cases()] * 6, JSON),
                          package=PACKAGE)
+
+
+@functools.cache
+def _periods_tests():
+    """The periods tests' module, for its run input programs (`node_slice`)."""
+    spec = importlib.util.spec_from_file_location(
+        "periods_test_interface_rows", Path(__file__).resolve().parents[7] / "tests/verity/commitments/periods/test_interface.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _slice_rows(starts, n, ranges):
+    """`node_slice`'s program, its ``x`` port's run input read (`interface.run_input_reads`), and the node's row each unit
+    reads by that read, and the piece's input asking the Lean for the same rows."""
+    TI = _periods_tests()
+    prog = TI.node_slice(starts, n, ranges)
+    (read,) = [r for r in TI.I.run_input_reads([(TI.COORD, len(starts))], prog, PO.template_instances_query([TI.COORD]), ())
+               if r.port == "x"]
+    words = dict(TI.I.layout(TI.COORD).rows)["x"]
+    rows = [int(i) // words for i in read.source(np.arange(read.units))]
+    case = {"program": json.loads(D.canonical(codec.encode_program(prog))), "indices": list(range(len(starts))),
+            "port": "x", "value": read.param, "leaves": n // 64}
+    return prog, read, words, rows, case
+
+
+@pytest.mark.parametrize("starts, n, ranges", [([64, 192, 320], 512, (3,)), ([128, 320, 512, 704], 768, (1, 3))])
+def test_a_run_input_slice_reads_the_rows_lean_derives(pieces, starts, n, ranges):
+    """A port whose units read its run input node at a first row above zero and a stride above one (rows 1, 3, 5 of 8;
+    rows 2, 5, 8, 11 of 12 across two ranges): the rows its `Read` names (``base`` and ``step``) are the rows
+    `Flock.OneCircuit.pos` derives from C, at the tree the read names; a `Read` of another stride names other rows, which
+    the verifier never opens, and the Lean refuses another tree or another row count."""
+    _prog, read, words, rows, case = _slice_rows(starts, n, ranges)
+    assert rows == [s // 64 for s in starts] and read.base > 0 and read.step[0] > words
+    assert pieces.call("run_input_rows", case) == ("output", D.canonical({"rows": rows, "from": 0}))
+    wrong = replace(read, step=(read.step[0] + words,))
+    assert [int(i) // words for i in wrong.source(np.arange(wrong.units))] != rows
+    assert pieces.call("run_input_rows", {**case, "value": "input/n1"})[0] == "reject"
+    assert pieces.call("run_input_rows", {**case, "leaves": n // 64 + 1})[0] == "reject"
+
+
+def test_a_run_input_read_off_one_stride_is_refused_by_the_read_and_derived_by_the_lean(pieces):
+    """Units at rows 1, 3, 4: `run_input_reads` refuses them (no one stride, so no one `Read`), and the Lean derives
+    each unit's row from C all the same, so its verdict rests on no `Read`."""
+    TI = _periods_tests()
+    prog = TI.node_slice([64, 192, 256], 512, (3,))
+    with pytest.raises(ValueError, match="not row 5: its units read the node's rows at one stride"):
+        TI.I.run_input_reads([(TI.COORD, 3)], prog, PO.template_instances_query([TI.COORD]), ())
+    case = {"program": json.loads(D.canonical(codec.encode_program(prog))), "indices": [0, 1, 2], "port": "x",
+            "value": "input/n0", "leaves": 8}
+    assert pieces.call("run_input_rows", case) == ("output", D.canonical({"rows": [1, 3, 4], "from": 0}))
 _X0, _X00 = ((0, 0, 0), (0, 0, 1)), ((0, 0, 0),) * 4
 #: Programs R8 reads past a population's: two calls of `PAIR` on `x`'s first pair, a batch of three broadcasting it (a
 #: run Input two proof blocks read), and a call reading the first's result whose result a batch of two maps (F 4).
@@ -5089,19 +5168,137 @@ def test_link_points_holds_the_per_member_forms_members_as_the_python_does(piece
     assert stats.outputs > 100 and stats.rejects > 0 and min(seen.get(True, 0), seen.get(False, 0)) > 20, (stats, seen)
 
 
+def _pin(program: Program, v: str, leaves: int | None = None, domain: str | None = None) -> dict:
+    """A pin of `program`'s parameter `v` at one word a row, its domain at program digest ``aa`` * 64 unless `domain` names one."""
+    n, b = G.shape(program, v, 1) if leaves is None else leaves, G.width(program, v)
+    return {"value": v, "root": "ab" * 64, "leaves": n, "words": 1, **({} if b == RV.WORD_BITS else {RV.WIDTH_KEY: b}),
+            "domain": domain or RV.domain("aa" * 64, v, 1, n, b).domain_id.hex()}
+
+
+def _weights_doc(pins: list[dict], **more) -> dict:
+    """The weights' registration of record pinning `pins`, with the keys `more` beside its own, as `weights_of_record`
+    names it: its document in hex and its SHA-512."""
+    body = json.dumps({"program": "aa" * 64, "values": {e["value"]: e for e in pins}, **more}).encode()
+    return {"digest": hashlib.sha512(body).hexdigest(), "document": body.hex()}
+
+
+def test_r8_holds_registered_inputs_to_the_weights_of_record_as_python_does(pieces):
+    """R8 under a weights' registration of record (`docket.weights_held`, `Docket.weightsOf`), Lean's codes the
+    Python's: `x` registered and read by two calls passes with the registration and its digest, on a v1 record (the
+    accepted pin is no entry R7 reads, and a v2 record is refused `keys`); it is refused without the registration
+    (`R8-unpinned`, the case where Lean once passed what Python refused, handed no `parameters`), at another digest, at
+    a pin's wrong domain or shape, and with a key beside `program` and `values` (`R8-weights-form`); a pin of the
+    unregistered `x` is not read; and a
+    registered input under a query no template query applies to is refused
+    (`R8-weights-query`)."""
+    marked = _readers(2, (("call", 2, _X0 + _X00),) * 2, True)
+    plain = READER_SETUPS[0]
+    s = Setup(marked, plain.query)
+    reads = sorted({(t, p, "x") for t, p, _ in P.input_reads(marked, s.query, G.held_gates(marked, ["x"]))})
+    assert reads
+    pin = _pin(marked, "x")
+    doc = _weights_doc([pin])
+    cases = [(s, doc, [], []), (s, doc, [pin], ["keys"]),
+             (s, None, [], ["R8-unpinned"]),
+             (s, {**doc, "digest": "00" * 64}, [], ["R8-weights-digest"]),
+             (s, {**doc, "document": "7b"}, [], ["R8-weights-digest"]),
+             (s, _weights_doc([_pin(marked, "x", domain="11" * 64)]), [], ["R8-weights-domain", "R8-unpinned"]),
+             (s, _weights_doc([_pin(marked, "x", leaves=pin["leaves"] + 1)]), [], ["R8-weights-shape"]),
+             (s, _weights_doc([pin], reads=[list(r) for r in reads]), [], ["R8-weights-form"]),
+             (s, _weights_doc([pin], reads=[]), [], ["R8-weights-form"]),
+             (plain, doc, [], ["R8-shared-input"]),
+             (Setup(marked, PO.query()), None, [], None)]
+    for setup, weights, entries, want in cases:
+        named, expanded = service.params_sampling_design("rate:1/2", setup.program, setup.query, None)
+        roots = [{"port": p, "root": ROOTS[p], **setup.ports[p]} for p in setup.ports]
+        rec = DK.record(setup.program, setup.query, named, SCHEME, roots, WINDOW, leaf_layer=LEAF, work_table=expanded,
+                        registered=entries)
+        sig = _json([[name, t.to_json()] for name, t in setup.program.fn.signature()[0]])
+        params = {"anchors": [], "delta": "1/1000", "law": "rate:1/2", "leaf_layer": LEAF, "log": [], "partition": None,
+                  "ports": setup.ports, "program": setup.desc, "query": setup.query, "registered": None, "scheme": SCHEME,
+                  "work_table": None, "parameters": sig, **({} if weights is None else {"weights_of_record": weights})}
+        given = _json({"params": params, "record": rec})
+        reg = registration(given)
+        assert reg["codes"] == want if want is not None else "R8-weights-query" in reg["codes"], (weights, reg)
+        assert D.replay(REGISTRATION, given, pieces) == ("output", D.canonical(reg)), weights
+
+
+def test_r8_refuses_a_marked_input_expected_by_name_alone_as_python_does(pieces):
+    """R8 on a marked input the verifier expects registered by name (`docket.weights_held`, `Docket.weightsHeld`), Lean's
+    codes the Python's: with no pin R8 accepted and no root the verifier holds itself it is refused (`R8-unpinned`)
+    whatever root the record names; pinned by the verifier (`pinned`) it passes."""
+    marked = _readers(2, (("call", 2, _X0 + _X00),) * 2, True)
+    s = Setup(marked, READER_SETUPS[0].query)
+    for pinned, want in ((None, ["R8-unpinned"]), ({"x": "ab" * 64}, [])):
+        named, expanded = service.params_sampling_design("rate:1/2", s.program, s.query, None)
+        roots = [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports]
+        mine = G.registered_entries(s.program, {"x": 1}, None, None, ("x",) if pinned else ())
+        entries = [{"value": v, "root": "ab" * 64, **e} for v, e in mine.items()]
+        rec = DK.record(s.program, s.query, named, SCHEME, roots, WINDOW, leaf_layer=LEAF, work_table=expanded,
+                        registered=entries)
+        sig = _json([[name, t.to_json()] for name, t in s.program.fn.signature()[0]])
+        params = {"anchors": [], "delta": "1/1000", "law": "rate:1/2", "leaf_layer": LEAF, "log": [], "partition": None,
+                  "ports": s.ports, "program": s.desc, "query": s.query, "registered": {"x": 1}, "scheme": SCHEME,
+                  "work_table": None, "parameters": sig, **({} if pinned is None else {"pinned": pinned})}
+        given = _json({"params": params, "record": rec})
+        reg = registration(given)
+        assert reg["codes"] == want, (pinned, reg)
+        assert D.replay(REGISTRATION, given, pieces) == ("output", D.canonical(reg)), pinned
+
+
+def _registration_case(s: Setup, entries: list, **more) -> dict:
+    named, expanded = service.params_sampling_design("rate:1/2", s.program, s.query, None)
+    roots = [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports]
+    rec = DK.record(s.program, s.query, named, SCHEME, roots, WINDOW, leaf_layer=LEAF, work_table=expanded,
+                    registered=entries)
+    sig = _json([[name, t.to_json()] for name, t in s.program.fn.signature()[0]])
+    params = {"anchors": [], "delta": "1/1000", "law": "rate:1/2", "leaf_layer": LEAF, "log": [], "partition": None,
+              "ports": s.ports, "program": s.desc, "query": s.query, "registered": None, "scheme": SCHEME,
+              "work_table": None, "parameters": sig, **more}
+    return _json({"params": params, "record": rec})
+
+
+def test_r7_refuses_a_supplied_input_with_no_mark_and_no_source_as_python_does(pieces):
+    """R7 on C whose root holds a SuppliedInput node with no mark in C (no `inputs` entry) and no source in the
+    parameters' `supplied` (`docket.unsourced_supplied`, `Docket.unsourced`), on a record that registers nothing: refused
+    by name (`R7-supplied-source`), Lean's codes the Python's. A source is a registered value's (`supplied`), so its
+    case is a v2 record's (`test_one_stage`, `Spot/Test/Docket.lean`)."""
+    plain = _readers(2, (("call", 2, _X0 + _X00),) * 2, False)
+    s = Setup(Program(plain.fn, supplied=("x",)), READER_SETUPS[0].query)
+    PROGRAMS[s.sha512] = s.program
+    assert G.marks(s.desc) == {} and R.unsourced_supplied(s.program, {}) == ["x"]
+    given = _registration_case(s, [])
+    reg = registration(given)
+    assert "R7-supplied-source" in reg["codes"], reg
+    assert D.replay(REGISTRATION, given, pieces) == ("output", D.canonical(reg))
+
+
+def test_r7_refuses_a_pinned_values_entry_whose_domain_alone_differs_as_python_does(pieces):
+    """R7 on a value the weights' registration of record pins (`docket.off_pin`, `Docket.offPin`): the record's entry
+    equal to the pin in root, leaf count and words, its domain alone another, is refused by name (`R7-pin`), Lean's codes
+    the Python's; the entry that is the pin is not."""
+    s = Setup(_readers(2, (("call", 2, _X0 + _X00),) * 2, True), READER_SETUPS[0].query)
+    pin = _pin(s.program, "x")
+    entry = {k: pin[k] for k in ("value", "root", "leaves", "words", "domain")}
+    for e, refused in ((entry, False), ({**entry, "domain": "11" * 64}, True)):
+        assert R.off_pin({}, [e], (bytes.fromhex(_weights_doc([pin])["document"]), _weights_doc([pin])["digest"])) == (
+            ["x"] if refused else [])
+        given = _registration_case(s, [e], registered={"x": 1}, weights_of_record=_weights_doc([pin]))
+        reg = registration(given)
+        assert ("R7-pin" in reg["codes"]) == refused, (e, reg)
+        assert D.replay(REGISTRATION, given, pieces) == ("output", D.canonical(reg)), e
+
+
 def test_r8_reads_the_readers_python_does(pieces):
     """R8 past a population program, Lean's answers the Python's: two calls of `PAIR` on one pair of `x`, or a batch
-    broadcasting it, share the run Input `x` at F 1, and the docket is refused (`R8-shared-input`); a call reading
-    another's result, whose result a batch of two maps, joins all three at F 4, which the docket publishes; `x`
-    named tied is let through, which the docket publishes where it was shared, and a tied name that isn't a
-    parameter is refused (`R8-tied`); and `x` registered, as a registered input or as a parameter the verifier expects
-    registered (`held`), is no run Input."""
-    for s, f, shared in zip(READER_SETUPS, (1, 1, 4), ([0], [0], [])):
+    broadcasting it, at F 1, and a call reading another's result, whose result a batch of two maps, joining all three at
+    F 4, which the docket publishes; a run Input two proof blocks read is refused in the variant with no members
+    (`R8-shared-input`) and not with members, whose check holds its readers to the node's one tree; `x` named tied is
+    let through, which the docket publishes, and a tied name that isn't a parameter is refused (`R8-tied`)."""
+    for s, f, shared in zip(READER_SETUPS, (1, 1, 4), (True, True, False)):
         case = {"program": s.desc, "query": _json(s.query)}
-        assert fanout(case) == {"fanout": f, "shared": shared, "reads": []}
+        assert fanout(case) == {"fanout": f}
         assert D.replay(FANOUT, case, pieces) == ("output", D.canonical(fanout(case)))
-        held = {**case, "held": [[g.start, len(g)] for g in G.held_gates(s.program, ["x"])]}
-        assert fanout(held)["reads"] and D.replay(FANOUT, held, pieces) == ("output", D.canonical(fanout(held)))
         named, expanded = service.params_sampling_design("rate:1/2", s.program, s.query, None)
         rec = _record_of(s, None, named, WINDOW, leaf_layer=LEAF, work_table=expanded)
         given = {"params": {"anchors": [], "delta": "1/1000", "law": "rate:1/2", "leaf_layer": LEAF, "log": [],
@@ -5110,19 +5307,48 @@ def test_r8_reads_the_readers_python_does(pieces):
         reg = registration(given)
         assert reg == {"codes": ["R8-shared-input"] if shared else [], "fanout": f}
         assert D.replay(REGISTRATION, given, pieces) == ("output", D.canonical(reg))
+        n = P.units(s.program, s.query)
+        each = {**given, "members": [{"units": [[u, u + 1]], "vus_per_block": 1} for u in range(n)]}
+        assert "R8-shared-input" not in registration(each)["codes"]
+        assert D.replay(REGISTRATION, each, pieces) == ("output", D.canonical(registration(each)))
         sig = _json([[name, t.to_json()] for name, t in s.program.fn.signature()[0]])
-        for tied, want in ((["x"], {"codes": [], "fanout": f, **({"rests_on_period_check": ["x"]} if shared else {})}),
+        for tied, want in ((["x"], {"codes": [], "fanout": f, "rests_on_period_check": ["x"]}),
                            (["nope"], {"codes": ["R8-tied", *(["R8-shared-input"] if shared else [])], "fanout": f})):
             tied_given = {**given, "params": {**given["params"], "parameters": sig, "tied": tied}}
             assert registration(tied_given) == want
             assert D.replay(REGISTRATION, tied_given, pieces) == ("output", D.canonical(want))
     program = _readers(2, (("call", 2, _X0 + _X00),) * 2, True)
     case = {"program": _json(codec.encode_program(program)), "query": _json(P.template_instance_query(PAIR.id))}
-    assert D.replay(FANOUT, case, pieces) == ("output", D.canonical({"fanout": 1, "shared": [], "reads": []}))
+    assert D.replay(FANOUT, case, pieces) == ("output", D.canonical({"fanout": 1}))
+
+
+def test_run_input_roots_reads_every_proof_block_as_python_does(pieces):
+    """`run_input_roots`, Lean's answers the Python's: two calls of `PAIR` reading one pair of the run Input `x` each
+    open the record's one tree of it at C's leaf count and the domain under the window's open root; no tree, another
+    leaf count, another domain, no open root, and a tied `x`, each as Python answers."""
     s = READER_SETUPS[0]
-    case = {"program": s.desc, "query": _json(s.query), "held": [[g.start, len(g)] for g in G.held_gates(s.program, ["x"])]}
-    assert case["held"] and fanout(case) == {"fanout": 1, "shared": [], "reads": [[0, 1, 0], [1, 1, 0]]}
-    assert D.replay(FANOUT, case, pieces) == ("output", D.canonical(fanout(case)))
+    prog = P.program_digest(s.program)
+    R = EG._Root(s.desc)
+    reads = M.member_inputs(R, P._template(s.program, s.query, "q").ranges, "T/m0", [(0, 1)])
+    assert reads and all(R.nodes[w]["input"] for _p, w, _n in reads)
+    w, ln = reads[0][1], reads[0][2]
+    rows = R.nodes[w]["out_leaves"] * R.nodes[w]["members"] // ln
+    words = ln * (EG._bits(R.nodes[w]["ret"]) // R.nodes[w]["out_leaves"]) // 16
+    good = {"port": f"input/n{w}", "root": "aa" * 64, "leaves": rows,
+            "domain": RV.domain(prog, f"input/n{w}", words, rows, 16, window=WROOT).domain_id.hex()}
+    base = {"program": s.desc, "query": _json(s.query), "members": [["T/m0", [[0, 1]]], ["T/m1", [[1, 2]]]],
+            "roots": [good], "window_root": WROOT}
+    got = run_input_roots(base)
+    assert got["refused"] is None and all(any(t == f"input/n{w}" for _p, t in r) for _n, r in got["roots"]), got
+    cases = [base, {**base, "roots": []}, {**base, "roots": [{**good, "leaves": rows + 1}]},
+             {**base, "roots": [{**good, "domain": "dd" * 64}]}, {k: v for k, v in base.items() if k != "window_root"},
+             {**base, "tied": [[g.start, len(g)] for g in G.held_gates(s.program, ["x"])]}]
+    whys = [M.run_tree_missing_why("T/m0", reads[0][0], w), M.run_tree_why(w, "leaf count"),
+            M.run_tree_why(w, "domain"), M.run_tree_unbound_why(w)]
+    assert [run_input_roots(c)["refused"] for c in cases[1:5]] == whys
+    assert run_input_roots(cases[5]) == {"roots": [["T/m0", []], ["T/m1", []]], "refused": None}
+    for c in cases:
+        assert D.replay(RUN_INPUT_ROOTS, c, pieces) == ("output", D.canonical(run_input_roots(c)))
 
 
 @pytest.mark.parametrize("name, change, code", [

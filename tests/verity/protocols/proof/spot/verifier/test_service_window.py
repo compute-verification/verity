@@ -48,7 +48,9 @@ def _stream(spec=None, coins=None, window=WINDOW, sampler=None) -> S.Stream:
 
 
 def _program(counts=COUNTS, window=WINDOW, values=()):
-    return PN.mixed_population_program([(t, counts[P.template_id(t)]) for t in window], values=values)
+    """The window's mixed population, its values bound at registration: a registered value is no run Input."""
+    fn = PN.mixed_population_program([(t, counts[P.template_id(t)]) for t in window], values=values).fn
+    return Program(fn, registered=[v for v, _, _ in values])
 
 
 def _gathered(counts=COUNTS) -> Program:
@@ -191,7 +193,8 @@ def test_a_tied_window_runs_to_an_accepted_outcome_by_the_lean_run():
     two proof blocks read ``t``, a run Input, which R8 refuses unless the check names it tied. Named tied
     (`Check(tied=)`), the docket is let through on both verifiers and publishes ``t``, and the outcome is
     accepted with the whole run the Lean's (`Run.run`, which reads the tied names from its params). Named nothing, or
-    the other parameter instead, both verifiers refuse the docket (``R8-shared-input``)."""
+    the other parameter instead, both verifiers refuse the docket in this variant, which has no members
+    (``R8-shared-input``)."""
     counts = {P.template_id(PAIR): 2, P.template_id(TRIPLE): 8}
     gathered = _gathered(counts)
     rec, ports = _record(counts, form=gathered), _ports(counts, program=gathered)
