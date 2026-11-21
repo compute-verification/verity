@@ -494,6 +494,7 @@ list names whose body is not there yet.
 | `window.salt/v1` | coin | coin | | 512 |
 | `pouw.pearlplus.salt/v1` | coin | coin | | 256 |
 | `registered.root/v1` (the verifier's pin, never a prover's row) | commitment | supplied | `value` | 512 |
+| `registered.domain/v1` (the domain id beside that pin) | commitment | supplied | `value` | 512 |
 | `record.root/v1` (a port root the record names) | commitment | supplied | `port` | 512 |
 | `log.base/v1` (the first position after the log's records) | commitment | supplied | | 64 |
 | `const.u16/v1` | constant | supplied | `value` | 16 |

@@ -44,7 +44,8 @@ refused.
 
 A *supplied value* is a registered value the verifier fills itself, from what it holds before the sample: each row is the
 bytes of its sources in order, each source a root the record names (`{"port": P}`, the `roots` entry of port P;
-`{"value": V}`, the `registered` entry of value V, never a supplied value's), bytes of its own (`{"bytes": hex}`), a
+`{"value": V}`, the `registered` entry of value V, never a supplied value's; `{"domain": V}`, that entry's domain id),
+bytes of its own (`{"bytes": hex}`), a
 position (`{"position": "K"}`: K, a decimal below the record's population, after every proof block of the log's earlier
 records, `log_base`, as a u64 big-endian, so no two records of one log share a position) or its coin bound to its
 stream, its prover and the record's window (`{"window": hex}`: `window_salt`, SHA-512 of `WINDOW_SALT`, the coin, the
@@ -103,7 +104,7 @@ PARAM_KEY = "param"
 WINDOW_SALT = ONE_STAGE_PERIOD_SALT
 #: a supplied row's source kinds: a served port's root, a registered value's root, the verifier's own bytes, a position
 #: after the log's, the verifier's coin bound to the record's window
-SOURCES = ("port", "value", "bytes", "position", "window")
+SOURCES = ("port", "value", "domain", "bytes", "position", "window")
 #: a row of a supplied input whose layout is `le` leads with `(LE, "")` (`of_mark`); no scheme names it
 LE = "le"
 #: a supplied value is short: at most this many bits, whatever the population (`Supplied.SHORT_BITS`)
@@ -441,13 +442,13 @@ def _source_bytes(rec: Any, value: str, kind: str, name: str, supplied: Sequence
             raise ValueError(f"supplied value {value!r}: position {p} is no u64")
         return p.to_bytes(8, "big")
     field, key = ("roots", "port") if kind == "port" else ("registered", "value")
-    if kind == "value" and name in supplied:
+    if kind in ("value", "domain") and name in supplied:
         raise ValueError(f"supplied value {value!r} reads supplied value {name!r}'s root")
     es = rec.get(field)
     found = [e for e in (es if isinstance(es, list) else ()) if isinstance(e, Mapping) and e.get(key) == name]
     if not found:
         raise ValueError(f"supplied value {value!r}: the record names no {key} {name!r}")
-    return _hex_bytes(value, kind, name, found[-1].get("root"))
+    return _hex_bytes(value, kind, name, found[-1].get("domain" if kind == "domain" else "root"))
 
 
 def supplied_rows(program: Program, value: str, rows: Sequence[Sequence[tuple[str, str]]], rec: Any,
@@ -824,6 +825,8 @@ def body(coins: Mapping[str, bytes], commitments: Mapping[str, bytes], name: str
         return [("window", c.hex())], 64
     if f == "registered.root/v1":
         return [("value", _arg(name, m, "value", str))], 64
+    if f == "registered.domain/v1":
+        return [("domain", _arg(name, m, "value", str))], 64
     if f == "record.root/v1":
         return [("port", _arg(name, m, "port", str))], 64
     if f == "log.base/v1":

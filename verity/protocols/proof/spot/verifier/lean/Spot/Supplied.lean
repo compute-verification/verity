@@ -10,7 +10,8 @@ Supplied values (`one_stage/registered.py`'s `supplied_root`): a registered valu
 holds before the sample, so the prover never chooses it.
 
 * `sources`: the verifier's `{value: [[source, ...], ...]}`, each source `{"port": P}` (the record's `roots` entry of port
-  P), `{"value": V}` (its `registered` entry of value V, never a supplied value's), `{"bytes": hex}` (the verifier's own
+  P), `{"value": V}` (its `registered` entry of value V, never a supplied value's), `{"domain": V}` (that entry's
+  domain id), `{"bytes": hex}` (the verifier's own
   bytes), `{"position": "K"}` (K, a decimal below the record's population, after every unit of the log's records,
   `logBase`, as a u64 big-endian) or `{"window": hex}` (`runSalt`: SHA-512 of `RUN_SALT`, the coin, the verifier's
   binding, its stream's digest and its prover's identity as hex, and the record's window as canonical JSON, NUL between
@@ -53,7 +54,7 @@ open Flock (V)
 
 def SUPPLIED_SALT : String := "verity/one-stage/supplied-salt/v1"
 def RUN_SALT : String := "verity/one-stage/window-salt/v1"
-def SOURCES : List String := ["port", "value", "bytes", "position", "window"]
+def SOURCES : List String := ["port", "value", "domain", "bytes", "position", "window"]
 def SALT_BYTES : Nat := 192
 
 /-- A supplied value's rows, each its sources `(kind, name)` in order. -/
@@ -69,7 +70,7 @@ def salt (program value : String) (i : Nat) : ByteArray :=
 private def source (v : String) : Json → V (String × String)
   | .obj o => match o.toArray with
     | #[(k, .str n)] => if SOURCES.contains k then pure (k, n) else throw s!"supplied value {v}: a source is {k}"
-    | _ => throw s!"supplied value {v}: a source is not one of port, value, bytes, position or window naming a string"
+    | _ => throw s!"supplied value {v}: a source is not one of port, value, domain, bytes, position or window naming a string"
   | _ => throw s!"supplied value {v}: a source is not an object"
 
 /-- `registered.sources`: the verifier's supplied values, in key order; an error on any other form. -/
@@ -166,13 +167,13 @@ def sourceBytes (rec : Json) (log : Array Json) (binding : Option (String × Str
       if name.isEmpty then throw s!"supplied value {value}: window {name} is no bytes"
       return (← runSalt (← Flock.unhex name) binding (getD rec "window"))
     let text ← if kind == "bytes" then pure (Json.str name) else do
-      if kind == "value" && supplied.contains name then
+      if (kind == "value" || kind == "domain") && supplied.contains name then
         throw s!"supplied value {value} reads supplied value {name}'s root"
       let (field, key) := if kind == "port" then ("roots", "port") else ("registered", "value")
       let es := match getD rec field with | .arr es => es | _ => #[]
       let some e := es.reverse.find? (fun e => jeq (getD e key) (Json.str name))
         | throw s!"supplied value {value}: the record names no {key} {name}"
-      pure (getD e "root")
+      pure (getD e (if kind == "domain" then "domain" else "root"))
     let .str s := text | throw s!"supplied value {value}: {kind} {name} is not hex"
     if s.isEmpty then throw s!"supplied value {value}: {kind} {name} is no bytes"
     Flock.unhex s
@@ -250,7 +251,7 @@ def FUNCTIONS : List String :=
   ["pous.session.round_coin/v1", "pous.session.header/v1", "pous.session.context/v1", "pous.session.message/v1",
    "pous.setup.salt/v1",
    "poub.read.pass_seed/v1", "poub.read.pass_root/v1", "window.salt/v1", "pouw.pearlplus.salt/v1", "registered.root/v1",
-   "record.root/v1", "log.base/v1", "const.u16/v1"]
+   "registered.domain/v1", "record.root/v1", "log.base/v1", "const.u16/v1"]
 def LAYOUTS : List String := ["le", "halves", "digest"]
 /-- A supplied value is short: at most this many bits, whatever the population; what grows with it is computed in C. -/
 def SHORT_BITS : Nat := 65536
@@ -498,7 +499,8 @@ private def message (coins commitments : Array (String × ByteArray)) (v : Strin
 little-endian; `pous.setup.salt/v1` the coin the verifier holds for it, 24 bytes (`coins`: the memory attester's salt,
 drawn after W's commitment); `pouw.pearlplus.salt/v1` the epoch's salt of Pearl+, the coin it holds for it, 32 bytes;
 `window.salt/v1` the window's salt under the coin it holds for it (`runSalt`, 64 bytes);
-`registered.root/v1` the root the record registers for its `value` and `record.root/v1` the root the record names for its
+`registered.root/v1` the root the record registers for its `value`, `registered.domain/v1` that entry's domain id, and
+`record.root/v1` the root the record names for its
 `port` (64 bytes each); `log.base/v1` the first position after the log's records (8 bytes). The storage session's four functions read the
 session in two entries by when each part exists: the commitment, held before the first coin, `{commitment, key, place}`
 (the header's fields with the coin key by its hash, the LMS public key and the place it was registered at), and the coin,
@@ -532,6 +534,7 @@ def body (coins commitments : Array (String × ByteArray)) (v : String) (m : Mar
     if c.isEmpty then throw s!"supplied input {v}: no statement: {m.fn}'s coin is no bytes"
     return (#[("window", Flock.hexOf c)], 64)
   | "registered.root/v1" => return (#[("value", ← argStr v m "value")], 64)
+  | "registered.domain/v1" => return (#[("domain", ← argStr v m "value")], 64)
   | "record.root/v1" => return (#[("port", ← argStr v m "port")], 64)
   | "log.base/v1" =>
     if !m.args.isEmpty then throw s!"supplied input {v}: {m.fn} takes no args"
