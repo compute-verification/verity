@@ -2361,6 +2361,26 @@ def test_a_records_templates_are_in_the_order_its_program_first_batches_them():
     assert canonical_json(codec.encode_program(rebuilt)) == canonical_json(codec.encode_program(program))
 
 
+def test_a_records_program_is_its_forms_and_reads_no_cap():
+    """`program_of_record` builds a stated record's Program (its cap and wires) and a description's (`Circuit.description`,
+    no cap) as `Circuit.program` does, at any cap, and a record that lists its members as `listed_program` does."""
+    wires = [I.Wire(GID, "x", SID if j == 0 else GID, "o0", at=2 * j, radix=(2,), base=2 * max(j - 1, 0), step=(1,))
+             for j in range(2)]
+    reads = tuple(I.Read(GID, "w", "w", at=2 * j, radix=(2,), base=256 * j, step=(0,)) for j in range(2))
+    given = I.Circuit("given", ((GEMM, 4), (SRC, 2)), wires=tuple(wires), registered=I.Registered({"w": 512}, reads=reads),
+                      order=I.ordered({SID: 2, GID: 4}, wires, {GID: range(0, 4, 2)}))
+    resolve = {SID: SRC, GID: GEMM}.__getitem__
+    want = canonical_json(codec.encode_program(given.program()[0]))
+    description = {**given.description(), "external": list(given.external)}
+    assert "cap" not in description and "members" not in description
+    for doc in (I.descriptor_record(given, 4), I.descriptor_record(given, 1), description):
+        assert canonical_json(codec.encode_program(I.program_of_record(doc, resolve)[0])) == want
+    listed = {"templates": description["templates"], "members": [], "external": []}
+    defs = [(resolve(t), n) for t, n in listed["templates"]]
+    assert canonical_json(codec.encode_program(I.program_of_record(listed, resolve)[0])) == \
+        canonical_json(codec.encode_program(I.listed_program(defs, [])[0]))
+
+
 def test_a_periods_commit_is_linear_in_its_members(tmp_path):
     """A period's commit and the verifier's rebuild of it from its record (`_long_chain`) run loops whose turns grow with
     its members, wires and reads, not with their products: from 32 layers to 64 the turns grow at most about twice what

@@ -771,8 +771,7 @@ def _wired_pair() -> tuple[dict, tuple, tuple]:
     """A circuit record of `PAIR`'s units, unit 1's first row wired from unit 0, its wired Program and that Program with no
     wires, each with its query."""
     tid = codec.descriptor_id(PAIR)
-    record = {"templates": [[tid, SLOTS]], "cap": SLOTS, "cuts": {tid: {"x": 2}}, "external": [],
-              "order": [[tid, 0, 1], [tid, 1, SLOTS - 1]],
+    record = {"templates": [[tid, SLOTS]], "cuts": {tid: {"x": 2}}, "external": [], "order": [[tid, 0, 1], [tid, 1, SLOTS - 1]],
               "wires": [{"reader": tid, "port": "x", "writer": tid, "out": "o0", "at": 1, "cut": [0, 1], "radix": [1],
                          "base": 0, "step": [1]}]}
     return (record, PN.wired_population_program([(PAIR, SLOTS)], record),
