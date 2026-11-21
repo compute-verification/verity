@@ -12,8 +12,8 @@ The circuit is the registry's window at K = 64 over J10-R's ``PouwH1Tile_v5``, n
 (`pouw_credit_cases.registry_window`, `test_period_real`'s), a template `credit.TILE_PINS` pins. The Lean calls are
 counted by wrapping `verifier.lean`, which `verifier.of_record` also calls.
 
-It takes about four and a half minutes on a node (9.5 GB at its peak): about a minute to build the window once a
-module, two minutes for the honest case and one for the rejected one. What only it catches: over a stand-in window
+It adds about two and a half minutes to its suite on a node (9.5 GB at its peak): about a minute and a half for the
+honest case, which builds the window once a module, and one for the rejected one. What only it catches: over a stand-in window
 `credit.layout_of` refuses at the layout before any proof is asked, so `credit.window` never reaches the Lean
 `credit-verified` or `credit-live-verified` there, and the Lean `window` of record judges no outcome. It cannot be
 cheaper: the smallest descriptor a pin holds is this window, about 60 MB, which `credit.window` reads itself and hands
