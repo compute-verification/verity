@@ -21,7 +21,7 @@ def WalkInv (S : Prog) (d : ℕ) (seen : Std.HashSet ℕ) (todo : Array ℕ) (at
   (∀ x : ℕ, seen.contains x = true → ((S.defs[x]!).prim = false → ∀ nd ∈ (S.defs[x]!).body.nodes, nd.fn ∈ todo.toList) ∧
     (isWordPrim (S.defs[x]!).prim (S.defs[x]!).key = true →
       ∃ bi, toB[x]? = some bi ∧ S.bodyOf? (S.defs[x]!).key = some bi)) ∧
-  ∀ (x bi : ℕ), toB[x]? = some bi → (S.defs[x]!).prim = true
+  ∀ (x bi : ℕ), toB[x]? = some bi → isWordPrim (S.defs[x]!).prim (S.defs[x]!).key = true
 
 /-- Each primitive's entry in `wordy` is whether it is a word primitive, and a composite `d` of word-primitive nodes,
 at least one, is wordy. -/
@@ -91,7 +91,7 @@ theorem walk_word {S : Prog} {d : ℕ} {seen : Std.HashSet ℕ} {todo : Array �
       exact ⟨b, by rw [Std.HashMap.getElem?_insert, if_neg (by simpa using hyx)]; exact hb, hb'⟩
   · rw [Std.HashMap.getElem?_insert] at hy
     by_cases hyx : todo[at_] = y
-    · subst hyx; rw [hD]; exact hpr
+    · subst hyx; rw [hD]; exact hw
     · rw [if_neg (by simpa using hyx)] at hy; exact h6 y b hy
 
 theorem walk_comp {S : Prog} {d : ℕ} {seen : Std.HashSet ℕ} {todo : Array ℕ} {at_ : ℕ} {toB : Std.HashMap ℕ ℕ}

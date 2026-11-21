@@ -32,7 +32,7 @@ statement reading the leaf's lane partials, a value committed after the sample (
   `h1unit.ok_salt`. The ``--registered`` file is `leaf_lanes.registered_file`'s at the entries and roots of the world's
   registration record and produced record alone (`leaf_lanes.verifier_entries`), at the leaf's placement in the window's
   tables (`h1window.place`: unit 0 of the one-call window, one round), the public file `h1unit.verifier_pub`'s.
-  Each check is the Lean verifier's verdict and `pouw-leaf-own-window`'s (PoUW's `PouwCheck.LeafOwn.leafOwn?`): from the
+  Each check is the Lean verifier's verdict and `pouw-leaf-own-window`'s (PoUW's `PouwVerifier.LeafOwn.leafOwn?`): from the
   window's descriptor and round log it places unit 0's reads (`placeOf`), and the file, as the Lean verifier parses it, holds
   the layout's data ports there at the roots of the records the verifier holds (``holds``), and each of the statement's
   sessions samples every unit of its partition (`PouwWindow.Lanes.checkFull`, the sample policy).

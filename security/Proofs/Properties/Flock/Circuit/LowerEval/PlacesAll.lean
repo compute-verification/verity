@@ -155,7 +155,7 @@ theorem liftAll_nil {S : Prog} {d : ℕ} {seen : Std.HashSet ℕ} {todo : Array 
   unfold LiftAll
   refine ⟨⟨Nat.le_refl _, fun _ _ => rfl, fun x hp hs => ?_, fun y hy => by simp at hy⟩, by simpa using order_nodup seen⟩
   obtain ⟨bi, hbi⟩ := Option.isSome_iff_exists.1 hs
-  have := h.2.2.2.2.2 x bi hbi; simp [this] at hp
+  have := h.2.2.2.2.2 x bi hbi; simp [isWordPrim, hp] at this
 
 theorem liftAll_skip {S : Prog} {toB : Std.HashMap ℕ ℕ} {w : Std.HashMap ℕ Bool} {pref suff : List ℕ}
     {cur : ℕ} {defs : Array Defn} {toL : Std.HashMap ℕ ℕ}
@@ -246,6 +246,8 @@ theorem placesAll_final {S : Prog} {d : ℕ} {seen : Std.HashSet ℕ} {todo : Ar
       ((seen.toArray.qsort fun x1 x2 => decide (x1 < x2)).toList ++ []).Nodup) :
     (∀ x, Reach S d x → isWordPrim (S.defs[x]!).prim (S.defs[x]!).key = true →
         S.bodyOf? (S.defs[x]!).key = some (toL[x]?.getD x)) ∧
+      (∀ x, Reach S d x → (S.defs[x]!).prim = true → isWordPrim (S.defs[x]!).prim (S.defs[x]!).key = false →
+        toL[x]?.getD x = x) ∧
       (∀ x, Reach S d x → (S.defs[x]!).prim = false → ¬ ReachesWord S x → toL[x]?.getD x = x) ∧
       ∀ x, Reach S d x → (S.defs[x]!).prim = false → ReachesWord S x → S.defs.size ≤ toL[x]?.getD x ∧
         ∃ fnOf primOf gatesOf, defs[toL[x]?.getD x]? = some (Flock.Lift.liftDef (S.defs[x]!) fnOf primOf gatesOf) ∧
@@ -255,10 +257,14 @@ theorem placesAll_final {S : Prog} {d : ℕ} {seen : Std.HashSet ℕ} {todo : Ar
   unfold LiftAll at hL
   unfold WordyAll at hW
   obtain ⟨⟨_, h2, h3, h4⟩, _⟩ := hL
-  refine ⟨fun x hr hw => ?_, fun x hr hp hn => ?_, fun x hr hp hrw => ?_⟩
+  refine ⟨fun x hr hw => ?_, fun x _ hp hw => ?_, fun x hr hp hn => ?_, fun x hr hp hrw => ?_⟩
   · obtain ⟨bi, hb, hbo⟩ := (hk.2.2.2.2.1 x (walk_reach hk hge hr)).2 hw
     have hpr : (S.defs[x]!).prim = true := by simp only [isWordPrim, Bool.and_eq_true] at hw; exact hw.1.1
     rw [h2 x hpr, hb]; exact hbo
+  · rw [h2 x hp]
+    cases hq : toB[x]? with
+    | none => rfl
+    | some bi => rw [hk.2.2.2.2.2 x bi hq] at hw; cases hw
   · cases hq : toL[x]? with
     | none => rfl
     | some e =>
@@ -274,6 +280,8 @@ theorem placesAll_final {S : Prog} {d : ℕ} {seen : Std.HashSet ℕ} {todo : Ar
 theorem closure_placesAll (S : Prog) (d : ℕ) :
     ⦃⌜True⌝⦄ Flock.Lift.closure S #[d] ⦃⇓? r => ⌜
       (∀ x, Reach S d x → isWordPrim (S.defs[x]!).prim (S.defs[x]!).key = true → S.bodyOf? (S.defs[x]!).key = some (r.2 x)) ∧
+      (∀ x, Reach S d x → (S.defs[x]!).prim = true → isWordPrim (S.defs[x]!).prim (S.defs[x]!).key = false →
+        r.2 x = x) ∧
       (∀ x, Reach S d x → (S.defs[x]!).prim = false → ¬ ReachesWord S x → r.2 x = x) ∧
       ∀ x, Reach S d x → (S.defs[x]!).prim = false → ReachesWord S x → S.defs.size ≤ r.2 x ∧
         ∃ fnOf primOf gatesOf, r.1.defs[r.2 x]? = some (Flock.Lift.liftDef (S.defs[x]!) fnOf primOf gatesOf) ∧
@@ -313,28 +321,27 @@ theorem prim_lt {P : Prog} {i : ℕ} (h : (P.defs[i]!).prim = true) : i < P.defs
 theorem wordPrim_lt {P : Prog} {i : ℕ} (h : isWordPrim (P.defs[i]!).prim (P.defs[i]!).key = true) : i < P.defs.size :=
   prim_lt (by simp only [isWordPrim, Bool.and_eq_true] at h; exact h.1.1)
 
-/-- A template of axis-0 batches over word primitives and earlier such templates reaches a word primitive, read in any
+/-- A template of batches over word primitives, gates and earlier such templates reaches a word primitive, read in any
 `S` that keeps `P`'s Definitions. -/
 theorem reachesWord_of_nested {P S : Prog} (hpre : ∀ i < P.defs.size, S.defs[i]! = P.defs[i]!) {y : ℕ}
-    (h : Batch0Nested P y) (hy : y < P.defs.size) : ReachesWord S y := by
+    (h : BatchNested P y) (hy : y < P.defs.size) : ReachesWord S y := by
   revert hy
   induction h with
-  | @mk d hp hne _ hlt _ ih =>
+  | @mk d hp _ hlt _ _ hex ih =>
     intro hy
-    have hmem := Array.getElem_mem hne
+    obtain ⟨nd, hmem, hc⟩ := hex
     have hpS : (S.defs[d]!).prim = false := by rw [hpre d hy]; exact hp
-    have hmemS : (P.defs[d]!).body.nodes[0] ∈ (S.defs[d]!).body.nodes := by rw [hpre d hy]; exact hmem
-    by_cases hw : isWordPrim (P.defs[((P.defs[d]!).body.nodes[0]).fn]!).prim
-        (P.defs[((P.defs[d]!).body.nodes[0]).fn]!).key = true
+    have hmemS : nd ∈ (S.defs[d]!).body.nodes := by rw [hpre d hy]; exact hmem
+    rcases hc with hc | hw
+    · exact .comp hpS hmemS (ih _ hmem hc (by have := hlt _ hmem hc; omega))
     · exact .comp hpS hmemS (.word (by rw [hpre _ (wordPrim_lt hw)]; exact hw))
-    · have hf : isWordPrim (P.defs[((P.defs[d]!).body.nodes[0]).fn]!).prim
-          (P.defs[((P.defs[d]!).body.nodes[0]).fn]!).key = false := by simpa using hw
-      exact .comp hpS hmemS (ih _ hmem hf (by have := hlt _ hmem hf; omega))
 
 /-- **`closure_placesAll` through `lift`**: the lift of `d` returns where its closure places `d`. -/
 theorem liftPlacesAll {S L : Prog} {d e : ℕ} (h : Flock.Lift.lift S d = .ok (L, e)) :
     ∃ pl : ℕ → ℕ, e = pl d ∧
       (∀ x, Reach S d x → isWordPrim (S.defs[x]!).prim (S.defs[x]!).key = true → S.bodyOf? (S.defs[x]!).key = some (pl x)) ∧
+      (∀ x, Reach S d x → (S.defs[x]!).prim = true → isWordPrim (S.defs[x]!).prim (S.defs[x]!).key = false →
+        pl x = x) ∧
       (∀ x, Reach S d x → (S.defs[x]!).prim = false → ¬ ReachesWord S x → pl x = x) ∧
       ∀ x, Reach S d x → (S.defs[x]!).prim = false → ReachesWord S x → S.defs.size ≤ pl x ∧
         ∃ fnOf primOf gatesOf, L.defs[pl x]? = some (Flock.Lift.liftDef (S.defs[x]!) fnOf primOf gatesOf) ∧

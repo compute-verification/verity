@@ -192,7 +192,7 @@ def combine? (T : Tile) : Except String (List Port) := do
 /-! ## A J10-R leaf
 
 A sampled proof block over J10-R's `PouwH1Tile_v5` is proved as `h1zy`'s v2 statements: each lane in `n` chunks along K
-(`PouwH1LaneZyChunk_v2`, `n = weights.chunks K`, `PouwCheck.Chunks.chunks`, which the caller passes; at `n = 1` the whole
+(`PouwH1LaneZyChunk_v2`, `n = weights.chunks K`, `PouwVerifier.Chunks.chunks`, which the caller passes; at `n = 1` the whole
 lane, `PouwH1LaneZy_v2`), then `PouwH1Combine_v2`, which folds the other statements' oks into its own. Statement `i < lanes n`
 is lane `i / n`'s chunk `i % n`; `leaf_lanes`' J10-R leaf reads them so:
 

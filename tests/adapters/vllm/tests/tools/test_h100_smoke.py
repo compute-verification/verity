@@ -13,7 +13,13 @@ import subprocess
 import sys
 from pathlib import Path
 
+import input_datasets
+
+from verity_vllm.inputs import serves
+
 ROOT = Path(__file__).resolve().parents[5]
+S = serves.SERVES
+DATASET = serves.application(str(ROOT / "applications/remote.toml"))[0]
 SMOKE = Path("adapters/vllm/tools/served_run/h100_smoke.sh")
 VERDICTS = ROOT / "benchmarks/one_stage/served_verdicts.sh"
 #: the script's ``PYTHONPATH`` (its ``$TREE`` entries) holds these, linked to the real ones, so its own blocks import the
@@ -98,14 +104,15 @@ def test_the_serve_follows_the_statement_and_the_load_is_the_dataset_through_the
     args = serve["argv"][1:]
     assert [opt(args, k) for k in ("--model", "--revision", "--precision", "--window-class", "--max-num-seqs",
                                    "--max-model-len", "--window-steps", "--window-requests")] == \
-        ["unsloth/Llama-3.2-1B", "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "bfloat16", "4,27,2", "4", "29", "2", "4"]
+        [S.model, S.revision, S.precision, S.window_class, str(S.slots), str(S.prompt + S.outputs), str(S.outputs), str(S.slots)]
     assert "--protocols" not in args and "--scheme" not in args
     assert serve["config"] == {"network-attester": {"order": "release-order"}}
     assert load[:2] == ["adapters/vllm/tools/served_run/inputs.py", "send"]
-    assert [opt(load, k) for k in ("--dataset", "--timing")] == ["llama32_1b_fixed_4_27_2", "at-once"]
+    assert [opt(load, k) for k in ("--dataset", "--timing")] == [DATASET, "at-once"]
     assert re.fullmatch(r"[0-9a-f]{32}", opt(load, "--release")), load
-    assert opt(commit, "--class") == "4,27,2"
-    assert re.search(r"^DOOR llama32_1b_fixed_4_27_2: 4 records the class 4,27,2 takes; identity generated:", p.stdout, re.M)
+    assert opt(commit, "--class") == S.window_class
+    n = len(input_datasets.open(DATASET))
+    assert re.search(rf"^DOOR {DATASET}: {n} records the class {S.window_class} takes; identity generated:", p.stdout, re.M)
     assert "1,24,4" not in (ROOT / SMOKE).read_text() and ".tie" not in (ROOT / SMOKE).read_text()
 
 
@@ -122,8 +129,8 @@ def test_the_dataset_its_timing_and_the_class_are_the_applications(tmp_path):
     p, calls = run_dry(tmp_path / "rate", APPLICATION=application(tmp_path / "rate", timing="rate:2"))
     assert p.returncode == 0, p.stdout[-2000:] + p.stderr[-2000:]
     serve, load, _ = served(calls, p.stdout)
-    assert [opt(load, k) for k in ("--dataset", "--timing")] == ["llama32_1b_fixed_4_27_2", "rate:2"]
-    assert opt(serve["argv"][1:], "--window-class") == "4,27,2"
+    assert [opt(load, k) for k in ("--dataset", "--timing")] == [DATASET, "rate:2"]
+    assert opt(serve["argv"][1:], "--window-class") == S.window_class
     p, calls = run_dry(tmp_path / "wipe", WIPE_CMD="true")
     assert p.returncode == 3 and "SMOKE REFUSED application: WIPE_CMD is set" in p.stdout, p.stdout + p.stderr
     assert not any(c["argv"][1:2] == ["serve-openai"] for c in calls)
@@ -133,8 +140,9 @@ def test_a_dataset_the_door_refuses_and_a_class_past_the_engines_step_are_refuse
     p, calls = run_dry(tmp_path / "unknown", APPLICATION=application(tmp_path / "unknown", dataset="no_such_dataset"))
     assert p.returncode == 3 and "SMOKE REFUSED dataset: REFUSED unknown-dataset" in p.stdout, p.stdout + p.stderr
     assert not any(c["argv"][1:2] == ["serve-openai"] for c in calls)
-    p, calls = run_dry(tmp_path / "narrow", MNBT="64")
-    assert p.returncode == 3 and "SMOKE REFUSED class" in p.stdout and "past the engine's 64 a step" in p.stdout, p.stdout
+    narrow = S.slots * S.prompt - 1
+    p, calls = run_dry(tmp_path / "narrow", MNBT=str(narrow))
+    assert p.returncode == 3 and "SMOKE REFUSED class" in p.stdout and f"past the engine's {narrow} a step" in p.stdout, p.stdout
     assert not any(c["argv"][1:2] == ["serve-openai"] for c in calls)
 
 
@@ -143,7 +151,7 @@ def test_the_window_commit_is_the_applications_launchers_entry_off_the_card(tmp_
     assert p.returncode == 0, p.stdout[-2000:] + p.stderr[-2000:]
     _, _, commit = served(calls, p.stdout)
     assert commit[0] == "window-commit"
-    assert [opt(commit, k) for k in ("--window", "--class", "--sampling-design")] == ["0", "4,27,2", "rate:1/3481648"]
+    assert [opt(commit, k) for k in ("--window", "--class", "--sampling-design")] == ["0", S.window_class, "rate:1/3481648"]
     assert "rate:" not in p.stdout and "(the registered sampling design)" in p.stdout, p.stdout
     script = (ROOT / SMOKE).read_text()
     done = next(x for x in script.splitlines() if '"SMOKE DONE' in x)
@@ -181,9 +189,19 @@ def test_the_serve_makes_each_windows_record_as_window_commit_does_unless_record
     assert "--sampling-design" not in served(calls, p.stdout)[0]["argv"]
 
 
+def test_the_development_design_is_refused_by_name_on_a_class_other_than_the_one_its_default_law_draws_from(tmp_path):
+    p, _ = run_dry(tmp_path / "default", DEVELOPMENT_DESIGN="1")
+    if S.window_class == "4,27,2":
+        assert p.returncode == 0, p.stdout[-2000:] + p.stderr[-2000:]
+    else:
+        assert p.returncode == 3 and "SMOKE REFUSED class: DEV_LAW draws 4 of class 4,27,2's proof blocks" in p.stdout, p.stdout
+    p, _ = run_dry(tmp_path / "given", DEVELOPMENT_DESIGN="1", LAW="rate:4/100")
+    assert p.returncode == 0, p.stdout[-2000:] + p.stderr[-2000:]
+
+
 def test_the_launcher_refuses_the_retired_tie_and_scheme_by_name(tmp_path):
-    for var, value in (("PEARLPLUS_TIE", "1"), ("SCHEME", "pearl-plus"), ("CLASS", "4,27,2"),
-                       ("DATASET", "llama32_1b_fixed_4_27_2")):
+    for var, value in (("PEARLPLUS_TIE", "1"), ("SCHEME", "pearl-plus"), ("CLASS", S.window_class),
+                       ("DATASET", DATASET)):
         env = {"PATH": os.environ["PATH"], "HOME": str(tmp_path), "DRY": "1", var: value}
         p = subprocess.run(["bash", str(ROOT / SMOKE)], env=env, capture_output=True, text=True)
         assert p.returncode == 3 and f"h100_smoke.sh: {var} is retired" in p.stderr, p.stdout + p.stderr
