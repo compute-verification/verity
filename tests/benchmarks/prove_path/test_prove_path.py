@@ -1336,6 +1336,73 @@ def test_the_weights_registration_is_also_the_first_record_of_the_serves_registr
         WW.deployment_record({"schema": "other"})
 
 
+@pytest.mark.slow
+def test_the_weights_registration_declares_the_reads_of_its_planned_class(tmp_path, capsys, monkeypatch):
+    """About a minute and a half: the walk needs a class circuit's whole marked Program, the smallest that reads every
+    weight, which no cheaper test builds. ``weights-registration --class C --of-record FILE`` plans C's class circuit before it writes the registration: its
+    ``reads`` are every (template, parameter, value) at which the verifier's walk of C's marked Program reads a rooted
+    weight (`partition.input_reads` over `registered.held_gates`), sorted, once each, and FILE is the registration of
+    record ``{program, values, reads}`` in canonical JSON, whose SHA-512 the command says. The check passes it, and
+    refuses one without its reads, or with one read removed, `R8-undeclared`, naming each read it lacks."""
+    import functools
+
+    import numpy as np
+    from verity.circuits.partition_object import template_instances_query
+    from verity.protocols.proof.spot.verifier.one_stage import partition as SP
+    from verity.protocols.proof.spot.verifier.one_stage import registered as SR
+
+    from verity_vllm.program import model as M
+    from verity_vllm.program.predict import window_circuit as WC
+    from verity_vllm.program.predict import window_weights as WW
+    from verity_vllm.program.predict.scan_state import SCAN_STATE
+    from verity_vllm.program.predict.window_weights import Grain
+
+    grain = Grain(gemm_words=512, rows=18, select=64)
+    monkeypatch.setattr(WW, "weights_registration", functools.partial(WW.weights_registration, grain=grain))
+    monkeypatch.setattr(WC, "class_circuit", functools.partial(WC.class_circuit, grain=grain))
+    run, hf, ck = tmp_path / "serve", tmp_path / "tiny.json", tmp_path / "ck" / "snap"
+    (run / "private").mkdir(parents=True)
+    serve = {"model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "default_seed": DEFAULT_SEED,
+             "execution": "bi-eager", "target": {"compute_capability": [12, 0], "num_sms": 188}}
+    (run / "serve.json").write_text(json.dumps(serve))
+    hf.write_text(json.dumps(TINY))
+    man = _tiny_checkpoint(ck, serve["model"], serve["revision"])
+    registered = PP.registered_of_serve(serve, str(hf), None, PP.CAP_BITS)
+    record = WW.weights_record(registered, str(ck), str(man), grain=grain)
+    np.save(run / "private" / "cos_sin_cache.npy",
+            M.cos_sin_table(next(f for f in record["fields"] if f.get("pinned") == "analytic")["analytic"]["C"]))
+    out, wor = tmp_path / "weights_registration.json", tmp_path / "weights_of_record.json"
+    planned: list = []
+
+    def spy(plans, values):
+        planned.extend(plans)
+        return walked(plans, values)
+
+    walked = PP.declared_reads
+    monkeypatch.setattr(PP, "declared_reads", spy)
+    capsys.readouterr()
+    assert PP.main(["weights-registration", "--serve-run", str(run), "--checkpoint-dir", str(ck), "--checkpoints", str(man),
+                    "--hf-config", str(hf), "--out", str(out), "--class", "1,2,2", "--of-record", str(wor)]) == 0
+    reg, said, body = json.loads(out.read_text()), json.loads(capsys.readouterr().out), wor.read_bytes()
+    (program, query), = planned
+    assert query == template_instances_query([t for t, _ in WC.class_circuit(registered, WC.WindowClass(1, 2, 2)).templates])
+    held = {g: v for v in reg["values"] for g in SR.held_gates(program, [v])}
+    walk = {(t, p, held[g]) for t, p, g in SP.input_reads(program, query, held)}
+    assert reg["unrooted"] == {} and {v for *_, v in walk} == {v for v in reg["values"] if not v.endswith("/table")}
+    assert reg["reads"] == [list(r) for r in sorted(walk)] and said["reads"] == len(walk)
+    assert body == canonical_json({"program": reg["program"], "values": reg["values"], "reads": reg["reads"]})
+    assert said["of_record"] == hashlib.sha512(body).hexdigest()
+
+    def refusals(doc: bytes) -> list:
+        return R.weights_held(program, query, [SCAN_STATE], (doc, hashlib.sha512(doc).hexdigest()))[0]
+
+    assert refusals(body) == []
+    for reads in ([], reg["reads"][1:]):
+        (why, got), = refusals(canonical_json({"program": reg["program"], "values": reg["values"],
+                                                **({"reads": reads} if reads else {})}))
+        assert why == "R8-undeclared" and got == {"undeclared": [r for r in reg["reads"] if r not in reads], "unread": []}
+
+
 def test_an_int8_served_runs_weights_registration_roots_its_scales_fused_linears_and_tied_embedding(tmp_path, capsys, monkeypatch):
     """The int8 Llama-3.2-1B is an exact-int8 checkpoint (`engine.int8_checkpoint`'s v1: each decoder linear an s8 weight and an f32
     row scale, the embedding bf16 and tied to the LM head), served under a target whose ``int8_exact`` is ``linears``, and

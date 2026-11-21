@@ -602,25 +602,30 @@ case $COMPOSE_OFF_NODE in 0 | 1) ;; *) say "PREFLIGHT: COMPOSE_OFF_NODE is 1 (th
 CKPT=${CKPT:-$HF_HOME/hub/models--${REPO//\//--}/snapshots/$REV} WREG=$D/weights_registration.json
 # the serve's first registration record: the weights registration as a record of the log, which Pearl+'s W is chained after
 DREG=$D/deployment-registration.json
+# the weights' registration of record the verifier's check reads: {program, values, reads}, the reads planned from V3C's class
+WOR=$D/weights_of_record.json
 NO_WEIGHTS="NO WEIGHTS REGISTRATION: no window registers a weight's root, so every weight read counts free"
 weights() {  # under the lease (its commit hashes on the leased GPU), before the first request: the committer's registration
+  local plan=(--class "$V3C")
+  [ -z "$PEARLPLUS_TIE" ] || plan+=(--pearl-tables "${PEARLPLUS_ARM#pouw:}")
   (cd "$TREE" && "$PY" benchmarks/prove_path/prove_path.py weights-registration --serve-run "$D" --checkpoint-dir "$CKPT" \
-    --out "$WREG" --deployment-record "$DREG") > "$LOGS/weights_registration.txt" 2>&1
+    --out "$WREG" --deployment-record "$DREG" --of-record "$WOR" "${plan[@]}") > "$LOGS/weights_registration.txt" 2>&1
   local rc=$? log=$LOGS/weights_registration.txt
   grep -o '"deployment": "[0-9a-f]\{128\}"' "$log" | tail -1 > "$OUT/weights_registration.txt"
   if [ "$rc" != 0 ] || [ ! -f "$WREG" ]; then
-    rm -f "$DREG"
+    rm -f "$DREG" "$WOR"
     say "$NO_WEIGHTS (weights-registration $(failed "$rc" "$log"))"
     return
   fi
-  cp "$WREG" "$OUT/"
+  cp "$WREG" "$WOR" "$OUT/"
   say "WEIGHTS $("$PY" - "$WREG" <<'EOF'
 import json, sys
 r = json.load(open(sys.argv[1]))
 v, u = r["values"], r["unrooted"]
 print(f"registered before the first request: {len(v)} weight parameters rooted ({sum(e['words'] * e['leaves'] for e in v.values()) * 16} "
       f"bits) of {r['model']['repo']}@{r['model']['revision'][:10]} under the committer's key (kept off every record); "
-      f"{len(u)} unrooted" + "".join(f"; {p}: {why}" for p, why in sorted(u.items())))
+      f"{len(u)} unrooted" + "".join(f"; {p}: {why}" for p, why in sorted(u.items())) +
+      f"; {len(r.get('reads', ()))} reads declared, planned from the class circuit (no proof is made, and Lean verifies nothing)")
 EOF
 )"
   [ -s "$DREG" ] || return 0
