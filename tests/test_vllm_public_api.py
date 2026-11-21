@@ -134,6 +134,8 @@ PUBLIC = {
                                                 "block's fresh bits), which benchmarks/inference_only prices",
     "verity_vllm.program.predict.window_weights": "I7: the window circuit's weights, the committer's registration and the "
                                                   "verifier's pins of it",
+    "verity_vllm.program.predict.close_record": "I7: a deployment's registration, written once before its first epoch "
+                                                "(register, its file names), and a sealed window's record at its close",
     "verity_vllm.pipeline.expert_tables": "I7: the per-expert cut's tables, their layout and record, the committer's "
                                           "registration of a TP rank's and the verifier's pin of it (tp-register-tables)",
     "verity_vllm.commit.history_tables": "I7: the committer's history tables of DSA's long rows by table reads, one a "
