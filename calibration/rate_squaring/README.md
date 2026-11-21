@@ -12,7 +12,8 @@ scales it to the card's highest clock reading and adds the host's rate once, and
 established variant) and
 so for the stated ceiling C_sq (`timing.Figures.squarings_per_s`), the `s` of
 the named assumption `ResourceAccounting.Remote.Held.Assumptions.SquaringCeiling`, which `ResourceAccounting.Guarantees.Remote.Held`
-and `HeldOverTime` take.
+and `HeldOverTime` take. The handed rate comes from a modelled variant and is above every timed one, so the rebuild
+share it gives is a bound from above, not a measurement.
 
 ## Try it
 
