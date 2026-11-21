@@ -353,8 +353,7 @@ def test_under_a_subset_design_the_strata_need_only_cover_the_units():
     strata = P.strata(program, QUERY)
     assert [(t, [tuple(r) for r in rs]) for t, rs in strata] == [(PAIR.id, [(0, 2), (5, 7)]), (TRIPLE.id, [(2, 5)])]
     assert not P.in_order(program, QUERY, 7) and P.covers(program, QUERY, 7) and not P.covers(program, QUERY, 6)
-    slice_ = {"population": 3, "roots": [{"domain": ROOTS[B][1], "leaves": 4, "port": "out", "root": ROOTS[B][0]},
-                                         tree_entry(B)], "scheme": SCHEME}
+    slice_ = slices(UNITS, RECORD)[B]
     assert M.population_why(UNITS[B], strata, header(B), slice_, subset=True) is None
     assert M.population_why(UNITS[B], strata, header(B), slice_) == M.MEMBER_STRATA
     assert M.population_why(UNITS[B], strata, "no header", slice_, subset=True) == M.MEMBER_UNITS
