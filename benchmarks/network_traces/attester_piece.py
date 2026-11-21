@@ -5,7 +5,6 @@ the active network attester in front of serve-openai there (its ``CERTIFIER_FRON
         [--prompts 4] [--prompt-ids 24] [--tokens 4] [--vocab 128000] [--scan-class w63k4] [--height 10]
         [--minutes M] [--bucket-ms MS] [--warmup N]
     python attester_piece.py piece SERVE_DIR WINDOW DIR
-    python attester_piece.py chain|period SERVE_DIR WINDOW DIR V3C
     python attester_piece.py relay --listen PORT --to PORT
     python attester_piece.py front PORT SERVE_DIR OUT --peer NAME --session --client-port PORT --windows N
         --gate ... [--key KEY] [--scan-class w63k4] [--height H] [--minutes M] [--bucket-ms MS]
@@ -38,9 +37,8 @@ the active network attester in front of serve-openai there (its ``CERTIFIER_FRON
   tree's gate in this process, a `relay` to PORT its tunnel): a network attester on the developer's node is no auditor's device,
   so it never stands for the gate.
   Exit as `served_session.session`'s.
-* **piece**, **chain** and **period** (``CERTIFIER_CMD``, or the split's ``CERTIFIER_CHAIN_CMD`` and
-  ``CERTIFIER_PERIOD_CMD``) write DIR/`REFUSED` naming `NOT_RUN` and exit 3, before anything else, and the served
-  window reads the network audit as pending. The attester's rows and its Lean program are checked by their own
+* **piece** (``CERTIFIER_CMD``) writes DIR/`REFUSED` naming `NOT_RUN` and exits 3, before anything else, and the
+  served window reads the network audit as pending. The attester's rows and its Lean program are checked by their own
   programs, not here.
 * **relay**: a TCP relay from 127.0.0.1:``--listen`` to 127.0.0.1:``--to``, the local gate's tunnel.
 * **front --session** and **close** put the gate's relay session (`auditor.py`'s "A relay session") around the served
@@ -514,7 +512,7 @@ def refuse(d: Path, why: str) -> int:
 
 
 def not_run(a: argparse.Namespace) -> int:
-    """**piece**, **chain** and **period**: DIR/`REFUSED` naming `NOT_RUN`, before any step runs."""
+    """**piece**: DIR/`REFUSED` naming `NOT_RUN`, before any step runs."""
     d = a.dir.resolve()
     d.mkdir(parents=True, exist_ok=True)
     return refuse(d, NOT_RUN)
@@ -548,13 +546,10 @@ def parser() -> argparse.ArgumentParser:
     f.add_argument("--client-port", type=int, metavar="PORT",
                    help="with --session: the port of the peer's loopback the load's clients connect to")
     f.add_argument("--windows", type=int, metavar="N", help="with --session: its length, in execution phases")
-    for name in ("piece", "chain", "period"):
-        q = sub.add_parser(name)
-        q.add_argument("serve_dir", type=Path)
-        q.add_argument("window", type=int)
-        q.add_argument("dir", type=Path)
-        if name != "piece":
-            q.add_argument("v3c", type=Path, help="V3c's directory: window/ (window-commit's) and period.json")
+    q = sub.add_parser("piece")
+    q.add_argument("serve_dir", type=Path)
+    q.add_argument("window", type=int)
+    q.add_argument("dir", type=Path)
     r = sub.add_parser("relay")
     r.add_argument("--listen", type=int, required=True, action="append")
     r.add_argument("--to", type=int, required=True, action="append")
@@ -573,7 +568,7 @@ def main(argv: list[str] | None = None) -> int:
     a = parser().parse_args(argv)
     if a.cmd == "front":
         return front(a)
-    if a.cmd in ("piece", "chain", "period"):
+    if a.cmd == "piece":
         return not_run(a)
     if a.cmd == "close":
         return close(a)

@@ -114,8 +114,7 @@ listens, the caller's command (`LOAD_CMD`, given the session's `relay.json` and 
 client address that file names, and `close` (`CERTIFIER_CLOSE`) waits for the session's end and keeps its fetch where a
 rehearsal's is. The runner refuses a session without all three, and under any other `LOAD` each of them. A session's
 records cover the connections that crossed the relay; that no other route reaches the endpoint is the placement's.
-Its `piece` (`CERTIFIER_CMD`), and the split's `chain` and `period` around V3c (`CERTIFIER_CHAIN_CMD` and
-`CERTIFIER_PERIOD_CMD`), write `refused.txt` with the one text (`NOT_RUN`) and exit 3 before any step runs, and the
+Its `piece` (`CERTIFIER_CMD`) writes `refused.txt` with the one text (`NOT_RUN`) and exits 3 before any step runs, and the
 served window reads the network audit as pending: never an accept, and never a reject. The attester launches and serves;
 its rows and its Lean program are checked by their own programs (`network-rows`, the network verifier's suites).
 `kind_scan.py DIR` reads a piece's files field by field and reports each one that is of none of the four public kinds
