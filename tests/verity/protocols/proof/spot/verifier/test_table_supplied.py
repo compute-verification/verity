@@ -9,8 +9,10 @@ import hashlib
 import json
 
 import numpy as np
+import pytest
 
 from verity.circuits.codec import descriptor_id, program_digest
+from verity.circuits.evaluation.batch import evaluate_batch
 from verity.commitments import registered_value as RV
 from verity.commitments import row_table as RT
 from verity.commitments.gates import embedding as E
@@ -117,3 +119,50 @@ def test_a_tables_root_and_domain_marks_give_the_rows_the_record_commits():
         assert leaves == G.digest_leaves(want) and words == I.digest_words(want) == list(committed[name].rows[0]), of
         mine = RV.Registered.commit(prog, name, [words], RV.supplied_salts(prog, name, 1), schema=V2)
         assert mine.root == committed[name].root and mine.entry() == committed[name].entry(), of
+
+
+def _anchor(rec: dict, of: str, value: str) -> list[int]:
+    """The leaves `registered.<of>/v1` of ``value`` gives a `Digest` port, read off ``rec``."""
+    mark = {"supplied": f"registered.{of}/v1", "args": {"value": value}, "layout": "digest", "bits": 512}
+    (row,) = G.of_mark({}, {}, f"{value}/{of}", mark)
+    return G.row_leaves_of(row, lambda k, n: G._source_bytes(rec, f"{value}/{of}", k, n, [], [], None), 1, True)
+
+
+def _opened(table: Table, tok: int, cases: list[tuple[list[int], list[int], list[int]]]) -> list[tuple[list[int], int]]:
+    """`embedding.opening(4, 16)` at ``tok`` on each ``(root, domain, row)`` leaves, the salt and path ``tok``'s: (h, ok)."""
+    args = E.arguments(4, tok, table.tree.root, table.dom.domain_id, table.rows[tok].tolist(), table.salts[tok], table.path(tok))
+    got = evaluate_batch(E.opening(4, 16), np.array([[tok]] * len(cases), dtype=object),
+                         *(np.array([c[k] for c in cases], dtype=object) for k in range(3)),
+                         *(np.array([args[k]] * len(cases), dtype=object) for k in (4, 5)))
+    return [([int(w) for w in g[:16]], int(g[16])) for g in np.asarray(got).reshape(len(cases), -1)]
+
+
+def _anchored() -> tuple[Table, dict, int, list[int]]:
+    table = Table()
+    rec = {"registered": [table.entry(), {"value": "other", "root": "11" * 64, "domain": "22" * 64}]}
+    tok = 2
+    return table, rec, tok, [(int(w) >> j) & 1 for w in table.rows[tok].tolist() for j in range(16)]
+
+
+@pytest.mark.slow
+def test_a_tables_anchors_from_their_supplied_rows_open_its_honest_row_and_not_under_a_swapped_domain():
+    """The opening (`embedding.opening`) evaluated with its root and domain ports the leaves the table's
+    `registered.root/v1` and `registered.domain/v1` marks give: an honest row opens, ``ok`` 1 and the row its own; the
+    same read with the domain swapped for another value's is ``ok`` 0. Slow (a minute or two tracing the opening's
+    Merkle path): only an evaluation holds the supplied anchors to what the opening's circuit expects as root and domain."""
+    table, rec, tok, row = _anchored()
+    root, domain = _anchor(rec, "root", "embed"), _anchor(rec, "domain", "embed")
+    got = _opened(table, tok, [(root, domain, row), (root, _anchor(rec, "domain", "other"), row)])
+    assert [ok for _, ok in got] == [1, 0] and got[0][0] == table.rows[tok].tolist()
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(descriptor_id(E.opening(4, 16)).startswith("EmbeddingRead_v3"),
+                    reason="the opening gates its row on ok from EmbeddingRead_v4")
+def test_an_in_range_token_with_a_wrong_row_reads_the_fill_row_and_ok_0():
+    """At an in-range token a row other than the table's, under the supplied anchors, gives the fill row and ``ok`` 0.
+    Slow as the test above, whose opening it evaluates."""
+    table, rec, tok, row = _anchored()
+    row[0] ^= 1
+    got = _opened(table, tok, [(_anchor(rec, "root", "embed"), _anchor(rec, "domain", "embed"), row)])
+    assert got == [([E.FILL] * 16, 0)]
