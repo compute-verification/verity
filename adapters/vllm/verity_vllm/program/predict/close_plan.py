@@ -199,6 +199,8 @@ class Options:
 def main(a: Options) -> int:
     from dataclasses import asdict
 
+    from verity_vllm.inputs.serves import window_class_parts
+
     from .window_class import WindowClass
 
     if a.parse_only:
@@ -206,7 +208,7 @@ def main(a: Options) -> int:
         return 0
     rec = Record(a.sampling_design, a.checkpoint_dir, a.serve_run / "private" / "salt_stream", checkpoints=a.checkpoints,
                  cap=a.cap, workers=a.workers, sample=a.twin_ports, development=a.development_design)
-    out = finish(a.serve_run, a.window, rec, WindowClass(*(int(x) for x in a.cls.split(","))))
+    out = finish(a.serve_run, a.window, rec, WindowClass(*window_class_parts(a.cls)))
     a.out.write_text(json.dumps(out) + "\n")
     sys.stderr.write("WINDOW-RECORD " + json.dumps({"window": a.window, **out}) + "\n")
     return 0
