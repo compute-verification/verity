@@ -663,6 +663,17 @@ def door_circuit(c: bytes, part: dict, k: int, st_dir: Path, lower: Path,
     return circuit, {"pin": circ.pin, "class_sha512": circ.cls}, circ
 
 
+#: members between two of staging's ``PROGRESS`` lines
+PROGRESS_EVERY = 50
+
+
+def progress(phase: str, t0: float, **kw: Any) -> None:
+    """A ``PROGRESS`` line on stderr, flushed: ``phase``, the seconds since ``t0`` and ``kw``; stdout's lines are the
+    audit's answer, which its callers read by their last line."""
+    print("PROGRESS " + json.dumps({"phase": phase, "s": round(time.time() - t0, 1), **kw}, sort_keys=True, default=str),
+          file=sys.stderr, flush=True)
+
+
 #: The start of the window's refusal before any coin at the first member the door refuses (`audit`'s ``door``).
 DOOR_REFUSES = "the door refuses member"
 
@@ -912,6 +923,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     (`a5_coins.start`'s, which the caller holds), ended before a negative's worker is forked (`session_ended`); None
     where the caller hands none, and its thread is then one more the workers' fork refuses while it lives."""
     out.mkdir(parents=True, exist_ok=True)
+    t_audit = time.time()
     program, query, part, pd, n_all, sampling_design = mine.program, mine.query, mine.partition, mine.partition_digest, mine.population, mine.law
     table = mine.work_table
     if (why := plain_refusal(a, mine, registered)) is not None:
@@ -945,7 +957,9 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     # file and the circuit's link only for a sampled member, after the sample (`stage`)
     files = (json.loads((served / "window.json").read_text()), rec)
     roots = {r["port"]: r for r in rec["roots"]}
+    progress("written", t_audit, members=len(mine.members), population=n_all)
     form = member_form(mine, rec)
+    progress("member-form", t_audit, members=len(mine.members), why=form if isinstance(form, str) else None)
     members, publics, checks, composed, programs_ok, kept, read, makes = [], {}, {}, {}, {}, {}, set(), {}
     door = getattr(a, "door_lower", None)
     c_bytes = b"".join(descriptor_chunks(program)) if door else b""
@@ -980,12 +994,17 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         tmpl: dict = {}
         if door:
             try:
-                cut = OC.cuts(c_bytes, part, decoded) if cut is None else cut
+                if cut is None:
+                    cut = OC.cuts(c_bytes, part, decoded)
+                    progress("cuts", t_audit, templates=len(cut))
                 # the door lowers a block to a templated circuit, whose unit rows both sides read
                 circuit, made, circ, tmpl = door_class(c_bytes, part, k, st_dir, door, decoded, cut, m.template, classes,
                                                        getattr(a, "tmpl_unit_bin", None))
             except (OC.Refused, OC.NotDerived) as e:
                 return door_refused(k, m, getattr(e, "code", type(e).__name__), f"{type(e).__name__}: {e}")
+            if circuit.parent == st_dir:
+                progress("class", t_audit, member=k, template=m.template, units=m.n, seconds=round(time.time() - t, 1),
+                         classes=len(classes))
         elif m.template in composed:      # a template's members: one circuit, composed from the same input set, partition and program
             circuit, made, circ = composed[m.template]
         elif own:
@@ -1050,15 +1069,19 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                                "program_file": out / "program.json",
                                "public": a0.sha512_file(st_dir / f"pub-{m.n}.bin"), **tmpl},
                         "compose_s": compose_s, "pin": made["pin"], "class": made.get("class_sha512")})
+        if (k + 1) % PROGRESS_EVERY == 0:
+            progress("staging", t_audit, staged=k + 1, members=len(mine.members))
     # staging composes the circuits and writes the members' files on the host: it starts nothing on a card
     summary["staging"] = {"before_draw_s": round(time.time() - t_stage, 1), "public_files": len(members), "gpus": 0,
                           **({"door_classes": len(classes)} if door else {})}
+    progress("staged", t_audit, staged=len(members), classes=len(classes) if door else None)
     summary["link_points"] = link_points(sampled_design, n_all, members)
     leaf_layer = CS.leaf_layer(publics)
     hist = history(publics) if history is not None else None
     checks["registration"] = V.check(rec, program, query, sampling_design, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table,
                                      partition=part, history=hist, members=link_members(members) if per_member(members, not plain(a)) else (),
                                      **verifying(a), **declared(a)).to_json()
+    progress("registration", t_audit, ok=checks["registration"].get("ok"))
     if mine.row_tables:
         bad = TB.check_row_tables(mine, publics, {r["port"]: r["root"] for r in rec["roots"]}, step_roots)
         checks["row_tables"] = {"ok": not bad, "codes": sorted(bad), "detail": bad}
@@ -1133,6 +1156,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         union_sample, sampled_design, receipt = dict(draw.draw), dict(draw.law), dict(draw.docket.receipt)
         (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
     (out / SAMPLE_FILE).write_text(json.dumps(union_sample, sort_keys=True))
+    progress("draw", t_audit, units=len(union_sample.get("units") or ()))
     after: dict[str, dict] = {}
     served_units, proved, instances, verdicts, statement, sessions, counts, session_roots = [], [], 0, {}, {}, [], {}, {}
     proving: dict[str, dict] = {}   # by member key, what the summary's timing adds to its statement (`proving_of`)

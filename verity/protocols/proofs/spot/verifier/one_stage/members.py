@@ -743,6 +743,29 @@ def _wire_reaches(ranges: Sequence[Sequence[Any]], lbase: Sequence[int], first: 
                for j, (_k, t, a, c) in enumerate(ranges))
 
 
+def _reaching(ranges: Sequence[Sequence[Any]], lbase: Sequence[int],
+              wires: Sequence[Mapping[str, Any]]) -> Callable[[int, int], list[Mapping[str, Any]]]:
+    """``(first, n) ->`` the wires of ``wires``, in their order, that `_wire_reaches` the member of units ``first`` to
+    ``first + n``, for ``n >= 1``: the partition's ranges are disjoint and ascending (`TemplatePartition`), so at most one
+    nonempty range holds the member, found by bisection, and only wires its template reads can reach it."""
+    held = [(a, j) for j, (_k, _t, a, c) in enumerate(ranges) if c]
+    starts = [a for a, _ in held]
+    by_reader: dict[str, list[Mapping[str, Any]]] = {}
+    for w in wires:
+        by_reader.setdefault(w["reader"], []).append(w)
+
+    def reach(first: int, n: int) -> list[Mapping[str, Any]]:
+        i = bisect.bisect_right(starts, first) - 1
+        if i < 0:
+            return []
+        j = held[i][1]
+        _k, t, a, c = ranges[j]
+        if not first + n <= a + c:
+            return []
+        return [w for w in by_reader.get(t, ()) if _wire_reaches([ranges[j]], [lbase[j]], first, n, w)]
+    return reach
+
+
 def _wired_roots(desc: Mapping[str, Any], ranges: Sequence[Sequence[Any]], ms: Mapping[str, Any],
                  ft: Mapping[str, Sequence[tuple[str, Mapping[str, Any]]]],
                  roots: dict[str, list[dict[str, Any]]]) -> dict[str, list[dict[str, Any]]]:
@@ -759,16 +782,17 @@ def _wired_roots(desc: Mapping[str, Any], ranges: Sequence[Sequence[Any]], ms: M
     if "refusal" in got:
         raise Outside(f"C's wiring: {got['refusal']}")
     lbase = _local_bases(ranges)
+    reach = _reaching(ranges, lbase, got["wires"])
     out = {}
     for name, m in ms.items():
         first, n = m["units"][0][0], _count(m)
         own = roots.get(name, [])
-        if (w := next((w for w in got["wires"] if _wire_reaches(ranges, lbase, first, n, w)
-                       and any(r.get("port") == w["port"] for r in own)), None)):
+        wires = reach(first, n) if n >= 1 else [w for w in got["wires"] if _wire_reaches(ranges, lbase, first, n, w)]
+        if (w := next((w for w in wires if any(r.get("port") == w["port"] for r in own)), None)):
             raise _Refused(own_root_why(name, w["port"]))
         mine = list(own)
-        for w in got["wires"]:
-            if _wire_reaches(ranges, lbase, first, n, w) and not any(r.get("port") == w["port"] for r in mine):
+        for w in wires:
+            if not any(r.get("port") == w["port"] for r in mine):
                 e = next((e for f, e in ft.get(w["writer"], ()) if f == w["out"]), None)
                 if e is not None:
                     mine.append({"domain": e.get("domain"), "leaves": e.get("leaves"), "port": w["port"],

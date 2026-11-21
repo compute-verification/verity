@@ -1109,6 +1109,7 @@ def audit(a: argparse.Namespace) -> int:
     a.compose_cache = a.compose_cache or str(out / "compose-cache")
     try:
         mine, doc, sets = verifier_window(wdir, a.sampling_design, Path(a.template_sets) if a.template_sets else None)
+        A5.progress("window", t0, members=len(mine.members))
         pins = pinned(json.loads(Path(a.registered).read_text())) if a.registered else {}
         def resolve(t: str) -> Any:
             return sets[t][1] if t in sets else catalog_resolve(t)
@@ -1182,6 +1183,7 @@ def audit(a: argparse.Namespace) -> int:
         print("TIE " + json.dumps(named, sort_keys=True), flush=True)
     if a.forged:
         os.environ["FC_ZK_SELF_CHECK"] = "skip"
+    A5.progress("records", t0, negatives=len(more))
     manager, a.coins, finisher = AC.start(a.challenger, mine.run, [0], out / "challenger", a.main, ssh_key=a.gate_key,
                                           peer=a.peer, key_record=a.challenger_key, deployed=a.deployed_key,
                                           local=LC.Local)
