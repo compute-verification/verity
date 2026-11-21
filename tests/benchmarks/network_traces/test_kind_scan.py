@@ -232,7 +232,7 @@ def _out(tmp_path: Path, period, v3c: dict = V3C_WINDOW) -> Path:
         "wrong_units": {"delta": 1e-6, "of": reg["population"], "bound": 9, "rule": "at most `bound` incorrect proof blocks"}}))
     (v3c / "registration.json").write_text(json.dumps(reg))
     (v3c / "period.json").write_text(json.dumps({"answer": ev["audits"][0], "registration": reg, "free": 3,
-                                                 **{k: case["params"]["audits"][0][k] for k in ("steps", "program")}}))
+                                                 **{k: case["params"]["audits"][0][k] for k in ("program",)}}))
     (out / "compiler.json").write_text(json.dumps(COMPILER))
     (out / "registration.json").write_text(json.dumps(SV.public_registration(ADVICE)))
     (out / "weights_registration.json").write_text(json.dumps(WEIGHTS))

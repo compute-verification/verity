@@ -1330,7 +1330,7 @@ def _audited(window: Path, out: Path, docket: dict | None = None, accepted: bool
 
 def test_a_windows_audit_is_a_period_audit_whose_scan_state_reads_count_registered(tmp_path, capsys):
     """`period`: a window whose circuit reads its own scan state (`TIED`) gives the network attester's period its
-    docket, the Program the audit sampled (the one the docket names), the audit's answer, ``steps`` 0 and
+    docket, the Program the audit sampled (the one the docket names), the audit's answer and
     ``free``: the audit's count, but with the state's reads registered (the period ties them to its scan's state tree),
     where the audit's own count leaves them free. ``records_audit.py period`` writes the same and says it in one line.
     Refused by name: a window that commits no scan state, a circuit the docket doesn't bind, an audit that wrote no
@@ -1340,7 +1340,7 @@ def test_a_windows_audit_is_a_period_audit_whose_scan_state_reads_count_register
     rec, doc = (json.loads((got.dir / f).read_text()) for f in ("registration.json", "circuit.json"))
     p = RA.period(got.dir, audit, {}, TIED)
     per_unit = sum(16 * w for _p, w in IF.layout(COORD).rows)
-    assert p["free"] == 8 * per_unit - 8 * 8 * K and p["steps"] == 0
+    assert p["free"] == 8 * per_unit - 8 * 8 * K and "steps" not in p
     assert p["registration"] == rec and p["answer"] == SI.answer(audit, rec) and p["answer"]["verdict"] == "accept"
     assert program_digest(p["program"]) == rec["program"] and p["answer"]["commitment"] == DD.digest(rec)
     ties, untied = RA.window_pins(rec["window"], doc, registration=rec)
