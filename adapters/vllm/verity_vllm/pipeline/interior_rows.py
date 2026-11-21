@@ -802,7 +802,7 @@ def write(it: Interior, directory: str | Path) -> dict[str, Any]:
             if p in given:
                 v, at = given[p].value, [int(x) for x in given[p].positions]
                 entry[p] = {"value": v.value, "positions": at, "paths": [v.path(x).hex() for x in at]}
-            elif (m.template, p) in back:
+            elif (m.template, p) in back and p not in dict(m.outs):
                 x, v = back[m.template, p]
                 entry[p] = v.header(x.rows(it.record["window"]["replay_sample"]))
             else:
