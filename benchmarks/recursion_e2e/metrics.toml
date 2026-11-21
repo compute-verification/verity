@@ -1,5 +1,5 @@
-# This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
-# enforces it. `run.py` refuses, and `--on NODE` is no node, so the loop doesn't run them; their readings stand.
+# This directory's numbers, one [[metric]] each, by the rules of tests/test_metrics_registry.py,
+# which enforces them. `run.py` refuses, and `--on NODE` is no node, so the loop doesn't run them; their readings stand.
 
 [[metric]]
 id = "benchmarks/recursion-run-seconds"

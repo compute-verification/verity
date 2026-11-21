@@ -13,14 +13,8 @@
   cluster shadow evaluate DIR [--quiet-log QUIET.jsonl[.gz]] [--sampler UTIL.jsonl[.gz]...]  # the pass bar: exit 0 or 2
   cluster submit DESCRIPTION.toml --run-id R --now T --project P --submitter W [--kind K] [--max-s S] [--gpus N ...]
                  [--stop NODE=EPOCH ...]                # the node, wrappers and kind as JSON; exit 3 with {"refused"}
-  cluster status [--on nebius-1|nebius-2|all] [--owner OWNER] [--json]   # each node's jobs, GPU-h ready, holds, disk,
-                                                        # bundles, read over SSH (status.py); exit 1 if a node can't be read
-  cluster usage hourly [--on nebius-1|nebius-2|all] [--hours H] [--json] [--file PATH]   # per node and UTC hour: busy
-                                                        # and useful against 95% / 90%, held idle, unmeasured (usage.py)
-  cluster usage wasters --day YYYY-MM-DD [--top N] [--json] [--file PATH]   # held-but-idle GPU-hours by holding, most first;
-                                                        # both read the console's record on vy-nebius-1, exit 1 if stale or unread
-  cluster kueue-shadow tick|loop --out RECORD.jsonl [--every S --hours H] | down   # on vy-nebius-1: what Kueue alone
-                                                        # would admit beside what the node did (kueue_shadow.py)
+  cluster status [--on nebius-2|all] [--owner OWNER] [--json]   # the node's jobs, GPU-h ready, disk, read over SSH
+                                                        # (status.py); exit 1 if the node can't be read
   cluster policy show [--description D] [--on N|all] [--key K] [--log L] [--json]   # the policy in force: each key, its
                                                         # owner and source, with the overrides in force from the local log
   cluster policy diff [--description D] [--on N|all] [--json]   # every key whose live value differs, read over SSH
@@ -34,9 +28,8 @@
 
 A snapshot is `{"node", "now", "allocations": [...], "queue": [...], "done": [...], "has": [...], "held_locks": [...],
 "last_busy": {alloc: t}, "idle_s": {kind: s}}`, in the shapes `model.allocation_to_dict` and `model.job_to_dict` write.
-Only `agent` and `kueue-shadow` read a clock or touch a node (`agent.py`, `kueue_shadow.py`; the shadow writes only its own
-Kueue objects), and `status`, `usage` and `policy diff`, which only read them; `policy override --apply` writes nothing but
-its log, and `policy apply --apply` only the policy files its appliers name and the node's log. `shadow replay` runs the same planner over a day's copied logs.
+Only `agent` reads a clock or touches a node (`agent.py`), and `status` and `policy diff`, which only read them; `policy
+override --apply` writes nothing but its log, and `policy apply --apply` only the policy files its appliers name and the node's log. `shadow replay` runs the same planner over a day's copied logs.
 """
 from __future__ import annotations
 
@@ -48,7 +41,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from . import kueue_shadow, ledger, model, plan, usage
+from . import ledger, model, plan
 
 
 def _lines(path: str) -> list[str]:
@@ -148,17 +141,14 @@ def main(argv: list[str] | None = None) -> int:
     sb.add_argument("--quiet", action="store_true", default=None)
     sb.add_argument("--on", dest="node", metavar="NODE")
     sb.add_argument("--gpu-ids", default="", help="comma-separated GPU indices the job must get")
-    sb.add_argument("--gpu-host", action="store_true", help="a job without --gpus that takes its GPUs with gpu-lease itself: its scope runs "
-                                                               "at a GPU job's CPU weight (node 1: not idle), with GPU_LEASE "
-                                                               "naming the node's lease tool")
+    sb.add_argument("--gpu-host", action="store_true", help="a job without --gpus that takes its GPUs with gpu-lease itself: GPU_LEASE names the "
+                                                               "node's lease tool")
     sb.add_argument("--stop", action="append", default=[], metavar="NODE=EPOCH",
                     help=f"NODE's stop as the node reports it ({model.DEADLINE_FILE}), in place of the description's stops_at")
-    st = sub.add_parser("status", help="each node's running, queued and held jobs, GPU-h ready, holds, disk and bundles")
-    st.add_argument("--on", dest="node", choices=("nebius-1", "nebius-2", "all"), default="all")
-    st.add_argument("--owner", help="only this owner's jobs (verity.dev/owner, else the workstream; a submitter on node 2)")
+    st = sub.add_parser("status", help="the node's running and queued jobs, GPU-h ready and disk")
+    st.add_argument("--on", dest="node", choices=("nebius-2", "all"), default="all")
+    st.add_argument("--owner", help="only this submitter's jobs")
     st.add_argument("--json", action="store_true")
-    usage.add_parser(sub)
-    kueue_shadow.add_parser(sub)
     po = sub.add_parser("policy", help="the declared policy, and every key where a node's live value differs")
     posub = po.add_subparsers(dest="pcmd", required=True)
     from .policy import OVERRIDES
@@ -167,7 +157,7 @@ def main(argv: list[str] | None = None) -> int:
         pp.add_argument("--description", default=str(Path(__file__).parents[2] / "descriptions" / "nebius.toml"))
         pp.add_argument("--json", action="store_true")
         if name != "override":
-            pp.add_argument("--on", dest="node", choices=("nebius-1", "nebius-2", "all"), default="all")
+            pp.add_argument("--on", dest="node", choices=("nebius-2", "all"), default="all")
         if name != "diff":
             pp.add_argument("--log", default=OVERRIDES, help="the override log (this node's)")
         if name == "show":
@@ -182,18 +172,12 @@ def main(argv: list[str] | None = None) -> int:
     pa = posub.add_parser("apply", help="the change that converges each key that differs; --apply writes it on the node")
     pa.add_argument("--description", default=str(Path(__file__).parents[2] / "descriptions" / "nebius.toml"))
     pa.add_argument("--json", action="store_true")
-    pa.add_argument("--on", dest="node", choices=("nebius-1", "nebius-2", "all"), default="all")
+    pa.add_argument("--on", dest="node", choices=("nebius-2", "all"), default="all")
     pa.add_argument("--key", help="only this key and the keys under it (exit 2 when there are none)")
     pa.add_argument("--apply", action="store_true", help="write it and read it back (else print the plan)")
     pa.add_argument("--as", dest="by", metavar="HANDLE", help="with --apply: the handle who decided it")
     pa.add_argument("--reason", help="with --apply: why, recorded with each change in the node's log")
     a = ap.parse_args(renamed(argv, {"--node": "--on"}))
-
-    if a.cmd == "usage":
-        return usage.main(a)
-
-    if a.cmd == "kueue-shadow":
-        return kueue_shadow.main(a)
 
     if a.cmd == "policy":
         from . import policy

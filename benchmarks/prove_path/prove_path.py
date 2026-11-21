@@ -1247,9 +1247,10 @@ def circuit_of_advice(a: argparse.Namespace) -> dict[str, int]:
 def window_class_of(arg: str | None) -> Any:
     """``--class`` or ``--probe``'s SLOTS,PROMPT,OUTPUTS[,LANES,EVERY] as a `window_circuit.WindowClass`, None the class of
     record."""
+    from verity_vllm.inputs.serves import window_class_parts
     from verity_vllm.program.predict.window_circuit import CLASS_OF_RECORD, WindowClass
 
-    return CLASS_OF_RECORD if arg is None else WindowClass(*(int(x) for x in arg.split(",")))
+    return CLASS_OF_RECORD if arg is None else WindowClass(*window_class_parts(arg))
 
 
 def window_circuit_of_advice(a: argparse.Namespace) -> dict[str, Any]:

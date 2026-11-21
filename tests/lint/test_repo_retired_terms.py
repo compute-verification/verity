@@ -391,7 +391,7 @@ OWN_NAME = {term: tuple((re.compile(pattern), files) for pattern, _, files in na
 #: refused as stale); when an owner writes a new key beside the old one, the entry's reason gets the day the old key stops
 #: being read.  A file's entry in the list falls by its held sites (``--prune``) and never rises for them.
 HELD_KEYS = {
-    "sampled-proofs:*": (("benchmarks/harness/README.md", "benchmarks/harness/specs/llama31-8b-fp8-1gpu-commit-served.toml",
+    "sampled-proofs:*": (("benchmarks/harness/specs/llama31-8b-fp8-1gpu-commit-served.toml",
                           "tests/benchmarks/harness/test_bench.py", "benchmarks/harness/verity_bench/vllm/commit_arm.py"),
                          "a stored run's arm key, vllm's"),
     "coin_source": (("benchmarks/harness/verity_bench/vllm/runner.py", "tests/benchmarks/harness/test_bench.py",
@@ -1307,14 +1307,14 @@ def test_the_word_in_prose_or_in_a_new_name_in_a_listed_file_still_counts() -> N
 
 
 def test_a_held_key_in_a_listed_file_is_not_a_site() -> None:
-    """Each key where it stands whole in a file its entry names, quoted or as the identifier it is, in code, a comment or
-    Markdown; a site beside it on the same line still counts."""
+    """Each key where it stands whole in a file its entry names, quoted or as the identifier it is, in code or in a
+    comment; a site beside it on the same line still counts."""
     assert retired(ARM_KEYS, "tests/" + HARNESS + "test_bench.py") == []
     coins = ('check.coins = ({"source": c["coin_source"]} if c.get("coin_source", "in-process") != "in-process"\n'
              "               else {}  # the firewall's coins\n")
     assert retired(coins, HARNESS + "verity_bench/vllm/runner.py") == [(2, "firewall")]
     assert retired("A protocol arm (`pouw:SCHEME`, SPOT's key, `sampled-proofs:SCHEME`) runs; sampled-proofs alone\n",
-                   HARNESS + "README.md") == [(1, "sampled-proofs")]
+                   HARNESS + "specs/llama31-8b-fp8-1gpu-commit-served.toml") == [(1, "sampled-proofs")]
 
 
 def test_a_held_key_that_no_longer_stands_in_a_file_its_entry_names_is_refused_as_stale() -> None:

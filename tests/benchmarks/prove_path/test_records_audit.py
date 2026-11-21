@@ -297,6 +297,74 @@ def test_source_and_the_negatives_refuse_what_the_records_dont_bind(written, tmp
                         "registration-binding-a-compiler-for-a-fixed-circuit"} and all(x["refused"] for x in got.values())
 
 
+def _prover_circuit_audit(w: SimpleNamespace, monkeypatch, tmp_path: Path, flags: list[str]) -> tuple[int, dict]:
+    """`main`'s audit of written window ``w`` under ``flags`` in place of ``--circuit``, its sessions (`a5.audit`) stubbed:
+    the stub's docket is the window's own, received before the draw, and its verdict is `source`'s on that docket.
+    -> (the exit code, what the stub saw: ``source``, ``negatives``, ``summary``)."""
+    import a5 as A5
+    from verity.protocols.proof.spot.verifier.challenger import challenger_session as AC
+
+    seen: dict = {}
+
+    def audit(a, sets, out, mine, served, source, port, summary, more, **kw):
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "registration.json").write_text(json.dumps(w.rec))
+        (out / "receipt.json").write_text(json.dumps({"registration": DD.digest(w.rec), "verifier": A5.CHALLENGER}))
+        seen.update(source=source(w.rec["window"]), negatives=more, summary=summary)
+        return {"audit": {"accepted": True}, "draw": {"units": [0]}}, seen["source"]["ok"]
+
+    session = SimpleNamespace(skip=lambda r: None, join=lambda: None, evidence=lambda: {}, shutdown=lambda: None)
+    monkeypatch.setattr(RA, "free_ports", lambda span: 20000)
+    monkeypatch.setattr(A5, "audit", audit)
+    monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
+    args = [x for x in _audit_args(w) if x != "--skip-negatives"]
+    i = args.index("--circuit")
+    return RA.main([*args[:i], *flags, *args[i + 2:], "--out", str(tmp_path / "o")]), seen
+
+
+def test_prover_circuit_takes_the_registered_circuit_holds_its_compiler_and_advice_and_says_compiled_not_checked(
+        written, tmp_path, monkeypatch, capsys):
+    """A compiled window whose compiler no command rebuilds, audited under ``--prover-circuit`` and ``--development``: no
+    compile check runs, the docket is still held to the compiler and advice it registers (`source`, `fixed_before_draw`,
+    the registration negatives, each refused), and the summary and the ``RECORDS`` line say the compile check did not run."""
+    rc, seen = _prover_circuit_audit(written, monkeypatch, tmp_path, ["--prover-circuit", "--development"])
+    assert rc == 0 and seen["source"]["ok"] and seen["source"]["detail"]["compiled"] == RA.NOT_CHECKED
+    assert set(seen["negatives"]) == {"registration-naming-another-circuit", "registration-naming-another-run",
+                                      "registration-naming-another-compiler", "registration-naming-another-advice-root",
+                                      "registration-charging-another-length", "registration-binding-no-compiler-or-advice"}
+    assert all(x["refused"] for x in seen["negatives"].values()), seen["negatives"]
+    summary = json.loads((tmp_path / "o" / "summary.json").read_text())
+    assert (summary["ok"], summary["compiled"], summary["compile"], summary["after_draw"]) == (True, "not checked", None,
+                                                                                              "not checked")
+    assert summary["fixed_before_draw"]["ok"] and (summary["compiler"], summary["advice"]) == (
+        written.bound["compiler"], written.bound["advice"])
+    assert seen["summary"]["compiled"] == "not checked" and not (tmp_path / "o" / "compile").exists()
+    line, = (x for x in capsys.readouterr().out.splitlines() if x.startswith("RECORDS "))
+    assert "compiled: not checked (the circuit is the one the prover registered)" in line
+
+
+def test_prover_circuit_is_refused_by_name_without_development(written, tmp_path, monkeypatch, capsys):
+    with pytest.raises(SystemExit):
+        _prover_circuit_audit(written, monkeypatch, tmp_path, ["--prover-circuit"])
+    assert "--prover-circuit: a development mode: the compile check does not run" in capsys.readouterr().err
+    assert not (tmp_path / "o").exists()
+
+
+def test_prover_circuit_is_refused_by_name_for_a_docket_binding_no_compiler(tmp_path, monkeypatch):
+    rc, seen = _prover_circuit_audit(_write(tmp_path / "w", advice=False), monkeypatch, tmp_path, ["--prover-circuit", "--development"])
+    assert (rc, seen) == (1, {})
+    why = json.loads((tmp_path / "o" / "summary.json").read_text())["refused"]["records"]
+    assert "--prover-circuit: the docket binds no compiler and advice" in why
+
+
+def test_without_prover_circuit_a_compiled_window_with_no_compile_check_fails_compiler(written, tmp_path, monkeypatch):
+    """The same window audited as today, at the circuit it registers and with no opening: the docket's compiler and
+    advice are not the verifier's (it holds none), so `source` fails them and the audit does not pass."""
+    rc, seen = _prover_circuit_audit(written, monkeypatch, tmp_path, ["--circuit", written.rec["window"]["circuit"]])
+    assert rc == 1 and seen["source"]["codes"] == ["compiler", "advice"]
+    assert "compiled" not in json.loads((tmp_path / "o" / "summary.json").read_text())
+
+
 def _git(repo: Path, *args: str) -> str:
     return subprocess.run(["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false",
                            *args], check=True, capture_output=True, text=True).stdout.strip()

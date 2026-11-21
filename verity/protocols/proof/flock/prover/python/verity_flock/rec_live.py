@@ -1041,7 +1041,7 @@ class LeanZkServer:
         self.proc = subprocess.Popen([self.binary, "live"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True,
                                      encoding="utf-8", stderr=self._err, env=LC.lean_env())
         try:
-            got = self._ask(json.dumps({"schedule": schedule, **({} if tree is None else {"coin_tree": tree})}))
+            got = self._ask(json.dumps({"schedule": schedule, **({} if tree is None else {"coin_tree": tree})}), first=True)
         except ValueError:
             self.discard()
             raise
@@ -1051,8 +1051,8 @@ class LeanZkServer:
 
     def _ended(self, input_ended: bool) -> str | None:
         """Why the process, which ended, has no answer to read: a panic line, a signal, or a status other than 0; any
-        status where its input had not ended (``input_ended``), which `liveWith` ends only at. None where it ended at 0
-        after its input did."""
+        status where its input had not ended (``input_ended``), which `liveWith` ends only at, but for its 1 after refusing
+        its first line. None where it ended at 0 after its input did."""
         self._err.seek(self._err_read)
         err = self._err.read()
         self._err_read += len(err)
@@ -1063,7 +1063,7 @@ class LeanZkServer:
         rc = self.proc.returncode
         return LC.exit_why(rc, LC.OK) if input_ended else LC.exit_why(rc, LC.OK) or f"{LC.LEAN_EXIT}: status {rc}"
 
-    def _ask(self, line: str) -> dict:
+    def _ask(self, line: str, first: bool = False) -> dict:
         if self.proc.poll() is not None:
             raise ValueError(f"{self.binary} live ended after its last answer, before this request: {self._ended(False)}")
         try:
@@ -1082,14 +1082,15 @@ class LeanZkServer:
         if not out:
             self.proc.wait()
             raise ValueError(f"{self.binary} live: {self._ended(False)}")
-        if self.proc.poll() is not None:
-            raise ValueError(f"{self.binary} live ended with its answer: {self._ended(False)}")
         try:
             got = json.loads(out)
         except json.JSONDecodeError:
             raise ValueError(f"{self.binary} live: not JSON: {out[:200]!r}") from None
         if not isinstance(got, dict):
             raise ValueError(f"{self.binary} live: not an object: {out[:200]!r}")
+        # `liveWith` answers a first line it refuses with {"error": why} and returns 1, and may have exited by this poll
+        if self.proc.poll() is not None and not (first and set(got) == {"error"} and self.proc.returncode == 1):
+            raise ValueError(f"{self.binary} live ended with its answer: {self._ended(False)}")
         return got
 
     def step(self, req: bytes) -> tuple[list[dict], list[bytes]]:

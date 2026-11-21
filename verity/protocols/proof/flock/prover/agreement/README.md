@@ -268,7 +268,7 @@ sampling design or missing sample alone as accepted, and every set so compares a
 | D19 | a V* cap session that doesn't read its level's tops at the verifier's shared rows |
 | D20 | a record not in its canonical text |
 | D21 | a nonzero proof-of-work nonce |
-| D22 | the verifier's own `--program` with a reference that reads a leaf at another width than its type gives that position (`E_REINTERPRET`, `verity/circuits/PROTOCOL.md` §4.4): `Flock.Program.Widths`, which `InferenceOnlyCheck` decodes with too, refuses it at setup with the codec's message; upstream reads no program. `qword_program_agree.py --widths` holds the decoder to the codec on `InferenceOnlyCheck`'s mistyped descriptors |
+| D22 | the verifier's own `--program` with a reference that reads a leaf at another width than its type gives that position (`E_REINTERPRET`, `verity/circuits/PROTOCOL.md` §4.4): `Flock.Program.Widths`, which `InferenceOnlyCheck` decodes with too, refuses it at setup with the codec's message, and as `E_REINTERPRET` each the codec refuses as a recut read (`recut-width`, `recut-boundary`); upstream reads no program. `qword_program_agree.py --widths` holds the decoder to the codec on `InferenceOnlyCheck`'s mistyped descriptors |
 
 Where the paper is silent, the verifier follows upstream:
 
@@ -301,7 +301,7 @@ Each holds one Lean part to its Python or Rust counterpart, or generates inputs 
 | `redigest.py` | proof mutants: one value of one rep edited, its round digests rebuilt, every coin kept; `--retain` writes retained-bytes sessions |
 | `fuzz.py` | seeded single mutations of an honest session (proof bytes, values, coins, digests, record fields) |
 | `selftest_records.py` | the prover's selftest cases as replayable sets |
-| `record_text.py` | the record's canonical text against Lean's |
+| `record_text.py` | `verity_flock.record_text`, loaded by path (`check.AGREEMENT_READS`) |
 | `zk_mutants.py` | `--zk` session mutants |
 | `template_query_agree.py`, `partition_object_agree.py`, `qword_agree.py`, `qword_program_agree.py`, `qcall_agree.py`, `cut_check_agree.py`, `unit_cut_agree.py`, `layout_agree.py`, `circuit_type_agree.py` | each Lean part against its Python counterpart in `verity` |
 | `zk_server_agree.py`, `zk_server_controls.sh`, `zk_server_finish_agree.py`, `zk_server_finish_agree.sh` | the ZK server's contract and session loop against the inner phase's proxy, and each tamper control held to a visible refusal |

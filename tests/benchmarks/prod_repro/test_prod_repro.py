@@ -1477,7 +1477,7 @@ def test_under_research_run_glm53s_replay_match_and_advice_are_its_metrics_where
 
 def test_each_of_the_three_measurements_carries_its_mark_and_inputs(tmp_path: Path):
     """The cost, the replay match and the advice each carry a mark and inputs whose first opens with it, where the
-    Metrics tab reads the mark (benchmarks/README.md, "Metrics"): a row without one shows none."""
+    Metrics tab reads the mark (tests/test_metrics_registry.py's docstring): a row without one shows none."""
     c, _ = lifetimes_cost(tmp_path, [[2.0, 2.0], [2.01, 2.01], [1.99, 1.99]], [[1.99, 1.99], [1.998, 1.998], [1.981, 1.981]])
     window = {"rep": 1}
     r = {"cost": c, "load": S.AGENTIC, "commit": "c" * 40, "run": "r-1",

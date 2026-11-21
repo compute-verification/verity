@@ -1065,7 +1065,6 @@
  },
  "meaning": [
   "Properties.Flock.Circuit.CircuitOf",
-  "Properties.Flock.Circuit.Chain",
   "Properties.Flock.Circuit.Keyed",
   "Properties.Flock.Circuit.Outs",
   "Properties.Flock.Circuit.Keys",
@@ -1964,15 +1963,15 @@
   },
   "Properties.Poub.Shared.acceptedSamplesOpenable": {
    "type_hash": "06805356a8866fa934ab220b1a19e7dc189b637bc5a8f12df71fb85d9216ce25",
-   "unfolded_hash": "7d572567278f2b175b8c3321c7f38482ebac6584d8e8ab89907f92e365444f56",
    "missing": "honest",
-   "why": "its premises are a run of `Shared.run` from `State.init` that has sampled and accepted every window of a sample, and the one accepted run proved (`Line.Honest.run_accepts`) states only that run's outcome and summary, not its final state's samples (`sampledOf`) or verdicts; no lemma yet states them at an accepted run"
+   "why": "its premises are a run of `Shared.run` from `State.init` that has sampled and accepted every window of a sample, and the one accepted run proved (`Line.Honest.run_accepts`) states only that run's outcome and summary, not its final state's samples (`sampledOf`) or verdicts; no lemma yet states them at an accepted run",
+   "unfolded_hash": "7d572567278f2b175b8c3321c7f38482ebac6584d8e8ab89907f92e365444f56"
   },
   "Properties.Poub.Shared.openingsUnreadUntilSampled": {
    "type_hash": "6de85e25d5f1ad61e45f3d6a7bbee4c67bcc0c0151bbc84cadd28b273027710f",
-   "unfolded_hash": "3a9a03d0074ee801f59bc83153927af8d526b195a7c0e3ad9a3847a91ef4e1f1",
    "missing": "nontrivial",
-   "why": "its conclusion is an equation between two runs of `Shared.run` from coins that agree up to the sampled windows, and no lemma yet shows it fails for a run that reads a later window's coin before that window is sampled; MEM-354, Fri 27 Nov"
+   "why": "its conclusion is an equation between two runs of `Shared.run` from coins that agree up to the sampled windows, and no lemma yet shows it fails for a run that reads a later window's coin before that window is sampled; MEM-354, Fri 27 Nov",
+   "unfolded_hash": "3a9a03d0074ee801f59bc83153927af8d526b195a7c0e3ad9a3847a91ef4e1f1"
   },
   "Properties.Poub.Shared.recordKeptAfterSample": {
    "type_hash": "325eff66573753409b317ac53a97b347dd6c1519a54e1b0324b4c98d61995ec6",
@@ -1980,15 +1979,15 @@
   },
   "Properties.Poub.Shared.runSamplesRecords": {
    "type_hash": "08fd07a6de59d35e560df52c144a4ab294113c61c28788d056460034b8e01f96",
-   "unfolded_hash": "36b359c272e7477afb0d6d53f3f68e547c35eca66049cc2c27aa447224393096",
    "missing": "honest",
-   "why": "its premises are a run of `Shared.run` from `State.init` that has sampled the first window of a sample (`(sampledOf s (c * g)).isSome`), and the one accepted run proved (`Line.Honest.run_accepts`) states only that run's outcome and summary, not its final state's samples; no lemma yet states them at an accepted run"
+   "why": "its premises are a run of `Shared.run` from `State.init` that has sampled the first window of a sample (`(sampledOf s (c * g)).isSome`), and the one accepted run proved (`Line.Honest.run_accepts`) states only that run's outcome and summary, not its final state's samples; no lemma yet states them at an accepted run",
+   "unfolded_hash": "36b359c272e7477afb0d6d53f3f68e547c35eca66049cc2c27aa447224393096"
   },
   "Properties.Poub.Shared.sampleIsSubset": {
    "type_hash": "68ed2d04b7a869f22f673dcb09fab4ad4ec3766222a70bd1bf246bc65254dc02",
-   "unfolded_hash": "0d0c93e6431a3f63265af6cea24b9e1c34476b69d6cca64c4fda48b4288b02c1",
    "missing": "honest",
-   "why": "its premise is `Shared.close` sampling at a state a session reaches, and no lemma yet evaluates a run up to a window's close: the one accepted run proved (`Line.Honest.run_accepts`) states only the whole run's outcome, so no state is at hand at which the close is shown to sample"
+   "why": "its premise is `Shared.close` sampling at a state a session reaches, and no lemma yet evaluates a run up to a window's close: the one accepted run proved (`Line.Honest.run_accepts`) states only the whole run's outcome, so no state is at hand at which the close is shown to sample",
+   "unfolded_hash": "0d0c93e6431a3f63265af6cea24b9e1c34476b69d6cca64c4fda48b4288b02c1"
   },
   "Properties.Poub.Subprotocol.acceptIsVerified": {
    "type_hash": "24966b9a2a442fc1bfd14ea399cf06b60c45246e014d93fe2eccf7789454dc6d",
@@ -3009,66 +3008,6 @@
    },
    "type_hash": "7b4111cc25192d1589a6fa7b4d4048850da3772390db68c0de2fc1346aa7d3a9",
    "unfolded_hash": "e7175f079887ec9994ca6e66aec9f63e7cfbe6f76da0ed94323d643397389d66"
-  },
-  "Flock.Chain.doorLengths": {
-   "owner": "@lean",
-   "signature": ["Flock.Chain.doorLengths : Flock.Chain.DoorLengths"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "a7c559d4bf966a0e04f642541eab2fd23a0c486e53534d80b200a150ca965418"
-  },
-  "Flock.Chain.lowerEval": {
-   "owner": "@lean",
-   "signature": ["Flock.Chain.lowerEval : Flock.Chain.LowerEval"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "31fa1ddf6f1a1cc5c20423da01f60168ebf7cc83748782a68cb87df14b065e34"
-  },
-  "Flock.Chain.lowerEvalDoor": {
-   "owner": "@lean",
-   "signature": ["Flock.Chain.lowerEvalDoor : Flock.Chain.LowerEvalDoor"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "01b41509e27ff26800788896d26f78d7e7fe66c8cb0ee615e0dbdcd49a88cc3e"
-  },
-  "Flock.Chain.portsBind": {
-   "owner": "@lean",
-   "signature": ["Flock.Chain.portsBind : Flock.Chain.PortsBind"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "d8fd28dbc1db172bf92286dcf95c90f3df4b4c369cb6ba845ba40abceb722dff"
-  },
-  "Flock.Chain.restrictBodyAgrees": {
-   "owner": "@lean",
-   "signature": ["Flock.Chain.restrictBodyAgrees : Flock.Chain.RestrictBodyAgrees"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "afa748058d4ef57d6dba5c944567a9a26c8c4d1c8e8f6017d0db49816118a631"
   },
   "InferenceOnlyVerifier.Properties.SecurityProofs.AcceptsExactly": {
    "owner": "@network-accounting",
@@ -15513,13 +15452,13 @@
    "Flock.Chain.TreeMapTotal": "unstated: on an accept, every committed gate a member's block reads or writes has a position and a leaf of a tree the verifier holds before any coin; a stated link of the chain, not proved in general; no theorem states it yet.",
    "Flock.Chain.TreeScBinds": "unstated: treeSc binds under the collision premise its trees bind under; a stated link of the chain, not proved in general; no theorem states it yet.",
    "Flock.Chain.UnitIndicesAgree": "unstated: the public file's unit indices, which the session reads, are the header's; a stated link of the chain, not proved in general; no theorem states it yet.",
-   "Flock.Chain.lowerEval": "frozen (no-function): a link of the chain from an accept to block correctness in C, stated over the circuit, its lowering and the commitments, not a property of one function's acceptance.",
-   "Flock.Chain.portsBind": "frozen (no-function): a link of the chain from an accept to block correctness in C, stated over the circuit, its lowering and the commitments, not a property of one function's acceptance.",
-   "Flock.Chain.lowerEvalDoor": "frozen (no-function): a link of the chain from an accept to block correctness in C, stated over the circuit, its lowering and the commitments, not a property of one function's acceptance.",
-   "Flock.Chain.doorLengths": "frozen (no-function): a link of the chain from an accept to block correctness in C, stated over the circuit, its lowering and the commitments, not a property of one function's acceptance.",
-   "Flock.Chain.restrictBodyAgrees": "frozen (no-function): a link of the chain from an accept to block correctness in C, stated over the circuit, its lowering and the commitments, not a property of one function's acceptance.",
    "Spot.Challenger.CutMeans": "unstated: on a log releasedLogOf accepts, cut accepting gives Log.Cut at the commitments (the code's challenger log is the core's log); a stated link, not proved; no theorem states it yet. Waits on the remote guarantee that was to read it, or its deletion as dead; owner @lean, issue LEAN-186, due 2026-11-30.",
-   "Spot.Challenger.KeyedBySlotMeans": "unstated: on a log releasedLogOf accepts, every family's coins are keyed by slot (Log.KeyedBySlot); a stated link, not proved; no theorem states it yet. Waits on the remote guarantee that was to read it, or its deletion as dead; owner @lean, issue LEAN-186, due 2026-11-30."
+   "Spot.Challenger.KeyedBySlotMeans": "unstated: on a log releasedLogOf accepts, every family's coins are keyed by slot (Log.KeyedBySlot); a stated link, not proved; no theorem states it yet. Waits on the remote guarantee that was to read it, or its deletion as dead; owner @lean, issue LEAN-186, due 2026-11-30.",
+   "Flock.Chain.LowerEval": "unstated: the lowered net's rows, where they hold, evaluate as the Definition bit for bit; proved by Flock.Chain.lowerEval from FlockSoundness.Built and FlockSoundness.Rows.Sat, with inline hypotheses, its statement reading Properties.Flock.EvalBool outside `meaning`; not listed until those are placed. Owner @lean, due 2026-11-30.",
+   "Flock.Chain.PortsBind": "unstated: a block's openings and the statement's at one commitment give C's port values as the statement's port columns, or a SHA-512 collision; proved by Flock.Chain.portsBind from Flock.Chain.BlockIs, Flock.Chain.PortsOpenAt, Hash.StringCommitment.Binds and Verity.Partition.Rblk, with inline hypotheses, its statement reading Properties.Flock.Circuit.OfProgram outside `meaning`; not listed until those are placed. Owner @lean, due 2026-11-30.",
+   "Flock.Chain.LowerEvalDoor": "unstated: LowerEval at the door: satisfied rows of the net the block's template unrolls to force each output column of the door's file to the bit the template's lift to bits gives on its input columns; proved by Flock.Chain.lowerEvalDoor from FlockSoundness.Built and FlockSoundness.Rows.Sat, with inline hypotheses, its statement reading Properties.Flock.EvalBool outside `meaning`; not listed until those are placed. Owner @lean, due 2026-11-30.",
+   "Flock.Chain.DoorLengths": "unstated: at every unit of the block, the bits of a trace of C at its arguments and at its return leaves are exactly the input rows' and the return fields' bits; proved by Flock.Chain.doorLengths from Flock.Chain.UnitResolves and InferenceOnlyVerifier.Properties.GateOk, with inline hypotheses, its statement reading Properties.Flock.Circuit.OfProgram outside `meaning`; not listed until those are placed. Owner @lean, due 2026-11-30.",
+   "Flock.Chain.RestrictBodyAgrees": "unstated: the block's Program restrict P units of a decoded C whose root has no recut keeps C's word primitives evaluating as their Boolean Definitions; proved by Flock.Chain.restrictBodyAgrees from no named premise, with inline hypotheses, its statement reading Properties.Flock.DecodeBoolean outside `meaning`; not listed until those are placed. Owner @lean, due 2026-11-30."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -26349,6 +26288,20 @@
    "digest": "812a6da5f74681c2e0b4b07b16b4e62d8ac3c50c32e54ef7b522a6729fd343b4",
    "definitions": {
     "PouwVerifier.protocol": "270390a4a7c452c4a13bb82f573b353fa916081a4aa0aa33724960a729a94b2b"
+   }
+  },
+  "PouwVerifier.Template": {
+   "digest": "33885b33d7e2676b505ac9006bd8ba9b4d6538bebbe33484d217f6b680cb8d79",
+   "definitions": {
+    "PouwVerifier.Credit.J10R": "7ef2a2c61133f45457add533ae131f8e594910c70eaf8095a41d8e17f82271e4",
+    "PouwVerifier.Credit.SHARED": "4d2d73fc23d887b4f0a6f4b239b4b4998dd567039920c22fffaac48dba681ef9",
+    "PouwVerifier.Credit.TILE_FN": "9e08735cd9eda3d9d2822a4bdc4f6d8ef74c4dc4c3f4d8c5095ea3d111bed2a7",
+    "PouwVerifier.Credit.TILE_PINS": "7cf213d65adf5b7ce31dee7875362fe82a9927dc6929a425170af1496d7e22fc",
+    "PouwVerifier.Credit.TYPE_DEPTH": "013880d05abba686c6f1df594c8d2dd436f86e021ae81864e0aa33e5db1b8e3d",
+    "PouwVerifier.Credit.bitsOf": "312fecef961f3645b466f954564c2560f723290853ecaee135addaf3185e50d2",
+    "PouwVerifier.Credit.defn?": "ffbd0b16a338c82ca5793beac7bd56b3c4100f297792f408b275d0b34d01cb3e",
+    "PouwVerifier.Credit.pinned": "2b744c55a1bbdc5b3388c4980006746e5b583c8bda85eae8b606e0fe7deac8bc",
+    "PouwVerifier.Credit.tileOf": "7972bf4b46f4a774257a580f59c74e9cac3bde952fd915c6354cdd0e5bae525c"
    }
   },
   "PouwVerifier.Tile": {

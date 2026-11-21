@@ -60,7 +60,7 @@ A local `research run` (no `--on`) publishes only its telemetry and the files it
    requests a run) and prints its art id, or says why not and exits 1 within `--timeout` (150 s unless given). Stop the job
    on a non-zero exit if it must not go on without the record; the file stays in `$OUT` either way.
 3. **Scratch, caches, build trees (`target/`, `.lake/`, `node_modules/`), datasets and checkpoints stay out of the run
-   dir**, in a `mktemp -d` directory you delete. `$TMPDIR` may be unset (queued jobs on vy-nebius-1): `$TMPDIR/x` is `/x`.
+   dir**, in a `mktemp -d` directory you delete. `$TMPDIR` may be unset (queued jobs): `$TMPDIR/x` is `/x`.
 4. **Data kept outside the run dir** is registered once it exists, `research keep DIR --owner @LANE --expires never
    --priority keep` (lowering it takes top's yes), and deleted only by `research retention rm PATH --approved-by @OWNER
    --ref THREAD --apply`, never `rm -rf`, so a stale step fails closed; it deletes passes only once their record names a
