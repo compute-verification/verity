@@ -395,7 +395,7 @@ def test_once_the_network_attesters_side_has_ended_the_front_ends_the_servers(an
     assert got == b"".join(REL.id_event(t, P) for t in sent)
     assert server.requests == [copy_of(released().partition(b"\r\n\r\n")[0] + b"\r\n\r\n",
                                        b"%s:%d" % (server.address[0].encode(), server.address[1]))]
-    assert f.log == [{"n": 4, "run": b"run".hex(), "bucket": 9, "prompt": 3, "ids": len(sent), "ended": False, "why": R.GONE,
+    assert f.log == [{"n": 4, "run": b"run".hex(), "bucket": 9, "prompt": 3, "ids": len(sent), "ended": False, "why": F.GONE,
                       "at": 1.0, "ms": [1000.0] * len(sent)}]
 
 
