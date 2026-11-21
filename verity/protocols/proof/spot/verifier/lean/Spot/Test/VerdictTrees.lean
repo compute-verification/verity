@@ -28,10 +28,12 @@ def composite (id : String) (ret : Ty) (nodes : Array Node) : Defn :=
 /-- The input, the reader, `EmbeddingRead_v3` (`(h, ok)`), an unlisted opener `Opens_v1`, and the root: the input node
 and a batch of three `EmbeddingRead_v3` units, then `extra`. -/
 def toy (extra : Array Node := #[]) : Prog :=
-  let input : Defn := { key := "Input16_v1", id := "Input16_v1", prim := true, params := #[], ret := v16, gates := 1,
-    paramLeaves := 0, outLeaves := 1, binding := some Flock.Program.RUN }
-  let read : Defn := { key := "FrameV3Read_v1", id := "FrameV3Read_v1", prim := true, params := #[("t", v16)],
-    ret := v16, gates := 1, paramLeaves := 1, outLeaves := 1 }
+  let input : Defn :=
+    { key := "Input16_v1", id := "Input16_v1", prim := true, params := #[], ret := v16, gates := 1, paramLeaves := 0,
+      outLeaves := 1, binding := some Flock.Program.RUN }
+  let read : Defn :=
+    { key := "FrameV3Read_v1", id := "FrameV3Read_v1", prim := true, params := #[("t", v16)], ret := v16, gates := 1,
+      paramLeaves := 1, outLeaves := 1 }
   let root : Defn := composite "R" v16
     (#[{ form := .batch, fn := 0, args := #[], out := .array 3 v16, n := 3 },
        { form := .batch, fn := 2, args := #[], out := .array 3 (.tuple #[v16, v16]), n := 3 }] ++ extra)
@@ -42,8 +44,9 @@ def toy (extra : Array Node := #[]) : Prog :=
 
 def rs : Array Flock.TemplateQuery.TRange := #[⟨1, "EmbeddingRead_v3", 0, 3⟩]
 
-def ms : Array Member := #[{ name := "e/c0", units := #[(0, 3)], g := 1,
-  own := { programJ := .null, program := .empty, partition := .null, pub := "", registered := none } }]
+def ms : Array Member :=
+  #[{ name := "e/c0", units := #[(0, 3)], g := 1,
+      own := { programJ := .null, program := .empty, partition := .null, pub := "", registered := none } }]
 
 def PROGRAM : String := String.join (List.replicate 64 "ab")
 
