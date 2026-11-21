@@ -28,7 +28,7 @@ import numpy as np
 import pytest
 
 from verity.circuits import codec, partition_object as PO, supplied as SU
-from verity.circuits.codec import canonical_json, descriptor_id
+from verity.circuits.codec import canonical_json, descriptor_id, program_digest
 from verity.circuits.defs import CATALOG_PACKAGES, REGISTRY, CompositeDefinition, bind, catalog_package
 from verity.circuits.program import Program
 from verity.circuits.refs import array_of, coll_concat
@@ -2086,6 +2086,49 @@ def test_a_period_registers_its_circuits_values_by_their_entries_chained_after_t
     c = unheld.close(salts_of=fixed(unheld))
     with pytest.raises(ValueError, match=r"values \['v'\] have no committed value"):
         unheld.write(c, tmp_path / "unheld", {"by": "test"}, registrar=reg)
+    assert not (tmp_path / "unheld").exists()
+
+
+def test_a_period_registers_each_table_its_circuits_anchor_marks_name_after_its_values(tmp_path, monkeypatch):
+    """A table whose root or domain id a supplied anchor's mark in C names (`supplied.registered_values`) is registered by the
+    entry of the value the period holds, after the circuit's values and once; a mark that is no anchor's adds nothing, a
+    marked table the period doesn't hold is refused by name before anything is written, and registering it moves neither
+    the circuit nor its Program's digest. Unmarked, the record is today's."""
+    got = {}
+
+    def record(*_x, **k):
+        got.clear()
+        got.update(k)
+        return {"leaf_layer": "l"}
+
+    reg = type("R", (), {"KINDS": ("served",), "record": staticmethod(record),
+                         "digest": staticmethod(lambda rec: "d")})
+    t = Held("t", np.arange(4 * 8, dtype=np.uint16).reshape(4, 8))
+
+    def write(name, marks, held=True):
+        win, w = registered(params={"t": 4 * 8}, held=("w",))
+        if held:
+            win.registered["t"] = t
+        win.window.program.supplied = dict(marks)
+        out = tmp_path / name
+        win.write(win.close(salts_of=fixed(win)), out, {"by": "test"}, registrar=reg)
+        return w, list(got["registered"]), (out / "circuit.json").read_bytes(), program_digest(win.window.program)
+
+    def anchor(fn, value):
+        return {"supplied": fn, "args": {"value": value}, "layout": "digest", "bits": 512}
+
+    w, plain, _, _ = write("plain", {})
+    assert plain == [w.entry()]
+    marked = {"t/root": anchor("registered.root/v1", "t"), "t/domain": anchor("registered.domain/v1", "t"),
+              "w/root": anchor("registered.root/v1", "w"), "x": None, "y": anchor("other/v1", "t")}
+    _, entries, body, digest = write("marked", marked)
+    assert entries == [w.entry(), t.entry()]
+    with monkeypatch.context() as m:
+        m.setattr(SU, "registered_values", lambda _p, values: tuple(values))
+        assert write("values-alone", marked)[1:] == ([w.entry()], body, digest)
+    assert write("not-anchors", {"y": anchor("other/v1", "t")})[1] == plain
+    with pytest.raises(ValueError, match=r"anchors name \['t'\]"):
+        write("unheld", marked, held=False)
     assert not (tmp_path / "unheld").exists()
 
 

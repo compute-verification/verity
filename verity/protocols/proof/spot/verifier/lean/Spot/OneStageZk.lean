@@ -915,6 +915,34 @@ private def portsPublic (ports : List String) : ByteArray :=
 #guard [["T/c0/x", "T/c1/x"], ["A/c0/x", "B/c0/x"], ["x", "T/c0/y"], ["T/c0/x", "row-table/s0/t"]].all fun ps =>
   refusal (publicHeld (portsRecord ps) (portsPublic ["x", "y"])) == NOT_ONE_MEMBER
 
+/-- A registered file reading port `x` at `value`. -/
+private def xReadT (value : String) : Json :=
+  Json.mkObj [("format", Json.str Flock.Registered.FORMAT), ("ports", Json.mkObj [("x", Json.mkObj [
+      ("domain", Json.str ("".pushn 'd' 128)), ("leaves", Lean.toJson (2 : Nat)), ("root", Json.str ("".pushn 'a' 128)),
+      ("value", Json.str value)])])]
+
+-- a header port the registration holds no root of is not compared only where the verifier's registered file reads it
+-- at a run input node's tree
+#guard refusal (publicHeld (portsRecord ["y", "input/n3"]) (portsPublic ["y", "x"])) ==
+  "public file: not the registration's: roots"
+#guard refusal (publicHeld (portsRecord ["y", "input/n3"]) (portsPublic ["y", "x"]) (some (xReadT "input/n3"))) == ""
+#guard refusal (publicHeld (portsRecord ["y", "input/n3"]) (portsPublic ["y", "x"]) (some (xReadT "w"))) ==
+  "public file: not the registration's: roots"
+-- a port the registration holds a root of is compared, whatever the registered file reads it at
+#guard refusal (publicHeld (portsRecord ["input/n3", "x"]) (portsPublic ["x"]) (some (xReadT "input/n3"))) ==
+  "public file: not the registration's: roots, domains"
+
+/-- A registration holding run input node 3's tree at the root of `c`s, `d`'s domain and 2 leaves. -/
+private def freshTreeT (c : Char) : Json :=
+  Json.mkObj [("roots", .arr #[Json.mkObj [("domain", .str ("".pushn 'd' 128)), ("leaves", Lean.toJson (2 : Nat)),
+    ("port", .str "input/n3"), ("root", .str ("".pushn c 128))]])]
+
+-- what holds the port `publicHeld` leaves out: the registered file opens it under the registration's tree, and a
+-- header root over other rows than that tree's, its registered file's root another, refuses by name
+#guard refusal (registeredTreesHeld (rootsByPort (freshTreeT 'a')) "the verifier" (some (xReadT "input/n3"))) == ""
+#guard refusal (registeredTreesHeld (rootsByPort (freshTreeT 'c')) "the verifier" (some (xReadT "input/n3"))) ==
+  TREE_OTHER "the verifier" "x" "input/n3" "root"
+
 /-- A circuit file whose META looks up the MUFU tables `names`. -/
 private def lookingUp (names : List String) : ByteArray :=
   s!"circuit\nMETA {(Json.mkObj [("lookups", Json.mkObj (names.map (·, Json.mkObj [])))]).compress}\nrest".toUTF8
