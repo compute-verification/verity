@@ -328,17 +328,17 @@ class SuppliedSetup(RegisteredSetup):
 #: Programs whose root parameters a verifier may expect registered: 16-bit ones (`W`, and `D` of 12-bit leaves) and ones
 #: `registered_entries` refuses (`E` has no gates, `M` two widths, `V` is 40 bits), 32-bit ones (`T`, and `U` of
 #: 20-bit leaves), and bit rows (`A`, 8-bit leaves two to a u16 word in `row/v2` rows, as H1's A, and `B` in
-#: `row-seg/v1` rows); `x`, bound per run, reads as a 16-bit value too.
+#: `row-seg/v1` rows); `x`, bound per run, is a run Input, which no verifier expects registered (`R7-run-input`).
 REGISTERED_SETUPS = [
     RegisteredSetup(_registered_program("CoreSpotRegistered16", 3, (
         ("W", Array(6, Value(16))), ("D", Array(4, Value(12))), ("E", Array(0, Value(16))), ("M", Tuple(Value(8), Value(16))),
-        ("V", Value(40))), ("W", "D")), [{"W": 2}, {"D": 1, "W": 3}, {"D": 4}, {"W": 6, "x": 2}]),
+        ("V", Value(40))), ("W", "D")), [{"W": 2}, {"D": 1, "W": 3}, {"D": 4}]),
     RegisteredSetup(_registered_program("CoreSpotRegistered32", 2, (
         ("T", Array(4, Value(32))), ("U", RecordType(("a", Array(3, Value(20))),))), ("T", "U")),
-        [{"T": 2}, {"T": 1, "U": 3}, {"U": 1}, {"T": 4, "x": 1}]),
+        [{"T": 2}, {"T": 1, "U": 3}, {"U": 1}]),
     RegisteredSetup(_registered_program("CoreSpotRegisteredBits", 2, (
         ("A", Array(8, Value(8))), ("B", Array(4, Value(16)))), ("A", "B")),
-        [{"A": 2}, {"A": 1, "B": 2}, {"B": 4}, {"A": 4, "x": 2}], {"A": G.SCHEMA_V2, "B": G.SCHEMA_SEG})]
+        [{"A": 2}, {"A": 1, "B": 2}, {"B": 4}], {"A": G.SCHEMA_V2, "B": G.SCHEMA_SEG})]
 #: Programs with a value the verifier fills itself, as PoUW's `pouw.roots`: `S`, each row a pair of digests of 32-bit
 #: leaves (rows of x's root and W's registered root, and W's and out's) or of 1-bit leaves (out's root and bytes of its own),
 #: or, in a bit-row format, one `Digest` a row in `row/v2` (out's root, then bytes of its own: 32 u16 words a row) or
@@ -351,20 +351,20 @@ SUPPLIED_SETUPS = [
         {"S": [[{"port": "x"}, {"value": "W"}], [{"value": "W"}, {"port": "out"}]]}),
     SuppliedSetup(_registered_program("CoreSpotSupplied1", 2, (
         ("S", Array(1, Array(2, Array(512, Value(1))))),), ("S",)),
-        [{"S": 1024}, {"x": 2, "S": 1024}], {"S": [[{"port": "out"}, {"bytes": "5a" * 64}]]}),
+        [{"S": 1024}, {"S": 1024}], {"S": [[{"port": "out"}, {"bytes": "5a" * 64}]]}),
     SuppliedSetup(_registered_program("CoreSpotSuppliedPW", 3, (
         ("S", Array(2, Array(2, Array(16, Value(32))))), ("W", Array(6, Value(16)))), ("S", "W")),
         [{"S": 32, "W": 2}, {"W": 3, "S": 32}],
         {"S": [[{"window": COIN}] + [{"position": "0"}] * 8, [{"position": "2"}] * 8 + [{"window": COIN}]]}),
     SuppliedSetup(_registered_program("CoreSpotSuppliedDigestV2", 2, (
         ("S", Array(2, Array(8, Array(64, Value(1))))),), ("S",)),
-        [{"S": 32}, {"x": 2, "S": 32}], {"S": [[{"port": "out"}], [{"bytes": "5a" * 64}]]}, {"S": G.SCHEMA_V2}),
+        [{"S": 32}, {"S": 32}], {"S": [[{"port": "out"}], [{"bytes": "5a" * 64}]]}, {"S": G.SCHEMA_V2}),
     SuppliedSetup(_registered_program("CoreSpotSuppliedBitsSeg", 2, (
         ("S", Array(2, Array(512, Value(1)))),), ("S",)),
-        [{"S": 32}, {"x": 2, "S": 32}], {"S": [[{"port": "x"}], [{"bytes": "a5" * 64}]]}, {"S": G.SCHEMA_SEG}),
+        [{"S": 32}, {"S": 32}], {"S": [[{"port": "x"}], [{"bytes": "a5" * 64}]]}, {"S": G.SCHEMA_SEG}),
     SuppliedSetup(_registered_program("CoreSpotSuppliedHalf", 2, (
         ("O", Array(2, Value(16))),), ("O",)),
-        [{"O": 1}, {"x": 2, "O": 1}], {"O": [[{"bytes": "0001"}], [{"bytes": "0001"}]]})]
+        [{"O": 1}, {"O": 1}], {"O": [[{"bytes": "0001"}], [{"bytes": "0001"}]]})]
 REGISTERED_SETUPS += SUPPLIED_SETUPS
 #: A program whose window opens a pool from `pin` and leaves it in `pout`, each one SHA-512 digest of 32-bit leaves, and
 #: the empty pool's root a chain restarts from.
@@ -5211,8 +5211,9 @@ def test_run_input_roots_reads_every_proof_block_as_python_does(pieces):
     assert reads and all(R.nodes[w]["input"] for _p, w, _n in reads)
     w, ln = reads[0][1], reads[0][2]
     rows = R.nodes[w]["out_leaves"] * R.nodes[w]["members"] // ln
+    words = ln * (EG._bits(R.nodes[w]["ret"]) // R.nodes[w]["out_leaves"]) // 16
     good = {"port": f"input/n{w}", "root": "aa" * 64, "leaves": rows,
-            "domain": RV.domain(prog, f"input/n{w}", ln, rows, 16, window=WROOT).domain_id.hex()}
+            "domain": RV.domain(prog, f"input/n{w}", words, rows, 16, window=WROOT).domain_id.hex()}
     base = {"program": s.desc, "query": _json(s.query), "members": [["T/m0", [[0, 1]]], ["T/m1", [[1, 2]]]],
             "roots": [good], "window_root": WROOT}
     got = run_input_roots(base)
