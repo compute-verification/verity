@@ -518,6 +518,25 @@ def test_a_record_over_an_explicit_partition_object():
     assert "R2-program" in R.check(rec, prog, q, SAMPLING_DESIGN, SCHEME, ports, leaf_layer="ee" * 64, partition={**old, "program": "0" * 128}).codes
 
 
+def test_a_canonical_partition_object_names_the_verifiers_query():
+    """Only a pre-canonical `{program, query}` may name another query than the verifier's (`OneStage.PARTITION_QUERY`)."""
+    prog = PN.population_program(PAIR, 6)
+    q = P.template_instance_query(PAIR.id)
+    ports = _ports(prog, q, 6)
+    roots = [{"port": p, "root": ROOTS[p], **ports[p]} for p in ports]
+    other = {**P.partition(prog, q), "query": P.template_instances_query([PAIR.id])}
+    rec = DK.record(prog, q, SAMPLING_DESIGN, SCHEME, roots, SERVED, leaf_layer="ee" * 64, partition=other)
+    with pytest.raises(ValueError, match=f"^{R.PARTITION_QUERY}$"):
+        R.check(rec, prog, q, SAMPLING_DESIGN, SCHEME, ports, leaf_layer="ee" * 64, partition=other)
+    honest = DK.record(prog, q, SAMPLING_DESIGN, SCHEME, roots, SERVED, leaf_layer="ee" * 64)
+    assert R.check(honest, prog, q, SAMPLING_DESIGN, SCHEME, ports, leaf_layer="ee" * 64,
+                   partition=_reversed_keys(P.partition(prog, q))).ok
+
+
+def _reversed_keys(j):
+    return {k: _reversed_keys(j[k]) for k in reversed(list(j))} if isinstance(j, dict) else j
+
+
 def test_the_incorrect_block_bound_matches_worst_case_and_scales():
     """The profile's Subset(k) bound is the exact count, the generic worst_case rounded down, and serves N = 183,680."""
     from verity.circuits.partition import Level
