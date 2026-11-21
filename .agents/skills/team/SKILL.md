@@ -130,10 +130,10 @@ does no lane work. Launching, handing over and archiving coordinators: `infra/cu
   or reports its branch and SHA for its launcher to.
 - **Name a worker's model**, as `Task`'s `model`, a standing request for every agent here, on every launch, never
   `inherit` or left out: `claude-opus-5-5-medium`, or `claude-sonnet-5-5-high` for a fully specified task (a move by a
-  map, a count, a rename, a rerun, a change its tests decide). No worker runs Fable 5.2: only leads may, at medium
-  effort, and they plan, design and decide. A worker holds no timer or subscription, since a turn that its lead's
-  resume didn't start can run on Fable: its brief has it end such a turn at once. A Fable worker is not resumed: its
-  launcher briefs an Opus worker from its note.
+  map, a count, a rename, a rerun, a change its tests decide). No worker runs Fable 5.2 but a design worker @top
+  permits (the guard's DESIGN.md): only leads may, at medium effort, and they plan, design and decide. A worker holds
+  no timer or subscription, since a turn that its lead's resume didn't start can run on Fable: its brief has it end
+  such a turn at once. A Fable worker is not resumed: its launcher briefs an Opus worker from its note.
 - **Reach a running agent** on any VM through its shell commands, since it never rereads a shared file mid-run:
   `python3 tools/agent-guard/inbox.py send AGENT_ID --text '…'` from a checkout pushes to origin's `inbox/AGENT_ID`,
   and its next shell command delivers it (`--local`: a subagent on your VM, no

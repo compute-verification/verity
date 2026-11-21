@@ -568,6 +568,9 @@ def wait_bindings(state: Path, party: str, start: Start, alive: Callable[[], boo
                   ) -> dict[str, dict[str, Any]]:
     clock, pause = clock or time.monotonic, pause or time.sleep
     f, until = state / "public" / party / "bindings.json", clock() + start.within
+    if not f.is_file():
+        print(f"verity run: waiting up to {start.within} s for {party}'s bindings (it builds its verifier and keys first)",
+              file=sys.stderr, flush=True)
     while not f.is_file():
         if not alive():
             raise Refused("bindings", f"{party} ended before it wrote {f} (its log: STATE/logs/{party}.log)")

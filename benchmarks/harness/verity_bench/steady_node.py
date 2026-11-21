@@ -29,8 +29,8 @@ the `research run` that `steady_plan` launches through one of the node's GPU slo
    and a passed point's rate is its one measurement, written with it as the kit's writer makes it under the step's
    host stamp.
 
-It exits 0 for a passed point, `steady_spec.NOT_PASSED` for a point that was timed and didn't pass, and `REFUSED` where
-nothing was timed. Its records are `out/point.json` (the point, the prover, the cores, the cards its lease was asked
+It exits 0 for a passed point, `steady_spec.NOT_PASSED` (3) for a point that was timed and didn't pass, `REFUSED` (4) where
+nothing was timed, and `STOPPED` (143) where TERM or INT ended it; each but 0 leaves a run with no passed point. Its records are `out/point.json` (the point, the prover, the cores, the cards its lease was asked
 of, the card and the versions), `out/verdict.json` (each check's answer, and `checked_by` `piece`: this job judges them
 on the node from its own files, and the sessions' `accepted` is their verifiers', which `server_rate.py` runs on this
 node beside the provers; no Lean verifier runs here, the kept proof is for one) and `out/rate/`; `result.json` lists every

@@ -22,8 +22,7 @@ SRC=${SRC:-$UNPRICED}
 CC=$(python3 "$HERE/../dc/archs.py" "$ARCH" capability) || exit 2
 CC=${CC%%.*}
 export PYTHONDONTWRITEBYTECODE=1
-NVCC=${NVCC:-$(python3 "$HERE/../../../benchmarks/kernels/machine.py" toolkit 13.0)/bin/nvcc} || { echo "rates.sh: no CUDA 13.0 (machine.py, above)" >&2; exit 2; }
-[ -x "$NVCC" ] || { echo "rates.sh: no nvcc at $NVCC" >&2; exit 2; }
+. "$HERE/../nvcc.sh"
 export NVCC PATH="$(dirname "$NVCC"):$PATH"
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT

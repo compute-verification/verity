@@ -2187,7 +2187,7 @@ class Result:
 _PYTEST = "import sys, pytest; sys.path.append(sys.argv.pop(1)); sys.exit(pytest.main(sys.argv[1:]))"
 #: xdist's scheduling: an idle worker takes queued tests from a busy one, which evens out suites whose tests differ in length.
 DIST = ["--dist", "worksteal"]
-#: `--timeouts`: a suite's run is bounded by its `timeout_s`, else this. The longest passes on vy-nebius-1 took about an hour
+#: `--timeouts`: a suite's run is bounded by its `timeout_s`, else this. The longest passes on vy-nebius-2 took about an hour
 #: (verity-circuit-check, which declares its own); a suite that hangs holds its check slot until the run's own timeout (a test
 #: blocked on a FIFO nobody writes holds it until it is killed by hand).
 SUITE_TIMEOUT_S = 3600.0

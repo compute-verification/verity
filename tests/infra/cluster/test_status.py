@@ -1,5 +1,5 @@
-"""`cluster status`: node 1's Kueue objects and node 2's ledger state as rows by owner and key, GPU-h ready, holds, disk and
-release.py's bundle count, from snapshots in the shapes the live nodes return."""
+"""`cluster status`: node 2's ledger state as rows by owner and key, GPU-h ready and disk, from snapshots in the shape the
+live node returns."""
 from __future__ import annotations
 
 import json
@@ -7,187 +7,12 @@ import re
 
 from _build import job
 
-from cluster import cli, ledger, model, nebius1, nebius2, status
+from cluster import cli, ledger, model, nebius2, status
 from cluster.ledger import epoch
 
 T = epoch("2026-10-01T00:30:00Z")
 DF = ("Filesystem     1024-blocks       Used  Available Capacity Mounted on\n"
       "/dev/vdc        5259290696 3638812520 1620461792      70% /workspace\n")
-BUNDLE_A = "/workspace/jobs/probe-jit/cfgtp2-deferred-smol2/D/sweep/smollm2-135m__tp1__b1__i256__o32/commit/replay_bundle_p0"
-BUNDLE_B = "/workspace/jobs/cov/cov-g176/sweep/qwen3-4b__tp1__b8__i256__o32/commit/replay_bundle_p0"
-DU = f"561566596\t{BUNDLE_A}\n13000000000\t{BUNDLE_B}\n"
-
-
-def kjob(name: str, item: str, **labels: str) -> dict:
-    ws = item.split("/")[0]
-    return {"kind": "Job", "metadata": {"name": name, "labels": {"verity.dev/workstream": ws, **labels},
-                                        "annotations": {"verity.dev/item": item}}, "spec": {}}
-
-
-def cond(type_: str, status_: str, at: str, reason: str = "") -> dict:
-    return {"type": type_, "status": status_, "lastTransitionTime": at, "reason": reason}
-
-
-def wl(owner: str, queue: str, *, gpus: int = 0, cpu: str = "4", memory: str = "170G", row: str | None = None,
-       active: bool = True, conds: tuple = (), created: str = "2026-10-01T00:00:00Z", deadline: int | None = None,
-       prio: str = "circuits-gpu") -> dict:
-    req = {"cpu": cpu, "memory": memory, **({"nvidia.com/gpu": str(gpus)} if gpus else {})}
-    env = [{"name": "OMP_NUM_THREADS", "value": cpu}, *([{"name": "ROW", "value": row}] if row else [])]
-    spec = {"containers": [{"env": env, "resources": {"requests": req}}], **({"activeDeadlineSeconds": deadline} if deadline else {})}
-    return {"kind": "Workload",
-            "metadata": {"name": f"job-{owner}-x", "creationTimestamp": created, "labels": {"kueue.x-k8s.io/job-uid": "u"},
-                         "ownerReferences": [{"kind": "Job", "name": owner}]},
-            "spec": {"active": active, "queueName": queue, "priorityClassRef": {"name": prio},
-                     "podSets": [{"count": 1, "template": {"metadata": {"labels": {}}, "spec": spec}}]},
-            "status": {"conditions": list(conds)}}
-
-
-def pod(name: str, job_name: str | None, start: str, *, gpus: int = 0, cpu: str = "4", phase: str = "Running",
-        labels: dict | None = None) -> dict:
-    meta = {"name": name, "labels": labels or {}}
-    if job_name:
-        meta["ownerReferences"] = [{"kind": "Job", "name": job_name}]
-    req = {"cpu": cpu, "memory": "8G", **({"nvidia.com/gpu": str(gpus)} if gpus else {})}
-    return {"kind": "Pod", "metadata": meta, "spec": {"containers": [{"resources": {"requests": req}}]},
-            "status": {"phase": phase, "startTime": start}}
-
-
-def queue(kind: str, name: str, stop: str | None) -> dict:
-    return {"kind": kind, "metadata": {"name": name}, "spec": {**({"stopPolicy": stop} if stop else {})}}
-
-
-G176 = "nd-vllm-epoch-run-2a25cdab54-gpu-0"
-BF16 = "nd-proofs-bf16-hi-4ed9fadd78-prover-b-0"
-FLOCK = "nd-proofs-flock-f-f75266031d-prover-b-0"
-TP2 = "nd-vllm-epoch-run-cc6666e339-gpu-0"
-N128 = "nd-vllm-epoch-run-07d3232f90-gpu-0"
-G055 = "nd-n2-build-1cfb93a181-gpu-0"
-DONE = "nd-vllm-epoch-run-0000000000-build-0"
-SKY = "sky-jobs-controller-29a45b65-29a45b65-head"
-
-
-def node1_snapshot() -> dict:
-    items = [
-        kjob(G176, "vllm-epoch-run/cov-g176"),
-        wl(G176, "deployments-gpu", gpus=1, row="qwen3-4b__bf16__rtxpro6000__tp1__b8__i256__o32__mixed__greedy__bi-eager",
-           conds=(cond("QuotaReserved", "True", "2026-10-01T00:20:00Z"), cond("Admitted", "True", "2026-10-01T00:20:00Z"))),
-        pod(f"{G176}-2fzth", G176, "2026-10-01T00:21:56Z", gpus=1),
-        kjob(BF16, "proofs-bf16-hill/bf16-hill-k8192-s0"),
-        wl(BF16, "provers", gpus=1, cpu="16", prio="prover-bench",
-           conds=(cond("QuotaReserved", "True", "2026-10-01T00:25:00Z"),)),
-        pod(f"{BF16}-pend", BF16, "2026-10-01T00:25:01Z", gpus=1, cpu="16", phase="Pending"),
-        kjob(FLOCK, "proofs-flock-fp/fp-hill-nvf4-k2048"),
-        wl(FLOCK, "provers", gpus=1, cpu="16", prio="prover-bench", created="2026-10-01T00:10:00Z",
-           conds=(cond("QuotaReserved", "False", "2026-10-01T00:22:00Z", "Pending"),
-                  cond("Requeued", "True", "2026-10-01T00:22:00Z", "Preempted"))),
-        kjob(TP2, "vllm-epoch-run/cov-p104"),
-        wl(TP2, "deployments-gpu", gpus=2, cpu="8", deadline=7200, created="2026-10-01T00:28:00Z",
-           row="qwen25-7b__bf16__rtxpro6000__tp2__b1__i256__o32__mixed__greedy__bi-eager"),
-        kjob(N128, "vllm-epoch-run/cov-n128"),
-        wl(N128, "deployments-gpu", gpus=1, active=False, created="2026-09-30T22:48:07Z",
-           row="qwen25-15b__bf16__rtxpro6000__tp1__b32__i256__o32__mixed__greedy__bi-eager",
-           conds=(cond("QuotaReserved", "False", "2026-09-30T23:00:00Z", "Inadmissible"),
-                  cond("Evicted", "True", "2026-09-30T23:00:00Z", "Deactivated"))),
-        kjob(G055, "n2-build/cov-g055", **{"verity.dev/owner": "circuits"}),
-        wl(G055, "deployments-gpu", gpus=1, active=False, created="2026-09-30T22:32:59Z",
-           row="llama32-1b__bf16__rtxpro6000__tp1__b32__i1024__o128__mixed__greedy__bi-eager"),
-        kjob(DONE, "vllm-epoch-run/cov-g001"),
-        wl(DONE, "deployments-cpu", conds=(cond("Finished", "True", "2026-09-30T20:00:00Z"),)),
-        pod(SKY, None, "2026-09-30T05:30:24Z", cpu="2", labels={"skypilot-cluster": "sky-jobs-controller-29a45b65"}),
-        pod("nd-old-pod", DONE, "2026-09-30T19:00:00Z", phase="Succeeded"),
-        queue("ClusterQueue", "deployments-gpu", "Hold"),
-        queue("ClusterQueue", "provers", "None"),
-        queue("ClusterQueue", "backfill", None),
-        queue("LocalQueue", "circuits", "HoldAndDrain"),
-    ]
-    return {"node": nebius1.NODE, "t": T, "k8s": items, "df": DF, "bundles": DU}
-
-
-def by_key(rows: list[dict]) -> dict[str, dict]:
-    return {r["key"]: r for r in rows}
-
-
-def test_node1_rows_are_kueues_unfinished_workloads_by_owner_and_key_with_phase_batch_resources_and_time():
-    rep = status.node1(node1_snapshot(), T)
-    rows = by_key(rep["jobs"])
-    assert set(rows) == {"vllm-epoch-run/cov-g176", "proofs-bf16-hill/bf16-hill-k8192-s0", "proofs-flock-fp/fp-hill-nvf4-k2048",
-                         "vllm-epoch-run/cov-p104", SKY}
-    g176 = rows["vllm-epoch-run/cov-g176"]
-    assert (g176["owner"], g176["phase"], g176["batch"], g176["state"], g176["gpus"], g176["cpus"], g176["queue"]) == \
-        ("vllm-epoch-run", "gpu", 8, "running", 1, 4, "deployments-gpu")
-    assert g176["since"] == epoch("2026-10-01T00:21:56Z") and g176["for_s"] == T - g176["since"]
-    bf16 = rows["proofs-bf16-hill/bf16-hill-k8192-s0"]
-    assert (bf16["state"], bf16["phase"], bf16["since"], bf16["cpus"]) == ("admitted", "prover-b", epoch("2026-10-01T00:25:00Z"), 16)
-    flock = rows["proofs-flock-fp/fp-hill-nvf4-k2048"]
-    assert (flock["state"], flock["since"]) == ("queued", epoch("2026-10-01T00:22:00Z"))
-    tp2 = rows["vllm-epoch-run/cov-p104"]
-    assert (tp2["state"], tp2["gpus"], tp2["batch"], tp2["length_s"], tp2["length_is"]) == ("queued", 2, 1, 7200, "max")
-    sky = rows[SKY]
-    assert (sky["owner"], sky["state"], sky["gpus"], sky["cpus"], sky["queue"]) == ("skypilot", "running", 0, 2, None)
-    assert [r["state"] for r in rep["jobs"] if r["owner"] == "vllm-epoch-run"] == ["running", "queued"]
-
-
-def test_node1_ready_counts_queued_gpus_and_only_the_gpu_hours_a_length_declares():
-    ready = status.node1(node1_snapshot(), T)["ready"]
-    assert ready == {"jobs": 2, "gpus": 3, "gpu_jobs": 2, "known": 1, "gpu_h": 4.0}
-
-
-def test_node1_holds_are_stopped_queues_and_deactivated_workloads_with_their_owner_label():
-    holds = status.node1(node1_snapshot(), T)["holds"]
-    assert holds["queues"] == [{"kind": "ClusterQueue", "name": "deployments-gpu", "stop_policy": "Hold"},
-                               {"kind": "LocalQueue", "name": "circuits", "stop_policy": "HoldAndDrain"}]
-    held = by_key(holds["workloads"])
-    assert set(held) == {"vllm-epoch-run/cov-n128", "n2-build/cov-g055"}
-    n128, g055 = held["vllm-epoch-run/cov-n128"], held["n2-build/cov-g055"]
-    assert (n128["owner"], n128["owner_label"], n128["since"], n128["batch"]) == \
-        ("vllm-epoch-run", None, epoch("2026-09-30T23:00:00Z"), 32)
-    assert (g055["owner"], g055["owner_label"], g055["since"]) == ("circuits", "circuits", epoch("2026-09-30T22:32:59Z"))
-
-
-def test_disk_is_dfs_capacity_and_bundles_are_release_pys_total_in_gb():
-    rep = status.node1(node1_snapshot(), T)
-    assert rep["disk"] == {"path": "/workspace", "use_pct": 70}
-    b = rep["bundles"]
-    assert (b["count"], b["gb"], b["roots"]) == (2, round((561566596 + 13000000000) / 1e9, 1), list(status.BUNDLE_ROOTS))
-    assert [i["path"] for i in b["items"]] == [BUNDLE_B, BUNDLE_A]
-    assert status.bundles("") == {"rule": "release.py bundles_gb", "roots": list(status.BUNDLE_ROOTS), "count": 0, "gb": 0.0,
-                                  "items": []}
-
-
-def test_the_bundle_command_is_release_pys_rule_and_fails_rather_than_reading_zero_without_sudo():
-    cmd = status.COMMANDS["bundles"]
-    assert "else sudo -n true && " in cmd
-    assert "find /workspace/jobs/cov /workspace/jobs/probe-jit -xdev -name 'replay_bundle_p*' -prune -print0" in cmd
-    assert "xargs -0r du -sb" in cmd
-    assert "if [ -x /usr/local/sbin/vy-sudo ]; then sudo -n -l /usr/local/sbin/vy-sudo du-bundles" in cmd
-
-
-def test_a_locked_node_whose_sudo_refuses_du_bundles_is_a_failed_read_not_zero_bundles(tmp_path, monkeypatch):
-    """A lock-out leaves `sudo -n true` passing whatever else it refuses: the read runs du-bundles only where sudo grants it."""
-    import os
-    import subprocess
-    vy, bin_dir = tmp_path / "vy-sudo", tmp_path / "bin"
-    bin_dir.mkdir()
-    vy.write_text(f"#!/bin/sh\nprintf '13000000000\\t{BUNDLE_A}\\n'\n")
-    vy.chmod(0o755)
-    monkeypatch.setenv("PATH", str(bin_dir), prepend=os.pathsep)
-    cmd = status.COMMANDS["bundles"].replace(status.VY_SUDO, str(vy))
-    for granted, want in ((True, (0, 1)), (False, (1, 0))):
-        grant = f'"-n -l {vy} du-bundles") exit 0 ;; "-n {vy} du-bundles") exec "{vy}" du-bundles ;;' if granted else ""
-        (bin_dir / "sudo").write_text(f'#!/bin/sh\ncase "$*" in "-n true") exit 0 ;; {grant} esac\n'
-                                      'echo "sudo: a password is required" >&2\nexit 1\n')
-        (bin_dir / "sudo").chmod(0o755)
-        r = subprocess.run(["sh", "-c", cmd], capture_output=True, text=True)
-        assert (r.returncode, status.bundles(r.stdout)["count"]) == want, (granted, r.stderr)
-
-
-def test_owner_filters_jobs_and_held_workloads_but_not_the_nodes_holds_disk_or_bundles():
-    rep = status.node1(node1_snapshot(), T, owner="vllm-epoch-run")
-    assert [r["key"] for r in rep["jobs"]] == ["vllm-epoch-run/cov-g176", "vllm-epoch-run/cov-p104"]
-    assert [r["key"] for r in rep["holds"]["workloads"]] == ["vllm-epoch-run/cov-n128"]
-    assert len(rep["holds"]["queues"]) == 2 and rep["disk"]["use_pct"] == 70 and rep["bundles"]["count"] == 2
-    assert rep["ready"] == {"jobs": 1, "gpus": 2, "gpu_jobs": 1, "known": 1, "gpu_h": 4.0}
-    assert status.node1(node1_snapshot(), T, owner="circuits")["holds"]["workloads"][0]["key"] == "n2-build/cov-g055"
 
 
 def node2_snapshot() -> dict:
@@ -221,7 +46,7 @@ def test_node2_rows_are_the_ledgers_leases_and_waiters_by_submitter_and_run():
     wait = rows["wait.17908.57723"]
     assert (wait["state"], wait["gpus"], wait["for_s"], wait["length_s"]) == ("queued", 2, 30, 900)
     assert rep["ready"] == {"jobs": 2, "gpus": 2, "gpu_jobs": 1, "known": 1, "gpu_h": 0.5}
-    assert rep["holds"] == {"queues": [], "workloads": []} and "bundles" not in rep and rep["disk"]["use_pct"] == 41
+    assert rep["disk"]["use_pct"] == 41
     assert rep["ledger"] == {"path": "/workspace/pouw/infra/cluster/live/20260930T2320Z/state.json", "seq": 479, "t": T - 2,
                              "age_s": 2, "window": False, "stale": False}
     assert status.node2(node2_snapshot(), T + status.STALE_S + 10)["ledger"]["stale"]
@@ -240,32 +65,20 @@ def test_node2_state_held_back_by_a_timed_window_is_stale_only_after_the_window_
     assert "seq 522, 15m old (a timed window: the agent writes no state until it ends)" in status.render([status.node2(snap, T + 900)])
 
 
-def test_render_prints_each_nodes_header_then_its_jobs_and_held_workloads_by_owner():
-    text = status.render([status.node1(node1_snapshot(), T), status.node2(node2_snapshot(), T),
-                          {"node": "vy-nebius-3", "t": T, "error": "ReadError: no route"}])
-    assert "vy-nebius-1 at 2026-10-01T00:30:00Z\n  disk: /workspace 70% used (df)\n" in text
-    assert "  unreplayed Commit bundles: 13.6 GB in 2 (release.py's rule: jobs/cov, jobs/probe-jit)\n" in text
-    assert "  ready: 2 queued, 3 GPUs asked; at least 4.00 GPU-h (1 of 2 GPU jobs declare a length)\n" in text
-    assert ("  holds: ClusterQueue deployments-gpu stopPolicy=Hold, LocalQueue circuits stopPolicy=HoldAndDrain; "
-            "2 Workloads deactivated (spec.active=false), 1 with a verity.dev/owner label\n") in text
-    lines = text.splitlines()
-    n1 = lines[lines.index("  holds: ClusterQueue deployments-gpu stopPolicy=Hold, LocalQueue circuits stopPolicy=HoldAndDrain; "
-                           "2 Workloads deactivated (spec.active=false), 1 with a verity.dev/owner label") + 1:]
-    assert n1[0].split() == ["STATE", "OWNER", "KEY", "PHASE", "MODEL", "B", "GPU", "CPU", "FOR"]
-    assert n1[1].split() == ["admitted", "proofs-bf16-hill", "bf16-hill-k8192-s0", "prover-b", "-", "-", "1", "16", "5m"]
-    assert n1[4].split() == ["running", "vllm-epoch-run", "cov-g176", "gpu", "qwen3-4b", "8", "1", "4", "8m"]
-    assert n1[6].split() == ["held", "circuits", "n2-build/cov-g055", "gpu", "llama32-1b", "32", "1", "4", "1h57m"]
+def test_render_prints_each_nodes_header_then_its_jobs_by_owner():
+    text = status.render([status.node2(node2_snapshot(), T), {"node": "vy-nebius-3", "t": T, "error": "ReadError: no route"}])
+    assert "vy-nebius-2 at 2026-10-01T00:30:00Z\n  disk: /workspace 41% used (df)\n" in text
     assert "  ledger state: seq 479, 2s old (/workspace/pouw/infra/cluster/live/20260930T2320Z/state.json)\n" in text
-    assert "  ready: 2 queued, 2 GPUs asked; 0.50 GPU-h\n  holds: none (no Kueue on node 2)\n" in text
-    n2 = lines[lines.index("  holds: none (no Kueue on node 2)") + 1:]
+    lines = text.splitlines()
+    n2 = lines[lines.index("  ready: 2 queued, 2 GPUs asked; 0.50 GPU-h") + 1:]
     assert n2[0].split() == ["STATE", "OWNER", "KEY", "GPU", "CPU", "FOR"]
+    assert n2[2].split() == ["running", "fill:bc-7442ca43", "gl-43527", "1", "-", "2m"]
     assert "vy-nebius-3: could not read: ReadError: no route" in text
 
 
-def test_cli_status_reads_every_node_with_read_only_commands_and_prints_json(capsys, monkeypatch):
+def test_cli_status_reads_the_node_with_read_only_commands_and_prints_json(capsys, monkeypatch):
     sent: list[tuple[str, str]] = []
-    out = {nebius1.NODE: {"kueue": json.dumps({"items": node1_snapshot()["k8s"]}), "df": DF, "bundles": DU},
-           nebius2.NODE: {"state": "/live/state.json\n" + json.dumps(node2_snapshot()["state"]), "df": DF}}
+    out = {nebius2.NODE: {"state": "/live/state.json\n" + json.dumps(node2_snapshot()["state"]), "df": DF}}
 
     def runner(node):
         def run(cmd):
@@ -279,10 +92,9 @@ def test_cli_status_reads_every_node_with_read_only_commands_and_prints_json(cap
     assert cli.main(["status", "--json"]) == 0
     doc = json.loads(capsys.readouterr().out)
     assert doc["schema"] == "cluster/status/v1" and doc["t"] == T
-    assert [n["node"] for n in doc["nodes"]] == [nebius1.NODE, nebius2.NODE]
-    assert doc["nodes"][0]["bundles"]["count"] == 2 and doc["nodes"][1]["ledger"]["path"] == "/live/state.json"
-    assert sorted(sent) == sorted([(nebius1.NODE, status.COMMANDS[k]) for k in ("kueue", "df", "bundles")]
-                                  + [(nebius2.NODE, status.COMMANDS[k]) for k in ("state", "df")])
+    assert [n["node"] for n in doc["nodes"]] == [nebius2.NODE]
+    assert doc["nodes"][0]["ledger"]["path"] == "/live/state.json"
+    assert sorted(sent) == sorted((nebius2.NODE, status.COMMANDS[k]) for k in ("state", "df"))
     writes = re.compile(r"\b(patch|delete|apply|create|edit|label|annotate|scale|cordon|drain|rm|mv|kill|tee|chmod|chown)\b|>(?!/dev/null)")
     for _, cmd in sent:
         assert not writes.search(cmd), cmd
@@ -309,10 +121,10 @@ def test_a_nodes_address_is_the_environments_and_unset_its_read_fails_naming_the
         returncode, stdout, stderr = 0, DF, ""
 
     monkeypatch.setattr(status.subprocess, "run", lambda argv, **kw: sent.append(argv) or Ran())
-    monkeypatch.setenv("VY_NEBIUS_1_HOST", "192.0.2.11")
-    monkeypatch.delenv("VY_NEBIUS_2_HOST", raising=False)
-    assert status.reach(nebius1.NODE, None)("df -P /workspace") == DF
-    assert [argv[-2:] for argv in sent] == [["research@192.0.2.11", "df -P /workspace"]]
+    monkeypatch.setenv("VY_NEBIUS_2_HOST", "192.0.2.12")
+    assert status.reach(nebius2.NODE, None)("df -P /workspace") == DF
+    assert [argv[-2:] for argv in sent] == [["research@192.0.2.12", "df -P /workspace"]]
+    monkeypatch.delenv("VY_NEBIUS_2_HOST")
     monkeypatch.setattr(status, "clock", lambda: T)
     assert cli.main(["status", "--on", "nebius-2"]) == 1
     assert capsys.readouterr().out == ("vy-nebius-2: could not read: ReadError: VY_NEBIUS_2_HOST is unset: vy-nebius-2's "
