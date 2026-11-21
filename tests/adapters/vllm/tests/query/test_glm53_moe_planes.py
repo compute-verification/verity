@@ -61,7 +61,7 @@ class _Served(nn.Module):
 def instances() -> dict:
     """The derived chain's instance rows under `model.model.layers.3.mlp.experts`, with the rows the CPU derive cannot emit appended:
     `MoeSum_v1` per token (`_moe_C.moe_sum` needs vLLM), the next layer's fused norm reading it, the logits and the token select."""
-    from verity_vllm.pipeline.build import _instance_sequence
+    from verity_vllm.pipeline.build_instances import _instance_sequence
     from verity_vllm.program.frontend.rules import vllm_bindings as VB
 
     class Root(nn.Module):
