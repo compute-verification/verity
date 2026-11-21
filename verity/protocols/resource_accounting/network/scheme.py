@@ -139,7 +139,8 @@ NETWORK_ATTESTER = register(Scheme(
     check_settings=_check,
     hooks=("declared", "steps"),
     requires={"one-labelling": "the network attester's rows (`verifier.network_attester_rows`)",
-              "one-design": "each scan's own sample at its δ (`prover.scan_zk`)"},
+              "one-design": "the proof layer's sample of the scan; the attester's piece writes NOT RUN "
+                                    "(`attester_piece.NOT_RUN`)"},
     ports=(Port("scan-state", "input", IngressScanStart.id, "sin", layout=_scan_state_layout, value=SCAN_STATE), Port("released", "output", EgressBucket.id, "o1")),
     requests=requests,
     attach=attach,

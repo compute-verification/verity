@@ -81,6 +81,7 @@ pythonpath = ["."]   # the repository root before tests/, whose tests/verity/ wo
 untraced = [
     "tests/lint/test_device_figures.py",
     "tests/lint/test_repo_env_reads.py",
+    "tests/lint/test_readme_pattern.py",
     "tests/lint/test_repo_lane_text.py",
     "tests/lint/test_repo_retired_terms.py",
     "tests/lint/test_repo_ruff.py",

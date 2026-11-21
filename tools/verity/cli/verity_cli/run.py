@@ -8,9 +8,9 @@
 
 `verity run` reads CONFIG, a configuration's path, or NAME, an application's, `applications/NAME.toml` (a - in NAME is
 a _; one that is neither is refused by name, ``application``, with the applications' names). It checks the
-configuration, refusing any set of subprotocols that is neither a composite's nor one of onsite's smaller sets
-(``composite``, `verity.config.COMPOSITES`: onsite and remote, whose work is Pearl+'s run verdict, the only two protocol
-soundness covers; `verity.config.UNACCEPTED`; H1's development composite is refused), then runs
+configuration, refusing any set of subprotocols that is no composite's (``composite``, `verity.config.COMPOSITES`:
+onsite and remote, whose work is Pearl+'s run verdict, the only two protocol soundness covers; H1's development
+composite is refused), then runs
 the parties it places on the machines this host stands for (``--on``, once for each, default ``local``, and for NAME each
 of the application's machines), or only the ``--party`` ones, for ``--periods`` periods (default 1), in the shared state
 ``--state`` (default a new directory under the system's temporary one). The parties are those of the static table
@@ -59,9 +59,7 @@ this process when all of them are here, else meeting the rest over TCP at the co
 ``listen``. Each prints a ``PARTY`` line as it finishes, with its exit code or the name it was refused by.
 
 When the verifier runs here, each period's verdict is its own: the composite of the listed subprotocols (remote or
-onsite, its id the line's ``product``), or for one of onsite's smaller sets, under that set's id, ``undecided``, since no
-composite takes it, unless the table's line says who combined its verdict (``combined_by``, printed beside it), printed
-as a line and written to ``STATE/record/verdicts.jsonl``:
+onsite, its id the line's ``product``), printed as a line and written to ``STATE/record/verdicts.jsonl``:
 
     VERDICT {"block": I, "coins": C, "coins_on": {NAME: MACHINE},
              "components": {NAME: accept|reject|undecided|development|error|absent}, "configuration": HASH, "product": ID,
@@ -674,15 +672,8 @@ def _parties(cfg: Mapping[str, Any], reg: Registry, state: Path, chosen: Sequenc
     lines = [{**x, "coins_on": {**on, **x.get("coins_on", {})}} for x in lines]
     if sharing(cfg, reg, machines):
         lines = [{**x, "coins": "simulated"} for x in lines]
-    if (cid := K.composite(cfg["protocols"], reg.components)) in K.UNACCEPTED:
-        lines = [{**x, "product": cid} if x.get("combined_by") else
-                 {**x, "product": cid, "verdict": "undecided", "reason": x.get("reason") or f"no composite takes {cid}"}
-                 for x in lines]
     for line in lines:
         say("VERDICT", line)
-        if line.get("combined_by"):
-            print(f"verity run: block {line['block']}'s verdict {line['verdict']} is combined by "
-                  f"{line['combined_by']}; no composite takes {line['product']}", file=sys.stderr)
     (state / "record").mkdir(parents=True, exist_ok=True)
     (state / "record" / "verdicts.jsonl").write_text("".join(json.dumps(x, sort_keys=True) + "\n" for x in lines))
     verdicts = {x["verdict"] for x in lines}

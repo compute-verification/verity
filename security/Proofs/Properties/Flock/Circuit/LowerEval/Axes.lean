@@ -344,6 +344,206 @@ theorem liftDef_arg_ax (D : Defn) (fnOf : ℕ → ℕ) (primOf : ℕ → Bool) (
   rw [hg _ hi', hg _ hi]
   simp [Flock.Lift.liftDef, hf, hax]
 
+/-- Iteration `m` of a scan's sequence argument on bits, the slice `[m·L, (m+1)·L)` of its lifted references, is the
+bits of the slice of its word references: `axisBits` at `t < L`. -/
+theorem scanSliceBits {D : Defn} {x : List (List Bool)} (hx : x.map List.length = leafWidths D)
+    {outs : Array (List (List Bool))} (ho : OutsOk D outs) {s : Seq}
+    (hr : ∀ r ∈ s.toArray.toList, RefIn D outs.size r) {n m : ℕ} (hm : m < n) {ew : List ℕ}
+    (hw : s.toArray.toList.map (fun r => (tyAt D r).widths[r.j]!) = (List.replicate n ew).flatten) :
+    (List.range ew.sum).map (fun t =>
+      Flock.Program.refVal x.flatten (Flock.Program.paramStarts (D.params.map fun (n, t) => (n, Ty.bitType t)))
+        (outs.map List.flatten) ((Flock.Lift.liftSeq (atOf D) (homoOf D) s).toArray.getD (t + m * ew.sum) default)) =
+      ((List.range ew.length).map fun t =>
+        Flock.Program.refVal x (Flock.Program.paramStarts D.params) outs
+          (s.toArray.getD (t + m * ew.length) default)).flatten := by
+  have key : ∀ L t : ℕ, t < L → t / L * n * L + t % L + m * L = t + m * L := fun L t h => by
+    rw [Nat.div_eq_of_lt h, Nat.mod_eq_of_lt h, Nat.zero_mul, Nat.zero_mul, Nat.zero_add]
+  refine (List.map_congr_left fun t ht => ?_).trans ((axisBits hx ho hr hm hw).trans ?_)
+  · simp only [key _ t (List.mem_range.1 ht)]
+  · congr 1
+    exact List.map_congr_left fun t ht => by simp only [key _ t (List.mem_range.1 ht)]
+
+theorem flatten_take_drop {α : Type} : ∀ (o : List (List α)) (k : ℕ),
+    o.flatten.take ((o.take k).map List.length).sum = (o.take k).flatten ∧
+      o.flatten.drop ((o.take k).map List.length).sum = (o.drop k).flatten
+  | [], _ => by simp
+  | a :: o, 0 => by simp
+  | a :: o, k + 1 => by
+    obtain ⟨h1, h2⟩ := flatten_take_drop o k
+    simp only [List.take_succ_cons, List.drop_succ_cons, List.map_cons, List.sum_cons, List.flatten_cons]
+    exact ⟨by rw [List.take_append, List.take_of_length_le (Nat.le_add_right _ _), Nat.add_sub_cancel_left, h1],
+      by rw [List.drop_append, List.drop_of_length_le (Nat.le_add_right _ _), List.nil_append,
+        Nat.add_sub_cancel_left, h2]⟩
+
+/-- **A scan's fold on words and on bits agree step by step**: where each iteration's step, from a carry of the
+widths `cw`, returns words of the widths `ow` (the carry's first) and on bits their bits, the fold on bits from the
+bits of a word carry and outputs ends at the bits of the fold on words, its carry of the widths `cw`. -/
+theorem scanFold (cw ow : List ℕ) (hk : ow.take cw.length = cw) (N : ℕ)
+    (stepW : List (List Bool) → ℕ → Option (List (List Bool))) (stepB : List Bool → ℕ → Option (List Bool))
+    (h : ∀ carry m, m < N → carry.map List.length = cw → ∃ o, stepW carry m = some o ∧ o.map List.length = ow ∧
+      stepB carry.flatten m = some o.flatten) :
+    ∀ (ms : List ℕ) (carry ys : List (List Bool)), (∀ m ∈ ms, m < N) → carry.map List.length = cw →
+      ∃ cr ys', ms.foldlM (fun (st : List (List Bool) × List (List Bool)) m => do
+          let o ← stepW st.1 m; pure (o.take cw.length, st.2 ++ o.drop cw.length)) (carry, ys) = some (cr, ys') ∧
+        cr.map List.length = cw ∧
+        ys'.map List.length = ys.map List.length ++ (List.replicate ms.length (ow.drop cw.length)).flatten ∧
+        ms.foldlM (fun (st : List Bool × List Bool) m => do
+          let o ← stepB st.1 m; pure (o.take cw.sum, st.2 ++ o.drop cw.sum)) (carry.flatten, ys.flatten) =
+          some (cr.flatten, ys'.flatten)
+  | [], carry, ys, _, hc => ⟨carry, ys, rfl, hc, by simp, rfl⟩
+  | m :: ms, carry, ys, hms, hc => by
+    obtain ⟨o, hw, hl, hb⟩ := h carry m (hms m (List.mem_cons_self ..)) hc
+    have hc' : (o.take cw.length).map List.length = cw := by rw [List.map_take, hl, hk]
+    obtain ⟨cr, ys', h1, h2, h4, h3⟩ := scanFold cw ow hk N stepW stepB h ms (o.take cw.length)
+      (ys ++ o.drop cw.length) (fun m' hm' => hms m' (List.mem_cons_of_mem _ hm')) hc'
+    have hs : cw.sum = ((o.take cw.length).map List.length).sum := by rw [hc']
+    obtain ⟨ht, hd⟩ := flatten_take_drop o cw.length
+    rw [← hs] at ht hd
+    refine ⟨cr, ys', ?_, h2, ?_, ?_⟩
+    · simp only [List.foldlM_cons, hw, Option.bind_eq_bind, Option.bind_some]
+      exact h1
+    · rw [h4, List.map_append, List.map_drop, hl, List.length_cons, List.replicate_succ, List.flatten_cons,
+        List.append_assoc]
+    · simp only [List.foldlM_cons, hb, Option.bind_eq_bind, Option.bind_some]
+      rw [ht, hd, ← List.flatten_append]
+      exact h3
+
+/-- A scan node's argument `i ≥ 1` at iteration `m`, as `nodeStep` reads it: a sequence argument's slice `m`, any
+other whole, each at its callee parameter's leaf count. -/
+def scanArg {W : Type} [Inhabited W] (v : Ref → W) (callee : Defn) (nd : Node) (m i : ℕ) : List W :=
+  if i ≤ nd.nxs then Flock.Program.argVals v (nd.args.getD i default) (callee.params.getD i default).2.leaves
+      fun t => t + m * (callee.params.getD i default).2.leaves
+  else Flock.Program.argVals v (nd.args.getD i default) (callee.params.getD i default).2.leaves id
+
+/-- `nodeStep`'s scan arm, its fold over the pair's projections. -/
+theorem nodeStep_scan {W : Type} [Inhabited W] (I : Flock.Program.Wires Option W)
+    (hI : ∀ {α : Type} (o : Option α), I.lift o = o) (P : Prog) (ev : ℕ → List W → Option (List W)) (d : ℕ)
+    (x : List W) (defn : Defn) (outs : Array (List W)) (nd : Node) {callee : Defn} (hf : nd.form = .scan)
+    (hlt : nd.fn < d) (hc : P.defs[nd.fn]? = some callee) :
+    nodeStep I P ev d x defn outs nd =
+      ((List.range nd.n).foldlM (fun (st : List W × List W) m => do
+          let o ← ev nd.fn (st.1 ++ ((List.range nd.args.size).drop 1).flatMap
+            (scanArg (Flock.Program.refVal x (Flock.Program.paramStarts defn.params) outs) callee nd m))
+          pure (o.take (callee.params.getD 0 default).2.leaves, st.2 ++ o.drop (callee.params.getD 0 default).2.leaves))
+        (Flock.Program.argVals (Flock.Program.refVal x (Flock.Program.paramStarts defn.params) outs)
+          (nd.args.getD 0 default) (callee.params.getD 0 default).2.leaves id, [])) >>=
+        fun r => pure (outs.push (r.1 ++ r.2)) := by
+  unfold nodeStep
+  rw [if_neg (by omega), show I.lift P.defs[nd.fn]? = some callee from by rw [hI, hc]]
+  simp only [Option.bind_eq_bind, Option.bind_some, hf]
+  rfl
+
+theorem paramBit {C C' : Defn} (hpar : C'.params.map (·.2) = C.params.map (·.2.bitType)) {i : ℕ}
+    (hip : i < C.params.size) : (C'.params.getD i default).2 = Ty.bitType (C.params.getD i default).2 := by
+  have hsb : C'.params.size = C.params.size := by simpa using congrArg Array.size hpar
+  have hib : i < C'.params.size := by rw [hsb]; exact hip
+  have h1 := congrArg (·[i]?) hpar
+  simp only [Array.getElem?_map] at h1
+  rw [Array.getElem?_eq_getElem hib, Array.getElem?_eq_getElem hip] at h1
+  rw [Array.getD_eq_getD_getElem?, Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hib,
+    Array.getElem?_eq_getElem hip]
+  simpa using h1
+
+/-- Slice `m` of an argument whose references' widths repeat `E`'s `n` times, on bits, at the lift's leaf count. -/
+theorem argSliceBits {D : Defn} {x : List (List Bool)} (hx : x.map List.length = leafWidths D)
+    {outs : Array (List (List Bool))} (ho : OutsOk D outs) {a a' : Arg}
+    (ha' : a'.seq = Flock.Lift.liftSeq (atOf D) (homoOf D) a.seq)
+    (hr : ∀ r ∈ a.seq.toArray.toList, RefIn D outs.size r) {n m : ℕ} (hm : m < n) {E : Ty}
+    (hw : a.seq.toArray.toList.map (fun r => (tyAt D r).widths[r.j]!) = (List.replicate n E.widths.toList).flatten) :
+    Flock.Program.argVals (Flock.Program.refVal x.flatten
+        (Flock.Program.paramStarts (D.params.map fun (n, t) => (n, Ty.bitType t))) (outs.map List.flatten)) a'
+        (Ty.bitType E).leaves (fun t => t + m * (Ty.bitType E).leaves) =
+      (Flock.Program.argVals (Flock.Program.refVal x (Flock.Program.paramStarts D.params) outs) a E.leaves
+        (fun t => t + m * E.leaves)).flatten := by
+  simp only [Flock.Program.argVals]
+  rw [ha', ← sum_widths E, show E.leaves = E.widths.toList.length by rw [Array.length_toList, hb_widths_size]]
+  exact scanSliceBits hx ho hr hm hw
+
+/-- An argument whose references have `E`'s widths, whole, on bits, at the lift's leaf count. -/
+theorem argSharedBits {D : Defn} {x : List (List Bool)} (hx : x.map List.length = leafWidths D)
+    {outs : Array (List (List Bool))} (ho : OutsOk D outs) {a a' : Arg}
+    (ha' : a'.seq = Flock.Lift.liftSeq (atOf D) (homoOf D) a.seq)
+    (hr : ∀ r ∈ a.seq.toArray.toList, RefIn D outs.size r) {E : Ty}
+    (hw : a.seq.toArray.toList.map (fun r => (tyAt D r).widths[r.j]!) = E.widths.toList) :
+    Flock.Program.argVals (Flock.Program.refVal x.flatten
+        (Flock.Program.paramStarts (D.params.map fun (n, t) => (n, Ty.bitType t))) (outs.map List.flatten)) a'
+        (Ty.bitType E).leaves id =
+      (Flock.Program.argVals (Flock.Program.refVal x (Flock.Program.paramStarts D.params) outs) a E.leaves
+        id).flatten := by
+  have h := argSliceBits hx ho ha' hr (n := 1) (m := 0) Nat.one_pos (E := E) (by rw [hw]; simp)
+  simp only [Nat.zero_mul, Nat.add_zero] at h
+  exact h
+
+/-- **A scan's argument `i ≥ 1` at iteration `m`, on bits**, `C` its callee on words and `C'` on bits: the lifted
+node's reads the bits of the word node's. -/
+theorem scanArgBits {D : Defn} {fnOf : ℕ → ℕ} {primOf : ℕ → Bool} {gatesOf : ℕ → ℕ} {x : List (List Bool)}
+    (hx : x.map List.length = leafWidths D) {outs : Array (List (List Bool))} (ho : OutsOk D outs) {n : ℕ}
+    (hnD : n < D.body.nodes.size) (hnD' : n < (Flock.Lift.liftDef D fnOf primOf gatesOf).body.nodes.size)
+    (hsz : outs.size = n) {C C' : Defn} (hpar : C'.params.map (·.2) = C.params.map (·.2.bitType))
+    (hargs : ∀ a ∈ (D.body.nodes[n]).args.toList,
+      a.seq.count = a.seq.toArray.size ∧ ∀ r ∈ a.seq.toArray.toList, RefIn D n r)
+    {i : ℕ} (hi : i < (D.body.nodes[n]).args.size) (hip : i < C.params.size)
+    (hw : ((D.body.nodes[n]).args.getD i default).seq.toArray.toList.map (fun r => (tyAt D r).widths[r.j]!) =
+      if i ≤ (D.body.nodes[n]).nxs then
+        (List.replicate (D.body.nodes[n]).n (C.params.getD i default).2.widths.toList).flatten
+      else (C.params.getD i default).2.widths.toList)
+    {m : ℕ} (hm : m < (D.body.nodes[n]).n) :
+    scanArg (Flock.Program.refVal x.flatten
+        (Flock.Program.paramStarts (D.params.map fun (n, t) => (n, Ty.bitType t))) (outs.map List.flatten))
+        C' ((Flock.Lift.liftDef D fnOf primOf gatesOf).body.nodes[n]) m i =
+      (scanArg (Flock.Program.refVal x (Flock.Program.paramStarts D.params) outs) C (D.body.nodes[n]) m i).flatten := by
+  obtain ⟨hseqi, -, -, -⟩ := liftDef_arg D fnOf primOf gatesOf hnD hnD' hi
+  have hmemA : (D.body.nodes[n]).args.getD i default ∈ (D.body.nodes[n]).args.toList := by
+    simp [Array.getD, hi]
+  have hrefs' : ∀ r ∈ ((D.body.nodes[n]).args.getD i default).seq.toArray.toList, RefIn D outs.size r :=
+    fun r h => by rw [hsz]; exact (hargs _ hmemA).2 r h
+  have hnx : ((Flock.Lift.liftDef D fnOf primOf gatesOf).body.nodes[n]).nxs = (D.body.nodes[n]).nxs := by
+    simp [Flock.Lift.liftDef]
+  unfold scanArg
+  rw [hnx, paramBit hpar hip]
+  by_cases hle : i ≤ (D.body.nodes[n]).nxs
+  · rw [if_pos hle] at hw
+    rw [if_pos hle, if_pos hle]
+    exact argSliceBits hx ho hseqi hrefs' hm hw
+  · rw [if_neg hle] at hw
+    rw [if_neg hle, if_neg hle]
+    exact argSharedBits hx ho hseqi hrefs' hw
+
+theorem mem_drop_range {i k : ℕ} (h : i ∈ (List.range k).drop 1) : 1 ≤ i ∧ i < k := by
+  obtain ⟨j, hj, rfl⟩ := List.mem_iff_getElem.1 h
+  simp only [List.length_drop, List.length_range] at hj
+  simp only [List.getElem_drop, List.getElem_range]
+  omega
+
+/-- **One scan iteration's inputs after the carry, on bits** (step 2b): the lifted node's arguments `i ≥ 1` at
+iteration `m` read the bits of the word node's. -/
+theorem scanRestBits {D : Defn} {fnOf : ℕ → ℕ} {primOf : ℕ → Bool} {gatesOf : ℕ → ℕ} {x : List (List Bool)}
+    (hx : x.map List.length = leafWidths D) {outs : Array (List (List Bool))} (ho : OutsOk D outs) {n : ℕ}
+    (hnD : n < D.body.nodes.size) (hnD' : n < (Flock.Lift.liftDef D fnOf primOf gatesOf).body.nodes.size)
+    (hsz : outs.size = n) {C C' : Defn} (hpar : C'.params.map (·.2) = C.params.map (·.2.bitType))
+    (hargs : ∀ a ∈ (D.body.nodes[n]).args.toList,
+      a.seq.count = a.seq.toArray.size ∧ ∀ r ∈ a.seq.toArray.toList, RefIn D n r)
+    (hcs : (D.body.nodes[n]).args.size = C.params.size)
+    (hw : ∀ i < (D.body.nodes[n]).args.size, 1 ≤ i →
+      ((D.body.nodes[n]).args.getD i default).seq.toArray.toList.map (fun r => (tyAt D r).widths[r.j]!) =
+        if i ≤ (D.body.nodes[n]).nxs then
+          (List.replicate (D.body.nodes[n]).n (C.params.getD i default).2.widths.toList).flatten
+        else (C.params.getD i default).2.widths.toList)
+    {m : ℕ} (hm : m < (D.body.nodes[n]).n) :
+    ((List.range ((Flock.Lift.liftDef D fnOf primOf gatesOf).body.nodes[n]).args.size).drop 1).flatMap
+        (scanArg (Flock.Program.refVal x.flatten
+          (Flock.Program.paramStarts (D.params.map fun (n, t) => (n, Ty.bitType t))) (outs.map List.flatten))
+          C' ((Flock.Lift.liftDef D fnOf primOf gatesOf).body.nodes[n]) m) =
+      (((List.range (D.body.nodes[n]).args.size).drop 1).flatMap
+        (scanArg (Flock.Program.refVal x (Flock.Program.paramStarts D.params) outs) C (D.body.nodes[n]) m)).flatten := by
+  have hasz : ((Flock.Lift.liftDef D fnOf primOf gatesOf).body.nodes[n]).args.size = (D.body.nodes[n]).args.size := by
+    simp [Flock.Lift.liftDef]
+  rw [hasz, flatten_flatMap]
+  apply List.flatMap_congr
+  intro i hi
+  obtain ⟨h1, h2⟩ := mem_drop_range hi
+  exact scanArgBits hx ho hnD hnD' hsz hpar hargs h2 (by omega) (hw i h2 h1) hm
+
 /-- **A batch member's arguments' bits, on any axis**, `C` its callee on words and `C'` on bits: member `m` of a lifted
 batch node reads, on bits, the bits of the words its word node's member reads. -/
 theorem batchBits_ax {D : Defn} {fnOf : ℕ → ℕ} {primOf : ℕ → Bool} {gatesOf : ℕ → ℕ} {x : List (List Bool)}

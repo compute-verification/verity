@@ -281,7 +281,7 @@ class _Program:
             self.tokens.append(None)
             rows = self.rows(tok.refs)
         else:
-            tid, u = self.b.unit(bind(IO.TokenFeed, NP=NP, FIRST=self.served))
+            tid, u = self.b.unit(bind(IO.TokenFeedV2, NP=NP, FIRST=self.served))
             assert self.slot is not None, f"{self.name}: position {p}'s token before position 0's, which carries its slot"
             self.b.feed(tid, "slot", u, 1, (self.slot,))
             if not self.served:
@@ -689,7 +689,7 @@ class _Program:
         first = p == 0 and not self.collects
         if self.head is None or (not first and self.collect is None):
             raise Unexpressible(f"{self.name}: position {p}'s collector before its Program's first position's token")
-        ctid, cu = self.b.unit(bind(IO.OutCollect, KO=KO, FIRST=first))
+        ctid, cu = self.b.unit(bind(IO.OutCollectV2, KO=KO, FIRST=first))
         self.b.feed(ctid, "head" if first else "state", cu, 1, (self.head if first else self.collect,))
         self.b.feed(ctid, "tok", cu, 1, self.tok_rows[p] if tok is None else tok)
         self.collect = Row(ctid, cu, "o0", 2 * (KO + 2))

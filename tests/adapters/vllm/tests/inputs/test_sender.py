@@ -1,11 +1,12 @@
 """The one sender (`verity_vllm.inputs.sender`) against serve-openai's endpoint as served_verdicts runs it (``--admit
 release-order --window-requests N``: `serve_openai.Server`, its `ReleaseOrder` and its `EngineLoop`) over a stand-in engine
-on CPU, playing the remote applications' input dataset at once. Request 0 goes out only once every other one is held, so
+on CPU, playing a four-request fixed dataset at once. Request 0 goes out only once every other one is held, so
 every one of the engine's steps runs all of them, the first included; its timings file carries the dataset's identity, on
 an injected clock. What it catches that a stand-in `urlopen` can't: a server that held a request without answering its
 head, or forwarded one before request 0, would leave the window short at its first step."""
 from __future__ import annotations
 
+import dataclasses
 import itertools
 import json
 import threading
@@ -13,6 +14,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import input_datasets
+import pytest
 
 from verity.protocols.resource_accounting.network.prover.admission import ReleaseOrder
 from verity_vllm.inputs import serves
@@ -21,6 +23,12 @@ from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline import serve_protocol as sp
 
 DATASET = "llama32_1b_fixed_4_27_2"
+
+
+@pytest.fixture(autouse=True)
+def _class_of_the_dataset(monkeypatch):
+    """The sender's point is the order of several requests, so it plays the four-request fixed load under its class."""
+    monkeypatch.setattr(serves, "SERVES", dataclasses.replace(serves.SERVES, window_class="4,27,2"))
 
 
 class _Tokenizer:
@@ -86,7 +94,7 @@ class _Endpoint:
 
 
 def test_the_dataset_at_once_runs_every_request_at_each_of_the_windows_steps_and_times_each(tmp_path, capsys):
-    """The remote applications' dataset at once: its four bodies as the dataset holds them, request 0 sent after every
+    """The four-request fixed dataset at once: its four bodies as the dataset holds them, request 0 sent after every
     other one and no output read before it was; the engine's two steps each run all four; each streams two ids and
     finishes by length; its timings file names the dataset, its timing and its identity, in release order."""
     engine, records, ticks = _Engine(), list(input_datasets.open(DATASET)), itertools.count()
