@@ -433,8 +433,8 @@ def _sha(p: Path) -> str:
 def registered_weights(registration: dict[str, Any], serve: dict[str, Any] | None = None) -> dict[str, str]:
     """What a window's registration records of the weights it served (``registered_roots``): the committer's weights
     registration's hiding root for each weight parameter its window circuit registers (`records.weights_registration`,
-    ``weights/<label>@<words>`` -> its entry, `window_weights.weights_registration`), written once per model and key
-    before the first window's coins, the roots the verifier pins, which `interface.input_count` holds each weight's reads
+    ``weights/<label>@<words>`` -> its entry, `window_weights.weights_registration`), written once per deployment
+    before its first epoch's coins, the roots the verifier pins, which `interface.input_count` holds each weight's reads
     to. Refused (ValueError) unless it is such a registration, every value a weight parameter's, and, given the run's
     ``serve.json``, of its model at its revision."""
     from verity_vllm.check import weights_of_record as WR
