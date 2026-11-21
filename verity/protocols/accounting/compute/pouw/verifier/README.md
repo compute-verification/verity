@@ -46,10 +46,10 @@ It needs no GPU.
 
 | Scheme | What it is |
 | --- | --- |
-| Pearl-C | Pearl's FP8 (E4M3) proof of useful work, on the H100 and the RTX PRO 6000. |
-| Pearl-C4 | Pearl-C on sm_120's NVFP4. Experimental. |
-| NCP | Noise-cancelling polarization over int7 activations. |
-| Dither | A design over the ACCEL model. Experimental, with its own `verity/protocols/experimental/dither/PROTOCOL.md`. |
+| Pearl-C | Pearl's FP8 (E4M3) proof of useful work. Served as Pearl+ on the H100 and H200 (`pearl-c-h100-v1-h3`); the RTX PRO 6000's scheme (`pearl-c-sm120-v1-h3`) has kernels and a build, and no Lean verifier or `verity run`. |
+| Pearl-C4 | Pearl-C on sm_120's NVFP4. Experimental: its kernels were deleted, and it has no Lean verifier or `verity run`. |
+| NCP | Noise-cancelling polarization over int7 activations. A kernel exists (`ncp-v2`); no Lean verifier or `verity run`. |
+| Dither | A design over the ACCEL model. Experimental, with its own `verity/protocols/experimental/dither/PROTOCOL.md`: kernels exist; no verifier or `verity run`. |
 
 ## What is proved
 
