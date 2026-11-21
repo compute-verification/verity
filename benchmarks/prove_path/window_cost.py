@@ -521,7 +521,7 @@ def _slot_definition(lab: str, cls: WindowClass) -> object:
     fam, s = CS.statics(lab)
     if fam == CS.SCAN:
         return SS.bridge(cls.scan, cls.prompt)[0]
-    make = {CS.FEED: IO.TokenFeed, CS.COLLECT: IO.SelectCollect, CS.ENTRY: IO.SelectEntry}[fam]
+    make = {CS.FEED: IO.TokenFeed, "TokenFeed_v2": IO.TokenFeedV2, CS.COLLECT: IO.SelectCollect, CS.ENTRY: IO.SelectEntry}[fam]
     return bind(make, **s, **({"STOP": ()} if fam == CS.ENTRY else {}))
 
 

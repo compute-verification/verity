@@ -74,7 +74,7 @@ subprotocol accepts its own case, and the commitment is `bind` of the subprotoco
 | SPOT (the audit on the proofs themselves, one-stage v2's, which it reads as blobs; one-stage v1 and the recursive audit, which its soundness doesn't cover, refused, and the two-stage audit read and checked, accepted while its switch is on, ahead of its proof) | yes | yes | `VStar.Recursive.Sampled.protocol` (`core_vstar_recursive`, `../../../proof/spot_flock/verifier/lean`) | `verity/sampled-proofs/v1` |
 | PoUW (Pearl+'s run verdict: a workload's retained passes sampled at δ, its credit at Pearl's assumption) | yes | yes | `PouwVerifier.PearlPlus.Protocol.protocol` (`pouw_pearlplus`, `../../../accounting/compute/pouw/verifier/lean/pearlplus`) | `verity/pouw/pearl-plus/v1` |
 | PoUW's period credit (the period's windows credited all or nothing), remote's development composite's work | | | `PouwVerifier.Period.protocol` (`pouw_verifier`, `../../../accounting/compute/pouw/verifier/lean/check`) | `verity/pouw/period/v1` |
-| the inference-only policy (its check: the registered circuit's division into inference blocks within their gate and fresh-input budgets, and the provenance of the registered information) | yes | yes | `InferenceOnlyCheck.Protocol.protocol` (`inference_only_check`, `../../../policy/training_detection/inference_only/verifier/lean`) | `verity/inference-only/v0` |
+| the inference-only policy (its check: the registered circuit's division into inference blocks within their gate and unregistered-input budgets, and the provenance of the registered information) | yes | yes | `InferenceOnlyCheck.Protocol.protocol` (`inference_only_check`, `../../../policy/training_detection/inference_only/verifier/lean`) | `verity/inference-only/v0` |
 | PoUS (its check of a run) | yes | | `PousCheck.RunProtocol.protocol` (`pous_check`, `../../../accounting/memory/pous/verifier/check`) | `verity/pous/p2/v4/run` |
 | PoUB-P2 (its session over PoUS's store) | yes | | `Poub.P2Protocol.protocol` (`poub`, `../../../accounting/memory/poub/verifier/lean`) | `verity/remote-bandwidth/p2/v0` |
 | the wipe (the memory attester's streamed-label wipe of the period) | yes | | `MemoryChallenger.WipeProtocol.protocol` (`core_memory_challenger`, `../../../accounting/memory/pous/attester/lean`) | `verity/wipe/v0` |
@@ -97,7 +97,7 @@ the policy's record to SPOT's (one record, below), so the circuit the policy che
 audited.
 
 A stated exception: the policy's v0 publishes the division and each inference block's profile (its gates and
-fresh-input bits) in the clear. Both products compose it for one run of record only, as an exception to
+unregistered-input bits) in the clear. Both products compose it for one run of record only, as an exception to
 everything-zero-knowledge, and v1's private form (the division committed under hiding leaves, compliance proved, a
 padded profile) replaces it. `tests/test_inference_only_not_composed.py` refuses any protocol that publishes
 private data among the products' subprotocols unless its `KNOWN` lists it with its reason, and `KNOWN` only shrinks;

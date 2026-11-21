@@ -3,6 +3,8 @@ module
 public import PouwPearlPlus.Run
 public import PouwCommit.Py
 public import PouwWindow.Rounds
+public import Spot.ChallengerSession
+public import Spot.ChallengerCoins
 
 /-!
 # The run's coins: the epoch's salt coin and the verifier's sample (`verify_run`, "The run's sample" and "The coin record")
@@ -18,11 +20,12 @@ public import PouwWindow.Rounds
   key and period: its opening is coin ``pouw/draw`` 0 of its commitment opened after the run's commitment C
   (`challenger.live_reason`), its coin is the record's source S, and its commitment is of a sample session's layout
   (`window.draw_epoch_reason`).
-* **No challenger key.** This Lean reads no challenger key: an opening is checked only against the commitment it is
-  handed. The sessions' signatures under the pinned key, and the auditor's ledger, are checked only by the served node's
-  Python (`served_verdicts.pearlplus_coins`, `pearlplus_draw`); the compose side reads copies the node hands it, and no
-  composite and no compose-side code verifies a signature. So against a prover that controls the node, nothing here holds
-  the coins to the challenger.
+* **The challenger key.** `check` reads no challenger key: an opening is checked only against the commitment it is
+  handed. `liveDrawReason` (`pouw-pearlplus --draw-live`) reads the pinned key, the auditor's ledger and the draw
+  session's files, and holds a challenger sample to its draw session, the ledger's and the session's signatures verified
+  under the key. The salt session's are `served_verdicts.pearlplus_coins`' (`core_check.live_salt`), outside this
+  executable; the compose side reads copies the node hands it, and no composite and no compose-side code verifies a
+  signature.
 * **Of record** (`--of-record`), the verdict takes only a challenger sample on live epoch coins: `ofRecordReason` refuses
   the node's sample, a v1 record (which names no sample), no record, a source given on the command line, and an in-process
   challenger's epoch coins. Without it they are read as development runs.
@@ -117,7 +120,37 @@ def drawReason (h : CoinRecord) (root : ByteArray) : Option String := Id.run do
   if o.coin != h.source then return some "the record's source is not its draw session's coin"
   return none
 
+/-- `served_verdicts.pearlplus_draw`: why the record's challenger sample is not its draw session's, read from the auditor's
+ledger and the session's own files (`{key, ledger, pins, main, session}`); `none` when it is, or when the record names no
+challenger sample. The session is the one the ledger opens on the run's commitment `root` under the pinned challenger key,
+run from a commit the host's pins log records on main's first-parent line, from its files
+(`Spot.Challenger.trustedChallengePhaseOf`, which verifies the ledger's and the session's signatures under that key); the
+ledger opens it withheld (`withheldOn`); its signed commitment is a sample session's (`drawEpochReason`) and the
+record's; and its log shows `root` alone as the root its draw coin followed. The record's opening and source are
+`drawReason`'s, against the record's commitment, which this holds to the signed one. -/
+def liveDrawReason (h : CoinRecord) (root : ByteArray) (live : Json) : Option String := Id.run do
+  if !fieldIs (get? h.draw "from") DRAW_CHALLENGER then return none
+  let g := fun k => (get? live k).getD .null
+  let k ← match Spot.Challenger.ChallengerKey.ofJson (g "key") with
+    | .ok k => pure k
+    | .error e => return some s!"the draw session's challenger key is malformed: {e}"
+  let window := Json.mkObj [("root", .str (Flock.hexOf root))]
+  let (c, log) ← match Spot.Challenger.trustedChallengePhaseOf (g "ledger") window k (g "pins") (g "main") (g "session") with
+    | .ok p => pure p
+    | .error e => return some s!"the draw session is not trusted: {e}"
+  if !Spot.Challenger.withheldOn (g "ledger") (Flock.hexOf root) then
+    return some s!"the run's draw session: {Spot.Challenger.WITHHELD}"
+  if let some why := PouwWindow.drawEpochReason c then return some s!"the draw session's signed coins: {why}"
+  let .ok claimed := LiveCommitment.ofJson ((get? h.draw "commitment").getD .null)
+    | return some "the record's draw commitment is malformed"
+  if !sameLive claimed c then
+    return some "the record's draw commitment is not the one the draw session's challenger signed"
+  if ((Spot.Challenger.byFamily c log).lookup PouwWindow.DRAW).getD [] != [root] then
+    return some "the draw session's log does not show the run's commitment as the one root its draw coin followed"
+  return none
+
 def DRAW_REFUSED : String := "draw"
+def DRAW_SESSION_REFUSED : String := "draw-session"
 def NOT_OF_RECORD : String := "of-record"
 
 /-- Why a verdict on these coins is no verdict of record; `none` when the epoch's coins are a live session's and the

@@ -67,8 +67,9 @@
 #      pouw-pearlplus-build.log; one that doesn't build answers nothing), on the same passes, epoch coins, samples, coin
 #      record and W (--tie), of record (--of-record) on a live session's coins, within PEARLPLUS_LEAN_TIMEOUT seconds
 #      (default 3,600), and writes its answer to PIECE_DIR/pearlplus-lean.json,
-#      the file `served_verdicts.pearlplus_of_record` reads, only where it is the Python verdict's; both verdicts, its
-#      command line and the executable's SHA-256 go to PIECE_DIR/pearlplus-lean-check.json either way;
+#      the file the piece's verdict and `served_verdicts.pearlplus_of_record` read, whatever the Python's verdict says
+#      (verify's verdict decides nothing: its coin and its timed credit are what is read of it); both verdicts, where
+#      they differ, its command line and the executable's SHA-256 go to PIECE_DIR/pearlplus-lean-check.json either way;
 #   4c. where the Lean answered, `served_passes.py case` writes the parts of the run's case as remote's composite of
 #      record reads it that need no docket, and the pass files its opened tiles read, to
 #      SERVE_DIR/private/pearlplus/case, where served_cases.py makes the case once the window's record R is made;
