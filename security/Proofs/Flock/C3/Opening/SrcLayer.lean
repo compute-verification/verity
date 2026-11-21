@@ -85,7 +85,7 @@ open Game Spot.Sampling Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockVBridge.Compiled FlockC3.Compose
 open FlockVBridge (copyVal keyInst bitOf)
 open FlockVBridge.Decode (fill)
-open FlockVBridge.OfVStar (OpeningZeroAtL rowCol partRep fill_rowCol readCol_rsAt)
+open FlockVBridge.OfVStar (OpeningZeroAtL rowCol partRep fill_rowCol)
 open FlockVBridge.PartS (wIdx)
 
 /-- Ring switch `i`'s element `t` of the messages w holds is w's at its slot. -/
