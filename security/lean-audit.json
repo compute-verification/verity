@@ -35079,54 +35079,6 @@
     "ResourceAccounting.Guarantees.TS.StageIdeal": "1bfa7573f8ee8da91c017a0cbcf9fabd85f5436c36e53f7dff3d8009909ee3a4"
    }
   },
-  "Definitions.Pouw.H1Zy.Chain": {
-   "digest": "f1775261148be5c488cab818aa5c8e34e156763e5de562497c9258992539f899",
-   "definitions": {
-    "Pouw.H1Zy.LaneNoise": "a5afb702cc555caf1ec84c56f007a74b386f50c02ab5bf152ca4ce88842bafa9",
-    "Pouw.H1Zy.LaneNoise.coin": "0f427104cbbddb953e049ab237b6212d8937bb7ad24e9fc4aff52db7504526c8",
-    "Pouw.H1Zy.LaneNoise.digit": "4093b7f8aa60153cb545d770713a8c0b5cb0afee8d84e0fdbc2ec577e5c1b8da",
-    "Pouw.H1Zy.LaneNoise.dither": "ead95df1e0ed27955ebac3192b18fc49f161dd3b4320f575c2b452fd3f399d7f",
-    "Pouw.H1Zy.LaneNoise.key": "f6f60e54664fc326aae0bcaccbaa56703af83fde31a065642e87c2f6588ac907",
-    "Pouw.H1Zy.LaneNoise.u": "804ad7dadbcfdd41665ceb1b57edbbcf558ed76dd23c3f548dd21c22edc89f3e",
-    "Pouw.H1Zy.SeedIn": "44f860fa03060e3a00167e30c4ee02288c00e1ac4a57f92176beb57a5d80ad2f",
-    "Pouw.H1Zy.SeedIn.position": "4e5065cfacc018730ba69aabfee0e49e1556ca6a64e8e984a46cbc6752a36413",
-    "Pouw.H1Zy.SeedIn.roots": "e29720bdd06a9449b684b7004fbe84c85ca870e782411e3b9ede28d859a219b6",
-    "Pouw.H1Zy.SeedIn.salt": "228fccb53239f969d54d4a6b9ce9c736c1e05a4f3b10f133ffe1fc46f76e4db9",
-    "Pouw.H1Zy.absorbSet": "3122c7f9cece5b9e025672870e257646cca89c1b34367e727edebced6a84cd31",
-    "Pouw.H1Zy.chunkBit": "ea2f7cb4a537813cbe96e9905cbee735afb649ab7a1efcfce0d30e1b4fa7660c",
-    "Pouw.H1Zy.colBlocks": "3656b081d5135f64c05bd106a2a52c4937bf56cd4a239d9e5a5fdfb54b82992c",
-    "Pouw.H1Zy.colFirst": "281e8f88f2e4def1569a75e20abbd0d24128015cea852a146fef8807a0d095e0",
-    "Pouw.H1Zy.colSlot": "919673e8b91cc5278c2c81290c9fbcfd3f0ec440877b7b961cf41e1a16be25f6",
-    "Pouw.H1Zy.digitsK": "6b49dab174a478d754e2d5a75873f7bf8c36329f71d172e0db39c62b30737c24",
-    "Pouw.H1Zy.duoAbsorb": "83a90addf567cb84bbe72e60054a58a9eaf560fefec55ad121a9c76ac9c5a286",
-    "Pouw.H1Zy.duoKa": "fd0b7b8ebd8d140b7079a1d113dbd30a9d1a4aa1f118776223f83f71c8f9e1ca",
-    "Pouw.H1Zy.duoKk": "249aebf00d9e02b04a26ea7a3ceb7df374f7c69bcb057f7a8761eece5d8823e0",
-    "Pouw.H1Zy.duoRot": "d9bb8b4c4e87fba24cd9a3e3e09c2d8266561a67c6d5c8d2fe94d0d0677630ac",
-    "Pouw.H1Zy.duoStep": "a94a09150fdf9251c0837746ecb81bb5a762fbe38b226d65b32e9b235b08d0f8",
-    "Pouw.H1Zy.finSets": "ab7d95bc5878ecde5b92c5b37c50856783431f808c468478cb9641b2b9cd5753",
-    "Pouw.H1Zy.fx1Absorb": "632ae0c94433df143b1dd0b8417d50f012c9ef6ce8761bc1eef370f48c421600",
-    "Pouw.H1Zy.fx1Key": "d54175ce6d8f8921a884e2ad5f5035ea03a6fa40430a5f094314f2c24af75ffc",
-    "Pouw.H1Zy.h1Chain": "18564522595186cdf3422e54d1aa3da5b6b4d579d0a3f82b5157fc5c9b7a459d",
-    "Pouw.H1Zy.halvesBytes": "293e8aec8b4c3fc7ccdd508fb94851948f607db7e67c35c21125821abb1d2e30",
-    "Pouw.H1Zy.laneNoise": "a3b93d38bb178398f39dd3ea28e8d607c40c19a04a260fd7fa3894016262ac1f",
-    "Pouw.H1Zy.mix32": "56fc88abf2290aa66b27aa30715d7598f63858c8fe28a797a56fc8504d74975c",
-    "Pouw.H1Zy.noiseChain": "0270f1c4e409807adae24f839cd8652d1ac5366e6ae41e7a45fdbf30813cac5c",
-    "Pouw.H1Zy.noiseChunk": "2c3617b825861271aa9c812e1d1c82d8a4680dd483a76760d8fc9ff29ba804f8",
-    "Pouw.H1Zy.noiseTag": "6b51fbcbd1e1b5fd8c797f91161b7717f308f00dfb1776252a83607506b061ba",
-    "Pouw.H1Zy.receiptTag": "7c969714eaa3e9deb6e19382b6050a28fef31a001c018d46e9936ccc228e69f8",
-    "Pouw.H1Zy.rowBlocks": "913fad74c8fec650d3bc121a3deab1f03406099bd46e79f8082922cd07d3ee31",
-    "Pouw.H1Zy.rowFirst": "95e3b65e8b3f72aaf97fb8b845f679fe55e714969ae662df3c8278fa8be0bf68",
-    "Pouw.H1Zy.rowSlot": "5768a5ddf9f6f449240ed65ec85d52235f1f8233d6e080cc112483e503ffdc39",
-    "Pouw.H1Zy.seedJ": "64784a8364d19b842eefbaf846289540d85439419aa6a09dce53987b8dee7a9a",
-    "Pouw.H1Zy.seedTag": "fbb506e5c5631331caaea6495701708d27a20592119ff27dddf0d48e890aaf98",
-    "Pouw.H1Zy.segStep": "aab36d8ff1a0c5f41985aa93c545aca70bce7938d65c91f3d0432c36c899d34c",
-    "Pouw.H1Zy.sigmaR": "145b2cc459c1f247a18cb072c8d6cdcac09bce908f35e325f8426ca0a0d97711",
-    "Pouw.H1Zy.streamBit": "931a9f59000680769d387b2137df9765b8c14811461af37e8bb7874581dddb74",
-    "Pouw.H1Zy.streamVal": "64ae133e775c2c23463675f99736e9be723fa613d6af352b6da2951599df5365",
-    "Pouw.H1Zy.tagged": "24e762e8307b8c07a6e18613ac902c45d307b7f68c34fcd9bda108138e0f8a3e",
-    "Pouw.H1Zy.xinFinal": "07e497f894b718adf7a786568e9e8fc1028ad2d84343acb6877a619292edf788"
-   }
-  },
   "Definitions.Pouw.H1Zy.Combine": {
    "digest": "fd659384da1d0215d08ac6f1351e17018bc38f247fd4e434287e52dc7dfbc75c",
    "definitions": {
@@ -48456,129 +48408,6 @@
     "FlockSoundness.Game.optS": "275c856dbbcd8d6201cce5745d4720019120997d057e0ed698605310b972a898"
    }
   },
-  "Proofs.Flock.EndToEnd.Joint.MT.Statement": {
-   "digest": "6a39265245afc1148f819d07a65a5c493c799d2fd295a115386a2977a4e1785b",
-   "definitions": {
-    "Flock.Guarantees.BlockRecMT": "380edd7b775bc951507457438ca7539e2ab5c099b262ec36237062ea93ba9680",
-    "Flock.Guarantees.BlockRecMT.accepted": "6500717c55af89240f1c39b2de29112305bc39268b60e7f8d982cf70230f0a45",
-    "Flock.Guarantees.BlockRecMT.harm": "2e90988cb216be7ad263ba16e932a35737e7cedd9b0368329a52a9595d407e9c",
-    "Flock.Guarantees.BlockRecMT.idx": "d9dc6718bc0084b2593e58cfd1ece575c4bcffb7e5c9f084f4f0c5b3565e02ec",
-    "Flock.Guarantees.BlockRecMT.incorrect": "81a7e421aa7d32ba7a88eb32f8ca380b33f79658977460c9b994523e8b87b35b",
-    "Flock.Guarantees.BlockRecMT.missProb": "7bf1feefcfa5d1d6f5a298289ec2352c2ad23a512e2b952c7017991a154d7fce",
-    "Flock.Guarantees.BlockRecMT.spend": "d3a153d2c0c0b483470af033cb78fe60220fe1d70f6831c027983dcba4b92ab1",
-    "Flock.Guarantees.JointStratifiedMT": "17531bbfc8cade1496da1c0fa4fb079dc6eacf1ec077a87311e9a72f4d593605",
-    "Flock.Guarantees.JointStratifiedPooledMT": "95900b5ba16393c0cb5e1397834667d9df49a724a7c9cf71fe19dc3b0d314a14",
-    "Flock.Guarantees.StratifiedBlockMT": "78f859280c7549cbf369fae1784468f0093540965a13d16f9c714c85ebb9fb29",
-    "Flock.Guarantees.StratifiedBlockMT.D": "1fd4b0dbab7accbb83083d9efa0b08b265f0b898b0705f6d00df38242aaf1e86",
-    "Flock.Guarantees.StratifiedBlockMT.I": "7ef7526996f57eaa47bb0b45d5753fae7939001d5d5616a93b0f910ac33a4113",
-    "Flock.Guarantees.StratifiedBlockMT.Kd": "5e82783456bbadeb5a934a1583d6f69fa10e990eddefcce3aa42755885a759a1",
-    "Flock.Guarantees.StratifiedBlockMT.L": "53f90f82f1dae2f25da797d8bdf31a6b8808fb48bdd30d9909bc08fa84b72e0e",
-    "Flock.Guarantees.StratifiedBlockMT.Lb": "f9b19a956a0cddea16a2e93fe90289e18c8b0598a55d29759010826a7588efb2",
-    "Flock.Guarantees.StratifiedBlockMT.M": "0939340d449b00e9e6a681d0f5b1d49ff2d413960a62523f1b5ef0478d141031",
-    "Flock.Guarantees.StratifiedBlockMT.N": "5c7866496527ded3c33dc64ada6ba64b5433520579da154b0234b4e4c91c39ad",
-    "Flock.Guarantees.StratifiedBlockMT.P": "f810fcf317b32d8de569bdc0c2cedeb6292011f5d527720171720f95ad0f7fe3",
-    "Flock.Guarantees.StratifiedBlockMT.Reg": "416473c5179a27316f007a9540eb5b82a27b162313406de6ead8a25212c2b509",
-    "Flock.Guarantees.StratifiedBlockMT.Rw": "f7060a57d6f230a42d18332461e996c448d6dd41c65fa0f15a0b248d8c245027",
-    "Flock.Guarantees.StratifiedBlockMT.St": "5967923e82e0d6c79ea2df4308592ef8936f0012025819b1e11ac7f66b785412",
-    "Flock.Guarantees.StratifiedBlockMT.S₀": "3487c50e564dfe3e07e37025e03e04eebf43f5453377da1a0881470a9f5ca749",
-    "Flock.Guarantees.StratifiedBlockMT.Within": "42b22a3f4a8837d898efc424252c817d88fc6325368f0773d0da6aec1c328688",
-    "Flock.Guarantees.StratifiedBlockMT.dg": "fdb1abd312eda7e48a780ca3d269275b32971f4022be202175d91f60c4e5e1f8",
-    "Flock.Guarantees.StratifiedBlockMT.dj": "4837355af7792ae40ce6b3c9bf93f81ed4c89b02e0004ce42dc4e4ddc9adfa6a",
-    "Flock.Guarantees.StratifiedBlockMT.d₀": "ca39b889f56d8398b1567fd8472ff59239b6a89de33a4648943c4ece21084372",
-    "Flock.Guarantees.StratifiedBlockMT.epsKs": "8d8b375c03b3255ee683f965f686dc14b844e6723606413b6ccd89579ae45462",
-    "Flock.Guarantees.StratifiedBlockMT.fintypeΩ": "60d49c4b9d19ea9b20c64f6b1fd61a935cb68f4d4ee492a3c7ce25238c2118e7",
-    "Flock.Guarantees.StratifiedBlockMT.game": "ed9879bd5cb6e1dca9135ef06554ac5a9245841e91c795f15d0baa7d57d010f8",
-    "Flock.Guarantees.StratifiedBlockMT.ideal": "cef064dc6bae55b10f018085eaca580920e899dd7a92842a630837b536b56f53",
-    "Flock.Guarantees.StratifiedBlockMT.incorrectSet": "d9a8080c441aee39e5d7243c9caa01cf8a322cfc5678bb51908b90cc03343cdb",
-    "Flock.Guarantees.StratifiedBlockMT.k": "a146f98bce2bf352b2917d9688e4a0a05fdbb50047747ae7be12bce1991ae030",
-    "Flock.Guarantees.StratifiedBlockMT.ks": "e02e2ea007f09763c892e1e495d2065967a884ba72d25f16dceb1bba3470c729",
-    "Flock.Guarantees.StratifiedBlockMT.link": "5eb8fb6aacba334a823c8bb2b0010334affce7fc212eaf92acdf68501a6755d9",
-    "Flock.Guarantees.StratifiedBlockMT.m": "f8e184879343fe832f42dc1b9486efb4e8ed78cac9bf682df7024361ef2bb8a7",
-    "Flock.Guarantees.StratifiedBlockMT.maxHarm": "77847dc24ae65328ac33c7a315c4a05401b3cfbb402b7ae2649455557d8226fd",
-    "Flock.Guarantees.StratifiedBlockMT.n": "ded98534b556d7907c610b76f7746b123a0ba9d9436caf34322a3f14a2a2f914",
-    "Flock.Guarantees.StratifiedBlockMT.pop": "7818b9540c233c03e1a8cc7087be09c12a5746190dc35e84443171c342edf374",
-    "Flock.Guarantees.StratifiedBlockMT.pub": "22f9818b22b51dcc2e499b167bd6d9c25a96a6590e5b67bfa0f706d81ec7b7d9",
-    "Flock.Guarantees.StratifiedBlockMT.qF": "568fb9831baf28dba3667d3794137113cf9163f2422d7d2d41260907248c2a76",
-    "Flock.Guarantees.StratifiedBlockMT.qS": "9c8dca86e60dd3546a238237a2b16b526eabf64d2e2beda0639a3f7c57b1c9d2",
-    "Flock.Guarantees.StratifiedBlockMT.record": "aabdf8a3ad487aeea07a3bc8970c3d7a4298d16c7b7e0d16ca86c739b14f337b",
-    "Flock.Guarantees.StratifiedBlockMT.sim": "67775f8d0bbcb52c80f0a491306331e477a8020dcbca4c774aeffa4f8563cbf7",
-    "Flock.Guarantees.StratifiedBlockMT.spend": "a805d465cef1defb8ac15ed931a6cbbb64c5d419083f6c5434155afd9f3780c1",
-    "Flock.Guarantees.StratifiedBlockMT.src": "f46ae84cbcc65f864a16958e8cf472bebfb2a9847a26a5211522e8598a54fd7a",
-    "Flock.Guarantees.StratifiedBlockMT.sub": "6cc673f27508c2aec561e9ffd989252b1c7a8434859d9d94bfb95eff7fbcd952",
-    "Flock.Guarantees.StratifiedBlockMT.t'": "3c23fdd6a07d8dbaa5deee1e389074bf70cda88f12f41dde33664505d6018ea6",
-    "Flock.Guarantees.StratifiedBlockMT.vb": "92b0cfb2dac0089d78f7939d9a776a06c7cdd4f481ebc89067866d36a4c5ad38",
-    "Flock.Guarantees.StratifiedBlockMT.wr": "33757c69f4c321b35c275e06bc6ec40fc3e7a58cb7aae5295b84105fe53906bf",
-    "Flock.Guarantees.StratifiedBlockMT.y₀": "326eb7a1e28bf33eea3c9b260eee803401bcc480f3f90c2a3aa36ce7719b664b",
-    "Flock.Guarantees.StratifiedBlockMT.Ω": "b0dd9b44b6e202537a79feafba3e2ec83ec390d6a1ec0a0bec1d73cb7a307d26",
-    "Flock.Guarantees.StratifiedBlockMT.ρ": "2f0701a9a16294380cb0ae43c2bfad52b6e90568ec9c81ccd7949758dd4d9ec2",
-    "Flock.Guarantees.StratifiedMT.Plays": "d88a5bbf2551f66854c83189726264783cf01d5a548e94b750911ec101e5f198",
-    "Flock.Guarantees.StratifiedMT.Within": "60deffdc94e9b03b9b74048df2aab3fb2bb735ab68eddc734f6edc64cf53c365",
-    "Flock.Guarantees.StratifiedMT.game": "11b60d5fdc7f481d4a519e856879a83403ac0dadf35e2a180122d6f237798c0d",
-    "Flock.Guarantees.StratifiedMT.maxHarm": "3cf20e762582ab5efb1d145309d2910c20d6bb4807a5b4b4b731db64b130e672",
-    "Flock.Guarantees.StratifiedMT.run": "d9fc6e02603ff21a4bfb01ccbf6d4e3923f9b037200ba09f6ae413da1d1b7934"
-   }
-  },
-  "Proofs.Flock.EndToEnd.Joint.Statement": {
-   "digest": "45d5913eea9cddbfc42f00b5e808d91ba31af99cc51d7c4621a848683b7d8293",
-   "definitions": {
-    "Flock.Guarantees.BlockRec": "68c8975d198b854946303d0e2969e47be8d5c7692baf692f9530d306f94138fb",
-    "Flock.Guarantees.BlockRec.accepted": "2bc5f04e33bb0232a29045623c2dec4cd607f3614810ca74f1a2406eb8ab634f",
-    "Flock.Guarantees.BlockRec.harm": "e0aa1e43872913b674ccd94247af594c5743dc0c908bce20107c3504a1a6b92b",
-    "Flock.Guarantees.BlockRec.idx": "c3cdd61ccbec253a113639969cc82195c0cbc1426d691a0d35c0a234e8e7e819",
-    "Flock.Guarantees.BlockRec.incorrect": "d26082f6e09f7b7a1ab7774f06d1ebc3e4dda226a30dc7d846096867dd3430f7",
-    "Flock.Guarantees.BlockRec.missProb": "a519f572b320532705099d1674e32441cc755b547cbd9b94b5962538c63545f3",
-    "Flock.Guarantees.BlockRec.spend": "990545645732de429e7ced4d7ed7e71c6db1dd52f11b573e99ae43212bef6350",
-    "Flock.Guarantees.JointStratified": "bd80e60a59e97f3f058518a1771941847c905d750e9f27e7c8f1fa7846c55dde",
-    "Flock.Guarantees.JointStratifiedPooled": "d9ff262e1ae8c3e99901dc831c07d933a6c21303941f3c984c618161483de868",
-    "Flock.Guarantees.Stratified.Plays": "f63478cfbb9d6a924e970b00e9440f3b5c68612609baa1410dd320eb63fb8900",
-    "Flock.Guarantees.Stratified.Within": "ef3503a239b346dd01a87377af32acc65def7a035bb372e2b8368b9f0288a112",
-    "Flock.Guarantees.Stratified.game": "a0d4ef096a11fc6e81e048dcc6bd375d4fb1ac7279c485a4bab1e7926c11b0be",
-    "Flock.Guarantees.Stratified.maxHarm": "d1560c816cce4e1323b9f5586f55747f0bdc3ec4aa0c8a2cf7bf755c6b6d8c5c",
-    "Flock.Guarantees.Stratified.run": "cf79f6a44e13866c013240f544fc15543bdc01e82c59d9b0c9526a3e2d66fa27",
-    "Flock.Guarantees.StratifiedBlock": "45aa2c6a6824755a1289d221f579479eb1027c6ef3486d647a64436619c9003a",
-    "Flock.Guarantees.StratifiedBlock.D": "aaa32f74e54b6eee13155fc402ffa85dee50aaba522554f2705aa65cbbc99d0c",
-    "Flock.Guarantees.StratifiedBlock.I": "0501f432a34397b30e3d012dba2bdbcc18fecfe1d32e955d8a9cb7186557ce0d",
-    "Flock.Guarantees.StratifiedBlock.Kd": "6dd40ad0b873f79d08a232e500b753722b0b5ba57c900b97c3f214b1f66a5bb4",
-    "Flock.Guarantees.StratifiedBlock.L": "ade485c20adba5fd68e9b7a072c283282e0de5744c6eadbc2c38199d03f008a7",
-    "Flock.Guarantees.StratifiedBlock.Lb": "b3e86da8ef23ca0de6d8137edcb6f9fc0a9da81a54407e52b27e63f35b3d0a6e",
-    "Flock.Guarantees.StratifiedBlock.M": "892940840350e74f46f6ac646b4cb51abad14f1326f8a9d7432946c539336e2f",
-    "Flock.Guarantees.StratifiedBlock.N": "2cf2d3a7763fde10532f4975005dce04068a153a8fcae044e431b9ae77b4cc53",
-    "Flock.Guarantees.StratifiedBlock.P": "7a93b4b08f8a36d6ac33e9ae627c5a319f73e05ab4b7df3bc65bcdfecad67b51",
-    "Flock.Guarantees.StratifiedBlock.Reg": "372befbedf6a4c6623c8b664937dc27c54219c2667f465ed47538d4f16299104",
-    "Flock.Guarantees.StratifiedBlock.Rw": "aa2f45f241cfb09f52921fb96a98b20b475dee601a561c919949893376dcb633",
-    "Flock.Guarantees.StratifiedBlock.St": "e51017df8f258e81cd936ae50c1e5efdcf66022d6379ec17793afac9d55f1270",
-    "Flock.Guarantees.StratifiedBlock.S₀": "c3c50d1b264a2f664d612894411831db5998bfeab93824df1bd24ccbbfca9396",
-    "Flock.Guarantees.StratifiedBlock.Within": "d73a4ae490a5a71436ae126ddfee1ee41d3e387c11c285b8181fc3d0108198c4",
-    "Flock.Guarantees.StratifiedBlock.dg": "f7784c5ea36452b72a1a0b9952cb98a17d789267668b5c7ab30ac27d695e4bfe",
-    "Flock.Guarantees.StratifiedBlock.dj": "3927f4d8d408a5f98c66796ea6a44d4747266854ef204dd2fdac09b8a8b58427",
-    "Flock.Guarantees.StratifiedBlock.epsKs": "bc95f1979594ac108c6bd3453fe51c53258e64470770ef5e2edd28eddddca627",
-    "Flock.Guarantees.StratifiedBlock.fintypeΩ": "5c42d3b67e2e017a791140588f29f3dc6b1501477cbfe030570b522836729fb4",
-    "Flock.Guarantees.StratifiedBlock.game": "f05ca464b7ce5c100ef44d8aa0478f6339ce7a21a47881073e6036013b7437d2",
-    "Flock.Guarantees.StratifiedBlock.ideal": "5dc37d884ab938dab275c871b3c37e6118ff33b77fd32a035b5c86f54f86d018",
-    "Flock.Guarantees.StratifiedBlock.incorrectSet": "90cf536f2bd702bd6fd89612313e61c202abd6f193a64a853c5d5a61584a93a4",
-    "Flock.Guarantees.StratifiedBlock.k": "d7e71337903b71cb076178959cfcd7ec4e0d1f17eb3ce4216cc504336433d2e8",
-    "Flock.Guarantees.StratifiedBlock.ks": "0274cfdebfa59527e39efb205777c722540ff7b50f1cbe779b8e492c32aa667c",
-    "Flock.Guarantees.StratifiedBlock.link": "7fb34952116a133d43734f2f61904f0976115e25ffe3ba5386aed7b072ad770d",
-    "Flock.Guarantees.StratifiedBlock.m": "3b269ab1a8de338b7ffc0b1b2695b70b6648f2cabbe0e89db2529ffca15044cf",
-    "Flock.Guarantees.StratifiedBlock.maxHarm": "dff91bddfdef64408c65d574d22e702e02eb54cbfe45893f562822d07286d481",
-    "Flock.Guarantees.StratifiedBlock.n": "c276e656968ad0e4374bec7209852f96e98ed81d0615c33d72f7d62310abf52e",
-    "Flock.Guarantees.StratifiedBlock.pop": "ec3fe74b611ba7551e969369b256267ec50a6e2e9f29508a88ac0c544d564e4f",
-    "Flock.Guarantees.StratifiedBlock.pub": "3fa4e22000471c9c50c39e12096259d4ffc8d6cada4083c5a1b450722a8f4608",
-    "Flock.Guarantees.StratifiedBlock.qF": "66805e18b152a6f9be27afa99ff8a9b006f7a7d363fb6bf496c154b4fab19476",
-    "Flock.Guarantees.StratifiedBlock.qS": "3e690fcf208556684c0a12c78dfa9f9de22a97de4a2a5c4e4e133caf7b80737c",
-    "Flock.Guarantees.StratifiedBlock.record": "2d7615f29049ed08f3712add9e0e367eef0963c826921583e16261742bca79cb",
-    "Flock.Guarantees.StratifiedBlock.sim": "8430794b99a1b44c7187b55ff14c0ed42aa3379b59edecf0ef468eb7a0561e56",
-    "Flock.Guarantees.StratifiedBlock.spend": "3b92a6ebdf5a9414ecb388204b7c112a62ebf062505010ff89d909a2df2d7949",
-    "Flock.Guarantees.StratifiedBlock.src": "6983cc191754fe7e2f56ac37b1844fd52f7dde8d7b1f3a7bb46298900bf898f2",
-    "Flock.Guarantees.StratifiedBlock.sub": "7c94ee8820606df1ea840f92cf93d3c717bdad3a40ef4baf379c53988a3b8466",
-    "Flock.Guarantees.StratifiedBlock.t'": "bb01cce14135d6051265e74b2170fedb1eba086ae2ec860492b6acd8e8a00770",
-    "Flock.Guarantees.StratifiedBlock.vb": "a3cb1683788350c8675227ef456d9a00818097aa645938f3eb01a526cabbb20c",
-    "Flock.Guarantees.StratifiedBlock.wr": "b690863c34a704fba42617fb835ec3bb46d2431c379aa693c4a7e654625132c6",
-    "Flock.Guarantees.StratifiedBlock.y₀": "1a900b4f36aad4b5ad68d9902685588e33c7c9eea25974486df2f344433a0256",
-    "Flock.Guarantees.StratifiedBlock.Ω": "4a2657595d460f4e1900d59d06f5e6c8d0af4f1b67dbb74708e10323ace0741c",
-    "Flock.Guarantees.StratifiedBlock.ρ": "6a039f872b18a8308a946194656c8e052d4b42a3dbe20506330ca9c4e7b2addf"
-   }
-  },
   "Proofs.Flock.EndToEnd.Joint.V5.Statement": {
    "digest": "647826211104a2129d665b52a8f88bb9bbfa041b59b999270d82b573b666d1c1",
    "definitions": {
@@ -49854,14 +49683,6 @@
     "Claims.ZKServer.Loop.leakWk": "8c7ffc763e2fc0ad836e59d8c3be87117f2de24cf5e817eb5de109571545918d"
    }
   },
-  "Proofs.Flock.SoundAtBridge.Served": {
-   "digest": "c521e7f4820f3a763a42866590428c68c23c110f53513187ac1c49b3679a9720",
-   "definitions": {
-    "Flock.Guarantees.ServedRowsLinked": "d040236b04f20f27fcc1804741c2fb7ce3c077163214304c10c0df57c16b3dfd",
-    "Flock.SoundAtBridge.RowsSession.ServedRegistered": "ac393eb5dcf7ede0dc7ca8d0d5c4d9063a064a4aa1e6bac8d5739757fa842f1f",
-    "Flock.SoundAtBridge.RowsSession.ownPort": "1337a2cb158c6a582b98713124afd263d6aef6338dbb6ae91f93233314300964"
-   }
-  },
   "Proofs.Flock.SoundAtBridge.Session": {
    "digest": "492381b504567b904cc764eae38ae020d0963cb94931eb51e5577953fd039ecb",
    "definitions": {
@@ -49909,16 +49730,6 @@
     "Flock.SoundAtBridge.RowsSession.ρ": "caef5cdfff2be37636658c554ff48b61865f1148c06705f12b75c1814dd46bea",
     "Flock.SoundAtBridge.RowsSession.σ": "cc95b3e87100acdc3e12e48e63b6f2260c3b812e83dd9761f6f9b9bdaff7be91",
     "Flock.SoundAtBridge.RowsSession.τ": "96f0996f24e7e368735fa60c30aad6dfb59372d476d305832c8a321798eb302e"
-   }
-  },
-  "Proofs.Flock.SoundAtBridge.Statement": {
-   "digest": "7aed5dc016aded847158922982f70331f950ba290f59a3fcc421c0247b0076c3",
-   "definitions": {
-    "Flock.Guarantees.SoundAtBridge": "89e5f2eeadce04d6a1f61364d6f48e96bcb376e7df9cdb0b212fdccbcf7860c4",
-    "Flock.SoundAtBridge.AcceptedLive": "f86d73f87fc6dfbd64da8e95dc67acf2b149b2dc8b5287ebfadab71012532053",
-    "Flock.SoundAtBridge.ExecutionPhaseSamplingDesign": "0a256a08a50c6a7dd662117ec9ad8032aaf97e344e67762ced887b7b92c34948",
-    "Flock.SoundAtBridge.OpenedPlurAt": "8acfcd6cb81a5ab66c902f32f627f0ac6f0353a2880ac94091da9baddac9cfc5",
-    "Flock.SoundAtBridge.RelOfRows": "ed226860b94de17f30f82381b1484adf83e714ce15953941fc1780ca760ba26d"
    }
   },
   "Proofs.Flock.Soundness.Accounting.PaddedNumbers": {
@@ -52094,14 +51905,6 @@
     "FlockSoundness.Discharge.ZkLink.tabAfterZCP": "353e5ba93d80659f0b62a94f028cc65ce3573f6499c20382d98a1bcaa029eb53"
    }
   },
-  "Proofs.Flock.Soundness.Discharge.ZkLink.Rows": {
-   "digest": "abe73c02ab669241695ad92863ddd4e9c33b4e634a73d361419736f77cc5bbf6",
-   "definitions": {
-    "FlockSoundness.Discharge.ZkLink.RowsCRZC": "a018810ae79e83d40182bd393bab2be9d7259dbb756535ec5e7aa5190dbe1150",
-    "FlockSoundness.Discharge.ZkLink.RowsRightZC": "17903e7c3e7e3167969767b45c16afad438cad2a579c80e9846fadcd798e6f2b",
-    "FlockSoundness.Discharge.ZkLink.rowsOutZC": "2d42ba4af13d6a202c0bfc4586b25484acbb51c2bd7d1cd6656bdfe0f813901d"
-   }
-  },
   "Proofs.Flock.Soundness.Discharge.ZkLink.SampleOk": {
    "digest": "9158cf1032119d2385e3e461c68e87913fb8b036ceb025470adc7ecc602307a6",
    "definitions": {
@@ -53473,51 +53276,6 @@
     "Pouw.SecurityProofs.OnsiteFreedWitness.twF": "3c791fc1c071db00773d761eb3359500085dc3b33a3144b28832756461404b58",
     "Pouw.SecurityProofs.OnsiteFreedWitness.twNet": "c61095c3a2c19598e0d67ea70ee2dab548dd605bb71c4e672af0d2eb74a663c5",
     "Pouw.SecurityProofs.OnsiteFreedWitness.twWork": "cbd1289061856f009326a2c6ca5cc940704b78e1b5ca0fea2b1e8d216ceebc47"
-   }
-  },
-  "Proofs.Pouw.TS.Session.Group.Layer": {
-   "digest": "c6ffa386f4bd21003293b85fd94e43fd6aa64250422cc61a758cdccb108b4c64",
-   "definitions": {
-    "ResourceAccounting.TS.Group.Ix": "42b4584d26b8ce12548dc1fea0609fa8708ec3cc18953726141d701e7bc46a05",
-    "ResourceAccounting.TS.Group.SessionChecks": "e53d495a4837fa50ccdc37a6b2b9f3700b26aba57ba79a7f2fd11272601968a6",
-    "ResourceAccounting.TS.Group.groupLayer": "6c430831b869373f73944f00ffce9427b0c489444bc854d888ae0e668e83b4b8",
-    "ResourceAccounting.TS.Group.okKnown": "aeb0524f53b61872aae3e7550589377d4556f62a3c4179b186a0e12133d511f2"
-   }
-  },
-  "Proofs.Pouw.TS.Session.Held.Known": {
-   "digest": "3dcfe8bb5ad90b9bdc6f372ed0bcf50c5c3d381af63b15b6aaab628a6108534f",
-   "definitions": {
-    "FlockC3.RegLevels.knownColl": "e71810ad87304b5935c9f0c333c562ff3b2e67d58e5995733923c61b0c814f5e",
-    "FlockC3.RegLevels.openPairAs": "a812c1c25ef92a2d039a0b7747ff327deab0457125b0d8c3d7906c32f0d3dd7e"
-   }
-  },
-  "Proofs.Pouw.TS.Session.Held.Layer": {
-   "digest": "a78bc7e798c20128ba1713ce28eae6d3d142a7bcb63593a365942546cd98c05c",
-   "definitions": {
-    "ResourceAccounting.TS.Held.HeldRel": "83396afb937b493ab8fc9eb134c171eb95d27198406b0aacf69c836443bcc086",
-    "ResourceAccounting.TS.Held.OkColl": "0bd47d152b8f4a5cc577cf0afb5ac25acaa8dfcbd1912a2fdb3dbb3fcbe1e650",
-    "ResourceAccounting.TS.Held.OkVal": "9b43e2152cf7b26e5b40687ff422bc32b4700702a06d587bfb6fb9ce5eee4731",
-    "ResourceAccounting.TS.Held.OkWire": "13dacffc6c935d81317934cf9fbc3167cf4f1b10da489fc329941c3bc12b3daa",
-    "ResourceAccounting.TS.Held.heldLayer": "1f5873a470688076018c5489ea409d0581a04e516b800e720d29a786dce6b613",
-    "ResourceAccounting.TS.Held.okRow": "ad158eb1ef36ba6fc89f206e92948b10d0d1142c89a5594c038f55a99eaedb86",
-    "ResourceAccounting.TS.Held.rsOf": "053e162a084cf32f1bcefdb9db8d83ae0be05299f99d2708b352a86e38961142"
-   }
-  },
-  "Proofs.Pouw.TS.Session.Lanes.Canon": {
-   "digest": "f250d5ba755418ebdc541163fe6895fb3c447436f94f4f0e30dd72ba80cec1a2",
-   "definitions": {
-    "Flock.SoundAtBridge.RowsSession.CanonRead": "ee50f002ea7f8c6c8697a4f4cfc7072e51a16be620efd314cc6ae6369ab88bf7",
-    "Flock.SoundAtBridge.RowsSession.Openings": "20d6825a3ec2687e9c1acfe3b53ac034257f57b86b753b462bfa1596431f1b61",
-    "Flock.SoundAtBridge.RowsSession.Openings.wpath": "706591ed13db7125101092eac0201416b41ea8b9462cadec5601f96c68d41734",
-    "Flock.SoundAtBridge.RowsSession.Openings.ws": "d91f3f8a6a4066b53f12b98ef3ef1fc54d69b96ca37437c30f667cf4f170a08a",
-    "Flock.SoundAtBridge.RowsSession.Openings.wv": "142660c5fdf3d79ae33595d3a4964da9c6c3dbd963648e77facdd818a0da23ac",
-    "Flock.SoundAtBridge.RowsSession.canon": "2ab9567ef843f30110288e987ce7bb569d813bb44d9402bb67950dd9f181e290",
-    "Flock.SoundAtBridge.RowsSession.canonAt": "04666b8123315fc203857589b725fef17d90b5a15296e237af3e57a023ed2ac4",
-    "Flock.SoundAtBridge.RowsSession.canonLay": "de4f44f3c43195aa611349e0dfbd7f5af765692aed2b4d8da0dd44eacd174719",
-    "Flock.SoundAtBridge.RowsSession.canonPort": "5ae63cc5a7a9cad2671a20dd3c2db87f3b74af617f39282ce027a5a5e5420277",
-    "Flock.SoundAtBridge.RowsSession.canonReads": "3769c3ea1cce7d73bb51dc3a29494f6698029fd2a9455e9aac7bfef2cc445b5c",
-    "Flock.SoundAtBridge.RowsSession.canonRs": "ae0859108f6c1a74e5b533d1d0849f19bfbfeea20db107077fa7fe452fcf4e79",
-    "Flock.SoundAtBridge.RowsSession.oneRead": "fa9fa765b7ebfeaf6855851c4a4034430c1bd41bce8a043a511c0332a887a707"
    }
   },
   "Proofs.Pouw.TS.Session.Lanes.Decode": {
