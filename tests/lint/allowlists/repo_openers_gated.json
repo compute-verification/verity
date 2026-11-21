@@ -1,0 +1,5 @@
+{
+  "rule": "circuit templates whose returned rows don't gate on their opener's verdict (tests/lint/test_repo_openers_gated.py)",
+  "entries": [
+  ]
+}
