@@ -1767,7 +1767,7 @@ def registration_of(ledger: Any, window: Any, key: ChallengerKey, verify: Verify
     """Lean `Challenger.registrationOf`: the `registration` of the first period-open of the epoch's lane signed before
     the epoch's first entry, the digest of the deployment's registration record.  Raises `CoinError` naming why where
     `declared_day` would, with none (`NO_REGISTRATION`), or where another period-open of the lane before that entry
-    names another head (`SECOND_REGISTRATION`)."""
+    registers again, under any digest (`SECOND_REGISTRATION`)."""
     if not _window(window):
         raise CoinError(f"the window's identity is malformed: {WINDOW_FORM}")
     windows, _ = _checked(ledger, key, verify)
@@ -1785,7 +1785,8 @@ def registration_of(ledger: Any, window: Any, key: ChallengerKey, verify: Verify
         raise CoinError(f"the auditor's ledger entry {e['seq']}: {REGISTRATION_FORM}")
     h = heads[0]
     r = h["body"]["registration"]
-    if (e := next((e for e in heads if e["body"]["registration"] != r), None)) is not None:
+    if len(heads) > 1:
+        e = heads[1]
         raise CoinError(f"{SECOND_REGISTRATION} (entry {e['seq']} names {e['body']['registration'][:16]}..., entry "
                         f"{h['seq']} {r[:16]}...)")
     return r

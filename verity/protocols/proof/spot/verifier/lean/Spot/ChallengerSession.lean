@@ -912,8 +912,8 @@ def REGISTRATION_FORM : String :=
 ledger `ledger` (its lines) under the pinned key `key`: the `registration` of the first `period-open` of the epoch's
 lane (`laneOf` its open) signed before the epoch's first entry (its reserve, else its open). That is the digest of the
 deployment's registration record, the registration log's first record, as the challenger signed it before the first
-coin. Refused by name with none (`NO_REGISTRATION`), and when another period-open of the lane before that entry names
-another head (`SECOND_REGISTRATION`): every epoch is held to the lane's first registration. The lane is what "the same
+coin. Refused by name with none (`NO_REGISTRATION`), and when another period-open of the lane before that entry
+registers again, under any digest (`SECOND_REGISTRATION`): every epoch is held to the lane's first registration. The lane is what "the same
 deployment" means here. Two limits stand on soundness's page. A new lane is a fresh registration: nothing here stops a
 developer from using one, so every accepted run names the registration's digest it was held to, and what closes it is
 the lane named by the auditor in the signed entry. No run today has a ledger carrying a registration: the signed case
@@ -933,7 +933,7 @@ def registrationOf (key : ChallengerKey) (window ledger : Json) : V String := do
   if let some e := heads.find? (fun e => !isDigest (getD e.body "registration")) then
     throw s!"the auditor's ledger entry {e.seq}: {REGISTRATION_FORM}"
   let r := strOf (getD h.body "registration")
-  if let some e := heads.find? (fun e => !jsonStrIs (getD e.body "registration") r) then
+  if let some e := heads[1]? then
     throw s!"{SECOND_REGISTRATION} (entry {e.seq} names {(strOf (getD e.body "registration")).take 16}..., entry {h.seq} {r.take 16}...)"
   return r
 
