@@ -93,14 +93,35 @@ accepted). The caller then refuses a record with an output value that reads a po
 included. A record it holds no verdict for is not refused, as for the pool. A registered value an output value reuses
 (`Earlier.value`, the pool's `pin` among them) is not held to it: the pool restarts by its own lag (`Pool.refused`).
 
-Under a template query that applies, R8 refuses a run Input node whose leaves the proof blocks don't each read alone,
-unless it is a parameter's the verifier expects registered (`heldGates`), which is a registered value, or a tied value's
-(`tiedGates`) (`Partition.readAlone`, `R8-shared-input`): a value another proof block writes that the program takes as an
-Input joins no proof blocks in the fan-out (`Partition.fanout`, which the registration piece publishes). A tied value
+Under a template query that applies, the fan-out joins no proof blocks through a value another proof block writes that
+the program takes as an Input (`Partition.fanout`, which the registration piece publishes). In the variant with no members, R8
+refuses a run Input node whose leaves the proof blocks don't each read alone, unless it is a parameter's the verifier
+expects registered (`heldGates`) or a tied value's (`tiedGates`) (`Partition.readAlone`, `R8-shared-input`); the
+per-member variant holds each reader to the node's one tree instead. A tied value
 is a run Input whose rows a later check ties to the registrations that computed them; R8 refuses a tied name that isn't
 a parameter of the program, neither registered nor held, whose gates are one interval of run Input nodes (`R8-tied`),
 and the registration piece publishes, beside the fan-out, the tied names it let through (`tiedThrough`), since
-acceptance rests on that later check.
+acceptance rests on that later check. R7 refuses a registered value, a supplied one included (a table opening's root
+and domain), whose parameter's gates hold a run Input node (`runInputNamed`, `R7-run-input`): a run Input's rows are
+committed once, in its one tree, and are never a registered value. R7 refuses a supplied anchor, a mark of
+`registered.root/v1` or `registered.domain/v1`, whose value V neither the verifier's `pinned` nor the weights'
+registration of record pins (`anchorUnpinned`, `R7-anchor-unpinned`); a value the registration of record pins whose
+record entry is not that pin in root, leaf count, words and domain, or an anchor's value it pins that the record
+registers no entry of (`offPin`, `R7-pin`); and a parameter bound as a supplied input that the parameters' `supplied`
+gives no source (`unsourced`, `R7-supplied-source`). `R7-anchor-unpinned` reads C's marks (`Verifier.marks`, from the
+program descriptor's `inputs`), which no descriptor carries until circuits writes the marks into C: until then it
+refuses nothing.
+
+R8 then holds the program's registered inputs (the parameters it binds at registration, `Partition.regInputs`) to the
+weights' registration of record the auditor's side hands it (`weightsOfRecord`: its bytes and the SHA-512 it holds; a
+document at another digest, `R8-weights-digest`, or of another form, `R8-weights-form`, is refused alone), each pin's
+domain the one its own document's program makes (`R8-weights-domain`) and its shape the parameter's
+(`R8-weights-shape`). A program with a registered input, or a verifier with a registration, under a query that is no
+template query that applies is refused (`R8-weights-query`). An input bound at registration that is neither pinned nor
+expected registered and that a template parameter reads is refused at one reader as at several (`R8-unpinned`), and a pin
+of no registered input excuses nothing. The pins it accepts of inputs the verifier does not expect registered (`weightsOf`) are no entry
+R7 reads: the members' check holds each member's registered read of such an input to its pin's root, leaf count and
+domain (`OneStageZk.pinsHeld`).
 
 A verifier of the per-member form (`OneStageZk`) names its members (`members`: each its units and its circuit's units a
 proof block, META `vus_per_block`), and after R8 the check refuses a member whose fewest and most sampled proof blocks under the
@@ -254,6 +275,11 @@ structure Verifier where
   verifier built from a registration it read under the deployment's key, which R7 holds the record's entry for the
   value to (`checkOutputs`, `certifiedHeld`) -/
   certified : Array (Registered.Entry × String) := #[]
+  /-- the weights' registration of record: its bytes and the SHA-512 (hex) the auditor's side holds for it, which R8
+  holds the program's registered inputs to (`weightsCodes`); none where it is handed none -/
+  weightsOfRecord : Option (ByteArray × String) := none
+  /-- C's supplied marks (`Supplied.marks`), by input, which R7 holds each anchor of to a pin (`anchorUnpinned`) -/
+  marks : Array (String × Supplied.Mark) := #[]
 
 /-- Whether the verifier expects a v2 record: it expects values registered or holds certified entries. -/
 def Verifier.v2 (v : Verifier) : Bool := !(v.registered.isEmpty && v.certified.isEmpty)
@@ -286,6 +312,13 @@ def optStr : Option String → Json
 def heldGates (v : Verifier) : Array (Nat × Nat) :=
   v.params.filterMap fun p => if v.registered.any (·.1 == p.name) then p.gates else none
 
+/-- The registered names, supplied ones included, whose parameter's gates hold a run Input node
+(`Partition.anyRunInput`; `registration._run_input_named`), which R7 refuses (`R7-run-input`). -/
+def runInputNamed (v : Verifier) : Array String :=
+  (v.registered.map (·.1)).filter fun t =>
+    ((v.params.find? (·.name == t)).bind (·.gates)).any fun (first, count) =>
+      Partition.anyRunInput v.program.prog first count
+
 /-- The Input gates `(first, count)` of tied name `t` where R8 may let it through: a parameter of the program that `v`
 neither expects registered nor holds, whose gates are one non-empty interval of run Input nodes
 (`Partition.runInputs`; `registration._tied`). A tied value is never a registered value: R7 holds nothing of it. -/
@@ -300,14 +333,82 @@ def tiedGates (v : Verifier) : Array (Nat × Nat) := v.tied.filterMap (tiedGate 
 /-- The tied names R8 can't let through (`R8-tied`). -/
 def tiedBad (v : Verifier) : Array String := v.tied.filter fun t => (tiedGate v t).isNone
 
-/-- The tied names R8 let through: each whose gates hold a run Input node the proof blocks don't each read alone outside
-the registered parameters' gates (`Partition.shared?`). The registration piece publishes them beside the fan-out:
-acceptance rests on the later check that ties their rows. -/
-def tiedThrough (v : Verifier) : Array String :=
-  let shared := Partition.shared? v.program v.query (heldGates v)
-  v.tied.filter fun t => match tiedGate v t with
-    | some (first, count) => shared.any (Partition.within v.program.prog first count)
-    | none => false
+/-- The tied names R8 let through (`tiedGate`). The registration piece publishes them beside the fan-out: acceptance
+rests on the later check that ties their rows. -/
+def tiedThrough (v : Verifier) : Array String := v.tied.filter fun t => (tiedGate v t).isSome
+
+/-- A pin of the weights' registration of record: its value, leaves, words, word bits, domain and root. -/
+structure Pin where
+  value : String
+  leaves : Nat
+  words : Nat
+  wordBits : Nat
+  domain : String
+  root : String
+  deriving Inhabited
+
+/-- An entry's leaves, words and word bits (16 where it leaves `word_bits` out), each a natural, when its keys are the
+entry's with or without `word_bits`; none otherwise (`R8-weights-form`). -/
+def pinForm (e : Json) : Option (Nat × Nat × Nat) :=
+  if !(keys? e == some Registered.ENTRY_KEYS || keys? e == some (sortStrings (Registered.ENTRY_KEYS.push Registered.WIDTH_KEY)))
+  then none
+  else match nat? (getD e "leaves"), nat? (getD e "words"),
+      (match field? e Registered.WIDTH_KEY with | none => some Registered.WORD_BITS | some j => nat? j) with
+    | some l, some w, some b => some (l, w, b)
+    | _, _, _ => none
+
+/-- The documents of the weights' registration of record, each `(program, values)`: one object, or a list of them,
+each exactly a string `program` and an object `values` of well-formed entries (`pinForm`), no value in two; none
+otherwise. -/
+def pinDocs (doc : Json) : Option (Array (String × Array (String × Json))) := do
+  let docs := match doc with | .arr ds => ds | d => #[d]
+  let docs ← docs.mapM fun d => do
+    if keys? d != some #["program", "values"] then none
+    match getD d "program", getD d "values" with
+    | .str p, .obj kvs => if kvs.toArray.all (fun (_, e) => (pinForm e).isSome) then some (p, kvs.toArray) else none
+    | _, _ => none
+  let names := docs.flatMap fun (_, vs) => vs.map (·.1)
+  if (sortStrings names).toList.eraseDups.length != names.size then none
+  return docs
+
+/-- `docket._of_record`: the weights' registration of record's pins, after its digest (`R8-weights-digest`), its form
+(`R8-weights-form`), each one refused by the first code; then each pin whose value, domain or root is not its own
+(`R8-weights-domain`): its domain is the one its own document's program, value and shape make
+(`Registered.domain`), its root lowercase hex of 64 bytes. The codes and the pins that pass. -/
+def pinsOf (body : ByteArray) (digest : String) : Except String (Array String × Array Pin) := do
+  if Flock.hexOf (Flock.Sha512.hash body) != digest then throw "R8-weights-digest"
+  let some text := String.fromUTF8? body | throw "R8-weights-form"
+  let .ok doc := Json.parse text | throw "R8-weights-form"
+  let some docs := pinDocs doc | throw "R8-weights-form"
+  let mut bad := false
+  let mut pins := #[]
+  for (program, vs) in docs do
+    for (v, e) in vs do
+      let some (leaves, words, wordBits) := pinForm e | throw "R8-weights-form"
+      let pin := match Registered.domain program v words leaves wordBits, getD e "root" with
+        | .ok d, .str r =>
+          if jeq (getD e "value") (Json.str v) && jeq (getD e "domain") (Json.str (Flock.hexOf d)) &&
+              r.length == 128 && isHex r
+          then some { value := v, leaves, words, wordBits, domain := Flock.hexOf d, root := r : Pin } else none
+        | _, _ => none
+      match pin with
+      | some x => pins := pins.push x
+      | none => bad := true
+  return (if bad then #["R8-weights-domain"] else #[], pins)
+
+/-- Whether parameter `p` is a registered input of the program: its gates are one interval of root input nodes bound at
+registration (`Partition.regInputs`). -/
+def marked (v : Verifier) (p : Registered.Param) : Bool :=
+  match p.gates with
+  | some (first, count) => Partition.regInputs v.program.prog first count
+  | none => false
+
+/-- Whether pin `x` is parameter `p`'s shape: the leaves and word bits the verifier's own entry for `p` at `x`'s words
+gives (`Registered.entries`, Python's `registered.shape` and `width`). -/
+def pinShaped (v : Verifier) (p : Registered.Param) (x : Pin) : Bool :=
+  match Registered.entries v.program.desc #[p] #[(p.name, x.words)] with
+  | .ok #[e] => e.leaves == x.leaves && e.wordBits == x.wordBits
+  | _ => false
 
 /-- The values whose domain leaves the window's open root out: `held`, then the pinned, supplied and output values. -/
 def fixedOf (v : Verifier) : Array String :=
@@ -329,6 +430,166 @@ def heldRoots (log : Array Json) (mine : V (Array Registered.Entry)) : Array (St
         if held.any (·.1 == v) || !mine.any (fun w => w.value == v && w.domain == d) then held else held.push (v, r)
       | _, _, _ => held) held
     | _ => held) #[]
+
+/-- The roots the verifier itself holds of its values, as R7 holds them (`R7-held`): its `pinned`, then those an earlier
+record of the log registered under the domain each takes now (`heldRoots`). -/
+def ownHeld (v : Verifier) : Array (String × String) := v.pinned ++ heldRoots v.log (ownEntries v)
+
+/-- `docket.held_entries`: each of the verifier's own entries whose root it holds itself (`ownHeld`), with that root;
+none where its entries don't compute. -/
+def heldEntries (v : Verifier) : Array (Registered.Entry × String) :=
+  match ownEntries v with
+  | .error _ => #[]
+  | .ok mine => mine.filterMap fun e => ((ownHeld v).find? (·.1 == e.value)).map fun (_, r) => (e, r)
+
+/-- **R8's hold on the program's registered inputs** (`docket.weights_held`): its codes in order, the weights'
+registration of record's (`pinsOf`), `R8-weights-shape` for a pinned registered input whose shape isn't its pin's, then
+`R8-weights-query` for a registered input or a registration of record under a query that is no template query that
+applies; else `R8-unpinned` for a registered input neither pinned nor one whose root the verifier itself holds
+(`heldEntries`) that a template parameter reads (`Partition.inputReads`), at one reader as at several: that the verifier
+expects it registered by name excuses nothing. Then the accepted pins, each an excused input (marked, pinned and
+shaped) as an entry and its root, which the members' check holds each member's registered read of it to
+(`OneTree.pinsHeld`). None for a verifier with no registration of record and no registered input. -/
+def weightsHeld (v : Verifier) (codes : Array String) (pins : Array Pin) :
+    Array String × Array (Registered.Entry × String) :=
+  let P := v.program.prog
+  let marks := v.params.filter (marked v)
+  let pinned := marks.filterMap fun p => (pins.find? (·.value == p.name)).map (p, ·)
+  let codes := if pinned.all fun (p, x) => pinShaped v p x then codes else codes.push "R8-weights-shape"
+  let held := (heldEntries v).map (·.1.value)
+  match Partition.templateRanges? v.program v.query with
+  | none => (if v.weightsOfRecord.isSome || !marks.isEmpty then codes.push "R8-weights-query" else codes, #[])
+  | some rs =>
+    let gated (p : Registered.Param) := (p.gates.map fun (first, count) => #[(p.name, first, count)]).getD #[]
+    let loose := marks.filter fun p => !(pins.any (·.value == p.name)) && !held.contains p.name
+    let codes := if (Partition.inputReads P rs (loose.flatMap gated)).isEmpty then codes else codes.push "R8-unpinned"
+    let excused := pinned.filter fun (p, x) => pinShaped v p x
+    (codes, excused.map fun (_, x) =>
+      ({ value := x.value, leaves := x.leaves, words := x.words, wordBits := x.wordBits, domain := x.domain }, x.root))
+
+/-- `weightsHeld` after the weights' registration of record's own refusals (`pinsOf`), a digest or form refusal alone
+and no pin accepted. -/
+def weightsOf (v : Verifier) : Array String × Array (Registered.Entry × String) :=
+  match v.weightsOfRecord with
+  | none => weightsHeld v #[] #[]
+  | some (body, digest) => match pinsOf body digest with
+    | .error code => (#[code], #[])
+    | .ok (codes, pins) => weightsHeld v codes pins
+
+/-- The supplied functions whose value is a registered value's root or domain (`anchorUnpinned`). -/
+def ANCHOR_FUNCTIONS : Array String := #["registered.root/v1", "registered.domain/v1"]
+
+/-- The weights' registration of record's pins (`pinsOf`), none where it is absent or refused. -/
+def recordPins (v : Verifier) : Array Pin :=
+  match v.weightsOfRecord with
+  | some (body, digest) => match pinsOf body digest with
+    | .ok (_, pins) => pins
+    | .error _ => #[]
+  | none => #[]
+
+/-- The values V of C's supplied anchors (a mark of `ANCHOR_FUNCTIONS`), each once, in the marks' order. -/
+def anchorValues (v : Verifier) : Array String :=
+  v.marks.foldl (init := (#[] : Array String)) fun out (mk : String × Supplied.Mark) =>
+    let value : Option Json := (mk.2.args.find? (·.1 == "value")).map Prod.snd
+    match ANCHOR_FUNCTIONS.contains mk.2.fn, value with
+    | true, some (Json.str x) => if out.contains x then out else out.push x
+    | _, _ => out
+
+/-- `docket.anchor_unpinned`: the values V of C's supplied anchors (a mark of `ANCHOR_FUNCTIONS`) that are neither in
+the verifier's `pinned` nor pinned by the weights' registration of record (`pinsOf`'s pins), each once, in the marks'
+order; R7 refuses them (`R7-anchor-unpinned`). It reads C's marks (`Verifier.marks`), a field no circuit description
+carries today, so it refuses nothing yet. -/
+def anchorUnpinned (v : Verifier) : Array String :=
+  let ofRecord := (recordPins v).map (·.value)
+  (anchorValues v).filter fun x => !(v.pinned.any (·.1 == x) || ofRecord.contains x)
+
+/-- `docket.off_pin`: the values the weights' registration of record pins (`recordPins`, in its order) whose record entry
+(`rec`'s last `registered` entry of the value) is not that pin in root, leaf count, words and domain, or that a supplied
+anchor of C names (`anchorValues`) and the record registers no entry of; R7 refuses them (`R7-pin`). A value the
+verifier's `pinned` names is held by `R7-held` and R7's own entry (`checkRegistered`). -/
+def offPin (rec : Json) (v : Verifier) : Array String :=
+  let got : Array Json := match getD rec "registered" with | .arr es => es | _ => #[]
+  let anchors := anchorValues v
+  (recordPins v).filterMap fun p =>
+    let off := match got.reverse.find? (fun e => getD e "value" == Json.str p.value) with
+      | none => anchors.contains p.value
+      | some e => !(getD e "root" == Json.str p.root && nat? (getD e "leaves") == some p.leaves
+          && nat? (getD e "words") == some p.words && getD e "domain" == Json.str p.domain)
+    if off then some p.value else none
+
+/-- Whether the root nodes inside gates `[first, first + count)` of `P` are all primitive supplied inputs
+(`SuppliedInput<w>_v1`), as `Partition.regInputs` reads registered ones. -/
+def suppliedInputs (P : Flock.Program.Prog) (first count : Nat) : Bool :=
+  let nodes := Flock.Registered.rootNodes P
+  let inside := (List.range nodes.size).filter (Partition.within P first count)
+  !inside.isEmpty && inside.all fun i => match nodes[i]? >>= fun x => P.defs[x.fn]? with
+    | some f => f.prim && f.binding == some Flock.Program.SUPPLIED
+    | none => false
+
+/-- `docket.unsourced_supplied`: the parameters bound as supplied inputs (`suppliedInputs`) that the parameters'
+`supplied` (C's marked rows among them) gives no source and that is no output of an earlier record (`outputs`, a pool's
+reused `pin` among them); R7 refuses them (`R7-supplied-source`). -/
+def unsourced (v : Verifier) : Array String :=
+  (v.params.filter fun p => match p.gates with
+    | some (first, count) => suppliedInputs v.program.prog first count && !v.supplied.any (·.1 == p.name)
+        && !v.outputs.any (·.1 == p.name)
+    | none => false).map (·.name)
+
+/-- The members' check's refusal of a program marking a registered input the verifier does not expect, under parameters
+whose weights' registration of record is absent or one R8 refuses (`readPins`). -/
+def WEIGHTS_UNREGISTERED_WHY : String :=
+  "registered: the program marks registered inputs the verifier does not expect, and the parameters carry no weights' " ++
+    "registration of record R8 accepts: a marked input is read only at a pin R8 accepted"
+
+/-- The members' check's refusal of a program marking a registered input the verifier does not expect, under a
+partition that is no template query applying to the program, whose ranges the members' reads are read off (`readPins`). -/
+def WEIGHTS_QUERY_WHY : String :=
+  "registered: the program marks registered inputs the verifier does not expect, and the partition is no template " ++
+    "query that applies to the program, whose ranges its members' reads of them are read off: a marked input is read " ++
+    "only at a pin R8 accepted"
+
+/-- What the members' check holds each registered read to (`readPins`). -/
+structure ReadPins where
+  /-- the marked inputs the verifier does not expect -/
+  loose : Array String
+  /-- their gates, `(value, first, count)` each -/
+  held : Array (String × Nat × Nat)
+  /-- the template query's ranges whose instance node reads one (`Partition.memberReads`) -/
+  ranges : Array Flock.TemplateQuery.TRange
+  /-- R8's accepted pins -/
+  pins : Array (Registered.Entry × String)
+  /-- the roots the verifier itself holds (`heldEntries`) -/
+  roots : Array (Registered.Entry × String)
+
+/-- What the members' check holds each registered read to, on the docket's own derivation (`weightsOf v`, of the one
+parameters' verifier), with the roots the verifier itself holds (`heldEntries`). None where the program marks an input
+the verifier does not expect and the verifier holds no weights' registration of record, or R8 refuses it; the first
+three empty where every marked input is one the verifier expects. -/
+def readPins (v : Verifier) : Option ReadPins :=
+  let loose := (v.params.filter (marked v)).filter fun p => !v.registered.any (·.1 == p.name)
+  let roots := heldEntries v
+  if loose.isEmpty then some ⟨#[], #[], #[], (weightsOf v).2, roots⟩ else
+  let (codes, pins) := weightsOf v
+  if v.weightsOfRecord.isNone || !codes.isEmpty then none else
+  match Partition.templateRanges? v.program v.query with
+  | none => none
+  | some rs =>
+    let held := loose.flatMap fun p => (p.gates.map fun (first, count) => #[(p.name, first, count)]).getD #[]
+    some ⟨loose.map (·.name), held,
+      rs.filter fun r => !(Partition.memberReads v.program.prog held r 0 r.count).isEmpty, pins, roots⟩
+
+/-- Why `readPins v` is none: no template query applying (`WEIGHTS_QUERY_WHY`), else no registration R8 accepts
+(`WEIGHTS_UNREGISTERED_WHY`). -/
+def readPinsWhy (v : Verifier) : String :=
+  if (Partition.templateRanges? v.program v.query).isNone then WEIGHTS_QUERY_WHY else WEIGHTS_UNREGISTERED_WHY
+
+/-- Every marked parameter's gates, `(value, first, count)` each, the expected ones' with the loose ones'
+(`docket.marked_gates`): the members' check holds each port reading one to its entry of record. -/
+def markedGates (v : Verifier) : Array (String × Nat × Nat) :=
+  (v.params.filter (marked v)).flatMap fun p => (p.gates.map fun (first, count) => #[(p.name, first, count)]).getD #[]
+
+/-- R8's codes on the program's registered inputs (`weightsOf`). -/
+def weightsCodes (v : Verifier) : Array String := (weightsOf v).1
 
 /-- `registration.unwindowed`: for a verifier that names no window root, its values it doesn't hold across windows
 (`fixedOf`) that an earlier record of the log registered under the domain it takes now, a window-independent program's
@@ -564,13 +825,15 @@ def linkRefused (v : Verifier) : Bool :=
 twice, so `check_eq_checkRef`'s `simp`, which leaves it folded, doesn't copy the codes before it into both cases. -/
 def kept (ok : Bool) (c : Array String) (code : String) : Array String := if ok then c else addCode c code
 
-/-- R8's codes added to `c`: a tied name it can't let through (`R8-tied`, `tiedBad`), then a run Input node the proof
-blocks don't each read alone outside the registered and tied parameters' gates (`R8-shared-input`,
-`Partition.readAlone`). One term rather than two lines, since `check_eq_checkRef`'s `simp` copies every line after a
-join point into each of its branches. -/
+/-- R8's codes added to `c`: a tied name it can't let through (`R8-tied`, `tiedBad`), then, in the variant with no
+members, a run Input node the proof blocks don't each read alone outside the registered and tied parameters' gates
+(`R8-shared-input`, `Partition.readAlone`), then R8's hold on the program's registered inputs (`weightsCodes`). One
+term rather than two lines, since `check_eq_checkRef`'s `simp` copies every line after a join point into each of its
+branches. -/
 def r8Codes (v : Verifier) (c : Array String) : Array String :=
-  kept (Partition.readAlone v.program v.query (heldGates v ++ tiedGates v)) (kept (tiedBad v).isEmpty c "R8-tied")
-    "R8-shared-input"
+  (weightsCodes v).foldl addCode
+    (kept (!v.members.isEmpty || Partition.readAlone v.program v.query (heldGates v ++ tiedGates v))
+      (kept (tiedBad v).isEmpty c "R8-tied") "R8-shared-input")
 
 /-- `registration.check`'s failure codes, R1–R8 in order, then `link-points` (`linkRefused`): empty when the record
 holds. -/
@@ -633,6 +896,11 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
         v.schemas)
       v.outputs v.log (v.certified.map (·.1))
     c := kept (certifiedHeld rec v) c "R7-certified"
+    c := kept (runInputNamed v).isEmpty c "R7-run-input"
+    c := kept (anchorUnpinned v).isEmpty c "R7-anchor-unpinned"
+    c := kept (offPin rec v).isEmpty c "R7-pin"
+  -- a supplied input's rows have a source whatever the record registers
+  c := kept (unsourced v).isEmpty c "R7-supplied-source"
   -- R8
   c := r8Codes v c
   return if linkRefused v then addCode c "link-points" else c
@@ -700,6 +968,11 @@ def checkRef (rec : Json) (v : Verifier) : Array String := Id.run do
         v.schemas)
       v.outputs v.log (v.certified.map (·.1))
     c := kept (certifiedHeld rec v) c "R7-certified"
+    c := kept (runInputNamed v).isEmpty c "R7-run-input"
+    c := kept (anchorUnpinned v).isEmpty c "R7-anchor-unpinned"
+    c := kept (offPin rec v).isEmpty c "R7-pin"
+  -- a supplied input's rows have a source whatever the record registers
+  c := kept (unsourced v).isEmpty c "R7-supplied-source"
   -- R8
   c := r8Codes v c
   return if linkRefused v then addCode c "link-points" else c
