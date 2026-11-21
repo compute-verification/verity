@@ -1362,6 +1362,22 @@ def test_a_tails_rows_are_its_parts_leaves_in_the_order_of_at(split):
     assert [w.leaves(t, f"r#{j}").tolist() for j in range(4)] == [[0]] * 4
 
 
+def test_a_one_slot_windows_run_inputs_are_the_embedding_openings_three_trees():
+    """At class 1,1,1, with the weights registered input nodes, the window's run inputs are the embedding opening's
+    path, row and salt, each read whole by the one `EmbeddingRead` unit from its node's one tree ``input/n<w>``, which
+    its port names and no member holds a tree of; a class whose readers are several ranges is refused by name."""
+    circuit = class_circuit(S._registered(), WindowClass(1, 1, 1), None, GRAIN)
+    win = IF.Window(circuit, "ab" * 64, {"law": "stratified", "k": 2}, 64)
+    (emb,) = [IF.descriptor_id(fn) for fn, _ in circuit.templates if fn.name == "EmbeddingRead"]
+    assert sorted((r.reader, r.port) for r in win.runs) == [(emb, "path"), (emb, "row"), (emb, "salt")]
+    assert len({r.param for r in win.runs}) == 3 and all(re.fullmatch(r"input/n\d+", r.param) for r in win.runs)
+    m = next(m for m in win.window.members if m.template == emb)
+    assert {"path", "row", "salt"} <= set(m.values)
+    assert not any(t.rsplit("/", 1)[-1] in ("path", "row", "salt") for t in win.window.trees)
+    with pytest.raises(ValueError, match=r"run inputs: EmbeddingRead\S* reads run input nodes at \[.*\] but is \d+ ranges"):
+        IF.Window(class_circuit(S._registered(), CLASS, None, GRAIN), "ab" * 64, {"law": "stratified", "k": 2}, 64)
+
+
 def wired(circuit: IF.Circuit) -> tuple[Any, dict[str, Any]]:
     return wired_population_program(list(circuit.templates), {**circuit.description(), "external": list(circuit.external)})
 
