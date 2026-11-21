@@ -106,14 +106,14 @@ STEPS = ("partition", "block", "restrict", "cuts", "lower", "reader", "ported", 
 def _exe(path: str | None) -> Callable[[], Path]:
     if path:
         return lambda: Path(path)
-    from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+    from verity.protocols.proof.spot.verifier.one_stage import proofs as PF
     return PF.lower_executable
 
 
 def _lean_exe(path: str | None) -> Callable[[], Path]:
     if path:
         return lambda: Path(path)
-    from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+    from verity.protocols.proof.spot.verifier.one_stage import proofs as PF
     return PF.v2_executable
 
 
@@ -184,7 +184,7 @@ def chain() -> tuple[bytes, dict]:
     """`test_one_circuit_chain`'s C: the periods' chain of eight ``Gemm_v2{K=16, N=16}`` units, one wire, theta registered."""
     import importlib.util
     spec = importlib.util.spec_from_file_location(
-        "periods_chain", ROOT / "tests/verity/protocols/proofs/spot/verifier/test_one_circuit_chain.py")
+        "periods_chain", ROOT / "tests/verity/protocols/proof/spot/verifier/test_one_circuit_chain.py")
     m = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)
     program, query = _held("chain", m.circuit())
@@ -450,7 +450,7 @@ CRASHED = "crashed: "
 def clause(text: str) -> str:
     """A refusal's clause: the door predicate's clause name where it names one, else its text with the tool's own
     wrappers (its error code, `flock-lower-check compose (n)`) cut, normalised."""
-    from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
+    from verity.protocols.proof.spot.verifier.one_stage import one_circuit as OC
     i = text.find(OC.NOT_ADMITTED)
     if i >= 0:
         return text[i + len(OC.NOT_ADMITTED):].lstrip(", ").split(":")[0]
@@ -484,7 +484,7 @@ def sizes(c_s: bytes, cut: dict) -> tuple[int | None, int | str]:
     from verity.circuits.codec import descriptor_id
     from verity.circuits.count import count
     from verity.circuits.program import input_id
-    from verity.protocols.proofs.spot.verifier.one_stage.certified_rows import _fields
+    from verity.protocols.proof.spot.verifier.one_stage.certified_rows import _fields
     D = R.program(c_s)
     called = sorted({descriptor_id(nd.fn) for nd in D.root.body.nodes if input_id(nd.fn.id) is None})
     try:
@@ -557,7 +557,7 @@ def lean_piece(server: Any, c: bytes, partition: dict, units: Sequence[tuple[int
     """Lean's `Spot.Restrict.piece` on the block (the Spot difftest's ``restrict``): ``lowers`` where Lean's `restrict`
     is Python's and `Flock.Lower.lower` lowers Lean's `ported` of it at the front's port widths, else what differs or
     the lowering's refusal."""
-    from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
+    from verity.protocols.proof.spot.verifier.one_stage import one_circuit as OC
     us = [u for lo, hi in units for u in range(lo, hi)]
     try:
         py = OC.restrict(c, partition, units, decoded).decode()
@@ -579,7 +579,7 @@ class Door:
     def __init__(self, c: bytes, query: dict, blocks: Sequence[tuple[int, int]], exe: Callable[[], Path],
                  form: str = "unit", piece: Any = None, lean: Callable[[], Path] | None = None):
         from verity.circuits import partition_object as PO
-        from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
+        from verity.protocols.proof.spot.verifier.one_stage import one_circuit as OC
         self.c, self.query, self.exe, self.form, self.piece, self.lean = c, query, exe, form, piece, lean
         self._dir: tempfile.TemporaryDirectory | None = None
         self.decoded = OC.Decoded(c)
@@ -590,7 +590,7 @@ class Door:
         self._cuts: tuple[Any, str | None] | None = None
 
     def cuts(self) -> tuple[Any, str | None]:
-        from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
+        from verity.protocols.proof.spot.verifier.one_stage import one_circuit as OC
         if self._cuts is None:
             try:
                 self._cuts = (OC.cuts(self.c, self.partition, self.decoded), None)
@@ -624,8 +624,8 @@ class Door:
         return r
 
     def _steps(self, k: int, lo: int, hi: int, shape: str = "") -> Result:
-        from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
-        from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+        from verity.protocols.proof.spot.verifier.one_stage import one_circuit as OC
+        from verity.protocols.proof.spot.verifier.one_stage import proofs as PF
         r = Result(k, (lo, hi), self.templates(lo, hi), shape)
 
         def stop(step: str, text: str) -> Result:
@@ -1179,7 +1179,7 @@ def _padded(bits: list[int]) -> list[int]:
 def ports(fn: Any, cut: dict[str, int]) -> tuple[list[tuple[str, list[int]]], list[tuple[str, list[int]]]]:
     """The template's input rows and output rows as leaf-index lists over its parameters' and return's leaves, in
     the door's order (`one_circuit.lower`): each parameter, or its ``k`` slices; each return field."""
-    from verity.protocols.proofs.spot.verifier.one_stage.certified_rows import _fields
+    from verity.protocols.proof.spot.verifier.one_stage.certified_rows import _fields
     params, ret = fn.signature()
     ins, at = [], 0
     for name, t in params:

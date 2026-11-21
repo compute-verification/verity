@@ -16,8 +16,8 @@ from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.ops import gemm as G
 from verity.commitments import randomness as RND
 from verity.commitments.periods import interface as I, rows as CS
-from verity.protocols.proofs.spot.prover import docket as DK
-from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
+from verity.protocols.proof.spot.prover import docket as DK
+from verity.protocols.proof.spot.verifier.one_stage import one_circuit as OC
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "benchmarks" / "one_stage"))
 import a5 as A5

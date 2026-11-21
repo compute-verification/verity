@@ -37,14 +37,14 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-INFERENCE_ONLY_PACKAGE = ROOT / "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean"
+INFERENCE_ONLY_PACKAGE = ROOT / "verity/protocols/policy/training_detection/inference_only/verifier/lean"
 EXE = INFERENCE_ONLY_PACKAGE / ".lake/build/bin/inference-only-verifier"
 SCHEMA = "verity/verifier-cost/v1"
 METRIC = "proofs/verifier-seconds-served-description"
 
 
 def built(exe: Path) -> Path:
-    from verity.protocols.proofs.spot.verifier.one_stage import verifier as V
+    from verity.protocols.proof.spot.verifier.one_stage import verifier as V
     if not exe.exists():
         V.executable(exe.name, exe.parents[3])
     return exe
@@ -225,7 +225,7 @@ def record(out: Path, rows: list[dict], bad: list[str]) -> None:
                                **{k: r[k] for k in ("config", "ir", "description_bytes", "unrolled_gates")}})
 
 
-PIECES = ROOT / "verity/protocols/proofs/spot/verifier/lean/.lake/build/bin/spot-difftest"
+PIECES = ROOT / "verity/protocols/proof/spot/verifier/lean/.lake/build/bin/spot-difftest"
 PARTITION_SCHEMA = "verity/verifier-cost-partition/v1"
 POPULATION = (1, 30, 1000, 1_000_000)
 

@@ -275,7 +275,7 @@ def stage(d: Path, template: str, seed: int = 7) -> dict:
     def port(r) -> dict:
         return {"value": r.value, "root": r.root.hex(), "leaves": r.leaves, "words": r.words, "word_bits": 16,
                 "domain": r.domain.domain_id.hex(), RV.SCHEMA_KEY: r.schema}
-    from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
+    from verity.protocols.proof.spot.verifier.one_stage import registered as REG
     file = {"format": REG.READS_V2,
             "ports": {p: port(regs[tw]) for p, (tw, _l) in reads.items()} | {"o0": port(oreg)}}
     (s / "registered.json").write_text(json.dumps(file))
@@ -288,7 +288,7 @@ def stage(d: Path, template: str, seed: int = 7) -> dict:
 
 
 def step(a) -> int:
-    from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
+    from verity.protocols.proof.spot.verifier.one_stage import one_circuit as OC
     d = Path(a.dir)
     c = (d / "C.json").read_bytes()
     t = time.perf_counter()
@@ -296,7 +296,7 @@ def step(a) -> int:
     if a.name == "stage":
         rec |= stage(d, a.template)
     elif a.name == "verify":
-        from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+        from verity.protocols.proof.spot.verifier.one_stage import proofs as PF
         import os
         s = d / f"stage-{a.unit}"
         os.environ[PF.TMPL_SWITCH] = "1"
@@ -328,7 +328,7 @@ def step(a) -> int:
             rec |= {"restrict_s": round(time.perf_counter() - t, 1), "c_s_bytes": len(c_s)}
             (d / f"c_s-{u}.json").write_bytes(c_s)
             if a.name == "lower":
-                from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+                from verity.protocols.proof.spot.verifier.one_stage import proofs as PF
                 t = time.perf_counter()
                 try:
                     exe = Path(a.lower) if a.lower else PF.lower_executable()
@@ -345,7 +345,7 @@ def step(a) -> int:
                 except (OC.NotDerived, OC.Refused) as e:
                     rec["refused"] = f"{type(e).__name__}: {e}"
         elif a.name == "door":
-            from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+            from verity.protocols.proof.spot.verifier.one_stage import proofs as PF
             f = d / f"door-{u}"
             (f / "session").mkdir(parents=True, exist_ok=True)
             (f / "session" / "session.json").write_text("{}")
@@ -370,7 +370,7 @@ def window(a) -> int:
     from verity.circuits.codec import program_digest
     from verity.commitments import docket_digest as DD
     from verity.commitments.periods import interface as IF
-    from verity.protocols.proofs.spot.prover import docket as DK
+    from verity.protocols.proof.spot.prover import docket as DK
     from verity_vllm.program.predict import scan_state as SS
     from verity_vllm.program.predict import window_rows as WR
     t = time.perf_counter()

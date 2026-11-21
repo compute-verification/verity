@@ -30,7 +30,7 @@ cr = _load("chain_record")
 def test_leak_counts_the_scans_terms_on_the_network_attester_run(tmp_path):
     import math
     from dataclasses import asdict
-    from verity.protocols.resource_accounting.network.verifier import network_attester as W
+    from verity.protocols.accounting.network.verifier import network_attester as W
     run = tmp_path / "c1"
     (run / "out").mkdir(parents=True)
     (run / "out/deployment.json").write_text(json.dumps({"params": asdict(W.W63)}))

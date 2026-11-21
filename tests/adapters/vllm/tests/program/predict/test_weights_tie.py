@@ -23,12 +23,12 @@ from verity.commitments.gates import sha512_stream as SS
 from verity.commitments.gates.sha512 import IV
 from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
-from verity.protocols.proofs.spot.verifier import service as SV
-from verity.protocols.proofs.spot.prover import docket as DK
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D
+from verity.protocols.proof.spot.verifier import service as SV
+from verity.protocols.proof.spot.prover import docket as DK
+from verity.protocols.proof.spot.verifier.one_stage import draw as D
 from verity.commitments import randomness as RND
 from verity.commitments import registered_value as RV
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.protocols.proof.spot.verifier.one_stage import registered as G
 
 from tests.check.test_weights_of_record import write_safetensors
 from tests.program.predict import test_steps as S

@@ -17,7 +17,7 @@ import struct
 import numpy as np
 
 # the receipts reference: the folds' steps, key rules and pfill's lane starts
-from verity.protocols.resource_accounting.compute.pouw.verifier.receipts import receipt_folds as RF
+from verity.protocols.accounting.compute.pouw.verifier.receipts import receipt_folds as RF
 
 M64 = (1 << 64) - 1
 

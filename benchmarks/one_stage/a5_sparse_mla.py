@@ -44,10 +44,10 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1] / "adapters" / "vllm"))
 
 import a5  # noqa: E402
-from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC  # noqa: E402
-from verity.protocols.proofs.spot.prover.audit import local_challenger as LC  # noqa: E402
+from verity.protocols.proof.spot.verifier.challenger import challenger_session as AC  # noqa: E402
+from verity.protocols.proof.spot.prover.audit import local_challenger as LC  # noqa: E402
 from tests.pipeline import test_serving_rows_splits as TS  # noqa: E402
-from verity.protocols.proofs.spot.prover import docket as DK  # noqa: E402
+from verity.protocols.proof.spot.prover import docket as DK  # noqa: E402
 from verity_vllm.commit import index as IX  # noqa: E402
 from verity.commitments.periods import rows as CS  # noqa: E402
 

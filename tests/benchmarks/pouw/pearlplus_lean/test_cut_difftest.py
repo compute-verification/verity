@@ -29,10 +29,10 @@ import pytest
 from hypothesis import strategies as st
 
 import verity_difftest as D
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_inert_work as IW
+from verity.protocols.accounting.compute.pouw.prover.schemes import pearl_c_inert_work as IW
 
 ROOT = Path(__file__).resolve().parents[4]
-PACKAGE = ROOT / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "verifier" / "lean" / "pearlplus"
+PACKAGE = ROOT / "verity" / "protocols" / "accounting" / "compute" / "pouw" / "verifier" / "lean" / "pearlplus"
 EXE = "pouw-pearlplus-cut-difftest"
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 

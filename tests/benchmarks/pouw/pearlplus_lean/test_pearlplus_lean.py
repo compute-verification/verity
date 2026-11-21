@@ -46,7 +46,7 @@ import verity_difftest as D  # noqa: E402
 from verity.commitments import docket_digest as DD  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[4]
-PACKAGE = ROOT / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "verifier" / "lean" / "pearlplus"
+PACKAGE = ROOT / "verity" / "protocols" / "accounting" / "compute" / "pouw" / "verifier" / "lean" / "pearlplus"
 SOURCE = b"verifier" * 4
 H100 = "pearl-c-h100-v1-h3"
 

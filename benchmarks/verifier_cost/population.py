@@ -15,7 +15,7 @@ import functools
 import json
 from pathlib import Path
 
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+from verity.protocols.proof.spot.verifier.one_stage import partition as P
 from verity.circuits import codec
 from verity.circuits.population import wired_population_program
 from verity.circuits.program import input_id

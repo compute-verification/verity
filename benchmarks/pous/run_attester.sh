@@ -13,7 +13,7 @@ ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 USAGE="usage: run_attester.sh challenger_party|bw_party PY DIR [LEAN --minutes M ...]"
 VERB=${1:?$USAGE} PY=${2:?$USAGE} DIR=${3:?$USAGE}
 shift 3
-A=verity.protocols.resource_accounting.memory.pous.attester
+A=verity.protocols.accounting.memory.pous.attester
 cd "$ROOT"
 case $VERB in
   challenger_party)
@@ -38,7 +38,7 @@ case $VERB in
     [ $# = 0 ] || { echo "run_attester.sh: bw_party takes --pous-session SID, --session SID and --trusted-sha512 HEX, got $*" >&2; exit 2; }
     exec timeout --foreground "${m}m" env -u PYTHONPATH "$PY" -c "import sys
 from $A import onsite
-from verity.protocols.resource_accounting.memory.poub.verifier import p2_parties
+from verity.protocols.accounting.memory.poub.verifier import p2_parties
 sys.exit(p2_parties.main(sys.argv[1:], device_key=onsite.device_key))" \
       --device "$DIR/bw" --listen 127.0.0.1:0 --lean-exe "$LEAN" "${args[@]}" ;;
   *) echo "$USAGE" >&2; exit 2 ;;

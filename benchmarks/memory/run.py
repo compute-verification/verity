@@ -95,8 +95,8 @@ from pathlib import Path
 
 from verity.device import load_card, load_node
 from verity.protocol import no_bound
-from verity.protocols.resource_accounting.memory.poub.verifier import ledger as poub_ledger
-from verity.protocols.resource_accounting.memory.poub.verifier import receipts, timing
+from verity.protocols.accounting.memory.poub.verifier import ledger as poub_ledger
+from verity.protocols.accounting.memory.poub.verifier import receipts, timing
 from verity_bench import kit
 from verity_config.settings import of
 
@@ -140,7 +140,7 @@ LOOPBACK = ("loopback: both processes ran on this machine, the prover the CPU re
             "certifies nothing")
 LOCAL = "local: the verifier and its coins ran on the machine being measured"
 #: what a --local result's digests are of: the session's verifier, and the data sheets its node is read from
-VERIFIER = ROOT / "verity" / "protocols" / "resource_accounting" / "memory" / "poub" / "verifier"
+VERIFIER = ROOT / "verity" / "protocols" / "accounting" / "memory" / "poub" / "verifier"
 SHEETS = ROOT / "calibration" / "hardware"
 #: the one session form `--local` runs, the node run's paced session (PACED's default) as `run.sh` passes it to its
 #: verifier: a coin a pass group, seven credited stretches of a second at 2773 openings each, the groups counted at
@@ -162,7 +162,7 @@ UTIL, VLLM_ROOM_GIB = 0.88, 12
 #: not the card's, and its share is not this benchmark's
 STORE_MIN = 0.5
 #: the pin of the checkpoint ROLE serves: its repo, revision and files, fetched into LOCAL_WORK/hf
-PIN = ROOT / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "verifier" / "lean" / "check" / "models.json"
+PIN = ROOT / "verity" / "protocols" / "accounting" / "compute" / "pouw" / "verifier" / "lean" / "check" / "models.json"
 FETCH = ("import sys; from huggingface_hub import snapshot_download as d; "
          "print(d(sys.argv[1], revision=sys.argv[2], allow_patterns=sys.argv[3:], max_workers=8))")
 VERSIONS = "import importlib.metadata as m; print(m.version('vllm'), m.version('torch'))"
