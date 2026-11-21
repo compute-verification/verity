@@ -891,24 +891,6 @@ def program_values(registered: Registered | None) -> tuple[tuple[str, int, int],
     return tuple((v, int(params[v]) * 16 // bits[v], bits[v]) for v in vs)
 
 
-#: the supplied functions whose mark names a registered value whose root or domain id it gives, its table's anchors
-ANCHOR_FUNCTIONS = ("registered.root/v1", "registered.domain/v1")
-
-
-def _record_values(registered: Registered | None, program: Any) -> tuple[str, ...]:
-    """The values a period's record registers, in order, each once: ``registered``'s values (`program_values`), then each
-    value a supplied anchor's mark names among ``program``'s descriptor's top-level ``inputs`` (`Program.inputs_entry`, as
-    the codec writes them); the values alone where the descriptor carries no marks."""
-    out = [v for v, _n, _w in program_values(registered)]
-    entry = getattr(program, "inputs_entry", None)
-    for e in (entry() if entry is not None else None) or ():
-        m = SU.mark_of(e)
-        x = m["args"].get("value") if m is not None and m["supplied"] in ANCHOR_FUNCTIONS else None
-        if x is not None and x not in out:
-            out.append(str(x))
-    return tuple(out)
-
-
 @dataclass(frozen=True)
 class Ingress:
     """Template ``reader``'s units ``[at, at + units)`` read their ``port`` whole as the system's ingress at step ``step``
@@ -3329,7 +3311,7 @@ class Window:
         if missing := [v for v in program_values(self.circuit.registered) if v[0] not in held]:
             raise ValueError(f"the circuit's values {[v for v, _n, _w in missing]} have no committed value: give each in "
                              "the period's registered")
-        values = _record_values(self.circuit.registered, self.window.program)
+        values = SU.registered_values(self.window.program, [v for v, _n, _w in program_values(self.circuit.registered)])
         if unheld := [v for v in values if v not in held]:
             raise ValueError(f"C's supplied anchors name {unheld}, whose tables the period holds no committed value of: "
                              "give each in the period's registered")
