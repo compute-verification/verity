@@ -1,7 +1,7 @@
 """The network attester's id egress relay: a process of the server's side, on its host, between the network attester and
 a server that answers in HTTP, which takes the HTTP off the server's answers to the network attester's id requests.
 
-* **An id request** (a connection's first request, exactly `ids_protocol.id_request` in the network attester's P + 9-byte
+* **An id request** (a connection's first request, exactly `release.id_request` in the network attester's P + 9-byte
   cells, its release headers aside: `ids_protocol.id_request_fields`) goes to the server as the request ``request_of``
   builds of its fields, on a connection of its own, under the release headers it came with. Of the server's answer only
   the token ids come back, as ``stream_ids`` reads them, each one id event written as its chunk arrives, then the trailer
@@ -34,7 +34,8 @@ from typing import Any
 
 from verity import hooks as H
 from verity import release as REL
-from verity_vllm.pipeline.ids_protocol import ID_PAYLOAD, TRAILER, id_event, id_request_fields
+from verity.release import TRAILER, id_event
+from verity_vllm.pipeline.ids_protocol import ID_PAYLOAD, id_request_fields
 
 __all__ = ["BLANK", "BODY_BYTES", "COMPLETIONS", "GONE", "READ_BYTES", "Broken", "Front", "RequestOf", "StreamIds", "run", "serve"]
 

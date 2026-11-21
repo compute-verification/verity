@@ -77,24 +77,17 @@ from verity.commitments.merkle import _PAD, CommitmentDomain, frame_hash, _uint
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
 from verity.commitments.gates import bits as GB
 from verity.circuits.boolean.benes import IoTieRoute, IoTieSwitch, benes, benes_apply, route_depth
-from verity.protocols.accounting.network.verifier.id_form import EVENT_END, EVENT_HEAD
+from verity.release import ID_DIGITS, ID_EVENT_BYTES, ID_EVENT_HEAD, TRAILER, id_event
 from verity.protocols.accounting.network.verifier.link_frame import DATA, HEADER, PAD
 from verity.commitments import registered_value as RV
 
 BIT, BYTE = GB.BIT, GB.BYTE
-ID_DIGITS = 10
-ID_EVENT_HEAD = EVENT_HEAD[:EVENT_HEAD.index(b'"delta"')] + b'"token_id":'
-ID_EVENT_TAIL = b',"finish_reason":null}]}' + EVENT_END
-ID_EVENT_BYTES = len(ID_EVENT_HEAD) + ID_DIGITS + len(ID_EVENT_TAIL)
 #: the id's first character in a cell: the header, then the event's head
 ID_AT = HEADER.size + len(ID_EVENT_HEAD)
 #: the least cell: the header and one event, which a `DATA` cell holds with no padding
 CELL_USED = HEADER.size + ID_EVENT_BYTES
 #: the network attester's `END` kind (`network_attester.END`), beside `link_frame`'s `PAD` and `DATA`
 END = 0x20
-#: a response's last bytes, after its events: the network attester's `END` holds them; the workload declares the same
-#: (`attester.prover.workload.TRAILER`), held equal by `tests/test_network_attester_id_request_writers.py`
-TRAILER = b"data: [DONE]" + EVENT_END
 #: `IoTieCell`'s output: ok, data, end, the stream and the id
 CELL_OUT = 3 + 32 + 32
 #: a map record: the stream q and the port entry e, u32be each; e is `EMPTY` for a `PAD` on q and `END_ENTRY` for
@@ -109,19 +102,6 @@ SAMPLED = "sampled_token_ids"
 
 
 # --- the cells -------------------------------------------------------------------------------------------------------
-
-def id_event(token_id: int, size: int = ID_EVENT_BYTES) -> bytes:
-    """The canonical event of one token id in `size` bytes: `ID_EVENT_HEAD`, the id right-aligned in 10 decimal
-    characters, then `ID_EVENT_TAIL` with spaces (JSON whitespace) ahead of its blank line to fill `size`. The
-    workload's declaration (`attester.prover.workload.id_event`) writes the same bytes, held equal by
-    `tests/test_network_attester_id_request_writers.py`."""
-    if type(token_id) is not int or not 0 <= token_id < 1 << 32:
-        raise ValueError(f"a token id is a u32, not {token_id!r}")
-    if type(size) is not int or size < ID_EVENT_BYTES:
-        raise ValueError(f"an id event is at least {ID_EVENT_BYTES} bytes, not {size!r}")
-    tail = ID_EVENT_TAIL[:-len(EVENT_END)] + b" " * (size - ID_EVENT_BYTES) + EVENT_END
-    return ID_EVENT_HEAD + b"%10d" % token_id + tail
-
 
 def _check_cell_bytes(cell_bytes: object) -> None:
     if type(cell_bytes) is not int or cell_bytes < CELL_USED:

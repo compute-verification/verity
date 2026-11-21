@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 from verity import release as REL
 from verity_vllm.pipeline import id_relay as R
-from verity_vllm.pipeline.ids_protocol import FRAME_HEADER, TRAILER, id_event, id_request
+from verity.release import FRAME_HEADER, TRAILER, id_event, id_request
 
 P = 140
 FIELDS = {"model": "m", "user": "u", "prompt": [128000, 791, 4062], "max_tokens": 2, "temperature": 0.0, "top_p": 1.0, "seed": 0}
@@ -63,7 +63,7 @@ async def through(answer: bytes, request: bytes, *, eof: bool = False) -> tuple[
 
 
 def released() -> bytes:
-    return REL.with_release(id_request(**FIELDS, frame_bytes=P + FRAME_HEADER.size), 4, b"run", 9)
+    return REL.with_release(id_request(**FIELDS, frame_bytes=P + FRAME_HEADER.size, offset=0), 4, b"run", 9)
 
 
 def test_an_id_request_is_answered_with_the_readers_ids_then_the_trailer():

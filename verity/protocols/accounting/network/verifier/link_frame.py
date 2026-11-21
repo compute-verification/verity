@@ -4,14 +4,9 @@ frames."""
 
 from __future__ import annotations
 
-import struct
+from verity.release import FRAME_HEADER as HEADER
 
-#: the workload declares the same header (`attester.prover.workload.FRAME_HEADER`), held equal by
-#: `tests/test_network_attester_id_request_writers.py`
-HEADER = struct.Struct(">BII")
 PAD, DATA, SALT = 0, 1, 3
-#: a request's length (u32be), which opens it in the link's DATA payloads
-LENGTH = struct.Struct(">I")
 
 
 def encode_frame(kind: int, stream: int, payload: bytes, frame_bytes: int) -> bytes:
