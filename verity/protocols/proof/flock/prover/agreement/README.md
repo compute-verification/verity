@@ -301,7 +301,7 @@ Each holds one Lean part to its Python or Rust counterpart, or generates inputs 
 | `redigest.py` | proof mutants: one value of one rep edited, its round digests rebuilt, every coin kept; `--retain` writes retained-bytes sessions |
 | `fuzz.py` | seeded single mutations of an honest session (proof bytes, values, coins, digests, record fields) |
 | `selftest_records.py` | the prover's selftest cases as replayable sets |
-| `record_text.py` | `verity_flock.record_text` for these scripts, run by path |
+| `record_text.py` | the record's canonical text against Lean's |
 | `zk_mutants.py` | `--zk` session mutants |
 | `template_query_agree.py`, `partition_object_agree.py`, `qword_agree.py`, `qword_program_agree.py`, `qcall_agree.py`, `cut_check_agree.py`, `unit_cut_agree.py`, `layout_agree.py`, `circuit_type_agree.py` | each Lean part against its Python counterpart in `verity` |
 | `zk_server_agree.py`, `zk_server_controls.sh`, `zk_server_finish_agree.py`, `zk_server_finish_agree.sh` | the ZK server's contract and session loop against the inner phase's proxy, and each tamper control held to a visible refusal |
