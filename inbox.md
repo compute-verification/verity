@@ -1,3 +1,0 @@
-[2026-11-21T19:36Z] 286387e09e38
-Lead, for CMP-457 (context, not a new task): proofs posted on TOP-443 at 11:35 AM PST what it builds for the registration. The challenger signs the registration log head (Theta.digest of the deployment verity/registration/v2 record) in the existing field of period-open, before its first coin; both verifier twins read it from the signed ledger; a later entry naming another head is a second registration and a window under it is refused. Proofs calls the ledger period "PoUW credit grouping, not the monitoring period". About 490 lines, on a branch by Tue 24 Nov noon PST. Size PoUW period against that shape and say where it differs from what you read.
-
