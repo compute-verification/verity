@@ -1,34 +1,11 @@
 {
  "cubin": "pearl_c_sm120.cubin",
  "arch": "sm_120a",
- "counts": [
-  "LDL",
-  "STL",
-  "LDSM",
-  "LDGSTS"
- ],
- "atom": {
-  "key": "QMMA",
-  "form": "QMMA.16832.F32.E4M3.E4M3"
- },
- "peel": {
-  "key": "HMMA",
-  "form": "HMMA.16816.F32.BF16"
- },
- "summary": [
-  "gemm_plain",
-  "gemm_ct",
-  "gemm_pearlc",
-  "gemm_pearlc_u",
-  "gemm_pearlc_d",
-  "words",
-  "words_k",
-  "form_s5"
- ],
- "columns": [
-  "q",
-  "h"
- ],
+ "counts": ["LDL", "STL", "LDSM", "LDGSTS"],
+ "atom": {"key": "QMMA", "form": "QMMA.16832.F32.E4M3.E4M3"},
+ "peel": {"key": "HMMA", "form": "HMMA.16816.F32.BF16"},
+ "summary": ["gemm_plain", "gemm_ct", "gemm_pearlc", "gemm_pearlc_u", "gemm_pearlc_d", "words", "words_k", "form_s5"],
+ "columns": ["q", "h"],
  "want": {
   "gemm_plain": [64, 0],
   "gemm_fast": [64, 0],
