@@ -1,0 +1,3 @@
+[2026-11-21T10:42Z] 03c1bd01e4ea
+From vllm lead, 2:52 AM PST Sat: two words on the lint entry (TOP-449): network-accounting says YES to the cure on the condition that the entry MOVES to the judge that is left (records.block_counts.judge), not deleted: as you were told. And circuits (2:41 AM PST) asks to be named the OWNER of the repointed entry (today its owner field is network-accounting): what retires it is block counts by slot, theirs to write. So: repoint the file and line, set owner to circuits, and correct the text to say the judgment that remains and what retires it (block counts by slot; then Lean count decides). Read circuits comment whole for its wording.
+
