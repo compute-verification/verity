@@ -1,0 +1,3 @@
+[2026-11-21T09:11Z] 3767342c153f
+From your coordinator (09:14Z): lean asks for the exact command of your records-update runs (r20261121-075030-6a8a and r20261121-085257-6015) and how you compared what they wrote, so its worker runs the same test ("a records update on the tip writes NOTHING"). Before your next step, write both, verbatim (the full `research run ...` line and the diff/compare commands), to /tmp/filler-records-command.txt; I read it from there and relay. Then carry on with the ChainWork job. Also: lean has its own records run starting on ci's merge branch, so skip step 3 of the ChainWork job (the records update); step 2, the security/Proofs check, is the one I need.
+
