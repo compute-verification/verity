@@ -741,11 +741,13 @@ class Prestaged:
     def __init__(self, workers: int, c: bytes, part: dict, decoded: OC.Decoded, cut: dict, members: Sequence[Any],
                  out: Path, lower: Path, tmpl_unit_bin: str | None) -> None:
         self.plan: dict[int, str] = {}
+        self.ended: tuple[int, str] | None = None
         tasks, seen = [], {}
         for k, m in enumerate(members):
             try:
                 units = OC.block(c, part, k, decoded)
-            except (OC.Refused, OC.NotDerived):
+            except (OC.Refused, OC.NotDerived) as e:
+                self.ended = (k, f"{type(e).__name__}: {e}")
                 break
             key = (m.template, sum(hi - lo for lo, hi in units), tuple(sorted(cut.get(m.template, {}).items())))
             seen[key] = seen.get(key, 0) + 1
