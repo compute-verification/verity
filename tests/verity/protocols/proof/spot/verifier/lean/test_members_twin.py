@@ -347,6 +347,22 @@ def test_a_statement_of_a_member_the_sample_missed_is_refused_by_both_before_any
                        "has no statement")
 
 
+def test_strata_that_cover_the_units_out_of_order_pass_both_population_checks_under_a_subset_design(tmp_path):
+    """PAIR, TRIPLE, PAIR: the strata `PAIR [0, 2) [5, 7)` and `TRIPLE [2, 5)` are a cover of the units, not the units in
+    order stratum by stratum. Under the parameters' subset design both sides take them (`Slots.popCovers`,
+    `members.subset_design`) and end, as on an in-order window, at the first member's stand-in public file."""
+    c = f"{PAIR.id}/c1"
+    ports = (f"{A}/out", f"{B}/out", f"{c}/out")
+    s = Setup(PN.mixed_population_program([(PAIR, 2), (TRIPLE, 3), (PAIR, 2)]),
+              P.template_instances_query([PAIR.id, TRIPLE.id]), names=ports)
+    assert not P.in_order(s.program, s.query, 7) and P.covers(s.program, s.query, 7)
+    a = Audit("members-twin-cover", ports=ports, setup=s, units={A: [[0, 2]], B: [[2, 5]], c: [[5, 7]]},
+              trees={PAIR.id: 4, TRIPLE.id: 3})
+    why, (run, refused) = a.ask(tmp_path / "cover")
+    assert run is None and why == M.run_reason(run, refused), (why, refused)
+    assert M.POPULATION_ORDER not in why and "partition:" not in why, why
+
+
 def test_leans_parse_and_the_twin_take_a_members_units_from_its_block_and_refuse_the_same_parameters(tmp_path):
     """A member names its block of the partition object's ``blocks`` (`one_circuit.block`, `OneStageZk.membersOf`):
     Lean's parse (`proofs.members_parsed`, the executable's ``members``) reads each member's units as the twin's
