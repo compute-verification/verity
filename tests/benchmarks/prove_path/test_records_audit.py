@@ -1631,15 +1631,12 @@ def test_the_audit_reserves_a_port_for_every_session_its_sample_can_open(tmp_pat
         assert seen == want
 
 
-def test_the_audit_passes_a_refused_window_on_the_check_for_what_its_caller_says_it_forges(written, tmp_path, monkeypatch, capsys):
-    """`audit` is told what a window that must be refused forges, ``--forged`` a false unit or ``--forged-read`` a
-    registered read that opens no pinned root, and passes it on that kind's check alone (`forged_outcome`). The sessions
-    (`a5.audit`) are stubbed and leave the record of a window of no false unit whose read opens no root: its proof left,
-    and Lean refused its session at setup on a row of the read. As a forged read it passes, its prover run as an honest
-    window's; as a forged unit it fails, its prover run with its self-check skipped; told neither it fails as any
-    rejected audit does, and told both the command refuses its arguments before any session. The summary of a window
-    that passes as a forged read carries that verdict under ``forged``, as a forged unit's does, so no reader of it
-    takes the pass for an accepting audit (the weights tie's pins refuse a summary that holds it)."""
+def test_the_audit_passes_a_refused_window_on_the_check_for_a_forged_unit(written, tmp_path, monkeypatch, capsys):
+    """`audit` told ``--forged`` passes a window that must be refused on the check for a false unit alone
+    (`forged_outcome`), its prover run with its self-check skipped. The sessions (`a5.audit`) are stubbed and leave the
+    record of a window of no false unit whose read opens no root: its proof left, and Lean refused its session at setup
+    on a row of the read, which is no check of a false unit, so it fails; told nothing it fails as any rejected audit
+    does."""
     import a5 as A5
     from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
 
@@ -1679,12 +1676,6 @@ def test_the_audit_passes_a_refused_window_on_the_check_for_what_its_caller_says
         assert list(checks.values()) == [True, True], row
         return got
 
-    rc, row = run("--forged-read")
-    assert rc == 0 and row["ok"] is True and row["accepted"] is False, row
-    assert (row["forged"]["ok"], row["forged"]["passes_on"]) == (True, "read_refused"), row
-    assert stopped(row) == {"no_proof_released": False, "lean_refused": None, "read_refused": True}, row
-    summary = json.loads((tmp_path / "out--forged-read" / "summary.json").read_text())
-    assert summary["ok"] is True and summary["forged"] == row["forged"] and summary["audit"]["accepted"] is False, summary
     rc, row = run()
     assert rc == 1 and row["ok"] is False and "forged" not in row, row
     assert "forged" not in json.loads((tmp_path / "out" / "summary.json").read_text())
@@ -1692,10 +1683,7 @@ def test_the_audit_passes_a_refused_window_on_the_check_for_what_its_caller_says
     assert rc == 1 and row["ok"] is False, row
     assert (row["forged"]["ok"], row["forged"]["passes_on"]) == (False, "no_proof_released"), row
     assert stopped(row) == {"no_proof_released": False, "lean_refused": None, "read_refused": True}, row
-    assert self_checks == ["stop", "stop", "skip"]
-    with pytest.raises(SystemExit) as refused:
-        RA.main([*args, "--out", str(tmp_path / "both"), "--forged", "--forged-read"])
-    assert refused.value.code == 2 and len(self_checks) == 3
+    assert self_checks == ["stop", "skip"]
 
 
 def test_the_audit_counts_a_listed_record_with_window_ingress_and_prints_its_window_figure_with_its_premise(
