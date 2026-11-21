@@ -5,9 +5,9 @@ committed values, what the circuit says, from one zero-knowledge Flock proof a s
 registers the docket and samples proof blocks on the challenger's live coins; Flock proves each sampled block over its hm96
 rows, and every byte the workers send the auditor leaves through the ZK server.
 
-The guarantee: `Flock.Guarantees.SampledKSLiveV3` (`security/Proofs/Flock/Bridge/ScopeGate.lean`).
+The guarantee: `Flock.Guarantees.SampledKSLiveV5` (`security/Proofs/Flock/Bridge/V5/Statement.lean`).
 
-Not yet: the outer (recursive) proof, which the first version leaves out; a two-stage audit, which the verifier refuses by name (`Spot.Levels.TWO_LEVELS_REFUSED`); the guarantee as an instance of the sampling layer's `Spot.Sampling.Sound` rather than proved on its own.
+Not yet: the outer (recursive) proof, which the first version leaves out; a two-stage audit, which the verifier refuses by name (`Spot.Levels.TWO_LEVELS_REFUSED`); the guarantee as an instance of the sampling layer's `Spot.Sampling.Sound` rather than proved on its own; the cover form for subset designs, without which a window whose templates interleave (every real model's) is refused; the check reading the weights' registration of record, without which a weight several blocks read is refused.
 
 ## Pieces
 
@@ -32,15 +32,14 @@ Not yet: the outer (recursive) proof, which the first version leaves out; a two-
 
 | implementation | one-stage | two-stage | recursive | CPU build | sm_90 build | sm_120 build |
 | --- | --- | --- | --- | --- | --- | --- |
-| Flock | served | exists | exists | exists | served | exists |
+| Flock | served | exists | exists | served | exists | exists |
 
-two-stage: built, and refused by the verifier; recursive: built, and outside the first version. The other proof
-systems (A-GKR, B-Ligero, D-SP1, the VOLE prover) were deleted; `git checkout 2091252fe3^ -- archive` restores them.
+two-stage: built, and refused by the verifier; recursive: built, and outside the first version.
 
 A new implementation supplies: an argument system's prover for one statement over committed hm96 rows, its Lean
 verifier, and its build for each GPU architecture (`flock/prover/cuda_chunk_patch.py` takes the architecture).
 Fixed for every implementation: the docket and its digest, the sampling designs and the sample read from the challenger's
-coins (`Flock.Draw`), hm96-sha512 rows in frame-v3-sha512 trees, the ZK server as the only exit, and
+coins, hm96-sha512 rows in frame-v3-sha512 trees, the ZK server as the only exit, and
 Lean's verdict of record.
 
 ## Interfaces

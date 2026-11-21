@@ -29,8 +29,8 @@ Not yet: a supplied input's domain source kind in `Supplied`, with a table's row
 | implementation | CPU (Python) | sm_90 | sm_120 |
 | --- | --- | --- | --- |
 | `hm96-sha512/row/v1`: Flock's ports, registered values | served | never written | never written |
-| `hm96-sha512/row/v2`: serving's step rows, advice | served | served | served |
-| `hm96-sha512/row-seg/v1`: row tables, PoUW's operand rows | served | exists | served |
+| `hm96-sha512/row/v2`: serving's step rows, supplied rows | served | served | exists |
+| `hm96-sha512/row-seg/v1`: row tables, PoUW's operand rows | served | served | exists |
 
 The hash is SHA-512 with its whole output; SHA-256 frames and BLAKE3 stay only where a recorded format names them, and
 TurboSHAKE128 only as Pearl-C's ticket hash (`crypto/turboshake.py`).
