@@ -78,7 +78,7 @@ private theorem none_of_forall {α : Type} {o : Option α} (h : ∀ c, o = some 
   | some c => exact (h c rfl).elim
 
 -- `run` unfolds to about 50 decided leaves under one `match` or `if` per step, hence the heartbeat budget.
-set_option maxHeartbeats 8000000 in
+set_option maxHeartbeats 20000000 in
 /-- **A run's answer**, at either switch: refused at a step, or past every step: the boundary registration passed the
 registration check under the sampling design the rule gives its population and the work table the rule expands, the first stage
 ran with no closure map on the challenger's bytes and the check of them gave no code on the bytes it read, the second
@@ -122,6 +122,7 @@ theorem run_path {i : Spot.Run.Input} {j : Json} (h : Spot.Run.run i = .ok j) :
     | exact Or.inr ⟨_, _, _, _, _, _, _, _, by assumption, by assumption, by assumption, by assumption,
         by assumption, by assumption, by assumption, by assumption, by assumption,
         _, _, _, _, _, _, _, by assumption, by assumption, (Except.ok.inj h).symm, fun hs => by simp at hs⟩
+    | (obtain ⟨_, h⟩ | ⟨_, h⟩ := Spot.Run.ite_eq_cases h)
 
 /-- **The second stage under a two-stage rule with an interior** is the interior's steps. -/
 theorem secondStage_two {i : Spot.Run.Input} {sample : Array ℕ} {grain : Json} {replay : String}
