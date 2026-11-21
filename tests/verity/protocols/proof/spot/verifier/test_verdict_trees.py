@@ -1,7 +1,7 @@
 """`one_stage.members`' verdict trees (`OneStageZk.verdictTreesHeld`) on a toy opening: an `EmbeddingRead` v3 whose
 verdict is its output field 1, over a toy `FrameV3Read` v1. The record's root of ``<template>/o1`` is accepted where
 every row is the word 1 under the public salts, and refused by name where a row is 0, where the rows are salted from the
-operating system, and where C holds an opening on no entry of the list."""
+operating system, and where C holds an opening on no entry of the list; the writer's root is the verifier's."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ import os
 import re
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from verity.circuits import population as PN
@@ -16,6 +17,7 @@ from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.refs import tuple_of
 from verity.circuits.types import Tuple, Value
 from verity.commitments import registered_value as RV
+from verity.commitments.periods import rows as R
 from verity.commitments.merkle import _LEAF, _uint, frame_hash, root_from_subtrees
 from verity.protocols.proof.spot.verifier.one_stage import members as M, partition as P
 
@@ -81,3 +83,17 @@ def test_the_lists_are_leans():
     openers = re.search(r"^def OPENERS : List String := \[(.*)\]$", text, re.M).group(1)
     assert [(n, int(v), int(j)) for n, v, j in re.findall(r'\("(\w+)", (\d+), (\d+)\)', verdicts)] == list(M.VERDICTS)
     assert re.findall(r'"(\w+)"', openers) == list(M.OPENERS)
+
+
+@pytest.mark.parametrize("into", [False, True], ids=["in-memory", "into-a-directory"])
+def test_the_writers_verdict_tree_is_the_verifiers(into, tmp_path):
+    """`rows.commit` salts a verdict tree's rows with `Binding.verdict_salts`, so an honest window's record holds."""
+    program, query = window((EMBED, 3))
+    b = R.Binding(program, query, {"law": "stratified", "k": 2}, "ab" * 64,
+                  (R.Member(EMBED.id, (("t", 64),), (("o0", 1), ("o1", 1)), 3),))
+    ones = np.ones((3, 1), dtype=np.uint16)
+    c = R.commit(b, [{"rows": {"t": np.zeros((3, 64), dtype=np.uint16)}, "outs": {"o0": ones, "o1": ones}}],
+                 into=tmp_path / "w" if into else None)
+    tree = f"{EMBED.id}/o1"
+    rec = {"roots": [{"port": tree, "root": c.roots[tree].hex(), "leaves": 3, "domain": c.domains[tree].domain_id.hex()}]}
+    M._verdict_trees_held(program, query, {f"{EMBED.id}/c0": {"units": [[0, 3]]}}, rec)

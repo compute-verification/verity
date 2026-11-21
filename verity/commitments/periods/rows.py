@@ -506,6 +506,20 @@ class Binding:
         return np.arange(m.n, dtype=np.int64)
 
     @cached_property
+    def verdict_salts(self) -> dict[str, bytes]:
+        """Each member's output port of an opening's verdict (`RV.VERDICTS`) to its rows' salts: its template's tree is a
+        supplied value, row i under `RV.supplied_salts`' salt i, the template's members' rows in order."""
+        out: dict[str, bytes] = {}
+        for t, n in self.templates.items():
+            j = next((j for d, v, j in RV.VERDICTS if t.split("{")[0] == f"{d}_v{v}"), None)
+            if j is None:
+                continue
+            salts, at = RV.supplied_salts(self.program_digest, WI.tree(t, f"o{j}"), n), 0
+            for m in (m for m in self.members if m.template == t):
+                out[m.port(f"o{j}")], at = b"".join(salts[at:at + m.n]), at + m.n
+        return out
+
+    @cached_property
     def trees(self) -> dict[str, tuple[str, int]]:
         """Every tree of the period's members, its schema and leaves: one each (template, output field), and one each
         member's input port that is neither wired nor a registered value's, in order."""
@@ -992,7 +1006,8 @@ def commit(window: Binding, data: Iterable[dict[str, dict[str, Any]]], *,
     if refd and window.row_tables:
         raise ValueError(f"{len(refd)} ports given by reference ({sorted(refd)[:3]}) in a period with row tables, whose linked "
                          "members' rows are read off their x tables: give every row")
-    ys = {p: (salts_of or {}).get(p) or os.urandom(n * SALT_BYTES) for p, n in counts.items() if p not in refd}
+    ys = {p: (salts_of or {}).get(p) or window.verdict_salts.get(p) or os.urandom(n * SALT_BYTES) for p, n in counts.items()
+          if p not in refd}
     domains = {t: window.domain(t, s, n) for t, (s, n) in window.trees.items()}
     for k, (t, a) in enumerate(zip(window.row_tables, _table_rows(window, rows), strict=True)):
         rows[t.port], schemas[t.port], domains[t.port] = a, TABLE_SCHEMA, window.table_domain(k)
@@ -1204,7 +1219,8 @@ def _commit_into(window: Binding, data: Iterable[dict[str, Any]], d: Path, *, sa
                             a = np.concatenate([a, np.zeros((hi - lo, w - given[p]), dtype=np.uint16)], axis=1)
                         t = time.perf_counter()
                         y = (bytes(salts_of[port][lo * SALT_BYTES:hi * SALT_BYTES]) if salts_of.get(port)
-                             else os.urandom((hi - lo) * SALT_BYTES))
+                             else window.verdict_salts[port][lo * SALT_BYTES:hi * SALT_BYTES]
+                             if port in window.verdict_salts else os.urandom((hi - lo) * SALT_BYTES))
                         spent += time.perf_counter() - t
                         if port in nodes:
                             jobs[port] = _row_port(domains[port], a, y, schemas[port], lo)
