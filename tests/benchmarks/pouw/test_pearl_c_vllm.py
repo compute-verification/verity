@@ -2201,7 +2201,9 @@ def test_retain_writes_w_over_the_retained_timed_rounds_and_the_tied_verdict_cre
                     "--day-declaration", str(declared)]) == 1 and not (tmp_path / "none.json").exists()
     rc, doc, answer = served_verify(d, tmp_path / "verify.json", "--tie", str(wfile))
     assert rc == 0 and answer["public"]["tie"] == {"record": DD.digest(w), "tables": 10}, doc["line"]
-    assert (answer["public"]["rounds"], answer["public"]["dropped"], doc["timed"]["passes"]) == ([1, 2], [0], 2)
+    served = json.loads((d / "served.json").read_text())
+    timed = SP.timed_credit(served, answer["public"]["work"], published(a), answer["public"]["rounds"])
+    assert (answer["public"]["rounds"], answer["public"]["dropped"], timed["passes"]) == ([1, 2], [0], 2)
     before = wfile.read_text()
     assert SP.main(["retain", "--passes", str(d), "--window-record", str(wfile)]) == 1 and wfile.read_text() == before
 
@@ -2292,7 +2294,8 @@ def test_served_passes_verify_credits_only_the_passes_retained_before_its_coin_a
     assert rc == 0 and work == {**one, "credited": 0}, doc["line"]
     assert (answer["public"]["rounds"], answer["public"]["dropped"], doc["dropped"]) == ([1], [0], [0])
     assert doc["passes"][0].split(" sha256:")[0].split(":", 1)[1] == str(b) and "1 passes dropped before the coin (rounds 0)" in doc["line"]
-    assert doc["timed"] == {"passes": 1, "macs": one["checked_macs"], "credited": 0}
+    served = json.loads((d / "served.json").read_text())
+    assert SP.timed_credit(served, work, published(b), [1]) == {"passes": 1, "macs": one["checked_macs"], "credited": 0}
     coin = json.loads((d / SP.COIN).read_text())
     assert (coin["commitment"], coin["source"], coin["rounds"]) == (answer["commitment"], doc["source"], [1])
     again = served_verify(d, tmp_path / "again.json")[1]
