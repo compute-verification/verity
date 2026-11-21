@@ -135,8 +135,8 @@ from verity.circuits.defs import (CATALOG_PACKAGES, REGISTRY, CompositeDefinitio
                                   bind)
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.population import wired_population_program
-from verity.circuits.program import RUN, input_id
 from verity.circuits.cut import member_refs
+from verity.circuits.program import RUN, input_id
 from verity.circuits.refs import recut, runs as ref_runs
 from verity.circuits.types import Array
 from verity.commitments import advice as AC, history as HT, registered_value as RV
@@ -1820,7 +1820,7 @@ def run_input_reads(templates: Sequence[tuple[Any, int]], program: Any, query: M
                                      "fills it: a port of a registered or supplied node is read at its registered root, "
                                      "never in a tree of the period's")
                 r, q = divmod(lo, leaves)
-                if (kind is None or w in body.recut or q or hi - lo != leaves or hi > offs[w + 1] - offs[w]):
+                if kind is None or w in body.recut or q or hi - lo != leaves or hi > offs[w + 1] - offs[w]:
                     raise ValueError(f"run inputs: {tid} {p}: unit {u}'s row is not one row of a run input node's leaves, "
                                      f"in rows of its {leaves}")
                 if rows[p] and rows[p][0][0] != w:
