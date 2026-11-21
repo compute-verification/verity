@@ -52,6 +52,7 @@ compared output for output: the ratio's numerator and denominator in hex, the te
 """
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 import random
@@ -339,22 +340,27 @@ def registered_file(case: dict) -> dict:
                                                                    "partition": Cr.partition_of(program, shape, lay)}
 
 
-def _port(name: str, fn, instance, names: list[str]) -> D.Port:
+def _cases(instance, names: list[str]) -> st.SearchStrategy:
+    return st.builds(instance, st.randoms(use_true_random=False), st.sampled_from(["honest"] * (len(names) // 4) + names))
+
+
+def _port(name: str, fn, instance=None, names: list[str] = ()) -> D.Port:
     return D.Port("pouw-verifier-difftest", name, fn, package=LEAN, need_rejects=False, of_record=V.RECORD_VERDICT,
-                  inputs=st.builds(instance, st.randoms(use_true_random=False),
-                                   st.sampled_from(["honest"] * (len(names) // 4) + names)))
+                  inputs=st.nothing() if instance is None else _cases(instance, names))
 
 
 CREDIT = _port("credit", credit, credit_cases.credit_instance, credit_cases.CREDIT_NAMES)
 DRAWN = _port("drawn", drawn, credit_cases.drawn_instance, credit_cases.DRAWN_NAMES)
-WINDOW_DRAWN = _port("window-drawn", window_drawn, credit_cases.window_drawn_instance, credit_cases.WINDOW_DRAWN_NAMES)
 OUTCOME = _port("outcome", outcome, credit_cases.outcome_instance, credit_cases.OUTCOME_NAMES)
 WINDOW = _port("window", window, credit_cases.window_instance, credit_cases.WINDOW_NAMES)
 PERIOD = _port("period", period, credit_cases.period_instance, credit_cases.PERIOD_NAMES)
 A_LINK = _port("a-link", a_link, credit_cases.a_link_instance, credit_cases.A_LINK_NAMES)
 WEIGHTS = _port("weights", weights, credit_cases.weights_instance, credit_cases.WEIGHTS_NAMES)
-REGISTERED_FILE = _port("registered-file", registered_file, credit_cases.registered_file_instance,
-                        credit_cases.REGISTERED_FILE_NAMES)
+#: the ports whose cases carry the registry's pinned windows, which each test draws its inputs over (`_pinned`)
+WINDOW_DRAWN = _port("window-drawn", window_drawn)
+REGISTERED_FILE = _port("registered-file", registered_file)
+#: their sampled cases: each reads a 60 MB descriptor on both sides
+WINDOW_DRAWN_EXAMPLES, REGISTERED_FILE_EXAMPLES = 30, 50
 
 
 def test_credit(pass_server):
@@ -379,14 +385,11 @@ def test_credit(pass_server):
     refusal of `credit.window`, `credit.period_credit` and the steps they run."""
     CREDITED.clear()
     stats = {p.fn: D.run(p, examples=n, server=pass_server)
-             for p, n in ((CREDIT, 300), (DRAWN, 300), (WINDOW_DRAWN, 100), (OUTCOME, 300), (WINDOW, 150), (PERIOD, 100), (A_LINK, 400),
-                             (WEIGHTS, 300), (REGISTERED_FILE, 150))}
+             for p, n in ((CREDIT, 300), (DRAWN, 300), (OUTCOME, 300), (WINDOW, 150), (PERIOD, 100), (A_LINK, 400),
+                             (WEIGHTS, 300))}
     swept = Counter()
     for port, instance, names in ((CREDIT, credit_cases.credit_instance, credit_cases.CREDIT_NAMES),
-                                  (REGISTERED_FILE, credit_cases.registered_file_instance,
-                                   credit_cases.REGISTERED_FILE_NAMES),
                                   (DRAWN, credit_cases.drawn_instance, credit_cases.DRAWN_NAMES),
-                                  (WINDOW_DRAWN, credit_cases.window_drawn_instance, credit_cases.WINDOW_DRAWN_NAMES),
                                   (OUTCOME, credit_cases.outcome_instance, credit_cases.OUTCOME_NAMES),
                                   (WINDOW, credit_cases.window_instance, credit_cases.WINDOW_NAMES),
                                   (PERIOD, credit_cases.period_instance, credit_cases.PERIOD_NAMES),
@@ -441,8 +444,7 @@ def test_credit(pass_server):
                  "the window's layout gives it (credit.table_rows", "(the verifier hashes its pads)",
                  "which only round # commits", "or receipt table of the window",
                  "'s receipt table, its round #'s, which only round # commits",
-                 "a-link a-link: registered receipt table ",
-                 "registered-file layout: the window's template at K = # is not h#window's"):
+                 "a-link a-link: registered receipt table "):
         assert any(part in k for k in CREDITED), part
 
 
@@ -452,44 +454,90 @@ def window_k64(tmp_path_factory) -> bytes:
     return credit_cases.shared_window(tmp_path_factory.getbasetemp().parent)
 
 
+@pytest.fixture(scope="session")
+def pinned_windows(tmp_path_factory) -> dict[str, str]:
+    """The registry's window at K = 64 over each H1 tile of `REGISTRY_TILES` (`pouw_credit_cases.shared_window`), in hex:
+    templates `credit.TILE_PINS` pins, which `credit.layout_of` reads past the layout. About 60 MB each."""
+    base = tmp_path_factory.getbasetemp().parent
+    return {t: credit_cases.shared_window(base, 64, t).hex() for t in credit_cases.REGISTRY_TILES}
+
+
+def _pinned(port: D.Port, instance, names: list[str], windows: dict[str, str]):
+    """`port` over `instance`'s cases (honest and `names`) whose descriptors are `windows`', and those cases' instance (a
+    closure, not a `functools.partial`, whose repr in Hypothesis' reports would hold the windows)."""
+    def of(rng: random.Random, name: str) -> dict:
+        return instance(rng, name, windows)
+    return dataclasses.replace(port, inputs=_cases(of, names)), of
+
+
+def _swept(port: D.Port, instance, names: list[str], server) -> dict[tuple[str, int], tuple[dict, dict]]:
+    """Each of `instance`'s cases, honest and `names`, over three seeds (`replay`): the case and its output."""
+    out = {}
+    for name in ["honest", *names]:
+        for seed in range(3):
+            case = instance(random.Random(f"{name}/{seed}"), name)
+            kind, got = D.replay(port, case, server)
+            assert kind == "output", (name, seed, got)
+            out[name, seed] = case, json.loads(got)
+    return out
+
+
+@pytest.mark.slow
+def test_window_drawn(pass_server, pinned_windows):
+    """`window-drawn` over the registry's pinned windows (`pinned_windows`, today's tiles and J10-R's), then each mutation
+    over a few seeds (`replay`): each honest case is drawn, past the layout, and each mutation refused for itself, past
+    the layout but ``descriptor-hex``'s. A descriptor no pin holds is refused at the layout before the draw, so a stand-in
+    window's case would compare two refusals. Each descriptor is about 60 MB, so it samples fewer cases than
+    `test_credit`'s ports."""
+    port, instance = _pinned(WINDOW_DRAWN, credit_cases.window_drawn_instance, credit_cases.WINDOW_DRAWN_NAMES,
+                             pinned_windows)
+    CREDITED.clear()
+    stats = D.run(port, examples=WINDOW_DRAWN_EXAMPLES, server=pass_server, shrink=False)
+    outs = _swept(port, instance, credit_cases.WINDOW_DRAWN_NAMES, pass_server)
+    print(f"pouw-verifier-difftest window-drawn: {stats}; by outcome: {dict(sorted(CREDITED.items()))}")
+    assert CREDITED["window-drawn accept"], CREDITED
+    for (name, seed), (_case, out) in outs.items():
+        assert ("refused" in out) == (name != "honest"), (name, seed, out)
+        assert name == "descriptor-hex" or out.get("refused", [None])[0] != "layout", (name, seed, out)
+
+
+@pytest.mark.slow
+def test_registered_file(pass_server, pinned_windows):
+    """`registered-file` over the registry's pinned windows (`pinned_windows`, J10-R's at v5), then each mutation over a
+    few seeds (`replay`): each honest case's whole ``--registered`` file is the compiled `Credit.registeredFile`'s, with
+    the public rows `credit.public_table` builds (at v5 each unit's call and blocks too, `window.j10r_blocks`) and the
+    ok rows `credit.ok_table` builds at their known rows, and each mutation is refused at the registration, past the
+    layout. A descriptor no pin holds is refused at the layout before the file is built, so a stand-in window's case
+    would compare two refusals. Each descriptor is about 60 MB, so it samples fewer cases than `test_credit`'s ports."""
+    port, instance = _pinned(REGISTERED_FILE, credit_cases.registered_file_instance, credit_cases.REGISTERED_FILE_NAMES,
+                             pinned_windows)
+    CREDITED.clear()
+    stats = D.run(port, examples=REGISTERED_FILE_EXAMPLES, server=pass_server, shrink=False)
+    outs = _swept(port, instance, credit_cases.REGISTERED_FILE_NAMES, pass_server)
+    print(f"pouw-verifier-difftest registered-file: {stats}; by outcome: {dict(sorted(CREDITED.items()))}")
+    assert CREDITED["registered-file accept"] and CREDITED["registered-file accept j10r"], CREDITED
+    for (name, seed), (case, out) in outs.items():
+        if name in ("honest", "j10r"):
+            ports = out["file"]["ports"]
+            j10r = case["descriptor"] == pinned_windows["v5"]
+            width = (Wd.PUBLIC_ROW_J10R_BITS if j10r else Wd.PUBLIC_ROW_BITS) // 16
+            assert [len(row) for row in ports[Cr.PUB_PORT]["known"]["rows"]] == [width], (name, seed)
+            assert ports[Cr.OK_PORT]["known"]["rows"] == [list(Wd.OK_ROW)], (name, seed)
+        else:
+            assert out["refused"][0] == "registration", (name, seed, out)
+
+
 @pytest.mark.slow
 def test_the_tile_name_over_another_body_is_refused(pass_server, window_k64):
-    """The compiled `Credit.descriptorDrawn` reads the registry's window at K = 64 (`registry_window`, its template one
-    `credit.TILE_PINS` pins) past its layout, and refuses the same descriptor with one Definition under its template over
+    """The compiled `Credit.descriptorDrawn` refuses the registry's window at K = 64 (`registry_window`, its template one
+    `credit.TILE_PINS` pins, which `test_window_drawn` draws past its layout) with one Definition under its template over
     another body (`other_body`: the name `PouwH1WindowTile_v1{UNIT=…,K=64}` and every id the same) as no template at
-    K = 64, as `credit.layout_of` does: `Credit.tileOf`'s pin, the closure digest, which `test_credit`'s stand-in
-    templates can't reach. Each descriptor is about 60 MB."""
+    K = 64, as `credit.layout_of` does: `Credit.tileOf`'s pin, the closure digest. The descriptor is about 60 MB."""
     case = credit_cases.window_drawn_instance(random.Random("pin/0"), "honest")
-    outs = {}
     other = credit_cases.desc_bytes(credit_cases.other_body(json.loads(window_k64)))
-    for name, raw in (("registry", window_k64), ("other-body", other)):
-        kind, out = D.replay(WINDOW_DRAWN, {**case, "descriptor": raw.hex()}, pass_server)
-        assert kind == "output", out
-        outs[name] = json.loads(out)
-    assert outs["other-body"] == {"refused": ["layout", Cr.no_template(64)]}, outs["other-body"]
-    assert outs["registry"].get("refused", [None])[0] != "layout", outs["registry"]
-
-
-@pytest.mark.slow
-@pytest.mark.parametrize("tile", ["v1", "v5"])
-def test_a_pinned_windows_registered_file_is_leans(pass_server, tmp_path_factory, tile):
-    """`credit.registered_file` of the registry's window at K = 64 (`shared_window`, its template one `credit.TILE_PINS`
-    pins) over the H1 tile `tile`, J10-R's at v5, held to the compiled `Credit.registeredFile`: the whole file, with the
-    public rows `credit.public_table` builds (at v5 each unit's call and blocks too, `window.j10r_blocks`) and the ok rows
-    `credit.ok_table` builds, each at its known rows, salts and root. `test_credit`'s ``registered-file`` cases are
-    stand-in layouts no pin holds, which `layout_of` refuses before the file is built, so only this case reaches those
-    rows. Each descriptor is about 60 MB."""
-    raw = credit_cases.shared_window(tmp_path_factory.getbasetemp().parent, 64, tile)
-    rng, lay = random.Random(f"registered-file/{tile}"), credit_cases.REGISTRY_LAYOUT
-    values = (f"a/64@{Cr.step_row(lay, 1, 0)[0]}", "zy@0", "b/64")
-    case = {"descriptor": raw.hex(), "call": 0, "roots": {v: [credit_cases._hex(rng)] for v in values},
-            "window": credit_cases._hex(rng), "steps": 1, "salt": credit_cases._hex(rng)}
-    kind, out = D.replay(REGISTERED_FILE, case, pass_server)
+    kind, out = D.replay(WINDOW_DRAWN, {**case, "descriptor": other.hex()}, pass_server)
     assert kind == "output", out
-    ports = json.loads(out)["file"]["ports"]
-    width = (Wd.PUBLIC_ROW_J10R_BITS if tile == "v5" else Wd.PUBLIC_ROW_BITS) // 16
-    assert [len(row) for row in ports[Cr.PUB_PORT]["known"]["rows"]] == [width], ports[Cr.PUB_PORT]
-    assert ports[Cr.OK_PORT]["known"]["rows"] == [list(Wd.OK_ROW)], ports[Cr.OK_PORT]
+    assert json.loads(out) == {"refused": ["layout", Cr.no_template(64)]}, out
 
 
 def commit_parsers(case: dict) -> dict:
