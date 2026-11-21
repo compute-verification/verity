@@ -634,7 +634,8 @@ def test_a_fresh_input_opens_the_windows_one_root_of_its_node(tmp_path):
 
 def test_what_the_run_does_not_decide_is_outside_and_never_a_pass(tmp_path):
     """Parameters or evidence the per-member parsers refuse (among them ``proved_units`` that are no list of natural
-    numbers, which the run compares with the members' units, and a member handed units of its own), a program other than the parameters', a registered
+    numbers, which the run compares with the members' units, a member handed units of its own, and a query other than
+    the partition object's), a program other than the parameters', a registered
     file whose port is no registered port's, and parameters naming a wiring beside the members."""
     w = Window(tmp_path)
     ms = w.params["proofs"]["members"]
@@ -649,6 +650,8 @@ def test_what_the_run_does_not_decide_is_outside_and_never_a_pass(tmp_path):
         w.run(params=w.params | {"proofs": {"members": {A: ms[A] | {"units": [[2, 1]]}, B: ms[B]}}})
     with pytest.raises(M.Outside, match="partition object"):
         w.run(program=PN.population_program(PAIR, 5))
+    with pytest.raises(M.Outside, match=f"^{M.PARTITION_QUERY}$"):
+        w.run(params=w.params | {"query": w.params["query"] | {"params": {"template": "Other_v1"}}})
     with pytest.raises(M.Outside, match="registered port"):
         w.run(params=w.params | {"proofs": {"members": {A: ms[A] | {"registered": {"ports": {"p": {}}}}, B: ms[B]}}})
     with pytest.raises(M.Outside, match="per-member form"):
