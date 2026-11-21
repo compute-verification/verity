@@ -123,7 +123,8 @@
   "Properties.Certifier.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod",
   "Properties.Certifier.JointBridge.WorkOfCreditedWords",
   "Properties.Certifier.JointBridge.ServiceSoundOfSessions",
-  "Properties.Registration.Premises"
+  "Properties.Registration.Premises",
+  "Properties.Spot.PortsHeld"
  ],
  "proved_in": ["../Proofs"],
  "assumptions_module": ["Definitions.Assumptions", "Properties.Assumptions"],
@@ -1671,6 +1672,9 @@
   },
   "Properties.Poub.Shared.openingsUnreadUntilSampled": {
    "honest": ["Properties.Poub.Line.SecurityProofs.lineHeld_honest"]
+  },
+  "Properties.Spot.PortsHeldProof.membersPortsHeld": {
+   "nontrivial": "Properties.Spot.PortsHeldProof.membersPortsHeld_nontrivial"
   }
  },
  "unwitnessed": {
@@ -2304,9 +2308,20 @@
    "why": "its honest case, remote's check accepting one run, needs the composite's check past parsing: each subprotocol's decoder reads its bytes through `Lean.Json.parse`, which is `partial`, so no proof evaluates it on a literal. PRF-299 brings the check factored past parsing and the reachability lemma by Tue 3 Nov; meanwhile `Properties.Remote.SecurityProofs.acceptInferenceOnly_honest` proves the tie on an honest run's one record",
    "unfolded_hash": "1cbdf00ba5dbe5e7e90c3c839923b6104892a82cc56f463e2667e0cf2b29c167"
   },
+  "Properties.Spot.PortsHeldProof.membersPortsHeld": {
+   "type_hash": "ec99409435abd5be30cba68bdd5e5a80b91e6a8f1f2735d5233454f7eab4382e",
+   "missing": "honest",
+   "why": "no honest instance in Lean: the kernel does not reduce SHA-512, and an accept computes the record's digest, the coins, the program's hash and each member's sessions. The honest accept is the compiled verifier's, on the benchmark's honest arm at the entry's head.",
+   "unfolded_hash": "c235304ef74eaacce0a52361f947ae912522bb584df518d7cfcddb47c7fe54b2"
+  },
   "Properties.Spot.SecurityProofs.designWellFormed": {
    "type_hash": "acbb6080f1cd957386c50b95fde7e961d541958f674278973716c53b2c47099e",
    "unfolded_hash": "270fdff67c7dd662bb2376b054888ac1b4589aed97d2db688b6dbf4e80764033"
+  },
+  "Properties.Spot.SecurityProofs.membersRootsRecord": {
+   "type_hash": "9d96a9a82c1f4c9666dd62628cf029d2144d605739bf6a274a30e3ea6ca910da",
+   "why": "no honest instance in Lean: the kernel does not reduce SHA-512, and an accept computes the record's digest, the coins, the program's hash and each member's sessions. The honest accept is the compiled verifier's, on the benchmark's honest arm at the entry's head.",
+   "unfolded_hash": "9f10c3cc7e34264e2473ff315816e2130258b85a41628cec4eeea4120b07e3d1"
   },
   "Properties.Spot.SecurityProofs.sampleMisses": {
    "type_hash": "3f87a355ae74af656383010355fd73d01ba49126bc986f32fe55c0b1b87d2d0f",
@@ -2603,7 +2618,8 @@
     "Properties.Spot.Wires",
     "Properties.Spot.Members",
     "Properties.Spot.HistoryTable",
-    "Properties.Spot.MonitoringPeriodLedger"
+    "Properties.Spot.MonitoringPeriodLedger",
+    "Properties.Spot.PortsHeld"
    ],
    "why": "the properties are stated against the one-stage audit's own functions, on Lean core: nothing of Mathlib, and of `security` only the core's label and challenger log (Definitions.Core.Label, Definitions.Core.Challenger), which import nothing, read with the wire they name (Circuits.Wire)"
   },
@@ -2962,6 +2978,11 @@
    ],
    "except": [],
    "why": "the chain's open premises from an accepted templated statement to a correct block of the registered description's circuit (`Flock.OfProgram.ofProgram`) are stated against core's blocks and openings (`Definitions.Core`, `Rblk`) and the code they join: the key circuit and the lowering (`Properties.Flock`), the block's front and Program (`Spot.Restrict`, which reads `Spot.BlockFront`), and the inference-only check's verdict and instance (`InferenceOnlyVerifier.Desc`, `Properties.InferenceOnly`), never a proof"
+  },
+  "Properties.Spot.PortsHeld": {
+   "imports": ["Spot", "Properties.Spot"],
+   "except": [],
+   "why": "what the per-member form's acceptance holds of every port is stated against its own check (`Spot.OneStageZk`) and the one-stage properties' vocabulary of a held port (`Properties.Spot`), never a proof"
   }
  },
  "reads_exempt": {
@@ -11123,6 +11144,12 @@
    },
    "type_hash": "8263b94dc12fe4a55ace70430d46d6ea1c47a7ec462b25d34b5a4f2791be9d68"
   },
+  "Properties.Spot.PortsHeldProof.membersPortsHeld": {
+   "owner": "@proofs"
+  },
+  "Properties.Spot.PortsHeldProof.membersPortsHeld_nontrivial": {
+   "owner": "@proofs"
+  },
   "Properties.Spot.SecurityProofs.boundLnBoundSound": {
    "owner": "@proofs",
    "signature": ["Properties.Spot.SecurityProofs.boundLnBoundSound : Properties.Spot.BoundLnBoundSound"],
@@ -11729,6 +11756,9 @@
     "reads": []
    },
    "type_hash": "7d98ac9564f0872f59bf121667570f982465f7c50932ab06f4254af0c8b2e8ac"
+  },
+  "Properties.Spot.SecurityProofs.membersRootsRecord": {
+   "owner": "@proofs"
   },
   "Properties.Spot.SecurityProofs.powLowerSound": {
    "owner": "@proofs",
@@ -14990,6 +15020,14 @@
    "Flock.Bridge.gateARow": {
     "function": "Flock.Bridge.parsedOf",
     "outcome": "none"
+   },
+   "Properties.Spot.PortsHeldProof.membersPortsHeld": {
+    "function": "Spot.OneStageZk.checkMembersAt",
+    "outcome": "accept"
+   },
+   "Properties.Spot.SecurityProofs.membersRootsRecord": {
+    "function": "Spot.OneStageZk.checkMembersAt",
+    "outcome": "accept"
    }
   },
   "frozen": {
