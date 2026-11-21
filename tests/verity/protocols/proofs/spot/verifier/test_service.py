@@ -10,14 +10,14 @@ import random
 import pytest
 
 from verity.commitments import docket_digest as DD
-from verity.circuits import partition_object as PO, population as PN
+from verity.circuits import codec, partition_object as PO, population as PN
 import verity.circuits.ops.prims  # the one-stage tests' primitives
 import verity.circuits.ops.scalar  # noqa: F401
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.types import Array, Value as Bits
 from verity.protocols.proofs.spot.verifier.challenger import challenger as C, coins as T
-from verity.protocols.proofs.spot.verifier import service as S
+from verity.protocols.proofs.spot.verifier import levels as LV, service as S
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R, verifier as V
 from verity.protocols.proofs.spot.prover import docket as DK
 
@@ -352,6 +352,38 @@ def test_a_bernoulli_sampling_design_is_refused_at_register():
         assert stream.register(_rated(text, table=table), _ports(6), work_table=table).order == 0, text
     stream = _stream(_spec(S.All(), public=(*RECORD_ITEMS, STRATUM)))
     assert stream.register(_record(sampling_design={"law": "subset", "k": 6}), _ports(6)).order == 0
+
+
+#: A replay block of three proof blocks, instances of PAIR.
+BLOCK = bind(CompositeDefinition("ServiceTestBlock", 0, (), lambda S_: ((("x", Array(3, Array(2, Bits(8)))),),
+                                                                        Array(3, Bits(8))),
+                                 lambda B, S_, x: B.batch(PAIR, x, axes=(0,)), register=False))
+
+
+def test_a_two_stage_stream_is_refused_by_name_at_registration():
+    """By design, a two-stage stream is the two-level audit, refused by name at its boundary docket's registration,
+    before any coin (`levels.TWO_LEVELS_REFUSED`, the Lean's `VStar.Recursive.Sampled.TWO_LEVELS_REFUSED`): the docket
+    passes R1-R8 and is refused after them, and nothing is logged."""
+    grain, n = P.template_instance_query(BLOCK), 4
+    boundary = tuple(f"{codec.descriptor_id(BLOCK)}/{v}" for v in ("x", "o0"))
+    values = (*(S.Value(v, SCHEMA, "serve") for v in boundary), *(S.Value(v, SCHEMA, "interior") for v in ("x", "out")))
+    public = (S.Public("population", "structure", "N, the sample's range"),
+              S.Public("window", "structure", "provenance: served, on test prompts (step 0)"),
+              *(S.Public(f"{k}:{v}", "structure", f"{v}'s {k} (step 0)") for v in (*boundary, "x", "out")
+                for k in ("leaves", "domain")))
+    stream = FC.Stream(_spec(S.TwoStage(grain, "rate:1/2", 1), public=public, values=values), PAIR, replay=BLOCK,
+                       budget=2, delta=DELTA, challenger="challenger-test", clock=Clock())
+    program = PN.population_program(BLOCK, n)
+    part = P.partition(program, grain)
+    ports = {v: {"leaves": 3 * n, "domain": R.window_domain(part["program"], P.digest(part), v, SCHEMA, 3 * n, RUN)}
+             for v in boundary}
+    roots = [{"port": v, "root": f"{i + 1:02x}" * 64, **ports[v]} for i, v in enumerate(boundary)]
+    record = DK.record(program, grain, {"law": "subset", "k": 2}, S.SCHEME, roots, {"kind": "served", "run": RUN, "row": 0})
+    with pytest.raises(S.Refused) as e:
+        stream.register(record, ports)
+    assert e.value.verdict.codes == (LV.NOT_PROVED,)
+    assert e.value.verdict.detail[LV.NOT_PROVED] == {"reason": LV.TWO_LEVELS_REFUSED}
+    assert stream._log == [] and stream._entries == []
 
 
 def test_a_rate_sampling_design_keeps_every_units_inclusion_at_its_rate_however_the_prover_pads_n():

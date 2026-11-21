@@ -1196,6 +1196,11 @@ POLICY = ("inference-policy", "block-counts", "inference-only")
 ENDED = (0, 20)
 
 
+def worse(a: int, b: int) -> int:
+    """Of two runner exits, one that did not reach its steps' end (not in `ENDED`) over one that did, else the larger."""
+    return max(a, b, key=lambda rc: (rc not in ENDED, rc))
+
+
 def _policy(public: period.PublicParameters, w: ServedWorkload, state: period.PeriodState, window: str,
             outcomes: Mapping[str, Any]) -> int | None:
     """The runner on the policy's steps (`POLICY`), its exit, where the workload's party is here and the accounting
@@ -1206,7 +1211,8 @@ def _policy(public: period.PublicParameters, w: ServedWorkload, state: period.Pe
 
 
 def _result(public: period.PublicParameters, w: ServedWorkload, state: period.PeriodState) -> Result:
-    """Each party's outcome: its window's (the policy's runner's exit where the accounting's was 0), else a gate's side
+    """Each party's outcome: its window's (the `worse` of the accounting's and the policy's exits, and the policy's as
+    ``policy`` where it is not 0, since both calls end 20 on a step refused or not run), else a gate's side
     as started by the gate; and when the verifier is here, the onsite line (`remote_check` under remote), with each memory attester's `trusted-device` premise as `placement`
     read it from the challenger's outcome here, each listed component's as `attested` reads it (``trusted-device``:
     component -> premise), and beside it what the wipe, compilation and registration said (``wipe``, ``compilation``,
@@ -1215,8 +1221,9 @@ def _result(public: period.PublicParameters, w: ServedWorkload, state: period.Pe
     out = {p: o for x in state.windows for p, o in x["accounting"]["outcomes"].items()}
     for x in state.windows:
         for o in out.values():
-            if x["policy"] and o["outcome"].get("served-window") == 0:
-                o["outcome"]["served-window"], o["refused"] = x["policy"], SERVED_WINDOW
+            if x["policy"] and o["outcome"].get("served-window") in ENDED:
+                o["outcome"]["served-window"] = worse(o["outcome"]["served-window"], x["policy"])
+                o["outcome"]["policy"], o["refused"] = x["policy"], SERVED_WINDOW
     for p in w.here:
         if p in out or p == VERIFIER:
             continue

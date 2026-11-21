@@ -244,12 +244,17 @@ def test_a_run_naming_no_application_is_refused_by_name(tmp_path):
 
 
 def test_a_run_naming_no_step_is_refused_by_name(tmp_path):
-    """The steps and their order are `verity run`'s stages': a run naming none is refused before the window's preflight."""
+    """The steps and their order are `verity run`'s stages': a run naming none, an unknown one or one twice is refused
+    before the window's preflight and any step."""
     for steps in ((), ("steps",)):
         rc, out = _preflight(tmp_path, steps, APPLICATION_PROTOCOLS="sampled-proofs", POUW="")
         assert rc == 3 and out.strip().splitlines()[-1] == (
             "PREFLIGHT: the runner's steps and their order are verity run's stages': none was named (served_verdicts.sh "
             "steps STEP...)"), out
+    for steps, line in ((("steps", "preflight", "seal", "preflight"), "the step preflight is named twice"),
+                        (("steps", "seal", "audit"), "the window has no step audit")):
+        rc, out = _preflight(tmp_path, steps, APPLICATION_PROTOCOLS="sampled-proofs", POUW="")
+        assert rc == 3 and out.strip().splitlines()[-1] == f"PREFLIGHT: {line}: nothing run", out
 
 
 def _sealed(tmp_path, window, drop=()):
@@ -374,3 +379,14 @@ def test_a_listed_pearl_plus_whose_piece_refuses_is_refused_by_its_sentence_and_
     assert f"  REFUSED pearl-plus: {sentence}" in out.splitlines(), out
     rc, out = _steps(tmp_path / "b", f"{piece}RAN+=(seal); road_pieces; road_end 20", "exit 9")
     assert rc == 0 and "pearl-plus" not in out and "ran 1 (seal)" in out, out
+
+
+def test_a_count_an_earlier_call_left_is_cleared_by_the_circuits_step_so_inference_only_does_not_run(tmp_path):
+    """The circuits step removes the window's public counts before it counts: one that fails leaves none, and the
+    inference-only step, which reads them, does not run on an earlier call's."""
+    body = ('touch "$OUT/window-circuit-2-4-2.json"; circuits() { echo "WINDOW-CIRCUIT class 2,4,2 refused"; return 1; }\n'
+            "road_step_named circuits; RAN+=(inference-policy); road_step_named inference-only; road_end 20")
+    rc, out = _steps(tmp_path, f"{_fns('road_step_named', 'circuits_counted')}\n{body}", "exit 9")
+    assert rc == 20 and not (tmp_path / "out" / "window-circuit-2-4-2.json").exists(), out
+    assert ("  NOT RUN inference-only: its verdict reads the circuits step's window circuit and the inference-only policy, "
+            "and one of them did not run") in out.splitlines(), out

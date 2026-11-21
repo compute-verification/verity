@@ -2116,7 +2116,10 @@ EOF
       say "ADVICE: committed (its root a hiding commitment); its content and length are held to no registered compiler (candidate 135)"
       RAN+=(advice) ;;
     inference-policy) road_step inference-policy inference_policy window ;;
-    circuits) road_step circuits circuits ;;
+    circuits)  # a count an earlier call left in OUT is no count of this one's, which inference-only reads
+      local c
+      for c in $CLASSES; do rm -f "$OUT/window-circuit-${c//,/-}.json"; done
+      road_step circuits circuits ;;
     block-counts) road_step block-counts block_counts ;;
     sampled-proofs) road_sampled ;;
     pieces) road_pieces ;;
@@ -2131,8 +2134,16 @@ EOF
       elif rec=$("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" window-record "$OUT/summary.json" 2>&1); then RAN+=(record); say "$rec"
       else step_refused record "$rec"; fi ;;
     composite) step_not_run composite "served_composite.sh reads the audit's cases under D/private/logs/sampled-proofs/keep/served or D/v3c-w*/audit and, under POUW=pearlplus, Pearl+'s run case, and the window road writes neither: no input of the composite's stands, so its verdict is not made" ;;
-    *) say "PREFLIGHT: the window has no step $1"; exit 3 ;;
   esac
+}
+steps_named() {  # every name in "$@" is a step road_step_named knows, and none is named twice: refused by name otherwise
+  local step seen=" " known
+  known=" $(declare -f road_step_named | sed -n 's/^ *\([a-z][a-z-]*\))$/\1/p' | tr '\n' ' ')"
+  for step in "$@"; do
+    [[ $known = *" $step "* ]] || { say "PREFLIGHT: the window has no step $step: nothing run"; return 3; }
+    [[ $seen = *" $step "* ]] && { say "PREFLIGHT: the step $step is named twice: nothing run"; return 3; }
+    seen+="$step "
+  done
 }
 circuits_counted() {  # every class of CLASSES counted (`circuit` writes its public count only then)
   local c
@@ -2230,6 +2241,7 @@ else
     || { say "PREFLIGHT: the runner is verity run's: no application was named (APPLICATION_PROTOCOLS), so what it lists cannot be checked"; exit 3; }
   [ "${1:-}" = steps ] && [ $# -gt 1 ] \
     || { say "PREFLIGHT: the runner's steps and their order are verity run's stages': none was named (served_verdicts.sh steps STEP...)"; exit 3; }
+  steps_named "${@:2}" || exit 3
   window_preflight || exit 3
   KN=$K CLASSES=$WINDOW_CLASS
   logs_dir
