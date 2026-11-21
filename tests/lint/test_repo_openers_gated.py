@@ -9,6 +9,8 @@ the walk can't decide (a body that doesn't build or compile) fails.  The walk bu
 most of an hour: no cheaper test finds an opener, which is seen only in the bodies that call it."""
 from __future__ import annotations
 
+import heapq
+import itertools
 import json
 import sys
 import time
@@ -35,43 +37,117 @@ def _imports() -> tuple[Any, Any, Any]:
     return BD, T, D
 
 
-def walk() -> tuple[dict[str, Any], dict[str, list[str]], dict[str, str]]:
-    """Every specialized template and primitive gate the catalog reaches, by id; each template's callees; and each id
-    that couldn't be opened, with why."""
-    _BD, T, D = _imports()
-    found: dict[str, Any] = {}
-    callees: dict[str, list[str]] = {}
+def _shape(v: Any, D: Any) -> str:
+    if isinstance(v, D.SpecializedDefinition):
+        return shape(v)
+    if isinstance(v, bool) or v is None or isinstance(v, str):
+        return repr(v)
+    if isinstance(v, int):
+        return "0" if v == 0 else "n"
+    if isinstance(v, float):
+        return "f"
+    if isinstance(v, (tuple, list)):
+        return "(" + ",".join(_shape(x, D) for x in v) + ")"
+    if isinstance(v, dict):
+        return "{" + ",".join(f"{k}:{_shape(x, D)}" for k, x in sorted(v.items())) + "}"
+    return str(getattr(v, "id", repr(v)))
+
+
+def shape(fn: Any) -> str:
+    """A template's shape: its circuit template and its statics, each size taken only as zero or not."""
+    D = _imports()[2]
+    return fn.base_id + "{" + ",".join(f"{k}={_shape(v, D)}" for k, v in fn.bindings.items()) + "}"
+
+
+def volume(v: Any) -> int:
+    """The product of a binding's sizes, nested statics' included: the walk takes each shape at its least."""
+    D = _imports()[2]
+    if isinstance(v, D.SpecializedDefinition):
+        return volume(list(v.bindings.values()))
+    if isinstance(v, bool):
+        return 1
+    if isinstance(v, int):
+        return max(v, 1)
+    if isinstance(v, (tuple, list)):
+        out = 1
+        for x in v:
+            out *= volume(x)
+        return out
+    if isinstance(v, dict):
+        return volume(list(v.values()))
+    return 1
+
+
+def roots() -> list[Any]:
+    """The catalog's roots as `targets.catalog` makes them, without building a model's body."""
+    _BD, T, _D = _imports()
+    out = list(T._registered())
+    for units, make, _kind, _label in T.catalog_units():
+        out += T._produce(units, make)
+    return out
+
+
+def walk(start: list[Any]) -> tuple[dict[str, list[tuple[int, Any]]], dict[str, set[str]], dict[str, str], list]:
+    """Each shape reached from ``start``, with its bindings by size; each built shape's callee shapes; each that couldn't
+    be opened, with why; and each body over 5 s to build.  Smallest binding first over the whole walk, one body per shape
+    (an opener's none), each released once its callees are read."""
+    _BD, _T, D = _imports()
+    members: dict[str, list[tuple[int, Any]]] = {}
+    callees: dict[str, set[str]] = {}
     undecided: dict[str, str] = {}
-    stack = list(T.catalog())
-    while stack:
-        fn = stack.pop()
+    slow: list[tuple[float, str]] = []
+    seen: set[str] = set()
+    heap: list[tuple[int, int, Any]] = []
+    order = itertools.count()
+
+    def push(fn: Any) -> None:
         if isinstance(fn, D.CompositeDefinition) and not fn.statics:
             fn = D.bind(fn)
         fid = getattr(fn, "id", None)
-        if fid is None or fid in found:
-            continue
-        found[fid] = fn
+        if fid is None or fid in seen:
+            return
+        seen.add(fid)
         if isinstance(fn, D.SpecializedDefinition):
-            try:
-                kids = [n.fn for n in fn.body.nodes]
-            except Exception as e:  # noqa: BLE001
-                undecided[fid] = f"its body doesn't build: {type(e).__name__}: {str(e)[:160]}"
-                continue
-            stack.extend(kids)
-            callees[fid] = sorted({getattr(k, "id", repr(k)) for k in kids})
+            heapq.heappush(heap, (volume(fn), next(order), fn))
         elif not isinstance(fn, D.PrimitiveDefinition) and type(fn).__name__ != "ScalarReference":
             undecided[fid] = f"a {type(fn).__name__}, neither a primitive gate nor a specialized template"
-    return found, callees, undecided
+
+    for fn in start:
+        push(fn)
+    while heap:
+        size, _, fn = heapq.heappop(heap)
+        k = shape(fn)
+        members.setdefault(k, []).append((size, fn))
+        if k in callees or k in undecided:
+            continue
+        if fn.base_id in OPENERS:
+            callees[k] = set()
+            continue
+        had, t = fn._body is not None, time.monotonic()
+        try:
+            kids = [n.fn for n in fn.body.nodes]
+        except Exception as e:  # noqa: BLE001
+            undecided[k] = f"{fn.id[:160]}: its body doesn't build: {type(e).__name__}: {str(e)[:160]}"
+            continue
+        finally:
+            if not had:
+                fn._body = None
+        if (dt := time.monotonic() - t) > 5:
+            slow.append((round(dt, 1), fn.id[:160]))
+        callees[k] = {shape(c) for c in kids if isinstance(c, D.SpecializedDefinition)}
+        for c in kids:
+            push(c)
+    return members, callees, undecided, slow
 
 
-def reaching(found: dict[str, Any], callees: dict[str, list[str]]) -> set[str]:
-    reach = {i for i, fn in found.items() if getattr(fn, "base_id", None) in OPENERS}
+def reaching(members: dict[str, list[tuple[int, Any]]], callees: dict[str, set[str]]) -> set[str]:
+    reach = {k for k, ms in members.items() if ms[0][1].base_id in OPENERS}
     changed = True
     while changed:
         changed = False
-        for i, cs in callees.items():
-            if i not in reach and any(c in reach for c in cs):
-                reach.add(i)
+        for k, cs in callees.items():
+            if k not in reach and cs & reach:
+                reach.add(k)
                 changed = True
     return reach
 
@@ -104,7 +180,7 @@ class Gating:
     def activation(self, sub: Any, vals: tuple, masks: tuple) -> tuple[tuple, tuple, int]:
         if sub.spec.base_id in OPENERS:
             return (0,) * len(sub.ret), (0,) * len(sub.ret), -1
-        if sub.spec.id not in self.reach and sub.P and all(v is None for v in vals):
+        if shape(sub.spec) not in self.reach and sub.P and all(v is None for v in vals):
             m = 0
             for x in masks:
                 m |= x
@@ -215,43 +291,54 @@ def allowed() -> dict[str, dict]:
     return parse(json.loads(LIST.read_text(encoding="utf-8")))
 
 
-def classes() -> tuple[dict[str, list[tuple[str, str]]], dict[str, str], dict[str, Any], dict]:
+def classes(start: list[Any] | None = None) -> tuple[dict[str, tuple[Any, list[tuple[str, str]]]], dict[str, str], dict]:
+    """Each reaching shape's least binding with its classes, what couldn't be decided, and the walk's numbers.  A reaching
+    shape's next binding, up to 64 times the least's size, is classified too and must agree."""
+    BD = _imports()[0]
     t0 = time.monotonic()
-    found, callees, undecided = walk()
+    members, callees, undecided, slow = walk(roots() if start is None else start)
     built = time.monotonic() - t0
-    reach = reaching(found, callees)
+    reach = reaching(members, callees)
     G = Gating(reach)
-    got: dict[str, list[tuple[str, str]]] = {}
-    for fid in sorted(reach):
-        fn = found[fid]
-        if fn.base_id in OPENERS:
+    got: dict[str, tuple[Any, list[tuple[str, str]]]] = {}
+    compared = 0
+    for k in sorted(reach):
+        ms = members[k]
+        if ms[0][1].base_id in OPENERS:
             continue
         try:
-            got[fid] = G.classify(fn)
+            got[k] = (ms[0][1], G.classify(ms[0][1]))
+            if len(ms) > 1 and ms[1][0] <= 64 * ms[0][0]:
+                compared += 1
+                if (other := G.classify(ms[1][1])) != got[k][1]:
+                    undecided[k] = f"its classes change with its sizes: {ms[0][1].id[:120]} {got[k][1]}, {ms[1][1].id[:120]} {other}"
         except Exception as e:  # noqa: BLE001
-            undecided[fid] = f"its body doesn't compile: {type(e).__name__}: {str(e)[:160]}"
-    stats = {"walked": len(found), "templates": sum(1 for f in found.values() if hasattr(f, "base_id")),
-             "reaching": len(reach), "openers": sorted(i for i in reach if found[i].base_id in OPENERS),
-             "build_s": round(built), "classify_s": round(time.monotonic() - t0 - built),
-             "unknown_where_evaluate_raised": sorted(G.raised)}
-    return got, undecided, found, stats
+            undecided[k] = f"its body doesn't compile: {type(e).__name__}: {str(e)[:160]}"
+        finally:
+            G.memo.clear()
+            BD._BODIES.clear()
+    stats = {"bindings": sum(len(ms) for ms in members.values()), "shapes": len(members), "built": len(callees),
+             "reaching": len(reach), "openers": sorted(k for k in reach if members[k][0][1].base_id in OPENERS),
+             "compared": compared, "build_s": round(built), "classify_s": round(time.monotonic() - t0 - built),
+             "slowest_builds": sorted(slow, reverse=True)[:10], "unknown_where_evaluate_raised": sorted(G.raised)}
+    return got, undecided, stats
 
 
-def report(got: dict, undecided: dict, found: dict, stats: dict) -> str:
+def report(got: dict, undecided: dict, stats: dict) -> str:
     lines = [json.dumps(stats)]
-    for fid, cs in sorted(got.items()):
+    for _k, (fn, cs) in sorted(got.items()):
         worst = UNGATED if any(c == UNGATED for _, c in cs) else VERDICT if any(c == VERDICT for _, c in cs) else GATED
-        lines.append(f"{worst:8} {fid[:220]}  [{', '.join(f'{k}:{c}' for k, c in cs)}]")
+        lines.append(f"{worst:8} {fn.id[:220]}  [{', '.join(f'{k}:{c}' for k, c in cs)}]")
     lines += [f"UNDECIDED {k[:220]}: {v}" for k, v in sorted(undecided.items())]
     return "\n".join(lines)
 
 
 @pytest.mark.slow
 def test_no_new_ungated_opener() -> None:
-    got, undecided, found, stats = classes()
-    print(report(got, undecided, found, stats))
+    got, undecided, stats = classes()
+    print(report(got, undecided, stats))
     listed = allowed()
-    ungated = {found[f].base_id for f, cs in got.items() if any(c == UNGATED for _, c in cs)}
+    ungated = {fn.base_id for fn, cs in got.values() if any(c == UNGATED for _, c in cs)}
     new = sorted(ungated - set(listed))
     assert not undecided, ("templates the walk can't decide whether they reach an opener or gate its verdict: "
                            + "; ".join(f"{k[:160]}: {v}" for k, v in sorted(undecided.items())))
@@ -275,17 +362,6 @@ def test_a_gated_read_and_an_ungated_one() -> None:
     D = _imports()[2]
     from verity.commitments.gates import embedding as E
     v4, v2 = D.bind(E.EmbeddingRead_v4, V=2, H=1), D.bind(E.EmbeddingRead, V=2, H=1)
-    found = {}
-    stack = [v4, v2]
-    callees: dict[str, list[str]] = {}
-    while stack:
-        fn = stack.pop()
-        if fn.id in found:
-            continue
-        found[fn.id] = fn
-        if isinstance(fn, D.SpecializedDefinition):
-            callees[fn.id] = sorted({n.fn.id for n in fn.body.nodes})
-            stack.extend(n.fn for n in fn.body.nodes)
-    G = Gating(reaching(found, callees))
-    assert G.classify(v4) == [("0", GATED), ("1", GATED)]
-    assert G.classify(v2) == [("0", UNGATED), ("1", VERDICT)]
+    got, undecided, stats = classes([v4, D.bind(E.EmbeddingRead, V=2, H=16), v2])
+    assert not undecided and stats["compared"] == 1
+    assert {fn.id: cs for fn, cs in got.values()} == {v4.id: [("0", GATED), ("1", GATED)], v2.id: [("0", UNGATED), ("1", VERDICT)]}
