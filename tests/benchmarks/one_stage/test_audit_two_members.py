@@ -116,19 +116,21 @@ def _kept_prover(out: Path) -> list[str]:
 def _window(d: Path, flipped: bool = False, own: str | None = None) -> Path:
     """The window (module docstring) written to ``d``. ``flipped``: the K = 256 proof block's committed output has bit 0
     of its first word flipped, and is committed as consistently as an honest one. ``own``: the K = 128 proof block reads
-    its ``wrow`` from a value of that name the Program takes, registered afresh under the run root."""
+    its ``sw`` from a value of that name the Program takes, registered afresh under the run root as one 32-bit word, the
+    width it is read at."""
     rng = np.random.default_rng(0)
     data = []
     for k in KS:
         x, w = (rng.integers(-128, 128, (1, k)).astype(np.int8) for _ in range(2))
         sx, sw = ((np.abs(rng.standard_normal(1)) / 127).astype(np.float32) for _ in range(2))
         data.append((x, w, sx, sw))
-    reg = None if own is None else IF.Registered({own: KS[0] // 2}, reads=(
-        IF.Read(descriptor_id(TEMPLATES[0]), "wrow", own, 0, (1, 1), 0, (0, KS[0] // 2)),), values=(own,))
+    reg = None if own is None else IF.Registered({own: 2}, reads=(
+        IF.Read(descriptor_id(TEMPLATES[0]), "sw", own, 0, (1,), 0, (0,)),), values=(own,),
+        formats={own: {"row_schema": REG.SCHEMA_V2, "word_bits": 32}})
     circuit = IF.Circuit("two-members", tuple((t, 1) for t in TEMPLATES), registered=reg)
     values = {} if own is None else {own: RV.Registered.commit(program_digest(circuit.program()[0]), own,
-                                                                data[0][1].view(np.uint16).tolist(), schema=REG.SCHEMA_V2,
-                                                                window=RUN)}
+                                                                [data[0][3].view(np.uint32).tolist()], word_bits=32,
+                                                                schema=REG.SCHEMA_V2, window=RUN)}
     win = IF.Window(circuit, RUN, RND.parse_design(DESIGN), 4, registered=values)
     for t, k, (x, w, sx, sw) in zip(TEMPLATES, KS, data):
         ins = [x.view(np.uint8), sx.view(np.uint32), w.view(np.uint8), sw.view(np.uint32)]
@@ -358,13 +360,10 @@ def test_a_member_with_one_bit_changed_is_refused(tmp_path, binaries):
     assert _kept_verifier(out) == [(0, True), (1, False)]
 
 
-#: The two refusals the afresh audit meets on this branch, each by a line of the audit's own words. Both fail closed.
-#: The recut: the registered value's 16-bit words are read into ``wrow``'s 8-bit leaves (a format's words are 16 or 32
-#: bits), a root Spot's registration refuses (`recut-root`) where Python's registers it, so the registration disagrees.
-#: The header: since a registered value is leafed once, in its registration's tree, the docket gives the member no root
-#: at the port that reads it, and the members check still asks one of every port the header names.
-AFRESH_REFUSALS = ("recut-root: the root reads an input node at a width other than its registered one",
-                   "port wrow has no tree under the member")
+#: The refusal the afresh audit meets on this branch, by a line of the audit's own words, which fails closed: since a
+#: registered value is leafed once, in its registration's tree, the docket gives the member no root at the port that
+#: reads it, and the members check still asks one of every port the header names.
+AFRESH_REFUSALS = ("port sw has no tree under the member",)
 
 
 class AfreshRefused(Exception):
@@ -372,15 +371,15 @@ class AfreshRefused(Exception):
 
 
 @pytest.mark.xfail(strict=True, raises=AfreshRefused,
-                   reason="the recut read Spot's registration refuses (recut-root) and the members check's header rule "
-                   "for a port that reads a registered value; any other failure, or either refusal gone, fails this test")
+                   reason="the members check's header rule for a port that reads a registered value; any other "
+                   "failure, or the refusal gone, fails this test")
 def test_a_value_the_program_takes_registered_afresh_with_no_earlier_record_passes_the_audit(tmp_path, binaries):
     """No other test runs a value the Program takes, registered afresh under the run root with no earlier record (no
     ``--tie``), through the stream's registration, the prover and the Lean verifier's registered reads."""
     window = _window(tmp_path / "window", own=STATE)
     rec = json.loads((window / "registration.json").read_text())
     (entry,) = rec["registered"]
-    rc, row, _out, said = _audit(tmp_path, window, binaries, more={"FLOCK_CHALLENGER": "0"})
+    rc, row, _out, said = _audit(tmp_path, window, binaries, "--deployed-key")
     if not (rc == 0 and row.get("ok") is True) and all(line in said for line in AFRESH_REFUSALS):
         raise AfreshRefused(said)
     assert rc == 0 and row.get("ok") is True, said
