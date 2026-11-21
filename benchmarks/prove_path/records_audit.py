@@ -710,10 +710,14 @@ DAY_SOURCES = {"device": "the challenger's signed ledger (--day-ledger)",
                "development": "development: --day and the prover's --day-log, not device-bound"}
 
 #: where R8's weights' registration of record's digest came from, as the summary's ``weights_of_record`` says
-WEIGHTS_SOURCES = {"auditor": "the auditor's side (--registered-digest)",
-                   "development": "development: the SHA-512 of --registered's own file, a stand-in for the auditor's "
-                                  "digest; condition (1) is UNMET and such a run tests the code and is reported as that: "
-                                  "NOT a first accept of record"}
+WEIGHTS_SOURCES = {"stand-in": "held to a registration the serving node wrote at this serve's start, its digest the file's "
+                               "own, pinned by no one: a stand-in"}
+#: the sources of a digest not built yet, each refused by name
+WEIGHTS_SOURCES_NOT_BUILT = {"tree-pin": "a digest pinned in the tree before the serve needs the one registration made "
+                                         "before any serve, which is not built",
+                             "ledger": "a digest read from the challenger's signed ledger is not built"}
+REGISTERED_DIGEST_WHY = ("--registered needs --registered-digest and --registered-digest-source: the verifier holds the "
+                         "file to the digest it is handed and computes none from the file")
 
 
 def device_day(lines: list[str], root: str, key: Any, verify: Callable[[Any, bytes, bytes], bool],
@@ -1106,6 +1110,13 @@ def forged_outcome(s: dict, wdir: Path, member: int | None = None, more: Mapping
 def audit(a: argparse.Namespace) -> int:
     """The audit (module docstring) into ``a.out``: ``summary.json`` and a ``RECORDS`` line, its ``definitions`` the module
     each member template's Definition is in and ``loaded`` the ``verity*`` packages the process loaded. -> 0 when it passed."""
+    if a.registered and not (a.registered_digest and a.registered_digest_source):
+        raise SystemExit(REGISTERED_DIGEST_WHY)
+    if a.registered_digest_source in WEIGHTS_SOURCES_NOT_BUILT:
+        raise SystemExit(f"--registered-digest-source {a.registered_digest_source}: "
+                         f"{WEIGHTS_SOURCES_NOT_BUILT[a.registered_digest_source]}")
+    if a.registered:
+        print("WEIGHTS " + WEIGHTS_SOURCES[a.registered_digest_source], flush=True)
     own_tree()
     import a5 as A5
     from verity.protocols.proof.spot.verifier.challenger import challenger_session as AC
@@ -1120,7 +1131,7 @@ def audit(a: argparse.Namespace) -> int:
         weights = Path(a.registered).read_bytes() if a.registered else None
         pins = pinned(json.loads(weights)) if weights is not None else {}
         if weights is not None:
-            a.weights_of_record = (weights, a.registered_digest or hashlib.sha512(weights).hexdigest())
+            a.weights_of_record = (weights, a.registered_digest)
             marks = set(DK.marked_inputs(mine.program))
             held = DK.weights_held(mine.program, mine.query, (), a.weights_of_record)[1]
             pins = {v: e for v, e in pins.items() if v not in marks} | {v: {"value": v, **e} for v, e in held.items()}
@@ -1228,7 +1239,7 @@ def audit(a: argparse.Namespace) -> int:
         row["tie"] = tie_row(tied)
     if a.registered:
         row["weights_of_record"] = {"digest": a.weights_of_record[1],
-                                    "source": WEIGHTS_SOURCES["auditor" if a.registered_digest else "development"]}
+                                    "source": WEIGHTS_SOURCES[a.registered_digest_source]}
     if day:
         row["day"] = {"day": day["day"], "declared": [d["program"] for d in day["declarations"] if d["day"] == day["day"]],
                       "source": DAY_SOURCES["device" if a.day_ledger else "development"]}
@@ -1266,6 +1277,7 @@ def audit(a: argparse.Namespace) -> int:
     print("RECORDS " + json.dumps({x: row.get(x) for x in ("ok", "circuit", "population", "draw", "draw_counts", "outputs", "seconds")}
                                   | {"compile": PROVER_CIRCUIT if a.prover_circuit else (compiled or {}).get("ok"),
                                      "fixed_before_draw": (row.get("fixed_before_draw") or {}).get("ok"),
+                                     "weights_digest": (row.get("weights_of_record") or {}).get("source"),
                                      "accepted": (s.get("audit") or {}).get("accepted"),
                                      "negatives_refused": all((row.get("negatives") or {"none": False}).values()),
                                      "definitions": row["definitions"], "loaded": row["loaded"],
@@ -1369,9 +1381,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--main", help="with --challenger: the verifier's copy of main's first-parent history")
     p.add_argument("--registered", help="the registered values' entries the verifier pinned before the run, {program, "
                    "values} (`pinned`), for a circuit that reads them")
-    p.add_argument("--registered-digest", help="with --registered: the SHA-512 the auditor's side holds for that file, which "
-                   "R8 refuses it without (`docket.weights_held`); without it, the file's own, a development stand-in "
-                   "(`WEIGHTS_SOURCES`)")
+    p.add_argument("--registered-digest", help="with --registered, which is refused without it: the SHA-512 the file is "
+                   "held to (`docket.weights_held`)")
+    p.add_argument("--registered-digest-source", choices=sorted({*WEIGHTS_SOURCES, *WEIGHTS_SOURCES_NOT_BUILT}),
+                   help="with --registered-digest: where it came from, which the audit's first line and the summary's "
+                   "weights_of_record say (`WEIGHTS_SOURCES`); tree-pin and ledger are refused, not built")
     p.add_argument("--tie", dest="tie_file", help="the earlier registration W (PoUW H1's of the window, or Pearl+'s window "
                    "record) that registered first the values the circuit's program takes, which the window's registration "
                    "registers as W's, chained right after it (`tie_of`); a circuit with values needs it")

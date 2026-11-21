@@ -343,6 +343,20 @@ def test_prover_circuit_takes_the_registered_circuit_holds_its_compiler_and_advi
     assert "compiled: not checked (the circuit is the one the prover registered)" in line
 
 
+@pytest.mark.parametrize("given", [[], ["--registered-digest", "ab" * 64], ["--registered-digest-source", "stand-in"],
+                                   ["--registered-digest", "ab" * 64, "--registered-digest-source", "tree-pin"],
+                                   ["--registered-digest", "ab" * 64, "--registered-digest-source", "ledger"]])
+def test_registered_is_refused_by_name_without_its_digest_and_a_built_source(written, tmp_path, given):
+    reg = tmp_path / "registered.json"
+    reg.write_text(json.dumps({"program": "aa" * 64, "values": {}}))
+    with pytest.raises(SystemExit) as e:
+        RA.main([*_audit_args(written), "--out", str(tmp_path / "o"), "--registered", str(reg), *given])
+    source = given[-1] if len(given) == 4 else None
+    assert e.value.code == (RA.REGISTERED_DIGEST_WHY if source is None
+                            else f"--registered-digest-source {source}: {RA.WEIGHTS_SOURCES_NOT_BUILT[source]}")
+    assert not (tmp_path / "o").exists()
+
+
 def test_prover_circuit_is_refused_by_name_without_development(written, tmp_path, monkeypatch, capsys):
     with pytest.raises(SystemExit):
         _prover_circuit_audit(written, monkeypatch, tmp_path, ["--prover-circuit"])
