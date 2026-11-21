@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # One window of Llama-3.2-1B int8 served on an H200 through every subprotocol, each step's own
-# verdict line in $OUT/verdicts.txt, and one record of every verdict. The chain, in order:
+# verdict line in $OUT/verdicts.txt, and one record of every verdict. A window's steps and their order are `verity run`'s
+# stages' (`steps STEP...`); what each verb and follow-on below runs:
 #  0. B: `verity-vllm predict row` writes the H200 int8 row's Build of record (ROW_ID, default ROW's name) from its declared
 #     inputs alone into PRED ($D/predicted), before the lease and on the CPU: its request Programs, GP-01's workload and the
 #     manifest, and beside them a copy of the checkpoint config it was predicted from (checkpoint_config.json, which the
@@ -1843,8 +1844,8 @@ TPY=$TREE/.venv/bin/python
 "$TPY" benchmarks/one_stage/served_verdicts.py pieces --serve-run "$D" --window "$K" --out "$OUT/pieces" "$@" \
   --product "$PRODUCT" 2>&1 | publish_lines
 }
-# The window's road, a plain run's: the steps on what a window's serve left in D, after the lease, serving nothing and
-# reading no ROW: the close's plan (plans.jsonl), its handoff and record (windows/wK/handoff, windows/wK/record), the
+# The window's steps, a plain run's, in the order verity run's stages name them: each on what a window's serve left in
+# D, after the lease, serving nothing and reading no ROW: the close's plan (plans.jsonl), its handoff and record (windows/wK/handoff, windows/wK/record), the
 # seal and the advice. Each step is in one class: ran (its command ended 0 and decided), refused or undecided (by its own
 # first line), or not run (by why: a step the record holds nothing for names what it lacks and whose it is).
 RAN=() REFUSED=() NOT_RUN=()
@@ -2009,19 +2010,22 @@ road_network() {  # the network attester's own piece, called as step 4 or 6 call
   elif [ "$rc" = 0 ]; then RAN+=(network-attester)
   else step_refused network-attester "$(failed "$rc" "$dir/road.log")"; fi
 }
-window_road() {  # in TREE: the runner's steps in its order, each from the window's record or refused by name
-  [ -z "${PEARLPLUS_TIE:-}" ] || { say "PREFLIGHT: PEARLPLUS_TIE ties a window to a ROW's serve, and the window's road serves none: it ties nothing"; exit 3; }
-  say "ROAD: the window's record in D (the close's plan, handoff and record, the seal and the advice), after the lease; nothing served, no ROW read"
-  road_private || road_stop private 2
-  RAN+=(preflight)
-  say "PREDICT, SERVE: the window's serve's, before and under its lease (PRED/predicted.json, D)"
-  if window_seal; then RAN+=(seal); else road_stop seal 11; fi
-  mkdir -p "$OUT/serve" && "$PY" -c 'import hashlib, json, sys; s = next(x.rstrip("\n") for x in open(sys.argv[1]) if x.strip() and json.loads(x)["window"] == int(sys.argv[2])); print(json.dumps({"seal_sha512": hashlib.sha512(s.encode()).hexdigest()}))' "$D/seals.jsonl" "$K" > "$OUT/serve/phase.json" \
-    || { rm -f "$OUT/serve/phase.json"; road_stop window 21; }
-  KN=$K CLASSES=$WINDOW_CLASS
-  say "WINDOW: the close's, with its record (WINDOW's, else plans.jsonl's last), at the class the serve took; its circuit registered by the prover, which no challenger holds before any coin on this road"
-  RAN+=(window)
-  say "$("$PY" - "$D/serve.json" "$WINDOW_CLASS" <<'EOF'
+road_step_named() {  # in TREE: the window's step $1, from its record or refused by name; the steps' order is the caller's
+  case $1 in
+    preflight)
+      [ -z "${PEARLPLUS_TIE:-}" ] || { say "PREFLIGHT: PEARLPLUS_TIE ties a window to a ROW's serve, and the window's road serves none: it ties nothing"; exit 3; }
+      say "ROAD: the window's record in D (the close's plan, handoff and record, the seal and the advice), after the lease; nothing served, no ROW read"
+      road_private || road_stop private 2
+      RAN+=(preflight) ;;
+    seal)
+      say "PREDICT, SERVE: the window's serve's, before and under its lease (PRED/predicted.json, D)"
+      if window_seal; then RAN+=(seal); else road_stop seal 11; fi ;;
+    window)
+      mkdir -p "$OUT/serve" && "$PY" -c 'import hashlib, json, sys; s = next(x.rstrip("\n") for x in open(sys.argv[1]) if x.strip() and json.loads(x)["window"] == int(sys.argv[2])); print(json.dumps({"seal_sha512": hashlib.sha512(s.encode()).hexdigest()}))' "$D/seals.jsonl" "$K" > "$OUT/serve/phase.json" \
+        || { rm -f "$OUT/serve/phase.json"; road_stop window 21; }
+      say "WINDOW: the close's, with its record (WINDOW's, else plans.jsonl's last), at the class the serve took; its circuit registered by the prover, which no challenger holds before any coin on this road"
+      RAN+=(window)
+      say "$("$PY" - "$D/serve.json" "$WINDOW_CLASS" <<'EOF'
 import json, math, sys
 c = sys.argv[2]
 t = ((json.load(open(sys.argv[1])).get("engine") or {}).get("engine_kwargs") or {}).get("max_num_batched_tokens")
@@ -2030,22 +2034,45 @@ print(f"CLASS {c}: its bits are not counted: serve.json records no engine.engine
       f"CLASS {c}: {math.log2(int(t) // s):.2f} bits leave with it (its prompt length, one of the {int(t) // s} that fit {s} "
       f"slots in {t} tokens a step; its slots and outputs are the application's)")
 EOF
-)"
-  "$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" public-registration "$D/advice/w$K/registration.json" > "$OUT/registration.json" \
-    || { say "ADVICE: its registration has no public form"; road_stop advice 14; }
-  say "ADVICE: committed (its root a hiding commitment); its content and length are held to no registered compiler (candidate 135)"
-  RAN+=(advice)
-  road_step inference-policy inference_policy window
-  road_step circuits circuits
-  road_step block-counts block_counts
-  step_not_run sampled-proofs "step 3's prove path (prove_path/run.sh) proves the units a partition file names (PP_PARTITION), and the window's record has none: its proof of the window's circuit is proofs'"
-  road_pieces
-  road_wipe
-  road_network
-  if [[ " ${RAN[*]} " = *" circuits "* && " ${RAN[*]} " = *" inference-policy "* ]]; then road_step inference-only inference_only
-  else step_not_run inference-only "its verdict reads the circuits step's window circuit and the inference-only policy, and one of them did not run"; fi
-  step_not_run record "served_verdicts.py record reads step 3's sampled proofs, which did not run"
-  step_not_run composite "V3c, the composite and the hand-off read the record, which was not made"
+)" ;;
+    advice)
+      "$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" public-registration "$D/advice/w$K/registration.json" > "$OUT/registration.json" \
+        || { say "ADVICE: its registration has no public form"; road_stop advice 14; }
+      say "ADVICE: committed (its root a hiding commitment); its content and length are held to no registered compiler (candidate 135)"
+      RAN+=(advice) ;;
+    inference-policy) road_step inference-policy inference_policy window ;;
+    circuits)  # a count an earlier call left in OUT is no count of this one's, which inference-only reads
+      local c
+      for c in $CLASSES; do rm -f "$OUT/window-circuit-${c//,/-}.json"; done
+      road_step circuits circuits ;;
+    block-counts) road_step block-counts block_counts ;;
+    sampled-proofs) step_not_run sampled-proofs "step 3's prove path (prove_path/run.sh) proves the units a partition file names (PP_PARTITION), and the window's record has none: its proof of the window's circuit is proofs'" ;;
+    pieces) road_pieces ;;
+    wipe) road_wipe ;;
+    network-attester) road_network ;;
+    inference-only)  # the circuits step may have run in another call: its public count is what it leaves in OUT
+      if circuits_counted && [[ " ${RAN[*]} " = *" inference-policy "* ]]; then road_step inference-only inference_only
+      else step_not_run inference-only "its verdict reads the circuits step's window circuit and the inference-only policy, and one of them did not run"; fi ;;
+    record) step_not_run record "served_verdicts.py record reads step 3's sampled proofs, which did not run" ;;
+    composite) step_not_run composite "V3c, the composite and the hand-off read the record, which was not made" ;;
+  esac
+}
+steps_named() {  # every name in "$@" is a step road_step_named knows, and none is named twice: refused by name otherwise
+  local step seen=" " known
+  known=" $(declare -f road_step_named | sed -n 's/^ *\([a-z][a-z-]*\))$/\1/p' | tr '\n' ' ')"
+  for step in "$@"; do
+    [[ $known = *" $step "* ]] || { say "PREFLIGHT: the window has no step $step: nothing run"; return 3; }
+    [[ $seen = *" $step "* ]] && { say "PREFLIGHT: the step $step is named twice: nothing run"; return 3; }
+    seen+="$step "
+  done
+}
+circuits_counted() {  # every class of CLASSES counted (`circuit` writes its public count only then)
+  local c
+  for c in $CLASSES; do [ -f "$OUT/window-circuit-${c//,/-}.json" ] || return 1; done
+}
+road_steps() {  # in TREE: the steps named, in the caller's order, then the road's end
+  local step
+  for step in "$@"; do road_step_named "$step"; done
   road_end 20
 }
 
@@ -2133,9 +2160,14 @@ else
   tie_refused || exit 3
   [ -n "${APPLICATION_PROTOCOLS+x}" ] \
     || { say "PREFLIGHT: the runner is verity run's: no application was named (APPLICATION_PROTOCOLS), so what it lists cannot be checked"; exit 3; }
+  [ "${1:-}" = steps ] && [ $# -gt 1 ] \
+    || { say "PREFLIGHT: the runner's steps and their order are verity run's stages': none was named (served_verdicts.sh steps STEP...)"; exit 3; }
+  steps_named "${@:2}" || exit 3
   window_preflight || exit 3
+  KN=$K CLASSES=$WINDOW_CLASS
   logs_dir
-  window_road
+  shift
+  road_steps "$@"
 fi
 front_ok || exit 3
 [ -n "$FOLLOW$COMPOSE" ] || [ "${1:-}" = v3c ] || pous_pins_ok || exit 3  # the serve's run, which starts PoUS's piece

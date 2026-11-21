@@ -700,18 +700,21 @@ def window_class(text: str) -> tuple[int, int, int]:
 
 def lean_argv(exe: Path, coins: Path, draws: int, record: Path, manifests: list[Path], tie: Path | None,
               over_cap: str = OVER_INERT_BOUND[1], test_instance: bool = False, of_record: bool = False,
-              load: list[int] | None = None) -> list[str]:
+              load: list[int] | None = None, draw_live: Path | None = None, salt_live: Path | None = None) -> list[str]:
     """``pouw-pearlplus``'s command line on the run's retained passes (`manifests`, in order), the epoch's coin commitment,
     the samples, the verifier's coin record, which pins the Lean's source to the one the Python drew, the over-cap rule and
     test instance the Python ran under, the window record W (`tie`) the passes are held to where there is one, with
-    the class whose fixed load they are held at (`load`, ``verify --class``'s), and ``--of-record`` (`of_record`, a run
-    on a live session's coins), under which the Lean takes only a challenger sample:
+    the class whose fixed load they are held at (`load`, ``verify --class``'s), ``--of-record`` (`of_record`, a run
+    on a live session's coins), under which the Lean takes only a challenger sample, and the draw session it holds that
+    sample to (`draw_live`, `served_verdicts.pearlplus_draw_live`'s), and the salt session it holds each live pass's salt
+    to (`salt_live`, `served_verdicts.pearlplus_salt_live`'s):
     ``--coins COINS --draws T --record RECORD --over-cap RULE [--test-instance] [--tie W [--class S,P,O]] [--of-record]
-    MANIFEST...``."""
+    [--draw-live LIVE] [--salt-live SALT] MANIFEST...``."""
     return [str(exe), "--coins", str(coins), "--draws", str(draws), "--record", str(record), "--over-cap", over_cap,
             *(["--test-instance"] if test_instance else []), *(["--tie", str(tie)] if tie is not None else []),
             *(["--class", ",".join(map(str, load))] if load is not None else []),
-            *(["--of-record"] if of_record else []), *map(str, manifests)]
+            *(["--of-record"] if of_record else []), *(["--draw-live", str(draw_live)] if draw_live else []),
+            *(["--salt-live", str(salt_live)] if salt_live else []), *map(str, manifests)]
 
 
 def lean_answer(got: dict) -> dict:
@@ -788,7 +791,8 @@ def lean(args: argparse.Namespace) -> int:
         return done(f"the epoch's coins can't be read: {type(e).__name__}: {e}", 2)
     rec["argv"] = lean_argv(exe, passes / "coins.json", doc["draws"], record, paths,
                             Path(doc["tie_record"]) if doc.get("tie_record") else None, doc.get("over_cap", OVER_INERT_BOUND[0]),
-                            doc.get("test_instance", False), of_record=live, load=doc.get("class"))
+                            doc.get("test_instance", False), of_record=live, load=doc.get("class"),
+                            draw_live=args.draw_live, salt_live=args.salt_live)
     t0 = CLOCK()
     try:
         p = LC.run(rec["argv"], timeout=args.timeout, check=False, ok_statuses=PEARLPLUS_EXITS)
@@ -1039,6 +1043,10 @@ def main(argv: list[str] | None = None) -> int:
     n.add_argument("--out", required=True, help="where the Lean's answer goes, whatever the Python's")
     n.add_argument("--check", help=f"where both verdicts go (default: {LEAN_CHECK} beside --out)")
     n.add_argument("--timeout", type=float, default=3600, help="seconds the Lean has to answer (default 3,600)")
+    n.add_argument("--draw-live", type=Path, help="the challenger sample's draw session (served_verdicts.py "
+                   "pearlplus-draw-live's), which the Lean holds the sample to; without it --of-record refuses one")
+    n.add_argument("--salt-live", type=Path, help="the epoch's salt session (served_verdicts.py pearlplus-salt-live's), "
+                   "which the Lean holds each live pass's salt to; without it --of-record refuses a live run")
     u = sub.add_parser("uncredited")
     u.add_argument("--passes", required=True)
     u.add_argument("--verify", required=True, help="verify's --out document, an accept")

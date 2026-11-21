@@ -134,7 +134,7 @@ difftest only.
 | A period's presented roots | `credit.period` | `Credit.period` (`period-roots`) | `period_twin` |
 | A Pearl-C period's credit | `credit.pearl_c_period_credit` | `Credit.pearlCMonitoringPeriodCredit`, a stub that refuses everything | `pearl_c_period_credit_twin` |
 | Passes credited together | `credit.passes_distinct` | Pearl+'s `PearlPlus.passesDistinct` (`passes-distinct`) | `passes_distinct_twin` |
-| A Pearl+ run | `served_passes.py lean`, which writes `pearlplus-lean.json`, read by `served_verdicts.pearlplus_of_record` | `pouw-pearlplus` (`PouwPearlPlus.Main`: `check`; `liveDrawReason` under `--draw-live`, which the served road does not pass yet) | None: `served_passes.py verify` draws the coin, and its verdict is compared with the Lean's as a measurement (`differ`) |
+| A Pearl+ run | `served_passes.py lean`, which writes `pearlplus-lean.json`, read by `served_verdicts.pearlplus_of_record` | `pouw-pearlplus` (`PouwPearlPlus.Main`: `check`; `liveDrawReason` under `--draw-live` and `liveSaltReason` under `--salt-live`, both passed by the served road; under `--of-record`, a live run missing either session is refused) | None: `served_passes.py verify` draws the coin, and its verdict is compared with the Lean's as a measurement (`differ`) |
 
 Several functions are twins only, because the Lean decides their verdict inside a whole case's (`registered_twin`,
 `opening_twin`, `pass_epoch_twin`, `draw_twin`). Others are guards a device runs before a coin opens: `window`'s
