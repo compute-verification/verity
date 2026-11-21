@@ -10,7 +10,7 @@ import struct
 from typing import Any
 
 import pytest
-from verity.protocols.accounting.network.prover import id_relay as R
+from verity_vllm.pipeline import id_relay as R
 from verity.protocols.accounting.network.prover.workload import FRAME_HEADER, TRAILER, id_event, id_request
 from verity import release as REL
 

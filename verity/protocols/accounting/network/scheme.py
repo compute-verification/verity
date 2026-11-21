@@ -25,8 +25,9 @@ from verity.protocol import Channel, Role
 from verity.protocols.accounting.scheme import Block, Charge, Layout, Order, Port, Scheme, Term, register
 from verity.protocols.accounting.network.verifier import parties as NC, period_check
 from verity import hooks as H
-from verity.protocols.accounting.network.prover import id_relay, workload
-from verity.protocols.accounting.network.prover.ids_protocol import IdsProtocol
+from verity_vllm.pipeline import id_relay
+from verity.protocols.accounting.network.prover import workload
+from verity_vllm.pipeline.ids_protocol import IdsProtocol
 from verity.protocols.accounting.network.prover.admission import ORDERS, Admitter, FrontFeed, engine, tick_config
 
 DEFINITIONS = (IngressScanStart, IngressScanBucket, EgressBucket, IoTieRoute, IoTieContent, IoTieBucket, IoTieRequest,

@@ -5522,6 +5522,13 @@
         "input_datasets/README.md": "library/datasets/README.md",
         "tests/input_datasets/": "tests/library/datasets/"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/network/prover/id_relay.py": "adapters/vllm/verity_vllm/pipeline/id_relay.py",
+        "verity/protocols/accounting/network/prover/ids_protocol.py": "adapters/vllm/verity_vllm/pipeline/ids_protocol.py",
+        "tests/verity/protocols/accounting/network/prover/test_id_relay.py": "tests/adapters/vllm/tests/pipeline/test_id_relay.py"
+      }
     }
   ]
 }

@@ -34,7 +34,7 @@ from collections.abc import AsyncIterator, Callable, Coroutine
 from typing import Any
 
 from verity import hooks as H
-from verity.protocols.accounting.network.prover.ids_protocol import (
+from verity_vllm.pipeline.ids_protocol import (
     ID_PAYLOAD,
     id_request_fields,
 )

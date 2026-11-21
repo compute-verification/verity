@@ -23,8 +23,8 @@ from verity_vllm.pipeline import ids_front as F
 from verity_vllm.pipeline import serve_protocol as proto
 
 from tests.pipeline import test_serve_openai as served
-from verity.protocols.accounting.network.prover import id_relay as R
-from verity.protocols.accounting.network.prover import ids_protocol as idp
+from verity_vllm.pipeline import id_relay as R
+from verity_vllm.pipeline import ids_protocol as idp
 from verity.protocols.accounting.network.verifier import io_tie as IT
 from verity import release as REL
 
@@ -485,7 +485,7 @@ def test_the_launcher_starts_each_process_a_named_scheme_files_with_this_servers
 
 def test_the_launcher_starts_the_network_attesters_id_relay_from_the_one_table():
     from verity.protocols.accounting.network import scheme as network
-    from verity.protocols.accounting.network.prover import id_relay
+    from verity_vllm.pipeline import id_relay
     from verity_vllm import messages
 
     ex = messages.Exchange()
