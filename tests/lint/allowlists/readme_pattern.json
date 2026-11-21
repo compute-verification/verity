@@ -30,7 +30,7 @@
   "adapters/vllm/verity_vllm/program/frontend/README.md": "not yet in the pattern",
   "adapters/vllm/verity_vllm/program/predict/README.md": "not yet in the pattern",
   "applications/README.md": "not yet in the pattern",
-  "input_datasets/README.md": "not yet in the pattern",
+  "library/datasets/README.md": "not yet in the pattern",
   "verity/circuits/README.md": "not yet in the pattern",
   "verity/circuits/boolean/README.md": "not yet in the pattern",
   "verity/circuits/evaluate/README.md": "not yet in the pattern",
