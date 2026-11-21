@@ -1135,8 +1135,8 @@ def _result(public: period.PublicParameters, w: ServedWorkload, state: period.Pe
     ``policy`` where it is not 0, since both calls end 20 on a step refused or not run), else a gate's side
     as started by the gate; and when the verifier is here, the onsite line (`remote_check` under remote), with each memory attester's `trusted-device` premise as `placement`
     read it from the challenger's outcome here, each listed component's as `attested` reads it (``trusted-device``:
-    component -> premise), and beside it what the wipe, compilation and registration said (``wipe``, ``compilation``,
-    and ``registration`` where it performed nothing)."""
+    component -> premise), and beside it what the wipe, compilation and registration said (``memory-wipe``,
+    ``compilation``, and ``registration`` where it performed nothing)."""
     # a party at a time: a later window's outcome would replace an earlier one's, and the period has one window today
     out = {p: o for x in state.windows for p, o in x["accounting"]["outcomes"].items()}
     said_period = _period(w, state)
@@ -1161,7 +1161,7 @@ def _result(public: period.PublicParameters, w: ServedWorkload, state: period.Pe
         said = "; ".join(sorted({x["accounting"]["compilation"]["note"] for x in state.windows}))
         try:
             line = remote_check if K.composite(w.cfg["protocols"], MANIFESTS) == REMOTE else onsite_check
-            beside = {"wipe": state.wipe["note"], "compilation": said,
+            beside = {"memory-wipe": state.wipe["note"], "compilation": said,
                       **({"registration": n} if (n := state.registration.get("note")) else {})}
             out[VERIFIER] = {"outcome": {"verdicts": [{**line(w.cfg, w.state), mc.PREMISE: devices, **beside}]},
                              "refused": None}
@@ -1199,7 +1199,7 @@ def _period(w: ServedWorkload, state: period.PeriodState) -> dict[str, Any]:
             "policy": {"exit": pol, "end": _end(w.state, "policy") if pol is not None else why},
             "outcome": worse(acc, pol) if acc is not None and pol is not None else acc,
             "compilation": "; ".join(sorted({x["accounting"]["compilation"]["note"] for x in state.windows})),
-            "wipe": state.wipe["note"],
+            "memory-wipe": state.wipe["note"],
             "registration": state.registration.get("note") or
             f"performed: the run's registration, for {', '.join(x.party for x, _ in prepared)}"}
 
