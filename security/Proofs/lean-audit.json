@@ -65,8 +65,6 @@
   "Proofs.Properties.Spot.Units",
   "Proofs.Properties.Spot.Credited",
   "Proofs.Properties.Spot.Tables",
-  "Proofs.Properties.Verity.Sampled.PortsHeld",
-  "Proofs.Properties.Spot.RootsRecord",
   "Proofs.Properties.Spot.SecondRefused",
   "Proofs.Properties.Spot.Rate",
   "Proofs.Flock.Bridge.RatePeriod",
@@ -336,7 +334,9 @@
   "Proofs.Properties.Verity.Recursive.PartVerdict",
   "Proofs.Properties.Verity.Recursive.ScheduleRun",
   "Proofs.Properties.Verity.Recursive.ScheduleInner",
-  "Proofs.Properties.Verity.Recursive.ScheduleSession"
+  "Proofs.Properties.Verity.Recursive.ScheduleSession",
+  "Proofs.Properties.Verity.Sampled.PortsHeld",
+  "Proofs.Properties.Spot.RootsRecord"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",

@@ -145,7 +145,8 @@ def linear(k: int, m: int, n: int, tile: tuple[int, int], reader: bool = True) -
     from verity.circuits.program import Program
     from verity.circuits.refs import Coll, concat, tuple_of
     from verity.circuits.types import Array
-    from verity.protocols.accounting.compute.pouw.prover.circuit import pearl_plus_credited as PC
+    from verity.protocols.run import schemes
+    PC = schemes.catalog("pearl-plus", "credited")
 
     tm, tn = tile
     ts = PC.tiles(SCHEME, k, m, n, tile)
@@ -198,7 +199,8 @@ def linear(k: int, m: int, n: int, tile: tuple[int, int], reader: bool = True) -
 def public_values(ln: Linear, k: int, unit: int, salt: bytes, root: bytes) -> dict:
     """The public row of call ``unit`` as C's values (`pearl_plus_credited.public` of each tile): ``salt``, ``root`` and
     ``unit`` one row each, ``rows`` a row tile's, ``col`` a column tile's."""
-    from verity.protocols.accounting.compute.pouw.prover.circuit import pearl_plus_credited as PC
+    from verity.protocols.run import schemes
+    PC = schemes.catalog("pearl-plus", "credited")
 
     pub: dict = {"rows": {}, "col": {}}
     for t in ln.tiles:
@@ -253,7 +255,8 @@ def honest(k: int, m: int, n: int, ln: Linear, unit: int, seed: str, salt: bytes
 def reference(ln: Linear, index: int, vals: dict, unit: int) -> list[int]:
     """`pearl_plus_tile.reference`'s (digest, y, ok) of unit ``index`` on ``vals``: the digest's 64 bytes, its real rows'
     TN y words, then ok."""
-    from verity.protocols.accounting.compute.pouw.prover.circuit import pearl_plus_tile as PT
+    from verity.protocols.run import schemes
+    PT = schemes.catalog("pearl-plus", "tile")
     t = ln.tiles[index]
     r, s = t.rows[0] // len(t.rows), t.core.bindings
     b = [[v << 16 for v in row] for row in vals["w"][t.col]]
@@ -479,9 +482,10 @@ def stage(a) -> int:
     from verity.protocols.proof.spot.verifier.one_stage import one_circuit as OC
     from verity.protocols.proof.spot.verifier.one_stage import registered as REG
     from verity.protocols.accounting.compute.pouw import scheme as PS
-    from verity.protocols.accounting.compute.pouw.prover.circuit import pearl_plus_credited as PC
+    from verity.protocols.run import schemes
     from verity.commitments import registered_value as RV
     from verity_flock import circuit as FC
+    PC = schemes.catalog("pearl-plus", "credited")
 
     rec: dict = {"size": {"K": k, "TM": tm, "TN": tn, "N": n, "M": m}, "scheme": SCHEME, "phases": {}}
     t = time.perf_counter()

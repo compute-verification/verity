@@ -1,7 +1,6 @@
 module
 
 public import Definitions.Flock.Guarantees.Claims
-public import Proofs.Flock.Claims.RecursionStated
 public import Proofs.Flock.Claims.Prob
 public import Proofs.Flock.Claims.Finder
 public import Proofs.Flock.Claims.Aggregate
