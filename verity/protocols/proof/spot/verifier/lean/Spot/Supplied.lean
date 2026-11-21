@@ -317,6 +317,25 @@ def marks (desc : Json) : V (Array (String × Mark)) := do
     k := k + n
   return out
 
+/-- `supplied.registered_values`: the values a record of the program registers, `values` as given, then each table a
+mark of an anchor's names (`registered.root/v1` or `registered.domain/v1`, its `value`), in the marks' order, once and
+not where it is among `values`: a table is there only because a mark in C names it. An error where `values` names a value
+twice. -/
+def registeredValues (values : Array String) (marks : Array (String × Mark)) : V (Array String) := do
+  let _ ← values.foldlM (init := (#[] : Array String)) fun seen v =>
+    if seen.contains v then throw s!"values: {v} is there twice: each once" else pure (seen.push v)
+  return marks.foldl (init := values) fun out (_, m) =>
+    match ["registered.root/v1", "registered.domain/v1"].contains m.fn, m.args.find? (·.1 == "value") with
+    | true, some (_, .str t) => if out.contains t then out else out.push t
+    | _, _ => out
+
+private def anchorMark (fn t : String) : String × Mark :=
+  (s!"{t}/{fn}", { fn := s!"registered.{fn}/v1", args := #[("value", .str t)], layout := "digest", bits := 512 })
+
+#guard (registeredValues #["v", "u"] #[]).toOption == some #["v", "u"]
+#guard (registeredValues #["v"] #[anchorMark "domain" "t", anchorMark "root" "t"]).toOption == some #["v", "t"]
+#guard (registeredValues #["v", "v"] #[]).toOption.isNone
+
 private def argNat (v : String) (m : Mark) (a : String) : V Nat := do
   if m.args.map (·.1) != #[a] then throw s!"supplied input {v}: {m.fn} takes the args [{a}]"
   let some x := (m.args.find? (·.1 == a)).bind (nat? ·.2) | throw s!"supplied input {v}: {m.fn}'s {a} is no natural"
@@ -685,5 +704,14 @@ def piece (j : Json) : Except String Json := do
       | _ => throw s!"cuts: {v}'s is not [n, k]"
     pure (v, Json.arr (ls.map fun l => Json.arr (l.map fun (x : Nat) => Json.num (Int.ofNat x))))
   return Json.mkObj out.toList
+
+/-- The difftest's `registered_values`: on `{program, values}`, the values a record of the program registers
+(`registeredValues` of `values` and the program's `marks`), or the refusal. -/
+def registeredValuesPiece (j : Json) : Except String Json := do
+  let .arr vs := getD j "values" | throw "values is not a list"
+  let values ← vs.mapM fun v => match v with
+    | .str s => pure s
+    | _ => throw "values: a value is not a string"
+  return Json.arr ((← registeredValues values (← marks (getD j "program"))).map Json.str)
 
 end Spot.Supplied

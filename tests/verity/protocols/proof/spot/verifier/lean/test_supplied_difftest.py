@@ -256,6 +256,34 @@ def test_the_marks_lean_reads_are_the_ones_the_codec_writes(pieces):
     assert pieces.call("supplied_marks", j) == ("output", D.canonical({"w": [[1]]}))
 
 
+def _anchor(of, table):
+    return {"supplied": f"registered.{of}/v1", "args": {"value": table}, "layout": "digest", "bits": 512}
+
+
+_D, _W = Array(512, Value(1)), Array(1, Value(16))
+TABLE_READS_FN = bind(CompositeDefinition(
+    "TSuppliedTableReads", 1, (),
+    lambda S: ((("v", _W), ("u", _W), ("t1/domain", _D), ("t1/root", _D), ("t2/root", _D), ("k", _W)), _W),
+    lambda B, S, v, u, *rest: v, register=False))
+
+
+@needs_lake
+@pytest.mark.parametrize("supplied", [
+    {},
+    {"t1/domain": _anchor("domain", "t1"), "t1/root": _anchor("root", "t1")},
+    {"t1/root": _anchor("root", "t1"), "t2/root": _anchor("root", "t2")},
+    {"t1/root": _anchor("root", "t1"), "k": {"supplied": "const.u16/v1", "args": {"value": 1}, "layout": "le", "bits": 16}},
+])
+def test_the_values_a_record_registers_are_the_same_in_lean(pieces, supplied):
+    """`Supplied.registeredValues` of a Program's description and the writer's values is `supplied.registered_values`:
+    the values, then each table a mark of an anchor's names, once."""
+    prog = Program(TABLE_READS_FN, registered=("v", "u"), supplied=supplied)
+    want = list(SU.registered_values(prog, ("v", "u")))
+    desc = json.loads(json.dumps(encode_program(prog)))
+    assert pieces.call("registered_values", {"program": desc, "values": ["v", "u"]}) == ("output", D.canonical(want))
+    assert pieces.call("registered_values", {"program": desc, "values": ["v", "v"]})[0] != "output"
+
+
 def test_the_registrys_list_is_the_formats():
     text = (PACKAGE / "Spot" / "Supplied.lean").read_text()
     body = re.search(r"def FUNCTIONS : List String :=\s*\[(.*?)\]", text, re.S)
