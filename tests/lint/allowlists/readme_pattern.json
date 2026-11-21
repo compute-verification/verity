@@ -55,7 +55,6 @@
   "verity/protocols/proof/spot_flock_recursion/README.md": "no README yet",
   "verity/protocols/registration/README.md": "not yet in the pattern",
   "verity/protocols/accounting/README.md": "no README yet",
-  "verity/protocols/accounting/compute/pouw/README.md": "no README yet",
   "verity/protocols/accounting/compute/pouw/prover/README.md": "not yet in the pattern",
   "verity/protocols/accounting/compute/pouw/prover/kernels/edited_gemm/README.md": "not yet in the pattern",
   "verity/protocols/accounting/compute/pouw/prover/kernels/floored_gemm/README.md": "not yet in the pattern",
