@@ -6,7 +6,7 @@
  "public": {
   "work": {
    "credited": 134502518410,
-   "macs": 136201633792,
+   "checked_macs": 136201633792,
    "epsilon": "1/100"
   },
   "unit": "MAC",

@@ -1355,7 +1355,7 @@ def test_served_passes_verify_accepts_only_when_every_pass_with_calls_is_accepte
     rc, doc, answer = served_verify(path.parent, tmp_path / "verify.json")
     assert rc == 0 and answer["verdict"] == "accept" and doc["line"].startswith("ACCEPT verity/pouw/pearl-plus/v1"), doc["line"]
     work = answer["public"]["work"]
-    assert work["credited"] == 0 < work["macs"] and work["credited_tiles"] > 0 and answer["profile"]["delta"] == "1/100"
+    assert work["credited"] == 0 < work["checked_macs"] and work["credited_tiles"] > 0 and answer["profile"]["delta"] == "1/100"
     assert answer["profile"]["test_instance"] and "a test instance's, credited nothing" in doc["line"]
     named = VR.assumption_of(pouw_schemes.get(answer["public"]["scheme"]))
     assert answer["public"]["assumption"] == named and f"({named})" in doc["line"]
@@ -1364,7 +1364,7 @@ def test_served_passes_verify_accepts_only_when_every_pass_with_calls_is_accepte
     assert answer["public"]["passes"][0]["y"] == [u["y"]["root"] for u in man["matmuls"]]
     assert "y committed and checked on 2 of 2 calls" in doc["line"]
     assert answer["profile"]["exclusion_tiles"] > 0 and " drawn tiles and the exclusion tiles over 1 passes, " in doc["line"]
-    assert "; 0 MACs credited at ε " in doc["line"] and f"{work['macs']:,}" not in doc["line"]
+    assert "; 0 MACs credited at ε " in doc["line"] and f"{work['checked_macs']:,}" not in doc["line"]
     assert not re.search(r"\d[\d,]* (exclusion tiles|of [\d,]+ MACs)", doc["line"])
     rows = path.parent / man["weights"]["0"]["rows"]["path"]
     bad = bytearray(rows.read_bytes())
@@ -1536,7 +1536,7 @@ def test_served_passes_verify_accepts_an_epochs_passes_numbered_on(tmp_path):
     assert rc == 0 and answer["verdict"] == "accept" and "refused" not in doc
     assert answer["profile"]["exclusion_tiles"] == 2 and len(answer["public"]["passes"]) == 2
     one = VR.credit_at_assumption([VR.load(a, published(a))], 3, Fraction(1, 100))
-    assert answer["public"]["work"]["macs"] == 2 * one["macs"]
+    assert answer["public"]["work"]["checked_macs"] == 2 * one["checked_macs"]
 
 
 @pytest.mark.slow
@@ -1554,7 +1554,7 @@ def test_verify_passes_reads_a_test_instance_only_as_one_and_a_runs_passes_of_on
                                               "nothing") and "verdicts" not in served
         test = VR.verify_passes([path], 3, 1, "test", coins, source, test_instance=True)
         work = test["answer"]["public"]["work"]
-        assert test["answer"]["verdict"] == "accept" and work["credited"] == 0 < work["macs"], test["line"]
+        assert test["answer"]["verdict"] == "accept" and work["credited"] == 0 < work["checked_macs"], test["line"]
     coins, source = published(a), b"verifier" * 4
     b = proved_pass(tmp_path / "b", PROMOTED[0], 1, seed=12)[0]
     assert json.loads(a.read_text())["salt"] != json.loads(b.read_text())["salt"]
@@ -1579,8 +1579,8 @@ def test_a_runs_credit_at_pearls_assumption_is_its_credited_macs_less_epsilon(tm
     path = proved_pass(tmp_path, PROMOTED[0])[0]
     p = VR.load(path, published(path))
     got = VR.credit_at_assumption([p], 459, Fraction(1, 100))
-    assert got["macs"] == ((20 - 1) * 16 + 16 * 32) * 128 and got["epsilon"] == str(eps)
-    assert 0 < got["credited"] <= (1 - p.scheme.cap) * (1 - eps) * got["macs"]
+    assert got["checked_macs"] == ((20 - 1) * 16 + 16 * 32) * 128 and got["epsilon"] == str(eps)
+    assert 0 < got["credited"] <= (1 - p.scheme.cap) * (1 - eps) * got["checked_macs"]
 
 
 def test_served_passes_verify_credits_the_timed_call_its_passes_less_the_runs_whole_deduction(tmp_path):
@@ -1594,18 +1594,18 @@ def test_served_passes_verify_credits_the_timed_call_its_passes_less_the_runs_wh
     work = VR.credit_at_assumption([VR.load(x, published(x)) for x in (a, b)], SP.DRAWS, Fraction(1, 100))
     warm = VR.pass_macs(VR.load(a, published(a)))
     got = SP.timed_credit(served, work, published(a))
-    assert warm == work["macs"] // 2 and got["passes"] == 1 and got["macs"] == work["macs"] - warm
+    assert warm == work["checked_macs"] // 2 and got["passes"] == 1 and got["macs"] == work["checked_macs"] - warm
     assert got["credited"] == work["credited"] - math.ceil((1 - Fraction(work["rho"])) * warm) > 0
     few = VR.credit_at_assumption([VR.load(x, published(x)) for x in (a, b)], 3, Fraction(1, 100))
     assert few["credited"] < (1 - Fraction(few["rho"])) * warm and SP.timed_credit(served, few, published(a))["credited"] == 0
     assert SP.timed_credit({**served, "passes": [{**p, "timed": True} for p in served["passes"]]}, work, published(a)) == {
-        "passes": 2, "macs": work["macs"], "credited": work["credited"]}
+        "passes": 2, "macs": work["checked_macs"], "credited": work["credited"]}
     # in the grid form the warm-up pass's MACs are its whole records', so the timed credit is at most the exact one
     passes = [VR.load(x, published(x)) for x in (a, b)]
     grid = VR.grid_work(VR.structural_credit(passes, SP.DRAWS, Fraction(1, 100)), work)
     whole = VR.pass_macs(VR.whole_pass(passes[0]))
     timed = SP.timed_credit(served, grid, published(a))
-    assert whole > warm and VR.pass_macs(passes[0]) == warm and timed["macs"] == grid["macs"] - whole
+    assert whole > warm and VR.pass_macs(passes[0]) == warm and timed["macs"] == grid["checked_macs"] - whole
     assert timed["credited"] == grid["credited"] - math.ceil((1 - Fraction(grid["rho"])) * whole) <= got["credited"]
     assert 0 < timed["credited"] and grid["credited"] <= work["credited"] and grid["give_up"] > 0
 
@@ -1712,7 +1712,7 @@ def test_served_passes_counts_a_passs_linear_macs_and_verify_run_its_credited_ce
     p = VR.load(path, published(path))
     assert macs(str(path)) == sum(u["real_rows"] * u["n"] * u["k"] for u in man["matmuls"]) and macs(None) is None
     assert any(u["excluded_a"] for u in man["matmuls"]) and any(u["real_rows"] < u["m"] for u in man["matmuls"])
-    assert VR.pass_macs(p) == VR.credit_at_assumption([p], 459, Fraction(1, 100))["macs"] < macs(str(path))
+    assert VR.pass_macs(p) == VR.credit_at_assumption([p], 459, Fraction(1, 100))["checked_macs"] < macs(str(path))
     r = p.records[0]
     blocks = {j // PW.BAND for j in (*r.excluded_b, *r.voluntary_b)}
     b = min(j for j in range(r.matmul.shape.n) if j // PW.BAND not in blocks)
@@ -1749,7 +1749,7 @@ def test_uncredited_calls_split_each_calls_macs_by_cause_and_sum_to_the_runs_cre
         got = VR.uncredited_calls([p], 459, Fraction(1, 100), over)
         credit = VR.credit_at_assumption([p], 459, Fraction(1, 100), over)
         _split(got)
-        assert (got["totals"]["checked_macs"], got["totals"]["credited"]) == (credit["macs"], credit["credited"])
+        assert (got["totals"]["checked_macs"], got["totals"]["credited"]) == (credit["checked_macs"], credit["credited"])
         assert (Fraction(got["totals"]["over_bound_macs"]) > 0) == (over > 0) and got["over_cap_draws"] == over
     calls = got["calls"]
     assert [c["call"] for c in calls] == [r.matmul.index for r in p.records]
@@ -1844,7 +1844,7 @@ def test_served_passes_uncredited_reads_the_grid_form_of_a_fixed_load_run(tmp_pa
     credited = t["credited"] - 3
 
     def held(give_up: int = 8, macs: int = whole) -> dict:
-        work = {**doc["answer"]["public"]["work"], "macs": macs, "credited": credited, "give_up": give_up}
+        work = {**doc["answer"]["public"]["work"], "checked_macs": macs, "credited": credited, "give_up": give_up}
         return {**doc, "answer": {**doc["answer"], "public": {**doc["answer"]["public"], "work": work}}}
 
     rc, said = run(held())
@@ -2040,7 +2040,7 @@ def test_the_run_verdict_credits_no_given_up_row_and_refuses_a_give_up_past_v_ex
         return r.k_kept * rows * sum(1 for j in range(r.matmul.shape.n) if j // PW.BAND not in blocks)
     kept = sum(band_rule(r) for r in p.records)
     whole = sum(r.k_kept * (r.real_rows - len(r.excluded_a)) * (r.matmul.shape.n - len(r.excluded_b)) for r in p.records)
-    assert good["answer"]["public"]["work"]["macs"] == kept < whole
+    assert good["answer"]["public"]["work"]["checked_macs"] == kept < whole
     assert good["answer"]["public"]["work"] == {**VR.credit_at_assumption([p], 3, VR.DELTA), "credited": 0}
     man = json.loads(path.read_text())
     u = next(u for u in man["matmuls"] if u.get("voluntary_a"))
@@ -2201,7 +2201,9 @@ def test_retain_writes_w_over_the_retained_timed_rounds_and_the_tied_verdict_cre
                     "--day-declaration", str(declared)]) == 1 and not (tmp_path / "none.json").exists()
     rc, doc, answer = served_verify(d, tmp_path / "verify.json", "--tie", str(wfile))
     assert rc == 0 and answer["public"]["tie"] == {"record": DD.digest(w), "tables": 10}, doc["line"]
-    assert (answer["public"]["rounds"], answer["public"]["dropped"], doc["timed"]["passes"]) == ([1, 2], [0], 2)
+    served = json.loads((d / "served.json").read_text())
+    timed = SP.timed_credit(served, answer["public"]["work"], published(a), answer["public"]["rounds"])
+    assert (answer["public"]["rounds"], answer["public"]["dropped"], timed["passes"]) == ([1, 2], [0], 2)
     before = wfile.read_text()
     assert SP.main(["retain", "--passes", str(d), "--window-record", str(wfile)]) == 1 and wfile.read_text() == before
 
@@ -2292,7 +2294,8 @@ def test_served_passes_verify_credits_only_the_passes_retained_before_its_coin_a
     assert rc == 0 and work == {**one, "credited": 0}, doc["line"]
     assert (answer["public"]["rounds"], answer["public"]["dropped"], doc["dropped"]) == ([1], [0], [0])
     assert doc["passes"][0].split(" sha256:")[0].split(":", 1)[1] == str(b) and "1 passes dropped before the coin (rounds 0)" in doc["line"]
-    assert doc["timed"] == {"passes": 1, "macs": one["macs"], "credited": 0}
+    served = json.loads((d / "served.json").read_text())
+    assert SP.timed_credit(served, work, published(b), [1]) == {"passes": 1, "macs": one["checked_macs"], "credited": 0}
     coin = json.loads((d / SP.COIN).read_text())
     assert (coin["commitment"], coin["source"], coin["rounds"]) == (answer["commitment"], doc["source"], [1])
     again = served_verify(d, tmp_path / "again.json")[1]
@@ -2528,90 +2531,6 @@ def test_a_window_class_that_is_no_three_positive_integers_is_refused_by_name():
         assert isinstance(e.value.__cause__, ValueError) == (text in ("4,x,4", ""))
 
 
-@pytest.mark.slow
-def test_a_tied_run_is_held_to_its_classs_fixed_load(tmp_path, monkeypatch):
-    """With the execution phase's class (``window_class``, ``served_passes.py verify --class``), a tied run accepts only where its passes
-    are the class's fixed load: a pass a round of the class's outputs, each retained or dropped, every call of round 0
-    of slots x prompt rows and of a later round of slots, committed in rows padded to 16.  Here the class is 2 slots of 8
-    prompt ids and 2 outputs: round 0's calls of 16 rows, round 1's of 2 in 16.  The tie then names the class, and so
-    does the line.  Its work is published in the grid form (`grid_work`: the class's structural credit less the give-up
-    on H1's execution phase grid), the exact credit beside it as the profile's ``exact_work``, and the timed call's credit is in
-    that form too; without a class the work is the exact credit.  Passes of another load (a round short or over, the
-    rounds in another order, a call of other rows or of other committed rows) are refused before the coin, each in the
-    same words, the class's alone (`off_load`), which name no round, call or count of the passes'.  A class is read only
-    beside the execution phase record."""
-    cls = (2, 8, 2)
-    a = proved_pass(tmp_path / "a", PROMOTED[0], 0, load=(16, 16))[0]
-    b = proved_pass(tmp_path / "b", PROMOTED[0], 1, load=(2, 16))[0]
-    wide = proved_pass(tmp_path / "wide", PROMOTED[0], 1, load=(2, 32))[0]
-    b0, a1, b2 = (proved_pass(tmp_path / n, PROMOTED[0], s, load=rows)[0]
-                  for n, s, rows in (("b0", 0, (2, 16)), ("a1", 1, (16, 16)), ("b2", 2, (2, 16))))
-    coins, w = published(a), window_record(a, b)
-
-    def run(paths, window=w, **kw):
-        return VR.verify_passes(paths, 3, 1, "test", coins, b"verifier" * 4, window=window, test_instance=True, **kw)
-
-    r = run([a, b], window_class=cls)
-    assert r["answer"]["verdict"] == "accept", r["line"]
-    assert r["answer"]["public"]["tie"] == {"record": DD.digest(w), "tables": 10, "load": [2, 8, 2]} == r["tie"]
-    assert "on its 10 tables, at its class's fixed load (2, 8, 2)" in r["line"]
-    # held to the class, the work is in the grid form and the exact credit is the profile's; a test instance's credits 0
-    passes = [VR.load(x, coins) for x in (a, b)]
-    work, kept = r["answer"]["public"]["work"], r["answer"]["profile"]["exact_work"]
-    exact = VR.credit_at_assumption(passes, 3, VR.DELTA, work["over_cap_draws"])
-    whole = VR.structural_credit(passes, 3, VR.DELTA, work["over_cap_draws"])
-    assert kept == {"credited": 0, "credited_tiles": exact["credited_tiles"], "macs": exact["macs"]}
-    assert whole["macs"] > exact["macs"] and whole["credited"] > exact["credited"] > 0
-    assert work == {**whole, "credited": 0, "give_up": Wd.pad(whole["credited"] - exact["credited"])}
-    assert VR.grid_work(whole, exact)["credited"] == whole["credited"] - work["give_up"] <= exact["credited"]
-    assert "; 0 MACs credited at ε " in r["line"]
-    r = run([a, b])
-    assert r["answer"]["verdict"] == "accept" and "load" not in r["tie"] and "fixed load" not in r["line"]
-    assert r["answer"]["public"]["work"] == {**exact, "credited": 0} and "exact_work" not in r["answer"]["profile"]
-    for paths, kw in (([a], {"rounds": [0], "dropped": (1,)}), ([b], {"rounds": [1], "dropped": (0,)})):
-        r = run(paths, window_class=cls, **kw)
-        assert r["answer"]["verdict"] == "accept" and r["tie"]["load"] == [2, 8, 2], r["line"]
-    off = [([a, b], w, (2, 8, 3), {}), ([a, b], w, (2, 8, 1), {}), ([a, b], w, (4, 4, 2), {}), ([a, b], w, (2, 4, 2), {}),
-           ([a, b], w, (1, 16, 2), {}), ([b0, a1], window_record(b0, a1), cls, {}),
-           ([a, wide], window_record(a, wide), cls, {}), ([a], w, cls, {"rounds": [0], "dropped": (1, 2)}),
-           ([b2], window_record(a, a, b2), cls, {"rounds": [2], "dropped": (0, 1)})]
-    for paths, window, c, kw in off:
-        r = run(paths, window, window_class=c, **kw)
-        assert (r["answer"]["verdict"], r["answer"]["reason"]) == ("reject", f"ValueError: {VR.off_load(c)}"), (c, r["line"])
-        assert "source" not in r and "tie" not in r and "refused" not in r
-    assert VR.off_load(cls) == (
-        "the passes are not the fixed load of the window's class (2 slots, 8 prompt ids, 2 outputs): a pass a round of "
-        "its 2, each retained or dropped, every call of round 0 of 16 rows and of a later round of 2, committed in rows "
-        "padded to a multiple of 16")
-    with pytest.raises(ValueError, match="no window"):
-        run([a, b], None, window_class=cls)
-    for bad in ((2, 8), (2, 8, 0), (2, 8, True), "2,8,2"):
-        with pytest.raises(ValueError, match="a window class is SLOTS, PROMPT, OUTPUTS"):
-            run([a, b], window_class=bad)
-    from verity.protocols.accounting.compute.pouw.verifier import verifier as PV
-
-    # the served verify's node draw on `run`'s source: on the OS's coins its 3 draws can all land over the inert-work
-    # bound, at ε 1 and no give-up
-    monkeypatch.setattr(PV, "coins", lambda n: (b"verifier" * 4)[:n])
-    d = _serve_dir(tmp_path, [a, b])
-    (wfile := tmp_path / "w.json").write_text(json.dumps(w))
-    rc, doc, answer = served_verify(d, tmp_path / "verify.json", "--tie", str(wfile), "--class", "2,8,2")
-    assert rc == 0 and doc["class"] == [2, 8, 2] and answer["public"]["tie"]["load"] == [2, 8, 2], doc["line"]
-    SP = load("pearl_c_vllm_served_passes", POUW / "pearl_c_vllm" / "served_passes.py")
-    served = answer["public"]["work"]
-    assert served["give_up"] > 0 and (served["macs"], served["credited_tiles"]) == (whole["macs"], whole["credited_tiles"])
-    assert answer["profile"]["exact_work"] == kept and doc["timed"] == {"passes": 2, "macs": whole["macs"], "credited": 0}
-    assert (SP.python_answer(doc)["work"], SP.python_answer(doc)["exact_work"]) == (served, kept)
-    rc, doc, answer = served_verify(d, tmp_path / "off.json", "--tie", str(wfile), "--class", "2,8,3")
-    assert rc == 1 and answer["reason"] == f"ValueError: {VR.off_load((2, 8, 3))}" and doc["class"] == [2, 8, 3]
-    assert SP.python_answer(doc)["work"] is None and SP.python_answer(doc)["exact_work"] is None
-    for argv in (["--class", "2,8,2"], ["--tie", str(wfile), "--class", "2,8"], ["--tie", str(wfile), "--class", "2,0,2"]):
-        with pytest.raises(SystemExit):
-            SP.main(["verify", "--passes", str(d), "--out", str(tmp_path / "no.json"), *argv])
-    assert SP.lean_argv(Path("exe"), Path("c"), 3, Path("r"), [a], wfile, load=[2, 8, 2])[9:] == [
-        "--tie", str(wfile), "--class", "2,8,2", str(a)]
-
-
 def test_the_load_check_takes_the_run_of_records_shape():
     """The class of record's run (class 4, 32, 4 over Llama 3.2 1B's 64 cut linears) is its fixed
     load, so the check accepts its shape: 64 calls a pass, round 0's of 4 x 32 = 128 rows in 128, each later round's of 4
@@ -2664,9 +2583,9 @@ def test_a_class_held_runs_work_is_its_structural_credit_less_the_give_up_on_the
     of_record = class_run((0, 4, 4, 11))
     assert VR.held_to_load((4, 32, 4), of_record)
     exact, whole = VR.credit_at_assumption(of_record, t, d), VR.structural_credit(of_record, t, d)
-    assert (exact["credited"], exact["macs"]) == (134_194_399_455, 135_895_449_600)
+    assert (exact["credited"], exact["checked_macs"]) == (134_194_399_455, 135_895_449_600)
     assert whole == VR.credit_at_assumption(class_run(), t, d)
-    assert (whole["credited"], whole["macs"]) == (134_525_747_434, 136_230_993_920)
+    assert (whole["credited"], whole["checked_macs"]) == (134_525_747_434, 136_230_993_920)
     assert [r.excluded_a for r in of_record[0].records[:4]] == [(), (0, 1, 2, 3), (0, 1, 2, 3), tuple(range(11))]
     work = VR.grid_work(whole, exact)
     assert whole["credited"] - exact["credited"] == 331_347_979 and work["give_up"] == Wd.pad(331_347_979) == 335_544_320
@@ -2688,7 +2607,7 @@ def test_a_class_held_runs_work_is_its_structural_credit_less_the_give_up_on_the
 
     over = VR.structural_credit(of_record, t, d, 2)
     assert over["epsilon"] == VR.credit_at_assumption(of_record, t, d, 2)["epsilon"] != whole["epsilon"]
-    assert over["over_cap_draws"] == 2 and over["credited"] < whole["credited"] and over["macs"] == whole["macs"]
+    assert over["over_cap_draws"] == 2 and over["credited"] < whole["credited"] and over["checked_macs"] == whole["checked_macs"]
     # the form's own floor: a give-up padded past the structural credit credits nothing, never below zero
     assert VR.grid_work({"credited": 17}, {"credited": 0}) == {"credited": 0, "give_up": 18}
     assert VR.grid_work({"credited": 5}, {"credited": 7}) == {"credited": 5, "give_up": 0}

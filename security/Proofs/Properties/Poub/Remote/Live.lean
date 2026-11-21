@@ -386,10 +386,21 @@ theorem sstep_close_params {g : Nat} {s : State} {t : Int} {now : Nat} {r : Resu
   · rw [sstep_close hg2] at he
     exact (Shared.sclose_dr he).2.2.2.1
 
+theorem kept_W (s s' : State) (r : Result) (c a : Array ByteArray) : W c a (Verifier.kept s r s') = W c a s' := by
+  cases r <;> rfl
+
+theorem kept_appendCoins (s s' : State) (r : Result) : (Verifier.kept s r s').appendCoins = s'.appendCoins := by
+  cases r <;> rfl
+
+theorem kept_le {s s' : State} (r : Result) (h : CoinsLE s s') : CoinsLE s (Verifier.kept s r s') := by
+  cases r
+  case refused => exact ⟨fun _ _ hx _ => hx, h.2⟩
+  all_goals exact h
+
 theorem eventOn_ok {g : Nat} {s : State} {e : Event} {coin : Option ByteArray} {r : Result} {s₂ : State}
     (h : Verifier.eventOn 2 g s e coin = .ok (r, s₂)) :
-    ∃ s₁, (∀ c a, W c a s₁ = W c a s) ∧ CoinsLE s s₁ ∧ Shared.step g s₁ e = .ok (r, s₂) ∧
-      Verifier.unset g s₂ e (some r) = none := by
+    ∃ s₁ s₂', (∀ c a, W c a s₁ = W c a s) ∧ CoinsLE s s₁ ∧ Shared.step g s₁ e = .ok (r, s₂') ∧
+      Verifier.unset g s₂' e (some r) = none ∧ s₂ = Verifier.kept s r s₂' := by
   unfold Verifier.eventOn at h
   simp only [bind, Except.bind, Flight.step_two] at h
   repeat' (split at h <;> try dsimp only at h)
@@ -404,10 +415,10 @@ theorem eventOn_ok {g : Nat} {s : State} {e : Event} {coin : Option ByteArray} {
       cases hu : Verifier.unset g s' e (some r') with
       | none => rfl
       | some why => exact (hun why hu).elim
-  · exact ⟨v₁, fun c a => withCoin_W hw c a, withCoin_le hw, hstep, hu⟩
+  · exact ⟨v₁, s', fun c a => withCoin_W hw c a, withCoin_le hw, hstep, hu, rfl⟩
   · injection hw with hw
     subst hw
-    exact ⟨s, fun _ _ => rfl, coinsLE_refl s, hstep, hu⟩
+    exact ⟨s, s', fun _ _ => rfl, coinsLE_refl s, hstep, hu, rfl⟩
 
 theorem bang {xs : Array ByteArray} {k : Nat} {x : ByteArray} (h : xs[k]? = some x) : xs[k]! = x := by
   rw [getElem!_def, h]
@@ -521,12 +532,12 @@ the ones the process holds after it. -/
 theorem event_W {g : Nat} (hg : 1 ≤ g) {s : State} {e : Event} {coin : Option ByteArray} {r : Result} {s₂ : State}
     {c a : Array ByteArray} (h : Verifier.eventOn 2 g s e coin = .ok (r, s₂)) (hc : Agree c a s₂) :
     Shared.step g (W c a s) e = .ok (r, W c a s₂) ∧ CoinsLE s s₂ := by
-  obtain ⟨s₁, hW, hle, hstep, hun⟩ := eventOn_ok h
+  obtain ⟨s₁, s₂', hW, hle, hstep, hun, rfl⟩ := eventOn_ok h
   obtain ⟨h1, h2⟩ := sstep_keeps hstep
-  refine ⟨?_, coinsLE_trans hle (coinsLE_of_eq h1 h2)⟩
-  rw [← hW c a]
+  refine ⟨?_, kept_le r (coinsLE_trans hle (coinsLE_of_eq h1 h2))⟩
+  rw [← hW c a, kept_W]
   refine sstep_W hg hstep (fun k he hr => ?_) (fun t now d he hr => ?_)
-    (fun _ _ _ _ _ x hx hs => hc.2 _ x (by rw [h2]; exact hx) hs)
+    (fun _ _ _ _ _ x hx hs => hc.2 _ x (by rw [kept_appendCoins, h2]; exact hx) hs)
   · subst hr
     obtain ⟨x, hx, hs⟩ := unset_released he hun
     rw [bang (hc.1 k x hx (by rw [hs]; decide)), ← h1, bang hx]
@@ -632,9 +643,9 @@ theorem step_le {chunk g : Nat} {p p' : Proc} {q : Req} {x : Reply} {e? : Option
     rename_i v hv
     obtain ⟨r, s⟩ := v
     cases h
-    obtain ⟨s₁, -, hle, hstep, -⟩ := eventOn_ok hv
+    obtain ⟨s₁, s₂', -, hle, hstep, -, rfl⟩ := eventOn_ok hv
     obtain ⟨h1, h2⟩ := sstep_keeps hstep
-    exact coinsLE_trans hle (coinsLE_of_eq h1 h2)
+    exact kept_le r (coinsLE_trans hle (coinsLE_of_eq h1 h2))
   | verify t id frames =>
     simp only [step] at h
     split at h
