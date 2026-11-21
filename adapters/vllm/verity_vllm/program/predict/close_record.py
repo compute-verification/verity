@@ -13,7 +13,7 @@ from typing import Any
 
 from verity_vllm.pipeline import advice as ADV
 
-__all__ = ["DEPLOYMENT", "REGISTRATION", "Record"]
+__all__ = ["DEPLOYMENT", "REGISTRATION", "Record", "register"]
 
 REGISTRATION = "weights_registration.json"
 DEPLOYMENT = "deployment-registration.json"
@@ -38,24 +38,13 @@ class Record:
     _words: dict[str, Any] | None = field(default=None, init=False, repr=False)
 
     def roots(self, registered: Any, out: Path) -> dict[str, str]:
-        """The serve's weights registration at ``out``'s `REGISTRATION`, made once from the checkpoint before the first
-        window's advice is written (`window_weights.weights_registration`, its salts beside it, its deployment record at
-        `DEPLOYMENT`, its document of record at `weights_registration.OF_RECORD`), as each window's advice registration
-        records it (`advice.registered_weights`)."""
-        from verity.commitments import salt_file as SF
-
-        from verity_vllm.records import weights_registration as WRG
-
-        from . import window_weights as WW
-
+        """The deployment's registration at ``out``'s `REGISTRATION` (`register`'s), read and never written, as each
+        epoch's advice registration records it (`advice.registered_weights`). Refused (ValueError) where ``out`` holds
+        none: the deployment registers once, before its first epoch."""
         path = Path(out) / REGISTRATION
         if not path.is_file():
-            doc = WW.weights_registration(registered, SF.beside(path), self.checkpoint_dir, checkpoints_manifest=self.checkpoints,
-                                          tables=served_tables(out))
-            (Path(out) / DEPLOYMENT).write_text(json.dumps(WW.deployment_record(doc), indent=1) + "\n")
-            path.write_text(json.dumps(doc, indent=1) + "\n")
-        if not (Path(out) / WRG.OF_RECORD).is_file():
-            WRG.write_of_record(path)
+            raise ValueError(f"{out} holds no registration: a deployment registers once, before its first epoch "
+                             "(`close_record.register`, `prove_path.py weights-registration`), and an epoch's close reads it")
         serve = json.loads((Path(out) / "serve.json").read_text())
         return ADV.registered_weights(json.loads(path.read_text()), serve)
 
@@ -173,6 +162,33 @@ class Record:
         return {"run": run, "out": str(to), "members": len(win.window.members), "population": population,
                 "design": {"rule": self.rule, "from": "the serve's --sampling-design", **said}, "cap": self.cap,
                 "scan_state": "stand-in", "weights": "checkpoint of record", "strings": cost, "seconds": seconds}
+
+
+def register(registered: Any, out: str | Path, checkpoint_dir: str, checkpoints: str | None = None,
+             tables: Any = None) -> str:
+    """The deployment's one registration, written into ``out`` before its first epoch: the committer's weights
+    registration (`REGISTRATION`, `window_weights.weights_registration`), its salts beside it, under which every later
+    epoch commits its weights, its projection (`weights_registration.OF_RECORD`) and its record (`DEPLOYMENT`,
+    `window_weights.deployment_record`). -> the record's digest (`docket_digest.digest`). Refused (ValueError) where
+    ``out`` holds a registration, naming its digest."""
+    from verity.commitments import docket_digest as DD
+    from verity.commitments import salt_file as SF
+
+    from verity_vllm.records import weights_registration as WRG
+
+    from . import window_weights as WW
+
+    out = Path(out)
+    if (out / DEPLOYMENT).is_file() or (out / REGISTRATION).is_file():
+        held = DD.digest(json.loads((out / DEPLOYMENT).read_text())) if (out / DEPLOYMENT).is_file() else "no record beside it"
+        raise ValueError(f"{out} holds the deployment's registration already ({held}): a deployment registers once")
+    doc = WW.weights_registration(registered, SF.beside(out / REGISTRATION), checkpoint_dir, checkpoints_manifest=checkpoints,
+                                  tables=tables)
+    rec = WW.deployment_record(doc)
+    (out / REGISTRATION).write_text(json.dumps(doc, indent=1) + "\n")
+    WRG.write_of_record(out / REGISTRATION)
+    (out / DEPLOYMENT).write_text(json.dumps(rec, indent=1) + "\n")
+    return DD.digest(rec)
 
 
 def development_of(design: dict[str, Any], n: int) -> dict[str, Any]:
