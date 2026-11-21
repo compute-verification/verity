@@ -560,6 +560,26 @@ def test_a_run_input_beside_a_registered_value_read_recut_is_read_from_cs_refere
     assert len({r.param for r in win.runs}) == 3
 
 
+def test_a_run_parameter_is_a_run_input_node_its_reads_read_a_slice_of():
+    """A registered parameter named ``run`` is bound per run: its reads are no registered reads, C's node of it is a run
+    input node, all its rows, which its port's units read a slice of (`run_input_reads`), and the record carries the
+    name. Refused for a name that is no parameter or is a program value."""
+    tid, words = I.descriptor_id(GEMM), dict(I.layout(GEMM).rows)["x"]
+    read = I.Read(tid, "x", "s", 0, (4,), 0, (words,))
+    reg = I.Registered({"s": 16 * words}, reads=(read,), run=("s",))
+    assert I.Registered.of(reg.doc()) == reg and reg.doc()["run"] == ["s"] and I.committed_reads(reg) == ()
+    win = I.Window(I.Circuit("part", ((GEMM, 4),), registered=reg), RUN, SAMPLING_DESIGN, 4)
+    (r,) = [r for r in win.runs if r.port == "x"]
+    w = I.run_input_node(r.param)
+    program = win.window.program
+    assert [p for p, _ in program.fn.signature()[0]][w] == "s" and program.bindings[w] == "run"
+    assert (r.at, r.radix, r.base, r.step) == (0, (4,), 0, (words,))
+    assert I.run_input_domain(program, I.program_digest(program), w, words, RUN).count == 16
+    for bad in ({"run": ("v",)}, {"run": ("s",), "values": ("s",)}):
+        with pytest.raises(ValueError, match="run "):
+            I.Registered({"s": 16 * words}, reads=(read,), **bad)
+
+
 def permuted(rows: Sequence[int], m: int) -> Program:
     """C batching COORD over its four ports' run input nodes of ``m`` rows each, unit u reading row ``rows[u]``."""
     sig = COORD.signature()[0]
