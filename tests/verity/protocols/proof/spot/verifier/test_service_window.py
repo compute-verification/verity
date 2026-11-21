@@ -48,7 +48,9 @@ def _stream(spec=None, coins=None, window=WINDOW, sampler=None) -> S.Stream:
 
 
 def _program(counts=COUNTS, window=WINDOW, values=()):
-    return PN.mixed_population_program([(t, counts[P.template_id(t)]) for t in window], values=values)
+    """The window's mixed population, its values bound at registration: a registered value is no run Input."""
+    fn = PN.mixed_population_program([(t, counts[P.template_id(t)]) for t in window], values=values).fn
+    return Program(fn, registered=[v for v, _, _ in values])
 
 
 def _gathered(counts=COUNTS) -> Program:
@@ -191,7 +193,8 @@ def test_a_tied_window_runs_to_an_accepted_outcome_by_the_lean_run():
     two proof blocks read ``t``, a run Input, which R8 refuses unless the check names it tied. Named tied
     (`Check(tied=)`), the docket is let through on both verifiers and publishes ``t``, and the outcome is
     accepted with the whole run the Lean's (`Run.run`, which reads the tied names from its params). Named nothing, or
-    the other parameter instead, both verifiers refuse the docket (``R8-shared-input``)."""
+    the other parameter instead, the docket is let through and publishes no tied ``t``: a run input the members read is
+    held at its one tree by the members' check (`OneStageZk.runInputRoots`), not by R8."""
     counts = {P.template_id(PAIR): 2, P.template_id(TRIPLE): 8}
     gathered = _gathered(counts)
     rec, ports = _record(counts, form=gathered), _ports(counts, program=gathered)
@@ -207,11 +210,8 @@ def test_a_tied_window_runs_to_an_accepted_outcome_by_the_lean_run():
     assert tied.deliver(draw, [SESSION]) is None
     out = tied.outcome(draw, _lean(), {"statement": "stub"})
     assert out.accepted and "run" not in tied.records[-1]["audit"]["checks"] and tied._entries[reg.order].read
-    for names in ((), ("1.x",)):
-        with pytest.raises(S.Refused) as e:
-            stream(names).register(rec, ports, counts=counts)
-        assert e.value.verdict.codes == ("R8-shared-input",), names
-        assert e.value.verdict.verifiers["lean"]["codes"] == ["R8-shared-input"], names
+    for names, through in (((), ()), (("1.x",), ("1.x",))):
+        assert stream(names).register(rec, ports, counts=counts).rests_on_period_check == through, names
 
 
 def test_a_stratum_short_of_its_floor_is_refused():

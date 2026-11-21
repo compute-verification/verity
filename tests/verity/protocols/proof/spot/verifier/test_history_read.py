@@ -65,7 +65,8 @@ def _program() -> Program:
     def body(B, S, x, W, hist):
         return coll_concat(sig(S)[1], [B.call(MIX, x[i], W[p]) for i, p in enumerate(POS)])
 
-    return Program(bind(CompositeDefinition("HistoryReadTestProgram", 0, (), sig, body, register=False)))
+    return Program(bind(CompositeDefinition("HistoryReadTestProgram", 0, (), sig, body, register=False)),
+                   registered=("W",), supplied=("hist",))
 
 
 def _case(hist_rows=None):

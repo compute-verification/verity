@@ -75,14 +75,15 @@ def _digest(bits: int) -> Array:
     return Array(16, Value(32)) if bits == 32 else Array(512, Value(1))
 
 
-def _program(pos=POS, rows: int = len(TABLE), body=None, w: int = 8) -> Program:
+def _program(pos=POS, rows: int = len(TABLE), body=None, w: int = 8, registered=("W",)) -> Program:
     def sig(S):
         return (("x", Array(len(pos), Array(2, Value(8)))), ("W", Array(rows, Array(2, Value(w))))), Array(len(pos), Value(8))
 
     def default(B, S, x, W):
         return coll_concat(sig(S)[1], [B.call(MIX, x[i], W[p] if w == 8 else x[i]) for i, p in enumerate(pos)])
 
-    return Program(bind(CompositeDefinition("RegisteredTestProgram", 0, (), sig, body or default, register=False)))
+    return Program(bind(CompositeDefinition("RegisteredTestProgram", 0, (), sig, body or default, register=False)),
+                   registered=registered)
 
 
 Q = P.template_instance_query(MIX.id)
@@ -681,7 +682,7 @@ def test_two_honest_windows_register_the_same_names_under_their_own_roots():
     naming `window_root`, whether or not it holds W. With R (`window_root`, from the challenger's signed open), x's domain
     binds its window and both windows are accepted, while W, which the verifier holds across windows (`held`), keeps one
     window-independent domain and its first root."""
-    prog = _program()
+    prog = _program(registered=("x", "W"))
     d = P.program_digest(prog)
     w = _registered(prog)
     plain, kw = _windows(prog, [RV.Registered.commit(d, "x", X_ROWS) for _ in WINDOWS], w)
@@ -721,7 +722,7 @@ def test_a_window_replaying_an_earlier_windows_root_is_refused():
     holds a per-window value to nothing, but no row of the first window's tree opens that root under the second
     window's domain, so every registered read of the replayed root is refused (`verify_read`, the Lean verifier's
     `Flock.Registered` check of each table row against its `--registered` port)."""
-    prog = _program()
+    prog = _program(registered=("x", "W"))
     d = P.program_digest(prog)
     w = _registered(prog)
     xs = [RV.Registered.commit(d, "x", X_ROWS, window=r) for r in WINDOWS]
@@ -745,7 +746,7 @@ def test_the_window_root_and_held_values_are_the_verifiers_never_the_records():
     signed open, and the window Program the period commits), never from the record. A record whose window names another
     root or holds x gets the verdict it gets without them; a record or entry carrying them as keys of its own is refused
     by its form."""
-    prog = _program()
+    prog = _program(registered=("x", "W"))
     d = P.program_digest(prog)
     w = _registered(prog)
     plain, kw = _windows(prog, [RV.Registered.commit(d, "x", X_ROWS) for _ in WINDOWS], w)
@@ -790,7 +791,7 @@ def _prefixed(prefix: str) -> Program:
     return Program(bind(CompositeDefinition("RegisteredTestProgram", 0, (), sig,
                                             lambda B, S, x, W: coll_concat(sig(S)[1], [B.call(MIX, x[i], W[p])
                                                                                        for i, p in enumerate(POS)]),
-                                            register=False)))
+                                            register=False)), registered=(f"{prefix}x", f"{prefix}W"))
 
 
 def test_the_window_prefixed_form_still_verifies():
@@ -830,7 +831,7 @@ def test_a_seed_salt_the_server_chose_is_refused_by_name():
     or none; one that read none refuses a window naming any, a salt the server chose, and the detail names both. A salt
     is read on the window's session in one form: in another, or without the window's open root, the verifier refuses its
     own inputs."""
-    prog = _program()
+    prog = _program(registered=("x", "W"))
     w = _registered(prog)
     x = RV.Registered.commit(P.program_digest(prog), "x", X_ROWS, window=WINDOWS[0])
     (rec,), kw = _windows(prog, [x], w)
@@ -859,7 +860,7 @@ def test_advice_no_registered_compiler_reads_is_refused_by_name():
     none (`R6-advice-length`). One that read a log registering none refuses a window naming a compiler or advice
     (`R6-compiler`); one that read no log's compiler holds the window to nothing. A compiler in another form refuses the
     verifier's own inputs."""
-    prog = _program()
+    prog = _program(registered=("x", "W"))
     x = RV.Registered.commit(P.program_digest(prog), "x", X_ROWS, window=WINDOWS[0])
     (rec,), kw = _windows(prog, [x], _registered(prog))
     kw = {**kw, "window_root": WINDOWS[0], "held": ["W"]}
@@ -952,7 +953,7 @@ def test_the_opened_roots_come_from_the_verifier_of_records_accepted_verdicts():
 
 # -- supplied values ---------------------------------------------------------------------------------------------------------
 
-def _seeded(bits: int = 32) -> Program:
+def _seeded(bits: int = 32, registered=("W",), supplied=("pouw.roots",)) -> Program:
     """Units that read a row of x, a row of the registered table W and their seed group's row of `pouw.roots`, a pair of
     digests, as PoUW's compiled proof blocks read theirs."""
     unit = bind(SEEDED, BITS=bits)
@@ -964,7 +965,8 @@ def _seeded(bits: int = 32) -> Program:
     def body(B, S, x, W, roots):
         return coll_concat(sig(S)[1], [B.call(unit, x[i], W[p], roots[g]) for i, (p, g) in enumerate(zip(POS, GROUPS))])
 
-    return Program(bind(CompositeDefinition(f"RegisteredTestSeededProgram{bits}", 0, (), sig, body, register=False)))
+    return Program(bind(CompositeDefinition(f"RegisteredTestSeededProgram{bits}", 0, (), sig, body, register=False)),
+                   registered=registered, supplied=supplied)
 
 
 def _seeded_case(bits: int = 32, x_root: str = "ab" * 64, roots=None, **kw):
@@ -1652,7 +1654,8 @@ def _pooled() -> Program:
     def body(B, S, x, W, pin, pout):
         return coll_concat(sig(S)[1], [B.call(MIX, x[i], W[p]) for i, p in enumerate(POS)])
 
-    return Program(bind(CompositeDefinition("RegisteredTestPooledProgram", 0, (), sig, body, register=False)))
+    return Program(bind(CompositeDefinition("RegisteredTestPooledProgram", 0, (), sig, body, register=False)),
+                   registered=("x", "W", "pout"), supplied=("pin",))
 
 
 def _pool(log, reset=False, week=0, verdicts=None, lag=1) -> tuple[dict, dict]:
@@ -1933,7 +1936,8 @@ def _continued() -> Program:
     def body(B, S, x, W, ing, req, pin, pout):
         return coll_concat(sig(S)[1], [B.call(MIX, x[i], W[p]) for i, p in enumerate(POS)])
 
-    return Program(bind(CompositeDefinition("RegisteredTestContinuedProgram", 0, (), sig, body, register=False)))
+    return Program(bind(CompositeDefinition("RegisteredTestContinuedProgram", 0, (), sig, body, register=False)),
+                   registered=("x", "W", "ing", "req", "pout"), supplied=("pin",))
 
 
 def _cut_window(prog: Program, w: RV.Registered, i: int, log, pin=None, ing=None, verdicts=None, reset=False):

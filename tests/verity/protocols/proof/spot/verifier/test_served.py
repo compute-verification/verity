@@ -33,7 +33,7 @@ SERVED = {"kind": "served", "row": 7, "run": "r-served"}
 Q = P.template_instance_query(MIX.id)
 
 
-def _program(pos=POS, rows: int = len(TABLE), unread: bool = False) -> Program:
+def _program(pos=POS, rows: int = len(TABLE), unread: bool = False, registered=("W",)) -> Program:
     params = (("x", Array(len(pos), Array(2, Value(8)))), ("W", Array(rows, Array(2, Value(8)))))
     params += (("V", Array(1, Array(2, Value(8)))),) if unread else ()
 
@@ -43,7 +43,7 @@ def _program(pos=POS, rows: int = len(TABLE), unread: bool = False) -> Program:
     def body(B, S, x, W, *_):
         return coll_concat(sig(S)[1], [B.call(MIX, x[i], W[p]) for i, p in enumerate(pos)])
 
-    return Program(bind(CompositeDefinition("ServedTestProgram", 0, (), sig, body, register=False)))
+    return Program(bind(CompositeDefinition("ServedTestProgram", 0, (), sig, body, register=False)), registered=registered)
 
 
 def _ports(prog: Program) -> dict:
@@ -108,7 +108,7 @@ def test_a_32_bit_tree_names_its_width():
 
     prog = Program(bind(CompositeDefinition("ServedTestWide", 0, (), sig,
                                             lambda B, S, x, W: coll_concat(sig(S)[1], [B.call(MIX32, x[i], W[p]) for i, p in enumerate(POS)]),
-                                            register=False)))
+                                            register=False)), registered=("W",))
     q = P.template_instance_query(MIX32.id)
     reg = RV.Registered.commit(P.program_digest(prog), "W", [[r * 0x10001, r] for r in range(5)], word_bits=32)
     tree = ServedTree.of(reg)
@@ -285,7 +285,7 @@ def test_r7_counts_a_bit_row_trees_rows_in_its_format():
 
     wide = Program(bind(CompositeDefinition("ServedTestWideV2", 0, (), sig,
                                             lambda B, S, x, W: coll_concat(sig(S)[1], [B.call(MIX32, x[i], W[p]) for i, p in enumerate(POS)]),
-                                            register=False)))
+                                            register=False)), registered=("W",))
     q = P.template_instance_query(MIX32.id)
     reg = RV.Registered.commit(P.program_digest(wide), "W", [[r * 0x10001, r] for r in range(5)], word_bits=32, schema=G.SCHEMA_V2)
     sr = register_served(wide, q, [ServedTree.of(reg)])
@@ -371,7 +371,7 @@ def test_each_window_registers_its_own_trees_under_its_root_and_the_weights_once
     window under the same name, R7 accepts each window's record with the returned copies, and the weights (W, `held`)
     keep their window-independent domain and first root. A second window that serves the first window's x tree is
     refused: its domain is the first window's."""
-    prog = _program()
+    prog = _program(registered=("x", "W"))
     d = P.program_digest(prog)
     w = RV.Registered.commit(d, "W", TABLE)
     xs = [RV.Registered.commit(d, "x", [[i, i] for i in range(len(POS))], window=r) for r in WINDOWS]
