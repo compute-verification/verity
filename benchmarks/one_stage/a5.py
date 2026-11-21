@@ -1056,12 +1056,14 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True))
         print("A5 " + json.dumps(why))
         return summary, False
-    want = CS.expected_ports(mine)
     # a circuit record with run inputs registers each run input node's tree beside the members' (`Window`), read off the
     # record only where it is the circuit the audit holds
     held_doc = served / "circuit.json"
-    if held_doc.is_file() and hashlib.sha512(held_doc.read_bytes()).hexdigest() == summary.get("circuit"):
-        want |= IF.run_input_ports(json.loads(held_doc.read_bytes()), mine)
+    held = held_doc.is_file() and hashlib.sha512(held_doc.read_bytes()).hexdigest() == summary.get("circuit")
+
+    def ports_at(w) -> dict:
+        return CS.expected_ports(w) | (IF.run_input_ports(json.loads(held_doc.read_bytes()), w) if held else {})
+    want = ports_at(mine)
     summary.update({"run_root": mine.run, "population": n_all, "partition": pd, "law": sampling_design, "delta": a.delta, "firewall": a.zk_server,
                     "arm": "fw" if a.zk_server else "dev",
                     "members": [{"k": k, "template": m.template, "n": m.n, "base": m.base} for k, m in enumerate(mine.members)]})
@@ -1599,7 +1601,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             name = "program-not-the-days-declared (R2)"
             parts.append(workers.submit(name, functools.partial(registration, name, program, want, leaf_layer,
                                                                 day=day["day"], declarations=moved)))
-        other = CS.expected_ports(replace(mine, run="00" * 32))
+        other = ports_at(replace(mine, run="00" * 32))
         name = "domains-bound-to-another-run-root (R3)"
         parts.append(workers.submit(name, functools.partial(registration, name, program, other, leaf_layer)))
         first = members[0]["m"].key
