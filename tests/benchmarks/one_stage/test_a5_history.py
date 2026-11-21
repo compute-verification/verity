@@ -111,9 +111,15 @@ def test_the_verifier_holds_the_registered_history_root_to_the_writers_bodies(tm
     def check(h: dict | None) -> V.Verdict:
         return verify(want, leaf, h)
 
+    files = I.registered_file(doc, mine, {}, rec["roots"])
+    sts = {}
+    for k, f in files.items():
+        sts[k] = {"registered_file": tmp_path / f"registered-{k}.json"}
+        sts[k]["registered_file"].write_text(json.dumps(f, sort_keys=True))
+
     def register(h: dict | None) -> S.WindowCommitmentRecord:
-        stream, counts = A5.stream_of(a, mine, [{"defn": G8, "m": m, "st": {}} for m in mine.members], want, leaf,
-                                      FC.Challenger("a5-history"))
+        stream, counts = A5.stream_of(a, mine, [{"defn": G8, "m": m, "st": sts.get(m.key, {})} for m in mine.members],
+                                      want, leaf, FC.Challenger("a5-history"))
         return stream.register(rec, want, leaf_layer=leaf, window_root=a.window_root, counts=counts,
                                work_table=mine.work_table, partition=mine.partition, **A5.registering(a, h))
 
