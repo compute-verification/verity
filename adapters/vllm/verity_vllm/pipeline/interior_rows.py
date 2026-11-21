@@ -814,7 +814,7 @@ def write(it: Interior, directory: str | Path) -> dict[str, Any]:
     window = {k: v for k, v in it.record["window"].items() if k not in ("kind", "run")}
     CS.write(c, directory, window, {"interior": True, "members": [m.key for m in w.members], "entries": it.entries},
              kind=it.record["window"]["kind"], registered=registered, registrar=DK, previous=it.record["previous"],
-             entries=it.record.get("registered", ()))
+             entries=it.record.get("registered", ()), outputs=[r for r in it.record["roots"] if r["port"] not in c.roots])
     return json.loads((Path(directory) / "registration.json").read_text())
 
 
