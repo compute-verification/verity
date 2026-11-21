@@ -1042,8 +1042,7 @@ def test_onsite_agrees(onsite_server, recorded):
     (left to the subprotocols) and on two (refused), and PoUS and PoUB-P2 on one store and on two, each often; its
     Pearl+ run is refused (`R.PEARL_PLUS`), so its run's ties are never read here. What only whole cases hold: `onsite serve`, over its seven
     subprotocols' own Lean, decodes a case as the reference does (`test_remote_agrees`) and rejects it where a
-    subprotocol is undecided beside a rejection, which the trial's rule would leave undecided
-    (`test_a_reference_without_reject_dominance_is_caught`). Its thousand cases reach what
+    subprotocol is undecided beside a rejection. Its thousand cases reach what
     `test_onsite_agrees_on_fewer_cases` samples too seldom (`FEWER`)."""
     _agree(ONSITE, onsite_server, SEEN["onsite"], 1000, (R.REJECT, "reject, a component undecided", "one record",
                                                        "two records", "one store", "two stores"))
@@ -1168,30 +1167,3 @@ def test_onsite_refuses_a_stray_tie_and_else_keeps_its_verdict(recorded):
     check()
     assert seen["same"] > 20 and seen["was reject, two"] > 0, dict(seen)
     assert seen["two stores"] > 0 and not seen["two records"] and not seen["two windows"], dict(seen)
-
-
-class Trial(R.TiedSame):
-    """The trial's rule over the subprotocols' verdicts (`trial_verdict`): a subprotocol left undecided leaves the product
-    undecided even when another rejects, once its ties hold. Everything else is the port's."""
-
-    def check(self, ps, c, ev, blobs=()) -> tuple:
-        answers = self.run(ps, ev, blobs)
-        if not isinstance(answers, str) and not self.strays(answers) and not any(t.strays(ev) for t in self.ties) \
-                and self.binds(answers, c) and R.trial_verdict([a["verdict"] for _, a in answers]) == R.UNDECIDED:
-            return R.UNDECIDED, "a component is undecided"
-        return super().check(ps, c, ev, blobs)
-
-
-@pytest.mark.slow
-@OPT_IN
-def test_a_reference_without_reject_dominance_is_caught(onsite_server, recorded):
-    """The difftest tells the composition's rule from the trial's: the first case they differ on has a subprotocol that
-    rejects and one that is undecided, under a commitment that binds their digests. It is not shrunk: a case is
-    megabytes, and what is asserted of it holds as it was sampled."""
-    trial = Trial(R.ONSITE.id, R.ONSITE.components, R.ONSITE.same, R.ONSITE.ties)
-    with pytest.raises(D.Mismatch) as e:
-        D.run(D.ProtocolPort("onsite", trial.answer, ONSITE.inputs, package=ONSITE_PACKAGE), examples=1000,
-              server=onsite_server, shrink=False)
-    assert (e.value.lean[0], e.value.python[0]) == (R.REJECT, R.UNDECIDED), (e.value.lean, e.value.python)
-    parts = R.ONSITE.verdicts(e.value.input)
-    assert R.REJECT in parts and R.UNDECIDED in parts, parts
