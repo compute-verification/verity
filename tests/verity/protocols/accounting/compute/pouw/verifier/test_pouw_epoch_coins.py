@@ -172,17 +172,17 @@ def test_a_served_window_flips_every_coin_from_its_entropy_and_none_from_the_os(
 #: The PoUW and proof-system modules that read the operating system's randomness, each with why it isn't a coin, or
 #: the claim instance that names it
 OS_RANDOMNESS = {
-    "protocols/resource_accounting/compute/pouw/prover/circuit/anchors.py": "ncp-v2's window secret (`Ledger.open`'s `_fresh_source`, `secrets`), named "
+    "protocols/accounting/compute/pouw/prover/circuit/anchors.py": "ncp-v2's window secret (`Ledger.open`'s `_fresh_source`, `secrets`), named "
                                             "by A5's uniform/python-secrets",
-    "protocols/proofs/spot/verifier/one_stage/verifier.py": "a placeholder nonce in the JSON it writes to the Lean "
+    "protocols/proof/spot/verifier/one_stage/verifier.py": "a placeholder nonce in the JSON it writes to the Lean "
                                                            "(`_dumps`), no coin",
-    "protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/statement.py": "the statement's hiding salts, no coin",
-    "protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/served_commit.py": "the commit's hiding salts, and its own pick "
+    "protocols/accounting/compute/pouw/prover/kernels/served_zk/statement.py": "the statement's hiding salts, no coin",
+    "protocols/accounting/compute/pouw/prover/kernels/served_zk/served_commit.py": "the commit's hiding salts, and its own pick "
                                                                            "of the calls it measures (recorded as "
                                                                            "``call_draw``), which credits nothing",
-    "protocols/proofs/spot/prover/audit/local_challenger.py": "the development challenger's session token and gate "
+    "protocols/proof/spot/prover/audit/local_challenger.py": "the development challenger's session token and gate "
                                                               "secret, compose's service and no SPOT coin",
-    "protocols/proofs/spot/verifier/one_stage/member_trees.py": "the tree relay's shared secret with its verifier "
+    "protocols/proof/spot/verifier/one_stage/member_trees.py": "the tree relay's shared secret with its verifier "
                                                                 "(`--tree-secret-file`), no coin",
 }
 
@@ -193,7 +193,7 @@ def test_the_served_path_takes_no_os_randomness_for_its_coins():
     the served path."""
     verity = Path(EC.__file__).resolve().parents[5]
     found = set()
-    for d in ("protocols/resource_accounting/compute/pouw/verifier", "protocols/proofs/spot", "protocols/resource_accounting/compute/pouw/prover"):
+    for d in ("protocols/accounting/compute/pouw/verifier", "protocols/proof/spot", "protocols/accounting/compute/pouw/prover"):
         for path in (verity / d).rglob("*.py"):
             rel = path.relative_to(verity).as_posix()
             if "/tests/" in f"/{rel}" or "/.lake/" in f"/{rel}":

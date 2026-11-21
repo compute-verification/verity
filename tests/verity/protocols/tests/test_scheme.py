@@ -366,7 +366,7 @@ def test_every_scheme_is_a_line_of_the_one_table() -> None:
                            "verity/protocols/proof/spot", "verity/protocols/policy")
                  for p in (root / d).rglob("scheme.py") if "register(" in p.read_text()}
     declaring.discard("verity.protocols.accounting.scheme")
-    assert declaring == set(schemes.DECLARATIONS.values()), "add each declaring module's names to compose.schemes"
+    assert declaring == set(schemes.DECLARATIONS.values()), "add each declaring module's names to run.schemes"
     probe = ("import importlib, json, sys\n"
              "from verity.protocols.accounting import scheme as S\n"
              "by = {}\n"
@@ -401,7 +401,7 @@ def test_the_lookup_table_is_each_declarations_own_values() -> None:
     from verity.protocols.run import schemes
 
     declared = {n: {f: tuple(v) for f, v in k.items()} for n, k in json.loads(out.stdout).items() if k}
-    assert {n: dict(k) for n, k in schemes.KEYS.items()} == declared, "write each declaration's values in compose.schemes.KEYS"
+    assert {n: dict(k) for n, k in schemes.KEYS.items()} == declared, "write each declaration's values in run.schemes.KEYS"
 
 
 def test_a_lookup_by_a_declared_value_names_one_scheme_and_refuses_none_or_two(monkeypatch) -> None:

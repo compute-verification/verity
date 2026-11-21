@@ -1,4 +1,4 @@
-"""PoUS attached by its scheme's name on the build's exchange (`compose.schemes.get("pous")`, `messages.Exchange`), over a
+"""PoUS attached by its scheme's name on the build's exchange (`run.schemes.get("pous")`, `messages.Exchange`), over a
 tiny int8 model's weights, on the CPU: what it holds, what it refuses, its period and its rejects.
 
 The weights are a toy int8 model's (`Model`), registered as a served run registers them (`RegisteredValues`, a tied weight

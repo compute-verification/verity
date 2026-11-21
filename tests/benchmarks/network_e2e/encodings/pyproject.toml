@@ -44,7 +44,7 @@ inputs = ["verity/lean_process.py", "verity/protocols/proof/spot/verifier/one_st
           "verity/protocols/accounting/scheme.py", "verity/protocols/run/__init__.py",
           "verity/protocols/run/schemes.py", "verity/protocols/proof/spot/prover/__init__.py",
           "verity/protocols/proof/spot/prover/workload.py",
-          # the registry of schemes (`compose.schemes`) loads every declared scheme, the sampled proofs' among them, whose
+          # the registry of schemes (`run.schemes`) loads every declared scheme, the sampled proofs' among them, whose
           # declaration reads SPOT's parties, its challenger and its one-stage docket, and the configuration's types
           "verity/config.py", "verity/party.py", "verity/protocols/proof/spot/verifier/parties.py",
           "verity/protocols/proof/spot/verifier/challenger/__init__.py",
