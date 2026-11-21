@@ -41,7 +41,7 @@ RES = {"program": {"digest": "d0", "function": "f"}, "target": {"declared": {"co
 
 
 def _derived():
-    from verity_vllm.pipeline.build import _instance_rows
+    from verity_vllm.pipeline.build_instances import _instance_rows
 
     with pytest.MonkeyPatch.context() as mp:
         saved = dict(VB._OBSERVED)
