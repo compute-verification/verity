@@ -373,7 +373,7 @@ def _held(ms: Sequence[CS.Member], cells: Sequence[int], offs: Sequence[int], q:
 
 def interior_window(members: Members, n_rho: Cells, boundary: str, sample: Sequence[int],
                     wires: Sequence[Any] = (), links: Sequence[Link] = (),
-                    rows: Sequence[Any] = ()) -> CS.Binding:
+                    rows: Sequence[Any] = (), inputs: Sequence[Input] = ()) -> CS.Binding:
     """The window of the replay sample's interior, template-major: template t's Q·n_t units from off_t = Q·Σ_{t'<t} n_t',
     laid out as ``members[t]`` (its ports and their words), each a shared-row member of one table row a unit a port,
     under `interior_run`: what the prover commits and the challenger derives the ports of. ``members``: one, or one a
@@ -382,15 +382,22 @@ def interior_window(members: Members, n_rho: Cells, boundary: str, sample: Seque
     its writer's output tree its units read (`wiring.table`), and unit u of span s reads the one of its writer's n_w units
     in that span that round 2 reads there, which ``rows`` say (the replay block's, `second_stage.replay_rows`; needed where
     a writer has more than one unit a block). ``links``: the replay block's (`links`): its program takes their values
-    ahead of the templates' parameters (`link_values`), and each port that reads one is named in its member's ``values``."""
+    ahead of the templates' parameters (`link_values`), and each port that reads one is named in its member's ``values``.
+    ``inputs``: the block's parameters round 1's record commits (`Input`): the program takes each as round 1's port,
+    bound at registration under its name and of its rows there (`population_program`'s ``reads``), each unit of the
+    port's member reading its row ``Input.rows``, so the interior commits no tree for it and a session opens those rows
+    at round 1's root, at the positions C gives (`Flock.OneCircuit.pos`)."""
     ms, cells = IL.cells(members, n_rho)
     q = len(sample)
     sizes = [q * n for n in cells]
     offs = [int(o) for o in np.cumsum([0, *sizes[:-1]])]
     held = _held(ms, cells, offs, q, wires, rows)
-    valued = [tuple(x.port for x, k, _at in IL.placed(ms, cells, q, links) if k == t) for t in range(len(ms))]
+    at = {m.template: t for t, m in enumerate(ms)}
+    taken = [(x.value, x.leaves or x.per * (max(sample) + 1), at[x.template], x.port, x.rows(sample)) for x in inputs]
+    valued = [tuple(x.port for x, k, _at in IL.placed(ms, cells, q, links) if k == t)
+              + tuple(x.port for x in inputs if at[x.template] == t) for t in range(len(ms))]
     program, query = CS.population_program([(SRW.template(m.template).fn, n) for m, n in zip(ms, sizes, strict=True)],
-                                           values=link_values(links, q))
+                                           values=link_values(links, q), reads=taken)
     def table(h: dict[str, tuple[WI.Wired, ...]], p: str, n: int) -> int:
         return len(WI.table(WI.reads(h[p], 0, n))[0]) if p in h else n
 
@@ -406,8 +413,11 @@ def interior_window(members: Members, n_rho: Cells, boundary: str, sample: Seque
 
 def run_inputs(window: CS.Binding) -> tuple[IF.Read, ...]:
     """The reads of the interior program's run input nodes (`interface.run_input_reads`): every member's input port no
-    wire fills reads its node's one tree ``input/n<w>``, unit i its row i."""
+    wire fills and that reads no port of round 1's record (a parameter the program takes bound at registration,
+    `interior_window`'s ``inputs``) reads its node's one tree ``input/n<w>``, unit i its row i."""
+    reads = {(r[2], r[3]) for r in window.program.fn.bindings.get("reads", ())}
     filled = {(m.template, w.port) for m in window.members for w in m.wired}
+    filled |= {(m.template, p) for t, m in enumerate(window.members) for p, _ in m.rows if (t, p) in reads}
     return IF.run_input_reads([(SRW.template(m.template).fn, m.n) for m in window.members], window.program,
                               window.query, filled)
 
@@ -419,11 +429,11 @@ def run_input_ports(window: CS.Binding) -> dict[str, dict[str, Any]]:
 
 def interior_ports(members: Members, n_rho: Cells, boundary: str, sample: Sequence[int],
                    wires: Sequence[Any] = (), links: Sequence[Link] = (),
-                   rows: Sequence[Any] = ()) -> dict[str, dict[str, Any]]:
+                   rows: Sequence[Any] = (), inputs: Sequence[Input] = ()) -> dict[str, dict[str, Any]]:
     """The challenger's copy of the interior registration's ports: `interior_window`'s, from the templates' layouts, the
     size class, the boundary registration's digest, its own replay sample, the wires and rows it derives from the replay
-    block and its links."""
-    w = interior_window(members, n_rho, boundary, sample, wires, links, rows)
+    block, its links and the parameters round 1's record commits."""
+    w = interior_window(members, n_rho, boundary, sample, wires, links, rows, inputs)
     return CS.expected_ports(w) | run_input_ports(w)
 
 
@@ -554,7 +564,8 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
     tied = IL.tied(members, links)
     readers = [(k, vh) for k, m in enumerate(members) if k not in tied and (vh := IL.reader(m)) is not None]
     q = len(sample)
-    window = interior_window(members, n_rho, boundary, sample, wires, links, rows)
+    inputs = [(replace(x, leaves=x.leaves or v.leaves), v) for x, v in inputs]
+    window = interior_window(members, n_rho, boundary, sample, wires, links, rows, [x for x, _v in inputs])
     ports, cells = CS.expected_ports(window), IL.cells(window.members, n_rho)[1]
     placed = IL.placed(window.members, cells, q, links)
     if (bool(readers) or bool(tables)) and len(tables) != len(sample) * bool(readers):
@@ -603,6 +614,8 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
             for w in m.wired:
                 d["rows"][w.port] = CS.WIRED
         _as_served(data, cells, took_in, "rows")
+        for x, v, k, at in took_in:
+            data[k]["rows"][x.port] = CS.ValueRows(_Round1(v), tuple(at))
         took = [np.asarray(data[k]["rows"][x.port], dtype=np.uint16) for x, k, _at in placed]
         for name, x in IL.values(links).items():
             if isinstance(x, Operand):
@@ -624,8 +637,6 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
         fresh = {m.port(p): os.urandom(ports[t]["leaves"] * CS.SALT_BYTES) for m in window.members for p, _w in m.all_rows
                  if window.wire(m, p) is None and (t := window.tree(m, p)) in ports and m.port(p) not in linked}
         fresh |= {window.members[k].port(x.port): v.salts_at(at) for x, v, k, at in back}
-        fresh |= {window.members[k].port(x.port): v.salts_at(at) for x, v, k, at in took_in
-                  if x.port not in window.members[k].values}
         for r in run_inputs(window):
             k = next(j for j, m in enumerate(window.members) if m.template == r.reader)
             x = data[k]["rows"][r.port]
@@ -665,6 +676,22 @@ def _served_some(per: Sequence[Sequence[Span]], sample: Sequence[int]) -> None:
         if any(s.n < 1 for s in p):
             raise ValueError(f"sampled span {i} (slot {int(sample[i])}, request {p[0].rid}) holds no unit of its replay "
                              "block: a span served nothing has no proof block to commit, whatever round 1 holds at its rows")
+
+
+class _Round1:
+    """Round 1's port ``port`` as `rows.ValueRows` reads a registered value: its rows, and each row's salt and
+    ``b || c``, so a port reading it by reference is leafed once, in round 1's tree."""
+
+    word_bits = 16
+
+    def __init__(self, port: LK.Port) -> None:
+        self.port, self.value, self.words, self.schema, self.rows = port, port.value, port.words, port.schema, port.rows
+        s, b = CS.SALT_BYTES, CS.BC_BYTES
+        self.salts = [port.salts[i * s:(i + 1) * s] for i in range(port.leaves)]
+        self.bcs = [port.bcs[i * b:(i + 1) * b] for i in range(port.leaves)]
+
+    def path(self, position: int) -> bytes:
+        return self.port.path(position)
 
 
 def _as_served(data: Sequence[Mapping[str, Any]], cells: Sequence[int], held: Sequence[tuple[Any, LK.Port, int, list[int]]],

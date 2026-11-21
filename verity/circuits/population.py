@@ -56,7 +56,8 @@ def _leaf_ok(width: Any) -> bool:
 
 
 def mixed_population_program(members: Sequence[tuple[SpecializedDefinition, int]], *, version: int = 1,
-                             values: Sequence[tuple[str, int, int | Sequence[int]]] = ()) -> Program:
+                             values: Sequence[tuple[str, int, int | Sequence[int]]] = (),
+                             reads: Sequence[tuple[str, int, int, str, Sequence[int]]] = ()) -> Program:
     """`TemplatePopulations_v1{templates, counts}`: one batch per member `(template, n)`, in order; member j's parameters are
     `j.<name>`, arrays over its instances, and the result is the tuple of the batches' results. `templates` are the members'
     descriptor ids, in order. A member whose population declares ports (`_instance_ports`) keeps them, under `j.<name>` and at
@@ -65,31 +66,55 @@ def mixed_population_program(members: Sequence[tuple[SpecializedDefinition, int]
     (``width`` an integer, or a shape such as a `Digest`'s ``(8, 64, 1)``, which the binding record holds as a list), read
     by no node and declared by no port, named in order in the binding record (`TemplatePopulations_v1{templates, values,
     counts}`): one-stage's R7 registers only a program's parameters, reading each by its type, and the proof blocks read
-    the values only through their registered reads. `version=0` builds `TemplatePopulations_v0{counts}`
-    (`POPULATION_VERSIONS`), which takes no values."""
+    the values only through their registered reads. ``reads``: ``(name, rows, j, param, at)`` each, an earlier period's
+    committed value of ``rows`` rows that member j's parameter ``param`` reads, its instance i the value's row ``at[i]``:
+    the root takes it bound at registration (`Program`'s ``registered``) as ``name`` of type ``Array(rows, row)``, after
+    ``values``, in place of ``j.<param>``, so a registered read of it opens each instance's row at the position the
+    circuit gives. `version=0` builds `TemplatePopulations_v0{counts}` (`POPULATION_VERSIONS`), which takes no values."""
     if not members or any(n < 1 for _, n in members):
         raise ValueError("every member has at least one instance")
     _population_version(version)
     sigs = [t.signature() for t, _ in members]
     values = tuple((name, leaves, tuple(width) if isinstance(width, list) else width) for name, leaves, width in values)
-    own = [f"{j}.{name}" for j, (ps, _) in enumerate(sigs) for name, _ in ps]
-    if values and version == 0:
+    reads = tuple((name, rows, j, param, tuple(int(a) for a in at)) for name, rows, j, param, at in reads)
+    read_at = {(j, param): (name, rows, at) for name, rows, j, param, at in reads}
+    own = [f"{j}.{name}" for j, (ps, _) in enumerate(sigs) for name, _ in ps if (j, name) not in read_at]
+    if (values or reads) and version == 0:
         raise ValueError("a v0 population takes no values: its id names its counts alone")
     if any(not (isinstance(v, str) and v and _natural(n) and _leaf_ok(w)) for v, n, w in values) \
             or len({v for v, _, _ in values} | set(own)) != len(values) + len(own):
         raise ValueError(f"values {[v for v, _, _ in values]}: each (name, leaves, width), a new name beside the members' "
                          f"parameters, at least one leaf of at least one bit, a shape two or more naturals")
+    if len(read_at) != len(reads) or len({r[0] for r in reads} | {v for v, _, _ in values} | set(own)) \
+            != len(reads) + len(values) + len(own) or any(
+            not (0 <= j < len(sigs) and param in dict(sigs[j][0]) and _natural(rows) and len(at) == members[j][1]
+                 and all(0 <= a < rows for a in at)) for _name, rows, j, param, at in reads):
+        raise ValueError(f"reads {[r[:4] for r in reads]}: each (name, rows, j, param, at) a new name, a parameter of member "
+                         "j read once, at one row of the value's rows an instance")
+
+    def row_type(j: int, param: str) -> Any:
+        return dict(sigs[j][0])[param]
 
     def signature(S):
-        params = tuple((f"{j}.{name}", Array(n, t)) for j, ((ps, _), n) in enumerate(zip(sigs, S.counts)) for name, t in ps)
+        params = tuple((f"{j}.{name}", Array(n, t)) for j, ((ps, _), n) in enumerate(zip(sigs, S.counts)) for name, t in ps
+                       if (j, name) not in read_at)
         held = tuple((v, Array(n, leaf_type(w))) for v, n, w in getattr(S, "values", ()))
-        return held + params, Tuple(*(Array(n, ret) for (_, ret), n in zip(sigs, S.counts)))
+        taken = tuple((name, Array(rows, row_type(j, param))) for name, rows, j, param, _at in getattr(S, "reads", ()))
+        return held + taken + params, Tuple(*(Array(n, ret) for (_, ret), n in zip(sigs, S.counts)))
 
     def body(B, S, *args):
-        outs, at = [], len(values)
-        for (t, _), (ps, _) in zip(members, sigs):
-            outs.append(B.batch(t, *args[at:at + len(ps)], axes=(0,) * len(ps)))
-            at += len(ps)
+        taken = dict(zip((r[0] for r in reads), args[len(values):len(values) + len(reads)]))
+        outs, at = [], len(values) + len(reads)
+        for j, ((t, n), (ps, _)) in enumerate(zip(members, sigs)):
+            argv = []
+            for name, pt in ps:
+                if (j, name) in read_at:
+                    v, _rows, rows_at = read_at[j, name]
+                    argv.append(Coll(Array(n, pt), _grid([taken[v][r].refs for r in rows_at], pt.leaves)))
+                else:
+                    argv.append(args[at])
+                    at += 1
+            outs.append(B.batch(t, *argv, axes=(0,) * len(ps)))
         return coll_concat(signature(S)[1], outs)
 
     each = [_instance_ports(t) for t, _ in members]
@@ -105,11 +130,11 @@ def mixed_population_program(members: Sequence[tuple[SpecializedDefinition, int]
         return Ports(params=params, ret=Leaves(tuple(sinks)) if sinks else None)
 
     named = {} if version == 0 else {"templates": tuple(descriptor_id(t) for t, _ in members),
-                                     **({"values": values} if values else {})}
+                                     **({"values": values} if values else {}), **({"reads": reads} if reads else {})}
     defn = CompositeDefinition("TemplatePopulations", version, (*named, "counts"), signature, body,
                                doc="independent instances of " + ", ".join(f"{n} x {t.id}" for t, n in members), register=False,
                                ports=ports if any(f is not None for f in each) else None)
-    return Program(bind(defn, **named, counts=tuple(n for _, n in members)))
+    return Program(bind(defn, **named, counts=tuple(n for _, n in members)), registered=tuple(r[0] for r in reads))
 
 
 #: the circuit record's fields `wired_population_program`'s ``record`` binding holds

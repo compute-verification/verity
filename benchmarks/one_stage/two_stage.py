@@ -681,7 +681,7 @@ class Design:
     def window(self, boundary: str, sample: Sequence[int]) -> CS.Binding:
         """The interior window of the replay sample ``sample`` after the boundary docket ``boundary``
         (`interior_rows.interior_window`): public items alone."""
-        return IR.interior_window(self.members, self.cells, boundary, sample, self.wires, self.links, self.rows)
+        return IR.interior_window(self.members, self.cells, boundary, sample, self.wires, self.links, self.rows, self.inputs)
 
 
 def design(layout: BR.Layout, record: Mapping[str, Any] | None = None, *, unlinked: bool = False,
