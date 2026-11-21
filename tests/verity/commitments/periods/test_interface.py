@@ -31,7 +31,7 @@ from verity.circuits import codec, partition_object as PO, supplied as SU
 from verity.circuits.codec import canonical_json, descriptor_id
 from verity.circuits.defs import CATALOG_PACKAGES, REGISTRY, CompositeDefinition, bind, catalog_package
 from verity.circuits.program import Program
-from verity.circuits.refs import array_of
+from verity.circuits.refs import array_of, coll_concat
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.evaluation.bits import evaluate_words
 from verity.circuits.ops import gemm as G
@@ -572,18 +572,72 @@ def permuted(rows: Sequence[int], m: int) -> Program:
 
 @pytest.mark.parametrize("rows, m, why", [
     ([0, 1, 2], 3, None),
-    ([0, 2], 3, "x: row 1 of run input node 0's 3 is read by no unit"),
+    ([0], 16, None),
+    ([0, 2], 3, None),
+    ([1, 2], 4, None),
     ([0, 1, 1], 3, "x: unit 2 reads row 1 of run input node 0, which unit 1 reads too"),
-    ([0, 2, 1], 3, "x: unit 1 reads row 2 of run input node 0, not row 1: its units read the node's rows in unit order"),
+    ([0, 2, 1], 3, "x: unit 2 reads row 1 of run input node 0, before unit 1's row 2: its units read the node's rows in "
+                   "unit order"),
+    ([0, 1, 3], 4, "x: unit 2 reads row 3 of run input node 0, not row 2: its units read the node's rows at one stride"),
 ])
 def test_a_run_inputs_rows_are_read_each_once_in_unit_order(rows, m, why):
-    """`run_input_reads` takes a port whose units read its run input node's rows each once, none skipped, unit i row i,
-    and refuses, by unit and row, a row skipped, a row read twice and rows out of unit order."""
+    """`run_input_reads` takes a port whose units read its run input node's rows at one stride in unit order, the whole
+    node or a slice of it, unit i row ``rows[0] + i * stride``, and refuses, by unit and row, a row read twice, rows out
+    of unit order and rows off one stride."""
     prog = permuted(rows, m)
     go = lambda: I.run_input_reads([(COORD, len(rows))], prog, PO.template_instances_query([COORD]), ())
     if why is None:
-        assert [(r.port, r.param, r.radix) for r in go()] == [(p, f"input/n{w}", (3,))
-                                                               for w, p in enumerate(("x", "sx", "wrow", "sw"))]
+        words, s = dict(I.layout(COORD).rows), rows[1] - rows[0] if len(rows) > 1 else 1
+        assert [(r.port, r.param, r.at, r.radix, r.base, r.step) for r in go()] == [
+            (p, f"input/n{w}", 0, (len(rows),), rows[0] * words[p], (s * words[p],))
+            for w, p in enumerate(("x", "sx", "wrow", "sw"))]
+    else:
+        with pytest.raises(ValueError, match=re.escape(f"run inputs: {TID} {why}")):
+            go()
+
+
+def node_slice(starts: Sequence[int], n: int, ranges: Sequence[int]) -> Program:
+    """C batching COORD in ``ranges`` (units a range) over one run input node of ``n`` leaves for ``x``, unit u reading
+    ``x``'s 64 leaves from leaf ``starts[u]`` (on into a last node, ``pad``, past ``n``), its other ports their nodes' row
+    u."""
+    sig = COORD.signature()[0]
+    L = COORD.signature()[0][0][1].leaves
+
+    def at(x, pad, lo):
+        if lo + L <= n:
+            return x[lo:lo + L]
+        return coll_concat(Array(L, Value(8)), [x[lo:n], pad[0:lo + L - n]])
+
+    def body(B, S, x, *rest):
+        *others, pad = rest
+        units = [(at(x, pad, lo), *(o[u] for o in others)) for u, lo in enumerate(starts)]
+        cuts = [sum(ranges[:k]) for k in range(len(ranges) + 1)]
+        return coll_concat(out, [B.batch(COORD, *(array_of([c[i] for c in units[a:b]]) for i in range(len(sig))),
+                                         axes=(0,) * len(sig)) for a, b in zip(cuts, cuts[1:])])
+
+    out = Tuple(tuple(Array(k, COORD.signature()[1]) for k in ranges))
+    params = (("x", Array(n, Value(8))), *((p, Array(len(starts), t)) for p, t in sig[1:]), ("pad", Array(L, Value(8))))
+    return Program(bind(CompositeDefinition("RunInputsTestSliced", 0, (), lambda S: (params, out), body, register=False)))
+
+
+@pytest.mark.parametrize("starts, n, ranges, why", [
+    ([0], 16 * 64, (1,), None),
+    ([0, 128, 256, 384], 512, (2, 2), None),
+    ([0, 128], 160, (2,), "x: unit 1's row from leaf 128 runs past run input node 0's 160 leaves"),
+    ([0, 64, 96], 256, (1, 2), "x: unit 2's row is not one row of a run input node's leaves, in rows of its 64"),
+    ([0, 64, 64], 256, (1, 2), "x: unit 2 reads row 1 of run input node 0, which unit 1 reads too"),
+])
+def test_a_run_input_read_as_a_slice_is_one_read_at_its_offset_and_stride(starts, n, ranges, why):
+    """A port whose units read a slice of its run input node, one row a unit at one stride across its template's ranges,
+    is one read: ``base`` the first row's words, ``step`` the stride's; a row past the node's end, a row off the node's
+    rows (overlapping another unit's) and a row read twice are refused by unit and row."""
+    prog = node_slice(starts, n, ranges)
+    go = lambda: I.run_input_reads([(COORD, len(starts))], prog, PO.template_instances_query([COORD]), ())
+    if why is None:
+        words, s = dict(I.layout(COORD).rows), (starts[1] - starts[0] if len(starts) > 1 else 64) // 64
+        assert [(r.port, r.param, r.radix, r.base, r.step) for r in go()] == [
+            ("x", "input/n0", (len(starts),), starts[0] // 64 * words["x"], (s * words["x"],)),
+            *((p, f"input/n{w}", (len(starts),), 0, (words[p],)) for w, p in enumerate(("sx", "wrow", "sw"), 1))]
     else:
         with pytest.raises(ValueError, match=re.escape(f"run inputs: {TID} {why}")):
             go()
