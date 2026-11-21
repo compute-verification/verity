@@ -227,7 +227,7 @@ def test_the_door_takes_the_sessions_units_in_wire_order() -> None:
     from verity.protocols.accounting.memory.pous.prover import window as W
 
     c = W.session_units(3, 8, 1000, 264, 2)
-    assert [t.split("{")[0] for t in c.ids] == ["PousSessionDigest_v2", "EmbeddingRead_v3", "PousRound_v3", "PousRound_v3"]
+    assert [t.split("{")[0] for t in c.ids] == ["PousSessionDigest_v2", "EmbeddingRead_v4", "PousRound_v3", "PousRound_v3"]
     assert list(c.units.values()) == [1, 3, 2, 1]
     o = c.ids[1]
     assert sorted((w.radix, w.base, w.step) for w in c.wires if (w.port, w.writer, w.out) == ("ok", o, "o1")) == [

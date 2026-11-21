@@ -173,7 +173,8 @@ def wired_population_program(templates: Sequence[tuple[SpecializedDefinition, in
     rows at one stride are one strided part, and the result is `mixed_population_program`'s. An input row is its wire's writer's output
     row; a registered or boundary read's, the root parameter named for the value it reads, a supplied input (with its
     mark) where the record's ``registered["supplied"]`` names it; a table read's,
-    ``<param>/<root or domain>``; an opening's port, ``<table>/<port>`` over the units of that table's openings in the
+    ``<param>/<root or domain>``, a supplied input marked `registered.<root or domain>/v1` of the table's ``param``; an
+    opening's port, ``<table>/<port>`` over the units of that table's openings in the
     record's order, each opening's after the one before; any other row, the
     population's own ``<j>.<port>``. The registered values are the first parameters, in order, the rest sorted by name; those
     ``registered`` names are bound at registration (`Program`'s ``registered``). A
@@ -264,9 +265,15 @@ def wired_population_program(templates: Sequence[tuple[SpecializedDefinition, in
         if inp:
             read(r, r["param"], row(j, r["port"]).homogeneous_width() or 0)
     tables = {t["name"]: t for t in reg.get("tables", ())}
+    anchors: dict[str, dict[str, Any]] = {}
     for r in reg.get("roots", ()):
         j, name = index[r["reader"]], f"{tables[r['table']]['param']}/{r['of']}"
         root(name, dict(sigs[j][0])[r["port"]])
+        if r["of"] in ("root", "domain"):
+            if roots[name].leaves != 512 or roots[name].width_set() != {1}:
+                raise ValueError(f"table read {r}: a table's {r['of']} is a Digest, not {roots[name]!r}")
+            anchors[name] = {"supplied": f"registered.{r['of']}/v1", "args": {"value": tables[r["table"]]["param"]},
+                             "layout": "digest", "bits": 512}
         for u in range(r["at"], r["at"] + r["units"]):
             for c in range(cut(j, r["port"])):
                 fill(r, j, r["port"], u, c, ("whole", name, None))
@@ -351,7 +358,10 @@ def wired_population_program(templates: Sequence[tuple[SpecializedDefinition, in
                                doc="wired units of " + ", ".join(f"{n} x {t.id}" for t, n in templates), register=False)
     free_rows = [{"reader": t, "port": p, "at": at, "units": n, **({} if rows == (0, cut(index[t], p)) else {"cut": list(rows)})}
                  for t, p, at, n, rows in free]
-    supplied = {v: m for v, m in (reg.get("supplied") or {}).items() if v in dict(params)}
+    given = reg.get("supplied") or {}
+    if clash := sorted(v for v in anchors if v in given and given[v] != anchors[v]):
+        raise ValueError(f"{clash}: a table's root or domain marked other than by its table read")
+    supplied = {v: m for v, m in {**given, **anchors}.items() if v in dict(params)}
     return (Program(bind(defn, **named), annotations={"free": free_rows}, supplied=supplied,
                     registered=tuple(v for v, _ in params if v in registered)),
             template_instances_query([t for t, _ in templates]))

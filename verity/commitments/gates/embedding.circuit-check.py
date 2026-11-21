@@ -13,7 +13,7 @@ def _embedding_roots() -> list[Any]:
     read's 17 levels), each checked at its smallest binding here and in its own module's bindings, and its gates are pinned
     in the tests (``READS``).  The read of a history table (`verity_vllm.definitions.registry.dsa_topk_reads`: a capacity of
     2^17 rows of GLM-5.3's 576-word kv row) is checked whole at its served binding, held to its digest pin, with its
-    selection. The opening (`opening`, ``EmbeddingRead_v3``) at its smallest binding, with its guard at the deployed
+    selection. The opening (`opening`, ``EmbeddingRead_v4``) at its smallest binding, with its guard at the deployed
     vocabularies, whose comparison a small V doesn't reach, and its one-word selection."""
     from verity.circuits.defs import bind
     from verity.commitments.gates.embedding import EmbeddingReadGuard, EmbeddingReadSelect, EmbeddingReadWord, opening, read
