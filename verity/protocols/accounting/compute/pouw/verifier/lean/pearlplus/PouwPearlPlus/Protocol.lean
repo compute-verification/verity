@@ -49,7 +49,7 @@ that digest, held to its manifest entry (`held`); a path the object doesn't name
 **The check** is `check` on them: it accepts with the run's credit at its scheme's named assumption at δ = `DELTA`, or rejects with
 `check`'s reason. It never leaves a run undecided.
 
-**Public**, on acceptance: the credit (`credited`, `credited_tiles`, `macs`, `rho`, `epsilon`) and `delta`.
+**Public**, on acceptance: the credit (`credited`, `credited_tiles`, `checked_macs`, `rho`, `epsilon`) and `delta`.
 
 **Profile**: the samples asked for, the tiles sampled and the passes.
 -/
@@ -180,7 +180,7 @@ def checkBlobs (p : Params) (c : Commitment) (e : Evidence) (bs : Core.Blobs) : 
 
 def publicJson (w : Credit) : Json :=
   Json.mkObj [("credited", toJson w.credited), ("credited_tiles", toJson w.creditedTiles), ("delta", .str (toString DELTA)),
-    ("epsilon", .str (toString w.epsilon)), ("macs", toJson w.macs), ("rho", .str (toString w.rho))]
+    ("epsilon", .str (toString w.epsilon)), ("checked_macs", toJson w.macs), ("rho", .str (toString w.rho))]
 
 def profileJson (pr : Profile) : Json :=
   Json.mkObj [("draws", toJson pr.draws), ("drawn", toJson pr.drawn), ("passes", toJson pr.passes)]

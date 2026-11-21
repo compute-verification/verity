@@ -141,7 +141,7 @@ class's own. `--set bounds.lock_only=false` admits every bound whose premises ar
 (`min_cut.HE`, `min_cut.HE_SHARED`, `min_cut.HE_CHARGED`), each function one side of an inequality they conclude or
 that inequality solved for one term; it is standard library only, so another benchmark loads it by path. The lock
 lists a proof of each of the three. A work of `N` MACs with `O` output wires needs at
-least `m` blocks of at most `k` fresh input bits with `N ≤ m (k + F α) + F (k/2) √(m O / q)`, `α = ½ √(k³ / (q b))`,
+least `m` blocks of at most `k` unregistered input bits with `N ≤ m (k + F α) + F (k/2) √(m O / q)`, `α = ½ √(k³ / (q b))`,
 under (H) at `q = β_w β_x` and (E) at `b` (`training-cut-hardness`, `training-cut-exports`: conjectures).
 
 - `min_cut.bound(c, k, n, N=…, O=…, size=…)` is the bound at a policy `(c, k, n)` on a circuit's own MACs, output

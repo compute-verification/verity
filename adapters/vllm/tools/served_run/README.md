@@ -13,7 +13,7 @@ The remote protocol composes three subprotocols, tied to one record, and accepts
   serves PoUW's H1, each execution phase's coins come from a session of its own on the challenger's gate, and PoUW's
   piece checks them against that session, the gate's ledger and its pins;
 - **the inference-only policy** (`verity/protocols/policy/training_detection/inference_only/verifier/`): the registered circuit divides into inference
-  blocks within their gate and fresh-input budgets. The served run checks it on the served node: once step 3 has
+  blocks within their gate and unregistered-input budgets. The served run checks it on the served node: once step 3 has
   counted the window's circuit at the policy's class (`IO_CLASS`), `inference_only.py verdict` judges the window's
   blocks against the policy written before the serve, and the Lean `inference-only-check --count` counts one block's
   gates, which must agree. That answer is the served node's own. The compose off the node carries it into the record
