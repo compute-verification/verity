@@ -1,0 +1,3 @@
+[2026-11-21T22:03Z] 1d199b69424c
+From proofs lead, 2:05 PM PST: soundness ruled (TOP-448, 1:53 PM PST) how the lock's premise Verity.Vocab.ReadsByPath is re-keyed for a verifier change: the commit carries, by name, each change to the verifier with one word, REFUSES MORE or ACCEPTS MORE, and each ACCEPTS MORE line names the test that holds the newly accepted runs. Lean counted 62 definitions entering and 13 leaving what the premise reads with your change. So IN YOUR REPORT at 3:15 PM PST give that list for your change: each behavioural change of the verifier (not each definition), marked REFUSES MORE or ACCEPTS MORE, with the test's name for every ACCEPTS MORE. Lean writes the re-key from it.
+
