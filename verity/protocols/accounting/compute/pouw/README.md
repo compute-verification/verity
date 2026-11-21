@@ -10,24 +10,17 @@ sample tiles, which the Lean check recomputes from their opened A and B rows. On
 The guarantee: `Properties.Pouw.PearlPlus.WorkIsTheCredit` (`security/Properties/Pouw/PearlPlus.lean`), not deployed.
 
 Not yet: a deployed Pearl+ statement (remote soundness assumes `Verity.Vocab.PouwSound`) or a priced one; a check that
-hides A and B, or reads the circuit or the kernel binary.
-
-The coins' sessions: `pouw-pearlplus` holds the sample to its draw session (`--draw-live`) and each live pass's salt
-to its salt session (`--salt-live`). It checks the ledger's and the session's signatures under the pinned key, and that
-the salt opened after its epoch's open root, which is derived from the weights' root. It refuses a run of record that is
-missing either session, and the served road passes both. But that Lean runs on the served node, and the node also
-supplies what the Lean reads:
-- the gate's fetch of the ledger and the sessions, so asked-once holds only over the ledger fetched
-  (`served_verdicts._salt_live`, `_draw_live`);
-- the pin values, the key's SHA-512 and main's line (`H1_KEY_SHA512`, `MAIN_FILE`, in `served_pearlplus.sh`);
-- the passes retained (`served_passes.py retain`);
-- the period rule (`served_verdicts.pearlplus_period_rule`);
-- the compose (`pearlplus_live_sample`, `pearlplus_of_record`).
-
-So no coin of a Pearl+ verdict of record is held to the challenger against a prover that controls the node.
-
-Grinding (a steer needing m noised coordinates succeeds with probability at most μ^m a try) is stated nowhere:
-Pearl+'s one seed is `seedB` over the salt and B's root, and GRIND's priced premium is H1's, proved and in no lock.
+hides A and B, or reads the circuit or the kernel binary. The coins' sessions: `pouw-pearlplus` holds the sample to its
+draw session (`--draw-live`) and each live pass's salt to its salt session (`--salt-live`): the ledger's and the
+session's signatures under the pinned key, and the salt opened after its epoch's open root, which is derived from the
+weights' root. A run of record missing either session is refused, and the served road passes both. But that Lean runs on
+the served node, which also supplies what it reads: the gate's fetch of the ledger and the sessions, so asked-once holds
+only over the ledger fetched (`served_verdicts._salt_live`, `_draw_live`); the pin values (`H1_KEY_SHA512`, `MAIN_FILE`,
+in `served_pearlplus.sh`); the passes retained (`served_passes.py retain`); the period rule
+(`served_verdicts.pearlplus_period_rule`); and the compose (`pearlplus_live_sample`, `pearlplus_of_record`). So no coin
+of a Pearl+ verdict of record is held to the challenger against a prover that controls the node. Grinding (a steer
+needing m noised coordinates succeeds with probability at most μ^m a try) is stated nowhere: Pearl+'s one seed is
+`seedB` over the salt and B's root, and GRIND's priced premium is H1's, proved and in no lock.
 
 ## Pieces
 
