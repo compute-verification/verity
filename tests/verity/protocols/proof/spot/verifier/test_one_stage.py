@@ -546,6 +546,16 @@ def test_strata_group_units_by_template_in_order_of_first_unit():
     assert P.strata(PN.population_program(PAIR, 4), P.template_instance_query(PAIR.id)) == [(PAIR.id, [[0, 4]])]
 
 
+def test_a_subset_design_lays_the_population_out_as_one_stratum():
+    prog = PN.mixed_population_program([(XOR3, 2), (PAIR, 3), (XOR3, 1)])
+    q = P.template_instances_query([PAIR.id, XOR3.id])
+    sub, strat = {"k": 1, "law": "subset"}, {"k": 1, "law": "stratified"}
+    assert P.layout_strata(prog, q, sub) == [("", [[0, 6]])] == P.one_stratum(P.strata(prog, q))
+    assert P.layout_strata(prog, q, strat) == P.layout_strata(prog, q, None) == P.strata(prog, q)
+    assert P.in_order(prog, q, 6, sub) and not P.in_order(prog, q, 6, strat) and not P.in_order(prog, q, 6)
+    assert not P.in_order(prog, q, 5, sub) and not P.in_order(prog, q, 7, sub)
+
+
 def test_the_stratified_rule_rounds_half_up_with_a_floor_of_one():
     assert [D.stratum_k(5, s, 4) for s in (1, 2, 3, 4)] == [1, 3, 4, 5]        # 1.25, 2.5 -> 3, 3.75, 5
     assert D.stratum_k(1, 1, 100) == 1 and D.stratum_k(5, 3, 8) == 2 and D.stratum_k(4, 1, 8) == 1

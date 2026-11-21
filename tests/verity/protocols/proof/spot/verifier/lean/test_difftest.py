@@ -243,6 +243,8 @@ SETUPS = [Setup(PN.population_program(PAIR, n), P.template_instance_query(PAIR.i
     Setup(PN.mixed_population_program([(PAIR, 2), (TRIPLE, 3)]), P.template_instances_query([PAIR.id, TRIPLE.id])),
     Setup(PN.mixed_population_program([(PAIR, 1), (TRIPLE, 2), (PAIR, 2)]), P.template_instances_query([TRIPLE.id, PAIR.id])),
     Setup(call_program((0, 2, 0, 3)), PO.query()), Setup(call_program((1, 2, 3)), PO.call_query(8))]
+#: A subset and a stratified sampling design as `Slots.layout` reads them: one stratum, or one a template.
+SUBSET, STRATIFIED = {"k": 1, "law": "subset"}, {"k": 1, "law": "stratified"}
 XOR16 = PrimitiveDefinition("CoreSpotXor16", 1, (("a", Value(16)), ("b", Value(16))), Value(16), lambda a, b: a ^ b,
                             register=False)
 #: `PAIR` and `TRIPLE` over u16 words, the one form the door lowers (`OneStageZk.admitted`), each `x` a 128-byte row,
@@ -1176,8 +1178,9 @@ def slots(j):
 
 
 def pop_order(j):
-    """`Slots.popOk` as it runs (`Slots.popOkRanges`: the strata's segments chain `0, ..., n - 1` and every unit has its
-    gates) and as it is stated (the layout's population is units `0, ..., n - 1` in slot order): both `partition.in_order`."""
+    """`Slots.popOk` for the sampling design `design` as it runs (`Slots.popOkRanges`: the strata's segments chain
+    `0, ..., n - 1` and every unit has its gates) and as it is stated (the layout's population is units `0, ..., n - 1`
+    in slot order): both `partition.in_order`, one stratum under a subset design."""
     j = _json(j)
     if not isinstance(j, dict):
         raise D.Reject("not an object")
@@ -1190,7 +1193,7 @@ def pop_order(j):
     sha = PO.program_sha512(desc)
     if sha not in PROGRAMS:
         raise RuntimeError(f"the strategy drew a descriptor this file has no program for: {sha[:16]}")
-    ok = P.in_order(PROGRAMS[sha], query, n)
+    ok = P.in_order(PROGRAMS[sha], query, n, j.get("design"))
     return {"layout": ok, "ranges": ok}
 
 
@@ -1691,7 +1694,7 @@ def run(j):
         return {"codes": list(codes), "step": "register"}
     if service.bernoulli(sampling_design):
         return {"codes": ["bernoulli"], "step": "register"}
-    if not P.in_order(p["program"], p["query"], n):
+    if not P.in_order(p["program"], p["query"], n, sampling_design):
         return {"codes": ["population-order"], "step": "register"}
     receipt = _receipt(rec, j["challenger"], j["received"])
     try:
@@ -2774,13 +2777,11 @@ def _audit_v1_accepts(s: Setup, seed: str, server) -> tuple:
     return rec, ch, base, params
 
 
-def test_v2_refuses_a_population_out_of_order(server, server_v2):
-    """v2 refuses a docket whose program's proof blocks, read stratum by stratum, are not its population's units
-    in order (`OneStageZk.popHeld`, `Slots.popOk`), before any session is verified, as the service's run refuses it at
-    docket (`population-order`): the session's knowledge soundness reads slot `u` as proof block `u`. v1, whose
-    R2 holds only the population's count, accepts the same audit on its verdicts. `SETUPS[4]` and `SETUPS[5]` are out
-    of order (`test_the_run_refuses_a_population_out_of_order`); `BLOCKED`'s audit goes on to its session's
-    verdict."""
+def test_v2_lays_the_population_out_as_one_stratum(server, server_v2):
+    """v2's population check (`OneStageZk.popHeld`, `Slots.popOk`) reads the population under its subset design as one
+    stratum (`Slots.layout`), as the service's run does (`test_the_run_lays_the_population_out_for_its_sampling_design`):
+    `SETUPS[4]`'s and `SETUPS[5]`'s audits, whose strata are not their units in order, go on past it, as `BLOCKED`'s
+    does to its session's verdict. v2's one statement takes no stratified or work design (`subset_only`)."""
     circuit = STAND_IN_CIRCUIT
     for s, ok in ((SETUPS[4], False), (SETUPS[5], False), (BLOCKED, True)):
         assert P.in_order(s.program, s.query, s.population) is ok, s.templates
@@ -2790,8 +2791,10 @@ def test_v2_refuses_a_population_out_of_order(server, server_v2):
         case = {"blobs": [circuit.hex(), public.hex(), record.hex()], "commitment": _hex(rec), "evidence": _hex(v2),
                 "params": params | {"proofs": {"public": _sha(public), "registered": None}}}
         out = server_v2.exchange(_json(case))
-        want = "verdict flock-verify/s did not accept" if ok else f"proofs: {POPULATION_ORDER}"
-        assert (out["verdict"], out["reason"]) == ("reject", want), (s.templates, out)
+        assert out["verdict"] == "reject" and POPULATION_ORDER not in out["reason"], (s.templates, out)
+        assert "partition: the registration's strata" not in out["reason"], (s.templates, out)
+        if ok:
+            assert out["reason"] == "verdict flock-verify/s did not accept", (s.templates, out)
 
 
 def test_the_per_member_form_as_written_is_what_v2_parses_and_its_check_reads(tmp_path, server, server_v2):
@@ -3829,8 +3832,9 @@ DESIGN = D.Port(PIECES, "design", design, st.one_of(selections(), selections(), 
                 package=PACKAGE)
 SLOTS = D.Port(PIECES, "slots", slots, st.one_of(selections(), selections(), changed_selections(1), JSON), package=PACKAGE)
 POP_ORDER = D.Port(PIECES, "pop_order", pop_order, st.one_of(*[st.builds(
-    lambda part, dn: {"population": max(0, part[2] + dn), "program": part[0], "query": part[1]}, partitions(),
-    st.sampled_from([0, 0, 0, -1, 1]))] * 3, JSON), package=PACKAGE)
+    lambda part, dn, d: {"design": d, "population": max(0, part[2] + dn), "program": part[0], "query": part[1]},
+    partitions(), st.sampled_from([0, 0, 0, -1, 1]), st.sampled_from([None, SUBSET, STRATIFIED]))] * 3, JSON),
+    package=PACKAGE)
 
 
 def _units_case(units: list, how: int, x: int) -> dict:
@@ -5239,7 +5243,8 @@ def test_the_population_order_from_the_ranges_is_the_layouts(pieces):
     """`Slots.popOk`, which runs from the ranges (`Slots.popOkRanges`), is its statement read off the layout's population,
     and the Python's (`partition.in_order`), at the docket's `n` and either side of it: on 2,000 units in seven root
     batches, whose strata put units apart and so fail it, on one batch of each of those templates, which passes at `n`
-    only, and on `SETUPS`, out of order and in order."""
+    only, and on `SETUPS`, out of order and in order, each under no design, a stratified one and a subset one, under
+    which the population is one stratum in the order the query numbers its units, so every one passes at `n`."""
     apart = PN.mixed_population_program([(DEEP, 300), (PAIR, 250), (NEST, 400), (DEEP, 170), (QUAD, 500), (NEST, 90),
                                         (PAIR, 290)])
     blocks = PN.mixed_population_program([(DEEP, 470), (PAIR, 540), (NEST, 490), (QUAD, 500)])
@@ -5249,10 +5254,13 @@ def test_the_population_order_from_the_ranges_is_the_layouts(pieces):
               for s, ok in ((SETUPS[4], False), (SETUPS[5], False), (SETUPS[3], True), (SETUPS[2], True), (SETUPS[6], True))]
     for program, query, n, ok in cases:
         PROGRAMS[PO.program_sha512(program)] = program
-        for m, want in ((n, ok), (n - 1, False), (n + 1, False)):
-            case = {"population": m, "program": _json(codec.encode_program(program)), "query": query}
-            assert pop_order(copy.deepcopy(case)) == {"layout": want, "ranges": want}, (m, want)
-            assert D.replay(POP_ORDER, case, pieces) == ("output", D.canonical({"layout": want, "ranges": want})), (m, want)
+        for design in (None, STRATIFIED, SUBSET):
+            for m, want in ((n, ok or design is SUBSET), (n - 1, False), (n + 1, False)):
+                case = {"design": design, "population": m, "program": _json(codec.encode_program(program)),
+                        "query": query}
+                assert pop_order(copy.deepcopy(case)) == {"layout": want, "ranges": want}, (design, m, want)
+                assert D.replay(POP_ORDER, case, pieces) == ("output", D.canonical({"layout": want, "ranges": want})), (
+                    design, m, want)
 
 
 #: Units of the toy and the real-template populations `unit_gates` is held to its walk at: L5's population on one
@@ -6780,22 +6788,25 @@ def test_the_audit_refuses_what_soundness_does_not_cover(server, server_v2):
             assert not (out["reason"] or "").startswith("params: "), (kind, out)
 
 
-def test_the_run_refuses_a_population_out_of_order(pieces):
-    """A docket whose program's units, read stratum by stratum, are not its N units in order is refused at its
-    docket (`population-order`, `Slots.popOk`), Lean's the Python's whole: `SETUPS[4]` puts PAIR's units 0, 3 and 4
-    in one stratum ahead of TRIPLE's 1 and 2, and `SETUPS[5]`'s Calls put PAIR's units 0 and 4 ahead of the Fork's. The
-    sampled audit's knowledge soundness reads slot `u` as unit `u`. Programs whose strata are blocks in order go on."""
+def test_the_run_lays_the_population_out_for_its_sampling_design(pieces):
+    """The run's population check (`population-order`, `Slots.popOk`) reads the population as its sampling design does,
+    Lean's the Python's whole: under a subset design one stratum, the units in the order the query numbers them, so
+    `SETUPS[4]` (PAIR's units 0, 3 and 4 beside TRIPLE's 1 and 2) and `SETUPS[5]` (the Calls' PAIR units 0 and 4 beside
+    the Fork's) go on; under a stratified one a stratum a template, read stratum by stratum, so `SETUPS[4]` is refused.
+    Programs whose strata are blocks in order go on under either."""
     source = hashlib.shake_256(b"run").hexdigest(600)
     for s, ok in ((SETUPS[4], False), (SETUPS[5], False), (SETUPS[3], True), (SETUPS[2], True), (SETUPS[6], True)):
         assert P.in_order(s.program, s.query, s.population) is ok, s.templates
-        case = _run_case(_v1_audit("subset", s), source, 2, ["credited"])
-        out = run(copy.deepcopy(case))
-        assert D.replay(RUN, case, pieces) == ("output", D.canonical(out)), out
-        if ok:
-            assert out.get("codes") != ["population-order"], out
-        else:
-            assert (out.get("step"), out.get("codes")) == ("register", ["population-order"]), out
-    assert not P.in_order(SETUPS[3].program, SETUPS[3].query, SETUPS[3].population + 1)
+        assert P.in_order(s.program, s.query, s.population, SUBSET), s.templates
+        for kind in ("subset", "stratified") if s is SETUPS[4] or s is SETUPS[3] else ("subset",):
+            case = _run_case(_v1_audit(kind, s), source, 2, ["credited"])
+            out = run(copy.deepcopy(case))
+            assert D.replay(RUN, case, pieces) == ("output", D.canonical(out)), (kind, out)
+            if ok or kind == "subset":
+                assert out.get("codes") != ["population-order"], (kind, out)
+            else:
+                assert (out.get("step"), out.get("codes")) == ("register", ["population-order"]), (kind, out)
+    assert not P.in_order(SETUPS[3].program, SETUPS[3].query, SETUPS[3].population + 1, SUBSET)
 
 
 #: The public files Flock's producers wrote, recorded in `tests/verity/protocols/proof/flock/prover`' fetched fixtures
