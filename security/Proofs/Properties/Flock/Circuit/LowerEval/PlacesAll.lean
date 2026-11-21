@@ -13,12 +13,6 @@ namespace Flock.Chain
 open Flock.Program
 open Std.Do
 set_option mvcgen.warning false
-/-- Definition `x` reaches a word primitive: it is one, or it is a composite with a node whose callee reaches one. -/
-inductive ReachesWord (S : Prog) : ℕ → Prop
-  | word {x : ℕ} : isWordPrim (S.defs[x]!).prim (S.defs[x]!).key = true → ReachesWord S x
-  | comp {x : ℕ} {nd : Node} : (S.defs[x]!).prim = false → nd ∈ (S.defs[x]!).body.nodes →
-      ReachesWord S nd.fn → ReachesWord S x
-
 /-- The `wordy` pass so far over `pref`: its keys are `pref`'s, each entry whether its Definition reaches a word
 primitive, and each composite's callees come before it. -/
 @[irreducible] def WordyAll (S : Prog) (pref : List ℕ) (w : Std.HashMap ℕ Bool) : Prop :=

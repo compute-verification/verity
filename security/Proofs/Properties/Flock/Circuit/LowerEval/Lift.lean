@@ -970,6 +970,53 @@ theorem batch0Nested_of_batch0 {P : Prog} {d : ℕ} (h : Batch0 P d) (hn : 0 < (
     (fun nd hnd _ hw => absurd (h.2 nd hnd).2 (by rw [hw]; decide))
     ⟨_, Array.getElem_mem hn, Or.inr (h.2 _ (Array.getElem_mem hn)).2⟩
 
+/-- Definition `x` reaches a word primitive: it is one, or it is a composite with a node whose callee reaches one. -/
+inductive ReachesWord (S : Prog) : ℕ → Prop
+  | word {x : ℕ} : isWordPrim (S.defs[x]!).prim (S.defs[x]!).key = true → ReachesWord S x
+  | comp {x : ℕ} {nd : Node} : (S.defs[x]!).prim = false → nd ∈ (S.defs[x]!).body.nodes →
+      ReachesWord S nd.fn → ReachesWord S x
+
+/-- `ReachesWord` decided at fuel `f`: false at fuel 0. -/
+def reachesWordF (P : Prog) : ℕ → ℕ → Bool
+  | 0, _ => false
+  | f + 1, d => isWordPrim (P.defs[d]!).prim (P.defs[d]!).key ||
+      (!(P.defs[d]!).prim && (P.defs[d]!).body.nodes.any fun nd => reachesWordF P f nd.fn)
+
+theorem reachesWord_of_F (P : Prog) : ∀ f d, reachesWordF P f d = true → ReachesWord P d
+  | 0, _, h => by simp [reachesWordF] at h
+  | f + 1, d, h => by
+    simp only [reachesWordF, Bool.or_eq_true, Bool.and_eq_true, Bool.not_eq_true', Array.any_eq_true'] at h
+    rcases h with h | ⟨hp, nd, hmem, hr⟩
+    · exact .word h
+    · exact .comp hp hmem (reachesWord_of_F P f _ hr)
+
+/-- A type whose every leaf is one bit: `Value<1>`, or an Array of such. -/
+def isBit : Ty → Bool
+  | .value w => w == 1
+  | .array _ e => isBit e
+  | _ => false
+
+theorem bitType_of_isBit : ∀ t : Ty, isBit t = true → Ty.bitType t = t
+  | .value w, h => by
+    simp only [isBit, beq_iff_eq] at h
+    subst h
+    simp [Ty.bitType]
+  | .array n e, h => by
+    rw [Ty.bitType, bitType_of_isBit e h]
+  | .tuple _, h => by simp [isBit] at h
+  | .record _, h => by simp [isBit] at h
+
+/-- Every parameter and node output of `D` is a type of one-bit leaves (`isBit`): its words are its bits. -/
+def BitTyped (D : Defn) : Prop :=
+  (∀ p ∈ D.params, isBit p.2 = true) ∧ ∀ nd ∈ D.body.nodes, isBit nd.out = true
+
+def bitTypedB (D : Defn) : Bool :=
+  D.params.all (fun p => isBit p.2) && D.body.nodes.all (fun nd => isBit nd.out)
+
+theorem bitTyped_of_B {D : Defn} (h : bitTypedB D = true) : BitTyped D := by
+  simp only [bitTypedB, Bool.and_eq_true, Array.all_eq_true'] at h
+  exact h
+
 /-- **A template of batches on any axes over word primitives, gates and earlier such templates**: `Batch0Nested`, but
 a batch node may map each argument along any axis of its type. -/
 inductive BatchNested (P : Prog) : ℕ → Prop
