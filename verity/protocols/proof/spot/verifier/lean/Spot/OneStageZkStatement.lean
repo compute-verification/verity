@@ -529,16 +529,6 @@ def publicPorts (rec : Json) : V (Array (String × Json)) := do
   ownFieldsHeld ft n (acc.getD n #[])
   return Record.byPort (Json.mkObj [("roots", .arr (ownFieldsOf ft n (acc.getD n #[])))])
 
-/-- The template of the one member the record `rec`'s roots name, as `publicPorts` finds it (`commonMember`); none where
-the roots are bare or no one member's. -/
-def oneTemplate (rec : Json) : Option String :=
-  let rs := (match getD rec "roots" with | .arr rs => rs | _ => #[]).filter fun r =>
-    !(match getD r "port" with | .str p => Flock.Registered.isFreshValue p | _ => false)
-  let ports := rs.toList.filterMap fun r => match getD r "port" with | .str p => some p | _ => none
-  if ports.all fun p => (splitsOf p).isEmpty then none else
-  let ts := templatesOf (ports.filterMap fun p => (templateOf p).map (·.1))
-  (commonMember (ports.filter fun p => !(templateOf p).any (ts.contains ·.1))).bind fun n => (templateOf n).map (·.1)
-
 /-- The record `rec`'s roots by port, the last of each port. A record that names a port twice is refused before any
 accept: `OneStage.checkAt` runs `Docket.check`, whose `R3-ports` counts the roots' distinct ports. -/
 def rootsByPort (rec : Json) : Std.HashMap String Json :=
@@ -604,8 +594,7 @@ def portTreeHeld (byPort : Std.HashMap String Json) (who : String) (tmpl : Optio
 
 /-- **A registered file's committed trees are its window's**: every port of the registered file `j` of `who` that
 opens a committed tree is held to the record's root of it (`portTreeHeld`, at `byPort`, `rootsByPort`); no file, no
-port, at the member's template `tmpl` (for the one statement, its one member's, `oneTemplate`; none where its roots
-are bare). One pass over the
+port, at the member's template `tmpl` (none for the one statement, whose ports open no field tree). One pass over the
 file's ports, each a lookup. -/
 def registeredTreesHeld (byPort : Std.HashMap String Json) (who : String) (j : Option Json) (tmpl : Option String := none) :
     V Unit :=
@@ -1176,7 +1165,7 @@ def checkOneBody (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Ev
     popHeld p.base.verifier c.record
     let pubB ← bs.get p.own.pub "public file"
     publicHeld c.record pubB p.own.registered
-    registeredTreesHeld (rootsByPort c.record) "the verifier" p.own.registered (oneTemplate c.record)
+    registeredTreesHeld (rootsByPort c.record) "the verifier" p.own.registered
     run p.own e.sessions (some e.base.provedUnits) bs
   match r with
   | .error err => .reject s!"proofs: {err}"

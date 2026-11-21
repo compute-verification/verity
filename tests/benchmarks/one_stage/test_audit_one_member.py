@@ -6,8 +6,8 @@ strata or by work is the several-statement form's), under FLOCK_CHALLENGER=1 and
 (``--deployed-key``), so the session takes its coin tree through the audit's relay with no closing round
 (`a5.closes_trees`) and the case names the challenger and carries its coins.
 
-The check accepts: the public file names its ports bare, the window's docket names them ``<member>/<port>``,
-and v2 holds the one to the other at that one member's roots (`OneStageZk.publicPorts`).
+Both verifiers refuse the run, by one reason: the member's own output is read at its template's field tree, which
+the one statement holds no tie to yet (`WIRED_TREE_WHY`). The accept returns with that tie.
 
 Slow, and past a minute in `check`: one audit as `test_audit_two_members`' window-session test runs it, of one session,
 about four minutes on a node with the deployed key. It alone runs the one-statement form of the compiled check on a
@@ -64,18 +64,23 @@ def _window(d: Path) -> Path:
     return d
 
 
-def test_one_member_on_the_windows_challenger_session_is_accepted_by_the_compiled_check(tmp_path, binaries):
-    """The audit accepts with the member's ``challenger`` verdict; the release log holds the sample, then the session's
-    one tree with no closing round, as the driver's check reads it; and Lean's check on the case accepts, crediting the
-    drawn unit as proved."""
+def test_one_member_on_the_windows_challenger_session_is_refused_by_both_at_its_own_output_tree(tmp_path, binaries):
+    """The release log holds the sample, then the session's one tree with no closing round, as the driver's check
+    reads it. Both verifiers hold the public file's run input ports by the registered file's reads of their one trees
+    (`OneStageZk.publicHeld`, `docket.public_held`), and both refuse the run at its member's own output read at its
+    template's field tree (`WIRED_TREE_WHY`, `docket.registered_trees_held`): the one statement holds no field tree
+    yet, and the accept returns with the tie of a reader's rows to its writer's tree. Both refuse a public file with no
+    registered file on its roots, and a registered file opening a run input port under another root than its tree's
+    by name (`TREE_OTHER`)."""
     window = _window(tmp_path / "window")
     assert T.RA.verifier_window(window, RATE, None)[0].law == RND.parse_design(DESIGN)
     rc, row, out, said = T._audit(tmp_path, window, binaries, "--deployed-key", more={"FLOCK_CHALLENGER": "1"},
                                   design=RATE)
-    assert rc == 0 and row.get("ok") is True, said
-    assert row["draw"] == [0] and row["audit"]["accepted"] is True, (row["audit"], said)
-    assert row["audit"]["verdicts"] == {f"{v}/m0": True for v in (*T.VERDICTS, "challenger")}
+    assert row["draw"] == [0] and row["audit"]["accepted"] is False, (row.get("audit"), said)
     assert row["coins_session"]["error"] is None, row["coins_session"]
+    audit = json.loads((out / "window" / "audit.json").read_text())
+    held = audit["checks"]["one_statement_public"]
+    assert held["codes"] == ["registered-trees"], held
 
     case = json.loads((out / "window" / "case-v2.json").read_text())
     params, evidence = case["params"], json.loads(bytes.fromhex(case["evidence"]))
@@ -99,33 +104,31 @@ def test_one_member_on_the_windows_challenger_session_is_accepted_by_the_compile
                            capture_output=True, text=True)
         return p.returncode, json.loads(p.stdout.strip().splitlines()[-1]), p.stderr[-2000:]
 
-    rc, answer, err = check(params)
-    assert (rc, answer["verdict"]) == (0, "accept"), (json.dumps(answer, sort_keys=True)[-4000:], err)
-    assert answer["public"]["drawn"] == answer["public"]["proved"] == [0], answer
-
-    # the public file names the run input ports, which the registration holds only at their one tree each, and both
-    # verifiers leave each out only as the registered file reads it there
     rec = json.loads(bytes.fromhex(case["commitment"]))
     registered = params["proofs"]["registered"]
+    rc, answer, err = check(params)
+    assert answer["verdict"] != "accept" and held["detail"]["registered-trees"] in answer["reason"], (answer, held, err)
+    assert "a wired port's tree is not derived from C yet" in answer["reason"], answer["reason"]
+
+    # the public file names the run input ports, which the registration holds only at their one tree each, and both
+    # leave each out only as the registered file reads it there: the executable refused past publicHeld
     pub, = (Path(b) for b in case["blobs"] if PF.file_sha512(Path(b)) == params["proofs"]["public"])
     header = json.loads(pub.read_bytes().split(b"\n", 1)[0])
     fresh = [q for q in R.fresh_reads(registered) if q in header["frame_v3"]["roots"]]
-    assert fresh, registered
-    audit = json.loads((out / "window" / "audit.json").read_text())
-    assert audit["checks"]["one_statement_public"]["ok"] is True and R.public_held(rec, header, registered).ok, audit["checks"]
+    assert fresh and R.public_held(rec, header, registered).ok, registered
 
     # with no registered file to read them, both refuse the public file on its roots
     assert R.public_held(rec, header, None).codes == ("roots",)
     rc, answer, err = check({**params, "proofs": {**params["proofs"], "registered": None}})
     assert answer["verdict"] != "accept" and "public file: not the registration's: roots" in answer["reason"], (answer, err)
 
-    # a registered file opening a run input port under another root than its tree's, so a header root over other rows
-    # than the registration's: refused by name
+    # a registered file, its field-tree reads left out, opening a run input port under another root than its tree's,
+    # so a header root over other rows than the registration's: refused by both by name
+    ports = {n: e for n, e in registered["ports"].items() if not R.field_tree_name(e["value"])}
     q = fresh[0]
-    other = {**registered, "ports": {**registered["ports"], q: {**registered["ports"][q], "root": "0" * 128}}}
+    other = {**registered, "ports": {**ports, q: {**ports[q], "root": "0" * 128}}}
+    why = R.registered_trees_held(rec, "the verifier", other)
+    assert why is not None and "at another root than the registration's" in why, why
     rc, answer, err = check({**params, "proofs": {**params["proofs"], "registered": other}})
-    want = f"port {q} opens the committed tree {registered['ports'][q]['value']} at another root than the registration's"
-    assert answer["verdict"] != "accept" and want in answer["reason"], (answer, err)
-    why = R.registered_trees_held(rec, "the verifier", other, R.one_template(rec))
-    assert why is not None and why in answer["reason"], (why, answer["reason"])
-    assert R.registered_trees_held(rec, "the verifier", registered, R.one_template(rec)) is None
+    assert answer["verdict"] != "accept" and why in answer["reason"], (why, answer, err)
+    assert R.registered_trees_held(rec, "the verifier", {**registered, "ports": ports}) is None

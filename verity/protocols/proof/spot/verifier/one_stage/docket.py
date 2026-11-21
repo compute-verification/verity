@@ -1007,7 +1007,7 @@ def matches_public(rec: Mapping[str, Any], scheme: str, roots: Mapping[str, str]
 COMMITTED = "committed/"
 
 
-def _field_tree_name(v: str) -> bool:
+def field_tree_name(v: str) -> bool:
     """`OneStageZkStatement.fieldTreeName`."""
     parts = v.split("/")
     return len(parts) >= 2 and parts[-1].startswith("o") and len(parts[-1]) > 1 and parts[-1][1:].isdigit()
@@ -1019,11 +1019,11 @@ def registered_trees_held(rec: Mapping[str, Any], who: str, registered: Mapping[
     ``who`` that opens a committed tree (`portTreeHeld`'s `treePortOf`) held to the record's root, domain and leaf
     count at that tree's port, at the member's template ``tmpl`` (none for the one statement)."""
     by = {r["port"]: r for r in rec.get("roots", []) if isinstance(r.get("port"), str)}
-    for name, e in ((registered or {}).get("ports") or {}).items():
+    for name, e in sorted(((registered or {}).get("ports") or {}).items()):
         v = e.get("value", "")
-        if not v.startswith(COMMITTED) and _field_tree_name(v) and (tmpl is None or f"{tmpl}/{name}" != v):
+        if not v.startswith(COMMITTED) and field_tree_name(v) and (tmpl is None or f"{tmpl}/{name}" != v):
             return f"registered: {who}'s port {name}: a wired port's tree is not derived from C yet"
-        t = v[len(COMMITTED):] if v.startswith(COMMITTED) else v if G.is_fresh_value(v) or _field_tree_name(v) else None
+        t = v[len(COMMITTED):] if v.startswith(COMMITTED) else v if G.is_fresh_value(v) or field_tree_name(v) else None
         if t is None:
             continue
         if (r := by.get(t)) is None:
@@ -1036,20 +1036,6 @@ def registered_trees_held(rec: Mapping[str, Any], who: str, registered: Mapping[
                         "registration's: a statement opens its window's registered tree, never another window's or "
                         "another member's")
     return None
-
-
-def one_template(rec: Mapping[str, Any]) -> str | None:
-    """`OneStageZkStatement.oneTemplate`: the template of the one member the record's roots name, as `public_ports`
-    finds it; none where the roots are bare or no one member's."""
-    ports = [r["port"] for r in rec.get("roots", []) if isinstance(r.get("port"), str) and not G.is_fresh_value(r["port"])]
-    if all("/" not in p for p in ports):
-        return None
-    ts = {n.rsplit("/", 1)[0] for p in ports if "/" in p and "/" in (n := p.rsplit("/", 1)[0])}
-    names = {p.rsplit("/", 1)[0] if "/" in p else None for p in ports if "/" not in p or p.rsplit("/", 1)[0] not in ts}
-    if None in names or len(names) != 1:
-        return None
-    name, = names
-    return name.rsplit("/", 1)[0] if "/" in name else None
 
 
 def fresh_reads(registered: Mapping[str, Any] | None) -> list[str]:
@@ -1073,5 +1059,5 @@ registered_entries = G.registered_entries
 
 __all__ = ["NOT_ONE_MEMBER", "PARTITION_QUERY", "POOL_KEYS", "RECEIPT", "ROW_TABLES", "TABLE_PORT",
            "WINDOW_DOMAIN", "check", "fresh_reads", "held_roots", "matches_public", "partition_query_refused", "pool_chains", "pool_open", "pool_refused",
-           "pool_spent_before", "pool_values", "public_held", "one_template", "public_ports", "registered_trees_held", "query_digest", "receipt",
+           "pool_spent_before", "pool_values", "public_held", "public_ports", "registered_trees_held", "query_digest", "receipt",
            "refuse_unwindowed", "refused", "registered_entries", "unwindowed", "window_domain"]

@@ -340,10 +340,6 @@ def test_the_one_statement_leaves_out_a_port_only_where_its_registered_file_read
     assert R.public_held(record(["y", "input/n3"]), header(["y", "x"]), reads("w")).codes == ("roots",)
     assert R.public_held(record(["input/n3", "x"]), header(["x"]), reads("input/n3")).codes == ("roots", "domains")
 
-    assert R.one_template(record(["T{K=1}/c0/x", "T{K=1}/c0/y", "input/n3"])) == "T{K=1}"
-    assert R.one_template(record(["x", "y"])) is None
-    assert R.one_template(record(["T/c0/x", "T/c1/x"])) is None
-
     def tree(c):
         return {"roots": [{"domain": "d" * 128, "leaves": 2, "port": "input/n3", "root": c * 128}]}
 
