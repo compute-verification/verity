@@ -96,8 +96,8 @@ With ``--negative-workers N`` a5's negatives that ask the verifier again run N a
 forked from the audit (`a5.NegativeWorkers`); the summary's ``negative_workers`` is each one's own seconds and memory.
 
 ``audit``: each member's circuit is the door's (`a5.door_circuit`: `one_circuit.block`, `.restrict` and `.lower` by
-``--lower``, `flock-lower-check`), the file Lean's `restrict` derives from C and the partition; a member whose block the
-door refuses has none, and a drawn unit of it is a failed proof (the summary's ``unlowered`` and ``failed_drawn``).
+``--lower``, `flock-lower-check`), the file Lean's `restrict` derives from C and the partition, staged once a class
+(`a5.door_class`); the first member whose block the door refuses refuses the window before any coin (`a5.DOOR_REFUSES`).
 ``warm``: a window's templates and binding are public, so every template its composers make is composed into a5's compose
 cache (`warm`, `a5.warm`), under the tree and ``FLOCK_*`` environment a5 then runs in, since the cache's key covers both;
 each template's line is printed as it finishes and kept in ``--out``'s ``composed.jsonl``. A compose keeps only its

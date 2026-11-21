@@ -95,7 +95,7 @@ only where `pearlplus_of_record` holds it to the piece's own check of live coins
 node only: the compose holds just the key file the piece hands to ``--key-sha512``), the lane ``--lane``'s own reserve and
 Pearl-C period, a sample session the lane reserved first after that period closed and opened on the run's commitment, the
 window's docket chained after Pearl+'s window record and its records audit tied to it accepted, that period's circuit the window-circuit record V3c held the
-window's circuit to, and the Lean `PouwCheck.PearlPlus` verdict on the same run; else its row stays missing, naming the
+window's circuit to, and the Lean `PouwVerifier.PearlPlus` verdict on the same run; else its row stays missing, naming the
 first condition it fails.
 
 ``pearlplus-period open``: the lane's Pearl-C period P, opened at ``--gate`` before Pearl+'s serve with cap 1 (the serve's
@@ -409,7 +409,7 @@ WITNESS_NAMES = {"inst*.bin": "a prover's instance file (its rows)", "*-private.
 DEV_VERDICT = "development run, credits nothing"
 #: Pearl+'s verdict's protocol (`verify_run.PROTOCOL`)
 PEARLPLUS_PROTOCOL = "verity/pouw/pearl-plus/v1"
-#: Pearl+'s verdict's core answer in its piece (`served_pearlplus.sh`'s step 4), and the Lean `PouwCheck.PearlPlus`
+#: Pearl+'s verdict's core answer in its piece (`served_pearlplus.sh`'s step 4), and the Lean `PouwVerifier.PearlPlus`
 #: verdict on the same passes and coin record there (`pouw-pearlplus`'s printout)
 PEARLPLUS_ANSWER, PEARLPLUS_LEAN = "pearlplus-answer.json", "pearlplus-lean.json"
 #: the window's docket R as its records audit under ``--sampled-proofs`` sampled against (a5's copy), and that
@@ -1904,7 +1904,7 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
        rate's leaves the answer without a weaker tie. The period's
        open (in the signed ledger) committed the SHA-512 of the window-circuit record V3c held R's circuit to
        (`CIRCUIT_RECORD` beside R), so the period holds the salt session to the circuit of the window served.
-    4. **Lean.** The Lean `PouwCheck.PearlPlus` verdict (`PEARLPLUS_LEAN`) accepts the same run commitment on the same
+    4. **Lean.** The Lean `PouwVerifier.PearlPlus` verdict (`PEARLPLUS_LEAN`) accepts the same run commitment on the same
        sample source, holds the passes to the same W, and credits work over tiles at the reference's ε.
 
     The answer is Pearl+'s, its work the Lean's (in the grid form, with its ``give_up``, where the verdict held the
