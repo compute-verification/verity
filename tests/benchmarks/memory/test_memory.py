@@ -1672,7 +1672,8 @@ def test_from_a_records_directory_reads_it_with_nothing_of_ours(store, capsys, t
 
 def test_the_verifiers_node_is_the_one_card_of_the_tree_sheets():
     """`--local`'s share is of the card it ran on and its host: the verifier's node is one card of the node sheet,
-    read from the tree's data sheets, not the eight-card node."""
+    read from the tree's data sheets, not the eight-card node.  The H200's card file states no on-chip storage, so its
+    node is that refusal, naming the card."""
     from verity.protocols.accounting.memory.poub.verifier import ledger, timing
     figures = timing.Figures.of_json(json.loads((HERE.parents[2] / "tests/verity/protocols/accounting/memory/poub/figures.json").read_text()))
     eight = ledger.Node.stated(figures)
@@ -1680,7 +1681,8 @@ def test_the_verifiers_node_is_the_one_card_of_the_tree_sheets():
     assert rtx["spec_bytes_per_s"] == pytest.approx(eight.spec_bytes_per_s - 7 * figures.gpu_spec_bytes_per_s)
     assert rtx_hbm == GPU_HBM["rtx-pro-6000-server-x8"]
     h200, h200_hbm = M.one_card("h200-sxm-141gb-x1")
-    assert h200["spec_bytes_per_s"] == pytest.approx(4.916736e12 + 6.144e11), "the H200's and its host's, at the sheets"
+    assert list(h200) == ["refused"] and h200["refused"].startswith(
+        "no on-chip storage is established for h200-sxm-141gb: its card file states no store.chip")
     assert h200_hbm == GPU_HBM["h200-sxm-141gb-x1"]
 
 
