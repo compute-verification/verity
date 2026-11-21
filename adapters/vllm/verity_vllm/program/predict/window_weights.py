@@ -42,9 +42,10 @@ from verity_vllm.check import weights_of_record as WR
 from verity_vllm.config import CHECKPOINTS
 from verity_vllm.records.weights_registration import WeightsRegistration
 
+from . import window_circuit as WC
 from .common import _arr_shape
 from .window_builder import WEIGHTS, Grain, table_param, weight_param
-from .window_circuit import WindowClass, class_program, lower
+from .window_circuit import WindowClass
 
 #: the class `weights_record` reads the weights record and the weight parameters of: every class's are the model's, at a grain
 WEIGHTS_CLASS = WindowClass(1, 2, 2)
@@ -141,7 +142,7 @@ def value_salts(v: RV.Registered) -> bytes:
 
 def _fields(registered: Any) -> tuple[Any, list[tuple[str, list[int], int]]]:
     """The class Program the weights are read of and its weights record's fields (name, shape, value bits)."""
-    r = class_program(registered, WEIGHTS_CLASS.positions)
+    r = WC.class_program(registered, WEIGHTS_CLASS.positions)
     return r, [(n, list(_arr_shape(t)), next(iter(t.width_set()))) for n, t in dict(r.program.fn.signature()[0])[WEIGHTS].fields]
 
 
@@ -151,7 +152,7 @@ def _weights(registered: Any, grain: Grain, served_params: Any = ()) -> tuple[An
     window's record's, ``weights/<label>@<words>``: its slice units' rows of a weight, `pipeline.weight_rows`) with their
     words, wired or not, and those by field. Refused (ValueError) for a served parameter of no field, or of a table."""
     r, fields = _fields(registered)
-    every = lower(registered, WEIGHTS_CLASS, None, grain).circuit.registered.params
+    every = WC.lower(registered, WEIGHTS_CLASS, None, grain).circuit.registered.params
     params = {p: every[p] for p in weight_params(every)}
     words = {n: int(np.prod(s, dtype=np.int64)) * int(b) // 16 for n, s, b in fields}
     for p in served_params:
