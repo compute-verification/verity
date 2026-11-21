@@ -101,6 +101,7 @@ mkdir -p "$OUT/ship" && tar -xf "${SHIP_TAR:-${RESEARCH_RUN_DIR:-$OUT}/inputs/${
 SHIP=$(dirname "$(find "$OUT/ship" -name MANIFEST.sha256 | head -1)")
 (cd "$SHIP" && sha256sum -c --quiet MANIFEST.sha256) || fail SHIP "MANIFEST.sha256 does not hold"
 cmp -s "$SHIP/run.py" "$KERNEL/run.py" || fail SHIP "the ship's run.py is not the run tree's"
+cmp -s "$SHIP/driver.py" "$KERNEL/../pearl_c/driver.py" || fail SHIP "the ship's driver.py is not the run tree's"
 
 PEARLC_EXPECT_UUID=$UUID SHAPES="" VARIANTS=$VARIANTS "$PY" "$SHIP/run.py" "$SHIP/check/check.json" > "$OUT/gpu1-check.jsonl" \
   || fail GPU1_CHECK "run.py's device check failed (exit $?); see gpu1-check.jsonl"

@@ -184,7 +184,7 @@ p_pearl_build() {
   CUDA_HOME=$CUDA GENCODE=$GENCODE bash "$PEARL/build.sh" "$SCRATCH/pearl_c" || { REASON="build.sh refused the build (the target, ptxas, the SASS gate or the debit cubin's gates)"; return 1; }
   mkdir -p "$O/pearl_c"
   cp "$SCRATCH/pearl_c"/{sass.json,ptxas.txt,toolchain.txt} "$SCRATCH/pearl_c/debit"/{debit_ptxas.txt,debit_mma.txt} "$O/pearl_c/"
-  cp "$PEARL/run.py" "$SCRATCH/pearl_c/"
+  cp "$PEARL/run.py" "$PEARL/../pearl_c/driver.py" "$SCRATCH/pearl_c/"
   SHA=$(sha "$SCRATCH/pearl_c/pearl_c_sm90.cubin")
   REASON="nvcc $NVCC_VERSION: no stack frame or spill, the SASS gate passes; debit cubin $(sha "$SCRATCH/pearl_c/debit/debit_sm90.cubin" | cut -c1-16)"
 }

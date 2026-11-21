@@ -52,6 +52,34 @@ import sys
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+
+
+def _driver():
+    """../pearl_c/driver.py, or a ship's copy beside this file, as a module named by its bytes' SHA-256 (`DRIVER_SHA256`),
+    as `kernel.Kernel.load` names this one: the same bytes are one module, other bytes another."""
+    import importlib.util
+    for path in (os.path.join(HERE, "driver.py"), os.path.join(HERE, "..", "pearl_c", "driver.py")):
+        if os.path.isfile(path):
+            break
+    else:
+        raise FileNotFoundError(f"no driver.py beside {HERE} or in ../pearl_c: a ship copies pearl_c/driver.py beside run.py")
+    with open(path, "rb") as f:
+        digest = hashlib.sha256(f.read()).hexdigest()
+    name = f"pearl_c_driver_{digest[:16]}"
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(name, path)
+        sys.modules[name] = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(sys.modules[name])
+    return sys.modules[name], digest
+
+
+D, DRIVER_SHA256 = _driver()
+u, i32, vp, sz, u64, P, NVML, Args, bind, emit = D.u, D.i32, D.vp, D.sz, D.u64, D.P, D.NVML, D.Args, D.bind, D.emit
+uuid_str, Nvml, cdiv, TILE, NB, RS_FAST_NT = D.uuid_str, D.Nvml, D.cdiv, D.TILE, D.NB, D.RS_FAST_NT
+RS_FOLD_NT, SEGDIG, HM_SALT, S512_SMALL, SALTED = D.RS_FOLD_NT, D.SEGDIG, D.HM_SALT, D.S512_SMALL, D.SALTED
+rs_fold_counts, pow2, depth, salts_at, stated_salts = D.rs_fold_counts, D.pow2, D.depth, D.salts_at, D.stated_salts
+PLAIN_BUFFERS, GEMM_RERUNS, ALIASES, PD_OUTPUTS = D.PLAIN_BUFFERS, D.GEMM_RERUNS, D.ALIASES, D.PD_OUTPUTS
+POISON, CALL_PHASES, TIMING_KEYS, parse_shape = D.POISON, D.CALL_PHASES, D.TIMING_KEYS, D.parse_shape
 NAME_PREFIXES = ("NVIDIA H100", "NVIDIA H200")
 SM_COUNT, MAX_DYN, CC_MAJOR, CC_MINOR, MAX_SHARED_OPTIN, SHARED_SIZE = 16, 8, 75, 76, 97, 1
 NORM_256, NORM_16 = 0x4600, 0x4400      # bf16(32 x the line norm): E's lines, and F's under v1
@@ -94,8 +122,6 @@ TMAP_UINT8, TMAP_SWIZZLE_128B, TMAP_L2_128B, TMAP_BYTES = 0, 3, 2, 128
 MAPS = {("at", "bt"): 0, ("at", "fbT32"): 1, ("bt", "faT32"): 2, ("fbT128", "faT32"): 3, ("qa", "qb"): 4, ("qa_s5", "qb_s5"): 5}
 MAP_SET = 4 * TMAP_BYTES
 
-u, i32, vp, sz, u64, P = C.c_uint, C.c_int, C.c_void_p, C.c_size_t, C.c_uint64, C.POINTER
-
 
 class LaunchAttr(C.Structure):
     """cuda.h's CUlaunchAttribute with an int value (CUlaunchAttributeValue is a 64-byte union)."""
@@ -120,60 +146,6 @@ CUDA = {
     "cuCtxSynchronize": [], "cuEventCreate": [P(vp), u], "cuEventRecord": [vp, vp], "cuEventSynchronize": [vp],
     "cuEventElapsedTime": [P(C.c_float), vp, vp], "cuEventDestroy_v2": [vp], "cuGetErrorString": [i32, P(C.c_char_p)],
 }
-NVML = {
-    "nvmlInit_v2": [], "nvmlDeviceGetHandleByUUID": [C.c_char_p, P(vp)], "nvmlSystemGetDriverVersion": [C.c_char_p, u],
-    "nvmlDeviceGetClockInfo": [vp, i32, P(u)], "nvmlDeviceGetCurrentClocksThrottleReasons": [vp, P(C.c_ulonglong)],
-    "nvmlDeviceGetPowerUsage": [vp, P(u)], "nvmlDeviceGetTemperature": [vp, i32, P(u)],
-}
-
-
-class Args(C.Structure):
-    _fields_ = [("p", C.c_uint64 * 16), ("i", C.c_int32 * 16)]
-
-
-def bind(lib, sigs):
-    for f, a in sigs.items():
-        getattr(lib, f).argtypes, getattr(lib, f).restype = a, i32
-    return lib
-
-
-def emit(obj: dict) -> None:
-    print(json.dumps(obj), flush=True)
-
-
-def uuid_str(raw: bytes) -> str:
-    h = raw[:16].hex()
-    return f"GPU-{h[:8]}-{h[8:12]}-{h[12:16]}-{h[16:20]}-{h[20:]}"
-
-
-class Nvml:
-    """NVML on the device of one UUID; reads nothing (and says so, and why) if NVML or the UUID isn't there."""
-
-    def __init__(self, uuid: str):
-        self.lib, self.h, self.driver, self.uuid = None, vp(), "", uuid
-        self.why = f"NVML did not start, or has no device of UUID {uuid}"
-        try:
-            lib = bind(C.CDLL(os.environ.get("PEARLC_LIBNVML", "libnvidia-ml.so.1")), NVML)
-        except (OSError, AttributeError) as e:
-            self.why = f"NVML did not load ({type(e).__name__}: {e})"
-            return
-        if lib.nvmlInit_v2() == 0 and lib.nvmlDeviceGetHandleByUUID(uuid.encode(), C.byref(self.h)) == 0:
-            self.lib = lib
-            b = C.create_string_buffer(96)
-            if lib.nvmlSystemGetDriverVersion(b, 96) == 0:
-                self.driver = b.value.decode()
-
-    def read(self) -> dict:
-        if not self.lib:
-            return {"nvml": "unavailable", "why": self.why}
-        sm, mem, pw, t, thr = u(), u(), u(), u(), C.c_ulonglong()
-        self.lib.nvmlDeviceGetClockInfo(self.h, 1, C.byref(sm))
-        self.lib.nvmlDeviceGetClockInfo(self.h, 2, C.byref(mem))
-        self.lib.nvmlDeviceGetCurrentClocksThrottleReasons(self.h, C.byref(thr))
-        self.lib.nvmlDeviceGetPowerUsage(self.h, C.byref(pw))
-        self.lib.nvmlDeviceGetTemperature(self.h, 0, C.byref(t))
-        return {"sm_mhz": sm.value, "mem_mhz": mem.value, "throttle": hex(thr.value), "power_w": round(pw.value / 1000, 1),
-                "temp_c": t.value}
 
 
 class Dev:
@@ -337,13 +309,6 @@ class Dev:
         return f.value, t.value
 
 
-def cdiv(a: int, b: int) -> int:
-    return -(-a // b)
-
-
-TILE = 64                                        # the leaf's tile
-#: a tree node's bytes: SHA-512's
-NB = 64
 #: s512_rows' most segments a row (hash_h3.cuh's RS_MAX_SEGS), 1 KiB each, and hash_fast.cuh's header tables'; a wider row
 #: goes to hash_wide.cuh's kernels (`Pipeline.row_digests`), which take RS_WIDE_MAX_SEGS (its constant)
 RS_MAX_SEGS, RS_WIDE_MAX_SEGS = 128, 1024
@@ -351,15 +316,6 @@ RS_MAX_SEGS, RS_WIDE_MAX_SEGS = 128, 1024
 RS_KERNELS = {"s512_rows": (1, RS_MAX_SEGS), "s512_row_segs": (1, RS_MAX_SEGS), "s512_folds": (None, RS_MAX_SEGS),
               "s512_heads_w": (0, RS_WIDE_MAX_SEGS), "s512_row_segs_w": (1, RS_WIDE_MAX_SEGS),
               "s512_folds_w": (1, RS_WIDE_MAX_SEGS)}
-#: hash_fast.cuh's blocks: the segment kernels' (RS_FAST_NT, as built) and s512_folds' (RS_FOLD_NT)
-RS_FAST_NT, RS_FOLD_NT = int(os.environ.get("PEARLC_RS_FAST_NT", "128")), 32
-#: their scratch, the segment digests of A's rows, B's and the tiles'
-SEGDIG = ("segdig_a", "segdig_b", "segdig_t")
-#: an hm96 leaf's salt in bytes (`hm96.SHA512.salt_bytes`, hash_h3.cuh's HM_SALT) and the widest level s512_tree_small (64
-#: threads) takes
-HM_SALT, S512_SMALL = 192, 128
-#: the trees with hm96 leaves, each with its salts in its own buffer ``salts_<tree>``: A's rows, B's rows and the tiles
-SALTED = ("a", "b", "t")
 
 
 #: hash_decode.cuh's launches at decode, the variants pearl_c_sm90.cu builds (its PD_VARIANT_LIST): pd_commit, A's commitment
@@ -390,20 +346,6 @@ PD_STAMP_BYTES = 16 * PD_SLOTS * (PD_MAX_ROWS + 1)
 #: PL_SEEDS rows a CTA.  Ranks and indices below PL_MAX_ROWS; "h3" is hash_h3.cuh's launches (hm_leaves, s512_frame_leaves,
 #: s512_nodes, s512_tree_small, s512_seeds)
 PL_VARIANT, PL_ROWS, PL_LEVELS, PL_SEEDS, PL_MAX_ROWS, CHAINS = 851, 16, 7, 32, 1 << 16, ("pl", "h3")
-
-
-def rs_fold_counts(name: str, i) -> str | None:
-    """Why s512_folds' segment counts are not counts, None if they are.  An int slot is an int32: a negative count
-    reaches the kernel as its low 32 bits, so it is refused always.  A zero is refused where a unit would fold it:
-    i1 for the units below i2, i3 for the rest of i0 (a caller passes 0 for a count no unit has: the tile leaves' last
-    row block when every block is full)."""
-    units, s, first, rest = i[:4]
-    if s < 0 or rest < 0:
-        return f"{name} takes counts of 1 KiB segments, not i1 = {s}, i3 = {rest} (an int32 slot keeps a negative's low bits)"
-    if not s and min(units, first) > 0 or not rest and units > first:
-        return (f"{name} takes at least one 1 KiB segment a unit, not {s} for the first {min(units, first)} units and "
-                f"{rest} for the other {max(units - first, 0)}")
-    return None
 
 
 def rs_refusal(name: str, i) -> str | None:
@@ -468,15 +410,6 @@ def pd_setup(dev) -> None:
     dev.pd_smem_shared, dev.pd_tree_smem_shared = smem["pd_commit_shared"], smem["pd_tree_shared"]
 
 
-def pow2(n: int) -> int:
-    """A tree's level-0 width over n leaves."""
-    return 1 << max(n - 1, 0).bit_length()
-
-
-def depth(n: int) -> int:
-    return pow2(n).bit_length() - 1
-
-
 def gemm_tile(name: str) -> tuple[int, int]:
     """A GEMM kernel's CTA tile (rows, columns): gemm_words 128 x 32 and gemm_words_d 64 x 32; the _d kernels 64 x 64, the
     _n64 ones 128 x 64, else 128 x 128."""
@@ -523,33 +456,6 @@ def widen_a(dev, src: int, out: int, rows: int, filled: int, k: int, stream=None
 def tile_suffix(bm: int, bn: int) -> str:
     """The chain's and the baselines' kernel suffix for a bm x bn tile."""
     return {(BM, BM): "", (BM, BN_N64): "_n64", (BM_D, BM_D): "_d"}[(bm, bn)]
-
-
-def salts_at(at: int, name: str, count: int, given: int | None) -> int:
-    """The address `at` of a buffer of hm96 salts as a leaf kernel may read it, else a refusal naming the buffer `name`: an
-    address says nothing of the bytes behind it, so the buffer's owner states its length `given`, which is `count` leaves'
-    `HM_SALT` bytes each, no fewer and no more (none stated is refused, not assumed); and the kernels read a salt by
-    16-byte loads (hash_h3.cuh's `load_salt`), so the address is a multiple of 16."""
-    if given is None:
-        raise ValueError(f"{name}: its owner stated no length, and the launch reads {HM_SALT * count} bytes ({count} leaves, "
-                         f"{HM_SALT} a leaf): a caller's salts are (address, bytes)")
-    if given != HM_SALT * count:
-        raise ValueError(f"{name}: {given} bytes for {count} leaves, which take {HM_SALT * count} ({HM_SALT} a leaf)")
-    if at % 16:
-        raise ValueError(f"{name} at {at:#x}: the leaf kernels read a salt by 16-byte loads, so the buffer's address is a "
-                         "multiple of 16 bytes (a slice of a buffer from an odd offset is not)")
-    return at
-
-
-def stated_salts(bufs: dict) -> tuple[dict[str, int], dict[str, int]]:
-    """A caller's buffers `bufs` as (each buffer's address, each tree's salts' stated length): a ``salts_<tree>`` buffer is
-    given as (address, bytes), the length its owner states.  One given as a bare address has none, and no launch reads it
-    (`Pipeline.salts`)."""
-    b, said = dict(bufs), {}
-    for name, given in bufs.items():
-        if name.startswith("salts_") and isinstance(given, tuple):
-            b[name], said[name[len("salts_"):]] = (int(x) for x in given)
-    return b, said
 
 
 class Pipeline:
@@ -1096,12 +1002,8 @@ class Pipeline:
 
 # ---- the check ----------------------------------------------------------------------------------------------------
 
-PLAIN_BUFFERS = {"qa", "qb", "sa", "sb", "y_plain", "y_fast", "qa_s5", "qb_s5", "y_adopt"}
 #: form_s5's gate (the one-code cast), run into at2 and held to form_s5's codes
 FORM_ALTS = ("form_s5_scalar",)
-GEMM_RERUNS = (("gemm_pearlc", ("c", "u", "y")), ("gemm_ct", ("c2",)), ("gemm_plain", ("y_plain",)), ("gemm_fast", ("y_fast",)),
-               ("af", ("af",)), ("bf", ("bf",)), ("gemm_adopt", ("y_adopt",)), ("gemm_pearlc_s", ("y",)))
-ALIASES = {"c2": "c"}
 #: a rerun step's followers at each tile, each with what it writes: pa after the words (under WORDS_WIN it adds up their
 #: windows into af)
 RERUN_AFTER = {"af": {"pa": "pa_t"}}
@@ -1116,11 +1018,6 @@ def compare(dev: Dev, pipe: Pipeline, name: str, want: bytes, alias: str | None 
     bad = [i for i in range(0, len(want), 4) if got[i:i + 4] != want[i:i + 4]]
     return {"ok": False, "bytes": len(want), "words_differing": len(bad),
             "first": [{"offset": i, "got": got[i:i + 4].hex(), "want": want[i:i + 4].hex()} for i in bad[:6]]}
-
-
-#: what pd's launches write (pd_commit: A's commitment and E_A's lines; pd_tiles: the tile leaves)
-PD_OUTPUTS = ("rowdig_a", "tree_a", "seed_a", "line_a", "seeds_a", "lkeys_a", "ea_codes", "leaves")
-POISON = 0xA5
 
 
 def check_pd(dev: Dev, pipe: Pipeline, want) -> dict:
@@ -1403,15 +1300,6 @@ def check(dev: Dev, man: dict, base: str, variants: list[str]) -> dict:
 
 
 # ---- the diagnostic timing ----------------------------------------------------------------------------------------
-
-CALL_PHASES = ("commit", "forming", "gemm", "cleanup", "hashing")
-TIMING_KEYS = {"line_b": 32, "dom_a": 64, "dom_b": 64, "dom_t": 64, "unit": 104, "hm": 128 + 192 * 256 * 64}
-
-
-def parse_shape(s: str) -> tuple[int, int, int]:
-    """SHAPES' entries: "8192" (m = n = k) or "MxNxK"."""
-    parts = [int(x) for x in s.lower().split("x")]
-    return (parts[0],) * 3 if len(parts) == 1 else tuple(parts)
 
 
 def timing(dev: Dev, nv: Nvml, shape: tuple[int, int, int], variant: str, reps: int, gates: dict) -> dict:
