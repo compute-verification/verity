@@ -36,29 +36,14 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Soundness.Game
 
 /-!
-# `SampledKSLiveV2`'s file preconditions, refused by the verifiers (`Bridge.SampledKSLiveRoots`)
+# The run's population check
 
-`SampledKSLiveV2` takes four things of the files as hypotheses: every port a row/v1, row/v2 or row-seg/v1 row
-(`Bridge.RowsOk`, which the scope check `scopeOkH` already gives: `Bridge.rowsOk_of_scopeOkH`), each of its own
-published domain (`PortRoots.dupId`), no two ports' registered roots one root under different domains
-(`PortRoots.rootsColl = none`), and the registration's population the game's `n` units in order
-(`Bridge.PopMatches`).
-The verifiers now refuse every file that fails the last three: `verify --zk` runs `Flock.PortRoots.check`
-last in its verdict (`Main.verifyCmd`, with or without `--ks-form`, the check's old flag), and the SPOT run
-refuses the registration (`Spot.Run.run`,
-`population-order`, `Spot.Slots.popOk`). So the guarantee reads them off acceptance.
+The SPOT run refuses a registration whose population isn't the game's `n` units in order (`Spot.Run.run`,
+`population-order`, `Spot.Slots.popOk`).
 
-* `Bridge.LiveAcceptsKS I o`: `verify --zk` accepts: the live audit's transcript (`LiveAcceptsZK`), and the files pass
-  `Flock.PortRoots.check`, whose published roots (`PortRoots.pubRoot`, each over its port's published domain at its
-  schema) are `Bridge.rootsOf`'s (`rootsOf_getD_pub`).
 * `Bridge.RunPopOk desc qr n`: the descriptor parses and its population under the query is `n` units in order
-  (`Slots.popOk`), which the run checks at registration.
-* `rowsOk_of_scopeOkH`, `rootsColl_none_of_collidesPub_false`, `popMatches_of_popOk`: the checks give V2's hypotheses.
-  The roots check is computed at the public file's population, so the game's `n` is identified with it (`pub.n = n`).
-* `SampledKSLiveRoots`: `SampledKSLiveV2` with its event `LiveAcceptsKS ∧ RunPopOk` in place of `LiveAcceptsZK` and
-  without the three hypotheses. `sampledKSLiveRoots_of` derives it from `SampledKSLiveV2`: files that pass give V2's
-  hypotheses, and at files that fail the event is empty. `SampledKSLiveV3` (`ScopeGate`) reads its other file
-  preconditions off acceptance too.
+  (`Slots.popOk`), which the run checks at registration;
+* `popMatches_of_popOk`: that check gives `Bridge.PopMatches`.
 -/
 
 @[expose] public section

@@ -38,12 +38,6 @@ import Proofs.Flock.Soundness.Game
 
 @[expose] public section
 
-namespace Flock.SecurityProofs
-
-open scoped ENNReal
-
-end Flock.SecurityProofs
-
 namespace Flock.Guarantees.SamplingBlock
 
 open FlockSoundness FlockSoundness.Game Spot.Sampling FlockSoundness.Discharge.Exec FlockSoundness.Refine
@@ -101,9 +95,3 @@ theorem one_sub_le {q : ℝ} (hq : 0 < q) (hqk : q ≤ (w.kd : ℝ) / w.n) :
 
 end Flock.Guarantees.SamplingBlock
 
-namespace Flock.SecurityProofs
-
-open FlockSoundness FlockSoundness.Game Flock.Guarantees
-open scoped ENNReal
-
-end Flock.SecurityProofs

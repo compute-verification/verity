@@ -24,32 +24,18 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJ
 import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundSampleOk
 
 /-!
-# The live `--zk` runs with the sample at accepted outcomes, and the challenger's live-coin part's samples at V*'s sampling design
+# The live `--zk` runs with the sample at accepted outcomes
 
-`ZkExec.runsZC_live` and `ZkHidden.runsZCJH_live` take their sample hypothesis (`SampleOkZK`, `SampleOkZKHJ`) at every sample of
-the sampling design, and read it only at the sample of an outcome verity-verify-proof `--zk` accepts. `runsZC_liveA` and `runsZCJH_liveA` take
-it there alone: each is the old theorem at the sampling design with the one coin that samples that sample.
+`ZkExec.runsZC_live` takes its sample hypothesis (`SampleOkZK`) at every sample of the sampling design, and reads it only at
+the sample of an outcome verity-verify-proof `--zk` accepts. `runsZC_liveA` takes it there alone: it is the old theorem at
+the sampling design with the one coin that samples that sample.
 
 The samples come from the record's custody (`SampleFileZK`):
 
 * `SampleFileZK.proves`, `SampleFileZK.card`: a sample file custody fixes proves its sample's units, as many as the sample has;
-* `sampleOkZK_execOS`, `sampleOkZKH_execOS`: `SampleOkZK` (`SampleOkZKH`) at a sample of `SamplingDesign.execOS` whose run succeeds, at link
-  points `mPts = mPtsOf c.g (∑ s, k s)` (`Exec.setupH_mPts_execOS`, `ZkHidden.setupHidden_mPts_of_proved`), from custody
-  under any sampling design. `ZkLink.sampleOkZK_of_exec` and `ZkHidden.sampleOkZKH_of_exec` give the same at every sample, the failed
-  run's (every unit) included, from custody under the live sampling design's own stratified sampling design;
-* `sampleOkZKHJ_one`, `sampleOkZKHJ_of_exec_one`: at one table, `SampleOkZKHJ` is `SampleOkZKH`, so `runsZCJH_live`'s `hDraw`
-  holds at every sample of the live sampling design;
-* `SampleFileZK.size_execOS`, `Composed.sampleOkZKJ_of_exec`, `sampleOkZKHJ_of_exec`: at every sample of the live stratified
-  sampling design, custody's sample file has `Σ_s k_s` units, so where the session's `J` tables divide it, `SampleOkZKJ` (`SampleOkZKHJ`)
-  holds at `(Σ_s k_s) / J` units a table: verity-verify-proof splits one stratified sample over several tables as it splits a
-  subset sample (`Draw.tablesWhy`);
-* `sampleOkZKHJ_of_accepts`, at any count: several tables split the sample's units evenly (`setupTables_units`), so at an
-  accepted outcome the tables divide `Σ_s k_s` and `sampleOkZKHJ_of_exec` holds. `runsZCJH_live_execOS` is
-  `runsZCJH_liveA` at the live sampling design with that sample hypothesis discharged. `sampleOkZKHJ_of_custodyJS` is the same from
-  `Assumptions.Zk.RecordCustodyZKJS`, the custody `JointStratifiedMT` takes;
-* `sampleOkZKHJ_of_accepts_subset`, at a subset sampling design and any count: several tables split the sample's units evenly
-  (`setupTables_units`), so `sampleOkZKHJ_of_file` holds at `kd / nTab I` units a table. `runsZCJH_live_subset` is
-  `runsZCJH_liveA` at any sampling design with that sample hypothesis discharged, V*'s full sample among them.
+* `sampleOkZK_execOS`: `SampleOkZK` at a sample of `SamplingDesign.execOS` whose run succeeds, at link points
+  `mPts = mPtsOf c.g (∑ s, k s)` (`Exec.setupH_mPts_execOS`), from custody under any sampling design;
+* `sampleOkZKHJ_one`: at one table, `SampleOkZKHJ` is `SampleOkZKH`.
 -/
 
 @[expose] public section

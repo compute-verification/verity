@@ -23,14 +23,13 @@ import Mathlib.Tactic.NormNum.RealSqrt
 layer instead: ring switch `i` is what a copy of the `rec-opening` unit holds at its row ports' columns, in the layer
 filled at its registered reads (`fill`), where those columns are ring switch `i`'s slots of w. The unit is RecResiduals'
 laid-out unit (`check_opening`), so its row ports' columns are `rowCol`'s, as for `rec-residuals`; the copy registering
-w where its rows read it (`OpeningZeroAtL`), which they do at the ring switches' columns (`readCol_rs`), makes the
-layer's ring switches w's.
+w where its rows read it (`OpeningZeroAtL`), which they do at the ring switches' columns, makes the layer's ring
+switches w's.
 
 * `fill_rowCol`: at a copy registering w, the filled layer holds w's elements at the row ports' columns it reads
-  (`copyVal_regBit`); `readCol_rsAt`: it reads the ring switches' columns.
-* `RsAt`, `eq_of_rsAt`: ring switch `i` at such a copy, and its elements are w's at their slots.
-* `OpenTieL`, `openTie_of_layer`: the source's opening steps are the opening's on the ring switches V*'s layer holds,
-  which gives `OpenTie`; `openingReadAt_srcL` is `openingReadAt_src` with `OpenTieL` in place of `OpenTie`.
+  (`copyVal_regBit`).
+* `RsAt`: ring switch `i` at such a copy.
+* `OpenTieL`: the source's opening steps are the opening's on the ring switches V*'s layer holds.
 -/
 
 @[expose] public section

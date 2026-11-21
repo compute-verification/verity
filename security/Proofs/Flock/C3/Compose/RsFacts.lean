@@ -24,28 +24,24 @@ import Proofs.Flock.VBridge.OpeningUnit
 import Proofs.Flock.VBridge.Pinned
 
 /-!
-# RsRead's facts
+# RsRead's facts, from V*'s files, circuits and reads file
 
-`rsRead_of_layer` takes four named facts. Here they come from facts closer to V*'s files, circuits and reads file:
-
-* `OneCopy` from each accepted session being V*'s statement of its index (`SessStmt`, from the verifier's statement
-  check, `sessStmt_of_checks`) and the verifier's `rec-opening` check of one copy (`OpenUpv`, `openUpv`),
+* `OneCopy`'s pieces: each accepted session is V*'s statement of its index (`SessStmt`, from the verifier's statement
+  check, `sessStmt_of_checks`), and the verifier's `rec-opening` check of one copy (`OpenUpv`, `openUpv`),
   `oneCopy_of`: one session per part (`openSess_of`: the list has one statement named as the part's unit) of one unit
   (`nv_of_copy`: that statement is one of R's opening parts, of one instance).
 * `OpenAll` from V*'s sessions (`SessionAt`'s (a)), `openAll_of_session`.
-* `RsSk` from the reads file at the ports keying the ring switches' columns (`RsSel`, S's `SelPort`), `rsSk_of_sel`:
-  the column's key (`OpeningZeroAtL`'s `RegBit`) puts its wire at the port's commit string (`posK_of_keyAt`).
-* `RsIo` from the unit reading its ring switches' columns (`RsReadCol`, S's `ReadCol`, which the opening's check gives,
-  `rsReadCol`), `rsIo_of_readCol`: copy `j` reads a column its computed rows read (`mem_io_of_readCol`,
-  `ioColAt_of_readCol` at copy `j`).
+* `RsSk`'s pieces: the reads file at the ports keying the ring switches' columns (`RsSel`, S's `SelPort`); the column's
+  key (`OpeningZeroAtL`'s `RegBit`) puts its wire at the port's commit string (`posK_of_keyAt`).
+* `RsIo`'s pieces: the unit reading its ring switches' columns (`RsReadCol`, S's `ReadCol`); a copy reads a column its
+  computed rows read (`mem_io_of_readCol`).
 
-`rsRead_of_facts` composes them. `RsSel` is at the round commitments (`rsSel_of_rounds`): ring switch `i`'s columns
-are keyed by port `m<i>` (`RsKeys`, the opening's check, `rsKeys`), whose reads-file entry is `rec-opening-c<i>`, read
-at the unit where stage `c₀ + i` reads it (`RoundReads`; `WRoundReads` is it at the residuals' parts; both at the
-verifier's own ports, `own := ownAt ss`, are `C3/Reps/RoundReads.lean`'s). `SessStmt` is at any family whose checks
-pass (`sessStmt_of_accepted`, from `ChecksAccepted`), and at the checked family from the guarantee's `_hF`
-(`sessStmt_checked`: the checked sessions carry the prover's inputs, `tagsFound_checked`); `rsRead_of_accepted`
-composes them, and `rsRead_checked` is it at the checked family.
+`RsSel` is at the round commitments (`rsSel_of_rounds`): ring switch `i`'s columns are keyed by port `m<i>` (`RsKeys`,
+the opening's check), whose reads-file entry is `rec-opening-c<i>`, read at the unit where stage `c₀ + i` reads it
+(`RoundReads`; `WRoundReads` is it at the residuals' parts; both at the verifier's own ports, `own := ownAt ss`, are
+`C3/Reps/RoundReads.lean`'s). `SessStmt` is at any family whose checks pass (`sessStmt_of_accepted`, from
+`ChecksAccepted`), and at the checked family from the guarantee's `_hF` (`sessStmt_checked`: the checked sessions carry
+the prover's inputs, `tagsFound_checked`).
 -/
 
 @[expose] public section
@@ -383,9 +379,9 @@ def RsSel (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin
           Aliased.srcKey (Vs s).c (j * (Rows.ofNet (Vs s).hU).nIn + rowCol (partRep ns nv).ports 0 (128 * q + b)) =
             .msg q'.val (kk / 8) (kk % 8) → SelPort Vs own sel (c₀ + i) s un q'
 
-/-- **The `rec-opening` unit reads its ring switches' columns** (S's `ReadCol`, `rsReadCol`): at a copy registering w as
+/-- **The `rec-opening` unit reads its ring switches' columns** (S's `ReadCol`): at a copy registering w as
 part `p`, a column of bit `b` of the part's row-port element `q` holding ring switch `i`'s slot `t`, an input column
-keyed at copy `j` by a bit of a row port `q'` (`openCopy_key`'s), is one a computed row of the unit reads. A part's
+keyed at copy `j` by a bit of a row port `q'`, is one a computed row of the unit reads. A part's
 other row-port columns need not be: touched ports bring whole ports into a part. -/
 def RsReadCol (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ) (sh : Flock.Shape)

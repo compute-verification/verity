@@ -20,12 +20,9 @@ import Mathlib.Tactic.NormNum.RealSqrt
 /-!
 # n1: the public rows, the tape and the commitments at the honest family
 
-* `hPubRows_of_check'`: `HPubRows` at `C3Family.honest`, from the verifier's check of each accepted session's public
-  file (`ChecksPubRows`: `RecVStar.checkPubRows` on each statement the session's record sets up, as `FlockVerify`'s
-  `--rec-inner` path runs it after setup; `AcceptsZKR` does not make it, gap n1b) where the check reads every row
-  `HPubRows` does: every unit, which a transcript the session writes samples (`rowsHeld`, at the labels `checkLabels`
-  makes the units), the first port of a name (`PortsNamed`) and a rec-sparse unit's rows at its own shape
-  (`SparseAtShape`, `PubRows/Check.lean`).
+* `ChecksPubRows`: the verifier's check of each accepted session's public file (`RecVStar.checkPubRows` on each
+  statement the session's record sets up, as `FlockVerify`'s `--rec-inner` path runs it after setup; `AcceptsZKR` does
+  not make it, gap n1b).
 * `hTape_of_frame`: `HTape` at the honest family from `HFrame`. The stages' obligations read only the decode, and no
   step after the openings changes it, so they don't give `HTape`: at the honest family it is exactly `HFrame`
   (`hTape_iff_frame`, `PubRows/Frame.lean`), the tape's cap and link points first and the openings alone after the

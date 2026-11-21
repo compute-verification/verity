@@ -40,28 +40,14 @@ import Proofs.Flock.Bridge.Refused
 import Proofs.Flock.Bridge.Transports
 
 /-!
-# `SampledKSLiveV2` with a public error
+# The sampled audit's public error
 
-`SampledKSLiveV2` bounds `Pr[verity-verify-proof accepts ∧ ¬ RelS]` by three terms, two of which read the prover's run:
-`ksAvgStrictZ (planZHJ dj y₀) L k q_F q_S (reg σ)`, at the prover's registration, and
-`Q_s = Σ_c |Ω_c|/|Ω|` (`ΩcZ`), at its binding. Neither depends on the prover in value, and each is at most a number read
-off the public parameters:
-
-* `ε_ks ≤ ksClosedM1 k qF qS / (1 − ρ)`: every table of `planZHJ` is at Flock ZK's parameters (`planZHJ_M1W`, from
-  what `verify --zk` checks at setup, at every registration: `planZHJ` reads none), so `ksAvgStrictZ_planZHJ_le_closed`
-  applies, and its rate `2^23/(ek)` is at most `ρ`;
-* `Q_s ≤ W`, `W = Σ_u |io u|` (`Bridge.ioSum`) the committed wires each unit of the circuit's partition computes or
-  reads: a sample reads a commit string only through such a wire of a sampled proof block (`qs_le_io`). It is `Σ_u`, not
-  `k_d · max_u`, because the live subset sample on finite bytes samples every unit when it runs out (`SamplingDesign.execOS`).
-
-So `SampledKSLivePub` is `SampledKSLiveV2` with its error `Bridge.deltaPub`:
+`Bridge.deltaPub` is the sampled audit's error read off the public parameters alone:
 $$\binom{n-K_0}{k_d}\Big/\binom{n}{k_d} + \frac{\mathrm{ksClosedM1}(k,q_F,q_S)}{1-\rho}
   + \frac{W\,\big(2(t'+v)(1+k)/2^{256} + 1/(eM) + k/(eR_w)\big)}{1-\rho},$$
-at the knowledge finders' budgets `q_F = 2(t' + v)` and `q_S = t' + v` and the link finders' per-run cost `t' + v`
-(`SampledKSLiveV2`'s: the prover's per-run time `t'` and one opening's verification `v`), a function of `n`, `k_d`,
-`K₀`, the analysis' `k`, `R_w`, `M`, `t'`, `v`, `ρ` and the circuit's partition. Its rate hypothesis reads only `k`
-(`rateM1 k ≤ ρ`) where `SampledKSLiveV2`'s reads the plan, and every other hypothesis, named assumption included, is
-`SampledKSLiveV2`'s.
+the sample's miss, the knowledge term at Flock ZK's parameters (`ksClosedM1`, at rate at most `ρ`) and the binding
+error at `W = Σ_u |io u|` commit strings, the committed wires each unit of the circuit's partition computes or reads,
+with the link finders charged `t' + v` per run.
 -/
 
 @[expose] public section
@@ -75,8 +61,8 @@ open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
 /-- **The sampled audit's public error**: the sample's miss, the knowledge term at Flock ZK's parameters
-(`ksClosedM1`), and the binding error at `W` commit strings with the link finders charged `t'` per run, each over `1 − ρ`
-where `SampledKSLiveV2` has it. -/
+(`ksClosedM1`), and the binding error at `W` commit strings with the link finders charged `t'` per run, the last two
+over `1 − ρ`. -/
 noncomputable def _root_.Flock.Bridge.deltaPub (n kd K₀ k : ℕ) (qF qS t' : ℝ) (M Rw W : ℕ) (ρ : ℝ) : ℝ :=
   ((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ) + ksClosedM1 k qF qS / (1 - ρ) +
     (W : ℝ) * (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ)

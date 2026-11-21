@@ -34,18 +34,9 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
 /-!
-# Rows that hold a leaf's encodings decode to it
+# An A or B row in range
 
-`decLane` and `decComb` read each field's bits at its port and first bit in the layout (`Lanes.Decode`). Where each
-field's bits hold the encoding of the leaf's word there, and the words are in range, the decodes give the leaf back
-(`Lanes.Range`):
-
-* `LeafInRange`: the committed leaf's codes are s8, its scales' and y's encodings u32 and u16, its z s32;
-* `LaneHolds`: lane `l`'s ports' rows hold its A rows (`laneA`) and B rows (`laneB`), the leaf's record, the public
-  inputs' admit bits, salt, position and roots and its index `l`, each field at its place, and `ok = 1`; `CombHolds`:
-  the combine's hold the receipt and `ok = 1`;
-* `decLane_eq`, `decComb_eq`: then the decodes are `laneView` and the combine's view, at the partials rows they read
-  (lane `l`'s and the combine's `p<l>` are one row, `Lanes.Partials`).
+`RowInRange`: an A or B row's codes are s8 and its scale's encoding a u32.
 -/
 
 @[expose] public section

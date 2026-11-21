@@ -17,7 +17,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.C3.HoloValues.Shape
 
 /-!
-# n10: the sparse phases' part ends in a coin, at a count the class fixes; R's ring switches are read at their rounds
+# n10: the sparse phases' part ends in a coin, at a count the class fixes
 
 `partEnds_sparse`: `PartEnds sparsePart` at `sparseCoins`, from the reps' and the sparse phases' ties. The part is the
 cap's and the points' steps, then the reps' and the sparse phases'. A sparse phase takes its exact shape, which ends in
@@ -25,10 +25,9 @@ a coin (`sparseKinds_ends`). A rep's spine is only a prefix, but every early ret
 whose verdict is false (`holoRepC_on`), so an accepting rep takes its whole shape (`SpineOn.kinds`), which reads only
 the statement, the extra claims' number (two per region) and the reps' schedule `e.sch`.
 
-`rsRead_of_layer`: `RsRead` where each accepted run has a copy of each part's `rec-opening` unit registering w
+The facts about R's ring switches: each accepted run has a copy of each part's `rec-opening` unit registering w
 (`OpenAll`), the accepted runs' copies of a part's unit are one (`OneCopy`), and the copy's ring-switch wires are read
-wires of their rounds' commit strings (`RsSk`, `RsIo`). The layers are good at an accepted outer proof, so each bit of
-w's element at a ring switch's slot is the layer's at one wire in both runs.
+wires of their rounds' commit strings (`RsSk`, `RsIo`).
 -/
 
 @[expose] public section

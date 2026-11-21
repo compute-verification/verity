@@ -38,27 +38,16 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 
 /-!
-# Two ports with one registered root and different domains are a SHA-512 collision
+# A port's registered root is SHA-512 of its top frame
 
-The deployed check opens a position at the first registered port whose root is the position's (`regPath`'s `find?`
-over `portsOf`), so a row of port `q` is checked in port `q'`'s tree when an earlier `q'` has `q`'s root. Each
-port's root is `FV3.root` over its own domain, the public file's published one (`domOf`), and that root is SHA-512 of
-one top frame (the top node's, or with one leaf that leaf's, or with none the pad's; `root_top`), whose first part is
-the domain. With one leaf the frame ends in the port's leaf schema and its payload, and two frames at different row
-schemas differ (`step_schema`), so two frames at one domain's place are at one schema. So two ports with one root and
-different domains give two different inputs with one SHA-512 digest (`rootsOf_collides`).
+Each port's root is `FV3.root` over its own domain, the public file's published one (`domOf`), and that root is SHA-512
+of one top frame (the top node's, or with one leaf that leaf's, or with none the pad's; `root_top`), whose first part
+is the domain. With one leaf the frame ends in the port's leaf schema and its payload, and two frames at different row
+schemas differ (`step_schema`), so two frames at one domain's place are at one schema (`topIn_ne`).
 
-* `RootFixesDomain`: an earlier port with a port's root has its domain. Off that collision it holds
-  (`fixes_of_none`). Two ports of one domain may share a root with no collision, and may have different schemas, so
-  what the deployed check needs is the distinct-roots form, at a public file whose ports' published domains are
-  pairwise distinct (`PortRoots.dupId`, which the verifier refuses): `rootsDistinct_of_fixes`. Then the check opens a
-  row of `q` in `q`'s own tree, at `q`'s schema.
-* `rootsFinder`: a finder with no coins that recomputes every port's root (`rootsCost` SHA-512 calls) and outputs the
-  first pair of top frames that `rootsOf_collides` finds (`rootsColl`). Under `ecr/sha-512` (`Claims.ExpectedCR`, read
-  through `Claims.ecrBound`) at that finder, a file that holds such a collision has `ecrBound ≥ 1`
-  (`one_le_ecrBound`), and one that holds none has `ecrBound = rootsCost / 2^256` (`ecrBound_of_none`). So a
-  probability bounded at every file with `RootFixesDomain` is bounded at every file with that term added
-  (`le_add_ecrBound`).
+* `pairs m`, `rootsCost c nl`: the ordered pairs of ports, and the SHA-512 calls that recompute every port's root;
+* `finderPr_one`, `finderPr_zero`: a finder whose every output is a collision finds one with probability 1, and one
+  with none with probability 0.
 -/
 
 @[expose] public section

@@ -24,21 +24,17 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
 import Proofs.Flock.VBridge.Sparse.Unit
 
 /-!
-# The algebra unit reads rep `i`'s `h` at `m<hr>` (`hAlgRows_of_res`)
+# The algebra unit's `h` round `m<hr>`: the list, the layout and the part
 
-`HAlgRows` (`HPortTie`), proved from the verifier's checks of V*'s holo list and each algebra part's `ResZeroAtLH`, the
-decoder tie `AlgebraDecodes` is proved from (`RepMaps.algebraDecodes`):
+What the verifier's checks of V*'s holo list and each algebra part give about rep `i`'s `h`:
 
 * The list (`hRound_held`, `sparse_stmt_of_name`): at a holo shape `RecVStar.statements` refuses a list none of whose
   groups holds `h`'s round `hRound m kLog` as a row port, and its RecSparse statement is `.sparse _ (hRound m kLog)`.
 * The layout (`rounds_holo`, `wi_h`, `portSizes_h`, `starts_h`, `portNames_h`): at a holo shape `h`'s round is the
   64-element round `m<hRound>` after the zerocheck's and lincheck's (`zlRounds`), `h l` its `l`-th element of `w`.
-* The part (`readCol_h`, `rowBit_at`, `hRow_of_part`): `RecResiduals.check` refuses a holo part that reads an element of
-  `h` in fewer than 128 bits (`hUnread`), so each bit of the part's `m<hRound>` row is a computed row's input, which
+* The part (`readBits_of_hUnread`, `rowBit_at`): `RecResiduals.check` refuses a holo part that reads an element of `h`
+  in fewer than 128 bits (`hUnread`), so each bit of the part's `m<hRound>` row is a computed row's input, which
   `ResZeroAtLH`'s `hw` registers at the bit of `w` the part's `wIdx` puts there, `h l`'s.
-* `hAlgRows_of_res`: at every accepted outcome, rep `i`'s unit (`RepUnitOfAlg`) has `U.d` the decoder's rep, whose `h`
-  (`hOfW`) is `w`'s at `wi`, so the part's row at unit `i` holds it; `hAlgRows_withReads` at the reads' decoder
-  (`RepMaps.withReads`, `resZeroAtLH_wRead`).
 -/
 
 @[expose] public section

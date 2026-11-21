@@ -32,12 +32,11 @@ so the Δ key (`Aliased.srcKey`, copy 0) of each of the unit's input bits is the
 * `repKeys_part`: part `p`'s circuit has those keys at V*'s part `pt.S`'s ports (`RepKeys`);
 * `srcKey_v`, `srcKey_row`: so the `v` column `vBase + q` is bit `q` of the port V* names `v`, and the row column
   `rowCol q` is a bit of the row port it lies in (`rowCol_at`), named as V* names it;
-* `part_counts`, `part_link`: V*'s part `pt.S` has the verifier's part's row ports and v (`nsOf F.sh p`, `nvOf F.sh p`;
-  `VStarFamily.hpart`, `RecVStar.checkPart`), so the keys hold at the verifier's part (`partRep`, which `rowCol` and
-  `vBase` read only through those counts): `partVCols` and `partRowCols` (`PartRowCols`);
-* its row ports are named the whole S's at the part's ports (`RecVStar.portNames`, `partPorts`), so a row column of
-  element `a` is keyed by that element's bit of its port in w, named as that port (`wIdx_get`, `rowBit`), and two
-  parts' keys of one element's bit are one bit of rows of one name (`starts_inj`, `partRowBits_holds`).
+* `part_counts`: V*'s part `pt.S` has the verifier's part's row ports and v (`nsOf F.sh p`, `nvOf F.sh p`;
+  `VStarFamily.hpart`, `RecVStar.checkPart`), which is all `partRep`'s `rowCol` and `vBase` read;
+* its row ports are named the whole S's at the part's ports (`RecVStar.portNames`, `partPorts_eq`), so a row column of
+  element `a` is keyed by that element's bit of its port in w, named as that port (`wIdx_get`, `rowBit_of`), and two
+  elements' positions are one only at one element (`starts_inj`).
 -/
 
 @[expose] public section

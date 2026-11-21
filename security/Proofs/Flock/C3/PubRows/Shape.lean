@@ -37,8 +37,7 @@ injective, and candidate 3's statements after RecSparse are R's levels and openi
   (`PubRowsChecked`) and
   `checkStmt` (`StmtsChecked`, `AcceptsZKV`'s second conjunct), n1b's checks; the checked family meets it
   (`checksAccepted_checked`, by `checks_of_keepOwn`). `ChecksReached` is it at the transcripts a session writes, which
-  the checked family meets too (`checksReached_checked`), and `hPubRows_of_checked` is `hPubRows_of_check'` with it,
-  `rowsHeld` and `SparseAtShapeChecked`.
+  the checked family meets too (`checksReached_checked`).
 * `ownIn_of_checks`: where `ChecksAccepted` holds, the accepted sessions' reads hold the verifier's message-round ports
   of their statement (`OwnIn` at `ownAt`), by `checkOwn`'s second and third loops (`checkOwn_ok`,
   `ownIn_of_checkStmt`); `ownIn_checked` is it at the checked family.
@@ -510,7 +509,7 @@ theorem checksAccepted_checked {coins : String → Option Flock.RecCoins.Source}
 
 /-- **(n1b) The checked family passes the verifier's checks where a session accepts a transcript it writes**, at one it
 writes: the checked session keeps its own list only where a transcript it writes and accepts passes `ChecksC3`
-(`Flock.Guarantees.keepOwn`, `checks_of_keepOwn`). `Compose.hbr_honest` reads it at `hPubRows_of_checked`. -/
+(`Flock.Guarantees.keepOwn`, `checks_of_keepOwn`). -/
 theorem checksReached_checked {coins : String → Option Flock.RecCoins.Source}
     {rows : Option (Array Flock.Registered.Port)}
     {zr : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → (j : Fin (vstarCount ish)) →

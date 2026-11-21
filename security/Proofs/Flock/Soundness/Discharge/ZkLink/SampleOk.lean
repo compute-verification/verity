@@ -31,11 +31,8 @@ custody; the second is verity-verify-proof's own arithmetic. This file splits th
   units ascending, no closure.
 * `SampleFileZK dj samplingDesign pop`: every sample file `dj S` that `UnitSample.ofJson` decodes decodes to `drawOf samplingDesign pop S`. It is a
   property of the file the challenger records, not of verity-verify-proof (DrawWords' `hdj`, with the sampling design).
-* `sampleOkZK_of_exec`: from `SampleFileZK` at the live sampling design's own stratified sampling design, `SampleOkZK` at every sample of `SamplingDesign.execOS`,
-  at `mPtsOf c.g (∑ s, ks s)`. At a run that succeeds the sample has `∑ s, ks s` units (`execOS_sample_card`); at a run that
-  reads past the source's bytes the sample is every unit (`execOS_sample_card_or`), and a sample file of every unit that
-  setupH accepts passes `UnitSample.ofJson`'s per-stratum count, so every stratum samples all its units and
-  `∑ s, ks s = n`.
+* `sampleOf_proved`, `sampleOf_mem`, `sampleOf_size`: the sample `drawOf` decodes proves `S`'s units, each of them, and
+  has `S`'s size; `ofJson_count`: a sample file that `UnitSample.ofJson` decodes passes its per-stratum count.
 -/
 
 @[expose] public section

@@ -38,35 +38,17 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
 /-!
-# The bridge's targets with canonical openings (targets, not proved)
+# Canonical openings
 
 A registered opening counts only when it is canonical at its wire (`Bridge.canonOpen`): the wire has a row
 (`rows g = some r`), the opening's value is a row (`RowShaped`) of the row's width, and its salt is the `saltLen` bytes
-the deployed leaf takes. The game side counts the units wrong with canonical openings (`incorrectRegZc`), and the bridge's
-targets read them:
+the deployed leaf takes. The game side counts the units wrong with canonical openings (`incorrectRegZc`), at:
 
 * `Bridge.canonRow rows g v`: `g` has a row `r`, `v` is `RowShaped` and `v`'s width is `r.width`;
 * `Bridge.canonOpen rows g v y`: `canonRow rows g v`, and the salt `y` has `saltLen` bytes;
 * `Bridge.canonAt rows κ g bt v y`: at a constant wire (`κ g = some b`) the opening's bit `bt` is `b`, at any other
   `canonOpen rows g v y`. A constant wire has no row: `progOf` reads it as `.const`, with no opening;
-* `Bridge.OpeningsCanonTarget`: at `EndToEndHidden`'s session, a sampled proof block's openings are canonical (`OpeningsCanon`
-  at `canonAt` and the circuit's constants `Bridge.constsOf`), the conjunct `zk_flock_countC_regC` takes;
-* `Bridge.EndToEndHiddenC`: `EndToEndHidden` with "wrong" `incorrectRegZc` at `canonAt`. It implies `EndToEndHidden`
-  (`incorrectRegZ_subset_incorrectRegZc`), and follows from `EndToEndHidden`'s argument at `zk_flock_countC_regC` and
-  `OpeningsCanonTarget`;
-* `Bridge.TransportsLiveC`: `TransportsLive` at canonical openings of the wires that aren't constants only;
-* `Bridge.FaultyRightTargetC`: `FaultyRightTarget` over `RightRegZc`'s second conjunct and canonical transport. Its
-  `canon` reads a value, so at `vb` it is taken with `Val := vb.Opening`, `val := id` and `bit := vb.bit ∘ vb.val`;
-* `SampledKSLiveV2`: `SampledKSLive` at circuit files whose ports are rows the verifier reads, each a
-  `sha512/row/v1`, `sha512/row/v2` or `sha512/row-seg/v1` row (`Bridge.RowsOk`, which Flock's scope check implies)
-  and at registrations whose ports' published domains are pairwise distinct (`PortRoots.dupId`) and whose equal roots
-  have one domain (`PortRoots.RootFixesDomain`), which `TransportsLiveC` also takes, and whose descriptor and query
-  evaluate to a
-  population of the game's `n` units in order (`Bridge.PopMatches`);
-* `Bridge.AssemblyTargetC`: those, `PartBlocksTarget`, `CountTarget` and `EndToEndHiddenC` give `SampledKSLiveV2`.
-
-`Bridge.SampledKSLiveRoots` (`Refused`) and `SampledKSLiveV3` (`ScopeGate`) read V2's file preconditions off the
-verifiers' acceptance, which refuses files that fail them.
+* `Bridge.FaultyRightTargetC`: M1's core over `RightRegZc`'s second conjunct, at canonical openings (a target, not proved).
 -/
 
 @[expose] public section
@@ -126,12 +108,3 @@ def FaultyRightTargetC : Prop :=
 
 end Flock.Bridge
 
-namespace Flock.Guarantees
-
-open FlockSoundness FlockSoundness.Game Spot.Sampling FlockSoundness.Discharge.Exec FlockSoundness.Refine
-  FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.Placed
-  FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden
-open FlockSoundness.Discharge.Tables (LiveOutJ)
-open scoped ENNReal
-
-end Flock.Guarantees

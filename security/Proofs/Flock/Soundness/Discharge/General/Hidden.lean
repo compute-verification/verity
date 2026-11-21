@@ -43,12 +43,10 @@ guarantees discharged by the decoders that read no shape of the circuit (`Hidden
 
 * `flock_headline_exec_hidden_gen`: `HdecCor.flock_headline_exec_hidden_dec` at `instProg c n`
   (`HiddenExec.flock_headline_exec_hidden_inst`);
-* `zk_session_soundH_gen`: `ZkHidden.zk_session_soundH` at `instProg c n` (`ZkHidden.zk_flock_countC_execOS_atHI`);
-* `zk_session_soundH_custody_gen`: `ZkHidden.zk_session_soundH_custody` at `instProg c n`.
+* `zk_session_soundH_gen`: `ZkHidden.zk_session_soundH` at `instProg c n` (`ZkHidden.zk_flock_countC_execOS_atHI`).
 
 None takes `c.unit.inGroups.size = 1`, `c.outNet = c.unitNet` or `pub.tables = none`. At `J` tables and against the
-registration, `ZkHidden.zk_session_soundHJI` and `ZkReg.zk_session_soundHJR_custody_regI` already take only the
-conditions `scopeGenH` gives (`hrf`, `hpr`, `hw`).
+registration, `ZkHidden.zk_session_soundHJI` already takes only the conditions `scopeGenH` gives (`hrf`, `hpr`, `hw`).
 -/
 
 namespace FlockSoundness.Discharge.General

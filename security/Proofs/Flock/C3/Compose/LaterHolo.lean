@@ -26,10 +26,8 @@ import Proofs.Flock.C3.RegLevels.LgHeld
 (`coinsEncoded_holoMap`, `coinWordsEncoded_holoMap`, `pointsEncoded_holoMap`), the sparse phases' stages are
 `stageHeldW_sparse` from their starts (`sparseSampledAt_holo`, `stageStarts`), and R's opening's and R's Ligerito's are
 `stagesHeld_of_run`'s, within the history's rounds where the stages take `holoCTs`' count (`coins_total_holo`).
-`stageCoins_holo_held`: `stageCoins_holo` at `holoMap` with `hlater` from `laterCoins_holo` at every accepted outer
-proof and `hlt` from `srcLevelTie_of_maps`, both at R's run in V*'s sessions (`MapsAt`) at the `C3` the verifier
-builds of its hold (`C3Held`), and the reps' `henc` at the map's one-round samples (`coinsEncoded_holoMap`). The
-record facts the stages read are named below (`RecordPoints` … `RepStagesCounted`).
+`MapsAt`: R's run in V*'s sessions at the `C3` the verifier builds of its hold (`C3Held`). The record facts the stages
+read are named below (`RecordPoints` … `RepStagesCounted`).
 `histPts`: a source with its link points set to the history's first coin under `holoMap`, where `hpts`
 (`PointsFromHistory`) is `pointsFromHistory_histPts`. At a free source it does not follow from the rest.
 -/
@@ -216,7 +214,7 @@ theorem pointsFromHistory_histPts {ish : RecVStar.Inner} {tbl : String} {bc : Cm
   rw [pts_histPts, he]
   rfl
 
-/-- **Hypothesis: R's opening is in V*'s sessions at the map `M`** (`srcLevelTie_of_maps`' `h`): at every accepted
+/-- **Hypothesis: R's opening is in V*'s sessions at the map `M`**: at every accepted
 outer proof, R's opening at the openings `opsAt` is in V*'s sessions, the claim tie holds, the source's opening is on
 the ring switches V*'s layer holds (`OpenTieL`), and `MapsLeft`. -/
 def MapsAt (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')

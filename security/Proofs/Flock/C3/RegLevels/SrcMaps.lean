@@ -28,9 +28,8 @@ import Proofs.Flock.Level3.Assembly
 * `opening_rounds`: `opening_ok` at the coins of `stacked/rep0`, which `RecCoins.opening` runs at.
 * `run_of_sessionAt`: at an accepted outer proof, R's run on the messages w holds, at R's claims at w (`claimsO`), from
   round 0 of `stacked/rep0`'s coins (`rep0`), has zero residuals (`openingReadAt_of_sessionAt`'s argument).
-* `levelTie_of_sessionAt`, `srcLevelTie_of_maps`: `levelTie_of_maps` at `opsAt`, with the run from `SessionAt`, the
-  claims' and ring switches' sizes from `coinClaim` and `decodedO`, the opening's play from the tie at V*'s layer
-  (`OpenTieL`) at the tied run, and the layers good from acceptance. Left, in `levelTie_of_maps`' form (`MapsLeft`):
+* `opsAt`, `MapsLeft`: the openings at R's maps, and what `levelTie_of_maps` takes there beyond the run, the claims'
+  and ring switches' sizes, the opening's play and the layers good (`MapsLeft`):
   custody (the coins nonempty, the opening's steps' coins), R's openings at `readMaps`' rows (`OpensAtMaps`), the
   Ligerito steps' weave (`lgSteps_of_lig` makes it a play's tape) and the openings, the cap; and the claim tie, in
   `openingReadAt_src`'s form.

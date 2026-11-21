@@ -13,8 +13,8 @@ public import Proofs.Flock.Bridge.V5.Statement
   `rsZHJP`, a set `W` of proof blocks is wrong with probability at most the sample's missProb of `W` and the extraction's
   terms (`zk_flock_missProbC_regC`), at any sample `L`;
 * `Flock.Bridge.endToEndHiddenV5_of`: `OpeningsCanonTargetV5` gives `EndToEndHiddenV5`, at the verifier's sample
-  `execSel` under the sampling design, whose missProb of `W` is at most the sampling design's `P_a` of `W` under A3 (`execSel_missProb_le`), and the
-  last term in closed form as `endToEndHiddenC_of`'s.
+  `execSel` under the sampling design, whose missProb of `W` is at most the sampling design's `P_a` of `W` under A3
+  (`execSel_missProb_le`).
 -/
 
 @[expose] public section

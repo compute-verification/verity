@@ -25,11 +25,6 @@ opens only the rows its sampled proof blocks read, while registration opens none
 faulty slot, and `δ` bounds those slots with the rest. An input no unit reads is in no slot. The deployed
 `Slots.layout` still lays a separate input class, which the claims' design reads `all`, so `partOf` is not yet its
 partition.
-
-`SampledKSLiveStated` freezes the statement and the definitions it reads; no proof of `SampledKSLive` exists yet.
-`SampledKSLive` holds at `kd = 0` (`δ = 1`), and elsewhere follows from `EndToEndHidden` at
-`min K₀ (n − kd + 1)` by `Bridge.TransportsLive`, `Bridge.FaultyRightTarget` and `Bridge.CountTarget`
-(`Bridge.AssemblyTarget`).
 -/
 
 @[expose] public section

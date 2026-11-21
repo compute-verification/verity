@@ -21,31 +21,3 @@ public import Proofs.Spot.Sampling.HarmBound
 
 @[expose] public section
 
-namespace FlockSoundness.Discharge.Composed
-
-open Game Spot.Sampling Exec Refine Flock Model ZkSession ZkLink ZkExec DecodeZL
-open scoped ENNReal
-
-local notation "𝔽" => FlockLevel3.GF128
-
-variable {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] {mPts n : ℕ} {Reg : Type} [Inhabited D] [Inhabited Sl]
-  (A : Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : Finset (Fin n) → Reg → TabZK 𝔽 mPts) (I : Inputs)
-  (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript)
-  (opn : ∀ (_ : Finset (Fin n)) (_ : Reg), Array ByteArray → OpensZ 𝔽 D Sl) (dg : ByteArray → ByteArray)
-  (dec : Finset (Fin n) → Reg → ℕ → ByteArray → List Msg) (one : Finset (Fin n) → Reg → ℕ → Bool)
-  (fin : Finset (Fin n) → Reg → Fin 2 → Array ByteArray → List Msg)
-  (capOf : ∀ (_ : Finset (Fin n)) (_ : Reg), ByteArray → Fin 1 → Cap D) (N : ℕ) {L : SamplingDesign n}
-
-end FlockSoundness.Discharge.Composed
-
-namespace Flock.Guarantees.StratifiedBlock
-
-open FlockSoundness FlockSoundness.Game Spot.Sampling FlockSoundness.Discharge.Exec FlockSoundness.Refine
-  FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.Placed
-  FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden FlockSoundness.Discharge.HiddenDec
-  FlockSoundness.Discharge.ZkSession
-open scoped ENNReal
-
-variable (w : StratifiedBlock)
-
-end Flock.Guarantees.StratifiedBlock

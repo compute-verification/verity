@@ -34,13 +34,7 @@ import Proofs.Flock.Soundness.Registered.Binding
 * `leaf_top`: so the read's leaf is `treeLeaf` of that string, or its two openings conflict (`leaf_of_accepts` at the
   outcome, with `ReadsOwnAt`'s port); `leaf_sampled`: `leaf_of_accepts` at a sampled outcome, whose reads the session's
   `hown` gives.
-
-Two registrant records' reads at one root, leaf count, domain and leaf schema, at one position, have one row, or the
-records clash (`enc_eq_of_not_clash`, from `TwoOpenings.collides` and `hm96Pair_spec`). At an accepted history no two
-of V*'s sessions clash (`Accepted`'s `¬ RegColl`), so two sessions' reads of one registered value at one position have
-one row where the value is one the verifier's shared rows register, or R's tops (`SharedValue`), so the two sessions'
-entries for it share their root, leaf count, domain and leaf schema (`SharedOwnRoot rows`, from `checkShared`:
-`sharedOwnRoot_checked`; `row_agree`).
+* `sharedValue_top`: R's tops are values the verifier's shared rows register (`SharedValue`).
 -/
 
 @[expose] public section
@@ -48,21 +42,6 @@ entries for it share their root, leaf count, domain and leaf schema (`SharedOwnR
 namespace FlockSoundness.Registered
 
 open Game Refine Binding Spot.Sampling
-
-section Agree
-
-variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Spot.Sampling.Partition C n} {Reg : Type} {mPts : ℕ}
-  {plan : Finset (Fin n) → Reg → List (TabSpec mPts)}
-  {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
-  {decode : Spot.Sampling.Partition.DecoderB (C := C) (Reg := Reg) plan tab}
-  {lay : Binding.Layout P plan tab decode} {rs : HmRowsX lay}
-  {C' : Verity.Boolean.Circuit} {n' : ℕ} {P' : Spot.Sampling.Partition C' n'} {Reg₁ : Type} {mPts' : ℕ}
-  {plan' : Finset (Fin n') → Reg₁ → List (TabSpec mPts')}
-  {tab' : (S : Finset (Fin n')) → (R : Reg₁) → Fin n' → Fin (plan' S R).length}
-  {decode' : Spot.Sampling.Partition.DecoderB (C := C') (Reg := Reg₁) plan' tab'}
-  {lay' : Binding.Layout P' plan' tab' decode'} {rs' : HmRowsX lay'}
-
-end Agree
 
 end FlockSoundness.Registered
 

@@ -8,20 +8,15 @@ import Mathlib.Tactic.NormNum.Abs
 import Mathlib.Tactic.NormNum.DivMod
 import Mathlib.Tactic.NormNum.OfScientific
 import Mathlib.Tactic.Ring.RingNF
-import Proofs.Pouw.H1Zy.Lane
 
 /-!
-# A lane's chunks, accepted at one carry chain, check the whole lane (`laneOk_of_chunks`)
+# A lane's chunks in sequence are the whole lane
 
-`n` chunk statements of a lane (`Pouw.H1Zy.chunkOk`, `PouwH1LaneZyChunk_v1{TILE, n, c}`), each `ok = 1`, chunk `c + 1`'s
-carry in the row chunk `c`'s carry out is, check the whole lane: `laneOk` at the chain machine's words (`chainOf`) on the
-lane the chunks read (`joinIn`: each row's codes the chunks' concatenated, `joinRows`, its scales chunk 0's, and the last
-chunk's record, partials, public inputs and index). The chain lemma (`run_join`, `zRun_join`): the whole `K`'s segments
-are the chunks' in sequence, so the chain's state and each cell's z after chunk `c` are the whole lane's after its first
-`(c + 1) K_c / 32` segments. An induction over `c` (`chunkCarry_eq`) pins each carry in, through the chunk before's
-carry-out check, to that state, and each chunk's scales, through its scale check, to chunk 0's. So the last chunk's
-checks are the lane's on the joined rows, at `z = gemmAccS8` over the whole `K` (`zRun_zero`), which `laneOk_spec`
-(with `gemmAccS8_eq`, at `32 ∣ K` and `K < 2^17`) makes the exact dot.
+`n` chunk statements of a lane (`Pouw.H1Zy.chunkOk`, `PouwH1LaneZyChunk_v1{TILE, n, c}`) read the lane's rows in
+chunks (`joinIn`: each row's codes the chunks' concatenated, `joinRows`, its scales chunk 0's, and the last chunk's
+record, partials, public inputs and index). The chain lemma (`run_join`, `zRun_join`): the whole `K`'s segments are the
+chunks' in sequence, so the chain's state and each cell's z after chunk `c` are the whole lane's after its first
+`(c + 1) K_c / 32` segments; from zero, `zRun` is `GemmAccumulatorS8`'s steps (`zRun_zero`).
 -/
 
 @[expose] public section

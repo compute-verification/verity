@@ -59,15 +59,6 @@ def sqrtBis (n : ℕ) : ℕ → ℕ → ℕ → ℕ
 
 end FlockSoundness.Accounting
 
-namespace FlockSoundness.Discharge.ZkSession
-
-open Game Model Accounting Spot.Sampling
-open scoped ENNReal NNReal
-
-variable {F : Type} [Field F] [Fintype F] [DecidableEq F] {mPts : ℕ}
-
-end FlockSoundness.Discharge.ZkSession
-
 namespace FlockSoundness.Discharge.ZkLink
 
 open Game Model Accounting Spot.Sampling ZkSession StrictCR
@@ -86,16 +77,6 @@ noncomputable def rateM1 (k : ℕ) : ℝ := 2 ^ 23 / (Real.exp 1 * k)
 
 /-! ## `Q_s`, the expected number of commit strings the sampled proof blocks read -/
 
-section Qs
-
-variable {K : Type} [Field K] (A : Arith F K) {C : Verity.Boolean.Circuit} {n : ℕ}
-  (P : Spot.Sampling.Partition C n) {Reg : Type} (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
-  (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
-  {decode : DecoderZK (C := C) planZ tab} {Dh : Type} {Hc : List UInt8 → Dh}
-  (vb : ValueBindingZ A P planZ tab decode Hc)
-
-end Qs
-
 end FlockSoundness.Discharge.ZkLink
 
 namespace FlockSoundness.Discharge.ZkHidden
@@ -103,12 +84,6 @@ namespace FlockSoundness.Discharge.ZkHidden
 open Game Spot.Sampling Exec Flock FlockLevel3 Model Accounting Refine ZkSession ZkLink ZkExec Composed
 
 variable {n mPts : ℕ}
-
-namespace SampleSetupZHJ
-
-variable {I' : Inputs} {S : Finset (Fin n)} {d : Lean.Json} (y : SampleSetupZHJ I' mPts S d)
-
-end SampleSetupZHJ
 
 variable {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
   (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀) {Reg : Type}

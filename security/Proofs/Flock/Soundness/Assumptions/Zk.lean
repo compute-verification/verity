@@ -24,9 +24,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 # The `--zk` session's assumptions
 
 The instances of `HashDerivedKey` and `PadNonvanishing` that `--zk` headlines take, stated as Prop constants so the
-audit names them, and the record's custody (`live-verifier`) that `--zk`'s soundness takes: `RecordCustodyZK` at one
-table, `RecordCustodyZKJS` at `J` under a stratified sample. `RecordCustodyZKJ`, at `J` under the subset sample, is
-`RecordCustodyZKJPLaw`'s instance at no public inputs (`Proofs.Flock.Soundness.Premises`), which this module imports so
+audit names them. The record's custody (`live-verifier`) that `--zk`'s soundness takes, `RecordCustodyZKJ`, at `J`
+tables under the subset sample, is `RecordCustodyZKJPLaw`'s instance at no public inputs (`Proofs.Flock.Soundness.Premises`), which this module imports so
 its readers keep the name.
 -/
 

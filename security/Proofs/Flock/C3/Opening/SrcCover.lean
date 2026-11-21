@@ -25,8 +25,6 @@ one holding ring switch `i`'s 128 slots of w in a run of its row-port elements. 
 (`cover_rs`): that residual, T against the batched sum, keeps every claim's `t_k[0]` as a term at the zero coins
 `structureOf` runs at (`Lin` keeps a term whose coefficient is zero), so it reads `["wt", 128 k, 0]`
 (`structureOf_rsT`), and a part reading a transpose holds its block in a run (`block_of_partS`).
-`openTieL_of_session` is `OpenTieL` for a source reading the layer there (`ReadsFill`, which w's ring switches are:
-`readsFill_w`), and `openTieL_of_openTie` for a source whose opening is on w's ring switches (`OpenTie`).
 -/
 
 @[expose] public section

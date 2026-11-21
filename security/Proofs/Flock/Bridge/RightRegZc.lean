@@ -19,8 +19,7 @@ right and more are incorrect:
   openings too;
 * `OpeningsCanon canon`: in every satisfying witness of a sampled proof block, the opening of each of its committed wires'
   commit strings (`ValueBindingZ.opening`) is canonical at the wire;
-* `analysisZCRegC`, `zk_flock_countC_regC`: `analysisZCReg` and its count curve with "wrong" `incorrectRegZc`, under
-  `OpeningsCanon`. Its knowledge and binding errors are `analysisZCReg`'s, and its `cover` is the same argument: the
+* `analysisZCRegC`: `analysisZCReg` with "wrong" `incorrectRegZc`, under `OpeningsCanon`. Its knowledge and binding errors are `analysisZCReg`'s, and its `cover` is the same argument: the
   unit's openings from the satisfying message are canonical (`OpeningsCanon`), so the unit is right with them.
 * `zk_flock_missProbC_regC`: the same bound at a set `W` of units, `Pr[accept ∧ W ⊆ incorrect] ≤ missProb W + ε_ks + ε_bind`.
 -/
@@ -163,8 +162,7 @@ theorem zk_linkSoundC_regC
     (zk_linkSoundC A Hs P planZ tab vb hlow hRw hM hρ hr hj ht R τ tgt)
   simp only [analysisZCRegC, analysisZC, ↓reduceIte]
 
-/-- **The compiled `--zk` missProb bound, "wrong" with canonical openings**: `zk_flock_countC_regC` at a set `W` of units
-in place of a count, `Pr[accept ∧ W ⊆ incorrect] ≤ missProb W + ε_ks(σ) + ε_bind(σ)`. -/
+/-- **The compiled `--zk` missProb bound, "wrong" with canonical openings**: at a set `W` of units, `Pr[accept ∧ W ⊆ incorrect] ≤ missProb W + ε_ks(σ) + ε_bind(σ)`. -/
 theorem zk_flock_missProbC_regC (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u)
     (hcan : OpeningsCanon A P planZ tab vb canon) {k Rw M : ℕ}
     (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)

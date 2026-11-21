@@ -39,28 +39,18 @@ import Proofs.Flock.Soundness.Discharge.PlainReg.Checked
 import Std.Tactic.BVDecide.Normalize.BitVec
 
 /-!
-# A shaped registered opening opens the deployed commitment
+# The deployed commitment's pieces at a session's rows
 
-`commitDep` (the deployed trace commitment at a session's rows) under `rootsOf` (the registration's roots) opens a
-claims position whose registered row sits at a port of `16 w` bits, `sha512/row/v1`, `sha512/row/v2` or
-`sha512/row-seg/v1`, to the bit of any value that is `RowShaped` of the row's width, under a salt of `saltLen` bytes,
-whose hm96 leaf at its port's bytes (`HiddenExec.encPortH`, the game's) is the registered leaf of that row
-(`opens_commitDep`). The deployed row message in the port's format is the game's bytes of the value
-(`rowMsg_eq_encPortH`), and the registered leaf is framed at the port's schema (`schemaOf`). The opening's data is the
-salt, the row's frame-v3 path in the verifier's own tree (`sibsV`) and the value's bits (`dataOf`). The one more
-condition: the registration's roots are distinct, since the verifier opens at the first port whose root the position
-names, and that port's schema must be the row's. They are at a public file whose ports' published domains are
-pairwise distinct (`PortRoots.dupId`) and roots that fix their domains (`PortRoots.RootFixesDomain`,
-`PortRoots.rootsDistinct_of_fixes`).
+`commitDep` (the deployed trace commitment at a session's rows) reads a claims position's registered row at a port of
+`16 w` bits, `sha512/row/v1`, `sha512/row/v2` or `sha512/row-seg/v1`. The deployed row message in the port's format is
+the game's bytes of the value (`rowMsg_eq_encPortH`, `rowDep_eq`), and the registered leaf is framed at the port's
+schema (`schemaOf`).
 
-The restriction is the deployed check's own: a misshaped value's leaf is the leaf of an opening `commitDep` passes only
-by a SHA-512 collision (`leaf_misshaped_dep`, `encPortH_ne_misshaped`), and so is a leaf under a salt of another length
-(`leaf_salt`): `commitDep` refuses data shorter than the salt (`pathOf`).
-
-At the session's binding (`vbOf`), `transports_shaped` reads a registered opening of a wire with a row through
-`opens_commitDep`; `transportsLiveCS` is `Bridge.TransportsLiveC`'s conclusion at canonical openings, `RowsOk` circuit
-files that name each port once and `PortRoots.RootFixesDomain` registrations, and `transportsLiveC` is
-`Bridge.TransportsLiveC`.
+The deployed check refuses other values: a misshaped value's leaf is the leaf of an opening `commitDep` passes only by
+a SHA-512 collision (`leaf_misshaped_dep`, `encPortH_ne_misshaped`), and so is a leaf under a salt of another length
+(`leaf_salt`): `commitDep` refuses data shorter than the salt (`pathOf`). Wires and positions: `posOf` is injective
+and ordered (`posOf_inj`, `posOf_lt`), and `wireOf` inverts it (`wireOf_posOf`). The game's openings at a Flock session:
+`vbOf`.
 -/
 
 @[expose] public section
@@ -74,12 +64,6 @@ open Properties.Certifier.Bytes (bs)
 
 /-- A row's bits as the deployed data carries them, one byte each. -/
 def bitMsg (b : List Bool) : Msg := b.map fun x => if x then 1 else 0
-
-section Data
-
-variable {y : Msg} {s : List ByteArray} {b : List Bool}
-
-end Data
 
 /-- The length of a deployed opening's salt: `saltLen` bytes wherever its path is whole levels, since data shorter
 than the salt has no such path (`saltLen_le_of_pathOf`). -/
@@ -340,16 +324,5 @@ theorem vbOf_cs_fst (R : Reg) (p : PosH c hU n) :
 
 end Game
 
-/-! ## `TransportsLive` at shaped openings -/
-
-section Live
-
-open FlockSoundness FlockSoundness.Game Spot.Sampling FlockSoundness.Discharge.Exec FlockSoundness.Refine
-  FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.Placed
-  FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden FlockSoundness.Discharge
-open FlockSoundness.Discharge.Tables (LiveOutJ)
-open scoped ENNReal
-
-end Live
 
 end Flock.Bridge

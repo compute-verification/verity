@@ -39,17 +39,13 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 
 /-!
-# The bridge's slot count, `P_a`, count lemma and scope
+# The bridge's slot count, `P_a` and scope
 
 `partOf P κ ns` is one class, the population's `n` proof blocks in strata of sizes `ns` (`blocks_length_partOf`), each
 unit's block holding the input rows it owns. A one-stage design `r` misses a set `B` on it with `r`'s own miss on the
 strata `ns` at `B`'s population slots (`pa_partOf_window`); `subset kd`'s is the subset miss, whatever the strata
 (`pa_partOf_subset`), so `C(n − K₀, kd)/C(n, kd)` at the first `K₀` slots (`pa_subset_range`) and `0` under `All`'s
-`subset n` at any `B` holding a slot (`pa_all`). From them: `PartBlocksTarget`, `PaTarget` (`P_a(B) = r.Pa ns B` for `B`
-of population slots), and
-`CountTarget`: under `subset kd`, a witness outside `RelS` at `δ = C(n − K₀, kd)/C(n, kd)` has at least
-`min K₀ (n − kd + 1)` faulty population slots, because `C(·, kd)` is strictly increasing from `kd` on
-(`choose_lt_of_lt`). A unit whose owned input row doesn't open is one of them.
+`subset n` at any `B` holding a slot (`pa_all`); `pa_partOf`: `P_a(B) = r.Pa ns B` for `B` of population slots.
 
 Scope: `designOf r` is well formed on `partOf P κ ns` when `r` is well formed on the strata `ns`
 (`designOf_wellFormed`).

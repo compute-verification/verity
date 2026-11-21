@@ -18,15 +18,11 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
-# Piece (h): V*'s statements over the verifier's list (gap 4(c)), and R's shape
+# Piece (h): V*'s list and R's shape
 
-`vstarParsesScoped_of_list`: at the inner shape `ish`, a family of V*'s statements indexed by the verifier's own list
-(`RecVStar.statements`, `vstarCount`) whose files, where the verifier parses them into scope, parse to its circuits
-(`VStarParsesScoped`, the guarantee's `_hob`), at any outer sampling design. It discharges `_hob`. At candidate 3's inner shape the
-list is circuits' gap 2's eleven statements, in the writer's order: four `rec-open`, two `rec-residuals`, one
-`rec-sparse`, R's three levels (`rec-open-stacked`) and one `rec-opening`. Statement `j`'s circuit is the parse of V*'s
-file for it where the verifier lists it, the file is written and its parse is in `Layout.scopeOk` (a built unit,
-`built_of_parse`), and `defaultCircuit` (`Default.lean`) elsewhere.
+The verifier's own list of V*'s statements (`RecVStar.statements`) has `vstarCount` entries (`vstarCount_eq`). At
+candidate 3's inner shape the list is circuits' gap 2's eleven statements, in the writer's order: four `rec-open`, two
+`rec-residuals`, one `rec-sparse`, R's three levels (`rec-open-stacked`) and one `rec-opening`.
 
 R's shape is derived, not a hypothesis: each `rec-opening/m<m>-c<c>-p<j>` unit the verifier checks opens R at META's
 `stacked` entry (`stacked_of_openingShape`, `checkOpeningShape`), and that entry opens exactly `STACKED_CLAIMS` claims
