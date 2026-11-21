@@ -7,7 +7,7 @@ public import PouwPearlPlus.Open
 
     pouw-pearlplus --coins COINS.json --draws T (--source HEX | --record RECORD.json | both)
       [--over-cap uncredited|reject] [--test-instance] [--tie W.json [--class SLOTS,PROMPT,OUTPUTS]] [--of-record]
-      [--draw-live LIVE.json] MANIFEST...
+      [--draw-live LIVE.json] [--salt-live SALT.json] MANIFEST...
 
 prints the verdict as one JSON object: `verdict` (`accept` or `reject`), `reason`, `refused` (`[code, why]` or null),
 `commitment` and `source` (hex, once the passes load and the coin is fixed), `over_cap` (the rule on a tile over its
@@ -29,8 +29,11 @@ commitment, the given source and the node's sample. `--tie W.json` holds the pas
 (`Tie.tieAt`), and `--of-record` takes only a challenger sample on live coins (`Coins.ofRecordReason`).
 `--draw-live LIVE.json` (`{key, ledger, pins, main, session}`: the pinned challenger key, the auditor's ledger, the host's
 pins log, main's first-parent history and the draw session's files) holds a challenger sample to its draw session, its
-signatures verified under the key (`Coins.liveDrawReason`), and rejects one that isn't (`draw-session`); it is read here,
-after `check`, so it adds a refusal to `check`'s verdict and nothing else.
+signatures verified under the key (`Coins.liveDrawReason`), and rejects one that isn't (`draw-session`).
+`--salt-live SALT.json` (the same fields, with the salt session's files) holds each live pass's salt to its salt session
+the same way (`Coins.liveSaltReason`), and rejects one that isn't (`salt-session`). Under `--of-record`, a live run
+missing either file is rejected. Both are read here, after `check`, so they add refusals to `check`'s verdict and
+nothing else.
 -/
 
 @[expose] public section
