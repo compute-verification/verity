@@ -670,7 +670,9 @@ def test_a_live_run_of_record_is_held_to_both_signed_sessions(exe, tmp_path):
     both opened in one auditor's ledger under the pinned key. Given both sessions (``--draw-live``, ``--salt-live``) the
     verdict of record accepts with the work the verdict gets without ``--of-record``. Given the sample session alone it is
     refused (`salt-session`) for want of the salt session, and given the salt session alone it is refused for want of
-    the sample session."""
+    the sample session. It is the one test where a verdict of record accepts on signed sessions, and the one that reaches
+    the missing-salt-session refusal, which the missing-sample-session refusal otherwise shadows; that needs a proved
+    pass, which no cheaper test can stand in for."""
     path, h = salt_session_pass(tmp_path)
     held, rec = {}, tmp_path / "coin.json"
     VR.verify_passes([path], 3, 1, "test", VR.epoch_coins(path.parent / "coins.json"), None,
