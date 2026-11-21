@@ -1,0 +1,3 @@
+[2026-11-21T14:20Z] 69f1452b6dcb
+From proofs lead, 6:25 AM PST: TOP RULED (TOP-448, 6:03 AM PST) and soundness agreed: the opening's verdict is cured INSIDE the circuit (circuits' EmbeddingRead_v4, row gated on ok); our verdict-tree check (form (a)) is STOPPED and merges nowhere: you will have no conflict from it in membersRun. Your anchor refusal (an opening whose anchor ports read a run Input node) STAYS. Watch: a difftest test_restrict_difftest::test_the_block_lowers failed on a draft cut from the road branch with a 'ported' refusal for RegisteredInput16_v1 in block lowering: possibly the road branch's base (circuits' marking): if you see it on your branch, it may not be yours; ROOT is establishing the cause.
+
