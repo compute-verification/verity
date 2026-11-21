@@ -748,7 +748,7 @@ def amounts(doc: dict, site: Site | None = None, span_s: Fraction | None = None)
 
 
 def member(doc: dict) -> str | None:
-    """The metrics' line a document's measurements are for, as `benchmarks/README.md` names one, model then card: the
+    """The metrics' line a document's measurements are for, as `tests/test_metrics_registry.py` names one, model then card: the
     served model's name and the card the record says the run served on (`RAN`'s ``card``, nvidia-smi's name), each
     lower-case and hyphenated (``llama-3.2-1b-h200``); None where the record names no card."""
     if not doc.get("card"):
