@@ -2007,12 +2007,12 @@ road_network() {  # the network attester's own piece, called as step 4 or 6 call
 }
 road_sampled() {  # step 3 on the window's road: the window's record, its Lean checks run from its own files (records_audit.py audit), its circuit the prover's
   local rec=$D/windows/w$K/record leanb=$TREE/verity/protocols/proofs/flock/verifier/.lake/build/bin bin=$FW/flock-gpu-link/flock/target/release/flock-circuit
-  local s=$D/private/sampled-proofs main=$OUT/sampled-proofs/main.txt unit=${TMPL_UNIT_BIN:-$leanb/flock-tmpl-unit} m0 law run rc b line
+  local s=$D/private/sampled-proofs main=$OUT/sampled-proofs/main.txt unit=${TMPL_UNIT_BIN:-$FW/lean-bin/flock-tmpl-unit} how="bash $TREE/benchmarks/one_stage/build_sampled_step.sh" m0 law run rc b line
   [ "$DEVELOPMENT" = 1 ] || { step_not_run sampled-proofs "its circuit is the one the prover registered, and its coins the local challenger's: a development run's alone (DEVELOPMENT=1) until proofs' compile check runs and the auditor's challenger is wired"; return; }
   for b in "$bin" "$leanb/verity-verify-proof" "$leanb/flock-zk-server" "$leanb/flock-lower-check"; do
-    [ -x "$b" ] || { step_not_run sampled-proofs "proofs' $(basename "$b") is not built at $b (build(): lake build in verity/protocols/proofs/flock/verifier, prover/pod/60-circuit.sh MODE=build)"; return; }
+    [ -x "$b" ] || { step_not_run sampled-proofs "proofs' $(basename "$b") is not built at $b: build it, with the other programs this step runs, by: $how"; return; }
   done
-  [ -x "$unit" ] || { step_not_run sampled-proofs "proofs' flock-tmpl-unit, which places a templated member's unit rows, is not built at $unit (TMPL_UNIT_BIN; served_door_prove.sh builds it from TmplUnit.lean)"; return; }
+  [ -x "$unit" ] || { step_not_run sampled-proofs "proofs' flock-tmpl-unit, which places a templated member's unit rows, is not built at $unit (TMPL_UNIT_BIN): build it, with the other programs this step runs, by: $how"; return; }
   grep -q -- '"--prover-circuit"' "$TREE/benchmarks/prove_path/records_audit.py" \
     || { step_not_run sampled-proofs "proofs' records_audit.py takes no --prover-circuit, the audit of a circuit the prover registered with its compile check not run"; return; }
   law=$("$PY" -c 'import json, sys; r = json.load(open(sys.argv[1])); print(r.get("rule") or (r.get("law") or {}).get("rule") or "")' "$rec/registration.json") || law=
