@@ -359,8 +359,9 @@ def registration_pins(registration: Any, record: dict[str, Any]) -> dict[str, st
 def deployment_record(registration: Any) -> dict[str, Any]:
     """The deployment's first registration record (`verity/registration/v2`, chained after nothing): each weight parameter
     the committer's ``registration`` roots (`weights_registration`), as the registered value of 16-bit words the
-    registration states (its value, root, leaves, words and domain), by name, under a ``deployment`` header: the weights
-    record's program, the model at its revision, the grain, and the weight parameters the registration leaves unrooted,
+    registration states (its value, root, leaves, words and domain), by name, under the weights record's program (the
+    top-level ``program``, the one every entry's domain is under) and a ``deployment`` header: the model at its revision,
+    the grain, and the weight parameters the registration leaves unrooted,
     which no record registers and whose reads stay free. A serve writes it before its first request. On a serve tied to
     Pearl+, Pearl+'s window record W names it as ``previous`` (`registration.digest`), so there a weight's root is in the
     log's first record before W. No other record names it: a window's own record is chained after its W or after nothing,
@@ -369,8 +370,8 @@ def deployment_record(registration: Any) -> dict[str, Any]:
     reg = WeightsRegistration.of(registration, "the weights registration")
     for p in (*reg.values, *reg.unrooted):
         _param(p)
-    return {"format": DM.REGISTRATION, "protocol": DM.ONE_STAGE_PROTOCOL,
-            "deployment": {"kind": DEPLOYMENT, "program": reg.program, "model": {"repo": reg.repo, "revision": reg.revision},
+    return {"format": DM.REGISTRATION, "protocol": DM.ONE_STAGE_PROTOCOL, "program": reg.program,
+            "deployment": {"kind": DEPLOYMENT, "model": {"repo": reg.repo, "revision": reg.revision},
                            "grain": dict(reg.grain), "unrooted": sorted(reg.unrooted)},
             "registered": [dict(reg.values[p]) for p in sorted(reg.values)],
             "previous": None}

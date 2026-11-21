@@ -1326,7 +1326,8 @@ def test_the_weights_registration_is_also_the_first_record_of_the_serves_registr
     assert [e["value"] for e in rec["registered"]] == sorted(reg["values"])
     assert {e["value"]: e for e in rec["registered"]} == reg["values"]
     assert all(set(e) == {"value", "root", "leaves", "words", "domain"} for e in rec["registered"])
-    assert rec["deployment"] == {"kind": WW.DEPLOYMENT, "program": reg["program"], "grain": reg["grain"],
+    assert rec["program"] == reg["program"]
+    assert rec["deployment"] == {"kind": WW.DEPLOYMENT, "grain": reg["grain"],
                                  "model": {"repo": serve["model"], "revision": serve["revision"]},
                                  "unrooted": sorted(reg["unrooted"])}
     assert rec["deployment"]["unrooted"] and not {e["value"] for e in rec["registered"]} & set(reg["unrooted"])
