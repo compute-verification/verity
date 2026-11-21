@@ -547,11 +547,17 @@ def outReads (c : Circuit) (P : Program.Prog) (indices : Array Nat) (j : Nat) (r
   return { reg with readsRel := r.1, readsFrom := r.2 }
 
 /-- The output row port `q` of `c` is: a circuit with hidden outputs declares its input rows (META `input_ports`, which
-`HmOut.checkRows` holds to `HmOut.nIn`), and each port past them is an output row; a circuit that declares none, a
-public-output statement's, has no output row among its ports, whatever its output ports. -/
+`HmOut.checkRows` holds to `HmOut.nIn`), and each port past them is an output row named after its run's first output
+port, as `checkRows` holds; a circuit that declares none, or rows that `checkRows` refuses so (a count not the rows
+before one output row each, or a port past it named otherwise), as a public-output statement's may, has no output row
+among its ports, whatever its output ports. -/
 def outRow? (c : Circuit) (q : Nat) : Option Nat :=
   match J.nat c.metaJ "input_ports" "circuit META" with
-  | .ok k => if k ≤ q then some (q - k) else none
+  | .ok k =>
+    if k + c.outRowPorts.size == c.ports.size && k ≤ q
+        && (c.outPorts[(HmOut.outGroup c (q - k)).1]?.map (·.1)) == some (c.ports.getD q default).name then
+      some (q - k)
+    else none
   | .error _ => none
 
 /-- The verifier's registered reads `own` with every port's reads derived at the statement's circuit `c` and public file

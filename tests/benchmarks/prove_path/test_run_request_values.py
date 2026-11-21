@@ -146,7 +146,7 @@ def test_no_kept_file_is_written_under_out():
     lines = [line for line in text.splitlines() if "$O/" in line and not line.lstrip().startswith("#")]
     bare = [k.replace("*", "") for k in KEPT]
     hit = sorted({k for line in lines for k in bare if f"$O/{k}" in line or ("$O/" in line and f"/{k}" in line
-                                                                              and f"$K/" not in line)})
+                                                                              and "$K/" not in line)})
     assert not hit, f"run.sh writes {hit} under $OUT; they go to $K (PP_KEEP)"
     assert 'K=${PP_KEEP:-$W/keep}' in text and "chmod 700" in text
 
@@ -193,7 +193,7 @@ def _run_arm(tmp_path: Path, arm: str, bits: int = 5) -> tuple[Path, Path, str]:
 
 @pytest.mark.parametrize("arm", ["run glm '--tp-commit T --build-root B' A part.json ''",
                                  "run served '--serve-run S --window 0 --row-dir R' - part.json ''",
-                                 "run standin '--tp-commit S --build-root B' A part.json '' --forge 0:1"])
+                                 "run standin '--tp-commit S --build-root B' A part.json ''"])
 def test_a_runs_partition_its_siblings_and_error_output_stay_in_the_keep(tmp_path, arm):
     """The TP, served and stand-in arms each go through run(): $OUT gets the window's registration, commit.log and the
     audit's log, whose PROVE-PATH line `verity bench prove layers` reads, and none of the planted values; the keep holds them."""

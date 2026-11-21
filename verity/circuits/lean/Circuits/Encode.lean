@@ -264,6 +264,10 @@ private def reencode (text : String) : Option String :=
 #guard reencode RECUT_WRITTEN == some RECUT_WRITTEN
 #guard reencode RECUT == some RECUT_WRITTEN
 #guard reencode EMPTY_WRITTEN == some EMPTY_WRITTEN
+#guard match decode (RECUT_WRITTEN.replace "\"id\":\"Root[P_v1]_v1\""
+    "\"id\":\"Root[P_v1]_v1\",\"ports\":{\"ret\":[[0,4,{\"equals\":[\"seed\",0,4]}]]}").toUTF8 with
+  | .error e => e.startsWith "E_PORT_DECL: Root[P_v1]_v1 return: a port is a non-empty object with keys from"
+  | .ok _ => false
 #guard reencode EMPTY == some EMPTY_WRITTEN
 #guard HAND != WRITTEN && RECUT != RECUT_WRITTEN && EMPTY != EMPTY_WRITTEN
 
