@@ -431,6 +431,56 @@ def fanout (P : Flock.Program.Prog) (rs : Array TRange) : Nat := Id.run do
       held := held.set! g (held.getD g 0 + (members.getD k none).getD 0)
   return held.foldl max 1
 
+/-- Spans `(node, lo, hi)` in lexicographic order. -/
+def spanLt (a b : Nat × Nat × Nat) : Bool :=
+  a.1 < b.1 || (a.1 == b.1 && (a.2.1 < b.2.1 || (a.2.1 == b.2.1 && a.2.2 < b.2.2)))
+
+/-- `partition.shared_inputs` over a template query's ranges `rs`: the run Input nodes (an input bound at `run`,
+`Program.inputId?`; a registered input, and an input node whose gates lie in one of `held`, the gates `(first, count)`
+of the parameters the verifier expects registered, are registered values) whose leaves the proof blocks don't each
+read alone, ascending: a batch of more than one member reading one whole (an argument it broadcasts) or by a run that
+names a leaf twice, two of a batch's runs that overlap, or two instance nodes' runs that overlap. The variant with no
+members refuses such a node (`R8-shared-input`); the per-member variant holds each reader to the node's one tree. -/
+def sharedInputs (P : Flock.Program.Prog) (rs : Array TRange) (held : Array (Nat × Nat) := #[]) : Array Nat := Id.run do
+  let nodes := Flock.Registered.rootNodes P
+  let offs := ((P.defs[P.root]?).map (·.body.offsets)).getD #[]
+  let run := fun (i : Nat) => match nodes[i]? >>= fun x => P.defs[x.fn]? with
+    | some f => f.prim && f.binding == some Flock.Program.RUN &&
+        !held.any fun (first, count) => first ≤ offs.getD i 0 && offs.getD (i + 1) 0 ≤ first + count
+    | none => false
+  let mut shared : Array Nat := #[]
+  let mut spans : Array (Nat × Nat × Nat) := #[]
+  for r in rs do
+    let x := nodes.getD r.node default
+    let batch := x.form == .batch
+    let mut mine : Array (Nat × Nat × Nat) := #[]
+    for ai in [0:if batch then min x.args.size x.axes.size else x.args.size] do
+      let mapped := batch && (x.axes.getD ai none).isSome
+      for (i, lo, hi, one) in runs (x.args.getD ai default).seq do
+        if !run i then continue
+        if r.count > 1 && (!mapped || !one) then shared := shared.push i
+        mine := mine.push (i, lo, hi)
+    let mut last : Option (Nat × Nat) := none
+    let mut merged : Array (Nat × Nat × Nat) := #[]
+    for (i, lo, hi) in mine.qsort spanLt do
+      if let some (j, h) := last then
+        if j == i && r.count > 1 && lo < h then shared := shared.push i
+      last := some (i, hi)
+      merged := match merged.back? with
+        | some (j, l, h) => if j == i && lo < h then merged.pop.push (j, l, max h hi) else merged.push (i, lo, hi)
+        | none => merged.push (i, lo, hi)
+    spans := spans ++ merged
+  let mut top : Option (Nat × Nat) := none
+  for (i, lo, hi) in spans.qsort spanLt do
+    match top with
+    | some (j, t) =>
+      if j == i then
+        if lo < t then shared := shared.push i
+        top := some (i, max t hi)
+      else top := some (i, hi)
+    | none => top := some (i, hi)
+  return (shared.qsort (· < ·)).foldl (init := #[]) fun o i => if o.back? == some i then o else o.push i
+
 /-- A template query's ranges (`partition.is_template_query`) applied to `p`; none for another query or one that
 doesn't apply. -/
 def templateRanges? (p : Program) (query : Json) : Option (Array TRange) :=
@@ -441,6 +491,11 @@ def templateRanges? (p : Program) (query : Json) : Option (Array TRange) :=
 
 /-- The fan-out a registration verdict publishes (`registration._readers`): a template query's, else none. -/
 def fanout? (p : Program) (query : Json) : Option Nat := (templateRanges? p query).map (fanout p.prog)
+
+/-- R8: no run Input of a template query's partition, outside the gates `held`, is one its proof blocks don't each read
+alone (`sharedInputs`). -/
+def readAlone (p : Program) (query : Json) (held : Array (Nat × Nat) := #[]) : Bool :=
+  ((templateRanges? p query).map (sharedInputs p.prog · held)).all (·.isEmpty)
 
 /-- Whether root node `i`'s gates lie in `[first, first + count)` (`partition.within`). -/
 def within (P : Flock.Program.Prog) (first count i : Nat) : Bool :=

@@ -319,7 +319,8 @@ name), the record's root of `input/n<w>` (`Registered.freshValue`, at `byPort`, 
 tree, which `headerHeldAt` holds as it holds a field tree every member of a template shares (`SHARED_UNREAD`), its
 leaves and domain C's and the window's (`runTreeHeld`). A record holding no such root is refused by name
 (`RUN_TREE_MISSING_WHY`), and so is a root of the member's own at the port (`RUN_OWN_ROOT_WHY`). A node inside a tied
-parameter's gates (`tied`) is not read here: its root is the later period check's, as R8 publishes. -/
+parameter's gates (`tied`) is not read here: every reader opens it under one root (`tiedRootsAt`), and that the root is
+the right one is the later period check's, as R8 publishes. -/
 def runInputRootsAt (P : Flock.Program.Prog) (rs : Array Flock.TemplateQuery.TRange) (prog : String) (R : Option String)
     (tied : Array (Nat × Nat)) (m : Member) (own : Array Json) (byPort : Std.HashMap String Json) : V (Array Json) := do
   (← memberInputs P rs m).foldlM (init := own) fun got (p, w, len) => do
@@ -332,9 +333,29 @@ def runInputRootsAt (P : Flock.Program.Prog) (rs : Array Flock.TemplateQuery.TRa
     return got.push (Json.mkObj [("domain", getD r "domain"), ("leaves", getD r "leaves"), ("port", .str p),
       ("root", getD r "root"), ("tree", .str t)])
 
+/-- The refusal of two roots for one tied run input node `w` (`tiedRootsAt`): every reader of a tied node opens one
+tree. -/
+def TIED_ROOTS_WHY (w : Nat) : String :=
+  s!"members: C's tied run input node {w} is read under two roots: every reader of a tied node opens one tree"
+
+/-- `seen`, the root each tied run input node is read under so far, with each node inside the tied gates `tied` that
+member `m` reads (`memberInputs`) at the root `own` holds for its port; refused (`TIED_ROOTS_WHY`) where `seen` holds
+another root for the node. That the root is the right one is the later period check's. -/
+def tiedRootsAt (P : Flock.Program.Prog) (rs : Array Flock.TemplateQuery.TRange) (tied : Array (Nat × Nat))
+    (m : Member) (own : Array Json) (seen : Array (Nat × Json)) : V (Array (Nat × Json)) := do
+  (← memberInputs P rs m).foldlM (init := seen) fun seen (p, w, _) => do
+    if !Flock.Registered.runNode P w || !tied.any fun (first, count) => Partition.within P first count w then
+      return seen
+    match (own.find? (getD · "port" == .str p)).map (getD · "root") with
+    | none => return seen
+    | some r => match seen.find? (·.1 == w) with
+      | some (_, r') => if r' == r then return seen else throw (TIED_ROOTS_WHY w)
+      | none => return seen.push (w, r)
+
 /-- `runInputRootsAt` for each member of `ms`, over the partition's ranges `rs`, the roots `roots` and the record `rec`,
-under the verifier `v`'s program digest, window open root and tied parameters' gates (`Docket.tiedGates`). Its cost
-is the members' ranges times their Definitions' parameters. -/
+under the verifier `v`'s program digest, window open root and tied parameters' gates (`Docket.tiedGates`), each tied
+node read under one root across the members (`tiedRootsAt`). Its cost is the members' ranges times their Definitions'
+parameters. -/
 def runInputRoots (v : Docket.Verifier) (P : Flock.Program.Prog) (rs : Array Flock.TemplateQuery.TRange)
     (ms : Array Member) (rec : Json) (roots : Std.HashMap String (Array Json)) :
     V (Std.HashMap String (Array Json)) := do
@@ -342,7 +363,9 @@ def runInputRoots (v : Docket.Verifier) (P : Flock.Program.Prog) (rs : Array Flo
   let prog := Flock.hexOf v.program.desc.sha512
   let tied := Docket.tiedGates v
   let mut acc := roots
+  let mut seen : Array (Nat × Json) := #[]
   for m in ms do
+    seen ← tiedRootsAt P rs tied m (acc.getD m.name #[]) seen
     acc := acc.insert m.name (← runInputRootsAt P rs prog v.windowRoot tied m (acc.getD m.name #[]) byPort)
   return acc
 

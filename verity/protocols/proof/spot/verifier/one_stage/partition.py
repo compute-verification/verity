@@ -201,6 +201,50 @@ def fanout(program: Program, query: Mapping[str, Any]) -> int:
     return max([1, *held.values()])
 
 
+def shared_inputs(program: Program, query: Mapping[str, Any], held: Iterable[range] = ()) -> list[int]:
+    """The run Input nodes of `program` (`program.INPUT_ID`; a registered input, and an Input node whose gates lie in one
+    of `held`, the gates of the parameters the verifier expects registered, are registered values, held by R7) whose
+    leaves a template query's proof blocks don't each read alone, in node order: a batch of more than one member reading
+    one whole (an argument it broadcasts), or two proof blocks reading one of its leaves, as the summary sees them a root
+    node at a time. A batch's members read disjoint elements of each argument it maps (`cut.member_refs`), so a batch
+    reads an Input node's leaves alone when no two of its references to them name one leaf; a call is one proof block,
+    whatever it reads twice. A strided run is taken at its span, and one that names a leaf twice, or two of a batch's
+    runs that overlap, count as shared. A served port's rows reach a proof block either as its own leaves or through a
+    registered value: a run Input two proof blocks read could hold rows one of them computed, which `fanout` can't see.
+    The variant with no members refuses such a node (`R8-shared-input`); the per-member variant holds each reader to the
+    node's one tree instead. `QueryRefused` for a query other than a template query."""
+    part = _template(program, query, "an Input's readers")
+    nodes, offsets, held = program.root.body.nodes, program.root.body.offsets, list(held)
+    run_input = {k for k, node in enumerate(nodes) if is_input(node.fn) and not is_registered(node.fn)
+                 and not any(h.start <= offsets[k] and offsets[k + 1] <= h.stop for h in held)}
+    shared: set[int] = set()
+    spans: dict[int, list[tuple[int, int]]] = {}
+    for k, _t, _lo, n in part.ranges:
+        node = nodes[k]
+        axes = node.axes if node.form == "batch" else (None,) * len(node.args)
+        mine: dict[int, list[tuple[int, int]]] = {}
+        for a, ax in zip(node.args, axes):
+            for i, lo, hi, once in _runs(a.refs):
+                if i not in run_input:
+                    continue
+                if n > 1 and (ax is None or not once):
+                    shared.add(i)
+                mine.setdefault(i, []).append((lo, hi))
+        for i, rs in mine.items():
+            rs.sort()
+            if n > 1 and any(b[0] < a[1] for a, b in zip(rs, rs[1:])):
+                shared.add(i)
+            spans.setdefault(i, []).extend(_merged(rs))
+    for i, rs in spans.items():
+        rs.sort()
+        top = None
+        for lo, hi in rs:
+            if top is not None and lo < top:
+                shared.add(i)
+            top = hi if top is None else max(top, hi)
+    return sorted(shared)
+
+
 def input_reads(program: Program, query: Mapping[str, Any], held: Iterable[range]) -> list[tuple[str, str, range]]:
     """Each template parameter whose argument reads an Input node inside one of `held`, as ``(template, parameter, the
     range of `held` it reads)``, a root node at a time, never its members or its gates. `QueryRefused` for a query other
@@ -322,5 +366,5 @@ def _merged(rs: Sequence[tuple[int, int]]) -> list[tuple[int, int]]:
 
 
 __all__ = ["template_id", "FORMAT", "QueryRefused", "cover", "cover_ranges", "covers", "digest", "evaluate", "fanout", "in_order", "is_template_query", "partition",
-           "program_digest", "program_sha512", "held_of", "held_value", "member_nodes", "member_reads", "ranges", "any_run_input", "run_inputs", "strata", "template_instance_query",
+           "program_digest", "program_sha512", "held_of", "held_value", "member_nodes", "member_reads", "ranges", "any_run_input", "run_inputs", "shared_inputs", "strata", "template_instance_query",
            "template_instances_query", "unit_gates", "units", "within", "QUERY_X"]

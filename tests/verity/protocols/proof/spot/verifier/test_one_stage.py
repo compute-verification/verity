@@ -810,21 +810,32 @@ def _two_programs(registered=()):
     return Program(bind(calls), registered=registered), Program(bind(batch), registered=registered)
 
 
-def test_r8_publishes_the_fan_out_and_a_run_input_two_proof_blocks_read_is_no_refusal_of_the_docket():
+def test_r8_publishes_the_fan_out_and_refuses_a_shared_run_input_only_in_the_variant_with_no_members():
     """R8, under a template query: the verdict publishes the fan-out F of the verifier's own program (`partition.fanout`),
-    1 for a population program and for two calls reading one table whole or a batch broadcasting it; a run Input two
-    proof blocks read is no refusal of the docket's, since its rows are one tree the members' check holds
-    (`members.run_input_roots_at`)."""
+    1 for a population program and for two calls reading one table whole or a batch broadcasting it. The variant with
+    no members refuses a run Input node whose leaves two proof blocks read (`R8-shared-input`,
+    `partition.shared_inputs`), which F can't see; the per-member variant doesn't, since it holds each reader to the
+    node's one tree (`members.run_input_roots_at`). A registered input, or a call reading a leaf twice, is no
+    sharing."""
     prog, q, rec = _registration(6)
     v = _check(rec, prog, q)
-    assert v.ok and v.fanout == 1 and v.to_json()["fanout"] == 1
+    assert v.ok and v.fanout == 1 and v.to_json()["fanout"] == 1 and P.shared_inputs(prog, q) == []
     for shared in _two_programs():
         n = P.units(shared, q)
+        inputs = [k for k, node in enumerate(shared.root.body.nodes) if is_input(node.fn)]
+        assert P.fanout(shared, q) == 1 and P.shared_inputs(shared, q) == inputs
         ports = _ports(shared, q, n)
         rec = DK.record(shared, q, SAMPLING_DESIGN, SCHEME, [{"port": p, "root": ROOTS[p], **ports[p]} for p in ports], SERVED,
                        leaf_layer="ee" * 64)
         v = _check(rec, shared, q)
-        assert v.ok and v.fanout == 1, v.codes
+        assert v.codes == ("R8-shared-input",) and v.detail["R8-shared-input"]["inputs"] == inputs and v.fanout == 1
+        v = _check(rec, shared, q, members=[([[u, u + 1]], 1) for u in range(n)])
+        assert "R8-shared-input" not in v.codes, v.codes
+    assert all(P.shared_inputs(p, q) == [] for p in _two_programs(registered=("t",)))
+    t = Array(2, Value(8))
+    twice = CompositeDefinition("OneStageTestOneCallTwice", 0, (), lambda S: ((("t", t),), Value(8)),
+                                lambda B, S, x: B.call(PAIR, array_of([x[0], x[0]])), register=False)
+    assert P.shared_inputs(Program(bind(twice)), q) == []
 
 
 def test_r7_refuses_a_registered_value_at_a_run_input_node():
@@ -893,7 +904,7 @@ def test_r7_refuses_a_supplied_input_with_no_source():
 def test_r8_lets_a_tied_run_input_through_and_publishes_it():
     """R8's tied values (`registration.check`'s `tied`): a run Input named tied is let through, and the verdict
     publishes it beside F (`Verdict.rests_on_period_check`), since its acceptance rests on the network period check that
-    ties its rows. A tied name that isn't a parameter of the program, one whose Input is a registered input, or one the
+    ties its rows; not named tied, the variant with no members refuses it (`R8-shared-input`). A tied name that isn't a parameter of the program, one whose Input is a registered input, or one the
     verifier expects registered or holds is refused (`R8-tied`) and lets nothing through; a tied value is never a
     registered value."""
     q = P.template_instance_query(PAIR.id)
@@ -906,18 +917,18 @@ def test_r8_lets_a_tied_run_input_through_and_publishes_it():
         assert v.ok and v.rests_on_period_check == ("t",) and v.fanout == 1
         assert v.to_json()["rests_on_period_check"] == ["t"]
         v = _check(rec, shared, q)
-        assert v.ok and v.rests_on_period_check == ()
+        assert v.codes == ("R8-shared-input",) and v.rests_on_period_check == ()
         v = _check(rec, shared, q, tied=["nope"])
-        assert v.codes == ("R8-tied",) and v.detail["R8-tied"]["tied"] == ["nope"]
+        assert v.codes == ("R8-tied", "R8-shared-input") and v.detail["R8-tied"]["tied"] == ["nope"]
         assert v.rests_on_period_check == ()
         v = _check(rec, shared, q, tied=["t", "nope"])
         assert v.codes == ("R8-tied",) and v.rests_on_period_check == ("t",)
-        assert R._readers(shared, q, {"t": 2}, (), ["t"]) == (1, (), ["t"])
-        assert R._readers(shared, q, {"t": 2}, ["t"], ["t"])[2] == ["t"]
-        assert R._readers(shared, {"name": "Q_all"}, {}, (), ["t", "nope"]) == (None, ("t",), ["nope"])
+        assert R._readers(shared, q, {"t": 2}, (), ["t"]) == (1, [], (), ["t"])
+        assert R._readers(shared, q, {"t": 2}, ["t"], ["t"])[3] == ["t"]
+        assert R._readers(shared, {"name": "Q_all"}, {}, (), ["t", "nope"]) == (None, [], ("t",), ["nope"])
     for registered in _two_programs(registered=("t",)):
         assert not P.run_inputs(registered, G.held_gates(registered, ["t"])[0])
-        assert R._readers(registered, q, {}, (), ["t"]) == (1, (), ["t"])
+        assert R._readers(registered, q, {}, (), ["t"]) == (1, [], (), ["t"])
     prog, q, rec = _registration(6)
     v = _check(rec, prog, q, tied=["x"])
     assert v.ok and v.rests_on_period_check == ("x",)
@@ -955,7 +966,8 @@ def test_r8_excuses_a_registered_weight_only_where_it_is_marked_and_pinned():
     passes with the registration and the SHA-512 the auditor's side holds for it, on a v1 record: the pin it accepts is
     no entry R7 reads. Without the registration it is refused by name (`R8-unpinned`), and at a wrong digest, a wrong
     domain or a wrong shape the registration is refused. A document with any key beside `program` and `values`, `reads`
-    among them, is another form (`R8-weights-form`). A pin of a parameter the program doesn't mark registered is not read."""
+    among them, is another form (`R8-weights-form`). A pin of a parameter the program doesn't mark registered excuses
+    nothing: two proof blocks reading it is refused in the variant with no members (`R8-shared-input`)."""
     q = P.template_instance_query(PAIR.id)
     for marked, unmarked in zip(_two_programs(registered=("t",)), _two_programs()):
         reads = sorted({(t, p, "t") for t, p, _ in P.input_reads(marked, q, G.held_gates(marked, ["t"]))})
@@ -977,8 +989,8 @@ def test_r8_excuses_a_registered_weight_only_where_it_is_marked_and_pinned():
         assert _weighed(marked, q, weights_of_record=bad).codes == ("R8-weights-shape",)
         for more in ({"reads": [list(r) for r in reads]}, {"reads": []}):
             assert _weighed(marked, q, weights_of_record=_weights([pin], **more)).codes == ("R8-weights-form",)
-        assert _weighed(unmarked, q, weights_of_record=_weights([_pin(unmarked)])).ok
-        assert _weighed(unmarked, q).ok
+        assert _weighed(unmarked, q, weights_of_record=_weights([_pin(unmarked)])).codes == ("R8-shared-input",)
+        assert _weighed(unmarked, q).codes == ("R8-shared-input",)
 
 
 def test_the_members_check_holds_a_marked_programs_reads_only_to_pins_r8_accepted():

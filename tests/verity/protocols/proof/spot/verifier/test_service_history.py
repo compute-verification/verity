@@ -162,15 +162,17 @@ def test_the_verdicts_log_and_records_are_the_whole_logs():
 
 def test_r8_lets_a_tied_value_through_on_both_verifiers():
     """R8's tied values on both verifiers, which compare the tied values a verdict publishes: a v1 record whose members
-    all read the run Input `W`, named tied, is let through and its verdict publishes `W`; not named, the members' check
-    holds its reads to the period's run Input tree; a name that isn't a parameter is refused, and so is `W` named tied
+    all read the run Input `W`, named tied, is let through and its verdict publishes `W`; not named, the variant with no
+    members refuses it (`R8-shared-input`), where the per-member variant holds its readers to the period's run Input
+    tree; a name that isn't a parameter is refused, and so is `W` named tied
     while expected registered (`R8-tied`), since a tied value is never a registered value. `W` marked registered, a v1
     record is refused whether or not `W` is named tied or expected by name: nothing pins its root (`R8-unpinned`)."""
     prog, marked = _program(registered=()), _program()
     first, ports = _registered_record(prog, _registered(prog))
     v1 = DK.record(prog, Q, SAMPLING_DESIGN, SCHEME, first["roots"], SERVED)
     for rec, registered, tied, codes, through in (
-            (v1, None, ["W"], (), ("W",)), (v1, None, None, (), ()), (v1, None, ["nope"], ("R8-tied",), ()),
+            (v1, None, ["W"], (), ("W",)), (v1, None, None, ("R8-shared-input",), ()),
+            (v1, None, ["nope"], ("R8-tied", "R8-shared-input"), ()),
             (first, {"W": 2}, ["W"], ("R7-run-input", "R8-tied"), ())):
         v = V.check(rec, prog, Q, SAMPLING_DESIGN, SCHEME, ports, None, (), (), None, None, registered, tied=tied)
         assert v.codes == codes and v.rests_on_period_check == through, (tied, v)

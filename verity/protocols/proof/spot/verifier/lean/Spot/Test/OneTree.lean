@@ -170,6 +170,15 @@ private def runRootsT (R : Option String) (rec : Json) (m : Member) (own : Array
 #guard (runRootsT (some rootT) (runRecT 2 runDomainT) (chunkT "A/c0" 0 2 none)).toOption.map (·.size) == some 0
 #guard (runRootsT (some rootT) (Json.mkObj []) (chunkT "A/c1" 2 4 none) (tied := #[(4, 4)])).toOption.map (·.size) ==
   some 0
+-- every reader of a tied node opens one root: a second root for it is refused by name, the same root is not
+#guard (tiedRootsAt (batchToy true) #[batchRangeT] #[(4, 4)] (chunkT "A/c1" 2 4 none)
+  #[Json.mkObj [("port", Json.str "w"), ("root", Json.str "a")]] #[]).toOption == some #[(1, Json.str "a")]
+#guard (tiedRootsAt (batchToy true) #[batchRangeT] #[(4, 4)] (chunkT "A/c1" 2 4 none)
+  #[Json.mkObj [("port", Json.str "w"), ("root", Json.str "a")]] #[(1, Json.str "a")]).toOption == some #[(1, Json.str "a")]
+#guard whyT (tiedRootsAt (batchToy true) #[batchRangeT] #[(4, 4)] (chunkT "A/c1" 2 4 none)
+  #[Json.mkObj [("port", Json.str "w"), ("root", Json.str "b")]] #[(1, Json.str "a")]) == TIED_ROOTS_WHY 1
+#guard (tiedRootsAt (batchToy true) #[batchRangeT] #[] (chunkT "A/c1" 2 4 none)
+  #[Json.mkObj [("port", Json.str "w"), ("root", Json.str "b")]] #[(1, Json.str "a")]).toOption == some #[(1, Json.str "a")]
 -- no tree in the record, a root of the member's own, another leaf count, another domain, no open root: refused by name
 #guard whyT (runRootsT (some rootT) (Json.mkObj [("roots", Json.arr #[])]) (chunkT "A/c1" 2 4 none)) ==
   RUN_TREE_MISSING_WHY "A/c1" "w" 1
@@ -185,6 +194,8 @@ private def runRootsT (R : Option String) (rec : Json) (m : Member) (own : Array
 #guard whyT (runRootsT (some rootT) (Json.mkObj [("roots", Json.arr #[])]) (chunkT "A/c" 0 0 none #[(0, 1), (3, 4)])) ==
   TWO_READS_WHY "A/c" "w" 0 1
 -- the refusals' text, which `members` prints word for word
+#guard TIED_ROOTS_WHY 3 == "members: C's tied run input node 3 is read under two roots: every reader of a tied node " ++
+  "opens one tree"
 #guard TWO_READS_WHY "a" "p" 1 2 == "registered reads: member a's units read parameter p at C's input nodes 1 and 2: a " ++
   "parameter that reads an input reads one node, each port one tree"
 #guard RUN_TREE_MISSING_WHY "a" "p" 3 == "member a: port p reads C's run input node 3, and the record holds no root of " ++

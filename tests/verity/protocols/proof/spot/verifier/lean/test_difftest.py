@@ -5153,7 +5153,7 @@ def test_r8_holds_registered_inputs_to_the_weights_of_record_as_python_does(piec
              (s, _weights_doc([_pin(marked, "x", leaves=pin["leaves"] + 1)]), [], ["R8-weights-shape"]),
              (s, _weights_doc([pin], reads=[list(r) for r in reads]), [], ["R8-weights-form"]),
              (s, _weights_doc([pin], reads=[]), [], ["R8-weights-form"]),
-             (plain, doc, [], []),
+             (plain, doc, [], ["R8-shared-input"]),
              (Setup(marked, PO.query()), None, [], None)]
     for setup, weights, entries, want in cases:
         named, expanded = service.params_sampling_design("rate:1/2", setup.program, setup.query, None)
@@ -5239,10 +5239,10 @@ def test_r7_refuses_a_pinned_values_entry_whose_domain_alone_differs_as_python_d
 def test_r8_reads_the_readers_python_does(pieces):
     """R8 past a population program, Lean's answers the Python's: two calls of `PAIR` on one pair of `x`, or a batch
     broadcasting it, at F 1, and a call reading another's result, whose result a batch of two maps, joining all three at
-    F 4, which the docket publishes; a run Input two proof blocks read is no refusal of the docket's (its rows are one
-    tree the members' check holds); `x` named tied is let through, which the docket publishes, and a tied name that
-    isn't a parameter is refused (`R8-tied`)."""
-    for s, f in zip(READER_SETUPS, (1, 1, 4)):
+    F 4, which the docket publishes; a run Input two proof blocks read is refused in the variant with no members
+    (`R8-shared-input`) and not with members, whose check holds its readers to the node's one tree; `x` named tied is
+    let through, which the docket publishes, and a tied name that isn't a parameter is refused (`R8-tied`)."""
+    for s, f, shared in zip(READER_SETUPS, (1, 1, 4), (True, True, False)):
         case = {"program": s.desc, "query": _json(s.query)}
         assert fanout(case) == {"fanout": f}
         assert D.replay(FANOUT, case, pieces) == ("output", D.canonical(fanout(case)))
@@ -5252,11 +5252,15 @@ def test_r8_reads_the_readers_python_does(pieces):
                             "partition": None, "ports": s.ports, "program": s.desc, "query": s.query, "registered": None,
                             "scheme": SCHEME, "work_table": None}, "record": rec}
         reg = registration(given)
-        assert reg == {"codes": [], "fanout": f}
+        assert reg == {"codes": ["R8-shared-input"] if shared else [], "fanout": f}
         assert D.replay(REGISTRATION, given, pieces) == ("output", D.canonical(reg))
+        n = P.units(s.program, s.query)
+        each = {**given, "members": [{"units": [[u, u + 1]], "vus_per_block": 1} for u in range(n)]}
+        assert "R8-shared-input" not in registration(each)["codes"]
+        assert D.replay(REGISTRATION, each, pieces) == ("output", D.canonical(registration(each)))
         sig = _json([[name, t.to_json()] for name, t in s.program.fn.signature()[0]])
         for tied, want in ((["x"], {"codes": [], "fanout": f, "rests_on_period_check": ["x"]}),
-                           (["nope"], {"codes": ["R8-tied"], "fanout": f})):
+                           (["nope"], {"codes": ["R8-tied", *(["R8-shared-input"] if shared else [])], "fanout": f})):
             tied_given = {**given, "params": {**given["params"], "parameters": sig, "tied": tied}}
             assert registration(tied_given) == want
             assert D.replay(REGISTRATION, tied_given, pieces) == ("output", D.canonical(want))

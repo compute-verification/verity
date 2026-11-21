@@ -907,7 +907,7 @@ t = json.loads(line[4:])
 w, ok = t["record"][:16], "PASS" if t["chained"] else "FAIL"
 print(f"the audit read its records tied to W {w}…, R chained right after it: {ok}")' 2>&1 \
     | tail -1 | cut -c1-400)"
-  say "V3C-AUDIT $(grep -m1 '^WEIGHTS ' "$LOGS/v3c-audit/audit.log" | cut -c9-400)"
+  ! grep -q '^WEIGHTS ' "$LOGS/v3c-audit/audit.log" || say "V3C-AUDIT $(grep -m1 '^WEIGHTS ' "$LOGS/v3c-audit/audit.log" | cut -c9-400)"
   say "V3C-AUDIT class $V3C (records_audit.py exit $rc), $("$PY" "$SV" coins --challenger "$V3C_CHALLENGER" \
     --summary "$VW/audit/summary.json" 2>&1 | tail -1 | cut -c1-300): $(grep -m1 '^RECORDS' "$LOGS/v3c-audit/audit.log" | cut -c1-3000)"
   [ -n "$(grep -m1 '^RECORDS' "$LOGS/v3c-audit/audit.log")" ] \

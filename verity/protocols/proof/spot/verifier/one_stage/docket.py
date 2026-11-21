@@ -29,6 +29,10 @@
     tree, which the members' check holds (`members.run_input_roots_at`), and are never a registered value; and a
     supplied anchor (`registered.root/v1`, `registered.domain/v1`) of a value V that neither the verifier's pinned
     roots nor the weights' registration of record pins (`anchor_unpinned`, `R7-anchor-unpinned`);
+  - R8, in the variant with no members (no ``members``), under a template query: each run Input node's leaves, other
+    than a parameter's the verifier expects registered or a tied one's, are read by one proof block alone
+    (`partition.shared_inputs`, `R8-shared-input`); the per-member variant holds each reader to the node's one tree
+    instead;
   - R8, under a template query: the verdict publishes the query's fan-out F on the verifier's program (`partition.fanout`, `Verdict.fanout`), the N at which the capped two-stage form charges a
     replay block (`plancheck.two`'s `fanout`). A run Input a parameter the verifier names `tied` holds is let through:
     the network period check ties its rows to the dockets that computed them, which this check doesn't, so the
@@ -176,6 +180,9 @@ POOL_SPENT = "pool_spent"
 UNREAD: Any = object()
 TIED_WHY = ("a tied value is a run Input of the program whose rows a later check ties to the registrations that computed "
             "them: a parameter of the program, neither registered nor held, whose gates are one interval of run Input nodes")
+SHARED_WHY = ("a run Input node whose leaves two proof blocks read, or a batch broadcasts, could hold rows one of them "
+              "computed, which the fan-out can't see, and the variant with no members holds no one tree of it: give each "
+              "proof block its own leaves, or bind the value at registration")
 RUN_INPUT_WHY = ("a run Input's rows are committed once, in its one tree, before any coin: a registered value, a supplied "
                  "one included, is no run Input node")
 #: the supplied functions whose value is a registered value's root or domain (`anchor_unpinned`)
@@ -544,7 +551,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
     _seed_salt(seed_salt, window)
     _registered_compiler(compiler)
     refuse_unwindowed(unwindowed(program, registered or {}, formats, window, fixed, log))
-    fan, through, bad = _readers(program, query, registered or {}, held or (), tied or ())
+    fan, shared, through, bad = _readers(program, query, registered or {}, held or (), tied or ())
     weights, _accepted = weights_held(program, query, registered or {}, weights_of_record,
                                       held_entries(program, registered or {}, formats, window_root, held, sup, pins,
                                                    outs, log))
@@ -635,6 +642,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
     # R8
     if bad:
         c.fail("R8-tied", {"tied": bad, "why": TIED_WHY})
+    if shared and not members:
+        c.fail("R8-shared-input", {"inputs": shared, "why": SHARED_WHY})
     for code, d in weights:
         c.fail(code, {"refused": d, "why": WEIGHTS_WHY[code]})
     if members:
@@ -649,21 +658,23 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
 
 
 def _readers(program: Program, query: Mapping[str, Any], registered: Iterable[str], held: Iterable[str],
-             tied: Sequence[str]) -> tuple[int | None, tuple[str, ...], list[str]]:
-    """R8's reading of `program`: under a template query that applies, its fan-out (`partition.fanout`), else None; the
-    tied names it lets through (`_tied`, the Lean's `Docket.tiedThrough`); and the tied names it can't let through. A
+             tied: Sequence[str]) -> tuple[int | None, list[int], tuple[str, ...], list[str]]:
+    """R8's reading of `program`: under a template query that applies, its fan-out (`partition.fanout`), else None, and
+    the run Input nodes its proof blocks don't each read alone outside the gates of the parameters the verifier expects
+    `registered` and of the tied ones (`partition.shared_inputs`), else none; the tied names it lets through (`_tied`, the Lean's `Docket.tiedThrough`); and the tied names it can't let through. A
     function of the program, query and verifier alone, so a verdict publishes F and the tied names it let through
     whatever the record."""
-    gates = _tied(program, tied, list(registered), held)
+    registered = list(registered)
+    gates = _tied(program, tied, registered, held)
     bad = [t for t, g in zip(tied, gates) if g is None]
     through = tuple(t for t, g in zip(tied, gates) if g is not None)
-    fan = None
-    if P.is_template_query(query):
-        try:
-            fan = P.fanout(program, query)
-        except P.QueryRefused:
-            fan = None
-    return fan, through, bad
+    if not P.is_template_query(query):
+        return None, [], through, bad
+    try:
+        fan, own = P.fanout(program, query), P.shared_inputs(program, query, G.held_gates(program, registered))
+    except P.QueryRefused:
+        return None, [], through, bad
+    return fan, [k for k in own if not any(g is not None and P.within(program, g, k) for g in gates)], through, bad
 
 
 def run_input_named(program: Program, registered: Iterable[str]) -> list[str]:
@@ -677,8 +688,7 @@ def anchor_unpinned(marks: Mapping[str, Mapping[str, Any]], pinned: Mapping[str,
     """The values V of C's supplied anchors (`marks`, `registered.marks`: a mark of a function of `ANCHOR_FUNCTIONS`)
     that are neither in the verifier's `pinned` nor pinned by the weights' registration of record (`_of_record`'s
     pins), each once, in the marks' order; R7 refuses them (`R7-anchor-unpinned`). C's marks come from a descriptor's
-    `inputs`, which no descriptor carries until circuits writes them into C (`codec` writes none): until then it
-    refuses nothing. The Lean's `Docket.anchorUnpinned` is this."""
+    `inputs`, a field no circuit description carries today (`codec` writes none), so it refuses nothing yet. The Lean's `Docket.anchorUnpinned` is this."""
     held = set(pinned or {}) | (set(_of_record(of_record)[1]) if of_record is not None else set())
     out: list[str] = []
     for m in marks.values():
