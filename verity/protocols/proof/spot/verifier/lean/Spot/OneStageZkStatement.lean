@@ -1088,14 +1088,13 @@ def designKind (d : Json) : String :=
 /-- **The subset design** (module docstring, **population**): the verifier's sampling design (`OneStage.design`'s, a
 rate resolved) and the registration's `law` are both of the `subset` kind, All among them. The one design whose
 draw reads no stratum (`Flock.Draw.drawWith`'s `subset`: the drawn indices are the units), so the strata need only be
-a disjoint cover of the population (`Slots.popCoverOk`, `Member.heldAt`). -/
+a disjoint cover of the population (`Slots.popCovers`, `Member.heldAt`). -/
 def subsetDesign (v : Docket.Verifier) (record : Json) : Bool :=
   jsonStrIs (getD v.samplingDesign "law") "subset" && jsonStrIs (getD (getD record "law") "law") "subset"
 
 /-- The registration's population held to the verifier's program (module docstring, **population**): the record names
 a population `n`, and under the verifier's query the program's proof blocks are its `n` units in order
-(`Slots.popOk`), or under a subset design (`subsetDesign`) its strata's ranges are a disjoint cover of them
-(`Slots.popCoverOk`); a cover that is not the units in order is refused by name under any other design
+(`Slots.popOk`), or under a subset design (`subsetDesign`) they are its units in any order (`Slots.popCovers`); a cover that is not the units in order is refused by name under any other design
 (`FilePart.STRATA_DESIGN`). This module imports `Spot.PopOrder`, so the call runs from the query's ranges
 (`Slots.popOk_eq_popOkRanges`) and builds no proof block: without the import it would run `Slots.layout`, a proof block
 for every input gate of the root. -/
@@ -1104,7 +1103,7 @@ def popHeld (v : Docket.Verifier) (record : Json) : V Unit :=
   | none => throw "the record names no population"
   | some n =>
     if Slots.popOk v.program v.query n then pure ()
-    else if Slots.popCoverOk v.program v.query n then
+    else if Slots.popCovers v.program v.query n then
       if subsetDesign v record then pure () else throw (FilePart.STRATA_DESIGN (designKind v.samplingDesign))
     else throw POPULATION_ORDER
 
