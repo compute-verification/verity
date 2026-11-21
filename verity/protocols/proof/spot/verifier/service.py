@@ -151,6 +151,7 @@ from . import levels as LV, window_place as WP
 from verity.protocols.proof.spot.verifier.one_stage import (
     audit as A,
     draw as D,
+    members as MB,
     partition as P,
     registered as G,
     docket as R,
@@ -1827,7 +1828,9 @@ class Stream:
         when either check fails, or, after both,
         when the sampling design is `bernoulli` at any p (`bernoulli`, `BERNOULLI`), when the stream is two-stage
         (`levels-not-proved`, `levels.TWO_LEVELS_REFUSED`: two levels are built and refused), when the program's proof blocks read stratum by stratum
-        are not its N proof blocks in order (`population-order`, `partition.in_order`), or its fleet refuses it (`halted`)."""
+        are not its N proof blocks in order (`partition.in_order`) nor a disjoint cover of them (`population-order`,
+        `partition.covers`), or are a cover under a design that is not subset at both the spec and the docket
+        (`strata-design`, `members.subset_designs`), or its fleet refuses it (`halted`)."""
         deadline = self.spec.check.registration_deadline
         op: dict[str, Any] = {"op": "register"}
         got: dict[str, Any] = {}
@@ -1868,7 +1871,10 @@ class Stream:
                 if v.ok and self.n_rho is not None:
                     v = _refuse(LV.NOT_PROVED, {"reason": LV.TWO_LEVELS_REFUSED}).verdict
                 if v.ok and not P.in_order(program, self.query, n):
-                    v = _refuse("population-order", {"population": n}).verdict
+                    if not P.covers(program, self.query, n):
+                        v = _refuse("population-order", {"population": n}).verdict
+                    elif not MB.subset_designs(sampling_design, record):
+                        v = _refuse("strata-design", {"population": n, "law": sampling_design}).verdict
                 got.update(program=program, law=sampling_design, table=table, earlier=earlier)
             if v.ok and self._fleet is not None:
                 try:

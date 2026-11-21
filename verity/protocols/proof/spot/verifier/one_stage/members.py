@@ -142,6 +142,46 @@ ROW_TABLES = ("roots: the registration names a row tables' root (row-table), the
 MEMBER_STRATA = ("partition: the registration's strata, read stratum by stratum, are not its units in order, or a unit "
                  "of the member's is past them: a member's strata are the registration's, each restricted to the "
                  "member's units")
+#: `OneStageZk.MEMBER_COVER`
+MEMBER_COVER = ("partition: the registration's strata's ranges are not a disjoint cover of its units 0, 1, …, N - 1, or a "
+                "unit of the member's is past them")
+
+
+def strata_design(kind: str) -> str:
+    """`FilePart.STRATA_DESIGN`: the refusal of strata that cover the units out of order under a design of kind `kind`."""
+    return ("partition: the registration's strata are a disjoint cover of its units, not its units in order stratum by "
+            f"stratum, and the sampling design is {kind}: only a subset design's draw reads no stratum")
+
+
+def subset_design(law: Any) -> bool:
+    """`OneStageZk.subsetDesign`'s verifier half: the resolved sampling design `law` (`resolved`) is a subset object, All
+    among them."""
+    return isinstance(law, dict) and law.get("law") == "subset"
+
+
+def resolved(params: Mapping[str, Any], program: Program) -> Any:
+    """The parameters' `law` as Lean's `OneStage.design` resolves it before any check reads it
+    (`service.params_sampling_design`): a rate to its sampling design over the program's population, an object as given;
+    None where it does not resolve, which the parameters' check refuses."""
+    from verity.protocols.proof.spot.verifier.service import params_sampling_design
+    try:
+        return params_sampling_design(params.get("law"), program, params["query"], params.get("work_table"))[0]
+    except ValueError:
+        return None
+
+
+def subset_designs(law: Any, record: Any) -> bool:
+    """`OneStageZk.subsetDesign`: the parameters' `law` is of the subset kind (`subset_design`) and so is the
+    registration `record`'s."""
+    rl = record.get("law") if isinstance(record, dict) else None
+    return subset_design(law) and isinstance(rl, dict) and rl.get("law") == "subset"
+
+
+def _kind(law: Any) -> str:
+    """`OneStageZk.designKind` of a resolved sampling design `law`."""
+    return law["law"] if isinstance(law, dict) and isinstance(law.get("law"), str) else "unnamed"
+
+
 #: `OneStageZk.MEMBER_UNITS`
 MEMBER_UNITS = ("units: the public file's units.indices are not exactly the member's units, in order: slot i of its "
                 "table is the member's i-th unit")
@@ -1200,23 +1240,34 @@ def registered_reads(registered: Mapping[str, Any] | None) -> tuple[set[tuple[st
     return {(p, e["value"]) for p, e in held.items()}, held
 
 
-def population_why(units: Sequence[Sequence[int]], strata: Sequence[tuple[str, Sequence[Sequence[int]]]], header: Any,
-                   slice_: Mapping[str, Any], reads: Collection[tuple[str, str]] = (),
-                   held: Mapping[str, Any] | None = None) -> str | None:
-    """`OneStageZk.Member.population` past its files' reads: why a member of the units `units` (ranges ``[lo, hi)``) is
-    not what its public file's header `header` holds at the docket's `strata` and the member's slice `slice_` of
-    the record (``{population, roots, scheme}``); None when it is. The docket's strata read stratum by stratum
-    are its units in order and hold the member's (`MEMBER_STRATA`), the header's ``units.indices`` are exactly the
-    member's units in order (`MEMBER_UNITS`), a port of its ``frame_v3`` roots the slice holds no root of is refused
-    by name, the first in key order (`unwired_why`), and its scheme, ``frame_v3`` roots, their ``domain_ids`` and its
-    ``instances`` are the slice's (`Record.matchesPublic`'s codes)."""
+def _walk(strata: Sequence[tuple[str, Sequence[Sequence[int]]]]) -> int | None:
+    """`FilePart.sizes`' walk: N where the strata read stratum by stratum are the units ``0, ..., N - 1`` in order."""
     at = 0
     for _t, rs in strata:
         for lo, hi in rs:
             if lo != at or hi < lo:
-                return MEMBER_STRATA
+                return None
             at = hi
-    if not all(hi <= at for _lo, hi in units):
+    return at
+
+
+def population_why(units: Sequence[Sequence[int]], strata: Sequence[tuple[str, Sequence[Sequence[int]]]], header: Any,
+                   slice_: Mapping[str, Any], reads: Collection[tuple[str, str]] = (),
+                   held: Mapping[str, Any] | None = None, subset: bool = False) -> str | None:
+    """`OneStageZk.Member.population` past its files' reads: why a member of the units `units` (ranges ``[lo, hi)``) is
+    not what its public file's header `header` holds at the docket's `strata` and the member's slice `slice_` of
+    the record (``{population, roots, scheme}``); None when it is. The docket's strata read stratum by stratum
+    are its units in order and hold the member's (`MEMBER_STRATA`), or under a subset design (`subset`,
+    `Member.subset`) are a disjoint cover of them that holds the member's (`MEMBER_COVER`), the header's ``units.indices`` are exactly the
+    member's units in order (`MEMBER_UNITS`), a port of its ``frame_v3`` roots the slice holds no root of is refused
+    by name, the first in key order (`unwired_why`), and its scheme, ``frame_v3`` roots, their ``domain_ids`` and its
+    ``instances`` are the slice's (`Record.matchesPublic`'s codes)."""
+    walk = _walk(strata)
+    if subset and walk is None:
+        n = P.cover(strata)
+        if n is None or not all(hi <= n for _lo, hi in units):
+            return MEMBER_COVER
+    elif walk is None or not all(hi <= walk for _lo, hi in units):
         return MEMBER_STRATA
     h = header if isinstance(header, dict) else {}
     indices = h["units"].get("indices") if isinstance(h.get("units"), dict) else None
@@ -1265,7 +1316,7 @@ def flock_form(circuit: Path, public: Path, tables: Sequence[tuple[str, Path]]) 
 
 def files_why(circuit: Path, public: Path, tables: Sequence[tuple[str, Path]], units: Sequence[Sequence[int]],
               strata: Any, slice_: Mapping[str, Any], form: Form, reads: Collection[tuple[str, str]] = (),
-              held: Mapping[str, Any] | None = None) -> str | None:
+              held: Mapping[str, Any] | None = None, subset: bool = False) -> str | None:
     """`OneStageZk.StepAt.filesHeld` as far as this answers it (module docstring): why the files of a member of the
     units `units` are refused with no session, the first of Lean's that applies, None where none does. A circuit that
     does not parse or a public file that does not load (`form`'s refusal, which is the scope's word for word,
@@ -1286,12 +1337,13 @@ def files_why(circuit: Path, public: Path, tables: Sequence[tuple[str, Path]], u
         header = _header(public)
     except ValueError as e:
         raise Outside(f"{e}, whose refusal is the Lean parser's own") from None
-    return population_why(units, strata, header, slice_, reads, held)
+    return population_why(units, strata, header, slice_, reads, held, subset)
 
 
 def _files(name: str, m: Mapping[str, Any], blobs: Mapping[str, Path], descriptor: bytes, partition: Mapping[str, Any],
            strata: Any, slice_: Mapping[str, Any], form: Form,
-           derived: Path, decoded: OC.Decoded | None = None) -> tuple[Path, Path, tuple[tuple[str, Path], ...]]:
+           derived: Path, decoded: OC.Decoded | None = None,
+           subset: bool = False) -> tuple[Path, Path, tuple[tuple[str, Path], ...]]:
     """`OneStageZk.Member.files`: the member `name`'s circuit file, C_S as `OneStageZk.restrict` derives it
     (`one_circuit.restrict`, then `one_circuit.lower`), written under `derived`, and public files and its own lookup
     tables, the blobs' pinned tables its circuit looks up (`proofs.own_tables`, `OneStageZk.ownTables`), read as
@@ -1331,7 +1383,7 @@ def _files(name: str, m: Mapping[str, Any], blobs: Mapping[str, Path], descripto
             raise _Refused(f"vus_per_block: the member's circuit has {g} units a proof block, not the "
                            f"{m['vus_per_block']} the parameters name")
         reads, held = registered_reads(m["registered"])
-        if (why := files_why(circuit, public, tables, m["units"], strata, slice_, form, reads, held)) is not None:
+        if (why := files_why(circuit, public, tables, m["units"], strata, slice_, form, reads, held, subset)) is not None:
             raise _Refused(why)
     except _Refused as e:
         raise _Refused(f"member {name}: {e}") from None
@@ -1431,7 +1483,11 @@ def _members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence:
         if not _nat(record.get("population")):
             raise _Refused("the record names no population")
         if not P.in_order(program, params["query"], record["population"]):
-            raise _Refused(POPULATION_ORDER)
+            if not P.covers(program, params["query"], record["population"]):
+                raise _Refused(POPULATION_ORDER)
+            mine = resolved(params, program)
+            if not subset_designs(mine, record):
+                raise _Refused(strata_design(_kind(record.get("law") if subset_design(mine) else mine)))
         _laid(ms, record)
         _class(ms)
         _tree_ports_held(ms, record)
@@ -1449,7 +1505,7 @@ def _members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence:
             strata = e
         files = {name: _files(name, m, blobs, descriptor, params["partition"], strata,
                               {"population": _count(m), "roots": roots[name], "scheme": record.get("scheme")}, form,
-                              derived, decoded)
+                              derived, decoded, subset_design(resolved(params, program)))
                  for name, m in ms.items()}
         findings: list[PF.Finding] = []
         for st, name in zip(sts, held):
@@ -1480,9 +1536,9 @@ def run_reason(run: Run | None, refused: str | None) -> str | None:
     return None if run is not None else f"proofs: {refused}"
 
 
-__all__ = ["EXITS", "Form", "MEMBERS_LAID", "MEMBER_STRATA", "MEMBER_UNITS", "NO_CHALLENGER",
+__all__ = ["EXITS", "Form", "MEMBERS_LAID", "MEMBER_COVER", "MEMBER_STRATA", "MEMBER_UNITS", "NO_CHALLENGER",
            "Outside", "POPULATION_ORDER", "PROVED_UNITS", "ROW_TABLES", "Run", "Statement", "TABLES",
            "TABLE_PORT", "UNREAD", "blobs_of", "case_check", "check", "files_why", "flock_form", "flock_verdict",
            "field_trees_why", "members_run", "population_why", "POPULATION_WHY", "registered_at", "registered_reads",
            "return_fields", "run_reason", "shared_unread", "unregistered_why", "unwired_why", "own_root_why",
-           "pinned_read_why", "pins_held", "port_twice_why", "read_pins", "unpinned_read_why", "run_own_root_why", "run_tree_missing_why", "run_tree_why", "run_tree_unbound_why", "run_input_roots_at", "run_tree_held", "member_inputs", "reg_rows", "read_form_why", "two_reads_why", "slice_no_port_why", "wired_tree_why"]
+           "pinned_read_why", "pins_held", "port_twice_why", "read_pins", "unpinned_read_why", "run_own_root_why", "run_tree_missing_why", "run_tree_why", "run_tree_unbound_why", "run_input_roots_at", "run_tree_held", "member_inputs", "reg_rows", "read_form_why", "two_reads_why", "slice_no_port_why", "strata_design", "resolved", "subset_design", "subset_designs", "wired_tree_why"]

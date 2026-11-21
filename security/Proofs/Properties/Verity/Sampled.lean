@@ -3,6 +3,7 @@ module
 public import Properties.Verity.Game
 public import Proofs.Properties.Verity.Soundness.Composite
 public import Properties.Spot.Draw
+public import Proofs.Flock.Bridge.PopCovers
 public import Proofs.Flock.Bridge.V5.Statement
 public import Proofs.Flock.Bridge.CircuitOf
 public import Proofs.Flock.Claims.Bridge.CustodyZkP
@@ -123,7 +124,7 @@ open scoped ENNReal
 /-- **The session v2 sets up on the parameters and the committed files**: V5's binders, each the value v2's check
 derives (the files' parse, the public file over the circuit's empty public input ports, the ports' published domains
 distinct, the population, the registration's descriptor, query, sampling-design object and work table and the
-population's order, and the sampling design the verifier samples under from them, a subset one), the device's byte
+strata's cover of the population, and the sampling design the verifier samples under from them, a subset one), the device's byte
 stream the sample reads, A3 at those bytes and the verify command's tags as fields, and the bound's parameters. The
 registration, the sample file (the printed one), the writer and the rounds' digest are the ones the period's
 registration fixes (`Live.Reg`, `Live.dj`, `Live.wr`, `Live.dg`), and `live-verifier` holds at the writer under the
@@ -155,8 +156,8 @@ structure Live where
   desc : Hash.Msg
   /-- the registration's query -/
   qr : Lean.Json
-  /-- the registration's population is the public file's proof blocks, in order -/
-  hpop : Flock.Bridge.PopMatches desc qr n
+  /-- the registration's strata cover the public file's proof blocks, in any order -/
+  hpop : Flock.Bridge.PopCovers desc qr n
   /-- the registration's sampling-design object and work table -/
   lj : Lean.Json
   tb : Option Lean.Json
@@ -309,11 +310,11 @@ theorem hCust : FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw (mPts := mPts
 theorem hb : Flock.Bridge.NotBernoulli A.design := Flock.Bridge.notBernoulli_designAt _ _ _ _ _
 
 /-- **The sampling design is on the strata of the registration's layout and samples `kd` proof blocks**, at the
-registration's population (`Flock.Bridge.samplingDesignOn_samplesUnder`); where the registration names no sampling design, the
+registration's population, which they cover, under its subset design (`Flock.Bridge.samplingDesignOn_samplesUnder_cover`); where the registration names no sampling design, the
 verifier samples under `subset 0`, which samples none. -/
 theorem hlaw : Flock.Bridge.SamplingDesignOn A.design (Flock.Bridge.nsOf A.desc A.qr) A.kd := by
   rcases Flock.Bridge.designAt_cases A.desc A.qr A.lj A.tb A.n with h | h
-  · exact Flock.Bridge.samplingDesignOn_samplesUnder A.hpop h (Flock.Bridge.notBernoulli_samplesUnder h)
+  · exact Flock.Bridge.samplingDesignOn_samplesUnder_cover A.hpop h ⟨_, A.hsub⟩
   · unfold Live.kd Live.design
     rw [h]
     exact ⟨rfl, Nat.zero_le _⟩

@@ -75,6 +75,38 @@ def evidence (log : Json) : OneStageZk.Evidence :=
 
 #guard why? (OneStageZk.popHeld V3 (Json.mkObj [("population", (2 : Nat))])) == OneStageZk.POPULATION_ORDER
 
+/-- Ranges of templates `(t, first, count)`, as the query lists them. -/
+def tranges (rs : List (String × Nat × Nat)) : Array Flock.TemplateQuery.TRange :=
+  rs.toArray.map fun (template, first, count) => { node := 0, template, first, count }
+
+-- PAIR, TRIPLE, PAIR: the strata `PAIR [0, 2) [5, 7)`, `TRIPLE [2, 5)`, a cover of 7 that `popOk`'s walk refuses
+#guard Slots.segsOf (tranges [("PAIR", 0, 2), ("TRIPLE", 2, 3), ("PAIR", 5, 2)]) == [(0, 2), (5, 7), (2, 5)]
+#guard !Slots.chain (Slots.segsOf (tranges [("PAIR", 0, 2), ("TRIPLE", 2, 3), ("PAIR", 5, 2)])) 0 7
+#guard FilePart.coverRanges (Slots.segsOf (tranges [("PAIR", 0, 2), ("TRIPLE", 2, 3), ("PAIR", 5, 2)])) == some 7
+-- an overlap, a gap, and a range past the population's 7
+#guard FilePart.coverRanges (Slots.segsOf (tranges [("PAIR", 0, 2), ("TRIPLE", 1, 4), ("PAIR", 5, 2)])) == none
+#guard FilePart.coverRanges (Slots.segsOf (tranges [("PAIR", 0, 2), ("TRIPLE", 2, 2), ("PAIR", 5, 2)])) == none
+#guard FilePart.coverRanges (Slots.segsOf (tranges [("PAIR", 0, 2), ("TRIPLE", 2, 3), ("PAIR", 5, 3)])) != some 7
+-- the contiguous layout: the walk and the cover both take it
+#guard Slots.chain (Slots.segsOf (tranges [("PAIR", 0, 4), ("TRIPLE", 4, 3)])) 0 7
+#guard FilePart.coverRanges (Slots.segsOf (tranges [("PAIR", 0, 4), ("TRIPLE", 4, 3)])) == some 7
+
+/-- The record of a registration under the law `law`. -/
+def lawRecord (law : String) : Json := Json.mkObj [("law", Json.mkObj [("law", law), ("k", (1 : Nat))])]
+
+#guard OneStageZk.subsetDesign V3 (lawRecord "subset")
+#guard !OneStageZk.subsetDesign V3 (lawRecord "stratified")
+#guard !OneStageZk.subsetDesign { V3 with samplingDesign := Json.mkObj [("law", "stratified"), ("k", (1 : Nat))] }
+  (lawRecord "subset")
+#guard !OneStageZk.subsetDesign { V3 with samplingDesign := Json.mkObj [("law", "work"), ("k", (1 : Nat))] }
+  (lawRecord "work")
+#guard OneStageZk.designKind (Json.mkObj [("law", "stratified"), ("k", (1 : Nat))]) == "stratified"
+-- V3's own layout is in order: the walk takes it under any design
+#guard match Partition.units V3.program V3.query with
+  | .ok n => why? (OneStageZk.popHeld V3 (Json.mkObj [("population", n), ("law", Json.mkObj [("law", "stratified"),
+      ("k", (1 : Nat))])])) == "ok"
+  | .error _ => false
+
 /-- A circuit of `upv` units, each returning `leaves` output leaves. -/
 def circuit (upv leaves : Nat) : Flock.Circuit :=
   { name := "c", sha := ByteArray.empty, nets := #[], ranges := #[], ports := #[], outPorts := #[], g := 0, kLog := 0,
