@@ -467,7 +467,7 @@ name `port`: its domain, leaves, root and `tree`, the tree's own port `<template
 def fieldRootIn (ft : Std.HashMap String (Array (String × Json))) (template field port : String) : Option Json :=
   ((ft.getD template #[]).find? (·.1 == field)).map fun (_, e) =>
     Json.mkObj [("domain", getD e "domain"), ("leaves", getD e "leaves"), ("port", .str port), ("root", getD e "root"),
-      ("tree", .str s!"{template}/{field}")]
+      ("tree", .str (template ++ "/" ++ field))]
 
 /-- **The registration's tree of a writer template's output field**, under the reader's port name `port`: the record
 `rec`'s root at `<template>/<field>` (`fieldTreesOf`, `fieldRootIn`), the window's one tree of the template's field
