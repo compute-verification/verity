@@ -462,10 +462,12 @@ def fieldTreesOf (ts : Std.HashSet String) (rec : Json) : Std.HashMap String (Ar
   | _ => {}
 
 /-- The window's tree of template `template`'s field `field` among the trees `ft` (`fieldTreesOf`), under the port
-name `port`: its domain, leaves, root and `tree`; none where the record names no such tree. -/
+name `port`: its domain, leaves, root and `tree`, the tree's own port `<template>/<field>`, which `headerHeldAt` and
+`portTreeHeld` read; none where the record names no such tree. -/
 def fieldRootIn (ft : Std.HashMap String (Array (String × Json))) (template field port : String) : Option Json :=
   ((ft.getD template #[]).find? (·.1 == field)).map fun (_, e) =>
-    Json.mkObj [("domain", getD e "domain"), ("leaves", getD e "leaves"), ("port", .str port), ("root", getD e "root")]
+    Json.mkObj [("domain", getD e "domain"), ("leaves", getD e "leaves"), ("port", .str port), ("root", getD e "root"),
+      ("tree", .str s!"{template}/{field}")]
 
 /-- **The registration's tree of a writer template's output field**, under the reader's port name `port`: the record
 `rec`'s root at `<template>/<field>` (`fieldTreesOf`, `fieldRootIn`), the window's one tree of the template's field
@@ -576,10 +578,13 @@ def TREE_OTHER (who port tree what : String) : String :=
 tree's port among `byPort` (`rootsByPort`): its root, domain and leaf count are the record's, refused by name
 (`TREE_UNHELD`, `TREE_OTHER`). The domain binds the window, so a tree of another window refuses. A port whose value
 is a field tree's name is opened only as the member's own output, `<tmpl>/<port>` for the member's template `tmpl`,
-whose rows `Flock.Registered.outReads` reads at the leaves C gives; any other refuses first (`WIRED_TREE_WHY`). -/
-def portTreeHeld (byPort : Std.HashMap String Json) (who : String) (tmpl : Option String) (q : Flock.Registered.Port) :
-    V Unit :=
-  if !q.value.startsWith COMMITTED && fieldTreeName q.value && tmpl.all (s!"{·}/{q.name}" != q.value) then
+whose rows `Flock.Registered.outReads` reads at the leaves C gives, or at a reader row `wired` holds at that tree,
+`(row, <writer>/o<j>)` for each wire C states into the member (`fieldRoots`), whose rows
+`Flock.Registered.treeReads` reads at the writer's leaves C gives; any other refuses first (`WIRED_TREE_WHY`). -/
+def portTreeHeld (byPort : Std.HashMap String Json) (who : String) (tmpl : Option String)
+    (wired : Array (String × String)) (q : Flock.Registered.Port) : V Unit :=
+  if !q.value.startsWith COMMITTED && fieldTreeName q.value && tmpl.all (s!"{·}/{q.name}" != q.value) &&
+      !wired.contains (q.name, q.value) then
     throw (WIRED_TREE_WHY who q.name) else
   match treePortOf q with
   | none => pure ()
@@ -595,13 +600,13 @@ def portTreeHeld (byPort : Std.HashMap String Json) (who : String) (tmpl : Optio
 /-- **A registered file's committed trees are its window's**: every port of the registered file `j` of `who` that
 opens a committed tree is held to the record's root of it (`portTreeHeld`, at `byPort`, `rootsByPort`); no file, no
 port, at the member's template `tmpl` (none for the one statement, whose ports open no field tree). One pass over the
-file's ports, each a lookup. -/
-def registeredTreesHeld (byPort : Std.HashMap String Json) (who : String) (j : Option Json) (tmpl : Option String := none) :
-    V Unit :=
+file's ports, each a lookup, at the reader rows `wired` holds at a writer's field tree (`portTreeHeld`). -/
+def registeredTreesHeld (byPort : Std.HashMap String Json) (who : String) (j : Option Json) (tmpl : Option String := none)
+    (wired : Array (String × String) := #[]) : V Unit :=
   match j with
   | none => pure ()
   | some j =>
-    (Flock.Registered.ofJson j).mapError (s!"{who}: {·}") >>= fun own => own.forM (portTreeHeld byPort who tmpl)
+    (Flock.Registered.ofJson j).mapError (s!"{who}: {·}") >>= fun own => own.forM (portTreeHeld byPort who tmpl wired)
 
 /-- The public file held to the registration `rec` (module docstring, **public**; `registration.matches_public`, as the
 one-stage drivers hold theirs before the sample): its header's scheme, `frame_v3` roots and their `domain_ids`, and
