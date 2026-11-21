@@ -5,7 +5,7 @@ public import Identity.Domains.Shared
 
 /-!
 One table of domain separators: every versioned string a protocol hashes, derives from or commits under, or names its
-records, schemes and protocols by. `verity/commitments/domains.py` mirrors it, entry for entry
+records, schemes and protocols by. `verity/commitments/domains.py` reads this table
 (`tests/test_domains.py`).
 
 A name is in today's words; the bytes keep the words of their version (a PoUW period's tags say "window", its
