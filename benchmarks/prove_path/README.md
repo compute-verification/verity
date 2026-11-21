@@ -106,13 +106,14 @@ Each guarantee below is listed in the lock (`security/lean-audit.json`), which r
 reads and its named assumptions. On a served execution phase, an accept holds each sampled block on its own inputs; the wires
 between blocks are not held, a limit that stands until the registered circuit carries its wires as edges.
 
-**A `--zk` session's acceptance, read in the sampling relation.** `Flock.SecurityProofs.SampledKSLiveV3`
-(`security/Proofs/Flock/Bridge/KSLive.lean`): on the event that `verity-verify-proof verify --zk` accepts the transcript and the
-files (their ports `sha512/row/v1`, `row/v2` or `row-seg/v1` rows of distinct names, no root registered under two domains)
-and the SPOT run passes the docket's population, the committed transcript, read as the sampling witness, is
-outside the sampling relation `RelS` at δ with probability at most δ + ε_ks + ε_bind. It takes no hypothesis on the files.
-It follows from `SampledKSLiveV2`, the same bound at the circuit files the verifier reads. Its named assumptions
-are the coins (A3, `FlockSoundness.Assumptions.UniformRandomBytes`), the live verifier, and SHA-512's collision resistance.
+**A `--zk` session's acceptance, read in the sampling relation.** `Flock.SecurityProofs.SampledKSLiveV5`
+(`security/Proofs/Flock/Bridge/V5/KSLive.lean`): on the event that `verity-verify-proof verify --zk --public-inputs`
+accepts the transcript and the files, the committed trace fixed at registration, read as the sampling witness, is outside
+the sampling relation `RelS` at δ with probability at most δ + ε_ks + ε_bind, where δ is the probability that the
+sampling design the verifier samples under from the registration samples no proof block of a set. It takes no hypothesis
+on the registration's roots or on the proof block's circuit. Its named assumptions are the coins (A3,
+`FlockSoundness.Assumptions.UniformRandomBytes`), the live verifier, the sampling design, and SHA-512's collision
+resistance.
 
 **The property.** `NetTiming.SecurityProofs.SampledAuditAccepted : NetTiming.Guarantees.SampledAuditAccepted`, at any
 compiled sampled verifier `D`: `∀ H D L K S lay k, D.KS H → KSAccepted H D L K S lay k` (`Compiled.KS`). The sampled
