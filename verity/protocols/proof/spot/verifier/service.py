@@ -1922,7 +1922,8 @@ class Stream:
         if self.program is not None:
             ranges = {tid: m for tid, _lo, m in P.ranges(self.program, self.query)}
             return self.program if ranges == dict(counts) else None
-        return PN.mixed_population_program([(t, counts[i]) for t, i in zip(self.templates, ids)], values=self.values)
+        fn = PN.mixed_population_program([(t, counts[i]) for t, i in zip(self.templates, ids)], values=self.values).fn
+        return Program(fn, registered=[v for v, _, _ in self.values])
 
     def _public(self, record: Mapping[str, Any]) -> Verdict:
         """`check_public` by the verifier (`verifier.check_public`) on a docket's values under its query."""
