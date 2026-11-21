@@ -386,8 +386,17 @@ if [ -n "$GO" ] && [ -s "$P/verify.json" ]; then
       LX=; }
   fi
   [ -n "$LX" ] && [ -x "$LX" ] || LX=
+  DL=  # the challenger sample's draw session, which the Lean holds it to (served_verdicts.py pearlplus-draw-live)
+  if [ -n "${PEARLC_CHALLENGER_GATE:-}" ] && [ -n "${H1_KEY_SHA512:-}" ] && [ -n "${MAIN_FILE:-}" ] \
+     && "$TPY" benchmarks/one_stage/served_verdicts.py pearlplus-draw-live "$Q" --record "$Q/passes/coin.json" \
+          --gate "$PEARLC_CHALLENGER_GATE" --key-sha512 "$H1_KEY_SHA512" --main "$MAIN_FILE" > "$Q/draw-live.log" 2>&1 \
+     && [ -s "$Q/pearlplus-draw-live.json" ]; then
+    DL=$Q/pearlplus-draw-live.json
+  fi
+  say "lean: draw session: $(tail -1 "$Q/draw-live.log" 2>/dev/null | cut -c1-300)"
   "$VENV/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py lean --passes "$Q/passes" --verify "$P/verify.json" \
-    --exe "${LX:-none}" --out "$P/pearlplus-lean.json" --timeout "${PEARLPLUS_LEAN_TIMEOUT:-3600}" > "$Q/lean.log" 2>&1
+    --exe "${LX:-none}" --out "$P/pearlplus-lean.json" --timeout "${PEARLPLUS_LEAN_TIMEOUT:-3600}" \
+    ${DL:+--draw-live "$DL"} > "$Q/lean.log" 2>&1
   say "lean: served_passes.py lean exit $? after $(took "$t"): $(tail -1 "$Q/lean.log" | cut -c1-400)"
 fi
 if [ -s "$P/pearlplus-lean.json" ]; then

@@ -471,7 +471,8 @@ def test_a_live_epoch_and_a_challenger_draw(exe, tmp_path):
     assert got["verdict"] == "accept" and len(got["source"]) == 128
     held = json.loads(rec.read_text())
     assert held["schema"] == VR.COIN_SCHEMA and held["draw"]["from"] == "challenger"
-    assert lean(exe, [a, b], 8, None, rec, test_instance=True, of_record=True) == got
+    undrawn = lean(exe, [a, b], 8, None, rec, test_instance=True, of_record=True)
+    assert (undrawn["verdict"], undrawn["refused"][0]) == ("reject", "draw-session") and "--draw-live" in undrawn["reason"]
     lr = tmp_path / "lean-coin.json"
     mine = lean(exe, [a, b], 8, SOURCE, lr, test_instance=True)
     assert mine["verdict"] == "accept" and json.loads(lr.read_text())["draw"] == {"from": "node", "claim": VR.NODE_CLAIM}

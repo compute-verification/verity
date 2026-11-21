@@ -143,13 +143,16 @@ def main (argv : List String) : IO UInt32 := do
         let f := (str? spec "path").getD ""
         (files.get? ((dir / f).toString, spec.compress)).getD (throw s!"FileNotFoundError: {f}")) tid
   let ans := check input opener
+  let refuse (why : String) : RunAnswer :=
+    let reason := s!"{DRAW_SESSION_REFUSED}: {why}"
+    { ans with accept := false, reason := some reason, refused := some (DRAW_SESSION_REFUSED, why), work := none }
   let ans ← match a.drawLive, held, pl? with
     | some f, some h, some pl => do
-      match liveDrawReason h pl.root (← readJson f) with
-      | some why =>
-        let reason := s!"{DRAW_SESSION_REFUSED}: {why}"
-        pure { ans with accept := false, reason := some reason, refused := some (DRAW_SESSION_REFUSED, why), work := none }
-      | none => pure ans
+      pure ((liveDrawReason h pl.root (← readJson f)).map refuse |>.getD ans)
+    | none, some h, some _ =>
+      pure (if a.ofRecord && fieldIs (get? h.draw "from") DRAW_CHALLENGER && ans.accept then
+        refuse "no draw session was given (--draw-live), so nothing checked the challenger's signatures on it"
+      else ans)
     | _, _, _ => pure ans
   IO.println (output ans (published input ans)).compress
   return if ans.accept then 0 else 1

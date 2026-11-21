@@ -1295,6 +1295,45 @@ def pearlplus_draw(record: Path, out: Path, gate: str | None, key: str | None, m
     return got
 
 
+#: The draw session `pouw-pearlplus --draw-live` holds a challenger sample to (`pearlplus_draw_live`), in the piece's dir.
+PEARLPLUS_DRAW_LIVE = "pearlplus-draw-live.json"
+
+
+def pearlplus_draw_live(record: Path, out: Path, gate: str | None, key: str | None, main: Path | None,
+                        fetch: Callable[..., bytes] | None = None) -> Path | None:
+    """The draw session of the verifier's challenger sample in its coin record `record`, as `pouw-pearlplus --draw-live`
+    reads it (`Coins.liveDrawReason`): ``{key, ledger, pins, main, session}``, the pinned challenger key, the auditor's
+    ledger and the host's pins log as the gate `gate` answers now, main's first-parent line `main` and the session's files,
+    fetched as `pearlplus_draw` fetches them, written to ``out/PEARLPLUS_DRAW_LIVE``. None for a node's sample, which has
+    no session; a fetch that fails raises, so the Lean step is given no session and its ``--of-record`` refuses."""
+    from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
+    from verity.protocols.proofs.spot.verifier.challenger import remote
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import challenger as PHC
+
+    draw = json.loads(record.read_text()).get("draw") or {}
+    if draw.get("from") != "challenger":
+        return None
+    sid = (draw.get("reserved") or {}).get("session")
+    if not (gate and key and main) and fetch is None:
+        raise ValueError("no gate, key pin or main's first-parent line to fetch the draw session by (--gate, "
+                         "--key-sha512, --main)")
+    if not (isinstance(sid, str) and PS.SESSION.fullmatch(sid)):
+        raise ValueError(f"the record's draw names no gate session ({sid!r})")
+    ask = fetch or (lambda *words: _gate_out(gate, *words))
+    tgz, tree = out / f"draw-{sid}.tgz", out / "session"
+    tgz.write_bytes(ask("fetch", sid))
+    with tarfile.open(tgz) as t:
+        t.extractall(tree, filter="data")
+    for name in ("ledger", "pins"):
+        (out / f"{name}.jsonl").write_bytes(ask(name))
+    d = tree / sid / "out"
+    live = {"key": PHC.pinned_key(d / remote.KEY, key).to_json(), "ledger": remote.ledger_lines(out / "ledger.jsonl"),
+            "pins": remote.ledger_lines(out / "pins.jsonl"), "main": remote.main_lines(main),
+            "session": remote.session_files(d)}
+    (path := out / PEARLPLUS_DRAW_LIVE).write_text(json.dumps(live) + "\n")
+    return path
+
+
 def custody_of(copy: Path, run: str | None, run_dir: Path | None) -> dict[str, str] | None:
     """Where the run's custody keeps `copy`: ``{attempt, path}``, the `research run` Attempt `run` (a valid run id) and
     `copy`'s path in it, when `copy` is under the run's directory `run_dir`'s ``out/`` (what an Attempt carries); else
@@ -2540,6 +2579,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     pp.add_argument("--coin", type=Path, help=f"the verifier's coin as `coin` published it (its {COIN_PUT})")
     pp.add_argument("--tie", type=Path, help="under PEARLPLUS_TIE, the window record W the window's passes are held to "
                                              "(retain --window-record's): --served is then the window's own epoch's")
+    dl = sub.add_parser("pearlplus-draw-live")
+    dl.add_argument("out", type=Path)
+    dl.add_argument("--record", type=Path, required=True, help="the verifier's coin record (served_passes.py verify's)")
+    dl.add_argument("--gate", required=True)
+    dl.add_argument("--key-sha512", required=True)
+    dl.add_argument("--main", type=Path, required=True)
     cn = sub.add_parser("coin")
     cn.add_argument("out", type=Path)
     cn.add_argument("--record", type=Path, required=True, help="the verifier's coin record (served_passes.py verify's "
@@ -2723,6 +2768,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"POUW-REFUSED {e}", flush=True)
             return 2
         print(f"POUW-DEV {json.dumps(development_line(doc), sort_keys=True, default=str)}", flush=True)
+        return 0
+    if a.cmd == "pearlplus-draw-live":
+        try:
+            path = pearlplus_draw_live(a.record, a.out, a.gate, a.key_sha512, a.main)
+        except (OSError, RuntimeError, ValueError, KeyError, TypeError, tarfile.TarError) as e:
+            print(f"DRAW-LIVE refused: {type(e).__name__}: {e}"[:800], flush=True)
+            return 2
+        print(f"DRAW-LIVE {path or "none: the sample is the node's"}", flush=True)
         return 0
     if a.cmd == "pearlplus-period":
         try:
