@@ -61,7 +61,6 @@ from verity_vllm.definitions.registry import greedy_stages as GS
 from verity_vllm.definitions.registry.dead_free import CHUNK
 from verity.commitments.periods import links as LK, rows as CS, wiring as WI
 from verity_vllm.check.replay.index import SAMPLER_OP, ProgramIndex
-from verity_vllm.check.replay.request_replay import Replay
 from verity_vllm.engine.sampler_capture import CAPTURE
 from verity_vllm.pipeline import chunk_rows as CR, interior_links as IL, serving_rows as SRW
 from verity_vllm.pipeline.interior_links import (DIGEST, HELD, INDEX, READ, TABLE, Cells, Input, Link, Members, Operand,
@@ -104,7 +103,7 @@ class Span:
                 for kind in ("rows", "outs")}
 
 
-def span(inst: dict[str, Any], replay: Replay, template: str, *, program_dir: str | None = None,
+def span(inst: dict[str, Any], replay: Any, template: str, *, program_dir: str | None = None,
          index: Mapping[str, Any] | None = None) -> Span:
     """Request ``replay.rid``'s units of ``template`` in its Program ``inst``, read from ``replay`` as `serving_rows`
     reads a committed store. ``program_dir`` and ``index``: the ProgramIndex's, as `serving_rows.member_rows` takes
