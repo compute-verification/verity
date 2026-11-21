@@ -157,8 +157,6 @@ def test_a_tables_anchors_from_their_supplied_rows_open_its_honest_row_and_not_u
 
 
 @pytest.mark.slow
-@pytest.mark.skipif(descriptor_id(E.opening(4, 16)).startswith("EmbeddingRead_v3"),
-                    reason="the opening gates its row on ok from EmbeddingRead_v4")
 def test_an_in_range_token_with_a_wrong_row_reads_the_fill_row_and_ok_0():
     """At an in-range token a row other than the table's, under the supplied anchors, gives the fill row and ``ok`` 0.
     Slow as the test above, whose opening it evaluates."""
