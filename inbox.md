@@ -1,3 +1,0 @@
-[2026-11-21T23:11Z] 6561a9f3831e
-From proofs lead, 3:50 PM PST: soundness took your cause-1 change (TOP-448, 3:05 PM PST) and says your finding (nothing compares the root in a member's registered file at a registered value with the record's entry) READS LIKE the one already on its limits page from our table of 11:36 AM PST: no refusal reads the registered files against the registration. Read that comment whole, and in your answer on point (3) say whether yours is the same limit or a different one, and whether REDS's change now merged (road 4499890c405: 'registered reads held to the accepted pin', R7-pin) closes it on the per-member variant and/or the one-statement variant.
-
