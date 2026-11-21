@@ -2050,7 +2050,10 @@ EOF
       say "ADVICE: committed (its root a hiding commitment); its content and length are held to no registered compiler (candidate 135)"
       RAN+=(advice) ;;
     inference-policy) road_step inference-policy inference_policy window ;;
-    circuits) road_step circuits circuits ;;
+    circuits)  # a count an earlier call left in OUT is no count of this one's, which inference-only reads
+      local c
+      for c in $CLASSES; do rm -f "$OUT/window-circuit-${c//,/-}.json"; done
+      road_step circuits circuits ;;
     block-counts) road_step block-counts block_counts ;;
     sampled-proofs) step_not_run sampled-proofs "step 3's prove path (prove_path/run.sh) proves the units a partition file names (PP_PARTITION), and the window's record has none: its proof of the window's circuit is proofs'" ;;
     pieces) road_pieces ;;

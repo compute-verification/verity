@@ -363,3 +363,14 @@ def test_a_listed_pearl_plus_whose_piece_refuses_is_refused_by_its_sentence_and_
     assert f"  REFUSED pearl-plus: {sentence}" in out.splitlines(), out
     rc, out = _steps(tmp_path / "b", f"{piece}RAN+=(seal); road_pieces; road_end 20", "exit 9")
     assert rc == 0 and "pearl-plus" not in out and "ran 1 (seal)" in out, out
+
+
+def test_a_count_an_earlier_call_left_is_cleared_by_the_circuits_step_so_inference_only_does_not_run(tmp_path):
+    """The circuits step removes the window's public counts before it counts: one that fails leaves none, and the
+    inference-only step, which reads them, does not run on an earlier call's."""
+    body = ('touch "$OUT/window-circuit-2-4-2.json"; circuits() { echo "WINDOW-CIRCUIT class 2,4,2 refused"; return 1; }\n'
+            "road_step_named circuits; RAN+=(inference-policy); road_step_named inference-only; road_end 20")
+    rc, out = _steps(tmp_path, f"{_fns('road_step_named', 'circuits_counted')}\n{body}", "exit 9")
+    assert rc == 20 and not (tmp_path / "out" / "window-circuit-2-4-2.json").exists(), out
+    assert ("  NOT RUN inference-only: its verdict reads the circuits step's window circuit and the inference-only policy, "
+            "and one of them did not run") in out.splitlines(), out
