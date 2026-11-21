@@ -26,11 +26,7 @@
 * the gate's coins (``--challenger gate:USER@HOST``) reach the challenger's session with the peer and the key record;
 * ``warm`` fills a5's compose cache from the verifier's window, its composers keyed by what they compose from, a table
   read's by the verifier's executable too, and the audit takes that cache;
-* of `verity_vllm` it loads only a catalog package (`verity.circuits.defs.catalog_package`) and nothing else of the adapter,
-  and the served compiler's command (``prove_path.py circuit``) refuses advice it can't compile and charges the length the
-  docket does;
-* that command compiles over its own trace of each Program, never the prover's row dir, so a row dir whose names make
-  another circuit under unchanged digests is refused by name and one whose names make the same circuit is ignored."""
+* of `verity_vllm` it loads only a catalog package (`verity.circuits.defs.catalog_package`) and nothing else of the adapter."""
 from __future__ import annotations
 
 import hashlib
@@ -1536,8 +1532,8 @@ def test_the_advice_is_fixed_before_the_sample_and_refused_re_committed_after_it
 
 
 def test_the_gates_coins_take_the_peer_and_key_record_to_the_challengers_session(written, tmp_path, monkeypatch):
-    """``--challenger gate:USER@HOST`` hands ``--gate-key``, ``--peer`` and ``--challenger-key`` to `a5_coins.start`, as
-    `prove_path.py audit` does; the command refuses a gate without the peer or the key record, and any other challenger.
+    """``--challenger gate:USER@HOST`` hands ``--gate-key``, ``--peer`` and ``--challenger-key`` to `a5_coins.start`;
+    the command refuses a gate without the peer or the key record, and any other challenger.
     ``--deployed-key`` reaches `a5_coins.start` as ``deployed`` with ``--challenger local``, and is refused with a gate."""
     import a5 as A5
     from verity.protocols.proof.spot.verifier.challenger import challenger_session as AC

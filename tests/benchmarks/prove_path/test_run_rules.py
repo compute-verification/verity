@@ -6,7 +6,7 @@ script:
 * that arm takes a tie's pins as given or refused only on `weights-tie pins`' own answer, never on a traceback;
 * each partition file (`partitions`: this benchmark's, the one-stage audit's and each one the script names) states a
   rate a stream takes or is listed as still stating a fixed design (`FIXED`), which an audit on a challenger's coins
-  (`prove_path.py audit`, `a5.py --challenger`) refuses at the rule check and a served window's audit from its records
+  (`a5.py --challenger`) refuses at the rule check and a served window's audit from its records
   (`records_audit.py audit`) refuses by name. The list only shrinks."""
 from __future__ import annotations
 
