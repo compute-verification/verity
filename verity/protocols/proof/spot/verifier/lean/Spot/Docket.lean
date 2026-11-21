@@ -102,8 +102,12 @@ acceptance rests on that later check. R7 refuses a registered value, a supplied 
 and domain), whose parameter's gates hold a run Input node (`runInputNamed`, `R7-run-input`): a run Input's rows are
 committed once, in its one tree, and are never a registered value. R7 refuses a supplied anchor, a mark of
 `registered.root/v1` or `registered.domain/v1`, whose value V neither the verifier's `pinned` nor the weights'
-registration of record pins (`anchorUnpinned`, `R7-anchor-unpinned`), and one the registration of record pins whose
-record entry is not that pin in root, leaf count, words and domain (`anchorOffPin`, `R7-anchor-pin`).
+registration of record pins (`anchorUnpinned`, `R7-anchor-unpinned`); a value the registration of record pins whose
+record entry is not that pin in root, leaf count, words and domain, or an anchor's value it pins that the record
+registers no entry of (`offPin`, `R7-pin`); and a parameter bound as a supplied input that the parameters' `supplied`
+gives no source (`unsourced`, `R7-supplied-source`). `R7-anchor-unpinned` reads C's marks (`Verifier.marks`, from the
+program descriptor's `inputs`), which no descriptor carries until circuits writes the marks into C: until then it
+refuses nothing.
 
 R8 then holds the program's registered inputs (the parameters it binds at registration, `Partition.regInputs`) to the
 weights' registration of record the auditor's side hands it (`weightsOfRecord`: its bytes and the SHA-512 it holds; a
@@ -485,24 +489,41 @@ def anchorValues (v : Verifier) : Array String :=
 
 /-- `docket.anchor_unpinned`: the values V of C's supplied anchors (a mark of `ANCHOR_FUNCTIONS`) that are neither in
 the verifier's `pinned` nor pinned by the weights' registration of record (`pinsOf`'s pins), each once, in the marks'
-order; R7 refuses them (`R7-anchor-unpinned`). -/
+order; R7 refuses them (`R7-anchor-unpinned`). It reads C's marks (`Verifier.marks`), which no program descriptor
+carries until circuits writes them into C: until then it refuses nothing. -/
 def anchorUnpinned (v : Verifier) : Array String :=
   let ofRecord := (recordPins v).map (·.value)
   (anchorValues v).filter fun x => !(v.pinned.any (·.1 == x) || ofRecord.contains x)
 
-/-- `docket.anchor_off_pin`: the values V of C's supplied anchors (`anchorValues`) the weights' registration of record
-pins whose record entry (`rec`'s last `registered` entry of V, none counting as another) is not that pin in root, leaf
-count, words and domain; R7 refuses them (`R7-anchor-pin`): a supplied function reads V's entry of the record, so the
-entry is the pin. A value the verifier's `pinned` names is held by `R7-held` and R7's own entry (`checkRegistered`). -/
-def anchorOffPin (rec : Json) (v : Verifier) : Array String :=
-  let pins := recordPins v
+/-- `docket.off_pin`: the values the weights' registration of record pins (`recordPins`, in its order) whose record entry
+(`rec`'s last `registered` entry of the value) is not that pin in root, leaf count, words and domain, or that a supplied
+anchor of C names (`anchorValues`) and the record registers no entry of; R7 refuses them (`R7-pin`). A value the
+verifier's `pinned` names is held by `R7-held` and R7's own entry (`checkRegistered`). -/
+def offPin (rec : Json) (v : Verifier) : Array String :=
   let got : Array Json := match getD rec "registered" with | .arr es => es | _ => #[]
-  (anchorValues v).filter fun x => match pins.find? (·.value == x) with
-    | none => false
-    | some p => match got.reverse.find? (fun e => getD e "value" == Json.str x) with
-      | none => true
+  let anchors := anchorValues v
+  (recordPins v).filterMap fun p =>
+    let off := match got.reverse.find? (fun e => getD e "value" == Json.str p.value) with
+      | none => anchors.contains p.value
       | some e => !(getD e "root" == Json.str p.root && nat? (getD e "leaves") == some p.leaves
           && nat? (getD e "words") == some p.words && getD e "domain" == Json.str p.domain)
+    if off then some p.value else none
+
+/-- Whether the root nodes inside gates `[first, first + count)` of `P` are all primitive supplied inputs
+(`SuppliedInput<w>_v1`), as `Partition.regInputs` reads registered ones. -/
+def suppliedInputs (P : Flock.Program.Prog) (first count : Nat) : Bool :=
+  let nodes := Flock.Registered.rootNodes P
+  let inside := (List.range nodes.size).filter (Partition.within P first count)
+  !inside.isEmpty && inside.all fun i => match nodes[i]? >>= fun x => P.defs[x.fn]? with
+    | some f => f.prim && f.binding == some Flock.Program.SUPPLIED
+    | none => false
+
+/-- `docket.unsourced_supplied`: the parameters bound as supplied inputs (`suppliedInputs`) that the parameters'
+`supplied` (C's marked rows among them) gives no source; R7 refuses them (`R7-supplied-source`). -/
+def unsourced (v : Verifier) : Array String :=
+  (v.params.filter fun p => match p.gates with
+    | some (first, count) => suppliedInputs v.program.prog first count && !v.supplied.any (·.1 == p.name)
+    | none => false).map (·.name)
 
 /-- The members' check's refusal of a program marking a registered input the verifier does not expect, under parameters
 whose weights' registration of record is absent or one R8 refuses (`readPins`). -/
@@ -863,7 +884,8 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
     c := kept (certifiedHeld rec v) c "R7-certified"
     c := kept (runInputNamed v).isEmpty c "R7-run-input"
     c := kept (anchorUnpinned v).isEmpty c "R7-anchor-unpinned"
-    c := kept (anchorOffPin rec v).isEmpty c "R7-anchor-pin"
+    c := kept (offPin rec v).isEmpty c "R7-pin"
+    c := kept (unsourced v).isEmpty c "R7-supplied-source"
   -- R8
   c := r8Codes v c
   return if linkRefused v then addCode c "link-points" else c
@@ -933,7 +955,8 @@ def checkRef (rec : Json) (v : Verifier) : Array String := Id.run do
     c := kept (certifiedHeld rec v) c "R7-certified"
     c := kept (runInputNamed v).isEmpty c "R7-run-input"
     c := kept (anchorUnpinned v).isEmpty c "R7-anchor-unpinned"
-    c := kept (anchorOffPin rec v).isEmpty c "R7-anchor-pin"
+    c := kept (offPin rec v).isEmpty c "R7-pin"
+    c := kept (unsourced v).isEmpty c "R7-supplied-source"
   -- R8
   c := r8Codes v c
   return if linkRefused v then addCode c "link-points" else c

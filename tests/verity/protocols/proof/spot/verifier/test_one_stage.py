@@ -839,21 +839,36 @@ def test_r7_refuses_a_supplied_anchor_whose_value_no_pin_holds():
     assert R.anchor_unpinned({"a": mark("record.root/v1", port="t")}, None, None) == []
 
 
-def test_r7_holds_an_anchors_record_entry_to_its_pin():
-    """`docket.anchor_off_pin` (Lean's `Docket.anchorOffPin`, `R7-anchor-pin`, its guards in `Spot/Test/Docket.lean`):
-    the record's last entry of an anchor's value that the weights' registration of record pins is that pin in root,
-    leaf count, words and domain; no entry, or another, is named; a value the registration does not pin is not."""
+def test_r7_holds_a_pinned_values_record_entry_to_its_pin():
+    """`docket.off_pin` (Lean's `Docket.offPin`, `R7-pin`, its guards in `Spot/Test/Docket.lean`): the record's last
+    entry of a value the weights' registration of record pins is that pin in root, leaf count, words and domain, and an
+    anchor's value it pins has an entry; a pinned value with no entry and no anchor naming it is not named, nor is a
+    value the registration does not pin."""
     pin = _pin(_two_programs(registered=("t",))[0])
     weights = _weights([pin])
     entry = {k: pin[k] for k in ("value", "root", "leaves", "words", "domain")}
     for fn in R.ANCHOR_FUNCTIONS:
         marks = {"a": {"supplied": fn, "args": {"value": "t"}, "layout": "digest", "bits": 512}}
-        assert R.anchor_off_pin(marks, [entry], weights) == []
-        assert R.anchor_off_pin(marks, [], weights) == ["t"]
-        for k, x in (("root", "bb" * 64), ("domain", "bb" * 64), ("leaves", 99), ("words", 99), ("leaves", True)):
-            assert R.anchor_off_pin(marks, [{**entry, k: x}], weights) == ["t"]
-        assert R.anchor_off_pin(marks, [entry, {**entry, "root": "bb" * 64}], weights) == ["t"]
-        assert R.anchor_off_pin(marks, [], None) == []
+        assert R.off_pin(marks, [entry], weights) == []
+        assert R.off_pin(marks, [], weights) == ["t"]
+        assert R.off_pin(marks, [], None) == []
+    assert R.off_pin({}, [], weights) == []
+    for k, x in (("root", "bb" * 64), ("domain", "bb" * 64), ("leaves", 99), ("words", 99), ("leaves", True)):
+        assert R.off_pin({}, [{**entry, k: x}], weights) == ["t"]
+    assert R.off_pin({}, [entry, {**entry, "root": "bb" * 64}], weights) == ["t"]
+
+
+def test_r7_refuses_a_supplied_input_with_no_source():
+    """`docket.unsourced_supplied` (Lean's `Docket.unsourced`, `R7-supplied-source`, its guards in
+    `Spot/Test/Docket.lean`): a parameter bound as a supplied input that the parameters' ``supplied`` gives no source is
+    named; with a source, or bound otherwise, it is not."""
+    t = Array(2, Value(8))
+    calls = CompositeDefinition("OneStageTestSupplied", 0, (), lambda S: ((("t", t),), Tuple(Value(8), Value(8))),
+                                lambda B, S, x: tuple_of(B.call(PAIR, x), B.call(PAIR, x)), register=False)
+    prog = Program(bind(calls), supplied=("t",))
+    assert R.unsourced_supplied(prog, {}) == ["t"]
+    assert R.unsourced_supplied(prog, {"t": []}) == []
+    assert R.unsourced_supplied(_two_programs(registered=("t",))[0], {}) == []
 
 
 def test_r8_lets_a_tied_run_input_through_and_publishes_it():

@@ -156,6 +156,7 @@ from verity.commitments.window import WINDOW_DOMAIN, window_domain
 from verity.circuits import partition_object as PO
 from verity.circuits.codec import canonical_json, descriptor_chunks
 from verity.circuits.program import REGISTRATION, Program
+from verity.circuits.supplied import SUPPLIED
 
 from . import draw as D, link_points as LP, partition as P, registered as G
 from verity.commitments import registered_value as RV
@@ -179,8 +180,11 @@ RUN_INPUT_WHY = ("a run Input's rows are committed once, in its one tree, before
                  "one included, is no run Input node")
 #: the supplied functions whose value is a registered value's root or domain (`anchor_unpinned`)
 ANCHOR_FUNCTIONS = ("registered.root/v1", "registered.domain/v1")
-ANCHOR_PIN_WHY = ("a supplied anchor's value is read from the record's registered entry, which must be the weights' "
-                  "registration of record's pin of it in root, leaf count, words and domain")
+PIN_WHY = ("a value the weights' registration of record pins is registered in the record at that pin, in root, leaf count, "
+           "words and domain, and a supplied anchor's value, which a supplied function reads from the record's entry, "
+           "is registered there")
+SUPPLIED_SOURCE_WHY = ("a supplied input's rows are the verifier's own: the parameters' supplied names its source, or C's "
+                       "mark its function; with neither, nothing fixes its root")
 ANCHOR_UNPINNED_WHY = ("a supplied anchor reads a registered value's root or domain, and the verifier holds that value "
                        "to no pin: neither its own pinned roots nor a pin of the weights' registration of record")
 #: R8's refusals of the program's registered inputs against the weights' registration of record (`weights_held`)
@@ -609,8 +613,10 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
         marks = G.marks(json.loads(b"".join(descriptor_chunks(program))))
         if loose := anchor_unpinned(marks, pinned, weights_of_record):
             c.fail("R7-anchor-unpinned", {"values": loose, "why": ANCHOR_UNPINNED_WHY})
-        if off := anchor_off_pin(marks, rec["registered"], weights_of_record):
-            c.fail("R7-anchor-pin", {"values": off, "why": ANCHOR_PIN_WHY})
+        if off := off_pin(marks, rec["registered"], weights_of_record):
+            c.fail("R7-pin", {"values": off, "why": PIN_WHY})
+        if unsourced := unsourced_supplied(program, sup):
+            c.fail("R7-supplied-source", {"values": unsourced, "why": SUPPLIED_SOURCE_WHY})
     # R8
     if bad:
         c.fail("R8-tied", {"tied": bad, "why": TIED_WHY})
@@ -655,8 +661,9 @@ def anchor_unpinned(marks: Mapping[str, Mapping[str, Any]], pinned: Mapping[str,
                     of_record: tuple[bytes, str] | None) -> list[str]:
     """The values V of C's supplied anchors (`marks`, `registered.marks`: a mark of a function of `ANCHOR_FUNCTIONS`)
     that are neither in the verifier's `pinned` nor pinned by the weights' registration of record (`_of_record`'s
-    pins), each once, in the marks' order; R7 refuses them (`R7-anchor-unpinned`). The Lean's `Docket.anchorUnpinned`
-    is this."""
+    pins), each once, in the marks' order; R7 refuses them (`R7-anchor-unpinned`). C's marks come from a descriptor's
+    `inputs`, which no descriptor carries until circuits writes them into C (`codec` writes none): until then it
+    refuses nothing. The Lean's `Docket.anchorUnpinned` is this."""
     held = set(pinned or {}) | (set(_of_record(of_record)[1]) if of_record is not None else set())
     out: list[str] = []
     for m in marks.values():
@@ -666,23 +673,31 @@ def anchor_unpinned(marks: Mapping[str, Mapping[str, Any]], pinned: Mapping[str,
     return out
 
 
-def anchor_off_pin(marks: Mapping[str, Mapping[str, Any]], got: Any, of_record: tuple[bytes, str] | None) -> list[str]:
-    """The values V of C's supplied anchors (`marks`) the weights' registration of record pins whose record entry (the
-    record's last ``registered`` entry of V, none counting as another) is not that pin in root, leaf count, words and
-    domain, each once; R7 refuses them (`R7-anchor-pin`): a supplied function reads V's entry of the record, so the
-    entry is the pin. A value the verifier's `pinned` names is held by `R7-held` and R7's own entry. The Lean's
-    `Docket.anchorOffPin` is this."""
+def off_pin(marks: Mapping[str, Mapping[str, Any]], got: Any, of_record: tuple[bytes, str] | None) -> list[str]:
+    """The values the weights' registration of record pins (`_of_record`'s pins, in its order) whose record entry (the
+    record's last ``registered`` entry of the value) is not that pin in root, leaf count, words and domain, or that a
+    supplied anchor of C names (`marks`, a mark of `ANCHOR_FUNCTIONS`) and the record registers no entry of; R7 refuses
+    them (`R7-pin`). A value the verifier's `pinned` names is held by `R7-held` and R7's own entry. The Lean's
+    `Docket.offPin` is this."""
     pins = _of_record(of_record)[1] if of_record is not None else {}
     entries = [e for e in got if isinstance(e, Mapping)] if isinstance(got, list) else []
+    anchors = {m["args"].get("value") for m in marks.values() if m["supplied"] in ANCHOR_FUNCTIONS}
     out: list[str] = []
-    for m in marks.values():
-        x = m["args"].get("value") if m["supplied"] in ANCHOR_FUNCTIONS else None
-        if x is None or x in out or (pin := pins.get(x)) is None:
-            continue
+    for x, pin in pins.items():
         e = next((e for e in reversed(entries) if e.get("value") == x), None)
-        if e is None or any(e.get(k) != pin[k] or type(e.get(k)) is bool for k in ("root", "leaves", "words", "domain")):
+        if (e is None and x in anchors) or (e is not None and any(
+                e.get(k) != pin[k] or type(e.get(k)) is bool for k in ("root", "leaves", "words", "domain"))):
             out.append(x)
     return out
+
+
+def unsourced_supplied(program: Program, supplied: Mapping[str, Any]) -> list[str]:
+    """The program's parameters bound as supplied inputs (`SuppliedInput<w>_v1`) that hold gates and that the
+    parameters' ``supplied`` (C's marked rows among them) gives no source; R7 refuses them (`R7-supplied-source`). The
+    Lean's `Docket.unsourced` is this."""
+    bindings = getattr(program, "bindings", ())
+    return [n for (n, _), b in zip(program.fn.signature()[0], bindings)
+            if b == SUPPLIED and G.held_gates(program, [n]) and n not in supplied] if bindings else []
 
 
 def marked_gates(program: Program) -> list[tuple[str, range]]:
