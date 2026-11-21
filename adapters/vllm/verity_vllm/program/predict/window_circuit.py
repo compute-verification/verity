@@ -47,7 +47,7 @@ Programs longest first, each a prefix of the longest): node j's units of slot 0,
 allocation's slots side by side in its template (`window_builder`, which holds
 the units, their feeds and weight reads, and wires them). Every unit reads its writers' rows as they hold them:
 
-- `Embedding_v1{V, H}` is the registered read `EmbeddingRead_v3{V, H}` (`commitments.gates.embedding`): its ``root`` and
+- `Embedding_v1{V, H}` is the registered read `EmbeddingRead_v4{V, H}` (`commitments.gates.embedding`): its ``root`` and
   ``domain`` are the embedding table's (a `Table` over the weights record, read by `TableRead`), its ``row``, ``salt`` and
   ``path`` a `TableOpening` at the hidden key ``tok``, pinned by its verdict ``o1``. Its ``tok`` is its position's feed.
 - `Gemm_v2{K, N}` is ⌈N / n⌉ slices `Gemm_v2{K, n}`, each reading its weight rows from the weights record (`Read`) and
