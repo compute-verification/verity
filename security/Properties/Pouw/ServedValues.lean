@@ -4,7 +4,7 @@ public import Definitions.Core.Formalism
 public import Properties.Pouw.MonitoringPeriodJ10R
 
 /-!
-# The served PoUW's values in AND gates (`PouwCheck.Credit.window`, J10-R)
+# The served PoUW's values in AND gates (`PouwVerifier.Credit.window`, J10-R)
 
 `Properties.Pouw.MonitoringPeriodJ10R.H1J10RCheckedCreditMonitoringPeriod` is stated in words: except with probability
 `δ_s + n·(δ_bind + δ_ks)`, an accepted period's fixed words are at least `(1 − ε(j))₊` of the live words of the windows

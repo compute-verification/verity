@@ -1,11 +1,9 @@
-"""a5 on a window whose members the door refuses to lower (`door_circuit` raising `one_circuit.Refused`): each refusal is
-recorded by name, and each member's public body, the commit's bytes, is staged all the same, so the registration's leaf
-layer covers every member and R4 passes; a draw of such a member is a failed proof by name (``failed_drawn``)."""
+"""a5 on a window whose members the door refuses to lower (`door_circuit` raising `one_circuit.Refused`): the window is
+refused before any coin at the first such member, with the door's refusal, the member's template and its block."""
 from __future__ import annotations
 
 import argparse
 import hashlib
-import inspect
 import sys
 from pathlib import Path
 
@@ -47,53 +45,20 @@ def _window(d: Path):
     return win.window
 
 
-class Stop(Exception):
-    """Past the checks before the draw."""
-
-
 def _refuse(*_a, **_k):
     raise OC.Refused("E_LOWER", WHY)
 
 
-def _audit(tmp: Path, monkeypatch, units: list[int], stop: str) -> tuple[dict, bool, dict]:
-    mine = _window(tmp / "w")
-    seen = {}
-    check = A5.V.check
-
-    def recorded(*a, **k):
-        seen["registration"] = v = check(*a, **k)
-        return v
-
+def test_the_first_member_the_door_refuses_refuses_the_window_before_any_coin(tmp_path, monkeypatch, capsys):
+    mine = _window(tmp_path / "w")
     monkeypatch.setattr(A5, "door_circuit", _refuse)
-    monkeypatch.setattr(A5.V, "check", recorded)
-
-    def halt(*_a, **_k):
-        seen["summary"] = dict(inspect.currentframe().f_back.f_locals["summary"])
-        raise Stop
-
-    # "checks": past the registration, before the reads; "draw": past `failed_drawn`, before any proof server
-    monkeypatch.setattr(*{"checks": (A5.CS, "own_reads"), "draw": (A5, "proof_server")}[stop], halt)
     a = argparse.Namespace(door_lower=Path("door"), delta=0.5, zk_server=None, rule="stratified-rate:1/2", session_timeout=1,
                            window_root=mine.run, coins=None)
-    try:
-        summary, ok = A5.audit(a, {descriptor_id(G8): (None, G8)}, tmp / "out", mine, tmp / "w", lambda w: {"ok": True}, 0, {},
-                               drawn=({"units": units}, {}, {}))
-    except Stop:
-        summary, ok = {}, None
-    return summary, ok, seen
-
-
-def test_a_member_the_door_refuses_is_registered_and_r4_covers_it(tmp_path, monkeypatch, capsys):
-    summary, ok, seen = _audit(tmp_path, monkeypatch, [], stop="checks")
-    said = capsys.readouterr().out
-    assert ok is None, summary
-    reg = seen["registration"].to_json()
-    assert reg["ok"] and "R4-leaf-layer" not in reg["codes"], reg
-    assert said.count("UNLOWERED ") == 2 and said.count(WHY.split(": ", 1)[1]) == 2, said
-
-
-def test_a_draw_of_a_member_the_door_refused_is_a_failed_proof_by_name(tmp_path, monkeypatch):
-    _summary, _ok, seen = _audit(tmp_path, monkeypatch, [0], stop="draw")
-    summary = seen["summary"]
-    assert summary["failed_drawn"] == {descriptor_id(G8): 1}, summary
-    assert set(summary["unlowered"]) == {"0", "1"} and WHY in summary["unlowered"]["0"]["why"], summary
+    summary, ok = A5.audit(a, {descriptor_id(G8): (None, G8)}, tmp_path / "out", mine, tmp_path / "w", lambda w: {"ok": True},
+                           0, {}, drawn=({"units": [0]}, {}, {}))
+    assert ok is False and summary["checks_before_draw"] == {"door": False}, summary
+    door = summary["checks"]["door"]["detail"]
+    assert door["why"] == f"{A5.DOOR_REFUSES} 0 of {descriptor_id(G8)}: Refused: E_LOWER: {WHY}", door
+    assert (door["member"], door["block"], door["units"]) == (0, 0, [0, 2]), door
+    assert "refused_before_draw" in capsys.readouterr().out
+    assert not (tmp_path / "out" / A5.SAMPLE_FILE).exists()

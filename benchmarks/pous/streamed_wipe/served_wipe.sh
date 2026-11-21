@@ -22,7 +22,8 @@
 #                      refused
 #   WIPE_NODE          the wiped server's id (this host's name)
 #   WIPE_CARD          the card's SKU the wipe is measured for (h200-sxm-141gb), a cuda store's only; `any` is refused
-#                      by name: the SKU is checked
+#                      by name: the SKU is checked, and the judge holds the fill to its card file's fill floor,
+#                      store.wipe_fill
 # The reads are the declaration's (`WIPE.settings`' reads, 0: the memory attester chooses them, wipe_party.READS on the
 # auditor's party), never this launcher's. The Lean judge, wipe-protocol, is the wipe's declared executable
 # (`Launch.executables`, declared.py), built here in a scratch copy of verity/ (never this tree's .lake) whose place
@@ -31,9 +32,12 @@
 # a card of its own), and one that doesn't build ends the piece after the wipe with its own error and exit 7.
 # Inside the serve's gpu-lease (GPU_LEASE_UUID) it wipes that card; outside one it takes a card of its own (`gpu-lease 1
 # --wait`, else the tree's gpu_lease.sh) and gives it back after. DIR gets period.json, wipe.json, summary.json,
-# answer.json (wipe.json's answer), served.json (the serve dir and window, the server, the card, the lease, the run, the
-# key's pin), lake-build.log and stamps.txt (`UTC EVENT` lines). The case goes to SERVE_DIR/private/wipe (0700), and
-# served_case.py writes the composite's piece beside it. Its last line is `WIPE {...}`.
+# answer.json (wipe.json's answer), served.json (the serve dir and window, the server, the fill floor, the card, the
+# lease, the run, the key's pin), lake-build.log and stamps.txt (`UTC EVENT` lines). summary.json, served.json and
+# the `WIPE` line state `uncovered_card_bytes` beside the answer (a core answer, which holds its own fields alone): the
+# card file's store.dram less its fill floor, the card's memory no label fills, which the wipe does not cover (null for
+# a store on no card). The node's other storage the wipe does not fill is not known here and is not stated. The case
+# goes to SERVE_DIR/private/wipe (0700), and served_case.py writes the composite's piece beside it. Its last line is `WIPE {...}`.
 # A refusal, the attach's or this launcher's, each by name, writes its one sentence to DIR/refused.txt and no
 # answer.json, and exits 3. Exit 0 on accept, 1 on another verdict or a wipe that failed, 7 when the judge or the
 # streamer doesn't build.
@@ -54,10 +58,11 @@ refused() { cat "$DIR/refused.txt"; stamp refused; exit 3; }
 # `attach.py check|run`: the settings checked and the attach's refusals made before any lease, then the wipe itself
 attach() { "$PY" - "$@" "$DIR" "$SERVE_DIR" "$WINDOW" "$SETTINGS" "${WIPE_NODE:-$(hostname)}" \
   "${WIPE_KEY_SHA512:-}" "$JUDGE" "${VERITY_PINS:-}" "${VERITY_CONFIGURATION:-}" \
-  "${VERITY_PROTOCOLS_CONFIG:-}" "${GPU_LEASE_UUID:-}" "${WIPE_OWN_LEASE:+own}" "$CTRL" "${STREAM:-}" <<'EOF'
+  "${VERITY_PROTOCOLS_CONFIG:-}" "${GPU_LEASE_UUID:-}" "${WIPE_OWN_LEASE:+own}" "$CTRL" "${STREAM:-}" \
+  "${WIPE_CARD:-h200-sxm-141gb}" "$ROOT/calibration/hardware/cards" <<'EOF'
 import json, os, shutil, socket, sys, tempfile
 from pathlib import Path
-from verity import hooks as H
+from verity import device, hooks as H
 from verity.protocols.compose import schemes
 from verity.protocols.resource_accounting import scheme as S
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
@@ -69,7 +74,8 @@ from verity_vllm.messages import Exchange
 
 DEFAULT = {"host": "vy-auditor-2", "address": "10.96.0.36:47611",
            "command": ["ssh", "-i", "~/.ssh/vy-auditor2-wipe", "-o", "BatchMode=yes", "research@10.96.0.36"]}
-mode, d, serve_dir, window, given, node, trusted, judge, pins, configuration, app, lease, own, ctrl, stream = sys.argv[1:]
+(mode, d, serve_dir, window, given, node, trusted, judge, pins, configuration, app, lease, own, ctrl, stream, sku,
+ cards) = sys.argv[1:]
 d, wipe = Path(d), schemes.get("wipe")
 
 
@@ -106,8 +112,21 @@ given = {k: v for k, v in doc.items() if k in wipe.settings}
 facts = json.loads(json.dumps(WS.FACTS | {k: v for k, v in doc.items() if k in WS.FACTS}))
 ctx = {"process": H.PIECE, "side_of": Side.of, "private": f"{serve_dir}/private", "trusted": trusted or None,
        "node": node, "judge": judge or None, "wipe_stream": stream or None, **facts}
+uncovered = None
 try:
     settings = S.settings(wipe, given)
+    if settings["store"] == "cuda":
+        # the verifier's fill floor: the card file's, never the node's settings
+        store = device.load_card(sku, directory=Path(cards))["store"]
+        if "wipe_fill" not in store:
+            raise ValueError(f"wipe: the card file {sku} gives no store.wipe_fill, the fill floor the judge holds "
+                             f"the wipe to")
+        ctx["fill"] = int(device.number(store["wipe_fill"]))
+        # the card's memory no label fills: the card file's store.dram less the floor, never the driver's report
+        uncovered = int(device.number(store["dram"])) - ctx["fill"] if "dram" in store else None
+        if uncovered is None or uncovered < 0:
+            raise ValueError(f"wipe: the card file {sku}'s store.dram is no memory at or above its fill floor "
+                             f"store.wipe_fill, so the memory the wipe leaves uncovered is not known")
     # the scheme's attach hands the party in (below); this check runs before it, so it hands the scheme's own
     if why := WS.refusals(ctx | {"settings": settings, "pins": json.loads(pins) if pins else None,
                                  "party": MEMORY_ATTESTER}):
@@ -138,11 +157,13 @@ finally:
 private = Path(serve_dir) / "private" / wipe.name
 shutil.copy(private / "period.json", d / "period.json")
 (d / "wipe.json").write_text(json.dumps(got.record(), sort_keys=True, indent=1))
-(d / "summary.json").write_text(json.dumps(s := got.summary(), indent=1, sort_keys=True))
+(d / "summary.json").write_text(json.dumps(s := got.summary() | {"uncovered_card_bytes": uncovered}, indent=1,
+                                          sort_keys=True))
 answer, ran = got.answer, got.record()["served"]
 card = lease.split(",")[0] or ran["card"]
 (d / "served.json").write_text(json.dumps({
-    "serve_dir": serve_dir, "window": window, "server": ran["server"], "card": card, "key_pin": ran["key_pin"],
+    "serve_dir": serve_dir, "window": window, "server": ran["server"], "fill": ran["fill"], "card": card,
+    "uncovered_card_bytes": uncovered, "key_pin": ran["key_pin"],
     "run": os.environ.get("RESEARCH_RUN_ID"),
     "lease": "its own (gpu-lease 1 --wait), given back before the serve takes one" if own else
              "the serve's: its engine loads on this card after the wipe"}, indent=1, sort_keys=True) + "\n")
@@ -151,6 +172,7 @@ print("WIPE " + json.dumps({"verdict": answer["verdict"], "reason": answer["reas
                             "decided_by": s.get("decided_by"), "executables": s.get("executables"), "k": s.get("k"), "segments": s.get("segments"),
                             "fill_GBps": (s.get("challenger") or {}).get("fill_GBps"), "t0": s.get("t0"),
                             "t1": s.get("t1"), "server": mc.PROVER_MACHINE, "card": card, "key_pin": ran["key_pin"],
+                            "uncovered_card_bytes": uncovered,
                             "exit": 0 if answer["verdict"] == "accept" else 1}, sort_keys=True), flush=True)
 sys.exit(0 if answer["verdict"] == "accept" else 1)
 EOF

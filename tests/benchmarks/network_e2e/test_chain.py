@@ -64,15 +64,12 @@ def test_the_bits_per_window_are_v0s_and_the_residuals_and_the_attested_io_binds
     assert [x["in_run"] for x in none["windows"]] == [True, False]
 
 
-def _arm(d: Path, name: str, advice: dict, *, ok=True, forged=False, negatives=None) -> None:
-    rank = {"ok": ok, "audit": {"accepted": not forged, "wrong_units": None if forged else {"bound": 3}},
+def _arm(d: Path, name: str, advice: dict, *, ok=True, negatives=None) -> None:
+    rank = {"ok": ok, "audit": {"accepted": True, "wrong_units": {"bound": 3}},
             "population": 10, "draw": [1, 2], "seconds": 1.5, "source": "stand-in",
             "negatives": negatives or {"a": True, "b": {"refused": True}}}
-    if forged:
-        rank["forged"] = {"ok": ok}
     (d / name).mkdir(parents=True)
-    (d / name / "summary.json").write_text(json.dumps({"ok": ok, "forged": forged, "world": 1, "advice": advice,
-                                                       "ranks": {"0": rank}}))
+    (d / name / "summary.json").write_text(json.dumps({"ok": ok, "world": 1, "advice": advice, "ranks": {"0": rank}}))
 
 
 def test_the_prove_paths_time_is_per_sampled_block_and_beside_the_endpoints_advice_it_is_the_fixed_workloads(tmp_path):
@@ -81,7 +78,6 @@ def test_the_prove_paths_time_is_per_sampled_block_and_beside_the_endpoints_advi
     assert chain.per_unit(rank) == {"S": {"units": 2, "proof_bytes": 1660660, "prove_s_per_unit": 214.45,
                                           "lean_verify_s_per_unit": 23.5}}
     _arm(tmp_path / "pp", "llama", {"root": "r", "bits": 2695})
-    _arm(tmp_path / "pp", "llama-forged", {"root": "r", "bits": 2695}, forged=True)
     got = chain.prove_path(tmp_path / "pp", {"served": "r-ep", "bits": 100}, True)
     assert sorted(got["arms"]) == ["llama"] and got["ok"] is True and got["committed_is_the_advice_file"] is None and got["bound"] is False
     assert got["bound_why"].startswith("from the fixed workload, not this run")

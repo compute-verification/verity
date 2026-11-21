@@ -122,23 +122,28 @@ test_answer = reference(TEST_ID, M.ts.SCHEMES)
 
 #: `MemoryAttester.WipeProtocol.otherServer`'s refusal
 OTHER_SERVER = "the case is a wipe of another server than {}"
+#: `MemoryAttester.WipeProtocol.underFilled`'s refusal: the bytes the wipe fills, then the fill floor
+UNDER_FILLED = "the wipe fills {} bytes, less than the fill floor of {} bytes the card file gives"
 
 
-def served_reference(protocol_id: str, schemes, served: bytes) -> Callable[[Any], dict]:
-    """`MemoryAttester.WipeProtocol.servedProtocol protocol_id schemes served` in Python: a case whose params name
-    another server than `served` refused by name (`OTHER_SERVER`) before anything else is checked."""
+def served_reference(protocol_id: str, schemes, served: bytes, fill: int) -> Callable[[Any], dict]:
+    """`MemoryAttester.WipeProtocol.servedProtocol protocol_id schemes served fill` in Python: a case whose params name
+    another server than `served` refused by name (`OTHER_SERVER`), then one whose commitment's labels fill less than
+    `fill` bytes, the fill floor the card file gives (`UNDER_FILLED`), before anything else is checked."""
 
     def check(p: Params, c: sw.WipeCommitment, e: Evidence) -> tuple:
         if p.server != served:
             return ("reject", OTHER_SERVER.format(served.decode()))
+        if (filled := c.params.labels * sw.LABEL_BYTES) < fill:
+            return ("reject", UNDER_FILLED.format(filled, fill))
         return WP.outcome(p.server, p.session, p.trusted, c, e.signed, schemes, egress_mib=e.egress_mib)
 
     return lambda case: P.answer(protocol_id, case, params=decode_params, commitment=decode_commitment,
                                  evidence=decode_evidence, check=check, digest=digest)
 
 
-#: `wipe-protocol --server server-4 serve`'s answer, the form the deployed command has
-served_answer = served_reference(ID, mc.SCHEMES, SERVER)
+#: `wipe-protocol --server server-4 --fill 0 serve`'s answer, the form the deployed command has, at a fill floor of 0
+served_answer = served_reference(ID, mc.SCHEMES, SERVER, 0)
 
 
 def counted_reference(protocol_id: str, schemes) -> Callable[[Any], dict]:
