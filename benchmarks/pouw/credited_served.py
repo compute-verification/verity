@@ -114,6 +114,14 @@ def served(tmp: Path, tile_fn) -> SimpleNamespace:
         WL._Program._Gemm = orig
     if "tile" not in placed:
         raise SystemExit("NO-PLACE: no Gemm_v2 of K = 256 reads layer 0's qkv projection in WIDE's class 1,1,1 circuit")
+    import dataclasses
+    from verity.commitments import registered_value as RV
+    from verity.commitments.periods import interface as IF
+    ports = dict(tile_fn.signature()[0])
+    wide = {VALUE + p: {IF.FORMAT_KEYS[0]: RV.SCHEMA_HM96_SHA512_ROW_V2, IF.FORMAT_KEYS[1]: 32}
+            for p in ("cert", "salt", "root", "unit", "rows", "col") if ports[p].leaf_widths()[0] == 32}
+    reg_ = circuit.registered
+    circuit = dataclasses.replace(circuit, registered=dataclasses.replace(reg_, formats={**dict(reg_.formats), **wide}))
     tid = descriptor_id(tile_fn)
     wires = [{"reader": w.reader[:40], "port": w.port, "writer": w.writer[:40], "out": w.out, "at": w.at, "base": w.base,
               "radix": list(w.radix), "step": list(w.step), "cut": list(w.cut)}
