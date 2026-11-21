@@ -5090,8 +5090,8 @@ def _weights_doc(pins: list[dict], reads) -> dict:
 
 def test_r8_holds_registered_inputs_to_the_weights_of_record_as_python_does(pieces):
     """R8 under a weights' registration of record (`docket.weights_held`, `Docket.weightsOf`), Lean's codes the
-    Python's: `x` registered and read by two calls passes with the registration, its digest and the reads it declares,
-    on a v1 record (the accepted pin is no entry R7 reads, and a v2 record is refused
+    Python's: `x` registered and read by two calls passes with the registration, its digest and the reads it declares
+    (`docket.declared_reads`), on a v1 record (the accepted pin is no entry R7 reads, and a v2 record is refused
     `keys`); it is refused without the registration (`R8-unpinned`, the case where Lean once passed what Python refused,
     handed no `parameters`), at another digest, at a pin's wrong domain or shape, and with its declared reads missing or past
     what the program reads (`R8-undeclared`); a pin of the unregistered `x` excuses nothing
@@ -5104,6 +5104,7 @@ def test_r8_holds_registered_inputs_to_the_weights_of_record_as_python_does(piec
     assert reads
     pin = _pin(marked, "x")
     doc = _weights_doc([pin], reads)
+    assert R.declared_reads(marked, s.query, ["x"]) == [list(r) for r in reads]
     cases = [(s, doc, [], []), (s, doc, [pin], ["keys"]),
              (s, None, [], ["R8-unpinned"]),
              (s, {**doc, "digest": "00" * 64}, [], ["R8-weights-digest"]),

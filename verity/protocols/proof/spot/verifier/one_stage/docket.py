@@ -249,6 +249,15 @@ def marked_inputs(program: Program) -> list[str]:
             if b == REGISTRATION and G.held_gates(program, [n])] if bindings else []
 
 
+def declared_reads(program: Program, query: Mapping[str, Any], values: Iterable[str]) -> list[list[str]]:
+    """The reads a weights' registration of record declares of the registered inputs `values` under the template query
+    `query`, as R8 derives them (`weights_held`): each ``[template, parameter, value]`` whose template parameter's argument
+    reads one of the value's input nodes (`partition.input_reads`), sorted, each once. A writer of the registration calls
+    this; `QueryRefused` under a query that is no template query."""
+    gates = {g: v for v in values for g in G.held_gates(program, [v])}
+    return [list(r) for r in sorted({(t, p, gates[g]) for t, p, g in P.input_reads(program, query, gates)})] if gates else []
+
+
 def weights_held(program: Program, query: Mapping[str, Any], registered: Iterable[str],
                  of_record: tuple[bytes, str] | None) -> tuple[list[tuple[str, Any]], dict[str, dict[str, Any]]]:
     """R8's hold on the program's registered inputs (the parameters it binds at registration), which `partition.shared_inputs`
@@ -297,11 +306,9 @@ def weights_held(program: Program, query: Mapping[str, Any], registered: Iterabl
     read = {g for _, _, g in P.input_reads(program, query, loose.values())} if loose else set()
     if unpinned := [v for v, g in loose.items() if g in read]:
         out.append(("R8-unpinned", {"values": unpinned}))
-    excused = {v: g for v in marked if v in pins and v not in shape for g in G.held_gates(program, [v])}
+    excused = [v for v in marked if v in pins and v not in shape]
     if excused:
-        reads = P.input_reads(program, query, excused.values())
-        by_gates = {g: v for v, g in excused.items()}
-        read = {(t, p, by_gates[g]) for t, p, g in reads}
+        read = {tuple(r) for r in declared_reads(program, query, excused)}
         said = {d for d in declared if d[2] in excused}
         if read != said:
             out.append(("R8-undeclared", {"undeclared": [list(m) for m in sorted(read - said)],
@@ -1126,6 +1133,6 @@ def matches_public(rec: Mapping[str, Any], scheme: str, roots: Mapping[str, str]
 registered_entries = G.registered_entries
 
 __all__ = ["NOT_ONE_MEMBER", "POOL_KEYS", "RECEIPT", "ROW_TABLES", "TABLE_PORT",
-           "WINDOW_DOMAIN", "check", "held_roots", "marked_inputs", "matches_public", "pool_chains", "pool_open", "pool_refused",
+           "WINDOW_DOMAIN", "check", "declared_reads", "held_roots", "marked_inputs", "matches_public", "pool_chains", "pool_open", "pool_refused",
            "pool_spent_before", "pool_values", "public_ports", "query_digest", "receipt",
            "refuse_unwindowed", "refused", "registered_entries", "unwindowed", "weights_held", "window_domain"]
