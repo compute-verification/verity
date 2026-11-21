@@ -16,7 +16,10 @@ import json
 import os
 import random
 import re
+import subprocess
+import sys
 from collections import Counter
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -40,6 +43,7 @@ from verity_vllm.definitions.registry.dsa_topk import (
 from verity_vllm.engine.profiles.engine_classes import CLASS_G_SERVED, DSA_TOPK_ENV
 from verity_vllm.program import workload as W
 from verity_vllm.program.frontend.rules.vllm_dsa import PAD_SCORE, long_row_keys
+from verity_vllm.program.predict import score as S
 from verity_vllm.program.predict.batch import workload_labels
 from verity_vllm.program.predict.build import build_program
 from verity_vllm.program.predict.common import Unexpressible
@@ -310,13 +314,14 @@ def test_table_reads_are_the_batched_forms(phi):
 
 def test_a_registration_with_table_reads_builds_and_traces_its_request_programs_by_table(tmp_path):
     """`Registered.dsa_table_reads`: class G's registration builds a request Program past INDEX_TOPK in the table form
-    (`request_program`); off (the default), not.  A registration
+    (`request_program`) and traces it with `--dsa-table-reads` after `--batched`; off (the default), neither.  A registration
     with no batched form (a batch-invariant target), or with the prefix cache on, refuses it by name."""
     from tests.program.predict.test_steps import _registered
     from verity_vllm.program.predict.steps import (
         Registered,
         plan_steps,
         request_program,
+        trace_commands,
     )
     hf = _short(json.loads((HF_CONFIG_DIR / "GLM53.config.json").read_text()))
     reg = _class_g(tmp_path, model={"hf_config": hf})
@@ -328,6 +333,10 @@ def test_a_registration_with_table_reads_builds_and_traces_its_request_programs_
     a, b = (request_program(r, u).program.fn.body.nodes for r in (off, on))
     assert _members(b, "DsaTopKIndex_v1") == _members(a, "DsaButterflySettings_v1") > 0
     assert _members(a, "DsaTopKIndex_v1") == _members(b, "DsaButterflySettings_v1") == 0
+    summary = {"requests": [{"LP": u.LP, "T": u.T, "C": u.C, "policy": u.policy, "launch": u.batch(), "chunks": list(u.chunks),
+                             "digest": "d", "stop": u.stop}]}
+    (x,), (y,) = trace_commands(summary, off, "/t"), trace_commands(summary, on, "/t")
+    assert x[-1] == "--batched" and y == [*x, "--dsa-table-reads"]
     assert _registered().phi.target_profile().batch_invariant
     with pytest.raises(ValueError, match="dsa_table_reads is class G's batched form's"):
         Registered.of(_registered().phi, 7, dsa_table_reads=True)
@@ -526,6 +535,46 @@ def test_class_g_compiles_a_prompt_whose_prefill_spans_two_window_edges(tmp_path
     for adv, wl in zip(windows, wls[1:]):
         assert E.fields(adv, TOPK) == {v.name: tuple(i for i, gs in (wl.edge.outs if wl.edge else ()) if v.history in [h for h, _, _ in gs])
                                        for v in E.VALUES if not v.fp8}, "the advice's side holds the fields the Program's edge returns"
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("table_reads", [False, True], ids=["rows-network", "table-reads"])
+def test_a_class_g_chunked_prompt_past_index_topk_traced_build_is_its_compiled_program(tmp_path, table_reads):
+    """The prompt above (10 tokens in chunks of 6 and 4 beside a short request, then two decodes; rows past INDEX_TOPK from
+    position 4), compiled at rank 0 under the cut checkpoint, and its trace: the command `trace_commands` gives it, run on the
+    pinned vLLM with the cut config.json in the hub and no CUDA device visible, as the row driver runs a Build.  `compare` finds the
+    two digests equal, by the rows network and under the registration's table reads (`--dsa-table-reads`).  What no cheaper test
+    can: that the Build's `vllm_dsa` rule, on vLLM's own graph, traces the mask form the predictor writes past INDEX_TOPK.  It
+    needs the pinned vLLM (a pod's venv), so it skips without it."""
+    pytest.importorskip("vllm")
+    from verity_vllm.program.predict.steps import (
+        Registered,
+        compare,
+        compile_steps,
+        trace_commands,
+    )
+    hub = tmp_path / "hub"
+    hf = _short(json.loads((HF_CONFIG_DIR / "GLM53.config.json").read_text()))
+    reg = _class_g(hub, model={"hf_config": hf})
+    cp = Path(S.hf_config_path(str(hub), reg.phi.model["repo"], reg.phi.model["revision"]))
+    assert cp.is_file(), "the config.json `_class_g` wrote, which the trace loads"
+    cp.write_text(json.dumps(hf))
+    reg = Registered.of(Phi.from_json({**reg.phi.to_json(), "engine": _canonical(reg.phi.engine)}), default_seed=7,
+                        dsa_table_reads=table_reads)
+    advice, ingress = _session([(10, 3, {**GREEDY, "max_tokens": 3, "ignore_eos": True}), (3, 2, {**GREEDY, "max_tokens": 2, "ignore_eos": True})],
+                               [[(0, 0, 6)], [(0, 6, 4), (1, 0, 3)], [(0, 10, 1), (1, 3, 1)], [(0, 11, 1)]])
+    c = compile_steps(reg, advice, {"q0": ingress["q0"]}, partial=True)
+    u = c.requests[0]
+    assert (u.LP, u.T, u.chunks) == (10, 2, (6, 4))
+    assert _members(c.programs[u.digest].fn.body.nodes, COUNTED) == 3 * 8
+    s = c.summary()
+    (cmd,) = trace_commands(s, reg, str(tmp_path / "traces"))
+    assert json.loads(cmd[cmd.index("--launch-context") + 1])["chunks"] == [6, 4] and ("--dsa-table-reads" in cmd) == table_reads
+    assert _members(c.programs[u.digest].fn.body.nodes, "DsaTopKIndex_v1") == (3 * 8 if table_reads else 0)
+    subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", *cmd[1:]], check=True,
+                   env={**os.environ, "HF_HUB_CACHE": str(hub), "CUDA_VISIBLE_DEVICES": ""})
+    got = compare(s, str(tmp_path / "traces"))
+    assert (got["equal"], got["mismatches"]) == (1, 0), got["units"]
 
 
 @pytest.mark.slow

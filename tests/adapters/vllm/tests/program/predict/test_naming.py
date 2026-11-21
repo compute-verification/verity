@@ -57,7 +57,7 @@ def pins(names: dict[int, str], params: list, doc: dict, prefix: dict | None) ->
 
 
 def case_of(d: Path) -> dict:
-    """`naming_traces.json`'s case of a Build dir the pinned vLLM traced: its φ and shape from its
+    """`naming_traces.json`'s case of a Build dir the pinned vLLM traced (`steps.trace_commands`): its φ and shape from its
     ``result.json``, three of its rows' names and `pins` of what it says beside its Program; ``python -m
     tests.program.predict.test_naming DIR...`` (from ``adapters/vllm``) prints each."""
     r = json.loads((d / "result.json").read_text())

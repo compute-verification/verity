@@ -36,6 +36,7 @@ PROG = "verity-vllm"
 COMMANDS: dict[str, tuple[str, str]] = {
     "advice": ("verity_vllm.pipeline.advice", "a served run's advice (I1) for the precommitted compiler, from its step trace and Commit record"),
     "block-counts": ("verity_vllm.program.predict.block_counts", "a day's (c, k)-inference blocks from its served windows' circuit records, judged against its declared n: the judgment public, the counts private"),
+    "build": ("verity_vllm.pipeline.build", "derive one request wrapper's Program (Build step)"),
     "close-record": ("verity_vllm.program.predict.close_plan", "a served window's record after the card is released, from the handoff its close left"),
     "epoch": ("verity_vllm.pipeline.epoch", "the re-baseline epoch's row job (job, resolve, row-state, word-check, digests, ...)"),
     "fa2-tap-apply": ("verity_vllm.acquire.fa2_tap_src.apply_fa2_tap", "patch a pinned vllm-flash-attn tree into the FA2 tapped tree"),
@@ -71,7 +72,6 @@ COMMANDS: dict[str, tuple[str, str]] = {
 #: commands of the rows' route, refused by name: requests are committed through the window's circuit (`serve-openai --seal`)
 DELETED: dict[str, str] = {
     "row": "the traced row driver and its Build are deleted; a workload's circuit is `predict row`'s",
-    "build": "the Build step is deleted; a request's Program is the registered compiler's (`predict.steps.compile_steps`)",
     "commit": "the Commit is deleted; `serve-openai --seal` commits what it serves",
     "manifest": "the row manifest is deleted; the serve commits the window's circuit",
     "neutrality": "the traced Build it compared a predicted one against is deleted",
