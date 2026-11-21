@@ -94,6 +94,13 @@ def test_the_recorded_workload_reads_as_its_requests():
     assert (record["request_id"], record["prompt_len"], len(record["prompt_token_ids"])) == ("728a5686-cfb6-58db-a1a8-170c12d608a6", 32, 32)
 
 
+def test_the_one_window_load_is_one_request_of_bos_alone_and_one_step():
+    ds = D.open("llama32_1b_fixed_1_1_1")
+    [record] = list(ds)
+    assert ds.kind == "completion-requests"
+    assert (record["model"], record["prompt"], record["max_tokens"], record["temperature"]) == ("unsloth/Llama-3.2-1B", [128000], 1, 0.0)
+
+
 def test_a_timed_view_pairs_each_record_with_its_time_and_is_timed_once(monkeypatch, tmp_path):
     _define(monkeypatch, tmp_path, a=GENERATED.format(seed=1, count=5))
     ds = D.open("a")

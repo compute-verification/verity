@@ -1,6 +1,5 @@
 // seeds.noise_block on the device: block t of seed u's stream, SHA-512(NOISE_TAG || seed_u || u64be t), one compression (96
-// message bytes), one thread a block.  `pouw_h1_receipts.Cubin` loads it, `pouw_h1_receipts.noise_cubin` builds it for the
-// serving card; by hand, from the repository's root:
+// message bytes), one thread a block.  No Python module loads or builds it; by hand, from the repository's root:
 //   nvcc -O3 -std=c++17 -I verity/commitments/cuda -gencode arch=compute_120a,code=sm_120a -cubin -o noise.cubin \
 //     verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/noise.cu
 //
