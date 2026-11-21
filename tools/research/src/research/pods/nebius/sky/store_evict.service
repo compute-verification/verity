@@ -1,4 +1,4 @@
-# /etc/systemd/system/vy-store-evict.service on vy-nebius-1 and vy-nebius-2 (`research deploy` and cluster_up.sh install it): the job
+# /etc/systemd/system/vy-store-evict.service on vy-nebius-2 (`research deploy` installs it): the job
 # pods' store eviction, as ubuntu, the job store's owner. It runs main's copy of `research`, which only `research deploy install`
 # places (deploy.toml's whole tree at VY_RESEARCH_TOOL), never a snapshot a `research run` shipped: without the copy a pass refuses.
 [Unit]

@@ -15,6 +15,7 @@ SPOT, and the one record of every verdict (the block record).
                               [--product P] [--deferred WHY] [--steps LO,HI] [--off-node]
                               [--sampled-lean [--sampled-exe PATH]] [--key-sha512 HEX] [--lane L] [--window-tie DIR]
                               [--tree SHA [--tree-on BRANCH]] [--served-compare FILE] [--composite DIR]
+    served_verdicts.py window-record SUMMARY_JSON
     served_verdicts.py witness < PATHS
     served_verdicts.py rebase SERVE_DIR SERVED_DIR < PATHS
     served_verdicts.py composed ANSWER DIR [--gate-exit RC]
@@ -1781,6 +1782,39 @@ def members_reached(members: Mapping[str, Any], answer: Mapping[str, Any]) -> di
             "bounds": BR.member_bounds(by_member, delta), "by_member": by_member}
 
 
+def window_record(summary: Any) -> tuple[str, str]:
+    """The window road's verdict of record and its line, from the records audit's ``summary.json`` alone: ``accept`` only
+    where the audit accepted and Lean's members check (`OneStageZk.checkMembersAt`, ``audit.members_lean``) ran and accepted,
+    ``undecided`` where Lean did not run, else ``reject``; the line says what the verdict rests on, ``compiled`` as the
+    summary states it. ValueError naming the field where the summary lacks one the verdict reads."""
+    def field(of: Any, key: str, kind: type, where: str) -> Any:
+        if not isinstance(of, Mapping) or not isinstance(of.get(key), kind):
+            raise ValueError(f"the audit's summary has no {where}{key} of type {kind.__name__}")
+        return of[key]
+
+    ok, audit = field(summary, "ok", bool, ""), field(summary, "audit", dict, "")
+    accepted, ml = field(audit, "accepted", bool, "audit."), field(audit, "members_lean", dict, "audit.")
+    ran, lean_ok = field(ml, "ran", bool, "audit.members_lean."), field(ml, "ok", bool, "audit.members_lean.")
+    compiled = summary.get("compiled", "not stated by the summary")
+    rests = "" if compiled is True else "; the verdict does not rest on the circuit's compile check"
+    tail = f"compiled: {compiled}{rests}; SPOT's verdict alone: no block record is composed on this road"
+    if not ran:
+        return "undecided", (f"WINDOW-RECORD undecided: Lean's members check did not run ({ml.get('reason')}), so no verdict of "
+                             f"Lean's stands; the audit's own accepted={accepted}; {tail}")
+    lean = ((ml.get("detail") or {}).get("lean") or {}) if isinstance(ml.get("detail"), Mapping) else {}
+    said = (f"Lean's members check (OneStageZk.checkMembersAt): ok={lean_ok}, codes={ml.get('codes')}, verdict "
+            f"{lean.get('verdict')}, output sha512 {lean.get('output_sha512') or 'not kept by this audit'}")
+    if not (ok and accepted and lean_ok and lean.get("verdict") == "accept"):
+        return "reject", (f"WINDOW-RECORD reject: {said}; the audit's ok={ok}, accepted={accepted}, refused="
+                          f"{summary.get('refused')}; {tail}")
+    wrong, sampled = field(audit, "wrong_units", dict, "audit."), field(summary, "draw", list, "")
+    for k in ("bound", "delta"):
+        if k not in wrong:
+            raise ValueError(f"the audit's summary has no audit.wrong_units.{k}")
+    return "accept", (f"WINDOW-RECORD accept: {said}; {len(sampled)} sampled blocks, at most {wrong['bound']} of its units wrong "
+                      f"except with probability {wrong['delta']}; {tail}")
+
+
 def sampled_exe(exe: str | os.PathLike | None) -> Path:
     """This tree's own SPOT Lean (`served_cases.SAMPLED_LEAN`'s build path): built here if ``exe`` is None, and ``exe``
     only if it resolves to that path; any other is refused (`SAMPLED_EXE_REFUSED`), so `LEAN_HERE` names this tree's."""
@@ -2646,6 +2680,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     pb = sub.add_parser("publish")
     pb.add_argument("out", type=Path)
     pb.add_argument("--private", type=Path, required=True)
+    wr = sub.add_parser("window-record", help="the window road's verdict of record from the records audit's summary.json: "
+                        "exit 0 accept, 1 reject or undecided, 2 a summary that is missing or lacks a field (ERROR)")
+    wr.add_argument("summary", type=Path)
     for name in ("coin-trees", "coins"):
         ct = sub.add_parser(name)
         ct.add_argument("--challenger", required=True)
@@ -2737,6 +2774,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     if a.cmd == "public-registration":
         print(json.dumps(public_registration(json.loads(a.registration.read_text())), indent=1, sort_keys=True))
         return 0
+    if a.cmd == "window-record":
+        try:
+            verdict, line = window_record(json.loads(a.summary.read_text()))
+        except (OSError, ValueError) as e:
+            print(f"WINDOW-RECORD ERROR: {type(e).__name__}: {e}", flush=True)
+            return 2
+        print(line, flush=True)
+        return 0 if verdict == "accept" else 1
     if a.cmd == "coins":
         print(coins_said(a.challenger, _summary(a.summary)))
         return 0

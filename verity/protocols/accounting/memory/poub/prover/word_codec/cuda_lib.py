@@ -26,3 +26,18 @@ def load(path: str | Path, functions: Mapping[str, Signature],
 def bind(fn: Any, sig: Signature) -> None:
     args, result = sig if isinstance(sig, tuple) else (sig, ctypes.c_int)
     fn.argtypes, fn.restype = list(args), result
+
+
+def timed(torch, fn, reps: int, warm: int = 1) -> list[float]:
+    for _ in range(warm):
+        fn()
+    torch.cuda.synchronize()
+    out = []
+    for _ in range(reps):
+        a, b = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+        a.record()
+        fn()
+        b.record()
+        b.synchronize()
+        out.append(a.elapsed_time(b) / 1e3)
+    return out

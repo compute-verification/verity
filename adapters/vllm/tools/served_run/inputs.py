@@ -1,9 +1,9 @@
 """The launchers' command line of the adapter's input datasets (`verity_vllm.inputs`): its statement, its door and its one
 sender.
 
-    inputs.py statement                  # MODEL REVISION PRECISION CLASS, one line
+    inputs.py statement                  # MODEL REVISION PRECISION CLASS CAP_BITS, one line
     inputs.py door NAME [TIMING]         # the door over the input dataset NAME at TIMING (default at-once): its identity
-    inputs.py application FILE           # MODEL REVISION PRECISION CLASS DATASET TIMING of applications/NAME.toml, then the door's line
+    inputs.py application FILE           # MODEL REVISION PRECISION CLASS DATASET TIMING CAP_BITS of applications/NAME.toml, then the door's line
     inputs.py tokenize --port P --dataset NAME     # the dataset's prompts, decoded, against the file's and the endpoint's ids
     inputs.py send --port P --dataset NAME --timing T [--release RUN] --out FILE    # the one sender
 
@@ -15,6 +15,7 @@ import argparse
 
 import input_datasets
 from verity_vllm.inputs import sender, serves
+from verity_vllm.pipeline.advice_windows import CAP_BITS
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -39,7 +40,7 @@ def main(argv: list[str] | None = None) -> int:
     if a.command == "tokenize":
         return tokenize(a.port, a.dataset, s)
     if a.command == "statement":
-        print(s.model, s.revision, s.precision, s.window_class)
+        print(s.model, s.revision, s.precision, s.window_class, CAP_BITS)
         return 0
     if a.command == "send":
         return sender.send(a.port, a.dataset, a.timing, release=a.release, out=a.out)
@@ -47,7 +48,7 @@ def main(argv: list[str] | None = None) -> int:
         if a.command == "application":
             name, timing = serves.application(a.file)
             door_said = serves.door_line(name, timing)
-            said = [" ".join((s.model, s.revision, s.precision, s.window_class, name, timing)), door_said]
+            said = [" ".join((s.model, s.revision, s.precision, s.window_class, name, timing, str(CAP_BITS))), door_said]
         else:
             said = [serves.door_line(a.dataset, a.timing)]
     except (serves.Refused, input_datasets.Refused) as e:

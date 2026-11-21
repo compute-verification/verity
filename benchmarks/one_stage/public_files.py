@@ -114,6 +114,7 @@ REFUSALS = {
     "advice-no-capped-compiler": "verity_vllm.pipeline.advice registers no capped compiler (its registered_compiler wraps none)",
     "advice-not-canonical": "the advice's bytes are not its canonical encoding",
     "scan-reader-not-passed": "a window's scan reads the network attester run its serve kept, or that it kept none, by the caller's reader, since SPOT imports neither the attester nor a benchmark: run this from a caller that passes it (main's kept_ingress, as benchmarks/one_stage/window_commit.py does)",
+    "prover-circuit-without-binding": "--prover-circuit: the docket binds no compiler and advice to hold it to (a circuit with no compiler is --circuit's)",
     "request-without-end": "a request of the window has no END in the kept run's ingress",
     "window-commit-reader-not-passed": "window-commit reads the network attester run its serve kept, and names the scan state it opens for the attester's scan, by what its caller passes (kept_ingress, scan_state_file), since SPOT imports neither the attester nor a benchmark: run benchmarks/one_stage/window_commit.py",
     "advice-compiler-absent": "a served window's registered compiler is `verity-vllm advice`'s (verity_vllm.pipeline.advice), which this tree lacks",

@@ -493,7 +493,7 @@ def start(p: Path, h: dict, backfill: bool = False, claim_fd: int | None = None)
         # them there until nothing else is left in it.  --mem-gb 0: the scope's MemoryMax is the limit, and a user scope of
         # gpu-lease's own would take the job out of this one.
         unit_name = f"fill-timing-{int(time.time() * 1000)}"
-        # one compute thread per core in each pool `research run --queue --cpus 8` set for the chunks on node 1; the SMT siblings
+        # one compute thread per core in each pool `research run --queue --cpus 8` set for the chunks; the SMT siblings
         # are headroom
         cores = str(len({siblings(c) for c in gpu_set(timing, 1 << 16) or ()}) or h["cpus"])
         env.update(dict.fromkeys(("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS"), cores))

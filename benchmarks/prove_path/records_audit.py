@@ -105,7 +105,7 @@ record (META, pin, class, size, seconds, peak), its text hashed as it is rendere
 circuit's text in the cache. The warm starts no compose, and stops, where the cache's file system would have less than
 ``--min-free-gb`` free.
 
-    records_audit.py audit --window DIR --sampling-design L (--opening FILE --compilers FILE [--repo DIR] | --circuit SHA512) --run HEX \\
+    records_audit.py audit --window DIR --sampling-design L (--opening FILE --compilers FILE [--repo DIR] | --circuit SHA512 | --prover-circuit) --run HEX \\
         [--template-sets DIR] [--outputs FILE] --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof --zk-server flock-zk-server \\
         --lower flock-lower-check --out DIR [--delta D] [--port P] [--ports N] [--forged] [--challenger local|loopback:HOST:PORT|gate:USER@HOST --main FILE] \\
         [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--registered FILE] [--tie W [--tie-prefix P]] [--skip-negatives] \\
@@ -154,6 +154,12 @@ auditing tree. The compile command is ``argv --advice FILE --out FILE``:
 * it prints ``{"bits": N}`` as its last stdout line: the advice's length in bits it charges;
 * it exits 0 having compiled, `REFUSED` (2) on advice it refuses, the reason on stderr, and any other code on an error.
 
+``--prover-circuit``: a development mode, refused unless its caller passes ``--development`` (its ``DEVELOPMENT=1``), for a compiled circuit whose compiler no
+command rebuilds: the circuit is the one the prover registered (``circuit.json``, which the docket binds). The docket must
+bind a compiler and advice, and `source` and `fixed_before_draw` still hold the docket to them, its length still charged;
+the compile check does not run, nor its two negatives and `after_draw`, which read the advice's opening. The summary's
+``compiled`` and the ``RECORDS`` line's ``compile`` say so (`NOT_CHECKED`, `PROVER_CIRCUIT`).
+
 ``--challenger``: the sample on the auditor's challenger's coins (`a5_coins`), the only coins a sample is on, as `prove_path.py audit`
 takes them: ``local``, a development session on this machine (with ``--deployed-key``, under a key made at the deployed
 LMS parameters, the only ones SPOT's v2 reads a challenger's signatures under), ``loopback:HOST:PORT``, that session on the challenger
@@ -189,9 +195,24 @@ from typing import Any
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
+
+
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 
-from verity.commitments import docket_digest as DD
+
+def own_tree(tree: Path = HERE.parents[1], packages: Iterable[str] = ("verity", "verity_vllm", "verity_flock")) -> None:
+    """Refuses unless each of ``packages`` imports from ``tree``, the checkout this file is in: a venv shared between
+    checkouts (a node's vLLM venv) holds editable installs of whichever tree last installed into it, and the audit would run
+    that commit's verifier and registry."""
+    for name in packages:
+        at = Path(importlib.import_module(name).__file__).resolve()
+        if not at.is_relative_to(tree.resolve()):
+            raise SystemExit(f"records_audit: {name} imports from {at}, not from this tree {tree}: the venv's editable "
+                             f"installs are another checkout's; run with PYTHONPATH naming this tree's import roots "
+                             f"({tree}:{tree}/adapters/vllm:{tree}/verity/protocols/proof/flock/prover/python) or a venv "
+                             f"synced in this tree (uv sync --all-packages)")
+
+from verity.commitments import docket_digest as DD  # noqa: E402
 from verity import device as ST  # noqa: E402
 from verity.protocols.registration.verifier import registration as G  # noqa: E402
 from verity.protocols.accounting.compute.pouw.verifier import window as Wd  # noqa: E402
@@ -207,6 +228,9 @@ PORTS = range(10000, 32000)
 #: a compile command's exit code for advice it refuses (not advice it compiles: malformed, over its cap, or a choice it can't
 #: compile), the reason on stderr; any other nonzero exit is an error. Either fails the compile check (``compiles``).
 REFUSED = 2
+#: ``--prover-circuit``'s word for the compile check it does not run, and what its ``RECORDS`` line says
+NOT_CHECKED = "not checked"
+PROVER_CIRCUIT = "compiled: not checked (the circuit is the one the prover registered)"
 #: the values an execution phase registers afresh under its open root, never an earlier record's: the scan's state, which
 #: the network verifier ties to its scan (stateTied); a circuit names it among its values and marks nothing else, so any
 #: other value it takes is W's
@@ -364,12 +388,17 @@ def compile_check(circuit: Mapping[str, Any], window: Mapping[str, Any], opening
 def source(w: Mapping[str, Any] | None, held: Mapping[str, Any]) -> dict[str, Any]:
     """The docket's window held to what the verifier holds: the circuit record's SHA-512 (``circuit``), the run root it
     names (``run``), and the compiler and advice the compile check verified, or neither for a circuit with no compiler
-    (``compiler``, ``advice``); ``compiled``: the compile check's verdict (true for a circuit with no compiler)."""
+    (``compiler``, ``advice``); ``compiled``: the compile check's verdict (true for a circuit with no compiler), no check
+    at all under ``--prover-circuit`` (`NOT_CHECKED`), which the detail names."""
     w = w or {}
     ok = {"circuit": w.get("circuit") == held["circuit"], "run": w.get("run") == held["run"],
-          "compiler": w.get("compiler") == held.get("compiler"), "advice": w.get("advice") == held.get("advice"),
-          "compiled": bool(held["compiled"])}
-    return _verdict(ok, {"kind": w.get("kind"), "circuit": w.get("circuit"), "run": w.get("run")})
+          "compiler": w.get("compiler") == held.get("compiler"), "advice": w.get("advice") == held.get("advice")}
+    detail = {"kind": w.get("kind"), "circuit": w.get("circuit"), "run": w.get("run")}
+    if held["compiled"] == NOT_CHECKED:
+        detail["compiled"] = NOT_CHECKED
+    else:
+        ok["compiled"] = bool(held["compiled"])
+    return _verdict(ok, detail)
 
 
 #: what the window figure rests on and the run figure doesn't (`declared_count`), named beside it wherever it is printed
@@ -761,7 +790,8 @@ def negatives(w: Mapping[str, Any], held: Mapping[str, Any], circuit: Mapping[st
     one binding a compiler for a circuit registered with none; for a compiled circuit, a docket naming another
     compiler, another commit of it, another advice root or another length, or binding neither (a circuit passed off as the
     compiler's), the advice's opening under another salt (which opens no registered root), and a circuit record other than
-    the compiler's output (``held["output"]``, the compile check's, its first template one unit short)."""
+    the compiler's output (``held["output"]``, the compile check's, its first template one unit short); these last two
+    not under ``--prover-circuit``, which holds no opening."""
     cases = {"registration-naming-another-circuit": {**w, "circuit": "00" * 64},
              "registration-naming-another-run": {**w, "run": "00" * 64}}
     if held.get("compiler") is None:
@@ -774,7 +804,7 @@ def negatives(w: Mapping[str, Any], held: Mapping[str, Any], circuit: Mapping[st
         if "commit" in w["compiler"]:
             cases["registration-naming-another-commit"] = {**w, "compiler": {**w["compiler"], "commit": "00" * 20}}
     out = {name: source(x, held) for name, x in cases.items()}
-    if held.get("compiler") is not None:
+    if held.get("compiler") is not None and held["compiled"] != NOT_CHECKED:
         op = dict(held["opening"])
         op["salts"] = [f"{int(op['salts'][0][:2], 16) ^ 1:02x}{op['salts'][0][2:]}", *op["salts"][1:]]
         v, _ = compile_check(circuit, w, op, held["compilers"], scratch, held.get("repo"))
@@ -1069,6 +1099,7 @@ def forged_outcome(s: dict, wdir: Path, member: int | None = None, more: Mapping
 def audit(a: argparse.Namespace) -> int:
     """The audit (module docstring) into ``a.out``: ``summary.json`` and a ``RECORDS`` line, its ``definitions`` the module
     each member template's Definition is in and ``loaded`` the ``verity*`` packages the process loaded. -> 0 when it passed."""
+    own_tree()
     import a5 as A5
     from verity.protocols.proof.spot.verifier.challenger import challenger_session as AC
     from verity.protocols.proof.spot.prover.audit import local_challenger as LC
@@ -1078,11 +1109,15 @@ def audit(a: argparse.Namespace) -> int:
     a.compose_cache = a.compose_cache or str(out / "compose-cache")
     try:
         mine, doc, sets = verifier_window(wdir, a.sampling_design, Path(a.template_sets) if a.template_sets else None)
+        A5.progress("window", t0, members=len(mine.members))
         pins = pinned(json.loads(Path(a.registered).read_text())) if a.registered else {}
         def resolve(t: str) -> Any:
             return sets[t][1] if t in sets else catalog_resolve(t)
         docket = json.loads((wdir / "registration.json").read_text())
         own = docket.get("window") or {}
+        if a.prover_circuit and not (own.get("compiler") and own.get("advice")):
+            raise ValueError("--prover-circuit: the docket binds no compiler and advice to hold it to (a circuit with no "
+                             "compiler is --circuit's)")
         ties, untied = window_pins(own, doc, resolve, docket)
         if twice := sorted((set(ties) | set(untied)) & set(pins)):
             raise ValueError(f"values {twice} are both pinned and the window's own")
@@ -1127,6 +1162,8 @@ def audit(a: argparse.Namespace) -> int:
         held.update(compiled=compiled["ok"], compiler=(bound or {}).get("compiler") or w.get("compiler"),
                     advice=(bound or {}).get("advice") or w.get("advice"), compilers=compilers, opening=opening, repo=repo,
                     output=json.loads(output.read_text()) if compiled["ok"] else None)
+    elif a.prover_circuit:
+        held.update(compiled=NOT_CHECKED, compiler=w["compiler"], advice=w["advice"])
     window_s = round(time.time() - t0, 2)
     if a.lower is None:
         from verity.protocols.proof.spot.verifier.one_stage import proofs as PF
@@ -1146,12 +1183,14 @@ def audit(a: argparse.Namespace) -> int:
         print("TIE " + json.dumps(named, sort_keys=True), flush=True)
     if a.forged:
         os.environ["FC_ZK_SELF_CHECK"] = "skip"
+    A5.progress("records", t0, negatives=len(more))
     manager, a.coins, finisher = AC.start(a.challenger, mine.run, [0], out / "challenger", a.main, ssh_key=a.gate_key,
                                           peer=a.peer, key_record=a.challenger_key, deployed=a.deployed_key,
                                           local=LC.Local)
     try:
         s, ok = A5.audit(a, sets, out / "window", mine, wdir, lambda x: source(x, held), a.port,
-                         {"verifier_window_s": window_s, "circuit": held["circuit"], **({"compile": compiled} if compiled else {})},
+                         {"verifier_window_s": window_s, "circuit": held["circuit"], **({"compile": compiled} if compiled else {}),
+                          **({"compiled": NOT_CHECKED} if a.prover_circuit else {})},
                          more, rank=0, registered=reads or None, ports=a.ports,
                          history=(lambda publics: HW.params(doc, mine, publics, pins)) if histories else None,
                          session=finisher)
@@ -1162,7 +1201,7 @@ def audit(a: argparse.Namespace) -> int:
         manager.shutdown()
     row = {"seconds": round(time.time() - t0, 1), "verifier_window_s": window_s, "circuit": held["circuit"],
            "compiler": held["compiler"], "advice": held["advice"], "compile": compiled, "law": a.sampling_design,
-           "sampling_design": a.sampling_design,
+           "sampling_design": a.sampling_design, **({"compiled": NOT_CHECKED} if a.prover_circuit else {}),
            **{x: s.get(x) for x in ("run_root", "population", "members", "registration", "source", "refused", "checks_before_draw",
                                     "audit", "draw", "draw_counts", "negatives", "negatives_skipped", "coins",
                                     "timing", "outputs", "negative_workers", "plain", "arm", "coin_trees")}}
@@ -1188,7 +1227,9 @@ def audit(a: argparse.Namespace) -> int:
         bound = {"compiler": held["compiler"], "advice": held["advice"]} if held["compiler"] is not None else None
         row["fixed_before_draw"] = fixed_before_draw(receipt, rec, bound)
         ordered = row["fixed_before_draw"]["ok"]
-        if bound is not None:
+        if a.prover_circuit:
+            row["after_draw"] = NOT_CHECKED
+        elif bound is not None:
             row["after_draw"] = after_draw(receipt, rec, held)
             row["negatives"] = {**(row["negatives"] or {}), "advice-root-after-the-draw": row["after_draw"]["refused"]}
             ordered = ordered and row["after_draw"]["refused"]
@@ -1207,7 +1248,8 @@ def audit(a: argparse.Namespace) -> int:
     row["ok"] = row["ok"] and (acts is None or acts["ok"])
     (out / "summary.json").write_text(json.dumps(row, indent=1, sort_keys=True, default=str))
     print("RECORDS " + json.dumps({x: row.get(x) for x in ("ok", "circuit", "population", "draw", "draw_counts", "outputs", "seconds")}
-                                  | {"compile": (compiled or {}).get("ok"), "fixed_before_draw": (row.get("fixed_before_draw") or {}).get("ok"),
+                                  | {"compile": PROVER_CIRCUIT if a.prover_circuit else (compiled or {}).get("ok"),
+                                     "fixed_before_draw": (row.get("fixed_before_draw") or {}).get("ok"),
                                      "accepted": (s.get("audit") or {}).get("accepted"),
                                      "negatives_refused": all((row.get("negatives") or {"none": False}).values()),
                                      "definitions": row["definitions"], "loaded": row["loaded"],
@@ -1265,6 +1307,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--repo", help="with --opening: the repository a registered compiler's commit is checked out from (default "
                    "this tree's)")
     p.add_argument("--circuit", help="instead: the SHA-512 of the circuit record the verifier registered, a circuit with no compiler")
+    p.add_argument("--prover-circuit", action="store_true", help="instead, under DEVELOPMENT=1 only: the circuit the prover "
+                   "registered, its compiler and advice held to the docket's, the compile check not run (module docstring)")
+    p.add_argument("--development", action="store_true", help="with --prover-circuit: the caller's DEVELOPMENT=1, which the "
+                   "audit takes as a flag and never reads from the environment")
     p.add_argument("--run", required=True, help="the run root the verifier holds the window to, the one the run published")
     p.add_argument("--template-sets", help="the verifier's own input sets, for templates whose units are not bit rows")
     p.add_argument("--outputs", help="JSON: the verifier's own [lo, hi) ranges of the units whose outputs are served out "
@@ -1394,7 +1440,13 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if a.cmd == "warm":
         return warm(a)
-    if bool(a.opening) == bool(a.circuit) or bool(a.opening) != bool(a.compilers):
+    if a.prover_circuit:
+        if not a.development:
+            ap.error("--prover-circuit: a development mode: the compile check does not run; it runs under DEVELOPMENT=1 only "
+                     "(its caller says so with --development)")
+        if a.opening or a.compilers or a.repo or a.circuit:
+            ap.error("--prover-circuit takes the circuit the prover registered: no --opening, --compilers, --repo or --circuit")
+    elif bool(a.opening) == bool(a.circuit) or bool(a.opening) != bool(a.compilers):
         ap.error("a compiled circuit: --opening FILE --compilers FILE; a circuit with no compiler: --circuit SHA512")
     if not a.challenger:
         ap.error("audit draws on the auditor's challenger's coins, never the verifier's own: give --challenger local --main FILE")

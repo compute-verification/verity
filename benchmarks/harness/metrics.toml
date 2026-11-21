@@ -1,5 +1,5 @@
-# This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
-# enforces it.
+# This directory's numbers, one [[metric]] each, by the rules of tests/test_metrics_registry.py,
+# which enforces them.
 
 # Each is a row of the served table (`served_overhead.py`, `verity-bench served-table`): a protocol's arm over stock FP8
 # as served (compiled), in time per output token, paired by rep, on Llama-3.1-8B at batch 32 with 512-token mixed
