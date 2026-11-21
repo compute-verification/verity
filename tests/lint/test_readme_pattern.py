@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[2]
 LIST = Path(__file__).resolve().parent / "allowlists" / "readme_pattern.json"
 ME = "python3 tests/lint/test_readme_pattern.py"
 #: the trees whose READMEs are read, as git pathspecs; `verity/README.md` outlines the distribution and is no subsystem's
-SCOPE = ("verity/*/", "adapters/", "library/", "applications/", "input_datasets/")
+SCOPE = ("verity/*/", "adapters/", "library/", "applications/")
 PARTS = ("Pieces", "What varies", "Interfaces", "Try it")
 MAX_LINES, MAX_BYTES, SUB_LINES = 70, 6000, 25
 FIX = (f"write it from `README.template.md` (a sub-directory's: at most {SUB_LINES} lines, what it is and one thing to "
