@@ -941,24 +941,6 @@ def descriptor(rng: random.Random, lay: dict, prefix: str = "", receipt: object 
     return desc_bytes(window_desc(rng, lay, prefix, receipt, j10r, tile)).hex()
 
 
-def j10r_misformed(rng: random.Random, lay: dict, prefix: str = "") -> str:
-    """A J10-R execution phase's descriptor (`descriptor`'s, ``j10r``) whose template at some K is in no one form: its ``call``
-    or ``blocks`` dropped, the two swapped, or (an execution phase of two K) that K's template today's while the other's is
-    J10-R's; in hex."""
-    desc = window_desc(rng, lay, prefix, j10r=True)
-    tiles = json.loads(dict(Cr._record(desc["program_fn"]))["TILES"])
-    _k, tid = rng.choice(tiles)
-    params = desc["definitions"][tid["fn"]]["body"]["params"]
-    how = rng.choice(["drop", "swap", *(["mixed"] if len(tiles) > 1 else [])])
-    if how == "drop":
-        del params[rng.choice([-1, -2])]
-    elif how == "swap":
-        params[-2:] = params[-2:][::-1]
-    else:
-        del params[-2:]
-    return desc_bytes(_wired(desc)).hex()
-
-
 def _alt_layout(rng: random.Random, lay: dict) -> dict:
     """Another layout of `lay`'s linears: another slot, another n, or the calls in another order, with other units or
     other strata than `lay`'s."""
@@ -1187,14 +1169,22 @@ def _draw_coin(rng: random.Random) -> dict:
                           tuple(bytes.fromhex(_hex(rng)) for _ in range(rng.randint(0, 3)))).to_json()
 
 
-def window_drawn_instance(rng: random.Random, name: str = "honest") -> dict:
+def window_drawn_instance(rng: random.Random, name: str = "honest", windows: dict[str, str] | None = None) -> dict:
     """One `window-drawn` case: an execution phase's open root, its sample (its coin's live opening, its root and its receipts), its
-    circuit's descriptor (`descriptor`, today's units or J10-R's) and a committed K, then mutation `name`."""
-    lay, j10r = layout(rng), rng.random() < 0.5
-    if j10r:
-        lay["m"] = 2 * lay["tile"][0]
+    circuit's descriptor (the registry's window at K = 64 over an H1 tile of `REGISTRY_TILES`, today's units or J10-R's,
+    in hex `windows` [tile]: a template `credit.TILE_PINS` pins) and a committed K, then mutation `name`. Without
+    `windows` the descriptor is `descriptor`'s of a random layout, which no pin holds, so `credit.layout_of` refuses it
+    and only a mutation refused before the layout is read (``descriptor-hex``) reaches its refusal."""
+    if windows is None:
+        lay, j10r = layout(rng), rng.random() < 0.5
+        if j10r:
+            lay["m"] = 2 * lay["tile"][0]
+        desc = descriptor(rng, lay, j10r=j10r)
+    else:
+        lay = REGISTRY_LAYOUT
+        desc = windows[rng.choice(REGISTRY_TILES)]
     d = {"window": {"root": _hex(rng)}, "draw": {"coin": _draw_coin(rng), "root": _hex(rng), "receipts": _hex(rng)},
-         "descriptor": descriptor(rng, lay, j10r=j10r), "k": _k(rng, lay)}
+         "descriptor": desc, "k": _k(rng, lay)}
     match name:
         case "honest":
             pass
@@ -2131,45 +2121,31 @@ PERIOD_NAMES = ["no-close", "incomplete", "missing", "order", "extra", "foreign"
 PERIOD_KEYS = ("key", "ledger", "pins", "main", "name", "windows")
 
 
-def registered_file_instance(rng: random.Random, name: str = "honest") -> dict:
-    """A `registered-file` case: an execution phase's circuit (`descriptor` of a random layout, its parameters named a prefix or
-    none), one of its calls, the execution phase's open root, its rounds (one to three dividing its calls), and the roots the
-    execution phase registers (``{value: [root, ...]}``) for each value a statement of that call reads (`h1window.table`'s A
-    table of its round and K, its z table and the weights' ``b/<K>``), some other rounds' and K's A tables among them,
-    as `credit.registered_file` takes them, and at random (always under the ``receipt-`` mutations) the call's receipt
-    table ``receipt@<call>``, its templates returning a receipt of whole 16-bit words (bits, of 1-bit leaves or wider); ``missing`` leaves one of the
-    call's values out, ``twice`` registers one twice, ``receipt-twice`` registers the receipt table twice and
-    ``receipt-width`` gives the templates a receipt of no whole 16-bit words, or none, ``pub-roots`` registers the
-    call's A table or ``b/<K>``, whose roots its units' public rows hold, at a root that is no SHA-512 digest, and
-    ``ok-registered`` registers the execution phase's ok rows ``<prefix>ok``, which are the verifier's own. Its templates are
-    J10-R's at random (always under ``j10r``), whose public rows the verifier derives each unit's call and blocks for,
-    and ``j10r-form`` gives a J10-R execution phase a template in no one form (`j10r_misformed`)."""
-    lay = layout(rng)
-    j10r = name == "j10r" or (name == "honest" and rng.random() < 0.5)
-    prefix = rng.choice(["", f"h1/w-{rng.randrange(100)}/"])
-    call = rng.randrange(len(lay["calls"]))
-    steps = rng.choice([s for s in (1, 2, 3) if len(lay["calls"]) % s == 0])
-    k_of = {lin: k for lin, k, _n in lay["linears"]}
-    a = f"{prefix}a/{k_of[lay['calls'][call][0]]}@{Cr.step_row(lay, steps, call)[0]}"
-    vals = [a, f"{prefix}zy@{call}", f"{prefix}b/{k_of[lay['calls'][call][0]]}"]
-    receipted = name.startswith("receipt-") or rng.random() < 0.5
-    bit = ["Value", 1]
-    w = rng.randint(1, 8)
-    receipt = rng.choice([["Array", 16 * w, bit], ["Array", w, ["Value", 16]], ["Value", 16 * w],
-                          ["Tuple", [["Value", 16], ["Array", 2 * w, ["Value", 8]]]]]) if receipted else None
-    if receipted:
-        vals.append(f"{prefix}receipt@{call}")
+def registered_file_instance(rng: random.Random, name: str, windows: dict[str, str]) -> dict:
+    """A `registered-file` case: the registry's window at K = 64 (`REGISTRY_LAYOUT`, its template one `credit.TILE_PINS`
+    pins) over an H1 tile of `REGISTRY_TILES` (J10-R's v5, whose public rows the verifier derives each unit's call and
+    blocks for, always under ``j10r``), its descriptor in hex `windows` [tile], its one call, the execution phase's open
+    root, its one round, and the roots the execution phase registers (``{value: [root, ...]}``) for each value the call's
+    statement reads (`h1window.table`'s A table of its round and K, its z table and the weights' ``b/<K>``), at random
+    some values it doesn't read among them, as `credit.registered_file` takes them, and at random (always under
+    ``receipt-twice``) the call's receipt table ``receipt@0``; ``missing`` leaves one of the call's values out, ``twice``
+    registers one twice, ``receipt-twice`` registers the receipt table twice, ``pub-roots`` registers the call's A table
+    or ``b/<K>``, whose roots its units' public rows hold, at a root that is no SHA-512 digest, and ``ok-registered``
+    registers the execution phase's ok rows ``ok``, which are the verifier's own. Each pinned template returns a receipt
+    of whole 16-bit words, and any other template is refused at the pin (`credit.layout_of`) before the file is built."""
+    tile = "v5" if name == "j10r" else rng.choice(REGISTRY_TILES)
+    lay, call, steps = REGISTRY_LAYOUT, 0, 1
+    vals = [f"a/64@{Cr.step_row(lay, steps, call)[0]}", f"zy@{call}", "b/64"]
+    if name == "receipt-twice" or rng.random() < 0.5:
+        vals.append(f"receipt@{call}")
     roots = {v: [_hex(rng)] for v in vals}
-    for st, k, _cs in Cr.step_tables(lay, steps):
-        if f"{prefix}a/{k}@{st}" != a and rng.random() < 0.5:
-            roots[f"{prefix}a/{k}@{st}"] = [_hex(rng)]
+    for other in ("a/64@1", "zy@1", "receipt@1"):
+        if rng.random() < 0.3:
+            roots[other] = [_hex(rng)]
     v = rng.choice(vals[:3])
     match name:
         case "honest" | "j10r":
             pass
-        case "j10r-form":
-            return {"descriptor": j10r_misformed(rng, lay, prefix), "call": call, "roots": roots, "window": _hex(rng),
-                    "steps": steps, "salt": _hex(rng)}
         case "missing":
             if rng.random() < 0.5:
                 del roots[v]
@@ -2182,19 +2158,14 @@ def registered_file_instance(rng: random.Random, name: str = "honest") -> dict:
         case "pub-roots":
             roots[rng.choice(vals[0:3:2])] = [rng.choice(["", _hex(rng)[:-2], _hex(rng).upper(), _hex(rng) + "00"])]
         case "ok-registered":
-            roots[f"{prefix}{Cr.OK_VALUE}"] = [_hex(rng)]
-        case "receipt-width":
-            receipt = rng.choice([None, bit, ["Array", 16 * rng.randint(0, 4) + rng.randint(1, 15), bit],
-                                  ["Array", 2, ["Array", 4, bit]], ["Array", rng.randint(1, 3), ["Value", 5]],
-                                  ["Value", 16 * rng.randint(0, 4) + rng.randint(1, 15)]])
+            roots[Cr.OK_VALUE] = [_hex(rng)]
         case _:
             raise ValueError(name)
-    return {"descriptor": descriptor(rng, lay, prefix, receipt, j10r), "call": call, "roots": roots, "window": _hex(rng),
-            "steps": steps, "salt": _hex(rng)}
+    return {"descriptor": windows[tile], "call": call, "roots": roots, "window": _hex(rng), "steps": steps,
+            "salt": _hex(rng)}
 
 
-REGISTERED_FILE_NAMES = ["missing", "twice", "receipt-twice", "receipt-width", "pub-roots", "ok-registered", "j10r",
-                         "j10r-form"]
+REGISTERED_FILE_NAMES = ["missing", "twice", "receipt-twice", "pub-roots", "ok-registered", "j10r"]
 
 
 def _tree(rng: random.Random, count: int, dom: CommitmentDomain | None = None) -> tuple[str, list[tuple[bytes, ...]]]:
