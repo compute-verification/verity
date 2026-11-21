@@ -230,6 +230,21 @@ def held_reads(program: Program, query: Mapping[str, Any], held: Iterable[range]
     return out
 
 
+def input_reads(program: Program, query: Mapping[str, Any], held: Iterable[range]) -> list[tuple[str, str, range]]:
+    """Each template parameter whose argument reads an Input node inside one of `held`, as ``(template, parameter, the
+    range of `held` it reads)``, a root node at a time, never its members or its gates. `QueryRefused` for a query other
+    than a template query."""
+    part = _template(program, query, "an Input's readers")
+    nodes, held = program.root.body.nodes, list(held)
+    inside = {k: h for k, node in enumerate(nodes) if is_input(node.fn) for h in held if within(program, h, k)}
+    out: list[tuple[str, str, range]] = []
+    for k, t, _lo, _n in part.ranges:
+        params = [p for p, _ in nodes[k].fn.signature()[0]]
+        for p, a in zip(params, nodes[k].args):
+            out.extend((t, p, inside[i]) for i in dict.fromkeys(i for i, *_ in _runs(a.refs) if i in inside))
+    return out
+
+
 def within(program: Program, gates: range, k: int) -> bool:
     """Whether root node `k`'s gates lie in `gates`. The Lean's `Partition.within` is this."""
     offsets = program.root.body.offsets

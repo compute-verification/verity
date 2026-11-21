@@ -1800,7 +1800,7 @@ class Stream:
                  outputs: Mapping[str, Mapping[str, str]] | None = None,
                  history: Mapping[str, Any] | None = None,
                  certified: Mapping[str, Mapping[str, Any]] | None = None,
-                 partition: Mapping[str, Any] | None = None) -> WindowCommitmentRecord:
+                 partition: Mapping[str, Any] | None = None, weights_of_record: tuple[bytes, str] | None = None) -> WindowCommitmentRecord:
         """Receive a docket: the public-items rule (`check_public`), then one-stage's R1-R8 (`registration.check`),
         each by the verifier (`verifier.check_public`, `verifier.check`), against the challenger's own copies:
         the population program it builds from `unit` and the record's N (a window's: the mixed population of its
@@ -1811,7 +1811,8 @@ class Stream:
         partition object, its proof blocks included, which R2 holds the record's digest to; without it, the blockless
         default), and the per-registration
         copies given here (`ports`, `leaf_layer`, `anchors`, `registered`, `work_table`, `supplied`, `pinned`,
-        `schemas`, `window_root`, `held`, `outputs`, `history` and `certified`, as `registration.check` takes them), which
+        `schemas`, `window_root`, `held`, `outputs`, `history`, `certified` and `weights_of_record`, as
+        `registration.check` takes them), which
         the stream's run of record reads again at the outcome. Then the receipt. Under
         `Check.registration_deadline` the challenger first reads its clock (`received_at`): a docket received more
         than the deadline after the salt's release, or before any salt, is refused (`late-registration`, with both
@@ -1861,7 +1862,7 @@ class Stream:
                 v = V.check(record, program, self.query, sampling_design, SCHEME, ports, leaf_layer, anchors, earlier, partition,
                             table, registered, supplied, pinned, self.binding, schemas, window_root, held,
                             outputs=outputs, seed_salt=seed_salt, tied=self.spec.check.tied or None,
-                            history=history, certified=certified)
+                            history=history, certified=certified, weights_of_record=weights_of_record)
                 if v.ok and bernoulli(sampling_design):
                     v = _refuse("bernoulli", {"law": sampling_design, "reason": BERNOULLI}).verdict
                 if v.ok and self.n_rho is not None:

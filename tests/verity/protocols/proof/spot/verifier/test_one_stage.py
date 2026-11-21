@@ -853,6 +853,95 @@ def test_r8_lets_a_tied_run_input_through_and_publishes_it():
     assert v.ok and v.rests_on_period_check == ()
 
 
+def _pin(prog, value="t", words=2, program="aa" * 64, leaves=None, domain=None):
+    """A pin of `value` of `prog` in a weights' registration of record."""
+    from verity.commitments import registered_value as RV
+    leaves = G.shape(prog, value, words) if leaves is None else leaves
+    width = G.width(prog, value)
+    entry = {"value": value, "root": "ab" * 64, "leaves": leaves, "words": words,
+             "domain": domain or RV.domain(program, value, words, leaves, width).domain_id.hex()}
+    if width != RV.WORD_BITS:
+        entry[RV.WIDTH_KEY] = width
+    return entry
+
+
+def _weights(pins, reads=None, program="aa" * 64):
+    """A weights' registration of record pinning `pins` and declaring `reads`, its bytes and their SHA-512."""
+    doc = {"program": program, "values": {e["value"]: e for e in pins}, **({} if reads is None else {"reads": reads})}
+    body = json.dumps(doc).encode()
+    return body, hashlib.sha512(body).hexdigest()
+
+
+def _weighed(prog, q, entries=(), **kw):
+    n = P.units(prog, q)
+    ports = _ports(prog, q, n)
+    rec = DK.record(prog, q, SAMPLING_DESIGN, SCHEME, [{"port": p, "root": ROOTS[p], **ports[p]} for p in ports], SERVED,
+                    leaf_layer="ee" * 64, registered=list(entries))
+    return _check(rec, prog, q, **kw)
+
+
+def test_r8_excuses_a_registered_weight_only_where_it_is_marked_pinned_and_declared():
+    """R8 under a weights' registration of record (`docket.weights_held`): a registered input two proof blocks read
+    passes with the registration, the SHA-512 the auditor's side holds for it and the reads it declares, and the record
+    registering it at the pin's entry; R7 holds that entry to the pin, its root included (`R7-certified`). Without the
+    registration it is refused by name (`R8-unpinned`), and at a wrong digest, a wrong domain or a wrong shape the
+    registration is refused. A pin of a parameter the program doesn't mark registered is ignored: it excuses nothing,
+    and R8 refuses the run Input as before. Declared reads that are not the template parameters reading the pinned
+    value, either way, are refused (`R8-undeclared`)."""
+    q = P.template_instance_query(PAIR.id)
+    for marked, unmarked in zip(_two_programs(registered=("t",)), _two_programs()):
+        reads = sorted({(t, p, "t") for t, p, _ in P.input_reads(marked, q, G.held_gates(marked, ["t"]))})
+        assert reads and {t for t, _, _ in reads} == {PAIR.id}
+        pin = _pin(marked)
+        weights = _weights([pin], [list(r) for r in reads])
+        v = _weighed(marked, q, [pin], weights_of_record=weights)
+        assert v.ok, v.codes
+        v = _weighed(marked, q, [{**pin, "root": "cd" * 64}], weights_of_record=weights)
+        assert v.codes == ("R7-certified",)
+        assert _weighed(marked, q, weights_of_record=weights).codes == ("keys",)
+        v = _weighed(marked, q)
+        assert v.codes == ("R8-unpinned",) and v.detail["R8-unpinned"]["refused"] == {"values": ["t"]}
+        v = _weighed(marked, q, weights_of_record=(weights[0], "00" * 64))
+        assert v.codes == ("R8-weights-digest",)
+        bad = _weights([_pin(marked, domain="11" * 64)], [list(r) for r in reads])
+        assert _weighed(marked, q, weights_of_record=bad).codes == ("R8-weights-domain", "R8-unpinned")
+        bad = _weights([_pin(marked, leaves=G.shape(marked, "t", 2) + 1)], [list(r) for r in reads])
+        assert _weighed(marked, q, weights_of_record=bad).codes == ("R8-weights-shape",)
+        v = _weighed(marked, q, [pin], weights_of_record=_weights([pin]))
+        assert v.codes == ("R8-undeclared",) and v.detail["R8-undeclared"]["refused"]["undeclared"] == [list(r) for r in reads]
+        v = _weighed(marked, q, [pin], weights_of_record=_weights([pin], [*map(list, reads), [PAIR.id, "nope", "t"]]))
+        assert v.codes == ("R8-undeclared",)
+        assert v.detail["R8-undeclared"]["refused"]["unread"] == [[PAIR.id, "nope", "t"]]
+        v = _weighed(unmarked, q, weights_of_record=_weights([_pin(unmarked)], [list(r) for r in reads]))
+        assert v.codes == ("R8-shared-input",)
+        assert _weighed(unmarked, q).codes == ("R8-shared-input",)
+
+
+def test_r8_refuses_a_registered_input_under_a_query_it_cannot_read_readers_under():
+    """A program marking a registered input, or a verifier holding a weights' registration of record, under a query that
+    is no template query that applies is refused by name (`R8-weights-query`), never passed unread."""
+    marked = _two_programs(registered=("t",))[0]
+    q = PO.query()
+    rec = DK.record(marked, q, SAMPLING_DESIGN, SCHEME, [{"port": p, "root": ROOTS[p], **ps} for p, ps in
+                                                         _ports(marked, q, P.units(marked, q)).items()], SERVED,
+                    leaf_layer="ee" * 64)
+    assert "R8-weights-query" in _check(rec, marked, q).codes
+    assert R.weights_held(marked, q, (), None)[0] == [("R8-weights-query", {"query": q})]
+
+
+def test_r8_still_refuses_a_shared_run_input_a_pin_of_another_name_does_not_cover():
+    """A table's root or domain read as a run Input that two proof blocks read (the program marks nothing registered) is
+    still refused (`R8-shared-input`) under a weights' registration of record, whatever the registration pins: pinning
+    covers a registered input, never a run Input."""
+    from verity.commitments import registered_value as RV
+    q = P.template_instance_query(PAIR.id)
+    for shared in _two_programs():
+        table = {"value": "t/table", "root": "ab" * 64, "leaves": 1, "words": 1,
+                 "domain": RV.domain("aa" * 64, "t/table", 1, 1, RV.WORD_BITS).domain_id.hex()}
+        v = _weighed(shared, q, weights_of_record=_weights([table]))
+        assert v.codes == ("R8-shared-input",), v.codes
+
+
 def test_a_member_reading_a_held_or_tied_run_input_carries_a_registered_file():
     """`members._held_read` (Lean's `OneStageZk.heldReadsFiled`): where R8 lets a run Input through as tied or held, a
     member whose units meet a range reading it and that carries no registered file is refused by name; with every
