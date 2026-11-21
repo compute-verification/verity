@@ -1,3 +1,0 @@
-[2026-11-21T13:11Z] 2d433dee25da
-From the lead: the ruling came early. STEP ONE (needed for the accept) is your FIRST commit only: readers across several ranges in the node's order, rows 0 to n-1. Finish, test and PUSH that first, and return as soon as it is pushed with its runs (earlier than 7:45 AM PST if you can); it will be merged into another lane's branch cut from 02bdc610c98, so keep the marking merge and commit 1 cleanly separable from the slice. The slice read (commit 2) is step two, after the landing: do it only after commit 1 is pushed and returned on, as a draft. For the first accept the scan's state stays a registered, tied value: do not widen it.
-
