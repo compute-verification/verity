@@ -152,6 +152,7 @@ from verity.commitments import docket_digest as DD
 from verity.commitments import domains as DM
 from verity.commitments import history as HT
 from verity.commitments.window import WINDOW_DOMAIN, window_domain
+from verity.circuits import partition_object as PO
 from verity.circuits.codec import canonical_json
 from verity.circuits.program import REGISTRATION, Program
 
@@ -321,22 +322,26 @@ WEIGHTS_UNREGISTERED_WHY = ("registered: the program marks registered inputs the
 
 
 def read_pins(program: Program, query: Mapping[str, Any], registered: Iterable[str], of_record: tuple[bytes, str] | None
-              ) -> tuple[list[str], list[tuple[range, str, str]], dict[str, dict[str, Any]]] | None:
+              ) -> tuple[list[str], list[tuple[str, range]], list[tuple[int, str, int, int]], dict[str, dict[str, Any]]] | None:
     """`Docket.readPins`: what the members' check holds each registered read to, on R8's own derivation
-    (`weights_held`): the marked inputs the verifier does not expect, each template range's units with each
-    ``(parameter, value)`` whose argument reads one (`partition.range_reads`), and the accepted pins. None where there
-    is such an input and no registration of record, or R8 refuses it; all empty where every marked input is expected."""
+    (`weights_held`): the marked inputs the verifier does not expect, their gates as ``(value, gates)``, the template
+    ranges some member of which reads one (`partition.member_reads`), and the accepted pins. None where there is such an
+    input and no registration of record, or R8 refuses it; all empty where every marked input is expected."""
     expected = set(registered)
     loose = [v for v in marked_inputs(program) if v not in expected]
     if not loose:
-        return [], [], {}
+        return [], [], [], {}
     if of_record is None:
         return None
     codes, pins = weights_held(program, query, registered, of_record)
     if codes:
         return None
-    gates = {g: v for v in loose for g in G.held_gates(program, [v])}
-    return loose, [(units, p, gates[g]) for units, p, g in P.range_reads(program, query, gates)], pins
+    part = P.evaluate(program, query)
+    if not isinstance(part, PO.TemplatePartition):
+        return None
+    held = [(v, g) for v in loose for g in G.held_gates(program, [v])]
+    ranges = [r for r in part.ranges if P.member_reads(program, held, r[0], 0, r[3])]
+    return loose, held, ranges, pins
 
 
 def held_roots(log: Iterable[Mapping[str, Any]]) -> dict[tuple[str, str], str]:

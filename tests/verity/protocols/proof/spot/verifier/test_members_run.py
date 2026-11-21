@@ -684,35 +684,27 @@ def test_a_members_read_of_a_pinned_registered_input_is_held_to_the_pin_by_name(
     """`members.pins_held` (`OneStageZk.pinsHeld`, the same guards there): a member reading the pinned input at the pin's
     own root, leaf count and domain, one reading another value and one with no registered file pass; another root,
     leaf count or domain is refused by name (`pinned_read_why`), and so is a marked input R8 pinned none of
-    (`unpinned_read_why`). A member whose units meet a range the program shows reading the input (``reads``) with no
-    registered file, with its port under another value, or with its own root there is refused by name
-    (`read_unnamed_why`, `pinned_read_why`); with nothing marked no read is held. The texts are Lean's."""
+    (`unpinned_read_why`); with nothing marked no read is held. The texts are Lean's."""
     pin = {"w": {"root": "a" * 128, "leaves": 2, "words": 1, "word_bits": 16, "domain": "d" * 128}}
-    reads = [(range(0, 1), "p", "w")]
+
+    def held(ms, loose, pins):
+        M.pins_held(ms, None, (loose, [], [], pins))
 
     def reader(value: str, root: str, leaves: int, domain: str = "d" * 128) -> dict:
         return {"units": [[0, 1]], "registered": {"format": "verity/registered-reads/v2",
                                                   "ports": {"p": {"value": value, "root": root * 128, "leaves": leaves,
                                                                   "domain": domain}}}}
 
-    M.pins_held({"a": reader("w", "a", 2), "b": reader("v", "b", 3), "c": {"units": [[1, 2]], "registered": None}},
-                ["w"], [], pin)
+    held({"a": reader("w", "a", 2), "b": reader("v", "b", 3), "c": {"units": [[1, 2]], "registered": None}}, ["w"], pin)
     for m, what in ((reader("w", "b", 2), "root"), (reader("w", "a", 3), "leaf count"),
                     (reader("w", "a", 2, "e" * 128), "domain")):
         with pytest.raises(M._Refused) as e:
-            M.pins_held({"a": m}, ["w"], [], pin)
+            held({"a": m}, ["w"], pin)
         assert str(e.value) == M.pinned_read_why("a", "p", "w", what)
     with pytest.raises(M._Refused) as e:
-        M.pins_held({"a": reader("u", "a", 2)}, ["w", "u"], [], pin)
+        held({"a": reader("u", "a", 2)}, ["w", "u"], pin)
     assert str(e.value) == M.unpinned_read_why("a", "p", "u")
-    M.pins_held({"a": reader("u", "b", 3)}, [], [], {})
-    M.pins_held({"a": reader("w", "a", 2), "c": {"units": [[1, 2]], "registered": None}}, ["w"], reads, pin)
-    for m, why in (({"units": [[0, 1]], "registered": None}, M.read_unnamed_why("a", "p", "w")),
-                   (reader("v", "a", 2), M.read_unnamed_why("a", "p", "w")),
-                   (reader("w", "b", 2), M.pinned_read_why("a", "p", "w", "root"))):
-        with pytest.raises(M._Refused) as e:
-            M.pins_held({"a": m}, ["w"], reads, pin)
-        assert str(e.value) == why
+    held({"a": reader("u", "b", 3)}, [], {})
     assert M.pinned_read_why("a", "p", "w", "root") == (
         "registered: member a's port p reads the registered input w at another root than its pin of record: a "
         "registered input the weights' registration of record pins is read at the pin's root, leaf count and domain")
