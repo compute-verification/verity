@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from verity.circuits import boundary, census, cross_call, cut
+from verity.circuits import boundary, census, cross_call, cut, replay_links
+from verity.circuits.codec import definitions
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import Affine, Coll, Explicit, Grid, Strided, recut
@@ -59,6 +60,8 @@ def test_the_toy_reads_its_input_node_recut_sixteen_ways():
     ("recut-unread: boundary.consumer_index", lambda: boundary.consumer_index(TOY.root)),
     ("recut-unread: boundary.used_param_intervals", lambda: boundary.used_param_intervals(TOY.root)),
     ("recut-unread: census.census", lambda: census.census(TOY)),
+    ("recut-unread: replay_links.link_runs", lambda: replay_links.link_runs(definitions(TOY), TOY.root.id)),
+    ("recut-unread: replay_links.wire_runs", lambda: replay_links.wire_runs(definitions(TOY), TOY.root.id)),
 ])
 def test_a_pass_that_reads_whole_leaves_refuses_a_recut_read_by_name(where, read):
     with pytest.raises(ValueError, match=where):

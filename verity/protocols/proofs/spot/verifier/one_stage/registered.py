@@ -344,7 +344,7 @@ def bytes_leaves(data: bytes, bits: int) -> list[int]:
 
 def half_leaves(data: bytes, bits: int) -> list[int]:
     """Two bytes, one big-endian 16-bit half, as its ``16 / bits`` leaves of `bits` bits least significant first: the
-    row `second_stage.VERDICT_ONE_LEAF` fills, one 16-bit leaf (`Supplied.halfLeaves`)."""
+    row Lean's `SecondStage.VERDICT_ONE_LEAF` fills, one 16-bit leaf (`Supplied.halfLeaves`)."""
     if not (0 < bits <= 16 and 16 % bits == 0):
         raise ValueError(f"leaves of {bits} bits hold no whole 16-bit half")
     if len(data) != 2:

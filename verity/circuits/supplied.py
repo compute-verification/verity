@@ -1,11 +1,10 @@
 """Supplied inputs (PROTOCOL.md §5.4): an input of C whose value the verifier computes, from public things only, by a
-function C names under its digest; and a public output C holds to one.
+function C names under its digest.
 
 A supplied parameter lowers to `SuppliedInput<w>_v1` nodes (`SUPPLIED_ID`), and its `inputs` entry carries its mark:
 ``[name, n, {"supplied": fn, "args": {...}, "layout": layout, "bits": bits}]``. ``fn`` is a function of `FUNCTIONS`, which
 says what it reads (`READS`), the origin its leaves take (`ORIGINS`), its static arguments and its value's length in bytes at
-them; ``layout`` (`LAYOUTS`) reads those bytes as the parameter's leaves; ``bits`` is the value's length in bits. A root
-`ret` row ``[lo, hi, {"equals": [name, at, n]}]`` holds each of its leaves to a leaf of a supplied input.
+them; ``layout`` (`LAYOUTS`) reads those bytes as the parameter's leaves; ``bits`` is the value's length in bits.
 
 This module holds a mark's form (`mark_of`), how a block's parameter over part of a supplied input is marked (`part`), and
 the order rule the verifier holds every evaluation to (`check_order`). The functions' bodies are the verifier's, not this
@@ -109,7 +108,7 @@ FUNCTIONS: dict[str, Function] = {f.name: f for f in (
     Function("record.root/v1", "supplied", ("commitment",), ("port",), _fixed(64)),
     # the first position after every unit of the log's records, a u64 big-endian: a unit's position adds its index
     Function("log.base/v1", "supplied", ("commitment",), (), _fixed(8)),
-    # a constant u16 word, what a held output is held to (an opening's verdict, a check's ok)
+    # a constant u16 word
     Function("const.u16/v1", "supplied", ("constant",), ("value",), lambda a: 2 if a["value"] < 1 << 16 else None),
 )}
 

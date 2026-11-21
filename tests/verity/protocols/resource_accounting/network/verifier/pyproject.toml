@@ -27,10 +27,7 @@ tests = ["test_network_attester_blocks.py"]
 paths = ["verity/circuits", "verity/circuits/kernels"]
 
 [[tool.verity.tests.reads]]
-tests = [
-    "test_network_attester_lean_difftest.py",
-    "test_network_check_lean_difftest.py",
-]
+tests = ["test_network_check_lean_difftest.py"]
 paths = ["verity"]
 
 # `lake build NetworkCheck.Registered` and the script it then runs: the check's Lake package (its lakefile and its Lean),

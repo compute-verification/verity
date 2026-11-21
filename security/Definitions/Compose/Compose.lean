@@ -421,7 +421,8 @@ def SeedNamed {ι : Type} (Cd : Declared ι) : Prop :=
   `OperandLuckCube`, for degree-2 cube operands; `Pouw.Guarantees.Receipt.DuoWindowNoKernel` binds four
   words), and `1` past it (`DuoLongRunKernel`: no receipt binds every length);
 * `coins b Z`: `Z(span)·C(b, ⌊b/2⌋)/2^b` for `b` fresh bits at the fibre `Z(span)` the receipt has at that span
-  (`ResourceAccounting.Guarantees.HMu.CoinPointMass`, `ReceiptLuckOfCoins`);
+  (`ResourceAccounting.Guarantees.HMu.CoinPointMass`, `ReceiptLuckOfCoins`), for a Program whose flow graph the Build
+  admits, which no statement yet gives of a decoded Program;
 * `pinned`: `0`, a value the proof pins (`ResourceAccounting.Guarantees.FillerLuck.PinnedFillLuckAt`);
 * `unproved`: `1`. -/
 inductive LuckForm
