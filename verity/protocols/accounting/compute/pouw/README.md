@@ -10,17 +10,17 @@ sample tiles, which the Lean check recomputes from their opened A and B rows. On
 The guarantee: `Properties.Pouw.PearlPlus.WorkIsTheCredit` (`security/Properties/Pouw/PearlPlus.lean`), not deployed.
 
 Not yet: a deployed Pearl+ statement (remote soundness assumes `Verity.Vocab.PouwSound`) or a priced one; a check that
-hides A and B, or reads the circuit or the kernel binary. The coins' sessions: `pouw-pearlplus` holds the sample to its
-draw session (`--draw-live`) and each live pass's salt to its salt session (`--salt-live`): the ledger's and the
-session's signatures under the pinned key, and the salt opened after its epoch's open root, which is derived from the
-weights' root. A run of record missing either session is refused, and the served road passes both. But that Lean runs on
-the served node, which also supplies what it reads: the gate's fetch of the ledger and the sessions, so asked-once holds
-only over the ledger fetched (`served_verdicts._salt_live`, `_draw_live`); the pin values (`H1_KEY_SHA512`, `MAIN_FILE`,
-in `served_pearlplus.sh`); the passes retained (`served_passes.py retain`); the period rule
-(`served_verdicts.pearlplus_period_rule`); and the compose (`pearlplus_live_sample`, `pearlplus_of_record`). So no coin
-of a Pearl+ verdict of record is held to the challenger against a prover that controls the node. Grinding (a steer
-needing m noised coordinates succeeds with probability at most μ^m a try) is stated nowhere: Pearl+'s one seed is
-`seedB` over the salt and B's root, and GRIND's priced premium is H1's, proved and in no lock.
+hides A and B, or reads the circuit or the kernel binary. The sessions: `--draw-live` and `--salt-live` hold the sample
+and each salt to their signed sessions under the pinned key; the served road passes both but runs that Lean on the node,
+which supplies the gate's fetch (asked-once holds only over it), the pins, retention, the period rule and the compose.
+So no coin of a Pearl+ verdict of record is held to the challenger against a prover that controls the node. Grinding (a
+steer needing m noised coordinates succeeds with probability at most μ^m a try) is stated nowhere: Pearl+'s one seed is
+`seedB` over the salt and B's root, and GRIND's priced premium is H1's, proved and in no lock. Deletable: nothing in
+PoUW's Python, data or kernel sources (each thing that looks dead has one reader); the FP4, FP8 and INT8 roads, the
+filler and Dither are kept paths. Of our 754 Lean modules, 139 are imported by no listed guarantee's module, 106 of them
+on kept paths; of the other 33 none is deletable: 16 hold what no lock lists (honest twins of unwitnessed guarantees,
+the grinding and steering theorems the composition's spec cites, single reductions such as `sakMatmul_of_residual`), 9
+are empty roots lake or the Lean check needs, 8 are not established (read at `one-circuit` `38285e72851`).
 
 ## Pieces
 
