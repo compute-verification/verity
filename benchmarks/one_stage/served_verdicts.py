@@ -1555,7 +1555,7 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
         reasons.append(f"{PEARLPLUS_NO_LEAN} ({PEARLPLUS_LEAN}: {lean or 'none written'})"[:800])
         lean = {}
     elif lean.get("verdict") != "accept":
-        reasons.append(f"Pearl+'s Lean verdict rejects the run: {lean.get('reason')}"[:800])
+        reasons.append(f"Pearl+'s verdict rejects the run: {lean.get('reason')}"[:800])
     answer = {"verdict": lean.get("verdict"), "commitment": lean.get("commitment"), "profile": {"source": lean.get("source")}}
     challenger = challenger_of(served)
     coins: dict[str, Any] = dict(pearlplus_coins_from(challenger) if live else PEARLPLUS_COINS_IN_PROCESS)
@@ -1993,7 +1993,6 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
                        "unit": "MAC", "tie": lean["tie"],
                        **{k: coin[k] for k in ("rounds", "dropped") if k in coin}},
             "profile": {"delta": PEARLPLUS_DELTA, "source": lean.get("source"), "over_cap": lean.get("over_cap"),
-                        "exact_work": lean.get("exact_work"),
                         "tiles": [[v.get("pass"), v.get("tile")] for v in lean.get("verdicts") or () if isinstance(v, dict)],
                         "lane": lane, "key_sha512": key, "period": name, "session": session,
                         "draw_session": drew.get("session"),

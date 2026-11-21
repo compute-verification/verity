@@ -1915,7 +1915,7 @@ def test_a_pearlplus_pieces_verdict_is_the_leans_whatever_the_python_verify_says
     (b / S.PEARLPLUS_LEAN).write_text(json.dumps({"verdict": "reject", "reason": "pass 0 tile 3: B opening", "work": None}))
     doc = S.pearlplus(b, served, verified, **live[1])
     assert (doc["verdict"], doc["reasons"], doc["credit"]) == (
-        "reject", ["Pearl+'s Lean verdict rejects the run: pass 0 tile 3: B opening"], None)
+        "reject", ["Pearl+'s verdict rejects the run: pass 0 tile 3: B opening"], None)
     assert doc["shares"]["macs"]["credited"] == 0
     doc = S.pearlplus(tmp_path / "c", served, verified, **live[1])
     assert doc["verdict"] == "reject" and doc["reasons"] == [f"{S.PEARLPLUS_NO_LEAN} ({S.PEARLPLUS_LEAN}: none written)"]
@@ -2024,6 +2024,7 @@ def test_a_pearlplus_piece_sets_the_unretained_serve_of_its_load_beside_its_shar
     (tmp_path / "v.json").write_text(json.dumps(verified))
     (tmp_path / "un.json").write_text(json.dumps(unretained))
     out, calls[:] = tmp_path / "cli", []
+    _lean_beside(out, verified)
     assert S.main(["pearlplus", str(out), "--served", str(tmp_path / "served.json"), "--verify", str(tmp_path / "v.json"),
                    "--unretained", str(tmp_path / "un.json"), "--gate", GATE, "--key-sha512", "ff" * 64,
                    "--main", str(tmp_path / "main.txt")]) == 0
@@ -2096,6 +2097,8 @@ def test_a_published_serve_dir_carries_none_of_the_give_ups_counts(tmp_path, liv
                    "device": device, **counts}
     out, private = tmp_path / "out", tmp_path / "serve" / "private" / "out"
     doc = _pearlplus(out / "pieces" / "pouw", served, verified, volunteered=volunteered, **live[1])
+    for name in (S.PEARLPLUS_LEAN, S.PEARLPLUS_LEAN_CHECK):
+        (out / "pieces" / "pouw" / name).unlink()
     line = S.development_line(doc)
     own = [str(v) for v in (*counts.values(), device["replayed"], device["bad_tiles"])]
     assert all(str(v) in json.dumps(doc["give_up"]) for v in own) and line["give_up"] == doc["give_up"]
@@ -2300,6 +2303,7 @@ def test_a_pearlplus_piece_holds_its_accept_to_the_coin_it_published(tmp_path, c
     assert doc["load"] == S.development_line(doc)["load"] == load
     for name, d in (("served.json", served), ("v.json", held)):
         (tmp_path / name).write_text(json.dumps(d))
+    _lean_beside(tmp_path / "cli", held)
     assert S.main(["pearlplus", str(tmp_path / "cli"), "--served", str(tmp_path / "served.json"), "--verify",
                    str(tmp_path / "v.json"), "--gate", GATE, "--key-sha512", "ff" * 64, "--main", str(tmp_path / "main.txt"),
                    "--coin", str(pub / S.COIN_PUT)]) == 0
@@ -2500,6 +2504,7 @@ def test_a_tied_pearlplus_piece_is_the_windows_own_epoch_and_says_so(tmp_path, c
     assert (doc["load"], doc["tie"]) == ({"window_steps": 3}, {"record": DD.digest(PEARL_WREC)})
     for name, d in (("served.json", window), ("v.json", verified)):
         (tmp_path / name).write_text(json.dumps(d))
+    _lean_beside(tmp_path / "cli", verified)
     assert S.main(["pearlplus", str(tmp_path / "cli"), "--served", str(tmp_path / "served.json"), "--verify",
                    str(tmp_path / "v.json"), "--tie", str(w)]) == 0
     line = json.loads(capsys.readouterr().out.removeprefix("POUW-DEV "))
