@@ -23,10 +23,6 @@ public import Proofs.Certifier.JointBridge.CommOfPooledLeakAcceptedHonest
 public import Proofs.Compose.JointLive
 public import Proofs.Certifier.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod
 public import Proofs.Certifier.JointBridge.HonestH200
-public import Proofs.Flock.EndToEnd.Period.Statement
-public import Proofs.Flock.EndToEnd.Period
-public import Proofs.Flock.EndToEnd.Carry.Statement
-public import Proofs.Flock.EndToEnd.Carry
 public import Proofs.Pouw.Pouw
 public import Proofs.Pouw.PouwWork
 public import Proofs.Pouw.PouwWitness
