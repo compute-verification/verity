@@ -172,7 +172,7 @@ import multiprocessing
 import os
 import sys
 import time
-from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -1207,21 +1207,6 @@ def compiler_doc(serve_run: str | None, hf_config: str | None, target: str | Non
             "phi": reg.phi.to_json(), "default_seed": reg.default_seed}
 
 
-def declared_reads(planned: Sequence[tuple[Any, Mapping[str, Any]]], values: Iterable[str]) -> list[tuple[str, str, str]]:
-    """Every ``(template, parameter, value)`` at which one of the ``planned`` Programs reads one of ``values``, sorted, once
-    each: each ``(program, query)`` a class's marked Program and its template query (`interface.Circuit.program`), walked as
-    the verifier's check walks it (`partition.input_reads` over `registered.held_gates`, `docket.weights_held`)."""
-    from verity.protocols.proof.spot.verifier.one_stage import partition as SP
-    from verity.protocols.proof.spot.verifier.one_stage import registered as SR
-
-    out: set[tuple[str, str, str]] = set()
-    values = list(values)
-    for program, query in planned:
-        if held := {g: v for v in values for g in SR.held_gates(program, [v])}:
-            out.update((t, p, held[g]) for t, p, g in SP.input_reads(program, query, held))
-    return sorted(out)
-
-
 def weights_registration_of_serve(a: argparse.Namespace) -> dict[str, Any]:
     """A served run's weights registration, the committer's (`window_weights.weights_registration` under the φ its window
     circuit lowers under, `registered_of_serve`): each weight committed under fresh OS salts, kept in the salt file beside
@@ -1236,7 +1221,7 @@ def weights_registration_of_serve(a: argparse.Namespace) -> dict[str, Any]:
     ``--deployment-record FILE``, the registration as the first record of the serve's registration log
     (`window_weights.deployment_record`) is written there too, for Pearl+'s W to be chained after on a serve tied to it. Each
     ``--class``'s circuit (cut at Pearl+'s linears with ``--pearl-tables``) is planned before the registration is written, and
-    its reads are those classes' (`window_weights.declared_reads`); with ``--of-record FILE``, the registration of record the
+    its reads are those classes' union (`docket.declared_reads`); with ``--of-record FILE``, the registration of record the
     check reads (`WeightsRegistration.of_record`) is written there. -> how many roots it registers, the weight parameters it
     leaves free (``unrooted``), how many reads it declares, the registration of record's SHA-512 (``of_record``) and, given,
     that record's digest (``deployment``)."""
@@ -1254,7 +1239,7 @@ def weights_registration_of_serve(a: argparse.Namespace) -> dict[str, Any]:
     registered = registered_of_serve(serve, a.hf_config, a.target, CAP_BITS)
     cut = PearlTables(a.pearl_tables) if a.pearl_tables else None
     planned = [class_circuit(registered, window_class_of(c), tables=cut).program() for c in a.window_classes]
-    reads = declared_reads(planned, sorted({v for p, _ in planned for v in DK.marked_inputs(p)}))
+    reads = sorted({tuple(r) for p, q in planned for r in DK.declared_reads(p, q, DK.marked_inputs(p))})
     doc = weights_registration(registered, SF.beside(a.out), a.checkpoint_dir, checkpoints_manifest=a.checkpoints,
                                tables={"cos_sin": np.load(cos_sin)} if cos_sin.is_file() else None, reads=reads)
     roots = registered_weights(doc, serve)
@@ -1704,7 +1689,7 @@ def main(argv: list[str] | None = None, kept_ingress: KeptIngress | None = None,
                    "serve's registration log too (verity/registration/v2), which Pearl+'s W is chained after on a serve tied to it")
     p.add_argument("--class", dest="window_classes", action="append", default=[], help="a window class the serve registers, "
                    "SLOTS,PROMPT,OUTPUTS[,LANES,EVERY] (repeatable): its class circuit is planned first and the registration's "
-                   "reads are those of every class given (window_weights.declared_reads)")
+                   "reads are the union of every class given's (docket.declared_reads)")
     p.add_argument("--pearl-tables", metavar="SCHEME", help="plan each class's circuit cut at its linears, as a serve tied "
                    "to Pearl+'s W commits it")
     p.add_argument("--of-record", metavar="FILE", help="write the registration of record the verifier's check reads there: "

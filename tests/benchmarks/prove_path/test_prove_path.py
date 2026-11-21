@@ -1374,12 +1374,12 @@ def test_the_weights_registration_declares_the_reads_of_its_planned_class(tmp_pa
     out, wor = tmp_path / "weights_registration.json", tmp_path / "weights_of_record.json"
     planned: list = []
 
-    def spy(plans, values):
-        planned.extend(plans)
-        return walked(plans, values)
+    def spy(program, query, values):
+        planned.append((program, query))
+        return walked(program, query, values)
 
-    walked = PP.declared_reads
-    monkeypatch.setattr(PP, "declared_reads", spy)
+    walked = R.declared_reads
+    monkeypatch.setattr(R, "declared_reads", spy)
     capsys.readouterr()
     assert PP.main(["weights-registration", "--serve-run", str(run), "--checkpoint-dir", str(ck), "--checkpoints", str(man),
                     "--hf-config", str(hf), "--out", str(out), "--class", "1,2,2", "--of-record", str(wor)]) == 0
