@@ -1230,7 +1230,7 @@ def audit(a: argparse.Namespace) -> int:
     A5.progress("records", t0, negatives=len(more))
     manager, a.coins, finisher = AC.start(a.challenger, mine.run, [0], out / "challenger", a.main, ssh_key=a.gate_key,
                                           peer=a.peer, key_record=a.challenger_key, deployed=a.deployed_key,
-                                          local=LC.Local)
+                                          host=Path(a.challenger_host) if a.challenger_host else None, local=LC.Local)
     try:
         s, ok = A5.audit(a, sets, out / "window", mine, wdir, lambda x: source(x, held), a.port,
                          {"verifier_window_s": window_s, "circuit": held["circuit"], **({"compile": compiled} if compiled else {}),
@@ -1411,6 +1411,8 @@ def main(argv: list[str] | None = None) -> int:
                    "(challenger-key/v1), never the session's key.json")
     p.add_argument("--gate-key", help="with --challenger gate:USER@HOST: the lane's own gate key (default ssh's own)")
     p.add_argument("--main", help="with --challenger: the verifier's copy of main's first-parent history")
+    p.add_argument("--challenger-host", help="with --challenger local: the host to reopen, whose ledger the auditor "
+                   "opened the lane's period in before the audit (benchmarks/one_stage/local_registration.py)")
     p.add_argument("--registered", help="the registered values' entries the verifier pinned before the run, {program, "
                    "values} (`pinned`), for a circuit that reads them")
     p.add_argument("--registration", help="the deployment's registration record (verity/registration/v2), whose "

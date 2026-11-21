@@ -34,14 +34,15 @@ LV=$?; cat $B/levels.txt
 audit() {  # name, rule, window flags, audit flags (the one honest run)
   OUT=$B/$1 AUDIT_RULE=$2 WINDOW_ARGS="benchmarks/one_stage/one_linear.py window --rule $2 $3" AUDIT_FLAGS="--delta $DELTA $4" \
     bash benchmarks/one_stage/served_door_prove.sh > $B/$1.log 2>&1
-  local r=$?; echo "$1 rc $r"; grep -h '^audit rc\|^STEP\|^VERDICT\|^DRAW\|^A5\|^REFUSED\|^UNLOWERED' $B/$1.log | cut -c1-2000
+  local r=$?; echo "$1 rc $r"; grep -h '^audit rc\|^STEP\|^VERDICT\|^DRAW\|^A5\|^REFUSED\|^UNLOWERED\|^REGISTERED\|^RECORDS' $B/$1.log | cut -c1-2000
   python3 - "$B/$1/summary.json" <<'EOF'
 import json, sys
 try:
     s = json.load(open(sys.argv[1]))
 except OSError:
     sys.exit()
-keep = ("ok", "accepted", "verdict", "refused", "epsilon", "eps", "bound", "delta", "law", "drawn")
+keep = ("ok", "accepted", "verdict", "refused", "epsilon", "eps", "bound", "delta", "law", "drawn", "registration",
+        "registration_halves", "registration_after_draw")
 print("SUMMARY " + json.dumps({k: s[k] for k in s if k in keep}, default=str)[:3000])
 EOF
   python3 benchmarks/one_stage/one_linear_arms.py $1 $r $B/$1.log $B/$1/summary.json $B/$1/audit.err $B/$1/window.txt $B/$1/audit.log | tee $B/$1.arm
