@@ -29,9 +29,6 @@ computes its word view, and `laneBits` at those two lifts computes `laneOk`.
 
 namespace Pouw.H1Zy
 
-/-- A word's bits, LSB first. -/
-def bv {n : ℕ} (x : BitVec n) : Fin n → Bool := fun i => x.getLsbD i.val
-
 /-- A bit's value. -/
 def bval (b : Bool) : ℕ := if b then 1 else 0
 

@@ -7,9 +7,9 @@ public import Proofs.Flock.Soundness.Discharge.ZkReg.BindHJ
 public import Proofs.Flock.Soundness.Discharge.ZkReg.Defs
 public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsHJ
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.Flat
-public import Proofs.Flock.Soundness.Discharge.ZkReg.PublicHJ
+public import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedHJ
+public import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJ
 public import Proofs.Flock.Soundness.Discharge.ZkReg.PublicHJSt
-public import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJCustody
 public import Proofs.Flock.Soundness.Registered.ReadsX
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational

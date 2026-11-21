@@ -1,6 +1,5 @@
 module
 
-public import Definitions.Pouw.H1Zy.Chain
 public import Definitions.Pouw.H1Zy.Combine
 public import Definitions.Pouw.H1Zy.Lane
 public import Definitions.Pouw.H1Zy.LaneBits

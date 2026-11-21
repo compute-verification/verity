@@ -481,16 +481,4 @@ theorem transportsLiveCR : Bridge.TransportsLiveCR := by
     (Bridge.rootsDistinctL_of_fixes (Bridge.LeafMap.ofPublic_dom _ _ _) hdup hroots)
     (fun u q => Bridge.ref_lt_cnt hpub u.isLt q.isLt) hr p v y hv hvw hy he
 
-/-- **`TransportsLiveCR` is `TransportsLiveC` at one leaf per unit**: at `pub.tables = none` the public file's leaf map
-is `LeafMap.ident`, at which `rootsOfL`, `commitDepL` and `RootFixesDomainL` are `rootsOf`, `commitDep` and
-`RootFixesDomain`, and `ZkReg.rsZHJS` is `rsZHJ`. -/
-theorem transportsLiveC_of_R (h : Bridge.TransportsLiveCR) : Bridge.TransportsLiveC := by
-  intro n Reg I ht D hD hU pub hpub hpt hscope hrows hdup hroots kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hTags
-    hCust τ
-  have hL := Bridge.LeafMap.ofPublic_none (c := D.unroll) n hpt
-  have := h n Reg I ht D hD hU pub hpub hscope hrows hdup (by rw [hL]; exact hroots) kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω Lb
-    src hTags hCust τ
-  rw [hL] at this
-  exact this
-
 end Flock.Guarantees

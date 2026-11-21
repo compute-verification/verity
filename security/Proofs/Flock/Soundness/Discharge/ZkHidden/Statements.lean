@@ -110,29 +110,6 @@ def ZkSchedOK : Prop :=
 
 variable {n : ℕ} {mPts : ℕ} {Reg : Type}
 
-/-- **Wherever verity-verify-proof accepts a hidden-output session, the `--zk` table is the executable's**
-(`TablesAtZKLive` under `hh = true`). On hidden-output one-table inputs whose `--statement` tags are untyped and whose
-circuit file `HmOut.parse` accepts (at the `--zk` tags) as a circuit whose unit returns the outputs, with `wr` the challenger's
-live-coin part's record (`RecordsLiveZK`): whenever the sample `S` is `SampleOkZKH` and `verify --zk` accepts what `wr` writes for
-`o` at it, setupHidden's statement `st` at `dj S` under the `--zk` tags is well formed, `Zk.schedule st.m` is
-`(sch, t_pad)`, the sample has a `SampleSetupZKH` at `st`, `sch` and `t_pad` whose table is `tablesAtZKH … S R`, and at the
-record's link points `Setup.ofCircuit st`'s extra claims are that table's. -/
-def TablesAtZKHLive : Prop :=
-  ∀ (I : Inputs) (_ht : I.tags.typed = false) {c : Flock.Circuit}
-    (_hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (_ho : c.outNet = c.unitNet)
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    (y₀ : SampleSetupZKH I mPts S₀ (dj S₀)) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript),
-    I.tags.hiddenOutputs = true → I.count ≤ 1 → RecordsLiveZK I dj wr →
-    ∀ S R o, SampleOkZKH I dj mPts S → AcceptsZK I (wr S R o) →
-      ∃ (st : Stmt) (sch : Flock.Schedule) (tPad : ℕ), StmtWF st ∧ RegionsWF st ∧
-        Stmt.setupHidden (zkTags I) I.circuitFile I.publicFile (zkCoins I) I.tables (some (dj S)) I.partition
-          I.program = .ok st ∧ Zk.schedule st.wideLeaf st.m = .ok (sch, tPad) ∧
-        ∃ y : SampleSetupZKH I mPts S (dj S), y.x.st = st ∧ y.sch = sch ∧ y.tPad = tPad ∧
-          tablesAtZKH (Reg := Reg) dj y₀ S R = y.table ∧
-          ∀ points : Array (Array F128), points.size = 2 → (∀ p ∈ points.toList, p.size = mPts) →
-            ExtraRealizes (Setup.ofCircuit st) y.table.S points
-              (Model.extraClaims y.table.S y.table.ptLocal mPts (ptsOf mPts points))
-
 /-- **`TablesAtZKHLive` wherever the outputs are returned**: its conclusion on every circuit `HmOut.parse` accepts. -/
 def TablesAtZKHLiveI : Prop :=
   ∀ (I : Inputs) (_ht : I.tags.typed = false) {c : Flock.Circuit}

@@ -15,7 +15,6 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.Soundness.Discharge.ZkHidden.Rate
 
 /-!
 # `flock-witness`'s checks are the recursive audit's predicates
@@ -247,19 +246,6 @@ theorem acceptsDescription_ok {st : Flock.Stmt} {own : Array Flock.Registered.Po
   unfold Flock.Witness.acceptsDescription at h
   obtain ⟨_, h1, _⟩ := bind_ok h
   exact fun rt hrt => ⟨own, hrt, h1⟩
-
-/-- **`PublicAudit`'s rate premise `_hr` at `k = 2^23` and `ρ = 1/e`**, for every `zr` the prover supplies: its type is
-`_hr`'s there, so `_hr := hr_inv_exp zr`. At every session `j`, reference setup `y₀`, sample `S'`, registration `R'` and
-table `i` of the hidden-output plan `ZkHidden.planZHJ`, `Zk.schedule` caps level 0's `logLen` at 23 at every `m` it
-accepts (`ZkHidden.hr_planZHJ_23`). The witness's `accepts_zkr` lines print each recorded session's level 0, whose
-`logLen` is under the cap. -/
-theorem hr_inv_exp {S : ℕ} {Vs : Fin S → VStmt} {Reg' : Type} {A B C D : Type*}
-    (zr : A → B → C → D → (j : Fin S) → (Vs j).OuterR Reg') :
-    ∀ R ω t R₂ j S₀ (d₀ : Lean.Json)
-      (y₀ : ZkHidden.SampleSetupZHJ (Composed.inputsJ (zr R ω t R₂ j).I 0) (Vs j).mPts S₀ d₀) S' R' i,
-      ZkLink.rateZ (ZkHidden.planZHJ (Reg := Reg') (zr R ω t R₂ j).dj y₀ S' R') i (2 ^ 23) ≤ (Real.exp 1)⁻¹ :=
-  fun R ω t R₂ j _ _ y₀ S' R' i =>
-    ZkHidden.hr_planZHJ_23 (zr R ω t R₂ j).dj y₀ (by rw [inv_mul_cancel_left₀ (Real.exp_pos 1).ne']; norm_num) S' R' i
 
 theorem inv_exp_lt_one : (Real.exp 1)⁻¹ < 1 := by
   rw [inv_eq_one_div, div_lt_one (Real.exp_pos 1)]

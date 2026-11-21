@@ -349,43 +349,6 @@ theorem prCoin_simAt_pubStmts {Ctx Pub WS Θ : Type} (V : LoopSessions Ctx Pub W
 
 end LoopSessions
 
-/-- **V*'s statements run in turn give the committed-coin statements their `_hOuter`** (`OuterSessionsZK`), at the
-registration by hm96 leaves of the private circuit's rows (`regLeaves rows pub`): the view is the auditor's of the
-statements run by `PS` at the honest context (`LoopSessions.viewAt`), the simulator the statements' at the public
-context `pubS` reads (`LoopSessions.simAt`), against `V*` at a tape `θ` of the registration's view, the auditor's tape
-and the commitments, and `ε_o` the statements' error (`LoopSessions.err`). It takes each statement's sessions'
-`ZKmalR` and, of V*'s staging, each an obligation: the simulator's public context is the honest one's
-(`LoopSessions.Public`), the honest witnesses are valid (`LoopSessions.Honest`) and V*'s statements fix the
-simulator's randomness (`LoopSessions.Sized`). -/
-theorem outerSessionsZK_of {Ow Prog Wit Rv Ωa Ωp Pub WS NB ΩB Θ : Type} [Fintype NB] [Nonempty NB] [Fintype ΩB]
-    [Nonempty ΩB] {nr nh : ℕ} (rows : Prog → Fin nr → ByteArray) (pub : (Fin nr → ByteArray) → Rv)
-    (honest : Ow → Prog → Wit → Prop) (msgs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → Fin nh → ByteArray)
-    (V : LoopSessions (HCtx Prog Wit Ωa Ωp nr nh) Pub WS) (pubS : Ow → Rv → Ωa → (Fin nh → ByteArray) → Pub)
-    (H : Hash.Msg → Hash.Msg) (kS : Hash.Msg → ℕ) (PS : WS → Claims.Prover (NB × ΩB)) (R : Claims.Rel WS)
-    (Sim : Claims.Simulator) (εS : Hash.Msg → ℝ) (g : ℝ) (CB : ℕ → Type) [∀ j, Fintype (CB j)]
-    [∀ j, Nonempty (CB j)] (hZK : Claims.ZKmalR H kS PS R Sim εS fun _ => g) (hε : ∀ x, 0 ≤ εS x) (hg : 0 ≤ g)
-    (Vs : Claims.VStar Θ) (θ : Rv → Ωa → (Fin nh → ByteArray) → Θ)
-    (hpub : V.Public rows pub honest (committed msgs) pubS)
-    (hH : ∀ o P w, honest o P w → ∀ r, V.Honest R fun u : (Ωa × Ωp) × (Fin nh → ZkView.Salt) =>
-      hctxAt (committed msgs) P w r u.1.1 u.1.2 u.2)
-    (hS : V.Sized Sim CB) :
-    _root_.Flock.Guarantees.OuterSessionsZK (_root_.Flock.Guarantees.regLeaves rows pub) honest nh msgs
-      (fun P w r a h p y q =>
-        V.viewAt H kS PS Vs (P, w, r, a, h, p, y) (θ (_root_.Flock.Guarantees.regLeaves rows pub P r) a h) q)
-      (fun o v a h s => V.simAt NB ΩB H kS Sim CB Vs (pubS o v a h) (θ v a h) s)
-      (V.err H kS PS εS g Vs fun x =>
-        θ (_root_.Flock.Guarantees.regLeaves rows pub x.1 x.2.2.1) x.2.2.2.1 x.2.2.2.2.1) := by
-  intro o P w hw r a p y E
-  have e : _root_.Flock.Guarantees.zkServerCommits (committed msgs P w r a p) y =
-      fun i => _root_.Flock.Guarantees.zkServerLeaf (msgs P w r a p i) (y i) :=
-    zkServerCommits_committed (msgs P w r a p) y
-  have hpc := hpub o P w hw r a p y
-  have hR := hH o P w hw r ((a, p), y)
-  simp only [hctxAt, e] at hpc hR
-  exact V.view_le H kS PS R Sim εS g CB hZK hε hg Vs
-    (fun x => θ (_root_.Flock.Guarantees.regLeaves rows pub x.1 x.2.2.1) x.2.2.2.1 x.2.2.2.2.1) _ _ hpc
-    (fun j hj => hS j hj _) hR E
-
 /-- The session loop's session at its own frames, link and `Finish` (`SessionLoopZKDeployed`'s): the deployed tables'
 session with the loop's stops. -/
 noncomputable abbrev loopRef
@@ -454,45 +417,6 @@ theorem loop_zkmalR (vs : Claims.ZKServer.Loop.finS.SwVals) (t : ℕ) (ht : 0 < 
       (Claims.ZKServer.Loop.realOf src)) hT
   rw [ENNReal.toReal_ofReal (CROnly.hidingGap_nonneg ZkView.My ZkView.saltHash)] at h
   exact h.2
-
-/-- **V*'s statements run by the session loop give the committed-coin statements their `_hOuter`** (`OuterSessionsZK`):
-`outerSessionsZK_of` at the loop's session (`loopRef`), each statement run by its switched prover at the workers' values
-`vs` (`(loopRef L₀ src).swP vs`), the simulator and errors `Flock.zk_deployZk_sw_stops`'s at the pinned key's hiding
-gap and `t` rewinds (`loopSim`, `loopEps`, `4·t·3^t`). The view is the switched prover's; what the loop's own prover
-sends is `SessionLoopZKDeployed`'s, which bounds it by twice the simulated view plus its error.
-The deployed tables' side (`Tables`, `Complete`, `DummyReg`, `Causal`, `TapeOK`, which `Loop.tables_dataE` and its
-siblings prove, and `SwCausalOn` at `Loop.SwOk`'s coins) takes `SessionsCoined`'s role, with no further obligation on
-the tables; V*'s staging is `outerSessionsZK_of`'s. -/
-theorem outerSessionsZK_loop {Ow Prog Wit Rv Ωa Ωp Pub Θ : Type} {nr nh : ℕ}
-    (vs : Claims.ZKServer.Loop.finS.SwVals) (t : ℕ) (ht : 0 < t) (hS : Claims.ZKServer.Loop.finS.Tables)
-    (hV : Claims.ZKServer.Loop.finS.Complete
-      (Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse))
-    (hD : Claims.ZKServer.Loop.finS.DummyReg) (hc : Claims.ZKServer.Loop.finS.Causal)
-    (hsc : Claims.ZKServer.Loop.finS.SwCausalOn (Claims.ZKServer.Loop.SwOk Claims.ZKMal.Masked.dataE) vs)
-    (hT : Claims.ZKServer.Loop.finS.TapeOK)
-    (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)
-    (src : Hash.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
-      _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray))
-    (rows : Prog → Fin nr → ByteArray) (pub : (Fin nr → ByteArray) → Rv) (honest : Ow → Prog → Wit → Prop)
-    (msgs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → Fin nh → ByteArray)
-    (V : LoopSessions (HCtx Prog Wit Ωa Ωp nr nh) Pub Claims.Flock.Wit)
-    (pubS : Ow → Rv → Ωa → (Fin nh → ByteArray) → Pub) (CB : ℕ → Type) [∀ j, Fintype (CB j)]
-    [∀ j, Nonempty (CB j)] (Vs : Claims.VStar Θ) (θ : Rv → Ωa → (Fin nh → ByteArray) → Θ)
-    (hpub : V.Public rows pub honest (committed msgs) pubS)
-    (hH : ∀ o P w, honest o P w → ∀ r,
-      V.Honest (Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse)
-        fun u : (Ωa × Ωp) × (Fin nh → ZkView.Salt) => hctxAt (committed msgs) P w r u.1.1 u.1.2 u.2)
-    (hsz : V.Sized (loopSim L₀ src t) CB) :
-    _root_.Flock.Guarantees.OuterSessionsZK (_root_.Flock.Guarantees.regLeaves rows pub) honest nh msgs
-      (fun P w r a h p y q => V.viewAt Claims.ZKMal.CoinOpen.shaH loopK ((loopRef L₀ src).swP vs).prover Vs
-        (P, w, r, a, h, p, y) (θ (_root_.Flock.Guarantees.regLeaves rows pub P r) a h) q)
-      (fun o v a h s => V.simAt ((loopRef L₀ src).swP vs).Nonce ((loopRef L₀ src).swP vs).Rand
-        Claims.ZKMal.CoinOpen.shaH loopK (loopSim L₀ src t) CB Vs (pubS o v a h) (θ v a h) s)
-      (V.err Claims.ZKMal.CoinOpen.shaH loopK ((loopRef L₀ src).swP vs).prover (loopEps L₀ src t)
-        (4 * t * 3 ^ t) Vs fun x =>
-          θ (_root_.Flock.Guarantees.regLeaves rows pub x.1 x.2.2.1) x.2.2.2.1 x.2.2.2.2.1) :=
-  outerSessionsZK_of rows pub honest msgs V pubS _ _ _ _ _ _ _ CB
-    (loop_zkmalR vs t ht hS hV hD hc hsc hT L₀ src) (loopEps_nonneg L₀ src t) (by positivity) Vs θ hpub hH hsz
 
 /-- **`RecursiveZK`'s `_hOuter` at V*'s statements run by the session loop** (`OuterViewZK`), at one worker whose
 messages `msgs` are fixed before the first commitment (the committed-coin case): the view is V*'s statements at the tape

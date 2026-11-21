@@ -3,11 +3,12 @@ module
 public import Flock.Desc
 public import Proofs.Flock.Soundness.Assumptions.Zk
 public import Proofs.Flock.Soundness.Discharge.ZkLink.Public
-public import Proofs.Flock.Soundness.Discharge.ZkLink.Rows
 public import Proofs.Flock.Soundness.Discharge.ZkReg.BindHJ
 public import Proofs.Flock.Soundness.Discharge.ZkReg.Defs
 public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsHJ
-public import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJCustody
+public import Proofs.Flock.Soundness.Discharge.Composed.CustodyJ
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundSampleOk
+public import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJ
 public import Proofs.Flock.Soundness.Registered.ReadsX
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
@@ -121,9 +122,6 @@ abbrev c : Flock.Circuit := s.D.unroll
 /-- `HmOut.parse` reads the session's circuit from its circuit file. -/
 theorem hc : HmOut.parse (zkTags s.I) s.I.circuitFile s.I.tables = .ok s.c := Flock.Desc.parse_flat s.hD
 
-/-- The session's outcome: the registration, the sample and the transcript. -/
-abbrev Out : Type := s.Reg × Finset (Fin s.n) × Discharge.Exec.Transcript
-
 /-- The key program's partition. -/
 abbrev P := (keyProg s.c s.hU s.n).partition (Discharge.Layout.outsOf s.c s.hU s.n)
 
@@ -133,31 +131,6 @@ abbrev Circ := (keyProg s.c s.hU s.n).circuit (Discharge.Layout.outsOf s.c s.hU 
 /-- The value binding of the session's rows. -/
 abbrev vb := (rsZHJS (Reg := s.Reg) s.dj s.y₀ s.ht s.hc s.hscope s.hU s.hpub).bindingZ
   (rsZHJS_computes (Reg := s.Reg) s.dj s.y₀ s.ht s.hc s.hscope s.hU s.hpub)
-
-/-- Unit `u`'s registrant's openings. -/
-abbrev wo (u : Fin s.n) : s.vb.Pos → s.vb.Opening := fun p => ((p, (s.rdU u).wv p, (s.rdU u).ws p) : s.vb.Opening)
-
-/-- The simulated audit's strategy the live prover's play gives. -/
-abbrev σ := simZJ execArith hs512 (planZHJ s.dj s.y₀) s.I s.wr (opnAtZHJ (planZHJ s.dj s.y₀) s.I s.dj) s.dg
-  (decAtZJ (planZHJ s.dj s.y₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) s.N
-  (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ s.I s.wr _ _ _ _ _
-    (runsZCJH_live s.I s.ht s.hc (Discharge.Layout.scopeOkH_spec s.hU s.hscope).2.1 s.dj s.y₀ s.wr _ s.hTags s.hCust.1
-      fun _ => Discharge.ZkReg.sampleOkZKHJ_of_file s.I s.ht s.hc s.kd s.n s.hdiv s.dj s.hCust.2 _)) s.τ
-
-/-- **The value layer**: the plurality the rows extraction finds at the registration (`XplurZC`). -/
-abbrev Xv : Fin s.Circ.N → Bool :=
-  XplurZC execArith hs512 s.P (planZHJ s.dj s.y₀) (tabZHJ s.dj s.y₀) s.vb (reg s.σ) (cont s.σ) s.k s.Rw
-
-/-- Unit `u` is wrong on the registration, at the value layer (`incorrectRegZ`). -/
-def IncorrectAt (u : Fin s.n) : Prop :=
-  u ∈ incorrectRegZ execArith s.P (planZHJ s.dj s.y₀) (tabZHJ s.dj s.y₀) s.vb (reg s.σ) s.Xv
-
-/-- Unit `u`'s rows are right at the value layer (`RowsRightZC`), at its own registered reads (`rdU u`) where the
-verifier owns them at the outcome `o`'s sample. -/
-def RowsAt (o : s.Out) (u : Fin s.n) : Prop :=
-  RowsRightZC execArith hs512 s.P (planZHJ s.dj s.y₀) (tabZHJ s.dj s.y₀) s.vb (reg s.σ) (cont s.σ)
-    (fun p => OwnReadsHJ s.I s.own s.c s.pub o.2.2 (s.rdU u).isRead (s.rdU u).port (s.rdU u).readAt ∧
-      (s.rdU u).isRead p) (s.wo u) s.k s.Rw u
 
 end RowsSession
 

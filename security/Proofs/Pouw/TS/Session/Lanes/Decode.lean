@@ -68,20 +68,6 @@ namespace ResourceAccounting.TS.Lanes
 open PouwWindow.Lanes Flock.SoundAtBridge
 open FlockSoundness.Discharge.Layout (keyN keyRowOf portRowW)
 
-open Classical in
-/-- **Bit `k` of the row of the port named `name`**, at unit 0, in the layer value `v`: `v` at a key program gate that
-the hidden-output layout (`HiddenExec.rowOfH`, at the session's row widths `portRowW`) places on that bit and that is a
-wire of unit 0 (`P.io`), or nothing where no such gate is: an input gate on an input row's bit (`keyRowOf`), which unit 0
-reads, or a gate unit 0 returns on an output row's bit (`outRowOf`). Several input columns can carry one message bit;
-only the first is wired, so only it is read. -/
-noncomputable def portBit (s : RowsSession) (v : ℕ → ℕ → Option Bool) (name : String) (k : ℕ) : Option Bool :=
-  if h : ∃ (g : Fin (keyN s.c s.hU s.n)) (u : Fin s.n) (q : Fin s.c.ports.size) (b : Fin (portRowW s.c q)),
-      u.val = 0 ∧ s.c.ports[q].name = name ∧ b.val = k ∧
-        FlockSoundness.Discharge.HiddenExec.rowOfH s.c s.hU s.n (FlockSoundness.Discharge.Layout.outsOf s.c s.hU s.n) g =
-          some (u, ⟨q, b⟩) ∧
-        (g : Fin s.Circ.N) ∈ s.P.io u
-  then v 0 (Classical.choose h).val else none
-
 /-- The natural number a reader's bits `[lo, lo + n)` spell, least significant first, a missing bit read as 0. -/
 def bitsN (rd : ℕ → Option Bool) (lo n : ℕ) : ℕ :=
   ∑ i ∈ Finset.range n, if rd (lo + i) = some true then 2 ^ i else 0
@@ -133,35 +119,5 @@ noncomputable def decLane (K nw : ℕ) (T : Tile) (rd : String → ℕ → Optio
     bitsN_lt _ _ _⟩
   lane := ⟨bitsN (rd "pub") (fieldBit (lanePorts T 0) "lane") laneBits % 32, Nat.mod_lt _ (by norm_num)⟩
   ok := rd "o0" 0 == some true
-
-/-- **The combine's view from a reader of its ports' row bits**: row `x` of the partials from `p<x>`, the receipt from
-`receipt`, each `nw` u32 words, and `ok` from `o0`. -/
-noncomputable def decComb (nw : ℕ) (T : Tile) (rd : String → ℕ → Option Bool) : CombineView nw where
-  parts x w := BitVec.ofNat 32
-    (bitsN (rd s!"p{x.val}") (fieldBit (combinePorts T) s!"partials[{x.val}]" + 32 * w.val) 32)
-  receipt w := BitVec.ofNat 32 (bitsN (rd "receipt") (fieldBit (combinePorts T) "receipt" + 32 * w.val) 32)
-  ok := rd "o0" 0 == some true
-
-/-- **A lane's decode**: `decLane` at the session's port bits (`portBit`). -/
-noncomputable def decL (K nw : ℕ) (T : Tile) (s : RowsSession) (v : ℕ → ℕ → Option Bool) : LaneView K nw LanePub :=
-  decLane K nw T (portBit s v)
-
-/-- **The combine's decode**: `decComb` at the session's port bits (`portBit`). -/
-noncomputable def decC (nw : ℕ) (T : Tile) (s : RowsSession) (v : ℕ → ℕ → Option Bool) : CombineView nw :=
-  decComb nw T (portBit s v)
-
-/-- A lane's decode reads only the ports' row bits. -/
-theorem decL_congr {K nw : ℕ} (T : Tile) {s s' : RowsSession} {v v' : ℕ → ℕ → Option Bool}
-    (h : ∀ name k, portBit s v name k = portBit s' v' name k) : decL K nw T s v = decL K nw T s' v' := by
-  have e : portBit s v = portBit s' v' := funext fun name => funext fun k => h name k
-  unfold decL
-  rw [e]
-
-/-- The combine's decode reads only the ports' row bits. -/
-theorem decC_congr {nw : ℕ} (T : Tile) {s s' : RowsSession} {v v' : ℕ → ℕ → Option Bool}
-    (h : ∀ name k, portBit s v name k = portBit s' v' name k) : decC nw T s v = decC nw T s' v' := by
-  have e : portBit s v = portBit s' v' := funext fun name => funext fun k => h name k
-  unfold decC
-  rw [e]
 
 end ResourceAccounting.TS.Lanes

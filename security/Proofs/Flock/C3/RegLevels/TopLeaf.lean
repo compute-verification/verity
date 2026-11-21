@@ -62,24 +62,6 @@ variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Spot.Sampling.Partition C n
   {decode' : Spot.Sampling.Partition.DecoderB (C := C') (Reg := Reg₁) plan' tab'}
   {lay' : Binding.Layout P' plan' tab' decode'} {rs' : HmRowsX lay'}
 
-/-- **Two registered reads at one root, leaf count, domain, leaf schema and position have one row**, or the records
-clash: their leaves differ and both open the root there (`TwoOpenings.collides`), or the leaves agree over two rows
-(`hm96Pair_spec`). -/
-theorem enc_eq_of_not_clash {rd : ReadsX lay rs} {rd' : ReadsX lay' rs'} (hc : ¬ rd.Clash rd') {p : lay.Pos}
-    {p' : lay'.Pos} (hp : rd.isRead p) (hp' : rd'.isRead p') (hroot : (rd.port p).root = (rd'.port p').root)
-    (hn : (rd.port p).leaves = (rd'.port p').leaves) (hdom : (rd.port p).domain = (rd'.port p').domain)
-    (hsch : (rd.port p).schema = (rd'.port p').schema)
-    (hpos : rd.readAt p = rd'.readAt p') : rs.enc p (rd.wv p) = rs'.enc p' (rd'.wv p') := by
-  have hleaf : rd.leaf p = rd'.leaf p' := Classical.byContradiction fun hne =>
-    hc ⟨p, p', hp, hp', Or.inl (TwoOpenings.collides
-      ⟨rd.port p, rd.readAt p, rd.leaf p, rd.wpath p, rd'.leaf p', rd'.wpath p'⟩ ⟨hne, rd.committed p hp, by
-      show Flock.Registered.opensLeaf (rd.port p) (rd'.leaf p').1 (rd.readAt p) (rd'.wpath p') = true
-      unfold Flock.Registered.opensLeaf
-      rw [hroot, hn, hdom, hsch, hpos]
-      exact rd'.committed p' hp'⟩)⟩
-  exact Classical.byContradiction fun hne => hc ⟨p, p', hp, hp', Or.inr
-    (hm96Pair_spec (rs.enc p (rd.wv p)) (rd.ws p) (rs'.enc p' (rd'.wv p')) (rd'.ws p') hne hleaf)⟩
-
 end Agree
 
 end FlockSoundness.Registered
@@ -233,48 +215,6 @@ theorem leaf_top {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} (hpr : FlockC
   obtain ⟨ω', R', x, ho⟩ := hre
   rw [← digest_top hpr hrow ⟨R', (o j).2.2, ⟨ω', x, by rw [ho]⟩, (h.1 j).1⟩ hmem hv hname.symm hpos hcs hs ht hi]
   exact leaf_of_accepts (F.zs R ω t R₂ j) (o j) (h.1 j).1 hown hp hA
-
-/-- **Two sessions' reads of one registered value at one position have one row** at an accepted history (no two
-sessions clash, `Accepted`'s `¬ RegColl`), where the value is a `SharedValue` of the verifier's shared rows
-`rows`, whose entries share their root (`SharedOwnRoot rows`), and each read's port is its reads file's entry
-(`ReadsOwnAt`). -/
-theorem row_agree {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {rows : Option (Array Flock.Registered.Port)}
-    (hsh : SharedOwnRoot rows F)
-    {dg : ByteArray → ByteArray} {N k Rw : ℕ} (hro : FlockC3.HPort.ReadsOwnAt F dg N k Rw)
-    {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o}
-    (h : Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o) (j j' : Fin (vstarCount F.ish))
-    {u : Fin (F.Vs j).nv} {q : Fin (F.Vs j).c.ports.size} (hp : (F.zs R ω t R₂ j).rd.isRead (.inl (u, q)))
-    {u' : Fin (F.Vs j').nv} {q' : Fin (F.Vs j').c.ports.size} (hp' : (F.zs R ω t R₂ j').rd.isRead (.inl (u', q')))
-    (hv : ((F.zs R ω t R₂ j).rd.port (.inl (u, q))).value = ((F.zs R ω t R₂ j').rd.port (.inl (u', q'))).value)
-    (hs : SharedValue rows ((F.zs R ω t R₂ j).rd.port (.inl (u, q))).value)
-    (hpos : (F.zs R ω t R₂ j).rd.readAt (.inl (u, q)) = (F.zs R ω t R₂ j').rd.readAt (.inl (u', q'))) :
-    HiddenExec.encPortH (F.Vs j).c.ports[q.val]! (FlockVBridge.Decode.regVal (F.zs R ω t R₂ j) (.inl (u, q))) =
-      HiddenExec.encPortH (F.Vs j').c.ports[q'.val]!
-        (FlockVBridge.Decode.regVal (F.zs R ω t R₂ j') (.inl (u', q'))) := by
-  obtain ⟨hroot, hn, hdom, hsch⟩ := hsh R ω t R₂ j j' ⟨_, (h.1 j).1⟩ ⟨_, (h.1 j').1⟩ _
-    (hro R ω t R₂ τ o h j u q hp).1 _ (hro R ω t R₂ τ o h j' u' q' hp').1 hv hs
-  exact FlockSoundness.Registered.enc_eq_of_not_clash (fun hc => h.2.1 ⟨j, j', hc⟩) hp hp' hroot hn hdom hsch hpos
-
-/-- **A chosen row for one read of R's level-`l` tops is the row at every other read of that node**:
-`row_agree` at the shared value `rec-top-stacked-L<l>`: every opening at that node has the same encoded row off
-`RegColl`. -/
-theorem top_row_agree {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂}
-    {rows : Option (Array Flock.Registered.Port)} (hsh : SharedOwnRoot rows F)
-    {dg : ByteArray → ByteArray} {N k Rw : ℕ} (hro : FlockC3.HPort.ReadsOwnAt F dg N k Rw)
-    {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o}
-    (h : Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o) (j j' : Fin (vstarCount F.ish))
-    {u : Fin (F.Vs j).nv} {q : Fin (F.Vs j).c.ports.size} (hp : (F.zs R ω t R₂ j).rd.isRead (.inl (u, q)))
-    {u' : Fin (F.Vs j').nv} {q' : Fin (F.Vs j').c.ports.size} (hp' : (F.zs R ω t R₂ j').rd.isRead (.inl (u', q')))
-    {l : ℕ}
-    (hv : ((F.zs R ω t R₂ j).rd.port (.inl (u, q))).value = s!"rec-top-stacked-L{l}")
-    (hv' : ((F.zs R ω t R₂ j').rd.port (.inl (u', q'))).value = s!"rec-top-stacked-L{l}")
-    (hpos : (F.zs R ω t R₂ j).rd.readAt (.inl (u, q)) = (F.zs R ω t R₂ j').rd.readAt (.inl (u', q')))
-    {top : ByteArray}
-    (he : HiddenExec.encPortH (F.Vs j).c.ports[q.val]!
-      (FlockVBridge.Decode.regVal (F.zs R ω t R₂ j) (.inl (u, q))) = rowInV (capRow top)) :
-    HiddenExec.encPortH (F.Vs j').c.ports[q'.val]!
-        (FlockVBridge.Decode.regVal (F.zs R ω t R₂ j') (.inl (u', q'))) = rowInV (capRow top) :=
-  (row_agree hsh hro h j j' hp hp' (hv.trans hv'.symm) (hv ▸ sharedValue_top rows l) hpos).symm.trans he
 
 end Family
 

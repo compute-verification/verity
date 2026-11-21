@@ -1,7 +1,5 @@
 module
 
-public import Proofs.Pouw.H1Zy.ChainVectors
-public import Proofs.Pouw.H1Zy.Combine
 public import Proofs.Pouw.H1Zy.Lane
 public import Definitions.Pouw.H1Zy.LaneBits
 public import Definitions.Pouw.H1Zy.Stream

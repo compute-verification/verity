@@ -144,11 +144,6 @@ theorem tablesAtZKH_liveISt_of (hsched : ZkSchedOK) {n mPts : ℕ} {Reg : Type} 
   intro I ht c _
   exact tablesAtZKH_liveU_of hsched I ht
 
-theorem tablesAtZKH_live_of (hsched : ZkSchedOK) {n mPts : ℕ} {Reg : Type} :
-    TablesAtZKHLive (n := n) (mPts := mPts) (Reg := Reg) := by
-  intro I ht c hc _
-  exact tablesAtZKH_liveI_of hsched I ht hc
-
 theorem tablesAtZKH_liveSt_of (hsched : ZkSchedOK) {n mPts : ℕ} {Reg : Type} :
     TablesAtZKHLiveSt (n := n) (mPts := mPts) (Reg := Reg) := by
   intro I ht c hc _
@@ -159,9 +154,6 @@ theorem tablesAtZKH_liveU {n mPts : ℕ} {Reg : Type} : TablesAtZKHLiveU (n := n
 
 theorem tablesAtZKH_liveI {n mPts : ℕ} {Reg : Type} : TablesAtZKHLiveI (n := n) (mPts := mPts) (Reg := Reg) :=
   tablesAtZKH_liveI_of zk_schedOK
-
-theorem tablesAtZKH_live {n mPts : ℕ} {Reg : Type} : TablesAtZKHLive (n := n) (mPts := mPts) (Reg := Reg) :=
-  tablesAtZKH_live_of zk_schedOK
 
 theorem tablesAtZKH_liveISt {n mPts : ℕ} {Reg : Type} : TablesAtZKHLiveISt (n := n) (mPts := mPts) (Reg := Reg) :=
   tablesAtZKH_liveISt_of zk_schedOK

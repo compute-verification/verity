@@ -58,14 +58,6 @@ theorem setupHidden_mPts_sampled {d : Json}
   rw [s.mPts, s.nbl, s.blocksReal, s.n, hn]
   rfl
 
-/-- **`m_pts` from the circuit and the sample's proved count**: at a sample `d` whose decoding proves `N₀` units, every
-statement `setupHidden` accepts has `m_pts = mPtsOf c.g N₀`, `c` the circuit file's `HmOut.parse`. -/
-theorem setupHidden_mPts_of_proved {c : Circuit} {d : Json} {N₀ : ℕ} (hc : HmOut.parse tags cf tables = .ok c)
-    (hD : ∀ D, Draw.UnitSample.ofJson d = .ok D → D.proved.size = N₀)
-    (h : Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st) : st.mPts = mPtsOf c.g N₀ := by
-  obtain ⟨ud, hud, hm⟩ := setupHidden_mPts_sampled h
-  rw [hm, setupHidden_c_of_parse hc h, hD ud hud]
-
 /-- `setupHidden_mPts_of_proved` at the session's own `g`. -/
 theorem setupHidden_mPts_of_provedG {g : ℕ} {d : Json} {N₀ : ℕ} (hg : st.c.g = g)
     (hD : ∀ D, Draw.UnitSample.ofJson d = .ok D → D.proved.size = N₀)
@@ -80,58 +72,5 @@ theorem setupHidden_mPts_of_provedSt {c : Circuit} {d : Json} {N₀ : ℕ} (ht :
   setupHidden_mPts_of_provedG (stmt_g_of_setupHidden ht hc h).symm hD h
 
 variable {n : ℕ}
-
-/-- **The challenger's sample is `SampleOkZKH` at every sample of the live sampling design, at any `g` every session under the `--zk`
-tags has.** With the executable strata `St` describing `σs`'s, each sampling `ks s` of its units: when the record's sample
-file is the verifier's sample under the live sampling design's own stratified sampling design (`SampleFileZK`), `SampleOkZKH` holds at
-`mPtsOf g (∑ s, ks s)` link points at every sample of `SamplingDesign.execOS`, the run that reads past the source's bytes (every
-unit) included. -/
-theorem sampleOkZKH_of_execG (I : Inputs) {g : ℕ}
-    (hg : ∀ {d : Json} {st : Flock.Stmt}, Stmt.setupHidden (zkTags I) I.circuitFile I.publicFile (zkCoins I) I.tables
-      (some d) I.partition I.program = .ok st → st.c.g = g)
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Spot.Sampling.SamplingDesign.stratum σs s).card)
-    (St : Fin m → Draw.Stratum) (hS : Spot.Sampling.SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
-    {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
-    (dj : Finset (Fin n) → Lean.Json) (hdj : SampleFileZK dj (.stratified Kd (Array.ofFn St)) pop) (ω : Ω) :
-    SampleOkZKH I dj (mPtsOf g (∑ s, ks s))
-      ((Spot.Sampling.SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) := by
-  refine ⟨fun D hD u hu => ?_, fun st hst => ?_⟩
-  · rw [hdj _ D hD, sampleOf_proved, sampleOf_mem]
-    exact ⟨u, hu, rfl⟩
-  · rw [setupHidden_mPts_of_provedG (hg hst) (fun D hD => by rw [hdj _ D hD, sampleOf_proved, sampleOf_size]) hst]
-    rcases execOS_sample_card_or σs ks St hS Kd pop src ω with hcard | huniv
-    · rw [hcard]
-    · obtain ⟨ud, hud, -⟩ := setupHidden_mPts_sampled hst
-      rw [hdj _ ud hud, huniv] at hud
-      rw [huniv, card_univ, Fintype.card_fin, sum_ks_of_univ σs ks hks St hS Kd pop hud]
-
-/-- **The challenger's sample is `SampleOkZKH` at every sample of the live sampling design.** On tags whose circuit file `HmOut.parse`
-accepts under the `--zk` tags as `c`, with the executable strata `St` describing `σs`'s, each sampling `ks s` of its
-units: when the record's sample file is the verifier's sample under the live sampling design's own stratified sampling design (`SampleFileZK`),
-`SampleOkZKH` holds at `mPtsOf c.g (∑ s, ks s)` link points at every sample of `SamplingDesign.execOS`, the run that reads past the
-source's bytes (every unit) included. -/
-theorem sampleOkZKH_of_exec (I : Inputs) {c : Flock.Circuit}
-    (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Spot.Sampling.SamplingDesign.stratum σs s).card)
-    (St : Fin m → Draw.Stratum) (hS : Spot.Sampling.SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
-    {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
-    (dj : Finset (Fin n) → Lean.Json) (hdj : SampleFileZK dj (.stratified Kd (Array.ofFn St)) pop) (ω : Ω) :
-    SampleOkZKH I dj (mPtsOf c.g (∑ s, ks s))
-      ((Spot.Sampling.SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) :=
-  sampleOkZKH_of_execG I (fun h => congrArg Flock.Circuit.g (setupHidden_c_of_parse hc h)) σs ks hks
-    St hS Kd pop Lb src dj hdj ω
-
-/-- `sampleOkZKH_of_exec` at the statement circuit (`HmOut.parseStmt`, a templated file's template unrolled), on untyped
-tags. -/
-theorem sampleOkZKH_of_execSt (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
-    (hc : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c)
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Spot.Sampling.SamplingDesign.stratum σs s).card)
-    (St : Fin m → Draw.Stratum) (hS : Spot.Sampling.SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
-    {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
-    (dj : Finset (Fin n) → Lean.Json) (hdj : SampleFileZK dj (.stratified Kd (Array.ofFn St)) pop) (ω : Ω) :
-    SampleOkZKH I dj (mPtsOf c.g (∑ s, ks s))
-      ((Spot.Sampling.SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) :=
-  sampleOkZKH_of_execG I (fun h => (stmt_g_of_setupHidden ((zkTags_typed I).trans ht) hc h).symm) σs ks hks
-    St hS Kd pop Lb src dj hdj ω
 
 end FlockSoundness.Discharge.ZkHidden

@@ -1,6 +1,16 @@
 module
 
-public import Proofs.Pouw.TS.Session.Held.Layer
+public import Definitions.ResourceAccounting.Served
+public import Proofs.Flock.C3.Compose.Honest
+public import Proofs.Flock.Soundness.Discharge.HiddenDec.Assemble
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.SiteHP
+public import Proofs.Flock.VBridge.Family.Registered
+public import Proofs.Flock.EndToEndRegistered
+public import Definitions.Pouw.TS.ProofLayer
+public import Proofs.Flock.SoundAtBridge.Session
+public import Proofs.Flock.C3.RegLevels.OpensRegs
+public import Proofs.Flock.C3.RegLevels.ValueTie
+public import Proofs.Flock.Recursive.ValueSrc
 public import Proofs.Flock.Recursive.Registrants
 public import Flock.KnownRead
 public import PouwWindow.OwnPorts
@@ -99,31 +109,10 @@ namespace ResourceAccounting.TS.Lanes
 open ResourceAccounting.TS Flock.SoundAtBridge FlockSoundness.Discharge.ZkReg
 open Pouw.RelativeSecurity (Paths)
 
-/-- Lane `l`'s row at row slot `s < 4`: `g + 8s` with `g = ⌊l/4⌋`. -/
-def rowOf (l : Fin 32) (s : Fin 4) : Fin 32 :=
-  ⟨l.val / 4 + 8 * s.val, by have := l.isLt; have := s.isLt; omega⟩
-
-/-- Lane `l`'s column at column slot `t < 8`: `2q + 8⌊t/2⌋ + (t mod 2)` with `q = l mod 4`. -/
-def colOf (l : Fin 32) (t : Fin 8) : Fin 32 :=
-  ⟨2 * (l.val % 4) + 8 * (t.val / 2) + t.val % 2, by have := t.isLt; omega⟩
-
 /-- An A or B row: its `K` codes, then its scale. -/
 structure Row (K : ℕ) where
   codes : Fin K → ℤ
   scale : ℤ
-
-/-- **A leaf's values committed before σ_w**: its 32 A rows, its 32 B rows and its z/y record, row-major. -/
-structure Leaf (K : ℕ) where
-  a : Fin 32 → Row K
-  b : Fin 32 → Row K
-  z : Fin 32 → Fin 32 → ℤ
-  y : Fin 32 → Fin 32 → ℤ
-
-/-- Lane `l`'s A rows by row slot. -/
-def laneA {K : ℕ} (L : Leaf K) (l : Fin 32) : Fin 4 → Row K := fun s => L.a (rowOf l s)
-
-/-- Lane `l`'s B rows by column slot. -/
-def laneB {K : ℕ} (L : Leaf K) (l : Fin 32) : Fin 8 → Row K := fun t => L.b (colOf l t)
 
 /-- **What lane `l`'s statement reads**: its A rows by row slot, its B rows by column slot, the leaf's record, its
 partials row, the public inputs (admit, salt, position, roots), its index and its `ok` word. -/
@@ -135,17 +124,6 @@ structure LaneView (K nw : ℕ) (Pub : Type) where
   part : Fin nw → BitVec 32
   pub : Pub
   lane : Fin 32
-  ok : Bool
-
-/-- Lane `l`'s view of a leaf `L`, its public inputs `pub` and its partials row `p`, with its `ok` word `1`. -/
-def laneView {K nw : ℕ} {Pub : Type} (L : Leaf K) (pub : Pub) (p : Fin nw → BitVec 32) (l : Fin 32) :
-    LaneView K nw Pub :=
-  ⟨laneA L l, laneB L l, L.z, L.y, p, pub, l, true⟩
-
-/-- **What the combine reads**: the 32 partials rows, lane-major, the leaf's receipt and its `ok` word. -/
-structure CombineView (nw : ℕ) where
-  parts : Fin 32 → Fin nw → BitVec 32
-  receipt : Fin nw → BitVec 32
   ok : Bool
 
 /-- **Wire `g` is a bit of one of unit `u`'s port rows**: its commit string is `u`'s row of some port `q` of the
@@ -163,41 +141,5 @@ noncomputable def portRead (s : RowsSession) (vals : Fin s.Circ.N → Bool) : �
       if (⟨b, h.2⟩ : Fin s.Circ.N) ∈ s.P.io ⟨a, h.1⟩ ∧ PortRow s ⟨a, h.1⟩ ⟨b, h.2⟩ then some (vals ⟨b, h.2⟩)
       else none
     else none
-
-/-- The session's row encodings (`rsShHJS`), the ones its registrants' openings are of. -/
-noncomputable abbrev rsOf (s : RowsSession) :=
-  rsShHJS (Reg := s.Reg) s.dj s.y₀ s.ht s.hc s.hscope s.hU s.hpub
-
-/-- **Two registered ports name one tree**: one root, leaf count, domain and leaf schema, all that
-`Flock.Registered.opensLeaf` reads of a port. Two statements' ports of one value (lane `l`'s `partials` and the
-combine's `p<l>`) have different names and one tree. -/
-def SameTree (a b : Flock.Registered.Port) : Prop :=
-  a.root = b.root ∧ a.leaves = b.leaves ∧ a.domain = b.domain ∧ a.schema = b.schema
-
-/-- **A leaf's sessions' registrants' rows agree at one tree and position**: wherever registered reads `p` of unit
-`u`'s registrant in session `k` and `p'` of unit `u'`'s in session `k'` (of the leaf's group `ι` of statements: its
-32 lanes and the combine, or any group) name one registered tree (`SameTree`) and one position, the two registrants' rows
-there are one row's bytes, each at its session's encoding. -/
-def RowsAgree {ι : Type} (sess : ι → RowsSession) : Prop :=
-  ∀ (k k' : ι) (u : Fin (sess k).n) (u' : Fin (sess k').n) (p : (sess k).vb.Pos)
-    (p' : (sess k').vb.Pos), ((sess k).rdU u).isRead p → ((sess k').rdU u').isRead p' →
-    SameTree (((sess k).rdU u).port p) (((sess k').rdU u').port p') →
-    ((sess k).rdU u).readAt p = ((sess k').rdU u').readAt p' →
-    (rsOf (sess k)).enc p (((sess k).rdU u).wv p) = (rsOf (sess k')).enc p' (((sess k').rdU u').wv p')
-
-/-- **Two of a leaf's sessions' registrants' records clash**: some unit's registrant in session `k` and some unit's in
-session `k'` (the same session or not) have registered reads whose openings, or hm96's leaves over their rows, are two
-different SHA-512 inputs with one digest (`ReadsX.Clash`). -/
-def LeafColl {ι : Type} (sess : ι → RowsSession) : Prop :=
-  ∃ (k k' : ι) (u : Fin (sess k).n) (u' : Fin (sess k').n), ((sess k).rdU u).Clash ((sess k').rdU u')
-
-/-- A registered file's known content (`Registered.KNOWN_KEY`): each port it names, with its rows' u16 words and salts. -/
-abbrev Known := Array (String × Array (Array ℕ × ByteArray))
-
-/-- **A leaf's known-content tie collides**: at one of its sessions `k`, at a port `nm` its known content names with
-rows `ks`, the known-content extractor outputs two different SHA-512 inputs with one digest
-(`ResourceAccounting.TS.Held.OkColl` at `nm`, the `ok` tie at any known port). -/
-def LeafKnownColl {ι : Type} (sess : ι → RowsSession) (known : ι → Known) : Prop :=
-  ∃ k nm ks, (nm, ks) ∈ known k ∧ ResourceAccounting.TS.Held.OkColl (sess k) nm ks
 
 end ResourceAccounting.TS.Lanes

@@ -229,9 +229,6 @@ theorem layoutIsL_ident (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option 
 def RootFixesDomainL (c : Flock.Circuit) (L : LeafMap) : Prop :=
   ∀ q q', q' < q → q < c.ports.size → (rootsOfL c L).getD q' [] = (rootsOfL c L).getD q [] → L.dom q' = L.dom q
 
-theorem rootFixesDomainL_ident (c : Flock.Circuit) (pub : Flock.Public) (nl : ℕ) :
-    RootFixesDomainL c (LeafMap.ident c pub nl) ↔ PortRoots.RootFixesDomain c pub nl := Iff.rfl
-
 end Flock.Bridge
 
 namespace Flock.Guarantees

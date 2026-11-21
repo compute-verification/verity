@@ -4,19 +4,18 @@ public import Properties.Certifier.JointBridge.ServiceSoundOfSessions
 public import Proofs.Flock.EndToEndRegistered
 public import Proofs.Flock.Soundness.Assumptions.Zk
 public import Proofs.Flock.Soundness.Discharge.ZkLink.Public
-public import Proofs.Flock.Soundness.Discharge.ZkLink.Rows
 public import Proofs.Flock.Soundness.Discharge.ZkReg.BindHJ
 public import Proofs.Flock.Soundness.Discharge.ZkReg.Defs
 public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsHJ
-public import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJCustody
 public import Proofs.Flock.Soundness.Registered.ReadsX
 public import Proofs.Flock.Soundness.Discharge.Composed.PublicJ
 public import Proofs.Flock.Soundness.Discharge.Composed.SampledJ
 public import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 public import Proofs.Flock.Soundness.Registered.Binding
-public import Proofs.Flock.SoundAtBridge.Reduce
-public import Proofs.Flock.C3.Compose.RowsReg
-public import Proofs.Flock.SoundAtBridge.Served
+public import Proofs.Flock.SoundAtBridge.Session
+public import Proofs.Flock.C3.Compose.Honest
+public import Proofs.Flock.Soundness.Discharge.HiddenDec.Assemble
+public import Proofs.Flock.VBridge.Family.Registered
 public import Proofs.Pouw.FillerLuck
 public import Proofs.Pouw.MonitoringPeriod.Honest
 

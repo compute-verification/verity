@@ -1,6 +1,8 @@
 module
 
-public import Definitions.Pouw.H1Zy.Chain
+public import Definitions.Pouw.H1Zy.LaneChunk
+public import Definitions.Pouw.H1Zy.Tile
+public import Definitions.Pouw.PearlC.Sha512
 
 /-!
 # `PouwH1LaneZy_v1{PouwH1Tile_v3}` on words (trusted)
@@ -15,29 +17,6 @@ public import Definitions.Pouw.H1Zy.Chain
 @[expose] public section
 
 namespace Pouw.H1Zy
-
-/-- **Lane `l`'s noise as the v3 tile's** (`h1tile.noise` at its 4 rows and 8 columns): the rows' dither bits and digit
-coins and the columns' coin bits as `laneNoise` reads them, and the columns' 32 noise bytes before `PouwU129`. -/
-def laneTileNoise (K : ℕ) (x : SeedIn) (l : Fin 32) : TileNoise 4 8 K where
-  bd s k := (laneNoise K x l).dither s k.val
-  zc s d ρ := (laneNoise K x l).digit s d ρ
-  cc t k := (laneNoise K x l).coin t k.val
-  ub t ρ := BitVec.ofNat 8 (streamVal (seedJ x) (colFirst K (laneCol l t)) (K + 8 * ρ.val) 8)
-
-/-- A lane's 4 A rows and 8 B rows as the v3 tile's inputs (`streamZ` reads only the codes). -/
-def laneTileIn {K : ℕ} (a : Fin 4 → Fin K → BitVec 8) (b : Fin 8 → Fin K → BitVec 8) : TileIn 4 8 K Unit where
-  a := a
-  sa _ := 0
-  b := b
-  sw _ := 0
-  zr _ _ := 0
-  yr _ _ := 0
-  pub := ()
-
-/-- **`PouwH1Tile_v3`'s z of lane `l`'s cell `(s, t)`** at the seeds `x`: `streamZ` at the lane's noise. -/
-def laneZ3 {K : ℕ} (x : SeedIn) (l : Fin 32) (a : Fin 4 → Fin K → BitVec 8) (b : Fin 8 → Fin K → BitVec 8)
-    (s : Fin 4) (t : Fin 8) : BitVec 32 :=
-  streamZ (laneTileNoise K x l) (laneTileIn a b) s t
 
 /-- **`PouwH1LaneZy_v1{TILE}`'s `ok`** at a 32 × 32 leaf, `laneOk` with its cells' z the tile's `zf` (of the public
 inputs, the lane `sel` names and the rows' codes): at `fun _ _ a b s t => gemmAccS8 (a s) (b t)` it is `laneOk`

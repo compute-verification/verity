@@ -552,33 +552,6 @@ theorem ownIn_checked {coins : String → Option Flock.RecCoins.Source} {rows : 
 
 local notation "𝓗" => C3Family.honest (xR := xR) ish hss bind hob zs own sel bc dec wr reg
 
-/-- **(n1) The public rows at the honest family, from the verifier's checks**: `hPubRows_of_check'` with the
-rec-sparse shape read at a transcript the session writes and accepts whose public rows and statements the verifier
-checks (`ChecksReached`), where `SparseAtShapeChecked` holds (`sparseAtShapeChecked`) and every unit is sampled
-(`rowsHeld`). The port the check finds by name is the session's: the statement check refuses a circuit naming a port
-twice (`names_of_checkStmt`), so `PortsNamed` holds at every accepted session. -/
-theorem hPubRows_of_checked {rows : Option (Array Flock.Registered.Port)} (hchk : ChecksReached 𝓗 rows wr reg)
-    (hsp : SparseAtShapeChecked 𝓗) : HPubRows 𝓗 := by
-  intro R ω t R₂ j hex rg hrg u q x hname hread b hrow
-  obtain ⟨R', tr', hw, hacc, hchk', hst⟩ := hchk R ω t R₂ j hex
-  obtain ⟨cs, w, c, hcs, hc, hb⟩ :=
-    heldRow_some (show heldRow (innerCommitsAt (wr t).1 (wr t).2 st reg) ish.sparse rg.value x = some b from hrow)
-  have hfix : (RecVStar.fixedRow { reps := #[] } rg.value 0).isSome = true := by
-    rw [fixedRow_isSome { reps := #[] } cs rg.value 0 x none ish.sparse]
-    simp [hc]
-  obtain ⟨d, D, dp, idx, hd, hD, hdp, hidx, hu⟩ := rowsHeld 𝓗 R ω t R₂ j R' tr' hw hacc rg hrg hfix u x hread
-  obtain ⟨sj, hsj, hck⟩ := stmt_of_session ((𝓗).zs R ω t R₂ j) hacc hst hd u
-  have hfind := port_find_of_unique (names_of_checkStmt hck hsj) q
-  rw [hname] at hfind
-  rw [hcs] at hchk'
-  obtain ⟨spec₀, sts₀, hs₀, hpr₀, hlb₀⟩ := hchk'
-  have hlab := label_of_checked ((𝓗).zs R ω t R₂ j) hacc ⟨spec₀, sts₀, hs₀, hlb₀⟩ hd hD hdp hidx hu
-  obtain ⟨w', c', hc', hdig⟩ := pubRow_of_checked ((𝓗).zs R ω t R₂ j) hacc (cs := cs) ⟨spec₀, sts₀, hs₀, hpr₀⟩ hrg
-    hfix hfind hd hD hdp hidx hu (by rw [hlab]; exact hread)
-  have he := (fixedRow_or (hsp j sj _ _ _ _ _ _ _ hsj hck) hc).symm.trans hc'
-  simp only [Option.some.injEq, Except.ok.injEq, Prod.mk.injEq] at he
-  exact hdig.trans (he.2.symm.trans hb.symm)
-
 end Family
 
 end FlockC3.PubRows

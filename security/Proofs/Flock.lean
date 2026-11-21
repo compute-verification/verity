@@ -9,7 +9,6 @@ public import Proofs.Flock.EndToEndHidden
 public import Proofs.Flock.EndToEnd.Period
 public import Proofs.Flock.EndToEnd.Blocks
 public import Proofs.Flock.EndToEnd.Carry
-public import Proofs.Flock.EndToEnd.Joint.MT.Statement
 public import Proofs.Flock.EndToEnd.Joint.V5.Bound
 public import Proofs.Flock.EndToEnd.Joint.V5.Layout
 public import Proofs.Flock.EndToEndRegistered

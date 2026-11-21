@@ -233,19 +233,6 @@ def OuterViewZK {Ωa Ωp Ωo Ωs V : Type} [Fintype Ωo] [Fintype Ωs] (nh : ℕ
     prCoin (fun r : Ωo => E (view a (fun i => zkServerLeaf (msgs a p i) (y i)) p y r))
       ≤ prCoin (fun s : Ωs => E (sim a (fun i => zkServerLeaf (msgs a p i) (y i)) s)) + εo
 
-/-- Obligation (V*'s sessions are zero knowledge, the circuit-privacy forms' `_hOuter`): at every honest witness `w` of
-a private circuit `P` owing `o` and every registration randomness `r`, `OuterViewZK` of the messages `msgs P w r` and
-the view `view P w r`, with a simulator `sim o (reg P r)` that reads the owed outputs, the registration's view, the
-auditor's tape and the commitments, and nothing of the private circuit, the witness, the salts or the developer's
-randomness. At V*'s `--zk` sessions run by the honest prover's code it holds within V*'s sessions' error at the pinned
-key's hiding gap, on V*'s staging (`SessionsPublic`, `SessionsCoined`, `SessionsHonest`:
-`OuterZK.recursiveZK_of_sessionZK`). -/
-def OuterSessionsZK {Out Prog Wit Rr Rv Ωa Ωp Ωo Ωs V : Type} [Fintype Ωo] [Fintype Ωs] (reg : Prog → Rr → Rv)
-    (honest : Out → Prog → Wit → Prop) (nh : ℕ) (msgs : Prog → Wit → Rr → Ωa → Ωp → Fin nh → ByteArray)
-    (view : Prog → Wit → Rr → Ωa → (Fin nh → ByteArray) → Ωp → (Fin nh → ZkView.Salt) → Ωo → V)
-    (sim : Out → Rv → Ωa → (Fin nh → ByteArray) → Ωs → V) (εo : ℝ≥0∞) : Prop :=
-  ∀ o P w, honest o P w → ∀ r, OuterViewZK nh (msgs P w r) (view P w r) (sim o (reg P r)) εo
-
 /-- **The auditor's whole view of the recursive audit** at `u = (((a, p), y), r)`: its tape `a`, the ZK server's
 commitments to `msgs a p` under the salts `y` (`zkServerLeaf`), and the outer session's view at them on the
 developer's randomness `r`. -/

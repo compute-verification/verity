@@ -1,6 +1,7 @@
 module
 
-public import Proofs.Flock.EndToEnd.Joint.Statement
+public import Proofs.Flock.EndToEnd.Period.Run
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundSampleOk
 public import Proofs.Flock.Soundness.Discharge.Composed.SampledJ
 public import Proofs.Spot.Sampling.HarmBound
 

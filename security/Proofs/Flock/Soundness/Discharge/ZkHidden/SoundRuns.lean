@@ -195,10 +195,6 @@ theorem runsZC_liveHI : RunsZCLiveHI := by
   intro n mPts Reg I ht c _ dj S₀ y₀ wr L _ hT hRec hDraw
   exact runsZC_liveHU I ht dj y₀ wr L hT hRec hDraw
 
-theorem runsZC_liveH : RunsZCLiveH := by
-  intro n mPts Reg I ht c _ _ dj S₀ y₀ wr L _ hT hRec hDraw
-  exact runsZC_liveHU I ht dj y₀ wr L hT hRec hDraw
-
 theorem runsZC_liveHISt : RunsZCLiveHISt := by
   intro n mPts Reg I ht c _ dj S₀ y₀ wr L _ hT hRec hDraw
   exact runsZC_liveHU I ht dj y₀ wr L hT hRec hDraw

@@ -225,41 +225,4 @@ theorem zk_session_viewHJ_nonvacuous (I : Inputs) (ht : I.tags.typed = false) (h
 
 /-! ## The whole-draw binder -/
 
-/-- **A whole-draw hidden-output setup has the whole sample's link points**: a `SampleSetupZKH` of the whole statement at
-a sample file of the verifier's `subset kd` sample has `mPtsOf c.g kd` link points, `c` the circuit file's `HmOut.parse`
-under the `--zk` tags. -/
-theorem sampleSetupZKH_whole_mPts (I : Inputs) {c : Flock.Circuit}
-    (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) {kd pop : ℕ}
-    (dj : Finset (Fin n) → Lean.Json) (hdj : SampleFileZK dj (.subset kd) pop) {S₀ : Finset (Fin n)}
-    (y₀ : SampleSetupZKH I mPts S₀ (dj S₀)) : mPts = mPtsOf c.g kd :=
-  y₀.x.hmPts.symm.trans (setupHidden_mPts_of_proved hc (sampleFileZK_proved_size hdj S₀) y₀.x.h)
-
-/-- **At 16 sampled proof blocks, two tables and `g = 1`, the whole-draw hidden-output binder is empty**: no whole-draw
-`SampleSetupZKH` at `mPtsOf c.g (16 / nTab I)` link points exists at a sample file of the verifier's `subset 16` sample. -/
-theorem sampleSetupZKH_whole_empty_16_2_1 (I : Inputs) {c : Flock.Circuit}
-    (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hJ : nTab I = 2) (hg : c.g = 1)
-    (dj : Finset (Fin n) → Lean.Json) (hdj : SampleFileZK dj (.subset 16) n) (S₀ : Finset (Fin n)) :
-    IsEmpty (SampleSetupZKH I (mPtsOf c.g (16 / nTab I)) S₀ (dj S₀)) :=
-  ⟨fun y₀ => by
-    have h := sampleSetupZKH_whole_mPts I hc dj hdj y₀
-    rw [hJ, hg] at h
-    exact mPtsOf_16_ne_8 h.symm⟩
-
-/-- **At 16 sampled proof blocks, two tables and `g = 1`, the hidden-output statements' `y₀` exists and a whole-draw one
-doesn't.** At the verifier's `subset 16` sample file and one session `verify --zk` accepts at the sample `dj S`: the tables'
-count is 27, a `y₀` (`zk_session_soundHJ`'s `SampleSetupZHJ` at table 0's inputs) exists at it, and no whole-draw
-`SampleSetupZKH` does. -/
-theorem y0_binderH_16_2_1 (I : Inputs) (ht : I.tags.typed = false) (hTags : TagsOkZHJ I) {c : Flock.Circuit}
-    (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit) (hscope : Layout.scopeOkH c = true)
-    (hJ : nTab I = 2) (hg : c.g = 1) (dj : Finset (Fin n) → Lean.Json) (hdj : SampleFileZK dj (.subset 16) n)
-    {S : Finset (Fin n)} {t : Exec.Transcript} (h : AcceptsZK I t) (hd : recordDraw t.record = some (dj S)) :
-    mPtsOf c.g (16 / nTab I) = 27 ∧
-      Nonempty (SampleSetupZHJ (inputsJ I 0) (mPtsOf c.g (16 / nTab I)) (partS I (dj S) S ⟨0, nTab_pos I⟩)
-        (drawJ I (dj S) 0)) ∧
-      ∀ S₀ : Finset (Fin n), IsEmpty (SampleSetupZKH I (mPtsOf c.g (16 / nTab I)) S₀ (dj S₀)) := by
-  refine ⟨?_, (sampleHypsZHJ I ht hTags hc hU hscope 16 (by simp [hJ]) dj hdj h hd).2 ⟨0, nTab_pos I⟩,
-    sampleSetupZKH_whole_empty_16_2_1 I hc hJ hg dj hdj⟩
-  rw [hJ, hg]
-  exact mPtsOf_16_8.2
-
 end FlockSoundness.Discharge.ZkHidden

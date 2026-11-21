@@ -147,19 +147,6 @@ theorem sampleOkZKHJ_of_sizeG (I : Inputs) {g : ℕ}
     · rw [setupHidden_mPts_of_provedG (hg j _ _ hst) (fun D' h' => ?_) hst]
       rw [hpd D' h', Array.size_extract, hsz, Nat.min_eq_left hjq, Nat.add_sub_cancel_left, hn]
 
-/-- **The challenger's live-coin part's sample is `SampleOkZKHJ` at a sample of `kd` units, under any sampling design.** On untyped `--statement` tags
-whose circuit file `HmOut.parse` accepts under the `--zk` tags as `c`: when the record's sample file is the verifier's sample
-under `samplingDesign` over `[0, pop)` (`SampleFileZK`), the sample file at `S` decodes only to a sample of `kd` units, and the session's
-tables divide `kd`, `S` is `SampleOkZKHJ` at `mPtsOf c.g (kd / nTab I)` link points: each table proves its `kd / nTab I`
-consecutive units, whatever the sampling design. -/
-theorem sampleOkZKHJ_of_size (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
-    (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (samplingDesign : Draw.SamplingDesign) (kd pop : ℕ) (hdiv : kd % nTab I = 0)
-    (dj : Finset (Fin n) → Lean.Json) (hdj : SampleFileZK dj samplingDesign pop) (S : Finset (Fin n))
-    (hsz : ∀ D, Draw.UnitSample.ofJson (dj S) = .ok D → D.units.size = kd) :
-    SampleOkZKHJ I dj (mPtsOf c.g (kd / nTab I)) S :=
-  sampleOkZKHJ_of_sizeG I (fun _ _ _ h => congrArg Flock.Circuit.g (setupHidden_c_of_parse
-    ((parseH_tagsAt ((zkTags_typed I).trans ht) _ _ _ _).trans hc) h)) samplingDesign kd pop hdiv dj hdj S hsz
-
 /-- **The challenger's live-coin part's samples are `SampleOkZKHJ`, at any `g` every table's session has.** When the record's sample file
 is the verifier's sample under the subset sampling design `subset kd` over `[0, pop)` (`SampleFileZK`) and the session's tables divide
 `kd`, every sample `S` is `SampleOkZKHJ` at `mPtsOf g (kd / nTab I)` link points (`sampleOkZKHJ_of_sizeG`: a subset sample has

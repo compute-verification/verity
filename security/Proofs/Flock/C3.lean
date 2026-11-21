@@ -14,7 +14,6 @@ public import Proofs.Flock.C3.Compose.LaterHeld
 public import Proofs.Flock.C3.Compose.LaterHeldW
 public import Proofs.Flock.C3.Compose.LaterHolo
 public import Proofs.Flock.C3.Compose.PartRead
-public import Proofs.Flock.C3.Compose.RowsReg
 public import Proofs.Flock.C3.Compose.RsFacts
 public import Proofs.Flock.C3.Compose.SparseEnds
 public import Proofs.Flock.C3.Compose.SrcClauses
@@ -70,7 +69,6 @@ public import Proofs.Flock.C3.Reps.OpensRead
 public import Proofs.Flock.C3.Reps.ReadCol
 public import Proofs.Flock.C3.Reps.ReadRow
 public import Proofs.Flock.C3.Reps.ReadSib
-public import Proofs.Flock.C3.Reps.ReadWhole
 public import Proofs.Flock.C3.Reps.RepCoins
 public import Proofs.Flock.C3.Reps.RepsRead
 public import Proofs.Flock.C3.Reps.ResRead
