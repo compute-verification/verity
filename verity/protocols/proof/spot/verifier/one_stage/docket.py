@@ -1302,9 +1302,61 @@ def matches_public(rec: Mapping[str, Any], scheme: str, roots: Mapping[str, str]
     return c.verdict()
 
 
+#: `OneStageZkStatement.COMMITTED`
+COMMITTED = "committed/"
+
+
+def field_tree_name(v: str) -> bool:
+    """`OneStageZkStatement.fieldTreeName`."""
+    parts = v.split("/")
+    return len(parts) >= 2 and parts[-1].startswith("o") and len(parts[-1]) > 1 and parts[-1][1:].isdigit()
+
+
+def registered_trees_held(rec: Mapping[str, Any], who: str, registered: Mapping[str, Any] | None,
+                          tmpl: str | None = None) -> str | None:
+    """`OneStageZkStatement.registeredTreesHeld`'s refusal, none where it holds: each port of the registered file of
+    ``who`` that opens a committed tree (`portTreeHeld`'s `treePortOf`) held to the record's root, domain and leaf
+    count at that tree's port, at the member's template ``tmpl`` (none for the one statement)."""
+    by = {r["port"]: r for r in rec.get("roots", []) if isinstance(r.get("port"), str)}
+    for name, e in sorted(((registered or {}).get("ports") or {}).items()):
+        v = e.get("value", "")
+        if not v.startswith(COMMITTED) and field_tree_name(v) and (tmpl is None or f"{tmpl}/{name}" != v):
+            return f"registered: {who}'s port {name}: a wired port's tree is not derived from C yet"
+        t = v[len(COMMITTED):] if v.startswith(COMMITTED) else v if G.is_fresh_value(v) or field_tree_name(v) else None
+        if t is None:
+            continue
+        if (r := by.get(t)) is None:
+            return (f"registered: {who}'s port {name} opens the committed tree {t}, and the registration holds no root "
+                    f"{t}: a committed tree a statement opens is one its window registered before any coin")
+        for what, k in (("root", "root"), ("domain", "domain"), ("leaf count", "leaves")):
+            mine = e.get(k).lower() if k != "leaves" else e.get(k)
+            if r.get(k) != mine:
+                return (f"registered: {who}'s port {name} opens the committed tree {t} at another {what} than the "
+                        "registration's: a statement opens its window's registered tree, never another window's or "
+                        "another member's")
+    return None
+
+
+def fresh_reads(registered: Mapping[str, Any] | None) -> list[str]:
+    """`OneStageZkStatement.freshReads`: the ports the verifier's registered file reads at a run input node's tree."""
+    return [p for p, e in ((registered or {}).get("ports") or {}).items() if G.is_fresh_value(e.get("value"))]
+
+
+def public_held(rec: Mapping[str, Any], header: Mapping[str, Any], registered: Mapping[str, Any] | None = None) -> Verdict:
+    """`OneStageZkStatement.publicHeld`'s comparison: the one statement's public file's ``header`` against the record at
+    `public_ports`, each port the registration holds no root of that the verifier's ``registered`` file reads at a run
+    input node's tree (`fresh_reads`) left out of its roots and domains. Raises `ValueError` where `public_ports` does."""
+    reg = public_ports(rec)
+    fv = header.get("frame_v3") or {}
+    drop = {p for p in fresh_reads(registered) if p not in reg}
+    roots = {p: r for p, r in (fv.get("roots") or {}).items() if p not in drop}
+    domains = {p: d for p, d in (fv.get("domain_ids") or {}).items() if p not in drop}
+    return matches_public(rec, header.get("scheme"), roots, domains, header.get("instances"), reg=reg)
+
+
 registered_entries = G.registered_entries
 
 __all__ = ["NOT_ONE_MEMBER", "PARTITION_QUERY", "POOL_KEYS", "RECEIPT", "ROW_TABLES", "TABLE_PORT", "WEIGHTS_UNREGISTERED_WHY", "read_pins",
-           "WINDOW_DOMAIN", "check", "held_roots", "marked_inputs", "matches_public", "partition_query_refused", "pool_chains", "pool_open", "pool_refused",
-           "pool_spent_before", "pool_values", "public_ports", "query_digest", "receipt",
+           "WINDOW_DOMAIN", "check", "fresh_reads", "held_roots", "marked_inputs", "matches_public", "partition_query_refused", "pool_chains", "pool_open", "pool_refused",
+           "pool_spent_before", "pool_values", "public_held", "public_ports", "query_digest", "receipt", "registered_trees_held",
            "refuse_unwindowed", "refused", "registered_entries", "unwindowed", "weights_held", "window_domain"]
