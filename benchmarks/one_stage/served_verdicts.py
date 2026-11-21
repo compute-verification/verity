@@ -1315,7 +1315,7 @@ def pearlplus_draw_live(record: Path, out: Path, gate: str | None, key: str | No
         return None
     sid = (draw.get("reserved") or {}).get("session")
     if not (gate and key and main) and fetch is None:
-        raise ValueError("no gate, key pin or main's first-parent line to fetch the draw session by (--gate, "
+        raise ValueError("no gate, key pin or main's first-parent line to check the draw session by (--gate, "
                          "--key-sha512, --main)")
     if not (isinstance(sid, str) and PS.SESSION.fullmatch(sid)):
         raise ValueError(f"the record's draw names no gate session ({sid!r})")
