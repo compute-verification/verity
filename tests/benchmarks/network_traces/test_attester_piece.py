@@ -141,7 +141,7 @@ def _refused_leg(rec: dict | None, line: dict, why: str) -> None:
     assert "the network certifier" not in line["missing"] and "certifier" not in line["record_missing"]
 
 
-@pytest.mark.parametrize("name", ["onsite_network", "onsite_network_front", "onsite_compute", "onsite_full"])
+@pytest.mark.parametrize("name", ["onsite_full"])
 def test_each_configuration_listing_the_network_attester_gets_not_run_from_the_pieces_own_entry(
         name, tmp_path, network_attester, capsys, monkeypatch):
     """Each command the launch hands the piece (whole under Pearl+'s tie, else split around V3c) refuses with

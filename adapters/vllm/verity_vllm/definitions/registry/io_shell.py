@@ -656,5 +656,18 @@ def SlotEntryV2(B, S, occ, state):
     return tuple_of(B.call(bind(SlotEntry, KO=S.KO, IDB=S.IDB, NP=S.NP, STOP=S.STOP), occ, state), _pad(B))
 
 
+def padded_feed_sig(S):
+    ins, ret = feed_sig(S)
+    return ins, Tuple(*ret.fields, Array(PAD_WORDS, Array(16, BIT)))
+
+
+@composite("TokenFeed", 2, ["NP", "FIRST"], padded_feed_sig, refuse=feed_refuse,
+           conformance="not-yet-established: TokenFeed_v1, with a zero row of 896 bits")
+def TokenFeedV2(B, S, slot, sel=None):
+    """`TokenFeed_v1{NP, FIRST}`'s token and slot, and a zero row of `PAD_WORDS` u16 words."""
+    r = B.call(bind(TokenFeed, NP=S.NP, FIRST=S.FIRST), *((slot,) if S.FIRST else (slot, sel)))
+    return tuple_of(r[0], r[1], _pad(B))
+
+
 IO_SHELL_COMPOSITES = [IngressPrompt, TokenFeed, OutCollect, SlotEntry, SelectCollect, SelectEntry, SelectCollectV2,
-                       OutCollectV2, SlotEntryV2]
+                       OutCollectV2, SlotEntryV2, TokenFeedV2]
