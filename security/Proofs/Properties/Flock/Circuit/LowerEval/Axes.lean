@@ -1,9 +1,9 @@
 module
 
-public import Proofs.Properties.Flock.Circuit.LowerEval.Nested
+public import Proofs.Properties.Flock.Circuit.LowerEval.PlacesAll
 
-/-! The class of templates whose batches map on any axis (`BatchNested`), and how removing a batch axis acts on types:
-on the bit-level type, on the axis' dimensions, and on a member's leaf widths. -/
+/-! How removing a batch axis acts on types (on the bit-level type, on the axis' dimensions, and on a member's leaf
+widths), and what a member of a batch on any axis reads on bits (`batchBits_ax`). -/
 
 @[expose] public section
 
@@ -11,6 +11,13 @@ namespace Flock.Chain
 
 open Flock Flock.Lower Flock.Tmpl Flock.TmplValue Flock.Chain.LowerDef
 open Flock.Program hiding Form
+
+theorem replicate_flatten_getElem? {α : Type} (ew : List α) {n m t : ℕ} (hm : m < n) (ht : t < ew.length) :
+    (List.replicate n ew).flatten[t + m * ew.length]? = ew[t]? := by
+  obtain ⟨k, hk⟩ : ∃ k, n - m = k + 1 := ⟨n - m - 1, by omega⟩
+  rw [replicate_flatten_split ew (Nat.le_of_lt hm), hk, List.replicate_succ, List.flatten_cons,
+    List.getElem?_append_right (by rw [length_replicate_flatten]; omega), length_replicate_flatten,
+    show t + m * ew.length - m * ew.length = t by omega, List.getElem?_append_left ht]
 
 theorem foldl_append_copies (w : Array ℕ) : ∀ (l : List ℕ) (acc : Array ℕ),
     (l.foldl (fun a _ => a ++ w) acc).toList = acc.toList ++ (List.replicate l.length w.toList).flatten
@@ -36,26 +43,6 @@ theorem flatten_getElem?_sum {α : Type} : ∀ (L : List (List α)) {i j : ℕ} 
 
 section BatchAxes
 open InferenceOnlyVerifier.Properties.SecurityProofs
-
-/-- **A template of batches on any axes over word primitives and earlier such templates**: `Batch0Nested`, but a batch
-node may map each argument along any axis of its type (`AxesOk`: the argument's type with axis `ax` removed is the
-node's length and its parameter's type). -/
-inductive BatchNested (P : Prog) : ℕ → Prop
-  | mk {d : ℕ} : (P.defs[d]!).prim = false → 0 < (P.defs[d]!).body.nodes.size →
-      (∀ nd ∈ (P.defs[d]!).body.nodes, nd.form = .prim ∨ nd.form = .call ∨ nd.form = .batch) →
-      (∀ nd ∈ (P.defs[d]!).body.nodes, isWordPrim (P.defs[nd.fn]!).prim (P.defs[nd.fn]!).key = false → nd.fn < d) →
-      (∀ nd ∈ (P.defs[d]!).body.nodes, isWordPrim (P.defs[nd.fn]!).prim (P.defs[nd.fn]!).key = false →
-        BatchNested P nd.fn) →
-      BatchNested P d
-
-theorem batchNested_of_batch0Nested {P : Prog} {d : ℕ} (h : Batch0Nested P d) : BatchNested P d := by
-  induction h with
-  | mk hp hn hform hlt _ ih =>
-    refine .mk hp hn (fun nd hnd => ?_) hlt ih
-    rcases hform nd hnd with h | h | ⟨h, -⟩
-    · exact Or.inl h
-    · exact Or.inr (Or.inl h)
-    · exact Or.inr (Or.inr h)
 
 theorem bitType_array (n : ℕ) (e : Ty) : Ty.bitType (.array n e) = .array n (Ty.bitType e) := by
   rw [Ty.bitType]
@@ -189,6 +176,240 @@ theorem removeAxis_widths : ∀ (ax : ℕ) {t E : Ty} {n L : ℕ}, t.removeAxis 
           replicate_flatten_getElem? _ hq (by rw [hle]; exact hin), replicate_flatten_getElem? _ hq (by rw [hli]; exact hr)]
         exact ih he hde m hm r hr
     | _ => simp [Ty.removeAxis] at h
+
+theorem flatten_replicate_replicate {α : Type} (X : List α) (a b : ℕ) :
+    (List.replicate a (List.replicate b X).flatten).flatten = (List.replicate (a * b) X).flatten := by
+  induction a with
+  | zero => simp
+  | succ a ih =>
+    rw [List.replicate_succ, List.flatten_cons, ih, show (a + 1) * b = b + a * b by ring, List.replicate_add,
+      List.flatten_append]
+
+/-- The bits before word leaf `j · |V| + c` of `k` copies of the widths `V`. -/
+theorem sum_take_replicate (V : List ℕ) : ∀ (j k c : ℕ), j < k → c ≤ V.length →
+    ((List.replicate k V).flatten.take (j * V.length + c)).sum = j * V.sum + (V.take c).sum := by
+  intro j
+  induction j with
+  | zero =>
+    intro k c hk hc
+    obtain ⟨k, rfl⟩ : ∃ k', k = k' + 1 := ⟨k - 1, by omega⟩
+    rw [List.replicate_succ, List.flatten_cons, Nat.zero_mul, Nat.zero_add, List.take_append_of_le_length hc]
+    simp
+  | succ j ih =>
+    intro k c hk hc
+    obtain ⟨k, rfl⟩ : ∃ k', k = k' + 1 := ⟨k - 1, by omega⟩
+    rw [List.replicate_succ, List.flatten_cons, show (j + 1) * V.length + c = V.length + (j * V.length + c) by ring,
+      List.take_length_add_append, List.sum_append, ih k c (by omega) hc]
+    ring
+
+/-- **Removing a batch axis, as blocks**: the widths of `t` are `o` blocks of `n` copies of `F`'s, the widths with the axis
+removed `o` copies of `F`'s, and the axis' dimensions are `(n, F`'s leaves`)`. -/
+theorem removeAxis_blocks : ∀ (ax : ℕ) {t E : Ty} {n : ℕ}, t.removeAxis ax = some (n, E) →
+    ∃ (o : ℕ) (F : Ty), t.widths.toList = (List.replicate o (List.replicate n F.widths.toList).flatten).flatten ∧
+      E.widths.toList = (List.replicate o F.widths.toList).flatten ∧ t.axisDims ax = some (n, F.leaves) ∧
+      (Ty.bitType t).axisDims ax = some (n, (Ty.bitType F).leaves) := by
+  intro ax
+  induction ax with
+  | zero =>
+    intro t E n h
+    match t, h with
+    | .array n' e, h =>
+      simp only [Ty.removeAxis, Option.some.injEq, Prod.mk.injEq] at h
+      obtain ⟨rfl, rfl⟩ := h
+      exact ⟨1, e, by rw [widths_array_flat]; simp, by simp, rfl, by simp [Ty.bitType, Ty.axisDims]⟩
+    | .value _, h => simp [Ty.removeAxis] at h
+    | .tuple _, h => simp [Ty.removeAxis] at h
+    | .record _, h => simp [Ty.removeAxis] at h
+  | succ ax ih =>
+    intro t E n h
+    match t, h with
+    | .array n0 e, h =>
+      simp only [Ty.removeAxis, Option.map_eq_some_iff, Prod.exists, Prod.mk.injEq] at h
+      obtain ⟨m, inner, he, rfl, rfl⟩ := h
+      obtain ⟨o, F, hw, hE, hd, hbd⟩ := ih he
+      refine ⟨n0 * o, F, ?_, ?_, by simpa [Ty.axisDims] using hd, by simpa [Ty.bitType, Ty.axisDims] using hbd⟩
+      · rw [widths_array_flat, hw, flatten_replicate_replicate]
+      · rw [widths_array_flat, hE, flatten_replicate_replicate]
+    | .value _, h => simp [Ty.removeAxis] at h
+    | .tuple _, h => simp [Ty.removeAxis] at h
+    | .record _, h => simp [Ty.removeAxis] at h
+
+/-- **A batch member's bits**: with `o` blocks of `n` copies of the widths `V` (`L` leaves, `S` bits), bit `t` of member
+`m`'s word leaf `a · L + c` sits, among the whole's bits, at member `m`'s place for its bit `b` of the member's
+`o` copies of `V`: `(b / S · n + m) · S + b % S`. -/
+theorem member_bit (V : List ℕ) (o n a m c t : ℕ) (ha : a < o) (hm : m < n) (hc : c < V.length)
+    (ht : t < V[c]) :
+    ((List.replicate o (List.replicate n V).flatten).flatten.take ((a * n + m) * V.length + c)).sum + t =
+      ((((List.replicate o V).flatten.take (a * V.length + c)).sum + t) / V.sum * n + m) * V.sum +
+        (((List.replicate o V).flatten.take (a * V.length + c)).sum + t) % V.sum := by
+  rw [flatten_replicate_replicate, sum_take_replicate V _ _ _ (BodiesOk.lt_mul_of a o n m ha hm) hc.le,
+    sum_take_replicate V _ _ _ ha hc.le]
+  have hlt : (V.take c).sum + t < V.sum := by
+    have h1 : (V.take (c + 1)).sum = (V.take c).sum + V[c] := by
+      rw [List.take_add_one, List.sum_append, List.getElem?_eq_getElem hc]; simp
+    have h2 : (V.take (c + 1)).sum ≤ V.sum := by
+      conv_rhs => rw [← List.take_append_drop (c + 1) V]
+      rw [List.sum_append]; omega
+    omega
+  have hS : 0 < V.sum := by omega
+  have hd : (a * V.sum + (V.take c).sum + t) / V.sum = a := by
+    rw [Nat.add_assoc, Nat.add_comm, Nat.add_mul_div_right _ _ hS, Nat.div_eq_of_lt hlt, Nat.zero_add]
+  have hmd : (a * V.sum + (V.take c).sum + t) % V.sum = (V.take c).sum + t := by
+    rw [Nat.add_assoc, Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hlt]
+  rw [hd, hmd]
+  ring
+
+theorem map_range_mul {β : Type} (f : ℕ → β) (K : ℕ) : ∀ o : ℕ,
+    (List.range (o * K)).map f = (List.range o).flatMap fun a => (List.range K).map fun c => f (a * K + c)
+  | 0 => by simp
+  | o + 1 => by
+    rw [show (o + 1) * K = o * K + K by ring, List.range_add, List.map_append, map_range_mul f K o, List.range_succ,
+      List.flatMap_append, List.flatMap_singleton, List.map_map]
+    rfl
+
+theorem block_index {K a c : ℕ} (n m : ℕ) (hc : c < K) :
+    (a * K + c) / K * n * K + (a * K + c) % K + m * K = c + (a * n + m) * K := by
+  have hK : 0 < K := by omega
+  rw [Nat.add_comm (a * K), Nat.add_mul_div_right _ _ hK, Nat.div_eq_of_lt hc, Nat.zero_add, Nat.add_mul_mod_self_right,
+    Nat.mod_eq_of_lt hc]
+  ring
+
+/-- **`block_bits` on any axis**: with the references' widths `o` blocks of `n` copies of `V`, member `m` reads, on bits,
+the bits of the words it reads, at the member's places `(t / K · n) · K + t % K + m · K`. -/
+theorem block_bits_ax {α β : Type} [Inhabited α] (refs : List α) (G : α → List α) (Vb : α → β) (Vw : α → List β)
+    (wid : α → ℕ) (V : List ℕ) (o n m : ℕ) (hm : m < n)
+    (hG : ∀ r ∈ refs, (G r).map Vb = Vw r ∧ (Vw r).length = wid r)
+    (hw : refs.map wid = (List.replicate o (List.replicate n V).flatten).flatten) :
+    (List.range (o * V.sum)).map (fun t =>
+        Vb ((refs.flatMap G).getD (t / V.sum * n * V.sum + t % V.sum + m * V.sum) default)) =
+      ((List.range (o * V.length)).map fun t =>
+        Vw (refs.getD (t / V.length * n * V.length + t % V.length + m * V.length) default)).flatten := by
+  rw [map_range_mul, map_range_mul, flatten_flatMap]
+  apply List.flatMap_congr
+  intro a ha
+  have hb := block_bits refs G Vb Vw wid V (o * n) (a * n + m)
+    (BodiesOk.lt_mul_of a o n m (List.mem_range.1 ha) hm) hG (by rw [hw, flatten_replicate_replicate])
+  refine (List.map_congr_left fun c hc => ?_).trans (hb.trans (congrArg List.flatten
+    (List.map_congr_left fun c hc => ?_)))
+  · rw [block_index n m (List.mem_range.1 hc)]
+  · rw [block_index n m (List.mem_range.1 hc)]
+
+/-- **A batch argument's bits, on any axis**: member `m` of an argument whose references' widths are `o` blocks of `n`
+copies of `V` reads on bits the bits of the words it reads. -/
+theorem axisBits_ax {D : Defn} {x : List (List Bool)} (hx : x.map List.length = leafWidths D)
+    {outs : Array (List (List Bool))} (ho : OutsOk D outs) {s : Seq}
+    (hr : ∀ r ∈ s.toArray.toList, RefIn D outs.size r) {o n m : ℕ} (hm : m < n) {V : List ℕ}
+    (hw : s.toArray.toList.map (fun r => (tyAt D r).widths[r.j]!) =
+      (List.replicate o (List.replicate n V).flatten).flatten) :
+    (List.range (o * V.sum)).map (fun t =>
+      Flock.Program.refVal x.flatten (Flock.Program.paramStarts (D.params.map fun (n, t) => (n, Ty.bitType t)))
+        (outs.map List.flatten)
+        ((Flock.Lift.liftSeq (atOf D) (homoOf D) s).toArray.getD (t / V.sum * n * V.sum + t % V.sum + m * V.sum)
+          default)) =
+      ((List.range (o * V.length)).map fun t =>
+        Flock.Program.refVal x (Flock.Program.paramStarts D.params) outs
+          (s.toArray.getD (t / V.length * n * V.length + t % V.length + m * V.length) default)).flatten := by
+  have hA : ∀ (A : Array Ref) (i : ℕ), A.getD i default = A.toList.getD i default := by
+    intro A i
+    rw [Array.getD_eq_getD_getElem?, ← Array.getElem?_toList, List.getD_eq_getElem?_getD]
+  have hG : ∀ r ∈ s.toArray.toList,
+      ((List.range (atOf D r.p r.i r.j).2).map fun t => ({ p := r.p, i := r.i, j := (atOf D r.p r.i r.j).1 + t } : Ref)).map
+        (Flock.Program.refVal x.flatten (Flock.Program.paramStarts (D.params.map fun (n, t) => (n, Ty.bitType t)))
+          (outs.map List.flatten)) = Flock.Program.refVal x (Flock.Program.paramStarts D.params) outs r ∧
+      (Flock.Program.refVal x (Flock.Program.paramStarts D.params) outs r).length = (tyAt D r).widths[r.j]! := by
+    intro r h
+    rw [List.map_map, (atOf_in (hr r h)).1]
+    exact refBits hx ho (hr r h)
+  have hls := liftSeqRefs (atOf D) (homoOf D) s (fun r h w hw j => by
+    rw [(atOf_in (hr r h)).1]; rw [(atOf_in (hr r h)).2] at hw; exact bitAt_homo hw j)
+  have key := block_bits_ax s.toArray.toList _ _ _ (fun r => (tyAt D r).widths[r.j]!) V o n m hm hG hw
+  rw [← hls] at key
+  refine (List.map_congr_left (fun t _ => ?_)).trans (key.trans ?_)
+  · rw [hA]
+  · congr 1
+    exact List.map_congr_left (fun t _ => by rw [hA])
+
+theorem liftDef_arg_ax (D : Defn) (fnOf : ℕ → ℕ) (primOf : ℕ → Bool) (gatesOf : ℕ → ℕ) {k i ax : ℕ}
+    (hk' : k < (Flock.Lift.liftDef D fnOf primOf gatesOf).body.nodes.size) (hi : i < (D.body.nodes[k]'(by
+      simpa [Flock.Lift.liftDef] using hk')).args.size)
+    (hf : (D.body.nodes[k]'(by simpa [Flock.Lift.liftDef] using hk')).form = .batch)
+    (hax : (D.body.nodes[k]'(by simpa [Flock.Lift.liftDef] using hk')).axes[i]? = some (some ax)) :
+    (((Flock.Lift.liftDef D fnOf primOf gatesOf).body.nodes[k]).args.getD i default).dims =
+      (Ty.bitType ((D.body.nodes[k]'(by simpa [Flock.Lift.liftDef] using hk')).args.getD i default).ty).axisDims ax := by
+  have hsz : ((Flock.Lift.liftDef D fnOf primOf gatesOf).body.nodes[k]).args.size =
+      (D.body.nodes[k]'(by simpa [Flock.Lift.liftDef] using hk')).args.size := by
+    simp [Flock.Lift.liftDef]
+  have hi' : i < ((Flock.Lift.liftDef D fnOf primOf gatesOf).body.nodes[k]).args.size := by rw [hsz]; exact hi
+  have hg : ∀ (A : Array Arg) (h : i < A.size), A.getD i default = A[i] := fun A h => by simp [Array.getD, h]
+  rw [hg _ hi', hg _ hi]
+  simp [Flock.Lift.liftDef, hf, hax]
+
+/-- **A batch member's arguments' bits, on any axis**, `C` its callee on words and `C'` on bits: member `m` of a lifted
+batch node reads, on bits, the bits of the words its word node's member reads. -/
+theorem batchBits_ax {D : Defn} {fnOf : ℕ → ℕ} {primOf : ℕ → Bool} {gatesOf : ℕ → ℕ} {x : List (List Bool)}
+    (hx : x.map List.length = leafWidths D) {outs : Array (List (List Bool))} (ho : OutsOk D outs) {n : ℕ}
+    (hnD : n < D.body.nodes.size) (hnD' : n < (Flock.Lift.liftDef D fnOf primOf gatesOf).body.nodes.size)
+    (hsz : outs.size = n) (hf : (D.body.nodes[n]).form = .batch) {C C' : Defn}
+    (hpar : C'.params.map (·.2) = C.params.map (·.2.bitType))
+    (hargs : ∀ a ∈ (D.body.nodes[n]).args.toList,
+      a.seq.count = a.seq.toArray.size ∧ ∀ r ∈ a.seq.toArray.toList, RefIn D n r)
+    (hbat : ∀ i < (D.body.nodes[n]).args.size,
+      (∀ ax, (D.body.nodes[n]).axes[i]? = some (some ax) →
+        ((D.body.nodes[n]).args.getD i default).ty.removeAxis ax = some ((D.body.nodes[n]).n, (C.params.getD i default).2) ∧
+        ((D.body.nodes[n]).args.getD i default).dims = ((D.body.nodes[n]).args.getD i default).ty.axisDims ax ∧
+        i < C.params.size ∧
+        ((D.body.nodes[n]).args.getD i default).seq.toArray.toList.map (fun r => (tyAt D r).widths[r.j]!) =
+          ((D.body.nodes[n]).args.getD i default).ty.widths.toList) ∧
+      ((∀ ax, (D.body.nodes[n]).axes[i]? ≠ some (some ax)) → ((D.body.nodes[n]).args.getD i default).dims = none))
+    {m : ℕ} (hm' : m < (D.body.nodes[n]).n) :
+    ((List.range ((Flock.Lift.liftDef D fnOf primOf gatesOf).body.nodes[n]).args.size).flatMap fun i =>
+        batchArg (Flock.Program.refVal x.flatten
+          (Flock.Program.paramStarts (D.params.map fun (n, t) => (n, Ty.bitType t))) (outs.map List.flatten))
+          C' ((Flock.Lift.liftDef D fnOf primOf gatesOf).body.nodes[n]) m i) =
+      ((List.range (D.body.nodes[n]).args.size).flatMap fun i =>
+          batchArg (Flock.Program.refVal x (Flock.Program.paramStarts D.params) outs) C (D.body.nodes[n]) m i).flatten := by
+  have hasz : ((Flock.Lift.liftDef D fnOf primOf gatesOf).body.nodes[n]).args.size = (D.body.nodes[n]).args.size := by
+    simp [Flock.Lift.liftDef]
+  rw [hasz, flatten_flatMap]
+  apply List.flatMap_congr
+  intro i hi
+  have hi' := List.mem_range.1 hi
+  obtain ⟨hseqi, -, haxn, -⟩ := liftDef_arg D fnOf primOf gatesOf hnD hnD' hi'
+  have hmemA : (D.body.nodes[n]).args.getD i default ∈ (D.body.nodes[n]).args.toList := by
+    simp [Array.getD, hi']
+  obtain ⟨hcnt, hrefs⟩ := hargs _ hmemA
+  have hrefs' : ∀ r ∈ ((D.body.nodes[n]).args.getD i default).seq.toArray.toList, RefIn D outs.size r :=
+    fun r h => by rw [hsz]; exact hrefs r h
+  by_cases hax : ∃ ax, (D.body.nodes[n]).axes[i]? = some (some ax)
+  · obtain ⟨ax, hax⟩ := hax
+    obtain ⟨hrm, hdm, hip, hw⟩ := (hbat i hi').1 ax hax
+    have hsb : C'.params.size = C.params.size := by simpa using congrArg Array.size hpar
+    have hib : i < C'.params.size := by rw [hsb]; exact hip
+    have hpb : (C'.params.getD i default).2 = Ty.bitType (C.params.getD i default).2 := by
+      have h1 := congrArg (·[i]?) hpar
+      simp only [Array.getElem?_map] at h1
+      rw [Array.getElem?_eq_getElem hib, Array.getElem?_eq_getElem hip] at h1
+      rw [Array.getD_eq_getD_getElem?, Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hib,
+        Array.getElem?_eq_getElem hip]
+      simpa using h1
+    obtain ⟨o, F, htw, hEw, hdF, hbdF⟩ := removeAxis_blocks ax hrm
+    have hd' : (((Flock.Lift.liftDef D fnOf primOf gatesOf).body.nodes[n]).args.getD i default).dims =
+        some ((D.body.nodes[n]).n, (Ty.bitType F).leaves) := by
+      rw [liftDef_arg_ax D fnOf primOf gatesOf hnD' hi' hf hax, hbdF]
+    rw [batchArg_some _ _ _ _ _ hd', batchArg_some _ _ _ _ _ (hdm.trans hdF), hpb]
+    simp only [Flock.Program.argVals]
+    rw [hseqi]
+    generalize (C.params.getD i default).2 = E at hEw ⊢
+    rw [← sum_widths E, ← sum_widths F, hEw, sum_replicate_flatten,
+      show E.leaves = E.widths.toList.length by rw [Array.length_toList, hb_widths_size],
+      show F.leaves = F.widths.toList.length by rw [Array.length_toList, hb_widths_size], hEw,
+      length_replicate_flatten]
+    exact axisBits_ax hx ho hrefs' hm' (hw.trans htw)
+  · have hn0 : ∀ ax, (D.body.nodes[n]).axes[i]? ≠ some (some ax) := fun ax h => hax ⟨ax, h⟩
+    rw [batchArg_none _ _ _ _ _ (haxn hf hn0), batchArg_none _ _ _ _ _ ((hbat i hi').2 hn0)]
+    simp only [Flock.Program.argVals]
+    rw [hseqi]
+    exact seqBits hx ho hcnt hrefs'
 
 end BatchAxes
 

@@ -648,19 +648,54 @@ def circuit_of(path: Path, made: dict, read: set[Path]) -> FI.FlockCircuit:
 
 
 def door_circuit(c: bytes, part: dict, k: int, st_dir: Path, lower: Path,
-                 decoded: OC.Decoded | None = None) -> tuple[Path, dict, FI.FlockCircuit]:
+                 decoded: OC.Decoded | None = None, cut: dict | None = None) -> tuple[Path, dict, FI.FlockCircuit]:
     """Member ``k``'s circuit as the door derives it from C's bytes ``c`` and the partition ``part`` (`one_circuit.block`,
     `.restrict`, `.lower` by ``lower``, `flock-lower-check`, at in(S)'s cuts `one_circuit.cuts`), the file Lean's
     `restrict` derives too, written under ``st_dir``; `one_circuit.Refused` or `.NotDerived` where the door refuses the
-    block. ``decoded``: C decoded once for every member."""
+    block. ``decoded``: C decoded once for every member; ``cut``: C's cuts, once for every member."""
     decoded = decoded or OC.Decoded(c)
     units = OC.block(c, part, k, decoded)
-    text = OC.lower(OC.restrict(c, part, units, decoded), part, lambda: lower, cut=OC.cuts(c, part, decoded),
-                    formed=OC.formed_in(decoded, part, units))
+    text = OC.lower(OC.restrict(c, part, units, decoded), part, lambda: lower,
+                    cut=OC.cuts(c, part, decoded) if cut is None else cut, formed=OC.formed_in(decoded, part, units))
     circuit = st_dir / "circuit.txt"
     circuit.write_bytes(text)
     circ = FI.flock_circuit(text)
     return circuit, {"pin": circ.pin, "class_sha512": circ.cls}, circ
+
+
+#: The start of the window's refusal before any coin at the first member the door refuses (`audit`'s ``door``).
+DOOR_REFUSES = "the door refuses member"
+
+#: `door_class`'s refusal of a class whose first two members it staged into different files.
+CLASS_DIFFERS = "members of one class staged different circuits"
+
+
+def door_class(c: bytes, part: dict, k: int, st_dir: Path, lower: Path, decoded: OC.Decoded, cut: dict, template: str,
+               classes: dict, tmpl_unit_bin: str | None) -> tuple[Path, dict, FI.FlockCircuit, dict]:
+    """Member ``k``'s door circuit (`door_circuit`) and templated unit (`a0.templated`), staged once a class: the template, the
+    block's unit count and the template's cuts, what `one_circuit.lower` reads besides C_S's Definitions (its META binds
+    the partition, C and the template's digests, none of them a member's). A class's first two members are staged in full
+    under their own ``st_dir`` and must agree in the circuit's SHA-512, its class and the unit's SHA-512 (`CLASS_DIFFERS`);
+    a later member takes the first's files once the door's check of its own block passes (`one_circuit.formed_in`).
+    ``classes``: by class, its members staged in full. The verifier's Lean derives each member's circuit itself from the
+    registered circuit (`Own.circuitFile = restrictOn`), so the staged circuit is the prover's working copy: a wrong one is
+    refused, never accepted."""
+    units = OC.block(c, part, k, decoded)
+    staged = classes.setdefault((template, sum(hi - lo for lo, hi in units), tuple(sorted(cut.get(template, {}).items()))), [])
+    if len(staged) == 2:
+        OC.formed_in(decoded, part, units)(template)
+        return staged[0][1:]
+    circuit, made, circ = door_circuit(c, part, k, st_dir, lower, decoded, cut)
+    tmpl = a0.templated(argparse.Namespace(meta=circ.meta, text=circuit.read_text()), st_dir / "tmpl", tmpl_unit_bin)
+    staged.append((k, circuit, made, circ, tmpl))
+    if len(staged) == 2:
+        (i, _, a, _, ta), (j, _, b, _, tb) = staged
+        unit = [a0.sha512_file(t["tmpl_unit"])[:16] if t else None for t in (ta, tb)]
+        if (a["pin"], a["class_sha512"], unit[0]) != (b["pin"], b["class_sha512"], unit[1]):
+            raise RuntimeError(f"{CLASS_DIFFERS}: members {i} and {j} of {template} at {len(units)} range(s), "
+                               f"{sum(hi - lo for lo, hi in units)} units: circuit SHA-512 {a['pin'][:16]} and {b['pin'][:16]}, "
+                               f"class {a['class_sha512'][:16]} and {b['class_sha512'][:16]}, unit {unit[0]} and {unit[1]}")
+    return circuit, made, circ, tmpl
 
 
 def held(path: Path, circ: FI.FlockCircuit, read: set[Path]) -> None:
@@ -915,15 +950,19 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     door = getattr(a, "door_lower", None)
     c_bytes = b"".join(descriptor_chunks(program)) if door else b""
     decoded = OC.Decoded(c_bytes) if door else None
-    unlowered: dict[int, dict] = {}     # by member: the door's refusal to lower its block (`one_circuit.lower`)
+    cut, classes = None, {}     # C's cuts (`one_circuit.cuts`) and the door's classes (`door_class`), once for every member
 
-    def unlowerable(k: int, m: Any, why: str) -> None:
-        """Member ``k`` the door refused: recorded by name, and its public body, the commit's bytes and no circuit's,
-        staged all the same, so the leaf layer R4 holds the registration to covers every member; a draw of it is a failed
-        proof (`failed_drawn`)."""
-        unlowered[k] = {"template": m.template, "base": m.base, "n": m.n, "why": why[:600]}
-        print("UNLOWERED " + json.dumps({"k": k, **unlowered[k]}), flush=True)
-        publics[m.key] = (served / f"m{k}-public.bin").read_bytes()
+    def door_refused(k: int, m: Any, code: str, why: str) -> tuple[dict, bool]:
+        """The window refused before any coin at member ``k``, the first whose block the door refuses (`one_circuit.lower`)
+        or whose rows the door's circuit lays otherwise than the period committed them, as the checks before the draw
+        refuse (``refused_before_draw``)."""
+        checks["door"] = {"ok": False, "codes": [code],
+                          "detail": {"why": f"{DOOR_REFUSES} {k} of {m.template}: {why[:2000]}", "member": k,
+                                     "template": m.template, "block": k, "units": [m.base, m.base + m.n]}}
+        summary.update(checks_before_draw={c: v["ok"] for c, v in checks.items()}, checks=checks)
+        (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True))
+        print("A5 " + json.dumps({"refused_before_draw": summary["checks_before_draw"], "checks": checks}, default=str))
+        return summary, False
 
     t_stage = time.time()
     for k, m in enumerate(mine.members):
@@ -941,13 +980,12 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         tmpl: dict = {}
         if door:
             try:
-                circuit, made, circ = door_circuit(c_bytes, part, k, st_dir, door, decoded)
+                cut = OC.cuts(c_bytes, part, decoded) if cut is None else cut
+                # the door lowers a block to a templated circuit, whose unit rows both sides read
+                circuit, made, circ, tmpl = door_class(c_bytes, part, k, st_dir, door, decoded, cut, m.template, classes,
+                                                       getattr(a, "tmpl_unit_bin", None))
             except (OC.Refused, OC.NotDerived) as e:
-                unlowerable(k, m, f"{type(e).__name__}: {e}")
-                continue
-            # the door lowers a block to a templated circuit, whose unit rows both sides read
-            tmpl = a0.templated(argparse.Namespace(meta=circ.meta, text=circuit.read_text()), st_dir / "tmpl",
-                                getattr(a, "tmpl_unit_bin", None))
+                return door_refused(k, m, getattr(e, "code", type(e).__name__), f"{type(e).__name__}: {e}")
         elif m.template in composed:      # a template's members: one circuit, composed from the same input set, partition and program
             circuit, made, circ = composed[m.template]
         elif own:
@@ -976,9 +1014,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         except ValueError as e:
             if not door:
                 raise
-            # the door's circuit lays the member's rows otherwise than the period committed them
-            unlowerable(k, m, f"UNLAID: {e}")
-            continue
+            return door_refused(k, m, "UNLAID", f"UNLAID: its rows are laid otherwise than the period committed them: {e}")
         link(Path(got["pub"]), st_dir / f"pub-{m.n}.bin")
         meta = circ.meta
         header = a0.public_header(st_dir, m.n)
@@ -1015,7 +1051,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                                "public": a0.sha512_file(st_dir / f"pub-{m.n}.bin"), **tmpl},
                         "compose_s": compose_s, "pin": made["pin"], "class": made.get("class_sha512")})
     # staging composes the circuits and writes the members' files on the host: it starts nothing on a card
-    summary["staging"] = {"before_draw_s": round(time.time() - t_stage, 1), "public_files": len(members), "gpus": 0}
+    summary["staging"] = {"before_draw_s": round(time.time() - t_stage, 1), "public_files": len(members), "gpus": 0,
+                          **({"door_classes": len(classes)} if door else {})}
     summary["link_points"] = link_points(sampled_design, n_all, members)
     leaf_layer = CS.leaf_layer(publics)
     hist = history(publics) if history is not None else None
@@ -1115,12 +1152,6 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         counts[m.template] = counts.get(m.template, 0) + sum(1 for u in local if m.base + u in drawn_units)
         if local:
             drawn.append((mm, local))
-    failed_drawn: dict[str, int] = {}     # a drawn unit of a block the door wouldn't lower: a failed proof, not resampled
-    for k, u in unlowered.items():
-        hit = sum(1 for x in D.proved(union_sample) if u["base"] <= x < u["base"] + u["n"])
-        if hit:
-            failed_drawn[u["template"]] = failed_drawn.get(u["template"], 0) + hit
-    summary.update(unlowered={str(k): u for k, u in unlowered.items()}, failed_drawn=failed_drawn)
     archived: dict = {}     # the window's files, archived once for every Lean verify (`a0.archive_put`)
     for mm in members:
         mm["st"]["archived"] = archived
@@ -1462,8 +1493,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     summary["negative_workers"] = workers.timing()
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     ok = bool(result.get("accepted")) and result.get("registered_reads", {"ok": True})["ok"] and all(summary["negatives"].values()) \
-        and all(c["ok"] for c in summary.get("challengers", {}).values()) and not failed_drawn
-    shown = {x: summary.get(x) for x in ("source", "commitment", "audit", "draw", "draw_counts", "negatives", "failed_drawn")}
+        and all(c["ok"] for c in summary.get("challengers", {}).values())
+    shown = {x: summary.get(x) for x in ("source", "commitment", "audit", "draw", "draw_counts", "negatives")}
     if "challengers" in summary:
         shown["challengers"] = {x: c["ok"] for x, c in summary["challengers"].items()}
     if "coins" in summary:

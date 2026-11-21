@@ -2,7 +2,7 @@
 // message bytes), one thread a block.  `pouw_h1_receipts.Cubin` loads it, `pouw_h1_receipts.noise_cubin` builds it for the
 // serving card; by hand, from the repository's root:
 //   nvcc -O3 -std=c++17 -I verity/commitments/cuda -gencode arch=compute_120a,code=sm_120a -cubin -o noise.cubin \
-//     adapters/vllm/verity_vllm/protocols/pouw/pouw_cuda/noise.cu
+//     verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/noise.cu
 //
 //   h1_noise        n seeds' blocks 0 .. nb - 1 each: a unit's seed_j (h1tile.noise) or σ_R (h1tile.fold_keys)
 //   h1_noise_calls  J10-R's call-scale streams (h1tile.j10r_noise): call c's seed_c, blocks 0 .. starts[c + 1] - starts[c] - 1,
