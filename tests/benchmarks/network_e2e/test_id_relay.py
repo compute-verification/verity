@@ -1,18 +1,24 @@
-"""`id_relay` before a scripted server, with a fake request builder and a fake stream reader: an id request's answer is
+"""`Front` of `ids_front` before a scripted server, with a fake request builder and a fake stream reader: an id request's answer is
 the reader's ids as id events then the trailer, a reader's `Broken` ends it without the trailer, and every other
 connection is relayed byte for byte."""
 from __future__ import annotations
 
 import asyncio
+import importlib.util
 import itertools
 import socket
 import struct
+from pathlib import Path
 from typing import Any
 
 import pytest
 from verity import release as REL
-from verity_vllm.pipeline import id_relay as R
 from verity.release import FRAME_HEADER, TRAILER, id_event, id_request
+
+_SPEC = importlib.util.spec_from_file_location("ids_front", Path(__file__).resolve().parents[3] / "benchmarks" / "network_e2e" / "ids_front.py")
+assert _SPEC is not None and _SPEC.loader is not None
+R = importlib.util.module_from_spec(_SPEC)
+_SPEC.loader.exec_module(R)
 
 P = 140
 FIELDS = {"model": "m", "user": "u", "prompt": [128000, 791, 4062], "max_tokens": 2, "temperature": 0.0, "top_p": 1.0, "seed": 0}
@@ -42,7 +48,7 @@ async def scripted(answer: bytes, seen: list[bytes]) -> asyncio.Server:
 
 async def through(answer: bytes, request: bytes, *, eof: bool = False) -> tuple[bytes, list[bytes], list[dict]]:
     """`request` through a relay before a server that answers ``answer``; ``eof`` ends the client's side after it, which an
-    id request's client doesn't, since the relay ends that stream on the client's end (`id_relay.GONE`)."""
+    id request's client doesn't, since the relay ends that stream on the client's end (`ids_front.GONE`)."""
     seen: list[bytes] = []
     log: list[dict] = []
     ticks = itertools.count(1)

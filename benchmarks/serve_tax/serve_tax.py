@@ -2229,6 +2229,7 @@ FRONT_PORT = 18746
 CELLS = {"cell_bytes": 4096, "slots": 1, "bucket_ms": 250, "delay": 60, "window": 600, "ingress_cells": 4,
          "ingress_buckets": 16, "egress_cells": 4096, "max_tokens_cap": 2048}
 ATTESTER = ROOT / "verity/protocols/accounting/network/attester/network_attester_serve.py"
+FRONT = ROOT / "benchmarks/network_e2e/ids_front.py"
 SHIM = HERE / "cell_shim.py"
 #: the server's side's record in its directory, which holds no meta.json: no table and no cost reads it as an arm
 SERVER_RECORD = "server.json"
@@ -2308,11 +2309,11 @@ def tree_env() -> dict[str, str]:
 
 
 def front_argv(port: int, front: int, payload: int, log: Path) -> list[str]:
-    """The id front's command (the adapter's ``verity-vllm ids-front``): on loopback port ``front`` before the server
+    """The id front's command (`FRONT`): on loopback port ``front`` before the server
     on ``port``, it sends the server each id request as a completion under its release headers and answers with the
     stream's ids, an id event of ``payload`` bytes each, and relays every other connection (the watermark's, a
     scrape) as it is. ``log`` takes its record of each id request: lengths and times."""
-    return [sys.executable, "-m", "verity_vllm.pipeline.cli", "ids-front", "--upstream", f"127.0.0.1:{port}",
+    return [sys.executable, str(FRONT), "--upstream", f"127.0.0.1:{port}",
             "--listen", f"127.0.0.1:{front}", "--id-payload", str(payload), "--log", str(log)]
 
 

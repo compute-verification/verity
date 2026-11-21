@@ -34,7 +34,7 @@ the named assumption `trusted-device`.
 | what varies | on `onsite_full.toml`'s road, the one application that lists the attester |
 | --- | --- |
 | admission order | `arrival` served; `release-order` exists; `tick` exists |
-| framing | `ids` served (`--protocol ids`, the adapter's id relay); plain HTTP exists |
+| framing | `ids` served (`--protocol ids`; the id relay of `benchmarks/network_e2e`); plain HTTP exists |
 | ports | the scan's own state port exists; the compiler's named external ports never written |
 | schedule form | form 1 exists; form 2 exists |
 | connection rows | exists |

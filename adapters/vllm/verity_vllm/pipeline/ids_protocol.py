@@ -4,33 +4,10 @@ answers every other request as the serving system's own completion protocol, ``b
 from __future__ import annotations
 
 import dataclasses
-import json
 from collections.abc import Mapping
 from typing import Any
 
-from verity import release as REL
-from verity.release import id_event
-
-#: the scan's cell payload, P = B − 9 at its B = 512-byte cells: ``--id-payload``'s default
-ID_PAYLOAD = 503
-
-
-def id_request_fields(request: bytes, payload: int) -> dict[str, Any] | str:
-    """The fields (`id_request`'s keywords) of `request`, its head and body as the server read them, where it is an id
-    request as the network attester forwards it: without the release headers it puts on the server's copy
-    (`release.with_release`), exactly `release.id_request` of its own fields in the scan's B = P + 9-byte cells (P =
-    ``payload``). For anything else, why it is not one."""
-    head, _, body = request.partition(b"\r\n\r\n")
-    line, *fields = head.split(b"\r\n")
-    kept = b"".join(f + b"\r\n" for f in fields
-                    if f.partition(b":")[0].strip().lower() not in (REL.RELEASE_HEADER, REL.RUN_HEADER, REL.BUCKET_HEADER))
-    try:
-        b = json.loads(body)
-        got = {k: b[k] for k in ("model", "user", "prompt", "max_tokens", "temperature", "top_p", "seed")}
-        canonical = REL.id_request(**got, frame_bytes=payload + REL.FRAME_HEADER.size, offset=0)
-    except (ValueError, KeyError, TypeError) as e:
-        return f"no id request's fields: {e!r}"
-    return got if canonical == line + b"\r\n" + kept + b"\r\n" + body else "not the id request of its fields"
+from verity.release import ID_PAYLOAD, id_event, id_request_fields
 
 
 class IdsProtocol:

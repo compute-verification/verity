@@ -9,6 +9,8 @@ endpoint runs. Nothing here serves or proves:
   over a `verity-vllm serve-openai` endpoint's records, `chain.ENDPOINT`, bound to a run's attested I/O); and a
   `prove_path.py audit` run's output (`benchmarks/prove_path/prove_path.py`) adopted and held by
   content to that advice (`prove_path`, `held_to`). Its docstring has each step's contract.
+- `ids_front.py`: the network attester's id relay before vLLM's own server, run by path (`traces/ids.sh`, `benchmarks/serve_tax`); it
+  imports `verity.release` and nothing of the adapter (`test_ids_front.py`, `test_id_relay.py`).
 - `encodings/`: the advice's encodings, measured.
 - `traces/`: the vLLM scheduler traces they are measured on (`traces/README.md`).
 - `tests/`: the steps on fakes and on recorded endpoint runs (`tests/benchmarks/network_e2e/data`, `test_chain.py`), the prove path's adoption

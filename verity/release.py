@@ -30,7 +30,7 @@ bytes that aren't an HTTP/1 request with its whole head pass unchanged. A live s
 headers onto it (`release_of`, `release_head`).
 
 **The id variant's bytes**, which the server writes and the network attester's cells carry unchanged: the link frame's
-header (`FRAME_HEADER`), the canonical id request (`id_request`), a response's id events (`id_event`) and its last
+header (`FRAME_HEADER`), the canonical id request (`id_request`, read back by `id_request_fields`), a response's id events (`id_event`) and its last
 bytes (`TRAILER`)."""
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ from __future__ import annotations
 import json
 import re
 import struct
-from typing import Mapping, Sequence
+from typing import Any, Mapping, Sequence
 
 RELEASE_HEADER, RUN_HEADER, BUCKET_HEADER = b"x-verity-release", b"x-verity-release-run", b"x-verity-release-bucket"
 #: the bytes of a network attester's run id, which it samples at its construction
@@ -256,3 +256,24 @@ def id_request(*, model: str, user: str, prompt: Sequence[int], max_tokens: int,
         at += gap + len(p)
     raw = b"".join(parts)
     return ID_REQUEST_HEAD + b"%*d" % (ID_DIGITS, len(raw)) + b"\r\n\r\n" + raw
+
+
+#: the scan's cell payload, P = B − 9 at its B = 512-byte cells
+ID_PAYLOAD = 503
+
+
+def id_request_fields(request: bytes, payload: int) -> dict[str, Any] | str:
+    """The fields (`id_request`'s keywords) of `request`, its head and body as the server read them, where it is an id
+    request as the network attester forwards it: without the release headers it puts on the server's copy
+    (`with_release`), exactly `id_request` of its own fields in the scan's B = P + 9-byte cells (P = ``payload``). For
+    anything else, why it is not one."""
+    head, _, body = request.partition(b"\r\n\r\n")
+    line, *fields = head.split(b"\r\n")
+    kept = b"".join(f + b"\r\n" for f in fields if _name(f) not in (RELEASE_HEADER, RUN_HEADER, BUCKET_HEADER))
+    try:
+        b = json.loads(body)
+        got = {k: b[k] for k in ("model", "user", "prompt", "max_tokens", "temperature", "top_p", "seed")}
+        canonical = id_request(**got, frame_bytes=payload + FRAME_HEADER.size, offset=0)
+    except (ValueError, KeyError, TypeError) as e:
+        return f"no id request's fields: {e!r}"
+    return got if canonical == line + b"\r\n" + kept + b"\r\n" + body else "not the id request of its fields"
