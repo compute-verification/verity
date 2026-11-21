@@ -1826,7 +1826,8 @@ class Stream:
         when either check fails, or, after both,
         when the sampling design is `bernoulli` at any p (`bernoulli`, `BERNOULLI`), when the stream is two-stage
         (`levels-not-proved`, `levels.TWO_LEVELS_REFUSED`: two levels are built and refused), when the program's proof blocks read stratum by stratum
-        are not its N proof blocks in order (`population-order`, `partition.in_order`), or its fleet refuses it (`halted`)."""
+        as the sampling design reads them (one stratum under a subset design) are not its N proof blocks in order
+        (`population-order`, `partition.in_order`), or its fleet refuses it (`halted`)."""
         deadline = self.spec.check.registration_deadline
         op: dict[str, Any] = {"op": "register"}
         got: dict[str, Any] = {}
@@ -1866,7 +1867,7 @@ class Stream:
                     v = _refuse("bernoulli", {"law": sampling_design, "reason": BERNOULLI}).verdict
                 if v.ok and self.n_rho is not None:
                     v = _refuse(LV.NOT_PROVED, {"reason": LV.TWO_LEVELS_REFUSED}).verdict
-                if v.ok and not P.in_order(program, self.query, n):
+                if v.ok and not P.in_order(program, self.query, n, sampling_design):
                     v = _refuse("population-order", {"population": n}).verdict
                 got.update(program=program, law=sampling_design, table=table, earlier=earlier)
             if v.ok and self._fleet is not None:

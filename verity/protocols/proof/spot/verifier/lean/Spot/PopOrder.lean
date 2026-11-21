@@ -37,18 +37,18 @@ def chain : List (Nat × Nat) → Nat → Nat → Bool
 def segUnits (ss : List (Nat × Nat)) : List Nat := ss.flatMap fun s => List.range' s.1 (s.2 - s.1)
 
 /-- The population's segments, in slot order: each stratum's ranges (`Draw.strataOf`), stratum by stratum. -/
-def segsOf (rs : Array Flock.TemplateQuery.TRange) : List (Nat × Nat) :=
-  (Flock.Draw.strataOf (rs.map fun r => (r.template, r.first, r.count))).toList.flatMap (·.2.toList)
+def segsOf (design : Json) (rs : Array Flock.TemplateQuery.TRange) : List (Nat × Nat) :=
+  (Flock.Draw.strataOf (rangesOf design rs)).toList.flatMap (·.2.toList)
 
 /-- `popOk` from the ranges, with no proof block and no input gate built: the query's ranges and unit gates are
 defined, its strata's segments chain `0, 1, …, n - 1`, and every one of those units has its gates. -/
-def popOkRanges (p : Program) (query : Json) (n : Nat) : Bool :=
+def popOkRanges (p : Program) (query design : Json) (n : Nat) : Bool :=
   match Partition.evaluate p query with
   | .error _ => false
   | .ok rs =>
     match Partition.unitGates p query with
     | .error _ => false
-    | .ok gs => chain (segsOf rs) 0 n && decide (n ≤ gs.size)
+    | .ok gs => chain (segsOf design rs) 0 n && decide (n ≤ gs.size)
 
 theorem chain_le : ∀ (ss : List (Nat × Nat)) (a b : Nat), chain ss a b = true → a ≤ b := by
   intro ss
@@ -194,17 +194,17 @@ theorem strata_err {β : Type} (G : Nat → V β) (S : Array (String × Array (N
     S.toList ⟨x, hx, e', by rw [Array.mapM_eq_mapM_toList, flat_toList, he']; rfl⟩
   exact ⟨e'', by rw [he'']; rfl⟩
 
-theorem segUnits_segsOf (rs : Array Flock.TemplateQuery.TRange) :
-    segUnits (segsOf rs) = ((Flock.Draw.strataOf (rs.map fun r => (r.template, r.first, r.count))).toList.flatMap
+theorem segUnits_segsOf (design : Json) (rs : Array Flock.TemplateQuery.TRange) :
+    segUnits (segsOf design rs) = ((Flock.Draw.strataOf (rangesOf design rs)).toList.flatMap
       fun x => segUnits x.2.toList) := by
   simp only [segsOf, segUnits, List.flatMap_assoc]
 
 /-- Where every segment unit has gates, the layout is defined and its population is those units, in order. -/
-theorem layout_ok (p : Program) (query : Json) (rs : Array Flock.TemplateQuery.TRange) (gs : Array (Nat × Nat))
+theorem layout_ok (p : Program) (query design : Json) (rs : Array Flock.TemplateQuery.TRange) (gs : Array (Nat × Nat))
     (h1 : Partition.evaluate p query = .ok rs) (h2 : Partition.unitGates p query = .ok gs)
-    (hall : ∀ u ∈ segUnits (segsOf rs), u < gs.size) :
-    ∃ l, layout p query = .ok l ∧ (popOf l).map (·.unit) = (segUnits (segsOf rs)).map some := by
-  have hG : ∀ x ∈ (Flock.Draw.strataOf (rs.map fun r => (r.template, r.first, r.count))).toList, ∀ u ∈ segUnits x.2.toList,
+    (hall : ∀ u ∈ segUnits (segsOf design rs), u < gs.size) :
+    ∃ l, layout p query design = .ok l ∧ (popOf l).map (·.unit) = (segUnits (segsOf design rs)).map some := by
+  have hG : ∀ x ∈ (Flock.Draw.strataOf (rangesOf design rs)).toList, ∀ u ∈ segUnits x.2.toList,
       u < gs.size := fun x hx u hu => hall u (by rw [segUnits_segsOf]; exact List.mem_flatMap.2 ⟨x, hx, hu⟩)
   unfold layout
   rw [h1, h2]
@@ -229,9 +229,9 @@ theorem layout_ok (p : Program) (query : Json) (rs : Array Flock.TemplateQuery.T
     rfl
 
 /-- Where a segment unit has no gates, the layout is an error. -/
-theorem layout_err (p : Program) (query : Json) (rs : Array Flock.TemplateQuery.TRange) (gs : Array (Nat × Nat))
+theorem layout_err (p : Program) (query design : Json) (rs : Array Flock.TemplateQuery.TRange) (gs : Array (Nat × Nat))
     (h1 : Partition.evaluate p query = .ok rs) (h2 : Partition.unitGates p query = .ok gs) (u : Nat)
-    (hu : u ∈ segUnits (segsOf rs)) (hge : gs.size ≤ u) : ∃ e, layout p query = .error e := by
+    (hu : u ∈ segUnits (segsOf design rs)) (hge : gs.size ≤ u) : ∃ e, layout p query design = .error e := by
   rw [segUnits_segsOf] at hu
   obtain ⟨x, hx, hux⟩ := List.mem_flatMap.1 hu
   unfold layout
@@ -243,22 +243,22 @@ theorem layout_err (p : Program) (query : Json) (rs : Array Flock.TemplateQuery.
     obtain ⟨e, he⟩ := strata_err _ _ heq ⟨x, hx, u, hux, _, by simp only [Array.getElem?_eq_none hge]; rfl⟩
     cases he
 
-theorem popOk_of (p : Program) (query : Json) (n : Nat) (rs : Array Flock.TemplateQuery.TRange) (gs : Array (Nat × Nat))
+theorem popOk_of (p : Program) (query design : Json) (n : Nat) (rs : Array Flock.TemplateQuery.TRange) (gs : Array (Nat × Nat))
     (h1 : Partition.evaluate p query = .ok rs) (h2 : Partition.unitGates p query = .ok gs) :
-    popOk p query n = (chain (segsOf rs) 0 n && decide (n ≤ gs.size)) := by
-  have hc : chain (segsOf rs) 0 n = decide (segUnits (segsOf rs) = List.range n) := by
-    have := chain_iff (segsOf rs) 0 n
+    popOk p query design n = (chain (segsOf design rs) 0 n && decide (n ≤ gs.size)) := by
+  have hc : chain (segsOf design rs) 0 n = decide (segUnits (segsOf design rs) = List.range n) := by
+    have := chain_iff (segsOf design rs) 0 n
     rw [Nat.zero_add, ← List.range_eq_range'] at this
-    by_cases h : segUnits (segsOf rs) = List.range n
+    by_cases h : segUnits (segsOf design rs) = List.range n
     · simp [this.2 h, h]
-    · have : chain (segsOf rs) 0 n = false := by
-        cases hh : chain (segsOf rs) 0 n
+    · have : chain (segsOf design rs) 0 n = false := by
+        cases hh : chain (segsOf design rs) 0 n
         · rfl
         · exact absurd (this.1 hh) h
       rw [this]; simp [h]
   rw [hc]
-  by_cases hall : ∀ u ∈ segUnits (segsOf rs), u < gs.size
-  · obtain ⟨l, hl, hu⟩ := layout_ok p query rs gs h1 h2 hall
+  by_cases hall : ∀ u ∈ segUnits (segsOf design rs), u < gs.size
+  · obtain ⟨l, hl, hu⟩ := layout_ok p query design rs gs h1 h2 hall
     unfold popOk
     rw [hl]
     simp only [hu]
@@ -272,16 +272,16 @@ theorem popOk_of (p : Program) (query : Json) (n : Nat) (rs : Array Flock.Templa
       | zero => exact Nat.zero_le _
       | succ k => exact hall k (by rw [h]; simp)
     · exact fun h => h.1
-  · obtain ⟨u, hu, hge⟩ : ∃ u ∈ segUnits (segsOf rs), gs.size ≤ u := by
+  · obtain ⟨u, hu, hge⟩ : ∃ u ∈ segUnits (segsOf design rs), gs.size ≤ u := by
       simp only [Classical.not_forall, Nat.not_lt] at hall
       obtain ⟨u, hu, h⟩ := hall
       exact ⟨u, hu, h⟩
-    obtain ⟨e, he⟩ := layout_err p query rs gs h1 h2 u hu hge
+    obtain ⟨e, he⟩ := layout_err p query design rs gs h1 h2 u hu hge
     unfold popOk
     rw [he]
     symm
     simp only [Bool.and_eq_false_iff, decide_eq_false_iff_not]
-    by_cases h : segUnits (segsOf rs) = List.range n
+    by_cases h : segUnits (segsOf design rs) = List.range n
     · right
       have : u < n := by rw [h] at hu; simpa using hu
       omega
@@ -290,13 +290,13 @@ theorem popOk_of (p : Program) (query : Json) (n : Nat) (rs : Array Flock.Templa
 /-- `popOk` runs as `popOkRanges`: the layout's population is defined and its slot `u` is unit `u` exactly when the
 query's strata chain `0, …, n - 1` and every such unit has gates. -/
 @[csimp] theorem popOk_eq_popOkRanges : @popOk = @popOkRanges := by
-  funext p query n
+  funext p query design n
   unfold popOkRanges
   cases h1 : Partition.evaluate p query with
   | error e => unfold popOk layout; rw [h1]; rfl
   | ok rs =>
     cases h2 : Partition.unitGates p query with
     | error e => unfold popOk layout; rw [h1, h2]; rfl
-    | ok gs => exact popOk_of p query n rs gs h1 h2
+    | ok gs => exact popOk_of p query design n rs gs h1 h2
 
 end Spot.Slots

@@ -78,12 +78,21 @@ def inputGatesFast (d : Desc) : Array Nat := Id.run do
   funext d
   simp only [inputGates, inputGatesFast, Partition.look_gTable]
 
-/-- The claims' partition over the verifier's own program `p` under `query` (`Partition.evaluate`): the population's
-strata, then the input class. An error where the query doesn't apply. -/
-def layout (p : Program) (query : Json) : V SlotOrder := do
+/-- Whether the sampling design `design` is a subset one, All among them: the one design whose draw reads no stratum
+(`Flock.Draw.drawWith`'s `subset`), so the population it samples is one stratum. -/
+def uniform (design : Json) : Bool := jsonStrIs (getD design "law") "subset"
+
+/-- The query's ranges `rs` as the strata `design` reads them group them (`Flock.Draw.strataOf`): one stratum a
+template, or one stratum of every range under a subset design (`uniform`), in the order the query numbers the units. -/
+def rangesOf (design : Json) (rs : Array Flock.TemplateQuery.TRange) : Array (String × Nat × Nat) :=
+  rs.map fun r => (if uniform design then "" else r.template, r.first, r.count)
+
+/-- The claims' partition over the verifier's own program `p` under `query` (`Partition.evaluate`) for the sampling
+design `design`: the population's strata (`rangesOf`), then the input class. An error where the query doesn't apply. -/
+def layout (p : Program) (query design : Json) : V SlotOrder := do
   let rs ← Partition.evaluate p query
   let gs ← Partition.unitGates p query
-  let strata := Flock.Draw.strataOf (rs.map fun r => (r.template, r.first, r.count))
+  let strata := Flock.Draw.strataOf (rangesOf design rs)
   let pop ← strata.mapM fun (_, ranges) =>
     (ranges.flatMap fun (lo, hi) => (Array.range (hi - lo)).map (lo + ·)).mapM fun u => do
       let some g := gs[u]? | throw s!"unit {u} has no gates"
@@ -94,11 +103,12 @@ def layout (p : Program) (query : Json) : V SlotOrder := do
 /-- A layout's population: its first class's proof blocks, in slot order. -/
 def popOf (l : SlotOrder) : List ProofBlock := ((l.classes.toList.headD #[]).toList.map Array.toList).flatten
 
-/-- **The population is the registration's `n` units, in order**: the layout of `p` under `query` is defined, and its
-population is `n` proof blocks with slot `u` unit `u`. The run refuses a registration whose program and query fail it
-(`Run.run`, `population-order`): the sampled audit's knowledge soundness reads slot `u` as the game's unit `u`. -/
-def popOk (p : Program) (query : Json) (n : Nat) : Bool :=
-  match layout p query with
+/-- **The population is the registration's `n` units, in order**: the layout of `p` under `query` for `design` is
+defined, and its population is `n` proof blocks with slot `u` unit `u`. The run refuses a registration whose program and
+query fail it (`Run.run`, `population-order`): the sampled audit's knowledge soundness reads slot `u` as the game's unit
+`u`. -/
+def popOk (p : Program) (query design : Json) (n : Nat) : Bool :=
+  match layout p query design with
   | .error _ => false
   | .ok l => decide ((popOf l).map (·.unit) = (List.range n).map some)
 
@@ -111,7 +121,8 @@ def checked (l : SlotOrder) (proved : Array Nat) : Array Nat :=
 `Select.select`'s sample on the coins `src` proves. An error where either is. -/
 def select (rule : Select.Rule) (p : Program) (query : Json) (table : Option Json) (cm : Option (Array (Int × Array Int)))
     (src : ByteArray) : V (SlotOrder × Array Nat) := do
-  let l ← layout p query
+  let n ← Partition.units p query
+  let l ← layout p query (← (← Select.resolve rule p query).samplingDesignOver n)
   let (_, proved, _) ← Select.select rule p query table cm src
   return (l, checked l proved)
 

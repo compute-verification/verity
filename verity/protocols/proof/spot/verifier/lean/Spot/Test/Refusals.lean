@@ -75,6 +75,25 @@ def evidence (log : Json) : OneStageZk.Evidence :=
 
 #guard why? (OneStageZk.popHeld V3 (Json.mkObj [("population", (2 : Nat))])) == OneStageZk.POPULATION_ORDER
 
+/-- Ranges of templates `(t, first, count)`, as the query lists them. -/
+def tranges (rs : List (String × Nat × Nat)) : Array Flock.TemplateQuery.TRange :=
+  rs.toArray.map fun (template, first, count) => { node := 0, template, first, count }
+
+def SUBSET : Json := Json.mkObj [("law", "subset"), ("k", (1 : Nat))]
+def STRATIFIED : Json := Json.mkObj [("law", "stratified"), ("k", (1 : Nat))]
+
+-- PAIR, TRIPLE, PAIR: one stratum `[0, 7)` under a subset design, which chains; `PAIR [0, 2) [5, 7)`, `TRIPLE [2, 5)`
+-- under a stratified one, which doesn't
+#guard Slots.segsOf SUBSET (tranges [("PAIR", 0, 2), ("TRIPLE", 2, 3), ("PAIR", 5, 2)]) == [(0, 7)]
+#guard Slots.chain (Slots.segsOf SUBSET (tranges [("PAIR", 0, 2), ("TRIPLE", 2, 3), ("PAIR", 5, 2)])) 0 7
+#guard Slots.segsOf STRATIFIED (tranges [("PAIR", 0, 2), ("TRIPLE", 2, 3), ("PAIR", 5, 2)]) == [(0, 2), (5, 7), (2, 5)]
+#guard !Slots.chain (Slots.segsOf STRATIFIED (tranges [("PAIR", 0, 2), ("TRIPLE", 2, 3), ("PAIR", 5, 2)])) 0 7
+-- the contiguous layout chains under both
+#guard Slots.chain (Slots.segsOf SUBSET (tranges [("PAIR", 0, 4), ("TRIPLE", 4, 3)])) 0 7
+#guard Slots.chain (Slots.segsOf STRATIFIED (tranges [("PAIR", 0, 4), ("TRIPLE", 4, 3)])) 0 7
+-- a member under a subset design reads the registration's strata as one stratum
+#guard FilePart.one #[("PAIR", #[(0, 2), (5, 7)]), ("TRIPLE", #[(2, 5)])] == #[("", #[(0, 7)])]
+
 #guard why? (OneStageZk.heldReadsOf { V3 with query := Json.mkObj [("name", "Q_unit"), ("params", Json.mkObj []),
   ("version", (0 : Nat))] }) == OneStageZk.HELD_QUERY_WHY
 

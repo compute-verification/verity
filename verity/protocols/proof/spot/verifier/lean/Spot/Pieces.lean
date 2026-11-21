@@ -486,19 +486,20 @@ def slots (j : Json) : V Json := do
   return Json.mkObj [("classes", l.toJson),
     ("checked", Json.arr (checked.map fun v => Json.arr #[Lean.toJson v, Lean.toJson (0 : Nat)]))]
 
-/-- `{"program", "query", "population"}` to `{"ranges", "layout"}`: `Slots.popOk`, which runs as `Slots.popOkRanges`,
-and `popOk`'s own statement read off `Slots.layout`'s population; refused where the program, query or population isn't
-one. -/
+/-- `{"program", "query", "design", "population"}` to `{"ranges", "layout"}`: `Slots.popOk` for the sampling design
+`design`, which runs as `Slots.popOkRanges`, and `popOk`'s own statement read off `Slots.layout`'s population; refused
+where the program, query or population isn't one. -/
 def popOrder (j : Json) : V Json := do
   let .obj _ := getD j "program" | throw "program is not an object"
   let .obj _ := getD j "query" | throw "query is not an object"
   let some n := (getD j "population").getNat?.toOption | throw "population is not a natural number"
   let p ← Program.parse (← Flock.canon (getD j "program")).toUTF8
   let q := getD j "query"
-  let layout : Bool := match Slots.layout p q with
+  let d := getD j "design"
+  let layout : Bool := match Slots.layout p q d with
     | .error _ => false
     | .ok l => decide ((Slots.popOf l).map (·.unit) = (List.range n).map some)
-  return Json.mkObj [("ranges", Lean.toJson (Slots.popOk p q n)), ("layout", Lean.toJson layout)]
+  return Json.mkObj [("ranges", Lean.toJson (Slots.popOk p q d n)), ("layout", Lean.toJson layout)]
 
 /-- `{"draw", "proved_units", "instances"}`, a sample whose units (and closure) are integers, to `check_proved`'s codes. -/
 def checkProved (j : Json) : V Json := do

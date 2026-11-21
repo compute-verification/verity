@@ -187,12 +187,14 @@ def Own.circuitFile (p : Own) : V ByteArray :=
   restrictOn (pure p.programJ) p.prog.get p.blocks.get p.cuts.get p.partition p.first
 
 /-- A member of the per-member form: its name, its units as `[lo, hi)` ranges, ascending, its circuit's units a proof
-block (META `vus_per_block`) and its statement's own inputs. -/
+block (META `vus_per_block`), its statement's own inputs, and whether the verifier's sampling design is a subset one
+(`Slots.uniform`, `membersParamsOfJson`), under which the population is one stratum (`Member.heldAt`). -/
 structure Member where
   name : String
   units : Array (Nat × Nat)
   g : Nat
   own : Own
+  subset : Bool := false
 
 /-- The parameters: v1's, the verifier's own inputs, and in the per-member form (module docstring, **per member**)
 its members, `own` then holding C and the partition every member's statement reads and no file. -/
@@ -1078,14 +1080,14 @@ def POPULATION_ORDER : String :=
   "population-order: the program's proof blocks under the query are not the registration's population units in order"
 
 /-- The registration's population held to the verifier's program (module docstring, **population**): the record names
-a population `n`, and under the verifier's query the program's proof blocks are its `n` units in order
-(`Slots.popOk`). This module imports `Spot.PopOrder`, so the call runs from the query's ranges
+a population `n`, and under the verifier's query the program's proof blocks, laid out for the verifier's sampling design
+(`Slots.layout`), are its `n` units in order (`Slots.popOk`). This module imports `Spot.PopOrder`, so the call runs from the query's ranges
 (`Slots.popOk_eq_popOkRanges`) and builds no proof block: without the import it would run `Slots.layout`, a proof block
 for every input gate of the root. -/
 def popHeld (v : Docket.Verifier) (record : Json) : V Unit :=
   match nat? (getD record "population") with
   | none => throw "the record names no population"
-  | some n => if Slots.popOk v.program v.query n then pure () else throw POPULATION_ORDER
+  | some n => if Slots.popOk v.program v.query v.samplingDesign n then pure () else throw POPULATION_ORDER
 
 /-- The challenger session's release log in the evidence's `coins`, a line each, as `Challenger.trustedTreesOf` reads
 it. -/
@@ -1269,7 +1271,8 @@ def membersParamsOfJson (j : Json) : V Params := do
   let one := Json.mkObj [("public", Json.str NO_FILE), ("registered", Json.null)]
   let p ← paramsParsed (Json.mkObj (without j "proofs" ++ [("proofs", one)]))
   let own := { p.own with pub := "" }
-  let ms ← membersOf own (getD pr "members")
+  let subset := Slots.uniform p.base.verifier.samplingDesign
+  let ms := (← membersOf own (getD pr "members")).map fun m => { m with subset }
   pure { p with base := { p.base with verifier := { p.base.verifier with members := ms.map fun m => (m.units, m.g) } },
                 own, members := some ms }
 
@@ -1373,10 +1376,11 @@ def MEMBER_STRATA : String :=
     "member's is past them: a member's strata are the registration's, each restricted to the member's units"
 
 /-- A member's population check at the registration's `strata` and its public file's header `h`: the member's strata
-are the registration's restricted to its units (`Member.sizes`), and the header's units are exactly the member's, in
-order (`unitsHeld`). -/
+are the registration's restricted to its units (`Member.sizes`), the registration's read as one stratum under a subset
+design (`m.subset`, `FilePart.one`), as `Slots.layout` lays them out; and the header's units are exactly the member's,
+in order (`unitsHeld`). -/
 def Member.heldAt (m : Member) (strata : Array (String × Array (Nat × Nat))) (h : Json) : V Unit :=
-  match m.sizes strata with
+  match m.sizes (if m.subset then FilePart.one strata else strata) with
   | none => throw MEMBER_STRATA
   | some _ => if unitsHeld m.indices h then pure () else throw MEMBER_UNITS
 

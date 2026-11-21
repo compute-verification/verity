@@ -9,7 +9,9 @@ check the stream ran on it, in the stream's order.
   whose strata or table don't apply), then R1–R8 (`Docket.check`) against the challenger's copies under the sampling design the rule names over
   that population (`Select.Rule.samplingDesignOver`, whatever sampling design the copies carry) and that work table, a `bernoulli` sampling
   design at any `p` (`Draw.bernoulli`: `bernoulli`), a
-  program and query whose population is not the registration's units in order (`Slots.popOk`: `population-order`), and
+  program and query whose population, laid out for that sampling design (`Slots.layout`: one stratum under a subset
+  design, one a template under any other), is not the registration's units in order (`Slots.popOk`:
+  `population-order`), and
   the receipt (`registration.receipt`);
 * `select`: a closure map, refused before any coin is read (`closure`: a work sample widened by one is outside the
   sampled audit's soundness statement); the sample of record on the bytes of the challenger's coins (`Select.select`,
@@ -315,7 +317,7 @@ def interiorSteps (i : Input) (it : Interior) (k : Select.Counts) (sample : Arra
   let v := { v with samplingDesign := Json.mkObj [("law", "subset"), ("k", Lean.toJson m)] }
   let codes := Docket.check it.record v
   if !codes.isEmpty then return .error ("interiors", codes)
-  if !Slots.popOk v.program v.query m then return .error ("interiors", #["population-order"])
+  if !Slots.popOk v.program v.query v.samplingDesign m then return .error ("interiors", #["population-order"])
   if !tablesServed i.record it.params.tables then return .error ("interiors", #["interior-table"])
   let receipt ← receipt it.record i.challenger it.received
   let (draw, read) ← Select.selectSecond sample ns ks it.source
@@ -384,7 +386,7 @@ def run (i : Input) : V Json := do
   let codes := Docket.check i.record v
   if !codes.isEmpty then return refused "register" codes
   if Draw.bernoulli samplingDesign then return refused "register" #["bernoulli"]
-  if !Slots.popOk v.program v.query n then return refused "register" #["population-order"]
+  if !Slots.popOk v.program v.query v.samplingDesign n then return refused "register" #["population-order"]
   let receipt ← receipt i.record i.challenger i.received
   let derived ← Draw.derive v.program v.query samplingDesign v.workTable
   if i.closure.isSome then return refused "select" #["closure"]

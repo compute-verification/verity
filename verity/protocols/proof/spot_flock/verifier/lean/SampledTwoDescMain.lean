@@ -44,7 +44,7 @@ def clauses (p : SampledTwo.Params) (bs : Core.Blobs) (i : Spot.Run.Input) (it :
       | .ok _ => none
     .error s!"refsOf ({"; ".intercalate errs})"
   | some f, some (ns, ks), some rs =>
-    match (Spot.Slots.layout f.verifier.program f.verifier.query).toOption,
+    match (Spot.Slots.layout f.verifier.program f.verifier.query f.verifier.samplingDesign).toOption,
         (firstSamplingDesign f.rule f.verifier.program f.verifier.query f.verifier.workTable).toOption with
     | none, _ => .error "layout"
     | _, none => .error "firstLaw"
@@ -90,7 +90,7 @@ output bits against the bound, and the template's units (requests times cells), 
 def sizes (p : SampledTwo.Params) (bs : Core.Blobs) (i : Spot.Run.Input) (it : Spot.Run.Interior) : List String :=
   match firstOf i, cellsOf i it, refsOf p bs with
   | some f, some (ns, ks), some rs =>
-    match (Spot.Slots.layout f.verifier.program f.verifier.query).toOption with
+    match (Spot.Slots.layout f.verifier.program f.verifier.query f.verifier.samplingDesign).toOption with
     | some l =>
       let cs := circsOf rs
       (List.range it.circuits.size).map fun t =>

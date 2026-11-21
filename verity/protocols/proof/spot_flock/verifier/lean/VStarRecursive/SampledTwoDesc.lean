@@ -440,7 +440,7 @@ and one of 4,096 returning 32 counts 4,128. What it refuses beyond `Spot.Partiti
 def descOk (p : SampledTwo.Params) (bs : Core.Blobs) (i : Spot.Run.Input) (it : Spot.Run.Interior) : Bool :=
   match firstOf i, cellsOf i it, refsOf p bs with
   | some f, some (ns, ks), some rs =>
-    match (Spot.Slots.layout f.verifier.program f.verifier.query).toOption,
+    match (Spot.Slots.layout f.verifier.program f.verifier.query f.verifier.samplingDesign).toOption,
         (firstSamplingDesign f.rule f.verifier.program f.verifier.query f.verifier.workTable).toOption with
     | some l, some samplingDesign =>
       let T := it.circuits.size

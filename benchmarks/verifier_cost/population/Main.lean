@@ -39,7 +39,7 @@ def row (fn : String) (units ms : Nat) (extra : List (String × Json)) : IO Unit
 
 /-- `Slots.popOk` as it is stated, off `Slots.layout`'s population. -/
 def popOkLayout (p : Program) (q : Json) (n : Nat) : Bool :=
-  match Slots.layout p q with
+  match Slots.layout p q .null with
   | .error _ => false
   | .ok l => decide ((Slots.popOf l).map (·.unit) = (List.range n).map some)
 
@@ -73,7 +73,7 @@ def main (args : List String) : IO UInt32 := do
     fun r => match r with | .ok a => a.size | .error _ => 0
   let gs ← IO.ofExcept gs
   row "unitGates" pop ms [("defs", toJson p.desc.defs.size), ("ranges", toJson rs.size)]
-  let (ok, ms) ← timed (fun t => t != 0 && Slots.popOk p q n) fun b => if b then 1 else 0
+  let (ok, ms) ← timed (fun t => t != 0 && Slots.popOk p q .null n) fun b => if b then 1 else 0
   row "popOk" pop ms [("ok", toJson ok)]
   if !ok then
     IO.eprintln "popOk refused the population"
@@ -93,7 +93,7 @@ def main (args : List String) : IO UInt32 := do
       return 1
     for m in [n, n - 1, n + 1] do
       let (lay, ms) ← timed (fun t => t != 0 && popOkLayout p q m) fun b => if b then 1 else 0
-      let ranges := Slots.popOk p q m
+      let ranges := Slots.popOk p q .null m
       row "popOkLayout" m ms [("ok", toJson lay), ("agree", toJson (lay == ranges))]
       if lay != ranges then
         IO.eprintln s!"popOk from the ranges and from the layout disagree at {m} units"

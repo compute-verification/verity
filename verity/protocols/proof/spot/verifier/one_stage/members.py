@@ -981,6 +981,17 @@ def registered_reads(registered: Mapping[str, Any] | None) -> tuple[set[tuple[st
     return {(p, e["value"]) for p, e in held.items()}, held
 
 
+def resolved(params: Mapping[str, Any], program: Program) -> Any:
+    """The parameters' `law` as Lean's `OneStage.design` resolves it before any check reads it
+    (`service.params_sampling_design`): a rate to its sampling design over the program's population, an object as given;
+    None where it does not resolve, which the parameters' check refuses."""
+    from verity.protocols.proof.spot.verifier.service import params_sampling_design
+    try:
+        return params_sampling_design(params.get("law"), program, params["query"], params.get("work_table"))[0]
+    except ValueError:
+        return None
+
+
 def population_why(units: Sequence[Sequence[int]], strata: Sequence[tuple[str, Sequence[Sequence[int]]]], header: Any,
                    slice_: Mapping[str, Any], reads: Collection[tuple[str, str]] = (),
                    held: Mapping[str, Any] | None = None) -> str | None:
@@ -1211,7 +1222,8 @@ def _members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence:
         _trees_held(trees, log, sts, blobs)
         if not _nat(record.get("population")):
             raise _Refused("the record names no population")
-        if not P.in_order(program, params["query"], record["population"]):
+        design = resolved(params, program)
+        if not P.in_order(program, params["query"], record["population"], design):
             raise _Refused(POPULATION_ORDER)
         _laid(ms, record)
         _held_read(ms, params, program)
@@ -1224,6 +1236,8 @@ def _members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence:
         _sampled(ms, held, evidence["proved_units"])
         try:
             strata: Any = P.strata(program, params["query"])
+            if P.subset(design):
+                strata = P.one_stratum(strata)
         except (P.QueryRefused, ValueError) as e:
             strata = e
         files = {name: _files(name, m, blobs, descriptor, params["partition"], strata,

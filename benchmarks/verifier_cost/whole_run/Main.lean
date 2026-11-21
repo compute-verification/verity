@@ -92,8 +92,8 @@ def runSteps (j : Json) (whole steps : Bool) : IO Unit := do
     (fun r => match r with | .ok rs => [("ranges", toJson rs.size)] | .error _ => [])
   let _ ← timed "partition.unitGates" v.program (fun pr => Partition.unitGates pr v.query) isOk
   let _ ← timed "slots.inputGates" v.program.desc Slots.inputGates (fun _ => true) (fun a => [("gates", toJson a.size)])
-  let _ ← timed "slots.layout" v.program (fun pr => Slots.layout pr v.query) isOk
-  let _ ← timed "popOk" v.program (fun pr => Slots.popOk pr v.query n) id
+  let _ ← timed "slots.layout" v.program (fun pr => Slots.layout pr v.query v.samplingDesign) isOk
+  let _ ← timed "popOk" v.program (fun pr => Slots.popOk pr v.query v.samplingDesign n) id
   let receipt ← IO.ofExcept (← timed "receipt" rec_ (fun r => Run.receipt r challenger received) isOk)
   let derived ← IO.ofExcept (← timed "derive" v.program (fun pr => Draw.derive pr v.query samplingDesign v.workTable) isOk)
   let res ← IO.ofExcept (← timed "resolve" v.program (fun pr => Select.resolve rule pr v.query) isOk)
@@ -153,7 +153,7 @@ def descSteps (j : Json) (unitGates ref popOk : Bool) : IO UInt32 := do
       if !agree then return 1
   if popOk then
     let n := Flock.TemplateQuery.population rs
-    let _ ← timed "slots.popOk" p (fun pr => Slots.popOk pr q n) id (fun b => [("ok", toJson b)])
+    let _ ← timed "slots.popOk" p (fun pr => Slots.popOk pr q .null n) id (fun b => [("ok", toJson b)])
   return 0
 
 def main (args : List String) : IO UInt32 := do

@@ -1170,8 +1170,9 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             # Lean's members check reads them off that file (`Member.reads`)
             opened |= {(p, e["value"]) for p, e in ((registered or {}).get(m.key) or {}).get("ports", {}).items()
                        if REG.is_fresh_value(e.get("value"))}
-            why = form if isinstance(form, str) else MB.population_why([[m.base, m.base + m.n]], form[0], header, form[1][m.key],
-                                                                        opened)
+            mstrata = P.one_stratum(form[0]) if not isinstance(form, str) and P.subset(mine.law) else form[0]
+            why = form if isinstance(form, str) else MB.population_why([[m.base, m.base + m.n]], mstrata, header,
+                                                                        form[1][m.key], opened)
             ok = {"pin": header.get("circuit_sha512") == made["pin"],
                   "partition": meta.get("partition") == {"rule": P.FORMAT, "digest": pd},
                   "program": meta.get("program_sha512") == part["program"],

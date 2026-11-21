@@ -70,6 +70,7 @@ from verity.circuits.library import TABLES
 from verity.protocols.proof.spot.verifier.challenger.challenger import SAMPLE_LINK_FIRST, _nat, sample_link_first
 from verity.commitments.docket_digest import digest as registration_digest
 from . import one_circuit as OC
+from .partition import one_stratum
 from .verifier import BUILD_LOCK, ROOT
 from .verifier import PACKAGE as V2_PACKAGE
 from .settings import TMPL_SWITCH, door_tmpl, lean_env
@@ -583,7 +584,7 @@ def verify(proof: Proof, *, program: bytes, partition: Mapping[str, Any], draw: 
     if (why := next(filter(None, map(not_zk_why, lines)), None)) is not None:
         return None, ("proof", why)
     want = partition.get("program")
-    population = (population_why(_header(proof.public)["units"]["indices"], strata)
+    population = (population_why(_header(proof.public)["units"]["indices"], one_stratum(strata))
                   if accepted and strata is not None else None)
     out = []
     for s, v in zip(proof.sessions, lines):

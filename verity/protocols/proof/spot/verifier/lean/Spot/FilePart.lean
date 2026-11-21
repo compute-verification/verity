@@ -153,6 +153,11 @@ def sizes (strata : Array (String × Array (Nat × Nat))) : Option (Array Nat) :
     out := out.push (at_ - lo)
   return out
 
+/-- **The strata as one stratum**: every unit of `strata`, `[0, N)` at their count `N`, as `Slots.layout` lays out the
+population under a subset design (`Slots.rangesOf`): the query numbers its units `0, 1, …` in node order. -/
+def one (strata : Array (String × Array (Nat × Nat))) : Array (String × Array (Nat × Nat)) :=
+  #[("", #[(0, strata.foldl (fun n (_, rs) => rs.foldl (fun n (lo, hi) => n + (hi - lo)) n) 0)])]
+
 /-- **Why the registration's population is not the circuit file's units in order** (module docstring), none when it is:
 `strata` the registration's (`Partition.strata`), `indices` the public file's `units.indices`. -/
 def why (strata : Array (String × Array (Nat × Nat))) (indices : Array Nat) : Option String :=
@@ -189,10 +194,11 @@ def unitIndices (pubB : ByteArray) : V (Array Nat) := do
   indicesOf (← header pubB)
 
 /-- **The population check on the files** (`why`): the registration's strata over the verifier's program (its
-descriptor's bytes) and query, against the public file's units. -/
+descriptor's bytes) and query, read as one stratum (`one`), against the public file's units: the one statement's
+design is a subset one (`SUBSET_ONLY`), whose layout is one stratum (`Slots.layout`). -/
 def check (program : ByteArray) (query : Json) (pubB : ByteArray) : V Unit := do
   let strata ← Partition.strata (← Program.parse program) query
-  if let some w := why strata (← unitIndices pubB) then throw w
+  if let some w := why (one strata) (← unitIndices pubB) then throw w
 
 /-- `{"program", "query", "indices"}` or `{"program", "query", "public"}` to `{"why"}`: `why` on the strata of the query
 over the program, against the given `indices` or the units the public file (`public`, its bytes in hex) names

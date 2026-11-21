@@ -83,12 +83,37 @@ def unit_gates(program: Program, query: Mapping[str, Any]) -> list[tuple[int, in
     return out
 
 
-def in_order(program: Program, query: Mapping[str, Any], n: int) -> bool:
+def subset(design: Any) -> bool:
+    """`Slots.uniform`: the sampling design `design` is a subset one, All among them, whose draw reads no stratum."""
+    return isinstance(design, Mapping) and design.get("law") == "subset"
+
+
+def layout_strata(program: Program, query: Mapping[str, Any], design: Any) -> list[tuple[str, list[list[int]]]]:
+    """`Slots.rangesOf`'s strata: one a template (`strata`), or under a subset design (`subset`) one stratum of every range,
+    in the order the query numbers the units."""
+    if not subset(design):
+        return strata(program, query)
+    rs: list[list[int]] = []
+    for _tid, lo, n in ranges(program, query):
+        if rs and rs[-1][1] == lo:
+            rs[-1][1] = lo + n
+        else:
+            rs.append([lo, lo + n])
+    return [("", rs)] if rs else []
+
+
+def one_stratum(ss: Sequence[tuple[str, Sequence[Sequence[int]]]]) -> list[tuple[str, list[list[int]]]]:
+    """`FilePart.one`: every unit of the strata `ss` as one stratum, ``[0, N)`` at their count ``N``."""
+    return [("", [[0, sum(hi - lo for _t, rs in ss for lo, hi in rs)]])]
+
+
+def in_order(program: Program, query: Mapping[str, Any], n: int, design: Any = None) -> bool:
     """`Slots.popOk`: `query` applies to `program`, every proof block has its gates (`unit_gates`), and the proof blocks read stratum by
-    stratum (`strata`) are `0, ..., n - 1` in order, so slot `u` is proof block `u`. The run refuses a docket whose program
-    and query fail it (`population-order`): the sampled audit's knowledge soundness reads slot `u` as the game's proof block `u`."""
+    stratum as the sampling design `design` reads them (`layout_strata`: one stratum under a subset design) are `0, ..., n - 1`
+    in order, so slot `u` is proof block `u`. The run refuses a docket whose program and query fail it
+    (`population-order`): the sampled audit's knowledge soundness reads slot `u` as the game's proof block `u`."""
     try:
-        ss, gates = strata(program, query), unit_gates(program, query)
+        ss, gates = layout_strata(program, query, design), unit_gates(program, query)
     except (QueryRefused, ValueError):
         return False
     us = [u for _t, rs in ss for lo, hi in rs for u in range(lo, hi)]
@@ -255,6 +280,6 @@ def _merged(rs: Sequence[tuple[int, int]]) -> list[tuple[int, int]]:
     return out
 
 
-__all__ = ["template_id", "FORMAT", "QueryRefused", "digest", "evaluate", "fanout", "in_order", "is_template_query", "partition",
-           "program_digest", "program_sha512", "ranges", "run_inputs", "shared_inputs", "strata", "template_instance_query",
+__all__ = ["template_id", "FORMAT", "QueryRefused", "digest", "evaluate", "fanout", "in_order", "is_template_query", "layout_strata", "one_stratum", "partition",
+           "program_digest", "program_sha512", "ranges", "run_inputs", "shared_inputs", "strata", "subset", "template_instance_query",
            "template_instances_query", "unit_gates", "units", "within", "QUERY_X"]
