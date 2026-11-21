@@ -142,6 +142,17 @@ def input_prim(w: int, binding: str = RUN) -> PrimitiveDefinition:
     return p
 
 
+def input_nodes(t: Type) -> int:
+    """The input nodes `_lower_input` makes for a parameter of type ``t``."""
+    if t.homogeneous_width() is not None:
+        return 1 if t.leaves else 0
+    if isinstance(t, (RecordType, TupleT)):
+        return sum(input_nodes(ft) for _k, ft in t.fields)
+    if isinstance(t, Array):
+        return t.n * input_nodes(t.elem)
+    raise TypeError(t)
+
+
 def _lower_input(B: Builder, t: Type, name: str, binding: str = RUN) -> Coll:
     w = t.homogeneous_width()
     if w is not None:
@@ -235,6 +246,14 @@ class Program:
     def input_coll(self, pi: int) -> Coll:
         """Root-scoped gate indices of prescribed parameter `pi`, as a typed collection over gate indices."""
         return self.root.input_colls[pi]  # type: ignore[attr-defined]
+
+    def inputs_entry(self) -> list[list[Any]] | None:
+        """The descriptor's top-level `inputs` (PROTOCOL.md §5.4): every parameter in order, `[name, n]` with ``n`` its
+        input nodes, a supplied one's `[name, n, mark]`; none where nothing is supplied or a supplied parameter has no mark
+        (a block `restrict` cuts), so such a Program's descriptor is as before."""
+        if not self.supplied or any(m is None for m in self.supplied.values()):
+            return None
+        return [[n, input_nodes(t), *([dict(self.supplied[n])] if n in self.supplied else [])] for n, t in self.fn.signature()[0]]
 
 
 def _lower_root(fn: SpecializedDefinition, bindings: tuple[str, ...] | None = None,
