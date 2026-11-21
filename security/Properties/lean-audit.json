@@ -119,6 +119,7 @@
   "Properties.Poub.Remote.SubprotocolDeployed",
   "Properties.Poub.Remote.HonestLog",
   "Properties.Poub.Remote.HonestLog.Case",
+  "Properties.Poub.Remote.Instances",
   "Properties.Poub.Remote.InProofs",
   "Properties.Certifier.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod",
   "Properties.Certifier.JointBridge.WorkOfCreditedWords",
@@ -1623,18 +1624,23 @@
    "nontrivial": "Properties.Spot.PortsHeldProof.membersPortsHeld_nontrivial"
   },
   "Properties.Poub.acceptChecksOpenings": {
+   "honest": ["Properties.Poub.acceptChecksOpenings_honest"],
    "nontrivial": "Properties.Poub.acceptChecksOpenings_nontrivial"
   },
   "Properties.Poub.acceptOpensSamples": {
+   "honest": ["Properties.Poub.acceptOpensSamples_honest"],
    "nontrivial": "Properties.Poub.acceptOpensSamples_nontrivial"
   },
   "Properties.Poub.acceptSamplesOpenable": {
+   "honest": ["Properties.Poub.acceptSamplesOpenable_honest"],
    "nontrivial": "Properties.Poub.acceptSamplesOpenable_nontrivial"
   },
   "Properties.Poub.sampleIsSubset": {
+   "honest": ["Properties.Poub.sampleIsSubset_honest"],
    "nontrivial": "Properties.Poub.sampleIsSubset_nontrivial"
   },
   "Properties.Poub.Shared.acceptSamplesOpenable": {
+   "honest": ["Properties.Poub.Shared.acceptSamplesOpenable_honest"],
    "nontrivial": "Properties.Poub.Shared.acceptSamplesOpenable_nontrivial"
   },
   "Properties.Poub.Shared.acceptedSamplesOpenable": {
@@ -1645,6 +1651,10 @@
   },
   "Properties.Poub.Shared.sampleIsSubset": {
    "nontrivial": "Properties.Poub.Shared.sampleIsSubset_nontrivial"
+  },
+  "Properties.Poub.appendsInOrder": {
+   "honest": ["Properties.Poub.appendsInOrder_honest"],
+   "nontrivial": "Properties.Poub.appendsInOrder_nontrivial"
   }
  },
  "unwitnessed": {
@@ -1920,12 +1930,6 @@
    "type_hash": "733125bdbc556723e5c4874bc8724923cfb4d1029f6d1eb5a9da47c7aa83e3d9",
    "unfolded_hash": "5b95a1321738350f108c3f26dd9884f5a73c6f8060cc9a99e2d9eeced0645404"
   },
-  "Properties.Poub.Shared.acceptSamplesOpenable": {
-   "type_hash": "72932ebcdc9d0dac150fe57d860e5c28e27873cfbb4ad0c1d1004e4a23cf6630",
-   "unfolded_hash": "e8427bfa412b5db30c5837701ffe2ae0b43f97ca2f831794310b961b98d77736",
-   "missing": "honest",
-   "why": "no honest witness is listed: its honest witness's statement reads proofs-tree definitions (Properties.Poub.Line.Honest.params1, Properties.Poub.Line.Honest.reg1, Properties.Poub.overrun, Properties.Poub.window0 (Proofs.Properties.Poub.Remote.RecordAccepts)), so it is not listed; it returns when memory-accounting states those in the properties tree."
-  },
   "Properties.Poub.Shared.acceptedSamplesOpenable": {
    "type_hash": "06805356a8866fa934ab220b1a19e7dc189b637bc5a8f12df71fb85d9216ce25",
    "unfolded_hash": "7d572567278f2b175b8c3321c7f38482ebac6584d8e8ab89907f92e365444f56",
@@ -1962,32 +1966,9 @@
    "type_hash": "15ebef425510bcf7bd868d9a6db984bb76052200ea09f3c327fd44e25ad0dc13",
    "unfolded_hash": "88c1ce2f1e369e32a1b63cabcc35f029c7fdf9076f2284f53f8fe2e1ffa7bca4"
   },
-  "Properties.Poub.acceptChecksOpenings": {
-   "type_hash": "4fbeddbfd8ebc3764ce443b7a3bd3accf8712775a2ea153e91dd73497ffabba3",
-   "unfolded_hash": "a46eb5ea87d1167dc83f62b562e3147752003d7b55c338d6c8108d5e5ed88ca3",
-   "missing": "honest",
-   "why": "no honest witness is listed: its honest witness's statement reads proofs-tree definitions (Properties.Poub.honestCodec (Proofs.Properties.Poub.Remote.Schedule)), so it is not listed; it returns when memory-accounting states those in the properties tree."
-  },
-  "Properties.Poub.acceptOpensSamples": {
-   "type_hash": "0824e125486350cbca90c13f408e9a32fe9bad346667d3234f62693b9a83b368",
-   "unfolded_hash": "8dce49548ff266fa526b5c2e7c4a5891bc460ad2fbca7e940b82098c5a3969cb",
-   "missing": "honest",
-   "why": "no honest witness is listed: its honest witness's statement reads proofs-tree definitions (Properties.Poub.honestCodec (Proofs.Properties.Poub.Remote.Schedule)), so it is not listed; it returns when memory-accounting states those in the properties tree."
-  },
-  "Properties.Poub.acceptSamplesOpenable": {
-   "type_hash": "23efc3674e2e53558d10237762e2aef44fad5fae02091016cd49a3d264198c6d",
-   "unfolded_hash": "0627a953d7b79ff14a48151aa6c1d7407b4b928b34b79bd1598322975b27ea27",
-   "missing": "honest",
-   "why": "no honest witness is listed: its honest witness's statement reads proofs-tree definitions (Properties.Poub.honestCodec (Proofs.Properties.Poub.Remote.Schedule)), so it is not listed; it returns when memory-accounting states those in the properties tree."
-  },
   "Properties.Poub.acceptedMinPasses": {
    "type_hash": "e6b461579b7c18b1f5700db1476b82564d659074a6ee381ea04f930a6b203ab2",
    "unfolded_hash": "21908df058c5173e83972f3c298e8dc6ff907de180dead7a87075e18e5a86e0d"
-  },
-  "Properties.Poub.appendsInOrder": {
-   "type_hash": "c48ed9f56bac401f1424ec8c1d301d878459fbd7f571eba05213f38f456f752b",
-   "unfolded_hash": "ef1530ccdd345492b3f0f4c85994fc35aada8306956da682e1e0d6082438ff85",
-   "why": "no witness is listed: its honest and nontrivial witnesses' statements read proofs-tree definitions (Properties.Poub.Line.Honest.params1, Properties.Poub.Line.Honest.reg1, Properties.Poub.overrun, Properties.Poub.window0 (Proofs.Properties.Poub.Remote.RecordAccepts); Properties.Poub.honestCodec (Proofs.Properties.Poub.Remote.Schedule)), so they are not listed; they return when memory-accounting states those in the properties tree."
   },
   "Properties.Poub.changedReadsDistinct": {
    "type_hash": "3567fe843c6c4f7018e4e854234128081962fba7a864074dfd00b296059aebfa",
@@ -2050,12 +2031,6 @@
   "Properties.Poub.releasedStayOut": {
    "type_hash": "f1641b2c9a2a8babc3fe8dd2026c94f9c95224f1069a41b5a07445e5226ac92c",
    "unfolded_hash": "aabd0bd0ff258e0bfe6a838e8cbe1d471a43da86c84e74bf52af8aaf3ffade7d"
-  },
-  "Properties.Poub.sampleIsSubset": {
-   "type_hash": "2478dc895508127d69a4cf3b2926faa65c0f79f6b9ad55350c96dd409ee1a99c",
-   "unfolded_hash": "c4fbc1d75f11591dfcf914072ef6d624bb4caf4b98673697af22a7db982e2da0",
-   "missing": "honest",
-   "why": "no honest witness is listed: its honest witness's statement reads proofs-tree definitions (Properties.Poub.Line.Honest.params1, Properties.Poub.Line.Honest.reg1, Properties.Poub.overrun, Properties.Poub.window0 (Proofs.Properties.Poub.Remote.RecordAccepts)), so it is not listed; it returns when memory-accounting states those in the properties tree."
   },
   "Properties.Poub.scheduleChecked": {
    "type_hash": "fa79b15871400e1ec705eadaa140e0a32cb18e891058edd46abbe00803e33ce6",
@@ -13700,6 +13675,27 @@
     ]
    },
    "type_hash": "7be5722effd046f635964f023dca25c90e739fb055dc677bb81837a5fcb7709d"
+  },
+  "Properties.Poub.Shared.acceptSamplesOpenable_honest": {
+   "owner": "@memory-accounting"
+  },
+  "Properties.Poub.appendsInOrder_honest": {
+   "owner": "@memory-accounting"
+  },
+  "Properties.Poub.appendsInOrder_nontrivial": {
+   "owner": "@memory-accounting"
+  },
+  "Properties.Poub.sampleIsSubset_honest": {
+   "owner": "@memory-accounting"
+  },
+  "Properties.Poub.acceptChecksOpenings_honest": {
+   "owner": "@memory-accounting"
+  },
+  "Properties.Poub.acceptOpensSamples_honest": {
+   "owner": "@memory-accounting"
+  },
+  "Properties.Poub.acceptSamplesOpenable_honest": {
+   "owner": "@memory-accounting"
   }
  },
  "shape": {
