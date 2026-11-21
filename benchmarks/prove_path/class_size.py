@@ -93,7 +93,7 @@ def _one(xs: list[Any], what: str) -> Any:
 
 
 def placed(lab: str, T: int, P: int) -> int | None:
-    """A Program's units of template ``lab`` at position T of its P, for a slot's template: `TokenFeed_v1` at each of its NP
+    """A Program's units of template ``lab`` at position T of its P, for a slot's template: a feed (`FEEDS`) at each of its NP
     prompt positions past the first, `ScanSlots_v5` at the first, `SelectEntry_v1` at the last and `SelectCollect_v1` at
     each other (its first the first's); None for any other, a fixed count at every position."""
     fam, s = statics(lab)
