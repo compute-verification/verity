@@ -277,7 +277,7 @@ def test_every_other_connection_gets_the_servers_own_answer():
                 b"POST /v1/completions HTTP/1.1\r\nhost: h\r\ncontent-length: 2\r\nconnection: close\r\n\r\n{}",
                 released(P)]
     server = Scripted(answer, connections=len(requests))
-    with Fronted(server.address) as f:
+    with Fronted(server.address, REL.ID_PAYLOAD) as f:
         assert [f.send(r) for r in requests] == [answer] * len(requests)
     server.join()
     assert server.requests == requests
