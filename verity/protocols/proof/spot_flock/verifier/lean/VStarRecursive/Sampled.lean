@@ -1,8 +1,8 @@
 /-
 SPOT (`verity/sampled-proofs/v1`), a `Core.BlobProtocol` with one entry, whose case is as many levels as its `levels`
 names: one level is one-stage v2's audit on the proofs themselves (`Spot.OneStageZk`), two levels the two-stage audit
-(`VStar.Recursive.SampledTwo`), read and checked, and accepted ahead of its soundness proof; 3 or more are refused as not
-built. One-stage v1 is refused (`V1_REFUSED`): its verdicts are the evidence's, and this audit's are its own run of the
+(`VStar.Recursive.SampledTwo`), whose parameters are read and then refused (`TWO_LEVELS_REFUSED`), since no soundness
+theorem covers its accept; 3 or more are refused as not built. One-stage v1 is refused (`V1_REFUSED`): its verdicts are the evidence's, and this audit's are its own run of the
 verifier.
 
 * **params**: `{"levels": 1 | 2, ...}`, one level where `levels` is absent, the rest that count's params. The auditor
