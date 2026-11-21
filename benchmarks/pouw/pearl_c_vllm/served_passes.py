@@ -125,12 +125,15 @@ and held to the names and SHA-256s
 that document gives them, the epoch's ``DIR/coins.json``, that document's samples, over-cap rule and test instance, the
 verifier's coin record it wrote (``DIR/coin.json``), which pins the Lean's source to the Python's, the W ``verify --tie``
 held the passes to with the class ``verify --class`` held them at, and, on a live session's coins, ``--of-record``, under which the Lean takes only a challenger sample
-(`lean_argv`, the one place the Lean's command line is written). It holds the Lean's printout to the Python's verdict on
-every field both give (`LEAN_HELD`: the verdict, its reason and refusal, the run's commitment and source, the over-cap
+(`lean_argv`, the one place the Lean's command line is written). It compares the Lean's printout with the Python's verdict
+on every field both give (`LEAN_HELD`: the verdict, its reason and refusal, the run's commitment and source, the over-cap
 rule, each opened tile's verdict, an accepted run's work and, where a class is held, the exact credit its grid form
-replaces, ``exact_work``), and its ``tie`` to the Python's: the same W at the same class's load, or none on both. Where they agree it writes the Lean's answer to ``--out`` (`lean_answer`: the
-printout with W at ``tie``), the file `served_verdicts.pearlplus_of_record` reads; where they don't, or the Lean doesn't
-answer within ``--timeout`` seconds, it writes none and removes any there. Either way both verdicts, the Lean's command
+replaces, ``exact_work``), and its ``tie`` with the Python's (the same W at the same class's load, or none on both), and
+records the fields that differ (``differ``) as a measurement that gates nothing: wherever the Lean gives a verdict it
+writes the Lean's answer to ``--out`` (`lean_answer`: the printout with W at ``tie``), the file
+`served_verdicts.pearlplus_of_record` reads, whatever the Python's says. Where the Lean gives none (the verify document
+recorded no coin or read other passes, the executable doesn't build or isn't there, or it doesn't answer within
+``--timeout`` seconds), it writes none and removes any there. Either way both verdicts, the Lean's command
 line, the executable's SHA-256, the line printed and, once the executable ran, its cost (``check_cost``, `check_cost`:
 its wall seconds on the node it ran on) go to ``--check`` (default `LEAN_CHECK` beside ``--out``). Prints one line and
 exits 0 on a written accept, 1 on a written reject and 2 when it wrote no answer. A written verdict's line starts

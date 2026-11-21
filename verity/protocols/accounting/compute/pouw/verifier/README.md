@@ -46,10 +46,10 @@ It needs no GPU.
 
 | Scheme | What it is |
 | --- | --- |
-| Pearl-C | Pearl's FP8 (E4M3) proof of useful work, on the H100 and the RTX PRO 6000. |
-| Pearl-C4 | Pearl-C on sm_120's NVFP4. Experimental. |
-| NCP | Noise-cancelling polarization over int7 activations. |
-| Dither | A design over the ACCEL model. Experimental, with its own `verity/protocols/experimental/dither/PROTOCOL.md`. |
+| Pearl-C | Pearl's FP8 (E4M3) proof of useful work. Served as Pearl+ on the H100 and H200 (`pearl-c-h100-v1-h3`); the RTX PRO 6000's scheme (`pearl-c-sm120-v1-h3`) has kernels and a build, and no Lean verifier or `verity run`. |
+| Pearl-C4 | Pearl-C on sm_120's NVFP4. Experimental: its kernels were deleted, and it has no Lean verifier or `verity run`. |
+| NCP | Noise-cancelling polarization over int7 activations. A kernel exists (`ncp-v2`); no Lean verifier or `verity run`. |
+| Dither | A design over the ACCEL model. Experimental, with its own `verity/protocols/experimental/dither/PROTOCOL.md`: kernels exist; no verifier or `verity run`. |
 
 ## What is proved
 
@@ -110,7 +110,9 @@ it to `"python"` is the one line that undoes those.
 
 ### Verdicts of record
 
-No function here returns a verdict of its own. Each verdict PoUW acts on comes from one of two places. Some come from
+No function here returns a verdict of its own. A Pearl+ run's verdict is `pouw-pearlplus`'s, which
+`benchmarks/pouw/pearl_c_vllm/served_passes.py lean` runs (the table's last row). Each other verdict PoUW acts on comes
+from one of two places. Some come from
 its Lean check: `verifier.of_record` for a `pouw-verifier-difftest` function, or `verifier.serve_of_record` for a core
 protocol's `serve`. The Lean's answer is the verdict, and no answer from the Lean is the refusal `no-answer`
 (`verifier.NO_ANSWER`); the Python twin (`*_twin`) answers the difftest only. `credit.window` and `period_credit` still
@@ -132,6 +134,7 @@ difftest only.
 | A period's presented roots | `credit.period` | `Credit.period` (`period-roots`) | `period_twin` |
 | A Pearl-C period's credit | `credit.pearl_c_period_credit` | `Credit.pearlCMonitoringPeriodCredit`, a stub that refuses everything | `pearl_c_period_credit_twin` |
 | Passes credited together | `credit.passes_distinct` | Pearl+'s `PearlPlus.passesDistinct` (`passes-distinct`) | `passes_distinct_twin` |
+| A Pearl+ run | `served_passes.py lean`, which writes `pearlplus-lean.json`, read by `served_verdicts.pearlplus_of_record` | `pouw-pearlplus` (`PouwPearlPlus.Main`: `check`; `liveDrawReason` under `--draw-live`, which the served road does not pass yet) | None: `served_passes.py verify` draws the coin, and its verdict is compared with the Lean's as a measurement (`differ`) |
 
 Several functions are twins only, because the Lean decides their verdict inside a whole case's (`registered_twin`,
 `opening_twin`, `pass_epoch_twin`, `draw_twin`). Others are guards a device runs before a coin opens: `window`'s
