@@ -163,13 +163,13 @@ def subset_design(law: Any) -> bool:
 def resolved(params: Mapping[str, Any], program: Program) -> Any:
     """The parameters' `law` as Lean's `OneStage.design` resolves it before any check reads it
     (`service.params_sampling_design`): a rate to its sampling design over the program's population, an object as given.
-    Refused (`_Refused`, naming why) where it does not resolve, which the parameters' check refuses before any member is
-    read."""
+    Where it does not resolve, why, as text: no design, which `subset_design` and `_kind` read as no subset and unnamed,
+    and which the parameters' check refuses before any member is read."""
     from verity.protocols.proof.spot.verifier.service import params_sampling_design
     try:
         return params_sampling_design(params.get("law"), program, params["query"], params.get("work_table"))[0]
     except ValueError as e:
-        raise _Refused(f"the parameters' law does not resolve to a sampling design: {e}") from None
+        return f"the parameters' law does not resolve to a sampling design: {e}"
 
 
 def subset_designs(law: Any, record: Any) -> bool:
