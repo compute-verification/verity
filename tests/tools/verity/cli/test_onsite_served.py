@@ -999,6 +999,21 @@ def test_a_policy_refusal_shows_in_the_period_s_outcome_after_accounting_ended_2
     assert (T.worse(20, 0), T.worse(0, 20), T.worse(20, 3), T.worse(3, 20)) == (20, 20, 3, 3)
 
 
+def test_the_period_s_line_states_both_stages_ends_and_the_outcome_over_both(tmp_path, monkeypatch):
+    end = "ran 1 (preflight); refused or undecided 0 (); not run 1 (record)"
+    monkeypatch.setattr(T, "RUNNER", stand_in(tmp_path, "runner.sh", f'mkdir -p "$OUT"\necho "{T.ROAD_END}{end}; no '
+                                              'verdict stands for a step that did not run"\nexit 20\n'))
+    got = T.live(R.load(ROOT / "applications" / "remote.toml", REG), tmp_path / "state", [T.WORKERS]).period
+    assert got == {"accounting": {"exit": 20, "end": end}, "policy": {"exit": 20, "end": end}, "outcome": 20,
+                   "compilation": "compilation not verified", "wipe": "the wipe is started by the adapter's launcher today",
+                   "registration": T.REGISTRATION_PERFORMS_NOTHING}
+    monkeypatch.setattr(T, "RUNNER", stand_in(tmp_path, "runner.sh", 'mkdir -p "$OUT"\nexit 3\n'))
+    got = T.live(R.load(ROOT / "applications" / "remote.toml", REG), tmp_path / "state", [T.WORKERS]).period
+    assert (got["accounting"], got["outcome"]) == ({"exit": 3, "end": None}, 3)
+    assert got["policy"] == {"exit": None,
+                             "end": "not run: the accounting stage's runner did not reach its steps' end (exit 3)"}
+
+
 def test_the_accounting_and_policy_lists_name_every_step_the_runner_knows_once():
     """`run`'s two lists against the runner's step arms (`road_step_named`'s case): a step added on one side alone fails."""
     text = (ROOT / T.RUNNER).read_text()

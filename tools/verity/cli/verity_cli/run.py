@@ -56,7 +56,8 @@ configuration, the state and whether every party is on this host, runs next, eac
 another in the table's order, its output in ``STATE/logs/<party>.log``; one that fails stops the run. Then the table's live parties here
 (SPOT's, the core parties) run together in one live run of the deployment layer (the table's ``live``): in
 this process when all of them are here, else meeting the rest over TCP at the configuration's ``address`` and
-``listen``. Each prints a ``PARTY`` line as it finishes, with its exit code or the name it was refused by.
+``listen``. Each prints a ``PARTY`` line as it finishes, with its exit code or the name it was refused by. A live run
+that states its period's line (its ``period``) has it printed as the run's last line, ``PERIOD``.
 
 When the verifier runs here, each period's verdict is its own: the composite of the listed subprotocols (remote or
 onsite, its id the line's ``product``), printed as a line and written to ``STATE/record/verdicts.jsonl``:
@@ -602,6 +603,7 @@ def execute(cfg: Mapping[str, Any], reg: Registry, state: Path, chosen: Sequence
     the verdicts when the verifier is among them, and last each started party stopped (module docstring); the exit
     code."""
     started: list[tuple[str, Any, dict[str, tuple[int, int]]]] = []
+    period: list[Mapping[str, Any]] = []
     rc = 2
     try:
         for p in starts:
@@ -618,7 +620,7 @@ def execute(cfg: Mapping[str, Any], reg: Registry, state: Path, chosen: Sequence
                 return 2
             bind(state, p, written)
             say("STARTED", {"party": p, "writes": {c: sorted(t) for c, t in written.items()}})
-        rc = _parties(cfg, reg, state, [p for p in chosen if p not in starts], runner, premises, machines)
+        rc = _parties(cfg, reg, state, [p for p in chosen if p not in starts], runner, premises, machines, period)
     finally:
         for p, h, before in reversed(started):
             try:
@@ -629,11 +631,14 @@ def execute(cfg: Mapping[str, Any], reg: Registry, state: Path, chosen: Sequence
             transcribe(state, p, [f for f in changed(before, files(state)) if f.startswith(f"public/{p}/")])
             say("PARTY", {"party": p, "exit": stopped})
             rc = rc or (2 if stopped else 0)
+        for x in period:
+            say("PERIOD", x)
     return rc
 
 
 def _parties(cfg: Mapping[str, Any], reg: Registry, state: Path, chosen: Sequence[str], runner: Any,
-             premises: Sequence[str], machines: Sequence[str]) -> int:
+             premises: Sequence[str], machines: Sequence[str], period: list[Mapping[str, Any]]) -> int:
+    """The entries, then the live run, whose period's line, where it states one, goes into ``period``; the exit code."""
     run = json.loads((state / "run.json").read_text())
     for p in (p for p in chosen if reg.functions(cfg, p)):
         before = files(state)
@@ -657,6 +662,8 @@ def _parties(cfg: Mapping[str, Any], reg: Registry, state: Path, chosen: Sequenc
     except OSError as e:
         print(f"verity run: refused live: {type(e).__name__}: {e}", file=sys.stderr)
         return 2
+    if (said := getattr(r, "period", None)) is not None:
+        period.append(said)
     for p, o in sorted(r.outcomes.items()):
         say("PARTY", {"party": p, "refused": o["refused"]})
         if o["refused"] is not None:

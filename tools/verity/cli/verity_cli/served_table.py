@@ -711,9 +711,11 @@ ORDER: tuple[str, ...] = ()
 
 @dataclass(frozen=True)
 class Result:
-    """What `verity_cli.run.execute` reads of a live run: each party's outcome and refusal."""
+    """What `verity_cli.run.execute` reads of a live run: each party's outcome and refusal, and the period's line, which
+    it prints as the run's last (``PERIOD``)."""
 
     outcomes: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
+    period: Mapping[str, Any] | None = None
 
 
 def bindings_of(state: Path) -> dict[str, Any]:
@@ -1204,6 +1206,7 @@ def _result(public: period.PublicParameters, w: ServedWorkload, state: period.Pe
     and ``registration`` where it performed nothing)."""
     # a party at a time: a later window's outcome would replace an earlier one's, and the period has one window today
     out = {p: o for x in state.windows for p, o in x["accounting"]["outcomes"].items()}
+    said_period = _period(w, state)
     for x in state.windows:
         for o in out.values():
             if x["policy"] and o["outcome"].get("served-window") in ENDED:
@@ -1231,7 +1234,40 @@ def _result(public: period.PublicParameters, w: ServedWorkload, state: period.Pe
                              "refused": None}
         except Refused as e:
             out[VERIFIER] = {"outcome": {"error": e.detail}, "refused": e.name}
-    return Result(out)
+    return Result(out, said_period)
+
+
+ROAD_END = "ROAD END (the window's record): "
+
+
+def _end(state: Path, log: str) -> str | None:
+    """A runner call's ROAD END in ``state/logs/<log>.log``, what ran, was refused or undecided and was not run; None
+    where the call printed none."""
+    f = state / "logs" / f"{log}.log"
+    lines = f.read_text().splitlines() if f.exists() else []
+    end = next((x for x in reversed(lines) if x.startswith(ROAD_END)), None)
+    return end and end.removeprefix(ROAD_END).split("; no verdict stands", 1)[0]
+
+
+def _period(w: ServedWorkload, state: period.PeriodState) -> dict[str, Any]:
+    """The period's one line (``PERIOD``): each stage's runner exit and ROAD END, the outcome, the `worse` of the two
+    exits (the workload's ``served-window``), and what the wipe, compilation and registration said. It decides nothing."""
+    # the period has one window today: a later window's would replace an earlier one's
+    acc = pol = None
+    for x in state.windows:
+        acc = next((o["outcome"]["served-window"] for o in x["accounting"]["outcomes"].values()
+                    if "served-window" in o["outcome"]), None)
+        pol = x["policy"]
+    why = (f"not run here: {WORKERS} is not on this machine" if acc is None else
+           f"not run: the accounting stage's runner did not reach its steps' end (exit {acc})")
+    prepared = state.registration["prepared"]
+    return {"accounting": {"exit": acc, "end": _end(w.state, "served-window") if acc is not None else why},
+            "policy": {"exit": pol, "end": _end(w.state, "policy") if pol is not None else why},
+            "outcome": worse(acc, pol) if acc is not None and pol is not None else acc,
+            "compilation": "; ".join(sorted({x["accounting"]["compilation"]["note"] for x in state.windows})),
+            "wipe": state.wipe["note"],
+            "registration": state.registration.get("note") or
+            f"performed: the run's registration, for {', '.join(x.party for x, _ in prepared)}"}
 
 
 STAGES = period.Stages(_registration, _windows, _accounting, _policy, _result)
