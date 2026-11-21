@@ -1,7 +1,8 @@
 """How many Pearl+ tiles, and of what size, a served epoch's circuit would hold if each of its linears' `Gemm_v2` units
 were Pearl+'s tile reading x by wire (`pearl_plus_credited.served_product`): the circuit of record's served class (Llama
 3.2 1B, class 4,27,2, four requests of 27 prompt tokens and 2 outputs, the RTX target, seed 7, as `served_door.py
-build`), its linear columns by depth K, the tiles at one row and TN columns a tile, and each tile's ANDs and its units
+build`), its linear columns by depth K, the tiles at one row and TN columns a tile (a K's columns past whole tiles
+counted as one more), and each tile's ANDs and its units
 before laying (`pearl_plus_credited.cut`). Nothing is proved.
 
   python benchmarks/pouw/credited_served_count.py [--tn 64] [--ands]     # one JSON line
@@ -46,11 +47,10 @@ def main() -> int:
             cols[fn.bindings["K"]] += n * fn.bindings["N"]
         else:
             other[fn.id.split("{")[0]] += n
-    if any(c % a.tn for c in cols.values()):
-        raise SystemExit(f"columns {dict(cols)} are not whole tiles of {a.tn}")
-    tiles = {k: c // a.tn for k, c in cols.items()}
+    tiles = {k: -(-c // a.tn) for k, c in cols.items()}
     out = {"class": "4,27,2", "model": "llama32-1b", "built_s": built, "units": units, "gemm_units": dict(gemm_units),
-           "other_units": dict(other), "linear_columns_by_k": dict(cols), "tn": a.tn, "tiles_by_k": tiles,
+           "other_units": dict(other), "linear_columns_by_k": dict(cols), "tn": a.tn,
+           "columns_past_whole_tiles": {k: c % a.tn for k, c in cols.items()}, "tiles_by_k": tiles,
            "tiles": sum(tiles.values())}
     shapes = {}
     for k in sorted(tiles):
