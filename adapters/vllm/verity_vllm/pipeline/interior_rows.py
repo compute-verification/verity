@@ -643,6 +643,22 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
     return Interior(rec, ports | run_input_ports(window), layer, c, [[s.entries for s in p] for p in per], tcs, tuple(returns), tuple(inputs))
 
 
+def _tree_port(c: CS.Committed, tree: str) -> LK.Port:
+    """`links.Port.of` by tree (`rows.Binding.tree`): the one member port whose rows are tree ``tree``'s leaves, which a
+    member named apart from its template holds under another name than the tree's."""
+    found = [(m, p) for m in c.window.members for p, _ in m.all_rows
+             if c.window.wire(m, p) is None and p not in m.values and c.window.tree(m, p) == tree]
+    if len(found) != 1 or tree not in c.roots:
+        raise ValueError(f"{tree!r} is no tree one member's rows are the leaves of (its trees: {sorted(c.roots)[:6]})")
+    (m, p), = found
+    key = m.port(p)
+    rows = np.asarray(c.rows[key], dtype=np.uint16)
+    port = LK.Port(tree, m.schema(p), int(rows.shape[1]), c.domains[tree], bytes(c.bc[key]), rows, bytes(c.salts[key]))
+    if port.root != c.roots[tree]:
+        raise ValueError(f"{tree}: its leaves' tree is not the period's root")
+    return port
+
+
 def _served_some(per: Sequence[Sequence[Span]], sample: Sequence[int]) -> None:
     """Refuse, by slot, a sampled span of no units: a request served nothing has no last unit to pad its block with."""
     for i, p in enumerate(per):
@@ -808,7 +824,7 @@ def write(it: Interior, directory: str | Path) -> dict[str, Any]:
             else:
                 port = w.tree(m, p)
                 if port not in held:
-                    held[port] = LK.Port.of(c, port)
+                    held[port] = _tree_port(c, port)
                 entry[p] = held[port].header(tuple(int(x) for x in w.leaves(m, p)))
         registered[m.key] = entry
     window = {k: v for k, v in it.record["window"].items() if k not in ("kind", "run")}
