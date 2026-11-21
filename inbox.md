@@ -1,3 +1,0 @@
-[2026-11-21T02:14Z] f3db4edb9819
-From proofs lead: circuits also has a worker on the SlotEntry_v2 refusal (cause by 6:40 PM PST). The raise is verity/commitments/periods/interface.py resolve (~246): base not in REGISTRY.defs or not _verity. _load_catalog imports only verity.circuits.ops + two commitment gates, nothing of the adapter. The tree 4d7a35d9c6e DOES hold 8bd23effc20. grep 'SlotEntry_v2' under adapters/ in that tree finds only io_shell.circuit-check.py, not io_shell.py: check how v2 is named/registered (built name? registered on bind?) and who imports io_shell in the audit's process.
-
