@@ -153,9 +153,10 @@ def ownEntry (value : String) : Registered.Entry :=
 def pin (value : String) (more : Nat := 0) (domain : Option String := none) : String × Json :=
   let e := ownEntry value
   let leaves := e.leaves + more
-  (value, Json.mkObj ([("value", value), ("root", ROOT), ("leaves", leaves), ("words", e.words),
-    ("domain", domain.getD ((Registered.domain ROOT value e.words leaves e.wordBits).toOption.map Flock.hexOf |>.getD ""))] ++
-    (if e.wordBits == Registered.WORD_BITS then [] else [(Registered.WIDTH_KEY, Lean.toJson e.wordBits)])))
+  let d := domain.getD ((Registered.domain ROOT value e.words leaves e.wordBits).toOption.map Flock.hexOf |>.getD "")
+  let kvs : List (String × Json) := [("value", Json.str value), ("root", Json.str ROOT), ("leaves", Lean.toJson leaves),
+    ("words", Lean.toJson e.words), ("domain", Json.str d)]
+  (value, Json.mkObj (kvs ++ if e.wordBits == Registered.WORD_BITS then [] else [(Registered.WIDTH_KEY, Lean.toJson e.wordBits)]))
 
 def READS : Array (String × String × String) := #[("E_v1", "x", "x"), ("E_v1", "y", "y")]
 
