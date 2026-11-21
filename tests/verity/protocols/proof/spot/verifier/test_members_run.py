@@ -21,7 +21,7 @@ from verity.circuits import partition_object as PO, population as PN
 from verity.circuits import codec
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.types import Array, Tuple, Value
-from verity.commitments import coin_tree as CT
+from verity.commitments import coin_tree as CT, registered_value as RV
 from verity.protocols.proof.spot.verifier.challenger import challenger as C
 from verity.protocols.proof.spot.verifier.one_stage import closing as K, docket as DK, members as M, one_circuit as OC
 from verity.protocols.proof.spot.verifier.one_stage import partition as P, proofs as PF
@@ -45,15 +45,22 @@ SPEC = {"block": 8, "rounds_log": 1, "scheme": CT.SCHEME, "streams": [CT.SESSION
 ROOTS = {A: ("11" * 64, "aa" * 64), B: ("22" * 64, "bb" * 64)}
 #: each template's one output field's tree, ``<template>/o0``, its leaves the template's units
 TREES = {A: ("a/o0", 2, "66" * 64, "88" * 64), B: ("b/o0", 3, "77" * 64, "99" * 64)}
+WINDOW_ROOT = "ee" * 64
+#: each template's run input node's one tree, ``input/n<w>``, its rows the node's 64-leaf rows, its domain under the
+#: window's open root (`members.run_tree_held`)
+INPUTS = {m: (f"input/n{w}", n, r, RV.domain(P.program_digest(PROGRAM), f"input/n{w}", 64, n, 16,
+                                              window=WINDOW_ROOT).domain_id.hex())
+          for m, w, n, r in ((A, 0, 2, "33" * 64), (B, 1, 3, "44" * 64))}
 RECORD = {"population": 5, "scheme": SCHEME,
           "roots": [{"domain": ROOTS[m][1], "leaves": 4, "port": f"{m}/out", "root": ROOTS[m][0]} for m in (A, B)] +
-                   [{"domain": d, "leaves": n, "port": t, "root": r} for t, n, r, d in TREES.values()]}
+                   [{"domain": d, "leaves": n, "port": t, "root": r} for t, n, r, d in TREES.values()] +
+                   [{"domain": d, "leaves": n, "port": t, "root": r} for t, n, r, d in INPUTS.values()]}
 SAMPLED = {A: [1], B: [0, 2]}
 
 
 def slices(units: dict, record: dict) -> dict:
     """`members.slices` under the window's program and query."""
-    return M.slices(units, record, program=PROGRAM, query=QUERY)
+    return M.slices(units, record, program=PROGRAM, query=QUERY, window_root=WINDOW_ROOT)
 DESCRIPTOR = json.dumps(json.loads(json.dumps(codec.encode_program(PROGRAM))), sort_keys=True,
                         separators=(",", ":")).encode()
 lean = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -69,7 +76,7 @@ def lowered(member: str) -> bytes:
 def frame(member: str, out: tuple[str, str] | None = None, **more: tuple[str, str]) -> dict:
     """A header's ``frame_v3``: the member's ``out`` and its template's tree at ``o0``, ``out`` and ``more`` each a
     root and a domain."""
-    ports = {"out": out or ROOTS[member], "o0": TREES[member][2:], **more}
+    ports = {"out": out or ROOTS[member], "o0": TREES[member][2:], "x": INPUTS[member][2:], **more}
     return {"domain_ids": {p: d for p, (_, d) in ports.items()}, "roots": {p: r for p, (r, _) in ports.items()}}
 
 
@@ -130,7 +137,7 @@ class Window:
                                                              "reps": {"circuit.rep0.bin": self.put(rep)}}]})
         self.params = {"challenger": {"key": {"W": 8, "H": 5, "public": "00" * C.PUBLIC_BYTES}, "label": "sample"},
                        "partition": PARTITION, "program": program,
-                       "query": QUERY, "window_root": "ee" * 64, "proofs": {"members": members}}
+                       "query": QUERY, "window_root": WINDOW_ROOT, "proofs": {"members": members}}
         self.evidence = {"coins": {"ledger": [], "main": [], "pins": [], "segment": {}, "session": {"log": log}},
                          "proved_units": [u + UNITS[m][0][0] for m in (A, B) if m in sessions for u in SAMPLED[m]],
                          "sessions": [s["name"] for st in statements for s in st["sessions"]],

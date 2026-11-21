@@ -520,15 +520,14 @@ def TWO_READS_WHY (member param : String) (w0 w1 : Nat) : String :=
 
 /-- The input nodes the members `[m0, m0 + n)` of root node `k` read their parameter `p` of type `ty` at
 (`Flock.OneCircuit.regRows?`): the whole parameter's, else, for an array whose whole has no closed form, each row's,
-which must be one node, an input at every row or at none. -/
+which must be one node, an input at every row or at none; the whole parameter's refusal otherwise. -/
 def paramInput (P : Flock.Program.Prog) (k m0 n : Nat) (p : String) (ty : Flock.Program.Ty) : V (Option (Nat × Nat)) :=
   match Flock.OneCircuit.regRows? P k m0 n p, ty with
   | .ok r, _ => pure r
-  | .error e, .array c _ => do
-    let rows ← (List.range c).mapM fun i => Flock.OneCircuit.regRows? P k m0 n s!"{p}[{i}]"
-    match rows.head? with
-    | some r0 => if rows.all (· == r0) then pure r0 else throw e
-    | none => throw e
+  | .error e, .array c _ =>
+    match (List.range c).map fun i => Flock.OneCircuit.regRows? P k m0 n s!"{p}[{i}]" with
+    | .ok r0 :: rows => if rows.all (fun | .ok r => r == r0 | .error _ => false) then pure r0 else throw e
+    | _ => throw e
   | .error e, _ => throw e
 
 /-- **The input nodes member `m`'s units read**, each `(parameter, node, row leaves)` once: over every range of `rs`
@@ -792,7 +791,7 @@ def runInputRoots (v : Docket.Verifier) (P : Flock.Program.Prog) (rs : Array Flo
   let byPort := rootsByPort rec
   let prog := Flock.hexOf v.program.desc.sha512
   let tied := Docket.tiedGates v
-  ms.foldlM (fun acc m => return acc.insert m.name
+  ms.foldlM (fun acc m => do return acc.insert m.name
     (← runInputRootsAt P rs prog v.windowRoot tied m (acc.getD m.name #[]) byPort)) roots
 
 /-- **The registration's roots each member's statement reads**: `rootsOf`'s, the window's trees of its templates'

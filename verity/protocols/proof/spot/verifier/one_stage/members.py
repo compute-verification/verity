@@ -586,14 +586,20 @@ def reg_rows(R: EG._Root, k: int, m0: int, n: int, param: str) -> tuple[int, int
 
 
 def _param_input(R: EG._Root, k: int, m0: int, n: int, p: str, ty: Any) -> tuple[int, int] | None:
-    """`OneStageZk.paramInput`: `reg_rows` of the whole parameter, else, for an array, of each row, which must be one."""
+    """`OneStageZk.paramInput`: `reg_rows` of the whole parameter, else, for an array, of each row, which must be one;
+    the whole parameter's refusal otherwise."""
     try:
         return reg_rows(R, k, m0, n, p)
     except _Refused:
         if ty[0] != "Array" or ty[1] == 0:
             raise
-        rows = [reg_rows(R, k, m0, n, f"{p}[{i}]") for i in range(ty[1])]
-        if all(r == rows[0] for r in rows):
+        rows = []
+        for i in range(ty[1]):
+            try:
+                rows.append(reg_rows(R, k, m0, n, f"{p}[{i}]"))
+            except _Refused:
+                rows.append(_Refused)
+        if rows[0] is not _Refused and all(r == rows[0] for r in rows):
             return rows[0]
         raise
 
