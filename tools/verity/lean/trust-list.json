@@ -12,8 +12,8 @@
   "Verity.Assumptions.TrustedDevice": {"reason": "the honest verifier server: the auditor's devices run their stated code on hosts the prover doesn't control (trusted-device), part of it by ruling"},
   "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw": {"reason": "the honest verifier server: the record the verifier reads is the one its challenger wrote, and the draw file the one it printed"},
   "Hash.Assumptions.LmsUnforgeable": {"reason": "LMS unforgeability: the remote audit's device signatures, and pinned on-site device keys"},
-  "Claims.Hm96Hiding": {"reason": "hm96 hiding (hash-derived-key), for the zero-knowledge guarantees only", "only": ["Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed"]},
-  "FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96": {"reason": "hm96-sha512's salt key is outside the keys its hiding bound fails for (hash-derived-key), for the zero-knowledge guarantees only", "only": ["Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed"]},
+  "Claims.Hm96Hiding": {"reason": "hm96 hiding (hash-derived-key), for the zero-knowledge guarantees only", "only": []},
+  "FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96": {"reason": "hm96-sha512's salt key is outside the keys its hiding bound fails for (hash-derived-key), for the zero-knowledge guarantees only", "only": []},
   "FlockSoundness.Assumptions.KeyedStreamsUniform": {"reason": "A4, SHA-512 as a PRF (prf/sha-512), for the streamed wipe's labels and PoUS only", "only": ["Pous.SecurityProofs.StreamedWipe"]},
   "Hash.Assumptions.Sha512Prf": {"reason": "A4, SHA-512 as a PRF (prf/sha-512), for PoUS's index streams and the streamed wipe's labels only", "only": ["Pous.SecurityProofs.StreamedWipe"]}
  },

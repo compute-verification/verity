@@ -166,15 +166,14 @@ def class_doc(serve: Mapping[str, Any], cls: Any, scheme: str | None = None) -> 
     counts hold its templates to, and the parameters it registers; `Undecided` where the vocabulary can't express it."""
     sys.path.insert(0, str(ROOT / "benchmarks" / "prove_path"))
     import prove_path as PP
+    import rehearsal_limits as RL
     from verity.commitments.periods import interface as IF
     from verity_vllm.program.predict.common import Unexpressible
-    from verity_vllm.program.predict.window_circuit import check_provable, class_circuit
     from verity_vllm.program.predict.window_class import PearlTables
 
     try:
-        circuit = class_circuit(PP.registered_of_serve(serve, None, None, PP.CAP_BITS), cls,
-                                tables=PearlTables(scheme) if scheme else None)
-        check_provable(circuit)
+        circuit = RL.class_circuit_of(PP.registered_of_serve(serve, None, None, PP.CAP_BITS), cls,
+                                      PearlTables(scheme) if scheme else None)
     except Unexpressible as e:
         raise Undecided(f"the class's circuit under the policy's φ: {e}") from e
     doc = IF.descriptor_record(circuit, 64)
