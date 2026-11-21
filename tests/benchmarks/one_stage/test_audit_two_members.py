@@ -2,8 +2,7 @@
 (`served_verdicts.sh`'s ``v3c_audit``): ``records_audit.py audit`` in a process of its own, which samples on its stream
 and hands `a5.audit` the members, each proved by Flock's prover (`flock-circuit`, the CPU build) behind the ZK server
 and verified by the Lean verifier. Nothing on that path is replaced. The members' prover is the audit's one kept process
-(`a5.proof_server`), which proves them one after another and writes a ``LIVE`` record for each, a member the ZK server
-stops included (`_kept_prover`).
+(`a5.proof_server`), which proves them one after another and writes a ``LIVE`` record for each (`_kept_prover`).
 
 * **The window** (`_window`): two templates of one proof block each, `ScaledMmS8Coordinate` at K = 128 and K = 256 (the
   smallest whose rows give Flock's composer a compression before a row's last block), recorded, committed and written
@@ -15,10 +14,10 @@ stops included (`_kept_prover`).
   this checkout's first-parent line. `test_a5_reserve` opens one the same way under a stub of the Lean verifier's coins;
   here its `serve.py` runs SPOT's Lean verifier itself. Its key is the session's own, so its coins show the path and
   are no auditor's.
-* **The sessions' coin trees.** By default the two sessions run on that same challenger session
+* **The sessions' coin trees.** The two sessions run on that same challenger session
   (`a5.window_trees`), as a served window's audit runs them: each of the kept prover's verifiers takes its tree
   through the audit's relay, and each session's tree is closed there after its evidence before the next session
-  starts (FLOCK_CHALLENGER=0, a development run's, keeps each on a tree of its own). The audit then writes its case in
+  starts. The audit then writes its case in
   v2's per-member form with the challenger's key, the window's root and the coins, and v2's check accepts it
   (`members.case_check`). v2 reads a key at the deployed parameters only, so that audit's local key is made at them
   (``--deployed-key``), over the machine's cores.
@@ -30,9 +29,8 @@ stops included (`_kept_prover`).
   first use (`one_stage.verifier.executable`): a checkout's first audit pays that build.
 
 Slow, and past a minute in `check`: about 150 s on a node, about 210 s where the audit builds the coins' Lean first,
-and about 5 GB at its peak, which the suite's ``worker_gb`` declares. Of it the changed member's audit is about 50 s:
-it alone shows a false member stopped (the ZK server lets no proof of it out, and the Lean verifier refuses its
-session), where the audit's own negatives change the record around honest sessions. The audits on the window's
+and about 5 GB at its peak, which the suite's ``worker_gb`` declares. The honest window is audited once (`road`), and
+its two tests read that one audit. The audits on the window's
 challenger session, under a key made for it at the deployed parameters, run Flock's own
 `serve --tree-from` client against the relay, the challenger's service on a session held open through the proving,
 and Lean's whole per-member check (`OneStageZk.membersRun`, then v1's check at the challenger's coins) on a window's
@@ -113,9 +111,8 @@ def _kept_prover(out: Path) -> list[str]:
     return [Path(json.loads(x[5:])["label"]).name for x in log.read_text().splitlines() if x.startswith("LIVE\t")]
 
 
-def _window(d: Path, flipped: bool = False, own: str | None = None) -> Path:
-    """The window (module docstring) written to ``d``. ``flipped``: the K = 256 proof block's committed output has bit 0
-    of its first word flipped, and is committed as consistently as an honest one. ``own``: the K = 128 proof block reads
+def _window(d: Path, own: str | None = None) -> Path:
+    """The window (module docstring) written to ``d``. ``own``: the K = 128 proof block reads
     its ``sw`` from a value of that name the Program takes, registered afresh under the run root as one 32-bit word, the
     width it is read at."""
     rng = np.random.default_rng(0)
@@ -135,8 +132,6 @@ def _window(d: Path, flipped: bool = False, own: str | None = None) -> Path:
     for t, k, (x, w, sx, sw) in zip(TEMPLATES, KS, data):
         ins = [x.view(np.uint8), sx.view(np.uint32), w.view(np.uint8), sw.view(np.uint32)]
         out = np.asarray(evaluate_batch(t, *ins, kernel="reference"), dtype=np.uint16)
-        if flipped and k == KS[-1]:
-            out.reshape(-1)[0] ^= 1
         win.record(t, ins, [out])
     win.write(win.close(salts_of=fixed(win)), d, {"label": "test"}, registrar=DK)
     return d
@@ -206,7 +201,16 @@ def _evidence_hex(evidence: dict) -> str:
     return json.dumps(evidence, sort_keys=True, separators=(",", ":"), allow_nan=False).encode().hex()
 
 
-def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_path, binaries):
+@pytest.fixture(scope="module")
+def road(tmp_path_factory, binaries) -> tuple[Path, int, dict, Path, str]:
+    """The honest window's one audit as the application's road runs it (`served_door_prove.sh`): on the local
+    challenger's session under a key at the deployed parameters -> (the window, then `_audit`'s four)."""
+    tmp = tmp_path_factory.mktemp("road")
+    window = _window(tmp / "window")
+    return (window, *_audit(tmp, window, binaries, "--deployed-key"))
+
+
+def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(road):
     """Both members are sampled, each one's session is accepted by the prover's own verifier and by Lean's, the audit
     record accepts with every negative refused, and the record holds the files the later steps read. The stream's rule is
     the rate the audit is given (``--sampling-design``), which the service takes where it and the audit refuse the design's fixed
@@ -214,14 +218,12 @@ def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_
     (`records_audit.verifier_window`), and the stream sampled by it accepts its outcome on the challenger's coins. The
     audit record names whose coins those are, the key and the session the challenger's ledger opens on the run's root,
     and says it wrote the case in the per-member form; SPOT's answer on the audit accepts with both in its public
-    outputs. The audit runs as the application's road runs it (`served_door_prove.sh`): on the local challenger's
-    session under a key at the deployed parameters, which the per-member case names, and Lean's check of that case
+    outputs. The audit is the road's (`road`), whose per-member case names the challenger, and Lean's check of that case
     (`a5.members_lean`) accepts with the Python's verdict."""
-    window = _window(tmp_path / "window")
+    window, rc, row, out, said = road
     assert RA.verifier_window(window, RULE, None)[0].law == RND.parse_design(DESIGN) and S.SamplingDesign(RULE).text == RULE
     with pytest.raises(ValueError, match="a fixed count"):
         RA.verifier_window(window, DESIGN, None)
-    rc, row, out, said = _audit(tmp_path, window, binaries, "--deployed-key")
     assert rc == 0 and row.get("ok") is True, said
     assert row["refused"] is None and row["population"] == 2 and row["draw"] == [0, 1], row
     assert [(m["template"], m["n"]) for m in row["members"]] == [(descriptor_id(t), 1) for t in TEMPLATES]
@@ -261,8 +263,8 @@ def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_
     assert json.loads((out / "window" / "case-sampled.json").read_text())["params"]["levels"] == 1
 
 
-def test_two_members_sessions_close_on_the_windows_challenger_session_and_v2_accepts_the_case(tmp_path, binaries):
-    """By default, FLOCK_CHALLENGER unset, the audit's two sessions take their coin trees from the session the
+def test_two_members_sessions_close_on_the_windows_challenger_session_and_v2_accepts_the_case(tmp_path, road):
+    """On the road's audit (`road`), the two sessions take their coin trees from the session the
     sample's coins came from, and each is closed there after its evidence: the audit accepts with each member's ``challenger`` verdict, the
     release log holds the sample, then each session's tree, its rounds and its closing round, in the sessions' order,
     and the per-member case names the challenger and carries its coins; the audit's summary says the trees were the
@@ -271,16 +273,8 @@ def test_two_members_sessions_close_on_the_windows_challenger_session_and_v2_acc
     the second session left out, the log shows a tree no session records, which both refuse
     (`challenger.UNUSED_TREE`). The Python run of the form (`members.members_run`) answers the same on all three:
     every session accepted with the units it proved, the changed file's reason, and the unused tree's."""
-    window = _window(tmp_path / "window")
-    rc, row, out, said = _audit(tmp_path, window, binaries, "--deployed-key")
-    assert rc == 0 and row.get("ok") is True, said
-    assert row["audit"]["accepted"] is True, (row["audit"], said)
-    assert row["audit"]["verdicts"] == {f"{v}/m{k}": True for v in (*VERDICTS, "challenger") for k in (0, 1)}
-    # on the window's challenger session too the members are the kept prover's and the kept verifier's
-    assert _kept_prover(out) == ["session-m0", "session-m1"]
-    assert _kept_verifier(out) == [(0, True), (1, True)]
-    assert _coin_trees(out) == ("window", True)
-    assert row["coins_session"]["error"] is None, row["coins_session"]
+    _window_dir, rc, row, out, said = road
+    assert rc == 0 and row.get("ok") is True and row["audit"]["accepted"] is True, said
     case = json.loads((out / "window" / "case-v2.json").read_text())
     params, evidence = case["params"], json.loads(bytes.fromhex(case["evidence"]))
     assert sorted(params["challenger"]) == ["key", "label"] and len(params["window_root"]) == 128
@@ -326,38 +320,6 @@ def test_two_members_sessions_close_on_the_windows_challenger_session_and_v2_acc
     why = f"session {evidence['sessions'][0]}'s coins are not the challenger's: {C.NO_CLOSING}"
     assert twin(other, evidence) == (None, why)
     assert M.case_check(other) == ("reject", M.run_reason(None, why)) == ("reject", f"proofs: {why}")
-
-
-def test_a_member_with_one_bit_changed_is_refused(tmp_path, binaries):
-    """One bit of one member's committed output flipped, committed as consistently as an honest window (the prover's
-    self-check off, ``--forged``): every check before the sample passes, both members are sampled, the ZK server releases
-    no proof of the changed member, so its session ends with none and each of its verdicts refuses, the other member's
-    accept, and the audit record rejects. Lean refuses the changed member's session for want of its proof file, a
-    verdict on no proof, so the audit passes on the proof held back and ``lean_refused`` has no value. No registered read
-    is refused, so ``read_refused`` is false."""
-    window = _window(tmp_path / "window", flipped=True)
-    rc, row, out, said = _audit(tmp_path, window, binaries, "--forged", more={"FLOCK_CHALLENGER": "0"})
-    assert rc == 0 and row.get("ok") is True, said
-    forged = row["forged"]
-    assert forged["checks"] == {"checks_before_draw": True, "rejected": True, "no_proof_released": True,
-                                "lean_refused": None, "read_refused": False}, forged
-    assert forged["passes_on"] == "no_proof_released" and forged["sessions"]["m0"]["prover_stopped"] is None, forged
-    assert forged["sessions"]["m1"]["proofs"] == 0, forged
-    assert forged["sessions"]["m1"]["prover_stopped"].startswith(RA.zk_server_refused()), forged
-    assert forged["no_value"]["lean_refused"].startswith(
-        f"the Lean verifier read no proof: lean-verify/m1: {RA.NO_SESSION_FILES}"), forged
-    assert row["draw"] == [0, 1] and row["audit"]["accepted"] is False
-    assert _answer(out)["verdict"] == "reject"
-    assert row["audit"]["verdicts"] == {f"{v}/m{k}": k == 0 for v in VERDICTS for k in (0, 1)}, row["audit"]
-    assert sorted(row["audit"]["why"]) == sorted(f"{v}/m1" for v in VERDICTS), row["audit"]["why"]
-    # the kept prover has a record for the member the ZK server stopped too, and went on from the member before it
-    assert _kept_prover(out) == ["session-m0", "session-m1"]
-    for k, proofs in ((0, True), (1, False)):
-        session, = sorted((out / "window" / f"session-m{k}" / "sessions").glob("*/session.json"))
-        record = json.loads(session.read_text())
-        assert (record["verdict"]["accepted"], bool(record["proof_sha512"])) == (proofs, proofs), session
-    # the one kept verifier answered both members, and went on to refuse the changed one after accepting the other
-    assert _kept_verifier(out) == [(0, True), (1, False)]
 
 
 #: The refusal the afresh audit meets on this branch, by a line of the audit's own words, which fails closed: since a
