@@ -111,8 +111,6 @@ ROW_ROLE = {f"2x3 {what}": stage for what, (stage, _) in vectors.ROW_ROLE.items(
     f"2x3 {vectors.ROW_UNPINNED}": vectors.ROW_ROLE[vectors.ROW_VERDICT][0]}
 #: the cases of one template in two root nodes, each with the stage that refuses it, None where the form takes it
 SPLITS = {f"2x3 {what}": ("templates" if short else None) for what, (_, short) in vectors.SPLITS.items()}
-#: the case that reads an input node at another width, refused before the record
-RECUT = {"a read at another width": "recut-unread"}
 
 
 @pytest.fixture(scope="module")
@@ -142,7 +140,7 @@ def test_the_generator_covers_what_it_says(random_cases, shaped):
         assert detail.get("error") == m["broken"], (m["shape"], m.get("how"))
         assert (m["case"]["spot"] is None) == (m["broken"] in vectors.EARLY)
         assert isinstance(r["kinds"], list) == isinstance(r["exported"], list) == ("error" not in detail)
-        assert ("message" in detail) == (m["broken"] in ("own-rows", "leaf-widths", "recut-unread"))
+        assert ("message" in detail) == (m["broken"] in ("own-rows", "leaf-widths"))
     assert {m["broken"] for m in made} == set(vectors.BROKEN) | {"wires", None}
     assert {m["how"] for m in random_cases if m["broken"]} == {how for hows in vectors.BROKEN.values() for how in hows}
     good = [r for r in results if "error" not in r["detail"]]
@@ -178,7 +176,7 @@ def test_the_served_shape(shaped):
     with none registered or committed, under another root, with an opening that reads no root, with an opening whose
     reader is another Definition under the pinned one's name, and with one wire from the next slot."""
     got = {what: vectors.results(m["case"]) for what, m in shaped.items()
-           if what not in LAYOUT | ROWS | TEXT | TWICE | BITLESS | KEYED | HISTORIES | FORMATS | ROW_ROLE | SPLITS | RECUT}
+           if what not in LAYOUT | ROWS | TEXT | TWICE | BITLESS | KEYED | HISTORIES | FORMATS | ROW_ROLE | SPLITS}
     verdicts = {what: (r["detail"]["failure"], r["count"]["failure"]) for what, r in got.items()}
     refused = ("nci", "fresh")
     assert verdicts == {
@@ -248,7 +246,7 @@ def test_a_pinned_readers_layout(shaped, monkeypatch):
     The layout's stage alone refuses them: without it the reference refuses none, and accepts the token among the
     ports with a block's fresh bits those of the case that wires it."""
     assert {what for what, m in shaped.items() if m["broken"]} == {
-            what for what, v in (LAYOUT | ROWS | TEXT | TWICE | BITLESS | KEYED | HISTORIES | FORMATS | ROW_ROLE | SPLITS | RECUT).items()
+            what for what, v in (LAYOUT | ROWS | TEXT | TWICE | BITLESS | KEYED | HISTORIES | FORMATS | ROW_ROLE | SPLITS).items()
             if isinstance(v, str)}
     got = {what: vectors.results(shaped[what]["case"]) for what in LAYOUT}
     for what, want in LAYOUT.items():
