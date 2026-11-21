@@ -2007,7 +2007,7 @@ road_network() {  # the network attester's own piece, called as step 4 or 6 call
 }
 road_sampled() {  # step 3 on the window's road: the window's record, its Lean checks run from its own files (records_audit.py audit), its circuit the prover's
   local rec=$D/windows/w$K/record leanb=$TREE/verity/protocols/proofs/flock/verifier/.lake/build/bin bin=$FW/flock-gpu-link/flock/target/release/flock-circuit
-  local s=$D/private/sampled-proofs main=$OUT/sampled-proofs/main.txt unit=${TMPL_UNIT_BIN:-$FW/lean-bin/flock-tmpl-unit} how="bash $TREE/benchmarks/one_stage/build_sampled_step.sh" m0 law run rc b line
+  local s=$D/private/sampled-proofs main=$OUT/sampled-proofs/main.txt unit=${TMPL_UNIT_BIN:-$FW/lean-bin/flock-tmpl-unit} how="bash $TREE/benchmarks/one_stage/build_sampled_step.sh" m0 law run rc b line regs
   [ "$DEVELOPMENT" = 1 ] || { step_not_run sampled-proofs "its circuit is the one the prover registered, and its coins the local challenger's: a development run's alone (DEVELOPMENT=1) until proofs' compile check runs and the auditor's challenger is wired"; return; }
   for b in "$bin" "$leanb/verity-verify-proof" "$leanb/flock-zk-server" "$leanb/flock-lower-check"; do
     [ -x "$b" ] || { step_not_run sampled-proofs "proofs' $(basename "$b") is not built at $b: build it, with the other programs this step runs, by: $how"; return; }
@@ -2021,13 +2021,17 @@ road_sampled() {  # step 3 on the window's road: the window's record, its Lean c
   # the commit verdict's run root, which the seal step held to the record's
   run=$("$PY" -c 'import json, sys; print(json.load(open(sys.argv[1]))["run_root"])' "$D/windows/w$K/commit/verdict.json") \
     || { step_not_run sampled-proofs "the window's commit verdict has no run root"; return; }
+  # the weights registration pins the roots a window's registered weight reads open against: given only where it holds some
+  regs=()
+  "$PY" -c 'import json, sys; sys.exit(0 if (json.load(open(sys.argv[1])) or {}).get("values") else 1)' "$WREG" 2> /dev/null \
+    && regs=(--registered "$WREG")
   (umask 077; mkdir -p "$s") && mkdir -p "$OUT/sampled-proofs" "$LOGS/sampled-proofs"
   git -C "$TREE" rev-list --first-parent "${MAIN_SHA:-HEAD}" > "$main" 2>/dev/null && [ -s "$main" ] \
     || { step_not_run sampled-proofs "no first-parent line of main for its challenger session to pin on (${MAIN_SHA:-HEAD} has none in this tree)"; return; }
   m0=$TREE:$TREE/benchmarks/numerical/python:$TREE/verity/protocols/proofs/flock/prover/python:$TREE/adapters/vllm
   (cd "$TREE" && env -u PYTHONPATH DEVELOPMENT=1 RAYON_NUM_THREADS="$(nproc)" RUST_MIN_STACK=$((64 << 20)) timeout -k 1m "$V3C_AUDIT_TIMEOUT" \
     "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py audit --window "$rec" --sampling-design "$law" \
-    --prover-circuit --development --run "$run" --registered "$WREG" \
+    --prover-circuit --development --run "$run" ${regs[@]+"${regs[@]}"} \
     --challenger local --main "$main" --m0-pythonpath "$m0" --bin "$bin" --lean "$leanb/verity-verify-proof" \
     --zk-server "$leanb/flock-zk-server" --lower "$leanb/flock-lower-check" --tmpl-unit-bin "$unit" \
     --lean-workers "${V3C_LEAN_WORKERS:-1}" --audit-mem-gb "$V3C_AUDIT_MEM_GB" --ports "${V3C_PORTS:-16}" --out "$s/audit") \
@@ -2133,7 +2137,7 @@ EOF
         step_not_run record "its verdict of record is Lean's members check in the sampled proofs' summary ($OUT/summary.json), which the sampled-proofs step did not write"
       elif rec=$("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" window-record "$OUT/summary.json" 2>&1); then RAN+=(record); say "$rec"
       else step_refused record "$rec"; fi ;;
-    composite) step_not_run composite "served_composite.sh reads the audit's cases under D/private/logs/sampled-proofs/keep/served or D/v3c-w*/audit and, and, where compute accounting is listed, Pearl+'s run case, and the window road writes neither: no input of the composite's stands, so its verdict is not made" ;;
+    composite) step_not_run composite "served_composite.sh reads the audit's cases under D/private/logs/sampled-proofs/keep/served or D/v3c-w*/audit and, where compute accounting is listed, Pearl+'s run case, and the window road writes neither: no input of the composite's stands, so its verdict is not made" ;;
   esac
 }
 steps_named() {  # every name in "$@" is a step road_step_named knows, and none is named twice: refused by name otherwise
