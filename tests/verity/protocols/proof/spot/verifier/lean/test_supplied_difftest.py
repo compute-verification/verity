@@ -9,6 +9,7 @@ import copy
 import functools
 import hashlib
 import importlib.util
+import json
 import re
 import shutil
 from pathlib import Path
@@ -18,6 +19,10 @@ from hypothesis import note, strategies as st
 
 import verity_difftest as D
 from verity.circuits import supplied as SU
+from verity.circuits.codec import encode_program
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.program import Program
+from verity.circuits.types import Array, Value
 from verity.protocols.proof.spot.verifier.one_stage import registered as G
 from verity.protocols.accounting.memory.pous.attester import memory_attester as MA
 
@@ -233,6 +238,22 @@ def test_named_cases(pieces, name, change, want):
     else:
         assert reference(j) == want
         assert pieces.call("supplied_marks", j) == ("output", D.canonical(want))
+
+
+MARKED_FN = bind(CompositeDefinition("TSuppliedMarked", 1, (),
+                                     lambda S: ((("w", Array(1, Value(16))), ("x", Array(1, Value(16)))), Array(1, Value(16))),
+                                     lambda B, S, w, x: w, register=False))
+
+
+@needs_lake
+def test_the_marks_lean_reads_are_the_ones_the_codec_writes(pieces):
+    """A Program's supplied mark, written into its descriptor's `inputs` by `codec.encode_program`, is the mark both
+    verifiers read off it, and the row they fill from it is the same."""
+    desc = json.loads(json.dumps(encode_program(Program(MARKED_FN, supplied={"w": ONE}))))
+    assert G.marks(desc) == {"w": ONE}
+    j = {**SETUP, "program": desc, "widths": {"w": 16}}
+    assert reference(j) == {"w": [[1]]}
+    assert pieces.call("supplied_marks", j) == ("output", D.canonical({"w": [[1]]}))
 
 
 def test_the_registrys_list_is_the_formats():

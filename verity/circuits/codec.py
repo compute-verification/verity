@@ -335,6 +335,8 @@ def encode_program(program, schema: str = SCHEMA) -> dict:
         "definitions": {fid: done[fid] for fid in seen},
         "annotations": dict(program.annotations),
     }
+    if (inputs := _inputs(program)) is not None:
+        desc["inputs"] = inputs
     if tables is not None:
         desc.update(tables.to_json())
     _check_domain(desc)
@@ -438,6 +440,12 @@ def _entry_head(fn: SpecializedDefinition) -> dict:
     return d
 
 
+def _inputs(program) -> list | None:
+    """``program``'s top-level `inputs` (`Program.inputs_entry`), a decoded one's as its descriptor holds it."""
+    entry = getattr(program, "inputs_entry", None)
+    return entry() if entry is not None else None
+
+
 def descriptor_chunks(program, schema: str = SCHEMA) -> Iterator[bytes]:
     """The bytes `program_digest` hashes, `canonical_json` of `encode_program(program, schema)` without ``annotations``, in pieces,
     without the descriptor's dict: one walk of the specializations (`_walk`), interning v1's tables in `encode_program`'s order,
@@ -462,6 +470,8 @@ def descriptor_chunks(program, schema: str = SCHEMA) -> Iterator[bytes]:
     skeleton = {"schema": schema, "boolean": bmap, "root": descriptor_id(program.root),
                 "program_fn": getattr(program, "program_fn_id", None) or descriptor_id(program.fn),
                 "definitions": {fid: heads[fid] for fid in seen}}
+    if (inputs := _inputs(program)) is not None:
+        skeleton["inputs"] = inputs
     if tables is not None:
         skeleton.update(tables.to_json())
         interned = (len(tables.callees), len(tables.type_json))
@@ -475,7 +485,8 @@ def descriptor_chunks(program, schema: str = SCHEMA) -> Iterator[bytes]:
             yield canonical_json(heads[fid])
         else:
             yield from _composite_chunks(fn, heads[fid], schema, tables)
-    yield (b'},"program_fn":' + canonical_json(skeleton["program_fn"]) + b',"root":' + canonical_json(skeleton["root"])
+    yield (b'}' + (b',"inputs":' + canonical_json(inputs) if inputs is not None else b"")
+           + b',"program_fn":' + canonical_json(skeleton["program_fn"]) + b',"root":' + canonical_json(skeleton["root"])
            + b',"schema":' + canonical_json(schema))
     if tables is not None:
         if (len(tables.callees), len(tables.type_json)) != interned:
@@ -758,6 +769,10 @@ class DecodedProgram:
         self.program_fn_id = desc["program_fn"]
         self.program_fn_functions = program_fn_functions  # the definitions `program_fn`'s record references
         self.boolean = dict(boolean or {})  # each word primitive's Boolean Definition, as the descriptor holds it
+        self.supplied = {e[0]: e[2] for e in desc.get("inputs") or () if len(e) == 3}
+
+    def inputs_entry(self) -> list | None:
+        return self.desc.get("inputs")
 
     @property
     def gates(self) -> int:
