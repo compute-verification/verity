@@ -23,7 +23,7 @@ Not yet: one function holding the period's order (`period.py`: the memory wipe, 
 
 ## What varies
 
-| implementation | sampled-proofs | pearl-plus | inference-only | pous | bandwidth | network-attester | wipe |
+| implementation | SPOT | PoUW (Pearl+) | inference-only | PoUS | PoUB | network attester | memory wipe |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `applications/remote.toml` | exists | exists | exists | never written | never written | never written | never written |
 | `applications/onsite_full.toml` | exists | exists | exists | exists | exists | exists | exists |
@@ -37,7 +37,7 @@ rule: any protocol's reject rejects, and an accept needs every protocol's accept
 
 ## Interfaces
 
-- From the application: `format`, `protocols`, `workload` (`name`, `params`), `service` (`law`), `program` (`commit`),
+- From the application: `format`, `protocols`, `workload` (`name`, `params`), `service` (the sampling design), `program` (`commit`),
   `params` (each protocol's, by its id), `party`, `pin`, `channel`; the hosts come in `--bindings`, which change no hash.
 - To each protocol: its `params`, its parties on their machines, and the run's state directory.
 - It gives: each period's `VERDICT` line (the composite's verdict, each protocol's under `components`), printed and
@@ -49,6 +49,6 @@ rule: any protocol's reject rejects, and an accept needs every protocol's accept
 uv run verity run applications/remote.toml --dry-run
 ~~~
 
-It runs nothing and needs no GPU: it prints a `PLAN` line for each of the four parties (workers, challenger, firewall,
+It runs nothing and needs no GPU: it prints a `PLAN` line for each of the four parties (workers, challenger, ZK server,
 verifier: its machine and each protocol's entry), a `CHANNEL` line for each of the five channels, and a `DRY` line of
 the counts, the configuration's hash and no unbound binding.
