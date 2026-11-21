@@ -40,7 +40,7 @@ from verity.commitments.periods.rows import registered as registered_commit
 
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.config import CHECKPOINTS
-from verity_vllm.records.weights_registration import WeightsRegistration
+from verity_vllm.records.weights_registration import OF_RECORD, WeightsRegistration
 
 from . import window_circuit as WC
 from .common import _arr_shape
@@ -385,7 +385,7 @@ def register(registered: Any, out: str | Path, checkpoint_dir: str, checkpoints:
              tables: Any = None) -> str:
     """The deployment's one registration, written into ``out`` before its first epoch: the committer's weights
     registration (`REGISTRATION`, `weights_registration`), its salts beside it, under which every later epoch commits its
-    weights, its projection (`weights_registration.OF_RECORD`) and its record (`DEPLOYMENT_RECORD`, `deployment_record`).
+    weights, its projection (`OF_RECORD`) and its record (`DEPLOYMENT_RECORD`, `deployment_record`).
     -> the record's digest (`docket_digest.digest`). Refused (ValueError) where ``out`` holds a registration, naming its
     digest."""
     from verity.commitments import docket_digest as DD
@@ -406,6 +406,6 @@ def register(registered: Any, out: str | Path, checkpoint_dir: str, checkpoints:
     return DD.digest(rec)
 
 
-__all__ = ["DEPLOYMENT", "DEPLOYMENT_RECORD", "REGISTRATION", "WEIGHTS_CLASS", "Grain", "WeightsRegistration",
+__all__ = ["DEPLOYMENT", "DEPLOYMENT_RECORD", "OF_RECORD", "REGISTRATION", "WEIGHTS_CLASS", "Grain", "WeightsRegistration",
            "deployment_record", "record_words", "register", "registration_pins", "value_salts", "weight_value",
            "weight_values", "weights_record", "weights_registration"]

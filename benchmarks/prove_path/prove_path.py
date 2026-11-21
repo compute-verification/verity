@@ -1225,8 +1225,7 @@ def weights_registration_of_serve(a: argparse.Namespace) -> dict[str, Any]:
     import numpy as np
 
     from verity_vllm.pipeline.advice import registered_weights
-    from verity_vllm.program.predict.window_weights import DEPLOYMENT_RECORD, REGISTRATION, register
-    from verity_vllm.records.weights_registration import OF_RECORD
+    from verity_vllm.program.predict.window_weights import DEPLOYMENT_RECORD, OF_RECORD, REGISTRATION, register
 
     out = Path(a.out)
     if out.name != REGISTRATION or (a.deployment_record and Path(a.deployment_record) != out.with_name(DEPLOYMENT_RECORD)):
