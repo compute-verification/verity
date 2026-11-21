@@ -343,7 +343,6 @@
         "security/Definitions/Registration/Guarantees/Sheet.lean",
         "security/Definitions/Pouw/Guarantees/TS.lean",
         "security/Definitions/Pouw/Guarantees/TS/",
-        "security/Proofs/Pouw/ChainWork.lean",
         "security/Proofs/Pouw/CoinFlow.lean",
         "security/Proofs/Pouw/CoinFlow/",
         "security/Proofs/Pouw/FillerLuck.lean",
