@@ -292,6 +292,13 @@ def counts_refused(k: int | Mapping[str, int], templates: Sequence[SpecializedDe
         [f"missing {t}" for t in missing] + [f"{t} is no template of the check" for t in other])
 
 
+def windowed(layout: BR.Layout, rule: Rule) -> bool:
+    """Whether the class's interior is a window of its templates (`TemplatePopulations`), even of one: several templates,
+    per-span values, or a parameter round 1's record commits, which the interior program takes as a root parameter
+    (`Design.window`)."""
+    return len(layout.templates) > 1 or bool(rule.span_values) or bool(design(layout, unlinked=True).inputs)
+
+
 def spec_of(layout: BR.Layout, rule: Rule) -> S.Spec:
     served = layout.schemas()
     linked = [n for n, _rows, _leaf in rule.span_values]
@@ -307,8 +314,7 @@ def spec_of(layout: BR.Layout, rule: Rule) -> S.Spec:
               *(S.Public(f"{k}:{v}", "structure", f"{v}'s {k}: a replay-block parameter's rows, from the sample")
                 for v in linked for k in ("leaves", "words", "domain")))
     digests = tuple(P.program_digest(Program(t)) for t in layout.templates)
-    # a parameter round 1 commits is a root parameter of the interior's TemplatePopulations (`Design.window`)
-    window = len(digests) > 1 or bool(linked) or bool(design(layout, unlinked=True).inputs)
+    window = windowed(layout, rule)
     check = S.Check(digests if window else digests[0],
                     P.template_instances_query(layout.templates) if window else layout.query,
                     proof_deadline=rule.proof_deadline)
@@ -317,9 +323,9 @@ def spec_of(layout: BR.Layout, rule: Rule) -> S.Spec:
 
 def stream_of(layout: BR.Layout, rule: Rule, coins: CC.ChallengerCoins, *, delta: float = 0.5, **kwargs: Any) -> S.Stream:
     """The class's two-stage stream on ``coins``: its units the check's templates (`Layout.templates`), its replay block
-    the layout's, its per-span values the rule's (a window of its templates then, even of one)."""
+    the layout's, its per-span values the rule's (a window of its templates where `windowed`)."""
     ts = layout.templates
-    return S.Stream(spec_of(layout, rule), ts[0] if len(ts) == 1 and not rule.span_values else ts, budget=1, delta=delta,
+    return S.Stream(spec_of(layout, rule), ts if windowed(layout, rule) else ts[0], budget=1, delta=delta,
                     challenger=CHALLENGER, coins=coins, replay=layout.replay, span_values=rule.span_values, **kwargs)
 
 
