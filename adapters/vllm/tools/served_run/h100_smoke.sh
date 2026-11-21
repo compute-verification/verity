@@ -253,6 +253,10 @@ if [ "${1:-}" = card ]; then  # under the lease: the wipe where the application 
     sleep 5
   done
   [ "$listened" = 1 ] || { say "SMOKE FAILED serve: the server did not listen on port $PORT within 10 minutes (tail $SR/serve.log)"; exit 1; }
+  # the deployment's one registration, before the first request: every epoch's close reads it and none writes one
+  "$PY" benchmarks/prove_path/prove_path.py weights-registration --serve-run "$D" --checkpoint-dir "$SNAP" --out "$WREG" \
+    --deployment-record "$DREG" > "$SR/weights_registration.log" 2>&1 \
+    || { say "SMOKE FAILED weights-registration ($SR/weights_registration.log)"; exit 1; }
   "$PY" adapters/vllm/tools/served_run/inputs.py tokenize --port "$PORT" --dataset "$DATASET" > "$SR/tokenize.log" 2>&1 \
     || echo "TOKENIZE FAILED ($SR/tokenize.log): $(tail -1 "$SR/tokenize.log")" >> "$SR/tokenize.log"
   "$PY" "${LOAD[@]}" > "$SR/load.log" 2>&1 || { say "SMOKE FAILED request ($SR/load.log)"; exit 1; }
@@ -272,13 +276,8 @@ for w in sorted(Path(sys.argv[1]).glob("w*")):
 print(f"SMOKE SEALED AND OPENED window {w.name} with no card visible: {r.commitment}, run root {bytes(r.run.run_root).hex()[:16]}")
 EOF
 ) || { say "SMOKE FAILED open: the sealed bundle against its record ($D/windows)"; exit 1; }
-if [ -s "$WREG" ]; then  # the serve's first close registered the weights (close_record.Record.roots)
-  said+="; WEIGHTS REGISTRATION the serve's, made at its first close"
-else
-  "$PY" benchmarks/prove_path/prove_path.py weights-registration --serve-run "$D" --checkpoint-dir "$SNAP" --out "$WREG" \
-    --deployment-record "$DREG" > "$SR/weights_registration.log" 2>&1 \
-    || { say "$said; SMOKE FAILED weights-registration ($SR/weights_registration.log)"; exit 1; }
-fi
+[ -s "$WREG" ] && [ -s "$DREG" ] || { say "$said; SMOKE FAILED: no deployment registration ($WREG, $DREG), which is written before the first request"; exit 1; }
+said+="; WEIGHTS REGISTRATION the deployment's, written before the first request"
 CA=$("$PY" benchmarks/prove_path/prove_path.py compiler --serve-run "$D" --cap-bits "$CAP" \
   | "$PY" -c "import json, sys; c = json.load(sys.stdin)['inner']; print('--compiler-name', c['name'], '--compiler-digest', c['digest'])") \
   || { say "$said; SMOKE FAILED compiler (prove_path.py compiler)"; exit 1; }

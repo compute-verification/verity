@@ -185,3 +185,46 @@ def test_the_launcher_runs_the_cards_parts_under_the_lease_and_the_record_after_
                                   'timeout -k 1m "$WC_TIMEOUT"')]
     assert at == sorted(at)
     assert '[ "$RECORD_IN_LEASE" != 1 ] || REC_ARGS+=(--record-in-lease)' in text and "no proof is made" in text
+
+
+def test_a_deployment_registers_once_and_each_epochs_close_reads_its_registration(tmp_path, monkeypatch):
+    """`register` writes the deployment's one registration (its record with the program at the top level, no protocol, the
+    embedding's table among its entries, the salts beside it) and refuses a second, naming the first's digest; an epoch's
+    close (`Record.roots`, `window_weights.weight_values`) reads it and writes nothing, refusing a deployment with none, so
+    two epochs commit the registered roots under the kept salts and the record's digest stays the one written."""
+    import functools
+
+    from verity.commitments import domains as DM
+    from verity.commitments import salt_file as SF
+
+    from tests.program.predict.test_window_circuit import GRAIN, S, _checkpoint
+    from verity_vllm.program.predict.window_weights import DEPLOYMENT_RECORD, REGISTRATION, register
+    from verity_vllm.records.weights_registration import OF_RECORD
+
+    monkeypatch.setattr(WW, "weights_registration", functools.partial(WW.weights_registration, grain=GRAIN))
+    reg, (d, man) = S._registered(), _checkpoint(tmp_path / "ck")
+    out = tmp_path / "deployment"
+    out.mkdir()
+    (out / "serve.json").write_text(json.dumps({"model": "org/m", "revision": "r"}))
+    close = Record("rate:1/4", d, tmp_path / "salt", checkpoints=man)
+    with pytest.raises(ValueError, match="holds no registration: a deployment registers once, before its first epoch"):
+        close.roots(reg, out)
+    digest = register(reg, out, d, man)
+    def held() -> dict[str, bytes]:
+        return {str(f.relative_to(out)): f.read_bytes() for f in sorted(out.rglob("*")) if f.is_file()}
+
+    files = held()
+    assert {REGISTRATION, DEPLOYMENT_RECORD, OF_RECORD, "serve.json"} < set(files)
+    assert all(f.startswith(SF.beside(out / REGISTRATION).name + "/") for f in set(files) - {REGISTRATION, DEPLOYMENT_RECORD, OF_RECORD, "serve.json"})
+    doc, rec = json.loads(files[REGISTRATION]), json.loads(files[DEPLOYMENT_RECORD])
+    assert DD.digest(rec) == digest and rec == WW.deployment_record(doc) and "protocol" not in rec
+    assert (rec["format"], rec["program"], rec["previous"]) == (DM.REGISTRATION, doc["program"], None)
+    assert "weights/model.embed_tokens.weight@64/table" in [e["value"] for e in rec["registered"]]
+    with pytest.raises(ValueError, match=re.escape(f"holds the deployment's registration already ({digest})")):
+        register(reg, out, d, man)
+    words = WW.record_words(reg, d, man)
+    for _epoch in range(2):
+        assert close.roots(reg, out) == ADV.registered_weights(doc)
+        served = WW.weight_values(reg, words, out / REGISTRATION, GRAIN)
+        assert {p: v.root.hex() for p, v in served.items()} == {e["value"]: e["root"] for e in rec["registered"]}
+        assert held() == files

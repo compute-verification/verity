@@ -20,6 +20,8 @@ from verity.protocols.proof.spot.prover import docket as DK
 from verity.commitments import registered_value as RV
 from verity.protocols.proof.spot.prover.served import ServedTree, register_served
 
+from test_registered import _per_window
+
 XOR8 = PrimitiveDefinition("ServedTestXor8", 1, (("a", Value(8)), ("b", Value(8))), Value(8), lambda a, b: a ^ b,
                            register=False)
 MIX = bind(CompositeDefinition("ServedTestMix", 0, (), lambda S: ((("x", Array(2, Value(8))), ("w", Array(2, Value(8)))), Value(8)),
@@ -33,7 +35,7 @@ SERVED = {"kind": "served", "row": 7, "run": "r-served"}
 Q = P.template_instance_query(MIX.id)
 
 
-def _program(pos=POS, rows: int = len(TABLE), unread: bool = False) -> Program:
+def _program(pos=POS, rows: int = len(TABLE), unread: bool = False, registered=("W",)) -> Program:
     params = (("x", Array(len(pos), Array(2, Value(8)))), ("W", Array(rows, Array(2, Value(8)))))
     params += (("V", Array(1, Array(2, Value(8)))),) if unread else ()
 
@@ -43,7 +45,7 @@ def _program(pos=POS, rows: int = len(TABLE), unread: bool = False) -> Program:
     def body(B, S, x, W, *_):
         return coll_concat(sig(S)[1], [B.call(MIX, x[i], W[p]) for i, p in enumerate(pos)])
 
-    return Program(bind(CompositeDefinition("ServedTestProgram", 0, (), sig, body, register=False)))
+    return Program(bind(CompositeDefinition("ServedTestProgram", 0, (), sig, body, register=False)), registered=registered)
 
 
 def _ports(prog: Program) -> dict:
@@ -73,7 +75,7 @@ def test_the_registration_it_builds_passes_r7_and_the_file_is_the_verifiers():
     assert sr.registered == [reg.entry()] and sr.values == {"W": 2} and sr.outputs is None
     assert sr.roots == {"W": reg.root.hex()}
     rec, ports = _record(prog, sr.registered)
-    assert R.check(rec, prog, Q, SAMPLING_DESIGN, SCHEME, ports, registered=sr.values, outputs=sr.outputs).ok
+    assert R.check(rec, prog, Q, SAMPLING_DESIGN, SCHEME, ports, registered=sr.values, outputs=sr.outputs, pinned=sr.roots).ok
     assert sr.file == G.reads_file(prog, Q, {"W": 2}, {"W": reg.root.hex()})
     assert sr.ports == {"w": {"value": "W", "root": reg.root.hex(), "leaves": 5, "words": 2, "word_bits": 16,
                               "domain": reg.domain.domain_id.hex(), "reads": list(POS)}}
@@ -108,7 +110,7 @@ def test_a_32_bit_tree_names_its_width():
 
     prog = Program(bind(CompositeDefinition("ServedTestWide", 0, (), sig,
                                             lambda B, S, x, W: coll_concat(sig(S)[1], [B.call(MIX32, x[i], W[p]) for i, p in enumerate(POS)]),
-                                            register=False)))
+                                            register=False)), registered=("W",))
     q = P.template_instance_query(MIX32.id)
     reg = RV.Registered.commit(P.program_digest(prog), "W", [[r * 0x10001, r] for r in range(5)], word_bits=32)
     tree = ServedTree.of(reg)
@@ -119,7 +121,7 @@ def test_a_32_bit_tree_names_its_width():
     ports = {"x": {"leaves": len(POS), "domain": R.window_domain(part["program"], P.digest(part), "x", "hm96-sha512/row/v1",
                                                                   len(POS), "r-served")}}
     rec = DK.record(prog, q, SAMPLING_DESIGN, SCHEME, [{"port": "x", "root": "ab" * 64, **ports["x"]}], SERVED, registered=sr.registered)
-    assert R.check(rec, prog, q, SAMPLING_DESIGN, SCHEME, ports, registered=sr.values).ok
+    assert R.check(rec, prog, q, SAMPLING_DESIGN, SCHEME, ports, registered=sr.values, pinned={"W": reg.root.hex()}).ok
     with pytest.raises(ValueError, match="16-bit leaves, and the program's parameter is 5 rows of 2 32-bit"):
         register_served(prog, q, [dataclasses.replace(tree, word_bits=16)])
 
@@ -168,7 +170,8 @@ def test_a_reused_tree_takes_an_earlier_records_registered_value():
     assert {e["domain"] for e in sr.ports.values()} == {dom} and {e["root"] for e in sr.ports.values()} == {"cd" * 64}
     rec = DK.record(prog, Q, SAMPLING_DESIGN, SCHEME, first["roots"], {**SERVED, "row": 8}, previous=DD.digest(earlier),
                    registered=sr.registered)
-    assert R.check(rec, prog, Q, SAMPLING_DESIGN, SCHEME, ports, registered=sr.values, outputs=sr.outputs, log=[earlier],
+    assert _per_window(R.check, ("W",))(rec, prog, Q, SAMPLING_DESIGN, SCHEME, ports, registered=sr.values, outputs=sr.outputs,
+                                        log=[earlier],
                    window_root="a7" * 64).ok
     for bad, why in ((dataclasses.replace(tree, root="ce" * 64), "not value 'a/16@0'"),
                      (dataclasses.replace(tree, domain="db" * 64), "not value 'a/16@0'"),
@@ -272,11 +275,13 @@ def test_r7_counts_a_bit_row_trees_rows_in_its_format():
         sr = register_served(prog, Q, [ServedTree.of(RV.Registered.commit(P.program_digest(prog), "W", PACKED, schema=schema))])
         assert sr.schemas == {"W": schema}
         rec, ports = _record(prog, sr.registered)
-        assert R.check(rec, prog, Q, SAMPLING_DESIGN, SCHEME, ports, registered=sr.values, schemas=sr.schemas).ok
+        assert R.check(rec, prog, Q, SAMPLING_DESIGN, SCHEME, ports, registered=sr.values, schemas=sr.schemas,
+                       pinned=sr.roots).ok
         v = R.check(rec, prog, Q, SAMPLING_DESIGN, SCHEME, ports, registered=sr.values)
         assert not v.ok and v.detail["R7-leaves"] == {"value": "W", "registered": 5, "verifier": 10}
         other = {G.SCHEMA_V2: G.SCHEMA_SEG, G.SCHEMA_SEG: G.SCHEMA_V2}[schema]
-        assert R.check(rec, prog, Q, SAMPLING_DESIGN, SCHEME, ports, registered=sr.values, schemas={"W": other}).ok
+        assert R.check(rec, prog, Q, SAMPLING_DESIGN, SCHEME, ports, registered=sr.values, schemas={"W": other},
+                       pinned=sr.roots).ok
     _, tree = _tree(prog)
     assert register_served(prog, Q, [tree]).schemas == {}
 
@@ -285,7 +290,7 @@ def test_r7_counts_a_bit_row_trees_rows_in_its_format():
 
     wide = Program(bind(CompositeDefinition("ServedTestWideV2", 0, (), sig,
                                             lambda B, S, x, W: coll_concat(sig(S)[1], [B.call(MIX32, x[i], W[p]) for i, p in enumerate(POS)]),
-                                            register=False)))
+                                            register=False)), registered=("W",))
     q = P.template_instance_query(MIX32.id)
     reg = RV.Registered.commit(P.program_digest(wide), "W", [[r * 0x10001, r] for r in range(5)], word_bits=32, schema=G.SCHEMA_V2)
     sr = register_served(wide, q, [ServedTree.of(reg)])
@@ -294,8 +299,8 @@ def test_r7_counts_a_bit_row_trees_rows_in_its_format():
     ports = {"x": {"leaves": len(POS), "domain": R.window_domain(part["program"], P.digest(part), "x", "hm96-sha512/row/v1",
                                                                   len(POS), "r-served")}}
     rec = DK.record(wide, q, SAMPLING_DESIGN, SCHEME, [{"port": "x", "root": "ab" * 64, **ports["x"]}], SERVED, registered=sr.registered)
-    assert R.check(rec, wide, q, SAMPLING_DESIGN, SCHEME, ports, registered=sr.values).ok
-    assert R.check(rec, wide, q, SAMPLING_DESIGN, SCHEME, ports, registered=sr.values, schemas=sr.schemas).ok
+    assert R.check(rec, wide, q, SAMPLING_DESIGN, SCHEME, ports, registered=sr.values, pinned=sr.roots).ok
+    assert R.check(rec, wide, q, SAMPLING_DESIGN, SCHEME, ports, registered=sr.values, schemas=sr.schemas, pinned=sr.roots).ok
 
 
 @pytest.mark.parametrize("schemas, registered", [
@@ -352,7 +357,7 @@ def test_a_fixed_name_served_again_without_the_windows_root_is_refused():
     reg, tree = _tree(prog)
     sr = register_served(prog, Q, [tree])
     first, ports = _record(prog, sr.registered)
-    assert R.check(first, prog, Q, SAMPLING_DESIGN, SCHEME, ports, registered=sr.values).ok
+    assert R.check(first, prog, Q, SAMPLING_DESIGN, SCHEME, ports, registered=sr.values, pinned=sr.roots).ok
     _, fresh = _tree(prog)
     for again in (tree, fresh):
         with pytest.raises(ValueError, match=r"registered values \['W'\].*`window_root`.*`held`"):
@@ -371,7 +376,7 @@ def test_each_window_registers_its_own_trees_under_its_root_and_the_weights_once
     window under the same name, R7 accepts each window's record with the returned copies, and the weights (W, `held`)
     keep their window-independent domain and first root. A second window that serves the first window's x tree is
     refused: its domain is the first window's."""
-    prog = _program()
+    prog = _program(registered=("x", "W"))
     d = P.program_digest(prog)
     w = RV.Registered.commit(d, "W", TABLE)
     xs = [RV.Registered.commit(d, "x", [[i, i] for i in range(len(POS))], window=r) for r in WINDOWS]
@@ -382,8 +387,8 @@ def test_each_window_registers_its_own_trees_under_its_root_and_the_weights_once
         assert sr.ports["x"]["domain"] == x.entry()["domain"] and sr.ports["w"]["domain"] == w.entry()["domain"]
         rec, ports = _record(prog, sr.registered, window={**SERVED, "row": 7 + len(log)},
                              previous=DD.digest(log[-1]) if log else None)
-        assert R.check(rec, prog, Q, SAMPLING_DESIGN, SCHEME, ports, log=log, registered=sr.values, window_root=sr.window_root,
-                       held=sr.held).ok
+        assert _per_window(R.check)(rec, prog, Q, SAMPLING_DESIGN, SCHEME, ports, log=log, registered=sr.values,
+                                    window_root=sr.window_root, held=sr.held, pinned={"W": w.root.hex()}).ok
         log.append(rec)
     with pytest.raises(ValueError, match="registered-value domain"):
         register_served(prog, Q, [ServedTree.of(xs[0]), ServedTree.of(w)], log=log[:1], window_root=WINDOWS[1],

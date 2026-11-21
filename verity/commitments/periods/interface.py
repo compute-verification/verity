@@ -1780,10 +1780,12 @@ def run_input_reads(templates: Sequence[tuple[Any, int]], program: Any, query: M
                     ) -> tuple[Read, ...]:
     """Each template's input port no wire, registered read, ingress or boundary read fills (``filled``, by (template,
     port)) as a read of the one value its rows are committed in, C's run input node ``w``'s tree ``input/n<w>``
-    (`Flock.Registered.freshValue`): the node's leaves in rows of the port's, unit i's row the node's row i, its units
-    taken across all its template's ranges of C's root in their order. Refused (ValueError) where such a port is cut, a
-    unit's row is not whole leaves of one run input node, or its units don't read one such node's rows each once, none
-    skipped, in unit order (named by unit and row): `Flock.OneCircuit.pos` reads that position and no other."""
+    (`Flock.Registered.freshValue`): the node's leaves in rows of the port's, its units taken across all its template's
+    ranges of C's root in their order, unit i's row the node's row ``r0 + i * s`` (``base`` ``r0`` rows' words, ``step``
+    ``s`` rows' words), the rows read a slice of the node or all of it. Refused (ValueError) where such a port is cut, a
+    unit's row is not whole leaves of one run input node or runs past its end, the node is no whole number of such rows,
+    or its units read a row twice, out of unit order or off one stride (named by unit and row): `Flock.OneCircuit.pos`
+    reads that position and no other."""
     free = {descriptor_id(fn): [p for p, _ in fn.signature()[0] if (descriptor_id(fn), p) not in filled]
             for fn, _ in templates}
     if not any(free.values()):
@@ -1812,7 +1814,7 @@ def run_input_reads(templates: Sequence[tuple[Any, int]], program: Any, query: M
                 if p not in rows:
                     continue
                 got = ref_runs(member_refs(arg, ax, j) if node.form == "batch" else arg.refs)
-                sp, w, lo, hi = got[0] if len(got) == 1 else ("", 0, 0, 0)
+                sp, w, lo, hi = got[0] if got else ("", 0, 0, 0)
                 fw = body.nodes[w].fn
                 kind = input_id(getattr(fw, "id", "")) if sp == "n" else None
                 if kind is not None and kind[0] != RUN:
@@ -1820,7 +1822,10 @@ def run_input_reads(templates: Sequence[tuple[Any, int]], program: Any, query: M
                                      "fills it: a port of a registered or supplied node is read at its registered root, "
                                      "never in a tree of the period's")
                 r, q = divmod(lo, leaves)
-                if kind is None or w in body.recut or q or hi - lo != leaves or hi > offs[w + 1] - offs[w]:
+                if kind is not None and w not in body.recut and not q and hi == offs[w + 1] - offs[w] < lo + leaves:
+                    raise ValueError(f"run inputs: {tid} {p}: unit {u}'s row from leaf {lo} runs past run input node {w}'s "
+                                     f"{hi} leaves")
+                if len(got) != 1 or kind is None or w in body.recut or q or hi - lo != leaves:
                     raise ValueError(f"run inputs: {tid} {p}: unit {u}'s row is not one row of a run input node's leaves, "
                                      f"in rows of its {leaves}")
                 if rows[p] and rows[p][0][0] != w:
@@ -1831,21 +1836,24 @@ def run_input_reads(templates: Sequence[tuple[Any, int]], program: Any, query: M
             if not rows.get(p):
                 continue
             w, read = rows[p][0][0], [r for _, r in rows[p]]
-            m = -(-(offs[w + 1] - offs[w]) // leaves)
+            if (offs[w + 1] - offs[w]) % leaves:
+                raise ValueError(f"run inputs: {tid} {p}: run input node {w}'s {offs[w + 1] - offs[w]} leaves are no whole "
+                                 f"number of its rows of {leaves}")
             first: dict[int, int] = {}
             for u, r in enumerate(read):
                 if r in first:
                     raise ValueError(f"run inputs: {tid} {p}: unit {u} reads row {r} of run input node {w}, which unit "
                                      f"{first[r]} reads too")
                 first[r] = u
-            if len(read) != m:
-                r = min(set(range(m)) - set(read))
-                raise ValueError(f"run inputs: {tid} {p}: row {r} of run input node {w}'s {m} is read by no unit")
-            u = next((u for u, r in enumerate(read) if r != u), None)
+                if u and r < read[u - 1]:
+                    raise ValueError(f"run inputs: {tid} {p}: unit {u} reads row {r} of run input node {w}, before unit "
+                                     f"{u - 1}'s row {read[u - 1]}: its units read the node's rows in unit order")
+            s = read[1] - read[0] if len(read) > 1 else 1
+            u = next((u for u, r in enumerate(read) if r != read[0] + u * s), None)
             if u is not None:
                 raise ValueError(f"run inputs: {tid} {p}: unit {u} reads row {read[u]} of run input node {w}, not row "
-                                 f"{u}: its units read the node's rows in unit order")
-            out.append(Read(tid, p, f"input/n{w}", 0, (n,), 0, (words[p],)))
+                                 f"{read[0] + u * s}: its units read the node's rows at one stride")
+            out.append(Read(tid, p, f"input/n{w}", 0, (n,), read[0] * words[p], (s * words[p],)))
     return tuple(out)
 
 
@@ -3313,6 +3321,10 @@ class Window:
         if missing := [v for v in program_values(self.circuit.registered) if v[0] not in held]:
             raise ValueError(f"the circuit's values {[v for v, _n, _w in missing]} have no committed value: give each in "
                              "the period's registered")
+        values = SU.registered_values(self.window.program, [v for v, _n, _w in program_values(self.circuit.registered)])
+        if unheld := [v for v in values if v not in held]:
+            raise ValueError(f"C's supplied anchors name {unheld}, whose tables the period holds no committed value of: "
+                             "give each in the period's registered")
         d = Path(out_dir)
         d.mkdir(parents=True, exist_ok=True)
         body = circuit_bytes(self.circuit_record())
@@ -3322,7 +3334,7 @@ class Window:
                  **({"registered_roots": roots} if roots else {})}
         return CS.write(c, d, bound, self.labels(), kind=kind, registered=self._entries, registrar=registrar,
                         index_salt=index_salt, previous=previous,
-                        entries=[held[v].entry() for v, _n, _w in program_values(self.circuit.registered)],
+                        entries=[held[v].entry() for v in values],
                         outputs=[{"port": v.value, "root": v.root.hex(), "leaves": v.leaves,
                                   "domain": v.domain.domain_id.hex()} for v in self._inputs().values()])
 

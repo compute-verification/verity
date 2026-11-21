@@ -1,6 +1,6 @@
 """The committer's weights registration (`verity-vllm/weights-registration/v1`): the hiding root of each weight parameter the
-window circuit registers (``weights/<label>@<words>``), its rows committed under the committer's secret salts once per model
-and key, before the first window's coins (`program.predict.window_weights.weights_registration` writes it), as the verifier
+window circuit registers (``weights/<label>@<words>``), its rows committed under the committer's secret salts once per
+deployment, before its first epoch's coins (`program.predict.window_weights.weights_registration` writes it), as the verifier
 pins it (`window_weights.registration_pins`, `records_audit.py count --pins`) and a window's registration records it
 (`pipeline.advice.registered_weights`). It names no key and no salt: what it states of the weights is each one's size and
 its hiding root."""
