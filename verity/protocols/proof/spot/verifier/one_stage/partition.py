@@ -43,6 +43,7 @@ from verity.circuits.partition_object import (FORMAT, QueryRefused, program_sha5
 from verity.circuits.partition_query import QUERY_X, evaluate, is_template_query, ranges, strata
 from verity.circuits.program import Program, is_input, is_registered
 from verity.circuits.refs import Affine, Concat, Grid, Strided
+from verity.circuits.types import axis_runs
 
 _PRE_CANONICAL = {"program", "query"}
 
@@ -230,6 +231,93 @@ def held_reads(program: Program, query: Mapping[str, Any], held: Iterable[range]
     return out
 
 
+def input_reads(program: Program, query: Mapping[str, Any], held: Iterable[range]) -> list[tuple[str, str, range]]:
+    """Each template parameter whose argument reads an Input node inside one of `held`, as ``(template, parameter, the
+    range of `held` it reads)``, a root node at a time, never its members or its gates. `QueryRefused` for a query other
+    than a template query."""
+    part = _template(program, query, "an Input's readers")
+    nodes, held = program.root.body.nodes, list(held)
+    inside = {k: h for k, node in enumerate(nodes) if is_input(node.fn) for h in held if within(program, h, k)}
+    out: list[tuple[str, str, range]] = []
+    for k, t, _lo, _n in part.ranges:
+        params = [p for p, _ in nodes[k].fn.signature()[0]]
+        for p, a in zip(params, nodes[k].args):
+            out.extend((t, p, inside[i]) for i in dict.fromkeys(i for i, *_ in _runs(a.refs) if i in inside))
+    return out
+
+
+def held_value(program: Program, held: Sequence[tuple[str, range]], i: int) -> str | None:
+    """The value of `held` whose gates hold root node `i`, an Input node (the first that holds it); None for another node
+    or one outside them. The Lean's `Partition.heldValue` is this."""
+    if not is_input(program.root.body.nodes[i].fn):
+        return None
+    return next((v for v, g in held if within(program, g, i)), None)
+
+
+def member_nodes(program: Program, k: int, m0: int, m1: int) -> list[tuple[str, int]]:
+    """Each ``(parameter, root node)`` whose argument root node `k`'s members ``[m0, m1)`` read names, in parameter and
+    part order, once each. A part counts where it meets the members' own leaves of a mapped argument (a batch's mapped
+    axis, a scan's xs), modulo the period the axis repeats at, and wherever an unmapped argument has it. The Lean's
+    `Partition.memberNodes` is this."""
+    node = program.root.body.nodes[k]
+    out: list[tuple[str, int]] = []
+    for pi, (p, a) in enumerate(zip([p for p, _ in node.fn.signature()[0]], node.args)):
+        dims = _dims(node, pi, a.type)
+        parts = a.refs.parts if isinstance(a.refs, Concat) else [a.refs]
+        starts = a.refs.starts if isinstance(a.refs, Concat) else [0]
+        for q, s in zip(parts, starts):
+            if q.count and _meets(dims, m0, m1, s, q.count):
+                out.extend(x for i in _part_nodes(q) if (x := (p, i)) not in out)
+    return out
+
+
+def held_of(program: Program, held: Sequence[tuple[str, range]], ns: Iterable[tuple[str, int]]) -> list[tuple[str, str]]:
+    """The ``(parameter, value)``s of `ns` whose node is an Input inside the gates of a value of `held` (`held_value`),
+    once each. The Lean's `Partition.heldOf` is this."""
+    out: list[tuple[str, str]] = []
+    for p, i in ns:
+        if (v := held_value(program, held, i)) is not None and (p, v) not in out:
+            out.append((p, v))
+    return out
+
+
+def member_reads(program: Program, held: Sequence[tuple[str, range]], k: int, m0: int, m1: int) -> list[tuple[str, str]]:
+    """The ``(parameter, value)``s of `held` root node `k`'s members ``[m0, m1)`` read (`member_nodes`, `held_of`). The
+    Lean's `Partition.memberReads` is this."""
+    return held_of(program, held, member_nodes(program, k, m0, m1))
+
+
+def _dims(node: Any, pi: int, t: Any) -> tuple[int, int] | None:
+    """``(d, L)`` of argument `pi` of `node` where its members each read a run of `L` leaves at m of `d` (the Lean's
+    `Arg.dims`); None where every member reads all of it."""
+    if node.form == "batch" and node.axes[pi] is not None:
+        _outer, d, leaves = axis_runs(t, node.axes[pi])
+        return d, leaves
+    if node.form == "scan" and 1 <= pi <= node.n_xs:
+        return t.n, t.elem.leaves
+    return None
+
+
+def _meets(dims: tuple[int, int] | None, m0: int, m1: int, s: int, n: int) -> bool:
+    if dims is None:
+        return True
+    d, leaves = dims
+    per = d * leaves
+    if per == 0 or n >= per:
+        return True
+    o = s % per
+    return (o < m1 * leaves and m0 * leaves < o + n) or m0 * leaves + per < o + n
+
+
+def _part_nodes(q: Any) -> list[int]:
+    """The root nodes part `q` of an argument names (the Lean's `Registered.partNodes`)."""
+    if isinstance(q, (Affine, Strided)):
+        return [q.idx] if q.space == "n" else []
+    if isinstance(q, Grid):
+        return [i for s, i, *_ in q.lanes if s == "n"]
+    return [i for s, i, _j in q if s == "n"]
+
+
 def within(program: Program, gates: range, k: int) -> bool:
     """Whether root node `k`'s gates lie in `gates`. The Lean's `Partition.within` is this."""
     offsets = program.root.body.offsets
@@ -256,5 +344,5 @@ def _merged(rs: Sequence[tuple[int, int]]) -> list[tuple[int, int]]:
 
 
 __all__ = ["template_id", "FORMAT", "QueryRefused", "digest", "evaluate", "fanout", "in_order", "is_template_query", "partition",
-           "program_digest", "program_sha512", "ranges", "run_inputs", "shared_inputs", "strata", "template_instance_query",
+           "program_digest", "program_sha512", "held_of", "held_value", "member_nodes", "member_reads", "ranges", "run_inputs", "shared_inputs", "strata", "template_instance_query",
            "template_instances_query", "unit_gates", "units", "within", "QUERY_X"]

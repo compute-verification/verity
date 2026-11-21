@@ -571,8 +571,11 @@ def _log_record(e) -> None:
 def decode_params(j) -> dict:
     v2 = isinstance(j, dict) and j.get("registered") is not None
     tied = isinstance(j, dict) and "tied" in j
-    keys = PARAM_KEYS | {"parameters"} if v2 or tied else PARAM_KEYS
+    weighed = isinstance(j, dict) and "weights_of_record" in j
+    given = isinstance(j, dict) and "parameters" in j
+    keys = PARAM_KEYS | {"parameters"} if v2 or tied or weighed or given else PARAM_KEYS
     keys = keys | {"tied"} if tied else keys
+    keys = keys | {"weights_of_record"} if weighed else keys
     keys = keys | {"supplied"} if isinstance(j, dict) and "supplied" in j else keys
     keys = keys | {"pinned"} if isinstance(j, dict) and "pinned" in j else keys
     keys = keys | {"outputs"} if isinstance(j, dict) and "outputs" in j else keys
@@ -613,8 +616,18 @@ def decode_params(j) -> dict:
         raise D.Reject("partition names no program digest or query")
     if v2 and not all(map(_nat, _obj(j["registered"], "registered").values())):
         raise D.Reject("registered: words that are not a natural number")
-    if v2 or tied:
+    needed = v2 or tied or weighed or bool(R.marked_inputs(PROGRAMS[sha]))
+    if needed and not given:
+        raise D.Reject("parameters: the program binds inputs at registration, or the verifier expects or pins values, "
+                       "and no parameters name them")
+    if needed or given:
         _parameters(desc, PROGRAMS[sha], j["parameters"])
+    if weighed:
+        w = j["weights_of_record"]
+        _exactly(w, {"digest", "document"}, "the weights' registration of record")
+        if not (isinstance(w["digest"], str) and isinstance(w["document"], str)
+                and re.fullmatch("(?:[0-9a-f]{2})*", w["document"])):
+            raise D.Reject("the weights' registration of record is its document's bytes in hex and a digest, both strings")
     if tied and not (j["tied"] is None or isinstance(j["tied"], list) and all(isinstance(t, str) for t in j["tied"])):
         raise D.Reject("tied values are a list of the program's parameters")
     raw = j
@@ -763,7 +776,9 @@ def _docket_verdict(p: dict, rec) -> Verdict:
                    p.get("binding"), p.get("outputs"), p.get("row_schemas"), p.get("window_root"), p.get("held"),
                    p.get("link_members", ()), seed_salt=p.get("seed_salt"), pool=p.get("pool"), tied=p.get("tied"),
                    compiler=p.get("compiler", R.UNREAD), certified=p.get("certified"), verdicts=p.get("verdicts"),
-                   coins=p.get("coins"), commitments=p.get("commitments"), released=p.get("released"))
+                   coins=p.get("coins"), commitments=p.get("commitments"), released=p.get("released"),
+                   weights_of_record=None if "weights_of_record" not in p else (
+                       bytes.fromhex(p["weights_of_record"]["document"]), p["weights_of_record"]["digest"]))
 
 
 def _registration(p: dict, rec) -> tuple[str, ...]:
@@ -5057,6 +5072,62 @@ def test_link_points_holds_the_per_member_forms_members_as_the_python_does(piece
     stats = D.run(D.Port(PIECES, "registration", counted, REGISTRATIONS_WITH_MEMBERS, package=PACKAGE), examples=400,
                   server=pieces)
     assert stats.outputs > 100 and stats.rejects > 0 and min(seen.get(True, 0), seen.get(False, 0)) > 20, (stats, seen)
+
+
+def _pin(program: Program, v: str, leaves: int | None = None, domain: str | None = None) -> dict:
+    """A pin of `program`'s parameter `v` at one word a row, its domain at program digest ``aa`` * 64 unless `domain` names one."""
+    n, b = G.shape(program, v, 1) if leaves is None else leaves, G.width(program, v)
+    return {"value": v, "root": "ab" * 64, "leaves": n, "words": 1, **({} if b == RV.WORD_BITS else {RV.WIDTH_KEY: b}),
+            "domain": domain or RV.domain("aa" * 64, v, 1, n, b).domain_id.hex()}
+
+
+def _weights_doc(pins: list[dict], reads) -> dict:
+    """The weights' registration of record pinning `pins` and declaring `reads`, as `weights_of_record` names it: its
+    document in hex and its SHA-512."""
+    body = json.dumps({"program": "aa" * 64, "values": {e["value"]: e for e in pins}, "reads": [list(r) for r in reads]}).encode()
+    return {"digest": hashlib.sha512(body).hexdigest(), "document": body.hex()}
+
+
+def test_r8_holds_registered_inputs_to_the_weights_of_record_as_python_does(pieces):
+    """R8 under a weights' registration of record (`docket.weights_held`, `Docket.weightsOf`), Lean's codes the
+    Python's: `x` registered and read by two calls passes with the registration, its digest and the reads it declares
+    (`docket.declared_reads`), on a v1 record (the accepted pin is no entry R7 reads, and a v2 record is refused
+    `keys`); it is refused without the registration (`R8-unpinned`, the case where Lean once passed what Python refused,
+    handed no `parameters`), at another digest, at a pin's wrong domain or shape, and with a read the program shows left
+    undeclared (`R8-undeclared`), and passes with a declared read the program does not show; a pin of the unregistered `x` excuses nothing
+    (`R8-shared-input`); and a registered input under a query no template query applies to is refused
+    (`R8-weights-query`)."""
+    marked = _readers(2, (("call", 2, _X0 + _X00),) * 2, True)
+    plain = READER_SETUPS[0]
+    s = Setup(marked, plain.query)
+    reads = sorted({(t, p, "x") for t, p, _ in P.input_reads(marked, s.query, G.held_gates(marked, ["x"]))})
+    assert reads
+    pin = _pin(marked, "x")
+    doc = _weights_doc([pin], reads)
+    assert R.declared_reads(marked, s.query, ["x"]) == [list(r) for r in reads]
+    cases = [(s, doc, [], []), (s, doc, [pin], ["keys"]),
+             (s, None, [], ["R8-unpinned"]),
+             (s, {**doc, "digest": "00" * 64}, [], ["R8-weights-digest"]),
+             (s, {**doc, "document": "7b"}, [], ["R8-weights-digest"]),
+             (s, _weights_doc([_pin(marked, "x", domain="11" * 64)], reads), [], ["R8-weights-domain", "R8-unpinned"]),
+             (s, _weights_doc([_pin(marked, "x", leaves=pin["leaves"] + 1)], reads), [], ["R8-weights-shape"]),
+             (s, _weights_doc([pin], []), [], ["R8-undeclared"]),
+             (s, _weights_doc([pin], [*reads, (reads[0][0], "nope", "x")]), [], []),
+             (plain, doc, [], ["R8-shared-input"]),
+             (Setup(marked, PO.query()), None, [], None)]
+    for setup, weights, entries, want in cases:
+        named, expanded = service.params_sampling_design("rate:1/2", setup.program, setup.query, None)
+        roots = [{"port": p, "root": ROOTS[p], **setup.ports[p]} for p in setup.ports]
+        rec = DK.record(setup.program, setup.query, named, SCHEME, roots, WINDOW, leaf_layer=LEAF, work_table=expanded,
+                        registered=entries)
+        sig = _json([[name, t.to_json()] for name, t in setup.program.fn.signature()[0]])
+        params = {"anchors": [], "delta": "1/1000", "law": "rate:1/2", "leaf_layer": LEAF, "log": [], "partition": None,
+                  "ports": setup.ports, "program": setup.desc, "query": setup.query, "registered": None, "scheme": SCHEME,
+                  "work_table": None, "parameters": sig, **({} if weights is None else {"weights_of_record": weights})}
+        given = _json({"params": params, "record": rec})
+        reg = registration(given)
+        assert reg["codes"] == want if want is not None else "R8-weights-query" in reg["codes"], (weights, reg)
+        assert D.replay(REGISTRATION, given, pieces) == ("output", D.canonical(reg)), weights
 
 
 def test_r8_reads_the_readers_python_does(pieces):

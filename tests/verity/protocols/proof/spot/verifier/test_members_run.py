@@ -678,3 +678,55 @@ def test_a_members_run_input_ports_are_held_at_their_nodes_trees_derived_from_c(
     old = {**rec, "roots": [r for r in got["roots"] if not r["port"].startswith("input/")]}
     assert not any(r.get("tree", "").startswith("input/") for s in M.slices(members, old, program=program, query=query).values()
                    for r in s["roots"])
+
+
+def test_a_members_read_of_a_pinned_registered_input_is_held_to_the_pin_by_name():
+    """`members.pins_held` (`OneStageZk.pinsHeld`, the same guards there): a member reading the pinned input at the pin's
+    own root, leaf count and domain, one reading another value and one with no registered file pass; another root,
+    leaf count or domain is refused by name (`pinned_read_why`), and so is a marked input R8 pinned none of
+    (`unpinned_read_why`); with nothing marked no read is held. The texts are Lean's."""
+    pin = {"w": {"root": "a" * 128, "leaves": 2, "words": 1, "word_bits": 16, "domain": "d" * 128}}
+
+    def held(ms, loose, pins):
+        M.pins_held(ms, None, (loose, [], [], pins))
+
+    def reader(value: str, root: str, leaves: int, domain: str = "d" * 128) -> dict:
+        return {"units": [[0, 1]], "registered": {"format": "verity/registered-reads/v2",
+                                                  "ports": {"p": {"value": value, "root": root * 128, "leaves": leaves,
+                                                                  "domain": domain}}}}
+
+    held({"a": reader("w", "a", 2), "b": reader("v", "b", 3), "c": {"units": [[1, 2]], "registered": None}}, ["w"], pin)
+    for m, what in ((reader("w", "b", 2), "root"), (reader("w", "a", 3), "leaf count"),
+                    (reader("w", "a", 2, "e" * 128), "domain")):
+        with pytest.raises(M._Refused) as e:
+            held({"a": m}, ["w"], pin)
+        assert str(e.value) == M.pinned_read_why("a", "p", "w", what)
+    with pytest.raises(M._Refused) as e:
+        held({"a": reader("u", "a", 2)}, ["w", "u"], pin)
+    assert str(e.value) == M.unpinned_read_why("a", "p", "u")
+    held({"a": reader("u", "b", 3)}, [], {})
+    assert M.pinned_read_why("a", "p", "w", "root") == (
+        "registered: member a's port p reads the registered input w at another root than its pin of record: a "
+        "registered input the weights' registration of record pins is read at the pin's root, leaf count and domain")
+    assert M.unpinned_read_why("a", "p", "u") == (
+        "registered: member a's port p reads the registered input u, which the program marks and R8 accepted no pin "
+        "of: a marked input is read only at a pin R8 accepted")
+    assert M.port_other_why("a", "p[1]", "p", "w", "e") == (
+        "registered: member a's port p[1] at parameter p names e, and its units read the registered input w there: every "
+        "row of a parameter that reads a marked input is that input's, at its pin")
+    assert M.two_reads_why("a", "p", "u", "w") == (
+        "registered: member a's units read the registered inputs u and w at parameter p: a parameter that reads a marked "
+        "input reads that one value alone")
+    assert M.mixed_read_why("a", "p", "w", 3) == (
+        "registered: member a's units read the registered input w at parameter p beside root node 3, which is not w: a "
+        "parameter that reads a marked input reads that one value alone")
+    assert DK.WEIGHTS_QUERY_WHY == (
+        "registered: the program marks registered inputs the verifier does not expect, and the partition is no template "
+        "query that applies to the program, whose ranges its members' reads of them are read off: a marked input is read "
+        "only at a pin R8 accepted")
+    assert M.read_unnamed_why("a", "p", "w") == (
+        "registered: member a's units read the registered input w at parameter p, and its registered file has no port "
+        "p naming w: a marked input is read only at a pin R8 accepted")
+    assert DK.WEIGHTS_UNREGISTERED_WHY == (
+        "registered: the program marks registered inputs the verifier does not expect, and the parameters carry no "
+        "weights' registration of record R8 accepts: a marked input is read only at a pin R8 accepted")

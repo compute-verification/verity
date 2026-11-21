@@ -853,6 +853,185 @@ def test_r8_lets_a_tied_run_input_through_and_publishes_it():
     assert v.ok and v.rests_on_period_check == ()
 
 
+def _pin(prog, value="t", words=2, program="aa" * 64, leaves=None, domain=None):
+    """A pin of `value` of `prog` in a weights' registration of record."""
+    from verity.commitments import registered_value as RV
+    leaves = G.shape(prog, value, words) if leaves is None else leaves
+    width = G.width(prog, value)
+    entry = {"value": value, "root": "ab" * 64, "leaves": leaves, "words": words,
+             "domain": domain or RV.domain(program, value, words, leaves, width).domain_id.hex()}
+    if width != RV.WORD_BITS:
+        entry[RV.WIDTH_KEY] = width
+    return entry
+
+
+def _weights(pins, reads=None, program="aa" * 64):
+    """A weights' registration of record pinning `pins` and declaring `reads`, its bytes and their SHA-512."""
+    doc = {"program": program, "values": {e["value"]: e for e in pins}, **({} if reads is None else {"reads": reads})}
+    body = json.dumps(doc).encode()
+    return body, hashlib.sha512(body).hexdigest()
+
+
+def _weighed(prog, q, entries=(), **kw):
+    n = P.units(prog, q)
+    ports = _ports(prog, q, n)
+    rec = DK.record(prog, q, SAMPLING_DESIGN, SCHEME, [{"port": p, "root": ROOTS[p], **ports[p]} for p in ports], SERVED,
+                    leaf_layer="ee" * 64, registered=list(entries))
+    return _check(rec, prog, q, **kw)
+
+
+def test_r8_excuses_a_registered_weight_only_where_it_is_marked_pinned_and_declared():
+    """R8 under a weights' registration of record (`docket.weights_held`): a registered input two proof blocks read
+    passes with the registration, the SHA-512 the auditor's side holds for it and the reads it declares
+    (`docket.declared_reads`, the walk R8 runs), on a v1 record: the pin it accepts is no entry R7 reads. Without the
+    registration it is refused by name (`R8-unpinned`), and at a wrong digest, a wrong domain or a wrong shape the
+    registration is refused. A pin of a parameter the program doesn't mark registered is ignored: it excuses nothing,
+    and R8 refuses the run Input as before. A template parameter reading the pinned value that the registration does
+    not declare is refused (`R8-undeclared`); a declared read the program does not show is let through."""
+    q = P.template_instance_query(PAIR.id)
+    for marked, unmarked in zip(_two_programs(registered=("t",)), _two_programs()):
+        reads = sorted({(t, p, "t") for t, p, _ in P.input_reads(marked, q, G.held_gates(marked, ["t"]))})
+        assert reads and {t for t, _, _ in reads} == {PAIR.id}
+        assert R.declared_reads(marked, q, ["t"]) == [list(r) for r in reads]
+        pin = _pin(marked)
+        weights = _weights([pin], R.declared_reads(marked, q, ["t"]))
+        v = _weighed(marked, q, weights_of_record=weights)
+        assert v.ok, v.codes
+        assert R.weights_held(marked, q, (), weights)[1] == {"t": {k: pin[k] for k in ("root", "leaves", "words", "domain")}
+                                                            | {"word_bits": pin.get("word_bits", 16)}}
+        assert _weighed(marked, q, [pin], weights_of_record=weights).codes == ("keys",)
+        v = _weighed(marked, q)
+        assert v.codes == ("R8-unpinned",) and v.detail["R8-unpinned"]["refused"] == {"values": ["t"]}
+        v = _weighed(marked, q, weights_of_record=(weights[0], "00" * 64))
+        assert v.codes == ("R8-weights-digest",)
+        bad = _weights([_pin(marked, domain="11" * 64)], [list(r) for r in reads])
+        assert _weighed(marked, q, weights_of_record=bad).codes == ("R8-weights-domain", "R8-unpinned")
+        bad = _weights([_pin(marked, leaves=G.shape(marked, "t", 2) + 1)], [list(r) for r in reads])
+        assert _weighed(marked, q, weights_of_record=bad).codes == ("R8-weights-shape",)
+        v = _weighed(marked, q, weights_of_record=_weights([pin]))
+        assert v.codes == ("R8-undeclared",) and v.detail["R8-undeclared"]["refused"]["undeclared"] == [list(r) for r in reads]
+        assert _weighed(marked, q, weights_of_record=_weights([pin], [*map(list, reads), [PAIR.id, "nope", "t"]])).ok
+        v = _weighed(unmarked, q, weights_of_record=_weights([_pin(unmarked)], [list(r) for r in reads]))
+        assert v.codes == ("R8-shared-input",)
+        assert _weighed(unmarked, q).codes == ("R8-shared-input",)
+
+
+def test_the_members_check_holds_a_marked_programs_reads_only_to_pins_r8_accepted():
+    """`members.read_pins` (`Docket.readPins`, its guards in `Spot/Test/Docket.lean`) on the one parameters' verifier: a
+    program marking an input the verifier does not expect, with no weights' registration of record or one R8 refuses, is
+    refused by name (`docket.WEIGHTS_UNREGISTERED_WHY`); with one R8 accepts, the members' check holds each member whose
+    own units read it to a port naming it at the pin (`members.pins_held`); a program marking nothing, or only inputs
+    the verifier expects, holds nothing."""
+    from verity.protocols.proof.spot.verifier.one_stage import members as M
+    q = P.template_instance_query(PAIR.id)
+
+    def params(weights=None, registered=None):
+        return {"query": q, "registered": registered,
+                **({} if weights is None else {"weights_of_record": {"document": weights[0].hex(), "digest": weights[1]}})}
+
+    for marked, unmarked in zip(_two_programs(registered=("t",)), _two_programs()):
+        pin, reads = _pin(marked), R.declared_reads(marked, q, ["t"])
+        for p in (params(), params(_weights([pin]))):
+            with pytest.raises(M._Refused) as e:
+                M.read_pins(p, marked)
+            assert str(e.value) == R.WEIGHTS_UNREGISTERED_WHY
+        with pytest.raises(M._Refused) as e:
+            M.read_pins({**params(_weights([pin], reads)), "query": {"name": "Q_all", "version": 0}}, marked)
+        assert str(e.value) == R.WEIGHTS_QUERY_WHY
+        loose, held, ranges, pins = rp = M.read_pins(params(_weights([pin], reads)), marked)
+        at = sorted({(t, p, v) for k, t, _lo, n in ranges for p, v in P.member_reads(marked, held, k, 0, n)})
+        assert loose == ["t"] and at == [tuple(r) for r in reads]
+        assert set(pins) == {"t"} and pins["t"]["root"] == pin["root"]
+        _k, _t, first, _n = ranges[0]
+        port = {"value": "t", "root": pin["root"], "leaves": pin["leaves"], "domain": pin["domain"]}
+        M.pins_held({"a": {"units": [[first, first + 1]], "registered": {"ports": {at[0][1]: port}}}}, marked, rp)
+        with pytest.raises(M._Refused) as e:
+            M.pins_held({"a": {"units": [[first, first + 1]], "registered": None}}, marked, rp)
+        assert str(e.value) == M.read_unnamed_why("a", at[0][1], "t")
+        assert M.read_pins(params(), unmarked) == ([], [], [], {})
+        assert M.read_pins(params(registered={"t": 2}), marked) == ([], [], [], {})
+
+
+def _chunked(second: str, marked: tuple[str, ...]):
+    """A batch of four PAIR members over ``w0``'s rows then ``second``'s, members 0 and 1 reading ``w0``'s and 2 and 3
+    ``second``'s, `marked` marked and pinned: the program, its query, its pins and `members.read_pins` on them."""
+    from verity.protocols.proof.spot.verifier.one_stage import members as M
+    row = Array(2, Array(2, Value(8)))
+    defn = CompositeDefinition("OneStageTestChunks", 0, (), lambda S: ((("w0", row), (second, row)), Array(4, Value(8))),
+                               lambda B, S, w0, w1: B.batch(PAIR, array_of([w0[0], w0[1], w1[0], w1[1]]), axes=(0,), n=4),
+                               register=False)
+    prog, q = Program(bind(defn), registered=marked), P.template_instance_query(PAIR.id)
+    pins = [_pin(prog, v) for v in marked]
+    body, digest = _weights(pins, R.declared_reads(prog, q, list(marked)))
+    params = {"query": q, "registered": None, "weights_of_record": {"document": body.hex(), "digest": digest}}
+    return prog, q, {e["value"]: e for e in pins}, M.read_pins(params, prog)
+
+
+def test_a_batch_chunk_reads_one_marked_value_a_parameter_and_names_it_at_every_port():
+    """Chunks of a batch over two marked weights (`partition.member_nodes`, `members.pins_held`; `OneStageZk`'s
+    `batchToy` guards): each honest chunk naming its own value passes and is not asked to name the other chunk's; one
+    without its value's port, with the port under the other value or at its own root, one whose units read both
+    values at one parameter, or one with a second port at its parameter under another value, a committed tree or a run
+    input's tree, is refused by name; and a parameter mixing the marked weight with a run input is refused by name."""
+    from verity.protocols.proof.spot.verifier.one_stage import members as M
+    prog, _q, pins, rp = _chunked("w1", ("w0", "w1"))
+    (k, _t, first, n), = rp[2]
+    assert (first, n) == (0, 4)
+    assert [P.member_reads(prog, rp[1], k, *c) for c in ((0, 2), (2, 4), (1, 3))] == [
+        [("x", "w0")], [("x", "w1")], [("x", "w0"), ("x", "w1")]]
+
+    def chunk(lo, hi, value=None, root=None, **more):
+        e = pins.get(value)
+        ports = {} if e is None else {"x[0]": {"value": value, "root": root or e["root"], "leaves": e["leaves"],
+                                               "domain": e["domain"]}}
+        ports.update({x: {**ports["x[0]"], "value": v} for x, v in more.items()})
+        return {"units": [[lo, hi]], "registered": {"ports": ports} if ports else None}
+
+    M.pins_held({"c0": chunk(0, 2, "w0"), "c1": chunk(2, 4, "w1")}, prog, rp)
+    for m, why in ((chunk(0, 2), M.read_unnamed_why("c", "x", "w0")),
+                   (chunk(2, 4, "w0"), M.read_unnamed_why("c", "x", "w1")),
+                   (chunk(0, 2, "w0", "bb" * 64), M.pinned_read_why("c", "x[0]", "w0", "root")),
+                   (chunk(1, 3, "w0", **{"x[1]": "w1"}), M.two_reads_why("c", "x", "w0", "w1")),
+                   *((chunk(0, 2, "w0", **{"x[1]": v}), M.port_other_why("c", "x[1]", "x", "w0", v))
+                     for v in ("w1", "e", "committed/c/x", "input/n1"))):
+        with pytest.raises(M._Refused) as e:
+            M.pins_held({"c": m}, prog, rp)
+        assert str(e.value) == why
+    prog, _q, pins, rp = _chunked("u", ("w0",))
+    (k, *_), = rp[2]
+    run = [i for p, i in P.member_nodes(prog, k, 1, 3) if P.held_value(prog, rp[1], i) is None]
+    assert len(run) == 1 and is_input(prog.root.body.nodes[run[0]].fn)
+    M.pins_held({"c0": chunk(0, 2, "w0"), "c1": {"units": [[2, 4]], "registered": None}}, prog, rp)
+    with pytest.raises(M._Refused) as e:
+        M.pins_held({"c": chunk(1, 3, "w0")}, prog, rp)
+    assert str(e.value) == M.mixed_read_why("c", "x", "w0", run[0])
+
+
+def test_r8_refuses_a_registered_input_under_a_query_it_cannot_read_readers_under():
+    """A program marking a registered input, or a verifier holding a weights' registration of record, under a query that
+    is no template query that applies is refused by name (`R8-weights-query`), never passed unread."""
+    marked = _two_programs(registered=("t",))[0]
+    q = PO.query()
+    rec = DK.record(marked, q, SAMPLING_DESIGN, SCHEME, [{"port": p, "root": ROOTS[p], **ps} for p, ps in
+                                                         _ports(marked, q, P.units(marked, q)).items()], SERVED,
+                    leaf_layer="ee" * 64)
+    assert "R8-weights-query" in _check(rec, marked, q).codes
+    assert R.weights_held(marked, q, (), None)[0] == [("R8-weights-query", {"query": q})]
+
+
+def test_r8_still_refuses_a_shared_run_input_a_pin_of_another_name_does_not_cover():
+    """A table's root or domain read as a run Input that two proof blocks read (the program marks nothing registered) is
+    still refused (`R8-shared-input`) under a weights' registration of record, whatever the registration pins: pinning
+    covers a registered input, never a run Input."""
+    from verity.commitments import registered_value as RV
+    q = P.template_instance_query(PAIR.id)
+    for shared in _two_programs():
+        table = {"value": "t/table", "root": "ab" * 64, "leaves": 1, "words": 1,
+                 "domain": RV.domain("aa" * 64, "t/table", 1, 1, RV.WORD_BITS).domain_id.hex()}
+        v = _weighed(shared, q, weights_of_record=_weights([table]))
+        assert v.codes == ("R8-shared-input",), v.codes
+
+
 def test_a_member_reading_a_held_or_tied_run_input_carries_a_registered_file():
     """`members._held_read` (Lean's `OneStageZk.heldReadsFiled`): where R8 lets a run Input through as tied or held, a
     member whose units meet a range reading it and that carries no registered file is refused by name; with every

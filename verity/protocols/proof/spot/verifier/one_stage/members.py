@@ -60,7 +60,7 @@ import json
 import math
 import os
 import tempfile
-from collections.abc import Callable, Collection, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -510,6 +510,121 @@ def _class(ms: Mapping[str, Any]) -> None:
                 raise _Refused(f"registered: members {first} and {name} read the registered value {q['value']} as two "
                                f"({k} {a}, against {b}): a value the window registers is one tree, read by every "
                                "member at one root")
+
+
+def pinned_read_why(member: str, port: str, value: str, what: str) -> str:
+    """`OneStageZk.PINNED_READ_WHY`: the refusal of member ``member``'s registered port ``port`` reading the registered
+    input ``value`` at another ``what`` (root, leaf count or domain) than the pin the docket's R8 accepted."""
+    return (f"registered: member {member}'s port {port} reads the registered input {value} at another {what} than its "
+            "pin of record: a registered input the weights' registration of record pins is read at the pin's root, leaf "
+            "count and domain")
+
+
+def unpinned_read_why(member: str, port: str, value: str) -> str:
+    """`OneStageZk.UNPINNED_READ_WHY`: member ``member``'s registered port ``port`` reads ``value``, which the program
+    marks, the verifier does not expect and R8 accepted no pin of."""
+    return (f"registered: member {member}'s port {port} reads the registered input {value}, which the program marks and "
+            "R8 accepted no pin of: a marked input is read only at a pin R8 accepted")
+
+
+def read_unnamed_why(member: str, param: str, value: str) -> str:
+    """`OneStageZk.READ_UNNAMED_WHY`: member ``member``'s own units read the marked input ``value`` at parameter ``param``
+    (`partition.member_reads`), and its registered file has no port of ``param`` naming ``value``."""
+    return (f"registered: member {member}'s units read the registered input {value} at parameter {param}, and its "
+            f"registered file has no port {param} naming {value}: a marked input is read only at a pin R8 accepted")
+
+
+def port_other_why(member: str, port: str, param: str, value: str, other: str) -> str:
+    """`OneStageZk.PORT_OTHER_WHY`: member ``member``'s registered port ``port`` at ``param``, where its units read the
+    marked input ``value`` alone, names ``other``."""
+    return (f"registered: member {member}'s port {port} at parameter {param} names {other}, and its units read the "
+            f"registered input {value} there: every row of a parameter that reads a marked input is that input's, at its pin")
+
+
+def two_reads_why(member: str, param: str, v0: str, v1: str) -> str:
+    """`OneStageZk.TWO_READS_WHY`: member ``member``'s units read two marked inputs at ``param``."""
+    return (f"registered: member {member}'s units read the registered inputs {v0} and {v1} at parameter {param}: a "
+            "parameter that reads a marked input reads that one value alone")
+
+
+def mixed_read_why(member: str, param: str, value: str, node: int) -> str:
+    """`OneStageZk.MIXED_READ_WHY`: member ``member``'s units read the marked input ``value`` at ``param`` beside root
+    node ``node``, no row of it."""
+    return (f"registered: member {member}'s units read the registered input {value} at parameter {param} beside root node "
+            f"{node}, which is not {value}: a parameter that reads a marked input reads that one value alone")
+
+
+ReadPins = tuple[list[str], list[tuple[str, range]], list[tuple[int, str, int, int]], dict[str, dict[str, Any]]]
+
+
+def read_pins(params: Mapping[str, Any], program: Program) -> ReadPins:
+    """`Docket.readPins` on the parameters' own verifier (`docket.read_pins`): refused by name (`docket.read_pins_why`)
+    where the program marks an input the verifier does not expect and the partition is no template query applying to
+    it, or the parameters carry no weights' registration of record R8 accepts."""
+    w = params.get("weights_of_record")
+    got = DK.read_pins(program, params["query"], params.get("registered") or {},
+                       None if w is None else (bytes.fromhex(w["document"]), w["digest"]))
+    if got is None:
+        raise _Refused(DK.read_pins_why(program, params["query"]))
+    return got
+
+
+def own_nodes(program: Program, rp: ReadPins, units: Iterable[tuple[int, int]]) -> list[tuple[str, int]]:
+    """`OneStageZk.ownNodes`: each ``(parameter, root node)`` the units ``units`` read over the ranges of ``rp``, each
+    range's members among them at a time (`partition.member_nodes`)."""
+    out: list[tuple[str, int]] = []
+    for lo, hi in units:
+        for k, _t, first, n in rp[2]:
+            a, b = max(lo, first), min(hi, first + n)
+            if a < b:
+                out.extend(x for x in P.member_nodes(program, k, a - first, b - first) if x not in out)
+    return out
+
+
+def _port_param(port: str, e: Mapping[str, Any]) -> str:
+    """`OneStageZk.portParam`: the template parameter a registered port reads, its ``param`` (else its name) without a
+    row index ``[i]``."""
+    name = e.get(G.PARAM_KEY) or port
+    head, sep, tail = name.partition("[")
+    return head if sep and tail.endswith("]") and tail[:-1].isdigit() and "[" not in tail else name
+
+
+def pins_held(ms: Mapping[str, Any], program: Program, rp: ReadPins) -> None:
+    """`OneStageZk.pinsHeld`: at each parameter where a member's own units read a marked input (`own_nodes`,
+    `partition.held_of`), they read one marked value and no other node (`two_reads_why`, `mixed_read_why`), its
+    registered file has a port of that parameter naming it (`read_unnamed_why`), and every port of that parameter, a
+    tree's or not, names it (`port_other_why`); every registered port whose value is marked names the pin R8 accepted
+    of it, its root, leaf count and domain, each member's ports in name order; refused by name, a value with no pin
+    (`unpinned_read_why`) or the first field that differs (`pinned_read_why`)."""
+    loose, held, pins = set(rp[0]), rp[1], rp[3]
+    if not loose:
+        return
+    for name, m in ms.items():
+        ports = (m["registered"] or {}).get("ports") or {}
+        own = [(_port_param(q, e), e.get("value")) for q, e in ports.items() if isinstance(e, dict)]
+        nodes = own_nodes(program, rp, m["units"])
+        read: dict[str, str] = {}
+        for p, v in P.held_of(program, held, nodes):
+            if p in read:
+                raise _Refused(two_reads_why(name, p, read[p], v))
+            read[p] = v
+        for p, v in read.items():
+            if (w := next((i for q, i in nodes if q == p and P.held_value(program, held, i) is None), None)) is not None:
+                raise _Refused(mixed_read_why(name, p, v, w))
+            if (p, v) not in own:
+                raise _Refused(read_unnamed_why(name, p, v))
+        for port in sorted(ports):
+            e = ports[port]
+            value = e.get("value") if isinstance(e, dict) else None
+            p = _port_param(port, e) if isinstance(e, dict) else port
+            if p in read and value != read[p]:
+                raise _Refused(port_other_why(name, port, p, read[p], value))
+            pin = pins.get(value)
+            if pin is None and value in loose:
+                raise _Refused(unpinned_read_why(name, port, value))
+            for k, what in (("root", "root"), ("leaves", "leaf count"), ("domain", "domain")) if pin else ():
+                if e.get(k) != pin[k]:
+                    raise _Refused(pinned_read_why(name, port, value, what))
 
 
 def _template_of(name: str) -> tuple[str, str] | None:
@@ -1217,6 +1332,7 @@ def _members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence:
         _held_read(ms, params, program)
         _class(ms)
         _tree_ports_held(ms, record)
+        pins_held(ms, program, read_pins(params, program))
         roots, ft = _members_roots(ms, record)
         roots = _wired(program, params["query"], params["program"], ms, record, roots, ft)
         _ports_once(ms, roots)
@@ -1264,4 +1380,4 @@ __all__ = ["EXITS", "Form", "MEMBERS_LAID", "MEMBER_STRATA", "MEMBER_UNITS", "NO
            "TABLE_PORT", "UNREAD", "blobs_of", "case_check", "check", "files_why", "flock_form", "flock_verdict",
            "field_trees_why", "members_run", "population_why", "POPULATION_WHY", "registered_at", "registered_reads",
            "return_fields", "run_reason", "shared_unread", "unregistered_why", "unwired_why", "own_root_why",
-           "port_twice_why", "run_own_root_why", "slice_no_port_why", "wired_tree_why"]
+           "pinned_read_why", "pins_held", "port_twice_why", "read_pins", "read_unnamed_why", "unpinned_read_why", "run_own_root_why", "slice_no_port_why", "wired_tree_why"]

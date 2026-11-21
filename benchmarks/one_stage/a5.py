@@ -282,10 +282,17 @@ def declared(a: argparse.Namespace) -> dict[str, Any]:
     return dict(getattr(a, "declared", None) or {})
 
 
+def weighed(a: argparse.Namespace) -> dict[str, Any]:
+    """The weights' registration of record (records_audit's ``--registered``), as `verifier.check` takes it; empty
+    without."""
+    return {"weights_of_record": a.weights_of_record} if getattr(a, "weights_of_record", None) is not None else {}
+
+
 def registering(a: argparse.Namespace, history: dict | None = None) -> dict[str, Any]:
     """`tie` as a stream's `register` takes it (the log is the stream's, `stream_of`), with the window's history tables
-    (``history``, `audit`'s), which the run of record holds the window's registered roots to."""
-    return {**{k: v for k, v in tie(a).items() if k != "log"}, **({"history": history} if history is not None else {})}
+    (``history``, `audit`'s), which the run of record holds the window's registered roots to, and `weighed`."""
+    return {**{k: v for k, v in tie(a).items() if k != "log"}, **({"history": history} if history is not None else {}),
+            **weighed(a)}
 
 
 def program_values(program: Program) -> tuple[tuple[str, int, int], ...]:
@@ -1203,7 +1210,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     hist = history(publics) if history is not None else None
     checks["registration"] = V.check(rec, program, query, sampling_design, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table,
                                      partition=part, history=hist, members=link_members(members) if per_member(members, not plain(a)) else (),
-                                     **verifying(a), **declared(a)).to_json()
+                                     **verifying(a), **declared(a), **weighed(a)).to_json()
     progress("registration", t_audit, ok=checks["registration"].get("ok"))
     if mine.row_tables:
         bad = TB.check_row_tables(mine, publics, {r["port"]: r["root"] for r in rec["roots"]}, step_roots)

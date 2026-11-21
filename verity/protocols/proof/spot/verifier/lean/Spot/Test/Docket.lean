@@ -133,4 +133,84 @@ def V3 : Verifier := verifier
 -- a member's units past the population of one: `bounds` refuses it
 #guard codes { V3 with members := #[(#[(0, 2)], 1)] } == #["link-points"]
 
+/-! R8's hold on the program's registered inputs (`weightsCodes`): `E3S` with both inputs bound at registration, each read
+by both calls, its leaves one bit each. -/
+
+/-- `E3S` with `x` and `y` registered inputs. -/
+def E3R : String := E3S.replace "Input1_v1" "RegisteredInput1_v1"
+
+/-- A v1 verifier of `d` that expects nothing registered, its program function's parameters given. -/
+def weighed (d : String) : Verifier := let v := verifier d; { v with registered := #[] }
+
+/-- The verifier's own entry for `E3R`'s parameter `value` at one word a row (`Registered.entries`). -/
+def ownEntry (value : String) : Registered.Entry :=
+  match Registered.entries (program E3R).desc (params (program E3R)) #[(value, 1)] with
+  | .ok #[e] => e
+  | _ => { value, leaves := 0, words := 0, wordBits := 0, domain := "" }
+
+/-- A pin of `value` at its own entry's shape, `more` leaves past it, its domain at the registration's program digest
+`ROOT` unless `domain` names one. -/
+def pin (value : String) (more : Nat := 0) (domain : Option String := none) : String × Json :=
+  let e := ownEntry value
+  let leaves := e.leaves + more
+  let d := domain.getD ((Registered.domain ROOT value e.words leaves e.wordBits).toOption.map Flock.hexOf |>.getD "")
+  let kvs : List (String × Json) := [("value", Json.str value), ("root", Json.str ROOT), ("leaves", Lean.toJson leaves),
+    ("words", Lean.toJson e.words), ("domain", Json.str d)]
+  (value, Json.mkObj (kvs ++ if e.wordBits == Registered.WORD_BITS then [] else [(Registered.WIDTH_KEY, Lean.toJson e.wordBits)]))
+
+def READS : Array (String × String × String) := #[("E_v1", "x", "x"), ("E_v1", "y", "y")]
+
+/-- The registration of record of `pins`, declaring `reads`, and its SHA-512. -/
+def ofRecord (pins : List (String × Json)) (reads : Array (String × String × String) := READS) : ByteArray × String :=
+  let rs := Json.arr (reads.map fun (t, p, x) => Json.arr #[t, p, x])
+  let b := (Json.compress (Json.mkObj [("program", ROOT), ("reads", rs), ("values", Json.mkObj pins)])).toUTF8
+  (b, Flock.hexOf (Flock.Sha512.hash b))
+
+def PINS : List (String × Json) := [pin "x", pin "y"]
+
+/-- The check's codes on the honest record of `v`. -/
+def weighedCodes (v : Verifier) : Array String :=
+  match honest v with
+  | .ok r => check r v
+  | .error e => #[s!"fixture: {e}"]
+
+#guard Partition.inputReads (weighed E3R).program.prog ((Partition.templateRanges? (program E3R) QE).getD #[])
+  #[("x", 0, 3), ("y", 3, 1)] == READS
+-- a registered input two proof blocks read passes with the registration, its digest and the reads it declares; the
+-- pins it accepts are no entry R7 reads, and the record stays v1
+#guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord PINS) } == #[]
+#guard ((weightsOf { weighed E3R with weightsOfRecord := some (ofRecord PINS) }).2.map fun (e, r) =>
+  (e.value, e.leaves, r)) == #[("x", (ownEntry "x").leaves, ROOT), ("y", (ownEntry "y").leaves, ROOT)]
+-- without the registration, or at another digest, nothing fixes its root
+#guard weighedCodes (weighed E3R) == #["R8-unpinned"]
+#guard weighedCodes { weighed E3R with weightsOfRecord := some ((ofRecord PINS).1, OTHER) } == #["R8-weights-digest"]
+-- a marked input with no pin is refused
+#guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord [pin "x"]) } == #["R8-unpinned"]
+-- a pin of a parameter the program doesn't mark registered excuses nothing
+#guard weighedCodes { weighed E3S with weightsOfRecord := some (ofRecord PINS) } == #["R8-shared-input"]
+#guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord [pin "x", pin "y" 0 (some OTHER)]) } ==
+  #["R8-weights-domain", "R8-unpinned"]
+#guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord [pin "x" 1, pin "y"]) } == #["R8-weights-shape"]
+-- every read the description shows is declared; a declared read it does not show is let through
+#guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord PINS #[]) } == #["R8-undeclared"]
+#guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord PINS #[READS[0]!]) } == #["R8-undeclared"]
+#guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord PINS (READS.push ("E_v1", "z", "x"))) } == #[]
+-- what the members' check holds reads to (`readPins`): with marked inputs, none without a registration or with one R8
+-- refuses; with one R8 accepts, the marked inputs, their gates, the ranges reading them and R8's pins
+#guard (readPins (weighed E3R)).isNone
+#guard (readPins { weighed E3R with weightsOfRecord := some (ofRecord [pin "x"]) }).isNone
+#guard (readPins { weighed E3R with weightsOfRecord := some (ofRecord PINS) }).map (fun rp =>
+  (rp.loose, rp.held, rp.ranges.map (·.template), rp.pins.size)) == some (#["x", "y"], #[("x", 0, 3), ("y", 3, 1)],
+    #["E_v1", "E_v1"], 2)
+-- nothing marked, or every marked input expected: nothing held
+#guard (readPins (weighed E3S)).map (fun rp => rp.loose.size + rp.ranges.size + rp.pins.size) == some 0
+#guard (readPins { verifier E3R with registered := #[("x", 1), ("y", 1)] }).map
+  (fun rp => rp.loose.size + rp.ranges.size + rp.pins.size) == some 0
+-- a registered input under a query that is no template query that applies
+#guard weightsCodes { weighed E3R with query := Json.mkObj [("name", "Q_all")] } == #["R8-weights-query"]
+-- why `readPins` is none: no template query applying, else no registration R8 accepts
+#guard readPinsWhy { { weighed E3R with query := Json.mkObj [("name", "Q_all")] } with
+  weightsOfRecord := some (ofRecord PINS) } == WEIGHTS_QUERY_WHY
+#guard readPinsWhy (weighed E3R) == WEIGHTS_UNREGISTERED_WHY
+
 end Spot.Test.Docket
