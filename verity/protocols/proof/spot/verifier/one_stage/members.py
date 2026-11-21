@@ -569,6 +569,14 @@ def _part_nodes(q: tuple) -> list[int]:
     return [i for p, i, *_ in (q[1] if q[0] == "e" else q[2]) if not p]
 
 
+def _lane_wire(part: Any, x: int, L: int, ln: int, c: int) -> int | EG.Refusal:
+    """`Program.laneWire`'s node, or its refusal."""
+    try:
+        return EG._lane_wire(part, x, L, ln, c)[0]
+    except EG.Refusal as e:
+        return e
+
+
 def reg_rows(R: EG._Root, k: int, m0: int, n: int, param: str) -> tuple[int, int] | None:
     """`Flock.OneCircuit.regRows?`: the input node every member of ``[m0, m0 + n)`` of root node ``k`` reads ``param``
     at, with a row's leaves; None where they read only root nodes that are no input; `_Refused` (`read_form_why`) where
@@ -611,10 +619,8 @@ def reg_rows(R: EG._Root, k: int, m0: int, n: int, param: str) -> tuple[int, int
         j = next((j for j, q in enumerate(parts) if starts[j] <= x < starts[j] + EG._count(q)), None)
         if j is None or x + (c - 1) * L + ln > starts[j] + EG._count(parts[j]) or parts[j][0] != "g":
             return None
-        try:
-            return EG._lane_wire(parts[j], x - starts[j], L, ln, c)[0]
-        except EG.Refusal:
-            return None
+        w = _lane_wire(parts[j], x - starts[j], L, ln, c)
+        return None if isinstance(w, EG.Refusal) else w
 
     if (w := wire(x_of(m0), max(n, 1), L)) is not None:
         return (w, ln) if _input(R, w) else None
