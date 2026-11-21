@@ -52,7 +52,9 @@ compared output for output: the ratio's numerator and denominator in hex, the te
 """
 from __future__ import annotations
 
+import copy
 import dataclasses
+import functools
 import hashlib
 import json
 import random
@@ -280,11 +282,25 @@ def drawn(case: dict) -> dict:
     return {"drawn": got} if refused is None else {"refused": list(refused)}
 
 
+@functools.lru_cache(maxsize=len(credit_cases.REGISTRY_TILES))
+def _descriptor(descriptor: str) -> tuple:
+    raw = bytes.fromhex(descriptor)
+    lay, refused = Cr.layout_of(raw)
+    return (lay, refused) + ((None, None) if refused is not None else (hashlib.sha512(raw).hexdigest(), Cr.shape_of(raw)))
+
+
+def _read(descriptor: str) -> tuple:
+    """`credit.layout_of` of the hex descriptor `descriptor` and, where it gives a layout, the descriptor's SHA-512 and
+    `credit.shape_of`, read once a session per descriptor and copied to each case: the pinned windows' cases share three
+    descriptors, each about 60 MB, whose reading is 10 to 20 seconds of each case's Python."""
+    return copy.deepcopy(_descriptor(descriptor))
+
+
 def window_drawn(case: dict) -> dict:
     """`credit._window_drawn` over the strata of the descriptor's layout, as `Credit.descriptorDrawn` reads them."""
     got, refused = None, ("layout", Cr.DESCRIPTOR_HEX)
     if type(case["descriptor"]) is str and Cr._HEX.fullmatch(case["descriptor"]):
-        lay, refused = Cr.layout_of(bytes.fromhex(case["descriptor"]))
+        lay, refused, _program, _shape = _read(case["descriptor"])
         ss = None
         if refused is None:
             ss, refused = Cr.strata(lay)
@@ -325,10 +341,8 @@ def weights(case: dict) -> dict:
 
 
 def registered_file(case: dict) -> dict:
-    raw = bytes.fromhex(case["descriptor"])
-    lay, refused = Cr.layout_of(raw)
+    lay, refused, program, shape = _read(case["descriptor"])
     if refused is None:
-        program, shape = hashlib.sha512(raw).hexdigest(), Cr.shape_of(raw)
         got, refused = Cr.registered_file(program, lay, shape, case["call"], case["roots"], case["window"],
                                           case["steps"], case["salt"])
         if refused is None and all(t["j10r"] for t in shape["tiles"].values()):
