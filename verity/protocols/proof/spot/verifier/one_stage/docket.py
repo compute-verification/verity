@@ -1321,7 +1321,8 @@ def registered_trees_held(rec: Mapping[str, Any], who: str, registered: Mapping[
     for name, e in sorted(((registered or {}).get("ports") or {}).items()):
         v = e.get("value", "")
         if not v.startswith(COMMITTED) and field_tree_name(v) and (tmpl is None or f"{tmpl}/{name}" != v):
-            return f"registered: {who}'s port {name}: a wired port's tree is not derived from C yet"
+            return (f"registered: {who}'s port {name}: the field tree it opens is neither its own output's nor one C "
+                    "wires into it at this row")
         t = v[len(COMMITTED):] if v.startswith(COMMITTED) else v if G.is_fresh_value(v) or field_tree_name(v) else None
         if t is None:
             continue
