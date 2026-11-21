@@ -44,6 +44,8 @@ FIRSTS = (FIRST, "AttnBlockFirst_v2")
 END = "AttnHeadEnd_v1"
 BLOCK = "AttnBlock_v5"
 FEED = "TokenFeed_v1"
+#: a feed's families: `TokenFeed_v2` is v1 with a zero row of 896 bits
+FEEDS = (FEED, "TokenFeed_v2")
 SCAN = "ScanSlots_v5"
 #: a position's select with the slot's collector, at every position but the last, and the last's with the slot's entry
 COLLECT = "SelectCollect_v1"
@@ -95,7 +97,7 @@ def placed(lab: str, T: int, P: int) -> int | None:
     prompt positions past the first, `ScanSlots_v5` at the first, `SelectEntry_v1` at the last and `SelectCollect_v1` at
     each other (its first the first's); None for any other, a fixed count at every position."""
     fam, s = statics(lab)
-    if fam == FEED:
+    if fam in FEEDS:
         return int(1 < T <= s["NP"])
     if fam == SCAN:
         return int(T == 1)
