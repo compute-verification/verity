@@ -1,5 +1,5 @@
-# This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
-# enforces it.
+# This directory's numbers, one [[metric]] each, by the rules of tests/test_metrics_registry.py,
+# which enforces them.
 
 # run on the control pod itself (`runs`): it reads Linear with the app's LINEAR_CLIENT_ID and LINEAR_CLIENT_SECRET
 # (response.py), which the pod holds and no CPU node does, and which the pod's list of its rows names for them

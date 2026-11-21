@@ -1,4 +1,4 @@
-"""The core benchmarks' interface as code a command calls (`benchmarks/README.md`'s "The core benchmarks' interface"),
+"""The core benchmarks' interface as code a command calls (`tests/test_metrics_registry.py`'s docstring),
 re-exported by `kit`:
 
 - `record_dir(arg)`: what a command takes, a run's record as a directory, read with nothing of ours; a run id is fetched

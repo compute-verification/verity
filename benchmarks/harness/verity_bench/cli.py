@@ -343,7 +343,15 @@ def _parser() -> argparse.ArgumentParser:
     _again_argument(plan)
     plan.set_defaults(run=_plan, command_parser=plan)
 
-    run = commands.add_parser("run", help="run one point without a passing run in this process's research run")
+    run = commands.add_parser(
+        "run", help="run one point without a passing run in this process's research run",
+        description="Launch with: research run --on NODE --pool gpu --project verity --source . --cwd source --require-result "
+                    "--tool verity_bench.tool:VLLM_BENCH_POINT (a steady-state spec: STEADY_POINT) --env GPU_LEASE_ON=N "
+                    "--env VERITY_BENCH_VENV=VENV [--env HF_HOME=DIR] -- uv run verity-bench run SPEC --point POINT. "
+                    "VERITY_BENCH_VENV is the node's pinned-vLLM environment (else $VIRTUAL_ENV, else the one pod_bootstrap.sh "
+                    "recorded; a point with none is refused) and HF_HOME its checkpoint store; --pool gpu takes a GPU slot, "
+                    "which gives the run its CPUs, and --timeout counts from taking it. A point whose row names its statement "
+                    "in the store also needs --store-read.")
     _spec_argument(run)
     _again_argument(run)
     run.add_argument("--point", default=None, metavar="POINT",

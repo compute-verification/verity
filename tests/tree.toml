@@ -194,6 +194,10 @@ path = "verity/protocols/proof/"
 means = "flock, with spot and recursion on it, spot_flock on those and spot_flock_recursion on top: what the other protocols call to prove; it uses neither layer"
 
 [[tree]]
+path = "verity/protocols/proof/README.md"
+means = "the proof layer's architecture on one screen, for its five protocols"
+
+[[tree]]
 path = "verity/protocols/accounting/"
 means = "the resource accounting layer: compute/pouw, memory/pous, memory/poub and network, on the proofs"
 

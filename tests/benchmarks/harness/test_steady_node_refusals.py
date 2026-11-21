@@ -27,7 +27,6 @@ from verity_bench import settings
 from verity_bench import steady as S
 from verity_bench import steady_cards as C
 from verity_bench import steady_node as N
-from verity_bench import steady_plan as P
 from verity_bench import steady_spec as SP
 from verity_bench.tool import STEADY_POINT
 
@@ -355,20 +354,3 @@ def test_the_node_side_reads_the_environment_through_declared_settings_and_names
     assert all(any(path.startswith(pattern.removesuffix("/**")) for pattern in STEADY_POINT.closure) for path in SP.CLOSURE)
     assert all(settings.REGISTRY.known(name) for name in (
         "VERITY_BENCH_STEADY_BIN", "VERITY_BENCH_STEADY_PY", "VERITY_BENCH_STEADY_SCRATCH", "CUDA_VISIBLE_DEVICES"))
-
-
-def test_the_readme_states_a_steady_state_spec_as_the_code_keeps_it():
-    readme = (Path(__file__).resolve().parents[3] / "benchmarks" / "harness" / "README.md").read_text()
-    section = readme[readme.index("## A steady-state spec"):readme.index("## Settings")]
-    for name in (SP.SCHEMA, "verity_bench.tool:STEADY_POINT", "VERITY_BENCH_STEADY_BIN", "VERITY_BENCH_STEADY_PY",
-                 "benchmarks/harness/steady_point.sh", SP.STAGER, SP.TIMER, "steady_plan.completed_rows", P.DERIVATION, SP.VERSIONS,
-                 *SP.CLOSURE[:2], "out/verdict.json", "out/point.json"):
-        assert f"`{name}`" in section, name
-    assert (N.VERDICT_FILE, N.POINT_FILE) == ("out/verdict.json", "out/point.json")
-    assert (f"exits 0 for a passed point, {SP.NOT_PASSED} for a point that was timed and didn't pass, {N.REFUSED} where "
-            f"nothing was timed, and {N.STOPPED} where\nTERM or INT ended it") in section
-    assert "`steady_plan.completed_rows`, `completed`" in section and "runs and arts" in section
-    assert all(f"`{name}`" in section for name in ("kit.lease", "kit.host_stamp", "kit.Writer", "jobs.dispatch"))
-    spec_keys = {"workload", "card", "cores", "sessions", "ahead", "driver", "cuda_toolkit", "setup", "[env]", "[admission]",
-                 "max_minutes", "mem_gb", "[[row]]", "type", "n", "pin", "provers", "warm", "period", "staged"}
-    assert all(f"`{key}`" in section for key in spec_keys), [key for key in spec_keys if f"`{key}`" not in section]

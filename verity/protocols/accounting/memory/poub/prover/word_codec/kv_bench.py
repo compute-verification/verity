@@ -45,6 +45,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import cuda_lib  # noqa: E402
+from cuda_lib import timed  # noqa: E402
 import kv as K  # noqa: E402
 
 SEED = hashlib.sha256(b"verity/word-codec/kv/bench/seed").digest()
@@ -117,21 +118,6 @@ def stream(torch) -> int:
 
 def ptr(t) -> int:
     return t.data_ptr()
-
-
-def timed(torch, fn, reps: int, warm: int = 1) -> list[float]:
-    for _ in range(warm):
-        fn()
-    torch.cuda.synchronize()
-    out = []
-    for _ in range(reps):
-        a, b = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
-        a.record()
-        fn()
-        b.record()
-        b.synchronize()
-        out.append(a.elapsed_time(b) / 1e3)
-    return out
 
 
 def queued(lib: Lib, torch, fn, cycles: int = SPIN_CYCLES) -> float:

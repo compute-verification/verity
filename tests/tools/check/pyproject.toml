@@ -56,7 +56,7 @@ untraced = [
     "test_tasks.py",
     "test_verdicts.py",
 ]
-# The tests read the verifier's pin, replayable sets and agreement scripts (the agreement step's inputs), check.py's
+# The tests read the verifier's pin, replayable sets and agreement scripts (the agreement step's inputs, `AGREEMENT_READS` among them), check.py's
 # shipped-tree commit record, the flock-circuit build step's script and the patches its Rust tests cover, the repository
 # lints the preflight names (and the direct environment read's detector, by which test_settings counts the reads left
 # outside settings.py), and the Lean audit's tool directory: the audit's job and the fast path (`lean_audit.py`,
@@ -77,7 +77,7 @@ inputs = ["tools/check", ".agents/skills/using-slack/registry.json", "READY.json
           "verity/protocols/proof/flock/prover/flock-gpu-link-b684b12.patch", "verity/protocols/proof/flock/prover/flock-link-b684b12.patch",
           "verity/protocols/proof/flock/prover/flock-sha512-b684b12.patch", "verity/protocols/proof/flock/prover/flock-vtime-b684b12.patch",
           "verity/protocols/proof/flock/prover/flock-wide-b684b12.patch",
-          "verity/protocols/proof/flock/prover/flock-zk-b684b12.patch", "verity/protocols/proof/flock/prover/agreement", "verity/protocols/proof/flock/verifier",
+          "verity/protocols/proof/flock/prover/flock-zk-b684b12.patch", "verity/protocols/proof/flock/prover/agreement", "verity/protocols/proof/flock/prover/python/verity_flock/record_text.py", "verity/protocols/proof/flock/verifier",
           "verity/circuits/base", "verity/circuits/lean", "verity/commitments/lean",
           "tests/test_no_wall_clock.py", "tests/test_repository.py",
           "tools/verity/lean", "tools/verity/graph/verity_graph/contract.py", "security/Proofs/lake-manifest.json", "security/Proofs/lean-audit.json",
