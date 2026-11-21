@@ -1,9 +1,9 @@
-Head nameable at 17:20Z (Lean build, four suites and one-linear rerun at the head carrying (i) and the cure below).
+Head nameable at 17:00Z: runs r20261121-161243-87f9 (Lean build, suites) and r20261121-161206-b13c (one-linear) at
+815beaab3fc, started 16:12Z.
 
-(iii) FINDING: a parameter whose root nodes are SuppliedInput<w>_v1, with no `inputs` marks in C and no source for it in
-the parameters' `supplied`, is refused by no code in either twin: the docket's `marked` (Docket.lean 389,
-Partition.regInputs 467-472) and `marked_inputs` (docket.py 246-250) count REGISTRATION bindings only; Supplied.marks
-(Supplied.lean 292-315) returns none without `inputs`; R7-supplied (Docket.lean ~681, `for (v, rs) in supplied`) checks
-only values the parameters' `supplied` lists. Its record entry is held to R7's own entry in leaves, words and domain
-(Docket.lean 667-669) and in root only where pinned or held (R7-held, 679). Cure going in now: R7 refuses a
-supplied-bound parameter with no source in `supplied` and no mark (by name), both twins.
+(iii) FINDING, cured at ac13bca7e9d: a parameter whose root nodes are SuppliedInput<w>_v1, with no `inputs` marks in C and
+no source in the parameters' `supplied`, was refused by no code in either twin (`marked`/`marked_inputs` count
+REGISTRATION only; Supplied.marks returns none without `inputs`; R7-supplied reads only the values `supplied` lists).
+Now refused by name: `R7-supplied-source` (Docket.unsourced, docket.unsourced_supplied).
+(i) R7-pin (Docket.offPin, docket.off_pin): the record's entry of every value the weights' registration of record pins
+is that pin in root, leaf count, words and domain, and an anchor's value it pins has an entry.
