@@ -1,7 +1,6 @@
 """The served window's table for `verity run` (`verity_cli.run.Registry`): onsite's and remote's components as a
-configuration declares them (`MANIFESTS`), the ``served-window`` workload (`SERVED`), each application's subprotocols and the
-configuration its file holds (`listed`, `configuration`), each party's piece (`PIECES`), the parties `verity run`
-starts first (`STARTS`), and the run of the pieces placed on a machine (`live`).
+configuration declares them (`MANIFESTS`), the ``served-window`` workload (`SERVED`), each party's piece (`PIECES`), the
+parties `verity run` starts first (`STARTS`), and the run of the pieces placed on a machine (`live`).
 
 A piece is what one party does in the run (`Piece`), in one of four ways (``runs``):
 
@@ -40,7 +39,6 @@ import re
 import subprocess
 import sys
 import time
-import tomllib
 from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
@@ -241,71 +239,6 @@ SERVED = Workload(SERVED_WINDOW, frozenset({"windows", "noise", "store", "receip
 PROVER_NODE, AUDITOR_HOST, GATE_HOST = "prover-node", "auditor-host", "gate-host"
 #: remote's auditor parties' machine, which isn't at the site: remote puts no auditor's device there
 AUDITOR_REMOTE = "auditor-remote"
-#: each party's machine: the developer's on the prover node, the auditor's devices on machines it doesn't control
-PLACEMENT = {WORKERS: PROVER_NODE, ZK_SERVER: PROVER_NODE, PROVER: PROVER_NODE, CHALLENGER: GATE_HOST,
-             NETWORK_ATTESTER: GATE_HOST, MEMORY_ATTESTER: AUDITOR_HOST, BANDWIDTH_VERIFIER: AUDITOR_HOST,
-             VERIFIER: AUDITOR_HOST}
-APPLICATIONS = ROOT / "applications"
-#: the configuration this table's application runs, whose `[[pin]]` entries are the only statement of the keys the auditor pinned
-CONFIG = APPLICATIONS / "onsite_full.toml"
-#: the header of each application's file
-HEADERS = {
-    "onsite_full": (
-        "The onsite run of the served window: onsite's seven subprotocols, each party on its machine, and the keys",
-        "the auditor pinned for its devices. Run it on each machine with `verity run THIS --on MACHINE --bindings",
-        "FILE` (tools/verity/cli/README.md); the deploy bindings hold every host and address, this file none.",
-        "`verity run THIS --dry-run` resolves it all."),
-    "remote": (
-        "The served window under remote's subprotocols (verity/remote/v1): SPOT, PoUW's Pearl+ run verdict and the",
-        "inference-only policy. No auditor's device is at the site: the developer's parties are on the prover node",
-        "and the auditor's on its own machine. `verity run THIS --dry-run` resolves every party."),
-}
-HEADER = HEADERS["onsite_full"]
-
-
-def listed(demo: str) -> tuple[str, ...]:
-    """The subprotocols `applications/<demo>.toml` lists, in its order (its ``protocols``)."""
-    return tuple(tomllib.loads((APPLICATIONS / f"{demo}.toml").read_text())["protocols"])
-
-
-#: an application's own workload values over the shared defaults, each of whose listed schemes then states its declared
-#: `Scheme.tie` over its parameters' defaults; remote and onsite both serve Pearl+ untied at this workload and its input
-#: dataset
-_TIED = {"model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da",
-         "precision": "bfloat16", "slots": 1, "window-steps": 1, "dataset": "llama32_1b_fixed_1_1_1", "timing": "at-once"}
-DEMO_VALUES = {"remote": _TIED, "onsite_full": _TIED}
-
-
-def tied(protocols: Sequence[str]) -> dict[str, dict[str, Any]]:
-    """Each listed declared scheme's `Scheme.tie`, by its component's id."""
-    return {MANIFESTS[n].id: dict(s.tie) for n in protocols if n in schemes.DECLARATIONS and (s := schemes.get(n)).tie}
-
-
-def configuration(commit: str, demo: str = "onsite_full",
-                  pins: Sequence[Mapping[str, str]] | None = None) -> dict[str, Any]:
-    """The configuration `applications/<demo>.toml` holds, at program ``commit``: `config new`'s over the application's subprotocols
-    (`listed`), each party at its `PLACEMENT` (remote's auditor parties at `AUDITOR_REMOTE`), the workload's and PoUS's
-    parameters stated (with the application's own, `DEMO_VALUES`, and its listed schemes' `tied`), and ``pins``, the keys the auditor pinned for its devices (by default `CONFIG`'s own `[[pin]]`
-    entries for the subprotocols the application lists: no code states a key)."""
-    protocols = listed(demo)
-    workload = DEMO_VALUES.get(demo, {})
-    named = replace(SERVED, default_params={**SERVED.default_params, **workload})
-    cfg = K.new(SERVED_WINDOW, list(protocols), MANIFESTS, {SERVED_WINDOW: named}, commit)
-    params = tied(protocols) if demo in DEMO_VALUES else {}
-    cfg["workload"]["params"] = {**SERVED.default_params, **workload}
-    stated = {c.id: dict(c.default_params) for c in map(MANIFESTS.__getitem__, protocols) if c.default_params}
-    for cid, own in params.items():
-        stated[cid] = {**stated.get(cid, {}), **own}
-    if stated:
-        cfg["params"] = stated
-    for p in cfg["party"]:
-        remote = demo == "remote" and p["principal"] == "auditor"
-        p["machine"] = AUDITOR_REMOTE if remote else PLACEMENT[p["name"]]
-    if pins is None:
-        pins = [p for p in tomllib.loads(CONFIG.read_text()).get("pin", []) if p["protocol"] in protocols]
-    cfg["pin"] = [dict(p) for p in pins]
-    K.check(cfg, MANIFESTS, {SERVED_WINDOW: SERVED})
-    return cfg
 
 
 # --- the pieces ------------------------------------------------------------------------------------------------------
@@ -1279,7 +1212,7 @@ def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result:
     w = ServedWorkload(cfg, state, bindings_of(state), here)
     return period.run_period(public(cfg), w, STAGES).result
 
-__all__ = ["DEMO_VALUES", "HEADERS", "MANIFESTS", "NOT_YET", "ORDER", "PIECES", "REGISTRATION_GOAL", "SERVED", "STARTS",
-           "WORKLOADS", "Held", "Piece", "Result", "Session", "attested", "held", "launched", "listed", "live",
+__all__ = ["MANIFESTS", "NOT_YET", "ORDER", "PIECES", "REGISTRATION_GOAL", "SERVED", "STARTS",
+           "WORKLOADS", "Held", "Piece", "Result", "Session", "attested", "held", "launched", "live",
            "onsite_check", "pending", "pieces", "placement", "prepare", "registration", "remote_check",
            "request_bound", "served_window", "unbound", "variables"]

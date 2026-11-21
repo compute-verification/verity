@@ -42,7 +42,7 @@ DATASET = serves.application(str(CONFIG))[0]
 REG = R.registry()
 T = sys.modules["served_table"]
 #: onsite's components, as its file lists them, and by their rows in the record
-PROTOCOLS = T.listed("onsite_full")
+PROTOCOLS = tuple(K.parse(CONFIG.read_text())["protocols"])
 NAMES = {T.ROWS[c]: c for c in PROTOCOLS}
 KEY = "0" * 128
 PIN = {p["protocol"]: p["key-sha512"] for p in tomllib.loads(CONFIG.read_text())["pin"]}
@@ -127,23 +127,11 @@ def dry(capsys, *args: str, reg: R.Registry = REG, config: Path = CONFIG) -> tup
 
 # --- the configuration -------------------------------------------------------------------------------------------------
 
-def test_the_configuration_is_the_tables_byte_for_byte():
-    text = CONFIG.read_text()
-    cfg = T.configuration(K.parse(text)["program"]["commit"])
-    assert K.render(cfg, T.HEADER) == text and K.parse(text) == cfg
+def test_remote_is_its_own_composite_with_no_pin_and_onsite_states_pous_challenges():
+    remote = R.load(ROOT / "applications" / "remote.toml", REG)
+    assert K.composite(remote["protocols"], REG.components) in set(K.COMPOSITES) - {T.ONSITE}
+    assert remote.get("pin", []) == []
     assert R.load(CONFIG, REG)["params"]["verity/pous/p2/v4/run"] == {"challenges": 320}
-
-
-@pytest.mark.parametrize("demo", sorted(set(T.HEADERS) - {"onsite_full"}))
-def test_each_smaller_demo_is_the_tables_byte_for_byte_and_its_own_composite(demo):
-    """Each other application's file is the table's configuration of its subprotocols, at onsite_full's commit, whose composite
-    is its own id; only the subprotocols it lists have parameters and pins."""
-    path = ROOT / "applications" / f"{demo}.toml"
-    cfg = T.configuration(K.parse(CONFIG.read_text())["program"]["commit"], demo)
-    assert K.render(cfg, T.HEADERS[demo]) == path.read_text()
-    assert K.composite(cfg["protocols"], REG.components) in K.COMPOSITES
-    assert K.composite(cfg["protocols"], REG.components) != T.ONSITE
-    assert {p["protocol"] for p in cfg["pin"]} == {"pous", "wipe"} & set(T.listed(demo))
 
 
 TIED = {"model": "unsloth/Llama-3.2-1B", "precision": "bfloat16", "slots": S.slots,
@@ -184,7 +172,6 @@ def test_the_memory_attester_s_two_keys_are_pinned_and_hashed():
     assert {p["protocol"]: p["key-sha512"] for p in cfg["pin"]} == stated
     assert all(re.fullmatch("[0-9a-f]{128}", k) for k in stated.values()) and stated["pous"] != stated["wipe"]
     assert stated["bandwidth"] == stated["pous"]   # the bandwidth close is signed with the PoUS key
-    assert T.configuration(cfg["program"]["commit"])["pin"] == cfg["pin"]   # the table states no key of its own
     bare = {k: v for k, v in K.parse(CONFIG.read_text()).items() if k != "pin"}
     assert K.digest(K.check(bare, REG.components, REG.workloads)) != K.digest(cfg)
 
