@@ -45,7 +45,7 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
     Definitions), `silicon` (the GPUs' exact semantics), `kernels`, `private_circuits` (the universal circuit), and the
     evaluator and a circuit's requirement in Lean (`evaluate`, `requirement`). The served kernels' circuits are the vLLM
     adapter's (`adapters/vllm/verity_vllm/definitions/`). Decided, not yet made: every workload circuit Definition moves
-    to `library/circuits/`, and `verity/circuits/` keeps the circuit language, the circuits a protocol itself names and
+    to library/circuits/, and `verity/circuits/` keeps the circuit language, the circuits a protocol itself names and
     only the primitives defining work needs.
   - `verity/commitments/`: the commitment schemes, with `crypto`, `randomness` (the one challenge derivation), `lms`
     and `identity` (Lean), `attest` (an auditor's device's signed period roots) and `periods` (what an adapter hands
@@ -57,7 +57,7 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
 - `calibration/`: the cards, the probes and the measurements that choose parameters. `calibration/hardware/` is the
   data sheets, and data only: `cards/` (one TOML data sheet per GPU, host or server model, or time
   base) and `nodes/` (one per kind of node). The Site's readers (`verity.device`'s `load_card` and `load_node`) read them.
-  Decided, not yet made: the data sheets move to `library/hardware/`.
+  Decided, not yet made: the data sheets move to library/hardware/.
 - `security/`: the Lean every guarantee is stated and proved in (Lean, below).
 - `adapters/`: one directory per serving system, holding its adapter (Design rules). `adapters/vllm/` (`verity_vllm`)
   builds each served workload's circuit and commits its values while serving. It sits on `adapters/torch/`
@@ -130,14 +130,14 @@ The rules in force, each stated as itself; the friction skill has the standing r
   (`verity/protocols/accounting`: compilation first, then compute, memory and network; each attester is part of an
   accounting protocol), the policy layer (`verity/protocols/policy`) and one top-level protocol, `run`
   (`verity/protocols/run`). The accounting layer gives the policy layer verified properties of blocks, and nothing
-  else. `run` is the orchestrator (Daniel, 20 Nov): it passes the public parameters in, calls every protocol in order,
+  else. `run` is the orchestrator: it passes the public parameters in, calls every protocol in order,
   passes what they give between them and between periods, and holds the top-level state; it has no logic of its own.
   One `run` covers one monitoring period and loops over its execution phases. Hardware is a public parameter of `run`,
   not registration. Registration is a protocol because its verifier can reject (the simplest rule: one registration,
   on day one); the Lean still folds the hardware from the registration log (`Site.ofLog`).
 - **The workload is the developer's private input:** a compiler (a function from advice to a circuit and its
   partitions), the advice and the trace (the compiled circuit's values). Requests are advice: the advice's length is
-  the number, in log space, of choices the prover made after registration about what its declared circuit was. A
+  the number, in log space, of choices the prover made after registration about what its registered circuit is. A
   workload reads its circuit's inputs from an input dataset through the one read API (`library/datasets`); Verity
   quantifies over all input datasets, which are not protocol structure, and timing is a view over one. In the first
   version compilation is a protocol that accepts everything, every result says "compilation not verified" beside it,
@@ -242,7 +242,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
   and later from a separate physical calibration. A device's capacity is an assumed bound on its true peak compute
   capacity, and nothing else: no power attester, power ceiling, energy floor or meter enters a protocol, premise or
   plan.
-- **Lean is the definition and the only verifier** (Daniel, 20 Nov). Python never decides a verdict and never
+- **Lean is the definition and the only verifier.** Python never decides a verdict and never
   re-implements a verifier. The provers' Python (the listing's untrusted places) mirrors the Lean for the prover's
   speed, held to it by difftest. A Python copy of a Lean verifier is deleted in one change with its generator and its
   difference test, once the Lean program's cases are frozen as a committed fixture or `#guard`s; until then it and what
@@ -255,7 +255,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
   the vLLM adapter's `check/match/`), one kept and consolidated set of tools. Nobody proves it, lists it
   as an assumption or counts it as a gap. Lean holds one description of the circuit, the parsed circuit file the verifier
   checks, and defines every other layer's circuit from it.
-- **Adapters are frontends, and Verity owns what verification rests on** (Daniel, 20 Nov). Everything soundness or
+- **Adapters are frontends, and Verity owns what verification rests on.** Everything soundness or
   zero knowledge rests on is in `verity/`; an adapter holds only what completeness rests on: it finds the engine's
   values and calls Verity's commitment functions, and holds no commitment, salt, sample, record or verdict code of its
   own. An adapter may import any part of `verity`. Its compiler is the adapter's, written in the circuit language.
