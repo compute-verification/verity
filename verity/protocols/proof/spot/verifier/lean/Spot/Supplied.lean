@@ -563,6 +563,19 @@ def ofMark (coins commitments : Array (String × ByteArray)) (v : String) (m : M
     throw s!"supplied input {v}: {m.fn}'s value is {8 * n} bits, and the mark says {m.bits}"
   return #[(if m.layout == "le" then #[(LE, "")] else #[]) ++ ss]
 
+private def hexRep (b : String) : Json := .str (String.join (List.replicate 64 b))
+private def domainRec (domain : Option String) : Json :=
+  Json.mkObj [("registered", Json.arr #[Json.mkObj ([("value", .str "w"), ("root", hexRep "11")] ++
+    (domain.map fun d => [("domain", hexRep d)]).getD [])])]
+private def domainRow (rec : Json) : V (Array Nat) := do
+  let rs ← ofMark #[] #[] "x" { fn := "registered.domain/v1", args := #[("value", .str "w")], layout := "digest", bits := 512 }
+  let some r := rs[0]? | throw "no row"
+  digestLeaves (← r.foldlM (fun acc s => return acc ++ (← sourceBytes rec #[] none #[] "x" s)) ByteArray.empty)
+
+#guard (domainRow (domainRec (some "33"))).toOption == (digestLeaves ⟨(List.replicate 64 (0x33 : UInt8)).toArray⟩).toOption
+#guard (domainRow (domainRec (some "33"))).toOption != (digestLeaves ⟨(List.replicate 64 (0x11 : UInt8)).toArray⟩).toOption
+#guard (domainRow (domainRec none)).toOption.isNone
+
 /-- The place a held commitment was registered at: its JSON's `place`, a natural; none for a text that is no JSON object of
 one. -/
 private def commitmentPlace (b : ByteArray) : Option Nat := do
