@@ -433,7 +433,7 @@ theorem runInputRootsAt_has {P : Flock.Program.Prog} {rs : Array Flock.TemplateQ
     {R : Option String} {tied : Array (Nat × Nat)} {m : OneStageZk.Member} {own out : Array Json}
     {byPort : Std.HashMap String Json}
     (h : OneStageZk.runInputRootsAt P rs prog R tied m own byPort = .ok out) :
-    (∀ y ∈ own, y ∈ out) ∧ ∀ ins, OneStageZk.memberInputs P rs m = .ok ins →
+    (∀ y ∈ own, y ∈ out) ∧ ∃ ins, OneStageZk.memberInputs P rs m = .ok ins ∧
       ∀ (port : String) (w len : Nat), (port, w, len) ∈ ins → Flock.Registered.runNode P w = true →
         (tied.any fun (first, count) => Partition.within P first count w) = false →
         ∃ r ∈ out, RunRootAt byPort port w r := by
@@ -444,10 +444,8 @@ theorem runInputRootsAt_has {P : Flock.Program.Prog} {rs : Array Flock.TemplateQ
     (fun (x : String × Nat × Nat) => Flock.Registered.runNode P x.2.1 = true ∧
       (tied.any fun (first, count) => Partition.within P first count x.2.1) = false)
     (fun x r => RunRootAt byPort x.1 x.2.1 r) ?_ ins.toList own out h
-  · refine ⟨key.1, fun ins' hins' port w len hx hrun ht => ?_⟩
-    have e : ins = ins' := Except.ok.inj (hins.symm.trans hins')
-    subst e
-    exact key.2 (port, w, len) (Array.mem_toList_iff.2 hx) ⟨hrun, ht⟩
+  · exact ⟨key.1, ins, hins, fun port w len hx hrun ht =>
+      key.2 (port, w, len) (Array.mem_toList_iff.2 hx) ⟨hrun, ht⟩⟩
   · intro got a got' hf
     obtain ⟨p, w, len⟩ := a
     dsimp only at hf
@@ -475,7 +473,7 @@ theorem runInputRootsAt_has {P : Flock.Program.Prog} {rs : Array Flock.TemplateQ
 theorem runInputRoots_has {v : Docket.Verifier} {P : Flock.Program.Prog} {rs : Array Flock.TemplateQuery.TRange}
     {ms : Array OneStageZk.Member} {rec : Json} {roots out : Std.HashMap String (Array Json)}
     (h : OneStageZk.runInputRoots v P rs ms rec roots = .ok out) :
-    ∀ m ∈ ms, ∀ ins, OneStageZk.memberInputs P rs m = .ok ins →
+    ∀ m ∈ ms, ∃ ins, OneStageZk.memberInputs P rs m = .ok ins ∧
       ∀ (port : String) (w len : Nat), (port, w, len) ∈ ins → Flock.Registered.runNode P w = true →
         ((Docket.tiedGates v).any fun (first, count) => Partition.within P first count w) = false →
         ∃ r ∈ out.getD m.name #[], RunRootAt (OneStageZk.rootsByPort rec) port w r := by
@@ -485,14 +483,14 @@ theorem runInputRoots_has {v : Docket.Verifier} {P : Flock.Program.Prog} {rs : A
   cases h
   rw [← Array.forIn_toList] at hacc
   have key := forIn_collect _ (fun a b : Std.HashMap String (Array Json) => ∀ n, ∀ y ∈ a.getD n #[], y ∈ b.getD n #[])
-    (fun m acc => ∀ ins, OneStageZk.memberInputs P rs m = .ok ins →
+    (fun m acc => ∃ ins, OneStageZk.memberInputs P rs m = .ok ins ∧
       ∀ (port : String) (w len : Nat), (port, w, len) ∈ ins → Flock.Registered.runNode P w = true →
         ((Docket.tiedGates v).any fun (first, count) => Partition.within P first count w) = false →
         ∃ r ∈ acc.getD m.name #[], RunRootAt (OneStageZk.rootsByPort rec) port w r)
     (fun _ _ _ hy => hy) (fun _ _ _ h1 h2 n y hy => h2 n y (h1 n y hy))
-    (fun _ _ _ hg hle ins hins port w len hx hrun ht => by
-      obtain ⟨r, hr, hq⟩ := hg ins hins port w len hx hrun ht
-      exact ⟨r, hle _ r hr, hq⟩) ?_ ms.toList roots _ hacc
+    (fun _ _ _ ⟨ins, hins, hg⟩ hle => ⟨ins, hins, fun port w len hx hrun ht => by
+      obtain ⟨r, hr, hq⟩ := hg port w len hx hrun ht
+      exact ⟨r, hle _ r hr, hq⟩⟩) ?_ ms.toList roots _ hacc
   · exact fun m hm => key.2 m (Array.mem_toList_iff.2 hm)
   · intro m acc r hf
     try dsimp only at hf
@@ -508,10 +506,11 @@ theorem runInputRoots_has {v : Docket.Verifier} {P : Flock.Program.Prog} {rs : A
         subst hn'
         exact hsub y hy
       · exact hy
-    · intro ins hins port w len hx hrun ht
+    · obtain ⟨ins, hins, hh⟩ := hhas
+      refine ⟨ins, hins, fun port w len hx hrun ht => ?_⟩
       rw [Std.HashMap.getD_insert]
       simp only [beq_self_eq_true, ↓reduceIte]
-      exact hhas ins hins port w len hx hrun ht
+      exact hh port w len hx hrun ht
 
 /-- **`fieldRoots` keeps every root each member had.** -/
 theorem fieldRoots_mono {W : Spot.Wires.Wiring} {bases : Array (String × Nat × Nat)} {ms : Array OneStageZk.Member}
@@ -818,8 +817,10 @@ theorem runInputsAtOneTree : RunInputsAtOneTree := by
     · obtain ⟨W, -, hw⟩ := ebind_ok hw
       exact fieldRoots_mono hw
   refine ⟨P, rs, hP, hrs, ?_⟩
-  intro m hm ins hins port w len hx hrun ht
-  obtain ⟨x, hx2, hpt, r1, hg, htr, hro, hd, hl⟩ := runInputRoots_has h2 m hm ins hins port w len hx hrun ht
+  intro m hm
+  obtain ⟨ins, hins, hh⟩ := runInputRoots_has h2 m hm
+  refine ⟨ins, hins, fun port w len hx hrun ht => ?_⟩
+  obtain ⟨x, hx2, hpt, r1, hg, htr, hro, hd, hl⟩ := hh port w len hx hrun ht
   refine ⟨x, ?_, hpt, htr, ?_⟩
   · rw [slice_roots]
     exact hmono _ x hx2

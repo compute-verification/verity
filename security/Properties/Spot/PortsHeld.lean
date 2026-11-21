@@ -127,8 +127,8 @@ def MembersRootsRecord : Prop :=
                   q = w.writer ++ "/" ++ w.out)
 
 /-- **On an accepted run of the per-member variant, every untied run input a member reads is at the record's one
-tree**: for each parameter `port` member `m`'s units read at a run input node `w` of C (`OneStageZk.memberInputs`)
-outside the tied values' gates (`Docket.tiedGates`), `m`'s slice holds a root under `port` at the tree `input/n<w>`
+tree**: `OneStageZk.memberInputs` succeeds for every member, and for each parameter `port` member `m`'s units read
+there at a run input node `w` of C outside the tied values' gates (`Docket.tiedGates`), `m`'s slice holds a root under `port` at the tree `input/n<w>`
 (`Flock.Registered.freshValue`) that is the record's one root of that tree (`IsRecordRoot`). So every proof block that
 reads an untied run input node opens one root of it. -/
 def RunInputsAtOneTree : Prop :=
@@ -138,7 +138,7 @@ def RunInputsAtOneTree : Prop :=
     OneStageZk.checkMembersAt p ms c ξ e sts bs = .accept pub prof →
       ∃ roots, OneStageZk.membersRootsOf p ms c.record = .ok roots ∧
         ∃ P rs, Program.parse p.own.program = .ok P ∧ Partition.evaluate P (getD p.own.partition "query") = .ok rs ∧
-          ∀ m ∈ ms, ∀ ins, OneStageZk.memberInputs P.prog rs m = .ok ins →
+          ∀ m ∈ ms, ∃ ins, OneStageZk.memberInputs P.prog rs m = .ok ins ∧
             ∀ (port : String) (w len : Nat), (port, w, len) ∈ ins → Flock.Registered.runNode P.prog w = true →
               ((Docket.tiedGates p.base.verifier).any fun (first, count) => Partition.within P.prog first count w) =
                 false →
