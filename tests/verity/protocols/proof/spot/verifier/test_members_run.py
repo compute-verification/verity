@@ -659,8 +659,8 @@ def test_a_members_run_input_ports_are_held_at_their_nodes_trees_derived_from_c(
     """`OneStageZk.runInputRoots`' mirror on a window whose C reads ``x``, ``sx``, ``wrow`` and ``sw`` from run input
     nodes (`Window` with ``run_inputs``): from C and the partition alone, each member's slice holds each such port at
     the record's ``input/n<w>`` root, with that tree, at C's leaf count and the domain under the window's open root
-    (`run_tree_held`); the writer's own domain, which binds no window, is refused by name; a root of a member's own at
-    one refuses by name, and so does a record of no run input's tree."""
+    (`run_tree_held`), which the writer commits under its run root; under another window's root the domain is refused
+    by name; a root of a member's own at one refuses by name, and so does a record of no run input's tree."""
     TI = _periods_interface_tests()
     got = {}
 
@@ -676,7 +676,7 @@ def test_a_members_run_input_ports_are_held_at_their_nodes_trees_derived_from_c(
     program, query = win.window.program, win.window.query
     members = {m.name: [[m.base, m.base + m.n]] for m in win.window.members}
     runs = {r.port: r.param for r in win.runs}
-    root = "ee" * 64
+    root = TI.RUN
     from verity.circuits import codec, edges as EG
     Rt = EG._Root(json.loads(json.dumps(codec.encode_program(program))))
     ranges = P._template(program, query, "q").ranges
@@ -685,9 +685,11 @@ def test_a_members_run_input_ports_are_held_at_their_nodes_trees_derived_from_c(
     def bound(r: dict) -> dict:
         w = int(r["port"].removeprefix("input/n"))
         rows = Rt.nodes[w]["out_leaves"] * Rt.nodes[w]["members"] // lens[w]
-        return {**r, "domain": RV.domain(P.program_digest(program), r["port"], lens[w], rows, 16,
+        words = lens[w] * (EG._bits(Rt.nodes[w]["ret"]) // Rt.nodes[w]["out_leaves"]) // 16
+        return {**r, "domain": RV.domain(P.program_digest(program), r["port"], words, rows, 16,
                                          window=root).domain_id.hex()}
-    roots = [bound(r) if r["port"].startswith("input/") else r for r in got["roots"]]
+    roots = got["roots"]
+    assert roots == [bound(r) if r["port"].startswith("input/") else r for r in roots]
     rec = {"population": 10, "scheme": "frame-v3-sha512/hm96-sha512", "roots": roots}
     by_port = {r["port"]: r for r in roots}
     sl = M.slices(members, rec, program=program, query=query, window_root=root)
@@ -700,7 +702,7 @@ def test_a_members_run_input_ports_are_held_at_their_nodes_trees_derived_from_c(
     first = next(iter(members))
     w = int(runs["x"].removeprefix("input/n"))
     with pytest.raises(ValueError) as e:
-        M.slices(members, {**rec, "roots": got["roots"]}, program=program, query=query, window_root=root)
+        M.slices(members, rec, program=program, query=query, window_root="ee" * 64)
     assert str(e.value).startswith("registered: the record's input/n") and str(e.value).endswith(
         "has another domain than C's run input node " + str(e.value).split("node ")[1].split(" ")[0] +
         " and the window's open root give it: a run input node's one tree binds its window")

@@ -136,7 +136,8 @@ def RUN_TREE_UNBOUND_WHY (w : Nat) : String :=
 /-- **A run input node's one tree binds its window**: the record's entry `r` of `input/n<w>` has the leaf count C's
 node `w` gives it, its rows `outLeaves · members / len` for rows of `len` leaves (as `OneCircuit.pos` counts them),
 and the domain the verifier computes itself (`Spot.Registered.domainAt`): the program's digest `prog`, the value
-`input/n<w>`, `len` words, those rows and 16-bit words, beside the window's open root `R`, which the per-member form
+`input/n<w>`, a row's 16-bit words (`len` leaves of the node's leaf width, as the writer packs a port's row), those rows
+and 16-bit words, beside the window's open root `R`, which the per-member form
 reads only where the challenger's signed coins verify under it (`coinsOf`, `treesOf`). The domain's `schema` is a
 constant of the domain (`hm96-sha512/row/v1`), not the rows' format. Refused by name otherwise (`RUN_TREE_WHY`), and
 with no `R` (`RUN_TREE_UNBOUND_WHY`). -/
@@ -146,7 +147,8 @@ def runTreeHeld (P : Flock.Program.Prog) (prog : String) (R : Option String) (w 
   let some f := P.defs[wn.fn]? | throw (RUN_TREE_WHY w "leaf count")
   let rows := if len == 0 then 0 else f.outLeaves * wn.members / len
   if nat? (getD r "leaves") != some rows then throw (RUN_TREE_WHY w "leaf count")
-  let d ← Spot.Registered.domainAt prog (Flock.Registered.freshValue w) len rows 16 (some R)
+  let words := if f.outLeaves == 0 then 0 else len * (f.ret.widths.foldl (· + ·) 0 / f.outLeaves) / 16
+  let d ← Spot.Registered.domainAt prog (Flock.Registered.freshValue w) words rows 16 (some R)
   if getD r "domain" != .str (Flock.hexOf d) then throw (RUN_TREE_WHY w "domain")
 
 end Spot.OneStageZk

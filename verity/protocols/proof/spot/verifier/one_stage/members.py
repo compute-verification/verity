@@ -1032,8 +1032,8 @@ def run_tree_unbound_why(w: int) -> str:
 
 def run_tree_held(R: EG._Root, prog: str, window: str | None, w: int, ln: int, r: Mapping[str, Any]) -> None:
     """`OneStageZk.runTreeHeld`: the record's entry ``r`` of ``input/n<w>`` has C's node's rows (out leaves times
-    members over ``ln``) and the domain under the program digest ``prog``, ``ln`` words, 16-bit, and the window's open
-    root ``window``. The domain's schema is a constant of the domain, not the rows' format."""
+    members over ``ln``) and the domain under the program digest ``prog``, a row's 16-bit words (``ln`` leaves of the
+    node's leaf width, as the writer packs a port's row), and the window's open root ``window``. The domain's schema is a constant of the domain, not the rows' format."""
     if window is None:
         raise _Refused(run_tree_unbound_why(w))
     node = R.nodes[w]
@@ -1042,7 +1042,8 @@ def run_tree_held(R: EG._Root, prog: str, window: str | None, w: int, ln: int, r
     if not (_nat(leaves) and leaves == rows):
         raise _Refused(run_tree_why(w, "leaf count"))
     try:
-        d = RV.domain(prog, f"input/n{w}", ln, rows, 16, window=window).domain_id.hex()
+        words = ln * (EG._bits(node["ret"]) // node["out_leaves"]) // 16 if node["out_leaves"] else 0
+        d = RV.domain(prog, f"input/n{w}", words, rows, 16, window=window).domain_id.hex()
     except ValueError as e:
         raise _Refused(str(e)) from None
     if r.get("domain") != d:
