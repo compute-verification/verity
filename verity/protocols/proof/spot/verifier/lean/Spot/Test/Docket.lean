@@ -196,15 +196,16 @@ def weighedCodes (v : Verifier) : Array String :=
 #guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord PINS #[READS[0]!]) } == #["R8-undeclared"]
 #guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord PINS (READS.push ("E_v1", "z", "x"))) } == #[]
 -- what the members' check holds reads to (`readPins`): with marked inputs, none without a registration or with one R8
--- refuses; with one R8 accepts, the marked inputs, the ranges' reads of them and R8's pins
+-- refuses; with one R8 accepts, the marked inputs, their gates, the ranges reading them and R8's pins
 #guard (readPins (weighed E3R)).isNone
 #guard (readPins { weighed E3R with weightsOfRecord := some (ofRecord [pin "x"]) }).isNone
-#guard (readPins { weighed E3R with weightsOfRecord := some (ofRecord PINS) }).map (fun (l, r, p) =>
-  (l, (r.map fun (x, q, v) => (x.template, q, v)).toList.eraseDups.toArray, p.size)) == some (#["x", "y"], READS, 2)
+#guard (readPins { weighed E3R with weightsOfRecord := some (ofRecord PINS) }).map (fun rp =>
+  (rp.loose, rp.held, rp.ranges.map (·.template), rp.pins.size)) == some (#["x", "y"], #[("x", 0, 3), ("y", 3, 1)],
+    #["E_v1", "E_v1"], 2)
 -- nothing marked, or every marked input expected: nothing held
-#guard (readPins (weighed E3S)).map (fun (l, r, p) => l.size + r.size + p.size) == some 0
-#guard (readPins { verifier E3R with registered := #[("x", 1), ("y", 1)] }).map (fun (l, r, p) => l.size + r.size + p.size) ==
-  some 0
+#guard (readPins (weighed E3S)).map (fun rp => rp.loose.size + rp.ranges.size + rp.pins.size) == some 0
+#guard (readPins { verifier E3R with registered := #[("x", 1), ("y", 1)] }).map
+  (fun rp => rp.loose.size + rp.ranges.size + rp.pins.size) == some 0
 -- a registered input under a query that is no template query that applies
 #guard weightsCodes { weighed E3R with query := Json.mkObj [("name", "Q_all")] } == #["R8-weights-query"]
 
