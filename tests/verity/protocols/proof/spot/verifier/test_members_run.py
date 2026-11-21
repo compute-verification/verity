@@ -328,6 +328,32 @@ def test_the_members_population_check_reads_the_registrations_strata(tmp_path):
     assert M.population_why(UNITS[B], strata, "no header", slice_) == M.MEMBER_UNITS
 
 
+def test_under_a_subset_design_the_strata_need_only_cover_the_units():
+    """PAIR, TRIPLE, PAIR: the strata cover the units out of order, which a subset design's member check takes and a
+    stratified one's refuses; an overlap, a gap and a range past the units are no cover."""
+    program = PN.mixed_population_program([(PAIR, 2), (TRIPLE, 3), (PAIR, 2)])
+    strata = P.strata(program, QUERY)
+    assert [(t, [tuple(r) for r in rs]) for t, rs in strata] == [(PAIR.id, [(0, 2), (5, 7)]), (TRIPLE.id, [(2, 5)])]
+    assert not P.in_order(program, QUERY, 7) and P.covers(program, QUERY, 7) and not P.covers(program, QUERY, 6)
+    slice_ = {"population": 3, "roots": [{"domain": ROOTS[B][1], "leaves": 4, "port": "out", "root": ROOTS[B][0]},
+                                         tree_entry(B)], "scheme": SCHEME}
+    assert M.population_why(UNITS[B], strata, header(B), slice_, subset=True) is None
+    assert M.population_why(UNITS[B], strata, header(B), slice_) == M.MEMBER_STRATA
+    assert M.population_why(UNITS[B], strata, "no header", slice_, subset=True) == M.MEMBER_UNITS
+    for bad in ([("p", [[0, 3], [5, 7]]), ("t", [[2, 5]])], [("p", [[0, 2], [6, 7]]), ("t", [[2, 5]])],
+                [("p", [[0, 2], [5, 7]]), ("t", [[2, 5], [5, 4]])]):
+        assert P.cover(bad) is None
+        assert M.population_why(UNITS[B], bad, header(B), slice_, subset=True) == M.MEMBER_COVER
+    assert M.population_why([[2, 8]], strata, header(B), slice_, subset=True) == M.MEMBER_COVER
+    in_order = P.strata(PROGRAM, QUERY)
+    assert P.cover(in_order) == 5 and P.in_order(PROGRAM, QUERY, 5) and P.covers(PROGRAM, QUERY, 5)
+    assert all(M.population_why(UNITS[B], in_order, header(B), slice_, subset=s) is None for s in (False, True))
+    assert M.subset_design({"law": "subset", "k": 1}) and M.subset_design("rate:1/8")
+    assert not any(map(M.subset_design, ({"law": "stratified", "k": 1}, {"law": "work", "k": 1}, "stratified-rate:1/8",
+                                         "work-rate:1/8")))
+    assert "stratified" in M.strata_design("stratified")
+
+
 def test_the_registrations_roots_are_each_one_members_and_none_a_row_tables(tmp_path):
     w = Window(tmp_path)
     roots = RECORD["roots"]

@@ -95,6 +95,31 @@ def in_order(program: Program, query: Mapping[str, Any], n: int) -> bool:
     return us == list(range(n)) and all(u < len(gates) for u in us)
 
 
+def cover(strata: Sequence[tuple[str, Sequence[Sequence[int]]]]) -> int | None:
+    """`FilePart.cover`: N where the strata's ranges ``[lo, hi)``, all strata together and in any order, are a disjoint
+    cover of ``0, ..., N - 1`` (a range with ``hi < lo`` refused, one with ``hi == lo`` holding no unit), else None."""
+    rs = [(lo, hi) for _t, s in strata for lo, hi in s]
+    if any(hi < lo for lo, hi in rs):
+        return None
+    at = 0
+    for lo, hi in sorted((r for r in rs if r[0] < r[1]), key=lambda r: r[0]):
+        if lo != at:
+            return None
+        at = hi
+    return at
+
+
+def covers(program: Program, query: Mapping[str, Any], n: int) -> bool:
+    """`Slots.popCovers` (run as `Slots.popCoverOk`), `in_order`'s cover form: `query` applies to `program`, the strata's ranges are a disjoint cover
+    of ``0, ..., n - 1`` (`cover`) and every one of those proof blocks has its gates. What a subset design's draw needs:
+    it reads no stratum, and slot `u` is proof block `u`."""
+    try:
+        ss, gates = strata(program, query), unit_gates(program, query)
+    except (QueryRefused, ValueError):
+        return False
+    return cover(ss) == n and n <= len(gates)
+
+
 def _once(inner: int, outer_stride: int, inner_stride: int, count: int) -> bool:
     """Whether a strided run of `count` references names each of its leaves at most once: its rows (or its columns) lie
     apart. A run whose rows and columns interleave counts as naming a leaf twice."""
@@ -255,6 +280,6 @@ def _merged(rs: Sequence[tuple[int, int]]) -> list[tuple[int, int]]:
     return out
 
 
-__all__ = ["template_id", "FORMAT", "QueryRefused", "digest", "evaluate", "fanout", "in_order", "is_template_query", "partition",
+__all__ = ["template_id", "FORMAT", "QueryRefused", "cover", "covers", "digest", "evaluate", "fanout", "in_order", "is_template_query", "partition",
            "program_digest", "program_sha512", "ranges", "run_inputs", "shared_inputs", "strata", "template_instance_query",
            "template_instances_query", "unit_gates", "units", "within", "QUERY_X"]

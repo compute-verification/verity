@@ -10,12 +10,14 @@ without this one among its imports runs it as stated, off the layout.
 module
 
 public import Spot.Slots
+public import Spot.FilePart
 
 /-!
 # The run's `population-order` check, decided from the ranges
 
 `chain` and `segsOf`, the population's segments in slot order; `popOkRanges`, `Slots.popOk` read off the query's ranges
-and unit gates with no proof block built; the lemmas up to `popOk_of` that tie the two; and `popOk_eq_popOkRanges`,
+and unit gates with no proof block built; `popCoverOk`, its cover form, which a subset sampling design's check reads
+(`OneStageZk.popHeld`); the lemmas up to `popOk_of` that tie `popOk` to `popOkRanges`; and `popOk_eq_popOkRanges`,
 the `@[csimp]` equality under which `popOk` runs as `popOkRanges`. `Spot.Run` and `Spot.OneStageZkStatement` import it, so the
 run's `population-order` checks and the one-stage check's (`OneStageZk.popHeld`) run `popOkRanges`.
 -/
@@ -49,6 +51,17 @@ def popOkRanges (p : Program) (query : Json) (n : Nat) : Bool :=
     match Partition.unitGates p query with
     | .error _ => false
     | .ok gs => chain (segsOf rs) 0 n && decide (n ≤ gs.size)
+
+/-- **`popOk`'s cover form**, a subset sampling design's population check: the query's ranges and unit gates are
+defined, the strata's segments together, in any order, are a disjoint cover of `0, 1, …, n - 1`
+(`FilePart.coverRanges` of `segsOf`), and every one of those units has its gates. -/
+def popCoverOk (p : Program) (query : Json) (n : Nat) : Bool :=
+  match Partition.evaluate p query with
+  | .error _ => false
+  | .ok rs =>
+    match Partition.unitGates p query with
+    | .error _ => false
+    | .ok gs => FilePart.coverRanges (segsOf rs) == some n && decide (n ≤ gs.size)
 
 theorem chain_le : ∀ (ss : List (Nat × Nat)) (a b : Nat), chain ss a b = true → a ≤ b := by
   intro ss
