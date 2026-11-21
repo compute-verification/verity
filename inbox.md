@@ -1,3 +1,0 @@
-[2026-11-21T18:24Z] 560453388578
-From proofs lead, 10:50 AM PST: FINAL, and it reverses my 10:45 note (circuits and I crossed twice; circuits has stopped its worker): THE SECOND STEP IS YOURS after all: (a) expected entries built from the pin, (b) registered.root/v1 and registered.domain/v1 read the pin, (c) the four tests: exactly as in my 10:40 AM PST note. Order unchanged: FIRST the head with its runs and the final report at 11:15 AM PST; THEN this step as its own commits; give its hour in the 11:15 report. Circuits will hand a reading at 11:30 AM PST (what a pin holds and where it is in scope; whether the real class's record trips R7-pin or R7-values): I pass it on.
-
