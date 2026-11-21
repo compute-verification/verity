@@ -765,6 +765,31 @@ def test_a_members_run_input_ports_are_held_at_their_nodes_trees_derived_from_c(
     assert [next(r["root"] for r in sl[n]["roots"] if r["port"] == "x") for n in two] == ["aa" * 64] * 2
 
 
+def test_the_one_statement_reads_a_registered_value_only_at_its_pin():
+    """`pinned_reads` on `Spot.Test.OneTree`'s guards of `pinnedReads`: the file at the pin and a committed tree's port
+    are held; a root off the pin, a value with no pin and a supplied value are refused by name."""
+    rp = ([], [], [], {"w": {"root": "a" * 128, "leaves": 2, "domain": "d" * 128}}, {})
+
+    def port(value, c="a", leaves=2):
+        return {"value": value, "root": c * 128, "leaves": leaves, "domain": "d" * 128}
+
+    regs = {p: e for p, e in {"p": port("w"), "q": port("committed/q", "b", 3)}.items()
+            if DK.tree_port(e["value"]) is None}
+    assert list(regs) == ["p"]
+    M.pinned_reads(rp, [], "the one statement", regs)
+    for got, why in (({"p": port("w", "b")}, M.pinned_read_why("the one statement", "p", "w", "root")),
+                     ({"p": port("u")}, M.unpinned_read_why("the one statement", "p", "u"))):
+        with pytest.raises(M._Refused) as e:
+            M.pinned_reads(rp, [], "the one statement", got)
+        assert str(e.value) == why
+    with pytest.raises(M._Refused) as e:
+        M.pinned_reads(rp, ["w"], "the one statement", {"p": port("w")})
+    assert str(e.value) == M.supplied_read_why("the one statement", "p", "w") == (
+        "registered: the one statement's port p reads the supplied value w, whose root R7 recomputes and no file root "
+        "is held to yet: the one statement reads a registered value only at a pin R8 accepted or a root the verifier "
+        "holds")
+
+
 def test_the_registered_reads_refusals_are_leans_word_for_word():
     """The texts of `pinned_read_why`, `unpinned_read_why`, `two_reads_why`, `read_form_why` and the run input tree's
     refusals, which Lean's guards (`OneStageZk`, `Flock.OneCircuit.READ_FORM_WHY`) hold too."""

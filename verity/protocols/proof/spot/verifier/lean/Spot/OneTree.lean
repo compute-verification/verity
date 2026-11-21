@@ -20,19 +20,6 @@ namespace Spot.OneStageZk
 open Lean (Json)
 open Flock (V)
 
-/-- The refusal of member `member`'s registered port `port` reading the registered input `value` at another `what` (root,
-leaf count, domain) than the pin the docket's R8 accepted (`pinsHeld`). -/
-def PINNED_READ_WHY (member port value what : String) : String :=
-  s!"registered: member {member}'s port {port} reads the registered input {value} at another {what} than its pin of " ++
-    "record: a registered input the weights' registration of record pins is read at the pin's root, leaf count and domain"
-
-/-- The refusal of member `member`'s registered port `port` reading the registered input `value`, which the program marks,
-R8 accepted no pin of and whose root the verifier holds none of (`pinsHeld`). -/
-def UNPINNED_READ_WHY (member port value : String) : String :=
-  s!"registered: member {member}'s port {port} reads the registered input {value}, which the program marks, R8 " ++
-    "accepted no pin of and the verifier holds no root of: a marked input is read only at a pin R8 accepted or a " ++
-    "root the verifier holds"
-
 /-- The refusal of member `member`, whose units read its parameter `param` at the two input nodes `w0` and `w1` of C
 (`memberInputs`). -/
 def TWO_READS_WHY (member param : String) (w0 w1 : Nat) : String :=
@@ -81,14 +68,6 @@ def memberInputs (P : Flock.Program.Prog) (rs : Array Flock.TemplateQuery.TRange
 /-- The template parameter a registered port reads: its `param`, else its name, without a row index (`paramRow`). -/
 def portParam (q : Flock.Registered.Port) : String :=
   (Flock.Registered.paramRow (if q.param.isEmpty then q.name else q.param)).1
-
-/-- The registration of record's entry of the registered input `v`: R8's accepted pin (`rp.pins`), else the root the
-verifier itself holds of it (`rp.roots`, `Docket.heldEntries`); as `(root, leaves, domain)`. No arm reads a root the
-record names: a root the prover registers is held to nothing but itself. -/
-def pinOf (rp : Docket.ReadPins) (v : String) : Option (String × Nat × String) :=
-  match rp.pins.find? (·.1.value == v) with
-  | some (e, root) => some (root, e.leaves, e.domain)
-  | none => (rp.roots.find? (·.1.value == v)).map fun (e, root) => (root, e.leaves, e.domain)
 
 /-- **Every port of a registered input is at its registration of record**: for each member, at each parameter its
 units read at a registered input node of C (`memberInputs`) whose gates are a marked value `v`'s

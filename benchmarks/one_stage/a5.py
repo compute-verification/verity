@@ -1562,7 +1562,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     result["checks_before_draw"] = checks
     result["case_v2"] = case_written(out)
     members_lean(out, result, pm)
-    one_statement_held(result, rec, members, pm)
+    one_statement_held(result, rec, members, pm, program, out)
     if after:
         result["checks_after_draw"] = after
     (out / "audit.json").write_text(json.dumps(result, indent=1, sort_keys=True, default=str))
@@ -1761,12 +1761,14 @@ def case_written(out: Path) -> dict:
     return {"written": False, "why": said.read_text().strip() if said is not None else "the audit wrote none, and no reason"}
 
 
-def one_statement_held(result: dict, rec: dict, members: Sequence[dict], pm: dict | str | None) -> None:
+def one_statement_held(result: dict, rec: dict, members: Sequence[dict], pm: dict | str | None,
+                       program: Program | None = None, out: Path | None = None) -> None:
     """The one statement's public file held to the registration as the executable holds it (`docket.public_held`,
-    `OneStageZkStatement.publicHeld`), and that file's committed trees held to the registration's
-    (`docket.registered_trees_held`), at the verifier's registered file its case names (`v2_proof`): an audit of one
-    member whose case is the one statement's (``pm`` none) accepts only where both hold, its verdict
-    ``result["checks"]["one_statement_public"]``."""
+    `OneStageZkStatement.publicHeld`), that file's committed trees held to the registration's
+    (`docket.registered_trees_held`) and its registered values to their pins on the written case's parameters
+    (`members.registered_pinned`, ``out/case-v2.json``), at the verifier's registered file its case names
+    (`v2_proof`): an audit of one member whose case is the one statement's (``pm`` none) accepts only where all hold,
+    its verdict ``result["checks"]["one_statement_public"]``."""
     if pm is not None or len(members) != 1:
         return
     mm = members[0]
@@ -1778,6 +1780,11 @@ def one_statement_held(result: dict, rec: dict, members: Sequence[dict], pm: dic
         v = {"ok": False, "codes": ["public"], "detail": str(e)}
     if (why := R.registered_trees_held(rec, "the verifier", reads)) is not None:
         v = {**v, "ok": False, "codes": [*v["codes"], "registered-trees"], "detail": {"registered-trees": why}}
+    case = None if out is None or program is None else out / "case-v2.json"
+    if case is not None and case.is_file() and (
+            why := MB.registered_pinned(json.loads(case.read_text())["params"], program, "the one statement",
+                                        reads)) is not None:
+        v = {**v, "ok": False, "codes": [*v["codes"], "registered-pins"], "detail": {"registered-pins": why}}
     result.setdefault("checks", {})["one_statement_public"] = v
     if not v["ok"]:
         result["accepted"] = False

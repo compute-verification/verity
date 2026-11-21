@@ -729,6 +729,46 @@ def pins_held(ms: Mapping[str, Any], R: EG._Root, ranges: Sequence[Sequence[Any]
                     raise _Refused(pinned_read_why(name, port, v, what))
 
 
+def supplied_read_why(who: str, port: str, value: str) -> str:
+    """`OneStageZk.SUPPLIED_READ_WHY`."""
+    return (f"registered: {who}'s port {port} reads the supplied value {value}, whose root R7 recomputes and no file "
+            "root is held to yet: the one statement reads a registered value only at a pin R8 accepted or a root the "
+            "verifier holds")
+
+
+def pinned_reads(rp: ReadPins, supplied: Iterable[str], who: str, regs: Mapping[str, Mapping[str, Any]]) -> None:
+    """`OneStageZk.pinnedReads`: each registered port of ``regs`` at its value's entry of record (`_pin_of`), refused
+    by name; a port reading a ``supplied`` value refused first (`supplied_read_why`)."""
+    supplied = set(supplied)
+    for port in sorted(regs):
+        e = regs[port]
+        v = e.get("value", "")
+        if v in supplied:
+            raise _Refused(supplied_read_why(who, port, v))
+        pin = _pin_of(rp, v)
+        if pin is None:
+            raise _Refused(unpinned_read_why(who, port, v))
+        for got, want, what in (((e.get("root") or "").lower(), pin[0], "root"), (e.get("leaves"), pin[1], "leaf count"),
+                                ((e.get("domain") or "").lower(), pin[2], "domain")):
+            if got != want:
+                raise _Refused(pinned_read_why(who, port, v, what))
+
+
+def registered_pinned(params: Mapping[str, Any], program: Program, who: str,
+                      registered: Mapping[str, Any] | None) -> str | None:
+    """`OneStageZk.registeredPinned`'s refusal, none where it holds: each port of the registered file ``registered``
+    that opens no committed tree (`docket.tree_port`) at its value's pin (`read_pins`, `pinned_reads`)."""
+    ports = (registered or {}).get("ports") or {}
+    regs = {p: e for p, e in ports.items() if isinstance(e, dict) and DK.tree_port(e.get("value", "")) is None}
+    if not regs:
+        return None
+    try:
+        pinned_reads(read_pins(params, program), params.get("supplied") or {}, who, regs)
+    except _Refused as e:
+        return str(e)
+    return None
+
+
 def _template_of(name: str) -> tuple[str, str] | None:
     """`OneStageZk.templateOf`: a name read at its last ``/``; None for a name with none."""
     i = name.rfind("/")
@@ -1569,4 +1609,4 @@ __all__ = ["EXITS", "Form", "MEMBERS_LAID", "MEMBER_COVER", "MEMBER_STRATA", "ME
            "TABLE_PORT", "UNREAD", "blobs_of", "case_check", "check", "files_why", "flock_form", "flock_verdict",
            "field_trees_why", "members_run", "population_why", "POPULATION_WHY", "registered_at", "registered_reads",
            "return_fields", "run_reason", "shared_unread", "unregistered_why", "unwired_why", "own_root_why",
-           "pinned_read_why", "pins_held", "port_twice_why", "read_pins", "unpinned_read_why", "run_own_root_why", "run_tree_missing_why", "run_tree_why", "run_tree_unbound_why", "run_input_roots_at", "run_tree_held", "tied_roots_at", "tied_roots_why", "member_inputs", "reg_rows", "read_form_why", "two_reads_why", "slice_no_port_why", "strata_design", "resolved", "subset_design", "subset_designs", "wired_tree_why"]
+           "pinned_read_why", "pinned_reads", "pins_held", "port_twice_why", "registered_pinned", "supplied_read_why", "read_pins", "unpinned_read_why", "run_own_root_why", "run_tree_missing_why", "run_tree_why", "run_tree_unbound_why", "run_input_roots_at", "run_tree_held", "tied_roots_at", "tied_roots_why", "member_inputs", "reg_rows", "read_form_why", "two_reads_why", "slice_no_port_why", "strata_design", "resolved", "subset_design", "subset_designs", "wired_tree_why"]

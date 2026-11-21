@@ -603,6 +603,63 @@ def registeredTreesHeld (byPort : Std.HashMap String Json) (who : String) (j : O
   | some j =>
     (Flock.Registered.ofJson j).mapError (s!"{who}: {·}") >>= fun own => own.forM (portTreeHeld byPort who tmpl)
 
+/-- The refusal of member `member`'s registered port `port` reading the registered input `value` at another `what` (root,
+leaf count, domain) than the pin the docket's R8 accepted (`pinsHeld`). -/
+def PINNED_READ_WHY (member port value what : String) : String :=
+  s!"registered: member {member}'s port {port} reads the registered input {value} at another {what} than its pin of " ++
+    "record: a registered input the weights' registration of record pins is read at the pin's root, leaf count and domain"
+
+/-- The refusal of member `member`'s registered port `port` reading the registered input `value`, which the program marks,
+R8 accepted no pin of and whose root the verifier holds none of (`pinsHeld`). -/
+def UNPINNED_READ_WHY (member port value : String) : String :=
+  s!"registered: member {member}'s port {port} reads the registered input {value}, which the program marks, R8 " ++
+    "accepted no pin of and the verifier holds no root of: a marked input is read only at a pin R8 accepted or a " ++
+    "root the verifier holds"
+
+/-- The registration of record's entry of the registered input `v`: R8's accepted pin (`rp.pins`), else the root the
+verifier itself holds of it (`rp.roots`, `Docket.heldEntries`); as `(root, leaves, domain)`. No arm reads a root the
+record names: a root the prover registers is held to nothing but itself. -/
+def pinOf (rp : Docket.ReadPins) (v : String) : Option (String × Nat × String) :=
+  match rp.pins.find? (·.1.value == v) with
+  | some (e, root) => some (root, e.leaves, e.domain)
+  | none => (rp.roots.find? (·.1.value == v)).map fun (e, root) => (root, e.leaves, e.domain)
+
+/-- The refusal of `who`'s registered port `port` reading the supplied value `value` (`Docket.Verifier.supplied`), whose
+root R7 recomputes from the rows it is supplied from (`registeredPinned`): no file root is held to that root yet. -/
+def SUPPLIED_READ_WHY (who port value : String) : String :=
+  s!"registered: {who}'s port {port} reads the supplied value {value}, whose root R7 recomputes and no file root " ++
+    "is held to yet: the one statement reads a registered value only at a pin R8 accepted or a root the verifier holds"
+
+/-- Each registered port `regs` of `who` at its value's entry of record (`pinOf rp`), refused by name otherwise; a port
+reading one of the `supplied` values refused first (`SUPPLIED_READ_WHY`). -/
+def pinnedReads (rp : Docket.ReadPins) (supplied : Array String) (who : String) (regs : Array Flock.Registered.Port) :
+    V Unit :=
+  regs.forM fun q => do
+    if supplied.contains q.value then throw (SUPPLIED_READ_WHY who q.name q.value)
+    match pinOf rp q.value with
+    | none => throw (UNPINNED_READ_WHY who q.name q.value)
+    | some (root, leaves, domain) =>
+      if Flock.hexOf q.root != root then throw (PINNED_READ_WHY who q.name q.value "root")
+      else if q.leaves != leaves then throw (PINNED_READ_WHY who q.name q.value "leaf count")
+      else if Flock.hexOf q.domain != domain then throw (PINNED_READ_WHY who q.name q.value "domain")
+      else pure ()
+
+/-- **The one statement's registered values are read at their pins**: each port of the verifier's registered file `j`
+that opens no committed tree (`treePortOf`), a registered value's, is at that value's entry of record (`pinOf` of
+`Docket.readPins v`): its root, leaf count and domain, refused by name otherwise (`PINNED_READ_WHY`,
+`UNPINNED_READ_WHY`), a supplied value's by name (`SUPPLIED_READ_WHY`), and where no pins derive
+(`Docket.readPinsWhy`). R7 holds the record's entries to the same pins, so the rows `checkPort` opens under the file's
+root are the registered ones. No file, or no such port, holds. -/
+def registeredPinned (v : Docket.Verifier) (who : String) (j : Option Json) : V Unit :=
+  match j with
+  | none => pure ()
+  | some j => do
+    let own ← (Flock.Registered.ofJson j).mapError (s!"{who}: {·}")
+    let regs := own.filter fun q => (treePortOf q).isNone
+    if regs.isEmpty then return
+    let some rp := Docket.readPins v | throw (Docket.readPinsWhy v)
+    pinnedReads rp (v.supplied.map (·.1)) who regs
+
 /-- The ports the verifier's registered file `registered` reads at a run input node's tree (`isFreshValue`); none
 without a file. -/
 def freshReads : Option Json → V (Array String)
@@ -1152,7 +1209,8 @@ def orderHeld (p : Params) (c : OneStage.Commitment) (e : Evidence) : V Unit := 
 (`oneSession`), its coins held to the trees the challenger logged in the order it must release them (`treesOf`,
 `orderHeld`, `treesHeld`), the registration's population held to the program (`popHeld`), the parameters' public file
 held to the registration (`publicHeld`), the committed trees its registered file opens held to the registration's
-roots (`registeredTreesHeld`), then the session's verdict on the blobs, then v1's `checkAt` at `ξ` on it. v1
+roots (`registeredTreesHeld`) and its registered values to their pins (`registeredPinned`), then the session's verdict
+on the blobs, then v1's `checkAt` at `ξ` on it. v1
 accepts only verdicts that all accepted (`VerdictsAccept`); the run's own `all` says it again, so an acceptance reads
 the run rather than the verdicts' JSON. -/
 def checkOneBody (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
@@ -1166,6 +1224,7 @@ def checkOneBody (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Ev
     let pubB ← bs.get p.own.pub "public file"
     publicHeld c.record pubB p.own.registered
     registeredTreesHeld (rootsByPort c.record) "the verifier" p.own.registered
+    registeredPinned p.base.verifier "the one statement" p.own.registered
     run p.own e.sessions (some e.base.provedUnits) bs
   match r with
   | .error err => .reject s!"proofs: {err}"

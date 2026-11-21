@@ -1279,6 +1279,12 @@ def field_tree_name(v: str) -> bool:
     return len(parts) >= 2 and parts[-1].startswith("o") and len(parts[-1]) > 1 and parts[-1][1:].isdigit()
 
 
+def tree_port(v: str) -> str | None:
+    """`OneStageZkStatement.treePortOf`: the committed tree a registered port reading ``v`` opens, None for a
+    registered value's."""
+    return v[len(COMMITTED):] if v.startswith(COMMITTED) else v if G.is_fresh_value(v) or field_tree_name(v) else None
+
+
 def registered_trees_held(rec: Mapping[str, Any], who: str, registered: Mapping[str, Any] | None,
                           tmpl: str | None = None) -> str | None:
     """`OneStageZkStatement.registeredTreesHeld`'s refusal, none where it holds: each port of the registered file of
@@ -1289,8 +1295,7 @@ def registered_trees_held(rec: Mapping[str, Any], who: str, registered: Mapping[
         v = e.get("value", "")
         if not v.startswith(COMMITTED) and field_tree_name(v) and (tmpl is None or f"{tmpl}/{name}" != v):
             return f"registered: {who}'s port {name}: a wired port's tree is not derived from C yet"
-        t = v[len(COMMITTED):] if v.startswith(COMMITTED) else v if G.is_fresh_value(v) or field_tree_name(v) else None
-        if t is None:
+        if (t := tree_port(v)) is None:
             continue
         if (r := by.get(t)) is None:
             return (f"registered: {who}'s port {name} opens the committed tree {t}, and the registration holds no root "
@@ -1325,5 +1330,5 @@ registered_entries = G.registered_entries
 
 __all__ = ["NOT_ONE_MEMBER", "PARTITION_QUERY", "POOL_KEYS", "RECEIPT", "ROW_TABLES", "TABLE_PORT", "WEIGHTS_UNREGISTERED_WHY", "read_pins",
            "WINDOW_DOMAIN", "check", "fresh_reads", "held_roots", "marked_inputs", "matches_public", "partition_query_refused", "pool_chains", "pool_open", "pool_refused",
-           "pool_spent_before", "pool_values", "public_held", "public_ports", "query_digest", "receipt", "registered_trees_held",
+           "pool_spent_before", "pool_values", "public_held", "public_ports", "query_digest", "receipt", "registered_trees_held", "tree_port",
            "refuse_unwindowed", "refused", "registered_entries", "unwindowed", "weights_held", "window_domain"]

@@ -65,6 +65,20 @@ private def heldNoReads (loose : Array String) (pins : Array (Spot.Registered.En
 #guard whyT (heldNoReads #["w", "u"] pinT #[readerT "a" (regT [("p", "u", 'a', 2)])]) == UNPINNED_READ_WHY "a" "p" "u"
 #guard refusal (heldNoReads #[] #[] #[readerT "a" (regT [("p", "u", 'b', 3)])]) == ""
 
+/-- `pinnedReads` on the one statement's registered file `reg`: its ports that open no committed tree at the pins
+`pins`, with the `supplied` values. -/
+private def oneT (reg : Json) (pins : Array (Spot.Registered.Entry × String) := pinT) (supplied : Array String := #[]) :
+    V Unit := do
+  let own ← Flock.Registered.ofJson reg
+  pinnedReads ⟨#[], #[], #[], pins, #[]⟩ supplied "the one statement" (own.filter fun q => (treePortOf q).isNone)
+
+-- the one statement's file at the pin, and a committed tree's port, which `registeredTreesHeld` holds: accepted
+#guard refusal (oneT (regT [("p", "w", 'a', 2), ("q", "committed/q", 'b', 3)])) == ""
+-- the file's root off the pin: refused by name
+#guard whyT (oneT (regT [("p", "w", 'b', 2)])) == PINNED_READ_WHY "the one statement" "p" "w" "root"
+#guard whyT (oneT (regT [("p", "u", 'a', 2)])) == UNPINNED_READ_WHY "the one statement" "p" "u"
+#guard whyT (oneT (regT [("p", "w", 'a', 2)]) pinT #["w"]) == SUPPLIED_READ_WHY "the one statement" "p" "w"
+
 /-- Two registered inputs `w0` (node 0) and `w1` (node 1) of four leaves each, and template `A`'s batch of four members
 (node 2) mapping its parameter `w` (two leaves) over axis 0 of an argument whose first part is `w0`'s leaves and second
 `w1`'s: members 0 and 1 read `w0`, members 2 and 3 `w1`. With `mixed`, node 1 is a run input instead. -/
