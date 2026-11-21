@@ -67,10 +67,11 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity import hooks as H
+from verity import release as REL
 from verity.release import release_fields
 
-RELEASE_HEADER, RUN_HEADER, BUCKET_HEADER = "x-verity-release", "x-verity-release-run", "x-verity-release-bucket"
-WATERMARK_PATH = "/verity/watermark"
+RELEASE_HEADER, RUN_HEADER, BUCKET_HEADER = (h.decode() for h in (REL.RELEASE_HEADER, REL.RUN_HEADER, REL.BUCKET_HEADER))
+WATERMARK_PATH = REL.WATERMARK_PATH.decode()
 #: what either frontend answers a request whose release a watermark line named lost
 LOST = RELEASE_HEADER + ": {n} of run {run!r} was lost on the way to the server, as the watermark says"
 
