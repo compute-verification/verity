@@ -628,6 +628,74 @@ def test_a_live_pass_is_held_to_its_signed_salt_session(exe, tmp_path):
                               "commitment"]
 
 
+def signed_sample(held: dict):
+    """`challenger_sample` from a signed sample session: a `pouw_rounds_cases.Session` of a sample session's layout, its
+    record and close signed under the test key, its coin 0 opened after the run's commitment C; ``held`` keeps the
+    session and C, and a second ask on the same C answers the same session."""
+    def sample(root: bytes, asking) -> tuple[bytes, dict]:
+        if held.get("c") != root:
+            rng = random.Random(13)
+            held.update(c=root, ds=RC.Session(rng, Wd.draw_challenger(0, rng.randbytes), [], salt=None,
+                                              sid=RC.session_id(rng), leaf=RC.DRAW_LEAF, draw=lambda _: root))
+        ds = held["ds"]
+        session = {"session": ds.sid, "seq": 3, "peer": "vy-dc-h200", "by": "vllm", "period": None}
+        asking({"reserved": session})
+        o = ds.draw[0]
+        return o.coin, {"from": VR.DRAW_CHALLENGER, "label": Wd.DRAW, "index": 0, "reserved": session,
+                        "session": {"session": ds.sid, "root": root.hex()},
+                        "commitment": ds.ch.commitment.to_json(), "opening": o.to_json()}
+    return sample
+
+
+def both_sessions(h: dict, held: dict) -> list[str]:
+    """The auditor's ledger, signed under the test key, reserving and opening `h`'s salt session on its epoch's root and
+    ending it as the gate does, then reserving the sample session `held` keeps and opening it withheld on C; and the
+    manifest's ``session`` the gate's answer to that salt open."""
+    rng, s, ds = random.Random(17), h["s"], held["ds"]
+
+    def asked(c: Ch.LiveCommitment) -> dict:
+        return {"scheme": c.scheme, "epoch": c.epoch, "families": [list(f) for f in c.families]}
+    events = RC.ledger_events(rng, {"root": h["r"].hex()}, s, reserved=True, opened=asked(s.ch.commitment),
+                              **PC.gate_end(s))
+    o = {**RC._open(rng, {"root": held["c"].hex()}, ds.pub), "withheld": True, **asked(ds.ch.commitment)}
+    events = RC._bind(events + RC._reserved(rng, ds.sid, o) + [("end", ds.sid, RC._end(ds))])
+    ledger = RC.ledger_lines(events, RC._key(0), RC.leaves_of(events, s.sid))
+    h["man"]["session"] = PC.carried(next(e for e in map(json.loads, ledger)
+                                          if e["kind"] == "open" and e["session"] == s.sid), s.ch.commitment)
+    return ledger
+
+
+def test_a_live_run_of_record_is_held_to_both_signed_sessions(exe, tmp_path):
+    """A live run of record end to end: its salt from a signed salt session and its sample from a signed sample session,
+    both opened in one auditor's ledger under the pinned key. Given both sessions (``--draw-live``, ``--salt-live``) the
+    verdict of record accepts with the work the verdict gets without ``--of-record``. Given the sample session alone it is
+    refused (`salt-session`) for want of the salt session, and given the salt session alone it is refused for want of
+    the sample session."""
+    path, h = salt_session_pass(tmp_path)
+    held, rec = {}, tmp_path / "coin.json"
+    VR.verify_passes([path], 3, 1, "test", VR.epoch_coins(path.parent / "coins.json"), None,
+                     record=tmp_path / "probe.json", draw=signed_sample(held), test_instance=True)
+    ledger = both_sessions(h, held)
+    path.write_text(json.dumps(h["man"]))
+    plain = same(exe, [path], 3, None, rec, draw=signed_sample(held))
+    assert plain["verdict"] == "accept"
+    files = {name: tmp_path / f"{name}-live.json" for name in ("sample", "salt")}
+    for name, s in (("sample", held["ds"]), ("salt", h["s"])):
+        files[name].write_text(json.dumps({**h["live"], "ledger": ledger, "session": s.files()}))
+
+    def of_record(**live: Path) -> dict:
+        return lean(exe, [path], 3, None, rec, test_instance=True, of_record=True, **live)
+    both = of_record(draw_live=files["sample"], salt_live=files["salt"])
+    assert (both["verdict"], both["refused"], both["work"]) == ("accept", None, plain["work"]), both
+    sample_only = of_record(draw_live=files["sample"])
+    assert sample_only["refused"] == ["salt-session", "no salt session was given (--salt-live), so nothing checked the "
+                                                    "challenger's signatures on it"], sample_only
+    assert (sample_only["verdict"], sample_only["work"]) == ("reject", None)
+    salt_only = of_record(salt_live=files["salt"])
+    assert (salt_only["verdict"], salt_only["refused"][0]) == ("reject", "draw-session") and \
+        "--draw-live" in salt_only["reason"], salt_only
+
+
 def test_a_run_tied_to_its_window_record(exe, tmp_path):
     """A window record W registering each call's A rows and y and each fixed operand's B rows once: the Lean holds the passes to W as the Python does and
     prints the same tie, W's digest and its table count, also when W lists a round dropped before the coin (the coin
