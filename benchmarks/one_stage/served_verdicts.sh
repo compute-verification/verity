@@ -2034,7 +2034,8 @@ road_sampled() {  # step 3 on the window's road: the window's record, its Lean c
     --prover-circuit --development --run "$run" ${regs[@]+"${regs[@]}"} \
     --challenger local --main "$main" --m0-pythonpath "$m0" --bin "$bin" --lean "$leanb/verity-verify-proof" \
     --zk-server "$leanb/flock-zk-server" --lower "$leanb/flock-lower-check" --tmpl-unit-bin "$unit" \
-    --lean-workers "${V3C_LEAN_WORKERS:-1}" --audit-mem-gb "$V3C_AUDIT_MEM_GB" --ports "${V3C_PORTS:-16}" --out "$s/audit") \
+    --lean-workers "${V3C_LEAN_WORKERS:-1}" --stage-workers "${V3C_STAGE_WORKERS:-1}" --stage-worker-gb "${V3C_STAGE_WORKER_GB:-20}" \
+    --audit-mem-gb "$V3C_AUDIT_MEM_GB" --ports "${V3C_PORTS:-16}" --out "$s/audit") \
     > "$LOGS/sampled-proofs/audit.log" 2> "$LOGS/sampled-proofs/audit.err"
   rc=$?
   grep -m1 '^RECORDS' "$LOGS/sampled-proofs/audit.log" > "$s/records.txt"
