@@ -135,7 +135,7 @@ from verity.circuits.defs import (CATALOG_PACKAGES, REGISTRY, CompositeDefinitio
                                   bind)
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.population import wired_population_program
-from verity.circuits.program import is_input, is_registered
+from verity.circuits.program import RUN, input_id
 from verity.circuits.refs import recut
 from verity.circuits.types import Array
 from verity.commitments import advice as AC, history as HT, registered_value as RV
@@ -1809,7 +1809,11 @@ def run_input_reads(templates: Sequence[tuple[Any, int]], program: Any, query: M
             w = bisect.bisect_right(offs, g0) - 1
             node = (offs[w + 1] if w + 1 < len(offs) else total) - offs[w]
             fw = body.nodes[w].fn
-            if (not is_input(fw) or is_registered(fw) or g0 != offs[w] or node != got * leaves
+            if (kind := input_id(getattr(fw, "id", ""))) is not None and kind[0] != RUN:
+                raise ValueError(f"run inputs: {tid} {p} reads C's node {w}, {fw.id}, bound at {kind[0]}, and no read fills "
+                                 "it: a port of a registered or supplied node is read at its registered root, never in a "
+                                 "tree of the period's")
+            if (kind is None or g0 != offs[w] or node != got * leaves
                     or gates[at - leaves:at] != list(range(g0, g0 + leaves))):
                 raise ValueError(f"run inputs: {tid} {p}: its rows are not run input node {w}'s {node} leaves, in rows of "
                                  f"its {leaves}, unit by unit")
@@ -1817,21 +1821,43 @@ def run_input_reads(templates: Sequence[tuple[Any, int]], program: Any, query: M
     return tuple(out)
 
 
+def run_input_node(param: str) -> int:
+    """Node ``w`` of a run input's tree ``input/n<w>`` (`Flock.Registered.freshValue`)."""
+    if not (param.startswith("input/n") and param[7:].isdigit()):
+        raise ValueError(f"{param!r} names no run input node's tree (input/n<w>)")
+    return int(param[7:])
+
+
 def run_inputs_of(doc: Mapping[str, Any]) -> tuple[Read, ...]:
     """A stated record's ``run_inputs`` (`Window.circuit_record`), each a `Read`."""
     return tuple(Read.of(x) for x in doc.get("run_inputs", ()))
 
 
+def run_input_domain(program: Any, digest: str, w: int, words: int, root: str) -> Any:
+    """Run input node ``w``'s tree ``input/n<w>``'s domain: `registered_value.domain` over C's program digest ``digest``,
+    at rows of ``words`` 16-bit words and node ``w``'s rows of them (its leaves over a row's, as `OneCircuit.pos` counts
+    them), under the window's root ``root`` (hex of 64 bytes: the open root the challenger signs). Refused (ValueError)
+    where node ``w`` is not bound at run or is no whole number of such rows."""
+    fw = program.root.body.nodes[w].fn
+    if (kind := input_id(getattr(fw, "id", ""))) is None or kind[0] != RUN:
+        raise ValueError(f"C's node {w} is no run input node ({getattr(fw, 'id', fw)}): it has no input/n{w} tree")
+    offs = list(program.root.body.offsets)
+    gates = (offs[w + 1] if w + 1 < len(offs) else program.root.gates) - offs[w]
+    row = 16 * int(words) // kind[1]
+    if 16 * int(words) % kind[1] or not row or gates % row:
+        raise ValueError(f"C's node {w}: its {gates} {kind[1]}-bit leaves are no whole number of rows of {words} words")
+    return RV.domain(digest, f"input/n{w}", int(words), gates // row, window=root)
+
+
 def run_input_ports(doc: Mapping[str, Any], w: CS.Binding) -> dict[str, dict[str, Any]]:
     """The registration's trees of C's run input nodes that the record ``doc`` names (``run_inputs``), as
-    ``registration.check`` takes a port (`rows.expected_ports`): ``{input/n<w>: {leaves, domain}}``, a leaf per unit of
-    its reader, each `registered_value.domain` over the period's program digest at the reader's port's words and the
-    window's run root (``window``), as `Window` commits it."""
+    ``registration.check`` takes a port (`rows.expected_ports`): ``{input/n<w>: {leaves, domain}}``, each node's rows and
+    domain from C (`run_input_domain`) under the window's root, the period's ``run``, as `Window` commits it."""
     prog = program_digest(w.program)
     out: dict[str, dict[str, Any]] = {}
     for r in run_inputs_of(doc):
-        n, words = int(r.radix[0]), int(r.step[0])
-        out.setdefault(r.param, {"leaves": n, "domain": RV.domain(prog, r.param, words, n, window=w.run).domain_id.hex()})
+        dom = run_input_domain(w.program, prog, run_input_node(r.param), int(r.step[0]), w.run)
+        out.setdefault(r.param, {"leaves": dom.count, "domain": dom.domain_id.hex()})
     return out
 
 
@@ -3091,8 +3117,9 @@ class Window:
 
     def _inputs(self) -> dict[str, Any]:
         """``inputs``: each of ``runs``' values committed once (core's ``registered_value.Registered``, fresh salts) under
-        the period's program digest and its run root (``window``), every unit's row of its port in unit order. Refused
-        (ValueError, naming the node) where a run input read has no tree: the period then refuses to close."""
+        the period's program digest and its run root (``window``), every unit's row of its port in unit order, in the
+        domain C gives its node (`run_input_domain`). Refused (ValueError, naming the node) where a run input read has no
+        such tree: the period then refuses to close."""
         if self.runs and not self.inputs:
             prog = program_digest(self.window.program)
             for r in self.runs:
@@ -3100,8 +3127,12 @@ class Window:
                 if rows is None:
                     raise ValueError(f"run input {r.param}: {r.reader} {r.port} is recorded by reference, and a run input's "
                                      "rows are recorded in full; the period commits no tree of it and refuses to close")
-                self.inputs[r.param] = RV.Registered.commit(prog, r.param, np.asarray(rows).tolist(), schema=V2,
-                                                            window=self.run)
+                v = RV.Registered.commit(prog, r.param, np.asarray(rows).tolist(), schema=V2, window=self.run)
+                want = run_input_domain(self.window.program, prog, run_input_node(r.param), v.words, self.run)
+                if v.domain.domain_id != want.domain_id:
+                    raise ValueError(f"run input {r.param}: {r.reader} {r.port}'s {v.leaves} rows are not C's node's "
+                                     f"{want.count}; the period commits no tree of it and refuses to close")
+                self.inputs[r.param] = v
         if missing := sorted({r.param for r in self.runs} - set(self.inputs)):
             raise ValueError(f"run inputs {missing}: read by members and committed in no tree of the period; it refuses "
                              "to close")

@@ -465,8 +465,8 @@ def test_several_templates_are_one_population():
 
 
 def test_run_inputs_are_committed_once_each_in_its_run_input_nodes_tree(tmp_path):
-    """With ``run_inputs``, C is the same circuit and each input port is read from its run input node's one tree
-    ``input/n<w>`` (`run_input_reads`): no member holds a tree of it, the registration holds its root beside the
+    """Each input port nothing else fills is read from its run input node's one tree ``input/n<w>``
+    (`run_input_reads`): no member holds a tree of it, the registration holds its root beside the
     members', each member's header names its units' rows of it, the verifier's period from the record is the prover's,
     and a record naming other reads is refused."""
     got = {}
@@ -477,7 +477,6 @@ def test_run_inputs_are_committed_once_each_in_its_run_input_nodes_tree(tmp_path
 
     reg = type("R", (), {"KINDS": ("served",), "record": staticmethod(record), "digest": staticmethod(lambda rec: "d")})
     win = I.Window(I.Circuit("test", ((COORD, 10),)), RUN, SAMPLING_DESIGN, 4)
-    assert codec.program_digest(win.window.program) == codec.program_digest(I.Circuit("test", ((COORD, 10),)).program()[0])
     names = [r.param for r in win.runs]
     assert [r.port for r in win.runs] == ["x", "sx", "wrow", "sw"] and len(set(names)) == 4
     assert all(re.fullmatch(r"input/n\d+", v) for v in names)
@@ -499,6 +498,37 @@ def test_run_inputs_are_committed_once_each_in_its_run_input_nodes_tree(tmp_path
     assert files[m1["name"]]["ports"]["x"]["root"] == x.root.hex()
     with pytest.raises(ValueError, match="run_inputs"):
         I.window_of_record({**rec, "run_inputs": rec["run_inputs"][:1]}, SAMPLING_DESIGN, BY_ID.__getitem__)
+
+
+def test_a_run_input_trees_domain_is_its_nodes_rows_under_the_windows_root():
+    """``input/n<w>``'s domain is `registered_value.domain` over C's program digest, the row's words and node ``w``'s rows,
+    under the window's root: the writer's and `run_input_ports`' are the one `run_input_domain`, another window's root
+    gives another domain, and a node bound at anything but run has none."""
+    win = I.Window(I.Circuit("test", ((COORD, 10),)), RUN, SAMPLING_DESIGN, 4)
+    ins, outs = values(10)
+    win.record(COORD, ins, outs)
+    win.close()
+    prog, digest = win.window.program, codec.program_digest(win.window.program)
+    for v in win.inputs.values():
+        w = I.run_input_node(v.value)
+        assert v.domain.domain_id == RV.domain(digest, v.value, v.words, v.leaves, window=RUN).domain_id
+        assert I.run_input_domain(prog, digest, w, v.words, RUN).domain_id == v.domain.domain_id
+        assert I.run_input_domain(prog, digest, w, v.words, "cd" * 64).domain_id != v.domain.domain_id
+    other = next(k for k, n in enumerate(prog.root.body.nodes) if f"input/n{k}" not in win.inputs)
+    with pytest.raises(ValueError, match=f"node {other} is no run input node"):
+        I.run_input_domain(prog, digest, other, 1, RUN)
+
+
+def test_a_close_that_cant_commit_a_run_inputs_tree_refuses_naming_it():
+    """A run input whose rows the period doesn't hold in full has no ``input/n<w>`` tree: the close refuses, naming it,
+    and never falls through to a tree of the member's own."""
+    win = I.Window(I.Circuit("test", ((COORD, 10),)), RUN, SAMPLING_DESIGN, 4)
+    ins, outs = values(10)
+    x = win.runs[0]
+    win.record(COORD, [None, *ins[1:]], outs)
+    with pytest.raises(ValueError, match=rf"run input {re.escape(x.param)}: .* {x.port} is recorded by reference.*refuses "
+                                         "to close"):
+        win.close()
 
 
 @pytest.mark.parametrize("templates", [((COORD, 10),), ((COORD, 3), (ACC, 2))])
