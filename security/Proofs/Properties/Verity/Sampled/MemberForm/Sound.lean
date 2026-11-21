@@ -18,7 +18,8 @@ place, two premises no refusal of the check enforces:
 * the window is the parameters' members on the registered files (`ExecutionPhaseInstance.ExecutionPhaseRegistered`);
 * the registered files hold each member's file (`RegisteredHolds`);
 
-and the open premise of the two-stage form (`TwoStageBound`), which stays open and no accept reaches it.
+and the two-stage variant: the verifier accepts a two-stage run whose every test passes; its soundness is the open
+premise `TwoStageBound`; an accepted run of it is recorded as unproved.
 -/
 
 @[expose] public section

@@ -70,7 +70,8 @@ theorem paramsAt_of_verdict (V : Vocab d α) (k : Verity.Registration.Composite)
 
 /-- **SPOT's target at the two-stage form, an open premise**: at every parameters `θ` that name the two-stage form, all
 committed files and commitments and every strategy, the probability that composite `k`'s sampled verdict holds while its
-claim fails is at most its error. Nothing proves it, and the verifier refuses the two-stage form at registration. -/
+claim fails is at most its error. Nothing proves it: the verifier accepts a two-stage run whose every test passes; its
+soundness is this open premise; an accepted run of it is recorded as unproved. -/
 def TwoStageBound (V : Vocab d α) (k : Verity.Registration.Composite) : Prop :=
   ∀ θ, TwoStageAt θ → ∀ (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)),
     Verity.Game.prob (fun o => V.Verdict k .sampled o ∧ ¬ V.Holds k θ F c σ .sampled o) (V.game θ F c) σ ≤

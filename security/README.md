@@ -542,8 +542,8 @@ Onsite (`Core.Onsite.protocol`, `verity/onsite/v1`) composes Pearl+'s run verdic
   (`Verity.Sampled.checkBlobs_event`), which has a coupling.
 - **The inference-only policy at remote** (`Properties.Remote.SecurityProofs.acceptInferenceOnly`, proved): remote's
   accept gives `InferenceOnlyHeld`, whose SPOT case is `StageHeld`, the one-stage form's. It has no clause for the
-  two-stage form (levels 2), which the verifier refuses at registration; the two-stage case
-  needs its own clause and its open premises.
+  two-stage form (levels 2): the verifier accepts a two-stage run whose every test passes; its soundness is the open
+  premise `TwoStageBound`; an accepted run of it is recorded as unproved.
 - **Assumptions:** those guarantees' named assumptions, `UniformRandomBytes`, `RecordCustodyZKJ`, `SHA512CRStrict`,
   `SHA512CRExpected`, `TileServiceSound`, `TileSampleIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `UnitFixed` and
   `SharedNoiseLucks`. The challenger and the verifier both run on auditor devices. The challenger, which
