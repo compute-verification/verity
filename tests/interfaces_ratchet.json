@@ -143,6 +143,7 @@
   "benchmarks/pous/served_case.py": 4,
   "benchmarks/pous/served_piece.py": 6,
   "benchmarks/pous/streamed_wipe/bench.py": 2,
+  "benchmarks/pouw/credited_in_c.py": 5,
   "benchmarks/pouw/filler/pfill_ref.py": 1,
   "benchmarks/pouw/grind_price.py": 1,
   "benchmarks/pouw/h1_lanes/leaf.py": 5,

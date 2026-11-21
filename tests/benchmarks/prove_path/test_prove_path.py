@@ -1076,6 +1076,7 @@ def test_window_commit_loads_its_own_builds_beside_its_out_while_the_row_dir_hol
     written from its compile with its names and no vLLM (`own_builds`) into a directory of its own beside ``--out``, gone
     once it returns, and writes none into the row dir."""
     from verity_vllm.program.predict import window_circuit as WC
+    from verity_vllm.program.predict import window_weights  # noqa: F401  imported before `lower`'s stub, which it binds by name
 
     monkeypatch.setitem(sys.modules, "vllm", None)
     s = _tiny_served(tmp_path, monkeypatch)
