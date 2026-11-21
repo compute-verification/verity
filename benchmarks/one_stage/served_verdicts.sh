@@ -604,6 +604,13 @@ CKPT=${CKPT:-$HF_HOME/hub/models--${REPO//\//--}/snapshots/$REV} WREG=$D/weights
 # the registration of record ({program, values}) the serve's first close writes beside WREG, which the audits hand the check
 WOR=$D/weights_of_record.json
 NO_WOR="the weights' registration of record (weights_of_record.json, {program, values}) is absent: the serve's first close writes it beside weights_registration.json"
+# the digest the audit holds WOR to: the file's own SHA-512, a stand-in, until the one registration a monitoring period is made
+# before any serve and its digest is pinned
+wor_held() {  # $1 the step's label; sets regs, the audit's arguments
+  local h; h=$(sha512sum "$WOR" | cut -c1-128) && [ ${#h} = 128 ] || return 1
+  say "$1: WEIGHTS REGISTRATION, A STAND-IN: held to its own SHA-512 $h, written at this serve's start and pinned by no one"
+  regs=(--registered "$WOR" --registered-digest "$h" --registered-digest-source stand-in)
+}
 # the serve's first registration record: the weights registration as a record of the log, which Pearl+'s W is chained after
 DREG=$D/deployment-registration.json
 NO_WEIGHTS="NO WEIGHTS REGISTRATION: no window registers a weight's root, so every weight read counts free"
@@ -849,6 +856,7 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
   run=$("$PY" -c 'import json, sys; print(next(json.loads(l)["run_root"] for l in open(sys.argv[1]) if l.strip() and json.loads(l)["window"] == int(sys.argv[2])))' \
     "$D/windows.jsonl" "$K") || { say "V3C-AUDIT: no run root for the window in windows.jsonl"; return 1; }
   [ -f "$WOR" ] || { say "V3C-AUDIT: $NO_WOR"; return 1; }
+  local regs; wor_held V3C-AUDIT || { say "V3C-AUDIT: no SHA-512 of $WOR"; return 1; }
   mkdir -p "$OUT/v3c-audit"
   if [ -n "${MAIN_FILE:-}" ]; then  # main's first-parent line, which the audit's challenger session pins on
     [ -s "$MAIN_FILE" ] || { say "V3C-AUDIT: MAIN_FILE $MAIN_FILE, main's first-parent line its challenger session pins on, is missing or empty"; return 1; }
@@ -890,7 +898,7 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
   mapfile -t ca < <(v3c_compose_args)
   (cd "$TREE" && "${lease[@]}" env -u PYTHONPATH "${ld[@]}" RAYON_NUM_THREADS="$(nproc)" RUST_MIN_STACK=$((64 << 20)) timeout -k 1m "$V3C_AUDIT_TIMEOUT" \
     "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py audit --window "$VW/window" --sampling-design "$V3C_LAW" \
-    --circuit "$(sha512sum "$VW/window/circuit.json" | cut -c1-128)" --run "$run" --registered "$WOR" "${tie[@]}" "${day[@]}" "${cache[@]}" "${ca[@]}" \
+    --circuit "$(sha512sum "$VW/window/circuit.json" | cut -c1-128)" --run "$run" "${regs[@]}" "${tie[@]}" "${day[@]}" "${cache[@]}" "${ca[@]}" \
     "${pool[@]}" "${gpus[@]}" \
     "${ch[@]}" --main "$main" --m0-pythonpath "$m0" --bin "$bin" --lean "$leanb/verity-verify-proof" \
     --zk-server "$leanb/flock-zk-server" --ports "$ports" "${link[@]}" --out "$VW/audit") > "$LOGS/v3c-audit/audit.log" 2> "$LOGS/v3c-audit/audit.err"
@@ -2027,7 +2035,7 @@ road_sampled() {  # step 3 on the window's road: the window's record, its Lean c
     || { step_not_run sampled-proofs "the window's commit verdict has no run root"; return; }
   # the registration of record pins the roots a window's registered weight reads open against
   [ -f "$WOR" ] || { step_not_run sampled-proofs "$NO_WOR"; return; }
-  regs=(--registered "$WOR")
+  wor_held SAMPLED-PROOFS || { step_not_run sampled-proofs "no SHA-512 of $WOR"; return; }
   (umask 077; mkdir -p "$s") && mkdir -p "$OUT/sampled-proofs" "$LOGS/sampled-proofs"
   git -C "$TREE" rev-list --first-parent "${MAIN_SHA:-HEAD}" > "$main" 2>/dev/null && [ -s "$main" ] \
     || { step_not_run sampled-proofs "no first-parent line of main for its challenger session to pin on (${MAIN_SHA:-HEAD} has none in this tree)"; return; }
