@@ -34,7 +34,7 @@ proof blocks on live coins, proves them with Flock `--zk` behind the Lean ZK ser
 it (`window-commit`) and counts it (`window-circuit`, `class-circuit`, `class-size`); `records_audit.py audit` audits the
 committed window from its records on a challenger's coins (`--challenger local` by default, `../one_stage/a5.py`); the
 verifier has no coins of its own. `run.sh` builds the prover and the Lean verifier and runs the checkpoint tie of vLLM's
-weights registration (`PP_WEIGHTS_TIE=1`), with two forged ties that must be refused; each run writes `$OUT/ran_with.txt`,
+weights registration (`PP_WEIGHTS_TIE=1`); each run writes `$OUT/ran_with.txt`,
 the line naming its coins and parameters (`prove_path.py ran-with`). Serve runs are the node's own, never fetched from the
 store, since their records hold request values. The docstrings say how.
 

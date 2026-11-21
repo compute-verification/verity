@@ -131,7 +131,7 @@ from typing import Any
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 
-from records_audit import PORTS, REFUSED, forged_outcome, free_ports, leak_count, pin_arg, pins_of, registration_roots, why_not_pearl  # noqa: E402, F401
+from records_audit import PORTS, REFUSED, free_ports, leak_count, pin_arg, pins_of, registration_roots, why_not_pearl  # noqa: E402, F401
 from verity.commitments import docket_digest as DD
 from verity.circuits.codec import canonical_json  # noqa: E402
 from verity.commitments.periods import interface as IF, rows as RW  # noqa: E402

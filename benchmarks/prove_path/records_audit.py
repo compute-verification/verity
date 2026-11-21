@@ -1,6 +1,6 @@
 """A window's audit from its records alone: what an integration hands Verity (`verity.commitments.periods.interface`), and nothing else.
 
-The records, every one in the window's directory:
+The records, every one in the window's directory but the advice's opening:
 
 * **the circuit** in proof blocks with its public layout (``circuit.json``), which the docket binds by SHA-512;
 * **the compiler and the advice**, when the circuit depends on run-time choices: the docket's window names the compiler
@@ -14,14 +14,18 @@ The verifier's window is `interface.of_records`'s, each template resolved among 
 (`catalog_resolve`), or, for a
 template the verifier lowers from its own input set (``--template-sets``), that set's Definition; a window with row tables
 is refused until its records carry their segment roots. Before the sample the audit holds the docket to that circuit,
-to the run root the run published (``--run``) and to the circuit the verifier
-registered (``--circuit``), which names no compiler (`source`). Then `a5.audit`, its stream's rule the rate its caller states (``--sampling-design``: ``rate:NUM/DEN``,
+to the run root the run published (``--run``) and, for a compiled circuit, to the compiler and advice it was compiled from
+(`source`), and runs the compile check (`compile_check`, the named gap until the compile slice's proof block exists): the advice's opening
+opens the registered root under the registered compiler, and that compiler, run as the command the verifier's own table
+names for it (``--compilers``) from a checkout of the registered commit whose code hashes to the registered digest, makes
+this circuit from the advice and charges the registered length. A circuit with no compiler is the one the verifier
+registered (``--circuit``). Then `a5.audit`, its stream's rule the rate its caller states (``--sampling-design``: ``rate:NUM/DEN``,
 ``stratified-rate:NUM/DEN`` or ``work-rate:NUM/DEN``; a fixed count ``subset:K``, ``stratified:K`` or ``work:K`` is refused
 by name, `service.SamplingDesign`) and the window's sampling design the one that rate names over the window's own proof blocks
 (`verifier_window`), which the stream holds the docket to:
 the docket checked by Lean and Python, the sample on live coins read after
 the receipt, Flock ``--zk`` behind the Lean ZK server on the sampled members, Lean's verdicts and the audit record. Then the
-advice was fixed before the sample (`fixed_before_draw`).
+advice was fixed before the sample (`fixed_before_draw`), and advice re-committed after the coins is refused (`after_draw`).
 Units whose outputs are served out (``--outputs`` and the circuit's registered reads of output ports, `output_class`) would be
 proved whole beside the sample only on a closure map, which the stream refuses, so a5 refuses such a window before the
 sample (a5's `output_refusal`).
@@ -92,8 +96,8 @@ With ``--negative-workers N`` a5's negatives that ask the verifier again run N a
 forked from the audit (`a5.NegativeWorkers`); the summary's ``negative_workers`` is each one's own seconds and memory.
 
 ``audit``: each member's circuit is the door's (`a5.door_circuit`: `one_circuit.block`, `.restrict` and `.lower` by
-``--lower``, `flock-lower-check`), the file Lean's `restrict` derives from C and the partition; a member whose block the
-door refuses has none, and a drawn unit of it is a failed proof (the summary's ``unlowered`` and ``failed_drawn``).
+``--lower``, `flock-lower-check`), the file Lean's `restrict` derives from C and the partition, staged once a class
+(`a5.door_class`); the first member whose block the door refuses refuses the window before any coin (`a5.DOOR_REFUSES`).
 ``warm``: a window's templates and binding are public, so every template its composers make is composed into a5's compose
 cache (`warm`, `a5.warm`), under the tree and ``FLOCK_*`` environment a5 then runs in, since the cache's key covers both;
 each template's line is printed as it finishes and kept in ``--out``'s ``composed.jsonl``. A compose keeps only its
@@ -101,9 +105,9 @@ record (META, pin, class, size, seconds, peak), its text hashed as it is rendere
 circuit's text in the cache. The warm starts no compose, and stops, where the cache's file system would have less than
 ``--min-free-gb`` free.
 
-    records_audit.py audit --window DIR --sampling-design L --circuit SHA512 --run HEX \\
+    records_audit.py audit --window DIR --sampling-design L (--opening FILE --compilers FILE [--repo DIR] | --circuit SHA512) --run HEX \\
         [--template-sets DIR] [--outputs FILE] --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof --zk-server flock-zk-server \\
-        --lower flock-lower-check --out DIR [--delta D] [--port P] [--ports N] [--forged | --forged-read] [--challenger local|loopback:HOST:PORT|gate:USER@HOST --main FILE] \\
+        --lower flock-lower-check --out DIR [--delta D] [--port P] [--ports N] [--forged] [--challenger local|loopback:HOST:PORT|gate:USER@HOST --main FILE] \\
         [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--registered FILE] [--tie W [--tie-prefix P]] [--skip-negatives] \\
         [--compose-cache DIR] [--jobs N] [--keep-circuits] [--min-free-gb G] [--day N --day-log LOG [--day-params FILE] | --day-ledger LEDGER] \\
         [--lean-workers N] [--audit-mem-gb G] [--negative-workers N]
@@ -135,7 +139,23 @@ and which `verity-vllm advice --weights-of-record` records in each window's regi
 only where the committer registered the words its engine serves (within the analytic table's bound); else its reads stay
 free.
 
-``--challenger``: the sample on the auditor's challenger's coins (`a5_coins`), the only coins a sample is on: ``local``, a development session on this machine (with ``--deployed-key``, under a key made at the deployed
+``--compilers FILE``: ``{name: {"digest": hex, "argv": [...], "code": [path, ...], "pythonpath": [path, ...]}}``, the
+registered compilers the verifier holds, each by the name and digest a docket names it under. A docket names
+the commit its compiler's code is at; the audit checks that commit out of ``--repo`` (default this tree's repository) into
+a worktree of its own, recomputes the digest there over the repository paths ``code`` (`interface.compiler_digest`),
+refuses the compiler unless it is the registered one, and runs ``argv`` in that checkout with ``pythonpath`` (repository
+paths) as its ``PYTHONPATH``: never the auditing tree's code. A docket naming no commit runs ``argv`` from the
+auditing tree. The compile command is ``argv --advice FILE --out FILE``:
+
+* ``--advice FILE``: the opened advice's bytes (the opening's ``advice``), nothing else of the window: the command's other
+  inputs are fixed in ``argv``;
+* it writes to ``--out`` the circuit record it compiles the advice to (``verity/window-circuit/v1``, `interface.circuit_bytes`),
+  its `interface.RUN_FIELDS` (``run``, ``context``) empty, since it knows no run; the check compares the rest;
+* it prints ``{"bits": N}`` as its last stdout line: the advice's length in bits it charges;
+* it exits 0 having compiled, `REFUSED` (2) on advice it refuses, the reason on stderr, and any other code on an error.
+
+``--challenger``: the sample on the auditor's challenger's coins (`a5_coins`), the only coins a sample is on, as `prove_path.py audit`
+takes them: ``local``, a development session on this machine (with ``--deployed-key``, under a key made at the deployed
 LMS parameters, the only ones SPOT's v2 reads a challenger's signatures under), ``loopback:HOST:PORT``, that session on the challenger
 party's host (`challenger_party.py`, `verity run CONFIG --party challenger`), or ``gate:USER@HOST``, the auditor device through its SSH gate with
 the lane's gate key ``--gate-key``, its challenger on ``--peer``'s 127.0.0.1 (so the audit runs on that peer), under the
@@ -144,13 +164,6 @@ deployment's key record ``--challenger-key``. The gate opens a root once, ever.
 ``--forged``: the window holds a forged unit, and the audit passes when every check before the sample passed, the audit
 record rejects and the ZK server released no proof of the false member (`forged_outcome`). The prover runs with its
 self-check skipped, ``FC_ZK_SELF_CHECK=skip``, so it proves the false witness, and the ZK server holds the proof back.
-
-``--forged-read``: the window holds no false unit and a registered read that opens no pinned root (values served as the
-registered ones that are not), and the audit passes when every check before the sample passed, the audit record rejects
-and the Lean verifier refused a session while setting its statement up, on a row of that read not opening the root the
-verifier holds (`forged_outcome`'s ``read_refused``, `READ_OPENS_NO_ROOT`). The window's units are their Definitions',
-so its prover runs as an honest window's does and its proofs may leave: the audit passes on that refusal alone, never
-on a proof held back or refused, and under ``--forged`` never on that refusal.
 """
 from __future__ import annotations
 
@@ -165,9 +178,11 @@ import random
 import re
 import shutil
 import socket
+import subprocess
 import sys
+import tempfile
 import time
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -190,7 +205,7 @@ from verity.commitments.periods import history as HW, interface as IF  # noqa: E
 #: which outbound connections take theirs
 PORTS = range(10000, 32000)
 #: a compile command's exit code for advice it refuses (not advice it compiles: malformed, over its cap, or a choice it can't
-#: compile), the reason on stderr; any other nonzero exit is an error.
+#: compile), the reason on stderr; any other nonzero exit is an error. Either fails the compile check (``compiles``).
 REFUSED = 2
 #: the values an execution phase registers afresh under its open root, never an earlier record's: the scan's state, which
 #: the network verifier ties to its scan (stateTied); a circuit names it among its values and marks nothing else, so any
@@ -248,10 +263,108 @@ def _verdict(ok: Mapping[str, bool], detail: Mapping[str, Any] | None = None) ->
     return {"ok": all(ok.values()), "codes": [c for c, v in ok.items() if not v], "detail": dict(detail or {})}
 
 
+def tree_root() -> Path:
+    """The auditing tree: the repository this file is in, whose compilers run for a docket naming no commit."""
+    return Path(subprocess.run(["git", "rev-parse", "--show-toplevel"], cwd=HERE, capture_output=True, text=True,
+                               check=True).stdout.strip())
+
+
+@contextlib.contextmanager
+def checkout(repo: Path, commit: str, at: Path) -> Iterator[Path]:
+    """``commit`` of ``repo`` checked out at ``at`` in its own worktree, removed after; a commit ``repo`` doesn't hold is a
+    ValueError (fetch it into ``repo`` first)."""
+    p = subprocess.run(["git", "-C", str(repo), "worktree", "add", "--detach", "--quiet", str(at), commit],
+                       capture_output=True, text=True)
+    if p.returncode != 0:
+        raise ValueError(f"{repo} can't check out commit {commit}: {p.stderr.strip()[-300:]}")
+    try:
+        yield at
+    finally:
+        subprocess.run(["git", "-C", str(repo), "worktree", "remove", "--force", str(at)], capture_output=True)
+
+
+def compiler_code(entry: Mapping[str, Any], compiler: Mapping[str, Any], at: Path | None) -> None:
+    """That the compiler about to run is the registered one, or a ValueError saying why not. At a checkout ``at`` of the
+    docket's ``commit``, the digest this verifier computes (`interface.compiler_digest`, over the code paths its own
+    table names, ``code``) must be the registered digest: the commit only says where to fetch that code. With no commit, the
+    auditing tree's compiler runs, the table's digest the verifier's word for it, recomputed there when the table names
+    ``code``."""
+    if at is not None and not entry.get("code"):
+        raise ValueError("the verifier's table names no code for this compiler, so a checkout's digest can't be recomputed")
+    if entry.get("code"):
+        got = IF.compiler_digest(compiler["name"], at or tree_root(), entry["code"])
+        if got != compiler.get("digest"):
+            where = f"commit {compiler['commit']}" if at is not None else "the auditing tree"
+            raise ValueError(f"the code at {where} hashes to {got[:16]}, not the registered {str(compiler.get('digest'))[:16]}")
+
+
+def _bits(stdout: str) -> int | None:
+    """The length a compile command charges: its last stdout line's ``{"bits": N}``, or None for anything else."""
+    try:
+        bits = json.loads(stdout.strip().splitlines()[-1]).get("bits")
+    except (IndexError, ValueError, AttributeError):
+        return None
+    return bits if isinstance(bits, int) and not isinstance(bits, bool) else None
+
+
+def compile_check(circuit: Mapping[str, Any], window: Mapping[str, Any], opening: Any, compilers: Mapping[str, Any],
+                  scratch: Path, repo: Path | None = None) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    """The compile check: the docket's compiler is one the verifier holds, under the digest it holds (``compiler``); the
+    opening opens the registered advice root under that compiler (``advice``); the code that runs is the registered compiler's
+    (``code``, `compiler_code`: a docket naming a ``commit`` is compiled from that commit of ``repo``, default the
+    auditing tree's repository, checked out in a worktree of its own, with the table's ``pythonpath`` under it); the
+    compiler's command on the opened advice exits 0 (``compiles``), the circuit record it writes is ``circuit`` less its
+    run's fields (``circuit``) and the length it charges is the registered one (``length``). The command runs only on advice
+    that opens, and writes inside a fresh directory. -> (the verdict, the compiler and advice it verified, or None)."""
+    c, adv = window.get("compiler"), window.get("advice")
+    c, adv = (c if isinstance(c, Mapping) else {}), (adv if isinstance(adv, Mapping) else {})
+    entry = compilers.get(c.get("name")) if isinstance(c.get("name"), str) else None
+    ok = {"compiler": entry is not None and entry.get("digest") == c.get("digest"), "advice": False, "code": False,
+          "compiles": False, "circuit": False, "length": False}
+    detail: dict[str, Any] = {"compiler": dict(c), "advice": dict(adv)}
+    try:
+        data, root = IF.opened_advice(c, opening)
+        ok["advice"] = root == adv.get("root")
+    except (ValueError, KeyError, TypeError) as e:
+        data, detail["opening"] = None, str(e)
+    scratch.mkdir(parents=True, exist_ok=True)
+    (scratch / "compiled.json").unlink(missing_ok=True)
+    if ok["compiler"] and ok["advice"]:
+        with tempfile.TemporaryDirectory(dir=scratch) as d, contextlib.ExitStack() as held:
+            d, at, env = Path(d), None, None
+            try:
+                if "commit" in c:
+                    at = held.enter_context(checkout(repo or tree_root(), str(c["commit"]), d / "tree"))
+                    env = {**os.environ, "PYTHONPATH": os.pathsep.join(str(at / p) for p in entry.get("pythonpath", ()))}
+                compiler_code(entry, c, at)
+                ok["code"] = True
+            except (ValueError, OSError, subprocess.CalledProcessError) as e:
+                detail["code"] = str(e)
+            if ok["code"]:
+                (d / "advice.bin").write_bytes(data)   # the opened advice, the verifier's under the named gap
+                t0 = time.time()
+                p = subprocess.run([*entry["argv"], "--advice", str(d / "advice.bin"), "--out", str(d / "compiled.json")],
+                                   cwd=at, env=env, capture_output=True, text=True)
+                detail.update(compile_s=round(time.time() - t0, 1), rc=p.returncode, refused=p.returncode == REFUSED,
+                              stderr=p.stderr[-2000:], at=c.get("commit", "the auditing tree"))
+                ok["compiles"] = p.returncode == 0
+                if ok["compiles"]:
+                    try:
+                        theirs = json.loads((d / "compiled.json").read_text())
+                        ok["circuit"] = IF.circuit_of(theirs) == IF.circuit_of(circuit)
+                        (scratch / "compiled.json").write_text(json.dumps(theirs))
+                    except (OSError, ValueError, AttributeError) as e:
+                        detail["output"] = f"{type(e).__name__}: {e}"
+                    detail["bits"] = _bits(p.stdout)
+                    ok["length"] = detail["bits"] is not None and detail["bits"] == adv.get("bits")
+    v = _verdict(ok, detail)
+    return v, ({"compiler": dict(c), "advice": dict(adv)} if v["ok"] else None)
+
+
 def source(w: Mapping[str, Any] | None, held: Mapping[str, Any]) -> dict[str, Any]:
     """The docket's window held to what the verifier holds: the circuit record's SHA-512 (``circuit``), the run root it
-    names (``run``), and the compiler and advice the verifier holds, or neither for a circuit with no compiler
-    (``compiler``, ``advice``); ``compiled``: true for a circuit with no compiler."""
+    names (``run``), and the compiler and advice the compile check verified, or neither for a circuit with no compiler
+    (``compiler``, ``advice``); ``compiled``: the compile check's verdict (true for a circuit with no compiler)."""
     w = w or {}
     ok = {"circuit": w.get("circuit") == held["circuit"], "run": w.get("run") == held["run"],
           "compiler": w.get("compiler") == held.get("compiler"), "advice": w.get("advice") == held.get("advice"),
@@ -645,11 +758,32 @@ def committed_activations(w: Mapping[str, Any]) -> dict[str, Any] | None:
 
 def negatives(w: Mapping[str, Any], held: Mapping[str, Any], circuit: Mapping[str, Any], scratch: Path) -> dict[str, dict]:
     """What the audit refuses before any sample about the records: a docket naming another circuit or another run root,
-    and one binding a compiler for a circuit registered with none."""
+    one binding a compiler for a circuit registered with none; for a compiled circuit, a docket naming another
+    compiler, another commit of it, another advice root or another length, or binding neither (a circuit passed off as the
+    compiler's), the advice's opening under another salt (which opens no registered root), and a circuit record other than
+    the compiler's output (``held["output"]``, the compile check's, its first template one unit short)."""
     cases = {"registration-naming-another-circuit": {**w, "circuit": "00" * 64},
              "registration-naming-another-run": {**w, "run": "00" * 64}}
-    cases["registration-binding-a-compiler-for-a-fixed-circuit"] = {**w, "compiler": {"name": "c", "digest": "00" * 64}}
+    if held.get("compiler") is None:
+        cases["registration-binding-a-compiler-for-a-fixed-circuit"] = {**w, "compiler": {"name": "c", "digest": "00" * 64}}
+    else:
+        cases |= {"registration-naming-another-compiler": {**w, "compiler": {**w["compiler"], "digest": "00" * 64}},
+                  "registration-naming-another-advice-root": {**w, "advice": {**w["advice"], "root": "00" * 64}},
+                  "registration-charging-another-length": {**w, "advice": {**w["advice"], "bits": w["advice"]["bits"] + 1}},
+                  "registration-binding-no-compiler-or-advice": {k: v for k, v in w.items() if k not in ("compiler", "advice")}}
+        if "commit" in w["compiler"]:
+            cases["registration-naming-another-commit"] = {**w, "compiler": {**w["compiler"], "commit": "00" * 20}}
     out = {name: source(x, held) for name, x in cases.items()}
+    if held.get("compiler") is not None:
+        op = dict(held["opening"])
+        op["salts"] = [f"{int(op['salts'][0][:2], 16) ^ 1:02x}{op['salts'][0][2:]}", *op["salts"][1:]]
+        v, _ = compile_check(circuit, w, op, held["compilers"], scratch, held.get("repo"))
+        out["opening-under-another-salt"] = v
+        if (theirs := held.get("output")) is not None:
+            (t0, n0), *rest = theirs["templates"]
+            short = {**theirs, "templates": [[t0, n0 - 1], *rest]}
+            out["circuit-record-not-the-compilers-output"] = {"ok": IF.circuit_of(theirs) == IF.circuit_of(short),
+                                                              "codes": ["circuit"]}
     return {name: {"refused": not v["ok"], "codes": v["codes"]} for name, v in out.items()}
 
 
@@ -658,7 +792,7 @@ def fixed_before_draw(receipt: Mapping[str, Any], rec: Mapping[str, Any], bound:
     docket (which covers the window's ``circuit``, ``compiler`` and ``advice``) is the one the sample's receipt names, the
     receipt the stream wrote when it received the docket and before its select read any coin (the challenger's
     coins also commit to that digest before any is read: a5_coins); and that docket
-    binds the compiler and advice the verifier holds (``bound``, None for a circuit with none). -> {ok, codes, detail}:
+    binds the compiler and advice the compile check verified (``bound``, None for a circuit with none). -> {ok, codes, detail}:
     ``after-the-draw`` where the sample followed another docket or another stream's, ``compiler`` or ``advice`` where the
     docket binds another."""
     import a5 as A5
@@ -668,6 +802,22 @@ def fixed_before_draw(receipt: Mapping[str, Any], rec: Mapping[str, Any], bound:
           "compiler": w.get("compiler") == b.get("compiler"), "advice": w.get("advice") == b.get("advice")}
     return _verdict(ok, {"drawn_after": receipt.get("registration"), "registration": DD.digest(rec),
                          "received": receipt.get("received")})
+
+
+def after_draw(receipt: Mapping[str, Any], rec: Mapping[str, Any], held: Mapping[str, Any]) -> dict:
+    """The negative: once the coins are read, the prover commits the same advice again (fresh salts, so a fresh root) and hands
+    in a docket binding that root, with its opening. Every check before the sample passes on it (the new opening opens
+    the new root, the same advice compiles to the same circuit, `source` holds), and `fixed_before_draw` refuses it
+    (``after-the-draw``): the sample followed the docket received first."""
+    c = held["compiler"]
+    data = bytes.fromhex(held["opening"]["advice"])
+    late = IF.commit_advice(c, data)
+    opens = IF.opened_advice(c, IF.advice_opening(data, late))[1] == late.root.hex()
+    advice = {**rec["window"]["advice"], "root": late.root.hex()}
+    late_rec = {**rec, "window": {**rec["window"], "advice": advice}}
+    src = source(late_rec["window"], {**held, "advice": advice})
+    v = fixed_before_draw(receipt, late_rec, {"compiler": held["compiler"], "advice": advice})
+    return {"refused": not v["ok"], "codes": v["codes"], "before_draw_checks_pass": opens and src["ok"]}
 
 
 def composer(fn: Any, st: Mapping[str, Any]) -> Callable[[Path, str, str], dict[str, Any]]:
@@ -868,12 +1018,10 @@ def session_proofs(sdir: Path) -> dict[str, Any]:
     return {"proofs": None if listed is None else len(listed), "prover_stopped": live.get("prover_stopped")}
 
 
-def forged_outcome(s: dict, wdir: Path, member: int | None = None, more: Mapping[str, bool] | None = None,
-                   read: bool = False) -> dict[str, Any]:
+def forged_outcome(s: dict, wdir: Path, member: int | None = None, more: Mapping[str, bool] | None = None) -> dict[str, Any]:
     """A forged window's verdict, from a5's summary ``s`` and its audit directory ``wdir`` (``audit.json``, each sampled
     member's ``session-m<k>``). Every check before the sample passed, ``more`` (the caller's own checks) holds, the audit
-    record rejects, and the window was stopped where what it forges is. The caller says what that is, a false unit or
-    (``read``) a registered read, and the window passes on the one check that calls for, never on another's:
+    record rejects, and the window was stopped where its false unit is, on the one check that calls for, never on another's:
 
     * a false unit behind the ZK server (the summary's ``arm`` is ``fw``, which a5 writes where the sessions ran behind
       its binary and nowhere else), no proof of which may leave the prover:
@@ -884,13 +1032,10 @@ def forged_outcome(s: dict, wdir: Path, member: int | None = None, more: Mapping
     * a false unit behind none (a plain audit), whose proof leaves, and Lean's own verdict must refuse it:
       ``lean_refused``, the Lean verifier refused a proof it read (`a0.lean_refused`, and not for want of the session's
       files, `NO_SESSION_FILES`).
-    * ``read``, a registered read that opens no pinned root, in a window of no false unit: ``read_refused``, some
-      session's Lean verdict is a refusal naming a row of a registered read that does not open the verifier's root,
-      which Lean checks at setup (`a0.lean_refused` naming `READ_OPENS_NO_ROOT`). The units are their Definitions', so
-      the sessions' proofs may leave, and none is refused: neither is asked of the window, or held against it.
 
-    ``checks`` holds the three, and the window passes on the one named (``passes_on``); the other two are shown and not
-    counted. A check with nothing to read has no value, and ``no_value`` says why: ``no_proof_released`` behind no ZK
+    ``checks`` holds those two and ``read_refused``, some session's Lean verdict refusing at setup a row of a registered
+    read that does not open the verifier's root (`READ_OPENS_NO_ROOT`); the window passes on the one named
+    (``passes_on``), and the others are shown and not counted. A check with nothing to read has no value, and ``no_value`` says why: ``no_proof_released`` behind no ZK
     server, and ``lean_refused`` where Lean refused only sessions it read no proof of (False where it refused none).
     ``sessions`` is what each session read records (`session_proofs`), and ``why`` the audit's reasons."""
     import a0
@@ -914,7 +1059,7 @@ def forged_outcome(s: dict, wdir: Path, member: int | None = None, more: Mapping
         no_value["no_proof_released"] = "the sessions ran behind no ZK server"
     stopped = {"no_proof_released": no_proof_released, "lean_refused": refused,
                "read_refused": any(a0.lean_refused(v, READ_OPENS_NO_ROOT) for v in lean.values())}
-    on = "read_refused" if read else "no_proof_released" if behind else "lean_refused"
+    on = "no_proof_released" if behind else "lean_refused"
     checks = {"checks_before_draw": bool(s.get("checks_before_draw")) and all(s["checks_before_draw"].values()), **(more or {}),
               "rejected": audit.get("accepted") is False, **stopped}
     return {"ok": all(v is True for c, v in checks.items() if c == on or c not in stopped), "checks": checks, "passes_on": on,
@@ -974,6 +1119,14 @@ def audit(a: argparse.Namespace) -> int:
     held: dict[str, Any] = {"run": a.run, "circuit": a.circuit or hashlib.sha512(body).hexdigest(),
                             "compiled": True, "compiler": None, "advice": None}
     compiled = None
+    if a.opening:
+        compilers, opening = json.loads(Path(a.compilers).read_text()), json.loads(Path(a.opening).read_text())
+        repo = Path(a.repo) if a.repo else None
+        compiled, bound = compile_check(doc, w, opening, compilers, out / "compile", repo)
+        output = out / "compile" / "compiled.json"
+        held.update(compiled=compiled["ok"], compiler=(bound or {}).get("compiler") or w.get("compiler"),
+                    advice=(bound or {}).get("advice") or w.get("advice"), compilers=compilers, opening=opening, repo=repo,
+                    output=json.loads(output.read_text()) if compiled["ok"] else None)
     window_s = round(time.time() - t0, 2)
     if a.lower is None:
         from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
@@ -1032,12 +1185,17 @@ def audit(a: argparse.Namespace) -> int:
     row["coins_session"] = {"trusted": published.get("trusted"), "error": published.get("error")}
     if s.get("draw") is not None:
         rec, receipt = (json.loads((out / "window" / f).read_text()) for f in ("registration.json", "receipt.json"))
-        row["fixed_before_draw"] = fixed_before_draw(receipt, rec, None)
+        bound = {"compiler": held["compiler"], "advice": held["advice"]} if held["compiler"] is not None else None
+        row["fixed_before_draw"] = fixed_before_draw(receipt, rec, bound)
         ordered = row["fixed_before_draw"]["ok"]
+        if bound is not None:
+            row["after_draw"] = after_draw(receipt, rec, held)
+            row["negatives"] = {**(row["negatives"] or {}), "advice-root-after-the-draw": row["after_draw"]["refused"]}
+            ordered = ordered and row["after_draw"]["refused"]
     else:
         ordered = False
-    if a.forged or a.forged_read:
-        row["forged"] = forged_outcome(s, out / "window", read=a.forged_read)
+    if a.forged:
+        row["forged"] = forged_outcome(s, out / "window")
         row["ok"] = row["forged"]["ok"] and ordered
     else:
         row["ok"] = ok and ordered and (compiled is None or compiled["ok"])
@@ -1101,7 +1259,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--sampling-design", required=True, help="the rate the audit's stream states as its rule (rate:NUM/DEN, "
                    "stratified-rate:NUM/DEN or work-rate:NUM/DEN), whose sampling design over the window's proof blocks the "
                    "registration is held to; a fixed count (subset:K, stratified:K, work:K) is refused")
-    p.add_argument("--circuit", help="the SHA-512 of the circuit record the verifier registered, a circuit with no compiler")
+    p.add_argument("--opening", help="the advice's opening (interface.advice_opening): the named gap, until the compile slice's proof block")
+    p.add_argument("--compilers", help="with --opening: the registered compilers the verifier holds, {name: {digest, argv, "
+                   "code, pythonpath}}")
+    p.add_argument("--repo", help="with --opening: the repository a registered compiler's commit is checked out from (default "
+                   "this tree's)")
+    p.add_argument("--circuit", help="instead: the SHA-512 of the circuit record the verifier registered, a circuit with no compiler")
     p.add_argument("--run", required=True, help="the run root the verifier holds the window to, the one the run published")
     p.add_argument("--template-sets", help="the verifier's own input sets, for templates whose units are not bit rows")
     p.add_argument("--outputs", help="JSON: the verifier's own [lo, hi) ranges of the units whose outputs are served out "
@@ -1125,10 +1288,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--session-jobs", type=A5.one_session, default=1, help="1 only: a5 runs the sessions one at a time (a5.ONE_AT_A_TIME)")
     p.add_argument("--archive-link", action="store_true", help=A5.ARCHIVE_LINK_HELP)
     A5.lean_options(p)
-    forges = p.add_mutually_exclusive_group()
-    forges.add_argument("--forged", action="store_true", help="the window holds a forged unit: it must be refused")
-    forges.add_argument("--forged-read", action="store_true", help="the window holds a registered read that opens no pinned "
-                        "root, and no forged unit: the Lean verifier must refuse it at setup on that read")
+    p.add_argument("--forged", action="store_true", help="the window holds a forged unit: it must be refused")
     p.add_argument("--flip-proofs", type=int, default=0, metavar="N",
                    help="after an accepted audit, at most N one-bit edits of its first drawn session's proof, each of which "
                    "Lean verify must refuse (`proof_edits`)")
@@ -1234,8 +1394,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if a.cmd == "warm":
         return warm(a)
-    if not a.circuit:
-        ap.error("a circuit with no compiler: --circuit SHA512")
+    if bool(a.opening) == bool(a.circuit) or bool(a.opening) != bool(a.compilers):
+        ap.error("a compiled circuit: --opening FILE --compilers FILE; a circuit with no compiler: --circuit SHA512")
     if not a.challenger:
         ap.error("audit draws on the auditor's challenger's coins, never the verifier's own: give --challenger local --main FILE")
     if a.challenger:

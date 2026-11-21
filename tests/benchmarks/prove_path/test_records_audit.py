@@ -5,6 +5,11 @@
   the docket binds; a window with row tables is refused until its records carry their segment roots; Pearl+'s tile and
   credit reader resolve in a fresh audit process to the body registered under their id, and a Definition of that id with
   another body is refused by name;
+* the compile check runs the registered compiler as the verifier's table names it, on advice that opens the registered root,
+  and refuses by name a compiler it doesn't hold, an opening of another root, a compiler that refuses the advice, one whose
+  circuit is another or that writes none, and a length other than the registered one or none;
+* a compiler registered under a commit runs from a checkout of that commit, not the auditing tree's, and a commit whose code
+  doesn't hash to the registered digest is refused;
 * the leak bound's count is the circuit's unwired input bits, reported beside the advice's charge and vacuous past it, and
   a record that declares registered reads counts those of a parameter the verifier pinned registered and the rest free
   (`declared_count`); the audit counts a record that lists its members and declares its window's ingress so too, and
@@ -16,12 +21,16 @@
 * a window's audit is one compute audit of the network attester's period (`period`), its scan state's reads registered;
 * a declared day (``--day``, `declared_day`) hands R2 the registration log's declarations, so a program other than the
   day's is refused;
-* `source` and the negatives refuse what the records don't bind, and `fixed_before_draw` refuses a sample that followed
-  another docket;
+* `source` and the negatives refuse what the records don't bind, and `fixed_before_draw` refuses advice re-committed after
+  the coins;
 * the gate's coins (``--challenger gate:USER@HOST``) reach the challenger's session with the peer and the key record;
 * ``warm`` fills a5's compose cache from the verifier's window, its composers keyed by what they compose from, a table
   read's by the verifier's executable too, and the audit takes that cache;
-* of `verity_vllm` it loads only a catalog package (`verity.circuits.defs.catalog_package`) and nothing else of the adapter."""
+* of `verity_vllm` it loads only a catalog package (`verity.circuits.defs.catalog_package`) and nothing else of the adapter,
+  and the served compiler's command (``prove_path.py circuit``) refuses advice it can't compile and charges the length the
+  docket does;
+* that command compiles over its own trace of each Program, never the prover's row dir, so a row dir whose names make
+  another circuit under unchanged digests is refused by name and one whose names make the same circuit is ignored."""
 from __future__ import annotations
 
 import hashlib
@@ -94,6 +103,21 @@ def _audit_args(w: SimpleNamespace) -> list[str]:
 COMPILER = {"name": "test/compiler", "digest": "cd" * 64}
 ADVICE = bytes(range(40))
 
+FAKE = '''import argparse, json, sys
+ap = argparse.ArgumentParser()
+for f in ("--record", "--expect", "--advice", "--out", "--say", "--write"):
+    ap.add_argument(f)
+ap.add_argument("--bits", type=int)
+a = ap.parse_args()
+data = open(a.advice, "rb").read()
+if data.hex() != a.expect:
+    sys.stderr.write("advice this compiler can't compile")
+    sys.exit(2)
+if a.write != "no":
+    open(a.out, "w").write(open(a.record).read())
+print(a.say if a.say is not None else json.dumps({"bits": 8 * len(data) if a.bits is None else a.bits}))
+'''
+
 
 def _write(d: Path, n: int = 5, cap: int = 4, advice: bool = True, compiler: dict = COMPILER) -> SimpleNamespace:
     """A window of ``n`` coordinates in members of ``cap``, its advice committed under ``compiler`` (or none), written and
@@ -110,6 +134,17 @@ def _write(d: Path, n: int = 5, cap: int = 4, advice: bool = True, compiler: dic
     doc = json.loads((d / "circuit.json").read_text())
     return SimpleNamespace(dir=d, doc=doc, rec=json.loads((d / "registration.json").read_text()),
                            opening=IF.advice_opening(ADVICE, reg), bound=bound)
+
+
+def _compilers(tmp: Path, doc: dict, **kw) -> dict:
+    """The verifier's table: `COMPILER` as the fake command, which writes ``doc`` less its run fields for `ADVICE` alone."""
+    body = json.dumps({**doc, "run": "", "context": ""}).encode()
+    record = tmp / f"record-{hashlib.sha512(body).hexdigest()[:16]}.json"
+    (tmp / "compiler.py").write_text(FAKE)
+    record.write_bytes(body)
+    argv = [sys.executable, str(tmp / "compiler.py"), "--record", str(record), "--expect", ADVICE.hex(),
+            *(x for k, v in kw.items() for x in (f"--{k}", str(v)))]
+    return {COMPILER["name"]: {"digest": COMPILER["digest"], "argv": argv}}
 
 
 @pytest.fixture
@@ -203,16 +238,119 @@ def test_a_definition_of_a_pearl_plus_id_with_another_body_is_refused_by_name():
     assert IF.resolve(PEARL_PLUS_IDS[0]).defn is seed
 
 
-def test_source_and_the_negatives_refuse_what_the_records_dont_bind(tmp_path):
+def test_the_compile_check_runs_the_registered_compiler_on_the_opened_advice(written, tmp_path):
+    w, doc, op = written.rec["window"], written.doc, written.opening
+    v, bound = RA.compile_check(doc, w, op, _compilers(tmp_path, doc), tmp_path / "c")
+    assert v["ok"] and bound == written.bound and v["detail"]["bits"] == 8 * len(ADVICE)
+    assert IF.circuit_of(json.loads((tmp_path / "c" / "compiled.json").read_text())) == IF.circuit_of(doc)
+    other = dict(op, salts=[("00" if op["salts"][0][:2] != "00" else "01") + op["salts"][0][2:], *op["salts"][1:]])
+    short = {**doc, "templates": [[TID, 4]]}
+    for name, (compilers, window, opening), codes in (
+            ("a compiler the verifier doesn't hold", ({}, w, op), ["compiler", "code", "compiles", "circuit", "length"]),
+            ("another digest", (_compilers(tmp_path, doc), {**w, "compiler": {**COMPILER, "digest": "00" * 64}}, op),
+             ["compiler", "advice", "code", "compiles", "circuit", "length"]),
+            ("an opening of another root", (_compilers(tmp_path, doc), w, other),
+             ["advice", "code", "compiles", "circuit", "length"]),
+            ("a compiler refusing the advice", (_compilers(tmp_path, doc, expect="00"), w, op), ["compiles", "circuit", "length"]),
+            ("another circuit", (_compilers(tmp_path, short), w, op), ["circuit"]),
+            ("another length", (_compilers(tmp_path, doc, bits=8 * len(ADVICE) + 1), w, op), ["length"]),
+            ("a length that isn't a whole number", (_compilers(tmp_path, doc, say='{"bits": "320"}'), w, op), ["length"]),
+            ("a length that's a boolean", (_compilers(tmp_path, doc, say='{"bits": true}'), w, op), ["length"]),
+            ("no length line", (_compilers(tmp_path, doc, say="compiled"), w, op), ["length"])):
+        v, bound = RA.compile_check(doc, window, opening, compilers, tmp_path / "c")
+        assert (v["codes"], bound) == (codes, None), name
+    v, _ = RA.compile_check(doc, w, op, _compilers(tmp_path, doc, expect="00"), tmp_path / "c")
+    assert v["detail"]["refused"] and "can't compile" in v["detail"]["stderr"]
+
+
+def test_a_command_that_exits_0_without_writing_its_circuit_fails_the_circuit_check(written, tmp_path):
+    """The command writes inside a fresh directory, so a stale ``compiled.json`` from an earlier compile is never compared."""
+    w, doc, op = written.rec["window"], written.doc, written.opening
+    assert RA.compile_check(doc, w, op, _compilers(tmp_path, doc), tmp_path / "c")[0]["ok"]
+    assert (tmp_path / "c" / "compiled.json").exists()
+    v, bound = RA.compile_check(doc, w, op, _compilers(tmp_path, doc, write="no"), tmp_path / "c")
+    assert (v["codes"], bound) == (["circuit"], None) and "output" in v["detail"]
+    assert not (tmp_path / "c" / "compiled.json").exists()
+
+
+def test_source_and_the_negatives_refuse_what_the_records_dont_bind(written, tmp_path):
+    w, doc = written.rec["window"], written.doc
+    compilers = _compilers(tmp_path, doc)
+    v, bound = RA.compile_check(doc, w, written.opening, compilers, tmp_path / "c")
+    held = {"run": RUN, "circuit": w["circuit"], "compiled": v["ok"], **bound, "compilers": compilers,
+            "opening": written.opening, "output": json.loads((tmp_path / "c" / "compiled.json").read_text())}
+    assert RA.source(w, held)["ok"]
+    assert RA.source(w, {**held, "run": "00" * 64})["codes"] == ["run"]
+    assert RA.source(w, {**held, "compiled": False})["codes"] == ["compiled"]
+    got = RA.negatives(w, held, doc, tmp_path / "n")
+    assert set(got) == {"registration-naming-another-circuit", "registration-naming-another-run",
+                        "registration-naming-another-compiler", "registration-naming-another-advice-root",
+                        "registration-charging-another-length", "registration-binding-no-compiler-or-advice",
+                        "opening-under-another-salt", "circuit-record-not-the-compilers-output"}
+    assert all(x["refused"] for x in got.values()), got
     fixed = _write(tmp_path / "fixed", advice=False)
     fw = fixed.rec["window"]
     held = {"run": RUN, "circuit": fw["circuit"], "compiled": True, "compiler": None, "advice": None}
     assert "compiler" not in fw and RA.source(fw, held)["ok"]
-    assert RA.source(fw, {**held, "run": "00" * 64})["codes"] == ["run"]
-    assert RA.source(fw, {**held, "compiled": False})["codes"] == ["compiled"]
     got = RA.negatives(fw, held, fixed.doc, tmp_path / "n")
     assert set(got) == {"registration-naming-another-circuit", "registration-naming-another-run",
                         "registration-binding-a-compiler-for-a-fixed-circuit"} and all(x["refused"] for x in got.values())
+
+
+def _git(repo: Path, *args: str) -> str:
+    return subprocess.run(["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false",
+                           *args], check=True, capture_output=True, text=True).stdout.strip()
+
+
+def test_a_window_is_compiled_at_its_registered_commit_from_a_tree_at_another(tmp_path, monkeypatch):
+    """A registered compiler is (name, digest, commit): the audit compiles from its own checkout of the commit, refused unless
+    the digest it computes there is the registered one. The compiler's code at commit A charges the advice's length; at B
+    it charges a byte more. From a tree at B, a window registered under A is audited with A's code, and one naming B under
+    A's digest, a commit the repository doesn't hold, or a compiler whose table entry names no code is refused."""
+    repo = tmp_path / "repo"
+    (repo / "fake").mkdir(parents=True)
+    _git(repo, "init", "-q")
+    (repo / "fake" / "compiler.py").write_text(FAKE)
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "A")
+    a, da = IF.commit_of(repo), IF.compiler_digest(COMPILER["name"], repo, ["fake"])
+    (repo / "fake" / "compiler.py").write_text(FAKE.replace("8 * len(data) if", "8 * len(data) + 8 if"))
+    _git(repo, "commit", "-qam", "B")
+    b, db = IF.commit_of(repo), IF.compiler_digest(COMPILER["name"], repo, ["fake"])
+    assert a != b and da != db
+
+    compiler = {"name": COMPILER["name"], "digest": da, "commit": a}
+    s = _write(tmp_path / "w", compiler=compiler)
+    w, doc, op = s.rec["window"], s.doc, s.opening
+    assert w["compiler"] == compiler
+    (tmp_path / "record.json").write_text(json.dumps({**doc, "run": "", "context": ""}))
+    entry = {"digest": da, "argv": [sys.executable, "fake/compiler.py", "--record", str(tmp_path / "record.json"),
+                                    "--expect", ADVICE.hex()], "code": ["fake"], "pythonpath": ["."]}
+    table = {COMPILER["name"]: entry}
+
+    v, bound = RA.compile_check(doc, w, op, table, tmp_path / "c", repo)
+    assert v["ok"], v
+    assert (v["detail"]["at"], v["detail"]["bits"], bound["compiler"]) == (a, 8 * len(ADVICE), compiler)
+    held = {"run": RUN, "circuit": w["circuit"], "compiled": True, **bound, "compilers": table, "opening": op, "repo": repo,
+            "output": json.loads((tmp_path / "c" / "compiled.json").read_text())}
+    assert RA.source(w, held)["ok"]
+    got = RA.negatives(w, held, doc, tmp_path / "n")
+    assert got["registration-naming-another-commit"] == {"refused": True, "codes": ["compiler"]}
+    assert all(x["refused"] for x in got.values()), got
+
+    monkeypatch.setattr(RA, "tree_root", lambda: repo)
+    for name, (window, compilers, why) in {
+            "the auditing tree's code, at B": ({**w, "compiler": {"name": COMPILER["name"], "digest": da}}, table, "hashes to"),
+            "commit B under A's digest": ({**w, "compiler": {**compiler, "commit": b}}, table, "hashes to"),
+            "a commit the repository doesn't hold": ({**w, "compiler": {**compiler, "commit": "e" * 40}}, table, "check out"),
+            "a table entry naming no code": (w, {COMPILER["name"]: {k: x for k, x in entry.items() if k != "code"}}, "no code"),
+    }.items():
+        v, bound = RA.compile_check(doc, window, op, compilers, tmp_path / "c", repo)
+        assert (v["codes"], bound) == (["code", "compiles", "circuit", "length"], None), name
+        assert why in v["detail"]["code"], (name, v["detail"])
+    v, _ = RA.compile_check(doc, {**w, "compiler": {**compiler, "digest": db, "commit": b}}, op, table, tmp_path / "c", repo)
+    assert v["codes"][:2] == ["compiler", "advice"]
+    assert _git(repo, "worktree", "list", "--porcelain").count("worktree ") == 1
 
 
 def test_the_leak_count_is_the_circuits_unwired_input_bits_and_vacuous_past_the_advices_charge(written):
@@ -1315,20 +1453,24 @@ def test_the_audit_needs_the_run_root_the_run_published(written, capsys):
     assert e.value.code == 2 and "--run" in capsys.readouterr().err
 
 
-def test_the_advice_is_fixed_before_the_sample(written):
+def test_the_advice_is_fixed_before_the_sample_and_refused_re_committed_after_it(written):
     import a5 as A5
 
-    rec = written.rec
+    rec, held = written.rec, {**written.bound, "opening": written.opening, "run": RUN, "circuit": written.rec["window"]["circuit"],
+                              "compiled": True}
     receipt = {"registration": DD.digest(rec), "verifier": A5.CHALLENGER, "received": 1}
     assert RA.fixed_before_draw(receipt, rec, written.bound)["ok"]
     assert RA.fixed_before_draw({**receipt, "registration": "00" * 64}, rec, written.bound)["codes"] == ["after-the-draw"]
     assert RA.fixed_before_draw({**receipt, "verifier": "another stream"}, rec, written.bound)["codes"] == ["after-the-draw"]
     assert RA.fixed_before_draw(receipt, rec, None)["codes"] == ["compiler", "advice"]
+    late = RA.after_draw(receipt, rec, held)
+    assert late == {"refused": True, "codes": ["after-the-draw"], "before_draw_checks_pass": True}
 
 
 def test_the_gates_coins_take_the_peer_and_key_record_to_the_challengers_session(written, tmp_path, monkeypatch):
-    """``--challenger gate:USER@HOST`` hands ``--gate-key``, ``--peer`` and ``--challenger-key`` to `a5_coins.start`; the
-    command refuses a gate without the peer or the key record, and any other challenger. ``--deployed-key`` reaches `a5_coins.start` as ``deployed`` with ``--challenger local``, and is refused with a gate."""
+    """``--challenger gate:USER@HOST`` hands ``--gate-key``, ``--peer`` and ``--challenger-key`` to `a5_coins.start`, as
+    `prove_path.py audit` does; the command refuses a gate without the peer or the key record, and any other challenger.
+    ``--deployed-key`` reaches `a5_coins.start` as ``deployed`` with ``--challenger local``, and is refused with a gate."""
     import a5 as A5
     from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
     from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
@@ -1417,15 +1559,12 @@ def test_the_audit_reserves_a_port_for_every_session_its_sample_can_open(tmp_pat
         assert seen == want
 
 
-def test_the_audit_passes_a_refused_window_on_the_check_for_what_its_caller_says_it_forges(written, tmp_path, monkeypatch, capsys):
-    """`audit` is told what a window that must be refused forges, ``--forged`` a false unit or ``--forged-read`` a
-    registered read that opens no pinned root, and passes it on that kind's check alone (`forged_outcome`). The sessions
-    (`a5.audit`) are stubbed and leave the record of a window of no false unit whose read opens no root: its proof left,
-    and Lean refused its session at setup on a row of the read. As a forged read it passes, its prover run as an honest
-    window's; as a forged unit it fails, its prover run with its self-check skipped; told neither it fails as any
-    rejected audit does, and told both the command refuses its arguments before any session. The summary of a window
-    that passes as a forged read carries that verdict under ``forged``, as a forged unit's does, so no reader of it
-    takes the pass for an accepting audit (the weights tie's pins refuse a summary that holds it)."""
+def test_the_audit_passes_a_refused_window_on_the_check_for_a_forged_unit(written, tmp_path, monkeypatch, capsys):
+    """`audit` told ``--forged`` passes a window that must be refused on the check for a false unit alone
+    (`forged_outcome`), its prover run with its self-check skipped. The sessions (`a5.audit`) are stubbed and leave the
+    record of a window of no false unit whose read opens no root: its proof left, and Lean refused its session at setup
+    on a row of the read, which is no check of a false unit, so it fails; told nothing it fails as any rejected audit
+    does."""
     import a5 as A5
     from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
 
@@ -1465,12 +1604,6 @@ def test_the_audit_passes_a_refused_window_on_the_check_for_what_its_caller_says
         assert list(checks.values()) == [True, True], row
         return got
 
-    rc, row = run("--forged-read")
-    assert rc == 0 and row["ok"] is True and row["accepted"] is False, row
-    assert (row["forged"]["ok"], row["forged"]["passes_on"]) == (True, "read_refused"), row
-    assert stopped(row) == {"no_proof_released": False, "lean_refused": None, "read_refused": True}, row
-    summary = json.loads((tmp_path / "out--forged-read" / "summary.json").read_text())
-    assert summary["ok"] is True and summary["forged"] == row["forged"] and summary["audit"]["accepted"] is False, summary
     rc, row = run()
     assert rc == 1 and row["ok"] is False and "forged" not in row, row
     assert "forged" not in json.loads((tmp_path / "out" / "summary.json").read_text())
@@ -1478,10 +1611,7 @@ def test_the_audit_passes_a_refused_window_on_the_check_for_what_its_caller_says
     assert rc == 1 and row["ok"] is False, row
     assert (row["forged"]["ok"], row["forged"]["passes_on"]) == (False, "no_proof_released"), row
     assert stopped(row) == {"no_proof_released": False, "lean_refused": None, "read_refused": True}, row
-    assert self_checks == ["stop", "stop", "skip"]
-    with pytest.raises(SystemExit) as refused:
-        RA.main([*args, "--out", str(tmp_path / "both"), "--forged", "--forged-read"])
-    assert refused.value.code == 2 and len(self_checks) == 3
+    assert self_checks == ["stop", "skip"]
 
 
 def test_the_audit_counts_a_listed_record_with_window_ingress_and_prints_its_window_figure_with_its_premise(
@@ -1602,10 +1732,13 @@ def test_a_table_reads_composer_is_keyed_by_the_verifiers_executable_and_no_othe
 
 
 def test_the_audit_from_the_records_loads_of_verity_vllm_only_a_catalog_package(written, tmp_path):
-    """The verifier's window, `source`, the negatives and the sample-order check, in a fresh process: every
+    """The verifier's window, the compile check, `source`, the negatives and the sample-order check, in a fresh process: every
     `verity_vllm` module it loads is a catalog package (`verity.circuits.defs.CATALOG_PACKAGES`, where a served template's
     Definition is registered), a module under one or a package above one. Any other module of the adapter fails, by name;
     while no catalog package is the adapter's, none of it loads."""
+    compilers = tmp_path / "compilers.json"
+    compilers.write_text(json.dumps(_compilers(tmp_path, written.doc)))
+    (tmp_path / "opening.json").write_text(json.dumps(written.opening))
     code = f"""
 import json, sys
 from pathlib import Path
@@ -1617,12 +1750,14 @@ import a5 as A5
 d, t = Path({str(written.dir)!r}), Path({str(tmp_path)!r})
 mine, doc, sets = RA.verifier_window(d, RND.parse_design({SAMPLING_DESIGN!r}), None)
 rec = json.loads((d / "registration.json").read_text())
-bound = {{"compiler": rec["window"].get("compiler"), "advice": rec["window"].get("advice")}}
-held = {{"run": mine.run, "circuit": rec["window"]["circuit"], "compiled": True, **bound}}
-assert RA.source(rec["window"], held)["ok"]
+compilers, opening = json.loads((t / "compilers.json").read_text()), json.loads((t / "opening.json").read_text())
+v, bound = RA.compile_check(doc, rec["window"], opening, compilers, t / "c")
+held = {{"run": mine.run, "circuit": rec["window"]["circuit"], "compiled": v["ok"], **bound, "compilers": compilers,
+        "opening": opening, "output": json.loads((t / "c" / "compiled.json").read_text())}}
+assert v["ok"] and RA.source(rec["window"], held)["ok"]
 assert all(x["refused"] for x in RA.negatives(rec["window"], held, doc, t / "n").values())
 receipt = {{"registration": DD.digest(rec), "verifier": A5.CHALLENGER}}
-assert RA.fixed_before_draw(receipt, rec, bound)["ok"]
+assert RA.fixed_before_draw(receipt, rec, bound)["ok"] and RA.after_draw(receipt, rec, held)["refused"]
 from verity.circuits.defs import CATALOG_PACKAGES
 
 print(json.dumps([sorted(m for m in sys.modules if m.split(".")[0] == "verity_vllm"), sorted(CATALOG_PACKAGES)]))

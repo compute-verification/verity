@@ -57,10 +57,10 @@ def test_public_log_lets_only_what_its_reader_reads_go():
     rank = {"accepted": True, "ok": True, "population": 9, "draw": [9], "draw_counts": {"t": 2}, "seconds": 9,
             "charge": {"c": 9}, "advice_before_draw": True, "forged": {"x": 9},
             "per_unit": {"t": {"units": 2, "proof_bytes": 3, "prove_s_per_unit": 1.5, "lean_verify_s_per_unit": 0.5, "x": 9}}}
-    line = {"advice_bits": 9, "delta": 9, "forged": False, "ok": True, "proof": "zk", "coins": "gate", "run_root": "9",
+    line = {"advice_bits": 9, "delta": 9, "ok": True, "proof": "zk", "coins": "gate", "run_root": "9",
             "transfer_gates": 9, "ranks": {"0": rank}}
     assert json.loads(m.public_line("PROVE-PATH " + json.dumps(line)).split(" ", 1)[1]) == {
-        "forged": False, "ok": True, "proof": "zk", "coins": "gate", "ranks": {"0": {
+        "ok": True, "proof": "zk", "coins": "gate", "ranks": {"0": {
             "accepted": True, "per_unit": {"t": {"proof_bytes": 3}}}}}
     a5 = {"source": "served", "draw": [9], "audit": {"accepted": True, "wrong_units": 9, "why": {"x": "9"},
                                                      "verdicts": {"lean-verify": True, "x": False}}}

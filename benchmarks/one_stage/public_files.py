@@ -118,6 +118,7 @@ REFUSALS = {
     "window-commit-reader-not-passed": "window-commit reads the network attester run its serve kept, and names the scan state it opens for the attester's scan, by what its caller passes (kept_ingress, scan_state_file), since SPOT imports neither the attester nor a benchmark: run benchmarks/one_stage/window_commit.py",
     "advice-compiler-absent": "a served window's registered compiler is `verity-vllm advice`'s (verity_vllm.pipeline.advice), which this tree lacks",
     "scan-request-in-two-slots": "the scan starts one request in two slots of the window",
+    "compiler-without-code": "the verifier's table names no code for this compiler, so a checkout's digest can't be recomputed",
     "tie-without-values": "the audit is tied to an earlier registration (--tie), and the circuit takes no values",
     "day-without-day-log": "--day needs --day-log, the registration log whose declarations R2 reads",
     "answer-of-another-registration": "the audit's answer commits to another registration than the window's",

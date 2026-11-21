@@ -3,8 +3,8 @@ Part of network attestation's [PROTOCOL.md](../PROTOCOL.md).
 ## The compile slice's charge, and a served execution phase at its engine's class
 
 This file describes a Definition and its design: no session of the compile slice runs, and no auditor and no driver
-runs any check of it; its checks run only in its tests. Nothing runs in its place: `records_audit.py audit` holds the
-docket to the circuit the verifier registered (`--circuit`) and recompiles no advice. Running the slice would not close the
+runs any check of it; its checks run only in its tests. In its place, `records_audit.py audit` opens the advice in the
+clear and recompiles it (`records_audit.compile_check`), which reads no served rows. Running the slice would not close the
 gap: the design holds the served rows to nothing the server ran, so even a proof of the slice would accept a prover that
 registers its own rows, the phase-10 passes' among them.
 

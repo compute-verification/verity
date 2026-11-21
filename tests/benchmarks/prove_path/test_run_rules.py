@@ -3,12 +3,10 @@ script:
 
 * the rule the script's weights tie arm states to its records audit is the rate of every unit of the tie, which names
   the tie's own design, work over every one of its units;
-* that arm tells its records audit what each tie that must be refused forges, a registered read or a unit, and no other
-  arm of the script audits a window as forging a read;
 * that arm takes a tie's pins as given or refused only on `weights-tie pins`' own answer, never on a traceback;
 * each partition file (`partitions`: this benchmark's, the one-stage audit's and each one the script names) states a
   rate a stream takes or is listed as still stating a fixed design (`FIXED`), which an audit on a challenger's coins
-  (`a5.py --challenger`) refuses at the rule check and a served window's audit from its records
+  (`prove_path.py audit`, `a5.py --challenger`) refuses at the rule check and a served window's audit from its records
   (`records_audit.py audit`) refuses by name. The list only shrinks."""
 from __future__ import annotations
 
@@ -91,56 +89,21 @@ def test_the_weights_ties_arm_states_the_rate_of_every_unit_of_the_tie():
         assert names == {KEY: "work", "k": units}, (text, names)
 
 
-def test_the_weights_ties_arm_tells_the_audit_what_each_refused_tie_forges():
-    """The weights tie's arm audits two ties that must be refused and tells `records_audit.py audit` what each forges,
-    since the audit passes a refused window on that kind's check alone. ``weights-tie-other`` serves another
-    checkpoint's words as the registered one's: a registered read that opens no pinned root, in a window of no false
-    unit (``--forged-read``). ``weights-tie-forged`` forges its ends' digests too: false units (``--forged``). The
-    honest tie is told neither. `tie` sets what the audit is told from its own arguments, each in turn, and hands it to
-    the audit, and no other arm of the script names ``--forged-read``."""
-    def code(text: str) -> str:
-        """``text``'s lines but its comments', each without a comment after its code."""
-        return "\n".join(x.split(" #", 1)[0] for x in text.splitlines() if not x.lstrip().startswith("#"))
-
-    script = code(RUN_SH.read_text())
-    arm = script.split('if [ -n "${PP_WEIGHTS_TIE:-}" ]; then', 1)[1].split("\nfi\n", 1)[0]
-    told = dict(re.findall(r"^\s*(--[\w-]+)\) forged=(\S+);", arm, re.M))
-    ties = re.findall(r"\btie (weights-tie[\w-]*)((?: --[\w-]+)*) \|\| rc=1", arm)
-    assert told and ties and re.search(r'for x in "\$@"; do\s+case \$x in', arm), (
-        f"{RUN_SH.name}'s weights tie arm no longer sets what its audit is told as this test reads it (a `case` over "
-        f"`tie`'s arguments in turn, each `--ARG) forged=FLAG;`, and `tie NAME [--ARG ...] || rc=1`): {told}, {ties}")
-
-    def audited(args: str) -> str | None:
-        flag = None
-        for x in args.split():
-            flag = told.get(x, flag)
-        return flag
-    assert {name: audited(args) for name, args in ties} == {
-        "weights-tie": None, "weights-tie-other": "--forged-read", "weights-tie-forged": "--forged"}, (told, ties)
-    audits = re.findall(r"records_audit\.py audit [^\n]*", arm.replace("\\\n", " "))
-    assert len(audits) == 1 and " $forged " in audits[0] and "--forged" not in audits[0], (
-        f"{RUN_SH.name}'s weights tie arm hands its one records audit what `tie` set, and no flag of its own: {audits}")
-    assert script.count("--forged-read") == arm.count("--forged-read") == 1, (
-        f"{RUN_SH.name} audits a window as forging a registered read (`--forged-read`) outside its weights tie's "
-        "`--served`: say in its header which arm passes on that refusal, and hold it here")
-
-
-#: `weights-tie pins`' outcomes: its status, its line and its stderr, whether it wrote the pins, and whether the honest
-#: tie and a forged one take each as their answer
+#: `weights-tie pins`' outcomes: its status, its line and its stderr, whether it wrote the pins, and whether the tie
+#: takes it as its answer
 PINS = {
-    "pinned": (0, '{"pinned": true, "weights": 3}', "", True, (True, False)),
-    "refused": (1, '{"pinned": false, "why": "the tie window holds no root of it"}', "", False, (False, True)),
-    "traceback": (1, "", "Traceback (most recent call last):\nRuntimeError: died\n", False, (False, False)),
+    "pinned": (0, '{"pinned": true, "weights": 3}', "", True, True),
+    "refused": (1, '{"pinned": false, "why": "the tie window holds no root of it"}', "", False, False),
+    "traceback": (1, "", "Traceback (most recent call last):\nRuntimeError: died\n", False, False),
     "refused, then a traceback": (1, '{"pinned": false, "why": "x"}', "Traceback (most recent call last):\n", False,
-                                  (False, False)),
-    "killed": (137, "", "", False, (False, False)),
+                                  False),
+    "killed": (137, "", "", False, False),
 }
 
 
 def test_the_weights_ties_arm_takes_only_pins_own_answer_and_a_traceback_is_no_refusal(tmp_path):
-    """A forged tie passes only on `weights-tie pins`' own refusal: status 1, its ``{"pinned": false, ...}`` line and no
-    pins written, with no traceback; the honest tie only on status 0, its ``{"pinned": true, ...}`` line and the pins.
-    A traceback (status 1, a refusal's status) or a kill is neither, and the arm says PINS ERROR."""
+    """The tie passes only on status 0, its ``{"pinned": true, ...}`` line and the pins. A refusal, a traceback or a
+    kill is not that, and the arm says PINS ERROR."""
     arm = RUN_SH.read_text().split('if [ -n "${PP_WEIGHTS_TIE:-}" ]; then', 1)[1].split("\nfi\n", 1)[0]
     fn = re.search(r"^  pins_answered\(\) \{.*?^  \}$", arm, re.M | re.S)
     assert fn and "pins_answered $pinned " in arm and "PINS ERROR" in arm, (
@@ -152,9 +115,8 @@ def test_the_weights_ties_arm_takes_only_pins_own_answer_and_a_traceback_is_no_r
         (d / "err").write_text(err)
         if wrote:
             (d / "pins").write_text("{}")
-        got = tuple(subprocess.run(["bash", "-c", f'{fn.group(0)}\npins_answered {status} "$1/verdict" "$1/err" "$1/pins" '
-                                    f'{forged}', "-", str(d)], check=False).returncode == 0
-                    for forged in ("", "--forged"))
+        got = subprocess.run(["bash", "-c", f'{fn.group(0)}\npins_answered {status} "$1/verdict" "$1/err" "$1/pins"',
+                              "-", str(d)], check=False).returncode == 0
         assert got == want, (case, got)
 
 

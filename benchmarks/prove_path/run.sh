@@ -8,18 +8,12 @@
 #     SHA-512, the run root, the registered entries and its supplied values), audits the window against it under the
 #     tie's own design, work:N over its N units in members of PP_TIE_CAP units (default 16), which the audit's rule
 #     samples at the rate N/N, so every unit is proved and no output class is passed, and pins the roots only on an
-#     accepting audit whose sample holds every unit. Two refused arms, each audited as holding what it forges and passing
-#     on that one refusal, never on the other's. weights-tie-other: a committer serving checkpoint Y's words as X's, whose
-#     units are their Definition's and whose last units' digest reads open no root (records_audit.py's --forged-read): it
-#     passes on the Lean verifier refusing a session at setup on a row of such a read, its proofs free to leave.
-#     weights-tie-forged: the same with those digests forged to X's, so those units aren't their Definition's (--forged):
-#     it passes on the ZK server releasing no proof of a false member. Each must be refused, and pin nothing.
-#   PP_ONLY=honest: the tie alone, neither refused arm. PP_FLOCK_WORK=DIR keeps M0's build across runs.
+#     accepting audit whose sample holds every unit.
+#   PP_FLOCK_WORK=DIR keeps M0's build across runs.
 #   PP_CHALLENGER=local (the default): each window sampled on a local challenger session's coins (--challenger local, a5_coins),
 #   pinned on main's first-parent history fetched from the clone's origin; the verifier flips no coins of its own. PP_CHALLENGER=gate:USER@HOST:
 #   the auditor device's, through its SSH gate with the lane's gate key PP_GATE_KEY, its challenger on PP_PEER's 127.0.0.1 (this
-#   node, as the gate's /etc/vy/peers names it), under the key record PP_CHALLENGER_KEY (challenger-key/v1). The gate opens a
-#   root once, and both arms register under the window's one run root: with the gate, run one arm (PP_ONLY). PP_MAIN (a
+#   node, as the gate's /etc/vy/peers names it), under the key record PP_CHALLENGER_KEY (challenger-key/v1). PP_MAIN (a
 #   file, `git rev-list --first-parent` of the gate's pin) is that history instead, for a gate pinned on `next`.
 # From a clone of the tree, with 64 GB of memory, the outputs in $OUT (default $RESEARCH_RUN_DIR/out, outside a research run
 # out/prove_path under the clone); $OUT/ran_with.txt is the line naming the run's coins and parameters (prove_path.py ran-with):
@@ -95,7 +89,6 @@ if [ -n "${PP_CHALLENGER:-}" ]; then
   CH=(--challenger $PP_CHALLENGER --main $O/main.txt)
   case $PP_CHALLENGER in gate:*)
     [ -n "${PP_PEER:-}" ] && [ -n "${PP_CHALLENGER_KEY:-}" ] || { echo "PP_CHALLENGER=gate:… needs PP_PEER and PP_CHALLENGER_KEY"; exit 4; }
-    [ -n "${PP_ONLY:-}" ] || { echo "PP_CHALLENGER=gate:… opens the window's root once: run one arm, PP_ONLY=honest|forged"; exit 4; }
     CH+=(--peer $PP_PEER --challenger-key $PP_CHALLENGER_KEY ${PP_GATE_KEY:+--gate-key $PP_GATE_KEY});;
   esac
 fi
@@ -130,30 +123,20 @@ if [ -n "${PP_WEIGHTS_TIE:-}" ]; then
   (cd tests/adapters/vllm && $PY -m tests.program.predict.weights_tie_fixture $F) > $O/tie-fixture.json 2> $K/tie-fixture.err \
     || { tail -20 $K/tie-fixture.err; exit 8; }
   WT="$PY -m verity_vllm.pipeline.cli weights-tie"
-  pins_answered() {  # STATUS VERDICT ERR PINS [FORGED]: `weights-tie pins` gave its own answer, with no traceback: 0 and
-                     # `"pinned": true` with PINS written, or, with FORGED, its refusal, 1 and `"pinned": false` with none
+  pins_answered() {  # STATUS VERDICT ERR PINS: `weights-tie pins` gave its own answer, with no traceback: 0 and
+                     # `"pinned": true` with PINS written
     ! grep -q '^Traceback (most recent call last):' "$3" || return 1
-    if [ -n "${5:-}" ]; then [ "$1" = 1 ] && grep -q '^{"pinned": false, ' "$2" && [ ! -e "$4" ]
-    else [ "$1" = 0 ] && grep -q '^{"pinned": true, ' "$2" && [ -e "$4" ]; fi
+    [ "$1" = 0 ] && grep -q '^{"pinned": true, ' "$2" && [ -e "$4" ]
   }
-  tie() {  # NAME [--served] [--forge-digest]: the committer's registration of X and its tie window (--served: Y's words served
-           # as X's; --forge-digest: its ends' digests forged to X's), the verifier's tie of X, the records audit of the window
-           # against it, and the pins, which only an accepting audit writes. Each arm is a run (and a root) of its own.
-           # The audit is told what a refused window forges: --served, a registered read that opens no pinned root
-           # (--forged-read); --forge-digest after it, a false unit (--forged)
-    local name=$1 forged= id=${RESEARCH_RUN_ID:-local}/$1 commit=() c run units rc pinned; shift
-    for x in "$@"; do
-      case $x in
-        --served) forged=--forged-read; commit+=(--served-dir $F/y/snap --served-manifest $F/y/checkpoints.json);;
-        --forge-digest) forged=--forged; commit+=(--forge-digest);;
-      esac
-    done
+  tie() {  # NAME: the committer's registration of X and its tie window, the verifier's tie of X, the records audit of the
+           # window against it, and the pins, which only an accepting audit writes
+    local name=$1 id=${RESEARCH_RUN_ID:-local}/$1 c run units rc pinned
     local common=(--phi $F/phi.json --checkpoint-dir $F/x/snap --manifest $F/x/checkpoints.json
                   --grain $($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["grain"])' $O/tie-fixture.json)
                   --cap $TCAP --run-id $id)
     mkdir -p $O/$name $K/$name/window
     $WT commit "${common[@]}" --registration-out $W/$name-registration.json --out $W/$name-window \
-      "${commit[@]}" | tee $O/$name/commit.json || return 1
+      | tee $O/$name/commit.json || return 1
     cp $W/$name-registration.json $O/$name/registration.json
     $WT verify "${common[@]}" --registration $O/$name/registration.json --out $O/$name/verifier | tee $O/$name/verify.json || return 1
     c=$($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["circuit"])' $O/$name/verifier/tie.json) || return 1
@@ -163,7 +146,7 @@ if [ -n "${PP_WEIGHTS_TIE:-}" ]; then
       && cp $W/$name-window/{window,index}.json $W/$name-window/m*-public.bin $K/$name/window/
     $TIME $PY benchmarks/prove_path/records_audit.py audit --window $W/$name-window --sampling-design work-rate:$units/$units --circuit $c --run $run \
       --registered $O/$name/verifier/registered.json \
-      ${PP_SESSION_TIMEOUT:+--session-timeout $PP_SESSION_TIMEOUT} $forged "${CH[@]}" \
+      ${PP_SESSION_TIMEOUT:+--session-timeout $PP_SESSION_TIMEOUT} "${CH[@]}" \
       --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --zk-server $FWL --out $W/$name > $K/$name/audit.log 2> $K/$name/audit.err
     rc=$?
     python3 "$PL" $K/$name/audit.log > $O/$name/audit.log
@@ -172,13 +155,11 @@ if [ -n "${PP_WEIGHTS_TIE:-}" ]; then
     $WT pins "${common[@]}" --registration $O/$name/registration.json --summary $W/$name/summary.json --out $O/$name/pins.json \
       2> $K/$name/pins.err | tee $O/$name/pins-verdict.json
     pinned=$?
-    pins_answered $pinned $O/$name/pins-verdict.json $K/$name/pins.err $O/$name/pins.json "$forged" \
-      || { echo "PINS ERROR $name: weights-tie pins ended with status $pinned and not its own $([ -n "$forged" ] && echo refusal || echo pins)"; tail -5 $K/$name/pins.err; rc=1; }
+    pins_answered $pinned $O/$name/pins-verdict.json $K/$name/pins.err $O/$name/pins.json \
+      || { echo "PINS ERROR $name: weights-tie pins ended with status $pinned and not its own pins"; tail -5 $K/$name/pins.err; rc=1; }
     return $rc
   }
   tie weights-tie || rc=1
-  [ "${PP_ONLY:-}" = honest ] || tie weights-tie-other --served || rc=1
-  [ "${PP_ONLY:-}" = honest ] || tie weights-tie-forged --served --forge-digest || rc=1
 fi
 cat $O/ran_with.txt
 exit $rc

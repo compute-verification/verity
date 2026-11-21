@@ -9,13 +9,13 @@ import all Lean.Data.Json.Basic
 /-!
 # Proofs of the Pearl-C live salt's properties (`Properties.Pouw.LiveSalt`)
 
-The epoch's root is `PouwCheck.epochOpenRoot`, the port's own (`epochOpenRoot_eq`). Its message is the tag, the 64-byte
+The epoch's root is `PouwVerifier.epochOpenRoot`, the port's own (`epochOpenRoot_eq`). Its message is the tag, the 64-byte
 weights' root and u64be of the epoch, so two equal messages split at fixed offsets into equal parts (`epochRootBinding`).
 A row seed's message ends in u64le of `u`·2^32 + `i`, so two equal messages have one call index and row
 (`rowSeedBinding`). The ledger opens a session once (`LedgerShows`' last clause), so two acceptances by one session read
-one open and its one root (`oneRoot_of`), and so for `PouwCheck.liveSaltCheck` (`oneRoot`).
+one open and its one root (`oneRoot_of`), and so for `PouwVerifier.liveSaltCheck` (`oneRoot`).
 
-`PouwCheck.liveSaltCheck` accepts only what `Accepted` describes (`acceptMeans`): each check it makes is one conjunct,
+`PouwVerifier.liveSaltCheck` accepts only what `Accepted` describes (`acceptMeans`): each check it makes is one conjunct,
 and the ledger's are `LedgerShows`, from the ledger's invariant (`Ledger.ledgerShows_of`). Two accepted passes of one
 epoch are pinned on one root, so they read one session of the ledger, and each one's commitment has the root whose hex
 the session's `end` recorded (`Ledger.challengePhaseNamed_root`). So, given `LiveCoinBinding`, their salt coins are one coin
@@ -36,7 +36,7 @@ open Spot.Challenger (Audited ChallengerKey LedgerEntry LiveCommitment LiveOpeni
   pinnedChallengePhase challengePhaseNamed byFamily)
 open Properties.Pouw.LiveSalt.Ledger (bind_ok of_triple ok_spec throw_spec ledgerShows_of challengePhaseNamed_root)
 
-/-- The epoch's root is the port's: `PouwCheck.epochOpenRoot`. -/
+/-- The epoch's root is the port's: `PouwVerifier.epochOpenRoot`. -/
 theorem epochOpenRoot_eq (w : ByteArray) (k : Nat) : epochOpenRoot w k = PouwVerifier.epochOpenRoot w k := rfl
 
 theorem epochRootBinding : EpochRootBinding := by
@@ -210,7 +210,7 @@ theorem carries_names {s : Json} {sid : String} {seq : Nat} {root : ByteArray} {
 theorem epochOpenRoot_size (w : ByteArray) (k : Nat) : (PouwVerifier.epochOpenRoot w k).size = 64 :=
   Properties.Pouw.Commit.sha512_size _
 
-/-- What `PouwCheck.liveSaltCheck` has checked on the path that returns, in the forms it checks them, is `Accepted`. -/
+/-- What `PouwVerifier.liveSaltCheck` has checked on the path that returns, in the forms it checks them, is `Accepted`. -/
 theorem accepted_of {key ledger pins main session : Json} {kv : Std.TreeMap.Raw String Json compare}
     {us : List PouwVerifier.Matmul × List (Nat × ByteArray)} {u : Unit} {k : Nat}
     {res : Audited × LiveCommitment × Roots} {reason : Option String} {rv op en : LedgerEntry}
@@ -259,9 +259,9 @@ theorem accepted_of {key ledger pins main session : Json} {kv : Std.TreeMap.Raw 
     ledgerShows_of (hexOf_ne (epochOpenRoot_size _ _)) hpin hfind hfam hres hcomp, carries_names hcarries, hcoins,
     hopen, hlive, by unfold liveSalt; rw [hseed]; rfl, jsonStrIs_eq hsalt⟩
 
--- `mvcgen` splits `PouwCheck.liveSaltCheck` into one goal per check, and all but one throw
+-- `mvcgen` splits `PouwVerifier.liveSaltCheck` into one goal per check, and all but one throw
 set_option maxHeartbeats 4000000 in
-/-- `PouwCheck.liveSaltCheck` accepts only what `Accepted` describes. -/
+/-- `PouwVerifier.liveSaltCheck` accepts only what `Accepted` describes. -/
 theorem acceptMeans : AcceptMeans PouwVerifier.liveSaltCheck := by
   intro key ledger pins main session m salt h
   refine of_triple (Q := fun salt => ∃ w k a c o, Accepted key ledger pins main session m w k a c o salt) ?_ h
@@ -289,7 +289,7 @@ theorem binding_of_root (hb : LiveCoinBinding) {c c' : LiveCommitment} {o o' : L
   obtain rfl : r = r' := hr
   exact hb s s' e e' fs fs' _ o o' label index after after' h h'
 
-/-- `OnePair` for `PouwCheck.liveSaltCheck`, given `LiveCoinBinding`: two accepted passes of one epoch are pinned on one
+/-- `OnePair` for `PouwVerifier.liveSaltCheck`, given `LiveCoinBinding`: two accepted passes of one epoch are pinned on one
 root, so they read one session and two commitments with one root; the binding gives one coin, and one coin one salt,
 unless the openings exhibit a collision. -/
 theorem onePair_of_binding (hb : LiveCoinBinding) : OnePair PouwVerifier.liveSaltCheck := by
