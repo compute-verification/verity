@@ -1,5 +1,5 @@
 """circuit-check's bindings of `verity_vllm.definitions.registry.io_shell`'s `TokenFeed_v1`, `OutCollect_v1`, `SlotEntry_v1`,
-`SelectCollect_v1`, `SelectCollect_v2` and `SelectEntry_v1`, in `circuit_check.targets`' forms (`circuit_check.sidecars`)."""
+`SelectCollect_v1`, `SelectCollect_v2`, `SelectEntry_v1`, `OutCollect_v2` and `SlotEntry_v2`, in `circuit_check.targets`' forms (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -35,6 +35,9 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
             ("SlotEntry_v1:2:np1", lambda: bind(X.SlotEntry, KO=2, IDB=17, NP=1, STOP=())),
             ("SlotEntry_v1:2:np1:stop", lambda: bind(X.SlotEntry, KO=2, IDB=17, NP=1, STOP=(128001,))),
             ("SlotEntry_v1:64:np1", lambda: bind(X.SlotEntry, KO=64, IDB=17, NP=1, STOP=(128001,))),
+            ("OutCollect_v2:2:1", lambda: bind(X.OutCollectV2, KO=2, FIRST=True)),
+            ("OutCollect_v2:2:0", lambda: bind(X.OutCollectV2, KO=2, FIRST=False)),
+            ("SlotEntry_v2:2:np1:stop", lambda: bind(X.SlotEntryV2, KO=2, IDB=17, NP=1, STOP=(128001,))),
             ("SelectCollect_v1:2:1", lambda: bind(X.SelectCollect, V=256, C=16, KO=2, FIRST=True)),
             ("SelectCollect_v1:2:0", lambda: bind(X.SelectCollect, V=256, C=16, KO=2, FIRST=False)),
             ("SelectCollect_v1:4:0", lambda: bind(X.SelectCollect, V=128256, C=16, KO=4, FIRST=False)),

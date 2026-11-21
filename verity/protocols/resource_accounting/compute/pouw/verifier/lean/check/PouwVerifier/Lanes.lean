@@ -8,7 +8,7 @@ public import Spot.Produced
 /-!
 # A sampled leaf past the cap verified as its lanes and the combine (`credit.py`'s lanes form)
 
-`PouwCheck.Verified`'s steps for the lanes form (`leaf_lanes`), each `credit.py`'s of its name, string for string: at a K
+`PouwVerifier.Verified`'s steps for the lanes form (`leaf_lanes`), each `credit.py`'s of its name, string for string: at a K
 the period-open commits as `lane<K>` and `combine<K>` (`lanesFiles`, `formOf`), each sampled leaf's statements are its
 (R/4)(C/8) lanes and the combine (`leafAsks`), each checked against its own one-call leaf Program (the lanes evidence's
 descriptor, `leafOf` the window's template at K and hashing to `LEAF_PROGRAMS`' digest) and its partials
