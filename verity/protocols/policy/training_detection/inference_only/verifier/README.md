@@ -1,10 +1,10 @@
 # The inference-only policy
 
 The inference-only policy is the part of Verity that tells serving from training. It asks that the registered circuit
-divide into inference blocks, each of at most c gates and each reading at most k bits of fresh input: bits from outside
+divide into inference blocks, each of at most c gates and each reading at most k unregistered input bits: bits from outside
 the registered information θ, the models, code and data fixed before the monitoring period.
 
-This directory is the policy's check, in Lean only (`lean/`, the Lake package `inference_only_verifier`). Its one Python
+This directory is the policy's verifier, in Lean only (`lean/`, the Lake package `inference_only_verifier`). Its one Python
 file is its manifest, `parties.py`: one party, the verifier, with no channel. Both composites, onsite and remote,
 compose the check as the core protocol `verity/inference-only/v0`.
 
@@ -40,6 +40,6 @@ a verdict's failure rule `"nci"`, its key `ius` for its inference blocks with th
 refusal codes `input-in-iu`, `gate-in-no-iu` and `empty-iu`; the toy Definitions the vector generators build
 (`NciHandBlk`, `NciDecl…`); `baseline_difftest/`, the θ difftest's directory, whose bytes the lock pins; "baseline"
 for the registered information, also the θ difftest's name in its printed messages; "IU" and "inference block" for
-an inference block, in the lock's reasons; "fresh input bits" for fresh input
-bits, in the lock's reasons and the liveness difftest's message; and `novel` for fresh input: the variable of the
+an inference block, in the lock's reasons; "fresh input bits" for unregistered input
+bits, in the lock's reasons and the liveness difftest's message; and `novel` for unregistered input: the variable of the
 check's rate rule and of its Python reference, and a mode of the liveness difftest.

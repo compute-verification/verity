@@ -234,15 +234,14 @@ def case_twin(j: Any) -> dict:
 
 def answer(params_b: bytes, commitment_b: bytes, evidence_b: bytes) -> dict:
     """`Core.Protocol.answer`, the Lean's (`pouw-period serve`, through `verifier.serve_of_record`) on the case of these
-    bytes, with `answer_twin` its twin: a disagreement is a rejection."""
-    return V.serve_of_record(EXE, CC.serve_case(params_b, commitment_b, evidence_b),
-                             answer_twin(params_b, commitment_b, evidence_b))
+    bytes; `answer_twin` is its twin, for the difftest."""
+    return V.serve_of_record(EXE, CC.serve_case(params_b, commitment_b, evidence_b), ID)
 
 
 def case(j: Any) -> dict:
-    """`Core.Protocol.case` on one `serve` case, the Lean's (`pouw-period serve`, through `verifier.serve_of_record`),
-    with `case_twin` its twin: a disagreement is a rejection."""
-    return V.serve_of_record(EXE, j, case_twin(j))
+    """`Core.Protocol.case` on one `serve` case, the Lean's (`pouw-period serve`, through `verifier.serve_of_record`);
+    `case_twin` is its twin, for the difftest."""
+    return V.serve_of_record(EXE, j, ID)
 
 
 __all__ = ["ALONE_KEYS", "CHALLENGE_PHASES_FORM", "COMMITMENT_TAG", "COVERED_TILE", "EVIDENCE_KEYS", "GUARANTEE",

@@ -1,12 +1,14 @@
 module
 
 public import PouwVerifier.Credit
+public import PouwVerifier.CreditOnce
 public import PouwVerifier.Pass
 public import PouwVerifier.WindowSalt
 public import PouwVerifier.Lanes
 public import PouwVerifier.Verified
 public import PouwVerifier.CommittedFiles
 meta import PouwVerifier.Credit
+meta import PouwVerifier.CreditOnce
 meta import PouwVerifier.Pass
 meta import PouwVerifier.WindowSalt
 meta import PouwVerifier.Lanes
@@ -17,11 +19,10 @@ meta import PouwVerifier.CommittedFiles
 # One guard per refusal code PoUW's check makes
 
 Each `#guard` builds the smallest input that reaches one refusal code and asserts the code, through the function that
-makes it. Pearl+'s own codes are guarded in `PouwPearlPlus.Refusals`. Three codes no small input reaches:
-
-* `tile-k` (`Credit.layoutOf`): it reads a window descriptor that parses as a circuit's Program;
-* `order` (`Credit.period`): it follows a ledger the challenger key's LMS signatures make trusted;
-* `sampler` (`Credit.drawnOf`, `drawCheck`): the coin stream runs out, which its spare bytes make negligible.
+makes it. Pearl+'s own codes are guarded in `PouwPearlPlus.Refusals`. `order` is guarded through
+`Credit.Once.periodWith`, which is `Credit.period` with the ledger's replay a parameter (`Credit.Once.period_eq`, by
+`rfl`), at a replay that trusts the ledger. No input reaches `sampler` (`Credit.drawnOf`, `drawCheck`): it is the coin
+stream running out, and `Flock.Draw` gives each draw 64 spare bits and never more draws than the stratum has members.
 -/
 
 namespace PouwVerifier.Refusals
@@ -54,6 +55,38 @@ def creditedRoot (key salt calls commit rounds draw : Json) : Option String :=
 #guard creditedRoot KEY DIGEST (Json.arr #[]) .null .null .null == some "commit"
 #guard creditedRoot KEY DIGEST (Json.arr #[]) COMMIT .null .null == some "rounds"
 #guard creditedRoot KEY DIGEST (Json.arr #[]) COMMIT (Json.arr #[]) .null == some "draw"
+
+/-- A Program whose function is a window's (`Credit.WINDOW_FN`) with one tile of K = `k`. -/
+def windowProg (k : Nat) : Flock.Program.Prog :=
+  { defs := #[], index := {}, root := 0, sha512 := .empty,
+    programFn := s!"{Credit.WINDOW_FN}\{TILES=[[{k},\{\"fn\":\"t\"}]],LINEARS=[],CALLS=[],M=1,PREFIX=\"h1/\"}" }
+
+#guard code? (Credit.layoutOf (windowProg 1) "{}".toUTF8) == some "tile-k"
+#guard code? (Credit.layoutOf (windowProg 32) "{}".toUTF8) == some "layout"
+
+/-- A ledger line holding `body` as an unsigned entry of kind `kind`: `Spot.Challenger.ledgerEntry?` reads it, and
+only the ledger's replay checks its signature. -/
+def line (kind : String) (body : Json) : Json :=
+  .str <| (Spot.PyJson.canonical (Json.mkObj [("body", body), ("kind", .str kind), ("prev", .str ("".pushn '0' 128)),
+    ("schema", .str Spot.Challenger.LEDGER_SCHEMA), ("seq", Lean.toJson (0 : Nat)), ("session", .null),
+    ("sig", .str "00000000")])).toOption.getD ""
+
+def ROOT_B : Json := .str ("".pushn 'b' 128)
+
+/-- A period `p` opened, and closed complete with two windows: roots `DIGEST` then `ROOT_B`. -/
+def PERIOD_LEDGER : Json :=
+  let named := [("by", Json.str "pouw"), ("lane", .str "pouw"), ("period", .str "p")]
+  let window (root : Json) (s : String) := Json.mkObj [("complete", .bool true), ("root", root), ("session", .str s)]
+  Json.arr #[line "period-open" (Json.mkObj (named ++ [("cap", Lean.toJson (4 : Nat)), ("circuit", .str ("".pushn 'a' 128)),
+      ("key_sha512", .str ("".pushn 'c' 128)), ("pinned", .str ("".pushn 'a' 40))])),
+    line "period-close" (Json.mkObj (named ++ [("complete", .bool true),
+      ("windows", Json.arr #[window DIGEST "o-0", window ROOT_B "o-1"])]))]
+
+def periodCode (roots : Array Json) : Option String :=
+  code? (Credit.Once.periodWith (fun _ => pure (#[], #[])) KEY PERIOD_LEDGER (.str "p") (Json.arr roots))
+
+#guard periodCode #[DIGEST, ROOT_B] == none
+#guard periodCode #[ROOT_B, DIGEST] == some "order"
 
 #guard code? (Credit.strata .null) == some "layout"
 #guard code? (Credit.samplingDesign #[] .null) == some "budget"
