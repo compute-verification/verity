@@ -100,7 +100,7 @@ def test_one_member_on_the_windows_challenger_session_is_accepted_by_the_compile
         return p.returncode, json.loads(p.stdout.strip().splitlines()[-1]), p.stderr[-2000:]
 
     rc, answer, err = check(params)
-    assert (rc, answer["verdict"]) == (0, "accept"), (answer, err)
+    assert (rc, answer["verdict"]) == (0, "accept"), (json.dumps(answer, sort_keys=True)[-4000:], err)
     assert answer["public"]["drawn"] == answer["public"]["proved"] == [0], answer
 
     # the public file names the run input ports, which the registration holds only at their one tree each, and both
