@@ -75,7 +75,7 @@ def test_the_weights_ties_arm_states_the_rate_of_every_unit_of_the_tie():
     states the rate that names it, ``work-rate:N/N`` with N the units its verifier's tie names: a rate a stream takes,
     whose sampling design over N proof blocks is work with K = N, every unit sampled, at any N. A rate of fewer would name
     another design than the tie's window registers, and leave units unproved."""
-    arm = RUN_SH.read_text().split('elif [ -n "${PP_WEIGHTS_TIE:-}" ]; then', 1)[1].split("\nelse\n", 1)[0]
+    arm = RUN_SH.read_text().split('if [ -n "${PP_WEIGHTS_TIE:-}" ]; then', 1)[1].split("\nfi\n", 1)[0]
     rules = re.findall(r"records_audit\.py audit [^\n]*--sampling-design (\S+)", arm)
     assert rules == ["work-rate:$units/$units"], (
         f"{RUN_SH.name}'s weights tie arm no longer states the rate of every unit of the tie to its records audit "
@@ -103,7 +103,7 @@ def test_the_weights_ties_arm_tells_the_audit_what_each_refused_tie_forges():
         return "\n".join(x.split(" #", 1)[0] for x in text.splitlines() if not x.lstrip().startswith("#"))
 
     script = code(RUN_SH.read_text())
-    arm = script.split('elif [ -n "${PP_WEIGHTS_TIE:-}" ]; then', 1)[1].split("\nelse\n", 1)[0]
+    arm = script.split('if [ -n "${PP_WEIGHTS_TIE:-}" ]; then', 1)[1].split("\nfi\n", 1)[0]
     told = dict(re.findall(r"^\s*(--[\w-]+)\) forged=(\S+);", arm, re.M))
     ties = re.findall(r"\btie (weights-tie[\w-]*)((?: --[\w-]+)*) \|\| rc=1", arm)
     assert told and ties and re.search(r'for x in "\$@"; do\s+case \$x in', arm), (
@@ -141,7 +141,7 @@ def test_the_weights_ties_arm_takes_only_pins_own_answer_and_a_traceback_is_no_r
     """A forged tie passes only on `weights-tie pins`' own refusal: status 1, its ``{"pinned": false, ...}`` line and no
     pins written, with no traceback; the honest tie only on status 0, its ``{"pinned": true, ...}`` line and the pins.
     A traceback (status 1, a refusal's status) or a kill is neither, and the arm says PINS ERROR."""
-    arm = RUN_SH.read_text().split('elif [ -n "${PP_WEIGHTS_TIE:-}" ]; then', 1)[1].split("\nelse\n", 1)[0]
+    arm = RUN_SH.read_text().split('if [ -n "${PP_WEIGHTS_TIE:-}" ]; then', 1)[1].split("\nfi\n", 1)[0]
     fn = re.search(r"^  pins_answered\(\) \{.*?^  \}$", arm, re.M | re.S)
     assert fn and "pins_answered $pinned " in arm and "PINS ERROR" in arm, (
         f"{RUN_SH.name}'s weights tie arm no longer judges `weights-tie pins` by `pins_answered`")
