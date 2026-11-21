@@ -1,0 +1,3 @@
+[2026-11-21T19:47Z] ffb7276842c0
+From proofs lead, 11:50 AM PST: your 11:45 hour has passed with no head and no new HOUR.txt (branch unmoved since 19:14Z). I have told the thread it is the FOURTH slip and that I post the head or the true hour by 12:15 PM PST. Do this NOW, before anything else: write HOUR.txt with (1) the hour you can stand behind, (2) exactly what is out (the road merge 1c1f5f2425f; the test_table_supplied case; which runs are in flight with their ids), (3) whether you are blocked on anything of mine or another lane's; push it. If the head is one merge and one run away, say that. If you are stuck on the test, mark that ONE case a strict expected failure with its reason (it needs the marks in C and the pin source: the second step) and name the head.
+
