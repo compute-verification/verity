@@ -18,7 +18,7 @@ place, two premises no refusal of the check enforces:
 * the window is the parameters' members on the registered files (`ExecutionPhaseInstance.ExecutionPhaseRegistered`);
 * the registered files hold each member's file (`RegisteredHolds`);
 
-and the open premise of the two-stage form (`TwoStageBound`), which the verifier accepts ahead of its proof.
+and the open premise of the two-stage form (`TwoStageBound`), which stays open and no accept reaches it.
 -/
 
 @[expose] public section
@@ -29,7 +29,9 @@ variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **SPOT's soundness at the per-member form's accepts** (`ExecutionPhaseInstance.spotSound`, at `claimReads`,
 `executionPhaseAt_form` and `executionPhaseReads_members`, at the check's accepts: `formAccepts`, `formApart`): where the window is
-the parameters' members on the registered files and the registered files hold each member's file. -/
+the parameters' members on the registered files and the registered files hold each member's file. A window with a
+member needs the flat parse `Flock.Desc.parse` at tags the form fixes to the templated statement (`MemberOn.tags`),
+so the theorem's window branch has no served instance. -/
 theorem spotSound_form (I : ExecutionPhaseInstance d α) (K₀ : ExecutionPhaseConstructions I.base)
     (k : Verity.Registration.Composite) (reg : Option Hash.Msg → ByteArray)
     (record₀ : ExecutionPhase → ByteArray → Array ByteArray → ByteArray → Verity.Exchange → Option Hash.Msg)
@@ -45,7 +47,8 @@ theorem spotSound_form (I : ExecutionPhaseInstance d α) (K₀ : ExecutionPhaseC
 
 /-- **Remote's soundness over windows of several members, at the per-member form's accepts**
 (`remote_soundness_executionPhase`, at `claimReads`, `executionPhaseAt_form` and `executionPhaseReads_members`): under `spotSound_form`'s
-premises and the base's PoUW target. -/
+premises and the base's PoUW target. A window with a member needs the flat parse `Flock.Desc.parse` at tags the form
+fixes to the templated statement (`MemberOn.tags`), so the theorem's window branch has no served instance. -/
 theorem soundnessAt_form (I : ExecutionPhaseInstance d α) (K₀ : ExecutionPhaseConstructions I.base)
     (reg : Option Hash.Msg → ByteArray)
     (record₀ : ExecutionPhase → ByteArray → Array ByteArray → ByteArray → Verity.Exchange → Option Hash.Msg)
