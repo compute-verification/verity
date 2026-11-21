@@ -246,31 +246,45 @@ def input_reads(program: Program, query: Mapping[str, Any], held: Iterable[range
     return out
 
 
-def member_reads(program: Program, held: Sequence[tuple[str, range]], k: int, m0: int, m1: int) -> list[tuple[str, str]]:
-    """Each ``(parameter, value)`` whose argument root node `k`'s members ``[m0, m1)`` read reaches an Input node inside
-    the gates of `value` in `held` (the first that holds it), in parameter and part order. A part counts where it meets
-    the members' own leaves of a mapped argument (a batch's mapped axis, a scan's xs), modulo the period the axis repeats
-    at, and wherever an unmapped argument has it. The Lean's `Partition.memberReads` is this."""
-    nodes = program.root.body.nodes
-    node = nodes[k]
+def held_value(program: Program, held: Sequence[tuple[str, range]], i: int) -> str | None:
+    """The value of `held` whose gates hold root node `i`, an Input node (the first that holds it); None for another node
+    or one outside them. The Lean's `Partition.heldValue` is this."""
+    if not is_input(program.root.body.nodes[i].fn):
+        return None
+    return next((v for v, g in held if within(program, g, i)), None)
 
-    def value_of(i: int) -> str | None:
-        if not is_input(nodes[i].fn):
-            return None
-        return next((v for v, g in held if within(program, g, i)), None)
 
-    out: list[tuple[str, str]] = []
+def member_nodes(program: Program, k: int, m0: int, m1: int) -> list[tuple[str, int]]:
+    """Each ``(parameter, root node)`` whose argument root node `k`'s members ``[m0, m1)`` read names, in parameter and
+    part order, once each. A part counts where it meets the members' own leaves of a mapped argument (a batch's mapped
+    axis, a scan's xs), modulo the period the axis repeats at, and wherever an unmapped argument has it. The Lean's
+    `Partition.memberNodes` is this."""
+    node = program.root.body.nodes[k]
+    out: list[tuple[str, int]] = []
     for pi, (p, a) in enumerate(zip([p for p, _ in node.fn.signature()[0]], node.args)):
         dims = _dims(node, pi, a.type)
         parts = a.refs.parts if isinstance(a.refs, Concat) else [a.refs]
         starts = a.refs.starts if isinstance(a.refs, Concat) else [0]
         for q, s in zip(parts, starts):
-            if not q.count or not _meets(dims, m0, m1, s, q.count):
-                continue
-            for i in _part_nodes(q):
-                if (v := value_of(i)) is not None and (p, v) not in out:
-                    out.append((p, v))
+            if q.count and _meets(dims, m0, m1, s, q.count):
+                out.extend(x for i in _part_nodes(q) if (x := (p, i)) not in out)
     return out
+
+
+def held_of(program: Program, held: Sequence[tuple[str, range]], ns: Iterable[tuple[str, int]]) -> list[tuple[str, str]]:
+    """The ``(parameter, value)``s of `ns` whose node is an Input inside the gates of a value of `held` (`held_value`),
+    once each. The Lean's `Partition.heldOf` is this."""
+    out: list[tuple[str, str]] = []
+    for p, i in ns:
+        if (v := held_value(program, held, i)) is not None and (p, v) not in out:
+            out.append((p, v))
+    return out
+
+
+def member_reads(program: Program, held: Sequence[tuple[str, range]], k: int, m0: int, m1: int) -> list[tuple[str, str]]:
+    """The ``(parameter, value)``s of `held` root node `k`'s members ``[m0, m1)`` read (`member_nodes`, `held_of`). The
+    Lean's `Partition.memberReads` is this."""
+    return held_of(program, held, member_nodes(program, k, m0, m1))
 
 
 def _dims(node: Any, pi: int, t: Any) -> tuple[int, int] | None:
@@ -330,5 +344,5 @@ def _merged(rs: Sequence[tuple[int, int]]) -> list[tuple[int, int]]:
 
 
 __all__ = ["template_id", "FORMAT", "QueryRefused", "digest", "evaluate", "fanout", "in_order", "is_template_query", "partition",
-           "program_digest", "program_sha512", "member_reads", "ranges", "run_inputs", "shared_inputs", "strata", "template_instance_query",
+           "program_digest", "program_sha512", "held_of", "held_value", "member_nodes", "member_reads", "ranges", "run_inputs", "shared_inputs", "strata", "template_instance_query",
            "template_instances_query", "unit_gates", "units", "within", "QUERY_X"]

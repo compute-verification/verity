@@ -534,38 +534,50 @@ def read_unnamed_why(member: str, param: str, value: str) -> str:
             f"registered file has no port {param} naming {value}: a marked input is read only at a pin R8 accepted")
 
 
-def port_other_why(member: str, port: str, param: str, value: str) -> str:
-    """`OneStageZk.PORT_OTHER_WHY`: member ``member``'s registered port ``port`` at ``param``, where its units read
-    marked inputs, names ``value``, none of them."""
-    return (f"registered: member {member}'s port {port} at parameter {param} names {value}, which its units don't read "
-            "there: a marked input is read only at a pin R8 accepted")
+def port_other_why(member: str, port: str, param: str, value: str, other: str) -> str:
+    """`OneStageZk.PORT_OTHER_WHY`: member ``member``'s registered port ``port`` at ``param``, where its units read the
+    marked input ``value`` alone, names ``other``."""
+    return (f"registered: member {member}'s port {port} at parameter {param} names {other}, and its units read the "
+            f"registered input {value} there: every row of a parameter that reads a marked input is that input's, at its pin")
+
+
+def two_reads_why(member: str, param: str, v0: str, v1: str) -> str:
+    """`OneStageZk.TWO_READS_WHY`: member ``member``'s units read two marked inputs at ``param``."""
+    return (f"registered: member {member}'s units read the registered inputs {v0} and {v1} at parameter {param}: a "
+            "parameter that reads a marked input reads that one value alone")
+
+
+def mixed_read_why(member: str, param: str, value: str, node: int) -> str:
+    """`OneStageZk.MIXED_READ_WHY`: member ``member``'s units read the marked input ``value`` at ``param`` beside root
+    node ``node``, no row of it."""
+    return (f"registered: member {member}'s units read the registered input {value} at parameter {param} beside root node "
+            f"{node}, which is not {value}: a parameter that reads a marked input reads that one value alone")
 
 
 ReadPins = tuple[list[str], list[tuple[str, range]], list[tuple[int, str, int, int]], dict[str, dict[str, Any]]]
 
 
 def read_pins(params: Mapping[str, Any], program: Program) -> ReadPins:
-    """`Docket.readPins` on the parameters' own verifier (`docket.read_pins`): refused by name (`docket.WEIGHTS_UNREGISTERED_WHY`)
-    where the program marks an input the verifier does not expect and the parameters carry no weights' registration of
-    record R8 accepts."""
+    """`Docket.readPins` on the parameters' own verifier (`docket.read_pins`): refused by name (`docket.read_pins_why`)
+    where the program marks an input the verifier does not expect and the partition is no template query applying to
+    it, or the parameters carry no weights' registration of record R8 accepts."""
     w = params.get("weights_of_record")
     got = DK.read_pins(program, params["query"], params.get("registered") or {},
                        None if w is None else (bytes.fromhex(w["document"]), w["digest"]))
     if got is None:
-        raise _Refused(DK.WEIGHTS_UNREGISTERED_WHY)
+        raise _Refused(DK.read_pins_why(program, params["query"]))
     return got
 
 
-def own_reads(program: Program, rp: ReadPins, units: Iterable[tuple[int, int]]) -> list[tuple[str, str]]:
-    """`OneStageZk.ownReads`: each ``(parameter, value)`` of a marked input the units ``units`` read, each range's
-    members among them at a time (`partition.member_reads`)."""
-    _loose, held, ranges, _pins = rp
-    out: list[tuple[str, str]] = []
+def own_nodes(program: Program, rp: ReadPins, units: Iterable[tuple[int, int]]) -> list[tuple[str, int]]:
+    """`OneStageZk.ownNodes`: each ``(parameter, root node)`` the units ``units`` read over the ranges of ``rp``, each
+    range's members among them at a time (`partition.member_nodes`)."""
+    out: list[tuple[str, int]] = []
     for lo, hi in units:
-        for k, _t, first, n in ranges:
+        for k, _t, first, n in rp[2]:
             a, b = max(lo, first), min(hi, first + n)
             if a < b:
-                out.extend(r for r in P.member_reads(program, held, k, a - first, b - first) if r not in out)
+                out.extend(x for x in P.member_nodes(program, k, a - first, b - first) if x not in out)
     return out
 
 
@@ -577,35 +589,36 @@ def _port_param(port: str, e: Mapping[str, Any]) -> str:
     return head if sep and tail.endswith("]") and tail[:-1].isdigit() and "[" not in tail else name
 
 
-def _tree_port(v: str) -> bool:
-    """`OneStageZk.treePortOf` is some: ``v`` opens a committed, fresh or field tree."""
-    return v.startswith(COMMITTED) or G.is_fresh_value(v) or _field_tree_name(v)
-
-
 def pins_held(ms: Mapping[str, Any], program: Program, rp: ReadPins) -> None:
-    """`OneStageZk.pinsHeld`: each member has, for each ``(parameter, value)`` its own units read of a marked input
-    (`own_reads`), a registered port of that parameter naming that value (`read_unnamed_why`); every member's
-    registered port whose value is marked names the pin R8 accepted of it, its root, leaf count and domain, each
-    member's ports in name order, each at such a parameter that opens no tree of its own naming one of the values its
-    units read there (`port_other_why`); refused by name, a value with no pin (`unpinned_read_why`) or the first field
-    that differs (`pinned_read_why`)."""
-    loose, pins = set(rp[0]), rp[3]
+    """`OneStageZk.pinsHeld`: at each parameter where a member's own units read a marked input (`own_nodes`,
+    `partition.held_of`), they read one marked value and no other node (`two_reads_why`, `mixed_read_why`), its
+    registered file has a port of that parameter naming it (`read_unnamed_why`), and every port of that parameter, a
+    tree's or not, names it (`port_other_why`); every registered port whose value is marked names the pin R8 accepted
+    of it, its root, leaf count and domain, each member's ports in name order; refused by name, a value with no pin
+    (`unpinned_read_why`) or the first field that differs (`pinned_read_why`)."""
+    loose, held, pins = set(rp[0]), rp[1], rp[3]
     if not loose:
         return
     for name, m in ms.items():
         ports = (m["registered"] or {}).get("ports") or {}
         own = [(_port_param(q, e), e.get("value")) for q, e in ports.items() if isinstance(e, dict)]
-        reads = own_reads(program, rp, m["units"])
-        for p, v in reads:
+        nodes = own_nodes(program, rp, m["units"])
+        read: dict[str, str] = {}
+        for p, v in P.held_of(program, held, nodes):
+            if p in read:
+                raise _Refused(two_reads_why(name, p, read[p], v))
+            read[p] = v
+        for p, v in read.items():
+            if (w := next((i for q, i in nodes if q == p and P.held_value(program, held, i) is None), None)) is not None:
+                raise _Refused(mixed_read_why(name, p, v, w))
             if (p, v) not in own:
                 raise _Refused(read_unnamed_why(name, p, v))
-        read_at = {p for p, _ in reads}
         for port in sorted(ports):
             e = ports[port]
             value = e.get("value") if isinstance(e, dict) else None
             p = _port_param(port, e) if isinstance(e, dict) else port
-            if (isinstance(value, str) and not _tree_port(value) and p in read_at and (p, value) not in reads):
-                raise _Refused(port_other_why(name, port, p, value))
+            if p in read and value != read[p]:
+                raise _Refused(port_other_why(name, port, p, read[p], value))
             pin = pins.get(value)
             if pin is None and value in loose:
                 raise _Refused(unpinned_read_why(name, port, value))

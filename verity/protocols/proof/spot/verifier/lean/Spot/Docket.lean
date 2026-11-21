@@ -452,6 +452,13 @@ def WEIGHTS_UNREGISTERED_WHY : String :=
   "registered: the program marks registered inputs the verifier does not expect, and the parameters carry no weights' " ++
     "registration of record R8 accepts: a marked input is read only at a pin R8 accepted"
 
+/-- The members' check's refusal of a program marking a registered input the verifier does not expect, under a
+partition that is no template query applying to the program, whose ranges the members' reads are read off (`readPins`). -/
+def WEIGHTS_QUERY_WHY : String :=
+  "registered: the program marks registered inputs the verifier does not expect, and the partition is no template " ++
+    "query that applies to the program, whose ranges its members' reads of them are read off: a marked input is read " ++
+    "only at a pin R8 accepted"
+
 /-- What the members' check holds each registered read to (`readPins`). -/
 structure ReadPins where
   /-- the marked inputs the verifier does not expect -/
@@ -477,6 +484,11 @@ def readPins (v : Verifier) : Option ReadPins :=
     let held := loose.flatMap fun p => (p.gates.map fun (first, count) => #[(p.name, first, count)]).getD #[]
     some ⟨loose.map (·.name), held,
       rs.filter fun r => !(Partition.memberReads v.program.prog held r 0 r.count).isEmpty, pins⟩
+
+/-- Why `readPins v` is none: no template query applying (`WEIGHTS_QUERY_WHY`), else no registration R8 accepts
+(`WEIGHTS_UNREGISTERED_WHY`). -/
+def readPinsWhy (v : Verifier) : String :=
+  if (Partition.templateRanges? v.program v.query).isNone then WEIGHTS_QUERY_WHY else WEIGHTS_UNREGISTERED_WHY
 
 /-- R8's codes on the program's registered inputs (`weightsOf`). -/
 def weightsCodes (v : Verifier) : Array String := (weightsOf v).1

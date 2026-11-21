@@ -547,19 +547,21 @@ def inputReads (P : Flock.Program.Prog) (rs : Array TRange) (held : Array (Strin
         | some v => if out.contains (r.template, p, v) then out else out.push (r.template, p, v)
         | none => out
 
-/-- The `(parameter, value)`s the members `[m0, m1)` of range `r`'s instance node read (`partition.member_reads`): each
-parameter whose argument has a part holding a leaf one of those members reads (a batch member's leaves at its axis,
-`Ty.axisDims`: leaf `ℓ` of member `m` is `((ℓ / L) · d + m) · L + ℓ % L`; every leaf of a broadcast argument) and
-reading an input node inside the gates `(value, first, count)` of `held`, once each. From the node's arguments' parts,
-never its members: a part is met where its leaves meet the members' period, `[m0 · L, m1 · L)` modulo `d · L`. -/
-def memberReads (P : Flock.Program.Prog) (held : Array (String × Nat × Nat)) (r : TRange) (m0 m1 : Nat) :
-    Array (String × String) :=
+/-- The value of `held` (`(value, first, count)` each) whose gates hold root node `i`, an input node; none for another
+node or one outside them (`partition.held_value`). -/
+def heldValue (P : Flock.Program.Prog) (held : Array (String × Nat × Nat)) (i : Nat) : Option String :=
   let nodes := Flock.Registered.rootNodes P
-  let valueOf := fun (i : Nat) =>
-    if (nodes[i]? >>= fun x => P.defs[x.fn]?).any fun f => f.prim && (Flock.Program.inputId? f.id).isSome then
-      (held.find? fun (_, first, count) => within P first count i).map (·.1)
-    else none
-  let x := nodes.getD r.node default
+  if (nodes[i]? >>= fun x => P.defs[x.fn]?).any fun f => f.prim && (Flock.Program.inputId? f.id).isSome then
+    (held.find? fun (_, first, count) => within P first count i).map (·.1)
+  else none
+
+/-- The `(parameter, node)`s the members `[m0, m1)` of range `r`'s instance node read (`partition.member_nodes`): each
+parameter whose argument has a part holding a leaf one of those members reads (a batch member's leaves at its axis,
+`Ty.axisDims`: leaf `ℓ` of member `m` is `((ℓ / L) · d + m) · L + ℓ % L`; every leaf of a broadcast argument), with
+each root node that part names, once each. From the node's arguments' parts, never its members: a part is met where
+its leaves meet the members' period, `[m0 · L, m1 · L)` modulo `d · L`. -/
+def memberNodes (P : Flock.Program.Prog) (r : TRange) (m0 m1 : Nat) : Array (String × Nat) :=
+  let x := (Flock.Registered.rootNodes P).getD r.node default
   let names := ((P.defs[x.fn]?).map fun f => f.params.map (·.1)).getD #[]
   (names.zip x.args).foldl (init := #[]) fun out (p, a) =>
     let meets := fun (s n : Nat) => match a.dims with
@@ -570,9 +572,21 @@ def memberReads (P : Flock.Program.Prog) (held : Array (String × Nat × Nat)) (
         per == 0 || n ≥ per || (o < m1 * L && m0 * L < o + n) || m0 * L + per < o + n
     (a.seq.parts.zip a.seq.starts).foldl (init := out) fun out (q, s) =>
       if q.count == 0 || !meets s q.count then out else
-      (Flock.Registered.partNodes q).foldl (init := out) fun out w => match valueOf w with
-        | some v => if out.contains (p, v) then out else out.push (p, v)
-        | none => out
+      (Flock.Registered.partNodes q).foldl (init := out) fun out w => if out.contains (p, w) then out else out.push (p, w)
+
+/-- The `(parameter, value)`s of `memberNodes` whose node is an input inside the gates of a value of `held`
+(`heldValue`), once each (`partition.member_reads`). -/
+def heldOf (P : Flock.Program.Prog) (held : Array (String × Nat × Nat)) (ns : Array (String × Nat)) :
+    Array (String × String) :=
+  ns.foldl (init := #[]) fun out (p, w) => match heldValue P held w with
+    | some v => if out.contains (p, v) then out else out.push (p, v)
+    | none => out
+
+/-- The `(parameter, value)`s the members `[m0, m1)` of range `r`'s instance node read of `held`
+(`memberNodes`, `heldOf`; `partition.member_reads`). -/
+def memberReads (P : Flock.Program.Prog) (held : Array (String × Nat × Nat)) (r : TRange) (m0 m1 : Nat) :
+    Array (String × String) :=
+  heldOf P held (memberNodes P r m0 m1)
 
 /-- Each range of `rs` with each run Input node inside the gates `held` its instance node reads, in the order its
 arguments' runs name them (`partition.held_reads`): its arguments' runs, never its members or its gates. -/

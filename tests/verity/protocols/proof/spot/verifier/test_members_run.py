@@ -711,9 +711,19 @@ def test_a_members_read_of_a_pinned_registered_input_is_held_to_the_pin_by_name(
     assert M.unpinned_read_why("a", "p", "u") == (
         "registered: member a's port p reads the registered input u, which the program marks and R8 accepted no pin "
         "of: a marked input is read only at a pin R8 accepted")
-    assert M.port_other_why("a", "p[0]", "p", "e") == (
-        "registered: member a's port p[0] at parameter p names e, which its units don't read there: a marked input is "
-        "read only at a pin R8 accepted")
+    assert M.port_other_why("a", "p[1]", "p", "w", "e") == (
+        "registered: member a's port p[1] at parameter p names e, and its units read the registered input w there: every "
+        "row of a parameter that reads a marked input is that input's, at its pin")
+    assert M.two_reads_why("a", "p", "u", "w") == (
+        "registered: member a's units read the registered inputs u and w at parameter p: a parameter that reads a marked "
+        "input reads that one value alone")
+    assert M.mixed_read_why("a", "p", "w", 3) == (
+        "registered: member a's units read the registered input w at parameter p beside root node 3, which is not w: a "
+        "parameter that reads a marked input reads that one value alone")
+    assert DK.WEIGHTS_QUERY_WHY == (
+        "registered: the program marks registered inputs the verifier does not expect, and the partition is no template "
+        "query that applies to the program, whose ranges its members' reads of them are read off: a marked input is read "
+        "only at a pin R8 accepted")
     assert M.read_unnamed_why("a", "p", "w") == (
         "registered: member a's units read the registered input w at parameter p, and its registered file has no port "
         "p naming w: a marked input is read only at a pin R8 accepted")

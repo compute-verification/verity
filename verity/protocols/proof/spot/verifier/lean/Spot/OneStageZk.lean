@@ -518,20 +518,32 @@ def READ_UNNAMED_WHY (member param value : String) : String :=
   s!"registered: member {member}'s units read the registered input {value} at parameter {param}, and its registered " ++
     s!"file has no port {param} naming {value}: a marked input is read only at a pin R8 accepted"
 
-/-- The refusal of member `member`'s registered port `port` at the parameter `param`, whose units read marked inputs
-there (`ownReads`), naming `value`, none of them (`pinsHeld`). -/
-def PORT_OTHER_WHY (member port param value : String) : String :=
-  s!"registered: member {member}'s port {port} at parameter {param} names {value}, which its units don't read " ++
-    "there: a marked input is read only at a pin R8 accepted"
+/-- The refusal of member `member`'s registered port `port` at the parameter `param`, where its units read the marked
+input `value` alone, naming `other` (`pinsHeld`). -/
+def PORT_OTHER_WHY (member port param value other : String) : String :=
+  s!"registered: member {member}'s port {port} at parameter {param} names {other}, and its units read the registered " ++
+    s!"input {value} there: every row of a parameter that reads a marked input is that input's, at its pin"
 
-/-- The `(parameter, value)`s of the marked inputs `rp.held` that member `m`'s own units read, over the ranges `rp.ranges`
-its units meet (`Partition.memberReads` at its slice of each), once each. -/
-def ownReads (P : Flock.Program.Prog) (rp : Docket.ReadPins) (m : Member) : Array (String × String) :=
+/-- The refusal of member `member`, whose units read the two marked inputs `v0` and `v1` at its parameter `param`
+(`pinsHeld`): a form no verifier holds yet. -/
+def TWO_READS_WHY (member param v0 v1 : String) : String :=
+  s!"registered: member {member}'s units read the registered inputs {v0} and {v1} at parameter {param}: a parameter " ++
+    "that reads a marked input reads that one value alone"
+
+/-- The refusal of member `member`, whose units read the marked input `value` at its parameter `param` beside root node
+`node`, which is no row of `value` (`pinsHeld`): a form no verifier holds yet. -/
+def MIXED_READ_WHY (member param value : String) (node : Nat) : String :=
+  s!"registered: member {member}'s units read the registered input {value} at parameter {param} beside root node " ++
+    s!"{node}, which is not {value}: a parameter that reads a marked input reads that one value alone"
+
+/-- The `(parameter, node)`s member `m`'s own units read over the ranges `rp.ranges` its units meet
+(`Partition.memberNodes` at its slice of each), once each. -/
+def ownNodes (P : Flock.Program.Prog) (rp : Docket.ReadPins) (m : Member) : Array (String × Nat) :=
   m.units.foldl (init := #[]) fun acc (lo, hi) => rp.ranges.foldl (init := acc) fun acc r =>
     let a := max lo r.first
     let b := min hi (r.first + r.count)
     if a < b then
-      (Partition.memberReads P rp.held r (a - r.first) (b - r.first)).foldl (init := acc) fun acc x =>
+      (Partition.memberNodes P r (a - r.first) (b - r.first)).foldl (init := acc) fun acc x =>
         if acc.contains x then acc else acc.push x
     else acc
 
@@ -539,29 +551,37 @@ def ownReads (P : Flock.Program.Prog) (rp : Docket.ReadPins) (m : Member) : Arra
 def portParam (q : Flock.Registered.Port) : String :=
   (Flock.Registered.paramRow (if q.param.isEmpty then q.name else q.param)).1
 
-/-- **A member reads a marked registered input only at its pin**: for each `(parameter, value)` of a marked input the
-verifier does not expect that member `m`'s own units read (`ownReads`, from the description and never the member's
-file), its registered file has a port of that parameter naming that value, refused by name otherwise
-(`READ_UNNAMED_WHY`: no registered file, no such port, the port under another value); every port of its file at
-such a parameter that opens no tree of its own (`treePortOf`) names one of the marked values its units read there,
-refused by name otherwise (`PORT_OTHER_WHY`), since the session binds a port's rows to the node C reads there and
-never reads its name; and every port of its file whose value is one of `rp.loose` names the pin the docket's R8
-accepted of it, its root, leaf count and domain, in name order; refused by name otherwise, a value with no pin
-(`UNPINNED_READ_WHY`) or the first field that differs (`PINNED_READ_WHY`). Every member, sampled or not, before any
-coin. -/
+/-- **A member reads a marked registered input only at its pin**: at each parameter where member `m`'s own units read
+a marked input the verifier does not expect (`ownNodes`, `Partition.heldOf`: from the description and never the
+member's file), they read exactly one marked value and no other node, else the member is refused by name
+(`TWO_READS_WHY`, `MIXED_READ_WHY`); its registered file has a port of that parameter naming that value
+(`READ_UNNAMED_WHY`: no registered file, no such port, the port under another value); and every port of that
+parameter, a tree's or not, names that value (`PORT_OTHER_WHY`), since the session binds a port's rows to the node C
+reads there and never reads its name. Every port of its file whose value is one of `rp.loose` names the pin the
+docket's R8 accepted of it, its root, leaf count and domain, in name order; refused by name otherwise, a value with no
+pin (`UNPINNED_READ_WHY`) or the first field that differs (`PINNED_READ_WHY`). So every row filed at such a parameter
+is at the pin, and a row with no port is `UNWIRED_WHY`'s. Every member, sampled or not, before any coin. -/
 def pinsHeld (P : Flock.Program.Prog) (rp : Docket.ReadPins) (ms : Array Member) : V Unit :=
   if rp.loose.isEmpty then pure () else
   ms.forM fun m => do
     let own ← match m.own.registered with
       | none => pure #[]
       | some j => (Flock.Registered.ofJson j).mapError (s!"member {m.name}: {·}")
-    let reads := ownReads P rp m
-    reads.forM fun (p, v) =>
+    let nodes := ownNodes P rp m
+    let reads := Partition.heldOf P rp.held nodes
+    let read ← reads.foldlM (init := (#[] : Array (String × String))) fun acc (p, v) =>
+      match acc.find? (·.1 == p) with
+      | some (_, v0) => throw (TWO_READS_WHY m.name p v0 v)
+      | none => pure (acc.push (p, v))
+    read.forM fun (p, v) => do
+      match nodes.find? fun (p', w) => p' == p && (Partition.heldValue P rp.held w).isNone with
+      | some (_, w) => throw (MIXED_READ_WHY m.name p v w)
+      | none => pure ()
       if own.any fun q => portParam q == p && q.value == v then pure () else throw (READ_UNNAMED_WHY m.name p v)
     own.forM fun q => do
-      let p := portParam q
-      if (treePortOf q).isNone && reads.any (·.1 == p) && !reads.contains (p, q.value) then
-        throw (PORT_OTHER_WHY m.name q.name p q.value)
+      match read.find? (·.1 == portParam q) with
+      | some (p, v) => if q.value != v then throw (PORT_OTHER_WHY m.name q.name p v q.value)
+      | none => pure ()
       match rp.pins.find? (·.1.value == q.value) with
         | none => if rp.loose.contains q.value then throw (UNPINNED_READ_WHY m.name q.name q.value) else pure ()
         | some (e, root) =>
@@ -729,7 +749,7 @@ def membersStructure (p : Params) (ms : Array Member) (c : OneStage.Commitment) 
   classHeld ms
   treePortsHeld ms c.record
   match Docket.readPins p.base.verifier with
-  | none => throw Docket.WEIGHTS_UNREGISTERED_WHY
+  | none => throw (Docket.readPinsWhy p.base.verifier)
   | some rp => pinsHeld p.base.verifier.program.prog rp ms
 
 /-- The refusal of a member's root of its own at a port C wires into it (`fieldRoots`): a crossing wire is committed
@@ -1748,9 +1768,12 @@ private def heldNoReads (loose : Array String) (pins : Array (Spot.Registered.En
 
 /-- Two registered inputs `w0` (node 0) and `w1` (node 1) of four leaves each, and template `A`'s batch of four members
 (node 2) mapping its parameter `w` (two leaves) over axis 0 of an argument whose first part is `w0`'s leaves and second
-`w1`'s: members 0 and 1 read `w0`, members 2 and 3 `w1`. -/
-private def batchToy : Flock.Program.Prog :=
+`w1`'s: members 0 and 1 read `w0`, members 2 and 3 `w1`. With `mixed`, node 1 is a run input instead. -/
+private def batchToy (mixed : Bool := false) : Flock.Program.Prog :=
   let v16 : Flock.Program.Ty := .value 16
+  let run : Flock.Program.Defn :=
+    { key := "Input16_v1", id := "Input16_v1", prim := true, params := #[], ret := v16, gates := 1, paramLeaves := 0,
+      outLeaves := 1, binding := some Flock.Program.RUN }
   let input : Flock.Program.Defn :=
     { key := "RegisteredInput16_v1", id := "RegisteredInput16_v1", prim := true, params := #[], ret := v16, gates := 1,
       paramLeaves := 0, outLeaves := 1, binding := some Flock.Program.REGISTRATION }
@@ -1764,28 +1787,34 @@ private def batchToy : Flock.Program.Prog :=
                   seq := Flock.Program.Seq.ofParts #[.affine false 0 0 4, .affine false 1 0 4] }] }
   let root : Flock.Program.Defn :=
     { key := "R", id := "R", prim := false, params := #[], ret := v16, gates := 0, paramLeaves := 0, outLeaves := 1,
-      body := { params := #[], retType := v16, nodes := #[w, w, reader], ret := default, offsets := #[0, 4, 8, 12] } }
-  { defs := #[input, a, root], index := {}, root := 2, programFn := "", sha512 := .empty }
+      body := { params := #[], retType := v16, nodes := #[w, if mixed then { w with fn := 3 } else w, reader],
+                ret := default, offsets := #[0, 4, 8, 12] } }
+  { defs := #[input, a, root, run], index := {}, root := 2, programFn := "", sha512 := .empty }
 
 private def batchHeldT : Array (String × Nat × Nat) := #[("w0", 0, 4), ("w1", 4, 4)]
 
 private def batchRangeT : Flock.TemplateQuery.TRange := ⟨2, "A", 0, 4⟩
 
 -- each member reads only its own slice's values: two chunks, one value each; a chunk across both, both
-#guard Partition.memberReads batchToy batchHeldT batchRangeT 0 2 == #[("w", "w0")]
-#guard Partition.memberReads batchToy batchHeldT batchRangeT 2 4 == #[("w", "w1")]
-#guard Partition.memberReads batchToy batchHeldT batchRangeT 1 3 == #[("w", "w0"), ("w", "w1")]
+#guard Partition.memberReads (batchToy) batchHeldT batchRangeT 0 2 == #[("w", "w0")]
+#guard Partition.memberReads (batchToy) batchHeldT batchRangeT 2 4 == #[("w", "w1")]
+#guard Partition.memberReads (batchToy) batchHeldT batchRangeT 1 3 == #[("w", "w0"), ("w", "w1")]
 
 /-- `pinsHeld` over `batchToy` with `w0` and `w1` pinned at root `a…`, 2 leaves, domain `d…`. -/
 private def batchHeld (ms : Array Member) : V Unit :=
-  pinsHeld batchToy ⟨#["w0", "w1"], batchHeldT, #[batchRangeT],
+  pinsHeld (batchToy) ⟨#["w0", "w1"], batchHeldT, #[batchRangeT],
     #[({ pinEntryT with value := "w0" }, "".pushn 'a' 128), ({ pinEntryT with value := "w1" }, "".pushn 'a' 128)]⟩ ms
+
+/-- `pinsHeld` over `batchToy true`, `w0` (node 0) marked and pinned, node 1 a run input. -/
+private def mixedHeld (ms : Array Member) : V Unit :=
+  pinsHeld (batchToy true) ⟨#["w0"], #[("w0", 0, 4)], #[batchRangeT],
+    #[({ pinEntryT with value := "w0" }, "".pushn 'a' 128)]⟩ ms
 
 /-- The chunk `name` over units `[lo, hi)` of `batchToy`'s range, its registered file `reg`. -/
 private def chunkT (name : String) (lo hi : Nat) (reg : Option Json) : Member :=
   { memberT name #[(lo, hi)] with own := { sharedT with registered := reg } }
 
--- every honest chunk names exactly the values its own units read, and none is asked to name another chunk's: accepted
+-- every honest chunk names the one value its own units read, and none is asked to name another chunk's: accepted
 #guard refusal (batchHeld #[chunkT "A/c0" 0 2 (regT [("w", "w0", 'a', 2)]),
   chunkT "A/c1" 2 4 (regT [("w", "w1", 'a', 2)])]) == ""
 -- a chunk without its value's port: no registered file, or the port under another value: refused by name
@@ -1793,15 +1822,33 @@ private def chunkT (name : String) (lo hi : Nat) (reg : Option Json) : Member :=
 #guard whyT (batchHeld #[chunkT "A/c1" 2 4 (regT [("w", "w0", 'a', 2)])]) == READ_UNNAMED_WHY "A/c1" "w" "w1"
 -- its own root for its value: refused by name
 #guard whyT (batchHeld #[chunkT "A/c0" 0 2 (regT [("w", "w0", 'b', 2)])]) == PINNED_READ_WHY "A/c0" "w" "w0" "root"
--- a chunk over both values naming one: refused by name for the other
-#guard whyT (batchHeld #[chunkT "A/c" 1 3 (regT [("w", "w0", 'a', 2)])]) == READ_UNNAMED_WHY "A/c" "w" "w1"
--- a second port at the chunk's parameter under the other chunk's value, or under a value nothing marks: refused by name
-#guard whyT (batchHeld #[chunkT "A/c0" 0 2 (regT [("w", "w0", 'a', 2), ("w[0]", "w1", 'a', 2)])]) ==
-  PORT_OTHER_WHY "A/c0" "w[0]" "w" "w1"
-#guard whyT (batchHeld #[chunkT "A/c0" 0 2 (regT [("w", "w0", 'a', 2), ("w[0]", "e", 'b', 2)])]) ==
-  PORT_OTHER_WHY "A/c0" "w[0]" "w" "e"
-#guard PORT_OTHER_WHY "a" "p[0]" "p" "e" == "registered: member a's port p[0] at parameter p names e, which its " ++
-  "units don't read there: a marked input is read only at a pin R8 accepted"
+-- a chunk whose units read both values at one parameter: refused by name, whatever it files
+#guard whyT (batchHeld #[chunkT "A/c" 1 3 (regT [("w[0]", "w0", 'a', 2), ("w[1]", "w1", 'a', 2)])]) ==
+  TWO_READS_WHY "A/c" "w" "w0" "w1"
+-- a second port at the chunk's parameter: the other chunk's value, a value nothing marks, the window's committed tree
+-- or a run input's tree: refused by name
+#guard whyT (batchHeld #[chunkT "A/c0" 0 2 (regT [("w[0]", "w0", 'a', 2), ("w[1]", "w1", 'a', 2)])]) ==
+  PORT_OTHER_WHY "A/c0" "w[1]" "w" "w0" "w1"
+#guard whyT (batchHeld #[chunkT "A/c0" 0 2 (regT [("w[0]", "w0", 'a', 2), ("w[1]", "e", 'b', 2)])]) ==
+  PORT_OTHER_WHY "A/c0" "w[1]" "w" "w0" "e"
+#guard whyT (batchHeld #[chunkT "A/c0" 0 2 (regT [("w[0]", "w0", 'a', 2), ("w[1]", "committed/A/w", 'b', 2)])]) ==
+  PORT_OTHER_WHY "A/c0" "w[1]" "w" "w0" "committed/A/w"
+#guard whyT (batchHeld #[chunkT "A/c0" 0 2 (regT [("w[0]", "w0", 'a', 2), ("w[1]", "input/n1", 'b', 2)])]) ==
+  PORT_OTHER_WHY "A/c0" "w[1]" "w" "w0" "input/n1"
+-- a parameter mixing the marked weight with a run input: refused by name; chunks reading one of them alone pass
+#guard whyT (mixedHeld #[chunkT "A/c" 1 3 (regT [("w[0]", "w0", 'a', 2), ("w[1]", "input/n1", 'b', 2)])]) ==
+  MIXED_READ_WHY "A/c" "w" "w0" 1
+#guard refusal (mixedHeld #[chunkT "A/c0" 0 2 (regT [("w", "w0", 'a', 2)]), chunkT "A/c1" 2 4 none]) == ""
+-- the refusals' text, which `members.port_other_why`, `two_reads_why` and `mixed_read_why` print word for word
+#guard PORT_OTHER_WHY "a" "p[1]" "p" "w" "e" == "registered: member a's port p[1] at parameter p names e, and its " ++
+  "units read the registered input w there: every row of a parameter that reads a marked input is that input's, at its pin"
+#guard TWO_READS_WHY "a" "p" "u" "w" == "registered: member a's units read the registered inputs u and w at parameter " ++
+  "p: a parameter that reads a marked input reads that one value alone"
+#guard MIXED_READ_WHY "a" "p" "w" 3 == "registered: member a's units read the registered input w at parameter p beside " ++
+  "root node 3, which is not w: a parameter that reads a marked input reads that one value alone"
+#guard Docket.WEIGHTS_QUERY_WHY == "registered: the program marks registered inputs the verifier does not expect, and " ++
+  "the partition is no template query that applies to the program, whose ranges its members' reads of them are read " ++
+  "off: a marked input is read only at a pin R8 accepted"
 #guard READ_UNNAMED_WHY "a" "p" "w" == "registered: member a's units read the registered input w at parameter p, and " ++
   "its registered file has no port p naming w: a marked input is read only at a pin R8 accepted"
 -- the refusals' text, which `members.unpinned_read_why` and `docket.WEIGHTS_UNREGISTERED_WHY` print word for word

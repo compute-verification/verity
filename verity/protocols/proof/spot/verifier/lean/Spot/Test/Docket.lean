@@ -208,5 +208,9 @@ def weighedCodes (v : Verifier) : Array String :=
   (fun rp => rp.loose.size + rp.ranges.size + rp.pins.size) == some 0
 -- a registered input under a query that is no template query that applies
 #guard weightsCodes { weighed E3R with query := Json.mkObj [("name", "Q_all")] } == #["R8-weights-query"]
+-- why `readPins` is none: no template query applying, else no registration R8 accepts
+#guard readPinsWhy { weighed E3R with query := Json.mkObj [("name", "Q_all")],
+  weightsOfRecord := some (ofRecord PINS) } == WEIGHTS_QUERY_WHY
+#guard readPinsWhy (weighed E3R) == WEIGHTS_UNREGISTERED_WHY
 
 end Spot.Test.Docket

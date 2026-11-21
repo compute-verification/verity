@@ -321,6 +321,18 @@ WEIGHTS_UNREGISTERED_WHY = ("registered: the program marks registered inputs the
                     "carry no weights' registration of record R8 accepts: a marked input is read only at a pin R8 accepted")
 
 
+WEIGHTS_QUERY_WHY = ("registered: the program marks registered inputs the verifier does not expect, and the partition is "
+                     "no template query that applies to the program, whose ranges its members' reads of them are read "
+                     "off: a marked input is read only at a pin R8 accepted")
+
+
+def read_pins_why(program: Program, query: Mapping[str, Any]) -> str:
+    """`Docket.readPinsWhy`: why `read_pins` is None, no template query applying (`WEIGHTS_QUERY_WHY`), else no
+    registration R8 accepts (`WEIGHTS_UNREGISTERED_WHY`)."""
+    templated = P.is_template_query(query) and isinstance(P.evaluate(program, query), PO.TemplatePartition)
+    return WEIGHTS_UNREGISTERED_WHY if templated else WEIGHTS_QUERY_WHY
+
+
 def read_pins(program: Program, query: Mapping[str, Any], registered: Iterable[str], of_record: tuple[bytes, str] | None
               ) -> tuple[list[str], list[tuple[str, range]], list[tuple[int, str, int, int]], dict[str, dict[str, Any]]] | None:
     """`Docket.readPins`: what the members' check holds each registered read to, on R8's own derivation

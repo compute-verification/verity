@@ -935,6 +935,9 @@ def test_the_members_check_holds_a_marked_programs_reads_only_to_pins_r8_accepte
             with pytest.raises(M._Refused) as e:
                 M.read_pins(p, marked)
             assert str(e.value) == R.WEIGHTS_UNREGISTERED_WHY
+        with pytest.raises(M._Refused) as e:
+            M.read_pins({**params(_weights([pin], reads)), "query": {"name": "Q_all", "version": 0}}, marked)
+        assert str(e.value) == R.WEIGHTS_QUERY_WHY
         loose, held, ranges, pins = rp = M.read_pins(params(_weights([pin], reads)), marked)
         at = sorted({(t, p, v) for k, t, _lo, n in ranges for p, v in P.member_reads(marked, held, k, 0, n)})
         assert loose == ["t"] and at == [tuple(r) for r in reads]
@@ -949,47 +952,59 @@ def test_the_members_check_holds_a_marked_programs_reads_only_to_pins_r8_accepte
         assert M.read_pins(params(registered={"t": 2}), marked) == ([], [], [], {})
 
 
-def test_a_batch_chunk_names_exactly_the_marked_inputs_its_own_members_read():
-    """A batch of four PAIR members over two marked weights, members 0 and 1 reading ``w0``'s leaves and 2 and 3
-    ``w1``'s, cut into chunks (`partition.member_reads`, `members.pins_held`; `OneStageZk`'s `batchToy` guards): each
-    honest chunk naming its own value passes and is not asked to name the other chunk's; one without its value's port,
-    with the port under the other value or at its own root, one over both naming one, or one with a second port at
-    its parameter under a value its units don't read there, is refused by name."""
+def _chunked(second: str, marked: tuple[str, ...]):
+    """A batch of four PAIR members over ``w0``'s rows then ``second``'s, members 0 and 1 reading ``w0``'s and 2 and 3
+    ``second``'s, `marked` marked and pinned: the program, its query, its pins and `members.read_pins` on them."""
     from verity.protocols.proof.spot.verifier.one_stage import members as M
     row = Array(2, Array(2, Value(8)))
-    defn = CompositeDefinition("OneStageTestChunks", 0, (), lambda S: ((("w0", row), ("w1", row)), Array(4, Value(8))),
+    defn = CompositeDefinition("OneStageTestChunks", 0, (), lambda S: ((("w0", row), (second, row)), Array(4, Value(8))),
                                lambda B, S, w0, w1: B.batch(PAIR, array_of([w0[0], w0[1], w1[0], w1[1]]), axes=(0,), n=4),
                                register=False)
-    prog, q = Program(bind(defn), registered=("w0", "w1")), P.template_instance_query(PAIR.id)
-    pins = [_pin(prog, v) for v in ("w0", "w1")]
-    params = {"query": q, "registered": None, "weights_of_record": dict(zip(
-        ("document", "digest"), (lambda d: (d[0].hex(), d[1]))(_weights(pins, R.declared_reads(prog, q, ["w0", "w1"])))))}
-    rp = M.read_pins(params, prog)
+    prog, q = Program(bind(defn), registered=marked), P.template_instance_query(PAIR.id)
+    pins = [_pin(prog, v) for v in marked]
+    body, digest = _weights(pins, R.declared_reads(prog, q, list(marked)))
+    params = {"query": q, "registered": None, "weights_of_record": {"document": body.hex(), "digest": digest}}
+    return prog, q, {e["value"]: e for e in pins}, M.read_pins(params, prog)
+
+
+def test_a_batch_chunk_reads_one_marked_value_a_parameter_and_names_it_at_every_port():
+    """Chunks of a batch over two marked weights (`partition.member_nodes`, `members.pins_held`; `OneStageZk`'s
+    `batchToy` guards): each honest chunk naming its own value passes and is not asked to name the other chunk's; one
+    without its value's port, with the port under the other value or at its own root, one whose units read both
+    values at one parameter, or one with a second port at its parameter under another value, a committed tree or a run
+    input's tree, is refused by name; and a parameter mixing the marked weight with a run input is refused by name."""
+    from verity.protocols.proof.spot.verifier.one_stage import members as M
+    prog, _q, pins, rp = _chunked("w1", ("w0", "w1"))
     (k, _t, first, n), = rp[2]
     assert (first, n) == (0, 4)
     assert [P.member_reads(prog, rp[1], k, *c) for c in ((0, 2), (2, 4), (1, 3))] == [
         [("x", "w0")], [("x", "w1")], [("x", "w0"), ("x", "w1")]]
 
-    def chunk(lo, hi, value=None, root=None):
-        e = {e["value"]: e for e in pins}.get(value)
-        ports = {} if e is None else {"x": {"value": value, "root": root or e["root"], "leaves": e["leaves"],
-                                            "domain": e["domain"]}}
+    def chunk(lo, hi, value=None, root=None, **more):
+        e = pins.get(value)
+        ports = {} if e is None else {"x[0]": {"value": value, "root": root or e["root"], "leaves": e["leaves"],
+                                               "domain": e["domain"]}}
+        ports.update({x: {**ports["x[0]"], "value": v} for x, v in more.items()})
         return {"units": [[lo, hi]], "registered": {"ports": ports} if ports else None}
 
     M.pins_held({"c0": chunk(0, 2, "w0"), "c1": chunk(2, 4, "w1")}, prog, rp)
     for m, why in ((chunk(0, 2), M.read_unnamed_why("c", "x", "w0")),
                    (chunk(2, 4, "w0"), M.read_unnamed_why("c", "x", "w1")),
-                   (chunk(0, 2, "w0", "bb" * 64), M.pinned_read_why("c", "x", "w0", "root")),
-                   (chunk(1, 3, "w0"), M.read_unnamed_why("c", "x", "w1"))):
+                   (chunk(0, 2, "w0", "bb" * 64), M.pinned_read_why("c", "x[0]", "w0", "root")),
+                   (chunk(1, 3, "w0", **{"x[1]": "w1"}), M.two_reads_why("c", "x", "w0", "w1")),
+                   *((chunk(0, 2, "w0", **{"x[1]": v}), M.port_other_why("c", "x[1]", "x", "w0", v))
+                     for v in ("w1", "e", "committed/c/x", "input/n1"))):
         with pytest.raises(M._Refused) as e:
             M.pins_held({"c": m}, prog, rp)
         assert str(e.value) == why
-    c0 = chunk(0, 2, "w0")
-    for other in ("w1", "e"):
-        ports = {**c0["registered"]["ports"], "x[0]": {**c0["registered"]["ports"]["x"], "value": other}}
-        with pytest.raises(M._Refused) as e:
-            M.pins_held({"c": {**c0, "registered": {"ports": ports}}}, prog, rp)
-        assert str(e.value) == M.port_other_why("c", "x[0]", "x", other)
+    prog, _q, pins, rp = _chunked("u", ("w0",))
+    (k, *_), = rp[2]
+    run = [i for p, i in P.member_nodes(prog, k, 1, 3) if P.held_value(prog, rp[1], i) is None]
+    assert len(run) == 1 and is_input(prog.root.body.nodes[run[0]].fn)
+    M.pins_held({"c0": chunk(0, 2, "w0"), "c1": {"units": [[2, 4]], "registered": None}}, prog, rp)
+    with pytest.raises(M._Refused) as e:
+        M.pins_held({"c": chunk(1, 3, "w0")}, prog, rp)
+    assert str(e.value) == M.mixed_read_why("c", "x", "w0", run[0])
 
 
 def test_r8_refuses_a_registered_input_under_a_query_it_cannot_read_readers_under():
