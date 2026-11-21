@@ -166,20 +166,6 @@ def test_the_window_road_runs_remote_from_the_record_and_publishes_no_descriptio
     assert {"plans.jsonl", "handoff/", "circuit.json", "predicted.json"} <= set(names), names
 
 
-@pytest.mark.slow
-def test_the_window_road_runs_an_onsite_application_without_compute_accounting(tmp_path, monkeypatch):
-    """onsite_network lists no compute accounting, so POUW is empty and the preflight passes it; the network attester's
-    own piece refuses in its own words (`attester_piece.NOT_RUN`), and the wipe, whose answer the card launcher did not
-    write, refuses as that launcher's. Slow (minutes) for the close."""
-    d = _serve_dir(tmp_path, monkeypatch, "onsite_network")
-    rc, log, _ = _road(tmp_path, monkeypatch, "onsite_network", d)
-    assert "POUW" not in log and "pearl-plus" not in log, log
-    assert "network-attester: the network audit is not run: its checks are being moved into the workload's circuit" in log, log
-    assert ("wipe: not run: D/pieces/wipe/answer.json is absent: the card launcher did not run the wipe under the serve's "
-            "lease (vllm's h100_smoke.sh)") in log, log
-    assert rc == 20 and "network-attester" in _end(log), log
-
-
 def _preflight(tmp_path, **env):
     (tmp_path / "serve").mkdir(exist_ok=True)
     env = {**os.environ, "D": str(tmp_path / "serve"), "PRED": str(tmp_path / "predicted"), "OUT": str(tmp_path / "out"),

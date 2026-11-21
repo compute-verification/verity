@@ -129,7 +129,7 @@ from verity.party import Finish, Identity, Received, LogEntry, Send
 from verity.channel import Body, Hex, Int, Message, Schema, Str
 
 from verity.commitments.domains import (
-    CERTIFIER_PROTOCOL, ONSITE_PROTOCOL, POUB_P2, POUB_PROTOCOL, POUS_P2_RUN, POUW_PROTOCOL, WIPE_PROTOCOL,
+    CERTIFIER_PROTOCOL, ONSITE_PROTOCOL, POUB_P2, POUS_P2_RUN, POUW_PROTOCOL, WIPE_PROTOCOL,
 )
 
 ID = DM.ONE_STAGE_PROTOCOL
@@ -155,7 +155,7 @@ SUBPROTOCOLS = {
                             COMPONENT: COMPOSED},
 }
 #: a configuration's subprotocol names and the protocol id each has outside a composite
-IDS = {"bandwidth": POUB_PROTOCOL, "network-attester": CERTIFIER_PROTOCOL,
+IDS = {"bandwidth": POUB_P2, "network-attester": CERTIFIER_PROTOCOL,
        "inference-only": "verity/inference-only/v0", "pearl-plus": "verity/pouw/pearl-plus/v1",
        "pous": POUS_P2_RUN, "pouw": POUW_PROTOCOL, COMPONENT: ID}
 #: what a run's coins are (module docstring)

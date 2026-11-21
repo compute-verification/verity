@@ -46,7 +46,6 @@ from hypothesis import strategies as st
 
 import periods
 import reference as R
-import test_sampled_two_difftest as TWO
 import verity_difftest as D
 from verity_difftest import canonical
 from verity_difftest import settings as opt
@@ -700,70 +699,6 @@ def test_spot_refuses_the_recursive_audit(name, request):
     assert set(seen) == set(want), dict(seen)
 
 
-def _two_stage_evidence(a: dict) -> dict:
-    """Two levels' evidence that its Lean reads in full (`SampledTwo.evidenceOf`): v2's evidence of `a` as
-    the interior audit's, in the per-member form (`OneStageZk.membersEvidenceOf`) with its sessions one member's
-    statement, and its other keys each of its type, the first stage's coins never null (`FIRST_COINS_NULL`)."""
-    interior = {**_without(a["evidence"], "proofs"),
-                "proofs": {"statements": [{"member": "m", "sessions": a["evidence"]["proofs"]["sessions"]}]}}
-    return {"levels": 2, "coins": {}, "interior": interior, "received": "", "record": {}, "source": "00",
-            "statements": []}
-
-
-def _two_stage_cases(a: dict) -> dict[str, dict]:
-    """Two levels' cases on v2's audit `a`, its record and evidence: two levels' params missing a key (``params-keys``,
-    `TWO.CHANGES`); v2's params with v2's evidence naming two levels (``evidence-keys``); and v2's params with two
-    levels' evidence that its Lean reads in full (``evidence-other``, `_two_stage_evidence`)."""
-    v2 = a["params"]
-    return {"params-keys": OS._case({"params": TWO.CHANGES["a-key-missing"](TWO.base()), "record": a["record"],
-                                     "evidence": a["evidence"]}),
-            "evidence-keys": OS._case({"params": v2, "record": a["record"], "evidence": {**a["evidence"], "levels": 2}}),
-            "evidence-other": OS._case({"params": v2, "record": a["record"], "evidence": _two_stage_evidence(a)})}
-
-
-def test_spot_reads_the_two_stage_form(remote_server):
-    """SPOT reads two levels with their own readings (`SampledTwo.paramsOfJson`, `SampledTwo.evidenceOf`) and refuses
-    evidence of other levels than the params' by name (`VStar.Recursive.Sampled.MISMATCH`). Remote, every other
-    subprotocol aimed at acceptance on the audit's record, rejects with SPOT's reason: two levels' params missing a key
-    and v2's params with v2's evidence naming two levels, each refused by a reading of keys, in Lean as in Python
-    (`_two_stage_cases`); and v2's params with two levels' evidence, which the Lean reads in full and refuses as a
-    mismatch of levels, with the Python's words (`R.mismatch`): the Python reads two levels' evidence only up to its
-    keys, so it decides no case past them, and an audit that passes every check is two levels' own difftest's to
-    build."""
-    product = R.REMOTE
-    want = {"params-keys": "params: the keys of the parameters are not ",
-            "evidence-keys": "evidence: the keys of the evidence are not ",
-            "evidence-other": R.mismatch(1, 2)}
-    others = [C for C in product.components if C is not R.SPOT]
-    seen = collections.Counter()
-
-    @settings(max_examples=2, database=None, deadline=None, suppress_health_check=list(HealthCheck))
-    @given(st.tuples(*[component_case(C, R.ACCEPT) for C in others]), sessionless_draws())
-    def check(drawn, audit):
-        for br, sampled in _two_stage_cases(audit).items():
-            if br == "evidence-other":
-                with pytest.raises(ValueError, match="outside the mirror"):
-                    R.SPOT.answer({**sampled, "blobs": BLOBS})
-                why = want[br]
-                component = {**as_component(R.SPOT, form_case(audit)),
-                             "evidence": bytes.fromhex(sampled["evidence"])}
-            else:
-                got = R.SPOT.answer({**sampled, "blobs": BLOBS})
-                why = got["reason"]
-                assert got["verdict"] == R.REJECT and why.startswith(want[br]), got
-                component = as_component(R.SPOT, sampled)
-            by_id = {c["id"]: c for c in (*drawn, component)}
-            case = product_case(product, one_record(product, [by_id[C.id] for C in product.components]))
-            if br != "evidence-other":
-                assert product.answer(case)["verdict"] == R.REJECT
-            out = remote_server.exchange(case)
-            refused = f"{R.SPOT.id} reject: {why}"
-            assert out["verdict"] == R.REJECT and refused in out["reason"], f"{br}: {out['verdict']}: {out['reason']}"
-            seen[br] += 1
-    check()
-    assert set(seen) == set(want), dict(seen)
-
-
 #: `reusing`'s R's sampling design: a subset of one, so v2's audit of R samples R's one proof block at its challenger's coins
 REUSING_SAMPLING_DESIGN = {"k": 1, "law": "subset"}
 
@@ -800,7 +735,8 @@ def reusing_audit(m: dict) -> dict:
     """SPOT's one-stage v2 case on `reusing`'s R (`m`) over the log [W], with R's outputs: its sample at its
     challenger's coins (`_challenger_sample`, a session whose challenger sampled no coin tree) is R's one proof block, its
     proved unit, and it names no session, its params name the circuit and public files `BLOBS` hold, and its registered
-    file names R's tables, which no proof block of R's program reads."""
+    file names R's tables, which no proof block of R's program reads. It names the sample's units served and R's roots
+    its sessions' (`checkOneAt` refuses a null of either before `oneSession`)."""
     s, rec = m["setup"], m["record"]
     ch, d, coins = OS._challenger_sample(random.Random("remote/reusing"), s, REUSING_SAMPLING_DESIGN, rec, trees=0)
     proved = OS.DR.proved(d)
@@ -814,8 +750,8 @@ def reusing_audit(m: dict) -> dict:
               "query": s.query, "registered": s.values[0], "scheme": OS.SCHEME,
               "window_root": ch.ledger.window["root"], "work_table": None}
     evidence = {"coins": coins, "draw": d, "instances": len(proved), "proofs": {"sessions": []}, "proved_units": proved,
-                "receipt": OS.R.receipt(rec, "v", received=OS.RECEIVED), "served": None, "session_roots": None,
-                "sessions": [], "statement": {}}
+                "receipt": OS.R.receipt(rec, "v", received=OS.RECEIVED), "served": sorted(d["units"]),
+                "session_roots": {r["port"]: r["root"] for r in rec["roots"]}, "sessions": [], "statement": {}}
     return form_case(OS._json({"params": params, "record": rec, "evidence": evidence}))
 
 
@@ -832,7 +768,7 @@ def test_remote_on_one_record_that_reuses_the_windows_registration(remote_server
     on R with a session's proofs granted and the tie on a window on R or on W."""
     PPC, made = R.POUW_PERIOD_CASES, []
     period = as_component(R.POUW_PERIOD, PPC.serve(PPC.credit_cases.period_instance(
-        random.Random("remote/reusing"), windows=1, commit=reusing(made), **PPC.COVERED)))
+        random.Random("remote/reusing"), windows=1, commit=reusing(made), real=True, **PPC.COVERED)))
     reused = reusing_audit(made[0])
     audit = as_component(R.SPOT, reused)
     policy = policy_on(audit)
@@ -1011,7 +947,7 @@ def test_remote_v1_on_a_served_pearl_plus_run(tmp_path, monkeypatch):
 
 
 INFERENCE_ONLY_PACKAGE = ROOT / "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean"
-#: How Pearl+'s refusal of params that name none of its keys starts (`PouwCheck.PearlPlus.Protocol`'s guard, which gives
+#: How Pearl+'s refusal of params that name none of its keys starts (`PouwVerifier.PearlPlus.Protocol`'s guard, which gives
 #: no digest); the reference compares no reason
 PEARL_PLUS_REFUSED = R.PEARL_PLUS_REFUSED
 

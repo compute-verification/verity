@@ -437,57 +437,7 @@ def test_a_published_line_holds_a_loads_tokens_and_span_and_leaves_the_inference
         assert S.public_line(line) == line and S.public_line(line + "\n") == line + "\n"
 
 
-def test_the_spot_line_names_the_partition_and_how_many_proof_blocks_were_sampled_and_publishes_no_population(tmp_path,
-                                                                                                               capsys):
-    """The line says how many proof blocks were sampled; the population's size, which counts the execution phase's
-    tokens, is in the private copy and cut from the published one; the advice's length and the steps are in neither."""
-    row = {"ok": True, "accepted": True, "draw": [0, 2], "population": 37,
-           "leak": {"advice_bits": 832, "bound": "vacuous", "other_inputs": 786432, "registered": 0}}
-    part = {"templates": ["SiluMul_v2{I=8192}"], "law": "rate:2/4",
-            "scope": {"op_path_prefix": "model.layers.0.mlp.", "steps": [5, 11]}}
-    line = S.sampled_line(row, part)
-    head, _, rec = line.partition(": RECORDS ")
-    assert head == "over SiluMul_v2{I=8192} at model.layers.0.mlp. (law rate:2/4), drawn members [0, 2]"
-    assert "steps" not in line and "11" not in line
-    assert json.loads(rec)["leak"] == {"bound": "vacuous", "other_inputs": 786432, "registered": 0} and "832" not in line
-    assert (json.loads(rec)["population"], json.loads(rec)["sampled"]) == (37, 2)
-    published = S.public_line(line)
-    assert "population" not in published and "37" not in published
-    assert json.loads(published.partition(": RECORDS ")[2])["sampled"] == 2
-    (tmp_path / "log").write_text("+ set -x\nRECORDS " + json.dumps(row) + "\n")
-    (tmp_path / "p.json").write_text(json.dumps(part))
-    assert S.main(["sampled-line", str(tmp_path / "log"), "--partition", str(tmp_path / "p.json")]) == 0
-    assert capsys.readouterr().out == line + "\n"
-    (tmp_path / "log").write_text("refused\n")
-    assert S.main(["sampled-line", str(tmp_path / "log")]) == 1
-
-
 GATE_COINS = "gate:research@challenger.invalid"
-
-
-@pytest.mark.parametrize("challenger, coins", [
-    (GATE_COINS, "coins the gate's, the auditor's challenger"),
-    ("local", "coins a development challenger's (local), not the auditor's"),
-    ("loopback:127.0.0.1:7811", "coins a development challenger's (loopback), not the auditor's"),
-])
-def test_the_spot_line_says_whose_coins_they_were_and_where_the_sessions_coin_trees_came_from(tmp_path, capsys,
-                                                                                               challenger, coins):
-    """A reader of the record tells a development session's run from the auditor's, and sees the audit's coin_trees,
-    which the RECORDS row of the audit itself leaves out; the gate's address is not in the line."""
-    row = {"ok": True, "accepted": True, "draw": [1, 2]}
-    line = S.sampled_line(row, None, challenger, {"coin_trees": "window"})
-    head, _, rec = line.partition(": RECORDS ")
-    assert head.endswith(f"drawn members [1, 2], {coins}") and "invalid" not in line and "127.0.0.1" not in line
-    assert json.loads(rec)["coin_trees"] == "window"
-    (tmp_path / "log").write_text("RECORDS " + json.dumps(row) + "\n")
-    (tmp_path / "summary.json").write_text(json.dumps({"coin_trees": "window", "ok": True}))
-    assert S.main(["sampled-line", str(tmp_path / "log"), "--challenger", challenger,
-                   "--summary", str(tmp_path / "summary.json")]) == 0
-    assert capsys.readouterr().out == line + "\n"
-    (tmp_path / "summary.json").write_text("{")
-    assert S.main(["sampled-line", str(tmp_path / "log"), "--challenger", challenger,
-                   "--summary", str(tmp_path / "summary.json")]) == 0
-    assert "unread: summary.json is not JSON" in capsys.readouterr().out
 
 
 @pytest.mark.parametrize("challenger, summary, refused", [
@@ -2672,7 +2622,7 @@ def test_pearlpluss_accepted_piece_under_every_condition_of_record_is_pouws_verd
                                                                                              capsys, live):
     """Pearl+'s accepted piece whose live coins the compose holds to its pin, whose session the lane reserved under its own
     gate key in its open Pearl-C period, whose passes are tied to the window SPOT audited, and which the Lean
-    `PouwCheck.PearlPlus` verdict accepts on the same run with nonzero work, is PoUW's verdict of record: its row is
+    `PouwVerifier.PearlPlus` verdict accepts on the same run with nonzero work, is PoUW's verdict of record: its row is
     Pearl+'s answer with the Lean's work, and remote's record composes it with W_cert that work, nothing missing, pending
     the remote check's answer."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
@@ -4115,7 +4065,8 @@ def test_the_script_parses_whole():
 PEARL_WREC = {"format": "verity/registration/v2", "window": {"scheme": "pearl-c-h100-v1-h3"}, "previous": None,
            "registered": {"pearl-a/0/0": {}}}
 #: a launch under PEARLPLUS_TIE, which states V3c's rule: the window cut at Pearl+'s linears has no default
-PEARL_TIES = {"POUW": "pearlplus", "PEARLPLUS_TIE": "1", "PEARLC_CHALLENGER_GATE": "", "V3C_LAW": TIED_RULE}
+PEARL_TIES = {"POUW": "pearlplus", "PEARLPLUS_TIE": "1", "PEARLC_CHALLENGER_GATE": "", "V3C_LAW": TIED_RULE,
+              "DATASET": "llama32_1b_fixed_4_27_2", "TIMING": "at-once"}
 
 
 #: `served_compare.py` as the served compare runs it: its arguments and CUDA_VISIBLE_DEVICES in $ORDER.compare; at
@@ -5786,13 +5737,13 @@ NO_SESSION = ("PREFLIGHT: LOAD=session is the caller's load through a relay sess
     ({**SESSION, "SERVE_ARGS": ""}, SESSION_TAKES, OFF_IDS),
     ({**SESSION, "LOAD": "varied", "CERTIFIER_CLOSE": "", "CERTIFIER_FRONT": FRONT}, SESSION_TAKES,
      "PREFLIGHT: LOAD_CMD is LOAD=session's, and LOAD is varied: unset it"),
-    ({**SESSION, "LOAD": "fixed", "LOAD_CMD": "", "CERTIFIER_FRONT": ""}, SESSION_TAKES,
-     "PREFLIGHT: CERTIFIER_CLOSE is LOAD=session's, and LOAD is fixed: unset it"),
+    ({**SESSION, "LOAD": "dataset", "DATASET": "llama32_1b_fixed_4_27_2", "TIMING": "at-once", "LOAD_CMD": "",
+      "CERTIFIER_FRONT": ""}, SESSION_TAKES, "PREFLIGHT: CERTIFIER_CLOSE is LOAD=session's, and LOAD is dataset: unset it"),
     ({**SESSION, "LOAD": "front", "LOAD_CMD": "", "CERTIFIER_CLOSE": ""}, SESSION_TAKES,
      "PREFLIGHT: CERTIFIER_FRONT passes --session, which opens a relay session for a caller's load, and LOAD is "
      "front, which sends none through it: LOAD=session, or a front without --session"),
 ], ids=["a session", "no front", "no load", "no close", "a front without --session", "a tree whose front takes none",
-        "an endpoint off the id form", "a load under varied", "a close under fixed", "a session's front under front"])
+        "an endpoint off the id form", "a load under varied", "a close under dataset", "a session's front under front"])
 def test_the_preflight_takes_a_session_only_whole_and_none_of_it_under_another_load(tmp_path, env, takes, line):
     """LOAD=session starts only with its three commands, a front that passes ``--session`` and that this tree's
     front takes, on an endpoint in the id form; under every other LOAD a session's load, its close and a front that
@@ -6543,7 +6494,7 @@ def test_a_serve_on_the_lanes_default_gate_reads_the_challenger_hosts_address_fr
     research@ the address VY_CHALLENGER_1_HOST holds, and with it unset the
     serve is refused by the variable's name before serve-openai starts. A gate given whole, or none, reads no address."""
     env = {"POUW": "pearlplus", "PEARLPLUS_TIE": "1", "PEARLC_KERNEL": "pearl_c_sm90", "PEARLC_CUBIN": "/c/pearl_c_sm90.cubin",
-           }
+           "DATASET": "llama32_1b_fixed_4_27_2", "TIMING": "at-once"}
     rc, argv = _serve_argv(tmp_path / "held", env)
     assert rc == 10 and argv[argv.index("--challenger-gate") + 1].endswith(f" research@{CHALLENGER_HOST}"), (rc, argv)
     rc, argv = _serve_argv(tmp_path / "unset", {**env, "VY_CHALLENGER_1_HOST": ""})
@@ -6607,7 +6558,7 @@ def _serve_calls(tmp_path: Path, env: dict[str, str]) -> tuple[int, list[str], l
               "    echo '{}' > \"$d/windows.jsonl\"; echo '{}' > \"$d/seals.jsonl\"\n"
               "    echo 'SERVE-OPENAI listening'\n"
               f"    : > {tmp_path}/up; echo > {tmp_path}/ready; read _ < {tmp_path}/hold ;;\n"
-              "  *serve_load.py*) echo '4/4 ok'; exit 0 ;;\n"
+              "  *serve_load.py*|*'served_run/inputs.py send'*) echo '4/4 ok'; exit 0 ;;\n"
               "  *weights-registration*) exit 1 ;;\n"
               "  *'attester_piece.py front '*' --session '*)\n"
               "    [ -z \"$FRONT_REFUSES\" ] || exit 2\n"
@@ -6651,11 +6602,12 @@ WEIGHTS_REGISTRATION = (
     "--out TMP/serve/weights_registration.json --deployment-record "
     "TMP/serve/deployment-registration.json")
 NEW_RELEASE_RUN = "-c import uuid; print(uuid.uuid4().hex)"
-SERVE_LOAD = ("TMP/tree/adapters/vllm/tools/served_run/serve_load.py --port 18190 --model verity-int8/Llama-3.2-1B-INT8 "
-              "{load} "
-              f"--prompt-range 16:24 --release {RELEASE_RUN} --seed 1 --out TMP/serve/load.jsonl")
-VARIED_LOAD = SERVE_LOAD.format(load="--varied 4 --rate 1000 --max-tokens 4")
-FIXED_LOAD = SERVE_LOAD.format(load="--fixed 4 --window-steps 256")
+SERVE_LOAD = "{load} " f"--port 18190 --release {RELEASE_RUN} --out TMP/serve/load.jsonl"
+VARIED_LOAD = SERVE_LOAD.format(load="TMP/tree/adapters/vllm/tools/served_run/serve_load.py --model verity-int8/Llama-3.2-1B-INT8 "
+                                     "--varied 4 --rate 1000 --max-tokens 4 --prompt-range 16:24 --seed 1")
+DATASET = {"LOAD": "dataset", "DATASET": "llama32_1b_fixed_4_27_2", "TIMING": "at-once"}
+DATASET_LOAD = SERVE_LOAD.format(load="TMP/tree/adapters/vllm/tools/served_run/inputs.py send --dataset llama32_1b_fixed_4_27_2 "
+                                      "--timing at-once")
 REHEARSAL_FRONT = '"$PY" benchmarks/network_traces/attester_piece.py front "$1" "$2" "$3" --gate local'
 FRONT_CALL = "benchmarks/network_traces/attester_piece.py front 18190 TMP/serve TMP/serve/private/certifier-front --gate local"
 FRONT_LINE = "TMP/tree/benchmarks/one_stage/served_verdicts.py front-line TMP/serve/private/certifier-front/session.json"
@@ -6673,17 +6625,17 @@ SAID_STOPPED = ["SERVE stopped (exit 143): every closed window sealed"]
 LOADS = pytest.mark.parametrize("env, issued, said", [
     ({}, [NEW_RELEASE_RUN, VARIED_LOAD], SAID_LOAD),
     ({"LOAD": "varied"}, [NEW_RELEASE_RUN, VARIED_LOAD], SAID_LOAD),
-    ({"LOAD": "fixed"}, [NEW_RELEASE_RUN, FIXED_LOAD], SAID_LOAD),
+    (DATASET, [NEW_RELEASE_RUN, DATASET_LOAD], SAID_LOAD),
     ({"LOAD": "front", "CERTIFIER_FRONT": REHEARSAL_FRONT}, [FRONT_CALL, FRONT_LINE], SAID_FRONT),
     ({"CERTIFIER_FRONT": REHEARSAL_FRONT}, [FRONT_CALL, FRONT_LINE, NEW_RELEASE_RUN, VARIED_LOAD], SAID_FRONT + SAID_LOAD),
-    ({"LOAD": "fixed", "CERTIFIER_FRONT": REHEARSAL_FRONT}, [FRONT_CALL, FRONT_LINE, NEW_RELEASE_RUN, FIXED_LOAD],
+    ({**DATASET, "CERTIFIER_FRONT": REHEARSAL_FRONT}, [FRONT_CALL, FRONT_LINE, NEW_RELEASE_RUN, DATASET_LOAD],
      SAID_FRONT + SAID_LOAD),
-], ids=["default", "varied", "fixed", "front", "varied behind a rehearsal's front", "fixed behind a rehearsal's front"])
+], ids=["default", "varied", "dataset", "front", "varied behind a rehearsal's front", "dataset behind a rehearsal's front"])
 
 
 @LOADS
 def test_the_serve_step_issues_these_commands_and_lines_under_each_load(tmp_path, env, issued, said):
-    """Under LOAD varied (the default), fixed and front, with and without a rehearsal's front, the serve step issues
+    """Under LOAD varied (the default), dataset and front, with and without a rehearsal's front, the serve step issues
     through the venv's python exactly these commands in this order and publishes exactly these lines: the endpoint, the
     weights' docket, the front's call and its line where one is set, the load's release run and the load. A change
     to the runner that alters one of them under these loads fails here."""
@@ -6771,23 +6723,6 @@ def _sse(*events: dict | bytes) -> list[bytes]:
     return [x for e in events for x in (b"data: " + (e if isinstance(e, bytes) else json.dumps(e).encode()) + b"\n", b"\n")]
 
 
-def test_serve_load_times_a_request_at_its_send_its_first_output_id_and_its_end(monkeypatch):
-    """A streamed request's first token is the first event carrying output ids, not the stream's opening event, and its end
-    comes once the stream is read past [DONE]; its ids and finish are what they were. An unstreamed one has no first token."""
-    now = [1.0]
-    lines = _sse({"choices": [{"text": "", "token_ids": None}]}, {"choices": [{"token_ids": [7]}]},
-                 {"choices": [{"token_ids": [8], "finish_reason": "length"}]}, b"[DONE]")
-    stream = _Response(lines, now, times=[2, 2, 3, 3, 4, 4, 5, 5], end=6.0)
-    monkeypatch.setattr(SL.urllib.request, "urlopen", lambda req, timeout=None: stream)
-    times: dict = {}
-    assert SL.post(0, {"stream": True}, times=times, clock=lambda: now[0]) == {"token_ids": [7, 8], "finish_reason": "length"}
-    assert times == {"send": 1.0, "first_token": 3.0, "done": 6.0}
-    whole = _Response([json.dumps({"choices": [{"token_ids": [7]}]}).encode()])
-    monkeypatch.setattr(SL.urllib.request, "urlopen", lambda req, timeout=None: whole)
-    times = {}
-    assert SL.post(0, {}, times=times, clock=lambda: now[0]) == {"choices": [{"token_ids": [7]}]} and set(times) == {"send", "done"}
-
-
 def test_serve_load_varied_writes_each_requests_timings_beside_its_record(tmp_path, monkeypatch):
     """A varied run's timings file beside its record: its release run and wall-clock start, and one entry a request in
     release order, its times on the injected clock from the run's start (send, then first token, then done) and its
@@ -6808,12 +6743,12 @@ def test_serve_load_varied_writes_each_requests_timings_beside_its_record(tmp_pa
 
     monkeypatch.setattr(SL.urllib.request, "urlopen", urlopen)
     out = tmp_path / "load.jsonl"
-    a = argparse.Namespace(port=0, model="m", varied=3, fixed=0, rate=2.0, prompt_range="16:24", max_tokens=4, seed=1,
+    a = argparse.Namespace(port=0, model="m", varied=3, rate=2.0, prompt_range="16:24", max_tokens=4, seed=1,
                            release="run", jitter_ms=0.0, out=str(out))
     assert SL.run_varied(a, clock=clock, wall=lambda: 1.7e9, sleep=lambda s: None) == 0
     rows = [json.loads(line) for line in out.read_text().splitlines()]
-    assert SL.timings_path(out) == tmp_path / "load.timings.json"
-    doc = json.loads(SL.timings_path(out).read_text())
+    assert SL.sender.timings_path(out) == tmp_path / "load.timings.json"
+    doc = json.loads(SL.sender.timings_path(out).read_text())
     assert set(doc) == {"clock", "release_run", "start_unix", "requests"} and (doc["release_run"], doc["start_unix"]) == ("run", 1.7e9)
     assert [set(r) for r in rows] == [{"user", "release", "at_s", "delay_s", "prompt", "max_tokens", "response"}] * 3
     assert [(t["user"], t["release"], t["at_s"]) for t in doc["requests"]] == [(r["user"], r["release"], r["at_s"]) for r in rows]
@@ -7077,3 +7012,13 @@ def test_compose_off_node_is_1_or_0_and_another_value_is_refused_by_name_before_
     rc, lines, order, _limits = _v3c(tmp_path, (), PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
                                      HOST="vy-dc-h200-2", PREFLIGHT_ONLY="1", COMPOSE_OFF_NODE="yes")
     assert (rc, lines, order) == (3, ["PREFLIGHT: COMPOSE_OFF_NODE is 1 (the default under VERITY_HOLD_PLACEMENT=1) or 0, not yes"], [])
+
+
+def test_a_dataset_load_without_its_dataset_or_timing_is_refused_before_the_serve(tmp_path):
+    for i, unset in enumerate(("DATASET", "TIMING")):
+        env = {k: v for k, v in {**PEARL_TIES, "PEARLC_KERNEL": "pearl_c_sm90", "PEARLC_CUBIN": "/c/pearl_c_sm90.cubin"}.items()
+               if k != unset}
+        rc, argv = _serve_argv(tmp_path / str(i), env)
+        assert (rc, argv) == (3, [])
+        said = (tmp_path / str(i) / "out" / "verdicts.txt").read_text().splitlines()
+        assert said == ["PREFLIGHT: LOAD=dataset plays the input dataset DATASET at TIMING, and one of them is unset"], said

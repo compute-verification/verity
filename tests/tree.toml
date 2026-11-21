@@ -31,7 +31,7 @@ means = "one directory per serving system, holding only what attaches Verity to 
 
 [[tree]]
 path = "applications/"
-means = "one file per application, the configuration `verity run` reads, and nothing else: README.md (one table of them), remote.toml, onsite_network.toml, onsite_network_front.toml, onsite_compute.toml (the default) and onsite_full.toml. An application holds no code"
+means = "one file per application, the configuration `verity run` reads, and nothing else: README.md (one table of them), remote.toml and onsite_full.toml. An application holds no code"
 
 [[tree]]
 path = "applications/README.md"
@@ -42,20 +42,8 @@ path = "applications/remote.toml"
 means = "the remote application: SPOT, PoUW and the inference-only policy, with no auditor's device at the site"
 
 [[tree]]
-path = "applications/onsite_network.toml"
-means = "onsite, network only: the network attester, SPOT and the memory wipe"
-
-[[tree]]
-path = "applications/onsite_network_front.toml"
-means = "onsite_network.toml with the network attester's front as the run's one load, so its chain and the window's compute audit see one window"
-
-[[tree]]
-path = "applications/onsite_compute.toml"
-means = "onsite, the default: those three, PoUW and the inference-only policy"
-
-[[tree]]
 path = "applications/onsite_full.toml"
-means = "onsite, whole: those five, PoUS and PoUB"
+means = "onsite, whole: SPOT, PoUW, the inference-only policy, the network attester, the memory wipe, PoUS and PoUB"
 
 [[tree]]
 path = "security/"
@@ -88,6 +76,10 @@ means = "the architecture"
 [[tree]]
 path = "GLOSSARY.md"
 means = "the Glossary: terms and notation"
+
+[[tree]]
+path = "README.template.md"
+means = "the form of a protocol's or subsystem's README, its architecture on one screen"
 
 [[tree]]
 path = "pyproject.toml"

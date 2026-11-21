@@ -17,6 +17,7 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.evaluation.bits import evaluate_words
 from verity.circuits.ops.boolean import versions as SW
+from verity.commitments.periods import interface as IF
 from verity.protocols.resource_accounting.network.prover import ingress_scan as IS
 
 from verity_vllm.definitions.registry import boolean_io_shell as BX
@@ -241,6 +242,22 @@ def test_a_slots_entry_counts_its_outputs_cuts_its_ids_and_is_zero_when_empty(KO
     for bad in ({"STOP": (1, 1)}, {"NP": 0}):
         with pytest.raises(ValueError, match="refuses this binding"):
             bind(X.SlotEntry, **{"KO": 2, "IDB": 17, "NP": 4, "STOP": (), **bad})
+
+
+@pytest.mark.parametrize("first", [True, False], ids=["first", "later"])
+def test_the_padded_collector_and_entry_are_v1s_then_a_zero_row_past_the_floor(first):
+    """`OutCollect_v2`, `SlotEntry_v2` and `TokenFeed_v2` return v1's words, then `PAD_WORDS` zero u16 words: a row of 896
+    bits."""
+    a = [3, 9] if first else [(1 - 2) & X.M32, 9, 100, 101]
+    v1, v2 = bind(X.OutCollect, KO=2, FIRST=first), bind(X.OutCollectV2, KO=2, FIRST=first)
+    assert _run(v2, a, [7]) == _run(v1, a, [7]) + [0] * (16 * X.PAD_WORDS)
+    state = [(1 - 1 - 2) & X.M32, 9, 100, 101]
+    e1, e2 = (bind(f, KO=2, IDB=17, NP=1, STOP=(128001,)) for f in (X.SlotEntry, X.SlotEntryV2))
+    assert _run(e2, [1], state) == _run(e1, [1], state) + [0] * (16 * X.PAD_WORDS)
+    slot, sel = [2, 11, 12, 13], ([] if first else [[50]])
+    f1, f2 = (bind(f, NP=3, FIRST=first) for f in (X.TokenFeed, X.TokenFeedV2))
+    assert _run(f2, slot, *sel) == _run(f1, slot, *sel) + [0] * (16 * X.PAD_WORDS)
+    assert 16 * X.PAD_WORDS == 8 * (IF.LAST_BLOCK_BYTES + 1)
 
 
 @pytest.mark.parametrize("KO, NP, STOP", [(2, 4, ()), (4, 32, (128001,)), (64, 1024, (128001,))],

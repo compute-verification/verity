@@ -146,7 +146,7 @@ def test_no_kept_file_is_written_under_out():
     lines = [line for line in text.splitlines() if "$O/" in line and not line.lstrip().startswith("#")]
     bare = [k.replace("*", "") for k in KEPT]
     hit = sorted({k for line in lines for k in bare if f"$O/{k}" in line or ("$O/" in line and f"/{k}" in line
-                                                                              and f"$K/" not in line)})
+                                                                              and "$K/" not in line)})
     assert not hit, f"run.sh writes {hit} under $OUT; they go to $K (PP_KEEP)"
     assert 'K=${PP_KEEP:-$W/keep}' in text and "chmod 700" in text
 
@@ -167,7 +167,7 @@ case $cmd in
          echo "{\"source\": \"workload\", \"draw_counts\": {\"t\": $BITS}, \"charge\": $BITS, \"binding\": {\"advice\": {\"root\": \"ab\", \"bits\": $BITS}},
                \"timing\": {\"t\": {\"timing\": {\"proof_bytes\": [3, 3], \"prove_total_s\": 1.5}, \"lean_verify_s\": 0.5,
                                     \"gpus\": 0, \"device\": \"cpu\", \"seed\": $BITS}}}" > $out/rank0/summary.json
-         echo 'PROVE-PATH {"advice_bits": 4242421, "forged": false, "ok": true, "ranks": {"0": {"accepted": true, "charge": {"c": 4242422}}}}'
+         echo 'PROVE-PATH {"advice_bits": 4242421, "ok": true, "ranks": {"0": {"accepted": true, "charge": {"c": 4242422}}}}'
          echo 'a5 progress planted-progress'; echo planted-auditerr >&2;;
   compiler) echo '{"name": "c", "digest": "d"}';;
 esac
@@ -193,7 +193,7 @@ def _run_arm(tmp_path: Path, arm: str, bits: int = 5) -> tuple[Path, Path, str]:
 
 @pytest.mark.parametrize("arm", ["run glm '--tp-commit T --build-root B' A part.json ''",
                                  "run served '--serve-run S --window 0 --row-dir R' - part.json ''",
-                                 "run standin '--tp-commit S --build-root B' A part.json '' --forge 0:1"])
+                                 "run standin '--tp-commit S --build-root B' A part.json ''"])
 def test_a_runs_partition_its_siblings_and_error_output_stay_in_the_keep(tmp_path, arm):
     """The TP, served and stand-in arms each go through run(): $OUT gets the window's registration, commit.log and the
     audit's log, whose PROVE-PATH line `verity bench prove layers` reads, and none of the planted values; the keep holds them."""
@@ -208,7 +208,7 @@ def test_a_runs_partition_its_siblings_and_error_output_stay_in_the_keep(tmp_pat
                                                   "m0-public.bin")} | {f"{name}/windows/commit.json"} <= kept
     assert f"{name}/audit.err" in kept and b"4242421" in (keep / name / "audit.log").read_bytes()
     line = json.loads(files[f"{name}/audit.log"].decode().split("PROVE-PATH ", 1)[1].splitlines()[0])
-    assert line == {"forged": False, "ok": True, "ranks": {"0": {"accepted": True}}}
+    assert line == {"ok": True, "ranks": {"0": {"accepted": True}}}
 
 
 def test_pp_keep_under_out_or_the_run_dir_is_refused_before_anything_is_written(tmp_path):
@@ -241,10 +241,10 @@ def test_public_log_lets_only_what_its_reader_reads_go():
     rank = {"accepted": True, "ok": True, "population": 9, "draw": [9], "draw_counts": {"t": 2}, "seconds": 9,
             "charge": {"c": 9}, "advice_before_draw": True, "forged": {"x": 9},
             "per_unit": {"t": {"units": 2, "proof_bytes": 3, "prove_s_per_unit": 1.5, "lean_verify_s_per_unit": 0.5, "x": 9}}}
-    line = {"advice_bits": 9, "delta": 9, "forged": False, "ok": True, "proof": "zk", "coins": "gate", "run_root": "9",
+    line = {"advice_bits": 9, "delta": 9, "ok": True, "proof": "zk", "coins": "gate", "run_root": "9",
             "transfer_gates": 9, "ranks": {"0": rank}}
     assert json.loads(m.public_line("PROVE-PATH " + json.dumps(line)).split(" ", 1)[1]) == {
-        "forged": False, "ok": True, "proof": "zk", "coins": "gate", "ranks": {"0": {
+        "ok": True, "proof": "zk", "coins": "gate", "ranks": {"0": {
             "accepted": True, "per_unit": {"t": {"proof_bytes": 3}}}}}
     a5 = {"source": "served", "draw": [9], "audit": {"accepted": True, "wrong_units": 9, "why": {"x": "9"},
                                                      "verdicts": {"lean-verify": True, "x": False}}}

@@ -70,13 +70,12 @@ parts = 7
 # cells of a network certifier run its tests drive tick by tick (`test_network_attester_serve._run`).
 # `benchmarks/one_stage/interfaces/verity_e2e_demo`: served_verdicts' block record (`block_record`, its schema and the census's
 # reference deployment it reads) and its bundle and registration fixtures; `benchmarks/prove_path/records_audit.py`: a5's
-# records audit. `adapters/vllm/tools/served_run/serve_load.py`:
-# served_verdicts' load, whose timings file its tests read and whose fixed window `test_serve_load` runs against
-# serve-openai's endpoint (`adapters/vllm/verity_vllm`) over a stand-in engine.
+# records audit. `adapters/vllm/tools/served_run/serve_load.py`: served_verdicts' varied load, sent by the adapter's one
+# sender (`adapters/vllm/verity_vllm`), whose timings file its tests read.
 # `verity/protocols/resource_accounting/memory/poub/attester/live_verifier/host.py`: the compose gate, which `gate-compose`'s tests
 # send a hand-off through.
 # `test_served_pearlplus_lean`: served_pearlplus.sh's Lean step (`served_passes.py lean`) on the pouw suite's toy passes
-# (its `test_pearl_c_vllm` and what that imports by path), with PouwCheck.PearlPlus's `pouw-pearlplus`.
+# (its `test_pearl_c_vllm` and what that imports by path), with PouwVerifier.PearlPlus's `pouw-pearlplus`.
 # `benchmarks/prove_path/prove_path.py`, its `sources.json` and the checkpoint manifests it reads: inference_only's class
 # circuit under a φ (`prove_path.registered_of_serve`), which refuses a BF16 checkpoint under the int8 serve's.
 # `benchmarks/spot_proved/stage.py`: its allreduce and cuBLAS GEMM staging on fake captures,
@@ -109,11 +108,8 @@ inputs = ["tests/verity/circuits/stand_in.py", "tests/verity/protocols/proofs/fl
           "benchmarks/spot_proved/stage.py", "benchmarks/served_units/stage.py",
           "tools/verity/circuit_check/src/circuit_check/__init__.py", "tools/verity/circuit_check/src/circuit_check/cache.py",
           "tools/verity/circuit_check/src/circuit_check/entries.py", "tools/verity/circuit_check/src/circuit_check/targets.py",
-          "benchmarks/one_stage/interfaces/verity_e2e_demo", "verity/commitments/cuda/commit_slots/slots.py",
+          "benchmarks/one_stage/interfaces/verity_e2e_demo",
           "benchmarks/prove_path/records_audit.py", "adapters/vllm/tools/served_run/serve_load.py",
-          "tests/benchmarks/one_stage/interfaces/fixtures/drawn-unit-bundle.json",
-          "tests/benchmarks/one_stage/interfaces/fixtures/drawn-unit-bundle.bin",
-          "tests/benchmarks/one_stage/interfaces/fixtures/drawn-unit-registration.json",
           "calibration/census/deployments.json",
           "calibration/census/adversary.json", "benchmarks/slowdown/data/reference.toml",
           "benchmarks/spot_figures/cards/workload.glm-5.3.json",

@@ -50,7 +50,7 @@ SHA-512 of its salt.
 **Known content.** A row the verifier registers itself at known content (`Flock.RegKnown`) commits no value. Its words
 and its salt are a function, fixed by the protocol under a tag of its own, of what is public before the row is made:
 protocol structure, the verifier's coins and samples, and roots registered before them. The verifier computes that
-function itself and takes the row from no file of the stack's (PoUW's ok rows: `PouwCheck.Credit.registeredFile`). So
+function itself and takes the row from no file of the stack's (PoUW's ok rows: `PouwVerifier.Credit.registeredFile`). So
 the leaf hides nothing and needs no secret salt, neither the stack nor the server chooses a bit of its `b ‖ c` or its
 root, and they add nothing to what was public: the service commits no such row and the leakage terms below count none.
 `Registered.checkKnown` alone does not make a row known content: it roots whatever rows and salts a `--registered` file

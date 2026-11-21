@@ -19,7 +19,6 @@ SPOT, and the one record of every verdict (the block record).
     served_verdicts.py rebase SERVE_DIR SERVED_DIR < PATHS
     served_verdicts.py composed ANSWER DIR [--gate-exit RC]
     served_verdicts.py public-registration REGISTRATION
-    served_verdicts.py sampled-line LOG [--partition FILE] [--challenger C --summary FILE]
     served_verdicts.py coin-trees --challenger C --summary FILE
     served_verdicts.py coins --challenger C --summary FILE
     served_verdicts.py front-line SESSION
@@ -37,10 +36,7 @@ is done, in full under DIR where it names or counts a window or holds a load's o
 its place. The class's padded counts, the period's declared T and S, the bench Build's requests and the
 verifier's coins and samples are public. ``public-registration`` prints what the run publishes of a window's advice
 docket (`public_registration`: its compiler's cap in place of the advice's length, which the advice tree's row count
-states all the same), ``sampled-line`` the
-SAMPLED-PROOFS line from the records audit's log
-(`sampled_line`: the partition the sample was over, the members it drew, whose challenger's coins they were and where
-its sessions' coin trees came from, and no length of the advice or count of the scope's members), ``coin-trees`` why an
+states all the same), ``coin-trees`` why an
 audit on the gate's coins took its sessions' coin trees from elsewhere (`coin_trees_refusal`, exit 1), ``coins`` the
 V3C-AUDIT line's account of whose coins its audit's were and its coin trees (`coins_said`), and
 ``front-line`` the CERTIFIER-FRONT line from the front's session (`front_line`: `FRONT_PUBLIC`), ``failed`` a tool's
@@ -49,7 +45,7 @@ failure by its exception's class and exit status (`failed`) and ``said`` its las
 ``window``: the sealed window to audit, from a serve-openai run's ``seals.jsonl``, ``windows.jsonl`` and ``requests.jsonl``
 (`pick`): sealed without error, its Commit passed, each of its requests checked and in no other window (V3b's window
 circuit refuses a request carried across windows), at most ``--slots`` of them (its class's); the most requests, then the
-earliest. ``--window K`` holds K to the same rules. ``--of-load FILE`` (a fixed load's lines, `serve_load.py`'s
+earliest. ``--window K`` holds K to the same rules. ``--of-load FILE`` (a fixed load's lines, `verity_vllm.inputs.sender`'s
 ``--out``) takes the one window whose requests are that load's and no other, and ``--attested`` the one whose requests
 are all the network attester's: neither a count nor a setting chooses it, and either refuses unless one window fits. Prints the pick (`pick`): ``{window, requests, users, steps,
 refused}``, which the run keeps in the serve dir's ``private/window.json``.
@@ -98,7 +94,7 @@ only where `pearlplus_of_record` holds it to the piece's own check of live coins
 node only: the compose holds just the key file the piece hands to ``--key-sha512``), the lane ``--lane``'s own reserve and
 Pearl-C period, a sample session the lane reserved first after that period closed and opened on the run's commitment, the
 window's docket chained after Pearl+'s window record and its records audit tied to it accepted, that period's circuit the window-circuit record V3c held the
-window's circuit to, and the Lean `PouwCheck.PearlPlus` verdict on the same run; else its row stays missing, naming the
+window's circuit to, and the Lean `PouwVerifier.PearlPlus` verdict on the same run; else its row stays missing, naming the
 first condition it fails.
 
 ``pearlplus-period open``: the lane's Pearl-C period P, opened at ``--gate`` before Pearl+'s serve with cap 1 (the serve's
@@ -412,7 +408,7 @@ WITNESS_NAMES = {"inst*.bin": "a prover's instance file (its rows)", "*-private.
 DEV_VERDICT = "development run, credits nothing"
 #: Pearl+'s verdict's protocol (`verify_run.PROTOCOL`)
 PEARLPLUS_PROTOCOL = "verity/pouw/pearl-plus/v1"
-#: Pearl+'s verdict's core answer in its piece (`served_pearlplus.sh`'s step 4), and the Lean `PouwCheck.PearlPlus`
+#: Pearl+'s verdict's core answer in its piece (`served_pearlplus.sh`'s step 4), and the Lean `PouwVerifier.PearlPlus`
 #: verdict on the same passes and coin record there (`pouw-pearlplus`'s printout)
 PEARLPLUS_ANSWER, PEARLPLUS_LEAN = "pearlplus-answer.json", "pearlplus-lean.json"
 #: the window's docket R as its records audit under ``--sampled-proofs`` sampled against (a5's copy), and that
@@ -777,31 +773,6 @@ def coin_trees_refusal(challenger: str, summary: Mapping[str, Any] | None) -> st
             "trees from somewhere other than the gate's session that sampled them, which the auditor's Lean verifier "
             "refuses (OneStageZk.treesHeld); serve from a tree whose a5.window_trees takes them from that session, "
             "with FLOCK_CHALLENGER unset")
-
-
-def sampled_line(records: Mapping[str, Any], partition: Mapping[str, Any] | None, challenger: str | None = None,
-                 summary: Mapping[str, Any] | None = None) -> str:
-    """The SAMPLED-PROOFS line's account of the records audit's ``RECORDS`` row: what the sample was over (the partition's
-    templates, its scope's op path and sampling design), which members it drew, and the row with no length of the advice
-    (``leak.advice_bits``) and with how many proof blocks were sampled (``sampled``). Its ``population``, the scope's
-    unpadded member count, counts the execution phase's tokens: the private copy keeps it and the published one cuts it
-    (`public_line`). The scope's ``steps``, the window's engine steps, stay on the node too. With the audit's
-    ``challenger``, whose coins they were (`challenger_coins`), and the row its ``summary``'s ``coin_trees``, so no reader
-    takes a development session's run for the auditor's."""
-    row = dict(records)
-    if isinstance(row.get("draw"), list):
-        row["sampled"] = len(row["draw"])
-    if isinstance(row.get("leak"), Mapping):
-        row["leak"] = {k: v for k, v in row["leak"].items() if k != "advice_bits"}
-    if summary is not None:
-        row["coin_trees"] = summary.get("coin_trees")
-    part = partition or {}
-    scope = part.get("scope") or {}
-    over = (f"over {', '.join(part.get('templates') or ['?'])} at {scope.get('op_path_prefix', '?')} "
-            f"(law {part.get('law', '?')})")
-    drawn = f"drawn members {row.get('draw')}" if row.get("draw") is not None else "no draw"
-    coins = f", coins {challenger_coins(challenger)}" if challenger is not None else ""
-    return f"{over}, {drawn}{coins}: RECORDS {json.dumps(row, sort_keys=True)}"
 
 
 #: The network attester front's session fields the CERTIFIER-FRONT line says. The rest (its prompts, request, kept fetch, gate
@@ -1899,7 +1870,7 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
        rate's leaves the answer without a weaker tie. The period's
        open (in the signed ledger) committed the SHA-512 of the window-circuit record V3c held R's circuit to
        (`CIRCUIT_RECORD` beside R), so the period holds the salt session to the circuit of the window served.
-    4. **Lean.** The Lean `PouwCheck.PearlPlus` verdict (`PEARLPLUS_LEAN`) accepts the same run commitment on the same
+    4. **Lean.** The Lean `PouwVerifier.PearlPlus` verdict (`PEARLPLUS_LEAN`) accepts the same run commitment on the same
        sample source, holds the passes to the same W, and credits work over tiles at the reference's ε.
 
     The answer is Pearl+'s, its work the Lean's (in the grid form, with its ``give_up``, where the verdict held the
@@ -2546,7 +2517,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     w.add_argument("serve_dir", type=Path)
     w.add_argument("--slots", type=int, default=8)
     w.add_argument("--window", type=int)
-    w.add_argument("--of-load", type=Path, help="the fixed load's lines (serve_load.py --out): the window of its requests")
+    w.add_argument("--of-load", type=Path, help="the fixed load's lines (verity_vllm.inputs.sender --out): the window of its requests")
     w.add_argument("--attested", action="store_true", help="the window of the network attester's requests alone")
     g = sub.add_parser("gate")
     g.add_argument("--gate", default=os.environ.get("H1_GATE"))
@@ -2596,11 +2567,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     pb = sub.add_parser("publish")
     pb.add_argument("out", type=Path)
     pb.add_argument("--private", type=Path, required=True)
-    sl = sub.add_parser("sampled-line")
-    sl.add_argument("log", type=Path)
-    sl.add_argument("--partition", type=Path)
-    sl.add_argument("--challenger")
-    sl.add_argument("--summary", type=Path)
     for name in ("coin-trees", "coins"):
         ct = sub.add_parser(name)
         ct.add_argument("--challenger", required=True)
@@ -2691,14 +2657,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         return rc
     if a.cmd == "public-registration":
         print(json.dumps(public_registration(json.loads(a.registration.read_text())), indent=1, sort_keys=True))
-        return 0
-    if a.cmd == "sampled-line":
-        rows = [x[len("RECORDS "):] for x in a.log.read_text().splitlines() if x.startswith("RECORDS ")]
-        if not rows:
-            print("no RECORDS line")
-            return 1
-        print(sampled_line(json.loads(rows[0]), json.loads(a.partition.read_text()) if a.partition else None,
-                           a.challenger, _summary(a.summary) if a.summary else None))
         return 0
     if a.cmd == "coins":
         print(coins_said(a.challenger, _summary(a.summary)))

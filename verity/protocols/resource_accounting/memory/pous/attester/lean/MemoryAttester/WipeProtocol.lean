@@ -29,7 +29,11 @@ The streamed-label wipe's verdict (`StreamedWipe.verdict`, the wipe judge of rec
   no egress, and this check holds the count to nothing: that it is the network attester's count over the span
   between the session's two marks is for the check that composes the wipe with the network attester;
 * the check: a commitment of another server or session rejects; an egress outside 0 to `EGRESS_MAX_UNITS` rejects;
-  an unsigned session is undecided; else `verdict`, whose reasons, joined by `"; "`, are a rejection's.
+  an unsigned session is undecided; else `verdict`, whose reasons, joined by `"; "`, are a rejection's. The deployed
+  command answers only on a served road (`checkServed`), held to the served node and to the fill floor the card file
+  gives (`--server NAME --fill BYTES`, `store.wipe_fill`): a wipe of another server, or one whose labels fill less, is
+  refused by name before `check` reads it. The floor is not the card's memory (`store.dram`, a ceiling): the memory
+  between them is filled by no label and is uncovered.
 
 On acceptance it publishes `uncounted`, `certify` at `EGRESS_MAX_UNITS`: `certified` false, whatever count the
 evidence names. No network attester signs that count, so until the check that composes the wipe with the network
@@ -247,15 +251,26 @@ def testProtocol : Core.Protocol := mkProtocol (TEST_PREFIX ++ ID) TEST_SCHEMES
 /-- The refusal of a case whose params name another server than the served node `served`. -/
 def otherServer (served : String) : String := s!"the case is a wipe of another server than {served}"
 
-/-- `check` on a served road, whose served node `served` (its name, the public input `serve --server` takes) the case
-must be a wipe of: a case whose params' `server` is not `served`'s bytes is refused by name (`otherServer`) before
-anything else is read. -/
-def checkServed (schemes : Schemes) (served : String) (p : Params) (c : StreamedWipe.Commitment) (e : Evidence) :
-    Core.Outcome Public (StreamedWipe.Params × Int) :=
-  if p.server != served.toUTF8 then .reject (otherServer served) else check schemes p c e
+/-- The refusal of a wipe whose fill, `filled` bytes (its labels at `LABEL_BYTES` each), is less than `fill`, the fill
+floor the card file gives: a floor on the fill, not the memory the wipe covers. -/
+def underFilled (filled fill : Nat) : String :=
+  s!"the wipe fills {filled} bytes, less than the fill floor of {fill} bytes the card file gives"
 
-/-- `mkProtocol id schemes` held to the served node `served` (`checkServed`). -/
-def servedProtocol (id : String) (schemes : Schemes) (served : String) : Core.Protocol where
+/-- `check` on a served road, whose served node `served` (its name, the public input `serve --server` takes) the case
+must be a wipe of, filling at least `fill` bytes, the fill floor the card file gives (the public input `serve --fill`
+takes, the card file's `store.wipe_fill`, below its `store.dram`): a case whose params' `server` is not `served`'s bytes
+is refused by name (`otherServer`), then one whose commitment's labels fill less than `fill` bytes (`underFilled`),
+before anything else is read. -/
+def checkServed (schemes : Schemes) (served : String) (fill : Nat) (p : Params) (c : StreamedWipe.Commitment)
+    (e : Evidence) : Core.Outcome Public (StreamedWipe.Params × Int) :=
+  if p.server != served.toUTF8 then .reject (otherServer served)
+  else if c.params.labels * StreamedWipe.LABEL_BYTES < fill then
+    .reject (underFilled (c.params.labels * StreamedWipe.LABEL_BYTES) fill)
+  else check schemes p c e
+
+/-- `mkProtocol id schemes` held to the served node `served` and the fill floor `fill` the card file gives
+(`checkServed`). -/
+def servedProtocol (id : String) (schemes : Schemes) (served : String) (fill : Nat) : Core.Protocol where
   id := id
   Params := Params
   Commitment := StreamedWipe.Commitment
@@ -266,25 +281,29 @@ def servedProtocol (id : String) (schemes : Schemes) (served : String) : Core.Pr
   commitment := decodeCommitment
   evidence := decodeEvidence
   digest := digest
-  check := checkServed schemes served
+  check := checkServed schemes served fill
   publicJson := Public.toJson
   profileJson := profileJson
 
-/-- The refusal of `serve` or `check` with no served node: the wipe answers only held to one. -/
+/-- The refusal of `serve` or `check` with no served node and fill floor: the wipe answers only held to both. -/
 def unheld (id : String) : String :=
-  s!"{id}: serve and check are held to the served node: --server NAME serve, or --server NAME check PARAMS " ++
-    "COMMITMENT EVIDENCE; there is no form without it"
+  s!"{id}: serve and check are held to the served node and the fill floor the card file gives: --server NAME " ++
+    "--fill BYTES serve, or --server NAME --fill BYTES check PARAMS COMMITMENT EVIDENCE; there is no form without them"
 
-/-- The wipe's command line: `id`, and `serve` or `check` held to the served node NAME (`servedProtocol`), each
-`--server NAME` first; any other form, `serve` or `check` with no server among them, is refused by name (`unheld`), exit
-64. -/
+/-- The wipe's command line: `id`, and `serve` or `check` held to the served node NAME and the fill floor BYTES the card
+file gives (`servedProtocol`), `--server NAME --fill BYTES` first; any other form, `serve` or `check` without both or
+with a fill that is no natural number, is refused by name (`unheld`), exit 64. -/
 def mainOf (id : String) (schemes : Schemes) : List String → IO UInt32
-  | ["--server", served, "serve"] => (servedProtocol id schemes served).main ["serve"]
-  | ["--server", served, "check", p, c, e] => (servedProtocol id schemes served).main ["check", p, c, e]
+  | ["--server", served, "--fill", fill, "serve"] => match fill.toNat? with
+    | some n => (servedProtocol id schemes served n).main ["serve"]
+    | none => do IO.eprintln (unheld id); return 64
+  | ["--server", served, "--fill", fill, "check", p, c, e] => match fill.toNat? with
+    | some n => (servedProtocol id schemes served n).main ["check", p, c, e]
+    | none => do IO.eprintln (unheld id); return 64
   | ["id"] => (mkProtocol id schemes).main ["id"]
   | _ => do IO.eprintln (unheld id); return 64
 
-/-- `wipe-protocol`'s command line (`mainOf`): no form without a served node. -/
+/-- `wipe-protocol`'s command line (`mainOf`): no form without a served node and a fill floor. -/
 def main : List String → IO UInt32 := mainOf ID SCHEMES
 
 /-- `wipe-protocol-test`'s command line: `mainOf`'s, and the test's form, `serve` and `check` of `testProtocol` held to
@@ -298,8 +317,9 @@ def testMain (args : List String) : IO UInt32 :=
 /-- **What a wipe accounts for** (`Core.Account`): the foreign bits the server may still hold after an accepted wipe
 (`foreign_bits`), free from above, against the memory the wipe declared (`memory_bits`, its capacity), at the error its
 bound states (`eps`), at a moment. Until the network attester's count reaches the check, every accepted wipe publishes
-`certified` false, and its rows say so. The wipe is computed at `memory_bits`, which must be at least the memory
-registered for the server (`params`): foreign bits outside what it declared are outside its bound.
+`certified` false, and its rows say so. The wipe is computed at `memory_bits`, the tiers it declared; on the served road
+its fill is at least the fill floor the card file gives (`checkServed`), and foreign bits outside what it declared
+are outside its bound. The floor is no memory covered: the card's memory past the fill is uncovered.
 
 Its answers name no auditor's device's key, so they are of the whole site (`witness`), and no step the bound held at
 (`held`). Its part is every tier a wipe can declare. The session's own tiers are in its profile's `tiers` as pairs of a
@@ -348,10 +368,10 @@ private def unread : StreamedWipe.Commitment := ⟨"n0".toUTF8, ⟨#[0]⟩, { se
 #guard (protocol.answer "{}".toUTF8 ByteArray.empty ByteArray.empty).reason.map (·.startsWith "params: ") == some true
 #guard account.Formed ∧ account.protocol = protocol.id
 
-#guard match checkServed SCHEMES "n0" ⟨"n0".toUTF8, ⟨#[0]⟩, #[]⟩ unread ⟨none, none⟩ with
+#guard match checkServed SCHEMES "n0" 0 ⟨"n0".toUTF8, ⟨#[0]⟩, #[]⟩ unread ⟨none, none⟩ with
   | .undecided r => r.startsWith "the memory challenger has not signed"
   | _ => false
-#guard match checkServed SCHEMES "n1" ⟨"n0".toUTF8, ⟨#[0]⟩, #[]⟩ unread ⟨none, none⟩ with
+#guard match checkServed SCHEMES "n1" 0 ⟨"n0".toUTF8, ⟨#[0]⟩, #[]⟩ unread ⟨none, none⟩ with
   | .reject r => r == otherServer "n1" && r == "the case is a wipe of another server than n1"
   | _ => false
 

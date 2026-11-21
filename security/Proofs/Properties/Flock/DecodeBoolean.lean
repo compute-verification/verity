@@ -480,6 +480,7 @@ theorem decode_facts (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P)
   have hk0 := of_triple (go_kept _ _ _ false) hgo (DecodeKeys.kept_empty desc hd0 hi0')
   obtain ⟨hi0, -⟩ := go_inv _ _ _ _ _ _ hgo
     ⟨fun i hi => absurd hi (by rw [hd0]; exact Nat.not_lt_zero i), fun k v hk => absurd hk (by rw [hi0']; simp),
+      fun i hi => absurd hi (by rw [hd0]; exact Nat.not_lt_zero i),
       fun i hi => absurd hi (by rw [hd0]; exact Nat.not_lt_zero i)⟩
   obtain ⟨hb1, hp1, hall'⟩ := decodeAll_run desc _ hall ⟨hk0, hi0⟩
   obtain ⟨hmiss, hextra⟩ := booleanKeys_ok hbk

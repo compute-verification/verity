@@ -57,6 +57,9 @@ NOT_SCANNED = {
 PUBLIC = {
     "verity_vllm": "I1: the pinned engine (LLM), its pin, its spec, its target and the serving device's target and execution",
     "verity_vllm.engine.spec": "I1: engine spec documents",
+    "verity_vllm.inputs.serves": "I1: what the adapter serves (SERVES: its model, vocabulary and window class) and the door "
+                                 "an input dataset passes before it is sent, which `verity run` reads an application's "
+                                 "dataset through",
     "verity_vllm.settings": "I1: the record of the value settings in force in an environment (record): each variable set "
                             "there that can change what is computed or committed, a credential by name only, and their "
                             "digest, which benchmarks/serve_tax writes into an arm's meta.json and a replay's replay.json",
@@ -338,7 +341,6 @@ KNOWN = frozenset({
     "verity_vllm.definitions.registry.fp8",
     "verity_vllm.definitions.registry.fp8_moe",
     "verity_vllm.definitions.registry.fp8_moe_experts",
-    "verity_vllm.definitions.registry.greedy_stages",
     "verity_vllm.definitions.registry.hopper",
     "verity_vllm.definitions.registry.int8_exact",
     "verity_vllm.definitions.registry.io_shell",
@@ -372,8 +374,6 @@ KNOWN = frozenset({
     "verity_vllm.pipeline.chunk_rows",
     "verity_vllm.pipeline.cpu_replay",
     "verity_vllm.pipeline.deferred_rows",
-    "verity_vllm.pipeline.serve_openai",
-    "verity_vllm.pipeline.serve_protocol",
     "verity_vllm.pipeline.serving_rows",
     "verity_vllm.pipeline.slice_rows",
     "verity_vllm.pipeline.window_advice",

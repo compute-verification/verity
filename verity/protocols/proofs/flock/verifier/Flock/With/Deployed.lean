@@ -79,6 +79,66 @@ theorem setupTables_named (tags : Tags) (circuitFile publicFile : ByteArray) (co
   clear_value strat1
   returns_walk [hstrat1 _]
 
+/-- **A one-table session with hidden outputs is `Stmt.setupHiddenOf`'s statement on `parsed`**: the one statement it
+returns is the one `setupHiddenOf` returns at the session's tags and sample, so its circuit is `parsed`'s. -/
+theorem _root_.Flock.Stmt.setupTablesOf_one {parsed : V Circuit} {tags : Tags} {circuitFile publicFile : ByteArray}
+    {coins : Coins} {count : Nat} {tables : List (String × ByteArray)} {draw partition : Option Lean.Json}
+    {program : Option ByteArray} {work : Option (Nat × Array (String × Nat × Nat))} {stratified : Option Nat}
+    {closure : Option (Std.HashMap Nat (Array Nat))} {publicInputs : Option ByteArray} {r : SessionSpec × Array Stmt}
+    (hh : tags.hiddenOutputs = true) (hc : count ≤ 1)
+    (h : Stmt.setupTablesOf parsed tags circuitFile publicFile coins count tables draw partition program work stratified
+      closure publicInputs = .ok r) :
+    ∃ st, r.2 = #[st] ∧
+      Stmt.setupHiddenOf parsed tags publicFile coins draw partition program publicInputs = .ok st := by
+  revert r
+  change Returns _ fun r : SessionSpec × Array Stmt => ∃ st, r.2 = #[st] ∧
+    Stmt.setupHiddenOf parsed tags publicFile coins draw partition program publicInputs = .ok st
+  unfold Stmt.setupTablesOf
+  extract_lets setup setupOne splits names count1 pubIn work1 strat1
+  have hone : ∀ d, Returns (setupOne d) fun st =>
+      Stmt.setupHiddenOf parsed tags publicFile coins d partition program publicInputs = .ok st := by
+    intro d
+    simp only [setupOne]
+    refine Returns.ite (fun _ => ?_) (fun hn => absurd hh hn)
+    refine Returns.bindQ (fun a ha => ha) fun st hst => ?_
+    repeat' (first
+      | (with_reducible apply Returns.bind'); intro _
+      | (with_reducible apply Returns.throw')
+      | (with_reducible apply Returns.pure'); exact hst
+      | (with_reducible apply Returns.ite) <;> intro _
+      | split)
+  clear_value setupOne
+  have hcount1 : ∀ u, Returns (count1 u) fun r : SessionSpec × Array Stmt => ∃ st, r.2 = #[st] ∧
+      Stmt.setupHiddenOf parsed tags publicFile coins draw partition program publicInputs = .ok st := by
+    intro _
+    repeat' (first
+      | (exfalso; exact ‹¬count ≤ 1› hc)
+      | (with_reducible apply Returns.bindQ (hone _)); intro _ _
+      | (with_reducible apply Returns.bind'); intro _
+      | (with_reducible apply Returns.throw')
+      | (with_reducible apply Returns.pure'); exact ⟨_, rfl, by assumption⟩
+      | (with_reducible apply Returns.ite) <;> intro _
+      | (with_reducible apply Returns.dite) <;> intro _
+      | split
+      | (with_reducible conv => arg 1; whnf); split)
+  clear_value count1
+  have hpubIn : ∀ u, Returns (pubIn u) fun r : SessionSpec × Array Stmt => ∃ st, r.2 = #[st] ∧
+      Stmt.setupHiddenOf parsed tags publicFile coins draw partition program publicInputs = .ok st := by
+    intro _
+    returns_walk [hcount1 _]
+  clear_value pubIn
+  have hwork1 : ∀ u, Returns (work1 u) fun r : SessionSpec × Array Stmt => ∃ st, r.2 = #[st] ∧
+      Stmt.setupHiddenOf parsed tags publicFile coins draw partition program publicInputs = .ok st := by
+    intro _
+    returns_walk [hpubIn _]
+  clear_value work1
+  have hstrat1 : ∀ u, Returns (strat1 u) fun r : SessionSpec × Array Stmt => ∃ st, r.2 = #[st] ∧
+      Stmt.setupHiddenOf parsed tags publicFile coins draw partition program publicInputs = .ok st := by
+    intro _
+    returns_walk [hwork1 _]
+  clear_value strat1
+  returns_walk [hstrat1 _]
+
 theorem named_ofCircuit {sts : Array Stmt} (h : ∀ st ∈ sts, st.merkle.Named) :
     ∀ s ∈ sts.map Setup.ofCircuit, s.merkle.Named := by
   intro s hs
