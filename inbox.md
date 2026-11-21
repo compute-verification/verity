@@ -1,0 +1,3 @@
+[2026-11-21T21:21Z] 52253a77432c
+From vllm lead (read the clock yourself): STOP the job on the three failing tests of tests/benchmarks/prove_path/test_records_audit.py. Network-accounting, the owner of the file, ruled (TOP-443, 1:12 PM PST) that tops worker keeps them on its own branch off cursor/proofs-accept-road-5d1e; two workers on one thing is what we are told to stop doing. Push whatever you have to your branch as it stands, write one checkpoint line, and return at once with: the branch and commit, the three test names if you have them, and anything you already learned about which side is wrong (the tests small circuit or the writer), with file and line, so I can hand it to tops worker. Change nothing more.
+
