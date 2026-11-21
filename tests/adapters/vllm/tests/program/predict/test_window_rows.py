@@ -119,27 +119,31 @@ class Unserved:
         return None
 
 
-def unserved_slots(low, state, weights) -> list[WR.Slot]:
+def unserved_slots(low, state, weights, cls=CLASS) -> list[WR.Slot]:
     """Each of ``low``'s Programs' `Slot` of its lane's row (`scan_slots`), every node computed (`Unserved`)."""
-    return [WR.Slot(P.fn, CLASS, row, weights, Unserved(row[1], P.positions))
+    return [WR.Slot(P.fn, cls, row, weights, Unserved(row[1], P.positions))
             for P, (row, _) in zip(low.programs, WR.scan_slots(low, state))]
 
 
-def _window(config=S.TINY, grain=GRAIN):
-    """The served circuit lowered (`REQUESTS`), its weights, its registered values (each weight's parameter under fresh
-    salts, and the scan state's, `STATE` committed as a stand-in for the network attester's, in ``row/v2`` rows as the
-    scan's units commit their state rows, as `Rows` and `Window` take them) and each request's `Slot` of its lane's row
-    (`scan_slots`), every node computed."""
-    low = WC.lower(_registered(config), CLASS, None, grain, requests=REQUESTS)
+def _window(config=S.TINY, grain=GRAIN, cls=CLASS, lanes=LANES):
+    """The served circuit of ``cls`` lowered (a request a lane of bucket 0's ``lanes``: `REQUESTS`), its weights, its
+    registered values (each weight's parameter under fresh salts, and the scan state's, bucket 0's row ``lanes`` and
+    every later one another request in each lane (`STATE`), committed as a stand-in for the network attester's, in
+    ``row/v2`` rows as the scan's units commit their state rows, as `Rows` and `Window` take them) and each request's
+    `Slot` of its lane's row (`scan_slots`), every node computed."""
+    later = [(1, 1, 1, [99] + [0] * (len(lanes[0][3]) - 1))] * len(lanes)
+    state_rows = [state_row(cls.scan, lanes)] + [state_row(cls.scan, later)] * (cls.buckets - 1)
+    requests = tuple(WC.Request(cls.anchor(k), cls.lane(k), lp, m) for k, (_o, lp, m, _ids) in enumerate(lanes))
+    low = WC.lower(_registered(config), cls, None, grain, requests=requests)
     fields = _weights(low.fn)
-    state = RV.Registered.commit(PROGRAM, SS.SCAN_STATE, STATE, [hm96_salt(bytes(32), 0, j) for j in range(len(STATE))],
-                                 schema=CR.SCHEMA_V2)
+    state = RV.Registered.commit(PROGRAM, SS.SCAN_STATE, state_rows,
+                                 [hm96_salt(bytes(32), 0, j) for j in range(len(state_rows))], schema=CR.SCHEMA_V2)
     values = {**WW.weight_values(_registered(config), fields, None, grain, keep_rows=True), SS.SCAN_STATE: state}
 
     def weights(label: str, lo: int, hi: int) -> np.ndarray:
         return fields[label][lo:hi]
 
-    return low, fields, values, weights, unserved_slots(low, STATE, weights)
+    return low, fields, values, weights, unserved_slots(low, state_rows, weights, cls)
 
 
 @pytest.fixture(scope="module")
@@ -945,19 +949,27 @@ def test_a_cut_norms_parts_hold_its_sum_and_its_tail_the_nodes_value():
 
 
 @pytest.mark.slow
-def test_a_windows_registration_registers_its_scan_state_under_the_domain_the_verifier_derives(window, tmp_path):
-    """Written as `prove_path` writes it, with no index salt given, its index salt is 192 fresh bytes read back from the
-    window's ``index-salt.bin`` under the index leaf it registers. Slow (minutes) for the window's close, which no cheaper
-    path to `Window.write` skips."""
-    low, _f, values, _w, slots = window
-    c, words = low.circuit, SS.words(CLASS.scan)
-    assert c.registered.values == (SS.SCAN_STATE,)
+@pytest.mark.parametrize("cls, lanes", [(WC.WindowClass(1, 1, 1), [(1, 1, 1, [17])]), (CLASS, LANES)], ids=["1,1,1", "2,4,2"])
+def test_a_windows_scan_state_is_a_run_input_committed_whole_and_registered_by_no_pin(cls, lanes, tmp_path):
+    """The scan's state is C's run input node, all ``buckets`` rows, of which the window's lanes read row 0: the close
+    commits its tree ``input/n<w>`` from the scan state's value, the rows no unit reads included, in the domain C gives
+    the node, and the registration registers it as a run input, never as a value a pin holds. Written as `prove_path`
+    writes it, with no index salt given, its index salt is 192 fresh bytes read back from the window's
+    ``index-salt.bin`` under the index leaf it registers. Slow (minutes) for the window's close, which no cheaper path
+    to `Window.write` skips."""
+    low, _f, values, _w, slots = _window(cls=cls, lanes=lanes)
+    c, words = low.circuit, SS.words(cls.scan)
+    assert c.registered.values == () and c.registered.run == (SS.SCAN_STATE,)
     program, digest = c.program()[0], IB.program_digest(c)
-    assert dict(program.fn.signature()[0])[SS.SCAN_STATE].leaves == CLASS.buckets * words
-    state = WR.state_value(digest, CLASS, SR.standin_rows(CLASS, [(r, m) for r, (_o, _lp, m, _ids) in zip(SLOTS, LANES)]),
-                           window=RUN)
+    names = [p for p, _ in program.fn.signature()[0]]
+    w = names.index(SS.SCAN_STATE)
+    assert dict(program.fn.signature()[0])[SS.SCAN_STATE].leaves == cls.buckets * words and program.bindings[w] == "run"
+    heads = [(r, m) for r, (_o, _lp, m, _ids) in zip(([occ, lp, *ids] for occ, lp, _m, ids in lanes), lanes)]
+    state = WR.state_value(digest, cls, SR.standin_rows(cls, heads), window=RUN)
     vals = {**values, SS.SCAN_STATE: state}
     win = IF.Window(c, RUN, DESIGN, 64, registered=vals, forms=WR.FORMS)
+    reads = [r for r in win.runs if r.param == f"input/n{w}"]
+    assert [(r.at, r.base, r.step) for r in reads] == [(0, 0, (words,))] * cls.lanes
     win.supply()
     WR.Rows(low, slots, vals).record(win)
     win.write(win.close(), tmp_path, {}, registrar=DK)
@@ -965,13 +977,14 @@ def test_a_windows_registration_registers_its_scan_state_under_the_domain_the_ve
     kept = (tmp_path / CS.INDEX_SALT).read_bytes()
     assert len(kept) == CS.SALT_BYTES and kept not in {bytes(s) for s in state.salts}
     assert CS.index_leaf((tmp_path / "index.json").read_bytes(), kept).hex() == rec["window"]["index_leaf"]
-    (e,) = rec["registered"]
-    scan = RV.Registered.commit(digest, SS.SCAN_STATE, list(state.rows), list(state.salts), schema=CR.SCHEMA_V2, window=RUN)
-    want = CR.registered_entries(program, {SS.SCAN_STATE: words}, {SS.SCAN_STATE: CR.SCHEMA_V2}, RUN)[SS.SCAN_STATE]
-    assert rec["format"] == DM.REGISTRATION and e == state.entry() == scan.entry()
-    assert e["value"] == SS.SCAN_STATE and e["root"] == rec["window"]["registered_roots"][SS.SCAN_STATE]
-    assert (e["leaves"], e["words"], e["domain"]) == (want["leaves"], want["words"], want["domain"]) == (
-        CLASS.buckets, words, RV.domain(digest, SS.SCAN_STATE, words, CLASS.buckets, window=RUN).domain_id.hex())
+    assert SS.SCAN_STATE not in rec["window"].get("registered_roots", {})
+    assert SS.SCAN_STATE not in [e["value"] for e in rec.get("registered", [])]
+    tree = win.inputs[f"input/n{w}"]
+    want = IF.run_input_domain(program, digest, w, words, RUN)
+    assert (tree.leaves, tree.domain.domain_id) == (cls.buckets, want.domain_id) and want.count == cls.buckets
+    assert np.array_equal(CS.value_rows(tree, range(cls.buckets)), CS.value_rows(state, range(cls.buckets)))
+    doc = json.loads((tmp_path / "circuit.json").read_text())
+    assert f"input/n{w}" in {r["param"] for r in doc["run_inputs"]} and doc["registered"]["run"] == [SS.SCAN_STATE]
 
 
 class _Kept:

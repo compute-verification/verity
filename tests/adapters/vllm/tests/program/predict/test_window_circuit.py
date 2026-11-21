@@ -1379,18 +1379,30 @@ def test_a_tails_rows_are_its_parts_leaves_in_the_order_of_at(split):
     assert [w.leaves(t, f"r#{j}").tolist() for j in range(4)] == [[0]] * 4
 
 
-def test_a_one_slot_windows_run_inputs_are_the_embedding_openings_three_trees():
+def test_a_one_slot_windows_run_inputs_are_the_embedding_openings_three_trees_and_the_scan_state():
     """At class 1,1,1, with the weights registered input nodes, the window's run inputs are the embedding opening's
     path, row and salt, each read whole by the one `EmbeddingRead` unit from its node's one tree ``input/n<w>``, which
-    its port names and no member holds a tree of."""
-    circuit = class_circuit(S._registered(), WindowClass(1, 1, 1), None, GRAIN)
+    its port names and no member holds a tree of, and the scan's state, whose node is all ``buckets`` rows, of which the
+    one `ScanSlots_v5` unit reads row 0: bound per run, so no registration pins it."""
+    cls = WindowClass(1, 1, 1)
+    circuit = class_circuit(S._registered(), cls, None, GRAIN)
     win = IF.Window(circuit, "ab" * 64, {"law": "stratified", "k": 2}, 64)
     (emb,) = [IF.descriptor_id(fn) for fn, _ in circuit.templates if fn.name == "EmbeddingRead"]
-    assert sorted((r.reader, r.port) for r in win.runs) == [(emb, "path"), (emb, "row"), (emb, "salt")]
-    assert len({r.param for r in win.runs}) == 3 and all(re.fullmatch(r"input/n\d+", r.param) for r in win.runs)
+    (scan,) = [IF.descriptor_id(fn) for fn, _ in circuit.templates if fn.name == "ScanSlots"]
+    assert sorted((r.reader, r.port) for r in win.runs) == sorted([(emb, "path"), (emb, "row"), (emb, "salt"), (scan, "state")])
+    assert len({r.param for r in win.runs}) == 4 and all(re.fullmatch(r"input/n\d+", r.param) for r in win.runs)
     m = next(m for m in win.window.members if m.template == emb)
     assert {"path", "row", "salt"} <= set(m.values)
-    assert not any(t.rsplit("/", 1)[-1] in ("path", "row", "salt") for t in win.window.trees)
+    assert not any(t.rsplit("/", 1)[-1] in ("path", "row", "salt", "state") for t in win.window.trees)
+    words = SS.words(cls.scan)
+    (r,) = [r for r in win.runs if r.reader == scan]
+    assert (r.at, r.radix, r.base, r.step) == (0, (1,), 0, (words,)) and circuit.registered.run == (SS.SCAN_STATE,)
+    program = win.window.program
+    w = IF.run_input_node(r.param)
+    assert [p for p, _ in program.fn.signature()[0]][w] == SS.SCAN_STATE and SS.SCAN_STATE not in circuit.registered.values
+    assert program.bindings[w] == "run" and IF.run_input_domain(program, IF.program_digest(program), w, words,
+                                                                 "ab" * 64).count == cls.buckets == 16
+    assert not [x for x in IF.committed_reads(circuit.registered) if x.param == SS.SCAN_STATE]
 
 
 def wired(circuit: IF.Circuit) -> tuple[Any, dict[str, Any]]:

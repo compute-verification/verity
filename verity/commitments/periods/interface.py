@@ -800,7 +800,9 @@ class Registered:
     ``hm96-sha512/row-seg/v1`` rows, as its trees commit them; ``formats`` and ``histories`` recorded only when there are
     some. ``supplied``: by parameter, its mark (`verity.circuits.supplied`, PROTOCOL.md §5.4): a short value the verifier
     computes by the function the mark names, which units read through their registered reads and expand inside, committed
-    under public salts (`Window.give`); recorded only when there are some."""
+    under public salts (`Window.give`); recorded only when there are some. ``run``: parameters bound per run, not at
+    registration: C's run input nodes its reads read a slice of, committed whole by the period (`Window._inputs`) and
+    pinned by no registration; recorded only when there are some."""
     params: Mapping[str, int]
     tables: tuple[Table, ...] = ()
     reads: tuple[Read, ...] = ()
@@ -810,8 +812,16 @@ class Registered:
     formats: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
     histories: tuple[History, ...] = ()
     supplied: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
+    run: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
+        object.__setattr__(self, "run", tuple(self.run))
+        tables = {t.param for t in self.tables}
+        for v in self.run:
+            if (not isinstance(v, str) or v not in self.params or v in tables or v in self.values or v in self.supplied
+                    or v in self.formats or self.run.count(v) != 1):
+                raise ValueError(f"run {v!r}: a registered parameter, once, no table's, program value's, supplied or "
+                                 "formatted, which only its reads read")
         if not isinstance(self.supplied, Mapping):
             raise ValueError(f"supplied {self.supplied!r}: an object of a mark by parameter")
         object.__setattr__(self, "supplied", {str(v): dict(SU.mark_of([v, 1, dict(m)]) or {}) for v, m in self.supplied.items()})
@@ -846,20 +856,22 @@ class Registered:
                 "openings": [o.doc() for o in self.openings], **({"values": list(self.values)} if self.values else {}),
                 **({"formats": dict(sorted(self.formats.items()))} if self.formats else {}),
                 **({"histories": [h.doc() for h in self.histories]} if self.histories else {}),
-                **({"supplied": dict(sorted(self.supplied.items()))} if self.supplied else {})}
+                **({"supplied": dict(sorted(self.supplied.items()))} if self.supplied else {}),
+                **({"run": list(self.run)} if self.run else {})}
 
     @classmethod
     def of(cls, d: Any) -> Registered:
         try:
             if not {"params", "tables", "reads", "roots", "openings"} <= set(d) <= {"params", "tables", "reads", "roots",
                                                                                     "openings", "values", "formats",
-                                                                                    "histories", "supplied"}:
+                                                                                    "histories", "supplied", "run"}:
                 raise ValueError(sorted(d))
             return cls({str(k): v for k, v in d["params"].items()}, tuple(Table(**t) for t in d["tables"]),
                        tuple(Read.of(r) for r in d["reads"]), tuple(TableRead(**r) for r in d["roots"]),
                        tuple(TableOpening(**{**o, "ports": tuple(o["ports"])}) for o in d["openings"]),
                        tuple(d.get("values", ())), d.get("formats", {}),
-                       tuple(History(**h) for h in d.get("histories", ())), d.get("supplied", {}))
+                       tuple(History(**h) for h in d.get("histories", ())), d.get("supplied", {}),
+                       tuple(d.get("run", ())))
         except (TypeError, ValueError, KeyError, AttributeError) as e:
             raise ValueError(f"a circuit's registered reads are {{params, tables, reads, roots, openings}}, its values, "
                              f"their formats and its histories: {e}") from e
@@ -1371,10 +1383,11 @@ def committed_reads(registered: Registered | None) -> tuple[Read, ...]:
     reads (`Read`); each table read, of its table's supplied root or domain id; and each opening's verdict, of its table's
     supplied 1 (an output row, so a verdict of 0 opens no root: `gates.embedding`'s ``ok``). A table read or verdict reads
     one row for all its units; an opening's other ports are its units' own rows, which its verdict holds to the table's
-    pinned root inside the proof, its key hidden."""
+    pinned root inside the proof, its key hidden. A read of a ``run`` parameter is none: it reads a run input node
+    (`run_input_reads`)."""
     reg = registered or Registered({})
     tables = reg.readable
-    out = list(reg.reads)
+    out = [r for r in reg.reads if r.param not in reg.run]
     out += [Read(r.reader, r.port, supplied_param(tables[r.table], r.of), r.at, (r.units,), 0, (0,)) for r in reg.roots]
     out += [Read(o.reader, o.verdict, supplied_param(tables[o.table], "opened"), o.at, (o.units,), 0, (0,))
             for o in reg.openings]
@@ -2747,10 +2760,11 @@ def window_of_record(doc: Mapping[str, Any], sampling_design: Mapping[str, Any],
 def served_program(templates: Sequence[tuple[Any, int]], record: Mapping[str, Any]) -> tuple[Any, dict[str, Any]]:
     """C, the Program and template query the served route registers, commits and proves for the circuit record
     ``record`` over ``templates``: its wired Program (`wired_population_program`, which refuses wires that don't fit its
-    templates), whose wires are its edges, its registered parameters but the supplied ones bound at registration. The
-    inference-only reader reads the same record's wires."""
+    templates), whose wires are its edges, its registered parameters but the supplied and ``run`` ones bound at
+    registration. The inference-only reader reads the same record's wires."""
     reg = record.get("registered") or {}
-    return wired_population_program(templates, record, set(reg.get("params", {})) - set(reg.get("supplied") or {}))[:2]
+    return wired_population_program(templates, record, set(reg.get("params", {})) - set(reg.get("supplied") or {})
+                                    - set(reg.get("run") or ()))[:2]
 
 
 def program_of_record(doc: Mapping[str, Any], resolve: Callable[[str], Any]) -> tuple[Any, dict[str, Any]]:
@@ -3156,15 +3170,31 @@ class Window:
     def _inputs(self) -> dict[str, Any]:
         """``inputs``: each of ``runs``' values committed once (core's ``registered_value.Registered``, fresh salts) under
         the period's program digest and its run root (``window``), every unit's row of its port in unit order, in the
-        domain C gives its node (`run_input_domain`). Refused (ValueError, naming the node) where a run input read has no
-        such tree: the period then refuses to close."""
+        domain C gives its node (`run_input_domain`). A node of a ``run`` parameter (`Registered.run`) is that parameter's
+        value in ``registered``, every row of it, the rows no unit reads included, refused unless each unit's row is the
+        value's row its read names. Refused (ValueError, naming the node) where a run input read has no such tree: the
+        period then refuses to close."""
         if self.runs and not self.inputs:
             prog = program_digest(self.window.program)
+            names = [p for p, _ in self.window.program.fn.signature()[0]]
+            run = set(self.circuit.registered.run) if self.circuit.registered is not None else set()
             for r in self.runs:
                 rows = self._words(r.reader)[[p for p, _ in self.circuit._by_id[r.reader][1].rows].index(r.port)]
                 if rows is None:
                     raise ValueError(f"run input {r.param}: {r.reader} {r.port} is recorded by reference, and a run input's "
                                      "rows are recorded in full; the period commits no tree of it and refuses to close")
+                if (name := names[run_input_node(r.param)]) in run:
+                    if (given := (self.registered or {}).get(name)) is None or getattr(given, "rows", None) is None:
+                        raise ValueError(f"run input {r.param}: give {name!r}'s value with its rows in the period's "
+                                         "registered; the period commits no tree of it and refuses to close")
+                    words = CS.value_words(given)
+                    at = [r.base // words + i * (r.step[0] // words) for i in range(len(rows))]
+                    if not np.array_equal(np.asarray(rows), CS.value_rows(given, at)):
+                        raise ValueError(f"run input {r.param}: {r.reader} {r.port}'s rows are not {name!r}'s rows {at[:4]}; "
+                                         "the period commits no tree of it and refuses to close")
+                    if r.param in self.inputs:
+                        continue
+                    rows = CS.value_rows(given, range(given.leaves))
                 v = RV.Registered.commit(prog, r.param, np.asarray(rows).tolist(), schema=V2, window=self.run)
                 want = run_input_domain(self.window.program, prog, run_input_node(r.param), v.words, self.run)
                 if v.domain.domain_id != want.domain_id:
@@ -3325,7 +3355,8 @@ class Window:
         d.mkdir(parents=True, exist_ok=True)
         body = circuit_bytes(self.circuit_record())
         (d / "circuit.json").write_bytes(body)
-        roots = {p: v.root.hex() for p, v in sorted(held.items())}
+        run = set(self.circuit.registered.run) if self.circuit.registered is not None else set()
+        roots = {p: v.root.hex() for p, v in sorted(held.items()) if p not in run}
         bound = {**provenance, "circuit": hashlib.sha512(body).hexdigest(), **(self.advice or {}),
                  **({"registered_roots": roots} if roots else {})}
         return CS.write(c, d, bound, self.labels(), kind=kind, registered=self._entries, registrar=registrar,
