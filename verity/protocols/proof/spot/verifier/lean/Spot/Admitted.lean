@@ -348,9 +348,9 @@ def E16R : String := E16.replace "Input1_v1" "RegisteredInput1_v1"
 def restrictE (d : String) : V Flock.Program.Prog := do
   Spot.Restrict.restrict (← Flock.Program.decode d.toUTF8) #[0]
 
--- the door's steps (`restrictOn`) on E16R, each passing: `restrict`, whose C_S's root opens with a registered input
--- node; `admitted`, with its lift; the lift; `blockTmpl`; and `lowerBlock` (`lowerE`); while `ported` refuses the
--- same block by name
+-- the door's steps (`restrictOn`) on E16R: `restrict`, whose C_S's root opens with a registered input node, `admitted`
+-- with its lift, the lift and `blockTmpl` pass; `lowerBlock` (`lowerE`) refuses it as it refuses E16, whose inputs are
+-- run inputs, at compose's row floor, a block this small; and `ported` refuses the same block by name
 #guard match restrictE E16R with
   | .ok S => ((S.defs[S.root]?).bind fun r => r.body.nodes[0]? >>= fun x => S.defs[x.fn]?).map (fun f => (f.id, f.binding))
       == some ("RegisteredInput1_v1", some Flock.Program.REGISTRATION)
@@ -358,7 +358,9 @@ def restrictE (d : String) : V Flock.Program.Prog := do
 #guard (admitE E16R).toBool
 #guard (restrictE E16R >>= fun S => admitE E16R >>= fun a => Flock.Lift.lift S a.d).toBool
 #guard (restrictE E16R >>= fun S => admitE E16R >>= fun a => blockTmpl S a).toBool
-#guard (lowerE E16R).toBool
+#guard match lowerE E16R, lowerE E16 with
+  | .error e, .error e' => e == e' && e == "unit/E_v1: no row has a compression before its last block"
+  | _, _ => false
 #guard match Flock.Program.decode E16R.toUTF8 >>= (Spot.Restrict.portedOf · #[0]) with
   | .error e => e == "ported: the block reads a registered value (RegisteredInput1_v1), and a parameter does not carry \
       that it is registered: its rows would be committed afresh"
