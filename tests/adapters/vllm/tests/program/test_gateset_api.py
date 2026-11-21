@@ -2,7 +2,7 @@
 
 Every family is checked for `count == len(list(iter))`, `by_index(i) == list[i]`, `index_of(by_index(i)) == i`; sets are
 compared with the intervals the layout gives (`FunctionCall` regions / `Scope` offsets); partition properties are
-checked by an interval sweep over the materialised sets (the oracle here -- `partition.py` owns the real validator)."""
+checked by an interval sweep over the materialised sets."""
 from __future__ import annotations
 
 import json
