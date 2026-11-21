@@ -110,7 +110,7 @@ def cover(strata: Sequence[tuple[str, Sequence[Sequence[int]]]]) -> int | None:
 
 
 def covers(program: Program, query: Mapping[str, Any], n: int) -> bool:
-    """`Slots.popCoverOk`, `in_order`'s cover form: `query` applies to `program`, the strata's ranges are a disjoint cover
+    """`Slots.popCovers` (run as `Slots.popCoverOk`), `in_order`'s cover form: `query` applies to `program`, the strata's ranges are a disjoint cover
     of ``0, ..., n - 1`` (`cover`) and every one of those proof blocks has its gates. What a subset design's draw needs:
     it reads no stratum, and slot `u` is proof block `u`."""
     try:
