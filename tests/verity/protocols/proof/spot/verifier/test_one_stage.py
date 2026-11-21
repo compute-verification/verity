@@ -820,6 +820,25 @@ def test_r7_refuses_a_registered_value_at_a_run_input_node():
         assert not P.any_run_input(marked, G.held_gates(marked, ["t"])[0])
 
 
+def test_r7_refuses_a_supplied_anchor_whose_value_no_pin_holds():
+    """`docket.anchor_unpinned` (Lean's `Docket.anchorUnpinned`, `R7-anchor-unpinned`, its guards in
+    `Spot/Test/Docket.lean`) on C's marks (`registered.marks`): a mark of `registered.root/v1` or `registered.domain/v1`
+    of a value V is named unless the verifier's `pinned` or the weights' registration of record pins V, each value
+    once; a registration of record R8 refuses pins nothing, and another function's mark is no anchor."""
+    def mark(fn: str, **args) -> dict:
+        return {"supplied": fn, "args": args, "layout": "digest", "bits": 512}
+    weights = _weights([_pin(_two_programs(registered=("t",))[0])])
+    for fn in R.ANCHOR_FUNCTIONS:
+        marks = {"a": mark(fn, value="t")}
+        assert R.anchor_unpinned(marks, None, None) == ["t"]
+        assert R.anchor_unpinned({**marks, "b": mark(R.ANCHOR_FUNCTIONS[0], value="t")}, None, None) == ["t"]
+        assert R.anchor_unpinned(marks, {"t": "ab" * 64}, None) == []
+        assert R.anchor_unpinned(marks, None, weights) == []
+        assert R.anchor_unpinned(marks, None, (weights[0], "00" * 64)) == ["t"]
+        assert R.anchor_unpinned({"a": mark(fn, value="w")}, None, weights) == ["w"]
+    assert R.anchor_unpinned({"a": mark("record.root/v1", port="t")}, None, None) == []
+
+
 def test_r8_lets_a_tied_run_input_through_and_publishes_it():
     """R8's tied values (`registration.check`'s `tied`): a run Input named tied is let through, and the verdict
     publishes it beside F (`Verdict.rests_on_period_check`), since its acceptance rests on the network period check that

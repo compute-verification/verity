@@ -223,4 +223,23 @@ def weighedCodes (v : Verifier) : Array String :=
   weightsOfRecord := some (ofRecord PINS) } == WEIGHTS_QUERY_WHY
 #guard readPinsWhy (weighed E3R) == WEIGHTS_UNREGISTERED_WHY
 
+/-! R7's hold on C's supplied anchors (`anchorUnpinned`): a mark of `registered.root/v1` or `registered.domain/v1` of a
+value V is refused unless the verifier's `pinned` or the weights' registration of record pins V. -/
+
+def anchorMark (x : String) (fn : String := "registered.root/v1") : Supplied.Mark :=
+  { fn, args := #[("value", .str x)], layout := "digest", bits := 512 }
+
+#guard codes { V3 with marks := #[("a", anchorMark "w")] } == #["R7-anchor-unpinned"]
+#guard codes { V3 with marks := #[("a", anchorMark "w" "registered.domain/v1")] } == #["R7-anchor-unpinned"]
+#guard anchorUnpinned { V3 with marks := #[("a", anchorMark "w"), ("b", anchorMark "w" "registered.domain/v1")] } ==
+  #["w"]
+#guard anchorUnpinned { V3 with marks := #[("a", anchorMark "w")], pinned := #[("w", ROOT)] } == #[]
+#guard anchorUnpinned { V3 with marks := #[("a", anchorMark "x")], weightsOfRecord := some (ofRecord PINS) } == #[]
+#guard anchorUnpinned { V3 with marks := #[("a", anchorMark "w")], weightsOfRecord := some (ofRecord PINS) } == #["w"]
+-- a registration of record R8 refuses pins nothing
+#guard anchorUnpinned { V3 with marks := #[("a", anchorMark "x")], weightsOfRecord := some ((ofRecord PINS).1, OTHER) } ==
+  #["x"]
+-- another function's mark is no anchor
+#guard anchorUnpinned { V3 with marks := #[("a", { anchorMark "w" with fn := "record.root/v1" })] } == #[]
+
 end Spot.Test.Docket

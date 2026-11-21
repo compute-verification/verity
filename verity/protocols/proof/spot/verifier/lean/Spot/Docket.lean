@@ -100,7 +100,9 @@ a parameter of the program, neither registered nor held, whose gates are one int
 and the registration piece publishes, beside the fan-out, the tied names it let through (`tiedThrough`), since
 acceptance rests on that later check. R7 refuses a registered value, a supplied one included (a table opening's root
 and domain), whose parameter's gates hold a run Input node (`runInputNamed`, `R7-run-input`): a run Input's rows are
-committed once, in its one tree, and are never a registered value.
+committed once, in its one tree, and are never a registered value. R7 refuses a supplied anchor, a mark of
+`registered.root/v1` or `registered.domain/v1`, whose value V neither the verifier's `pinned` nor the weights'
+registration of record pins (`anchorUnpinned`, `R7-anchor-unpinned`).
 
 R8 then holds the program's registered inputs (the parameters it binds at registration, `Partition.regInputs`) to the
 weights' registration of record the auditor's side hands it (`weightsOfRecord`: its bytes and the SHA-512 it holds; a
@@ -268,6 +270,8 @@ structure Verifier where
   /-- the weights' registration of record: its bytes and the SHA-512 (hex) the auditor's side holds for it, which R8
   holds the program's registered inputs to (`weightsCodes`); none where it is handed none -/
   weightsOfRecord : Option (ByteArray × String) := none
+  /-- C's supplied marks (`Supplied.marks`), by input, which R7 holds each anchor of to a pin (`anchorUnpinned`) -/
+  marks : Array (String × Supplied.Mark) := #[]
 
 /-- Whether the verifier expects a v2 record: it expects values registered or holds certified entries. -/
 def Verifier.v2 (v : Verifier) : Bool := !(v.registered.isEmpty && v.certified.isEmpty)
@@ -426,6 +430,24 @@ def weightsOf (v : Verifier) : Array String × Array (Registered.Entry × String
   | some (body, digest) => match pinsOf body digest with
     | .error code => (#[code], #[])
     | .ok (codes, pins) => weightsHeld v codes pins
+
+/-- The supplied functions whose value is a registered value's root or domain (`anchorUnpinned`). -/
+def ANCHOR_FUNCTIONS : Array String := #["registered.root/v1", "registered.domain/v1"]
+
+/-- `docket.anchor_unpinned`: the values V of C's supplied anchors (a mark of `ANCHOR_FUNCTIONS`) that are neither in
+the verifier's `pinned` nor pinned by the weights' registration of record (`pinsOf`'s pins), each once, in the marks'
+order; R7 refuses them (`R7-anchor-unpinned`). -/
+def anchorUnpinned (v : Verifier) : Array String :=
+  let ofRecord := match v.weightsOfRecord with
+    | some (body, digest) => match pinsOf body digest with
+      | .ok (_, pins) => pins.map (·.value)
+      | .error _ => #[]
+    | none => #[]
+  v.marks.foldl (init := #[]) fun out (_, m) =>
+    match ANCHOR_FUNCTIONS.contains m.fn, (m.args.find? (·.1 == "value")).map (·.2) with
+    | true, some (.str x) =>
+      if v.pinned.any (·.1 == x) || ofRecord.contains x || out.contains x then out else out.push x
+    | _, _ => out
 
 /-- The members' check's refusal of a program marking a registered input the verifier does not expect, under parameters
 whose weights' registration of record is absent or one R8 refuses (`readPins`). -/
@@ -802,6 +824,7 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
       v.outputs v.log (v.certified.map (·.1))
     c := kept (certifiedHeld rec v) c "R7-certified"
     c := kept (runInputNamed v).isEmpty c "R7-run-input"
+    c := kept (anchorUnpinned v).isEmpty c "R7-anchor-unpinned"
   -- R8
   c := r8Codes v c
   return if linkRefused v then addCode c "link-points" else c
@@ -870,6 +893,7 @@ def checkRef (rec : Json) (v : Verifier) : Array String := Id.run do
       v.outputs v.log (v.certified.map (·.1))
     c := kept (certifiedHeld rec v) c "R7-certified"
     c := kept (runInputNamed v).isEmpty c "R7-run-input"
+    c := kept (anchorUnpinned v).isEmpty c "R7-anchor-unpinned"
   -- R8
   c := r8Codes v c
   return if linkRefused v then addCode c "link-points" else c

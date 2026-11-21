@@ -433,6 +433,7 @@ def paramsParsed (j : Json) : V Params := do
       if registered.isEmpty then throw "supplied values are registered values: the verifier expects none registered"
       Supplied.sources s
   let supplied := supplied ++ (← markedRows j registered params supplied log.size)
+  let marks ← Supplied.marks (getD j "program")
   let pinned ← match field? j "pinned" with
     | none => pure #[]
     | some (.obj kvs) => do
@@ -541,7 +542,7 @@ def paramsParsed (j : Json) : V Params := do
   if delta.num == 0 || delta.den ≤ delta.num then throw "delta is not in (0, 1)"
   let p : Params := { verifier := { program, query, samplingDesign, workTable, scheme, ports, leafLayer, anchors, log, partition,
                                     registered, params, supplied, pinned, outputs, binding, schemas, windowRoot, held,
-                                    declared, seedSalt, pool, verdicts, tied, compiler, certified, weightsOfRecord },
+                                    declared, seedSalt, pool, verdicts, tied, compiler, certified, weightsOfRecord, marks },
                       delta, challenger, tables, windowValues }
   let again := Docket.unwindowed p.verifier
   if !again.isEmpty then

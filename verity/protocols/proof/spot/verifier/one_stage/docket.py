@@ -26,7 +26,9 @@
     window;
   - R7 refuses a registered value, a supplied one included (a table opening's root and domain), whose parameter's
     gates hold a run Input node (`run_input_named`, `R7-run-input`): a run Input's rows are committed once, in its one
-    tree, which the members' check holds (`members.run_input_roots_at`), and are never a registered value;
+    tree, which the members' check holds (`members.run_input_roots_at`), and are never a registered value; and a
+    supplied anchor (`registered.root/v1`, `registered.domain/v1`) of a value V that neither the verifier's pinned
+    roots nor the weights' registration of record pins (`anchor_unpinned`, `R7-anchor-unpinned`);
   - R8, under a template query: the verdict publishes the query's fan-out F on the verifier's program (`partition.fanout`, `Verdict.fanout`), the N at which the capped two-stage form charges a
     replay block (`plancheck.two`'s `fanout`). A run Input a parameter the verifier names `tied` holds is let through:
     the network period check ties its rows to the dockets that computed them, which this check doesn't, so the
@@ -152,7 +154,7 @@ from verity.commitments import domains as DM
 from verity.commitments import history as HT
 from verity.commitments.window import WINDOW_DOMAIN, window_domain
 from verity.circuits import partition_object as PO
-from verity.circuits.codec import canonical_json
+from verity.circuits.codec import canonical_json, descriptor_chunks
 from verity.circuits.program import REGISTRATION, Program
 
 from . import draw as D, link_points as LP, partition as P, registered as G
@@ -175,6 +177,10 @@ TIED_WHY = ("a tied value is a run Input of the program whose rows a later check
             "them: a parameter of the program, neither registered nor held, whose gates are one interval of run Input nodes")
 RUN_INPUT_WHY = ("a run Input's rows are committed once, in its one tree, before any coin: a registered value, a supplied "
                  "one included, is no run Input node")
+#: the supplied functions whose value is a registered value's root or domain (`anchor_unpinned`)
+ANCHOR_FUNCTIONS = ("registered.root/v1", "registered.domain/v1")
+ANCHOR_UNPINNED_WHY = ("a supplied anchor reads a registered value's root or domain, and the verifier holds that value "
+                       "to no pin: neither its own pinned roots nor a pin of the weights' registration of record")
 #: R8's refusals of the program's registered inputs against the weights' registration of record (`weights_held`)
 WEIGHTS_WHY = {
     "R8-weights-digest": "the weights' registration is not the one of record: its SHA-512 is not the digest the "
@@ -455,7 +461,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
     (`caller.check`, `R7-output-refused`).  R3
     reads `ports` by name, so its codes come in the ports' sorted order whatever order the mapping has, as the Lean port
     reads them.  R7 refuses a registered value, a supplied one included, whose gates hold a run Input node
-    (`run_input_named`, `R7-run-input`).  Under a template query the verdict carries the
+    (`run_input_named`, `R7-run-input`), and a supplied anchor whose value no pin holds (`anchor_unpinned`,
+    `R7-anchor-unpinned`).  Under a template query the verdict carries the
     fan-out F of `query` on `program` (`partition.fanout`), which it publishes whatever its codes; under any other query it
     carries none.  `tied`: parameters, run Inputs, whose rows a later check ties to the dockets that computed them
     (the scan's slot entries, which the network period check ties to the blocks that registered them), which R8 lets
@@ -567,6 +574,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
         _certified_held(c, rec, cert)
         if named := run_input_named(program, registered or {}):
             c.fail("R7-run-input", {"values": named, "why": RUN_INPUT_WHY})
+        if loose := anchor_unpinned(G.marks(json.loads(b"".join(descriptor_chunks(program)))), pinned, weights_of_record):
+            c.fail("R7-anchor-unpinned", {"values": loose, "why": ANCHOR_UNPINNED_WHY})
     # R8
     if bad:
         c.fail("R8-tied", {"tied": bad, "why": TIED_WHY})
@@ -605,6 +614,21 @@ def run_input_named(program: Program, registered: Iterable[str]) -> list[str]:
     """The registered names, supplied ones included, whose parameter's gates hold a run Input node
     (`partition.any_run_input`), which R7 refuses (`R7-run-input`). The Lean's `Docket.runInputNamed` is this."""
     return [v for v in registered if any(P.any_run_input(program, g) for g in G.held_gates(program, [v]))]
+
+
+def anchor_unpinned(marks: Mapping[str, Mapping[str, Any]], pinned: Mapping[str, str] | None,
+                    of_record: tuple[bytes, str] | None) -> list[str]:
+    """The values V of C's supplied anchors (`marks`, `registered.marks`: a mark of a function of `ANCHOR_FUNCTIONS`)
+    that are neither in the verifier's `pinned` nor pinned by the weights' registration of record (`_of_record`'s
+    pins), each once, in the marks' order; R7 refuses them (`R7-anchor-unpinned`). The Lean's `Docket.anchorUnpinned`
+    is this."""
+    held = set(pinned or {}) | (set(_of_record(of_record)[1]) if of_record is not None else set())
+    out: list[str] = []
+    for m in marks.values():
+        x = m["args"].get("value") if m["supplied"] in ANCHOR_FUNCTIONS else None
+        if x is not None and x not in held and x not in out:
+            out.append(x)
+    return out
 
 
 def marked_gates(program: Program) -> list[tuple[str, range]]:
