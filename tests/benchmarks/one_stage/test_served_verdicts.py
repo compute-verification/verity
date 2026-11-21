@@ -3816,7 +3816,7 @@ def test_v3c_links_each_members_circuit_into_its_archive_only_where_the_run_says
 
 @pytest.mark.parametrize("cards", [None, "3"])
 def test_v3c_audits_on_the_cards_v3c_gpus_names_with_a_cuda_prover_of_its_own_else_on_the_cpu(tmp_path, cards):
-    pod = tmp_path / "tree" / "verity" / "protocols" / "proofs" / "flock" / "prover" / "pod"
+    pod = tmp_path / "tree" / "verity" / "protocols" / "proof" / "flock" / "prover" / "pod"
     pod.mkdir(parents=True)
     (pod / "cuda-13.3.sh").write_text("export CUDA_TK=/tk\n")
     _script(tmp_path / "bin" / "flock",
@@ -6368,7 +6368,7 @@ def test_the_composite_takes_no_case_from_the_attester_pieces_private_directory_
     _script(bin_ / "lake", f'mkdir -p .lake/build/bin && cp {tmp_path}/lean ".lake/build/bin/$2"')
     _script(bin_ / "systemd-run", "exit 1")
     _script(bin_ / "prlimit", PRLIMIT.format(seen=tmp_path / "prlimit.seen"))
-    for pkg in ("protocols/compose/verifier/remote", "protocols/compose/verifier/onsite"):
+    for pkg in ("protocols/run/verifier/remote", "protocols/run/verifier/onsite"):
         (tree / "verity" / pkg).mkdir(parents=True)
     (tree / REMOTE_V1_MAIN).touch()
     _copy_composite(tree)
@@ -6477,7 +6477,7 @@ def _serve_argv(tmp_path: Path, env: dict[str, str]) -> tuple[int, list[str]]:
     tree, bin_, venv = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin"
     for d in (tree / "adapters" / "vllm", bin_, venv):
         d.mkdir(parents=True)
-    python = (f"case \"$*\" in *compose.schemes*|*\"import json, sys; v, n =\"*) exec {sys.executable} \"$@\" ;; esac; printf '%s\\n' \"$*\" >> {tmp_path}/calls; case \"$*\" in *prove_path.py\\ class-circuit*) "
+    python = (f"case \"$*\" in *run.schemes*|*\"import json, sys; v, n =\"*) exec {sys.executable} \"$@\" ;; esac; printf '%s\\n' \"$*\" >> {tmp_path}/calls; case \"$*\" in *prove_path.py\\ class-circuit*) "
               f"while [ $# -gt 0 ]; do [ \"$1\" = --out ] && printf '{{}}\\n' > \"$2\"; shift; done; exit 0;; "
               f"*prove_path.py\\ serve-phi*|*served_verdicts.py\\ pearlplus-period*) exit 0;; esac; "
               "case \"$*\" in *serve-openai*) [ -z \"$SERVE_SAYS\" ] || printf '%s\\n' \"$SERVE_SAYS\";; esac; "
@@ -6600,7 +6600,7 @@ def _serve_calls(tmp_path: Path, env: dict[str, str]) -> tuple[int, list[str], l
         d.mkdir(parents=True)
     for fifo in ("ready", "hold"):
         os.mkfifo(tmp_path / fifo)
-    python = (f"case \"$*\" in *compose.schemes*|*\"import json, sys; v, n =\"*) exec {sys.executable} \"$@\" ;;\nesac\nprintf '%s\\n' \"$*\" >> {tmp_path}/calls\n"
+    python = (f"case \"$*\" in *run.schemes*|*\"import json, sys; v, n =\"*) exec {sys.executable} \"$@\" ;;\nesac\nprintf '%s\\n' \"$*\" >> {tmp_path}/calls\n"
               "case \"$*\" in\n"
               f"  '-c '*) echo {RELEASE_RUN}; exit 0 ;;\n"
               "  *'verity_vllm.pipeline.cli serve-openai'*)\n"
