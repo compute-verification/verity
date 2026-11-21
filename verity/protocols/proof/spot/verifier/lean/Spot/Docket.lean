@@ -111,9 +111,9 @@ template query that applies is refused (`R8-weights-query`). An input bound at r
 expected registered and that a template parameter reads is refused at one reader as at several (`R8-unpinned`), and a pin
 of no registered input excuses nothing. The template parameters that read an excused input, one pass over the root's
 nodes (`Partition.inputReads`), are exactly the reads the registration declares of it, in either direction
-(`R8-undeclared`). Each pin it accepts of an input the verifier does not expect registered is a certified entry
-(`Verifier.weighed`): R7 holds the record's entry for it to the pin's, its root included, so what a sampled member
-opens against is the pin's root (`weightsCodes`).
+(`R8-undeclared`). The pins it accepts of inputs the verifier does not expect registered (`weightsOf`) are no entry
+R7 reads: the members' check holds each member's registered read of such an input to its pin's root, leaf count and
+domain (`OneStageZk.pinsHeld`).
 
 A verifier of the per-member form (`OneStageZk`) names its members (`members`: each its units and its circuit's units a
 proof block, META `vus_per_block`), and after R8 the check refuses a member whose fewest and most sampled proof blocks under the
@@ -416,8 +416,8 @@ applies; else `R8-unpinned` for a registered input the verifier neither expects 
 template parameter reads (`Partition.inputReads`), at one reader as at several, and `R8-undeclared` where the template
 parameters reading the inputs it excuses (marked, pinned and shaped) are not exactly the registration's declared reads
 of those values, in either direction (one pass over the root's nodes). Then the accepted pins, each an excused input the
-verifier does not expect registered as a certified entry and its root, which R7 holds the record's entry to
-(`Verifier.weighed`). None for a verifier with no registration of record and no registered input. -/
+verifier does not expect registered as an entry and its root, which the members' check holds each member's registered
+read of it to (`OneStageZk.pinsHeld`). None for a verifier with no registration of record and no registered input. -/
 def weightsHeld (v : Verifier) (codes : Array String) (pins : Array Pin) (said : Array (String × String × String)) :
     Array String × Array (Registered.Entry × String) :=
   let P := v.program.prog
@@ -450,11 +450,6 @@ def weightsOf (v : Verifier) : Array String × Array (Registered.Entry × String
 
 /-- R8's codes on the program's registered inputs (`weightsOf`). -/
 def weightsCodes (v : Verifier) : Array String := (weightsOf v).1
-
-/-- The verifier with the pins R8 accepts (`weightsOf`) among its certified entries, as `docket.check` holds the record
-to them: R7 holds each one's entry and root, and the record is v2 with any. `weightsOf` reads no certified entry, so
-R8's codes are the same on either. -/
-def Verifier.weighed (v : Verifier) : Verifier := { v with certified := v.certified ++ (weightsOf v).2 }
 
 /-- The values whose domain leaves the window's open root out: `held`, then the pinned, supplied and output values. -/
 def fixedOf (v : Verifier) : Array String :=
@@ -723,7 +718,6 @@ def r8Codes (v : Verifier) (c : Array String) : Array String :=
 /-- `registration.check`'s failure codes, R1–R8 in order, then `link-points` (`linkRefused`): empty when the record
 holds. -/
 def check (rec : Json) (v : Verifier) : Array String := Id.run do
-  let v := v.weighed
   let v2 := v.v2
   if keys? rec != some (if v2 then KEYS_V2 else KEYS) then return #["keys"]
   let get := getD rec
@@ -789,7 +783,6 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
 /-- `check` as first written, R3 quadratic in the ports: each root's port compared, re-canonicalized, with every port
 before it and every verifier port with every root. The reference `check` is proved equal to (`check_eq_checkRef`). -/
 def checkRef (rec : Json) (v : Verifier) : Array String := Id.run do
-  let v := v.weighed
   let v2 := v.v2
   if keys? rec != some (if v2 then KEYS_V2 else KEYS) then return #["keys"]
   let get := getD rec

@@ -512,6 +512,38 @@ def _class(ms: Mapping[str, Any]) -> None:
                                "member at one root")
 
 
+def pinned_read_why(member: str, port: str, value: str, what: str) -> str:
+    """`OneStageZk.PINNED_READ_WHY`: the refusal of member ``member``'s registered port ``port`` reading the registered
+    input ``value`` at another ``what`` (root, leaf count or domain) than the pin the docket's R8 accepted."""
+    return (f"registered: member {member}'s port {port} reads the registered input {value} at another {what} than its "
+            "pin of record: a registered input the weights' registration of record pins is read at the pin's root, leaf "
+            "count and domain")
+
+
+def accepted_pins(params: Mapping[str, Any], program: Program) -> dict[str, dict[str, Any]]:
+    """`OneStageZk.pinsOf`: the pins the docket's R8 accepts on the parameters' weights' registration of record
+    (`docket.weights_held`), none where they hand none."""
+    w = params.get("weights_of_record")
+    if w is None:
+        return {}
+    return DK.weights_held(program, params["query"], params.get("registered") or (),
+                           (bytes.fromhex(w["document"]), w["digest"]))[1]
+
+
+def pins_held(ms: Mapping[str, Any], pins: Mapping[str, Mapping[str, Any]]) -> None:
+    """`OneStageZk.pinsHeld`: every member's registered port reading a value the docket accepted a pin of
+    (`accepted_pins`) names the pin's root, leaf count and domain, each member's ports in name order; refused by name
+    (`pinned_read_why`), the first port and field that differ."""
+    for name, m in ms.items():
+        ports = (m["registered"] or {}).get("ports") or {}
+        for port in sorted(ports):
+            e = ports[port]
+            pin = pins.get(e.get("value")) if isinstance(e, dict) else None
+            for k, what in (("root", "root"), ("leaves", "leaf count"), ("domain", "domain")) if pin else ():
+                if e.get(k) != pin[k]:
+                    raise _Refused(pinned_read_why(name, port, e["value"], what))
+
+
 def _template_of(name: str) -> tuple[str, str] | None:
     """`OneStageZk.templateOf`: a name read at its last ``/``; None for a name with none."""
     i = name.rfind("/")
@@ -1193,6 +1225,7 @@ def _members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence:
         _held_read(ms, params, program)
         _class(ms)
         _tree_ports_held(ms, record)
+        pins_held(ms, accepted_pins(params, program))
         roots, ft = _members_roots(ms, record)
         roots = _wired(program, params["query"], params["program"], ms, record, roots, ft)
         _ports_once(ms, roots)
@@ -1240,4 +1273,4 @@ __all__ = ["EXITS", "Form", "MEMBERS_LAID", "MEMBER_STRATA", "MEMBER_UNITS", "NO
            "TABLE_PORT", "UNREAD", "blobs_of", "case_check", "check", "files_why", "flock_form", "flock_verdict",
            "field_trees_why", "members_run", "population_why", "POPULATION_WHY", "registered_at", "registered_reads",
            "return_fields", "run_reason", "shared_unread", "unregistered_why", "unwired_why", "own_root_why",
-           "port_twice_why", "run_own_root_why", "slice_no_port_why", "wired_tree_why"]
+           "pinned_read_why", "pins_held", "port_twice_why", "run_own_root_why", "slice_no_port_why", "wired_tree_why"]

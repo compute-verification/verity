@@ -62,8 +62,8 @@ SPOT's one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_record`, wit
   other form, and which only the registration check and the run of record read: `paramsOfJson` refuses the key;
   and it may add `weights_of_record`, `{"digest", "document"}`: the weights' registration of record, its document's bytes
   in hex and the SHA-512 the auditor's side holds for it, which needs `parameters` and which R8 holds the program's
-  registered inputs to (`Docket.weightsCodes`) and whose accepted pins R7 holds the record's entries to
-  (`Docket.Verifier.weighed`), refused in any other form;
+  registered inputs to (`Docket.weightsCodes`) and whose accepted pins the members' check holds each member's
+  registered reads to (`OneStageZk.pinsHeld`), refused in any other form;
   and it may add `window_values`, a list of strings its caller names (one-stage names none): values the record commits in
   its window's `activations.values`, whose reads a verifier of record reports the record's checks hold to that entry's
   root (`Record.windowReads`), refused in any other form and where one is a port or a value it expects registered;

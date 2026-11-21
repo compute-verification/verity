@@ -263,8 +263,8 @@ def weights_held(program: Program, query: Mapping[str, Any], registered: Iterabl
     (`partition.input_reads`, a root node at a time, never its blocks) must be exactly the reads the registration
     declares of that value, ``(template, parameter, value)``, in either direction (`R8-undeclared`). A pin of no
     registered input excuses nothing. The refusals, in `WEIGHTS_WHY`'s order, and the accepted pins, `{value: {"root",
-    "leaves", "words", "word_bits", "domain"}}` of each pinned input the verifier does not expect, which `check` holds
-    the record's registered entries to as certified entries (R7)."""
+    "leaves", "words", "word_bits", "domain"}}` of each pinned input the verifier does not expect, which the members'
+    check holds each member's registered read of it to (`members.pins_held`)."""
     marked = marked_inputs(program)
     if not marked and of_record is None:
         return [], {}
@@ -443,8 +443,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
     through though several proof blocks read them, on that later check alone: the verdict publishes the ones it let
     through (`Verdict.rests_on_period_check`), and refuses a name that isn't a parameter of `program`, one `registered`
     or `held` names, or one whose gates aren't one interval of run Input nodes (`R8-tied`).  `weights_of_record`:
-    the weights' registration of record, which R8 holds the program's registered inputs to (`weights_held`); each pin it
-    accepts is a certified entry R7 holds the record's registered entry to, so the record is v2.  `members`: the per-member
+    the weights' registration of record, which R8 holds the program's registered inputs to (`weights_held`); the members'
+    check holds each member's read of a pinned input to the pin it accepts (`members.pins_held`), and R7 reads none.  `members`: the per-member
     form's members, each its units (`[lo, hi)` ranges) and its circuit's units a proof block; after R8, `link-points`
     refuses the record when a member's fewest and most sampled proof blocks give different link points
     (`link_points.refused`), no sample under the sampling design ends (`link_points.NEVER_ENDS`), or the members or the
@@ -473,9 +473,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
     _registered_compiler(compiler)
     refuse_unwindowed(unwindowed(program, registered or {}, formats, window, fixed, log))
     fan, shared, through, bad = _readers(program, query, registered or {}, held or (), tied or ())
-    weights, accepted = weights_held(program, query, registered or {}, weights_of_record)
-    cert = {**cert, **accepted}
-    v2 = v2 or bool(accepted)
+    weights, _accepted = weights_held(program, query, registered or {}, weights_of_record)
     keys = _KEYS | {"registered"} if v2 else _KEYS
     if not isinstance(rec, Mapping) or set(rec) != keys:
         c.fail("keys", sorted(set(rec) ^ keys) if isinstance(rec, Mapping) else rec)
@@ -1128,6 +1126,6 @@ def matches_public(rec: Mapping[str, Any], scheme: str, roots: Mapping[str, str]
 registered_entries = G.registered_entries
 
 __all__ = ["NOT_ONE_MEMBER", "POOL_KEYS", "RECEIPT", "ROW_TABLES", "TABLE_PORT",
-           "WINDOW_DOMAIN", "check", "held_roots", "matches_public", "pool_chains", "pool_open", "pool_refused",
+           "WINDOW_DOMAIN", "check", "held_roots", "marked_inputs", "matches_public", "pool_chains", "pool_open", "pool_refused",
            "pool_spent_before", "pool_values", "public_ports", "query_digest", "receipt",
-           "refuse_unwindowed", "refused", "registered_entries", "unwindowed", "window_domain"]
+           "refuse_unwindowed", "refused", "registered_entries", "unwindowed", "weights_held", "window_domain"]
