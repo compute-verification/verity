@@ -210,8 +210,8 @@ def _pearl_c_gate(run: Any, scheme: str | None) -> dict[str, Any]:
     check.run, check.schedule = run, run.schedule.name
     c = run.commits
     if c.get("coin_source", "in-process") != "in-process":
-        from verity.protocols.compose import schemes
-        from verity.protocols.resource_accounting.scheme import declared
+        from verity.protocols.run import schemes
+        from verity.protocols.accounting.scheme import declared
 
         open_root = declared(schemes.get(scheme), "salt_open_root")
         check.coins = {"source": c["coin_source"], "session": c.get("session"), "pass_index": c["pass_index"],

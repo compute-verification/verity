@@ -294,19 +294,19 @@ CUSTODY_ENV, STORE_REQUIRED_ENV, REGRESSION_ENV = "CHECK_STORE_CUSTODY", "VERITY
 #: sees), and tests/test_after_lean.py holds every suite that is a Lake package or declares one's lakefile or `.lake` here.
 AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-verifier", "core-identity", "verity-core-composition",
               "verity", "verity-core-evaluate", "verity-core-zk-server",
-              "verity/protocols/proofs/recursion/verifier/vstar_cli", "verity/protocols/proofs/flock/verifier/sigma", "verity-core-sampled-proofs",
+              "verity/protocols/proof/recursion/verifier/vstar_cli", "verity/protocols/proof/flock/verifier/sigma", "verity-core-sampled-proofs",
               "verity/protocols/registration/verifier/lean",
-              "verity/protocols/resource_accounting/memory/poub/verifier/lean", "verity/protocols/resource_accounting/memory/poub/verifier",
-              "verity/protocols/resource_accounting/memory/poub",
-              "verity/protocols/resource_accounting/network/verifier/network", "verity-pouw-window-difftest",
-              "verity-pouw-verifier-difftest", "verity/protocols/resource_accounting/compute/pouw/verifier/lean/commit", "benchmarks/pouw/pearlplus_lean",
+              "verity/protocols/accounting/memory/poub/verifier/lean", "verity/protocols/accounting/memory/poub/verifier",
+              "verity/protocols/accounting/memory/poub",
+              "verity/protocols/accounting/network/verifier/network", "verity-pouw-window-difftest",
+              "verity-pouw-verifier-difftest", "verity/protocols/accounting/compute/pouw/verifier/lean/commit", "benchmarks/pouw/pearlplus_lean",
               "memory-attester-lean", "benchmarks/pous",
-              "verity/protocols/proofs/spot/verifier", "verity/protocols/proofs/spot/verifier/challenger",
-              "verity/protocols/resource_accounting/network/verifier", "verity-pouw-benchmarks",
-              "verity/protocols/resource_accounting/network/prover",
+              "verity/protocols/proof/spot/verifier", "verity/protocols/proof/spot/verifier/challenger",
+              "verity/protocols/accounting/network/verifier", "verity-pouw-benchmarks",
+              "verity/protocols/accounting/network/prover",
               "verity/circuits/requirement", "benchmarks/poub_session", "benchmarks/one_stage",
               "verity-network-e2e",
-              "verity/protocols/resource_accounting/memory/poub/attester/live_verifier", "verity-network-traces", "verity-vllm", "benchmarks/verifier_cost",
+              "verity/protocols/accounting/memory/poub/attester/live_verifier", "verity-network-traces", "verity-vllm", "benchmarks/verifier_cost",
               "benchmarks/inference_only", "adapters/vllm/flock")
 #: the toolchain `lean-toolchain` pins, through elan when `lake` is missing (as `ci-pod.sh` does)
 ELAN = ('command -v lake >/dev/null || command -v "$HOME/.elan/bin/lake" >/dev/null || { curl -sSf '
@@ -843,7 +843,7 @@ def roots(suite: Suite, pkgs: dict[str, str]) -> list[str]:
 
 def flock_lean() -> Path:
     """The Lean verifier, the package check's `lean-build` step builds (check.py's `FLOCK_LEAN`)."""
-    return ROOT / "verity" / "protocols" / "proofs" / "flock" / "verifier"
+    return ROOT / "verity" / "protocols" / "proof" / "flock" / "verifier"
 
 
 def lean_on_path() -> None:

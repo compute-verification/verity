@@ -27,7 +27,7 @@ from verity_flock import synthetic as SY
 from verity_numerical.bench import contract
 from verity_numerical.bench import generate as G
 
-DATA = Path(__file__).parent.parent.parent.parent / "verity" / "protocols" / "proofs" / "flock" / "prover" / "data" / "captured-101"
+DATA = Path(__file__).parent.parent.parent.parent / "verity" / "protocols" / "proof" / "flock" / "prover" / "data" / "captured-101"
 CAPTURED = sorted((DATA / "manifests").glob("*.json"))
 SLICES = sorted(d for d in (DATA / "slices").iterdir() if d.is_dir())
 CENSUS = Path(__file__).resolve().parents[4] / "calibration" / "census"

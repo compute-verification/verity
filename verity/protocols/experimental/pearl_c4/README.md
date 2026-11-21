@@ -5,7 +5,7 @@ replaced by the block-scaled FP4 one of sm_120 (`mma.sync kind::mxf4nvf4`): the 
 element, one noisy cast forms each operand, and the BF16 clean-up is checked as in Pearl-C. It is research only: it
 has no kernel, no application lists it, and its guarantee rests on a premise that is stated and not proved. Its tile
 check stays because `benchmarks/pouw/hidden_zk/stage.py` stages its proof blocks for Flock, which the ZK server's
-controls (`verity/protocols/proofs/flock/prover/agreement/zk_server_controls.sh`) and Flock's tests prove.
+controls (`verity/protocols/proof/flock/prover/agreement/zk_server_controls.sh`) and Flock's tests prove.
 
 ## What is here
 

@@ -18,11 +18,11 @@ from pathlib import Path
 
 import verity_difftest as D
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tests/verity/protocols/accounting/compute/pouw/verifier/lean/check"))
 import pouw_credit_cases as credit_cases
 import pouw_period_cases as period_cases
-from verity.protocols.resource_accounting.compute.pouw.verifier import period_check
-from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
+from verity.protocols.accounting.compute.pouw.verifier import period_check
+from verity.protocols.proof.spot.verifier.challenger import challenger as Ch
 
 
 def count(windows: int) -> tuple[dict, dict]:

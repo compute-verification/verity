@@ -63,9 +63,9 @@ from pathlib import Path
 from typing import Any
 
 from verity.protocol import DELTAS, MONITORING_PERIODS
-from verity.protocols.compose import schemes
-from verity.protocols.resource_accounting import scheme as S
-from verity.protocols.proofs.spot.verifier.profile import Stratified, Stratum
+from verity.protocols.run import schemes
+from verity.protocols.accounting import scheme as S
+from verity.protocols.proof.spot.verifier.profile import Stratified, Stratum
 from verity.commitments.domains import ONSITE_PROTOCOL
 
 FORMAT = "verity/block-record/v2"
@@ -228,7 +228,7 @@ def _scheme(subprotocol: str) -> S.Scheme:
     for scheme in schemes.load().values():
         if scheme.record == key:
             return scheme
-    raise ValueError(f"{subprotocol}: no declared scheme's record is {key!r} (verity.protocols.compose.schemes); "
+    raise ValueError(f"{subprotocol}: no declared scheme's record is {key!r} (verity.protocols.run.schemes); "
                      f"declare its scheme there, with its reader")
 
 

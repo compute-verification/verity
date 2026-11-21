@@ -155,7 +155,7 @@ untraced = [
 # tools/check/train.sh: test_landing launches the loop's own (`landing.OWN_TRAIN`) with the settings.py beside it.
 inputs = ["tools/research", ".agents/skills", "verity/README.md", ".gitignore", "benchmarks/numerical/bench-instances", "infra/ops", "adapters/vllm", "verity", "verity/circuits", "verity/circuits/kernels",
           "tools/check/lean_slot.py", "tools/check/slot.py", "tools/check/tool.py", "tools/check/drive.toml", "calibration/tc_probe",
-          "pyproject.toml", "tools/config/pyproject.toml", "verity/protocols/proofs/flock/prover/pyproject.toml", "benchmarks/numerical/pyproject.toml",
+          "pyproject.toml", "tools/config/pyproject.toml", "verity/protocols/proof/flock/prover/pyproject.toml", "benchmarks/numerical/pyproject.toml",
           "benchmarks/harness/pyproject.toml", "tests/benchmarks/commitments/pyproject.toml", "tests/benchmarks/network_traces/pyproject.toml",
           "tests/benchmarks/pouw/pyproject.toml", "tools/check/pyproject.toml", "tools/check/settings.py", "tools/check/train.sh",
           "tools/verity/circuit_check/pyproject.toml",

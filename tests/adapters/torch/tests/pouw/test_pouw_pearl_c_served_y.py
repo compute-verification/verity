@@ -10,8 +10,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity.protocols.resource_accounting.compute.pouw.prover.kernels.pearl_c_sm90 import run as R
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.served_y import HM96_SALT, commit_y
+from verity.protocols.accounting.compute.pouw.prover.kernels.pearl_c_sm90 import run as R
+from verity.protocols.accounting.compute.pouw.prover.serving.pearl_c.served_y import HM96_SALT, commit_y
 from verity_torch.pouw.pearl_c.host import _put
 from verity_torch.pouw.pearl_c.served_y_device import DeviceTrees, y_tree
 

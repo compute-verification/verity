@@ -1969,7 +1969,7 @@ def test_activations_on_their_grids(server, every):
                       "TanhF32Rn_v1": len(TANH_SWEEP), "GeluTanhMulBf16_v1": gu, "GeluErfBf16_v1": 65536}, counts
 
 
-CAPTURED = Path(__file__).resolve().parents[4] / "tests/verity/protocols/proofs/flock/prover/data/captured-101/slices"
+CAPTURED = Path(__file__).resolve().parents[4] / "tests/verity/protocols/proof/flock/prover/data/captured-101/slices"
 
 
 def _u16(path: Path) -> list[int]:

@@ -7,8 +7,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from verity.protocols.compose import schemes as declarations
-from verity.protocols.resource_accounting import scheme
+from verity.protocols.run import schemes as declarations
+from verity.protocols.accounting import scheme
 
 from verity_vllm import messages
 

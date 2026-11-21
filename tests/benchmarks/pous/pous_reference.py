@@ -8,9 +8,9 @@ import json
 from collections.abc import Mapping
 from typing import Any
 
-from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
-from verity.protocols.resource_accounting.memory.pous.verifier import period
-from verity.protocols.resource_accounting.memory.pous.verifier import run as R
+from verity.protocols.accounting.memory.pous.attester import memory_attester as mc
+from verity.protocols.accounting.memory.pous.verifier import period
+from verity.protocols.accounting.memory.pous.verifier import run as R
 
 
 def pous_answer(case: Mapping[str, Any], *, schemes: Mapping[str, mc.Verify] = mc.SCHEMES,

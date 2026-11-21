@@ -21,8 +21,8 @@ import pytest
 
 from verity.circuits import evaluation as E
 from verity.circuits.defs import bind
-from verity.protocols.resource_accounting.network.verifier import network_attester_rows as WR
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, verifier as V
+from verity.protocols.accounting.network.verifier import network_attester_rows as WR
+from verity.protocols.proof.spot.verifier.one_stage import draw as D, verifier as V
 from verity_vllm.definitions.registry.b1_tp2 import AllReduce2
 from verity.commitments.periods import rows as SR
 
@@ -142,7 +142,7 @@ def test_a_transfer_gate_unit_left_out_of_the_proved_set_is_refused(tmp_path, pa
     """Each way of leaving a transfer-gate unit unproved: the proved set less one (`check_proved`), a sample trading one for an
     unsampled unit of the rest (`check_draw`, the stratum's count), and a registration whose sampling design samples the
     transfer-gate template as the rest is (R1)."""
-    from verity.protocols.proofs.spot.verifier.challenger import coins as CO
+    from verity.protocols.proof.spot.verifier.challenger import coins as CO
 
     mine, c, regs, _wins = committed(tmp_path, parts)
     m, rec, gates = mine[0], regs[0], Q * K * T

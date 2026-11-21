@@ -14,7 +14,7 @@ ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
 cd "$ROOT"
 export PATH="$HOME/.elan/bin:$PATH" LEAN_ABORT_ON_PANIC=1
 PY=${PY:-$ROOT/.venv/bin/python}
-J=verity/protocols/resource_accounting/memory/poub/verifier/lean
+J=verity/protocols/accounting/memory/poub/verifier/lean
 (cd "$J" && lake build poub-p2-protocol) > "$(mktemp)" 2>&1 || { echo "poub-p2-protocol doesn't build"; exit 7; }
 EXE=$ROOT/$J/.lake/build/bin/poub-p2-protocol
 echo "poub-p2-protocol sha512 $(sha512sum "$EXE" | cut -c1-128)"
@@ -23,8 +23,8 @@ import hashlib, json, sys, tempfile
 from pathlib import Path
 
 ROOT = Path.cwd()
-sys.path[:0] = [str(ROOT), str(ROOT / "tests/benchmarks/pous"), str(ROOT / "tests/verity/protocols/resource_accounting/memory/pous/verifier"),
-                str(ROOT / "benchmarks/pous"), str(ROOT / "verity/protocols/resource_accounting/memory/poub/prover/p2_stage")]
+sys.path[:0] = [str(ROOT), str(ROOT / "tests/benchmarks/pous"), str(ROOT / "tests/verity/protocols/accounting/memory/pous/verifier"),
+                str(ROOT / "benchmarks/pous"), str(ROOT / "verity/protocols/accounting/memory/poub/prover/p2_stage")]
 import test_pous_p2_bandwidth as T  # noqa: E402
 
 exe, tmp = sys.argv[1], Path(tempfile.mkdtemp())

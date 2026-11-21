@@ -1,0 +1,368 @@
+"""PoUB's two declarations as resource schemes (`verity.protocols.accounting.scheme`), both of read bandwidth,
+registered when this module is imported (`verity.protocols.run.schemes.DECLARATIONS`).
+
+They are two protocols, each with its own verifier and its own store, and no setting turns one into the other:
+
+- `BANDWIDTH` (``bandwidth``, the name onsite's applications list): PoUB-P2, ``verity/remote-bandwidth/p2/v0``, over
+  PoUS's registered C*. Its prover reads PoUS's store and the receipts PoUS's decode computed: it attaches through no
+  hook of the served run and has no setting.
+- `POUB` (``poub``, the adapter's option and the benchmarks' session): the remote session ``verity/remote-bandwidth/v0``
+  over the node's own store (`prover.node_store`), which `prover.binder.Binder` keeps current from the served run's
+  ``memory`` and ``steps`` events, subscribed under `POUB`'s name. Its settings are `SETTINGS`: ``refresh`` and what
+  its binder holds. The Commit's
+  session over that store is its process `SESSION_PROCESS` (`prover.commit_session`), which reads what the build
+  declared.
+
+No verifier loads this module: each verifier states its own id, component name and deadline, and PoUB's tests hold them
+equal to the declarations. It reads each one's parties and channels from its verifier's manifest (`verifier.p2_parties`,
+`verifier.session_parties`).
+
+`POUB`'s blocks are its window's (`prover.window`): one unit of the opening unit ``BlockOpeningUnit_v2``
+(`verifier.commitments.gates.block_check`, ``BlockOpeningCheck_v2`` in its six rows) a sampled receipt, each costing
+the bits of the block a receipt reads, its static ``BYTES`` (`verifier.codec.BLOCK_BYTES`), which the verifier reads
+from the registered circuit. `BANDWIDTH` declares none: P2's openings go to its verifier in the clear. Each says its own term (`Scheme.delta_scheme`) as a `Term`: the sketch
+bound's error `δSketch g b Q P N εrank` (`DELTA_SCHEME`) at its receipts' layout (g, b), a function of the prover's hash
+budget ``Q``, the session's passes ``P``, the store's blocks ``N`` and the sign blocks' rank tail ``rank_tail`` (the
+Lean's εrank, which is not the audit's error ε).
+The two sides are the route form's: `ResourceAccounting.Remote.Run.Paid` is `Verity.Scheme`'s charge exactly
+(`ResourceAccounting.Remote.Run.scheme`, security/Definitions/Poub/Remote/Scheme.lean:56); the deployed forms are what
+its `GetsBack` gives. The term and the sides are not yet one statement: `Run.scheme`'s own term is `Paid`'s δ
+(`δscheme := δ`, linked by `PaidBoundsBreaks`, stated and unproved), which the deployed route gives as
+`RemoteRunRoutes`' hash term (Guarantees/RateAuditDeployed.lean:164), while `δSketch` is the error of `SketchBound`
+(Assumptions/RemoteHeld.lean:108), a bound on the trace's correct receipts, and no statement takes it to `Paid`.
+"""
+
+from __future__ import annotations
+
+import shlex
+from collections.abc import Mapping
+from fractions import Fraction
+from importlib import import_module
+from types import MappingProxyType
+from typing import Any
+
+from dataclasses import replace
+
+from verity import hooks as H
+from verity.commitments import domains
+from verity.protocol import VERIFIER, Channel
+from verity.protocols.accounting import scheme as S
+from verity.protocols.accounting.memory.poub.verifier import p2_parties as P2
+from verity.protocols.accounting.memory.poub.verifier import session_parties as RS
+
+#: P2's allowance from a window's boundary message to its roots' deadline, which the session's parameters carry
+#: (`verifier.p2_parties.SESSION`); the remote session's is a parameter of each session (`verifier.audit.Params`)
+DEADLINE_NS = 10**9
+#: the process `POUB` registers (`Scheme.processes`): the Commit's session, which an adapter looks up by this name
+SESSION_PROCESS = "poub-session"
+#: what the parts of `POUB` on a served run that are declared and not built wait on
+GOAL = "memory-accounting/memory-protocols-declared"
+#: the sketch bound's error at a fixed receipt layout, `δSketch g b Q P N εrank`
+#: (security/Definitions/Poub/Guarantees/RemoteSketch.lean): g the guess term's bits, b the bits of the sign keys'
+#: birthday term
+DELTA_SKETCH = "ResourceAccounting.Guarantees.Remote.δSketch"
+
+
+def delta_sketch(g: int, b: int) -> S.Term:
+    """`DELTA_SKETCH` at the layout (``g``, ``b``) as a scheme's own term: its parameters are the prover's SHA-512
+    compressions over the session ``Q``, its passes ``P``, the store's blocks ``N`` and the signs' rank tail
+    ``rank_tail`` (the Lean's εrank, a rational here), and its value
+    ``Q/2^g + (Q + P)·(rank_tail + N/2^512) + (Q + P)²/2^b``."""
+    def value(Q: int, P: int, N: int, rank_tail: Fraction) -> Fraction:
+        return Fraction(Q, 2**g) + (Q + P) * (Fraction(rank_tail) + Fraction(N, 2**512)) + Fraction((Q + P)**2, 2**b)
+    return S.Term(f"{DELTA_SKETCH} {g} {b}", ("Q", "P", "N", "rank_tail"), value)
+
+
+#: each scheme's own term: `DELTA_SKETCH` at its receipts' layout, the conclusion of `SketchBoundP2` (rank 12, 256-bit
+#: sign keys) and of `SketchBoundDeployed` (rank 27, 512-bit sign keys)
+DELTA_SCHEME = {"bandwidth": delta_sketch(96, 257), "poub": delta_sketch(216, 513)}
+#: the ways to a correct receipt without a read from node memory, as the session's ledger names them
+#: (`verifier.audit.GammaTerms`)
+CHARGES = ("chip", "counting", "rebuild", "host", "link", "carrier")
+_SKETCH = ("ResourceAccounting.Assumptions.SketchHashRandom",
+           "ResourceAccounting.Assumptions.SketchRank",
+           "ResourceAccounting.Remote.Sketch.Assumptions.KeyBudget",
+           "ResourceAccounting.Remote.Sketch.Assumptions.Present",
+           "ResourceAccounting.Remote.Sketch.Assumptions.Receipted")
+_OUTSIDE = "the opening unit (BlockOpeningCheck_v2) is proved outside the workload's circuit: "
+
+
+def _named(role: str) -> str:
+    return P2.CLOSER_PARTY if role == P2.VERIFIER else role
+
+
+def _bandwidth_attach(exchange: Any, ctx: Any) -> Any:
+    """``bandwidth`` on a served run (`Scheme.attach`): P2's prover over the store PoUS holds on ``exchange``
+    (`prover.p2_stage.bandwidth.Attached`), PoUS attached before it (``depends``); refused by name where it is not."""
+    from verity.protocols.accounting.memory.pous.prover import served
+
+    storage = served.of(exchange)
+    if storage is None:
+        raise LookupError("bandwidth reads the store pous holds on the same exchange, and no pous is attached on it: "
+                          "attach pous before bandwidth (its depends)")
+    return import_module("verity.protocols.accounting.memory.poub.prover.p2_stage.bandwidth").Attached(
+        storage, ctx)
+
+
+#: `POUB`'s settings, each what its binder holds: ``refresh``; ``passes``, the binder runs the passes itself (off for a
+#: session whose backend runs them); ``kv``, the KV pool is in the registration; ``weight_blocks``, the weight tensors
+#: registered in order while their blocks fit that many (0: every tensor); ``window``, the passes of a window on a fixed
+#: schedule for a run with no verifier (0: none)
+SETTINGS: Mapping[str, Any] = MappingProxyType(
+    {"refresh": False, "passes": True, "kv": True, "weight_blocks": 0, "window": 0})
+#: what a launcher hands `attach` beside the settings, each optional: ``store`` (a `NodeMemory`; `attach` makes one
+#: without it), ``challenge(t)`` (window ``t``'s challenge, with ``window``), ``reader(segments)`` (a pass's roots) and
+#: ``regions(values)`` (weight regions beside the registered values', each ``(name, tensor, source, codec)``)
+LAUNCHER = ("store", "challenge", "reader", "regions")
+
+
+def _check_settings(values: Mapping[str, Any]) -> str | None:
+    for name in ("weight_blocks", "window"):
+        if values[name] < 0:
+            return f"{name} is a count, 0 or more, not {values[name]}"
+    if values["window"] and not values["passes"]:
+        return f"window {values['window']} with passes off: a binder that runs no pass ends no window"
+    return None
+
+
+def _bandwidth_reading(row: Mapping[str, Any]) -> S.Reading:
+    q = row["quantity"]
+    return S.Reading(int(q["q_bytes"]), Fraction(str(q["eps"])), "quantity.eps")
+
+
+#: why neither read audit has a check of a record: its Lean verifier answers the session as it runs, one event a line
+_LIVE = ("its Lean verifier ({}) checks the session live, an event a line, and no entry checks a finished record "
+         "against the verifier's registration")
+
+
+#: the route's named premise, unproved: the incorrect receipts are counted (`Remote.Run.Counted`)
+_COUNTED = "ResourceAccounting.Remote.Run.Counted"
+
+_REQUIRES = {
+    "log-order": "the verifier party's own log of the session",
+    "log-times": "the verifier party's clock on the auditor's host",
+    "coins-at-rate": "a challenger in the verifier's process on its host's entropy; a pass's seed is derived from its "
+                     "window's challenge and the previous pass's root",
+}
+
+BANDWIDTH = S.register(S.Scheme(
+    name=P2.COMPONENT,
+    protocol=domains.POUB_P2,
+    resource="read",
+    blocks=S.Lacks(_OUTSIDE + "no block of the workload's circuit carries its cost"),
+    assumptions=(*_SKETCH, "ResourceAccounting.Assumptions.WorkHardnessP2",
+                 "ResourceAccounting.Remote.Held.Assumptions.SquaringCeilingP2"),
+    log=(
+        S.Order("registration", "challenge"),
+        S.Order("roots", "boundary", direction="after", within_ns=DEADLINE_NS,
+                assumption="ResourceAccounting.Remote.Held.Assumptions.SquaringCeilingP2"),
+        S.Order("roots", "openings"),
+    ),
+    charges=tuple(S.Charge(name, f"no P2 record carries it: verifier.audit.GammaTerms.{name} at P2's units",
+                           bounded=False) for name in CHARGES),
+    delta_scheme=DELTA_SCHEME["bandwidth"],
+    requires={
+        **_REQUIRES,
+        "one-labelling": "its own trees: PoUS's vk root over the store and a receipt root a pass",
+        "one-design": _OUTSIDE + "its own sample of receipts a window and its own pooled bound, the openings sent to "
+                                 "the verifier in the clear",
+    },
+    over="the credited bits: the committed receipts' words, committed · b bits (`Remote.Run.committed`)",
+    under="what the run paid for words: its tier reads, the state held at the pass boundaries and the bits rebuilt "
+          "(`Remote.Run.paid`), in bits",
+    attach=_bandwidth_attach,
+    parties=(*(replace(r, name=_named(r.name)) for r in P2.MANIFEST.parties), VERIFIER),
+    channels=(*(replace(c, sender=_named(c.sender), receiver=_named(c.receiver)) for c in P2.MANIFEST.channels),
+              Channel(P2.CLOSER_PARTY, VERIFIER.name, ("BandwidthAnswer",), after=("Openings",))),
+    channel_schemas=P2.MANIFEST.messages,
+    colocated=(),
+    needs=frozenset({"receipts"}),
+    depends=("pous",),
+    pieces={"prover": S.Launch(
+        optional=("host", "command"), development="host",
+        entry="verity.protocols.accounting.memory.poub.scheme:launch_bandwidth",
+        executables=(S.Executable("verity/protocols/accounting/memory/poub/verifier/lean", "poub-p2-protocol"),
+                     S.Executable("verity/protocols/accounting/memory/poub/verifier/lean", "poub-verifier")))},
+    reads={P2.CLOSER_PARTY: {"challenger": ("pous", "memory-challenger")}},
+    answers="verity.protocols.accounting.memory.poub.prover.p2_stage.bandwidth:ANSWERS",
+    unchecked=P2.mc.UNCHECKED,
+    record="bandwidth",
+    symbol="Q_cert",
+    published=("bytes", Fraction(1, 8)),
+    check=S.Lacks(_LIVE.format("p2_lean, as p2_parties.drive runs it")),
+    reader=_bandwidth_reading,
+    premises=(_COUNTED,),
+    # For its session's life it holds a reference to storage's own encoded rows, a tree of salted leaves held to the
+    # store's root, and each pass's receipts: none yields the weights apart from the store it audits.
+    keeps_weight_copy=False,
+    **dict.fromkeys(("tables", "output_format", "product_family", "y_committed", "salt_open_root", "kernels"),
+                    S.Lacks("not a kernel scheme")),
+))
+
+POUB = S.register(S.Scheme(
+    name="poub",
+    protocol=domains.POUB_PROTOCOL,
+    resource="read",
+    blocks=(S.Block("BlockOpeningUnit_v2", lambda shape: 8 * shape["BYTES"]),),
+    assumptions=(*_SKETCH, "ResourceAccounting.Assumptions.WorkHardness",
+                 "ResourceAccounting.Remote.Held.Assumptions.SquaringCeiling"),
+    log=(S.Order("registration", "challenge"), S.Order("roots", "openings")),
+    charges=tuple(S.Charge(name, f"gamma.{name}") for name in CHARGES),
+    delta_scheme=DELTA_SCHEME["poub"],
+    settings=SETTINGS,
+    check_settings=_check_settings,
+    hooks=("declared", "memory", "steps"),
+    requests=lambda ctx: requests(ctx),
+    attach=lambda exchange, ctx: attach(exchange, ctx),
+    processes={SESSION_PROCESS: lambda *a, **kw: session(*a, **kw)},
+    requires={
+        **_REQUIRES,
+        "one-labelling": "its own trees: the node store's registration root and a receipt root a pass",
+        "one-design": "its blocks are proved in the read session's own window (prover.window), whose rows the "
+                      "verifier makes are not yet given (Window.give); today its own sample of receipts a window "
+                      "and its own pooled bound",
+    },
+    over="the credited bits: the committed receipts' words, committed · b bits (`Remote.Run.committed`)",
+    under="what the run paid for words: its tier reads, the state held at the pass boundaries and the bits rebuilt "
+          "(`Remote.Run.paid`), in bits",
+    parties=RS.MANIFEST.parties,
+    channels=RS.MANIFEST.channels,
+    channel_schemas=RS.MANIFEST.messages,
+    colocated=(),
+    needs=frozenset(),
+    depends=(),
+    record=S.Lacks("no combined record has a row for the remote session: its verdict is its own session's "
+                   "(benchmarks/poub_session)"),
+    symbol=S.Lacks("the remote session publishes no certified quantity in a combined record"),
+    published=S.Lacks("the remote session publishes no certified quantity in a combined record"),
+    check=S.Lacks(_LIVE.format("session.lean_verifier, as session.verifier runs it")),
+    reader=S.Lacks("no combined record has a row for the remote session"),
+    premises=("ResourceAccounting.Assumptions.WorkHardness",
+              "ResourceAccounting.Remote.Held.Assumptions.SquaringCeiling", _COUNTED),
+    # Its binder registers views of the served tensors (`prover.binder.TorchBacking.of_tensor`), which keep the plain
+    # weights resident after storage releases them, and its session keeps two host copies of every block's payload,
+    # one of them plain (`prover.node_store.serving`: `payload_root`'s payloads and the audit store's encoded
+    # blocks). The commit that drops the views and the plain host copy changes this.
+    keeps_weight_copy=True,
+    **dict.fromkeys(("tables", "output_format", "product_family", "y_committed", "salt_open_root", "kernels"),
+                    S.Lacks("not a kernel scheme")),
+    answers=S.Lacks("its verifier answers the session live, an event a line; no piece keeps a session to answer later"),
+))
+
+#: a freed range is reused as late as the workload allows, so one freed inside a window is not written again in it
+REUSE_OLDEST_FREED = H.ReuseOldestFreed()
+#: what a session in lockstep with the run asks of it (one engine step a pass, `prover.node_store.serving.Lockstep`),
+#: in the properties a served run declares (`verity.hooks.Declared`): one GPU's store, a step's outputs read before the
+#: next step is scheduled, and no range brought back holding the values another input wrote
+SESSION: tuple[H.Request, ...] = (
+    H.RequireProperty("world", 1, "a store is one GPU's: a TP Commit's session is not wired yet"),
+    H.RequireProperty("async_steps", False, "a pass follows each step's schedule and its output in turn"),
+    H.RequireProperty("prefix_cache", False, "a prefix hit brings a page back with its KV"),
+)
+
+
+def requests(ctx: Mapping[str, Any]) -> tuple[H.Request, ...]:
+    """`POUB`'s requests of a served run (`Scheme.requests`), by what ``ctx`` says of it: `REUSE_OLDEST_FREED` unless
+    ``fifo`` is False; `SESSION` with ``session`` (a session in lockstep with the run); and with ``ranges`` that the
+    workload's memory hold exactly that many (a session whose store's size is its registration's)."""
+    return (*((REUSE_OLDEST_FREED,) if ctx.get("fifo", True) else ()),
+            *(SESSION if ctx.get("session") else ()),
+            *(() if ctx.get("ranges") is None else (H.FixRanges(ctx["ranges"]),)))
+
+
+#: `POUB`'s prover, by what the declaration hands out, each as ``module:name``. The prover is a distribution of its
+#: own (it runs on a GPU through torch, which `verity` never imports; ``tests/import_order.toml`` lists this file as
+#: its loader), so the declaration names it and loads it on first use, as `verity.protocols.run.schemes` loads a
+#: declaration by its scheme's name.
+_BINDER = "verity.protocols.accounting.memory.poub.prover.binder"
+PROVER: Mapping[str, str] = MappingProxyType({
+    "binder": f"{_BINDER}:Binder",
+    "store": "verity.protocols.accounting.memory.poub.prover.node_store.registry:NodeMemory",
+    "schedule": f"{_BINDER}:Every",
+    "tiles": "verity.protocols.accounting.memory.poub.verifier.audit:NoiseTiles",
+    "weights": f"{_BINDER}:model_weights",
+    "region": f"{_BINDER}:WeightRegion",
+    SESSION_PROCESS: "verity.protocols.accounting.memory.poub.prover.commit_session:CommitSession",
+})
+
+
+def prover(name: str) -> Any:
+    """What `PROVER` names ``name``, its module imported on first use."""
+    module, attribute = PROVER[name].split(":")
+    return getattr(import_module(module), attribute)
+
+
+def _weights(regions: Any) -> Any:
+    """The binder's weight regions: the registered values', then ``regions(values)``' tuples, each refused by its
+    place unless it is ``(name, tensor, source, codec)`` with ``name`` and ``source`` strings."""
+    def weights(values: Any) -> list[Any]:
+        out = list(prover("weights")(values))
+        for i, r in enumerate(regions(values)):
+            if not (isinstance(r, tuple) and len(r) == 4 and isinstance(r[0], str) and isinstance(r[2], str)):
+                raise ValueError(f"{POUB.name}: regions' entry {i} is {r!r}: each is (name, tensor, source, codec), "
+                                 "name and source strings")
+            out.append(prover("region")(r[0], r[1], r[2], codec=r[3]))
+        return out
+    return weights
+
+
+def attach(exchange: Any, ctx: Mapping[str, Any]) -> Any:
+    """`POUB` on a served run (`Scheme.attach`): its binder as ``ctx["settings"]`` state it (`SETTINGS`), over
+    ``ctx["store"]`` or a store of its own (read back as the binder's ``store``), with the launcher's callables
+    (`LAUNCHER`), installed on ``exchange``, which files its requests; returns the binder. With ``window`` it runs the
+    fixed schedule itself: ``challenge(t)`` every ``window`` passes, each receipt bound to the stub tiles
+    (`verifier.audit.NoiseTiles`). A setting handed beside the settings is refused by name, and so is a ``challenge``
+    without ``window`` or a ``window`` without one: what the binder holds is what the settings say."""
+    settings = ctx["settings"]
+    if beside := sorted(k for k in ("binder", *SETTINGS) if k in ctx):
+        raise ValueError(f"{POUB.name}: {beside} handed beside the settings: each is a setting of the declaration "
+                         f"({sorted(SETTINGS)}), given as one")
+    challenge = ctx.get("challenge")
+    if bool(settings["window"]) != (challenge is not None):
+        raise ValueError(f"{POUB.name}: window {settings['window']} with "
+                         f"{'no' if challenge is None else 'a'} challenge: a window's passes and its challenge go together")
+    kw: dict[str, Any] = {"passes": settings["passes"], "kv": settings["kv"],
+                          "weight_blocks": settings["weight_blocks"] or None}
+    if settings["window"]:
+        kw.update(messages=prover("schedule")(settings["window"], challenge), tiles=prover("tiles")())
+    if ctx.get("reader") is not None:
+        kw["reader"] = ctx["reader"]
+    if ctx.get("regions") is not None:
+        kw["weights"] = _weights(ctx["regions"])
+    store = ctx["store"] if ctx.get("store") is not None else prover("store")()
+    return prover("binder")(store, **kw).install(exchange)
+
+
+def session(verifier: str, **kw: Any) -> Any:
+    """The process `SESSION_PROCESS`: the Commit's session at ``verifier`` (``HOST:PORT``), `prover.commit_session`'s
+    `CommitSession` with its keywords. An adapter hands it ``exchange``, a call that gives the exchange of the build
+    about to be made, and drives what it gets back."""
+    return prover(SESSION_PROCESS)(verifier, **kw)
+
+
+BANDWIDTH_SCRIPT = "benchmarks/pous/served_piece.py"
+#: served_piece.py's flag for each binding of PoUB's bandwidth verifier
+_BANDWIDTH = {"host": "--bw-host", "command": "--bw-party"}
+
+
+def _bandwidth_hooks(cfg, params, bound, pinned):
+    """PoUB's prover inside PoUS's piece (served_piece.py's --bw-*): the held store proved to the bandwidth verifier a
+    pass at a time, its answer collected by BANDWIDTH_CMD. The close's key is the configuration's pin for the bandwidth verifier alone; with no pin the session has no
+    case. Unbound, PoUS's run keys start the bandwidth party too, under PoUS's key made for the run."""
+    from verity.protocols.accounting.memory.pous.scheme import onsite_command
+
+    words = [*(["--bw-trusted-sha512", *pinned] if pinned else []),
+             *(w for k, flag in _BANDWIDTH.items() if k in bound for w in (flag, bound[k]))]
+    return {**({"POUS_ARGS": shlex.join(words)} if words else {"DEVELOPMENT": "1"}),
+            "BANDWIDTH_CMD": onsite_command("BANDWIDTH_CMD")}
+
+
+def launch_bandwidth(declaration: S.Scheme) -> tuple[Any, tuple[str, ...]]:
+    """The bandwidth audit's prover piece (its `Launch.entry`): its hooks and the script they run. It launches and
+    collects, and decides no verdict."""
+    return _bandwidth_hooks, (BANDWIDTH_SCRIPT,)
+
+
+__all__ = ["BANDWIDTH", "BANDWIDTH_SCRIPT", "CHARGES", "DEADLINE_NS", "DELTA_SCHEME", "DELTA_SKETCH", "GOAL", "LAUNCHER", "POUB", "PROVER",
+           "REUSE_OLDEST_FREED", "SESSION", "SESSION_PROCESS", "SETTINGS", "attach", "delta_sketch", "prover",
+           "launch_bandwidth", "requests", "session"]

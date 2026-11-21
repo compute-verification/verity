@@ -3,7 +3,7 @@ of the salts share no row."""
 from __future__ import annotations
 
 from verity.commitments import salt_file
-from verity.protocols.resource_accounting.memory.pous.prover import served_weights as S
+from verity.protocols.accounting.memory.pous.prover import served_weights as S
 
 
 def test_two_draws_of_the_salts_share_no_row(tmp_path):

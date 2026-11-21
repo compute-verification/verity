@@ -26,7 +26,7 @@ from verity.circuits import partition_object as PO
 from verity.circuits import restrict as R
 from verity.circuits.codec import descriptor_chunks, descriptor_id
 from verity.circuits.program import input_id
-from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
+from verity.protocols.proof.spot.verifier.one_stage import one_circuit as OC
 
 CLAUSE = re.compile(re.escape(OC.NOT_ADMITTED) + r", ([a-z-]+): (.*)", re.S)
 
@@ -118,7 +118,7 @@ def main() -> int:
         census("test_class_rows._circuit", b"".join(descriptor_chunks(program)))
         _windows("test_class_rows._circuit", mod._circuit(), tree)
     elif a.what == "chain":
-        mod = _load(tree / "tests/verity/protocols/proofs/spot/verifier/test_one_circuit_chain.py", "door_form_chain")
+        mod = _load(tree / "tests/verity/protocols/proof/spot/verifier/test_one_circuit_chain.py", "door_form_chain")
         census("test_one_circuit_chain.registered", mod.registered()["C"])
         _windows("test_one_circuit_chain.circuit", mod.circuit(), tree)
     elif a.what == "one_linear":

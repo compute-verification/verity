@@ -7,9 +7,9 @@ import subprocess
 
 from test_repository import ROOT
 
-from verity.protocols.proofs.spot.verifier.one_stage import proofs
+from verity.protocols.proof.spot.verifier.one_stage import proofs
 
-DOOR = ("verity/protocols/proofs/spot/verifier/one_stage/proofs.py", "verity/protocols/proofs/spot/verifier/one_stage/settings.py")
+DOOR = ("verity/protocols/proof/spot/verifier/one_stage/proofs.py", "verity/protocols/proof/spot/verifier/one_stage/settings.py")
 
 
 def test_no_launcher_sets_the_door_switch() -> None:

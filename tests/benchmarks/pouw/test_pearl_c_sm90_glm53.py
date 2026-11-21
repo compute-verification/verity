@@ -72,8 +72,8 @@ def test_expert_parallel_brings_the_experts_into_the_domain():
 def test_gamma_is_the_lean_twins():
     """`Pouw.PearlC.pearlCGapSm120v1Cast32Rev1_8192`: v1 under rev1 (cap 1/400) at the sm_120 record, 8192³, the honest cast
     at 32 (24 over the credited 8), the gap 173561/22302500."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
-    from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_device import SM120
+    from verity.protocols.accounting.compute.pouw.prover.schemes import pearl_c as C
+    from verity.protocols.accounting.compute.pouw.prover.schemes.pearl_c_device import SM120
 
     s = C.PearlC(forming="v1", device=replace(SM120, cap=Fraction(1, 400)), hashing="h3")
     assert G.gamma(s, 8192, 8192, Fraction(24)) == Fraction(173561, 22302500)
@@ -191,14 +191,14 @@ def retained(tmp_path_factory):
     np = pytest.importorskip("numpy")
     torch = pytest.importorskip("torch")
     GP = _passes_module()
-    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/resource_accounting/compute/pouw/prover/clear"))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/accounting/compute/pouw/prover/clear"))
     import clear_work as CW
     from clear_audit import Prover
-    from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
+    from verity.protocols.accounting.compute.pouw.prover import schemes as pouw_schemes
     from verity_torch.pouw.pearl_c import run_device as PPDR
 
-    from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
-    from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
+    from verity.protocols.accounting.compute.pouw.verifier import core_check as CC
+    from verity.protocols.accounting.compute.pouw.verifier.audit import (
         HM96_SALT,
         HM96_TRANSCRIPT,
         HM96_WEIGHTS,
@@ -213,10 +213,10 @@ def retained(tmp_path_factory):
         weight_binding,
         weights_root,
     )
-    from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger
-    from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Context, Matmul, Shape, Tile
-    from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_work as PW
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
+    from verity.protocols.accounting.compute.pouw.verifier.coins import Challenger
+    from verity.protocols.accounting.compute.pouw.verifier.protocol import Context, Matmul, Shape, Tile
+    from verity.protocols.accounting.compute.pouw.prover.schemes import pearl_c_work as PW
+    from verity.protocols.accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
     from verity.commitments.merkle import tree_levels
 
     scheme = "pearl-c-h100-v1-h3"
@@ -363,7 +363,7 @@ def test_volunteer_leaves_each_pass_no_tile_over_an_inert_bound_and_its_transcri
     """`volunteer` runs `volunteer_pass` on prefill's and decode's passes: each pass's records then leave no tile over a
     debit cap, its commitment is the capture's, its manifest's records root is the one written, and every tile passes the
     verifier's check under it."""
-    from verity.protocols.resource_accounting.compute.pouw.verifier.coins import CoinCommitment
+    from verity.protocols.accounting.compute.pouw.verifier.coins import CoinCommitment
 
     out, pub = _copy(retained, tmp_path)
     before = {n: json.loads((out / n / "manifest.json").read_text()) for n in retained.GP.PASSES}
