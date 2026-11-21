@@ -149,7 +149,7 @@ def _record(lines: list[str]) -> list[str]:
 
 
 DEV_WHY = "no PoUW accept of record (a development accept counts as none)"
-#: the kit's lines under a record's first line (`benchmarks/README.md`'s interface)
+#: the kit's lines under a record's first line (`tests/test_metrics_registry.py`'s docstring)
 NOT_STATED, NOT_AN_AUDIT = "ran with: not stated", "a measurement, not an audit"
 
 

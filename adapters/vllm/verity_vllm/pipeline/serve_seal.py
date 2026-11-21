@@ -128,10 +128,12 @@ def window_class_of(opts: Any) -> SimpleNamespace:
     """The bounds the window class ``opts.window_class`` (``S,P,O[,LANES,EVERY]``) declares: its ``slots``, ``prompt`` and
     ``positions`` (`WindowClass.positions`, the longest prompt's then every output but the last); `ValueError` when it declares
     none.  The record path reaches the predictor, which defines the class, only through ``predict emit``."""
-    parts = str(opts.window_class or "").split(",")
-    if not 3 <= len(parts) <= 5 or not all(p.strip().isdecimal() and int(p) >= 1 for p in parts):
-        raise ValueError(f"--window-class {opts.window_class!r} is not S,P,O[,LANES,EVERY] of positive integers")
-    slots, prompt, outputs = (int(p) for p in parts[:3])
+    from verity_vllm.inputs.serves import window_class_parts
+
+    try:
+        slots, prompt, outputs = window_class_parts(opts.window_class)[:3]
+    except ValueError as e:
+        raise ValueError(f"--window-class {e}") from None
     return SimpleNamespace(slots=slots, prompt=prompt, positions=prompt + outputs - 1)
 
 
