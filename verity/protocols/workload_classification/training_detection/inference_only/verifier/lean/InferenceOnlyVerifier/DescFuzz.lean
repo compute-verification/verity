@@ -238,7 +238,7 @@ def bodyOk (P : Prog) (cap d : Nat) : Except Json Unit := do
 def pieceGates (q : Desc.Piece) : Array (Int × Nat) :=
   match q.tgt with
   | .gate w => (Array.range (max q.rows 1)).flatMap fun (r : Nat) => (Array.range q.len).map fun (t : Nat) =>
-      (q.base + (r : Int) * q.rowStride + (t : Int) * q.stride, w)
+      ((q.row r).at t, w)
   | .ref _ _ => #[]
 
 /-- `Width.segGates`. -/
@@ -252,8 +252,9 @@ def segJson (s : Desc.Seg) : Json :=
       | .gate w => Json.arr #[Json.str "gate", toJson w]
       | .ref p i => Json.arr #[Json.str (if p then "p" else "n"), toJson i]),
     ("base", toJson q.base), ("stride", toJson q.stride), ("len", toJson q.len), ("rows", toJson q.rows),
-    ("rowStride", toJson q.rowStride)]
-  Json.mkObj [("ps", Json.arr (s.ps.map pj)), ("len", toJson s.len), ("reps", toJson s.reps), ("shift", toJson s.shift)]
+    ("rowStride", toJson q.rowStride), ("lv", toJson q.lv), ("start", toJson q.start)]
+  Json.mkObj [("ps", Json.arr (s.ps.map pj)), ("len", toJson s.len), ("reps", toJson s.reps), ("shift", toJson s.shift),
+    ("rowed", toJson s.rowed)]
 
 /-- `Fresh.ReadsExact`'s conclusion for every root node: `none`, or the first node and clause where it fails; `some`
 with `skipped` for a segment past the cap. -/
@@ -271,7 +272,7 @@ def readsExact (P : Prog) (reads : Array (Array Desc.Seg)) (c : GateTable) (cap 
       if segSize s > cap then return some (Json.mkObj [("skipped", Json.str "a segment past the cap"), ("node", toJson k)])
       let gs := segGates s
       if let some q := s.ps[0]? then
-        let kk := Desc.nodeOf offs q.base.toNat
+        let kk := Desc.nodeOf offs (q.row 0).base.toNat
         if kk ≥ K then return some (fail "a: nodeOf past the root's nodes" [("seg", segJson s)])
         for x in gs do
           if x.1 < 0 then return some (fail "a: a negative gate" [("seg", segJson s), ("gate", toJson x.1)])
