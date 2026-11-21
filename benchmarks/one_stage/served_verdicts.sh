@@ -2029,7 +2029,7 @@ road_sampled() {  # step 3 on the window's road: the window's record, its Lean c
   git -C "$TREE" rev-list --first-parent "${MAIN_SHA:-HEAD}" > "$main" 2>/dev/null && [ -s "$main" ] \
     || { step_not_run sampled-proofs "no first-parent line of main for its challenger session to pin on (${MAIN_SHA:-HEAD} has none in this tree)"; return; }
   m0=$TREE:$TREE/benchmarks/numerical/python:$TREE/verity/protocols/proofs/flock/prover/python:$TREE/adapters/vllm
-  (cd "$TREE" && env -u PYTHONPATH DEVELOPMENT=1 RAYON_NUM_THREADS="$(nproc)" RUST_MIN_STACK=$((64 << 20)) timeout -k 1m "$V3C_AUDIT_TIMEOUT" \
+  (cd "$TREE" && env PYTHONPATH="$m0${PYTHONPATH:+:$PYTHONPATH}" DEVELOPMENT=1 RAYON_NUM_THREADS="$(nproc)" RUST_MIN_STACK=$((64 << 20)) timeout -k 1m "$V3C_AUDIT_TIMEOUT" \
     "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py audit --window "$rec" --sampling-design "$law" \
     --prover-circuit --development --run "$run" ${regs[@]+"${regs[@]}"} \
     --challenger local --main "$main" --m0-pythonpath "$m0" --bin "$bin" --lean "$leanb/verity-verify-proof" \

@@ -197,33 +197,20 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 
 
-def own_tree(tree: Path = HERE.parents[1]) -> Path | None:
-    """Import Verity from ``tree``, the checkout this file is in: a venv shared between checkouts (a node's vLLM venv) has
-    editable installs of whichever tree last installed into it, so the audit would run another commit's verifier, its
-    registry missing the window's templates. Each `sys.path` entry under that other tree is put ahead at the same path under
-    ``tree``, and `PYTHONPATH` too, for the processes the audit starts; -> the other tree, or None where it is ``tree``."""
-    import importlib.util
-
-    spec = importlib.util.find_spec("verity")
-    other = Path(spec.origin).resolve().parents[1] if spec is not None and spec.origin else tree
-    if other == tree:
-        return None
-    ahead = [str(tree)]
-    for p in sys.path:
-        try:
-            rel = Path(p).resolve().relative_to(other)
-        except ValueError:
-            continue
-        if (tree / rel).is_dir() and str(tree / rel) not in ahead:
-            ahead.append(str(tree / rel))
-    sys.path[:0] = ahead
-    os.environ["PYTHONPATH"] = os.pathsep.join([*ahead, *filter(None, [os.environ.get("PYTHONPATH")])])
-    print(f"TREE the venv's editable installs are {other}'s; importing {tree}'s ahead of them", file=sys.stderr)
-    return other
-
-
-own_tree()
 sys.path.insert(0, str(HERE.parent / "one_stage"))
+
+
+def own_tree(tree: Path = HERE.parents[1], packages: Iterable[str] = ("verity", "verity_vllm", "verity_flock")) -> None:
+    """Refuses unless each of ``packages`` imports from ``tree``, the checkout this file is in: a venv shared between
+    checkouts (a node's vLLM venv) holds editable installs of whichever tree last installed into it, and the audit would run
+    that commit's verifier and registry."""
+    for name in packages:
+        at = Path(importlib.import_module(name).__file__).resolve()
+        if not at.is_relative_to(tree.resolve()):
+            raise SystemExit(f"records_audit: {name} imports from {at}, not from this tree {tree}: the venv's editable "
+                             f"installs are another checkout's; run with PYTHONPATH naming this tree's import roots "
+                             f"({tree}:{tree}/adapters/vllm:{tree}/verity/protocols/proofs/flock/prover/python) or a venv "
+                             f"synced in this tree (uv sync --all-packages)")
 
 from verity.commitments import docket_digest as DD  # noqa: E402
 from verity import device as ST  # noqa: E402
@@ -1112,6 +1099,7 @@ def forged_outcome(s: dict, wdir: Path, member: int | None = None, more: Mapping
 def audit(a: argparse.Namespace) -> int:
     """The audit (module docstring) into ``a.out``: ``summary.json`` and a ``RECORDS`` line, its ``definitions`` the module
     each member template's Definition is in and ``loaded`` the ``verity*`` packages the process loaded. -> 0 when it passed."""
+    own_tree()
     import a5 as A5
     from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
     from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
