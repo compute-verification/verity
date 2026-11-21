@@ -5,7 +5,7 @@
                   numerics profile, FA version knob): a target that names its card names the GPU vLLM's tuned configs are keyed
                   by (`TargetProfile.device_name`)
     Phi.tp        {"world", "rank"}
-    Phi.sampling  the row's declared sampling policy (`pipeline.build.sampling_policy` shape: greedy | stochastic)
+    Phi.sampling  the row's declared sampling policy (`pipeline.build_sampling.sampling_policy` shape: greedy | stochastic)
     Phi.engine    the engine args (block_size, max_num_seqs, max_num_batched_tokens, chunked prefill, prefix caching,
                   disable_custom_all_reduce), the layout of an FP8 KV cache (`kv_cache_dtype`: `STATED_KV_LAYOUT`), the speculative
                   decoding it drafts under (`speculative`: `STATED_SPECULATIVE`) and the `env` its engines run under (the
