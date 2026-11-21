@@ -90,8 +90,8 @@ The committed run, and the only one (``--tp-commit`` is refused by name: the TP 
   rotary table at the engine's served words once they are within the analytic table's bound (``--tables``), the
   document ``verity-vllm advice --weights-of-record`` records in each window's registration; its roots are what
   ``window-circuit --pins`` and ``records_audit.py count --pins`` take. The verifier pins them before the first window's
-  coins and never recomputes one from the checkpoint. ``--deployment-record FILE`` writes it also as the first record of
-  the serve's registration log (`window_weights.deployment_record`).
+  coins and never recomputes one from the checkpoint. It is the deployment's one registration (`window_weights.register`):
+  written once, with its record (`window_weights.deployment_record`) beside ``--out``, and refused where one is there.
 * **circuit**: a served window's registered compiler as a command (`circuit_of_advice`), what ``records_audit.py audit``'s
   compile check runs: the circuit record the advice compiles to, over its own Build of each Program (`own_builds`; it takes
   no row dir), and the length it charges. ``records_audit.py`` audits a window
@@ -1216,32 +1216,29 @@ def weights_registration_of_serve(a: argparse.Namespace) -> dict[str, Any]:
     within the analytic table's bound; with no such file it stays unrooted. Written to ``--out``: what the server's
     ``verity-vllm advice --weights-of-record`` records in each window's registration, and the roots the verifier pins
     before the first window's coins (``window-circuit --pins``, ``records_audit.py count --pins``); the verifier never
-    recomputes one. Refused (ValueError) for a checkpoint not of record or one the manifest pins as another model than
-    ``serve.json``'s, a served rotary table outside its bound, and as `advice.registered_weights` refuses it. With
-    ``--deployment-record FILE``, the registration as the first record of the serve's registration log
-    (`window_weights.deployment_record`) is written there too, for Pearl+'s W to be chained after on a serve tied to it. -> how
-    many roots it registers, the weight parameters it leaves free (``unrooted``) and, given, that record's digest
-    (``deployment``)."""
+    recomputes one. It is the deployment's one registration (`window_weights.register`): ``--out`` is its `REGISTRATION`,
+    its record (`window_weights.deployment_record`) is written beside it as `DEPLOYMENT_RECORD` (``--deployment-record``, where
+    given, names that file), and a second registration of the deployment is refused, naming the first's digest. Refused
+    (ValueError) too for a checkpoint not of record or one the manifest pins as another model than ``serve.json``'s, a
+    served rotary table outside its bound, and as `advice.registered_weights` refuses it. -> how many roots it registers,
+    the weight parameters it leaves free (``unrooted``) and the record's digest (``deployment``)."""
     import numpy as np
 
     from verity_vllm.pipeline.advice import registered_weights
-    from verity.commitments import salt_file as SF
-    from verity_vllm.program.predict.window_weights import deployment_record, weights_registration
-    from verity_vllm.records.weights_registration import write_of_record
+    from verity_vllm.program.predict.window_weights import DEPLOYMENT_RECORD, OF_RECORD, REGISTRATION, register
 
+    out = Path(a.out)
+    if out.name != REGISTRATION or (a.deployment_record and Path(a.deployment_record) != out.with_name(DEPLOYMENT_RECORD)):
+        raise ValueError(f"a deployment's registration is {REGISTRATION} with its record {DEPLOYMENT_RECORD} beside it, not {a.out} "
+                         f"and {a.deployment_record}")
     serve = json.loads((Path(a.serve_run) / "serve.json").read_text())
     cos_sin = Path(a.tables or Path(a.serve_run) / "private") / "cos_sin_cache.npy"
-    doc = weights_registration(registered_of_serve(serve, a.hf_config, a.target, CAP_BITS), SF.beside(a.out),
-                               a.checkpoint_dir, checkpoints_manifest=a.checkpoints,
-                               tables={"cos_sin": np.load(cos_sin)} if cos_sin.is_file() else None)
+    digest = register(registered_of_serve(serve, a.hf_config, a.target, CAP_BITS), out.parent, a.checkpoint_dir, a.checkpoints,
+                      tables={"cos_sin": np.load(cos_sin)} if cos_sin.is_file() else None)
+    doc = json.loads(out.read_text())
     roots = registered_weights(doc, serve)
-    first = deployment_record(doc) if a.deployment_record else None
-    Path(a.out).write_text(json.dumps(doc, indent=1) + "\n")
-    of_record = write_of_record(a.out)
-    if first is not None:
-        Path(a.deployment_record).write_text(json.dumps(first, indent=1) + "\n")
-    return {"roots": len(roots), "unrooted": sorted(doc["unrooted"]), "out": a.out, "of_record": of_record,
-            **({"deployment": DD.digest(first)} if first is not None else {})}
+    return {"roots": len(roots), "unrooted": sorted(doc["unrooted"]), "out": a.out, "deployment": digest,
+            "of_record": hashlib.sha512(out.with_name(OF_RECORD).read_bytes()).hexdigest()}
 
 
 def circuit_of_advice(a: argparse.Namespace) -> dict[str, int]:
@@ -1675,8 +1672,8 @@ def main(argv: list[str] | None = None, kept_ingress: KeptIngress | None = None,
     p.add_argument("--checkpoints", help="the manifest pinning the checkpoint's shards (default the tree's manifests/checkpoints.json)")
     p.add_argument("--tables", help="the dir holding the engine's served rotary table, cos_sin_cache.npy (serve-openai's; "
                    "default SERVE_RUN/private): registered once within its bound, else unrooted")
-    p.add_argument("--deployment-record", metavar="FILE", help="write the registration there as the first record of the "
-                   "serve's registration log too (verity/registration/v2), which Pearl+'s W is chained after on a serve tied to it")
+    p.add_argument("--deployment-record", metavar="FILE", help="the deployment's registration record, written beside --out "
+                   "as deployment-registration.json (verity/registration/v2): where given, that file")
     p.add_argument("--hf-config")
     p.add_argument("--target")
     p = sub.add_parser("circuit", help="a served window's registered compiler as a command: the circuit record it compiles the "
