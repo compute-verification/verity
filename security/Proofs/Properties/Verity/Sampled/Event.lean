@@ -246,8 +246,9 @@ theorem popHeld_bridge {v : _root_.Spot.Docket.Verifier} {record : Json} {desc :
 /-- **The run's bridge**: where the service's `Run.run` does not refuse, at params whose program the descriptor `desc`
 parses to, the record names a population `n` that is the registration's in order (`Bridge.PopMatches`), or, under a
 one-stage rule, that the registration's strata cover (`Bridge.PopCovers`) under the subset sampling design the run
-derives (`Bridge.IsSubsetDesign` of `Bridge.designAt` at the verifier's query and the run's sampling design object and
-work table). -/
+derives (`Bridge.IsSubsetDesign` of `Bridge.designAt` at the verifier's query, the sampling design object of the rule over
+the population, `Rule.over` then `Rule.samplingDesignOver`, and the work table `Rule.tableOver` gives: the two its draw,
+`Draw.derive`, reads). -/
 theorem run_bridge {i : _root_.Spot.Run.Input} {j : Json} {desc : Hash.Msg}
     (hd : _root_.Spot.Program.parse ⟨desc.toArray⟩ = .ok i.params.verifier.program)
     (h : _root_.Spot.Run.run i = .ok j) :
@@ -256,14 +257,18 @@ theorem run_bridge {i : _root_.Spot.Run.Input} {j : Json} {desc : Hash.Msg}
     ∃ n, _root_.Spot.nat? (_root_.Spot.getD i.record "population") = some n ∧
       (Flock.Bridge.PopMatches desc i.params.verifier.query n ∨
         ((∀ g r k, i.rule ≠ .twoStage g r k) ∧ Flock.Bridge.PopCovers desc i.params.verifier.query n ∧
-          ∃ sd wt, Flock.Bridge.IsSubsetDesign (Flock.Bridge.designAt desc i.params.verifier.query sd wt n))) := by
-  rcases SpotFlock.RunsAs.run_popHeld h with hr | ⟨n, hn, hp | ⟨hc, ht, sd, wt, hs⟩⟩
+          ∃ rule sd wt, i.rule.over n
+              (_root_.Spot.Select.strataSizes i.params.verifier.program i.params.verifier.query) = some rule ∧
+            rule.samplingDesignOver n = .ok sd ∧
+            i.rule.tableOver i.params.verifier.program i.params.verifier.query i.params.verifier.workTable = .ok wt ∧
+            Flock.Bridge.IsSubsetDesign (Flock.Bridge.designAt desc i.params.verifier.query sd wt n))) := by
+  rcases SpotFlock.RunsAs.run_popHeld h with hr | ⟨n, hn, hp | ⟨hc, ht, rule, sd, wt, hr, hsd, hwt, hs⟩⟩
   · exact Or.inl hr
   · exact Or.inr ⟨n, hn, Or.inl (Flock.Bridge.popMatches_of_popOk hd hp)⟩
   · rcases bridge_of_cases (v := { i.params.verifier with samplingDesign := sd, workTable := wt }) hd
       (Or.inr ⟨hc, hs⟩) with hm | ⟨hcov, hsub⟩
     · exact Or.inr ⟨n, hn, Or.inl hm⟩
-    · exact Or.inr ⟨n, hn, Or.inr ⟨ht, hcov, sd, wt, hsub⟩⟩
+    · exact Or.inr ⟨n, hn, Or.inr ⟨ht, hcov, rule, sd, wt, hr, hsd, hwt, hsub⟩⟩
 
 /-! ## What acceptance gives -/
 

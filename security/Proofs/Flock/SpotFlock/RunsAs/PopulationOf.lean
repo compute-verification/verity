@@ -28,7 +28,8 @@ set_option maxHeartbeats 4000000 in
 /-- **A run that does not refuse passed its population check** (the run's bridge): `Run.run` either refuses at a step
 (a `{"step", "codes"}` object) or, at the population its boundary record states, the params' program and query lay
 it out as its units in order (`Slots.popOk`), or as a disjoint cover of them (`Slots.popCovers`) under a one-stage rule
-and a design that is subset at both the verifier the run derives and the registration (`OneStageZk.subsetDesign`). -/
+and a design that is subset at both the registration and the verifier the run derives, at the sampling design object
+of the rule over the population and the work table `Rule.tableOver` gives (`OneStageZk.subsetDesign`). -/
 theorem run_popHeld {i : Spot.Run.Input} {j : Json} (h : Spot.Run.run i = .ok j) :
     (∃ (step : String) (codes : Array String),
       j = Json.mkObj [("step", Json.str step), ("codes", Json.arr (codes.map Json.str))]) ∨
@@ -36,8 +37,12 @@ theorem run_popHeld {i : Spot.Run.Input} {j : Json} (h : Spot.Run.run i = .ok j)
       (Spot.Slots.popOk i.params.verifier.program i.params.verifier.query n = true ∨
         (Spot.Slots.popCovers i.params.verifier.program i.params.verifier.query n = true ∧
           (∀ g r k, i.rule ≠ .twoStage g r k) ∧
-          ∃ sd wt, Spot.OneStageZk.subsetDesign { i.params.verifier with samplingDesign := sd, workTable := wt }
-            i.record = true)) := by
+          ∃ rule sd wt, i.rule.over n
+              (Spot.Select.strataSizes i.params.verifier.program i.params.verifier.query) = some rule ∧
+            rule.samplingDesignOver n = .ok sd ∧
+            i.rule.tableOver i.params.verifier.program i.params.verifier.query i.params.verifier.workTable = .ok wt ∧
+            Spot.OneStageZk.subsetDesign { i.params.verifier with samplingDesign := sd, workTable := wt }
+              i.record = true)) := by
   unfold Spot.Run.run at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat'
@@ -49,7 +54,7 @@ theorem run_popHeld {i : Spot.Run.Input} {j : Json} (h : Spot.Run.run i = .ok j)
     | exact Or.inl ⟨_, _, (Except.ok.inj h).symm⟩
     | exact Or.inr ⟨_, by assumption, Or.inl (true_of_not ‹¬(!Spot.Slots.popOk _ _ _) = true›)⟩
     | exact Or.inr ⟨_, by assumption, Or.inr ⟨true_of_not ‹¬(!Spot.Slots.popCovers _ _ _) = true›,
-        by assumption, _, _,
+        by assumption, _, _, _, by assumption, by assumption, by assumption,
         true_of_not ‹¬(!Spot.OneStageZk.subsetDesign _ _) = true›⟩⟩
     | (obtain ⟨_, h⟩ | ⟨_, h⟩ := Spot.Run.ite_eq_cases h)
 
