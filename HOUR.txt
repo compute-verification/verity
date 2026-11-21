@@ -1,5 +1,6 @@
-Head nameable at 17:00Z: runs r20261121-161243-87f9 (Lean build, suites) and r20261121-161206-b13c (one-linear) at
-815beaab3fc, started 16:12Z.
+Head nameable at 18:15Z: after merging road a82f069267a (lean's cover; the three conflicts with lean's and vllm's two
+resolved here), then the Lean build, the suites and one-linear rerun on the merged head (about 45 min each, in parallel).
+
 
 (iii) FINDING, cured at ac13bca7e9d: a parameter whose root nodes are SuppliedInput<w>_v1, with no `inputs` marks in C and
 no source in the parameters' `supplied`, was refused by no code in either twin (`marked`/`marked_inputs` count
