@@ -336,10 +336,6 @@ theorem reachesWord_of_scanNested {P S : Prog} (hpre : ∀ i < P.defs.size, S.de
     · exact .comp hpS hmemS (ih _ hmem hc (by have := hlt _ hmem hc; omega))
     · exact .comp hpS hmemS (.word (by rw [hpre _ (wordPrim_lt hw)]; exact hw))
 
-theorem reachesWord_of_nested {P S : Prog} (hpre : ∀ i < P.defs.size, S.defs[i]! = P.defs[i]!) {y : ℕ}
-    (h : BatchNested P y) (hy : y < P.defs.size) : ReachesWord S y :=
-  reachesWord_of_scanNested hpre (scanNested_of_batchNested h) hy
-
 /-- **`closure_placesAll` through `lift`**: the lift of `d` returns where its closure places `d`. -/
 theorem liftPlacesAll {S L : Prog} {d e : ℕ} (h : Flock.Lift.lift S d = .ok (L, e)) :
     ∃ pl : ℕ → ℕ, e = pl d ∧

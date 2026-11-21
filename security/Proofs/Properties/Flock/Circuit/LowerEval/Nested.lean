@@ -785,24 +785,4 @@ theorem liftWordEval_scanNested_of (hT : NestedTyped) :
   rw [wordDef_fuel P d _ x (by omega), hw1, he, hw3 _ (by omega)]
   rfl
 
-theorem liftWordEval_batchNested_of (hT : NestedTyped) :
-    ∀ (bytes : ByteArray) (P : Prog) (units : Array ℕ) (S : Prog) (d : ℕ) (L : Prog) (e : ℕ),
-      decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] → Spot.Restrict.restrict P units = .ok S →
-      d < P.defs.size → BatchNested P d → GateBodiesDeep P d → Flock.Lift.lift S d = .ok (L, e) →
-      ∀ x : List (List Bool), x.map List.length = leafWidths (P.defs[d]!) →
-        Prog.evalBool L e x.flatten = (wordEval P d x).flatten :=
-  fun bytes P units S d L e h hr hs hd hnd =>
-    liftWordEval_scanNested_of hT bytes P units S d L e h hr hs hd (scanNested_of_batchNested hnd)
-
-/-- **`LiftWordEval` for a template of axis-0 batches over word primitives, gates and earlier such templates**, on
-`NestedTyped`. -/
-theorem liftWordEval_nested_of (hT : NestedTyped) :
-    ∀ (bytes : ByteArray) (P : Prog) (units : Array ℕ) (S : Prog) (d : ℕ) (L : Prog) (e : ℕ),
-      decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] → Spot.Restrict.restrict P units = .ok S →
-      d < P.defs.size → Batch0Nested P d → GateBodiesDeep P d → Flock.Lift.lift S d = .ok (L, e) →
-      ∀ x : List (List Bool), x.map List.length = leafWidths (P.defs[d]!) →
-        Prog.evalBool L e x.flatten = (wordEval P d x).flatten :=
-  fun bytes P units S d L e h hr hs hd hnd =>
-    liftWordEval_batchNested_of hT bytes P units S d L e h hr hs hd (batchNested_of_batch0Nested hnd)
-
 end Flock.Chain
