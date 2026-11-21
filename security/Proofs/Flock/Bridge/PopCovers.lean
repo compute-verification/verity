@@ -24,14 +24,11 @@ population's units are `0, …, n − 1`, each once, in any order.
 
 namespace Flock.Bridge
 
-/-- `PopCovers`'s check. -/
+/-- `PopCovers`'s check: the verifier's (`Spot.Slots.popCovers`) at the program `desc` parses to. -/
 def popCoverCheck (desc : Hash.Msg) (q : Lean.Json) (n : ℕ) : Bool :=
   match Spot.Program.parse ⟨desc.toArray⟩ with
   | .error _ => false
-  | .ok p =>
-    match Spot.Slots.layout p q with
-    | .error _ => false
-    | .ok l => decide (((popOf l).map (·.unit)).Perm ((List.range n).map some))
+  | .ok p => Spot.Slots.popCovers p q n
 
 /-- **The registration's strata cover the population's `n` units**: `desc` parses, its layout under the query `q` is
 defined, and the layout's population's units are `0, …, n − 1`, each once, in any order. -/
@@ -46,7 +43,7 @@ def IsSubsetDesign (samplingDesign : Flock.Draw.SamplingDesign) : Prop := ∃ k,
 theorem popCovers_iff {desc : Hash.Msg} {q : Lean.Json} {n : ℕ} :
     PopCovers desc q n ↔ ∃ p l, Spot.Program.parse ⟨desc.toArray⟩ = .ok p ∧
       Spot.Slots.layout p q = .ok l ∧ ((popOf l).map (·.unit)).Perm ((List.range n).map some) := by
-  unfold PopCovers popCoverCheck
+  unfold PopCovers popCoverCheck Spot.Slots.popCovers
   constructor
   · intro h
     split at h
@@ -69,6 +66,24 @@ theorem popCovers_of_popMatches {desc : Hash.Msg} {q : Lean.Json} {n : ℕ} (h :
     PopCovers desc q n := by
   obtain ⟨p, l, hp, hl, hu⟩ := popMatches_iff.1 h
   exact popCovers_iff.2 ⟨p, l, hp, hl, List.Perm.of_eq hu⟩
+
+/-- **The verifier's population in order is its cover**: `Slots.popOk` gives `Slots.popCovers`. -/
+theorem slots_popCovers_of_popOk {p : Spot.Program} {q : Lean.Json} {n : ℕ} (h : Spot.Slots.popOk p q n = true) :
+    Spot.Slots.popCovers p q n = true := by
+  unfold Spot.Slots.popOk at h
+  unfold Spot.Slots.popCovers
+  split at h
+  · cases h
+  · exact decide_eq_true (List.Perm.of_eq (of_decide_eq_true h))
+
+/-- **The verifier's cover check is `PopCovers`.** -/
+theorem popCovers_of_slots {desc : Hash.Msg} {q : Lean.Json} {n : ℕ} {p : Spot.Program}
+    (hp : Spot.Program.parse ⟨desc.toArray⟩ = .ok p) (h : Spot.Slots.popCovers p q n = true) :
+    PopCovers desc q n := by
+  show popCoverCheck desc q n = true
+  unfold popCoverCheck
+  rw [hp]
+  exact h
 
 /-- **The strata sum to `n`**: at `PopCovers`, the registration's strata cover the population's `n` slots. -/
 theorem nsOf_sum_of_popCovers {desc : Hash.Msg} {q : Lean.Json} {n : ℕ} (h : PopCovers desc q n) :
