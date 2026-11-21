@@ -5513,6 +5513,15 @@
         "tests/verity/protocols/workload_classification/": "tests/verity/protocols/policy/",
         "tests/verity/protocols/compose/": "tests/verity/protocols/run/"
       }
+    },
+    {
+      "paths": {
+        "input_datasets/input_datasets/": "library/datasets/input_datasets/",
+        "input_datasets/definitions/": "library/datasets/definitions/",
+        "input_datasets/pyproject.toml": "library/datasets/pyproject.toml",
+        "input_datasets/README.md": "library/datasets/README.md",
+        "tests/input_datasets/": "tests/library/datasets/"
+      }
     }
   ]
 }
