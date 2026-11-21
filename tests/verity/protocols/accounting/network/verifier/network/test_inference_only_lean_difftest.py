@@ -101,8 +101,11 @@ def test_the_pinned_instances_get_their_results():
     `Const<w>` primitive, the deployed spelling). The difftest holds `InferenceOnlyCheck.check` to these results."""
     pins = vectors.pinned()
     assert [p["theta_kind"] for p in pins] == ["all", "registered", "registered"]
-    defs = json.loads(pins[-1]["instance"]["program"])["definitions"]
-    assert [k for k in defs if k.startswith("Const")] == ["Const8[0x2a]_v1"]
+    desc = json.loads(pins[-1]["instance"]["program"])
+    defs = desc["definitions"]
+    assert [k for k in defs if k.startswith("Const")] == ["Const1[0x0]_v1", "Const1[0x1]_v1", "Const8[0x2a]_v1",
+                                                          "Const8[0x2a]_v2"]
     assert defs["Const8[0x2a]_v1"] == {"form": "primitive", "id": "Const8[0x2a]_v1", "params": [], "ret": ["Value", 8]}
+    assert desc["boolean"]["Const8[0x2a]_v1"] == "Const8[0x2a]_v2"
     for p in pins:
         assert reference.check(p["instance"]) == p["expect"]

@@ -28,11 +28,20 @@ import argparse
 import json
 from pathlib import Path
 
-SCHEMA = "verity-ir/descriptor/v1"
+SCHEMA = "verity-ir/descriptor/v2"
 
 
 def V(w):
     return ["Value", w]
+
+
+def bits(t):
+    """`t` with each `Value<w>` an `Array<w, Value<1>>` (`Value<1>` stays a bit): a word's Boolean signature."""
+    if t[0] == "Value":
+        return t if t[1] == 1 else A(t[1], V(1))
+    if t[0] == "Array":
+        return A(t[1], bits(t[2]))
+    return Tup(*(bits(f) for f in t[1]))
 
 
 def A(n, e):
@@ -59,6 +68,7 @@ class Program:
         self.callees: list[str] = []
         self.types: list = []
         self.gates: dict[str, int] = {}
+        self.boolean: dict[str, str] = {}
 
     def ty(self, t) -> int:
         if t not in self.types:
@@ -74,6 +84,15 @@ class Program:
         self.defs[key] = {"form": "primitive", "id": key, "params": [[f"a{i}", p] for i, p in enumerate(params)],
                           "ret": ret}
         self.gates[key] = 1
+        if not key.startswith("RegisteredInput"):
+            # Every check counts the word primitive's own gate, never its body's: a body passing its first argument's
+            # bits through is enough to make the descriptor v2.
+            name, _, _ = key.rpartition("_v")
+            body, ret_bits = f"{name}Bits_v1", bits(ret)
+            self.defs[body] = {"form": "composite", "id": body, "bindings": {}, "body": {
+                "params": [[f"a{i}", bits(p)] for i, p in enumerate(params)], "ret_type": ret_bits, "nodes": [],
+                "ret": aff("p", 0, 0, leaves(ret_bits))}}
+            self.boolean[key] = body
         return key
 
     def composite(self, key: str, body: "Body", ret, refs) -> str:
@@ -84,8 +103,8 @@ class Program:
         return key
 
     def text(self) -> str:
-        d = {"annotations": {}, "callees": self.callees, "definitions": self.defs, "program_fn": "R_v1", "root": "R_v1",
-             "schema": SCHEMA, "types": self.types}
+        d = {"annotations": {}, "boolean": self.boolean, "callees": self.callees, "definitions": self.defs,
+             "program_fn": "R_v1", "root": "R_v1", "schema": SCHEMA, "types": self.types}
         return json.dumps(d, separators=(",", ":"), sort_keys=True)
 
 

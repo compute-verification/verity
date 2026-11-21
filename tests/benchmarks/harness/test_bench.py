@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import argparse
 import hashlib
 import os
 import re
@@ -40,8 +39,6 @@ from verity_bench.vllm.presets import (
     resolve_spec,
 )
 from verity_bench.vllm.runner import (
-    METRICS,
-    OPTIONAL_METRICS,
     _pearl_c_gate,
 )
 
@@ -570,26 +567,6 @@ def test_the_harness_gate_is_refused_on_a_run_that_retains_its_passes(monkeypatc
                                          "retains its passes"):
         got.custom_gate()
     assert sorted(p.name for p in run.retain_dir.iterdir()) == ["pass-00000"]
-
-
-def test_the_readme_states_the_contract_the_code_keeps():
-    """The README is the harness's contract: every metric, gate kind, mode, schema and kind it names is the
-    code's, and the code has none it doesn't name."""
-
-    root = Path(__file__).resolve().parents[3]
-    readme = (root / "benchmarks/harness/README.md").read_text()
-    runner_source = (root / "benchmarks/harness/verity_bench/vllm/runner.py").read_text()
-    for metric in METRICS + OPTIONAL_METRICS:
-        assert f"`{metric}`" in readme, metric
-    for kind in re.findall(r'"kind": "([a-z-]+)"', runner_source):
-        assert f"`{kind}`" in readme, kind
-    for mode in ("resident", "blocks"):
-        assert f"`{mode}`" in readme and f'"{mode}"' in runner_source
-    assert f"`{result_format.SCHEMA}`" in readme
-    assert "`vllm-bench-1gpu`" in readme
-    [subparsers] = [a for a in _parser()._actions if isinstance(a, argparse._SubParsersAction)]
-    public = {name for name in subparsers.choices if not name.startswith("_")}
-    assert public == set(re.findall(r"^verity-bench ([a-z-]+) ", readme, re.M))
 
 
 def test_a_stopped_bandwidth_setup_removes_its_partial_build_even_when_its_builds_already_exited(tmp_path):

@@ -23,9 +23,9 @@
     "1687"
    ],
    "data": {
-    "count_difftest/detail.jsonl": "3e89b30da0aacbceff3b2fc356cf510cab56d7a13842717fde046a3c402d7c2d",
-    "count_difftest/instances.jsonl": "9a0b10f7c319efe974c28a8d3de929c5e3d36ebc75a8dfd94e183a529e555230",
-    "count_difftest/public.jsonl": "dcb1c2df02073a63813a8631ad2b67be08a23d9d25980e9caf5e0cb690dfa2f5"
+    "count_difftest/detail.jsonl": "aee49a96d3c1d6ad29826412f6fe310b567de4e79cdab03fcd6558342494224f",
+    "count_difftest/instances.jsonl": "8af8ff9e6ad3b1ec80971fc83677f357c9e9392c6ed63179bc83cfdba9ea8cef",
+    "count_difftest/public.jsonl": "6b21b315f9e152a1a4fab072fdb9235ae4a87697c3958ebf85fa1ccd9f765945"
    },
    "generate": ["python3", "scripts/count_difftest_vectors.py", "{repo}", "--out", "{out}"]
   },
@@ -56,7 +56,7 @@
    "why": "13 descriptions naming 2^22 to 2^52 + 1 scan iterations or batch members, past what InferenceOnlyVerifier.Desc walks one by one (InferenceOnlyVerifier.Desc.WALK): a scan of pass-through iterations a gate reads and one nothing reads, a batch returning its shared input read whole, by a gate and through a mapped argument, scans swapping their carry an odd and an even number of times, carries leaving through an xs row, and gates reading a carry or part of an xs row; on each one InferenceOnlyVerifier.Desc.check gives a verdict, the one it gives on the same description at a small count (the novel reads for a description whose reads grow with it), which InferenceOnlyVerifier.check gives on that one expanded gate by gate",
    "args": ["{desc_liveness/cases.jsonl}", "13"],
    "data": {
-    "desc_liveness/cases.jsonl": "481b3a6d30e820f52e496e918a7a6653b4f2bcd903f75cd1f24f5332cd5e18a2"
+    "desc_liveness/cases.jsonl": "923fae8acc3792c05a4f7369f52dd62f5263942692c08fbb45d01638fdba4d75"
    },
    "generate": ["python3", "scripts/desc_liveness_vectors.py", "{repo}", "--out", "{out}"]
   },
@@ -64,8 +64,8 @@
    "why": "4,000 random declarations and divisions, the description-sized difftest's 335 on E_REINTERPRET (references naming leaves of other widths than their types give them, which both sides refuse as program, and their well-typed neighbours, expanded gate by gate where the Program decodes), and three pinned ones (θ with an input bound per run, refused theta-not-registered, θ the registered input, accepted, and a declaration with a Const8 gate, which reads nothing, accepted), on which InferenceOnlyVerifier.check gives what scripts/inference_only_reference.py computes from InferenceOnly.Complies' definitions: per IU its size and novel reads, the verdict and the first failing IU with its rule, or the first malformation's code",
    "args": ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", "4338"],
    "data": {
-    "difftest/instances.jsonl": "b9e24d5488d8098cd829535a697033ad3574b3db3545e84d4adfe41b268580f5",
-    "difftest/python.jsonl": "6c1afeabbc17328b5f64fde48e518c18742a70ef295216ff00c181751a464e8b"
+    "difftest/instances.jsonl": "2ebd44374dee25c1404cc06cf912c1b42636e1e5e7d921fdb8e79608bce83f56",
+    "difftest/python.jsonl": "1a3782b9a027cbccaa2b39d37355859a9911ec0621764b08434fdd8bf07aeef0"
    },
    "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]
   },
@@ -87,8 +87,8 @@
     "1218"
    ],
    "data": {
-    "baseline_difftest/cases.jsonl": "d3bb952b8ff9f664eb95a4b3691ab3c36427f6ae16d0a9c33df8de67026ad571",
-    "baseline_difftest/expanded.jsonl": "3f81a967870c4226434ae8b52c2bd6b8d7bf2819edc592421a0f07a255fa185b",
+    "baseline_difftest/cases.jsonl": "7ec0adc02fcc1a7c9e1cd1e78b5cd1af984899b1fe751010f5bc507d864e2e21",
+    "baseline_difftest/expanded.jsonl": "e33c24032b82c72b24b760b9f40a4772a0031905dafbaff4e2c3730788ef4ce4",
     "baseline_difftest/python.jsonl": "309dad230487b9101c41c22fa269268670210f151d2c797aaa5d5db8df44ec67"
    },
    "generate": ["python3", "scripts/theta_difftest_vectors.py", "{repo}", "--out", "{out}"]
