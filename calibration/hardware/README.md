@@ -1,9 +1,47 @@
 # Hardware
 
-The data sheets of the hardware Verity accounts for, and nothing else: TOML, no code. Each GPU, host, server model
-and time base has one card in `cards/`, the one source of that card's numbers. Each kind of node, a host and the GPUs
-it carries, has one file in `nodes/`: what a node's registration states that no card does. Each target a GPU card's
-`arch` names has one file in `architectures/`. The Site's module, `verity.device`, reads all three.
+The hardware description's capacities: what each GPU, host, server and time base the parties agree on can do, every
+number with its source. Every guarantee assumes the real hardware is within these files, and the calibration probes
+measure devices against them.
+
+Not yet: an application's file names no hardware description, and four sets of helpers besides the kit wrap `load_card`.
+
+## Pieces
+
+| Piece | What it is | Where |
+|---|---|---|
+| Card | One SKU's figures (counts, clocks, stores, rates, weights), each an entry `{value, unit, mark, source}` | `cards/<sku>.toml` |
+| Node file | One kind of node: its GPU card and count, its host card, its memory leaves and ways out | `nodes/<node>.toml` |
+| Architecture file | The compile target a GPU card's `arch` names: capability, virtual architecture, toolkit gates | `architectures/<arch>.toml` |
+| Reader | The one loader and checker of all three, and a card's rate at a clock reading | `verity/device.py` |
+| Kit | A running device's reported name to its card, its short name and its compile target | `benchmarks/harness/verity_bench/kit.py` |
+| Probes | Programs that time a device against its card; a run above a ceiling refutes it | `calibration/tensor_duty`, `calibration/native_peak`, `calibration/pouw` |
+| Device model | Prices instruction classes and designs on a card's rows | `calibration/machine_model` |
+
+## What varies
+
+The device. Each cell is served (an application runs on it), exists, or never written.
+
+| GPU card | Card | Node file | Architecture | Device model | Probe point | Application |
+|---|---|---|---|---|---|---|
+| `h100-sxm-80gb` | exists | exists (one card) | `sm_90a` | never written | exists | served |
+| `h200-sxm-141gb` | exists | exists (one card) | `sm_90a` | exists | exists | served |
+| `rtx-pro-6000-server` | exists | exists (eight cards) | `sm_120a` | exists | exists | exists |
+| `b200-sxm-180gb` | exists | never written | `sm_100a` | exists | never written | never written |
+
+A new device supplies: one card with every section of its kind; an architecture file if its `arch` is new; a node file
+for each kind of node it sits in. No code changes.
+
+Fixed for every device: the entry form and its four marks (`verity/device.py`'s docstring defines them); a `ceiling` is
+a bound no program on that SKU exceeds, and a figure stated at a clock reading names the reading.
+
+## Interfaces
+
+- From the workload: nothing.
+- From `run`: the name a device's driver reports (`gpu_card_reporting`), or a node's kind (`load_node`).
+- It gives: to accounting, a device's capacities as entries (`load_card`, `rate(card, fmt, reading)`); to a build, the
+  compile target of a card's architecture (`kit.card_gencode`, `load_architecture`); to the device model and the
+  probes, a card's rows and ceilings, read at run time and never copied.
 
 ## Try it
 
@@ -11,67 +49,8 @@ it carries, has one file in `nodes/`: what a node's registration states that no 
 from pathlib import Path
 from verity.device import load_card, number, skus
 cards = Path("calibration/hardware/cards")
-skus("host", directory=cards)                   # ['xeon-6776p-2s', 'xeon-platinum-8468-2s']
-load_card("xeon-6776p-2s", directory=cards)["rate"]["ops"]   # {'value': 1045299200000000.0, 'unit': 'op/s', 'mark': 'ceiling', ...}
-(drift := load_card("nebius-vm-monotonic-raw", directory=cards)["drift"]["max"])   # {'value': 0.0005, 'unit': 's/s', ...}
-number(drift)                                   # Fraction(1, 2000)
+skus("gpu", directory=cards)   # ['b200-sxm-180gb', 'h100-sxm-80gb', 'h200-sxm-141gb', 'rtx-pro-6000-server']
+number(load_card("h200-sxm-141gb", directory=cards)["sm"]["count"])   # Fraction(132, 1)
 ~~~
 
-In `uv run python` from a clone, each line gives what its comment shows. A number is an entry
-`{ value, unit, mark, source }`:
-
-- `mark` is `ceiling` (no program on that SKU exceeds it, whatever firmware it runs: what the model's premises need),
-  `measurement` (a measured value, so only a lower bound on the ceiling), `premise` (no page and no run bounds the
-  number; it is assumed under the premise its source states, of whom it names. A row that uses it prints the premise
-  for its device's host, and no figure of record uses it) or `placeholder` (none of these: open);
-- `source` names a data sheet, a document or an `art:` id (a run's evidence: its record, `research data show RUN`'s
-  `outputs.run_record`), and a node by its kind, never its host name.
-
-## The cards
-
-| SKU | kind | file |
-|---|---|---|
-| RTX PRO 6000 Blackwell Server Edition (board 900-2G153-0000-000) | gpu | `calibration/hardware/cards/rtx-pro-6000-server.toml` |
-| H100 SXM 80 GB (no board read) | gpu | `calibration/hardware/cards/h100-sxm-80gb.toml` |
-| H200 SXM 141 GB (board 692-2G520-0280-001) | gpu | `calibration/hardware/cards/h200-sxm-141gb.toml` |
-| B200 SXM 180 GB (board 692-2G525-0220-000) | gpu | `calibration/hardware/cards/b200-sxm-180gb.toml` |
-| Two Xeon 6776P, the RTX node's host | host | `calibration/hardware/cards/xeon-6776p-2s.toml` |
-| Two Xeon Platinum 8468, the H200 nodes' host | host | `calibration/hardware/cards/xeon-platinum-8468-2s.toml` |
-| NVIDIA DGX H200, a server none of our nodes is | server | `calibration/hardware/cards/dgx-h200.toml` |
-| `CLOCK_MONOTONIC_RAW` in a Nebius virtual machine, a KVM guest on `kvm-clock` or `tsc` | timebase | `calibration/hardware/cards/nebius-vm-monotonic-raw.toml` |
-
-A new SKU is a new card file. Every card of a kind has the same sections and entries.
-
-**The device's own report.** A ceiling is the hardware's, never its firmware's. A few entries marked `ceiling` are
-today what the device reports under its vBIOS, with no document behind them: `clock.sm` on the RTX PRO 6000 and the
-B200, `clock.memory` on all three GPU cards and `sm.count` on the B200, and with them what a card computes from one
-(`clock.tensor` on those two cards, `memory.bandwidth` on all three). `store.dram` on the H200 and the B200 is of that
-kind too: what the shipped firmware gives a program, under the board's `store.dram_installed`. Each bounds a card only
-while it is the declared board and vBIOS, which the named assumptions `accounting-declared-device` and
-`accounting-sheet-clock` state and no mark does. A host card's `store.l2`, `l1d` and `l1i` are
-likewise its guest's CPUID.
-
-A GPU card's `driver` lists the product strings a driver reports for it, so the harness kit (`verity_bench.kit`'s
-`card_short`, `card_arch`) finds the one card a device's reported name is; it refuses a name no card or two cards hold.
-Its `short` is the card's name in a member, a row id or a flag (`h200`, `rtx-pro-6000`): lower case letters, digits and
-hyphens, no two GPU cards the same; `verity.device`'s `gpu_card_called` finds the card a short names.
-
-## The architecture files
-
-`architectures/<name>.toml` is the machine code's side of a GPU, shared by every card whose `arch` is `name`: its
-compute capability, its virtual architecture, and its toolkit gates (`[[toolkit]]`), each a CUDA toolkit that builds
-for the target, its PTX ISA, and `driver_min`, the oldest driver that toolkit's release notes require. A build target,
-a machine-code gate's table and a check of a device's capability or driver read it with
-`load_architecture(name, directory=...)`; a card's figures stay in the card, even where two cards of one architecture
-state the same number. Its values are versions, strings beside one `source`, so they carry no `mark`. Every GPU card's
-`arch` names a file here, and each file is named by a card.
-
-## The node files
-
-| Node | file | GPU card | host card | the host's own leaves | its ways out |
-|---|---|---|---|---|---|
-| An RTX PRO 6000 node, eight cards | `calibration/hardware/nodes/rtx-pro-6000-server-x8.toml` | `rtx-pro-6000-server` | `xeon-6776p-2s` | `dram`, and the disks `vda`, `vdb` and `vdc` | `eth0`, at its line rate, and the storage path |
-| An H200 node, one card | `calibration/hardware/nodes/h200-sxm-141gb-x1.toml` | `h200-sxm-141gb` | `xeon-platinum-8468-2s` | `dram`, and the disks `vda`, `vdb` and `vdc` | `eth0`, which reads no rate, and the storage path |
-
-A node file names no machine, no address and no provider: it is the kind's, read on one node of it. Its numbers are
-entries under the cards' rules.
+In `uv run python` from a clone, each line gives what its comment shows.

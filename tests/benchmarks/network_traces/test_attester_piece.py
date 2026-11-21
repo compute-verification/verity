@@ -144,21 +144,18 @@ def _refused_leg(rec: dict | None, line: dict, why: str) -> None:
 @pytest.mark.parametrize("name", ["onsite_full"])
 def test_each_configuration_listing_the_network_attester_gets_not_run_from_the_pieces_own_entry(
         name, tmp_path, network_attester, capsys, monkeypatch):
-    """Each command the launch hands the piece (whole under Pearl+'s tie, else split around V3c) refuses with
-    `NOT_RUN` before any step: DIR holds `REFUSED` alone and no answer. The record reads it as the attester refused by
-    that sentence: undecided, the window pending, never accepted and never a reject."""
+    """The command the launch hands the piece refuses with `NOT_RUN` before any step: DIR holds `REFUSED` alone and
+    no answer. The record reads it as the attester refused by that sentence: undecided, the window pending, never
+    accepted and never a reject."""
     cfg = tomllib.loads((ROOT / "applications" / f"{name}.toml").read_text())
     assert "network-attester" in cfg["protocols"]
     hooks = NS._attester_hooks(cfg, {}, {"gate": "local", "peer": "node"}, {})
-    subs = [shlex.split(hooks[k])[2] for k in ("CERTIFIER_CMD", "CERTIFIER_CHAIN_CMD", "CERTIFIER_PERIOD_CMD")
-            if k in hooks]
-    assert subs == (["piece"] if "pearl-plus" in cfg["protocols"] else ["chain", "period"]), hooks
+    assert shlex.split(hooks["CERTIFIER_CMD"])[2] == "piece" and "CERTIFIER_CHAIN_CMD" not in hooks, hooks
     d = _serve_dir(tmp_path / "serve", network_attester)
-    for sub in subs:
-        piece = tmp_path / "pieces" / "certifier"
-        assert CP.main([sub, str(d), str(K), str(piece), *([] if sub == "piece" else [str(tmp_path / "v3c")])]) == 3
-        assert {p.name for p in piece.iterdir()} == {CP.REFUSED}
-        assert (piece / CP.REFUSED).read_text() == CP.NOT_RUN + "\n"
+    piece = tmp_path / "pieces" / "certifier"
+    assert CP.main(["piece", str(d), str(K), str(piece)]) == 3
+    assert {p.name for p in piece.iterdir()} == {CP.REFUSED}
+    assert (piece / CP.REFUSED).read_text() == CP.NOT_RUN + "\n"
     assert _refused_row(tmp_path / "pieces", CP.NOT_RUN)
     rec, line = _record(monkeypatch, capsys, d, tmp_path / "pieces")
     _refused_leg(rec, line, CP.NOT_RUN)

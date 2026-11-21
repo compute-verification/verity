@@ -45,8 +45,8 @@ def test_a_verifier_that_panics_and_answers_accept_with_exit_0_is_refused_by_nam
     fake.chmod(0o755)
     monkeypatch.setattr(V, "executable", lambda exe=V.EXE: fake)
     monkeypatch.setattr(V, "_server", V._Server())
-    got = V.of_record("window", {}, {"verdict": "accept"})
-    assert got["refused"][0] == V.DISAGREE and f"{V.LC.LEAN_PANIC}: " in got["refused"][1], got
+    got = V.of_record("window", {})
+    assert got["refused"][0] == V.NO_ANSWER and f"{V.LC.LEAN_PANIC}: " in got["refused"][1], got
     assert said in got["refused"][1], got
     V._server.close()
 
@@ -62,8 +62,8 @@ def test_a_verifier_killed_by_a_signal_or_ending_with_no_verdict_is_refused_by_n
     fake.chmod(0o755)
     monkeypatch.setattr(V, "executable", lambda exe=V.EXE: fake)
     monkeypatch.setattr(V, "_server", V._Server())
-    got = V.of_record("window", {}, {"verdict": "accept"})
-    assert got["refused"][0] == V.DISAGREE and f"{V.LC.LEAN_EXIT}: {how}: " in got["refused"][1], got
+    got = V.of_record("window", {})
+    assert got["refused"][0] == V.NO_ANSWER and f"{V.LC.LEAN_EXIT}: {how}: " in got["refused"][1], got
 
 
 def test_without_lake_the_refusal_names_the_path_it_searched(monkeypatch, tmp_path) -> None:

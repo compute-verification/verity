@@ -108,10 +108,10 @@ credit, as exact fractions. The causes
 over the model are those, the LM head and attention (which Pearl+ doesn't credit), the linears outside the passes, and
 the floor of the credit; they sum to the give-up exactly. The split is the answer's or it is refused (exit 2): its
 commitment and its passes' records roots are the answer's, each call's terms sum as above, and its calls' credited
-cells' MACs are the answer's ``macs`` and their credit, floored, its ``credited``. An answer held to its class's fixed
-load publishes its work in the grid form instead (``give_up`` among it: Pearl+'s `verify_run.grid_work`): its ``macs``
+cells' MACs are the answer's ``checked_macs`` and their credit, floored, its ``credited``. An answer held to its class's fixed
+load publishes its work in the grid form instead (``give_up`` among it: Pearl+'s `verify_run.grid_work`): its ``checked_macs``
 are the passes' whole MACs, each call's real MACs less its side channels, and its ``credited`` the whole passes' credit
-less ``give_up``, the give-up padded up to H1's window grid. So there the split's whole MACs are the answer's ``macs``,
+less ``give_up``, the give-up padded up to H1's window grid. So there the split's whole MACs are the answer's ``checked_macs``,
 its credit, floored, is at least the answer's ``credited`` and at most that plus ``give_up``, and what the padding
 takes off past the split's credit is the cause ``grid``. Where the passes hold the LM head's
 calls, the LM head is no cause of its own: its calls are calls like the linears', and what the head computes outside
@@ -381,7 +381,7 @@ def credit(tree: Path, scheme: Scheme) -> dict:
                                "without it")
         protocol, verdict, public = answer["protocol"], answer["verdict"], answer.get("public") or {}
         work = public.get("work") or {}
-        credited, passes = work.get("credited"), work.get("macs")
+        credited, passes = work.get("credited"), work.get("checked_macs")
         mine = ("accept", answer.get("commitment"), credited)
         theirs = (lean["verdict"], lean.get("commitment"), (lean.get("work") or {}).get("credited"))
         differ = check["differ"]
@@ -606,12 +606,12 @@ def split(tree: Path, given: Path | None, macs: dict[str, int], credited: int, s
     exact = int(sums["credited_macs"])
     if "give_up" in work:
         whole = sums["checked_macs"] + sum(sums[x] for x in ROWS[:3])
-        if whole != work["macs"] or not credited <= exact <= credited + work["give_up"]:
+        if whole != work["checked_macs"] or not credited <= exact <= credited + work["give_up"]:
             raise Unreadable(f"the per-call split's calls credit {exact:,} of {int(whole):,} whole MACs and the answer's "
-                             f"grid form {credited:,} of {work['macs']:,} less a give-up of {work['give_up']:,}")
-    elif (sums["checked_macs"], exact) != (work["macs"], credited):
+                             f"grid form {credited:,} of {work['checked_macs']:,} less a give-up of {work['give_up']:,}")
+    elif (sums["checked_macs"], exact) != (work["checked_macs"], credited):
         raise Unreadable(f"the per-call split's calls credit {exact:,} of "
-                         f"{int(sums['checked_macs']):,} MACs and the answer {credited:,} of {work['macs']:,}")
+                         f"{int(sums['checked_macs']):,} MACs and the answer {credited:,} of {work['checked_macs']:,}")
     if sums["macs"] - in_head > macs["linears"]:
         raise Unreadable(f"the per-call split's calls hold {int(sums['macs'] - in_head):,} real MACs, more than the "
                          f"{macs['linears']:,} of the class's linears")

@@ -1,9 +1,8 @@
-"""Pearl+'s credit over C as its laying lays it (`scheme.laid_tiles`, `scheme.credited_tiles`): C is three tiles, a linear
-of one column and one of two whose W is one parameter of two rows, so that their kinds differ, and one unit of no tile,
-laid under a limit below the wired core's
-ANDs, so the laying opens the core as it does at the served K = 2048; each laid block is its tile's by the gates it holds,
-and the tiles are credited all or none, on an audit that drew every stratum holding a tile's block at its count. The
-fixture's tiles are a test instance's (K = 256 at 1 × 1), so an audit of them that passes is refused, crediting nothing."""
+"""Pearl+'s tiles in C as its laying lays it (`scheme.laid_tiles`): C is three tiles, a linear of one column and one of
+two whose W is one parameter of two rows, so that their kinds differ, and one unit of no tile, laid under a limit below the
+wired core's ANDs, so the laying opens the core as it does at the served K = 2048; each laid block is its tile's by the
+gates it holds. The fixture's tiles are a test instance's (K = 256 at 1 × 1, `scheme.test_instance`). The credit itself
+is the Lean's (`PouwPearlPlus`, `creditAtAssumption`)."""
 from __future__ import annotations
 
 import pytest
@@ -68,11 +67,6 @@ def _units(strata, tid: str) -> list[int]:
     return [u for t, rs in strata if t == tid for lo, hi in rs for u in range(lo, hi)]
 
 
-def _audit(strata, k: int = 1) -> tuple[dict[int, bool], dict[str, int]]:
-    """Each stratum's first ``k`` blocks drawn and verified, at a registered count of ``k``."""
-    return {u: True for tid, _rs in strata for u in _units(strata, tid)[:k]}, {tid: k for tid, _rs in strata}
-
-
 @pytest.mark.slow
 def test_a_tiles_laid_blocks_hold_all_its_ands_and_it_is_credited_its_macs(c) -> None:
     """Slow: only a laid C of real tiles shows the public rule places every block of a tile, its opened core's included,
@@ -86,6 +80,7 @@ def test_a_tiles_laid_blocks_hold_all_its_ands_and_it_is_credited_its_macs(c) ->
         assert sum(per[of[b]].ands for b in t.blocks) == whole[descriptor_id(tile.core)].ands
         assert sum(t.kinds.values()) == len(t.blocks) and len(t.kinds) > 6
         assert t.amount == PS.tile_macs(tile.core.bindings) == tile.real * 1 * K
+        assert t.test
 
 
 @pytest.mark.slow
@@ -97,49 +92,6 @@ def test_a_unit_of_another_tile_or_of_none_is_not_counted(c) -> None:
     assert all(not a & b for i, a in enumerate(held) for b in held[i + 1:]) and reader not in set().union(*held)
     assert set().union(*held) | {reader} == {u for _tid, rs in strata for lo, hi in rs for u in range(lo, hi)}
     assert all(s.gates[1] <= t.gates[0] and max(a) < min(b) for s, t, a, b in zip(tiles, tiles[1:], held, held[1:]))
-
-
-@pytest.mark.slow
-def test_the_tiles_are_credited_all_or_none(c) -> None:
-    """Slow: as above: a failed block of any stratum holding a tile's block credits no tile, a kind only the second tile
-    has included; a failed block of no tile's stratum spoils none, and the passed audit of the test instance's tiles is
-    refused."""
-    _ts, _program, _laid, strata, tiles, add = c
-    verdicts, counts = _audit(strata)
-    assert all(t.test for t in tiles)
-    with pytest.raises(ValueError, match=PS.TEST_INSTANCE):
-        PS.credited_tiles(tiles, strata, verdicts, counts)
-    only = sorted(set(tiles[1].kinds) - set(tiles[0].kinds))
-    assert only, "the two tiles differ in their kinds"
-    shared = sorted(set(tiles[0].kinds) & set(tiles[1].kinds))
-    for kind in (only[0], shared[0]):
-        (bad,) = [u for u in verdicts if u in _units(strata, kind)]
-        assert PS.credited_tiles(tiles, strata, {**verdicts, bad: False}, counts) == []
-    (reader,) = _units(strata, add)
-    with pytest.raises(ValueError, match=PS.TEST_INSTANCE):
-        PS.credited_tiles(tiles, strata, {**verdicts, reader: False}, counts)
-
-
-@pytest.mark.slow
-def test_an_audit_short_of_its_draw_is_refused(c) -> None:
-    """Slow: as above: no evidence is no credit. An empty audit, and a stratum holding a tile's block short of its
-    registered count, are refused; a stratum of no tile short of its count does not matter."""
-    _ts, _program, _laid, strata, tiles, add = c
-    verdicts, counts = _audit(strata)
-    with pytest.raises(ValueError, match=PS.AUDIT_SHORT):
-        PS.credited_tiles(tiles, strata, {}, counts)
-    with pytest.raises(ValueError, match=PS.AUDIT_SHORT):
-        PS.credited_tiles(tiles, strata, {}, {})
-    kind = sorted(tiles[1].kinds)[0]
-    with pytest.raises(ValueError, match=PS.AUDIT_SHORT):
-        PS.credited_tiles(tiles, strata, verdicts, {**counts, kind: 2})
-    with pytest.raises(ValueError, match=PS.AUDIT_SHORT):
-        PS.credited_tiles(tiles, strata, {u: v for u, v in verdicts.items() if u not in _units(strata, kind)}, counts)
-    (reader,) = _units(strata, add)
-    with pytest.raises(ValueError, match=PS.TEST_INSTANCE):
-        PS.credited_tiles(tiles, strata, {u: v for u, v in verdicts.items() if u != reader}, counts)
-    with pytest.raises(ValueError, match=PS.AUDIT_STRAY):
-        PS.credited_tiles(tiles, strata, {**verdicts, 10**9: True}, counts)
 
 
 @pytest.mark.slow
@@ -216,23 +168,9 @@ def _off_scheme() -> dict[str, dict]:
             "DEV": dict(PC.credited_product("pearl-c-sm120-v1-h3", K, 1, 1, 1, 1).bindings)}
 
 
-def test_tiles_at_the_served_floor_are_credited_and_below_it_refused() -> None:
-    """Tiles at the served floor (K 1024 at 64 × 64) are credited all or none on an audit that passed; one tile below it
-    in K or in either side makes the passed audit a test instance's, refused by name."""
-    strata = [("A", [(0, 2)]), ("B", [(2, 3)])]
-    served = {"K": 1024, "TM": 64, "TN": 64}
-    tiles = [PS.LaidTile(i, (i, i + 1), 1, (i,), {"A": 1}, PS.test_instance(served)) for i in (0, 1)]
-    assert PS.credited_tiles(tiles, strata, {0: True, 2: True}, {"A": 1, "B": 1}) == tiles
-    assert PS.credited_tiles(tiles, strata, {0: False, 2: True}, {"A": 1, "B": 1}) == []
-    for low in ({"K": 512}, {"TM": 1}, {"TN": 32}):
-        below = [tiles[0], PS.LaidTile(1, (1, 2), 1, (1,), {"A": 1}, PS.test_instance({**served, **low}))]
-        with pytest.raises(ValueError, match=PS.TEST_INSTANCE):
-            PS.credited_tiles(below, strata, {0: True, 2: True}, {"A": 1, "B": 1})
-
-
 def test_the_served_floor_is_the_lean_credits() -> None:
     """The floor `test_instance` reads (`pearl_c.K_MIN`, `pearl_c.TILE`) is the Lean credit's: `Check.K_MIN` and
-    `Check.TILE`, below which its `plan` credits nothing."""
+    `Check.TILE`, below which its `plan` credits nothing; a tile below it in K or in either side is a test instance's."""
     from pathlib import Path
     import re
 
@@ -243,6 +181,8 @@ def test_the_served_floor_is_the_lean_credits() -> None:
     assert lean == {"K_MIN": C.K_MIN, "TILE": C.TILE}
     assert PS.test_instance({"K": C.K_MIN, "TM": C.TILE, "TN": C.TILE}) is None
     assert PS.test_instance({"K": C.K_MIN - 1, "TM": C.TILE, "TN": C.TILE})
+    assert PS.test_instance({"K": C.K_MIN, "TM": 1, "TN": C.TILE})
+    assert PS.test_instance({"K": C.K_MIN, "TM": C.TILE, "TN": C.TILE // 2})
 
 
 def test_every_tile_static_is_read_by_the_credit_rule_pinned_to_the_scheme_or_free() -> None:

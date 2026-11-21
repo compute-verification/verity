@@ -409,9 +409,14 @@ WITNESS_NAMES = {"inst*.bin": "a prover's instance file (its rows)", "*-private.
 DEV_VERDICT = "development run, credits nothing"
 #: Pearl+'s verdict's protocol (`verify_run.PROTOCOL`)
 PEARLPLUS_PROTOCOL = "verity/pouw/pearl-plus/v1"
-#: Pearl+'s verdict's core answer in its piece (`served_pearlplus.sh`'s step 4), and the Lean `PouwVerifier.PearlPlus`
-#: verdict on the same passes and coin record there (`pouw-pearlplus`'s printout)
+#: the Python verify's core answer in its piece (`served_pearlplus.sh`'s step 4, a measurement that decides nothing), and
+#: the Lean `PouwVerifier.PearlPlus` verdict on the passes and coin record there (`pouw-pearlplus`'s printout), Pearl+'s
+#: verdict
 PEARLPLUS_ANSWER, PEARLPLUS_LEAN = "pearlplus-answer.json", "pearlplus-lean.json"
+#: the δ the Lean verdict's ε is at (`PouwVerifier.PearlPlus.DELTA`, which `pouw-pearlplus` doesn't print)
+PEARLPLUS_DELTA = "1/100"
+#: why the piece rejects where the Lean wrote no verdict
+PEARLPLUS_NO_LEAN = "no Lean PouwVerifier.PearlPlus verdict, so Pearl+ has none"
 #: the window's docket R as its records audit under ``--sampled-proofs`` sampled against (a5's copy), and that
 #: audit's summary (`spot_row`)
 WINDOW_REGISTRATION, AUDIT_SUMMARY = "window/registration.json", "summary.json"
@@ -910,7 +915,7 @@ def development_line(doc: Mapping[str, Any]) -> dict[str, Any]:
                 "coin_source": doc.get("coin_source"), "session": check.get("session"),
                 "coins": check.get("reason", "unchecked"),
                 **{k: doc.get(k) for k in ("scheme", "load", "passes", "dropped", "served_tokens", "generate_s", "tie")},
-                "credit": None if credit is None else {k: credit.get(k) for k in ("credited", "macs", "epsilon")},
+                "credit": None if credit is None else {k: credit.get(k) for k in ("credited", "checked_macs", "epsilon")},
                 "coin": None if published is None else {k: published.get(k) for k in ("art", "preserved", "error", "sha512")},
                 "give_up": doc.get("give_up"),
                 "shares_at_tensor_clock": {k: at.get(k) for k in ("declared_linears", "credited")},
@@ -1483,15 +1488,18 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
               gate: str | None = None, key: str | None = None, main: Path | None = None,
               coin: Path | None = None, tie: Path | None = None) -> dict[str, Any]:
     """PoUW's development piece under POUW=pearlplus (``served_pearlplus.sh``), its document written to
-    ``out/development.json``: Pearl+'s own served run (``served``, `served_passes.py serve`'s document) and Pearl+'s
-    verdict over every pass it retained (``verified``, its ``verify``'s; None where either wrote none). Where either is
+    ``out/development.json``: Pearl+'s own served run (``served``, `served_passes.py serve`'s document), the Python
+    verify over every pass it retained (``verified``, its ``verify``'s; None where either wrote none), which drew the
+    verifier's coin and whose verdict decides nothing, and Pearl+'s verdict, the Lean's (``out/pearlplus-lean.json``,
+    `PEARLPLUS_LEAN`, `served_passes.py lean`'s answer). Where ``served`` or ``verified`` is
     None there is no verdict, so it writes no document: it refuses (`PEARLPLUS_NO_VERDICT`), its sentence in
     ``out/refused.txt`` (`REFUSED`), and raises `PearlplusRefused`. Its verdict is
-    accept when the run served within its caps across at least two pass boundaries, Pearl+'s verdict accepts, and its
+    accept when the run served within its caps across at least two pass boundaries, the Lean verdict accepts (none written
+    rejects, `PEARLPLUS_NO_LEAN`), and its
     epoch's salt coin is its live session's (`pearlplus_coins` through the gate `gate`, the key pin `key` and main's line
     `main`; `pearlplus_coins_from`, naming the challenger as `challenger_of`); with an in-process challenger's coins (`PEARLPLUS_COINS_IN_PROCESS`) a run where nothing
-    failed is `UNCLAIMED`, and a run served under the gate whose coins are not live rejects. It carries that verdict's
-    line, credit at the scheme's named assumption (``credit``, the answer's ``public.work``) and the rounds the prover dropped from
+    failed is `UNCLAIMED`, and a run served under the gate whose coins are not live rejects. It carries the Lean check's
+    line, the Lean verdict's credit at the scheme's named assumption (``credit``, its ``work``) and the rounds the prover dropped from
     its retention before the coin (``dropped``, which credit nothing and stay declared), its shares are
     `served_shares.pearlplus_shares`'s wherever the run served within its caps, whatever the verdict (a rejected or
     missing one credits 0), and it credits nothing (`pearlplus_why`, or `PEARLPLUS_WHY_IN_PROCESS`). ``unretained``, the
@@ -1540,9 +1548,16 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
                        if tie is not None else
                        f"the served run crossed fewer than two pass boundaries or ran over its caps (passes over their "
                        f"caps: {served.get('over_caps')})")
-    answer = verified.get("answer") or {}
-    if answer.get("verdict") != "accept":
-        reasons.append(f"Pearl+'s verdict rejects the run: {answer.get('reason')}"[:800])
+    try:
+        lean = _json(out / PEARLPLUS_LEAN)
+    except ValueError as e:
+        lean = f"{type(e).__name__}: {e}"
+    if not isinstance(lean, dict):
+        reasons.append(f"{PEARLPLUS_NO_LEAN} ({PEARLPLUS_LEAN}: {lean or 'none written'})"[:800])
+        lean = {}
+    elif lean.get("verdict") != "accept":
+        reasons.append(f"Pearl+'s verdict rejects the run: {lean.get('reason')}"[:800])
+    answer = {"verdict": lean.get("verdict"), "commitment": lean.get("commitment"), "profile": {"source": lean.get("source")}}
     challenger = challenger_of(served)
     coins: dict[str, Any] = dict(pearlplus_coins_from(challenger) if live else PEARLPLUS_COINS_IN_PROCESS)
     if tie is not None:
@@ -1586,7 +1601,9 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
             doc["tie"] = {"record": DD.digest(json.loads(tie.read_text()))}
         except (OSError, ValueError, AttributeError) as e:
             doc["tie"] = {"record": None, "why": f"W can't be read: {type(e).__name__}: {e}"[:400]}
-    doc.update(line=verified.get("line"), credit=(answer.get("public") or {}).get("work"), dropped=verified.get("dropped"))
+    checked = _json(out / PEARLPLUS_LEAN_CHECK)
+    doc.update(line=checked.get("line") if isinstance(checked, Mapping) else None, credit=lean.get("work"),
+               dropped=verified.get("dropped"))
     if coin is not None:
         doc["coin"] = pearlplus_coin(coin, answer)
         if doc["coin"]["reason"] is not None and answer.get("verdict") == "accept":
@@ -1598,7 +1615,10 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
                                  "generate call of its own"}
     elif served.get("ok"):
         try:
-            doc["shares"] = SS.pearlplus_shares(dict(served), dict(verified))
+            doc["shares"] = SS.pearlplus_shares(dict(served), {
+                "answer": {"verdict": lean.get("verdict"), "public": {"work": lean.get("work")}},
+                "timed": checked.get("timed") if isinstance(checked, Mapping) else None,
+                "delta": verified.get("delta"), "draws": verified.get("draws")})
         except (KeyError, TypeError, ValueError) as e:
             reasons.append(f"no shares: {type(e).__name__}: {e}"[:600])
         if doc["shares"] is not None and unretained is not None:
@@ -1872,16 +1892,6 @@ def pearlplus_live_sample(record: Mapping[str, Any], piece_dir: Path, key: str, 
     return None
 
 
-#: a rational as JSON carries ε: an integer, a fraction with a nonzero denominator, or a decimal
-_RATIONAL = re.compile(r"[+-]?\d+/0*[1-9]\d*|[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?")
-
-
-def _rational(x: Any) -> Fraction | None:
-    """``x`` as a `Fraction` when its text is a rational (`_RATIONAL`), else None."""
-    s = str(x).strip()
-    return Fraction(s) if not isinstance(x, bool) and _RATIONAL.fullmatch(s) else None
-
-
 def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | None, key: str | None,
                         lane: str | None) -> tuple[dict[str, Any] | None, str | None]:
     """Whether Pearl+'s accepted development piece `doc` (`pearlplus`'s, in `piece_dir`) is PoUW's verdict of record: its
@@ -1897,19 +1907,20 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
        session in no other). The verifier's sample source is a sample session's coin opened on the run's commitment, that
        session the lane's first reserve after the period closed (`pearlplus_live_sample` over `pearlplus_draw`'s check),
        and the verdict is over the coin published at its sample (`pearlplus_coin`).
-       Pearl+'s verdict (`PEARLPLUS_ANSWER`) held its passes to a window record W (``verify --tie W``), the
+       Pearl+'s verdict, the Lean `PouwVerifier.PearlPlus` one (`PEARLPLUS_LEAN`, ``served_passes.py lean``'s answer),
+       accepts, credits work over tiles, and held its passes to a window record W (the Lean's ``--tie W``), the
        window's docket R under `spot` is chained right after W, and its records audit is tied to W
        (``records_audit --tie W``) and accepted (its summary's ``audit.accepted``), so the window SPOT audited reads the roots Pearl+ credits. The rule that audit's
        summary states is the sampling design R commits (its kind, and its K unless stratified), and only a stratified
        rate's leaves the answer without a weaker tie. The period's
        open (in the signed ledger) committed the SHA-512 of the window-circuit record V3c held R's circuit to
        (`CIRCUIT_RECORD` beside R), so the period holds the salt session to the circuit of the window served.
-    4. **Lean.** The Lean `PouwVerifier.PearlPlus` verdict (`PEARLPLUS_LEAN`) accepts the same run commitment on the same
-       sample source, holds the passes to the same W, and credits work over tiles at the reference's ε.
 
-    The answer is Pearl+'s, its work the Lean's (in the grid form, with its ``give_up``, where the verdict held the
-    passes to their class's fixed load), its profile the reference's with the lane, pin, period, session and the Lean
-    verdict. Nothing here decides anew: each condition reads what a check or a verifier answered."""
+    The answer is the Lean's, in core's answer form: its run commitment, its work (in the grid form, with its
+    ``give_up``, where it held the passes to their class's fixed load) and W, the coin record's rounds and dropped rounds
+    it read, and a profile of its source, over-cap rule, exact work and opened tiles at `PEARLPLUS_DELTA`, with the lane,
+    pin, period and sessions. The Python verify's answer (`PEARLPLUS_ANSWER`) is not read. Nothing here decides anew:
+    each condition reads what a check or a verifier answered."""
     from verity.protocols.accounting.compute.pouw.verifier import window as Wd
     from verity.protocols.proof.spot.verifier.challenger import remote
     from verity.protocols.proof.spot.verifier.one_stage import draw as D
@@ -1959,15 +1970,23 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
     if not published or published.get("reason") is not None:
         return None, f"the verdict is not held to the coin published at its draw: {published.get('reason') or 'none published'}"
     try:
-        answer = check_answer(json.loads((piece_dir / PEARLPLUS_ANSWER).read_text()))
+        lean = json.loads((piece_dir / PEARLPLUS_LEAN).read_text())
     except (OSError, ValueError) as e:
-        return None, f"Pearl+'s verdict's answer ({PEARLPLUS_ANSWER}) can't be read ({type(e).__name__}: {e})"
-    if (answer["protocol"], answer["verdict"]) != (PEARLPLUS_PROTOCOL, "accept"):
-        return None, f"Pearl+'s verdict's answer is {answer['protocol']}'s {answer['verdict']}, not {PEARLPLUS_PROTOCOL}'s accept"
-    w = ((answer["public"] or {}).get("tie") or {}).get("record")
+        return None, f"no Lean PouwVerifier.PearlPlus verdict ({PEARLPLUS_LEAN}: {type(e).__name__}: {e})"
+    if not isinstance(lean, dict) or lean.get("verdict") != "accept":
+        v = lean.get("verdict") if isinstance(lean, dict) else None
+        return None, f"the Lean PouwVerifier.PearlPlus verdict is {v}: {lean.get('reason') if isinstance(lean, dict) else lean}"
+    work = lean.get("work") or {}
+    credited, tiles = work.get("credited"), work.get("credited_tiles")
+    if not (type(credited) is int and credited > 0 and type(tiles) is int and tiles > 0):
+        return None, f"the Lean verdict credits {credited!r} MACs over {tiles!r} tiles: nothing"
+    if (lean.get("commitment"), lean.get("source")) != (coin.get("commitment"), coin.get("source")):
+        return None, (f"the Lean verdict is on run {str(lean.get('commitment'))[:16]}... at source "
+                      f"{str(lean.get('source'))[:16]}..., not the verifier's coin record's")
+    w = (lean.get("tie") or {}).get("record")
     if not isinstance(w, str):
-        return None, ("Pearl+'s verdict holds its passes to no window record W (served_passes.py verify --tie W), so "
-                      "nothing ties them to the window")
+        return None, ("the Lean verdict holds its passes to no window record W (served_passes.py lean, the Lean's --tie W), "
+                      "so nothing ties them to the window")
     if spot is None:
         return None, "the compose names no window registration to tie W to (--window-tie, else --sampled-proofs)"
     try:
@@ -2001,32 +2020,16 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
                       "SHA-512 of the window-circuit record V3c held R's circuit to: its salt session counts toward "
                       "another circuit than the window served")
 
-    try:
-        lean = json.loads((piece_dir / PEARLPLUS_LEAN).read_text())
-    except (OSError, ValueError) as e:
-        return None, f"no Lean PouwVerifier.PearlPlus verdict ({PEARLPLUS_LEAN}: {type(e).__name__}: {e})"
-    if not isinstance(lean, dict) or lean.get("verdict") != "accept":
-        v = lean.get("verdict") if isinstance(lean, dict) else None
-        return None, f"the Lean PouwVerifier.PearlPlus verdict is {v}: {lean.get('reason') if isinstance(lean, dict) else lean}"
-    source = (answer["profile"] or {}).get("source")
-    if (lean.get("commitment"), lean.get("source")) != (answer["commitment"], source):
-        return None, (f"the Lean verdict is on run {str(lean.get('commitment'))[:16]}... at source "
-                      f"{str(lean.get('source'))[:16]}..., not Pearl+'s verdict's run and source")
-    if ((lean.get("tie") or {}).get("record")) != w:
-        return None, f"the Lean verdict doesn't hold the passes to Pearl+'s window record W {w[:16]}..."
-    work, ref = lean.get("work") or {}, (answer["public"] or {}).get("work") or {}
-    credited, tiles = work.get("credited"), work.get("credited_tiles")
-    if not (type(credited) is int and credited > 0 and type(tiles) is int and tiles > 0):
-        return None, f"the Lean verdict credits {credited!r} MACs over {tiles!r} tiles: nothing"
-    eps = _rational(work.get("epsilon"))
-    if eps is None or eps != _rational(ref.get("epsilon")):
-        return None, f"the Lean verdict's ε {work.get('epsilon')!r} is not the reference's {ref.get('epsilon')!r}"
     weaker = {} if kind == "stratified" else {"weaker_tie": WEAKER_TIE.format(design=design)}
-    return {**answer, "public": {**answer["public"], "work": {k: work.get(k) for k in
-                                                              ("credited", "credited_tiles", "macs", "rho", "epsilon")}
-                                 | ({"give_up": work["give_up"]} if "give_up" in work else {})},
-            "profile": {**answer["profile"], "lane": lane, "key_sha512": key, "period": name, "session": session,
-                        "draw_session": drew.get("session"), "reference_work": ref,
+    return {"protocol": PEARLPLUS_PROTOCOL, "verdict": "accept", "reason": None, "commitment": lean.get("commitment"),
+            "public": {"work": {k: work.get(k) for k in ("credited", "credited_tiles", "checked_macs", "rho", "epsilon")}
+                       | ({"give_up": work["give_up"]} if "give_up" in work else {}),
+                       "unit": "MAC", "tie": lean["tie"],
+                       **{k: coin[k] for k in ("rounds", "dropped") if k in coin}},
+            "profile": {"delta": PEARLPLUS_DELTA, "source": lean.get("source"), "over_cap": lean.get("over_cap"),
+                        "tiles": [[v.get("pass"), v.get("tile")] for v in lean.get("verdicts") or () if isinstance(v, dict)],
+                        "lane": lane, "key_sha512": key, "period": name, "session": session,
+                        "draw_session": drew.get("session"),
                         "lean": {k: lean.get(k) for k in ("verdict", "commitment", "source", "drawn", "work", "tie")},
                         **weaker}}, None
 

@@ -7,7 +7,7 @@ public import PouwPearlPlus.Open
 
     pouw-pearlplus --coins COINS.json --draws T (--source HEX | --record RECORD.json | both)
       [--over-cap uncredited|reject] [--test-instance] [--tie W.json [--class SLOTS,PROMPT,OUTPUTS]] [--of-record]
-      MANIFEST...
+      [--draw-live LIVE.json] MANIFEST...
 
 prints the verdict as one JSON object: `verdict` (`accept` or `reject`), `reason`, `refused` (`[code, why]` or null),
 `commitment` and `source` (hex, once the passes load and the coin is fixed), `over_cap` (the rule on a tile over its
@@ -27,6 +27,10 @@ sample, and its ``rounds`` and ``dropped`` place the passes for the tie; one tha
 commitment, the given source and the node's sample. `--tie W.json` holds the passes to the window record W (`Tie.tieOf`),
 `--class SLOTS,PROMPT,OUTPUTS`, read only beside it, refuses passes that are not that window class's fixed load
 (`Tie.tieAt`), and `--of-record` takes only a challenger sample on live coins (`Coins.ofRecordReason`).
+`--draw-live LIVE.json` (`{key, ledger, pins, main, session}`: the pinned challenger key, the auditor's ledger, the host's
+pins log, main's first-parent history and the draw session's files) holds a challenger sample to its draw session, its
+signatures verified under the key (`Coins.liveDrawReason`), and rejects one that isn't (`draw-session`); it is read here,
+after `check`, so it adds a refusal to `check`'s verdict and nothing else.
 -/
 
 @[expose] public section
@@ -43,6 +47,7 @@ structure Args where
   tie : Option String := none
   load : Option LoadClass := none
   ofRecord : Bool := false
+  drawLive : Option String := none
   manifests : List String := []
 
 /-- `--class`'s `SLOTS,PROMPT,OUTPUTS`, each a positive integer. -/
@@ -68,6 +73,7 @@ def parse : List String → Args → Except String Args
     | some c => parse rest { a with load := some c }
     | none => throw s!"--class {v}: SLOTS,PROMPT,OUTPUTS, each a positive integer"
   | "--of-record" :: rest, a => parse rest { a with ofRecord := true }
+  | "--draw-live" :: v :: rest, a => parse rest { a with drawLive := some v }
   | m :: rest, a => if m.startsWith "--" then throw s!"unknown option {m}" else parse rest { a with manifests := a.manifests ++ [m] }
 
 def readJson (path : String) : IO Json := do
@@ -137,5 +143,13 @@ def main (argv : List String) : IO UInt32 := do
         let f := (str? spec "path").getD ""
         (files.get? ((dir / f).toString, spec.compress)).getD (throw s!"FileNotFoundError: {f}")) tid
   let ans := check input opener
+  let ans ← match a.drawLive, held, pl? with
+    | some f, some h, some pl => do
+      match liveDrawReason h pl.root (← readJson f) with
+      | some why =>
+        let reason := s!"{DRAW_SESSION_REFUSED}: {why}"
+        pure { ans with accept := false, reason := some reason, refused := some (DRAW_SESSION_REFUSED, why), work := none }
+      | none => pure ans
+    | _, _, _ => pure ans
   IO.println (output ans (published input ans)).compress
   return if ans.accept then 0 else 1

@@ -67,6 +67,27 @@ def MembersPortsHeld : Prop :=
           FilePart.header a.I.publicFile = .ok hd ∧ m.reads = .ok reads ∧ m.held = .ok held ∧
           PortsHeld reads held (m.slice c.record roots) hd
 
+/-- Parameters naming no members, a default program and no ports: what the per-member form reads of them before
+the registration's roots is nothing. -/
+def bareVerifier : Docket.Verifier where
+  program := default
+  query := .null
+  samplingDesign := .null
+  workTable := none
+  scheme := ""
+  ports := #[]
+  leafLayer := none
+  anchors := #[]
+  log := #[]
+  partition := none
+
+/-- The parameters `MembersPortsHeld`'s nontrivial lemma refuses at: `bareVerifier`'s, with no own program and no
+members. -/
+def bareParams : OneStageZk.Params where
+  base := { verifier := bareVerifier, delta := default }
+  own := { programJ := .null, program := ByteArray.empty, partition := .null, pub := "", registered := none }
+  members := none
+
 /-- **`r` is the committed record `rec`'s root for the port `q`**: the record's `roots` hold exactly one root naming `q`
 (R3: no port twice), and `r` has its root, domain and leaves. -/
 def IsRecordRoot (rec : Json) (q : String) (r : Json) : Prop :=

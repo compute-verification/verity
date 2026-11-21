@@ -332,7 +332,7 @@ def test_publish_holds_pearlpluss_exclusion_tiles_count_and_ids_and_leaves_its_o
     reference's and the Lean's (`_tile_verdicts`). The verdict, its outputs (the work credited, the tie and the class it
     held), the sample's count and source and a record's verdicts by protocol stay as written, and the documents in full are
     under the private dir."""
-    work = {"credited": 990, "credited_tiles": 3, "macs": 1000, "rho": "1/400", "epsilon": "1/100", "over_cap_draws": 0}
+    work = {"credited": 990, "credited_tiles": 3, "checked_macs": 1000, "rho": "1/400", "epsilon": "1/100", "over_cap_draws": 0}
     answer = {"protocol": "verity/pouw/pearl-plus/v1", "verdict": "accept", "reason": None, "commitment": "ab" * 64,
               "public": {"work": work, "unit": "MAC", "tie": {"record": "cd" * 64, "tables": 10, "load": [2, 8, 2]}},
               "profile": {"delta": "1/100", "draws": 3, "source": "ef" * 32, "over_cap": "uncredited",
@@ -368,9 +368,9 @@ def test_publish_holds_a_class_held_pearlplus_runs_exact_credit_and_leaves_its_g
     wherever a document names it (the reference's profile, the Lean's printout, `served_passes.py lean`'s record of both
     and the answer of record's profile), in a line's JSON, in a JSON string's text and in a JSON object cut short. The
     grid work, its give-up among it, stays as written, and the documents in full are under the private dir."""
-    work = {"credited": 134_190_203_114, "credited_tiles": 29_440, "macs": 136_230_993_920, "rho": "1/400",
+    work = {"credited": 134_190_203_114, "credited_tiles": 29_440, "checked_macs": 136_230_993_920, "rho": "1/400",
             "epsilon": "9982889/1000000000", "over_cap_draws": 0, "give_up": 335_544_320}
-    exact = {"credited": 134_194_399_455, "credited_tiles": 29_429, "macs": 135_895_449_600}
+    exact = {"credited": 134_194_399_455, "credited_tiles": 29_429, "checked_macs": 135_895_449_600}
     tie = {"record": "cd" * 64, "tables": 265, "load": [4, 32, 4]}
     answer = {"protocol": "verity/pouw/pearl-plus/v1", "verdict": "accept", "reason": None, "commitment": "ab" * 64,
               "public": {"work": work, "unit": "MAC", "tie": tie},
@@ -381,7 +381,7 @@ def test_publish_holds_a_class_held_pearlplus_runs_exact_credit_and_leaves_its_g
     docs = {"pieces/pearlplus/pearlplus-answer.json": answer, "pieces/pearlplus/pearlplus-lean.json": lean,
             "pieces/pearlplus/pearlplus-lean-check.json": {"lean": lean, "python": {"verdict": "accept", "work": work,
                                                                                     "exact_work": exact}, "differ": []},
-            "pieces/pearlplus/verify.json": {"answer": answer, "timed": {"passes": 4, "macs": work["macs"],
+            "pieces/pearlplus/verify.json": {"answer": answer, "timed": {"passes": 4, "macs": work["checked_macs"],
                                                                          "credited": work["credited"]}},
             "record/record.json": {"rows": [{"protocol": "pouw", "answer": of_record}]}}
     out, private = tmp_path / "out", tmp_path / "serve" / "private" / "out"
@@ -393,7 +393,7 @@ def test_publish_holds_a_class_held_pearlplus_runs_exact_credit_and_leaves_its_g
     assert {rel: json.loads((private / rel).read_text()) for rel in docs} == docs
     for rel in docs:
         text = (out / rel).read_text()
-        assert "exact_work" not in text and str(exact["credited"]) not in text and str(exact["macs"]) not in text, rel
+        assert "exact_work" not in text and str(exact["credited"]) not in text and str(exact["checked_macs"]) not in text, rel
         assert str(work["credited"]) in text and str(work["give_up"]) in text, rel
     shown = {**answer, "profile": {k: v for k, v in answer["profile"].items() if k != "exact_work"}}
     assert pub["pieces/pearlplus/pearlplus-answer.json"] == shown and shown["public"] == answer["public"]
@@ -1802,13 +1802,37 @@ def _pearlplus_run(accepted: bool = True, source: str = S.LIVE_SOURCE) -> tuple[
               "coins": {"source": source, "session": {"session": SID} if live else None,
                         "closed": {"closed": True, "complete": True} if live else None},
               "passes": [{"pass": i, "timed": i > 0, "units": 64, "macs": 1000 * i} for i in range(4)]}
-    work = {"credited": 5500, "credited_tiles": 40, "macs": 5600, "rho": "1/100", "epsilon": "1/100"}
+    work = {"credited": 5500, "credited_tiles": 40, "checked_macs": 5600, "rho": "1/100", "epsilon": "1/100"}
     verified = {"draws": 459, "delta": "1/100",
                 "line": "ACCEPT verity/pouw/pearl-plus/v1 …" if accepted else "REJECT verity/pouw/pearl-plus/v1: pass 1 tile 7: B opening",
                 "answer": {"verdict": "accept", "reason": None, "public": {"work": work}} if accepted else
                           {"verdict": "reject", "reason": "pass 1 tile 7: B opening", "public": None},
                 **({"timed": {"passes": 3, "macs": 5400, "credited": 5300}} if accepted else {})}
     return served, verified
+
+
+def _lean_beside(out: Path, verified: dict | None) -> None:
+    """``served_passes.py lean``'s documents in the piece's directory `out` where they agree with the Python verify's
+    `verified`: its answer (`PEARLPLUS_LEAN`) where none is there, and its check's ``line`` and ``timed`` where the check
+    (`PEARLPLUS_LEAN_CHECK`) names none."""
+    if verified is None:
+        return
+    out.mkdir(parents=True, exist_ok=True)
+    a = verified.get("answer") or {}
+    if not (out / S.PEARLPLUS_LEAN).exists():
+        (out / S.PEARLPLUS_LEAN).write_text(json.dumps({
+            "verdict": a.get("verdict"), "reason": a.get("reason"), "commitment": a.get("commitment"),
+            "source": (a.get("profile") or {}).get("source"), "work": (a.get("public") or {}).get("work"),
+            "tie": (a.get("public") or {}).get("tie")}))
+    check = json.loads((out / S.PEARLPLUS_LEAN_CHECK).read_text()) if (out / S.PEARLPLUS_LEAN_CHECK).exists() else {}
+    (out / S.PEARLPLUS_LEAN_CHECK).write_text(json.dumps({"line": verified.get("line"), "timed": verified.get("timed"),
+                                                          **check}))
+
+
+def _pearlplus(out: Path, served: dict | None, verified: dict | None, *more, **kw) -> dict:
+    """`served_verdicts.pearlplus` with the Lean verdict that agrees with `verified` beside it (`_lean_beside`)."""
+    _lean_beside(out, verified)
+    return S.pearlplus(out, served, verified, *more, **kw)
 
 
 @pytest.fixture
@@ -1831,7 +1855,7 @@ def test_a_pearlplus_piece_names_the_challenger_its_session_was_opened_on(tmp_pa
     challenger made the coins, the deployed auditor's where it did, never one for the other."""
     served, verified = _pearlplus_run()
     served["coins"]["session"] = {"session": SID, "host": f"{host}.{SID}"}
-    doc = S.pearlplus(tmp_path / "pieces" / "pouw", served, verified, **live[1])
+    doc = _pearlplus(tmp_path / "pieces" / "pouw", served, verified, **live[1])
     assert S.challenger_of(served) == host and doc["why"] == S.pearlplus_why(host)
     assert S.pearlplus_coins_from(host).items() <= doc["coins"].items()
     other = ({"local-challenger", "vy-challenger-1"} - {host}).pop()
@@ -1846,7 +1870,7 @@ def test_a_pearlplus_piece_replays_its_own_served_run_and_credits_nothing(tmp_pa
     names the session."""
     calls, args = live
     served, verified = _pearlplus_run()
-    doc = S.pearlplus(tmp_path / "pieces" / "pouw", served, verified, **args)
+    doc = _pearlplus(tmp_path / "pieces" / "pouw", served, verified, **args)
     assert (doc["verdict"], doc["reasons"], doc["credited"], doc["why"]) == ("accept", [], False,
                                                                              S.pearlplus_why(S.UNNAMED_CHALLENGER))
     assert calls == [(GATE, "ff" * 64, tmp_path / "main.txt")] and doc["coin_source"] == S.LIVE_SOURCE
@@ -1870,8 +1894,31 @@ def test_a_pearlplus_piece_replays_its_own_served_run_and_credits_nothing(tmp_pa
     assert "POUW (development run, credits nothing) " in capsys.readouterr().out
     assert (got["pouw"]["verdict"], got["pouw"]["passes"], got["pouw"]["credited"]) == ("accept", 4, False)
     assert (got["pouw"]["coin_source"], got["pouw"]["session"], got["pouw"]["coins"]) == (S.LIVE_SOURCE, SID, None)
-    assert got["pouw"]["credit"] == {"credited": 5500, "macs": 5600, "epsilon": "1/100"}
+    assert got["pouw"]["credit"] == {"credited": 5500, "checked_macs": 5600, "epsilon": "1/100"}
     assert got["pouw"]["shares_at_tensor_clock"]["declared_linears"] == tensor["declared_linears"]
+
+
+def test_a_pearlplus_pieces_verdict_is_the_leans_whatever_the_python_verify_says(tmp_path, live):
+    """The piece's verdict, credit and line are the Lean step's (`PEARLPLUS_LEAN` and its check): a Lean accept beside a
+    Python reject accepts with the Lean's work, a Lean reject beside a Python accept rejects with the Lean's reason, and
+    a piece with no Lean answer rejects (`PEARLPLUS_NO_LEAN`) whatever the Python's verdict."""
+    served, verified = _pearlplus_run()
+    _served, rejected = _pearlplus_run(accepted=False)
+    work = verified["answer"]["public"]["work"]
+    (a := tmp_path / "a").mkdir()
+    (a / S.PEARLPLUS_LEAN).write_text(json.dumps({"verdict": "accept", "reason": None, "work": work}))
+    (a / S.PEARLPLUS_LEAN_CHECK).write_text(json.dumps({"line": "ACCEPT lean", "timed": verified["timed"]}))
+    doc = S.pearlplus(a, served, rejected, **live[1])
+    assert (doc["verdict"], doc["reasons"], doc["credit"], doc["line"]) == ("accept", [], work, "ACCEPT lean")
+    assert doc["shares"]["verdict"] == "accept" and doc["shares"]["macs"]["credited"] == 5300
+    (b := tmp_path / "b").mkdir()
+    (b / S.PEARLPLUS_LEAN).write_text(json.dumps({"verdict": "reject", "reason": "pass 0 tile 3: B opening", "work": None}))
+    doc = S.pearlplus(b, served, verified, **live[1])
+    assert (doc["verdict"], doc["reasons"], doc["credit"]) == (
+        "reject", ["Pearl+'s verdict rejects the run: pass 0 tile 3: B opening"], None)
+    assert doc["shares"]["macs"]["credited"] == 0
+    doc = S.pearlplus(tmp_path / "c", served, verified, **live[1])
+    assert doc["verdict"] == "reject" and doc["reasons"] == [f"{S.PEARLPLUS_NO_LEAN} ({S.PEARLPLUS_LEAN}: none written)"]
 
 
 def test_a_pearlplus_piece_holds_the_execution_phase_as_the_challenger_saw_it_and_what_each_check_cost(tmp_path, live):
@@ -1902,7 +1949,7 @@ def test_a_pearlplus_piece_holds_the_execution_phase_as_the_challenger_saw_it_an
     (piece := tmp_path / "pieces" / "pouw").mkdir(parents=True)
     (piece / "ledger.jsonl").write_text("\n".join(ledger) + "\n")
     (piece / S.PEARLPLUS_LEAN_CHECK).write_text(json.dumps({"check_cost": lean}))
-    doc = S.pearlplus(piece, served, {**verified, "check_cost": python}, **args)
+    doc = _pearlplus(piece, served, {**verified, "check_cost": python}, **args)
     phase = {"clock": S.PHASE_CLOCK, "start_utc": "2026-01-02T18:00:05Z", "end_utc": "2026-01-02T18:07:45Z", "seconds": 460,
              "session": {"reserved_utc": "2026-01-02T18:00:05Z", "opened_utc": "2026-01-02T18:00:09Z",
                          "ended_utc": "2026-01-02T18:07:45Z"},
@@ -1922,12 +1969,12 @@ def test_a_pearlplus_piece_holds_the_execution_phase_as_the_challenger_saw_it_an
     assert S.public_line(f"POUW-DEV {json.dumps(line, sort_keys=True)}").count('"seconds": 460') == 1
 
     (piece / "ledger.jsonl").write_text("\n".join(x for x in ledger if '"end"' not in x) + "\n")
-    cut = S.pearlplus(piece, served, verified, **args)["execution_phase"]
+    cut = _pearlplus(piece, served, verified, **args)["execution_phase"]
     assert (cut["start_utc"], cut["end_utc"], cut["seconds"]) == (phase["start_utc"], None, None)
     assert cut["why"] == "the ledger has no entry for the session's ended_utc"
     (piece / "ledger.jsonl").write_text("not a ledger\n")
-    assert S.pearlplus(piece, served, verified, **args)["execution_phase"]["why"].startswith("the ledger can't be read: ")
-    none = S.pearlplus(tmp_path / "plain", served, verified, **args)
+    assert _pearlplus(piece, served, verified, **args)["execution_phase"]["why"].startswith("the ledger can't be read: ")
+    none = _pearlplus(tmp_path / "plain", served, verified, **args)
     assert none["execution_phase"] is None and none["checks"] == {"where": S.CHECKS_WHERE, "python": None, "lean": None}
     assert S.development_line(none)["execution_phase"] is None
 
@@ -1941,7 +1988,7 @@ def test_a_pearlplus_piece_holds_its_class_with_the_requests_and_rounds_the_clas
     _calls, args = live
     served, verified = _pearlplus_run()
     want = {"slots": 4, "prompt_tokens": 32, "outputs": 6, "n_requests": 4, "n_rounds": 6, "of": S.CLASS_LOAD}
-    doc = S.pearlplus(tmp_path / "piece", {**served, "requests": 9}, {**verified, "class": [4, 32, 6]}, **args)
+    doc = _pearlplus(tmp_path / "piece", {**served, "requests": 9}, {**verified, "class": [4, 32, 6]}, **args)
     assert doc["verdict"] == "accept" and doc["class"] == want and "no request's own length" in S.CLASS_LOAD
     line = S.development_line(doc)
     assert line["class"] == want and S.public_json(doc)["class"] == want
@@ -1949,7 +1996,7 @@ def test_a_pearlplus_piece_holds_its_class_with_the_requests_and_rounds_the_clas
     published = S.public_line(f"POUW-DEV {json.dumps(line, sort_keys=True)}")
     assert json.dumps(want, sort_keys=True) in published
     for cls in (None, [4, 32], [4, 0, 6], [4, "32", 6], "4,32,6"):
-        none = S.pearlplus(tmp_path / "none", served, {**verified, "class": cls}, **args)
+        none = _pearlplus(tmp_path / "none", served, {**verified, "class": cls}, **args)
         assert none["class"] is None and S.development_line(none)["class"] is None
     assert S.pearlplus_class(None) is None
 
@@ -1962,21 +2009,22 @@ def test_a_pearlplus_piece_sets_the_unretained_serve_of_its_load_beside_its_shar
     served, verified = _pearlplus_run()
     served["engine"] = {"max_num_batched_tokens": 8192}
     unretained = {**served, "retained": False, "generate_s": 0.5, "passes": []}
-    doc = S.pearlplus(tmp_path / "pieces" / "pouw", served, verified, unretained, **args)
+    doc = _pearlplus(tmp_path / "pieces" / "pouw", served, verified, unretained, **args)
     un, rho = doc["shares"]["unretained"], 4096 * 132 * 1830e6
     assert doc["verdict"] == "accept" and (un["wall_s"], un["retained_over_unretained"]) == (0.5, 4.0)
     assert un["readings"]["tensor"]["declared_linears"] == 6000 / rho / 0.5
     assert S.development_line(doc)["unretained"] == {"generate_s": 0.5, "declared_linears_at_tensor_clock": 6000 / rho / 0.5}
-    assert S.development_line(S.pearlplus(tmp_path / "plain", served, verified, **args))["unretained"] is None
+    assert S.development_line(_pearlplus(tmp_path / "plain", served, verified, **args))["unretained"] is None
     for other, why in (({"engine": {"max_num_batched_tokens": 4096}}, "served another load"),
                        ({"prompt_tokens": 512}, "served another load"), ({"retained": True}, "retained its passes")):
-        doc = S.pearlplus(tmp_path / "pieces" / "pouw", served, verified, {**unretained, **other}, **args)
+        doc = _pearlplus(tmp_path / "pieces" / "pouw", served, verified, {**unretained, **other}, **args)
         assert doc["verdict"] == "accept" and why in doc["shares"]["unretained"]["error"]
         assert why in S.development_line(doc)["unretained"]
     (tmp_path / "served.json").write_text(json.dumps(served))
     (tmp_path / "v.json").write_text(json.dumps(verified))
     (tmp_path / "un.json").write_text(json.dumps(unretained))
     out, calls[:] = tmp_path / "cli", []
+    _lean_beside(out, verified)
     assert S.main(["pearlplus", str(out), "--served", str(tmp_path / "served.json"), "--verify", str(tmp_path / "v.json"),
                    "--unretained", str(tmp_path / "un.json"), "--gate", GATE, "--key-sha512", "ff" * 64,
                    "--main", str(tmp_path / "main.txt")]) == 0
@@ -1993,16 +2041,16 @@ def test_a_pearlplus_piece_sets_the_provers_replay_beside_its_shares(tmp_path, c
     _calls, args = live
     served, verified = _pearlplus_run()
     volunteered = {"s": 110.0, "jobs": 32, "ok": False, "node": "vy-dc-h200", "of": 4, "passes": [{"pass": 0}] * 3}
-    doc = S.pearlplus(tmp_path / "pieces" / "pouw", served, verified, volunteered=volunteered, **args)
+    doc = _pearlplus(tmp_path / "pieces" / "pouw", served, verified, volunteered=volunteered, **args)
     assert doc["verdict"] == "accept" and doc["shares"]["replay"] == {"s": 110.0, "cpus": 32, "core_s": 3520.0, "of_wall": 55.0,
                                                                       "cores_to_keep_pace": 1760.0, "device_s": None,
                                                                       "node": "vy-dc-h200", "finished": 3, "of": 4}
     assert S.development_line(doc)["replay"] == {"s": 110.0, "cpus": 32, "cores_to_keep_pace": 1760.0, "device_s": None,
                                                  "node": "vy-dc-h200", "finished": 3, "of": 4}
     assert (doc["give_up"]["counts"], doc["give_up"]["cross_check"], doc["give_up"]["finished"]) == ("cpu", None, 3)
-    plain = S.pearlplus(tmp_path / "plain", served, verified, **args)
+    plain = _pearlplus(tmp_path / "plain", served, verified, **args)
     assert plain["give_up"] is None and S.development_line(plain)["replay"] is None
-    doc = S.pearlplus(tmp_path / "pieces" / "pouw", served, verified, volunteered={"jobs": 32}, **args)
+    doc = _pearlplus(tmp_path / "pieces" / "pouw", served, verified, volunteered={"jobs": 32}, **args)
     assert doc["verdict"] == "accept" and "KeyError" in S.development_line(doc)["replay"]
     for name, d in (("served.json", served), ("v.json", verified), ("vol.json", {"s": 110.0, "jobs": 32})):
         (tmp_path / name).write_text(json.dumps(d))
@@ -2022,7 +2070,7 @@ def test_a_pearlplus_piece_names_its_provers_give_up_on_the_card_its_cross_check
               "bad_tiles": 1, "form_s": 50.0, "device_s": 30.0, "replay_s": 20.0}
     volunteered = {"s": 110.0, "jobs": 32, "ok": True, "node": "vy-dc-h200", "of": 3, "passes": [{"pass": 0}] * 3,
                    "device": device, "tiles": 8000, "over": 6, "left": 0, "voluntary_a": 4, "voluntary_b": 2}
-    doc = S.pearlplus(tmp_path / "pieces" / "pouw", served, verified, volunteered=volunteered, **args)
+    doc = _pearlplus(tmp_path / "pieces" / "pouw", served, verified, volunteered=volunteered, **args)
     line = S.development_line(doc)
     assert doc["verdict"] == "accept" and doc["give_up"] == line["give_up"] == {
         "counts": "device", "cubin_sha256": "ab" * 32, "cross_check": 1024, "replayed": 9, "bad_tiles": 1, "a_rows": 4,
@@ -2048,7 +2096,9 @@ def test_a_published_serve_dir_carries_none_of_the_give_ups_counts(tmp_path, liv
     volunteered = {"s": 110.0, "jobs": 32, "ok": False, "node": "vy-dc-h200", "of": 3, "passes": [{"pass": 0}] * 3,
                    "device": device, **counts}
     out, private = tmp_path / "out", tmp_path / "serve" / "private" / "out"
-    doc = S.pearlplus(out / "pieces" / "pouw", served, verified, volunteered=volunteered, **live[1])
+    doc = _pearlplus(out / "pieces" / "pouw", served, verified, volunteered=volunteered, **live[1])
+    for name in (S.PEARLPLUS_LEAN, S.PEARLPLUS_LEAN_CHECK):
+        (out / "pieces" / "pouw" / name).unlink()
     line = S.development_line(doc)
     own = [str(v) for v in (*counts.values(), device["replayed"], device["bad_tiles"])]
     assert all(str(v) in json.dumps(doc["give_up"]) for v in own) and line["give_up"] == doc["give_up"]
@@ -2084,7 +2134,7 @@ def test_a_published_serve_dir_carries_none_of_the_give_ups_counts(tmp_path, liv
     assert shown == {k: v for k, v in line.items() if k != "give_up"} and shown["credit"]["epsilon"] == work["epsilon"]
     assert json.loads(json.loads(log[4].removeprefix("POUW "))["stdout"]) == {"credit": work} and log[5] == "POUW " + S.CUT
     assert S.publish(out, private) == []
-    plain = S.pearlplus(tmp_path / "plain", served, verified, **live[1])
+    plain = _pearlplus(tmp_path / "plain", served, verified, **live[1])
     assert S.public_json(plain) == plain and plain["give_up"] is None
     assert S.public_json({"work": work}) == {"work": work}
 
@@ -2093,10 +2143,10 @@ def test_a_pearlplus_piece_names_the_rounds_its_prover_dropped_before_the_coin(t
     """A verdict over a retention that dropped rounds before the coin (``served_passes.py retain``) names them in the
     piece and its line: the verdict is the retained passes', and the dropped ones stay in the declared share."""
     served, verified = _pearlplus_run()
-    doc = S.pearlplus(tmp_path / "pieces" / "pouw", served, {**verified, "rounds": [0, 1, 3], "dropped": [2]}, **live[1])
+    doc = _pearlplus(tmp_path / "pieces" / "pouw", served, {**verified, "rounds": [0, 1, 3], "dropped": [2]}, **live[1])
     assert (doc["verdict"], doc["dropped"], S.development_line(doc)["dropped"]) == ("accept", [2], [2])
     assert doc["shares"]["macs"]["declared_linears"] == 6000
-    assert S.development_line(S.pearlplus(tmp_path / "all", served, verified, **live[1]))["dropped"] is None
+    assert S.development_line(_pearlplus(tmp_path / "all", served, verified, **live[1]))["dropped"] is None
 
 
 DSID = "s20261104T090000Z-dr01"
@@ -2245,7 +2295,7 @@ def test_a_pearlplus_piece_holds_its_accept_to_the_coin_it_published(tmp_path, c
     published = S.coin(rec, pub, "r1", research=["research"], put=_put(NODE_PUT)[0])
     answer = {**verified["answer"], "commitment": "c1" * 64, "profile": {"source": "5e" * 32}}
     held, given = {**verified, "answer": answer}, {"coin": pub / S.COIN_PUT, **live[1]}
-    doc = S.pearlplus(tmp_path / "a", served, held, **given)
+    doc = _pearlplus(tmp_path / "a", served, held, **given)
     assert (doc["verdict"], doc["reasons"]) == ("accept", [])
     coin = {"art": "art:bb", "preserved": False, "error": published["error"], "sha512": published["sha512"]}
     assert doc["coin"] == {**coin, "reason": None} and S.development_line(doc)["coin"] == coin
@@ -2253,24 +2303,25 @@ def test_a_pearlplus_piece_holds_its_accept_to_the_coin_it_published(tmp_path, c
     assert doc["load"] == S.development_line(doc)["load"] == load
     for name, d in (("served.json", served), ("v.json", held)):
         (tmp_path / name).write_text(json.dumps(d))
+    _lean_beside(tmp_path / "cli", held)
     assert S.main(["pearlplus", str(tmp_path / "cli"), "--served", str(tmp_path / "served.json"), "--verify",
                    str(tmp_path / "v.json"), "--gate", GATE, "--key-sha512", "ff" * 64, "--main", str(tmp_path / "main.txt"),
                    "--coin", str(pub / S.COIN_PUT)]) == 0
     line = json.loads(capsys.readouterr().out.removeprefix("POUW-DEV "))
     assert (line["verdict"], line["coin"], line["load"]) == ("accept", coin, load)
-    for other in ({"commitment": "c2" * 64}, {"profile": {"source": "77" * 32}}):
-        doc = S.pearlplus(tmp_path / "a", served, {**verified, "answer": {**answer, **other}}, **given)
+    for i, other in enumerate(({"commitment": "c2" * 64}, {"profile": {"source": "77" * 32}})):
+        doc = _pearlplus(tmp_path / f"other{i}", served, {**verified, "answer": {**answer, **other}}, **given)
         assert doc["verdict"] == "reject" and doc["reasons"] == [f"coin: {doc['coin']['reason']}"]
         assert doc["coin"]["reason"].startswith("the verdict's run commitment or draw source is not the published coin record's")
     unpublished = {**given, "coin": tmp_path / "none" / S.COIN_PUT}
-    doc = S.pearlplus(tmp_path / "a", served, held, **unpublished)
+    doc = _pearlplus(tmp_path / "a", served, held, **unpublished)
     assert doc["verdict"] == "reject" and doc["reasons"][0].startswith("coin: the verifier's coin was not published: FileNotFoundError")
-    doc = S.pearlplus(tmp_path / "a", served, _pearlplus_run(accepted=False)[1], **unpublished)
+    doc = _pearlplus(tmp_path / "rejected", served, _pearlplus_run(accepted=False)[1], **unpublished)
     assert doc["reasons"] == ["Pearl+'s verdict rejects the run: pass 1 tile 7: B opening"] and doc["coin"]["reason"]
     (pub / S.COIN_RECORD).write_bytes(_coin_record(source="77" * 32))
-    doc = S.pearlplus(tmp_path / "a", served, held, **given)
+    doc = _pearlplus(tmp_path / "a", served, held, **given)
     assert doc["reasons"] == ["coin: the coin record beside the put is not the one it published"]
-    assert S.development_line(S.pearlplus(tmp_path / "plain", served, held, **live[1]))["coin"] is None
+    assert S.development_line(_pearlplus(tmp_path / "plain", served, held, **live[1]))["coin"] is None
 
 
 @pytest.mark.parametrize("served, verified, reason", [
@@ -2279,7 +2330,7 @@ def test_a_pearlplus_piece_holds_its_accept_to_the_coin_it_published(tmp_path, c
 def test_a_pearlplus_piece_rejects_a_run_pearlpluss_verdict_rejects(tmp_path, served, verified, reason, live):
     """A run Pearl+'s verdict rejects still carries its shares, its declared linears beside a credit of 0."""
     s, v = _pearlplus_run(verified is not False)
-    doc = S.pearlplus(tmp_path / "pieces" / "pouw", s, v, **live[1])
+    doc = _pearlplus(tmp_path / "pieces" / "pouw", s, v, **live[1])
     assert (doc["verdict"], doc["reasons"][0], doc["why"]) == ("reject", reason, S.pearlplus_why(S.UNNAMED_CHALLENGER))
     rho = 4096 * 132 * 1830e6
     assert doc["shares"]["macs"] == {"declared_linears": 6000, "credited": 0}
@@ -2366,7 +2417,7 @@ def test_a_pearlplus_piece_holds_each_pass_salt_to_the_live_session_the_gate_hol
     (main := tmp_path / "main.txt").write_text("cc" * 20 + "\n" + "aa" * 20 + "\n")
     pin = "00" * 64 if case == "other key" else hashlib.sha512(PUBLIC).hexdigest()
     out = tmp_path / "pieces" / "pouw"
-    doc = S.pearlplus(out, served, verified, gate=None if case == "no gate" else GATE, key=pin, main=main)
+    doc = _pearlplus(out, served, verified, gate=None if case == "no gate" else GATE, key=pin, main=main)
     got = doc["coins"]["check"]
     assert (got["session"], got["closed"]) == (None if case == "no session" else SID, served["coins"]["closed"])
     assert got["reason"] == reason if case != "other key" else got["reason"].startswith(reason), got
@@ -2388,7 +2439,7 @@ def test_a_pearlplus_piece_on_in_process_coins_claims_no_verdict(tmp_path, monke
     `PEARLPLUS_WHY_IN_PROCESS`, the record's line naming it, and `pieces` counting it no failure; the same run given the
     gate, which its serve then didn't take its coins from, rejects."""
     served, verified = _pearlplus_run(source="in-process")
-    doc = S.pearlplus(tmp_path / "pieces" / "pouw", served, verified)
+    doc = _pearlplus(tmp_path / "pieces" / "pouw", served, verified)
     assert (doc["verdict"], doc["reasons"], doc["credited"]) == (S.UNCLAIMED, [], False)
     assert (doc["why"], doc["coin_source"], doc["coins"]) == (S.PEARLPLUS_WHY_IN_PROCESS, "in-process",
                                                               S.PEARLPLUS_COINS_IN_PROCESS)
@@ -2406,7 +2457,7 @@ def test_a_pearlplus_piece_on_in_process_coins_claims_no_verdict(tmp_path, monke
     got = json.loads(capsys.readouterr().out.strip().removeprefix("POUW (development run, credits nothing) "))
     assert (got["verdict"], got["coin_source"], got["session"], got["coins"]) == (S.UNCLAIMED, "in-process", None,
                                                                                   "unchecked")
-    doc = S.pearlplus(tmp_path / "gated", served, verified, gate=GATE, key="ff" * 64, main=tmp_path / "main.txt")
+    doc = _pearlplus(tmp_path / "gated", served, verified, gate=GATE, key="ff" * 64, main=tmp_path / "main.txt")
     assert (doc["verdict"], doc["why"]) == ("reject", S.PEARLPLUS_WHY_IN_PROCESS)
     assert doc["reasons"] == ["coins: in-process, not a live session on the gate, so nothing checks them"]
 
@@ -2419,11 +2470,11 @@ def test_a_pearlplus_piece_over_a_commit_windows_epoch_names_its_arm_and_no_shar
     window = {"schema": served.get("schema"), "entry": served["arm"], "run": "r", "window": 0, "retained": True,
               "commit_steps": 3, "passes": [{**p, "timed": True} for p in served["passes"][1:]], "passes_with_calls": 3,
               "coins": served["coins"], "ok": True, "error": None}
-    doc = S.pearlplus(tmp_path / "w", window, verified)
+    doc = _pearlplus(tmp_path / "w", window, verified)
     assert (doc["verdict"], doc["reasons"], doc["arm"], doc["scheme"]) == (S.UNCLAIMED, [], served["arm"], "pearl-c-h100-v1-h3")
     assert list(doc["shares"]) == ["none"] and doc["passes"] == 3
     assert S.development_line(doc)["shares_at_tensor_clock"] == {"declared_linears": None, "credited": None}
-    bad = S.pearlplus(tmp_path / "bad", {**window, "ok": False, "error": "pass 2 retained no manifest"}, verified)
+    bad = _pearlplus(tmp_path / "bad", {**window, "ok": False, "error": "pass 2 retained no manifest"}, verified)
     assert bad["verdict"] == "reject" and bad["shares"] is None
 
 
@@ -2447,21 +2498,22 @@ def test_a_tied_pearlplus_piece_is_the_windows_own_epoch_and_says_so(tmp_path, c
     window's steps and its ``tie`` W's digest, which its line names. Its arm's document short of ok rejects, and a missing
     one refuses, each naming the window's arm."""
     window, verified, w = _tied_epoch(tmp_path)
-    doc = S.pearlplus(tmp_path / "a", window, verified, tie=w)
+    doc = _pearlplus(tmp_path / "a", window, verified, tie=w)
     assert (doc["verdict"], doc["reasons"], doc["why"]) == (S.UNCLAIMED, [], S.PEARLPLUS_WHY_TIED_IN_PROCESS)
     assert doc["coins"] == {**S.PEARLPLUS_COINS_IN_PROCESS, "epoch": S.PEARLPLUS_EPOCH_TIED_IN_PROCESS}
     assert (doc["load"], doc["tie"]) == ({"window_steps": 3}, {"record": DD.digest(PEARL_WREC)})
     for name, d in (("served.json", window), ("v.json", verified)):
         (tmp_path / name).write_text(json.dumps(d))
+    _lean_beside(tmp_path / "cli", verified)
     assert S.main(["pearlplus", str(tmp_path / "cli"), "--served", str(tmp_path / "served.json"), "--verify",
                    str(tmp_path / "v.json"), "--tie", str(w)]) == 0
     line = json.loads(capsys.readouterr().out.removeprefix("POUW-DEV "))
     assert (line["verdict"], line["tie"], line["load"]) == (S.UNCLAIMED, doc["tie"], {"window_steps": 3})
-    assert S.pearlplus(tmp_path / "b", window, verified, tie=tmp_path / "none.json")["tie"]["record"] is None
-    bad = S.pearlplus(tmp_path / "c", {**window, "ok": False, "error": "pass 2 retained no manifest"}, verified, tie=w)
+    assert _pearlplus(tmp_path / "b", window, verified, tie=tmp_path / "none.json")["tie"]["record"] is None
+    bad = _pearlplus(tmp_path / "c", {**window, "ok": False, "error": "pass 2 retained no manifest"}, verified, tie=w)
     assert bad["reasons"] == ["the window's Pearl+ epoch isn't one round a Commit step: pass 2 retained no manifest"]
     with pytest.raises(S.PearlplusRefused, match="serve-openai's Pearl\\+ arm wrote no served.json for the window"):
-        S.pearlplus(tmp_path / "d", None, verified, tie=w)
+        _pearlplus(tmp_path / "d", None, verified, tie=w)
 
 
 def test_publish_holds_a_tied_pearlplus_pieces_window_steps_as_it_holds_a_windows_steps(tmp_path):
@@ -2470,7 +2522,7 @@ def test_publish_holds_a_tied_pearlplus_pieces_window_steps_as_it_holds_a_window
     none either; the verdict, the tie's digest and the scheme stay."""
     window, verified, w = _tied_epoch(tmp_path)
     out, private = tmp_path / "out", tmp_path / "serve" / "private" / "out"
-    doc = S.pearlplus(out / "pieces" / "pouw", window, verified, tie=w)
+    doc = _pearlplus(out / "pieces" / "pouw", window, verified, tie=w)
     assert doc["load"] == {"window_steps": 3}
     whole = (out / "pieces" / "pouw" / S.DEVELOPMENT).read_text()
     assert S.publish(out, private) == [f"pieces/pouw/{S.DEVELOPMENT}"]
@@ -2513,7 +2565,7 @@ def test_a_tied_pearlplus_piece_on_a_live_salt_session_names_the_period_it_joine
     _calls, args = live
     window, verified, w = _tied_epoch(tmp_path, S.LIVE_SOURCE, reserved)
     window["coins"]["session"] = {"session": SID, "host": f"local-challenger.{SID}"}
-    doc = S.pearlplus(tmp_path / "a", window, verified, tie=w, **args)
+    doc = _pearlplus(tmp_path / "a", window, verified, tie=w, **args)
     assert (doc["verdict"], doc["reasons"], doc["coins"]["epoch"]) == ("accept", [],
                                                                       S.pearlplus_epoch_tied("local-challenger"))
     assert doc["why"] == S.pearlplus_why_tied(reserved, "local-challenger")
@@ -2523,7 +2575,7 @@ def test_a_tied_pearlplus_piece_on_a_live_salt_session_names_the_period_it_joine
 
 
 PEARL_W = "d7" * 64
-PEARL_LEAN_WORK = {"credited": 5400, "credited_tiles": 40, "macs": 5600, "rho": "1/100", "epsilon": "1/100"}
+PEARL_LEAN_WORK = {"credited": 5400, "credited_tiles": 40, "checked_macs": 5600, "rho": "1/100", "epsilon": "1/100"}
 
 
 #: the window-circuit record V3c held R's circuit to, kept beside R (`S.CIRCUIT_RECORD`), which Pearl+'s period opens on
@@ -2562,7 +2614,7 @@ def _pearlplus_piece(tmp_path: Path, monkeypatch, live, case: str = "of record",
     S.coin(rec, piece, "r1", research=["research"], put=_put(NODE_PUT)[0])
     checked = {"from": draw["from"], "session": DSID if draw is not NODE else None, "reason": None}
     monkeypatch.setattr(S, "pearlplus_draw", lambda *a, **k: dict(checked))
-    doc = S.pearlplus(piece, served, {**verified, "answer": answer}, coin=piece / S.COIN_PUT, **live[1])
+    doc = _pearlplus(piece, served, {**verified, "answer": answer}, coin=piece / S.COIN_PUT, **live[1])
     assert (doc["verdict"], doc["reasons"], doc["coins"]["draw"]) == ("accept", [], checked)
     doc.update({"in-process coins": {"coin_source": "in-process"},
                 "session refused": {"coins": {**doc["coins"], "check": {**doc["coins"]["check"],
@@ -2598,10 +2650,11 @@ def _pearlplus_piece(tmp_path: Path, monkeypatch, live, case: str = "of record",
     lean.update({"Lean rejects": {"verdict": "reject", "reason": "the live session's coins are out of scope"},
                  "Lean other run": {"commitment": "c2" * 64}, "Lean untied": {"tie": None},
                  "Lean credits nothing": {"work": {**PEARL_LEAN_WORK, "credited": 0}},
-                 "Lean other epsilon": {"work": {**PEARL_LEAN_WORK, "epsilon": "1/50"}},
                  "class held": {"work": {**PEARL_LEAN_WORK, "give_up": 96}, "exact_work": {
-                     "credited": 5490, "credited_tiles": 39, "macs": 5590}}}.get(case, {}))
-    if case != "no Lean":
+                     "credited": 5490, "credited_tiles": 39, "checked_macs": 5590}}}.get(case, {}))
+    if case == "no Lean":
+        (piece / S.PEARLPLUS_LEAN).unlink()
+    else:
         (piece / S.PEARLPLUS_LEAN).write_text(json.dumps(lean))
     audit = tmp_path / "audit"
     (audit / S.WINDOW_REGISTRATION).parent.mkdir(parents=True)
@@ -2783,8 +2836,13 @@ def test_the_record_reads_pearlpluss_tie_from_the_window_tied_to_w_under_window_
     ("draw off C", "the record's draw coin: "),
     ("source not coin", "the record's source is not its draw session's coin"),
     ("unpublished coin", "the verdict is not held to the coin published at its draw: none published"),
-    ("untied", "Pearl+'s verdict holds its passes to no window record W (served_passes.py verify --tie W), so nothing "
-               "ties them to the window"),
+    ("no Lean", f"no Lean PouwVerifier.PearlPlus verdict ({S.PEARLPLUS_LEAN}: FileNotFoundError"),
+    ("Lean rejects", "the Lean PouwVerifier.PearlPlus verdict is reject: the live session's coins are out of scope"),
+    ("Lean credits nothing", "the Lean verdict credits 0 MACs over 40 tiles: nothing"),
+    ("Lean other run", f"the Lean verdict is on run {'c2' * 8}... at source {SAMPLE_COIN[:16]}..., not the verifier's "
+                       "coin record's"),
+    ("Lean untied", "the Lean verdict holds its passes to no window record W (served_passes.py lean, the Lean's --tie W), "
+                    "so nothing ties them to the window"),
     ("R not after W", f"the window's registration R is chained after {'ab' * 8}..., not right after Pearl+'s window "
                       f"record W {PEARL_W[:16]}..."),
     ("audit untied", f"the window's records audit is not tied to Pearl+'s window record W {PEARL_W[:16]}... "
@@ -2802,13 +2860,6 @@ def test_the_record_reads_pearlpluss_tie_from_the_window_tied_to_w_under_window_
                                   f"..., not {hashlib.sha512(PEARL_RECORD).hexdigest()[:16]}..., the SHA-512 of the "
                                   "window-circuit record V3c held R's circuit to: its salt session counts toward another "
                                   "circuit than the window served"),
-    ("no Lean", f"no Lean PouwVerifier.PearlPlus verdict ({S.PEARLPLUS_LEAN}: FileNotFoundError"),
-    ("Lean rejects", "the Lean PouwVerifier.PearlPlus verdict is reject: the live session's coins are out of scope"),
-    ("Lean other run", f"the Lean verdict is on run {'c2' * 8}... at source {SAMPLE_COIN[:16]}..., not Pearl+'s verdict's "
-                       "run and source"),
-    ("Lean untied", f"the Lean verdict doesn't hold the passes to Pearl+'s window record W {PEARL_W[:16]}..."),
-    ("Lean credits nothing", "the Lean verdict credits 0 MACs over 40 tiles: nothing"),
-    ("Lean other epsilon", "the Lean verdict's ε '1/50' is not the reference's '1/100'"),
 ])
 def test_pearlpluss_accepted_piece_that_fails_a_condition_of_record_stays_a_development_piece_naming_it(
         tmp_path, monkeypatch, live, case, why):
@@ -2908,7 +2959,7 @@ def test_the_pearlplus_piece_holds_the_verifiers_sample_to_its_sample_session(tm
     monkeypatch.setattr(S, "_gate_out", lambda gate, *words: ask(*words))
     answer = {**verified["answer"], "commitment": "c1" * 64, "profile": {"source": SAMPLE_COIN}}
     S.coin(rec, out, "r1", research=["research"], put=_put(NODE_PUT)[0])
-    doc = S.pearlplus(out, served, {**verified, "answer": answer}, gate=GATE, key="00" * 64, main=main,
+    doc = _pearlplus(out, served, {**verified, "answer": answer}, gate=GATE, key="00" * 64, main=main,
                       coin=out / S.COIN_PUT)
     assert doc["verdict"] == "reject" and doc["reasons"] == [f"draw: {doc['coins']['draw']['reason']}"]
     assert doc["coins"]["draw"]["reason"].startswith("CoinError: the challenger key at ")
