@@ -49923,12 +49923,6 @@
     "Flock.SoundAtBridge.RelOfRows": "ed226860b94de17f30f82381b1484adf83e714ce15953941fc1780ca760ba26d"
    }
   },
-  "Proofs.Flock.SoundAtBridge.Union": {
-   "digest": "c041749ce75bf7ab0d7f91795dd54d20c31e59bd9ab766af83e68ff36411055a",
-   "definitions": {
-    "Flock.SoundAtBridge.SessionSamplingDesign": "3382a9d2a2da8c28006b66f071eca9d6ca16d7a76885e553413c548800615a21"
-   }
-  },
   "Proofs.Flock.Soundness.Accounting.PaddedNumbers": {
    "digest": "0bcee9b2679faf0b00c122472059942886e437496d814da2b258aa1dd04e19b3",
    "definitions": {
@@ -53481,15 +53475,6 @@
     "Pouw.SecurityProofs.OnsiteFreedWitness.twF": "3c791fc1c071db00773d761eb3359500085dc3b33a3144b28832756461404b58",
     "Pouw.SecurityProofs.OnsiteFreedWitness.twNet": "c61095c3a2c19598e0d67ea70ee2dab548dd605bb71c4e672af0d2eb74a663c5",
     "Pouw.SecurityProofs.OnsiteFreedWitness.twWork": "cbd1289061856f009326a2c6ca5cc940704b78e1b5ca0fea2b1e8d216ceebc47"
-   }
-  },
-  "Proofs.Pouw.TS.Session.Assumptions": {
-   "digest": "eca8d9981645c9752c157aa026fd5406846aab23127b3e716c1b909adc836507",
-   "definitions": {
-    "ResourceAccounting.Assumptions.TS.AcceptedLive": "097058d54f2f10c6963205f34e91a39797045419496e66d9c4e46527c3938f2a",
-    "ResourceAccounting.Assumptions.TS.ExecutionPhaseDesign": "841f04f4bde40cef554bc6e026ae7efb594b36795b5fe9ab27e15dea16aa4a37",
-    "ResourceAccounting.Assumptions.TS.ServedChecksHold": "a8da98121666cb12e54c9ec454cfe7c7e4d8492d219e41cfd933f1d06b807c27",
-    "ResourceAccounting.Assumptions.TS.ServedRootsLinked": "220a4c2660710353948032259e531e0a4d0c94ebdbf53bd0af96181377c4f973"
    }
   },
   "Proofs.Pouw.TS.Session.Group.Layer": {
