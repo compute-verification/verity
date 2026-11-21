@@ -10,7 +10,8 @@ circuit's own value, the first norm's output (`RMSNormTriton_v5`) on token 7's e
 by wire. Its y is the tile's own output, the one y the circuit would hold, read by wire by the linear's readers.
 
 The tile is held here to its reference (`pearl_plus_tile.reference`, the scheme's semantics the circuit template's tests
-hold it to). Its circuit template on bits is the slow test at the end.
+hold it to). `PearlPlusTileCoreWords_v5` reads A in FP32 words, which no served writer writes; `_v6` reads the writer's
+BF16 row, and its circuit template on bits is the slow test at the end.
 """
 from __future__ import annotations
 
@@ -100,7 +101,8 @@ def linear(tmp_path_factory):
     salt, root = random.Random("served-linear").randbytes(32), values[PARAM].root
     a, b = [[v << 16 for v in x]], [[v << 16 for v in r] for r in w16]
     cert = _cert(tile, a, b, salt, root)
-    return dict(circuit=circuit, registration=registration, rpath=rpath, pins=pins, values=values, ck=ck, x=x, read=read,
+    v6 = PC.served_product(SCHEME, K, 1, TN, N)
+    return dict(circuit=circuit, registration=registration, rpath=rpath, pins=pins, values=values, ck=ck, x=x, read=read, v6=v6,
                 gemm=gemm, w16=w16, y_gemm=y_gemm, tile=tile, salt=salt, root=root, a=a, b=b, cert=cert)
 
 
@@ -136,15 +138,18 @@ def test_the_tiles_b_rows_are_the_registered_row_the_served_unit_reads_and_its_r
     assert len(L["root"]) == 64 and L["root"].hex() == L["pins"][PARAM]
 
 
-def test_the_tiles_a_port_takes_fp32_words_where_the_served_x_is_bf16(linear):
-    """The served x is the norm's 256 BF16 words (`RMSNormTriton_v5`'s output row, 16-bit leaves); the tile's ``a`` is TM
-    rows of K FP32 words. A wire reads a writer's row at the writer's width, so a tile that reads x by wire needs ``a`` in
-    BF16 words, widened inside as ``b`` already is (`Bf16ToF32`)."""
+def test_the_tiles_a_port_takes_fp32_words_where_the_served_x_is_bf16_and_v6_takes_the_writers_row(linear):
+    """The served x is the norm's 256 BF16 words (`RMSNormTriton_v5`'s output row, 16-bit leaves); `_v5`'s ``a`` is TM
+    rows of K FP32 words. A wire reads a writer's row at the writer's width, so `_v5` cannot read x by wire.
+    `PearlPlusTileCoreWords_v6` takes ``a`` in BF16 words, widened inside as ``b`` is (`Bf16ToF32`): its ``a`` row is
+    the norm's output row and its ``b`` the served unit's ``w``; its other ports and its return are `_v5`'s."""
     L = linear
     norm = _unit(L["circuit"], "RMSNormTriton_v5")
-    assert norm.signature()[1].leaf_widths() == [16] * K
-    assert dict(L["tile"].core.signature()[0])["a"].leaf_widths() == [32] * K
-    assert dict(L["tile"].core.signature()[0])["b"].leaf_widths() == [16] * (TN * K)
+    v5, v6 = (dict(t.signature()[0]) for t in (L["tile"].core, L["v6"]))
+    assert norm.signature()[1].leaf_widths() == [16] * K and v5["a"].leaf_widths() == [32] * K
+    assert v6["a"].elem == norm.signature()[1] and v6["b"] == v5["b"] == dict(L["gemm"].signature()[0])["w"]
+    assert {p: t for p, t in v6.items() if p != "a"} == {p: t for p, t in v5.items() if p != "a"}
+    assert L["v6"].signature()[1] == L["tile"].core.signature()[1]
 
 
 def test_on_the_served_values_the_tile_accepts_and_writes_pearl_plus_y_not_the_bf16_gemms(linear):
@@ -201,14 +206,15 @@ def test_pearl_plus_y_at_the_linear_moves_with_the_epochs_salt(linear):
 
 @pytest.mark.slow
 def test_the_circuit_template_on_bits_is_the_reference_on_the_served_values(linear):
-    """Slow (the tile's noise is about 370k · K ANDs, its core more): `PearlPlusTileCoreWords_v5` evaluated on its
-    public row and the served values writes the reference's digest, y and ok, bit for bit; the only test that the
-    circuit template, not just its reference, takes the served layout."""
+    """Slow (the tile's noise is about 370k · K ANDs, its core more): `PearlPlusTileCoreWords_v6` evaluated on bits on
+    the served x as the norm wrote it, the registered row, the certificates and the public row writes the reference's
+    digest, y and ok, bit for bit, and with one y word other than its own the block's output is not the y held; the only
+    test that the circuit template, not just its reference, takes the served layout."""
     L = linear
     t = L["tile"]
     pub = PC.public(SCHEME, K, t, UNIT, L["salt"], L["root"])
-    words = [L["a"], L["w16"], L["cert"], *(pub[p] for p in PC.PUBLIC)]
-    g = evaluate_batch(t.core, *(np.asarray([_flat(x)], dtype=np.int64) for x in words)).reshape(-1).tolist()
+    words = [[L["x"]], L["w16"], L["cert"], *(pub[p] for p in PC.PUBLIC)]
+    g = evaluate_batch(L["v6"], *(np.asarray([_flat(x)], dtype=np.int64) for x in words)).reshape(-1).tolist()
     digest, y, ok = _tile(L)
     assert bytes(sum(g[8 * i + j] << j for j in range(8)) for i in range(64)) == digest
     assert g[512:512 + TN] == y[0] and g[512 + TN] == ok == 1
