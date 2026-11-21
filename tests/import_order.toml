@@ -40,7 +40,7 @@ order = [
     ["verity/protocols/run/verifier/onsite"],
     ["verity/protocols/run"],
     ["security"],
-    ["input_datasets"],
+    ["library/datasets"],
     ["adapters"],
     ["tools"],
     ["applications"],
