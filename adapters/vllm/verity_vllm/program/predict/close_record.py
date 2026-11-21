@@ -40,8 +40,11 @@ class Record:
     def roots(self, registered: Any, out: Path) -> dict[str, str]:
         """The serve's weights registration at ``out``'s `REGISTRATION`, made once from the checkpoint before the first
         window's advice is written (`window_weights.weights_registration`, its salts beside it, its deployment record at
-        `DEPLOYMENT`), as each window's advice registration records it (`advice.registered_weights`)."""
+        `DEPLOYMENT`, its document of record at `weights_registration.OF_RECORD`), as each window's advice registration
+        records it (`advice.registered_weights`)."""
         from verity.commitments import salt_file as SF
+
+        from verity_vllm.records import weights_registration as WRG
 
         from . import window_weights as WW
 
@@ -51,6 +54,8 @@ class Record:
                                           tables=served_tables(out))
             (Path(out) / DEPLOYMENT).write_text(json.dumps(WW.deployment_record(doc), indent=1) + "\n")
             path.write_text(json.dumps(doc, indent=1) + "\n")
+        if not (Path(out) / WRG.OF_RECORD).is_file():
+            WRG.write_of_record(path)
         serve = json.loads((Path(out) / "serve.json").read_text())
         return ADV.registered_weights(json.loads(path.read_text()), serve)
 
