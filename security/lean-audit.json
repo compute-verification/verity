@@ -24911,8 +24911,7 @@
    "Proofs.Flock.Recursive.Premises",
    "Proofs.Flock.Soundness.Premises",
    "Definitions.Slowdown.Assumptions.Fit",
-   "Definitions.Core.Assumptions.DeviceFigures",
-   "Proofs.Pouw.TS.Session.Group.Premises"
+   "Definitions.Core.Assumptions.DeviceFigures"
   ],
   "properties": {
    "Flock.SecurityProofs.PublicAudit": {
