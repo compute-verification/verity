@@ -299,6 +299,11 @@
    "digest": "5483c9e14f6369c3172eeb633e66b867881aabbd9c8e644c852598cc3fe7dad4",
    "why": "The parameters the bound speaks of: a per-round floor p, a bad-event mass ε₀ and k rounds with (1 − p)^k + k·ε₀ ≤ c."
   },
+  "Pous.StreamedWipe.Covers": {
+   "owner": "@memory-accounting",
+   "digest": "682ffd917d6a913a39ffed09c56ba29925a87b669cd35f33bd484280e91bcc45",
+   "why": "restricts the residual bound to a residual below the fill and prior content of at least the egress plus the residual (met by `StreamedWipeResidual_honest`)"
+  },
   "Pous.StreamedWipe.FillsSegment": {
    "owner": "@memory-accounting",
    "digest": "3b562ca902b009ae95b447de74d775431a0d94f6b6188602b1b89bac55769c8d",
@@ -4703,27 +4708,27 @@
   },
   "Flock.SecurityProofs.SampledKSLivePub": {
    "type_hash": "73bba6ca03a2bea3af5929f64cc490770d7705ec7e5b87dee4831fda9891a268",
+   "unfolded_hash": "94f106f24a30fb648285d056263009257c98121c6a8fe68a6c78979fa15fe396",
    "missing": "nontrivial",
-   "why": "nontrivial instance needs a fixture the kernel builds, or the statement restated to conclude a claims predicate over the record's verifier",
-   "unfolded_hash": "94f106f24a30fb648285d056263009257c98121c6a8fe68a6c78979fa15fe396"
+   "why": "nontrivial instance needs a fixture the kernel builds, or the statement restated to conclude a claims predicate over the record's verifier"
   },
   "Flock.SecurityProofs.SampledKSLiveV2": {
    "type_hash": "43e16e73206c75e215db6b95d1b2daba857ef90f89f56300e63260c0414d8aa5",
+   "unfolded_hash": "de168b0ac1d5c0463239cadacabae773703954ba8cac24169d90ce249a2e38ba",
    "missing": "nontrivial",
-   "why": "nontrivial instance needs a fixture the kernel builds, or the statement restated to conclude a claims predicate over the record's verifier",
-   "unfolded_hash": "de168b0ac1d5c0463239cadacabae773703954ba8cac24169d90ce249a2e38ba"
+   "why": "nontrivial instance needs a fixture the kernel builds, or the statement restated to conclude a claims predicate over the record's verifier"
   },
   "Flock.SecurityProofs.SampledKSLiveV3": {
    "type_hash": "363e8e7a18f9b0417428098088fd441f7724d15f39eee5ae5f424e4559e7f84b",
+   "unfolded_hash": "9ac9996b97d78e8215eed13c67ad40db69c97b35981b59b443f62c47d36fcfce",
    "missing": "nontrivial",
-   "why": "nontrivial instance needs a fixture the kernel builds, or the statement restated to conclude a claims predicate over the record's verifier",
-   "unfolded_hash": "9ac9996b97d78e8215eed13c67ad40db69c97b35981b59b443f62c47d36fcfce"
+   "why": "nontrivial instance needs a fixture the kernel builds, or the statement restated to conclude a claims predicate over the record's verifier"
   },
   "Flock.SecurityProofs.SampledKSLiveV5": {
    "type_hash": "1da5c430cbb43b0232626e9ac21f59025a435c8829d4500927b3bd052f108f35",
+   "unfolded_hash": "58bb5cbb8cc0b48501c5e640ec5d267fa0dcd20534db6c40d7a4c98ee183d90f",
    "missing": "nontrivial",
-   "why": "nontrivial instance needs a fixture the kernel builds, or the statement restated to conclude a claims predicate over the record's verifier",
-   "unfolded_hash": "58bb5cbb8cc0b48501c5e640ec5d267fa0dcd20534db6c40d7a4c98ee183d90f"
+   "why": "nontrivial instance needs a fixture the kernel builds, or the statement restated to conclude a claims predicate over the record's verifier"
   },
   "Flock.SecurityProofs.ServedRowsLinked": "2cde2f3d97c487723b8f8899ebf241205f576cceca38ba6d92a6a1872108aba6",
   "Flock.SecurityProofs.SessionLoopZK": "a4028bdba4de3cb93455dbf5d27c01dc1e341693a308bf26b99de7a4451e2862",
@@ -14652,18 +14657,20 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": [],
+    "domain": ["Pous.StreamedWipe.Covers"],
     "open": [],
     "reads": []
    },
    "type_hash": "8f92847a58d12d714f379f23ac080b4472d149a132755b140a0c4761bd1dfed8",
-   "unfolded_hash": "1f85d433d5218de1119bfb13d8a32e2a6fca59df439219e08d49cf90b28a2819"
+   "unfolded_hash": "3a613429c8d48e33a8e2e160b7642799a311bc01619c76096c530b5e60ee5749"
   },
   "Pous.SecurityProofs.StreamedWipeResidual_honest": {
    "owner": "@memory-accounting",
    "signature": [
     "Pous.SecurityProofs.StreamedWipeResidual_honest :",
-    "  Exists fun prf => Exists fun P => Eq (Pous.pr fun x => Pous.StreamedWipe.Accepts P x.fst.fst (prf x.snd) x.fst.snd) 1"
+    "  And (Pous.StreamedWipe.Covers 2319974400 2152 512 128 52439071629 0)",
+    "    (Exists fun prf =>",
+    "      Exists fun P => Eq (Pous.pr fun x => Pous.StreamedWipe.Accepts P x.fst.fst (prf x.snd) x.fst.snd) 1)"
    ],
    "assumptions": [],
    "premises": {
@@ -14672,7 +14679,7 @@
     "open": [],
     "reads": []
    },
-   "type_hash": "94eb12791f5ab6996b2abcb3eec9186250875841fa6a7ee0c0772434b346daa5"
+   "type_hash": "2f3f957b876532ec15f3dac31eb33aa73527a2a435fa131e0c584ca0136013d9"
   },
   "Pous.SecurityProofs.StreamedWipeResidual_nontrivial": {
    "owner": "@memory-accounting",
@@ -34855,9 +34862,9 @@
    }
   },
   "Definitions.Pous.Guarantees.StreamedWipeResidual": {
-   "digest": "9e6a52bd4fb11df37d96a7d78f8a905f540b5273f6247d8d8f9f7ab46c823031",
+   "digest": "31c373ec2a45916162522bbfff3196f3e7300c1d39597db54725981c936b691e",
    "definitions": {
-    "Pous.Guarantees.StreamedWipeResidual": "1b2fa8e65ed89f95afb0ee80ec61c1462e23a9153ff1689cd1daea1844bd10a2"
+    "Pous.Guarantees.StreamedWipeResidual": "e1926627fd28b3bac8d52ee60b965d269631e4d3a9aa38ee258ba727015d66ce"
    }
   },
   "Definitions.Pous.Guarantees.StreamedWipeServer": {
@@ -35129,8 +35136,9 @@
    }
   },
   "Definitions.Pous.Model.StreamedWipeResidual": {
-   "digest": "68aac37f84dfd68900761dd06d09e85625d6a14aad9e0cc4eda4c2ff0dc7d297",
+   "digest": "25e1b3ede843fa767a1de77a0a70faec28b3eb4ab00c83572cee60cdc1ff6609",
    "definitions": {
+    "Pous.StreamedWipe.Covers": "682ffd917d6a913a39ffed09c56ba29925a87b669cd35f33bd484280e91bcc45",
     "Pous.StreamedWipe.wipeMissing": "cab350eca1363c70c3984520480713d48581ac14895feffb62f8786a5e31ab90",
     "Pous.StreamedWipe.wipeResidual": "0960712b8e48bb3ac4b9615a16f2376cf98322190d7b37e8f747fad86ad5b636"
    }
