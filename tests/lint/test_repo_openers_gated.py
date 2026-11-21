@@ -29,12 +29,13 @@ OPENERS = {"FrameV3Read_v1": ("value", "path"), "FrameV3ReadAt_v1": ("value", "p
 GATED, VERDICT, UNGATED = "gated", "verdict", "ungated"
 
 
-def _imports() -> tuple[Any, Any, Any]:
+def _imports() -> tuple[Any, Any, Any, Any]:
     sys.path[:0] = [p for p in (str(ROOT / "tools/verity/circuit_check/src"),) if p not in sys.path]
     from circuit_check import bodies as BD
+    from circuit_check import by_calls as BC
     from circuit_check import targets as T
     from verity.circuits import defs as D
-    return BD, T, D
+    return BD, T, D, BC
 
 
 def _shape(v: Any, D: Any) -> str:
@@ -80,7 +81,7 @@ def volume(v: Any) -> int:
 
 def roots() -> list[Any]:
     """The catalog's roots as `targets.catalog` makes them, without building a model's body."""
-    _BD, T, _D = _imports()
+    T = _imports()[1]
     out = list(T._registered())
     for units, make, _kind, _label in T.catalog_units():
         out += T._produce(units, make)
@@ -90,8 +91,8 @@ def roots() -> list[Any]:
 def walk(start: list[Any]) -> tuple[dict[str, list[tuple[int, Any]]], dict[str, set[str]], dict[str, str], list]:
     """Each shape reached from ``start``, with its bindings by size; each built shape's callee shapes; each that couldn't
     be opened, with why; and each body over 5 s to build.  Smallest binding first over the whole walk, one body per shape
-    (an opener's none), each released once its callees are read."""
-    _BD, _T, D = _imports()
+    (an opener's none), each its own nodes alone (`by_calls.unlaid`), so no callee's body is built for it."""
+    _BD, _T, D, BC = _imports()
     members: dict[str, list[tuple[int, Any]]] = {}
     callees: dict[str, set[str]] = {}
     undecided: dict[str, str] = {}
@@ -123,15 +124,12 @@ def walk(start: list[Any]) -> tuple[dict[str, list[tuple[int, Any]]], dict[str, 
         if fn.base_id in OPENERS:
             callees[k] = set()
             continue
-        had, t = fn._body is not None, time.monotonic()
+        t = time.monotonic()
         try:
-            kids = [n.fn for n in fn.body.nodes]
+            kids = [n.fn for n in BC.unlaid(fn).nodes]
         except Exception as e:  # noqa: BLE001
             undecided[k] = f"{fn.id[:160]}: its body doesn't build: {type(e).__name__}: {str(e)[:160]}"
             continue
-        finally:
-            if not had:
-                fn._body = None
         if (dt := time.monotonic() - t) > 5:
             slow.append((round(dt, 1), fn.id[:160]))
         callees[k] = {shape(c) for c in kids if isinstance(c, D.SpecializedDefinition)}
