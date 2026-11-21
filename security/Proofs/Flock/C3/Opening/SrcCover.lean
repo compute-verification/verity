@@ -277,7 +277,7 @@ open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
 open Game Spot.Sampling Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockVBridge.Compiled FlockC3.Compose
 open FlockVBridge.Decode (fill)
-open FlockVBridge.OfVStar (fill_rowCol readCol_rsAt)
+open FlockVBridge.OfVStar (fill_rowCol)
 
 variable {nS : ℕ} {Vs : Fin nS → VStmt} {Reg' : Type}
 

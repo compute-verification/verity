@@ -55,7 +55,7 @@ open Game Spot.Sampling Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockVBridge.Compiled
 open FlockVBridge (keyInst)
 open FlockVBridge.Family (skOf mem_skOf_inl)
-open FlockVBridge.OfVStar (rowCol partRep readCol_rsAt part_eqOpening wIdx_size ReadCol)
+open FlockVBridge.OfVStar (rowCol partRep part_eqOpening wIdx_size ReadCol)
 open FlockVBridge.PartS (wIdx)
 open FlockC3.Reps (SelPort)
 

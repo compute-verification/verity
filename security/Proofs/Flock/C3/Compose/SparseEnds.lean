@@ -198,7 +198,7 @@ open FlockC3.Sparse (SparseTie SrcSparseTie sparseKinds)
 open FlockVBridge.InnerAccepts (firstSteps)
 open FlockVBridge (keyInst)
 open FlockVBridge.Family (skOf maskOf)
-open FlockVBridge.OfVStar (OpeningZeroAtL rowCol partRep fill_rowCol readCol_rsAt part_eqOpening wIdx_size)
+open FlockVBridge.OfVStar (OpeningZeroAtL rowCol partRep fill_rowCol part_eqOpening wIdx_size)
 open FlockVBridge.PartS (wIdx)
 
 /-- **The sparse phases' part's coins**: the points', two reps' at the class's statement, extra claims (two per
