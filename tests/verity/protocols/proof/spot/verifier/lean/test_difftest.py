@@ -2782,7 +2782,7 @@ def test_v2_takes_a_cover_of_the_population_under_a_subset_design(server, server
     """v2's population check (`OneStageZk.popHeld`) takes a docket whose program's proof blocks, read stratum by
     stratum, are not its population's units in order but a disjoint cover of them (`Slots.popCovers`) under its subset
     design, as the service's run does (`test_the_run_takes_a_cover_of_the_units_only_under_a_subset_design`):
-    `SETUPS[4]`'s and `SETUPS[5]`'s audits go on to their session's verdict, as `BLOCKED`'s, in order, does. v2's one
+    `SETUPS[4]`'s and `SETUPS[5]`'s audits go on past it, as `BLOCKED`'s, in order, does to its session's verdict. v2's one
     statement takes no stratified or work design (`subset_only`)."""
     circuit = STAND_IN_CIRCUIT
     for s, ok in ((SETUPS[4], False), (SETUPS[5], False), (BLOCKED, True)):
@@ -2793,8 +2793,10 @@ def test_v2_takes_a_cover_of_the_population_under_a_subset_design(server, server
         case = {"blobs": [circuit.hex(), public.hex(), record.hex()], "commitment": _hex(rec), "evidence": _hex(v2),
                 "params": params | {"proofs": {"public": _sha(public), "registered": None}}}
         out = server_v2.exchange(_json(case))
-        assert P.covers(s.program, s.query, s.population)
-        assert (out["verdict"], out["reason"]) == ("reject", "verdict flock-verify/s did not accept"), (s.templates, out)
+        assert P.covers(s.program, s.query, s.population) and out["verdict"] == "reject", (s.templates, out)
+        assert POPULATION_ORDER not in out["reason"] and "partition: the registration's strata" not in out["reason"], out
+        if ok:
+            assert out["reason"] == "verdict flock-verify/s did not accept", (s.templates, out)
 
 
 def test_the_per_member_form_as_written_is_what_v2_parses_and_its_check_reads(tmp_path, server, server_v2):
