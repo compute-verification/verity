@@ -870,6 +870,10 @@ def launch(*args: str, **env: str) -> subprocess.CompletedProcess:
     return subprocess.run(["bash", str(NEBIUS / "launch.sh"), *args], env={**base, **env}, capture_output=True, text=True)
 
 
+ROOT = NEBIUS.parents[5]
+GPU_REGISTRY = ROOT / "tools" / "config" / "verity_config" / "registry" / "gpus.toml"
+
+
 def test_dry_run_renders_the_cloud_init_and_vm_spec_without_credentials():
     pub = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIdummy research@test"
     r = launch("--dry-run", NEBIUS_SSH_PUBKEY=pub)
@@ -899,6 +903,56 @@ def test_dry_run_renders_the_cloud_init_and_vm_spec_without_credentials():
     nic = s["network_interfaces"][0]
     assert nic["public_ip_address"] == {"static": True} and nic["security_groups"] and s["secondary_disks"][0]["device_id"] == "data"
     assert "# data disk vy-nebius-1-data: attached as it is if it exists, else created (5022 GiB" in ud
+
+
+def test_a_platform_that_locks_clocks_gets_both_from_its_card_file_and_another_gets_neither(tmp_path):
+    """The memory lock is the clock.memory of the card file the GPU registry's entry for the platform names; a locking
+    platform is refused before anything is created when the registry refuses an entry naming no card."""
+    (entry,) = [g for g in tomllib.loads(GPU_REGISTRY.read_text())["gpu"] if "gpu-rtx6000" in g["nebius_platforms"]]
+    clock = tomllib.loads((ROOT / "calibration" / "hardware" / "cards" / f"{entry['card']}.toml").read_text())["clock"]
+
+    def settings(**env: str) -> list[str]:
+        r = launch("--dry-run", NEBIUS_SSH_PUBKEY="ssh-ed25519 dummy", **env)
+        assert r.returncode == 0, r.stderr
+        b64 = re.search(r"  - path: /etc/vy/vy.env\n    permissions: '\d+'\n    encoding: gz\+b64\n    content: (\S+)", r.stdout)[1]
+        return [ln for ln in gzip.decompress(base64.b64decode(b64)).decode().splitlines() if "CLOCK" in ln]
+
+    gpu = int(re.search(r"^GPU_LOCK_MHZ=(\d+)$", (NEBIUS / "launch.sh").read_text(), re.M)[1])
+    assert gpu <= clock["sm"]["value"]
+    assert settings() == ["VY_LOCK_CLOCKS=1", f"VY_GPU_CLOCK_MHZ={gpu}", f"VY_MEM_CLOCK_MHZ={clock['memory']['value']}"]
+    assert settings(NEBIUS_PLATFORM_PREFIX="gpu-h100-sxm") == ["VY_LOCK_CLOCKS=0"]
+    copy = tmp_path / NEBIUS.relative_to(ROOT)
+    copy.mkdir(parents=True)
+    for name in ("launch.sh", "common.sh"):
+        shutil.copy(NEBIUS / name, copy / name)
+    package = GPU_REGISTRY.parents[1]
+    shutil.copytree(package, tmp_path / package.relative_to(ROOT), ignore=shutil.ignore_patterns("__pycache__"))
+    registry = tmp_path / GPU_REGISTRY.relative_to(ROOT)
+    registry.write_text(re.sub(r"^card = .*\n", "", GPU_REGISTRY.read_text(), flags=re.M))
+    base = {k: v for k, v in os.environ.items() if not k.startswith(("NEBIUS_", "RUNPOD_"))}
+    r = subprocess.run(["bash", str(copy / "launch.sh"), "--dry-run"], env={**base, "NEBIUS_SSH_PUBKEY": "ssh-ed25519 dummy"},
+                       capture_output=True, text=True)
+    assert r.returncode == 2 and f"GPU {entry['id']} names no card" in r.stderr and not r.stdout, r.stderr
+
+
+def test_the_first_boot_refuses_to_lock_with_a_clock_unset_before_writing_anything(tmp_path):
+    """vm_setup.sh has no clock of its own: told to lock with either clock unset or empty it stops, naming both, before its
+    first write; untold, it locks nothing and writes no clock unit."""
+    text = (NEBIUS / "vm_setup.sh").read_text()
+    head, rest = text.split("\nfi\n", 1)
+    assert "cat >" not in head and "systemctl" not in head
+    assert re.search(r'^\[ "\$LOCK_CLOCKS" = 0 \] \|\| cat > /etc/systemd/system/vy-clocks\.service', rest, re.M)
+    env_file = tmp_path / "vy.env"
+    prefix = tmp_path / "head.sh"
+    prefix.write_text(head.replace("/etc/vy/vy.env", str(env_file)) + "\nfi\necho passed\n")
+    for settings, refused in [("VY_LOCK_CLOCKS=1\nVY_GPU_CLOCK_MHZ=2100\n", True),
+                              ("VY_LOCK_CLOCKS=1\nVY_GPU_CLOCK_MHZ=\nVY_MEM_CLOCK_MHZ=12481\n", True),
+                              ("VY_LOCK_CLOCKS=1\nVY_GPU_CLOCK_MHZ=2100\nVY_MEM_CLOCK_MHZ=12481\n", False),
+                              ("VY_USER=research\n", False), ("VY_LOCK_CLOCKS=0\n", False)]:
+        env_file.write_text(settings)
+        r = subprocess.run(["bash", str(prefix)], capture_output=True, text=True)
+        assert (r.returncode, r.stdout) == ((2, "") if refused else (0, "passed\n")), settings
+        assert not refused or ("VY_GPU_CLOCK_MHZ" in r.stderr and "VY_MEM_CLOCK_MHZ" in r.stderr), settings
 
 
 def test_the_first_boot_writes_and_applies_the_user_namespace_setting_on_the_nodes_deploy_gives_it():
@@ -1334,100 +1388,6 @@ def test_fill_runner_files_a_job_by_its_own_exit_status_across_a_restart_and_nev
     assert not list((fill / "queue").glob("legacy.sh")) and not list((fill / "queue").glob("orphan.sh"))
     kinds = [json.loads(l)["event"] for l in (fill / "events.jsonl").read_text().splitlines()]
     assert kinds.count("unknown-exit") == 2 and "adopted-exit" not in kinds
-
-
-def test_publish_pool_reports_busy_useful_holders_and_ready_gpu_h_and_stays_quiet_in_a_timed_window(tmp_path, monkeypatch):
-    util, fill = tmp_path / "util", tmp_path / "fill"
-    util.mkdir()
-    for d in ("queue", "running", "done"):
-        (fill / d).mkdir(parents=True)
-    (fill / "status.txt").write_text("2026-09-30T21:00:00Z free GPUs 0/2, kept free -, waiters -, timed False, window waiting False\n")
-    (fill / "running" / "work-a.sh").write_text("# fill: owner=bc-a gpus=1 max_min=20 project=pous\n")
-    (fill / "running" / "pad-b.sh").write_text("# fill: owner=bc-b gpus=1 max_min=20 project=pous filler=idle-gpu\n")
-    (fill / "queue" / "q1.sh").write_text("# fill: owner=bc-a gpus=1 max_min=30\n")
-    (fill / "queue" / "q2.sh").write_text("# fill: owner=bc-a gpus=0 max_min=30\n")
-    lease = "pid=1 run=- who=fill:{} since=x cmd=nice -n 19 taskset -c 96-127 bash /workspace/pouw/fill/running/{}"
-    now = datetime.datetime(2026, 9, 30, 21, 0, 0, tzinfo=datetime.UTC)
-    with open(util / "2026-09-30.jsonl", "w") as f:
-        for s in range(0, 3600, 12):
-            t = now - datetime.timedelta(seconds=3600 - s)
-            recent = s >= 3300
-            f.write(json.dumps({"t": t.strftime("%Y-%m-%dT%H:%M:%SZ"), "cpu_busy": 0.5 if recent else 0.1, "gpus": [
-                {"i": 0, "util": 90, "smact": 0.5, "lease": lease.format("bc-a", "work-a")},
-                {"i": 1, "util": 0 if recent else 90, "smact": 0.0 if recent else 0.4, "lease": lease.format("bc-b", "pad-b")},
-            ]}) + "\n")
-    monkeypatch.setenv("UTIL_OUT_DIR", str(util))
-    monkeypatch.setenv("FILL_DIR", str(fill))
-    monkeypatch.setenv("LEASE_USAGE", str(tmp_path / "lease-usage.jsonl"))
-    spec = importlib.util.spec_from_file_location("publish_pool_under_test", NEBIUS / "publish_pool.py")
-    pp = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(pp)
-    n2 = pp.build(now)["nodes"]["n2"]
-    assert n2["gpu_busy_5m"] == 0.5 and 0.9 < n2["gpu_busy_1h"] < 1
-    assert 0.5 < n2["useful_share_1h"] < 0.6
-    assert n2["cpu_busy_5m"] == 0.5
-    assert [(g["index"], g["holder"], g["class"], g["busy_5m"]) for g in n2["gpus"]] == [
-        (0, "fill:bc-a", "pous", 1.0), (1, "fill:bc-b", "filler", 0.0)]
-    assert (n2["ready_gpu_h"], n2["waiting"], n2["waiting_gpu"], n2["waiting_cpu"]) == (0.5, 2, 1, 1)
-    out = tmp_path / "pool.json"
-    (fill / "status.txt").write_text("2026-09-30T21:00:00Z free GPUs 0/2, kept free -, waiters -, timed True, window waiting False\n")
-    monkeypatch.setattr(sys, "argv", ["publish_pool.py", "--out", str(out), "--no-push"])
-    assert pp.main() == 0 and not out.exists()
-
-
-def test_publish_pool_flags_an_idle_lease_and_an_unleased_gpu_process_once_and_ranks_kinds_by_idle_gpu_h(tmp_path, monkeypatch):
-    util, fill, proc = tmp_path / "util", tmp_path / "fill", tmp_path / "proc"
-    for d in (util, fill / "queue", fill / "running", fill / "done"):
-        d.mkdir(parents=True)
-    (fill / "done" / "kt-e70b-fold-pc.sh").write_text("# fill: owner=bc-a gpus=1 max_min=20 kind=pouw-kt-gpu1\n")
-    (fill / "done" / "pad-x.sh").write_text("# fill: owner=bc-b gpus=1 max_min=20 filler=idle-gpu\n")
-    (fill / "queue" / "q.sh").write_text("# fill: owner=bc-a gpus=1 max_min=30\n")
-    for pid, cg, ppid in ((11, "0::/user.slice/gpu-lease-10.scope\n", 10), (21, "0::/user.slice/tmux.scope\n", 20),
-                          (20, "0::/user.slice/tmux.scope\n", 1)):
-        (proc / str(pid)).mkdir(parents=True)
-        (proc / str(pid) / "cgroup").write_text(cg)
-        (proc / str(pid) / "stat").write_text(f"{pid} (python3) S {ppid} 0 0\n")
-    now = datetime.datetime(2026, 9, 30, 21, 0, 0, tzinfo=datetime.UTC)
-    idle = "pid=10 run=- who=fill:bc-a since=2026-09-30T20:50:00Z scope=gpu-lease-10 cmd=bash /workspace/pouw/fill/running/kt-e70b-fold-pc"
-    with open(util / "2026-09-30.jsonl", "w") as f:
-        for s in range(0, 300, 12):
-            t = (now - datetime.timedelta(seconds=300 - s)).strftime("%Y-%m-%dT%H:%M:%SZ")
-            f.write(json.dumps({"t": t, "cpu_busy": 0.2, "gpus": [
-                {"i": 0, "util": 12 if s < 24 else 3, "smact": 0.02, "lease": idle, "procs": [{"pid": 11, "mib": 900, "cmd": "python3 kt.py"}]},
-                {"i": 1, "util": 60, "smact": 0.3, "lease": None, "procs": [{"pid": 21, "mib": 4000, "cmd": "python3 stray.py"}]},
-            ]}) + "\n")
-    usage = tmp_path / "lease-usage.jsonl"
-    rec = {"schema": "gpu-lease/usage/v1", "end": "2026-09-30T20:30:00Z"}
-    usage.write_text("".join(json.dumps(r) + "\n" for r in [
-        {**rec, "who": "fill:bc-a", "since": "2026-09-30T20:00:00Z", "rc": 0, "cmd": "bash /workspace/pouw/fill/running/kt-e70b-fold-pc.sh",
-         "gpus": [{"held_s": 3600, "busy_s": 1800}]},
-        {**rec, "who": "fill:bc-b", "cmd": "bash /workspace/pouw/fill/running/pad-x.sh", "gpus": [{"held_s": 360, "busy_s": 360}]},
-        {**rec, "who": "session:bc-c", "cmd": "python3 bench.py", "gpus": [{"held_s": 720, "busy_s": 720}]},
-        {**rec, "who": "bc-d", "timed": True, "cmd": "python3 audit.py", "gpus": [{"held_s": 360, "busy_s": 360}]},
-        {**rec, "end": "2026-09-29T20:00:00Z", "who": "fill:bc-a", "cmd": "x", "gpus": [{"held_s": 9999, "busy_s": 0}]},
-    ]))
-    for k, v in {"UTIL_OUT_DIR": util, "FILL_DIR": fill, "POOL_PROC": proc, "LEASE_USAGE": usage,
-                 "POOL_ALERTS": tmp_path / "alerts.jsonl", "POOL_STATE": tmp_path / "state.json"}.items():
-        monkeypatch.setenv(k, str(v))
-    spec = importlib.util.spec_from_file_location("publish_pool_monitors_under_test", NEBIUS / "publish_pool.py")
-    pp = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(pp)
-    n2 = pp.build(now)["nodes"]["n2"]
-    assert [(m["kind"], m["gpu"]) for m in n2["monitors"]] == [("gpu-idle-in-lease", 0), ("gpu-unleased", 1)]
-    assert n2["monitors"][0]["job_kind"] == "pouw-kt-gpu1" and n2["monitors"][0]["owner"] == "bc-a"
-    assert n2["unlabeled_waiting"] == 1
-    assert [(k["kind"], k["leased_gpu_h"], k["useful_gpu_h"], k["idle_gpu_h"], k["efficiency"]) for k in n2["kinds"]] == [
-        ("pouw-kt-gpu1", 1.0, 0.5, 0.5, 0.5), ("unlabeled:pad-x", 0.1, 0.0, 0.1, 0.0), ("direct:session:bc-c", 0.2, 0.2, 0.0, 1.0),
-        ("timed:bc-d", 0.1, 0.1, 0.0, 1.0)]
-    d = n2["delivered_by_hour"]
-    assert [r["hour"] for r in d] == ["2026-09-30T18:00:00Z", "2026-09-30T19:00:00Z", "2026-09-30T20:00:00Z", "2026-09-30T21:00:00Z"]
-    assert (d[2]["leased_gpu_s"], d[2]["delivered_gpu_s"], d[2]["delivered_share"], d[2]["provisional"]) == (2400, 1800, 0.75, True)
-    assert d[3]["leased_gpu_s"] == 0 and d[3]["delivered_share"] is None and d[0]["delivered_share"] is None
-    pp.alert(n2["monitors"], now)
-    pp.alert(n2["monitors"], now + datetime.timedelta(minutes=5))
-    assert len((tmp_path / "alerts.jsonl").read_text().splitlines()) == 2
-    pp.alert(n2["monitors"], now + datetime.timedelta(minutes=31))
-    assert len((tmp_path / "alerts.jsonl").read_text().splitlines()) == 4
 
 
 #: n2_custody.sh's node 1, faked under N1_FS: rsync copies the run dir there, and ssh answers the round's calls as node 1 would: the

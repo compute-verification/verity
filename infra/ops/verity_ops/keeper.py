@@ -15,8 +15,8 @@ docstring says what a tick does.
 chunks of CMD live (running, or waiting for their lease) until UTC, at most 48 h ahead, each with `{seed}` replaced by the next
 seed of the target's counter. Every chunk is a recorded `research run` on that machine, its workload under `gpu-lease G --wait
 --preemptible --max-min M`, so a waiter can always take its GPUs back (a preempted chunk's place goes to a new seed). M counts
-from the lease's grant: the node cancels a chunk whose lease would meet a window booked on node 2 or node 1's daily hold
-(12:10-13:30Z), and one still waiting at UTC. --env is set inside the lease, on the chunk's command line, so never a secret
+from the lease's grant: the node cancels a chunk whose lease would meet a window booked on node 2,
+and one still waiting at UTC. --env is set inside the lease, on the chunk's command line, so never a secret
 (PYTHONPATH stays the runner's, as with --on); it may not set GPU_LEASE_*, CUDA_VISIBLE_DEVICES, CUDA_DEVICE_ORDER or
 RESEARCH_KEEPER_*.
 Setting a NAME again replaces its values and re-arms it after a stop or a pause (3 failed chunks in a row); its seed counter

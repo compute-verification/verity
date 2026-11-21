@@ -16,6 +16,12 @@ U=${VY_USER:-research}
 DEV=/dev/disk/by-id/virtio-${VY_DATA_DEVICE_ID:-data}
 LEASE_DIR=/home/$U/.research
 log() { echo "vy-setup: $*"; }
+# VY_LOCK_CLOCKS absent locks nothing: launch.sh always writes it, so only a hand run lacks it, and that run has no clocks to lock.
+LOCK_CLOCKS=${VY_LOCK_CLOCKS:-0}
+if [ "$LOCK_CLOCKS" != 0 ] && { [ -z "${VY_GPU_CLOCK_MHZ:-}" ] || [ -z "${VY_MEM_CLOCK_MHZ:-}" ]; }; then
+  log "refused: VY_LOCK_CLOCKS=$LOCK_CLOCKS and VY_GPU_CLOCK_MHZ='${VY_GPU_CLOCK_MHZ:-}', VY_MEM_CLOCK_MHZ='${VY_MEM_CLOCK_MHZ:-}' in /etc/vy/vy.env: set both (launch.sh writes them, the memory clock from the platform's card file), or VY_LOCK_CLOCKS=0" >&2
+  exit 2
+fi
 
 cat > /etc/ssh/sshd_config.d/10-vy.conf <<EOF
 PasswordAuthentication no
@@ -114,7 +120,7 @@ done
 echo 'd /run/gpu-lease 1777 root root -' > /etc/tmpfiles.d/gpu-lease.conf
 systemd-tmpfiles --create /etc/tmpfiles.d/gpu-lease.conf
 # gpu-lease hands out this VM's GPUs: a `research run --on` here sees none unless it asks with --gpus N (research.remote).
-# The cluster's nodes say otherwise in /etc/vy/direct-gpus (cluster_up.sh), which the runner reads first.
+# A node that says otherwise in /etc/vy/direct-gpus (`cluster policy apply`) is read first by the runner.
 # vy-gpu-adopt holds the lease of a GPU some process uses without one, until it exits, and logs it (gpu_adopt.py).
 install -d -m 755 /etc/vy
 if nvidia-smi -L 2> /dev/null | grep -q '^GPU ' && [ ! -e /etc/vy/direct-gpus ]; then
@@ -231,19 +237,19 @@ AccuracySec=5s
 WantedBy=timers.target
 EOF
 
-# Fixed clocks node-wide at every boot, so timings repeat: the graphics lock below holds under full bf16 load beneath the board's
-# power limit, where unlocked GPUs ride the power limit and drift; the RTX PRO 6000 has one memory clock (its card's
-# clock.memory).  Only root can change them.
-cat > /etc/systemd/system/vy-clocks.service <<EOF
+# Fixed clocks node-wide at every boot, so timings repeat: the graphics lock holds under full bf16 load beneath the board's
+# power limit, where unlocked GPUs ride the power limit and drift; the memory lock is the card's one memory clock (its
+# clock.memory).  Both come from vy.env; a node told not to lock gets no unit.  Only root can change them.
+[ "$LOCK_CLOCKS" = 0 ] || cat > /etc/systemd/system/vy-clocks.service <<EOF
 [Unit]
-Description=lock every GPU's clocks (graphics ${VY_GPU_CLOCK_MHZ:-2100} MHz, memory ${VY_MEM_CLOCK_MHZ:-12481} MHz)
+Description=lock every GPU's clocks (graphics ${VY_GPU_CLOCK_MHZ} MHz, memory ${VY_MEM_CLOCK_MHZ} MHz)
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
 ExecStart=/usr/bin/nvidia-smi -pm 1
-ExecStart=/usr/bin/nvidia-smi -lgc ${VY_GPU_CLOCK_MHZ:-2100},${VY_GPU_CLOCK_MHZ:-2100}
-ExecStart=/usr/bin/nvidia-smi -lmc ${VY_MEM_CLOCK_MHZ:-12481},${VY_MEM_CLOCK_MHZ:-12481}
+ExecStart=/usr/bin/nvidia-smi -lgc ${VY_GPU_CLOCK_MHZ},${VY_GPU_CLOCK_MHZ}
+ExecStart=/usr/bin/nvidia-smi -lmc ${VY_MEM_CLOCK_MHZ},${VY_MEM_CLOCK_MHZ}
 ExecStop=/usr/bin/nvidia-smi -rgc
 ExecStop=/usr/bin/nvidia-smi -rmc
 
@@ -255,7 +261,7 @@ systemctl daemon-reload
 systemctl enable --now vy-lease.service
 systemctl enable --now vy-deadline.timer
 [ ! -e /etc/systemd/system/vy-gpu-adopt.service ] || systemctl enable --now vy-gpu-adopt.service
-[ "${VY_LOCK_CLOCKS:-1}" = 0 ] || systemctl enable --now vy-clocks.service   # the clocks are the RTX PRO 6000's
+[ "$LOCK_CLOCKS" = 0 ] || systemctl enable --now vy-clocks.service
 
 nvidia-smi -pm 1 > /dev/null 2>&1 || log "nvidia-smi -pm 1 refused (persistence mode stays off)"
 date -u +%Y-%m-%dT%H:%M:%SZ > /var/lib/vy-setup.done

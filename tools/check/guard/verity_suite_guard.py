@@ -202,7 +202,7 @@ HOST_FILES = {"RUNS_VIA_SLOT_FILE": "/etc/vy/runs-via-slot", "DIRECT_CPUS_FILE":
               "GPU_LEASE_ALLOWED_FILE": "/etc/vy/direct-gpus", "CHECK_PEERS": "/etc/vy/peers",
               "LEASE_DEADLINE_FILE": "/etc/research/deadline", "CHECK_SLOTS": "/workspace/research/locks/slots"}
 #: the check's caches (variable: default), each an empty directory of the test's own, so no test reads a pass, a report or a
-#: build some earlier check on the machine kept (node 1's real caches failed test_placement and test_shards)
+#: build some earlier check on the machine kept (a node's real caches failed test_placement and test_shards)
 HOST_CACHES = {"CHECK_CACHE": "~/.cache/verity-check", "VERITY_TEST_CACHE": "~/.cache/verity/tests"}
 #: what a check slot gives the processes it runs (slot.py), which a test run inside one would otherwise take as its own, and
 #: what its run asks of a slot (`research run --pool --mem-gb`, `check.py --priority`), which can reach the run's processes: a
