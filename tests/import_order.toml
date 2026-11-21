@@ -910,6 +910,11 @@ reaches = [
 
 [[place]]
 paths = [
+    "verity/protocols/run/period.py",
+]
+
+[[place]]
+paths = [
     "verity/protocols/run/schemes.py",
 ]
 loads = [

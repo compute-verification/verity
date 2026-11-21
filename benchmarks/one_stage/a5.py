@@ -157,6 +157,7 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's docket, `step_rows.weig
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import ctypes
 import functools
 import gc
@@ -172,6 +173,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import traceback
@@ -663,6 +665,20 @@ def door_circuit(c: bytes, part: dict, k: int, st_dir: Path, lower: Path,
     return circuit, {"pin": circ.pin, "class_sha512": circ.cls}, circ
 
 
+#: GiB a staging worker is taken to need: a 1,060-member window's audit held 8 GiB and its flock-tmpl-unit 7 GiB
+STAGE_WORKER_GIB = 16.0
+
+#: members between two of staging's ``PROGRESS`` lines
+PROGRESS_EVERY = 50
+
+
+def progress(phase: str, t0: float, **kw: Any) -> None:
+    """A ``PROGRESS`` line on stderr, flushed: ``phase``, the seconds since ``t0`` and ``kw``; stdout's lines are the
+    audit's answer, which its callers read by their last line."""
+    print("PROGRESS " + json.dumps({"phase": phase, "s": round(time.time() - t0, 1), **kw}, sort_keys=True, default=str),
+          file=sys.stderr, flush=True)
+
+
 #: The start of the window's refusal before any coin at the first member the door refuses (`audit`'s ``door``).
 DOOR_REFUSES = "the door refuses member"
 
@@ -670,8 +686,108 @@ DOOR_REFUSES = "the door refuses member"
 CLASS_DIFFERS = "members of one class staged different circuits"
 
 
+class DoorRefused(Exception):
+    """A door refusal a staging worker met (`stage_task`), with the code and the text `audit`'s ``door_refused`` takes."""
+
+    def __init__(self, code: str, why: str) -> None:
+        super().__init__(why)
+        self.code, self.why = code, why
+
+
+_STAGE: dict = {}
+
+
+def stage_init(c_file: str, part: dict, lower: str, tmpl_unit_bin: str | None) -> None:
+    """A staging worker's C, read from ``c_file`` and decoded on its first task, and what `door_circuit` reads besides."""
+    c = Path(c_file).read_bytes()
+    _STAGE.update(c=c, decoded=OC.Decoded(c), part=part, lower=Path(lower), tmpl_unit_bin=tmpl_unit_bin)
+
+
+def stage_task(kind: str, k: int, st_dir: Path, cut: dict, template: str, units: list) -> tuple[str, Any]:
+    """In a staging worker: member ``k``'s full staging (``kind`` "full": `door_circuit`, then `a0.templated`) or its
+    door check (`one_circuit.formed_in`); -> ("ok", what it made), ("refused", (code, why)) as `audit` names a door
+    refusal, or ("error", the traceback)."""
+    S = _STAGE
+    try:
+        if kind == "full":
+            st_dir.mkdir(parents=True, exist_ok=True)
+            circuit, made, circ = door_circuit(S["c"], S["part"], k, st_dir, S["lower"], S["decoded"], cut)
+            tmpl = a0.templated(argparse.Namespace(meta=circ.meta, text=circuit.read_text()), st_dir / "tmpl",
+                                S["tmpl_unit_bin"])
+            return "ok", (circuit, made, circ, tmpl)
+        OC.formed_in(S["decoded"], S["part"], units)(template)
+        return "ok", None
+    except (OC.Refused, OC.NotDerived) as e:
+        return "refused", (getattr(e, "code", type(e).__name__), f"{type(e).__name__}: {e}")
+    except Exception:  # noqa: BLE001 - the audit raises it at member k, in member order
+        return "error", traceback.format_exc()
+
+
+def stage_workers(asked: int, need_gib: float) -> int:
+    """How many staging workers start: ``asked``, at most the CPUs less one, and at most what the memory available now
+    holds at ``need_gib`` each, a sixth of the machine's left free."""
+    mem = {line.split(":")[0]: int(line.split()[1]) for line in Path("/proc/meminfo").read_text().splitlines()[:3]}
+    free = mem["MemAvailable"] / 2**20 - mem["MemTotal"] / 2**20 / 6
+    return max(1, min(asked, (os.cpu_count() or 1) - 1, int(free // need_gib)))
+
+
+class Prestaged:
+    """The staging of a window's members over a pool of spawned workers (`stage_task`), ahead of `audit`'s loop, which
+    still stages them in member order and reads each one's result at that member (`door_class`'s ``pre``): the two
+    full stagings of each class and every later member's door check. The plan is `door_class`'s: a member's class by its
+    block (`one_circuit.block`), its template and the template's cuts; a member whose block the door refuses ends the
+    plan, the loop refusing it there itself."""
+
+    def __init__(self, workers: int, c: bytes, part: dict, decoded: OC.Decoded, cut: dict, members: Sequence[Any],
+                 out: Path, lower: Path, tmpl_unit_bin: str | None) -> None:
+        self.plan: dict[int, str] = {}
+        self.ended: tuple[int, str] | None = None
+        tasks, seen = [], {}
+        for k, m in enumerate(members):
+            try:
+                units = OC.block(c, part, k, decoded)
+            except (OC.Refused, OC.NotDerived) as e:
+                self.ended = (k, f"{type(e).__name__}: {e}")
+                break
+            key = (m.template, sum(hi - lo for lo, hi in units), tuple(sorted(cut.get(m.template, {}).items())))
+            seen[key] = seen.get(key, 0) + 1
+            self.plan[k] = "full" if seen[key] <= 2 else "formed"
+            tasks.append((self.plan[k], k, out / f"m{k}", cut, m.template, units))
+        self.dir = Path(tempfile.mkdtemp(prefix="a5-stage-"))
+        (self.dir / "c.bin").write_bytes(c)
+        self.pool = concurrent.futures.ProcessPoolExecutor(
+            workers, mp_context=multiprocessing.get_context("spawn"), initializer=stage_init,
+            initargs=(str(self.dir / "c.bin"), part, str(lower), tmpl_unit_bin))
+        self.futures = {t[1]: self.pool.submit(stage_task, *t) for t in sorted(tasks, key=lambda t: t[0] != "full")}
+        self.full = sum(1 for t in tasks if t[0] == "full")
+
+    def got(self, k: int, kind: str) -> Callable[[], Any] | None:
+        """Member ``k``'s result as `door_class` reads it, raising `DoorRefused` or the worker's error; None where the
+        plan staged it otherwise, which `door_class` then stages itself."""
+        if self.plan.get(k) != kind:
+            return None
+
+        def read() -> Any:
+            status, what = self.futures[k].result()
+            if status == "refused":
+                raise DoorRefused(*what)
+            if status == "error":
+                raise RuntimeError(f"member {k}'s staging worker: {what}")
+            return what
+        return read
+
+    def close(self) -> None:
+        for f in self.futures.values():
+            f.cancel()
+        for p in list(getattr(self.pool, "_processes", {}).values()):
+            p.terminate()
+        self.pool.shutdown(wait=True, cancel_futures=True)
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+
 def door_class(c: bytes, part: dict, k: int, st_dir: Path, lower: Path, decoded: OC.Decoded, cut: dict, template: str,
-               classes: dict, tmpl_unit_bin: str | None) -> tuple[Path, dict, FI.FlockCircuit, dict]:
+               classes: dict, tmpl_unit_bin: str | None,
+               pre: Prestaged | None = None) -> tuple[Path, dict, FI.FlockCircuit, dict]:
     """Member ``k``'s door circuit (`door_circuit`) and templated unit (`a0.templated`), staged once a class: the template, the
     block's unit count and the template's cuts, what `one_circuit.lower` reads besides C_S's Definitions (its META binds
     the partition, C and the template's digests, none of them a member's). A class's first two members are staged in full
@@ -679,14 +795,20 @@ def door_class(c: bytes, part: dict, k: int, st_dir: Path, lower: Path, decoded:
     a later member takes the first's files once the door's check of its own block passes (`one_circuit.formed_in`).
     ``classes``: by class, its members staged in full. The verifier's Lean derives each member's circuit itself from the
     registered circuit (`Own.circuitFile = restrictOn`), so the staged circuit is the prover's working copy: a wrong one is
-    refused, never accepted."""
+    refused, never accepted. ``pre``: the window's stagings over workers (`Prestaged`), each read here at its member."""
     units = OC.block(c, part, k, decoded)
     staged = classes.setdefault((template, sum(hi - lo for lo, hi in units), tuple(sorted(cut.get(template, {}).items()))), [])
     if len(staged) == 2:
-        OC.formed_in(decoded, part, units)(template)
+        if (got := pre and pre.got(k, "formed")) is not None:
+            got()
+        else:
+            OC.formed_in(decoded, part, units)(template)
         return staged[0][1:]
-    circuit, made, circ = door_circuit(c, part, k, st_dir, lower, decoded, cut)
-    tmpl = a0.templated(argparse.Namespace(meta=circ.meta, text=circuit.read_text()), st_dir / "tmpl", tmpl_unit_bin)
+    if (got := pre and pre.got(k, "full")) is not None:
+        circuit, made, circ, tmpl = got()
+    else:
+        circuit, made, circ = door_circuit(c, part, k, st_dir, lower, decoded, cut)
+        tmpl = a0.templated(argparse.Namespace(meta=circ.meta, text=circuit.read_text()), st_dir / "tmpl", tmpl_unit_bin)
     staged.append((k, circuit, made, circ, tmpl))
     if len(staged) == 2:
         (i, _, a, _, ta), (j, _, b, _, tb) = staged
@@ -912,6 +1034,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     (`a5_coins.start`'s, which the caller holds), ended before a negative's worker is forked (`session_ended`); None
     where the caller hands none, and its thread is then one more the workers' fork refuses while it lives."""
     out.mkdir(parents=True, exist_ok=True)
+    t_audit = time.time()
     program, query, part, pd, n_all, sampling_design = mine.program, mine.query, mine.partition, mine.partition_digest, mine.population, mine.law
     table = mine.work_table
     if (why := plain_refusal(a, mine, registered)) is not None:
@@ -945,7 +1068,9 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     # file and the circuit's link only for a sampled member, after the sample (`stage`)
     files = (json.loads((served / "window.json").read_text()), rec)
     roots = {r["port"]: r for r in rec["roots"]}
+    progress("written", t_audit, members=len(mine.members), population=n_all)
     form = member_form(mine, rec)
+    progress("member-form", t_audit, members=len(mine.members), why=form if isinstance(form, str) else None)
     members, publics, checks, composed, programs_ok, kept, read, makes = [], {}, {}, {}, {}, {}, set(), {}
     door = getattr(a, "door_lower", None)
     c_bytes = b"".join(descriptor_chunks(program)) if door else b""
@@ -965,100 +1090,121 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         return summary, False
 
     t_stage = time.time()
-    for k, m in enumerate(mine.members):
-        own = callable(sets.get(m.template, (None,))[0])  # the caller's composer, chunked or not
-        chunked = bool(m.schemas) and not own
-        if m.template not in sets and not chunked:
-            summary["refused"] = {"no-template-set": m.template}
-            (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True))
-            print("A5 " + json.dumps(summary["refused"]))
-            return summary, False
-        defn = vllm_template(m.template) if chunked else sets[m.template][1]
-        st_dir = out / f"m{k}"
-        st_dir.mkdir(parents=True, exist_ok=True)
-        t = time.time()
-        tmpl: dict = {}
-        if door:
+    pre: Prestaged | None = None
+    try:
+        for k, m in enumerate(mine.members):
+            own = callable(sets.get(m.template, (None,))[0])  # the caller's composer, chunked or not
+            chunked = bool(m.schemas) and not own
+            if m.template not in sets and not chunked:
+                summary["refused"] = {"no-template-set": m.template}
+                (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True))
+                print("A5 " + json.dumps(summary["refused"]))
+                return summary, False
+            defn = vllm_template(m.template) if chunked else sets[m.template][1]
+            st_dir = out / f"m{k}"
+            st_dir.mkdir(parents=True, exist_ok=True)
+            t = time.time()
+            tmpl: dict = {}
+            if door:
+                try:
+                    if cut is None:
+                        cut = OC.cuts(c_bytes, part, decoded)
+                        progress("cuts", t_audit, templates=len(cut))
+                        if getattr(a, "stage_workers", 1) > 1 and \
+                                (w := stage_workers(a.stage_workers, getattr(a, "stage_worker_gb", STAGE_WORKER_GIB))) > 1:
+                            pre = Prestaged(w, c_bytes, part, decoded, cut, mine.members, out, door,
+                                            getattr(a, "tmpl_unit_bin", None))
+                            progress("workers", t_audit, workers=w, full=pre.full, tasks=len(pre.futures))
+                    # the door lowers a block to a templated circuit, whose unit rows both sides read
+                    circuit, made, circ, tmpl = door_class(c_bytes, part, k, st_dir, door, decoded, cut, m.template, classes,
+                                                           getattr(a, "tmpl_unit_bin", None), pre)
+                except (OC.Refused, OC.NotDerived) as e:
+                    return door_refused(k, m, getattr(e, "code", type(e).__name__), f"{type(e).__name__}: {e}")
+                except DoorRefused as e:
+                    return door_refused(k, m, e.code, e.why)
+                if circuit.parent == st_dir:
+                    progress("class", t_audit, member=k, template=m.template, units=m.n, seconds=round(time.time() - t, 1),
+                             classes=len(classes))
+            elif m.template in composed:      # a template's members: one circuit, composed from the same input set, partition and program
+                circuit, made, circ = composed[m.template]
+            elif own:
+                circuit = st_dir / "circuit.txt"
+                made, kept[m.template] = own_composed(a, sets[m.template][0], defn, m.template, circuit, pd, part["program"])
+                if made.get("text") is False:   # a record alone: its circuit is composed in full only if a member of it is sampled
+                    makes[m.template] = functools.partial(own_composed, argparse.Namespace(), sets[m.template][0], defn, m.template,
+                                                          circuit, pd, part["program"])
+                circ = circuit_of(circuit, made, read)
+                composed[m.template] = (circuit, made, circ)
+            else:
+                src = ["--template", m.template, *(["--cache", a.compose_cache] if a.compose_cache else [])] if chunked else \
+                    ["--input-set", str(sets[m.template][0])]
+                compose = Path(__file__).resolve().parents[0] / "compose_circuit.py"
+                p = a0.run([sys.executable, str(compose), *src, "--out", str(st_dir / "circuit.txt"),
+                            "--partition", pd, "--program", part["program"]], st_dir / "compose.log", {"PYTHONPATH": a.m0_pythonpath},
+                           timeout=a.session_timeout)
+                if p.returncode != 0:
+                    raise RuntimeError(f"composing member {k}'s circuit failed: {p.stderr[-2000:]}")
+                circuit, made = st_dir / "circuit.txt", json.loads(p.stdout.strip().splitlines()[-1])
+                circ = circuit_of(circuit, made, read)
+                composed[m.template] = (circuit, made, circ)
+            compose_s = round(time.time() - t, 1)
             try:
-                cut = OC.cuts(c_bytes, part, decoded) if cut is None else cut
-                # the door lowers a block to a templated circuit, whose unit rows both sides read
-                circuit, made, circ, tmpl = door_class(c_bytes, part, k, st_dir, door, decoded, cut, m.template, classes,
-                                                       getattr(a, "tmpl_unit_bin", None))
-            except (OC.Refused, OC.NotDerived) as e:
-                return door_refused(k, m, getattr(e, "code", type(e).__name__), f"{type(e).__name__}: {e}")
-        elif m.template in composed:      # a template's members: one circuit, composed from the same input set, partition and program
-            circuit, made, circ = composed[m.template]
-        elif own:
-            circuit = st_dir / "circuit.txt"
-            made, kept[m.template] = own_composed(a, sets[m.template][0], defn, m.template, circuit, pd, part["program"])
-            if made.get("text") is False:   # a record alone: its circuit is composed in full only if a member of it is sampled
-                makes[m.template] = functools.partial(own_composed, argparse.Namespace(), sets[m.template][0], defn, m.template,
-                                                      circuit, pd, part["program"])
-            circ = circuit_of(circuit, made, read)
-            composed[m.template] = (circuit, made, circ)
-        else:
-            src = ["--template", m.template, *(["--cache", a.compose_cache] if a.compose_cache else [])] if chunked else \
-                ["--input-set", str(sets[m.template][0])]
-            compose = Path(__file__).resolve().parents[0] / "compose_circuit.py"
-            p = a0.run([sys.executable, str(compose), *src, "--out", str(st_dir / "circuit.txt"),
-                        "--partition", pd, "--program", part["program"]], st_dir / "compose.log", {"PYTHONPATH": a.m0_pythonpath},
-                       timeout=a.session_timeout)
-            if p.returncode != 0:
-                raise RuntimeError(f"composing member {k}'s circuit failed: {p.stderr[-2000:]}")
-            circuit, made = st_dir / "circuit.txt", json.loads(p.stdout.strip().splitlines()[-1])
-            circ = circuit_of(circuit, made, read)
-            composed[m.template] = (circuit, made, circ)
-        compose_s = round(time.time() - t, 1)
-        try:
-            got = FI.flock_input_files(served, k, circ, st_dir / "prover", write=("pub",), files=files)
-        except ValueError as e:
-            if not door:
-                raise
-            return door_refused(k, m, "UNLAID", f"UNLAID: its rows are laid otherwise than the period committed them: {e}")
-        link(Path(got["pub"]), st_dir / f"pub-{m.n}.bin")
-        meta = circ.meta
-        header = a0.public_header(st_dir, m.n)
-        if (m.template, circ.pin) not in programs_ok and door:   # the door binds the Definition's digest in C (`one_circuit.lower`)
-            desc = decoded.get().desc
-            programs_ok[m.template, circ.pin] = meta.get("program_digests") == {
-                m.template: definition_digest(desc["definitions"][m.template], desc)}
-        elif (m.template, circ.pin) not in programs_ok:   # a function of the circuit's META and the template: once per circuit
-            programs_ok[m.template, circ.pin] = a0.template_program_ok(meta, defn)
-        # the header against the member's slice of the docket: the per-member form's rule, in its one Python
-        # at the reads the verifier opens a shared output tree at (`rows.own_reads`'s `rows.out_value`)
-        opened = {(p, mine.tree(m, p)) for p, _ in m.outs if mine.tree(m, p) != m.port(p)}
-        # and at the run input nodes' trees its registered file reads (`interface.registered_file`'s run inputs), as
-        # Lean's members check reads them off that file (`Member.reads`)
-        opened |= {(p, e["value"]) for p, e in ((registered or {}).get(m.key) or {}).get("ports", {}).items()
-                   if REG.is_fresh_value(e.get("value"))}
-        why = form if isinstance(form, str) else MB.population_why([[m.base, m.base + m.n]], form[0], header, form[1][m.key],
-                                                                    opened, subset=MB.subset_designs(mine.law, rec))
-        ok = {"pin": header.get("circuit_sha512") == made["pin"],
-              "partition": meta.get("partition") == {"rule": P.FORMAT, "digest": pd},
-              "program": meta.get("program_sha512") == part["program"],
-              "header": why is None,
-              "classes": header["units"].get("classes") == [made.get("class_sha512")] * m.n,
-              "template_program": programs_ok[m.template, circ.pin],
-              "shared_rows": header.get("shared_rows") == ({**dict(m.tables), **{p: m.n for p, _ in m.out_rows}}
-                                                           if m.tables else None)}
-        checks[f"m{k}"] = {"ok": all(ok.values()), "codes": [c for c, v in ok.items() if not v],
-                           "detail": {} if why is None else {"header": why}}
-        publics[m.key] = body(st_dir / f"pub-{m.n}.bin")
-        members.append({"k": k, "m": m, "defn": defn, "header": header, "circuit": circuit, "circ": circ, "read": read,
-                        "make": makes.get(m.template),
-                        "st": {"dir": st_dir, "meta": meta, "pin": made["pin"], "partition_file": out / "partition.json",
-                               "program_file": out / "program.json",
-                               "public": a0.sha512_file(st_dir / f"pub-{m.n}.bin"), **tmpl},
-                        "compose_s": compose_s, "pin": made["pin"], "class": made.get("class_sha512")})
+                got = FI.flock_input_files(served, k, circ, st_dir / "prover", write=("pub",), files=files)
+            except ValueError as e:
+                if not door:
+                    raise
+                return door_refused(k, m, "UNLAID", f"UNLAID: its rows are laid otherwise than the period committed them: {e}")
+            link(Path(got["pub"]), st_dir / f"pub-{m.n}.bin")
+            meta = circ.meta
+            header = a0.public_header(st_dir, m.n)
+            if (m.template, circ.pin) not in programs_ok and door:   # the door binds the Definition's digest in C (`one_circuit.lower`)
+                desc = decoded.get().desc
+                programs_ok[m.template, circ.pin] = meta.get("program_digests") == {
+                    m.template: definition_digest(desc["definitions"][m.template], desc)}
+            elif (m.template, circ.pin) not in programs_ok:   # a function of the circuit's META and the template: once per circuit
+                programs_ok[m.template, circ.pin] = a0.template_program_ok(meta, defn)
+            # the header against the member's slice of the docket: the per-member form's rule, in its one Python
+            # at the reads the verifier opens a shared output tree at (`rows.own_reads`'s `rows.out_value`)
+            opened = {(p, mine.tree(m, p)) for p, _ in m.outs if mine.tree(m, p) != m.port(p)}
+            # and at the run input nodes' trees its registered file reads (`interface.registered_file`'s run inputs), as
+            # Lean's members check reads them off that file (`Member.reads`)
+            opened |= {(p, e["value"]) for p, e in ((registered or {}).get(m.key) or {}).get("ports", {}).items()
+                       if REG.is_fresh_value(e.get("value"))}
+            why = form if isinstance(form, str) else MB.population_why([[m.base, m.base + m.n]], form[0], header, form[1][m.key],
+                                                                        opened, subset=MB.subset_designs(mine.law, rec))
+            ok = {"pin": header.get("circuit_sha512") == made["pin"],
+                  "partition": meta.get("partition") == {"rule": P.FORMAT, "digest": pd},
+                  "program": meta.get("program_sha512") == part["program"],
+                  "header": why is None,
+                  "classes": header["units"].get("classes") == [made.get("class_sha512")] * m.n,
+                  "template_program": programs_ok[m.template, circ.pin],
+                  "shared_rows": header.get("shared_rows") == ({**dict(m.tables), **{p: m.n for p, _ in m.out_rows}}
+                                                               if m.tables else None)}
+            checks[f"m{k}"] = {"ok": all(ok.values()), "codes": [c for c, v in ok.items() if not v],
+                               "detail": {} if why is None else {"header": why}}
+            publics[m.key] = body(st_dir / f"pub-{m.n}.bin")
+            members.append({"k": k, "m": m, "defn": defn, "header": header, "circuit": circuit, "circ": circ, "read": read,
+                            "make": makes.get(m.template),
+                            "st": {"dir": st_dir, "meta": meta, "pin": made["pin"], "partition_file": out / "partition.json",
+                                   "program_file": out / "program.json",
+                                   "public": a0.sha512_file(st_dir / f"pub-{m.n}.bin"), **tmpl},
+                            "compose_s": compose_s, "pin": made["pin"], "class": made.get("class_sha512")})
+            if (k + 1) % PROGRESS_EVERY == 0:
+                progress("staging", t_audit, staged=k + 1, members=len(mine.members))
+    finally:
+        if pre is not None:
+            pre.close()
     # staging composes the circuits and writes the members' files on the host: it starts nothing on a card
     summary["staging"] = {"before_draw_s": round(time.time() - t_stage, 1), "public_files": len(members), "gpus": 0,
                           **({"door_classes": len(classes)} if door else {})}
+    progress("staged", t_audit, staged=len(members), classes=len(classes) if door else None)
     summary["link_points"] = link_points(sampled_design, n_all, members)
     leaf_layer = CS.leaf_layer(publics)
     hist = history(publics) if history is not None else None
     checks["registration"] = V.check(rec, program, query, sampling_design, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table,
                                      partition=part, history=hist, members=link_members(members) if per_member(members, not plain(a)) else (),
                                      **verifying(a), **declared(a)).to_json()
+    progress("registration", t_audit, ok=checks["registration"].get("ok"))
     if mine.row_tables:
         bad = TB.check_row_tables(mine, publics, {r["port"]: r["root"] for r in rec["roots"]}, step_roots)
         checks["row_tables"] = {"ok": not bad, "codes": sorted(bad), "detail": bad}
@@ -1133,6 +1279,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         union_sample, sampled_design, receipt = dict(draw.draw), dict(draw.law), dict(draw.docket.receipt)
         (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
     (out / SAMPLE_FILE).write_text(json.dumps(union_sample, sort_keys=True))
+    progress("draw", t_audit, units=len(union_sample.get("units") or ()))
     after: dict[str, dict] = {}
     served_units, proved, instances, verdicts, statement, sessions, counts, session_roots = [], [], 0, {}, {}, [], {}, {}
     proving: dict[str, dict] = {}   # by member key, what the summary's timing adds to its statement (`proving_of`)
@@ -2361,6 +2508,12 @@ def lean_options(p: argparse.ArgumentParser) -> None:
     p.add_argument("--lean-workers", type=positive, default=LEAN_WORKERS,
                    help=f"Lean checks of finished members at once, beside the next member's session (sessions stay one at a "
                         f"time); default {LEAN_WORKERS}, one check at a time")
+    p.add_argument("--stage-workers", type=positive, default=1,
+                   help="door stagings at once before the draw (`Prestaged`), each in a spawned worker, at most the CPUs "
+                        "less one and what available memory holds (--stage-worker-gb each); default 1, in the audit's own "
+                        "process")
+    p.add_argument("--stage-worker-gb", type=float, default=STAGE_WORKER_GIB,
+                   help=f"GiB a staging worker is taken to need; default {STAGE_WORKER_GIB}")
     p.add_argument("--audit-mem-gb", type=float,
                    help=f"the audit's memory, which admits a start and limits nothing that runs: a Lean check starts "
                         f"only while its estimate fits within it beside the running session's, estimated at "
