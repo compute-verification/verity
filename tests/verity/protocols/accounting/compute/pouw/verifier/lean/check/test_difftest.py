@@ -359,8 +359,9 @@ WEIGHTS = _port("weights", weights, credit_cases.weights_instance, credit_cases.
 #: the ports whose cases carry the registry's pinned windows, which each test draws its inputs over (`_pinned`)
 WINDOW_DRAWN = _port("window-drawn", window_drawn)
 REGISTERED_FILE = _port("registered-file", registered_file)
-#: their sampled cases: each reads a 60 MB descriptor on both sides
-WINDOW_DRAWN_EXAMPLES, REGISTERED_FILE_EXAMPLES = 30, 50
+#: their sampled cases, besides each mutation's three seeds: each reads a 60 MB descriptor on both sides, about half a
+#: minute a case
+WINDOW_DRAWN_EXAMPLES, REGISTERED_FILE_EXAMPLES = 5, 8
 
 
 def test_credit(pass_server):
