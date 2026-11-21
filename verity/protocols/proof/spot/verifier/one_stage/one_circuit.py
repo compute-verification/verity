@@ -4,6 +4,7 @@ it does not yet derive, each refusing by name (`NotDerived`)."""
 
 from __future__ import annotations
 
+import bisect
 import json
 import tempfile
 from collections.abc import Callable, Mapping, Sequence
@@ -212,12 +213,15 @@ def admitted_block(D: DecodedProgram, partition: Mapping[str, Any], units: Seque
         if lo < hi:
             raise _not_admitted("disjoint-ranges", f"units {u} and {v} of the block hold gates in common")
     nodes = D.root.body.nodes
+    los = [lo for _, lo, _ in by_lo]
     for u, _, _ in us:
         k, _m = tp.locate(u)
         if (c := descriptor_id(nodes[k].fn)) != key:
             raise _not_admitted("one-callee", f"unit {u} calls {c}, not the block's template {key}")
         for g in tp.inputs(u):
-            held = next((v for v, lo, hi in us if lo <= g < hi), None)
+            # the units' gate ranges are disjoint (checked above), so at most one holds g
+            i = bisect.bisect_right(los, g) - 1
+            held = by_lo[i][0] if i >= 0 and g < by_lo[i][2] else None
             if held is not None:
                 raise _not_admitted("operands-outside", f"unit {u} reads gate {g}, which unit {held} of the block "
                                                         "computes: a unit reads only gates outside its block")
