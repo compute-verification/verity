@@ -1672,9 +1672,6 @@
   "Properties.Poub.Shared.openingsUnreadUntilSampled": {
    "honest": ["Properties.Poub.Line.SecurityProofs.lineHeld_honest"]
   },
-  "Properties.Spot.PortsHeldProof.membersPortsHeld": {
-   "nontrivial": "Properties.Spot.PortsHeldProof.membersPortsHeld_nontrivial"
-  },
   "Properties.Poub.acceptChecksOpenings": {
    "honest": ["Properties.Poub.acceptChecksOpenings_honest"],
    "nontrivial": "Properties.Poub.acceptChecksOpenings_nontrivial"
@@ -2326,8 +2323,7 @@
   },
   "Properties.Spot.PortsHeldProof.membersPortsHeld": {
    "type_hash": "ec99409435abd5be30cba68bdd5e5a80b91e6a8f1f2735d5233454f7eab4382e",
-   "missing": "honest",
-   "why": "no honest instance in Lean: the kernel does not reduce SHA-512, and an accept computes the record's digest, the coins, the program's hash and each member's sessions. The honest accept is the compiled verifier's, on the benchmark's honest arm at the entry's head.",
+   "why": "no honest instance in Lean: the kernel does not reduce SHA-512, and an accept computes the record's digest, the coins, the program's hash and each member's sessions. The honest accept is the compiled verifier's, on the benchmark's honest arm at the entry's head. Its nontrivial witness's statement reads a proofs-tree definition (Properties.Spot.PortsHeldProof.bareParams), so it is not listed; it returns when that definition is stated in the properties tree.",
    "unfolded_hash": "c235304ef74eaacce0a52361f947ae912522bb584df518d7cfcddb47c7fe54b2"
   },
   "Properties.Spot.SecurityProofs.designWellFormed": {
@@ -3029,6 +3025,21 @@
    },
    "type_hash": "7b4111cc25192d1589a6fa7b4d4048850da3772390db68c0de2fc1346aa7d3a9",
    "unfolded_hash": "e7175f079887ec9994ca6e66aec9f63e7cfbe6f76da0ed94323d643397389d66"
+  },
+  "Flock.Chain.doorLengths": {
+   "owner": "@lean"
+  },
+  "Flock.Chain.lowerEval": {
+   "owner": "@lean"
+  },
+  "Flock.Chain.lowerEvalDoor": {
+   "owner": "@lean"
+  },
+  "Flock.Chain.portsBind": {
+   "owner": "@lean"
+  },
+  "Flock.Chain.restrictBodyAgrees": {
+   "owner": "@lean"
   },
   "InferenceOnlyVerifier.Properties.SecurityProofs.AcceptsExactly": {
    "owner": "@network-accounting",
@@ -11217,9 +11228,6 @@
   "Properties.Spot.PortsHeldProof.membersPortsHeld": {
    "owner": "@proofs"
   },
-  "Properties.Spot.PortsHeldProof.membersPortsHeld_nontrivial": {
-   "owner": "@proofs"
-  },
   "Properties.Spot.SecurityProofs.boundLnBoundSound": {
    "owner": "@proofs",
    "signature": ["Properties.Spot.SecurityProofs.boundLnBoundSound : Properties.Spot.BoundLnBoundSound"],
@@ -15195,13 +15203,31 @@
    "Properties.Poub.CoinAfterAppend": "unstated: one of refresh's code-side statements (Properties.Poub.Remote.Refresh), proved by Properties.Poub.coinAfterAppend; it gets a guarantee entry, with its shape and record, after tonight's landing",
    "Properties.Poub.CoinBySlot": "unstated: one of refresh's code-side statements (Properties.Poub.Remote.Refresh), proved by Properties.Poub.coinBySlot; it gets a guarantee entry, with its shape and record, after tonight's landing",
    "Flock.Chain.V5Rows": "unstated: the adapter from a unit correct in the templated statement's key circuit to its rows; no theorem states it yet.",
-   "Flock.Chain.LowerEval": "unstated: the lowered net's rows, where they hold, evaluate as the Definition bit for bit; no theorem states it yet.",
-   "Flock.Chain.PortsBind": "unstated: a block's openings and the statement's at one commitment give C's port values as the statement's port columns, or a SHA-512 collision; no theorem states it yet.",
    "Flock.Chain.DescEqPartOf": "unstated: the inference-only check's three counts are partOf's; no theorem states it yet.",
    "Flock.OfProgram.InlineEval": "unstated: the inlining's bit gates compute C's gates' bits on every description; no theorem states it yet.",
    "Flock.OfProgram.InlineAnds": "unstated: the inlining's ANDs are at most the bodies' ANDs, in all and per block, on a description decode accepts; no theorem states it yet.",
    "Flock.Program.DecodeBoolean": "unstated: proved in the proofs tree, not listed.",
-   "Flock.Program.DecodeBodyAgrees": "unstated: proved in the proofs tree, not listed."
+   "Flock.Program.DecodeBodyAgrees": "unstated: proved in the proofs tree, not listed.",
+   "Flock.Chain.AcceptGivesDoorFile": "unstated: an accept of the per-member check reads every member's statement at its slice, against the admitted file lowerBlock writes for its block's restricted Program; a stated link of the chain, not proved in general; no theorem states it yet.",
+   "Flock.Chain.BlockCorrectDoor": "unstated: rows of the block's units' unrolled nets agreeing with a trace of C at their arguments and committed return leaves make the block correct in C; a stated link of the chain, not proved in general; no theorem states it yet.",
+   "Flock.Chain.BlockEvalDoor": "unstated: each admitted unit of a block, lifted to bits and lowered, evaluates on the block's local evaluation at its arguments to its returns; a stated link of the chain, not proved in general: proved for a block whose template is in ScanNested (Flock.Chain.blockEvalDoor_nested), and from UnitComputes (Flock.Chain.blockEvalDoor_of).",
+   "Flock.Chain.DoorJoin": "unstated: an accepted session's copies, the statement's openings and the block's own at one commitment give BlockCorrectDoor's hypothesis, or a collision; a stated link of the chain, not proved in general; no theorem states it yet.",
+   "Flock.Chain.FifthOpens": "unstated: on an accept, every committed gate of a member's block is a leaf of a tree the verifier holds, and the opening checked there is the one Partition.Rblk reads; a stated link of the chain, not proved in general; no theorem states it yet.",
+   "Flock.Chain.HeldReadsAtRegisteredTree": "unstated: on an accept, each read of a held parameter's or tied value's gate is a port of the member's file at the run Input node's tree or a registered value; a stated link of the chain, not proved in general; no theorem states it yet.",
+   "Flock.Chain.PortTreeHeldRecord": "unstated: a held registered port that opens a committed tree carries the record's root, domain and leaf count at that tree's port; a stated link of the chain, not proved in general; no theorem states it yet.",
+   "Flock.Chain.RblkOfTrees": "unstated: a block's openings at the verifier's tree leaves are Partition.Rblk at Core's commitment of treeSc over treeMap; a stated link of the chain, not proved in general; no theorem states it yet.",
+   "Flock.Chain.ReadAloneOneReader": "unstated: where the read-alone check accepts, a committed run Input gate outside the held and tied gates is read by one block; a stated link of the chain, not proved in general; no theorem states it yet.",
+   "Flock.Chain.TreeMapInjective": "unstated: on an accept, two gates of C at one tree leaf are one gate; a stated link of the chain, not proved in general; no theorem states it yet.",
+   "Flock.Chain.TreeMapOne": "unstated: on an accept, a committed gate has one tree leaf, whichever block and copy reads it; a stated link of the chain, not proved in general; no theorem states it yet.",
+   "Flock.Chain.TreeMapOneOfReadAlone": "unstated: ReadAloneOneReader and HeldReadsAtRegisteredTree give TreeMapOne; a stated link of the chain, not proved in general; no theorem states it yet.",
+   "Flock.Chain.TreeMapTotal": "unstated: on an accept, every committed gate a member's block reads or writes has a position and a leaf of a tree the verifier holds before any coin; a stated link of the chain, not proved in general; no theorem states it yet.",
+   "Flock.Chain.TreeScBinds": "unstated: treeSc binds under the collision premise its trees bind under; a stated link of the chain, not proved in general; no theorem states it yet.",
+   "Flock.Chain.UnitIndicesAgree": "unstated: the public file's unit indices, which the session reads, are the header's; a stated link of the chain, not proved in general; no theorem states it yet.",
+   "Flock.Chain.lowerEval": "frozen (no-function): a link of the chain from an accept to block correctness in C, stated over the circuit, its lowering and the commitments, not a property of one function's acceptance.",
+   "Flock.Chain.portsBind": "frozen (no-function): a link of the chain from an accept to block correctness in C, stated over the circuit, its lowering and the commitments, not a property of one function's acceptance.",
+   "Flock.Chain.lowerEvalDoor": "frozen (no-function): a link of the chain from an accept to block correctness in C, stated over the circuit, its lowering and the commitments, not a property of one function's acceptance.",
+   "Flock.Chain.doorLengths": "frozen (no-function): a link of the chain from an accept to block correctness in C, stated over the circuit, its lowering and the commitments, not a property of one function's acceptance.",
+   "Flock.Chain.restrictBodyAgrees": "frozen (no-function): a link of the chain from an accept to block correctness in C, stated over the circuit, its lowering and the commitments, not a property of one function's acceptance."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
