@@ -9,5 +9,5 @@ PC_GENCODE=$(python3 benchmarks/kernels/machine.py gencode "$(python3 benchmarks
 CUDA_HOME=$CUDA_HOME GENCODE=$PC_GENCODE bash verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm120/build.sh "$PC_OUT" \
   || { echo "setup: verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm120/build.sh failed" >&2; exit 4; }
 # shellcheck disable=SC2046  # sources.txt's paths hold no space
-sha256sum $(cat "$PC_OUT/sources.txt") verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm120/run.py "$PC_OUT/pearl_c_sm120.cubin" > "$PC_OUT/sha256.txt"
+sha256sum $(cat "$PC_OUT/sources.txt") verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm120/run.py verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c/driver.py "$PC_OUT/pearl_c_sm120.cubin" > "$PC_OUT/sha256.txt"
 export PEARLC_CUBIN=$PC_OUT/pearl_c_sm120.cubin

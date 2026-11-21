@@ -1,6 +1,7 @@
 """Served variants and protocol arms: their checkpoints, settings and execution, and the Pearl-C arms' gates."""
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
 import subprocess
@@ -133,7 +134,8 @@ def test_pearlpluss_h200_spec_serves_the_1bs_bf16_checkpoint_through_sm90s_kerne
 def test_the_h200_pearl_c_setup_serves_without_batch_invariance_and_with_sm90s_bf16_rows_off(tmp_path):
     """The H200 spec's point, launched as `run_point.sh` launches it (its setup sourced, then the point's Python), with
     only the off-card build stood in: the serve gets no VLLM_BATCH_INVARIANT even when the job has one, and
-    PEARLC_BF16_ROWS=0 unless the job sets it."""
+    PEARLC_BF16_ROWS=0 unless the job sets it. Its sha256.txt names the runner's Python by its bytes: run.py, grouped.py and
+    the shared pearl_c/driver.py."""
 
     root = Path(__file__).resolve().parents[3]
     stand_in = tmp_path / "stand-in"
@@ -162,6 +164,10 @@ def test_the_h200_pearl_c_setup_serves_without_batch_invariance_and_with_sm90s_b
 
     assert served() == "unset 0 out/setup/pearl_c_sm90/pearl_c_sm90.cubin"
     assert served(PEARLC_BF16_ROWS="1") == "unset 1 out/setup/pearl_c_sm90/pearl_c_sm90.cubin"
+    kernels = "verity/protocols/accounting/compute/pouw/prover/kernels"
+    hashed = set((tmp_path / "run" / "out" / "setup" / "pearl_c_sm90" / "sha256.txt").read_text().splitlines())
+    assert {f"{hashlib.sha256((root / f).read_bytes()).hexdigest()}  {f}"
+            for f in (f"{kernels}/pearl_c_sm90/run.py", f"{kernels}/pearl_c_sm90/grouped.py", f"{kernels}/pearl_c/driver.py")} <= hashed
 
 
 def test_served_passes_arm_writes_that_arm_as_serve_openais_protocols_config(monkeypatch, tmp_path):
