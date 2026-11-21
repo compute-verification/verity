@@ -484,7 +484,7 @@ def sizes(c_s: bytes, cut: dict) -> tuple[int | None, int | str]:
     from verity.circuits.codec import descriptor_id
     from verity.circuits.count import count
     from verity.circuits.program import input_id
-    from verity.protocols.proof.spot.verifier.one_stage.certified_rows import _fields
+    from verity.protocols.proof.spot.verifier.one_stage.one_circuit import _fields
     D = R.program(c_s)
     called = sorted({descriptor_id(nd.fn) for nd in D.root.body.nodes if input_id(nd.fn.id) is None})
     try:
@@ -1179,7 +1179,7 @@ def _padded(bits: list[int]) -> list[int]:
 def ports(fn: Any, cut: dict[str, int]) -> tuple[list[tuple[str, list[int]]], list[tuple[str, list[int]]]]:
     """The template's input rows and output rows as leaf-index lists over its parameters' and return's leaves, in
     the door's order (`one_circuit.lower`): each parameter, or its ``k`` slices; each return field."""
-    from verity.protocols.proof.spot.verifier.one_stage.certified_rows import _fields
+    from verity.protocols.proof.spot.verifier.one_stage.one_circuit import _fields
     params, ret = fn.signature()
     ins, at = [], 0
     for name, t in params:

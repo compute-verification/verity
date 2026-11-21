@@ -16,8 +16,8 @@ from verity.circuits import partition_object as PO
 from verity.circuits import restrict as R
 from verity.circuits.codec import DecodedProgram, definition_digest, descriptor_id, lift_shape
 from verity.circuits.program import input_id, recut_gates
+from verity.circuits.types import RecordType, Tuple
 
-from .certified_rows import _fields
 from . import lean_child as LC
 
 PREFIX = "one-circuit: not derived yet: "
@@ -150,6 +150,13 @@ def admitted(D: DecodedProgram, partition: Mapping[str, Any],
         raise _not_admitted("listed", f"C_S's template {key} is not one the partition's query lists")
     rows, fields = template_form(D, key, (cut or {}).get(key, {}))
     return key, rows, fields
+
+
+def _fields(t: Any) -> list[Any]:
+    """`SecondStage.fields`: one per output port, a tuple's or a record's fields, else `t`."""
+    if isinstance(t, RecordType):
+        return [f for _n, f in t.fields]
+    return list(t.fields) if isinstance(t, Tuple) else [t]
 
 
 def template_form(D: DecodedProgram, key: str, ks: Mapping[str, int]) -> tuple[list[tuple[str, int]], list[tuple[str, int]]]:
