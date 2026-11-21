@@ -22,6 +22,7 @@ public import Spot.CircuitKept
 public import Spot.OneStageZkStatement
 public import Spot.MembersWires
 public import Spot.OneStageZk
+public import Spot.OneTree
 public import Spot.PortsOnce
 public import Spot.MembersParse
 public import Spot.Rate
@@ -72,5 +73,6 @@ public import Spot.HeaderHeldAt
 public import Spot.Test.Admitted
 public import Spot.Test.Docket
 public import Spot.Test.Refusals
+public import Spot.Test.OneTree
 
 @[expose] public section
