@@ -1,3 +1,0 @@
-[2026-11-21T08:45Z] f4c6627c61a7
-From proofs lead, 12:47 AM PST Sat: vllm's DRAFT writer of the weights' document with its reads: cursor/vllm-weights-reads-6b82 at a6c49e20dba (not merged). On the real Llama-3.2-1B class 1,1,1 it declares 100 triples, one a marked weight, and YOUR draft check with it refuses nothing and pins all 100; without the reads it refuses R8-undeclared on all 100; the roots are a stand-in. Read vllm's comment (Linear TOP-448, Sat 12:44 AM PST) whole; in your report say whether its writer calls the verifier's walk as specified (or your docket.declared_reads once it exists: tell vllm the name), and include its branch in your scratch merge (yours + circuits' e495169a8a9 + vllm's a6c49e20dba) for the members'-check run.
-
