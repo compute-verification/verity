@@ -453,3 +453,41 @@ def test_an_unread_commitment_or_coin_has_no_place_to_hold():
     """Only the functions a mark names count: the held ones the program doesn't read need no place."""
     order_of((CONTEXT_0,), held(place=None), {})
     order_of((CONTEXT_0,), held(place=None), {ROUND: 0})
+
+
+def _anchor(of, table):
+    return {"supplied": f"registered.{of}/v1", "args": {"value": table}, "layout": "digest", "bits": 512}
+
+
+def _table_reads(supplied):
+    from verity.circuits.defs import CompositeDefinition, bind
+    from verity.circuits.program import Program
+    from verity.circuits.types import Array, Value
+
+    d, w = Array(512, Value(1)), Array(1, Value(16))
+    sig = (("v", w), ("u", w), ("t1/domain", d), ("t1/root", d), ("t2/root", d), ("k", w))
+    fn = bind(CompositeDefinition("TRegisteredValues", 1, (), lambda S: (sig, w), lambda B, S, v, u, *rest: v,
+                                  register=False))
+    return Program(fn, registered=("v", "u"), supplied=supplied)
+
+
+@pytest.mark.parametrize("supplied, want", [
+    ({}, ("v", "u")),
+    ({"t1/domain": _anchor("domain", "t1"), "t1/root": _anchor("root", "t1")}, ("v", "u", "t1")),
+    ({"t1/root": _anchor("root", "t1"), "t2/root": _anchor("root", "t2")}, ("v", "u", "t1", "t2")),
+    ({"t1/root": _anchor("root", "t1"), "k": {"supplied": "const.u16/v1", "args": {"value": 1}, "layout": "le", "bits": 16}},
+     ("v", "u", "t1")),
+])
+def test_a_records_values_are_the_writers_then_each_table_an_anchors_mark_names_once(supplied, want):
+    """`registered_values`: the writer's values in its order, then each table a `registered.root/v1` or
+    `registered.domain/v1` mark names, once, in the marks' order; another mark adds nothing; the same from the Program and
+    from its description encoded and decoded."""
+    from verity.circuits.codec import decode_program, encode_program
+    from verity.circuits.defs import DefinitionTable
+
+    prog = _table_reads(supplied)
+    assert S.registered_values(prog, ("v", "u")) == want
+    back = decode_program(json.loads(json.dumps(encode_program(prog))), DefinitionTable())
+    assert S.registered_values(back, ("v", "u")) == want
+    with pytest.raises(ValueError, match="each once"):
+        S.registered_values(prog, ("v", "v"))

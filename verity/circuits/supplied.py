@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from typing import Any
 
 __all__ = ["FUNCTIONS", "Function", "LAYOUTS", "ORIGINS", "READS", "SUPPLIED", "SUPPLIED_ID", "SuppliedError", "check_order",
-           "layout_fits", "leaves", "mark_of", "part"]
+           "layout_fits", "leaves", "mark_of", "part", "registered_values"]
 
 SUPPLIED = "supplied"
 #: the ids that denote `SuppliedInput<w>`: a node is a supplied-input node exactly when its callee's id matches
@@ -167,6 +167,19 @@ def part(name: str, mark: Mapping[str, Any], lo: int, hi: int, w: int) -> dict[s
     if not (0 <= lo < hi and hi * w <= mark["bits"]):
         raise SuppliedError("E_SUPPLIED_WIDTH", f"leaves [{lo}, {hi}) of {w} bits are not in {name!r}'s {mark['bits']} bits")
     return {**mark, "bits": (hi - lo) * w, "of": [name, lo, hi]}
+
+
+def registered_values(program: Any, values: Sequence[str]) -> tuple[str, ...]:
+    """The values a record of ``program`` registers, in order: ``values``, its parameters a record registers as the writer
+    lists them (`periods.interface.program_values`' names), then each table a mark of an anchor's names (`registered.root/v1`
+    or `registered.domain/v1`, its ``value``), in the marks' order, once: a table is among them only because a mark in C
+    names it. ``program`` a `Program` or a decoded one (`codec.DecodedProgram`), each with ``supplied``, by parameter its
+    mark or None, in parameter order. ValueError unless each of ``values`` is there once."""
+    if len(set(values)) != len(values):
+        raise ValueError(f"values {list(values)}: each once")
+    tables = [m["args"]["value"] for m in program.supplied.values()
+              if m and m["supplied"] in ("registered.root/v1", "registered.domain/v1")]
+    return (*values, *(t for t in dict.fromkeys(tables) if t not in values))
 
 
 def check_order(reads: Mapping[str, int], coin: int, coin_name: str = "the coin") -> None:
