@@ -244,7 +244,7 @@ theorem tile_of_nodeOk (c : Defn) (nd : Node) (hc : CalleeOk c) (hn : NodeOk c n
       simp [Node.members, show (Form.scan == Form.scan) = true from rfl]
     rw [hmem] at hm ⊢
     have hn0 : 0 < n := Nat.pos_of_ne_zero hm
-    obtain ⟨carry, y, -, -, hp0, ha0, hrest⟩ := hsh
+    obtain ⟨carry, y, -, -, hp0, ha0, ⟨hrest, -⟩⟩ := hsh
     by_cases hi0 : i = 0
     · subst hi0
       refine ⟨0, hn0, t, by rw [hp0, ← ha0]; exact ht, ?_⟩

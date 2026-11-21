@@ -16,7 +16,7 @@
 #        bash .../build.sh --arch   prints the target the tree's kernels are built for and builds nothing (needs no toolkit)
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
-ARCH=sm_120a   # pearl_c_sm120.cu's kernels are this target's alone (sass_gate.py holds its MMA forms)
+ARCH=sm_120a   # pearl_c_sm120.cu's kernels are this target's alone (sass_gate.json holds its MMA forms)
 [ "${1:-}" = --arch ] && { echo "$ARCH"; exit 0; }
 CUDA=${CUDA_HOME:?set CUDA_HOME to a CUDA toolkit of nvcc 12.8 or later}; OUT=${1:-/tmp/pearl-c-sm120-ship}
 GENCODE=${GENCODE:?set GENCODE to the -gencode value of the target (benchmarks/kernels/machine.py gencode ARCH)}
@@ -28,6 +28,6 @@ FLAGS=(-O3 -std=c++17 -gencode "$GENCODE" -fmad=false -Xptxas -v -cubin)
 case " ${FLAGS[*]} " in *ftz*|*fast-math*|*fast_math*) echo "an FTZ or fast-math flag: ${FLAGS[*]}" >&2; exit 1;; esac
 "$CUDA/bin/nvcc" "${FLAGS[@]}" -o "$OUT/pearl_c_sm120.cubin" "$HERE/pearl_c_sm120.cu" 2> "$OUT/ptxas.txt"
 PATH="$CUDA/bin:$PATH" "$CUDA/bin/cuobjdump" -sass "$OUT/pearl_c_sm120.cubin" > "$OUT/pearl_c_sm120.sass"
-python3 "$HERE/sass_gate.py" "$OUT/ptxas.txt" "$OUT/pearl_c_sm120.sass" "$OUT/sass.json"
+python3 "$HERE/../../build_gate.py" "$HERE/sass_gate.json" "$OUT/ptxas.txt" "$OUT/pearl_c_sm120.sass" "$OUT/sass.json"
 rm "$OUT/pearl_c_sm120.sass"
 { "$CUDA/bin/nvcc" --version; echo "nvcc ${FLAGS[*]} -o pearl_c_sm120.cubin pearl_c_sm120.cu"; } > "$OUT/toolchain.txt"

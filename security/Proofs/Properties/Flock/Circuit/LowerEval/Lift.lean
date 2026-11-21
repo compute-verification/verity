@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Properties.Flock.Circuit.LowerEval.Keeps
+public import Proofs.Properties.Flock.Circuit.LowerEval.Gates
 
 /-! `UnitWidths` and `UnitComputes` from their parts, and `LiftWordEval` for templates of word-primitive calls and axis-0
 batches. -/
@@ -927,17 +928,20 @@ def Batch0 (P : Prog) (d : ℕ) : Prop :=
       (nd.form = .batch ∧ ∀ i < nd.args.size, nd.axes[i]? = some (some 0) ∨ ∀ ax, nd.axes[i]? ≠ some (some ax))) ∧
     isWordPrim (P.defs[nd.fn]!).prim (P.defs[nd.fn]!).key = true
 
-/-- **A template of axis-0 batches over word primitives and earlier such templates**: `Batch0`, at least one node, but a
-node may also call, as a primitive, call or batch node, an earlier Definition (a smaller index) that is itself such a
-template. -/
+/-- **A template of axis-0 batches over word primitives, gates and earlier such templates**: `Batch0`, but a node may
+also call, as a primitive, call or batch node, a gate or a constant bit (`GateCallee`), or an earlier Definition (a
+smaller index) that is itself such a template; some node calls a word primitive or such a template. -/
 inductive Batch0Nested (P : Prog) : ℕ → Prop
-  | mk {d : ℕ} : (P.defs[d]!).prim = false → 0 < (P.defs[d]!).body.nodes.size →
+  | mk {d : ℕ} : (P.defs[d]!).prim = false →
       (∀ nd ∈ (P.defs[d]!).body.nodes,
         nd.form = .prim ∨ nd.form = .call ∨
           (nd.form = .batch ∧ ∀ i < nd.args.size, nd.axes[i]? = some (some 0) ∨ ∀ ax, nd.axes[i]? ≠ some (some ax))) →
-      (∀ nd ∈ (P.defs[d]!).body.nodes, isWordPrim (P.defs[nd.fn]!).prim (P.defs[nd.fn]!).key = false → nd.fn < d) →
-      (∀ nd ∈ (P.defs[d]!).body.nodes, isWordPrim (P.defs[nd.fn]!).prim (P.defs[nd.fn]!).key = false →
-        Batch0Nested P nd.fn) →
+      (∀ nd ∈ (P.defs[d]!).body.nodes, (P.defs[nd.fn]!).prim = false → nd.fn < d) →
+      (∀ nd ∈ (P.defs[d]!).body.nodes, (P.defs[nd.fn]!).prim = false → Batch0Nested P nd.fn) →
+      (∀ nd ∈ (P.defs[d]!).body.nodes, (P.defs[nd.fn]!).prim = true →
+        isWordPrim (P.defs[nd.fn]!).prim (P.defs[nd.fn]!).key = false → GateCallee P nd.fn) →
+      (∃ nd ∈ (P.defs[d]!).body.nodes,
+        (P.defs[nd.fn]!).prim = false ∨ isWordPrim (P.defs[nd.fn]!).prim (P.defs[nd.fn]!).key = true) →
       Batch0Nested P d
 
 theorem reach_batch0 {P : Prog} {d y : ℕ} (h : Batch0 P d) (hy : Reach P d y) : y = d ∨ (P.defs[y]!).prim = true := by
@@ -960,9 +964,119 @@ theorem gateBodiesDeep_batch0 {P : Prog} {d : ℕ} (h : Batch0 P d) : GateBodies
 
 theorem batch0Nested_of_batch0 {P : Prog} {d : ℕ} (h : Batch0 P d) (hn : 0 < (P.defs[d]!).body.nodes.size) :
     Batch0Nested P d :=
-  .mk h.1 hn (fun nd hnd => (h.2 nd hnd).1)
-    (fun nd hnd hw => absurd (h.2 nd hnd).2 (by rw [hw]; decide))
-    (fun nd hnd hw => absurd (h.2 nd hnd).2 (by rw [hw]; decide))
+  .mk h.1 (fun nd hnd => (h.2 nd hnd).1)
+    (fun nd hnd hp => absurd (h.2 nd hnd).2 (by simp [isWordPrim, hp]))
+    (fun nd hnd hp => absurd (h.2 nd hnd).2 (by simp [isWordPrim, hp]))
+    (fun nd hnd _ hw => absurd (h.2 nd hnd).2 (by rw [hw]; decide))
+    ⟨_, Array.getElem_mem hn, Or.inr (h.2 _ (Array.getElem_mem hn)).2⟩
+
+/-- **A template of batches on any axes over word primitives, gates and earlier such templates**: `Batch0Nested`, but
+a batch node may map each argument along any axis of its type. -/
+inductive BatchNested (P : Prog) : ℕ → Prop
+  | mk {d : ℕ} : (P.defs[d]!).prim = false →
+      (∀ nd ∈ (P.defs[d]!).body.nodes, nd.form = .prim ∨ nd.form = .call ∨ nd.form = .batch) →
+      (∀ nd ∈ (P.defs[d]!).body.nodes, (P.defs[nd.fn]!).prim = false → nd.fn < d) →
+      (∀ nd ∈ (P.defs[d]!).body.nodes, (P.defs[nd.fn]!).prim = false → BatchNested P nd.fn) →
+      (∀ nd ∈ (P.defs[d]!).body.nodes, (P.defs[nd.fn]!).prim = true →
+        isWordPrim (P.defs[nd.fn]!).prim (P.defs[nd.fn]!).key = false → GateCallee P nd.fn) →
+      (∃ nd ∈ (P.defs[d]!).body.nodes,
+        (P.defs[nd.fn]!).prim = false ∨ isWordPrim (P.defs[nd.fn]!).prim (P.defs[nd.fn]!).key = true) →
+      BatchNested P d
+
+theorem batchNested_of_batch0Nested {P : Prog} {d : ℕ} (h : Batch0Nested P d) : BatchNested P d := by
+  induction h with
+  | mk hp hform hlt _ hgate hex ih =>
+    refine .mk hp (fun nd hnd => ?_) hlt ih hgate hex
+    rcases hform nd hnd with h | h | ⟨h, -⟩
+    · exact Or.inl h
+    · exact Or.inr (Or.inl h)
+    · exact Or.inr (Or.inr h)
+
+def noScan : Flock.Program.Form → Bool
+  | .scan => false
+  | _ => true
+
+theorem noScan_form {f : Flock.Program.Form} (h : noScan f = true) : f = .prim ∨ f = .call ∨ f = .batch := by
+  cases f <;> simp_all [noScan]
+
+/-- **`ScanNested`**: `BatchNested` with a node of any form, a scan's step among the composite callees: the Definition
+is composite, each composite callee is earlier and in `ScanNested`, each primitive callee no word primitive is a gate
+(`GateCallee`), and some node calls a composite or a word primitive. -/
+inductive ScanNested (P : Prog) : ℕ → Prop
+  | mk {d : ℕ} : (P.defs[d]!).prim = false →
+      (∀ nd ∈ (P.defs[d]!).body.nodes, (P.defs[nd.fn]!).prim = false → nd.fn < d) →
+      (∀ nd ∈ (P.defs[d]!).body.nodes, (P.defs[nd.fn]!).prim = false → ScanNested P nd.fn) →
+      (∀ nd ∈ (P.defs[d]!).body.nodes, (P.defs[nd.fn]!).prim = true →
+        isWordPrim (P.defs[nd.fn]!).prim (P.defs[nd.fn]!).key = false → GateCallee P nd.fn) →
+      (∃ nd ∈ (P.defs[d]!).body.nodes,
+        (P.defs[nd.fn]!).prim = false ∨ isWordPrim (P.defs[nd.fn]!).prim (P.defs[nd.fn]!).key = true) →
+      ScanNested P d
+
+theorem scanNested_of_batchNested {P : Prog} {d : ℕ} (h : BatchNested P d) : ScanNested P d := by
+  induction h with
+  | mk hp _ hlt _ hgate hex ih => exact .mk hp hlt ih hgate hex
+
+/-- The nested class's clauses at fuel `f`, each node's form passing `ok`, each composite callee's at fuel `f - 1`;
+false at fuel 0. -/
+def nestedF (ok : Flock.Program.Form → Bool) (P : Prog) : ℕ → ℕ → Bool
+  | 0, _ => false
+  | f + 1, d =>
+    !(P.defs[d]!).prim &&
+    (P.defs[d]!).body.nodes.all (fun nd => ok nd.form &&
+      if (P.defs[nd.fn]!).prim then
+        isWordPrim (P.defs[nd.fn]!).prim (P.defs[nd.fn]!).key || (gateKind? (P.defs[nd.fn]!).key).isSome
+      else decide (nd.fn < d) && nestedF ok P f nd.fn) &&
+    (P.defs[d]!).body.nodes.any (fun nd =>
+      !(P.defs[nd.fn]!).prim || isWordPrim (P.defs[nd.fn]!).prim (P.defs[nd.fn]!).key)
+
+/-- `BatchNested` decided, at fuel the Definition's index plus one: a composite callee is earlier. -/
+def batchNestedB (P : Prog) (d : ℕ) : Bool := nestedF noScan P (d + 1) d
+
+/-- `ScanNested` decided, at fuel the Definition's index plus one. -/
+def scanNestedB (P : Prog) (d : ℕ) : Bool := nestedF (fun _ => true) P (d + 1) d
+
+theorem nestedF_succ {ok : Flock.Program.Form → Bool} {P : Prog} {f d : ℕ} (h : nestedF ok P (f + 1) d = true) :
+    (P.defs[d]!).prim = false ∧
+    (∀ nd ∈ (P.defs[d]!).body.nodes, ok nd.form = true ∧
+      ((P.defs[nd.fn]!).prim = false → nd.fn < d ∧ nestedF ok P f nd.fn = true) ∧
+      ((P.defs[nd.fn]!).prim = true → isWordPrim (P.defs[nd.fn]!).prim (P.defs[nd.fn]!).key = false →
+        GateCallee P nd.fn)) ∧
+    ∃ nd ∈ (P.defs[d]!).body.nodes,
+      (P.defs[nd.fn]!).prim = false ∨ isWordPrim (P.defs[nd.fn]!).prim (P.defs[nd.fn]!).key = true := by
+  simp only [nestedF, Bool.and_eq_true, Bool.not_eq_true', Array.all_eq_true', Array.any_eq_true'] at h
+  obtain ⟨⟨hp, hall⟩, hex⟩ := h
+  refine ⟨hp, fun nd h => ⟨(hall nd h).1, fun hp' => ?_, fun hp' hw => ?_⟩, ?_⟩
+  · have := (hall nd h).2
+    simp only [hp', Bool.false_eq_true, ↓reduceIte, Bool.and_eq_true, decide_eq_true_eq] at this
+    exact this
+  · have := (hall nd h).2
+    rw [hp'] at hw
+    simp only [hp', ↓reduceIte, hw, Bool.false_or] at this
+    exact ⟨hp', this⟩
+  · obtain ⟨nd, h, hx⟩ := hex
+    exact ⟨nd, h, by simpa using hx⟩
+
+theorem nestedF_zero {ok : Flock.Program.Form → Bool} {P : Prog} {d : ℕ} : nestedF ok P 0 d = false := rfl
+
+theorem batchNested_of_F (P : Prog) : ∀ f d, nestedF noScan P f d = true → BatchNested P d
+  | 0, _, h => by simp [nestedF_zero] at h
+  | f + 1, _, h => by
+    obtain ⟨hp, hall, hex⟩ := nestedF_succ h
+    exact .mk hp (fun nd h => noScan_form (hall nd h).1) (fun nd h hp' => ((hall nd h).2.1 hp').1)
+      (fun nd h hp' => batchNested_of_F P f _ ((hall nd h).2.1 hp').2) (fun nd h => (hall nd h).2.2) hex
+
+theorem scanNested_of_F (P : Prog) : ∀ f d, nestedF (fun _ => true) P f d = true → ScanNested P d
+  | 0, _, h => by simp [nestedF_zero] at h
+  | f + 1, _, h => by
+    obtain ⟨hp, hall, hex⟩ := nestedF_succ h
+    exact .mk hp (fun nd h hp' => ((hall nd h).2.1 hp').1)
+      (fun nd h hp' => scanNested_of_F P f _ ((hall nd h).2.1 hp').2) (fun nd h => (hall nd h).2.2) hex
+
+theorem batchNested_of_B {P : Prog} {d : ℕ} (h : batchNestedB P d = true) : BatchNested P d :=
+  batchNested_of_F P (d + 1) d h
+
+theorem scanNested_of_B {P : Prog} {d : ℕ} (h : scanNestedB P d = true) : ScanNested P d :=
+  scanNested_of_F P (d + 1) d h
 
 /-- **`LiftCalls`**: the lift to bits of a template of word-primitive nodes, at least one, keeps `S`'s
 Definitions and Boolean Definitions and places Definition `d` lifted (`Flock.Lift.liftDef`) after them, each node

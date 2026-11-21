@@ -62,8 +62,7 @@ ALLOWED: dict[str, str] = {
     "verity/protocols/proofs/flock/verifier/Flock/ZkServer/Session.lean": "@proofs",
     "verity/protocols/proofs/flock/verifier/Flock/ZkServer/Values.lean": "@proofs",
     "verity/protocols/proofs/recursion/verifier/zk_server/ZkServer/Loop.lean": "@proofs",
-    # both keep ChaCha20 for a caller that hands no salts, which none does now: every caller hands its rows' salts
-    "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/registered_rows.cuh": "@vllm",
+    # keeps ChaCha20 for a caller that hands no salts, which none does now: every caller hands its rows' salts
     "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/row_table.cuh": "@vllm",
     "verity/protocols/resource_accounting/compute/pouw/verifier/audit.py": "@compute-accounting",
     "verity/protocols/resource_accounting/compute/pouw/verifier/weights.py": "@compute-accounting",

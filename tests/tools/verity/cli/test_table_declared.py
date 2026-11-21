@@ -10,6 +10,7 @@ import sys
 import pytest
 
 from verity_cli import run as R
+from verity_vllm.inputs import serves
 
 REG = R.registry()
 T = sys.modules["served_table"]
@@ -68,8 +69,9 @@ def test_only_the_sampled_proofs_carry_the_served_windows_rule_and_its_default()
 
 def test_a_tied_schemes_parameters_are_what_its_tie_names_and_nothing_else(monkeypatch):
     s = dataclasses.replace(T.schemes.get("pearl-plus"), tie={"class": "1,2,3", "schedule": "serial", "kernel": ""})
-    assert T._tied(s, "x", {"class": "4,27,2", "kernel": "k"}) == {
-        "class": "4,27,2", "schedule": T.schemes.get("pearl-plus").settings["schedule"], "kernel": "k"}
+    cls = serves.SERVES.window_class
+    assert T._tied(s, "x", {"class": cls, "kernel": "k"}) == {
+        "class": cls, "schedule": T.schemes.get("pearl-plus").settings["schedule"], "kernel": "k"}
     with pytest.raises(T.Refused, match=r"lane \(known: class, kernel, schedule\)"):
         T._tied(s, "x", {"lane": "v"})
 
