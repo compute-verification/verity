@@ -422,9 +422,20 @@ theorem flatten_map_flatten {α : Type} (l : List (List (List α))) : l.flatten.
   | nil => rfl
   | cons a l ih => rw [List.flatten_cons, List.flatten_append, ih, List.map_cons, List.flatten_cons]
 
+/-- **`GateWords`**: in a C `decode` accepts whose root has no recut, a template of `ScanNested` that reaches no word
+primitive evaluates on its words' bits, in any `L` that keeps C's Definitions and at every fuel past it, as it does on
+words. -/
+def GateWords : Prop :=
+  ∀ (bytes : ByteArray) (P L : Prog), decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] →
+    (∀ i < P.defs.size, L.defs[i]? = P.defs[i]?) →
+    ∀ c < P.defs.size, ScanNested P c → ¬ ReachesWord P c → GateBodiesDeep P c →
+      ∀ z : List (List Bool), z.map List.length = leafWidths (P.defs[c]!) →
+        ∃ ws, wordDef? P (c + 1) c z = some ws ∧ ws.map List.length = (P.defs[c]!).ret.widths.toList ∧
+          ∀ f, c < f → Flock.Program.evalDef? L f c z.flatten = some ws.flatten
+
 /-- **`LiftWordEval` for a template of batches on any axes and scans over word primitives, gates and earlier such
-templates**, on `NestedTyped`. -/
-theorem liftWordEval_scanNested_of (hT : NestedTyped) :
+templates**, on `NestedTyped` and `GateWords`. -/
+theorem liftWordEval_scanNested_of (hT : NestedTyped) (hGW : GateWords) :
     ∀ (bytes : ByteArray) (P : Prog) (units : Array ℕ) (S : Prog) (d : ℕ) (L : Prog) (e : ℕ),
       decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] → Spot.Restrict.restrict P units = .ok S →
       d < P.defs.size → ScanNested P d → GateBodiesDeep P d → Flock.Lift.lift S d = .ok (L, e) →
@@ -452,7 +463,9 @@ theorem liftWordEval_scanNested_of (hT : NestedTyped) :
   have hLP' : ∀ i < P.defs.size, L.defs[i]! = P.defs[i]! := fun i hi => by
     rw [getElem!_def, getElem!_def, hLP i hi]
   have hLbP : ∀ k, L.bodyOf? k = P.bodyOf? k := fun k => by rw [hLbody, hbodyS]
-  obtain ⟨pl, he, hA, hG, -, hC⟩ := liftPlacesAll hl
+  obtain ⟨pl, he, hA, hG, hN, hC⟩ := liftPlacesAll hl
+  have hnS : ∀ y, y < P.defs.size → ScanNested P y → ¬ ReachesWord P y → ¬ ReachesWord S y :=
+    fun y hy hn hw hs => hw (reachesWord_unrestrict hpre hn hy hs)
   have key : ∀ y, y < P.defs.size → ScanNested P y → Reach P d y →
       ∀ z : List (List Bool), z.map List.length = leafWidths (P.defs[y]!) →
         ∃ ws, wordDef? P (y + 1) y z = some ws ∧ ws.map List.length = (P.defs[y]!).ret.widths.toList ∧
@@ -462,8 +475,14 @@ theorem liftWordEval_scanNested_of (hT : NestedTyped) :
     | _ y ih =>
     intro hyl hny hry z hz
     have hryS : Reach S d y := (reach_restrict h hr hpre hd hry).2
-    have hrwS : ReachesWord S y := reachesWord_of_scanNested hpre hny hyl
     have hgy : GateBodiesDeep P y := fun z' hz' => hgd z' (reach_trans hry hz')
+    by_cases hrwP : ReachesWord P y
+    swap
+    · have hply : pl y = y :=
+        hN y hryS (by rw [hpre y hyl]; cases hny; assumption) (hnS y hyl hny hrwP)
+      obtain ⟨ws, g1, g2, g3⟩ := hGW bytes P L h hr hLP y hyl hny hrwP hgy z hz
+      exact ⟨ws, g1, g2, fun f hf => by rw [hply]; exact g3 f (by omega)⟩
+    have hrwS : ReachesWord S y := reachesWord_restrict hpre hrwP
     have hfacts := hT bytes P h hr y hyl hny hgy
     cases hny with
     | mk hp1 hltn hnest hgate hex =>
@@ -591,21 +610,41 @@ theorem liftWordEval_scanNested_of (hT : NestedTyped) :
         · have hpc := hpc0
           have hnc := hnest _ hmem hpc
           have hryc := hry' _ hmem
-          have IH := ih _ hlt hfnP hnc hryc
-          have hrwc : ReachesWord S (D.body.nodes[n]).fn := reachesWord_of_scanNested hpre hnc hfnP
           have hpcS : (S.defs[(D.body.nodes[n]).fn]!).prim = false := by rw [hpre _ hfnP]; exact hpc
-          have hplc : pl (D.body.nodes[n]).fn < pl y := hlty _ hmem hpcS hrwc
-          obtain ⟨-, fnOf2, primOf2, gatesOf2, hLc, -, -⟩ := hC _ (reach_restrict h hr hpre hd hryc).2 hpcS hrwc
-          rw [hpre _ hfnP] at hLc
+          have hrycS := (reach_restrict h hr hpre hd hryc).2
+          obtain ⟨C', hLc, hplc, hpar, IH⟩ : ∃ C' : Defn, L.defs[pl (D.body.nodes[n]).fn]? = some C' ∧
+              pl (D.body.nodes[n]).fn < pl y ∧
+              C'.params.map (·.2) = (P.defs[(D.body.nodes[n]).fn]!).params.map (·.2.bitType) ∧
+              ∀ z : List (List Bool), z.map List.length = leafWidths (P.defs[(D.body.nodes[n]).fn]!) →
+                ∃ ws, wordDef? P ((D.body.nodes[n]).fn + 1) (D.body.nodes[n]).fn z = some ws ∧
+                  ws.map List.length = (P.defs[(D.body.nodes[n]).fn]!).ret.widths.toList ∧
+                  ∀ f, pl (D.body.nodes[n]).fn < f →
+                    Flock.Program.evalDef? L f (pl (D.body.nodes[n]).fn) z.flatten = some ws.flatten := by
+            by_cases hrwc : ReachesWord P (D.body.nodes[n]).fn
+            · have hrwcS : ReachesWord S (D.body.nodes[n]).fn := reachesWord_restrict hpre hrwc
+              obtain ⟨-, fnOf2, primOf2, gatesOf2, hLc, -, -⟩ := hC _ hrycS hpcS hrwcS
+              rw [hpre _ hfnP] at hLc
+              refine ⟨_, hLc, hlty _ hmem hpcS hrwcS, ?_, ih _ hlt hfnP hnc hryc⟩
+              rw [liftDef_params]; simp [Array.map_map, Function.comp_def]
+            · have hplc0 : pl (D.body.nodes[n]).fn = (D.body.nodes[n]).fn :=
+                hN _ hrycS hpcS (hnS _ hfnP hnc hrwc)
+              have hbt : BitTyped (P.defs[(D.body.nodes[n]).fn]!) := by
+                cases hnc with
+                | mk _ _ _ _ h5 => exact h5.resolve_left hrwc
+              refine ⟨P.defs[(D.body.nodes[n]).fn]!, ?_, ?_, ?_, ?_⟩
+              · rw [hplc0, hLP _ hfnP, getElem!_pos P.defs _ hfnP]; exact getElem?_pos P.defs _ hfnP
+              · rw [hplc0]; have := hle; omega
+              · exact Array.map_congr_left fun p hp' => (bitType_of_isBit _ (hbt.1 p hp')).symm
+              · intro z' hz'
+                obtain ⟨ws, g1, g2, g3⟩ := hGW bytes P L h hr hLP _ hfnP hnc hrwc
+                  (fun z'' hz'' => hgd z'' (reach_trans hryc hz'')) z' hz'
+                exact ⟨ws, g1, g2, fun f hf => by rw [hplc0]; exact g3 f (by omega)⟩
           have hfc := hfy _ hmem
           have hWc : ∀ ws, wordDef? P y (D.body.nodes[n]).fn ws =
               wordDef? P ((D.body.nodes[n]).fn + 1) (D.body.nodes[n]).fn ws := fun ws => wordDef_fuel P _ y ws hlt
           have hfL : ¬ pl y ≤ pl (D.body.nodes[n]).fn := by omega
           by_cases hs : (D.body.nodes[n]).form = .scan
           · obtain ⟨-, hcs, h0, hw0, hw, yw, hretc, hout'⟩ := hscan n hnD hs
-            have hpar : (Flock.Lift.liftDef (P.defs[(D.body.nodes[n]).fn]!) fnOf2 primOf2 gatesOf2).params.map (·.2) =
-                (P.defs[(D.body.nodes[n]).fn]!).params.map (·.2.bitType) := by
-              rw [liftDef_params]; simp [Array.map_map, Function.comp_def]
             obtain ⟨w, g1, g2, g3⟩ := scanStep (P := P) (L := L) (y := y) (y' := pl y) hz ho hnD hnD' hsz hs hlt hcal (by rw [hfn', hfc]; exact hplc)
               (by rw [hfn', hfc]; exact hLc) hpar (hargs n hnD) hcs h0 hw0 hw hretc (wordDef? P y)
               (Flock.Program.evalDef? L f') (fun ws hws => by
@@ -623,9 +662,6 @@ theorem liftWordEval_scanNested_of (hT : NestedTyped) :
               (outs.map List.flatten) ((Flock.Lift.liftDef D fnOf primOf gatesOf).body.nodes[n]) (hf2 hb)
               (by rw [hfn', hfc]; omega) (by rw [hfn', hfc]; exact hLc)
             rw [liftDef_params, hfn', hfc, hn2] at hBt
-            have hpar : (Flock.Lift.liftDef (P.defs[(D.body.nodes[n]).fn]!) fnOf2 primOf2 gatesOf2).params.map (·.2) =
-                (P.defs[(D.body.nodes[n]).fn]!).params.map (·.2.bitType) := by
-              rw [liftDef_params]; simp [Array.map_map, Function.comp_def]
             let Am : ℕ → List (List Bool) := fun m => (List.range (D.body.nodes[n]).args.size).flatMap fun i =>
               batchArg (Flock.Program.refVal z (Flock.Program.paramStarts D.params) outs)
                 (P.defs[(D.body.nodes[n]).fn]!) (D.body.nodes[n]) m i
@@ -649,7 +685,7 @@ theorem liftWordEval_scanNested_of (hT : NestedTyped) :
                 ((List.range ((Flock.Lift.liftDef D fnOf primOf gatesOf).body.nodes[n]).args.size).flatMap fun i =>
                   batchArg (Flock.Program.refVal z.flatten
                     (Flock.Program.paramStarts (D.params.map fun (n, t) => (n, Ty.bitType t))) (outs.map List.flatten))
-                    (Flock.Lift.liftDef (P.defs[(D.body.nodes[n]).fn]!) fnOf2 primOf2 gatesOf2)
+                    C'
                     ((Flock.Lift.liftDef D fnOf primOf gatesOf).body.nodes[n]) m i))
               (fun m => (vsOf m).flatten) (List.range (D.body.nodes[n]).n)
               (fun m hm => by
@@ -778,8 +814,11 @@ theorem liftWordEval_scanNested_of (hT : NestedTyped) :
       exact congrArg some (seqBits hz g3 hret.1 hretr)
   have hpd : (P.defs[d]!).prim = false := by cases hnd; assumption
   have hpdS : (S.defs[d]!).prim = false := by rw [hpre d hd]; exact hpd
-  obtain ⟨-, _f, _p, _g, hLd, -⟩ := hC d .root hpdS (reachesWord_of_scanNested hpre hnd hd)
-  have hpl : pl d < L.defs.size := (Array.getElem?_eq_some_iff.1 hLd).1
+  have hpl : pl d < L.defs.size := by
+    by_cases hrwd : ReachesWord P d
+    · obtain ⟨-, _f, _p, _g, hLd, -⟩ := hC d .root hpdS (reachesWord_restrict hpre hrwd)
+      exact (Array.getElem?_eq_some_iff.1 hLd).1
+    · rw [hN d .root hpdS (hnS d hd hnd hrwd)]; omega
   obtain ⟨ws, hw1, -, hw3⟩ := key d hd hnd .root x hx
   unfold wordEval Prog.evalBool
   rw [wordDef_fuel P d _ x (by omega), hw1, he, hw3 _ (by omega)]

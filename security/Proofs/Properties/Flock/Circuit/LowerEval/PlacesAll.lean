@@ -315,20 +315,40 @@ theorem prim_lt {P : Prog} {i : ℕ} (h : (P.defs[i]!).prim = true) : i < P.defs
 theorem wordPrim_lt {P : Prog} {i : ℕ} (h : isWordPrim (P.defs[i]!).prim (P.defs[i]!).key = true) : i < P.defs.size :=
   prim_lt (by simp only [isWordPrim, Bool.and_eq_true] at h; exact h.1.1)
 
-/-- A template of batches and scans over word primitives, gates and earlier such templates reaches a word primitive,
-read in any `S` that keeps `P`'s Definitions. -/
-theorem reachesWord_of_scanNested {P S : Prog} (hpre : ∀ i < P.defs.size, S.defs[i]! = P.defs[i]!) {y : ℕ}
-    (h : ScanNested P y) (hy : y < P.defs.size) : ReachesWord S y := by
-  revert hy
+theorem reachesWord_lt {P : Prog} {x : ℕ} (h : ReachesWord P x) : x < P.defs.size := by
+  cases h with
+  | word hw => exact wordPrim_lt hw
+  | comp _ hmem _ =>
+    refine Classical.byContradiction fun hn => ?_
+    rw [getElem!_neg P.defs _ hn] at hmem
+    simp [show (default : Defn).body.nodes = #[] from rfl] at hmem
+
+/-- `ReachesWord`, read in any `S` that keeps `P`'s Definitions. -/
+theorem reachesWord_restrict {P S : Prog} (hpre : ∀ i < P.defs.size, S.defs[i]! = P.defs[i]!) {y : ℕ}
+    (h : ReachesWord P y) : ReachesWord S y := by
   induction h with
-  | @mk d hp hlt _ _ hex ih =>
-    intro hy
-    obtain ⟨nd, hmem, hc⟩ := hex
-    have hpS : (S.defs[d]!).prim = false := by rw [hpre d hy]; exact hp
-    have hmemS : nd ∈ (S.defs[d]!).body.nodes := by rw [hpre d hy]; exact hmem
-    rcases hc with hc | hw
-    · exact .comp hpS hmemS (ih _ hmem hc (by have := hlt _ hmem hc; omega))
-    · exact .comp hpS hmemS (.word (by rw [hpre _ (wordPrim_lt hw)]; exact hw))
+  | word hw => exact .word (by rw [hpre _ (wordPrim_lt hw)]; exact hw)
+  | comp hp hmem hr ih =>
+    have hy := reachesWord_lt (.comp hp hmem hr)
+    exact .comp (by rw [hpre _ hy]; exact hp) (by rw [hpre _ hy]; exact hmem) ih
+
+/-- `ReachesWord` in `S` of a template of `ScanNested`, read back in `P`, whose Definitions `S` keeps. -/
+theorem reachesWord_unrestrict {P S : Prog} (hpre : ∀ i < P.defs.size, S.defs[i]! = P.defs[i]!) {y : ℕ}
+    (h : ScanNested P y) : y < P.defs.size → ReachesWord S y → ReachesWord P y := by
+  induction h with
+  | @mk d hp hlt _ _ _ ih =>
+    intro hy hr
+    cases hr with
+    | word hw => exact .word (by rw [← hpre d hy]; exact hw)
+    | @comp _ nd hpS hmem hr' =>
+      rw [hpre d hy] at hmem
+      cases hc : (P.defs[nd.fn]!).prim with
+      | false => exact .comp hp hmem (ih nd hmem hc (by have := hlt nd hmem hc; omega) hr')
+      | true =>
+        have hl := prim_lt hc
+        cases hr' with
+        | word hw => exact .comp hp hmem (.word (by rw [← hpre _ hl]; exact hw))
+        | comp hpS' _ _ => rw [hpre _ hl, hc] at hpS'; cases hpS'
 
 /-- **`closure_placesAll` through `lift`**: the lift of `d` returns where its closure places `d`. -/
 theorem liftPlacesAll {S L : Prog} {d e : ℕ} (h : Flock.Lift.lift S d = .ok (L, e)) :
