@@ -205,8 +205,11 @@ PROOF_DEADLINE_S = 86400.0
 
 def interior_values(window: CS.Binding) -> tuple[tuple[str, str], ...]:
     """The interior values of a replay side that commits the check template's units as one interior window: each of
-    the window's trees (`Binding.trees`) and its schema, in the window's order."""
-    return tuple((t, s) for t, (s, _n) in window.trees.items())
+    the window's trees (`Binding.trees`) and its schema, in the window's order, then each run input node's tree
+    (`interior_rows.run_inputs`) in its reader's schema."""
+    by = {m.template: m for m in window.members}
+    return tuple((t, s) for t, (s, _n) in window.trees.items()) + tuple(
+        dict.fromkeys((r.param, by[r.reader].schema(r.port)) for r in IR.run_inputs(window)))
 
 
 @dataclass(frozen=True)
@@ -884,11 +887,16 @@ def verifier_reads(d: Design, window: CS.Binding, interior: Mapping[str, Any], b
     q, out = window.population // sum(d.cells), {}
     if len(sample) != q:
         raise ValueError(f"a replay sample of {len(sample)} for a window of {q} sampled spans")
+    runs = {(r.reader, r.port): r.param for r in IR.run_inputs(window)}
     for m in window.members:
         ports = {}
         for p, words in m.all_rows:
+            if (m.template, p) in runs:
+                ports[p] = LK.reads(interior, runs[m.template, p], words, m.schema(p), list(range(m.n)), m.base,
+                                    registered=REG)
+                continue
             x = linked.get((m.template, p))
-            if (m.template, p) in back:
+            if (m.template, p) in back and p not in dict(m.outs):
                 y = back[m.template, p]
                 ports[p] = LK.reads(boundary, y.value, words, m.schema(p), y.rows(sample), m.base, registered=REG)
                 continue
@@ -1097,7 +1105,8 @@ def second_stage(a: argparse.Namespace, sets: dict, window: CS.Binding, window_d
     a.coins, a.rule, a.window_root, a.compose_cache, a.transfer_gate = None, None, None, None, []
     a.tie = {"log": [brec], **(tie or {})}
     port = a.port or RA.free_ports(a5.RANK_PORTS)
-    s, ok = a5.audit(a, sets, out / "audit", window, window_dir, source, port, provenance, registered=reads, drawn=second)
+    s, ok = a5.audit(a, sets, out / "audit", window, window_dir, source, port, provenance, registered=reads, drawn=second,
+                     run_inputs=IR.run_input_ports(window))
     rec_file = out / "audit" / "audit.json"
     record = json.loads(rec_file.read_text()) if rec_file.exists() else {}
     got = {"audit": {x: s.get(x) for x in ("checks_before_draw", "refused", "audit", "draw", "draw_counts", "negatives",

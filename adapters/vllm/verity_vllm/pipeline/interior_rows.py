@@ -54,12 +54,12 @@ import numpy as np
 
 from verity.protocols.proof.spot.prover import docket as DK
 from verity.circuits.codec import program_digest
-from verity.commitments import history as HT
+from verity.commitments import history as HT, registered_value as RV
 from verity_vllm.definitions.numerics.rows import SAMPLED_MEMBER
 from verity_vllm.definitions.numerics.token_select_rows import token_select_chunk_bests
 from verity_vllm.definitions.registry import greedy_stages as GS
 from verity_vllm.definitions.registry.dead_free import CHUNK
-from verity.commitments.periods import links as LK, rows as CS, wiring as WI
+from verity.commitments.periods import interface as IF, links as LK, rows as CS, wiring as WI
 from verity_vllm.check.replay.index import SAMPLER_OP, ProgramIndex
 from verity_vllm.engine.sampler_capture import CAPTURE
 from verity_vllm.pipeline import chunk_rows as CR, interior_links as IL, serving_rows as SRW
@@ -394,10 +394,27 @@ def interior_window(members: Members, n_rho: Cells, boundary: str, sample: Seque
     def table(h: dict[str, tuple[WI.Wired, ...]], p: str, n: int) -> int:
         return len(WI.table(WI.reads(h[p], 0, n))[0]) if p in h else n
 
-    return CS.Binding(program, query, {"law": "subset", "k": sum(sizes)}, interior_run(boundary, sample),
-                      tuple(replace(m, n=n, base=o, name=f"{m.template}/c0", wired=tuple(x for ps in h.values() for x in ps),
-                                    tables=tuple((p, table(h, p, n)) for p, _ in m.rows), values=v)
-                            for m, n, o, h, v in zip(ms, sizes, offs, held, valued, strict=True)))
+    b = CS.Binding(program, query, {"law": "subset", "k": sum(sizes)}, interior_run(boundary, sample),
+                   tuple(replace(m, n=n, base=o, name=f"{m.template}/c0", wired=tuple(x for ps in h.values() for x in ps),
+                                 tables=tuple((p, table(h, p, n)) for p, _ in m.rows), values=v)
+                         for m, n, o, h, v in zip(ms, sizes, offs, held, valued, strict=True)))
+    runs = {(r.reader, r.port) for r in run_inputs(b)}
+    return replace(b, members=tuple(replace(m, values=tuple(dict.fromkeys((*m.values, *(p for p, _ in m.rows
+                                                                                     if (m.template, p) in runs)))))
+                                    for m in b.members))
+
+
+def run_inputs(window: CS.Binding) -> tuple[IF.Read, ...]:
+    """The reads of the interior program's run input nodes (`interface.run_input_reads`): every member's input port no
+    wire fills reads its node's one tree ``input/n<w>``, unit i its row i."""
+    filled = {(m.template, w.port) for m in window.members for w in m.wired}
+    return IF.run_input_reads([(SRW.template(m.template).fn, m.n) for m in window.members], window.program,
+                              window.query, filled)
+
+
+def run_input_ports(window: CS.Binding) -> dict[str, dict[str, Any]]:
+    """The interior registration's trees of its run input nodes (`interface.run_input_ports`)."""
+    return IF.run_input_ports({"run_inputs": [r.doc() for r in run_inputs(window)]}, window)
 
 
 def interior_ports(members: Members, n_rho: Cells, boundary: str, sample: Sequence[int],
@@ -406,7 +423,8 @@ def interior_ports(members: Members, n_rho: Cells, boundary: str, sample: Sequen
     """The challenger's copy of the interior registration's ports: `interior_window`'s, from the templates' layouts, the
     size class, the boundary registration's digest, its own replay sample, the wires and rows it derives from the replay
     block and its links."""
-    return CS.expected_ports(interior_window(members, n_rho, boundary, sample, wires, links, rows))
+    w = interior_window(members, n_rho, boundary, sample, wires, links, rows)
+    return CS.expected_ports(w) | run_input_ports(w)
 
 
 @dataclass(frozen=True)
@@ -557,7 +575,10 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
     prog = program_digest(window.program)
     schemas = link_schemas(window.members, links)
     given = {v.value: v for v in supplied(prog, links, q, [t.entry() for t in tcs], schemas, pins)}
+    fed: dict[str, Any] = {}
     if device is not None:
+        if run_inputs(window):
+            raise ValueError("a commitment on the rows' device commits no run input node's tree: commit on the host")
         c = committed(window, device)
     else:
         data = []
@@ -603,14 +624,23 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
         fresh = {m.port(p): os.urandom(ports[t]["leaves"] * CS.SALT_BYTES) for m in window.members for p, _w in m.all_rows
                  if window.wire(m, p) is None and (t := window.tree(m, p)) in ports and m.port(p) not in linked}
         fresh |= {window.members[k].port(x.port): v.salts_at(at) for x, v, k, at in back}
-        fresh |= {window.members[k].port(x.port): v.salts_at(at) for x, v, k, at in took_in}
+        fresh |= {window.members[k].port(x.port): v.salts_at(at) for x, v, k, at in took_in
+                  if x.port not in window.members[k].values}
+        for r in run_inputs(window):
+            k = next(j for j, m in enumerate(window.members) if m.template == r.reader)
+            x = data[k]["rows"][r.port]
+            got = np.asarray(x.value.rows)[list(x.positions)] if isinstance(x, CS.ValueRows) else np.asarray(x)
+            fed[r.param] = RV.Registered.commit(prog, r.param, got.tolist(), schema=window.members[k].schema(r.port))
+            data[k]["rows"][r.port] = CS.ValueRows(fed[r.param], tuple(range(len(got))))
         c = CS.commit(window, data, salts_of=fresh or None)
     provenance = {"row": row, "interior": True, "replay_sample": [int(u) for u in sample],
                   **({"replay": replay} if replay is not None else {})}
     rec = CS.registration(c, provenance, boundary if previous is None else previous, kind=kind, registrar=DK,
-                          entries=[given[v].entry() for v in IL.values(links)])
+                          entries=[given[v].entry() for v in IL.values(links)],
+                          outputs=[{"port": v.value, "root": v.root.hex(), "leaves": v.leaves,
+                                    "domain": v.domain.domain_id.hex()} for v in fed.values()])
     layer = CS.leaf_layer({m.key: c.public_body(k) for k, m in enumerate(window.members)})
-    return Interior(rec, ports, layer, c, [[s.entries for s in p] for p in per], tcs, tuple(returns), tuple(inputs))
+    return Interior(rec, ports | run_input_ports(window), layer, c, [[s.entries for s in p] for p in per], tcs, tuple(returns), tuple(inputs))
 
 
 def _served_some(per: Sequence[Sequence[Span]], sample: Sequence[int]) -> None:
@@ -784,7 +814,7 @@ def write(it: Interior, directory: str | Path) -> dict[str, Any]:
     window = {k: v for k, v in it.record["window"].items() if k not in ("kind", "run")}
     CS.write(c, directory, window, {"interior": True, "members": [m.key for m in w.members], "entries": it.entries},
              kind=it.record["window"]["kind"], registered=registered, registrar=DK, previous=it.record["previous"],
-             entries=it.record.get("registered", ()))
+             entries=it.record.get("registered", ()), outputs=[r for r in it.record["roots"] if r["port"] not in c.roots])
     return json.loads((Path(directory) / "registration.json").read_text())
 
 
@@ -797,6 +827,6 @@ def register(stream: Any, first: Any, it: Interior, **copies: Any) -> Any:
 
 __all__ = ["DIGEST", "HELD", "INDEX", "MOVED", "READ", "TABLE", "DeviceCommit", "Input", "Interior", "Link", "Operand",
            "Return", "Span", "Supply", "captured", "committed", "gather", "history", "inputs", "interior", "interior_ports",
-           "interior_run", "interior_window", "kept_table", "link_schemas", "link_values", "link_words", "links", "member",
+           "interior_run", "interior_window", "run_input_ports", "run_inputs", "kept_table", "link_schemas", "link_values", "link_words", "links", "member",
            "named", "pieces", "port_map", "register", "returns", "sources", "span", "span_values", "supplied", "table_reads",
            "whole", "write"]

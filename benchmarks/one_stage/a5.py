@@ -1008,7 +1008,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
           step_roots: dict[int, bytes] | None = None, registered: dict[str, dict] | None = None,
           ports: int | None = None, drawn: tuple[dict, dict, dict] | None = None,
           history: Callable[[dict[str, bytes]], dict | None] | None = None,
-          session: threading.Thread | None = None) -> tuple[dict, bool]:
+          session: threading.Thread | None = None,
+          run_inputs: Mapping[str, Any] | None = None) -> tuple[dict, bool]:
     """One window's audit: serving's window ``served`` held to the verifier's own ``mine`` (and its docket's ``window`` to
     ``source``; a window with row tables, its tables to its linked members' strings, its registered `row-table` root and
     ``step_roots``, what serving recorded before each step's coin, `tables.check_row_tables`), one Lean sample by its sampling design
@@ -1053,6 +1054,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     held_doc = served / "circuit.json"
     if held_doc.is_file() and hashlib.sha512(held_doc.read_bytes()).hexdigest() == summary.get("circuit"):
         want |= IF.run_input_ports(json.loads(held_doc.read_bytes()), mine)
+    want |= dict(run_inputs or {})
     summary.update({"run_root": mine.run, "population": n_all, "partition": pd, "law": sampling_design, "delta": a.delta, "firewall": a.zk_server,
                     "arm": "fw" if a.zk_server else "dev",
                     "members": [{"k": k, "template": m.template, "n": m.n, "base": m.base} for k, m in enumerate(mine.members)]})
