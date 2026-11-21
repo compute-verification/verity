@@ -12,7 +12,6 @@ public import Proofs.Flock.SoundAtBridge.Session
 public import Proofs.Pouw.TS.Session.Held.Layer
 public import Proofs.Pouw.TS.Session.Lanes.Holds
 public import Proofs.Pouw.TS.Session.Lanes.Range
-public import Proofs.Pouw.TS.Session.Lanes.KnownOf
 public import Proofs.Pouw.TS.Session.Lanes.Canon
 public import Proofs.Flock.C3.RegLevels.TopLeaf
 import Mathlib.Algebra.Order.Floor.Extended

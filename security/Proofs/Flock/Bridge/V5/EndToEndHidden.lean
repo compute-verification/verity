@@ -1,7 +1,6 @@
 module
 
 public import Proofs.Flock.Bridge.V5.Statement
-public import Proofs.Flock.Bridge.EndToEndHiddenC
 
 /-!
 # `EndToEndHiddenV5`, from `OpeningsCanonTargetV5`

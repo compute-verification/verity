@@ -34,7 +34,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Bridge.Count
-import Proofs.Flock.Bridge.EndToEndHiddenC
 import Proofs.Flock.Bridge.FaultyRightC
 import Proofs.Flock.Bridge.OpeningsCanon
 import Proofs.Flock.Bridge.Refused

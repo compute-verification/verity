@@ -86,11 +86,9 @@ public import Proofs.Pouw.TS.FixedMeets
 public import Proofs.Pouw.TS.SharedNoise
 public import Proofs.Pouw.TS.J10RChecks
 public import Proofs.Pouw.TS.GroupSound
-public import Proofs.Pouw.TS.LanesSound
 public import Proofs.Pouw.TS.Session.Lanes.Decode
 public import Proofs.Pouw.TS.Session.Lanes.Range
 public import Proofs.Pouw.TS.Session.Lanes.Holds
-public import Proofs.Pouw.TS.Session.Lanes.KnownOf
 public import Definitions.Pouw.H1Zy.Stream
 public import Proofs.Pouw.TS.PeriodSound
 public import Proofs.ResourceAccounting.Actual
