@@ -171,9 +171,8 @@ Protocols and claims:
 - θ comes only from registered public data, registered at the start of a deployment; outputs of earlier runs
   are never θ.
 - A protocol's verifier switches from Python to Lean only on evidence: its gap list shows nothing the
-  Python checks that the Lean doesn't, and every recorded run replayed through the Lean gets the Python's verdict,
-  negative controls included. The Python keeps running as the reference, the switch is one reversible line, and it moves
-  the protocol's properties into `Properties/`.
+  Python checks that the Lean doesn't, and every recorded run replayed through the Lean gets its verdict. Then the
+  Python copy goes as AGENTS.md says, and the protocol's properties move into `Properties/`.
 - An auditor device releases its commitment to its coins only after the prover's commitment is in, so no
   soundness statement takes a hiding premise on it. A guarantee whose break includes a forged device release names two
   assumptions outside the theorem: `ecr/sha-512` for its finders and `euf-cma/lms-sha512-n64` for the forgery finder.
