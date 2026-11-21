@@ -7194,6 +7194,12 @@
    "type_hash": "72932ebcdc9d0dac150fe57d860e5c28e27873cfbb4ad0c1d1004e4a23cf6630",
    "unfolded_hash": "437520d64afd45c64c9d350b18cdf6f5b6792798f6cdef4b4e32490530eb607c"
   },
+  "Properties.Poub.Shared.acceptSamplesOpenable_honest": {
+   "owner": "@memory-accounting"
+  },
+  "Properties.Poub.Shared.acceptSamplesOpenable_nontrivial": {
+   "owner": "@memory-accounting"
+  },
   "Properties.Poub.Shared.acceptedSamplesOpenable": {
    "owner": "@memory-accounting",
    "signature": ["Properties.Poub.Shared.acceptedSamplesOpenable : Properties.Poub.Shared.AcceptedSamplesOpenable"],
@@ -7206,6 +7212,9 @@
    },
    "type_hash": "06805356a8866fa934ab220b1a19e7dc189b637bc5a8f12df71fb85d9216ce25",
    "unfolded_hash": "7297c88e3dedbfefb2514ea43be83dfa5348d2d594f778b59c1ff2d5176a019f"
+  },
+  "Properties.Poub.Shared.acceptedSamplesOpenable_nontrivial": {
+   "owner": "@memory-accounting"
   },
   "Properties.Poub.Shared.openingsUnreadUntilSampled": {
    "owner": "@memory-accounting",
@@ -7246,6 +7255,9 @@
    "type_hash": "08fd07a6de59d35e560df52c144a4ab294113c61c28788d056460034b8e01f96",
    "unfolded_hash": "969240cb3fa52146a06cde222d9992d741676a91b6904058a9278dbb0f3310a0"
   },
+  "Properties.Poub.Shared.runSamplesRecords_nontrivial": {
+   "owner": "@memory-accounting"
+  },
   "Properties.Poub.Shared.sampleIsSubset": {
    "owner": "@memory-accounting",
    "signature": ["Properties.Poub.Shared.sampleIsSubset : Properties.Poub.Shared.SampleIsSubset"],
@@ -7258,6 +7270,9 @@
    },
    "type_hash": "68ed2d04b7a869f22f673dcb09fab4ad4ec3766222a70bd1bf246bc65254dc02",
    "unfolded_hash": "53d3068b0e8b411c6dd19d5ca1090e491277cd143934356b20bcda06220bbaa5"
+  },
+  "Properties.Poub.Shared.sampleIsSubset_nontrivial": {
+   "owner": "@memory-accounting"
   },
   "Properties.Poub.Subprotocol.SecurityProofs.lineHeldAtSubprotocol": {
    "owner": "@memory-accounting",
@@ -7825,6 +7840,12 @@
    "type_hash": "4fbeddbfd8ebc3764ce443b7a3bd3accf8712775a2ea153e91dd73497ffabba3",
    "unfolded_hash": "3fe757d68edc226c89eb078f0794c196d7b787b0508dc96410bc16052eb666ff"
   },
+  "Properties.Poub.acceptChecksOpenings_honest": {
+   "owner": "@memory-accounting"
+  },
+  "Properties.Poub.acceptChecksOpenings_nontrivial": {
+   "owner": "@memory-accounting"
+  },
   "Properties.Poub.acceptOpensSamples": {
    "owner": "@memory-accounting",
    "signature": ["Properties.Poub.acceptOpensSamples : Properties.Poub.AcceptOpensSamples"],
@@ -7838,6 +7859,12 @@
    "type_hash": "0824e125486350cbca90c13f408e9a32fe9bad346667d3234f62693b9a83b368",
    "unfolded_hash": "4af6721b9373e897b08385a10f23c3fe86d47a940976bf8b63a0af3d3e96a3e3"
   },
+  "Properties.Poub.acceptOpensSamples_honest": {
+   "owner": "@memory-accounting"
+  },
+  "Properties.Poub.acceptOpensSamples_nontrivial": {
+   "owner": "@memory-accounting"
+  },
   "Properties.Poub.acceptSamplesOpenable": {
    "owner": "@memory-accounting",
    "signature": ["Properties.Poub.acceptSamplesOpenable : Properties.Poub.AcceptSamplesOpenable"],
@@ -7850,6 +7877,12 @@
    },
    "type_hash": "23efc3674e2e53558d10237762e2aef44fad5fae02091016cd49a3d264198c6d",
    "unfolded_hash": "2c257a0b154641952b0f85a8473cf4e8934a377d5d8023257cd2fe5f5c14b54f"
+  },
+  "Properties.Poub.acceptSamplesOpenable_honest": {
+   "owner": "@memory-accounting"
+  },
+  "Properties.Poub.acceptSamplesOpenable_nontrivial": {
+   "owner": "@memory-accounting"
   },
   "Properties.Poub.acceptedMinPasses": {
    "owner": "@memory-accounting",
@@ -7876,6 +7909,12 @@
    },
    "type_hash": "c48ed9f56bac401f1424ec8c1d301d878459fbd7f571eba05213f38f456f752b",
    "unfolded_hash": "6ad56c01a985ad6902f2eac496bf8d55d2a63df40f1fdbd69c34f389d4da0e87"
+  },
+  "Properties.Poub.appendsInOrder_honest": {
+   "owner": "@memory-accounting"
+  },
+  "Properties.Poub.appendsInOrder_nontrivial": {
+   "owner": "@memory-accounting"
   },
   "Properties.Poub.changedReadsDistinct": {
    "owner": "@memory-accounting",
@@ -8273,6 +8312,12 @@
    },
    "type_hash": "2478dc895508127d69a4cf3b2926faa65c0f79f6b9ad55350c96dd409ee1a99c",
    "unfolded_hash": "8f1ba48a15cd840913ba5af5f8352569e9634dd05cb9c224787a37a02876a207"
+  },
+  "Properties.Poub.sampleIsSubset_honest": {
+   "owner": "@memory-accounting"
+  },
+  "Properties.Poub.sampleIsSubset_nontrivial": {
+   "owner": "@memory-accounting"
   },
   "Properties.Poub.scheduleChecked": {
    "owner": "@memory-accounting",
