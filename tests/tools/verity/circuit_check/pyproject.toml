@@ -129,7 +129,7 @@ inputs = ["verity/lean_process.py", "tools/verity/circuit_check", "verity/__init
           "verity/protocols/resource_accounting/network/verifier/io_tie.circuit-check.json",
           "verity/protocols/resource_accounting/network/prover/egress.py", "verity/protocols/resource_accounting/network/prover/egress.circuit-check.py",
           "verity/protocols/resource_accounting/network/prover/egress.circuit-check.json",
-          "verity/protocols/resource_accounting/network/verifier/audit.py", "verity/protocols/resource_accounting/network/verifier/commitment.py",
+          "verity/protocols/resource_accounting/network/verifier/commitment.py",
           "verity/protocols/proofs/spot/verifier/profile.py",
           "verity/protocols/proofs/spot/verifier/challenger/challenger.py", "verity/protocols/proofs/spot/verifier/challenger/coins.py",
           "verity/protocols/proofs/spot/verifier/challenger/remote.py",
