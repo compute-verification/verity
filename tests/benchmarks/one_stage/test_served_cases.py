@@ -803,6 +803,30 @@ def test_the_case_takes_the_program_its_record_names_wired_or_with_no_wires():
         SC.inference_only_case(v1_case(whole, wq), 1, 1, circuit={**record, "templates": [["Other_v1", SLOTS]]})
 
 
+def test_the_wired_program_of_a_record_is_the_served_routes():
+    """A circuit record's wired Program (`wired`) is the served route's (`interface.served_program`), byte for byte, its
+    registered parameter marked as bound at registration, and with no wires the served route's over the record less its
+    wires."""
+    from verity.circuits.ops import gemm as GM
+    from verity.circuits.program import REGISTRATION
+    from verity.commitments.periods import interface as I
+
+    gemm, src = bind(GM.Gemm, K=16, N=16, **GM.GEMM_AMPERE), bind(GM.Gemm, K=32, N=16, **GM.GEMM_AMPERE)
+    gid, sid = codec.descriptor_id(gemm), codec.descriptor_id(src)
+    wires = [I.Wire(gid, "x", sid if j == 0 else gid, "o0", at=2 * j, radix=(2,), base=2 * max(j - 1, 0), step=(1,))
+             for j in range(2)]
+    reads = tuple(I.Read(gid, "w", "w", at=2 * j, radix=(2,), base=256 * j, step=(0,)) for j in range(2))
+    circuit = I.Circuit("given", ((gemm, 4), (src, 2)), wires=tuple(wires), registered=I.Registered({"w": 512}, reads=reads),
+                        order=I.ordered({sid: 2, gid: 4}, wires, {gid: range(0, 4, 2)}))
+    served, _ = circuit.program()
+    assert REGISTRATION in served.bindings
+    doc = I.descriptor_record(circuit, 4)
+    defs = [({gid: gemm, sid: src}[t], int(n)) for t, n in doc["templates"]]
+    for record in (doc, {**doc, "wires": []}):
+        assert codec.program_digest(SC.wired(served.root, record)) == codec.program_digest(I.served_program(defs, record)[0])
+    assert codec.program_digest(SC.wired(served.root, doc)) == codec.program_digest(served)
+
+
 def test_a_log_that_chains_to_the_record_is_the_cases_log(tmp_path):
     program, query = toy()
     first = {"format": DM.REGISTRATION, "previous": None, "program": "11" * 64}
