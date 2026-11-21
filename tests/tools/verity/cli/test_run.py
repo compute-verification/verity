@@ -950,6 +950,15 @@ def test_the_runs_tree_is_its_commits_archive_under_the_commits_name(tmp_path):
         assert t.extractfile(f"{commit}/a.txt").read() == b"a\n"
 
 
+def test_a_live_run_s_period_line_is_the_run_s_last(tmp_path, capsys):
+    cfg = config(**AUDITOR)
+    said = verifier_says(accepting(cfg, "verity/onsite/v0"))
+    reg = dataclasses.replace(said, live=lambda c, s, h: SimpleNamespace(outcomes=said.live(c, s, h).outcomes,
+                                                                          period={"outcome": 20}))
+    rc, _ = run(tmp_path, reg, "--on", "auditor-1", cfg=cfg)
+    assert rc == 0 and capsys.readouterr().out.splitlines()[-1] == 'PERIOD {"outcome": 20}'
+
+
 @pytest.mark.parametrize("machines, on", [(["auditor-1"], "auditor-1"), (["auditor-1", "local"], "local")])
 def test_the_record_says_on_which_machine_each_subprotocols_coins_were_flipped(tmp_path, machines, on):
     cfg = config(**AUDITOR)

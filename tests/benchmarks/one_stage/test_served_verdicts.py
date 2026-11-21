@@ -2433,6 +2433,33 @@ def test_a_pearlplus_piece_holds_each_pass_salt_to_the_live_session_the_gate_hol
         assert calls == []
 
 
+def test_the_lean_step_is_handed_the_salt_session_pearlplus_coins_checks(tmp_path, monkeypatch):
+    """`pearlplus_salt_live`: the live session `pearlplus_coins` fetches through the gate, written for
+    `pouw-pearlplus --salt-live` with the key's pin beside the key (`Coins.keyPinReason`); none for a run that names no
+    session, and no gate, key pin or main's line raises, so the Lean step is given no session."""
+    from verity.protocols.proof.spot.verifier.challenger import challenger as Ch
+    from verity.protocols.proof.spot.verifier.challenger import remote
+
+    files = {remote.KEY: json.dumps({"H": 5, "W": 4, "public": PUBLIC.hex()}), remote.RELEASES: '{"event": "root"}\n',
+             remote.CLOSE: "{}"}
+    calls = []
+    monkeypatch.setattr(S, "_gate_out", _gate(calls, files))
+    served, _verified = _pearlplus_run()
+    (main := tmp_path / "main.txt").write_text("cc" * 20 + "\n" + "aa" * 20 + "\n")
+    pin = hashlib.sha512(PUBLIC).hexdigest()
+    path = S.pearlplus_salt_live(served, tmp_path, GATE, pin, main)
+    assert path == tmp_path / S.PEARLPLUS_SALT_LIVE
+    live = json.loads(path.read_text())
+    assert Ch.ChallengerKey.from_json(live.pop("key")).public == PUBLIC
+    assert live == {"key_sha512": pin, "ledger": [LEDGER_LINE], "pins": [PINS_LINE], "main": ["cc" * 20, "aa" * 20],
+                    "session": {"close": {}, "hellos": None, "log": ['{"event": "root"}'], "record": {}}}
+    assert [w for _g, w in calls] == [("fetch", SID), ("ledger",), ("pins",)]
+    with pytest.raises(ValueError, match="no gate, key pin or main's first-parent line"):
+        S.pearlplus_salt_live(served, tmp_path, None, pin, main)
+    served["coins"]["session"] = None
+    assert S.pearlplus_salt_live(served, tmp_path, GATE, pin, main) is None
+
+
 def test_a_pearlplus_piece_on_in_process_coins_claims_no_verdict(tmp_path, monkeypatch, capsys):
     """A Pearl+ run whose epoch's coins are an in-process challenger's, which the serving process holds (its serve without
     PEARLC_CHALLENGER_GATE), is held to nothing: where nothing failed its verdict is unclaimed, its row missing with
@@ -7059,7 +7086,7 @@ def test_the_split_attester_needs_v3c_and_no_whole_piece_beside_it(tmp_path, arg
 
 
 def test_compose_off_node_is_1_or_0_and_another_value_is_refused_by_name_before_anything_runs(tmp_path):
-    """COMPOSE_OFF_NODE is read before any mode, the window road's included."""
+    """COMPOSE_OFF_NODE is read before any mode, the window steps included."""
     rc, lines, order, _limits = _v3c(tmp_path, (), PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
                                      HOST="vy-dc-h200-2", PREFLIGHT_ONLY="1", COMPOSE_OFF_NODE="yes")
     assert (rc, lines, order) == (3, ["PREFLIGHT: COMPOSE_OFF_NODE is 1 (the default under VERITY_HOLD_PLACEMENT=1) or 0, not yes"], [])

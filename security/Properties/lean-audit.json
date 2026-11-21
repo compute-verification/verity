@@ -119,6 +119,7 @@
   "Properties.Poub.Remote.SubprotocolDeployed",
   "Properties.Poub.Remote.HonestLog",
   "Properties.Poub.Remote.HonestLog.Case",
+  "Properties.Poub.Remote.Instances",
   "Properties.Poub.Remote.InProofs",
   "Properties.Certifier.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod",
   "Properties.Certifier.JointBridge.WorkOfCreditedWords",
@@ -352,27 +353,27 @@
   },
   "InferenceOnlyVerifier.Record.SecurityProofs.EdgeFreeReads": {
    "owner": "@lean",
-   "digest": "908b1f05729237cc240356cc6c6b587393db6299532bf9df87733e63c2683679",
+   "digest": "7cd98059132acf87bd14441c25138b437e0d648c2b17a702b514ab94afa83af3",
    "issue": "LEAN-186",
    "due": "2026-11-30",
-   "waits": "InferenceOnlyVerifier.SecurityProofs.ServedComplies",
-   "why": "ServedComplies takes Record.LaidOut and Record.Counts, which form_laidOut and form_counts prove from it"
+   "why": "ServedComplies takes Record.LaidOut and Record.Counts, which form_laidOut and form_counts prove from it",
+   "waits": "InferenceOnlyVerifier.SecurityProofs.ServedComplies"
   },
   "InferenceOnlyVerifier.Record.SecurityProofs.FinishTemplates": {
    "owner": "@lean",
-   "digest": "d102a04b9b03780520266b77b3d5ac0dfbfe26a8fd6165de04fb5566c2153c98",
+   "digest": "dc042cebba9492d66b8f90e04c476416813d109b8bf2d0a6416c5c464366d6f6",
    "issue": "LEAN-186",
    "due": "2026-11-30",
-   "waits": "InferenceOnlyVerifier.SecurityProofs.ServedComplies",
-   "why": "ServedComplies takes Record.LaidOut and Record.Counts, which form_laidOut and form_counts prove from it"
+   "why": "ServedComplies takes Record.LaidOut and Record.Counts, which form_laidOut and form_counts prove from it",
+   "waits": "InferenceOnlyVerifier.SecurityProofs.ServedComplies"
   },
   "InferenceOnlyVerifier.Record.SecurityProofs.OwnRowsEdges": {
    "owner": "@lean",
-   "digest": "70d3596323a4191f5239b2720b09791137330fdc5391e825a633a8653ab13d1c",
+   "digest": "64a7bfcac47f049ea671a449263f210b1e46fa74773e1a851d1790476d77b20d",
    "issue": "LEAN-186",
    "due": "2026-11-30",
-   "waits": "InferenceOnlyVerifier.SecurityProofs.ServedComplies",
-   "why": "ServedComplies takes Record.LaidOut and Record.Counts, which form_laidOut and form_counts prove from it"
+   "why": "ServedComplies takes Record.LaidOut and Record.Counts, which form_laidOut and form_counts prove from it",
+   "waits": "InferenceOnlyVerifier.SecurityProofs.ServedComplies"
   },
   "MemoryAttester.Properties.CountRan": {
    "owner": "@network-accounting",
@@ -925,35 +926,11 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Spot.Challenger.CutMeans": {
-   "owner": "@lean",
-   "digest": "7b0f8dc18e2d1ab726718693945fa1fbedd43c893169d2aba6f3677ea2138a2b",
-   "issue": "LEAN-186",
-   "due": "2026-11-30",
-   "waits": "Verity.remote_soundness_of_subprotocols",
-   "why": "the code's challenger log is the core's log; unproved; read by no guarantee yet"
-  },
-  "Spot.Challenger.KeyedBySlotMeans": {
-   "owner": "@lean",
-   "digest": "312c9fb49319f427a5d72811b9f6708371fa6c28ef93e9fe806400114ec19ceb",
-   "issue": "LEAN-186",
-   "due": "2026-11-30",
-   "waits": "Verity.remote_soundness_of_subprotocols",
-   "why": "the code's challenger log is the core's log; unproved; read by no guarantee yet"
-  },
   "Verity.Vocab.BandwidthAuditSound": {
    "owner": "@memory-accounting",
    "digest": "0ba14a8edc194d4a0149201841d2bb1f8546486d4829928a3f14a2193301d417",
    "issue": "LEAN-186",
    "due": "2026-11-30"
-  },
-  "Verity.Vocab.CutIsRegistered": {
-   "owner": "@proofs",
-   "digest": "9d67ca6d39814d0dbfee03f1868962c8219753c4c7c91a780064db99e81eb598",
-   "issue": "LEAN-186",
-   "due": "2026-11-18",
-   "waits": "Verity.remote_soundness_of_subprotocols",
-   "why": "the unwired Program and positions are the cut of the registered wired Program; open until the registration's check exists"
   },
   "Verity.Vocab.InferenceOnlySound": {
    "owner": "@lean",
@@ -966,14 +943,6 @@
    "digest": "3add71017f6fcbf3309c7a2867a7b97fd2bd0581ec23c3ea28478d21f90644c5",
    "issue": "LEAN-186",
    "due": "2026-11-30"
-  },
-  "Verity.Vocab.PositionsCarry": {
-   "owner": "@proofs",
-   "digest": "e5f4f6f363319dfae78ebacf305d5b102b0d30947f012f8409469b5bfa29d754",
-   "issue": "LEAN-186",
-   "due": "2026-11-24",
-   "waits": "Verity.remote_soundness_of_subprotocols",
-   "why": "`named` is given, not defined: if it names no gate's place, `Carries` holds of every unit; needs, with the registration's check, every input gate of a wired reader row named and each place naming at most one gate"
   },
   "Verity.Vocab.PousSound": {
    "owner": "@memory-accounting",
@@ -989,11 +958,11 @@
   },
   "Verity.Vocab.ReadsByPath": {
    "owner": "@lean",
-   "digest": "6254d2e982584c8ed07b5031ef3f978b4aec304d821053b62d981e30e09fb3ae",
+   "digest": "4b1190adc2485e92681dc156007ace4d9269c94561de97786f2c3ca5bff55f7a",
    "issue": "LEAN-238",
    "due": "2026-11-24",
-   "waits": "Verity.remote_soundness_of_subprotocols",
-   "why": "remote soundness concludes the policy on the case as sent; its conclusion on the committed files waits on it"
+   "why": "remote soundness concludes the policy on the case as sent; its conclusion on the committed files waits on it",
+   "waits": "Verity.remote_soundness_of_subprotocols"
   },
   "Verity.Vocab.SpotSound": {
    "owner": "@proofs",
@@ -1687,18 +1656,23 @@
    "nontrivial": "Properties.Spot.PortsHeldProof.membersPortsHeld_nontrivial"
   },
   "Properties.Poub.acceptChecksOpenings": {
+   "honest": ["Properties.Poub.acceptChecksOpenings_honest"],
    "nontrivial": "Properties.Poub.acceptChecksOpenings_nontrivial"
   },
   "Properties.Poub.acceptOpensSamples": {
+   "honest": ["Properties.Poub.acceptOpensSamples_honest"],
    "nontrivial": "Properties.Poub.acceptOpensSamples_nontrivial"
   },
   "Properties.Poub.acceptSamplesOpenable": {
+   "honest": ["Properties.Poub.acceptSamplesOpenable_honest"],
    "nontrivial": "Properties.Poub.acceptSamplesOpenable_nontrivial"
   },
   "Properties.Poub.sampleIsSubset": {
+   "honest": ["Properties.Poub.sampleIsSubset_honest"],
    "nontrivial": "Properties.Poub.sampleIsSubset_nontrivial"
   },
   "Properties.Poub.Shared.acceptSamplesOpenable": {
+   "honest": ["Properties.Poub.Shared.acceptSamplesOpenable_honest"],
    "nontrivial": "Properties.Poub.Shared.acceptSamplesOpenable_nontrivial"
   },
   "Properties.Poub.Shared.acceptedSamplesOpenable": {
@@ -1709,6 +1683,10 @@
   },
   "Properties.Poub.Shared.sampleIsSubset": {
    "nontrivial": "Properties.Poub.Shared.sampleIsSubset_nontrivial"
+  },
+  "Properties.Poub.appendsInOrder": {
+   "honest": ["Properties.Poub.appendsInOrder_honest"],
+   "nontrivial": "Properties.Poub.appendsInOrder_nontrivial"
   }
  },
  "unwitnessed": {
@@ -1984,12 +1962,6 @@
    "type_hash": "733125bdbc556723e5c4874bc8724923cfb4d1029f6d1eb5a9da47c7aa83e3d9",
    "unfolded_hash": "5b95a1321738350f108c3f26dd9884f5a73c6f8060cc9a99e2d9eeced0645404"
   },
-  "Properties.Poub.Shared.acceptSamplesOpenable": {
-   "type_hash": "72932ebcdc9d0dac150fe57d860e5c28e27873cfbb4ad0c1d1004e4a23cf6630",
-   "unfolded_hash": "e8427bfa412b5db30c5837701ffe2ae0b43f97ca2f831794310b961b98d77736",
-   "missing": "honest",
-   "why": "no honest witness is listed: its honest witness's statement reads proofs-tree definitions (Properties.Poub.Line.Honest.params1, Properties.Poub.Line.Honest.reg1, Properties.Poub.overrun, Properties.Poub.window0 (Proofs.Properties.Poub.Remote.RecordAccepts)), so it is not listed; it returns when memory-accounting states those in the properties tree."
-  },
   "Properties.Poub.Shared.acceptedSamplesOpenable": {
    "type_hash": "06805356a8866fa934ab220b1a19e7dc189b637bc5a8f12df71fb85d9216ce25",
    "unfolded_hash": "7d572567278f2b175b8c3321c7f38482ebac6584d8e8ab89907f92e365444f56",
@@ -2026,32 +1998,9 @@
    "type_hash": "15ebef425510bcf7bd868d9a6db984bb76052200ea09f3c327fd44e25ad0dc13",
    "unfolded_hash": "88c1ce2f1e369e32a1b63cabcc35f029c7fdf9076f2284f53f8fe2e1ffa7bca4"
   },
-  "Properties.Poub.acceptChecksOpenings": {
-   "type_hash": "4fbeddbfd8ebc3764ce443b7a3bd3accf8712775a2ea153e91dd73497ffabba3",
-   "unfolded_hash": "a46eb5ea87d1167dc83f62b562e3147752003d7b55c338d6c8108d5e5ed88ca3",
-   "missing": "honest",
-   "why": "no honest witness is listed: its honest witness's statement reads proofs-tree definitions (Properties.Poub.honestCodec (Proofs.Properties.Poub.Remote.Schedule)), so it is not listed; it returns when memory-accounting states those in the properties tree."
-  },
-  "Properties.Poub.acceptOpensSamples": {
-   "type_hash": "0824e125486350cbca90c13f408e9a32fe9bad346667d3234f62693b9a83b368",
-   "unfolded_hash": "8dce49548ff266fa526b5c2e7c4a5891bc460ad2fbca7e940b82098c5a3969cb",
-   "missing": "honest",
-   "why": "no honest witness is listed: its honest witness's statement reads proofs-tree definitions (Properties.Poub.honestCodec (Proofs.Properties.Poub.Remote.Schedule)), so it is not listed; it returns when memory-accounting states those in the properties tree."
-  },
-  "Properties.Poub.acceptSamplesOpenable": {
-   "type_hash": "23efc3674e2e53558d10237762e2aef44fad5fae02091016cd49a3d264198c6d",
-   "unfolded_hash": "0627a953d7b79ff14a48151aa6c1d7407b4b928b34b79bd1598322975b27ea27",
-   "missing": "honest",
-   "why": "no honest witness is listed: its honest witness's statement reads proofs-tree definitions (Properties.Poub.honestCodec (Proofs.Properties.Poub.Remote.Schedule)), so it is not listed; it returns when memory-accounting states those in the properties tree."
-  },
   "Properties.Poub.acceptedMinPasses": {
    "type_hash": "e6b461579b7c18b1f5700db1476b82564d659074a6ee381ea04f930a6b203ab2",
    "unfolded_hash": "21908df058c5173e83972f3c298e8dc6ff907de180dead7a87075e18e5a86e0d"
-  },
-  "Properties.Poub.appendsInOrder": {
-   "type_hash": "c48ed9f56bac401f1424ec8c1d301d878459fbd7f571eba05213f38f456f752b",
-   "unfolded_hash": "ef1530ccdd345492b3f0f4c85994fc35aada8306956da682e1e0d6082438ff85",
-   "why": "no witness is listed: its honest and nontrivial witnesses' statements read proofs-tree definitions (Properties.Poub.Line.Honest.params1, Properties.Poub.Line.Honest.reg1, Properties.Poub.overrun, Properties.Poub.window0 (Proofs.Properties.Poub.Remote.RecordAccepts); Properties.Poub.honestCodec (Proofs.Properties.Poub.Remote.Schedule)), so they are not listed; they return when memory-accounting states those in the properties tree."
   },
   "Properties.Poub.changedReadsDistinct": {
    "type_hash": "3567fe843c6c4f7018e4e854234128081962fba7a864074dfd00b296059aebfa",
@@ -2113,12 +2062,6 @@
   "Properties.Poub.releasedStayOut": {
    "type_hash": "f1641b2c9a2a8babc3fe8dd2026c94f9c95224f1069a41b5a07445e5226ac92c",
    "unfolded_hash": "aabd0bd0ff258e0bfe6a838e8cbe1d471a43da86c84e74bf52af8aaf3ffade7d"
-  },
-  "Properties.Poub.sampleIsSubset": {
-   "type_hash": "2478dc895508127d69a4cf3b2926faa65c0f79f6b9ad55350c96dd409ee1a99c",
-   "unfolded_hash": "c4fbc1d75f11591dfcf914072ef6d624bb4caf4b98673697af22a7db982e2da0",
-   "missing": "honest",
-   "why": "no honest witness is listed: its honest witness's statement reads proofs-tree definitions (Properties.Poub.Line.Honest.params1, Properties.Poub.Line.Honest.reg1, Properties.Poub.overrun, Properties.Poub.window0 (Proofs.Properties.Poub.Remote.RecordAccepts)), so it is not listed; it returns when memory-accounting states those in the properties tree."
   },
   "Properties.Poub.scheduleChecked": {
    "type_hash": "fa79b15871400e1ec705eadaa140e0a32cb18e891058edd46abbe00803e33ce6",
@@ -7310,6 +7253,24 @@
    "type_hash": "72932ebcdc9d0dac150fe57d860e5c28e27873cfbb4ad0c1d1004e4a23cf6630",
    "unfolded_hash": "e8427bfa412b5db30c5837701ffe2ae0b43f97ca2f831794310b961b98d77736"
   },
+  "Properties.Poub.Shared.acceptSamplesOpenable_honest": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.Poub.Shared.acceptSamplesOpenable_honest :",
+    "  Exists fun coin =>",
+    "    Exists fun sampled =>",
+    "      Eq (Poub.receiptSample 1 coin (Properties.Poub.Shared.lengthsOf (List.cons Properties.Poub.window0 List.nil)))",
+    "        (Option.some sampled)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "40eca6e59c47875d35de0cd2a6b728c238bfda7d79eb25a2cfe3e6e43a144051"
+  },
   "Properties.Poub.Shared.acceptSamplesOpenable_nontrivial": {
    "owner": "@memory-accounting",
    "signature": [
@@ -8001,6 +7962,30 @@
    "type_hash": "4fbeddbfd8ebc3764ce443b7a3bd3accf8712775a2ea153e91dd73497ffabba3",
    "unfolded_hash": "a46eb5ea87d1167dc83f62b562e3147752003d7b55c338d6c8108d5e5ed88ca3"
   },
+  "Properties.Poub.acceptChecksOpenings_honest": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.Poub.acceptChecksOpenings_honest :",
+    "  Exists fun reg =>",
+    "    Exists fun w =>",
+    "      Exists fun coin =>",
+    "        Exists fun openings =>",
+    "          And",
+    "            (Eq",
+    "              (Poub.Registration.make? (Poub.zeros 1) 1 reg.payloadRoot (Poub.zeros Poub.Codec.SEED_BYTES)",
+    "                Properties.Poub.honestCodec Poub.Kind.sketch Bool.false Poub.LAYOUT 16)",
+    "              (Except.ok reg))",
+    "            (Eq (Poub.verifyWindow reg List.nil.toArray w coin 1 openings) (Option.some Poub.Verdict.accept))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "a023cd02fbf4c1aadec9a332188c3ccc1e2908385ee681035962d6901d0c442b"
+  },
   "Properties.Poub.acceptChecksOpenings_nontrivial": {
    "owner": "@memory-accounting",
    "signature": [
@@ -8029,6 +8014,30 @@
    "type_hash": "0824e125486350cbca90c13f408e9a32fe9bad346667d3234f62693b9a83b368",
    "unfolded_hash": "8dce49548ff266fa526b5c2e7c4a5891bc460ad2fbca7e940b82098c5a3969cb"
   },
+  "Properties.Poub.acceptOpensSamples_honest": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.Poub.acceptOpensSamples_honest :",
+    "  Exists fun reg =>",
+    "    Exists fun w =>",
+    "      Exists fun coin =>",
+    "        Exists fun openings =>",
+    "          And",
+    "            (Eq",
+    "              (Poub.Registration.make? (Poub.zeros 1) 1 reg.payloadRoot (Poub.zeros Poub.Codec.SEED_BYTES)",
+    "                Properties.Poub.honestCodec Poub.Kind.sketch Bool.false Poub.LAYOUT 16)",
+    "              (Except.ok reg))",
+    "            (Eq (Poub.verifyWindow reg List.nil.toArray w coin 1 openings) (Option.some Poub.Verdict.accept))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "a023cd02fbf4c1aadec9a332188c3ccc1e2908385ee681035962d6901d0c442b"
+  },
   "Properties.Poub.acceptOpensSamples_nontrivial": {
    "owner": "@memory-accounting",
    "signature": [
@@ -8056,6 +8065,30 @@
    },
    "type_hash": "23efc3674e2e53558d10237762e2aef44fad5fae02091016cd49a3d264198c6d",
    "unfolded_hash": "0627a953d7b79ff14a48151aa6c1d7407b4b928b34b79bd1598322975b27ea27"
+  },
+  "Properties.Poub.acceptSamplesOpenable_honest": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.Poub.acceptSamplesOpenable_honest :",
+    "  Exists fun reg =>",
+    "    Exists fun w =>",
+    "      Exists fun coin =>",
+    "        Exists fun openings =>",
+    "          And",
+    "            (Eq",
+    "              (Poub.Registration.make? (Poub.zeros 1) 1 reg.payloadRoot (Poub.zeros Poub.Codec.SEED_BYTES)",
+    "                Properties.Poub.honestCodec Poub.Kind.sketch Bool.false Poub.LAYOUT 16)",
+    "              (Except.ok reg))",
+    "            (Eq (Poub.verifyWindow reg List.nil.toArray w coin 1 openings) (Option.some Poub.Verdict.accept))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "a023cd02fbf4c1aadec9a332188c3ccc1e2908385ee681035962d6901d0c442b"
   },
   "Properties.Poub.acceptSamplesOpenable_nontrivial": {
    "owner": "@memory-accounting",
@@ -8097,6 +8130,54 @@
    },
    "type_hash": "c48ed9f56bac401f1424ec8c1d301d878459fbd7f571eba05213f38f456f752b",
    "unfolded_hash": "ef1530ccdd345492b3f0f4c85994fc35aada8306956da682e1e0d6082438ff85"
+  },
+  "Properties.Poub.appendsInOrder_honest": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.Poub.appendsInOrder_honest :",
+    "  Exists fun reg =>",
+    "    Exists fun coins =>",
+    "      Exists fun events =>",
+    "        Exists fun rs =>",
+    "          Exists fun s =>",
+    "            And",
+    "              (Eq",
+    "                (Poub.Registration.make? (Poub.zeros 1) 1 reg.payloadRoot (Poub.zeros Poub.Codec.SEED_BYTES)",
+    "                  Properties.Poub.honestCodec Poub.Kind.sketch Bool.false Poub.LAYOUT 16)",
+    "                (Except.ok reg))",
+    "              (And",
+    "                (Eq",
+    "                  (Poub.Session.run",
+    "                    (Poub.Session.State.init Properties.Poub.Line.Honest.params1 reg coins List.nil.toArray 0) events)",
+    "                  (Except.ok { fst := rs, snd := s }))",
+    "                (Eq s.outcome (Option.some \"accepted\")))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "d836de306384750f0efad70e4b4de7d9c7eba6da22618b9e21dd6ed4c9e7999c"
+  },
+  "Properties.Poub.appendsInOrder_nontrivial": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.Poub.appendsInOrder_nontrivial :",
+    "  Not",
+    "    (Eq Properties.Poub.overrun.extent",
+    "      (instHAdd.hAdd Properties.Poub.Line.Honest.reg1.blocks",
+    "        (List.map (fun x => x.count) Properties.Poub.overrun.appends.toList).sum))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "4dfe31f5e0d7e7775b3ddb67395aa97bdce5917e358b5b892cdb07c119134d0c"
   },
   "Properties.Poub.changedReadsDistinct": {
    "owner": "@memory-accounting",
@@ -8494,6 +8575,24 @@
    },
    "type_hash": "2478dc895508127d69a4cf3b2926faa65c0f79f6b9ad55350c96dd409ee1a99c",
    "unfolded_hash": "c4fbc1d75f11591dfcf914072ef6d624bb4caf4b98673697af22a7db982e2da0"
+  },
+  "Properties.Poub.sampleIsSubset_honest": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.Poub.sampleIsSubset_honest :",
+    "  Exists fun src =>",
+    "    Exists fun sampled =>",
+    "      Eq (Poub.receiptSample 1 src (Array.map (fun x => x.plan.length) Properties.Poub.window0.passes))",
+    "        (Option.some sampled)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "db6d022df2573bb2e1968445a4eeacec5faaa3ebb8fd4f69271014e98dd01f51"
   },
   "Properties.Poub.sampleIsSubset_nontrivial": {
    "owner": "@memory-accounting",
@@ -15418,8 +15517,8 @@
    "Flock.Chain.lowerEvalDoor": "frozen (no-function): a link of the chain from an accept to block correctness in C, stated over the circuit, its lowering and the commitments, not a property of one function's acceptance.",
    "Flock.Chain.doorLengths": "frozen (no-function): a link of the chain from an accept to block correctness in C, stated over the circuit, its lowering and the commitments, not a property of one function's acceptance.",
    "Flock.Chain.restrictBodyAgrees": "frozen (no-function): a link of the chain from an accept to block correctness in C, stated over the circuit, its lowering and the commitments, not a property of one function's acceptance.",
-   "Spot.Challenger.CutMeans": "unstated: on a log releasedLogOf accepts, cut accepting gives Log.Cut at the commitments (the code's challenger log is the core's log); a stated link, not proved; no theorem states it yet.",
-   "Spot.Challenger.KeyedBySlotMeans": "unstated: on a log releasedLogOf accepts, every family's coins are keyed by slot (Log.KeyedBySlot); a stated link, not proved; no theorem states it yet."
+   "Spot.Challenger.CutMeans": "unstated: on a log releasedLogOf accepts, cut accepting gives Log.Cut at the commitments (the code's challenger log is the core's log); a stated link, not proved; no theorem states it yet. Waits on the remote guarantee that was to read it, or its deletion as dead; owner @lean, issue LEAN-186, due 2026-11-30.",
+   "Spot.Challenger.KeyedBySlotMeans": "unstated: on a log releasedLogOf accepts, every family's coins are keyed by slot (Log.KeyedBySlot); a stated link, not proved; no theorem states it yet. Waits on the remote guarantee that was to read it, or its deletion as dead; owner @lean, issue LEAN-186, due 2026-11-30."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -27188,6 +27287,22 @@
     "Properties.Poub.Subprotocol.HonestLog.evidence": "0a153953522ed9205a7c6f2dc2a5b550b511cd48a39b541139cb45e858e6eaa6",
     "Properties.Poub.Subprotocol.HonestLog.params": "79cb056cc0e9a2aed5aab2e14240e68245b23e74ebd1255c374f00c4c929920d",
     "Properties.Poub.Subprotocol.HonestLog.registration": "3e1befdcb53507f9ae736b3a4403445cf4d9750edf833ebeaff7ef8e187ee2e7"
+   }
+  },
+  "Properties.Poub.Remote.Instances": {
+   "digest": "567390da234d6924a2ed9740b683b94da27c109305564b7c9c14dc722048019f",
+   "definitions": {
+    "Properties.Poub.Line.Honest.leaf1": "b27a889df6bb4f4b238a679bbb8d09629ba4fbc9c94f2e80a4230556f8e8644d",
+    "Properties.Poub.Line.Honest.params1": "901a5b588a103ee23d96082d3300e89477857e4a1f6a6345e2cdfb3983fd1d9f",
+    "Properties.Poub.Line.Honest.reg1": "760ccee9de03cbd4418eb48ecd230f1bfc9ad8f97c928a891a297565a8917095",
+    "Properties.Poub.Line.Honest.root1": "145e4068330973f39c9cfdf2494920d743d4464bf0d1431c7fe77e1c5b92d0cf",
+    "Properties.Poub.Line.Honest.window1": "3813d8fdb47f736148116c056b8f395486fc4d402d28466d274b91109d2fed68",
+    "Properties.Poub.honestCodec": "1f56327573fbd371bcd5ed5fc141f587da640598378418aa35af1e155a7b7b15",
+    "Properties.Poub.overrun": "0c42c0c9a21a2f4c27db9293b80545c272cdc1d2f25b6815f0fb241cb0f9d4be",
+    "Properties.Poub.window0": "15b74121854812706f73fcd11d94fb5fbf557023e512039903a1768bbd79b955",
+    "Properties.Poub.zeroPath": "38b01c5ec8a70fc02bccb3d959e419b96a5c278117595ca06e3a1973e4c4743b",
+    "Properties.Poub.zeroPayload": "21c0be08473fbecff361e2cb483b06f2024ecdcb7c9fca231ca180e404189063",
+    "Properties.Poub.zeroRoot": "2e0f1dc7605f1275814b631c2730db7801eb226f42ac1d3d7d815ecbefaaae3d"
    }
   },
   "Properties.Poub.Remote.Line": {
