@@ -2044,7 +2044,7 @@ road_sampled() {  # step 3 on the window's road: the window's record, its Lean c
     || { step_refused sampled-proofs "ERROR: the records audit stopped with no RECORDS row $(failed "$rc" "$LOGS/sampled-proofs/audit.err")"; return; }
   # $OUT/summary.json is the audit's public summary, which the record step reads; the full one names templates and stays in $s
   line=$("$PY" - "$s/summary.json" "$s/audit/window/summary.json" "$law" "$OUT/summary.json" <<'EOF'
-import json, sys
+import json, re, sys
 from pathlib import Path
 row, inner = json.load(open(sys.argv[1])), (json.load(open(sys.argv[2])) if Path(sys.argv[2]).is_file() else {})
 draw = row.get("draw") if isinstance(row.get("draw"), list) else []
@@ -2083,7 +2083,9 @@ def reasons(checks):
 
 if row.get("refused") or not isinstance(row.get("draw"), list):
     why = row.get("refused") or reasons(inner.get("checks") or {}) or "the audit's summary names no failing check"
-    print(f"REFUSED before the sample: {why if isinstance(why, str) else json.dumps(why, sort_keys=True)}"[:2000])
+    text = why if isinstance(why, str) else json.dumps(why, sort_keys=True)
+    text = re.sub(r"[A-Za-z][A-Za-z0-9]*(?:_[A-Za-z0-9]+)*_v[0-9]+(?:\{[^}]*\})?", "a template", text)
+    print(f"REFUSED before the sample: {text}"[:2000])
     sys.exit(2)
 if not draw:
     print("the law samples no block of this window: nothing would be proved")
