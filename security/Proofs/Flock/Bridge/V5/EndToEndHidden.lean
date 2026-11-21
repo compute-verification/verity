@@ -5,7 +5,7 @@ public import Proofs.Flock.Bridge.V5.Statement
 /-!
 # `EndToEndHiddenV5`, from `OpeningsCanonTargetV5`
 
-`EndToEndHiddenC.lean` at the verifier's public inputs:
+The one-stage audit under hidden outputs with canonical openings, at the verifier's public inputs:
 
 * `Layout.keyProgP_readsOwn`: `keyProgP`'s proof blocks read only their own gates and input gates (`keyProgP_reads`);
 * `zk_session_soundHJ_custody_escCP`: at verity-verify-proof `--zk --public-inputs`'s acceptance (`zk_headline_exec_tablesA`
