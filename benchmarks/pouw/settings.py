@@ -24,6 +24,7 @@ from verity_config.settings import DEBUG, VALUE, WHERE, Registry, Setting as S, 
 STANDALONE = ("../../verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm120/run.py",
               "../../verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm90/run.py",
               "../../verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm90/grouped.py",
+              "../../verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c/driver.py",
               "../../verity/protocols/accounting/compute/pouw/prover/sass_gate.py")
 
 

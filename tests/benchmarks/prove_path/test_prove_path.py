@@ -1716,6 +1716,7 @@ def test_window_commit_loads_its_own_builds_beside_its_out_while_the_row_dir_hol
     written from its compile with its names and no vLLM (`own_builds`) into a directory of its own beside ``--out``, gone
     once it returns, and writes none into the row dir."""
     from verity_vllm.program.predict import window_circuit as WC
+    from verity_vllm.program.predict import window_weights  # noqa: F401  imported before `lower`'s stub, which it binds by name
 
     monkeypatch.setitem(sys.modules, "vllm", None)
     s = _tiny_served(tmp_path, monkeypatch)
@@ -1831,8 +1832,8 @@ def test_window_commit_fills_the_served_circuits_slots_and_rows_from_its_served_
     lower, weight_values, rows_of = WC.lower, WW.weight_values, WRS.Rows
     widths, zeros = {8: np.uint8, 16: np.uint16, 32: np.uint32}, {}
 
-    def lowered(r, c, requests=None):
-        low = lower(r, c, None, grain, requests=requests)
+    def lowered(r, c, programs=None, g=grain, requests=None):
+        low = lower(r, c, programs, g, requests=requests)
         zeros.update({label: np.zeros(ty.leaves, dtype=widths[next(iter(ty.width_set()))])
                       for label, ty in dict(low.fn.signature()[0])[WC.WEIGHTS].fields})
         return low
