@@ -17,7 +17,10 @@ import one_linear as OL  # noqa: E402
 from verity.circuits import laying  # noqa: E402
 from verity.circuits.codec import encode_program  # noqa: E402
 from verity.commitments.periods import interface as I  # noqa: E402
-from verity.protocols.proof.spot.verifier.one_stage import members as M, one_circuit as OC, verifier as V  # noqa: E402
+from verity.protocols.proof.spot.verifier.one_stage import members as M, one_circuit as OC  # noqa: E402
+import verity_difftest as D  # noqa: E402
+
+SPOT = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "proof" / "spot" / "verifier" / "lean"
 
 
 def test_one_template_its_blocks_between_the_floor_and_the_cap():
@@ -56,23 +59,32 @@ def committed(tmp_path_factory):
     return record, members, program, query
 
 
-def _run_input_roots(record: dict, members: dict, program, query) -> dict:
-    """The Lean verifier's `OneStageZk.runInputRoots` (`run_input_roots`) on the window's members, no tied gates."""
-    return V.lean("run_input_roots", {"program": encode_program(program), "query": query, "roots": record["roots"],
-                                      "members": [[n, us] for n, us in members.items()], "window_root": OL.RUN,
-                                      "tied": []})
+def _run_input_roots(lean: D.Server, record: dict, members: dict, program, query) -> dict:
+    """The Lean verifier's `OneStageZk.runInputRoots` (`spot-difftest`'s `run_input_roots`) on the window's members, no
+    tied gates."""
+    kind, body = lean.call("run_input_roots", {"program": encode_program(program), "query": query,
+                                               "roots": record["roots"], "members": [[n, us] for n, us in members.items()],
+                                               "window_root": OL.RUN, "tied": []})
+    assert kind == "output", body
+    return json.loads(body)
+
+
+@pytest.fixture(scope="module")
+def lean():
+    with D.Server([str(D.build(SPOT, "spot-difftest"))]) as s:
+        yield s
 
 
 @pytest.mark.slow
-def test_every_member_reads_an_untied_run_input_at_the_records_one_tree_and_without_it_is_refused(committed):
+def test_every_member_reads_an_untied_run_input_at_the_records_one_tree_and_without_it_is_refused(committed, lean):
     """What `Properties.Spot.RunInputsAtOneTree` concludes, on the honest run's files: for every member, the inputs Lean's
     `memberInputs` gives it hold an untied run input node, and for each the member's slice of the record holds a root at
     its port, its node's one tree ``input/n<w>``, equal to the record's root of that tree. With one tree's root taken out
     of the record, Lean refuses the first member by `RUN_TREE_MISSING_WHY`. Slow (the window's commitments, seconds): no
     smaller window has one-linear's run input nodes and members."""
     record, members, program, query = committed
-    got = _run_input_roots(record, members, program, query)
-    assert got.get("refused") is None and len(got["roots"]) == len(members) >= 2, got
+    got = _run_input_roots(lean, record, members, program, query)
+    assert got["refused"] is None and len(got["roots"]) == len(members) >= 2, got
     of_tree = {r["port"]: r for r in record["roots"]}
     slices = M.slices(members, record, program=program, query=query, window_root=OL.RUN)
     for name, pairs in got["roots"]:
@@ -83,5 +95,5 @@ def test_every_member_reads_an_untied_run_input_at_the_records_one_tree_and_with
     first, pairs = got["roots"][0]
     port, tree = pairs[-1]
     cut = {**record, "roots": [r for r in record["roots"] if r["port"] != tree]}
-    refused = _run_input_roots(cut, members, program, query)
-    assert refused == {"roots": None, "refused": M.run_tree_missing_why(first, port, int(tree.removeprefix("input/n")))}
+    assert _run_input_roots(lean, cut, members, program, query) == {
+        "roots": None, "refused": M.run_tree_missing_why(first, port, int(tree.removeprefix("input/n")))}
