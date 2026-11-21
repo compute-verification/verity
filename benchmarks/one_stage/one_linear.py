@@ -57,7 +57,7 @@ def circuit(registered: bool = True):
     g = gemm()
     gid = descriptor_id(g)
     if not registered:
-        return I.Circuit("one_linear", ((g, UNITS),), external=(f"{gid}/x", f"{gid}/w"), run_inputs=True)
+        return I.Circuit("one_linear", ((g, UNITS),), external=(f"{gid}/x", f"{gid}/w"))
     reg = I.Registered({"weights": E * K}, reads=(I.Read(gid, "w", "weights", 0, (len(TOKENS), SLICES), 0, (0, N * K)),))
     return I.Circuit("one_linear", ((g, UNITS),), external=(f"{gid}/x",), registered=reg)
 
