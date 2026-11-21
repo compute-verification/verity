@@ -6,6 +6,7 @@ public import Proofs.Properties.InferenceOnly.DescVerdict
 public import Proofs.Properties.InferenceOnly.Theta
 public import Proofs.Properties.InferenceOnly.ThetaSteps
 public import Proofs.Properties.InferenceOnly
+public import Proofs.Properties.InferenceOnly.Count
 public import Proofs.Properties.InferenceOnly.Agrees
 public import Proofs.Slowdown.FitWitness
 public import Proofs.Properties.Spot

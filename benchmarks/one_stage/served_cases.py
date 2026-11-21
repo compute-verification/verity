@@ -128,16 +128,16 @@ from typing import Any
 
 from verity.commitments import docket_digest as DD
 from verity.commitments import domains as DM
-from verity.protocols.proofs.spot.verifier import levels as LV
-from verity.protocols.proofs.spot.verifier.one_stage import lean_child as LC, proofs as PF
-from verity.protocols.proofs.spot.verifier.one_stage import verifier as VF
+from verity.protocols.proof.spot.verifier import levels as LV
+from verity.protocols.proof.spot.verifier.one_stage import lean_child as LC, proofs as PF
+from verity.protocols.proof.spot.verifier.one_stage import verifier as VF
 from verity.circuits import codec
 
 ROOT = Path(__file__).resolve().parents[2]
 V1 = DM.ONE_STAGE_PROTOCOL
 V1_LEAN = (VF.PACKAGE, "spot-one-stage")
 SAMPLED = "verity/sampled-proofs/v1"
-SAMPLED_LEAN = (ROOT / "verity/protocols/proofs/spot_flock_recursion/verifier/lean", "vstar-recursive")
+SAMPLED_LEAN = (ROOT / "verity/protocols/proof/spot_flock_recursion/verifier/lean", "vstar-recursive")
 #: `vstar-recursive`'s command for SPOT (`VStarRecursiveMain.main` sends ``sampled`` to
 #: `VStar.Recursive.Sampled.protocol`), ahead of ``check``
 SAMPLED_CMD = ("sampled",)
@@ -147,13 +147,13 @@ INFERENCE_ONLY = "verity/inference-only/v0"
 #: (``LEAN``) and the Python that check is held to (``reference``), which `policy` loads by name
 POLICY = "inference_only_lean"
 PEARL_PLUS = "verity/pouw/pearl-plus/v1"
-#: what Pearl+'s commitment's digest hashes ahead of a zero byte and the commitment (`PouwCheck.PearlPlus.Protocol`)
+#: what Pearl+'s commitment's digest hashes ahead of a zero byte and the commitment (`PouwVerifier.PearlPlus.Protocol`)
 PEARL_PLUS_TAG = b"verity/pouw/pearl-plus/manifests/v1"
 #: the keys of `served_passes.py case`'s parts that make the case and its answer
 PEARL_PLUS_PARTS = {"params", "manifests", "window", "evidence", "lean", "delta"}
-#: the commitment's window (`PouwCheck.PearlPlus.Protocol.windowKeys`)
+#: the commitment's window (`PouwVerifier.PearlPlus.Protocol.windowKeys`)
 PEARL_PLUS_WINDOW = {"dropped", "record", "rounds"}
-#: the work the protocol's check publishes (`PouwCheck.PearlPlus.Protocol.publicJson`, δ aside): the exact credit, which
+#: the work the protocol's check publishes (`PouwVerifier.PearlPlus.Protocol.publicJson`, δ aside): the exact credit, which
 #: holds no class, so where the verdict of record printed the grid form, its exact work in that form's place
 PEARL_PLUS_PUBLIC = ("credited", "credited_tiles", "epsilon", "macs", "rho")
 DIRS = {V1: "sampled-proofs-v1", SAMPLED: "sampled-proofs", INFERENCE_ONLY: "inference-only",

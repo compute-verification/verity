@@ -28,25 +28,25 @@ from verity.commitments.crypto import lms
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain, tree_levels
 from verity.commitments.rowleaf import row_leaf
-from verity.protocols.resource_accounting.compute.pouw.prover.circuit import leaves as L
-from verity.protocols.resource_accounting.compute.pouw.prover.kernels.served_zk import of_record as OR
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_device import DEVICES
-from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
-from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
-from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
-from verity.protocols.resource_accounting.compute.pouw.verifier.audit import Epoch, Workload, weights_root
-from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger as Coins
-from verity.protocols.resource_accounting.compute.pouw.verifier.coins import CoinOpening, coin_reason
-from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Context, Matmul, Shape
-from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
-from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+from verity.protocols.accounting.compute.pouw.prover.circuit import leaves as L
+from verity.protocols.accounting.compute.pouw.prover.kernels.served_zk import of_record as OR
+from verity.protocols.accounting.compute.pouw.prover.schemes import pearl_c as C
+from verity.protocols.accounting.compute.pouw.prover.schemes.pearl_c_device import DEVICES
+from verity.protocols.accounting.compute.pouw.verifier import core_check as CC
+from verity.protocols.accounting.compute.pouw.verifier import salt as PS
+from verity.protocols.accounting.compute.pouw.verifier import window as Wd
+from verity.protocols.accounting.compute.pouw.verifier.audit import Epoch, Workload, weights_root
+from verity.protocols.accounting.compute.pouw.verifier.coins import Challenger as Coins
+from verity.protocols.accounting.compute.pouw.verifier.coins import CoinOpening, coin_reason
+from verity.protocols.accounting.compute.pouw.verifier.protocol import Context, Matmul, Shape
+from verity.protocols.proof.spot.verifier.challenger import challenger as Ch
+from verity.protocols.proof.spot.verifier import service as S
+from verity.protocols.proof.spot.verifier.one_stage import docket as R
 
 import of_record_lean as ORL
 import served_commit as SC
 
-_spec = importlib.util.spec_from_file_location("certified_salt", Path(__file__).resolve().parents[2] / "verity/protocols/resource_accounting/compute/pouw/verifier/certified_salt.py")
+_spec = importlib.util.spec_from_file_location("certified_salt", Path(__file__).resolve().parents[2] / "verity/protocols/accounting/compute/pouw/verifier/certified_salt.py")
 CS = sys.modules["certified_salt"] = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(CS)
 
@@ -176,7 +176,7 @@ def test_rows_are_the_schemes_operands(served):
     none of the call's kept rows."""
     scheme, ctx, noise, words = served
     assert words["a"][M] is None and all(w is not None for w in words["a"][:M] + words["b"])
-    from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Tile
+    from verity.protocols.accounting.compute.pouw.verifier.protocol import Tile
     ops = scheme.encode(ctx, noise, _rows(1, M)[1:2], _rows(2, N)[3:4], Tile((1,), (3,)))
     assert words["a"][1] == L.words_fp8_p(ops.a.codes[0], ops.pa[0])
     assert words["b"][3] == L.words_fp8_p(ops.b.codes[0], ops.pb[0])
@@ -1245,8 +1245,8 @@ def test_without_the_lean_side_the_commands_that_check_refuse_before_any_work(ar
 
 
 def _stub_calls():
-    from verity.protocols.resource_accounting.compute.pouw.prover.kernels.served_zk import stage_tile as STG
-    from verity.protocols.resource_accounting.compute.pouw.prover.kernels.served_zk import statement as ST
+    from verity.protocols.accounting.compute.pouw.prover.kernels.served_zk import stage_tile as STG
+    from verity.protocols.accounting.compute.pouw.prover.kernels.served_zk import statement as ST
     st = object.__new__(ST.Statement)
     record = OR.Record(lean=False)
     torch = "benchmarks/pouw/served_zk/statement_torch.py"
@@ -1441,7 +1441,7 @@ def test_the_cli_runs_the_window_through_the_service(served, tmp_path, monkeypat
         src = "resalt.json" if case == "resalted" else "manifest.json"
         assert SC.main(["coin-variant", f"{t}/{src}", f"{t}/coins.json", f"{t}/opening.json", f"{t}/coin-{case}.json", case]) == 0
     lean = tmp_path / "lean"
-    lean.write_text(f"#!{sys.executable}\nimport json, sys\nfrom verity.protocols.resource_accounting.compute.pouw.verifier.core_check import stream_subset\n"
+    lean.write_text(f"#!{sys.executable}\nimport json, sys\nfrom verity.protocols.accounting.compute.pouw.verifier.core_check import stream_subset\n"
                     "a = sys.argv\np, k = int(a[a.index('--population') + 1]), int(a[a.index('--k') + 1])\n"
                     "w = (p.bit_length() + 64 + 7) // 8\nsrc = bytes.fromhex(a[a.index('--stream') + 1])\n"
                     "sys.exit(1) if len(src) != 2 * k * w + 64 else None\n"
@@ -1553,7 +1553,7 @@ def test_shape_compares_what_the_prover_sends(tmp_path):
 def test_a_staged_unit_opens_under_the_window_root(served, tmp_path):
     """stage_tile.py, run by hidden_zk/served_stage.py, stages a call's tile and a filler tile of a committed execution phase as `Pc8TileSide` units, each in its own
     process, on the committer's side rows and salts: each is over the circuit the verifier pins for the template
-    (`core_check.TILES`, Lean's `PouwCheck.tiles`), and each public file's rows are the side trees' leaves, so the opening
+    (`core_check.TILES`, Lean's `PouwVerifier.tiles`), and each public file's rows are the side trees' leaves, so the opening
     accepts.  Nothing cheaper catches a unit whose committed rows are not the side rows (the index field dropped or moved),
     or a change to the template or to Flock's lowering that moves the circuit off its pin, which only staging shows;
     about a minute at K = 128."""

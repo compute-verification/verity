@@ -1,5 +1,5 @@
 """The served Pearl+ flow's Lean step end to end (`served_pearlplus.sh` step 4b) with the real Lean verifier,
-PouwCheck.PearlPlus's ``pouw-pearlplus`` (PR #7221's package, built here as its difftest builds it), and the row PoUW's
+PouwVerifier.PearlPlus's ``pouw-pearlplus`` (PR #7221's package, built here as its difftest builds it), and the row PoUW's
 compose then makes of the piece.
 
 A toy serve stands in for the GPU's: a warm-up pass and two timed passes of one epoch (the pouw suite's `proved_pass`, the
@@ -32,7 +32,7 @@ pytest.importorskip("torch")
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-PACKAGE = ROOT / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "verifier" / "lean" / "pearlplus"
+PACKAGE = ROOT / "verity" / "protocols" / "accounting" / "compute" / "pouw" / "verifier" / "lean" / "pearlplus"
 H100 = "pearl-c-h100-v1-h3"
 SOURCE = b"verifier" * 4
 pytestmark = [pytest.mark.slow, pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain"),
@@ -56,7 +56,7 @@ SP = T.load("pearl_c_vllm_served_passes", T.POUW / "pearl_c_vllm" / "served_pass
 
 def test_the_lean_step_writes_the_real_lean_answer_on_the_served_run_and_the_compose_reads_it(tmp_path, monkeypatch):
     import verity_difftest as D
-    from verity.protocols.resource_accounting.compute.pouw.verifier import verifier as PV
+    from verity.protocols.accounting.compute.pouw.verifier import verifier as PV
     from verity.commitments import docket_digest as DD
 
     monkeypatch.setattr(PV, "coins", lambda n: SOURCE[:n])

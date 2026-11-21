@@ -1,6 +1,6 @@
 """A verifier costs O(circuit description), never O(unrolled circuit) (AGENTS.md "Design rules").
 
-A scan over the Lean under `verity/` outside `verity/protocols/proofs/flock/prover/` (the verifiers and the code they run) and over `security/`'s verifier code
+A scan over the Lean under `verity/` outside `verity/protocols/proof/flock/prover/` (the verifiers and the code they run) and over `security/`'s verifier code
 models (each `security/Proofs/**/Code.lean`, a verifier a guarantee is stated at, with the `security` modules it imports
 and the `Properties` modules those import) refuses the forms an unrolled walk takes there: locating gates one by one
 through the canonical layout (`P.gate g`, `Prog.gate P g`, `Flock.Program.Prog.gate P g`), a range or loop bounded by a Definition's gate count
@@ -8,7 +8,8 @@ through the canonical layout (`P.gate g`, `Prog.gate P g`, `Flock.Program.Prog.g
 bound to one (`let n := defn.gates` … `Array.mkEmpty n`, `for j in [0:n]`; `let gs := C.gates.toArray` … `List.range
 gs.size`), a range or loop over a key program's gates, inputs or units (`List.range kp.size`, `List.range kp.units`: a
 `Spot.Bits.KeyProg` lays a member's units out side by side), a range or
-loop over a node's members (`for m in [0:node.members]`, `List.range node.members`: every batch member or scan iteration),
+loop over a node's members (`for m in [0:node.members]`, `List.range node.members`: every batch member or scan iteration)
+unless a `walkAtMost` on that same count refuses it first (`_bounded`),
 and outside the tests a templated unit unrolled (`Tmpl.unroll`, `Tmpl.unrollAt`, `Tmpl.unitFull`, `Tmpl.posMap`, `Tmpl.foldRef`):
 a templated unit is read from its description (`Tmpl.unrollOk`, `Tmpl.unitNet`, `Tmpl.foldUnit`), or a member's key
 program built (`Spot.Bits.keyProg c n`, every one of its `n` units laid out). Outside the tests it
@@ -23,6 +24,11 @@ iterations, as `InferenceOnlyCheck.Desc` does (its docstring), so a Definition's
 
 The scan is a net for the forms that have occurred, and no regex sees every spelling: the cost rule is held finally by the
 cost measurements and the count theorems.
+
+A `walkAtMost` bounds one loop and not the product of loops: `InferenceOnlyVerifier.Desc`'s bounded walks nest (a
+node's members, a member's runs, each resolved through `down` again), so this scan passing on it says that no single
+walk passes `WALK`, and its total work is still not bounded in the description's size. That stays open until its
+recursion spends one step budget.
 
 What may stay is listed in ``ALLOWED``, one line of reason each: the gate-by-gate references a description-sized
 verifier is difftested against, and the walks still open. An entry that no longer matches anything fails too.
@@ -43,19 +49,10 @@ ALLOWED: dict[str, str] = {
     "verity/circuits/evaluate/Evaluate/Walk.lean":
         "Evaluate.walk, the evaluator: a Program's values gate by gate, every member of every node, by definition; no "
         "verifier imports it",
-    "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyVerifier/Desc.lean":
-        "InferenceOnlyVerifier.Desc's members of a node reading part of a mapped argument, one by one: bounded by walkAtMost, "
-        "which refuses past its limit; and a grid part's pieces, one a lane a period (ofPart): bounded by gridWalk at WALK, "
-        "2^20 pieces a part, and refused by name past it (unwalked). The bound admits a grid of up to 2^20 lanes times "
-        "periods; the served classes' grids are 128 and 768 pieces at the class 4,27,2, a period count that grows with the "
-        "class's batch and steps, so it is a limit on class size. Measured so far on stand-in Programs read through the "
-        "classes' two grid parts, not the served classes: 0.03 s at 128 and at 768 pieces, 1.9 s at the bound; the served "
-        "classes' own figures replace these. An exception granted until one piece a lane replaces "
-        "the walk (LEAN-335, due Fri 20 Nov), which deletes it and these words",
-    "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyVerifier/DescFuzz.lean":
+    "verity/protocols/policy/training_detection/inference_only/verifier/lean/InferenceOnlyVerifier/DescFuzz.lean":
         "InferenceOnlyVerifier.DescFuzz, the desc fuzzer the Lean audit runs (InferenceOnlyVerifier.DescFuzzMain): it visits every member of every "
         "node of a generated Program, under caps.work, to decide DescAgrees' open statements there; the verifier never runs it",
-    "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyVerifier/Check.lean":
+    "verity/protocols/policy/training_detection/inference_only/verifier/lean/InferenceOnlyVerifier/Check.lean":
         "InferenceOnlyVerifier.check, the gate-by-gate reference InferenceOnlyVerifier.Desc is difftested against (runs InferenceOnlyVerifier.DescDifftestMain); "
         "`inference-only-verifier` runs it only with --unrolled",
     "verity/circuits/lean/Circuits/AnnotExpand.lean":
@@ -65,43 +62,43 @@ ALLOWED: dict[str, str] = {
         "open: Q_word v1 owns every computing gate, so its CallGraph lays out one activation of each distinct "
         "Call's Definition, batch members and scan iterations unrolled; no served window names Q_word (they name "
         "template queries, which read the root body only)",
-    "verity/protocols/proofs/flock/verifier/Flock/Qcall.lean":
+    "verity/protocols/proof/flock/verifier/Flock/Qcall.lean":
         "open: Q_call v1 owns every computing gate, so its Gates lays out one activation of each distinct "
         "Call's Definition, batch members and scan iterations unrolled (its reads deduplicated in linear time, "
         "dedupReads, proved equal to the quadratic loop it replaced: gates_ref); no served window names Q_call",
-    "verity/protocols/proofs/spot/verifier/lean/Spot/PartitionRef.lean":
+    "verity/protocols/proof/spot/verifier/lean/Spot/PartitionRef.lean":
         "committedBitsRef, the walk of one activation Partition.committedBits replaced by reading Flock.Qcall.gates' "
         "layout (Gates.readTo): the reference the committed_bits difftest piece holds it to; the verifier never runs it",
-    "verity/protocols/proofs/flock/verifier/Flock/TemplateQuery.lean":
+    "verity/protocols/proof/flock/verifier/Flock/TemplateQuery.lean":
         "TemplateQuery.unitGatesRef, every unit's gates unit by unit, the walk unitGates replaced: the reference the "
         "unit_gates difftest piece holds it to, and unitGates' answer on ranges evaluate never gives (not contiguous "
         "from unit 0, or a root that isn't a definition)",
-    "verity/protocols/proofs/flock/verifier/Flock/RecCoins.lean":
+    "verity/protocols/proof/flock/verifier/Flock/RecCoins.lean":
         "open: Inner.load's comb, CircuitFold.folded on the inner statement set up from its flat "
         "file, folds every row of the unrolled inner unit, until a templated inner is folded once per Definition "
         "(InnerSuccinct)",
-    "verity/protocols/proofs/flock/verifier/Flock/RecVStar.lean":
+    "verity/protocols/proof/flock/verifier/Flock/RecVStar.lean":
         "open: circuitFile regenerates V*'s unrolled circuit text (VStar.emitCircuitOf) for "
         "checkFile's byte comparison, until a templated inner is folded once per Definition (InnerSuccinct)",
-    "verity/protocols/proofs/flock/verifier/Flock/NetAt.lean":
+    "verity/protocols/proof/flock/verifier/Flock/NetAt.lean":
         "Tmpl.unrollAt, a templated unit's rows at their committed positions: the reference Tmpl.unitNet is proved "
         "equal to (FlockSoundness.TmplFold.unitNet_eq) and Flock.Test.NetAt compares it with; Tmpl.unitFull, its rows "
         "behind Tmpl.unitNet's thunks, built only where a check reads them: open on the templated statement's path, "
         "where verify --zk's KsScope.checkOf reads them (ProvedScope.scopeOkH's portReadsB) before refusing the "
         "statement as a version it doesn't serve (ProvedScope.servedForm)",
-    "verity/protocols/proofs/flock/verifier/Flock/HmRow.lean":
+    "verity/protocols/proof/flock/verifier/Flock/HmRow.lean":
         "HmOut.unrolled (and HmOut.parseStmt), a templated file's statement circuit, the flat circuit its template "
         "unrolls to, which the soundness statements read; no check runs it: verify sets up on and "
         "checks the committed circuit (HmOut.parseCommit), its template by its description (ProvedScope.scopeOkT), "
         "but KsScope.checkOf's scope check reads its unit's rows (NetAt.lean's entry)",
-    "verity/protocols/proofs/flock/verifier/Flock/Compose.lean":
+    "verity/protocols/proof/flock/verifier/Flock/Compose.lean":
         "open: zeroOutputsT, the template's output on the zero input that compose pins, evaluates the root through "
         "colsOf, which writes every copy of every CALL's columns: the unrolled columns, where only the root's return "
         "columns are needed (a region of copies with equal bound values is one callee's output repeated); owner proofs, "
         "until PRF-645 (due Wed 25 Nov) computes them once per Definition and deletes this entry",
-    "verity/protocols/proofs/flock/verifier/Flock/TmplLayout.lean":
+    "verity/protocols/proof/flock/verifier/Flock/TmplLayout.lean":
         "Tmpl.posMap, every column's committed position: the reference Tmpl.posOf is proved to read (posMap_tree)",
-    "verity/protocols/proofs/flock/verifier/Flock/TmplFold.lean":
+    "verity/protocols/proof/flock/verifier/Flock/TmplFold.lean":
         "Tmpl.foldRef, the fold over the unrolled rows: the reference Tmpl.foldUnit is difftested against "
         "(Flock.Test.TmplFold) and proved equal to (foldUnit_eq_project)",
     "verity/circuits/lean/Circuits/Gate.lean":
@@ -120,7 +117,7 @@ ALLOWED: dict[str, str] = {
         "open: bitsProgs, membersPart and filesReplay build each member's key program (Bits.keyProg, every unit laid "
         "out) and lower it, and its blocks, unit by unit: what SpotFlock.code's parse and partition evaluate; replaced as "
         "SpotFlock/Code.lean's entry says",
-    "verity/protocols/proofs/spot/verifier/lean/Spot/Bits.lean":
+    "verity/protocols/proof/spot/verifier/lean/Spot/Bits.lean":
         "open: keyProg lays a member's every unit out (2 + n·B inputs and n·R rows), and its layout (prog, off, offs, "
         "unitGates, owner, owners, insOf, blockOf) walks that program gate by gate, which Properties.Spot.Members reads "
         "for SpotFlock.code; replaced as security/Proofs/Flock/SpotFlock/Code.lean's entry says",
@@ -179,6 +176,31 @@ ZERO = re.compile(r"(?<![\w'.])(?:Compose\.)?zeroOutputsT\b(?![\w'])")
 UNIT_MAP = re.compile(r"\b(?:List|Array)\.range\b[^\n]*?\bfun\s+(\w+)\s*=>([^\n]*(?:\n[^\n]*){0,2})")
 
 
+#: a statement of its own line refusing a walk of `count` past its bound (`InferenceOnlyVerifier.Desc.walkAtMost`)
+WALK_AT_MOST = r'^([ \t]*)(?:[\w.]*\.)?walkAtMost[ \t]+"[^"\n]*"[ \t]+{count}[ \t]*$'
+
+
+def _bounded(src: str, at: int, count: str) -> bool:
+    """Whether the loop at ``at`` over ``count`` runs after a `walkAtMost` on that same text: a statement on its own line
+    before it, every line from there to the loop indented at least as deep (so neither a branch, a handler nor another
+    declaration lies between), and no line between naming an identifier of ``count`` before its first `:=`, `←`, `=>`
+    or ` in`, where it could be bound again."""
+    head = src[:src.rfind("\n", 0, at) + 1]
+    walks = list(re.finditer(WALK_AT_MOST.format(count=re.escape(count)), head, re.M))
+    if not walks:
+        return False
+    w = walks[-1]
+    names = set(re.findall(r"[A-Za-z_][\w']*", count))
+    end = src.find("\n", at)
+    for line in src[w.end():len(src) if end < 0 else end].split("\n")[1:]:
+        if line.strip() and len(line) - len(line.lstrip()) < len(w.group(1)):
+            return False
+        left = re.split(r":=|←|=>|\sin\s", line, maxsplit=1)
+        if len(left) > 1 and names & set(re.findall(r"[A-Za-z_][\w']*", left[0])):
+            return False
+    return True
+
+
 def _unit_gates(unit: str) -> re.Pattern:
     """A template query's gates of one unit, `TemplateQuery.gates d rs unit`."""
     return re.compile(rf"(?<![\w'.])(?:(?:Flock\.)?TemplateQuery\.)?gates\s+[\w.]+\s+\w+\s+{re.escape(unit)}\b(?![\w'.])")
@@ -186,7 +208,8 @@ def _unit_gates(unit: str) -> re.Pattern:
 
 def offenses(source: str, test: bool = False) -> list[tuple[int, str]]:
     """(line, what) for every unrolled walk in Lean `source`; a test (`test`) may unroll a templated unit."""
-    blank = lambda m: re.sub(r"[^\n]", " ", m.group())
+    def blank(m: re.Match) -> str:
+        return re.sub(r"[^\n]", " ", m.group())
     src = THEOREM.sub(blank, COMMENT.sub(blank, source))
     if test:
         src = GUARD.sub(blank, src)
@@ -203,7 +226,8 @@ def offenses(source: str, test: bool = False) -> list[tuple[int, str]]:
         hits += [(m.start(), "a member's key program built, every unit laid out") for m in KEYPROG_BUILT.finditer(src)]
         hits += [(m.start(), "a template's zero output, every copy's columns written") for m in ZERO.finditer(src)]
     hits += [(m.start(), "a range over a gate count") for m in RANGE.finditer(src)]
-    hits += [(m.start(), "a range over a node's members") for m in MEMBERS.finditer(src)]
+    hits += [(m.start(), "a range over a node's members") for m in MEMBERS.finditer(src)
+             if not _bounded(src, m.start(), re.search(r"[\w.!\[\]()]*\.members\b", m.group()).group())]
     for b in BOUND.finditer(src):
         name = b.group(1) + (".size" if b.group(2) else "")
         n = re.escape(name)
@@ -236,7 +260,7 @@ def _security_code(tracked: list[str]) -> set[str]:
 
 def _scanned() -> list[str]:
     tracked = _tracked()
-    return sorted({p for p in tracked if p.startswith("verity/") and not p.startswith("verity/protocols/proofs/flock/prover/") and p.endswith(".lean")} | _security_code(tracked))
+    return sorted({p for p in tracked if p.startswith("verity/") and not p.startswith("verity/protocols/proof/flock/prover/") and p.endswith(".lean")} | _security_code(tracked))
 
 
 def test_no_verifier_walks_the_unrolled_circuit():
@@ -248,7 +272,7 @@ def test_no_verifier_walks_the_unrolled_circuit():
 
 
 #: the spot verifier's Lean package, and in it `popOk`'s module and the module of its `@[csimp]` equality
-SPOT = "verity/protocols/proofs/spot/verifier/lean"
+SPOT = "verity/protocols/proof/spot/verifier/lean"
 SLOTS, POP_ORDER = f"{SPOT}/Spot/Slots.lean", f"{SPOT}/Spot/PopOrder.lean"
 #: a call of `popOk` (`popOkRanges` and `popOk_eq_popOkRanges` are other names)
 POP_OK = re.compile(r"(?<![\w'])popOk\b(?!')")
@@ -286,6 +310,24 @@ def test_the_popOk_scan_reads_calls_and_imports():
     assert not POP_OK.search("theorem popOk_eq_popOkRanges : @popOkRanges = f := popOk' x")
     assert SPOT_IMPORT.findall("module\n\npublic import Spot.PopOrder\nimport all Spot.Run\nmeta import Spot.Slots\n"
                                "import Spot\npublic import Flock\n") == ["Spot.PopOrder", "Spot.Run", "Spot"]
+
+
+def test_a_loop_over_members_after_its_walkAtMost_is_bounded():
+    bounded = """
+def a (node : Node) : Except String Unit := do
+  walkAtMost "members, one by one" node.members
+  let mut out := #[]
+  for m in [0:node.members] do out := out.push m
+"""
+    branch = """
+def b (node : Node) (c : Bool) : Except String Unit := do
+  if c then
+    walkAtMost "members, one by one" node.members
+  else
+    for m in [0:node.members] do pure ()
+"""
+    assert offenses(bounded) == []
+    assert offenses(branch) == [(6, "a range over a node's members")]
 
 
 def test_the_scan_sees_each_form():

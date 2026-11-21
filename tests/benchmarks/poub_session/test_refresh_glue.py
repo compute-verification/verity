@@ -16,11 +16,11 @@ sys.path.insert(0, str(ROOT / "benchmarks" / "poub_session"))
 sys.path.insert(0, str(ROOT))
 
 import refresh_result as R  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier import audit  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier.session import lean_verifier as lv  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier.session import verifier  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier import audit  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier.session import lean_verifier as lv  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier.session import verifier  # noqa: E402
 
-from tests.verity.protocols.resource_accounting.memory.poub import session_harness as H  # noqa: E402
+from tests.verity.protocols.accounting.memory.poub import session_harness as H  # noqa: E402
 
 
 @pytest.fixture

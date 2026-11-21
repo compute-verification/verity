@@ -12,8 +12,8 @@ from types import SimpleNamespace as NS
 
 import pytest
 from verity import hooks as H
-from verity.protocols.compose import schemes as declarations
-from verity.protocols.resource_accounting import scheme as schemes
+from verity.protocols.run import schemes as declarations
+from verity.protocols.accounting import scheme as schemes
 
 from verity.channel import Body, MessageTypes, Refused
 from verity_vllm import messages as M

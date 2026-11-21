@@ -13,7 +13,7 @@ import ast
 from pathlib import Path
 
 import pytest
-from verity.protocols.resource_accounting.compute.pouw.verifier.audit import HM96_SALT
+from verity.protocols.accounting.compute.pouw.verifier.audit import HM96_SALT
 
 from verity_torch.pouw.pearl_c import host as PH
 from verity_torch.pouw.pearl_c.host import _Arena

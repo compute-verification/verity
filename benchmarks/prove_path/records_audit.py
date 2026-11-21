@@ -96,8 +96,8 @@ With ``--negative-workers N`` a5's negatives that ask the verifier again run N a
 forked from the audit (`a5.NegativeWorkers`); the summary's ``negative_workers`` is each one's own seconds and memory.
 
 ``audit``: each member's circuit is the door's (`a5.door_circuit`: `one_circuit.block`, `.restrict` and `.lower` by
-``--lower``, `flock-lower-check`), the file Lean's `restrict` derives from C and the partition; a member whose block the
-door refuses has none, and a drawn unit of it is a failed proof (the summary's ``unlowered`` and ``failed_drawn``).
+``--lower``, `flock-lower-check`), the file Lean's `restrict` derives from C and the partition, staged once a class
+(`a5.door_class`); the first member whose block the door refuses refuses the window before any coin (`a5.DOOR_REFUSES`).
 ``warm``: a window's templates and binding are public, so every template its composers make is composed into a5's compose
 cache (`warm`, `a5.warm`), under the tree and ``FLOCK_*`` environment a5 then runs in, since the cache's key covers both;
 each template's line is printed as it finishes and kept in ``--out``'s ``composed.jsonl``. A compose keeps only its
@@ -107,7 +107,7 @@ circuit's text in the cache. The warm starts no compose, and stops, where the ca
 
     records_audit.py audit --window DIR --sampling-design L (--opening FILE --compilers FILE [--repo DIR] | --circuit SHA512) --run HEX \\
         [--template-sets DIR] [--outputs FILE] --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof --zk-server flock-zk-server \\
-        --lower flock-lower-check --out DIR [--delta D] [--port P] [--ports N] [--forged | --forged-read] [--challenger local|loopback:HOST:PORT|gate:USER@HOST --main FILE] \\
+        --lower flock-lower-check --out DIR [--delta D] [--port P] [--ports N] [--forged] [--challenger local|loopback:HOST:PORT|gate:USER@HOST --main FILE] \\
         [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--registered FILE] [--tie W [--tie-prefix P]] [--skip-negatives] \\
         [--compose-cache DIR] [--jobs N] [--keep-circuits] [--min-free-gb G] [--day N --day-log LOG [--day-params FILE] | --day-ledger LEDGER] \\
         [--lean-workers N] [--audit-mem-gb G] [--negative-workers N]
@@ -164,13 +164,6 @@ deployment's key record ``--challenger-key``. The gate opens a root once, ever.
 ``--forged``: the window holds a forged unit, and the audit passes when every check before the sample passed, the audit
 record rejects and the ZK server released no proof of the false member (`forged_outcome`). The prover runs with its
 self-check skipped, ``FC_ZK_SELF_CHECK=skip``, so it proves the false witness, and the ZK server holds the proof back.
-
-``--forged-read``: the window holds no false unit and a registered read that opens no pinned root (values served as the
-registered ones that are not), and the audit passes when every check before the sample passed, the audit record rejects
-and the Lean verifier refused a session while setting its statement up, on a row of that read not opening the root the
-verifier holds (`forged_outcome`'s ``read_refused``, `READ_OPENS_NO_ROOT`). The window's units are their Definitions',
-so its prover runs as an honest window's does and its proofs may leave: the audit passes on that refusal alone, never
-on a proof held back or refused, and under ``--forged`` never on that refusal.
 """
 from __future__ import annotations
 
@@ -201,9 +194,9 @@ sys.path.insert(0, str(HERE.parent / "one_stage"))
 from verity.commitments import docket_digest as DD
 from verity import device as ST  # noqa: E402
 from verity.protocols.registration.verifier import registration as G  # noqa: E402
-from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd  # noqa: E402
-from verity.protocols.compose import schemes  # noqa: E402
-from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
+from verity.protocols.accounting.compute.pouw.verifier import window as Wd  # noqa: E402
+from verity.protocols.run import schemes  # noqa: E402
+from verity.protocols.proof.spot.verifier import service as S  # noqa: E402
 from verity.commitments import registered_value as RV  # noqa: E402
 from verity.circuits.codec import program_digest  # noqa: E402
 from verity.commitments.periods import history as HW, interface as IF  # noqa: E402
@@ -694,7 +687,7 @@ def device_day(lines: list[str], root: str, key: Any, verify: Callable[[Any, byt
     one-stage R2's shape: the UTC day of the window open's signed ``started_utc``, and the declarations its lane signed
     before that open), never ``--day``. The tied W's naming is held to `registration.Declaration` rebuilt from the
     device's entry of its day. ValueError (`challenger.CoinError`) where the reader refuses the ledger."""
-    from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
+    from verity.protocols.proof.spot.verifier.challenger import challenger as Ch
     got = Ch.declared_day(lines, {"root": root}, key, verify)
     day = got["day"]
     declarations = [{"blocks": list(d["blocks"]), "day": d["day"], "program": d["program"]} for d in got["declarations"]]
@@ -859,7 +852,7 @@ def period(window: Path, audit: Path, pins: Mapping[str, str], tied: str) -> dic
     caller passes, since SPOT reads the attester's output as a certified input and never imports it. ValueError where the
     circuit isn't the one the docket binds, the window commits no ``tied`` value its circuit reads, the audit wrote no
     Program or another than the docket names, or its answer commits to another docket."""
-    from verity.protocols.proofs.spot.verifier.one_stage import served_integrity as SI
+    from verity.protocols.proof.spot.verifier.one_stage import served_integrity as SI
 
     rec = json.loads((window / "registration.json").read_text())
     body, own = (window / "circuit.json").read_bytes(), rec.get("window") or {}
@@ -947,7 +940,7 @@ def proof_edits(lean: str, wdir: Path, members: tuple, out: Path, most: int) -> 
     bit flipped (``public-bit-*``) under the honest proof."""
     import a0
     # the directory of `zk_mutants.py` and the modules it imports beside it
-    sys.path.insert(0, str((Path(__file__).resolve().parents[2] / "verity/protocols/proofs/flock/prover/agreement/zk_mutants.py").parent))
+    sys.path.insert(0, str((Path(__file__).resolve().parents[2] / "verity/protocols/proof/flock/prover/agreement/zk_mutants.py").parent))
     import zk_mutants as ZM
 
     k, honest = next(((k, s.parent) for k in range(len(members))
@@ -1025,12 +1018,10 @@ def session_proofs(sdir: Path) -> dict[str, Any]:
     return {"proofs": None if listed is None else len(listed), "prover_stopped": live.get("prover_stopped")}
 
 
-def forged_outcome(s: dict, wdir: Path, member: int | None = None, more: Mapping[str, bool] | None = None,
-                   read: bool = False) -> dict[str, Any]:
+def forged_outcome(s: dict, wdir: Path, member: int | None = None, more: Mapping[str, bool] | None = None) -> dict[str, Any]:
     """A forged window's verdict, from a5's summary ``s`` and its audit directory ``wdir`` (``audit.json``, each sampled
     member's ``session-m<k>``). Every check before the sample passed, ``more`` (the caller's own checks) holds, the audit
-    record rejects, and the window was stopped where what it forges is. The caller says what that is, a false unit or
-    (``read``) a registered read, and the window passes on the one check that calls for, never on another's:
+    record rejects, and the window was stopped where its false unit is, on the one check that calls for, never on another's:
 
     * a false unit behind the ZK server (the summary's ``arm`` is ``fw``, which a5 writes where the sessions ran behind
       its binary and nowhere else), no proof of which may leave the prover:
@@ -1041,13 +1032,10 @@ def forged_outcome(s: dict, wdir: Path, member: int | None = None, more: Mapping
     * a false unit behind none (a plain audit), whose proof leaves, and Lean's own verdict must refuse it:
       ``lean_refused``, the Lean verifier refused a proof it read (`a0.lean_refused`, and not for want of the session's
       files, `NO_SESSION_FILES`).
-    * ``read``, a registered read that opens no pinned root, in a window of no false unit: ``read_refused``, some
-      session's Lean verdict is a refusal naming a row of a registered read that does not open the verifier's root,
-      which Lean checks at setup (`a0.lean_refused` naming `READ_OPENS_NO_ROOT`). The units are their Definitions', so
-      the sessions' proofs may leave, and none is refused: neither is asked of the window, or held against it.
 
-    ``checks`` holds the three, and the window passes on the one named (``passes_on``); the other two are shown and not
-    counted. A check with nothing to read has no value, and ``no_value`` says why: ``no_proof_released`` behind no ZK
+    ``checks`` holds those two and ``read_refused``, some session's Lean verdict refusing at setup a row of a registered
+    read that does not open the verifier's root (`READ_OPENS_NO_ROOT`); the window passes on the one named
+    (``passes_on``), and the others are shown and not counted. A check with nothing to read has no value, and ``no_value`` says why: ``no_proof_released`` behind no ZK
     server, and ``lean_refused`` where Lean refused only sessions it read no proof of (False where it refused none).
     ``sessions`` is what each session read records (`session_proofs`), and ``why`` the audit's reasons."""
     import a0
@@ -1071,7 +1059,7 @@ def forged_outcome(s: dict, wdir: Path, member: int | None = None, more: Mapping
         no_value["no_proof_released"] = "the sessions ran behind no ZK server"
     stopped = {"no_proof_released": no_proof_released, "lean_refused": refused,
                "read_refused": any(a0.lean_refused(v, READ_OPENS_NO_ROOT) for v in lean.values())}
-    on = "read_refused" if read else "no_proof_released" if behind else "lean_refused"
+    on = "no_proof_released" if behind else "lean_refused"
     checks = {"checks_before_draw": bool(s.get("checks_before_draw")) and all(s["checks_before_draw"].values()), **(more or {}),
               "rejected": audit.get("accepted") is False, **stopped}
     return {"ok": all(v is True for c, v in checks.items() if c == on or c not in stopped), "checks": checks, "passes_on": on,
@@ -1082,8 +1070,8 @@ def audit(a: argparse.Namespace) -> int:
     """The audit (module docstring) into ``a.out``: ``summary.json`` and a ``RECORDS`` line, its ``definitions`` the module
     each member template's Definition is in and ``loaded`` the ``verity*`` packages the process loaded. -> 0 when it passed."""
     import a5 as A5
-    from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
-    from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
+    from verity.protocols.proof.spot.verifier.challenger import challenger_session as AC
+    from verity.protocols.proof.spot.prover.audit import local_challenger as LC
 
     t0, wdir, out = time.time(), Path(a.window), Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -1115,7 +1103,7 @@ def audit(a: argparse.Namespace) -> int:
         pins |= histories
         reads = IF.registered_file(doc, mine, pins, docket.get("roots") or ())
         if a.day_ledger:
-            from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch, remote as SPR
+            from verity.protocols.proof.spot.verifier.challenger import challenger as Ch, remote as SPR
             key = Ch.key_of_record(json.loads(Path(a.challenger_key).read_text()))
             day = device_day(SPR.ledger_lines(a.day_ledger), mine.run, key, AC.lms_verify, w_tie)
         else:
@@ -1141,7 +1129,7 @@ def audit(a: argparse.Namespace) -> int:
                     output=json.loads(output.read_text()) if compiled["ok"] else None)
     window_s = round(time.time() - t0, 2)
     if a.lower is None:
-        from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+        from verity.protocols.proof.spot.verifier.one_stage import proofs as PF
         a.door_lower = PF.lower_executable()
     else:
         a.door_lower = Path(a.lower)
@@ -1206,8 +1194,8 @@ def audit(a: argparse.Namespace) -> int:
             ordered = ordered and row["after_draw"]["refused"]
     else:
         ordered = False
-    if a.forged or a.forged_read:
-        row["forged"] = forged_outcome(s, out / "window", read=a.forged_read)
+    if a.forged:
+        row["forged"] = forged_outcome(s, out / "window")
         row["ok"] = row["forged"]["ok"] and ordered
     else:
         row["ok"] = ok and ordered and (compiled is None or compiled["ok"])
@@ -1300,10 +1288,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--session-jobs", type=A5.one_session, default=1, help="1 only: a5 runs the sessions one at a time (a5.ONE_AT_A_TIME)")
     p.add_argument("--archive-link", action="store_true", help=A5.ARCHIVE_LINK_HELP)
     A5.lean_options(p)
-    forges = p.add_mutually_exclusive_group()
-    forges.add_argument("--forged", action="store_true", help="the window holds a forged unit: it must be refused")
-    forges.add_argument("--forged-read", action="store_true", help="the window holds a registered read that opens no pinned "
-                        "root, and no forged unit: the Lean verifier must refuse it at setup on that read")
+    p.add_argument("--forged", action="store_true", help="the window holds a forged unit: it must be refused")
     p.add_argument("--flip-proofs", type=int, default=0, metavar="N",
                    help="after an accepted audit, at most N one-bit edits of its first drawn session's proof, each of which "
                    "Lean verify must refuse (`proof_edits`)")

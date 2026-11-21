@@ -54,19 +54,19 @@ from verity import config as K
 from verity.commitments.crypto import lms
 from verity.config import Component, Workload
 from verity.protocol import Channel, ProtocolDef, Role, Starter
-from verity.protocols.compose import schemes
+from verity.protocols.run import schemes
 from verity.lean_process import lean_env
-from verity.protocols.resource_accounting.network.verifier import parties as NC
-from verity.protocols.resource_accounting.scheme import (Executable, Lacks, Launch, LaunchRefused, Scheme, declared,
+from verity.protocols.accounting.network.verifier import parties as NC
+from verity.protocols.accounting.scheme import (Executable, Lacks, Launch, LaunchRefused, Scheme, declared,
                                                              settings)
-from verity.protocols.resource_accounting.memory.poub.verifier import p2_parties as P2
-from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
+from verity.protocols.accounting.memory.poub.verifier import p2_parties as P2
+from verity.protocols.accounting.memory.pous.attester import challenger_session as CS
 from verity.protocols.registration.verifier import registration as RL
-from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
-from verity.protocols.resource_accounting.memory.pous.verifier import wipe_parties as WP
-from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
-from verity.protocols.proofs.spot.verifier import parties as SP
-from verity.protocols.proofs.spot.verifier.challenger import challenger_party as CP
+from verity.protocols.accounting.memory.pous.attester import memory_attester as mc
+from verity.protocols.accounting.memory.pous.verifier import wipe_parties as WP
+from verity.protocols.proof.spot.prover.audit import local_challenger as LC
+from verity.protocols.proof.spot.verifier import parties as SP
+from verity.protocols.proof.spot.verifier.challenger import challenger_party as CP
 from verity.commitments.randomness import parse_rate, parse_strata_rate
 from verity.channel import Refused
 from verity.runtime import runner
@@ -223,7 +223,7 @@ UNDECLARED: dict[str, tuple[Component, str, Mapping[str, Launch]]] = {c.name: (c
                          Channel(WORKERS, VERIFIER, ("H1Record",), after=("H1Coins",))),
                needs=frozenset({"windows", "noise"}), requires=("sampled-proofs",)), "work",
      {WORKERS: Launch(binds=("gate", "peer", "key-sha512"), optional=("main-file",), entry="served_table:pouw_entry",
-                      executables=(Executable("verity/protocols/resource_accounting/compute/pouw/verifier/lean/check",
+                      executables=(Executable("verity/protocols/accounting/compute/pouw/verifier/lean/check",
                                               "pouw-verifier-difftest"),))}),
 )}
 #: every component the served window's record has a row for: each undeclared one's, and each declared scheme's whose
@@ -250,8 +250,6 @@ PLACEMENT = {WORKERS: PROVER_NODE, ZK_SERVER: PROVER_NODE, PROVER: PROVER_NODE, 
 APPLICATIONS = ROOT / "applications"
 #: the configuration this table's application runs, whose `[[pin]]` entries are the only statement of the keys the auditor pinned
 CONFIG = APPLICATIONS / "onsite_full.toml"
-_UNDECIDED = ("`verity run` records each period's verdict under that id, undecided unless the line says who",
-              "combined it: no composite takes it.")
 #: the header of each application's file
 HEADERS = {
     "onsite_full": (
@@ -259,18 +257,6 @@ HEADERS = {
         "the auditor pinned for its devices. Run it on each machine with `verity run THIS --on MACHINE --bindings",
         "FILE` (tools/verity/cli/README.md); the deploy bindings hold every host and address, this file none.",
         "`verity run THIS --dry-run` resolves it all."),
-    "onsite_compute": (
-        "The served window under SPOT, PoUW, the inference-only policy, the network attester and the memory",
-        "wipe (verity/onsite-compute/v0, a deployment of its own, never onsite): onsite without PoUS and PoUB,",
-        "each party on its machine, and the key the auditor pinned for its memory attester.", *_UNDECIDED),
-    "onsite_network": (
-        "The served window under the network attester, SPOT and the memory wipe (verity/onsite-network/v0, a",
-        "deployment of its own, never onsite), each party on its machine, and the key the auditor pinned for",
-        "its memory attester.", *_UNDECIDED),
-    "onsite_network_front": (
-        "onsite_network.toml with the network attester's front as the run's one load (load front): the one run in",
-        "which the network attester's chain and the window's compute audit see the same window, so the period check",
-        "can reach its tied form.", *_UNDECIDED),
     "remote": (
         "The served window under remote's subprotocols (verity/remote/v1): SPOT, PoUW's Pearl+ run verdict and the",
         "inference-only policy. No auditor's device is at the site: the developer's parties are on the prover node",
@@ -286,11 +272,10 @@ def listed(demo: str) -> tuple[str, ...]:
 
 #: an application's own workload values over the shared defaults, each of whose listed schemes then states its declared
 #: `Scheme.tie` over its parameters' defaults; remote and onsite both serve Pearl+ untied at this workload and its input
-#: dataset, the other three name their load, and onsite_network_front only the front's
+#: dataset
 _TIED = {"model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da",
-         "precision": "bfloat16", "slots": 4, "window-steps": 2, "dataset": "llama32_1b_fixed_4_27_2", "timing": "at-once"}
-DEMO_VALUES = {"remote": _TIED, "onsite_full": _TIED, "onsite_compute": {"load": "varied"},
-               "onsite_network": {"load": "varied"}, "onsite_network_front": {"load": "front"}}
+         "precision": "bfloat16", "slots": 1, "window-steps": 1, "dataset": "llama32_1b_fixed_1_1_1", "timing": "at-once"}
+DEMO_VALUES = {"remote": _TIED, "onsite_full": _TIED}
 
 
 def tied(protocols: Sequence[str]) -> dict[str, dict[str, Any]]:
@@ -585,15 +570,15 @@ def _stop_challenger(cfg: Mapping[str, Any], state: Path) -> None:
 
 #: PoUS's timed rounds (`challenger_session`'s parties), beside the served window: the challenger's header names the
 #: monotonic clock
-POUS = Session(("verity.protocols.resource_accounting.memory.pous.attester.challenger_party:PROTOCOL",
-                "verity.protocols.resource_accounting.memory.pous.prover.challenger_prover:PROTOCOL"),
+POUS = Session(("verity.protocols.accounting.memory.pous.attester.challenger_party:PROTOCOL",
+                "verity.protocols.accounting.memory.pous.prover.challenger_prover:PROTOCOL"),
                {MEMORY_ATTESTER: CS.CHALLENGER, PROVER: CS.PROVER}, {CS.CHALLENGER: (time.monotonic_ns, MONOTONIC)},
                MEMORY_ATTESTER)
 #: onsite PoUB over PoUS's P2 store (`p2_parties`' verifier, `p2_party_prover`'s prover), beside the served window, on
 #: the verifier's monotonic clock; the verifier reads the memory attester's PoUS key from that party's run beside it
 #: on the auditor's device, as the bandwidth audit declares (`Scheme.reads`)
-POUB = Session(("verity.protocols.resource_accounting.memory.poub.verifier.p2_parties:PROTOCOLS",
-                "verity.protocols.resource_accounting.memory.poub.prover.p2_party_prover:PROTOCOL"),
+POUB = Session(("verity.protocols.accounting.memory.poub.verifier.p2_parties:PROTOCOLS",
+                "verity.protocols.accounting.memory.poub.prover.p2_party_prover:PROTOCOL"),
                {BANDWIDTH_VERIFIER: P2.VERIFIER, PROVER: P2.PROVER}, {P2.VERIFIER: (time.monotonic_ns, MONOTONIC)},
                BANDWIDTH_VERIFIER, starts=P2.starts())
 
@@ -750,7 +735,7 @@ def launched(name: str) -> Mapping[str, Piece]:
     """The pieces of the component ``name`` by party (`PIECES`), refused (``unknown-protocol``) by name where no scheme
     declares it and `UNDECLARED` doesn't hold it, or where this table has no pieces for it."""
     if name not in schemes.DECLARATIONS and name not in UNDECLARED:
-        raise Refused("unknown-protocol", f"{name} is no declared scheme (verity.protocols.compose.schemes) and no "
+        raise Refused("unknown-protocol", f"{name} is no declared scheme (verity.protocols.run.schemes) and no "
                                           "row of served_table.UNDECLARED: declare it, or list a declared one")
     if name not in PIECES:
         raise Refused("unknown-protocol", f"{name} is declared, but served_table.PIECES has no pieces for it: "

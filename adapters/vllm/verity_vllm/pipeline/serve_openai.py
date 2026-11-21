@@ -619,7 +619,7 @@ def scheme_refusal(opts: Any, found: list[tuple[Any, dict[str, Any]]]) -> str | 
     """Why ``opts`` can't serve the schemes `listed` ``found``, None when they can: each one's settings as it checks them,
     and a scheme with an option (Pearl+'s) reads the BF16 checkpoint's linears unquantized, under the server's
     rows-sha512 Commit."""
-    from verity.protocols.resource_accounting.scheme import settings as checked
+    from verity.protocols.accounting.scheme import settings as checked
 
     g = opts.gate
     if g.challenger_gate and not private():
@@ -747,7 +747,7 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
         raise UsageError("--window-steps is at least 1")
     if opts.window_requests < 0:
         raise UsageError("--window-requests is at least 0 (0: no bound)")
-    from verity.protocols.resource_accounting.scheme import settings as checked
+    from verity.protocols.accounting.scheme import settings as checked
     try:
         if (admit := admission_order(opts)) != "arrival":
             checked(M.providing("admission"), admission_settings(opts))

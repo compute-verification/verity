@@ -1,4 +1,4 @@
-"""Pearl+'s run verdict in Lean (`pouw-pearlplus`, `PouwCheck.PearlPlus.check`) is the Python's (`verify_run.verify_passes`).
+"""Pearl+'s run verdict in Lean (`pouw-pearlplus`, `PouwVerifier.PearlPlus.check`) is the Python's (`verify_run.verify_passes`).
 
 Each case proves passes on the CPU as verify_run's tests do (`test_pearl_c_vllm.proved_pass`: the H100 record's -h3 scheme
 at k = 128 in 16 x 16 tiles, a call with filler rows and an excluded row, y committed), changes them as those tests do, and
@@ -46,7 +46,7 @@ import verity_difftest as D  # noqa: E402
 from verity.commitments import docket_digest as DD  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[4]
-PACKAGE = ROOT / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "verifier" / "lean" / "pearlplus"
+PACKAGE = ROOT / "verity" / "protocols" / "accounting" / "compute" / "pouw" / "verifier" / "lean" / "pearlplus"
 SOURCE = b"verifier" * 4
 H100 = "pearl-c-h100-v1-h3"
 

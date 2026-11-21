@@ -8,7 +8,7 @@ gap's function (v1-hot, v2-hot, Pearl-C4 v1 and v2). The Lean store's pins keep 
 are read, and `_short` gives one key for both. Its key is
 
   statement   the panel line and version it is the gap for, hashing format aside: pearl-c-sm120/v2, pearl-c-fp4/v1, ...
-  path        the priced path, as `verity.protocols.resource_accounting.compute.pouw.verifier.serving.KernelVariant.prices` and `GateRecord.prices` name it: cast-8 (the
+  path        the priced path, as `verity.protocols.accounting.compute.pouw.verifier.serving.KernelVariant.prices` and `GateRecord.prices` name it: cast-8 (the
               statement's), cast-8.72, cast-16, cast-32, cast-32.06; lut256 or rcpApprox for Pearl-C4's block scale
   fadd        the FP32 add's W1 price: 8 (the cheapest bit-exact FADD) or 1047/125 (the measured in-loop one)
   reading     forming-credited, chain-only or chain-cap
@@ -343,8 +343,11 @@ def _jsonable(row: dict) -> dict:
 
 
 def guarantees(doc: dict) -> dict[str, dict]:
-    """A Lean audit record's guarantees; the store's files, written before they were called that, hold them as `pins`."""
-    return doc["guarantees"] if "guarantees" in doc else doc["pins"]
+    """A Lean audit record's recorded guarantees; the store's files, written before they were called that, hold them as
+    `pins`. A guarantee listed with its owner only, which `check.py --update` hasn't recorded yet (`guarantees.unrecorded`),
+    states nothing and isn't one."""
+    pins = doc["guarantees"] if "guarantees" in doc else doc["pins"]
+    return {name: pin for name, pin in pins.items() if "signature" in pin}
 
 
 def repository(repo_audit: Path, pinned: dict[str, str]) -> list[tuple[str, list[dict]]]:

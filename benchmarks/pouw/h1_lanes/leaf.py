@@ -32,7 +32,7 @@ statement reading the leaf's lane partials, a value committed after the sample (
   `h1unit.ok_salt`. The ``--registered`` file is `leaf_lanes.registered_file`'s at the entries and roots of the world's
   registration record and produced record alone (`leaf_lanes.verifier_entries`), at the leaf's placement in the window's
   tables (`h1window.place`: unit 0 of the one-call window, one round), the public file `h1unit.verifier_pub`'s.
-  Each check is the Lean verifier's verdict and `pouw-leaf-own-window`'s (PoUW's `PouwCheck.LeafOwn.leafOwn?`): from the
+  Each check is the Lean verifier's verdict and `pouw-leaf-own-window`'s (PoUW's `PouwVerifier.LeafOwn.leafOwn?`): from the
   window's descriptor and round log it places unit 0's reads (`placeOf`), and the file, as the Lean verifier parses it, holds
   the layout's data ports there at the roots of the records the verifier holds (``holds``), and each of the statement's
   sessions samples every unit of its partition (`PouwWindow.Lanes.checkFull`, the sample policy).
@@ -69,21 +69,21 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "h1_prove"))
 
 from verity.commitments import docket_digest as DD
-from verity.protocols.resource_accounting.compute.pouw.prover.lowering import h1unit as U  # noqa: E402
+from verity.protocols.accounting.compute.pouw.prover.lowering import h1unit as U  # noqa: E402
 
 import h1form as F  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.circuits.program import Program  # noqa: E402
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
-from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1tile as H  # noqa: E402
-from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1window as HW  # noqa: E402
-from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1zy as Z  # noqa: E402
-from verity.protocols.resource_accounting.compute.pouw.verifier import leaf_lanes as LL  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import produced as PR  # noqa: E402
-from verity.protocols.proofs.spot.prover import produced as PP  # noqa: E402
+from verity.protocols.accounting.compute.pouw.prover.circuit import h1tile as H  # noqa: E402
+from verity.protocols.accounting.compute.pouw.prover.circuit import h1window as HW  # noqa: E402
+from verity.protocols.accounting.compute.pouw.prover.circuit import h1zy as Z  # noqa: E402
+from verity.protocols.accounting.compute.pouw.verifier import leaf_lanes as LL  # noqa: E402
+from verity.protocols.proof.spot.verifier.one_stage import partition as P  # noqa: E402
+from verity.protocols.proof.spot.verifier.one_stage import produced as PR  # noqa: E402
+from verity.protocols.proof.spot.prover import produced as PP  # noqa: E402
 from verity.commitments import registered_value as RV  # noqa: E402
-from verity.protocols.proofs.spot.prover import docket as DK  # noqa: E402
+from verity.protocols.proof.spot.prover import docket as DK  # noqa: E402
 
 if TYPE_CHECKING:
     from verity_flock.class_statement import UnitStager

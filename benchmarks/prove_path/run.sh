@@ -40,8 +40,6 @@
 #     states a fixed design (subset:K, stratified:K or work:K) is refused at the rule check, before any session opens, by
 #     either audit, by name. tests/benchmarks/prove_path/test_run_rules.py holds the stand-in's rules to what a stream takes
 #     and lists the partition files, this benchmark's and the one-stage audit's, that still state a fixed design.
-#   PP_KEEP_WINDOWS=DIR: each run's committed windows copied whole to DIR/<name>-windows (the prover's files with them, so
-#   DIR stays on the node, under `research keep`).
 #   PP_JOBS=N ranks at once (a GLM-5.3 rank: its bundle window ~2.5 min and ~11 GB, its audit ~10 GB); PP_RANKS=0,3 those ranks
 #   only; PP_FLOCK_WORK=DIR keeps M0's
 #   build across runs. A served Llama window's audit peaks at ~20 GB (one process).
@@ -105,7 +103,7 @@ fi
 ROW=glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager
 export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:$PATH
 { nproc; free -g | head -2; } > $K/machine.txt
-git rev-parse HEAD HEAD:verity/protocols/proofs/flock | tee $O/machine.txt
+git rev-parse HEAD HEAD:verity/protocols/proof/flock | tee $O/machine.txt
 command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
 command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
 uv sync --all-packages --extra torch-cpu > $K/sync.log 2>&1 || { tail -20 $K/sync.log; exit 5; }
@@ -113,16 +111,16 @@ PY=$REPO/.venv/bin/python
 PLAIN=(); SAMPLING_DESIGN=rate; [ -n "${PP_PLAIN:-}" ] && PLAIN=(--plain) SAMPLING_DESIGN=stratified-rate
 STEP1=benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step1.json
 
-(cd verity/protocols/proofs/flock/verifier && lake build verity-verify-proof flock-zk-server flock-read-tmpl) > $K/build-lean.log 2>&1 &
+(cd verity/protocols/proof/flock/verifier && lake build verity-verify-proof flock-zk-server flock-read-tmpl) > $K/build-lean.log 2>&1 &
 LP=$!
 mkdir -p $K/m0-build
 FW=${PP_FLOCK_WORK:-$W}
-RESEARCH_RUN_DIR=$K/m0-build FLOCK_WORK=$FW MODE=build GPU=0 bash verity/protocols/proofs/flock/prover/pod/60-circuit.sh > $K/m0-build/build.log 2>&1 \
+RESEARCH_RUN_DIR=$K/m0-build FLOCK_WORK=$FW MODE=build GPU=0 bash verity/protocols/proof/flock/prover/pod/60-circuit.sh > $K/m0-build/build.log 2>&1 \
   || { tail -40 $K/m0-build/build.log; exit 6; }
 BIN=$FW/flock-gpu-link/flock/target/release/flock-circuit
 wait $LP || { tail -40 $K/build-lean.log; exit 7; }
-LEAN=$REPO/verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof; FWL=${LEAN%/*}/flock-zk-server
-(cd verity/protocols/proofs/spot/verifier/lean && lake build spot-verifier) > $K/build-sampled-proofs.log 2>&1 || { tail -40 $K/build-sampled-proofs.log; exit 7; }
+LEAN=$REPO/verity/protocols/proof/flock/verifier/.lake/build/bin/verity-verify-proof; FWL=${LEAN%/*}/flock-zk-server
+(cd verity/protocols/proof/spot/verifier/lean && lake build spot-verifier) > $K/build-sampled-proofs.log 2>&1 || { tail -40 $K/build-sampled-proofs.log; exit 7; }
 sha256sum $BIN $LEAN $FWL | tee $O/binaries.sha256
 PP_CHALLENGER=${PP_CHALLENGER:-local}   # the sample's coins are a challenger's: a local development session unless named
 $PY benchmarks/prove_path/prove_path.py ran-with --challenger "$PP_CHALLENGER" ${PP_CHALLENGER_KEY:+--challenger-key "$PP_CHALLENGER_KEY"} \
@@ -150,7 +148,7 @@ if [ -n "${PP_CHALLENGER:-}" ]; then
     CH+=(--peer $PP_PEER --challenger-key $PP_CHALLENGER_KEY ${PP_GATE_KEY:+--gate-key $PP_GATE_KEY});;
   esac
 fi
-M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/adapters/torch
+M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proof/flock/prover/python:$REPO/adapters/vllm:$REPO/adapters/torch
 export RAYON_NUM_THREADS=$(nproc)
 # flock-circuit's rayon pool keeps Rust's default 2 MiB thread stack, which a --zk prover at m=27 can overflow on a many-core
 # node; its own worker and verifier threads take 64 MiB
@@ -196,11 +194,6 @@ run() {  # NAME RUN ADVICE PARTITION RANKS: the prover's windows, then the verif
     [ ! -e $d/circuit.json ] || { mkdir -p $O/$name/windows/$(basename $d) && cp $d/circuit.json $O/$name/windows/$(basename $d)/; }
   done
   cp $W/$name-windows/commit.json $K/$name/windows/
-  if [ -n "${PP_KEEP_WINDOWS:-}" ]; then   # the windows whole, the prover's files included, for a later job on this node
-    mkdir -p "$PP_KEEP_WINDOWS" && rm -rf "$PP_KEEP_WINDOWS/$name-windows" && cp -a $W/$name-windows "$PP_KEEP_WINDOWS/" || return 1
-    R keep "$PP_KEEP_WINDOWS" --owner @proofs --expires 7d --priority low \
-      --why "prove_path.sh PP_KEEP_WINDOWS: committed windows (rows and salts) a later job stages from" >> $K/keep.log 2>&1
-  fi
   if [ -n "${PP_RECORDS:-}" ] && [ -n "${REC_RUN:-}" ]; then   # the window's audit from its records alone
     records $name $part
     local rc=$?

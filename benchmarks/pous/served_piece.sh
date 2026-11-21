@@ -4,7 +4,7 @@
 #
 #   POUS_CMD='bash benchmarks/pous/served_piece.sh "$@"'
 #
-# Before the card: libp2v1.so built for it (verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh at ARCH, default the `arch` of this node's card record) into a
+# Before the card: libp2v1.so built for it (verity/protocols/accounting/memory/pous/prover/p2/p2_store/build.sh at ARCH, default the `arch` of this node's card record) into a
 # scratch directory removed on exit, unless P2_LIB names one, as a node that refuses `setarch -R` needs, since the build
 # doesn't run there; the library loaded once by the sessions' Python, with no card to see; and the two Lean verifiers
 # that decide, pous-run-protocol (PoUS's case) and poub-p2-protocol (PoUB-P2's), started building in a scratch copy of
@@ -96,7 +96,7 @@ LIB=${P2_LIB:-}
 if [ -z "$LIB" ]; then
   setarch "$(uname -m)" -R true 2> /dev/null \
     || { echo "POUS: no answer: setarch -R is refused on this node, so libp2v1.so doesn't build here: build it where" \
-           "it is allowed (verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh) and name its directory in P2_LIB"; exit 3; }
+           "it is allowed (verity/protocols/accounting/memory/pous/prover/p2/p2_store/build.sh) and name its directory in P2_LIB"; exit 3; }
   if [ -z "${ARCH:-}" ]; then
     ARCH=$(python3 "$ROOT/benchmarks/kernels/machine.py" arch \
       "$(nvidia-smi -i "${GPU_LEASE_UUID:-0}" --query-gpu=name --format=csv,noheader 2> /dev/null | head -1)" 2>&1) \
@@ -104,7 +104,7 @@ if [ -z "$LIB" ]; then
   fi
   TOOLKIT=$(python3 "$ROOT/benchmarks/kernels/machine.py" toolkit 13.0) \
     || { echo "POUS: no answer: no CUDA 13.0 toolkit to build libp2v1.so with (machine.py, above)"; exit 3; }
-  ARCH=$ARCH CUDA_HOME=$TOOLKIT bash "$ROOT/verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh" "$S/p2" > "$DIR/build.log" 2>&1 \
+  ARCH=$ARCH CUDA_HOME=$TOOLKIT bash "$ROOT/verity/protocols/accounting/memory/pous/prover/p2/p2_store/build.sh" "$S/p2" > "$DIR/build.log" 2>&1 \
     || { tail -20 "$DIR/build.log"; echo "POUS: no answer: libp2v1.so doesn't build (build.log)"; exit 3; }
   LIB=$S/p2/lib
   stamp "built libp2v1.so"
@@ -174,7 +174,7 @@ if [ -n "$RUN_KEYS" ]; then
   rm -rf "$K" && (umask 077 && mkdir -p "$K/pous")
   TPY=${TPY:-$ROOT/.venv/bin/python}
   SHA=$(cd "$ROOT" && env -u PYTHONPATH "$TPY" -c 'import hashlib, sys
-from verity.protocols.resource_accounting.memory.pous.attester import onsite
+from verity.protocols.accounting.memory.pous.attester import onsite
 print(hashlib.sha512(onsite.device_key(sys.argv[1], workers=int(sys.argv[2])).public_key).hexdigest())' \
     "$K/pous" "$(nproc)" 2>> "$DIR/pous.log")
   [[ $SHA =~ ^[0-9a-f]{128}$ ]] || { echo "POUS: no answer: the run's key isn't made in $K (pous.log)"; exit 2; }

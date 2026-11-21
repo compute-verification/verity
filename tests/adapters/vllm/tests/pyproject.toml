@@ -57,7 +57,7 @@ untraced = [
 # tests/engine's int8 tests run benchmarks/ppl's int8 steps as their oracle;
 # tests/store/test_poub_session.py runs the remote session's prover and verifier (`store.remote`), and the verifier
 # imports lean_verifier.py, challengers.py and store_layout.py; the in-process gate (tests/protocol_options/challenger_host.py)
-# runs infra's gate (verity/protocols/compose/verifier/live_challenger/auditor.py) and its model registry (verity/protocols/compose/verifier/live_challenger/models.py);
+# runs infra's gate (verity/protocols/run/verifier/live_challenger/auditor.py) and its model registry (verity/protocols/run/verifier/live_challenger/models.py);
 # tests/pipeline/test_served_unit_rows.py pins the statements of the served GLM-5.3 partitions' chunked templates
 # (benchmarks/one_stage/glm53_*.json), and tests/tools/test_description_sizes.py holds the description of every template
 # they name to its size (each glm53_*_tp8_step*.json, so a partition file added there is listed here);
@@ -78,25 +78,25 @@ untraced = [
 # A TargetProfile that names its card reads the card's architecture file (target_profile.card_facts).
 # The one sender and the door (`inputs.sender`, `serves`) read the input datasets (input_datasets).
 inputs_only = true
-inputs = ["adapters/vllm", "verity", "input_datasets", "adapters/vllm/verity_vllm/definitions", "adapters/torch/verity_torch", "calibration/hardware/cards",
+inputs = ["adapters/vllm", "verity", "library/datasets", "adapters/vllm/verity_vllm/definitions", "adapters/torch/verity_torch", "calibration/hardware/cards",
           "calibration/hardware/architectures", "verity/README.md",
           "tools/config/verity_config", "artifacts.json", "adapters/vllm/tools/served_run/workloads/SHA256SUMS",
-          "applications/remote.toml", "applications/onsite_network.toml",
+          "applications/remote.toml",
           "benchmarks/one_stage/served_verdicts.sh", "benchmarks/pous/onsite_pieces.sh",
           ".gitignore",
-          "verity/protocols/proofs/spot/verifier/lean/lakefile.toml",
-          "verity/protocols/resource_accounting/memory/poub/verifier/lean/lakefile.toml",
+          "verity/protocols/proof/spot/verifier/lean/lakefile.toml",
+          "verity/protocols/accounting/memory/poub/verifier/lean/lakefile.toml",
           "benchmarks/ppl/steps.py", "benchmarks/ppl/matmul.py", "benchmarks/ppl/gates.py", "benchmarks/ppl/spec.py", "benchmarks/ppl/methodology.py", "benchmarks/ppl/model.py",
           "benchmarks/ppl/windows.py", "benchmarks/ppl/datasets.json",
-          "verity/protocols/resource_accounting/memory/poub/prover/poub_session/prover.py",
-          "verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/fattn_ref.py",
-          "verity/protocols/resource_accounting/memory/poub/verifier/session/verifier.py",
-          "verity/protocols/resource_accounting/memory/poub/verifier/session/wire.py",
-          "verity/protocols/resource_accounting/memory/poub/verifier/session/checks.py", "verity/protocols/resource_accounting/memory/poub/verifier/session/lean_verifier.py", "verity/protocols/resource_accounting/memory/poub/verifier/session/challengers.py",
-          "benchmarks/poub_session/store_layout.py", "verity/protocols/compose/verifier/live_challenger/auditor.py", "verity/protocols/compose/verifier/live_challenger/host.json",
-          "verity/protocols/compose/verifier/live_challenger/models.py", "verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py",
-          "benchmarks/pous/p2_v1/__init__.py", "verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/load.py", "verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/gpu.py",
-          "verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/store.py", "verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/tensors.py", "verity/protocols/resource_accounting/memory/pous/verifier/p2_v1/reference.py",
+          "verity/protocols/accounting/memory/poub/prover/poub_session/prover.py",
+          "verity/protocols/accounting/compute/pouw/prover/kernels/edited_gemm/fattn_ref.py",
+          "verity/protocols/accounting/memory/poub/verifier/session/verifier.py",
+          "verity/protocols/accounting/memory/poub/verifier/session/wire.py",
+          "verity/protocols/accounting/memory/poub/verifier/session/checks.py", "verity/protocols/accounting/memory/poub/verifier/session/lean_verifier.py", "verity/protocols/accounting/memory/poub/verifier/session/challengers.py",
+          "benchmarks/poub_session/store_layout.py", "verity/protocols/run/verifier/live_challenger/auditor.py", "verity/protocols/run/verifier/live_challenger/host.json",
+          "verity/protocols/run/verifier/live_challenger/models.py", "verity/protocols/accounting/compute/pouw/prover/sass_gate.py",
+          "benchmarks/pous/p2_v1/__init__.py", "verity/protocols/accounting/memory/pous/prover/p2/p2_store/load.py", "verity/protocols/accounting/memory/pous/prover/p2/p2_store/gpu.py",
+          "verity/protocols/accounting/memory/pous/prover/p2/p2_store/store.py", "verity/protocols/accounting/memory/pous/prover/p2/p2_store/tensors.py", "verity/protocols/accounting/memory/pous/verifier/p2_v1/reference.py",
           "benchmarks/one_stage/glm53_all_families_tp8_step16.json", "benchmarks/one_stage/glm53_sparse_mla_tp8_step16.json",
           "benchmarks/one_stage/glm53_prefill_tp8_step0.json", "benchmarks/one_stage/glm53_prefill_tp8_step0_core.json",
           "benchmarks/one_stage/glm53_moe_w13_tp8_step16.json", "benchmarks/one_stage/glm53_moe_w2_tp8_step16.json",
@@ -112,11 +112,11 @@ inputs = ["adapters/vllm", "verity", "input_datasets", "adapters/vllm/verity_vll
           "tools/research/src/research/withdraw.py",
           "tools/research/src/research/__main__.py", "tools/difftest",
           "tools/verity/cli/verity_cli",
-          "tests/verity/protocols/resource_accounting/network/verifier/scan_traffic.py"]
+          "tests/verity/protocols/accounting/network/verifier/scan_traffic.py"]
 parallel = true
-# verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/fattn_ref.py is the int8 attention tests' oracle (tests/engine), beside benchmarks/ppl's linears;
+# verity/protocols/accounting/compute/pouw/prover/kernels/edited_gemm/fattn_ref.py is the int8 attention tests' oracle (tests/engine), beside benchmarks/ppl's linears;
 # tests/engine/int8_attention_sass.py reads the int8 attention kernels' SASS with the PoUW SASS gate's nvdisasm parser
-# (verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py)
+# (verity/protocols/accounting/compute/pouw/prover/sass_gate.py)
 # a worker's peak grows with its share of the suite, since what its tests leave held isn't returned, and the workers' peaks
 # spread wide: `--mem-gb`, or a job's memory cgroup, books one worker at worker_gb and each other at typical_worker_gb
 # (suites.py's `workers_gb`), what the workers' peaks summed reach
@@ -171,7 +171,7 @@ paths = ["adapters/vllm/verity_vllm/commit/committer/hidden_gpu_src"]
 
 [[tool.verity.tests.reads]]
 tests = ["commit/test_pinned_pool_exact.py"]
-paths = ["adapters/vllm/verity_vllm", "verity/protocols/resource_accounting/memory/poub/verifier", "verity/circuits"]
+paths = ["adapters/vllm/verity_vllm", "verity/protocols/accounting/memory/poub/verifier", "verity/circuits"]
 
 [[tool.verity.tests.reads]]
 tests = ["engine/collectives/test_tp_collective.py", "properties/test_quarantine_lint.py"]
@@ -220,15 +220,15 @@ tests = [
     "pipeline/test_serve_poub.py",
     "protocols/poub/test_commit_session.py",
 ]
-paths = ["benchmarks/poub_session", "verity/protocols/resource_accounting/memory/poub/prover/poub_session/prover.py", "verity/protocols/resource_accounting/memory/poub/prover/poub_session/device.py",
-         "verity/protocols/resource_accounting/memory/poub/verifier"]
+paths = ["benchmarks/poub_session", "verity/protocols/accounting/memory/poub/prover/poub_session/prover.py", "verity/protocols/accounting/memory/poub/prover/poub_session/device.py",
+         "verity/protocols/accounting/memory/poub/verifier"]
 
 [[tool.verity.tests.reads]]
 tests = ["pipeline/test_serve_row.py"]
 paths = [
     "adapters/vllm/verity_vllm/engine",
     "adapters/vllm/verity_vllm/pipeline",
-    "verity/protocols/resource_accounting/network",
+    "verity/protocols/accounting/network",
     "verity/commitments/crypto",
 ]
 
@@ -242,7 +242,7 @@ paths = ["verity/circuits/ops"]
 
 [[tool.verity.tests.reads]]
 tests = ["program/predict/test_window_rows.py"]
-paths = ["verity/protocols/resource_accounting/network"]
+paths = ["verity/protocols/accounting/network"]
 
 [[tool.verity.tests.reads]]
 tests = ["program/test_compiled_relations_warm_vml.py"]

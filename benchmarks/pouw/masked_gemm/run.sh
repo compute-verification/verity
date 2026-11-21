@@ -12,7 +12,7 @@ export O=${OUT:?}
 CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit 13.0) || exit 2
 export CUDA_HOME PATH=$CUDA_HOME/bin:$PATH
 GENCODE=$(python3 benchmarks/kernels/machine.py gencode "$(python3 benchmarks/kernels/machine.py arch)") || exit 2
-export D=verity/protocols/resource_accounting/compute/pouw/prover/kernels/masked_gemm
+export D=verity/protocols/accounting/compute/pouw/prover/kernels/masked_gemm
 # the references import their siblings as verity's modules, from the clone's root
 export PYTHONPATH=$PWD${PYTHONPATH:+:$PYTHONPATH}
 export B; B=$(mktemp -d /tmp/masked-gemm.XXXXXX); trap 'rm -rf "$B"' EXIT

@@ -10,7 +10,7 @@ import json
 
 import pytest
 from verity.commitments.periods import interface as IF
-from verity.protocols.resource_accounting.compute.pouw.verifier import credit
+from verity.protocols.accounting.compute.pouw.verifier import credit
 
 from tests.program.predict import test_steps as S
 from tests.program.predict.test_window_circuit import (
@@ -63,7 +63,7 @@ def test_the_class_circuit_holds_each_quantizers_leaf_and_each_token_to_its_row_
     and its input-ids table, 8 rows of one u32. Slot k's position p is round 0's row 4k + p below the prompt and round 1's
     row k past it: each quantizer's leaf row ``o2`` is held to row 8c + i of its round's A table, c its index among its
     position's 6 in node order, and each position's token row (its lane's of the scan proof block at position 0, its
-    `TokenFeed_v1`'s below the prompt, the previous select's past it) to row i of its round's input-ids table; no other
+    `TokenFeed_v2`'s below the prompt, the previous select's past it) to row i of its round's input-ids table; no other
     output row is held to a table, and no two to one row. The reads fill no input, so the circuit's inputs by what fills
     them are the int8 circuit's without the tables. The circuit's program takes the tables as its values, round by round
     the A table then the input-ids table, then the scan state, ahead of its units' parameters."""
@@ -101,7 +101,7 @@ def test_each_tables_readers_are_templates_of_their_own():
     """A sample stratified by template samples a unit from every template, so each table has a sampled reader when its readers
     are templates of their own: each template that holds a table row holds one on each of its units, all of one table, and
     every table has one, but a `ScanSlots_v5` lane's, a unit a slot, which holds one on the units its lane's slots read.
-    Round s's quantizers bind ROUND = s; round 0's token rows are its `ScanSlots_v5` and `TokenFeed_v1` units' and round
+    Round s's quantizers bind ROUND = s; round 0's token rows are its `ScanSlots_v5` and `TokenFeed_v2` units' and round
     1's its selects', `SelectCollect_v2{..., ROUND=1}`. Without the tables no template binds a round."""
     c = _lowered().circuit
     tables: dict[str, set[str]]
@@ -116,7 +116,7 @@ def test_each_tables_readers_are_templates_of_their_own():
     readers = sorted((t.split("{")[0], *ts, "ROUND=1" in t) for t, ts in tables.items())
     assert readers == [("Int8RowQuant_v5", "row-table/0/k64", False)] * 2 + [("Int8RowQuant_v5", "row-table/1/k64", True)] * 2 + [
         *[("ScanSlots_v5", "input-ids/0", False)] * CLASS.lanes, ("SelectCollect_v2", "input-ids/1", True),
-        ("TokenFeed_v1", "input-ids/0", False)]
+        ("TokenFeed_v2", "input-ids/0", False)]
     assert {s for t, ts in tables.items() for s in ts} == {p for p in c.registered.params
                                                             if p.startswith(("row-table/", "input-ids/"))}
     assert not any("ROUND=" in IF.descriptor_id(fn) for fn, _ in _lowered(None).circuit.templates)

@@ -17,11 +17,15 @@ from pathlib import Path
 import pytest
 
 from verity import config as K
-from verity.protocols.proofs.spot.verifier import parties as SP
+from verity.protocols.proof.spot.verifier import parties as SP
 from verity_cli import run as R
+from verity_vllm.inputs import serves
 
 ROOT = Path(R.ROOT)
 CONFIG = ROOT / "applications" / "remote.toml"
+S = serves.SERVES
+DATASET = serves.application(str(CONFIG))[0]
+WINDOW = {"SLOTS": str(S.slots), "WINDOW_STEPS": str(S.outputs), "V3C_CLASS": S.window_class, "CLASSES": S.window_class}
 ONSITE = ROOT / "applications" / "onsite_full.toml"
 REG = R.registry()
 T = sys.modules["served_table"]
@@ -140,8 +144,8 @@ def test_the_runners_variables_under_remote_are_pearl_pluss():
     serve = T.SERVE.variables(cfg, BINDINGS)
     assert {k: serve[k] for k in ("REPO", "PRECISION", "SLOTS", "WINDOW_STEPS", "LOAD", "DATASET", "TIMING", "V3C_CLASS",
                                   "CLASSES")} == {
-        "REPO": "unsloth/Llama-3.2-1B", "PRECISION": "bfloat16", "SLOTS": "4", "WINDOW_STEPS": "2", "LOAD": "dataset",
-        "DATASET": "llama32_1b_fixed_4_27_2", "TIMING": "at-once", "V3C_CLASS": "4,27,2", "CLASSES": "4,27,2"}
+        "REPO": "unsloth/Llama-3.2-1B", "PRECISION": "bfloat16", "SLOTS": str(S.slots), "WINDOW_STEPS": str(S.outputs),
+        "LOAD": "dataset", "DATASET": DATASET, "TIMING": "at-once", "V3C_CLASS": S.window_class, "CLASSES": S.window_class}
     variables = serve | PEARLPLUS | {"VERITY_CONFIGURATION": K.digest(cfg), "VERITY_PINS": "[]",
                                      "PP_DEVELOPMENT_UNDER_HOLD": "1"}
     assert T.variables(cfg, BINDINGS) == variables
@@ -151,7 +155,7 @@ def test_the_runners_variables_under_remote_are_pearl_pluss():
 
 
 def test_the_retired_tie_params_are_refused_by_name(tmp_path, capsys):
-    for retired in ({"class": "4,27,2"}, {"tie-uniform": True}):
+    for retired in ({"class": S.window_class}, {"tie-uniform": True}):
         rc, _, err = dry(capsys, config=remote(tmp_path, retired))
         assert rc == 2 and "refused unknown-key" in err and f"pearl-plus has no setting {sorted(retired)}" in err, err
 
@@ -175,7 +179,7 @@ def test_the_workload_runs_once_with_pearl_pluss_hooks(tmp_path, capsys, monkeyp
     here = sorted(p["name"] for p in R.load(CONFIG, REG)["party"] if p["machine"] == T.PROVER_NODE)
     assert said(capsys.readouterr().out, "PARTY") == [{"party": p, "refused": None} for p in here] and "workers" in here
     hooks = dict(x.split("=", 1) for x in (state / "out" / "hooks.txt").read_text().splitlines())
-    assert hooks == PEARLPLUS | {"SLOTS": "4", "WINDOW_STEPS": "2", "V3C_CLASS": "4,27,2", "CLASSES": "4,27,2"}
+    assert hooks == PEARLPLUS | WINDOW
 
 
 def test_without_bindings_the_workload_runs_with_no_gate_and_no_placeholder(tmp_path, capsys, monkeypatch):
@@ -188,7 +192,7 @@ def test_without_bindings_the_workload_runs_with_no_gate_and_no_placeholder(tmp_
     rc = R.run_main([str(CONFIG), "--on", T.PROVER_NODE, "--state", str(state)], REG)
     assert rc == 0 and set(parties(capsys).values()) == {None}
     hooks = dict(x.split("=", 1) for x in (state / "out" / "hooks.txt").read_text().splitlines())
-    assert hooks == {k: v for k, v in LOCAL.items() if k != "DEVELOPMENT"} | {"SLOTS": "4", "WINDOW_STEPS": "2", "V3C_CLASS": "4,27,2", "CLASSES": "4,27,2"}
+    assert hooks == {k: v for k, v in LOCAL.items() if k != "DEVELOPMENT"} | WINDOW
 
 
 HANDED = "HANDOFF the final record, composed off this node: on COMPOSE_NODE (auditor-2)"
@@ -285,7 +289,7 @@ def test_a_component_that_charges_nothing_reads_why_for_its_figure_and_shows_its
     """A stand-in declaration under inference-only's name whose resource is a `Lacks`: the check's line says why it
     has no figure (``charges_nothing``) and keeps its verdict among the components and in the combined verdict, as
     any component's: a reject of it makes the line reject and names it, and a missing row holds the line open."""
-    from verity.protocols.resource_accounting import scheme as S
+    from verity.protocols.accounting import scheme as S
     nothing = S.Lacks("charges nothing: a stand-in that checks a policy")
     standin = S.Scheme("inference-only", "verity/inference-only/v0", nothing, nothing, (), (), ())
     monkeypatch.setattr(T.schemes, "DECLARATIONS", {**T.schemes.DECLARATIONS, "inference-only": "stand-in"})

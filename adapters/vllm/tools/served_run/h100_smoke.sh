@@ -31,13 +31,13 @@ ROW=llama32-1b__bf16__h100__tp1__b4__i256__o32__mixed__greedy__bi-eager
 DRY=${DRY:-0} PY=${PY:-/workspace/venv312/bin/python} LEASE_MIN=${LEASE_MIN:-30} LEASE_MEM_GB=${LEASE_MEM_GB:-64}
 # the sampling design is the auditor's and not public: a printed line says only that one is registered
 DESIGN="(the registered sampling design)"
-# DEVELOPMENT_DESIGN=1: LAW is a development sampling design (default DEV_LAW, a uniform draw of 4 of class 4,27,2's
-#   proof blocks), which each record says, with what an accept of it establishes at δ
-DEVELOPMENT_DESIGN=${DEVELOPMENT_DESIGN:-0} DEV_LAW=rate:4/3654200
+# DEVELOPMENT_DESIGN=1: LAW is a development sampling design (default DEV_LAW, a uniform draw of 4 of class DEV_CLASS's
+#   proof blocks, refused on another class: give LAW), which each record says, with what an accept of it establishes at δ
+DEVELOPMENT_DESIGN=${DEVELOPMENT_DESIGN:-0} DEV_CLASS=4,27,2 DEV_LAW=rate:4/3654200
 [ "$DEVELOPMENT_DESIGN" = 1 ] && LAW=${LAW:-$DEV_LAW}
 MNBT=${MNBT:-512} CAP=${CAP:-8388608} LAW=${LAW:-rate:1/3481648} WC_TIMEOUT=${WC_TIMEOUT:-90m} FIN_TIMEOUT=${FIN_TIMEOUT:-120m}
 RECORD_IN_LEASE=${RECORD_IN_LEASE:-0}
-export PYTHONPATH=$TREE:$TREE/input_datasets:$TREE/adapters/vllm:$TREE/adapters/torch:$TREE/tools/config:$TREE/verity/protocols/proofs/flock/prover/python:$TREE/tools/research/src
+export PYTHONPATH=$TREE:$TREE/library/datasets:$TREE/adapters/vllm:$TREE/adapters/torch:$TREE/tools/config:$TREE/verity/protocols/proof/flock/prover/python:$TREE/tools/research/src
 [ -z "${WIPE_CMD:-}" ] || [ -n "${APPLICATION:-}" ] || { echo "SMOKE REFUSED application: WIPE_CMD is set where an application" \
   "lists the wipe, so name it: APPLICATION=applications/NAME.toml"; exit 3; }
 APPLICATION=${APPLICATION:-applications/remote.toml}
@@ -58,6 +58,8 @@ PINS
 fi
 echo "${SAID#*$'\n'}"
 IFS=, read -r SLOTS PROMPT OUTPUTS _ <<< "$CLASS"
+[ "$DEVELOPMENT_DESIGN" != 1 ] || [ "$LAW" != "$DEV_LAW" ] || [ "$CLASS" = "$DEV_CLASS" ] || { echo "SMOKE REFUSED class:" \
+  "DEV_LAW draws 4 of class $DEV_CLASS's proof blocks, not of CLASS=$CLASS's: pass LAW=rate:K/N, N its proof blocks"; exit 3; }
 [ $((SLOTS * PROMPT)) -le "$MNBT" ] || { echo "SMOKE REFUSED class: CLASS=$CLASS's $SLOTS prompts of $PROMPT ids are $((SLOTS * PROMPT))" \
   "tokens, past the engine's $MNBT a step (MNBT): its requests would not start in the window's first step together"; exit 3; }
 SERVER= SCRATCH=
@@ -103,10 +105,10 @@ REC_ARGS=()  # RECORD=0: each window's close plans its circuit and makes no reco
 # reads under the name of the scheme that provides admission
 ADMIT=$("$PY" - <<'EOF'
 import json
-from verity.protocols.compose import schemes
+from verity.protocols.run import schemes
 print(json.dumps({schemes.named("provides", "admission"): {"order": "release-order"}}))
 EOF
-) || { echo "SMOKE REFUSED admission: no one declared scheme provides admission (verity.protocols.compose.schemes, above)"; exit 3; }
+) || { echo "SMOKE REFUSED admission: no one declared scheme provides admission (verity.protocols.run.schemes, above)"; exit 3; }
 SERVE=(serve-openai --model "$MODEL" --revision "$REV" --out "$D" --port "$PORT" --precision "$PRECISION"
   --run-id "smoke-${RESEARCH_RUN_ID:-local}" --seal --max-num-batched-tokens "$MNBT" --window-steps "$OUTPUTS"
   --row-build "$PRED" --window-requests "$SLOTS" --window-class "$CLASS" --max-num-seqs "$SLOTS"

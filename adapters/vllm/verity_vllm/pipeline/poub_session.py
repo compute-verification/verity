@@ -1,14 +1,14 @@
 """The Commit's PoUB session (``--remote-verifier HOST:PORT``), from its ``--remote-*`` options to its lines in the Commit's
 record: the audited run's row entry, the verdict's ``poub_session`` and the Commit's last line, whose rejection fails the
 Commit (`pipeline.commit.main`).  The session is the process registered as `SESSION` (`scheme.PROCESSES`, once the one
-declaration that states it is imported by that name, `compose.schemes.named`), so this package imports no PoUB code: it hands the session the exchange of the build about to be
+declaration that states it is imported by that name, `run.schemes.named`), so this package imports no PoUB code: it hands the session the exchange of the build about to be
 made (`messages.current`), on which the session attaches its scheme, and drives what it gets back."""
 from __future__ import annotations
 
 from typing import Any
 
-from verity.protocols.compose import schemes as declarations
-from verity.protocols.resource_accounting import scheme
+from verity.protocols.run import schemes as declarations
+from verity.protocols.accounting import scheme
 
 from verity_vllm import messages
 

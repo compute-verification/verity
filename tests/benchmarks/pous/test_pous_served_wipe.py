@@ -24,14 +24,14 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
-from verity.protocols.resource_accounting.memory.pous.prover import wipe_served as WS
-from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
-from verity.protocols.resource_accounting.memory.pous.verifier import wipe_party as WP
-from verity.protocols.resource_accounting.memory.pous.verifier import wipe_period as W
+from verity.protocols.accounting.memory.pous.attester import memory_attester as mc
+from verity.protocols.accounting.memory.pous.prover import wipe_served as WS
+from verity.protocols.accounting.memory.pous.verifier import streamed_wipe as sw
+from verity.protocols.accounting.memory.pous.verifier import wipe_party as WP
+from verity.protocols.accounting.memory.pous.verifier import wipe_period as W
 
 WRAPPER = Path(__file__).resolve().parents[3] / "benchmarks" / "pous" / "streamed_wipe" / "served_wipe.sh"
-SIDE = Path(__file__).resolve().parents[2] / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "verifier" / "wipe_side.py"
+SIDE = Path(__file__).resolve().parents[2] / "verity" / "protocols" / "accounting" / "memory" / "pous" / "verifier" / "wipe_side.py"
 ANSWER_KEYS = ["commitment", "profile", "protocol", "public", "reason", "verdict"]
 CARD = "GPU-5e7ed000-0000-0000-0000-000000000000"
 #: who decided, as the summary and the headline name it: the stand-in judge, on this host
@@ -50,7 +50,7 @@ UNTRUSTED = "the session is signed by a key that is not a trusted memory challen
 TREE_LEASE = "tools/research/src/research/pods/sh/gpu_lease.sh"
 ROOT = Path(__file__).resolve().parents[3]
 #: the Lean judge's package, `wipe-protocol`'s
-JUDGE = "verity/protocols/resource_accounting/memory/pous/attester/lean"
+JUDGE = "verity/protocols/accounting/memory/pous/attester/lean"
 LAKE = """#!/usr/bin/env bash
 echo "$PWD $*" >> "$FAKE_LAKE_LOG"
 python3 - << 'EOF' || exit 1
@@ -89,7 +89,7 @@ if sys.argv[1] != "-":
 sys.argv = sys.argv[1:]
 code = sys.stdin.read()
 from verity.runtime.stream import Side
-from verity.protocols.resource_accounting.memory.pous.prover import wipe_run, wipe_served as WS
+from verity.protocols.accounting.memory.pous.prover import wipe_run, wipe_served as WS
 of = Side.of
 
 
@@ -110,7 +110,7 @@ def ran(*args, **kw):
 
 def judged(exe, cases, *args):
     assert Path(exe).name == "wipe-protocol" and list(cases) == [wipes[-1].case]
-    assert len(args) == 2 and args[0] == "--server"
+    assert len(args) == 4 and (args[0], args[2]) == ("--server", "--fill") and args[3].isdigit()
     return [wipes[-1].answer]
 
 
@@ -244,7 +244,8 @@ def test_the_wipe_on_the_serves_card_writes_its_core_answer(node, tmp_path) -> N
     (its stand-in's key pinned by the run, not the configuration, so trusted-device's premise reads a rehearsal's), the
     window's serve dir and the card in served.json, and the piece's last line its `WIPE` headline. The case, which holds
     the signed session, is the serve dir's, private, with the composite's piece beside it (served_case.py's `CASE` line
-    before the headline), and DIR keeps none of it."""
+    before the headline), and DIR keeps none of it. summary.json, served.json, the headline and the `CASE` line state
+    the card's uncovered bytes beside the answer, null for this store on no card."""
     d = tmp_path / "pieces" / "wipe"
     r = _wipe(node | {"GPU_LEASE_UUID": f"{CARD},GPU-other"}, d)
     assert r.returncode == 0, r.stdout + r.stderr
@@ -272,22 +273,24 @@ def test_the_wipe_on_the_serves_card_writes_its_core_answer(node, tmp_path) -> N
                      "address": ["10.96.0.36", 47611]}
     assert json.loads((d / "served.json").read_text()) == {
         "serve_dir": str(tmp_path / "pieces" / "serve-run"), "window": "3", "server": "vy-dc-h200", "card": CARD,
-        "run": node.get("RESEARCH_RUN_ID"), "lease": "the serve's: its engine loads on this card after the wipe",
-        "key_pin": "configuration"}
+        "fill": None, "uncovered_card_bytes": None, "run": node.get("RESEARCH_RUN_ID"),
+        "lease": "the serve's: its engine loads on this card after the wipe", "key_pin": "configuration"}
     summary = json.loads((d / "summary.json").read_text())
     assert summary["verdict"] == "accept" and _decider(summary) and summary["k"] == W.READS
+    assert summary["uncovered_card_bytes"] is None and "uncovered_card_bytes" not in answer
     key, = case["params"]["trusted"]
     assert summary["key_sha512"] == hashlib.sha512(bytes.fromhex(key)).hexdigest() == PINNED and summary["key_pinned"]
     assert _built(d)
     *_, built, last = r.stdout.strip().splitlines()
-    assert json.loads(built.removeprefix("CASE ")) == {"piece": str(private), "protocol": W.PROTOCOL, "verdict": "accept"}
+    assert json.loads(built.removeprefix("CASE ")) == {
+        "piece": str(private), "protocol": W.PROTOCOL, "verdict": "accept", "uncovered_card_bytes": None}
     assert last.startswith("WIPE {")
     headline = json.loads(last.removeprefix("WIPE "))
     assert _decider(headline) and headline | {"fill_GBps": None, "t0": None, "t1": None} == {
         "verdict": "accept", "reason": None, "protocol": W.PROTOCOL, "decided_by": headline["decided_by"],
         "executables": headline["executables"], "k": W.READS,
         "segments": 1, "fill_GBps": None, "t0": None, "t1": None, "server": mc.PROVER_MACHINE, "card": CARD, "exit": 0,
-        "key_pin": "configuration"}
+        "key_pin": "configuration", "uncovered_card_bytes": None}
     assert not (tmp_path / "lease.log").exists() and not (d / "refused.txt").exists()
     assert _beside(d) == ["start", "the wipe exit 0", "exit 0"]
 
@@ -608,7 +611,7 @@ def _distinct(key: Path, **more) -> str:
 
 def _public_bytes(r: subprocess.CompletedProcess, d: Path) -> bytes:
     """What of a wipe piece leaves the node in public: its answer or its refusal, its served counts but for ``server``
-    (the case's server id, which `wipe-protocol --server NODE serve` holds the case to), and its last line."""
+    (the case's server id, which `wipe-protocol --server NODE --fill BYTES serve` holds the case to), and its last line."""
     out = [r.stdout.strip().splitlines()[-1].encode()]
     for name in ("answer.json", "refused.txt"):
         if (d / name).exists():

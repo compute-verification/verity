@@ -24,14 +24,15 @@ directory composite.py takes as ``--piece``.
 
 Before anything is written, the case is held to what the run published: for PoUS, the private opening opens the public
 answer's commitment, under the window's binding, to the digest of the case's commitment. The verdict is the
-component's Lean's alone (``--lean-root``: `pous-run-protocol`, or `wipe-protocol` held to the served node ``served.json``
-names, ``--server NODE serve``), refused unless it is the run's own answer but for the reason. A piece that fails any
-of these is refused (`Refused`) and nothing is written.
+component's Lean's alone (``--lean-root``: `pous-run-protocol`, or `wipe-protocol` held to the served node and the
+fill floor ``served.json`` names, ``--server NODE --fill BYTES serve``), refused unless it is the run's own answer but
+for the reason. A piece that fails any of these is refused (`Refused`) and nothing is written.
 
 The case and its answer stay on the prover's side, in that 0700 directory, and so does composite.py's ``--out``, where it
 writes every piece's evidence again (``evidence.json``). The auditor's side reads what it read before: each piece's
 public ``answer.json`` (PoUS's under its hiding commitment) and the composite's answer. This prints one ``CASE`` line,
-naming the protocol, the verdict and where the piece is. A served run never runs it on PoUS's piece: `served_piece.py`
+naming the protocol, the verdict and where the piece is, and for the wipe ``uncovered_card_bytes`` as ``served.json``
+states it (the card file's store.dram less its fill floor, memory no label fills). A served run never runs it on PoUS's piece: `served_piece.py`
 writes that case and its answer itself while it holds ``C*`` (`lean_answer`, `write`), `served_wipe.sh` runs
 it on the wipe's, and the composite takes both as written (`onsite_pieces.sh`'s `onsite_cases`).
 
@@ -52,12 +53,12 @@ from types import ModuleType
 from typing import Any
 
 from verity import lean_process as LC
-from verity.protocols.resource_accounting.memory.pous.prover import weight_store as ws
-from verity.protocols.resource_accounting.memory.pous.verifier import period
-from verity.protocols.resource_accounting.memory.pous.verifier import run as R
-from verity.protocols.resource_accounting.memory.pous.verifier import wipe_period
-from verity.protocols.compose import schemes as registry
-from verity.protocols.resource_accounting import scheme as S
+from verity.protocols.accounting.memory.pous.prover import weight_store as ws
+from verity.protocols.accounting.memory.pous.verifier import period
+from verity.protocols.accounting.memory.pous.verifier import run as R
+from verity.protocols.accounting.memory.pous.verifier import wipe_period
+from verity.protocols.run import schemes as registry
+from verity.protocols.accounting import scheme as S
 from verity.commitments import advice
 from verity.commitments.identity import canonical_json_bytes
 
@@ -264,8 +265,8 @@ def wipe_piece(window: Path, private: Path | None = None, *,
                exe: str | os.PathLike | None = None) -> tuple[Path, dict[str, Any]]:
     """The wipe's piece from its public ``window`` and its kept case (module docstring). The answer written is the
     subprotocol's own, the public one without the placement the run added to its profile (the Lean's when the subprotocol ran its
-    judge), or with ``exe`` the Lean's now (`judged`), held to the served node ``served.json`` names. Returns the
-    private directory and that answer."""
+    judge), or with ``exe`` the Lean's now (`judged`), held to the served node and fill floor ``served.json`` names.
+    Returns the private directory and that answer."""
     public = _json(window / ANSWER)
     served = _json(window / "served.json") if (window / "served.json").is_file() else {}
     if private is None:
@@ -275,7 +276,8 @@ def wipe_piece(window: Path, private: Path | None = None, *,
     case = _json(kept)
     prof = None if public.get("profile") is None else {k: v for k, v in public["profile"].items() if k != "placement"}
     own = {k: public.get(k) for k in (*WIPE_FIELDS, "reason")} | {"profile": prof}
-    server = () if served.get("server") is None else ("--server", str(served["server"]))
+    server = () if served.get("server") is None else ("--server", str(served["server"]),
+                                                       "--fill", str(served.get("fill") or 0))
     own = judged(case, own, exe, *server)
     return write(private, case, own), own
 
@@ -285,7 +287,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--window", type=Path, required=True, help="the piece's public directory (its answer.json)")
     ap.add_argument("--private", type=Path, help="its private directory (default: the one the run kept)")
     ap.add_argument("--hf-home", type=Path, help="PoUS (required): the HF cache the serve read its snapshot from")
-    ap.add_argument("--p2-lib", help="PoUS: libp2v1.so's directory (verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh's lib/)")
+    ap.add_argument("--p2-lib", help="PoUS: libp2v1.so's directory (verity/protocols/accounting/memory/pous/prover/p2/p2_store/build.sh's lib/)")
     ap.add_argument("--device", default="cuda", help="PoUS: where C* is encoded again")
     ap.add_argument("--lean-root", type=Path, help="the tree the component's declared Lean executable is built in "
                                                     "(`declared.py`: pous-run-protocol, wipe-protocol), whose answer "
@@ -296,6 +298,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     except (Refused, AttributeError) as e:
         print(f"CASE: no answer in {a.window}: {e}", file=sys.stderr)
         return 2
+    stated = {}
     try:
         if protocol == period.PROTOCOL:
             if a.hf_home is None:
@@ -306,14 +309,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif protocol == wipe_period.PROTOCOL:
             exe = None if a.lean_root is None else declared.built("wipe", "wipe-protocol", a.lean_root)
             private, answer = wipe_piece(a.window, a.private, exe=exe)
+            served = a.window / "served.json"
+            stated = {"uncovered_card_bytes": (_json(served) if served.is_file() else {}).get("uncovered_card_bytes")}
         else:
             print(f"CASE: {a.window}/answer.json is no PoUS or wipe answer ({protocol})", file=sys.stderr)
             return 2
     except Refused as e:
         print(f"CASE: refused: {e}", flush=True)
         return 1
-    print("CASE " + json.dumps({"protocol": answer["protocol"], "verdict": answer["verdict"], "piece": str(private)},
-                               sort_keys=True), flush=True)
+    print("CASE " + json.dumps({"protocol": answer["protocol"], "verdict": answer["verdict"], "piece": str(private)}
+                               | stated, sort_keys=True), flush=True)
     return 0
 
 
