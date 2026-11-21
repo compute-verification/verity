@@ -18,7 +18,6 @@ import random
 import re
 import shutil
 import socket
-import subprocess
 import sys
 from dataclasses import replace
 from pathlib import Path
@@ -31,14 +30,12 @@ from verity.commitments import docket_digest as DD
 from verity.commitments import domains as DM
 from verity.commitments import salt_file as SF
 from verity.commitments.periods import interface as IF
-from verity_difftest import settings as opt
 from verity_vllm.engine.served_seed import DEFAULT_SEED
 from verity_vllm.pipeline import advice_windows as AW
 from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.commit import step_rows
 
 HERE = (Path(__file__).resolve().parent)
-VLLM = HERE.parents[2] / "tests" / "adapters" / "vllm"  # where adapters/vllm's `tests` imports from
 sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "prove_path"))
 import prove_path as PP  # noqa: E402
 import records_audit as RA  # noqa: E402
@@ -1262,23 +1259,3 @@ def test_window_commits_design_is_the_one_its_rate_names_over_the_circuit_and_a_
         with pytest.raises(ValueError, match="a fixed count") as e:
             PP.window_design(fixed, circuit)
         assert repr(fixed) in str(e.value)
-
-
-@pytest.fixture(scope="module")
-def fused(tmp_path_factory) -> dict:
-    """A block-FP8 MoE layer's committed step with the per-expert tables' registration, the checkpoint and the fused cut's
-    partition; over that one step, the row driver's window (``hook``: the in-Commit hook's, ``served``) and a serve-openai
-    window's sealed row dir (``served``), which names no Programs."""
-    pytest.importorskip("torch")
-    root = tmp_path_factory.mktemp("fused")
-    p = subprocess.run([sys.executable, "-m", "tests.pipeline.served_experts", str(root)], cwd=VLLM, capture_output=True, text=True)
-    assert p.returncode == 0, p.stderr[-3000:]
-    return json.loads(p.stdout.strip().splitlines()[-1])
-
-
-#: the mark of the fused cut's two window tests, which take over five minutes on a node between them, in the fixture they
-#: share (`fused`) and the first one's own window: they stay out of every check but the nightly cold one, which runs each by
-#: name with VERITY_SLOW=1 (check.py's `OPT_IN`), and run wherever else VERITY_SLOW asks
-OPT_IN = pytest.mark.skipif(opt.get("VERITY_SLOW") != "1", reason="over five minutes on a node: VERITY_SLOW=1")
-
-
