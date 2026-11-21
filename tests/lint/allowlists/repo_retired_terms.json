@@ -2063,7 +2063,6 @@
     {"file": "tests/verity/protocols/compose/verifier/lean/pyproject.toml", "count": 1},
     {"file": "tests/verity/protocols/compose/verifier/lean/reference.py", "count": 11},
     {"file": "tests/verity/protocols/compose/verifier/lean/test_composition_difftest.py", "count": 41},
-    {"file": "tests/verity/protocols/compose/verifier/lean/test_sampled_two_difftest.py", "count": 6},
     {"file": "tests/verity/protocols/compose/verifier/live_challenger/stub_serve.py", "count": 1},
     {"file": "tests/verity/protocols/compose/verifier/live_challenger/test_auditor.py", "count": 3},
     {"file": "tests/verity/protocols/compose/verifier/live_challenger/test_auditor_load.py", "count": 4},

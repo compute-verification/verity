@@ -12,8 +12,7 @@ inference-only policy's difftest's `reference` (`verity/inference-only/v0`, the 
 `spot`: its levels' split over one-stage v2's audit (`verity/sampled-proofs/one-stage/v2`, one-stage v1
 refused by name, `V1_REFUSED`), its decoders `OneStageZk` reads (behind the decoders `OneStage` reads, v1's difftest's,
 `tests/verity/protocols/proofs/spot/verifier/lean/test_difftest.py`) and its check up to its one session's coin tree, the
-and two levels' params through their own difftest's
-twin (`sampled_two.py`) and its evidence up to its keys, the wipe's
+and two levels' evidence up to its keys, the wipe's
 (`verity/wipe/v0`) `wipe_protocol_case.answer`, and for space (`verity/pous/p2/v4/run`) and bandwidth (PoUB-P2,
 `verity/remote-bandwidth/p2/v0`) their Python verifiers' answers on small periods of their hooks (`Recorded`,
 `periods.py`). Each subprotocol's own difftest holds its Lean to that Python; this one holds the composition of them.
@@ -57,7 +56,6 @@ from verity_difftest import Reject, canonical
 from verity_difftest import protocol as P
 
 from verity.commitments import docket_digest as DD
-from verity.protocols.proofs.spot.verifier.levels import TWO_LEVELS_REFUSED
 from verity.protocols.resource_accounting.network.verifier import registered as RH
 from verity.protocols.resource_accounting.network.verifier import span
 from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
@@ -161,13 +159,6 @@ class Recorded:
 
 
 SPOT_V1 = "verity/sampled-proofs/v1"
-
-
-def _two_stage():
-    """The two-stage form's twin (`sampled_two.py`, its own difftest's), which reads `ONE_STAGE` from this module, so it
-    is imported once this module is."""
-    import sampled_two
-    return sampled_two
 
 
 #: `VStar.Recursive.Sampled.TWO_LEVEL_KEYS`
@@ -297,10 +288,8 @@ def _one_stage_check(p: dict, c: tuple[dict, bytes], e: dict, blobs: list[bytes]
 TWO_STAGE_EVIDENCE_KEYS = ["coins", "interior", "received", "record", "source", "statements"]
 
 
-def _two_stage_evidence(j: Any) -> dict:
-    """`SampledTwo.evidenceOf` up to its keys: the form's split (`sampled_two.split`) and the keys; the rest is outside
-    the mirror."""
-    rest = _two_stage().split(j, "evidence")
+def _two_stage_evidence(rest: dict) -> dict:
+    """`SampledTwo.evidenceOf` up to its keys, on the evidence past `_split`; the rest is outside the mirror."""
     _keys(rest, TWO_STAGE_EVIDENCE_KEYS, "the evidence")
     raise ValueError("outside the mirror: the two-stage form's evidence past its keys")
 
@@ -308,8 +297,8 @@ def _two_stage_evidence(j: Any) -> dict:
 def _form_params(j: Any) -> dict:
     n, rest = _split(j, "parameters", params=True)
     if n == 2:
-        _two_stage().params_of_json(j)
-        raise Reject(TWO_LEVELS_REFUSED)
+        raise ValueError("outside the mirror: two levels' parameters, which the Lean parses before it refuses them by "
+                         "name (`VStar.Recursive.Sampled.twoLevels`)")
     return _one_stage_params(rest)
 
 
@@ -331,7 +320,7 @@ def _form_evidence(b: bytes) -> dict:
     j = P.canonical_json(b)
     n, rest = _split(j, "evidence")
     if n == 2:
-        _two_stage_evidence(j)
+        _two_stage_evidence(rest)
     return _one_stage_evidence(rest)
 
 
@@ -343,8 +332,8 @@ def mismatch(params_levels: int, evidence_levels: int) -> str:
 def spot(case: Any) -> dict:
     """`VStar.Recursive.Sampled.protocol` on a case and its ``blobs``: one-stage v2 (`Spot.OneStageZk`,
     `_one_stage_check`, at the coins the challenger's release gives) when its params and evidence are one level and name
-    ``proofs``, a refusal of one-stage v1 (naming no ``proofs``) by name, two levels' refusals of their params (its
-    twin's) and of their evidence's keys, on the cases the mirror decides."""
+    ``proofs``, a refusal of one-stage v1 (naming no ``proofs``) by name, and two levels' refusal of their evidence's keys,
+    on the cases the mirror decides."""
     blobs = case.get("blobs", []) if isinstance(case, dict) else []
     return P.answer(SPOT_V1, case, params=_form_params, commitment=ONE_STAGE.decode_commitment,
                     evidence=_form_evidence, digest=lambda c: c[1],
