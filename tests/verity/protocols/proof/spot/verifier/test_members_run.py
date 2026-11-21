@@ -598,6 +598,35 @@ def test_a_members_own_output_opens_its_templates_field_tree(tmp_path):
     assert why(port="x") == M.wired_tree_why(B, "x")
 
 
+def test_a_wired_row_opens_only_the_writers_field_tree_c_wires_into_it_at_the_records_root():
+    """`OneStageZk.portTreeHeld` at C's wired rows (`wiredRowsOf`, `members._wired_rows`), as Lean's guards on
+    `wiredAtT`: a reader's row ``x`` C wires from ``W``'s ``o0`` opens ``W/o0`` at the record's root; at another root it
+    is refused by name, and another writer's tree, a field of ``W`` C doesn't wire, the other cut row and another
+    member each by `wired_tree_why`."""
+    tree = {"port": "W/o0", "root": "aa" * 64, "domain": "dd" * 64, "leaves": 4}
+    record = {"roots": [tree, {**tree, "port": "W/o1"}, {**tree, "port": "V/o0"}]}
+
+    def why(port: str = "x", value: str = "W/o0", root: str = tree["root"], who: str = "R/c0",
+            wired: frozenset = frozenset({("x", "W/o0")})) -> str | None:
+        reg = {"format": "verity/registered-reads/v2",
+               "ports": {port: {"value": value, "root": root, "domain": tree["domain"], "leaves": 4}}}
+        try:
+            M._tree_ports_held({who: {"registered": reg}}, record, {"R/c0": set(wired)})
+        except M._Refused as e:
+            return str(e)
+        return None
+    assert why() is None
+    assert why(root="44" * 64) == (
+        "registered: member R/c0's port x opens the committed tree W/o0 at another root than the registration's: a "
+        "statement opens its window's registered tree, never another window's or another member's")
+    assert why(value="V/o0") == M.wired_tree_why("R/c0", "x")
+    assert why(value="W/o1") == M.wired_tree_why("R/c0", "x")
+    assert why(who="R/c1") == M.wired_tree_why("R/c1", "x")
+    cut = frozenset({("x#1", "W/o0")})
+    assert why(port="x#1", wired=cut) is None
+    assert why(port="x#0", wired=cut) == M.wired_tree_why("R/c0", "x#0")
+
+
 @lean
 def test_a_fresh_input_opens_the_windows_one_root_of_its_node(tmp_path):
     """A registered port of run input node 3, its value ``input/n3``, opens the record's one root of the node, the
