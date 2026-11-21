@@ -18,4 +18,5 @@ addopts = "-q -p no:cacheprovider"
 # In place of `verity` whole (`inputs_only`): the settings machinery its registries are built on.
 inputs_only = true
 inputs = ["tools/config", "verity/__init__.py", "tools/config/verity_config/verity_settings.py",
-          ]
+          # the card files a registry entry's `card` names, read through `load_card` and its two imports
+          "calibration/hardware/cards", "verity/device.py", "verity/channel.py", "verity/errors.py"]
