@@ -37,8 +37,8 @@ untraced = [
     "test_door_walls.py",
 ]
 # The Lean verifier, the ZK server's Lean and the door's lowering check, which `test_audit_one_member` and
-# `test_audit_two_members` run and skip without: check's lean-build step builds them, the verifier's defaultTargets, before
-# this suite (`AFTER_LEAN`), and fails the suite if one is missing. Its flock-circuit is `verity/protocols/proof/flock/prover/check_build.sh bin`'s,
+# `test_audit_two_members` run and skip without: check's lean-build step builds them, by name where not a default target,
+# before this suite (`AFTER_LEAN`). Its flock-circuit is `verity/protocols/proof/flock/prover/check_build.sh bin`'s,
 # from the live crate and the patches under `verity`, on the Flock checkout check's flock-circuit-build step leaves on a
 # machine: the test skips on a machine without one, since its build fetches nothing.
 artifacts = ["verity/protocols/proof/flock/verifier/.lake/build/bin/verity-verify-proof",
