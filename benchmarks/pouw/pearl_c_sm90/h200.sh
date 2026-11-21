@@ -31,7 +31,7 @@
 # the machine's 13.0, benchmarks/kernels/machine.py's).  Every step's exit code is in $OUT/rc.txt; exits non-zero if any step failed.
 set -uo pipefail
 O=${OUT:?}; IN=${RESEARCH_RUN_DIR:?}/inputs
-D=benchmarks/pouw/pearl_c_sm90 K=verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90
+D=benchmarks/pouw/pearl_c_sm90 K=verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm90
 PY=${VERITY_BENCH_VENV:-/workspace/cp/venv312}/bin/python
 export PYTHONPATH=$PWD:$PWD/tools/config:$PWD/adapters/vllm:$PWD/benchmarks/pouw${PYTHONPATH:+:$PYTHONPATH}
 MODEL=${MODEL:-glm53}

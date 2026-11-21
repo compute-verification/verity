@@ -20,13 +20,13 @@ from functools import cache
 from typing import TYPE_CHECKING, Any
 
 from verity.circuits.defs import bind
-from verity.protocols.resource_accounting import scheme as schemes
+from verity.protocols.accounting import scheme as schemes
 
 from verity_vllm import messages
 from verity_vllm.definitions.registry import boolean_io_shell as BIO
 
 #: the network attester's cells at the class of record (w63,
-#: `verity.protocols.resource_accounting.network.prover.scan_zk.W63`): B-byte cells, r a connection a bucket, C cells a
+#: `verity.protocols.accounting.network.prover.scan_zk.W63`): B-byte cells, r a connection a bucket, C cells a
 #: request, ids of IDB bits, a request's ingress within WITHIN buckets
 B, R, C, IDB, WITHIN = 512, 4, 47, 17, 12
 #: the port whose layout the state row is, looked up on the declared scheme that has it (`messages.declaring`)

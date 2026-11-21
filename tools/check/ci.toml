@@ -61,9 +61,9 @@ part = "lean"
 group = 3
 needs = ["lean-build"]
 # parts named apart from their directory: a move that sends one elsewhere keeps it under the gate
-merge_requires = ["verity/protocols/proofs/flock/prover/", "verity/protocols/proofs/flock/prover/pod/", "verity/protocols/proofs/flock/prover/agreement/", "verity/protocols/proofs/flock/prover/tool.py",
-                  "verity/protocols/proofs/flock/verifier/", "verity/circuits/base/", "verity/circuits/lean/",
-                  "verity/commitments/lean/", "!README.md", "!PROTOCOL.md", "!verity/protocols/proofs/flock/verifier/sigma/*"]
+merge_requires = ["verity/protocols/proof/flock/prover/", "verity/protocols/proof/flock/prover/pod/", "verity/protocols/proof/flock/prover/agreement/", "verity/protocols/proof/flock/prover/tool.py",
+                  "verity/protocols/proof/flock/verifier/", "verity/circuits/base/", "verity/circuits/lean/",
+                  "verity/commitments/lean/", "!README.md", "!PROTOCOL.md", "!verity/protocols/proof/flock/verifier/sigma/*"]
 
 # Group 4: every Lake package's audit. It builds only in scratch trees of its own, so nothing in group 3 waits on it.
 [[job]]
@@ -91,12 +91,12 @@ part = "tests"
 group = 5
 after = "lean-build"
 # V*'s stager and its Lean mirror (VStar.In) stay in step: core_vstar's `part_in` difftest holds one to the other.
-merge_requires = ["verity/protocols/proofs/flock/prover/python/verity_flock/rec_vstage.py", "verity/protocols/proofs/flock/prover/python/verity_flock/rec_outer.py",
-                  "verity/protocols/proofs/flock/prover/python/verity_flock/rec_open.py", "verity/protocols/proofs/flock/prover/python/verity_flock/rec_residuals.py",
-                  "verity/protocols/proofs/flock/prover/python/verity_flock/rec_cap.py", "verity/protocols/proofs/flock/prover/python/verity_flock/circuit.py",
-                  "verity/protocols/proofs/spot/verifier/one_stage/registered.py", "verity/protocols/proofs/flock/verifier/VStar/In.lean",
-                  "verity/protocols/proofs/recursion/verifier/vstar_cli/", "verity/protocols/proofs/spot_flock/verifier/lean/",
-                  "verity/protocols/proofs/spot_flock_recursion/verifier/lean/"]
+merge_requires = ["verity/protocols/proof/flock/prover/python/verity_flock/rec_vstage.py", "verity/protocols/proof/flock/prover/python/verity_flock/rec_outer.py",
+                  "verity/protocols/proof/flock/prover/python/verity_flock/rec_open.py", "verity/protocols/proof/flock/prover/python/verity_flock/rec_residuals.py",
+                  "verity/protocols/proof/flock/prover/python/verity_flock/rec_cap.py", "verity/protocols/proof/flock/prover/python/verity_flock/circuit.py",
+                  "verity/protocols/proof/spot/verifier/one_stage/registered.py", "verity/protocols/proof/flock/verifier/VStar/In.lean",
+                  "verity/protocols/proof/recursion/verifier/vstar_cli/", "verity/protocols/proof/spot_flock/verifier/lean/",
+                  "verity/protocols/proof/spot_flock_recursion/verifier/lean/"]
 
 # Group 6: no merge above the check's base grows the vLLM integration's lint ratchets (`ratchet_gate.py`, as the base has it):
 # on a train, each `Queue: #N` merge against the one below, so a failure names its PR.
@@ -155,20 +155,20 @@ group = 7
 shards = [
     ["lean-audit:security/Proofs", "lean-audit:security/Properties", "landing-gates", "pytest:*", "lean-suites:verity-vllm:1/3",
      "lean-suites:verity-flock:1/6", "lean-suites:verity-flock:2/6", "lean-suites:verity-core-evaluate", "lean-suites:pous-verifier",
-     "lean-suites:verity/protocols/resource_accounting/network/verifier:3/3",
+     "lean-suites:verity/protocols/accounting/network/verifier:3/3",
      "lean-suites:verity-pouw-verifier-difftest:1/3", "lean-suites:verity-lean-audit:1/3",
      "lean-suites:verity-core-composition:3/3", "lean-suites:verity-pouw-benchmarks:3/3",
      "lean-suites:benchmarks/one_stage:5/7"],
     ["lean-build", "lean-unit-cut", "lean-audit:*", "lean-suites:verity-flock:3/6", "lean-suites:verity-flock:4/6",
-     "lean-suites:verity-flock:5/6", "lean-suites:verity-flock:6/6", "lean-suites:verity/protocols/proofs/recursion/verifier/vstar_cli",
-     "lean-suites:verity/protocols/resource_accounting/network/verifier:1/3", "lean-suites:verity-pouw-verifier-difftest:2/3",
+     "lean-suites:verity-flock:5/6", "lean-suites:verity-flock:6/6", "lean-suites:verity/protocols/proof/recursion/verifier/vstar_cli",
+     "lean-suites:verity/protocols/accounting/network/verifier:1/3", "lean-suites:verity-pouw-verifier-difftest:2/3",
      "lean-suites:verity-lean-audit:2/3", "lean-suites:verity-core-composition:1/3",
      "lean-suites:verity-pouw-benchmarks:2/3", "lean-suites:verity-vllm:3/3", "lean-agreement", "pytest:research",
      "pytest:adapters/vllm/verity_vllm/definitions", "pytest:verity/circuits/ops", "pytest:verity-graph",
-     "pytest:calibration/training", "pytest:repository", "pytest:verity/protocols/resource_accounting/memory/pous/verifier"],
+     "pytest:calibration/training", "pytest:repository", "pytest:verity/protocols/accounting/memory/pous/verifier"],
     ["flock-circuit-build", "circuit-check", "flock-rust-tests", "lean-suites:verity-core-composition:2/3",
      "lean-suites:verity-pouw-benchmarks:1/3", "lean-suites:verity-vllm:2/3",
-     "lean-suites:verity/protocols/resource_accounting/network/verifier:2/3", "lean-suites:verity-pouw-verifier-difftest:3/3",
+     "lean-suites:verity/protocols/accounting/network/verifier:2/3", "lean-suites:verity-pouw-verifier-difftest:3/3",
      "lean-suites:verity-lean-audit:3/3", "lean-suites:*"],
 ]
 
@@ -178,19 +178,19 @@ shards = [
 shards = [
     ["lean-audit:security/Proofs", "lean-audit:security/Properties", "landing-gates", "circuit-check:1/4", "lean-suites:verity-vllm:1/3",
      "lean-suites:verity-flock:1/6", "lean-suites:verity-flock:2/6", "lean-suites:verity-core-evaluate", "lean-suites:pous-verifier",
-     "lean-suites:verity/protocols/resource_accounting/network/verifier:3/3",
+     "lean-suites:verity/protocols/accounting/network/verifier:3/3",
      "lean-suites:verity-pouw-verifier-difftest:1/3", "lean-suites:verity-lean-audit:1/3",
      "lean-suites:verity-core-composition:3/3", "lean-suites:verity-pouw-benchmarks:3/3",
      "lean-suites:benchmarks/one_stage:5/7"],
     ["lean-build", "lean-unit-cut", "lean-audit:*", "lean-suites:verity-flock:3/6", "lean-suites:verity-flock:4/6",
-     "lean-suites:verity-flock:5/6", "lean-suites:verity-flock:6/6", "lean-suites:verity/protocols/proofs/recursion/verifier/vstar_cli",
-     "lean-suites:verity/protocols/resource_accounting/network/verifier:1/3", "lean-suites:verity-pouw-verifier-difftest:2/3",
+     "lean-suites:verity-flock:5/6", "lean-suites:verity-flock:6/6", "lean-suites:verity/protocols/proof/recursion/verifier/vstar_cli",
+     "lean-suites:verity/protocols/accounting/network/verifier:1/3", "lean-suites:verity-pouw-verifier-difftest:2/3",
      "lean-suites:verity-lean-audit:2/3", "lean-suites:verity-core-composition:1/3",
      "lean-suites:verity-pouw-benchmarks:2/3", "lean-suites:verity-vllm:3/3", "lean-agreement", "circuit-check:2/4"],
     ["pytest", "circuit-check:3/4"],
     ["flock-circuit-build", "flock-rust-tests", "circuit-check:*", "lean-suites:verity-core-composition:2/3",
      "lean-suites:verity-pouw-benchmarks:1/3", "lean-suites:verity-vllm:2/3",
-     "lean-suites:verity/protocols/resource_accounting/network/verifier:2/3", "lean-suites:verity-pouw-verifier-difftest:3/3",
+     "lean-suites:verity/protocols/accounting/network/verifier:2/3", "lean-suites:verity-pouw-verifier-difftest:3/3",
      "lean-suites:verity-lean-audit:3/3", "lean-suites:*"],
 ]
 
@@ -205,18 +205,18 @@ shards = [
 shards = [
     ["lean-audit:security/Proofs", "lean-audit:security/Properties", "landing-gates", "pytest:adapters/vllm/verity_vllm/definitions", "lean-suites:verity-vllm:1/3",
      "lean-suites:verity-flock:1/6", "lean-suites:verity-flock:2/6", "lean-suites:verity-core-evaluate", "lean-suites:pous-verifier",
-     "lean-suites:verity/protocols/resource_accounting/network/verifier:3/3",
+     "lean-suites:verity/protocols/accounting/network/verifier:3/3",
      "lean-suites:verity-pouw-verifier-difftest:1/3", "lean-suites:verity-lean-audit:1/3",
      "lean-suites:verity-core-composition:3/3", "lean-suites:verity-pouw-benchmarks:3/3",
      "lean-suites:benchmarks/one_stage:5/7"],
     ["flock-circuit-build", "flock-rust-tests", "lean-audit:*", "lean-suites:verity-core-composition:2/3",
      "lean-suites:verity-pouw-benchmarks:1/3", "lean-suites:verity-vllm:2/3",
-     "lean-suites:verity/protocols/resource_accounting/network/verifier:2/3", "lean-suites:verity-pouw-verifier-difftest:3/3",
+     "lean-suites:verity/protocols/accounting/network/verifier:2/3", "lean-suites:verity-pouw-verifier-difftest:3/3",
      "lean-suites:verity-lean-audit:3/3", "lean-suites:*",
      "ratchet-gate", "added-lines"],
     ["lean-build", "lean-unit-cut", "lean-suites:verity-flock:3/6", "lean-suites:verity-flock:4/6",
-     "lean-suites:verity-flock:5/6", "lean-suites:verity-flock:6/6", "lean-suites:verity/protocols/proofs/recursion/verifier/vstar_cli",
-     "lean-suites:verity/protocols/resource_accounting/network/verifier:1/3", "lean-suites:verity-pouw-verifier-difftest:2/3",
+     "lean-suites:verity-flock:5/6", "lean-suites:verity-flock:6/6", "lean-suites:verity/protocols/proof/recursion/verifier/vstar_cli",
+     "lean-suites:verity/protocols/accounting/network/verifier:1/3", "lean-suites:verity-pouw-verifier-difftest:2/3",
      "lean-suites:verity-lean-audit:2/3", "lean-suites:verity-core-composition:1/3",
      "lean-suites:verity-pouw-benchmarks:2/3", "lean-suites:verity-vllm:3/3", "lean-agreement"],
     ["pytest:*"],

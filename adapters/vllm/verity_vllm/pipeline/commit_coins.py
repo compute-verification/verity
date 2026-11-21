@@ -3,7 +3,7 @@ and its served C2 replay challenge after each run's root of record.
 
 * **Serving** (the Commit's ``--challenger-gate CMD`` and ``--challenger-peer NAME``; `of_options`): before its engine,
   the Commit reserves a challenge phase on the auditor's challenger gate (`ChallengerGate`: ``reserve --peer NAME --scheme SCHEME --families
-  families(runs)``, `verity/protocols/compose/verifier/live_challenger/auditor.py` on the auditor device, under the caller's own gate key). Once its
+  families(runs)``, `verity/protocols/run/verifier/live_challenger/auditor.py` on the auditor device, under the caller's own gate key). Once its
   first instrumented run's root of record is fixed (rows-sha512's 64-byte root, `commit.step_rows`), it opens that challenge phase on it (``open --session S --root R``): the gate signs the open entry
   binding the challenge phase to the root before the challenger serves a coin, and refuses a second challenge phase for the root, ever.
   The Commit then reaches the challenger on its own 127.0.0.1 (this machine's certifier coin link), refuses one whose coin
@@ -39,7 +39,7 @@ from typing import Any
 
 from verity.commitments.live_coin import CoinError, LiveOpening
 from verity.commitments.scheme import DIGEST_BYTES
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+from verity.protocols.accounting.compute.pouw.prover.serving import (
     REPLY_FIELDS,
     SESSION_FIELDS,
     challenger_carried,
@@ -48,9 +48,9 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     pins_head,
     session_of,
 )
-from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
-from verity.protocols.proofs.spot.verifier.challenger import remote
-from verity.protocols.proofs.spot.verifier.challenger.challenger import live_reason
+from verity.protocols.proof.spot.verifier.challenger import challenger as Ch
+from verity.protocols.proof.spot.verifier.challenger import remote
+from verity.protocols.proof.spot.verifier.challenger.challenger import live_reason
 from verity_vllm.config import option
 
 SCHEME_TAG = "verity/vllm/commit-coins/v1"

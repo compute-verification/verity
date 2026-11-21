@@ -25,15 +25,15 @@ trap 'rm -rf $S' EXIT
 { lscpu | grep -E 'Model name|^CPU\(s\)'; free -g | head -2; echo "pinned=$TU_PINNED rayon=$RAYON_NUM_THREADS size=$SIZE"; } > $O/host.txt 2>&1
 timed() { local name=$1; shift; if [ -x /usr/bin/time ]; then /usr/bin/time -o $O/time-$name.txt -f "TIME $name wall_s=%e maxrss_kb=%M rc=%x" "$@"; else "$@"; fi; }
 
-LSHA=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py key verity/protocols/proofs/flock/verifier $REPO/tests/verity/protocols/proofs/flock/prover/lean/TmplUnit.lean)
+LSHA=$(python3 verity/protocols/proof/flock/prover/pod/lake_closure.py key verity/protocols/proof/flock/verifier $REPO/tests/verity/protocols/proof/flock/prover/lean/TmplUnit.lean)
 LEAN_BIN=$L/lean-$LSHA/verity-verify-proof; UNIT_BIN=$L/lean-$LSHA/flock-tmpl-unit; FW_BIN=$L/lean-$LSHA/flock-zk-server; LOW_BIN=$L/lean-$LSHA/flock-lower-check
 (
   export PATH=$HOME/.elan/bin:$PATH
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
   exec 9>$L/lean.lock; flock 9
   if [ ! -x $LEAN_BIN ] || [ ! -x $UNIT_BIN ] || [ ! -x $FW_BIN ] || [ ! -x $LOW_BIN ]; then
-    rm -rf $L/lean-src && LEAN_SRC=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py copy verity/protocols/proofs/flock/verifier $L/lean-src) \
-      && cp tests/verity/protocols/proofs/flock/prover/lean/TmplUnit.lean $LEAN_SRC/ \
+    rm -rf $L/lean-src && LEAN_SRC=$(python3 verity/protocols/proof/flock/prover/pod/lake_closure.py copy verity/protocols/proof/flock/verifier $L/lean-src) \
+      && cp tests/verity/protocols/proof/flock/prover/lean/TmplUnit.lean $LEAN_SRC/ \
       && printf '\n[[lean_exe]]\nname = "flock-tmpl-unit"\nroot = "TmplUnit"\n' >> $LEAN_SRC/lakefile.toml \
       && (cd $LEAN_SRC && lake build verity-verify-proof flock-tmpl-unit flock-zk-server flock-lower-check) && mkdir -p $L/lean-$LSHA \
       && cp $LEAN_SRC/.lake/build/bin/verity-verify-proof $LEAN_BIN && cp $LEAN_SRC/.lake/build/bin/flock-tmpl-unit $UNIT_BIN \
@@ -42,18 +42,18 @@ LEAN_BIN=$L/lean-$LSHA/verity-verify-proof; UNIT_BIN=$L/lean-$LSHA/flock-tmpl-un
 ) > $O/build-lean.log 2>&1 &
 LP=$!
 CHALLENGER_REPO=$REPO CHALLENGER_WORK=$S/challenger-work
-. verity/protocols/proofs/flock/prover/pod/challenger.sh
+. verity/protocols/proof/flock/prover/pod/challenger.sh
 challenger_build
 
-KEY=$(cat verity/protocols/proofs/flock/prover/pod/20-gpu-link.sh verity/protocols/proofs/flock/prover/pod/60-circuit.sh verity/protocols/proofs/flock/prover/*.patch verity/protocols/proofs/flock/prover/cuda_*_patch.py \
-  $(find verity/protocols/proofs/flock/prover/cuda verity/protocols/proofs/flock/prover/live -type f | LC_ALL=C sort) | sha256sum | cut -c1-16)
+KEY=$(cat verity/protocols/proof/flock/prover/pod/20-gpu-link.sh verity/protocols/proof/flock/prover/pod/60-circuit.sh verity/protocols/proof/flock/prover/*.patch verity/protocols/proof/flock/prover/cuda_*_patch.py \
+  $(find verity/protocols/proof/flock/prover/cuda verity/protocols/proof/flock/prover/live -type f | LC_ALL=C sort) | sha256sum | cut -c1-16)
 BIN=$W/bin-$KEY-g0; F=$FW/flock-gpu-link/flock
 exec 8>$W/build.lock; flock 8
 if [ -x $BIN/flock-circuit ] && [[ $(ldd $BIN/flock-circuit 2>&1) == *"not found"* ]]; then
   rm -rf $BIN || { echo "$BIN: built against another glibc, and this job can't remove it" >&2; exit 1; }
 fi
 if [ ! -x $BIN/flock-circuit ]; then
-  RESEARCH_RUN_DIR=$O/build FLOCK_WORK=$FW MODE=build GPU=0 bash verity/protocols/proofs/flock/prover/pod/60-circuit.sh > $O/build.log 2>&1 || { tail -30 $O/build.log; exit 1; }
+  RESEARCH_RUN_DIR=$O/build FLOCK_WORK=$FW MODE=build GPU=0 bash verity/protocols/proof/flock/prover/pod/60-circuit.sh > $O/build.log 2>&1 || { tail -30 $O/build.log; exit 1; }
   mkdir -p $BIN && cp $F/target/release/flock-circuit $BIN/flock-circuit
 fi
 exec 8>&-
@@ -61,7 +61,7 @@ B=$BIN/flock-circuit; sha256sum $B | tee $O/binary.sha256
 UV=$(command -v uv || echo $HOME/.local/bin/uv)
 [ -x $UV ] || { curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1; UV=$HOME/.local/bin/uv; }
 [ -x $W/py/bin/python ] || { $UV venv -q --python 3.12 $W/py && $UV pip install -q --python $W/py/bin/python numpy blake3; } || exit 1
-export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/adapters/torch
+export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proof/flock/prover/python:$REPO/adapters/vllm:$REPO/adapters/torch
 CHALLENGER_PY=python3
 challenger_built || exit 1
 

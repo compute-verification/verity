@@ -56,8 +56,8 @@ sys.path.insert(0, str(HERE))
 
 import auditor_line as al  # noqa: E402
 
-from verity.protocols.proofs.spot.verifier.challenger import remote  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier import coins  # noqa: E402
+from verity.protocols.proof.spot.verifier.challenger import remote  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier import coins  # noqa: E402
 
 RTT_MS = (0.3, 1.15, 10.0, 25.0, 50.0)
 """The round trips a row is replayed at by default, ms: in-region and a few farther."""

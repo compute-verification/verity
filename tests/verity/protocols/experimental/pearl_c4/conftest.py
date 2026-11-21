@@ -3,7 +3,7 @@ they share checks with) and its clear audit (``prover/clear``) by name, as PoUW'
 import sys
 from pathlib import Path
 
-POUW = Path(__file__).resolve().parents[5] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw"
-for d in (POUW / "prover" / "clear", POUW.parents[4] / "tests" / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "verifier"):
+POUW = Path(__file__).resolve().parents[5] / "verity" / "protocols" / "accounting" / "compute" / "pouw"
+for d in (POUW / "prover" / "clear", POUW.parents[4] / "tests" / "verity" / "protocols" / "accounting" / "compute" / "pouw" / "verifier"):
     if str(d) not in sys.path:
         sys.path.insert(0, str(d))

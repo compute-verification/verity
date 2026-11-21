@@ -8,7 +8,7 @@ import asyncio
 
 import pytest
 
-from verity.protocols.resource_accounting.network.prover import id_relay
+from verity.protocols.accounting.network.prover import id_relay
 
 NO_DECIMAL = "²"
 

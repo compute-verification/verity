@@ -11,13 +11,13 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_inert_work as D
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_u as PCU
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_kw as P
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_device import H100
-from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Context, Matmul, Shape, Tile
+from verity.protocols.accounting.compute.pouw.prover import schemes as pouw_schemes
+from verity.protocols.accounting.compute.pouw.prover.schemes import pearl_c as C
+from verity.protocols.accounting.compute.pouw.prover.schemes import pearl_c_inert_work as D
+from verity.protocols.accounting.compute.pouw.prover.schemes import pearl_c_u as PCU
+from verity.protocols.accounting.compute.pouw.prover.schemes import pearl_kw as P
+from verity.protocols.accounting.compute.pouw.prover.schemes.pearl_c_device import H100
+from verity.protocols.accounting.compute.pouw.verifier.protocol import Context, Matmul, Shape, Tile
 
 _SPEC = importlib.util.spec_from_file_location(
     "pouw_pearlc_fast_tile_held", Path(__file__).parents[3] / "benchmarks" / "pouw" / "pearl_c_vllm" / "fast_tile.py")

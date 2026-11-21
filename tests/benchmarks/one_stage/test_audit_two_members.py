@@ -54,12 +54,12 @@ import numpy as np
 import pytest
 
 from verity.commitments import coin_tree as CT
-from verity.protocols.proofs.spot.verifier.challenger import challenger as C
-from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import members as M, proofs as PF
-from verity.protocols.proofs.spot.prover import docket as DK
+from verity.protocols.proof.spot.verifier.challenger import challenger as C
+from verity.protocols.proof.spot.verifier import service as S
+from verity.protocols.proof.spot.verifier.one_stage import members as M, proofs as PF
+from verity.protocols.proof.spot.prover import docket as DK
 from verity.commitments import randomness as RND
-from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
+from verity.protocols.proof.spot.verifier.one_stage import registered as REG
 from verity.commitments import registered_value as RV
 from verity.circuits.codec import descriptor_id, program_digest
 from verity.circuits.defs import bind
@@ -71,8 +71,8 @@ HERE = ((Path(__file__).resolve().parents[3] / "benchmarks" / "one_stage"))
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(HERE.parent / "prove_path"))
 sys.path.insert(0, str(HERE))
-from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import member_trees as MT  # noqa: E402
+from verity.protocols.proof.spot.verifier.challenger import challenger_session as AC  # noqa: E402
+from verity.protocols.proof.spot.verifier.one_stage import member_trees as MT  # noqa: E402
 import records_audit as RA  # noqa: E402
 
 
@@ -87,8 +87,8 @@ def fixed(w, seed: int = 0) -> dict[str, bytes]:
 STATE = next(iter(RA.PHASE_OWN))
 
 LEAN = ROOT / "verity" / "protocols" / "proofs" / "flock" / "verifier" / ".lake" / "build" / "bin"
-BUILD = ROOT / "verity" / "protocols" / "proofs" / "flock" / "prover" / "check_build.sh"
-TMPL_UNIT = ROOT / "tests" / "verity" / "protocols" / "proofs" / "flock" / "prover" / "lean" / "TmplUnit.lean"
+BUILD = ROOT / "verity" / "protocols" / "proof" / "flock" / "prover" / "check_build.sh"
+TMPL_UNIT = ROOT / "tests" / "verity" / "protocols" / "proof" / "flock" / "prover" / "lean" / "TmplUnit.lean"
 #: `check_build.sh bin`'s exit where the machine has no Flock checkout, not its toolchain or not its crates
 NOTHING_TO_BUILD_ON = 3
 KS = (128, 256)
@@ -169,7 +169,7 @@ def _audit(tmp: Path, window: Path, binaries: dict[str, Path], *flags: str,
     main.write_text(subprocess.run(["git", "-C", str(ROOT), "rev-list", "--first-parent", "HEAD"], capture_output=True,
                                    text=True, check=True).stdout)
     m0 = os.pathsep.join(str(ROOT / p) for p in ("", "benchmarks/numerical/python",
-                                                 "verity/protocols/proofs/flock/prover/python", "adapters/vllm"))
+                                                 "verity/protocols/proof/flock/prover/python", "adapters/vllm"))
     argv = [sys.executable, str(ROOT / "benchmarks" / "prove_path" / "records_audit.py"), "audit", "--window", str(window),
             "--sampling-design", design, "--circuit", hashlib.sha512((window / "circuit.json").read_bytes()).hexdigest(), "--run", RUN,
             "--challenger", "local", "--main", str(main), "--m0-pythonpath", m0, *(x for k, p in binaries.items()
@@ -389,6 +389,6 @@ def test_a_value_the_program_takes_registered_afresh_with_no_earlier_record_pass
 def _answer(out: Path) -> dict:
     """SPOT's answer on the audit under ``out`` (`served_integrity.answer`, as the served run's record and the
     attestation period read it), its docket the one the audit registered."""
-    from verity.protocols.proofs.spot.verifier.one_stage import served_integrity as SI  # beside a5, on the path `records_audit` put there
+    from verity.protocols.proof.spot.verifier.one_stage import served_integrity as SI  # beside a5, on the path `records_audit` put there
 
     return SI.answer(out, json.loads((out / "window" / "registration.json").read_text()))

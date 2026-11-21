@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.resource_accounting.memory.poub.verifier.codec import Field, rho, rho_inv
+from verity.protocols.accounting.memory.poub.verifier.codec import Field, rho, rho_inv
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "word_codec"))

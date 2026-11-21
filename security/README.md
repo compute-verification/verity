@@ -70,7 +70,7 @@ incorrect set of the trace the extractor recovers.
      read in the error.
    - Open: the targets (`SpotSound`, `PouwSound`, `InferenceOnlySound`, `PousSound`, `BandwidthAuditSound`,
      `NetworkAttesterSound`, `WipeSound`), each open until proved (PoUW's:
-     `verity/protocols/resource_accounting/compute/pouw/verifier/`). Remote: the first two.
+     `verity/protocols/accounting/compute/pouw/verifier/`). Remote: the first two.
 
 **The real assumptions.** Items 1 to 3 rest on three: `Claims.ExpectedCR` (SHA-512 collision resistance, which the
 other SHA-512 shapes fold into) and `Claims.Hm96Hiding` (hm96 leaves hide at the pinned key), each under the lock's
@@ -480,7 +480,7 @@ to) and build or run Lean in a package's Lake environment. No outside package re
 - The NCP pin's command in `tools/check/pins.py` builds and runs Lean in `security`'s environment.
 - Generators: `machine-model lean-headline` and `machine-model --device DEVICE sheet --lean`
   (the second prints `Sheets/`); `tests/verity/circuits/ops/test_lean_fp32_vectors.py`; `fp8atom_vectors.py`,
-  `h1t_vectors.py` and `row_prims_vectors.py` in `verity/protocols/resource_accounting/compute/pouw/verifier/lean/scripts/`.
+  `h1t_vectors.py` and `row_prims_vectors.py` in `verity/protocols/accounting/compute/pouw/verifier/lean/scripts/`.
 
 ## The lock
 
@@ -524,7 +524,7 @@ PoUW has other guarantees, outside protocol soundness.
 
 ## The remote protocol in Lean
 
-Remote (`verity/protocols/compose/verifier/remote`, `Core.Remote.protocol`) is the composite for an auditor with no devices at the
+Remote (`verity/protocols/run/verifier/remote`, `Core.Remote.protocol`) is the composite for an auditor with no devices at the
 site. It composes three subprotocols, SPOT (one-stage v2; the recursive audit refused), PoUW's period check
 (`verity/pouw/period/v1`) and the inference-only policy's check (`InferenceOnlyVerifier.Protocol`), and
 accepts only when all three accept and the commitment binds them (`Properties.Composition`, proved), and only when the
@@ -549,7 +549,7 @@ Onsite (`Core.Onsite.protocol`, `verity/onsite/v1`) composes Pearl+'s run verdic
   `SharedNoiseLucks`. The challenger and the verifier both run on auditor devices. The challenger, which
   flips each coin after the commitment it challenges, is the one auditor-trusted device remote relies on
   (`trusted-device`); the verifier is the auditor's own check. Two premises about where the challenger runs are
-  onsite's (`verity/protocols/proofs/spot/verifier/README.md`): `CoinsConfidential`, the named Prop
+  onsite's (`verity/protocols/proof/spot/verifier/README.md`): `CoinsConfidential`, the named Prop
   `Pouw.Assumptions.CoinsConfidential` (`Definitions/Pouw/Assumptions/Dither.lean`, in the lock, taken by
   `Pouw.Guarantees.Dither.FleetSound`), and `OneClock`, prose only.
   Remote's coin path is three assumptions over the challenger's log (`Definitions/Core/Challenger.lean`), stated in
@@ -559,7 +559,7 @@ Onsite (`Core.Onsite.protocol`, `verity/onsite/v1`) composes Pearl+'s run verdic
   before it at most as often as the sampling design allows (`Verity.Guarantees.SampleAfterRecorded`, proved); none of
   remote's guarantees reads `CoinsConfidential`, and no `.lean` file defines `OneClock`.
 - **Not the remote composite.** `ResourceAccounting.Remote` and `Properties.Poub.Remote` are PoUB
-  (`verity/protocols/resource_accounting/memory/poub/verifier`), which proves the bits a node read from its registered store; it is a subprotocol
+  (`verity/protocols/accounting/memory/poub/verifier`), which proves the bits a node read from its registered store; it is a subprotocol
   of onsite only.
 
 ## Building and checking

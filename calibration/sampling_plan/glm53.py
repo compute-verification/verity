@@ -47,8 +47,8 @@ from typing import Any
 from verity.circuits.evaluation import bits
 from verity.commitments.periods.interface import proof_block_k_log
 from inputs import MEASURED
-from verity.protocols.proofs.spot.prover.optimize import Candidate
-from verity.protocols.proofs.spot.verifier.profile import WINDOW_DELTA, Stratified, Stratum
+from verity.protocols.proof.spot.prover.optimize import Candidate
+from verity.protocols.proof.spot.verifier.profile import WINDOW_DELTA, Stratified, Stratum
 
 CARD = MEASURED.with_name("glm53_blocks.json")
 QUANTITIES = ("blocks", "out_bits", "ands", "macs", "row_bytes")

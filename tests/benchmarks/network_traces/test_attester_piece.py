@@ -32,12 +32,12 @@ sys.path.append(str(ROOT))  # for benchmarks.network_traces
 
 import attester_piece as CP  # noqa: E402
 import chain_record as CR  # noqa: E402
-from verity.protocols.resource_accounting.network import scheme as NS  # noqa: E402
+from verity.protocols.accounting.network import scheme as NS  # noqa: E402
 import served_verdicts as S  # noqa: E402
 from test_served_session import CHALLENGER_HOST, LIVE_GATE, RUN, STUB  # noqa: E402
 from test_network_attester_chain import WC, gate_run  # noqa: E402
-from verity.protocols.resource_accounting.network.verifier import relay_check as RC  # noqa: E402
-from verity.protocols.resource_accounting.network.verifier.certificate import Direction  # noqa: E402
+from verity.protocols.accounting.network.verifier import relay_check as RC  # noqa: E402
+from verity.protocols.accounting.network.verifier.certificate import Direction  # noqa: E402
 
 K = 3
 #: the gate's end of a rehearsal its check passed, and of one whose every request was late past the network attester's
@@ -765,8 +765,8 @@ def test_the_launchers_scan_class_is_v3cs_setup_in_scan_zk():
     """The network attester's launcher's `SCAN_CLASS` is `V3C_SCAN_CLASS`'s setup (`scan_zk.W63K4`) as
     served_verdicts.sh's SLOTS,PROMPT,OUTPUTS,LANES,EVERY: a slot stride's Program slots over an execution phase's
     strides, KI, KO, the lanes and EVERY."""
-    from verity.protocols.resource_accounting.network import scheme as NS
-    from tests.verity.protocols.resource_accounting.network.verifier import scan_traffic as ST
+    from verity.protocols.accounting.network import scheme as NS
+    from tests.verity.protocols.accounting.network.verifier import scan_traffic as ST
 
     setup = ST.SETUPS[CP.V3C_SCAN_CLASS]
     c = setup.cls

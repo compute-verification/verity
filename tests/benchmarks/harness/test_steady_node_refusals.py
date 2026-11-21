@@ -55,16 +55,16 @@ def test_the_node_side_refuses_a_tree_whose_point_is_not_the_one_it_was_launched
     node = Node(tmp_path, monkeypatch)
     with pytest.raises(ValueError, match=f"point identity changed: this tree gives {POINT} {node.identity}"):
         node.point(identity="0" * 64)
-    (node.root / "verity/protocols/proofs/flock/prover/src/main.rs").write_text("fn main() { /* edited on the node */ }\n")
+    (node.root / "verity/protocols/proof/flock/prover/src/main.rs").write_text("fn main() { /* edited on the node */ }\n")
     with pytest.raises(ValueError, match="a file its time depends on differs from the launching checkout's"):
         node.point()
-    (node.root / "verity/protocols/proofs/flock/prover/src/main.rs").write_text(FILES["verity/protocols/proofs/flock/prover/src/main.rs"])
+    (node.root / "verity/protocols/proof/flock/prover/src/main.rs").write_text(FILES["verity/protocols/proof/flock/prover/src/main.rs"])
     # a shipped tree is no checkout: a file a build left under the closure's directories counts, and the refusal says so
-    (left := node.root / "verity/protocols/proofs/flock/prover/target/built.o").parent.mkdir()
+    (left := node.root / "verity/protocols/proof/flock/prover/target/built.o").parent.mkdir()
     left.write_text("object\n")
     with pytest.raises(ValueError) as shipped:
         node.point()
-    assert ("This tree is no checkout, so every file under verity/protocols/proofs/flock/prover, verity/protocols/proofs/flock/prover/pod "
+    assert ("This tree is no checkout, so every file under verity/protocols/proof/flock/prover, verity/protocols/proof/flock/prover/pod "
             "counts: one the launching checkout doesn't track (what a build or a setup left there) changes the identity "
             "too. Its closure here is ") in str(shipped.value)
     assert re.search(r"Its closure here is \d+ files \(SHA-256 [0-9a-f]{16}\.\.\.\); `plan` prints the launching "
@@ -73,13 +73,13 @@ def test_the_node_side_refuses_a_tree_whose_point_is_not_the_one_it_was_launched
     left.unlink()
     git(node.root)
     left.write_text("object\n")
-    (node.root / "verity/protocols/proofs/flock/prover/src/main.rs").write_text("fn main() { /* edited in the checkout */ }\n")
+    (node.root / "verity/protocols/proof/flock/prover/src/main.rs").write_text("fn main() { /* edited in the checkout */ }\n")
     with pytest.raises(ValueError) as checkout:
         node.point()
     assert "differs from the launching checkout's. Its closure here is " in str(checkout.value)
     assert "no checkout" not in str(checkout.value)
     monkeypatch.setenv("RUST_MIN_STACK", "1")
-    (node.root / "verity/protocols/proofs/flock/prover/src/main.rs").write_text(FILES["verity/protocols/proofs/flock/prover/src/main.rs"])
+    (node.root / "verity/protocols/proof/flock/prover/src/main.rs").write_text(FILES["verity/protocols/proof/flock/prover/src/main.rs"])
     with pytest.raises(ValueError, match=r"differs from spec 'steady''s env and setup in \['RUST_MIN_STACK'\]"):
         node.point()
     assert node.ran == [] and not (node.run_dir / "result.json").exists()
