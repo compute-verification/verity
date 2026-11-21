@@ -35,7 +35,7 @@ DESIGN="(the registered sampling design)"
 #   proof blocks, refused on another class: give LAW), which each record says, with what an accept of it establishes at δ
 DEVELOPMENT_DESIGN=${DEVELOPMENT_DESIGN:-0} DEV_CLASS=4,27,2 DEV_LAW=rate:4/3654200
 [ "$DEVELOPMENT_DESIGN" = 1 ] && LAW=${LAW:-$DEV_LAW}
-MNBT=${MNBT:-512} CAP=${CAP:-8388608} LAW=${LAW:-rate:1/3481648} WC_TIMEOUT=${WC_TIMEOUT:-90m} FIN_TIMEOUT=${FIN_TIMEOUT:-120m}
+MNBT=${MNBT:-512} LAW=${LAW:-rate:1/3481648} WC_TIMEOUT=${WC_TIMEOUT:-90m} FIN_TIMEOUT=${FIN_TIMEOUT:-120m}
 RECORD_IN_LEASE=${RECORD_IN_LEASE:-0}
 export PYTHONPATH=$TREE:$TREE/library/datasets:$TREE/adapters/vllm:$TREE/adapters/torch:$TREE/tools/config:$TREE/verity/protocols/proof/flock/prover/python:$TREE/tools/research/src
 [ -z "${WIPE_CMD:-}" ] || [ -n "${APPLICATION:-}" ] || { echo "SMOKE REFUSED application: WIPE_CMD is set where an application" \
@@ -44,7 +44,8 @@ APPLICATION=${APPLICATION:-applications/remote.toml}
 # the window class (S,P,O: slots, prompt ids, outputs) the serve's arena is sized from, and the model, from the adapter's
 # statement; the dataset and its timing from APPLICATION, which the door reads through before the lease
 SAID=$("$PY" adapters/vllm/tools/served_run/inputs.py application "$APPLICATION") || { echo "SMOKE REFUSED dataset: $SAID"; exit 3; }
-read -r MODEL REV PRECISION CLASS DATASET TIMING <<< "${SAID%%$'\n'*}"
+read -r MODEL REV PRECISION CLASS DATASET TIMING CAP_BITS <<< "${SAID%%$'\n'*}"
+CAP=${CAP:-$CAP_BITS}
 if [ -n "${WIPE_CMD:-}" ]; then  # the wipe reads the application's pins and configuration as the road hands them to a piece
   WIPE_ENV=$(PYTHONPATH=$TREE/tools/verity/cli:$PYTHONPATH "$PY" - "$APPLICATION" <<'PINS'
 import shlex, sys

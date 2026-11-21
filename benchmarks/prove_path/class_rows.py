@@ -104,6 +104,7 @@ def main(argv=None) -> int:
     sys.path.insert(0, str(Path.cwd() / "adapters/vllm"))
     sys.path.insert(0, str(Path.cwd() / "adapters/torch"))
     from verity_vllm.program.predict import window_circuit as WC
+    from verity_vllm.inputs.serves import window_class_parts
     from verity_vllm.program.predict.window_circuit import CLASS_OF_RECORD, Grain, WindowClass, check_provable, class_circuit
     from verity.commitments.periods import interface as IF
     from verity_vllm.program.predict.steps import Registered
@@ -126,9 +127,9 @@ def main(argv=None) -> int:
             target = {**target, "int8_exact": "linears"}
         phi = Phi(model={"repo": "org/m", "revision": "r", "hf_config": cfg}, target=target)
         reg = Registered.of(phi, default_seed=7)
-        cls = WindowClass(*map(int, a.cls.split(","))) if a.cls else CLASS_OF_RECORD
+        cls = WindowClass(*window_class_parts(a.cls)) if a.cls else CLASS_OF_RECORD
         if a.probe:
-            cls = WindowClass(*map(int, a.probe.split(",")))
+            cls = WindowClass(*window_class_parts(a.probe))
             circuit = class_circuit(reg, cls, 1)
         else:
             built, program = WC.class_program(reg, cls.positions), WC.class_program

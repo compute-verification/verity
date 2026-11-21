@@ -14,6 +14,15 @@ from typing import Any
 from verity_vllm.errors import Refused
 
 
+def window_class_parts(text: str | None) -> tuple[int, ...]:
+    """A window class's ``S,P,O[,LANES,EVERY]`` as its integers; `ValueError` naming it where it is not three to five
+    positive integers."""
+    parts = str(text or "").split(",")
+    if not 3 <= len(parts) <= 5 or not all(p.strip().isdecimal() and int(p) >= 1 for p in parts):
+        raise ValueError(f"{text!r} is not S,P,O[,LANES,EVERY] of positive integers")
+    return tuple(int(p) for p in parts)
+
+
 @dataclass(frozen=True)
 class Serves:
     """The served model and the window class ``window_class`` (``S,P,O``, serve-openai's ``--window-class``): a window of
@@ -28,15 +37,15 @@ class Serves:
 
     @property
     def slots(self) -> int:
-        return int(self.window_class.split(",")[0])
+        return window_class_parts(self.window_class)[0]
 
     @property
     def prompt(self) -> int:
-        return int(self.window_class.split(",")[1])
+        return window_class_parts(self.window_class)[1]
 
     @property
     def outputs(self) -> int:
-        return int(self.window_class.split(",")[2])
+        return window_class_parts(self.window_class)[2]
 
 
 SERVES = Serves(**json.loads((Path(__file__).parent / "serves.json").read_text()))
@@ -127,4 +136,4 @@ def door_line(name: str, said: str) -> str:
     return f"DOOR {name}: {n} records the class {SERVES.window_class} takes; identity {timed.identity}"
 
 
-__all__ = ["SERVES", "TIMINGS", "Refused", "Serves", "application", "door", "door_line", "refusal", "served", "timing"]
+__all__ = ["SERVES", "TIMINGS", "Refused", "Serves", "application", "door", "door_line", "refusal", "served", "timing", "window_class_parts"]

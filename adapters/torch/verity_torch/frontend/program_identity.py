@@ -15,19 +15,8 @@ from verity.circuits.defs import (
 from verity.circuits.defs import bind as ir_bind
 from verity.circuits.program import Program
 
-from verity_torch.frontend.correspond import compare_bodies
+from verity_torch.frontend.correspond import _visit_static, compare_bodies
 from verity_torch.frontend.errors import FrontendError
-
-
-def _visit_static(v, visit) -> None:
-    if isinstance(v, (PrimitiveDefinition, SpecializedDefinition)):
-        visit(v)
-    elif isinstance(v, (list, tuple)):
-        for x in v:
-            _visit_static(x, visit)
-    elif isinstance(v, dict):
-        for x in v.values():
-            _visit_static(x, visit)
 
 
 def check_identity(program: Program, *, check_registry: bool = True) -> dict[str, SpecializedDefinition | PrimitiveDefinition]:
