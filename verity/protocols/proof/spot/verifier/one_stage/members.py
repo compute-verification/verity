@@ -611,21 +611,22 @@ def reg_rows(R: EG._Root, k: int, m0: int, n: int, param: str) -> tuple[int, int
     def x_of(m: int) -> int:
         return t0 if dims is None else (t0 // dims[1] * dims[0]) * dims[1] + t0 % dims[1] + m * dims[1]
 
-    def wire(x: int, c: int, L: int) -> int | None:
+    def wire(x: int, c: int, L: int) -> int | str:
+        """The root node the lane's run reads, or why it is no lane's run."""
         j = next((j for j, q in enumerate(parts) if starts[j] <= x < starts[j] + EG._count(q)), None)
         if j is None or x + (c - 1) * L + ln > starts[j] + EG._count(parts[j]) or parts[j][0] != "g":
-            return None
+            return "no lane's part holds it"
         try:
             return EG._lane_wire(parts[j], x - starts[j], L, ln, c)[0]
-        except EG.Refusal:
-            return None
+        except EG.Refusal as e:
+            return str(e)
 
-    if (w := wire(x_of(m0), max(n, 1), L)) is not None:
+    if isinstance(w := wire(x_of(m0), max(n, 1), L), int):
         return (w, ln) if _input(R, w) else None
     got: list[int] = []
     for m in range(max(n, 1)):
         w = wire(x_of(m0 + m), 1, 0)
-        if w is None:
+        if not isinstance(w, int):
             return edge("a row of no lane's run (an explicit part, or across parts or lanes)")
         if w not in got:
             got.append(w)

@@ -318,7 +318,8 @@ def _of_record(of_record: tuple[bytes, str]) -> tuple[list[tuple[str, Any]], dic
         try:
             want = RV.domain(program, v, e["words"], e["leaves"], e.get(RV.WIDTH_KEY, RV.WORD_BITS)).domain_id.hex()
         except ValueError:
-            want = None
+            bad.append(v)
+            continue
         if e["value"] != v or e["domain"] != want or not (isinstance(e["root"], str) and len(e["root"]) == 128
                                                           and _HEX.fullmatch(e["root"])):
             bad.append(v)
@@ -363,19 +364,23 @@ def weights_held(program: Program, query: Mapping[str, Any], registered: Iterabl
         try:
             ok = G.shape(program, v, e["words"]) == e["leaves"] and G.width(program, v) == e.get(RV.WIDTH_KEY, RV.WORD_BITS)
         except ValueError:
-            ok = False
+            shape.append(v)
+            continue
         if not ok:
             shape.append(v)
     if shape:
         out.append(("R8-weights-shape", {"values": shape}))
-    try:
-        templated = P.is_template_query(query) and P.units(program, query) >= 0
-    except P.QueryRefused:
-        templated = False
-    if not templated:
+    def untemplated() -> tuple[list[tuple[str, Any]], dict[str, Any]]:
         if of_record is not None or marked:
             out.append(("R8-weights-query", {"query": dict(query)}))
         return out, {}
+
+    try:
+        templated = P.is_template_query(query) and P.units(program, query) >= 0
+    except P.QueryRefused:
+        return untemplated()
+    if not templated:
+        return untemplated()
     loose = {v: g for v in marked if v not in pins and v not in held for g in G.held_gates(program, [v])}
     read = {g for _, _, g in P.input_reads(program, query, loose.values())} if loose else set()
     if unpinned := [v for v, g in loose.items() if g in read]:
@@ -913,8 +918,8 @@ def _output_port(log: Sequence[Mapping[str, Any]], record: str, port: str, key: 
     for r in log:
         try:
             d = DD.digest(r)
-        except (TypeError, ValueError):
-            continue
+        except (TypeError, ValueError) as e:
+            d = f"no digest: {e}"
         if d != record:
             continue
         roots = r.get(key)
