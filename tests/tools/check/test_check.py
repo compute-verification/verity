@@ -152,7 +152,7 @@ def test_the_lean_steps_once_the_verifier_is_on_the_tree(tmp_path, monkeypatch):
     urls = _signed(sent, tmp_path / "agreement-urls.json")
     (build, lake, _), (unit, cut, _), (audit, lean_audit, _), (agree, argv, _) = CHECK.lean_steps(out, agreement_urls=urls)
     assert (build, unit, audit, agree) == ("lean-build", "lean-unit-cut", "lean-audit", "lean-agreement")
-    assert lake[-1] == CHECK.SUITES.lake_build_command() and "lake build" in lake[-1]
+    assert lake[-1].endswith("lake build")
     assert cut[1].endswith("verifier/unit_cut_agree.py") and cut[cut.index("--lean") + 1].endswith(".lake/build/bin/verity-verify-proof")
     assert lean_audit[1].endswith("tools/check/check.py") and lean_audit[2] == "--lean-slot"
     assert lean_audit[4].endswith("tools/verity/lean/lean_audit.py") and {"--cache", "--deps"} <= set(lean_audit) and "--fresh" not in lean_audit

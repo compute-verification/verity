@@ -316,9 +316,8 @@ ELAN = ('command -v lake >/dev/null || command -v "$HOME/.elan/bin/lake" >/dev/n
 #: check and its touched-suites run would otherwise build `.lake` there at once, and one's link could find its output gone: a
 #: failure no PR caused. It holds the tree's one Lake build lock, the file every test-time build takes
 #: (`verity_difftest.BUILD_LOCK`), since Lake builds a package's path requires in their own `.lake`
-_LAKE_LOCKED = ELAN + ('d=$PWD; until [ -z "$d" ] || [ -d "$d/verity/circuits/difftest" ]; do d=${d%/*}; done; '
-                       'L=${d:+$d/verity/circuits/difftest/}.lake; mkdir -p "$L" && exec flock "$L/harness-build.lock" ')
-LAKE_BUILD = _LAKE_LOCKED + "lake build"
+LAKE_BUILD = ELAN + ('d=$PWD; until [ -z "$d" ] || [ -d "$d/verity/circuits/difftest" ]; do d=${d%/*}; done; '
+                     'L=${d:+$d/verity/circuits/difftest/}.lake; mkdir -p "$L" && exec flock "$L/harness-build.lock" lake build')
 #: what an uncached run (`--fresh`, and every step of check's `--no-cache`) gives each Lake build it runs and each suite's tests:
 #: Lake's local artifact cache off, so every module is compiled from the tree, none unpacked from what an earlier build on the
 #: node or `tools/verity/lean/cache.py get` left there. No key holds it, so a fresh pass keys as the pass it is compared with;
@@ -866,33 +865,21 @@ def verifier_exes(suite: Suite) -> list[str]:
     return [a[len(bin_):] for a in suite.artifacts if a.startswith(bin_) and "/" not in a[len(bin_):]]
 
 
-def lake_build_command(suites: list[Suite] | None = None) -> str:
-    """check's `lean-build` step: `LAKE_BUILD`, then `lake build` of each executable a suite declares (`verifier_exes`) that is
-    not among the verifier's `defaultTargets`, since a test that runs one would otherwise skip in every check."""
-    lakefile = flock_lean() / "lakefile.toml"
-    default = set(tomllib.loads(lakefile.read_text()).get("defaultTargets", [])) if lakefile.is_file() else set()
-    extra = sorted({e for s in (discover() if suites is None else suites) for e in verifier_exes(s)} - default)
-    if bad := [e for e in extra if not re.fullmatch(r"[A-Za-z0-9_.-]+", e)]:
-        raise ValueError(f"[tool.verity.tests] artifacts name verifier executables {bad} that are not Lake target names")
-    return LAKE_BUILD if not extra else _LAKE_LOCKED + f"sh -c 'lake build && lake build {' '.join(extra)}'"
-
-
 def unbuilt_exes(suite: Suite) -> list[str]:
-    """The verifier's executables `suite` declares that lean-build left unbuilt: its tests that run one would skip."""
+    """The verifier's executables `suite` declares that lean-build (`lake build`, the package's `defaultTargets`) left unbuilt:
+    its tests that run one would skip in every check."""
     bin_ = flock_lean() / ".lake" / "build" / "bin"
     return [e for e in verifier_exes(suite) if not (bin_ / e).is_file()]
 
 
-def lean_build(log: Path, suites: list[Suite] | tuple[Suite, ...] = ()) -> str | None:
-    """check's `lean-build` step for ``suites``, `lake build` in the verifier: None when it built (or the tree has no verifier),
-    else why not."""
+def lean_build(log: Path) -> str | None:
+    """check's `lean-build` step, `lake build` in the verifier: None when it built (or the tree has no verifier), else why not."""
     lean = flock_lean()
     if not (lean / "lakefile.toml").exists():
         return None
     print(f"suites: `lake build` in {lean.relative_to(ROOT)} (check's lean-build step) before {', '.join(AFTER_LEAN)}")
     with log.open("w") as out:
-        rc = subprocess.run(["bash", "-c", lake_build_command(list(suites))], cwd=lean, stdout=out,
-                            stderr=subprocess.STDOUT).returncode
+        rc = subprocess.run(["bash", "-c", LAKE_BUILD], cwd=lean, stdout=out, stderr=subprocess.STDOUT).returncode
     return None if rc == 0 else f"`lake build` in {lean.relative_to(ROOT)} exited {rc}"
 
 
@@ -3002,8 +2989,7 @@ def main(argv: list[str] | None = None) -> int:
                     for s, _paths, keys, _deps in todo if s in lent]
         todo = [t for t in todo if t[0] not in lent]
         per = {s: pt for s, pt in per.items() if s not in lent}
-    if build_lean and any(s.name in AFTER_LEAN for s, *_ in todo) and (
-            why := lean_build(logs / "lean-build.log", [s for s, *_ in todo if s.name in AFTER_LEAN])):
+    if build_lean and any(s.name in AFTER_LEAN for s, *_ in todo) and (why := lean_build(logs / "lean-build.log")):
         for s, *_ in todo:
             if s.name in AFTER_LEAN:
                 print(f"failed  {s.name:28} {why} (log: {logs / 'lean-build.log'})")
@@ -3012,8 +2998,8 @@ def main(argv: list[str] | None = None) -> int:
     if (build_lean or a.lean_built) and not (a.list or a.explain) and (flock_lean() / "lakefile.toml").exists():
         unbuilt = {s: gone for s, *_ in todo if s.name in AFTER_LEAN and (gone := unbuilt_exes(s))}
         for s, gone in unbuilt.items():
-            print(f"failed  {s.name:28} lean-build left {', '.join(gone)} unbuilt, which it declares under `artifacts`: its "
-                  "tests would skip (`lake_build_command` builds each declared executable)")
+            print(f"failed  {s.name:28} lean-build left {', '.join(gone)} unbuilt, which it declares under `artifacts`, so its "
+                  "tests would skip: add it to the verifier's defaultTargets (its lakefile.toml)")
             results.append(Result(s, "failed", log=logs / "lean-build.log"))
         todo = [t for t in todo if t[0] not in unbuilt]
     here = kept_passes() if todo else {}
