@@ -2,6 +2,7 @@ module
 
 public import Batteries.Tactic.OpenPrivate
 public import Properties.Poub.Remote.Schedule
+public import Properties.Poub.Remote.Instances
 public import Proofs.Properties.Poub.Remote.Plan
 public import Proofs.Properties.Poub.Remote.Window
 public import Definitions.Poub.Assumptions.Stacking
@@ -804,13 +805,6 @@ theorem climb_size (d : Flock.FV3.Sha512.Domain) (pos : ℕ) (schema : String) (
 
 theorem scheme_bytes : Flock.FV3.Sha512.scheme.bytes = 64 := rfl
 
-/-- A path of `log2ceil count` siblings, each 64 zero bytes. -/
-def zeroPath (d : Flock.FV3.Sha512.Domain) : Array ByteArray := Array.replicate (Flock.log2ceil d.count) (zeros 64)
-
-/-- The root `value` at `position` climbs to along `zeroPath`. -/
-def zeroRoot (d : Flock.FV3.Sha512.Domain) (position : ℕ) (value : ByteArray) : ByteArray :=
-  d.climb position SCHEMA value (zeroPath d)
-
 theorem verifyOpening_zeroRoot (d : Flock.FV3.Sha512.Domain) (pos : ℕ) (v : ByteArray) (hs : d.start ≤ pos)
     (hp : pos < d.start + d.count) : d.verifyOpening (zeroRoot d pos v) d.count pos v SCHEMA (zeroPath d) = true := by
   have hall : (zeroPath d).all (·.size == 64) = true := by
@@ -890,12 +884,6 @@ theorem decode_zeros (k : Codec.Key) (hj : 0 < k.codec.maxBlocks) (hp : 0 < k.co
   simp [Nat.not_le.mpr hj, zeros_size]
   try exact ⟨_, rfl⟩
 
-/-- The zero block's decoding under `k`. -/
-def zeroPayload (k : Codec.Key) : ByteArray :=
-  match Codec.decode (zeros Codec.BLOCK_BYTES) 0 k none with
-  | .ok (some p) => p
-  | _ => .empty
-
 theorem decode_zeroPayload (k : Codec.Key) (hj : 0 < k.codec.maxBlocks) (hp : 0 < k.codec.field.p) :
     Codec.decode (zeros Codec.BLOCK_BYTES) 0 k none = .ok (some (zeroPayload k)) := by
   obtain ⟨payload, h⟩ := decode_zeros k hj hp
@@ -927,9 +915,6 @@ theorem checkOpening_of {reg : Registration} {digest : ByteArray} {appends : Arr
   rw [hany]
   simp [hpass, hpos, hblock, htile, hls, hps, hj, Nat.not_le.2 hj, hdig, hy, hleaf, hdec, hver, hrec, horig]
   rfl
-
-/-- The deployed codec: p1024, three rounds, masked. -/
-def honestCodec : Codec.Codec := ⟨Codec.P1024, 3, true⟩
 
 /-- The deployed registration of node `node` under codec seed `codecSeed`: 130023424 blocks, sketch-sha512 receipts
 of `rows` rows, and a payload tree holding `zeroPayload` at block 0. -/
