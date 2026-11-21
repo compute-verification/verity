@@ -618,6 +618,27 @@ def test_a_members_own_output_opens_its_templates_field_tree(tmp_path):
     assert why(port="x") == M.wired_tree_why(B, "x")
 
 
+def test_a_wired_row_named_as_its_writers_field_is_refused(monkeypatch):
+    """`OneStageZk.fieldRoots`' `WIRED_AS_FIELD_WHY`, as Lean's guard on `wiredSliceT`'s wiring: a reader ``R/c0``'s row
+    ``o1`` C wires from ``W``'s ``o1`` is refused by name, so a slice's entry named as its tree's field is a member's own
+    output; the same wire into a row ``x`` gives ``x`` the writer's tree."""
+    root = {"port": "W/o1", "root": "aa" * 64, "domain": "dd" * 64, "leaves": 2}
+    ranges = [(0, "W", 0, 2), (1, "R", 2, 2)]
+    ms = {"W/c0": {"units": [[0, 2]]}, "R/c0": {"units": [[2, 4]]}}
+
+    def roots(port: str) -> dict:
+        wire = {"reader": "R", "port": port, "writer": "W", "out": "o1", "at": 0, "radix": [2], "base": 0, "step": [1],
+                "cut": [0, 1]}
+        monkeypatch.setattr(M.EG, "has_edge", lambda _d: True)
+        monkeypatch.setattr(M.EG, "io_cuts", lambda _d, _r: {})
+        monkeypatch.setattr(M.EG, "edges", lambda _d, _r, _w: {"wires": [wire]})
+        return M._wired_roots({}, ranges, ms, {"W": [("o1", root)]}, {})
+    with pytest.raises(M._Refused) as e:
+        roots("o1")
+    assert str(e.value) == M.wired_as_field_why("R/c0", "o1")
+    assert [(r["port"], r["tree"], r["root"]) for r in roots("x")["R/c0"]] == [("x", "W/o1", root["root"])]
+
+
 def test_a_wired_row_opens_only_the_writers_field_tree_c_wires_into_it_at_the_records_root():
     """`OneStageZk.portTreeHeld` at C's wired rows (`wiredRowsOf`, `members._wired_rows`), as Lean's guards on
     `wiredAtT`: a reader's row ``x`` C wires from ``W``'s ``o0`` opens ``W/o0`` at the record's root; at another root it
