@@ -154,7 +154,7 @@ auditing tree. The compile command is ``argv --advice FILE --out FILE``:
 * it prints ``{"bits": N}`` as its last stdout line: the advice's length in bits it charges;
 * it exits 0 having compiled, `REFUSED` (2) on advice it refuses, the reason on stderr, and any other code on an error.
 
-``--prover-circuit``: a development mode, refused unless ``DEVELOPMENT=1``, for a compiled circuit whose compiler no
+``--prover-circuit``: a development mode, refused unless its caller passes ``--development`` (its ``DEVELOPMENT=1``), for a compiled circuit whose compiler no
 command rebuilds: the circuit is the one the prover registered (``circuit.json``, which the docket binds). The docket must
 bind a compiler and advice, and `source` and `fixed_before_draw` still hold the docket to them, its length still charged;
 the compile check does not run, nor its two negatives and `after_draw`, which read the advice's opening. The summary's
@@ -1291,6 +1291,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--circuit", help="instead: the SHA-512 of the circuit record the verifier registered, a circuit with no compiler")
     p.add_argument("--prover-circuit", action="store_true", help="instead, under DEVELOPMENT=1 only: the circuit the prover "
                    "registered, its compiler and advice held to the docket's, the compile check not run (module docstring)")
+    p.add_argument("--development", action="store_true", help="with --prover-circuit: the caller's DEVELOPMENT=1, which the "
+                   "audit takes as a flag and never reads from the environment")
     p.add_argument("--run", required=True, help="the run root the verifier holds the window to, the one the run published")
     p.add_argument("--template-sets", help="the verifier's own input sets, for templates whose units are not bit rows")
     p.add_argument("--outputs", help="JSON: the verifier's own [lo, hi) ranges of the units whose outputs are served out "
@@ -1421,8 +1423,9 @@ def main(argv: list[str] | None = None) -> int:
     if a.cmd == "warm":
         return warm(a)
     if a.prover_circuit:
-        if os.environ.get("DEVELOPMENT") != "1":
-            ap.error("--prover-circuit: a development mode: the compile check does not run; it runs under DEVELOPMENT=1 only")
+        if not a.development:
+            ap.error("--prover-circuit: a development mode: the compile check does not run; it runs under DEVELOPMENT=1 only "
+                     "(its caller says so with --development)")
         if a.opening or a.compilers or a.repo or a.circuit:
             ap.error("--prover-circuit takes the circuit the prover registered: no --opening, --compilers, --repo or --circuit")
     elif bool(a.opening) == bool(a.circuit) or bool(a.opening) != bool(a.compilers):

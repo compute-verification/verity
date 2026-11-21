@@ -2027,7 +2027,7 @@ road_sampled() {  # step 3 on the window's road: the window's record, its Lean c
   m0=$TREE:$TREE/benchmarks/numerical/python:$TREE/verity/protocols/proofs/flock/prover/python:$TREE/adapters/vllm
   (cd "$TREE" && env -u PYTHONPATH DEVELOPMENT=1 RAYON_NUM_THREADS="$(nproc)" RUST_MIN_STACK=$((64 << 20)) timeout -k 1m "$V3C_AUDIT_TIMEOUT" \
     "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py audit --window "$rec" --sampling-design "$law" \
-    --prover-circuit --run "$run" --registered "$WREG" \
+    --prover-circuit --development --run "$run" --registered "$WREG" \
     --challenger local --main "$main" --m0-pythonpath "$m0" --bin "$bin" --lean "$leanb/verity-verify-proof" \
     --zk-server "$leanb/flock-zk-server" --lower "$leanb/flock-lower-check" --tmpl-unit-bin "$unit" \
     --lean-workers "${V3C_LEAN_WORKERS:-1}" --audit-mem-gb "$V3C_AUDIT_MEM_GB" --ports "${V3C_PORTS:-16}" --out "$s/audit") \
@@ -2133,7 +2133,7 @@ EOF
         step_not_run record "its verdict of record is Lean's members check in the sampled proofs' summary ($OUT/summary.json), which the sampled-proofs step did not write"
       elif rec=$("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" window-record "$OUT/summary.json" 2>&1); then RAN+=(record); say "$rec"
       else step_refused record "$rec"; fi ;;
-    composite) step_not_run composite "served_composite.sh reads the audit's cases under D/private/logs/sampled-proofs/keep/served or D/v3c-w*/audit and, under POUW=pearlplus, Pearl+'s run case, and the window road writes neither: no input of the composite's stands, so its verdict is not made" ;;
+    composite) step_not_run composite "served_composite.sh reads the audit's cases under D/private/logs/sampled-proofs/keep/served or D/v3c-w*/audit and, and, where compute accounting is listed, Pearl+'s run case, and the window road writes neither: no input of the composite's stands, so its verdict is not made" ;;
   esac
 }
 steps_named() {  # every name in "$@" is a step road_step_named knows, and none is named twice: refused by name otherwise

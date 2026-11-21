@@ -324,11 +324,10 @@ def _prover_circuit_audit(w: SimpleNamespace, monkeypatch, tmp_path: Path, flags
 
 def test_prover_circuit_takes_the_registered_circuit_holds_its_compiler_and_advice_and_says_compiled_not_checked(
         written, tmp_path, monkeypatch, capsys):
-    """A compiled window whose compiler no command rebuilds, audited under ``--prover-circuit`` and ``DEVELOPMENT=1``: no
+    """A compiled window whose compiler no command rebuilds, audited under ``--prover-circuit`` and ``--development``: no
     compile check runs, the docket is still held to the compiler and advice it registers (`source`, `fixed_before_draw`,
     the registration negatives, each refused), and the summary and the ``RECORDS`` line say the compile check did not run."""
-    monkeypatch.setenv("DEVELOPMENT", "1")
-    rc, seen = _prover_circuit_audit(written, monkeypatch, tmp_path, ["--prover-circuit"])
+    rc, seen = _prover_circuit_audit(written, monkeypatch, tmp_path, ["--prover-circuit", "--development"])
     assert rc == 0 and seen["source"]["ok"] and seen["source"]["detail"]["compiled"] == RA.NOT_CHECKED
     assert set(seen["negatives"]) == {"registration-naming-another-circuit", "registration-naming-another-run",
                                       "registration-naming-another-compiler", "registration-naming-another-advice-root",
@@ -345,7 +344,6 @@ def test_prover_circuit_takes_the_registered_circuit_holds_its_compiler_and_advi
 
 
 def test_prover_circuit_is_refused_by_name_without_development(written, tmp_path, monkeypatch, capsys):
-    monkeypatch.delenv("DEVELOPMENT", raising=False)
     with pytest.raises(SystemExit):
         _prover_circuit_audit(written, monkeypatch, tmp_path, ["--prover-circuit"])
     assert "--prover-circuit: a development mode: the compile check does not run" in capsys.readouterr().err
@@ -353,8 +351,7 @@ def test_prover_circuit_is_refused_by_name_without_development(written, tmp_path
 
 
 def test_prover_circuit_is_refused_by_name_for_a_docket_binding_no_compiler(tmp_path, monkeypatch):
-    monkeypatch.setenv("DEVELOPMENT", "1")
-    rc, seen = _prover_circuit_audit(_write(tmp_path / "w", advice=False), monkeypatch, tmp_path, ["--prover-circuit"])
+    rc, seen = _prover_circuit_audit(_write(tmp_path / "w", advice=False), monkeypatch, tmp_path, ["--prover-circuit", "--development"])
     assert (rc, seen) == (1, {})
     why = json.loads((tmp_path / "o" / "summary.json").read_text())["refused"]["records"]
     assert "--prover-circuit: the docket binds no compiler and advice" in why
@@ -363,7 +360,6 @@ def test_prover_circuit_is_refused_by_name_for_a_docket_binding_no_compiler(tmp_
 def test_without_prover_circuit_a_compiled_window_with_no_compile_check_fails_compiler(written, tmp_path, monkeypatch):
     """The same window audited as today, at the circuit it registers and with no opening: the docket's compiler and
     advice are not the verifier's (it holds none), so `source` fails them and the audit does not pass."""
-    monkeypatch.setenv("DEVELOPMENT", "1")
     rc, seen = _prover_circuit_audit(written, monkeypatch, tmp_path, ["--circuit", written.rec["window"]["circuit"]])
     assert rc == 1 and seen["source"]["codes"] == ["compiler", "advice"]
     assert "compiled" not in json.loads((tmp_path / "o" / "summary.json").read_text())
