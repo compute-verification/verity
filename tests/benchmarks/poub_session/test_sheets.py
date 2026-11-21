@@ -64,11 +64,11 @@ def test_an_h200_nodes_borrowed_sha512_rate_link_burst_and_on_chip_storage_are_r
     fig = sheets.figures("h200-sxm-141gb-x1")
     chip = "no on-chip storage is established for h200-sxm-141gb: its card file states no store.chip.*h200-sxm-141gb.toml"
     with pytest.raises(ValueError, match=chip):
-        fig.chip_bytes
+        _ = fig.chip_bytes
     with pytest.raises(ValueError, match=chip):
         ledger.Node.stated(fig)
     with pytest.raises(ValueError, match="no SHA-512 rate is established for h200-sxm-141gb: .*UNSHEETED"):
-        fig.sha512_per_s
+        _ = fig.sha512_per_s
     with pytest.raises(ValueError, match="no link burst is established for the node kind h200-sxm-141gb-x1: .*UNSHEETED"):
         ledger.Node.stated(dataclasses.replace(fig, gpu_chip_bytes=1), link_bytes_per_s=1e9)
     assert ledger.Node.stated(dataclasses.replace(fig, gpu_chip_bytes=1)).link_burst_bytes == 0

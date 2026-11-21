@@ -15,9 +15,9 @@ if __package__ in (None, ""):
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "calibration/rate_squaring"))
 
-import gamma  # noqa: E402
-from verity.device import load_card, load_node, node_kinds, number  # noqa: E402
-from verity.protocols.accounting.memory.poub.verifier import timing  # noqa: E402
+import gamma
+from verity.device import load_card, load_node, node_kinds, number
+from verity.protocols.accounting.memory.poub.verifier import timing
 
 CARD_FILES = Path(__file__).resolve().parents[2] / "calibration/hardware/cards"
 NODE_FILES = Path(__file__).resolve().parents[2] / "calibration/hardware/nodes"
