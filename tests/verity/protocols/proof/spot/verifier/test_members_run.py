@@ -678,3 +678,24 @@ def test_a_members_run_input_ports_are_held_at_their_nodes_trees_derived_from_c(
     old = {**rec, "roots": [r for r in got["roots"] if not r["port"].startswith("input/")]}
     assert not any(r.get("tree", "").startswith("input/") for s in M.slices(members, old, program=program, query=query).values()
                    for r in s["roots"])
+
+
+def test_a_members_read_of_a_pinned_registered_input_is_held_to_the_pin_by_name():
+    """`members.pins_held` (`OneStageZk.pinsHeld`, the same guards there): a member reading the pinned input at the pin's
+    own root, leaf count and domain, one reading another value and one with no registered file pass; another root,
+    leaf count or domain is refused by name (`pinned_read_why`), whose text is Lean's `PINNED_READ_WHY`'s."""
+    pin = {"w": {"root": "a" * 128, "leaves": 2, "words": 1, "word_bits": 16, "domain": "d" * 128}}
+
+    def reader(value: str, root: str, leaves: int, domain: str = "d" * 128) -> dict:
+        return {"registered": {"format": "verity/registered-reads/v2",
+                               "ports": {"p": {"value": value, "root": root * 128, "leaves": leaves, "domain": domain}}}}
+
+    M.pins_held({"a": reader("w", "a", 2), "b": reader("v", "b", 3), "c": {"registered": None}}, pin)
+    for m, what in ((reader("w", "b", 2), "root"), (reader("w", "a", 3), "leaf count"),
+                    (reader("w", "a", 2, "e" * 128), "domain")):
+        with pytest.raises(M._Refused) as e:
+            M.pins_held({"a": m}, pin)
+        assert str(e.value) == M.pinned_read_why("a", "p", "w", what)
+    assert M.pinned_read_why("a", "p", "w", "root") == (
+        "registered: member a's port p reads the registered input w at another root than its pin of record: a "
+        "registered input the weights' registration of record pins is read at the pin's root, leaf count and domain")

@@ -168,25 +168,19 @@ def ofRecord (pins : List (String × Json)) (reads : Array (String × String × 
 
 def PINS : List (String × Json) := [pin "x", pin "y"]
 
-/-- The check's codes on the honest record of `v` with the pins R8 accepts (`Verifier.weighed`), each registered at
-its pin's entry under `ROOT`, changed by `f`. -/
-def weighedCodes (v : Verifier) (f : Json → Json := id) : Array String :=
-  let w := v.weighed
-  match honest w with
-  | .ok r =>
-    let es := w.certified.map fun (e, _) => Json.mkObj [("value", e.value), ("root", ROOT), ("leaves", Lean.toJson e.leaves),
-      ("words", Lean.toJson e.words), ("domain", e.domain)] |> fun j => if e.wordBits == Registered.WORD_BITS then j
-        else put j Registered.WIDTH_KEY (some (Lean.toJson e.wordBits))
-    check (f (if es.isEmpty then r else put r "registered" (some (Json.arr es)))) v
+/-- The check's codes on the honest record of `v`. -/
+def weighedCodes (v : Verifier) : Array String :=
+  match honest v with
+  | .ok r => check r v
   | .error e => #[s!"fixture: {e}"]
 
 #guard Partition.inputReads (weighed E3R).program.prog ((Partition.templateRanges? (program E3R) QE).getD #[])
   #[("x", 0, 3), ("y", 3, 1)] == READS
--- a registered input two proof blocks read passes with the registration, its digest and the reads it declares, and
--- R7 holds the record's entry to the pin's root
+-- a registered input two proof blocks read passes with the registration, its digest and the reads it declares; the
+-- pins it accepts are no entry R7 reads, and the record stays v1
 #guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord PINS) } == #[]
-#guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord PINS) } (putEntry · "registered" "root" OTHER) ==
-  #["R7-certified"]
+#guard ((weightsOf { weighed E3R with weightsOfRecord := some (ofRecord PINS) }).2.map fun (e, r) =>
+  (e.value, e.leaves, r)) == #[("x", (ownEntry "x").leaves, ROOT), ("y", (ownEntry "y").leaves, ROOT)]
 -- without the registration, or at another digest, nothing fixes its root
 #guard weighedCodes (weighed E3R) == #["R8-unpinned"]
 #guard weighedCodes { weighed E3R with weightsOfRecord := some ((ofRecord PINS).1, OTHER) } == #["R8-weights-digest"]
@@ -197,10 +191,10 @@ def weighedCodes (v : Verifier) (f : Json → Json := id) : Array String :=
 #guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord [pin "x", pin "y" 0 (some OTHER)]) } ==
   #["R8-weights-domain", "R8-unpinned"]
 #guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord [pin "x" 1, pin "y"]) } == #["R8-weights-shape"]
--- the declared reads are the reads the description shows, in either direction
+-- every read the description shows is declared; a declared read it does not show is let through
 #guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord PINS #[]) } == #["R8-undeclared"]
-#guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord PINS (READS.push ("E_v1", "z", "x"))) } ==
-  #["R8-undeclared"]
+#guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord PINS #[READS[0]!]) } == #["R8-undeclared"]
+#guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord PINS (READS.push ("E_v1", "z", "x"))) } == #[]
 -- a registered input under a query that is no template query that applies
 #guard weightsCodes { weighed E3R with query := Json.mkObj [("name", "Q_all")] } == #["R8-weights-query"]
 

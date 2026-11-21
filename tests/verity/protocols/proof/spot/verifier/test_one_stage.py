@@ -882,23 +882,24 @@ def _weighed(prog, q, entries=(), **kw):
 
 def test_r8_excuses_a_registered_weight_only_where_it_is_marked_pinned_and_declared():
     """R8 under a weights' registration of record (`docket.weights_held`): a registered input two proof blocks read
-    passes with the registration, the SHA-512 the auditor's side holds for it and the reads it declares, and the record
-    registering it at the pin's entry; R7 holds that entry to the pin, its root included (`R7-certified`). Without the
+    passes with the registration, the SHA-512 the auditor's side holds for it and the reads it declares
+    (`docket.declared_reads`, the walk R8 runs), on a v1 record: the pin it accepts is no entry R7 reads. Without the
     registration it is refused by name (`R8-unpinned`), and at a wrong digest, a wrong domain or a wrong shape the
     registration is refused. A pin of a parameter the program doesn't mark registered is ignored: it excuses nothing,
-    and R8 refuses the run Input as before. Declared reads that are not the template parameters reading the pinned
-    value, either way, are refused (`R8-undeclared`)."""
+    and R8 refuses the run Input as before. A template parameter reading the pinned value that the registration does
+    not declare is refused (`R8-undeclared`); a declared read the program does not show is let through."""
     q = P.template_instance_query(PAIR.id)
     for marked, unmarked in zip(_two_programs(registered=("t",)), _two_programs()):
         reads = sorted({(t, p, "t") for t, p, _ in P.input_reads(marked, q, G.held_gates(marked, ["t"]))})
         assert reads and {t for t, _, _ in reads} == {PAIR.id}
+        assert R.declared_reads(marked, q, ["t"]) == [list(r) for r in reads]
         pin = _pin(marked)
-        weights = _weights([pin], [list(r) for r in reads])
-        v = _weighed(marked, q, [pin], weights_of_record=weights)
+        weights = _weights([pin], R.declared_reads(marked, q, ["t"]))
+        v = _weighed(marked, q, weights_of_record=weights)
         assert v.ok, v.codes
-        v = _weighed(marked, q, [{**pin, "root": "cd" * 64}], weights_of_record=weights)
-        assert v.codes == ("R7-certified",)
-        assert _weighed(marked, q, weights_of_record=weights).codes == ("keys",)
+        assert R.weights_held(marked, q, (), weights)[1] == {"t": {k: pin[k] for k in ("root", "leaves", "words", "domain")}
+                                                            | {"word_bits": pin.get("word_bits", 16)}}
+        assert _weighed(marked, q, [pin], weights_of_record=weights).codes == ("keys",)
         v = _weighed(marked, q)
         assert v.codes == ("R8-unpinned",) and v.detail["R8-unpinned"]["refused"] == {"values": ["t"]}
         v = _weighed(marked, q, weights_of_record=(weights[0], "00" * 64))
@@ -907,11 +908,9 @@ def test_r8_excuses_a_registered_weight_only_where_it_is_marked_pinned_and_decla
         assert _weighed(marked, q, weights_of_record=bad).codes == ("R8-weights-domain", "R8-unpinned")
         bad = _weights([_pin(marked, leaves=G.shape(marked, "t", 2) + 1)], [list(r) for r in reads])
         assert _weighed(marked, q, weights_of_record=bad).codes == ("R8-weights-shape",)
-        v = _weighed(marked, q, [pin], weights_of_record=_weights([pin]))
+        v = _weighed(marked, q, weights_of_record=_weights([pin]))
         assert v.codes == ("R8-undeclared",) and v.detail["R8-undeclared"]["refused"]["undeclared"] == [list(r) for r in reads]
-        v = _weighed(marked, q, [pin], weights_of_record=_weights([pin], [*map(list, reads), [PAIR.id, "nope", "t"]]))
-        assert v.codes == ("R8-undeclared",)
-        assert v.detail["R8-undeclared"]["refused"]["unread"] == [[PAIR.id, "nope", "t"]]
+        assert _weighed(marked, q, weights_of_record=_weights([pin], [*map(list, reads), [PAIR.id, "nope", "t"]])).ok
         v = _weighed(unmarked, q, weights_of_record=_weights([_pin(unmarked)], [list(r) for r in reads]))
         assert v.codes == ("R8-shared-input",)
         assert _weighed(unmarked, q).codes == ("R8-shared-input",)

@@ -500,6 +500,30 @@ members, each member's registered file read once, and it reads no blob. -/
 def classHeld (ms : Array Member) : V Unit :=
   ms.foldlM classStep {} >>= fun _ => pure ()
 
+/-- The refusal of member `member`'s registered port `port` reading the registered input `value` at another `what` (root,
+leaf count, domain) than the pin the docket's R8 accepted (`pinsHeld`). -/
+def PINNED_READ_WHY (member port value what : String) : String :=
+  s!"registered: member {member}'s port {port} reads the registered input {value} at another {what} than its pin of " ++
+    "record: a registered input the weights' registration of record pins is read at the pin's root, leaf count and domain"
+
+/-- **A member reads a pinned registered input at its pin**: every port of a member's registered file whose value is
+one the docket's R8 accepted a pin of (`pins`, `Docket.weightsOf`'s, from the same parameters' weights' registration of
+record) names the pin's root, leaf count and domain, each member's ports in name order; refused by name otherwise
+(`PINNED_READ_WHY`), the first port and field that differ. One pass over the members' registered files. -/
+def pinsHeld (pins : Array (Spot.Registered.Entry × String)) (ms : Array Member) : V Unit :=
+  if pins.isEmpty then pure () else
+  ms.forM fun m => match m.own.registered with
+    | none => pure ()
+    | some j => do
+      let own ← (Flock.Registered.ofJson j).mapError (s!"member {m.name}: {·}")
+      own.forM fun q => match pins.find? (·.1.value == q.value) with
+        | none => pure ()
+        | some (e, root) =>
+          if Flock.hexOf q.root != root then throw (PINNED_READ_WHY m.name q.name q.value "root")
+          else if q.leaves != e.leaves then throw (PINNED_READ_WHY m.name q.name q.value "leaf count")
+          else if Flock.hexOf q.domain != e.domain then throw (PINNED_READ_WHY m.name q.name q.value "domain")
+          else pure ()
+
 /-- **Every member's registered file opens only its window's committed trees** (`registeredTreesHeld` at the record
 `rec`'s roots by port, `rootsByPort`, built once): a member's own committed port at another root, domain or leaf
 count than the record's (another window's tree, another member's) refuses by name, and so does a port whose value is a
@@ -640,8 +664,8 @@ v1's in order, the sessions' coins held to the trees the challenger logged in th
 tree closed after its session's evidence before the next is opened (`treesOf`, `orderHeld`, `membersTreesHeld`), the
 registration's population held to the program (`popHeld`) and the members laid over it (`laidHeld`), each reader of
 a held or tied parameter with a registered file (`heldReadsFiled`), each registered value the members read one tree
-(`classHeld`), and each committed tree a member's registered file opens
-its window's (`treePortsHeld`). -/
+(`classHeld`), each committed tree a member's registered file opens
+its window's (`treePortsHeld`), and each read of a pinned registered input at the pin R8 accepted (`pinsHeld`). -/
 def membersStructure (p : Params) (ms : Array Member) (c : OneStage.Commitment) (e : Evidence)
     (sts : Array StatementFiles) (bs : Core.Blobs) : V Unit := do
   namesOnce ms
@@ -656,6 +680,7 @@ def membersStructure (p : Params) (ms : Array Member) (c : OneStage.Commitment) 
   heldReadsFiled p.base.verifier ms
   classHeld ms
   treePortsHeld ms c.record
+  pinsHeld (Docket.weightsOf p.base.verifier).2 ms
 
 /-- The refusal of a member's root of its own at a port C wires into it (`fieldRoots`): a crossing wire is committed
 once, in its writer's output field's tree, and the reader's row opens that tree by path. -/
@@ -1645,6 +1670,26 @@ private def readerT (name : String) (reg : Json) : Member :=
 #guard whyT (classHeld #[readerT "a" (regT [("p", "w", 'a', 2), ("q", "w", 'b', 2)])]) ==
   classTwo "a" "a" "w" ("root " ++ "".pushn 'a' 128 ++ ", against " ++ "".pushn 'b' 128)
 #guard (whyT (classHeld #[memberT "a" #[(0, 1)], readerT "c" Json.null])).startsWith "member c: "
+
+/-- The pin of `w` R8 accepts in these guards: root `a…`, 2 leaves, domain `d…`. -/
+private def pinEntryT : Spot.Registered.Entry :=
+  { value := "w", leaves := 2, words := 1, wordBits := 16, domain := "".pushn 'd' 128 }
+
+private def pinT : Array (Spot.Registered.Entry × String) := #[(pinEntryT, "".pushn 'a' 128)]
+
+-- a member reading the pinned input at the pin's own entry, and one reading only other values: accepted
+#guard refusal (pinsHeld pinT #[readerT "a" (regT [("p", "w", 'a', 2)]), readerT "b" (regT [("q", "v", 'b', 3)]),
+  memberT "c" #[(1, 2)]]) == ""
+-- another root, another leaf count: refused by name
+#guard whyT (pinsHeld pinT #[readerT "a" (regT [("p", "w", 'b', 2)])]) == PINNED_READ_WHY "a" "p" "w" "root"
+#guard whyT (pinsHeld pinT #[readerT "a" (regT [("p", "w", 'a', 3)])]) == PINNED_READ_WHY "a" "p" "w" "leaf count"
+-- another domain: refused by name
+#guard whyT (pinsHeld #[({ pinEntryT with domain := "".pushn 'e' 128 }, "".pushn 'a' 128)]
+  #[readerT "a" (regT [("p", "w", 'a', 2)])]) == PINNED_READ_WHY "a" "p" "w" "domain"
+-- the refusal's text, which `members.pinned_read_why` prints word for word
+#guard PINNED_READ_WHY "a" "p" "w" "root" == "registered: member a's port p reads the registered input w at another " ++
+  "root than its pin of record: a registered input the weights' registration of record pins is read at the pin's " ++
+  "root, leaf count and domain"
 
 /-- The slice `rootsOf` and `Member.slice` give the member `name` of `keyedT` on the roots given. -/
 private def sliceT (roots : List (String × String)) (name : String) : Json :=

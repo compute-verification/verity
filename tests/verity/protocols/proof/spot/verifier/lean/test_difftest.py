@@ -5090,10 +5090,11 @@ def _weights_doc(pins: list[dict], reads) -> dict:
 
 def test_r8_holds_registered_inputs_to_the_weights_of_record_as_python_does(pieces):
     """R8 under a weights' registration of record (`docket.weights_held`, `Docket.weightsOf`), Lean's codes the
-    Python's: `x` registered and read by two calls passes with the registration, its digest and the reads it declares,
-    the record registering `x` at the pin's entry, which R7 holds to the pin's root (`R7-certified`); it is refused
-    without the registration (`R8-unpinned`), at another digest, at a pin's wrong domain or shape, and with its declared
-    reads missing or past what the program reads (`R8-undeclared`); a pin of the unregistered `x` excuses nothing
+    Python's: `x` registered and read by two calls passes with the registration, its digest and the reads it declares
+    (`docket.declared_reads`), on a v1 record (the accepted pin is no entry R7 reads, and a v2 record is refused
+    `keys`); it is refused without the registration (`R8-unpinned`, the case where Lean once passed what Python refused,
+    handed no `parameters`), at another digest, at a pin's wrong domain or shape, and with a read the program shows left
+    undeclared (`R8-undeclared`), and passes with a declared read the program does not show; a pin of the unregistered `x` excuses nothing
     (`R8-shared-input`); and a registered input under a query no template query applies to is refused
     (`R8-weights-query`)."""
     marked = _readers(2, (("call", 2, _X0 + _X00),) * 2, True)
@@ -5103,14 +5104,15 @@ def test_r8_holds_registered_inputs_to_the_weights_of_record_as_python_does(piec
     assert reads
     pin = _pin(marked, "x")
     doc = _weights_doc([pin], reads)
-    cases = [(s, doc, [pin], []), (s, doc, [{**pin, "root": "cd" * 64}], ["R7-certified"]),
+    assert R.declared_reads(marked, s.query, ["x"]) == [list(r) for r in reads]
+    cases = [(s, doc, [], []), (s, doc, [pin], ["keys"]),
              (s, None, [], ["R8-unpinned"]),
              (s, {**doc, "digest": "00" * 64}, [], ["R8-weights-digest"]),
              (s, {**doc, "document": "7b"}, [], ["R8-weights-digest"]),
              (s, _weights_doc([_pin(marked, "x", domain="11" * 64)], reads), [], ["R8-weights-domain", "R8-unpinned"]),
              (s, _weights_doc([_pin(marked, "x", leaves=pin["leaves"] + 1)], reads), [], ["R8-weights-shape"]),
-             (s, _weights_doc([pin], []), [pin], ["R8-undeclared"]),
-             (s, _weights_doc([pin], [*reads, (reads[0][0], "nope", "x")]), [pin], ["R8-undeclared"]),
+             (s, _weights_doc([pin], []), [], ["R8-undeclared"]),
+             (s, _weights_doc([pin], [*reads, (reads[0][0], "nope", "x")]), [], []),
              (plain, doc, [], ["R8-shared-input"]),
              (Setup(marked, PO.query()), None, [], None)]
     for setup, weights, entries, want in cases:
