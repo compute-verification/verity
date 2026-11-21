@@ -47,6 +47,15 @@ def test_the_lean_parses_the_options_the_cases_pass():
                              "--draw-live": True, "--salt-live": True}
 
 
+def test_the_standalone_notice_is_verify_runs_and_printed_before_the_verdict():
+    """Both standalone verifiers print the same first line: a benchmark's and the prover's tool, not an accepted run."""
+    main = (LEAN / "Main.lean").read_text()
+    notice = re.search(r'def STANDALONE : String :=\s*"([^"]*)" \+\+\s*"([^"]*)"', main).groups()
+    assert "".join(notice) == VR.STANDALONE
+    assert "not an accepted run" in VR.STANDALONE and "no compute credit" in VR.STANDALONE
+    assert "  IO.println STANDALONE\n  IO.println (output ans (published input ans)).compress\n" in main
+
+
 def test_the_over_inert_bound_rules_and_default_are_verify_runs():
     check = (LEAN / "Check.lean").read_text()
     names = dict(re.findall(r'\| \.(\w+) => "([a-z]+)"', _block(check, "def OverInertBound.name ")))

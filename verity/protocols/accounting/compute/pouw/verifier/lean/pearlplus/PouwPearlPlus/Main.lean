@@ -9,7 +9,10 @@ public import PouwPearlPlus.Open
       [--over-cap uncredited|reject] [--test-instance] [--tie W.json [--class SLOTS,PROMPT,OUTPUTS]] [--of-record]
       [--draw-live LIVE.json] [--salt-live SALT.json] MANIFEST...
 
-prints the verdict as one JSON object: `verdict` (`accept` or `reject`), `reason`, `refused` (`[code, why]` or null),
+is Pearl+'s standalone verifier, a benchmark's and the prover's tool: its pass is not an accepted run and states no
+compute credit. A Pearl+ pass counts only in the remote composite's Pearl+ (`PouwVerifier.PearlPlus.Protocol`), which
+refuses a commitment that names no epoch record. It prints `STANDALONE` as its first line, then the verdict as one JSON
+object: `verdict` (`accept` or `reject`), `reason`, `refused` (`[code, why]` or null),
 `commitment` and `source` (hex, once the passes load and the coin is fixed), `over_cap` (the rule on a tile over its
 inert-work bound, `uncredited` unless `--over-cap` says otherwise), `verdicts` (each opened tile's pass, id, ok and
 reason, in the verdict's order; a tile over its bound has its reason, and is ok under `uncredited`), `work`, and `tie`
@@ -53,6 +56,11 @@ structure Args where
   drawLive : Option String := none
   saltLive : Option String := none
   manifests : List String := []
+
+/-- The first line of every verdict printed, word for word `verify_run.STANDALONE`. -/
+def STANDALONE : String :=
+  "Pearl+'s standalone verifier, a benchmark's and the prover's tool: its pass is not an accepted run and states " ++
+  "no compute credit; a Pearl+ pass counts only in the remote composite"
 
 /-- `--class`'s `SLOTS,PROMPT,OUTPUTS`, each a positive integer. -/
 def loadClass? (v : String) : Option LoadClass :=
@@ -173,5 +181,6 @@ def main (argv : List String) : IO UInt32 := do
         refuseSalt "no salt session was given (--salt-live), so nothing checked the challenger's signatures on it"
       else ans)
     | _, _, _ => pure ans
+  IO.println STANDALONE
   IO.println (output ans (published input ans)).compress
   return if ans.accept then 0 else 1

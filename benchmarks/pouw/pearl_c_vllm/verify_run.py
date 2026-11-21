@@ -1,6 +1,10 @@
 """The reference replay on a vLLM pass's transcript (``pouw_pearl_c_device``'s retained pass): the work sampling design
 (`clear_work`), over the pass's whole workload, with the prover's openings read from the pass's files.
 
+This is Pearl+'s standalone verifier, a benchmark's and the prover's tool (`STANDALONE`, the first line it prints): its
+pass is not an accepted run and states no compute credit. A Pearl+ pass counts only in the remote composite's Pearl+
+(`PouwVerifier.PearlPlus.Protocol`), which refuses a commitment that names no epoch record.
+
   python benchmarks/pouw/pearl_c_vllm/verify_run.py RUN_DIR/manifest.json --coins COINS.json [--draws T] [--jobs J] [--commit SHA] [--fast]
 
 - **The execution phase** is re-started from the manifest's salt coin and every fixed operand's root (`Epoch.start`): the coin must open
@@ -53,11 +57,11 @@ match, but the run's B is no registered value, so it never reads as a tie. A W t
 written before W registered the fixed operands: it is held to the calls alone, as it was then, and the tie names its fixed operands
 untied (``"weights": WEIGHTS_UNTIED``, in the answer's tie and the verdict's line), so its accept never reads as a tie of
 the fixed operands; a version-1 W that registers a ``pearl-b/`` value is refused (`V1_WEIGHTS`).
-An accepted run publishes its fixed operands' standing (``public.operands``, `operands_of`, as
+An accepting verdict publishes its fixed operands' standing (``public.operands``, `operands_of`, as
 `PouwVerifier.PearlPlus.Protocol` publishes it): `OPERANDS_COMMITTED` under a version-2 W, `OPERANDS_NOT_COMMITTED` under a
 version-1 W or with no W, and ``"compared_with_registered_weights": false`` beside it, since no fixed operand is compared
 with the weights the audited circuit reads. With no W this verdict accepts untied, where Pearl+'s protocol
-(`PouwVerifier.PearlPlus.Protocol`, the composites' Pearl+) refuses a commitment that names no W: such an accepted run is
+(`PouwVerifier.PearlPlus.Protocol`, the composites' Pearl+) refuses a commitment that names no W: such a pass is
 this verdict's alone, never Pearl+'s protocol's.
 With the execution phase's class too (``window_class``, `served_passes.py verify --class`), the tied passes must be the class's fixed load
 (`held_to_load`: a pass a round of the class's outputs, each call's rows `window_class.PearlTables`'), or the run is
@@ -177,6 +181,10 @@ settings = of(__file__)
 DRAWS = 3
 #: a served run's verdict over all its passes (`verify_passes`)
 PROTOCOL = "verity/pouw/pearl-plus/v1"
+#: the first line every verdict of this verifier prints (here and in `served_passes.py` ``verify`` and ``lean``), word for
+#: word the Lean twin's (`PouwPearlPlus.Main`'s ``STANDALONE``)
+STANDALONE = ("Pearl+'s standalone verifier, a benchmark's and the prover's tool: its pass is not an accepted run and states "
+              "no compute credit; a Pearl+ pass counts only in the remote composite")
 RUN_TAG = "verity/pouw/pearl-plus/run/v1"
 RUN_DRAW_DOMAIN = "verity/pouw/pearl-plus-run-draw/v1"
 #: the named assumption an accepted run's credit is at, TT_OUT(1/400) per audit tile, rev1, at the scheme's device record
@@ -1056,6 +1064,7 @@ def main(argv: list[str] | None = None) -> int:
     a = p.parse_args(argv)
     coins = epoch_coins(a.coins) if a.coins else None
     r = verify(a.manifest, a.draws, a.jobs, a.commit, fast=a.fast, cross_check=a.cross_check, coins=coins)
+    print(STANDALONE, flush=True)
     print(r["line"], flush=True)
     (a.manifest.parent / "verify.json").write_text(json.dumps(r, indent=1) + "\n")
     if r.get("cross_check_failed"):

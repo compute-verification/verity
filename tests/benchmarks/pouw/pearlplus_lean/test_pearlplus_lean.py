@@ -92,7 +92,9 @@ def lean(exe: Path, paths: list[Path], draws: int, source: bytes | None = SOURCE
     argv += ["--of-record"] if of_record else []
     p = subprocess.run([*argv, *map(str, paths)], capture_output=True, text=True)
     assert p.returncode in (0, 1) and not p.stderr, p.stderr
-    got = json.loads(p.stdout)
+    notice, verdict = p.stdout.splitlines()
+    assert notice == VR.STANDALONE
+    got = json.loads(verdict)
     assert p.returncode == (got["verdict"] != "accept")
     assert got.pop("drawn") in (None, draws)
     return got

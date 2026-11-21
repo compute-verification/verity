@@ -113,12 +113,14 @@ or more of an honest run's credit, where the over-cap tiles it would spare cost 
 of one salt and, but under ``--test-instance`` (a test instance's passes, whose verdict credits nothing), of the served instance, k_min 1,024 at 64 x 64 tiles.  It writes the details to ``--out``, with, where
 ``served.json`` says which passes the timed call made and no ``--manifest`` names others, the credit over those retained
 alone (`timed_credit`), and the core answer (`answer_of`'s form, ``public.work.credited`` the MACs credited at the scheme's named assumption (TT_OUT rev1) at ``--delta``) to ``--answer``
-(default ``answer.json`` beside ``--out``, the file `served_verdicts.sh` reads as a piece's core answer), prints one line
-and exits 0 only on accept.  An ACCEPT is replay-verified (development shortcut; the protocol's check is a ZK proof,
+(default ``answer.json`` beside ``--out``, the file `served_verdicts.sh` reads as a piece's core answer), prints
+`verify_run.STANDALONE` and then one line, and exits 0 only on accept: this is Pearl+'s standalone verifier, a benchmark's
+and the prover's tool, whose pass is not an accepted run and states no compute credit.  An ACCEPT is replay-verified (development shortcut; the protocol's check is a ZK proof,
 PouwVerifier).  The document's ``check_cost`` is the check's own (`check_cost`): its wall seconds, from the sample through the
 last replayed tile, on the node it ran on and in how many processes.
 
-``lean`` is the Lean verdict of record on the run `verify` judged (`PouwVerifier.PearlPlus`, ``--exe`` its ``pouw-pearlplus``,
+``lean`` is the Lean twin's verdict on the run `verify` judged, as standalone as `verify`'s and printed after
+`verify_run.STANDALONE` too, from `PouwVerifier.PearlPlus` (``--exe`` its ``pouw-pearlplus``,
 or ``build``: built first in its package, `LEAN_PACKAGE`, where a build that fails answers nothing):
 the passes ``verify --out``'s document (``--verify``) names, read as `verify` reads them (``--manifest`` as it named them)
 and held to the names and SHA-256s
@@ -154,7 +156,7 @@ grid.  There the totals' whole MACs (``checked_macs`` and the ``excluded_a``, ``
 are its ``checked_macs``, and their ``credited`` is at least its ``credited`` and at most that plus ``give_up``; what the
 padding takes off past the totals' credit is the cause ``grid``.
 
-``case`` writes, from the Lean verdict of record ``lean`` wrote (``--lean``), the parts of the run's case in the form
+``case`` writes, from the Lean twin's verdict ``lean`` wrote (``--lean``), the parts of the run's case in the form
 remote's composite of record reads it (`PouwVerifier.PearlPlus.Protocol`, ``verity/pouw/pearl-plus/v1``) that need no
 registration record, to ``--out`` (0700, its files 0600: the manifests carry the passes' salt key, and the files their
 values): ``parts.json`` (`CASE_SCHEMA`: the params, of the epoch's ``DIR/coins.json``, the document's samples and its coin
@@ -667,6 +669,7 @@ def verify(args: argparse.Namespace) -> int:
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(doc, indent=1) + "\n")
     (Path(args.answer) if args.answer else out.parent / "answer.json").write_text(json.dumps(doc["answer"], indent=1) + "\n")
+    print(VR.STANDALONE, flush=True)
     print(doc["line"], flush=True)
     return 0 if doc["answer"]["verdict"] == "accept" else 1
 
@@ -760,6 +763,7 @@ def lean(args: argparse.Namespace) -> int:
             rec["line"] = f"lean REFUSED: {reason}; both verdicts in {check.name}"
         check.parent.mkdir(parents=True, exist_ok=True)
         check.write_text(json.dumps(rec, indent=1) + "\n")
+        print(VR.STANDALONE, flush=True)
         print(rec["line"], flush=True)
         return rc
 
@@ -907,7 +911,7 @@ def case(args: argparse.Namespace) -> int:
     try:
         lean = json.loads(Path(args.lean).read_text())
     except (OSError, ValueError) as e:
-        return refuse(f"no Lean verdict of record ({type(e).__name__}: {e})")
+        return refuse(f"no Lean verdict ({type(e).__name__}: {e})")
     record = Path(doc["coin_record"]) if doc.get("coin_record") else None
     if record is None or not record.is_file():
         return refuse("the Python verdict recorded no coin (verify's coin record)")
@@ -1054,7 +1058,7 @@ def main(argv: list[str] | None = None) -> int:
     c = sub.add_parser("case")
     c.add_argument("--passes", required=True)
     c.add_argument("--verify", required=True, help="verify's --out document")
-    c.add_argument("--lean", required=True, help="lean's --out answer: the Lean verdict of record")
+    c.add_argument("--lean", required=True, help="lean's --out answer: the Lean twin's verdict")
     c.add_argument("--out", required=True, help="the case's parts and blobs (0700)")
     args = p.parse_args(argv)
     if args.cmd == "verify" and args.cls is not None and not args.tie:

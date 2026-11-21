@@ -94,7 +94,9 @@ def verifier() -> dict:
     judges the same pass, coins, samples and coin record, its verdict compared with the twin's as a measurement that gates
     nothing: only its line starts ``ACCEPT`` or ``REJECT`` and names the manifest's sha256, and where the Lean gives no
     verdict it names none. The no-write
-    control's at the same path under ``negative/``, which the Lean must reject."""
+    control's at the same path under ``negative/``, which the Lean must reject. Both steps are Pearl+'s standalone
+    verifier (`verify_run.STANDALONE`), the gate on the timed pass: an accept is not an accepted run and states no compute
+    credit, and the arm's record is a cost."""
     pass_ = ["--passes", "{dir}", "--manifest", "{transcript}"]
     return {"name": "served_passes.py lean: Pearl+'s verdict in Lean (PouwVerifier.PearlPlus) on a retained Pearl-C pass, "
                     "held to its Python twin", "per": "shape",

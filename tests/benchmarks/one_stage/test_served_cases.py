@@ -932,7 +932,7 @@ def pearlplus_parts(serve: Path, w: dict | None = None) -> tuple[Path, dict]:
              "window": {"dropped": [0], "rounds": [1],
                         "record": w or {"window": {"version": 2}, "registered": [], "previous": None}},
              "evidence": {"files": [{"pearl/w0/rows.bin": hashlib.sha512(blob).hexdigest()}]},
-             "lean": {"verdict": "accept", "reason": None, "drawn": 3,
+             "lean": {"verdict": "accept", "reason": None, "drawn": 3, "tie": {"record": "ab" * 64, "tables": 6},
                       "work": {"credited": 4, "credited_tiles": 2, "checked_macs": 16, "rho": "1/4", "epsilon": "1/8",
                                "over_cap_draws": 0, "give_up": 8},
                       "exact_work": {"credited": 7, "credited_tiles": 1, "checked_macs": 9}}}
@@ -945,8 +945,10 @@ def test_pearl_plus_s_case_is_its_piece_s_parts_naming_the_records_digest(tmp_pa
     the retained manifests, R's digest (the tie remote's composite of record checks against the policy's record) and the
     window, W with its rounds and dropped rounds (the tie it checks against the record R is chained after), as
     canonical JSON, exactly the three keys the protocol's decoder takes; its evidence each pass's files by blob digest
-    and its blobs the parts' own; its answer the Lean verdict of record's under the commitment's digest, SHA-512(tag ‖ 0
-    ‖ commitment), its public the exact work the protocol's check publishes, never the grid form's give-up. Nothing of
+    and its blobs the parts' own; its answer the Lean twin's verdict under the commitment's digest, SHA-512(tag ‖ 0
+    ‖ commitment), its public the exact work the protocol's check publishes, never the grid form's give-up, and the fixed
+    operands' standing (committed before the coin, W naming its weights; not committed for a version-1 W's untied ones).
+    An accepting Lean verdict whose passes are held to no W is refused. Nothing of
     the commitment is printed. A part naming a blob that isn't a file is refused saying so, and so are parts with no
     window, or one that isn't the protocol's; the other cases are still written."""
     serve, v1, w = tied_serve(tmp_path / "serve")
@@ -971,8 +973,20 @@ def test_pearl_plus_s_case_is_its_piece_s_parts_naming_the_records_digest(tmp_pa
     assert json.loads((got / "answer.json").read_text()) == {
         "protocol": SC.PEARL_PLUS, "verdict": "accept", "reason": None,
         "commitment": hashlib.sha512(b"verity/pouw/pearl-plus/manifests/v1\0" + commitment).hexdigest(),
-        "public": {"credited": 7, "credited_tiles": 1, "checked_macs": 9, "rho": "1/4", "epsilon": "1/8", "delta": "1/100"},
+        "public": {"credited": 7, "credited_tiles": 1, "checked_macs": 9, "rho": "1/4", "epsilon": "1/8", "delta": "1/100",
+                   "operands": "committed-before-coin", "compared_with_registered_weights": False},
         "profile": {"draws": 3, "drawn": 3, "passes": 1}}
+    for n, lean in enumerate(({**parts["lean"], "tie": {**parts["lean"]["tie"], "weights": "weights untied (W v1)"}},
+                              {k: v for k, v in parts["lean"].items() if k != "tie"})):
+        (piece / "parts.json").write_text(json.dumps({**parts, "lean": lean}, sort_keys=True))
+        rc, cases, refused, out = run(capsys, "--serve-dir", serve, "--private", tmp_path / f"t{n}", "--alpha", "1",
+                                      "--gamma", 1, *stand_ins(tmp_path, v1))
+        if n == 0:
+            assert rc == 0 and json.loads((tmp_path / "t0" / "pouw-pearl-plus" / "answer.json").read_text())["public"][
+                "operands"] == "not-committed", out
+        else:
+            assert rc == 1 and "held to no W" in refused[-1]["reason"], refused
+    (piece / "parts.json").write_text(json.dumps(parts, sort_keys=True))
     assert case["commitment"] not in out
     assert SALTS.hex() not in out and hashlib.sha256(SALTS).hexdigest() not in out and "salts_t" not in out
     (piece / "blobs" / h).unlink()
