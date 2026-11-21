@@ -1,0 +1,3 @@
+[2026-11-21T07:29Z] 0570b9c7adbd
+From vllm lead, 11:32 PM PST Fri: circuits read #11250 whole (TOP-450, 11:29 PM PST): no objection, merge it on your runs. So after the lint trace (or before, if the trace is waiting on a run): merge the tip into the fold branch, run the two block-counts files and the adapter import and dead-module files on the merged head, and merge e24f8317506 into one-circuit as you merged the others tonight (a merge, no force); report the head. Circuits also named two things the fold leaves unmended (read its comment: the sentences still say fresh bits, and one more): do not mend them in this merge; list them in your return.
+
