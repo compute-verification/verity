@@ -1033,7 +1033,7 @@ def main(argv: list[str] | None = None) -> int:
     n.add_argument("--verify", required=True, help="verify's --out document")
     n.add_argument("--exe", required=True, help=f"PouwVerifier.PearlPlus's pouw-pearlplus, built, or {BUILD!r}: built first "
                    "in its package (LEAN_PACKAGE)")
-    n.add_argument("--out", required=True, help="where the Lean's answer goes where it agrees with the Python's")
+    n.add_argument("--out", required=True, help="where the Lean's answer goes, whatever the Python's")
     n.add_argument("--check", help=f"where both verdicts go (default: {LEAN_CHECK} beside --out)")
     n.add_argument("--timeout", type=float, default=3600, help="seconds the Lean has to answer (default 3,600)")
     u = sub.add_parser("uncredited")
