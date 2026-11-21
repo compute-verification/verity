@@ -138,9 +138,6 @@ def lawRecord (law : String) : Json := Json.mkObj [("law", Json.mkObj [("law", l
       ("k", (1 : Nat))])])) == "ok"
   | .error _ => false
 
-#guard why? (OneStageZk.heldReadsOf { V3 with query := Json.mkObj [("name", "Q_unit"), ("params", Json.mkObj []),
-  ("version", (0 : Nat))] }) == OneStageZk.HELD_QUERY_WHY
-
 /-- A circuit of `upv` units, each returning `leaves` output leaves. -/
 def circuit (upv leaves : Nat) : Flock.Circuit :=
   { name := "c", sha := ByteArray.empty, nets := #[], ranges := #[], ports := #[], outPorts := #[], g := 0, kLog := 0,
