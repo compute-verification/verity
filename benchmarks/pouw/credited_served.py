@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import bisect
+import dataclasses
 import hashlib
 import json
 import os
@@ -44,6 +45,9 @@ SCHEME = "pearl-c-h100-v1-h3"
 QKV = "model.layers.0.self_attn.qkv_proj.weight"
 NORM = "model.layers.0.input_layernorm.weight"
 K, N, TN = 256, 512, 4
+#: the test grain's words a GEMM unit (`window_builder.Grain.gemm_words`) and Flock's largest block, 2^K_MAX bits
+#: (`Flock/HmRow.lean` MAX_K_LOG), which the laying holds each block to
+GEMM_WORDS, K_MAX = 1024, 27
 TOKEN, UNIT = 7, 0
 VALUE = "pearlplus/"
 PUBLIC_VALUES = tuple(VALUE + p for p in ("salt", "root", "unit", "rows", "col"))
@@ -63,10 +67,11 @@ def served(tmp: Path, tile_fn) -> SimpleNamespace:
     from verity.circuits.codec import descriptor_id
     from verity.circuits.defs import bind
 
+    grain = dataclasses.replace(TW.GRAIN, gemm_words=GEMM_WORDS)
     reg = S._registered(S.WIDE)
     d, man = SL._checkpoint(tmp)
-    registration, rpath = TW._register(tmp / "committer", reg, d, checkpoints_manifest=man, grain=TW.GRAIN)
-    values = WW.weight_values(reg, WW.record_words(reg, d, man), rpath, TW.GRAIN, keep_rows=True)
+    registration, rpath = TW._register(tmp / "committer", reg, d, checkpoints_manifest=man, grain=grain)
+    values = WW.weight_values(reg, WW.record_words(reg, d, man), rpath, grain, keep_rows=True)
     ck = WR.CheckpointIndex(d, checkpoints_manifest=man, model="org/m", revision="r")
     placed: dict = {}
     orig = WL._Program._Gemm
@@ -109,12 +114,11 @@ def served(tmp: Path, tile_fn) -> SimpleNamespace:
 
     WL._Program._Gemm = gemm
     try:
-        circuit = class_circuit(reg, WindowClass(1, 1, 1), None, TW.GRAIN)
+        circuit = class_circuit(reg, WindowClass(1, 1, 1), None, grain)
     finally:
         WL._Program._Gemm = orig
     if "tile" not in placed:
         raise SystemExit("NO-PLACE: no Gemm_v2 of K = 256 reads layer 0's qkv projection in WIDE's class 1,1,1 circuit")
-    import dataclasses
     from verity.commitments import registered_value as RV
     from verity.commitments.periods import interface as IF
     ports = dict(tile_fn.signature()[0])
@@ -130,6 +134,30 @@ def served(tmp: Path, tile_fn) -> SimpleNamespace:
                            tile=placed["tile"], wires=wires)
 
 
+def fits(ins: tuple[int, ...], outs: tuple[int, ...], ands: int) -> bool:
+    """`credited_in_c.fits` within 2^`K_MAX`, the largest block Lean's compose takes."""
+    from verity_flock import circuit as FC
+    ports = [FC.Port(f"p{i}", -(-b // 16), 16 * -(-b // 16)) for i, b in enumerate((*ins, *outs))]
+    useful = FC._flat_useful(ands, sum(p.n_bits for p in ports[:len(ins)]), sum(p.n_bits for p in ports[len(ins):]))
+    return FC._block_ranges(FC._row_slots(ports)[0], FC._pow2(len(ports)), FC._slot_log(useful + 1), 1)[1] <= K_MAX
+
+
+def cert_of(tile, a, b, salt: bytes, root: bytes) -> list:
+    """The prover's inert-work certificates of the tile's one row against its TN columns (`test_pearl_plus_served_linear._cert`
+    at this TN)."""
+    from verity.protocols.accounting.compute.pouw.prover import schemes as pouw_schemes
+    from verity.protocols.accounting.compute.pouw.prover.circuit import inert_bound
+    from verity.protocols.accounting.compute.pouw.prover.schemes import pearl_c as C
+    s = pouw_schemes.get(SCHEME, k_min=K, tile=(1, TN))
+    dev = s.device.name
+    _d, ng = inert_bound._promoted(dev, K)
+    ctx = C.Context(salt, C.Matmul(UNIT, C.Shape(1, K, N), 0), bytes(64), root)
+    ops = s.encode(ctx, s.noise(ctx), [C.f32_row(r) for r in a], [C.f32_row(r) for r in b], C.Tile(tile.rows, tile.cols))
+    assert ops is not None, "the served x and W rows don't encode under Pearl+'s scheme"
+    return [[[list(inert_bound.certificates(ops.a.codes[0], ops.b.codes[j], dev))[2 * z:2 * z + 2] for z in range(ng - 1)]
+             for j in range(TN)]]
+
+
 def lay_tile(program, tile_ids: set[str]):
     """``program`` with the tile's units (``tile_ids``: the tile and its cut's units) opened (`laying._laid`) until each
     fits one block (`credited_in_c.fits`); every other unit as it is. Refused by name where another unit is past the
@@ -138,7 +166,7 @@ def lay_tile(program, tile_ids: set[str]):
     from verity.circuits.codec import descriptor_id
     while True:
         m = LY.Measure(program, LY.query(program))
-        over = sorted({m.units[u][0] for u in range(len(m.units)) if not CI.fits(*m.block(u, u + 1))})
+        over = sorted({m.units[u][0] for u in range(len(m.units)) if not fits(*m.block(u, u + 1))})
         nodes = program.root.body.nodes
         mine = {k for k in over if descriptor_id(nodes[k].fn) in tile_ids}
         if other := sorted({descriptor_id(nodes[k].fn) for k in over} - tile_ids):
@@ -225,9 +253,9 @@ def stage(a) -> int:
     from verity_flock import circuit as FC
     PC = schemes.catalog("pearl-plus", "credited")
     PT = schemes.catalog("pearl-plus", "tile")
-    from tests.program.predict import test_pearl_plus_served_linear as SL
 
-    rec: dict = {"scheme": SCHEME, "class": "1,1,1", "model": "WIDE (TINY at hidden 256)", "phases": {}}
+    rec: dict = {"scheme": SCHEME, "class": "1,1,1", "model": "WIDE (TINY at hidden 256)", "tile": [1, TN],
+                 "gemm_words": GEMM_WORDS, "k_max": K_MAX, "phases": {}}
     t = time.perf_counter()
 
     def phase(name: str, **extra) -> None:
@@ -266,7 +294,7 @@ def stage(a) -> int:
                                    "ins_rows": len(ins), "outs_rows": len(outs)})
         b["blocks"] += 1
         assert b["ands"] == ands, (u, t_)
-    rec["laid"] = {"by": "laying._laid on the tile alone under credited_in_c.fits", "population": population,
+    rec["laid"] = {"by": f"laying._laid on the tile alone, each block within 2^{K_MAX} bits (fits)", "population": population,
                    "served_units": sum(by.values()) - 1, "tile_blocks": sum(b["blocks"] for b in blocks.values()),
                    "tile_ands": sum(b["blocks"] * b["ands"] for b in blocks.values()),
                    "by_template": blocks,
@@ -362,7 +390,7 @@ def stage(a) -> int:
     x = cone.member(kw_a, mw_a)
     a_rows = [[v << 16 for v in x]]
     b_rows = [[v << 16 for v in r] for r in w16]
-    cert = SL._cert(tile, a_rows, b_rows, salt, root)
+    cert = cert_of(tile, a_rows, b_rows, salt, root)
     vals = {VALUE + "cert": cert, **{VALUE + p: pub[p] for p in ("salt", "root", "unit", "rows", "col")}}
     supplied = PUBLIC_VALUES
     ptype = {VALUE + p: params[p] for p in ("cert", "salt", "root", "unit", "rows", "col")}
@@ -532,12 +560,17 @@ def main() -> int:
     st.add_argument("--out", type=Path, required=True)
     st.add_argument("--steer", default="PearlPlusTileCoreWired")
     st.add_argument("--until", choices=("laid", "lower"), default=None)
+    st.add_argument("--tn", type=int, default=TN, help="the tile's columns, the grain's GEMM unit's (K · TN words)")
+    st.add_argument("--k-max", type=int, default=K_MAX)
     dr = sub.add_parser("door")
     dr.add_argument("--lower", required=True)
     dr.add_argument("--lean", required=True)
     dr.add_argument("--out", type=Path, required=True)
     dr.add_argument("--session", nargs=2, action="append", metavar=("PROOF", "DIR"), required=True)
     a = ap.parse_args()
+    if a.cmd == "stage":
+        global TN, GEMM_WORDS, K_MAX
+        TN, GEMM_WORDS, K_MAX = a.tn, K * a.tn, a.k_max
     if a.cmd == "door":
         a.session = {t_: [s for u, s in a.session if u == t_] for t_, _ in a.session}
         return door(a)
