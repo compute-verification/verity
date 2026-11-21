@@ -4,6 +4,7 @@
 # rewrites the branch's own lines that only hand.py reads, and leaves the result on a new local branch BRANCH-renamed (no
 # push). The helpers and maps are REMOTE_BRANCH's own, so a branch made before this directory existed carries too.
 set -euo pipefail
+own=$(cd "$(dirname "$0")" && pwd)
 cd "$(git rev-parse --show-toplevel)"
 onto=${1:-origin/one-circuit}
 branch=$(git branch --show-current)
@@ -13,7 +14,7 @@ wt=$(mktemp -d)
 trap 'git worktree remove --force "$wt"' EXIT
 git worktree add -q --detach "$wt" "$onto"
 here=$wt/tools/move/layout_names
-[ -d "$here" ] || { echo "carry.sh: $onto holds no tools/move/layout_names/" >&2; exit 1; }
+[ -d "$here" ] || here=$own     # an onto branch made before this directory: this script's own
 moves=()
 for m in protocol_names_map library_datasets_map; do
   move=$(git log "$onto" -1 --format=%H --grep="^Layout-move: tools/move/$m.toml")
