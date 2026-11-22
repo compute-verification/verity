@@ -146,28 +146,22 @@ def RunInputsAtOneTree : Prop :=
                 getD r "port" = .str port ∧ getD r "tree" = .str (Flock.Registered.freshValue w) ∧
                 IsRecordRoot c.record (Flock.Registered.freshValue w) r
 
-/-- **On an accepted run of the per-member variant, all readers of a tied run input node have one root**: for any two
-members `m`, `m'` (one or two) whose units read a run input node `w` of C inside the tied values' gates at their
-parameters `port`, `port'` (`OneStageZk.memberInputs`), their slices' roots under those ports have one root. It rests
-on `OneStageZk.tiedRootsAt`, which `OneStageZk.runInputRoots` runs on each member before its run input roots, refusing
-a second root for a tied node among the roots the members hold of their own at the ports that read it
-(`OneStageZk.TIED_ROOTS_WHY`). -/
+/-- **Where `OneStageZk.runInputRoots` passes, the roots the readers of a tied run input node bring are one root**:
+for members of distinct names and a run input node `w` of C inside the tied values' gates, there is one root `r0` such
+that each root a member holds of its own (`roots`, as `runInputRoots` is handed it) at a port it reads `w` at
+(`OneStageZk.memberInputs`; the first such entry, as `OneStageZk.tiedRootsAt` reads it) is `r0` or `==` to it
+(`OneStageZk.TIED_ROOTS_WHY` otherwise; core's `==` on `Json` is opaque to the kernel, so not `=`). A member that holds
+no root of its own at such a port is not refused by `tiedRootsAt`: this says nothing of the root its slice later reads
+there. -/
 def TiedInputsAtOneRoot : Prop :=
-  ∀ (p : OneStageZk.Params) (ms : Array OneStageZk.Member) (c : OneStage.Commitment) (ξ : ByteArray)
-    (e : OneStageZk.Evidence) (sts : Array OneStageZk.StatementFiles) (bs : Core.Blobs) (pub : OneStage.Public)
-    (prof : Core.Integrity),
-    OneStageZk.checkMembersAt p ms c ξ e sts bs = .accept pub prof →
-      ∃ roots, OneStageZk.membersRootsOf p ms c.record = .ok roots ∧
-        ∃ P rs, Program.parse p.own.program = .ok P ∧ Partition.evaluate P (getD p.own.partition "query") = .ok rs ∧
-          ∀ m ∈ ms, ∀ m' ∈ ms, ∀ ins ins', OneStageZk.memberInputs P.prog rs m = .ok ins →
-            OneStageZk.memberInputs P.prog rs m' = .ok ins' →
-            ∀ (port port' : String) (w len len' : Nat), (port, w, len) ∈ ins → (port', w, len') ∈ ins' →
-              Flock.Registered.runNode P.prog w = true →
-              ((Docket.tiedGates p.base.verifier).any fun (first, count) => Partition.within P.prog first count w) =
-                true →
-              ∀ r ∈ (match getD (m.slice c.record roots) "roots" with | .arr rs => rs | _ => #[]),
-                getD r "port" = .str port →
-              ∀ r' ∈ (match getD (m'.slice c.record roots) "roots" with | .arr rs => rs | _ => #[]),
-                getD r' "port" = .str port' → getD r "root" = getD r' "root"
+  ∀ (v : Docket.Verifier) (P : Flock.Program.Prog) (rs : Array Flock.TemplateQuery.TRange)
+    (ms : Array OneStageZk.Member) (rec : Json) (roots out : Std.HashMap String (Array Json)),
+    (ms.toList.map (·.name)).Nodup → OneStageZk.runInputRoots v P rs ms rec roots = .ok out →
+    ∀ w, Flock.Registered.runNode P w = true →
+      ((Docket.tiedGates v).any fun (first, count) => Partition.within P first count w) = true →
+      ∃ r0 : Json, ∀ m ∈ ms, ∀ ins, OneStageZk.memberInputs P rs m = .ok ins →
+        ∀ (port : String) (len : Nat), (port, w, len) ∈ ins → ∀ r : Json,
+          ((roots.getD m.name #[]).find? (getD · "port" == .str port)).map (getD · "root") = some r →
+            r0 = r ∨ (r0 == r) = true
 
 end Properties.Spot

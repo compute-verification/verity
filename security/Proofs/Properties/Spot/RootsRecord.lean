@@ -758,6 +758,140 @@ theorem slice_roots (m : OneStageZk.Member) (rec : Json) (roots : Std.HashMap St
   unfold OneStageZk.Member.slice
   with_unfolding_all rfl
 
+/-! ## Tied roots (`tiedRootsAt`) -/
+
+/-- `t` keeps every node's first entry `s` has. -/
+def SeenLe (s t : Array (Nat × Json)) : Prop :=
+  ∀ w x, s.find? (fun e => e.1 == w) = some x → t.find? (fun e => e.1 == w) = some x
+
+theorem seenLe_push {s : Array (Nat × Json)} {w : Nat} {r : Json} : SeenLe s (s.push (w, r)) := by
+  intro w' x hx
+  rw [Array.find?_push, hx]
+  rfl
+
+/-- What a member's step leaves of node `w`: each root `own` holds at a port the member reads `w` at has `w`'s entry
+in `t`, that root or `==` to it. -/
+def TiedHeld (P : Flock.Program.Prog) (rs : Array Flock.TemplateQuery.TRange) (m : OneStageZk.Member)
+    (own : Array Json) (w : Nat) (t : Array (Nat × Json)) : Prop :=
+  ∀ ins, OneStageZk.memberInputs P rs m = .ok ins → ∀ (port : String) (len : Nat), (port, w, len) ∈ ins →
+    ∀ r : Json, (own.find? (getD · "port" == .str port)).map (getD · "root") = some r →
+      ∃ x, t.find? (fun e => e.1 == w) = some x ∧ (x.2 = r ∨ (x.2 == r) = true)
+
+theorem tiedHeld_mono {P : Flock.Program.Prog} {rs : Array Flock.TemplateQuery.TRange} {m : OneStageZk.Member}
+    {own : Array Json} {w : Nat} {s t : Array (Nat × Json)} (h : TiedHeld P rs m own w s) (hle : SeenLe s t) :
+    TiedHeld P rs m own w t := by
+  intro ins hins port len hmem r hr
+  obtain ⟨x, hx, hxr⟩ := h ins hins port len hmem r hr
+  exact ⟨x, hle w x hx, hxr⟩
+
+theorem foldlM_collectLe {ε α σ : Type} (f : σ → α → Except ε σ) (Le : σ → σ → Prop) (G : α → σ → Prop)
+    (refl : ∀ s, Le s s) (trans : ∀ s t u, Le s t → Le t u → Le s u) (mono : ∀ a s t, G a s → Le s t → G a t)
+    (hf : ∀ s a t, f s a = .ok t → Le s t ∧ G a t) :
+    ∀ (l : List α) (s out : σ), l.foldlM f s = .ok out → Le s out ∧ ∀ a ∈ l, G a out
+  | [], s, out, h => by
+    simp only [List.foldlM_nil] at h
+    cases h
+    exact ⟨refl s, fun a ha => by cases ha⟩
+  | a :: l, s, out, h => by
+    rw [List.foldlM_cons] at h
+    obtain ⟨t, ht, h⟩ := ebind_ok h
+    obtain ⟨hle, hg⟩ := hf s a t ht
+    obtain ⟨hle', hall⟩ := foldlM_collectLe f Le G refl trans mono hf l t out h
+    refine ⟨trans _ _ _ hle hle', fun b hb => ?_⟩
+    rcases List.mem_cons.1 hb with rfl | hb
+    · exact mono _ _ _ hg hle'
+    · exact hall b hb
+
+/-- `tiedRootsAt` keeps `seen`'s entries and leaves each tied node `w` a member reads where `own` holds a root its
+entry, that root or `==` to it. -/
+theorem tiedRootsAt_ok {P : Flock.Program.Prog} {rs : Array Flock.TemplateQuery.TRange} {tied : Array (Nat × Nat)}
+    {m : OneStageZk.Member} {own : Array Json} {seen seen' : Array (Nat × Json)}
+    (h : OneStageZk.tiedRootsAt P rs tied m own seen = .ok seen') (w : Nat) (hw : Flock.Registered.runNode P w = true)
+    (ht : (tied.any fun (first, count) => Partition.within P first count w) = true) :
+    SeenLe seen seen' ∧ TiedHeld P rs m own w seen' := by
+  unfold OneStageZk.tiedRootsAt at h
+  obtain ⟨ins0, hins0, h⟩ := ebind_ok h
+  rw [← Array.foldlM_toList] at h
+  have H := foldlM_collectLe (ε := String) (α := String × Nat × Nat) (σ := Array (Nat × Json)) _ SeenLe
+    (fun (e : String × Nat × Nat) t => e.2.1 = w → ∀ r : Json,
+      (own.find? (getD · "port" == .str e.1)).map (getD · "root") = some r →
+        ∃ x, t.find? (fun e => e.1 == w) = some x ∧ (x.2 = r ∨ (x.2 == r) = true))
+    (fun _ _ _ hx => hx) (fun _ _ _ h1 h2 w x hx => h2 w x (h1 w x hx))
+    (fun _ _ _ hg hle hw' r hr => by
+      obtain ⟨x, hx, hxr⟩ := hg hw' r hr
+      exact ⟨x, hle w x hx, hxr⟩)
+    ?_ ins0.toList seen seen' h
+  · refine ⟨H.1, fun ins hins port len hmem r hr => ?_⟩
+    rw [hins0] at hins
+    cases hins
+    exact H.2 (port, w, len) (Array.mem_toList_iff.2 hmem) rfl r hr
+  · intro s e t hst
+    obtain ⟨p, w', len⟩ := e
+    dsimp only at hst ⊢
+    split at hst
+    · rename_i hc
+      cases hst
+      refine ⟨fun _ _ hx => hx, fun hww r _ => ?_⟩
+      subst hww
+      simp [hw, ht] at hc
+    · split at hst
+      · rename_i hn
+        cases hst
+        refine ⟨fun _ _ hx => hx, fun _ r hr => ?_⟩
+        rw [hn] at hr
+        cases hr
+      · rename_i r0 hr0
+        split at hst
+        · rename_i x r' hx
+          split at hst
+          · rename_i hb
+            cases hst
+            refine ⟨fun _ _ hx => hx, fun hww r hr => ?_⟩
+            subst hww
+            rw [hr0] at hr
+            cases hr
+            exact ⟨(x, r'), hx, Or.inr hb⟩
+          · exact absurd hst (by simp [throw, throwThe, MonadExceptOf.throw])
+        · rename_i hx
+          cases hst
+          refine ⟨seenLe_push, fun hww r hr => ?_⟩
+          subst hww
+          rw [hr0] at hr
+          cases hr
+          refine ⟨(w', r0), ?_, Or.inl rfl⟩
+          rw [Array.find?_push, hx]
+          simp
+
+theorem forIn_tied {roots : Std.HashMap String (Array Json)} {P : Flock.Program.Prog}
+    {rs : Array Flock.TemplateQuery.TRange} {w : Nat}
+    {f : OneStageZk.Member → Std.HashMap String (Array Json) × Array (Nat × Json) →
+      Except String (ForInStep (Std.HashMap String (Array Json) × Array (Nat × Json)))}
+    (hf : ∀ m s r, s.1.getD m.name #[] = roots.getD m.name #[] → f m s = .ok r →
+      ∃ t, r = .yield t ∧ SeenLe s.2 t.2 ∧ TiedHeld P rs m (roots.getD m.name #[]) w t.2 ∧
+        ∀ n, n ≠ m.name → t.1.getD n #[] = s.1.getD n #[]) :
+    ∀ (l : List OneStageZk.Member) (s out), (l.map (·.name)).Nodup →
+      (∀ m ∈ l, s.1.getD m.name #[] = roots.getD m.name #[]) → forIn l s f = .ok out →
+      SeenLe s.2 out.2 ∧ ∀ m ∈ l, TiedHeld P rs m (roots.getD m.name #[]) w out.2
+  | [], s, out, _, _, h => by
+    rw [List.forIn_nil] at h
+    cases h
+    exact ⟨fun _ _ hx => hx, fun m hm => by cases hm⟩
+  | a :: l, s, out, hn, hq, h => by
+    rw [List.forIn_cons] at h
+    cases hfa : f a s with
+    | error e => rw [hfa] at h; cases h
+    | ok r =>
+      rw [hfa] at h
+      obtain ⟨t, rfl, hle, hg, hkeep⟩ := hf a s r (hq a (List.mem_cons_self ..)) hfa
+      rw [List.map_cons, List.nodup_cons] at hn
+      have hq' : ∀ m ∈ l, t.1.getD m.name #[] = roots.getD m.name #[] := fun m hm => by
+        rw [hkeep m.name (fun he => hn.1 (he ▸ List.mem_map_of_mem hm)), hq m (List.mem_cons_of_mem _ hm)]
+      obtain ⟨hle', hall⟩ := forIn_tied hf l t out hn.2 hq' h
+      refine ⟨fun w x hx => hle' w x (hle w x hx), fun m hm => ?_⟩
+      rcases List.mem_cons.1 hm with rfl | hm
+      · exact tiedHeld_mono hg hle'
+      · exact hall m hm
+
 end Properties.Spot.RootsRecordProof
 
 namespace Properties.Spot.SecurityProofs
@@ -830,5 +964,30 @@ theorem runInputsAtOneTree : RunInputsAtOneTree := by
     exact hmono _ x hx2
   · obtain ⟨hm', hp'⟩ := rootsByPort_get hg
     exact isRecordRoot_of_carries h3 ⟨r1, hm', hp', hro, hd, hl⟩
+
+/-- **`TiedInputsAtOneRoot`**: where `runInputRoots` passes, the roots the readers of a tied run input node bring at
+the ports that read it are one root, up to core's `==`. -/
+theorem tiedInputsAtOneRoot : TiedInputsAtOneRoot := by
+  intro v P rs ms rec roots out hn h w hw ht
+  unfold OneStageZk.runInputRoots at h
+  try dsimp only at h
+  obtain ⟨acc, hacc, -⟩ := ebind_ok h
+  rw [← Array.forIn_toList] at hacc
+  have H := forIn_tied (roots := roots) (P := P) (rs := rs) (w := w) ?_ ms.toList (roots, #[]) acc
+    (by simpa using hn) (fun _ _ => rfl) hacc
+  · refine ⟨match acc.2.find? (fun e => e.1 == w) with | some x => x.2 | none => .null, ?_⟩
+    intro m hm ins hins port len hmem r hr
+    obtain ⟨x, hx, hxr⟩ := H.2 m (Array.mem_toList_iff.2 hm) ins hins port len hmem r hr
+    simp only [hx]
+    exact hxr
+  · intro m s r hq hf
+    try dsimp only at hf
+    obtain ⟨seen', hseen, hf⟩ := ebind_ok hf
+    obtain ⟨rr, -, hf⟩ := ebind_ok hf
+    cases hf
+    rw [hq] at hseen
+    obtain ⟨hle, hg⟩ := tiedRootsAt_ok hseen w hw ht
+    refine ⟨_, rfl, hle, hg, fun n hne => ?_⟩
+    simp [Std.HashMap.getD_insert, Ne.symm hne]
 
 end Properties.Spot.SecurityProofs
