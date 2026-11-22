@@ -468,7 +468,8 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
     why = published.get("error") if ev is None else reason(ev)
     try:
         o, result = outcome(stream, draw, ev)
-        told = {"stream": stream.digest, "record": o.record, "accepted": o.accepted, "codes": list(o.verdict.codes)}
+        told = {"stream": stream.digest, "record": o.record, "accepted": o.accepted, "codes": list(o.verdict.codes),
+                "population": o.population}
     except (S.Refused, S.Pending) as e:
         result, told = None, {"stream": stream.digest, "accepted": False, "refused": refusal(e)}
     if result is not None and why is not None:

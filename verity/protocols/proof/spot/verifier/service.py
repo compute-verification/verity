@@ -495,7 +495,8 @@ class Outcome:
     (`reject`, `late`, or `halted`, whose detail is the halt's cause). `profile`: the integrity profile of an accepted
     sampled selection; `exhaustive`: the fact of an accepted `All`. `public`: the check's public outputs, as the
     verifier reported them. `record`: the SHA-512 of the outcome's record, which binds the docket, the sample, the
-    delivered sessions, the audit record and, for a sample a `ProofRun` covers, the session's rounds."""
+    delivered sessions, the audit record and, for a sample a `ProofRun` covers, the session's rounds. `population`: on
+    an accept, which population test registration passed, `IN_ORDER` or `COVER`."""
 
     accepted: bool
     verdict: Verdict
@@ -504,6 +505,7 @@ class Outcome:
     terms: Terms
     public: Mapping[str, Any]
     record: str
+    population: str | None = None
 
 
 _O = TypeVar("_O", Outcome, tuple[Outcome, ...])
@@ -773,6 +775,8 @@ def params_sampling_design(sampling_design: Any, program: Program, query: Mappin
 
 
 #: The refusal of a `bernoulli` sampling design (`bernoulli`), the Lean verifier's `Draw.BERNOULLI`.
+IN_ORDER = "its proof blocks in slot order (Slots.popOk)"
+COVER = "its proof blocks a disjoint cover, not in slot order, under a subset design (Slots.popCovers)"
 BERNOULLI = "the law is bernoulli, which the sampled audit's soundness statement doesn't cover"
 
 
@@ -960,6 +964,8 @@ class _Entry:
     certified: Mapping[str, Mapping[str, Any]] | None = None
     #: the window's partition object `register` held the record's digest to (None: the blockless one)
     partition: Mapping[str, Any] | None = None
+    #: the population test `register` passed: `IN_ORDER` or `COVER`
+    population: str | None = None
     read: bytes | None = None
     #: the challenger's family the sample's coins were read from (`coins.ChallengerCoins.label`), None when it read none
     family: str | None = None
@@ -1487,8 +1493,10 @@ class Stream:
     supplied value of `Digest`s in Digest order); the stream's digest names them. Or a window's stream takes `program`, the challenger's own copy of
     the window's Program where it is another form than the mixed population (the network attester's scan in its
     generator form, one batch a template reading a shared input, say): its proof blocks under the check's query are the
-    templates' ranges, any number a template, numbered in the declared circuit's order (`Slots.popOk`), and it is each
-    docket's population program, a docket whose `counts` aren't each template's ranges summed refused (`population`); the stream's digest names it. `log` is the prover's records the challenger logged before the
+    templates' ranges, any number a template, each unit numbered in the declared circuit's order: registration takes
+    them in slot order (`Slots.popOk`) or, under a subset design only, as a disjoint cover of the population
+    (`Slots.popCovers`), as an interleaved declared circuit of several layers is, and an accepted outcome says which
+    (`Outcome.population`). It is each docket's population program, a docket whose `counts` aren't each template's ranges summed refused (`population`); the stream's digest names it. `log` is the prover's records the challenger logged before the
     stream, a docket of another Program whose values this stream's dockets reuse (`register`'s
     `outputs`), say: the stream's log starts with them, in order, so R6 and R7 read them, and none of them is sampled.
 
@@ -1869,12 +1877,14 @@ class Stream:
                     v = _refuse("bernoulli", {"law": sampling_design, "reason": BERNOULLI}).verdict
                 if v.ok and self.n_rho is not None:
                     v = _refuse(LV.NOT_PROVED, {"reason": LV.TWO_LEVELS_REFUSED}).verdict
+                order = IN_ORDER
                 if v.ok and not P.in_order(program, self.query, n):
+                    order = COVER
                     if not P.covers(program, self.query, n):
                         v = _refuse("population-order", {"population": n}).verdict
                     elif not MB.subset_designs(sampling_design, record):
                         v = _refuse("strata-design", {"population": n, "law": sampling_design}).verdict
-                got.update(program=program, law=sampling_design, table=table, earlier=earlier)
+                got.update(program=program, law=sampling_design, table=table, earlier=earlier, population=order)
             if v.ok and self._fleet is not None:
                 try:
                     self._fleet._admit(self)
@@ -1901,7 +1911,7 @@ class Stream:
         self._entries.append(_Entry(reg, D.derive(program, self.query, sampling_design, got["table"]), program, work_table,
                                     (ports, leaf_layer, anchors, earlier, registered, supplied, pinned, schemas,
                                      window_root, held, outputs), seed_salt, history, certified,
-                                    None if partition is None else dict(partition)))
+                                    None if partition is None else dict(partition), population=got["population"]))
         if deadline is not None:
             self._epoch_log.append({"event": "registration", "order": reg.order, "registration": reg.digest,
                                     "salted_at": reg.salted_at, "received_at": reg.received_at})
@@ -2223,7 +2233,8 @@ class Stream:
             exhaustive=Exhaustive(len(draw.draw["units"])) if accepted and exhaustive else None,
             terms=Terms(None if exhaustive else self.delta),
             public=dict(public),
-            record=_sha512(body))
+            record=_sha512(body),
+            population=e.population if accepted else None)
         self._records.append(body)
         return e.outcome
 

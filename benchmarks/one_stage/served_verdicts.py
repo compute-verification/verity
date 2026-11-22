@@ -1899,7 +1899,8 @@ def window_record(summary: Any) -> tuple[str, str]:
     """The window road's verdict of record and its line, from the records audit's ``summary.json`` alone: ``accept`` only
     where the audit accepted and Lean's members check (`OneStageZk.checkMembersAt`, ``audit.members_lean``) ran and accepted,
     ``undecided`` where Lean did not run, else ``reject``, its line the stream's refusal where it refused the draw
-    (``checks.draw``); the line says what the verdict rests on, ``compiled`` as the
+    (``checks.draw``); an accept names the population test registration passed (the stream outcome's
+    ``population``); the line says what the verdict rests on, ``compiled`` as the
     summary states it. ValueError naming the field where the summary lacks one the verdict reads."""
     def field(of: Any, key: str, kind: type, where: str) -> Any:
         if not isinstance(of, Mapping) or not isinstance(of.get(key), kind):
@@ -1929,8 +1930,10 @@ def window_record(summary: Any) -> tuple[str, str]:
     for k in ("bound", "delta"):
         if k not in wrong:
             raise ValueError(f"the audit's summary has no audit.wrong_units.{k}")
+    held = ((summary.get("coins") or {}).get("outcome") or {}).get("population")
     return "accept", (f"WINDOW-RECORD accept: {said}; {len(sampled)} sampled blocks, at most {wrong['bound']} of its units wrong "
-                      f"except with probability {wrong['delta']}; {tail}")
+                      f"except with probability {wrong['delta']}; registration took "
+                      f"{held or 'its proof blocks in an order the summary does not state'}; {tail}")
 
 
 def sampled_exe(exe: str | os.PathLike | None) -> Path:

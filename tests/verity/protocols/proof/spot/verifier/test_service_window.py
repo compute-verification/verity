@@ -25,6 +25,9 @@ import fake_challenger as FC
 
 TRIPLE = bind(CompositeDefinition("ServiceTestTriple", 0, (), lambda S_: ((("x", Array(3, Bits(8))),), Bits(8)),
                                   lambda B, S_, x: B.call(XOR8, B.call(XOR8, x[0], x[1]), x[2]), register=False))
+QUAD = bind(CompositeDefinition("ServiceTestQuad", 0, (), lambda S_: ((("x", Array(4, Bits(8))),), Bits(8)),
+                                lambda B, S_, x: B.call(XOR8, B.call(XOR8, x[0], x[1]), B.call(XOR8, x[2], x[3])),
+                                register=False))
 WINDOW = (PAIR, TRIPLE)
 QUERY = P.template_instances_query(WINDOW)
 #: PAIR's one instance and TRIPLE's nine, strata `stratified-rate:1/3` samples ⌈1/3⌉ = 1 and ⌈9/3⌉ = 3 of.
@@ -116,7 +119,8 @@ def test_a_two_template_window_runs_to_an_accepted_outcome_by_the_lean_run():
     """A window of PAIR x 1 and TRIPLE x 9 under `stratified-rate:1/3`: registered at the challenger's own counts, sampled once
     from its coins by the stratified sampling design at the K its strata need (`draw.strat_k`, 3), each stratum sampled its k (a third of
     its proof blocks, rounded up), and run to an accepted outcome, the
-    verifier's whole run (`Run.run`, over the window's mixed population) agreeing."""
+    verifier's whole run (`Run.run`, over the window's mixed population) agreeing, the outcome saying its proof blocks
+    were in slot order (`IN_ORDER`)."""
     stream = _stream()
     rec = _record()
     reg = stream.register(rec, _ports(), counts=COUNTS)
@@ -129,6 +133,7 @@ def test_a_two_template_window_runs_to_an_accepted_outcome_by_the_lean_run():
     out = stream.outcome(draw, _lean(), {"statement": "stub"})
     audit = stream.records[-1]["audit"]
     assert out.accepted and "run" not in audit["checks"] and stream._entries[reg.order].read
+    assert out.population == S.IN_ORDER
 
 
 def test_a_registration_of_another_window_is_refused():
@@ -162,7 +167,8 @@ def test_a_window_in_another_form_runs_on_the_challengers_own_copy_of_it():
     own copy of that form (`Stream(program=)`), whose digest names it; a stream without it builds the mixed population and
     refuses the docket (`R2-program`, `R2-partition`), and the stream with it refuses a docket of the mixed
     population (`R2-program`) and counts that aren't its form's ranges (`population`). A form is a window's, its proof
-    blocks ranges of exactly the window's templates: refused with one template, values or a template missing."""
+    blocks ranges of exactly the window's templates: refused with one template, values, a template missing or a
+    template the window has not."""
     gathered = _gathered()
     rec, ports = _record(form=gathered), _ports(program=gathered)
     assert {"R2-program", "R2-partition"} <= set(_refused(lambda: _stream().register(rec, ports, counts=COUNTS)))
@@ -183,7 +189,10 @@ def test_a_window_in_another_form_runs_on_the_challengers_own_copy_of_it():
     for unit, spec, kw, why in ((PAIR, pair_spec(), {}, "takes no values"),
                                 (WINDOW, _spec(), {"values": (VALUE,)}, "takes no values"),
                                 (WINDOW, _spec(), {"program": PN.mixed_population_program([(TRIPLE, 9)])},
-                                 "has no instance of")):
+                                 "has no instance of"),
+                                (WINDOW, _spec(), {"program": PN.mixed_population_program([(PAIR, 1), (TRIPLE, 9),
+                                                                                          (QUAD, 1)])},
+                                 "an instance is a call or batch of one of")):
         with pytest.raises(ValueError, match=why):
             FC.Stream(spec, unit, budget=2, delta=DELTA, challenger="c", **{"program": gathered, **kw})
 
@@ -194,7 +203,7 @@ def test_a_two_layer_window_runs_to_an_accepted_outcome_by_the_lean_run_under_a_
     (`partition.covers`, `Slots.popCovers`; not `partition.in_order`, `Slots.popOk`). Under a subset design the stream
     takes it, each template's count its ranges summed, and the docket reaches the draw and an accepted outcome with the
     whole run the Lean's (`Run.run`); under a stratified one it is refused (`strata-design`), and a docket whose counts
-    leave a range out is refused (`population`)."""
+    leave a range out is refused (`population`). The accepted outcome says it rested on the cover (`COVER`)."""
     pair, triple = P.template_id(PAIR), P.template_id(TRIPLE)
     counts = {pair: 2, triple: 8}
     layers = PN.mixed_population_program([(PAIR, 1), (TRIPLE, 4), (PAIR, 1), (TRIPLE, 4)])
@@ -218,7 +227,7 @@ def test_a_two_layer_window_runs_to_an_accepted_outcome_by_the_lean_run_under_a_
     assert len(draw.units) == 3 and V.check_draw(draw.draw, rec, on._entries[reg.order].law).ok
     assert on.deliver(draw, [SESSION]) is None
     out = on.outcome(draw, _lean(), {"statement": "stub"})
-    assert out.accepted and "run" not in on.records[-1]["audit"]["checks"]
+    assert out.accepted and "run" not in on.records[-1]["audit"]["checks"] and out.population == S.COVER
 
 
 def test_a_tied_window_runs_to_an_accepted_outcome_by_the_lean_run():
