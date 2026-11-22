@@ -242,3 +242,20 @@ def test_the_wipe_gets_the_pins_and_configuration_the_road_hands_a_piece(tmp_pat
     want = served_table.pins_and_configuration(run.load(app, run.registry()))
     assert said.splitlines() == [f"export {k}={shlex.quote(v)}" for k, v in want.items()]
     assert json.loads(want["VERITY_PINS"]) and any(x["protocol"] == "wipe" for x in json.loads(want["VERITY_PINS"]))
+
+
+def test_the_hold_reads_the_gate_the_epochs_use_or_a_readable_ledger_and_the_development_path_holds_nothing(tmp_path):
+    """Under ``REGISTRATION_LANE`` with ``PP_CHALLENGER=gate:USER@HOST`` the ledger is that gate's, and a
+    ``REGISTRATION_LEDGER`` naming another is refused by name, as is an unreadable path with no gate; with no lane the
+    launcher calls proofs' ``registration-hold`` with no lane, which prints the development line."""
+    key = tmp_path / "key.json"
+    key.write_text("{}")
+    lane = {"REGISTRATION_LANE": "rehearsal-1", "H1_LANE": "rehearsal-1", "REGISTRATION_CAP": "4",
+            "REGISTRATION_HOLD_S": "60", "REGISTRATION_KEY": str(key)}
+    p, _ = run_dry(tmp_path / "other", **lane, PP_CHALLENGER="gate:u@h", REGISTRATION_LEDGER=str(tmp_path / "ledger"))
+    assert p.returncode == 3 and "is not PP_CHALLENGER gate:u@h, the gate whose ledger" in p.stdout, p.stdout + p.stderr
+    p, _ = run_dry(tmp_path / "none", **lane, REGISTRATION_LEDGER=str(tmp_path / "absent"))
+    assert p.returncode == 3 and "REGISTRATION_LEDGER is unreadable and no PP_CHALLENGER" in p.stdout, p.stdout + p.stderr
+    p, calls = run_dry(tmp_path / "dev")
+    assert p.returncode == 0 and ["benchmarks/one_stage/served_verdicts.py", "registration-hold", "/dev/null"] in \
+        [c["argv"] for c in calls], p.stdout[-2000:] + p.stderr[-2000:]

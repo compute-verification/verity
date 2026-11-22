@@ -150,7 +150,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 from typing import Any, NamedTuple
 
-from verity.circuits.codec import descriptor_id
+from verity.circuits.codec import descriptor_id, program_digest
 from verity.circuits.defs import bind
 from verity.commitments.periods import interface as IF
 
@@ -418,6 +418,25 @@ def served_lowering(registered: Any, cls: WindowClass, advice: Any, ingress: Any
     return compiled, replace(low, unprovable=check_served(low.circuit))
 
 
+#: the classes whose served window's circuit the class fixes before the serve: one slot of one prompt id and one output,
+#: so its one window of record holds one request of one position at its one lane (a window of no request has no circuit)
+FIXED_CLASSES = ((1, 1, 1),)
+
+
+def fixed_program(registered: Any, cls: WindowClass, grain: Grain = _GRAIN) -> str:
+    """The `program_digest` of a served window's Program at ``cls`` (the docket's ``program``), computed before the serve:
+    `lower`'s circuit of the one window the class leaves, one request, of prompt length 1 and one kept output, at lane 0
+    of boundary 0 (a window of no request has no circuit, and a prompt or outputs of 0 has no Program). Refused by name
+    for any class not in `FIXED_CLASSES`: a served window's circuit moves with its requests' number and, in lane order,
+    their prompt lengths and kept outputs, which the serve chooses."""
+    if (cls.slots, cls.prompt, cls.outputs) not in FIXED_CLASSES:
+        raise Unexpressible(f"{cls}: its served window's circuit moves with the requests the serve takes (their number, "
+                            f"prompt lengths and outputs), so no digest fixes it before the serve; only "
+                            f"{', '.join(','.join(map(str, c)) for c in FIXED_CLASSES)} fix their one request")
+    one = Request(cls.boundaries[0], 0, 1, 1)
+    return program_digest(lower(registered, cls, None, grain, requests=(one,)).circuit.program()[0])
+
+
 def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grain = _GRAIN,
                    placed: Sequence[tuple[int, int | None]] | None = None,
                    tables: FixedLoad | None = None) -> IF.Circuit:
@@ -435,7 +454,7 @@ def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grai
     return class_circuit(registered, cls, None, grain, tables)
 
 
-__all__ = ["CLASS_OF_RECORD", "CUTS", "FAMILIES", "Grain", "Lowered", "NAME", "PearlTables", "Request", "Row", "Scheduled", "Tables",
-           "WEIGHTS", "WindowClass", "WindowCompiler", "check_provable", "check_served", "class_circuit", "class_program", "lower",
+__all__ = ["CLASS_OF_RECORD", "CUTS", "FAMILIES", "FIXED_CLASSES", "Grain", "Lowered", "NAME", "PearlTables", "Request", "Row", "Scheduled", "Tables",
+           "WEIGHTS", "WindowClass", "WindowCompiler", "check_provable", "check_served", "class_circuit", "class_program", "fixed_program", "lower",
            "requests_of", "served_lowering", "stop_ids",
            "takes", "window_circuit"]
