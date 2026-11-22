@@ -723,10 +723,14 @@ REGISTRATION_NEEDS = ("--registration needs --registration-ledger (with --challe
 def registration_param(a: argparse.Namespace) -> dict[str, Any]:
     """The parameters' ``registration`` (`docket.registration_parsed`) of ``--registration``: the record's bytes in hex,
     with the ledger's lines and the auditor's lane, or the development path named."""
-    from verity.protocols.proof.spot.verifier.challenger import remote as SPR
+    from verity.protocols.proof.spot.verifier.challenger import challenger as Ch, challenger_session as AC
     body = Path(a.registration).read_bytes().hex()
     if a.registration_ledger:
-        return {"record": body, "ledger": SPR.ledger_lines(a.registration_ledger), "lane": a.registration_lane}
+        try:
+            lines = AC.ledger_lines_at(a.registration_ledger, getattr(a, "gate_key", None))
+        except Ch.CoinError as e:
+            raise SystemExit(f"REGISTRATION refused: {e}") from None
+        return {"record": body, "ledger": lines, "lane": a.registration_lane}
     return {"record": body, "head": DK.DEVELOPMENT}
 
 
@@ -746,7 +750,11 @@ def registration_line(a: argparse.Namespace) -> tuple[str, dict[str, Any]]:
     except (OSError, ValueError, KeyError, TypeError, Ch.CoinError) as e:
         raise SystemExit(f"REGISTRATION refused: the record or the challenger's key record is unreadable or malformed "
                          f"({type(e).__name__}: {e})") from None
-    held = {"digest": digest, "source": "ledger", "lane": a.registration_lane, "key": key}
+    pinned = getattr(a, "challenger_key_sha512", None)
+    if pinned is not None and pinned != key:
+        raise SystemExit(f"REGISTRATION refused: the challenger's key record holds key {key[:16]}..., not the pinned "
+                         f"{pinned[:16]}... (--challenger-key-sha512)")
+    held = {"digest": digest, "source": "ledger", "lane": a.registration_lane, "key": key, "key_pinned": pinned is not None}
     return f"REGISTRATION lane {a.registration_lane} digest {digest} key {key}: {REGISTRATION_SOURCES['ledger']}", held
 
 
@@ -1324,7 +1332,8 @@ def audit(a: argparse.Namespace) -> int:
     row["ok"] = row["ok"] and not row["coins_session"]["error"]
     row["ok"] = row["ok"] and (not a.registration_ledger or "after the draw" in row["registration_halves"])
     row["ok"] = row["ok"] and (acts is None or acts["ok"])
-    row["of_record"] = row["ok"] and row["registration"]["source"] == "ledger" and "not_verified" not in row
+    row["of_record"] = (row["ok"] and row["registration"]["source"] == "ledger" and row["registration"]["key_pinned"]
+                        and "not_verified" not in row)
     (out / "summary.json").write_text(json.dumps(row, indent=1, sort_keys=True, default=str))
     if "not_verified" in row:
         print("NOT-VERIFIED " + json.dumps(row["not_verified"], sort_keys=True))
@@ -1444,6 +1453,8 @@ def main(argv: list[str] | None = None) -> int:
                    "registered entries R8 holds the circuit's registered inputs to (`docket.registration_parsed`)")
     p.add_argument("--registration-ledger", help="with --registration and --challenger-key: the auditor's ledger, whose "
                    "challenger signed the record's digest for the epoch's lane before its first coin")
+    p.add_argument("--challenger-key-sha512", help="with --registration-ledger: the SHA-512 of the challenger's public key "
+                   "the operator posted from the device, which the key record must hold; a run of record needs it")
     p.add_argument("--registration-lane", help="with --registration-ledger: the lane the auditor names, whose "
                    "period-open signs the registration; the session the audit draws on must be on it")
     p.add_argument("--registration-head", choices=[DK.DEVELOPMENT],

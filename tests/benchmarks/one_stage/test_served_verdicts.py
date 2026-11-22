@@ -3352,14 +3352,30 @@ def test_the_serve_holds_until_the_local_challengers_ledger_registers_its_record
     """`registration-hold` on a local challenger: the serve's hold prints the record's digest and the period-open that
     registers it, and, following the ledger as it grows, proceeds once the lane's period-open carries that digest; a
     ledger with no registration for the lane refuses by name where it ends, and one registering another digest refuses
-    at once."""
+    at once; the key record must hold the posted key where one is given; ``gate:USER@HOST`` reads the ledger through
+    the gate's ``ledger`` verb with the lane's gate key."""
     digest = DD.digest(DEPLOYMENT_RECORD)
     ledger, key = _registering_host(tmp_path / "held", digest)
     held = _hold(tmp_path / "held", ledger, key)
     assert held.returncode == 0, held.stdout + held.stderr
     said = held.stdout.splitlines()
-    assert said[0].startswith(f"REGISTRATION-HOLD digest {digest} lane circuits: ") and f"--registration {digest}" in said[0]
-    assert said[-1].startswith(f"REGISTRATION-HELD digest {digest} lane circuits: ")
+    k = hashlib.sha512(bytes.fromhex(json.loads(key.read_text())["pubkey"])).hexdigest()
+    assert said[0].startswith(f"REGISTRATION-HOLD digest {digest} lane circuits key {k}: ") and f"--registration {digest}" in said[0]
+    assert said[-1].startswith(f"REGISTRATION-HELD digest {digest} lane circuits key {k}: ")
+    assert _hold(tmp_path / "held", ledger, key, "--key-sha512", k).returncode == 0
+    pinned = _hold(tmp_path / "held", ledger, key, "--key-sha512", "11" * 64)
+    assert pinned.returncode == 2 and "not the pinned 1111111111111111..." in pinned.stdout, pinned.stdout
+    bin_ = tmp_path / "bin"
+    _script(bin_ / "ssh", f'[ "$8" = ledger ] && [ "$6" = /keys/lane ] && cat {ledger}\n')
+    env = {**os.environ, "PATH": f"{bin_}:{os.environ['PATH']}"}
+    gate = subprocess.run([sys.executable, str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.py"),
+                           "registration-hold", str(tmp_path / "held" / "dreg.json"), "--lane", "circuits", "--ledger",
+                           "gate:research@challenger", "--gate-key", "/keys/lane", "--key", str(key), "--once"],
+                          capture_output=True, text=True, check=False, env=env)
+    assert gate.returncode == 0 and gate.stdout.splitlines()[-1].startswith("REGISTRATION-HELD "), gate.stdout + gate.stderr
+    _script(bin_ / "ssh", "echo refused >&2; exit 2\n")
+    down = subprocess.run(gate.args, capture_output=True, text=True, check=False, env=env)
+    assert down.returncode == 1 and "infra's gate refused ledger: refused" in down.stdout, down.stdout
     ledger, key = _registering_host(tmp_path / "none", None)
     none = _hold(tmp_path / "none", ledger, key, "--once")
     assert none.returncode == 1 and none.stdout.splitlines()[-1].startswith("REGISTRATION-HOLD refused: "), none.stdout

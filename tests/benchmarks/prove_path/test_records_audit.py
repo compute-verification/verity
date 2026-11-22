@@ -364,8 +364,8 @@ def test_parameters_with_no_registration_say_the_development_line_first_and_are_
 
 def test_a_registration_from_the_ledger_names_its_lane_digest_and_key_first(tmp_path):
     """With ``--registration-ledger``, the audit's first line and the summary's ``registration`` name the lane, the
-    record's digest and the challenger's key (its public key's SHA-512) the registration is held to; a malformed key
-    record refuses."""
+    record's digest and the challenger's key (its public key's SHA-512) the registration is held to, and whether that key
+    is the one the operator posted (``--challenger-key-sha512``), which refuses another; a malformed key record refuses."""
     from verity.protocols.proof.spot.verifier.challenger import challenger as Ch
 
     rec, pub = _deployment_record(tmp_path), bytes(range(80))
@@ -377,7 +377,13 @@ def test_a_registration_from_the_ledger_names_its_lane_digest_and_key_first(tmp_
     digest, k = DD.digest(json.loads(rec.read_text())), hashlib.sha512(pub).hexdigest()
     line, held = RA.registration_line(a)
     assert line == f"REGISTRATION lane circuits digest {digest} key {k}: {RA.REGISTRATION_SOURCES['ledger']}"
-    assert held == {"digest": digest, "source": "ledger", "lane": "circuits", "key": k}
+    assert held == {"digest": digest, "source": "ledger", "lane": "circuits", "key": k, "key_pinned": False}
+    a.challenger_key_sha512 = k
+    assert RA.registration_line(a)[1]["key_pinned"] is True
+    a.challenger_key_sha512 = "11" * 64
+    with pytest.raises(SystemExit, match="not the pinned 1111111111111111"):
+        RA.registration_line(a)
+    a.challenger_key_sha512 = None
     key.write_text(json.dumps({"schema": Ch.KEY_RECORD_SCHEMA, "W": 4, "H": 5, "pubkey": pub.hex(),
                                "pubkey_sha512": "00" * 64}))
     with pytest.raises(SystemExit, match="REGISTRATION refused"):

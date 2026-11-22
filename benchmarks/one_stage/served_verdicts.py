@@ -1019,14 +1019,17 @@ def pearlplus_period_open(piece_dir: Path, gate: str, name: str, scheme: str, cu
     return doc
 
 
-def registration_hold(record: Path, lane: str | None, ledger: Path | None, key: Path | None, once: bool = False,
-                      say: Callable[[str], None] = print) -> int:
+def registration_hold(record: Path, lane: str | None, ledger: str | None, key: Path | None, once: bool = False,
+                      say: Callable[[str], None] = print, gate_key: str | None = None, key_sha512: str | None = None,
+                      every: float = 10.0) -> int:
     """``registration-hold``: with no `lane`, the development line, and 0. Under `lane`, the deployment's registration
-    record's digest and the period-open that registers it, then the auditor's `ledger` read as it grows (``tail -F``;
-    as it stands with `once`) until it carries the lane's registering period-open (`challenger.registration_head`, its
-    signatures under the key record `key`): 0 where that is the record's digest; 2 at once where the ledger signs another
-    digest or refuses (a second registration, a malformed entry, a signature); 1 where the ledger ends without one. The
-    wait's limit is the caller's (`timeout`)."""
+    record's digest and the period-open that registers it, then the auditor's `ledger` until it carries the lane's
+    registering period-open (`challenger.registration_head`: every entry's signature and the chain tested under the key
+    record `key`, whose public key's SHA-512 must be `key_sha512` where given): 0 where that is the record's digest; 2
+    at once where the ledger signs another digest or refuses (a second registration, a malformed entry, a signature, a
+    key not `key_sha512`); 1 where the ledger ends without one, or with `once` holds none as it stands. A path is read
+    as it grows (``tail -F``); ``gate:USER@HOST`` through the gate's ``ledger`` verb with `gate_key`
+    (`challenger_session.ledger_lines_at`), again every `every` seconds. The wait's limit is the caller's (`timeout`)."""
     from verity.commitments import docket_digest as DD
     from verity.protocols.proof.spot.verifier.challenger import challenger as CH, challenger_session as AC
     from verity.protocols.proof.spot.verifier.one_stage import docket as DK
@@ -1041,30 +1044,57 @@ def registration_hold(record: Path, lane: str | None, ledger: Path | None, key: 
         say(f"REGISTRATION-HOLD refused: the challenger's key record {key} is unreadable or malformed "
             f"({type(e).__name__}: {e})")
         return 2
-    say(f"REGISTRATION-HOLD digest {digest} lane {lane}: before the epoch's first reserve, the auditor opens the lane's "
-        f"period with it: vy-challenger-gate period-open --name NAME --lane {lane} --cap CAP --circuit CIRCUIT "
+    pinned = hashlib.sha512(k.public).hexdigest()
+    if key_sha512 is not None and pinned != key_sha512:
+        say(f"REGISTRATION-HOLD refused: the challenger's key record {key} holds key {pinned[:16]}..., not the "
+            f"pinned {key_sha512[:16]}...")
+        return 2
+    say(f"REGISTRATION-HOLD digest {digest} lane {lane} key {pinned}: before the epoch's first reserve, the auditor opens "
+        f"the lane's period with it: vy-challenger-gate period-open --name NAME --lane {lane} --cap CAP --circuit CIRCUIT "
         f"--registration {digest}; held until {ledger} carries it")
-    follow = subprocess.Popen(["cat" if once else "tail", *([] if once else ["-F", "-n", "+1"]), str(ledger)],
+
+    def judged(lines: list[str]) -> int | None:
+        try:
+            head = CH.registration_head(lines, lane, k, AC.lms_verify)
+        except CH.CoinError as e:
+            if CH.NO_REGISTRATION in str(e):
+                return None
+            say(f"REGISTRATION-HOLD refused: {e}")
+            return 2
+        if head != digest:
+            say(f"REGISTRATION-HOLD refused: the ledger signs registration {head[:16]}... for lane {lane}, not this "
+                f"serve's {digest[:16]}..., and a lane is held to its first registration alone")
+            return 2
+        say(f"REGISTRATION-HELD digest {digest} lane {lane} key {pinned}: the ledger's line {len(lines) - 1} signs it")
+        return 0
+
+    ended = (f"REGISTRATION-HOLD refused: {ledger} holds no registering period-open of lane {lane}: "
+             f"{CH.NO_REGISTRATION}")
+    if ledger.startswith("gate:"):
+        said = None
+        while True:
+            try:
+                rc = judged(AC.ledger_lines_at(ledger, gate_key))
+            except CH.CoinError as e:
+                rc = None
+                if str(e) != said:
+                    said = str(e)
+                    say(f"REGISTRATION-HOLD reading {ledger}: {e}")
+            if rc is not None:
+                return rc
+            if once:
+                say(ended)
+                return 1
+            time.sleep(every)
+    follow = subprocess.Popen(["cat" if once else "tail", *([] if once else ["-F", "-n", "+1"]), ledger],
                               stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
     lines: list[str] = []
     try:
         for line in follow.stdout:
             lines.append(line.rstrip("\n"))
-            try:
-                head = CH.registration_head(lines, lane, k, AC.lms_verify)
-            except CH.CoinError as e:
-                if CH.NO_REGISTRATION in str(e):
-                    continue
-                say(f"REGISTRATION-HOLD refused: {e}")
-                return 2
-            if head != digest:
-                say(f"REGISTRATION-HOLD refused: the ledger signs registration {head[:16]}... for lane {lane}, not this "
-                    f"serve's {digest[:16]}..., and a lane is held to its first registration alone")
-                return 2
-            say(f"REGISTRATION-HELD digest {digest} lane {lane}: the ledger's line {len(lines) - 1} signs it")
-            return 0
-        say(f"REGISTRATION-HOLD refused: {ledger} ended with no registering period-open of lane {lane}: "
-            f"{CH.NO_REGISTRATION}")
+            if (rc := judged(lines)) is not None:
+                return rc
+        say(ended)
         return 1
     finally:
         follow.kill()
@@ -2730,8 +2760,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                         "for the lane (`registration_hold`); its limit is the caller's timeout")
     rh.add_argument("record", type=Path, help="the deployment's registration record (deployment-registration.json)")
     rh.add_argument("--lane", help="REGISTRATION_LANE; none: the development path, no hold")
-    rh.add_argument("--ledger", type=Path, help="REGISTRATION_LEDGER: the auditor's ledger as its host appends it")
+    rh.add_argument("--ledger", help="REGISTRATION_LEDGER: the auditor's ledger as its host appends it, or gate:USER@HOST")
     rh.add_argument("--key", type=Path, help="REGISTRATION_KEY: the challenger's key record")
+    rh.add_argument("--key-sha512", help="REGISTRATION_KEY_SHA512: the SHA-512 of the challenger's public key the operator "
+                    "posted, which the key record must hold")
+    rh.add_argument("--gate-key", help="with --ledger gate:USER@HOST: the lane's gate key")
+    rh.add_argument("--every", type=float, default=10.0, help="with --ledger gate:USER@HOST: seconds between reads")
     rh.add_argument("--once", action="store_true", help="the ledger as it stands, no wait")
     rg = sub.add_parser("public-registration")
     rg.add_argument("registration", type=Path)
@@ -2870,8 +2904,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         if a.lane is not None and (a.ledger is None or a.key is None):
             ap.error("registration-hold --lane needs --ledger and --key")
         signal.signal(signal.SIGTERM, lambda *_: sys.exit(124))
-        return registration_hold(a.record, a.lane, a.ledger, a.key, once=a.once,
-                                 say=lambda x: print(x, flush=True))
+        return registration_hold(a.record, a.lane, a.ledger, a.key, once=a.once, say=lambda x: print(x, flush=True),
+                                 gate_key=a.gate_key, key_sha512=a.key_sha512, every=a.every)
     if a.cmd == "public-lines":
         public_lines(sys.stdin, sys.stdout, a.private)
         return 0

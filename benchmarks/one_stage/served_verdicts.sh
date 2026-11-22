@@ -21,7 +21,9 @@
 #     why, or NO WEIGHTS REGISTRATION why not, and then every weight read counts free. Under REGISTRATION_LANE the serve
 #     then holds (`registration_hold`): it prints the deployment's registration record's digest and the period-open that
 #     registers it, and sends no request until the auditor's ledger REGISTRATION_LEDGER carries that period-open for the
-#     lane, checked under the challenger's key record REGISTRATION_KEY (default PP_CHALLENGER_KEY), within
+#     lane (a path, or gate:USER@HOST read through the gate's ledger verb under PP_GATE_KEY), checked under the
+#     challenger's key record REGISTRATION_KEY (default PP_CHALLENGER_KEY), held to the SHA-512 REGISTRATION_KEY_SHA512
+#     the operator posted where given, within
 #     REGISTRATION_HOLD_S seconds, else stops refused; the audit is then held to that head (`wreg_args`). With no lane it
 #     prints the development line and does not hold.
 #  2. requests: REQUESTS greedy requests (default SLOTS) from the network attester's traffic generator (`adapters/vllm/tools/served_run/serve_load.py --varied`:
@@ -837,7 +839,8 @@ wreg_args() {  # the deployment's registration record: under REGISTRATION_LANE, 
   # PP_CHALLENGER_KEY); with no lane, the development path, named
   if [ -n "${REGISTRATION_LANE:-}" ]; then
     printf '%s\n' --registration "$DREG" --registration-ledger "${REGISTRATION_LEDGER:-}" \
-      --challenger-key "${REGISTRATION_KEY:-${PP_CHALLENGER_KEY:-}}" --registration-lane "$REGISTRATION_LANE"
+      --challenger-key "${REGISTRATION_KEY:-${PP_CHALLENGER_KEY:-}}" --registration-lane "$REGISTRATION_LANE" \
+      ${REGISTRATION_KEY_SHA512:+--challenger-key-sha512 "$REGISTRATION_KEY_SHA512"}
   else
     printf '%s\n' --registration "$DREG" --registration-head development
   fi
@@ -849,7 +852,8 @@ registration_hold() {  # after weights wrote $DREG, before the epoch's first res
   if [ -n "${REGISTRATION_LANE:-}" ]; then
     [ -s "$DREG" ] || { say "REGISTRATION-HOLD refused: $NO_DREG"; return 1; }
     timeout -k 10s "$REGISTRATION_HOLD_S" "$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" registration-hold "$DREG" \
-      --lane "$REGISTRATION_LANE" --ledger "$REGISTRATION_LEDGER" --key "${REGISTRATION_KEY:-${PP_CHALLENGER_KEY:-}}" | publish_lines
+      --lane "$REGISTRATION_LANE" --ledger "$REGISTRATION_LEDGER" --key "${REGISTRATION_KEY:-${PP_CHALLENGER_KEY:-}}" \
+      ${REGISTRATION_KEY_SHA512:+--key-sha512 "$REGISTRATION_KEY_SHA512"} ${PP_GATE_KEY:+--gate-key "$PP_GATE_KEY"} | publish_lines
   else
     "$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" registration-hold "$DREG" | publish_lines
   fi
