@@ -8,7 +8,6 @@ TINY's slots and the class of record's.
 """
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import re
@@ -27,7 +26,7 @@ from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
 from verity.protocols.proof.spot.prover import docket as DK
 from verity.protocols.proof.spot.verifier.one_stage import docket as R, registered as CR
-from verity.commitments import registered_value as RV
+from verity.commitments import docket_digest as DD, domains as DM, registered_value as RV
 from verity.protocols.accounting.compute.pouw.verifier.audit import hm96_salt
 from verity.protocols.accounting.network.prover import ingress_scan as IS
 from verity.protocols.accounting.network.prover import scan_state_rows as SR
@@ -991,12 +990,12 @@ def test_a_windows_scan_state_is_a_run_input_committed_whole_and_registered_by_n
     anchors = SU.anchors(program)
     assert anchors == (f"{TABLE}/domain", f"{TABLE}/root")
     assert {e["value"]: e for e in rec["registered"]} == {v: win.registered[v].entry() for v in (*anchors, TABLE)}
-    body = json.dumps({"program": values[TABLE].program,
-                       "values": {p: v.entry() for p, v in values.items() if p != SS.SCAN_STATE}}).encode()
+    of_record = {"format": DM.REGISTRATION, "program": values[TABLE].program, "deployment": {"kind": "test"},
+                 "registered": [v.entry() for p, v in values.items() if p != SS.SCAN_STATE], "previous": None}
     got = R.check(rec, program, win.window.query, DESIGN, CS.SCHEME,
                   {r["port"]: {"leaves": r["leaves"], "domain": r["domain"]} for r in rec["roots"]},
                   leaf_layer=rec.get("leaf_layer"), registered={v: win.registered[v].words for v in anchors},
-                  schemas={v: CR.SCHEMA_V2 for v in anchors}, weights_of_record=(body, hashlib.sha512(body).hexdigest()))
+                  schemas={v: CR.SCHEMA_V2 for v in anchors}, weights_of_record=(json.dumps(of_record).encode(), DD.digest(of_record)))
     assert {c for c in got.codes if c.startswith(("R7", "R8"))} == ({"R8-shared-input"} if cls.lanes > 1 else set()), got
     assert cls.lanes == 1 or got.detail["R8-shared-input"]["inputs"] == [w], got
 
