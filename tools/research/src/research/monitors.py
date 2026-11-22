@@ -778,18 +778,40 @@ def fixtures_public(ctx: Ctx) -> list[Finding]:
 #: the verified queue's decision log on the control pod (the live loop's `--log`), its last line's `at` the last decision
 VQUEUE_DECISIONS = "data/vqueue/live/decisions.jsonl"
 UNVERIFIED_S = 3 * 3600
+#: the live loop's own output on the control pod, a `<at> tick rc=<exit>` line after each tick
+VQUEUE_LOG = "data/vqueue/live/vqueue.log"
+TICK_RE = re.compile(r"^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ) tick rc=(\d+)", re.M)
+#: how recent the loop's last tick must be for it to count as running; a tick takes seconds and the loop ticks again at once
+TICKING_S = 600
+
+
+def loop_ticking(ctx: Ctx) -> bool:
+    """Whether the live loop runs and its ticks pass: the last `tick rc=` line in the end of `VQUEUE_LOG` exited 0 within
+    `TICKING_S`. A log this can't find counts as a loop not running."""
+    log = ctx.root / VQUEUE_LOG
+    if not log.is_file():
+        return False
+    with log.open("rb") as f:
+        f.seek(max(0, log.stat().st_size - 65536))
+        ticks = TICK_RE.findall(f.read().decode(errors="replace"))
+    if not ticks:
+        return False
+    at, rc = ticks[-1]
+    return rc == "0" and ctx.now - calendar.timegm(time.strptime(at, "%Y-%m-%dT%H:%M:%SZ")) < TICKING_S
 
 
 def unverified_main(ctx: Ctx) -> list[Finding]:
-    """The verified queue, the one path `main` moves by, has decided nothing for over `UNVERIFIED_S`: a loop stopped or stuck,
-    and every marked PR waits with nobody outside ci told. Timed from its decisions file's (`VQUEUE_DECISIONS`) last
-    decision, else the file's own time; one event per further hour, to ci and top, until the queue decides again. A queue
-    that decides is ci's, which it rings itself; a file this can't read is the monitor's own finding, in time."""
+    """The verified queue, the one path `main` moves by, has decided nothing for over `UNVERIFIED_S` while its loop is stopped
+    or its ticks fail (`loop_ticking`), and every marked PR waits with nobody outside ci told. A loop that ticks and passes
+    but decides nothing has nothing to decide, and this is quiet then. Timed from its decisions file's (`VQUEUE_DECISIONS`)
+    last decision, else the file's own time; one event per further hour, to ci and top, until the queue decides again or its
+    loop ticks again. A queue that decides is ci's, which it rings itself; a file this can't read is the monitor's own
+    finding, in time."""
     decisions = ctx.root / VQUEUE_DECISIONS
     lines = [ln for ln in decisions.read_text().splitlines() if ln.strip()]
     last = json.loads(lines[-1]).get("at") if lines else None
     since = calendar.timegm(time.strptime(last, "%Y-%m-%dT%H:%M:%SZ")) if last else decisions.stat().st_mtime
-    if (behind := ctx.now - since) < UNVERIFIED_S:
+    if (behind := ctx.now - since) < UNVERIFIED_S or loop_ticking(ctx):
         return []
     hours = int(behind // 3600)
     return [Finding(f"vqueue:{hours}", f"*The verified queue has decided nothing for {hours} h*: its last decision in "
@@ -1715,8 +1737,8 @@ MONITORS: list[Monitor] = [
             every_s=900, for_s=1800, unread_s=4 * 3600),
     Monitor("unverified-main", "ci", "warn", "relay", unverified_main,
             "Read the end of the live loop's decision log (`/data/vqueue/live/decisions.jsonl`) and its output on the control "
-            "pod: start a loop that stopped again, or fix what a stuck one fails on each tick. It rings again each hour until "
-            "the queue decides again.",
+            "pod (`/data/vqueue/live/vqueue.log`): start a loop that stopped again, or fix what a stuck one fails on each "
+            "tick. It rings again each hour until the queue decides again or its loop ticks and passes again.",
             every_s=600, events=True, unread_s=3600),
     Monitor("nightly-check", "infra", "warn", "relay", nightly_check,
             "On the control pod, read /data/watchers/log/nightly-check.log (each pass says what it did) and status.json (is "
