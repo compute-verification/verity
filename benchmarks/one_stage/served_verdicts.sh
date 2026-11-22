@@ -532,6 +532,16 @@ if [ -n "${ONSITE_PIECES:-}" ]; then
   [ "$PRODUCT" != onsite ] || onsite_piece_commands
 fi
 export H1_KEY_SHA512 H1_PEER WINDOW_STEPS MAIN_SHA WIPE_CMD POUS_CMD BANDWIDTH_CMD PRODUCT ONSITE_PIECES POUW
+serve_said() {  # FIELD...: the serve dir's own record (serve.json) of FIELD, empty where the serve dir or the field is absent
+  python3 - "$D/serve.json" "$@" 2> /dev/null <<'EOF' || true
+import json, sys
+v = json.load(open(sys.argv[1]))
+for k in sys.argv[2:]:
+    v = v[k]
+print(v or "")
+EOF
+}
+PRED=${PRED:-$(serve_said committer_options row_build)}
 PRED=${PRED:-$D/predicted}
 SERVED_COMPARE=$D/served-compare/served_compare.json
 FW=${FLOCK_WORK:-$ROOT/flock-work}
@@ -1835,7 +1845,7 @@ tie_refused() {  # the window commit tied to Pearl+'s W is deleted, so a setting
 window_preflight() {  # K the close's window with a record (WINDOW's, else plans.jsonl's last); each thing absent refused by name
   local miss=() f why
   [ -e "$PY" ] || miss+=("PY, python under VENV")
-  [ -n "${WINDOW_CLASS:-}" ] || miss+=("WINDOW_CLASS, the class the serve took (its --window-class), which serve.json doesn't record")
+  [ -n "${WINDOW_CLASS:-}" ] || miss+=("WINDOW_CLASS, the class the serve took (its --window-class): serve.json's window_class, absent from a serve made before it recorded it, so pass WINDOW_CLASS=S,P,O")
   if [ ! -f "$D/plans.jsonl" ]; then miss+=("D/plans.jsonl, the close's plan of each window")
   elif ! K=$("$PY" - "$D/plans.jsonl" "${WINDOW:-}" 2>&1 <<'EOF'
 import json, sys
@@ -1858,7 +1868,7 @@ EOF
       [ -e "$D/$f" ] || miss+=("D/${f//w$K/wK}")
     done
   fi
-  [ -f "$PRED/predicted.json" ] || miss+=("PRED/predicted.json, predict row's Build before the lease")
+  [ -f "$PRED/predicted.json" ] || miss+=("PRED/predicted.json, predict row's Build before the lease: PRED is serve.json's committer_options.row_build, else D/predicted, so pass PRED=<the directory that holds predicted.json>")
   [ ${#miss[@]} = 0 ] && return 0
   why=$(printf '%s; ' "${miss[@]}")
   say "PREFLIGHT: the window's record lacks ${why%; }"
@@ -2224,6 +2234,7 @@ else
   [ "${1:-}" = steps ] && [ $# -gt 1 ] \
     || { say "PREFLIGHT: the runner's steps and their order are verity run's stages': none was named (served_verdicts.sh steps STEP...)"; exit 3; }
   steps_named "${@:2}" || exit 3
+  WINDOW_CLASS=${WINDOW_CLASS:-$(serve_said window_class)}
   window_preflight || exit 3
   KN=$K CLASSES=$WINDOW_CLASS
   logs_dir

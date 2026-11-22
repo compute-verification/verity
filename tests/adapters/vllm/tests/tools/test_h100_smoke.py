@@ -146,6 +146,22 @@ def test_a_dataset_the_door_refuses_and_a_class_past_the_engines_step_are_refuse
     assert not any(c["argv"][1:2] == ["serve-openai"] for c in calls)
 
 
+def test_a_missing_interpreter_is_refused_by_name_with_the_fix_and_an_interpreter_that_errs_is_never_an_empty_refusal(tmp_path):
+    """``PY`` that does not exist on the node is refused first, naming it and the fix; one that exists but fails on the
+    application's door refuses with what it printed on stderr, not an empty reason."""
+    gone = tmp_path / "no-such-venv" / "bin" / "python"
+    p, calls = run_dry(tmp_path / "gone", PY=str(gone))
+    assert p.returncode == 3 and not calls, p.stdout + p.stderr
+    assert f"SMOKE REFUSED interpreter: the interpreter PY={gone} does not exist on this node: pass PY=/path/to/python" in p.stdout, \
+        p.stdout + p.stderr
+    broken = tmp_path / "broken"
+    broken.write_text("#!/bin/sh\necho 'ModuleNotFoundError: no module named verity_x' >&2\nexit 1\n")
+    broken.chmod(0o755)
+    p, calls = run_dry(tmp_path / "broken", PY=str(broken))
+    assert p.returncode == 3, p.stdout + p.stderr
+    assert "SMOKE REFUSED dataset: ModuleNotFoundError: no module named verity_x" in p.stdout, p.stdout + p.stderr
+
+
 def test_the_window_commit_is_the_applications_launchers_entry_off_the_card(tmp_path):
     p, calls = run_dry(tmp_path)
     assert p.returncode == 0, p.stdout[-2000:] + p.stderr[-2000:]
