@@ -1898,19 +1898,24 @@ def members_reached(members: Mapping[str, Any], answer: Mapping[str, Any]) -> di
 def window_record(summary: Any) -> tuple[str, str]:
     """The window road's verdict of record and its line, from the records audit's ``summary.json`` alone: ``accept`` only
     where the audit accepted and Lean's members check (`OneStageZk.checkMembersAt`, ``audit.members_lean``) ran and accepted,
-    ``undecided`` where Lean did not run, else ``reject``; the line says what the verdict rests on, ``compiled`` as the
+    ``undecided`` where Lean did not run, else ``reject``, its line the stream's refusal where it refused the draw
+    (``checks.draw``); the line says what the verdict rests on, ``compiled`` as the
     summary states it. ValueError naming the field where the summary lacks one the verdict reads."""
     def field(of: Any, key: str, kind: type, where: str) -> Any:
         if not isinstance(of, Mapping) or not isinstance(of.get(key), kind):
             raise ValueError(f"the audit's summary has no {where}{key} of type {kind.__name__}")
         return of[key]
 
+    compiled = summary.get("compiled", "not stated by the summary") if isinstance(summary, Mapping) else None
+    rests = "" if compiled is True else "; the verdict does not rest on the circuit's compile check"
+    tail = f"compiled: {compiled}{rests}; SPOT's verdict alone: no block record is composed on this road"
+    drew = (summary.get("checks") or {}).get("draw") if isinstance(summary, Mapping) else None
+    if isinstance(drew, Mapping) and drew.get("ok") is False:
+        return "reject", (f"WINDOW-RECORD reject: the stream refused the draw, codes={drew.get('codes')}, so no proof "
+                          f"block was sampled and no audit ran; {tail}")
     ok, audit = field(summary, "ok", bool, ""), field(summary, "audit", dict, "")
     accepted, ml = field(audit, "accepted", bool, "audit."), field(audit, "members_lean", dict, "audit.")
     ran, lean_ok = field(ml, "ran", bool, "audit.members_lean."), field(ml, "ok", bool, "audit.members_lean.")
-    compiled = summary.get("compiled", "not stated by the summary")
-    rests = "" if compiled is True else "; the verdict does not rest on the circuit's compile check"
-    tail = f"compiled: {compiled}{rests}; SPOT's verdict alone: no block record is composed on this road"
     if not ran:
         return "undecided", (f"WINDOW-RECORD undecided: Lean's members check did not run ({ml.get('reason')}), so no verdict of "
                              f"Lean's stands; the audit's own accepted={accepted}; {tail}")

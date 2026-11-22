@@ -7275,12 +7275,16 @@ def _audit_summary(**over) -> dict:
         "ok": True, "ran": False, "codes": [], "reason": "a window of one member"}}},
      "undecided", 1, ["WINDOW-RECORD undecided: Lean's members check did not run (a window of one member)",
                       "no verdict of Lean's stands"]),
+    ({"ok": False, "compiled": True, "checks": {"draw": {"ok": False, "codes": ["strata-design"],
+                                                         "detail": {"population": 40}}}},
+     "reject", 1, ["WINDOW-RECORD reject: the stream refused the draw, codes=['strata-design']", "no audit ran",
+                   "compiled: True"]),
 ], ids=["accept, compiled not checked", "accept, compiled", "accept, compiled unstated", "audit not ok",
-        "Lean rejects", "Lean did not run"])
+        "Lean rejects", "Lean did not run", "draw refused"])
 def test_the_window_roads_record_is_leans_members_verdict_and_says_what_it_rests_on(tmp_path, capsys, summary, verdict, rc,
                                                                                    said):
     """The line is the verdict of record only where the audit accepted and Lean's members check ran and accepted; a Lean
-    that did not run is undecided, never an accept; `compiled` is said as the summary states it, and a verdict beside a
+    that did not run is undecided, never an accept; a draw the stream refused is a reject naming the refusal's codes; `compiled` is said as the summary states it, and a verdict beside a
     compile check that was not made says it does not rest on one. The line names no population and no window."""
     got, line = S.window_record(summary)
     assert got == verdict and all(x in line for x in said), line
