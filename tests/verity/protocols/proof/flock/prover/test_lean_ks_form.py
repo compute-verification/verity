@@ -1,5 +1,5 @@
 """`one_stage.proofs.ks_form_why`, the Python mirror of `verify --zk`'s refusal of a statement form the sampled audit's
-knowledge soundness (`SampledKSLiveV3`, and `SampledKSLiveV5` at a shared-row public file) does not cover
+knowledge soundness (`SampledKSLiveV5`) does not cover
 (`Flock.KsScope.filesWhy`), held to `verity-verify-proof ks-form`, which runs that check with no session and then the public
 file's header's (`Flock.PortRoots.headerOf`, which a file the prover staged passes), on statements the prover wrote:
 M0's flat hidden-output sets, RoPE (its unit returns its output) and GEMM (its unit reads two input groups and a tail

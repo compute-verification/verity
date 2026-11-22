@@ -61,7 +61,7 @@ messages are the live-coin session's. Lean's ZK server refuses a binding round o
 `verity_flock.rec_session.serve`'s sessions keep the Python send check, held to Lean's by ``test_zk_server_agreement``.
 
 **Live coins.** Each round's coins are flipped by the challenger's live-coin part when the round's commitments reach it, never before
-(`RecursiveKS`'s game and `RecursiveZK` sample them so, and `Flock.ZkServer.Contract`'s ``coins`` rule lets coins out only
+(`RecursiveKS`'s game and `RecursiveZKLoop` sample them so, and `Flock.ZkServer.Contract`'s ``coins`` rule lets coins out only
 after the commitments the schedule owes); `serve`'s challenger commits to none. A challenger may instead commit to every
 coin before the session (`LiveCoinPart.commit_coins`, from the schedule alone: one hm96-sha512 commitment a round, the link
 points as round 0 of stream ``link``, each to `coin_message` under a fresh salt of the challenger's). A proxy given those

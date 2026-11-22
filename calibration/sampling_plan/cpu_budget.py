@@ -17,7 +17,7 @@ each template's units the budget certifies.
   memory needs. No statement is smaller than k_log `PACK_LOG` (m = 25), so a smaller unit costs the m = 25 point.
 * **The plan**: every template samples k = ceil(ln(S/1%)/share), rounded up to fill its last statement and at most n.
   The share is the least whose statements fit `slots` x `hours` of slot time. Each window then has fewer than
-  K0 = ln(S/delta) n/k units incorrect outside delta (`IntegrityMonitoringPeriodLog`, delta split over the S windows), and its
+  K0 = ln(S/delta) n/k units incorrect outside delta (delta split over the S windows; this bound runs unproved), and its
   windows over any period fewer than that in all (`IntegrityHorizon`), as in `h200.py`.
 """
 from __future__ import annotations

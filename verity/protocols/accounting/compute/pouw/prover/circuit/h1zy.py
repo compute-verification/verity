@@ -35,19 +35,19 @@ halves: `ResourceAccounting.Served.ValueChecked`'s product and dequant are check
   verifier accepts is one whose unit computed 1, and a record that is not the unit's product and its dequant has no
   accepted proof. The ok rows are the verifier's own registered value ``ok`` (h1_prove's `register_ok`: row u the
   word 1 under unit u's public salt), and each unit's ok port ``o1`` reads it at the unit's row through ``--registered``,
-  so Lean opens each ok row against that root rather than reading ok off the public file alone (``CheckedSessionSound``,
-  `security/Proofs/Pouw/TS/CheckedSound.lean`, binds ok only through a port of ``own``). A lane's and a combine's ok take the same
+  so Lean opens each ok row against that root rather than reading ok off the public file alone (the session's
+  relation binds ok only through a port of ``own``). A lane's and a combine's ok take the same
   form: each statement's ok port (``o0``, its one output) reads the verifier's own ``ok``, one row of the word 1 a
   statement under its public salt, beside the ``partials`` ports.
 * **A leaf's lanes** (option A: the served path keeps one receipt a 32 × 32 leaf, and a sampled leaf is proved as its 32
   lanes and their combine). Option A is a proof strategy, not a new Served form: a sampled leaf is one Cd
-  unit and meets Served as `PouwH1TileZy_v1` does, and `ResourceAccounting.Guarantees.TS.LeafLanesSound`'s linked realization carries the 33 statements to it.
+  unit and meets Served as `PouwH1TileZy_v1` does, and the 33 statements stand for it, unproved.
   CP-W's receipt is the XOR over the leaf's lanes of their partials (`h1tile.fold`). The partials are proof-layer values,
   not Cd inputs: the prover commits them after the sample under hiding leaves, like a proof's own outputs, one row per lane
   (``partials``, row l lane l; proofs' service piece, `one_stage.produced`), and the 33 statements open that one
   commitment as registered ports of the verifier's own, lane l's ``partials`` at row l and the combine's ``p0`` .. ``p31``
   at rows 0 .. 31 (`pouw.leaf_lanes.reads`; each statement's ok is its ``o0``), since a port ``own`` doesn't name
-  is free in ``CheckedSessionSound``'s relation. A partial is 2 (KS + m) u32 (8,320 bits at K = 4096), so it is an
+  is free in the session's relation. A partial is 2 (KS + m) u32 (8,320 bits at K = 4096), so it is an
   input, never an output, and a row of 8 (KS + m) bytes. The combine reads only those rows and the receipt, and Flock
   proves a statement only with a row that compresses before its last block, so `combine` is staged only at K >= 384
   (`LEAST_K`: 112-byte rows, whose padding spills into a second block); `lane` takes any positive K. Both stage only a

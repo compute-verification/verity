@@ -25,14 +25,14 @@ and its units, from the finest up:
 
 The harm is incorrect ANDs: each unit is credited its ANDs (a recomputed statistic once, in the op it belongs to), so a
 plan's certificate means the same whatever the cut, where a count of incorrect proof blocks falls as the cut coarsens; the
-incorrect proof blocks (`IntegrityMonitoringPeriod`'s W) are reported beside it. The cost is Flock's, fitted from its zero-knowledge
+incorrect proof blocks (W) are reported beside it. The cost is Flock's, fitted from its zero-knowledge
 sessions on sm_120 (`inputs.observations`, `costfit`), in GPU-seconds of an RTX PRO 6000, with every serve-time
 commitment of the block: every unit's outputs, the requests' bytes, the carried KV cache at the block's close, PoUW's
 CP-W receipts (h1, assumed) and the bandwidth audit's receipts (`serve`), and the replay of each sampled request
 (`Serving.replay`). A plan is a stratified sampling design, k units of each subcircuit; the chosen one is the cheapest certifying at
 most `TARGET_SHARE` of the block's ANDs incorrect. `recertify` recomputes its certificate from the sizes alone through
 core's `Stratified.harm_bound` and `count_bound`, and `pooled` bounds the incorrect proof blocks over a monitoring period of many
-blocks. `handoff` is the plan as the GPU loop registers it: one `IntegrityMonitoringPeriod` window a subcircuit, or the block as one
+blocks. `handoff` is the plan as the GPU loop registers it: one window a subcircuit, or the block as one
 window under the `work:1` sampling design.
 
     uv run python calibration/sampling_plan/transformer.py --out DIR [--model small|large] [--share S] [--delta D]
@@ -457,13 +457,13 @@ def handoff(plan: Plan, cands: list[Candidate], dag: DefinitionGraph) -> dict:
     """The plan as a GPU loop registers it (a `circuit_record(..., sampling_design, cap)`), each subcircuit
     a Definition's descriptor id (a stub's id until its Definition lands) with its units:
 
-    * `windows`, the form `IntegrityMonitoringPeriod` reads: one window a subcircuit, its units under `subset:k_s` in
-      members of its statement size (the loop's `--sampling-design` and `--cap`), and at each delta its `K0`, `IntegrityMonitoringPeriodLog`'s
+    * `windows`, the per-window variant: one window a subcircuit, its units under `subset:k_s` in
+      members of its statement size (the loop's `--sampling-design` and `--cap`), and at each delta its `K0`, the unproved
       ln(1/delta_w)/q at delta_w = delta over the block's windows and q = k/n (or n - k + 1, which no sample misses), so
       outside delta every window has fewer than its K0 units incorrect;
     * `record`, the block as one window: every subcircuit under the `work:1` sampling design whose work table's floors are the plan's
       k, which `draw.derive` expands to exactly those k (`work_k`). It needs one `cap` for every subcircuit, so it carries
-      the least statement size; `IntegrityMonitoringPeriod` covers only a uniform subset, not this sampling design.
+      the least statement size.
 
     The planner's strata are its ops' subcircuits, so two ops cut to one Definition (attention's QK and PV matmuls both to
     `F2fpBf16_v1`, say) are two of its strata and one of the record's: merged, at the higher of their rates, which only
@@ -633,7 +633,7 @@ def render(out: dict) -> str:
         p, a, b = r["pooled"], r["pooled_ands"], r["per_block"]
         lines.append(f"| {r['period']} | {r['fleet']} | {r['blocks']:,.0f} | {p['0.01']:.4g} | {p['1e-06']:.4g} | "
                      f"{a['0.01']:.4g} | {a['1e-06']:.4g} | {b['0.01']:.4g} | {b['1e-06']:.4g} |")
-    lines += ["", "hand-off, `IntegrityMonitoringPeriod`'s windows (one a template; `compile --sampling-design L --cap N`):", "",
+    lines += ["", "hand-off, the windows (one a template; `compile --sampling-design L --cap N`):", "",
               "| template | units | law | cap | K0 at 1% | K0 at 1e-6 |", "|---|---|---|---|---|---|"]
     for w in out["handoff"]["windows"]:
         (t, n), = w["templates"]

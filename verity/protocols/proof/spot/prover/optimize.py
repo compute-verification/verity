@@ -199,7 +199,7 @@ class CostModel:
     """Measured subcircuits, and the rates that derive the rest from their features, `ands` being a proof block's ANDs with its
     rows' openings (`row_ands`), as `costfit` measures them: per touched statement `statement_fixed + statement_per_and *
     ands` (the session and the verifier's parse), per staged proof block `staged_per_and * ands + staged_per_unit`, and per
-    proved proof block `per_and * ands`.  When `shared`, a template's statements hold only its sampled proof blocks (`IntegrityMonitoringPeriod`'s
+    proved proof block `per_and * ands`.  When `shared`, a template's statements hold only its sampled proof blocks (the
     hidden window: one session, its k sampled proof blocks split evenly over `ceil(k / cap)` statements), so only they are staged;
     otherwise its proof blocks are cut in order into statements and every touched statement is staged whole.  Serving commits each proof block's outputs at `commit_per_bit` and `commit_per_row`, and
     `serve`, every other serve-time commitment, which every plan pays; `replay` names the replay grains that build
@@ -510,7 +510,7 @@ def acceptance_parts(n: int, k: int, x: int) -> tuple[int, int]:
 def max_harm_check(rows: Iterable[tuple[int, int, float | Fraction, int, int, int]], delta: float | Fraction,
                    lam: float | Fraction) -> tuple[Fraction, Fraction]:
     """(lower, upper) around the most harm an incorrect set accepted with probability at least `delta` holds,
-    `Flock.Guarantees.JointStratified`'s `StratifiedBlock.maxHarm`, from a certificate: rows (n, k, h, take, lo, hi) and
+    `Spot.Bound`'s `maxHarm`, from a certificate: rows (n, k, h, take, lo, hi) and
     a multiplier `lam > 0`.  `lower` is the harm of the counts `take`, whose exact acceptance probability is at least `delta`; `upper`
     the dual bound `lam ln(1/delta) + sum_s max_x (h_s x - lam c_s(x))`, `c(x) = -ln(C(n - x, k)/C(n, k))`, whose
     maximizer the row's lo <= hi place: the increments `d(j) = ln((n - j)/(n - j - k))` before `lo` cost at most `h`,
@@ -557,7 +557,7 @@ def _taken(n: int, k: int, h: float, lam: float) -> int:
 
 def max_harm(rows: Iterable[tuple[int, int, float | Fraction]], delta: float | Fraction
              ) -> tuple[Fraction, Fraction, Fraction, list[tuple[int, int, int]]]:
-    """`max_harm_check`'s bracket around `StratifiedBlock.maxHarm` for rows (n, k, h) at delta, with the certificate
+    """`max_harm_check`'s bracket around `Spot.Bound`'s `maxHarm` for rows (n, k, h) at delta, with the certificate
     found: (lower, upper, lam, [(take, lo, hi)]).  The multiplier is searched in floats, where each stratum's maximizer is
     in closed form, so `upper` is the linear relaxation over the exact risk to the search's precision; `take` is the
     maximizers at the least multiplier found whose counts' exact acceptance probability is at least `delta`; `lo` and `hi` are widened until they hold."""

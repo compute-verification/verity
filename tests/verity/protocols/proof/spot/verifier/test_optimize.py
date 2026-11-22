@@ -83,7 +83,7 @@ def test_density_bound_is_its_exact_value_rounded_up():
 
 def test_max_harm_brackets_the_exact_supremum():
     """`max_harm`'s bracket holds the brute-force supremum of the harm over every count vector whose exact acceptance probability is at
-    least delta (`JointStratified`'s `maxHarm`), within a few proof blocks' harm; `ln_bound` brackets ln; a failing certificate
+    least delta (`Spot.Bound`'s `maxHarm`), within a few proof blocks' harm; `ln_bound` brackets ln; a failing certificate
     is refused, as Lean's `#guard`s pin."""
     lo, hi = ln_bound(2, 1, False), ln_bound(2, 1, True)
     assert lo < hi < lo + Fraction(1, 2 ** 100) and abs(lo - Fraction(log(2))) < 2.0 ** -52
