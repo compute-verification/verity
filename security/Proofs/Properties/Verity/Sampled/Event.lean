@@ -270,6 +270,30 @@ theorem run_bridge {i : _root_.Spot.Run.Input} {j : Json} {desc : Hash.Msg}
     · exact Or.inr ⟨n, hn, Or.inl hm⟩
     · exact Or.inr ⟨n, hn, Or.inr ⟨ht, hcov, rule, sd, wt, hr, hsd, hwt, hsub⟩⟩
 
+/-- **An accepted run passed `popHeld`**: where the audit's check on the blobs accepts (`OneStageZk.checkBlobs`, at
+the challenges it reads, either variant), the registration's population passed `popHeld` at the verifier's own
+parameters. -/
+theorem checkBlobs_popHeld {p : _root_.Spot.OneStageZk.Params}
+    {c : _root_.Spot.OneStage.Commitment} {e : _root_.Spot.OneStageZk.Evidence}
+    {bs : _root_.Core.Blobs} {pub : _root_.Spot.OneStage.Public} {prof : _root_.Core.Integrity}
+    (h : _root_.Spot.OneStageZk.checkBlobs p c e bs = .accept pub prof) :
+    _root_.Spot.OneStageZk.popHeld p.base.verifier c.record = .ok () := by
+  unfold _root_.Spot.OneStageZk.checkBlobs _root_.Core.atCoins at h
+  split at h
+  · exact checkBlobsAt_popHeld h
+  · cases h
+
+/-- **An accepted run gives `PopHeld`** at the verifier's own query, sampling design and work table, at a descriptor
+`desc` that parses to the verifier's program (`checkBlobs_popHeld`, then `popHeld_bridge`). -/
+theorem checkBlobs_popHeldBridge {p : _root_.Spot.OneStageZk.Params}
+    {c : _root_.Spot.OneStage.Commitment} {e : _root_.Spot.OneStageZk.Evidence}
+    {bs : _root_.Core.Blobs} {pub : _root_.Spot.OneStage.Public} {prof : _root_.Core.Integrity} {desc : Hash.Msg}
+    (hd : _root_.Spot.Program.parse ⟨desc.toArray⟩ = .ok p.base.verifier.program)
+    (h : _root_.Spot.OneStageZk.checkBlobs p c e bs = .accept pub prof) :
+    ∃ n, _root_.Spot.nat? (_root_.Spot.getD c.record "population") = some n ∧
+      Flock.Bridge.PopHeld desc p.base.verifier.query p.base.verifier.samplingDesign p.base.verifier.workTable n :=
+  popHeld_bridge hd (checkBlobs_popHeld h)
+
 /-! ## What acceptance gives -/
 
 /-- **What v2's acceptance gives of one session**, at its inputs `I` and transcript `t`, the verifier `v` and the
