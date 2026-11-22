@@ -20,8 +20,8 @@ interval a network attester counts the session's egress over.
 
 `command(device, extra)` is the argv that starts the challenger's side (`python -m
 verity.protocols.accounting.memory.wipe.attester.wipe_challenger`, `MODULE`) on this machine; the prover's end of the session,
-which answers it, is `pous/prover/wipe_run.py`'s (`session`, `answer`). The wipe's two parties as the deployment layer
-runs them speak `wipe_parties`'s messages: `pous/attester/wipe_challenger.py` and `pous/prover/wipe_prover.py`.
+which answers it, is `wipe/prover/wipe_run.py`'s (`session`, `answer`). The wipe's two parties as the deployment layer
+runs them speak `wipe_parties`'s messages: `wipe/attester/wipe_challenger.py` and `wipe/prover/wipe_prover.py`.
 """
 
 from __future__ import annotations
