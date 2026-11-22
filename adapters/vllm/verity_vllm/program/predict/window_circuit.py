@@ -423,10 +423,11 @@ FIXED_CLASSES = ((1, 1, 1),)
 
 
 def fixed_program(registered: Any, cls: WindowClass, grain: Grain = _GRAIN) -> str:
-    """The digest of the Program of a served window of ``cls`` (the docket's ``program``), computed before the serve:
-    `lower`'s circuit of the one request the class fixes, one prompt id and one output at boundary 0's lane 0. Refused by
-    name for any class not in `FIXED_CLASSES`: a served window's circuit moves with its requests' number, prompt lengths
-    and outputs, which the serve chooses."""
+    """The `program_digest` of a served window's Program at ``cls`` (the docket's ``program``), computed before the serve:
+    `lower`'s circuit of the one window the class leaves, one request, of prompt length 1 and one kept output, at lane 0
+    of boundary 0 (a window of no request has no circuit, and a prompt or outputs of 0 has no Program). Refused by name
+    for any class not in `FIXED_CLASSES`: a served window's circuit moves with its requests' number and, in lane order,
+    their prompt lengths and kept outputs, which the serve chooses."""
     if (cls.slots, cls.prompt, cls.outputs) not in FIXED_CLASSES:
         raise Unexpressible(f"{cls}: its served window's circuit moves with the requests the serve takes (their number, "
                             f"prompt lengths and outputs), so no digest fixes it before the serve; only "

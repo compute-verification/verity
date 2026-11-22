@@ -374,5 +374,5 @@ EOF
 )" || { say "$said; SMOKE FAILED counts: no WINDOW-ROWS line or registration ($SR/window-commit.err)"; exit 1; }
 said+=$'\n'"$(plan_lines)"
 said+=$'\n'"$(grep '^TOKENIZE' "$SR/tokenize.log" | tail -1)"
-said+=$'\n'"SMOKE DONE window $K: served, planned, its strings made on the card and its record written, its circuit registered by the prover; no proof is made, and Lean verifies nothing; no sampled verdict, so no δ or ε; $([ -s "$SR/fixed_program" ] && echo "its Program digest was fixed before the serve and named in the period-open line" || echo "the circuit digest is kept private and NO public value fixes it before the coins")"
+said+=$'\n'"SMOKE DONE window $K: served, planned, its strings made on the card and its record written, its circuit registered by the prover; no proof is made, and Lean verifies nothing; no sampled verdict, so no δ or ε; the circuit digest is kept private and NO public value fixes it before the coins"
 say "$said"
