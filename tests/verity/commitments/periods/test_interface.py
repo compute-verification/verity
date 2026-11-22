@@ -560,6 +560,26 @@ def test_a_run_input_beside_a_registered_value_read_recut_is_read_from_cs_refere
     assert len({r.param for r in win.runs}) == 3
 
 
+def test_a_run_parameter_is_a_run_input_node_its_reads_read_a_slice_of():
+    """A registered parameter named ``run`` is bound per run: its reads are no registered reads, C's node of it is a run
+    input node, all its rows, which its port's units read a slice of (`run_input_reads`), and the record carries the
+    name. Refused for a name that is no parameter or is a program value."""
+    tid, words = I.descriptor_id(GEMM), dict(I.layout(GEMM).rows)["x"]
+    read = I.Read(tid, "x", "s", 0, (4,), 0, (words,))
+    reg = I.Registered({"s": 16 * words}, reads=(read,), run=("s",))
+    assert I.Registered.of(reg.doc()) == reg and reg.doc()["run"] == ["s"] and I.committed_reads(reg) == ()
+    win = I.Window(I.Circuit("part", ((GEMM, 4),), registered=reg), RUN, SAMPLING_DESIGN, 4)
+    (r,) = [r for r in win.runs if r.port == "x"]
+    w = I.run_input_node(r.param)
+    program = win.window.program
+    assert [p for p, _ in program.fn.signature()[0]][w] == "s" and program.bindings[w] == "run"
+    assert (r.at, r.radix, r.base, r.step) == (0, (4,), 0, (words,))
+    assert I.run_input_domain(program, I.program_digest(program), w, words, RUN).count == 16
+    for bad in ({"run": ("v",)}, {"run": ("s",), "values": ("s",)}):
+        with pytest.raises(ValueError, match="run "):
+            I.Registered({"s": 16 * words}, reads=(read,), **bad)
+
+
 def permuted(rows: Sequence[int], m: int) -> Program:
     """C batching COORD over its four ports' run input nodes of ``m`` rows each, unit u reading row ``rows[u]``."""
     sig = COORD.signature()[0]
@@ -938,7 +958,7 @@ def test_a_port_held_in_its_writers_tree_is_registered_at_the_root_and_rows_the_
     for k, m in enumerate(ms[1:], 1):
         assert CS.shared_ports(doc, k)["x"][2] == tree and m.port("x") not in c.roots
         e, read = CS.shared_entries(tmp_path, doc, k)["x"], files[m.key]["ports"]["x"]
-        assert e["value"] == read["value"] == CS.own_value(tree) and read["root"] == c.roots[tree].hex()
+        assert e["value"] == read["value"] == tree and read["root"] == c.roots[tree].hex()
         assert e["positions"] == w.leaves(m, "x").tolist()
         assert read["reads"] == w.reads(m, "x").tolist() and read["reads_from"] == m.base and "tree" not in read
         for i, path in zip(e["positions"], e["paths"], strict=True):
@@ -2091,7 +2111,8 @@ def test_a_period_registers_its_circuits_values_by_their_entries_chained_after_t
 
 def test_a_period_registers_each_table_its_circuits_anchor_marks_name_after_its_values(tmp_path, monkeypatch):
     """A table whose root or domain id a supplied anchor's mark in C names (`supplied.registered_values`) is registered by the
-    entry of the value the period holds, after the circuit's values and once; a mark that is no anchor's adds nothing, a
+    entry of the value the period holds, after the circuit's values and its anchors (`supplied.anchors`) and once; a
+    mark that is no anchor's adds nothing, a
     marked table the period doesn't hold is refused by name before anything is written, and registering it moves neither
     the circuit nor its Program's digest. Unmarked, the record is today's."""
     got = {}
@@ -2110,6 +2131,7 @@ def test_a_period_registers_each_table_its_circuits_anchor_marks_name_after_its_
         if held:
             win.registered["t"] = t
         win.window.program.supplied = dict(marks)
+        win.registered.update({a: anchors[a] for a in SU.anchors(win.window.program)})
         out = tmp_path / name
         win.write(win.close(salts_of=fixed(win)), out, {"by": "test"}, registrar=reg)
         return w, list(got["registered"]), (out / "circuit.json").read_bytes(), program_digest(win.window.program)
@@ -2117,14 +2139,16 @@ def test_a_period_registers_each_table_its_circuits_anchor_marks_name_after_its_
     def anchor(fn, value):
         return {"supplied": fn, "args": {"value": value}, "layout": "digest", "bits": 512}
 
+    anchors = {a: Held(a, np.full((1, 32), k, dtype=np.uint16)) for k, a in enumerate(("t/root", "t/domain", "w/root"))}
     w, plain, _, _ = write("plain", {})
     assert plain == [w.entry()]
     marked = {"t/root": anchor("registered.root/v1", "t"), "t/domain": anchor("registered.domain/v1", "t"),
               "w/root": anchor("registered.root/v1", "w"), "x": None, "y": anchor("other/v1", "t")}
     _, entries, body, digest = write("marked", marked)
-    assert entries == [w.entry(), t.entry()]
+    assert entries == [w.entry(), *(anchors[a].entry() for a in ("t/root", "t/domain", "w/root")), t.entry()]
     with monkeypatch.context() as m:
         m.setattr(SU, "registered_values", lambda _p, values: tuple(values))
+        m.setattr(SU, "anchors", lambda _p: ())
         assert write("values-alone", marked)[1:] == ([w.entry()], body, digest)
     assert write("not-anchors", {"y": anchor("other/v1", "t")})[1] == plain
     with pytest.raises(ValueError, match=r"anchors name \['t'\]"):

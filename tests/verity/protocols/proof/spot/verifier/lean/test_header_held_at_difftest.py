@@ -127,6 +127,42 @@ def test_a_run_input_port_is_held_only_by_a_read_of_its_nodes_tree(reads, want, 
 
 
 @needs_lake
+def test_a_run_input_port_at_its_nodes_own_root_is_refused_without_a_read(pieces):
+    """`Spot.HeaderHeldAt`'s guard on the run input slice at the node's own root and domain: with no read the session
+    would hold the member's rows to the tree's leaves in order, not the rows C gives, so both refuse by
+    `SHARED_UNREAD`; a read of ``w`` at ``input/n0`` holds it."""
+    for reads, want in (([], M.shared_unread("w", "input/n0")), ([["w", "input/n0"]], "")):
+        j = case(reads, None, {"w": "ee"}, 2, RUN_SLICE)
+        assert reference(j) == want
+        assert pieces.call("header_held_at", j) == ("output", D.canonical(want))
+
+
+#: a reader's port ``x`` cut in two, each cut row wired from the writer ``W``'s field ``o0`` (`OneStageZk.fieldRoots`)
+CUT_SLICE = {"population": 2, "scheme": SCHEME,
+             "roots": [{"domain": "dee", "leaves": 4, "port": f"x#{j}", "root": "ee", "tree": "W/o0"} for j in (0, 1)]}
+
+
+@needs_lake
+@pytest.mark.parametrize("reads, want", [([["x#0", "W/o0"], ["x#1", "W/o0"]], ""),
+                                         ([["x#0", "W/o0"]], M.shared_unread("x#1", "W/o0")),
+                                         ([["x#1", "W/o0"]], M.shared_unread("x#0", "W/o0")),
+                                         ([["x", "W/o0"]], M.shared_unread("x#0", "W/o0"))])
+def test_each_cut_row_is_held_only_by_its_own_read(reads, want, pieces):
+    """A cut port's rows ``x#0`` and ``x#1`` in the header, each at the writer's root: each is held by a read of that
+    row at ``W/o0``, and a row with no read of its own is refused by name in both, whatever the other row's read."""
+    for roots in ({"x#0": "77", "x#1": "77"}, {"x#0": "ee", "x#1": "ee"}):
+        j = case(reads, None, roots, 2, CUT_SLICE)
+        assert reference(j) == want
+        assert pieces.call("header_held_at", j) == ("output", D.canonical(want))
+
+
+def test_a_wired_row_named_as_its_writers_field_is_refused_by_name():
+    assert M.wired_as_field_why("R/c0", "y") == (
+        "member R/c0: its row y of in(S) is named as the writer's output field it reads, and a member's slice names a "
+        "field tree's field only at the member's own output")
+
+
+@needs_lake
 def test_the_header_held_at_piece_agrees(pieces):
     stats = D.run(HELD, examples=600, server=pieces)
     assert stats.outputs > 100, stats

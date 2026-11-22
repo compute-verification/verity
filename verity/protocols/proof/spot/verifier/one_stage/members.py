@@ -221,11 +221,12 @@ def own_root_why(member: str, port: str) -> str:
 
 def wired_tree_why(name: str, port: str) -> str:
     """`OneStageZk.WIRED_TREE_WHY`: the refusal of member ``name``'s registered port whose value is a field tree's
-    name that is not its own output at its template's tree."""
-    return f"registered: member {name}'s port {port}: a wired port's tree is not derived from C yet"
+    name that is neither its own output at its template's tree nor a row C wires into it from that tree."""
+    return (f"registered: member {name}'s port {port}: the field tree it opens is neither its own output's nor one C "
+            "wires into it at this row")
 
 
-def _field_tree_name(v: str) -> bool:
+def field_tree_name(v: str) -> bool:
     """`OneStageZk.fieldTreeName`: ``v`` is ``<template>/o<j>`` (`Flock.Registered.fieldTree`)."""
     parts = v.split("/")
     j = parts[-1][1:]
@@ -569,6 +570,14 @@ def _part_nodes(q: tuple) -> list[int]:
     return [i for p, i, *_ in (q[1] if q[0] == "e" else q[2]) if not p]
 
 
+def _lane_wire(part: Any, x: int, L: int, ln: int, c: int) -> int | EG.Refusal:
+    """`Program.laneWire`'s node, or its refusal."""
+    try:
+        return EG._lane_wire(part, x, L, ln, c)[0]
+    except EG.Refusal as e:
+        return e
+
+
 def reg_rows(R: EG._Root, k: int, m0: int, n: int, param: str) -> tuple[int, int] | None:
     """`Flock.OneCircuit.regRows?`: the input node every member of ``[m0, m0 + n)`` of root node ``k`` reads ``param``
     at, with a row's leaves; None where they read only root nodes that are no input; `_Refused` (`read_form_why`) where
@@ -611,10 +620,8 @@ def reg_rows(R: EG._Root, k: int, m0: int, n: int, param: str) -> tuple[int, int
         j = next((j for j, q in enumerate(parts) if starts[j] <= x < starts[j] + EG._count(q)), None)
         if j is None or x + (c - 1) * L + ln > starts[j] + EG._count(parts[j]) or parts[j][0] != "g":
             return None
-        try:
-            return EG._lane_wire(parts[j], x - starts[j], L, ln, c)[0]
-        except EG.Refusal:
-            return None
+        w = _lane_wire(parts[j], x - starts[j], L, ln, c)
+        return None if isinstance(w, EG.Refusal) else w
 
     if (w := wire(x_of(m0), max(n, 1), L)) is not None:
         return (w, ln) if _input(R, w) else None
@@ -766,21 +773,24 @@ def _own_fields(ft: Mapping[str, Sequence[tuple[str, Mapping[str, Any]]]], name:
     return got
 
 
-def _tree_ports_held(ms: Mapping[str, Any], record: Mapping[str, Any]) -> None:
-    """`OneStageZk.treePortsHeld`: every port of a member's registered file that opens a committed tree, a value
-    ``committed/<port>`` or a run input node's ``input/n<w>``, is the record's root of it, its root, domain and leaf
-    count (`OneStageZk.portTreeHeld`); a port whose value is a field tree's name is opened only as the member's own
-    output, ``<template>/<port>``, and any other refuses first (`wired_tree_why`)."""
+def _tree_ports_held(ms: Mapping[str, Any], record: Mapping[str, Any],
+                     wired: Mapping[str, set[tuple[str, str]]] | None = None) -> None:
+    """`OneStageZk.treePortsHeldAt`: every port of a member's registered file that opens a committed tree, a value
+    ``committed/<port>``, a run input node's ``input/n<w>`` or a field tree's name, is the record's root of it, its
+    root, domain and leaf count (`OneStageZk.portTreeHeld`); a port whose value is a field tree's name is opened only
+    as the member's own output, ``<template>/<port>``, or at a reader row ``wired`` holds for the member at that tree
+    (`_wired_rows`), and any other refuses first (`wired_tree_why`)."""
     roots = record.get("roots")
     by_port = {r["port"]: r for r in (roots if isinstance(roots, list) else ())
                if isinstance(r, dict) and type(r.get("port")) is str}
     for name, m in ms.items():
         reg, tmpl = m["registered"], _template_of(name)
+        mine = (wired or {}).get(name, set())
         for port in sorted(reg["ports"]) if reg is not None else ():
             e = reg["ports"][port]
             value = e["value"]
-            field = not value.startswith(COMMITTED) and _field_tree_name(value)
-            if field and (tmpl is None or f"{tmpl[0]}/{port}" != value):
+            field = not value.startswith(COMMITTED) and field_tree_name(value)
+            if field and (tmpl is None or f"{tmpl[0]}/{port}" != value) and (port, value) not in mine:
                 raise _Refused(wired_tree_why(name, port))
             t = value[len(COMMITTED):] if value.startswith(COMMITTED) else value if G.is_fresh_value(value) or field \
                 else None
@@ -998,6 +1008,7 @@ def _wired_roots(desc: Mapping[str, Any], ranges: Sequence[Sequence[Any]], ms: M
         raise Outside(f"C's wiring: {e}") from None
     if "refusal" in got:
         raise Outside(f"C's wiring: {got['refusal']}")
+    cuts = EG.io_cuts(desc, ranges)
     lbase = _local_bases(ranges)
     reach = _reaching(ranges, lbase, got["wires"])
     out = {}
@@ -1005,17 +1016,52 @@ def _wired_roots(desc: Mapping[str, Any], ranges: Sequence[Sequence[Any]], ms: M
         first, n = m["units"][0][0], _count(m)
         own = roots.get(name, [])
         wires = reach(first, n) if n >= 1 else [w for w in got["wires"] if _wire_reaches(ranges, lbase, first, n, w)]
-        if (w := next((w for w in wires if any(r.get("port") == w["port"] for r in own)), None)):
-            raise _Refused(own_root_why(name, w["port"]))
+        if (w := next((w for w in wires if _wire_row(cuts, w) == w["out"]), None)):
+            raise _Refused(wired_as_field_why(name, w["out"]))
+        if (w := next((w for w in wires if any(r.get("port") == _wire_row(cuts, w) for r in own)), None)):
+            raise _Refused(own_root_why(name, _wire_row(cuts, w)))
         mine = list(own)
         for w in wires:
-            if not any(r.get("port") == w["port"] for r in mine):
+            row = _wire_row(cuts, w)
+            if not any(r.get("port") == row for r in mine):
                 e = next((e for f, e in ft.get(w["writer"], ()) if f == w["out"]), None)
                 if e is not None:
-                    mine.append({"domain": e.get("domain"), "leaves": e.get("leaves"), "port": w["port"],
-                                 "root": e.get("root")})
+                    mine.append({"domain": e.get("domain"), "leaves": e.get("leaves"), "port": row,
+                                 "root": e.get("root"), "tree": f"{w['writer']}/{w['out']}"})
         out[name] = mine
     return out
+
+
+def wired_as_field_why(member: str, row: str) -> str:
+    """`OneStageZk.WIRED_AS_FIELD_WHY`: the refusal of a member's wired row named as its writer's output field."""
+    return (f"member {member}: its row {row} of in(S) is named as the writer's output field it reads, and a member's "
+            "slice names a field tree's field only at the member's own output")
+
+
+def _wire_row(cuts: Mapping[str, Mapping[str, int]], w: Mapping[str, Any]) -> str:
+    """`OneStageZk.wireRow`: the reader row the wire ``w`` covers, as the public file names it (`interface.row_name`):
+    its port uncut, else ``<port>#<j>``, ``j`` its first cut row."""
+    return w["port"] if cuts.get(w["reader"], {}).get(w["port"], 1) <= 1 else f"{w['port']}#{w['cut'][0]}"
+
+
+def _wired_rows(program: Program, query: Mapping[str, Any], desc: Mapping[str, Any],
+                ms: Mapping[str, Any]) -> dict[str, set[tuple[str, str]]]:
+    """`OneStageZk.wiredRowsOf`: for each member, ``(row, <writer>/o<j>)`` for each wire C states into it
+    (`_wire_reaches`, `_wire_row`); none for every member where no member has a registered file, C states no edge, or
+    C, the partition or the wiring is refused, which `_wired` refuses by name later."""
+    if all(m.get("registered") is None for m in ms.values()) or not EG.has_edge(desc):
+        return {}
+    try:
+        ranges = P._template(program, query, "the members' partition").ranges
+        cuts = EG.io_cuts(desc, ranges)
+        got = EG.edges(desc, ranges, {"templates": {t: {} for _k, t, _a, _c in ranges}, "cuts": cuts})
+    except (ValueError, P.QueryRefused):
+        return {}
+    if "refusal" in got:
+        return {}
+    lbase = _local_bases(ranges)
+    return {name: {(_wire_row(cuts, w), f"{w['writer']}/{w['out']}") for w in got["wires"]
+                   if _wire_reaches(ranges, lbase, m["units"][0][0], _count(m), w)} for name, m in ms.items()}
 
 
 def slices(members: Mapping[str, Sequence[Sequence[int]]], record: Mapping[str, Any], *, program: Program,
@@ -1127,17 +1173,24 @@ def tied_roots_why(w: int) -> str:
     return f"members: C's tied run input node {w} is read under two roots: every reader of a tied node opens one tree"
 
 
+def tied_no_root_why(member: str, p: str, w: int) -> str:
+    """`OneStageZk.TIED_NO_ROOT_WHY`: the refusal of a member reading tied run input node ``w`` at port ``p`` with no
+    root there."""
+    return (f"member {member}: port {p} reads C's tied run input node {w}, and its slice holds no root there: every "
+            "reader of a tied node opens one tree")
+
+
 def tied_roots_at(R: EG._Root, program: Program, ranges: Sequence[Sequence[Any]], tied: Sequence[range], name: str,
                   m: Mapping[str, Any], own: Sequence[Mapping[str, Any]], seen: dict[int, Any]) -> dict[int, Any]:
     """`OneStageZk.tiedRootsAt`: ``seen``, the root each tied run input node is read under so far, with each node inside
     the tied gates ``tied`` that member ``name`` reads (`member_inputs`) at the root ``own`` holds for its port; refused
-    (`tied_roots_why`) where ``seen`` holds another root for the node. That the root is the right one is the later
-    period check's."""
+    where ``own`` holds no root at the port (`tied_no_root_why`) or ``seen`` holds another root for the node
+    (`tied_roots_why`). That the root is the right one is the later period check's."""
     for p, w, _ln in member_inputs(R, ranges, name, m["units"]):
         if not _input(R, w, run=True) or not any(P.within(program, g, w) for g in tied):
             continue
         if (e := next((e for e in own if e.get("port") == p), None)) is None:
-            continue
+            raise _Refused(tied_no_root_why(name, p, w))
         if seen.setdefault(w, e.get("root")) != e.get("root"):
             raise _Refused(tied_roots_why(w))
     return seen
@@ -1203,7 +1256,7 @@ POPULATION_WHY = "public file: not the registration's: population"
 
 def shared_unread(port: str, tree: str) -> str:
     """`OneStageZk.SHARED_UNREAD`: the refusal of a member's header port ``port`` held in its template's shared field tree
-    ``tree``, that its registered reads open no row of there and whose header root is not the registration's."""
+    ``tree``, that its registered reads open no row of there."""
     return (f"public file: port {port} is held in the shared tree {tree}, and the member's registered reads open no row "
             "of it there: a member's rows of a tree other members' rows share are held to the registration's root by "
             "opening it at the leaves C gives, and the header's own root there is no commitment to them")
@@ -1214,7 +1267,7 @@ def registered_at(held: Mapping[str, Any], p: str, v: str) -> bool:
     ``v``, which names no committed tree, run input's tree or field tree."""
     e = held.get(p)
     return (isinstance(e, dict) and e.get("value") == v and not v.startswith(COMMITTED) and not G.is_fresh_value(v)
-            and not _field_tree_name(v))
+            and not field_tree_name(v))
 
 
 def unregistered_why(p: str, v: str) -> str:
@@ -1229,8 +1282,9 @@ def _held_at(reads: Collection[tuple[str, str]], held: Mapping[str, Any], slice_
     """`OneStageZk.headerHeldAt` before `headerHeld`: the slice and the header without each port the slice holds at a
     template's field tree (its entry's ``tree``) that ``reads`` opens there, and each it holds no root of, that the
     header names and ``reads`` names at a value the verifier's registered file's ports ``held`` hold there as a
-    registered value (`registered_at`); `_Refused` (`shared_unread`) for one ``reads`` doesn't open whose header root
-    or domain is not the registration's, and (`unregistered_why`) for one read at any other value."""
+    registered value (`registered_at`); `_Refused` (`shared_unread`) for one the header names that ``reads`` doesn't
+    open whose header root or domain is not the registration's, or that is a wired row or a run input's tree (its
+    port not the tree's field) whatever its root, and (`unregistered_why`) for one read at any other value."""
     h = header if isinstance(header, dict) else {}
     if not _same(h.get("instances"), slice_.get("population")):
         raise _Refused(POPULATION_WHY)
@@ -1244,7 +1298,8 @@ def _held_at(reads: Collection[tuple[str, str]], held: Mapping[str, Any], slice_
             continue
         if (p, t) in reads:
             drop.add(p)
-        elif roots.get(p) is not None and (roots[p] != r.get("root") or domains.get(p) != r.get("domain")):
+        elif roots.get(p) is not None and (not t.endswith(f"/{p}") or G.is_fresh_value(t) or roots[p] != r.get("root")
+                                           or domains.get(p) != r.get("domain")):
             raise _Refused(shared_unread(p, t))
     ported = {r.get("port") for r in slice_["roots"]}
     for p, v in sorted(reads):
@@ -1518,7 +1573,7 @@ def _members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence:
                 raise _Refused(strata_design(_kind(record.get("law") if subset_design(mine) else mine)))
         _laid(ms, record)
         _class(ms)
-        _tree_ports_held(ms, record)
+        _tree_ports_held(ms, record, _wired_rows(program, params["query"], params["program"], ms))
         rp = read_pins(params, program)
         pins_held(ms, EG._Root(params["program"]), P._template(program, params["query"], "the members' partition").ranges,
                   program, DK.marked_gates(program), rp)
@@ -1569,4 +1624,4 @@ __all__ = ["EXITS", "Form", "MEMBERS_LAID", "MEMBER_COVER", "MEMBER_STRATA", "ME
            "TABLE_PORT", "UNREAD", "blobs_of", "case_check", "check", "files_why", "flock_form", "flock_verdict",
            "field_trees_why", "members_run", "population_why", "POPULATION_WHY", "registered_at", "registered_reads",
            "return_fields", "run_reason", "shared_unread", "unregistered_why", "unwired_why", "own_root_why",
-           "pinned_read_why", "pins_held", "port_twice_why", "read_pins", "unpinned_read_why", "run_own_root_why", "run_tree_missing_why", "run_tree_why", "run_tree_unbound_why", "run_input_roots_at", "run_tree_held", "tied_roots_at", "tied_roots_why", "member_inputs", "reg_rows", "read_form_why", "two_reads_why", "slice_no_port_why", "strata_design", "resolved", "subset_design", "subset_designs", "wired_tree_why"]
+           "pinned_read_why", "pins_held", "port_twice_why", "read_pins", "unpinned_read_why", "run_own_root_why", "run_tree_missing_why", "run_tree_why", "run_tree_unbound_why", "run_input_roots_at", "run_tree_held", "tied_roots_at", "tied_roots_why", "tied_no_root_why", "member_inputs", "reg_rows", "read_form_why", "two_reads_why", "slice_no_port_why", "strata_design", "resolved", "subset_design", "subset_designs", "wired_tree_why"]
