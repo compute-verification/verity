@@ -356,15 +356,6 @@ def _canon_step_relative_identity(P: SEQ.RootView, i: int, seqs: list[list[int]]
     return [tuple(arg) for arg in P.canon(i, False)]
 
 
-def dag_multiset(A: SEQ.RootView, B: SEQ.RootView) -> dict:
-    """The within-step criterion of record for two Programs loaded in this process: their live-cone DAG multisets (structural Merkle
-    ids, one id space per process) are equal.  `program-dag` reads it when a step's order differs (GLM-5.3: the fold emits the
-    prefill's indexer logits launch by launch, the Build per query row)."""
-    la, lb = DAG.live_cone(A), DAG.live_cone(B)
-    ma, mb = collections.Counter(_dag_hashes_intern(A, la).values()), collections.Counter(_dag_hashes_intern(B, lb).values())
-    return {"equal": ma == mb, "a_live": len(la), "b_live": len(lb), "only_a": sum((ma - mb).values()), "only_b": sum((mb - ma).values())}
-
-
 def _live_cone_memo(P: SEQ.RootView) -> set[int]:
     hit = _live_memo.get(id(P))
     if hit is not None and hit[0] is P:

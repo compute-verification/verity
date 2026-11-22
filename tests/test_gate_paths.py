@@ -389,14 +389,14 @@ def test_the_cluster_kinds_inputs_are_in_this_tree():
 
 def test_each_check_catches_a_dangling_path():
     """The detectors above find what a move would leave behind, on a toy tree."""
-    files = frozenset({"verity/protocols/proofs/flock/prover/live/lib.rs", "verity/protocols/proofs/flock/prover/README.md", "tools/check/x.py", "tools/check/data/a.json"})
-    assert rule_dangling(["verity/protocols/proofs/flock/prover/", "!README.md"], files) == []
-    assert rule_dangling(["verity/protocols/proofs/flock/prover/", "verity/flock/", "!README.md"], files) == ["verity/flock/"]
+    files = frozenset({"verity/protocols/proof/flock/prover/live/lib.rs", "verity/protocols/proof/flock/prover/README.md", "tools/check/x.py", "tools/check/data/a.json"})
+    assert rule_dangling(["verity/protocols/proof/flock/prover/", "!README.md"], files) == []
+    assert rule_dangling(["verity/protocols/proof/flock/prover/", "verity/flock/", "!README.md"], files) == ["verity/flock/"]
     assert rule_dangling(["tools/check/data/a.json"], files) == []
 
     from research.store.tool import Tool
 
-    tool = Tool(name="t", command=["bash", "verity/ml/flock/run.sh"], closure=["verity/protocols/proofs/flock/prover/live/**", "elsewhere/**"],
+    tool = Tool(name="t", command=["bash", "verity/ml/flock/run.sh"], closure=["verity/protocols/proof/flock/prover/live/**", "elsewhere/**"],
                 after_land=["python", "tools/check/x.py"], merge_requires={"s": ["verity/flock/"]})
     assert tool_problems("t", tool, files) == ["closure glob 'elsewhere/**' matches no tracked file",
                                                "command names 'verity/ml/flock/run.sh', which isn't tracked",
@@ -409,7 +409,7 @@ def test_each_check_catches_a_dangling_path():
     assert tool_problems("g", tool, gkr) == ["command runs -m gpu.run, which isn't a module here"]
 
     text = ('from pathlib import Path\nROOT = Path(__file__).resolve().parents[2]\nA = ROOT / "tools" / "check" / "x.py"\n'
-            'B = ROOT / "tools" / "verity" / "lean"\nC = "verity/protocols/proofs/flock/prover/live"\nD = ("verity/gone/x.py", "data/a.json")\n'
+            'B = ROOT / "tools" / "verity" / "lean"\nC = "verity/protocols/proof/flock/prover/live"\nD = ("verity/gone/x.py", "data/a.json")\n'
             'E = Path(__file__).parent / "data" / "b.json"\nF = "origin/main"\n')
     got = dangling_constants(files | {"tools/check/y.py"}, read=lambda f: text if f == "tools/check/y.py" else "")
     assert got == ["tools/check/y.py:4: tools/verity/lean (join)", "tools/check/y.py:6: verity/gone/x.py (string)",

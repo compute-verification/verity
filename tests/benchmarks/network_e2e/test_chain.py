@@ -64,15 +64,12 @@ def test_the_bits_per_window_are_v0s_and_the_residuals_and_the_attested_io_binds
     assert [x["in_run"] for x in none["windows"]] == [True, False]
 
 
-def _arm(d: Path, name: str, advice: dict, *, ok=True, forged=False, negatives=None) -> None:
-    rank = {"ok": ok, "audit": {"accepted": not forged, "wrong_units": None if forged else {"bound": 3}},
+def _arm(d: Path, name: str, advice: dict, *, ok=True, negatives=None) -> None:
+    rank = {"ok": ok, "audit": {"accepted": True, "wrong_units": {"bound": 3}},
             "population": 10, "draw": [1, 2], "seconds": 1.5, "source": "stand-in",
             "negatives": negatives or {"a": True, "b": {"refused": True}}}
-    if forged:
-        rank["forged"] = {"ok": ok}
     (d / name).mkdir(parents=True)
-    (d / name / "summary.json").write_text(json.dumps({"ok": ok, "forged": forged, "world": 1, "advice": advice,
-                                                       "ranks": {"0": rank}}))
+    (d / name / "summary.json").write_text(json.dumps({"ok": ok, "world": 1, "advice": advice, "ranks": {"0": rank}}))
 
 
 def test_the_prove_paths_time_is_per_sampled_block_and_beside_the_endpoints_advice_it_is_the_fixed_workloads(tmp_path):
@@ -81,9 +78,8 @@ def test_the_prove_paths_time_is_per_sampled_block_and_beside_the_endpoints_advi
     assert chain.per_unit(rank) == {"S": {"units": 2, "proof_bytes": 1660660, "prove_s_per_unit": 214.45,
                                           "lean_verify_s_per_unit": 23.5}}
     _arm(tmp_path / "pp", "llama", {"root": "r", "bits": 2695})
-    _arm(tmp_path / "pp", "llama-forged", {"root": "r", "bits": 2695}, forged=True)
     got = chain.prove_path(tmp_path / "pp", {"served": "r-ep", "bits": 100}, True)
-    assert got["ok"] is True and got["committed_is_the_advice_file"] is None and got["bound"] is False
+    assert sorted(got["arms"]) == ["llama"] and got["ok"] is True and got["committed_is_the_advice_file"] is None and got["bound"] is False
     assert got["bound_why"].startswith("from the fixed workload, not this run")
 
 
@@ -119,14 +115,14 @@ def _apart(d: Path, w: int, adv=None) -> str:
     return root
 
 
-def _serve_arm(d: Path, name: str, w: int, bits: int, *, forged=False, root=None, codes=(), advice_root=None,
+def _serve_arm(d: Path, name: str, w: int, bits: int, *, root=None, codes=(), advice_root=None,
                before_draw=True) -> None:
     """A `prove_path.py audit --serve-run` arm of the endpoint fixture's Commit window ``w``: its summary's ``serve``
     names the window, its run id and the root it found sealed while serving (``codes`` its refusals), its committed
     advice the report's own registration of ``w`` unless ``advice_root`` names another, and its rank's
     `advice_before_draw` (the verifier's receipt of the registration before any coin) ``before_draw``, absent when None."""
     c = next(x for x in chain._jsonl(EP / "windows.jsonl") if int(x["window"]) == w)
-    _arm(d, name, {}, forged=forged)
+    _arm(d, name, {})
     s = json.loads((d / name / "summary.json").read_text())
     adv = {"root": advice_root or _reg(w)["binding"]["advice"]["root"], "bits": bits}
     if before_draw is not None:
@@ -164,14 +160,12 @@ def test_a_serve_run_audit_is_bound_to_the_runs_by_the_endpoints_commit_window_i
     w1, w0 = tmp_path / "w1", tmp_path / "w0"
     for d, w in ((w1, 1), (w0, 0)):
         _serve_arm(d, "served", w, row[1]["v0_bits"] if w == 1 else 7, advice_root=apart if w == 1 else None)
-        _serve_arm(d, "served-forged", w, row[1]["v0_bits"] if w == 1 else 7, forged=True,
-                   advice_root=apart if w == 1 else None)
     registered = {"1": {"by": "the lane", "registration": str(lane), "ref": "r-reg",
                         "first_draw": chain._utc(closed[1] + 1503.6 + 852.6)},
                   "0": {"by": "vllm"}}
     got = chain.prove_path([w1, w0], info, b["bound"], b, ep, registered)
     assert got["bound"] is True and got["bound_why"] is None and got["ok"] is True and got["tied"] is True
-    assert sorted(got["arms"]) == ["w0 served", "w0 served-forged", "w1 served", "w1 served-forged"]
+    assert sorted(got["arms"]) == ["w0 served", "w1 served"]
     assert got["arms"]["w1 served"]["commit"] == {
         "window": 1, "run_id": commits[1]["run_id"], "run_root": commits[1]["run_root"], "sealed_while_serving": True,
         "the_endpoints": True, "of_the_honest_run": True, "advice_root": apart, "advice_bits": row[1]["v0_bits"],
@@ -199,7 +193,7 @@ def test_a_serve_run_audit_is_bound_to_the_runs_by_the_endpoints_commit_window_i
         p = chain.prove_path(list(dirs), info, b["bound"], b, ep, given)
         assert p["bound"] is (p["bound_why"] is None) and p["tied"] in (None, p["tied_why"] is None)
         return p["bound_why"]
-    assert why(w0) == "no honest arm proves one of the honest run's Commit windows"
+    assert why(w0) == "no arm proves one of the honest run's Commit windows"
     _serve_arm(tmp_path / "other", "served", 1, row[1]["v0_bits"], root="0" * 128, advice_root=apart)
     assert why(tmp_path / "other") == "w1 served: Commit window 1 isn't the endpoint's (its windows.jsonl)"
     _serve_arm(tmp_path / "unsealed", "served", 1, row[1]["v0_bits"], codes=["published-root-of-another-commit"],
@@ -220,16 +214,15 @@ def test_a_serve_run_audit_is_bound_to_the_runs_by_the_endpoints_commit_window_i
     moved = json.loads((lane / "registration.json").read_text()) | {"commit": _reg(2)["commit"]}
     shutil.copytree(lane, tmp_path / "moved")
     (tmp_path / "moved" / "registration.json").write_text(json.dumps(moved))
-    assert why(w1, given={"1": {"registration": str(tmp_path / "moved")}}) == "; ".join(
-        f"w1 {a}: the registration at {tmp_path / 'moved'} doesn't name Commit window 1's Commit (the endpoint's "
-        "windows.jsonl)" for a in ("served", "served-forged"))
+    assert why(w1, given={"1": {"registration": str(tmp_path / "moved")}}) == (
+        f"w1 served: the registration at {tmp_path / 'moved'} doesn't name Commit window 1's Commit (the endpoint's "
+        "windows.jsonl)")
     assert why(w1, given={"1": {"registration": str(tmp_path / "nowhere")}}).startswith(
         f"w1 served: no registration of Commit window 1's advice to hold it to at {tmp_path / 'nowhere'} (")
     _arm(tmp_path / "fixed", "llama", {"root": "r", "bits": 2695})
     assert why(w1, tmp_path / "fixed").startswith("from the fixed workload, not this run")
     shutil.rmtree(ep / "advice/w0")
-    assert why(w1, w0) == "; ".join(f"w0 {a}: the report has no advice of Commit window 0 to hold it to"
-                                    for a in ("served", "served-forged"))
+    assert why(w1, w0) == "w0 served: the report has no advice of Commit window 0 to hold it to"
 
 
 def test_at_serve_time_is_before_its_sample_and_no_later_than_the_next_windows_close(tmp_path):

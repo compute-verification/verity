@@ -26,7 +26,7 @@ inputs = ["calibration/census/deployments.json", "calibration/census/adversary.j
           "security/Proofs/Flock/Soundness/Discharge/ZkSession/Numbers.lean",
           "security/Properties/Verity/Game.lean", "security/Definitions/Core/Interaction.lean",
           "security/Definitions/Hash/Assumptions.lean", "security/Proofs/Properties/Verity/InferenceOnly.lean",
-          "verity/protocols/proofs/flock/verifier/Flock/Zk.lean",
-          "verity/protocols/proofs/flock/verifier/Flock/Schedule.lean",
+          "verity/protocols/proof/flock/verifier/Flock/Zk.lean",
+          "verity/protocols/proof/flock/verifier/Flock/Schedule.lean",
           "security/Proofs/Flock/Soundness/Discharge/ZkBind/Rate.lean", "verity/commitments/periods/interface.py",
           "applications/remote.toml", "benchmarks/spot_figures/cards/commitment.all.json"]

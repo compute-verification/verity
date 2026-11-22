@@ -257,7 +257,7 @@ def single_gpu_commit_part(d: Path) -> tuple[dict[str, Any], dict[str, Any]]:
 
 
 def replay_of(sr: dict[str, Any]) -> dict[str, Any]:
-    """One sampled replay's result (`check.replay.driver.sampled_replay`), with the units that differed.  An empty block (a Commit that
+    """One sampled replay's result, with the units that differed.  An empty block (a Commit that
     recorded no replay) has no result: it is not ok, and states no sample and no unit."""
     smp, mism = sr.get("sample"), sr.get("mismatch")   # a replay that stopped before it drew states no sample; one all equal, no mismatch
     sample = {k: field_of(smp, k) for k in ("strata_by", "k", "picked", "evaluated", "equal", "mismatch_n", "not_evaluated_n", "seed", "seed_source")}

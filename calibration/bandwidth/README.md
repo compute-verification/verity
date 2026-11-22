@@ -1,6 +1,6 @@
 # Device ceilings for PoUB
 
-PoUB's timing (`verity/protocols/resource_accounting/memory/poub/verifier/timing.py`) cites a few hardware bounds: how
+PoUB's timing (`verity/protocols/accounting/memory/poub/verifier/timing.py`) cites a few hardware bounds: how
 fast a node's writers can fill a tier with labels, and how much a card holds on chip. These probes measure them. Each
 probe is one Attempt on a GPU node, and writes its records and the run's `result.json` through the harness's kit
 (`result.py`): `write_host` its fastest record as `metrics.toml`'s number, `chip` and `write_gpu` their device program's

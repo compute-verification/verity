@@ -29,23 +29,24 @@ from concurrent import futures
 from fractions import Fraction
 from pathlib import Path
 
+import pous_reference as REF
 import pytest
 
 from verity.channel import Refused
 from verity.runtime.stream import Side
-from verity.protocols.resource_accounting.memory.pous.prover import weight_store as ws
-from verity.protocols.resource_accounting.memory.pous.attester import challenger_party as CP
-from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
-from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
-from verity.protocols.resource_accounting.memory.pous.prover import challenger_prover as CR
-from verity.protocols.resource_accounting import scheme as resource_scheme
-from verity.protocols.resource_accounting.memory.pous import scheme as pous_scheme
-from verity.protocols.resource_accounting.memory.pous.prover import served as pous_served
-from verity.protocols.resource_accounting.memory.pous.verifier import period
-from verity.protocols.resource_accounting.memory.pous.verifier import setup as pous_setup
-from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import POINT, P2Params
-from verity.protocols.resource_accounting.memory.poub.verifier import ledger, p2_case, p2_lean
-from verity.protocols.resource_accounting.memory.poub.prover.p2_stage import bandwidth as BW
+from verity.protocols.accounting.memory.pous.prover import weight_store as ws
+from verity.protocols.accounting.memory.pous.attester import challenger_party as CP
+from verity.protocols.accounting.memory.pous.attester import challenger_session as CS
+from verity.protocols.accounting.memory.pous.attester import memory_attester as mc
+from verity.protocols.accounting.memory.pous.prover import challenger_prover as CR
+from verity.protocols.accounting import scheme as resource_scheme
+from verity.protocols.accounting.memory.pous import scheme as pous_scheme
+from verity.protocols.accounting.memory.pous.prover import served as pous_served
+from verity.protocols.accounting.memory.pous.verifier import period
+from verity.protocols.accounting.memory.pous.verifier import setup as pous_setup
+from verity.protocols.accounting.memory.pous.verifier.schemes.p2 import POINT, P2Params
+from verity.protocols.accounting.memory.poub.verifier import ledger, p2_case, p2_lean
+from verity.protocols.accounting.memory.poub.prover.p2_stage import bandwidth as BW
 from verity.commitments import advice
 from verity.commitments.identity import canonical_json_bytes
 
@@ -81,8 +82,8 @@ def _load(name: str, path: Path):
 
 SP = _load("pous_served_piece", ROOT / "benchmarks" / "pous" / "served_piece.py")
 SV = _load("served_verdicts", ROOT / "benchmarks" / "one_stage" / "served_verdicts.py")
-fakes = _load("pous_fakes", ROOT / "tests" / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "verifier" / "pous_fakes.py")
-ts = _load("pous_test_signer", ROOT / "tests" / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "verifier" / "pous_test_signer.py")
+fakes = _load("pous_fakes", ROOT / "tests" / "verity" / "protocols" / "accounting" / "memory" / "pous" / "verifier" / "pous_fakes.py")
+ts = _load("pous_test_signer", ROOT / "tests" / "verity" / "protocols" / "accounting" / "memory" / "pous" / "verifier" / "pous_test_signer.py")
 BR = _load("pous_served_block_record", ROOT / "benchmarks" / "one_stage" / "interfaces" / "verity_e2e_demo" / "block_record.py")
 
 
@@ -249,7 +250,7 @@ def _judge(monkeypatch, kw: dict) -> None:
         return
     kw["case_exe"], serve = JUDGE, period.serve
     monkeypatch.setattr(period, "serve", lambda exe, cases: [
-        SP.SC.pous_answer(c, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL) for c in cases] if exe == JUDGE
+        REF.pous_answer(c, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL) for c in cases] if exe == JUDGE
         else serve(exe, cases))
 
 
@@ -265,7 +266,7 @@ def _run(s: Served, tmp_path, monkeypatch, auditor: Auditor | None = None, host:
     kw.setdefault("deployment", _deployment(key))
     answer = SP.run(s.serve, 3, s.out, hf_home=s.hf, device="cpu", node=node,
                     party=Side(host, ("ssh", host, "challenger_party"), address),
-                    private=s.private, pins=[s.pins], schemes=ts.SCHEMES, protocol=TEST_PROTOCOL, **kw)
+                    private=s.private, pins=[s.pins], protocol=TEST_PROTOCOL, **kw)
     return answer, auditor.calls
 
 
@@ -294,7 +295,7 @@ def _parts(s: Served, tmp_path, monkeypatch, auditor: Auditor | None = None, bet
     with monkeypatch.context() as m:
         for mod, name in ((CS, "salt"), (CR, "session"), (SP.messages, "Exchange"), (BW.Attached, "session")):
             m.setattr(mod, name, _gone)
-        return SP.answers(s.serve, 3, s.out, trusted_sha512=trusted, private=s.private, schemes=ts.SCHEMES,
+        return SP.answers(s.serve, 3, s.out, trusted_sha512=trusted, private=s.private,
                           protocol=TEST_PROTOCOL, **kw)
 
 
@@ -314,8 +315,8 @@ def _public_text(s: Served) -> str:
 
 
 def test_with_no_lean_an_honest_store_is_undecided_and_the_python_is_named(served, tmp_path, monkeypatch):
-    """`answers` with no ``case_exe``: the Python accepts the honest store, and that decides nothing alone, so the
-    answer is undecided with `period.NO_JUDGE`, no public outputs and no profile, the summary naming the Python."""
+    """`answers` with no ``case_exe``: no Lean decides the honest store and no Python is asked, so the answer is
+    undecided with `period.NO_JUDGE`, no public outputs and no profile, the summary naming no Lean."""
     answer, _ = _run(served, tmp_path, monkeypatch, case_exe=None)
     assert answer["verdict"] == "undecided" and answer["reason"] == period.NO_JUDGE
     assert answer["public"] is None and answer["profile"] is None
@@ -395,9 +396,13 @@ def test_a_run_that_pins_its_own_key_is_accepted_and_its_record_is_a_rehearsals(
     """A run that passes its own challenger key's SHA-512 as the pin has its session accepted under it (`key_pinned`),
     and its record says the pin was the run's (`key_pin`) and that `trusted-device` is a rehearsal's, with no bound:
     the committed configuration pins another key for the memory attester, so naming the auditor's device changes
-    nothing."""
+    nothing. Its accept is a development run's: ``development.json``, saying why, and no ``answer.json``."""
     answer, _ = _run(served, tmp_path, monkeypatch, host=host, deployment=_deployment("ab" * 64))
     assert answer["verdict"] == "accept", answer["reason"]
+    assert not (served.out / period.ANSWER).exists()
+    mark = json.loads((served.out / period.DEVELOPMENT).read_text())
+    key = json.loads((served.out / "pous.json").read_text())["key_sha512"]
+    assert mark["verdict"] == "accept" and mark["why"] == period.development_of(key, ())
     where = answer["profile"]["placement"]
     assert where["kind"] == "own-host" and where[CS.PREMISE] == (
         f"{mc.REHEARSAL} (configuration {CONF}); the memory attester ran on {mc.ATTESTER_MACHINE}, not on {mc.PROVER_MACHINE}")
@@ -546,7 +551,7 @@ def test_the_composites_piece_is_written_privately_with_the_runs_own_answer(serv
     assert sorted(case) == ["commitment", "evidence", "params"]
     assert json.loads(bytes.fromhex(case["commitment"])) == run["published"]
     assert own["commitment"] == hashlib.sha512(bytes.fromhex(case["commitment"])).hexdigest()
-    assert SP.SC.pous_answer(case, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL) == own
+    assert REF.pous_answer(case, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL) == own
     for f in ("case.json", "answer.json"):
         assert stat.S_IMODE((served.private / f).stat().st_mode) == 0o600
 
@@ -572,12 +577,12 @@ def test_the_sessions_are_kept_and_then_answered_with_no_card(served, tmp_path, 
     run = json.loads((s.private / "run.json").read_text())
     case = json.loads((s.private / "case.json").read_text())
     assert run["answer"] == json.loads((s.private / "answer.json").read_text()) and len(run["trusted"]) == 1
-    assert run["answer"] == SP.SC.pous_answer(case, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL)
+    assert run["answer"] == REF.pous_answer(case, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL)
     doc = json.loads((s.out / "pous.json").read_text())
     assert doc["case_bytes"] == (s.private / "case.json").stat().st_size == len(canonical_json_bytes(case)) + 1
-    assert doc["key_pinned"] and doc["session_s"] >= 0 and doc["answer_s"] >= 0
+    assert doc["key_pinned"] and doc["session_s"] >= 0 and "answer_s" not in doc
     with pytest.raises(SP.Refusal, match="holds no sessions to answer"):
-        SP.answers(s.serve, 3, s.out, private=s.private, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL)
+        SP.answers(s.serve, 3, s.out, private=s.private, protocol=TEST_PROTOCOL)
 
 
 class _Lazy(futures.Executor):
@@ -599,10 +604,10 @@ class _Lazy(futures.Executor):
         return Later()
 
 
-def test_the_three_answers_are_all_started_before_any_is_waited_for(served, tmp_path, monkeypatch):
-    """`answers` hands PoUB-P2's answer and PoUS's by the Python and by the Lean to its executor before it waits for
-    any of them, so none waits for another's end. The bandwidth session held and `p2_stage.bandwidth.decide` are
-    stand-ins."""
+def test_the_answers_are_all_started_before_any_is_waited_for(served, tmp_path, monkeypatch):
+    """`answers` hands PoUB-P2's answer and PoUS's by the Lean to its executor before it waits for either, so neither
+    waits for the other's end; no Python answers PoUS's case. The bandwidth session held and
+    `p2_stage.bandwidth.decide` are stand-ins."""
     s, pool = served, _Lazy()
 
     def held_bandwidth():
@@ -612,8 +617,8 @@ def test_the_three_answers_are_all_started_before_any_is_waited_for(served, tmp_
                                                       line=lambda bw: "BANDWIDTH stand-in"))
     answer = _parts(s, tmp_path, monkeypatch, between=held_bandwidth, pool=pool)
     assert answer["verdict"] == "accept", answer["reason"]
-    assert pool.log[:3] == [("submit", "bandwidth_answer"), ("submit", "lean_answer"), ("submit", "python_answer")]
-    assert sorted(pool.log[3:]) == [("run", "bandwidth_answer"), ("run", "lean_answer"), ("run", "python_answer")]
+    assert pool.log[:2] == [("submit", "bandwidth_answer"), ("submit", "lean_answer")]
+    assert sorted(pool.log[2:]) == [("run", "bandwidth_answer"), ("run", "lean_answer")]
     assert json.loads((s.out / "pous.json").read_text())["bandwidth"]["verdict"] == "accept"
 
 
@@ -643,7 +648,7 @@ def test_kept_sessions_under_another_id_than_the_windows_are_not_answered(served
 
     def other():
         with pytest.raises(SP.Refusal, match="not this window's"):
-            SP.answers(s.serve, 4, s.out, private=s.private, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL)
+            SP.answers(s.serve, 4, s.out, private=s.private, protocol=TEST_PROTOCOL)
         run = json.loads((s.private / "run.json").read_text())
         (s.private / "run.json").write_text(json.dumps(run | {"session_id": "00" * 32}))
     with pytest.raises(SP.Refusal, match="under another binding or id than the ones window 3 of"):
@@ -724,16 +729,19 @@ def test_a_weights_registration_of_another_model_is_rejected(served, tmp_path, m
 
 
 def test_a_session_signed_under_another_key_is_rejected(served, tmp_path, monkeypatch):
+    """Under a key no pin names the run is a development run's, and its reject stays a reject there."""
     answer, _ = _run(served, tmp_path, monkeypatch, trusted_sha512="00" * 64)
     assert answer["verdict"] == "reject" and answer["reason"]
     assert not json.loads((served.out / "pous.json").read_text())["key_pinned"]
+    assert not (served.out / period.ANSWER).exists()
+    assert json.loads((served.out / period.DEVELOPMENT).read_text())["verdict"] == "reject"
 
 
 def test_a_challenger_whose_side_does_not_start_leaves_the_period_undecided(served, tmp_path):
     """No retry and no exception: the answer says the challenger drew no salt for the setup, and why."""
     answer = SP.run(served.serve, 3, served.out, hf_home=served.hf, device="cpu", node=NODE, private=served.private,
                     party=Side(AUDITOR, (sys.executable, "-c", "import sys; sys.exit(3)"), ("127.0.0.1", 9)),
-                    pins=[served.pins], schemes=ts.SCHEMES, protocol=TEST_PROTOCOL)
+                    pins=[served.pins], protocol=TEST_PROTOCOL)
     assert answer["verdict"] == "undecided" and answer["reason"].startswith(
         f"the memory attester on {mc.ATTESTER_MACHINE} drew no salt for the setup: ")
     assert SV.piece_row("space", served.out.parent)["verdict"] == "undecided"
@@ -779,7 +787,7 @@ def test_an_answer_the_sessions_part_leaves_already_is_never_answered_again(serv
     assert early["verdict"] == "undecided" and json.loads((served.out / "answer.json").read_text()) == early
     assert not (served.private / SP.HELD).exists() and not (served.private / SP.STORE).exists()
     with pytest.raises(SP.Refusal, match="holds no sessions to answer"):
-        SP.answers(served.serve, 3, served.out, private=served.private, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL)
+        SP.answers(served.serve, 3, served.out, private=served.private, protocol=TEST_PROTOCOL)
 
 
 def _built(package: Path, exe: str) -> Path:
@@ -811,14 +819,14 @@ def _script(directory: Path, name: str, body: str) -> Path:
 def run_exe(tmp_path_factory) -> Path:
     """`pous-run-protocol`, built in the run protocol's package, behind a script of its name that runs it under
     ``--test``: the protocol of the test signers' schemes, which the deployed one refuses."""
-    real = _built(ROOT / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "verifier" / "check", RUN_EXE)
+    real = _built(ROOT / "verity" / "protocols" / "accounting" / "memory" / "pous" / "verifier" / "check", RUN_EXE)
     return _script(tmp_path_factory.mktemp("lean"), RUN_EXE, f'exec {real} --test "$@"\n')
 
 
 @pytest.mark.slow
 def test_with_its_lean_the_answer_is_the_leans_and_the_summary_names_it(served, tmp_path, monkeypatch, run_exe):
-    """With ``--case-exe``, `pous-run-protocol` answers the case the piece holds, and its answer, the Python's but for
-    the reason, is the one written: the summary names the program and this host under ``decided_by``, with the Lean's
+    """With ``case_exe``, `pous-run-protocol` answers the case the piece holds, and its answer, which the Python's
+    (`pous_reference`) is held to here as a difference test, is the one written: the summary names the program and this host under ``decided_by``, with the Lean's
     seconds, and the private answer is what the Lean says of the private case."""
     answer, _ = _run(served, tmp_path, monkeypatch, case_exe=str(run_exe))
     assert answer["verdict"] == "accept", answer["reason"]
@@ -828,7 +836,7 @@ def test_with_its_lean_the_answer_is_the_leans_and_the_summary_names_it(served, 
     case = json.loads((served.private / "case.json").read_text())
     own = json.loads((served.private / "answer.json").read_text())
     assert period.serve(run_exe, [case]) == [own] == [json.loads((served.private / "run.json").read_text())["answer"]]
-    assert own == SP.SC.pous_answer(case, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL)
+    assert own == REF.pous_answer(case, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL)
     assert answer == own | {"commitment": answer["commitment"], "profile": answer["profile"]}
     row = SV.piece_row("space", served.out.parent)
     assert row["verdict"] == "accept" and row["protocol"] == TEST_PROTOCOL
@@ -843,14 +851,11 @@ REFUSAL = {"commitment": None, "profile": None, "protocol": "p", "public": None,
 
 @pytest.mark.parametrize("lean, reason", [
     (_fails, "doesn't answer the case: CalledProcessError"),
-    (lambda exe, cases, *args: [], "doesn't answer the case: IndexError"),
-    (lambda exe, cases, *args: [REFUSAL], "answers the case reject (no), its Python accept (None)")])
-def test_a_lean_that_does_not_answer_as_the_python_leaves_the_window_undecided(served, tmp_path, monkeypatch, lean,
-                                                                               reason):
-    """A `pous-run-protocol` that fails, answers nothing, or answers the case otherwise than the Python (`period.serve`
-    stood in for, so no program starts): no verdict is taken from either. The window is undecided, naming the failure
-    or both answers, under the hiding commitment; no case is written for the composite; and the summary names the
-    Python, whose answer this is. What the sessions kept stays, and once the Lean answers as the Python, the same
+    (lambda exe, cases, *args: [], "doesn't answer the case: IndexError")])
+def test_a_lean_that_does_not_answer_leaves_the_window_undecided(served, tmp_path, monkeypatch, lean, reason):
+    """A `pous-run-protocol` that fails or answers nothing (`period.serve` stood in for, so no program starts): no
+    verdict is taken. The window is undecided, naming the failure, under the hiding commitment; no case is written for
+    the composite; and the summary names no Lean. What the sessions kept stays, and once the Lean answers, the same
     sessions are answered with no new one, the Lean's answer the one written."""
     exe = tmp_path / RUN_EXE
     monkeypatch.setattr(period, "serve", lean)
@@ -866,13 +871,33 @@ def test_a_lean_that_does_not_answer_as_the_python_leaves_the_window_undecided(s
 
     assert (served.private / SP.STORE).exists() and (served.private / SP.HELD).exists()
     monkeypatch.setattr(period, "serve", lambda exe, cases, *args: [
-        SP.SC.pous_answer(c, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL) for c in cases])
-    again = SP.answers(served.serve, 3, served.out, trusted_sha512=hashlib.sha512(bytes.fromhex(run["public_key"])).hexdigest(),
-                       private=served.private, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL, case_exe=str(exe))
+        REF.pous_answer(c, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL) for c in cases])
+    key = hashlib.sha512(bytes.fromhex(run["public_key"])).hexdigest()
+    again = SP.answers(served.serve, 3, served.out, trusted_sha512=key, deployment=_deployment(key),
+                       private=served.private, protocol=TEST_PROTOCOL, case_exe=str(exe))
     assert again["verdict"] == "accept" and len(calls) == 1
     assert SV.piece_row("space", served.out.parent)["verdict"] == "accept" and (served.private / "case.json").exists()
     assert json.loads((served.out / "pous.json").read_text())["decided_by"]["program"] == RUN_EXE
     assert not (served.private / SP.STORE).exists() and not (served.private / SP.HELD).exists()
+
+
+def test_the_leans_answer_is_the_verdict_alone(served, tmp_path, monkeypatch):
+    """A `pous-run-protocol` that rejects the honest store's case, which `period.answer` accepts: its reject is the
+    window's verdict and the answer written, and no Python answer is asked for or compared with it."""
+    exe = tmp_path / RUN_EXE
+    asked = []
+
+    def lean(exe_, cases, *args):
+        asked.append(exe_)
+        return [REFUSAL | {"commitment": SP.SC.digest(c), "protocol": TEST_PROTOCOL} for c in cases]
+    monkeypatch.setattr(period, "serve", lean)
+    monkeypatch.setattr(period, "answer", lambda *a, **kw: pytest.fail("the Python answered PoUS's case"))
+    answer, _ = _run(served, tmp_path, monkeypatch, case_exe=str(exe))
+    assert answer["verdict"] == "reject" and answer["reason"] == "no" and asked == [str(exe)]
+    case = json.loads((served.private / "case.json").read_text())
+    own = json.loads((served.private / "answer.json").read_text())
+    assert own == REFUSAL | {"commitment": SP.SC.digest(case), "protocol": TEST_PROTOCOL}
+    assert json.loads((served.out / "pous.json").read_text())["decided_by"]["program"] == RUN_EXE
 
 
 #: each checkpoint form `registered` takes: its fixture, its model, and the bytes of a linear's element
@@ -956,10 +981,6 @@ def test_the_held_sessions_request_is_the_auditors_session():
     assert SP.BW.session == {"windows": 6, "passes": 4, "samples": 1024, "window_s": 20.0, "deadline_s": 1.0}
 
 
-def _jsonl(path: Path) -> list:
-    return [json.loads(x) for x in path.read_text().splitlines()]
-
-
 @pytest.mark.slow
 @pytest.mark.parametrize("registered, form", [(f, FORMS[f]) for f in FORMS], ids=list(FORMS), indirect=["registered"])
 def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_the_leans(registered, form, tmp_path,
@@ -967,7 +988,7 @@ def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_
     """PoUS's session and then PoUB-P2's on the one ``C*`` the piece encoded and holds, of the int8 checkpoint or of
     the BF16 one, the bandwidth party's
     registration the challenger's own record of the PoUS session: both accepted. The P2 case, written privately, is of
-    PoUS's store (`p2_case.same_store` against the run's case), and answered as the session did (`p2_case.answer`, by
+    PoUS's store (its params' `store_root`, `p2_case.storing` of the run's case), and answered as the session did (`p2_case.answer`, by
     the stand-in `BW_JUDGE`), which with no Lean is undecided (`p2_case.unjudged`); `poub-p2-protocol` refuses
     it, a toy party's session, naming each value off the auditor's (`p2_parties.SESSION`). The public answer, which the composed run reads as the bandwidth
     piece's, names none of the store. It encodes ``C*`` at the registered point (about 25 s on the CPU), the only point
@@ -1002,13 +1023,13 @@ def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_
     for f in (p2_case.CASE, p2_case.ANSWER, "session.json", "opening.json"):
         assert stat.S_IMODE((private / f).stat().st_mode) == 0o600
     pous_case = json.loads((s.private / "case.json").read_text())
-    assert p2_case.same_store(case, pous_case) is None and p2_case.store_root(case).hex() == published["root"]
+    assert case == p2_case.storing(case, pous_case) and case["params"]["store_root"] == published["root"]
     toy = BW.p2_parties.request_of(NODE.encode(), windows=2, passes=2, samples=4, window_ns=10 ** 6,
                                     deadline_ns=10 ** 6)
     assert case["params"]["request"] == toy and own["verdict"] == "accept"
     session = json.loads((private / "session.json").read_text())["answer"]
     assert own == p2_case.answer(case, session)
-    assert p2_case.unjudged(case, session) == own | {"profile": None, "public": None, "reason": p2_case.NO_JUDGE,
+    assert p2_case.unjudged(case) == own | {"profile": None, "public": None, "reason": p2_case.NO_JUDGE,
                                                      "verdict": "undecided"}
     lean, = p2_case.serve(case_exe, [case])
     why = "; ".join(f"the request's {k} is not the auditor's ({toy[k]}, not {v})"
@@ -1018,7 +1039,7 @@ def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_
     kept = tmp_path / "parties" / "bw" / "private"
     assert (kept / BW.p2_parties.CASE_DIGESTS).read_text().splitlines() == [BW.p2_parties.case_digest(case)]
     assert sorted(p.name for p in kept.iterdir()) == [BW.p2_parties.CASE_DIGESTS]
-    assert _jsonl(tmp_path / "parties" / "bw" / "answers.jsonl")[-1]["verdict"] == "accept"
+    assert sorted(p.name for p in (tmp_path / "parties" / "bw").iterdir()) == ["private"]
 
     assert {k: v for k, v in bw["public"].items() if k not in ("gamma", "r_bytes_per_s")} == own["public"]
     assert "registration" not in bw["profile"] and bw["profile"]["units"] == 2
@@ -1039,7 +1060,7 @@ def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_
     assert case["params"]["trusted"] == [ts.AtLeaf(b"p2-party-at-leaf").public_key.hex()]
     assert not any((d / f).exists() for d, f in ((private, BW.HELD), (s.private, SP.STORE), (s.private, SP.HELD)))
     stamps = _stamps(s.out)
-    answers = [f"{a} {e}" for a in ("PoUB's answer", "PoUS's answer by the Python", "PoUS's answer by the Lean")
+    answers = [f"{a} {e}" for a in ("PoUB's answer", "PoUS's answer by the Lean")
                for e in ("start", "done")]
     assert stamps[:5] == ["the weights loaded", "setup done", "PoUS's session done", "PoUB's session start",
                           "PoUB's session done"]
@@ -1075,7 +1096,7 @@ def test_no_pous_session_leaves_the_bandwidth_piece_undecided_naming_why(served,
     """The challenger's side doesn't start: no store was bound, so no bandwidth session runs, and its answer says so."""
     SP.run(served.serve, 3, served.out, hf_home=served.hf, device="cpu", node=NODE, private=served.private,
            party=Side(AUDITOR, (sys.executable, "-c", "import sys; sys.exit(3)"), ("127.0.0.1", 9)),
-           pins=[served.pins], schemes=ts.SCHEMES, protocol=TEST_PROTOCOL, bw_party="false")
+           pins=[served.pins], protocol=TEST_PROTOCOL, bw_party="false")
     bw = json.loads((served.out.parent / "bandwidth" / "answer.json").read_text())
     assert bw["verdict"] == "undecided" and bw["reason"].startswith("no PoUS session bound a store: the memory attester")
     assert SV.piece_row("bandwidth", served.out.parent)["verdict"] == "undecided"
@@ -1084,16 +1105,17 @@ def test_no_pous_session_leaves_the_bandwidth_piece_undecided_naming_why(served,
     assert doc["decided_by"] == {"program": "python", "host": mc.PROVER_MACHINE}
 
 
-def _bandwidth_files(s: Served) -> tuple[Path, dict, dict]:
+def _bandwidth_files(s: Served, answer: str = period.ANSWER) -> tuple[Path, dict, dict]:
     public = s.out.parent / "bandwidth"
-    return (s.serve / "private" / "bandwidth", json.loads((public / "answer.json").read_text()),
+    assert not (public / ({period.ANSWER, period.DEVELOPMENT} - {answer}).pop()).exists()
+    return (s.serve / "private" / "bandwidth", json.loads((public / answer).read_text()),
             json.loads((public / "bandwidth.json").read_text()))
 
 
 @pytest.mark.slow
 def test_with_its_lean_the_bandwidth_answer_is_the_leans_and_the_summary_names_it(registered, tmp_path, monkeypatch,
                                                                                   case_exe):
-    """With ``--bw-case-exe``, `poub-p2-protocol` answers the case of the session over the held store, and its
+    """With ``bw_case_exe``, `poub-p2-protocol` answers the case of the session over the held store, and its
     answer is the one written, privately and under the hiding commitment publicly, whatever the session's own party
     said of it: the summary names the program and this host under ``decided_by``, with the Lean's seconds, where a run
     without it names the Python. PoUS's answer is its own. Run in the piece's two parts: both sessions leave only what
@@ -1150,13 +1172,16 @@ def test_a_close_the_prover_signed_under_a_key_it_listed_itself_is_refused(regis
 
 @pytest.mark.slow
 def test_a_key_the_run_names_and_the_configuration_does_not_pin_is_a_rehearsals(registered, tmp_path, monkeypatch):
+    """A close under a key the run names and the configuration doesn't pin: the Lean's accept is a development run's,
+    written to ``development.json`` with why, and no ``answer.json`` is written, so it is never an onsite accept."""
     s = registered
     kw = _bandwidth(tmp_path, bw_case_exe=_bandwidth_judge(monkeypatch))
     pous = hashlib.sha512(kw["auditor"].signer.public_key).hexdigest()
     answer = _parts(s, tmp_path, monkeypatch, deployment=_deployment(pous, bw=None), bw_trusted_sha512=BW_KEY, **kw)
     assert answer["verdict"] == "accept", answer["reason"]
-    _, bw, summary = _bandwidth_files(s)
+    _, bw, summary = _bandwidth_files(s, period.DEVELOPMENT)
     assert bw["verdict"] == "accept", bw["reason"]
+    assert bw["why"] == period.development_of(BW_KEY, ()) == summary["development"]
     assert (summary["key_sha512"], summary["key_pinned"], summary["key_pin"], summary["pins_matched"]) == (
         BW_KEY, True, "run", False)
     assert summary[mc.PREMISE].startswith(mc.REHEARSAL) and "holds" not in summary[mc.PREMISE]
@@ -1169,7 +1194,7 @@ def test_with_no_key_named_for_the_close_the_bandwidth_session_has_no_case(regis
     pous = hashlib.sha512(kw["auditor"].signer.public_key).hexdigest()
     answer = _parts(s, tmp_path, monkeypatch, deployment=_deployment(pous, bw=None), **kw)
     assert answer["verdict"] == "accept", answer["reason"]
-    private, bw, summary = _bandwidth_files(s)
+    private, bw, summary = _bandwidth_files(s, period.DEVELOPMENT)
     assert bw["verdict"] == "undecided" and bw["reason"].startswith(BW.NO_KEY), bw
     assert "key_pin" not in summary and not (private / p2_case.CASE).exists()
     session = json.loads((private / BW.SESSION).read_text())
@@ -1276,7 +1301,7 @@ def test_the_bandwidth_answer_names_who_graded_it_where_the_launcher_reads_it(tm
     of: what no auditor-side entry checks of the memory attester (`memory_attester.UNCHECKED`) and who graded it
     (`GRADED_BY`), which the launcher ends the bandwidth row's ``answer_from`` with (`served_verdicts.ran_by`), in place
     of its general sentence. The placement names no premise, so nothing reads it as holding."""
-    from verity.protocols.resource_accounting.memory.poub.verifier import p2_parties
+    from verity.protocols.accounting.memory.poub.verifier import p2_parties
 
     session = {"verdict": "accept", "delta": "1/1099511627776", "span_ns": 16448, "q_bytes": 8224, "draws": [0],
                "receipts": 1, "unit_bytes": 8224, "units": 1, "windows": [0], "wrong_at_most": 0}
@@ -1341,7 +1366,7 @@ def test_no_machine_name_reaches_a_refused_bandwidth_audits_public_output_or_its
     private, public = tmp_path / "private", tmp_path / "public"
     private.mkdir()
     (private / BW.SESSION).write_text(json.dumps({
-        "answer": {"verdict": "refused", "reason": why}, "verifier_record": {"verdict": "refused", "reason": why},
+        "answer": {"verdict": "refused", "reason": why},
         "verifier_rc": 0, "request": {"node": node}, "steps": [], "r_bytes_per_s": None, "party_host": address,
         "setup_s": 0.0, "session_wall_s": 0.0}))
     got = BW.decide(private, public, bind=b"\x01" * 32, window=3, trusted_sha512=BW_KEY,

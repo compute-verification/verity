@@ -1,13 +1,13 @@
 """Join a corpus run's raw records into each trace's steps.jsonl and requests.jsonl, and write summary.json and README.md.
 
-Stdlib only. `summarize(DIR)` reads DIR/plan.jsonl, DIR/meta.json and, per trace, DIR/<trace>/{meta.json, client.jsonl,
-raw/*.jsonl} (`vllm_trace_plugin`, `corpus.drive`). `compare` checks that traces of one plan gave every request the same
-output ids, and where they first differ.
+Stdlib only. `summarize(DIR)` reads DIR/meta.json and, per trace, DIR/<trace>/{meta.json, client.jsonl, raw/*.jsonl}
+(`vllm_trace_plugin`, `corpus.drive`). `compare` checks that traces of one plan gave every request the same output ids,
+and where they first differ. A corpus holds no file of its plan: meta.json's `plan` is its SHA-512 and its recipe
+(`corpus.plan_record`), and each client.jsonl line has its request's place in it.
 """
 from __future__ import annotations
 
 import bisect
-import hashlib
 import json
 import math
 import shutil
@@ -172,7 +172,7 @@ def serving(reqs: list[dict]) -> dict:
 
 
 def tick_log(d: Path) -> dict | None:
-    """What the attested tick's gate logged (``raw/tick.PID.jsonl``, `verity.protocols.resource_accounting.network.prover.admission.TickGate`), None where it logged
+    """What the attested tick's gate logged (``raw/tick.PID.jsonl``, `verity.protocols.accounting.network.prover.admission.TickGate`), None where it logged
     nothing: its admissions (``steps``: the engine steps that added any, ``requests``: how many they added) and its events
     by kind (``unordered``, ``stale``, ``late``, ``skipped``, ``opened``, ... ; none in a run the tick ordered whole)."""
     recs = raw(d, "tick")
@@ -196,7 +196,7 @@ def engine_geometry(d: Path) -> dict | None:
     return rec
 
 
-def join_trace(d: Path, plan: dict[int, dict], eos: tuple[int, ...] = EOS) -> dict:
+def join_trace(d: Path, eos: tuple[int, ...] = EOS) -> dict:
     steps, outputs, engine = raw(d, "steps"), raw(d, "outputs"), raw(d, "requests")
     calls = raw(d, "adversary")
     by_call = {c["step"]: c for c in calls}
@@ -225,12 +225,11 @@ def join_trace(d: Path, plan: dict[int, dict], eos: tuple[int, ...] = EOS) -> di
     reqs = []
     for e in engine:
         c = client.get(e["id"], {})
-        p = plan.get(c.get("i"), {})
         out_ids = e["output_ids"]
         reqs.append({
             "id": e["id"], "i": c.get("i"), "arrival": e["arrival"], "send_unix": c.get("send_unix"),
             "planned_s": c.get("planned_s"), "prompt_ids": e["prompt_ids"], "prompt_len": len(e["prompt_ids"]),
-            "prefix": p.get("prefix"), "prefix_len": p.get("prefix_len"), "max_tokens": e["max_tokens"],
+            "prefix": c.get("prefix"), "prefix_len": c.get("prefix_len"), "max_tokens": e["max_tokens"],
             "output_ids": out_ids, "output_len": len(out_ids), "finish_reason": e["finish_reason"],
             "eos": e["finish_reason"] == "stop" and bool(out_ids) and out_ids[-1] in eos, "stop_reason": e["stop_reason"],
             "cache_hit": e["cache_hit"], "num_preemptions": e["num_preemptions"], "first_step": first.get(e["id"]),
@@ -592,14 +591,13 @@ def summarize_trace(d: Path, steps: list[dict], reqs: list[dict], client: dict) 
 
 def summarize(root: Path) -> dict:
     root = Path(root)
-    plan = {r["i"]: r for r in read_jsonl(root / "plan.jsonl")}
     meta = json.loads((root / "meta.json").read_text())
     eos = tuple(meta.get("eos_token_ids") or EOS)
     traces = {}
     for name, m in meta.get("traces", {}).items():
         d = root / name
         if (d / "raw").is_dir():
-            traces[name] = join_trace(d, plan, eos)
+            traces[name] = join_trace(d, eos)
             if traces[name]["warden"]:
                 traces[name]["views"] = network_attester_views(root, name, traces[name]["warden"])
         if m.get("error") or name not in traces:
@@ -609,7 +607,7 @@ def summarize(root: Path) -> dict:
            "async_scheduling": meta.get("async_scheduling", False), "engine_env": meta.get("engine_env"),
            "eos_token_ids": list(eos), "admit": meta.get("admit", "arrival"), "tick": meta.get("tick"),
            "versions": meta.get("versions"), "host": meta.get("host"), "env": meta.get("env"),
-           "requests_per_trace": meta.get("requests"), "seed": meta.get("seed"), "traffic": meta.get("traffic"),
+           "plan": meta.get("plan"), "traffic": meta.get("traffic"),
            "traces": traces,
            "outputs": compare({n: root / n for n, t in traces.items() if (root / n / "requests.jsonl").exists()})}
     (root / "summary.json").write_text(json.dumps(out, indent=1))
@@ -769,13 +767,16 @@ def corpus_spec(arg: str) -> tuple[Path, list[str] | None]:
 
 
 def compare_corpora(specs: list[tuple[Path, list[str] | None]], out: Path) -> dict:
-    """`compare` across summarized corpora that serve one plan (their plan.jsonl files are byte for byte the same), each
+    """`compare` across summarized corpora that serve one plan (their meta.json files name one plan's SHA-512), each
     trace labelled ``<variant>/<trace>``; writes OUT/compare.json and OUT/COMPARE.md."""
     traces, corpora, plans = {}, [], set()
     for root, names in specs:
         meta = json.loads((root / "meta.json").read_text())
         variant = meta.get("variant", "greedy")
-        plans.add(hashlib.sha256((root / "plan.jsonl").read_bytes()).hexdigest())
+        if not (digest := (meta.get("plan") or {}).get("sha512")):
+            raise SystemExit(f"{root / 'meta.json'} names no plan (`plan.sha512`, which `corpus.py run` writes): nothing "
+                             f"says which requests {root} served")
+        plans.add(digest)
         corpora.append({"dir": str(root), "variant": variant, "async_scheduling": meta.get("async_scheduling", False),
                         "sampling": meta.get("sampling", {"name": "greedy", "temperature": 0.0})})
         for name in names or [n for n in meta.get("traces", {}) if (root / n / "requests.jsonl").exists()]:
@@ -785,7 +786,7 @@ def compare_corpora(specs: list[tuple[Path, list[str] | None]], out: Path) -> di
             traces[label] = root / name
     if len(plans) != 1:
         raise SystemExit(f"the corpora serve {len(plans)} different plans; compare only corpora of one plan")
-    result = {"plan_sha256": plans.pop(), "corpora": corpora, **compare(traces)}
+    result = {"plan_sha512": plans.pop(), "corpora": corpora, **compare(traces)}
     out.mkdir(parents=True, exist_ok=True)
     (out / "compare.json").write_text(json.dumps(result, indent=1))
     (out / "COMPARE.md").write_text("\n".join(["# Output ids across corpora", "", *outputs_section(result)]) + "\n")
@@ -844,12 +845,15 @@ def outputs_section(c: dict, limit: int = 20) -> list[str]:
 FIELDS = """\
 ## Files
 
-- `plan.jsonl`: the one request plan every trace serves, in order (`traffic.plan`): `i`, `prompt_ids` (BOS first),
-  `prompt_len`, `prefix` (the shared-prefix group, or null) and `prefix_len`, `doc` (the C4 document the body is cut from)
-  and `gap` (tokens left between the prompt's end and the document's), `max_tokens`, and `gap_draw`, the unit-rate
-  exponential gap before the request (a trace at rate λ sends request i at Σ_{j≤i} gap_sample_j / λ seconds).
 - `meta.json`, `summary.json`: the run (model, variant, sampling, versions, host, leased GPU) and the statistics below, per
-  trace; `summary.json`'s `overrun` per trace counts the rows that sample past a request's last output (async scheduling
+  trace. Their `plan` is the one request plan every trace serves, which the corpus doesn't store: `sha512`, the SHA-512 of
+  its requests in order, each one line of compact JSON (`traffic.plan_sha512`), and `recipe`, what rebuilds it
+  (`traffic.plan` over `corpus.load_docs`): the C4 shard and the tokenizer (`c4`, `tokenizer`, and each file's SHA-512),
+  the number of documents (`docs`), the `seed` and the number of `requests`. A plan request has `i`, `prompt_ids` (BOS
+  first), `prompt_len`, `prefix` (the shared-prefix group, or null) and `prefix_len`, `doc` (the C4 document the body is cut
+  from) and `gap` (tokens left between the prompt's end and the document's), `max_tokens`, and `gap_draw`, the unit-rate
+  exponential gap before the request (a trace at rate λ sends request i at Σ_{j≤i} gap_sample_j / λ seconds).
+  `summary.json`'s `overrun` per trace counts the rows that sample past a request's last output (async scheduling
   schedules a step before the previous one's tokens are back), its `serving` per trace is the client's throughput and
   latency (`summary.serving`), and its `outputs` compares the traces' output ids request by request (`summary.compare`).
 - `<trace>/steps.jsonl`: one line per scheduler step (`Scheduler.schedule()` call) that scheduled a token or reported a
@@ -894,10 +898,11 @@ FIELDS = """\
   `tick.releases`), elsewhere the client's stand-in's (`corpus.StandIn`).
 - `<trace>/engine.json`: the scheduler's KV pool as the hook saw it (`block_size`, `num_gpu_blocks`, `kv_cache_groups`),
   which `replay.read_corpus_trace` takes over the server log's KV cache size.
-- `<trace>/client.jsonl`, `<trace>/raw/`: the client's records as written (with the `seed` each request sent, if any) and
+- `<trace>/client.jsonl`, `<trace>/raw/`: the client's records as written (with each request's `i`, `prefix` and
+  `prefix_len` in the plan, which `requests.jsonl` takes from it, and the `seed` it sent, if any) and
   the hook's (`raw/steps.PID.jsonl`, `raw/outputs.PID.jsonl`, `raw/requests.PID.jsonl`, `raw/arrivals.PID.jsonl`,
   `raw/engine.PID.json`, and in a hostile trace the adversary's `raw/adversary.PID.jsonl`), the API server's
-  `raw/accept.PID.jsonl` (`vllm_accept_stamp`), and under `--admit tick` the feed `verity.protocols.resource_accounting.network.prover.admission.FrontFeed` wrote
+  `raw/accept.PID.jsonl` (`vllm_accept_stamp`), and under `--admit tick` the feed `verity.protocols.accounting.network.prover.admission.FrontFeed` wrote
   (in `raw/`) and the scheme's log (`raw/tick.PID.jsonl`: the front's releases and watermark ends, and the gate's
   admissions and events);
   `<trace>/server.log`, `<trace>/meta.json`: the server's log, argv, timings, adversary (seed and prefix-cache mode),
@@ -929,6 +934,8 @@ def readme(s: dict) -> str:
               if (s.get("engine_env") or {}).get("VLLM_BATCH_INVARIANT", "1") == "1"
               else "eager, vLLM's own kernels (not batch invariant)")
     tick = s.get("tick")
+    plan = s.get("plan") or {}
+    recipe = plan.get("recipe") or {}
     lines = [
         f"# vLLM V1 scheduler traces under varied traffic: {s.get('model_what')}, {s.get('variant', 'greedy')}", "",
         f"Model `{s.get('model')}` (`{s.get('model_id')}`) on {s.get('host')}, GPU "
@@ -938,13 +945,14 @@ def readme(s: dict) -> str:
         f"{'on' if s.get('async_scheduling') else 'off'}, Model Runner V2, prefix caching on, at most 256 sequences; a scheduler hook (`vllm_trace_plugin.py`) records each step; an async client streams each request at "
         f"its Poisson arrival, {sampling_text(s)}, `max_tokens` 64 or 256, no stop strings; a request ends on EOS "
         f"{s.get('eos_token_ids') or list(EOS)} or its cap.", "",
-        *([f"Admission: the certified tick (`--admit tick`, `verity.protocols.resource_accounting.network.prover.admission`), τ_b {tick['bucket_us']} µs, "
+        *([f"Admission: the certified tick (`--admit tick`, `verity.protocols.accounting.network.prover.admission`), τ_b {tick['bucket_us']} µs, "
            f"τ_sat {tick['sat_us']} µs, τ_free {tick['free_us']} µs"
            f"{', calibrated on ' + tick['calibrated_from']['trace'] if tick.get('calibrated_from') else ''}, behind the "
            "network certifier each trace's meta.json `tick.where` names (a network certifier trace's own, the client's stand-in, "
            "`corpus.StandIn`, for the others); each trace's gate log is its `tick` in summary.json.",
            ""] if tick else []),
-        f"Every trace serves the same {s.get('requests_per_trace')} requests (`plan.jsonl`, seed {s.get('seed')}) on a "
+        f"Every trace serves the same {recipe.get('requests')} requests (seed {recipe.get('seed')}; the plan's SHA-512 is "
+        f"`{plan.get('sha512')}`) on a "
         "fresh server, so each starts with a cold prefix cache.", "",
         "| trace | rate (req/s) | what | requests freed | steps | rows | rows/step p50 / p90 / max | tokens/step p50 / max | running p50 / max | waiting p90 / max | EOS (share) | length | prefix-hit requests | hit tokens (of prompt tokens) | preemptions (requests) | partial prefill chunks (steps with one) | mixed steps | rows past the last output (EOS / length) |",
         "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]

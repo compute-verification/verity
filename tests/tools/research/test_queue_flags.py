@@ -192,8 +192,8 @@ def test_the_land_verdicts_gate_reads_lowrisk_excludes_but_verdict_plain_and_add
                  "security/lean-toolchain", "security/lake-manifest.json", "x/TRUSTED.sha256",
                  "tools/research/src/research/pods/nebius/verifier/setup.sh",
                  "tools/verity/lean/check.py", "verity/circuits/program.py", "verity/commitments/x.py",
-                 "verity/protocols/resource_accounting/compute/pouw/verifier/audit.py",
-                 "verity/protocols/compose/verifier/live_challenger/auditor.py"):
+                 "verity/protocols/accounting/compute/pouw/verifier/audit.py",
+                 "verity/protocols/run/verifier/live_challenger/auditor.py"):
         assert not lowrisk([path, "README.md"], flags.plain_excludes), f"drive.toml's excludes let {path} land on a verdict"
     for path in ("GLOSSARY.md", "calibration/census/README.md", ".gitattributes", "tools/check/check.py",
                  "tools/check/drive.toml", "tools/check/policy.toml", "tools/move/restack.py",
@@ -209,15 +209,15 @@ def test_the_land_verdicts_gate_reads_lowrisk_excludes_but_verdict_plain_and_add
     ("tools/agent-guard/shell_hook.py", "tools/agent-guard/"),
     ("infra/README.md", "infra/"),
     ("benchmarks/one_stage/a5.py", None),
-    ("verity/protocols/resource_accounting/network/attester/network_attester_serve.py", None),
+    ("verity/protocols/accounting/network/attester/network_attester_serve.py", None),
     ("benchmarks/poub_session/auditor_line.py", None),
     ("tools/move/restack.py", "tools/move/"),
     ("verity/circuits/program.py", None),
     ("tools/research/src/research/vqueue_loop.py", "tools/research/"),
     ("tools/research/src/research/pods/nebius/verifier/setup.sh", None),
     ("tools/check/drive.toml", "tools/check/"),
-    ("verity/protocols/resource_accounting/compute/pouw/verifier/__init__.py", None),
-    ("tests/verity/protocols/compose/verifier/lean/pyproject.toml", None),
+    ("verity/protocols/accounting/compute/pouw/verifier/__init__.py", None),
+    ("tests/verity/protocols/run/verifier/lean/pyproject.toml", None),
 ], ids=lambda x: x or "-")
 def test_each_verdict_plain_entry_frees_its_files_for_the_gate_and_the_rest_stay_on_the_whole_check(path, entry):
     """Over this tree's drive.toml and files: a file kept off the low-risk lane only by an entry of `verdict_plain` (``entry``)
@@ -267,7 +267,7 @@ EXCLUDES = ("*.lean", "lean-audit.json", "lakefile.*", "lean-toolchain", "lake-m
     (["adapters/vllm/verity_vllm/serve.py", "verity/ml/flock/x.py", "verity/ml/definitions/y.py"], True),
     (["security/Proofs/Core/X.lean"], False),
     (["docs/a.md", "tools/pous_grader/lean-audit.json"], False),
-    (["verity/protocols/proofs/flock/verifier/lakefile.toml"], False),
+    (["verity/protocols/proof/flock/verifier/lakefile.toml"], False),
     (["x/lean-toolchain"], False), (["x/lake-manifest.json"], False), (["x/TRUSTED.sha256"], False),
     (["verity/core/claims.py"], False),
     (["verity/circuits/ops/add.py"], False), (["verity/circuits/kernels/k.cu"], False),
@@ -289,7 +289,7 @@ def test_an_entry_with_a_slash_before_its_end_keeps_that_one_file_off():
     excludes = ("verity/protocols/__init__.py", "verity/channel.py")
     for f in excludes:
         assert not lowrisk(["README.md", f], excludes), f
-    assert lowrisk(["verity/protocols/resource_accounting/compute/pouw/__init__.py", "verity/protocols/reporting.py", "adapters/vllm/channel.py",
+    assert lowrisk(["verity/protocols/accounting/compute/pouw/__init__.py", "verity/protocols/reporting.py", "adapters/vllm/channel.py",
                     "x/verity/channel.py", "verity/channel.pyc"], excludes)
 
 

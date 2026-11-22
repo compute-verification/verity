@@ -9,33 +9,37 @@ and tests that load this one by path.
 
 from __future__ import annotations
 
-import importlib.util
 import math
-import sys
 from collections.abc import Iterable, Sequence
-from pathlib import Path
 from typing import Any
 
 from verity.protocols.interface.charge.window_charge import Advice
+from verity_vllm.pipeline.advice_code.arith import Binned, MAX_TOTAL, Table, bin_of, in_range
 from verity_vllm.pipeline.advice_code.window_code import (
     Book, Caps, DEFAULT_CAPS, decode as decode, Decoder as Decoder, encode as encode, Encoded as Encoded,
     Encoder as Encoder, ints, context_key, KT, pack as pack, CoderState, unpack as unpack, code_executionPhase,
 )
 
-HERE = Path(__file__).resolve().parent
 
-
-def _load(name: str):
-    if f"enc_{name}" in sys.modules:
-        return sys.modules[f"enc_{name}"]
-    spec = importlib.util.spec_from_file_location(f"enc_{name}", HERE / f"{name}.py")
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = mod
-    spec.loader.exec_module(mod)
-    return mod
-
-
-C = _load("code")
+def fit_table(samples: Sequence[int], lo: int, hi: int, escape_share: float = 2 ** -12, total: int = MAX_TOTAL) -> Table:
+    """A table over `[lo, hi]` fit to samples: counts plus one, scaled into `total`, every value at least 1, and the escape
+    at least `escape_share` of the total (the uniform floor that bounds a code's worst case)."""
+    counts = [1] * (hi - lo + 1)
+    out = 0
+    for s in samples:
+        if lo <= s <= hi:
+            counts[s - lo] += 1
+        else:
+            out += 1
+    esc = max(1, round(total * max(escape_share, out / max(len(samples), 1))))
+    budget = total - esc
+    if budget < len(counts):
+        raise ValueError("a table's core is wider than its total")
+    n = sum(counts)
+    freqs = [max(1, (c * budget) // n) for c in counts]
+    while sum(freqs) > budget:
+        freqs[max(range(len(freqs)), key=freqs.__getitem__)] -= 1
+    return Table(lo, tuple(freqs), esc)
 
 
 # ------------------------------------------------------------------------------------------------------ the residual
@@ -55,7 +59,7 @@ class _Ideal:
         self.book, self.kt, self.bits = book, KT(book.priors), 0.0
 
     def _sym(self, name: str, v: int, lo: int, hi: int) -> int:
-        v = C.in_range(name, v, lo, hi)
+        v = in_range(name, v, lo, hi)
         self.bits += self.book.models[name].cost(v, lo, hi)
         return v
 
@@ -76,7 +80,7 @@ class _Count:
         self.bits: dict[str, list[int]] = {}
 
     def _sym(self, name: str, v: int, lo: int, hi: int) -> int:
-        v = C.in_range(name, v, lo, hi)
+        v = in_range(name, v, lo, hi)
         self.ints.setdefault(name, []).append(v)
         return v
 
@@ -107,7 +111,7 @@ def fit_book(history: Iterable[Sequence[Advice]], caps: Caps = DEFAULT_CAPS, pri
         st = CoderState()
         for win in windows:
             code_executionPhase(c, win, st)
-    models = {n: C.Binned(C.fit_table([C.bin_of(v) for v in c.ints.get(n, [])], 0, C.bin_of(hi)))
+    models = {n: Binned(fit_table([bin_of(v) for v in c.ints.get(n, [])], 0, bin_of(hi)))
               for n, (_, hi) in ints(caps).items()}
     priors = {}
     for k, (n0, n1) in sorted(c.bits.items()):

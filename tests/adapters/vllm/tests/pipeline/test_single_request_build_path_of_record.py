@@ -8,17 +8,12 @@ import gzip
 import hashlib
 import json
 import os
-import subprocess
-import sys
 from pathlib import Path
 
 import pytest
 from verity.circuits.codec import canonical_json, program_digest
 
 from tests.pipeline.test_single_request_build_path import (
-    VLLM_DIR,
-    _compose,
-    _decode_cold,
     _run,
 )
 
@@ -49,29 +44,6 @@ def _rekey_sha512(d: Path) -> None:
     new = program_digest(desc)
     for p in d.glob("*.json"):
         p.write_text(p.read_text().replace(old, new))
-
-
-@pytest.mark.slow
-def test_101s_request_program_composes_as_its_build_does(tmp_path):
-    """Workload 101's request Program (V = 128256, S = 32, 23.26 x 10^9 word gates once composed) through GP-01 and a cold decode."""
-    build = _build_101(tmp_path)
-    r = _compose(VLLM_DIR / "workloads" / f"{ROW_101}.json", build / "build_request", tmp_path / "build_workload", eos=128001)
-    assert r["requests"] == 1 and r["gates"] == 23_256_312_239
-    assert _decode_cold(tmp_path / "build_workload" / "descriptor.json.gz") == r["gates"]
-
-
-@pytest.mark.slow
-def test_101s_manifest_step_resolves_every_call_as_its_build_does(tmp_path):
-    """`manifest build` as the workload runs it, in its own interpreter: the program view finds every Call's Definition and the word check
-    runs over them all.  At the default gate limit its one violation is the sampler Call's size (the workload raises the limit for it on a
-    big-memory pod, `VERITY_QWORD_MAX_GATES`), never a Definition the registry lacks."""
-    build = _build_101(tmp_path)
-    env = {k: v for k, v in os.environ.items() if k not in ("VERITY_QWORD_MAX_GATES", "VERITY_WORD_CHECK")}
-    p = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "manifest", "build", "--program", str(build / "build_request"),
-                        "--workload", f"workloads/{ROW_101}.json", *MANIFEST_POLICY, "--out", str(tmp_path / "manifest.json")],
-                       cwd=VLLM_DIR, capture_output=True, text=True, env=env)
-    assert "not a registered Definition" not in p.stderr and "not in the registry" not in p.stderr, p.stderr[-3000:]
-    assert p.returncode != 0 and "1 violation(s): GumbelTopPTokenSelect_v2{V=128256,S=32}: too-large, 32 Call(s)" in p.stderr, p.stderr[-3000:]
 
 
 @pytest.mark.slow

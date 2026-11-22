@@ -5,8 +5,7 @@
 # source; `host:PATH` is an entry of the host's card (model.toml's `host`), and a `[[public]]` figure's `sms` and `mhz`
 # are `{ card = "EXPR" }` where they are the card's. A rate is a SM-clock's (MACs, results or bytes a SM-clock); `clock` names the clock its
 # per-second figure is at, and `figure` is the number the document prints there (dense), which 2 · sheet · SMs · clock
-# reproduces (`machine-model theta --check`). `machine-model theta` derives d, the exchange rate, B_RF and r_H against
-# r_min from it; `machine-model render theta` tabulates it.
+# reproduces.
 gpu = "H200 SXM 141 GB (sm_90a)"
 # Duo (provisional), LI (provisional), and the measured LI loop that folds its own wgmma accumulators.
 honest = ["dc90-l32", "dc90-li-l32", "dc90-licpw-redux-l32"]

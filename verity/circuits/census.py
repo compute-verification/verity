@@ -109,9 +109,9 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any, Callable, Iterable, Iterator
 
-from verity.circuits import boolean as BL
 from verity.circuits import ports
 from verity.circuits.codec import MAX_SAFE_INT, _static_json, canonical_json, descriptor_id, jcs_domain_error
+from verity.circuits.count import gate
 from verity.circuits.defs import CompositeDefinition, BodyNode, PrimitiveDefinition, bind, recut_unread
 from verity.circuits.intervals import Intervals, contains, full, norm, ref_intervals, total
 from verity.circuits.layout import resolve
@@ -128,7 +128,7 @@ SCHEMA = "verity/census/v1"
 #: count by their `FAMILY_COUNTS` rule.  A step cut into parts (vLLM's `cublas_bf16.HOPPER_STEP`: the gates that read only one
 #: operand, shared across W's rows, and the rest, once per row) names each part: the per-row part performs the k products, the
 #: shared part none.  PoUW's segment dots on bits are one wrapping s8 IMMA coordinate's k32 (their word primitives take no rule,
-#: so they are not named)
+#: so they are not named), and its route-U step on bits (`PouwDot16U8S8_v2`) 16 products of the wrapping u8 x s8 arm
 PRODUCTS: dict[str, int] = {
     "AmpereBF16TcDot16_v1": 16, "AmpereBF16TcDot16_v2": 16, "HopperBF16WgmmaDot16_v1": 16, "HopperTf32WgmmaDot8_v1": 8,
     "HopperTf32WgmmaDot8_v2": 8,
@@ -141,7 +141,7 @@ PRODUCTS: dict[str, int] = {
     "BlackwellS8ImmaDot32_v1": 32, "BlackwellU8S8ImmaDot32_v1": 32, "BlackwellS8ImmaDot32_v2": 32, "BlackwellU8S8ImmaDot32_v2": 32,
     "HopperBf16Dot16StepFirst_v1": 16, "HopperBf16Dot16Step_v1": 16, "HopperBf16Dot16StepFirstX_v1": 0, "HopperBf16Dot16StepX_v1": 0,
     "HopperBf16Dot16StepFirst_v2": 16, "HopperBf16Dot16Step_v2": 16, "HopperBf16Dot16StepFirstX_v2": 0, "HopperBf16Dot16StepX_v2": 0,
-    "PouwSegDot_v2": 32, "PouwSegDot0_v2": 32,
+    "PouwSegDot_v2": 32, "PouwSegDot0_v2": 32, "PouwDot16U8S8_v2": 16,
 }
 
 #: the operand format of each `PRODUCTS` family's products, as the accounting layer names its multiply-add kinds (`mac:<precision>`):
@@ -159,7 +159,8 @@ PRECISION: dict[str, str] = {
     **dict.fromkeys(("BlackwellNvf4OmmaDot64_v1", "BlackwellNvf4OmmaDot64_v2", "BlackwellMxf4OmmaDot64_v1",
                      "BlackwellMxf4OmmaDot64_v2"), "fp4"),
     **dict.fromkeys(("PouwDot16U8S8_v1", "NcpDot16I7_v1", "BlackwellS8ImmaDot32_v1", "BlackwellU8S8ImmaDot32_v1",
-                     "BlackwellS8ImmaDot32_v2", "BlackwellU8S8ImmaDot32_v2", "PouwSegDot_v2", "PouwSegDot0_v2"), "int8"),
+                     "BlackwellS8ImmaDot32_v2", "BlackwellU8S8ImmaDot32_v2", "PouwSegDot_v2", "PouwSegDot0_v2",
+                     "PouwDot16U8S8_v2"), "int8"),
 }
 
 #: a silicon model's operand format (its ``dtype``, and ``b_dtype`` where B's differs, or the ``executes`` its instruction
@@ -184,8 +185,8 @@ RULED: dict[str, str] = {"S8Dot_v1": "verity.circuits.ops.s8", "S8Matmul_v1": "v
                          "S8Dot_v2": "verity.circuits.ops.boolean.s8", "S8Matmul_v2": "verity.circuits.ops.boolean.s8",
                          "GemmAccumulatorS8_v1": "verity.circuits.ops.gemm",
                          "GemmAccumulatorS8_v2": "verity.circuits.ops.boolean.gemm",
-                         "PouwSegDot_v2": "verity.protocols.resource_accounting.compute.pouw.prover.circuit.segment",
-                         "PouwSegDot0_v2": "verity.protocols.resource_accounting.compute.pouw.prover.circuit.segment"}
+                         "PouwSegDot_v2": "verity.protocols.accounting.compute.pouw.prover.circuit.segment",
+                         "PouwSegDot0_v2": "verity.protocols.accounting.compute.pouw.prover.circuit.segment"}
 
 
 def serves_none(bindings: dict) -> dict[str, int]:
@@ -732,13 +733,10 @@ class BooleanWork:
 
     @staticmethod
     def _primitive(fn: PrimitiveDefinition) -> Work | str:
-        gk = BL.gate_kind(fn)
-        if gk is not None:
-            kind, n = gk
-            return {CUDA: (max(1, n - 1), n - 1 if kind == "and" else 0)}
-        if BL.is_constant_bit(fn) or input_id(fn.id):
-            return {}
-        return fn.id
+        g = gate(fn)
+        if g is None:
+            return fn.id
+        return {CUDA: (g.gates, g.ands)} if g.gates else {}
 
     def _composite(self, fn: Any, kids: Counter) -> Work | str:
         out: dict[str, list[int]] = {}

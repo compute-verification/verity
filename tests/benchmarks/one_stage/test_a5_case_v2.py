@@ -19,7 +19,7 @@ import pytest
 HERE = (Path(__file__).resolve().parent)
 sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
 import a5  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF  # noqa: E402
+from verity.protocols.proof.spot.verifier.one_stage import proofs as PF  # noqa: E402
 
 
 @pytest.fixture
@@ -45,10 +45,9 @@ def test_case_v2_names_the_proofs_files_in_place_of_verdicts(tmp_path, RP):
     evidence = {"draw": {"units": [1]}, "sessions": [sha(s / "session.json")], "verdicts": {"m0": {"accepted": True}}}
     case = {"commitment": "ab", "evidence": RP.DT.canonical(evidence).encode().hex(), "params": {"delta": "1/100"}}
     got = a5.case_v2(case, evidence["sessions"], proof=PF.Proof(tmp_path / "circuit.txt", tmp_path / "pub-4.bin", (s,)),
-                     circuit="cc" * 64, public=sha(tmp_path / "pub-4.bin"), registered=None, tables=[table])
+                     public=sha(tmp_path / "pub-4.bin"), registered=None, tables=[table])
     assert got["commitment"] == "ab"
-    assert got["params"] == {"delta": "1/100", "proofs": {"circuit": "cc" * 64, "public": sha(tmp_path / "pub-4.bin"),
-                                                          "registered": None}}
+    assert got["params"] == {"delta": "1/100", "proofs": {"public": sha(tmp_path / "pub-4.bin"), "registered": None}}
     e = json.loads(bytes.fromhex(got["evidence"]))
     assert "verdicts" not in e and e["draw"] == evidence["draw"] and e["sessions"] == evidence["sessions"]
     assert e["proofs"] == {"sessions": [{"name": evidence["sessions"][0], "record": sha(s / "session.json"),
@@ -80,8 +79,7 @@ def test_two_sampled_members_statements_make_no_v2_case_and_each_alone_names_its
     evidence = {"draw": {"units": [1, 2]}, "sessions": names[1:], "verdicts": {"m1": {"accepted": True}}}
     case = {"commitment": "ab", "evidence": RP.DT.canonical(evidence).encode().hex(), "params": {"delta": "1/100"}}
     got = a5.case_v2(case, names[1:], **a5.v2_proof(done[1:], zk=True))
-    assert got["params"] == {"delta": "1/100", "proofs": {"circuit": "cc" * 64, "public": sha(m1 / "pub-2.bin"),
-                                                          "registered": None}}
+    assert got["params"] == {"delta": "1/100", "proofs": {"public": sha(m1 / "pub-2.bin"), "registered": None}}
     e = json.loads(bytes.fromhex(got["evidence"]))
     assert "verdicts" not in e and e["sessions"] == names[1:]
     assert [x["name"] for x in e["proofs"]["sessions"]] == names[1:]
@@ -111,7 +109,7 @@ def test_v2_case_is_the_sampled_members_one_statement_whatever_the_windows_other
     done = [{"mm": ms[1], "sdir": sdir}]
     got = a5.v2_proof(done, True)
     assert {k: v for k, v in got.items() if k != "proof"} == {
-        "circuit": "1" * 128, "public": "1" * 128, "registered": {"ports": {}}, "tables": []}
+        "public": "1" * 128, "registered": {"ports": {}}, "tables": []}
     assert (got["proof"].circuit, got["proof"].public, got["proof"].sessions) == (
         tmp_path / "m1" / "circuit.txt", tmp_path / "m1" / "pub-3.bin", (sdir / "sessions" / "a",))
     iface = tmp_path / "circuit.json"
@@ -330,7 +328,7 @@ def test_a5_records_the_members_whose_link_points_the_registration_refuses():
     assert a5.link_points({"k": 39, "law": "subset"}, 40, ms) == {"members": 3, "refused": []}
     got = a5.link_points({"k": 41, "law": "subset"}, 40, ms)
     assert got == {"members": 3, "error": "a subset draw of 41 exceeds the population of 40"}
-    from verity.protocols.proofs.spot.verifier.one_stage import link_points as LP
+    from verity.protocols.proof.spot.verifier.one_stage import link_points as LP
 
     assert a5.link_members(ms) == [([[0, 28]], 1), ([[28, 36]], 1), ([[36, 40]], 2)]
     assert LP.refused({"k": 20, "law": "subset"}, 40, a5.link_members(ms)) == [0]
@@ -343,7 +341,7 @@ def test_a5_records_a_sampling_design_none_of_whose_samples_ends(monkeypatch):
     """`a5.link_points` records the docket's refusal of a sampling design no sample of which ends (`link_points.NEVER_ENDS`),
     which `coins.sampling_design_problem` refuses first for every sampling design it reads: past it, `subset:41` over 40 units is refused for
     every member."""
-    from verity.protocols.proofs.spot.verifier.one_stage import link_points as LP
+    from verity.protocols.proof.spot.verifier.one_stage import link_points as LP
 
     monkeypatch.setattr(a5.CC, "sampling_design_problem", lambda sampling_design, population: None)
     m = {"k": 0, "m": SimpleNamespace(template="t", base=0, n=40), "st": {"meta": {"vus_per_block": 1}}}
@@ -397,10 +395,10 @@ def test_the_per_member_proof_holds_every_member_and_the_sampled_ones_sessions(t
            staged(tmp_path, 2, "u/c0", 5, 4, lookups='{"ex2": {}, "rcp": {}}')]
     done = [session(tmp_path, mms[0], "a"), session(tmp_path, mms[2], "b")]
     got = a5.members_proof(mms, done, zk=True)
-    assert [(m.name, m.units, m.vus_per_block, m.circuit_sha512, m.public_sha512, m.registered) for m in got["members"]] == [
-        ("t/c0", ((0, 3),), 4, "00" * 64, mms[0]["st"]["public"], None),
-        ("t/c1", ((3, 5),), 4, "01" * 64, mms[1]["st"]["public"], reads),
-        ("u/c0", ((5, 9),), 4, "02" * 64, mms[2]["st"]["public"], None)]
+    assert [(m.name, m.units, m.vus_per_block, m.public_sha512, m.registered) for m in got["members"]] == [
+        ("t/c0", ((0, 3),), 4, mms[0]["st"]["public"], None),
+        ("t/c1", ((3, 5),), 4, mms[1]["st"]["public"], reads),
+        ("u/c0", ((5, 9),), 4, mms[2]["st"]["public"], None)]
     assert [m.proof.sessions for m in got["members"]] == [
         (tmp_path / "session-m0" / "sessions" / "a",), (), (tmp_path / "session-m2" / "sessions" / "b",)]
     assert got["members"][2].proof.circuit == tmp_path / "m2" / "circuit.txt"
@@ -434,11 +432,11 @@ def test_case_members_names_every_member_and_a_statement_for_each_sampled_one(tm
     got = a5.case_members(case, **proof)
     assert got["commitment"] == "ab"
     assert got["params"] == {"delta": "1/100", "proofs": {"members": {
-        "t/c0": {"circuit": "00" * 64, "public": mms[0]["st"]["public"], "registered": None, "units": [[0, 3]],
+        "t/c0": {"public": mms[0]["st"]["public"], "registered": None, "block": 0,
                  "vus_per_block": 4},
-        "t/c1": {"circuit": "01" * 64, "public": mms[1]["st"]["public"], "registered": None, "units": [[3, 5]],
+        "t/c1": {"public": mms[1]["st"]["public"], "registered": None, "block": 1,
                  "vus_per_block": 4},
-        "u/c0": {"circuit": "02" * 64, "public": mms[2]["st"]["public"], "registered": None, "units": [[5, 9]],
+        "u/c0": {"public": mms[2]["st"]["public"], "registered": None, "block": 2,
                  "vus_per_block": 4}}}}
     e = json.loads(bytes.fromhex(got["evidence"]))
     assert "verdicts" not in e and e["sessions"] == names and e["proved_units"] == [1, 6]
@@ -526,3 +524,77 @@ def test_the_audit_record_says_whether_the_case_for_the_compiled_check_was_writt
     assert a5.case_written(failed) == {"written": False, "why": "ZeroDivisionError: division by zero"}
     (none := tmp_path / "none").mkdir()
     assert a5.case_written(none) == {"written": False, "why": "the audit wrote none, and no reason"}
+
+
+def _audited(d: Path, accepted: bool, case: bool = True) -> dict:
+    """A stand-in audit's result under ``d``, its Python verdict ``accepted``, with a stand-in per-member case."""
+    d.mkdir(parents=True, exist_ok=True)
+    if case:
+        (d / "case-v2.json").write_text(json.dumps({"blobs": [], "commitment": "", "evidence": "", "params": {}}))
+    return {"accepted": accepted, "checks": {"draw": {"ok": accepted, "codes": []}}}
+
+
+#: a stand-in `members_proof` answer naming members, so the audit has a per-member case
+PM = {"members": [], "tables": []}
+
+
+def test_the_audit_accepts_only_where_leans_members_check_accepts_its_case_too(tmp_path):
+    """`a5.members_lean` with a per-member case: Lean's `checkMembersAt` on it is required (``ran``); where it and the
+    Python verdict differ the audit refuses with `MEMBERS_DISAGREE` and both texts, and an audit whose case Lean could not
+    read is refused, ``ran`` false, its reason the one `case_written` gives."""
+    def lean(verdict, why=None):
+        return lambda case: (verdict, why)
+
+    r = _audited(tmp_path / "both", True)
+    a5.members_lean(tmp_path / "both", r, PM, lean("accept"))
+    got = r["checks"]["members_lean"]
+    assert r["accepted"] and got["ok"] and got["ran"] is True and got["codes"] == []
+    r = _audited(tmp_path / "lean-refuses", True)
+    a5.members_lean(tmp_path / "lean-refuses", r, PM, lean("reject", "proofs: member a/c0: refused"))
+    got = r["checks"]["members_lean"]
+    assert not r["accepted"] and not got["ok"] and got["ran"] is True and got["codes"] == [a5.MEMBERS_DISAGREE]
+    assert got["detail"] == {"lean": {"verdict": "reject", "reason": "proofs: member a/c0: refused"},
+                             "python": {"accepted": True, "failed": []}}
+    r = _audited(tmp_path / "python-refuses", False)
+    a5.members_lean(tmp_path / "python-refuses", r, PM, lean("accept"))
+    got = r["checks"]["members_lean"]
+    assert not r["accepted"] and got["codes"] == [a5.MEMBERS_DISAGREE] and got["detail"]["python"]["failed"] == ["draw"]
+    r = _audited(tmp_path / "neither", False)
+    a5.members_lean(tmp_path / "neither", r, PM, lean("reject", "proofs: x"))
+    assert not r["accepted"] and r["checks"]["members_lean"]["codes"] == ["lean-reject"]
+    (tmp_path / "none" / "case-v2-error.txt").parent.mkdir()
+    (tmp_path / "none" / "case-v2-error.txt").write_text("ValueError: no case\n")
+    r = _audited(tmp_path / "none", True, case=False)
+    a5.members_lean(tmp_path / "none", r, PM, lean("accept"))
+    assert not r["accepted"] and r["checks"]["members_lean"] == {
+        "ok": False, "ran": False, "codes": ["lean-not-run"], "reason": "no per-member case: ValueError: no case"}
+
+
+def test_an_audit_with_no_per_member_case_says_leans_members_check_did_not_run_and_why(tmp_path):
+    """`a5.members_lean` writes its verdict in every audit: one with no per-member case, a window of one member
+    (`members_proof`'s None) or sessions that are not ``--zk`` (its reason), keeps the Python's verdict with ``ran``
+    false and that reason, and Lean is not asked."""
+    def never(case):
+        raise AssertionError("Lean was asked")
+
+    for pm, why in ((None, a5.ONE_MEMBER), ("v2 verifies --zk sessions; this audit's are plain",
+                                           "v2 verifies --zk sessions; this audit's are plain")):
+        r = _audited(tmp_path / str(bool(pm)), True)
+        a5.members_lean(tmp_path / str(bool(pm)), r, pm, never)
+        assert r["accepted"] and r["checks"]["members_lean"] == {"ok": True, "ran": False, "codes": [], "reason": why}
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_leans_members_check_refuses_a_stand_in_case_the_python_accepted(tmp_path):
+    """The executable's own ``check`` (`members.case_check_out`) on a stand-in case: Lean refuses its parameters, so an
+    audit the Python accepted is refused as a disagreement, Lean's reason beside the Python's verdict, and its printed
+    line beside its SHA-512."""
+    r = _audited(tmp_path, True)
+    a5.members_lean(tmp_path, r, PM)
+    got = r["checks"]["members_lean"]
+    assert not r["accepted"] and got["ran"] is True and got["codes"] == [a5.MEMBERS_DISAGREE], got
+    assert got["detail"]["lean"]["verdict"] == "reject" and got["detail"]["lean"]["reason"], got
+    lean = got["detail"]["lean"]
+    assert json.loads(lean["output"])["verdict"] == "reject"
+    assert lean["output_sha512"] == hashlib.sha512(lean["output"].encode()).hexdigest()

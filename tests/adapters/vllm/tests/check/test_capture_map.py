@@ -6,7 +6,6 @@ the shape the inventory gives a rank; each rank built for the target's profile a
 cites are pinned."""
 from __future__ import annotations
 
-import ast
 import copy
 import hashlib
 import json
@@ -287,30 +286,6 @@ def test_the_check_passes_the_meta_build_and_a_live_document(tmp_path):
     (tmp_path / "live.json").write_text(json.dumps(MI.live_document(per_rank)))
     code, out = _check_document(tmp_path / "live.json")
     assert code == 1 and out.count("FAIL") == 1 and "FAIL rank 5: switch VLLM_USE_DEEP_GEMM" in out
-
-
-def test_a_tp_capture_writes_the_live_document_the_check_reads_from_its_own_engine_before_any_request(tmp_path):
-    """`tp-capture --inventory-out` (the H200 runbook's serve smoke, capture-map check and observer log in one engine load): the
-    document `write_live` makes of the ranks' `rank_inventory` passes the check, and the capture writes it once the engine is built,
-    before the warm-up and the observer."""
-    from verity_vllm.pipeline.tp import lease as TPL
-
-    rpc_timeout = object()      # handed to collective_rpc unchanged
-
-    class _LLM:
-        def collective_rpc(self, fn, timeout=None):
-            assert fn is MI.rank_inventory and timeout is rpc_timeout
-            return [{"rank": r, **copy.deepcopy(RANK0)} for r in reversed(range(TP))]
-
-    live = MI.write_live(_LLM(), tmp_path / "inv" / "live.json", timeout=rpc_timeout, repo=DOC["repo"], revision=DOC["revision"], tp=TP)
-    assert json.loads((tmp_path / "inv" / "live.json").read_text()) == live and live["source"] == "live" and live["tp"] == TP
-    code, out = _check_document(tmp_path / "inv" / "live.json")
-    assert code == 0 and out.count(": 0 problems") == TP
-    src = Path(TPL.__file__).with_name("capture.py").read_text()
-    main = ast.get_source_segment(src, next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == "main"))
-    assert main is not None
-    at = [main.index(m) for m in ("LLM(**kw)", "write_live(llm", "throwaway_requests(", '"tp2_install"')]
-    assert at == sorted(at), at
 
 
 def test_ranks_that_build_different_modules_fail_the_check(tmp_path):

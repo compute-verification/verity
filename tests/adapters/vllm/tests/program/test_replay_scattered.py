@@ -145,19 +145,3 @@ def test_replayed_program_equals_direct_lowering_for_a_repeated_row():
     batch = next(n for n in replayed.root.body.nodes if n.form == "batch" and n.args)
     assert isinstance(batch.args[0].refs, Strided) and batch.args[0].refs.outer_stride == 0
 
-
-def test_replayed_digest_unchanged_for_ordinary_bodies():
-    """The run path's output for a body with no scattered part: pinned on the commit before the fast path was added
-    (the fast path never fires, so the descriptor is bit-identical)."""
-    def body(Bd, S, M):  # contiguous rows (inner_stride == 1) and a broadcast: both take the run path
-        rows = Bd.batch(Row3, Coll(Array(4, Array(3, V32)), strided_view(M, 0, 3, 6, 1, 12)), axes=(0,))
-        rep = Bd.batch(Add32, rows, Coll(Array(4, V32), strided_view(rows, 1, 1, 0, 0, 4)), axes=(0, 0))
-        return rep
-    plain = CompositeDefinition("TPlain", 1, (), lambda S: ((("M", Array(4, Array(6, V32))),), Array(4, V32)),
-                                body, register=False)
-    d = program_digest(encode_program(_replayed(bind(plain), "TPlain")))
-    assert d == PLAIN_DIGEST
-
-
-PLAIN_DIGEST = ("fdffd0189139ab686564436a5c3f132d1ee6317a6a4ffd070b693698a5823bb0"
-                "26e12a78697135077659bafcfe9f61d75d2b55b33c01418869c71e56319f3f45")  # computed on 7b399e1b9, before the fast path

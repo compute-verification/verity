@@ -70,6 +70,9 @@ def _u(x: int, n: int) -> bytes:
 def _blocks(circuit: IF.Circuit) -> IF.Blocks:
     if circuit.blocks is None:
         raise ValueError(f"{circuit.name}: no inference entries to partition")
+    if not circuit.blocks.uniform:
+        raise ValueError(f"{circuit.name}: a served window's blocks are a request each of its own positions, not m blocks of "
+                         "one gate count; this partition is a class circuit's")
     return circuit.blocks
 
 

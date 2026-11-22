@@ -56,8 +56,8 @@ def ReadsExact : Prop :=
     Desc.inputsAtRoot P = true → Desc.walkable P = true → Desc.analyze P = .ok reads → circuitOf P = .ok c →
     ∀ k < nodeCount P,
       (∀ s ∈ reads[k]!, s.count ≠ 0 → ∀ q, s.ps[0]? = some q →
-        Desc.nodeOf (rootOffs P) q.base.toNat < nodeCount P ∧
-        ∀ x ∈ segGates s, ∃ a : ℕ, x = ((a : ℤ), c.w[a]!) ∧ a ∈ nodeGates P (Desc.nodeOf (rootOffs P) q.base.toNat)) ∧
+        Desc.nodeOf (rootOffs P) (q.row 0).base.toNat < nodeCount P ∧
+        ∀ x ∈ segGates s, ∃ a : ℕ, x = ((a : ℤ), c.w[a]!) ∧ a ∈ nodeGates P (Desc.nodeOf (rootOffs P) (q.row 0).base.toNat)) ∧
       ∀ a : ℕ, (∃ s ∈ reads[k]!, s.count ≠ 0 ∧ ∃ w, ((a : ℤ), w) ∈ segGates s) ↔
         ∃ g ∈ nodeGates P k, a ∈ c.reads[g]! ∧ a ∉ nodeGates P k
 
@@ -69,7 +69,7 @@ def collStep (offs : Array ℕ) (own : Array (Option ℕ)) (theta : Array Bool) 
   match s.ps[0]? with
   | none => into
   | some q =>
-    let k' := Desc.nodeOf offs q.base.toNat
+    let k' := Desc.nodeOf offs (q.row 0).base.toNat
     if s.count == 0 || own[k']! == some u || theta[k']! then into else into.modify u (·.push s)
 
 /-- `Desc.intoOf`'s step over root node `k`. -/
@@ -87,8 +87,8 @@ theorem intoOf_eq (offs : Array ℕ) (own : Array (Option ℕ)) (theta : Array B
 /-- What `collStep` keeps for inference block `u`: a segment of positive count whose first piece is in a root node of another inference block and
 outside θ's nodes. -/
 abbrev Coll (offs : Array ℕ) (own : Array (Option ℕ)) (theta : Array Bool) (u : ℕ) (s : Desc.Seg) : Prop :=
-  ∃ q, s.ps[0]? = some q ∧ s.count ≠ 0 ∧ own[Desc.nodeOf offs q.base.toNat]! ≠ some u ∧
-    theta[Desc.nodeOf offs q.base.toNat]! = false
+  ∃ q, s.ps[0]? = some q ∧ s.count ≠ 0 ∧ own[Desc.nodeOf offs (q.row 0).base.toNat]! ≠ some u ∧
+    theta[Desc.nodeOf offs (q.row 0).base.toNat]! = false
 
 theorem collStep_spec (offs : Array ℕ) (own : Array (Option ℕ)) (theta : Array Bool) (u : ℕ)
     (into : Array (Array Desc.Seg)) (s : Desc.Seg) :
@@ -244,7 +244,7 @@ theorem segGates_ps {s : Desc.Seg} {x : ℤ × ℕ} (h : x ∈ segGates s) : ∃
     unfold segGates at h
     split_ifs at h
     · simp [piecesGates, h0] at h
-    · simp [piecesGates, Desc.Seg.copy, Desc.shiftGates, Array.toList_map, h0] at h
+    · cases hr : s.lanes <;> simp [piecesGates, Desc.Seg.copy, Desc.shiftGates, Array.toList_map, h0, hr] at h
   · exact ⟨q, rfl⟩
 
 /-! ## `FreshExact` -/
@@ -336,9 +336,9 @@ theorem freshExact_of (hR : ReadsExact) : FreshExact := by
       have haa : (a : ℤ) = a' := congrArg Prod.fst ha'
       have haa' : a = a' := by exact_mod_cast haa
       subst haa'
-      have hown' : own[Desc.nodeOf (rootOffs P) q.base.toNat]! ≠ some u := fun h =>
+      have hown' : own[Desc.nodeOf (rootOffs P) (q.row 0).base.toNat]! ≠ some u := fun h =>
         hau (by rw [(hdiv _ hk'lt a hak').1]; exact h)
-      have hmask' : mask[Desc.nodeOf (rootOffs P) q.base.toNat]! = false := by
+      have hmask' : mask[Desc.nodeOf (rootOffs P) (q.row 0).base.toNat]! = false := by
         rw [Bool.eq_false_iff]
         intro hm
         have := Std.HashSet.mem_iff_contains.1 ((hdiv _ hk'lt a hak').2.2 hm)

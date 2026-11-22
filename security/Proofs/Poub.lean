@@ -6,6 +6,7 @@ public import Proofs.Poub.RateAudit
 public import Proofs.Poub.BoundReceipt
 public import Proofs.Poub.Remote
 public import Proofs.Poub.RemoteHeld.Sample
+public import Proofs.Poub.RemoteHeld.RawSample
 public import Proofs.Poub.RemoteHeld
 public import Proofs.Poub.RemoteHeld.Meets
 public import Proofs.Poub.RemoteHeld.OverTime

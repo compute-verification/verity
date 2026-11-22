@@ -1,13 +1,15 @@
 """The served table reads what a listed scheme's declaration states, never a scheme's name: what a party's start writes
-(`Launch.starts`, `served_table.started`), what a tied application states over a scheme's defaults (`Scheme.tie`,
-`served_table.tied`), and the device premise a piece's answer places (`served_table.attested`)."""
+(`Launch.starts`, `served_table.started`) and the device premise a piece's answer places (`served_table.attested`)."""
 from __future__ import annotations
 
 import dataclasses
 import json
 import sys
 
+import pytest
+
 from verity_cli import run as R
+from verity_vllm.inputs import serves
 
 REG = R.registry()
 T = sys.modules["served_table"]
@@ -36,14 +38,32 @@ def test_the_declared_starts_are_what_the_challenger_and_the_network_attester_wr
     assert not T.STARTS[T.NETWORK_ATTESTER].optional
 
 
-def test_a_tied_application_states_each_listed_schemes_declared_tie(monkeypatch):
-    real = T.schemes.get
-    monkeypatch.setattr(T.schemes, "get", lambda n: dataclasses.replace(real(n), tie={"order": "fifo"})
-                        if n == "network-attester" else real(n))
-    got = T.tied(("sampled-proofs", "pearl-plus", "network-attester"))
-    assert got[T.MANIFESTS["network-attester"].id] == {"order": "fifo"}
-    assert got[T.MANIFESTS["pearl-plus"].id] == {"class": "4,27,2", "tie-uniform": True}
-    assert T.MANIFESTS["sampled-proofs"].id not in got
+def test_each_declared_read_is_a_run_of_a_party_its_scheme_declares():
+    reads = {(n, p, k): run for n, c in T.MANIFESTS.items() if n not in T.UNDECLARED
+             and not isinstance(said := T.schemes.get(n).reads, T.Lacks) for p, r in said.items() for k, run in r.items()}
+    assert reads == {("bandwidth", T.BANDWIDTH_VERIFIER, "challenger"): ("pous", T.MEMORY_ATTESTER)}
+    for scheme, party in reads.values():
+        assert party in {r.name for r in T.MANIFESTS[scheme].parties}
+
+
+def test_the_declared_components_are_the_schemes_whose_record_names_a_row():
+    rowed = {n for n in T.schemes.DECLARATIONS if not isinstance(T.schemes.get(n).record, T.Lacks)}
+    assert set(T.MANIFESTS) == rowed | set(T.UNDECLARED)
+    assert rowed == {"sampled-proofs", "inference-only", "pearl-plus", "pous", "bandwidth", "wipe", "network-attester"}
+
+
+def test_only_the_sampled_proofs_carry_the_served_windows_rule_and_its_default():
+    designs = {n: (c.default_sampling_design, c.sampling_design) for n, c in T.MANIFESTS.items() if c.sampling_design}
+    assert designs == {"sampled-proofs": ("rate:1/3481648", T._design)}
+
+
+def test_a_tied_schemes_parameters_are_what_its_tie_names_and_nothing_else(monkeypatch):
+    s = dataclasses.replace(T.schemes.get("pearl-plus"), tie={"class": "1,2,3", "schedule": "serial", "kernel": ""})
+    cls = serves.SERVES.window_class
+    assert T._tied(s, "x", {"class": cls, "kernel": "k"}) == {
+        "class": cls, "schedule": T.schemes.get("pearl-plus").settings["schedule"], "kernel": "k"}
+    with pytest.raises(T.Refused, match=r"lane \(known: class, kernel, schedule\)"):
+        T._tied(s, "x", {"lane": "v"})
 
 
 def test_a_piece_answer_places_the_listed_component_whose_id_it_names(tmp_path, monkeypatch):

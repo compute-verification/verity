@@ -17,7 +17,6 @@ importing the package does not load those registries.
 from __future__ import annotations
 
 from verity_vllm.observe.fold.patterns.activations import SiluAndMul as SiluAndMul
-from verity_vllm.observe.fold.patterns.activations import SiluAndMulWithClamp
 from verity_vllm.observe.fold.patterns.attention import FA2_OP_NAMES, AttentionScope
 from verity_vllm.observe.fold.patterns.embedding import Embedding
 from verity_vllm.observe.fold.patterns.gemm import BiasAdd, GemmLaunch, fuse_bias_adds
@@ -88,10 +87,10 @@ from verity_vllm.observe.fold.patterns.transparent import (
 __all__ = [
     "ALIAS_OPS", "AttentionScope", "BiasAdd", "ComputeGroup", "Embedding", "FA2_OP_NAMES", "FusedAddRMSNorm",
     "GEMM_TARGET_SCRATCH_KEY", "GemmLaunch", "GeometryError", "KVCacheUpdate", "LogitsGather", "RMSNormTritonLaunch",
-    "SCRATCH_INT_FILLS", "SiluAndMulWithClamp", "TokenSelectArgmax", "TokenSelectGumbelTopP", "TokenSelectGumbelTwoStage",
+    "SCRATCH_INT_FILLS", "TokenSelectArgmax", "TokenSelectGumbelTopP", "TokenSelectGumbelTwoStage",
     "TransparentAten", "TransparentGroup", "TransparentTritonMetadata", "X01_SCRATCH_KEY", "_check_pins", "_fmt",
     "_group_compute", "_positions_ok", "as_float", "as_slot_rows", "as_weight_view", "attribution_for", "base_op", "bound_args",
-    "classify_transparent", "dsa_patterns", "dsv4_patterns", "find_descendants", "first", "fuse_bias_adds", "gemm_target_of",
+    "classify_transparent", "dsa_patterns", "find_descendants", "first", "fuse_bias_adds", "gemm_target_of",
     "hint_of", "is_int", "is_row_major", "kv_group_of", "kv_layer_of", "kv_slots", "members", "op_name", "schema_param_names",
     "scope_transparents", "split_heads", "sub_rows", "target_of", "triton_name", "unsupported", "vocab_kind", "widened_source",
 ]
@@ -100,10 +99,4 @@ __all__ = [
 def dsa_patterns() -> list:
     """Load GLM-5.3's DSA patterns without making the shared package import them."""
     from verity_vllm.observe.fold.patterns.dsa import dsa_patterns as build
-    return build()
-
-
-def dsv4_patterns() -> list:
-    """Load DeepSeek-V4's patterns without making the shared package import them."""
-    from verity_vllm.observe.fold.patterns.dsv4 import dsv4_patterns as build
     return build()

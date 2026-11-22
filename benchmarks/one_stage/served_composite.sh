@@ -12,14 +12,11 @@
 # SPOT's one-stage v1 case (no composite takes it: its answer goes to OUT/verdicts.txt alone), both composites'
 # SPOT case (a5's v2 case of a `--zk` audit, in the form `one-stage`)
 # and the inference-only case from the window's records audit
-# (SERVE_DIR/v3c-w*/audit; in a run without V3c whose H1 windows weren't tied, so with no SERVE_DIR/h1/log.jsonl,
-# `served_verdicts.sh`'s step 3's,
+# (SERVE_DIR/v3c-w*/audit; in a run without V3c, `served_verdicts.sh`'s step 3's,
 # SERVE_DIR/private/logs/sampled-proofs/keep/served), the latter with the policy's α and Γ read off the case's own division
-# (`--from-division`), or ALPHA and GAMMA where both are set, and its log the serve's H1 log through R's previous record,
-# or, on a serve with no H1 log, the serve's own records walked back from R's previous to its first (on a
+# (`--from-division`), or ALPHA and GAMMA where both are set, and its log the serve's own records walked back from R's previous to its first (on a
 # serve tied to Pearl+, the window's W and the serve's first record, which a compose hand-off carries);
-# and PoUW's period case (`served_pouw.sh`'s SERVE_DIR/private/pouw/period) once every window of it names R as its
-# Commit record, refused otherwise, and Pearl+'s run case naming R from the parts its piece wrote
+# and Pearl+'s run case naming R from the parts its piece wrote
 # (`served_pearlplus.sh`'s SERVE_DIR/private/pearlplus/case). Each CASE line's protocol and verdict go to
 # OUT/verdicts.txt, and α and Γ, which count the block's gates, stay in the case's private policy.json. Then
 # `composite.py` remote and onsite,
@@ -46,13 +43,14 @@
 # directories it left out can't be read), it says so (`COMPOSITE: not run`) and exits 1, since no product's Lean
 # answered. It exits 1 only where the step itself fails, not for a piece's summary or answer that doesn't parse: that
 # makes its protocol NOT_WRITTEN, its case is not composed, the step goes on, and onsite's NOT_ESTABLISHED line names
-# the protocol as missing. It makes no verdict: exit 0 when each product's Lean answered, else 1. PRODUCT=remote
+# the protocol as missing. It makes no verdict: exit 0 when each product's Lean answered, else 1. A product whose
+# composite.py printed no VERDICT line or a traceback, or refused its Lean's answer (composite.py's ERROR line: a panic
+# line, a signal, a status other than 0, 1 or 2), gets a `COMPOSITE PRODUCT: ERROR` line and no answer. PRODUCT=remote
 # (`served_verdicts.sh`'s) reads no PoUS or wipe case and no ONSITE_PIECES, and runs remote's Lean alone: under
 # POUW=pearlplus remote's composite of record (`remote-v1`, `Core.Remote.V1`, whose work
 # subprotocol is Pearl+'s run verdict, served_cases.py's Pearl+ case; composite.py remote-v1), and where the tree
 # lacks it none (`COMPOSITE: not run`, exit 1), else v0. PRODUCT=onsite runs remote beside onsite: under
-# POUW=pearlplus, where the tree has it, remote-v1, whose work is Pearl+'s run verdict as onsite's is, else v0, so that
-# under POUW=h1 onsite's Lean rejects naming Pearl+'s case missing.
+# POUW=pearlplus, where the tree has it, remote-v1, whose work is Pearl+'s run verdict as onsite's is, else v0.
 # On the served node itself (SERVED_NODE unset or its own host), which the prover controls, it is composed and its
 # first line, COMPOSITE ON-NODE, says so; COMPOSE_ON_NODE=WHY says WHY there instead (a deferral's follow-on, on a prover
 # node). Under VERITY_HOLD_PLACEMENT=1 a composite on the served node claims no record: it is refused (COMPOSITE
@@ -93,12 +91,12 @@ fi
 PRODUCT=${PRODUCT:-onsite}
 case $PRODUCT in
   onsite) products=(remote onsite)
-    [ "${POUW:-}" = pearlplus ] && [ -f verity/protocols/compose/verifier/remote/RemoteV1Main.lean ] \
+    [ "${POUW:-}" = pearlplus ] && [ -f verity/protocols/run/verifier/remote/RemoteV1Main.lean ] \
       && products=(remote-v1 onsite) ;;
   remote) products=(remote)
     if [ "${POUW:-}" = pearlplus ]; then
-      [ -f verity/protocols/compose/verifier/remote/RemoteV1Main.lean ] \
-        || { say "COMPOSITE: not run, POUW=pearlplus composes remote/v1, and this tree has no verity/protocols/compose/verifier/remote/RemoteV1Main.lean"; exit 1; }
+      [ -f verity/protocols/run/verifier/remote/RemoteV1Main.lean ] \
+        || { say "COMPOSITE: not run, POUW=pearlplus composes remote/v1, and this tree has no verity/protocols/run/verifier/remote/RemoteV1Main.lean"; exit 1; }
       products=(remote-v1)
     fi ;;
   *) say "COMPOSITE: not run, PRODUCT is onsite or remote, not $PRODUCT"; exit 1 ;;
@@ -114,8 +112,8 @@ fi
 mkdir -p "$P" && chmod 700 "$D/private" "$P"
 package() {  # the Lake package directory of product $1
   case $1 in
-    remote | remote-v1) echo verity/protocols/compose/verifier/remote ;;
-    onsite) echo verity/protocols/compose/verifier/onsite ;;
+    remote | remote-v1) echo verity/protocols/run/verifier/remote ;;
+    onsite) echo verity/protocols/run/verifier/onsite ;;
   esac
 }
 exe() {  # Lean executable $1 of package dir $2, built, its path printed
@@ -139,7 +137,7 @@ if [ -f benchmarks/one_stage/served_cases.py ]; then
   ag=(--from-division)
   [ -n "${ALPHA:-}" ] && [ -n "${GAMMA:-}" ] && ag=(--alpha "$ALPHA" --gamma "$GAMMA")
   where=(--serve-dir "$D")
-  compgen -G "$D/v3c-w*/audit/window/case.json" > /dev/null || [ -f "$D/h1/log.jsonl" ] \
+  compgen -G "$D/v3c-w*/audit/window/case.json" > /dev/null \
     || { [ -f "$D/private/logs/sampled-proofs/keep/served/window/case.json" ] && where=(--audit "$D/private/logs/sampled-proofs/keep/served"); }
   "$TPY" benchmarks/one_stage/served_cases.py "${where[@]}" --private "$D/private" "${ag[@]}" > "$P/served_cases.log" 2>&1
   rc=$?
@@ -185,9 +183,12 @@ EOF
   "${scope[@]}" timeout -k 1m "${COMPOSITE_TIMEOUT:-60m}" "$TPY" benchmarks/one_stage/composite.py "$x" "${cases[@]}" \
     --private-out "$P/$x/private" --public-out "$OUT/composite/$x" --exe "$e" "${dev[@]}" > "$P/$x.log" 2>&1
   r=$?
-  grep -E '^(NOT_ESTABLISHED|VERDICT) ' "$P/$x.log" | sed "s/^/COMPOSITE $x: /" | tee -a "$OUT/verdicts.txt"
+  grep -E '^(NOT_ESTABLISHED|VERDICT|ERROR) ' "$P/$x.log" | sed "s/^/COMPOSITE $x: /" | tee -a "$OUT/verdicts.txt"
+  # A Python traceback exits 1, a reject's status: only a VERDICT line, with no traceback, makes 0, 1 or 2 an answer.
   case $r in
-    0 | 1 | 2) ;;
+    0 | 1 | 2) grep -q '^VERDICT ' "$P/$x.log" && ! grep -q '^Traceback (most recent call last):' "$P/$x.log" \
+      || { say "COMPOSITE $x: ERROR composite.py ended with status $r and printed no verdict, its log on the node"; bad=1; } ;;
+    67) bad=1 ;;
     65) say "COMPOSITE $x: composite.py wrote no public line (exit 65: they share bytes with a case's evidence)"; bad=1 ;;
     *) say "COMPOSITE $x: composite.py exit $r, its log on the node"; bad=1 ;;
   esac

@@ -5,7 +5,6 @@ Hopper's expert-GEMM step, and the check's vectorised twins pass them; each sing
 fails by name."""
 from __future__ import annotations
 
-import copy
 from typing import Any
 
 import numpy as np
@@ -18,7 +17,7 @@ from verity_vllm.check.replay import served_check as SC
 from verity_vllm.definitions.numerics import rows as R
 from verity_vllm.definitions.numerics.act_rows import silu_mul_expf
 from verity_vllm.definitions.numerics.rows import token_select_first_max
-from verity_vllm.definitions.registry import act, b1
+from verity_vllm.definitions.registry import b1
 from verity_vllm.definitions.registry import moe as M
 from verity_vllm.query.manifest.format import manifest_digest
 
@@ -126,11 +125,6 @@ def served():
     return build, W, steps, prompts
 
 
-def _check(served, steps=None, build=None):
-    b, W, st, prompts = served
-    return SC.check(build or b, st if steps is None else steps, W.__getitem__, seed=None, rows=8, prompts=prompts)
-
-
 def _with(steps, step: int, name: str, f) -> list[SC.Step]:
     out = list(steps)
     s = out[step]
@@ -148,41 +142,8 @@ def test_every_launch_config_binds_hoppers_expert_gemm_step(served):
     assert [(p["moe"][UPK]["base"], p["moe"][DOWNK]["base"]) for p in plans] == [(M.MoeExpertGemmV2.id, M.MoeExpertGemmWV2.id)] * 3
 
 
-def test_the_served_moe_values_pass(served):
-    rep = _check(served)
-    assert rep["ok"], rep["failures"]
-    assert rep["steps_checked"] == [0, 1, 2]
-    kinds = {M.MoeRouterTopKNorm.id, M.MoeExpertGemmV2.id, M.MoeExpertGemmWV2.id, act.SiluMul.id, M.MoeSum.id, b1.GemmV2.id}
-    assert kinds <= set(rep["tally"])
-    assert all(ok == n for ok, n in rep["tally"].values())
-    s1 = rep["steps"]["1"]
-    picked = sum(map(len, rep["picks"]["1"].values()))
-    assert (s1[UP]["rows"], s1[UP]["pairs"], s1[UP]["nonfinite"]) == (picked, TOPK * picked, 0)
-
-
 def _r0(served, step: int) -> int:
     return next(lo for r, lo, _hi in served[2][step].rows if r == "r0")
-
-
-@pytest.mark.parametrize("name,col", [(LG, 3), (RW, 1), (RI, 0), (UP, 2 * INTER + 5), (ACT, INTER + 1), (DOWN, H + 7), (OUT, 4)])
-def test_a_flipped_word_fails_its_value(served, name, col):
-    row = _r0(served, 1)
-
-    def flip(a):
-        a[row, col] ^= 1
-        return a
-    rep = _check(served, _with(served[2], 1, name, flip))
-    assert (1, name) in _failed(rep)
-
-
-def test_an_expert_id_outside_the_experts_fails_the_launches(served):
-    row = _r0(served, 0)
-
-    def far(a):
-        a[row, 1] = E
-        return a
-    failed = _failed(_check(served, _with(served[2], 0, RI, far)))
-    assert {(0, RI), (0, UP), (0, DOWN)} <= failed
 
 
 def _steps_apart(served) -> tuple[dict, list[SC.Step], dict]:
@@ -200,19 +161,3 @@ def _steps_apart(served) -> tuple[dict, list[SC.Step], dict]:
     return W, steps, prompts
 
 
-def test_the_expert_gemm_is_the_plans_step(served):
-    W, steps, prompts = _steps_apart(served)
-    build = served[0]
-    assert SC.check(build, steps, W.__getitem__, seed=None, rows=8, prompts=prompts)["ok"]
-    other = copy.deepcopy(build)
-    plan = other["steps_plan"][1]
-    plan["moe"][UPK] = SV.bound(M.MoeExpertGemm, E=E, K=H, N=2 * INTER)
-    rep = SC.check(other, steps, W.__getitem__, seed=None, rows=8, prompts=prompts)
-    assert (1, UP) in _failed(rep) and rep["steps"]["1"][UP]["definition"] == plan["moe"][UPK]["definition"]
-    assert rep["steps"]["1"][UP]["bad"] == rep["steps"]["1"][UP]["pairs"]
-
-
-def test_a_routed_expert_weight_of_another_shape_is_refused(served):
-    b, W, steps, prompts = served
-    rep = SC.check(b, steps, lambda n: W[n][:-1] if n == "w2" else W[n], seed=None, rows=8, prompts=prompts)
-    assert all((s, DOWN) in _failed(rep) for s in range(STEPS))

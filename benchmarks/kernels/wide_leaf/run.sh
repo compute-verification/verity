@@ -7,7 +7,7 @@
 #           own (a slot's): every step pinned to them, the prover built by the steady harness's setup
 #           (benchmarks/harness/setup/flock_prover.sh) in FLOCK_WORK on the node's disk with CUDA 13.3, CUDA_HOME
 #           where given, else the run's machine's [properties]' (benchmarks/kernels/machine.py, which the setup reads too),
-#           unpacked by the setup (verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh, from the node's apt source) where
+#           unpacked by the setup (verity/protocols/proof/flock/prover/pod/cuda-13.3.sh, from the node's apt source) where
 #           the record lists none, and refused before any lease where there is no record or its toolkit is unread; the statement
 #           fetched from the store into a scratch where server_rate.py looks (z/NAME/c{n}/stage) and its circuit held to
 #           its pin; then one gpu-lease of the card CARD (else of one card near those CPUs), pinned to them, for LEASE_MIN (100) minutes,
@@ -40,7 +40,13 @@ rfetch() {   # rfetch STORE ARGS...: the statement's files through the tree's re
 
 setup() {
   # the setup writes under RESEARCH_RUN_DIR/out/setup, and it and the CUDA unpacker it sources read unset names
-  export RESEARCH_RUN_DIR=$O/setup-run; mkdir -p "$RESEARCH_RUN_DIR"; set +u
+  # and its toolkit reader (machine.py) reads the run's machine's record, which this private run directory carries
+  export RESEARCH_RUN_DIR=$O/setup-run; mkdir -p "$RESEARCH_RUN_DIR"
+  if [ -f "$RD/inputs/${RESEARCH_MACHINE:-}.toml" ]; then
+    mkdir -p "$RESEARCH_RUN_DIR/inputs" && cp "$RD/inputs/$RESEARCH_MACHINE.toml" "$RESEARCH_RUN_DIR/inputs/" \
+      || { export RESEARCH_RUN_DIR=$RD; log "REFUSED: cannot copy the machine's record into $O/setup-run/inputs"; exit 4; }
+  fi
+  set +u
   # shellcheck disable=SC1091
   . benchmarks/harness/setup/flock_prover.sh || { export RESEARCH_RUN_DIR=$RD; log "REFUSED: the setup failed ($O/setup-run/out/setup)"; exit 4; }
   set -u; export RESEARCH_RUN_DIR=$RD

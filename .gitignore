@@ -5,7 +5,6 @@ __pycache__/
 
 # Run outputs, evidence, and shipped source snapshots live in artifact storage (tests/test_repository.py is the backstop).
 out/
-!tests/benchmarks/numerical/bench/data/flock-runs/*/out/
 !benchmarks/exfiltration/made_up/out/
 runs/
 *.tgz
@@ -52,16 +51,23 @@ runs/
 **/.lake/
 
 # Fetched fixtures: registered in artifacts.json, fetched by `research data fetch-fixtures` (store README §7.3)
-tests/verity/commitments/fixtures/layouts
+tests/verity/circuits/count_vectors.jsonl
+tests/verity/circuits/format_vectors.json
+tests/verity/circuits/qcall_vectors.json
+tests/verity/circuits/qword_vectors.json
 benchmarks/nci/sources
 tests/benchmarks/one_stage/fixtures/guard.tar.xz
-tests/verity/protocols/proofs/flock/prover/fixtures/f1-gate
-tests/verity/protocols/proofs/flock/prover/fixtures/forged-proofs
-tests/verity/protocols/proofs/flock/prover/fixtures/hidden-outputs
-tests/verity/protocols/proofs/flock/prover/fixtures/honest-session
-tests/verity/protocols/proofs/flock/prover/fixtures/honest-plain
-tests/verity/protocols/proofs/flock/prover/fixtures/plain-tree
-tests/verity/protocols/compose/verifier/lean/fixtures/sampled-two-case
+tests/verity/protocols/proof/flock/prover/fixtures/f1-gate
+tests/verity/protocols/proof/flock/prover/fixtures/forged-proofs
+tests/verity/protocols/proof/flock/prover/fixtures/hidden-outputs
+tests/verity/protocols/proof/flock/prover/fixtures/honest-session
+tests/verity/protocols/proof/flock/prover/fixtures/honest-plain
+tests/verity/protocols/proof/flock/prover/fixtures/plain-tree
+tests/verity/protocols/proof/flock/prover/fixtures/served-registered-plain
+tests/verity/protocols/proof/flock/prover/fixtures/served-registered-plain-descriptor-v2
+tests/verity/protocols/proof/flock/prover/fixtures/registered-reads
+tests/verity/protocols/proof/flock/prover/fixtures/session-tables
+tests/verity/protocols/run/verifier/lean/fixtures/sampled-two-case
 calibration/machine_model/data/cover/corpus.json
 calibration/machine_model/data/cover/bu_12_9.json
 calibration/machine_model/data/cover/sass_isa_tables.json
@@ -71,22 +77,21 @@ benchmarks/machine_model/data/cover/corpus.json
 benchmarks/machine_model/data/cover/bu_12_9.json
 benchmarks/machine_model/data/cover/sass_isa_tables.json
 benchmarks/training_slowdown/data/v3-selection.json
-tests/verity/protocols/proofs/flock/prover/fixtures/public-inputs
-tests/verity/protocols/proofs/flock/prover/fixtures/public-inputs-blocks
-tests/verity/protocols/proofs/flock/prover/fixtures/rec-c3-inner
-tests/verity/protocols/proofs/flock/prover/fixtures/rec-coins
-tests/verity/protocols/proofs/flock/prover/fixtures/rec-links
-tests/verity/protocols/proofs/flock/prover/fixtures/zk-sessions
-tests/verity/protocols/proofs/spot/verifier/fixtures/form-refusals
+tests/verity/protocols/proof/flock/prover/fixtures/public-inputs
+tests/verity/protocols/proof/flock/prover/fixtures/public-inputs-blocks
+tests/verity/protocols/proof/flock/prover/fixtures/rec-c3-inner
+tests/verity/protocols/proof/flock/prover/fixtures/rec-coins
+tests/verity/protocols/proof/flock/prover/fixtures/rec-links
+tests/verity/protocols/proof/flock/prover/fixtures/zk-sessions
 tests/adapters/vllm/tests/protocols/fixtures/challenger_periods
 tests/benchmarks/network_e2e/encodings/fixtures
 tests/benchmarks/network_e2e/encodings/fixtures_draft
 tests/benchmarks/network_e2e/data/endpoint_carry/advice_trace.jsonl
-tests/verity/protocols/resource_accounting/network/attester/fixtures/weights-v1-h200-digests.json
+tests/verity/protocols/accounting/network/attester/fixtures/weights-v1-h200-digests.json
 tests/calibration/tc_probe_fp4/fixtures/tc-sm100-f8-2026-10-19.json
-tests/verity/protocols/resource_accounting/network/verifier/fixtures/arith_encode_vectors.json
-tests/verity/protocols/resource_accounting/network/verifier/fixtures/cache_step_vectors.json
-tests/verity/protocols/resource_accounting/network/verifier/fixtures/replay_step_vectors.json
+tests/verity/protocols/accounting/network/verifier/fixtures/arith_encode_vectors.json
+tests/verity/protocols/accounting/network/verifier/fixtures/cache_step_vectors.json
+tests/verity/protocols/accounting/network/verifier/fixtures/replay_step_vectors.json
 fixtures/lean-vectors
 verity/circuits/silicon/captures/autoproof-probe-vectors.json
 tests/benchmarks/numerical/checker/fixtures/typed-obligation-v0/stage2--qkv-proj-decode-0-k1536.json
@@ -101,9 +106,7 @@ tests/adapters/vllm/tests/engine/fixtures/llama31_8b_int8_attn_l0.jsonl.gz
 tests/adapters/vllm/tests/program/data/fp8_block_operands.npz
 tests/adapters/vllm/tests/regression/expected/llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager.json
 tests/adapters/vllm/tests/properties/fixtures/dsv4_q_norm_commit_20261021.json
-tests/adapters/vllm/tests/check/fixtures/deepseek_v4/inventory-tp8-rank0.json
 tests/adapters/vllm/tests/check/fixtures/glm_moe_dsa/inventory-tp8-rank0.json
-tests/adapters/vllm/tests/properties/fixtures/dsv4_mhc_capture_20261013.json
 tests/adapters/vllm/tests/regression/expected/llama32-1b__bf16__l40s__tp1__b64__i1024__o128__mixed__greedy__bi-eager.json
 tests/adapters/vllm/tests/program/data/fp8_saved_operands.npz
 tests/adapters/vllm/tests/program/data/fp8_production_row_l0_qkv.npz

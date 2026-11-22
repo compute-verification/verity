@@ -16,7 +16,7 @@ import pytest
 
 from tests.program import test_dsa_derive as DSA
 from tests.program.test_dsa_derive import dense, served  # noqa: F401  (the dense DSA layers' fixture)
-from verity_vllm.pipeline.build import (
+from verity_vllm.pipeline.build_instances import (
     _instance_rows,
     _write_instances,
     _write_instances_file,

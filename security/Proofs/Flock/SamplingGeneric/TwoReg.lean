@@ -41,7 +41,8 @@ block's committed interior (`OffIreg`).
 * `Compiled.pr_unfound_le_at`, `Compiled.ex_offReg_le`: the sessions' bound at a selection that reads the run's coins
   off the second stage only, and the rewinding lemma at the committed boundary trace averaged over the tape.
 * `eventTwo_split`, `eventTwo_le`: the event at a tape and a boundary trace as the union of those four, and, at the
-  committed boundary trace, **the primary conjunct of `CompiledTwo.KSRegTwo`**, at most `ε_reg,2`.
+  committed boundary trace, **the primary conjunct of `CompiledTwo.KSRegTwo`**, at most `ε_reg,2`. Their `_of` forms
+  read only the contract's clauses at the statement and a replay partition `Q` (`SharedOpensTwo`).
 
 The deterministic half and the event's union read the boundary trace as a parameter, so the form at the boundary trace
 read at the statement (`SamplingGeneric/TwoRegX.lean`) takes them as they are.
@@ -302,8 +303,9 @@ theorem le_bconfTwo (H : Msg → Msg) (L : CompiledTwo Coin A) {x : Msg} {s : Au
 
 /-- **Two second stages' conflict at the committed interior**: at most `Pr[B_conf,2]`. Both read gate `g` under the
 interior roots of one replay block, which the two second stages share (`Sessions.interior`). -/
-theorem pr_iconflict_le {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind : L.commit.Binds H) (hS : L.Sessions H)
-    {x : Msg} {s : AuditStatement} (hs : L.parse x = some s) (Pρ : Partition) {Ω : Type} [Fintype Ω] [Nonempty Ω]
+theorem pr_iconflict_le_of {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind : L.commit.Binds H) {x : Msg}
+    (hint : ∀ (Ω : Type) (P : Prover Ω) ω r e ρ,
+      L.iroots x (run H P L.V x ω (forkOn (L.secondStage x) r e)).seen ρ = L.iroots x (run H P L.V x ω r).seen ρ) {s : AuditStatement} (hs : L.parse x = some s) (Pρ : Partition) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) :
     Ex (fun p : Ω × (Fin (L.V.k x) → Coin) => Pr fun ee : ((Fin (L.V.k x) → Coin) × L.SlotEC x) ×
       ((Fin (L.V.k x) → Coin) × L.SlotEC x) => L.IConflict H P x p.1 Pρ p.2 ee) ≤ (BconfTwo H L Ω P x).Pr H := by
@@ -327,15 +329,16 @@ theorem pr_iconflict_le {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind : L.co
   obtain ⟨a, ha, ha1, ha2, ha3, -⟩ := iopensAt_some hs hb1'
   obtain ⟨a', ha', ha1', ha2', ha3', -⟩ := iopensAt_some hs hb2'
   have hroots : a.1 = a'.1 := by
-    rw [ha1, ha1', hS.interior x Ω P q.1 q.2.1 q.2.2.1.1 ρ, hS.interior x Ω P q.1 q.2.1 q.2.2.2.1 ρ]
+    rw [ha1, ha1', hint Ω P q.1 q.2.1 q.2.2.1.1 ρ, hint Ω P q.1 q.2.1 q.2.2.2.1 ρ]
   exact Compiled.bconf_of_disagree hbind s P q.1 (forkOn (L.secondStage x) q.2.1 q.2.2.1.1, q.2.2.1.2)
     (forkOn (L.secondStage x) q.2.1 q.2.2.2.1, q.2.2.2.2) (Or.inl ha) (Or.inr ha') hroots (ha2.trans ha2'.symm)
     (by rw [ha3, ha3']; exact fun h => hne (congrArg some h))
 
 /-- **The rewinding lemma at the committed interior, averaged over the tape and the first stage**: at most
 `N·√Pr[B_conf,2]` (Jensen's inequality). -/
-theorem ex_offIreg_le {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind : L.commit.Binds H) (hS : L.Sessions H)
-    {x : Msg} {s : AuditStatement} (hs : L.parse x = some s) (Pρ : Partition) {Ω : Type} [Fintype Ω] [Nonempty Ω]
+theorem ex_offIreg_le_of {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind : L.commit.Binds H) {x : Msg}
+    (hint : ∀ (Ω : Type) (P : Prover Ω) ω r e ρ,
+      L.iroots x (run H P L.V x ω (forkOn (L.secondStage x) r e)).seen ρ = L.iroots x (run H P L.V x ω r).seen ρ) {s : AuditStatement} (hs : L.parse x = some s) (Pρ : Partition) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) :
     Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffIreg H P x ω Pρ rc.1 rc.2) ≤
       L.nG x * Real.sqrt ((BconfTwo H L Ω P x).Pr H) :=
@@ -356,7 +359,51 @@ theorem ex_offIreg_le {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind : L.comm
             L.IConflict H P x p.1 Pρ p.2 ee)) := Ex_mul_left _ _
     _ ≤ L.nG x * Real.sqrt ((BconfTwo H L Ω P x).Pr H) :=
         mul_le_mul_of_nonneg_left ((Ex_sqrt_le _ fun _ => Pr_nonneg _).trans
-          (Real.sqrt_le_sqrt (pr_iconflict_le hbind hS hs Pρ P))) (Nat.cast_nonneg _)
+          (Real.sqrt_le_sqrt (pr_iconflict_le_of hbind hint hs Pρ P))) (Nat.cast_nonneg _)
+
+theorem pr_iconflict_le {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind : L.commit.Binds H) (hS : L.Sessions H)
+    {x : Msg} {s : AuditStatement} (hs : L.parse x = some s) (Pρ : Partition) {Ω : Type} [Fintype Ω] [Nonempty Ω]
+    (P : Prover Ω) :
+    Ex (fun p : Ω × (Fin (L.V.k x) → Coin) => Pr fun ee : ((Fin (L.V.k x) → Coin) × L.SlotEC x) ×
+      ((Fin (L.V.k x) → Coin) × L.SlotEC x) => L.IConflict H P x p.1 Pρ p.2 ee) ≤ (BconfTwo H L Ω P x).Pr H :=
+  pr_iconflict_le_of hbind (hS.interior x) hs Pρ P
+
+theorem ex_offIreg_le {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind : L.commit.Binds H) (hS : L.Sessions H)
+    {x : Msg} {s : AuditStatement} (hs : L.parse x = some s) (Pρ : Partition) {Ω : Type} [Fintype Ω] [Nonempty Ω]
+    (P : Prover Ω) :
+    Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffIreg H P x ω Pρ rc.1 rc.2) ≤
+      L.nG x * Real.sqrt ((BconfTwo H L Ω P x).Pr H) :=
+  ex_offIreg_le_of hbind (hS.interior x) hs Pρ P
+
+/-- **The contract's clauses the two-stage event reads**, at statement `s` of `x` on `Pt` with replay partition `Q`:
+`slots`, `shared` and `interior` at `x`, `opens` at `s` on `Pt` and `Q`, and the scope's facts the event reads. A
+contract read level by level gives them at two levels too. -/
+structure SharedOpensTwo (H : Msg → Msg) (L : CompiledTwo Coin A) (x : Msg) (s : AuditStatement) (Pt Q : Partition) :
+    Prop where
+  slots : ∀ r, (L.checked x r).length ≤ L.nPU x
+  shared : ∀ (Ω : Type) (P : Prover Ω) ω r i j u u', (run H P L.V x ω r).out = .acc →
+    (L.checked x r)[i]? = some u → (L.checked x r)[j]? = some u' →
+    L.skey x (L.checked x r) i = L.skey x (L.checked x r) j →
+    L.session x u (run H P L.V x ω r).seen = L.session x u' (run H P L.V x ω r).seen
+  interior : ∀ (Ω : Type) (P : Prover Ω) ω r e ρ,
+    L.iroots x (run H P L.V x ω (forkOn (L.secondStage x) r e)).seen ρ = L.iroots x (run H P L.V x ω r).seen ρ
+  opens : ∀ (Ω : Type) (Pv : Prover Ω) ω r u xS vS w, (run H Pv L.V x ω r).out = .acc → u ∈ L.checked x r →
+    L.session x u (run H Pv L.V x ω r).seen = some (xS, vS) → A.R xS w →
+    ∃ b ρ rb, Pt.blocks[u]? = some b ∧ replayOf Pt Q u = some ρ ∧ Q.blocks[ρ]? = some rb ∧
+      ∀ (val : ℕ → Option Bool) (ι : ℕ → Bool),
+        (∀ q ∈ L.reveal s u (run H Pv L.V x ω r).seen w, L.commit.Opens H q.1 q.2 = true →
+          (q.1 = s.roots → val q.2.pos = some q.2.val) ∧
+          (q.1 = L.iroots x (run H Pv L.V x ω r).seen ρ → ι q.2.pos = q.2.val)) →
+        s.prog.Correct (s.prog.refIn rb val ι) b
+  scope : s.prog.Topological ∧ Pt.Partitions s.prog ∧ Q.gates.Nodup
+
+theorem Sessions.toSharedOpensTwo {H : Msg → Msg} {L : CompiledTwo Coin A} (hS : L.Sessions H) {x : Msg}
+    {s : AuditStatement} {Pt : Partition} {d : Sampling.Design.Two} (hs : L.parse x = some s)
+    (hPt : L.partition s = some Pt) (hd : L.two s = some d) (hin : InScopeTwo Pt d s) :
+    L.SharedOpensTwo H x s Pt d.part :=
+  ⟨hS.slots x, hS.shared x, hS.interior x,
+    fun Ω Pv ω r u xS vS w hacc hu hsu hR => hS.opens x s Pt d Ω Pv ω r u xS vS w hs hPt hd hin hacc hu hsu hR,
+    hin.1, hin.2.1, hin.2.2.1⟩
 
 /-! ## The deterministic half -/
 
@@ -370,16 +417,15 @@ the kept openings elsewhere, agree with every opening the session's witness reve
 `u` correct (`Sessions.opens`); and `tr` and the committed interior agree with them where `u`'s correctness reads
 (`correct_refIn_congr`), so `u` is correct at them, which `u ∈ incorrectAllAt` denies. The boundary trace is the reader's:
 the committed trace at the run's tape (`FregTwo_eq`), or one read at the statement. -/
-theorem regTwo_split {H : Msg → Msg} {L : CompiledTwo Coin A} (hS : L.Sessions H) {x : Msg} {s : AuditStatement}
-    {Pt : Partition} {d : Sampling.Design.Two} (hs : L.parse x = some s) (hPt : L.partition s = some Pt)
-    (hd : L.two s = some d) (hin : InScopeTwo Pt d s) {Ω : Type} (P : Prover Ω) (ω : Ω)
+theorem regTwo_split_of {H : Msg → Msg} {L : CompiledTwo Coin A} {x : Msg} {s : AuditStatement}
+    {Pt Q : Partition} (hS : L.SharedOpensTwo H x s Pt Q) (hs : L.parse x = some s) {Ω : Type} (P : Prover Ω) (ω : Ω)
     (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x) (hacc : (run H P L.V x ω r).out = .acc) (i u : Fin (L.nPU x))
     (hiu : (L.checked x r)[i.val]? = some u.val) (tr : ℕ → Option Bool)
-    (hF : u.val ∈ incorrectAllAt s Pt d.part tr (L.iregVal H P x ω r)) (i₀ u₀ : Fin (L.nPU x))
+    (hF : u.val ∈ incorrectAllAt s Pt Q tr (L.iregVal H P x ω r)) (i₀ u₀ : Fin (L.nPU x))
     (hlead : L.leadOf x (L.checked x r) i = some i₀) (hu₀ : (L.checked x r)[i₀.val]? = some u₀.val) :
     ¬ L.Found H x (run H P L.V x ω) u₀ r (c i₀ u₀) ∨ L.InConf H P x s ω r c ∨
       (∃ g < L.nG x, ∃ b, L.opensAt H P x ω r c g = some b ∧ tr g ≠ some b) ∨
-      L.OffIreg H P x ω d.part r c := by
+      L.OffIreg H P x ω Q r c := by
   have hu := List.mem_of_getElem? hiu
   by_cases hfd : L.Found H x (run H P L.V x ω) u₀ r (c i₀ u₀)
   swap
@@ -388,7 +434,7 @@ theorem regTwo_split {H : Msg → Msg} {L : CompiledTwo Coin A} (hS : L.Sessions
   · exact Or.inr (Or.inl hconf)
   by_cases hoff : ∃ g < L.nG x, ∃ b, L.opensAt H P x ω r c g = some b ∧ tr g ≠ some b
   · exact Or.inr (Or.inr (Or.inl hoff))
-  by_cases hioff : L.OffIreg H P x ω d.part r c
+  by_cases hioff : L.OffIreg H P x ω Q r c
   · exact Or.inr (Or.inr (Or.inr hioff))
   exfalso
   have hagree : ∀ q ∈ L.kept H P x s ω r c, ∀ q' ∈ L.kept H P x s ω r c, q.1 = q'.1 → q.2.pos = q'.2.pos →
@@ -396,19 +442,19 @@ theorem regTwo_split {H : Msg → Msg} {L : CompiledTwo Coin A} (hS : L.Sessions
     fun q hq q' hq' h1 h2 => Classical.byContradiction fun hne => hconf ⟨q, hq, q', hq', h1, h2, hne⟩
   have hreg : ∀ g < L.nG x, ∀ b, L.opensAt H P x ω r c g = some b → tr g = some b :=
     fun g hg b hb => Classical.byContradiction fun hne => hoff ⟨g, hg, b, hb, hne⟩
-  have hireg : ∀ g < L.nG x, ∀ ρ, gateBlock d.part g = some ρ → ∀ b, L.iopensAt H P x ω r c ρ g = some b →
+  have hireg : ∀ g < L.nG x, ∀ ρ, gateBlock Q g = some ρ → ∀ b, L.iopensAt H P x ω r c ρ g = some b →
       L.iregVal H P x ω r ρ g = b :=
     fun g hg ρ hρ b hb => Classical.byContradiction fun hne => hioff ⟨g, hg, ρ, hρ, b, hb, hne⟩
   have hnG : L.nG x = s.prog.gates.length := by simp only [Compiled.nG, hs]
   obtain ⟨xS, vS, hsess, hsh, w, hw, hR⟩ := hfd
   obtain ⟨hk, hc, hfirst⟩ := Compiled.of_leadOf hlead
   have hsu : L.session x u (run H P L.V x ω r).seen = some (xS, vS) := by
-    rw [← hS.shared x Ω P ω r _ _ _ _ hacc hu₀ hiu hk]
+    rw [← hS.shared Ω P ω r _ _ _ _ hacc hu₀ hiu hk]
     exact hsess
   have hub : u.val ∈ L.sessBlocks x (L.checked x r) i₀ := by
     rw [Compiled.sessBlocks, hc]
     exact List.mem_filterMap.2 ⟨i.val, Compiled.self_mem_sessSlots hiu u.isLt, hiu⟩
-  obtain ⟨b, ρ, rb, hb, hρ, hrb, hcor⟩ := hS.opens x s Pt d Ω P ω r u xS vS w hs hPt hd hin hacc hu hsu hR
+  obtain ⟨b, ρ, rb, hb, hρ, hrb, hcor⟩ := hS.opens Ω P ω r u xS vS w hacc hu hsu hR
   simp only [incorrectAllAt, mem_biUnion, mem_product, mem_range] at hF
   obtain ⟨⟨ρ', t⟩, -, hwr⟩ := hF
   simp only [incorrectInAt, mem_filter] at hwr
@@ -440,12 +486,25 @@ theorem regTwo_split {H : Msg → Msg} {L : CompiledTwo Coin A} (hS : L.Sessions
     · rw [hI]
       by_cases hg : q.2.pos < s.prog.gates.length ∧ q.2.pos ∈ rb
       · rw [ite_eq_left hg]
-        exact hireg _ (by rw [hnG]; exact hg.1) ρ (gateBlock_of_mem hin.2.2.1 hrb hg.2) _
+        exact hireg _ (by rw [hnG]; exact hg.1) ρ (gateBlock_of_mem hS.scope.2.2 hrb hg.2) _
           (iopensAt_of_mem hs hagree hqk hi hok)
       · rw [ite_eq_right hg, ← hi]
         exact ιOf_eq hagree hqk
-  exact hnot ⟨b, rb, hb, hrb, (correct_refIn_congr hin.1 hin.2.1 hb rb (fun g hg => by rw [hV, ite_eq_left hg])
+  exact hnot ⟨b, rb, hb, hrb, (correct_refIn_congr hS.scope.1 hS.scope.2.1 hb rb (fun g hg => by rw [hV, ite_eq_left hg])
     fun g hg hgr => by rw [hI, ite_eq_left ⟨hg, hgr⟩]).1 hc'⟩
+
+set_option synthInstance.maxSize 1024 in
+theorem regTwo_split {H : Msg → Msg} {L : CompiledTwo Coin A} (hS : L.Sessions H) {x : Msg} {s : AuditStatement}
+    {Pt : Partition} {d : Sampling.Design.Two} (hs : L.parse x = some s) (hPt : L.partition s = some Pt)
+    (hd : L.two s = some d) (hin : InScopeTwo Pt d s) {Ω : Type} (P : Prover Ω) (ω : Ω)
+    (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x) (hacc : (run H P L.V x ω r).out = .acc) (i u : Fin (L.nPU x))
+    (hiu : (L.checked x r)[i.val]? = some u.val) (tr : ℕ → Option Bool)
+    (hF : u.val ∈ incorrectAllAt s Pt d.part tr (L.iregVal H P x ω r)) (i₀ u₀ : Fin (L.nPU x))
+    (hlead : L.leadOf x (L.checked x r) i = some i₀) (hu₀ : (L.checked x r)[i₀.val]? = some u₀.val) :
+    ¬ L.Found H x (run H P L.V x ω) u₀ r (c i₀ u₀) ∨ L.InConf H P x s ω r c ∨
+      (∃ g < L.nG x, ∃ b, L.opensAt H P x ω r c g = some b ∧ tr g ≠ some b) ∨
+      L.OffIreg H P x ω d.part r c :=
+  regTwo_split_of (hS.toSharedOpensTwo hs hPt hd hin) hs P ω r c hacc i u hiu tr hF i₀ u₀ hlead hu₀
 
 /-! ## The event -/
 
@@ -453,6 +512,43 @@ set_option synthInstance.maxSize 1024 in
 /-- **The event at a tape, at a boundary trace**: an accepted run that samples a proof block incorrect at the boundary
 trace `tr` and its replay block's committed interior has the first such block's session unfound at its first slot (at
 `leadSel (selOf …)`), or disagrees with itself, or is off `tr` or off the committed interior (`regTwo_split`). -/
+theorem eventTwo_split_of {H : Msg → Msg} {L : CompiledTwo Coin A} {x : Msg} {s : AuditStatement}
+    {Pt Q : Partition} (hS : L.SharedOpensTwo H x s Pt Q) (hs : L.parse x = some s) (hPt : L.partition s = some Pt)
+    {Ω : Type} (P : Prover Ω) (ω : Ω) (tr : ℕ → Option Bool) :
+    Pr (fun r : Fin (L.V.k x) → Coin => (run H P L.V x ω r).out = .acc ∧
+      ∃ u ∈ L.checked x r, u ∈ incorrectAllAt s Pt Q tr (L.iregVal H P x ω r)) ≤
+      Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => (run H P L.V x ω rc.1).out = .acc ∧
+        ∃ i, L.leadSel x (L.selOf x (incorrectAllAt s Pt Q tr (L.iregVal H P x ω rc.1)))
+            (L.checked x rc.1) = some i ∧
+          ∃ u : Fin (L.nPU x), (L.checked x rc.1)[i.val]? = some u.val ∧
+            ¬ L.Found H x (run H P L.V x ω) u rc.1 (rc.2 i u)) +
+      (Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.InConf H P x s ω rc.1 rc.2) +
+        (Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
+            ∃ g < L.nG x, ∃ b, L.opensAt H P x ω rc.1 rc.2 g = some b ∧ tr g ≠ some b) +
+          Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffIreg H P x ω Q rc.1 rc.2))) := by
+  have hIO := (Sampling.Pr_union_le
+    (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.InConf H P x s ω rc.1 rc.2)
+    (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
+      (∃ g < L.nG x, ∃ b, L.opensAt H P x ω rc.1 rc.2 g = some b ∧ tr g ≠ some b) ∨
+        L.OffIreg H P x ω Q rc.1 rc.2)).trans
+      (add_le_add le_rfl (Sampling.Pr_union_le
+        (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
+          ∃ g < L.nG x, ∃ b, L.opensAt H P x ω rc.1 rc.2 g = some b ∧ tr g ≠ some b)
+        (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffIreg H P x ω Q rc.1 rc.2)))
+  refine (Pr_fst (β := L.SlotEC x) (fun r : Fin (L.V.k x) → Coin => (run H P L.V x ω r).out = .acc ∧
+    ∃ u ∈ L.checked x r, u ∈ incorrectAllAt s Pt Q tr (L.iregVal H P x ω r))).symm.trans_le
+      (Sampling.Pr_or_le (fun rc hrc => ?_) le_rfl hIO)
+  obtain ⟨hacc, v, hvl, hvF⟩ := hrc
+  obtain ⟨i, hi, u, hiu, huF⟩ := L.selOf_some x (hS.slots rc.1)
+    (fun w hw => by rw [Compiled.nPU_eq hs hPt]; exact mem_range.1 (incorrectAllAt_subset s Pt Q _ _ hw)) hvl hvF
+  obtain ⟨i₀, u₀, hlead, hu₀⟩ := Compiled.leadOf_some hiu u.isLt
+  rcases regTwo_split_of hS hs P ω rc.1 rc.2 hacc i u hiu tr huF i₀ u₀ hlead hu₀ with h | h | h | h
+  · exact Or.inl ⟨hacc, i₀, by rw [Compiled.leadSel, hi, Option.bind_some, hlead], u₀, hu₀, h⟩
+  · exact Or.inr (Or.inl h)
+  · exact Or.inr (Or.inr (Or.inl h))
+  · exact Or.inr (Or.inr (Or.inr h))
+
+set_option synthInstance.maxSize 1024 in
 theorem eventTwo_split {H : Msg → Msg} {L : CompiledTwo Coin A} (hS : L.Sessions H) {x : Msg} {s : AuditStatement}
     {Pt : Partition} {d : Sampling.Design.Two} (hs : L.parse x = some s) (hPt : L.partition s = some Pt)
     (hd : L.two s = some d) (hin : InScopeTwo Pt d s) {Ω : Type} (P : Prover Ω) (ω : Ω) (tr : ℕ → Option Bool) :
@@ -466,35 +562,43 @@ theorem eventTwo_split {H : Msg → Msg} {L : CompiledTwo Coin A} (hS : L.Sessio
       (Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.InConf H P x s ω rc.1 rc.2) +
         (Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
             ∃ g < L.nG x, ∃ b, L.opensAt H P x ω rc.1 rc.2 g = some b ∧ tr g ≠ some b) +
-          Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffIreg H P x ω d.part rc.1 rc.2))) := by
-  have hIO := (Sampling.Pr_union_le
-    (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.InConf H P x s ω rc.1 rc.2)
-    (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
-      (∃ g < L.nG x, ∃ b, L.opensAt H P x ω rc.1 rc.2 g = some b ∧ tr g ≠ some b) ∨
-        L.OffIreg H P x ω d.part rc.1 rc.2)).trans
-      (add_le_add le_rfl (Sampling.Pr_union_le
-        (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
-          ∃ g < L.nG x, ∃ b, L.opensAt H P x ω rc.1 rc.2 g = some b ∧ tr g ≠ some b)
-        (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffIreg H P x ω d.part rc.1 rc.2)))
-  refine (Pr_fst (β := L.SlotEC x) (fun r : Fin (L.V.k x) → Coin => (run H P L.V x ω r).out = .acc ∧
-    ∃ u ∈ L.checked x r, u ∈ incorrectAllAt s Pt d.part tr (L.iregVal H P x ω r))).symm.trans_le
-      (Sampling.Pr_or_le (fun rc hrc => ?_) le_rfl hIO)
-  obtain ⟨hacc, v, hvl, hvF⟩ := hrc
-  obtain ⟨i, hi, u, hiu, huF⟩ := L.selOf_some x (hS.slots x rc.1)
-    (fun w hw => by rw [Compiled.nPU_eq hs hPt]; exact mem_range.1 (incorrectAllAt_subset s Pt d.part _ _ hw)) hvl hvF
-  obtain ⟨i₀, u₀, hlead, hu₀⟩ := Compiled.leadOf_some hiu u.isLt
-  rcases regTwo_split hS hs hPt hd hin P ω rc.1 rc.2 hacc i u hiu tr huF i₀ u₀ hlead hu₀ with h | h | h | h
-  · exact Or.inl ⟨hacc, i₀, by rw [Compiled.leadSel, hi, Option.bind_some, hlead], u₀, hu₀, h⟩
-  · exact Or.inr (Or.inl h)
-  · exact Or.inr (Or.inr (Or.inl h))
-  · exact Or.inr (Or.inr (Or.inr h))
+          Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffIreg H P x ω d.part rc.1 rc.2))) :=
+  eventTwo_split_of (hS.toSharedOpensTwo hs hPt hd hin) hs hPt P ω tr
 
 /-- **The primary conjunct of `KSRegTwo`, from the sessions' bound**: at each tape, an accepted run that samples a
 proof block of `FregTwo` has the first such block's session unfound at its first slot (the sessions' bound at
 `leadSel (selOf …)`, which reads the run's coins off the second stage only), or its extractions disagree with
 themselves (`B_conf`), open a gate off the committed boundary trace (the rewinding lemma at the tape), or open a gate
 off a replay block's committed interior (the rewinding lemma at the tape and the first stage, and `B_conf,2`):
-`eventTwo_split` at the committed boundary trace. -/
+`eventTwo_split_of` at the committed boundary trace. -/
+theorem eventTwo_le_of {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind : L.commit.Binds H) {x : Msg}
+    {s : AuditStatement} {Pt Q : Partition} (hS : L.SharedOpensTwo H x s Pt Q) (hSK : L.toCompiled.SessionKS H)
+    (hs : L.parse x = some s) (hPt : L.partition s = some Pt) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) :
+    Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
+      ∃ u ∈ L.checked x p.2, u ∈ incorrectAllAt s Pt Q (L.regVal H P x p.1) (L.iregVal H P x p.1 p.2)) ≤
+      L.εregTwo H x P := by
+  obtain ⟨β, hβ0, hβ, hκ⟩ := hSK x Ω P
+  have hT : Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
+      (run H P L.V x ω rc.1).out = .acc ∧
+        ∃ i, L.leadSel x (L.selOf x (incorrectAllAt s Pt Q (L.regVal H P x ω) (L.iregVal H P x ω rc.1)))
+            (L.checked x rc.1) = some i ∧
+          ∃ u : Fin (L.nPU x), (L.checked x rc.1)[i.val]? = some u.val ∧
+            ¬ L.Found H x (run H P L.V x ω) u rc.1 (rc.2 i u)) ≤
+      L.κs x + Real.sqrt (L.V.k x * L.γs x * PrB H L.V P x) :=
+    Compiled.pr_unfound_le_at H L.toCompiled P β hβ0 hβ
+      (fun ω r => L.leadSel x (L.selOf x (incorrectAllAt s Pt Q (L.regVal H P x ω) (L.iregVal H P x ω r))))
+      (fun ω r e => by simp only [iregVal_forkOn]) fun ω r sl => hκ ω r sl
+  have hI := Compiled.pr_inConf_le hbind hs P
+  have hO : Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
+      ∃ g < L.nG x, ∃ b, L.opensAt H P x ω rc.1 rc.2 g = some b ∧ L.regVal H P x ω g ≠ some b) ≤
+      L.nG x * Real.sqrt ((Compiled.Bconf H L.toCompiled Ω P x).Pr H) := Compiled.ex_offReg_le hbind hs P
+  have hIC := ex_offIreg_le_of hbind hS.interior hs Q P
+  refine (Sampling.Pr_prod_eq_Ex _).trans_le
+    ((Ex_mono fun ω => eventTwo_split_of hS hs hPt P ω (L.regVal H P x ω)).trans ?_)
+  rw [Ex_add, Ex_add, Ex_add]
+  unfold εregTwo Compiled.εreg
+  linarith
+
 theorem eventTwo_le {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A.KS H) (hbind : L.commit.Binds H)
     (hS : L.Sessions H) :
     ∀ x, L.Scope x → ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω),
@@ -502,29 +606,9 @@ theorem eventTwo_le {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A.KS H) (hb
         ∃ u ∈ L.checked x p.2, u ∈ L.FregTwo H P x p.1 p.2) ≤ L.εregTwo H x P := by
   intro x hsc Ω _ _ P
   obtain ⟨s, Pt, d, hs, hPt, hd, hin⟩ := hsc
-  have hSK : L.toCompiled.SessionKS H := Compiled.sessionKS_of hA ⟨hS.fixed, hS.runs⟩
-  obtain ⟨β, hβ0, hβ, hκ⟩ := hSK x Ω P
-  have hT : Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
-      (run H P L.V x ω rc.1).out = .acc ∧
-        ∃ i, L.leadSel x (L.selOf x (incorrectAllAt s Pt d.part (L.regVal H P x ω) (L.iregVal H P x ω rc.1)))
-            (L.checked x rc.1) = some i ∧
-          ∃ u : Fin (L.nPU x), (L.checked x rc.1)[i.val]? = some u.val ∧
-            ¬ L.Found H x (run H P L.V x ω) u rc.1 (rc.2 i u)) ≤
-      L.κs x + Real.sqrt (L.V.k x * L.γs x * PrB H L.V P x) :=
-    Compiled.pr_unfound_le_at H L.toCompiled P β hβ0 hβ
-      (fun ω r => L.leadSel x (L.selOf x (incorrectAllAt s Pt d.part (L.regVal H P x ω) (L.iregVal H P x ω r))))
-      (fun ω r e => by simp only [iregVal_forkOn]) fun ω r sl => hκ ω r sl
-  have hI := Compiled.pr_inConf_le hbind hs P
-  have hO : Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
-      ∃ g < L.nG x, ∃ b, L.opensAt H P x ω rc.1 rc.2 g = some b ∧ L.regVal H P x ω g ≠ some b) ≤
-      L.nG x * Real.sqrt ((Compiled.Bconf H L.toCompiled Ω P x).Pr H) := Compiled.ex_offReg_le hbind hs P
-  have hIC := ex_offIreg_le hbind hS hs d.part P
   simp only [FregTwo_eq H L P hs hPt hd]
-  refine (Sampling.Pr_prod_eq_Ex _).trans_le
-    ((Ex_mono fun ω => eventTwo_split hS hs hPt hd hin P ω (L.regVal H P x ω)).trans ?_)
-  rw [Ex_add, Ex_add, Ex_add]
-  unfold εregTwo Compiled.εreg
-  linarith
+  exact eventTwo_le_of hbind (hS.toSharedOpensTwo hs hPt hd hin) (Compiled.sessionKS_of hA ⟨hS.fixed, hS.runs⟩) hs hPt
+    Ω P
 
 end CompiledTwo
 

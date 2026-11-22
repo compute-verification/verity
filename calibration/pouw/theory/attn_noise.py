@@ -34,7 +34,7 @@ import sys
 
 import numpy as np
 
-from verity.protocols.proofs.spot.verifier.profile import WINDOW_DELTA
+from verity.protocols.proof.spot.verifier.profile import WINDOW_DELTA
 
 from checked_strip import W_RE, CellGrid, cross_ranks
 from exact_kit.checks import Checks

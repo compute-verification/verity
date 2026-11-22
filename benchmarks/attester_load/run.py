@@ -6,7 +6,7 @@
 Each arm sends the same requests at the same evenly spaced load to one endpoint, through the network attester and
 straight to it, alternating, and measures each request's time to the first and to the last byte of its response. The
 network attester runs as deployed (`network_attester_serve.py serve`, under a key made for the run) at a scan class's
-schedule (`scan_zk.py schedule --class`), on this machine. The schedule delays every response on purpose: a request's
+schedule (its network attester's, `schedule`), on this machine. The schedule delays every response on purpose: a request's
 first egress cell leaves D buckets after its admission, and its last D + ⌊k/r⌋ buckets after it, so most of each added
 time is a parameter, which the result states beside it, and so is the capacity, lanes / ((D + 1 + ⌊k/r⌋)·τ) requests a
 second for responses of k ids. The stub arm runs on a CPU against `network_attester_serve.py fake`, in the id form; the
@@ -39,8 +39,7 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
-SERVE = ROOT / "verity/protocols/resource_accounting/network/attester/network_attester_serve.py"
-SCAN_ZK = ROOT / "verity/protocols/resource_accounting/network/prover/scan_zk.py"
+SERVE = ROOT / "verity/protocols/accounting/network/attester/network_attester_serve.py"
 FIRST, LAST, TICK = ("network-accounting/attester-added-first-byte", "network-accounting/attester-added-last-byte",
                      "network-accounting/attester-tick-lateness")
 #: a cell's header bytes (`link_frame.HEADER`): an id event fills the rest of its cell, and the id form fails any other size
@@ -54,11 +53,13 @@ SESSION_LOG = "warden.json"
 
 
 def schedule(scan_class: str, overrides: dict[str, int]) -> dict[str, int]:
-    """The scan class's schedule, as `scan_zk.py schedule --class` prints its flags, with `overrides` in place."""
-    words = subprocess.run([sys.executable, str(SCAN_ZK), "schedule", "--class", scan_class], check=True,
-                           capture_output=True, text=True).stdout.split()
-    got = {words[i][2:].replace("-", "_"): int(words[i + 1]) for i in range(0, len(words), 2)}
-    return got | {k: v for k, v in overrides.items() if v is not None}
+    """The scan class's schedule, its network attester's integer fields (`network_attester.W63`, `W63K4`), with `overrides` in place."""
+    from verity.protocols.run import schemes
+
+    W = schemes.catalog("network-attester", "attester")
+
+    params = {"w63": W.W63, "w63k4": W.W63K4}[scan_class]
+    return {k: getattr(params, k) for k in W.INTEGER_FIELDS} | {k: v for k, v in overrides.items() if v is not None}
 
 
 def stated(s: dict[str, int], tokens: int, paced_ms: float) -> dict[str, float]:
@@ -413,7 +414,7 @@ def write(doc: dict, out: Path) -> int:
 def parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="verity bench attester_load", description=__doc__.splitlines()[0])
     ap.add_argument("--class", dest="scan_class", default="w63k4", help="the scan class whose schedule the network "
-                    "attester runs (scan_zk.py schedule --class; default w63k4, the onsite application's)")
+                    "attester runs (w63 or w63k4; default w63k4, the onsite application's)")
     for name in ("cell-bytes", "slots", "bucket-ms", "delay", "lanes", "queue", "window", "ingress-cells",
                  "ingress-buckets", "egress-cells", "every"):
         ap.add_argument(f"--{name}", type=int, help="this parameter of the schedule in place of the class's")

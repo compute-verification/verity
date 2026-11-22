@@ -9,12 +9,12 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "poub_session"))
-sys.path.insert(0, str((HERE.parents[2] / "verity/protocols/resource_accounting/memory/poub/prover/poub_session/prover.py").parent))
+sys.path.insert(0, str((HERE.parents[2] / "verity/protocols/accounting/memory/poub/prover/poub_session/prover.py").parent))
 sys.path.insert(0, str(HERE.parents[2]))
 
 import prover  # noqa: E402
 
-from verity.protocols.resource_accounting.memory.poub.verifier import receipts as rb  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier import receipts as rb  # noqa: E402
 
 TOP = (1 << 64) - 1
 

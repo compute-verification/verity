@@ -1,50 +1,14 @@
-"""Coverage campaign harness (D87): seeded workload samples, the step-indexed arrival loop, the control-run step expectation.
-The generated B0 workloads are `test_coverage_workloads_of_record`."""
+"""The step-indexed arrival loop (`vllm_adapter.run_requests_arrivals`) on stub engines, and the control-run step expectation."""
 from __future__ import annotations
 
 import json
-import logging
 import types
 from pathlib import Path
 
-import pytest
 
 from verity_vllm.config import workload_file
-from verity_vllm.pipeline import coverage_workloads as gw
 
 REPO = (Path(__file__).resolve().parents[5] / "adapters" / "vllm")
-
-
-# ---------------------------------------------------------------------------------------------------------
-# samples
-# ---------------------------------------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize("profile", gw.PROFILES)
-@pytest.mark.parametrize("ctx", sorted(gw.CTX))
-def test_draws_respect_the_context_class(profile, ctx):
-    c = gw.CTX[ctx]
-    d = gw.draw_lengths(profile, ctx, 0)
-    assert len(d) == (1 if profile == "B1" else 8)
-    for r in d:
-        assert c["lo"] <= r["prompt_len"] <= c["cap"]
-        assert r["max_tokens"] == max(c["min_out"], r["prompt_len"] // 10)
-        assert r["max_tokens"] <= c["cap"] // 10 + 1
-    if profile == "B8-mixed":
-        assert d[0]["arrive_step"] == 0 and any(r["arrive_step"] > 0 for r in d[1:])
-        assert [r["arrive_step"] for r in d] == sorted(r["arrive_step"] for r in d)
-        sim = gw.simulate_schedule(d)
-        assert sim["membership_changes"] >= 2 and sim["steps_with_mixed_prefill_decode"] >= 1
-    else:
-        assert all(r["arrive_step"] == 0 for r in d)
-        assert gw.simulate_schedule(d)["expected_engine_steps"] == max(r["max_tokens"] for r in d)
-
-
-def test_draws_are_seeded_and_model_independent():
-    assert gw.draw_lengths("B8-static", "C256", 0) == gw.draw_lengths("B8-static", "C256", 0)
-    assert gw.draw_lengths("B8-static", "C256", 0) != gw.draw_lengths("B8-static", "C256", 1)
-    a = gw.draw_lengths("B8-static", "C256", 0)
-    assert len({r["prompt_len"] for r in a}) > 1, "heterogeneous lengths within the batch"
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -400,12 +364,3 @@ def test_expected_steps_prefers_the_control_run(tmp_path):
     assert G.RunArtifacts(run).expected_steps() == 21, "arrivals / chunking / EOS: the control run's realized steps"
 
 
-def test_the_command_names_each_file_it_writes_and_the_head_of_its_note(tmp_path, monkeypatch, caplog):
-    monkeypatch.setattr(gw, "Tok", lambda path: None)
-    monkeypatch.setattr(gw, "workload_doc", lambda **kw: {"note": f"{kw['profile']} at {kw['ctx']}: " + "n" * 300})
-    a = gw.Options(case="B0", model="m", tokenizer="t", profiles="P,Q", ctx="C", out_dir=str(tmp_path / "out"), checkpoints=str(tmp_path / "none.json"))
-    with caplog.at_level(logging.INFO, logger="verity_vllm"):
-        assert gw.main(a) == 0
-    logged = [(r.levelno, r.getMessage()) for r in caplog.records if r.name == "verity_vllm.pipeline.coverage_workloads"]
-    assert logged == [(logging.INFO, f"workload_cov_b0_{p.lower()}_c.json: " + (f"{p} at C: " + "n" * 300)[:200]) for p in "PQ"]
-    assert sorted(f.name for f in (tmp_path / "out").iterdir()) == ["workload_cov_b0_p_c.json", "workload_cov_b0_q_c.json"]

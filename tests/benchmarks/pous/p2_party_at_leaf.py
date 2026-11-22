@@ -6,9 +6,9 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path[:0] = [str(ROOT), str(ROOT / "tests" / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "verifier")]
+sys.path[:0] = [str(ROOT), str(ROOT / "tests" / "verity" / "protocols" / "accounting" / "memory" / "pous" / "verifier")]
 
 import pous_test_signer as ts  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier import p2_parties  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier import p2_parties  # noqa: E402
 
 raise SystemExit(p2_parties.main(device_key=lambda directory: ts.AtLeaf(b"p2-party-at-leaf")))

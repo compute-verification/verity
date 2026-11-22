@@ -1,5 +1,5 @@
 """A row's argument group stored as a progression (`program.compact`'s ``["N"|"P", idx, lo, hi, dI, dL, dH, count]``, a v2
-Program's form) is read as its runs, as the replay reads it (`check.replay.index.row_args`): GLM-5.3's MoeSum rows store their
+Program's form) is read as its runs (`compact.runs_from_file_items`): GLM-5.3's MoeSum rows store their
 TOPK expert outputs as one node progression, so their column blocks read the same words as the same row with its runs listed,
 and a row template's input port counts every run of the progression."""
 from __future__ import annotations

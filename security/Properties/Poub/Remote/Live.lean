@@ -19,10 +19,11 @@ settled window as a `verify` of its frames, read by the same `Wire.openingsOf`.
 
 * `LiveIsRun`: a session the process ran on its live coins, with every window it checked settled or not, is
   `Shared.run g` on the events its transcript records, from `State.init` on any coins that agree with the ones the
-  challenger sent (every coin the session holds, of a coin's size, and every append coin): every result the same,
+  challenger sent (every coin the session holds that is not empty, and every append coin): every result the same,
   and the same session but for its coins. So its outcome and record (`State.outcome`, `State.summary`, which read no
-  coin) are `Shared.run g`'s, and a transcript that pads the coins never sent (`benchmarks/remote_session/
-  lean_verifier.py`) replays to the process's verdict. At `g = 1` that is `Session.run` (`Poub.Shared.run_one`).
+  coin) are `Shared.run g`'s, and a transcript that pads the coins never sent
+  (`verity/protocols/accounting/memory/poub/verifier/session/lean_verifier.py`) replays to the process's
+  verdict. At `g = 1` that is `Session.run` (`Poub.Shared.run_one`).
 
 It needs `1 ≤ g` and `1 ≤ min_passes` (`Properties.Poub.Coins`: with none, an empty window sampled at its deadline
 could take a root before its verdict is settled), which the process's `session` request checks (`Difftest.sessionOf`'s
@@ -110,7 +111,7 @@ def LiveIsRun : Prop :=
     Live.run chunk g { session := Session.State.init params reg coins appendCoins notBeforeNs } qs =
       .ok (answers, es, p) →
     ∀ (c a : Array ByteArray), 1 ≤ g → 1 ≤ params.minPasses →
-      (∀ (i : Nat) (x : ByteArray), p.session.coins[i]? = some x → x.size = Codec.COIN_BYTES → c[i]? = some x) →
+      (∀ (i : Nat) (x : ByteArray), p.session.coins[i]? = some x → 0 < x.size → c[i]? = some x) →
       (∀ (k : Nat) (x : ByteArray), p.session.appendCoins[k]? = some x → a[k]? = some x) →
       Shared.run g (Session.State.init params reg c a notBeforeNs) es.toArray =
         .ok ((answers.filterMap Live.Reply.result?).toArray, { p.session with coins := c, appendCoins := a })

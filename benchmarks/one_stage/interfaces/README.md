@@ -1,45 +1,7 @@
 # E2E demo interfaces
 
-The interfaces between the six subprotocols of the one-H200 E2E demo: the replay bundle of sampled proof blocks and the block record.
+The interfaces between the six subprotocols of the one-H200 E2E demo: the block record.
 Not a package: run the modules with this directory on `PYTHONPATH` (the suite's `pyproject.toml` sets it).
-
-## The replay bundle of sampled proof blocks (`verity/drawn-unit-bundle/v2`)
-
-`verity_e2e_demo/replay_bundle.py`, schema `verity_e2e_demo/schemas/drawn-unit-bundle.v2.schema.json`. What the prover
-behind the ZK server reads to prove a window's sampled proof blocks: per proof block its coordinates (block, step, slot, layer, op, unit),
-its template id and binding, each row's opening (input and output rows against the step commitment, weight rows against
-their registered value's root, every row against its window port's registered root) and the Flock `--zk` session's
-member, subset sample and `frame_v3` header entry. A JSON document holds the public part; the private rows and salts are a
-binary payload beside it (`<name>.bin`, mode 0600), each named by `[offset, length]`. The payload is each proof block's rows in
-order, each row's u16 words little-endian then its 192-byte salt.
-
-The step commitment is kernels' commit call (`verity/commit-slots/v1`): a step tree over slot trees over
-proof-block trees over rows, only each proof block's outputs committed. An output row opens in its proof block's own commitment. An input
-row opens where its producer committed it, and names the producer's coordinates (the fixture's `x` and `sx` open at
-their layer's input quantizer). The bundle adds a block tree over each server block's step roots.
-The bundle builds its step commitments with kernels' CPU reference, `verity/commitments/cuda/commit_slots/slots.py`,
-imported from the tree. The suite pins the SHA-512 of their fixture, `commit-slots-v1.json`, which the reference must
-reproduce; its roots and digests are those of the commit `REFERENCE` pins.
-
-`target` names the card's binding of the templates' dot: `GEMM_SM90_S8` for the H200's INT8, `GEMM_HOPPER` for its BF16,
-`GEMM_SM120_S8` for the RTX PRO 6000. `check` refuses a template that binds another dot. On `main`, `GEMM_SM90_S8`
-resolves to the same s8 dot as `GEMM_SM120_S8`, so only the field tells the two cards apart. A `live` sample carries
-`draw.receipt`, the challenger's live-coin receipt; `check` and `build` refuse one without it. Against the window's
-docket, `check` refuses a sample whose sampling design isn't the registered one (fixed before any coin, so the
-prover can't pick it), a subset sample of other than its k proof blocks, and a `draw.record` that isn't a sample of the
-bundle's proof blocks under that sampling design over the registered population (Lean's `verity-verify-proof draw --registration F`
-refuses to sample one).
-
-~~~sh
-python -m verity_e2e_demo.replay_bundle check tests/fixtures/drawn-unit-bundle.json [--registration tests/fixtures/drawn-unit-registration.json]
-~~~
-
-`build` writes a bundle from a window and the prover's step records, given where each port's row is in the step layout
-(`locate`), a proof block's coordinates (`coords`) and its registered reads (`reads`). The fixture,
-`tests/fixtures/drawn-unit-bundle.{json,bin}` with its window's docket, is four sampled proof blocks of a W8A8 MLP's window
-(two requests, one step, both linears, width 128: 512 proof blocks, registered `subset:4`), its weights registered as core's
-registered values and its step committed under test salts, its target the RTX PRO 6000's. The suite pins its
-SHA-512s. `check` recomputes every string, path and domain and replays each proof block's Definition on its input rows.
 
 ## The block record (`verity/block-record/v2`)
 

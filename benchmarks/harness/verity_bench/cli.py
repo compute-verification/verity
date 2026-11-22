@@ -10,13 +10,11 @@ from pathlib import Path
 from typing import Any
 
 from verity_bench import (
-    breakdown,
     jobs,
     kit,
     lean_verify,
     overhead,
     overhead_records,
-    proof_layers,
     prove_records,
     served_render,
     served_table,
@@ -120,6 +118,7 @@ def _point(args: Any) -> int:
     jobs.check_point_environment(spec, settings.environ())
     if why := kit.wrong_card(spec.id, spec.preset.gpu_id, kit.host_stamp()["card"]):
         raise ValueError(why)
+    cpus = kit.machine_cpus()
     preset, eager = served(spec.preset, spec.eager)
     arms = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
     doc = run_benchmark(
@@ -131,6 +130,7 @@ def _point(args: Any) -> int:
         warmups=spec.warmups,
         max_warmups=spec.max_warmups,
         factory=ProcessEngineFactory(eager=eager),
+        cpus=cpus,
         git_commit=plan.toolchain.commit,
         config_identity={
             "resolved_spec_sha256": plan.spec_sha256,
@@ -157,14 +157,6 @@ def _point(args: Any) -> int:
     return 0 if passed else 3
 
 
-def _table(args: Any) -> int:
-    doc = result.merge([json.loads(path.read_text()) for path in args.results])
-    if args.out is not None:
-        write(doc, args.out)
-    print(render(doc), end="")
-    return 0
-
-
 def _served_table(args: Any) -> int:
     table = served_table.build(local_only=args.local_only)
     if args.json:
@@ -173,15 +165,6 @@ def _served_table(args: Any) -> int:
         print(served_render.render(table), end="")
     if args.metrics and settings.is_set("RESEARCH_RUN_DIR"):
         served_render.record(table, args.metrics)
-    return 0
-
-
-def _breakdown(args: Any) -> int:
-    doc = breakdown.from_results(args.results) if args.results else breakdown.build(local_only=args.local_only)
-    if args.json:
-        print(json.dumps(doc, indent=1, sort_keys=True))
-    else:
-        print(breakdown.render(doc), end="")
     return 0
 
 
@@ -346,12 +329,6 @@ def _prove_parser(commands: Any) -> None:
     lean_verify.add_arguments(timed)
     timed.set_defaults(run=lean_verify.run, command_parser=timed)
 
-    layers = commands.add_parser("prove-layers", prog="verity bench prove layers",
-                                 help="the proof benchmark by layer (Flock, with zero knowledge, with sampling, with "
-                                      "recursion), the benchmark result for each layer read from its run's output")
-    proof_layers.add_arguments(layers)
-    layers.set_defaults(run=proof_layers.run, command_parser=layers)
-
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="verity-bench")
@@ -366,7 +343,15 @@ def _parser() -> argparse.ArgumentParser:
     _again_argument(plan)
     plan.set_defaults(run=_plan, command_parser=plan)
 
-    run = commands.add_parser("run", help="run one point without a passing run in this process's research run")
+    run = commands.add_parser(
+        "run", help="run one point without a passing run in this process's research run",
+        description="Launch with: research run --on NODE --pool gpu --project verity --source . --cwd source --require-result "
+                    "--tool verity_bench.tool:VLLM_BENCH_POINT (a steady-state spec: STEADY_POINT) --env GPU_LEASE_ON=N "
+                    "--env VERITY_BENCH_VENV=VENV [--env HF_HOME=DIR] -- uv run verity-bench run SPEC --point POINT. "
+                    "VERITY_BENCH_VENV is the node's pinned-vLLM environment (else $VIRTUAL_ENV, else the one pod_bootstrap.sh "
+                    "recorded; a point with none is refused) and HF_HOME its checkpoint store; --pool gpu takes a GPU slot, "
+                    "which gives the run its CPUs, and --timeout counts from taking it. A point whose row names its statement "
+                    "in the store also needs --store-read.")
     _spec_argument(run)
     _again_argument(run)
     run.add_argument("--point", default=None, metavar="POINT",
@@ -377,28 +362,11 @@ def _parser() -> argparse.ArgumentParser:
     _spec_argument(check)
     check.set_defaults(run=_check, command_parser=check)
 
-    compare = commands.add_parser("compare", help="compare results only when their identities agree")
-    result.add_judge_arguments(compare)
-    compare.set_defaults(run=result.run_judge, command_parser=compare)
-
-    table = commands.add_parser("table", help="one table from one spec's per-point results, when their identities agree")
-    table.add_argument("results", type=Path, nargs="+")
-    table.add_argument("--out", type=Path, default=None, help="also write the merged result here")
-    table.set_defaults(run=_table, command_parser=table)
-
     served = commands.add_parser("served-table", help="every protocol's served overhead, from the store's runs of record")
     served.add_argument("--json", action="store_true", help="the rows as JSON, not markdown")
     served.add_argument("--local-only", action="store_true",
                         help="read this machine's catalog alone, not the store's remote")
     served.set_defaults(run=_served_table, command_parser=served)
-
-    split = commands.add_parser("breakdown", help="where the bandwidth audit's time goes, by span, from its breakdown spec")
-    split.add_argument("results", type=Path, nargs="*",
-                       help="result files (benchmark.json) to read instead of the store's newest passing runs")
-    split.add_argument("--json", action="store_true", help="the breakdown as JSON, not markdown")
-    split.add_argument("--local-only", action="store_true",
-                       help="read this machine's catalog alone, not the store's remote")
-    split.set_defaults(run=_breakdown, command_parser=split)
 
     _overhead_parser(commands)
     _prove_parser(commands)
@@ -414,8 +382,7 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None, metrics: Mapping[str, str] | None = None) -> int:
     """`metrics`: a runner's metric ids, each for what its command's table names, which the command records in a
     research run's result: for `prove` a total of its table (`prove_records.FIGURES`), for `overhead table` the γ of a
-    row (`overhead_records.measurements`), for `served-table` a row's ``SPEC/POINT`` (`served_render.measurements`), for
-    `prove-layers` a figure a proof block (`proof_layers.FIGURES`)."""
+    row (`overhead_records.measurements`), for `served-table` a row's ``SPEC/POINT`` (`served_render.measurements`)."""
 
     args = _parser().parse_args(argv)
     args.metrics = dict(metrics or {})

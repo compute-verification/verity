@@ -7,7 +7,6 @@ its word).
     AllReduceResidualMnnvl_v2{WORLD,N,SHOT}, RmsNormMnnvl_v2{N,SHOT,CLUSTER,EPS,FMA}   (the fused one's parts)
     RmsNormMnnvlSumSq_v2{N,SHOT,CLUSTER,EPS,FMA}, RmsNormMnnvlApply_v2{G,SHOT}   (that norm cut at its scale)
     DotBf16_v4{K}, GemmCoordinate_v4{K}, Gemm_v4{K,N}   (σ of b1's v1, the Ampere accepted kind; v2's is ops.boolean.gemm's v3)
-    MhcFusedPostPre_v2{HC,H,NS,TH,TN,REPEAT,EPS,HC_EPS}
     InductorRMSNorm_v2, InductorAddRMSNorm_v2, InductorAdd2RMSNorm_v2, InductorAdd2RMSNormFinal_v2   {N,EPS,XBLOCK,R0_BLOCK,NUM_WARPS}
     InductorSiluMulElem_v2, InductorSiluMul_v2{I}, InductorRoPEHead_v2{D}, InductorRoPE_v2{NHEADS,D}
     InductorQKNormRoPEHead_v2{D,EPS,XBLOCK,R0_BLOCK,NUM_WARPS}, InductorQKNormRoPE_v2{NHEADS,D,EPS,XBLOCK,R0_BLOCK,NUM_WARPS}
@@ -15,14 +14,13 @@ its word).
     ArgmaxStepF32_v2, MoeRouterTopK_v2{E,TOPK,VPT}, MoeRouterTopKNorm_v2{E,TOPK,VPT}
     MoeExpertRow_v2{E,K}, MoeExpertCoordinate_v3{E,K,DOT}, MoeExpertCoordinateW_v3{E,K,DOT}
     MoeExpertGemm_v3{E,K,N,DOT}, MoeExpertGemmW_v3{E,K,N,DOT}
-    MoeAlignRanks_v2{E,P,BM}, MoeAlignBlocks_v2{P,BM} and the align steps they Call, each _v2
     RMSNormFusedCudaVector8_v4{N,EPS,BLOCK} and the parts its word body batches: RMSNormPairSumCuda_v2,
     RMSNormSumStepCuda_v2, RMSNormSumInOrderCuda_v2{K}   (σ of the served CUDA fused norm, v3)
     DotTf32_v2{K}, GemmTf32_v2{K,N}   (σ of the training step's TF32 GEMM on sm_120, `cublas_bf16`'s v1)
 
 Each is the served row's word Definition with no Boolean version of its own whose body's callees all have one: the collectives
 and plumbing of the TP rows, the GEMM of the rows on the Ampere accepted kinds (no declared target, the registered-values serve
-among them), DeepSeek-V4's mHC layer and MoE align, and the served-compiled rows' Inductor kernels, FA3's split decode and the MoE
+among them), and the served-compiled rows' Inductor kernels, FA3's split decode and the MoE
 router and expert GEMMs, and the training step's TF32 GEMM.  A σ body is built from the Boolean versions registered when it is built, so the
 word body and its callees' Boolean versions fix it; circuit-check pins each one's lowering counts.
 """
@@ -30,11 +28,10 @@ from __future__ import annotations
 
 from verity.circuits.ops.boolean.versions import sigma_lift
 
-from verity_vllm.definitions.registry import b1, b1_tp2, mhc, moe
+from verity_vllm.definitions.registry import b1, b1_tp2, moe
 from verity_vllm.definitions.registry import cublas_bf16 as CB
 from verity_vllm.definitions.registry import cuda_rmsnorm as CR
 from verity_vllm.definitions.registry import inductor as I
-from verity_vllm.definitions.registry import marlin_moe as MM
 from verity_vllm.definitions.registry import ref_prims as R
 from verity_vllm.definitions.registry import tp_allreduce as TA
 from verity_vllm.definitions.registry import tp_allreduce_split as TS
@@ -42,9 +39,7 @@ from verity_vllm.definitions.registry import tp_allreduce_split as TS
 __all__ = ["AllGather", "AllReduceResidualMnnvl", "AllReduceRmsNormMnnvl", "ArgmaxStepF32", "DotBf16", "DotTf32", "EmbeddingShard",
            "Fa3AttentionHeadSplit", "Fa3AttentionSplit", "Gemm", "GemmCoordinate", "GemmTf32", "InductorAdd2RMSNorm", "InductorAdd2RMSNormFinal",
            "InductorAddRMSNorm", "InductorQKNormRoPE", "InductorQKNormRoPEHead", "InductorRMSNorm", "InductorRoPE", "InductorRoPEHead",
-           "InductorSiluMul", "InductorSiluMulElem", "MhcFusedPostPre", "MoeAlignBefore", "MoeAlignBelow", "MoeAlignBlockOf",
-           "MoeAlignBlocks", "MoeAlignPar", "MoeAlignRank", "MoeAlignRankStart", "MoeAlignRanks", "MoeAlignStart",
-           "MoeExpertCoordinate", "MoeExpertCoordinateW", "MoeExpertGemm", "MoeExpertGemmW", "MoeExpertRow", "MoeRouterTopK",
+           "InductorSiluMul", "InductorSiluMulElem", "MoeExpertCoordinate", "MoeExpertCoordinateW", "MoeExpertGemm", "MoeExpertGemmW", "MoeExpertRow", "MoeRouterTopK",
            "MoeRouterTopKNorm", "RMSNormFusedCudaVector8", "RMSNormPairSumCuda", "RMSNormSumInOrderCuda",
            "RMSNormSumStepCuda", "ResidualAdd", "RmsNormMnnvl", "RmsNormMnnvlApply", "RmsNormMnnvlSumSq"]
 
@@ -59,7 +54,6 @@ AllReduceResidualMnnvl = sigma_lift(TA.AllReduceResidualMnnvl, 2)
 RmsNormMnnvl = sigma_lift(TA.RmsNormMnnvl, 2)
 RmsNormMnnvlSumSq = sigma_lift(TS.RmsNormMnnvlSumSq, 2)
 RmsNormMnnvlApply = sigma_lift(TS.RmsNormMnnvlApply, 2)
-MhcFusedPostPre = sigma_lift(mhc.MhcFusedPostPre, 2)
 
 InductorRMSNorm = sigma_lift(I.InductorRMSNorm, 2)
 InductorAddRMSNorm = sigma_lift(I.InductorAddRMSNorm, 2)
@@ -82,16 +76,6 @@ MoeExpertCoordinate = sigma_lift(moe.MoeExpertCoordinateV2, 3)
 MoeExpertCoordinateW = sigma_lift(moe.MoeExpertCoordinateWV2, 3)
 MoeExpertGemm = sigma_lift(moe.MoeExpertGemmV2, 3)
 MoeExpertGemmW = sigma_lift(moe.MoeExpertGemmWV2, 3)
-
-MoeAlignBefore = sigma_lift(MM.MoeAlignBefore, 2)
-MoeAlignRank = sigma_lift(MM.MoeAlignRank, 2)
-MoeAlignStart = sigma_lift(MM.MoeAlignStart, 2)
-MoeAlignRankStart = sigma_lift(MM.MoeAlignRankStart, 2)
-MoeAlignRanks = sigma_lift(MM.MoeAlignRanks, 2)
-MoeAlignBelow = sigma_lift(MM.MoeAlignBelow, 2)
-MoeAlignBlockOf = sigma_lift(MM.MoeAlignBlockOf, 2)
-MoeAlignPar = sigma_lift(MM.MoeAlignPar, 2)
-MoeAlignBlocks = sigma_lift(MM.MoeAlignBlocks, 2)
 
 RMSNormPairSumCuda = sigma_lift(CR.RMSNormPairSumCuda, 2)
 RMSNormSumStepCuda = sigma_lift(CR.RMSNormSumStepCuda, 2)

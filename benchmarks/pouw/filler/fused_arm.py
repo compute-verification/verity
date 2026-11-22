@@ -73,7 +73,7 @@ class FusedPumpK:
                       "prefill:split"],
         "hypothesis": "FusedPump's splits beside a pfill-k pump read Theorem K's 0.9 under filler-scorer/v3: the pump's "
                       "0.88 of FILL v1's rate an SM, on 44-140 SMs, projects 0.365"})
-    sources: tuple = ("verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler/dcap.cu", "verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler/flin.cuh",
+    sources: tuple = ("verity/protocols/accounting/compute/pouw/prover/kernels/filler/dcap.cu", "verity/protocols/accounting/compute/pouw/prover/kernels/filler/flin.cuh",
                       "benchmarks/pouw/filler/fscore.cu", "benchmarks/pouw/filler/fused_arm.py",
                       "benchmarks/pouw/filler/fused_score.py")
     filler: A.Filler | None = K_FILLER

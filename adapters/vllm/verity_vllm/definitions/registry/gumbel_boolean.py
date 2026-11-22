@@ -6,6 +6,7 @@ And/Xor/Not circuits.
     NvLogfQuietNan_v1       (a: Array<32>) -> Array<32>                                  word view: NvLogf_v1
     NvLogf_v5               (a: Array<32>) -> Array<32>                                  word view: NvLogf_v4
     GumbelNoiseLane_v3      (key, v: Array<32>) -> Array<32>                             word view: GumbelNoiseLane_v1
+    GumbelNoiseLane_v4      (key, v: Array<32>) -> Array<32>                             word view: GumbelNoiseLane_v2
     GumbelSelectF32_v2{V}   (logits: Array<V, Array<32>>, seed, pos: Array<64>, temp: Array<32>) -> Array<32>
                                                                                          word view: GumbelSelectF32_v1{V}
 
@@ -32,6 +33,7 @@ as columns and not as its forms; a trace's commit is the word itself, so no Defi
 `GumbelNoiseLane_v3` is one lane on its own operands, for a body that Calls `GumbelNoiseLane_v1` a lane (the top-p stages'
 select chunks): its Philox word is the stream key's function of (key, 0) and (v, 0), so `GumbelStreamKey_v2`, and the uniform
 and the logs one more Call (`GumbelWordNoise_v1`). It shares nothing between lanes, which `GumbelNoise_v1{V}` does.
+`GumbelNoiseLane_v4` is the same circuit named for `GumbelNoiseLane_v2`: its logs are the GPU-NaN ones `_v2` names.
 
 `GumbelSelectF32_v2{V}` is `GumbelSelectF32_v1{V}` (the first index of the maximum of ``logits[v] + g(key)[v]``, or of the
 logits when ``temp`` is zero; NaN never taken, index 0 when lane 0 is a NaN) as a chain of Calls a partition query cuts at any
@@ -93,7 +95,7 @@ from verity_vllm.definitions.registry.sampling_boolean import (
 )
 
 __all__ = ["LANE_ROUNDS", "GumbelLane", "GumbelLaneHead", "GumbelLaneRounds", "GumbelLaneTail", "GumbelNoise", "GumbelNoiseGroup",
-           "GumbelNoiseLane", "GumbelSelectF32", "GumbelSetup", "GumbelStreamKey", "GumbelStreamKeyHead", "GumbelStreamKeyTail",
+           "GumbelNoiseLane", "GumbelNoiseLaneV4", "GumbelSelectF32", "GumbelSetup", "GumbelStreamKey", "GumbelStreamKeyHead", "GumbelStreamKeyTail",
            "GumbelWordNoise", "NvLogf", "NvLogfQuietNan", "NvLogfV5", "gumbel_noise", "gumbel_select_calls", "lane_keys",
            "lane_products", "lane_rounds", "nv_log1pf", "nv_logf", "nv_logf_no_ftz", "philox_round", "round2_lows", "stream_keys",
            "tl_rand"]
@@ -348,6 +350,11 @@ GumbelNoiseLane = CompositeDefinition(
     doc="One lane's Gumbel noise on bits: GumbelNoiseLane_v1 (g[v] of the stream key). Its Philox word (counter (v, 0, 0, 0), "
         "key (key, 0)) is GumbelStreamKey_v2 of (key, 0) and (v, 0), and the noise from it one Call")
 GumbelNoiseLane.word = SM.GumbelNoiseLane  # type: ignore[attr-defined]
+
+GumbelNoiseLaneV4 = CompositeDefinition(
+    "GumbelNoiseLane", 4, (), lambda S: ((("key", U32), ("v", I32)), F32), _noise_lane, conformance="exact-model-tested",
+    doc="GumbelNoiseLane_v3's circuit as GumbelNoiseLane_v2 on bits: its logs already return the GPU's NaN, 0x7FFFFFFF")
+GumbelNoiseLaneV4.word = SM.GumbelNoiseLaneV2  # type: ignore[attr-defined]
 
 
 # --- GumbelSelectF32_v2{V} as separable stages -------------------------------------------------------------------------------

@@ -10,27 +10,12 @@
   "cublas_cc12_probes": {"run_records": ["art:db886b970d327bb2f2e2253fdac0fbb8dae098c646f2f641c16ba1280214f750",
                                          "art:916168fad15230f7bacb35eb2b2388351b267dd47fd8ef22d56072beffbd3d53",
                                          "art:13a8b8e6f6378f42b3eb297db5d78c90ac8999b8fb5dfc1cca02b93c4dd660bf"]},
-  "dsv4_mhc_capture": {
-    "run_record": "art:a124651d725c6e3332e10342cd135eaad9daf0ba96e68d9e382e0da8feb86a86",
-    "art": "art:b5b410ee8690cc67d2bb638073b2528ef4d66b12a76d12949efc7f8f41983cd8",
-    "captured_utc": "2026-10-13"
-  },
   "hopper_tf32_k8_step_probe": {"run_record": "art:7a87428ee4b0cb9ae98420432f65c493e8f12f2d0b7bf5b90cc927a86f1129ab"},
   "cc12_tf32_gemm_capture": {"run_record": "art:d660f85d3a6e0e88514ca14ea84e08e2bb9b56ee23cb8388d1da4f988ae4e1fb",
                              "fit": "art:84094fd4473b4af283db2356f42fd0c650a1dde596ad5aa902ef2db4a9225cfd"},
-  "dsv4_compressor_capture": {
-    "run_record": "art:29147a8d544386a92edcb29f6c8ae8649c0942ec040a271450f4323daa9bf610",
-    "art": "art:914dd281ad207ce67db3affd9378d3fa2088a27e00508046ab9f9dce09922048",
-    "captured_utc": "2026-10-13"
-  },
   "dsv4_flashmla_capture": {
     "run_record": "art:c2b72c763740cbb0ea22be4e4381806212627c8f271555fa534c964c8de62755",
     "art": "art:b937e7c8f60098ab98711b04f2180fe1c70b179aba05dacd3fd5dfb50cb50974",
-    "captured_utc": "2026-10-13"
-  },
-  "dsv4_qnorm_insert_capture": {
-    "run_record": "art:27e3ef0f03f91a3a341fb46b51b2e2681341ad1cfcc655ef547c75232438b9d9",
-    "art": "art:b460c496817d865da135f44c882eae879f27a82cc5e59ae864ab4a4e66388819",
     "captured_utc": "2026-10-13"
   },
   "dsv4_moe_capture": {
@@ -45,11 +30,6 @@
     "sass": "art:f4e10fe8b11dc71532c8512691edaa642b76f322854221841afc068d14737139",
     "kv_rows": ["art:888545f4916911790c4a7d29b66e9d4e6735d0a12e0430aa8394ccdd973bca02",
                 "art:b51e054d1e9870b971434da18c9d3524bb10ebdc78d44135e41588184e32ba67"]
-  },
-  "dsv4_indexer_capture": {
-    "run_record": "art:9887a85fab026cc175dd3fb89a94ba2068ebf7e881cbb7aa863ee0ad2e85c442",
-    "art": "art:87f0fbe8e76cbbc95828f7676225a4e5eefce363f0c9e98cf83bd10602c8488f",
-    "captured_utc": "2026-10-13"
   },
   "glm53_fused_rmsnorm_capture": {"art": "art:e98ef16cd853c142ba5f8fa7f82335e8e26d73fcb7bae2ad3e5d2888d8394e74"},
   "cc12_fa2_forward_capture": {"run_record": "art:d660f85d3a6e0e88514ca14ea84e08e2bb9b56ee23cb8388d1da4f988ae4e1fb",

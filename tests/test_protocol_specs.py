@@ -15,13 +15,12 @@ KEPT = {
     "verity/circuits/PROTOCOL.md": "a format: the circuit file",
     "verity/commitments/frame_v3/PROTOCOL.md": "a format: frame-v3 trees",
     "verity/commitments/hm96/PROTOCOL.md": "a format: hm96 rows",
-    "adapters/vllm/verity_vllm/commitments/vllm_v1/PROTOCOL.md": "a format: the vLLM v1 commitment",
-    "verity/protocols/proofs/flock/prover/live/PROTOCOL.md": "a format: the zero-knowledge prover's sessions",
+    "verity/protocols/proof/flock/prover/live/PROTOCOL.md": "a format: the zero-knowledge prover's sessions",
 }
 #: Specs of protocols whose verifier is already Lean, each to be deleted: {PROTOCOL.md: the Lean that covers it}. An entry
 #: only goes, in the PR that deletes its file.
 RETIRING = {
-    "verity/protocols/resource_accounting/network/verifier/PROTOCOL.md": "verity/protocols/resource_accounting/network/attester/program/lean",
+    "verity/protocols/accounting/network/verifier/PROTOCOL.md": "verity/protocols/accounting/network/attester/program/lean",
 }
 
 

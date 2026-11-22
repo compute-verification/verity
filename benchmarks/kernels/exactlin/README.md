@@ -3,7 +3,7 @@
 The int8-exact profile's linear (`verity_int8::row_quant`, then `verity_int8::scaled_mm`; `engine.int8_exact`'s statement)
 as two launches a call, stock vLLM int8's count: a quantizer bit for bit `int8_exact.quantize_rows`, and a GEMM whose
 epilogue is `int8_exact.dequantize`. Each is gated bit for bit against `int8_exact` and the int8 Definitions' replay
-evaluators, then timed against stock vLLM int8, at kernel level and served. The kernels run on an RTX PRO 6000 (sm_120),
+evaluators, then timed against stock vLLM int8 at kernel level. The kernels run on an RTX PRO 6000 (sm_120),
 an H200 (sm_90) and a B200 (sm_100).
 
 The kernels are the vLLM integration's: `adapters/vllm/verity_vllm/engine/int8_fused.py`, the CUDA bodies
@@ -69,16 +69,9 @@ For x [M, K] bf16, W [N, K] int8 and s_w [N] float32:
   - `kgate.py`: the fused linear bit for bit against `int8_exact` on Llama-3.1-8B's and Qwen3-8B's linears at every
     `CONFIGS` row, with each buffer poisoned first. It covers the statement's edge rows, a CUDA graph's replay, zero
     allocation and `ptx_check`, and also measures where stock vLLM int8's kernels differ from the statement. `gate()`
-    is what the benches call first, and `--dump` writes the outputs `replay.py` reads.
-  - `replay.py`: `Int8RowQuant_v1` and `ScaledMmS8_v1`'s replay evaluators on `kgate.py --dump`'s outputs, on the CPU.
+    is what the benches call first.
 - Kernel-level benches, run by `kbench.sh` (`KSCRIPT` picks the script):
   - `kbench.py`: the exact, stock and fused arms, interleaved rep by rep, each in a CUDA graph over enough weight
     copies to stream from DRAM. `--arms` also takes single kernels.
   - `ksweep.py`: the fused GEMM's configs swept at the decode shapes, each gated before it is timed, and the
     quantizer's warps.
-- Analysis:
-  - `steps.py`: a served decode step's kernels by category, from a `prof` capture's nsys SQLite export.
-    `--compare` puts arms side by side.
-  - `share.py`: the share of a served step that PoUW doesn't credit. Each arm runs under nsys through
-    decode and prefill scenarios, and `--analyse` splits a forward's GPU time into the credited int8 GEMMs, the
-    quantizer, lm_head, attention, norms and elementwise, sampling and the gaps.

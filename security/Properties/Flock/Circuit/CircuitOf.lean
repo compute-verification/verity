@@ -14,10 +14,8 @@ The circuit a Flock session checks is defined from its circuit file: the descrip
 file's `pub.n`) give the key program `keyProg D.unroll hU n`, whose circuit and partition (`keyCircuit`,
 `keyPartition`) the session's game is stated over. Here that circuit is core's:
 
-* `Verity.Circuit.ofAudit C`: a game circuit (`Verity.Boolean.Circuit`) as core's (`Verity.Circuit`), the same
-  gates, one bit each; `Verity.Partition.ofAudit P`, the same partition.
-* `circuitOf D hU n := .ofAudit (keyCircuit D hU n)` and `partsOf D hU n := .ofAudit (keyPartition D hU n)`: the
-  parsed file as core's circuit and its `n` units.
+* `circuitOf D hU n := (keyCircuit D hU n).toCircuit` and `partsOf D hU n := keyPartition D hU n`: the parsed file
+  as core's circuit (the Boolean profile's, `Verity.Boolean.Circuit.toCircuit`) and its `n` units.
 * `circuitOfFile tags cf tables pf`, `unitsOfFile` and `partsOfFile`: the same at the committed files themselves, the
   circuit file `cf` and the public file `pf` the prover sends before any coin, read as the verifier reads them
   (`parsedOf`), and the empty circuit (`Verity.Circuit.empty`) when they don't read.
@@ -27,51 +25,7 @@ The lemmas about them are `Proofs.Flock.Bridge.CircuitOf`'s.
 
 @[expose] public section
 
-namespace Flock.Bridge
-
-/-- A game gate as the Boolean profile's: the same gate. -/
-def coreOp {N : ℕ} : Verity.Boolean.Op N → Verity.Boolean.Op N
-  | .input => .input
-  | .and a b => .and a b
-  | .xor a b => .xor a b
-  | .not a => .not a
-  | .row a b => .row a b
-
-theorem args_coreOp {N : ℕ} (o : Verity.Boolean.Op N) : (coreOp o).args = o.args := by
-  cases o <;> rfl
-
-theorem isInput_coreOp {N : ℕ} (o : Verity.Boolean.Op N) : (coreOp o).isInput = o.isInput := by
-  cases o <;> rfl
-
-end Flock.Bridge
-
 namespace Verity
-
-open Flock.Bridge (coreOp args_coreOp isInput_coreOp)
-
-/-- **A game circuit as core's**: the Boolean profile's circuit of it, one bit a gate, written out so that its gates are
-the game circuit's. -/
-abbrev Circuit.ofAudit (C : Verity.Boolean.Circuit) : Circuit where
-  N := C.N
-  w _ := 1
-  isInput g := (coreOp (C.op g)).isInput
-  reads g := (coreOp (C.op g)).args.toFinset
-  reads_lt g a ha := C.topo g a (by rwa [List.mem_toFinset, args_coreOp] at ha)
-  input_reads g h := by simp [Verity.Boolean.Op.args_of_isInput h]
-  op g v := BitVec.ofBool ((coreOp (C.op g)).apply fun a => (v a).getLsbD 0)
-  op_congr g v v' h := by
-    rw [Verity.Boolean.Op.apply_congr (coreOp (C.op g)) fun x hx => by rw [h x (List.mem_toFinset.2 hx)]]
-  outputs := C.outputs
-
-theorem Circuit.ofAudit_isInput {C : Verity.Boolean.Circuit} (g : Fin C.N) :
-    (Circuit.ofAudit C).isInput g = (C.op g).isInput :=
-  isInput_coreOp _
-
-/-- A game partition as core's: the same units. -/
-def Partition.ofAudit {C : Verity.Boolean.Circuit} {n : ℕ} (P : Spot.Sampling.Partition C n) :
-    Partition (Circuit.ofAudit C) n where
-  unit := P.unit
-  input_iff g := by rw [Circuit.ofAudit_isInput]; exact Verity.Partition.input_iff P g
 
 /-- The circuit with no gates: what files that don't parse register. -/
 def Circuit.empty : Circuit where
@@ -110,12 +64,12 @@ noncomputable abbrev keyPartition (D : Flock.Desc) (hU : FlockSoundness.Built D.
 /-- **The parsed circuit file as core's circuit**: the key program of the descriptor `D`, its unit's rows `hU` and the
 population `n`, through the Boolean profile. -/
 noncomputable def circuitOf (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.unit) (n : ℕ) : Verity.Circuit :=
-  .ofAudit (keyCircuit D hU n)
+  (keyCircuit D hU n).toCircuit
 
 /-- **The parsed circuit file's units**, as core's partition of `circuitOf`. -/
 noncomputable def partsOf (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.unit) (n : ℕ) :
     Verity.Partition (circuitOf D hU n) n :=
-  .ofAudit (keyPartition D hU n)
+  keyPartition D hU n
 
 /-! ## The committed files' circuit -/
 
@@ -128,11 +82,11 @@ structure Parsed where
 
 open Classical in
 /-- **What the committed files parse to**: the circuit file `cf` (with the lookup tables `tables`) as the verifier reads
-it (`Flock.Desc.parse tags`), and the public file `pf` against its circuit (`HmOut.loadPublic`), when both read and the
+it (`Flock.Desc.parseStmt tags`, a templated statement's file unrolled), and the public file `pf` against its circuit (`HmOut.loadPublic`), when both read and the
 unit's rows are built; else `none`. -/
 noncomputable def parsedOf (tags : Flock.Tags) (cf : ByteArray) (tables : List (String × ByteArray)) (pf : ByteArray) :
     Option Parsed :=
-  match Flock.Desc.parse tags cf tables with
+  match Flock.Desc.parseStmt tags cf tables with
   | .error _ => none
   | .ok D =>
     match HmOut.loadPublic tags D.unroll pf with

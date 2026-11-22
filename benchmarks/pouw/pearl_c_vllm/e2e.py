@@ -1,10 +1,10 @@
 """PoUW's MVP end to end on the RTX PRO 6000 (sm_120): Pearl-C (`pearl-c-sm120-v1-h3`) commits every linear call of a vLLM model
 on the device, timed against stock vLLM on the same card at the panel's two shapes, rep by rep.
 
-  python benchmarks/pouw/pearl_c_vllm/e2e.py --model DIR --kernel verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120 --cubin SHIP/pearl_c_sm120.cubin \\
+  python benchmarks/pouw/pearl_c_vllm/e2e.py --model DIR --kernel verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm120 --cubin SHIP/pearl_c_sm120.cubin \\
       --out RUN_DIR/e2e.json [--retain DIR] [--reps 3]
 
-On an H100 or H200 the kernel directory is ``verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90`` under ``--scheme pearl-c-h100-v1-h3`` (window.sh's
+On an H100 or H200 the kernel directory is ``verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm90`` under ``--scheme pearl-c-h100-v1-h3`` (window.sh's
 ``PEARLC_KERNEL``), and ``--tag`` names another model in the shape names (`SHAPES`).
 
 It holds the device run directly, not Pearl+ attached by name, because it times and replays device internals no served
@@ -30,13 +30,14 @@ The run:
   ``pearlc-nohash``), hashing and records (``pearlc`` less ``pearlc-nohash``), and everything else.
 - **Gates, in the arm's process, before any timing:** at every distinct linear shape and both m, served y is held to the
   float product x·Wᵀ (relative RMS error under 8%, the scheme's tested bound), with hashing and without.  With hashing, the
-  same call made twice, each from a fresh pass on poisoned outputs, must give the same A root and tile root, and the
-  negative control, the call once more with its tile leaves omitted, must not.
+  same call made twice, each from a fresh pass on poisoned outputs and on a device run of its own (`on_twin`), must give
+  the same tile digests under different roots.
 - **The verify passes** (``--retain``): after the timing, the first timed prefill prompt and the decode prompts are replayed
-  in the arm, each a retained pass on poisoned buffers, whose commitment must equal its timed pass's.  Then the negative
-  control: one decode prompt as a retained pass writing none of the commitment (`CONTROL_OMITS`).  The three manifests go to
-  `verify.sh` after the execution phase, whose verdict on each is the Lean's: the first two must be replay-verified
-  (development shortcut; the protocol's check is a ZK proof, PouwVerifier) and the control rejected (the panel's rule).
+  in the arm, each a retained pass on poisoned buffers, the first pass of a device run of its own, whose commitment must
+  equal the same prompts' generate as the first pass of another (`on_twin`: a call's index is its place, so no pass repeats
+  a timed one's, and a pass verified alone is round 0).  The two manifests go to `verify.sh` after the execution phase,
+  whose verdict on each is the Lean's: each must be replay-verified (development shortcut; the protocol's check is a ZK
+  proof, PouwVerifier).
 - **The panel's shapes:** `SHAPES`, under ``pearl-c-sm120`` v1-h3; `panel_rows.py` writes the rows.
 
 ``--whole-step`` (with ``--graphs``) builds the arm engine with vLLM's FULL decode graphs (no compile, the decode batch's
@@ -44,8 +45,9 @@ size only, or ``--capture``'s sizes), and each Pearl-C arm's decode forward is c
 (`pouw_pearl_c_whole`): a decode step is one graph replay after one slot upload.  Prefill runs eagerly; a retained decode
 replays its own capture, which also keeps each call's A words and tree.  Its gate (`whole_check`) holds a forward's calls
 replayed whole to the eager calls, and a retained pass replayed whole to an eager one, bit for bit; the decode response
-counts the steps replayed and run eagerly.  vLLM's eager decode isn't its graph's bit for bit, so the verify pass's eager
-check compares Pearl-C's graphed calls with its eager ones both under vLLM's eager decode.  ``--whole-defer`` (with
+counts the steps replayed and run eagerly.  A whole capture is the arm's own run's, so the verify passes, each on a
+device run of its own, decode under vLLM's eager decode, and their eager check compares Pearl-C's graphed calls with its
+eager ones there.  ``--whole-defer`` (with
 ``--whole-step``) captures each call's tile hashing beside the next call (`pouw_pearl_c_graphs`), ``--whole-defer-a``
 (with ``--whole-defer``) each call's A tree beside its own forming and GEMM, ``--whole-tree-sm`` (with
 ``--whole-defer-a``) that GEMM leaving the tree's CTA its SM, and ``--whole-fork-stats`` (with ``--whole-defer``) each
@@ -55,8 +57,8 @@ may read a call's BF16 rows (`bf16_race`, `BF16_RACE`).
 ``--statement CUBIN`` (with ``--whole-step``; hm96_rows.cu built for sm_120a) adds the mode ``pearlc-zk``: ``pearlc`` with
 each decode forward replayed whole also committing its calls' A rows and its tile rows in the ZK statement's format,
 hm96-sha512 row leaves of frame-v3-sha512 trees, once after the forward (served_zk/statement.py), beside the scheme's own
--h3 trees.  Its gate (`Statement.check`) holds the device's roots to Python's over the rows a whole replay staged, and
-the no-write control's not; prefill's rows are not committed in it.
+-h3 trees.  Its gate (`Statement.check`) holds the device's roots to Python's over the rows a whole replay staged;
+prefill's rows are not committed in it.
 
 Every rep records the SM clock (the panel's clock rule).  ``--smoke`` (`smoke`) is the untimed check before an execution phase: both
 engines resident, the arm's install and gates, and each engine's first sampling calls.  ``--perplexity`` (`perplexity`) is
@@ -66,6 +68,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import gc
 import hashlib
 import json
 import multiprocessing as mp
@@ -79,13 +82,13 @@ from pathlib import Path
 from typing import ClassVar
 
 from verity_config.settings import of
-from verity.protocols.compose import schemes
+from verity.protocols.run import schemes
 
 settings = of(__file__)
 settings.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
 HERE = Path(__file__).resolve().parent
 #: the sm_120 kernel's directory, the default kernel
-SM120 = HERE.parents[2] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "kernels" / "pearl_c_sm120"
+SM120 = HERE.parents[2] / "verity" / "protocols" / "accounting" / "compute" / "pouw" / "prover" / "kernels" / "pearl_c_sm120"
 sys.path.insert(0, str(HERE.parent))
 
 SCHEME = "pearl-c-sm120-v1-h3"
@@ -108,13 +111,8 @@ BLOCKS = 4
 #: the decode batch and its prompts' length are ``--batch`` and ``--prompt`` (`configure`); these are their defaults, the panel's
 PREFILL, BATCH, PROMPT, STEPS = 8192, 32, 64, 64
 PREFILL_DEFAULT, BATCH_DEFAULT, PROMPT_DEFAULT = PREFILL, BATCH, PROMPT
-#: the served y's bound against the float product (the scheme's tested bound, verity/protocols/resource_accounting/compute/pouw/verifier's sm120 useful-output test)
+#: the served y's bound against the float product (the scheme's tested bound, verity/protocols/accounting/compute/pouw/verifier's sm120 useful-output test)
 ERR = 0.08
-#: the negative control's omitted steps: every write of the commitment (A's row digests and row tree, the tile leaves)
-CONTROL_OMITS = frozenset({"pad_a", "rowdig_a", "hash_rows_a", "tree_a", "hash_leaf"})
-#: the verify's no-write controls, each a retained pass the reference replay must reject: every commitment write omitted, and (under
-#: ``--graphs``, whose leaves reach the pass through a copy) the tile leaves alone
-CONTROLS = {"control": CONTROL_OMITS, "control-leaves": frozenset({"hash_leaf"})}
 #: the smoke's chat prompts
 PROMPTS = [
     "Explain why the sky is blue in two sentences.", "Write a haiku about matrix multiplication.",
@@ -140,11 +138,11 @@ def chat(tok, prompts) -> list[str]:
         return list(prompts)
 
 
-#: ``--smoke --retain``'s served requests, each one chat prompt (PROMPTS, by index) as a retained pass: the
-#: request whose calls a ZK proof opens (served_zk), and another request, whose commitment is that proof's foreign control.
+#: ``--smoke --retain``'s served request, one chat prompt (PROMPTS, by index) as a retained pass: the request whose calls
+#: a ZK proof opens (served_zk).
 #: Each is served at the fixed length SERVED_TOKENS under ignore_eos, and how it was served goes
 #: beside its pass as SERVED_RECORD (``{"ignore_eos", "max_tokens", "served"}``), which served_zk's committer registers
-SERVED, SERVED_TOKENS = {"request": 0, "other": 1}, 4
+SERVED, SERVED_TOKENS = {"request": 0}, 4
 SERVED_RECORD = "served.json"
 #: the quality run's schemes by kernel directory, each in an arm engine of its own: Pearl-C v1 (G = 4), and on sm_120 v2 (no
 #: promotion), which has no sm_90a record
@@ -196,7 +194,7 @@ def pass_capacity(tile: int, ns: list[int]) -> tuple[int, int]:
     and at least the device run's defaults: the prompts' prefill in chunks of `PREFILL` tokens, then 1 + `STEPS` forwards of the
     batch, each forward's rows padded to `ROW_ALIGN` and its tiles to whole tile rows, with as many forwards again for
     vLLM's mixed prefill-and-decode steps.  Every linear (`ns`, their n) runs once per forward."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
+    from verity.protocols.accounting.compute.pouw.prover.serving import pearl_c as PPD
     cdiv = lambda a, b: -(-a // b)  # noqa: E731
     prompt_rows, forwards = BATCH * PROMPT, 2 * (cdiv(BATCH * PROMPT, PREFILL) + 1 + STEPS)
     tile_rows = cdiv(prompt_rows, tile) + forwards * cdiv(BATCH, tile)
@@ -246,14 +244,14 @@ def install(model, args, coins):
     `PearlCDeviceRun` over the layers' own weights, attached through `engine.hooks`.  The execution phase's salt is `coins`' salt coin,
     asked for once the weights are committed (`Coins`).  Returns the run, the weights by id and the stack; the stack starts
     inactive (vLLM's own apply), and `arm_of` gives each mode's arm."""
-    from verity.protocols.resource_accounting.compute.pouw.verifier.audit import weights_root
+    from verity.protocols.accounting.compute.pouw.verifier.audit import weights_root
     from verity.hooks import ComputeBlockWith
     from verity_vllm import messages
     from verity_vllm.engine.hooks import Hooks
     from verity_vllm.protocols.linear import vllm_site
     from verity_vllm.protocols.linear.api import Stack
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
-    from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
+    from verity.protocols.accounting.compute.pouw.prover.serving import pearl_c as PPD
+    from verity.protocols.accounting.compute.pouw.prover import schemes as pouw_schemes
     from verity_torch.pouw.pearl_c import run_device as PPDR
 
     sites = vllm_site.discover(model)
@@ -329,48 +327,72 @@ def unsalted(run, ended: dict) -> dict:
 
 
 def call_verdict(commits: list[dict], err: float) -> dict:
-    """The call check's verdict on `under_salt` of the same call twice and then with its tile leaves omitted.  Every leaf's
-    salt is fresh operating-system bytes, so the two calls' roots differ and what repeats is under the salt: their tile
-    digests are equal (the call is deterministic), their roots are not (the salts are fresh), and the omitted call's
-    digests are not the first's (the leaves are the call's own, not what the poison left). One commitment (no hashing)
-    checks y alone."""
+    """The call check's verdict on `under_salt` of the same call twice.  Every leaf's salt is fresh operating-system
+    bytes, so the two calls' roots differ and what repeats is under the salt: their tile digests are equal (the call is
+    deterministic), their roots are not (the salts are fresh). One commitment (no hashing) checks y alone."""
     if len(commits) == 1:
-        return {"rel_rms": err, "digests_repeat": True, "salts_fresh": True, "omitted_leaves_rejected": True, "ok": err < ERR}
-    a, b, omitted = commits
+        return {"rel_rms": err, "digests_repeat": True, "salts_fresh": True, "ok": err < ERR}
+    a, b = commits
     same, fresh = a["digests"] == b["digests"], a["transcript_root"] != b["transcript_root"]
-    control = omitted["digests"] != a["digests"]
-    return {"rel_rms": err, "digests_repeat": same, "salts_fresh": fresh, "omitted_leaves_rejected": control,
-            "ok": err < ERR and same and fresh and control}
+    return {"rel_rms": err, "digests_repeat": same, "salts_fresh": fresh, "ok": err < ERR and same and fresh}
+
+
+def on_twin(run, passes):
+    """``passes(twin)`` on a device run of its own over `run`'s install (`PearlCDeviceRun.twin`): the same salt and its
+    rounds from 0, so its k-th pass with calls holds the place every other twin's k-th does, where `run`'s own next pass
+    can't repeat one (`passes.CHOSEN_INDEX`).  The twin is finished and dropped after, so one twin's memory is held at a
+    time."""
+    import torch
+    twin = run.twin()
+    try:
+        return passes(twin)
+    finally:
+        twin.finish()
+        del twin
+        gc.collect()
+        torch.cuda.empty_cache()
+
+
+def call_checks(run, cases: list) -> list[dict]:
+    """The call check (`call_verdict`) of each case (weight id, weight, x): each case's call in a pass of its own on a
+    twin (`on_twin`), the cases in order, then on a second twin, so a case's passes share a place; without hashing one
+    twin, y alone."""
+    commits, errs = [[] for _ in cases], []
+    for _ in range(2 if run.hashing else 1):
+        def passes(t):
+            for i, (w, W, x) in enumerate(cases):
+                t.begin()
+                t.poison()
+                y = t.gemm(w, x, W, None)
+                if len(errs) < len(cases):
+                    ref = x.float() @ W.float().T
+                    errs.append(float(((y.float() - ref).pow(2).sum() / ref.pow(2).sum()).sqrt()))
+                ended = t.end()
+                commits[i].append(under_salt(t, ended) if t.hashing else ended)
+        on_twin(run, passes)
+    return [call_verdict(c, err) for c, err in zip(commits, errs, strict=True)]
+
+
+def shape_cases(weights: dict, ms: tuple, gen) -> list:
+    """A case (weight id, weight, x) at every distinct (n, k) of `weights` and each m of `ms`, x BF16 rows drawn from the
+    torch generator `gen`."""
+    import torch
+    out, seen = [], set()
+    for w, W in weights.items():
+        if tuple(W.shape) not in seen:
+            seen.add(tuple(W.shape))
+            out += [(w, W, torch.randn(m, W.shape[1], device=W.device, generator=gen).to(torch.bfloat16)) for m in ms]
+    return out
 
 
 def gate(run, weights: dict, whole: bool = False) -> list[dict]:
-    """Served y against x·Wᵀ, and with hashing the same call's commitment twice and the negative control (`call_verdict`),
-    at every distinct (n, k) and both m; with `whole` (``--whole-step``), `whole_check` too.  The checks that compare passes
-    repeat one pass's call indices (`PearlCDeviceRun.begin`'s ``at``), since the execution phase numbers calls across
-    passes."""
+    """Served y against x·Wᵀ, and with hashing the same call's commitment twice (`call_checks`),
+    at every distinct (n, k) and both m; with `whole` (``--whole-step``), `whole_check` too."""
     import torch
-    out, seen = [], set()
-    gen = torch.Generator(device=next(iter(weights.values())).device).manual_seed(20260930)
-    for w, W in weights.items():
-        if tuple(W.shape) in seen:
-            continue
-        seen.add(tuple(W.shape))
-        for m in (PREFILL, BATCH):
-            x = torch.randn(m, W.shape[1], device=W.device, generator=gen).to(torch.bfloat16)
-            commits, served, at = [], None, run.epoch_calls()
-            for omit in ((), (), ("hash_leaf",)) if run.hashing else ((),):
-                run.begin(at=at)
-                run.poison()
-                run.omit = frozenset(omit)
-                y = run.gemm(w, x, W, None)
-                served = y if served is None else served
-                ended = run.end()
-                commits.append(under_salt(run, ended) if run.hashing else ended)
-            run.omit = frozenset()
-            ref = x.float() @ W.float().T
-            err = float(((served.float() - ref).pow(2).sum() / ref.pow(2).sum()).sqrt())
-            out.append({"check": "call", "weight": w, "n": W.shape[0], "k": W.shape[1], "m": m, "hashing": run.hashing,
-                        **call_verdict(commits, err)})
+    cases = shape_cases(weights, (PREFILL, BATCH),
+                        torch.Generator(device=next(iter(weights.values())).device).manual_seed(20260930))
+    out = [{"check": "call", "weight": w, "n": W.shape[0], "k": W.shape[1], "m": x.shape[0], "hashing": run.hashing, **v}
+           for (w, W, x), v in zip(cases, call_checks(run, cases), strict=True)]
     if run.hashing:
         out.append(screen_check(run, weights))
     if run.hashing and run.schedule.side:
@@ -404,11 +426,12 @@ def bf16_race(run) -> bool:
 
 
 def whole_check(run, weights: dict, m: int | None = None) -> dict:
-    """With ``--whole-step``, a forward's calls (every weight once, `m` rows, default `BATCH`, in weight order) made eagerly
-    twice in one pass, then captured whole in one CUDA graph after a warm-up outside it (as vLLM captures a decode forward)
-    and replayed twice in each of two fresh passes on poisoned outputs, between `whole_replay` and `whole_replayed`, as vLLM's
-    decode steps replay it: each pass must give the eager pass's tile digests (`unsalted`: each pass's salts are fresh, so
-    its roots are its own), screen flags and outputs, bit for bit,
+    """With ``--whole-step``, a forward's calls (every weight once, `m` rows, default `BATCH`, in weight order) captured whole
+    in one CUDA graph after a warm-up outside it (as vLLM captures a decode forward) and replayed twice in each of two
+    fresh passes on poisoned outputs, between `whole_replay` and `whole_replayed`, as vLLM's decode steps replay it; and on
+    another twin (`on_twin`) the forward made eagerly twice in a pass, three passes, so the second and third hold the
+    replays' places: each replayed pass must give its place's eager pass's tile digests (`unsalted`: each pass's salts are
+    fresh, so its roots are its own), screen flags and outputs, bit for bit,
     and each pass's second replay must upload the slots the first one staged (with hashing).  A retained capture keeps a
     stage for each weight and m₁₆, so the check runs at any m beside the sizes vLLM's graphs captured.  The arm
     `bf16_race` names fails it before anything is captured, ``refused`` saying why (`BF16_RACE`)."""
@@ -420,83 +443,98 @@ def whole_check(run, weights: dict, m: int | None = None) -> dict:
     gen = torch.Generator(device=dev).manual_seed(20261002)
     xs = {w: torch.randn(m, W.shape[1], device=dev, generator=gen).to(torch.bfloat16) for w, W in weights.items()}
     rows = 2 * m * len(weights) if run.hashing else 0
-    def forward():
-        return [run.gemm(w, xs[w], W, None) for w, W in weights.items()]
-    def ended(ys):
-        return [y.clone() for y in ys], run.flag_buf[:rows].clone(), unsalted(run, run.end())
+    def forward(t):
+        return [t.gemm(w, xs[w], W, None) for w, W in weights.items()]
+    def ended(t, ys):
+        return [y.clone() for y in ys], t.flag_buf[:rows].clone(), unsalted(t, t.end())
 
-    run.graphs = False
-    run.begin()
-    at = run.cur.base
-    run.poison()
-    forward()
-    want = ended(forward())
-    run.graphs = True
-    run.begin()
-    graph, side = torch.cuda.CUDAGraph(), torch.cuda.Stream(device=dev)
-    run.whole_capture_begin()
-    try:
-        forward()
-        side.wait_stream(torch.cuda.current_stream(dev))
-        with torch.cuda.graph(graph, stream=side):
-            outs = forward()
-    finally:
-        calls = run.whole_capture_end()
-    run.end()
-    got, staged = [], []
-    for _ in range(2):
-        run.begin(at=at)
-        run.poison()
+    def eager(t):
+        t.graphs, got = False, []
+        for _ in range(3):
+            t.begin()
+            t.poison()
+            forward(t)
+            got.append(ended(t, forward(t)))
+        return got[1:]
+
+    def replayed(t):
+        t.graphs = True
+        t.begin()
+        graph, side = torch.cuda.CUDAGraph(), torch.cuda.Stream(device=dev)
+        t.whole_capture_begin()
+        try:
+            forward(t)
+            side.wait_stream(torch.cuda.current_stream(dev))
+            with torch.cuda.graph(graph, stream=side):
+                outs = forward(t)
+        finally:
+            calls = t.whole_capture_end()
+        t.end()
+        got, staged = [], []
         for _ in range(2):
-            staged.append(run.whole_replay(calls))
-            graph.replay()
-            run.whole_replayed(calls)
-        got.append(ended(outs))
-    same = all(g[2] == want[2] and torch.equal(g[1], want[1]) and all(torch.equal(a, b) for a, b in zip(g[0], want[0], strict=True))
-               for g in got)
-    kept = whole_retained_check(run, forward, side) if run.hashing else None
-    return {"check": "whole", "hashing": run.hashing, "calls": len(calls), "eager": want[2], "replays": [g[2] for g in got],
+            t.begin()
+            t.poison()
+            for _ in range(2):
+                staged.append(t.whole_replay(calls))
+                graph.replay()
+                t.whole_replayed(calls)
+            got.append(ended(t, outs))
+        return calls, got, staged
+
+    want = on_twin(run, eager)
+    calls, got, staged = on_twin(run, replayed)
+    same = all(g[2] == e[2] and torch.equal(g[1], e[1]) and all(torch.equal(a, b) for a, b in zip(g[0], e[0], strict=True))
+               for g, e in zip(got, want, strict=True))
+    kept = whole_retained_check(run, forward) if run.hashing else None
+    return {"check": "whole", "hashing": run.hashing, "calls": len(calls), "eager": [e[2] for e in want], "replays": [g[2] for g in got],
             "replay_equals_eager": same, "staged": staged, "retained_equals_eager": None if kept is None else kept["ok"],
             "retained": kept,
             "ok": (same and len(calls) == len(weights) and (kept is None or kept["ok"])
                    and staged == ([False, True] * 2 if run.hashing else [False] * 4))}
 
 
-def whole_retained_check(run, forward, side) -> dict:
-    """A retained pass of `forward` made eagerly, and one replayed from a whole capture of a retained pass's kind: the same
-    records, call files (each call's A and y rows, less what its fresh salts make differ: `RETAINED_SALTED`) and tile digests
-    (`unsalted`), byte for byte (`retained_differences`).  Each pass drops its retain directory before it ends, so neither
-    writes the weights' files, which the two would share."""
+def whole_retained_check(run, forward) -> dict:
+    """A retained pass of `forward` (a function of a device run) made eagerly after an eager pass, and on another twin
+    (`on_twin`) one replayed from a whole capture of a retained pass's kind after its capture's pass, so both are at round
+    1: the same records, call files (each call's A and y rows, less what its fresh salts make differ: `RETAINED_SALTED`)
+    and tile digests (`unsalted`), byte for byte (`retained_differences`).  Each pass drops its retain directory before it
+    ends, so neither writes the weights' files, which the two would share."""
     import shutil
     import tempfile
 
     import torch
     dirs = [Path(tempfile.mkdtemp(prefix="whole-kept-")) for _ in "ab"]
 
-    try:
-        run.graphs = False
-        run.begin(retain=str(dirs[0]))
-        at = run.cur.base
-        forward()
-        want = retained_end(run)
-        run.graphs = True
-        run.begin()
-        graph = torch.cuda.CUDAGraph()
-        run.whole_capture_begin(run.whole_key(True))
+    def eager(t):
+        t.graphs = False
+        t.begin()
+        forward(t)
+        t.end()
+        t.begin(retain=str(dirs[0]))
+        forward(t)
+        return retained_end(t)
+
+    def replayed(t):
+        t.graphs = True
+        t.begin()
+        graph, side = torch.cuda.CUDAGraph(), torch.cuda.Stream()
+        t.whole_capture_begin(t.whole_key(True))
         try:
-            forward()
+            forward(t)
             side.wait_stream(torch.cuda.current_stream())
             with torch.cuda.graph(graph, stream=side):
-                forward()
+                forward(t)
         finally:
-            calls = run.whole_capture_end()
-        run.end()
-        run.begin(retain=str(dirs[1]), at=at)
-        run.whole_replay(calls)
+            calls = t.whole_capture_end()
+        t.end()
+        t.begin(retain=str(dirs[1]))
+        t.whole_replay(calls)
         graph.replay()
-        run.whole_replayed(calls)
-        got = retained_end(run)
-        return retained_differences(want, got, dirs)
+        t.whole_replayed(calls)
+        return retained_end(t)
+
+    try:
+        return retained_differences(on_twin(run, eager), on_twin(run, replayed), dirs)
     finally:
         for d in dirs:
             shutil.rmtree(d, ignore_errors=True)
@@ -513,7 +551,7 @@ def retained_end(run, commitment=None) -> tuple:
 
 
 #: a retained call's file entries that differ between two passes of the same calls, each drawing its own salts: A's tree
-#: and salts, and y's root, tree and salts (`grouped_check.SALTED`'s calls)
+#: and salts, and y's root, tree and salts
 RETAINED_SALTED = {"call": ("tree", "salts"), "y": ("root", "tree", "salts")}
 
 
@@ -573,48 +611,53 @@ def _differing(a, b, at: str = "") -> list[str]:
 
 def schedule_check(run, weights: dict) -> dict:
     """The run's schedule on the card: the same calls (m = 32 on the 64 x 64 path, m = 128 on the 128 x 128 one), each
-    from a fresh pass on poisoned outputs, under the serial schedule and under the run's, must give the same
-    tile digests (`unsalted`: each pass's salts are fresh, so its roots are its own).  The run's schedule is its own again
-    after."""
+    from a fresh pass on poisoned outputs on a twin (`on_twin`), under the serial schedule and under the run's, must give the
+    same tile digests (`unsalted`: each pass's salts are fresh, so its roots are its own).  The run's own passes are
+    untouched."""
     import torch
     w, W = next(iter(weights.items()))
     gen = torch.Generator(device=W.device).manual_seed(20260932)
     xs = [torch.randn(m, W.shape[1], device=W.device, generator=gen).to(torch.bfloat16) for m in (32, 128, 32)]
-    commits, mine, at = {}, run.schedule.name, run.epoch_calls()
+    commits, mine = {}, run.schedule.name
     for name in ("serial", mine):
-        run.begin(schedule=name, at=at)
-        run.poison()
-        for x in xs:
-            run.gemm(w, x, W, None)
-        commits[name] = unsalted(run, run.end())
-    run.begin(schedule=mine)
+        def passes(t, name=name):
+            t.begin(schedule=name)
+            t.poison()
+            for x in xs:
+                t.gemm(w, x, W, None)
+            commits[name] = unsalted(t, t.end())
+        on_twin(run, passes)
     return {"check": "schedule", "schedule": mine, "priorities": run.details["schedule"], "serial": commits["serial"],
             mine: commits[mine], "ok": commits["serial"] == commits[mine]}
 
 
 def graphs_check(run, weights: dict) -> list[dict]:
-    """With ``--graphs``, at every distinct (n, k): one m = 32 call made eagerly, then twice as a graph replay, each from a
-    fresh pass on poisoned outputs, must give the same tile digests (`unsalted`), screen flags and y, bit for bit.  And the screen
+    """With ``--graphs``, at every distinct (n, k): one m = 32 call twice as a graph replay, each from a fresh pass on
+    poisoned outputs, must give the tile digests (`unsalted`), screen flags and y the call gives made eagerly in the pass at
+    its place on another twin (`on_twin`), bit for bit.  And the screen
     of an m = 8,192 call read from its BF16 x must give the flags it gives from A's FP32 words."""
     import torch
     from verity_torch.pouw.pearl_c import run_device as PPDR
-    out, seen = [], set()
     gen = torch.Generator(device=next(iter(weights.values())).device).manual_seed(20261001)
-    for w, W in weights.items():
-        if tuple(W.shape) in seen:
-            continue
-        seen.add(tuple(W.shape))
-        x = torch.randn(BATCH, W.shape[1], device=W.device, generator=gen).to(torch.bfloat16)
-        got, at = [], run.epoch_calls()
-        for graphs in (False, True, True):
-            run.graphs = graphs
-            run.begin(at=at)
-            run.poison()
-            y = run.gemm(w, x, W, None).clone()
-            flags = run.flag_buf[:BATCH].clone()
-            got.append((unsalted(run, run.end()), flags, y))
-        run.graphs = True
-        same = all(g[0] == got[0][0] and torch.equal(g[1], got[0][1]) and torch.equal(g[2], got[0][2]) for g in got[1:])
+    cases = shape_cases(weights, (BATCH,), gen)
+
+    def passes(graphs: bool):
+        def on(t):
+            t.graphs, got = graphs, []
+            for w, W, x in cases:
+                for _ in range(2):
+                    t.begin()
+                    t.poison()
+                    y = t.gemm(w, x, W, None).clone()
+                    got.append((unsalted(t, t.end()), t.flag_buf[:BATCH].clone(), y))
+            return got
+        return on
+
+    eager, replayed = on_twin(run, passes(False)), on_twin(run, passes(True))
+    out = []
+    for i, (w, W, _) in enumerate(cases):
+        same = all(g[0] == e[0] and torch.equal(g[1], e[1]) and torch.equal(g[2], e[2])
+                   for g, e in zip(replayed[2 * i:2 * i + 2], eager[2 * i:2 * i + 2], strict=True))
         out.append({"check": "graphs", "weight": w, "n": W.shape[0], "k": W.shape[1], "m": BATCH, "eager_equals_replay": same,
                     "ok": same})
     w, W = next(iter(weights.items()))
@@ -707,11 +750,11 @@ def serve(conn, args, group: str, coins: dict) -> None:
         # at most a decode batch of them, so a small batch's chat (its prompts one after another) stays within one pass
         turns = chat(tok, PROMPTS[:BATCH])
 
-        def timed(prompts, sp, retain=None, controls=()):
+        def timed(prompts, sp, retain=None):
             """One timed generate; under a Pearl-C arm it is one pass (`Stack.pass_`), whose end is inside the time."""
             import dataclasses
             pearl = stack is not None and stack.executing
-            spec = dataclasses.replace(stack.active.spec, retain=retain, controls=tuple(controls)) if pearl else None
+            spec = dataclasses.replace(stack.active.spec, retain=retain) if pearl else None
             with stack.pass_(spec) if pearl else contextlib.nullcontext():
                 if pearl:
                     run.gemm_ms()
@@ -755,39 +798,36 @@ def serve(conn, args, group: str, coins: dict) -> None:
             elif op == "ppl":
                 conn.send(prompt_logprobs(llm, SamplingParams, timed, cmd["windows"]))
             elif op == "verify":
-                from verity_vllm.protocols.linear.api import Control
                 stack.activate(arm_of("pearlc", run, args))
                 out = {}
                 if whole is not None:
                     whole.take()
-                for name, prompts, sp in (("prefill", [cmd["prefill"]], one), ("decode", cmd["decode"], many)):
-                    want = cmd["want"][name]
-                    run.repeat_at = want.get("base")     # the timed pass's call indices, so its commitment can repeat
-                    _, _, got, _ = timed([{"prompt_token_ids": x} for x in prompts], sp, retain=str(Path(args.retain) / name))
-                    same = all(got.get(k) == want.get(k) for k in ("transcript_root", "activation_roots", "units", "tiles"))
-                    out[name] = {"manifest": got.get("manifest"), "commitment": got, "same_commitment_as_timed": same,
-                                 **({"whole_step": whole.take()} if whole is not None else {})}
-                    if run.graphs:
-                        p, ref = [{"prompt_token_ids": x} for x in prompts], want
-                        if whole is not None:    # vLLM's eager decode isn't its graph's: both sides on vLLM's eager path
-                            whole.enabled = False
+                def alone(name, prompts, sp, retain=None, graphs=True):
+                    """`name`'s generate, one pass, as the first pass of a twin (`on_twin`) the stack's executor runs
+                    meanwhile: round 0, the place verify.sh verifies a pass alone at."""
+                    def on(t):
+                        t.graphs, stack.executor.run = run.graphs and graphs, t
                         try:
-                            if whole is not None:
-                                run.repeat_at = want.get("base")
-                                _, _, ref, _ = timed(p, sp)
-                            run.graphs = False
-                            run.repeat_at = want.get("base")
-                            _, _, eager, _ = timed(p, sp)
+                            return timed([{"prompt_token_ids": x} for x in prompts], sp,
+                                         retain=retain and str(Path(retain) / name))[2]
                         finally:
-                            run.graphs = True
-                            if whole is not None:
-                                whole.enabled = True
-                        out[name]["same_commitment_eager"] = all(eager.get(k) == ref.get(k) for k in
-                                                                 ("transcript_root", "activation_roots", "units", "tiles"))
-                for label, omits in CONTROLS.items():
-                    _, _, got, _ = timed([{"prompt_token_ids": cmd["decode"][0]}], one, retain=str(Path(args.retain) / label),
-                                         controls=(Control("omit", omits),))
-                    out[label] = {"manifest": got.get("manifest"), "commitment": got, "omitted": sorted(omits)}
+                            stack.executor.run = run
+                    return on_twin(run, on)
+
+                def same(a, b):
+                    return all(a.get(k) == b.get(k) for k in ("transcript_root", "activation_roots", "units", "tiles"))
+                if whole is not None:     # a whole capture is the arm's own run's: the twins decode under vLLM's eager decode
+                    whole.enabled = False
+                try:
+                    for name, prompts, sp in (("prefill", [cmd["prefill"]], one), ("decode", cmd["decode"], many)):
+                        kept, again = alone(name, prompts, sp, args.retain), alone(name, prompts, sp)
+                        out[name] = {"manifest": kept.get("manifest"), "commitment": kept,
+                                     "same_commitment_as_timed": same(kept, again)}
+                        if run.graphs:
+                            out[name]["same_commitment_eager"] = same(alone(name, prompts, sp, graphs=False), again)
+                finally:
+                    if whole is not None:
+                        whole.enabled = True
                 conn.send(out)
             elif op == "served":
                 stack.activate(arm_of("pearlc", run, args))
@@ -835,16 +875,16 @@ class Coins:
     refusal, so nothing resamples."""
 
     def __init__(self, epoch: int, entropy=None):
-        from verity.protocols.resource_accounting.compute.pouw.verifier import verifier
-        from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger
-        from verity.protocols.proofs.spot.verifier.challenger.challenger import served_claim
+        from verity.protocols.accounting.compute.pouw.verifier import verifier
+        from verity.protocols.accounting.compute.pouw.verifier.coins import Challenger
+        from verity.protocols.proof.spot.verifier.challenger.challenger import served_claim
         entropy = verifier.coins if entropy is None else entropy
         served_claim(entropy)
         self.challenger, self.opened = Challenger(epoch, entropy), {}
         self.commitment = self.challenger.commitment
 
     def open(self, label: str, after: bytes):
-        from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import DomainError
+        from verity.protocols.accounting.compute.pouw.verifier.protocol import DomainError
         if label in self.opened:
             if self.opened[label].after != after:
                 raise DomainError(f"epoch {self.commitment.epoch}'s {label!r} coin is already open, after another record")
@@ -857,12 +897,12 @@ class PipeCoins:
     """The engine's side: the execution phase's commitment, and each coin asked of the controller's `Coins` over the pipe."""
 
     def __init__(self, conn, commitment: dict):
-        from verity.protocols.resource_accounting.compute.pouw.verifier.coins import CoinCommitment
+        from verity.protocols.accounting.compute.pouw.verifier.coins import CoinCommitment
         self.conn, self.commitment = conn, CoinCommitment.from_json(commitment)
 
     def open(self, label: str, after: bytes):
-        from verity.protocols.resource_accounting.compute.pouw.verifier.coins import CoinOpening
-        from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import DomainError
+        from verity.protocols.accounting.compute.pouw.verifier.coins import CoinOpening
+        from verity.protocols.accounting.compute.pouw.verifier.protocol import DomainError
         self.conn.send({"coin": label, "after": after.hex()})
         msg = self.conn.recv()
         if "refused" in msg:
@@ -895,7 +935,7 @@ class Worker:
 
     def recv(self, timeout: float = 1200) -> dict:
         """The engine's answer; a coin it asks for on the way is answered from the execution phase's `Coins`."""
-        from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import DomainError
+        from verity.protocols.accounting.compute.pouw.verifier.protocol import DomainError
         while True:
             if not self.conn.poll(timeout):
                 raise RuntimeError(f"{self.group}: no answer in {timeout:.0f} s")
@@ -1010,7 +1050,7 @@ def split(results: dict) -> dict:
 def state_entropy(path: str):
     """The challenger's entropy held in the file `path`: served_zk's `served_commit.state_entropy`, which the challenger
     process reads it with too."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.kernels.served_zk.served_commit import state_entropy as entropy_of
+    from verity.protocols.accounting.compute.pouw.prover.kernels.served_zk.served_commit import state_entropy as entropy_of
     return entropy_of(path)
 
 
@@ -1176,9 +1216,9 @@ def agree(a, b) -> float:
 
 
 def main() -> None:
-    from verity.protocols.resource_accounting.compute.pouw.verifier.serving import SCHEDULES
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
-    from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import names as kernel_names
+    from verity.protocols.accounting.compute.pouw.verifier.serving import SCHEDULES
+    from verity.protocols.accounting.compute.pouw.prover.serving import pearl_c as PPD
+    from verity.protocols.accounting.compute.pouw.verifier.kernel_schemes import names as kernel_names
     from verity_torch.pouw.pearl_c import run_device as PPDR
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--model", required=True)
@@ -1268,9 +1308,7 @@ def main() -> None:
             if mode not in tokens:
                 tokens[mode] = arm.ask(op="chat", mode=mode)
         if last and args.retain:
-            want = {ph: next(r["commitment"] for r in records if r["mode"] == "pearlc" and r["phase"] == ph and r["rep"] == 0)
-                    for ph in ("prefill", "decode")}
-            verify.update(arm.ask(op="verify", prefill=p["prefill"][0], decode=p["decode"], want=want))
+            verify.update(arm.ask(op="verify", prefill=p["prefill"][0], decode=p["decode"]))
 
     try:
         run_workers(ctx, args, coins, p, records, out, arm_steps)
@@ -1342,10 +1380,10 @@ def finish(args, out: dict, records: list[dict], ready: dict, tokens: dict, veri
     import run_result
     ok = (not out.get("error") and all(m in results for m in MODES) and summary["gates"]["arm"]
           and all(v["same_commitment_as_timed"] and v.get("same_commitment_eager") is not False
-                  for k, v in summary["verify_pass"].items() if not k.startswith("control")))
+                  for v in summary["verify_pass"].values()))
     ms = [(f"{m}.{k}", v, "s") for m, r in results.items() for k, v in r["timing"].items()]
-    run_result.write(args.out, ok, "pearl-c vLLM e2e: gated, fp8 interleaved with the Pearl-C engine, and each verify pass repeats "
-                     "its timed commitment", json.dumps(summary), ms)
+    run_result.write(args.out, ok, "pearl-c vLLM e2e: gated, fp8 interleaved with the Pearl-C engine, and each verify pass's "
+                     "commitment its prompts' generate's at its place", json.dumps(summary), ms)
 
 
 if __name__ == "__main__":

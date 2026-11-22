@@ -663,8 +663,8 @@ def _undecided(p: Refs, why: str) -> TypeError:
 class _Widths:
     """The leaf widths a body's references name, for `Builder.finish`'s reinterpretation check (`E_REINTERPRET`). A reference
     that names no leaf is not this check's: the decoder and the checkers refuse it. Nor is one to node `below` or later, which
-    node `below`'s arguments cannot read in dataflow order: such a descriptor decodes, and the checkers name the defect
-    (PROTOCOL.md §4.4)."""
+    node `below`'s arguments cannot read in dataflow order: the decoder refuses it (`codec.forward_refusal`, PROTOCOL.md §4.4),
+    and a `Builder` names only nodes it has emitted."""
 
     def __init__(self, params: tuple[tuple[str, Type], ...], nodes: list["BodyNode"]) -> None:
         self.params, self.nodes = params, nodes

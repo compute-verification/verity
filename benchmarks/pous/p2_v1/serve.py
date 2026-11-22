@@ -37,15 +37,15 @@ import numpy as np
 
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/store.py").parents[1]))
+sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "verity/protocols/accounting/memory/pous/prover/p2/p2_store/store.py").parents[1]))
 
 from p2_store import store as S
 
-from verity.protocols.resource_accounting.memory.pous.verifier import setup
-from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import expand_prefix
-from verity.protocols.resource_accounting.memory.poub.prover import audit_prover
-from verity.protocols.resource_accounting.memory.poub.prover import p2_prover
-from verity.protocols.resource_accounting.memory.poub.verifier import audit, coins, p2, receipts
+from verity.protocols.accounting.memory.pous.verifier import setup
+from verity.protocols.accounting.memory.pous.verifier.schemes.p2 import expand_prefix
+from verity.protocols.accounting.memory.poub.prover import audit_prover
+from verity.protocols.accounting.memory.poub.prover import p2_prover
+from verity.protocols.accounting.memory.poub.verifier import audit, coins, p2, receipts
 
 FIXTURE_SCHEMA = "verity-remote-bandwidth/p2-sketch-fixture/v0"
 FIXTURE_SHA512 = ("24105e1575ed49793c2eaec7f765ea71303686601c8e29bc514fd5cb6fd277c8"
@@ -210,7 +210,8 @@ def serve(engine: Engine, store: p2_prover.Store, *, prompt: int, windows: int, 
                           delta=1e-6, window_ns=per_window * step_ns, codec=reg.codec, receipt=reg.receipt,
                           layout=reg.layout, rows=reg.rows)
     entropy = entropy or Entropy(b"verity-pous/p2-serve/entropy/v0")
-    session = audit.AuditRun(params, reg, None, coins.local(reg.digest, 0, windows, entropy), not_before_ns=0,
+    session = audit.AuditRun(params, reg, None, coins.local(reg.digest, 0, windows, entropy, samples=params.samples),
+                             not_before_ns=0,
                              clock=clock)
     prover = p2_prover.Prover(store, entropy=entropy)
     opener = (open_ or (lambda pr: pr.open))(prover)

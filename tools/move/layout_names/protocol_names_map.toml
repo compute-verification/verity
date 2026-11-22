@@ -1,0 +1,74 @@
+# The protocol groups' directory names: what `tools/move/layout.py --map tools/move/protocol_names_map.toml` moves and
+# rewrites. `verity/protocols/proofs/` becomes `proof/`, `resource_accounting/` `accounting/`, `workload_classification/`
+# `policy/` and `compose/` `run/`, each with its tests' mirror under `tests/`.
+#
+# What stays as it is: Lean namespaces and module names (a Lake package moves whole, so its modules keep their names),
+# English words, format ids and domain tags, and the files whose bytes a digest pins or that record what was. The format
+# is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", verity_torch = "adapters/torch/verity_torch", input_datasets = "input_datasets/input_datasets", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "calibration/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter", slowdown = "benchmarks/slowdown/slowdown" }
+new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proof/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", verity_torch = "adapters/torch/verity_torch", input_datasets = "input_datasets/input_datasets", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "calibration/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter", slowdown = "benchmarks/slowdown/slowdown" }
+
+[paths]
+"verity/protocols/proofs/" = "verity/protocols/proof/"
+"verity/protocols/resource_accounting/" = "verity/protocols/accounting/"
+"verity/protocols/workload_classification/" = "verity/protocols/policy/"
+"verity/protocols/compose/" = "verity/protocols/run/"
+"tests/verity/protocols/proofs/" = "tests/verity/protocols/proof/"
+"tests/verity/protocols/resource_accounting/" = "tests/verity/protocols/accounting/"
+"tests/verity/protocols/workload_classification/" = "tests/verity/protocols/policy/"
+"tests/verity/protocols/compose/" = "tests/verity/protocols/run/"
+
+[retired]
+paths = ["verity/protocols/proofs/", "verity/protocols/resource_accounting/", "verity/protocols/workload_classification/",
+         "verity/protocols/compose/", "tests/verity/protocols/proofs/", "tests/verity/protocols/resource_accounting/",
+         "tests/verity/protocols/workload_classification/", "tests/verity/protocols/compose/"]
+
+[drop]
+paths = []
+
+[split]
+# A reference to a directory the map splits follows its larger part; each one here says why that is what it means.
+"verity/protocols/proofs/flock/prover/live/src/circuit.rs: verity" = "a path from the crate's directory, as deep after the move as before"
+"verity/protocols/proofs/flock/prover/live/src/lookup.rs: verity" = "a path from the crate's directory, as deep after the move as before"
+"verity/protocols/proofs/flock/prover/live/src/sha512_native.rs: verity" = "a path from the crate's directory, as deep after the move as before"
+"verity/protocols/proofs/flock/prover/live/src/zk_server.rs: verity" = "a path from the crate's directory, as deep after the move as before"
+
+[rewrite]
+# Never rewritten: records of what was, files whose bytes a digest pins (RandomnessVectors.lean's, in its pin),
+# `move_check.py` and its test.
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/**", "archive/**",
+           "tools/check/tests/test_move_check.py", "tools/check/move_check.py",
+           "tools/research/src/research/store/moves.json",
+           "tests/verity/protocols/*/flock/prover/lean/RandomnessVectors.lean"]
+# The fixtures that pin digests by path: their paths follow, their digests stay.
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json",
+           "tests/verity/protocols/*/flock/prover/fixtures/randomness_lean.json",
+           "tests/verity/protocols/*/flock/prover/fixtures/inner_claims.json",
+           "tests/verity/protocols/*/spot/verifier/fixtures/exfiltration*_lean.json"]
+# What stands for the root before a path: the pods' install directories, and the benchmarks' contents' paths from a
+# benchmark's directory (the move keeps every path's depth).
+root_prefixes = ["/opt/vy-challenger/current/", "/opt/vy-verifier/current/", "/opt/vy-compose/current/", "../../", "../../../"]
+# The label RandomnessVectors.lean writes into its pinned output, which names no file.
+keep = ["verity/protocols/proofs/flock/prover/tests/lean/*"]
+
+# The labels a generator writes into its pinned or vector output: the output's bytes stay.
+[rewrite.keep_in]
+"*/pearl_c_u_vectors.py" = ["verity/protocols/resource_accounting/compute/pouw/prover/schemes/pearl_c_u.py",
+                            "tests/verity/protocols/resource_accounting/compute/pouw/verifier/pearl_c_vectors.py"]
+"*/test_history_read.py" = ["tests/verity/protocols/proofs/spot/verifier/test_history_read.py"]
+"*/p2_v1/vectors.py" = ["verity/protocols/resource_accounting/memory/pous/verifier/p2_v1/vectors.json"]
+"benchmarks/pous/p2_v1/serve.py" = ["verity/protocols/resource_accounting/memory/poub/verifier/PROTOCOL.md"]
+"*/test_pearl_plus_public_row.py" = ["tests/verity/protocols/resource_accounting/compute/pouw/prover/test_pearl_plus_public_row.py"]
+
+[modules]
+"verity.protocols.proofs" = "verity.protocols.proof"
+"verity.protocols.resource_accounting" = "verity.protocols.accounting"
+"verity.protocols.workload_classification" = "verity.protocols.policy"
+"verity.protocols.compose" = "verity.protocols.run"
+"tests.verity.protocols.proofs" = "tests.verity.protocols.proof"
+"tests.verity.protocols.resource_accounting" = "tests.verity.protocols.accounting"
+"tests.verity.protocols.workload_classification" = "tests.verity.protocols.policy"
+"tests.verity.protocols.compose" = "tests.verity.protocols.run"

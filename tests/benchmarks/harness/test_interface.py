@@ -1,4 +1,4 @@
-"""The core benchmarks' interface (`benchmarks/README.md`'s "The core benchmarks' interface") as the kit holds it:
+"""The core benchmarks' interface (`tests/test_metrics_registry.py`'s docstring) as the kit holds it:
 `record_dir` reads a directory with nothing of research's and a run id only through it, past its withdrawals (which
 `record` also gives),
 `ran_with` takes only the fixed words and states the deployed challenger's unverified coins as the record's word, and `report` prints the line after
@@ -394,9 +394,3 @@ def test_a_measurement_that_gives_its_own_mark_keeps_it_unless_the_record_is_mad
     assert kit.report("x", "x: 0.25", DOC, measured, made_up=True) == 0
     assert {m["mark"] for m in said(capsys, out)[2].values()} == {kit.kit_report.MADE_UP_MARK}
 
-
-def test_given_none_of_the_interfaces_arguments_report_prints_and_writes_as_before(out, capsys):
-    assert kit.report("x", "x: 0.25", DOC, MEASURED) == 0
-    text, doc, got = said(capsys, out)
-    assert text == ["x: 0.25"] and doc == DOC
-    assert (got["a/metric"]["verdict"], got["a/metric"]["mark"]) == ("within target", "measured")

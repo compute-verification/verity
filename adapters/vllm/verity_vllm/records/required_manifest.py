@@ -1,5 +1,4 @@
-"""The required-value manifest (`verity-sweep/required-manifest/v1`): the header fields the replay's coverage reads
-(`check.replay.coverage`) and the identity rows as written, one per required Value.
+"""The required-value manifest (`verity-sweep/required-manifest/v1`): the header fields and the identity rows as written, one per required Value.
 
 Its writers are `query.required.request_manifest` (a request Program), `query.compose` (the global composition and a TP workload's
 rank merge) and `acquire.served`; each writes every field typed here as

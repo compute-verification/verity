@@ -18,7 +18,7 @@ namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 open Lean (Json)
 open Flock.Program (Prog)
-open InferenceOnlyVerifier.DefinitionDigest (canonicalEntry)
+open Flock.DefinitionDigest (canonicalEntry)
 
 /-- **Equivalent canonical entries pin the decoded Definition.** Two Program texts whose descriptors give every
 Definition `key` reaches equivalent canonical entries decode `key` to the same Definition, callees and all. -/

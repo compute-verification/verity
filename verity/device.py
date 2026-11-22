@@ -1161,13 +1161,13 @@ def compute_capability(card: dict) -> tuple[int, int]:
 
 
 ARCHITECTURE = frozenset({"name", "capability", "virtual", "source", "toolkit"})
-TOOLKIT_GATE = frozenset({"version", "ptx_isa", "driver_min", "source"})
+TOOLKIT_GATE = frozenset({"version", "driver_min", "source"})
 
 
 def load_architecture(name: str, *, directory: Path) -> dict:
     """The architecture file of ``name`` in ``directory`` as parsed TOML: the target machine code is built for (a GPU
     card's ``arch``), its compute capability, its virtual architecture and its toolkit gates, each the toolkit
-    ``version`` and ``ptx_isa`` that build for it and the oldest driver (``driver_min``) that toolkit requires. Refused
+    ``version`` that builds for it and the oldest driver (``driver_min``) that toolkit requires. Refused
     unless it has exactly those keys, each a sourced string, and ``name`` is ``sm_`` and its capability's digits."""
     path = directory / f"{name}.toml"
     if not path.is_file():

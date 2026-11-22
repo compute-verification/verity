@@ -27,11 +27,9 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
-import pytest
 
 from verity_vllm.check.cublas_route_pin import route_pin_gate
 from verity_vllm.definitions.registry import bf16_gemm_check as BC
-from verity_vllm.pipeline.tp.c2 import c2_and_pin_gates, replay_gates
 
 #: vLLM's batch-invariant cuBLAS configuration on cc 9.0 (determinism/batch_invariant.py), the capture's `split_k_off` variant
 SWITCH_ENV = {"CUBLAS_WORKSPACE_CONFIG": ":16:8", "CUBLASLT_WORKSPACE_SIZE": "1"}
@@ -55,16 +53,6 @@ def _bf16(a: np.ndarray) -> np.ndarray:
     return (np.asarray(a, np.float32).view(np.uint32) >> 16).astype(np.uint16)
 
 
-def _gates(engine: dict) -> tuple[bool | None, str | None]:
-    checks = {k: {"n": 0, "first": []} for k in ("vus_outside_query", "identities_without_rows", "identities_unreachable_by_alias", "rows_disagree")}
-    by_family = POPULATION | PINNED_ROUTE
-    pop = {"vus": sum(by_family.values()) // 8, "by_family": by_family, "scope": "Q_module_v1(P)", "query_checks": checks | {"ok": True}}
-    sr = {"result": True, "grade": "complete", "population": pop, "engine_of_record": dict(engine),
-          "sample": {"picked": 3985, "evaluated": 3985, "equal": 3985, "mismatch_n": 0}, "unreplayable": []}
-    f = {"sampled_replay": {"sampled_replay": sr, "boundary_linkage": {"result": True, "linked": 32, "pairs": 32}},
-         "weights_pin": {"result": True, "compared": 1700}}
-    return c2_and_pin_gates({"match_oracle": dict(ORACLE)}, f, True, None, rank=0, replay_on=True, required=True, bundle="bundle_pair0_rank0",
-                            xrank_families=None)
 
 
 def test_the_bound_route_is_the_pin_whatever_the_process_configures(monkeypatch):
@@ -95,47 +83,17 @@ SWITCHED = {**HONEST, **SWITCH_ENV, "cublas": {**HONEST["cublas"], "env": dict(S
                                                "allow_bf16_reduced_precision_reduction": "(False, False)"}}
 
 
-def test_the_honest_rank_passes():
-    assert _gates(HONEST) == (True, None)
-
-
-def test_the_tp_verdict_fails_a_rank_served_off_the_route_pin():
-    ok, why = _gates(ENGINE_OF_RECORD)
-    assert ok is False, why
-    assert "CUBLAS" in (why or "") or "CublasSplitKGemm" in (why or "")
-
-
-def test_the_switched_rank_is_refused_naming_every_departure():
-    ok, why = _gates(SWITCHED)
-    assert ok is False and why is not None
-    assert why.startswith("cuBLAS route pin (rank 0): CublasSplitKGemmF32Out_v1 x153600, CublasSplitKGemm_v1 x48216 bound at the routes of "
-                          f"{BC.CUBLAS_ROUTES['run_record']}, served otherwise: ")
-    assert why.split("served otherwise: ")[1].split("; ") == [
-        "allow_fp16_reduced_precision_reduction '(False, False)' (pin: 'True')",
-        "allow_bf16_reduced_precision_reduction '(False, False)' (pin: 'True')",
-        "preferred_blas_library '_BlasBackend.Cublaslt' (pin: '_BlasBackend.Cublas')",
-        "CUBLAS_WORKSPACE_CONFIG ':16:8' (pin: None)", "CUBLASLT_WORKSPACE_SIZE '1' (pin: None)"]
-
-
-@pytest.mark.parametrize("fact,served", [("cublas_version", 130101), ("multiprocessors", 114), ("device", "NVIDIA H100 80GB HBM3"),
-                                         ("torch", "2.12.0+cu128"), ("compute_capability", [10, 0])])
-def test_another_library_device_or_torch_is_a_departure(fact, served):
-    ok, why = _gates({**HONEST, "cublas": {**HONEST["cublas"], fact: served}})
-    assert ok is False and why is not None and why.endswith(f"served otherwise: {fact} {served!r} (pin: {BC.ROUTE_CONDITIONS[fact]!r})")
 
 
 
-def test_a_fact_the_rank_could_not_read_or_did_not_record_is_refused_by_name():
-    unread = {**HONEST, "cublas": {**HONEST["cublas"], "cublas_version": "unavailable: LookupError: 0 libcublas.so* mapped []"}}
-    assert (_gates(unread)[1] or "").endswith("served otherwise: cublas_version 'unavailable: LookupError: 0 libcublas.so* mapped []' (pin: 120901)")
-    no_env = {**HONEST, "cublas": {k: v for k, v in HONEST["cublas"].items() if k != "env"}}
-    assert (_gates(no_env)[1] or "").endswith("CUBLAS_WORKSPACE_CONFIG not recorded (pin: None); CUBLASLT_WORKSPACE_SIZE not recorded (pin: None)")
 
 
-def test_the_commit_of_record_is_now_refused_for_its_unrecorded_cublas_facts():
-    """GLM-5.3 B1 TP8's Commit of record recorded the workspace variables alone: under the gate it no longer passes."""
-    ok, why = _gates(FACTS_OF_RECORD)
-    assert ok is False and why is not None and "no cuBLAS facts recorded (engine_of_record.cublas" in why
+
+
+
+
+
+
 
 
 def test_a_rank_that_binds_no_pinned_route_family_is_not_gated():
@@ -146,11 +104,3 @@ def test_a_rank_that_binds_no_pinned_route_family_is_not_gated():
     assert block["families"] == {"GemmF32Out_v1": 2} and block["ok"] is False and why.startswith("cuBLAS route pin (rank 1): GemmF32Out_v1 x2")
 
 
-def test_the_gate_reads_the_deferred_replays_facts_too():
-    """`commit_replay.fold` decides a deferred rank by `replay_gates` over its CPU replay, whose `engine_of_record` is the bundle's
-    (the Commit engine's, measured in its process)."""
-    sr = {"result": True, "grade": "complete", "engine_of_record": SWITCHED, "population": {"by_family": {"CublasSplitKGemmF32Out_v1": 9}}}
-    cblock: dict = {}
-    ok, why = replay_gates(cblock, sr, {"result": True}, True, None, rank=3, replay_on=True, required=False, xrank_families=None)
-    assert ok is False and why.startswith("cuBLAS route pin (rank 3): CublasSplitKGemmF32Out_v1 x9")
-    assert cblock["cublas_route_pin"]["departures"] and cblock["cublas_route_pin"]["pin"] == BC.CUBLAS_ROUTES["run_record"]

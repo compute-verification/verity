@@ -2,7 +2,7 @@
 with none.
 
 * each new Boolean leaf (`ops.boolean.scalar`'s I32/bit/f32 scalars, `ops.boolean.attention`'s GPU-NaN FTZ arithmetic,
-  `registry.boolean_scalar`, `registry.boolean_marlin_moe`'s integer division) computes its word primitive on random words and
+  `registry.boolean_scalar`, `registry.boolean_gate_ops`' integer division) computes its word primitive on random words and
   on the f32 specials (zeros, subnormals, infinities, NaNs of both kinds), through bit-sliced evaluation against the word's;
 * a word primitive made on demand (`Const<w>[0x..]_v1`, `GatherBf16x{V}_v1`, `GatherI32x{V}_v1`, whole and as a tree of
   1024-word chunks) has a Boolean version made on demand;
@@ -27,9 +27,9 @@ from verity.circuits.ops.boolean import versions as BB
 from verity.circuits.types import Array, Value
 
 from verity_vllm.definitions.registry import b1, b1_tp2, hopper, moe
-from verity_vllm.definitions.registry import dsv4_decode_indices as DI
+from verity_vllm.definitions.registry import boolean_gate_ops as BG
+from verity_vllm.definitions.registry import fp8_moe_experts as FX
 from verity_vllm.definitions.registry import inductor as I
-from verity_vllm.definitions.registry import marlin_moe as MM
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry import ref_prims as R
 from verity_vllm.definitions.registry import tp_allreduce as TA
@@ -84,7 +84,7 @@ def _boolean_ids(word) -> list[str]:
 
 LEAVES = [S.I32Le, S.I32Eq, S.BitNot, S.BitOr, S.F32Neg, S.F32Sat, S.F32BitsShl23, S.F32IsFinite, W.F32AddFtzV2, W.F32SubFtzV2,
           W.F32MulFtzV2, W.F32FmaFtzV2, W.F32FmaSubFtzV2, P.DivFullScaleAV2, P.F32SubV2, R.F32Sub, R.F32GtStrict, moe.F32FmaRm,
-          moe.F32FmaRmV2, MM.I32Div, MM.I32Rem]
+          moe.F32FmaRmV2, BG.I32Div, BG.I32Rem]
 
 
 @pytest.mark.parametrize("word", LEAVES, ids=lambda d: d.id)
@@ -102,8 +102,8 @@ def test_a_word_primitive_made_on_demand_has_a_boolean_version_made_on_demand():
     assert sum(b << i for i, b in enumerate(evaluate(c))) == 0x3727C5AC
     assert BB.boolean_version(MP.const(1, 1)) is MP.const(1, 1)
     _agrees(P.gather_bf16(16))
-    _agrees(DI.gather_i32(16))
-    word = DI.gather_i32(1100)
+    _agrees(FX.gather_i32(16))
+    word = FX.gather_i32(1100)
     tree = BB.boolean_version(word)
     assert tree.id == "GatherI32x1100_v2" and BL.is_boolean(tree) and {n.fn.id for n in tree.body.nodes} == {
         "GatherI32x1024u10_v1", "GatherI32x76u10_v1", "GatherI32x2u22_v1"}
@@ -116,8 +116,7 @@ def test_a_word_primitive_made_on_demand_has_a_boolean_version_made_on_demand():
 
 
 SIGMA = [bind(b1.ResidualAdd, N=4), bind(b1.Gemm, K=32, N=2), bind(I.InductorRoPE, NHEADS=1, D=4), bind(I.InductorSiluMul, I=1),
-         bind(moe.MoeRouterTopKNorm, E=4, TOPK=2, VPT=4), bind(moe.MoeExpertGemmWV2, E=2, K=16, N=2, DOT=hopper.HopperBF16WgmmaDot16),
-         bind(MM.MoeAlignRanks, E=3, P=4, BM=2), bind(MM.MoeAlignBlocks, P=4, BM=2)]
+         bind(moe.MoeRouterTopKNorm, E=4, TOPK=2, VPT=4), bind(moe.MoeExpertGemmWV2, E=2, K=16, N=2, DOT=hopper.HopperBF16WgmmaDot16)]
 
 
 @pytest.mark.parametrize("word", SIGMA, ids=lambda d: d.id)

@@ -8,21 +8,21 @@ pythonpath = ["../../../benchmarks/compute"]
 
 [tool.verity.tests]
 # run.py reads the run's output directory through verity_config's SHARED registry, which is built on tools/config/verity_config/verity_settings.py
-inputs = ["tools/config/verity_config", "verity/__init__.py", "tools/config/verity_config/verity_settings.py",
+inputs = ["verity/lean_process.py", "tools/config/verity_config", "verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           # the shared result: the kit's writer, and capacity from the registered hardware's Site and card files
           "benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit.py", "benchmarks/harness/verity_bench/kit_report.py",
           "benchmarks/harness/verity_bench/settings.py", "calibration/hardware/cards",
           # the useful-work scheme by its registered name: the registry, the hooks it checks, and the packages that register
           "benchmarks/harness/verity_bench/schemes.py", "verity/hooks.py", "verity/protocols/__init__.py",
-          "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/scheme.py",
-          "verity/protocols/resource_accounting/compute/__init__.py",
-          "verity/protocols/resource_accounting/compute/pouw/__init__.py",
-          "verity/protocols/resource_accounting/compute/pouw/scheme.py", "verity/protocols/experimental/__init__.py",
+          "verity/protocols/accounting/__init__.py", "verity/protocols/accounting/scheme.py",
+          "verity/protocols/accounting/compute/__init__.py",
+          "verity/protocols/accounting/compute/pouw/__init__.py",
+          "verity/protocols/accounting/compute/pouw/scheme.py", "verity/protocols/experimental/__init__.py",
           "verity/protocols/experimental/dither/__init__.py", "verity/protocols/experimental/dither/scheme.py",
           "verity/device.py", "verity/errors.py", "verity/runtime/__init__.py",
           "verity/channel.py", "verity/release.py", "verity/runtime/handshake.py", "verity/runtime/framing.py", "verity/party.py",
           "tests/verity/tests/test_channel.py", "benchmarks/compute",
-          # useful_work refuses a name no scheme is declared under by loading every declaration (compose.schemes.load),
+          # useful_work refuses a name no scheme is declared under by loading every declaration (run.schemes.load),
           # so test_compute.py reads every declared scheme's package and what it imports
           "verity/protocols", "verity/protocol.py", "verity/config.py", "verity/circuits", "verity/commitments"]
 

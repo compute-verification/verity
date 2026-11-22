@@ -8,9 +8,9 @@
 
 `verity run` reads CONFIG, a configuration's path, or NAME, an application's, `applications/NAME.toml` (a - in NAME is
 a _; one that is neither is refused by name, ``application``, with the applications' names). It checks the
-configuration, refusing any set of subprotocols that is neither a composite's nor one of onsite's smaller sets
-(``composite``, `verity.config.COMPOSITES`: onsite and remote, whose work is Pearl+'s run verdict, the only two protocol
-soundness covers; `verity.config.UNACCEPTED`; H1's development composite is refused), then runs
+configuration, refusing any set of subprotocols that is no composite's (``composite``, `verity.config.COMPOSITES`:
+onsite and remote, whose work is Pearl+'s run verdict, the only two protocol soundness covers; H1's development
+composite is refused), then runs
 the parties it places on the machines this host stands for (``--on``, once for each, default ``local``, and for NAME each
 of the application's machines), or only the ``--party`` ones, for ``--periods`` periods (default 1), in the shared state
 ``--state`` (default a new directory under the system's temporary one). The parties are those of the static table
@@ -56,12 +56,11 @@ configuration, the state and whether every party is on this host, runs next, eac
 another in the table's order, its output in ``STATE/logs/<party>.log``; one that fails stops the run. Then the table's live parties here
 (SPOT's, the core parties) run together in one live run of the deployment layer (the table's ``live``): in
 this process when all of them are here, else meeting the rest over TCP at the configuration's ``address`` and
-``listen``. Each prints a ``PARTY`` line as it finishes, with its exit code or the name it was refused by.
+``listen``. Each prints a ``PARTY`` line as it finishes, with its exit code or the name it was refused by. A live run
+that states its period's line (its ``period``) has it printed as the run's last line, ``PERIOD``.
 
 When the verifier runs here, each period's verdict is its own: the composite of the listed subprotocols (remote or
-onsite, its id the line's ``product``), or for one of onsite's smaller sets, under that set's id, ``undecided``, since no
-composite takes it, unless the table's line says who combined its verdict (``combined_by``, printed beside it), printed
-as a line and written to ``STATE/record/verdicts.jsonl``:
+onsite, its id the line's ``product``), printed as a line and written to ``STATE/record/verdicts.jsonl``:
 
     VERDICT {"block": I, "coins": C, "coins_on": {NAME: MACHINE},
              "components": {NAME: accept|reject|undecided|development|error|absent}, "configuration": HASH, "product": ID,
@@ -607,6 +606,7 @@ def execute(cfg: Mapping[str, Any], reg: Registry, state: Path, chosen: Sequence
     the verdicts when the verifier is among them, and last each started party stopped (module docstring); the exit
     code."""
     started: list[tuple[str, Any, dict[str, tuple[int, int]]]] = []
+    period: list[Mapping[str, Any]] = []
     rc = 2
     try:
         for p in starts:
@@ -623,7 +623,7 @@ def execute(cfg: Mapping[str, Any], reg: Registry, state: Path, chosen: Sequence
                 return 2
             bind(state, p, written)
             say("STARTED", {"party": p, "writes": {c: sorted(t) for c, t in written.items()}})
-        rc = _parties(cfg, reg, state, [p for p in chosen if p not in starts], runner, premises, machines)
+        rc = _parties(cfg, reg, state, [p for p in chosen if p not in starts], runner, premises, machines, period)
     finally:
         for p, h, before in reversed(started):
             try:
@@ -634,11 +634,14 @@ def execute(cfg: Mapping[str, Any], reg: Registry, state: Path, chosen: Sequence
             transcribe(state, p, [f for f in changed(before, files(state)) if f.startswith(f"public/{p}/")])
             say("PARTY", {"party": p, "exit": stopped})
             rc = rc or (2 if stopped else 0)
+        for x in period:
+            say("PERIOD", x)
     return rc
 
 
 def _parties(cfg: Mapping[str, Any], reg: Registry, state: Path, chosen: Sequence[str], runner: Any,
-             premises: Sequence[str], machines: Sequence[str]) -> int:
+             premises: Sequence[str], machines: Sequence[str], period: list[Mapping[str, Any]]) -> int:
+    """The entries, then the live run, whose period's line, where it states one, goes into ``period``; the exit code."""
     run = json.loads((state / "run.json").read_text())
     for p in (p for p in chosen if reg.functions(cfg, p)):
         before = files(state)
@@ -662,6 +665,8 @@ def _parties(cfg: Mapping[str, Any], reg: Registry, state: Path, chosen: Sequenc
     except OSError as e:
         print(f"verity run: refused live: {type(e).__name__}: {e}", file=sys.stderr)
         return 2
+    if (said := getattr(r, "period", None)) is not None:
+        period.append(said)
     for p, o in sorted(r.outcomes.items()):
         say("PARTY", {"party": p, "refused": o["refused"]})
         if o["refused"] is not None:
@@ -677,15 +682,8 @@ def _parties(cfg: Mapping[str, Any], reg: Registry, state: Path, chosen: Sequenc
     lines = [{**x, "coins_on": {**on, **x.get("coins_on", {})}} for x in lines]
     if sharing(cfg, reg, machines):
         lines = [{**x, "coins": "simulated"} for x in lines]
-    if (cid := K.composite(cfg["protocols"], reg.components)) in K.UNACCEPTED:
-        lines = [{**x, "product": cid} if x.get("combined_by") else
-                 {**x, "product": cid, "verdict": "undecided", "reason": x.get("reason") or f"no composite takes {cid}"}
-                 for x in lines]
     for line in lines:
         say("VERDICT", line)
-        if line.get("combined_by"):
-            print(f"verity run: block {line['block']}'s verdict {line['verdict']} is combined by "
-                  f"{line['combined_by']}; no composite takes {line['product']}", file=sys.stderr)
     (state / "record").mkdir(parents=True, exist_ok=True)
     (state / "record" / "verdicts.jsonl").write_text("".join(json.dumps(x, sort_keys=True) + "\n" for x in lines))
     verdicts = {x["verdict"] for x in lines}

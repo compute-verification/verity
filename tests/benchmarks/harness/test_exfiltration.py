@@ -25,7 +25,6 @@ from exfiltration_helpers import (
     ASSUMED,
     PLANNED,
     REPO,
-    SERVED,
     YEAR_GB,
     Store,
     as_row,
@@ -88,14 +87,6 @@ def test_verity_bench_exfiltration_is_the_commands_runner(tmp_path, monkeypatch,
     assert code == 2 and out == "" and "verity bench exfiltration: " in err and "the scan's δ in (0, 1)" in err
     code, out, err = run("--row", "(iv)")
     assert code == 2 and out == "" and "verity bench exfiltration: no run of record holds the planner's rows" in err
-    # a served run's record from its reader: the share it measures, beside the given one
-    (served := tmp_path / "served.json").write_text(json.dumps(SERVED))
-    code, out, _ = run("--served-run", str(served))
-    assert code == 0 and f"**The audit's share of compute: 12.000% (measured)**, on {SERVED['run']}" in out
-    code, out, _ = run("--json", "--served-run", str(served))
-    assert code == 0 and json.loads(out)["compute_share"]["value"] == pytest.approx(0.12)
-    code, out, err = run("--served-run", str(tmp_path / "none.json"))
-    assert code == 2 and out == "" and "verity bench exfiltration: " in err and "none.json" in err
     # this machine's catalog alone holds no label
     monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "alone"))
     clone = ("with only a clone, run `uv run verity bench exfiltration --from benchmarks/exfiltration/made_up`, a made-up "

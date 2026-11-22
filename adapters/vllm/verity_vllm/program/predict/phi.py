@@ -5,7 +5,7 @@
                   numerics profile, FA version knob): a target that names its card names the GPU vLLM's tuned configs are keyed
                   by (`TargetProfile.device_name`)
     Phi.tp        {"world", "rank"}
-    Phi.sampling  the row's declared sampling policy (`pipeline.build.sampling_policy` shape: greedy | stochastic)
+    Phi.sampling  the row's declared sampling policy (`pipeline.build_sampling.sampling_policy` shape: greedy | stochastic)
     Phi.engine    the engine args (block_size, max_num_seqs, max_num_batched_tokens, chunked prefill, prefix caching,
                   disable_custom_all_reduce), the layout of an FP8 KV cache (`kv_cache_dtype`: `STATED_KV_LAYOUT`), the speculative
                   decoding it drafts under (`speculative`: `STATED_SPECULATIVE`) and the `env` its engines run under (the
@@ -34,7 +34,7 @@ from verity_vllm.records.schema_ids import PHI_SCHEMA
 if TYPE_CHECKING:
     from verity_vllm.program.frontend.target_profile import TargetProfile
 
-__all__ = ["Phi", "served_phi"]
+__all__ = ["Phi", "phi_of_serve", "registered_seed", "served_phi"]
 
 
 @dataclass
@@ -253,3 +253,43 @@ def served_phi(meta: Mapping[str, Any], hf_config: Mapping[str, Any], rank: int 
     dtype = checkpoint_dtype(hf_config)
     return Phi(model={"repo": meta["model"], "revision": meta["revision"], "hf_config": dict(hf_config), **({"dtype": dtype} if dtype else {})},
                target=dict(meta["target"]), execution=meta.get("execution") or "eager", tp=tp, engine=engine)
+
+
+def phi_of_serve(serve: Mapping[str, Any], hf_config: str | None = None, target: str | None = None) -> Phi:
+    """φ of a served engine from its ``serve.json`` (`served_phi`): the pinned model (``model``, ``revision`` and the checkpoint's
+    ``config.json``: ``hf_config``, else the pin's config of record, `dense_generic.pinned_hf_config`), the serving device's target
+    profile (``target``, else the file ``target``), the execution label (``execution``, else ``engine.execution``) and the engine
+    record (``engine``); no workload. A ValueError names what ``serve.json`` lacks, a model no manifest pins with no
+    ``hf_config`` among it."""
+    import json
+    from pathlib import Path
+
+    from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
+
+    prof = json.loads(Path(target).read_text()) if target else serve.get("target")
+    if not isinstance(prof, Mapping):
+        raise ValueError("serve.json records no target profile (the serving device's TargetProfile.to_json()), so φ can't be read: "
+                         "--target F gives it")
+    engine = serve.get("engine")
+    execution = serve.get("execution") or (engine.get("execution") if isinstance(engine, Mapping) else None)
+    if not isinstance(execution, str) or not execution:
+        raise ValueError("serve.json records no execution label (execution, engine.execution), so φ can't be read")
+    path = hf_config or pinned_hf_config(serve["model"], serve["revision"])
+    if path is None:
+        raise ValueError(f"{serve['model']}@{serve['revision']} is pinned by no manifest, so φ reads its config.json from "
+                         "the one given (hf_config)")
+    return served_phi({"model": serve["model"], "revision": serve["revision"], "target": prof, "execution": execution,
+                       "engine_record": engine if isinstance(engine, Mapping) else None}, json.loads(Path(path).read_text()))
+
+
+def registered_seed(serve: Mapping[str, Any]) -> int:
+    """The default seed a served window's docket fixes, `engine.served_seed.DEFAULT_SEED`; a ValueError when ``serve.json`` says
+    the server filled in another (or says none), since a request that sent no seed would be compiled under a seed its sample
+    didn't use."""
+    from verity_vllm.engine.served_seed import DEFAULT_SEED
+
+    seed = serve.get("default_seed")
+    if type(seed) is not int or seed != DEFAULT_SEED:
+        raise ValueError(f"serve.json: the run's server filled in default seed {seed!r}, and the registered one is "
+                         f"engine.served_seed.DEFAULT_SEED ({DEFAULT_SEED}): serve it under that rule")
+    return DEFAULT_SEED

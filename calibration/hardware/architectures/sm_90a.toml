@@ -9,30 +9,25 @@ source = "NVCC documentation (CUDA 13.5), section 5.2 'GPU Feature List': 'GPUs 
 
 [[toolkit]]
 version = "12.0"
-ptx_isa = "8.0"
 driver_min = "525.60.13"
 source = "PTX ISA 9.5, Table 73 'PTX Release History': PTX ISA 8.0, 'CUDA 12.0, driver r525', the first row whose targets list sm_90a (PTX ISA 7.8, CUDA 11.8, lists sm_90 alone); CUDA Toolkit 13.5 Release Notes, Table 4 'Corresponding Driver Versions (CUDA 12.9 and earlier)': 'CUDA 12.0 GA', Linux x86_64 '>=525.60.13'"
 
 [[toolkit]]
 version = "12.4"
-ptx_isa = "8.4"
 driver_min = "550.54.14"
 source = "PTX ISA 9.5, Table 73 'PTX Release History': PTX ISA 8.4, 'CUDA 12.4, driver r550', its targets listing sm_90a; CUDA Toolkit 13.5 Release Notes, Table 4 'Corresponding Driver Versions (CUDA 12.9 and earlier)': 'CUDA 12.4 GA', Linux x86_64 '>=550.54.14'"
 
 [[toolkit]]
 version = "12.9"
-ptx_isa = "8.8"
 driver_min = "575.51.03"
 source = "PTX ISA 9.5, Table 73 'PTX Release History': PTX ISA 8.8, 'CUDA 12.9, driver r575', its targets listing sm_90a; CUDA Toolkit 13.5 Release Notes, Table 4 'Corresponding Driver Versions (CUDA 12.9 and earlier)': 'CUDA 12.9 GA', Linux x86_64 '>=575.51.03'"
 
 [[toolkit]]
 version = "13.0"
-ptx_isa = "9.0"
 driver_min = "580.65.06"
 source = "PTX ISA 9.5, Table 73 'PTX Release History': PTX ISA 9.0, 'CUDA 13.0, driver r580', its targets listing sm_90a; CUDA Toolkit 13.3 Release Notes, Table 3 'CUDA Toolkit and Corresponding Driver Versions': 'CUDA 13.0 GA', Linux x86_64 '>=580.65.06' (13.5's Release Notes give a 13.x toolkit only its branch, Table 2: 'CUDA 13.0 R580')"
 
 [[toolkit]]
 version = "13.3"
-ptx_isa = "9.3"
 driver_min = "610.43.02"
 source = "PTX ISA 9.5, Table 73 'PTX Release History': PTX ISA 9.3, 'CUDA 13.3, driver r610', its targets listing sm_90a; CUDA Toolkit 13.3 Release Notes, Table 3 'CUDA Toolkit and Corresponding Driver Versions': 'CUDA 13.3 GA', Linux x86_64 '>=610.43.02' (13.5's Release Notes give a 13.x toolkit only its branch, Table 2: 'CUDA 13.3 R610')"

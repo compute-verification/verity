@@ -1,7 +1,7 @@
 """`Q_word` v1's behaviour pinned beyond the six-Call vector (`qword_vectors.json`): the version's constants as data, programs that
 exercise every step of `verity.circuits.cut`'s algorithm (X packing narrow outputs, wide gates, returned wiring inputs, a source read
 twice, the dead-unit second pass, the separable branches, primitive Calls, all three wiring primitives), every refusal of `validate`
-and `verify`, and the seeded random corpus of the Lean port's conformance run (`verity/protocols/proofs/flock/prover/agreement/qword_agree.py`, same
+and `verify`, and the seeded random corpus of the Lean port's conformance run (`verity/protocols/proof/flock/prover/agreement/qword_agree.py`, same
 generator and seed), as digests of its cases and of core's answers.  Programs are descriptor bytes; the evaluation is from the bytes.
 `v2`: `Q_word` v2 on the same programs (v1's evaluation; a value computed in two units reported, not refused).
 Its `--write` rewrites the file; `REWRITE` names the command that runs it."""
@@ -18,10 +18,11 @@ from types import SimpleNamespace
 
 import pytest
 
+import stand_in  # noqa: F401  (the test primitives' Boolean bodies, also when run as a script)
 from verity.circuits import codec, cut, partition_object as PO
 from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, DefinitionTable, bind
 from verity.circuits.program import Program
-from verity.circuits.refs import tuple_of
+from verity.circuits.refs import refs_from_json, tuple_of
 from verity.circuits.types import Array, Tuple, Value
 from verity.circuits.ops.prims import Bf16ToF32, F32ToBf16Rn, const
 from verity.circuits.ops.scalar import BitAnd, Bf16GtStrict, F32BitsShl23, F32Fabs, F32Fmaxf, I32Add
@@ -257,7 +258,7 @@ def served_cases(D, version: int = 1) -> list:
     return [[label, {str(j): v for j, v in s.items()}, _codes(PO.verify(obj, D, served=s))] for label, s in cases]
 
 
-# -- the Lean port's random corpus (verity/protocols/proofs/flock/prover/agreement/qword_agree.py at 34b6fb0e: the same generator, seed and answers) ---------
+# -- the Lean port's random corpus (verity/protocols/proof/flock/prover/agreement/qword_agree.py at 34b6fb0e: the same generator, seed and answers) ---------
 
 def _graph_json(rng, n):
     edges = [(p, q) for q in range(n) for p in range(q) if rng.random() < 2.0 / max(n, 1)]
@@ -357,9 +358,9 @@ def build() -> dict:
     for label, name, key, node, arg, refs in ORDER:
         d = json.loads(_canon(PROGRAMS[name]))
         d["definitions"][key or d["root"]]["body"]["nodes"][node]["args"][arg]["refs"] = refs
-        D = codec.decode_program(d, reg)
-        v = PO.verify(PO.build(D), D)
-        order.append([label, name, key, node, arg, refs, {"codes": list(v.codes), "detail": v.detail.get("query-inapplicable", {}).get("gates")}])
+        with pytest.raises(ValueError) as e:
+            codec.decode_program(d, reg)
+        order.append([label, name, key, node, arg, refs, {"refused": str(e.value)}])
     other = copy.deepcopy(PO.build(decoded["narrow"]))
     other["program"] = "f" * 128
     refused.append(["another program", "narrow", 16, 32, _codes(PO.verify(other, decoded["narrow"]))])
@@ -448,10 +449,16 @@ def test_verify_refuses(live, n):
     assert not VECTORS["verify_refusals"][n][4]["ok"]
 
 
-def test_every_query_refuses_a_program_that_is_not_topological(live):
+def forward_sentence(descriptors: dict, name: str, key: str | None, node: int, refs: dict) -> str:
+    """The decoder's whole refusal of an `ORDER` edit: the Definition and node, then `codec.forward_refusal`."""
+    fid = key or json.loads(descriptors[name])["root"]
+    return f"definition '{fid}' node {node}: " + codec.forward_refusal(node, codec._forward(refs_from_json(refs), node))
+
+
+def test_the_decoder_refuses_a_program_that_is_not_topological(live):
     assert live["order_refusals"] == VECTORS["order_refusals"], REWRITE
-    for _l, _n, _k, _node, _a, _r, v in VECTORS["order_refusals"]:
-        assert v["codes"] == ["query-inapplicable"] and v["detail"][0]["why"] == "not topological"
+    for _l, name, key, node, _a, refs, v in VECTORS["order_refusals"]:
+        assert v["refused"] == forward_sentence(VECTORS["descriptors"], name, key, node, refs)
     reg = registry()
     for name, text in VECTORS["descriptors"].items():                   # every pinned program is topological
         assert PO.order_violation(codec.decode_program(json.loads(text), reg)) is None, name

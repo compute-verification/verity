@@ -59,7 +59,7 @@ def ReceiptsBindingOfFork : Prop :=
     (R : Receipts n κ X)
     (prf : Fin n → Pous.Bits κ → Blocks m) (rest : SampleCoins n κ X → Fin n → ℕ → ℕ) (L : Fin n → Finset ℕ),
     (∀ t ω, D.opened prf rest t ω ⊆ L t) →
-    (R.binding D prf rest).toReal ≤
-      ∑ t, √((L t).card * s t * ((R.fork D prf rest t).toReal + (R.split D prf rest t).toReal))
+    (R.binding (D.opened prf rest)).toReal ≤
+      ∑ t, √((L t).card * s t * ((R.fork (D.opened prf rest) t).toReal + (R.split (D.opened prf rest) t).toReal))
 
 end ResourceAccounting.Guarantees.Remote

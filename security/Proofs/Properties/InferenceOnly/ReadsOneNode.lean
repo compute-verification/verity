@@ -54,10 +54,12 @@ def InNode (P : Prog) (d k : Nat) (xs : List (Tgt × Int)) : Prop :=
   ∀ w p, (Tgt.gate w, p) ∈ xs →
     (((P.defs[d]!).body.offsets[k]! : Nat) : Int) ≤ p ∧ p < (((P.defs[d]!).body.offsets[k + 1]! : Nat) : Int)
 
-/-- A segment of Definition `d`'s body keeping its gates by node: each piece's gates are one node's, and, when its
-copies shift, all its copies' gates are one node's. -/
+/-- A segment of Definition `d`'s body keeping its gates by node: each piece's gates are one node's, when its
+copies shift, all its copies' gates are one node's, and, when its copies are its pieces' rows, each piece's rows that
+are copies are one node's. -/
 def NodeW (P : Prog) (d : Nat) (s : Seg) : Prop :=
-  (∀ q ∈ s.ps.toList, ∃ k, InNode P d k (pos q)) ∧ (1 < s.reps → s.shift ≠ 0 → ∃ k, InNode P d k (segPos s))
+  (∀ q ∈ s.ps.toList, ∃ k, InNode P d k (pos q)) ∧ (1 < s.reps → s.shift ≠ 0 → ∃ k, InNode P d k (segPos s)) ∧
+    (s.lanes = true → ∀ q ∈ s.ps.toList, ∃ k, InNode P d k (pos (q.rowsFrom 0 s.reps)))
 
 theorem inNode_mono {P : Prog} {d k : Nat} {xs ys : List (Tgt × Int)} (h : InNode P d k ys)
     (hs : ∀ x ∈ xs, x ∈ ys) : InNode P d k xs :=
@@ -72,21 +74,39 @@ theorem inNode_ref {P : Prog} {d k : Nat} {q : Piece} {b : Bool} {i : Nat} (ht :
   cases this
 
 /-- A piece's positions are its segment's first copy's, of a copy at least. -/
-theorem pos_sub_segPos {s : Seg} (h : s.reps ≠ 0) {q : Piece} (hq : q ∈ s.ps.toList) : ∀ x ∈ pos q, x ∈ segPos s := by
+theorem pos_sub_segPos {s : Seg} (h : s.reps ≠ 0) (hw : s.lanes = false) {q : Piece} (hq : q ∈ s.ps.toList) :
+    ∀ x ∈ pos q, x ∈ segPos s := by
   intro x hx
   unfold segPos
   refine List.mem_flatMap.2 ⟨0, List.mem_range.2 (Nat.pos_of_ne_zero h), ?_⟩
-  rw [copy_pos, Nat.cast_zero, Int.zero_mul, shiftPos_zero, List.map_id]
+  rw [copy_pos s hw, Nat.cast_zero, Int.zero_mul, shiftPos_zero, List.map_id]
   exact List.mem_flatMap.2 ⟨q, hq, hx⟩
 
 /-- A segment of a copy at least whose gates are all one node's keeps its gates by node. -/
-theorem nodeW_of_whole {P : Prog} {d k : Nat} {s : Seg} (h : s.reps ≠ 0) (hk : InNode P d k (segPos s)) :
-    NodeW P d s :=
-  ⟨fun _ hq => ⟨k, inNode_mono hk (pos_sub_segPos h hq)⟩, fun _ _ => ⟨k, hk⟩⟩
+theorem nodeW_of_whole {P : Prog} {d k : Nat} {s : Seg} (h : s.reps ≠ 0) (hw : s.lanes = false)
+    (hk : InNode P d k (segPos s)) : NodeW P d s :=
+  ⟨fun _ hq => ⟨k, inNode_mono hk (pos_sub_segPos h hw hq)⟩, fun _ _ => ⟨k, hk⟩, fun h' => absurd h' (by simp [hw])⟩
+
+/-- What `segDown` gives a segment of positive pieces keeps its gates by node where what `f` gives each piece so resolved
+does. -/
+theorem segDown_nodeW {P : Prog} {d : Nat} (f : Piece → Except String (Array Seg)) (s : Seg)
+    (hpos : ∀ p ∈ s.ps.toList, 0 < p.count)
+    (hD : ∀ q v, 0 < q.count → (∀ x ∈ pos q, x ∈ segPos s) → f q = .ok v → ∀ g ∈ v.toList, NodeW P d g)
+    (out : Array Seg) (h : Desc.segDown f s = .ok out) : ∀ g ∈ out.toList, NodeW P d g := by
+  intro g hg
+  rcases segDown_mem f s hpos out h g hg with ⟨q, v, h0, hsub, hfq, hgv⟩ | ⟨-, hps, -, -, -, hsh, -, hrows⟩
+  · exact hD q v h0 hsub hfq g hgv
+  have hW : ∀ p ∈ g.ps.toList, ∃ k, InNode P d k (pos p) := fun p hp => by
+    obtain ⟨q, v, h0, hsub, hfq, x, hx, y, hy, hpy⟩ := hps p hp
+    obtain ⟨k, hk⟩ := (hD q v h0 hsub hfq x hx).1 y hy
+    exact ⟨k, inNode_mono hk hpy⟩
+  refine ⟨hW, fun _ h => absurd hsh h, fun _ p hp => ?_⟩
+  obtain ⟨k, hk⟩ := hW p hp
+  exact ⟨k, inNode_mono hk (pos_rowsFrom_sub p (hrows p hp).ge)⟩
 
 /-- One piece whose gates are one node's keeps its gates by node. -/
 theorem nodeW_one {P : Prog} {d k : Nat} {q : Piece} (h : InNode P d k (pos q)) : NodeW P d (Seg.one q) := by
-  refine ⟨fun g hg => ⟨k, ?_⟩, fun h1 => absurd h1 (Nat.lt_irrefl 1)⟩
+  refine ⟨fun g hg => ⟨k, ?_⟩, fun h1 => absurd h1 (Nat.lt_irrefl 1), fun h' => by simp [Seg.one, Desc.Seg.lanes] at h'⟩
   have e : g = q := by simpa [Seg.one] using hg
   subst e
   exact h
@@ -200,9 +220,9 @@ theorem downN_batchPrim (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : 
     refine nodeW_one (k := k) ?_
     intro w' p hx
     unfold pos at hx
-    simp only [List.mem_flatMap, List.mem_map, List.mem_range, Prod.mk.injEq, Tgt.gate.injEq] at hx
+    simp only [List.mem_flatMap, List.mem_map, List.mem_range, Prod.mk.injEq, Tgt.gate.injEq, rowOff_with] at hx
     obtain ⟨r, hr, t, htl, rfl, rfl⟩ := hx
-    have hmem : (q.tgt, q.base + (r : Int) * q.rowStride + (t : Int) * q.stride) ∈ pos q := by
+    have hmem : (q.tgt, q.base + q.rowOff r + (t : Int) * q.stride) ∈ pos q := by
       unfold pos
       simp only [List.mem_flatMap, List.mem_map, List.mem_range]
       exact ⟨r, hr, t, htl, rfl⟩
@@ -210,7 +230,7 @@ theorem downN_batchPrim (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : 
     have h1 := hF _ hmem k ht
     rw [hg] at h1
     obtain ⟨n, hn'⟩ := Int.eq_ofNat_of_zero_le h0
-    have hpn : (c.body.offsets[k]! : Int) + q.base + (r : Int) * q.rowStride + (t : Int) * q.stride =
+    have hpn : (c.body.offsets[k]! : Int) + q.base + q.rowOff r + (t : Int) * q.stride =
         ((c.body.offsets[k]! + n : Nat) : Int) := by
       push_cast
       simp only at hn'
@@ -232,12 +252,12 @@ shifted to the member's first gate they are node `k`'s, in a laid-out body. -/
 theorem nodeW_shift (P : Prog) {d k m : Nat} {o : Int} (hoff : Laid P d) (hk : k < (P.defs[d]!).body.nodes.size)
     (hm : m < ((P.defs[d]!).body.nodes[k]!).members)
     (ho : o = (((P.defs[d]!).body.offsets[k]! + m * (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).gates : Nat) : Int))
-    {s : Seg} (hr : s.reps ≠ 0)
+    {s : Seg} (hr : s.reps ≠ 0) (hs : s.lanes = false)
     (hin : ∀ w p, (Tgt.gate w, p) ∈ segPos s → 0 ≤ p ∧ p < ((P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).gates : Int)) :
-    NodeW P d { ps := Desc.shiftGates o s.ps, len := s.len, reps := s.reps, shift := s.shift } := by
-  refine nodeW_of_whole (k := k) hr ?_
+    NodeW P d { s with ps := Desc.shiftGates o s.ps } := by
+  refine nodeW_of_whole (k := k) hr hs ?_
   intro w p hx
-  rw [segPos_shift] at hx
+  rw [segPos_shift _ hs] at hx
   obtain ⟨⟨t, v⟩, hxs, he⟩ := List.mem_map.1 hx
   cases t with
   | ref b i => cases he
@@ -258,16 +278,16 @@ theorem nodeW_oneShift (P : Prog) {d k m : Nat} {o : Int} (hoff : Laid P d) (hk 
   refine nodeW_one (k := k) ?_
   intro w p hx
   unfold pos at hx
-  simp only [List.mem_flatMap, List.mem_map, List.mem_range, Prod.mk.injEq] at hx
+  simp only [List.mem_flatMap, List.mem_map, List.mem_range, Prod.mk.injEq, rowOff_with] at hx
   obtain ⟨r, hr, t, htl, hgt, rfl⟩ := hx
-  have hmem : (Tgt.gate w, g.base + (r : Int) * g.rowStride + (t : Int) * g.stride) ∈ pos g := by
+  have hmem : (Tgt.gate w, g.base + g.rowOff r + (t : Int) * g.stride) ∈ pos g := by
     unfold pos
     simp only [List.mem_flatMap, List.mem_map, List.mem_range]
     exact ⟨r, hr, t, htl, by rw [hgt]⟩
   obtain ⟨h0, h1⟩ := hin w _ hmem
   have := inNode_at P hoff hk hm ho h0 h1
-  rw [show o + g.base + (r : Int) * g.rowStride + (t : Int) * g.stride =
-    g.base + (r : Int) * g.rowStride + (t : Int) * g.stride + o by ring]
+  rw [show o + g.base + g.rowOff r + (t : Int) * g.stride =
+    g.base + g.rowOff r + (t : Int) * g.stride + o by ring]
   exact this
 
 /-- **Copies of a callee's gates, a copy a member** (`shiftGates` to member `m0`'s first gate, each next copy `dm`
@@ -287,12 +307,12 @@ theorem nodeW_copies (P : Prog) {d k : Nat}
     (hin : ∀ u < reps, 0 ≤ (m0 : Int) + (u : Int) * dm ∧
       (m0 : Int) + (u : Int) * dm < (((P.defs[d]!).body.nodes[k]!).members : Int)) :
     NodeW P d { ps := Desc.shiftGates δ ps, len := len, reps := reps, shift := S } := by
-  refine nodeW_of_whole (k := k) hr ?_
+  refine nodeW_of_whole (k := k) hr rfl ?_
   intro w p hx
   unfold segPos at hx
   obtain ⟨u, hu, hx⟩ := List.mem_flatMap.1 hx
   rw [List.mem_range] at hu
-  simp only [copy_pos, shiftGates_pos, List.map_map, shiftPos_shiftPos, List.mem_map] at hx
+  simp only [copy_pos { ps := Desc.shiftGates δ ps, len := len, reps := reps, shift := S } rfl, shiftGates_pos, List.map_map, shiftPos_shiftPos, List.mem_map] at hx
   obtain ⟨⟨t, v⟩, hy, he⟩ := hx
   cases t with
   | ref b i => simp [shiftPos] at he
@@ -320,7 +340,7 @@ theorem nodeW_copies (P : Prog) {d k : Nat}
 copies not shifting. -/
 theorem nodeW_alike (P : Prog) (d : Nat) {one : Array Seg} (hW : ∀ s ∈ one.toList, NodeW P d s) (len reps : Nat) :
     NodeW P d { ps := one.flatMap (·.ps), len := len, reps := reps, shift := 0 } := by
-  refine ⟨fun q hq => ?_, fun _ h => absurd rfl h⟩
+  refine ⟨fun q hq => ?_, fun _ h => absurd rfl h, fun h' => by simp [Desc.Seg.lanes] at h'⟩
   rw [Array.toList_flatMap, List.mem_flatMap] at hq
   obtain ⟨s, hs, hq⟩ := hq
   exact (hW s hs).1 q hq
@@ -388,6 +408,25 @@ theorem calleeN_succ (c : Desc.Ctx) (fuel : Nat)
         (m : Int) * ((c.P.defs[(c.body.nodes[k]!).fn]!).gates : Int)) + g.base }) := fun g hg =>
     nodeW_oneShift c.P hL hk hm ho (fun w p hxm => hin w p (hg _ hxm))
   split at hy
+  · obtain ⟨out, hout, hy⟩ := Walk.except_bind_ok hy
+    simp only [pure, Except.pure, Except.ok.injEq] at hy
+    subst hy
+    refine ⟨out, rfl, segDown_nodeW _ s (psSlice_ok _ hps hpp a b s hs).2.2 (fun q v h0 hsub hfq g hg => ?_) out hout⟩
+    split at hfq
+    · simp only [pure, Except.pure, Except.ok.injEq] at hfq
+      subst hfq
+      simp only [List.mem_singleton] at hg
+      subst hg
+      exact hone1 q (fun x hxm => hx x (hsub x hxm))
+    · exact absurd hfq (by intro h; cases h)
+    · rename_i i hi
+      exact hTW k m i q v hm hi (fun x hxm => by
+        obtain ⟨h0', -, hp⟩ := hpos x (hx x (hsub x hxm))
+        obtain ⟨h1, h2⟩ := hp i ((mem_pos_tgt hxm).trans hi)
+        exact ⟨h0', h1, h2⟩) hfq g hg
+  rename_i hnr
+  have hnr : s.lanes = false := Bool.eq_false_iff.2 hnr
+  split at hy
   · rename_i hr
     split at hy
     · rename_i hall
@@ -397,7 +436,7 @@ theorem calleeN_succ (c : Desc.Ctx) (fuel : Nat)
       refine ⟨#[_], congrArg _ Array.push_eq_append, fun s' hs' => ?_⟩
       simp only [List.mem_singleton] at hs'
       subst hs'
-      exact nodeW_shift c.P hL hk hm ho (by omega) (fun w p hxm => hin w p (hx _ hxm))
+      exact nodeW_shift c.P hL hk hm ho (by omega) hnr (fun w p hxm => hin w p (hx _ hxm))
     rename_i hnot
     have hsh : s.shift = 0 := by
       rcases hgates hr with hg | hg
@@ -412,7 +451,7 @@ theorem calleeN_succ (c : Desc.Ctx) (fuel : Nat)
     rw [← Array.forIn_toList] at hone
     have hxg : ∀ g ∈ s.ps.toList, ∀ x ∈ pos g, x ∈ psPos (c.memo[(c.body.nodes[k]!).fn]!).ret := fun g hg x hxm =>
       hx x (by
-        rw [segPos_alike hsh]
+        rw [segPos_alike hsh hnr]
         exact List.mem_flatMap.2 ⟨0, List.mem_range.2 (by omega), List.mem_flatMap.2 ⟨g, hg, hxm⟩⟩)
     obtain ⟨one'', h1'', h2''⟩ := forIn_app (NodeW c.P c.d) _ s.ps.toList (fun g hg r' y' hy' => by
         split at hy'
@@ -505,42 +544,35 @@ theorem one_n (c : Desc.Ctx) (fuel : Nat) (hD : DownNAt c fuel) {k i : Nat} (hA 
   unfold oneOf at h
   dsimp only at h
   rw [← Array.forIn_toList] at h
-  have hp := pieces_pos _ hA.1 lo hi
+  have hp := psSlice_pos _ hA.1 lo hi
   rw [hA.2, sl_map_range' _ _ _ _ hhi] at hp
-  have hmem : ∀ q ∈ ((c.arg k i).pieces lo hi).toList, ∀ x ∈ pos q,
+  have hmem : ∀ s ∈ ((c.arg k i).slice lo hi).toList, ∀ x ∈ segPos s,
       ∃ t < ((c.body.nodes[k]!).args[i]!).seq.count, x = refPos (((c.body.nodes[k]!).args[i]!).seq.get t) := by
-    intro q hq x hx
-    have : x ∈ posAll ((c.arg k i).pieces lo hi) := List.mem_flatMap.2 ⟨q, hq, hx⟩
+    intro s hs x hx
+    have : x ∈ segsPos ((c.arg k i).slice lo hi) := List.mem_flatMap.2 ⟨s, hs, hx⟩
     rw [hp] at this
     obtain ⟨t, ht, rfl⟩ := List.mem_map.1 this
     exact ⟨t, by rw [List.mem_range'_1] at ht; omega, rfl⟩
-  have hcnt : ∀ q ∈ ((c.arg k i).pieces lo hi).toList, 0 < q.count := by
-    intro q hq
-    unfold Desc.PS.pieces at hq
-    rw [Array.toList_flatMap, List.mem_flatMap] at hq
-    obtain ⟨g, hg, hq⟩ := hq
-    rw [Array.toList_flatMap, List.mem_flatMap] at hq
-    obtain ⟨m, -, hq⟩ := hq
-    exact shiftGates_count _ _ (psSlice_ok _ hA.1 hP lo hi g hg).2.2 q hq
-  exact loop_mem _ (Desc.down c fuel) _ (fun q hq segs hs => hD q segs (hcnt q hq)
-    (fun x hx => by obtain ⟨t, -, rfl⟩ := hmem q hq x hx; simp [refPos])
-    (fun x hx k' hk' => by
-      obtain ⟨t, ht, rfl⟩ := hmem q hq x hx
-      simp only [refPos, Tgt.ref.injEq] at hk'
-      obtain ⟨hp', rfl⟩ := hk'
-      have := ((hR t ht).2 hp').2
-      simp only [refPos]
-      exact_mod_cast this)
-    (fun x hx i' hi' => by
-      obtain ⟨t, ht, rfl⟩ := hmem q hq x hx
-      simp only [refPos, Tgt.ref.injEq] at hi'
-      obtain ⟨hp', rfl⟩ := hi'
-      have := (hR t ht).1 hp'
-      simp only [refPos]
-      exact ⟨this.1, by exact_mod_cast this.2⟩)
-    ⟨0, fun w p hx => by
-      obtain ⟨t, -, he⟩ := hmem q hq _ hx
-      simp [refPos] at he⟩ hs) out h
+  exact loop_mem _ (Desc.segDown (Desc.down c fuel)) _ (fun s hs segs hsd =>
+    segDown_nodeW _ s (psSlice_ok _ hA.1 hP lo hi s hs).2.2 (fun q v hq0 hsub hfq => hD q v hq0
+      (fun x hx => by obtain ⟨t, -, rfl⟩ := hmem s hs x (hsub x hx); simp [refPos])
+      (fun x hx k' hk' => by
+        obtain ⟨t, ht, rfl⟩ := hmem s hs x (hsub x hx)
+        simp only [refPos, Tgt.ref.injEq] at hk'
+        obtain ⟨hp', rfl⟩ := hk'
+        have := ((hR t ht).2 hp').2
+        simp only [refPos]
+        exact_mod_cast this)
+      (fun x hx i' hi' => by
+        obtain ⟨t, ht, rfl⟩ := hmem s hs x (hsub x hx)
+        simp only [refPos, Tgt.ref.injEq] at hi'
+        obtain ⟨hp', rfl⟩ := hi'
+        have := (hR t ht).1 hp'
+        simp only [refPos]
+        exact ⟨this.1, by exact_mod_cast this.2⟩)
+      ⟨0, fun w p hx => by
+        obtain ⟨t, -, he⟩ := hmem s hs _ (hsub _ hx)
+        simp [refPos] at he⟩ hfq) segs hsd) out h
 
 /-- **`throughArg`'s node step**: one step up, what member `m`'s parameter leaves read through node `k`'s argument `i`
 give keeps the body's gates by node wherever `down`'s and `carry`'s segments do (`throughShape_succ`'s argument). -/
@@ -559,6 +591,8 @@ theorem throughN_succ (c : Desc.Ctx) (hB : Resolve.BodyOk c.P c.d)
   · rw [ha] at h; exact absurd h (by intro h; cases h)
   rw [ha] at h
   dsimp only at h
+  have h := walkAtMost_bind _ _ _ h
+  have h := walkAtMost_bind _ _ _ h
   have h' := ok_bind_pure h
   rw [← Array.forIn_toList] at h'
   have hnode : c.body.nodes[k]! = node := node_get hn
@@ -738,6 +772,7 @@ theorem downN_callPts (c : Desc.Ctx) (fuel : Nat) (hC : CalleeN c fuel) (q : Pie
     {segs : Array Seg} (h : Desc.down c (fuel + 1) q = .ok segs) : ∀ s ∈ segs.toList, NodeW c.P c.d s := by
   rw [down_call_pts c fuel q ht hff hn hform h0 hr hs] at h
   unfold callPts at h
+  have h := walkAtMost_bind _ _ _ h
   dsimp only at h
   simp only [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size] at h
   rw [range'_size] at h
@@ -1126,8 +1161,8 @@ theorem batchAffine_n (c : Desc.Ctx) (hB : Resolve.BodyOk c.P c.d) (hL : Laid c.
   swap
   · cases ha
   rename_i hc
-  simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq, Bool.or_eq_true] at hc
-  obtain ⟨⟨hrows, hlen⟩, hFG⟩ := hc
+  simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq, Bool.or_eq_true, List.isEmpty_iff] at hc
+  obtain ⟨⟨⟨hrows, hlen⟩, hFG⟩, hglv⟩ := hc
   simp only [Option.some.injEq] at ha
   subst ha
   rw [e1] at hg0
@@ -1193,7 +1228,9 @@ theorem batchAffine_n (c : Desc.Ctx) (hB : Resolve.BodyOk c.P c.d) (hL : Laid c.
 gates by node. -/
 theorem batchPts_n (c : Desc.Ctx) (fuel : Nat) (hD : DownNAt c fuel) (q : Piece) {k : Nat}
     (ht : q.tgt = .ref false k) (h1 : q.rows = 1) (hq : ∀ x ∈ pos q, 0 ≤ x.2) (hf : ∀ x ∈ pos q, Fits c x)
-    {segs : Array Seg} (h : batchPts c fuel q = .ok segs) : ∀ s ∈ segs.toList, NodeW c.P c.d s := by
+    {segs : Array Seg} (h : batchPts c fuel q = .ok segs)
+    (hlv : q.lv = [] := by first | assumption | exact flat_lv (by assumption) (by omega)) :
+    ∀ s ∈ segs.toList, NodeW c.P c.d s := by
   unfold batchPts at h
   have h := walkAtMost_bind _ _ _ h
   dsimp only at h
@@ -1201,7 +1238,7 @@ theorem batchPts_n (c : Desc.Ctx) (fuel : Nat) (hD : DownNAt c fuel) (q : Piece)
   rw [range'_size] at h
   have hpt : ∀ t, pos { q with base := q.at t, stride := 1, len := 1 } = [(q.tgt, q.at t)] := by
     intro t
-    simp [pos, h1]
+    simp [pos, h1, Desc.Piece.rowOff, hlv]
   exact loop_mem _ (fun t => Desc.down c fuel { q with base := q.at t, stride := 1, len := 1 }) (List.range q.len)
     (fun t htm segs hs => by
       have hm := at_mem_pos h1 (List.mem_range.1 htm)
@@ -1217,7 +1254,7 @@ body's gates by node. -/
 def BatchOneN (c : Desc.Ctx) (fuel : Nat) : Prop :=
   ∀ q k node segs, q.tgt = .ref false k → c.node k = .ok node → node.form = .batch →
     (c.P.defs[node.fn]!).prim = false → (c.P.defs[node.fn]!).outLeaves ≠ 0 → q.count ≠ 0 → q.rows = 1 →
-    q.stride = 1 → (∀ x ∈ pos q, 0 ≤ x.2) → (∀ x ∈ pos q, Fits c x) → batchOne c fuel k node q = .ok segs →
+    q.lv = [] → q.stride = 1 → (∀ x ∈ pos q, 0 ≤ x.2) → (∀ x ∈ pos q, Fits c x) → batchOne c fuel k node q = .ok segs →
     ∀ s ∈ segs.toList, NodeW c.P c.d s
 
 /-- **`BatchN` from its cases**: a batch of a composite's piece row by row and position by position through `down`
@@ -1229,7 +1266,7 @@ theorem batchN_of (c : Desc.Ctx) (fuel : Nat) (hD : DownNAt c fuel)
       (∀ x ∈ pos q, 0 ≤ x.2) → (∀ x ∈ pos q, Fits c x) → affineOf c k node q = some p → NodeW c.P c.d (Seg.one p))
     (hOne : BatchOneN c fuel)
     (hStride : ∀ q k node segs, q.tgt = .ref false k → c.node k = .ok node → node.form = .batch →
-      (c.P.defs[node.fn]!).prim = false → (c.P.defs[node.fn]!).outLeaves ≠ 0 → q.rows = 1 →
+      (c.P.defs[node.fn]!).prim = false → (c.P.defs[node.fn]!).outLeaves ≠ 0 → q.rows = 1 → q.lv = [] →
       (q.len > 1 ∧ q.stride % ((c.P.defs[node.fn]!).outLeaves : Int) = 0 ∧ q.base ≥ 0) →
       (∀ x ∈ pos q, 0 ≤ x.2) → (∀ x ∈ pos q, Fits c x) → batchStride c fuel k node q = .ok segs →
       ∀ s ∈ segs.toList, NodeW c.P c.d s) :
@@ -1245,10 +1282,10 @@ theorem batchN_of (c : Desc.Ctx) (fuel : Nat) (hD : DownNAt c fuel)
         ⟨0, inNode_ref ht⟩ h
     by_cases hs : q.stride = 1
     · rw [down_batch_one c fuel q ht hff hn hform hp hL h0 ha hr hs] at h
-      exact hOne q k node segs ht hn hform hp hL h0 (rows_one h0 hr) hs hq hf h
+      exact hOne q k node segs ht hn hform hp hL h0 (rows_one h0 hr) (flat_lv hff (by omega)) hs hq hf h
     by_cases hcp : q.len > 1 ∧ q.stride % ((c.P.defs[node.fn]!).outLeaves : Int) = 0 ∧ q.base ≥ 0
     · rw [down_batch_stride c fuel q ht hff hn hform hp hL h0 ha hr hs hcp] at h
-      exact hStride q k node segs ht hn hform hp hL (rows_one h0 hr) hcp hq hf h
+      exact hStride q k node segs ht hn hform hp hL (rows_one h0 hr) (flat_lv hff (by omega)) hcp hq hf h
     rw [down_batch_pts c fuel q ht hff hn hform hp hL h0 ha hr hs hcp] at h
     exact batchPts_n c fuel hD q ht (rows_one h0 hr) hq hf h
   · rw [down_batch_affine c fuel q ht hff hn hform hp hL h0 ha] at h
@@ -1270,11 +1307,11 @@ theorem batchStride_n (c : Desc.Ctx) (hB : Resolve.BodyOk c.P c.d) (hL : Laid c.
     (hLF : ∀ k node, c.node k = .ok node → (c.P.defs[node.fn]!).prim = false → Laid c.P node.fn ∧
       (c.P.defs[node.fn]!).body.offsets[(c.P.defs[node.fn]!).body.nodes.size]! = (c.P.defs[node.fn]!).gates) :
     ∀ q k node segs, q.tgt = .ref false k → c.node k = .ok node → node.form = .batch →
-      (c.P.defs[node.fn]!).prim = false → (c.P.defs[node.fn]!).outLeaves ≠ 0 → q.rows = 1 →
+      (c.P.defs[node.fn]!).prim = false → (c.P.defs[node.fn]!).outLeaves ≠ 0 → q.rows = 1 → q.lv = [] →
       (q.len > 1 ∧ q.stride % ((c.P.defs[node.fn]!).outLeaves : Int) = 0 ∧ q.base ≥ 0) →
       (∀ x ∈ pos q, 0 ≤ x.2) → (∀ x ∈ pos q, Fits c x) → batchStride c fuel k node q = .ok segs →
       ∀ s ∈ segs.toList, NodeW c.P c.d s := by
-  intro q k node segs ht hn hform hp hL0 h1 hcp hq hf h
+  intro q k node segs ht hn hform hp hL0 h1 hlv hcp hq hf h
   obtain ⟨hok, hnn, hgo, -, hpp⟩ := hR k node hn
   have hRWk := hRW k node hn
   obtain ⟨hLc, hlast⟩ := hLF k node hn hp
@@ -1532,7 +1569,7 @@ theorem batchOne_n (c : Desc.Ctx) (hB : Resolve.BodyOk c.P c.d) (hLd : Laid c.P 
     (hLF : ∀ k node, c.node k = .ok node → (c.P.defs[node.fn]!).prim = false → Laid c.P node.fn ∧
       (c.P.defs[node.fn]!).body.offsets[(c.P.defs[node.fn]!).body.nodes.size]! = (c.P.defs[node.fn]!).gates) :
     BatchOneN c fuel := by
-  intro q k node segs ht hn hform hp hL h0 h1 hs hq hf h
+  intro q k node segs ht hn hform hp hL h0 h1 hlv hs hq hf h
   have hlen : 0 < q.len := by rw [← count_one h1]; omega
   have hdo := downOk_of hB hn
   have hnode := node_get hn
@@ -1668,53 +1705,39 @@ theorem oneNode_decoded (P : Prog) (memo : Array Desc.Summary) {d : Nat} (hdP : 
     · rw [getElem!_neg _ i hi] at hdims; cases hdims
   · rw [getElem!_neg _ k hk, getElem!_neg _ i (Nat.not_lt_zero i)] at hdims; cases hdims
 
-/-- A piece argument `i` of node `k` gives (`PS.pieces`), through `down`: segments keeping the body's gates by node, the
+/-- A segment of a slice of argument `i` of node `k`, through `segDown`: segments keeping the body's gates by node, the
 argument naming references. -/
-theorem piece_n (c : Desc.Ctx) (fuel : Nat) (hD : DownNAt c fuel) {k i : Nat} (hA : ArgOk c k i)
+theorem argSeg_n (c : Desc.Ctx) (fuel : Nat) (hD : DownNAt c fuel) {k i : Nat} (hA : ArgOk c k i)
     (hP : ∀ s ∈ (c.arg k i).segs.toList, ∀ q ∈ s.ps.toList, 0 < q.count)
     (hR : ∀ t < ((c.body.nodes[k]!).args[i]!).seq.count,
       Resolve.RefOk c.P c.d k (((c.body.nodes[k]!).args[i]!).seq.get t))
-    {lo hi : Nat} {q : Piece} (hq : q ∈ (c.arg k i).pieces lo hi) {segs : Array Seg}
-    (h : Desc.down c fuel q = .ok segs) : ∀ s ∈ segs.toList, NodeW c.P c.d s := by
-  have hq' := Array.mem_toList_iff.2 hq
-  have hmem : ∀ x ∈ pos q, ∃ t < ((c.body.nodes[k]!).args[i]!).seq.count,
-      x = refPos (((c.body.nodes[k]!).args[i]!).seq.get t) := by
-    intro x hx
-    have : x ∈ posAll ((c.arg k i).pieces lo hi) := List.mem_flatMap.2 ⟨q, hq', hx⟩
-    rw [pieces_pos _ hA.1 lo hi] at this
-    have := mem_sl this
-    rw [hA.2] at this
-    obtain ⟨t, ht, rfl⟩ := List.mem_map.1 this
-    exact ⟨t, List.mem_range.1 ht, rfl⟩
-  have hcnt : 0 < q.count := by
-    unfold Desc.PS.pieces at hq'
-    rw [Array.toList_flatMap, List.mem_flatMap] at hq'
-    obtain ⟨g, hg, hq'⟩ := hq'
-    rw [Array.toList_flatMap, List.mem_flatMap] at hq'
-    obtain ⟨m, -, hq'⟩ := hq'
-    exact shiftGates_count _ _ (psSlice_ok _ hA.1 hP lo hi g hg).2.2 q hq'
-  exact hD q segs hcnt
-    (fun x hx => by obtain ⟨t, -, rfl⟩ := hmem x hx; simp [refPos])
+    {lo hi : Nat} {g : Seg} (hg : g ∈ (c.arg k i).slice lo hi) {segs : Array Seg}
+    (h : Desc.segDown (Desc.down c fuel) g = .ok segs) : ∀ s ∈ segs.toList, NodeW c.P c.d s := by
+  have hg' := Array.mem_toList_iff.2 hg
+  have hmem := argSeg_mem c hA hg'
+  refine segDown_nodeW _ g (psSlice_ok _ hA.1 hP lo hi g hg').2.2 (fun q v hq0 hsub hfq => ?_) segs h
+  exact hD q v hq0
+    (fun x hx => by obtain ⟨t, -, rfl⟩ := hmem x (hsub x hx); simp [refPos])
     (fun x hx k' hk' => by
-      obtain ⟨t, ht, rfl⟩ := hmem x hx
+      obtain ⟨t, ht, rfl⟩ := hmem x (hsub x hx)
       simp only [refPos, Tgt.ref.injEq] at hk'
       obtain ⟨hp', rfl⟩ := hk'
       have := ((hR t ht).2 hp').2
       simp only [refPos]
       exact_mod_cast this)
     (fun x hx i' hi' => by
-      obtain ⟨t, ht, rfl⟩ := hmem x hx
+      obtain ⟨t, ht, rfl⟩ := hmem x (hsub x hx)
       simp only [refPos, Tgt.ref.injEq] at hi'
       obtain ⟨hp', rfl⟩ := hi'
       have := (hR t ht).1 hp'
       simp only [refPos]
       exact ⟨this.1, by exact_mod_cast this.2⟩)
     ⟨0, fun w p hx => by
-      obtain ⟨t, -, he⟩ := hmem _ hx
-      simp [refPos] at he⟩ h
+      obtain ⟨t, -, he⟩ := hmem _ (hsub _ hx)
+      simp [refPos] at he⟩ hfq
 
 /-- **Every segment `down` gives a piece of a root node's argument, one `Desc.memberRows` gives, or one
-`Desc.carriesRead` gives, keeps the root's gates by node** (`piece_n`, `throughPS_n`, `carriesRead_of`). -/
+`Desc.carriesRead` gives, keeps the root's gates by node** (`argSeg_n`, `throughPS_n`, `carriesRead_of`). -/
 theorem rootN (P : Prog) (memo : Array Desc.Summary) (hm : memoOf P = .ok memo) (hF : RootFacts P)
     (hWF : WidthFacts P) {k : Nat} {node : Flock.Program.Node} (hn : (rootCtx P memo).node k = .ok node) {s : Seg}
     (hs : (∃ i, FromDown (rootCtx P memo) k i s) ∨ FromRows (rootCtx P memo) k node s ∨
@@ -1739,9 +1762,9 @@ theorem rootN (P : Prog) (memo : Array Desc.Summary) (hm : memoOf P = .ok memo) 
   have hk := node_lt hn
   rcases hs with ⟨i, lo, hi, q, hq, segs, hd, hs⟩ | ⟨i, u, ps, hmr, p, hp, segs, hd, hs⟩ | ⟨hfs, hn2, segs, hc, hs⟩
   · by_cases hi' : i < ((ctxOf P memo P.root).body.nodes[k]!).args.size
-    · exact piece_n _ _ hW.1 (hA k i hk hi') (ctxOf_argCount P memo P.root k i hk hi') ((hBr.1 k hk).2.1 i) hq hd
+    · exact argSeg_n _ _ hW.1 (hA k i hk hi') (ctxOf_argCount P memo P.root k i hk hi') ((hBr.1 k hk).2.1 i) hq hd
         s (Array.mem_toList_iff.2 hs)
-    · rw [pieces_empty (ctxOf_arg_ge P memo P.root k i hi')] at hq
+    · rw [slice_empty (ctxOf_arg_ge P memo P.root k i hi')] at hq
       simp at hq
   · obtain ⟨p', hp'⟩ := memberRows_mem _ node k i u hmr p (Array.mem_toList_iff.2 hp)
     exact hPS k node i p' p segs hn hp' hd s (Array.mem_toList_iff.2 hs)
@@ -1789,6 +1812,7 @@ theorem rootOneNode_of
   obtain ⟨hRF, hWF⟩ := hF bytes P hd ho hw
   have hN := rootN P memo hm hRF hWF hn hs
   exact ⟨fun q hq _ => nodeGates_of_inNode P hl hk (hN.1 q hq),
-    fun h1 h2 _ => nodeGates_of_inNode P hl hk (hN.2 h1 h2)⟩
+    fun h1 h2 _ => nodeGates_of_inNode P hl hk (hN.2.1 h1 h2),
+    fun h' q hq _ => nodeGates_of_inNode P hl hk (hN.2.2 h' q hq)⟩
 
 end InferenceOnlyVerifier.Properties.SecurityProofs.ReadsExact

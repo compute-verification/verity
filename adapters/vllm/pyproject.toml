@@ -8,15 +8,14 @@ dependencies = [
     "verity-config",
     "numpy>=1.26",
     "verity-torch",
+    "input-datasets",
 ]
 
 [project.scripts]
 verity-vllm = "verity_vllm.pipeline.cli:main"
 
-# vLLM calls each general plugin in every process it loads plugins in (vllm/plugins/__init__.py): this one puts the canonical
-# moe_align_block_size on the Marlin MoE path (verity_vllm/engine/moe_align.py)
+# vLLM calls each general plugin in every process it loads plugins in (vllm/plugins/__init__.py)
 [project.entry-points."vllm.general_plugins"]
-verity_moe_align = "verity_vllm.engine.moe_align:register"
 verity_cut = "verity_vllm.pipeline.cut_plugin:register"
 verity_schemes = "verity_vllm.pipeline.scheme_plugin:register"
 
@@ -37,6 +36,7 @@ packages = [
 ]
 
 [tool.uv.sources]
+input-datasets = { workspace = true }
 research = { workspace = true }
 verity = { workspace = true }
 verity-config = { workspace = true }

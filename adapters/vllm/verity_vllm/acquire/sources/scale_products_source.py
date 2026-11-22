@@ -1,19 +1,21 @@
 """The blockwise FP8 GEMM's scale products (`query.scale_products`) as an acquisition source: per linear module and step, the committed
 products of every token row, `<linear module>/scale_products` (f32 [rows, N/G * K/G], weight block nb major, k block kb minor), in the
-same step stream and run root as the module's other values.  Attached whenever the required manifest names `scale_products` identities
-(a Program built under `fp8_scale_construction = shared-per-block`), refused on a manifest that names none.
+same step stream and run root as the module's other values.  Attached whenever the capture plan names `scale_products` classes
+(a Program built under `fp8_scale_construction = shared-per-block`), refused on a plan that names none.
 
-The sites are the manifest's `scale_products` identities.  A forward pre-hook marks the site module that runs; inside it, during a
+The sites are the capture plan's `scale_products` classes (`check.capture_plan.of_build`, taken as data), each with the
+block geometry (N/G, K/G) of its plan rows' statics (`capture_plan.rows_of_build`: K, N, G); a class no row gives a geometry, or
+whose width is not the geometry's product, refuses the Commit.  A forward pre-hook marks the site module that runs; inside it, during a
 committed step, the wrapper of `torch.ops._C.cutlass_scaled_mm` reads the launch's `a_scales` (the [M, K/G] group scales
 `per_token_group_fp8_quant` wrote, x_s) and `b_scales` (the transposed view of the module's [N/G, K/G] `weight_scale_inv`, w_s), computes
 `F32Mul_v1(x_s[m][kb], w_s[nb][kb])` on the host through the circuit (`numerics.fp8_twins.scale_products`), acquires the words on the launch's
-device, then runs the installed kernel unchanged.  No kernel changes.  A launch whose scale shapes are not the manifest's block geometry
+device, then runs the installed kernel unchanged.  No kernel changes.  A launch whose scale shapes are not the plan's block geometry
 is a collector error.
 """
 from __future__ import annotations
 
 import time
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 import numpy as np
@@ -22,6 +24,7 @@ from verity_vllm.definitions.numerics import fp8_twins
 from verity_vllm.engine import hooks
 from verity_vllm.log import init_logger
 from verity_vllm.query import scale_products as SP
+from verity_vllm.records.capture import SCALE_PRODUCTS
 
 logger = init_logger(__name__)
 
@@ -38,14 +41,14 @@ def products(torch: Any, a_scales: Any, b_scales: Any) -> Any:
 class ScaleProductsSource:
     short_name = "scale_products"
 
-    def __init__(self, committer: Any, model: Any, sites: Mapping[str, Mapping[str, int]]) -> None:
-        """`sites`: linear module op path -> {"n_blocks", "k_blocks"} (`query.scale_products.manifest_sites`)."""
+    def __init__(self, committer: Any, model: Any, sites: Mapping[str, tuple[int, int]]) -> None:
+        """`sites`: linear module op path -> (N/G, K/G), its weight and k blocks (`sites`)."""
         import torch
 
         if not sites:
             raise ValueError("scale products: no linear module to tap")
         self.torch, self.c, self.model = torch, committer, model
-        self.sites = {str(k): dict(v) for k, v in sites.items()}
+        self.sites = {str(k): (int(v[0]), int(v[1])) for k, v in sites.items()}
         self._hooks = hooks.Hooks()
         self._handles: list[Any] = []
         self._scope: list[str] = []
@@ -57,7 +60,7 @@ class ScaleProductsSource:
         mods = dict(self.model.named_modules())
         missing = sorted(set(self.sites) - set(mods))
         if missing:
-            raise RuntimeError(f"scale products: the manifest's linear modules are not modules of the model: {missing[:4]}")
+            raise RuntimeError(f"scale products: the capture plan's linear modules are not modules of the model: {missing[:4]}")
         for op in self.sites:
             self._handles.append(mods[op].register_forward_pre_hook(self._enter(op)))
             self._handles.append(mods[op].register_forward_hook(self._leave(op), always_call=True))
@@ -100,11 +103,10 @@ class ScaleProductsSource:
             job = me.c._cur
             if job is not None and me._scope:
                 op = me._scope[-1]
-                g = me.sites[op]
-                nb, kb = g["n_blocks"], g["k_blocks"]
+                nb, kb = me.sites[op]
                 if a_scales.dim() != 2 or int(a_scales.shape[1]) != kb or tuple(b_scales.shape) != (kb, nb):
                     me.error(f"scale products: {op} launched cutlass_scaled_mm with a_scales {tuple(a_scales.shape)}, b_scales "
-                             f"{tuple(b_scales.shape)}; the manifest's blocks are [M, {kb}] x [{kb}, {nb}]")
+                             f"{tuple(b_scales.shape)}; the capture plan's blocks are [M, {kb}] x [{kb}, {nb}]")
                 else:
                     t0 = time.perf_counter()
                     v = products(torch, a_scales, b_scales)
@@ -122,33 +124,63 @@ class ScaleProductsSource:
         return cutlass_scaled_mm
 
     def extra_step_bytes(self, envelope: Mapping[str, Any], model: Any) -> dict[str, int]:
-        per_token = sum(4 * g["n_blocks"] * g["k_blocks"] for g in self.sites.values())
+        per_token = sum(4 * nb * kb for nb, kb in self.sites.values())
         return {"per_token_bytes": per_token, "per_seq_bytes": 0, "tensors_per_step": len(self.sites)}
 
     def declaration_classes(self) -> list[dict]:
-        return [{"class": SP.FAMILY, "how": "bound-as-leaf", "rule": None, "count": self.stats["tensors"], "bytes": self.stats["bytes"],
+        return [{"class": SCALE_PRODUCTS, "how": "bound-as-leaf", "rule": None, "count": self.stats["tensors"], "bytes": self.stats["bytes"],
                  "tensors": self.stats["tensors"], "rows": self.stats["rows"], "errors": self.stats["errors"],
                  "evidence": (f"scale-products source: `<linear module>/{SP.MEMBER}` of {len(self.sites)} sites, F32Mul_v1 of the launch's "
                               "activation scales and the module's weight_scale_inv through the IR (numerics.fp8_twins.scale_products; no kernel change)")}]
 
 
-def attach(com: Any, enabled: bool, manifest: Mapping[str, Any] | None, required_classes: tuple[str, ...], *,
-           explicit_classes: bool = False, model: Any = None) -> tuple[tuple[str, ...], ScaleProductsSource | None]:
-    """Attach the source to `com` when `enabled`; the required manifest must name `scale_products` identities, else the Commit is refused
-    (exit 3).  Returns the required classes with `scale_products` added unless they were given explicitly."""
+def sites(plan: Sequence[Mapping[str, Any]], rows: Sequence[Mapping[str, Any]]) -> dict[str, tuple[int, int]]:
+    """Linear module op path -> (N/G, K/G) of every `scale_products` class of the capture plan, the geometry that of the statics of
+    the plan rows (`capture_plan.rows_of_build`) that commit it.  ValueError, naming the class, for a member other than
+    `scale_products`, a module no row gives a geometry or rows give two, or a width that is not the geometry's product."""
+    geometry: dict[str, set[tuple[int, int]]] = {}
+    for r in rows:
+        if SCALE_PRODUCTS in r["classes"].values():
+            geometry.setdefault(str(r["op_path"]), set()).add(SP.blocks(r["statics"]))
+    out: dict[str, tuple[int, int]] = {}
+    for c in plan:
+        if c["capture"] != SCALE_PRODUCTS:
+            continue
+        op, w, g = str(c["op_path"]), int(c["width"]), sorted(geometry.get(str(c["op_path"]), ()))
+        if c["member"] != SP.MEMBER:
+            raise ValueError(f"scale products: {op}/{c['member']} is a scale_products class and not the member {SP.MEMBER}")
+        if len(g) != 1:
+            raise ValueError(f"scale products: the plan's rows give {op} {len(g)} block geometries ({g}), and the source needs one")
+        if g[0][0] * g[0][1] != w:
+            raise ValueError(f"scale products: {op} is {w} wide, and its rows' blocks are {g[0][0]} x {g[0][1]}")
+        out[op] = g[0]
+    return out
+
+
+def attach(com: Any, enabled: bool, plan: Sequence[Mapping[str, Any]], required_classes: tuple[str, ...], *,
+           rows: Sequence[Mapping[str, Any]] | None = None, explicit_classes: bool = False,
+           model: Any = None) -> tuple[tuple[str, ...], ScaleProductsSource | None]:
+    """Attach the source to `com` when `enabled`; the capture plan must name `scale_products` classes, each this source's and each
+    with one block geometry in the plan's `rows`, else the Commit is refused (exit 3): without the rows the source would know
+    only the products' width, and commit a launch of other blocks at the same product.  Returns the required classes with
+    `scale_products` added unless they were given explicitly."""
     if not enabled:
         return required_classes, None
-    sites = SP.manifest_sites(manifest)
-    if not sites:
-        logger.error("[delta] REFUSE: the scale-products source but the required-value manifest names no scale_products identity (a Program "
-                     "without ScaledMmFp8BlockSharedScale Calls)")
+    try:
+        at = sites(plan, rows or ())
+    except ValueError as e:
+        logger.error("[delta] REFUSE: %s", e)
+        raise SystemExit(3) from None
+    if not at:
+        logger.error("[delta] REFUSE: the scale-products source but the capture plan names no scale_products class (a Program without "
+                     "ScaledMmFp8BlockSharedScale Calls)")
         raise SystemExit(3)
-    src = ScaleProductsSource(com, model if model is not None else getattr(com, "model", None), sites)
+    src = ScaleProductsSource(com, model if model is not None else getattr(com, "model", None), at)
     com.attach_source(src)
-    logger.info("[delta] scale-products source attached: %d sites -> committer %s", len(sites), com.name)
-    if not explicit_classes and SP.FAMILY not in required_classes:
-        return (*required_classes, SP.FAMILY), src
+    logger.info("[delta] scale-products source attached: %d sites -> committer %s", len(at), com.name)
+    if not explicit_classes and SCALE_PRODUCTS not in required_classes:
+        return (*required_classes, SCALE_PRODUCTS), src
     return required_classes, src
 
 
-__all__ = ["ScaleProductsSource", "products", "attach"]
+__all__ = ["ScaleProductsSource", "products", "sites", "attach"]

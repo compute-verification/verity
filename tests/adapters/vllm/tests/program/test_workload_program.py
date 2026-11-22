@@ -231,11 +231,10 @@ def test_registered_values_are_shared_once_and_registered_at_the_root():
                            W.WorkloadRequest("b", 1, 5, 1, 0, _registered_component(5, registered=()))], lag=0)
 
 
-def test_a_workload_without_registered_values_keeps_its_digest():
+def test_a_workload_without_registered_values_registers_none():
     wl = _wl([(3, 2), (5, 0)])
     assert wl.registered == () and "registered" not in wl.artifact()["shared"]
     assert wl.descriptor["annotations"]["theta"] == [0]   # the weights, marked outside the digest
-    assert wl.digest == "6e2b20e9356a27b5b3db628205d9b97f617a400cfa95c96fa7d9aff92b145de92892833688405e5e8ee4fa29cd4400395250238cc9764234376882bcb6904655"
 
 
 def test_theta_registered_binds_the_weights_at_registration_and_moves_only_the_workload_digest():

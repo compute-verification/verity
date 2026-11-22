@@ -47,7 +47,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 
 The positive twin of `Properties.Pouw.MonitoringPeriod.H1CheckedCreditMonitoringPeriod`, as
 `ResourceAccounting.SecurityProofs.ComposeMonitoringPeriod.Honest` is of `CircuitWorkMonitoringPeriod`: a period of `n ≥ 1` executionPhases at H1's
-instance's own numbers, whose every window the deployed check (`PouwCheck.protocol.check`) accepts at the
+instance's own numbers, whose every window the deployed check (`PouwVerifier.protocol.check`) accepts at the
 parameters `Accept.h1Params`, and which meets every premise of the instance
 (`h1_meets`). The instance itself is `Properties.Pouw.MonitoringPeriod.Witnesses`', where the witnesses' statements read it.
 

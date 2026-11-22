@@ -9,7 +9,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from tests.pipeline.test_row import _row, _tp_row
 from verity_vllm import target_family as tf
 
 TREE = (Path(__file__).resolve().parents[4] / "adapters" / "vllm")
@@ -91,20 +90,6 @@ def test_the_match_s_cpu_phase_reads_no_device_and_every_gpu_stage_still_refuses
         assert rec["verdict"] == "FAIL" and [m["fact"] for m in rec["mismatches"]] == ["device"], (stages, phase)
 
 
-def test_the_row_hands_its_match_phase_to_the_preflight_so_its_cpu_half_needs_no_gpu(tmp_path):
-    """`--match-phase cpu` on a workload's run reaches `target-family`, which then passes on a host with no GPU; the same
-    workload's GPU stages (`--match-phase all`) are refused there."""
-    env = {**os.environ, "PYTHONPATH": os.pathsep.join([str(TREE), os.environ.get("PYTHONPATH", "")]), "PATH": str(tmp_path),
-           "CUDA_VISIBLE_DEVICES": ""}
-    for phase, rc, head in (("cpu", 0, "TARGET-FAMILY-OK"), ("all", 3, "PRECHECK_FAIL_TARGET_FAMILY: no GPU visible for a GPU stage")):
-        t = _tp_row(tmp_path, ROW_H200_TP8, "--stages", "match", "--match-phase", phase)
-        os.makedirs(t.d, exist_ok=True)
-        t.child_env = env
-        got = t.target_family(out=str(tmp_path / f"{phase}.json"))
-        assert got[0] == rc and got[1].startswith(head), got
-        assert json.loads((tmp_path / f"{phase}.json").read_text())["match_phase"] == phase
-
-
 def test_rtxpro6000_rows_are_the_cc_12_0_family(monkeypatch):
     row = "llama32-1b__bf16__rtxpro6000__tp1__b1__i256__o32__mixed__greedy__bi-eager"
     assert tf.row_family(row) == ("rtxpro6000", (12, 0))
@@ -139,18 +124,18 @@ def test_cli_fails_by_name_with_rc_3_and_writes_the_record(tmp_path):
     out = tmp_path / "target_family.json"
     env = {**os.environ, "PYTHONPATH": os.pathsep.join(filter(None, [str(TREE), str(TREE / "vllm-poc"), os.environ.get("PYTHONPATH")]))}
     env.pop("TARGET_FAMILY_WAIVER", None)
-    r = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "target-family", "--row", ROW_PRO, "--stages", "build", "--no-device",
+    r = subprocess.run([sys.executable, "-c", "import importlib, sys; from verity_vllm.pipeline import cli; raise SystemExit(cli.run(importlib.import_module(sys.argv[1]), sys.argv[2:]))", "verity_vllm.target_family", "--row", ROW_PRO, "--stages", "build", "--no-device",
                         "--build-summary", str(bs), "--out", str(out)], capture_output=True, text=True, env=env, cwd=TREE)
     assert r.returncode == 3, r.stderr
     assert r.stderr.startswith("PRECHECK_FAIL_TARGET_FAMILY:") and "Build target 9.0 != row family 12.0" in r.stderr
     rec = json.loads(out.read_text())
     assert rec["schema"] == "verity-sweep/target-family/v1" and rec["fail_class"] == "PRECHECK_FAIL_TARGET_FAMILY"
     # the waiver from the environment (canary.sh exports TARGET_FAMILY_WAIVER) turns it into a named WAIVED, rc 0
-    r2 = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "target-family", "--row", ROW_PRO, "--stages", "build", "--no-device",
+    r2 = subprocess.run([sys.executable, "-c", "import importlib, sys; from verity_vllm.pipeline import cli; raise SystemExit(cli.run(importlib.import_module(sys.argv[1]), sys.argv[2:]))", "verity_vllm.target_family", "--row", ROW_PRO, "--stages", "build", "--no-device",
                          "--build-summary", str(bs), "--out", str(out)], capture_output=True, text=True, env={**env, "TARGET_FAMILY_WAIVER": "canary t"}, cwd=TREE)
     assert r2.returncode == 0 and r2.stdout.startswith("TARGET-FAMILY-WAIVED (canary t)")
     assert json.loads(out.read_text())["verdict"] == "WAIVED"
-    r3 = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "target-family", "--row", ROW_PRO, "--stages", "build", "--out", str(out)],
+    r3 = subprocess.run([sys.executable, "-c", "import importlib, sys; from verity_vllm.pipeline import cli; raise SystemExit(cli.run(importlib.import_module(sys.argv[1]), sys.argv[2:]))", "verity_vllm.target_family", "--row", ROW_PRO, "--stages", "build", "--out", str(out)],
                         capture_output=True, text=True, env={**env, "CUDA_VISIBLE_DEVICES": ""}, cwd=TREE)
     assert r3.returncode == 3 and "CUDA_VISIBLE_DEVICES hides" in r3.stderr, "the row's empty CUDA_VISIBLE_DEVICES reaches the check"
 
@@ -177,19 +162,6 @@ def test_the_cli_opens_the_build_summary_by_the_name_as_it_is_handed(tmp_path):
     assert [[m["fact"] for m in r["mismatches"]] for r in _main_reads(tmp_path, "build_summary")] == [["built"], ["built"]]
 
 
-def test_the_row_match_argv_carries_the_explicit_snapshot_cap_only_when_set(tmp_path):
-    """--snapshot-max-bytes N (MATCH_SNAP_MAX_BYTES) arms the Match's cap; unset -> the argv without it."""
-
-    def argv(*flags, environ=None):
-        r = _row(tmp_path, *flags, environ=environ)
-        r.B, r.ck, r.snap_def, r.snap_steps = 1, "/tmp/ck", "0,1", None
-        return r.match_cmd()
-    unset = argv()
-    assert "--snapshot-max-bytes" not in unset
-    for st in (argv("--snapshot-max-bytes", "33554432"), argv(environ={"MATCH_SNAP_MAX_BYTES": "33554432"})):
-        i = st.index("--snapshot-max-bytes")
-        assert st[i + 1] == "33554432" and st[i - 1] == "0,1" and st[i + 2] == "--skip"
-        assert [x for x in st if x != "--snapshot-max-bytes" and x != "33554432"] == unset
 
 
 def test_a_builds_target_reads_a_summary_whose_step_target_or_applicability_is_absent_null_or_empty():

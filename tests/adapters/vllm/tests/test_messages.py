@@ -12,22 +12,21 @@ from types import SimpleNamespace as NS
 
 import pytest
 from verity import hooks as H
-from verity.protocols.compose import schemes as declarations
-from verity.protocols.resource_accounting import scheme as schemes
+from verity.protocols.run import schemes as declarations
+from verity.protocols.accounting import scheme as schemes
 
 from verity.channel import Body, MessageTypes, Refused
 from verity_vllm import messages as M
 from verity_vllm.config import UsageError
 from verity_vllm.pipeline import advice as A
 from verity_vllm.pipeline import serve_day as SD
-from verity_vllm.pipeline import serve_h1 as SH
 
 
 def test_useful_works_workload_messages_are_types_with_no_scheme_declared():
-    """H1's messages (`pouw.prover.workload.MESSAGES`), which no scheme declares, are types before any declaration is
-    imported: Pearl+'s declaration isn't what finds them."""
+    """Useful work's workload messages (`pouw.prover.workload.MESSAGES`), which no scheme declares, are types before any
+    declaration is imported: Pearl+'s declaration isn't what finds them."""
     probe = ("import sys\nfrom verity_vllm import messages as M\n"
-             "assert {'H1Registration', 'H1Record', 'H1Program'} <= M.types().types\n"
+             "assert {'PoUWScheme', 'PoUWMonitoringPeriod'} <= M.types().types\n"
              f"assert {declarations.DECLARATIONS['pearl-plus']!r} not in sys.modules\n")
     got = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True)
     assert got.returncode == 0, got.stderr[-2000:]
@@ -43,18 +42,15 @@ def test_a_type_no_protocol_declares_is_refused():
         M.body("Summary", b"{}")
 
 
-@pytest.mark.parametrize("entry", ["serve_h1.config_of", "serve_day.declare"])
-def test_a_body_its_declaration_refuses_is_a_usage_error_naming_the_bound(tmp_path, monkeypatch, entry):
-    type_ = "MonitoringPeriodDeclaration" if entry == "serve_day.declare" else "PoUWScheme"
+def test_a_body_its_declaration_refuses_is_a_usage_error_naming_the_bound(tmp_path, monkeypatch):
+    type_ = "MonitoringPeriodDeclaration"
     narrowed = MessageTypes(dataclasses.replace(s, body=Body(max=8)) if s.type == type_ else s
                             for s in M.types().schemas.values())
     monkeypatch.setattr(M, "types", lambda: narrowed)
     (big := tmp_path / "big.json").write_text(json.dumps({"pouw": {}}))
     day = SD.DayOptions(day=0, day_log=str(tmp_path / "log.json"), day_program="5a" * 64, day_params=str(big))
-    call = {"serve_h1.config_of": lambda: SH.config_of(str(big)),
-            "serve_day.declare": lambda: SD.declare(NS(day=day), tmp_path)}[entry]
     with pytest.raises(UsageError, match=f"oversized: {type_}'s body is at most 8 bytes, not 12"):
-        call()
+        SD.declare(NS(day=day), tmp_path)
 
 
 def test_run_totals_bytes_unchanged(tmp_path):
@@ -154,20 +150,20 @@ def test_pearl_pass_bytes_unchanged(tmp_path):
         assert (tmp_path / f"after-{name}").read_bytes() == (tmp_path / f"before-{name}").read_bytes()
 
 
-def test_h1_registration_bytes_unchanged(tmp_path):
-    w = {"schema": "h1-registration/v1", "window": 0, "prev": None, "roots": {"advice": "02" * 64}, "note": "é"}
+def test_a_workload_message_s_bytes_unchanged(tmp_path):
+    w = {"schema": "pouw-scheme/v1", "window": 0, "prev": None, "roots": {"advice": "02" * 64}, "note": "é"}
     lines = [{"kind": "declaration", "digest": "03" * 64}, {"window": 0, "kind": "registration",
                                                              "file": "w0/registration.json", "digest": "04" * 64}]
     (tmp_path / "before.json").write_text(json.dumps(w, indent=1) + "\n")
-    M.write(tmp_path / "after.json", "H1Registration", (json.dumps(w, indent=1) + "\n").encode())
+    M.write(tmp_path / "after.json", "PoUWScheme", (json.dumps(w, indent=1) + "\n").encode())
     assert (tmp_path / "after.json").read_bytes() == (tmp_path / "before.json").read_bytes()
-    assert json.loads(M.read(tmp_path / "after.json", "H1Registration")) == w
+    assert json.loads(M.read(tmp_path / "after.json", "PoUWScheme")) == w
     for line in lines:
         with open(tmp_path / "before.jsonl", "a") as fh:
             fh.write(json.dumps(line) + "\n")
-        M.append(tmp_path / "after.jsonl", "H1Registration", json.dumps(line).encode())
+        M.append(tmp_path / "after.jsonl", "PoUWScheme", json.dumps(line).encode())
     assert (tmp_path / "after.jsonl").read_bytes() == (tmp_path / "before.jsonl").read_bytes()
-    assert [json.loads(x) for x in M.lines(tmp_path / "after.jsonl", "H1Registration")] == lines
+    assert [json.loads(x) for x in M.lines(tmp_path / "after.jsonl", "PoUWScheme")] == lines
 
 
 def test_registered_weights_reading_unchanged(tmp_path):

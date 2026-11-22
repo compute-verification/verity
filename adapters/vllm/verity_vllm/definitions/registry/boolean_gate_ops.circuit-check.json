@@ -1,0 +1,42 @@
+{
+ "definitions": {
+  "F32ToU32RzByte_v2": {
+   "and": 111,
+   "type": "ae3b40c5e9de1429de8c5b7be7b013288d47ae1734b0e10a500612f1ef560477f035236d95f9ff6a6a191ecfd28eee9808aab24b095d4b56454fab80496079e1"
+  },
+  "I32Div_v2": {
+   "and": 2141,
+   "type": "76f4c908c370d798953b94ddcf52d3a612692db0b4889f2c319922ecfc928ca0962a4f3ae901dbca96801d86d72485f9c8e3a5bf0de21a59b809ec992fbec343"
+  },
+  "I32Mul_v2": {
+   "and": 993,
+   "type": "694689ca5e4acf63c035ce405f0eaa62ba671411213e6eaf258433865ac8e798525d4a9eccd4ffe1d50cd0ad8fd1b5ff891a291325400a00e11f95271676d83b"
+  },
+  "I32Rem_v2": {
+   "and": 2110,
+   "type": "07ecea2720d77b1b522b355934ef95bbbb4bcd6c72a2cf6a94f9fc1b58c3b0f0460755bb7c172e9f08af9c7d63a80fb9622cbf240b6ec84f32b68b9c6f9cefad"
+  },
+  "MufuLg2Mantissa_v2": {
+   "and": 986,
+   "type": "6c56b5930e1ab34524d0f2e433b666d77544572e0abad9ad07a62cca978f925e162f81bb6995f5f6e03f446b4ae2202744e787945e5c2380c7204ba98de15e1d"
+  },
+  "Ue8m0CeilByte_v2": {
+   "and": 29,
+   "type": "b25ca766c072f1397a014d7b79a01b003f01cd18a367f1329ab13dfd010e5e213564393213a717e331f8d71d82d95ae919176f9f8a5e5ee4fe670a68b0a8e7f3"
+  }
+ },
+ "pieces": {
+  "F32ToU32RzByte_v1": {
+   "and": 111,
+   "type": "9d36d4ee6ebca8535d5327551f1f1017a0fec11681b35b1978bf6e5c0ffc497fb6f9535408f5aea7ce92a5bf2127a2be45a02fdb572a66ee27807378c5a5dbc9"
+  },
+  "MufuLg2Mantissa_v1": {
+   "and": 986,
+   "type": "5a3dc5cc6eda83dee8c9ace3ef34f51d7e5239d618614d050b977b90e29fd9674f3eeb28995bf11b5507fab38e9009f9838e537b2831839bc20e6f80aa84834b"
+  },
+  "Ue8m0CeilByte_v1": {
+   "and": 29,
+   "type": "573975d833b42eb136ca3707d985f17b440cf69f7903f3d7bc068c7cbfb2ee61c9fb27157d61044a0252f6c77b0a07a708d8eec761fe3d3edd1eaaaaa4855ae0"
+  }
+ }
+}

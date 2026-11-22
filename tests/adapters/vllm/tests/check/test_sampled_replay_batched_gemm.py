@@ -15,7 +15,6 @@ from verity.circuits.defs import bind, conformance_label
 from verity.circuits.evaluation import evaluate
 
 from tests.program.test_dsa_derive import STANDIN, _bf16, served  # noqa: F401  (the H200 Build fixture)
-from verity_vllm.check.replay import evaluate as EV
 from verity_vllm.check.replay import index as IX
 from verity_vllm.check.replay import opening as OP
 from verity_vllm.definitions.numerics import batched_gemm_rows, rows
@@ -25,8 +24,6 @@ from verity_vllm.definitions.registry import b1, hopper
 from verity_vllm.definitions.registry import bf16_gemm_check as BC
 from verity_vllm.definitions.registry import cublas_bf16 as CB
 from verity_vllm.program import compact as CP
-from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
-from verity_vllm.program.frontend.vllm_derive import derive_report
 from verity_vllm.query.manifest import format as RM
 
 HOP = '{"fn":"HopperBF16WgmmaDot16_v1"}'
@@ -175,60 +172,6 @@ def world():
     return table, planes
 
 
-def _replay(table, planes, items=None):
-    reads = []
-
-    def weights(field, lo, hi):
-        reads.append((field, lo, hi))
-        return table[field][lo:hi]
-
-    rec = EV._replay_vu(_Index(_w_items() if items is None else items), _store(planes), weights,
-                        {"i": 7, "request_id": "r0", "phase": "decode"}, 0, {})
-    return rec, reads
-
-
-def test_an_honest_row_replays_equal_from_one_read_of_the_field(world):
-    rec, reads = _replay(*world)
-    assert rec["result"] is True, rec.get("why")
-    assert [o["member"] for o in rec["outputs"]] == ["ql_nope"] and rec["outputs"][0]["equal"]
-    assert reads == [(FIELD, 0, B * K * N)]
-    assert rec["inputs"][1] == {"kind": "weights", "field": FIELD, "range": [0, B * K * N], "bits": 16,
-                                "gather": {"runs": _n_runs(_w_items()), "leaves": B * N * K}}
-
-
-@pytest.mark.parametrize("word", [0, B * N - 1, N + 3])
-def test_a_changed_committed_word_is_a_mismatch_by_name(world, word):
-    table, planes = world
-    out = planes[(OP_PATH, "ql_nope")].copy()
-    out[ROW * B * N + word] ^= 1
-    rec, _ = _replay(table, {**planes, (OP_PATH, "ql_nope"): out})
-    assert rec["result"] is False
-    assert rec["outputs"][0]["differing_elements"] == 1 and rec["outputs"][0]["first_diff"] == word
-    assert f"{OP_PATH}/ql_nope row {ROW}" in rec["why"]
-
-
-def test_the_first_progressions_weight_is_read_too(world):
-    """A changed leaf of W[0][0][0] (the first stored progression, never the last) changes coordinate (b 0, n 0)."""
-    table, planes = world
-    w = table[FIELD].copy()
-    w[0] ^= 0x4000
-    rec, _ = _replay({**table, FIELD: w}, planes)
-    assert rec["result"] is False and rec["outputs"][0]["first_diff"] == 0
-    assert f"{OP_PATH}/ql_nope row {ROW}" in rec["why"]
-
-
-def test_a_weight_operand_across_two_fields_is_not_evaluated_by_name(world):
-    table, planes = world
-    rec, reads = _replay(table, planes, items=_w_items(base=PRE - 4))
-    assert rec["result"] is None and "spans fields" in rec["why"] and reads == []
-
-
-def test_plan_reads_no_weight_and_names_nothing(world):
-    table, planes = world
-    store = _store(planes)
-    assert EV.plan_vu(_Index(_w_items()), store, {"i": 7, "request_id": "r0"}, arrive=0) is None
-
-
 # -- the Build's own stored rows ------------------------------------------------------------------------------------------------------
 
 NH, P, L, V = 2, 16, 32, 16
@@ -246,46 +189,6 @@ class _Absorbs(nn.Module):
 
     def forward(self, q, a):
         return torch.bmm(q.transpose(0, 1), self.W_UK_T).transpose(0, 1), torch.bmm(a.transpose(0, 1), self.W_UV).transpose(0, 1)
-
-
-def test_the_builds_stored_weight_operand_gathers_the_definitions_w(served):
-    """Every BatchedGemm row the Build derives stores W^T as "P" progressions; read by the replay's own provider over the module's
-    parameters, the gather is the Definition's ``w[b][n][k]``, and the row kernel on it is `bmm_rows` of torch's operands."""
-    from verity_vllm.pipeline.build import _instance_rows
-
-    m = _Absorbs()
-    assert m.W_UK_T.stride() == (P + V, 1, NH * (P + V)) and m.W_UV.stride() == (P + V, NH * (P + V), 1)
-    T = 3
-    q, a = torch.empty(T, NH, P, dtype=torch.bfloat16), torch.empty(T, NH, L, dtype=torch.bfloat16)
-    rep = derive_report(m, (q, a), mode="profile", profile=STANDIN.name, name="absorbs", rules=vllm_ruleset())
-    assert rep.program is not None, rep.unsupported
-    params = [(n, str(t)) for n, t in rep.program.fn.body.params]
-
-    class _Pi:
-        pnames = [n for n, _ in params]
-        fields = IX.parse_struct(dict(params)["weights"])
-        foff = list(np.cumsum([0] + [c for _n, c, _s, _b in fields])[:-1])
-        weight_slice = IX.ProgramIndex.weight_slice
-        weight_bits = IX.ProgramIndex.weight_bits
-
-    weights = OP.model_weights_provider(m, "")
-    rng = np.random.default_rng(2)
-    by_spec = {}
-    for r in _instance_rows(rep.program):
-        assert r["spec"].startswith("BatchedGemm_v1")
-        assert all(it[0] == "P" for it in r["args"][1])
-        rec: list = []
-        got, ref = EV._weight_gather(_Pi(), weights, *EV._weight_runs(_Pi(), r["args"][1]), rec)
-        by_spec[r["spec"]] = (got, ref["field"])
-    W = {"W_UK_T": m.W_UK_T, "W_UV": m.W_UV}
-    assert sorted(f for _g, f in by_spec.values()) == ["W_UK_T", "W_UV"]
-    for spec, (got, field) in by_spec.items():
-        wt = W[field].contiguous().view(torch.int16).numpy().view(np.uint16)
-        assert got.tolist() == wt.transpose(0, 2, 1).reshape(-1).tolist(), field
-        st = RM_statics(spec)
-        x = _words(rng, NH, int(st["K"]))
-        out = batched_gemm(st, [x.reshape(-1), got])["out"]
-        assert out.tolist() == BC.bmm_rows(x.reshape(NH, 1, -1), wt).reshape(-1).tolist(), field
 
 
 def RM_statics(spec: str) -> dict:

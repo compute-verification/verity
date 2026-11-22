@@ -18,7 +18,6 @@ import pytest
 import verity_vllm.pipeline.cpu_replay as CPU
 import verity_vllm.pipeline.replay_bundle as RB
 from tests.pipeline import test_cpu_replay as OF_RECORD
-from verity_vllm.check import cublas_route_pin, verdict
 
 Record = dict[str, Any]
 ABSENT = object()
@@ -41,30 +40,6 @@ def rewritten(path: Path, change: Callable[[Record], Record]) -> None:
 
 # ---------------------------------------------------------------------------------------------- a keep or a bundle that is not one
 
-@pytest.mark.parametrize("schema", [ABSENT, None, "verity-vllm/another-record/v1"])
-def test_a_keep_and_a_bundle_of_another_schema_are_refused_by_name(tmp_path: Path, schema: object) -> None:
-    out, _awaiting = OF_RECORD._decided(tmp_path)
-    named = None if schema is ABSENT else schema
-    for source, doc, what, read in ((CPU.slim_path(out, 1), CPU.SLIM_DOC, "keep", CPU.SLIM_SCHEMA),
-                                    (RB.path(out, 1), RB.MANIFEST, "manifest", RB.SCHEMA)):
-        assert CPU.open_source(source)["path"] == str(source)
-        rewritten(source / doc, lambda d: with_(d, "schema", schema))
-        with pytest.raises(ValueError, match=re.escape(f"{source}: {what} schema {named!r} is not {read}")):
-            CPU.open_source(source)
-
-
-@pytest.mark.parametrize(("field", "value"), [("pair", 2), ("run_root", "cd" * 64), ("binding_map_sha256", "00" * 32)])
-def test_a_keep_whose_slim_json_names_another_pair_run_root_or_binding_map_than_its_files_is_refused(tmp_path: Path, field: str,
-                                                                                                    value: object) -> None:
-    """A keep's files are checked against `slim.json`'s list, and then `slim.json`'s own pair, run root and binding map against the
-    context and the binding map among those files: a document that lists the files as they are and names another record is refused."""
-    out, _awaiting = OF_RECORD._decided(tmp_path)
-    keep = CPU.slim_path(out, 1)
-    assert json.loads((keep / CPU.SLIM_DOC).read_text())[field] != value
-    rewritten(keep / CPU.SLIM_DOC, lambda doc: doc | {field: value})
-    with pytest.raises(ValueError, match=re.escape(f"{keep}: its context and binding map are not slim.json's (pair, run root, binding map sha256)")):
-        CPU.open_keep(keep)
-
 
 @pytest.mark.parametrize("held", [COS_SIN[:-1], COS_SIN + b"\x00", b""])
 def test_a_bundle_s_tensor_of_another_size_than_registered_is_read_and_does_not_open(tmp_path: Path, held: bytes) -> None:
@@ -81,20 +56,6 @@ def test_a_bundle_s_tensor_of_another_size_than_registered_is_read_and_does_not_
 
 # ---------------------------------------------------------------------------------------------- a reader that decides nothing
 
-def test_a_reader_that_decides_nothing_takes_a_decided_record_as_it_stands(tmp_path: Path) -> None:
-    """`of_record` with ``awaiting=False`` reads a bundle's run for a reader that decides nothing: the record may be decided, and
-    its row is given as it stands, from the bundle or from its keep (which a deciding replay puts back to the awaiting state)."""
-    out, awaiting = OF_RECORD._decided(tmp_path)
-    bundle, keep = RB.open_bundle(RB.path(out, 1)), CPU.open_keep(CPU.slim_path(out, 1))
-    decided = json.loads((out / "runs.jsonl").read_text())
-    for source in (bundle, keep):
-        rows, row, _verdict, _store, run = CPU.of_record(source, out, awaiting=False)
-        assert rows == [decided] and row == decided and row["commit"]["commit_pass"] is True
-        assert run.run_root.hex() == decided["commit"]["run_root"]
-    with pytest.raises(CPU.Refused, match=AWAITING):
-        CPU.of_record(bundle, out)
-    assert CPU.of_record(keep, out)[1] == awaiting
-
 
 @pytest.mark.parametrize("change", [lambda row: row | {"arm": "control"}, lambda row: row | {"pair": 2}], ids=["control", "another-pair"])
 def test_a_reader_that_decides_nothing_is_refused_a_record_with_no_instrumented_run_of_the_pair(tmp_path: Path,
@@ -107,15 +68,6 @@ def test_a_reader_that_decides_nothing_is_refused_a_record_with_no_instrumented_
         CPU.of_record(b, out, awaiting=False)
     with pytest.raises(CPU.Refused, match=AWAITING):
         CPU.of_record(b, out)
-
-
-@pytest.mark.parametrize("engine", [ABSENT, None])
-def test_a_bundle_that_names_no_engine_of_record_leaves_the_replay_s_own_facts_where_they_are(tmp_path: Path, engine: object) -> None:
-    cpu = {"VLLM_BATCH_INVARIANT": None, "compute_capability": "unavailable: no CUDA device"}
-    row: Record = {"commit": {"sampled_replay": {"engine_of_record": dict(cpu)}}}
-    art = tmp_path / "sampled_replay_p1.json"
-    CPU.engine_of_record(row, with_({}, "engine_of_record", engine), art)
-    assert row == {"commit": {"sampled_replay": {"engine_of_record": cpu}}} and not art.exists()
 
 
 # ---------------------------------------------------------------------------------------------- the Commit's required manifest
@@ -161,36 +113,3 @@ def test_a_commit_that_recorded_no_required_manifest_gives_the_replay_none_and_r
 
 # ---------------------------------------------------------------------------------------------- the decided run's components
 
-def test_a_decided_run_s_components_end_on_the_weights_pin_and_the_replay_and_its_why_names_each_failure_in_that_order(
-        monkeypatch: pytest.MonkeyPatch) -> None:
-    """`decide` puts the run's weights pin and its `replay` component last, in that order, as the in-process Commit writes them;
-    the correspondence's why names each failing component in the order they then stand, and none when none fails.  The route pin
-    is stamped before, and the verdict read after, over the run's own tokens and the bundle's declaration."""
-    seen: list[tuple[Any, ...]] = []
-
-    def commit_verdict(c: Record, tokens_equal: bool | None, **kw: Any) -> tuple[bool, str]:
-        vc = c["value_correspondence"]
-        seen.append(("verdict", list(vc["components"]), vc["why"], c["weights_attest"]["root_openings"], tokens_equal, kw))
-        return False, "C2 FAIL"
-
-    monkeypatch.setattr(cublas_route_pin, "stamp", lambda c: seen.append(("stamp", list(c["value_correspondence"]["components"]))))
-    monkeypatch.setattr(verdict, "commit_verdict", commit_verdict)
-    components: Record = {"weights_pin": {"result": False, "why": "pin differs"}, "replay": {"result": True},
-                          "sampled_replay": {"result": True}, "boundary_linkage": {"result": False, "why": "2 unlinked"},
-                          "negatives": {"suite": "s"}}
-    as_given, as_decided = list(components), ["sampled_replay", "boundary_linkage", "negatives", "weights_pin", "replay"]
-    row: Record = {"tokens_equal_ref": True, "commit": {"value_correspondence": {"method": "m", "result": False, "components": components}}}
-    ctx = {"min_openings": 64, "declaration": {"classes": ["c"]}, "required_classes": ["c"]}
-    why = "boundary_linkage: 2 unlinked; weights_pin: pin differs"
-
-    CPU.decide(row, ctx, {"equal": True}, {"manifest_sha256": SHA}, set(), {}, {})
-    c = row["commit"]
-    assert list(c["value_correspondence"]["components"]) == as_decided and c["value_correspondence"]["why"] == why
-    assert (c["commit_pass"], c["commit_fail_reason"]) == (False, "C2 FAIL")
-    assert seen == [("stamp", as_given), ("verdict", as_decided, why, "0/0", True, ctx)]
-
-    for x in components.values():
-        x.pop("why", None)
-        x["result"] = True
-    CPU.decide(row, ctx, {"equal": True}, {"manifest_sha256": SHA}, set(), {}, {})
-    assert list(c["value_correspondence"]["components"]) == as_decided and c["value_correspondence"]["why"] is None

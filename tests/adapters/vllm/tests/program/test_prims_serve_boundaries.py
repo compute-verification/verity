@@ -18,10 +18,10 @@ REG = "verity_vllm.definitions.registry"
 _SPEC = importlib.util.find_spec(REG)
 assert _SPEC is not None and _SPEC.origin is not None, REG
 REGISTRY = Path(_SPEC.origin).parent
-FAMILY = ("__init__", "catalog", "prims", "ref_prims", "pad_prims", "lifted", "tables", "value_inputs", "operand_widths", "b1",
+FAMILY = ("__init__", "catalog", "prims", "ref_prims", "pad_prims", "tables", "value_inputs", "b1",
           "b1_tp2", "serve3", "spec", "pouw_rows")
 #: the other families' Definition modules this family reads (each family's own split judges its modules)
-OTHER_FAMILIES = {"dead_free", "dense", "dsa_topk", "dsa_topk_mask", "fa2_softcap", "fa3_check_inf", "fp8_moe_experts", "marlin_moe", "sampling", "topp_geometry",
+OTHER_FAMILIES = {"dead_free", "dense", "dsa_topk", "dsa_topk_mask", "fa2_softcap", "fa3_check_inf", "fp8_moe_experts", "sampling", "topp_geometry",
                   "topp_word_gates"}
 THIRD_PARTY = {"numpy"}
 #: the catalog, where the layout move put core's Definitions, silicon models and targets: not all of `verity.circuits`,

@@ -1,7 +1,7 @@
 """`engine.sampler_capture` on stand-ins for vLLM's V2 model runner: its sampler, input batch and two TP ranks, on CPU torch.
 
 A target's rows are kept only at the steps that sample a token of it (its scheduled tokens reach its prompt's end), as the
-bf16 bits the sampler took, and `pipeline.interior_rows.captured` reads them back as its token-select span. Ranks that took
+bf16 bits the sampler took. Ranks that took
 other bits are refused, as are a sharded sampler and logits that are not one bf16 row a request. The wrap is a patch of
 `verity_vllm.engine.hooks`, and `verity_vllm.engine.sampler_capture.uninstall` puts the runner's own sampler back."""
 from __future__ import annotations
@@ -15,7 +15,6 @@ import torch
 
 from verity_vllm.engine import hooks
 from verity_vllm.engine import sampler_capture as SC
-from verity_vllm.pipeline import interior_rows as IR
 
 V = 64
 TSEL = "TokenSelect_v1{V=64}"
@@ -71,22 +70,6 @@ def _serve(workers, flip_at: int | None = None):
                 x[0, 0] = -x[0, 0] + 1
             w.model_runner.sampler(x, _batch(s))
     return sent
-
-
-def test_a_target_s_rows_are_its_sampled_steps_bits_and_read_back_as_its_token_select_span(tmp_path):
-    workers = [_worker(0), _worker(1)]
-    assert [SC.install(w, ["a"]) for w in workers] == [0, 1]
-    assert workers[0].model_runner.sampler.vocab == V
-    sent = _serve(workers)
-    spans = SC.spans([SC.take(w, str(tmp_path / "ranks")) for w in workers], STEPS)
-    want = torch.stack([sent[1][0], sent[2][0]]).view(torch.int16).numpy().view("<u2")
-    assert set(spans) == {"a"} and spans["a"]["steps"] == [1, 2]
-    assert np.array_equal(spans["a"]["logits"], want)
-    ids = [int(sent[k][0].float().argmax()) for k in (1, 2)]
-    assert spans["a"]["tokens"] == ids and spans["a"]["program"] == SC.launch("a", STEPS)
-    SC.write(tmp_path / "capture", TSEL, spans)
-    got = IR.captured(tmp_path / "capture", "a", ids)
-    assert np.array_equal(got.data["rows"]["in0"], want) and [e[3] for e in got.entries] == [1, 2]
 
 
 def test_ranks_that_took_other_bits_and_runners_a_token_select_cannot_read_are_refused(tmp_path):

@@ -7,7 +7,7 @@ from slowdown.envelopes import Detection
 from slowdown.params import Registry
 from slowdown.scenario import build
 
-from verity.protocols.proofs.spot.verifier.profile import MARGIN, WINDOW_DELTA, Bernoulli, IntegrityProfile
+from verity.protocols.proof.spot.verifier.profile import MARGIN, WINDOW_DELTA, Bernoulli, IntegrityProfile
 
 REG = Registry.load()
 

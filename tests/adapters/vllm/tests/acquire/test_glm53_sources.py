@@ -16,7 +16,7 @@ import pytest
 import torch
 
 from tests import fake_vllm as stand_in
-from tests.acquire.test_vocab_range_source import exactness_in_tree
+from tests.acquire.recorder import exactness_in_tree
 from verity_vllm.acquire.sources import moe_source as MS
 from verity_vllm.commit import capture_map as CM
 from verity_vllm.records import property_record as PR
@@ -308,8 +308,6 @@ def test_the_fused_silu_quant_binds_nine_planes_without_act(monkeypatch):
 MOE_CHECKS = {
     "tests.properties.router_tap_exactness": ("topk_softmax",),
     "tests.properties.sigmoid_router_capture_gpu": ("grouped_topk",),
-    "tests.properties.dsv4_moe_capture_gpu": ("dsv4_topk", "topk_hash_softplus_sqrt", "silu_and_mul_with_clamp"),
-    "tests.properties.dsv4_marlin_capture_gpu": ("moe_wna16_marlin_gemm",),
     "tests.properties.glm53_block_fp8_capture_gpu": ("per_token_group_quant_fp8", "fused_moe_kernel", "silu_and_mul", "moe_sum"),
     "verity_vllm.program.moe_difftest": ("fused_moe_kernel", "silu_and_mul", "moe_sum"),
 }

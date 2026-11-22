@@ -1365,7 +1365,7 @@ def pearl_c_run(weight: torch.Tensor) -> object:
     from verity_bench.schemes import attached
 
     kernel = settings.get("PEARLC_KERNEL") or str(Path(__file__).resolve().parents[2]
-                                                  / "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90")
+                                                  / "verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm90")
     return attached("pearl-plus", {0: weight}, {"kernel": kernel, "cubin": cubin, "coins": "in-process"}).run
 
 

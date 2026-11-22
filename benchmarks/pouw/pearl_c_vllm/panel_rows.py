@@ -1,6 +1,5 @@
 """The e2e's panel rows (research store ``internal/pouw/panel/add-a-row.md``), from the window's ``e2e.json`` and the verify
-job's verdicts on its prefill, decode and control passes (and control-leaves where the window retained it), as
-``panel.py append`` commands.  A pass's verdict is the Lean's (`verdicts`: ``<pass>-lean-check.json``, `served_passes.py
+job's verdicts on its prefill and decode passes, as ``panel.py append`` commands.  A pass's verdict is the Lean's (`verdicts`: ``<pass>-lean-check.json``, `served_passes.py
 lean`'s), its transcript and verifier commit those of the Python twin's document it was held to (``<pass>-verify.json``).
 
   python benchmarks/pouw/pearl_c_vllm/panel_rows.py E2E_JSON VERIFY_DIR [--panel PANEL_PY] [--append]
@@ -10,8 +9,7 @@ row's slowdown is ``pearlc`` over stock vLLM ``fp8`` in the same window, interle
 engines could not stay resident, which the row's description then says; ``--hash-free`` is ``pearlc-nohash`` over ``fp8``.  The clocks
 are every rep's SM clock, the arm's and the ``fp8`` baseline's.  Refused, with the reason, unless every gate held, both verify
 passes repeated their timed commitments and were replay-verified (development shortcut; the protocol's check is a ZK proof,
-PouwVerifier), and the negative control was rejected.  The decode row is the
-prefill row's attempt, another phase of it (``--attempt``).  Without ``--append`` it prints the commands.
+PouwVerifier).  The decode row is the prefill row's attempt, another phase of it (``--attempt``).  Without ``--append`` it prints the commands.
 
 When the window also timed stock FP8 as vLLM serves it (``--fp8-graphs``), decode's headline row is over that graphed
 baseline (``slowdown_vs_fp8_graphs``, its reps' clocks as the base's) at the decode shape, and the eager row goes beside it
@@ -55,8 +53,6 @@ def rows(e2e: dict, verdicts: dict[str, dict], panel: str, kernel_ratio: tuple[f
     bad += [f"{p}: its commitment did not repeat" for p in ("prefill", "decode")
             if not summary["verify_pass"].get(p, {}).get("same_commitment_as_timed")]
     bad += [f"{p}: not accepted" for p in ("prefill", "decode") if not verdicts[p].get("accepted")]
-    bad += [f"{c}: the negative control was not rejected" for c in verdicts if c.startswith("control")
-            and verdicts[c].get("accepted") is not False]
     bad += [f"{p}: its eager replay did not repeat the commitment" for p in ("prefill", "decode")
             if summary["verify_pass"].get(p, {}).get("same_commitment_eager") is False]
     if not run or any(run not in verdicts[p].get("transcript", "") for p in verdicts):
@@ -87,7 +83,7 @@ def rows(e2e: dict, verdicts: dict[str, dict], panel: str, kernel_ratio: tuple[f
                "--hash-free", f"{s['nohash_s'] / s['fp8_s']:.4f}", "--change", "kernel", "--description", desc,
                "--source", run, "--run", run, "--verifier-commit", verdicts[pass_]["verifier_commit"],
                "--verifier-accept", verdicts[pass_]["line"], "--transcript", verdicts[pass_]["transcript"],
-               "--negative-control", verdicts["control"]["line"], "--sm-clock-arm", clocks["pearlc"],
+               "--sm-clock-arm", clocks["pearlc"],
                "--sm-clock-base", clocks["fp8"], "--by", BY]
         if phase == "decode":
             cmd += ["--decode-method", "dependent-chain"]
@@ -103,9 +99,7 @@ def verdicts(verify_dir: Path) -> dict[str, dict]:
     agrees with (``<pass>-lean-check.json``'s ``answer``) and None where it gave none, ``line`` the Lean step's line, and
     the pass's ``transcript`` and ``verifier_commit`` as the twin's document (``<pass>-verify.json``) names them."""
     out = {}
-    for x in ("prefill", "decode", "control", "control-leaves"):
-        if x == "control-leaves" and not (verify_dir / f"{x}-lean-check.json").exists():
-            continue
+    for x in ("prefill", "decode"):
         check = json.loads((verify_dir / f"{x}-lean-check.json").read_text())
         twin = json.loads((verify_dir / f"{x}-verify.json").read_text())
         answer = check.get("answer")

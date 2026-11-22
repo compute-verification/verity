@@ -118,7 +118,7 @@ from verity_vllm.definitions.registry import dead_free as DF
 from verity_vllm.definitions.registry import sampling as SA
 from verity_vllm.definitions.registry import topp_stages as TS
 from verity_vllm.definitions.registry.dsa import I32Sub
-from verity_vllm.definitions.registry.dsv4_moe import Ex2Approx
+from verity_vllm.definitions.registry.moe import Ex2Approx
 from verity_vllm.definitions.registry.ref_prims import F32GtStrict, F32Sub
 from verity_vllm.definitions.registry.topp_word_gates import LOG2E, I32ToF32, U32Xor
 

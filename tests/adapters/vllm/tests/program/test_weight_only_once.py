@@ -119,7 +119,7 @@ def test_once_is_bit_equal_on_edge_words():
 
 
 def test_cross_call_finds_the_repeated_adds_only_per_forward():
-    X = pytest.importorskip("verity.circuits.cross_call")
+    from verity.circuits import cross_call as X
     _m, per = _derived("per-forward")
     _m, once = _derived("once")
     r = X.check_program(_rows(per), strict=False)

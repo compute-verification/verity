@@ -41,7 +41,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from verity.commitments.crypto import lms
-from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
+from verity.protocols.proof.spot.verifier.challenger import challenger as Ch
 from verity.commitments.domains import LMS_I, POUW_EPOCH_COINS_LIVE
 
 LANE = "lane-a"

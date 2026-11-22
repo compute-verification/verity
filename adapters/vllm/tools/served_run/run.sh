@@ -125,8 +125,7 @@ if r.get("send_workload"):
     elif run in ("window", "settings"):
         sys.exit(f"run.sh: placement.toml's builds name no traced Build of {row} on {on}: run "
                  f"`run.sh setup{' --tie' if tie else ''}` and name its run id there")
-    taps = ["adapters/vllm/verity_vllm/acquire/fa3_tap_src", "adapters/vllm/verity_vllm/acquire/norm_tap_src",
-            "adapters/vllm/verity_vllm/ops/pod_fa3_tap.sh", "adapters/vllm/verity_vllm/ops/pod_norm_tap.sh"]
+    taps = ["adapters/vllm/verity_vllm/acquire/fa3_tap_src", "adapters/vllm/verity_vllm/ops/pod_fa3_tap.sh"]
     if run == "window" and (d := git("diff", "--name-only", node["TAPS_AT"], "HEAD", "--", *taps)).stdout + d.stderr:
         sys.exit(f"run.sh: the taps were built at {node['TAPS_AT'][:12]} and this commit differs there "
                  f"({' '.join((d.stdout or d.stderr).split()[:4])}): rebuild them (`run.sh setup` with --env STEPS=taps) "

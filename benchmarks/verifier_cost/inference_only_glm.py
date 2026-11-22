@@ -4,8 +4,7 @@ express (README.md).
 
   measure --rank PATH ... --pins PINS --out DIR [--case NAME ...] [--gamma G] [--alpha NUM/DEN] [--jobs N]
           [--scratch DIR] [--exe PATH] [--check-mem-gb G]
-  measure --case registered-node --node PATH --node-digest HEX [--node-trusted PATH --node-provenance PATH
-          [--node-registration PATH]] [--node-points POINT ...] --out DIR [...]
+  measure --case registered-node --node PATH --node-digest HEX [--node-points POINT ...] --out DIR [...]
 
 `--rank` names each rank's workload descriptor (`build/rank<r>/build_workload/descriptor.json.gz` of the Build), in rank
 order, and `--pins` the Build's meta (`rank_workload_digests`), which each must match. `--check-mem-gb` caps each
@@ -25,11 +24,7 @@ order, and `--pins` the Build's meta (`rank_workload_digests`), which each must 
               the node Program `verity-vllm predict node` registered (`--node`), whose SHA-512 must be
               `--node-digest`. One inference block, every root node that isn't an input (the whole node's session), θ its
               `RegisteredInput` root nodes (the descriptor's `annotations["theta"]` too, where it has them). `--policy`
-              at A (`GAMMA`, `ALPHA`), its neighbours and C (`ALPHA_C` at `GAMMA` and `GAMMA_C`). Given its
-              registration, the node is held to it before any check (it is the program of the record `--node-trusted`
-              cites as the run's own, `run`, and `--node-provenance` has one entry per θ node, each citing the log's
-              first record), and the check of record runs too, at A (`inference-only-check INSTANCE TRUSTED`,
-              `InferenceOnlyCheck.Theta`: the policy check, then θ's provenance against the registration log).
+              at A (`GAMMA`, `ALPHA`), its neighbours and C (`ALPHA_C` at `GAMMA` and `GAMMA_C`).
               `--node-points` picks some of `NODE_POINTS`
 
 A finer division of a whole session (per engine step, per layer, per Call) is not checked here. Its root would be the
@@ -70,16 +65,15 @@ ALPHA = (1, 2 ** 25)
 #: the stricter point C: α = 2^-28, at Γ and at Γ = 2^52
 ALPHA_C = (1, 2 ** 28)
 GAMMA_C = 2 ** 52
-#: the registered node's checks, in the order they start: tag -> (Γ, α, the check of record or `--policy`)
+#: the registered node's `--policy` checks, in the order they start: tag -> (Γ, α)
 NODE_POINTS = {
-    "full": (GAMMA, ALPHA, True),
-    "A": (GAMMA, ALPHA, False),
-    "C": (GAMMA, ALPHA_C, False),
-    "C-2^52": (GAMMA_C, ALPHA_C, False),
-    "alpha/2": (GAMMA, (ALPHA[0], 2 * ALPHA[1]), False),
-    "2alpha": (GAMMA, (2 * ALPHA[0], ALPHA[1]), False),
-    "gamma/2": (GAMMA // 2, ALPHA, False),
-    "2gamma": (2 * GAMMA, ALPHA, False),
+    "A": (GAMMA, ALPHA),
+    "C": (GAMMA, ALPHA_C),
+    "C-2^52": (GAMMA_C, ALPHA_C),
+    "alpha/2": (GAMMA, (ALPHA[0], 2 * ALPHA[1])),
+    "2alpha": (GAMMA, (2 * ALPHA[0], ALPHA[1])),
+    "gamma/2": (GAMMA // 2, ALPHA),
+    "2gamma": (2 * GAMMA, ALPHA),
 }
 INPUT = re.compile(r"^(Registered)?Input[1-9][0-9]*_v1$")
 #: rank 0's Definitions checked gate by gate: the router, the fused all-reduce and norm, and an FP8 linear layer
@@ -427,10 +421,9 @@ class Runs:
         self.futures: list = []
         self.rows: list[dict] = []
 
-    def submit(self, path: Path, row: dict, unrolled: bool = False, trusted: Path | None = None) -> None:
-        """`inference-only-check --policy` on the instance `path`, or with `trusted` the check of record against it."""
-        argv = [str(self.args.exe), *([str(path), str(trusted)] if trusted else
-                                      ["--policy", *(["--unrolled"] if unrolled else []), str(path)])]
+    def submit(self, path: Path, row: dict, unrolled: bool = False) -> None:
+        """`inference-only-check --policy` on the instance `path`."""
+        argv = [str(self.args.exe), "--policy", *(["--unrolled"] if unrolled else []), str(path)]
         if self.args.check_mem_gb:
             argv = ["bash", "-c", 'ulimit -v "$0" && exec "$@"', str(self.args.check_mem_gb << 20), *argv]
         self.futures.append(self.pool.submit(self._run, argv, path, row))
@@ -471,17 +464,13 @@ def summary(v: dict | None) -> dict:
             "worst_iu": ius[worst] if worst is not None else None}
 
 
-def write_instance(path: Path, ptext: str, theta: list, owner: list, gamma: int, alpha: tuple[int, int],
-                   provenance: list | None = None) -> Path:
-    """`InferenceOnlyCheck.Desc`'s instance, `ptext` the program as a JSON string; with `provenance`, `InferenceOnlyCheck.Theta`'s."""
+def write_instance(path: Path, ptext: str, theta: list, owner: list, gamma: int, alpha: tuple[int, int]) -> Path:
+    """`InferenceOnlyCheck.Desc`'s instance, `ptext` the program as a JSON string."""
     with open(path, "w") as f:
         f.write(f'{{"alpha":[{alpha[0]},{alpha[1]}],"gamma":{gamma},"owner":')
         f.write(json.dumps(owner, separators=(",", ":")))
         f.write(',"program":')
         f.write(ptext)
-        if provenance is not None:
-            f.write(',"provenance":')
-            f.write(json.dumps(provenance, separators=(",", ":")))
         f.write(',"theta":')
         f.write(json.dumps(theta, separators=(",", ":")))
         f.write("}")
@@ -595,10 +584,7 @@ def slices(runs: Runs, scratch: Path, src: Source, body: dict, ref) -> None:
 
 
 def node_instances(args, scratch: Path) -> tuple[list[tuple], dict]:
-    """The registered node's instances, one per `--node-points` point, once its descriptor is its digest and, given its
-    registration, held to it (`registered-node`); run in a process of its own, as the decoded descriptor is tens of GB."""
-    from verity.commitments import docket_digest as DD
-
+    """The registered node's instances, one per `--node-points` point, once its descriptor is its digest (`registered-node`); run in a process of its own, as the decoded descriptor is tens of GB."""
     desc, ann = load(Path(args.node))
     text, size = described(desc)
     names = [desc["callees"][nd["fn"]] for nd in desc["definitions"][desc["root"]]["body"]["nodes"]]
@@ -612,48 +598,26 @@ def node_instances(args, scratch: Path) -> tuple[list[tuple], dict]:
         wrong.append("its root has no RegisteredInput node")
     if "theta" in ann and list(ann["theta"]) != theta:
         wrong.append(f"its annotations' θ ({len(ann['theta'])} nodes) isn't its RegisteredInput root nodes ({len(theta)})")
-    provenance = own = trusted = None
-    if args.node_trusted:
-        trusted = json.loads(Path(args.node_trusted).read_text())
-        provenance = json.loads(Path(args.node_provenance).read_text())
-        digests = [DD.digest(rec) for rec in trusted["log"]]
-        own = trusted["log"][digests.index(trusted["run"])] if trusted["run"] in digests else None
-        if own is None:
-            wrong.append(f"the trusted input's run {trusted['run'][:16]} is the digest of no record of its log")
-        elif own["program"] != size["sha512"]:
-            wrong.append(f"the run's record registers program {own['program'][:16]}, not this one")
-        if len(provenance) != len(theta):
-            wrong.append(f"{len(provenance)} provenance entries for {len(theta)} θ nodes")
-        elif any(p.get("registration") != digests[0] for p in provenance):
-            wrong.append("a provenance entry cites a record other than the log's first")
-        if args.node_registration:
-            reg = json.loads(Path(args.node_registration).read_text())
-            if (reg["program_digest"], reg["record_digest"]) != (size["sha512"], trusted["run"]):
-                wrong.append("the registration's summary names another program or record")
     if wrong:
-        raise ValueError("the node is not the one named, or not its registration's: " + "; ".join(wrong))
+        raise ValueError("the node is not the one named: " + "; ".join(wrong))
     info = {"root_calls": owner.count(0), "theta_nodes": len(theta), **size}
-    if own is not None:
-        info |= {"record": trusted["run"], "window": own["window"]}
     ptext = json.dumps(text)
     del text
     made = []
     for tag in args.node_points:
-        g, a, full = NODE_POINTS[tag]
-        case = "registered-node/full" if full else "registered-node/session" + ("" if tag == "A" else f"@{tag}")
-        path = write_instance(scratch / f"registered-node_{tag.replace('/', '_')}.json", ptext, theta, owner, g, a,
-                              provenance if full else None)
-        made.append((case, path, full, g, a))
+        g, a = NODE_POINTS[tag]
+        case = "registered-node/session" + ("" if tag == "A" else f"@{tag}")
+        path = write_instance(scratch / f"registered-node_{tag.replace('/', '_')}.json", ptext, theta, owner, g, a)
+        made.append((case, path, g, a))
     return made, info
 
 
 def registered_node(runs: Runs, scratch: Path) -> dict:
     with ProcessPoolExecutor(1, mp_context=multiprocessing.get_context("spawn")) as ex:
         made, info = ex.submit(node_instances, runs.args, scratch).result()
-    for case, path, full, g, a in made:
+    for case, path, g, a in made:
         runs.submit(path, {"case": case, "program": "registered-node", "division": "session", "gamma": g,
-                           "alpha": list(a), "check": "baseline" if full else "desc", **info},
-                    trusted=Path(runs.args.node_trusted) if full else None)
+                           "alpha": list(a), "check": "desc", **info})
     return info
 
 
@@ -661,13 +625,7 @@ def measure(args) -> int:
     if "registered-node" in args.case:
         if not (args.node and args.node_digest):
             raise SystemExit("registered-node: give --node and --node-digest")
-        if bool(args.node_trusted) != bool(args.node_provenance):
-            raise SystemExit("registered-node: give both --node-trusted and --node-provenance (the registration), or neither")
-        record = {t for t, (_, _, full) in NODE_POINTS.items() if full}
-        args.node_points = args.node_points or [t for t in NODE_POINTS if args.node_trusted or t not in record]
-        if not args.node_trusted and record & set(args.node_points):
-            raise SystemExit("registered-node: the check of record (--node-points full) needs the registration: give "
-                             "--node-trusted and --node-provenance")
+        args.node_points = args.node_points or list(NODE_POINTS)
     runs = Runs(args)
     t0 = time.perf_counter()
     meta: dict = {}
@@ -750,9 +708,6 @@ def main(argv: list[str] | None = None) -> int:
     m.add_argument("--check-mem-gb", type=int, default=None)
     m.add_argument("--node")
     m.add_argument("--node-digest")
-    m.add_argument("--node-trusted")
-    m.add_argument("--node-provenance")
-    m.add_argument("--node-registration")
     m.add_argument("--node-points", nargs="+", choices=tuple(NODE_POINTS), default=None)
     args = ap.parse_args(argv)
     args.case = args.case or ["registered", "rank", "slice", "node"]

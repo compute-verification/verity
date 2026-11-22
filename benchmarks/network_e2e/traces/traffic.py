@@ -16,6 +16,8 @@ Caps are `CAPS` (64 or 256), each with probability 1/2. Temperature is 0.
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import math
 import random
 from collections.abc import Sequence
@@ -85,6 +87,15 @@ def plan(docs: Sequence[Sequence[int]], n: int, seed: int = 0) -> list[dict]:
                     "prefix_len": len(head) if group is not None else 0, "doc": doc, "gap": gap, "max_tokens": cap,
                     "gap_draw": rng.expovariate(1.0)})
     return out
+
+
+def plan_sha512(requests: Sequence[dict]) -> str:
+    """A plan's digest: the SHA-512 of its requests in order, each as one line of compact JSON. A corpus keeps it and the
+    recipe that rebuilds the plan (`corpus.plan_record`), never the plan."""
+    h = hashlib.sha512()
+    for r in requests:
+        h.update((json.dumps(r, separators=(",", ":")) + "\n").encode())
+    return h.hexdigest()
 
 
 def _take(docs, pool: list[int], used: set[int], need: int, rng: random.Random) -> int:

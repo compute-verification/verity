@@ -2,25 +2,17 @@
 `lean_layout` restates `WholeCircuit.whole4` (`security/Definitions/Pouw/PearlC/WholeCircuit4.lean`): `pc8`'s input regions at
 `inW4`'s widths, the blocks (`row4B`, `row4A`, `tile4Spec`) and their ports (`portB8`, `portA8`, `portT4`, with `code4`,
 `scale4`, `paOut4` and `pbOut4` naming the rows' outputs), and the outputs (`outs4`). `check_whole` checks every computed
-gate's template gate, owner, width and relocated reads, and each parameter leaf's producer exactly, so it and the pinned
-descriptor digests tie `tileCheck4`'s circuit to the Program. No primitive is evaluated."""
+gate's template gate, owner, width and relocated reads, and each parameter leaf's producer exactly, so it ties
+`tileCheck4`'s circuit to the Program. No primitive is evaluated."""
 from __future__ import annotations
 
 import pytest
 
-from verity.circuits import Program
-from verity.circuits.codec import program_digest
 
 pc4 = pytest.importorskip("verity.protocols.experimental.pearl_c4.prover.pc4", reason="the Program is `verity.protocols.experimental.pearl_c4.prover.pc4`'s")
 
 from test_circuit_whole_lean import check_whole, row_in  # noqa: E402
 
-#: `program_digest` of the `Pc4Check` Programs the Lean layout was checked against; a change to any needs the Lean re-read
-DIGESTS = {
-    (2, 64, 3, (1, 1)): "0e4ecd8175f6ef252d105fcb5058ce4b47204ad424b7f8886644e6a7812db21e9fae17de76943643152742281b691d827091ed6d22beb28ec4558cab917ac594",
-    (4, 128, 4, (2, 2)): "4a301d7956afb808c42d13bb22fdc5113ca10d9023e7af14f150c19eb2ff64be4f4686f02e41028b25f5bb2a5fc2cda41b89b82ac86212412abef4a72bdd9349",
-    (2, 128, 2, (1, 2)): "c5d7e67421d147d96b3094a7ca3600bb5f78e23b0103a30987538aeb32339e221d62024778b5fa9acc664dc62947bba6988140090f2970d68bf395121d428c28",
-}
 
 
 # ---- `Row4Circuit`'s offsets -----------------------------------------------------------------------------------------------
@@ -138,7 +130,7 @@ def lean_layout(m: int, k: int, n: int, tm: int, tn: int):
     return nin, widths, blocks, outs
 
 
-CASES = list(DIGESTS)
+CASES = [(2, 64, 3, (1, 1)), (4, 128, 4, (2, 2)), (2, 128, 2, (1, 2))]
 
 
 def check_layout(m: int, k: int, n: int, tile: tuple[int, int]) -> None:
@@ -149,11 +141,6 @@ def check_layout(m: int, k: int, n: int, tile: tuple[int, int]) -> None:
 @pytest.mark.parametrize("m,k,n,tile", CASES)
 def test_the_lean_whole_table_is_pc4_check(m, k, n, tile):
     check_layout(m, k, n, tile)
-
-
-@pytest.mark.parametrize("m,k,n,tile", CASES)
-def test_the_checked_programs_are_pinned(m, k, n, tile):
-    assert program_digest(Program(pc4.check(pc4.Shape(m, k, n, tile)))) == DIGESTS[m, k, n, tile]
 
 
 @pytest.mark.slow

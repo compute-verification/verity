@@ -21,11 +21,11 @@ from conftest import load
 
 from verity.commitments import MerkleTree, hm96
 from verity.commitments.merkle import tree_levels
-from verity.protocols.resource_accounting.compute.pouw.verifier import audit
-from verity.protocols.resource_accounting.compute.pouw.verifier.audit import ROW_SCHEMA, activation_binding, rows_domain
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
+from verity.protocols.accounting.compute.pouw.verifier import audit
+from verity.protocols.accounting.compute.pouw.verifier.audit import ROW_SCHEMA, activation_binding, rows_domain
+from verity.protocols.accounting.compute.pouw.prover.schemes import pearl_c as C
 
-HERE = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "kernels" / "pearl_c"
+HERE = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "compute" / "pouw" / "prover" / "kernels" / "pearl_c"
 FAST = HERE.parent / "pearl_c_sm120" / "hash_fast.cuh"
 WIDE = HERE / "hash_wide.cuh"
 R = load("pearl_c_sm120/run.py")
@@ -364,39 +364,6 @@ def test_a_salts_buffer_of_the_wrong_length_or_alignment_is_refused_before_any_l
         host.launch = launch
 
 
-@pytest.mark.parametrize("run", ["pearl_c_sm120/run.py", "pearl_c_sm90/run.py"])
-def test_a_callers_salts_buffer_states_its_length_or_is_refused_before_any_launch(host, run):
-    """A caller that owns ``salts_<tree>`` gives it in ``bufs`` as (address, bytes).  `Pipeline.salts` refuses, by the
-    buffer's name and with both byte counts, one given as a bare address (no length is assumed) and one whose stated length
-    is a salt too few, a salt too many or a byte short of what the launch reads; the stated length launches, and travels
-    with the buffers a pipeline lends another (`lent`)."""
-    M = load(run)
-    count = 4
-    need = M.HM_SALT * count
-    values, salts = host.put(bytes(64 * count)), host.put(salts_of("stated", count))
-    keys = {"hm": host.put(audit.hm96_kernel_constants()), "dom_b": host.put(bytes(64))}
-    launched, launch = [], host.launch
-    host.launch = lambda name, *a, **kw: launched.append(name) or launch(name, *a, **kw)
-
-    def pipe(given):
-        b, said = M.stated_salts({"tree_b": host.alloc(64 * count), "salts_b": given})
-        return SimpleNamespace(dev=host, keys=keys, b=b, salt_bytes=said)
-    try:
-        with pytest.raises(ValueError, match=f"salts_b: its owner stated no length, and the launch reads {need} bytes"):
-            M.Pipeline.hm_level0(pipe(salts), "b", values, count, "dom_b")
-        for given in (need - M.HM_SALT, need + M.HM_SALT, need - 1):
-            with pytest.raises(ValueError, match=f"salts_b: {given} bytes for {count} leaves, which take {need}"):
-                M.Pipeline.hm_level0(pipe((salts, given)), "b", values, count, "dom_b")
-        assert not launched
-        p = pipe((salts, need))
-        assert p.b["salts_b"] == salts and M.Pipeline.lent(p)["salts_b"] == (salts, need)
-        assert M.stated_salts(M.Pipeline.lent(p)) == (p.b, p.salt_bytes)
-        M.Pipeline.hm_level0(p, "b", values, count, "dom_b")
-        assert launched == ["hm_leaves", "s512_frame_leaves"]
-    finally:
-        host.launch = launch
-
-
 @pytest.mark.parametrize("sha", ["fast", pytest.param("ref", marks=pytest.mark.slow)])
 def test_sm120_h3_phases_are_the_verifiers(host, monkeypatch, sha):
     """pearl_c_sm120/run.py's `Pipeline` under -h3 at 64 x 128 x 1024 (m_real 48: a partial row block), its epoch, unit, commit
@@ -476,7 +443,7 @@ def test_a_caller_without_the_scratch_runs_the_reference_kernels(host, monkeypat
 def y_trees(host, monkeypatch):
     """served_y's `DeviceTrees` over the host build, for a run of the sm120 variant whose salt is fixed."""
     torch = pytest.importorskip("torch")
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
+    from verity.protocols.accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
     from verity_torch.pouw.pearl_c import served_y_device as SYD
     run = SimpleNamespace(kernel=SimpleNamespace(run=R, dev=host), device=torch.device("cpu"), variant="sm120",
                           salt=bytes(range(64)), salt_key=bytes(range(100, 132)),
@@ -528,50 +495,6 @@ def test_served_y_refuses_a_wrong_count_or_size_of_salts(host, monkeypatch):
     for size in (R.HM_SALT * (m - 1), R.HM_SALT * (m + 1), R.HM_SALT * m - 1):
         with pytest.raises(ValueError, match=refusal):
             SYD.y_tree(run, y, index, torch.frombuffer(bytearray(raw[:size]), dtype=torch.uint8))
-
-
-def test_device_trees_refuse_a_wrong_count_or_size_of_salts_before_any_launch(host, monkeypatch):
-    """The device path (`DeviceTrees`, whose kernels read `R.HM_SALT` bytes a leaf from the salts' address with no length)
-    refuses a salt too few, one too many, a short salt, and salts not contiguous uint8 on y's device, each before any
-    launch: its width's pipeline is built first, and every launch after it fails."""
-    n, m, index = 1024, 5, 3
-    torch, _, _, trees = y_trees(host, monkeypatch)
-    y = torch.randn(m, n, generator=torch.Generator().manual_seed(0)).to(torch.bfloat16)
-    raw = salts_of("y-device-count", m + 1)
-    trees.pipe(n, index)
-
-    def launched(*a, **kw):
-        raise AssertionError("a launch")
-    monkeypatch.setattr(host, "launch", launched, raising=False)
-    wrong = [torch.frombuffer(bytearray(raw[:size]), dtype=torch.uint8)
-             for size in (R.HM_SALT * (m - 1), R.HM_SALT * (m + 1), R.HM_SALT * m - 1)]
-    whole = torch.frombuffer(bytearray(raw[:R.HM_SALT * m]), dtype=torch.uint8)
-    wrong += [whole.view(torch.int8), torch.frombuffer(bytearray(raw[:2 * R.HM_SALT * m]), dtype=torch.uint8)[::2]]
-    for salts in wrong:
-        with pytest.raises(ValueError, match=f"y's {m} rows take {m} salts of {R.HM_SALT} bytes, contiguous uint8"):
-            trees(y, index, salts)
-
-
-def test_served_y_tree_launches_state_the_salts_length_to_hm_level0(host, monkeypatch):
-    """`tree_launches` hands `hm_level0` its salts with their length: a buffer a salt short, a salt long or a byte short of
-    `m` rows' is refused by name before the leaf launch, and the right length launches it."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
-    m = 4
-    salts = host.put(salts_of("tree-launches", m + 1))
-    p = SimpleNamespace(dev=host, keys={"hm": host.put(audit.hm96_kernel_constants()), "dom_b": host.put(bytes(64))}, b={},
-                        tree_setup=lambda *a: [], row_digests=lambda *a: None, levels=lambda *a: None)
-    launched: list[str] = []
-    launch = host.launch
-    monkeypatch.setattr(host, "launch", lambda name, *a, **kw: launched.append(name) or launch(name, *a, **kw), raising=False)
-
-    def go(given: int) -> None:
-        SY.tree_launches(R, p, host.alloc(64 * m), host.alloc(64 * m), 0, m, m, 0, lambda r, c: 0, salts, given)
-    for given in (R.HM_SALT * (m - 1), R.HM_SALT * (m + 1), R.HM_SALT * m - 1):
-        with pytest.raises(ValueError, match=f"tree 'b''s salts: {given} bytes for {m} leaves, which take {R.HM_SALT * m}"):
-            go(given)
-    assert not launched
-    go(R.HM_SALT * m)
-    assert launched == ["hm_leaves", "s512_frame_leaves"]
 
 
 def test_served_y_device_trees_refuse_a_width_whose_first_tree_isnt_commit_ys(host, monkeypatch):

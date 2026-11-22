@@ -238,12 +238,8 @@ def test_cache_ownership_by_kind_rejects_miswired_kv(kind):
     assert bad, f"mis-wired ({kind}) K/V accepted by the name-independent ownership check"
 
 
-def _derive_examples():
-    return pytest.importorskip("verity_vllm.program.frontend.derive_examples", reason="DERIVE's derive_examples.py not merged yet")
-
-
 def _derive_serve(steps: int = 1, **kw):
-    dex = _derive_examples()
+    from verity_vllm.program.frontend import derive_examples as dex
     return _D.derive_report(dex.GreedyServe(TINY, steps, **kw), (torch.zeros(2, dtype=torch.int32),), mode="profile", profile="b1-eager", config=TINY)
 
 
@@ -252,8 +248,7 @@ def test_derived_tiny_serve_owns_its_kv_cache_and_matches_the_registered_program
     K/V ownership holds by NAME (if the family matched) and by KIND (always); and if the family rule claims
     `Serve_v1{C,LP,STEPS}`, the digest equals the hand-built program's (an independent check of that claim)."""
     rep = _derive_serve(1)
-    if not rep.ok:
-        pytest.skip(f"tiny GreedyServe does not derive: {rep.unsupported}")
+    assert rep.ok, rep.unsupported
     P = rep.program
     assert check_cache_ownership_by_kind(P, TINY["NL"], 2, 1) == []
     hand = Program(bind(b1.Serve, C=TINY, LP=2, STEPS=1))
@@ -270,8 +265,7 @@ def test_a_different_circuit_is_not_relabelled_as_serve():
     of which only the last is sampled) is a legitimately different circuit with extra dead work. It must derive
     under its OWN identity, never be relabelled `Serve_v1`, and still own its KV cache."""
     rep = _derive_serve(1, final_norm_all_rows=True)
-    if not rep.ok:
-        pytest.skip(f"all-rows GreedyServe does not derive: {rep.unsupported}")
+    assert rep.ok, rep.unsupported
     hand = Program(bind(b1.Serve, C=TINY, LP=2, STEPS=1))
     assert not (rep.family and rep.family.get("matched")), "a different circuit was relabelled Serve_v1"
     assert rep.digest != program_digest(hand)

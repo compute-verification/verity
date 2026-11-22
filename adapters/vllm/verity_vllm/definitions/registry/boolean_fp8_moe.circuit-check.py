@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+#: the E4M3 expert gathers' Boolean versions, which this module makes inside the expert-row bodies and the `GatherE4m3x{E}_v1`
+#: family makes on demand, and no id names alone (`circuit_check.sidecars.body_family`)
+BODY_FAMILIES = (r"GatherE4m3x\d+_v2",)
+
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """This module's Definitions in tiny whole-model configurations (`circuit_check.targets.TINY`, the vLLM tests'), and the
@@ -15,19 +19,8 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     from verity_vllm.definitions.registry import boolean_fp8_moe
 
     return [
-        ("MoeExpertFp8BlockCoordinate_v2", lambda: bind(boolean_fp8_moe.MoeExpertFp8BlockCoordinateV2, K=64, G=32, KB=32, SWAP=False)),
-        ("MoeExpertFp8BlockCoordinate_v2/swap", lambda: bind(boolean_fp8_moe.MoeExpertFp8BlockCoordinateV2, K=64, G=64, KB=32,
-                                                             SWAP=True)),
-        ("MoeExpertFp8BlockCoordinate_v2/kb64", lambda: bind(boolean_fp8_moe.MoeExpertFp8BlockCoordinateV2, K=64, G=64, KB=64,
-                                                             SWAP=False)),
-        ("MoeExpertFp8BlockCoordinateW_v2", lambda: bind(boolean_fp8_moe.MoeExpertFp8BlockCoordinateWV2, K=64, G=32, KB=32, SWAP=True)),
-        # one tile at one scale block, without and with SWAP_AB
-        ("MoeExpertFp8BlockCoordinate_v2/k32", lambda: bind(boolean_fp8_moe.MoeExpertFp8BlockCoordinateV2, K=32, G=32, KB=32,
-                                                            SWAP=False)),
-        ("MoeExpertFp8BlockCoordinateW_v2/k32", lambda: bind(boolean_fp8_moe.MoeExpertFp8BlockCoordinateWV2, K=32, G=32, KB=32,
-                                                             SWAP=True)),
-        # the same with the e4m3 step as a static (cc 12.0's): two tiles per scale block over a whole and a partial weight block; the
-        # coordinate at the `_v2` coordinate's shape, small enough for Flock to lower whole (its AND count pinned)
+        # the e4m3 step as a static (cc 12.0's): two tiles per scale block over a whole and a partial weight block, small enough
+        # for Flock to lower whole (its AND count pinned)
         ("MoeExpertFp8BlockCoordinate_v4", lambda: bind(boolean_fp8_moe.MoeExpertFp8BlockCoordinateV4, K=64, G=32, KB=32, SWAP=False,
                                                         DOT=BG.BlackwellE4m3QmmaDot32)),
         ("MoeExpertFp8BlockCoordinateW_v4", lambda: bind(boolean_fp8_moe.MoeExpertFp8BlockCoordinateWV4, K=128, G=64, KB=32, SWAP=False,
@@ -64,6 +57,8 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
                                                               SWAP=False, DOT=BG.HopperE4m3MmaV2Dot32, FIRST=False, LAST=False)),
         ("MoeExpertFp8CoordinateChunk_v2/last", lambda: bind(boolean_fp8_moe.MoeExpertFp8CoordinateChunkV2, E=3, K=64, G=64, KB=32,
                                                              SWAP=True, DOT=BG.HopperE4m3MmaV2Dot32, FIRST=False, LAST=True)),
+        # the expert gather at the served models' 256 experts
+        ("GatherE4m3x256_v2", lambda: bind(boolean_fp8_moe.gather_e4m3(256))),
         ("SiluMulFp8BlockQuantResult_v2", lambda: bind(boolean_fp8_moe.SiluMulFp8BlockQuantResultV2)),
         ("SiluMulFp8BlockQuantGroup_v2", lambda: bind(boolean_fp8_moe.SiluMulFp8BlockQuantGroupV2, G=4)),
         ("SiluMulFp8BlockQuant_v2", lambda: bind(boolean_fp8_moe.SiluMulFp8BlockQuantV2, I=8, G=4)),

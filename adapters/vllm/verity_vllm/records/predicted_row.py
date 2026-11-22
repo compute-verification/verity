@@ -1,6 +1,7 @@
 """A predicted row's record (`verity-vllm/predicted-row/v1`, `FILE`): what the ahead-of-time compiler wrote as a single-GPU
-row's Build of record (`program.predict.aot.write_row`, ``verity-vllm predict row``), beside its Build dirs and its manifest,
-whose bytes it names by their sha256. ``predict compare --predicted`` holds it to a traced Build of the same row."""
+row's Build of record (`program.predict.aot.write_row`, ``verity-vllm predict row``), beside its Build dirs: the registered
+compiler (`pipeline.advice.registered_compiler`, the name and digest every window's advice binding names) and the Programs it
+compiles, by digest, and nothing of any window. ``predict compare --predicted`` holds it to a traced Build of the same row."""
 from __future__ import annotations
 
 import dataclasses
@@ -12,8 +13,8 @@ from verity_vllm.records.fields import RecordError, only, required
 
 __all__ = ["FILE", "PredictedRow"]
 
-SCHEMA = "verity-vllm/predicted-row/v1"
-#: its name in the Build's dir, beside ``manifest.json``
+SCHEMA = "verity-vllm/predicted-row/v2"
+#: its name in the Build's dir
 FILE = "predicted.json"
 
 
@@ -25,10 +26,7 @@ class PredictedRow:
     requests: Mapping[str, str]                       # each request Build dir's Program digest, by the dir's name
     workload_digest: str                              # GP-01's workload Program over them
     lag: int                                          # its LAG static
-    manifest_digest: str                              # the manifest's digest over its identities
-    manifest_sha256: str                              # the sha256 of manifest.json's bytes as written
-    program_digest: str                               # the Program digest the manifest names
-    identities: int                                   # its identities
+    compiler: Mapping[str, str]                       # the registered compiler's name and digest
     secs: float                                       # how long the Build took
 
     @classmethod
@@ -47,5 +45,4 @@ class PredictedRow:
 
 
 KINDS: dict[str, type | tuple[type, ...]] = {"row": str, "config": str, "code_version": str, "requests": Mapping,
-                                             "workload_digest": str, "lag": int, "manifest_digest": str, "manifest_sha256": str,
-                                             "program_digest": str, "identities": int, "secs": (int, float)}
+                                             "workload_digest": str, "lag": int, "compiler": Mapping, "secs": (int, float)}

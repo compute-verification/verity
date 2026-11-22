@@ -216,7 +216,7 @@ Code.lean       network attestation's program (`certifier_program`, `NetworkAtte
 lake exe cache get                         # in security/: Mathlib's prebuilt oleans; never build Mathlib from source
 lake build                                 # in security/, then security/Properties/ and security/Proofs/ (this area's proofs)
 python3 tools/verity/lean/check.py security/   # from the repository root: Verity's Lean check
-# the difftest is network attestation's program's: see its package, ../../../verity/protocols/resource_accounting/network/attester/program/lean/
+# the difftest is network attestation's program's: see its package, ../../../verity/protocols/accounting/network/attester/program/lean/
 ~~~
 
 **Trusted without proof:** the statements in `../../Definitions/Certifier/`, the guarantees' modules among them;
@@ -433,7 +433,7 @@ The other 16 are the rest of the Capacity table's bounds:
 
 **The program's agreements, proved and audited, not guarantees.** Five theorems tie the difftests to these definitions
 (`NetTiming.SecurityProofs.Code`): the difftests hold the Python audit and advice v1's charge references
-to the network attester's program (`verity/protocols/resource_accounting/network/attester/program/lean/`, Lean core only, `NetworkAttester`), and
+to the network attester's program (`verity/protocols/accounting/network/attester/program/lean/`, Lean core only, `NetworkAttester`), and
 these say the program computes what the definitions above define. Each is stated in `Code.lean` over both sides'
 definitions, relating them by their fields, since `security` requires nothing but Mathlib
 (`tests/test_lean_packages.py`) and so `Definitions/` cannot name the program:
@@ -451,7 +451,7 @@ definitions, relating them by their fields, since `security` requires nothing bu
   with the same fields (the charge difftest's `charges`);
 - `CodeChargesWhole`: `NetworkAttester.WindowCharge.charges` of the execution phases is `WindowCharge.charges` for books with
   the same tables and priors and execution phases with the same decisions, hits and order entries
-  (`certifier-window-difftest`'s `charges`).
+  (the window difftest's `charges`).
 
 They aren't guarantees because `four_names` holds every `NetTiming` guarantee to `SecurityProofs.G : Guarantees.G`,
 and a `Guarantees` module can't state them: it would have to import the program. They are built and checked like every
@@ -479,7 +479,7 @@ three axioms, but they have no record in `lean-audit.json`, so no citation may c
 `--update` like any other.
 
 Every statement, lemma and witness here is proved. The reference implementation,
-`verity.protocols.resource_accounting.network.verifier`, mirrors statements and lemmas by name in its tests, and each test module's docstring says what it holds (its `PROTOCOL.md`, "Tests"). The witnesses have no Python counterpart.
+`verity.protocols.accounting.network.verifier`, mirrors statements and lemmas by name in its tests, and each test module's docstring says what it holds (its `PROTOCOL.md`, "Tests"). The witnesses have no Python counterpart.
 
 ## Modelling choices a reader of the statements checks
 

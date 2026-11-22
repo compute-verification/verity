@@ -121,8 +121,9 @@ def LabelledAt (σ : ℕ → ℕ) (sts : Array _root_.Flock.Stmt) : Prop :=
 
 /-- **The header's position for an instance is the registered read's at its label**, at any slot map that labels the
 session's instances: at a session statement that sets up as a masked Flock statement with registered ports `own`, in
-Flock's scope with hidden outputs, and a Flock witness its relation accepts, each port `reg` of `own` reads at label
-`σ n` the position the header gives instance `n`'s row (`rows_open`, `Registered.Port.readAt`). -/
+Flock's scope with hidden outputs, and a Flock witness its relation accepts, each port `reg` of `own`, as its port
+`reg'` of the ports `own'` `Registered.withPositions` derives from C, reads at label `σ n` the position the header gives
+instance `n`'s row (`rows_open`, `Registered.Port.readAt`). -/
 def PositionFact : Prop :=
   ∀ {xS : Msg} {ins : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
     {own : Array _root_.Flock.Registered.Port} {w : Claims.Flock.Wit} (σ : ℕ → ℕ),
@@ -132,8 +133,10 @@ def PositionFact : Prop :=
         ∀ reg ∈ own, ∀ q tb positions paths,
           (List.range sts[0]!.c.ports.size).find? (fun q => sts[0]!.c.ports[q]!.name == reg.name) = some q →
           sts[0]!.pub.tables = some tb → _root_.Flock.Registered.entry sts[0]!.pub reg = .ok (positions, paths) →
-          ∀ n < sts[0]!.pub.n,
-            reg.readAt (σ n) =
+          ∀ own', _root_.Flock.Registered.withPositions sts[0]!.c sts[0]!.pub ins.read.I.program (some own) =
+            .ok (some own') →
+          ∃ reg' ∈ own', reg' = { reg with readsRel := reg'.readsRel, readsFrom := reg'.readsFrom } ∧
+            ∀ n < sts[0]!.pub.n, reg'.readAt (σ n) =
               some (some (positions.getD (_root_.Flock.Registered.ref tb sts[0]!.c.ports.size q n) 0))
 
 /-- **Friday's slot map**: instance `n` of part `p`'s session is the slot of its sample's `n`-th unit, the session's

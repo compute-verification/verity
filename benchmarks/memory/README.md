@@ -32,14 +32,14 @@ what the session ran with. `verity bench memory --help` lists its other ways in.
 - **A vLLM environment, `VLLM_PY`:** a Python with vLLM installed (`uv venv V && uv pip install --python V/bin/python
   vllm`). Without it `--local` runs nothing and says how to make one. It serves the checkpoint and fetches it:
   `unsloth/Llama-3.2-1B` at the revision core's pin names
-  (`verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/models.json`), about 2.5 GB from Hugging Face, not gated, so
+  (`verity/protocols/accounting/compute/pouw/verifier/lean/check/models.json`), about 2.5 GB from Hugging Face, not gated, so
   no token.
   Its vLLM and torch must be built for your card's CUDA. The recipe as written (no pin, index or extra) was run from
   nothing on an H200: `uv venv` fetched Python 3.12 itself, and the install gave vLLM 0.33.0 and torch
   `2.14.0+cu130`, which served the session; earlier runs used a vLLM development build and torch `2.13.0+cu129`.
 - **The CUDA toolkit with `nvcc`** (`CUDA_HOME`, else the machine's toolkit: `python3 benchmarks/kernels/machine.py toolkit`). The driver alone is not enough: the
   session compiles its kernels for your card.
-- **Lean:** `bash tools/verity/lean/setup.sh verity/protocols/resource_accounting/memory/poub/verifier/lean` installs `elan` and the
+- **Lean:** `bash tools/verity/lean/setup.sh verity/protocols/accounting/memory/poub/verifier/lean` installs `elan` and the
   verifier's dependencies. On your machine the Lean verifier builds from source: several minutes and about 4 GB of
   memory the first time, reused after.
   `setup.sh` printing `error: unknown executable cache` (this package has no Mathlib to fetch) and
@@ -94,7 +94,7 @@ card's share at its own sheet has no target; the goal's 0.14 at an error of at m
   not a number from another.
 - The share is of the one card's read rate and its host's: the verifier's node is one card of the card's node sheet,
   handed to it as `--node`. A line names the card and the sheet with the SHA-256 of the tree's data sheets
-  (`calibration/hardware/`) and of the verifier (`verity/protocols/resource_accounting/memory/poub/verifier/`), Markdown left out, in the JSON's
+  (`calibration/hardware/`) and of the verifier (`verity/protocols/accounting/memory/poub/verifier/`), Markdown left out, in the JSON's
   `machine` with the arena's GiB, vLLM's share of the card, the engine's steps a second at most and the share of the
   session its steps took (`step_hz`, `busy`), and the `vllm` and `torch` versions `VLLM_PY` holds.
 
@@ -139,8 +139,8 @@ at its end. The sample term is next; it falls with more openings a stretch, whic
 line prints the measured pass and the lateness allowed.
 
 - the pass that reads the arena, and its pacing against the verifier's coins
-  (`verity/protocols/resource_accounting/memory/poub/prover/poub_session/session.cu`, `benchmarks/poub_session/node.py`);
-- how the arena is encoded and decoded on the GPU (`verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.cu`), and
+  (`verity/protocols/accounting/memory/poub/prover/poub_session/session.cu`, `benchmarks/poub_session/node.py`);
+- how the arena is encoded and decoded on the GPU (`verity/protocols/accounting/memory/poub/prover/word_codec/kv.cu`), and
   how the engine serves from it (`benchmarks/poub_session/engine.py`);
 - the arena's size: `ARENA_GIB` (default 0.88 of the card's memory less 12 GiB, `arena_of`; 112 GiB on an H200, 72
   on an RTX PRO 6000) and vLLM's share `UTIL` (default 0.88). The document says what it was;
@@ -149,7 +149,7 @@ line prints the measured pass and the lateness allowed.
 
 ## What is fixed
 
-- the verifier and its Lean (`verity/protocols/resource_accounting/memory/poub/verifier/`, its `lean/`);
+- the verifier and its Lean (`verity/protocols/accounting/memory/poub/verifier/`, its `lean/`);
 - the ledger that turns a session into the share and its error (`verifier/session/verifier.py`), and the error rule
   (an error of 1 or more prints no number);
 - the session's form: one paced session (`--paced 1:1000:2773:7`, a coin every pass group, seven credited stretches

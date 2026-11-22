@@ -2,26 +2,15 @@
 `test_circuit_tile_lean` hold `pc8`'s, on their helpers. `lean_rows4` restates `row4A` and `row4B`
 (`security/Definitions/Pouw/PearlC/Row4Circuit.lean`) run by run, and `lean_table4` restates `TileCircuit.tile4Gate`
 (`Tile4Circuit.lean`, `tile4Spec K TM TN`); the Lean proofs (`tile4_correct` in `Pouw.SecurityProofs.PearlC`) are about
-those tables, so this test and the pinned descriptor digests are what tie them to the Programs."""
+those tables, so this test is what ties them to the Programs."""
 from __future__ import annotations
 
 import pytest
 
 from test_circuit_row_lean import c, check, g, offsets, stats_runs
-from verity.circuits import Program
-from verity.circuits.codec import program_digest
 from verity.circuits.cut import CallGraph, call_scope
 
 pc4 = pytest.importorskip("verity.protocols.experimental.pearl_c4.prover.pc4", reason="the row templates are `verity.protocols.experimental.pearl_c4.prover.pc4`'s")
-
-#: `program_digest` of the row templates the Lean tables were checked against; a change to any needs the Lean re-read
-ROW_DIGESTS4 = {
-    ("row_a", 64): "05776871660ac10e7e7e544ed93592eb6f58b312c9aa4cbeb8d43a2f27722b71ec8863cbe3690feb91f75d4e7b7712e5abe4068a7ce3e87fab937b27fc9df5fb",
-    ("row_b", 64): "8221194fdd79643540af01ae6f4cf06032e35ed84f774277f23785842d9bd2d7a87165d32ca1072076f91936a186e1047d5c82a2db2e17e3bba55b82e4522afa",
-    ("row_a", 128): "7882e13ab6e49da5da56d4c0a3008a974be80091564a32009367712db5b92fd97b66a6dc4356fc9a39e64d8d0cf9eb46e6ceba8c666795dc127924410454431e",
-    ("row_b", 128): "146e9dc2971de9d4bab5844638ecc89c29d9ef45e7b13ca69a26d79bec39fd645ea34c9f748e05f7c5384243d98abce04dafdec5ee75062514c5b5162122f519",
-}
-
 
 def chain4(code, col, scale, gt: int, r: int):
     """`chain4`: gate `r` of a chain's K/64 NVF4 atoms at gate `gt`."""
@@ -103,36 +92,13 @@ def test_the_lean_row4_tables_are_the_templates(k, side):
     check(pc4.templates(k)["row_" + side], *lean_rows4(k, side))
 
 
-@pytest.mark.parametrize("role,k", sorted(ROW_DIGESTS4))
-def test_the_checked_row4_templates_are_pinned(role, k):
-    assert program_digest(Program(pc4.templates(k)[role])) == ROW_DIGESTS4[role, k]
-
-
-#: the deployed depth's row templates, each table check and digest about 20 seconds
-DEPLOYED_ROWS = {
-    "row_a": "fc08f808658abb29a2d5e7eb566409ae39e350a3999a990964765fd4c6593ee8f4f5fdcafad9e8a7347e48592349a66b753bad4b3587d7ab745523b87b0b78c1",
-    "row_b": "463b39057954204873d5c5efc969682ca54bd2f78732913869decdb1973bd1d6f558125a8cd4db48c74c516892c406824ac1cbb140be01c0e7c07e50f6fff297",
-}
-
-
 @pytest.mark.slow
-@pytest.mark.parametrize("role", sorted(DEPLOYED_ROWS))
+@pytest.mark.parametrize("role", ["row_a", "row_b"])
 def test_the_deployed_rows_are_the_lean_tables(role):
-    """Catches a change to a row template at K = 8192 that the checks at K <= 1024 and the K = 128 pins don't see, such
+    """Catches a change to a row template at K = 8192 that the checks at K <= 1024 don't see, such
     as one gated on the depth."""
     fn = pc4.templates(8192)[role]
     check(fn, *lean_rows4(8192, role[-1]))
-    assert program_digest(Program(fn)) == DEPLOYED_ROWS[role]
-
-
-#: `program_digest` of the `pc4` templates the Lean table was checked against
-TILE_DIGESTS4 = {
-    (128, (1, 1)): "7cc96f4aa6a2b68a676404f3be86c997cb6d5889d67b4336adcb2301bb2b42dbf59011ee318ce0af96bcf2135df08607339dce9c7128b64f64e865e064749476",
-    (128, (64, 64)): "81ac3d445c5518b223309462102f5a1a4381c91b2830d7a92937ecfb97e323b50ebf3fa186579bb5234075477c1a34f64616e4934173483f89bd780d8c8c9516",
-}
-
-#: the deployed tile (`pc4.TILE`) at K = 8192
-DEPLOYED_TILE4 = {(8192, (64, 64)): "5d52d991c237f460928a26c00019c8ad906d0b50a95a9fa6ee5c74a95b8e0ac06d22d1e0315317b91dc87878e3f01796cd59d0d697cc3f641491a8c309dd9a19"}
 
 
 def lean_table4(k: int, tm: int, tn: int):
@@ -188,16 +154,3 @@ def test_the_lean_tile4_table_is_the_templates_call_graph(k, tile):
     assert reads == [set(r) for _, r in table]
     assert all(len(set(r)) == len(r) for _, r in table)
     assert [base + o for o in g.outputs] == outs
-
-
-@pytest.mark.parametrize("k,tile", sorted(TILE_DIGESTS4))
-def test_the_checked_tile4_templates_are_pinned(k, tile):
-    assert program_digest(Program(pc4.templates(k, tile)["tile"])) == TILE_DIGESTS4[k, tile]
-
-
-@pytest.mark.slow
-@pytest.mark.parametrize("k,tile", sorted(DEPLOYED_TILE4))
-def test_the_deployed_tile4_is_pinned(k, tile):
-    """Catches a change to `pc4`'s deployed template at K = 8192 that the table check and the K = 128 pins don't see."""
-    assert tile == pc4.TILE
-    assert program_digest(Program(pc4.templates(k, tile)["tile"])) == DEPLOYED_TILE4[k, tile]

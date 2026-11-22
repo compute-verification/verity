@@ -46,7 +46,7 @@ value whose first bit it opens. -/
 theorem opensPlace_of_ready {D : Flock.Desc} {hU : FlockSoundness.Built D.unroll.unit} {n : ℕ}
     {pi : Flock.HmIn.Ports} {pub : Flock.Public} {I : FlockSoundness.Discharge.Exec.Inputs} (hpi : pi = {})
     (hL : Commit.Loads D n pi pub I) (hA : Commit.Ready I)
-    {r : Verity.FileRead} (hD : Flock.Desc.parse r.tags r.circuitFile r.tables = .ok D)
+    {r : Verity.FileRead} (hD : Flock.Desc.parseStmt r.tags r.circuitFile r.tables = .ok D)
     (hpub : Flock.HmIn.loadPublic r.tags D.unroll pi r.publicFile = .ok pub) (hn : pub.n = n)
     (hN : r.circuit.N = (Commit.Cc D hU n pi).N) (g : Fin r.circuit.N) (hw : r.circuit.w g = 1) {b : Bool}
     {dg : Hash.Msg}
@@ -78,9 +78,10 @@ theorem opensOwn_of_ready {Reg : Type} {nJ : ℕ} (m : MemberV5 Reg nJ) (hc : m.
   obtain ⟨-, pubO, hO, hnO⟩ := Flock.Bridge.parse_of_parsedOf hc.parsed
   have hn : m.pub.n = m.n := (Flock.Bridge.loadPublic_inOut m.hpub hO).1.symm.trans hnO
   have hw : m.fileRead.circuit.w g = 1 :=
-    w_ofAudit ((checked_circuit m hc).trans (Flock.Bridge.circuitOf_eq m.D m.hU m.n)) g
-  have hL : Commit.Loads m.D m.n m.pi m.pub m.I := ⟨m.ht, m.hTags, m.hD, m.hpub, hn, hc.distinct⟩
-  exact opensPlace_of_ready (r := m.fileRead) hc.noPublic hL hr m.hD m.hpub hn hN g hw hop hv
+    w_toCircuit ((checked_circuit m hc).trans (Flock.Bridge.circuitOf_eq m.D m.hU m.n)) g
+  have hD := Flock.Desc.parseStmt_of_parse m.hD
+  have hL : Commit.Loads m.D m.n m.pi m.pub m.I := ⟨m.ht, m.hTags, hD, m.hpub, hn, hc.distinct⟩
+  exact opensPlace_of_ready (r := m.fileRead) hc.noPublic hL hr hD m.hpub hn hN g hw hop hv
 
 /-- **A member whose files pass has files ready for its commitment's openings**: `Commit.Ready` is the ports and
 roots check's pass, which the files check holds (`FilesPass.ports`). -/

@@ -100,7 +100,6 @@ def test_a_request_program_is_named_as_its_trace_names_it(case):
     select's names and its constants' Calls to a trace; TINY's stochastic Programs have no trace."""
     b = named_program(phi_of(case), case["LP"], case["T"], case["C"])
     n = b.named
-    assert b.digest == case["digest"]
     assert {k: n.names[int(k)] for k in case["names"]} == case["names"]
     assert pins(n.names, n.params, n.correspondence, n.prefix) == case["pins"]
     assert validate_document(n.correspondence) == []

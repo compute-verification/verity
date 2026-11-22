@@ -1,10 +1,12 @@
 {
  "definitions": {
   "IngressPrompt_v2{MODEL='m',LP=3,V=1000}": {
-   "and": 2001
+   "and": 2001,
+   "type": "3b5616066b1f00a9dc9de50bcf4a219b461f8843be18ee36bdd0b1d82c834559bd98283a4048106ee86894216b92974347cd5869d5c0b59971d986395f6c2d61"
   },
   "IngressPrompt_v2{MODEL='served-model',LP=16,V=128256}": {
-   "and": 11660
+   "and": 11660,
+   "type": "ed28da68cb33a3a22ed53d676738ae67dfbd6ce9f1cbb4f6a1217910b8b1ebf301ebb2b8e9a35484aaf8d869b94cfe2b4b737a752451c95d770f686ff1fe95b8"
   },
   "IngressSampled_v1{MODEL='m',LP=3,V=1000,RID=6}": {
    "and": 8537,
@@ -14,14 +16,15 @@
    "and": 18366,
    "type": "1d0e1e545614e1459998feef0d1e529b83b4dee668c7ab7436cf0fbf600b73d7158f64996623889e6315fab4ca94b3862ed0e31b80ed607d731f4d9d55760a12"
   },
-  "ScanSlots_v3{NS=4548,NP=4,IDB=17,K0=12,K=45,OCC=[376,36709],LP=[168,36501],MAX=[200,36533],IDS=[474,36807]}": {
-   "and": 60
+  "ScanSlots_v5{NS=4548,NP=4,IDB=17,K0=12,K=45,OCC=36709,LP=36501,MAX=36533,IDS=36807}": {
+   "and": 30
   },
-  "ScanSlots_v3{NS=9353,NP=1024,IDB=17,K0=12,K=45,OCC=[376,37763,75150,112537],LP=[168,37555,74942,112329],MAX=[200,37587,74974,112361],IDS=[1528,38915,76302,113689]}": {
-   "and": 120
+  "ScanSlots_v5{NS=9353,NP=1024,IDB=17,K0=12,K=45,OCC=112537,LP=112329,MAX=112361,IDS=113689}": {
+   "and": 30
   }
  },
  "struct_max_gates": {
-  "ScanSlots_v3": 80000
+  "ScanSlotsBits_v1": 80000,
+  "ScanSlots_v5": 80000
  }
 }

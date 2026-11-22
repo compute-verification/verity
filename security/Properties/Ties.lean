@@ -45,13 +45,13 @@ is `f x` for some `x` in `holds`, what the registration's view holds, under the 
 def NamesRegistered {X Y : Type} (holds : Set X) (f : X → Y) (y : Y) : Prop := ∃ x ∈ holds, f x = y
 
 /-- **The Program a circuit file binds**: the META `program_sha512` (`Flock.ProvedScope.metaProgram`) of the circuit
-file `cf` as the verifier reads it at the statement's tags and tables (`Flock.Desc.parse`, the reading
+file `cf` as the verifier reads it at the statement's tags and tables (`Flock.Desc.parseStmt`, the reading
 `Flock.Bridge.circuitOfFile` takes the circuit from). It is the SHA-512 of the Program descriptor's canonical JSON
 without `annotations`, in lower-case hex: the digest Flock's verifier holds its own Program to
 (`Flock.ProvedScope.programWhyP`) and the one a declaration's `program` is. `none` when the file doesn't read or its
 META binds no Program. -/
 def boundProgram (tags : Flock.Tags) (cf : ByteArray) (tables : List (String × ByteArray)) : Option String :=
-  match Flock.Desc.parse tags cf tables with
+  match Flock.Desc.parseStmt tags cf tables with
   | .ok D => Flock.ProvedScope.metaProgram D.unroll
   | .error _ => none
 

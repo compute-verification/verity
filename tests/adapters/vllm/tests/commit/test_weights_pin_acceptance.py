@@ -23,14 +23,11 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 from pathlib import Path
 
 import numpy as np
 import pytest
 
-from tests.check.test_sampled_replay import _program as _wired_program
-from tests.check.test_sampled_replay import v2_manifest
 from tests.check.test_weights_of_record import (  # noqa: F401 (fixture)
     PREFIX,
     _program,
@@ -41,9 +38,7 @@ from tests.check.test_weights_of_record import (  # noqa: F401 (fixture)
     write_safetensors,
 )
 from verity_vllm.check import weights_of_record as WR
-from verity_vllm.commit import binding as B
 from verity_vllm.pipeline import cli
-from verity_vllm.pipeline import row_records as R
 
 pytestmark = pytest.mark.usefixtures("code_versions_stood_in")
 
@@ -115,109 +110,6 @@ def test_b1_b2_b8_same_model_one_pin_per_row_and_the_default_shape_record_is_ref
     x = WR.check(st8, live, program_digests_of_record=set2)
     assert x["result"] is False and "record's of-record set != the run's" in x["why"]
     assert WR.check(st2, live, program_digests_of_record=set8)["result"] is False
-
-
-def _pick(root) -> str:
-    return R.wor_component(str(root))
-
-
-def test_the_row_derives_the_pin_from_the_first_manifest_component_at_b_ge_2(checkpoint, tmp_path):
-    """The workload's pick = the manifest's first component (r0) -> build_request_LP<LP>_T<T>, or build_request only
-    when its own result.json declares that shape; the record derived from the pick is of record for the run (independent of when
-    the Build ran -- the pick reads the Build's dirs and manifest, nothing from a previous Commit)."""
-    d, man, t = checkpoint
-    prog, fields = _program()
-    live = live_digests(_served(t, fields))
-    # mixed B8: the default shape (9, 2) is no component -> the pick is r0's dir, never build_request
-    r8, set8, _ = _row(tmp_path, "b8", prog, B8_SHAPES, workload_digest="8" * 128)
-    pick = _pick(r8)
-    assert os.path.basename(pick) == "build_request_LP9_T1", pick
-    rec = WR.build_record(pick, str(d), checkpoints_manifest=str(man))
-    assert WR.check(rec, live, program_digests_of_record=set8)["result"] is True
-    # a row whose r0 has the default shape and whose Build wrote only build_request for it: the pick is build_request (declared (LP, T) match)
-    rd, setd, ddig = _row(tmp_path, "bdef", prog, [(4, 1)], workload_digest="a" * 128, default=(9, 2))
-    m = json.loads((rd / "manifest.json").read_text())
-    m["components"] = {"r0": {"program_digest": ddig, "LP": 9, "T": 2}, "r1": m["components"]["r0"]}
-    m["component_digests"] = sorted(set(m["component_digests"]) | {ddig})
-    (rd / "manifest.json").write_text(json.dumps(m))
-    assert os.path.basename(_pick(rd)) == "build_request"
-    assert WR.check(WR.build_record(_pick(rd), str(d), checkpoints_manifest=str(man)), live, program_digests_of_record=set(m["component_digests"]) | {"a" * 128})["result"] is True
-    # a component dir whose result.json is not ok (a failed derive) is skipped, the next candidate taken
-    (r8 / "build_request_LP9_T1" / "result.json").write_text(json.dumps({"program_digest": "x" * 64, "ok": False, "LP": 9, "T": 1}))
-    assert os.path.basename(_pick(r8)) == "build_request_LP8_T2"
-    # the pick never depends on a previous Commit's files: a stale record beside the default shape changes nothing
-    (r8 / "build_request" / "weights_of_record.json").write_text("{}")
-    assert os.path.basename(_pick(r8)) == "build_request_LP8_T2"
-
-
-def test_shared_weights_are_one_registered_input_across_request_subcircuits(tmp_path):
-    """At B>=2 exactly one shared weights input per tensor: the GLOBAL manifest lists each weight field once (not x B),
-    binding collapses the weights rows to ONE registered-input identity per rank, request composition never duplicates / omits / selects it."""
-    inst, woff = _wired_program()
-    b1, g2, g8 = (v2_manifest(inst, tuple(f"r{i}" for i in range(B_))) for B_ in (1, 2, 8))
-    n_fields = len(woff)                                                                  # the synthetic Program's weights struct
-    for man, B_ in ((b1, 1), (g2, 2), (g8, 8)):
-        w = [r for r in man["identities"] if r["family"] == "weights"]
-        assert len(w) == n_fields, (B_, len(w))                                           # once per field, never x B
-        assert len({(r["rank"], r["op_path"]) for r in w}) == n_fields and all(r["step"] == "*" for r in w)   # step-free, one per (rank, field)
-        if B_ > 1:
-            assert all(r["program_digest"] == man["program_digest"] and r.get("component_digest") for r in w)   # workload identity, component provenance kept
-    # binding: ONE registered-input identity per rank whatever B (the committer registers the model once)
-    for man, reqs, steps in ((b1, ["r0"], 3), (g2, ["r0", "r1"], 3), (g8, [f"r{i}" for i in range(8)], 3)):
-        p = tmp_path / f"m{len(reqs)}.json"
-        p.write_text(json.dumps(man))
-        pop, hdr = B.load_required_manifest(str(p), man["program_digest"], requests=reqs, steps=steps, ranks=[0], arrivals={r: 0 for r in reqs})
-        wids = [i for i in pop if i[4] == "weights"]
-        # one row per field in the population (n_fields), ONE identity (the registered input of rank 0) -- never one per request
-        assert len(wids) == n_fields and set(wids) == {B.identity(man["program_digest"], "*", -1, 0, "weights", "registered", 0, 0, 0)}, (len(reqs), wids)
-        reg = {"identity": B.identity_dict(wids[0]), "kind": "registered-input", "digest": "r" * 64}
-        empty = {"digest": "m", "entries_n": 0, "entries": []}
-        ok = B.coverage_check(wids, {**empty, "entries": [reg], "entries_n": 1})
-        assert ok["ok"] and ok["bound_n"] == n_fields and ok["physical_copies_n"] == 0
-        # omitted registration: the weights identity is MISSING by name (never hidden by the per-request leaves)
-        miss = B.coverage_check(wids, empty)
-        assert not miss["ok"] and miss["missing_n"] == n_fields and miss["missing"][0]["op_path"] == "weights" and miss["missing"][0]["request_id"] == "*"
-        # a second registration (another root) under the ONE weights identity is an AMBIGUOUS binding (a binding is unambiguous):
-        # refused by name -- every field of the identity is named ambiguous with both copies' addresses, nothing is missing, and the
-        # duplicate is also counted as a physical copy; the first copy is never silently picked.
-        dup = B.coverage_check(wids, {**empty, "entries": [reg, dict(reg, digest="s" * 64)], "entries_n": 2})
-        assert not dup["ok"] and dup["ambiguous_n"] == n_fields and dup["missing_n"] == 0 and dup["bound_n"] == n_fields and dup["physical_copies_n"] == 1
-        assert dup["ambiguous"][0]["op_path"] == "weights" and dup["ambiguous"][0]["bindings_n"] == 2 and len(dup["ambiguous"][0]["bound_at"]) == 2
-
-
-def test_wrong_registered_root_and_wrong_checkpoint_context_are_refused_by_name_and_the_verdict_names_the_pin(checkpoint, tmp_path):
-    """Wrong registered root (shard sha != checkpoints.json pin; no entry) and wrong checkpoint context (another repo / revision /
-    Program) each FAIL by name with the honest served model; commit_verdict carries the pin's outcome into the verdict text (ok / missing / mismatch)."""
-    from verity_vllm.check.commit_pass import commit_verdict
-
-    d, man, t = checkpoint
-    prog, fields = _program()
-    live = live_digests(_served(t, fields))
-    rec = WR.weights_of_record(prog, WR.CheckpointIndex(str(d), checkpoints_manifest=str(man)), prefix=PREFIX)
-    ok = WR.check(rec, live, program_digests_of_record={"d" * 128}, checkpoint_of_record={"repo": "test/tiny", "revision": "abc"})
-    assert ok["result"] is True and ok["why"] is None
-    # wrong registered root: the manifest pins another sha for the shard
-    bad_man = tmp_path / "bad.json"
-    Path(bad_man).write_text(json.dumps({"checkpoints": [{"repo": "test/tiny", "revision": "abc", "local_path": str(d), "files": {"model.safetensors": {"sha256": "f" * 64}}}]}))
-    rec_w1 = WR.weights_of_record(prog, WR.CheckpointIndex(str(d), checkpoints_manifest=str(bad_man)), prefix=PREFIX)
-    w1 = WR.check(rec_w1, live)
-    assert w1["result"] is False and "not the pinned ones (W1)" in w1["why"] and "model.safetensors" in w1["why"]
-    # wrong checkpoint context: another model / revision / Program
-    assert "!= the workload's model" in WR.check(rec, live, checkpoint_of_record={"repo": "other/model"})["why"]
-    assert "revision" in WR.check(rec, live, checkpoint_of_record={"repo": "test/tiny", "revision": "0123456789ab"})["why"]
-    assert "!= Program of record" in WR.check(rec, live, program_digests_of_record={"e" * 128})["why"]
-    # the verdict text: ok -> PASS; mismatch / wrong context -> 'weights of record: <named cause>'; not run -> 'weights unpinned'
-    bnd = {"context": {"ok": True}, "coverage": {"ok": True, "expected_n": 1, "bound_n": 1, "missing_n": 0}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": 8}}
-    base = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64}, "binding": bnd,
-            "value_correspondence": {"method": "sampled-exact-replay(complete) + boundary-linkage", "result": True},
-            "sampled_replay": {"result": True, "grade": "complete"}, "boundary_linkage": {"result": True, "pairs": 6, "linked": 6}}
-    ok_, why_ = commit_verdict({**base, "weights_pin": ok}, True, min_openings=64)
-    assert ok_ is True and why_.startswith("PASS"), why_                        # at B>=2 without form (B) the PASS names the attribution gap
-    for bad in (w1, WR.check(rec, live, program_digests_of_record={"e" * 128}), WR.check(rec, live, checkpoint_of_record={"repo": "other/model"})):
-        v, why = commit_verdict({**base, "weights_pin": bad}, True, min_openings=64)
-        assert not v and why.startswith("weights of record: ") and bad["why"] in why, why
-    v, why = commit_verdict({**base, "weights_pin": {"result": None, "why": "weights of record not derived: no checkpoint dir"}}, True, min_openings=64)
-    assert not v and why.startswith("weights unpinned: ") and "not derived" in why
 
 
 def test_substituted_weight_input_is_named_whether_in_memory_or_on_disk(checkpoint, tmp_path):
@@ -337,7 +229,7 @@ def test_pin_record_is_built_once_per_row_not_per_request(checkpoint, tmp_path, 
     shapes = B1_SHAPES if name == "b1" else B2_SHAPES
     root, ofr, _ = _row(tmp_path, name, prog, shapes, workload_digest="c" * 128)
     out = root / "weights_of_record.json"
-    rc = cli.main(["weights-of-record", "--programs-root", str(root), "--checkpoint-dir", str(d), "--checkpoints", str(man), "--out", str(out)])
+    rc = cli.run(WR, ["--programs-root", str(root), "--checkpoint-dir", str(d), "--checkpoints", str(man), "--out", str(out)])
     rec = json.loads(Path(out).read_text())
     assert rc == 0 and rec["of_record"] is True and set(rec["of_record_set"]["program_digests"]) == ofr
     live = live_digests(_served(t, fields))

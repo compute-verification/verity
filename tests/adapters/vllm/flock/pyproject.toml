@@ -23,24 +23,26 @@ inputs = [
     # test_boolean_export reads the served node's card
     "calibration/hardware/cards/rtx-pro-6000-server.toml",
     # the Flock suite's helpers these tests import (conftest.py puts its directory on the path) and what they read
-    "tests/verity/protocols/proofs/flock/prover/synthetic_sets.py",
-    "tests/verity/protocols/proofs/flock/prover/fixtures/synthetic_sets",
-    "tests/verity/protocols/proofs/flock/prover/test_circuit_types.py",
-    "tests/verity/protocols/proofs/flock/prover/circuit_type_vectors.json",
-    "tests/verity/protocols/proofs/flock/prover/test_class_statement_unit_stager.py",
-    "tests/verity/protocols/proofs/flock/prover/test_lean_verifier.py",
-    "tests/verity/protocols/proofs/flock/prover/stratified_agree.py",
-    "tests/verity/protocols/proofs/flock/prover/test_pouw_rows.py",
-    "tests/verity/protocols/proofs/flock/prover/test_read_slots.py",
-    "tests/verity/protocols/proofs/flock/prover/test_struct_lower.py",
-    "tests/verity/protocols/proofs/flock/prover/tmpl_toy.py",
-    "tests/verity/protocols/proofs/flock/prover/derive_vectors.json",
-    "tests/verity/protocols/proofs/flock/prover/data/captured-101",
+    "tests/verity/protocols/proof/flock/prover/synthetic_sets.py",
+    "tests/verity/protocols/proof/flock/prover/fixtures/synthetic_sets",
+    "tests/verity/protocols/proof/flock/prover/test_circuit_types.py",
+    "tests/verity/protocols/proof/flock/prover/circuit_type_vectors.json",
+    "tests/verity/protocols/proof/flock/prover/test_class_statement_unit_stager.py",
+    "tests/verity/protocols/proof/flock/prover/test_lean_verifier.py",
+    "tests/verity/protocols/proof/flock/prover/stratified_agree.py",
+    "tests/verity/protocols/proof/flock/prover/test_pouw_rows.py",
+    "tests/verity/protocols/proof/flock/prover/test_read_slots.py",
+    "tests/verity/protocols/proof/flock/prover/test_struct_lower.py",
+    "tests/verity/protocols/proof/flock/prover/tmpl_toy.py",
+    "tests/verity/protocols/proof/flock/prover/derive_vectors.json",
+    "tests/verity/protocols/proof/flock/prover/data/captured-101",
+    # the test primitives' Boolean bodies (conftest.py)
+    "tests/verity/circuits/stand_in.py",
 ]
 parallel = true
 # Build outputs the Lean tests run or skip on.
-artifacts = ["verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof",
-             "verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-rows"]
+artifacts = ["verity/protocols/proof/flock/verifier/.lake/build/bin/verity-verify-proof",
+             "verity/protocols/proof/flock/verifier/.lake/build/bin/flock-rows"]
 
 # What these test files read that their source doesn't name: the graph's test-file tasks are keyed on it.
 
@@ -52,7 +54,7 @@ tests = [
     "test_stage_typed.py",
     "test_typed_statement.py",
 ]
-paths = ["verity/protocols/proofs/flock/prover/python/verity_flock/templates"]
+paths = ["verity/protocols/proof/flock/prover/python/verity_flock/templates"]
 
 [[tool.verity.tests.reads]]
 tests = ["test_class_statement.py"]
@@ -65,15 +67,15 @@ paths = [
 
 [[tool.verity.tests.reads]]
 tests = ["test_tmpl_statement.py", "test_unit_range.py"]
-paths = ["tests/verity/protocols/resource_accounting/compute/pouw/verifier", "tests/verity/protocols/experimental/pearl_c4"]
+paths = ["tests/verity/protocols/accounting/compute/pouw/verifier", "tests/verity/protocols/experimental/pearl_c4"]
 
 [[tool.verity.tests.reads]]
 tests = ["test_derive.py"]
-paths = ["adapters/vllm/verity_vllm/definitions/registry", "verity/protocols/proofs/flock/prover/python/verity_flock/templates"]
+paths = ["adapters/vllm/verity_vllm/definitions/registry", "verity/protocols/proof/flock/prover/python/verity_flock/templates"]
 
 [[tool.verity.tests.reads]]
 tests = ["test_flock_rows.py"]
-paths = ["verity/circuits/ops", "adapters/vllm/verity_vllm/definitions/registry", "verity/protocols/proofs/flock/prover/python/verity_flock"]
+paths = ["verity/circuits/ops", "adapters/vllm/verity_vllm/definitions/registry", "verity/protocols/proof/flock/prover/python/verity_flock"]
 
 [[tool.verity.tests.reads]]
 tests = ["test_lean_typed_statement.py"]
@@ -84,14 +86,14 @@ tests = ["test_ir_lowering_bench.py"]
 paths = [
     "benchmarks/numerical/python/verity_numerical/bench",
     "tools/research/src/research",
-    "verity/protocols/proofs/flock/prover/python/verity_flock/templates",
+    "verity/protocols/proof/flock/prover/python/verity_flock/templates",
 ]
 
 [[tool.verity.tests.reads]]
 tests = ["test_partition_units.py"]
 paths = [
     "benchmarks/numerical/python/verity_numerical/bench",
-    "verity/protocols/resource_accounting/network",
-    "verity/protocols/resource_accounting/memory/pous",
-    "verity/circuits", "verity/commitments", "adapters/vllm/verity_vllm/definitions", "verity/protocols/proofs/flock/prover", "verity/protocols/proofs/flock/prover/pod", "verity/protocols/proofs/flock/prover/agreement", "verity/protocols/proofs/flock/prover/tool.py", "verity/protocols/resource_accounting/compute/pouw/prover", "verity/protocols/resource_accounting/memory/poub/verifier/commitments", "verity/commitments/periods",
+    "verity/protocols/accounting/network",
+    "verity/protocols/accounting/memory/pous",
+    "verity/circuits", "verity/commitments", "adapters/vllm/verity_vllm/definitions", "verity/protocols/proof/flock/prover", "verity/protocols/proof/flock/prover/pod", "verity/protocols/proof/flock/prover/agreement", "verity/protocols/proof/flock/prover/tool.py", "verity/protocols/accounting/compute/pouw/prover", "verity/protocols/accounting/memory/poub/verifier/commitments", "verity/commitments/periods",
 ]

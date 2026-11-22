@@ -26,14 +26,14 @@ install -d -m 0755 -o root -g root "$O"
 if [ ! -d "$T" ]; then
   tmp=$(mktemp -d "$O/.pin.XXXXXX")
   tar -x -C "$tmp" --no-same-owner --no-same-permissions
-  for f in verity/protocols/resource_accounting/memory/poub/attester/live_verifier/host.py verity/protocols/resource_accounting/memory/poub/verifier/poub_session/verifier_process.py tools/research/src/research/store/cli.py benchmarks/poub_session/sheets.py; do
+  for f in verity/protocols/accounting/memory/poub/attester/live_verifier/host.py verity/protocols/accounting/memory/poub/verifier/poub_session/verifier_process.py tools/research/src/research/store/cli.py benchmarks/poub_session/sheets.py; do
     [ -f "$tmp/$f" ] || { rm -rf "$tmp"; die "the archive has no $f"; }
   done
   chown -R root:root "$tmp"
   chmod -R u+rwX,go+rX,go-w "$tmp"
   mv "$tmp" "$T"
 fi
-pkg=$T/verity/protocols/resource_accounting/memory/poub/verifier/lean
+pkg=$T/verity/protocols/accounting/memory/poub/verifier/lean
 tc=$(tr -d '[:space:]' < "$pkg/lean-toolchain")
 [[ $tc =~ ^leanprover/lean4:v[0-9A-Za-z.-]+$ ]] || die "$pkg/lean-toolchain: $tc"
 if [ ! -x "$ELAN_HOME/bin/elan" ]; then
@@ -59,9 +59,9 @@ find "$T" \( -name lakefile.toml -o -name lakefile.lean \) -printf '%h\n' | whil
 done
 runuser -u auditor -- env -i HOME=/var/lib/vy-verifier PATH="$T/.lean-bin:/usr/bin:/bin" \
   sh -c "cd '$pkg' && lake build poub-verifier poub-difftest &&
-         cd '$T/verity/protocols/proofs/spot/verifier/lean' && lake build spot-verifier" | tail -1
+         cd '$T/verity/protocols/proof/spot/verifier/lean' && lake build spot-verifier" | tail -1
 /usr/bin/python3 -I /usr/local/sbin/vy-verifier-figures "$T" || die "no figures for $c (above): nothing pinned"
-/usr/bin/python3 -I "$T/verity/protocols/resource_accounting/memory/poub/attester/live_verifier/host.py" pinned "$c"
+/usr/bin/python3 -I "$T/verity/protocols/accounting/memory/poub/attester/live_verifier/host.py" pinned "$c"
 ln -sfn "$c" "$O/current.tmp"
 mv -Tf "$O/current.tmp" "$O/current"
 echo "pinned: $O/current -> $c"

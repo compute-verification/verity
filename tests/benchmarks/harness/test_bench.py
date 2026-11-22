@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import argparse
 import hashlib
 import os
 import re
@@ -12,12 +11,12 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from bench_standins import on_stand_in_machine
 from verity_config import Admission
 
-from verity_bench import jobs, served_table, steady_spec
+from verity_bench import jobs, steady_spec
 from verity_bench.cli import _parser, main
 from verity_bench.tool import VLLM_BENCH_POINT
-from verity_bench.vllm import presets
 from verity_bench.vllm import result as result_format
 from verity_bench.vllm.arms import (
     build_bound,
@@ -31,9 +30,7 @@ from verity_bench.vllm.engine import (
 )
 from verity_bench.vllm.presets import (
     ENGINE_SETTINGS,
-    FORMER_SPECS,
     GPUS,
-    SOURCE_ROOT,
     SPEC_ROOT,
     Sweep,
     expand_sweep,
@@ -42,8 +39,6 @@ from verity_bench.vllm.presets import (
     resolve_spec,
 )
 from verity_bench.vllm.runner import (
-    METRICS,
-    OPTIONAL_METRICS,
     _pearl_c_gate,
 )
 
@@ -295,6 +290,7 @@ def test_a_point_refuses_a_card_that_is_not_its_specs_before_anything_is_timed(t
     path.write_text(path.read_text().replace('cards = ["rtx-pro-6000"]', 'cards = ["h200"]'))
     monkeypatch.setenv("RESEARCH_SOURCE_SHA", "a" * 40)
     monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path))
+    on_stand_in_machine(monkeypatch, tmp_path)
     item = jobs.make_plan(path, lookup=lambda identity, commit: None).points[0]
     monkeypatch.setattr(result_format.kit, "host_stamp", lambda: {"card": card})
     monkeypatch.setattr("verity_bench.cli.run_benchmark", lambda *args, **kwargs: sys.exit("timed"))
@@ -306,6 +302,21 @@ def test_a_point_refuses_a_card_that_is_not_its_specs_before_anything_is_timed(t
         assert stop.value.code == 2 and (
             f"the card is a {card}, not the h200 of spec 'llama31-8b-fp8-1gpu' (NVIDIA H200): run it on a node whose "
             "card is a NVIDIA H200, or name this card where the spec lists it (`SPEC@CARD`)") in capsys.readouterr().err
+
+
+def test_a_point_on_a_machine_whose_record_has_not_read_its_processors_is_refused_before_any_arm(tmp_path, monkeypatch):
+    path = _spec_with(tmp_path, "")
+    monkeypatch.setenv("RESEARCH_SOURCE_SHA", "a" * 40)
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path))
+    on_stand_in_machine(monkeypatch, tmp_path)
+    record = tmp_path / "inputs" / "one-card.toml"
+    record.write_text(record.read_text().replace('cpus = { value = 16, read = "nproc" }',
+                                                 'cpus = { value = "unread", read = "not run" }'))
+    item = jobs.make_plan(path, lookup=lambda identity, commit: None).points[0]
+    monkeypatch.setattr(result_format.kit, "host_stamp", lambda: {"card": "NVIDIA RTX PRO 6000 Blackwell Server Edition"})
+    monkeypatch.setattr("verity_bench.cli.resolve_arms", lambda *args: sys.exit("an arm was resolved"))
+    with pytest.raises(SystemExit, match=r"^machine 'one-card': its record gives cpus \"unread\".* cpus = \{ value = N"):
+        main(["_vllm-point", "--spec", str(path), "--point", item.point.id, "--identity", item.identity])
 
 
 def test_the_launcher_sources_the_setup_before_the_point_runs(tmp_path):
@@ -381,23 +392,6 @@ def test_a_points_run_records_its_identity_as_the_key_param_resume_matches(monke
     assert VLLM_BENCH_POINT.resolve_params(["uv", "run", "verity-bench", "run", "llama31-8b-fp8-1gpu"], root)[1] == {}
 
 
-def test_a_spec_named_by_a_path_under_the_specs_former_directory_is_the_spec_of_that_name_here(tmp_path):
-    """A command written while the specs had a directory of their own names a file there. It loads as the spec of that
-    name, a steady-state spec's path resolves the same way, and its points record the path the spec has now."""
-
-    name = "llama31-8b-fp8-1gpu"
-    former = SOURCE_ROOT / FORMER_SPECS / f"{name}.toml"
-    assert presets.former_name(former) == presets.former_name(f"{FORMER_SPECS}/{name}.toml") == name
-    assert presets.former_name(name) is None and presets.former_name(tmp_path / f"{name}.toml") is None
-    assert presets.former_name(f"not-{FORMER_SPECS}/{name}.toml") is None
-    assert load_spec(former) == load_spec(name) and resolve_spec(former) == resolve_spec(name)
-    assert steady_spec.spec_path(former).samefile(SPEC_ROOT / f"{name}.toml")
-    assert jobs._relative_spec(former, SOURCE_ROOT) == served_table.spec_path(name)
-    assert (SOURCE_ROOT / served_table.spec_path(name)).samefile(SPEC_ROOT / f"{name}.toml")
-    with pytest.raises(Exception, match="no benchmark spec"):
-        load_spec(SOURCE_ROOT / FORMER_SPECS / "no-such-spec.toml")
-
-
 def test_every_spec_fits_the_queued_points_kind():
     """A point run through the queue is a job of the kind the README names, `vllm-bench-1gpu`: each spec's GPUs are its
     shape's, and its wall time covers the spec's admission."""
@@ -411,12 +405,11 @@ def test_every_spec_fits_the_queued_points_kind():
         assert spec.admission.max_minutes is None or spec.admission.max_minutes <= kind["max_wall_min"], spec.id
 
 
-def test_plan_run_check_and_compare_are_top_level_commands(tmp_path):
+def test_plan_run_and_check_are_top_level_commands():
     parser = _parser()
     assert parser.parse_args(["plan", "llama31-8b-fp8-1gpu"]).command == "plan"
     assert parser.parse_args(["run", "llama31-8b-fp8-1gpu"]).command == "run"
     assert parser.parse_args(["check", "llama31-8b-fp8-1gpu"]).command == "check"
-    assert parser.parse_args(["compare", str(tmp_path / "a"), str(tmp_path / "b")]).command == "compare"
 
 
 def test_graphs_are_refused_for_arms_bound_to_the_build():
@@ -429,47 +422,53 @@ def test_graphs_are_refused_for_arms_bound_to_the_build():
 
 def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(monkeypatch):
     """Pearl-C's tokens carry the epoch's live salt, so no stock arm is a protocol arm's token control; its own gate is
-    the experimental arm's call check on the installed run: y against x·Wᵀ, the commitment twice, the negative control.
+    the experimental arm's call check on the installed run: y against x·Wᵀ and the commitment twice.
     A live run's coins name its challenge phase, its salt epoch and that epoch's root over the weights' root."""
 
     import torch
-    from verity.protocols.resource_accounting.compute.pouw.verifier.salt import epoch_open_root
+    from verity.protocols.accounting.compute.pouw.verifier.salt import epoch_open_root
 
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3]))
 
     class Run:
-        """A pass's tile digest is written into `leaves` by its call (not with ``hash_leaf`` omitted) over the poison, and
-        each end draws fresh salts, so its roots are its own (`fresh`, `writes`: a run that breaks either)."""
-        fresh, writes = True, True
+        """A pass's tile digest is written into `leaves` by its call over the poison, and each end, on the run or any twin
+        of it, draws fresh salts, so its roots are its own (`fresh`: a run that breaks it)."""
+        fresh, hashing = True, True
 
-        def __init__(self, y, **commits):
-            self.y, self.omit, self.details = y, frozenset(), {"passes": [{}]}
+        def __init__(self, y, ends=None, **commits):
+            self.y, self.details = y, {"passes": [{}]}
             self.scheme, self.schedule = SimpleNamespace(name="pearl-c-h100-v1-h3"), SimpleNamespace(name="deferred")
             self.commits = {"weights_root": "ab" * 64, **commits}
-            self.nb, self.leaves, self.ended = 64, torch.zeros(64, dtype=torch.uint8), 0
+            self.nb, self.leaves, self.ends = 64, torch.zeros(64, dtype=torch.uint8), [0] if ends is None else ends
+            self.begins, self.twins = 0, []
             g = torch.Generator().manual_seed(0)
             self.weights = {w: SimpleNamespace(tensor=torch.randn(n, 32, generator=g).to(torch.bfloat16))
                             for w, n in ((0, 64), (1, 64), (2, 128))}
 
-        def begin(self, stepped=False, at=None):
-            self.stepped, self.ats = stepped, [*getattr(self, "ats", []), at]
+        def twin(self):
+            t = Run(self.y, self.ends, **self.commits)
+            t.fresh = self.fresh
+            self.twins.append(t)
+            return t
 
-        def epoch_calls(self):
-            return 7
+        def begin(self, stepped=False):
+            self.stepped, self.begins = stepped, self.begins + 1
+
+        def finish(self):
+            pass
 
         def poison(self):
             self.leaves.fill_(0xA5)
 
         def gemm(self, w, x, W, bias):
             y = self.y(x, W)
-            if self.writes and "hash_leaf" not in self.omit:
-                digest = hashlib.sha512(y.contiguous().view(torch.uint8).numpy().tobytes()).digest()
-                self.leaves.copy_(torch.frombuffer(bytearray(digest), dtype=torch.uint8))
+            digest = hashlib.sha512(y.contiguous().view(torch.uint8).numpy().tobytes()).digest()
+            self.leaves.copy_(torch.frombuffer(bytearray(digest), dtype=torch.uint8))
             return y
 
         def end(self):
-            self.ended += self.fresh
-            return {"transcript_root": f"root-{self.ended}", "activation_roots": f"a-{self.ended}", "units": 1, "tiles": 1}
+            self.ends[0] += self.fresh
+            return {"transcript_root": f"root-{self.ends[0]}", "activation_roots": f"a-{self.ends[0]}", "units": 1, "tiles": 1}
 
     def exact_y(x, W):
         return (x.float() @ W.float().T).to(torch.bfloat16)
@@ -478,14 +477,14 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
     exact = _pearl_c_gate(run, "pearl-plus")
     assert exact["passed"] and exact["provided"] and exact["schedule"] == "deferred"
     assert exact["coins"] == {"source": "in-process"}
-    assert run.stepped and set(run.ats[:-1]) == {7} and run.ats[-1] is None    # the compared passes share one index
+    # the compared passes are twins' (`PearlCDeviceRun.twin`), each taking the cases in one order, so a case's share a place
+    assert run.stepped and run.begins == 1 and len(run.twins) == 2 and [t.begins for t in run.twins] == [4, 4]
     assert sorted({(c["n"], c["m"]) for c in exact["checks"]}) == [(64, 16), (64, 64), (128, 16), (128, 64)]
     wrong = _pearl_c_gate(Run(lambda x, W: torch.zeros(x.shape[0], W.shape[0], dtype=torch.bfloat16)), "pearl-plus")
     assert not wrong["passed"] and wrong["provided"]
-    for broken in ("fresh", "writes"):          # roots that repeat (salts not fresh), leaves the call never writes
-        run = Run(exact_y)
-        setattr(run, broken, False)
-        assert not _pearl_c_gate(run, "pearl-plus")["passed"]
+    run = Run(exact_y)
+    run.fresh = False                           # roots that repeat (salts not fresh)
+    assert not _pearl_c_gate(run, "pearl-plus")["passed"]
     session = {"session": "s1", "root": "ab" * 64, "commitment": "cd" * 64}
     live = _pearl_c_gate(Run(exact_y, coin_source="challenger", session=session, pass_index=0), "pearl-plus")
     after = epoch_open_root(bytes.fromhex("ab" * 64), 0).hex()
@@ -497,8 +496,8 @@ def test_the_config_a_declared_schemes_arm_hands_passes_that_schemes_own_setting
     """A protocol arm whose entry is a declared scheme's name hands it settings it takes, read as
     `verity_vllm.LLM` reads them (`option_settings`) and checked by the scheme's own `settings`: its in-process coins
     the string its settings say, ``coins = "in-process"``, or, where the spec gives one, its challenger's address alone."""
-    from verity.protocols.compose import schemes
-    from verity.protocols.resource_accounting.scheme import settings
+    from verity.protocols.run import schemes
+    from verity.protocols.accounting.scheme import settings
     from verity_vllm.llm import option_settings
 
     spec = resolve_spec("llama32-1b-1gpu-pouw-protocol-served@h200")
@@ -568,26 +567,6 @@ def test_the_harness_gate_is_refused_on_a_run_that_retains_its_passes(monkeypatc
                                          "retains its passes"):
         got.custom_gate()
     assert sorted(p.name for p in run.retain_dir.iterdir()) == ["pass-00000"]
-
-
-def test_the_readme_states_the_contract_the_code_keeps():
-    """The README is the harness's contract: every metric, gate kind, mode, schema and kind it names is the
-    code's, and the code has none it doesn't name."""
-
-    root = Path(__file__).resolve().parents[3]
-    readme = (root / "benchmarks/harness/README.md").read_text()
-    runner_source = (root / "benchmarks/harness/verity_bench/vllm/runner.py").read_text()
-    for metric in METRICS + OPTIONAL_METRICS:
-        assert f"`{metric}`" in readme, metric
-    for kind in re.findall(r'"kind": "([a-z-]+)"', runner_source):
-        assert f"`{kind}`" in readme, kind
-    for mode in ("resident", "blocks"):
-        assert f"`{mode}`" in readme and f'"{mode}"' in runner_source
-    assert f"`{result_format.SCHEMA}`" in readme
-    assert "`vllm-bench-1gpu`" in readme
-    [subparsers] = [a for a in _parser()._actions if isinstance(a, argparse._SubParsersAction)]
-    public = {name for name in subparsers.choices if not name.startswith("_")}
-    assert public == set(re.findall(r"^verity-bench ([a-z-]+) ", readme, re.M))
 
 
 def test_a_stopped_bandwidth_setup_removes_its_partial_build_even_when_its_builds_already_exited(tmp_path):

@@ -10,7 +10,7 @@ from verity.circuits.defs import bind
 from verity.circuits.ops import gemm as OG
 from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+from verity.protocols.proof.spot.verifier.one_stage import partition as P
 
 from verity_vllm.pipeline import chain_rows as CH
 from verity_vllm.pipeline import serving_rows as SRW

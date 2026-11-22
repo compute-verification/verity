@@ -71,6 +71,15 @@ def test_a_value_its_check_refuses_is_refused_naming_the_field(tmp_path, old, ne
         kit.machine_properties("m", directory=d)
 
 
+def test_the_processors_are_the_records_and_a_record_that_has_not_read_them_is_refused_with_the_line_to_add(tmp_path):
+    assert kit.machine_cpus("one-card", directory=MACHINES) == 16
+    d = _record(tmp_path, 'cpus = { value = 16, read = "nproc" }', 'cpus = { value = "unread", read = "not run" }')
+    with pytest.raises(SystemExit, match=re.escape(
+            "machine 'm': its record gives cpus \"unread\", and a served point's host-quiet gate is bounded by it: read "
+            "it on the machine and write in its record's [properties] cpus = { value = N, read = \"nproc\" }")):
+        kit.machine_cpus("m", directory=d)
+
+
 @pytest.mark.parametrize("old, new", [
     (', read = "python3 --version" }', " }"),
     (', read = "python3 --version" }', ', read = "" }'),

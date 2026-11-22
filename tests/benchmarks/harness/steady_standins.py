@@ -37,11 +37,11 @@ OWN = {"pin": PIN, "n": 1, "stage": STAGE, "cores": {"count": 10, "list": "0-9",
 #: script and the spec's setup
 FILES = {
     "uv.lock": "lock\n", "pyproject.toml": "",
-    "verity/protocols/proofs/flock/prover/src/main.rs": "fn main() {}\n",
-    "verity/protocols/proofs/flock/prover/cuda/ntt.cu": "// kernel\n",
-    "tests/verity/protocols/proofs/flock/prover/test_prover.py": "def test(): pass\n",
-    "verity/protocols/proofs/flock/prover/README.md": "the prover\n",
-    "verity/protocols/proofs/flock/prover/pod/70-class-sweep.sh": "FLAGS=-O3\n",
+    "verity/protocols/proof/flock/prover/src/main.rs": "fn main() {}\n",
+    "verity/protocols/proof/flock/prover/cuda/ntt.cu": "// kernel\n",
+    "tests/verity/protocols/proof/flock/prover/test_prover.py": "def test(): pass\n",
+    "verity/protocols/proof/flock/prover/README.md": "the prover\n",
+    "verity/protocols/proof/flock/prover/pod/70-class-sweep.sh": "FLAGS=-O3\n",
     "benchmarks/one_stage/server_rate.py": "# times\n",
     SETUP: "export VERITY_BENCH_STEADY_BIN=/built/prover\n",
 }

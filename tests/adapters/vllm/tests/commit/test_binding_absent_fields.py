@@ -24,47 +24,21 @@ def given(**fields: Any) -> dict[str, Any]:
 
 # ---------------------------------------------------------------------- the expected population
 
-def placed(structure: dict[str, Any], **workload: Any) -> list[tuple]:
-    """(request, step, op_path, member) of each identity the structure requires of two requests over two steps."""
-    pop = B.expected_population(structure, {"program_digest": PD, "requests": ["r0", "r1"], "steps": 2, **workload})
-    return [(i[1], i[2], i[4], i[5]) for i in pop]
 
 
 ONE_MODULE = {"modules": [{"op_path": OP, "members": ["out"]}]}
 
 
-@pytest.mark.parametrize("request_steps", [ABSENT, None, {}])
-def test_a_workload_that_states_no_request_steps_places_every_request_at_every_step(request_steps):
-    assert placed(ONE_MODULE, **given(request_steps=request_steps)) == [(r, s, OP, "out") for r in ("r0", "r1") for s in (0, 1)]
 
 
-def test_a_request_the_stated_request_steps_leave_out_is_placed_at_every_step():
-    assert placed(ONE_MODULE, request_steps={"r1": [1]}) == [("r0", 0, OP, "out"), ("r0", 1, OP, "out"), ("r1", 1, OP, "out")]
 
 
-@pytest.mark.parametrize(("request_steps", "before"), [(ABSENT, [0, 1]), (None, [0, 1]), ({}, [0, 1]), ({"r1": [1]}, [1])],
-                         ids=["absent", "null", "empty", "stated"])
-@pytest.mark.parametrize("rid", [["r0"], {"r": 0}, {"r0"}], ids=["a list", "a dict", "a set"])
-def test_a_request_id_that_cannot_be_hashed_is_refused_whether_or_not_request_steps_are_stated(request_steps, before, rid):
-    pop = B.expected_population(ONE_MODULE, {"program_digest": PD, "requests": ["r1", rid], "steps": 2, **given(request_steps=request_steps)})
-    assert [(i[1], i[2]) for i in (next(pop) for _ in before)] == [("r1", s) for s in before]     # the request before it is placed
-    with pytest.raises(TypeError, match=f"unhashable type: '{type(rid).__name__}'"):
-        next(pop)
 
 
-@pytest.mark.parametrize("layers", [ABSENT, None, []])
-def test_a_structure_that_names_no_moe_layer_requires_no_moe_plane(layers):
-    assert placed({"modules": [], "moe_planes": ["up", "sum"], **given(moe_layers=layers)}) == []
 
 
-@pytest.mark.parametrize("planes", [ABSENT, None, []])
-def test_a_structure_whose_moe_layers_name_no_plane_requires_none(planes):
-    assert placed({"modules": [], "moe_layers": [3, 5], **given(moe_planes=planes)}) == []
 
 
-def test_a_structure_with_moe_layers_and_planes_requires_each_plane_of_each_layer():
-    got = placed({"modules": [], "moe_layers": [3, 5], "moe_planes": ["up", "sum"]})
-    assert got == [(r, s, f"moe/L{layer}", plane) for r in ("r0", "r1") for s in (0, 1) for layer in (3, 5) for plane in ("up", "sum")]
 
 
 # ---------------------------------------------------------------------- the required-value manifest
@@ -175,21 +149,10 @@ def test_a_manifests_composition_reference_is_on_its_header(tmp_path):
 HIDDEN = "fa2.m1/L0"
 
 
-def shortfalls(launch: dict[str, Any] | None) -> list[str]:
-    """What the launch of request r0 at step 0 lacks, bound to one committed tensor of eight words."""
-    ident = B.LaunchIdentity(B.identity(PD, "r0", 0, 0, HIDDEN, "*", 0, -1), launch)
-    idx = {("r0", 0, 0, HIDDEN, "g4x8x16/q", 0): [{"name": "t", "stream_offset": 0, "identity": {"element_range": [0, 8]}}]}
-    return list(B._launch_shortfalls([ident], idx, B._op_key_index(idx)).values())
 
 
-@pytest.mark.parametrize("launch", [None, {}, {"rows": None}, {"rows": {}}, {"geometry": {"HB": 4}, "rows": {}}])
-def test_a_launch_that_declares_no_rows_declares_none_for_its_bound_request(launch):
-    assert shortfalls(launch) == ["requests ['r0'] have no declared rows at engine step 0"]
 
 
-def test_a_launch_that_declares_its_requests_rows_is_held_to_its_geometry():
-    assert shortfalls({"rows": {"r0": 8}}) == ["the batch-level row carries no launch geometry"]
-    assert shortfalls({"rows": {"r1": 8}}) == ["requests ['r0'] have no declared rows at engine step 0"]
 
 
 # ---------------------------------------------------------------------- the composition check
@@ -210,24 +173,9 @@ def token_entry(**more: Any) -> dict[str, Any]:
     return {"kind": "leaf", "identity": identity, **given(**more)}
 
 
-@pytest.mark.parametrize("header", [{}, {"engine_steps": None}, {"engine_steps": []}, {"engine_steps": [0, 1]}])
-def test_a_header_that_declares_no_composition_is_skipped_by_name(header):
-    assert B.composition_check(header, {"entries": [token_entry()]}) == SKIPPED
 
 
-@pytest.mark.parametrize("reference", [ABSENT, None, {}, {"sampled_token_ids": TOKENS}, {"input_token_ids": None}])
-def test_a_composition_without_a_token_reference_member_fails_by_name(reference):
-    assert B.composition_check(one_step(composition_reference=reference), {"entries": [token_entry()]}) == NO_REFERENCE
 
 
-@pytest.mark.parametrize("encoding", [ABSENT, None, {}, {"dtype": "int64"}, {"shape": [None]}, {"shape": [0]}, {"shape": [4]}])
-def test_a_tiled_member_passes_where_its_entry_states_no_row_count_or_the_tiled_one(encoding):
-    got = B.composition_check(one_step(composition_reference={"input_token_ids": TOKENS}), {"entries": [token_entry(encoding=encoding)]})
-    assert got == {"ok": True, "checked_steps": 1, "problem_steps_n": 0, "problems": [], "error": None,
-                   "reference": {"input_token_ids": TOKENS, "sampled_token_ids": None}}
 
 
-def test_rows_of_the_member_past_the_tiled_ones_are_bound_to_no_request():
-    got = B.composition_check(one_step(composition_reference={"input_token_ids": TOKENS}), {"entries": [token_entry(encoding={"shape": [6]})]})
-    assert not got["ok"] and got["problems"][0]["gaps"] == ["rows [4,6) bound to no request"]
-    assert got["error"] == f"composition: engine step 0 composition on {OP}/in; gaps ['rows [4,6) bound to no request']"

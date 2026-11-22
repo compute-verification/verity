@@ -31,3 +31,17 @@ def test_the_command_prints_the_directory_exits_3_on_a_version_not_listed_and_re
     assert no_short.returncode == 1 and no_short.stderr.startswith("0 GPU card files under ") and "`short` 'l40s'" in no_short.stderr
     assert (gencode.returncode, gencode.stdout) == (0, "arch=compute_120a,code=sm_120a\n")
     assert no_target.returncode == 1 and no_target.stderr.startswith("target 'sm_77a': no architecture 'sm_77a'")
+
+
+def test_a_private_run_directory_without_the_record_is_told_the_file_looked_for_and_to_carry_it(tmp_path):
+    env = {k: v for k, v in os.environ.items() if k != "CUDA_HOME"} | {"RESEARCH_RUN_DIR": str(tmp_path),
+                                                                        "RESEARCH_MACHINE": "m"}
+    run = lambda *a: subprocess.run([sys.executable, str(SCRIPT), *a], env=env, capture_output=True, text=True)  # noqa: E731
+    for r in (run("toolkit", "13.0"), run("toolkit"), run("arch")):
+        assert r.returncode == 1 and r.stdout == ""
+        assert "$RESEARCH_RUN_DIR/inputs/$RESEARCH_MACHINE.toml" in r.stderr and str(tmp_path / "inputs" / "m.toml") in r.stderr
+        assert "a private run directory must carry the record" in r.stderr
+    other, usage, card_file = run("arch", "NVIDIA A100-SXM4-80GB"), run("no-such-reader"), run("gencode", "sm_90a")
+    assert other.returncode == 1 and usage.returncode == 1 and "private run directory" not in other.stderr
+    assert "machine.py: looked for the run's machine record" not in usage.stderr
+    assert (card_file.returncode, card_file.stdout) == (0, "arch=compute_90a,code=sm_90a\n")

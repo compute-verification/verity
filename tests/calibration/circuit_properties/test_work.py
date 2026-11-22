@@ -25,12 +25,12 @@ from circuit_properties import points as PT
 from circuit_properties import work as WK
 from circuit_properties.ops import flatten
 
-from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.evaluation.bits import compile as compile_bits
-from verity.circuits.program import Program, is_input
+from verity.circuits.program import NoBooleanBody, Program, is_input
 from verity.circuits.refs import Coll, Strided, concat, strided_view, tuple_of
 from verity.circuits.types import Array, Tuple
-from verity.circuits.ops.boolean.versions import NoBooleanVersion, boolean_version
+from verity.circuits.ops.boolean.versions import boolean_version
 from verity.circuits.ops import scalar as SC
 from verity.circuits.ops.prims import const
 from verity.circuits.ops.scalar import F32Neg
@@ -159,9 +159,10 @@ def test_the_batch_alone_is_free_like_theta():
 
 
 def test_a_primitive_with_no_boolean_version_is_refused_by_name():
-    tanh = _def("Tanh", ((("x", F32),), F32), lambda B, S, x: B.call(RP.F32TanhRn, x))
-    with pytest.raises(NoBooleanVersion, match="F32TanhRn"):
-        WK.read(Program(bind(tanh)), KB)
+    bare = PrimitiveDefinition("TWorkNoBoolean32", 1, (("x", F32),), F32, lambda x: x, register=False)
+    call = _def("NoBoolean", ((("x", F32),), F32), lambda B, S, x: B.call(bare, x))
+    with pytest.raises(NoBooleanBody, match="TWorkNoBoolean32"):
+        WK.read(Program(bind(call)), KB)
 
 
 def _lookup_loop(carried: bool) -> Program:

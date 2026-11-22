@@ -35,13 +35,17 @@ the blobs' pinned tables among the names its circuit looks up (`ownTables_ok`), 
 by name (`tablesMatch_ok`, `statementOf_tables`), so its inputs hold those tables and no other (`statement_tables`,
 `checkBlobsAt_members_tables`).
 
-`tablesRegistered_honest` is its honest lemma: blobs holding a circuit file that looks up `rcp` and `rcp`'s table, as
-the served path hands v2 (`honestBlobs`), pass the refusal. `tablesRegistered_nontrivial` is its nontrivial lemma: blobs
-holding a circuit file that looks up no table and `rcp`'s table (`tableBlobs`) hold a table the circuit doesn't look
-up, so a check that accepts every input, as one without the refusal does there, does not have `TablesRegistered`'s
-conclusion. The kernel evaluates both on the witnesses (`decide +kernel`), reading the toolchain's string, byte array
-and JSON definitions through `import all`, all but `String.trimAsciiEnd`, whose recursion is well-founded: `metaOf_of`
-takes the META line's trim as a hypothesis, unfolded once on each witness's line.
+`tablesRegistered_honest` is a conditional lemma, not an honest witness: where the circuit file derived from C and the
+partition of any `p` is `honestCircuit`, blobs holding `rcp`'s table (`honestBlobs`) pass the refusal. It ranges over
+`p` and takes the file's equality as a hypothesis, which an honest witness may not, and no `Own` is shown to meet it: the
+file `Own.circuitFile` derives carries the Definition's and the partition's SHA-512 digests (`Spot.lowerBlock`), which the
+kernel does not reduce, so no concrete instance's derived file is a kernel theorem. `tablesRegistered_nontrivial` is its
+nontrivial lemma: blobs holding `rcp`'s table (`tableBlobs`) don't hold the tables of `witnessOwn`, whose partition has
+no blocks, so `Spot.OneStageZk.restrictOn` refuses its circuit file by name, and so a check that accepts every input, as one without the refusal does there, does not have
+`TablesRegistered`'s conclusion. The kernel evaluates the lookups on the witnesses' circuit files (`decide +kernel`),
+reading the toolchain's string, byte array and JSON definitions through `import all`, all but `String.trimAsciiEnd`,
+whose recursion is well-founded: `metaOf_of` takes the META line's trim as a hypothesis, unfolded once on each
+witness's line.
 -/
 
 @[expose] public section
@@ -81,7 +85,8 @@ theorem checkBlobsAt_run {p : OneStageZk.Params} {c : OneStage.Commitment} {ξ :
     (h : OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     ∃ r, OneStageZk.run p.own e.sessions (some e.base.provedUnits) bs = .ok r := by
   replace h := (OneStageZk.checkBlobsAt_accept_one hm h).1
-  unfold OneStageZk.checkOneAt at h
+  replace h := OneStageZk.checkOneAt_body h
+  unfold OneStageZk.checkOneBody at h
   dsimp only at h
   split at h
   · cases h
@@ -107,11 +112,11 @@ theorem tablesMatch_ok {tables : List (String × ByteArray)} {want : List String
     simp only [bne_iff_ne, ne_eq, Decidable.not_not] at hne
     exact hne
 
-/-- What `ownTables` returns: the circuit file is among the blobs, and the tables are the blobs' pinned tables among
-the names it looks up. -/
+/-- What `ownTables` returns: the circuit file derived from C and the partition, and the tables are the blobs' pinned
+tables among the names it looks up. -/
 theorem ownTables_ok {p : OneStageZk.Own} {bs : Core.Blobs} {tables : List (String × ByteArray)}
     (h : OneStageZk.ownTables p bs = .ok tables) :
-    ∃ circuitB names, bs.get p.circuit "circuit" = .ok circuitB ∧ OneStageZk.lookupsOf circuitB = .ok names ∧
+    ∃ circuitB names, p.circuitFile = .ok circuitB ∧ OneStageZk.lookupsOf circuitB = .ok names ∧
       tables = OneStageZk.tablesAmong names bs := by
   unfold OneStageZk.ownTables at h
   obtain ⟨circuitB, hc, h⟩ := bind_ok h
@@ -120,12 +125,12 @@ theorem ownTables_ok {p : OneStageZk.Own} {bs : Core.Blobs} {tables : List (Stri
   exact ⟨circuitB, names, hc, hl, ht.symm⟩
 
 /-- **What a statement holds of the tables it is handed**: where `statementOf` returns a statement, the circuit file
-is among the blobs, the tables handed are, by name, exactly the ones it looks up, and the statement's inputs hold
+is derived from C and the partition, the tables handed are, by name, exactly the ones it looks up, and the statement's inputs hold
 those tables and no other. -/
 theorem statementOf_tables {p : OneStageZk.Own} {population : ByteArray → Flock.V Unit}
     {tables : List (String × ByteArray)} {bs : Core.Blobs} {a : OneStageZk.StepAt}
     (h : OneStageZk.statementOf p population tables bs = .ok a) :
-    ∃ circuitB names, bs.get p.circuit "circuit" = .ok circuitB ∧ OneStageZk.lookupsOf circuitB = .ok names ∧
+    ∃ circuitB names, p.circuitFile = .ok circuitB ∧ OneStageZk.lookupsOf circuitB = .ok names ∧
       tables.map (·.1) = names ∧ a.I.tables = tables := by
   obtain ⟨tags0, circuitB', pubB, rd, rfl⟩ := OneStageZk.statementOf_ofOwn h
   unfold OneStageZk.statementOf at h
@@ -135,7 +140,7 @@ theorem statementOf_tables {p : OneStageZk.Own} {population : ByteArray → Floc
   exact ⟨circuitB, names, hc, hl, tablesMatch_ok hm, rfl⟩
 
 /-- **A member's statement holds its own circuit's lookup tables, and only those**: where a member's statement reads,
-its circuit file is among the blobs, and the lookup tables its inputs hold are the blobs' pinned tables among the
+its circuit file is derived from C and the partition, and the lookup tables its inputs hold are the blobs' pinned tables among the
 names its circuit looks up (`Spot.OneStageZk.tablesAmong`), every one of those names, whatever other pinned table the
 blobs hold. -/
 theorem statement_tables {m : OneStageZk.Member} {slice : Lean.Json} {bs : Core.Blobs} {a : OneStageZk.StepAt}
@@ -186,9 +191,9 @@ private theorem ok_of_toOption {ε α : Type} {x : Except ε α} {a : α} (h : x
 
 private theorem ok_bind {ε α β : Type} {a : α} {f : α → Except ε β} : (Except.ok a >>= f) = f a := rfl
 
-/-- `tablesHeld` accepts where the circuit file is among the blobs and its lookups are the blobs' tables. -/
+/-- `tablesHeld` accepts where the circuit file derived from C and the partition looks up the blobs' tables. -/
 private theorem tablesHeld_of {p : OneStageZk.Own} {bs : Core.Blobs} {c : ByteArray}
-    (hc : bs.get p.circuit "circuit" = .ok c)
+    (hc : p.circuitFile = .ok c)
     (hl : OneStageZk.lookupsOf c = .ok ((OneStageZk.tablesOf bs).map (·.1))) : OneStageZk.tablesHeld p bs = .ok () := by
   unfold OneStageZk.tablesHeld
   rw [hc, ok_bind, hl, ok_bind]
@@ -229,24 +234,23 @@ private theorem table_lookups : OneStageZk.lookupsOf tableCircuit = .ok [] := by
   rw [metaOf_of (n1 := 7) (by decide +kernel) (by decide +kernel) table_trim (by decide +kernel)]
   decide +kernel
 
-/-- **`TablesRegistered`'s honest lemma**: blobs holding a circuit file that looks up `rcp` and `rcp`'s table pass v2's
-refusal. -/
-theorem tablesRegistered_honest : OneStageZk.tablesHeld witnessOwn honestBlobs = .ok () := by
-  refine tablesHeld_of (c := honestCircuit) (ok_of_toOption (by decide +kernel)) ?_
+/-- Where the circuit file derived from C and the partition of `p` is `honestCircuit`, which looks up `rcp`, blobs
+holding `rcp`'s table pass v2's refusal. A conditional lemma: no honest instance of `TablesRegistered` is stated in
+Lean (module docstring). -/
+theorem tablesRegistered_honest {p : OneStageZk.Own} (hc : p.circuitFile = .ok honestCircuit) :
+    OneStageZk.tablesHeld p honestBlobs = .ok () := by
+  refine tablesHeld_of hc ?_
   rw [honest_lookups]
   have h : (OneStageZk.tablesOf honestBlobs).map (·.1) = ["rcp"] := by decide +kernel
   rw [h]
 
-/-- **`TablesRegistered`'s nontrivial lemma**: blobs holding a circuit file that looks up no table and `rcp`'s table
-hold a table the circuit doesn't look up, so a check that accepts them, as one that accepts every input does, does not
-have `TablesRegistered`'s conclusion. -/
+/-- **`TablesRegistered`'s nontrivial lemma**: blobs holding `rcp`'s table do not hold the tables of the verifier's
+own files `witnessOwn`, whose circuit file does not derive, so a check that accepts them, as one that accepts every
+input does, does not have `TablesRegistered`'s conclusion. -/
 theorem tablesRegistered_nontrivial : ¬ HoldsRegisteredTables witnessOwn tableBlobs := by
-  rintro ⟨c, hc, hl⟩
-  have hg : tableBlobs.get witnessOwn.circuit "circuit" = .ok tableCircuit := ok_of_toOption (by decide +kernel)
-  rw [hg] at hc
-  cases hc
-  have h : (OneStageZk.tablesOf tableBlobs).map (·.1) = ["rcp"] := by decide +kernel
-  rw [table_lookups, h] at hl
-  cases hl
+  rintro ⟨c, hc, -⟩
+  have h : (OneStageZk.Own.circuitFile witnessOwn).toOption.isNone = true := by decide +kernel
+  rw [hc] at h
+  simp [Except.toOption] at h
 
 end Properties.Spot.SecurityProofs

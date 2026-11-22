@@ -12,7 +12,7 @@ from types import SimpleNamespace as NS
 import pytest
 import serve_tax as S
 
-from verity.protocols.resource_accounting.network.prover import admission as NA
+from verity.protocols.accounting.network.prover import admission as NA
 from verity_vllm.pipeline.research_outputs import PRIVATE
 
 
@@ -402,7 +402,7 @@ def test_the_pearl_plus_arms_turn_it_on_by_name_inside_vllms_server_at_the_jobs_
     assert env["VERITY_PROTOCOLS"] == "pearl-plus" and S.PLUGIN_ENV not in env
     assert {k: cfg[k] for k in ("feed", "out", "private", "gate")} == {"feed": str(tmp_path), "out": str(tmp_path),
                                                                         "private": str(private), "gate": "gate-cmd"}
-    from verity.protocols.resource_accounting.compute.pouw.scheme import SETTINGS
+    from verity.protocols.accounting.compute.pouw.scheme import SETTINGS
 
     assert cfg["pearl-plus"] == {**SETTINGS, **own}
     with pytest.raises(SystemExit, match="this arm keeps files on the node, outside its run's directory: --private DIR"):

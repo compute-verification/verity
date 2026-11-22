@@ -15,14 +15,14 @@
 set -euo pipefail
 O=${OUT:?run under research run, which sets OUT}
 [ $# -gt 0 ] || { echo "usage: ledger_replay.sh S..." >&2; exit 2; }
-P=$PWD/verity/protocols/proofs/spot/verifier/lean
+P=$PWD/verity/protocols/proof/spot/verifier/lean
 S=$(mktemp -d)
 trap 'rm -rf "$S"' EXIT
 uv sync -q --all-packages --extra torch-cpu
 bash tools/verity/lean/setup.sh "$P" > "$O/setup.log" 2>&1 || { tail -40 "$O/setup.log" >&2; exit 1; }
 export PATH="$HOME/.elan/bin:$PATH"
 # the packages the verifier requires by path, each restored as main built it, so that lake unpacks them
-python3 tools/verity/lean/cache.py get verity/protocols/proofs/flock/verifier verity/protocols/interface \
+python3 tools/verity/lean/cache.py get verity/protocols/proof/flock/verifier verity/protocols/interface \
   verity/commitments/lms/lean verity/circuits/difftest verity/circuits/base verity/circuits/lean \
   verity/commitments/lean >> "$O/setup.log" 2>&1 || echo "ledger_replay.sh: a cached build didn't restore; lake compiles it"
 mkdir -p "$S/time"

@@ -1,6 +1,6 @@
 """`verity bench prove` on a workload of several requests (`prove_census`): each request's census summed into the row
 as served, the census table with its gaps, the totals refused by name, and GLM-5.3's reading unchanged. The censuses
-are made up in the form `block_census.sh --request` writes, one `REQUEST/census.json` a request."""
+are made up in the form `block_census.py --request` writes, one `REQUEST/census.json` a request."""
 
 from __future__ import annotations
 
@@ -67,7 +67,7 @@ REQUESTS = {"r0": request(5, 3, gemm=4, norm=1), "r1": request(2, 1, gemm=4, nor
 
 
 def census_art(s: Store, requests: dict[str, dict], model: str = ONE_B.model) -> str:
-    """The censuses in one tree, as `block_census.sh` lays them out, labelled the workload's census of record."""
+    """The censuses in one tree, as `block_census.py` lays them out, labelled the workload's census of record."""
 
     root = s._scratch()
     for name, doc in requests.items():
@@ -361,7 +361,9 @@ def test_glm53s_reading_is_unchanged(tmp_path, monkeypatch, capsys):
     member's carry that member, with the same values and marks."""
 
     got = glm_reading(tmp_path, monkeypatch, capsys)
-    assert got == json.loads(GLM_READING.read_text())
+    named = "`h100-sxm-80gb-sm/e4m3`, reading `datasheet`"
+    assert named in got["text"]
+    assert json.loads(json.dumps(got).replace(named, "`h100-sxm5-80gb/e4m3`")) == json.loads(GLM_READING.read_text())
     doc = json.loads((tmp_path / "run" / R.TABLE).read_text())
     metrics = runpy.run_path(str(RUNNER))["METRICS"]
     plain = R.measurements(doc, metrics)

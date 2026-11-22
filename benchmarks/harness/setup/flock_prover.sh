@@ -2,14 +2,14 @@
 # node's cards and names it, with the Python that drives it, for a steady-state point whose rows name their statements
 # (a row staged in the run needs what the stager needs besides).
 #
-# - The prover: verity/protocols/proofs/flock/prover/pod/70-class-sweep.sh BUILD_ONLY=1 GPU=1, which keeps the binary under FLOCK_WORK by
+# - The prover: verity/protocols/proof/flock/prover/pod/70-class-sweep.sh BUILD_ONLY=1 GPU=1, which keeps the binary under FLOCK_WORK by
 #   a hash of the prover's sources and build scripts, so a later point of the same sources finds it built
 #   (VERITY_BENCH_STEADY_BIN). Its build tree stays under FLOCK_WORK, as the build scripts leave it.
 # - The Python: 3.12 with numpy and blake3, kept under FLOCK_WORK too (VERITY_BENCH_STEADY_PY), with the PYTHONPATH
 #   benchmarks/one_stage/server_rate.py imports from.
 # - The CUDA 13.3 toolkit the prover is built with, first on PATH, where the node side reads its version, and its lib64
 #   on LD_LIBRARY_PATH: benchmarks/kernels/machine.py's (CUDA_HOME at 13.3, else the run's machine's [properties]'), else
-#   where that names none the one verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh unpacks; a node whose own 13.3
+#   where that names none the one verity/protocols/proof/flock/prover/pod/cuda-13.3.sh unpacks; a node whose own 13.3
 #   its record doesn't list is refused, naming the record. Its compat
 #   library, which a driver older than the toolkit needs, is left out: a spec names its driver.
 # - The scratch (VERITY_BENCH_STEADY_SCRATCH): a directory on the node's disk beside the builds, never the node's memory,
@@ -31,9 +31,9 @@ else
   unset CUDA_TK
   # the unpacking runs in a subshell, which keeps this shell's arguments (the point's) from its `set --`; sourced again,
   # the script only names the toolkit it unpacked, and leaves CUDA_TK unset where the node has its own 13.3
-  ( . verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh ) >> "$steady_out/cuda.log" 2>&1 \
+  ( . verity/protocols/proof/flock/prover/pod/cuda-13.3.sh ) >> "$steady_out/cuda.log" 2>&1 \
     || { tail -20 "$steady_out/cuda.log" >&2; echo "setup: the node has no CUDA 13.3 toolkit and none could be unpacked (out/setup/cuda.log)" >&2; exit 4; }
-  . verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh >> "$steady_out/cuda.log" 2>&1
+  . verity/protocols/proof/flock/prover/pod/cuda-13.3.sh >> "$steady_out/cuda.log" 2>&1
   [ -n "${CUDA_TK:-}" ] || { cat "$steady_out/cuda.log" >&2
     echo "setup: the node has its own CUDA 13.3, which the run's machine's [properties] don't list under toolkit: list it there, or set CUDA_HOME (out/setup/cuda.log)" >&2; exit 4; }
   steady_cuda=$CUDA_TK
@@ -41,7 +41,7 @@ fi
 export PATH=$steady_cuda/bin:$PATH LD_LIBRARY_PATH=$steady_cuda/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
 
 # the build scripts write their own out/ files: they get a run directory of their own under the setup's
-RESEARCH_RUN_DIR=$steady_out/build OUT=$steady_out/build/sweep bash verity/protocols/proofs/flock/prover/pod/70-class-sweep.sh BUILD_ONLY=1 GPU=1 \
+RESEARCH_RUN_DIR=$steady_out/build OUT=$steady_out/build/sweep bash verity/protocols/proof/flock/prover/pod/70-class-sweep.sh BUILD_ONLY=1 GPU=1 \
   > "$steady_out/build.txt" 2>&1 \
   || { tail -30 "$steady_out/build.txt" >&2; echo "setup: the prover's build failed (out/setup/build.txt)" >&2; exit 4; }
 VERITY_BENCH_STEADY_BIN=$(sed -n 's/^BINARY=//p' "$steady_out/build.txt" | tail -1)
@@ -63,4 +63,4 @@ fi
 
 find "$FLOCK_WORK/scratch" -mindepth 1 -maxdepth 1 -name 'verity-bench-steady-*' -mmin +1440 -exec rm -rf {} + 2> /dev/null || true
 export VERITY_BENCH_STEADY_BIN VERITY_BENCH_STEADY_PY VERITY_BENCH_STEADY_SCRATCH=$FLOCK_WORK/scratch
-export PYTHONPATH=$PWD:$PWD/verity/protocols/proofs/flock/prover/python:$PWD/adapters/vllm:$PWD/adapters/torch:$PWD/tools/verity/circuit_check/src:$PWD/benchmarks/numerical/python
+export PYTHONPATH=$PWD:$PWD/verity/protocols/proof/flock/prover/python:$PWD/adapters/vllm:$PWD/adapters/torch:$PWD/tools/verity/circuit_check/src:$PWD/benchmarks/numerical/python

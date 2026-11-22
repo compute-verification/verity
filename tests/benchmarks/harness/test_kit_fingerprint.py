@@ -114,19 +114,6 @@ def test_the_writer_refuses_a_file_outside_the_result_or_named_twice_and_a_finge
         assert (other / kit.RESULT).read_text() == text
 
 
-def test_a_result_that_names_no_fingerprint_and_no_file_is_written_byte_for_byte_as_it_was(tmp_path, no_gpu):
-    w, stamp = kit.writer(tmp_path), kit.host_stamp()
-    w.validation("passed", "a benchmark", "4 of 4 gates hold", ["out/gates.json"])
-    w.measurement("wall", 1.5, "s", mark="measured")
-    text = (tmp_path / kit.RESULT).read_text()
-    assert text == json.dumps({"schema": kit.RESULT_SCHEMA, "run_id": RUN, "measurements": [
-        {"name": "wall", "value": 1.5, "unit": "s", "mark": "measured", "version": 1, "commit": SHA, "run": RUN,
-         "ci95": None, "target": None, "verdict": None, "inputs": ["measured"], "host": stamp}], "validation": {
-        "status": "passed", "checker": "a benchmark", "detail": "4 of 4 gates hold", "evidence": ["out/gates.json"]}},
-        indent=1) + "\n"
-    assert not {"workload_fingerprint", *kit.FILES} & json.loads(text).keys()
-
-
 def test_a_writer_of_a_kind_writes_it_and_refuses_a_result_of_another(tmp_path, no_gpu):
     """`research` stores a result as the artifact kind its `kind` names (`bench-result/v1` where it has none), so a
     benchmark whose results are stored as their own kind writes it through the writer, and one run writes one kind."""

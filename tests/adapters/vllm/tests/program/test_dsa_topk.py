@@ -84,8 +84,9 @@ def test_the_relation_accepts_exactly_the_permutations_of_the_top_set() -> None:
         assert T.order_ok(sc, o, 3) == (o in want), o
 
 
-#: (N, TOPK): equal, one, a power of two and one past it, GLM-5.3's shape scaled down, b = 1
-SHAPES = [(6, 4), (6, 6), (5, 1), (8, 5), (9, 8), (17, 16), (2, 1), (1, 1)]
+#: (N, TOPK): equal, one, a power of two and one past it, GLM-5.3's shape scaled down, b = 1 (N = 1 is no shape of the long row: its
+#: row check is a concentrator of N >= 2 rows, which `check_net` refuses)
+SHAPES = [(6, 4), (6, 6), (5, 1), (8, 5), (9, 8), (17, 16), (2, 1)]
 
 
 def test_the_long_row_accepts_exactly_the_top_set_in_ascending_order() -> None:

@@ -1,13 +1,11 @@
 """`verity-vllm predict`: the ahead-of-time predictor's commands.
 
     verity-vllm predict node --row ROW --config CONFIG_JSON --wrapper step|request [--LP N --T N | --M N --pos0 N] --out DIR
-    verity-vllm predict node-registration --row ROW --config CONFIG_JSON --program NODE_DESCRIPTOR --commit-out OUT ...
     verity-vllm predict compare ROW_DIR --row ROW --config CONFIG_JSON --out comparison.json [--workers N] [--predicted DIR]
     verity-vllm predict emit --row ROW --rank R --config CONFIG_JSON --trace DIR --out DIR --wrapper ...   (`aot`)
     verity-vllm predict row --row ROW --out DIR [--config CONFIG_JSON] [--jobs N]                (`aot`: a row's Build of record)
     verity-vllm predict compiled --role ROLE --device DEVICE --workload WL --out build.json      (`compiled`: the served Build)
 
-`node-registration` registers a node Program's θ from its TP Commit of record (`node_registration`, the inference-only policy's full check).
 `emit` writes into a traced Build row: a switched row's AOT Build (`aot`, `row_tp.TpRow.build`) runs it for each derive.
 `row` writes a single-GPU row's whole Build of record from its declared inputs, with no trace, into a dir of its own.
 """
@@ -27,7 +25,6 @@ from verity_vllm.records.schema_ids import PREDICT_NODE_SCHEMA
 
 from . import aot as A
 from . import compiled as PC
-from . import node_registration as NR
 from .node import build_node_program
 
 __all__ = ["COMMANDS", "main"]
@@ -48,7 +45,7 @@ class NodeOptions:
     cmd: str = field(default="node", init=False)
 
 
-COMMANDS = {"node": NodeOptions, "node-registration": NR.Options, "compare": A.CompareOptions, "emit": A.EmitOptions,
+COMMANDS = {"node": NodeOptions, "compare": A.CompareOptions, "emit": A.EmitOptions,
             "row": A.RowOptions, **PC.COMMANDS}
 
 
@@ -78,6 +75,4 @@ def main(a) -> int:
         return A.main(a)
     if isinstance(a, (PC.Options, PC.PinOptions)):
         return PC.main(a)
-    if isinstance(a, NodeOptions):
-        return node_main(a)
-    return NR.main(a)
+    return node_main(a)

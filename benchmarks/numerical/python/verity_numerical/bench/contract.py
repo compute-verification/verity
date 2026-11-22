@@ -809,13 +809,43 @@ def _check_verifier_rates(measurements: Any) -> list[str]:
             if not _is_number(values[n]) or abs(values[n] - want[n][0]) > RATE_TOLERANCE * want[n][0]]
 
 
+READING_FIELD = "reading"
+"""The key of a ``rate.native_peak_flop_per_second`` measurement that names the reading of the census line its figure is at, one of
+the line's named ``readings`` (``"datasheet"``). A measurement without it is at the line's own figure."""
+
+
+def native_reading(measurements: Any) -> str | None:
+    """The reading ``measurements``' ``rate.native_peak_flop_per_second`` entry names in its `READING_FIELD`, None where it names none."""
+    if not isinstance(measurements, list):
+        return None
+    named = next((m.get(READING_FIELD) for m in measurements if isinstance(m, Mapping) and m.get("name") == RATE_NATIVE), None)
+    return named if isinstance(named, str) else None
+
+
+def native_reading_note(result: Any) -> str | None:
+    """The sentence that says which figure of its census line a result's overhead is at, where it names a reading other than the
+    line's own (None where it is at the line's own)."""
+    if not isinstance(result, Mapping) or (named := native_reading(result.get("measurements"))) is None:
+        return None
+    fp = result.get("workload_fingerprint")
+    profile = fp.get("profile") if isinstance(fp, Mapping) else None
+    if profile not in PROFILES:
+        return None
+    line = native_reference(profile)
+    at = {r.name: r.flop_per_second for r in getattr(line, "readings", ())}.get(named)
+    return None if at is None else (f"{OVERHEAD} is at the {named!r} reading of {line.id}, {at:.6g} FLOP/s, not the line's own "
+                                    f"{line.flop_per_second:.6g}")
+
+
 def _check_rates(fp: Any, measurements: Any) -> list[str]:
     """The rate measurements, when reported, must be what the contract computes from the fingerprint's ``profile`` and
     ``K`` and the result's ``t.total`` and ``vu.count``: ``rate.proved_flop_per_second`` = 2 K vu.count / t.total and
-    ``rate.native_peak_flop_per_second`` = :func:`native_reference` (profile) to :data:`RATE_TOLERANCE`;
-    ``overhead.vs_native_peak`` = their ratio, i.e. :func:`overhead` at the fingerprint's ``K`` **and profile**, to
-    :data:`TOLERANCE`.  An overhead divided by another target's peak fails here.  A profile that is not a target is
-    reported by :func:`validate_fingerprint`; the rates are not checked against it."""
+    ``rate.native_peak_flop_per_second`` = :func:`native_reference` (profile), the census line's own figure, to
+    :data:`RATE_TOLERANCE`, or the figure of the line's named reading the measurement names in `READING_FIELD`;
+    ``overhead.vs_native_peak`` = their ratio, i.e. :func:`overhead` at the fingerprint's ``K`` **and profile**, at that
+    figure, to :data:`TOLERANCE`.  An overhead divided by another target's peak, or at a reading its result does not name,
+    fails here.  A profile that is not a target is reported by :func:`validate_fingerprint`; the rates are not checked
+    against it."""
 
     if not isinstance(fp, Mapping) or not isinstance(measurements, list):
         return []
@@ -829,10 +859,18 @@ def _check_rates(fp: Any, measurements: Any) -> list[str]:
     if profile not in PROFILES:
         return []
     p: list[str] = []
-    native = native_reference(profile).flop_per_second
+    line = native_reference(profile)
+    native = line.flop_per_second
+    sheet = {r.name: r.flop_per_second for r in getattr(line, "readings", ())}
+    named = native_reading(measurements)
+    if named is not None and named not in sheet:
+        p.append(f"{RATE_NATIVE} names the reading {named!r}, which {line.id} does not have: its readings are {sorted(sheet) or 'none'}")
+    at = sheet.get(named, native)
+    where = f"the {named!r} reading of {line.id}" if named in sheet else f"the line's own figure ({line.id}), the ceiling's"
     got = reported.get(RATE_NATIVE)
-    if got is not None and (not _is_number(got) or abs(got - native) > RATE_TOLERANCE * native):
-        p.append(f"{RATE_NATIVE} {got!r} is not the native peak of profile {profile!r}, {native:.6g} FLOP/s")
+    if got is not None and (not _is_number(got) or abs(got - at) > RATE_TOLERANCE * at):
+        p.append(f"{RATE_NATIVE} {got!r} is not the native peak of profile {profile!r} at {where}, {at:.6g} FLOP/s"
+                 + ("" if named in sheet else f"; a result at a named reading of its line names it in `{READING_FIELD}`"))
     if RATE_PROVED not in reported and OVERHEAD not in reported:
         return p
     K, total, count = fp.get("K"), values.get(T_TOTAL), values.get("vu.count")
@@ -844,10 +882,10 @@ def _check_rates(fp: Any, measurements: Any) -> list[str]:
     if got is not None and (not _is_number(got) or abs(got - proved) > RATE_TOLERANCE * proved):
         p.append(f"{RATE_PROVED} {got!r} is not 2 * K * vu.count / t.total = {proved:.6g} FLOP/s")
     got = reported.get(OVERHEAD)
-    want = overhead(total / count, K, profile)
+    want = total / count * at / (2 * K)
     if got is not None and (not _is_number(got) or abs(got - want) > TOLERANCE * want):
         p.append(f"{OVERHEAD} {got!r} is not (t.total / vu.count) / native_seconds_per_vu(K, profile) = {want:.6g} "
-                 f"at the native peak of profile {profile!r} ({native:.6g} FLOP/s)")
+                 f"at the native peak of profile {profile!r} at {where} ({at:.6g} FLOP/s)")
     return p
 
 

@@ -56,7 +56,7 @@ def _gate():
     """The SASS gate under the name every file that loads it gives it, so a process holds one."""
     name = "pouw_harness_sass_gate"
     if name not in sys.modules:
-        tree = ROOT / "verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py"
+        tree = ROOT / "verity/protocols/accounting/compute/pouw/prover/sass_gate.py"
         spec = importlib.util.spec_from_file_location(name, tree)
         sys.modules[name] = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(sys.modules[name])
@@ -65,7 +65,7 @@ def _gate():
 
 SG = _gate()
 #: the pinned builds' source, beside the pins
-SOURCE = ROOT / "verity/protocols/resource_accounting/compute/pouw/prover/ieee_pin.cu"
+SOURCE = ROOT / "verity/protocols/accounting/compute/pouw/prover/ieee_pin.cu"
 #: the target of a toolkit whose name has no suffix, as sass_pins.json names them
 DEFAULT_TARGET = "sm_120a"
 #: the compute capability (major and minor digits) ieee_pin.cu builds and runs `units_checks` for

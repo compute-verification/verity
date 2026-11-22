@@ -12,11 +12,9 @@ import re
 import numpy as np
 import pytest
 from verity_vllm.check.replay.index import ProgramIndex
-from verity_vllm.pipeline import chain_rows as CH, serving_rows as SRW, weight_rows as WT
+from verity_vllm.pipeline import serving_rows as SRW, weight_rows as WT
 from verity_vllm.program.predict import window_weights as WW
 
-from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
-from verity.protocols.proofs.spot.prover import docket as DK
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.ops import gemm as G
@@ -105,31 +103,6 @@ def values_and_rows(window, doc):
         data.append({"rows": {"in0": rng.integers(0, 1 << 16, (m.n, 32), dtype=np.uint16), "in1": CS.value_rows(values[r.param], at)},
                      "outs": {p: np.zeros((m.n, w), dtype=np.uint16) for p, w in m.outs}})
     return values, data
-
-
-def test_the_committer_commits_each_read_by_reference_as_the_lean_verifier_opens_it(served, tmp_path):
-    """Given the committer's weights, each read port's rows are its value's rows, its units' positions the ones the Lean
-    verifier's ``--registered`` derives from the record alone (`interface.registered_reads`, under the pins of the values'
-    entries); the window writes them as its members' ``registered`` and ``value_rows`` and records each value's root."""
-    window, _rows, doc = served(PARTITION)
-    values, data = values_and_rows(window, doc)
-    got, entries, roots, salts = WT.by_reference(window, IF.declarations(doc)[2], data, values, IF.ranges_of(doc["templates"], None))
-    assert salts == {}
-    assert roots == {p: v.root.hex() for p, v in values.items()}
-    assert {k: e["in1"]["positions"] for k, e in entries.items()} == {f"{T}/c{j}": [3 * (j % 3 == 2) + i for i in range(3)]
-                                                                       for j in range(6)}
-    assert all(isinstance(d["rows"]["in1"], CS.ValueRows) and isinstance(d["rows"]["in0"], np.ndarray) for d in got)
-    lean = IF.registered_reads(doc, IF.window_of_record(doc, window.law, {T: UNIT}.__getitem__),
-                               {p: v.entry() for p, v in values.items()}, registered=REG)
-    assert {k: (e["ports"]["in1"]["reads"], e["ports"]["in1"]["root"]) for k, e in lean.items()} == {
-        k: (e["in1"]["positions"], roots[e["in1"]["value"]]) for k, e in entries.items()}
-    valued = WT.valued(window, got)
-    res = CS.write(CS.commit(valued, CH.held_rows(valued, got)), tmp_path, {"registered_roots": roots}, {}, registered=entries,
-                   registrar=DK)
-    assert [m["registered"]["in1"] for m in res["members"]] == [{"value": e["in1"]["value"], "positions": e["in1"]["positions"]}
-                                                                 for e in entries.values()]
-    assert all(m["value_rows"] == ["in1"] for m in res["members"]) and set(res["registered_paths"]) == set(roots)
-    assert IF.registered_roots(json.loads((tmp_path / "registration.json").read_text())["window"]) == roots
 
 
 def test_a_read_whose_rows_are_not_its_values_is_refused_and_no_values_commit_rows_in_full(served):

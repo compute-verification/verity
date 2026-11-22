@@ -286,7 +286,7 @@ theorem toy_advantage (prf : Fin 1 → Pous.Bits 1 → Blocks 1) (δ : ℝ) (t :
     (le_of_eq pr_false))) zero_le
 
 theorem unsalted_binding (D : Remote.Sample.Run 1 1 (fun _ => 1) 1 Unit) (prf : Fin 1 → Pous.Bits 1 → Blocks 1)
-    (rest : SampleCoins 1 1 Unit → Fin 1 → ℕ → ℕ) : unsalted.binding D prf rest = 0 := by
+    (rest : SampleCoins 1 1 Unit → Fin 1 → ℕ → ℕ) : unsalted.binding (D.opened prf rest) = 0 := by
   refine le_antisymm ((Bandwidth.pr_mono (Q := fun _ => False) fun ω hω => ?_).trans (le_of_eq pr_false)) zero_le
   obtain ⟨t, p, -, hmv⟩ := hω
   have h := hmv.1.2.1
@@ -297,7 +297,7 @@ theorem unsalted_binding (D : Remote.Sample.Run 1 1 (fun _ => 1) 1 Unit) (prf : 
 theorem toy_error (prf : Fin 1 → Pous.Bits 1 → Blocks 1) (rest : SampleCoins 1 1 Unit → Fin 1 → ℕ → ℕ) (δ : ℝ) :
     δ + ((∑ _t : Fin 1, 1 : ℕ) : ℝ) / 2 ^ 256 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t) (toy.distinguisher prf δ t)).toReal +
-        (unsalted.binding toy prf rest).toReal = δ + 1 / 2 ^ 256 := by
+        (unsalted.binding (toy.opened prf rest)).toReal = δ + 1 / 2 ^ 256 := by
   rw [unsalted_binding, sum_eq_zero fun t _ => toy_advantage prf δ t]
   simp
 
@@ -314,7 +314,7 @@ theorem pooledSample_nontrivial (prf : Fin 1 → Pous.Bits 1 → Blocks 1) (rest
     (∀ ω, acceptAll.accepts ω) ∧ Live toy ∧ Counted toy acceptAll ∧
       ¬ acceptAll.Holds (δ + ((∑ _t : Fin 1, 1 : ℕ) : ℝ) / 2 ^ 256 +
           (∑ t, Pous.StreamedWipe.prfAdvantage (prf t) (toy.distinguisher prf δ t)).toReal +
-          (unsalted.binding toy prf rest).toReal)
+          (unsalted.binding (toy.opened prf rest)).toReal)
         (fun ω => (acceptAll.incorrect ω : ℝ) ≤ toy.pooled δ ω) := by
   refine ⟨fun _ => trivial, toy_live, toy_counted, ?_⟩
   rw [toy_error]
@@ -328,7 +328,7 @@ theorem liveCoinsSampled_nontrivial (prf : Fin 1 → Pous.Bits 1 → Blocks 1) (
     (∀ ω, acceptAll.accepts ω) ∧ Live toy ∧ Counted toy acceptAll ∧ (∀ ω, acceptAll.accepts ω → toy.pooled δ ω ≤ 0) ∧
       ¬ LiveCoins acceptAll 0 (δ + ((∑ _t : Fin 1, 1 : ℕ) : ℝ) / 2 ^ 256 +
           (∑ t, Pous.StreamedWipe.prfAdvantage (prf t) (toy.distinguisher prf δ t)).toReal +
-          (unsalted.binding toy prf rest).toReal) := by
+          (unsalted.binding (toy.opened prf rest)).toReal) := by
   refine ⟨fun _ => trivial, toy_live, toy_counted, fun ω _ => toy_pooled δ ω, ?_⟩
   unfold LiveCoins
   rw [toy_error]
@@ -345,7 +345,7 @@ theorem heldSampled_nontrivial (prf : Fin 1 → Pous.Bits 1 → Blocks 1) (rest 
       ChipCeiling acceptAll 0 ∧ Routed acceptAll ∧ Live toy ∧ Counted toy acceptAll ∧
       ¬ acceptAll.Holds (δs + (δc + ((∑ _t : Fin 1, 1 : ℕ) : ℝ) / 2 ^ 256 +
           (∑ t, Pous.StreamedWipe.prfAdvantage (prf t) (toy.distinguisher prf δc t)).toReal +
-          (unsalted.binding toy prf rest).toReal)) fun ω =>
+          (unsalted.binding (toy.opened prf rest)).toReal)) fun ω =>
         (acceptAll.planned ω : ℝ) - toy.pooled δc ω - (((0 : ℝ) / 1 + 0) * (((0 : ℕ) : ℝ) - (0 : ℕ)) + (0 + 0)) -
             acceptAll.passes * (0 : ℕ) ≤ acceptAll.held ω := by
   obtain ⟨hI, -, hsq, hd, hS, hr⟩ := acceptAll_inside
@@ -365,7 +365,7 @@ theorem heldOverTimeSampled_nontrivial (prf : Fin 1 → Pous.Bits 1 → Blocks 1
       ChipCeiling acceptAll 0 ∧ Routed acceptAll ∧ Live toy ∧ Counted toy acceptAll ∧
       ¬ acceptAll.Holds (δs + (δc + ((∑ _t : Fin 1, 1 : ℕ) : ℝ) / 2 ^ 256 +
           (∑ t, Pous.StreamedWipe.prfAdvantage (prf t) (toy.distinguisher prf δc t)).toReal +
-          (unsalted.binding toy prf rest).toReal)) fun ω =>
+          (unsalted.binding (toy.opened prf rest)).toReal)) fun ω =>
         ((toyPace.stop ω - toyPace.start ω : ℕ) : ℝ) * ((acceptAll.blocks : ℝ) - (0 : ℕ))
             - 2 * toyPace.longest ω * (((0 : ℝ) / 1 + 0) * (((toyPace.stop ω - toyPace.start ω : ℕ) : ℝ) +
               2 * toyPace.longest ω) + (0 + 0))
@@ -391,7 +391,7 @@ theorem heldOverTimeLinksSampled_nontrivial (prf : Fin 1 → Pous.Bits 1 → Blo
       ChipCeiling acceptAll 0 ∧ Routed acceptAll ∧ Live toy ∧ Counted toy acceptAll ∧
       ¬ acceptAll.Holds (δs + (δc + ((∑ _t : Fin 1, 1 : ℕ) : ℝ) / 2 ^ 256 +
           (∑ t, Pous.StreamedWipe.prfAdvantage (prf t) (toy.distinguisher prf δc t)).toReal +
-          (unsalted.binding toy prf rest).toReal)) fun ω =>
+          (unsalted.binding (toy.opened prf rest)).toReal)) fun ω =>
         ((toyPace.stop ω - toyPace.start ω : ℕ) : ℝ) * ((acceptAll.blocks : ℝ) - (0 : ℕ))
             - 2 * toyPace.longest ω * (((0 : ℝ) / 1 + 0 + 0) * (((toyPace.stop ω - toyPace.start ω : ℕ) : ℝ) +
               2 * toyPace.longest ω) + (0 + 0 + 0))
@@ -438,7 +438,7 @@ theorem PooledSample_nontrivial :
     ¬ acceptAll.Holds ((1 / 1099511627776 : ℝ) + ((∑ _t : Fin 1, 1 : ℕ) : ℝ) / 2 ^ 256 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (toyStream t)
           (toy.distinguisher toyStream (1 / 1099511627776) t)).toReal +
-        (unsalted.binding toy toyStream fun _ _ _ => 0).toReal)
+        (unsalted.binding (toy.opened toyStream fun _ _ _ => 0)).toReal)
       (fun ω => (acceptAll.incorrect ω : ℝ) ≤ toy.pooled (1 / 1099511627776) ω) :=
   (pooledSample_nontrivial toyStream (fun _ _ _ => 0) (by norm_num)).2.2.2
 
@@ -459,7 +459,7 @@ theorem LiveCoinsSampled_nontrivial :
     ¬ LiveCoins acceptAll 0 ((1 / 1099511627776 : ℝ) + ((∑ _t : Fin 1, 1 : ℕ) : ℝ) / 2 ^ 256 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (toyStream t)
           (toy.distinguisher toyStream (1 / 1099511627776) t)).toReal +
-        (unsalted.binding toy toyStream fun _ _ _ => 0).toReal) :=
+        (unsalted.binding (toy.opened toyStream fun _ _ _ => 0)).toReal) :=
   (liveCoinsSampled_nontrivial toyStream (fun _ _ _ => 0) (by norm_num)).2.2.2.2
 
 /-- **`HeldSampled`'s hypotheses hold** at W2's session with no link block, at W2's rates, `δs = 0` and
@@ -484,7 +484,7 @@ theorem HeldSampled_nontrivial :
     ¬ acceptAll.Holds (0 + ((1 / 1099511627776 : ℝ) + ((∑ _t : Fin 1, 1 : ℕ) : ℝ) / 2 ^ 256 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (toyStream t)
           (toy.distinguisher toyStream (1 / 1099511627776) t)).toReal +
-        (unsalted.binding toy toyStream fun _ _ _ => 0).toReal)) fun ω =>
+        (unsalted.binding (toy.opened toyStream fun _ _ _ => 0)).toReal)) fun ω =>
       (acceptAll.planned ω : ℝ) - toy.pooled (1 / 1099511627776) ω -
           (((0 : ℝ) / 1 + 0) * (((0 : ℕ) : ℝ) - (0 : ℕ)) + (0 + 0)) - acceptAll.passes * (0 : ℕ) ≤
         acceptAll.held ω := by
@@ -514,7 +514,7 @@ theorem HeldOverTimeSampled_nontrivial :
     ¬ acceptAll.Holds (0 + ((1 / 1099511627776 : ℝ) + ((∑ _t : Fin 1, 1 : ℕ) : ℝ) / 2 ^ 256 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (toyStream t)
           (toy.distinguisher toyStream (1 / 1099511627776) t)).toReal +
-        (unsalted.binding toy toyStream fun _ _ _ => 0).toReal)) fun ω =>
+        (unsalted.binding (toy.opened toyStream fun _ _ _ => 0)).toReal)) fun ω =>
       ((toyPace.stop ω - toyPace.start ω : ℕ) : ℝ) * ((acceptAll.blocks : ℝ) - (0 : ℕ))
           - 2 * toyPace.longest ω * (((0 : ℝ) / 1 + 0) * (((toyPace.stop ω - toyPace.start ω : ℕ) : ℝ) +
             2 * toyPace.longest ω) + (0 + 0))
@@ -549,7 +549,7 @@ theorem HeldOverTimeLinksSampled_nontrivial :
     ¬ acceptAll.Holds (0 + ((1 / 1099511627776 : ℝ) + ((∑ _t : Fin 1, 1 : ℕ) : ℝ) / 2 ^ 256 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (toyStream t)
           (toy.distinguisher toyStream (1 / 1099511627776) t)).toReal +
-        (unsalted.binding toy toyStream fun _ _ _ => 0).toReal)) fun ω =>
+        (unsalted.binding (toy.opened toyStream fun _ _ _ => 0)).toReal)) fun ω =>
       ((toyPace.stop ω - toyPace.start ω : ℕ) : ℝ) * ((acceptAll.blocks : ℝ) - (0 : ℕ))
           - 2 * toyPace.longest ω * (((0 : ℝ) / 1 + 0 + 0) * (((toyPace.stop ω - toyPace.start ω : ℕ) : ℝ) +
             2 * toyPace.longest ω) + (0 + 0 + 0))

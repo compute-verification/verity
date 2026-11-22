@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Properties.InferenceOnly.BodiesOk.Decode
+public import Proofs.Properties.Flock.Decoder.Decode
 
 /-!
 # A leaf read at its width, reference by reference

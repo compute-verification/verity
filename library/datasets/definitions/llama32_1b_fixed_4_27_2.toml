@@ -1,0 +1,26 @@
+# The remote application's fixed load (applications/remote.toml, onsite_full.toml): one window of class 4,27,2, four
+# requests of 27 prompt tokens and 2 steps. The token ids are unsloth/Llama-3.2-1B's tokenizer.json at revision
+# 9535bd9b1d1dea6acafbdc4813b728796aeb28da, with BOS, as serve-openai's /tokenize returns them: each head is one of the
+# varied load's six questions in Llama 3's user header, the tail the assistant header, the filler its notes.
+kind = "completion-requests"
+
+[generated]
+generator = "fixed-window-completions"
+version = 1
+seed = 1
+
+[generated.parameters]
+model = "unsloth/Llama-3.2-1B"
+count = 4
+window_steps = 2
+prompt_tokens = [27, 27]
+heads = [
+    [128000, 128006, 882, 128007, 271, 3923, 374, 279, 6864, 315, 9822, 30, 22559, 449, 832, 3492, 11, 1243, 3009, 13, 40071, 279, 8554, 1306, 420, 1584, 382],
+    [128000, 128006, 882, 128007, 271, 4438, 1690, 14535, 1587, 264, 35454, 617, 30, 22559, 449, 264, 1396, 1193, 13, 40071, 279, 8554, 1306, 420, 1584, 382],
+    [128000, 128006, 882, 128007, 271, 46864, 10035, 477, 912, 25, 374, 3090, 14739, 30, 40071, 279, 8554, 1306, 420, 1584, 382],
+    [128000, 128006, 882, 128007, 271, 8144, 264, 1317, 3446, 922, 264, 326, 59009, 54516, 323, 264, 13766, 13, 40071, 279, 8554, 1306, 420, 1584, 382],
+    [128000, 128006, 882, 128007, 271, 861, 279, 33975, 315, 279, 13238, 1887, 449, 832, 11914, 389, 1855, 13, 40071, 279, 8554, 1306, 420, 1584, 382],
+    [128000, 128006, 882, 128007, 271, 849, 21435, 304, 7872, 1268, 264, 36086, 596, 54260, 990, 13, 40071, 279, 8554, 1306, 420, 1584, 382],
+]
+tail = [128009, 128006, 78191, 128007, 271]
+filler = [22405, 25, 279, 6574, 7882, 311, 7950, 11, 279, 23185, 389, 279, 4948, 6558, 374, 704, 315, 8941, 261, 11, 279, 13217, 2763, 690, 387, 2109, 31329, 1828, 2046, 11, 323, 279, 94948, 17482, 19724, 389, 91271, 323, 80523, 13, 220]

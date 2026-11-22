@@ -36,7 +36,7 @@
 // B tiles from shared memory (6 KB a wgmma s8 m64n128k32, 96 B a SM-clock at the tensor peak) through no
 // shared-memory class instruction, so the sheet's smem facet never sees it.
 //   emp_smem      warpgroups 0-1 wgmma s8 m64n128k32 flat out (OP_LOOP), warpgroups 2-3 8 conflict-free LDS.128 a trip
-//                 (lm.cu's ring) only while they run (OP_UNTIL): LDS bytes a SM-clock beside the wgmma's own reads.
+//                 (a ring: lane l's row base + l + 8 slot) only while they run (OP_UNTIL): LDS bytes a SM-clock beside the wgmma's own reads.
 //   emp_lds_solo  the same LDS warpgroups alone (OP_LOOP), the LDS ceiling at this warp count.
 //   emp_reg       wg_until's split with setmaxnreg (the producer/consumer register handoff): the wgmma warpgroups raise
 //                 to 232 registers, the lane warpgroup drops to 40 and runs 64 IMAD a trip (emp_reg_d64, _d96: 208 / 64

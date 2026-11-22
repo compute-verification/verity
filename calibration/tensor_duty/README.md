@@ -1,8 +1,9 @@
 # tensor_duty: an sm_90a GPU's tensor MAC rate by duty cycle
 
 Can an sm_90a GPU move more tensor MACs a second than its card says it can? Its card, the data sheet under
-`calibration/hardware/cards/` whose `driver` holds the name nvidia-smi gives the GPU, gives its tensor rate at
-`clock.tensor`, and this benchmark is the falsification test of that clock: a run above the card's rate refutes the card.
+`calibration/hardware/cards/` whose `driver` holds the name nvidia-smi gives the GPU, gives its tensor rate at its
+ceiling reading (`clock.tensor` where the card marks that clock a ceiling, else `clock.sm`), and this benchmark is the
+falsification test of that ceiling: a run above the card's rate refutes the card.
 
 A full tensor pipe is not the only case: a pipe busy part of the time, with the rest idle or non-tensor work, could run
 its tensor phases at a higher clock. So each point holds the dense tensor MMA at a duty cycle from 50% to 100%, for an

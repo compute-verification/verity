@@ -380,6 +380,12 @@ theorem grid_index (size run m o t : ℕ) (hm : m < size) (ho : o < run) :
 
 /-! ## A part -/
 
+/-- **The plain check reads no input node at another width**: `srcOf` holds no input widths, so `recutOk` leaves every
+part to the rest of `partOk`. -/
+theorem recutOk_srcOf (B : Body) (below : ℕ) (t : Ty) (ht : Option ℕ) (a : ℕ) (q : Part) :
+    Widths.recutOk (srcOf B below) t ht a q = pure none := by
+  cases q <;> simp [Widths.recutOk, Widths.Src.inW?, srcOf]
+
 /-- **A part the width check passes names leaves of the widths its type gives them.** -/
 theorem partOk_sound (B : Body) (below : ℕ) (t : Ty) (a : ℕ) (q : Part) (w w' : ℕ) (hq : BodiesOk.PartNonneg q)
     (hi : PartInner q) (ha : a + q.count ≤ t.leaves) (hin : ∀ k < q.count, BodiesOk.RefIn B (q.get k))
@@ -395,6 +401,7 @@ theorem partOk_sound (B : Body) (below : ℕ) (t : Ty) (a : ℕ) (q : Part) (w w
   cases q with
   | explicit items =>
     unfold Widths.partOk at h
+    rw [recutOk_srcOf, pure_bind] at h
     have hall := (m_pure h).1
     rw [List.all_eq_true] at hall
     have hk' := hall k (List.mem_range.2 hk)
@@ -409,6 +416,7 @@ theorem partOk_sound (B : Body) (below : ℕ) (t : Ty) (a : ℕ) (q : Part) (w w
     change k < n at hk
     change a + n ≤ t.leaves at ha
     unfold Widths.partOk at h
+    rw [recutOk_srcOf, pure_bind] at h
     dsimp only at h
     rw [hS] at h
     dsimp only at h
@@ -482,6 +490,7 @@ theorem partOk_sound (B : Body) (below : ℕ) (t : Ty) (a : ℕ) (q : Part) (w w
       ((t₀ * (lanes.size * run) + (m * run + o₀)) % run)).toNat < S.leaves at hj₀
     rw [i1, i2, i3, he₀] at hj₀
     unfold Widths.partOk at h
+    rw [recutOk_srcOf, pure_bind] at h
     try dsimp only at h
     cases ht with
     | none =>
@@ -528,6 +537,7 @@ theorem partOk_sound (B : Body) (below : ℕ) (t : Ty) (a : ℕ) (q : Part) (w w
     change atOf base inner os is k < S.leaves at hj
     show Widths.wAt S (atOf base inner os is k) = Widths.wAt t (a + k)
     unfold Widths.partOk at h
+    rw [recutOk_srcOf, pure_bind] at h
     dsimp (config := { zeta := false }) only at h
     rw [hS] at h
     dsimp (config := { zeta := false }) only at h

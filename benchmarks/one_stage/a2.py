@@ -39,7 +39,7 @@ from verity.circuits import population as PN
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity_flock.input_sets import InputSet  # noqa: E402
 from verity_flock import circuit as FC  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import audit, partition as P, docket as R, verifier as V  # noqa: E402
+from verity.protocols.proof.spot.verifier.one_stage import audit, partition as P, docket as R, verifier as V  # noqa: E402
 from verity.commitments import randomness as RND  # noqa: E402
 from verity.commitments.domains import PARTITION  # noqa: E402
 

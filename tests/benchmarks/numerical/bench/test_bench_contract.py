@@ -420,7 +420,7 @@ def test_native_reference_is_the_targets_anchor_peak_and_the_bf16_default_is_unc
 def test_fp8_targets_divide_by_their_own_anchor_peak() -> None:
     """FP8 Ada: the RTX 4090's dense FP8 peak *with FP32 accumulate* (330.3 TFLOPS -- Ada halves FP8 under FP32
     accumulate; 660.6 is the FP16-accumulate figure): 9.30 ps per K=1536 VU, so 401 us/VU is 4.31e7x, not the 4.07e7x
-    the BF16 constant would give.  FP8 Hopper: the H100's 1978.9 TFLOPS dense FP8 peak, 1.55 ps per VU."""
+    the BF16 constant would give.  FP8 Hopper: the H100's dense FP8 peak at its sm reading, 2141.06 TFLOPS, 1.43 ps per VU."""
 
     ada = contract.native_reference(FP8_ADA_MMA.name)
     assert ada is contract.native_peak_of(FP8_ADA_MMA) and ada.flop_per_second == 330.3e12 and ada.accumulate == "fp32" and "4090" in ada.device
@@ -429,9 +429,9 @@ def test_fp8_targets_divide_by_their_own_anchor_peak() -> None:
     assert contract.overhead(401e-6, 1536, FP8_ADA_MMA.name) == pytest.approx(4.31e7, rel=1e-2)
     assert contract.overhead(401e-6, 1536, FP8_ADA_MMA.name) != pytest.approx(contract.overhead(401e-6, 1536), rel=1e-2)
     hopper = contract.native_reference(FP8_HOPPER_WGMMA.name)
-    assert hopper is contract.native_peak_of(FP8_HOPPER_WGMMA) and hopper.flop_per_second == 1978.9e12 and hopper.accumulate == "fp32" and "H100" in hopper.device
-    assert contract.native_seconds_per_vu(1536, FP8_HOPPER_WGMMA.name) == pytest.approx(2 * 1536 / 1978.9e12)
-    assert contract.native_seconds_per_vu(1536, FP8_HOPPER_WGMMA.name) == pytest.approx(1.552e-12, rel=1e-3)
+    assert hopper is contract.native_peak_of(FP8_HOPPER_WGMMA) and hopper.flop_per_second == 2141.06112e12 and hopper.accumulate == "fp32" and "H100" in hopper.device
+    assert contract.native_seconds_per_vu(1536, FP8_HOPPER_WGMMA.name) == pytest.approx(2 * 1536 / 2141.06112e12)
+    assert contract.native_seconds_per_vu(1536, FP8_HOPPER_WGMMA.name) == pytest.approx(1.4348e-12, rel=1e-3)
     for t in (FIRST, FP8_HOPPER_WGMMA, FP8_ADA_MMA):
         assert census.native_seconds_per_instance(contract.native_peak_of(t), 1536) == contract.native_seconds_per_vu(1536, t.name)
         assert "sparsity" not in contract.native_peak_of(t).rate and "dense" in contract.native_peak_of(t).rate and census.source(contract.native_peak_of(t))
@@ -516,6 +516,53 @@ def test_rate_measurements_are_three_consistent_numbers_the_validator_recomputes
     # a rate without the numbers it is checked against is a problem, not a pass
     bare = {**res, "measurements": [m for m in res["measurements"] if m["name"] != "vu.count"]}
     assert any("needs K in the fingerprint and positive t.total and vu.count" in p for p in contract.validate(bare))
+
+
+def _hopper_result(conforming: dict, at: float | None = None, name: str | None = None) -> tuple[dict, float]:
+    """A conforming FP8 Hopper result whose native peak and overhead are the census line's own, or at ``at`` FLOP/s, and the
+    native-peak measurement naming ``name`` in `contract.READING_FIELD` where given."""
+    t_total, B, K = 1.643, 4096, 1536
+    res = json.loads(json.dumps(conforming))
+    res["workload_fingerprint"].update(profile=FP8_HOPPER_WGMMA.name, K=K, B=B)
+    res["measurements"] = [m for m in res["measurements"] if not m["name"].startswith(("t.", "vu."))]
+    ms = contract.rate_measurements(t_total, B, K, FP8_HOPPER_WGMMA.name)
+    res["measurements"] += [contract.measurement("t.arithmetic", t_total), contract.measurement("t.total", t_total), contract.measurement("vu.count", B), *ms]
+    if at is not None:
+        res["measurements"][-2]["value"] = at
+        res["measurements"][-1]["value"] = t_total / B * at / (2 * K)
+    if name is not None:
+        res["measurements"][-2][contract.READING_FIELD] = name
+    return res, contract.native_reference(FP8_HOPPER_WGMMA.name).flop_per_second
+
+
+def test_an_overhead_at_a_named_reading_of_the_line_is_accepted_and_says_which(conforming: dict) -> None:
+    """The H100's FP8 line is its card's ceiling, and its `datasheet` reading is the vendor's clock: a result whose native-peak
+    measurement carries that reading's name is checked at it, passes, and the note states the reading beside the line's own."""
+    line = contract.native_reference(FP8_HOPPER_WGMMA.name)
+    sheet = next(r for r in line.readings if r.name == "datasheet").flop_per_second
+    assert sheet != line.flop_per_second
+    res, _ = _hopper_result(conforming, sheet, "datasheet")
+    assert contract.validate(res) == [] and contract.native_reading(res["measurements"]) == "datasheet"
+    note = contract.native_reading_note(res)
+    assert note and "'datasheet'" in note and line.id in note and f"{sheet:.6g}" in note and f"{line.flop_per_second:.6g}" in note
+    assert contract.native_reading_note(_hopper_result(conforming)[0]) is None
+    unknown, _ = _hopper_result(conforming, sheet, "no-such-reading")
+    assert any("names the reading 'no-such-reading'" in p for p in contract.validate(unknown))
+    wrong, _ = _hopper_result(conforming, line.flop_per_second, "datasheet")
+    assert [p.split(" ")[0] for p in contract.validate(wrong)] == ["rate.native_peak_flop_per_second", "overhead.vs_native_peak"]
+
+
+def test_an_overhead_at_another_reading_that_names_none_is_refused_at_the_lines_own_figure(conforming: dict) -> None:
+    """The same result without the name is checked at the line's own figure and fails on both numbers, the problem text
+    giving that figure and saying a named reading carries its name."""
+    line = contract.native_reference(FP8_HOPPER_WGMMA.name)
+    sheet = next(r for r in line.readings if r.name == "datasheet").flop_per_second
+    res, _ = _hopper_result(conforming, sheet)
+    problems = contract.validate(res)
+    assert [p.split(" ")[0] for p in problems] == ["rate.native_peak_flop_per_second", "overhead.vs_native_peak"], problems
+    assert all(f"{line.flop_per_second:.6g}" in p and "the line's own figure" in p for p in problems)
+    assert f"names it in `{contract.READING_FIELD}`" in problems[0]
+    assert contract.validate(_hopper_result(conforming)[0]) == []
 
 
 def test_the_verifiers_derived_numbers_are_recomputed_from_its_cpu_seconds(conforming: dict) -> None:
@@ -660,7 +707,7 @@ def test_no_writer_hardcodes_the_domain_and_new_fingerprints_use_the_vocab() -> 
 
     assert set(contract.DOMAINS) == set(vocab.DOMAINS)
     root = Path(contract.__file__).resolve().parents[5]
-    writers = [*root.glob("verity/protocols/proofs/flock/prover/python/verity_flock/*.py"), *root.glob("benchmarks/numerical/python/verity_numerical/bench/*.py")]
+    writers = [*root.glob("verity/protocols/proof/flock/prover/python/verity_flock/*.py"), *root.glob("benchmarks/numerical/python/verity_numerical/bench/*.py")]
     assert writers and not [str(p) for p in writers if re.search(r'domain\s*=\s*"finite"', p.read_text())]
     kw = dict(profile=None, K=None, B=4, proof_class="NON_ZK_PROOF", authentication="included-hash", zk_mode="none",
               security={"target": -128}, hardware={"gpu": None, "cpu": {"model": "x"}},

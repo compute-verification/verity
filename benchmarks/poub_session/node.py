@@ -37,7 +37,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/resource_accounting/memory/poub/prover/poub_session/prover.py").parent))
+sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/accounting/memory/poub/prover/poub_session/prover.py").parent))
 sys.path.insert(0, str(HERE.parents[1]))
 
 import device  # noqa: E402
@@ -46,8 +46,8 @@ import store_layout  # noqa: E402
 from engine import IpcHandle, write_json  # noqa: E402
 from prover import ProverSide, parse_plan  # noqa: E402
 
-from verity.protocols.resource_accounting.memory.poub.verifier import store as rstore  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier.session import wire  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier import store as rstore  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier.session import wire  # noqa: E402
 
 BLOCK = device.BLOCK
 

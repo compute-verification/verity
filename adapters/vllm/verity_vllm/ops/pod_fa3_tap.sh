@@ -18,7 +18,7 @@ REPO=${REPO:-$(cd "$(dirname "$0")/../.." && pwd)}; cd "$REPO"
 VENV=${VENV:-/workspace/venv312}; PY=$VENV/bin/python   # the one Python 3.12 environment of verity_vllm/ops/pod_bootstrap.sh
 export CUDA_HOME=${CUDA_HOME:?set CUDA_HOME to the CUDA toolkit of torch's CUDA version (a node's placement entry names it)}; export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
 export MAX_JOBS=${MAX_JOBS:-32}
-[ -n "${FA2:-}" ] || FA2=${VERITY_BUILD_ROOT:-$("$PY" -c "from verity_vllm.pipeline.cli import MACHINE; print(MACHINE[\"RunEnv.build_root\"])")}/fa2 || { echo "FA3-TAP-FAIL no build root (VERITY_BUILD_ROOT)"; exit 1; }
+[ -n "${FA2:-}" ] || FA2=${VERITY_BUILD_ROOT:-/workspace/cp}/fa2
 HDIMS=${FA3_TAP_HDIMS:-64,128}
 FA_SRC=${FA_SRC:-$(dirname "$FA2")/vllm-flash-attn}   # the pinned upstream tree, beside $FA2
 PIN=506341a143fcabd4bb79052a7605ada727d6b3f5

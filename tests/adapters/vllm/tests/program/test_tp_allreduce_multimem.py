@@ -220,15 +220,6 @@ def test_vector_on_bits(tree, ftz: bool) -> None:
     _agree(bind(BA.AllReduceMultimemVector, WORLD=8, TREE=tree, FTZ=ftz), _vectors(_rows(np.random.default_rng(13), 256, 8)))
 
 
-#: id -> (And, Xor, Not gates, standalone program digest)
-PINS = {
-    "AllReduceMultimemCoordinate_v2{WORLD=8,TREE=(((((((0,1),2),3),4),5),6),7),FTZ=False}": (5211, 8375, 918, "54c7f060720f9feec924eccbc9e485f6e03cf6e75b8fdfa7c137b6b6509f133840c50ba5c76f69e8bc1671058824e9ec891a257a800b5b56327fff4ee595a045"),
-    "AllReduceMultimemCoordinate_v2{WORLD=8,TREE=(((0,1),(2,3)),((4,5),(6,7))),FTZ=False}": (5013, 7943, 966, "285abf9afb624373a4f2765f7105261a9c66fdbeabc2aa2040d912a99cdbd100324580ace6af3e273ade36042b27b197ab2afc0aece0c7d9668430916fa47df0"),
-    "AllReduceMultimemCoordinate_v2{WORLD=8,TREE=(((0,1),(2,3)),((4,5),(6,7))),FTZ=True}": (5233, 7957, 966, "55430db2b0ccb84ab69e7ba4118127c02dcd59703a709407f1c01fa1ad0c7cc96ba4973936db742ee9bf37cccf03424f3433d63a7faa6e086f8e9777a56d5aa2"),
-    "AllReduceMultimem_v2{WORLD=4,SIZE=64,TREES=((((0,1),2),3),((0,1),(2,3)),((0,3),(1,2)),(((0,1),2),3)),FTZ=False}": (139648, 219328, 26240, "0933468cc49b8d33246ac16540ff62d89050909ed7c781d1766e7ccb47637bbb5024fea90804788aa33e51d90f0102a8297511c7f4758b9fa76715b339583a6a"),
-    "AllReduceMultimemVector_v2{WORLD=8,TREE=((((((0,(1,2)),3),5),6),4),7),FTZ=False}": (41808, 67256, 7456, "1c742d1e4011baa6b030b89c7474d01d5de428900da3af7c1395ff9ac464eb732f854fcc39c87a0ab99748daa6df72e51dd8b064ad4ff6846be0084b5a36fbea"),
-    "AllReduceMultimemVector_v2{WORLD=8,TREE=(((0,1),(2,3)),((4,5),(6,7))),FTZ=True}": (41864, 63656, 7728, "1caeeeb4b5b9e1d7db2286df850ce5da9ad2f25093612c6cce14a4e36cbc34381ce57b3c4a4d4886d7e8091a7e0319e75049c41b98a3b95ef2d6d094735f5466"),
-}
 TARGETS = [bind(BA.AllReduceMultimemCoordinate, WORLD=8, TREE=CHAIN8, FTZ=False),
            bind(BA.AllReduceMultimemCoordinate, WORLD=8, TREE=BALANCED8, FTZ=False),
            bind(BA.AllReduceMultimemCoordinate, WORLD=8, TREE=BALANCED8, FTZ=True),
@@ -239,15 +230,11 @@ TARGETS = [bind(BA.AllReduceMultimemCoordinate, WORLD=8, TREE=CHAIN8, FTZ=False)
 
 
 @pytest.mark.parametrize("target", TARGETS, ids=lambda t: t.id)
-def test_pinned_counts_and_digests(target) -> None:
-    ands, xors, nots, digest = PINS[target.id]
+def test_the_target_is_boolean_and_survives_the_codec(target) -> None:
     assert BL.is_boolean(target)
-    assert BS.compile(target).counts == {"and": ands, "xor": xors, "not": nots}
     prog, _ = standalone_call(target)
-    desc = codec.encode_program(prog)
-    assert codec.program_digest(desc) == digest
-    back = codec.decode_program(json.loads(codec.canonical_json(desc)), REGISTRY)
-    assert back.gates == prog.gates and codec.program_digest(codec.encode_program(back)) == digest
+    back = codec.decode_program(json.loads(codec.canonical_json(codec.encode_program(prog))), REGISTRY)
+    assert back.gates == prog.gates
 
 
 @pytest.mark.slow

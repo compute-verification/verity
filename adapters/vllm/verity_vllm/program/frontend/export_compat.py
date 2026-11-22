@@ -10,10 +10,7 @@ counts them as structural scaffolding.
 4. DeepSeek sparse attention's three kernels as leaf ops (`dsa_leaves.dsa_ops_leaf`).  5. The MoE gate's cuteDSL GEMM as a leaf op
    (`moe_gate_leaf`).  6. The default Hopper block-FP8 linear's dynamic custom op as a leaf
    (`default_fp8_linear_leaf`).  7. CUDA streams and events as inert stand-ins (`cuda_streams_inert`).  8. A registered op's
-   Python body, called directly by a model module, as the op (`registered_op_bodies_as_ops`).  9. DeepSeek-V4's layer-0 mHC
-   broadcast pre as a leaf op (`mhc_pre_broadcast_leaf`).  10. DeepSeek-V4's sparse MLA kernels as leaf ops
-   (`dsv4_leaves.dsv4_attention_leaves`).  11. DeepGEMM's `fp8_einsum` as a leaf op (`deep_gemm_fp8_einsum_leaf`).  12. The MXFP4
-   Marlin MoE's expert GEMMs as leaf ops over the logical weights (`marlin_moe_leaf.mxfp4_marlin_moe_leaf`).
+   Python body, called directly by a model module, as the op (`registered_op_bodies_as_ops`).
 """
 
 from __future__ import annotations
@@ -31,8 +28,6 @@ from verity_vllm.config import vllm_revision
 from verity_vllm.engine import env as engine_env
 from verity_vllm.engine import hooks
 from verity_vllm.program.frontend.dsa_leaves import dsa_ops_leaf
-from verity_vllm.program.frontend.dsv4_leaves import dsv4_attention_leaves
-from verity_vllm.program.frontend.marlin_moe_leaf import mxfp4_marlin_moe_leaf
 
 _ORIG_DATA = torch._C.TensorBase.data
 
@@ -625,9 +620,8 @@ def _registered_from(ns, f):
 
 @contextmanager
 def registered_op_bodies_as_ops(model=None, ns=None):
-    """8. A model module may import the Python body of a vLLM custom op and call it directly: DeepSeek-V4's decoder layer calls
-    `mhc_fused_post_pre_tilelang`, which `direct_register_custom_op` also registers as `vllm::mhc_fused_post_pre_tilelang`.  Traced,
-    the body launches kernels a meta export cannot run.  For the duration, each global of a module ``model``'s classes are defined in
+    """8. A model module may import the Python body of a vLLM custom op, which `direct_register_custom_op` also registers as
+    `vllm::<name>`, and call it directly.  Traced, the body launches kernels a meta export cannot run.  For the duration, each global of a module ``model``'s classes are defined in
     that is the function an op of ``ns`` (default `torch.ops.vllm`) was registered from (`_registered_from`) is that op: the same call
     through the dispatcher, the op's fake giving the shapes."""
     if model is None:
@@ -642,75 +636,21 @@ def registered_op_bodies_as_ops(model=None, ns=None):
         yield
 
 
-_MHC_SITE = "vllm.model_executor.kernels.mhc.tilelang"
-
-
-@contextmanager
-def mhc_pre_broadcast_leaf(model=None, original=None):
-    """9. Layer 0's mHC pre on the embedding broadcast to the residual streams (`mhc_pre_broadcast_tilelang`, DeepSeek-V4), which
-    vLLM does not register: its body sizes DeepGEMM's split-K from the device's SM count and launches TileLang.  For the duration,
-    each global of a module ``model``'s classes are defined in that is ``original`` (default vLLM's function, loaded by the model
-    module that imports it) is `vllm_iface.mhc_pre_broadcast_tilelang`, an op of the schema `infer_schema` gives the function.  A
-    model that does not call it is unchanged."""
-    if original is None:
-        original = getattr(sys.modules.get(_MHC_SITE), "mhc_pre_broadcast_tilelang", None)
-    if model is None or original is None:
-        yield
-        return
-    from verity_vllm.program.frontend.rules.vllm_iface import iface
-    with hooks.Hooks() as h:
-        for module in _model_modules(model):
-            for name, f in list(vars(module).items()):
-                if f is original:
-                    h.patch(module, name, iface.mhc_pre_broadcast_tilelang)
-        yield
-
-
-_DEEP_GEMM = "vllm.utils.deep_gemm"
-
-
-@contextmanager
-def deep_gemm_fp8_einsum_leaf(model=None):
-    """11. DeepGEMM's `fp8_einsum` (vLLM's `utils.deep_gemm` entry; DeepSeek-V4's o-projection `bhr,hdr->bhd`) JIT-compiles its
-    kernel through the CUDA driver and leaves no dispatcher op behind.  For the duration, that entry and every vLLM module's global
-    bound to it is `vllm_iface.deep_gemm_fp8_einsum`, which writes `d` as DeepGEMM does; an accumulator `c` refuses at export."""
-    original = getattr(sys.modules.get(_DEEP_GEMM), "fp8_einsum", None)
-    if model is None or original is None:
-        yield
-        return
-    from verity_vllm.program.frontend.rules.vllm_iface import iface
-
-    def fp8_einsum(expr, a, b, d, c=None, recipe=(1, 128, 128)):
-        if c is not None:
-            raise NotImplementedError("deep_gemm_fp8_einsum_leaf: fp8_einsum with an accumulator c")
-        iface.deep_gemm_fp8_einsum(expr, a[0], a[1], b[0], b[1], d, [int(r) for r in recipe])
-
-    users = [m for n, m in list(sys.modules.items()) if n.startswith("vllm.") and getattr(m, "fp8_einsum", None) is original]
-    with hooks.Hooks() as h:
-        for module in users:
-            h.patch(module, "fp8_einsum", fp8_einsum)
-        yield
-
-
 @contextmanager
 def export_compat(profile=None, model=None):
     """The export shims: `.data` -> `detach()` on fake tensors + the declared target applied (default profile if None) + the MoE
     dispatcher ops traced through their bodies (`moe_ops_traced`) + DeepSeek sparse attention's kernels, the MoE gate's cuteDSL GEMM
     and the default Hopper FP8 linear as leaf ops (`dsa_ops_leaf`, `moe_gate_leaf`, `default_fp8_linear_leaf`) + inert CUDA streams
-    (`cuda_streams_inert`) + registered op bodies called as their ops (`registered_op_bodies_as_ops`), layer 0's mHC broadcast
-    pre, DeepSeek-V4's sparse MLA, DeepGEMM's einsum and the MXFP4 Marlin MoE's GEMMs as leaves (`mhc_pre_broadcast_leaf`,
-    `dsv4_attention_leaves`, `deep_gemm_fp8_einsum_leaf`, `mxfp4_marlin_moe_leaf`, which builds the kernel objects `moe_ops_traced`
-    then reads); `model` = the instantiated module, for the per-layer entries."""
+    (`cuda_streams_inert`) + registered op bodies called as their ops (`registered_op_bodies_as_ops`); `model` = the instantiated module, for the per-layer entries."""
     if profile is None:
         from verity_vllm.program.frontend.target_profile import TargetProfile
         profile = TargetProfile.default()
-    with (tensor_data_as_detach(), apply_target_profile(profile), mxfp4_marlin_moe_leaf(model), moe_ops_traced(model), dsa_ops_leaf(model),
+    with (tensor_data_as_detach(), apply_target_profile(profile), moe_ops_traced(model), dsa_ops_leaf(model),
           fused_allreduce_rms_norm_leaf(model), moe_gate_leaf(model), default_fp8_linear_leaf(model), cuda_streams_inert(),
-          registered_op_bodies_as_ops(model), mhc_pre_broadcast_leaf(model), dsv4_attention_leaves(model),
-          deep_gemm_fp8_einsum_leaf(model)):
+          registered_op_bodies_as_ops(model)):
         yield
 
 
 __all__ = ["export_compat", "tensor_data_as_detach", "apply_target_profile", "select_cuda_platform", "moe_ops_traced",
            "fused_allreduce_rms_norm_leaf", "moe_gate_leaf", "default_fp8_linear_leaf", "cuda_streams_inert", "InertStream", "InertEvent",
-           "registered_op_bodies_as_ops", "mhc_pre_broadcast_leaf", "deep_gemm_fp8_einsum_leaf", "read_back_applied", "host_facts"]
+           "registered_op_bodies_as_ops", "read_back_applied", "host_facts"]

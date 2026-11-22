@@ -181,8 +181,7 @@ the run wrote each of OUT's and how each must be kept (``kept``, `REPROOF_KEPT`)
 OUT and custody in a copy off the served node (``--reproof-copy`` NODE:/PATH, ``--reproof-listing``, a listing of it kept
 off OUT): ``copy`` names its node and path, and each serve-dir input says whether the listing holds each file its path
 names and at least one file under each directory it names, never their bytes or digests; with no copy given, ``copy`` is
-missing with why. Under H1_TIE (``--h1-tie``) the circuit is the verifier's record reading H1's tables, the one V3c
-holds the tied commit to.
+missing with why.
 
 The record's counts and indices are the certification period's (m and each phase j), public in the Lean answer's
 profile; it names no Commit window, whose count `publish` holds.
@@ -208,7 +207,7 @@ if str(HERE.parents[1]) not in sys.path:
     sys.path.append(str(HERE.parents[1]))  # the root, for benchmarks.network_traces
 import advice_charge as AC  # noqa: E402
 import leak_bounds as LB  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage.served_integrity import exact_delta  # noqa: E402
+from verity.protocols.proof.spot.verifier.one_stage.served_integrity import exact_delta  # noqa: E402
 from verity.commitments.domains import CERTIFIER_PROTOCOL, CERTIFIER_SCAN_STATE, REMOTE_PROTOCOL  # noqa: E402
 
 FORMAT = "verity/onsite-network-record/v1"
@@ -338,10 +337,8 @@ POUW = (f"{POUW_OPEN}: the record credits no PoUW freed compute, and no figure o
         "Not claimed, by this name: OnsiteFreed (Definitions.Pouw.Guarantees.OnsiteFreed) "
         "reads Dither's headlines (Pouw.Dither.FreedSound, WorkSound), which are stated for the no-fold round "
         "(noFoldRound) and describe neither Dither v3.2's proof block nor the PoUW piece the run serves. That piece is "
-        "PoUW H1 + fx1 (eps1-sm120-h1fx1, served_verdicts.sh's default POUW=h1), checked over H1's J10-R period "
-        "(PouwVerifier.Credit.window), a development run under the lane's development key that credits nothing; Pearl+ "
-        "(POUW=pearlplus: served_pearlplus.sh, its own seeded load after the window's serve) is a development piece "
-        "too, untied, and credits nothing. ``served`` is what each COINS line says the run's PoUW piece was")
+        "Pearl+ (POUW=pearlplus: served_pearlplus.sh, its own seeded load after the window's serve), a development "
+        "piece, untied, that credits nothing. ``served`` is what each COINS line says the run's PoUW piece was")
 #: the verdicts ``of_record.holds`` doesn't read, since the record claims nothing of them (`POUW`), and under a composite
 #: of record without PoUW (`WITHOUT_POUW`) remote's too, whose composite composes PoUW's case
 NOT_CLAIMED = ("PoUW",)
@@ -359,7 +356,7 @@ NO_VERIFIED_COMPUTE = "none"
 #: ``compute`` in the run's ONSITE and ONSITE-BESIDE lines, at the composite of record's id, so that no reader of a line
 #: takes the composite's verdict for a claim of compute
 NO_COMPUTE_CLAIM = "no verified compute is credited: {}'s verdict is no compute claim"
-#: the PoUW clause of the run's COINS line (served_verdicts.sh's H1_COINS), which runs up to the bandwidth audit's
+#: the PoUW clause of the run's COINS line (served_verdicts.sh's PW_COINS), which runs up to the bandwidth audit's
 POUW_SAID = re.compile(r"; (PoUW.*?); the bandwidth audit's")
 #: where SPOT's audit publishes its record (`served_integrity.public_copy`)
 AUDIT = Path("v3c-audit") / "window" / "audit.json"
@@ -428,8 +425,8 @@ MULTI = ("a window of more than one member, whatever its draw: its case of verit
 #: the network attester's chain report as its piece publishes it (`attester_piece.PUBLIC`), and its draws by step
 CHAIN_REPORT = CASE.parent / "chain" / "report" / "report.json"
 DRAWS = {"n2": "the period draw", "scan": "the scan's draw"}
-CHAIN_DRAWS = (f"the network certifier's chain draws on no live coins. Its period draw (N2's, `TransferBlocks.period_draw`) "
-               "takes every window (sampling_design all: k None, no coins) or K of them on the verifier's own coins (n2_zk.py's); "
+CHAIN_DRAWS = (f"the network certifier's chain draws on no live coins. Its period draw (N2's) "
+               "has no prover in the tree, so a report states no sampling_design for it; "
                "its scan's draw takes every proof block or K of them on the verifier's or the gate's coins, which the "
                "published report doesn't say. So each draw whose sampling_design isn't all is open under "
                f"{COINS_OPEN}, by its name (``open``), and the network certifier's bound and figures are conditional on "
@@ -891,8 +888,7 @@ TEST_PHASES = ("the test run's own: T buckets of τ from its first Commit period
                "certifier's phase boundaries, so a Commit period near a boundary can count in the next phase")
 #: what a later re-proof of the run's sampled proof blocks needs, each wire a sampled proof block reads then proved inside its session:
 #: each by name, where it is (the serve dir, the prover's on the served node, by its path there with w<K> the audited
-#: window, <class> V3c's class and <tie> -tie where H1_TIE ties the window, whose record V3c holds the commit to reads
-#: H1's tables (served_verdicts.sh's `v3c_record`), else nothing; or OUT, the run's public files) and what it holds
+#: window and <class> V3c's class; or OUT, the run's public files) and what it holds
 REPROOF = {
     "values": ("serve dir", "v3c-w<K>-<class>/window/",
                "the window commit: every unit's committed values with their rows and salts, the sampled units' and those "
@@ -916,10 +912,8 @@ REPROOF = {
                 "the weights registration the audit pins, the salt file of its salts and the rotary table, "
                 "beside the checkpoint (REPO at REV, public)"),
     "run root": ("serve dir", "windows.jsonl", "the run root the audit holds the registration to"),
-    "circuit": ("serve dir", "window-circuit-w<K>-<class><tie>.json",
-                "the verifier's window-circuit record at the class (under H1_TIE, the one reading H1's tables), which "
-                "the window commit's circuit is held to"),
-    "h1": ("serve dir", "h1/", "under H1_TIE, H1's registration of the window and its log, whose tables the circuit reads"),
+    "circuit": ("serve dir", "window-circuit-w<K>-<class>.json",
+                "the verifier's window-circuit record at the class, which the window commit's circuit is held to"),
     "registration": ("OUT", "v3c-audit/registration.json",
                      "the window's registration, whose roots bind every committed value and which the period's "
                      "commitment holds whole"),
@@ -942,7 +936,7 @@ NO_COPY = ("no copy of the serve dir's inputs is given (--reproof-copy NODE:/PAT
            "the served node only")
 SERVING = ("the run's serving settings as its caller states them (--window-steps, --max-tokens): S, served_verdicts.sh's "
            "WINDOW_STEPS, the most engine steps a Commit period holds, and its MAX_TOKENS. No file of OUT states both "
-           "(its COINS line names S only where PoUW H1 is served); ℓ_a (advice_charge.cap) is the cap the run's S, "
+           "(its COINS line names S only where PoUW is served on the engine); ℓ_a (advice_charge.cap) is the cap the run's S, "
            "slots, model length and id bytes set, and every figure here is the run's at these settings alone")
 NO_SERVING = ("the run's caller stated no serving settings (--window-steps and --max-tokens: served_verdicts.sh's "
               "WINDOW_STEPS and MAX_TOKENS)")
@@ -1868,12 +1862,12 @@ def figure(out: Path, case: Mapping[str, Any], public: Mapping[str, Any], K: int
         return (why := {"error": f"{CASE} commitment: {type(e).__name__}: {e}"}), why
 
 
-def named(path: str, tie: bool = False) -> list[re.Pattern[str]]:
+def named(path: str) -> list[re.Pattern[str]]:
     """Each file a `REPROOF` path names, as a pattern over a listing's paths: ``, `` separates paths, ``{a,b}`` is each of
-    a and b, ``<tie>`` -tie where ``tie`` (H1_TIE ties the window) and nothing otherwise, any other ``<x>`` any one name,
+    a and b, any ``<x>`` any one name,
     and a trailing ``/`` a directory holding at least one file."""
     out = []
-    for part in path.replace("<tie>", "-tie" if tie else "").split(", "):
+    for part in path.split(", "):
         m = re.fullmatch(r"(.*)\{([^}]*)\}(.*)", part)
         for p in [m[1] + x + m[3] for x in m[2].split(",")] if m else [part]:
             rx = "".join("[^/]+" if t.startswith("<") else re.escape(t) for t in re.split(r"(<[^>]+>)", p))
@@ -1881,9 +1875,8 @@ def named(path: str, tie: bool = False) -> list[re.Pattern[str]]:
     return out
 
 
-def reproof(out: Path, copy: str | None = None, listing: Path | None = None, tie: bool = False) -> dict[str, Any]:
-    """The re-proof inputs (`REPROOF`), each with where it is, its path (``<tie>`` -tie where ``tie``: H1_TIE ties the
-    window) and what it holds; of OUT's whether the run wrote it, and of the serve dir's, where ``copy`` (NODE:/PATH) and
+def reproof(out: Path, copy: str | None = None, listing: Path | None = None) -> dict[str, Any]:
+    """The re-proof inputs (`REPROOF`), each with where it is, its path and what it holds; of OUT's whether the run wrote it, and of the serve dir's, where ``copy`` (NODE:/PATH) and
     ``listing`` (each file under PATH, one path relative to it a line) are given, whether the copy's listing holds each
     file its path names (`named`) and at least one under each directory it names."""
     files = None
@@ -1899,7 +1892,6 @@ def reproof(out: Path, copy: str | None = None, listing: Path | None = None, tie
             kept = {"error": f"the copy's listing (--reproof-listing) can't be read: {type(e).__name__}"}
     inputs = {}
     for name, (at, path, what) in REPROOF.items():
-        path = path.replace("<tie>", "-tie" if tie else "")
         inputs[name] = {"in": at, "path": path, "holds": what}
         if at == "OUT":
             inputs[name]["present"] = (out / path).exists()
@@ -1930,12 +1922,12 @@ def alpha_gamma(path: Path | None) -> dict[str, str]:
 
 
 def record(out: Path, advice_charge: Path | None = None, copy: str | None = None,
-           listing: Path | None = None, serving: tuple[int, int] | None = None, tie: bool = False,
+           listing: Path | None = None, serving: tuple[int, int] | None = None,
            certifier_key: Path | None = None, site_registration: Path | None = None,
            case_policy: Path | None = None, sampled_case: Path | None = None,
            public_pin: Path | None = None) -> dict[str, Any]:
     """OUT's onsite record (module docstring), with the re-proof inputs' ``copy`` and its ``listing`` where given
-    (`reproof`, ``tie`` where H1_TIE ties the window), the run's ``serving`` settings, S and MAX_TOKENS, where its
+    (`reproof`), the run's ``serving`` settings, S and MAX_TOKENS, where its
     caller states them (`SERVING`), the auditor's inputs the run's checks read, its ``certifier_key`` record and its
     ``site_registration`` (`auditor_record`), the inference-only case's private policy.json, ``case_policy``
     (`alpha_gamma`), and remote's SPOT case, ``sampled_case``, with a5's ``public_pin`` of its public file
@@ -2026,7 +2018,7 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
         "spot": sampled(rows.get(ROWS["sampled proofs"]), v["sampled proofs"], *phase_seconds(out), cond),
         "placement": profile.get("placement"), "advice_charge": advice,
         "composite_error": composite_error(rows, None, conditional=cond, composite=composite, pouw=with_pouw),
-        "reproof": reproof(out, copy, listing, tie)}
+        "reproof": reproof(out, copy, listing)}
     cond = cond_net
     if not accepted:
         nv = v["the network certifier"]
@@ -2155,6 +2147,10 @@ def positive(s: str) -> int:
     return n
 
 
+#: what a request for a run tied to PoUW H1's window is refused with
+H1_TIE_REFUSED = "PoUW H1 is deleted, so its tied windows are; a window tied to Pearl+'s W is PEARLPLUS_TIE's"
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("out", type=Path, nargs="?", help="the served run's public $OUT")
@@ -2170,9 +2166,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     help="where the serve dir's re-proof inputs were copied off the served node, keeping its layout")
     ap.add_argument("--reproof-listing", type=Path,
                     help="the copy's listing, kept off OUT: each file under PATH, one path relative to it a line")
-    ap.add_argument("--h1-tie", action="store_true",
-                    help="the run ties its window to H1's W (H1_TIE): the re-proof's circuit is the record reading "
-                         "H1's tables (`REPROOF`'s <tie>)")
+    ap.add_argument("--h1-tie", action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("--certifier-key", type=Path, metavar="RECORD",
                     help="the auditor's record of its network certifier (certifier-key/v1, ATTESTER_KEY), never the "
                          "prover's node's: the run's auditor-record check holds the period's key, LMS parameters and "
@@ -2197,8 +2191,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                     help="the record's path (default OUT/record/onsite.json); with --beside, where the records go "
                          "beside each other")
     a = ap.parse_args(argv)
+    if a.h1_tie:
+        ap.error(f"--h1-tie: {H1_TIE_REFUSED}")
     if a.beside is not None:
-        if a.to is None or a.h1_tie or any(x is not None for x in (a.out, a.advice_charge, a.reproof_copy,
+        if a.to is None or any(x is not None for x in (a.out, a.advice_charge, a.reproof_copy,
                                                                      a.reproof_listing, a.window_steps, a.max_tokens,
                                                                      a.certifier_key, a.site_registration,
                                                                      a.inference_only_case_policy,
@@ -2222,7 +2218,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         ap.error("--window-steps and --max-tokens go together: the run's S and MAX_TOKENS label its figures")
     serving = None if a.window_steps is None else (a.window_steps, a.max_tokens)
     try:
-        rec = record(a.out, a.advice_charge, a.reproof_copy, a.reproof_listing, serving, a.h1_tie,
+        rec = record(a.out, a.advice_charge, a.reproof_copy, a.reproof_listing, serving,
                      a.certifier_key, a.site_registration, a.inference_only_case_policy, a.sampled_proofs_case,
                      a.public_pin)
     except FileNotFoundError as e:

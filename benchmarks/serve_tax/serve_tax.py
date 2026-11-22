@@ -50,7 +50,7 @@ The arms, each one engine configuration; each adds its change to the arm it name
 - ``bi-eager``: ``eager`` with ``VLLM_BATCH_INVARIANT=1``, the committing path's execution with nothing committed;
 - ``record``: the scheduler's step trace (`verity_vllm.engine.step_trace.StepTrace`, the recorder serve-openai uses), in
   the engine core, written by a thread of its own (`servetax_plugin`);
-- ``tick``: the certified tick (`verity.protocols.resource_accounting.network.prover.admission.TickGate` under vLLM's server, `verity_vllm.pipeline.scheme_plugin`), τ_sat and
+- ``tick``: the certified tick (`verity.protocols.accounting.network.prover.admission.TickGate` under vLLM's server, `verity_vllm.pipeline.scheme_plugin`), τ_sat and
   τ_free given or calibrated on a ``record`` trace (`tick`), the client standing in for the network attester (`corpus.StandIn`);
 - ``tokens``: each window's tokens committed: every prompt id and every sampled id, 4 bytes a token, in ``rows-sha512``
   rows (`verity_vllm.commit.step_rows`), hashed off the engine loop at each window's close (`servetax_plugin.TokenCommit`).
@@ -860,7 +860,7 @@ def server_env(arm: Arm, d: Path, site: Path, tick: dict | None, window_s: float
     if arm.tick:
         if tick is None:
             raise SystemExit("the tick arms need τ: --tick-ms SAT,FREE or --tick-from STEP_TRACE")
-        from verity.protocols.resource_accounting.network.prover.admission import scheme_name
+        from verity.protocols.accounting.network.prover.admission import scheme_name
         names.insert(0, scheme_name())
         cfg[scheme_name()] = ({k: tick[k] for k in ("bucket_us", "sat_us", "free_us")} | tick.get("rule", {})
                               | {"hold_ms": 5000, "log": str(d)})
@@ -887,8 +887,8 @@ def scheme_config(arm: Arm, given: dict | None) -> dict:
     if lacking:
         raise SystemExit(f"the arm's schemes need {', '.join(lacking)}: --scheme-settings '{{\"gate\": CMD, "
                          f"\"pearl-plus\": {{\"kernel\": DIR, \"challenger\": HOST:PORT, \"session\": RESERVED}}}}'")
-    from verity.protocols.compose import schemes
-    from verity.protocols.resource_accounting.scheme import settings
+    from verity.protocols.run import schemes
+    from verity.protocols.accounting.scheme import settings
 
     try:
         return {"gate": given["gate"], **{n: settings(schemes.get(n), given[n]) for n in arm.schemes}}
@@ -2185,7 +2185,7 @@ def tail_records(d: Path, pattern: str, at: dict[str, int]) -> list[dict]:
 
 
 def tick_counts(recs: list[dict]) -> dict:
-    """What the certified tick's gate logged over a pass (`verity.protocols.resource_accounting.network.prover.admission.TickGate`): the requests it admitted, how many it
+    """What the certified tick's gate logged over a pass (`verity.protocols.accounting.network.prover.admission.TickGate`): the requests it admitted, how many it
     deferred by one step or more, how many steps each was held (steps: requests), the steps that admitted any, and its
     events by kind (an ``opened`` gate ordered nothing after it)."""
     held = [k for r in recs if "admitted" in r for k in r.get("held_steps", ())]
@@ -2228,7 +2228,7 @@ FRONT_PORT = 18746
 #: read within ``ingress_buckets`` buckets, and an answer at most the ids its last field, the response limit, allows
 CELLS = {"cell_bytes": 4096, "slots": 1, "bucket_ms": 250, "delay": 60, "window": 600, "ingress_cells": 4,
          "ingress_buckets": 16, "egress_cells": 4096, "max_tokens_cap": 2048}
-ATTESTER = ROOT / "verity/protocols/resource_accounting/network/attester/network_attester_serve.py"
+ATTESTER = ROOT / "verity/protocols/accounting/network/attester/network_attester_serve.py"
 SHIM = HERE / "cell_shim.py"
 #: the server's side's record in its directory, which holds no meta.json: no table and no cost reads it as an arm
 SERVER_RECORD = "server.json"
@@ -2286,7 +2286,7 @@ def certifier_cells(text: str | None, loads: dict[str, tuple[int, ...]]) -> dict
 
 def attester_schedule(cells: dict[str, int]):
     """The network attester's own parameters for a schedule, in the id form; a ValueError where they are none."""
-    from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams as CertifierParams
+    from verity.protocols.accounting.network.verifier.network_attester import NetworkAttesterParams as CertifierParams
 
     return CertifierParams(**cells, egress="id")
 
@@ -3124,7 +3124,6 @@ SESSION_UNIT = "percent of stock's serving time"
 NO_ARM = (
     "the engine class's served limits (engine_classes.CLASS_G_SERVED)",
     "the sparse attention kernel at one split (VERITY_SPARSE_MLA_NUM_SPLITS=1)",
-    "the fixed expert alignment on the Marlin MoE path (verity_moe_align)",
     "the committing endpoint (verity-vllm serve-openai) and all it turns on: its engine profile, the Commit, the seal, "
     "exact int8, proof of useful work, proof of useful space, the memory audit, the network certifier in front of it",
 )

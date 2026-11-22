@@ -344,10 +344,10 @@ def test_handles_and_subscriptions(registry, routes_dirs, capsys):
 
 def test_owners_pick_the_longest_prefix(registry, capsys, monkeypatch):
     rc, out, _ = run(capsys, "owners", "tools/research/src/research/slack.py", "tools/research/src/research/cli.py",
-                     "verity/circuits/ops/tc.py", "verity/protocols/proofs/flock/verifier/Flock.lean", "AGENTS.md", "nowhere/x")
+                     "verity/circuits/ops/tc.py", "verity/protocols/proof/flock/verifier/Flock.lean", "AGENTS.md", "nowhere/x")
     assert rc == 0 and [line.split() for line in out.splitlines()] == [
         ["@comms", "tools/research/src/research/slack.py"], ["@infra", "tools/research/src/research/cli.py"],
-        ["@circuits", "verity/circuits/ops/tc.py"], ["@proofs", "verity/protocols/proofs/flock/verifier/Flock.lean"],
+        ["@circuits", "verity/circuits/ops/tc.py"], ["@proofs", "verity/protocols/proof/flock/verifier/Flock.lean"],
         ["@top", "AGENTS.md"], ["-", "nowhere/x"]]
     monkeypatch.setattr("sys.stdin", io.StringIO("tools/research/src/research/slack.pyc\n./AGENTS.md\n"))
     rc, out, _ = run(capsys, "owners")
@@ -3074,7 +3074,7 @@ def test_a_reply_with_a_retired_term_posts_with_a_note_naming_what_to_write(fake
 
 
 def test_the_retired_terms_name_what_to_write_and_skip_code_and_quoted_mentions():
-    """`research msg` reads the table from tests/test_retired_terms.py, its one home."""
+    """`research msg` reads the table from tests/lint/test_repo_retired_terms.py, its one home."""
     from research import vocabulary
     doc = vocabulary.table()["DOC_TERMS"]
     service = "proof " + "service"                                   # the tree's own scan refuses the term written whole

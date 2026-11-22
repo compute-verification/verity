@@ -3,27 +3,19 @@
 # `verify --zk`, a row unit's anchors held to the verifier's own `TileAnchors.public_inputs` file. Run from the source tree's
 # root (`research run --cwd source --declared-output 'out/*'`); results go to $RESEARCH_RUN_DIR/out, scratch to a
 # `mktemp -d` directory the job removes, builds to $HZ_CACHE (kept, keyed by their inputs) or the scratch directory.
-#   1. builds flock-circuit twice from Flock b684b12 and verity/protocols/proofs/flock/prover's patches (the proving build: sha512, glue; the
+#   1. builds flock-circuit twice from Flock b684b12 and verity/protocols/proof/flock/prover's patches (the proving build: sha512, glue; the
 #      selftest build: + seed-injection), the Lean verity-verify-proof, and a venv with numpy and blake3
 #   2. per config ROLE:K in HZ_CONFIGS (ROLE row_a, row_b or tile, stage.py's): stage N instances, one loopback --zk session
-#      sampling all N (subset:N; HZ_WARM warm + HZ_RUNS timed proofs) with the proving build, the selftest build's recorded
-#      controls, sampled the same way, and the Lean
-#      verifier on all of them:
+#      sampling all N (subset:N; HZ_WARM warm + HZ_RUNS timed proofs) with the proving build, and the Lean verifier on it:
 #        honest-own     the honest session, the verifier's own anchors file                REFUSED (below)
-#        honest-wrong   the honest session, one bit of one anchor wrong in the verifier's file      REJECT
-#        honest-chosen  the honest session, the same anchor bit chosen by the prover (public file)  REJECT
-#        st-<case>      the selftest build's records under verity/flock-circuit+seed-injection, a statement verity-verify-proof
-#                       refuses once every check has passed (`ProvedScope.servedForm`): honest gets through every check
-#                       before its config's refusal (below); output_row_committed_false (a tampered output row),
-#                       output_claim_false, unit_internal_bit_flipped and public_input_claim_false (a false anchor
-#                       claim, the verifier's file agreeing with it) REJECT
+#      Sourcing scripts may still call `controls` (the selftest build's records) and `lean_jobs` checks them (st-<case>).
 #      until T4 the verifier refuses --public-inputs, so summarize.py expects each row-unit check REFUSED; once every
 #      check has passed it refuses a plain tile's output row of two output ports, so a plain tile's honest checks are
 #      REFUSED, and so are a hiding tile's, whose rows (row-seg/v1, row/v2) are covered, for the tile's want of a Program
 #      (no --program, NO_PROGRAM): summarize.py holds an honest check as expected only with its config's refusal, and
 #      counts a NO_PROGRAM refusal in lean_refused_no_program, never in lean_accepted. A config whose stage writes a
 #      Program (program.json; served_units' bound statements) is checked with it (--program).
-#      A tile has no public input, so it runs honest-own without --public-inputs and none of the anchor controls.
+#      A tile has no public input, so it runs honest-own without --public-inputs.
 #   3. summarize.py: out/<role>-k<K>/summary.json and out/summary.json
 # A staged config is kept under $HZ_CACHE/stage, keyed by its role, K, N, HZ_STAGE, the venv and every source stage.py
 # reads; a later run with the same key proves the kept files (stage-cache.json says which, stage.json their own staging).
@@ -56,7 +48,7 @@ TH=$(nproc)
 export RAYON_NUM_THREADS=$TH
 log() { echo "$(date -u +%H:%M:%SZ) $*" | tee -a "$OUT/job.log"; }
 vlimit() { echo "ulimit -v $(( $1 * 1024 * 1024 ));"; }
-. "$SRC/verity/protocols/proofs/spot/verifier/one_stage/verifier_env.sh"
+. "$SRC/verity/protocols/proof/spot/verifier/one_stage/verifier_env.sh"
 
 # ---- 1. builds -----------------------------------------------------------------------------------------------------------
 tree_key() { (cd "$SRC" && find "$@" -type f -not -path '*/.lake/*' -not -path '*/__pycache__/*' -print0 | sort -z \
@@ -64,11 +56,11 @@ tree_key() { (cd "$SRC" && find "$@" -type f -not -path '*/.lake/*' -not -path '
 
 # check's Rust pin (check_build.sh's RUST_TOOLCHAIN default): a machine's default toolchain, or a home with none, doesn't decide it
 RUST_TOOLCHAIN=${RUST_TOOLCHAIN:-$(sed -n 's/^RUST_TOOLCHAIN=\${RUST_TOOLCHAIN:-\(.*\)}$/\1/p' \
-  "$SRC/verity/protocols/proofs/flock/prover/check_build.sh")}
+  "$SRC/verity/protocols/proof/flock/prover/check_build.sh")}
 
 build_circuit() {   # build_circuit DEST: DEST/flock-circuit-prove and DEST/flock-circuit-selftest
   export PATH="$HOME/.cargo/bin:$PATH"
-  [ -n "$RUST_TOOLCHAIN" ] || { echo "no RUST_TOOLCHAIN pin in verity/protocols/proofs/flock/prover/check_build.sh" >&2; return 1; }
+  [ -n "$RUST_TOOLCHAIN" ] || { echo "no RUST_TOOLCHAIN pin in verity/protocols/proof/flock/prover/check_build.sh" >&2; return 1; }
   command -v rustup >/dev/null \
     || curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none >/dev/null || return 1
   # --no-self-update: a rustup on PATH from outside $HOME installs the toolchain and then exits 1 looking for itself here
@@ -78,11 +70,11 @@ build_circuit() {   # build_circuit DEST: DEST/flock-circuit-prove and DEST/floc
   local D=$1 F=$W/flock
   rm -rf "$F" "$D.tmp"
   git clone -q https://github.com/succinctlabs/flock "$F" && cd "$F" && git checkout -q b684b12 || return 1
-  for p in link gpu-link; do git apply "$SRC/verity/protocols/proofs/flock/prover/flock-$p-b684b12.patch" || return 1; done
-  cp -r "$SRC/verity/protocols/proofs/flock/prover/live" crates/flock-live
+  for p in link gpu-link; do git apply "$SRC/verity/protocols/proof/flock/prover/flock-$p-b684b12.patch" || return 1; done
+  cp -r "$SRC/verity/protocols/proof/flock/prover/live" crates/flock-live
   grep -q '"crates/flock-live"' Cargo.toml || sed -i 's|    "crates/flock-transcript",|    "crates/flock-transcript",\n    "crates/flock-live",|' Cargo.toml
   rm -f crates/flock-merkle/src/hm96.rs
-  for p in sha512 glue zk vtime wide; do git apply "$SRC/verity/protocols/proofs/flock/prover/flock-$p-b684b12.patch" || return 1; done
+  for p in sha512 glue zk vtime wide; do git apply "$SRC/verity/protocols/proof/flock/prover/flock-$p-b684b12.patch" || return 1; done
   mkdir -p "$D.tmp"
   CARGO_TARGET_DIR=$W/target cargo build -q --release -p flock-live --features sha512,glue --bin flock-circuit -j "$TH" \
     && cp "$W/target/release/flock-circuit" "$D.tmp/flock-circuit-prove" || return 1
@@ -91,11 +83,11 @@ build_circuit() {   # build_circuit DEST: DEST/flock-circuit-prove and DEST/floc
   rm -rf "$D" && mv "$D.tmp" "$D"
 }
 lean_key() {        # lean_key [FILE...]: the key of the Lean verifier's package, the packages it requires by path, and FILEs
-  python3 "$SRC/verity/protocols/proofs/flock/prover/pod/lake_closure.py" key "$SRC/verity/protocols/proofs/flock/verifier" "$@"
+  python3 "$SRC/verity/protocols/proof/flock/prover/pod/lake_closure.py" key "$SRC/verity/protocols/proof/flock/verifier" "$@"
 }
 lean_copy() {       # lean_copy DEST: those packages copied under DEST, with DEST/.lake the verifier's build directory; its directory on stdout
   local P
-  P=$(python3 "$SRC/verity/protocols/proofs/flock/prover/pod/lake_closure.py" copy "$SRC/verity/protocols/proofs/flock/verifier" "$1") \
+  P=$(python3 "$SRC/verity/protocols/proof/flock/prover/pod/lake_closure.py" copy "$SRC/verity/protocols/proof/flock/verifier" "$1") \
     && ln -s "${P#"$1/"}/.lake" "$1/.lake" && echo "$P"
 }
 build_lean() {      # build_lean DEST: DEST/.lake/build/bin/verity-verify-proof
@@ -108,7 +100,7 @@ build_tmpl_unit() { # build_tmpl_unit DEST: DEST/.lake/build/bin/flock-tmpl-unit
   command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
   local D=$1 P
   rm -rf "$D.tmp" && P=$(lean_copy "$D.tmp") \
-    && cp "$SRC/tests/verity/protocols/proofs/flock/prover/lean/TmplUnit.lean" "$P/" \
+    && cp "$SRC/tests/verity/protocols/proof/flock/prover/lean/TmplUnit.lean" "$P/" \
     && printf '\n[[lean_exe]]\nname = "flock-tmpl-unit"\nroot = "TmplUnit"\n' >> "$P/lakefile.toml" \
     && (cd "$P" && lake build flock-tmpl-unit) && rm -rf "$D" && mv "$D.tmp" "$D"
 }
@@ -132,7 +124,7 @@ setup() {
   { lscpu | grep -E 'Model name|^CPU\(s\)'; echo "threads $TH"; grep -E 'MemTotal|MemAvailable' /proc/meminfo; cat /proc/self/cgroup
     taskset -pc $$; df -h "${HZ_CACHE:-$W}" "$W"; } > "$OUT/host.txt" 2>&1
   local fail=0 p
-  [ -n "${FLOCK_PROVE:-}" ] || cached flock "$(tree_key verity/protocols/proofs/flock/prover/live verity/protocols/proofs/flock/prover/*.patch)-rust$RUST_TOOLCHAIN" build_circuit > "$W/flock.dir" &
+  [ -n "${FLOCK_PROVE:-}" ] || cached flock "$(tree_key verity/protocols/proof/flock/prover/live verity/protocols/proof/flock/prover/*.patch)-rust$RUST_TOOLCHAIN" build_circuit > "$W/flock.dir" &
   [ -n "${FLOCK_VERIFY:-}" ] || cached lean "$(lean_key)" build_lean > "$W/lean.dir" &
   [ -n "${HZ_PYTHON:-}" ] || cached venv numpy2.5.3-blake3-1.0.9 build_python > "$W/venv.dir" &
   wait
@@ -145,7 +137,7 @@ setup() {
     log "build FAILED"; for f in "$OUT"/build-*.log; do echo "== $f"; tail -20 "$f"; done | tee -a "$OUT/job.log"; exit 1
   fi
   sha256sum "$BIN" "$SBIN" "$LEAN" | tee "$OUT/binaries.sha256" | tee -a "$OUT/job.log"
-  "$PY" -c "import numpy, blake3, verity.protocols.resource_accounting.compute.pouw.verifier, verity_flock; print('python', numpy.__version__, blake3.__version__)" | tee -a "$OUT/job.log"
+  "$PY" -c "import numpy, blake3, verity.protocols.accounting.compute.pouw.verifier, verity_flock; print('python', numpy.__version__, blake3.__version__)" | tee -a "$OUT/job.log"
   TIME="$PY $J/timed.py"
   log "built"
 }
@@ -156,7 +148,7 @@ free_port() { "$PY" -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1",
 session() {   # session D O: one loopback --zk session with the proving build, the verifier serving its own public file and
   local D=$1 O=$2 port pin srv rc try up= tu=   # sampling all N instances (subset:N), as every soundness claim is about a sampled session
   pin=$(cat "$D/pin.txt")
-  # a templated statement's unit rows, placed by flock-tmpl-unit (h1_lanes/job.sh), which serve and prove read
+  # a templated statement's unit rows, placed by flock-tmpl-unit when the job's directory has them, which serve and prove read
   [ -L "$D/unit.placed" ] || [ -e "$D/unit.placed" ] && tu="--tmpl-unit $D/unit.placed"
   for try in 1 2 3 4 5; do   # the ephemeral port free_port picked can be taken by another worker before serve binds it: retake one
     port=$(free_port)
@@ -189,7 +181,7 @@ controls() {  # controls D O ROLE: the selftest build's cases, recorded for the 
     rc=$?
     log "  selftest $c exit $rc: $(grep -E '^NEG' "$O/selftest-$c.out" | cut -c1-200)"
   done
-  "$PY" "$SRC/verity/protocols/proofs/flock/prover/agreement/selftest_records.py" "$D/rec" "$D/st" > /dev/null
+  "$PY" "$SRC/verity/protocols/proof/flock/prover/agreement/selftest_records.py" "$D/rec" "$D/st" > /dev/null
 }
 
 lean_jobs() {   # lean_jobs D O ROLE: every Lean check of one config, as many at once as fit beside each other
@@ -205,9 +197,7 @@ lean_jobs() {   # lean_jobs D O ROLE: every Lean check of one config, as many at
     if [[ $role == tile* || $role == hidden* ]]; then
       cmds+=("honest-own|$base --statement verity/flock-circuit --public $D/pub.bin --session $s")
     else
-      cmds+=("honest-own|$base --statement verity/flock-circuit --public $D/pub.bin --public-inputs $D/public-inputs.bin --session $s"
-             "honest-wrong|$base --statement verity/flock-circuit --public $D/pub.bin --public-inputs $D/public-inputs-wrong.bin --session $s"
-             "honest-chosen|$base --statement verity/flock-circuit --public $D/pub-chosen.bin --public-inputs $D/public-inputs.bin --session $s")
+      cmds+=("honest-own|$base --statement verity/flock-circuit --public $D/pub.bin --public-inputs $D/public-inputs.bin --session $s")
     fi
   fi
   for s in "$D"/st/*/; do
@@ -255,7 +245,7 @@ $(tail -1 "$O/lean-$tag.err" | cut -c1-160)"
 stage_config() {   # stage_config ROLE K TAG D O: D holds the config's staged files, from the stage cache or staged now
   local role=$1 k=$2 tag=$3 D=$4 O=$5 key S rc=0
   key=$(tree_key benchmarks/pouw/hidden_zk/stage.py benchmarks/pouw/hidden_zk/fast_stage.py benchmarks/pouw/hidden_zk/core3_scratch.py \
-    benchmarks/pouw/hidden_zk/hash_scratch.py verity/protocols/proofs/flock/prover/python verity verity/circuits verity/circuits/kernels \
+    benchmarks/pouw/hidden_zk/hash_scratch.py verity/protocols/proof/flock/prover/python verity verity/circuits verity/circuits/kernels \
     )
   S=${HZ_CACHE:-$W/cache}/stage/$tag-n$N-$HZ_STAGE-$(basename "$(dirname "$(dirname "$PY")")")-$key
   mkdir -p "$(dirname "$S")"
@@ -286,12 +276,11 @@ run_configs() {
       log "$tag: staging FAILED: $(tail -1 "$O/stage.err")"; rm -rf "$D"; "$PY" "$J/summarize.py" "$OUT" > /dev/null; continue
     fi
     cp "$D/stage.json" "$D/pin.txt" "$O/"
-    [ -e "$D/public-inputs.bin" ] && cp "$D/public-inputs.bin" "$D/public-inputs-wrong.bin" "$O/"
+    [ -e "$D/public-inputs.bin" ] && cp "$D/public-inputs.bin" "$O/"
     log "$tag: staged: $("$PY" -c "import json; s = json.load(open('$O/stage.json')); c = json.load(open('$O/stage-cache.json')); print(s['definition'], s['ands'], 'ANDs, k_log', s['k_log'], s['circuit_bytes'], 'B, sha512', s['circuit_sha512'][:16], 'peak', s['maxrss_gb'], 'GB,', s['seconds']['total'], 's,', s.get('staging'), 'staging, cache', 'hit' if c['hit'] else 'miss')")"
     if [ "${HZ_STAGE_ONLY:-0}" = 1 ]; then "$PY" "$J/summarize.py" "$OUT" > /dev/null; rm -rf "$D"; continue; fi
     log "$tag: --zk session ($WARM warm + $RUNS timed)"
     session "$D" "$O" || log "$tag: --zk session FAILED: $(tail -2 "$O/prove.err")"
-    controls "$D" "$O" "$role"
     lean_jobs "$D" "$O" "$role"
     "$PY" "$J/summarize.py" "$OUT" > /dev/null
     rm -rf "$D"

@@ -285,23 +285,23 @@ def test_a_path_rule_leaves_out_what_its_patterns_name():
 
 
 def test_a_flock_file_whose_name_git_quotes_still_requires_the_agreement(tmp_path):
-    """`git diff --name-only` quotes a name with bytes outside ASCII (`"verity/protocols/proofs/flock/prover/\\303\\251.py"`), which no prefix of a
+    """`git diff --name-only` quotes a name with bytes outside ASCII (`"verity/protocols/proof/flock/prover/\\303\\251.py"`), which no prefix of a
     `merge_requires` rule matched, so a candidate changing such a file required no `lean-agreement`."""
     from research.merge import required_steps
 
     repo = tmp_path / "repo"
     (repo / "mytools").mkdir(parents=True)
     (repo / "mytools" / "agree.py").write_text("from research.store.tool import Tool\nT = Tool(name='check', version='1', "
-                                               "merge_requires={'lean-agreement': ['verity/protocols/proofs/flock/prover/', '!README.md']})\n")
+                                               "merge_requires={'lean-agreement': ['verity/protocols/proof/flock/prover/', '!README.md']})\n")
     _git(repo, "init", "-q", "-b", "main")
     _git(repo, "add", "-A")
     _git(repo, "commit", "-q", "-m", "base")
     base = _git(repo, "rev-parse", "HEAD")
-    (repo / "verity" / "protocols" / "proofs" / "flock" / "prover").mkdir(parents=True)
-    (repo / "verity" / "protocols" / "proofs" / "flock" / "prover" / "é.py").write_text("x = 1\n")
+    (repo / "verity" / "protocols" / "proof" / "flock" / "prover").mkdir(parents=True)
+    (repo / "verity" / "protocols" / "proof" / "flock" / "prover" / "é.py").write_text("x = 1\n")
     _git(repo, "add", "-A")
     _git(repo, "commit", "-q", "-m", "é")
-    assert required_steps(repo, base, _git(repo, "rev-parse", "HEAD"), "mytools.agree:T") == {"lean-agreement": ["verity/protocols/proofs/flock/prover/"]}
+    assert required_steps(repo, base, _git(repo, "rev-parse", "HEAD"), "mytools.agree:T") == {"lean-agreement": ["verity/protocols/proof/flock/prover/"]}
 
 
 def test_the_bases_declaration_requires_the_agreement_when_the_checkout_holds_an_older_one(tmp_path):
@@ -319,18 +319,18 @@ def test_the_bases_declaration_requires_the_agreement_when_the_checkout_holds_an
     _git(repo, "add", "-A")
     _git(repo, "commit", "-q", "-m", "before the move")
     before = _git(repo, "rev-parse", "HEAD")
-    (repo / "mytools" / "agree.py").write_text(decl.format(path="verity/protocols/proofs/flock/verifier/"))
+    (repo / "mytools" / "agree.py").write_text(decl.format(path="verity/protocols/proof/flock/verifier/"))
     _git(repo, "commit", "-q", "-am", "the move")
     base = _git(repo, "rev-parse", "HEAD")
-    (repo / "verity" / "protocols" / "proofs" / "flock" / "verifier").mkdir(parents=True)
-    (repo / "verity" / "protocols" / "proofs" / "flock" / "verifier" / "Hello.lean").write_text("-- a verifier change\n")
+    (repo / "verity" / "protocols" / "proof" / "flock" / "verifier").mkdir(parents=True)
+    (repo / "verity" / "protocols" / "proof" / "flock" / "verifier" / "Hello.lean").write_text("-- a verifier change\n")
     _git(repo, "add", "-A")
     _git(repo, "commit", "-q", "-m", "a verifier change")
     tip = _git(repo, "rev-parse", "HEAD")
     _git(repo, "checkout", "-q", "--detach", before)
     assert required_steps(repo, base, tip, "mytools.agree:T") == {}
     assert required_steps(repo, base, tip, "mytools.agree:T", at=base) == {
-        "lean-agreement": ["verity/protocols/proofs/flock/verifier/"]}
+        "lean-agreement": ["verity/protocols/proof/flock/verifier/"]}
 
 
 def _deferred_lock(feat: Path, tip: str, files: dict[str, str], checked: str, made_as: dict[str, str] | None = None) -> str:

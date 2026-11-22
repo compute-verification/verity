@@ -8,15 +8,12 @@ from typing import Any
 
 import pytest
 
-from tests.acquire.test_plan import manifest, row
+from tests.acquire.test_plan import row
 from tests.acquire.test_served_moe import RECORD, SMALL, _wired
-from verity_vllm.acquire import gate as G
 from verity_vllm.acquire import inductor_templates as T
-from verity_vllm.acquire import plan as P
 from verity_vllm.acquire import served_artifact as SA
 from verity_vllm.acquire import served_moe as SM
 from verity_vllm.acquire.inductor_templates import Unmodelled
-from verity_vllm.acquire.sources import call_boundary_source as CB
 
 LEFT_OUT = object()
 EMPTY = [LEFT_OUT, None, [], {}, "", 0, False]
@@ -38,30 +35,10 @@ def _rows() -> list[dict[str, Any]]:
 NAMES = ("identities", "entries", "rows")
 
 
-@pytest.mark.parametrize("name", NAMES)
-@empty
-def test_a_manifests_rows_are_read_under_the_first_name_that_holds_any(name: str, held: Any) -> None:
-    want = P.value_classes(manifest(_rows()))
-    assert len(want) == 2
-    doc = holding(manifest(_rows()), "identities", LEFT_OUT)
-    for earlier in NAMES[:NAMES.index(name)]:
-        doc = holding(doc, earlier, held)
-    assert P.value_classes({**doc, name: _rows()}) == want
 
 
-@empty
-def test_a_manifest_without_rows_has_no_value_and_no_call_boundary(held: Any, monkeypatch: pytest.MonkeyPatch) -> None:
-    man = holding(manifest(_rows()), "identities", held)
-    assert P.value_classes(man) == []
-    monkeypatch.setattr(G.taps, "attached", lambda manifest: [])            # the sources' own reading of a manifest is theirs
-    monkeypatch.setattr(CB, "unattached", lambda manifest, on: [])
-    assert G.call_boundaries_of(man, None)["identities"] == 0
 
 
-@empty
-def test_a_row_names_no_consumer(held: Any) -> None:
-    (v,) = P.value_classes(manifest([holding(_rows()[0], "consumers", held)]))
-    assert (v.value_id, v.consumers) == ("body.blocks.0.act/out", [])
 
 
 @empty

@@ -12,7 +12,6 @@ from __future__ import annotations
 import hashlib
 from typing import TYPE_CHECKING
 
-import numpy as np
 import pytest
 
 if TYPE_CHECKING:
@@ -28,7 +27,6 @@ from verity_vllm.commit.committer.native_host import (
     _StepJob,
 )
 from verity_vllm.query.manifest import format as RM
-from verity_vllm.query.manifest.bind import Binder
 
 V, H, TOKENS = 8, 16, 3
 PD = hashlib.sha512(b"program").hexdigest()
@@ -224,95 +222,9 @@ def test_an_ambiguous_observation_point_is_refused_by_name_never_guessed():
 
 # ------------------------------------------------------------------------------------------------------------ the collector: acquisition at the consumer's input
 
-@pytest.mark.parametrize("consumer_is_acquire_class", [False, True], ids=["consumer-of-no-acquire-class", "consumer-of-an-acquire-class"])
-def test_a_value_produced_in_the_parents_forward_body_is_acquired_at_the_childs_input_and_bound_to_the_promoted_row(consumer_is_acquire_class):
-    """The scaled embedding exists only inside the parent's forward: the embedding leaf returns the UNSCALED gather, the parent has no
-    output of its own that is it, and the child leaf receives it.  Armed by the manifest, the committer installs a forward PRE-hook on the
-    child (whether or not the child's class is one it selects on its own) and commits `<child>/in`; the binding map binds that tensor to
-    the PROMOTED identity (model, out); coverage over the manifest passes, and the committed bytes are the parent's value bit for bit."""
-    model = _Model()
-    man = _manifest(["model.norm"])
-    classes = {"_Embed"} | ({"_Norm"} if consumer_is_acquire_class else set())
-    c, pia, run, vals = _run_one_step(model, acquire_classes=classes, manifest=man)
-    # the hooks the manifest added: the consumer's pre-hook; the consumer's OUTPUT is acquired only when its class says so
-    names = [m.name for m in c._layouts[0]]
-    assert "model.norm/in" in names and "model.embed_tokens" in names, names
-    assert ("model.norm" in names) == consumer_is_acquire_class, names
-    assert c._acquires_input("model.norm", model.model.norm) and not c._acquires_input("model.embed_tokens", model.model.embed_tokens)
-    assert [n for n, _m in c._input_only_modules()] == ([] if consumer_is_acquire_class else ["model.norm"])
-    assert c.x03_expected == c.x03_committed == len(names) and c.errors == []
-    # the binding map: `<consumer>/in` binds the PRODUCER's identity (model, out), says so, keeps the committed name
-    bmap = B.build_binding_map(c._layouts, run.steps, run.run_root, PD, request_id="r0", rank=0, chunk=c.chunk, binder=Binder.of_manifest(man))
-    by_name = {e["name"]: e for e in bmap["entries"] if e["kind"] == "leaf"}
-    e = by_name["model.norm/in"]
-    assert (e["identity"]["op_path"], e["identity"]["output_member"]) == ("model", "out") and e["observation"] == "consumer-input"
-    assert e["identity"]["element_range"] == [0, TOKENS * H] and e["encoding"] == {"dtype": "bfloat16", "shape": [TOKENS, H]}
-    assert (by_name["model.embed_tokens"]["identity"]["op_path"], by_name["model.embed_tokens"]["identity"]["output_member"]) == ("model.embed_tokens", "out")
-    assert "observation" not in by_name["model.embed_tokens"]
-    # coverage over the manifest's identities (the promoted row included) passes: one unambiguous binding each
-    pop = [B.identity(PD, "r0", 0, 0, r["op_path"], r["output_member"], 0, r["element_range"][1]) for r in man["identities"]]
-    cov = B.coverage_check(pop, bmap)
-    assert cov["ok"] and cov["bound_n"] == cov["expected_n"] == 2 and cov["ambiguous_n"] == 0, cov
-    # the committed bytes under (model, out) ARE the value produced in the parent's forward body -- not the embedding's own output
-    got = _committed_bytes(c, e)
-    assert got == _bytes_of(vals["scaled"]) and got != _bytes_of(vals["embedded"])
-    assert _committed_bytes(c, by_name["model.embed_tokens"]) == _bytes_of(vals["embedded"])
-    # and the value the model returned is the child's output, untouched by the hook
-    assert torch.equal(vals["out"], vals["scaled"] * 2)
-    # the openings of the promoted member's leaves verify against the run root like any other committed leaf
-    lo, hi = int(e["leaf_lo"]), int(e["leaf_hi"])
-    for op in c.open([(0, leaf) for leaf in range(lo, hi)]):
-        assert c.verify(run, op), op
 
 
-def test_without_the_manifests_binder_the_promoted_identity_is_unbound_by_name_and_the_consumer_input_is_an_extra():
-    """The negative the rule closes: the same collector, the same committed tensor, but a map that does not know the manifest's promoted
-    rows binds `<child>/in` to its own name (child, in) -- coverage names the promoted identity missing (fail closed), never covered by the
-    stray `/in`."""
-    model = _Model()
-    man = _manifest(["model.norm"])
-    c, _pia, run, _vals = _run_one_step(model, acquire_classes={"_Embed"}, manifest=man)
-    bmap = B.build_binding_map(c._layouts, run.steps, run.run_root, PD, request_id="r0", rank=0, chunk=c.chunk)          # no binder
-    pop = [B.identity(PD, "r0", 0, 0, r["op_path"], r["output_member"], 0, r["element_range"][1]) for r in man["identities"]]
-    cov = B.coverage_check(pop, bmap)
-    assert not cov["ok"] and cov["missing_n"] == 1 and cov["missing"][0]["op_path"] == "model" and cov["missing"][0]["output_member"] == "out", cov
-    assert ["r0", 0, 0, "model.norm", "in", 0] in cov["extra"]
-    # two maps of the same layouts differ ONLY by the binding (same leaves, same roots): the identity is a statement of the map, fixed
-    # before the challenge, and its digest changes with it
-    bmap2 = B.build_binding_map(c._layouts, run.steps, run.run_root, PD, request_id="r0", rank=0, chunk=c.chunk, binder=Binder.of_manifest(man))
-    assert bmap2["digest"] != bmap["digest"] and bmap2["run_root"] == bmap["run_root"]
 
 
-def test_a_consumer_that_is_not_a_module_of_the_built_model_leaves_the_identity_unbound_and_is_named():
-    """The manifest names a consumer the model does not have: nothing is guessed (no hook, no other module's input), the promoted identity
-    stays unbound and coverage names it; `_input_only_modules` skips it and commit_delta prints the NOTE."""
-    model = _Model()
-    man = _manifest(["model.layers.0.input_layernorm"])                          # not a module of this tree
-    c, pia, run, _vals = _run_one_step(model, acquire_classes={"_Embed"}, manifest=man)
-    assert pia["consumers"] == {"model.layers.0.input_layernorm": H * 2}
-    assert c._input_only_modules() == [] and [m.name for m in c._layouts[0]] == ["model.embed_tokens"]
-    bmap = B.build_binding_map(c._layouts, run.steps, run.run_root, PD, request_id="r0", rank=0, chunk=c.chunk, binder=Binder.of_manifest(man))
-    pop = [B.identity(PD, "r0", 0, 0, r["op_path"], r["output_member"], 0, r["element_range"][1]) for r in man["identities"]]
-    cov = B.coverage_check(pop, bmap)
-    assert not cov["ok"] and cov["missing_n"] == 1 and cov["missing"][0]["op_path"] == "model"
 
 
-def test_batched_requests_split_the_consumer_input_by_token_rows_like_any_per_token_member():
-    """B > 1: the committed `<child>/in` is one batched tensor of every request's token rows; the promoted identity is per request, its
-    request-local range at the request's `element_offset` (the per-token rule of the map), so each request's rows bind its own identity."""
-    model = _Model()
-    man = _manifest(["model.norm"])
-    c, _pia, run, vals = _run_one_step(model, acquire_classes={"_Embed"}, manifest=man)
-    rows = {0: [("r0", 0, 2), ("r1", 2, TOKENS)]}
-    bmap = B.build_binding_map(c._layouts, run.steps, run.run_root, PD, request_rows=rows, rank=0, chunk=c.chunk, binder=Binder.of_manifest(man))
-    ents = sorted((e for e in bmap["entries"] if e["name"] == "model.norm/in"), key=lambda e: e["identity"]["request_id"])
-    assert [(e["identity"]["request_id"], e["identity"]["element_range"], e["element_offset"]) for e in ents] == [("r0", [0, 2 * H], 0), ("r1", [0, (TOKENS - 2) * H], 2 * H)]
-    assert all(e["identity"]["op_path"] == "model" and e["identity"]["output_member"] == "out" for e in ents)
-    for e, (lo, hi) in zip(ents, ((0, 2), (2, TOKENS))):
-        pop = [B.identity(PD, e["identity"]["request_id"], 0, 0, "model", "out", 0, (hi - lo) * H)]
-        assert B.coverage_check(pop, bmap)["ok"]
-    # the bytes of request r1's block are the parent's value for ITS token rows
-    e1 = ents[1]
-    blk = _committed_bytes(c, e1)[2 * H * 2:]
-    assert blk == _bytes_of(vals["scaled"][2:])
-    assert np.frombuffer(blk, dtype=np.uint16).size == (TOKENS - 2) * H

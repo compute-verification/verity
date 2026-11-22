@@ -64,6 +64,7 @@ import re
 import shutil
 import sys
 import types
+from collections import Counter
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import Any
@@ -72,13 +73,22 @@ import numpy as np
 from verity.circuits.kernels import tc as CK
 
 from tests.properties import dsv4_flashmla_capture_gpu as D
-from tests.properties import dsv4_marlin_capture_gpu as M
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from verity_vllm.definitions.numerics import derived_rows as DRW
 from verity_vllm.definitions.numerics import flashmla_dsv32_twin as V
 from verity_vllm.definitions.numerics import flashmla_twin as T
 from verity_vllm.records.property_record import digest_of
+
+#: the floating-point SASS opcodes `sass_census` counts
+FP_OP = re.compile(r"(?:HMMA|HFMA|HMUL|HADD|HMNMX|FADD|FFMA|FMUL|FMNMX|FSET|FCHK|F2F|MUFU|DADD|DFMA|DMUL)")
+
+
+def sass_census(sass: str) -> dict[str, int]:
+    """The floating-point opcodes (`FP_OP`) of a `cuobjdump -sass` listing, counted."""
+    ops = re.findall(r"/\*[0-9a-f]{4,}\*/\s+(?:@!?U?P[T0-9]+\s+)?([A-Z][A-Z0-9_.]*)", sass)
+    return dict(sorted(Counter(op for op in ops if FP_OP.match(op)).items()))
+
 
 SCHEMA = "verity-vllm/glm53-flashmla-fp8-capture/v1"
 RECORD = "glm53_flashmla_fp8_capture.json"
@@ -385,7 +395,7 @@ def sass(out: str) -> dict[str, Any]:
             with gzip.open(path, "wt") as f:
                 f.write(text)
             ent = {"file": path.name, "arch": SASS_ARCH, "image": cubin.name, "function": name, "instructions": n_ins,
-                   "sha256": hashlib.sha256(text.encode()).hexdigest(), "fp_ops": M.sass_census(text)}
+                   "sha256": hashlib.sha256(text.encode()).hexdigest(), "fp_ops": sass_census(text)}
             if filt:
                 ent["demangled"] = C._run([filt, name]).stdout.strip()[:2000]
             rec["kept"].append(ent)

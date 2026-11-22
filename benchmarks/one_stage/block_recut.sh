@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The proof-block census made again at this tree from a stored census's families (`census-rank<r>.json`, each rank's
-# `m1_families.py --steps all`, fetched from the census artifact ART): each family's unit templates and template
+# families, fetched from the census artifact ART): each family's unit templates and template
 # recomputed from its spec at this tree (`serving_rows.unit_templates`, `serving_rows.template`), each rank sized
 # (`m1_families.py --estimate`) and cut (`block_census.py`), which writes census.json, table.md and card.json under $OUT.
 # The Programs, rows and steps are the census's, so a change to the cut or to a family's units needs no Commit Build or row
@@ -20,7 +20,7 @@ R=("$REPO/.venv/bin/research")
 FAMS=$(find "$D" -name 'census-rank*.json' | sort -V)
 [ -n "$FAMS" ] || { echo "no census-rank<r>.json in $ART"; exit 4; }
 sha256sum $FAMS | sed "s|$D/||" > "$O/families.sha256"
-export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/adapters/torch
+export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proof/flock/prover/python:$REPO/adapters/vllm:$REPO/adapters/torch
 start=$(date +%s)
 $PY - $FAMS <<'PYEOF' 2>&1 | tee "$O/retemplate.log"
 import json, sys

@@ -29,7 +29,6 @@ the Program lists in ``inputs``), exactly as a Program gives ``Input`` gates the
 The canonical partition (``verity.circuits.partition_object``: ``Partition``, ``CallPartition``) cuts inside each Call and commits
 every Call output, read or not.  With every Call a unit (the query of record, ``required.Population``), the boundary here leaves out
 an output nothing reads; the policy requires those a module returns, and a Call it leaves out too is ``unreturned``.
-``tests/adapters/vllm/tests/query/test_units_canonical.py`` holds what serving commits to the canonical object on a served Program.
 """
 
 from __future__ import annotations

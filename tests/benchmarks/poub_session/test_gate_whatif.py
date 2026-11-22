@@ -16,8 +16,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 import auditor_line as al  # noqa: E402
 import gate_whatif as gw  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier.session import verifier  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier.session import wire  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier.session import verifier  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier.session import wire  # noqa: E402
 from test_challengers import PINS, analysed, host  # noqa: E402,F401
 from test_session import run as run_sessions  # noqa: E402
 
@@ -29,7 +29,7 @@ THETA = 7_000 * MS
 def loop(rtt: int, passes: list[int], *, tau: int = MS // 2, gap: int = MS // 5) -> tuple[dict, list[str], dict]:
     """The record of a k = 1 session whose every exchange with the challenger is `rtt` ns, half each way, and whose
     passes take `passes`: verifier.json's session, the challenger's release log and the prover's session. chal_0's fetch
-    holds the loop until it returns, then chal_1's; at root g the verifier asks openings coin g, and chal_(g+2) behind
+    holds the loop until it returns, then chal_1's; at root g the verifier asks sample g's one coin, and chal_(g+2) behind
     it, once it has sent window g's boundary, samples for d after the reply and sends the boundary s after that."""
     n, h = len(passes), rtt // 2
     c0, po, fsync, ps, d, s = 40_000, 30_000, 2 * MS, 20_000, 300_000, 100_000
@@ -45,7 +45,7 @@ def loop(rtt: int, passes: list[int], *, tau: int = MS // 2, gap: int = MS // 5)
         A[g] = start + passes[g] + gap + tau
         free = A[g] - tau
         root, got = f"{g:0128x}", max(A[g], b[g] if g else R[1] + 2 * h + c0) + h
-        log.append(("poub/openings", g, root, got, got + po))
+        log.append(("poub/sample", g, root, got, got + po))
         end = got + po
         if g + 2 < n:
             log.append(("poub/challenge", g + 2, root, end + fsync, end + fsync + ps))
@@ -119,13 +119,13 @@ def test_a_record_of_another_loop_is_refused_by_name(broken):
     s, lines, proved = loop(100 * MS, PASSES)
     if broken == "alone":
         j = next(i for i, x in enumerate(map(json.loads, lines))
-                 if x["event"] == "root" and x.get("label") == "poub/openings" and x["index"] == 3)
+                 if x["event"] == "root" and x.get("label") == "poub/sample" and x["index"] == 3)
         lines[j + 2:j + 6] = lines[j + 4:j + 6] + lines[j + 2:j + 4]
     elif broken == "k3":
         s = {**s, "pace": {"k": 3}}
     else:
         proved = {**proved, "pass_host_ns": proved["pass_host_ns"][:-1]}
-    why = {"alone": "wasn't asked with openings coin g", "k3": "the replay models k = 1",
+    why = {"alone": "wasn't asked with sample g's last coins", "k3": "the replay models k = 1",
            "short": "the prover's record has 23 passes for its 24 groups"}[broken]
     with pytest.raises(gw.Refused, match=why):
         gw.record(s, lines, al.auditor_seen(lines, s["windows_seen"])[0], proved, MS // 2)
@@ -167,15 +167,16 @@ def test_a_host_runs_replay_at_its_own_round_trip_is_its_line_of_record_and_its_
     assert doc["whatif_line"][s["T"]]["credited_sessions"] == [0]
 
 
-def test_a_release_log_recorded_before_the_poub_labels_reads_as_today():
-    """Release logs recorded before 18 Nov 2026 name the coins' families `challenge` and `openings`: both readers of a
-    gate run's record read them as `poub/challenge` and `poub/openings`, so a stored run's line and what-if replay as
-    they were."""
+def test_a_release_log_recorded_before_the_poub_labels_reads_as_today_and_an_openings_coin_is_not_a_samples():
+    """Release logs recorded before the `poub/` labels name the challenge family `challenge`: both readers of a gate
+    run's record read it as `poub/challenge`. An `openings` coin, the one derived key a window was sampled on before the
+    sample read its own coins, is not a sample's coin, and the replay refuses its family."""
     def lines(ch: str, op: str) -> list[str]:
         def coin(label: str, i: int, t: int) -> list[str]:
             return [json.dumps({"label": label, "index": i, "root": f"{i:0128x}", "received_at": t}),
                     json.dumps({"released_at": t + 1})]
         return ["{}", *coin(ch, 0, 10), *coin(op, 0, 20), *coin(ch, 1, 30), "{}"]
-    old, new = lines("challenge", "openings"), lines("poub/challenge", "poub/openings")
-    assert al.release_log(old) == al.release_log(new) and set(al.release_log(new)) == {"poub/challenge", "poub/openings"}
+    old, new = lines("challenge", "poub/sample"), lines("poub/challenge", "poub/sample")
+    assert al.release_log(old) == al.release_log(new) and set(al.release_log(new)) == {"poub/challenge", "poub/sample"}
     assert gw.log_coins(old) == gw.log_coins(new) and {x[0] for x in gw.log_coins(old)} == set(gw.FAMILIES)
+    assert {x[0] for x in gw.log_coins(lines("challenge", "openings"))} - set(gw.FAMILIES) == {"openings"}

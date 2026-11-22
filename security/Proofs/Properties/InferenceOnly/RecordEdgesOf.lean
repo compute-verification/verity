@@ -116,6 +116,7 @@ theorem edgesOf_wire {P : Prog} {rs W ws} (h : edgesOf P rs W = .ok ws) : ∀ w 
     simp [throw, throwThe, MonadExceptOf.throw] at hx
   refine bind_ok_elim h (fun o hs h => ?_)
   cases h
+  suffices hI : ∀ w ∈ o, Digits w from fun w hw => hI w (List.mem_reverse.1 hw)
   refine forIn_upto (fun o => ∀ w ∈ o, Digits w) _ _ ?_ _ _ (by simp) hs
   intro k a st hk ha hst
   refine ite_ok hst (fun _ hst => ?_) (fun _ hst => ?_)
@@ -139,8 +140,8 @@ theorem edgesOf_wire {P : Prog} {rs W ws} (h : edgesOf P rs W = .ok ws) : ∀ w 
     cases hst''
     intro w hw
     rcases List.mem_append.1 hw with hw | hw
+    · exact partWires_wire hl w (List.mem_reverse.1 hw)
     · exact hc w hw
-    · exact partWires_wire hl w hw
   · refine bind_ok_elim hst (fun _ hx _ => ?_)
     simp [throw, throwThe, MonadExceptOf.throw] at hx
 

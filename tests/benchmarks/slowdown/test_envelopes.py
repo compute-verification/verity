@@ -10,7 +10,7 @@ from slowdown.params import Param, Registry
 from slowdown.scenario import build, evaluate_named
 from slowdown.theorem import Budget, multiple_bound, slowdown
 
-from verity.protocols.proofs.spot.verifier.profile import WINDOW_DELTA
+from verity.protocols.proof.spot.verifier.profile import WINDOW_DELTA
 
 ROOT = Path(__file__).resolve().parents[3]
 REG = Registry.load()

@@ -218,7 +218,8 @@ theorem credited_of_checkBlobsAt {b : ByteArray} {p : OneStageZk.Params} {c : On
       nat? (getD c.record "population") = some n ∧ OneStage.sampledFrom p.base.verifier samplingDesign n ξ = .ok (units, read) ∧
       OneStageZk.provedUnits pubB record = .ok (units.qsort (· < ·)) := by
   replace h := (OneStageZk.checkBlobsAt_accept_one hm h).1
-  unfold OneStageZk.checkOneAt at h
+  replace h := OneStageZk.checkOneAt_body h
+  unfold OneStageZk.checkOneBody at h
   dsimp only at h
   split at h
   case h_1 => cases h
@@ -257,7 +258,7 @@ theorem credited_of_checkBlobsAt {b : ByteArray} {p : OneStageZk.Params} {c : On
     all_goals first | (simp at hsz; done) | exact ⟨s, rfl⟩
   unfold OneStageZk.run at hR
   obtain ⟨_, -, hR⟩ := bind_ok hR
-  cases ht : Flock.Tags.find? OneStageZk.STATEMENT with
+  cases ht : Flock.Tags.byName? OneStageZk.STATEMENT with
   | none => (simp only [ht] at hR; cases hR)
   | some tags0 =>
   simp only [ht] at hR
@@ -403,7 +404,8 @@ theorem population_of_checkBlobsAt {p : OneStageZk.Params} {c : OneStage.Commitm
     {pi : Flock.HmIn.Ports} {P : Flock.Public} (hl : Flock.HmIn.loadPublic tags cc pi pubB = .ok P) :
     nat? (getD c.record "population") = some P.n := by
   replace h := (OneStageZk.checkBlobsAt_accept_one hm h).1
-  unfold OneStageZk.checkOneAt at h
+  replace h := OneStageZk.checkOneAt_body h
+  unfold OneStageZk.checkOneBody at h
   dsimp only at h
   split at h
   case h_1 => cases h
@@ -491,7 +493,8 @@ theorem units_of_checkBlobsAt {p : OneStageZk.Params} {c : OneStage.Commitment} 
     ∃ n, nat? (getD c.record "population") = some n ∧
       _root_.Spot.FilePart.indicesOf P.header = .ok (Array.range n) := by
   replace h := (OneStageZk.checkBlobsAt_accept_one hm h).1
-  unfold OneStageZk.checkOneAt at h
+  replace h := OneStageZk.checkOneAt_body h
+  unfold OneStageZk.checkOneBody at h
   dsimp only at h
   split at h
   case h_1 => cases h

@@ -1,4 +1,4 @@
-"""serve-openai under order ``release-order`` (`verity.protocols.resource_accounting.network.prover.admission.ReleaseOrder`) on CPU: requests reach the engine in the network attester's
+"""serve-openai under order ``release-order`` (`verity.protocols.accounting.network.prover.admission.ReleaseOrder`) on CPU: requests reach the engine in the network attester's
 release order (``x-verity-release``) whatever order the frontend reads their bodies in, a missing earlier release holds the
 later ones, and a release that never comes (the network attester dropped it) or is refused holds them only until its skip, never for
 good. The gate's skip is driven by hand (an injected ``schedule``), so nothing here waits on the clock.
@@ -23,12 +23,11 @@ from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Committer, Engine, 
 from verity_vllm import messages
 from verity_vllm.engine import hooks
 from verity_vllm.pipeline import cli
-from verity.protocols.resource_accounting.network.prover import admission as na
+from verity.protocols.accounting.network.prover import admission as na
 from verity_vllm.pipeline import serve_admit as sa
 from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline.serve_openai import SSE_DONE
-from verity_vllm.protocols.pouw import h1_hooks as PHK
 
 
 class Timers:
@@ -146,11 +145,18 @@ def test_unnumbered_malformed_repeated_and_new_runs():
 RUNNER_MODULE = "tests.pipeline.fake_model_runner_v2"
 
 
+def v2_order(num_tokens_per_req: dict[str, int], draft_tokens: dict[str, list[int]], decode_query_len: int) -> list[str]:
+    """Model Runner V2's batch order at vLLM d9105ea8 (``vllm/v1/worker/gpu/model_runner.py``, `sort_batch_req_ids`):
+    verification and decode first, then short extends, then prefills, by rows."""
+    return sorted(num_tokens_per_req, key=lambda r: (not draft_tokens.get(r), num_tokens_per_req[r] != decode_query_len,
+                                                     num_tokens_per_req[r]))
+
+
 def runner_module() -> types.ModuleType:
     """Model Runner V2's module as the step reads it (vllm/v1/worker/gpu/model_runner.py at d9105ea8): its runner's
     ``gather_batch_req_state`` lays the step out by the module's ``sort_batch_req_ids``, looked up when the step runs."""
     mod = types.ModuleType(RUNNER_MODULE)
-    mod.sort_batch_req_ids = PHK.sort_batch_req_ids
+    mod.sort_batch_req_ids = v2_order
 
     class GPUModelRunner:
         decode_query_len = 1
@@ -214,8 +220,6 @@ def test_release_order_keeps_the_schedulers_rows(v2):
         assert runner.gather_batch_req_state(W237) == ["varied.00035", "varied.00036"]
         assert runner.gather_batch_req_state(W220) == ["varied.00008", "varied.00009", "varied.00010"]
         assert runner.gather_batch_req_state(W237_DECODING) == [*DECODES, "varied.00035", "varied.00036"]
-        # H1's batch order reads the runner module's sort, so its tables follow the same order
-        assert [r for r, _ in PHK.batch_order(runner, W237_DECODING)] == [*DECODES, "varied.00035", "varied.00036"]
     finally:
         rows.uninstall()
     assert v2.sort_batch_req_ids is vllms and not hooks.live("admit-rows")
@@ -261,7 +265,7 @@ def test_the_pinned_runner_orders_rows_as_its_mirror_and_takes_the_schedulers_or
     `keep_scheduler_rows` replaces it in Model Runner V2's module."""
     mr = pytest.importorskip("vllm.v1.worker.gpu.model_runner")
     for step in (W237, W220):
-        assert mr.sort_batch_req_ids(step.num_scheduled_tokens, {}, 1) == PHK.sort_batch_req_ids(step.num_scheduled_tokens, {}, 1)
+        assert mr.sort_batch_req_ids(step.num_scheduled_tokens, {}, 1) == v2_order(step.num_scheduled_tokens, {}, 1)
     runner = type("GPUModelRunner", (), {"__module__": mr.__name__, "attn_groups": []})()
     with sa.keep_scheduler_rows(runner, FCFS):
         assert mr.sort_batch_req_ids(W237.num_scheduled_tokens, {}, 1) == list(W237.num_scheduled_tokens)

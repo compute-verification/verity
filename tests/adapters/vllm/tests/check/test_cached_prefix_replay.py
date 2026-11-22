@@ -5,14 +5,10 @@ from __future__ import annotations
 
 import json
 
-import numpy as np
 import pytest
 
 from verity_vllm.check.replay import cached_prefix as CP
-from verity_vllm.check.replay import evaluate as EV
-from verity_vllm.check.replay import linkage as LK
 from verity_vllm.definitions.numerics.kernel_registry import Declined
-from verity_vllm.pipeline import c2_replay as C2
 
 C, RL, BS = 4, 4, 2          # cached rows, key / value leaves per row (KVH*D), block size
 ROPE, QKV = "model.layers.{l}.self_attn.rotary_emb", "model.layers.{l}.self_attn.qkv_proj"
@@ -76,68 +72,9 @@ def test_a_read_across_two_planes_or_from_a_producer_that_was_itself_served_is_d
         CP.CachedPrefix(LAYOUT, ["r0", "r0"], {}, {}).identities(0, RL)
 
 
-def test_the_warm_prefix_input_resolves_and_the_prompt_reads_the_uncached_suffix():
-    class Store:
-        def __init__(self):
-            self.reads = []
-
-        def words(self, *a):
-            self.reads.append(a)
-            return np.zeros(a[5] - a[4], dtype=np.uint16), None
-
-    class Warm:
-        pnames, supplied, kv_prefix, by_i = ["prompt", "prefix", "weights"], {}, dict(LAYOUT), {}
-        cached_prefix = {"r1": _src()}
-
-        def describe(self, r):
-            return {"family": "Attention_v4", "statics": {}, "step": 0, "row": 0, "op_path": "x", "members": []}
-
-        def embed_op_path(self):
-            return "model.embed_tokens"
-
-    st = Store()
-    EV._evaluate_row(Warm(), st, None, {"i": 9, "spec": "X_v1", "args": [[["p", 0, C + 1, C + 2]], [["p", 1, 0, 2 * RL]]]}, "r1", 5, [],
-                     depth=0, plan=True)
-    assert st.reads == [("r1", 5, "model.embed_tokens", "in", 1, 2), ("r0", 0, ROPE.format(l=0), "key", 0, RL),
-                        ("r0", 0, ROPE.format(l=0), "key", RL, 2 * RL)]
-    with pytest.raises(Declined, match="prefix cache served"):
-        EV._evaluate_row(Warm(), st, None, {"i": 9, "spec": "X_v1", "args": [[["p", 0, C - 1, C]]]}, "r1", 5, [], depth=0, plan=True)
-    cold = Warm()
-    cold.cached_prefix = {}
-    with pytest.raises(Declined, match="no producing requests of record for r1"):
-        EV._evaluate_row(cold, st, None, {"i": 9, "spec": "X_v1", "args": [[["p", 1, 0, RL]]]}, "r1", 5, [], depth=0, plan=True)
-
-
 def test_the_layout_is_the_derives_prefix_file(tmp_path):
     assert CP.layout_of(str(tmp_path)) is None and CP.layout_of(None) is None
     (tmp_path / CP.PREFIX_FILE).write_text(json.dumps(dict(LAYOUT, input="1")))
     assert CP.layout_of(str(tmp_path)) == LAYOUT
 
 
-def test_the_commit_hands_each_warm_request_its_producers_by_label():
-    reqs = [{"request_id": "a", "cached": 0, "cached_from": []},
-            {"request_id": "b", "cached": 128, "cached_from": ["a"] * 8, "prompt_token_ids": list(range(130))}]
-    assert C2.cached_prefixes(reqs, {"a": "r0", "b": "r1"}) == {"r1": {"cached": 128, "producers": ["r0"] * 8, "prompt": list(range(130))}}
-
-
-def test_the_linkage_holds_a_warm_arrival_to_the_declared_uncached_suffix():
-    prompt = list(range(100, 110))
-
-    class Store:
-        def __init__(self, ids):
-            self.ids = ids
-
-        def words(self, rid, step, op, member, lo, hi):
-            got = self.ids.get((rid, step))
-            return (np.asarray(got[lo:hi], dtype=np.int64), "") if got is not None and hi <= len(got) else (None, f"no ids [{lo}, {hi})")
-
-        def has(self, *a):
-            return False
-
-    reqs = [{"request_id": "r1", "arrive_step": 4, "prompt_token_ids": prompt, "steps": [4], "cached": C}]
-    lk = LK.boundary_linkage({}, None, reqs, embed_op_path="model.embed_tokens", store=Store({("r1", 4): prompt[C:]}))
-    assert lk["result"] is True and lk["prompt_cached"] == {"r1": C}
-    bad = LK.boundary_linkage({}, None, reqs, embed_op_path="model.embed_tokens", store=Store({("r1", 4): prompt[C - 1:-1]}))
-    assert bad["result"] is False and bad["unlinked"][0]["kind"] == "prompt"
-    whole = LK.boundary_linkage({}, None, [dict(reqs[0], cached=0)], embed_op_path="model.embed_tokens", store=Store({("r1", 4): prompt[C:]}))
-    assert whole["result"] is False

@@ -23,8 +23,8 @@ from verity_vllm.definitions.registry import dense as D
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
-    "TanhBf16_v2": (391, 1628, 31, "556586c2a32ec874adf62df5acc74a853dde4642b1add2cd3365cdd55d3f876147219bbb421733c9d7dd74897869b3b6a4945c01dc25a833f45bc3a54be7d4fd"),
-    "Bf16Tanh_v2{N=8}": (3128, 13024, 248, "a145e0351c69d4a45f8740b301f91e6682306d7cde53a41c75d7c77329862567bf16add6473d294b9d8f501e714af3a84cbdfb2a26a938d27503d84bbb8f01ba"),
+    "TanhBf16_v2": (391, 1628, 31, "0b3c0ce0ff4d059239772c4bb67af4d23b5fdcc46a6bd68c1514ace33aa56ac58624d4d6de3737b96a5230b542a0025b9680889a5795fad50e0a77cc211c9573"),
+    "Bf16Tanh_v2{N=8}": (3128, 13024, 248, "41bfddb7d5d9a9fbdec078a47a2341fe7f8944d9bea3da6655ff9856456b4c153a97d3e646df1dafd4e6913d59116241fd084d2b3ec64877b37dc5486f9d6e1b"),
 }
 WORDS: np.ndarray = np.arange(1 << 16, dtype=np.uint32).astype(np.uint16)
 

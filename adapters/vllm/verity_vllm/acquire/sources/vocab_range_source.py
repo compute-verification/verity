@@ -17,6 +17,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from verity_vllm.engine import hooks
+from verity_vllm.acquire.sources.scale_products_source import ScaleProductsSource
 from verity_vllm.log import init_logger
 from verity_vllm.query import vocab_range as VR
 
@@ -75,14 +76,7 @@ class VocabRangeSource:
         self._hooks.patch(self.torch.ops._C, "vocab_parallel_embedding", self._wrap(self.torch.ops._C.vocab_parallel_embedding))
         self.active = True
 
-    def uninstall(self) -> None:
-        for h in self._handles:
-            h.remove()
-        self._handles = []
-        self._hooks.uninstall()
-        self._scope.clear()
-        self._held.clear()
-        self.active = False
+    uninstall = ScaleProductsSource.uninstall
 
     def on_step_begin(self) -> None:
         self._held.clear()

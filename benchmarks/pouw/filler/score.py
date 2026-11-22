@@ -141,7 +141,7 @@ def nvflags() -> list[str]:
 def build(bdir: Path, out: Path) -> dict:
     log = out / "build.log"
     rec = {"nvcc": subprocess.run([nvcc(), "--version"], capture_output=True, text=True).stdout.strip().splitlines()[-1:]}
-    for name, src in (("dcap", REPO / "verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler" / "dcap.cu"), ("dscore", HERE / "dscore.cu")):
+    for name, src in (("dcap", REPO / "verity/protocols/accounting/compute/pouw/prover/kernels/filler" / "dcap.cu"), ("dscore", HERE / "dscore.cu")):
         rc = sh([nvcc(), *nvflags(), "-o", str(bdir / name), str(src), *LIBS], out=log, err=log)
         if rc:
             raise SystemExit(f"build of {name} failed (rc {rc}); see {log}")

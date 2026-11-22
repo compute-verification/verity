@@ -624,6 +624,8 @@ def main(a: PublishOptions | PullOptions | CaptureOptions | ShowOptions | Progra
     if isinstance(a, ShowOptions):
         write(json.dumps(record(a.row) if a.row else {r: e.get("record") for r, e in index().items()}, indent=1, sort_keys=True))
         return 0
+    if isinstance(a, (FetchOptions, ProgramsOptions)) and (others := sorted(set(a.rank) - {0})):
+        raise UsageError(f"the multi-GPU model is not served: --rank {others}; a row's circuit is rank 0's")
     if isinstance(a, FetchOptions):
         write(str(bundle(a.row, Path(a.to), a.rank or None, part=a.part or None)))
         return 0

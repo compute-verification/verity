@@ -119,7 +119,7 @@ def made(case: dict, where: Path, *, accept: bool = False, credited: float = 0.9
         macs = CLASS[0] * work["linears"] if macs is None else macs
         window = {"same": tr["log"][-1]["previous"], "other": "ab" * 64, None: None}[tie]
         answer = {"protocol": SV.PEARLPLUS_PROTOCOL, "verdict": "accept", "reason": None, "commitment": "cd" * 64,
-                  "public": {"work": {"credited": round(credited * macs), "macs": macs},
+                  "public": {"work": {"credited": round(credited * macs), "checked_macs": macs},
                              **({"tie": {"record": window}} if window else {})},
                   "profile": {"source": "ef" * 64}}
         row = {**SV.row_of("compute-accounting", answer, out), "answer_from": SV.PEARLPLUS_FROM}
@@ -149,7 +149,7 @@ def _record(lines: list[str]) -> list[str]:
 
 
 DEV_WHY = "no PoUW accept of record (a development accept counts as none)"
-#: the kit's lines under a record's first line (`benchmarks/README.md`'s interface)
+#: the kit's lines under a record's first line (`tests/test_metrics_registry.py`'s docstring)
 NOT_STATED, NOT_AN_AUDIT = "ran with: not stated", "a measurement, not an audit"
 
 

@@ -2,7 +2,7 @@
 
 This directory takes a served Pearl-C execution phase through the proof system: a retained served pass, committed as one
 audit execution phase in the ZK statement's format, is registered, sampled once, proved hidden tile by tile under Flock
-`--zk` and judged as PoUW's verifier says, with every control refused.
+`--zk` and judged as PoUW's verifier says.
 
 ## Try it
 
@@ -32,7 +32,7 @@ research run --on MACHINE --project verity --source . --cwd source --declared-ou
 | job | what it runs | writes under `$OUT` |
 |---|---|---|
 | `serve` | the served kernel's ship built from this tree (`build.sh`), then `pearl_c_vllm/window.sh`'s smoke with its requests retained on the node, for `job` | `window/` (`window.sh`'s output and the ship), `tree.txt`, `build.log`, `lean-coins-build.log` |
-| `job` | the window through the proof system on CPUs, over a `serve` run's retained requests (`SERVED_RUN`): commit, register, the challenger's coins, the sample, each sampled tile proved under Flock `--zk` and opened, a filler tile, the outcome and every control | `summary.json` (each check and the verdict it must give), and a file or directory a step, listed in the script's header |
+| `job` | the window through the proof system on CPUs, over a `serve` run's retained requests (`SERVED_RUN`): commit, register, the challenger's coins, the sample, each sampled tile proved under Flock `--zk` and opened, a filler tile and the outcome | `summary.json` (each check and the verdict it must give), and a file or directory a step, listed in the script's header |
 
 `job` is started through `hidden_zk/scope.sh` with `HZ_JOB=benchmarks/pouw/served_zk/job.sh`, which gives it a systemd
 scope of its own on the node's CPUs; its header has the full command. `job` reads `hidden_zk/job.sh` for its builds.

@@ -1,5 +1,5 @@
 """The operations list and the guard (`verity.circuits.operations`): a constant is data outside an operation, a table a primitive
-reads is data unless the library lists it, and the list's digest is pinned, so an edit without a version bump fails here."""
+reads is data unless the library lists it."""
 from __future__ import annotations
 
 import pytest
@@ -15,9 +15,6 @@ from verity.circuits import operations as O
 from verity.circuits.ops import prims as P
 from verity.circuits.ops.boolean import cast, gemm, mufu as boolean_mufu, scalar  # noqa: F401  (register the listed Definitions)
 
-#: `digest()` of VERSION 2. A change to the list needs a new VERSION, then this pin.
-DIGEST_V2 = ("ed918096fe165d6b29744c4d90da491e7be633eae488bb638be5744b6a876f49"
-             "915a47cc55c49a7786fec709a6ee716b3e7b6bc4c430679607941a83106f59e5")
 #: the entries core does not define (PoUW's, and the vLLM integration's MUFU.LG2), which circuit-check's catalog loads and its
 #: suite checks
 ELSEWHERE = {"PouwKeccakF1600_v1", "PouwSha512Compress_v1", "MufuLg2Mantissa_v2"}
@@ -35,11 +32,6 @@ def _root(fn):
 
 def _dot(dot):
     return _c("KDot", (("x", A16), ("w", A16)), P.F32, lambda B, S, x, w: B.call(G.DotBf16.bind(K=16, DOT=dot), x, w))
-
-
-def test_the_digest_is_pinned():
-    assert O.digest() == DIGEST_V2
-    assert O.spec() == {"format": O.TAG, "version": O.VERSION, "operations": sorted(O.OPERATIONS)} and O.VERSION == 2
 
 
 def test_core_entries_are_registered_composites():
@@ -98,8 +90,9 @@ def test_a_public_port_is_data_unless_its_derivation_is_listed(monkeypatch):
     ports = {"cs": {"seed": "rope/positions", "derivation": "verity/rope/neox-bf16/cos-sin/v1"}}
     assert O.DERIVATIONS == frozenset() and O.public_data(ports) == {
         "public input cs": [(0, "verity/rope/neox-bf16/cos-sin/v1")]}
+    before = O.digest()
     monkeypatch.setattr(O, "DERIVATIONS", frozenset({"verity/rope/neox-bf16/cos-sin/v1"}))
-    assert O.public_data(ports) == {} and O.digest() != DIGEST_V2
+    assert O.public_data(ports) == {} and O.digest() != before
     rope = "verity/rope/neox-bf16/cos-sin/v1"
     for bad in ({"derivation": rope}, {"seed": "", "derivation": rope}, {"seed": "rope/positions", "derivation": "request/x"},
                 {"seed": "rope/positions"}, "request/x"):

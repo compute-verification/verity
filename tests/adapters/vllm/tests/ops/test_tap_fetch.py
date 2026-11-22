@@ -1,4 +1,4 @@
-"""`ops/pod_norm_tap.sh` and `ops/pod_router_tap.sh` fetch their pinned vLLM sources with curl's own retry, `--retry 5`,
+"""`ops/pod_router_tap.sh` fetches its pinned vLLM sources with curl's own retry, `--retry 5`,
 which waits out a 429 or a 5xx from GitHub in any curl from 7.66.0 on (the bootstrap refuses an older one); a file that
 never comes fails the tap in one line naming it, and a file already fetched is not fetched again. The retry itself is
 curl's: the stub `curl` here records how it is called and answers at once."""
@@ -8,8 +8,7 @@ from pathlib import Path
 import pytest
 
 OPS = Path(__file__).resolve().parents[5] / "adapters" / "vllm" / "verity_vllm" / "ops"
-TAPS = {"pod_norm_tap.sh": ("NT", "NORM-TAP-FAIL", "type_convert.cuh"),
-        "pod_router_tap.sh": ("RT", "ROUTER-TAP-FAIL", "csrc/cuda_compat.h")}
+TAPS = {"pod_router_tap.sh": ("RT", "ROUTER-TAP-FAIL", "csrc/cuda_compat.h")}
 CURL = """#!/bin/bash
 echo "$*" >> "$CALLS"
 while [ $# -gt 0 ]; do case $1 in -o) out=$2; shift;; https://*) url=$1;; esac; shift; done

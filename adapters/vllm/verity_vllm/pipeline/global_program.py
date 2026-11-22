@@ -1,6 +1,6 @@
 """GP-01 driver: build the workload Program of a declared manifest from the derived request-wrapper Programs.
 
-    verity-vllm global-program --workload <manifest.json> --derived <dir> [--derived <dir> ...] --out <dir>
+    cli.run(global_program) --workload <manifest.json> --derived <dir> [--derived <dir> ...] --out <dir>
 
 Inputs (pre-execution only): the request manifest, read through the workload record (`records.workload.Workload`, which refuses a
 missing or unknown field by name: request ids, prompt lengths, caps, `arrive_step`, the sampling parameters, the row's declared `target`
@@ -390,7 +390,7 @@ def sampler_geometry(app: dict, reqs: list[dict]) -> dict | None:
     out["splits"] = S = int(registered_splits(int(nsm)))
     if samp.get("splits") != S:
         out["refusal"] = (f"the components declare splits {samp.get('splits')!r}, not the registered split count {S} of num_SMs={nsm}: "
-                          f"rebuild them (`pipeline.build.sampler_geometry`)")
+                          f"rebuild them (`pipeline.build_sampling.sampler_geometry`)")
     return out
 
 

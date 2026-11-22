@@ -19,25 +19,27 @@ above is the encoding-level value type, and a Call's inputs/outputs are its Valu
 PROTOCOL SUMMARY (Build stage: the registry = the closed vocabulary every Program is written in)
   Purpose: the registered function library the frontend binds vLLM's traced ATen ops to (Build), the fold names captured kernels with
     (Match) and the replay evaluates bit-exactly with (Commit): primitives with total evaluators on encodings (`prims`), the B1 eager
-    composites (`b1`), the sampler chain (`sampling`), the ⊥-lifted families (`lifted`), and the kernel conformance record.
-  Inputs: none at import beyond `verity.circuits` (REGISTRY, register_lazy_family); a descriptor's spec ids (e.g. `Const32[0x..]_v1`,
-    `GatherBf16x64_v1`, `Lifted[..]_v2`) are resolved on demand through the regex families registered here.
+    composites (`b1`), the sampler chain (`sampling`), and the kernel conformance record.
+  Inputs: none at import beyond `verity.circuits` (register_lazy_family); a descriptor's spec ids (e.g. `Const32[0x..]_v1`,
+    `GatherBf16x64_v1`) are resolved on demand through the regex families registered here.
   Outputs: a populated `verity.circuits.defs.REGISTRY`; every Program descriptor (descriptor.json.gz) decodes only against it.
   Invariants: importing ANY `verity_vllm.definitions.registry.*` module registers the lazy families first (Python imports the package), so a
-    descriptor decoded after such an import resolves the same way; family ORDER matters -- the two catch-alls (`{ORD=n}`,
-    `Lifted[..]`) are registered last; a spec id no family matches is a decode failure, never a guessed definition.
+    descriptor decoded after such an import resolves the same way; a spec id no family matches is a decode failure, never a guessed definition.
 """
 
 
 # ----------------------------------------------------------------------------------------------------------------------
 # On-demand primitive families.  veritor hardcoded these in verity_ir/codec.py:_LAZY_PRIMITIVE_FAMILIES; verity.circuits registers
-# only its own `Input<w>` and exposes `register_lazy_family` for semantics packages.  Order matters for the two catch-alls
-# (`{ORD=n}` and `Lifted[..]`), which is why they are registered last, exactly as veritor listed them.  Importing any
+# only its own `Input<w>` and exposes `register_lazy_family` for semantics packages.  Importing any
 # `verity_vllm.definitions.registry.*` module runs this (Python imports the package first), so a descriptor decoded after such an import
 # resolves as it did in veritor.  The makers import lazily to keep this package import light and cycle-free.
+#: Definition ids of a model that is not served, refused by name when no module registered them.
+RETIRED = r"^(Lifted\[(Dsv4|Mhc|Marlin|MoeAlign)\w*_v\d+(\{.*\})?\]_v[12]|(Dsv4|Mhc|Marlin|MoeAlign)\w*_v\d+(\{.*\})?)$"
+RETIRED_WHY = "Definition {fid} is refused: its model is not served through the one circuit, and its serving path is deleted"
+
+
 def _register_lazy_families() -> None:
-    from verity.circuits.codec import lookup_primitive, register_lazy_family
-    from verity.circuits.defs import REGISTRY
+    from verity.circuits.codec import register_lazy_family
 
     def _b1():
         from verity_vllm.definitions.registry import b1
@@ -50,10 +52,6 @@ def _register_lazy_families() -> None:
     def _sampling():
         from verity_vllm.definitions.registry import sampling
         return sampling
-
-    def _lifted():
-        from verity_vllm.definitions.registry import lifted
-        return lifted
 
     def _topp_word_gates():
         from verity_vllm.definitions.registry import topp_word_gates
@@ -71,9 +69,8 @@ def _register_lazy_families() -> None:
         from verity_vllm.definitions.registry import dsa_topk_mask
         return dsa_topk_mask
 
-    def _marlin_moe():
-        from verity_vllm.definitions.registry import marlin_moe
-        return marlin_moe
+    def _retired(m):
+        raise KeyError(RETIRED_WHY.format(fid=m[0]))
 
     register_lazy_family(r"^Const([1-9][0-9]*)\[0x([0-9a-f]+)\]_v1$", lambda m: _b1().const(int(m[1]), int(m[2], 16)))  # prims.CONST_ID
     register_lazy_family(r"^GatherBf16x(\d+)_v1$", lambda m: _prims().gather_bf16(int(m[1])))
@@ -81,9 +78,7 @@ def _register_lazy_families() -> None:
     # of such a descriptor (the Match of record, replay) must resolve them by id like GatherBf16
     register_lazy_family(r"^GatherE4m3x(\d+)_v1$", lambda m: _fp8_moe().gather_e4m3(int(m[1])))
     register_lazy_family(r"^GatherF32x(\d+)_v1$", lambda m: _fp8_moe().gather_f32(int(m[1])))
-    # [DeepSeek-V4] the Marlin W4A16 expert-row gathers, likewise built per expert count while deriving (`marlin_moe`)
-    register_lazy_family(r"^GatherE2m1Pairx(\d+)_v1$", lambda m: _marlin_moe().gather_e2m1_pair(int(m[1])))
-    register_lazy_family(r"^GatherE8m0x(\d+)_v1$", lambda m: _marlin_moe().gather_e8m0(int(m[1])))
+    register_lazy_family(RETIRED, _retired)
     # [GLM-5.3] the canonical top-k row's accelerator, one per (row length, TOPK), built while deriving a row past TOPK
     register_lazy_family(r"^DsaTopKLongRowCheck(\d+)x(\d+)_v1$", lambda m: _dsa_topk().long_row_check(int(m[1]), int(m[2])))
     # the mask form's accelerators, one per (row length, TOPK): the threshold `DsaTopKMask` compares each key with (its key and its
@@ -99,25 +94,6 @@ def _register_lazy_families() -> None:
     # the keep word as word gates at a constant S (`topp_words`, the registered S): its own word gates, which no module a
     # decoder imports for the sampler (`sampling`, among the modules the workload Program imports) registers
     register_lazy_family(r"^(BitXor|U32Xor|SelectBit|I32ToF32|NvLogf|TopPNumkeep)_v1$", lambda m: getattr(_topp_word_gates(), m[1]))
-    # the ⊥-lifted families: the strict lift of a registered primitive is a total function
-    # of the original's id, the specified ones of their width/size parameters
-    register_lazy_family(r"^LSelect(\d+)_v1$", lambda m: _lifted().l_select(int(m[1])))
-    register_lazy_family(r"^LIsActive(\d+)_v1$", lambda m: _lifted().l_is_active(int(m[1])))
-    register_lazy_family(r"^LBot(\d+)_v1$", lambda m: _lifted().l_bot(int(m[1])))
-    register_lazy_family(r"^LGatherRow(\d+)x(\d+)_v1$", lambda m: _lifted().l_gather_row(int(m[1]), int(m[2])))
-    register_lazy_family(r"^LStepLive(\d+)_v1$", lambda m: _lifted().l_step_live(int(m[1])))
-    # a cold decode of a lifted Program must resolve these by id too
-    register_lazy_family(r"^LIsEOS(\d+)_v1$", lambda m: _lifted().l_is_eos(int(m[1])))
-    register_lazy_family(r"^LEmitNext\[H=(\d+)\]_v1$", lambda m: _lifted().l_emit_next(int(m[1])))
-    register_lazy_family(r"^LFixedSelect(\d+)x(\d+)_v1$", lambda m: _lifted().l_fixed_select(int(m[1]), int(m[2])))
-    register_lazy_family(r"^LEnable_v1$", lambda m: _lifted().l_enable())  # the conditional enable
-    # a lifted primitive reading the masked operands at their ordinary type
-    register_lazy_family(r"^(.+)\{ORD=(\d+)\}$",
-                         lambda m: _lifted().with_ordinary(lookup_primitive(REGISTRY, m[1]), int(m[2])))
-    # lifted-v1 (propagation semantics): legacy, decodes as it was written
-    register_lazy_family(r"^Lifted\[(.+)\]_v1$", lambda m: _lifted().lifted_prim_v1(lookup_primitive(REGISTRY, m[1])))
-    # padded-v1 (explicit enablement): the enable is the last operand
-    register_lazy_family(r"^Lifted\[(.+)\]_v2$", lambda m: _lifted().lifted_prim(lookup_primitive(REGISTRY, m[1])))
 
 
 _register_lazy_families()

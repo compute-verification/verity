@@ -50,6 +50,7 @@ theorem membersStructure_ok {p : _root_.Spot.OneStageZk.Params} {ms : Array _roo
       _root_.Spot.OneStageZk.linesOf e = .ok lines ∧
       _root_.Spot.OneStageZk.membersTreesHeld ts lines (sts.zip held) bs = .ok () := by
   unfold _root_.Spot.OneStageZk.membersStructure at h
+  obtain ⟨⟨⟩, -, h⟩ := ebind_ok h
   obtain ⟨held, hheld, h⟩ := ebind_ok h
   dsimp only at h
   split at h

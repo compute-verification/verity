@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-import tomllib
 from dataclasses import asdict, dataclass, field, fields, replace
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -21,15 +20,7 @@ VLLM_PIN = _PRODUCTION.vllm
 REVISIONS = {m.repository: m.revision for m in _PRODUCTION.models.values()}
 SPEC_ROOT = Path(__file__).resolve().parents[2] / "specs"
 SOURCE_ROOT = Path(__file__).resolve().parents[4]
-#: A spec's path from the source tree's root while the specs had a directory of their own, and that directory. A run
-#: recorded then names its spec by that path, and so does a command written then: each is the spec of that name in
-#: `SPEC_ROOT` (`former_name`).
-FORMER_SPEC = "benchmarks/specs/{name}.toml"
-FORMER_SPECS = PurePosixPath(FORMER_SPEC).parent.as_posix()
 GPUS = gpus()
-#: Each spec id a run was recorded under before its spec named no card, as the spec and card it is now: read for a stored
-#: run's record alone (`former_spec`); no launch takes one
-FORMER_IDS = Path(__file__).resolve().parents[1] / "data" / "former_spec_ids.toml"
 ENV_NAME = re.compile(r"[A-Z_][A-Z0-9_]*")
 # What the dispatcher, the queue or the launcher sets: a spec naming one would be overridden or would override them.
 RESERVED_ENV = re.compile(r"VERITY_BENCH_\w*|RESEARCH_\w*|GPU_LEASE_\w*|CUDA_VISIBLE_DEVICES|CUDA_DEVICE_ORDER|PYTHONPATH|PATH")
@@ -161,15 +152,6 @@ class ResolvedSpec:
         return sha256(self, identity=True)
 
 
-def former_name(spec: str | Path) -> str | None:
-    """The name of the spec that a path under the specs' former directory (`FORMER_SPECS`) names; None for a name or any
-    other path."""
-
-    path = PurePosixPath(Path(spec).as_posix())
-    under = path.parent.as_posix()
-    return path.name.removesuffix(".toml") if under == FORMER_SPECS or under.endswith("/" + FORMER_SPECS) else None
-
-
 def split_card(spec: str | Path) -> tuple[str, str | None]:
     """A spec argument as (the spec, the card it names): ``SPEC@CARD`` names the card by its `short`, and so does a path
     recorded for one (``.../SPEC@CARD.toml``, `jobs._relative_spec`'s); else no card."""
@@ -183,71 +165,26 @@ def split_card(spec: str | Path) -> tuple[str, str | None]:
     return (f"{head}/" if head else "") + stem + toml, card
 
 
-def former_spec(spec_id: str) -> tuple[str, str] | None:
-    """The spec and card a former spec id is now (`FORMER_IDS`), for reading a run recorded under it; None for any
-    other id."""
-
-    return former_specs().get(spec_id)
-
-
-def former_specs() -> dict[str, tuple[str, str]]:
-    """Every former spec id (`FORMER_IDS`) as the spec and card it is now."""
-
-    return {old: (entry["spec"], entry["card"]) for old, entry in tomllib.loads(FORMER_IDS.read_text())["former"].items()}
-
-
 def declared_schemes() -> tuple[str, ...]:
-    """The declared schemes' names (`compose.schemes`), each an arm id that attaches it by name."""
-    from verity.protocols.compose import schemes
+    """The declared schemes' names (`run.schemes`), each an arm id that attaches it by name."""
+    from verity.protocols.run import schemes
 
     return tuple(schemes.load())
 
 
-def former_arm(arm_id: str) -> str | None:
-    """The arm id a former arm id is now (`FORMER_IDS`' ``[former_arms]``), for reading a run recorded under it; None
-    for any other id. No launch takes a former arm id."""
-
-    return tomllib.loads(FORMER_IDS.read_text()).get("former_arms", {}).get(arm_id)
-
-
-def retired_spec(spec_id: str) -> str | None:
-    """Why a spec deleted with no successor refuses a launch (`FORMER_IDS`' ``[retired]``); None for any other id. Its
-    stored runs read under the id itself."""
-
-    return tomllib.loads(FORMER_IDS.read_text()).get("retired", {}).get(spec_id)
-
-
-def current_spec(spec_id: str) -> str:
-    """The name a stored run's spec id has now: for a former id (`FORMER_IDS`), its spec, ``@CARD`` where that spec runs on
-    more than its card; else the id itself."""
-
-    now = former_spec(spec_id)
-    if now is None:
-        return spec_id
-    doc = tomllib.loads(_spec_path(now[0]).read_text())
-    return now[0] if doc.get("cards", [doc.get("card")]) == [now[1]] else f"{now[0]}@{now[1]}"
-
-
 def spec_file(spec: str | Path) -> Path | None:
-    """The spec file ``spec`` names, by path or id (one under `FORMER_SPECS` by its name); None where none is there: a
-    former, retired or unknown id."""
+    """The spec file ``spec`` names, by path or id; None where none is there."""
 
     path = Path(spec)
     if path.is_file():
         return path
-    named = SPEC_ROOT / f"{former_name(spec) or spec}.toml"
+    named = SPEC_ROOT / f"{spec}.toml"
     return named if named.is_file() else None
 
 
 def _spec_path(spec: str | Path) -> Path:
     if (path := spec_file(spec)) is not None:
         return path
-    name = former_name(spec) or str(spec)
-    if now := former_spec(name):
-        raise ConfigError(f"spec {name!r} is {now[0]!r} on the {now[1]}, `{now[0]}@{now[1]}`: its former id names a "
-                          "stored run's spec, and no run is launched under it")
-    if why := retired_spec(name):
-        raise ConfigError(f"spec {name!r} is refused: {why}")
     raise ConfigError(f"no benchmark spec {spec!r}")
 
 

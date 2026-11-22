@@ -8,8 +8,9 @@
   when its scheme is `window.LIVE_SCHEME`, `epoch_coins`), as the salt coin, opened after the fixed operands' root (a live
   session's after its salt execution phase's root), and the salt must be the manifest's.  A pass recorded before the execution
   phase's coins (a v1 manifest, which carries a beacon instead) is refused, as the Lean `PouwVerifier.PearlPlus` refuses it.
-- **The call indices** are each below 2^32 and none twice (`credit.passes_distinct`: ``call-range``, ``repeated-call``);
-  `served_passes.py` holds a run's passes of one salt to distinct indices too.
+- **The call indices** are each below 2^32 and none twice in a pass (`credit.passes_distinct`: ``call-range``,
+  ``repeated-call``); over a run (`verify_passes`), each is its place, round s's call c at `protocol.call_place` (s, c),
+  each part below 2^16 (`passes_placed`: ``call-place``, ``repeated-call``, ``call-range``).
 - **The records** (each matmul's real rows, width, excluded and voluntary rows; each fixed operand's excluded and voluntary rows)
   are the manifest's (`records_of`).  Their root must be the one the pass published before any sample.
 - **The samples' source** is 32 bytes of the Lean verifier's coins (`pouw.verifier.coins`, `IO.getRandomBytes`,
@@ -22,12 +23,14 @@
   a B row's from the copy the pass kept beside the fixed operand's rows (its ``salts``) of the salts the weights'
   registration committed them under (`pearl_c.weight_row_salts`), 192 bytes a leaf, and the scheme reads the value less
   its salt.
-- **The tiles** are `clear_work.audit`'s: its t work-weighted samples (`draw`) and one tile per excluded row
+- **The tiles** are `clear_work.audit`'s: its t work-weighted samples (`draw`, as Pearl+'s credited blocks,
+  `sampled_blocks`) and one tile per excluded row
   (`exclusion_tiles`).  Each is held to `Verifier.check_tile` and `check_opened`, as `audit` does, but mapped over J
   processes, since each costs about 11 s of CPU per 1,024 of k (``--fast``: about a tenth of that on `fast_tile`'s batch
   forms, with the first tile and every ``--cross-check``-th after it, in the sample's order, replayed on the scalar reference
   too).  `tests/benchmarks/pouw/test_pearl_c_vllm.py` holds this to `audit`'s own verdict.
-- **The served y**, where a call commits it (`served_y`, the manifest's ``y``): an accepted tile's real rows of y open against
+- **The served y**, which every call with a credited cell commits (`served_y`, the manifest's ``y``; one that commits none
+  is refused at load, ``a credited call commits no y root``): an accepted tile's real rows of y open against
   its root, each holds a word for every column of the tile (the opening doesn't bind a row's length: one that ends before
   the tile's columns is refused, ``the opened row holds N words``), and each of the tile's words must be the unscale of
   the tile's checked U (`pearl_c_u.y`, the kernels' epilogue), so the y that leaves the linear is the one the credited
@@ -110,13 +113,11 @@ protocol's check is a ZK proof, PouwVerifier).
 from __future__ import annotations
 
 import argparse
-import bisect
 import copy
 import dataclasses
 import hashlib
 import json
 import math
-import mmap
 import os
 import sys
 import multiprocessing
@@ -129,38 +130,39 @@ import numpy as np
 from verity.commitments import docket_digest as DD
 from verity.commitments import domains as DM
 from verity.commitments import Commitment, Opening, VerificationLimits, verify_opening
-from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
+from verity.protocols.accounting.compute.pouw.verifier.audit import (
     HM96,
-    HM96_SALT,
     ROW_SCHEMA,
     Epoch,
     activation_binding,
     opened_value,
     rows_domain,
     weight_binding,
+    Workload,
+    tile_refs,
 )
-from verity.protocols.resource_accounting.compute.pouw.verifier import verifier as PV
-from verity.protocols.resource_accounting.compute.pouw.verifier.coins import CoinCommitment
-from verity.protocols.resource_accounting.compute.pouw.verifier.credit import passes_distinct
-from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul, Shape, Tile, tagged
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_u as PCU
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_work as PW
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c import H100, K_MIN, TILE
-from verity.protocols.resource_accounting.compute.pouw.verifier.window import LIVE_SCHEME, pad as grid_pad
-from verity.protocols.compose import schemes
-from verity.protocols.resource_accounting.scheme import declared
-from verity.protocols.proofs.spot.verifier.challenger.challenger import LiveCommitment
+from verity.protocols.accounting.compute.pouw.verifier import verifier as PV
+from verity.protocols.accounting.compute.pouw.verifier.coins import CoinCommitment
+from verity.protocols.accounting.compute.pouw.verifier.credit import CALL_RANGE_CODE, REPEATED_CALL, passes_distinct
+from verity.protocols.accounting.compute.pouw.verifier.protocol import DomainError, Matmul, Shape, Tile, call_place, tagged
+from verity.protocols.accounting.compute.pouw.prover.schemes import pearl_c_u as PCU
+from verity.protocols.accounting.compute.pouw.prover.schemes import pearl_c_work as PW
+from verity.protocols.accounting.compute.pouw.prover.schemes.pearl_c import H100, K_MIN, TILE
+from verity.protocols.accounting.compute.pouw.verifier.window import LIVE_SCHEME, pad as grid_pad
+from verity.protocols.run import schemes
+from verity.protocols.accounting.scheme import declared
+from verity.protocols.proof.spot.verifier.challenger.challenger import LiveCommitment
 from verity.commitments import registered_value as RV
 from verity.errors import ProtocolError
 from verity.commitments.randomness import derive
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PD
-from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR
+from verity.protocols.accounting.compute.pouw.prover.serving import pearl_c as PD
+from verity.protocols.accounting.compute.pouw.prover import schemes as pouw_schemes
+from verity.protocols.accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
+from verity.protocols.accounting.compute.pouw.prover.serving.pearl_c import opened as PO, window as PWR
 from verity_config.settings import of
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "clear"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "compute" / "pouw" / "prover" / "clear"))
 import fast_tile as FT
 import clear_work as CW
 from clear_audit import TileOpening, Transcript, Verifier
@@ -184,90 +186,96 @@ OVER_INERT_BOUND = (REJECT, UNCREDITED)
 LIMITS = VerificationLimits()
 
 
-def pow2(n: int) -> int:
-    return 1 << max(n - 1, 0).bit_length()
+@dataclass(frozen=True)
+class CreditedBlock:
+    """One credited block: tile ``id`` = (pass, tile id) of the run, the tile id its transcript leaf's position; ``record``
+    its call's position in the pass, ``unit`` the call's index, ``rows`` and ``cols`` the tile's, ``col`` its column block
+    (``cols[0] // TN``), ``size`` its template's (K, TM, TN, N), ``real`` its template's static real-row count TR (its
+    rows below the call's ``real_rows``; the rest are filler, held to zero), and ``ticket`` its integer sample weight."""
+
+    id: tuple[int, int]
+    record: int
+    unit: int
+    rows: tuple[int, ...]
+    cols: tuple[int, ...]
+    col: int
+    size: tuple[int, int, int, int]
+    real: int
+    ticket: int
 
 
-def opening(tree: bytes, count: int, pos: int, value: bytes, nb: int = 32) -> Opening:
-    """Position `pos`'s path in a tree laid out as the device writes it: level 0 padded to a power of two, then each level
-    above it, `nb` bytes a node (64 under hm96-sha512)."""
-    path, off, width, cur = [], 0, pow2(count), pos
-    while width > 1:
-        s = off + (cur ^ 1)
-        path.append(bytes(tree[nb * s:nb * s + nb]))
-        off, width, cur = off + width, width // 2, cur >> 1
-    return Opening(pos, value, tuple(path))
+def credited_blocks(scheme: Any, passes: list[list[Any]]) -> list[CreditedBlock]:
+    """The run's credited product as blocks, one per grid tile of every call of every pass (``passes``, each pass's
+    `UnitRecord`s in order), in the Lean verifier's order (`Run.lean`'s `tile?` and `tickets`): pass by pass, call by call,
+    each call's tiles row-major (`audit.tile_refs` over `grid_tiles`), each ticketed at its credited cells' `wref` share
+    (`clear_work.tickets` over every pass's records together). A tile with no credited cell has ticket 0 and is never in
+    the sample."""
+    tickets = iter(CW.tickets(scheme, [r for records in passes for r in records]))
+    tn, out = scheme.tile[1], []
+    for i, records in enumerate(passes):
+        for ref in tile_refs(scheme, Workload(tuple(r.matmul for r in records))):
+            _, tile, ticket = next(tickets)
+            r = records[ref.matmul]
+            u = r.matmul
+            assert tile == ref.tile, "clear_work.tickets and audit.tile_refs enumerate one grid"
+            out.append(CreditedBlock((i, ref.id), ref.matmul, u.index, tile.rows, tile.cols, tile.cols[0] // tn,
+                                     (u.shape.k, len(tile.rows), tn, u.shape.n),
+                                     sum(row < r.real_rows for row in tile.rows), ticket))
+    return out
 
 
-class Files:
-    """The pass's files, each read once (large ones memory-mapped) and held to its size and, where the manifest has one, its
-    SHA-256."""
-
-    def __init__(self, base: Path):
-        self.base, self.cache = base, {}
-
-    def __call__(self, spec: dict):
-        key = spec["path"]
-        if key not in self.cache:
-            with open(self.base / key, "rb") as fh:
-                data = mmap.mmap(fh.fileno(), 0, access=mmap.ACCESS_READ) if spec["bytes"] > 1 << 24 else fh.read()
-            if len(data) != spec["bytes"]:
-                raise ValueError(f"{key}: {len(data)} bytes; the manifest says {spec['bytes']}")
-            if "sha256" in spec and hashlib.sha256(data).hexdigest() != spec["sha256"]:
-                raise ValueError(f"{key}: its SHA-256 is not the manifest's")
-            self.cache[key] = data
-        return self.cache[key]
-
-
-def f32_row(data, k: int, i: int) -> bytes:
-    """Row i of a BF16 row file as the committed FP32 words (BF16 widened, exact)."""
-    return (np.frombuffer(data[2 * k * i:2 * k * (i + 1)], "<u2").astype("<u4") << 16).tobytes()
-
-
-class Opened:
-    """The prover's side of the audit from the pass's files: `open`, as `clear_audit.Prover` has it."""
-
-    def __init__(self, man: dict, files: Files, refs):
-        self.man, self.files, self.refs = man, files, refs
-        self.hm96 = pouw_schemes.get(man["scheme"]).commitment_hash == HM96
-        self.nb = 64 if self.hm96 else 32
-
-    def _salted(self, value: bytes, spec: dict | None, i: int) -> bytes:
-        """``value`` followed by leaf ``i``'s salt from the kept salts at manifest entry ``spec``."""
-        return value + bytes(self.files(spec)[HM96_SALT * i:HM96_SALT * (i + 1)]) if self.hm96 else value
-
-    def open(self, epoch: Epoch, tile_id: int) -> TileOpening:
-        ref, nb, sv = self.refs[tile_id], self.nb, self._salted
-        u, rec = epoch.workload.matmuls[ref.matmul], self.man["matmuls"][ref.matmul]
-        wt = self.man["weights"][str(u.weight)]
-        a_rows, a_tree = self.files(rec["rows"]), self.files(rec["tree"])
-        b_rows, b_tree = self.files(wt["rows"]), self.files(wt["tree"])
-        c = self.man["commitment"]
-        leaves = self.files(self.man["leaves"])
-        a_salts, b_salts, t_salts = (rec["salts"], wt["salts"], self.man["salts_t"]) if self.hm96 else (None, None, None)
-        return TileOpening(ref, tuple(opening(a_tree, u.shape.m, i, sv(f32_row(a_rows, u.shape.k, i), a_salts, i), nb)
-                                      for i in ref.tile.rows),
-                           tuple(opening(b_tree, u.shape.n, j, sv(f32_row(b_rows, u.shape.k, j), b_salts, j), nb)
-                                 for j in ref.tile.cols),
-                           opening(self.files(self.man["tree_t"]), c["count"], tile_id,
-                                   sv(bytes(leaves[nb * tile_id:nb * tile_id + nb]), t_salts, tile_id), nb))
-
-    def open_y(self, epoch: Epoch, tile_id: int) -> tuple[Opening, ...]:
-        """The tile's real rows of its call's committed y (`served_y`; filler rows aren't served)."""
-        ref = self.refs[tile_id]
-        u, rec = epoch.workload.matmuls[ref.matmul], self.man["matmuls"][ref.matmul]
-        rows, tree, real = self.files(rec["y"]["rows"]), self.files(rec["y"]["tree"]), rec["real_rows"]
-        salts = rec["y"]["salts"] if self.hm96 else None
-        return tuple(opening(tree, real, i, self._salted(f32_row(rows, u.shape.n, i), salts, i), self.nb)
-                     for i in ref.tile.rows if i < real)
+def sampled_blocks(scheme: Any, passes: list[list[Any]], key: Any, t: int) -> list[CreditedBlock]:
+    """The ``t`` blocks of `credited_blocks` that ``key`` samples (`clear_work`'s, work-weighted with replacement, in its
+    order): the Lean verifier's sample (`Run.lean`) under its key."""
+    blocks, at = credited_blocks(scheme, passes), [0]
+    for records in passes:
+        at.append(at[-1] + len(records))
+    by_tile = {(at[b.id[0]] + b.record, b.rows[0], b.cols[0]): b for b in blocks}
+    return [by_tile[(pos, tile.rows[0], tile.cols[0])]
+            for pos, tile in CW.draw(scheme, [r for records in passes for r in records], key, t)]
 
 
 class Refused(ValueError):
-    """A pass refused before anything is opened, with `credit.passes_distinct`'s (code, why)."""
+    """A pass refused before anything is opened, with `passes_placed`'s or `credit.passes_distinct`'s (code, why)."""
 
     def __init__(self, why: tuple[str, str]):
         super().__init__(": ".join(why))
         self.why = why
+
+
+#: why `passes_placed` refuses a call whose index is not its place
+CALL_PLACE = "call-place"
+
+
+def passes_placed(passes: Any, rounds: list[int] | None = None) -> tuple[str, str] | None:
+    """Why a run's pass manifests `passes`, pass i round ``rounds[i]`` (default i), are refused, or None: each call's index
+    is its place, `protocol.call_place` of its pass's round and its position among the pass's calls, recomputed here and
+    never read: ``manifest`` for a pass that is not a manifest with a string salt and a list of matmuls, ``call-place``
+    for rounds that are not one a pass or a call whose index is another, ``repeated-call`` for two passes at one round
+    (their calls' places, so their seeds and tickets, repeat), and ``call-range`` for a round or a position at or past
+    2^16 (`protocol.OFF_PLACE`). The Lean `PouwPearlPlus.passesPlaced`, step for step."""
+    ss = list(range(len(passes))) if rounds is None else list(rounds)
+    if len(ss) != len(passes):
+        return (CALL_PLACE, f"the run names {len(ss)} rounds for its {len(passes)} passes: a pass is one round")
+    held: dict[int, int] = {}
+    for p, (m, s) in enumerate(zip(passes, ss)):
+        us = m.get("matmuls") if isinstance(m, dict) else None
+        if not isinstance(m.get("salt") if isinstance(m, dict) else None, str) or not isinstance(us, list) \
+                or not all(isinstance(u, dict) for u in us):
+            return ("manifest", f"pass {p} is not a Pearl-C manifest with a string salt and a list of matmuls")
+        if (q := held.setdefault(s, p)) != p:
+            return (REPEATED_CALL, f"passes {q} and {p} are both round {s}: calls at one place repeat their seeds and "
+                                   "tickets")
+        for c, u in enumerate(us):
+            try:
+                want = call_place(s, c)
+            except DomainError as e:
+                return (CALL_RANGE_CODE, f"pass {p}'s call {c} is at round {s}, position {c}: {e}")
+            if type(i := u.get("index")) is not int or i != want:
+                return (CALL_PLACE, f"pass {p}'s call {c} holds index {i!r}, not its place {want} (round {s}, position "
+                                    f"{c}): -h3's row seed reads the index, so its place fixes the call's noise and no "
+                                    "one chooses it")
+    return None
 
 
 def read(path: Path) -> tuple[dict, str, str]:
@@ -300,7 +308,7 @@ class Pass:
     records: list
     transcript: Transcript
     verifier: Verifier
-    prover: Opened
+    prover: PO.Opened
 
     def tile_ids(self, picks: list[tuple[int, Tile]]) -> list[tuple[int, int]]:
         ids = {(ref.matmul, ref.tile.rows[0], ref.tile.cols[0]): ref.id for ref in self.verifier.refs}
@@ -333,13 +341,21 @@ def load(path: Path, coins: CoinCommitment | LiveCommitment | None = None, man: 
         reason = "the records are not the ones whose root the pass published"
     if reason is not None:
         raise ValueError(reason)
+    if bad := next((r for u, r in zip(man["matmuls"], records) if "y" not in u and sum(credited_cells(scheme, r))), None):
+        raise ValueError(f"matmul {bad.matmul.index}: a credited call commits no y root")
     c = man["commitment"]
     transcript = Transcript(tuple(bytes.fromhex(u["root_a"]) for u in man["matmuls"]), Commitment(bytes.fromhex(c["root"]), c["count"]),
                             ())
     verifier = Verifier(CW._TileRuleView(scheme), epoch)
     if len(verifier.refs) != c["count"]:
         raise ValueError(f"the commitment counts {c['count']} tiles; the workload has {len(verifier.refs)}")
-    return Pass(path, man, salt, scheme, epoch, records, transcript, verifier, Opened(man, Files(path.parent), verifier.refs))
+    return Pass(path, man, salt, scheme, epoch, records, transcript, verifier, prover_of(man, path.parent, verifier.refs))
+
+
+def prover_of(man: dict, d: Path, refs) -> PO.Opened:
+    """The prover's openings of the pass in directory ``d`` (`Opened`): salted where its scheme commits under hm96, each
+    tile's opening the `clear_audit.TileOpening` this file's `Verifier` reads."""
+    return PO.Opened(man, PO.Files(d), refs, pouw_schemes.get(man["scheme"]).commitment_hash == HM96, TileOpening)
 
 
 _JOB: dict = {}
@@ -467,8 +483,8 @@ def verify(path: Path, draws: int, jobs: int, commit: str, source: bytes | None 
         scheme, records, c, out["salt"] = p.scheme, p.records, man["commitment"], p.salt
         source = PV.coins(32) if source is None else source
         key = CW.replay_key(CW.RecordedDraw(1, source), p.transcript.commitment.root, bytes.fromhex(man["records_root"]), p.epoch.salt)
-        drawn, excluded = CW.draw(scheme, records, key, draws), CW.exclusion_tiles(scheme, records)
-        todo = [(0, pos, tid) for pos, tid in p.tile_ids(drawn + excluded)]
+        drawn, excluded = sampled_blocks(scheme, [records], key, draws), CW.exclusion_tiles(scheme, records)
+        todo = [(0, b.record, b.id[1]) for b in drawn] + [(0, pos, tid) for pos, tid in p.tile_ids(excluded)]
         verdicts, fast = replay([p], todo, jobs, fast, cross_check)
         out["replay"] = "batch" if fast else "scalar"
         differ = [t for _, t, _, _, _, same in verdicts if same is False]
@@ -677,7 +693,7 @@ def credited_cells(scheme: Any, r: PW.UnitRecord) -> list[int]:
 
 
 def pass_macs(p: Pass) -> int:
-    """One pass's credited cells' MACs, each cell at its record's kept K (`credit_at_assumption`'s ``macs`` over it alone;
+    """One pass's credited cells' MACs, each cell at its record's kept K (`credit_at_assumption`'s ``checked_macs`` over it alone;
     over `whole_pass`, `structural_credit`'s)."""
     return sum(sum(credited_cells(p.scheme, r)) * r.k_kept for r in p.records)
 
@@ -720,12 +736,12 @@ def credit_at_assumption(passes: list[Pass], t: int, delta: Fraction, over: int 
     tiles = sum(1 for cells, _ in taken.values() for c in cells if c)
     wrong, rho = sum((w for _, w in taken.values()), Fraction(0)), passes[0].scheme.cap
     credited = (1 - rho) * max(macs - wrong, Fraction(0))
-    return {"credited": math.floor(credited), "credited_tiles": tiles, "macs": macs, "rho": str(rho), "epsilon": str(eps),
+    return {"credited": math.floor(credited), "credited_tiles": tiles, "checked_macs": macs, "rho": str(rho), "epsilon": str(eps),
             "over_cap_draws": over}
 
 
 #: the exact credit's fields the grid form replaces (`grid_work`), kept as the profile's ``exact_work``
-EXACT_WORK = ("credited", "credited_tiles", "macs")
+EXACT_WORK = ("credited", "credited_tiles", "checked_macs")
 
 
 def whole(r: PW.UnitRecord) -> PW.UnitRecord:
@@ -787,7 +803,7 @@ def uncredited_cells(r: PW.UnitRecord) -> tuple[int, dict[str, int]]:
 def uncredited_calls(passes: list[Pass], t: int, delta: Fraction, over: int = 0) -> dict:
     """Where an accepted run's linears' MACs go uncredited, call by call (the verify document's ``uncredited``): each call's
     real MACs (its real rows × n × its weight's k), the MACs its credited cells hold at |K| (``checked_macs``, summing to
-    the credit's ``macs``), its real MACs the credit leaves out by cause (`uncredited_cells` at |K|, and ``kept_width``,
+    the credit's ``checked_macs``), its real MACs the credit leaves out by cause (`uncredited_cells` at |K|, and ``kept_width``,
     its real rows × n × the k − |K| side channels), and the credit's three terms on it: ``epsilon_macs``, what
     `credit_at_assumption`'s deduction takes off it at ε with no sample over the inert-work bound; ``over_bound_macs``, what
     the ``over`` samples on tiles over it add; ``rho_macs``, ρ of the rest; and ``credited_macs``, (1 − ρ) of the rest.  The
@@ -866,10 +882,11 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
     Held to a class, the work the verdict publishes (``public.work``, and the line's credit) is in the grid form
     (`grid_work`): the class's structural credit, MACs and credited tiles (`structural_credit`), the credit less the
     give-up padded up to H1's execution phase grid (``give_up``), so at most the exact credit. The exact one
-    (`credit_at_assumption`'s ``credited``, ``credited_tiles`` and ``macs``) is the profile's ``exact_work``, held on the
+    (`credit_at_assumption`'s ``credited``, ``credited_tiles`` and ``checked_macs``) is the profile's ``exact_work``, held on the
     node. Without a class the structural credit is not defined, and ``public.work`` is the exact credit.
 
-    ``paths`` are the passes the prover retained, pass i the served run's round ``rounds[i]`` (default i), the rounds
+    ``paths`` are the passes the prover retained, pass i the served run's round ``rounds[i]`` (default i), each of its calls
+    at its place there, refused before anything is read otherwise (`passes_placed`), the rounds
     ``dropped`` left out before the coin: they credit nothing, and W may register them (`tie`).  ``record`` is the
     verifier's record of its coin: the first verdict writes the run's commitment and the source there before any replay,
     and a later one over passes whose commitment is another (a retention or a give-up changed after the coin) is refused
@@ -895,7 +912,7 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
     if not paths:
         return reject("the run holds no pass with calls")
     try:
-        why = passes_distinct([read(x)[0] for x in paths])
+        why = passes_placed([read(x)[0] for x in paths], rounds)
         if why is not None:
             out["refused"] = list(why)
             raise Refused(why)
@@ -951,21 +968,14 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
                                        "draw": drew}, indent=1) + "\n")
             os.replace(tmp, record)
     out["draw"] = (drew or {}).get("from")
-    key = derive(source, RUN_DRAW_DOMAIN, {"run": root})
-    at = [0]
-    for p in passes:
-        at.append(at[-1] + len(p.records))
-    records = [r for p in passes for r in p.records]
-    drawn: dict[int, list] = {}
-    for pos, tile in CW.draw(scheme, records, key, draws):
-        i = bisect.bisect_right(at, pos) - 1
-        drawn.setdefault(i, []).append((pos - at[i], tile))
+    drawn = sampled_blocks(scheme, [p.records for p in passes], derive(source, RUN_DRAW_DOMAIN, {"run": root}), draws)
     todo, picked = [], []
     for i, p in enumerate(passes):
-        mine, ex = p.tile_ids(drawn.get(i, [])), p.tile_ids(CW.exclusion_tiles(p.scheme, p.records))
+        mine = [(b.record, b.id[1]) for b in drawn if b.id[0] == i]
+        ex = p.tile_ids(CW.exclusion_tiles(p.scheme, p.records))
         todo += [(i, pos, tid) for pos, tid in mine + ex]
         picked += [True] * len(mine) + [False] * len(ex)
-    excluded = len(todo) - sum(map(len, drawn.values()))
+    excluded = len(todo) - len(drawn)
     verdicts, fast = replay(passes, todo, jobs, fast, cross_check)
     uncredited = over_cap == UNCREDITED
     bad = [f"pass {i} tile {t}: {r}" for i, t, good, r, over, _ in verdicts if not good and not (over and uncredited)]

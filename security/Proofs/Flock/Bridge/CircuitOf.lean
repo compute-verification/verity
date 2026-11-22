@@ -45,14 +45,12 @@ import Std.Tactic.BVDecide.Normalize.BitVec
 /-!
 # The parsed circuit file as core's circuit, and the sampling relation as its incorrect proof blocks
 
-The definitions are `Properties.Flock.Circuit.CircuitOf`'s: `Verity.Circuit.ofAudit` and `Verity.Partition.ofAudit` (a
-game circuit and partition as core's), `circuitOf D hU n` and `partsOf D hU n` (the key program of the parsed file
+The definitions are `Properties.Flock.Circuit.CircuitOf`'s: `circuitOf D hU n` and `partsOf D hU n` (the key program of the parsed file
 `keyProg D.unroll hU n` as core's circuit and its `n` units), and `circuitOfFile tags cf tables pf`, `unitsOfFile` and
 `partsOfFile` (the same at the committed circuit and public files, through `parsedOf`). Here are their lemmas:
 
-* `Verity.Circuit.ofAudit_eq_toCircuit`: `Circuit.ofAudit C` is the Boolean profile's circuit of `C`
-  (`Verity.Boolean.Circuit.toCircuit`). `Verity.Circuit.ofBits xs` is a transcript of bits, and
-  `Verity.Partition.incorrect_ofAudit` says the incorrect proof blocks are the game's, so every statement about the game's incorrect proof blocks
+* `Verity.Circuit.ofBits xs` is a transcript of bits of a game circuit's Boolean profile
+  (`Verity.Boolean.Circuit.toCircuit`), and `Verity.Partition.incorrect_bool` says the incorrect proof blocks are the game's, so every statement about the game's incorrect proof blocks
   is one about core's.
 * `circuitOf_eq` and `partsOf_eq` restate the key program's circuit and partition as the ones `circuitOf` and `partsOf`
   embed (by definition), and `partsOf_incorrect` its incorrect proof blocks as theirs.
@@ -69,71 +67,45 @@ game circuit and partition as core's), `circuitOf D hU n` and `partsOf D hU n` (
 
 @[expose] public section
 
-namespace Flock.Bridge
-
-open Claims.Sampling
-
-/-! ## A game circuit as core's -/
-
-theorem apply_coreOp {N : ℕ} (o : Verity.Boolean.Op N) (v : Fin N → Bool) :
-    (coreOp o).apply v = o.apply v := by
-  cases o <;> rfl
-
-/-- A game circuit as a Boolean circuit: the same gates and outputs. -/
-def coreBool (C : Verity.Boolean.Circuit) : Verity.Boolean.Circuit where
-  N := C.N
-  op g := coreOp (C.op g)
-  topo g a ha := C.topo g a (by rwa [args_coreOp] at ha)
-  outputs := C.outputs
-
-end Flock.Bridge
-
 namespace Verity
 
-open Flock.Bridge (coreOp coreBool args_coreOp isInput_coreOp apply_coreOp)
-
-section OfAudit
+section ToCircuit
 
 variable {C : Verity.Boolean.Circuit}
 
-/-- `Circuit.ofAudit` is the Boolean profile's circuit of the game circuit. -/
-theorem Circuit.ofAudit_eq_toCircuit : Circuit.ofAudit C = (coreBool C).toCircuit := rfl
+theorem Boolean.Circuit.toCircuit_reads (g : Fin C.N) : C.toCircuit.reads g = (C.op g).args.toFinset := rfl
 
-theorem Circuit.ofAudit_reads (g : Fin C.N) : (Circuit.ofAudit C).reads g = (C.op g).args.toFinset :=
-  congrArg List.toFinset (args_coreOp _)
-
-theorem Circuit.ofAudit_op (g : Fin C.N) (v : (Circuit.ofAudit C).Trace) :
-    (Circuit.ofAudit C).op g v = BitVec.ofBool ((C.op g).apply fun a => (v a).getLsbD 0) :=
-  congrArg BitVec.ofBool (apply_coreOp _ _)
+theorem Boolean.Circuit.toCircuit_op (g : Fin C.N) (v : C.toCircuit.Trace) :
+    C.toCircuit.op g v = BitVec.ofBool ((C.op g).apply fun a => (v a).getLsbD 0) := rfl
 
 /-- A transcript of bits as core's. -/
-def Circuit.ofBits (xs : Fin C.N → Bool) : (Circuit.ofAudit C).Trace := fun g => BitVec.ofBool (xs g)
+def Circuit.ofBits (xs : Fin C.N → Bool) : C.toCircuit.Trace := fun g => BitVec.ofBool (xs g)
 
 variable {n : ℕ} (P : Spot.Sampling.Partition C n)
 
-theorem Partition.ofAudit_unit : (Partition.ofAudit P).unit = P.unit := rfl
-
-theorem Partition.mem_committed_ofAudit (g : Fin C.N) :
-    g ∈ (Partition.ofAudit P).committed ↔ g ∈ P.committed := by
+theorem Partition.mem_committed_bool (g : Fin C.N) :
+    g ∈ Verity.Partition.committed P ↔ g ∈ P.committed := by
   classical
-  simp only [Partition.committed, Spot.Sampling.Partition.committed, Finset.mem_filter,
-    Finset.mem_univ, true_and, isInput_coreOp, args_coreOp, List.mem_toFinset, Partition.ofAudit_unit]
+  simp only [Partition.committed, Spot.Sampling.Partition.committed, Finset.mem_filter, Finset.mem_univ, true_and,
+    Boolean.Circuit.toCircuit, List.mem_toFinset, Spot.Sampling.Partition.unit]
+  exact ⟨fun h => (@Finset.mem_filter _ _ _ _ _).2 ⟨Finset.mem_univ _, h⟩,
+    fun h => ((@Finset.mem_filter _ _ _ _ _).1 h).2⟩
 
-theorem Partition.localEval_ofAudit (xs : Fin C.N → Bool) (u : Fin n) (g : Fin C.N) :
-    (Partition.ofAudit P).localEval (Circuit.ofBits xs) u g = BitVec.ofBool (P.localEval xs u g) := by
+theorem Partition.localEval_bool (xs : Fin C.N → Bool) (u : Fin n) (g : Fin C.N) :
+    Verity.Partition.localEval P (Circuit.ofBits xs) u g = BitVec.ofBool (P.localEval xs u g) := by
   induction g using WellFoundedLT.induction with
   | _ g ih =>
   by_cases hu : P.unit g = some u
-  · rw [(Partition.ofAudit P).localEval_of_mem (Circuit.ofBits xs)
-      (show (Partition.ofAudit P).unit g = some u from hu), Circuit.ofAudit_op, P.localEval_of_mem xs hu]
+  · rw [Verity.Partition.localEval_of_mem P (Circuit.ofBits xs)
+      (show Verity.Partition.unit P g = some u from hu), Boolean.Circuit.toCircuit_op, P.localEval_of_mem xs hu]
     congr 1
     exact Verity.Boolean.Op.apply_congr _ fun a ha => by simp [ih a (C.topo g a ha)]
-  · rw [(Partition.ofAudit P).localEval_of_not_mem (Circuit.ofBits xs)
-      (show (Partition.ofAudit P).unit g ≠ some u from hu), P.localEval_of_not_mem xs hu]
+  · rw [Verity.Partition.localEval_of_not_mem P (Circuit.ofBits xs)
+      (show Verity.Partition.unit P g ≠ some u from hu), P.localEval_of_not_mem xs hu]
     rfl
 
 /-- Every transcript of core's circuit of a game circuit is a transcript of bits. -/
-theorem Circuit.ofBits_getLsbD (tr : (Circuit.ofAudit C).Trace) :
+theorem Circuit.ofBits_getLsbD (tr : C.toCircuit.Trace) :
     Circuit.ofBits (fun g => (tr g).getLsbD 0) = tr := by
   funext g
   apply BitVec.eq_of_getLsbD_eq
@@ -145,29 +117,29 @@ theorem Circuit.ofBits_getLsbD (tr : (Circuit.ofAudit C).Trace) :
   simp [Circuit.ofBits]
 
 /-- A unit's local evaluation in core's view of a game partition is the game's, at the transcript's bits. -/
-theorem Partition.localEval_ofAudit_bit (tr : (Circuit.ofAudit C).Trace) (u : Fin n) (g : Fin C.N) :
-    ((Partition.ofAudit P).localEval tr u g).getLsbD 0 = P.localEval (fun g => (tr g).getLsbD 0) u g := by
-  have e := Partition.localEval_ofAudit P (fun g => (tr g).getLsbD 0) u g
+theorem Partition.localEval_bool_bit (tr : C.toCircuit.Trace) (u : Fin n) (g : Fin C.N) :
+    (Verity.Partition.localEval P tr u g).getLsbD 0 = P.localEval (fun g => (tr g).getLsbD 0) u g := by
+  have e := Partition.localEval_bool P (fun g => (tr g).getLsbD 0) u g
   rw [Circuit.ofBits_getLsbD] at e
   rw [e]
   simp
 
-/-- **The incorrect proof blocks are the game's**: core's partition of a game circuit has the game partition's incorrect proof blocks, on
-the same bits. -/
-theorem Partition.incorrect_ofAudit (xs : Fin C.N → Bool) :
-    (Partition.ofAudit P).incorrect (Circuit.ofBits xs) = P.incorrect xs := by
+/-- **The incorrect proof blocks are the game's**: core's incorrect proof blocks of a game partition are the game
+partition's, on the same bits. -/
+theorem Partition.incorrect_bool (xs : Fin C.N → Bool) :
+    Verity.Partition.incorrect P (Circuit.ofBits xs) = P.incorrect xs := by
   classical
   ext u
   rw [Partition.mem_incorrect, Spot.Sampling.Partition.mem_incorrect]
   refine not_congr ⟨fun h g hg hu => ?_, fun h g hg hu => ?_⟩
-  · have e := h g ((Partition.mem_committed_ofAudit P g).2 hg) hu
-    rw [Partition.localEval_ofAudit] at e
+  · have e := h g ((Partition.mem_committed_bool P g).2 hg) hu
+    rw [Partition.localEval_bool] at e
     have e' := congrArg (fun v : BitVec 1 => v.getLsbD 0) e
     simpa [Circuit.ofBits] using e'
-  · rw [Partition.localEval_ofAudit]
-    exact congrArg BitVec.ofBool (h g ((Partition.mem_committed_ofAudit P g).1 hg) hu)
+  · rw [Partition.localEval_bool]
+    exact congrArg BitVec.ofBool (h g ((Partition.mem_committed_bool P g).1 hg) hu)
 
-end OfAudit
+end ToCircuit
 
 end Verity
 
@@ -359,18 +331,18 @@ section Parsed
 variable (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.unit) (n : ℕ)
 
 /-- **The key program's circuit restated from `circuitOf`**: `circuitOf` is it, through the Boolean profile. -/
-theorem circuitOf_eq : circuitOf D hU n = .ofAudit ((FlockSoundness.Discharge.Placed.keyProg D.unroll hU n).circuit
-    (FlockSoundness.Discharge.Layout.outsOf D.unroll hU n)) := rfl
+theorem circuitOf_eq : circuitOf D hU n = ((FlockSoundness.Discharge.Placed.keyProg D.unroll hU n).circuit
+    (FlockSoundness.Discharge.Layout.outsOf D.unroll hU n)).toCircuit := rfl
 
 /-- **The key program's partition restated from `partsOf`.** -/
 theorem partsOf_eq : partsOf D hU n =
-    .ofAudit ((FlockSoundness.Discharge.Placed.keyProg D.unroll hU n).partition
-      (FlockSoundness.Discharge.Layout.outsOf D.unroll hU n)) := rfl
+    (FlockSoundness.Discharge.Placed.keyProg D.unroll hU n).partition
+      (FlockSoundness.Discharge.Layout.outsOf D.unroll hU n) := rfl
 
 /-- **`partsOf`'s incorrect proof blocks are the key program's**, on the same bits. -/
 theorem partsOf_incorrect (xs : Fin (keyCircuit D hU n).N → Bool) :
     (partsOf D hU n).incorrect (Verity.Circuit.ofBits xs) = (keyPartition D hU n).incorrect xs :=
-  Verity.Partition.incorrect_ofAudit _ xs
+  Verity.Partition.incorrect_bool _ xs
 
 /-- **The incorrect-blocks bridge at the parsed file's circuit**: a witness in `RelS` at `δ = C(n − K₀, kd)/C(n, kd)`, in
 the sampling statement of the key program at constants `κ` under `subset kd`, at strata `ns` that sum to `n`, leaves
@@ -392,7 +364,7 @@ end Parsed
 variable {tags : Flock.Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {pf : ByteArray}
 
 /-- Files the verifier reads parse to their descriptor, its built unit and the public file's population. -/
-theorem parsedOf_eq {D : Flock.Desc} {pub : Flock.Public} (hD : Flock.Desc.parse tags cf tables = .ok D)
+theorem parsedOf_eq {D : Flock.Desc} {pub : Flock.Public} (hD : Flock.Desc.parseStmt tags cf tables = .ok D)
     (hpub : HmOut.loadPublic tags D.unroll pf = .ok pub) (hU : FlockSoundness.Built D.unroll.unit) :
     parsedOf tags cf tables pf = some ⟨D, hU, pub.n⟩ := by
   simp [parsedOf, hD, hpub, hU]
@@ -400,7 +372,7 @@ theorem parsedOf_eq {D : Flock.Desc} {pub : Flock.Public} (hD : Flock.Desc.parse
 /-- Files that parse are files the verifier reads: the circuit file to the parse's descriptor, and the public file
 to its population. -/
 theorem parse_of_parsedOf {r : Parsed} (h : parsedOf tags cf tables pf = some r) :
-    Flock.Desc.parse tags cf tables = .ok r.D ∧
+    Flock.Desc.parseStmt tags cf tables = .ok r.D ∧
       ∃ pub : Flock.Public, HmOut.loadPublic tags r.D.unroll pf = .ok pub ∧ pub.n = r.n := by
   unfold parsedOf at h
   split at h

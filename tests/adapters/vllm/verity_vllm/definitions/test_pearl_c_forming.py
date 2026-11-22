@@ -1,5 +1,5 @@
 """Pearl-C's forming v1, chain, Gram matrix, peel factors and peel as registered Definitions
-(`verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_c_forming`), word and Boolean, against PoUW's reference (`schemes.pearl_c`:
+(`verity.protocols.accounting.compute.pouw.prover.circuit.pearl_c_forming`), word and Boolean, against PoUW's reference (`schemes.pearl_c`:
 `s5_stats`, `eprime`, `form_v1`, `chain`, `gram`, `peel_factors_a`, `peel_factors_b`, `peel`), against PoUW's row units
 (`circuit.pc8`: `Pc8RowA`, `Pc8RowB`) on rows the reference rejects too, and on a chain the Lean specification proves of its
 own (`Pouw.PearlC.PeelExactVectors.chainV1c0`, held by `PeelExactChecks.chainsV1`)."""
@@ -21,17 +21,17 @@ from verity.circuits.ops.prims import (
     HopperBF16WgmmaDot16,
     HopperE4m3QgmmaDot32,
 )
-from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pc8
-from verity.protocols.resource_accounting.compute.pouw.prover.circuit import (
+from verity.protocols.accounting.compute.pouw.prover.circuit import pc8
+from verity.protocols.accounting.compute.pouw.prover.circuit import (
     pearl_c_forming as F,
 )
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import (
+from verity.protocols.accounting.compute.pouw.prover.schemes import (
     pearl_c as C,
 )
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import (
+from verity.protocols.accounting.compute.pouw.prover.schemes import (
     pearl_kw as P,
 )
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_device import (
+from verity.protocols.accounting.compute.pouw.prover.schemes.pearl_c_device import (
     DEVICES,
 )
 

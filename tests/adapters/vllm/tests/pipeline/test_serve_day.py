@@ -1,14 +1,11 @@
 """serve-openai's day (``--day``, `serve_day`): before the model loads, the server declares the day's one circuit in the
 deployment's registration log under core's own check, so a second declaration of the day is refused by core's name before
-anything serves. Without ``--day`` nothing is declared. What ``--h1-window-commit`` does with the day (the window log
-registers the declaration first, each W names it, an R of another program is refused at its close, and without ``--day``
-every byte is as before) is in `test_serve_tie`, with the windows it serves."""
+anything serves. Without ``--day`` nothing is declared."""
 from __future__ import annotations
 
 import dataclasses
 import json
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 from verity import device as ST
@@ -17,9 +14,7 @@ from verity.protocols.registration.verifier import site_log as L
 
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_day as SD
-from verity_vllm.pipeline import serve_h1 as SH
 from verity_vllm.pipeline import serve_openai as so
-from verity_vllm.pipeline import serve_tie as TIE
 
 #: the day's circuit's Program, and another
 PROGRAM = "5a" * 64
@@ -121,24 +116,3 @@ def test_a_second_declaration_of_the_day_is_refused_by_name_and_leaves_the_log_a
     log.unlink()
     with pytest.raises(cli.UsageError, match="a new log takes its composite from --day-params"):
         SD.declare(_opts(tmp_path, "--day", "0", "--day-log", str(log), "--day-program", PROGRAM), tmp_path)
-
-
-def test_the_day_reaches_the_tie_through_serve_h1s_arm(tmp_path, monkeypatch):
-    """`serve_h1.arm_of` hands the day to the tie it makes for ``--h1-window-commit``, and none without one."""
-    made = []
-
-    def tie(*a, **kw):
-        made.append(kw.get("day"))
-        return SimpleNamespace()
-
-    monkeypatch.setattr(TIE, "WindowTie", tie)
-    monkeypatch.setattr(SH, "sessions_of", lambda opts: None)
-    monkeypatch.setattr(SH, "H1Windows", lambda *a, **kw: SimpleNamespace(ready=lambda: None, tie=kw["tie"]))
-    monkeypatch.setattr(SH, "worker", lambda name: None)
-    monkeypatch.setattr(SH, "config_of", lambda c: None)
-    h1 = SimpleNamespace(h1_window_commit="cmd", h1_model=None, h1_prover=None, h1_receipts=False, h1_weights_root=None)
-    opts = SimpleNamespace(protocols="pouw:x", h1=h1, max_num_batched_tokens=1, window_steps=1, protocols_config=None)
-    llm = SimpleNamespace(model=None, vllm=None)
-    SH.arm_of(opts, llm, None, tmp_path, day="the day")
-    SH.arm_of(opts, llm, None, tmp_path)
-    assert made == ["the day", None]

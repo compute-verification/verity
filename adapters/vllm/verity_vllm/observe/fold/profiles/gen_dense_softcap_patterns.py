@@ -21,7 +21,7 @@ selection: `Attention_v3{T,NH,KVH,D,BN}` -> `AttentionSoftcap_v1{T,NH,KVH,D,BN,C
 attribution / consumed ids.  `softcap` in `(None, 0.0)` is the base pattern's case (returns None); a negative,
 NaN or infinite `softcap` is Unsupported here (FA2 takes the softcap path iff `softcap > 0`; the Definition requires `CAP > 0`).
 
-G4 admits the Definition through the run's `quarantine.json` (per-Definition difftest record, `verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json`, inherited by `cov_pod.sh`).
+G4 admits the Definition through the run's `quarantine.json` (per-Definition difftest record).
 """
 from __future__ import annotations
 

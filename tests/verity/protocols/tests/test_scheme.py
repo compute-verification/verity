@@ -1,4 +1,4 @@
-"""The resource scheme interface and its registry (`verity.protocols.resource_accounting.scheme`)."""
+"""The resource scheme interface and its registry (`verity.protocols.accounting.scheme`)."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.resource_accounting import scheme as S
+from verity.protocols.accounting import scheme as S
 
 EPS = Fraction(1, 2**40)
 
@@ -30,7 +30,7 @@ def _toy(name: str = "toy-bandwidth", **kw) -> S.Scheme:
 
 @pytest.fixture(autouse=True)
 def _empty(monkeypatch: pytest.MonkeyPatch) -> None:
-    from verity.protocols.compose import schemes
+    from verity.protocols.run import schemes
 
     # every declaration is imported into the real registry first: a module first imported under the empty one would
     # register there, and stay loaded with its scheme gone from the real one for the rest of the process
@@ -39,10 +39,10 @@ def _empty(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_picked_by_name_its_module_imported_on_first_use(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    from verity.protocols.compose import schemes
+    from verity.protocols.run import schemes
 
     (tmp_path / "toy_declaration.py").write_text(
-        "from verity.protocols.resource_accounting import scheme as S\n"
+        "from verity.protocols.accounting import scheme as S\n"
         "S.register(S.Scheme('toy', 'toy', 'memory', S.Lacks('a stand-in'), (), (), ()))\n")
     monkeypatch.syspath_prepend(str(tmp_path))
     monkeypatch.setattr(schemes, "DECLARATIONS", {"toy": "toy_declaration", "absent": "toy_declaration"})
@@ -57,12 +57,12 @@ def test_picked_by_name_its_module_imported_on_first_use(monkeypatch: pytest.Mon
 
 
 def test_a_shell_reads_one_field_of_a_declaration(monkeypatch: pytest.MonkeyPatch, capsys, tmp_path: Path) -> None:
-    """`python3 -m verity.protocols.compose.schemes NAME FIELD`, what the benchmarks' shell scripts read instead of a
+    """`python3 -m verity.protocols.run.schemes NAME FIELD`, what the benchmarks' shell scripts read instead of a
     literal of their own."""
-    from verity.protocols.compose import schemes
+    from verity.protocols.run import schemes
 
     (tmp_path / "toy_shell_declaration.py").write_text(
-        "from verity.protocols.resource_accounting import scheme as S\n"
+        "from verity.protocols.accounting import scheme as S\n"
         "S.register(S.Scheme('toy', 'verity/toy/v0', 'memory', S.Lacks('a stand-in'), (), (), (), settings={'reads': 5, 'on': True},\n"
         "                    option='toy:at-v1'))\n")
     monkeypatch.syspath_prepend(str(tmp_path))
@@ -200,7 +200,7 @@ def _dither_circuit() -> list[tuple[str, list[list[int]]]]:
     from verity.circuits.defs import bind
     from verity.commitments.periods import interface as I
     from verity.protocols.experimental.dither.prover import dither as D
-    from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+    from verity.protocols.proof.spot.verifier.one_stage import partition as P
 
     program, query = I.Circuit("toy", ((bind(D.PouwDitherBlock, L=32, FIRST=True), 3),
                                        (bind(D.PouwDitherLast, K=64, L=64), 1))).program()
@@ -246,8 +246,8 @@ def test_a_field_no_declaration_fills_is_refused_by_its_name() -> None:
 
 def test_every_declaration_fills_each_field_or_says_why_not() -> None:
     probe = ("import json\n"
-             "from verity.protocols.compose import schemes as C\n"
-             "from verity.protocols.resource_accounting import scheme as S\n"
+             "from verity.protocols.run import schemes as C\n"
+             "from verity.protocols.accounting import scheme as S\n"
              "C.load()\n"
              "F = ('parties', 'channels', 'channel_schemas', 'colocated', 'needs', 'depends', 'record', 'symbol',\n"
              "     'published', 'check', 'reader', 'premises', 'tables', 'output_format', 'product_family',\n"
@@ -278,8 +278,8 @@ def test_an_answers_entry_is_module_colon_attribute_and_a_lacks_is_refused_by_na
 def test_the_bandwidth_audit_is_answered_through_its_entry_in_a_process_with_no_exchange(tmp_path: Path) -> None:
     probe = ("import json, sys\n"
              "from pathlib import Path\n"
-             "from verity.protocols.compose import schemes as C\n"
-             "from verity.protocols.resource_accounting import scheme as S\n"
+             "from verity.protocols.run import schemes as C\n"
+             "from verity.protocols.accounting import scheme as S\n"
              "A = S.answering(C.get('bandwidth'))\n"
              "out = A.missing(Path(sys.argv[1]), 3, 'no session ran')\n"
              "print(json.dumps({'line': A.line(out), 'held': A.held, 'session': dict(A.session),\n"
@@ -358,17 +358,17 @@ def test_a_layout_refuses_an_overlap_and_an_overrun_by_name(fields, match) -> No
 
 def test_every_scheme_is_a_line_of_the_one_table() -> None:
     """Each name maps to the module that registers it, and every module that registers one is in the table."""
-    from verity.protocols.compose import schemes
+    from verity.protocols.run import schemes
 
     root = Path(__file__).resolve().parents[4]
     declaring = {str(p.relative_to(root).with_suffix("")).replace("/", ".")
-                 for d in ("verity/protocols/resource_accounting", "verity/protocols/experimental",
-                           "verity/protocols/proofs/spot", "verity/protocols/workload_classification")
+                 for d in ("verity/protocols/accounting", "verity/protocols/experimental",
+                           "verity/protocols/proof/spot", "verity/protocols/policy")
                  for p in (root / d).rglob("scheme.py") if "register(" in p.read_text()}
-    declaring.discard("verity.protocols.resource_accounting.scheme")
-    assert declaring == set(schemes.DECLARATIONS.values()), "add each declaring module's names to compose.schemes"
+    declaring.discard("verity.protocols.accounting.scheme")
+    assert declaring == set(schemes.DECLARATIONS.values()), "add each declaring module's names to run.schemes"
     probe = ("import importlib, json, sys\n"
-             "from verity.protocols.resource_accounting import scheme as S\n"
+             "from verity.protocols.accounting import scheme as S\n"
              "by = {}\n"
              "for m in sys.argv[1:]:\n"
              "    before = set(S.SCHEMES); importlib.import_module(m)\n"
@@ -395,17 +395,17 @@ def test_the_lookup_table_is_each_declarations_own_values() -> None:
     """`KEYS` holds, for every declared scheme, exactly the option, roles and port, framing and process names its
     declaration states: an entry the declaration lacks fails, and so does a declared value the table lacks."""
     probe = ("import json\n"
-             "from verity.protocols.compose import schemes\n"
+             "from verity.protocols.run import schemes\n"
              "print(json.dumps({n: schemes.keys(s) for n, s in schemes.load().items()}))\n")
     out = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True, check=True)
-    from verity.protocols.compose import schemes
+    from verity.protocols.run import schemes
 
     declared = {n: {f: tuple(v) for f, v in k.items()} for n, k in json.loads(out.stdout).items() if k}
-    assert {n: dict(k) for n, k in schemes.KEYS.items()} == declared, "write each declaration's values in compose.schemes.KEYS"
+    assert {n: dict(k) for n, k in schemes.KEYS.items()} == declared, "write each declaration's values in run.schemes.KEYS"
 
 
 def test_a_lookup_by_a_declared_value_names_one_scheme_and_refuses_none_or_two(monkeypatch) -> None:
-    from verity.protocols.compose import schemes
+    from verity.protocols.run import schemes
 
     assert schemes.named("option", "pous:p2-16448/v4") == "pous"
     assert schemes.named("provides", "admission") == "network-attester"
@@ -440,6 +440,33 @@ def test_a_pieces_party_is_a_declared_developer_party_and_its_development_one_of
                         ({"prover": S.Launch(optional=("address",), starts=("address", "host"))},
                          "start writes is among its binds or optional, not \\['host'\\]"),
                         ({"prover": S.Launch(optional=("address", "host"), starts=("address",), starts_optional=("host",))},
-                         "start may leave out is among what it writes, not \\['host'\\]")):
+                         "start may leave out is among what it writes, not \\['host'\\]"),
+                        ({"prover": S.Launch(entry="TOY_LAUNCHER")}, "prover's entry is a module:attribute"),
+                        ({"prover": S.Launch(executables=(("pkg", "exe"),))}, "executables are Executable records"),
+                        ({"prover": S.Launch(executables=(S.Executable("pkg", "exe"),) * 2)},
+                         "prover declares an executable twice")):
         with pytest.raises(ValueError, match=why):
             _toy(parties=parties, pieces=pieces)
+    assert isinstance(ok.pieces["prover"].entry, S.Lacks) and isinstance(ok.pieces["prover"].executables, S.Lacks)
+    exe = S.Executable("verity/x/lean", "toy-protocol")
+    said = _toy(parties=parties, pieces={"prover": S.Launch(entry="toy.launch:prover", executables=(exe,))}).pieces["prover"]
+    assert (said.entry, said.executables) == ("toy.launch:prover", (exe,))
+    assert exe.built("/t") == Path("/t/verity/x/lean/.lake/build/bin/toy-protocol")
+    for package, target, why in (("/abs", "t", "relative to the tree"), ("a/../b", "t", "relative to the tree"),
+                                 ("", "t", "relative to the tree"), ("a", "t/u", "a Lake target's name")):
+        with pytest.raises(ValueError, match=why):
+            S.Executable(package, target)
+
+
+def test_a_partys_start_reads_runs_only_of_its_depends_and_a_scheme_that_says_none_refuses_by_name() -> None:
+    from verity.protocol import Role
+    parties = (Role("prover", "developer"), Role("verifier", "auditor"))
+    ok = _toy(parties=parties, depends=("other",), reads={"verifier": {"key": ("other", "attester")}})
+    assert dict(ok.reads["verifier"]) == {"key": ("other", "attester")}
+    for reads, why in (({"oracle": {}}, "by its parties \\['prover', 'verifier'\\], not 'oracle'"),
+                       ({"verifier": {"key": ("third", "attester")}}, "reads runs of \\['third'\\], which are not among "
+                                                                       "its depends \\['other'\\]")):
+        with pytest.raises(ValueError, match=why):
+            _toy(parties=parties, depends=("other",), reads=reads)
+    with pytest.raises(LookupError, match="declares no reads"):
+        S.declared(_toy(parties=parties), "reads")

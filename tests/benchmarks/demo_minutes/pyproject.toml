@@ -12,7 +12,7 @@ inputs = ["benchmarks/demo_minutes",
     # test_no_pin_literal.py: the committed configurations and the code it holds to having none of their pins as a literal
     "tools/verity/cli/verity_cli/configurations.toml",
     "applications",
-    "verity/protocols/registration", "verity/protocols/resource_accounting",
+    "verity/protocols/registration", "verity/protocols/accounting",
     "benchmarks/pous",
     "benchmarks/one_stage",
     "adapters/vllm/verity_vllm/protocols",

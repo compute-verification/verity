@@ -14,8 +14,9 @@ counts, span and windows in the serve dir's ``private/out``. `served_stock.sh`'s
 is a full aggregate (a stock run's file, or the composed run's ``private/out/serve/overhead.json``, each on the node), or
 a serve dir when it runs on the node; it refuses a published one.
 
-Two rulers, each the same code in both arms. The client's is `adapters/vllm/tools/served_run/serve_load.py`'s timings file, a ``--varied``
-or a ``--fixed`` load's alike (``load.timings.json`` beside its record, on the node, which `metrics` reads there): each request's
+Two rulers, each the same code in both arms. The client's is the adapter's one sender's timings file
+(`verity_vllm.inputs.sender`), an input dataset's or `serve_load.py --varied`'s alike (``load.timings.json`` beside its
+record, on the node, which `metrics` reads there): each request's
 send, first-token and done times on the client's monotonic clock. Per load, from it:
 
 - ``client_time_per_output_token_s``: the first send to the last done, over the output ids the requests streamed;
@@ -74,7 +75,7 @@ TABLE_READS = ("requests", "span_s", "windows")
 T95 = {1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447, 7: 2.365, 8: 2.306, 9: 2.262, 10: 2.228, 15: 2.131,
        20: 2.086, 30: 2.042, 60: 2.000, 120: 1.980}
 #: the protocols of `verity-bench served-table` that run on the composed block's serving path
-SINGLE = ("Commit", "PoUS bandwidth audit", "H1 served")
+SINGLE = ("Commit", "PoUS bandwidth audit")
 
 
 def t95(df: int) -> float:
@@ -139,14 +140,7 @@ def load_metrics(load: dict[str, Any], windows: dict[int, dict[str, Any]]) -> di
             "step_s": [b - a for a, b in zip(times, times[1:])],
             "windows": {"n": len(ws), "closed_mid_load": len(mid), "open_s": sum(sec(w, "open") for w in ws),
                         "close_on_loop_s": on_loop, "close_on_loop_after_s": after,
-                        "arm_close_s": sum(float((w.get("on_loop_phases_s") or {}).get("arm") or 0.0) for w in ws),
-                        "h1": [_h1(w) for w in ws]}}
-
-
-def _h1(w: dict[str, Any]) -> str | None:
-    """A window's PoUW H1 on the serving path: None (not served), "error" (its session refused or failed), "tied" or "untied"."""
-    h = w.get("pouw_h1")
-    return None if not h else "error" if "error" in h else "tied" if h.get("tied") else "untied"
+                        "arm_close_s": sum(float((w.get("on_loop_phases_s") or {}).get("arm") or 0.0) for w in ws)}}
 
 
 def client_metrics(doc: dict[str, Any]) -> dict[str, Any]:
@@ -323,9 +317,7 @@ def table(composed: list[Path], stock: list[Path], *, allow: tuple[str, ...] = (
     parts = {k: summary([ld["windows"][k] for ld in c1]) for k in ("open_s", "close_on_loop_s", "arm_close_s")}
     parts["close_on_loop_after_s"] = summary([after(ld) for ld in c1])
     span = summary([ld["span_s"] for ld in c1])
-    h1 = [ld["windows"].get("h1") for ld in c1]
     return {"schema": "verity-bench/served-overhead/v0", "metrics": rows, "composed_parts": parts, "composed_span_s": span,
-            "composed_h1": h1,
             "composed": [{k: x[k] for k in ("dir", "run_id", "commit", "protocols", "remote_session", "scheduler")} | {"loads": x["loads"]}
                          for x in cs],
             "stock": [{k: x[k] for k in ("dir", "run_id", "scheduler")} | {"loads": x["loads"]} for x in ss],
@@ -359,11 +351,11 @@ def markdown(t: dict[str, Any]) -> str:
               "| part | seconds | share of the load's span | share of span + close |", "|---|---:|---:|---:|"]
     busy = span["mean"] + p["close_on_loop_after_s"]["mean"]
     lines.append(f"| load span (first arrival to last step's output) | {span['mean']:.3f} | 100% | {span['mean'] / busy:.0%} |")
-    lines.append(f"| Commit windows' open (Commit and H1 window open, before a window's first step) | {p['open_s']['mean']:.3f} | "
+    lines.append(f"| Commit windows' open (before a window's first step) | {p['open_s']['mean']:.3f} | "
                  f"{p['open_s']['mean'] / span['mean']:.0%} | {p['open_s']['mean'] / busy:.0%} |")
     lines.append(f"| Commit windows' close on the loop (between steps and after the last) | {p['close_on_loop_s']['mean']:.3f} | — | "
                  f"{p['close_on_loop_s']['mean'] / busy:.0%} |")
-    lines.append(f"| of which H1's arm close | {p['arm_close_s']['mean']:.3f} | — | {p['arm_close_s']['mean'] / busy:.0%} |")
+    lines.append(f"| of which the protocol arm's close | {p['arm_close_s']['mean']:.3f} | — | {p['arm_close_s']['mean'] / busy:.0%} |")
     if t["single_protocol"]:
         lines += ["", "Single-protocol served overhead (`verity-bench served-table`; another model and workload, time per output token "
                   "over the protocol's served stock):", "", "| protocol | device | spec | point | ratio | reps | run | art |",
@@ -381,7 +373,7 @@ PUBLIC = "verity-bench/served-overhead-ratios/v0"
 def public(t: dict[str, Any]) -> dict[str, Any]:
     """What `table --public` publishes: composed over stock for each metric (the ratio of means, its 95% interval, the range
     of the composed mean over each stock rep's first load, and over the warm loads), the composed run's served parts as
-    shares of its span plus the closes after its last step, its windows' H1, and the single-protocol rows. No count, time
+    shares of its span plus the closes after its last step, and the single-protocol rows. No count, time
     or rate of either arm."""
     p, span = t["composed_parts"], t["composed_span_s"]["mean"]
     busy = span + p["close_on_loop_after_s"]["mean"]
@@ -390,9 +382,9 @@ def public(t: dict[str, Any]) -> dict[str, Any]:
                  | ({"warm": {k: r["ratio_warm"][k] for k in keep if k in r["ratio_warm"]}} if "ratio_warm" in r else {})
               for m, r in t["metrics"].items()}
     shares = {"window_open": p["open_s"]["mean"] / busy, "window_close_on_loop": p["close_on_loop_s"]["mean"] / busy,
-              "h1_arm_close": p["arm_close_s"]["mean"] / busy}
+              "arm_close": p["arm_close_s"]["mean"] / busy}
     shares["engine_and_admission"] = 1.0 - shares["window_open"] - shares["window_close_on_loop"]
-    return {"schema": PUBLIC, "ratios": ratios, "composed_shares": shares, "composed_h1": t["composed_h1"],
+    return {"schema": PUBLIC, "ratios": ratios, "composed_shares": shares,
             "runs": {"composed": [x["run_id"] for x in t["composed"]], "stock": [x["run_id"] for x in t["stock"]]},
             "allowed": sorted({k for d in t["allowed"].values() for k in d}),
             "single_protocol": [{k: r[k] for k in ("protocol", "device", "spec", "point", "reps", "run", "art")}
@@ -412,8 +404,8 @@ def public_markdown(pub: dict[str, Any]) -> str:
         row = f"| {names[m]} | {_fmt(r['ratio'], 1, '×')} | {r['per_stock_rep'][0]:.4g}× to {r['per_stock_rep'][1]:.4g}× |"
         lines.append(row + (f" {_fmt(r['warm'], 1, '×')} |" if warm else ""))
     s = pub["composed_shares"]
-    lines += ["", "Composed run's served parts, as shares of its span plus the closes after its last step "
-              f"(H1 per window: {pub['composed_h1']}):", "", "| part | share |", "|---|---:|"]
+    lines += ["", "Composed run's served parts, as shares of its span plus the closes after its last step:", "",
+              "| part | share |", "|---|---:|"]
     lines += [f"| {k.replace('_', ' ')} | {v:.1%} |" for k, v in s.items()]
     if pub["single_protocol"]:
         lines += ["", "| single protocol | device | point | time per output token over its served stock | run |", "|---|---|---|---:|---|"]

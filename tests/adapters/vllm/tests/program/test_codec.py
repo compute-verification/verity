@@ -26,7 +26,6 @@ from tests.program.test_running_example import (
     Id16,
     Mul16,
     Relu16,
-    make_program,
 )
 from verity_vllm.definitions.registry import b1
 
@@ -164,9 +163,8 @@ def test_two_bodies_for_one_fully_qualified_specialization_are_rejected():
     top = CompositeDefinition("TopConflict", 1, (), lambda S: ((("x", A2), ("w", A2)), Array(2, V16)),
                               lambda B, S, x, w: __import__("verity.circuits.refs", fromlist=["array_of"]).array_of(
                                   [B.call(da, x, w), B.call(db, x, w)]), register=False)
-    P = Program(bind(top))
     with pytest.raises(IdentityConflict, match="DotConflict_v1"):
-        encode_program(P)
+        encode_program(Program(bind(top)))
     # ... whichever order the two are met in
     top2 = CompositeDefinition("TopConflict2", 1, (), lambda S: ((("x", A2), ("w", A2)), Array(2, V16)),
                                lambda B, S, x, w: __import__("verity.circuits.refs", fromlist=["array_of"]).array_of(
@@ -343,73 +341,3 @@ def test_v1_alias_writes_a_repeated_reference_sequence_as_a_pass_through_to_the_
     assert isinstance(dB, Concat) and len(dB.parts) == 4 and list(dB) == list(Bn)
     with pytest.raises(ValueError):
         _decode_refs({"alias": [9, 0]}, nodes, SCHEMA_V1)  # aliases point backwards only
-
-
-@pytest.mark.slow
-def test_v1_kv_cache_arguments_alias_the_previous_position_and_denote_the_same_program():
-    from verity.circuits.codec import SCHEMA_V0, SCHEMA_V1
-    from verity.circuits.codec import encode_program as enc
-
-    from tests.program.descriptor_equivalence import canonical_runs
-    LP, STEPS = 4, 2
-    desc = enc(Program(bind(b1.Serve, C=b1.B0_CONFIG, LP=LP, STEPS=STEPS)))
-    assert desc["schema"] == SCHEMA_V1
-    root = desc["definitions"][desc["root"]]["body"]
-    fn_of = desc["callees"].__getitem__  # v1: callee ids are interned
-    attn = [(k, n) for k, n in enumerate(root["nodes"]) if fn_of(n["fn"]).startswith("Attention_v1{")]
-    for k, n in attn:
-        T = int(fn_of(n["fn"]).split("T=")[1].split(",")[0])
-        kc, vc = n["args"][1]["refs"], n["args"][2]["refs"]
-        if T >= 3:  # position T's cache is position T-1's cache (an earlier Attention node's argument) plus one row
-            assert kc["concat"][0]["alias"][1] == 1 and vc["concat"][0]["alias"][1] == 2
-            j = kc["concat"][0]["alias"][0]
-            assert j < k and fn_of(root["nodes"][j]["fn"]).startswith(f"Attention_v1{{T={T - 1},")
-            assert len(kc["concat"]) == 2 and "affine" in kc["concat"][1]
-        elif T == 2:
-            assert all("affine" in p for p in kc["concat"]) and len(kc["concat"]) == 2
-        else:
-            assert "affine" in kc
-    assert len(attn) == b1.B0_CONFIG["NL"] * (LP + STEPS)
-    # the v0 (verbatim) and v1 (aliased) descriptors decode to the same reference sequences everywhere ...
-    D1 = decode_program(json.loads(json.dumps(desc)), REGISTRY)
-    d0 = enc(D1, schema=SCHEMA_V0)
-    D0 = decode_program(json.loads(json.dumps(d0)), REGISTRY)
-    assert d0["definitions"].keys() == desc["definitions"].keys()
-    for fid in desc["definitions"]:
-        f0, f1 = D0.defs[fid], D1.defs[fid]
-        if not hasattr(f0, "body"):
-            continue
-        for n0, n1 in zip(f0.body.nodes, f1.body.nodes, strict=True):
-            assert n0.fn.id == n1.fn.id and n0.out == n1.out
-            for x0, x1 in zip(n0.args, n1.args, strict=True):
-                assert x0.type == x1.type and canonical_runs(x0.refs) == canonical_runs(x1.refs)
-        assert canonical_runs(f0.body.ret) == canonical_runs(f1.body.ret)
-    # ... and the v1 digest is a function of the denoted program, not of the writer's nesting: the v0 descriptor
-    # re-encoded as v1 has the v1 digest, and v1 round-trips byte-for-byte
-    assert program_digest(enc(D0, schema=SCHEMA_V1)) == program_digest(desc) == program_digest(enc(D1, schema=SCHEMA_V1))
-    assert program_digest(d0) != program_digest(desc) and len(json.dumps(d0)) > len(json.dumps(desc))
-
-
-# -- digest stability: the v0 encoding of programs whose construction did not change ----------------------
-
-V0_DIGESTS = {  # recorded with the codec at vllm-poc e47be70
-    "running-example": "d4ab767ce4d2a53369a712b45ab1d534d338a559067eb7f2e737c8b11126ced6877d3402dd2c45c44f511d353d27169440152bcb85d5079c73e76626eb5b5d8d",
-    "running-example-Id16": "7ab1b121aefdc5b77e44ea6eefaa06c71192b316e4cacd7bbe3cbe67ef604a25b0aead3ac174b6adf90e118877a06ae6d4674619b0ef0cac05fbded0045ce7ec",
-    "Gemm{K=32,N=4}": "73b31a201e80a139da6a2c8ff9fdf8de66e1d4c79a5994be754574d3677d40c1d0838cb571b6bd43e8448e1c5b4bc8bb4cd259e5e1a3e7fcb9c3921645f2cc11",  # the re-key (AmpereBF16TcDot16_v2); 708fd264 = docs/data/frontend acceptance
-}
-# Programs with broadcasts or KV caches (B0/B1 `Serve`, `AttentionHead`) moved: descriptor-codec.md records old -> new.
-
-
-def _v0_programs():
-    return {
-        "running-example": make_program(),
-        "running-example-Id16": make_program(act=Id16),
-        "Gemm{K=32,N=4}": Program(bind(b1.Gemm, K=32, N=4)),
-    }
-
-
-@pytest.mark.parametrize("label", sorted(V0_DIGESTS))
-def test_v0_digests_of_programs_without_nested_statics_did_not_move(label):
-    from verity.circuits.codec import SCHEMA_V0
-    P = _v0_programs()[label]
-    assert program_digest(encode_program(P, schema=SCHEMA_V0)) == V0_DIGESTS[label]

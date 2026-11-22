@@ -8,7 +8,7 @@ A name one directory holds is imported by that name. A name two directories hold
 most, the one whose own scripts import it so: `AHEAD` lists those directories and puts them first, and `FirstHolder`, a
 finder ahead of ``sys.path``, keeps the name theirs whoever imports it, whatever a script has put first on the path since
 (a launcher starts a script with its own directory first, and many scripts put it there themselves). Another holder's
-module comes from `load`, under a name of its own. ``test_script_imports.py`` holds the tree to this.
+module comes from `load`, under a name of its own.
 """
 from __future__ import annotations
 
@@ -27,10 +27,10 @@ POUW = (Path(__file__).resolve().parents[3] / "benchmarks" / "pouw")
 NOT_SCRIPTS = frozenset({"tests", "exact_kit"})
 #: PoUW's prover's kernels, where the directories `MOVED` of ``benchmarks/pouw/`` went: this suite still takes their
 #: scripts, by the same names (``gpu_kit/sass_gate.py``)
-KERNELS = POUW.parents[1] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "kernels"
+KERNELS = POUW.parents[1] / "verity" / "protocols" / "accounting" / "compute" / "pouw" / "prover" / "kernels"
 MOVED = ("floored_gemm", "gpu_kit", "masked_gemm", "pearl_c")
 #: the directories of ``benchmarks/pouw/`` that went to ``calibration/pouw/``: this suite still takes their scripts, by the
-#: same names (``theory/run.py``)
+#: same names (``theory/fold_opt.py``)
 CALIBRATION = POUW.parents[1] / "calibration" / "pouw"
 CALIBRATED = ("dc", "facet_break", "opcode_probe", "sass_census", "tensor_kinds", "theory")
 #: the directories of ``benchmarks/pouw/`` whose kernels went to `KERNELS` and whose checks, ships and model drivers

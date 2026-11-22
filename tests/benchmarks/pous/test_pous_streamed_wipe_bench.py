@@ -10,10 +10,10 @@ from pathlib import Path
 import pytest
 from verity.ports import free_port
 
-pytest.importorskip("verity.protocols.resource_accounting.memory.pous.verifier")
+pytest.importorskip("verity.protocols.accounting.memory.pous.verifier")
 
 BENCH = Path(__file__).resolve().parents[3] / "benchmarks" / "pous" / "streamed_wipe" / "bench.py"
-POUS_TESTS = Path(__file__).resolve().parents[2] / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "verifier"
+POUS_TESTS = Path(__file__).resolve().parents[2] / "verity" / "protocols" / "accounting" / "memory" / "pous" / "verifier"
 
 
 def _load(name: str, path: Path):

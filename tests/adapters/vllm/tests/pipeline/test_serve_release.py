@@ -248,15 +248,14 @@ def test_a_window_whose_close_fails_is_discarded_not_waited_on():
     from verity_vllm.pipeline.serve_commit import CommitWindows
 
     _host, _rc, dev = committed()
-    draws, heard = SL.Draws(PROTOCOLS, dev.device_pool), []
-    windows = SimpleNamespace(release=draws, _sealed=heard.append)
+    draws = SL.Draws(PROTOCOLS, dev.device_pool)
+    windows = SimpleNamespace(release=draws)
     rec = {"window": 4, "error": "RuntimeError: finalize failed"}
     CommitWindows._no_release(windows, rec, dev, None)
     assert rec["release"]["discarded"] == "not sealed: RuntimeError: finalize failed" and dev.device_pool.held == 0
-    assert heard == [{"window": 4, "error": "not sealed: RuntimeError: finalize failed"}], "the arm hears why it has no seal"
     rec = {"window": 5}
     CommitWindows._no_release(windows, rec, dev, ("com", "rc", {}))
-    assert "release" not in rec and len(heard) == 1     # a window with a seal job is released, and heard, at its seal
+    assert "release" not in rec     # a window with a seal job is released at its seal
 
 
 def opts(**retention):

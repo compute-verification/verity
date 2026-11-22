@@ -16,12 +16,13 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/resource_accounting/memory/poub/prover/codec_tensor/reader.py").parent))
-sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/resource_accounting/memory/poub/prover/word_codec/cuda_lib.py").parent))
+sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/accounting/memory/poub/prover/codec_tensor/reader.py").parent))
+sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/accounting/memory/poub/prover/word_codec/cuda_lib.py").parent))
 CARD_FILES = HERE.parents[1] / "calibration/hardware/cards"
 sys.path.append(str(HERE.parents[1]))
 
 import cuda_lib  # noqa: E402
+from cuda_lib import timed  # noqa: E402
 import sketch_receipt as SR  # noqa: E402
 import sketching as SKT  # noqa: E402
 import wide as W  # noqa: E402
@@ -113,21 +114,6 @@ def stream(torch) -> int:
 
 def ptr(t) -> int:
     return t.data_ptr()
-
-
-def timed(torch, fn, reps: int, warm: int = 1) -> list[float]:
-    for _ in range(warm):
-        fn()
-    torch.cuda.synchronize()
-    out = []
-    for _ in range(reps):
-        a, b = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
-        a.record()
-        fn()
-        b.record()
-        b.synchronize()
-        out.append(a.elapsed_time(b) / 1e3)
-    return out
 
 
 def queued(lib: Lib, torch, fn) -> tuple[float, float]:

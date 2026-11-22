@@ -513,9 +513,9 @@ theorem run_verdicts_at {p : _root_.Spot.OneStageZk.Own} {sessions : Array _root
     (h : _root_.Spot.OneStageZk.run p sessions pu bs = .ok r) (hall : r.all = true) :
     ∃ (tags0 : Flock.Tags) (circuitB pubB : ByteArray) (rd : _root_.Spot.OneStageZk.Reads),
       _root_.Spot.OneStageZk.tablesHeld p bs = .ok () ∧
-      Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧ tags0.plainLeaves = false ∧
+      Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧ tags0.plainLeaves = false ∧
       (p.registered.isNone && _root_.Spot.OneStageZk.readsRegistered p.programJ) = false ∧
-      bs.get p.circuit "circuit" = .ok circuitB ∧ bs.get p.pub "public file" = .ok pubB ∧
+      p.circuitFile = .ok circuitB ∧ bs.get p.pub "public file" = .ok pubB ∧
       _root_.Spot.OneStageZk.fitsWhy _root_.Spot.OneStageZk.WORD circuitB pubB (_root_.Spot.OneStageZk.tablesOf bs)
         (some p.program) (some p.partition) p.registered = none ∧
       _root_.Spot.OneStageZk.readsOf p.registered = .ok rd ∧
@@ -578,8 +578,8 @@ theorem run_verdicts {p : _root_.Spot.OneStageZk.Own} {sessions : Array _root_.S
     {pu : Option (Array ℕ)} {bs : _root_.Core.Blobs} {r : _root_.Spot.OneStageZk.Run}
     (h : _root_.Spot.OneStageZk.run p sessions pu bs = .ok r) (hall : r.all = true) :
     ∃ (a : StepAt) (tags0 : Flock.Tags) (circuitB pubB : ByteArray),
-      Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧ tags0.plainLeaves = false ∧
-      bs.get p.circuit "circuit" = .ok circuitB ∧ bs.get p.pub "public file" = .ok pubB ∧
+      Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧ tags0.plainLeaves = false ∧
+      p.circuitFile = .ok circuitB ∧ bs.get p.pub "public file" = .ok pubB ∧
       a.I = _root_.Spot.OneStageZk.inputsOf tags0 p circuitB pubB bs ∧
       _root_.Spot.OneStageZk.readsOf p.registered = .ok a.rd ∧ a.scope = Record.scopeOf a.I a.rd ∧
       a.population = _root_.Spot.FilePart.check p.program (_root_.Spot.getD p.partition "query") pubB ∧

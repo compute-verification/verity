@@ -1,0 +1,8 @@
+{
+ "definitions": {
+  "HopperTf32WgmmaDot8_v2": {
+   "and": 6524,
+   "type": "48e98b1af3e2961101f300f7d231e867341b69b8991aede60af95d043a75d81ec49d448bfdc1a5e7abb812fda08714b3f725b685de41597c3e7bf0b59107bf98"
+  }
+ }
+}

@@ -14,13 +14,13 @@ reads off the blobs, and at it the scope check, the files' ports and roots and t
 setup asks, of each of its members, that its files pass the files check (`FilesPass`). This module carries the first
 to the second, at the window's member that is the parameters' member on the registered files (`MemberOn`):
 
-* **The circuit the checks read** (`circuitOf_flat`, `circuitOf_back`): an untyped statement's circuit file that
+* **The circuit the checks read** (`circuitOf_back`, over `Sampled.circuitOf_flat`): an untyped statement's circuit file that
   parses with some lookup tables is the circuit `Flock.ProvedScope.circuitOf` reads with them, and with tables that
   find by name whatever they find.
 * **What the statement's checks are** (`statementOf_checks`, `statement_checks`): the files' check of a member's
   statement is `Flock.PortRoots.checkOf` at the circuit read with its inputs' tables, and its population check the
   member's on its public file.
-* **The public file's count** (`population_header`, `headerHeld_instances`, `slice_population`, `load_count`): the
+* **The public file's count** (`population_header`, `headerHeldAt_instances`, `slice_population`, `load_count`): the
   member's population check holds its public file's header to the member's slice of the registration, whose
   population is the member's units' count, so a load of the file has as many proof blocks as the member has units.
 * **The member's files pass** (`filesPass_of_held`): on blobs where v2 reads the member's files among the files
@@ -43,35 +43,6 @@ open FlockSoundness.Refine (ebind_ok TablesExtend parse_okLe parseCommit_okLe)
 variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-! ## The circuit the checks read -/
-
-/-- An untyped statement's circuit file that `HmOut.parse` reads is what `HmOut.parseCommit` and `HmRow.parse`
-read. -/
-theorem parse_both {tags : Flock.Tags} {cf : ByteArray} {T : List (String × ByteArray)} {c : Flock.Circuit}
-    (ht : tags.typed = false) (hp : Flock.HmOut.parse tags cf T = .ok c) :
-    Flock.HmOut.parseCommit tags cf T = .ok c ∧ Flock.HmRow.parse tags cf T = .ok c := by
-  have hi := Flock.HmOut.parse_isTmpl hp
-  refine ⟨?_, ?_⟩
-  · rw [Flock.HmOut.parseCommit, ite_eq_right (by simp [hi])]
-    exact hp
-  · unfold Flock.HmOut.parse at hp
-    rw [ite_eq_right (by simp [hi])] at hp
-    dsimp only at hp
-    rw [ite_eq_left (by simp [ht])] at hp
-    obtain ⟨c', hc', hp⟩ := ebind_ok hp
-    obtain ⟨_, -, hp⟩ := ebind_ok hp
-    cases hp
-    exact hc'
-
-/-- **The circuit the checks read is the one the file parses to**: an untyped statement's circuit file that
-`HmOut.parse` reads as `c` with the tables `T` is the circuit `ProvedScope.circuitOf` reads with them. -/
-theorem circuitOf_flat {tags : Flock.Tags} {cf : ByteArray} {T : List (String × ByteArray)} {c : Flock.Circuit}
-    (ht : tags.typed = false) (hp : Flock.HmOut.parse tags cf T = .ok c) :
-    Flock.ProvedScope.circuitOf tags cf T = .ok c := by
-  obtain ⟨hpc, hr⟩ := parse_both ht hp
-  unfold Flock.ProvedScope.circuitOf
-  split
-  · exact hpc
-  · exact hr
 
 /-- **More lookup tables read the same circuit**: where `T'` finds by name whatever `T` finds and the circuit file
 parses with `T`, `ProvedScope.circuitOf` reads with `T'` the circuit it parses to. -/
@@ -132,28 +103,33 @@ theorem statement_checks {vm : _root_.Spot.OneStageZk.Member} {slice : Json} {bs
 
 /-! ## The public file's count -/
 
-/-- A member's population check that passes read the public file's header and held it to the slice. -/
+/-- A header `headerHeldAt` passes names the record's population as its `instances`: its first check, on the header
+as parsed. -/
+theorem headerHeldAt_instances {reads : Array (String × String)} {held : Array _root_.Flock.Registered.Port}
+    {rec hd : Json} (h : _root_.Spot.OneStageZk.headerHeldAt reads held rec hd = .ok ()) :
+    _root_.Spot.jeq (_root_.Spot.getD hd "instances") (_root_.Spot.getD rec "population") = true := by
+  cases hj : _root_.Spot.jeq (_root_.Spot.getD hd "instances") (_root_.Spot.getD rec "population")
+  · unfold _root_.Spot.OneStageZk.headerHeldAt at h
+    simp only [hj, Bool.not_false, ↓reduceIte, throw, throwThe, MonadExceptOf.throw] at h
+    first
+      | (simp only [bind, Except.bind, reduceCtorEq] at h; done)
+      | cases h
+  · rfl
+
+/-- A member's population check that passes read the public file's header, whose `instances` it held to the slice's
+population. -/
 theorem population_header {vm : _root_.Spot.OneStageZk.Member} {slice : Json} {pubB : ByteArray}
     (h : vm.population slice pubB = .ok ()) :
-    ∃ hd, _root_.Spot.FilePart.header pubB = .ok hd ∧ _root_.Spot.OneStageZk.headerHeld slice hd = .ok () := by
+    ∃ hd, _root_.Spot.FilePart.header pubB = .ok hd ∧
+      _root_.Spot.jeq (_root_.Spot.getD hd "instances") (_root_.Spot.getD slice "population") = true := by
   unfold _root_.Spot.OneStageZk.Member.population at h
   obtain ⟨prog, -, h⟩ := ebind_ok h
   obtain ⟨strata, -, h⟩ := ebind_ok h
   obtain ⟨hd, hh, h⟩ := ebind_ok h
   obtain ⟨⟨⟩, -, h⟩ := ebind_ok h
-  exact ⟨hd, hh, h⟩
-
-/-- A header held to a record names the record's population as its `instances`. -/
-theorem headerHeld_instances {rec hd : Json} (h : _root_.Spot.OneStageZk.headerHeld rec hd = .ok ()) :
-    _root_.Spot.jeq (_root_.Spot.getD hd "instances") (_root_.Spot.getD rec "population") = true := by
-  unfold _root_.Spot.OneStageZk.headerHeld at h
-  dsimp only at h
-  split at h
-  · cases h
-  · split at h
-    · rename_i he
-      exact Properties.Spot.Credited.population_of_matchesPublic (Array.isEmpty_iff.1 he)
-    · cases h
+  obtain ⟨rd, -, h⟩ := ebind_ok h
+  obtain ⟨hl, -, h⟩ := ebind_ok h
+  exact ⟨hd, hh, headerHeldAt_instances h⟩
 
 /-- A member's slice of the registration names the member's units' count as its population. -/
 theorem slice_population (vm : _root_.Spot.OneStageZk.Member) (rec : Json)
@@ -171,10 +147,9 @@ theorem load_count {vm : _root_.Spot.OneStageZk.Member} {rec : Json} {roots : St
     {pubB : ByteArray} (hpop : vm.population (vm.slice rec roots) pubB = .ok ()) {tags : Flock.Tags}
     {c : Flock.Circuit} {pi : Flock.HmIn.Ports} {P : Flock.Public}
     (hl : Flock.HmIn.loadPublic tags c pi pubB = .ok P) : P.n = vm.count := by
-  obtain ⟨hd, hh, hheld⟩ := population_header hpop
+  obtain ⟨hd, hh, hj⟩ := population_header hpop
   rw [Properties.Spot.Units.headerOf_loadPublic hl] at hh
   obtain rfl := Except.ok.inj hh
-  have hj := headerHeld_instances hheld
   have hi : _root_.Spot.getD P.header "instances" = .num ⟨Int.ofNat P.n, 0⟩ := by
     unfold _root_.Spot.getD _root_.Spot.field?
     rw [Properties.Spot.Credited.instances_of_loadPublic hl]

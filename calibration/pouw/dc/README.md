@@ -29,7 +29,7 @@ research run --on H200 ... --env DC_JBREAK=1 -- bash calibration/pouw/dc/run.sh 
 
 A run builds and SASS-gates everything before it touches the GPU, and `DC_BUILD_ONLY=1` builds and gates without one (on a node
 with no GPU, `DC_SKU` names the card file to build for, `calibration/hardware/cards/SKU.toml`; with neither, the build is
-refused). `uni.sh`, `pipe.sh`, `ffill.sh`, `s8_mma.sh` and `emp.sh run h32|emp` (the H32 probes, `h32.py`'s input, and
+refused). `uni.sh`, `ffill.sh`, `s8_mma.sh` and `emp.sh run h32|emp` (the H32 probes, `h32.py`'s input, and
 `sm90_emp.cu`, `emp.py`'s) take their target from the card the same way, and `emp.sh build SKU` and `s8_mma.sh build
 SKU` build on a CPU node for the card file `SKU`.
 Its results are not kept here: the analyses print them from a run's `out/`.
@@ -39,6 +39,6 @@ Its results are not kept here: the analyses print them from a run's `out/`.
 Not covered yet: sparse wgmma and tcgen05 (metadata operands), the N sweep for the FP kinds (s8 only), cta_group::2 (a
 CTA pair), M4e beyond fp8acc's binade question (kind::f16/tf32/f8f6f4 accumulation against the silicon models in
 general), lanes beside wgmma with more than one lane warp a SMSP (`wgU_`'s lanes stay well under their rate alone,
-and under the block-timed points the sm_90 facets rest on), operand streaming (TMA) in `pgemm.cu`, and a pipelined
-sm_90 GEMM. On sm_90 CUDA 13.0 has no native FP8 or s4 mma.sync: e4m3 m16n8k32 is 2 HMMA.16816.F32 + 4 FADD (timed as
-that), s4 m16n8k64 a CALL (not timed).
+and under the block-timed points the sm_90 facets rest on), operand streaming (TMA), and a pipelined sm_90 GEMM. On
+sm_90 CUDA 13.0 has no native FP8 or s4 mma.sync: e4m3 m16n8k32 is 2 HMMA.16816.F32 + 4 FADD (timed as that), s4
+m16n8k64 a CALL (not timed).

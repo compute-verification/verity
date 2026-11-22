@@ -1,0 +1,44 @@
+# A suite of `verity`'s tests: they run in the workspace's environment, against the editable `verity`.
+[tool.pytest.ini_options]
+testpaths = ["."]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = [
+    "test_challenger_coins.py",
+    "test_coins.py",
+    "test_plancheck.py",
+    "test_proofs.py",
+    "test_one_circuit_chain.py",
+    "test_service.py",
+    "test_service_fleet.py",
+    "test_service_history.py",
+    "test_service_sessions.py",
+    "test_service_window.py",
+    "test_verifier.py",
+]
+# Test-only: the Lean-evaluated exfiltration vectors record the sha256 of the soundness package's files they were generated
+# from (tests/lean/generate.sh), and a test compares them with the tree. The catalog's Definitions register their kernels
+# (verity.circuits.kernels) lazily.
+# the served circuits' Definitions (`verity_vllm.definitions`) its tests import, with the package they sit in
+inputs = ["tests/verity/circuits/stand_in.py", "verity", "tests/verity/commitments/periods/test_interface.py", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/definitions", "security/Proofs/Spot/Sampling/Influence.lean",
+          # `verity_difftest`, through which the verifiers these tests run speak to their Lean executables
+          "tools/difftest/python/verity_difftest",
+          "security/Proofs/Spot/Sampling/SamplingDesign.lean",
+          "security/Proofs/Spot/Sampling/Stratified.lean",
+          "security/Proofs/Spot/Sampling/StratifiedMiss.lean",
+          "security/Proofs/Flock/SamplingGeneric/TwoCount.lean",
+          "security/Proofs/Flock/SamplingGeneric/TwoTable.lean",
+          "security/Definitions/Claims/SamplingTwo.lean",
+          "security/Proofs/lake-manifest.json",
+          "security/Proofs/lean-toolchain", "verity/circuits", "verity/circuits/kernels",
+          # the scripts under `benchmarks/` the window's audit from its records (`benchmarks/prove_path/records_audit.py`), which
+          # two tests here load, still loads off `sys.path`
+          "benchmarks/one_stage", "benchmarks/prove_path", "benchmarks/network_traces",
+          # the vLLM adapter, which test_proofs and test_served_select load, and the PyTorch adapter it loads
+          "adapters/vllm/verity_vllm", "adapters/torch/verity_torch",
+          # the RTX PRO 6000's card, which the vLLM adapter's definitions registry reads in test_proofs
+          "calibration/hardware/cards/rtx-pro-6000-server.toml",
+          "verity/protocols/proof/flock/prover/agreement/zk_mutants.py",
+          "benchmarks/pouw/settings.py", "tools/config/verity_config"]

@@ -2,7 +2,7 @@
 graph's wiring (`split_graph_wiring`), the wrapper of each piece (`assign_wrappers`) and the workload's request schedule
 (`schedule_of_workload`, `tokens_at`), which the served Build (`acquire.served`) is derived from.  Nothing here reads a checkpoint.
 
-    verity-vllm compiled verify --manifest USED --rebuilt REBUILT --out verify.json
+    cli.run(compiled) verify --manifest USED --rebuilt REBUILT --out verify.json
 
 holds the Build a treatment ran with to the Build that process rederived from its own compile artifact.
 """
@@ -347,7 +347,7 @@ def assign_wrappers(wrappers: list[dict[str, Any]], graph: dict[str, Any]) -> li
     layer-name placeholder is an argument of no kind get_args() names ("?").
 
     The refusal's class is imported here and not among the module's imports: its module loads numpy and the Definitions, and
-    `verity-vllm compiled verify` runs without either."""
+    `cli.run(compiled) verify` runs without either."""
     from verity_vllm.acquire.inductor_templates import Unmodelled
 
     out = []

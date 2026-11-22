@@ -332,21 +332,6 @@ def _cases(V: int, n: int, seed: int):
     return out
 
 
-@needs_tables
-@pytest.mark.slow
-def test_the_whole_row_equals_the_lane_walk_evaluate_spec_over_temps_top_p_split_counts_ties_masks_and_nan():
-    from verity_vllm.check.replay.stoch_recompute import evaluate_spec
-    from verity_vllm.definitions.registry import sampling_topp_difftest as D
-    V = 1024
-    for bf, temp, p, S, seed, pos in _cases(V, 30, 11):
-        words = [bf.astype(np.uint64), np.array([f32b(p)], dtype=np.uint64), np.array([seed], dtype=np.uint64),
-                 np.array([pos], dtype=np.uint64), np.array([f32b(temp)], dtype=np.uint64)]
-        ref = evaluate_spec(D.spec({"V": V, "S": S}), words)[0]
-        out = SR.gumbel_topp_token_select_row(bf, f32b(p), seed, pos, f32b(temp), S)
-        assert out["token"] == ref, (temp, p, S, seed, pos, out["token"], ref)
-        assert out["scaled"].shape == (V,) and out["masked"].shape == (V,) and out["noisy"].shape == (V,)
-
-
 def test_the_select_is_the_strict_first_maximum_scan_nan_never_wins_and_a_nan_lane_zero_pins_the_result():
     x = np.array([f32b(1.0), f32b(3.0), f32b(3.0), f32b(2.0)], dtype=np.uint32)
     tok, y = SR.gumbel_select_row(x, 0, 0, 0)                                    # temp 0: no noise, first max

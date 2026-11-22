@@ -16,7 +16,6 @@ from verity_bench.exfiltration_common import (
     NOT_PROVED,
     NOT_RECORDED,
     NUMERALS,
-    ON_CPUS,
     PARTS,
     PLAN_FILE,
     PRINTED,
@@ -163,41 +162,12 @@ def _security(bound: Mapping | None) -> list[str]:
         "sums a monitoring period's verification phases.")]
 
 
-def _share(cs: Mapping) -> tuple[list[str], list[str]]:
+def _share(cs: Mapping) -> list[str]:
     """The share of compute a served run measures (`build`'s `compute_share`), beside the given share every other
-    figure is read at: a line, and with a run's record a table of its parts."""
+    figure is read at."""
 
     given = f"the given {_pct(cs['given']['share'])} of total compute ({cs['given']['mark']})"
-    if cs["value"] is None:
-        lines = [f"**The audit's share of compute: {cs['why']}.** Every figure below is read at {given}.", ""]
-    else:
-        parts = ", ".join(f"{name.replace('_', ' ')} {_part(p['share'])}" + (f" ({ON_CPUS})" if p["on_cpus"] else "")
-                          for name, p in cs["parts"].items())
-        there = (f"its part has no figure at that share: {cs['no_GB']}" if cs["GB"] is None else
-                 f"at that share, β = {_part(cs['beta'])}{'' if cs['inside'] else ' (extrapolated)'}, the compute "
-                 f"audit's part over the world's year is {_n(cs['GB'])} GB")
-        lines = [(f"**The audit's share of compute: {_part(cs['value'])} ({cs['mark']})**, on {cs['run']}: the audit's "
-                 f"GPU-seconds over the window's serving, {_n(cs['serving_gpu_s'])} GPU-seconds, in parts {parts}. "
-                 f"{there[0].upper()}{there[1:]}, beside {_n(cs['given']['GB'])} GB at {given}, which every figure "
-                 "below is read at."), ""]
-    if cs["run"] is None:
-        return lines, []
-    gaps = {g["field"]: g for g in cs["missing"]}
-
-    def source(name: str, said: str) -> str:
-        return said + (f"; lacks {', '.join(f'`{k}`' for k in gaps[name]['lacks'])}: {gaps[name]['why']}"
-                       if name in gaps else "")
-
-    return lines, [f"## The audit's share of compute on {cs['run']}", "",
-            ("Each part of the audit's GPU time on the served run, and the window's serving it is a share of, read from "
-            "the run's record. A part the record lacks is marked missing with its gap, and the share is not claimed "
-            "without it."), "",
-            *_table(("part", "what", "GPU-seconds", "share of the window's serving", "mark", "source"),
-                    [("serving", "the window's serving", _n(cs["serving_gpu_s"]), "",
-                      "missing" if "serving" in gaps else "measured", source("serving", "`serving`")),
-                     *((name, p["what"], _n(p["gpu_s"]) + (f", {ON_CPUS}" if p["on_cpus"] else ""), _part(p["share"]),
-                        p["mark"], source(name, p["source"]))
-                       for name, p in cs["parts"].items())]), ""]
+    return [f"**The audit's share of compute: {cs['why']}.** Every figure below is read at {given}.", ""]
 
 
 def render(doc: Mapping[str, Any]) -> str:
@@ -220,7 +190,7 @@ def render(doc: Mapping[str, Any]) -> str:
     # the rows that take the output count at 0, and where; the rows of the sums that would, were an execution phase held
     at_zero, held = count["at_zero_in"], _on(charged)
     would = [name for name in TOGETHER if name in charged["rows"]]
-    measured, parts = _share(doc["compute_share"])
+    measured = _share(doc["compute_share"])
     outside = "" if head["inside"] else ", outside the pinned budgets: extrapolated"
     what = ", the plan of record's row, with every modeled lever at its measured value" if doc["row"] == ROW else ""
     what += f", in its variant `{doc['variant']}`" if doc["variant"] else ""
@@ -331,7 +301,6 @@ def render(doc: Mapping[str, Any]) -> str:
         *_table(("part", "input", "value", "unit", "mark", "source"),
                 [(i["part"], i["input"], _n(i["value"]), i["unit"], PRINTED.get(i["mark"], i["mark"]), i["source"])
                  for i in doc["inputs"]]), "",
-        *parts,
         f"## The compute audit's part at {_pct(share)} of total compute", "",
         ("Each scope's rows of record, read at the audit budget β where their total is the share. The requests are the "
         "count the rows are priced over. The parts are shares of total compute; the wait is part of serving."), "",

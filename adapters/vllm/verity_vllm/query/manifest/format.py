@@ -30,11 +30,11 @@ from typing import Any
 from verity_vllm.records import required_manifest
 
 __all__ = ["LIFTED_DTYPES", "LIFTED_F32", "MOE_FP8_PLANES", "MOE_PLANES", "PROMOTED_DTYPE_BYTES",
-           "PROMOTED_OBSERVATION_RULE", "REQ_RE", "RUN_FAMILY", "RUN_PARAM", "SCHEDULE_PARAM", "SCHEDULE_READERS",
+           "PROMOTED_OBSERVATION_RULE", "REQ_RE", "RUN_FAMILY", "RUN_PARAM", "SCHEDULE_PARAM",
            "SCHEMA", "SERVED_FAMILY", "SERVED_IDS", "SERVED_LOGITS", "SERVED_POSITIONS", "SERVED_SAMPLED",
            "TP_PARTIAL_MEMBER", "TP_SHARD_MEMBER", "alias_family", "batch_launch_shortfall", "canonical_identity",
            "collector_path", "components_fold_digest", "is_token_select", "layer_of", "lifted_bot", "load_program",
-           "manifest_digest", "moe_geometry", "moe_plane_kind", "moe_plane_modules", "program_dirs_for", "programs_for",
+           "manifest_digest", "moe_geometry", "moe_plane_kind", "moe_plane_modules", "narrowed_of", "program_dirs_for", "programs_for",
            "promoted_observation", "segment_steps", "spec_family", "spec_statics", "split_name", "tp_ranks_fold_digest",
            "wrapper_prefix_of"]
 
@@ -65,6 +65,13 @@ TP_SHARD_MEMBER = "shard_rank{rank}"
 #: layer's fused qkv on the prompt rows before the last, of which only the keys and values are read), `width` elements a row: their own
 #: member beside the widest rows' `member` (`query.required.Population.narrowed`), so neither stands for the other
 NARROWED_MEMBER = "{member}@{width}"
+_NARROWED_RE = re.compile(NARROWED_MEMBER.format(member="(.+)", width=r"(\d+)"))
+
+
+def narrowed_of(member: str) -> str | None:
+    """The widest rows' member a `NARROWED_MEMBER` names (``out`` of ``out@1024``), else None."""
+    m = _NARROWED_RE.fullmatch(member)
+    return m.group(1) if m else None
 
 #: A served Build's step boundary (`acquire.served`, `served_compiled_source`, `served_check`): piece 0's token inputs, the logits and the
 #: sampled ids; and the one family of its identities (every value of every engine step).
@@ -462,7 +469,7 @@ def batch_launch_shortfall(geometry: Any, active_rows: list[int], members: Itera
 
 def load_program(program_dir: str, *, expand: bool = True) -> dict[str, Any]:
     """The Program dir's instances, result and artifact.  `expand=False` keeps a v2 row's argument progressions as stored, for a reader
-    that expands what it reads (the sampled replay's `index.row_args` / `node_runs`).  Equal argument items are one list
+    that expands what it reads (`check.replay.index.ProgramIndex`).  Equal argument items are one list
     (`instances_file.read_instances`): read them, never modify them in place."""
     # Inside the function: importing this module loads nothing of `program`, which a suite that lists its inputs by file
     # and reads this module relies on (its read guard fails on a file its list lacks).
@@ -487,12 +494,8 @@ TOKEN_SELECT_FAMILIES = ("TokenSelect", "GumbelTokenSelect", "ArgmaxTokenSelect"
 #: could set) is refused by name.
 SAMPLER_INPUTS = frozenset({"seed"})
 
-#: [DSV4] a TP rank Program's WITNESS input `schedule`, each Marlin align call's key per pair, read by `MoeAlignRanks_v1` only; no
-#: builder emits it any more (every Program keys the align by the pair indices, the served deterministic align's order).  It is neither the prompt nor a committed word of its own: any key gives ranks the kernel can produce, so
-#: the Commit's replay binds a reader's slice to that Call's own committed rank (port 0; key := rank gives rank back exactly when the
-#: committed ranks rank each expert's pairs), and the manifest names no identity for it.
+#: a Program input named `schedule` is neither the prompt nor a committed word, and nothing binds it: any Call that reads it is refused.
 SCHEDULE_PARAM = "schedule"
-SCHEDULE_READERS = frozenset({"MoeAlignRanks_v1"})
 
 
 #: a Program's `run` Input (`registration.RunInputs`): values the served run decides and the Program checks in gates, one field each.

@@ -83,7 +83,7 @@ RAM = "/dev/shm/"  # a FLOCK_WORK here is host memory, counted with the processe
 #: public files and every session's records. Never inst.bin (the witness), nor circuit.txt (gigabytes: the verifier's node
 #: restages it from the same commit and checks it against stage.json's circuit_sha512). WIN_KEEP_ALSO adds globs.
 #: the GPU prover's most nonzeros in A or in B of one net: its CSC offsets are 32-bit (`circuit::GPU_NNZ_MAX` in
-#: verity/protocols/proofs/flock/prover/live/src/circuit.rs, which refuses a larger net); the CPU prover's are 64-bit
+#: verity/protocols/proof/flock/prover/live/src/circuit.rs, which refuses a larger net); the CPU prover's are 64-bit
 GPU_NNZ_MAX = (1 << 32) - 1
 KEEP = ("pub.bin", "stage.json", "pin.txt", "partition.json", "tables", "sessions/index.jsonl", "sessions/*/session.json",
         "sessions/*/circuit.rep*.bin", "sessions/*/verifier.json")

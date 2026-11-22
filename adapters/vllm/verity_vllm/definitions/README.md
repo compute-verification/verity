@@ -44,7 +44,6 @@ its Definitions with their signatures.
   id go through it, so a new module's Definitions resolve everywhere, not only where someone imported the module.
 - Each Definition module has its binding file beside it, `<module>.circuit-check.py`, the small bindings `circuit-check`
   checks it at, and `<module>.circuit-check.json`, its lowering pins (`tools/verity/circuit_check/`).
-- `tests/adapters/vllm/verity_vllm/definitions/test_catalog.py` checks what the catalog loads.
 
 ## Boolean versions
 
@@ -60,8 +59,6 @@ Program is from pure bits.
   Definition's cut, and `word.check_query` checks a served Program's.
 - `cross_call`: the same invariant across a Program's Calls, a value computed in two Calls.
 - `call_scope`: what the two share (the Definition a spec id names, its parts, `QueryRuleViolation`).
-- `encoding`: a specialization's Definitions in the codec's form (`encode_specialization`), a Definition's digest
-  (`definition_digest`), and the values of a varying static a Program graph is partitioned at (`word_values`).
 
 ## Fast evaluators: `numerics/`
 

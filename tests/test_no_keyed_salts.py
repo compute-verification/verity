@@ -55,19 +55,17 @@ ALLOWED: dict[str, str] = {
     # the step rows' processor twin is ruled (RULED's native_rows.cu); the registered weights' `tensor_key` expansion here is not
     "adapters/vllm/verity_vllm/commit/step_rows.py": "@vllm",
     "verity/commitments/hm96/batch.py": "@proofs",
-    "verity/protocols/proofs/flock/prover/live/src/bin/flock-circuit.rs": "@proofs",
-    "verity/protocols/proofs/flock/prover/live/src/zk_server.rs": "@proofs",
-    "verity/protocols/proofs/flock/prover/python/verity_flock/zk_server.py": "@proofs",
-    "verity/protocols/proofs/flock/verifier/Flock/ZkServer/Salts.lean": "@proofs",
-    "verity/protocols/proofs/flock/verifier/Flock/ZkServer/Session.lean": "@proofs",
-    "verity/protocols/proofs/flock/verifier/Flock/ZkServer/Values.lean": "@proofs",
-    "verity/protocols/proofs/recursion/verifier/zk_server/ZkServer/Loop.lean": "@proofs",
-    # both keep ChaCha20 for a caller that hands no salts, which none does now: every caller hands its rows' salts
-    "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/registered_rows.cuh": "@vllm",
-    "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/row_table.cuh": "@vllm",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/served.py": "@compute-accounting",
-    "verity/protocols/resource_accounting/compute/pouw/verifier/audit.py": "@compute-accounting",
-    "verity/protocols/resource_accounting/compute/pouw/verifier/weights.py": "@compute-accounting",
+    "verity/protocols/proof/flock/prover/live/src/bin/flock-circuit.rs": "@proofs",
+    "verity/protocols/proof/flock/prover/live/src/zk_server.rs": "@proofs",
+    "verity/protocols/proof/flock/prover/python/verity_flock/zk_server.py": "@proofs",
+    "verity/protocols/proof/flock/verifier/Flock/ZkServer/Salts.lean": "@proofs",
+    "verity/protocols/proof/flock/verifier/Flock/ZkServer/Session.lean": "@proofs",
+    "verity/protocols/proof/flock/verifier/Flock/ZkServer/Values.lean": "@proofs",
+    "verity/protocols/proof/recursion/verifier/zk_server/ZkServer/Loop.lean": "@proofs",
+    # keeps ChaCha20 for a caller that hands no salts, which none does now: every caller hands its rows' salts
+    "verity/protocols/accounting/compute/pouw/prover/kernels/pouw_cuda/row_table.cuh": "@vllm",
+    "verity/protocols/accounting/compute/pouw/verifier/audit.py": "@compute-accounting",
+    "verity/protocols/accounting/compute/pouw/verifier/weights.py": "@compute-accounting",
 }
 #: the rulings that admit a keyed derivation: {ruling: its condition}
 PASS_TREE = ("the bandwidth audit's pass tree: its leaves' salts are expanded on the card from a key drawn fresh from the "
@@ -83,17 +81,17 @@ RULE = ("verity/commitments/hm96/PROTOCOL.md", "derivations kept for now by a ru
 #: {ruling: (the file in the tree that states it as a rule, a phrase of that statement), or None while nothing does}
 STATED: dict[str, tuple[str, str] | None] = {PASS_TREE: RULE, PAYLOAD_TREE: RULE, STEP_ROWS: RULE}
 #: {ruling: (the module it covers, the names its keys go by there)}
-SCOPE = {PASS_TREE: ("verity/protocols/resource_accounting/memory/poub/", ("salt_key", "salt-key")),
-         PAYLOAD_TREE: ("verity/protocols/resource_accounting/memory/poub/", ("payload_key", "payload-key")),
+SCOPE = {PASS_TREE: ("verity/protocols/accounting/memory/poub/", ("salt_key", "salt-key")),
+         PAYLOAD_TREE: ("verity/protocols/accounting/memory/poub/", ("payload_key", "payload-key")),
          STEP_ROWS: ("adapters/vllm/verity_vllm/commit/", ("keys.bin",))}
 #: {file whose keyed derivation a ruling admits: (the lane that owns it, the rulings it rests on)}
 RULED: dict[str, tuple[str, tuple[str, ...]]] = {
     "adapters/vllm/verity_vllm/commit/committer/native_rows.cu": ("@vllm", (STEP_ROWS,)),
-    "verity/protocols/resource_accounting/memory/poub/prover/codec_tensor/reader.py": ("@memory-accounting", (PASS_TREE,)),
-    "verity/protocols/resource_accounting/memory/poub/prover/node_store/registry.py": ("@memory-accounting", (PASS_TREE,)),
-    "verity/protocols/resource_accounting/memory/poub/prover/poub_session/device.py": ("@memory-accounting",
+    "verity/protocols/accounting/memory/poub/prover/codec_tensor/reader.py": ("@memory-accounting", (PASS_TREE,)),
+    "verity/protocols/accounting/memory/poub/prover/node_store/registry.py": ("@memory-accounting", (PASS_TREE,)),
+    "verity/protocols/accounting/memory/poub/prover/poub_session/device.py": ("@memory-accounting",
                                                                                       (PASS_TREE, PAYLOAD_TREE)),
-    "verity/protocols/resource_accounting/memory/poub/verifier/store.py": ("@memory-accounting", (PASS_TREE, PAYLOAD_TREE)),
+    "verity/protocols/accounting/memory/poub/verifier/store.py": ("@memory-accounting", (PASS_TREE, PAYLOAD_TREE)),
 }
 #: a line that writes, sends, logs or serializes what it names: a writer's call, a key's hex, or the name as a string's
 #: field (a manifest's or a message's)
@@ -111,10 +109,10 @@ LANES = {"@compute-accounting", "@kernels", "@lean", "@memory-accounting", "@net
 #: {file that derives salts only in a test build: (the lane that owns it, the file that declares its module, the module's
 #: name, the condition every declaration of it carries on the line before)}. A proving build has none of these modules;
 #: Flock's verifier refuses a statement made with the `seed-injection` feature by name (`versionWhy` in
-#: `verity/protocols/proofs/flock/verifier/Flock/ProvedScope.lean`).
+#: `verity/protocols/proof/flock/verifier/Flock/ProvedScope.lean`).
 TEST_BUILD: dict[str, tuple[str, str, str, str]] = {
-    "verity/protocols/proofs/flock/prover/live/src/seed_injection.rs": (
-        "@proofs", "verity/protocols/proofs/flock/prover/live/src/lib.rs", "seed_injection",
+    "verity/protocols/proof/flock/prover/live/src/seed_injection.rs": (
+        "@proofs", "verity/protocols/proof/flock/prover/live/src/lib.rs", "seed_injection",
         '#[cfg(any(test, feature = "seed-injection"))]'),
 }
 

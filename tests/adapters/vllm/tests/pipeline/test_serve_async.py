@@ -1,5 +1,5 @@
 """serve-openai's loop under async scheduling on CPU: for a fixed load its Commit windows see the same steps, rows and values,
-and H1 gets the same rounds and admissions, as synchronously. The committer is a stand-in (`Committer`), not the native
+as synchronously. The committer is a stand-in (`Committer`), not the native
 collector; ``serve_async_commit_gpu.py`` holds the native collector's rows-sha512 roots under the two schedulers equal on an
 H200, and `test_the_gpu_comparison_holds_every_async_window_committed_with_syncs_roots` its comparison here.
 
@@ -8,9 +8,9 @@ The engine stands in for vLLM's in-process engine core at d9105ea80: a schedule 
 ``EngineCore.step_with_batch_queue`` with a queue of two, so a call runs the next schedule and returns the previous one's
 outputs, and a request whose last token is scheduled keeps its seat but isn't scheduled again (`AsyncScheduler`'s
 placeholders). The rest is the server's own: `serve_loop.EngineLoop`, `serve_commit.CommitWindows` and its record's
-checks, and H1's `hooks.admitting` on top of the committer's patches. A load with no early stop schedules the same batches
+checks. A load with no early stop schedules the same batches
 either way while the scheduler has seats for a step's requests and the next's; with fewer, async scheduling runs an empty
-schedule between forwards, which commits nothing and admits nothing."""
+schedule between forwards, which commits nothing."""
 from __future__ import annotations
 
 import collections
@@ -27,13 +27,13 @@ from tests.pipeline import test_serve_openai as TSO
 from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline.serve_admit import Admission
-from verity_vllm.protocols.pouw import h1_hooks as H1H
+from tests.pipeline.test_serve_admit import v2_order
 
 
 class Engine:
     """vLLM's ``LLMEngine`` over its engine core, synchronous or with the batch queue (module docstring). FCFS, at most
     ``seqs`` requests running and ``budget`` tokens a schedule, a new request's whole prompt in its first; its rows in Model
-    Runner V2's batch order (`h1_hooks.sort_batch_req_ids`); each sample a function of the request's ids. ``calls`` holds each
+    Runner V2's batch order (`test_serve_admit.v2_order`); each sample a function of the request's ids. ``calls`` holds each
     ``step``'s (the forward it ran, the forward whose outputs it returned), None for none."""
 
     def __init__(self, runner: Any, *, async_scheduling: bool, seqs: int, budget: int) -> None:
@@ -75,7 +75,7 @@ class Engine:
     def _launch(self) -> tuple[int | None, list[tuple[str, int]]]:
         rows, new = self._schedule()
         name = {self.reqs[e]["internal"]: e for e in rows}
-        live = [name[i] for i in H1H.sort_batch_req_ids({i: len(rows[e][0]) for i, e in name.items()}, {}, 1)]
+        live = [name[i] for i in v2_order({i: len(rows[e][0]) for i, e in name.items()}, {}, 1)]
         ids, qsl, pos = [], [0], []
         for e in live:
             ids += rows[e][0]
@@ -151,24 +151,6 @@ class Committer(TSO.Committer):
         return super().finalize()
 
 
-class Arm:
-    """`serve_h1.H1Windows` as `CommitWindows` drives it: at each window's open, H1's `hooks.admitting` on the runner, on top of
-    the committer's patches; ``rounds`` gets each admission's (window, the committed step it precedes, new requests, batch
-    order)."""
-
-    def __init__(self, runner: Any, com: Committer) -> None:
-        self.runner, self.com, self.rounds, self.bare = runner, com, [], None
-
-    def open(self, window: int) -> None:
-        run = SimpleNamespace(admit=lambda new, order: self.rounds.append((window, self.com._step_index, new, order)))
-        self.bare = self.runner.execute_model
-        self.runner.execute_model = H1H.admitting(run, self.bare, self.runner)
-
-    def close(self, window: int) -> dict[str, int]:
-        self.runner.execute_model = self.bare
-        return {"rounds": sum(r[0] == window for r in self.rounds)}
-
-
 def serve(out: Path, load: list[tuple[list[int], int]], *, async_scheduling: bool, seqs: int, budget: int,
           window_steps: int) -> SimpleNamespace:
     """``load`` (each request's prompt ids and max_tokens, all admitted before the first step) served to the end."""
@@ -176,9 +158,8 @@ def serve(out: Path, load: list[tuple[list[int], int]], *, async_scheduling: boo
     runner = TSO.Runner()
     runner.decode_query_len = 1
     com = Committer(runner)
-    arm = Arm(runner, com)
     windows = sc.CommitWindows(com, out, run_id="t", window_steps=window_steps, eos_ids=[TSO.Tokenizer.eos_token_id],
-                               clock=lambda: 0.0, wall=lambda: 0.0, arm=arm)
+                               clock=lambda: 0.0, wall=lambda: 0.0)
     engine = Engine(runner, async_scheduling=async_scheduling, seqs=seqs, budget=budget)
     loop = so.EngineLoop(engine, windows, clock=lambda: 0.0)
     streamed: dict[str, list[int]] = collections.defaultdict(list)
@@ -193,8 +174,8 @@ def serve(out: Path, load: list[tuple[list[int], int]], *, async_scheduling: boo
     held = [w for w in lines["windows.jsonl"] if w["steps"]]
     return SimpleNamespace(
         engine=engine, error=loop.error, empty_windows=[w for w in lines["windows.jsonl"] if not w["steps"]], streamed=dict(streamed),
-        windows=[{k: w.get(k) for k in ("window", "steps", "step_roots", "run_root", "passed", "pouw_h1")} for w in held],
-        committed=com.committed, rounds=arm.rounds, step_trace=lines["step_trace.jsonl"],
+        windows=[{k: w.get(k) for k in ("window", "steps", "step_roots", "run_root", "passed")} for w in held],
+        committed=com.committed, step_trace=lines["step_trace.jsonl"],
         requests=sorted(({k: v for k, v in r.items() if k != "times"} for r in lines["requests.jsonl"]), key=lambda r: r["engine_id"]))
 
 
@@ -210,8 +191,7 @@ def prompts(n: int, lengths: tuple[int, ...], max_tokens: int) -> list[tuple[lis
 def test_async_scheduling_commits_and_admits_what_sync_scheduling_does(tmp_path, load, seqs, budget, window_steps, overlap):
     """Under async scheduling each ``engine.step`` runs one schedule and returns the one before's outputs (``overlap``: a
     forward runs while the outputs of the one before are delivered, checked and windowed), yet the Commit's windows hold the
-    same steps, each step commits the same bytes and rows, H1's round r is the window's committed step r with the same
-    admissions and batch order, and every request's record checks against what it was streamed. A window whose bound falls on
+    same steps, each step commits the same bytes and rows, and every request's record checks against what it was streamed. A window whose bound falls on
     the last forward closes before the call that only delivers its outputs, so async scheduling may close one more window,
     empty, at the stop; it holds no step."""
     kw = {"seqs": seqs, "budget": budget, "window_steps": window_steps}
@@ -223,12 +203,10 @@ def test_async_scheduling_commits_and_admits_what_sync_scheduling_does(tmp_path,
     assert asyn.engine.empty == (1 if overlap else asyn.engine.forwards)     # the last call only returns the last outputs
     assert asyn.windows == sync.windows and all(w["passed"] for w in sync.windows)
     assert asyn.committed == sync.committed and len(sync.committed) == len(sync.windows)
-    assert [w["pouw_h1"] for w in asyn.empty_windows] == [{"rounds": 0}] * len(asyn.empty_windows) and not sync.empty_windows
+    assert not sync.empty_windows
     assert asyn.step_trace == sync.step_trace and asyn.requests == sync.requests and asyn.streamed == sync.streamed
     assert all(r["check"]["passed"] for r in sync.requests) and len(sync.requests) == len(load)
-    assert asyn.rounds == sync.rounds and len(sync.rounds) == sync.engine.forwards
-    for w in sync.windows:
-        assert [s for v, s, _, _ in sync.rounds if v == w["window"]] == list(range(w["steps"])) == list(range(w["pouw_h1"]["rounds"]))
+    assert sum(w["steps"] for w in sync.windows) == sync.engine.forwards
 
 
 def test_a_window_that_holds_no_step_serves_the_next_burst_rather_than_closing_empty_at_the_request_cap(tmp_path):

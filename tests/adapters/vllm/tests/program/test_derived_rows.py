@@ -200,8 +200,6 @@ def test_hopper_wgmma_port_equals_silicon_total_on_every_encoding():
     uniform 16-bit operands and 32-bit accumulators (NaN / inf / inf*0 / mixed-sign infinities / subnormals / zeros), realistic
     N(0,1) lanes over 40 binades, overflow to the sticky infinity, exact cancellation to +0, all-subnormal lanes."""
     ref = _veritor_silicon()
-    if ref is None:
-        pytest.skip("veritor.core.silicon_total (Python 3.12 syntax) is not importable on this interpreter: oracle comparison skipped BY NAME")
     from verity_vllm.definitions.registry import hopper as H
     ST = ref[1]
     rng = np.random.default_rng(2027)
@@ -288,8 +286,6 @@ def test_ampere_tc_dot16_port_equals_silicon_total_and_the_mma_finite_model_on_e
     NaN word 0x7FFFFFFF (was 0x7FC00000) and a group's finite overflow counting as its infinity beside an infinite operand of the
     other sign (-> NaN; was that infinity)."""
     ref = _veritor_silicon()
-    if ref is None:
-        pytest.skip("veritor.core.silicon(_total) (Python 3.12 syntax) is not importable on this interpreter: oracle comparison skipped BY NAME")
     from verity_vllm.definitions.registry import prims as P
     S, ST = ref
     from verity_vllm.definitions.numerics import mma

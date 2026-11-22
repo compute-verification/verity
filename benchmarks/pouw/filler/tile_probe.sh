@@ -12,7 +12,7 @@ export O=${OUT:?}
 CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit 13.0) || exit 4  # the machine's toolkit at 13.0
 GENCODE=$(python3 benchmarks/kernels/machine.py gencode "$(python3 benchmarks/kernels/machine.py arch)") || exit 4
 export PATH=$CUDA_HOME/bin:$PATH
-D=benchmarks/pouw/filler K=verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler
+D=benchmarks/pouw/filler K=verity/protocols/accounting/compute/pouw/prover/kernels/filler
 export B; B=$(mktemp -d /tmp/tprobe.XXXXXX); trap 'rm -rf "$B"' EXIT
 export TP_BUILDS=${TP_BUILDS:-"bits:-DPFILL_BITS bu:-DPFILL_BU,-Xcompiler,-mpopcnt li:-DPFILL_BU,-DPFILL_LI,-Xcompiler,-mpopcnt xin13:-DPFILL_BU,-DPFILL_XIN13,-Xcompiler,-mpopcnt"}
 export TP_NC=${TP_NC:-"bits:4 bu:4 bu:2 li:4 xin13:4"} TP_W=${TP_W-"bits"} TP_S=${TP_S:-256} TP_WS=${TP_WS:-2048}

@@ -9,11 +9,12 @@ from pathlib import Path
 
 import pytest
 
+import stand_in  # noqa: F401  (the test primitives' Boolean bodies, also when run as a script)
 from verity.circuits import codec, partition_object as PO
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, DefinitionTable, bind
 from verity.circuits.population import population_program
 from verity.circuits.program import Program
-from verity.circuits.refs import tuple_of
+from verity.circuits.refs import Affine, Coll, tuple_of
 from verity.circuits.types import Array, Tuple, Value
 
 PATH = Path(__file__).parent / "template_instance_vectors.json"
@@ -136,11 +137,19 @@ def _refusal(program, q) -> str | None:
     return None
 
 
-def _order_refused() -> list:
-    """The population program whose instances read their own outputs: not topological, so no query applies."""
+def _self_reading() -> dict:
+    """The population program's descriptor whose instances read their own outputs."""
     d = json.loads(_canon(POPULATION))
     d["definitions"][d["root"]]["body"]["nodes"][2]["args"][0]["refs"] = {"affine": ["n", 2, 0, 6]}
-    D = codec.decode_program(d, REG)
+    return d
+
+
+def _order_refused() -> list:
+    """The population program whose instances read their own outputs: not topological, so no query applies. No descriptor of it
+    decodes, so the Program is the decoded one with that read set in memory."""
+    D = codec.decode_program(json.loads(_canon(POPULATION)), REG)
+    node = D.root.body.nodes[2]
+    node.args = (Coll(node.args[0].type, Affine("n", 2, 0, 6)), *node.args[1:])
     v = PO.verify(PO.build(D, PO.template_instance_query(Scale)), D)
     return [list(v.codes), v.detail["query-inapplicable"]["gates"]]
 
@@ -209,6 +218,11 @@ def test_a_program_that_is_not_topological_and_served(live):
     assert VECTORS["served_unsupported"] == ["served-unsupported"]
     for name, text in VECTORS["descriptors"].items():                   # every pinned program is topological
         assert PO.order_violation(codec.decode_program(json.loads(text), REG)) is None, name
+
+
+def test_no_descriptor_with_a_self_reading_node_decodes():
+    with pytest.raises(ValueError, match="forward-reference: node 2 reads node 2"):
+        codec.decode_program(_self_reading(), REG)
 
 
 @pytest.mark.parametrize("n", range(len(MALFORMED)), ids=[m[0] for m in MALFORMED])

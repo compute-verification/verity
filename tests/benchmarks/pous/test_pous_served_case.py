@@ -7,7 +7,9 @@ is one wipe in this process at a small fill (`wipe_run.run`), laid out as `strea
 ``answer.json`` with the run's placement in its profile, ``served.json`` and the subprotocol's ``wipe.case.json``. Each piece is
 held to the composite's form (`benchmarks/one_stage/composite.py`'s ``piece``: a case of commitment, evidence and params,
 an answer whose commitment is the digest of the case's commitment), and a kept output that was changed after the run is
-refused with its reason before anything is written.
+refused with its reason before anything is written. The verdict is the Lean's: PoUS's stand-in Lean (`SPT.JUDGE`) answers
+as `pous_reference`, the Python it is difftested against, and the wipe's is `wipe-protocol-test` (`wipe-protocol` for a
+deployed protocol's case), built here.
 """
 from __future__ import annotations
 
@@ -18,12 +20,14 @@ import stat
 import sys
 from pathlib import Path
 
+import pous_reference as REF
 import pytest
 
-from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
-from verity.protocols.resource_accounting.memory.pous.prover import wipe_run
-from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
-from verity.protocols.resource_accounting.memory.pous.verifier import wipe_period as W
+from verity.protocols.accounting.memory.pous.attester import memory_attester as mc
+from verity.protocols.accounting.memory.pous.prover import wipe_run
+from verity.protocols.accounting.memory.pous.verifier import streamed_wipe as sw
+from verity.protocols.accounting.memory.pous.verifier import wipe_party
+from verity.protocols.accounting.memory.pous.verifier import wipe_period as W
 from verity.commitments.identity import canonical_json_bytes
 
 pytest.importorskip("torch")
@@ -43,6 +47,13 @@ SC = _load("pous_served_case", ROOT / "benchmarks" / "pous" / "served_case.py")
 ts, served, served_bf16 = SPT.ts, SPT.served, SPT.served_bf16
 WIPE_ID = mc.TEST_PREFIX + W.PROTOCOL
 SMALL_WIPE = sw.WipeParams(64, W.READS, 1, 1_000, (("gpu", 64 * sw.LABEL_BYTES),))
+ATTESTER = ROOT / "verity" / "protocols" / "accounting" / "memory" / "pous" / "attester" / "lean"
+
+
+@pytest.fixture(scope="module")
+def wipe_exe() -> Path:
+    """`wipe-protocol-test`, the wipe's Lean under the test signers' schemes."""
+    return SPT._built(ATTESTER, "wipe-protocol-test")
 
 
 def _mode(p: Path) -> int:
@@ -56,7 +67,7 @@ def _listing(d: Path) -> dict[str, bytes]:
 def _pous(s, **kw):
     """`pous_piece` over ``s``, asking `SPT.JUDGE`, the stand-in `SPT._run` serves, unless ``kw`` names an ``exe``."""
     kw.setdefault("exe", SPT.JUDGE)
-    return SC.pous_piece(s.out, schemes=ts.SCHEMES, hf_home=s.hf, device="cpu", pins=[s.pins], **kw)
+    return SC.pous_piece(s.out, hf_home=s.hf, device="cpu", pins=[s.pins], **kw)
 
 
 def _edit(path: Path, change) -> None:
@@ -97,15 +108,15 @@ def test_pous_case_is_the_composites_piece_and_its_answer_the_runs(served, tmp_p
     assert ev["setup"]["commitment"] == run["published"]["commitment"] + run["published"]["salt"]
     q = SC.period.point_of(run["point"]).params
     assert len(bytes.fromhex(ev["setup"]["evidence"])) == 4 + 4 * q.segments + q.blocks * (4 + q.block_bytes)
-    assert SC.pous_answer(case, schemes=ts.SCHEMES, protocol=SPT.TEST_PROTOCOL) == got
+    assert REF.pous_answer(case, schemes=ts.SCHEMES, protocol=SPT.TEST_PROTOCOL) == got
     assert _mode(private) == 0o700 and _mode(private / "case.json") == _mode(private / "answer.json") == 0o600
     for secret in (run["published"]["salt"], run["published"]["root"], got["commitment"], case["evidence"][:64]):
         assert secret not in "".join(p.decode() for p in public.values())
 
 
 def test_a_run_with_no_lean_is_undecided_until_the_builders_lean_answers_its_case(served, tmp_path, monkeypatch):
-    """A run with no ``case_exe`` keeps the Python's accept as undecided (`period.NO_JUDGE`); the builder with no ``exe``
-    writes that again, and with a Lean (`SPT.JUDGE`, which answers as the Python) writes the Lean's accept."""
+    """A run with no ``case_exe`` is undecided (`period.NO_JUDGE`); the builder with no ``exe`` writes that again, and
+    with a Lean (`SPT.JUDGE`) writes the Lean's accept."""
     answer, _ = SPT._run(served, tmp_path, monkeypatch, case_exe=None)
     assert answer["verdict"] == "undecided" and answer["reason"] == SC.period.NO_JUDGE
     SPT._judge(monkeypatch, {})
@@ -128,29 +139,24 @@ def test_after_the_run_the_builder_writes_the_piece_the_run_wrote(form, request,
 
 
 def test_a_tampered_pous_case_is_answered_otherwise(served, tmp_path, monkeypatch):
-    """The component answers the case from its own bytes: another commitment is another digest, a session without one of
-    its coin openings is rejected, and a case not in canonical form is refused before it is read."""
+    """The reference the stand-in Lean answers with reads the case from its own bytes: another commitment is another
+    digest, and a session without one of its coin openings is rejected."""
     SPT._run(served, tmp_path, monkeypatch)
     _, got = _pous(served)
     case = json.loads((served.private / "case.json").read_text())
     published = _hexjson(case["commitment"]) | {"salt": "00" * 32}
-    other = SC.pous_answer(case | {"commitment": _rehex(published)}, schemes=ts.SCHEMES, protocol=SPT.TEST_PROTOCOL)
+    other = REF.pous_answer(case | {"commitment": _rehex(published)}, schemes=ts.SCHEMES, protocol=SPT.TEST_PROTOCOL)
     assert other["commitment"] != got["commitment"] and other["verdict"] == "reject"
     ev = _hexjson(case["evidence"])
     ev["session"]["openings"].pop()
-    lost = SC.pous_answer(case | {"evidence": _rehex(ev)}, schemes=ts.SCHEMES, protocol=SPT.TEST_PROTOCOL)
+    lost = REF.pous_answer(case | {"evidence": _rehex(ev)}, schemes=ts.SCHEMES, protocol=SPT.TEST_PROTOCOL)
     assert lost["verdict"] == "reject" and lost["commitment"] == got["commitment"]
-    loose = json.dumps(_hexjson(case["commitment"]), indent=1).encode().hex()
-    with pytest.raises(SC.Refused, match="commitment is not canonical JSON"):
-        SC.pous_answer(case | {"commitment": loose}, schemes=ts.SCHEMES)
-    with pytest.raises(SC.Refused, match="a case holds exactly"):
-        SC.pous_answer(case | {"blobs": []}, schemes=ts.SCHEMES)
 
 
 @pytest.mark.parametrize("tamper, reason", [
     ("public commitment", "doesn't open the public answer's commitment"),
     ("published", "the opened row is not the digest of setup's published outputs"),
-    ("session", "the run protocol answers the case reject"),
+    ("session", f"{SPT.JUDGE} answers the case reject"),
     ("table", "is not the memory attester's table"),
     ("verdict", "is not the run's own answer under a hiding commitment"),
 ])
@@ -188,9 +194,9 @@ def test_weights_that_are_not_the_pins_make_no_pous_case(served, tmp_path, monke
 def test_a_pous_window_whose_session_did_not_complete_has_no_case(served, tmp_path):
     SPT.SP.run(served.serve, 3, served.out, hf_home=served.hf, device="cpu", node=SPT.NODE, private=served.private,
                party=SPT.Side(SPT.AUDITOR, (sys.executable, "-c", "import sys; sys.exit(3)"), ("127.0.0.1", 9)),
-               pins=[served.pins], schemes=ts.SCHEMES, protocol=SPT.TEST_PROTOCOL)
+               pins=[served.pins], protocol=SPT.TEST_PROTOCOL)
     with pytest.raises(SC.Refused, match="names no private directory: the run's session didn't complete"):
-        SC.pous_piece(served.out, schemes=ts.SCHEMES, hf_home=served.hf, device="cpu", pins=[served.pins])
+        SC.pous_piece(served.out, hf_home=served.hf, device="cpu", pins=[served.pins])
 
 
 def _wipe_window(tmp_path: Path, *, protocol: str = WIPE_ID, egress_mib: int | None = None) -> tuple[Path, Path, wipe_run.Wipe]:
@@ -215,11 +221,11 @@ def test_the_wipe_case_is_the_subprotocols_and_its_answer_the_subprotocols_own(t
     dir's private wipe directory, and the public directory gains nothing."""
     window, serve, w = _wipe_window(tmp_path)
     public = _listing(window)
-    private, got = SC.wipe_piece(window, schemes=ts.SCHEMES)
+    private, got = SC.wipe_piece(window)
     assert private == serve / "private" / "wipe" and _listing(window) == public
     assert json.loads((private / "case.json").read_text()) == w.case
     assert got == w.answer == json.loads((private / "answer.json").read_text())
-    assert got["commitment"] == SC.digest(w.case) == W.digest(SC.wipe_party.commitment_of(_hexjson(w.case["commitment"]))).hex()
+    assert got["commitment"] == SC.digest(w.case) == W.digest(wipe_party.commitment_of(_hexjson(w.case["commitment"]))).hex()
     assert _mode(private) == 0o700 and _mode(private / "case.json") == 0o600
 
 
@@ -229,43 +235,51 @@ def test_the_wipe_case_kept_privately_is_the_one_read(tmp_path):
     private.mkdir(parents=True)
     (private / "wipe.case.json").write_text(json.dumps(w.case))
     (window / "wipe.case.json").unlink()
-    assert SC.wipe_piece(window, schemes=ts.SCHEMES)[1] == w.answer
+    assert SC.wipe_piece(window)[1] == w.answer
 
 
-def test_a_tampered_wipe_case_is_refused(tmp_path):
-    """Another commitment is another digest than the answer's; a signed session changed after the challenger signed it
-    is rejected, not as the run answered; another egress in the evidence is another answer than the run's; evidence in
-    an earlier format (a signed egress, no egress beside the session) doesn't decode; a case that is not what its own
-    parts make is refused."""
+def test_the_lean_answers_the_kept_wipe_case_as_the_run_did(tmp_path, wipe_exe):
+    """`wipe-protocol-test`, held to the served node, answers the kept case as the run did: its answer is written."""
+    window, serve, w = _wipe_window(tmp_path)
+    _, got = SC.wipe_piece(window, exe=wipe_exe)
+    assert {k: v for k, v in got.items() if k != "reason"} == {k: v for k, v in w.answer.items() if k != "reason"}
+    assert got == json.loads((serve / "private" / "wipe" / "answer.json").read_text())
+
+
+def test_a_tampered_wipe_case_is_refused(tmp_path, wipe_exe):
+    """The Lean answers a tampered case otherwise than the run did, so nothing is written: another commitment is
+    another digest; a signed session changed after the challenger signed it is rejected; another egress in the evidence
+    is another answer; evidence in an earlier format (a signed egress, no egress beside the session), an egress that
+    is no integer and a case that is not what its own parts make don't decode."""
     window, serve, w = _wipe_window(tmp_path)
     c, ev = _hexjson(w.case["commitment"]), _hexjson(w.case["evidence"])
     assert ev["egress_mib"] is None and "egress_bits" not in ev["signed"]
     for name, case, reason in [
-        ("commitment", w.case | {"commitment": _rehex(c | {"session": "44" * 32})},
-         "the answer's commitment is not the digest"),
+        ("commitment", w.case | {"commitment": _rehex(c | {"session": "44" * 32})}, "answers the case reject"),
         ("evidence", w.case | {"evidence": _rehex(ev | {"signed": ev["signed"] | {
-            "fill_start_ns": ev["signed"]["fill_start_ns"] - 1}})}, "the wipe protocol answers the case reject"),
-        ("egress", w.case | {"evidence": _rehex(ev | {"egress_mib": 0})}, "the wipe protocol answers the case accept"),
-        ("egress out of range", w.case | {"evidence": _rehex(ev | {"egress_mib": -1})},
-         "the wipe protocol answers the case reject"),
-        ("egress no integer", w.case | {"evidence": _rehex(ev | {"egress_mib": True})}, "null or an integer of MiB"),
+            "fill_start_ns": ev["signed"]["fill_start_ns"] - 1}})}, "answers the case reject"),
+        ("egress", w.case | {"evidence": _rehex(ev | {"egress_mib": 0})}, "answers the case accept"),
+        ("egress out of range", w.case | {"evidence": _rehex(ev | {"egress_mib": -1})}, "answers the case reject"),
+        ("egress no integer", w.case | {"evidence": _rehex(ev | {"egress_mib": True})}, "answers the case reject"),
         ("signed egress", w.case | {"evidence": _rehex({"signed": ev["signed"] | {"egress_bits": 7}})},
-         "the wipe's case doesn't decode"),
+         "answers the case reject"),
         ("signed egress beside", w.case | {"evidence": _rehex(ev | {"signed": ev["signed"] | {"egress_bits": 7}})},
-         "is not the one its decoded commitment"),
-        ("params", w.case | {"params": w.case["params"] | {"extra": 1}}, "is not the one its decoded commitment"),
+         "answers the case reject"),
+        ("params", w.case | {"params": w.case["params"] | {"extra": 1}}, "answers the case reject"),
     ]:
         (window / "wipe.case.json").write_text(json.dumps(case))
         with pytest.raises(SC.Refused, match=reason):
-            SC.wipe_piece(window, schemes=ts.SCHEMES)
+            SC.wipe_piece(window, exe=wipe_exe)
         assert not (serve / "private" / "wipe" / "case.json").exists(), name
 
 
-def test_a_wipe_of_another_server_is_refused(tmp_path):
-    window, _, _ = _wipe_window(tmp_path)
+def test_a_wipe_of_another_server_is_refused(tmp_path, wipe_exe):
+    """The Lean, held to the served node ``served.json`` names, refuses a case of another server by name."""
+    window, serve, _ = _wipe_window(tmp_path)
     _edit(window / "served.json", lambda d: d.update(server="n1"))
-    with pytest.raises(SC.Refused, match="a wipe of another server than n1"):
-        SC.wipe_piece(window, schemes=ts.SCHEMES)
+    with pytest.raises(SC.Refused, match=r"answers the case reject \(the case is a wipe of another server than n1\)"):
+        SC.wipe_piece(window, exe=wipe_exe)
+    assert not (serve / "private" / "wipe" / "case.json").exists()
 
 
 def _fake_lean(tmp_path: Path, answer: dict) -> Path:
@@ -279,18 +293,18 @@ def _fake_lean(tmp_path: Path, answer: dict) -> Path:
 def test_with_the_lean_its_answer_is_written_when_it_agrees(tmp_path):
     window, serve, w = _wipe_window(tmp_path)
     lean = w.answer | {"reason": None if w.answer["reason"] else "-"}
-    _, got = SC.wipe_piece(window, schemes=ts.SCHEMES, exe=_fake_lean(tmp_path, lean))
+    _, got = SC.wipe_piece(window, exe=_fake_lean(tmp_path, lean))
     assert got == lean == json.loads((serve / "private" / "wipe" / "answer.json").read_text())
     other = w.answer | {"verdict": "reject", "public": None, "profile": None, "reason": "no"}
     with pytest.raises(SC.Refused, match="answers the case reject"):
-        SC.wipe_piece(window, schemes=ts.SCHEMES, exe=_fake_lean(tmp_path, other))
+        SC.wipe_piece(window, exe=_fake_lean(tmp_path, other))
 
 
 def test_a_case_is_written_as_canonical_json_whatever_its_size(tmp_path, monkeypatch):
     """A string past `CHUNK` goes out in slices, the file the same bytes as one canonical dump."""
     window, serve, w = _wipe_window(tmp_path)
     monkeypatch.setattr(SC, "CHUNK", 7)
-    private, got = SC.wipe_piece(window, schemes=ts.SCHEMES)
+    private, got = SC.wipe_piece(window)
     for name, doc in (("case.json", w.case), ("answer.json", got)):
         assert (private / name).read_text() == json.dumps(doc, sort_keys=True, separators=(",", ":")) + "\n"
     SC.write(tmp_path / "empty", {}, {"a": "0123456789abcdef", "b": [1, {"d": 2, "c": None}]})
@@ -299,12 +313,44 @@ def test_a_case_is_written_as_canonical_json_whatever_its_size(tmp_path, monkeyp
 
 
 def test_the_cli_refuses_a_test_signed_session_and_what_is_no_piece(tmp_path, capsys):
-    """Under the deployed schemes a test signer's session is no accept, so the run's answer stands refused (exit 1);
-    an answer of another protocol is no piece (exit 2)."""
+    """Under the deployed schemes (`wipe-protocol`) a test signer's session is no accept, so the run's accept is
+    refused (exit 1); an answer of another protocol is no piece (exit 2)."""
     window, serve, _ = _wipe_window(tmp_path, protocol=W.PROTOCOL)
-    assert SC.main(["--window", str(window)]) == 1
-    assert "CASE: refused: the wipe protocol answers the case reject" in capsys.readouterr().out
+    SPT._built(ATTESTER, "wipe-protocol")
+    assert SC.main(["--window", str(window), "--lean-root", str(ROOT)]) == 1
+    assert "answers the case reject (signature scheme" in capsys.readouterr().out
     assert not (serve / "private" / "wipe" / "case.json").exists()
     _edit(window / "answer.json", lambda d: d.update(protocol="verity/other/v0"))
     assert SC.main(["--window", str(window)]) == 2
     assert "no PoUS or wipe answer" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("flag", ["--exe", "--ex", "--case-exe"])
+def test_the_cli_takes_no_executables_path(tmp_path, flag):
+    """The Lean that answers is the scheme's declared executable in ``--lean-root`` (`declared.py`), never a path
+    the caller names, nor one an abbreviation of a flag reaches."""
+    window, _, _ = _wipe_window(tmp_path, protocol=W.PROTOCOL)
+    with pytest.raises(SystemExit) as e:
+        SC.main(["--window", str(window), flag, "/bin/true"])
+    assert e.value.code == 2
+
+
+def _lean_stand_in(tmp_path: Path, body: str) -> Path:
+    exe = tmp_path / "fake-lean"
+    exe.write_text(f"#!{sys.executable}\nimport json, sys\n{body}")
+    exe.chmod(0o755)
+    return exe
+
+
+def test_a_lean_answer_beside_a_panic_or_after_a_failure_is_refused_by_name(tmp_path):
+    """The piece's Lean (`lean_answer`, which `served_piece.py` and the builder ask) gives no answer where its error stream
+    holds a panic line, whatever its exit, or where it exits non-zero: the accept on its output stream is not read."""
+    panic = "PANIC at PousVerifier.RunProtocol PousVerifier.RunProtocol:1:2: index out of bounds"
+    accept = 'print(json.dumps({"verdict": "accept"}))\n'
+    for code in (0, 1):
+        exe = _lean_stand_in(tmp_path, f"print({panic!r}, file=sys.stderr)\n{accept}sys.exit({code})\n")
+        with pytest.raises(SC.Refused, match=f"LeanPanic: lean-panic: the Lean verifier wrote a panic: its answer is not read: {panic}"):
+            SC.lean_answer({"commitment": "", "evidence": "", "params": {}}, exe)
+    exe = _lean_stand_in(tmp_path, f"{accept}sys.exit(3)\n")
+    with pytest.raises(SC.Refused, match="LeanExit: lean-exit: .*status 3"):
+        SC.lean_answer({"commitment": "", "evidence": "", "params": {}}, exe)

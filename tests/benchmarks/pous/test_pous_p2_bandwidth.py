@@ -1,4 +1,4 @@
-"""The PoUB session's prover over the P2 store (`verity/protocols/resource_accounting/memory/poub/prover/p2_stage/bandwidth.py`):
+"""The PoUB session's prover over the P2 store (`verity/protocols/accounting/memory/poub/prover/p2_stage/bandwidth.py`):
 SHA-512's midstate and the device's receipts held to hashlib and `p2.Sketcher`, the sketch of stored rows held to the
 unit sketch, the receipt tree built in
 worker processes held to `receipts.tree`, PoUS's vk paths from row digests held to the verifier's tree, the plan of a
@@ -8,6 +8,7 @@ the toy's plan or one of fewer units, and rejected when the prover skips a layer
 private."""
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import multiprocessing as mp
@@ -24,17 +25,18 @@ torch = pytest.importorskip("torch")
 HERE = (Path(__file__).resolve().parents[3] / "benchmarks" / "pous")
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str((ROOT / "verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/store.py").parents[1]))
-sys.path.insert(0, str((ROOT / "verity/protocols/resource_accounting/memory/poub/prover/p2_stage/bandwidth.py").parent))
+sys.path.insert(0, str((ROOT / "verity/protocols/accounting/memory/pous/prover/p2/p2_store/store.py").parents[1]))
+sys.path.insert(0, str((ROOT / "verity/protocols/accounting/memory/poub/prover/p2_stage/bandwidth.py").parent))
 import bandwidth as B  # noqa: E402
 from p2_v1 import bandwidth_toy as BT  # noqa: E402
 
-from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
-from verity.protocols.resource_accounting.memory.pous.verifier import verifier as V
-from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import P2Params
-from verity.protocols.resource_accounting.memory.poub.verifier import p2, p2_case, p2_parties, receipts
+from verity.commitments.merkle import levels, merkle_depth
+from verity.protocols.accounting.memory.pous.attester import memory_attester as mc
+from verity.protocols.accounting.memory.pous.verifier import verifier as V
+from verity.protocols.accounting.memory.pous.verifier.schemes.p2 import P2Params
+from verity.protocols.accounting.memory.poub.verifier import p2, p2_case, p2_parties, receipts
 
-sys.path.insert(0, str(ROOT / "tests" / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "verifier"))
+sys.path.insert(0, str(ROOT / "tests" / "verity" / "protocols" / "accounting" / "memory" / "pous" / "verifier"))
 
 import pous_test_signer as ts  # noqa: E402
 
@@ -80,19 +82,31 @@ def test_the_sketch_of_stored_rows_is_the_unit_sketch() -> None:
         assert sk.sigma[g].numpy().astype("<i4").tobytes() == ref.sketch(rows[4 * g:4 * g + 4].tobytes())
 
 
-@pytest.mark.parametrize(("units", "runs"), [(8, None), (16 * 40 + 5, None), (16 * 40 + 5, ((100, 500), (0, 50)))])
-def test_the_receipt_tree_is_receipts_tree(units, runs, monkeypatch) -> None:
-    plan = receipts.Plan.whole(units) if runs is None else receipts.Plan(runs, units)
-    rng = np.random.default_rng(units)
+TREES = [(1, 4, False, None), (17, 4, False, None), (33, 4, False, None), (128, 4, False, None), (129, 4, False, None),
+         (64, 4, False, None), (65, 4, False, None), (550, 4, True, ((100, 500), (0, 50))), (16 * 2049, 64, False, None),
+         (129, 3, False, None)]
+
+
+@pytest.mark.parametrize(("positions", "chunk", "pooled", "runs"), TREES)
+def test_the_receipt_tree_is_one_levels_call(positions, chunk, pooled, runs, monkeypatch) -> None:
+    plan = receipts.Plan.whole(positions) if runs is None else receipts.Plan(runs, 645)
+    rng = np.random.default_rng(positions)
     ys = rng.integers(0, 256, (plan.length, 64), dtype=np.uint8)
     n = receipts.leaves(plan.length)
     salts = rng.integers(0, 256, n * receipts.SALT_BYTES, dtype=np.uint8).tobytes()
-    ref = receipts.tree(SEED, plan, [bytes(y) for y in ys],
-                        [salts[192 * c:192 * (c + 1)] for c in range(n)])
-    monkeypatch.setattr(B.ReceiptTree, "CHUNK", 4)
-    with ProcessPoolExecutor(2, mp_context=mp.get_context("fork")) as pool:
+    monkeypatch.setattr(B.ReceiptTree, "CHUNK", chunk)
+    with ProcessPoolExecutor(2, mp_context=mp.get_context("fork")) if pooled else contextlib.nullcontext() as pool:
+        if chunk & (chunk - 1):
+            with pytest.raises(ValueError, match="CHUNK 3 is not a power of two"):
+                B.ReceiptTree(SEED, plan, ys, salts, pool)
+            return
         got = B.ReceiptTree(SEED, plan, ys, salts, pool)
-    assert got.root == ref.commitment.root
+    d = receipts.domain(SEED, plan)
+    nodes = [d.leaf(c, c, receipts.SCHEMA, receipts.hidden(ys[16 * c:16 * c + 16].tobytes(), salts[192 * c:192 * c + 192]))
+             for c in range(n)] + [d.pad(r) for r in range(n, 1 << merkle_depth(n))]
+    assert [[lv[i:i + 64] for i in range(0, len(lv), 64)] for lv in got.levels] == [list(lv) for lv in levels(
+        d.domain_id, nodes, hash=d.hash)]
+    ref = receipts.tree(SEED, plan, [bytes(y) for y in ys], [salts[192 * c:192 * c + 192] for c in range(n)])
     assert all(got.path(c) == ref.open(c).path for c in range(n))
 
 
@@ -133,7 +147,7 @@ def test_the_tracked_registrations_plan_is_the_real_layouts_tensors_units() -> N
     doc = ST._dump(ST.build(ST.MQA16K).to_json())
     assert hashlib.sha512(doc.encode()).hexdigest() == ST.LAYOUT_SHA512
     layout = json.loads(doc)
-    tracked = json.loads((ROOT / "verity/protocols/resource_accounting/memory/poub/verifier/bandwidth-mem69-v2.json").read_text())
+    tracked = json.loads((ROOT / "verity/protocols/accounting/memory/poub/verifier/bandwidth-mem69-v2.json").read_text())
     reg = p2_parties.registration_of(tracked)
     plan = p2_parties.plan_of(tracked, reg)
     assert plan == B.tensor_plan(layout, reg.blocks) == receipts.Plan(((0, 17_003_406),), reg.blocks)
@@ -146,11 +160,12 @@ def test_the_tracked_registrations_plan_is_the_real_layouts_tensors_units() -> N
 def test_the_toy_served_through_the_staging_decode_is_accepted_and_a_skipped_layer_rejected(tmp_path) -> None:
     reg = BT.toy(tmp_path / "toy")
     assert B.registration_of_store(tmp_path / "toy" / "store", reg.node) == reg
-    verifier = (f"{sys.executable} -m verity.protocols.resource_accounting.memory.poub.verifier.p2_parties "
+    verifier = (f"{sys.executable} -m verity.protocols.accounting.memory.poub.verifier.p2_parties "
                 f"--registration {tmp_path / 'toy' / 'registration.json'} --stdio {held_to()}")
     base = ["session", "--store", str(tmp_path / "toy" / "store"), "--layout", str(tmp_path / "toy" / "layout.json"),
             "--node", reg.node.decode(), "--registration", str(tmp_path / "toy" / "registration.json"),
-            "--verifier", verifier, "--device", "cpu", "--ref-decode", "--samples", "64", "--window-s", "0.001",
+            "--verifier", verifier, "--device", "cpu", "--ref-decode", "--windows", "2", "--passes", "2", "--samples", "64",
+            "--window-s", "0.001",
             "--deadline-s", "0.001", "--workers", "2", "--chunk", "5"]
     assert B.main(base + ["--out", str(tmp_path / "honest"), "--expect", "accept"]) == 0
     doc = json.loads((tmp_path / "honest" / "session.json").read_text())
@@ -172,25 +187,25 @@ def test_a_registration_whose_plan_is_fewer_units_is_what_each_pass_reads(tmp_pa
     assert doc["plan"] == [[0, reg.blocks]]
     path = tmp_path / "fewer.json"
     path.write_text(json.dumps(doc | {"plan": [[0, 2], [4, 3]]}))
-    verifier = (f"{sys.executable} -m verity.protocols.resource_accounting.memory.poub.verifier.p2_parties --registration {path} --stdio "
+    verifier = (f"{sys.executable} -m verity.protocols.accounting.memory.poub.verifier.p2_parties --registration {path} --stdio "
                 f"{held_to()}")
     assert B.main(["session", "--store", str(tmp_path / "toy" / "store"), "--layout", str(tmp_path / "toy" / "layout.json"),
                    "--node", reg.node.decode(), "--registration", str(path), "--verifier", verifier, "--device", "cpu",
-                   "--ref-decode", "--samples", "64", "--window-s", "0.001", "--deadline-s", "0.001", "--workers", "2",
-                   "--chunk", "5", "--out", str(tmp_path / "fewer"), "--expect", "accept"]) == 0
+                   "--ref-decode", "--windows", "2", "--passes", "2", "--samples", "64", "--window-s", "0.001",
+                   "--deadline-s", "0.001", "--workers", "2", "--chunk", "5", "--out", str(tmp_path / "fewer"), "--expect", "accept"]) == 0
     doc = json.loads((tmp_path / "fewer" / "session.json").read_text())
     a = doc["answer"]
     assert a["verdict"] == "accept" and (a["units"], a["plan_units"], a["receipts"]) == (reg.blocks, 5, 2 * 2 * 5)
     assert [s["covered_units"] for s in doc["steps"]] == [5] * 4 and doc["registration"]["plan"] == [[0, 2], [4, 3]]
 
 
-def test_sessions_reach_a_listening_verifier_which_records_their_answers(tmp_path) -> None:
+def test_sessions_reach_a_listening_verifier_which_records_no_answer(tmp_path) -> None:
     """The gate's shape: `p2_parties --listen --sessions 2` on the auditor, the honest prover and then the cheat at
-    `--connect`, each answer a line of `--answer`."""
+    `--connect`, each getting its answer; the verifier's stdout holds its port and no answer, and `--answer` is gone."""
     reg = BT.toy(tmp_path / "toy")
-    verifier = subprocess.Popen([sys.executable, "-m", "verity.protocols.resource_accounting.memory.poub.verifier.p2_parties",
+    verifier = subprocess.Popen([sys.executable, "-m", "verity.protocols.accounting.memory.poub.verifier.p2_parties",
                                  "--registration", str(tmp_path / "toy" / "registration.json"), "--listen",
-                                 "127.0.0.1:0", "--sessions", "2", "--answer", str(tmp_path / "answers.jsonl"),
+                                 "127.0.0.1:0", "--sessions", "2",
                                  *held_to(1, 1, 8).split()],
                                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, cwd=ROOT)
     port = json.loads(verifier.stdout.readline())["listening"]
@@ -200,22 +215,20 @@ def test_sessions_reach_a_listening_verifier_which_records_their_answers(tmp_pat
             "--workers", "1"]
     assert B.main(base + ["--out", str(tmp_path / "honest"), "--expect", "accept"]) == 0
     assert B.main(base + ["--out", str(tmp_path / "cheat"), "--skip-layer", "1", "--expect", "reject"]) == 0
-    assert verifier.wait() == 0
-    mine = [json.loads(x) for x in (tmp_path / "answers.jsonl").read_text().splitlines()]
-    assert mine == [json.loads((tmp_path / s / "session.json").read_text())["answer"] for s in ("honest", "cheat")]
+    assert verifier.wait() == 0 and verifier.stdout.read() == ""
+    mine = [json.loads((tmp_path / s / "session.json").read_text())["answer"] for s in ("honest", "cheat")]
     assert mine[0]["verdict"] == "accept" and mine[0]["receipts"] == reg.blocks
     assert mine[1]["verdict"] == "reject" and mine[1]["failure"] == "receipt"
 
 
-#: a case's verdict with no `--case-exe`: the Python may only refuse, so its reject stands and its accept is undecided
-WITHOUT_LEAN = {"accept": "undecided", "reject": "reject"}
+#: a case's verdict with no `--case-exe`: undecided, whatever its session said; no Python verdict stands
+WITHOUT_LEAN = {"accept": "undecided", "reject": "undecided"}
 
 
-def test_a_party_the_gate_starts_says_its_port_and_its_own_record_of_the_answer(tmp_path) -> None:
+def test_a_party_the_gate_starts_says_its_port_and_keeps_no_record_of_the_answer(tmp_path) -> None:
     """The auditor gate's party shape (`--party CMD`): the party run as the gate runs one, from the tree with no
     site-packages (`-S`: the standard library only, which the gate's `python3 -s -E` has) and its `--device`
-    directory; CMD's stdout says the port and then the verifier's record of the answer, which the verdict line holds
-    to the session's, and which the device's answers.jsonl keeps. Each session's core case, whose digest alone (the
+    directory; CMD's stdout says the port, and neither it nor the device keeps any record of the answer. Each session's core case, whose digest alone (the
     chain its signed close signs) the device's private case-digests.txt keeps, goes with its answer to `--case-dir` (0700, its files 0600), naming the
     toy's store, its log closed by the memory challenger's key (`p2_party_at_leaf`) under the session id the party was
     given, and `session.json` holds only its digest, store and verdict."""
@@ -238,24 +251,21 @@ def test_a_party_the_gate_starts_says_its_port_and_its_own_record_of_the_answer(
         assert B.main(base + more + ["--party", party(session), "--out", str(tmp_path / name), "--expect", expect,
                                      "--case-dir", str(private)]) == 0
         doc = json.loads((tmp_path / name / "session.json").read_text())
-        assert doc["verifier_record"] == doc["answer"] and doc["answer"]["verdict"] == expect
-        assert "verifier_record_agrees=True" in doc["verdict_line"]
+        assert "verifier_record" not in doc and doc["answer"]["verdict"] == expect
+        assert "verifier_record" not in doc["verdict_line"] and doc["verdict_line"].endswith("PASS")
         case, answer = (json.loads((private / f).read_text()) for f in (p2_case.CASE, p2_case.ANSWER))
         assert [(private / f).stat().st_mode & 0o777 for f in ("", p2_case.CASE, p2_case.ANSWER)] == [0o700, 0o600, 0o600]
-        assert answer == p2_case.unjudged(case, doc["answer"]) and answer["verdict"] == WITHOUT_LEAN[expect]
-        assert p2_case.store_root(case) == reg.root
+        assert answer == p2_case.unjudged(case) and answer["verdict"] == WITHOUT_LEAN[expect]
+        assert case["params"]["store_root"] == reg.root.hex()
         assert doc["case"] == {"commitment": p2_case.digest(case).hex(), "dir": str(private), "judge": "none",
                                "store_root": reg.root.hex(), "verdict": WITHOUT_LEAN[expect]}
         assert case["evidence"] not in (tmp_path / name / "session.json").read_text()
         assert case["params"]["session"] == session.hex()
         cases.append(case)
-    kept = [json.loads(x) for x in (tmp_path / "party" / "answers.jsonl").read_text().splitlines()]
-    assert kept == [json.loads((tmp_path / s / "session.json").read_text())["answer"] for s in ("honest", "cheat")]
+    assert sorted(p.name for p in (tmp_path / "party").iterdir()) == ["private"]
     private = tmp_path / "party" / "private"
     assert (private / p2_parties.CASE_DIGESTS).read_text().splitlines() == [p2_parties.case_digest(c) for c in cases]
     assert sorted(p.name for p in private.iterdir()) == [p2_parties.CASE_DIGESTS]
-    record = {"verdict": "accept"}
-    assert B.verdict_line(doc["answer"], "reject", record).endswith("verifier_record_agrees=False FAIL")
     with pytest.raises(SystemExit, match="can't be under --out"):
         B.main(base + ["--party", party(session), "--out", str(tmp_path / "x"),
                        "--case-dir", str(tmp_path / "x" / "private")])
@@ -328,6 +338,6 @@ def test_the_cli_runs_as_a_script(tmp_path) -> None:
                        capture_output=True, text=True, cwd=ROOT)
     assert p.returncode == 0, p.stderr
     assert json.loads(p.stdout)["units"] == 8
-    p = subprocess.run([sys.executable, str(ROOT / "verity/protocols/resource_accounting/memory/poub/prover/p2_stage/bandwidth.py"), "--help"], check=False,
+    p = subprocess.run([sys.executable, str(ROOT / "verity/protocols/accounting/memory/poub/prover/p2_stage/bandwidth.py"), "--help"], check=False,
                        capture_output=True, text=True, cwd=ROOT)
     assert p.returncode == 0 and "session" in p.stdout, p.stderr

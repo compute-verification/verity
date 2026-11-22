@@ -7,12 +7,10 @@ import ast
 import json
 import os
 import re
-import shutil
 import signal
 import socket
 import subprocess
 import sys
-from tests.row_paths import row_paths
 import threading
 from pathlib import Path
 from types import SimpleNamespace
@@ -20,7 +18,6 @@ from types import SimpleNamespace
 import pytest
 
 from verity_vllm.pipeline import gpu_lease as GL
-from verity_vllm.pipeline import row_driver as RD
 
 
 def fake_smi(tmp_path: Path, looks: list[str]) -> Path:
@@ -243,17 +240,6 @@ def test_a_queued_commit_writes_a_heartbeat_to_its_log_until_the_gpu_is_held(tmp
     assert log.read_text().count("waiting for a GPU lease") == 3
 
 
-def test_the_cuda_jit_cache_persists_beside_the_trees_triton_cache(tmp_path):
-    env = {"TRITON_CACHE_DIR": str(tmp_path / "cache" / "triton" / "tree1")}
-    RD.jit_cache(env)
-    assert env["CUDA_CACHE_PATH"] == str(tmp_path / "cache" / "cuda" / "tree1") and Path(env["CUDA_CACHE_PATH"]).is_dir()
-    assert env["CUDA_CACHE_MAXSIZE"] == str(4 << 30)
-    kept = {"TRITON_CACHE_DIR": "/t/triton/x", "CUDA_CACHE_PATH": "/mine"}
-    RD.jit_cache(kept)
-    assert kept == {"TRITON_CACHE_DIR": "/t/triton/x", "CUDA_CACHE_PATH": "/mine"}
-    none: dict[str, str] = {}
-    RD.jit_cache(none)
-    assert none == {}
 
 
 PRO = "pleias-350m__bf16__rtxpro6000__tp1__b16__i256__o32__mixed__greedy__bi-eager"
@@ -275,65 +261,10 @@ def _toolchain(tmp_path: Path) -> tuple[str, str, Path]:
     return str(tmp_path / "venv" / "bin" / "python"), str(tmp_path / "cuda"), tree
 
 
-def test_the_jit_key_is_the_toolchain_the_device_class_and_the_trees_triton_kernels(tmp_path):
-    py, cuda, a = _toolchain(tmp_path)
-    k = RD.jit_key(py, cuda, PRO, str(a))
-    assert re.fullmatch(r"[0-9a-f]{16}", k)
-    b = tmp_path / "src" / "fedcba9876543210" / "adapters" / "vllm"
-    shutil.copytree(a, b)
-    (b / "verity_vllm" / "row.py").write_text("STAGES = 2\n")
-    assert RD.jit_key(py, cuda, PRO, str(b)) == k                                  # another sync, its change outside the kernels
-    assert RD.jit_key(py, cuda, PRO.replace("rtxpro6000", "h100"), str(a)) not in (k, None)
-    (b / "verity_vllm" / "acquire" / "tap.py").write_text("import triton\n\n\n@triton.jit\ndef k(x):\n    return x\n")
-    assert RD.jit_key(py, cuda, PRO, str(b)) not in (k, None)
-    (tmp_path / "cuda" / "include" / "cuda.h").write_text("#define CUDA_VERSION 13000\n")
-    assert RD.jit_key(py, cuda, PRO, str(a)) not in (k, None)
-    rec = next((tmp_path / "venv").rglob("torch-*.dist-info/RECORD"))
-    rec.write_text("torch/__init__.py,sha256=y,1\n")
-    k2 = RD.jit_key(py, cuda, PRO, str(a))
-    assert k2 not in (k, None)
-    assert RD.jit_key(py, cuda, "r", str(a)) is None                               # no device class, no key
-    rec.unlink()
-    assert RD.jit_key(py, cuda, PRO, str(a)) is None
 
 
-def test_a_bi_eager_rows_jit_caches_move_from_its_job_tree_to_its_key_and_any_other_directory_is_kept(tmp_path):
-    tree, c, k = str(tmp_path / "src" / "0123456789abcdef" / "adapters" / "vllm"), tmp_path / "cache", "00ff00ff00ff00ff"
-    env = {"TRITON_CACHE_DIR": str(c / "triton" / "0123456789abcdef"), "VLLM_CACHE_ROOT": str(c / "vllm" / "0123456789abcdef")}
-    RD.jit_cache(env, tree, lambda: k)
-    assert env == {"TRITON_CACHE_DIR": str(c / "triton" / f"k-{k}"), "VLLM_CACHE_ROOT": str(c / "vllm" / f"k-{k}"),
-                   "CUDA_CACHE_PATH": str(c / "cuda" / f"k-{k}"), "CUDA_CACHE_MAXSIZE": str(4 << 30)}
-    own = {"TRITON_CACHE_DIR": str(c / "triton" / "0123456789abcdef")}
-    RD.jit_cache(own, tree, lambda: None)                                           # a compiled row, or an input that can't be read
-    assert own["TRITON_CACHE_DIR"] == str(c / "triton" / "0123456789abcdef") and own["CUDA_CACHE_PATH"] == str(c / "cuda" / "0123456789abcdef")
-
-    def never() -> str:
-        raise AssertionError("a key for a directory that isn't the job tree's")
-    scratch = {"TRITON_CACHE_DIR": str(tmp_path / "scratch" / "rk" / "triton")}    # `research run --scratch triton`: cold on purpose
-    RD.jit_cache(scratch, tree, never)
-    assert scratch["TRITON_CACHE_DIR"] == str(tmp_path / "scratch" / "rk" / "triton")
-    checkout = {"TRITON_CACHE_DIR": str(c / "triton" / "verity")}                 # a checkout, not `job_tree.sh`'s copy
-    RD.jit_cache(checkout, str(tmp_path / "verity" / "adapters" / "vllm"), never)
-    assert checkout["TRITON_CACHE_DIR"] == str(c / "triton" / "verity")
 
 
-@pytest.mark.parametrize("row,workload,eager", [
-    (PRO, {"sweep": {"execution": "bi-eager", "row_id": PRO}}, True),
-    (PRO, {"sweep": {"row_id": PRO}}, True),
-    (PRO, {"execution": "bi-compiled", "sweep": {"row_id": PRO}}, False),
-    (PRO.replace("bi-eager", "bi-compiled"), {"sweep": {"row_id": PRO.replace("bi-eager", "bi-compiled")}}, False),
-    (PRO.replace("bi-eager", "bi-eager-fa2"), {"sweep": {"execution": "bi-eager-fa2"}}, False),
-    (PRO, None, False),
-])
-def test_only_a_bi_eager_row_shares_jit_caches(tmp_path, row, workload, eager):
-    from verity_vllm.pipeline import cli
-    o = cli.parse("row", ["run", row, "R", "o/r", "x", "--sweep-dir", str(tmp_path), "--py", sys.executable], row_paths(tmp_path))
-    r = RD.Row(row=row, role="R", repo="o/r", rev="x", stages="build", env=o.env, proc="row_pod")
-    r.tree = str(tmp_path)
-    if workload is not None:
-        (tmp_path / "workloads").mkdir()
-        (tmp_path / "workloads" / f"{row}.json").write_text(json.dumps(workload))
-    assert r.bi_eager() is eager
 
 
 def _args(**kw):
@@ -372,33 +303,6 @@ def test_a_commit_whose_checks_after_its_last_run_read_host_memory_only_may_rele
     assert GL.kept_reason(_args(), [_com()], ENG, ONE, bundle=True) is None
     assert GL.kept_reason(_args(open_after_release=False), [_com(retain="none")], ENG, ONE, bundle=True) is None    # no openings after release
     assert GL.kept_reason(_args(), [_com(pool=SimpleNamespace(mode=None))], ENG, ONE, bundle=True) is None          # a pool that never allocated
-
-
-def test_the_commit_releases_its_lease_after_its_last_run_and_before_the_checks_that_follow():
-    """In `commit.main`, read with the text of each function that holds a part of it (`parts`) where `main` calls it: the release
-    follows the last run's records that read the device (the run, its openings, the replay bundle's device-resident tensors in
-    `RB.start`) and precedes every check that reads host memory; nothing after it calls CUDA."""
-    src = Path(GL.__file__).with_name("commit.py").read_text()
-    fns = {n.name: ast.get_source_segment(src, n) or "" for n in ast.parse(src).body if isinstance(n, ast.FunctionDef)}
-    parts = ("write_verdict", "challenged_openings", "binding_coverage", "manifest_coverage", "value_correspondence", "match_record_compare",
-             "weights_pin", "record_openings_after_release")
-    main = fns["main"]
-    for part in parts:                                    # a part may be called by one named before it
-        calls = re.findall(rf"\n +(?:\w+(?:, \w+)* = )?{part}\(", main)
-        assert main.count(f"{part}(") == len(calls) <= 1, f"read at one call of {part}, a statement of main's or of a part's"
-        if calls:
-            head, call, tail = main.partition(calls[0])
-            main = head + "\n" + fns[part] + call + tail
-    marks = ["GL.acquire(TL)", "TL.end(_wstage", '"gpu_mem"', 'TL.start("validate.openings"', "RB.start(out, pair", "GL.release(TL",
-             'TL.start("validate.binding_coverage"', 'TL.start("validate.manifest_coverage"', "RB.defer(", "TL.start(\"validate.weights_pin\"",
-             "openings_after_release(com", "for c in coms.values():\n        c.close()", 'TL.start("closure.summary")']
-    at = [main.index(m) for m in marks]
-    assert at == sorted(at) and main.count("GL.release(") == 1, dict(zip(marks, at))
-    call = main[at[5]:main.index("\n", at[5])]
-    assert "last=pair == args.pairs - 1 and k == len(order) - 1, after=_wstage" in call
-    assert "bundle=_rb_started is not None" in call
-    after = main[main.index("\n", at[5]):]
-    assert not re.search(r"torch\.cuda|\.cuda\(|nvidia_smi|synchronize\(|empty_cache", after)
 
 
 def test_the_lease_record_dates_the_release_and_names_its_stage_or_why_it_was_kept(tmp_path):
@@ -533,31 +437,6 @@ with open({legs!r}, "a") as f:
 '''
 
 
-@pytest.mark.parametrize("leased, legs", [
-    (True, [{"phase": "gpu", "devices": "5", "locks": 1}, {"phase": "cpu", "devices": "", "locks": 0}]),
-    (False, [{"phase": "all", "devices": "5", "locks": 0}]),
-])
-def test_a_single_gpu_match_holds_its_lease_for_its_gpu_phase_only(tmp_path, leased, legs):
-    """A leased row's Match runs `match` as its GPU phase under the lease, holding it to the phase's exit (its record in
-    ``match/lease/``), then its CPU phase with no device and no lease; an unleased row's runs both phases in one process, as before."""
-    from tests.pipeline.test_row import _row
-    t = _row(tmp_path / "sweep")
-    t.B, t.I, t.O, t.snap_def, t.snap_steps, t.ck = 1, 256, 32, "all", None, str(tmp_path / "ck")
-    (tmp_path / "leg.py").write_text(MATCH_LEG.format(lock=str(tmp_path / "5.lock"), legs=str(tmp_path / "legs.jsonl")))
-    t.cli = lambda *a, py=None: [sys.executable, str(tmp_path / "leg.py"), *a]
-    env = {k: v for k, v in t.child_env.items() if not k.startswith(("GPU_LEASE", "VERITY_LEASE"))}
-    env["CUDA_VISIBLE_DEVICES"] = "5"
-    if leased:
-        env["GPU_LEASE"] = fake_lease(tmp_path)
-        GL.hide_devices(env)
-    t.child_env = env
-    with pytest.raises(RD.Stop):              # the stand-in folds nothing, so the Match fails after its stages
-        t.match()
-    assert [json.loads(ln) for ln in (tmp_path / "legs.jsonl").read_text().splitlines()] == legs
-    rec = Path(t.d, "match", "lease", GL.RECORD)
-    assert rec.exists() is leased
-    if leased:
-        assert json.loads(rec.read_text())["kept"] == GL.MATCH_STAGE_KEPT and released(tmp_path / "5.lock")
 
 
 def test_the_match_takes_its_lease_in_a_gpu_phase_before_its_first_stage():

@@ -26,7 +26,7 @@ reusable across requests and rows. The verdict is PASS iff every request is cano
 resolved AND no XREQ AND every needed derivation is present. Missing derivations are listed (`missing_derived`) and
 exit 4 so the driver (`row_pod.sh`) can derive them and rerun; refusal/mismatch exits 3.
 
-    verity-vllm batch-decomp --oracle <match dir: program.json + instances.jsonl + capture/log.jsonl.gz>
+    cli.run(batch_decomp) --oracle <match dir: program.json + instances.jsonl + capture/log.jsonl.gz>
         --derived <dir with descriptor.json.gz + derive-report.json + artifact.json> [--derived <dir> ...] --out decomp.json
 
 PROTOCOL SUMMARY (Match stage, B>1: the per-request decomposition of the batched fold -- X-09; occurrence resolution at B>1)

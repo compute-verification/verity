@@ -76,22 +76,22 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent))
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/resource_accounting/compute/pouw/prover/clear"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/accounting/compute/pouw/prover/clear"))
 import fast_tile as FT  # noqa: E402
 import run_result  # noqa: E402
 import verify_run as VR  # noqa: E402
 from verity.commitments import Commitment  # noqa: E402
 from verity.commitments import verify_opening  # noqa: E402
 from verity.commitments.randomness import derive  # noqa: E402
-from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (ROW_SCHEMA, activation_binding, opened_value, rows_domain,  # noqa: E402
+from verity.protocols.accounting.compute.pouw.verifier.audit import (ROW_SCHEMA, activation_binding, opened_value, rows_domain,  # noqa: E402
                                               weight_binding)
 from clear_audit import Transcript, Verifier, commitment_hash  # noqa: E402
-from verity.protocols.resource_accounting.compute.pouw.verifier.coins import CoinCommitment  # noqa: E402
-from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Context, Matmul, Shape  # noqa: E402
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_work as PW  # noqa: E402
+from verity.protocols.accounting.compute.pouw.verifier.coins import CoinCommitment  # noqa: E402
+from verity.protocols.accounting.compute.pouw.verifier.protocol import Context, Matmul, Shape  # noqa: E402
+from verity.protocols.accounting.compute.pouw.prover.schemes import pearl_c_work as PW  # noqa: E402
 import clear_work as CW  # noqa: E402
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PD  # noqa: E402
-from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes  # noqa: E402
+from verity.protocols.accounting.compute.pouw.prover.serving import pearl_c as PD  # noqa: E402
+from verity.protocols.accounting.compute.pouw.prover import schemes as pouw_schemes  # noqa: E402
 from verity_config.settings import of  # noqa: E402
 
 settings = of(__file__)
@@ -188,7 +188,7 @@ def load(path: Path, light: bool = False, coins: CoinCommitment | None = None) -
         raise ValueError(f"the commitment counts {c['count']} tiles; the workload has {len(verifier.refs)}")
     return {"man": man, "sha256": sha, "scheme": scheme, "view": view, "epoch": epoch, "tile": index,
             "records": records, "transcript": transcript, "verifier": verifier,
-            "prover": VR.Opened(man, VR.Files(path.parent), verifier.refs)}
+            "prover": VR.prover_of(man, path.parent, verifier.refs)}
 
 
 def credited_macs(record: PW.UnitRecord) -> int:

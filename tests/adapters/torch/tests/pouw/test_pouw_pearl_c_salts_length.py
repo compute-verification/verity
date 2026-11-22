@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity.protocols.resource_accounting.compute.pouw.prover.kernels.pearl_c_sm90 import run as R
+from verity.protocols.accounting.compute.pouw.prover.kernels.pearl_c_sm90 import run as R
 from verity_torch.pouw.pearl_c import grouped as PG
 from verity_torch.pouw.pearl_c.graphs import GraphCalls
 

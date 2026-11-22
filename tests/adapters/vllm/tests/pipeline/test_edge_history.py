@@ -10,9 +10,9 @@ from verity.circuits.codec import descriptor_id, program_digest
 from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.partition_object import calls
 from verity.circuits.types import Array, Value, field_starts, field_types
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
-from verity.protocols.proofs.spot.prover import docket as DK
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+from verity.protocols.proof.spot.verifier.one_stage import docket as R
+from verity.protocols.proof.spot.prover import docket as DK
+from verity.protocols.proof.spot.verifier.one_stage import partition as P
 from verity.commitments import registered_value as RV
 
 from tests.program.test_workload_program import _edge_wl, _groups

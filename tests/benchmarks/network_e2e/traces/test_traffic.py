@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import random
 
 import pytest
@@ -55,3 +57,23 @@ def test_plan_refuses_when_documents_run_out(mod):
     traffic = mod("traffic")
     with pytest.raises(ValueError, match="no unused document"):
         traffic.plan(docs(n=30), 200, seed=0)
+
+
+def test_a_plans_digest_is_the_sha512_of_its_lines_and_its_record_names_what_rebuilds_it(tmp_path, mod):
+    """A corpus keeps the plan's digest and recipe, not the plan: the digest is that of the plan written one request a
+    line, it moves with the seed, and the recipe's files are named by path and SHA-512."""
+    traffic, corpus = mod("traffic"), mod("corpus")
+    d = docs()
+    plan = traffic.plan(d, 50, seed=3)
+    lines = "".join(json.dumps(r, separators=(",", ":")) + "\n" for r in plan).encode()
+    assert traffic.plan_sha512(plan) == hashlib.sha512(lines).hexdigest() == traffic.plan_sha512(traffic.plan(d, 50, seed=3))
+    assert traffic.plan_sha512(plan) != traffic.plan_sha512(traffic.plan(d, 50, seed=4))
+    assert traffic.plan_sha512(plan) != traffic.plan_sha512(plan[:-1])
+    c4, tokenizer = tmp_path / "c4.json.gz", tmp_path / "tokenizer.json"
+    c4.write_bytes(b"documents")
+    tokenizer.write_bytes(b"{}")
+    assert corpus.plan_record(plan, c4, tokenizer, len(d), 3) == {
+        "sha512": hashlib.sha512(lines).hexdigest(),
+        "recipe": {"c4": str(c4), "c4_sha512": hashlib.sha512(b"documents").hexdigest(), "tokenizer": str(tokenizer),
+                   "tokenizer_sha512": hashlib.sha512(b"{}").hexdigest(), "docs": len(d), "seed": 3, "requests": 50}}
+    assert sorted(tmp_path.iterdir()) == [c4, tokenizer]

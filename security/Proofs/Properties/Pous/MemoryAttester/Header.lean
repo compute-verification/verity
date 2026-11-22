@@ -25,6 +25,7 @@ a hex string through `hexOf_inj`, a number through its decimal digits.
 namespace MemoryAttester.Properties.SecurityProofs.Header
 
 open MemoryAttester Flock
+open Flock.SessionCoins (PROTOCOL COIN_TREE RECORDS COMPLETE LATE CLOCK)
 
 /-- A character `pyJsonStr` writes as it is, and not a comma. -/
 def plain (c : Char) : Bool := 0x20 ≤ c.toNat && c.toNat ≤ 0x7e && c != '"' && c != '\\' && c != ','
@@ -39,7 +40,7 @@ theorem foldl_plain {f : String → Char → String} (hf : ∀ b c, plain c = tr
 
 theorem pyJsonStr_toList (s : String) (h : ∀ c ∈ s.toList, plain c = true) :
     (pyJsonStr s).toList = '"' :: s.toList ++ ['"'] := by
-  unfold pyJsonStr
+  unfold pyJsonStr SessionCoins.pyJsonStr
   simp only [Id.run]
   rw [List.forIn_pure_yield_eq_foldl]
   show (String.toList (List.foldl _ "\"" s.toList ++ "\"")) = _
@@ -59,9 +60,13 @@ def keys : List (String × Nat) :=
    ("coin_tree", 6), ("k", 7), ("limit_ns", 8), ("protocol", 9), ("records", 10), ("session", 11), ("ended", 12),
    ("rounds", 13)]
 
+/-- The commitment's header fields, as `SessionCoins.headerFields` writes them. -/
+def fields (c : ChallengePhaseCommitment) : List (String × String) :=
+  SessionCoins.headerFields c.session c.coinRoot (Sha512.hash c.coinKey) c.binding c.blocks c.k c.limitNs c.blockBytes
+
 /-- The header's values, in `keys`'s places. -/
 def vals (c : ChallengePhaseCommitment) (e : String) (n : Nat) : List String :=
-  c.headerFields.map (·.2) ++ [pyJsonStr e, toString n]
+  (fields c).map (·.2) ++ [pyJsonStr e, toString n]
 
 /-- The order the header writes its keys in, which no field moves. -/
 def order : Array (String × Nat) := keys.toArray.qsort fun x y => decide (x.1 < y.1)
@@ -71,10 +76,11 @@ def entry (c : ChallengePhaseCommitment) (e : String) (n : Nat) (x : String × N
 
 theorem header_eq (c : ChallengePhaseCommitment) (e : String) (n : Nat) :
     header c e n = "{" ++ ",".intercalate (order.toList.map (entry c e n)) ++ "}" := by
-  have hf : (c.headerFields ++ [("ended", pyJsonStr e), ("rounds", toString n)]).toArray =
+  have hf : (SessionCoins.headerFields c.session c.coinRoot (Sha512.hash c.coinKey) c.binding c.blocks c.k c.limitNs
+      c.blockBytes ++ [("ended", SessionCoins.pyJsonStr e), ("rounds", toString n)]).toArray =
       keys.toArray.map fun x => (x.1, (vals c e n)[x.2]!) := by
-    simp [keys, vals, ChallengePhaseCommitment.headerFields]
-  unfold header
+    simp [keys, vals, fields, pyJsonStr, SessionCoins.headerFields]
+  unfold header SessionCoins.header
   simp only
   rw [hf, Sort.qsort_map, Array.toList_map, List.map_map]
   rfl
@@ -119,7 +125,8 @@ theorem comma_pyJsonStr {s : String} (hs : Plain s) : ',' ∉ (pyJsonStr s).toLi
   rw [pyJsonStr_toList s hs]
   simpa using comma_plain hs
 
-theorem plain_const : Plain CLOCK ∧ Plain COIN_TREE ∧ Plain PROTOCOL ∧ Plain RECORDS := by
+theorem plain_const : Plain SessionCoins.CLOCK ∧ Plain SessionCoins.COIN_TREE ∧ Plain SessionCoins.PROTOCOL ∧
+    Plain SessionCoins.RECORDS := by
   refine ⟨?_, ?_, ?_, ?_⟩ <;> intro c hc <;> revert c <;> decide
 
 theorem plain_keys : ∀ x ∈ keys, Plain x.1 := by
@@ -132,7 +139,7 @@ theorem comma_vals (c : ChallengePhaseCommitment) {e : String} (he : Plain e) (n
     ∀ v ∈ vals c e n, ',' ∉ v.toList := by
   have hc := plain_const
   intro v hv
-  simp only [vals, ChallengePhaseCommitment.headerFields, List.map_cons, List.map_nil, List.cons_append, List.nil_append,
+  simp only [vals, fields, SessionCoins.headerFields, List.map_cons, List.map_nil, List.cons_append, List.nil_append,
     List.mem_cons, List.not_mem_nil, or_false] at hv
   rcases hv with h | h | h | h | h | h | h | h | h | h | h | h | h | h <;> subst h
   · exact comma_pyJsonStr (plain_hexOf _)
@@ -231,8 +238,8 @@ theorem header_inj {c c' : ChallengePhaseCommitment} {e e' : String} {n n' : Nat
   exact ⟨hx v0, toString_inj v1, toString_inj v2, hx v4, hx v5, toString_inj v7, toString_inj v8, hx v11,
     pyJsonStr_inj he he' v12, toString_inj v13⟩
 
-theorem plain_complete : Plain COMPLETE := by intro c hc; revert c; decide
+theorem plain_complete : Plain SessionCoins.COMPLETE := by intro c hc; revert c; decide
 
-theorem plain_late : Plain LATE := by intro c hc; revert c; decide
+theorem plain_late : Plain SessionCoins.LATE := by intro c hc; revert c; decide
 
 end MemoryAttester.Properties.SecurityProofs.Header

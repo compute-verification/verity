@@ -13,6 +13,7 @@ from types import MappingProxyType
 
 import pytest
 from verity import ports
+from verity.protocols.accounting.compute.pouw import scheme as PS
 
 import serve_tax as S
 
@@ -45,17 +46,18 @@ def test_feature_names_an_applications_component_and_its_settings_as_verity_conf
     with pytest.raises(SystemExit, match="^--feature record: no component of that name; an application's components: "
                                          + ", ".join(sorted(table)) + "$"):
         FEATURE(["record"], "compiled")
-    with pytest.raises(SystemExit, match=r"^--feature pearl-plus: unknown-key: .*levels \(known: class, tie-uniform\)$"):
+    with pytest.raises(SystemExit, match=r"^--feature pearl-plus: unknown-key: pearl-plus has no setting \['levels'\]: "
+                                         r"its settings are \[.*\]$"):
         FEATURE(["pearl-plus", "levels=2"], "prod")
-    with pytest.raises(SystemExit, match="^--feature pearl-plus: 'tie-uniform' is no KEY=VALUE$"):
-        S.feature_of(["pearl-plus", "tie-uniform"])
-    assert S.feature_of(["pearl-plus"]) == S.Feature("pearl-plus", (("tie-uniform", False),))
-    assert S.feature_of(["pearl-plus", "tie-uniform=true", "class=8,4096,512"]) == S.Feature(
-        "pearl-plus", (("class", "8,4096,512"), ("tie-uniform", True)))
+    with pytest.raises(SystemExit, match="^--feature pearl-plus: 'schedule' is no KEY=VALUE$"):
+        S.feature_of(["pearl-plus", "schedule"])
+    assert S.feature_of(["pearl-plus"]) == S.Feature("pearl-plus", tuple(sorted(PS.SETTINGS.items())))
+    assert S.feature_of(["pearl-plus", 'kernel="lib.so"', "users=.*"]) == S.Feature(
+        "pearl-plus", tuple(sorted({**PS.SETTINGS, "kernel": "lib.so", "users": ".*"}.items())))
     assert FEATURE(["pearl-plus"], "prod") == "prod-pearl-plus" and FEATURE(["pearl-plus"], "compiled") == "pearl-plus"
-    assert FEATURE(["pearl-plus", "tie-uniform=false"], "prod") == "prod-pearl-plus"
-    with pytest.raises(NotImplementedError, match="no arm over prod serves pearl-plus tie-uniform=true"):
-        FEATURE(["pearl-plus", "tie-uniform=true"], "prod")
+    assert FEATURE(["pearl-plus", "schedule=serial"], "prod") == "prod-pearl-plus"
+    with pytest.raises(NotImplementedError, match='no arm over prod serves pearl-plus .*users="a"'):
+        FEATURE(["pearl-plus", "users=a"], "prod")
 
 
 def test_pearl_plus_plans_on_one_gpu_with_a_reserved_session_a_lifetime_checked_before_any_gpu_is_held(
@@ -107,7 +109,7 @@ def test_sampled_proofs_at_two_levels_is_the_two_stage_arm_once_the_component_de
     assert S.ARMS["two-stage"].feature == S.Feature("sampled-proofs", (("levels", 2),))
     with pytest.raises(SystemExit, match=r"^--feature sampled-proofs: unknown-key: .*\['levels'\]$"):
         FEATURE(["sampled-proofs", "levels=2"], "compiled")
-    from verity.protocols.proofs.spot.verifier import parties as SP
+    from verity.protocols.proof.spot.verifier import parties as SP
 
     table = dict(S.components())
     table["sampled-proofs"] = replace(table["sampled-proofs"], params=lambda p: {

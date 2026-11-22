@@ -11,7 +11,7 @@ family, with every other resource converted at its price. Its parts:
 
 - the PoUW transform, its honest overhead γ (honest over plain int8 less 1, the machine model's ratio on the family's
   measured kernel);
-- commitment hashing, receipts and the noise's samples (`commit_gpu`'s measured fractions of plain prefill time);
+- commitment hashing, receipts and the noise's samples (fractions of plain prefill time, measured with the deleted `commit_gpu`);
 - sampling, B_s: proving, staging and verifying the sampled proof blocks under the fitted Flock cost model (cost-model/v1),
   as the sampling planner spends it. `budget_sampling.json` is its frontier at δ_s (`sampling_sweep`): the least
   ε_sample at each spend over a GPU-week of one RTX PRO 6000, with the plan's samples and cut. The provers are RTX PRO
@@ -79,7 +79,7 @@ TODAY_SAMPLES = 2 * ROUNDS
 #: (assumed); it scales the part of a sample's cost that grows with the unit's ANDs (`unit_share`)
 FILL_PROOF = 1 / 16
 
-#: of plain prefill time (`commit_gpu`, measured on sm_120 at 8 × 4K, applied to every family as
+#: of plain prefill time (measured with the deleted `commit_gpu` on sm_120 at 8 × 4K, applied to every family as
 #: assumed): SHA-512 operand tile leaves at R = 128 (+6.0%; R = 64 is +10.1%), receipts at S = 128, simulated samples.
 #: R = 128's is cost-model/v1's commitment floor too.
 HASH_LEAVES = {64: 0.101, 128: 0.060}
@@ -88,7 +88,8 @@ HASH_SAMPLES = 0.019
 
 
 def hash_leaves(r: int) -> float:
-    """SHA-512 tile-leaf hashing at leaf size R: a + b/R through commit_gpu's two points (modeled past R = 128)."""
+    """SHA-512 tile-leaf hashing at leaf size R: a + b/R through the two points measured with the deleted commit_gpu
+    (modeled past R = 128)."""
     b = (HASH_LEAVES[64] - HASH_LEAVES[128]) * 128
     return HASH_LEAVES[128] - b / 128 + b / r
 

@@ -1,5 +1,5 @@
-# This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
-# enforces it.
+# This directory's numbers, one [[metric]] each, by the rules of tests/test_metrics_registry.py,
+# which enforces them.
 
 [[metric]]
 id = "network-accounting/release-timing-bits"

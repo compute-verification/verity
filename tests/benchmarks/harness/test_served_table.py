@@ -6,12 +6,12 @@ import re
 from pathlib import Path
 
 import pytest
+from bench_standins import CPUS, QUIET
 
 from verity_bench import served_render, served_table
 from verity_bench.cli import main
 from verity_bench.vllm.arms import Arm
-from verity_bench.vllm import presets
-from verity_bench.vllm.presets import FORMER_SPECS, expand_sweep, resolve_spec
+from verity_bench.vllm.presets import expand_sweep, resolve_spec
 from verity_bench.vllm.runner import run_benchmark
 
 COMMIT_SPEC = "llama31-8b-fp8-1gpu-commit-served"
@@ -31,17 +31,17 @@ SCALE = {"stock-fp8": 2.0, "commit": 2.4, "stock-fp8@compiled": 1.0, "commit@com
 R6, BIG, SMALL = ("llama31-8b-fp8-1gpu-bandwidth-served-reps6@rtx-pro-6000", "llama31-8b-fp8-1gpu-bandwidth-served-reps6@h200",
                   "llama32-1b-fp8-1gpu-bandwidth-served")
 WIDTH_H200 = "llama31-8b-fp8-1gpu-commit-served-width@h200"
-#: POUW_ARM is the arm id the PoUW spec's runs were recorded under before the arm took the declared scheme's name
-#: (`presets.former_arm`), which the stand-in run of record keeps
+#: POUW_ARM is the arm id the PoUW spec's runs were recorded under before the arm took the declared scheme's name, which
+#: the stand-in run of record keeps beside its `arms` label
 POUW, POUW_H100, POUW_ARM = ("benchmarks/served-overhead-pouw", "llama32-1b-1gpu-pouw-protocol-served@h100",
                              "pouw:pearl-c-h100-v1-h3")
-#: the id the PoUW spec's H100 runs were recorded under before its spec named no card (`presets.FORMER_IDS`)
+#: the id the PoUW spec's H100 runs were recorded under before its spec named no card
 FORMER_H100 = "llama32-1b-1gpu-pouw-protocol-served-h100"
 
 
 class ScaledEngine:
-    def __init__(self, arm, scale, gpu):
-        self.arm, self.scale, self.reps = arm, scale, 0
+    def __init__(self, arm, scale, gpu, load=QUIET["loadavg_1m"]):
+        self.arm, self.scale, self.reps, self.load = arm, scale, 0, load
         self.identity = {"vllm_version": "0.fake+gd9105ea80", "kernel_digest": None, "engine_overrides": {}, "kv_cache_tokens": 1,
                          "gpu": gpu}
 
@@ -61,43 +61,45 @@ class ScaledEngine:
         tpot = self.scale * SCALE[self.arm.id] * (1 + self.reps / 10)
         return {"token_digest": _token_digest({f"{point.id}-0": (7, 9)}),
                 "metrics": {"time_per_output_token_s": tpot, "decode_time_per_token_s": 0.8 * tpot,
-                            "time_to_first_token_s": 1.0, "tokens_per_s": 1 / tpot, "peak_gpu_memory_bytes": 1.0}}
+                            "time_to_first_token_s": 1.0, "tokens_per_s": 1 / tpot, "peak_gpu_memory_bytes": 1.0},
+                "host": {**QUIET, "loadavg_1m": self.load}}
 
     def close(self):
         pass
 
 
 class ScaledFactory:
-    def __init__(self, commit_scale, gpu):
-        self.commit_scale, self.gpu = commit_scale, gpu
+    def __init__(self, commit_scale, gpu, load=QUIET["loadavg_1m"]):
+        self.commit_scale, self.gpu, self.load = commit_scale, gpu, load
 
     def create(self, arm, preset, *, resident):
-        return ScaledEngine(arm, self.commit_scale if arm.id.startswith(("commit", "bandwidth")) else 1.0, self.gpu)
+        return ScaledEngine(arm, self.commit_scale if arm.id.startswith(("commit", "bandwidth")) else 1.0, self.gpu,
+                            self.load)
 
 
 RTX, H200, H100 = "NVIDIA RTX PRO 6000 Blackwell Server Edition", "NVIDIA H200", "NVIDIA H100 80GB HBM3"
 
 
-def _result(point_id: str, commit_scale: float, reps: int = 2, gpu: str = RTX) -> dict:
+def _result(point_id: str, commit_scale: float, reps: int = 2, gpu: str = RTX, load: float = QUIET["loadavg_1m"]) -> dict:
     [point] = [p for p in expand_sweep("quick") if p.id == point_id]
     arms = (Arm("stock-fp8"), Arm("commit", control="stock-fp8"), Arm("stock-fp8@compiled"),
             Arm("commit@compiled", control="stock-fp8@compiled"))
     return run_benchmark(resolve_spec(COMMIT_SPEC).preset, arms, (point,), sweep="quick", reps=reps,
-                         factory=ScaledFactory(commit_scale, gpu), git_commit="c" * 40)
+                         factory=ScaledFactory(commit_scale, gpu, load), git_commit="c" * 40, cpus=CPUS)
 
 
 def _audit(point_id: str, scale: float, gpu: str) -> dict:
     [point] = [p for p in expand_sweep("quick") if p.id == point_id]
     arms = (Arm("stock-fp8@compiled"), Arm("bandwidth-audit", control="stock-fp8@compiled"))
     return run_benchmark(resolve_spec(COMMIT_SPEC).preset, arms, (point,), sweep="quick", reps=2,
-                         factory=ScaledFactory(scale, gpu), git_commit="c" * 40)
+                         factory=ScaledFactory(scale, gpu), git_commit="c" * 40, cpus=CPUS)
 
 
 def _pouw(point_id: str, gpu: str) -> dict:
     [point] = [p for p in expand_sweep("quick") if p.id == point_id]
     arms = (Arm("stock-fp8"), Arm(POUW_ARM), Arm("stock-fp8@compiled"))
     return run_benchmark(resolve_spec(COMMIT_SPEC).preset, arms, (point,), sweep="quick", reps=2,
-                         factory=ScaledFactory(1.0, gpu), git_commit="c" * 40)
+                         factory=ScaledFactory(1.0, gpu), git_commit="c" * 40, cpus=CPUS)
 
 
 class Producer:
@@ -274,23 +276,25 @@ def test_a_row_says_who_ran_its_results_gates_and_not_recorded_for_a_result_that
     assert " verified" not in markdown
 
 
-def test_a_run_recorded_under_the_specs_former_directory_counts_beside_one_under_todays(tmp_path, monkeypatch):
-    """A run of record keeps the path its spec had when it ran. With the specs in another directory than the one the
-    older runs name, a point's newest passing run is still found under either path, and each path names the same spec."""
+def test_a_run_whose_record_names_its_spec_by_a_former_path_counts_by_its_spec_label(tmp_path, monkeypatch):
+    """A run keeps the path its spec had when it ran. One recorded under a path the spec no longer has is found by its
+    `spec` label beside one under today's path, and an unlabelled one under another path is never its spec's."""
 
     monkeypatch.setattr(served_table, "SPECS", "elsewhere/specs")
-    today, former = served_table.spec_paths(COMMIT_SPEC)
-    assert (today, former) == (f"elsewhere/specs/{COMMIT_SPEC}.toml", f"{FORMER_SPECS}/{COMMIT_SPEC}.toml")
-    assert served_table.spec_name(today) == served_table.spec_name(former) == COMMIT_SPEC
-    assert served_table.spec_name("another/place/a-spec.toml") == "another/place/a-spec"
+    former = f"benchmarks/specs/{COMMIT_SPEC}.toml"
+    assert served_table.spec_paths(COMMIT_SPEC) == (f"elsewhere/specs/{COMMIT_SPEC}.toml",)
+    assert served_table.spec_name(f"elsewhere/specs/{COMMIT_SPEC}.toml") == COMMIT_SPEC
+    assert served_table.spec_name(former) == former.removesuffix(".toml")
 
     producer = Producer(tmp_path)
     producer.ran("r20261024-020000-0001", COMMIT_SPEC, "b8-p512-mixed", _result("b8-p512-mixed", 1.0), recorded=former)
+    producer.label("r20261024-020000-0001", "spec", f"{COMMIT_SPEC}@rtx-pro-6000", "2026-10-24T05:00:00Z")
     newer = producer.ran("r20261024-030000-0002", COMMIT_SPEC, "b8-p512-mixed", _result("b8-p512-mixed", 1.25))
     only_former = producer.ran("r20261024-020000-0004", COMMIT_SPEC, "b32-p512-mixed", _result("b32-p512-mixed", 1.1),
                                recorded=former)
+    producer.label("r20261024-020000-0004", "spec", f"{COMMIT_SPEC}@rtx-pro-6000", "2026-10-24T05:00:00Z")
     producer.ran("r20261024-040000-0006", COMMIT_SPEC, "b32-p512-mixed", _result("b32-p512-mixed", 9.0),
-                 recorded=f"neither/{COMMIT_SPEC}.toml")
+                 recorded=former)
 
     table = served_table.build(store=_fresh(tmp_path, producer), root=tmp_path, added=lambda spec: ADDED,
                                log=lambda line: None, **BY_SPEC)
@@ -317,6 +321,32 @@ def test_a_labelled_run_is_its_protocols_row_over_a_newer_unlabelled_one(tmp_pat
     assert [(row["point"], row["run"]) for row in table["rows"] if row["protocol"] == "of record"] == [
         ("b8-p512-mixed", "r20261024-020000-0001")]
     assert _commit_rows(table)["b8-p512-mixed"]["run"] == "r20261024-030000-0002"
+
+
+def test_a_run_of_record_on_a_loaded_host_is_passed_over_naming_its_host_quiet_gate_and_prints_no_ratio(tmp_path):
+    """A point timed on a loaded host keeps no timed points and its run fails validation, as the point command writes
+    it: its record's row prints no ratio, and the passed-over list says it was the host-quiet gate."""
+
+    loaded = _result("b8-p512-mixed", 1.0, load=21.0)
+    [gate] = {g["kind"]: g for g in loaded["gates"] if not g["passed"]}.values()
+    assert (gate["kind"], gate["bound"], gate["loadavg_1m_max"], loaded["points"]) == ("host-quiet", CPUS / 2, 21.0, [])
+    producer = Producer(tmp_path)
+    run = "r20261024-020000-0001"
+    producer.ran(run, COMMIT_SPEC, "b8-p512-mixed", loaded, validation="failed", rc=3)
+    producer.label(run, "run_of_record", "commit", "2026-10-24T05:00:00Z")
+    of_record = served_table.Protocol("of record", (COMMIT_SPEC,), "commit@compiled", "stock-fp8", own_arm="commit",
+                                      record="commit")
+
+    table = served_table.build(store=_fresh(tmp_path, producer), root=tmp_path, added=lambda spec: ADDED,
+                               log=lambda _: None, protocols=(of_record,), factors=BY_SPEC["factors"], breakdowns=())
+    [row] = table["rows"]
+    assert (row["point"], row["run"], row["over_served"]) == ("—", None, None)
+    [skipped] = table["skipped"]
+    assert skipped["run"] == run and skipped["why"].endswith(": its host-quiet gate failed")
+    markdown = served_render.render(table)
+    [line] = [line for line in markdown.splitlines() if line.startswith("| of record |")]
+    assert "×" not in line
+    assert f"{run}" in markdown.split("Passed over")[1] and "its host-quiet gate failed" in markdown.split("Passed over")[1]
 
 
 def test_a_labelled_trial_is_left_out_of_its_record_and_the_live_rows_with_why(tmp_path):
@@ -654,23 +684,6 @@ def _row(protocol: str, spec: str, mean: float, member: str | None = None) -> di
             "over_served": {served_table.PER_OUTPUT: {"mean": mean, "ci95": [mean - 0.01, mean + 0.01], "n": 6}}}
 
 
-def test_a_metric_of_members_only_leaves_every_other_metrics_readings_byte_for_byte_as_they_were():
-    import hashlib
-
-    table = {"rows": [_row("Commit", WIDTH_H200, 2.378), _row("PoUS bandwidth audit", R6, 6.02),
-                      _row("PoUS bandwidth audit", BIG, 2.5, "llama-3.1-8b-h200"),
-                      _row("PoUS bandwidth audit", SMALL, 4.0, "llama-3.2-1b-h200")], "skipped": []}
-    metrics = _served_overhead_metrics()
-    before = served_render.measurements(table, {k: v for k, v in metrics.items() if k != POUW})
-    assert hashlib.sha256(json.dumps(before, sort_keys=True).encode()).hexdigest() == (
-        "d50ef6dae84589eca812f209a93d096b8be477f32c57c6dd01c5ddba4f9974c3")
-    table["rows"].append(_row("Pearl+ served", POUW_H100, 12.4, "llama-3.2-1b-h100"))
-    after = served_render.measurements(table, metrics)
-    assert [m for m in after if m["name"] != POUW] == before
-    [pouw] = [m for m in after if m["name"] == POUW]
-    assert (pouw["member"], pouw["value"], pouw["mark"]) == ("llama-3.2-1b-h100", pytest.approx(1140.0), "measured")
-
-
 def test_the_pouw_metric_is_its_members_readings_from_their_records_runs_and_never_fails_validation_for_its_own(
         tmp_path, monkeypatch, capsys):
     from verity_bench import kit
@@ -703,9 +716,12 @@ def test_the_pouw_metric_is_its_members_readings_from_their_records_runs_and_nev
     assert got["validation"]["status"] == "passed" and got["validation"]["detail"].startswith("2 of 2 metrics")
 
     [pearl] = [p for p in served_table.PROTOCOLS if p.record == "pouw-served-sm90"]
-    assert pearl.arm == "pearl-plus" == presets.former_arm(POUW_ARM) != POUW_ARM
+    assert pearl.arm == "pearl-plus" != POUW_ARM
     producer.ran("r20261117-221551-8a0b", FORMER_H100, "b32-p512-mixed", _pouw("b32-p512-mixed", H100))
     producer.label("r20261117-221551-8a0b", "run_of_record", "pouw-served-sm90", "2026-11-17T23:00:00Z")
+    assert table("unlabelled")["by"][POUW, "llama-3.2-1b-h100"]["value"] is None
+    producer.label("r20261117-221551-8a0b", "spec", POUW_H100, "2026-11-19T18:00:00Z")
+    producer.label("r20261117-221551-8a0b", "arms", {POUW_ARM: "pearl-plus"}, "2026-11-19T18:00:00Z")
     member = table("after")["by"][POUW, "llama-3.2-1b-h100"]
     assert (member["value"], member["unit"], member["mark"], member["device"]) == (
         pytest.approx(1140.0), served_render.OVERHEAD_UNIT, "measured", H100)

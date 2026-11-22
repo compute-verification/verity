@@ -11,7 +11,7 @@ is ``pipeline``, ``check``, ``acquire``, ``observe|commit``, ``engine``, ``query
 ``program``, ``collectives``, ``config``, core, with ``tests`` above ``pipeline``.  The modules bound for core sit in
 ``core``, ``target_family`` (bound for ``config.py``) sits in ``config``, and ``predict``, which imports ``pipeline``,
 sits in ``pipeline``; ``protocols.linear``, the linear site ``engine.kv_blocks`` attaches, sits in ``engine``.  ``OPTIONAL`` names the packages a
-tree may hold or not (a private protocol's driver, the commitment scheme's reference).  ``engine.hooks``, the one owner of
+tree may hold or not (a private protocol's driver).  ``engine.hooks``, the one owner of
 runtime patches, ``engine.env``, the one writer of vLLM's env pins, ``settings``,
 the environment's registry, ``messages``, the schemes' exchange, and ``log``, the logger, import nothing from the package
 but ``settings`` and sit in ``core`` so every layer may call them.  Peers in one layer
@@ -57,24 +57,22 @@ LAYER = {
     "verity_vllm.commit.challenge": "core",                    # -> verity.commitments.randomness; imports nothing from verity_vllm
     "verity_vllm.records": "core",                             # the typed stage records; imports nothing else from verity_vllm
     "verity_vllm.errors": "core",                              # the one Refused; imports nothing from verity_vllm
-    "verity_vllm.commitments": "core",                         # the commitment scheme's reference; imports nothing else from verity_vllm
     "verity_vllm.engine.served_seed": "core",                  # the served seed rule's functions; imports only engine.hooks
 }
 
-#: the packages a tree may not hold, the commitment scheme's reference: placed where present
-OPTIONAL = ("verity_vllm.commitments",)
+#: the packages a tree may not hold: placed where present
+OPTIONAL: tuple[str, ...] = ()
 
 #: the packages whose modules are graph nodes
 LIBRARY_PACKAGES = ("verity_vllm",)
 
 #: The replay drivers (check/replay/) and the determinism value checks.
 VALUE_CHECK_MODULES = tuple(f"verity_vllm.{m}" for m in (
-    "check.replay", "check.value_check", "check.oracle_compare", "check.match_oracle", "check.producers"))
+    "check.replay", "check.oracle_compare", "check.match_oracle", "check.producers"))
 
-#: The verdict and the rules it decides from (the per-run rules, the C2 rules, the Build gates).
-VERDICT_MODULES = ("verity_vllm.check.verdict", "verity_vllm.check.verdict_names", "verity_vllm.check.commit_pass", "verity_vllm.check.commit_rules",
-                   "verity_vllm.check.c2_rules", "verity_vllm.check.gates", "verity_vllm.check.gate_base",
-                   "verity_vllm.check.gate_rules")
+#: The verdict and the rules it decides from (the per-run rules, the Build gates).
+VERDICT_MODULES = ("verity_vllm.check.verdict", "verity_vllm.check.verdict_names", "verity_vllm.check.commit_rules",
+                   "verity_vllm.check.gates", "verity_vllm.check.gate_base", "verity_vllm.check.gate_rules")
 
 
 def layer_of(module: str) -> str:
@@ -221,7 +219,7 @@ SIDES: dict[str, bool] = {
     "verity.circuits.silicon": False,
     "verity.circuits.targets": False,
     "verity.commitments.multiproof": False,
-    "verity.protocols.proofs.flock": False,
+    "verity.protocols.proof.flock": False,
     "verity.channel": False,
     "verity.commitments.attest": False,
     "verity.commitments.lms": False,
@@ -229,16 +227,16 @@ SIDES: dict[str, bool] = {
     "verity.device": False,
     "verity.party": False,
     "verity.protocol": False,
-    "verity.protocols.resource_accounting.network.attester.program.lean": False,
-    "verity.protocols.resource_accounting.memory.pous.attester": False,
-    "verity.protocols.resource_accounting.memory.pous.attester.challenger_session": True,
-    "verity.protocols.resource_accounting.memory.pous.attester.memory_attester": True,
+    "verity.protocols.accounting.network.attester.program.lean": False,
+    "verity.protocols.accounting.memory.pous.attester": False,
+    "verity.protocols.accounting.memory.pous.attester.challenger_session": True,
+    "verity.protocols.accounting.memory.pous.attester.memory_attester": True,
     "verity.runtime": False,
-    "verity.protocols.resource_accounting.memory.poub.attester": False,
-    "verity.protocols.resource_accounting.memory.poub.verifier.poub_session": False,
-    "verity.protocols.resource_accounting.compute.pouw.prover.clear": False,
-    "verity.protocols.resource_accounting.compute.pouw.verifier.receipts": False,
-    "verity.protocols.compose": False,
+    "verity.protocols.accounting.memory.poub.attester": False,
+    "verity.protocols.accounting.memory.poub.verifier.poub_session": False,
+    "verity.protocols.accounting.compute.pouw.prover.clear": False,
+    "verity.protocols.accounting.compute.pouw.verifier.receipts": False,
+    "verity.protocols.run": False,
 }
 #: the same for a test of what the Definitions import: the integration's Definitions are not core
 SIDES_LESS_DEFINITIONS: dict[str, bool] = {**SIDES, "verity_vllm.definitions": False}

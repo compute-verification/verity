@@ -1,7 +1,8 @@
 """A served window's step stages what its plan key predicts when a source commits by engine step.
 
-A served window restarts its engine steps at 0, and the int8 source stages a linear's Int8RowQuant_v1 (x_q, s_a) only at the
-engine steps its manifest names (a bench manifest's first 32). Keyed by the geometry alone, a lone request whose batch-mates had
+A served window restarts its engine steps at 0, and a source that commits by engine step (`_ByStep`: the int8 source as it was under
+a bench manifest, which named a linear's Int8RowQuant_v1 (x_q, s_a) at its first 32 engine steps only; under the capture plan the
+int8 source commits a site at every step) stages its values only at those steps. Keyed by the geometry alone, a lone request whose batch-mates had
 finished met one key at a window step inside those steps in one window and past them in the next: the second step followed a
 plan of the quantizers' bytes and staged none, which bounded staging fails closed on (a hit step keeps no host copy to re-hash
 from), and the plan it relearned failed the first window's step when its schedule came again. The plan key now binds the names
@@ -24,7 +25,7 @@ from verity_vllm.engine import int8_ops
 
 LIN = "model.layers.0.mlp.down_proj"
 K = 4608                                        # a lone request's x_q outgrows the row padding the worker compares at
-SITES = 4                                       # the manifest's engine steps with an Int8RowQuant_v1 site: 0..3
+SITES = 4                                       # the engine steps `_ByStep` commits the linear's site at: 0..3
 
 #: per window, per step, the scheduled requests (id, KV length, new tokens). The first window's pair prefills at step 0 and b
 #: finishes after step 1, so a decodes alone at step 2. The second window's pair arrives two steps in, behind a request that
@@ -54,11 +55,12 @@ def _model() -> torch.nn.Module:
     return m
 
 
-def _manifest() -> dict:
-    """A bench manifest's Int8RowQuant_v1 call boundaries of the linear: one per engine step, its fx node counting on."""
-    return {"ranks": 1, "identities": [{"family": "call_boundaries", "op_path": f"{LIN}/row_quant_{e}", "output_member": m, "step": e,
-                                        "engine_step": e, "spec": I8.QUANT_SPEC, "request_id": "r0"}
-                                       for e in range(SITES) for m in ("0", "1")]}
+class _ByStep(I8.Int8Source):
+    """The int8 source committing by engine step: the linear's site at steps 0..SITES-1, under a name of each step's own."""
+
+    def targets_at(self, engine_step: int) -> dict[str, int]:
+        op = self.quant.get((int(engine_step), LIN))
+        return {} if op is None else {f"{op}/0": 1, f"{op}/1": 1}
 
 
 class _Runner(PC._Runner):
@@ -88,7 +90,7 @@ def _committer(monkeypatch):
     com = PC.committer(monkeypatch, bounded=False)
     com.runner = _Runner(_model())
     com.runner.committer = com
-    I8.attach(com, True, _manifest(), (), model=com.runner.model)
+    com.attach_source(_ByStep(com, com.runner.model, {(e, LIN): f"{LIN}/row_quant_{e}" for e in range(SITES)}, []))
     return com
 
 

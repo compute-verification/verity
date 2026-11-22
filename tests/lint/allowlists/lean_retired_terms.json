@@ -1,6 +1,0 @@
-{
-  "rule": "retired terms in Lean comments and docstrings (tests/test_retired_terms.py)",
-  "entries": [
-
-  ]
-}

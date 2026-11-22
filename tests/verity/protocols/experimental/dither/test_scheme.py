@@ -7,7 +7,7 @@ import pytest
 
 from verity.protocols.experimental.dither import scheme as DS
 from verity.protocols.experimental.dither.prover import dither as D
-from verity.protocols.resource_accounting import scheme as S
+from verity.protocols.accounting import scheme as S
 
 
 def test_found_by_name() -> None:

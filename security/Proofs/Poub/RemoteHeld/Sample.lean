@@ -1361,7 +1361,7 @@ theorem opened_sub {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fintyp
     {D : Remote.Sample.Run n m s κ X}
     {prf : Fin n → Pous.Bits κ → Blocks m} {rest : SampleCoins n κ X → Fin n → ℕ → ℕ} {T : Trace (SampleCoins n κ X)}
     {R : Receipts n κ X} (hR : Refused D prf rest T R) {ω : SampleCoins n κ X} (ha : T.accepts ω)
-    (hb : ¬ ∃ t, ∃ p ∈ D.opened prf rest t ω, R.Moved D prf rest t ω p) (t : Fin n) :
+    (hb : ¬ ∃ t, ∃ p ∈ D.opened prf rest t ω, R.Moved (D.opened prf rest) t ω p) (t : Fin n) :
     D.opened prf rest t ω ⊆ D.correct t ω :=
   fun p hp => (hR ω ha t p hp).resolve_right fun hmv => hb ⟨t, p, hp, hmv⟩
 
@@ -1372,11 +1372,11 @@ theorem pooledSample {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X Cm : Type} [F
     (hL : ∀ c, Live (F.view c)) (hR : Refused (F.play com) prf rest T R) (hC : Counted (F.play com) T) :
     T.Holds (δ + ((∑ t, s t : ℕ) : ℝ) / 2 ^ 256 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t) ((F.play (Committed.junk com t)).distinguisher prf δ t)).toReal +
-        (∑ t, F.hide com prf δ t).toReal + (R.binding (F.play com) prf rest).toReal)
+        (∑ t, F.hide com prf δ t).toReal + (R.binding ((F.play com).opened prf rest)).toReal)
       (fun ω => (T.incorrect ω : ℝ) ≤ (F.play com).pooled δ ω) := by
   classical
   have hreal : ∀ ω, (T.accepts ω ∧ ¬ (T.incorrect ω : ℝ) ≤ (F.play com).pooled δ ω) ∧
-      ¬ (∃ t, ∃ p ∈ (F.play com).opened prf rest t ω, R.Moved (F.play com) prf rest t ω p) →
+      ¬ (∃ t, ∃ p ∈ (F.play com).opened prf rest t ω, R.Moved ((F.play com).opened prf rest) t ω p) →
       (∀ t, (F.play com).lands t ω (prf t (ω.2 t))) ∧ ∏ t, (F.play com).bound t ω ≤ δ := by
     intro ω ⟨⟨hacc, hw⟩, hb⟩
     refine ⟨fun t ha => ?_, ?_⟩
@@ -1394,22 +1394,22 @@ theorem pooledSample {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X Cm : Type} [F
             rw [Run.incorrect, Nat.cast_sum]
   have hall := pr_landed_le F hL com prf hδ hm
     (fun ω => (T.accepts ω ∧ ¬ (T.incorrect ω : ℝ) ≤ (F.play com).pooled δ ω) ∧
-      ¬ (∃ t, ∃ p ∈ (F.play com).opened prf rest t ω, R.Moved (F.play com) prf rest t ω p)) hreal
+      ¬ (∃ t, ∃ p ∈ (F.play com).opened prf rest t ω, R.Moved ((F.play com).opened prf rest) t ω p)) hreal
   have hsplit : pr (fun ω => T.accepts ω ∧ ¬ (T.incorrect ω : ℝ) ≤ (F.play com).pooled δ ω) ≤
       pr (fun ω => (T.accepts ω ∧ ¬ (T.incorrect ω : ℝ) ≤ (F.play com).pooled δ ω) ∧
-        ¬ (∃ t, ∃ p ∈ (F.play com).opened prf rest t ω, R.Moved (F.play com) prf rest t ω p)) +
-      R.binding (F.play com) prf rest :=
+        ¬ (∃ t, ∃ p ∈ (F.play com).opened prf rest t ω, R.Moved ((F.play com).opened prf rest) t ω p)) +
+      R.binding ((F.play com).opened prf rest) :=
     (Bandwidth.pr_mono (Q := fun ω => ((T.accepts ω ∧ ¬ (T.incorrect ω : ℝ) ≤ (F.play com).pooled δ ω) ∧
-        ¬ (∃ t, ∃ p ∈ (F.play com).opened prf rest t ω, R.Moved (F.play com) prf rest t ω p)) ∨
-        (∃ t, ∃ p ∈ (F.play com).opened prf rest t ω, R.Moved (F.play com) prf rest t ω p))
-      fun ω h => (em (∃ t, ∃ p ∈ (F.play com).opened prf rest t ω, R.Moved (F.play com) prf rest t ω p)).elim Or.inr
+        ¬ (∃ t, ∃ p ∈ (F.play com).opened prf rest t ω, R.Moved ((F.play com).opened prf rest) t ω p)) ∨
+        (∃ t, ∃ p ∈ (F.play com).opened prf rest t ω, R.Moved ((F.play com).opened prf rest) t ω p))
+      fun ω h => (em (∃ t, ∃ p ∈ (F.play com).opened prf rest t ω, R.Moved ((F.play com).opened prf rest) t ω p)).elim Or.inr
         fun hb => Or.inl ⟨h, hb⟩).trans (Bandwidth.pr_or_le _ _)
   unfold Trace.Holds
   rw [ResourceAccounting.pr_eq_toReal]
   exact error_toReal s hδ
     (fun t => Pous.StreamedWipe.prfAdvantage (prf t) ((F.play (Committed.junk com t)).distinguisher prf δ t))
     (fun t => F.hide com prf δ t) (fun t => tsub_le_self.trans (pr_le_one _)) (fun t => hide_le F com prf δ t)
-    (R.binding (F.play com) prf rest) (pr_le_one _) (hsplit.trans (add_le_add hall le_rfl))
+    (R.binding ((F.play com).opened prf rest)) (pr_le_one _) (hsplit.trans (add_le_add hall le_rfl))
 
 /-- A session that reads no commitment has no hiding term. -/
 theorem hide_const {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X Cm : Type} [Fintype X]
@@ -1429,7 +1429,7 @@ theorem pooledSampleLive {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [
     (hR : Refused D prf rest T R) (hC : Counted D T) :
     T.Holds (δ + ((∑ t, s t : ℕ) : ℝ) / 2 ^ 256 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t) (D.distinguisher prf δ t)).toReal +
-        (R.binding D prf rest).toReal)
+        (R.binding (D.opened prf rest)).toReal)
       (fun ω => (T.incorrect ω : ℝ) ≤ D.pooled δ ω) := by
   have h0 : (∑ t, (⟨fun _ => D⟩ : Committed n m s κ X Unit).hide (fun _ => ()) prf δ t) = 0 :=
     sum_eq_zero fun t _ => hide_const D _ prf δ t

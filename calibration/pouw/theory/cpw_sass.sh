@@ -18,8 +18,7 @@ export PYTHONDONTWRITEBYTECODE=1
 
 if [ "${CPW_LEASED:-}" != 1 ]; then
   mkdir -p "$OUT/sass" "$OUT/env" "$OUT/bin"
-  NVCC=${NVCC:-$(python3 "$HERE/../../../benchmarks/kernels/machine.py" toolkit 13.0)/bin/nvcc} || { echo "cpw_sass.sh: no CUDA 13.0 (machine.py, above)" >&2; exit 2; }
-  [ -x "$NVCC" ] || { echo "cpw_sass.sh: no nvcc at $NVCC" >&2; exit 2; }
+  . "$HERE/../nvcc.sh"
   "$NVCC" --version >"$OUT/env/nvcc.txt" 2>&1
   PROBE="$HERE/../opcode_probe/probe.py"
   ARCH=$(python3 "$PROBE" arch) || exit 2

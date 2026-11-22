@@ -2,7 +2,7 @@
 
 Under PEARLPLUS_TIE: Pearl+'s piece over the window's own epoch, which serve-openai's Pearl+ (`serve_openai.scheme_settings`) retained
 in the serve dir's ``pearl/w<k>/``: the epoch taken as the piece's passes, the give-up on the card, ``retain
---window-record W``, PEARLPLUS_TIE_CMD's window commit before the coin, and ``verify --tie W``.
+--window-record W``, and ``verify --tie W``.
 
 The give-up before the verifier's coin, with stand-ins for served_passes.py, debit.py, served_verdicts.py,
 pearl_c_sm90.sh's setup and gpu-lease: it asks ``served_passes.py volunteer-needed`` before anything is built or served,
@@ -97,8 +97,7 @@ def _piece(tmp_path: Path, served: dict | None, period: dict | None = None, firs
         (sd / "declaration.json").write_text(json.dumps(declared))
     env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent), "PEARLPLUS_TIE": "1",
            "PEARLC_KERNEL": "pearl_c_sm90", "PEARLC_CUBIN": str(tmp_path / "cubin" / "pearl_c_sm90.cubin"),
-           "PEARLPLUS_JOBS": "1", "PEARLPLUS_TIE_CMD": f'printf "%s\\n" "$@" > {tmp_path}/tie.args; echo "PEARL-TIE: tied"',
-           **extra}
+           "PEARLPLUS_JOBS": "1", **extra}
     run = subprocess.run(["bash", str(tree / "benchmarks" / "one_stage" / "served_pearlplus.sh"), str(sd), "7",
                           str(tmp_path / "piece")], cwd=tmp_path, env=env, check=False, capture_output=True, text=True)
     return run, sd, tree
@@ -118,8 +117,7 @@ def _epoch(ok: bool = True) -> dict:
 
 def test_under_pearlplus_tie_the_piece_ties_the_windows_own_epoch_to_its_w(tmp_path):
     """The piece serves nothing: its passes are the window's epoch (a symlink to ``pearl/w7``), the card gives up its rows
-    over a cap (VOLUNTEER's default), `retain` writes W, PEARLPLUS_TIE_CMD commits the window tied to W before the coin
-    (the serve dir, the window, W and the passes), `verify` holds the passes to W, and the piece reads the epoch's
+    over a cap (VOLUNTEER's default), `retain` writes W, `verify` holds the passes to W, and the piece reads the epoch's
     served.json."""
     run, sd, tree = _piece(tmp_path, _epoch())
     q = sd / "private" / "pearlplus"
@@ -135,7 +133,6 @@ def test_under_pearlplus_tie_the_piece_ties_the_windows_own_epoch_to_its_w(tmp_p
     assert retain[retain.index("--passes") + 1] == str(q / "passes") and retain[retain.index("--window-record") + 1] == w
     assert retain[retain.index("--volunteer") + 1] == str(q / "volunteer.json") and "--previous-record" not in retain
     assert "--day-declaration" not in retain
-    assert (tmp_path / "tie.args").read_text().split() == [str(sd), "7", w, str(q / "passes")]
     verify = argv["served_passes.py verify"]
     assert verify[verify.index("--tie") + 1] == w and verify[verify.index("--passes") + 1] == str(q / "passes")
     assert "--class" not in verify
@@ -146,8 +143,6 @@ def test_under_pearlplus_tie_the_piece_ties_the_windows_own_epoch_to_its_w(tmp_p
     assert any(x.startswith("POUW window: the window's own Pearl+ epoch ") and x.endswith("coins in-process -> OK")
                for x in lines), lines
     assert "POUW W: rounds 0..2 (3), 384 values, digest abcd…" in lines
-    assert any(x.startswith("POUW tie: served_verdicts.sh pearl-tie exit 0 after ") and x.endswith(": PEARL-TIE: tied")
-               for x in lines), lines
     assert (sd / "pearl" / "w7" / "coin.json").exists()
 
 
@@ -199,37 +194,26 @@ def test_under_pearlplus_tie_a_window_whose_epoch_failed_or_is_missing_gets_no_r
                                                                      "served_verdicts.py pearlplus"], run.stdout
         pearlplus = _steps(d)[-1]
         assert pearlplus[pearlplus.index("--tie") + 1] == str(sd / "private" / "pearlplus" / "window-record.json")
-        assert not (d / "tie.args").exists()
         said = [x for x in run.stdout.splitlines() if x.startswith("POUW window: ")]
         assert len(said) == 1 and (said[0].endswith("so round s isn't step s") if served else
                                    said[0].endswith("so there are no passes to tie")), said
 
 
-@pytest.mark.parametrize("case", ["tie fails", "no W"])
-def test_under_pearlplus_tie_a_window_whose_commit_tied_to_w_fails_gets_no_sample_verdict_or_line(tmp_path, case):
-    """The window commit tied to W is what holds the window to its class's fixed load, so where PEARLPLUS_TIE_CMD fails,
-    or `retain` wrote no W to tie, the piece says so and stops before the coin: no sample, no `verify` (tied or not), no
+def test_under_pearlplus_tie_a_window_whose_w_retain_did_not_write_gets_no_sample_verdict_or_line(tmp_path):
+    """Where `retain` wrote no W to tie, the piece says so and stops before the coin: no sample, no `verify` (tied or not), no
     Lean, and a piece written over a verdict document that isn't there, which `served_verdicts.pearlplus` rejects, so no
     Pearl+ line is published for a window nothing holds to its class."""
-    extra = ({"PEARLPLUS_TIE_CMD": 'echo "PEARL-TIE: window-commit class 4,32,4 refused: its rows by step"; exit 16'}
-             if case == "tie fails" else {"TOY_NO_W": "1"})
-    run, sd, _tree = _piece(tmp_path, _epoch(), **extra)
+    run, sd, _tree = _piece(tmp_path, _epoch(), TOY_NO_W="1")
     assert run.returncode == 0, (run.stdout, run.stderr)
     names = [Path(a[0]).name + " " + a[1] for a in _steps(tmp_path)]
     assert names == ["served_passes.py volunteer-needed", "debit.py --cubin", "served_passes.py volunteer",
                      "served_passes.py retain", "served_verdicts.py pearlplus"], run.stdout
     pearlplus = _steps(tmp_path)[-1]
     assert not Path(pearlplus[pearlplus.index("--verify") + 1]).exists()
-    assert not (sd / "pearl" / "w7" / "coin.json").exists() and not (tmp_path / "tie.args").exists()
+    assert not (sd / "pearl" / "w7" / "coin.json").exists()
     lines = run.stdout.splitlines()
-    if case == "tie fails":
-        assert any(x.startswith("POUW tie: served_verdicts.sh pearl-tie exit 16 after ") and
-                   x.endswith(": PEARL-TIE: window-commit class 4,32,4 refused: its rows by step") for x in lines), lines
-        assert ("POUW draw: refused before it: the window's commit tied to W failed (pearl-tie exit 16), so nothing holds "
-                "the passes to the window's class and no sample or Pearl+ line follows it") in lines
-    else:
-        assert ("POUW W: retain wrote no window record, so nothing ties the passes to the window and no sample or Pearl+ "
-                "line follows") in lines
+    assert ("POUW W: retain wrote no window record, so nothing ties the passes to the window and no sample or Pearl+ "
+            "line follows") in lines
     assert not any(x.startswith(("POUW verdict: ", "POUW coin: ", "POUW lean: ")) for x in lines), lines
 
 
@@ -314,6 +298,8 @@ def _untied(tmp_path: Path, needed: str, volunteer: str | None = None) -> Any:
     bin_.mkdir()
     (bin_ / "gpu-lease").write_text('#!/bin/sh\nwhile [ "$1" != -- ]; do shift; done\nshift\nexec "$@"\n')
     (bin_ / "gpu-lease").chmod(0o755)
+    (bin_ / "nvidia-smi").write_text('#!/bin/sh\necho "GPU 0: toy (UUID: GPU-0)"\n')
+    (bin_ / "nvidia-smi").chmod(0o755)
     d.mkdir()
     env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "CALLS": str(calls), "NEEDED": needed,
            "VERITY_BENCH_VENV": str(tree / ".venv"), "PEARLPLUS_PASSES_RAM": "", "PEARLPLUS_UNRETAINED": "",
@@ -323,7 +309,8 @@ def _untied(tmp_path: Path, needed: str, volunteer: str | None = None) -> Any:
         calls.unlink(missing_ok=True)
         r = subprocess.run(["bash", "benchmarks/one_stage/served_pearlplus.sh", str(d), "3", str(p)], cwd=tree,
                            env={**env, **more}, capture_output=True, text=True, check=False)
-        return r.returncode, r.stdout + r.stderr, [json.loads(x) for x in calls.read_text().splitlines()]
+        return r.returncode, r.stdout + r.stderr, [json.loads(x) for x in
+                                                   (calls.read_text().splitlines() if calls.exists() else ())]
     return run
 
 
@@ -358,6 +345,26 @@ def test_the_give_up_runs_exactly_when_volunteer_needed_says_yes_and_cant_be_ski
         asked = {c["argv"][0]: c["argv"] for c in got if c["tool"] == "served_passes.py"}
         assert rc == 0 and asked["volunteer-needed"] == ["volunteer-needed", "--over-cap", "reject"], said
         assert asked["verify"][asked["verify"].index("--over-cap") + 1] == "reject"
+
+
+def test_on_a_node_with_no_card_the_untied_piece_refuses_by_name_and_writes_no_answer(tmp_path):
+    """A node that lists no card serves nothing, so the piece has no verdict: it refuses (pearlplus-no-card) before any
+    step, its one sentence its POUW-REFUSED line and the piece's refused.txt, exits 2 and writes no development.json,
+    which `piece_row` makes refused, never an answer of nulls."""
+    sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
+    import served_verdicts as S
+    from verity_e2e_demo import block_record as BR
+
+    run, p = _untied(tmp_path, "no uncredited"), tmp_path / "piece"
+    (tmp_path / "bin" / "nvidia-smi").write_text("#!/bin/sh\nexit 9\n")
+    rc, said, got = run()
+    sentence = (tmp_path / "piece" / "refused.txt").read_text().strip()
+    assert (rc, got) == (2, []), said
+    assert sentence.startswith("pearlplus-no-card: this node lists no card") and f"POUW-REFUSED {sentence}" in said
+    assert not (p / S.DEVELOPMENT).exists()
+    (pieces := tmp_path / "pieces").mkdir()
+    p.rename(pieces / "pouw")
+    assert S.piece_row("work", pieces) == {"verdict": BR.REFUSED, "owner": S.PIECES["work"][2], "reason": sentence}
 
 
 def test_under_the_gate_the_untied_piece_holds_its_pearl_c_period_open_from_its_serve_to_right_before_its_sample(tmp_path):

@@ -1,6 +1,4 @@
-"""The pipeline's seeded samples, pinned by digest: the coverage workloads' lengths and prompts, the top-p split fixture's
-cases and manifest, and compiled_merge's bootstrap interval.  Every committed workload and fixture was sampled from these
-streams, so a change to how a generator is built or seeded fails here first."""
+"""The pipeline's seeded samples, pinned by digest: the top-p split fixture's cases and manifest.  Every committed fixture was sampled from these streams, so a change to how a generator is built or seeded fails here first."""
 from __future__ import annotations
 
 import contextlib
@@ -10,32 +8,11 @@ import json
 
 import pytest
 
-from verity_vllm.pipeline import compiled_merge as cm
-from verity_vllm.pipeline import coverage_workloads as gw
 from verity_vllm.pipeline import topp_split_probe as tp
-
-
-class _CharTok:
-    def encode(self, text: str) -> list[int]:
-        return [ord(c) for c in text]
-
-    def decode(self, ids: list[int]) -> str:
-        return "".join(map(chr, ids))
 
 
 def _digest(obj) -> str:
     return hashlib.sha256(json.dumps(obj, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:16]
-
-
-def test_coverage_length_draws_are_pinned():
-    draws = {f"{p}/{c}/{s}": gw.draw_lengths(p, c, s) for p in gw.PROFILES for c in sorted(gw.CTX) for s in (0, 3)}
-    assert _digest(draws) == "35bc3641918bdcfc"
-
-
-def test_coverage_prompt_draws_are_pinned():
-    reqs = {f"{p}/{c}/{ps}": gw.build_requests(_CharTok(), gw.draw_lengths(p, c, 3), case="B0", profile=p, ctx=c, seed=3, prompt_seed=ps)
-            for p in gw.PROFILES for c in sorted(gw.CTX) for ps in (None, 1003)}
-    assert _digest(reqs) == "636ca9201d792690"
 
 
 def test_topp_case_draws_are_pinned():
@@ -59,12 +36,3 @@ def test_topp_manifest_command_prints_the_pinned_manifest(record: bool, digest: 
     with contextlib.redirect_stdout(buf):
         tp.main(tp.ManifestOptions(record=record))
     assert hashlib.sha256(buf.getvalue().encode()).hexdigest()[:16] == digest and buf.getvalue().count("\n") == lines
-
-
-def test_compiled_merge_bootstrap_interval_is_pinned():
-    xs = [0.5, -1.25, 3.0, 2.0, 0.0, 1.5, -0.75]
-    assert cm._bootstrap_ci(xs, seed=0) == (-0.32142857142857145, 1.7857142857142858)
-    assert cm._bootstrap_ci(xs, seed=1) == (-0.32142857142857145, 1.75)
-    assert cm._bootstrap_ci(xs, 500, seed=2) == (-0.35714285714285715, 1.75)
-    lo, hi = cm._bootstrap_ci([1.0], seed=0)
-    assert lo != lo and hi != hi

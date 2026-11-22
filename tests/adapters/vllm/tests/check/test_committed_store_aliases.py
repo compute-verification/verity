@@ -12,9 +12,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from verity_vllm.check.replay import coverage as COV
 from verity_vllm.check.replay import opening as OP
-from verity_vllm.records.required_manifest import SCHEMA
 
 ROT = "model.layers.0.self_attn.rotary_emb"
 W = 8                                                                            # words per identity
@@ -52,7 +50,7 @@ def _world(n_layers: int = 4):
 
 def test_layer_n_reads_invocation_n_of_the_canonical_path_through_the_manifest_alias_table():
     bmap, committed, manifest = _world()
-    st = OP.CommittedStore.of_record(bmap, committed, manifest)
+    st = OP.CommittedStore.of_record(bmap, committed, OP.alias_table(manifest))
     for n in range(4):
         op = ROT if n == 0 else f"model.layers.{n}.self_attn.rotary_emb"
         assert st.resolve(op) == (ROT, n)
@@ -67,7 +65,7 @@ def test_layer_n_reads_invocation_n_of_the_canonical_path_through_the_manifest_a
 
 def test_no_alias_means_invocation_zero_exactly_and_a_missing_invocation_is_named_never_the_lowest():
     bmap, committed, manifest = _world()
-    st = OP.CommittedStore.of_record(bmap, committed, manifest)
+    st = OP.CommittedStore.of_record(bmap, committed, OP.alias_table(manifest))
     # a per-layer path with NO alias entry (layer 4 does not exist): missing by name, the Program path in the message
     w, why = st.words("r0", 0, "model.layers.4.self_attn.rotary_emb", "0", 0, W)
     assert w is None and "no committed identity for (r0, step 0, model.layers.4.self_attn.rotary_emb/0)" in why
@@ -97,29 +95,3 @@ def test_without_the_alias_table_a_shared_module_layer_path_is_missing_by_name_n
     assert OP.CommittedStore.of_record(bmap, committed, None).aliases == {}
 
 
-def test_the_store_and_the_population_reconciliation_resolve_through_the_same_table():
-    """`alias_table` / `resolve_op_path` are the one resolver: the manifest identity of layer n's rotary output (canonical path, invocation n)
-    is the key the population reconciliation forms for the Program's per-layer row address, and the key the store reads."""
-    bmap, committed, manifest = _world()
-    ids = [{"family": "instance_outputs", "request_id": "r0", "step": 0, "op_path": ROT, "output_member": "0", "invocation": n, "element_range": [0, W],
-            "rank": 0, "spec": "RoPE_v1{}"} for n in range(4)]
-    man = dict(manifest, schema=SCHEMA, program_digest="ab" * 64, manifest_digest="cd" * 64, requests=["r0"], identities=ids,
-               query={"id": "Q_module_v1"})
-    table = OP.alias_table(man)
-    assert table == {f"model.layers.{n}.self_attn.rotary_emb": (ROT, n) for n in range(1, 4)}
-    # the Program's row addresses, per-layer paths: every manifest identity is addressed (0 without rows) iff the aliases resolve
-    addresses = {("r0", 0, ROT if n == 0 else f"model.layers.{n}.self_attn.rotary_emb", "0"): {"class": "vu", "rows": 1, "spec": "RoPE_v1{}", "why": None}
-                 for n in range(4)}
-    qp = COV.query_population(man, addresses, set(), ranks=[0])
-    assert "manifest_refused" not in qp["query_checks"] and qp["query_total"]["identities"] == 4
-    assert qp["query_checks"]["identities_without_rows"]["n"] == 0 and qp["query_checks"]["vus_outside_query"]["n"] == 0
-    store = OP.CommittedStore.of_record(bmap, committed, man)
-    for (rid, step, op, mem) in addresses:
-        canon, inv = OP.resolve_op_path(table, op)
-        assert store.resolve(op) == (canon, inv) and store.has(rid, step, op, mem)
-    # drop the aliases from the manifest: the reconciliation names layers 1..3 as identities without rows AND the store misses them by name
-    man2 = dict(man, op_path_aliases={})
-    qp2 = COV.query_population(man2, addresses, set(), ranks=[0])
-    assert qp2["query_checks"]["identities_without_rows"]["n"] == 3 and qp2["query_checks"]["vus_outside_query"]["n"] == 3
-    store2 = OP.CommittedStore.of_record(bmap, committed, man2)
-    assert [store2.has("r0", 0, f"model.layers.{n}.self_attn.rotary_emb", "0") for n in range(1, 4)] == [False] * 3

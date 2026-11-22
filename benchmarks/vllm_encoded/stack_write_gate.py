@@ -33,7 +33,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "codec_tensor"))
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/resource_accounting/memory/poub/prover/word_codec/paged.py").parent))
+sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/accounting/memory/poub/prover/word_codec/paged.py").parent))
 
 import write_gate as WG
 
@@ -42,7 +42,7 @@ def _harness():
     name = "pouw_harness_sass_gate"
     if name not in sys.modules:
         spec = importlib.util.spec_from_file_location(
-            name, HERE.parents[1] / "verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py")
+            name, HERE.parents[1] / "verity/protocols/accounting/compute/pouw/prover/sass_gate.py")
         sys.modules[name] = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(sys.modules[name])
     return sys.modules[name]

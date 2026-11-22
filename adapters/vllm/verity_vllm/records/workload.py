@@ -2,7 +2,7 @@
 `workloads/<row>.json` holds it and a run reads it; and the v1 layout (no `engine` block, the flat keys it replaced), which a
 pod's older run directories still hold.
 
-Its writers are `config.RowConfig.to_json` (the row files), `pipeline.workload.workload_doc` and `pipeline.coverage_workloads`;
+Its writers are `config.RowConfig.to_json` (the row files), and `pipeline.workload.workload_doc`;
 each writes every field typed here as required, and a holdout workload a pod's runs hold lacks three that are optional.  `config.RowConfig` parses a
 row file for running it (v2 only, with the engine's checks); this is the record a check reads.
 

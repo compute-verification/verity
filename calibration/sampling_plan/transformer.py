@@ -49,11 +49,11 @@ from pathlib import Path
 from inputs import CARDS, I, cap, observations
 
 from verity import protocol
-from verity.protocols.proofs.spot.verifier.profile import Stratified, Stratum
-from verity.protocols.proofs.spot.prover.candidates import Shape, cuts, shape_of
-from verity.protocols.proofs.spot.prover.costfit import Fitted, fit
-from verity.protocols.proofs.spot.verifier.one_stage.draw import work_k, work_table
-from verity.protocols.proofs.spot.prover.optimize import (Candidate, TensorCommit, CostModel, Objective,
+from verity.protocols.proof.spot.verifier.profile import Stratified, Stratum
+from verity.protocols.proof.spot.prover.candidates import Shape, cuts, shape_of
+from verity.protocols.proof.spot.prover.costfit import Fitted, fit
+from verity.protocols.proof.spot.verifier.one_stage.draw import work_k, work_table
+from verity.protocols.proof.spot.prover.optimize import (Candidate, TensorCommit, CostModel, Objective,
                                                            Plan, ReplayGrain, certify, density_bound, for_target,
                                                            frontier, ln_upper, row_ands)
 from verity.circuits.codec import descriptor_id

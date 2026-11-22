@@ -1154,8 +1154,8 @@ def test_a_fresh_run_builds_the_verifier_and_runs_the_suites_with_lakes_artifact
     root = tmp_path / "tree"
     _env_workspace(root, {"verity-flock": "import os\n\ndef test_env():\n"
                                           "    assert os.environ.get('LAKE_ARTIFACT_CACHE') == os.environ['WANT']\n"})
-    (root / "verity" / "protocols" / "proofs" / "flock" / "verifier").mkdir(parents=True)
-    (root / "verity" / "protocols" / "proofs" / "flock" / "verifier" / "lakefile.toml").write_text('name = "f"\n')
+    (root / "verity" / "protocols" / "proof" / "flock" / "verifier").mkdir(parents=True)
+    (root / "verity" / "protocols" / "proof" / "flock" / "verifier" / "lakefile.toml").write_text('name = "f"\n')
     (root / ".gitignore").write_text(".lake/\n")
     _git(root, "add", ".")
     _git(root, "commit", "-q", "-m", "verifier")
@@ -1328,9 +1328,9 @@ def test_the_suites_on_the_lean_verifier_run_after_its_build_as_inside_check(tmp
     root, log = tmp_path / "tree", tmp_path / "lake.log"
     _env_workspace(root, {"verity-flock": "import shutil\n\ndef test_lake():\n    assert shutil.which('lake')\n",
                           "other": "def test_other():\n    pass\n"})
-    (root / "verity" / "protocols" / "proofs" / "flock" / "verifier").mkdir(parents=True)
-    (root / "verity" / "protocols" / "proofs" / "flock" / "verifier" / "lakefile.toml").write_text('name = "flock"\n')
-    (root / "verity" / "protocols" / "proofs" / "flock" / "verifier" / ".gitignore").write_text(".lake/\n")       # as the verifier's own
+    (root / "verity" / "protocols" / "proof" / "flock" / "verifier").mkdir(parents=True)
+    (root / "verity" / "protocols" / "proof" / "flock" / "verifier" / "lakefile.toml").write_text('name = "flock"\n')
+    (root / "verity" / "protocols" / "proof" / "flock" / "verifier" / ".gitignore").write_text(".lake/\n")       # as the verifier's own
     _git(root, "add", ".")
     _git(root, "commit", "-q", "-m", "verifier")
     # ELAN puts $HOME/.elan/bin first on the PATH, so on a machine with elan its real lake would shadow one only on the PATH
@@ -1347,10 +1347,10 @@ def test_the_suites_on_the_lean_verifier_run_after_its_build_as_inside_check(tmp
     assert p.returncode == 0 and not log.exists(), p.stdout
     p = _run_suite(root, tmp_path, "--fresh", extra=extra)
     assert p.returncode == 0 and "passed  verity-flock" in p.stdout and "passed  other" in p.stdout, p.stdout
-    assert log.read_text() == f"{root / 'verity/protocols/proofs/flock/verifier'} build\n"
+    assert log.read_text() == f"{root / 'verity/protocols/proof/flock/verifier'} build\n"
 
     p = _run_suite(root, tmp_path, "--fresh", extra={**extra, "FAKE_LAKE_RC": "1"})
-    assert p.returncode == 1 and "failed  verity-flock" in p.stdout and "`lake build` in verity/protocols/proofs/flock/verifier exited 1" in p.stdout
+    assert p.returncode == 1 and "failed  verity-flock" in p.stdout and "`lake build` in verity/protocols/proof/flock/verifier exited 1" in p.stdout
     assert "passed  other" in p.stdout, p.stdout
 
 
@@ -2728,6 +2728,22 @@ def test_the_verifiers_lake_build_holds_the_trees_build_lock_so_two_runs_of_one_
     log = tmp_path / "lean-build.log"
     assert mod.lean_build(log) is None
     assert log.read_text().strip() == "locked"
+
+
+def test_a_declared_verifier_executable_lean_build_left_unbuilt_is_named(tmp_path, monkeypatch):
+    """lean-build is `lake build`, the verifier's `defaultTargets`: an executable a suite declares under `artifacts` that isn't
+    one of them stays unbuilt, and the tests that run it skipped in every check. `unbuilt_exes` names each one still absent
+    after the build, and its suite fails rather than skips; another package's build outputs are not lean-build's."""
+    S = _suites(monkeypatch, tmp_path)
+    lean = tmp_path / "verity" / "protocols" / "proof" / "flock" / "verifier"
+    monkeypatch.setattr(S, "flock_lean", lambda: lean)
+    bin_ = "verity/protocols/proof/flock/verifier/.lake/build/bin/"
+    suite = S.Suite("one", "one", (), (), artifacts=(bin_ + "dflt", bin_ + "lower", "other/.lake/build/bin/x"))
+    assert S.verifier_exes(suite) == ["dflt", "lower"]
+    assert S.unbuilt_exes(suite) == ["dflt", "lower"]
+    (lean / ".lake" / "build" / "bin").mkdir(parents=True)
+    (lean / ".lake" / "build" / "bin" / "dflt").write_text("")
+    assert S.unbuilt_exes(suite) == ["lower"]
 
 
 def test_a_fetch_that_prints_no_report_names_its_error_and_keeps_its_own_log(tmp_path, monkeypatch, capsys):

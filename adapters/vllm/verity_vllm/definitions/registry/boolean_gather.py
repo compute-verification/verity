@@ -8,7 +8,7 @@ bits (`verity.circuits.boolean.trace`).
     GatherBf16x{N}u{k}_v1   (idx: Array<k, Value<1>>, column: Array<N, Array<16, Value<1>>>) -> Array<16, Value<1>>
                             column[idx] for idx < N (unsigned), else 0x7FFF: a level of a gather's tree, no word Definition
     GatherI32x{V}_v2        (token: Array<32, Value<1>>, column: Array<V, Array<32, Value<1>>>) -> Array<32, Value<1>>
-                            word view: GatherI32x{V}_v1 (`dsv4_decode_indices.gather_i32`), column[token], else -1
+                            word view: GatherI32x{V}_v1 (`fp8_moe_experts.gather_i32`), column[token], else -1
     GatherI32x{N}u{k}_v1    the i32 levels, -1 past N
     GatherF32x{V}_v2        (token: Array<32, Value<1>>, column: Array<V, Array<32, Value<1>>>) -> Array<32, Value<1>>
                             word view: GatherF32x{V}_v1 (`ref_prims.gather_f32`), column[token], else 0x7FC00000
@@ -50,7 +50,7 @@ another Definition. The offsets and the sum read only the token and the V-chunks
 V-chunks they add no fresh input, and only whole 32-bit words pass between blocks.
 
 `W_MAX` is the most words whose `GatherF32x{W}_v2`, with each of its three rows a ``hm96-sha512/row/v2`` row opened in the
-block, fits one Flock block of 2^27 bits (`verity_flock.circuit.compose`, `benchmarks/unit_block`). In slots of 2^18 the
+block, fits one Flock block of 2^27 bits (`verity_flock.circuit.compose`). In slots of 2^18 the
 block holds 512: the gather's unit takes a range of 2^22 (16), the rows' four hm96 slots a range of 2^20 (4), the mask
 aligns the packed sha512x3 range up by one, and the column row's 4W bytes take ceil((4W + 17) / 128) - 1 compressions, three
 to a sha512x3 slot. So 491 slots, 1,473 compressions, hold 4W + 17 <= 1,474 * 128 bytes: W <= 47,163.
@@ -86,7 +86,7 @@ FILL = 0x7FFF
 CHUNK_BITS = 10
 CHUNK = 1 << CHUNK_BITS
 I32 = Array(32, BIT)
-#: the word an index outside an i32 gather's column selects (`dsv4_decode_indices.FILL`)
+#: the word an index outside an i32 gather's column selects (`fp8_moe_experts.I32_FILL`)
 I32_FILL = 0xFFFFFFFF
 #: the word an index outside an f32 gather's column selects (`ref_prims.gather_f32`'s extension, a quiet NaN)
 F32_FILL = 0x7FC00000
@@ -170,14 +170,14 @@ def gather_bf16(vocab: int) -> CompositeDefinition:
 
 def gather_i32(vocab: int) -> CompositeDefinition:
     """`GatherI32x{V}_v2`: `GatherI32x{V}_v1` on bits, column[token] for 0 <= token < V, else -1."""
-    from . import dsv4_decode_indices as DI
+    from . import fp8_moe_experts as FX
 
     if vocab < 1:
         raise ValueError(f"a gather selects from at least one word, not {vocab}")
     d = _GATHERS.get(("I32", vocab))
     if d is None:
         d = _GATHERS[("I32", vocab)] = _gather_definition(
-            f"GatherI32x{vocab}", 2, vocab, 32, "token", DI.gather_i32(vocab),
+            f"GatherI32x{vocab}", 2, vocab, 32, "token", FX.gather_i32(vocab),
             f"GatherI32x{vocab}_v1 on bits: column[token] for 0 <= token < {vocab} (i32), else -1; the multiplexer tree over the "
             "token's bits", "I32")
     return d

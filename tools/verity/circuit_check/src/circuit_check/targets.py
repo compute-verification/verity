@@ -6,8 +6,6 @@ the suite runs over, every registered Definition and template at small bindings.
                 digest its id prints, ``WidgetStep_v1{C={d0dc81b7fa41},T=4,...}``, one of the records the suite binds)
     template    ``rope-head`` (its example parameters), ``rope-head:D=128`` (parameters given), or a subcircuit id
                 (``gemm-coordinate/k2048/sm80-mma-bf16``); an attention head is checked at the ends of its key-count range
-    row         a served workload's request Program, a Build's: its directory or its ``instances.json.gz``, read by the
-                sidecar of the package that writes it (`request_program`)
     sidecar     ``path/to/<module>.circuit-check.py``: the module's own Definitions its bindings reach, and its templates
                 (`sidecar_targets`)
 
@@ -182,13 +180,13 @@ def _static(text: str) -> Any:
 def _element(text: str) -> Any:
     """A tuple element (`_static`), a bare id among them the registered Definition it names, as `call_scope.specialization`
     resolves a function-valued static, else its text."""
-    from verity.circuits import word as W
+    from verity.circuits.call_scope import specialization
 
     v = _static(text)
     if v is not text or not _BARE.fullmatch(text):
         return v
     try:
-        return W.specialization(text, {})
+        return specialization(text, {})
     except KeyError:
         return text
 
@@ -241,23 +239,14 @@ def _record(text: str) -> Any:
     return _RECORDS[text]
 
 
-def _lift(fam: str) -> None:
-    """Register ``Lifted[<composite>]_v2``, the lift a body that calls the composite makes (`lifted.lift_composite`), where no body
-    has yet: unregistered, `word.specialization` takes it for a lifted primitive.  An id whose composite is lifted otherwise (by hand,
-    `lifted.register_hand_lift`, or at another version) names no Definition, and is refused by name."""
-    from . import sidecars as SC
-
-    if (made := SC.composite_lift(fam)) is not None and made.id != fam:
-        raise LookupError(f"{fam} names no Definition: {made.lifted_from.id}'s lift is {made.id}")
-
-
 def definition(spec: str) -> Any:
     """The registered Definition ``spec`` names, bound to the statics its id writes (`_static`: a Definition-valued one by its
-    own id, ``EXACT=GemmAccumulatorS8_v2{K=64,DOT=BlackwellS8ImmaDot32_v2}``, bound the same way; a composite's lift, `_lift`, the
-    one a body calling it binds), or else the suite's target of that id: a Definition that only tracing the catalog's roots
-    registers, such as `boolean_gather.gather_bf16(n)`'s gathers, or one whose id writes a dict static as its digest, such as
-    `gf2k.GfResiduals`'s schema."""
-    from verity.circuits import word as W
+    own id, ``EXACT=GemmAccumulatorS8_v2{K=64,DOT=BlackwellS8ImmaDot32_v2}``, bound the same way), or else, of a family a
+    binding file's `BODY_FAMILIES` holds, that file's target of that id
+    (`sidecar_targets`, without the catalog), or else the suite's target of that id: a Definition that only tracing the
+    catalog's roots registers, such as `boolean_gather.gather_bf16(n)`'s gathers, or one whose id writes a dict static as its
+    digest, such as `gf2k.GfResiduals`'s schema."""
+    from verity.circuits.call_scope import specialization
 
     load_registries()
     m = re.fullmatch(r"([^{]+)(?:\{(.*)\})?", spec.strip())
@@ -265,12 +254,17 @@ def definition(spec: str) -> Any:
         raise ValueError(f"not a Definition id: {spec!r}")
     fam, body = m[1], m[2]
     statics = {k: _static(v) for k, v in _split(body).items()} if body else {}
-    _lift(fam)
     try:
         if any(isinstance(v, str) and re.fullmatch(r"\{[0-9a-f]{12}\}", v) for v in statics.values()):
             raise KeyError(spec)
-        fn = W.specialization(fam, statics)
+        fn = specialization(fam, statics)
     except KeyError:
+        from . import sidecars as SC
+
+        if (mod := SC.body_family(fam)) is not None:
+            path = str(SC.discover()[mod]["py"])
+            if (fn := {**sidecar_targets(path)[0], **sidecar_dropped(path)}.get(spec.strip())) is not None:
+                return fn
         fn = suite().get(spec.strip())
         if fn is None:
             raise
@@ -308,13 +302,13 @@ def kind_of(spec: str) -> str:
     from verity_flock import subcircuit_templates as TM
 
     if os.path.exists(spec):   # False for an id longer than a file name may be (a static spelled out at length)
-        return "sidecar" if spec.endswith(f"{CC.SUFFIX}.py") else "row"
+        if not spec.endswith(f"{CC.SUFFIX}.py"):
+            raise ValueError(f"{spec}: a path names a sidecar (``*{CC.SUFFIX}.py``), and this is none")
+        return "sidecar"
     head = spec.partition(":")[0].partition("/")[0]
     return "template" if head in TM.TEMPLATES else "definition"
 
 
-#: the reader of a served workload's request Program, which the sidecar of the package that writes it defines
-ROW_READER = "request_program"
 #: the reader of a struct-slots split (`structural_slots`), which the sidecar of the module that writes one defines
 SPLIT_READER = "struct_slots_split"
 #: what circuit-check reads of the catalog it checks, each a function the one sidecar that defines it at its top level hands
@@ -332,21 +326,17 @@ HOOKS = {
                      "(`lazy_operands`)",
     "operand_probes": "the index values at which a lazy operand's Definition reads its first and last rows, by its id "
                       "without statics, a function of its statics (`operand_probes`)",
-    "callee_calls": "the families a Call calls where that Call's own partition goes unchecked, each with the families of the "
-                    "Calls that pass it (`callee_calls`)",
     "row_families": "the replay's row families, word Call families (`word_call_families`)",
     "boolean_table": "the Boolean table's two lookups and its import errors (exact, by_name, errors)",
     "made_on_demand": "the Boolean version of a word Definition made on demand, by its id, or None",
     "boolean_version": "the Boolean version of a word Definition, and the error it raises for one that has none",
-    "lift_composite": "the lift of a registered composite Definition",
     "handed_packages": "the packages and modules, dotted, whose circuits circuit-check is handed and names none of "
                        "(`tests/test_handed_names.py`)",
 }
 _HANDS: dict[str, Any] = {}
 #: the hooks a catalog may hand none of: then the table is empty, and every check that would read it fails or warns by name
-#: (``correspondence/unprobed-table``, ``correspondence/operand-unread``, ``partition/over-cost-target`` or, over the leaf
-#: budget, ``partition/unpartitioned``)
-OPTIONAL = frozenset({"table_probes", "lazy_operands", "operand_probes", "callee_calls"})
+#: (``correspondence/unprobed-table``, ``correspondence/operand-unread``)
+OPTIONAL = frozenset({"table_probes", "lazy_operands", "operand_probes"})
 
 
 def _handed(name: str) -> Any:
@@ -377,13 +367,6 @@ def _read_by(reader: str, what: str, path: str) -> Any:
         raise ValueError(f"{path}: {what} is read by the one sidecar that defines `{reader}`, and "
                          f"{len(readers)} that `sidecars.discover` finds do: {', '.join(readers) or 'none'}")
     return next(iter(readers.values()))(path)
-
-
-def request_program(path: str) -> tuple[Any, Any, Callable[[], Iterator[Any]]]:
-    """A row target's request Program, read by the one binding file that defines `ROW_READER`: the Program's view, its
-    population as `verity.circuits.word.call_groups` reads one, and its instance rows, from the first at each call
-    (`verity.circuits.cross_call.check_program`)."""
-    return _read_by(ROW_READER, "a request Program", path)
 
 
 def struct_slots_split(path: str) -> tuple[Callable[[], Any], str, dict[str, tuple[int, int]], Callable[[str], Sequence[int]]]:
@@ -637,28 +620,16 @@ def word_call_families() -> set[str]:
     return _SHORT["words"]
 
 
-def callee_calls() -> dict[str, tuple[str, ...]]:
-    """The families a Call calls where that Call's own partition goes unchecked (`checks.uncut`: over the partition's gate
-    budget and not cut member by member, or cut so down to a member over it, or over its leaf budget), each with the families
-    of the Calls that pass it, as the catalog hands them (`HOOKS`' ``callee_calls``): each is a Call, so such a Call is
-    partitioned by its callees (`checks.by_callees`) and every gate of it sits in a Call whose partition is checked.
-    ``test_circuit_check`` holds it to the suite's and the range spots' unchecked Calls, apart from those its
-    ``OVER_PARTITION_BUDGET`` holds (each with why), which pass nothing.  Read by a call each time, so a check that asks
-    whether a family is a Call holds what the catalog's sidecar hands (`cache`)."""
-    return {f: tuple(by) for f, by in _handed("callee_calls")().items()}
-
-
 def call_families(found: dict[str, Any] | None = None) -> set[str]:
     """The Definition families a served Program calls, where the partition invariant applies: the word Call families
     (`word_call_families`: the replay's row families, every frontend vocabulary kind, every template's Definition), the
-    Boolean version of each of those (`boolean_call_families`: the Program on bits calls them in their place), and the callees
-    of a Call whose own partition goes unchecked (`callee_calls`).  Any other Definition's gates are partitioned inside the
+    Boolean version of each of those (`boolean_call_families`: the Program on bits calls them in their place).  Any other Definition's gates are partitioned inside the
     Call that contains them.  It builds the whole catalog, or takes ``found``, a `suite` built already (`cli._tasks`'s: a later
     one would also hold what building its bodies registered); `is_call` asks whether one family is among them without it, and
     refuses a family it can't decide so."""
     if not _CALLS:
         words = word_call_families()
-        _CALLS.update(words | boolean_call_families(set(words), found) | set(callee_calls()))
+        _CALLS.update(words | boolean_call_families(set(words), found))
     return _CALLS
 
 
@@ -677,14 +648,13 @@ def is_call(fam: str) -> bool:
 
 def call_answer(fam: str) -> bool | None:
     """Whether family ``fam`` is in `call_families`, never building the catalog for it: once `call_families` is known here, by it;
-    else a word Call family or a `callee_calls` one is; a family outside `boolean_call_candidates` is not; one
+    else a word Call family is; a family outside `boolean_call_candidates` is not; one
     `certified_boolean_calls` names is.  Any other (a Boolean version of a word Call family that only Definitions the catalog
     reaches inside its roots could show) is undecided, None."""
-    callees = callee_calls()
     if _CALLS:
         return fam in _CALLS
     words = word_call_families()
-    if fam in words or fam in callees:
+    if fam in words:
         return True
     if "candidates" not in _SHORT:
         _SHORT["candidates"] = boolean_call_candidates(words)
@@ -1006,8 +976,8 @@ def sidecar_targets(path: str) -> tuple[dict[str, Any], list[tuple[str, Any, lis
 
 
 __all__ = ["BY_CALLS", "BY_CALLS_ROOTS", "CATALOGS", "MAX_GATES", "OPTIONAL", "PINNED_KINDS", "REACHED", "REGISTERED", "ROOT_ERRORS",
-           "HOOKS", "ROOT_FUNCTIONS", "ROW_READER", "SPLIT_READER", "TINY", "Undecided", "binding_files", "binding_roots", "boolean_call_candidates",
-           "boolean_call_families", "boolean_family", "boolean_links", "call_families", "callee_calls", "catalog", "catalog_units",
+           "HOOKS", "ROOT_FUNCTIONS", "SPLIT_READER", "TINY", "Undecided", "binding_files", "binding_roots", "boolean_call_candidates",
+           "boolean_call_families", "boolean_family", "boolean_links", "call_families", "catalog", "catalog_units",
            "certified_boolean_calls", "declare_by_calls", "definition", "family", "instance_statics", "is_by_calls", "is_call",
-           "kind_of", "lazy_operands", "load_registries", "operand_probes", "pinned", "preload", "pouw_bindings", "reachable", "request_program", "root_functions", "select", "sidecar_dropped", "sidecar_targets", "struct_slots_split", "subcircuit", "suite",
+           "kind_of", "lazy_operands", "load_registries", "operand_probes", "pinned", "preload", "pouw_bindings", "reachable", "root_functions", "select", "sidecar_dropped", "sidecar_targets", "struct_slots_split", "subcircuit", "suite",
            "table_probe", "template_of", "template_params", "templates", "word_call_families"]

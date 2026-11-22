@@ -11,8 +11,8 @@ import pytest
 
 from verity.protocols.experimental.dither.prover import dither as D
 from verity.protocols.experimental.dither.prover import pouw_scheme as DS
-from verity.protocols.resource_accounting.compute.pouw.prover import schemes
-from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import (
+from verity.protocols.accounting.compute.pouw.prover import schemes
+from verity.protocols.accounting.compute.pouw.verifier.protocol import (
     Context, DomainError, Matmul, PoUWScheme, Shape, Tile)
 
 SEEDS = D.seeds(hashlib.sha512(b"call coin").digest(), hashlib.sha512(b"operand-root receipt").digest(), 0)

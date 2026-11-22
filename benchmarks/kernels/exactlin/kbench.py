@@ -237,7 +237,7 @@ def main() -> int:
     ap.add_argument("--arms", default=",".join(ARMS), help=f"of {ARMS + PARTS}")
     ap.add_argument("--models", default="llama-3.1-8b", help=f"comma-separated, of {tuple(kgate.MODELS)}")
     ap.add_argument("--special-rows", action="store_true", help="time on the gate's edge rows too (default: plain rows)")
-    ap.add_argument("--dump", action="store_true", help="the gate's M <= 32 outputs to OUT/replay (replay.py)")
+    ap.add_argument("--dump", action="store_true", help="the gate's M <= 32 outputs to OUT/replay")
     a = ap.parse_args()
     arms = tuple(a.arms.split(","))
     models = tuple(a.models.split(","))

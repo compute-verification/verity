@@ -14,7 +14,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
 PACKAGING = REPO / "tools/research/src/research/pods/nebius/compose"
-HOST_PY = REPO / "verity/protocols/resource_accounting/memory/poub/attester/live_verifier/host.py"
+HOST_PY = REPO / "verity/protocols/accounting/memory/poub/attester/live_verifier/host.py"
 ONE_STAGE = REPO / "benchmarks/one_stage"
 _spec = importlib.util.spec_from_file_location("live_verifier_host", HOST_PY)
 H = sys.modules[_spec.name] = importlib.util.module_from_spec(_spec)
@@ -39,7 +39,7 @@ def compose_builds() -> set[tuple[str, str]]:
     lean = re.compile(r'\(ROOT / "([^"]+)", "([^"]+)"\)')
     found.add(tuple(reversed(lean.search(re.search(r"^SAMPLED_LEAN = .*$", cases, re.M).group(0)).groups())))
     found.add(tuple(reversed(lean.search((ONE_STAGE / "inference_only_lean.py").read_text()).groups())))
-    spot = (REPO / "verity/protocols/proofs/spot/verifier/one_stage/verifier.py").read_text()
+    spot = (REPO / "verity/protocols/proof/spot/verifier/one_stage/verifier.py").read_text()
     found.add((re.search(r'^V1_LEAN = \(VF\.PACKAGE, "([^"]+)"\)$', cases, re.M).group(1),
                re.search(r'^PACKAGE = ROOT / "([^"]+)"$', spot, re.M).group(1)))
     return found

@@ -1,5 +1,5 @@
 """The Commit block's `binding`: one run's binding map checked against its population, as the Commit's rules read it
-(`check.commit_rules`, `check.c2_rules`) and as the not-executed class's facts read it (`commit.executed_prefix.executed_prefix_facts`).
+(`check.commit_rules`) and as the not-executed class's facts read it (`commit.executed_prefix.executed_prefix_facts`).
 
 Its writers are `pipeline.commit.binding_record` (or, when that raised, only its error), a TP rank's `pipeline.tp.rank_worker` and
 `pipeline.serve_seal` (a sealed window's map digests alone).  The sub-records are the ones those readers read: the identity coverage of

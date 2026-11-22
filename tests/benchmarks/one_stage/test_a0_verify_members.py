@@ -15,6 +15,7 @@ HERE = (Path(__file__).resolve().parent)
 sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
 
 import a0  # noqa: E402
+from verity import lean_process as LP  # noqa: E402
 from test_a0_archive_once import window  # noqa: E402
 
 
@@ -76,7 +77,7 @@ def test_a_member_verify_refuses_or_stops_on_is_that_members_alone(tmp_path):
                                                         (False, "no verdict (rc 2): usage: verify ...\n")]
     assert [{**v, "verify_s": None} for v in got] == [{**v, "verify_s": None} for v in alone]
     assert a0.lean_refused(got[1]) and not a0.lean_refused(got[2]) and kept.ended is None
-    assert kept.close() == 0
+    assert kept.close() == 1
 
 
 @pytest.mark.parametrize("mode, why", [
@@ -123,3 +124,36 @@ def test_a_kept_process_that_writes_nothing_in_its_wait_is_ended_and_answers_no_
     assert [v["accepted"] for v in got] == [False] * 3
     assert kept.ended == "the kept verifier wrote nothing for 3600 s before member 0's MEMBER line (it exited -9)"
     assert kept.close() == -9
+
+
+@pytest.mark.parametrize("status", [3, 134])
+def test_an_accept_at_a_status_verify_does_not_document_is_no_verdict(tmp_path, status):
+    """`verify` ends 0, 1 or 2 (`verifyCmdBy`; `VERIFY_EXITS`): its accepting `VERDICT` line at any other status is no
+    verdict, from a process of its own and from the kept verifier, refused by name (`lean-exit`); the kept process goes on
+    to the next member."""
+    lean, members, kept = kept_window(tmp_path)
+    (st, out), (st2, out2) = members[1], members[2]
+    (out / "sessions" / "s" / "mode").write_text(f"exit {status}")
+    why = f"{LP.LEAN_EXIT}: status {status}" + (" (abort)" if status == LP.ABORTED else "")
+    for v in (a0.lean_verify(lean, st, 8, out, zk=True, members=kept),
+              a0.lean_verify(lean, st, 8, out, zk=True, log="lean-verify-alone")):
+        assert (v["accepted"], v["why"], v["digest"]) == (False, why, None) and not a0.lean_refused(v)
+    log = (out / "lean-verify.log").read_text()
+    assert verdict_lines(out / "lean-verify.log") == [] and "not taken: VERDICT " in log and f"\n# {why}\n" in log
+    assert a0.lean_verify(lean, st2, 8, out2, zk=True, members=kept)["accepted"] and kept.ended is None
+    assert kept.close() == 1
+
+
+@pytest.mark.parametrize("after, why", [
+    ("abort", f"{LP.LEAN_EXIT}: status 134 (abort)"),
+    ("panic", f"{LP.LEAN_PANIC}: PANIC at Flock.VerifyMembers.run Flock.VerifyMembers:1:2: index out of bounds")])
+def test_a_kept_verifier_that_accepts_every_member_then_does_not_end_cleanly_is_refused_at_its_close(tmp_path, after,
+                                                                                                    why):
+    """The kept process answers every member, accepting each, and then aborts or writes a panic line once its input
+    ends: its close refuses by name (`LeanPanic`), so no caller keeps the accepts it read before the end."""
+    lean, members, kept = kept_window(tmp_path)
+    (members[2][1] / "sessions" / "s" / "mode").write_text(f"after {after}")
+    assert all(a0.lean_verify(lean, st, 8, out, zk=True, members=kept)["accepted"] for st, out in members)
+    with pytest.raises(LP.LeanPanic) as e:
+        kept.close()
+    assert str(e.value) == why

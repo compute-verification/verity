@@ -1,4 +1,4 @@
-"""A benchmark's useful-work scheme, given by its registered name (`verity.protocols.resource_accounting.scheme`), and
+"""A benchmark's useful-work scheme, given by its registered name (`verity.protocols.accounting.scheme`), and
 the PoUW kernel scheme it runs on a card, given by the card's short name (`kit.card_short`).
 
 - `useful_work(name)`: the registered compute scheme ``name``; ValueError naming the registered ones otherwise.
@@ -10,15 +10,15 @@ the PoUW kernel scheme it runs on a card, given by the card's short name (`kit.c
 
 from __future__ import annotations
 
-from verity.protocols.resource_accounting import scheme as registry
+from verity.protocols.accounting import scheme as registry
 
 __all__ = ["arch", "attached", "kernel_scheme", "served", "useful_work"]
 
 
 def useful_work(name: str) -> registry.Scheme:
-    """The compute scheme declared under ``name`` (`compose.schemes.get`); ValueError naming the declared compute schemes
-    otherwise, every declaration loaded only to name them (`compose.schemes.load`)."""
-    from verity.protocols.compose import schemes
+    """The compute scheme declared under ``name`` (`run.schemes.get`); ValueError naming the declared compute schemes
+    otherwise, every declaration loaded only to name them (`run.schemes.load`)."""
+    from verity.protocols.run import schemes
 
     try:
         found = schemes.get(name)
@@ -35,7 +35,7 @@ def useful_work(name: str) -> registry.Scheme:
 def attached(name: str, weights: dict, given: dict) -> object:
     """What scheme ``name``'s ``attach`` returned on an exchange with no engine: ``weights`` registered by key, phase 0 open."""
     from verity import hooks as H
-    from verity.protocols.compose import schemes as declarations
+    from verity.protocols.run import schemes as declarations
     from verity_vllm.messages import Exchange
 
     exchange = Exchange()

@@ -1,4 +1,4 @@
-"""Order ``tick`` (`verity.protocols.resource_accounting.network.prover.admission.TickGate`): the certified tick in front of a vLLM-like FCFS scheduler, run in simulated
+"""Order ``tick`` (`verity.protocols.accounting.network.prover.admission.TickGate`): the certified tick in front of a vLLM-like FCFS scheduler, run in simulated
 physical time, so that the batches can be compared across wall-clock jitter and against the rule in logical time alone;
 what isn't certified (unnumbered, late, missing, aborted, a new run, a stalled or broken watermark); the watermark's
 lines, as the network attester's own code writes them (`line`), and the releases they name lost; and serve-openai's
@@ -24,9 +24,9 @@ from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Tokenizer
 from verity_vllm import messages
 from verity_vllm.engine import admission, hooks
 from verity_vllm.pipeline import cli
-from verity.protocols.resource_accounting.network.prover import admission as na
+from verity.protocols.accounting.network.prover import admission as na
 from verity_vllm.pipeline import serve_admit as sa
-from verity.protocols.resource_accounting.network.prover import serve_head as hd
+from verity.protocols.accounting.network.prover import serve_head as hd
 from verity_vllm.pipeline import serve_openai as so
 
 TICK = na.Tick(bucket_us=100_000, sat_us=30_000, free_us=40_000)

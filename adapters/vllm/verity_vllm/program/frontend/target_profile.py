@@ -131,8 +131,7 @@ class TargetProfile:
                            None) = MOE-01 with the router stated in its selection order over one committed softmax
                            (`MoeRouterTopKOrdered_v1`).  `"padded"` = the
                            fixed-slot construction: ONE `MoeFfnFixedL_v1{E,TOPK,VPT,H,I}` call per token over ALL E experts on their own
-                           weights, the TOPK slot outputs selected by the router ids (`verity_vllm.definitions.registry.moe_pad`; its lift of record is the
-                           hand-authored `LMoeFfnL_v1` with the unselected slots DISABLED by the enable vector `a_{r,t,e}`).  Two Programs
+                           weights, the TOPK slot outputs selected by the router ids (`verity_vllm.definitions.registry.moe_pad`).  Two Programs
                            of the same trace differ in digest by construction; GP-01 refuses a workload whose components were derived under
                            another construction than the declared one, and labels the workload (`moe_construction` block) so the row's
                            population is reported as what it is (no forced #Q correspondence).  A dense model ignores the
@@ -247,7 +246,6 @@ class TargetProfile:
                          "padded": {"rules": "vllm_moe padded (PaddedTopkSoftmax / PaddedMoeAlignBlockSize / PaddedFusedMoeKernel / PaddedSiluAndMul / "
                                              "PaddedMoeSum -> ONE MoeFfnFixedL_v1 per token)",
                                     "definitions": ("MoeFfnFixedL_v1{E,TOPK,VPT,H,I}",),
-                                    "lift_of_record": "LMoeFfnL_v1{E,TOPK,VPT,H,I} (hand-authored; registry.lifted.register_hand_lift)",
                                     "population": "|Q(Lift(P_fixed-slot))|: every expert slot of every token, the unselected ones DISABLED (bot) -- "
                                                   "labelled with its actual population, never equated to the indexed-read row's (R17-45 (1))"},
                          "indexed-read-ordered": {"rules": "vllm_moe MOE-01, the router stated in its selection order over one committed softmax (the same function as MOE-01's)",

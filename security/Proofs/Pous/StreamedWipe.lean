@@ -6,6 +6,7 @@ public import Proofs.Pous.StreamedWipe.Deployed
 public import Proofs.Pous.StreamedWipe.Disk
 public import Proofs.Pous.StreamedWipe.Family
 public import Proofs.Pous.StreamedWipe.Honest
+public import Proofs.Pous.StreamedWipe.Residual
 public import Proofs.Pous.StreamedWipe.Server
 public import Proofs.Pous.StreamedWipe.Witnesses
 import Mathlib.Algebra.Order.Algebra

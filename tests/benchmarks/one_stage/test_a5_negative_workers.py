@@ -41,8 +41,8 @@ from types import SimpleNamespace
 import pytest
 
 from verity.commitments.periods import history as HW, interface as I, rows as CS
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R, verifier as V
-from verity.protocols.proofs.spot.prover import docket as DK
+from verity.protocols.proof.spot.verifier.one_stage import docket as R, verifier as V
+from verity.protocols.proof.spot.prover import docket as DK
 from verity.commitments import randomness as RND
 
 HERE = Path(__file__).resolve().parent

@@ -8,7 +8,7 @@
  "benchmarks/pearl-plus-gamma-l-h100": {"version": 1, "unit": "fraction over stock"},
  "benchmarks/pearl-plus-gamma-l-h200": {"version": 1, "unit": "fraction over stock"},
  "benchmarks/proof-bytes-per-token": {"version": 1, "unit": "proof bytes a served token"},
- "benchmarks/proof-layer-build-seconds": {"version": 1, "unit": "s a build"},
+ "benchmarks/proof-layer-build-seconds": {"version": 2, "unit": "s a build"},
  "benchmarks/proof-layer-lean-seconds": {"version": 1, "unit": "s a proof block"},
  "benchmarks/proof-layer-proof-bytes": {"version": 1, "unit": "bytes a proof block"},
  "benchmarks/proof-layer-prover-seconds": {"version": 1, "unit": "s a proof block"},

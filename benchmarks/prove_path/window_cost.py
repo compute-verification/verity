@@ -6,7 +6,7 @@ registration's size; and the totals over monitoring periods of one week, one mon
 Costs. A fresh output row is its digest x (`class_rows.blocks(128 + b)`: P(8 nbytes) and its b bytes) and `Costs.fresh` more
 (hm96's c and h, two each, the frame leaf, and a port-tree node); an input row a wire or a registered read fills is re-leafed in
 its reader's port tree for `Costs.reused` (h, the leaf, the node). `CENSUS` is class_rows' model, a node one compression;
-`ENGINE` is the commit engine's, a node two (`commit_slots`: nine compressions a one-block row-slot). Compressions are priced
+`ENGINE` is the deleted slot commit's, a node two (nine compressions a one-block row-slot). Compressions are priced
 in AND rows at `SHA512_ROWS` each (`Sha512Compress_v1`'s pin, the copies Flock proves included); the served window is the
 class circuit's ANDs (`unit_ands`).
 
@@ -26,7 +26,7 @@ Levers (`LEVERS`), each a change to the circuit's layout or the commitment's for
   reader; as one row it is one.
 - ``W`` and ``R``, ports by reference: a reader's wired or registered port is the writer's or the pinned weight's leaves
   (a sampled member's port tree is derived at the audit), so no input row is re-leafed.
-- ``P``, shared output rows (`commit_slots --row-bytes`): units' outputs packed into rows of `ROW_BYTES`, so a
+- ``P``, shared output rows: units' outputs packed into rows of `ROW_BYTES`, so a
   fresh row's fixed cost is paid a KiB, not a unit's few bytes (its readers re-leaf as many rows as before, and a unit reads
   its segment for a few thousand ANDs, which this doesn't price).
 - ``L4``, one member root: the registration is O(members) (`RegistrationSize`), every member's public body (every row's
@@ -56,7 +56,7 @@ from verity_vllm.program.predict import scan_state as SS
 from verity_vllm.program.predict.window_circuit import WindowClass
 
 from verity.protocol import MONITORING_PERIODS
-from verity.protocols.proofs.spot.prover.optimize import SHA512_ROWS
+from verity.protocols.proof.spot.prover.optimize import SHA512_ROWS
 from verity.circuits.defs import bind
 from verity_vllm.definitions.registry import io_shell as IO
 from verity.commitments.periods import interface as IF
@@ -82,7 +82,7 @@ CAP = 64
 #: one port root's entry in `registration.json` (``indent=1``): a port name of about 40 characters, 128 hex of root and of
 #: domain, leaves
 ROOT_JSON_BYTES = 360
-#: the H200's rates, compressions a second: a measured step and commit_gpu's peak (`commit_slots`)
+#: the H200's rates, compressions a second: a measured step and the deleted commit_gpu's peak
 RATES = {"3.1 G/s": 3.1e9, "4.79 G/s": 4.79e9}
 #: the reference datacenter's GPUs: the census deployment whose role is reference (`calibration/census/deployments.json`)
 _REF = next(d for d in json.loads((HERE.parents[1] / "calibration" / "census" / "deployments.json").read_text()) if d["role"] == "reference")
@@ -187,20 +187,21 @@ def canonical(lab: str) -> str:
 
 
 def units_of(census: dict) -> list[Unit]:
-    """A census's templates as `Unit`s (a wired+registered port counted wired)."""
+    """A census's templates as `Unit`s (a wired+registered port counted wired), those of one label and the same rows one."""
     def by_kind(d: dict) -> dict:
         return {"wired": sum(v for k, v in d.items() if "wired" in k),
                 "registered": sum(v for k, v in d.items() if "wired" not in k and "registered" in k),
                 "other": sum(v for k, v in d.items() if k != "out" and "wired" not in k and "registered" not in k)}
 
-    out = []
+    out: dict[Unit, int] = {}
     for lab, t in census["templates"].items():
         rows, b = by_kind(t["rows"]), by_kind(t["bytes"])
         o = t["rows"].get("out", 0)
         fresh = t["compressions_a_unit"] - CR.REUSED * sum(rows.values())
-        out.append(Unit(canonical(lab), t["units"], **rows, out=o, out_bytes=t["bytes"].get("out", 0),
-                        x=fresh - CR.FRESH_EXTRA * o, **{f"{k}_bytes": v for k, v in b.items()}))
-    return out
+        u = Unit(canonical(lab), 0, **rows, out=o, out_bytes=t["bytes"].get("out", 0), x=fresh - CR.FRESH_EXTRA * o,
+                 **{f"{k}_bytes": v for k, v in b.items()})
+        out[u] = out.get(u, 0) + t["units"]
+    return [replace(u, n=n) for u, n in out.items()]
 
 
 def kv_bytes(D: int) -> int:
@@ -519,8 +520,8 @@ def _slot_definition(lab: str, cls: WindowClass) -> object:
     none, which its rows don't read)."""
     fam, s = CS.statics(lab)
     if fam == CS.SCAN:
-        return SS.bridge(cls.scan, cls.prompt)
-    make = {CS.FEED: IO.TokenFeed, CS.COLLECT: IO.SelectCollect, CS.ENTRY: IO.SelectEntry}[fam]
+        return SS.bridge(cls.scan, cls.prompt)[0]
+    make = {CS.FEED: IO.TokenFeed, "TokenFeed_v2": IO.TokenFeedV2, CS.COLLECT: IO.SelectCollect, CS.ENTRY: IO.SelectEntry}[fam]
     return bind(make, **s, **({"STOP": ()} if fam == CS.ENTRY else {}))
 
 
@@ -566,52 +567,12 @@ def project(census: dict, slots: int, prompt: int, outputs: int, target: str = "
         raise ValueError(f"the probe's token selects are group units of {sorted(groups)} logits, not one count")
     out = []
     for u in rest:
-        lab, n = CS.projected(u.label, u.n, at, to, CS.label(SS.bridge(to.scan, to.prompt)))
+        lab, n = CS.projected(u.label, u.n, at, to, CS.label(SS.bridge(to.scan, to.prompt)[0]))
         if CS.placed(u.label, 1, at.positions) is not None:
             u = _slot_unit(u, lab, at, to, next(iter(groups), None))
         out.append(replace(u, label=lab, n=slots * n))
     cls = {"slots": slots, "prompt": prompt, "outputs": outputs, "positions": to.positions}
     return out, replace(heads, S=slots, P=to.positions), cls
-
-
-def position_layout(rest: list[Unit], heads: Heads, levers: frozenset[str], T: int) -> dict:
-    """One slot's output rows at position T under ``levers`` as a `commit_slots` step layout (`slots._layout_json`'s form,
-    for ``step.py time`` at ``--slots S``): a group a template, one tensor of its units' bytes, each unit its rows, a unit's
-    bytes split evenly over its rows (the census keeps a unit's total, not each row's). A template outside attention is at
-    every position as often, a slot's where it places it (`class_size.placed`). No lever but ``P``, whose shared rows are
-    another layout (the H200 demo's `window.shared_layout`, in history at `5c095bb4ab70`), changes a template's output rows
-    outside attention."""
-    if "P" in levers:
-        raise ValueError("P's shared rows are FAMILIES' shared-row layout (the H200 demo's window.shared_layout), not this one")
-    S, P, BN = heads.S, heads.P, EXACT_KEYS if "L1" in levers else heads.BN
-    here = []
-    for u in rest:
-        k = CS.placed(u.label, T, P)
-        if k is None:
-            k, r = divmod(u.n, S * P)
-            if r:
-                raise ValueError(f"{u.n} {u.label} units are not a fixed count at each of {S} × {P} positions")
-        here.append((u, k))
-    nb, nvis = heads.blocks_at(T, BN)
-    one = replace(heads, S=1, P=T, BN=BN)
-    for u in one.units(BN=BN, packed="L3b" in levers):
-        fam, s = CS.statics(u.label)
-        k = heads.H * (nb - 1) if fam == heads.block else heads.H if fam == END or s["NVIS"] == nvis else 0
-        here.append((u, k))
-    groups = []
-    for u, k in here:
-        if not k or not u.out:
-            continue
-        sizes = [u.out_bytes // u.out + (j < u.out_bytes % u.out) for j in range(u.out)]
-        units, at = [], 0
-        for _ in range(k):
-            unit = []
-            for b in sizes:
-                unit.append([[0, at, b]])
-                at += b
-            units.append(unit)
-        groups.append({"sources": [at], "units": units})
-    return {"name": f"window_cost {S} x {P} at T {T}, levers {','.join(sorted(levers)) or 'none'}", "groups": groups}
 
 
 #: the plan's order, each step stacked on those before it: exactness (no pad pass), the registration, the rows' layout
@@ -752,24 +713,12 @@ def main(argv: list[str] | None = None) -> int:
                      "writing its test files into SCRATCH, and price the registration at them")
     cpu.add_argument("--cpu-rates", default=None, metavar="FILE", help="price the registration at an earlier --out's rates")
     ap.add_argument("--measure-mib", type=int, default=256, help="MiB each of --measure-cpu's rates is measured over")
-    ap.add_argument("--layout", nargs=2, default=None, metavar=("T,T,...", "DIR"), help="write one slot's output rows at "
-                    "each position T as a commit_slots layout, DIR/pos<T>.json (`position_layout`), for step.py time")
-    ap.add_argument("--layout-levers", default="L1", help="the levers the layouts are under, comma-separated (default L1)")
     ap.add_argument("--stream", default=None, metavar="SIZING", help="price serving's own stream commit (`stream`) at this arena "
                     "sizing record's widths, or a fixture's under \"sizing\" (Llama-3.2-1B's: "
                     "tests/adapters/vllm/tests/pipeline/fixtures/admission/b16.json)")
     ap.add_argument("--out", default=None)
     a = ap.parse_args(argv)
     to = tuple(int(v) for v in a.project.split(",")) if a.project else None
-    if a.layout:
-        census = json.loads(Path(a.census).read_text())
-        rest, heads = (project(census, *to[:3], a.target, *to[3:])[:2] if to else
-                       split(units_of(census), census["class"], a.target))
-        levers, d = frozenset(v for v in a.layout_levers.split(",") if v), Path(a.layout[1])
-        d.mkdir(parents=True, exist_ok=True)
-        for T in (int(v) for v in a.layout[0].split(",")):
-            (d / f"pos{T}.json").write_text(json.dumps(position_layout(rest, heads, levers, T)) + "\n")
-        return 0
     rates = (measure_cpu(Path(a.measure_cpu), a.measure_mib) if a.measure_cpu else
              json.loads(Path(a.cpu_rates).read_text())["cpu"] if a.cpu_rates else None)
     sizing = json.loads(Path(a.stream).read_text()) if a.stream else None

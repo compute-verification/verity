@@ -29,9 +29,9 @@ from collections.abc import Sequence
 import numpy as np
 from verity.circuits.kernels import tc as K
 from verity.circuits.silicon import fp32
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_inert_work as D
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_kw as P
+from verity.protocols.accounting.compute.pouw.prover.schemes import pearl_c as C
+from verity.protocols.accounting.compute.pouw.prover.schemes import pearl_c_inert_work as D
+from verity.protocols.accounting.compute.pouw.prover.schemes import pearl_kw as P
 
 _TOP = 0x7F7FFFFF
 _NEG_ZERO = np.uint32(0x80000000)
@@ -294,9 +294,9 @@ def _salt_dead(alpha: int, x: np.ndarray, beta: int, device) -> np.ndarray:
 
 
 def _cut(acc: np.ndarray, a: np.ndarray, b: np.ndarray, device) -> np.ndarray:
-    """`pearl_c_inert_work.cut_flags` on every lane of one atom of one group: a product is cut when its significand on the
-    adder, shifted right by its distance below the largest exponent of the lane's nonzero products and accumulator (at
-    least the floor), is 0."""
+    """`pearl_c_inert_work.cut_flags` on every lane of one atom of one group: a product is cut when it is zero, or when its
+    significand on the adder, shifted right by its distance below the largest exponent of the lane's nonzero products and
+    accumulator (at least the floor), is 0."""
     atom = device.atom
     if len(atom.groups) != 1 or atom.width < 7 or ((a & 0x7F) == 0x7F).any() or ((b & 0x7F) == 0x7F).any():
         raise _Scalar
@@ -306,7 +306,8 @@ def _cut(acc: np.ndarray, a: np.ndarray, b: np.ndarray, device) -> np.ndarray:
     f, m = (acc.astype(np.int64) >> 23) & 0xFF, acc.astype(np.int64) & 0x7FFFFF
     e_acc = np.where((f == 0) & (m == 0), atom.zero_exponent, np.where(f == 0, -126, f - 127))
     top = np.maximum(np.maximum(np.where(sig > 0, e, atom.zero_exponent).max(axis=1), e_acc), atom.zero_exponent)
-    return ((sig << (atom.width - 7)) >> np.minimum(top[:, None] - e, 62)) == 0
+    # a zero product's nominal e may lie above top, a negative shift count
+    return (sig == 0) | (((sig << (atom.width - 7)) >> np.clip(top[:, None] - e, 0, 62)) == 0)
 
 
 def _mends(ends_a: list, ends_b: list, device) -> int:

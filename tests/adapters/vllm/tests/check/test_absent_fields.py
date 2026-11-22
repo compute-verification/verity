@@ -14,22 +14,21 @@ from typing import Any
 
 import numpy as np
 import pytest
-
-from tests.check.test_gates_fixtures import gate, passing_artifacts, query_use_doc
-from tests.check.test_oracle_compare import make_bmap, make_match, reader
-from tests.check.test_oracle_compare_v2_producers import gemma_like_program
-from tests.check.test_verdict import CLASSES, _base
-from tests.check.test_weights_of_record import write_safetensors
 from verity_vllm.check import checkpoint_index as CI
 from verity_vllm.check import cublas_route_pin, fp8_moe_scales
 from verity_vllm.check import fp8_ue8m0 as U
 from verity_vllm.check import gates as G
 from verity_vllm.check import oracle_compare as OC
 from verity_vllm.check import producers as PR
-from verity_vllm.check import verdict as V
 from verity_vllm.check.component_programs import post_load_tensors
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.query import program_view
+
+from tests.check.test_gates_fixtures import gate, passing_artifacts, query_use_doc
+from tests.check.test_oracle_compare import make_bmap, make_match, reader
+from tests.check.test_oracle_compare_v2_producers import gemma_like_program
+from tests.check.test_verdict import _base
+from tests.check.test_weights_of_record import write_safetensors
 
 NO_BLOCK_SIZE = [{}, {"quantization_config": None}, {"quantization_config": {}}]
 PINNED = "GemmF32Out_v1"
@@ -97,34 +96,12 @@ def test_the_pinned_families_are_counted_from_the_population_and_the_unreplayabl
     assert families({"population": {"by_family": {PINNED: 2}}, "unreplayable": [{"family": PINNED, "n": 3}]}) == {PINNED: 5}
 
 
-@pytest.mark.parametrize("doc", [{}, {"checks": None}, {"checks": []}])
-def test_a_verdict_document_without_checks_reads_as_no_checks(doc):
-    v = V.CommitChecks.from_dict({"outcome": V.PASS, **doc})
-    assert v.checks == [] and v.outcome == V.PASS
-
-
-def test_a_wrapper_result_without_a_program_block_states_no_correspondence_digest():
-    digest = "c" * 64
-    silent: dict[str, Any] = {"a": None, "b": {}, "c": {"program": None}, "d": {"program": {}}, "e": {"program": {"correspondence_digest": None}}}
-    assert V.correspondence_of_build(None, result_jsons=silent) == (None, "absent", {})
-    assert V.correspondence_of_build(None, result_jsons=None) == (None, "absent", {})
-    stated = {**silent, "request": {"program": {"correspondence_digest": digest}}}
-    assert V.correspondence_of_build(None, result_jsons=stated) == (digest, "result.json:request", {"request": digest})
-
-
 def instrumented(pair: int, commit_pass: Any) -> dict[str, Any]:
     """An instrumented run's line of runs.jsonl whose Commit record states `commit_pass`, or leaves it out."""
     commit = _base()
     if commit_pass is not ABSENT:
         commit["commit_pass"] = commit_pass
     return {"arm": "instrumented", "pair": pair, "tokens_equal_ref": True, "commit": commit}
-
-
-@pytest.mark.parametrize("stated, outcome", [((True, True), V.PASS), ((True, False), V.FAIL), ((True, ABSENT), V.PASS), ((True, None), V.PASS)])
-def test_a_verdict_document_that_states_no_decision_takes_the_runs_own_where_every_run_states_one(stated, outcome):
-    v = V.build([instrumented(i, p) for i, p in enumerate(stated)], {"required_classes": list(CLASSES)})
-    mismatch = ["RECONSTRUCTION MISMATCH: recorded commit_pass=False but the rule-by-rule outcome is PASS; the recorded decision stands"]
-    assert (v.outcome, v.notes) == (outcome, mismatch if outcome == V.FAIL else [])
 
 
 @pytest.fixture

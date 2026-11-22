@@ -37,7 +37,7 @@ url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
 [tool.uv.workspace]
-members = ["tools/research", "tests/tools/research", "tools/config", "tests/tools/config", "infra/cluster", "tests/infra/cluster", "infra/ops", "tests/infra/ops", "benchmarks/numerical", "tests/benchmarks/numerical", "benchmarks/harness", "tests/benchmarks/harness", "adapters/vllm", "tests/adapters/vllm/tests", "tests/infra/slack-events", "verity/protocols/proofs/flock/prover", "tests/verity/protocols/proofs/flock/prover", "tools/verity/circuit_check", "tests/tools/verity/circuit_check", "tools/check", "tests/tools/check", "tests/tools/verity/lean", "tests/calibration/native_peak", "tests/calibration/tc_probe", "tests/calibration/tc_probe_fp4", "tests/benchmarks/commitments", "tests/benchmarks/pouw", "calibration/machine_model", "tests/calibration/machine_model", "tests/benchmarks/network_traces", "tests/benchmarks/network_e2e", "tests/calibration/attester_timing", "tools/verity/cli", "tests/tools/verity/cli", "tools/verity/graph", "tests/tools/verity/graph", "tools/difftest", "tests/tools/difftest", "tests/verity/protocols/resource_accounting/memory/pous/verifier/check", "tests/verity/commitments/identity", "tests/verity/protocols/compose/verifier/lean", "tests/verity/circuits/evaluate", "tests/verity/protocols/proofs/recursion/verifier/zk_server", "tests/verity/protocols/proofs/spot/verifier/lean", "tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/window", "tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check", "tests/verity/protocols/resource_accounting/memory/pous/attester/lean", "benchmarks/pouw/exact_kit", "tests/benchmarks/pouw/exact_kit", "benchmarks/proof_throughput", "tests/benchmarks/proof_throughput", "tests/benchmarks/harness/specs", "adapters/torch", "tests/adapters/torch/tests"]
+members = ["tools/research", "tests/tools/research", "tools/config", "tests/tools/config", "infra/cluster", "tests/infra/cluster", "infra/ops", "tests/infra/ops", "benchmarks/numerical", "tests/benchmarks/numerical", "benchmarks/harness", "tests/benchmarks/harness", "adapters/vllm", "tests/adapters/vllm/tests", "tests/infra/slack-events", "verity/protocols/proof/flock/prover", "tests/verity/protocols/proof/flock/prover", "tools/verity/circuit_check", "tests/tools/verity/circuit_check", "tools/check", "tests/tools/check", "tests/tools/verity/lean", "tests/calibration/native_peak", "tests/calibration/tc_probe", "tests/calibration/tc_probe_fp4", "tests/benchmarks/commitments", "tests/benchmarks/pouw", "calibration/machine_model", "tests/calibration/machine_model", "tests/benchmarks/network_traces", "tests/benchmarks/network_e2e", "tests/calibration/attester_timing", "tools/verity/cli", "tests/tools/verity/cli", "tools/verity/graph", "tests/tools/verity/graph", "tools/difftest", "tests/tools/difftest", "tests/verity/protocols/accounting/memory/pous/verifier/check", "tests/verity/commitments/identity", "tests/verity/protocols/run/verifier/lean", "tests/verity/circuits/evaluate", "tests/verity/protocols/proof/recursion/verifier/zk_server", "tests/verity/protocols/proof/spot/verifier/lean", "tests/verity/protocols/accounting/compute/pouw/verifier/lean/window", "tests/verity/protocols/accounting/compute/pouw/verifier/lean/check", "tests/verity/protocols/accounting/memory/pous/attester/lean", "benchmarks/pouw/exact_kit", "tests/benchmarks/pouw/exact_kit", "benchmarks/proof_throughput", "tests/benchmarks/proof_throughput", "tests/benchmarks/harness/specs", "adapters/torch", "tests/adapters/torch/tests", "library/datasets", "tests/library/datasets"]
 exclude = ["infra/slack-events/service"]               # a Vercel project's root, which Vercel installs on its own
 
 [tool.uv.sources]
@@ -59,6 +59,7 @@ verity-exact-kit = { workspace = true }
 verity-proof-throughput = { workspace = true }
 verity-torch = { workspace = true }
 verity-machine-model = { workspace = true }
+input-datasets = { workspace = true }
 
 [dependency-groups]
 # pyyaml: the tests of the Job templates (research/pods/nebius/sky), which parse them with it; without it the modules that need it skip.
@@ -80,16 +81,15 @@ pythonpath = ["."]   # the repository root before tests/, whose tests/verity/ wo
 untraced = [
     "tests/lint/test_device_figures.py",
     "tests/lint/test_repo_env_reads.py",
+    "tests/lint/test_readme_pattern.py",
     "tests/lint/test_repo_lane_text.py",
     "tests/lint/test_repo_retired_terms.py",
     "tests/lint/test_repo_ruff.py",
     "tests/lint/test_repo_silent_excepts.py",
     "tests/test_agent_guard_hook.py",
-    "tests/test_benchmarks_index.py",
     "tests/test_boundaries.py",
     "tests/test_cli_conventions.py",
     "tests/test_doc_paths.py",
-    "tests/test_documented_commands.py",
     "tests/test_domains.py",
     "tests/test_flock_json.py",
     "tests/test_flock_literals.py",
@@ -112,9 +112,7 @@ untraced = [
     "tests/test_provider_names.py",
     "tests/test_pythonpath_entries.py",
     "tests/test_repository.py",
-    "tests/test_retired_terms.py",
     "tests/test_seed_ports.py",
-    "tests/test_shell_verifier_env.py",
     "tests/test_tree.py",
     "tests/test_verifier_cost.py",
     "tests/test_vllm_boundary.py",
@@ -122,5 +120,5 @@ untraced = [
     "tests/test_wipe_counted_callers.py",
 ]
 inputs = [".", "AGENTS.md"]   # its lints read the docs: a listed `.md` keys its Markdown too (`suites.markdown`)
-testpaths = ["tests", "tests/tools/research", "tests/infra/ops", "tests/calibration/native_peak", "tests/verity", "tests/benchmarks/numerical", "tests/verity/protocols/proofs/flock/prover", "tests/tools/verity/circuit_check", "tests/tools/verity/lean", "verity/protocols", "tests/verity/circuits/ops", "tests/benchmarks/pouw"]
+testpaths = ["tests", "tests/tools/research", "tests/infra/ops", "tests/calibration/native_peak", "tests/verity", "tests/benchmarks/numerical", "tests/verity/protocols/proof/flock/prover", "tests/tools/verity/circuit_check", "tests/tools/verity/lean", "verity/protocols", "tests/verity/circuits/ops", "tests/benchmarks/pouw"]
 markers = ["slow: full rechecks that take minutes (bench-instances full recheck); opt in with `--slow`"]

@@ -18,8 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-DIRS = ("benchmarks/harness", "benchmarks/overhead", "benchmarks/prove", "benchmarks/exfiltration", "benchmarks/recursion_e2e",
-        "benchmarks/recursion_figures")
+DIRS = ("benchmarks/harness", "benchmarks/overhead", "benchmarks/prove", "benchmarks/exfiltration", "benchmarks/recursion_e2e")
 PUBLIC_API = "tests/test_vllm_public_api.py"
 #: files whose `verity_vllm` strings are data, not imports, each with why
 NOT_SCANNED = {"tests/benchmarks/harness/test_adapter.py": "this file: its scan's examples"}

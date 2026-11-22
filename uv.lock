@@ -24,6 +24,8 @@ members = [
     "cluster",
     "cluster-tests",
     "core-identity",
+    "input-datasets",
+    "input-datasets-tests",
     "memory-attester-lean",
     "pous-verifier",
     "research",
@@ -681,6 +683,22 @@ wheels = [
 ]
 
 [[package]]
+name = "input-datasets"
+version = "0.1.0"
+source = { editable = "library/datasets" }
+
+[[package]]
+name = "input-datasets-tests"
+version = "0.0.0"
+source = { virtual = "tests/library/datasets" }
+dependencies = [
+    { name = "input-datasets" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "input-datasets", editable = "library/datasets" }]
+
+[[package]]
 name = "jinja2"
 version = "3.1.6"
 source = { registry = "https://pypi.org/simple" }
@@ -1057,7 +1075,7 @@ wheels = [
 [[package]]
 name = "memory-attester-lean"
 version = "0.0.0"
-source = { virtual = "tests/verity/protocols/resource_accounting/memory/pous/attester/lean" }
+source = { virtual = "tests/verity/protocols/accounting/memory/pous/attester/lean" }
 dependencies = [
     { name = "hypothesis" },
     { name = "verity" },
@@ -1492,7 +1510,7 @@ wheels = [
 [[package]]
 name = "pous-verifier"
 version = "0.1.0"
-source = { virtual = "tests/verity/protocols/resource_accounting/memory/pous/verifier/check" }
+source = { virtual = "tests/verity/protocols/accounting/memory/pous/verifier/check" }
 dependencies = [
     { name = "hypothesis" },
     { name = "verity" },
@@ -2367,7 +2385,7 @@ dev = [
     { name = "verity-cli", editable = "tools/verity/cli" },
     { name = "verity-config", editable = "tools/config" },
     { name = "verity-difftest", editable = "tools/difftest" },
-    { name = "verity-flock", editable = "verity/protocols/proofs/flock/prover" },
+    { name = "verity-flock", editable = "verity/protocols/proof/flock/prover" },
     { name = "verity-numerical", editable = "benchmarks/numerical" },
     { name = "verity-ops", editable = "infra/ops" },
     { name = "verity-proof-throughput", editable = "benchmarks/proof_throughput" },
@@ -2402,7 +2420,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "verity-config", editable = "tools/config" },
-    { name = "verity-flock", editable = "verity/protocols/proofs/flock/prover" },
+    { name = "verity-flock", editable = "verity/protocols/proof/flock/prover" },
     { name = "verity-vllm", editable = "adapters/vllm" },
 ]
 
@@ -2460,7 +2478,7 @@ dependencies = [
 requires-dist = [
     { name = "numpy" },
     { name = "verity", editable = "." },
-    { name = "verity-flock", editable = "verity/protocols/proofs/flock/prover" },
+    { name = "verity-flock", editable = "verity/protocols/proof/flock/prover" },
     { name = "verity-numerical", editable = "benchmarks/numerical" },
     { name = "verity-vllm", editable = "adapters/vllm" },
 ]
@@ -2548,7 +2566,7 @@ requires-dist = [{ name = "verity-config", editable = "tools/config" }]
 [[package]]
 name = "verity-core-composition"
 version = "0.0.0"
-source = { virtual = "tests/verity/protocols/compose/verifier/lean" }
+source = { virtual = "tests/verity/protocols/run/verifier/lean" }
 dependencies = [
     { name = "verity-difftest" },
 ]
@@ -2564,7 +2582,7 @@ source = { virtual = "tests/verity/circuits/evaluate" }
 [[package]]
 name = "verity-core-sampled-proofs"
 version = "0.0.0"
-source = { virtual = "tests/verity/protocols/proofs/spot/verifier/lean" }
+source = { virtual = "tests/verity/protocols/proof/spot/verifier/lean" }
 dependencies = [
     { name = "hypothesis" },
 ]
@@ -2575,7 +2593,7 @@ requires-dist = [{ name = "hypothesis", specifier = ">=6.100" }]
 [[package]]
 name = "verity-core-zk-server"
 version = "0.1.0"
-source = { virtual = "tests/verity/protocols/proofs/recursion/verifier/zk_server" }
+source = { virtual = "tests/verity/protocols/proof/recursion/verifier/zk_server" }
 dependencies = [
     { name = "hypothesis" },
     { name = "verity-difftest" },
@@ -2642,7 +2660,7 @@ requires-dist = [{ name = "verity-exact-kit" }]
 [[package]]
 name = "verity-flock"
 version = "0.1.0"
-source = { editable = "verity/protocols/proofs/flock/prover" }
+source = { editable = "verity/protocols/proof/flock/prover" }
 dependencies = [
     { name = "blake3" },
     { name = "numpy" },
@@ -2668,7 +2686,7 @@ provides-extras = ["bench"]
 [[package]]
 name = "verity-flock-tests"
 version = "0.0.0"
-source = { virtual = "tests/verity/protocols/proofs/flock/prover" }
+source = { virtual = "tests/verity/protocols/proof/flock/prover" }
 dependencies = [
     { name = "verity-flock", extra = ["bench"] },
 ]
@@ -2866,12 +2884,12 @@ provides-extras = ["research", "exact-kit"]
 [[package]]
 name = "verity-pouw-verifier-difftest"
 version = "0.0.0"
-source = { virtual = "tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check" }
+source = { virtual = "tests/verity/protocols/accounting/compute/pouw/verifier/lean/check" }
 
 [[package]]
 name = "verity-pouw-window-difftest"
 version = "0.0.0"
-source = { virtual = "tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/window" }
+source = { virtual = "tests/verity/protocols/accounting/compute/pouw/verifier/lean/window" }
 
 [[package]]
 name = "verity-proof-throughput"
@@ -2890,7 +2908,7 @@ requires-dist = [
     { name = "numpy" },
     { name = "research", editable = "tools/research" },
     { name = "verity", editable = "." },
-    { name = "verity-flock", editable = "verity/protocols/proofs/flock/prover" },
+    { name = "verity-flock", editable = "verity/protocols/proof/flock/prover" },
     { name = "verity-numerical", editable = "benchmarks/numerical" },
 ]
 
@@ -3000,6 +3018,7 @@ name = "verity-vllm"
 version = "0.1.0"
 source = { editable = "adapters/vllm" }
 dependencies = [
+    { name = "input-datasets" },
     { name = "numpy" },
     { name = "verity" },
     { name = "verity-config" },
@@ -3016,6 +3035,7 @@ torch = [
 
 [package.metadata]
 requires-dist = [
+    { name = "input-datasets", editable = "library/datasets" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "research", marker = "extra == 'research'", editable = "tools/research" },
     { name = "torch", marker = "extra == 'torch'", specifier = ">=2.4" },

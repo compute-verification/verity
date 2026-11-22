@@ -1,5 +1,6 @@
 """The Pearl-C device path's host helpers (`pouw_pearl_c_device`): the epoch of the challenger's salt coin, held in this
-process or a live session's (`epoch_of`), device byte buffers and their uploads, the current stream's
+process or a live session's (`epoch_of`), device byte buffers and their uploads, the hm96 salts of a pass (`fresh_into`,
+`PassSalts`), the current stream's
 handle, each call's keys by native SHA-512 (`_Keys`, byte for byte `call_keys`), the pinned upload ring (`_Uploads`), the keys
 kept on the device by call (`_KeyTable`), the streams a run owns (`_Lane`) and the driver calls a lane graph's replay makes on
 their handles (`_Driver`), and a retained pass's files (`_write`, `write_behind`, `write_manifest`) and its
@@ -15,16 +16,18 @@ import threading
 from collections import deque
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
-from contextlib import nullcontext
-from functools import partial
+from functools import cache, partial
 from pathlib import Path
 from typing import Any, ClassVar
 
 import numpy as np
 from verity.commitments import RangeIndexedDomain
+from verity.commitments.cuda.salt_stream import engine as SX
 from verity.commitments.merkle import domain_message
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
-from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
+from verity.commitments.randomness import Key, derive
+from verity.protocols.accounting.compute.pouw.prover.schemes import pearl_c as C
+from verity.protocols.accounting.compute.pouw.prover.serving import device as pouw_device
+from verity.protocols.accounting.compute.pouw.verifier.audit import (
     HM96,
     HM96_SALT,
     activation_binding,
@@ -32,7 +35,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     rows_domain,
 )
 
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.manifest import (  # noqa: F401 - kept importable here, as callers read them
+from verity.protocols.accounting.compute.pouw.prover.serving.pearl_c.manifest import (  # noqa: F401 - kept importable here, as callers read them
     SaltCoins,
     SaltOpening,
     _entry,
@@ -56,6 +59,16 @@ ARENA_RINGS = 4
 _writers: tuple[int, ThreadPoolExecutor] | None = None     # the pool and the process it was made in
 _finisher: tuple[int, ThreadPoolExecutor] | None = None    # the thread `behind` runs on, and its process
 _copiers: dict[tuple[int, int | None], Any] = {}           # each (process, device)'s `_Copies`
+#: the domain the pass's salt stream's key is derived under (`verity.commitments.randomness.derive`), and the stream's index
+SALT_STREAM, SALT_INDEX = "verity/pearl-c/hm96-salts/v1", "s"
+#: where the card's salt fill (`salt_stream`) is built
+FILL_BUILD = Path.home() / ".cache" / "verity" / "salt_stream"
+#: the bytes SHA-512 hashes for every block of every pass's salts: one length, whatever the key or counter
+SALT_MESSAGE_BYTES = 87
+if HM96_SALT != SX.LEAF_BYTES:
+    raise ImportError(f"an hm96 salt is {HM96_SALT} bytes, the stream's leaf {SX.LEAF_BYTES}")
+if SX.message_bytes(SALT_INDEX) != SALT_MESSAGE_BYTES:
+    raise ImportError(f"a salt block hashes {SX.message_bytes(SALT_INDEX)} bytes, not {SALT_MESSAGE_BYTES}")
 
 
 def torch_uint8() -> Any:
@@ -79,17 +92,81 @@ def _put(t: Any, data: bytes) -> None:
     t[:len(data)].copy_(host.pin_memory() if t.is_cuda else host, non_blocking=t.is_cuda)
 
 
-def fresh_into(dst: Any, n: int, raw: int | None = None) -> None:
-    """`n` leaves' hm96 salts into device bytes `dst`, `HM96_SALT` bytes a leaf in leaf order, fresh from the operating
-    system and never derived; on raw stream `raw` where given (a lane's or a replay's), else the current stream.  The pinned
-    staging copy is torch's to keep alive until the copy is done."""
+class SaltsRefused(RuntimeError):
+    """A fill of a pass's salts refused by name: ``NO_OPEN_PASS`` (no pass named, or its pass has ended and dropped its
+    key) or ``OTHER_PROCESS`` (a pass a forked process inherited, whose counters its parent goes on using)."""
+
+    def __init__(self, name: str, why: str) -> None:
+        self.name = name
+        super().__init__(f"{name}: {why}")
+
+
+class PassSalts:
+    """One pass's hm96 salts: `Key.stream` at `SALT_INDEX` under a key `derive` makes from 32 fresh operating-system bytes
+    at the pass's first fill, each fill the leaves after the last's, so no two leaves share a counter.  `drop`, at the
+    pass's end or the begin that replaces it, clears the key, and every fill after it is refused (`SaltsRefused`).  The
+    key is never written or sent.  Hiding of these leaves is no better than the key's 256 bits (hm96 PROTOCOL section 3)."""
+
+    def __init__(self) -> None:
+        self.lock, self.pid = threading.Lock(), os.getpid()
+        self.key: Key | None = None
+        self.next, self.open = 0, True
+
+    def check(self) -> None:
+        """Refuses (`SaltsRefused`) where a fill would be refused, without taking a leaf."""
+        with self.lock:
+            self._refuse()
+
+    def _refuse(self) -> None:
+        if not self.open:
+            raise SaltsRefused("NO_OPEN_PASS", "the pass has ended and dropped its key: begin a pass")
+        if self.pid != os.getpid():
+            raise SaltsRefused("OTHER_PROCESS", "a forked process fills no salts of its parent's pass: begin a pass")
+
+    def take(self, n: int) -> tuple[Key, int]:
+        with self.lock:
+            self._refuse()
+            if self.key is None:
+                self.key = derive(os.urandom(32), SALT_STREAM, {})
+            first = self.next
+            if first + n > SX.LEAVES_MAX:
+                raise RuntimeError("a pass's salts are past its key's stream: begin a pass for a new key")
+            self.next = first + n
+            return self.key, first
+
+    def drop(self) -> None:
+        with self.lock:
+            self.key, self.open = None, False
+
+
+@cache
+def _fill_lib_at(index: int) -> ctypes.CDLL:
     import torch
-    host = torch.frombuffer(bytearray(os.urandom(HM96_SALT * n)), dtype=torch.uint8)
+    from verity_torch.pouw.row_table_device import arch
+    return SX.device_lib(FILL_BUILD, arch(torch.cuda.get_device_name(index)), pouw_device.nvcc())
+
+
+def fill_lib(device: Any) -> ctypes.CDLL:
+    """The card's salt fill (`salt_stream`) for CUDA device `device`, built at the first call, loaded once a process."""
+    import torch
+    return _fill_lib_at(device.index if device.index is not None else torch.cuda.current_device())
+
+
+def fresh_into(dst: Any, n: int, raw: int | None = None, *, salts: PassSalts | None) -> None:
+    """`n` leaves' hm96 salts into device bytes `dst`, `HM96_SALT` bytes a leaf in leaf order: the next `n` leaves of the
+    open pass's keyed stream (`salts`, its `PassSalts`), filled on the card on raw stream `raw` where given (a lane's or a
+    replay's), else the current stream; off the GPU, `Key.block`'s bytes.  No open pass, an ended one or a stream
+    capturing a graph is refused (`SaltsRefused`, `SX.Refused`)."""
+    if salts is None:
+        raise SaltsRefused("NO_OPEN_PASS", "a fill names the open pass's salts (`_Pass.salts`)")
+    key, first = salts.take(n)
     if not dst.is_cuda:
-        dst[:host.numel()].copy_(host)
+        import torch
+        data = b"".join(key.block(SALT_INDEX, c) for c in range(3 * first, 3 * (first + n)))
+        dst[:len(data)].copy_(torch.frombuffer(bytearray(data), dtype=torch.uint8))
         return
-    with torch.cuda.stream(torch.cuda.ExternalStream(raw, device=dst.device)) if raw is not None else nullcontext():
-        dst[:host.numel()].copy_(host.pin_memory(), non_blocking=True)
+    SX.fill(fill_lib(dst.device), dst[:HM96_SALT * n].view(n, HM96_SALT), key, SALT_INDEX, first,
+            stream=raw if raw is not None else _stream(dst.device), length=SALT_MESSAGE_BYTES)
 
 
 def _constants(device: Any) -> Any:

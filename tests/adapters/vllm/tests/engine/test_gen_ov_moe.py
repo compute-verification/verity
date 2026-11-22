@@ -1,6 +1,6 @@
 """The pair-major MoE definitions (`verity_vllm.definitions.registry.moe`), the `MoEFusedExperts`
 recognizer (positive and negative cases on synthetic events shaped exactly like the pinned vLLM's `vllm.moe_forward`
-body as recorded on OLMoE).  The recorded kernel cases and captures are `test_gen_ov_moe_of_record`."""
+body as recorded on OLMoE)."""
 
 from __future__ import annotations
 

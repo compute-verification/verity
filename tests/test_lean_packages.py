@@ -96,7 +96,7 @@ def test_one_mathlib():
 # their nontrivial witnesses; their honest ones are due with the two-stage layout and the deployed check pinning CheckedUnique;
 # Flock.SecurityProofs.SessionLoopZKAnyDeployed carries its honest one, and its nontrivial one is due with the lemma
 # restated at the deployed session its domain hypothesis fixes
-UNWITNESSED = {"security": 194, "security/Properties": 172, "verity/protocols/proofs/flock/verifier": 7}
+UNWITNESSED = {"security": 191, "security/Properties": 169, "verity/protocols/proof/flock/verifier": 7}
 
 
 def test_the_unwitnessed_list_only_shrinks():
@@ -111,7 +111,7 @@ def test_the_unwitnessed_list_only_shrinks():
 #: the count of each lock's `unwitnessed` entries that exempt both witnesses with no reason (a bare hash, or {type_hash,
 #: unfolded_hash}), carried from before {type_hash, why} was the form: each owner gives its guarantee a witness, a
 #: reason or its removal from the listed guarantees
-UNREASONED = {"security": 185, "security/Properties": 162, "verity/protocols/proofs/flock/verifier": 7}
+UNREASONED = {"security": 180, "security/Properties": 150, "verity/protocols/proof/flock/verifier": 7}
 
 
 def test_no_exemption_is_written_without_a_reason():
@@ -335,7 +335,7 @@ def test_every_open_conjecture_names_a_test_that_exists():
 #: the 398 premises of the lemmas and completeness theorems the lock stopped listing and the guarantees deleted with the
 #: falsified conjectures they rest on; a renamed or restated premise counts twice, under both texts, until `--update`
 #: drops the one no tree prints
-INLINE = {"security": 837, "security/Properties": 132, "verity/protocols/proofs/flock/verifier": 6}
+INLINE = {"security": 829, "security/Properties": 132, "verity/protocols/proof/flock/verifier": 6}
 
 
 def test_the_inline_list_only_shrinks():
@@ -351,7 +351,7 @@ def test_the_inline_list_only_shrinks():
 #: how far a cap here may stand above its count ({"CAP key": room}): changes queued when the caps came to equal
 #: their counts moved the counts and not the caps, so each room is the gap between the queued count and `main`'s, and each
 #: cap holds on both. Once those changes have landed, a cap and its room come down to the count together.
-ROOM = {"INLINE security": 3, "INLINE security/Properties": 20, "RETIRED_NAMES draw": 59, "RETIRED_NAMES wrong": 10, "OVERLONG security/Proofs": 275, "RETIRED_NAMES escape": 9, "RETIRED_NAMES law": 9, "TREES_EXCEPT security": 1, "OVERLONG verity/protocols/resource_accounting/compute/pouw/verifier/lean/check": 3, "OVERLONG verity/protocols/proofs/flock/verifier": 4, "IMPORT_ALL_USES security/Proofs": 1}
+ROOM = {"INLINE security": 3, "INLINE security/Properties": 20, "OVERLONG security/Proofs": 275, "TREES_EXCEPT security": 1, "OVERLONG verity/protocols/accounting/compute/pouw/verifier/lean/check": 3, "OVERLONG verity/protocols/proof/flock/verifier": 4, "IMPORT_ALL_USES security/Proofs": 1}
 
 
 def test_the_caps_the_lock_run_repairs_are_the_files_drive_commits():
@@ -399,7 +399,7 @@ def _held(name: str, caps: dict[str, int], got: dict[str, int], what: str, fix: 
 #: the size of each lock's `trees.except`: the modules whose statements may read a definition of the proofs tree, almost
 #: all Flock's until its spec is extracted; a moved module keeps its exception, as an entry of its own where its new
 #: prefix also holds modules never excepted (`Proofs.Spot.Sampling`'s seven, moved from `Proofs.Flock.Soundness.Audit`)
-TREES_EXCEPT = {"security": 35}
+TREES_EXCEPT = {"security": 34}
 
 
 def test_the_trees_except_list_only_shrinks():
@@ -586,7 +586,7 @@ def test_the_spec_states_no_new_lemma():
 #: the lines a module may run to: one module is one unit of rebuild, so a long one costs every check and train its build
 LONG = 2000
 #: the lines past `LONG` of each package's modules, summed
-OVERLONG = {"security": 963, "security/Proofs": 53427, "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check": 282, "verity/protocols/proofs/flock/verifier": 725}
+OVERLONG = {"security": 963, "security/Proofs": 53427, "verity/protocols/accounting/compute/pouw/verifier/lean/check": 282, "verity/protocols/proof/flock/verifier": 690}
 
 
 def overlong(lines: dict[str, int]) -> dict[str, int]:
@@ -605,21 +605,17 @@ def test_no_long_module_grows():
           + "\n  ".join(f"{f}: {n} lines" for fs in long.values() for f, n in fs.items()))
 
 
-#: the Lean declarations whose own names carry each of the older names (`test_retired_terms.py`'s `LEAN_WORDS`)
-RETIRED_NAMES = {"draw": 1020, "law": 133, "escape": 98, "wrong": 130, "dampener": 37, "firewall": 26, "horizon": 31, "warden": 10, "tap": 19, "leg": 3}
-
-
 #: each `import all` of an in-tree module ({"FILE: MODULE": why}), those in the tree or queued when the rule came; an
 #: entry whose FILE the tree doesn't have waits for the queued change that adds it
 IMPORT_ALL: dict[str, str] = {
     "security/Proofs/Flock/Claims/Sampling/Select/Second.lean: Spot.Draw":
         "its proofs open `Spot.Draw`'s private `stratum?` and `natRanges` to read the stratified sampling design's strata",
-    "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/PouwVerifier/CreditOnce.lean: Spot.ChallengerSession":
+    "verity/protocols/accounting/compute/pouw/verifier/lean/check/PouwVerifier/CreditOnce.lean: Spot.ChallengerSession":
         "`pinnedChallengePhaseWith` restates `pinnedChallengePhase`, which reads the private `strOf`, and is held to it by "
         "`rfl`; a copy of `strOf` is another constant, so the `rfl` fails",
 }
 #: the entries of `IMPORT_ALL` whose FILE the tree has, per package
-IMPORT_ALL_USES = {"security/Proofs": 1, "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check": 1}
+IMPORT_ALL_USES = {"security/Proofs": 1, "verity/protocols/accounting/compute/pouw/verifier/lean/check": 1}
 
 
 def imports_all(files: dict[str, str], in_tree) -> list[str]:

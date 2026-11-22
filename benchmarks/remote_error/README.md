@@ -45,14 +45,14 @@ remote composite's error is the union bound over its subprotocols' errors (`Veri
   - (a) determined by the remote application's parameters, computed from the file:
     - `positions`, the commit strings a window's sample reads (Σ_p ratio_p): an **upper bound**, 2^(m_max − SLOT_LOG).
       The session proves one `--zk` table (`Verity.Sampled.LiveSpec.count`) of at most 2^m_max bits, m_max the largest m
-      `Flock.Zk.queries0` accepts (`verity/protocols/proofs/flock/verifier/Flock/Zk.lean`), and each row a sampled proof
+      `Flock.Zk.queries0` accepts (`verity/protocols/proof/flock/verifier/Flock/Zk.lean`), and each row a sampled proof
       block reads or writes takes an hm96 slot of 2^SLOT_LOG bits (`verity/commitments/periods/interface.py`). The exact
       count is K times the rows a sampled block reads, with K = ceil(NUM·N/DEN) by the remote application's sampling design
-      (`applications/remote.toml`) and at most MAX_ROWS rows a block. N, the class 4,27,2 circuit's proof blocks, is the output
+      (`applications/remote.toml`) and at most MAX_ROWS rows a block. N, the served class's circuit's proof blocks (`verity_vllm.inputs.serves.SERVES`), is the output
       of lowering it, which the tree doesn't hold; `--blocks N` takes it and gives min(the bound, K·MAX_ROWS).
     - `N` (the inner proof's), `innerN` at `Flock.Zk.PadLayout`'s largest length: `Flock/Zk.lean`, with the statement
       in `security/Proofs/Flock/Soundness/Discharge/ZkExec/Statements.lean`.
-    - `levels` and k₀: `verity/protocols/proofs/flock/verifier/Flock/Schedule.lean`; `queries`, the coin tree's rounds:
+    - `levels` and k₀: `verity/protocols/proof/flock/verifier/Flock/Schedule.lean`; `queries`, the coin tree's rounds:
       `Flock/Zk.lean`; `log_len`: `security/Proofs/Flock/Soundness/Discharge/ZkBind/Rate.lean`; `max_leaves`:
       `security/Properties/Verity/Game.lean`; `calls_mul`: `security/Proofs/Properties/Verity/Sampled/Instance.lean`.
     - `v`, `w`, `h` and the roots' calls (one opening's verification, one acceptance check, hashing one message,

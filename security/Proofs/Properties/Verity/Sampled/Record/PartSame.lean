@@ -187,8 +187,9 @@ private theorem tmOf_same {ps ps' : Json} (h : Same ps ps') : tmOf ps = tmOf ps'
 /-- `HmRow.checkPartitionObject`'s text, with each read of the object an argument (`chkObj_view`). -/
 private def chkObjV (okeys : Array String) (fmt : Option String) (prog : String) (qkeys : Array String) (name : String)
     (ver : Option Json) (ps : Json) (pkeys : Array String) (px : String → Option Json)
-    (tm : String → Nat → Option (V (Array String))) : V (String × Nat) := do
-  if okeys != #["format", "program", "query"] then throw "partition: the object's keys are not format, program, query"
+    (tm : String → Nat → Option (V (Array String))) (blk : V (Option (Array (Array (Nat × Nat))))) : V (String × Nat) := do
+  if okeys != #["format", "program", "query"] && okeys != #["blocks", "format", "program", "query"] then
+    throw "partition: the object's keys are not format, program, query and optionally blocks"
   if fmt != some PARTITION_V1 then throw s!"partition: not a {PARTITION_V1} object"
   if !isSha512Hex prog then throw "partition: program is not a SHA-512 digest"
   if qkeys != #["name", "params", "version"] then throw "partition: the query's keys are not name, version, params"
@@ -213,6 +214,8 @@ private def chkObjV (okeys : Array String) (fmt : Option String) (prog : String)
         throw s!"partition: X is not an integer in 1..{Qcall.PARAM_MAX}"
     | _ => throw s!"partition: X is not an integer in 1..{Qcall.PARAM_MAX}"
   if let some ts := tm name version then discard ts
+  if let some bs ← blk then
+    HmRow.checkBlocks (tm name version).isSome bs
   return (name, version)
 
 set_option smartUnfolding false in
@@ -223,29 +226,29 @@ private theorem chkObj_view (obj : Json) :
         (((sub obj "query").getObjValAs? String "name").toOption.getD "")
         ((sub obj "query").getObjVal? "version").toOption (sub (sub obj "query") "params")
         (keysOf (sub (sub obj "query") "params")) (pxOf (sub (sub obj "query") "params"))
-        (tmOf (sub (sub obj "query") "params")) := by rfl
+        (tmOf (sub (sub obj "query") "params")) (HmRow.blocksIn (obj.getObjVal? "blocks").toOption) := by rfl
 
 section
 
 variable {ok qk pk : Array String} {f : Option String} {p nm : String} {v : Option Json} {ps : Json}
-  {px : String → Option Json} {tm : String → Nat → Option (V (Array String))}
+  {px : String → Option Json} {tm : String → Nat → Option (V (Array String))} {bk : V (Option (Array (Array (Nat × Nat))))}
 
 set_option smartUnfolding false in
 private theorem chkObjV_ver {va vb : Option Json} (h : Alike va vb) :
-    chkObjV ok f p qk nm va ps pk px tm = chkObjV ok f p qk nm vb ps pk px tm := by
+    chkObjV ok f p qk nm va ps pk px tm bk = chkObjV ok f p qk nm vb ps pk px tm bk := by
   rcases h with ⟨rfl, rfl⟩ | ⟨a, b, rfl, rfl, hs⟩
   · rfl
   · cases hs <;> rfl
 
 set_option smartUnfolding false in
 private theorem chkObjV_ps {psa psb : Json} (h : Same psa psb) :
-    chkObjV ok f p qk nm v psa pk px tm = chkObjV ok f p qk nm v psb pk px tm := by
+    chkObjV ok f p qk nm v psa pk px tm bk = chkObjV ok f p qk nm v psb pk px tm bk := by
   cases h <;> rfl
 
 set_option smartUnfolding false in
 private theorem chkObjV_px {pxa pxb : String → Option Json} (hX : Alike (pxa "X") (pxb "X"))
     (hW : Alike (pxa "W") (pxb "W")) :
-    chkObjV ok f p qk nm v ps pk pxa tm = chkObjV ok f p qk nm v ps pk pxb tm := by
+    chkObjV ok f p qk nm v ps pk pxa tm bk = chkObjV ok f p qk nm v ps pk pxb tm bk := by
   unfold chkObjV
   simp only [List.forIn_cons, List.forIn_nil]
   generalize pxa "X" = xa at hX ⊢
@@ -260,12 +263,64 @@ private theorem chkObjV_px {pxa pxb : String → Option Json} (hX : Alike (pxa "
 
 end
 
+private theorem blockPair_same : ∀ {p q : Json}, Same p q → HmRow.blockPair p = HmRow.blockPair q
+  | _, _, .null => rfl
+  | _, _, .bool _ => rfl
+  | _, _, .num _ => rfl
+  | _, _, .str _ => rfl
+  | _, _, .obj _ _ _ _ => rfl
+  | _, _, @Same.arr a b hs he => by
+    by_cases h : a.size = 2
+    · have h' : b.size = 2 := hs ▸ h
+      have e0 := getNat_same (he 0 (by omega) (by omega))
+      have e1 := getNat_same (he 1 (by omega) (by omega))
+      simp only [HmRow.blockPair, h, h', ↓reduceDIte, e0, e1]
+    · have h' : ¬b.size = 2 := hs ▸ h
+      simp only [HmRow.blockPair, h, h', ↓reduceDIte]
+
+private theorem mapM_same {β : Type} {f : Json → Option β} (hf : ∀ {p q : Json}, Same p q → f p = f q)
+    {a b : Array Json} (hs : a.size = b.size)
+    (he : ∀ (i : Nat) (h₁ : i < a.size) (h₂ : i < b.size), Same a[i] b[i]) :
+    a.mapM f = b.mapM f := by
+  have e : a.map f = b.map f := by
+    apply Array.ext
+    · rw [Array.size_map, Array.size_map]; exact hs
+    · intro i h₁ h₂
+      rw [Array.getElem_map, Array.getElem_map]
+      exact hf (he i _ _)
+  have m : ∀ x : Array Json, x.mapM f = (x.map f).mapM (fun o => o) := fun x =>
+    (Array.mapM_map (f := f) (g := fun o => o) (xs := x)).symm
+  rw [m a, m b, e]
+
+private theorem blockLevel_same : ∀ {p q : Json}, Same p q → HmRow.blockLevel p = HmRow.blockLevel q
+  | _, _, .null => rfl
+  | _, _, .bool _ => rfl
+  | _, _, .num _ => rfl
+  | _, _, .str _ => rfl
+  | _, _, .obj _ _ _ _ => rfl
+  | _, _, @Same.arr a b hs he => by
+    simp only [HmRow.blockLevel, mapM_same blockPair_same hs he]
+
+/-- **Alike `blocks` read alike.** -/
+private theorem blocksIn_same {x y : Option Json} (h : Alike x y) : HmRow.blocksIn x = HmRow.blocksIn y := by
+  rcases h with ⟨rfl, rfl⟩ | ⟨a, b, rfl, rfl, hs⟩
+  · rfl
+  · cases hs with
+    | @arr a' b' hs he => simp only [HmRow.blocksIn, mapM_same blockLevel_same hs he]
+    | _ => rfl
+
+/-- **Alike partition objects cover a population alike.** -/
+theorem cover_same {a b : Json} (h : Same a b) (pop : Nat) :
+    HmRow.checkBlocksCover a pop = HmRow.checkBlocksCover b pop := by
+  unfold HmRow.checkBlocksCover
+  rw [blocksIn_same (alike_get h "blocks")]
+
 /-- **Alike partition objects pass the form check alike**, with one query name and version. -/
 theorem chkObj_same {a b : Json} (h : Same a b) : HmRow.checkPartitionObject a = HmRow.checkPartitionObject b := by
   have hq := same_sub h "query"
   have hp := same_sub hq "params"
   rw [chkObj_view a, chkObj_view b, keysOf_same h, asStr_same h "format", asStr_same h "program", keysOf_same hq,
-    asStr_same hq "name", keysOf_same hp, tmOf_same hp]
+    asStr_same hq "name", keysOf_same hp, tmOf_same hp, blocksIn_same (alike_get h "blocks")]
   exact (chkObjV_ver (alike_get hq "version")).trans
     ((chkObjV_ps hp).trans (chkObjV_px (pxa := pxOf (sub (sub a "query") "params"))
       (pxb := pxOf (sub (sub b "query") "params")) (alike_px hp "X") (alike_px hp "W")))
@@ -346,11 +401,18 @@ theorem canon_of_chkPart {c : Circuit} {o : Json} {f : HmRow.PartitionFinding}
     rw [hc] at hd
     cases hd
 
+theorem ranges_same {a b : Json} (h : Same a b) (readDesc : ByteArray → V TemplateQuery.Desc) (refusal name : String)
+    (version : Nat) (program : ByteArray) :
+    HmRow.templateRangesBy readDesc refusal name version a program
+      = HmRow.templateRangesBy readDesc refusal name version b program := by
+  unfold HmRow.templateRangesBy
+  simp only [tm_same (same_sub (same_sub h "query") "params"), asStr_same h "program", cover_same h]
+
 theorem derive_same {a b : Json} (h : Same a b) (c : Circuit) (program : ByteArray) (indices : Array Nat) :
     HmRow.deriveTemplateUnits c a program indices = HmRow.deriveTemplateUnits c b program indices := by
   have hq := same_sub h "query"
-  unfold HmRow.deriveTemplateUnits
-  simp only [asStr_same hq "name", asNat_same hq "version", tm_same (same_sub hq "params"), asStr_same h "program"]
+  unfold HmRow.deriveTemplateUnits HmRow.deriveTemplateUnitsBy
+  simp only [asStr_same hq "name", asNat_same hq "version", ranges_same h]
 
 theorem qwordUnits_same {a b : Json} (h : Same a b) (c : Circuit) (program : ByteArray) (indices : Array Nat) :
     HmRow.deriveQwordUnits c a program indices = HmRow.deriveQwordUnits c b program indices := by
@@ -373,9 +435,8 @@ theorem qword_same {a b : Json} (h : Same a b) (c : Circuit) (pub : Public) (pro
 
 theorem strata_same {a b : Json} (h : Same a b) (samplingDesign : String) (program : ByteArray) :
     HmRow.templateStrataWith With.std samplingDesign a program = HmRow.templateStrataWith With.std samplingDesign b program := by
-  have hp := same_sub (same_sub h "query") "params"
-  unfold HmRow.templateStrataWith
-  simp only [chkObj_same h, tm_same hp, asStr_same h "program"]
+  unfold HmRow.templateStrataWith HmRow.templateStrataBy
+  simp only [chkObj_same h, ranges_same h]
 
 theorem strat_same {a b : Json} (h : Same a b) (program : ByteArray) (k : Nat) :
     HmRow.stratifiedSamplingDesign a program k = HmRow.stratifiedSamplingDesign b program k := by

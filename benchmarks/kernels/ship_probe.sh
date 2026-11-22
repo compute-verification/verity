@@ -31,8 +31,10 @@ void launch(const unsigned *in, unsigned *out, int n) { probe<<<(n + 31) / 32, 3
 PROBE
   echo "__device__ inline unsigned mix(unsigned x) { return x * 2654435761u + 1u; }" > "${places[i]}/${includes[i]}"
 done
-# a ship's cubin flags (ship_cubin_flags), less ptxas's report
-flags=(-O3 -std=c++17 -gencode "$gencode" -fmad=false -cubin)
+# a ship's cubin flags (cubin_flags.sh), less ptxas's report
+. "$(dirname "${BASH_SOURCE[0]}")/../../verity/protocols/accounting/compute/pouw/prover/kernels/cubin_flags.sh"
+cubin_flags "$gencode" || exit 1
+flags=(); for f in "${FLAGS[@]}"; do case $f in -Xptxas|-v) ;; *) flags+=("$f") ;; esac; done
 for cc in "$CUDA/bin/nvcc" "$SHIP_NVCC"; do
   for i in 0 1; do
     "$cc" "${flags[@]}" -o "$p/$(basename "$cc").$i.cubin" "${places[i]}/probe.cu" || {
