@@ -1753,6 +1753,97 @@ def declared_day(ledger: Any, window: Any, key: ChallengerKey, verify: Verify) -
     return {"day": day, "declarations": [{"blocks": b["blocks"], "day": b["day"], "program": b["program"]} for b in mine]}
 
 
+#: Lean `Challenger.NO_REGISTRATION`, `SECOND_REGISTRATION` and `REGISTRATION_FORM`
+NO_REGISTRATION = ("the auditor's ledger signs no registration for this epoch's lane before the epoch's first entry: the "
+                   "challenger signs the registration log's head (a period-open's registration) before the first coin of "
+                   "any epoch held to it")
+SECOND_REGISTRATION = ("a second registration: the auditor's ledger signs another head for this epoch's lane after its "
+                       "first, and an epoch is held to the lane's first registration alone")
+REGISTRATION_FORM = ("a period-open's registration is the digest of the deployment's registration record, a SHA-512 in "
+                     "128 lowercase hex")
+
+
+def registration_of(ledger: Any, window: Any, key: ChallengerKey, verify: Verify) -> str:
+    """Lean `Challenger.registrationOf`: the `registration` of the first period-open of the epoch's lane signed before
+    the epoch's first entry, the digest of the deployment's registration record.  Raises `CoinError` naming why where
+    `declared_day` would, with none (`NO_REGISTRATION`), or where another period-open of the lane before that entry
+    registers again, under any digest (`SECOND_REGISTRATION`)."""
+    if not _window(window):
+        raise CoinError(f"the window's identity is malformed: {WINDOW_FORM}")
+    windows, _ = _checked(ledger, key, verify)
+    w = windows.get(window["root"])
+    if w is None:
+        raise CoinError("the auditor's ledger opens no challenger session for this window")
+    o = w["open"]
+    lane, es = lane_of(o), [e for e in map(_ledger_entry, ledger)]
+    first = min([o["seq"]] + [e["seq"] for e in es if e.get("session") == o["session"]])
+    heads = [e for e in es if e["kind"] == "period-open" and e["seq"] < first and e["body"].get("lane") == lane
+             and "registration" in e["body"]]
+    if not heads:
+        raise CoinError(NO_REGISTRATION)
+    if (e := next((e for e in heads if not _digest_hex(e["body"]["registration"])), None)) is not None:
+        raise CoinError(f"the auditor's ledger entry {e['seq']}: {REGISTRATION_FORM}")
+    h = heads[0]
+    r = h["body"]["registration"]
+    if len(heads) > 1:
+        e = heads[1]
+        raise CoinError(f"{SECOND_REGISTRATION} (entry {e['seq']} names {e['body']['registration'][:16]}..., entry "
+                        f"{h['seq']} {r[:16]}...)")
+    return r
+
+
+REGISTRATION_LANE = "the epoch's challenger session is on another lane than the one the auditor names for the registration"
+REGISTRATION_TWICE = ("the registration the ledger after the draw holds the epoch to is not the record's digest the run was "
+                      "held to before it: a run is held to one registration")
+
+
+def registration_head(ledger: Any, lane: str, key: ChallengerKey, verify: Verify) -> str:
+    """Lean `Challenger.registrationHead`, the half before the draw: the `registration` of the one registering period-open
+    the auditor's ledger (as published before the epoch's session opens) signs for the auditor's ``lane``. Raises
+    `CoinError` with none (`NO_REGISTRATION`), a malformed one or a second (`SECOND_REGISTRATION`); that it preceded the
+    epoch's first entry is `registration_held`'s."""
+    _checked(ledger, key, verify)
+    es = [e for e in map(_ledger_entry, ledger)]
+    heads = [e for e in es if e["kind"] == "period-open" and e["body"].get("lane") == lane and "registration" in e["body"]]
+    if not heads:
+        raise CoinError(NO_REGISTRATION)
+    if (e := next((e for e in heads if not _digest_hex(e["body"]["registration"])), None)) is not None:
+        raise CoinError(f"the auditor's ledger entry {e['seq']}: {REGISTRATION_FORM}")
+    h = heads[0]
+    r = h["body"]["registration"]
+    if len(heads) > 1:
+        e = heads[1]
+        raise CoinError(f"{SECOND_REGISTRATION} (entry {e['seq']} names {e['body']['registration'][:16]}..., entry "
+                        f"{h['seq']} {r[:16]}...)")
+    return r
+
+
+def registration_held(ledger: Any, window: Any, lane: str, digest: str, key: ChallengerKey, verify: Verify) -> None:
+    """Lean `Challenger.registrationHeld`, the half after the draw: on the ledger handed out at the session's end, the
+    epoch is held to ``digest`` (`registration_of`) and its session is on the auditor's ``lane``; raises `CoinError`
+    naming why (`REGISTRATION_LANE`, `REGISTRATION_TWICE`)."""
+    r = registration_of(ledger, window, key, verify)
+    windows, _ = _checked(ledger, key, verify)
+    w = windows.get(window["root"])
+    if w is None:
+        raise CoinError("the auditor's ledger opens no challenger session for this window")
+    if lane_of(w["open"]) != lane:
+        raise CoinError(REGISTRATION_LANE)
+    if r != digest:
+        raise CoinError(REGISTRATION_TWICE)
+
+
+def period_circuit(ledger: Any, window: Any, key: ChallengerKey, verify: Verify) -> Any:
+    """Lean `Challenger.periodCircuit`: the circuit the open of the period holding the session of the epoch whose open
+    root is ``window["root"]`` committed, on ``ledger`` under the pinned key `key`; None when no period holds it."""
+    windows, periods = _checked(ledger, key, verify)
+    w = windows.get(window["root"])
+    if w is None:
+        raise CoinError("the auditor's ledger opens no challenger session for this window")
+    s = w["open"]["session"]
+    return next((p["circuit"] for p in periods.values() if s in p["windows"]), None)
+
+
 def ledger_head(heads: Any, key: ChallengerKey, verify: Verify) -> list[str]:
     """The auditor's ledger as the auditor device's operator published it: every head of `heads` (each its lines; None
     when the verifier has none)
@@ -2269,7 +2360,7 @@ __all__ = ["Audited", "BINDING", "CAP", "CIRCUIT", "CLOSE_FILE", "CLOSE_FORM", "
            "RECORD_FORM", "RECORD_ROLE",
            "RESERVED", "SEALED_FILES", "SESSION_FORM", "SESSION_KINDS", "Verify", "WINDOW_FORM", "WITHHELD", "audited_session",
            "cap_of", "circuit_of", "circuit_reason", "close_message", "credited_session", "extends", "first_parent_reason", "key_of_record", "lane_of", "later", "layout_problem",
-           "leaf_of", "ledger_head", "ledger_line", "pin_line", "pinned_session", "pins_reason", "pins_seal",
+           "leaf_of", "ledger_head", "NO_REGISTRATION", "REGISTRATION_FORM", "SECOND_REGISTRATION", "registration_of", "ledger_line", "pin_line", "pinned_session", "pins_reason", "pins_seal",
            "ledger_message", "ledger_text", "live_domain", "live_leaf", "live_reason", "log_chain", "log_digest",
            "order_reason", "record_many", "record_message", "record_reason", "released_log_of", "root_of",
            "COMMITTED_RELEASED", "Entry", "RELEASED_BEFORE_RECEIVED", "SLOT_TWICE", "UNRELEASED", "before", "by_family",

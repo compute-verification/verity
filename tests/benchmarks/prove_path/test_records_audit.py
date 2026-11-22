@@ -29,6 +29,7 @@
 * of `verity_vllm` it loads only a catalog package (`verity.circuits.defs.catalog_package`) and nothing else of the adapter."""
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import shutil
@@ -293,9 +294,11 @@ def test_source_and_the_negatives_refuse_what_the_records_dont_bind(written, tmp
                         "registration-binding-a-compiler-for-a-fixed-circuit"} and all(x["refused"] for x in got.values())
 
 
-def _prover_circuit_audit(w: SimpleNamespace, monkeypatch, tmp_path: Path, flags: list[str]) -> tuple[int, dict]:
+def _prover_circuit_audit(w: SimpleNamespace, monkeypatch, tmp_path: Path, flags: list[str],
+                          members_lean: dict | None = None) -> tuple[int, dict]:
     """`main`'s audit of written window ``w`` under ``flags`` in place of ``--circuit``, its sessions (`a5.audit`) stubbed:
-    the stub's docket is the window's own, received before the draw, and its verdict is `source`'s on that docket.
+    the stub's docket is the window's own, received before the draw, and its verdict is `source`'s on that docket, with
+    ``members_lean`` its Lean members verdict where given.
     -> (the exit code, what the stub saw: ``source``, ``negatives``, ``summary``)."""
     import a5 as A5
     from verity.protocols.proof.spot.verifier.challenger import challenger_session as AC
@@ -307,7 +310,8 @@ def _prover_circuit_audit(w: SimpleNamespace, monkeypatch, tmp_path: Path, flags
         (out / "registration.json").write_text(json.dumps(w.rec))
         (out / "receipt.json").write_text(json.dumps({"registration": DD.digest(w.rec), "verifier": A5.CHALLENGER}))
         seen.update(source=source(w.rec["window"]), negatives=more, summary=summary)
-        return {"audit": {"accepted": True}, "draw": {"units": [0]}}, seen["source"]["ok"]
+        return {"audit": {"accepted": True, **({"members_lean": members_lean} if members_lean else {})},
+                "draw": {"units": [0]}, "registration": DD.digest(w.rec)}, seen["source"]["ok"]
 
     session = SimpleNamespace(skip=lambda r: None, join=lambda: None, evidence=lambda: {}, shutdown=lambda: None)
     monkeypatch.setattr(RA, "free_ports", lambda span: 20000)
@@ -334,11 +338,13 @@ def test_prover_circuit_takes_the_registered_circuit_holds_its_compiler_and_advi
                                                                                               "not checked")
     assert summary["fixed_before_draw"]["ok"] and (summary["compiler"], summary["advice"]) == (
         written.bound["compiler"], written.bound["advice"])
+    assert summary["circuit_registration"] == DD.digest(written.rec)
     assert seen["summary"]["compiled"] == "not checked" and not (tmp_path / "o" / "compile").exists()
     out = capsys.readouterr().out.splitlines()
     line, = (x for x in out if x.startswith("RECORDS "))
     assert "compiled: not checked (the circuit is the one the prover registered)" in line
-    assert out[0] == f"DEVELOPMENT {RA.DEVELOPMENT_RESTS['circuit']}" and summary["development"] == [RA.DEVELOPMENT_RESTS["circuit"]]
+    assert out[0].startswith("REGISTRATION ") and out[1] == f"DEVELOPMENT {RA.DEVELOPMENT_RESTS['circuit']}"
+    assert summary["development"] == [RA.DEVELOPMENT_RESTS["circuit"]]
     assert RA.DEVELOPMENT_RESTS["circuit"].startswith("the circuit is the record's own, pinned by no one")
 
 
@@ -356,18 +362,123 @@ def _with(a: SimpleNamespace, **kw: object) -> SimpleNamespace:
     return SimpleNamespace(**{**vars(a), **kw})
 
 
-@pytest.mark.parametrize("given", [[], ["--registered-digest", "ab" * 64], ["--registered-digest-source", "stand-in"],
-                                   ["--registered-digest", "ab" * 64, "--registered-digest-source", "tree-pin"],
-                                   ["--registered-digest", "ab" * 64, "--registered-digest-source", "ledger"]])
-def test_registered_is_refused_by_name_without_its_digest_and_a_built_source(written, tmp_path, given):
-    reg = tmp_path / "registered.json"
-    reg.write_text(json.dumps({"program": "aa" * 64, "values": {}}))
+def test_parameters_with_no_registration_say_the_development_line_first_and_are_no_run_of_record(
+        written, tmp_path, monkeypatch, capsys):
+    """An audit with no ``--registration`` is the development path: it says first what that path says
+    (`docket.registration_first`, `OneStage.registrationFirst`), publishes the development source with no digest, and,
+    with no ledger registration, is not a run of record."""
+    rc, _seen = _prover_circuit_audit(written, monkeypatch, tmp_path, ["--prover-circuit", "--development"])
+    assert rc == 0
+    first = next(x for x in capsys.readouterr().out.splitlines() if x.strip())
+    assert first == "REGISTRATION " + R.DEVELOPMENT_WHY == "REGISTRATION " + R.registration_first(None)
+    summary = json.loads((tmp_path / "o" / "summary.json").read_text())
+    assert summary["registration"] == {"digest": None, "source": "development"}
+    assert summary["ok"] and summary["of_record"] is False
+
+
+def test_a_registration_from_the_ledger_names_its_lane_digest_and_key_first(tmp_path):
+    """With ``--registration-ledger``, the audit's first line and the summary's ``registration`` name the lane, the
+    record's digest and the challenger's key (its public key's SHA-512) the registration is held to, and whether that key
+    is the one the operator posted (``--challenger-key-sha512``), which refuses another, and a record stating the posted
+    digest over other key bytes; a malformed key record refuses."""
+    from verity.protocols.proof.spot.verifier.challenger import challenger as Ch
+
+    rec, pub = _deployment_record(tmp_path), bytes(range(80))
+    key = tmp_path / "key.json"
+    key.write_text(json.dumps({"schema": Ch.KEY_RECORD_SCHEMA, "W": 4, "H": 5, "pubkey": pub.hex(),
+                               "pubkey_sha512": hashlib.sha512(pub).hexdigest()}))
+    a = argparse.Namespace(registration=str(rec), registration_ledger="ledger.jsonl", registration_head=None,
+                           registration_lane="circuits", challenger_key=str(key))
+    digest, k = DD.digest(json.loads(rec.read_text())), hashlib.sha512(pub).hexdigest()
+    line, held = RA.registration_line(a)
+    assert line == f"REGISTRATION lane circuits digest {digest} key {k}: {RA.REGISTRATION_SOURCES['ledger']}"
+    assert held == {"digest": digest, "source": "ledger", "lane": "circuits", "key": k, "key_pinned": False}
+    a.challenger_key_sha512 = k
+    assert RA.registration_line(a)[1]["key_pinned"] is True
+    a.challenger_key_sha512 = "11" * 64
+    with pytest.raises(SystemExit, match="not the pinned 1111111111111111"):
+        RA.registration_line(a)
+    a.challenger_key_sha512 = k
+    key.write_text(json.dumps({"schema": Ch.KEY_RECORD_SCHEMA, "W": 4, "H": 5, "pubkey": bytes(80).hex(),
+                               "pubkey_sha512": k}))
+    with pytest.raises(SystemExit, match="REGISTRATION refused"):
+        RA.registration_line(a)
+    a.challenger_key_sha512 = None
+    key.write_text(json.dumps({"schema": Ch.KEY_RECORD_SCHEMA, "W": 4, "H": 5, "pubkey": pub.hex(),
+                               "pubkey_sha512": "00" * 64}))
+    with pytest.raises(SystemExit, match="REGISTRATION refused"):
+        RA.registration_line(a)
+    dev = argparse.Namespace(registration=str(rec), registration_ledger=None, registration_head=R.DEVELOPMENT,
+                             registration_lane=None, challenger_key=None)
+    assert RA.registration_line(dev) == ("REGISTRATION " + R.DEVELOPMENT_WHY, {"digest": None, "source": "development"})
+
+
+def test_a_run_is_of_record_only_on_a_lane_named_record_n_and_says_why_otherwise():
+    """`of_record_why`: an accepted ledger run held to the posted key is of record on ``record-N`` alone; on
+    ``rehearsal-1`` or any other lane it is not, and says so; the development path, an unpinned key, an unverified member
+    and a refusal each say theirs."""
+    def row(lane="record-7", **kw):
+        return {"ok": True, "registration": {"source": "ledger", "lane": lane, "key_pinned": True}, **kw}
+
+    assert RA.of_record_why(row()) is None and RA.of_record_why(row("record-30")) is None
+    for lane in ("rehearsal-1", "circuits", "vllm", "record-0", "record-7x", "my-record-7", None):
+        assert RA.of_record_why(row(lane)) == (f"its lane {lane} is not a lane of record (record-N); a run on another lane "
+                                              "is never promoted"), lane
+    assert "development path" in RA.of_record_why({"ok": True, "registration": {"source": "development", "digest": None}})
+    assert "posted digest" in RA.of_record_why({"ok": True, "registration": {"source": "ledger", "lane": "record-7",
+                                                                            "key_pinned": False}})
+    assert RA.of_record_why(row(not_verified={"members": ["a/c0"]})) == "members were left unverified"
+    assert RA.of_record_why(row(ok=False)) == "the audit did not accept"
+
+
+def test_members_no_lean_ran_on_are_listed_by_name_first_and_the_run_is_not_of_record(written, tmp_path, monkeypatch,
+                                                                                         capsys):
+    """Where Lean's members check did not run (`a5.members_lean`'s ``ran`` false), the result lists the window's
+    members by name as not verified, in the summary and in the line printed before ``RECORDS``, and the run is not a
+    run of record."""
+    lean = {"ok": True, "ran": False, "codes": [], "reason": "why", "not_verified": ["a/c0", "a/c1"]}
+    rc, _seen = _prover_circuit_audit(written, monkeypatch, tmp_path, ["--prover-circuit", "--development"], lean)
+    assert rc == 0
+    out = capsys.readouterr().out.splitlines()
+    i = next(k for k, x in enumerate(out) if x.startswith("RECORDS "))
+    assert out[i - 1] == "NOT-VERIFIED " + json.dumps({"members": ["a/c0", "a/c1"], "why": "why"}, sort_keys=True)
+    summary = json.loads((tmp_path / "o" / "summary.json").read_text())
+    assert summary["not_verified"] == {"members": ["a/c0", "a/c1"], "why": "why"} and summary["of_record"] is False
+    assert json.loads(out[i][len("RECORDS "):])["not_verified"]["members"] == ["a/c0", "a/c1"]
+
+
+def _deployment_record(tmp_path: Path) -> Path:
+    rec = tmp_path / "deployment-registration.json"
+    rec.write_text(json.dumps({"format": DM.REGISTRATION, "program": "aa" * 64, "deployment": {"kind": "test"},
+                               "registered": [], "previous": None}))
+    return rec
+
+
+@pytest.mark.parametrize("given", [[], ["--registration-ledger", "ledger.txt"],
+                                   ["--registration-ledger", "ledger.txt", "--challenger-key", "key.json"]])
+def test_registration_is_refused_by_name_without_a_ledger_or_the_development_path_named(written, tmp_path, given):
+    """No challenger and no ledger refuses: the development path is taken only where the parameters name it."""
     with pytest.raises(SystemExit) as e:
-        RA.main([*_audit_args(written), "--out", str(tmp_path / "o"), "--registered", str(reg), *given])
-    source = given[-1] if len(given) == 4 else None
-    assert e.value.code == (RA.REGISTERED_DIGEST_WHY if source is None
-                            else f"--registered-digest-source {source}: {RA.WEIGHTS_SOURCES_NOT_BUILT[source]}")
+        RA.main([*_audit_args(written), "--out", str(tmp_path / "o"), "--registration", str(_deployment_record(tmp_path)),
+                 *given])
+    assert e.value.code == RA.REGISTRATION_NEEDS
     assert not (tmp_path / "o").exists()
+
+
+def test_the_development_path_says_first_that_the_digest_is_the_serving_nodes_own_and_publishes_it(
+        written, tmp_path, monkeypatch, capsys):
+    """An accepted run on the development path says first, in plain words, that the digest was taken from the serving
+    node's own file and is held by no one else, and that it states no bound from the sample; its summary publishes the
+    registration's digest and source."""
+    rec = _deployment_record(tmp_path)
+    rc, _seen = _prover_circuit_audit(written, monkeypatch, tmp_path, ["--prover-circuit", "--development",
+                                      "--registration", str(rec), "--registration-head", "development"])
+    assert rc == 0
+    first = next(x for x in capsys.readouterr().out.splitlines() if x.strip())
+    assert first == "REGISTRATION " + R.DEVELOPMENT_WHY
+    summary = json.loads((tmp_path / "o" / "summary.json").read_text())
+    assert summary["registration"] == {"digest": DD.digest(json.loads(rec.read_text())), "source": "development"}
+    assert summary["circuit_registration"] == DD.digest(written.rec)
 
 
 def test_prover_circuit_is_refused_by_name_without_development(written, tmp_path, monkeypatch, capsys):
@@ -1128,7 +1239,8 @@ def test_a_development_day_says_first_and_in_the_summary_that_the_day_is_the_dev
     day = ["--day", "0", "--day-log", str(_day_log(tmp_path, written.rec["program"]))]
     _prover_circuit_audit(written, monkeypatch, tmp_path, ["--circuit", written.rec["window"]["circuit"], *day, "--development"])
     said = RA.DEVELOPMENT_RESTS["day"]
-    assert capsys.readouterr().out.splitlines()[0] == f"DEVELOPMENT {said}"
+    out = capsys.readouterr().out.splitlines()
+    assert out[0].startswith("REGISTRATION ") and out[1] == f"DEVELOPMENT {said}"
     summary = json.loads((tmp_path / "o" / "summary.json").read_text())
     assert summary["development"] == [said] and summary["day"]["source"] == RA.DAY_SOURCES["development"]
 
@@ -1636,7 +1748,7 @@ def test_the_gates_coins_take_the_peer_and_key_record_to_the_challengers_session
         RA.main([*args, *gate])
     assert seen.pop("local") is LC.Local
     assert seen == {"challenger": "gate:research@gate", "root": RUN, "ranks": [0], "main": "main.txt", "ssh_key": "gate.key",
-                    "peer": "vy-nebius-1", "key_record": "key.json", "deployed": False}
+                    "peer": "vy-nebius-1", "key_record": "key.json", "deployed": False, "host": None}
     seen.clear()
     with pytest.raises(SystemExit, match="2"):
         RA.main([*args, *gate, "--deployed-key"])
@@ -1645,7 +1757,7 @@ def test_the_gates_coins_take_the_peer_and_key_record_to_the_challengers_session
         RA.main([*args, "--challenger", "local", "--deployed-key"])
     assert seen.pop("local") is LC.Local
     assert seen == {"challenger": "local", "root": RUN, "ranks": [0], "main": "main.txt", "ssh_key": None, "peer": None,
-                    "key_record": None, "deployed": True}
+                    "key_record": None, "deployed": True, "host": None}
 
 
 def test_the_audit_reserves_a_port_for_every_session_its_sample_can_open(tmp_path, monkeypatch):

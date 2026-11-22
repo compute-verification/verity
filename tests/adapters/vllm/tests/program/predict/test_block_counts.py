@@ -361,3 +361,59 @@ def test_a_declaration_s_digest_is_its_bytes_as_compact_sorted_ascii_json():
         want = json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()
         assert codec.canonical_json(doc) == want
         assert BC.declaration(doc)[0] == hashlib.sha512(want).hexdigest()
+
+
+@pytest.mark.slow
+def test_a_closed_epochs_fresh_bits_are_its_free_inputs_with_every_registered_read_held(tmp_path, monkeypatch):
+    """The epoch of class 1,1,1 on the small model, closed and written as the serve's close writes it (`Window.write`,
+    which records ``registered_roots`` under the message's ``window``): `main` counts a block's fresh bits with every
+    registered read held at the verifier's pins, so they are the declared circuit's free inputs, never those plus the
+    registered bits; a message that records no registered roots is refused by name. What no cheaper test reaches: the
+    roots where `Window.write` puts them, read by `main`. Slow (minutes) for the epoch's close."""
+    from types import SimpleNamespace
+
+    from verity.commitments.periods import interface as IF
+    from verity.protocols.accounting.network.prover import scan_state_rows as SR
+    from verity.protocols.proof.spot.prover import docket as DK
+    from verity_vllm.program.predict import inference_blocks as IB
+    from verity_vllm.program.predict import scan_state as SS
+    from verity_vllm.program.predict import window_circuit as WC
+    from verity_vllm.program.predict import window_rows as WR
+
+    from tests.program.predict.test_window_rows import DESIGN, RUN, _window
+
+    cls, lanes = WC.WindowClass(1, 1, 1), [(1, 1, 1, [17])]
+    low, _f, values, _w, slots = _window(cls=cls, lanes=lanes)
+    heads = [([occ, lp, *ids], m) for occ, lp, m, ids in lanes]
+    state = WR.state_value(IB.program_digest(low.circuit), cls, SR.standin_rows(cls, heads), window=RUN)
+    vals = {**values, SS.SCAN_STATE: state}
+    win = IF.Window(low.circuit, RUN, DESIGN, 64, registered=vals, forms=WR.FORMS)
+    win.supply()
+    WR.Rows(low, slots, vals).record(win)
+    win.write(win.close(), tmp_path, {}, registrar=DK)
+    message = json.loads((tmp_path / "registration.json").read_text())
+    doc = json.loads((tmp_path / "circuit.json").read_text())
+    roots = IF.registration_roots(message)
+    assert roots == message["window"]["registered_roots"] and "registered_roots" not in message
+    held = IF.input_count(doc, BC.resolve, pins=roots, roots=roots)
+    loose = IF.input_count(doc, BC.resolve, pins=roots, roots={})
+    assert held["registered"] > 0 == loose["registered"]
+    assert held["free"] + held["ingress"] == loose["free"] + loose["ingress"] - held["registered"]
+    (tmp_path / "pins.json").write_text("{}")
+    monkeypatch.setattr(BC, "WeightsRegistration", SimpleNamespace(of=lambda doc, name: SimpleNamespace(roots=roots)))
+    (tmp_path / "declaration.json").write_text(json.dumps({"c": 10 ** 15, "k": 10 ** 15, "n": 1}))
+
+    def counted(reg: dict) -> dict:
+        (tmp_path / "message.json").write_text(json.dumps(reg))
+        BC.main(BC.Options(day=DAY, declaration=tmp_path / "declaration.json", private=tmp_path / "private.json",
+                           out=tmp_path / "public.json", pins=tmp_path / "pins.json",
+                           window=[[str(tmp_path / "circuit.json"), str(tmp_path / "message.json")]]))
+        return json.loads((tmp_path / "private.json").read_text())
+
+    private = counted(message)
+    assert BC.fresh(doc, 1, roots, roots) == held["free"] + held["ingress"], private
+    assert str(held["free"] + held["ingress"]) in json.dumps(private) and str(loose["free"] + loose["ingress"]) not in json.dumps(private)
+    bare = {**message, "window": {k: v for k, v in message["window"].items() if k != "registered_roots"}}
+    with pytest.raises(ValueError, match=re.escape(IF.NO_REGISTERED_ROOTS)):
+        counted(bare)
+    print(f"FRESH-COUNT held {held} loose {loose}")

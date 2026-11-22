@@ -187,6 +187,7 @@ import os
 import re
 import shlex
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -945,10 +946,12 @@ def _gate_out(gate: str, *words: str) -> bytes:
     return p.stdout
 
 
-def gate_ready(gate: str, lane: str, main: Path | None = None, root: str | None = None) -> tuple[bool, str]:
+def gate_ready(gate: str, lane: str, main: Path | None = None, root: str | None = None,
+               registration: str | None = None) -> tuple[bool, str]:
     """Whether this run may reserve its windows' sessions at `gate` (the ``gate`` subcommand), and its ``GATE`` line; with
     `root`, the run root a session of this run opens on, also refused once an open in the ledger names it: the gate opens
-    a root once, ever."""
+    a root once, ever. The lane's open period refuses, unless it is the registering period whose ``registration`` is
+    `registration` (the deployment's registration record's digest), which the epoch's sessions are to join."""
     from verity.protocols.proof.spot.verifier.challenger import challenger as CH
     from verity.protocols.accounting.compute.pouw.prover.serving.coins import window as PHW
 
@@ -961,11 +964,14 @@ def gate_ready(gate: str, lane: str, main: Path | None = None, root: str | None 
     where = "" if on is None else f", {'on' if on else 'NOT on'} the verifier's first-parent line of main"
     rooted = "" if root is None else (f"; root {root[:16]}… " + (f"already has its session {held} (one session a root, ever)"
                                                                   if held else "has no session yet"))
-    line = (f"GATE {'refused' if period or held else 'ready'}: lane {lane}'s open period "
-            f"{period and period.get('period')}{' (a reserve would join it)' if period else ''}{rooted}; the ledger's "
+    registering = period is not None and registration is not None and period.get("registration") == registration
+    joins = " (the registering period, which the epoch's reserves join)" if registering else " (a reserve would join it)"
+    stops = (period is not None and not registering) or held is not None
+    line = (f"GATE {'refused' if stops else 'ready'}: lane {lane}'s open period "
+            f"{period and period.get('period')}{joins if period else ''}{rooted}; the ledger's "
             f"{len(ledger)} entries; pinned {str(pin.get('commit'))[:12]} (main {str(pin.get('main'))[:12]}, "
             f"{pin.get('pinned_utc')}){where}")
-    return period is None and held is None, line
+    return not stops, line
 
 
 def _gate_json(gate: str, argv: Sequence[str]) -> dict[str, Any]:
@@ -1016,6 +1022,113 @@ def pearlplus_period_open(piece_dir: Path, gate: str, name: str, scheme: str, cu
            "open": _gate_json(gate, ["period-open", "--name", name, "--cap", "1", "--circuit", circuit])}
     (piece_dir / PERIOD).write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
     return doc
+
+
+#: the hold's refusals where the lane's registration is not this serve's to proceed on
+REGISTERED_PERIOD_CLOSED = ("the lane's registering period is closed and no period of the lane is open, so the epoch's "
+                            "sessions would join none: the auditor opens the lane's next period, with no registration")
+LANE_REGISTERED_BEFORE = ("the lane was registered before, by a period now closed, to another record: a lane takes one "
+                          "registration, ever, so this deployment registers on a fresh lane")
+REGISTERED_OTHER_DIGEST = ("the lane's open registering period names another record's digest than this serve's: the "
+                           "period-open was given another registration record")
+
+
+def registration_hold(record: Path, lane: str | None, ledger: str | None, key: Path | None, once: bool = False,
+                      say: Callable[[str], None] = print, gate_key: str | None = None, key_sha512: str | None = None,
+                      every: float = 10.0) -> int:
+    """``registration-hold``: with no `lane`, the development line, and 0. Under `lane`, the deployment's registration
+    record's digest and the period-open that registers it, then the auditor's `ledger` until it carries the lane's
+    registering period-open (`challenger.registration_head`: every entry's signature and the chain tested under the key
+    record `key`, whose public key's SHA-512 must be `key_sha512` where given): 0 where that is the record's digest and
+    the lane has a period open for the epoch to join; 2 at once where the ledger refuses (a second registration, a
+    malformed entry, a signature, a key not `key_sha512`), or registers the lane to another record in a closed period
+    (`LANE_REGISTERED_BEFORE`) or an open one (`REGISTERED_OTHER_DIGEST`), or to this one with no period of the lane
+    open (`REGISTERED_PERIOD_CLOSED`); 1 where the ledger ends without one, or with `once` holds none as it stands. A
+    path is read whole, then as it grows (``tail -F``); ``gate:USER@HOST`` through the gate's ``ledger`` verb with `gate_key`
+    (`challenger_session.ledger_lines_at`), again every `every` seconds. The wait's limit is the caller's (`timeout`)."""
+    from verity.commitments import docket_digest as DD
+    from verity.protocols.proof.spot.verifier.challenger import challenger as CH, challenger_session as AC
+    from verity.protocols.proof.spot.verifier.one_stage import docket as DK
+
+    if lane is None:
+        say(f"REGISTRATION {DK.DEVELOPMENT_WHY}")
+        return 0
+    digest = DD.digest(json.loads(record.read_text()))
+    try:
+        k = CH.key_of_record(json.loads(key.read_text()))
+    except (OSError, ValueError, CH.CoinError) as e:
+        say(f"REGISTRATION-HOLD refused: the challenger's key record {key} is unreadable or malformed "
+            f"({type(e).__name__}: {e})")
+        return 2
+    pinned = hashlib.sha512(k.public).hexdigest()
+    if key_sha512 is not None and pinned != key_sha512:
+        say(f"REGISTRATION-HOLD refused: the challenger's key record {key} holds key {pinned[:16]}..., not the "
+            f"pinned {key_sha512[:16]}...")
+        return 2
+    say(f"REGISTRATION-HOLD digest {digest} lane {lane} key {pinned}: before the epoch's first reserve, the auditor opens "
+        f"the lane's period with it: vy-challenger-gate period-open --name NAME --lane {lane} --cap CAP --circuit CIRCUIT "
+        f"--registration {digest}; held until {ledger} carries it")
+
+    def judged(lines: list[str]) -> int | None:
+        try:
+            head = CH.registration_head(lines, lane, k, AC.lms_verify)
+        except CH.CoinError as e:
+            if CH.NO_REGISTRATION in str(e):
+                return None
+            say(f"REGISTRATION-HOLD refused: {e}")
+            return 2
+        es = [json.loads(x) for x in lines]
+        period = next(e["body"]["period"] for e in es if e["kind"] == "period-open"
+                      and e["body"].get("lane") == lane and "registration" in e["body"])
+        closed = any(e["kind"] == "period-close" and e["body"].get("period") == period for e in es)
+        if head != digest:
+            why = LANE_REGISTERED_BEFORE if closed else REGISTERED_OTHER_DIGEST
+            say(f"REGISTRATION-HOLD refused: {why} (lane {lane}'s period {period} registers {head[:16]}..., this "
+                f"serve's record is {digest[:16]}...)")
+            return 2
+        last = [e["body"]["period"] for e in es if e["kind"] == "period-open" and e["body"].get("lane") == lane][-1]
+        if any(e["kind"] == "period-close" and e["body"].get("period") == last for e in es):
+            say(f"REGISTRATION-HOLD refused: {REGISTERED_PERIOD_CLOSED} (lane {lane}'s registering period {period})")
+            return 2
+        say(f"REGISTRATION-HELD digest {digest} lane {lane} key {pinned}: the ledger's line {len(lines) - 1} signs it")
+        return 0
+
+    ended = (f"REGISTRATION-HOLD refused: {ledger} holds no registering period-open of lane {lane}: "
+             f"{CH.NO_REGISTRATION}")
+    if ledger.startswith("gate:"):
+        said = None
+        while True:
+            try:
+                rc = judged(AC.ledger_lines_at(ledger, gate_key))
+            except CH.CoinError as e:
+                rc = None
+                if str(e) != said:
+                    said = str(e)
+                    say(f"REGISTRATION-HOLD reading {ledger}: {e}")
+            if rc is not None:
+                return rc
+            if once:
+                say(ended)
+                return 1
+            time.sleep(every)
+    lines = Path(ledger).read_text().splitlines() if Path(ledger).exists() else []
+    if lines and (rc := judged(lines)) is not None:
+        return rc
+    if once:
+        say(ended)
+        return 1
+    follow = subprocess.Popen(["tail", "-F", "-n", f"+{len(lines) + 1}", ledger],
+                              stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+    try:
+        for line in follow.stdout:
+            lines.append(line.rstrip("\n"))
+            if (rc := judged(lines)) is not None:
+                return rc
+        say(ended)
+        return 1
+    finally:
+        follow.kill()
+        follow.wait()
 
 
 def period_reserves(lines: Sequence[str], lane: str, period: str) -> list[str] | None:
@@ -2625,6 +2738,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     g.add_argument("--lane", default="vllm")
     g.add_argument("--main", type=Path, default=os.environ.get("MAIN_FILE") or None)
     g.add_argument("--root", help="a window's run root (128 hex digits) a session of this run opens on")
+    g.add_argument("--registration-record", type=Path,
+                   help="the deployment's registration record, whose registering period the lane's open one may be")
     pp = sub.add_parser("pearlplus")
     pp.add_argument("out", type=Path)
     pp.add_argument("--served", type=Path, help="served_passes.py serve's document")
@@ -2673,6 +2788,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     ppe.add_argument("--wait", type=float, default=0, help="close, with --windows: at most this many seconds waited for "
                                                            "the gate's ledger to end each window's salt session")
     ppe.add_argument("--coin", type=Path, help="rule: the verifier's coin record (served_passes.py verify's coin.json)")
+    rh = sub.add_parser("registration-hold", help="the serve's hold until the auditor's ledger signs its registration "
+                        "for the lane (`registration_hold`); its limit is the caller's timeout")
+    rh.add_argument("record", type=Path, help="the deployment's registration record (deployment-registration.json)")
+    rh.add_argument("--lane", help="REGISTRATION_LANE; none: the development path, no hold")
+    rh.add_argument("--ledger", help="REGISTRATION_LEDGER: the auditor's ledger as its host appends it, or gate:USER@HOST")
+    rh.add_argument("--key", type=Path, help="REGISTRATION_KEY: the challenger's key record")
+    rh.add_argument("--key-sha512", help="REGISTRATION_KEY_SHA512: the SHA-512 of the challenger's public key the operator "
+                    "posted, which the key record must hold")
+    rh.add_argument("--gate-key", help="with --ledger gate:USER@HOST: the lane's gate key")
+    rh.add_argument("--every", type=float, default=10.0, help="with --ledger gate:USER@HOST: seconds between reads")
+    rh.add_argument("--once", action="store_true", help="the ledger as it stands, no wait")
     rg = sub.add_parser("public-registration")
     rg.add_argument("registration", type=Path)
     pl = sub.add_parser("public-lines")
@@ -2806,6 +2932,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     if a.cmd in ("failed", "said"):
         print((failed if a.cmd == "failed" else tool_said)(a.rc, a.logs))
         return 0
+    if a.cmd == "registration-hold":
+        if a.lane is not None and (a.ledger is None or a.key is None):
+            ap.error("registration-hold --lane needs --ledger and --key")
+        signal.signal(signal.SIGTERM, lambda *_: sys.exit(124))
+        return registration_hold(a.record, a.lane, a.ledger, a.key, once=a.once, say=lambda x: print(x, flush=True),
+                                 gate_key=a.gate_key, key_sha512=a.key_sha512, every=a.every)
     if a.cmd == "public-lines":
         public_lines(sys.stdin, sys.stdout, a.private)
         return 0
@@ -2830,7 +2962,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             print("GATE refused: no gate command (--gate, H1_GATE)", flush=True)
             return 1
         try:
-            ok, line = gate_ready(a.gate, a.lane, a.main, a.root)
+            reg = None
+            if a.registration_record is not None:
+                from verity.commitments import docket_digest as DD
+                reg = DD.digest(json.loads(a.registration_record.read_text()))
+            ok, line = gate_ready(a.gate, a.lane, a.main, a.root, reg)
         except (KeyError, OSError, RuntimeError, ValueError) as e:
             ok, line = False, f"GATE refused: {type(e).__name__}: {e}"[:800]
         print(line, flush=True)

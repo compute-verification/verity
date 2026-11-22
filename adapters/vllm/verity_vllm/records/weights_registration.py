@@ -6,23 +6,16 @@ pins it (`window_weights.registration_pins`, `records_audit.py count --pins`) an
 its hiding root."""
 from __future__ import annotations
 
-import hashlib
-import json
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
-
-from verity.circuits.codec import canonical_json
 
 from verity_vllm.records.fields import RecordError, only, required
 
-__all__ = ["OF_RECORD", "WeightsRegistration", "write_of_record"]
+__all__ = ["WeightsRegistration"]
 
 SCHEMA = "verity-vllm/weights-registration/v1"
-#: the registration of record's file, beside the registration, which the audit hands the verifier's check
-OF_RECORD = "weights_of_record.json"
 #: an entry's fields: core's `registered_value.Registered.entry()` of a value of 16-bit words
 ENTRY = ("value", "root", "leaves", "words", "domain")
 ROOT = re.compile(r"[0-9a-f]{128}")
@@ -65,21 +58,8 @@ class WeightsRegistration:
                 "grain": dict(self.grain), "values": {p: dict(e) for p, e in sorted(self.values.items())},
                 "unrooted": dict(sorted(self.unrooted.items()))}
 
-    def of_record(self) -> bytes:
-        """The registration of record as the verifier's check reads it (``records_audit.py --registered``): exactly
-        ``{program, values}`` in canonical JSON, whose SHA-512 is the digest the auditor's side holds."""
-        return canonical_json({"program": self.program, "values": {p: dict(e) for p, e in sorted(self.values.items())}})
-
     @property
     def roots(self) -> dict[str, str]:
         """Each weight parameter's root, ``{param: root}``."""
         return {p: e["root"] for p, e in sorted(self.values.items())}
 
-
-def write_of_record(registration: str | Path) -> str:
-    """The registration at ``registration``'s document of record (`WeightsRegistration.of_record`), written beside it as
-    `OF_RECORD`; -> its SHA-512. Refused (`fields.RecordError`) where the file is no registration."""
-    path = Path(registration)
-    body = WeightsRegistration.of(json.loads(path.read_text()), str(path)).of_record()
-    path.with_name(OF_RECORD).write_bytes(body)
-    return hashlib.sha512(body).hexdigest()

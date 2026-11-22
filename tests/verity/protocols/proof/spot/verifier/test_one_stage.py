@@ -31,6 +31,7 @@ from verity.protocols.proof.spot.verifier.one_stage import (
 )
 from verity.protocols.proof.spot.prover import docket as DK
 from verity.commitments import randomness as RND
+from verity.commitments.live_coin import PUBLIC_BYTES
 
 XOR8 = PrimitiveDefinition("OneStageTestXor8", 1, (("a", Value(8)), ("b", Value(8))), Value(8), lambda a, b: a ^ b,
                            register=False)
@@ -1022,11 +1023,12 @@ def _pin(prog, value="t", words=2, program="aa" * 64, leaves=None, domain=None):
     return entry
 
 
-def _weights(pins, program="aa" * 64, **more):
-    """A weights' registration of record pinning `pins`, with the keys `more` beside its own, its bytes and their SHA-512."""
-    doc = {"program": program, "values": {e["value"]: e for e in pins}, **more}
-    body = json.dumps(doc).encode()
-    return body, hashlib.sha512(body).hexdigest()
+def _weights(pins, program="aa" * 64):
+    """A deployment's registration record registering `pins` under `program`, its bytes and its digest."""
+    from verity.commitments import docket_digest as DD, domains as DM
+    doc = {"format": DM.REGISTRATION, "program": program, "deployment": {"kind": "test"}, "registered": list(pins),
+           "previous": None}
+    return json.dumps(doc).encode(), DD.digest(doc)
 
 
 def _weighed(prog, q, entries=(), **kw):
@@ -1041,8 +1043,8 @@ def test_r8_excuses_a_registered_weight_only_where_it_is_marked_and_pinned():
     """R8 under a weights' registration of record (`docket.weights_held`): a registered input two proof blocks read
     passes with the registration and the SHA-512 the auditor's side holds for it, on a v1 record: the pin it accepts is
     no entry R7 reads. Without the registration it is refused by name (`R8-unpinned`), and at a wrong digest, a wrong
-    domain or a wrong shape the registration is refused. A document with any key beside `program` and `values`, `reads`
-    among them, is another form (`R8-weights-form`). A pin of a parameter the program doesn't mark registered excuses
+    domain or a wrong shape the registration is refused. An entry with a key beside its own, or a value registered
+    twice, is another form (`R8-weights-form`). A pin of a parameter the program doesn't mark registered excuses
     nothing: two proof blocks reading it is refused in the variant with no members (`R8-shared-input`)."""
     q = P.template_instance_query(PAIR.id)
     for marked, unmarked in zip(_two_programs(registered=("t",)), _two_programs()):
@@ -1063,8 +1065,8 @@ def test_r8_excuses_a_registered_weight_only_where_it_is_marked_and_pinned():
         assert _weighed(marked, q, weights_of_record=bad).codes == ("R8-weights-domain", "R8-unpinned")
         bad = _weights([_pin(marked, leaves=G.shape(marked, "t", 2) + 1)])
         assert _weighed(marked, q, weights_of_record=bad).codes == ("R8-weights-shape",)
-        for more in ({"reads": [list(r) for r in reads]}, {"reads": []}):
-            assert _weighed(marked, q, weights_of_record=_weights([pin], **more)).codes == ("R8-weights-form",)
+        for form in ([{**pin, "reads": [list(r) for r in reads]}], [pin, pin]):
+            assert _weighed(marked, q, weights_of_record=_weights(form)).codes == ("R8-weights-form",)
         assert _weighed(unmarked, q, weights_of_record=_weights([_pin(unmarked)])).codes == ("R8-shared-input",)
         assert _weighed(unmarked, q).codes == ("R8-shared-input",)
 
@@ -1080,7 +1082,7 @@ def test_the_members_check_holds_a_marked_programs_reads_only_to_pins_r8_accepte
 
     def params(weights=None, registered=None):
         return {"query": q, "registered": registered,
-                **({} if weights is None else {"weights_of_record": {"document": weights[0].hex(), "digest": weights[1]}})}
+                **({} if weights is None else {"registration": {"record": weights[0].hex(), "head": R.DEVELOPMENT}})}
 
     for marked, unmarked in zip(_two_programs(registered=("t",)), _two_programs()):
         pin = _pin(marked)
@@ -1116,6 +1118,50 @@ def test_the_members_check_holds_a_marked_programs_reads_only_to_pins_r8_accepte
         assert set(own[4]) == {"t"} and own[4]["t"]["root"] == pin["root"]
         assert R.weights_held(marked, q, {"t": 2}, None)[0] == [("R8-unpinned", {"values": ["t"]})]
         assert R.weights_held(marked, q, {"t": 2}, None, own[4])[0] == []
+        body = _weights([pin])[0]
+        for reg, why in (({"record": body.hex(), "ledger": [], "lane": "circuits"}, R.NO_SIGNED_HEAD_WHY),
+                         ({"record": body.hex()}, R.REGISTRATION_FORM),
+                         ({"record": body.hex(), "head": "served"}, R.REGISTRATION_FORM),
+                         ({"record": body.hex().upper(), "head": R.DEVELOPMENT}, R.REGISTRATION_FORM)):
+            with pytest.raises(M.Outside) as e:
+                M.read_pins({**params(), "registration": reg}, marked)
+            assert str(e.value).startswith(why)
+
+
+def test_the_registration_is_the_challengers_signed_head_or_the_development_path_named():
+    """`docket.registration_parsed` (`OneStage.registrationParsed`): the development path holds the record to its own
+    digest, and only where named; a ledger with no challenger or epoch is refused by name, and so is a record whose
+    digest is not the head the ledger's challenger signed."""
+    body, digest = _weights([])
+    assert R.registration_parsed(None, None, None, None) is None
+    assert R.registration_parsed({"record": body.hex(), "head": R.DEVELOPMENT}, None, None, None) == (
+        body, digest, R.DEVELOPMENT)
+    for challenger, root in ((None, "ab" * 64), ({"key": {}}, None)):
+        with pytest.raises(R.RegistrationRefused) as e:
+            R.registration_parsed({"record": body.hex(), "ledger": [], "lane": "circuits"}, challenger, root, lambda *a: True)
+        assert str(e.value) == R.NO_SIGNED_HEAD_WHY
+    with pytest.raises(R.RegistrationRefused) as e:
+        R.registration_parsed({"record": body.hex(), "ledger": []}, None, "ab" * 64, lambda *a: True)
+    assert str(e.value) == R.REGISTRATION_FORM
+
+
+def test_the_half_after_the_draw_refuses_by_name_what_it_cannot_test():
+    """`docket.registration_after_draw` (`OneStage.registrationAfterDraw`): no epoch or challenger key, or no lane the
+    auditor names, or evidence with no ledger, refuses by name; the ledger's own refusals are
+    `challenger.registration_held`'s, held to the Lean's by the challenger difftest and, through the whole check, by
+    `test_difftest.py`."""
+    for registration, challenger, root, why in (({"lane": "circuits"}, {"key": {}}, "ab" * 64, R.NO_SIGNED_HEAD_WHY),
+                                                ({"lane": "circuits"}, None, None, R.NO_SIGNED_HEAD_WHY)):
+        with pytest.raises(R.RegistrationRefused) as e:
+            R.registration_after_draw(registration, challenger, root, "cd" * 64, {"ledger": []}, lambda *a: True,
+                                      "ef" * 64)
+        assert str(e.value) == why
+    key = {"H": 4, "W": 4, "public": "00" * PUBLIC_BYTES}
+    for coins in ({}, {"ledger": None}, None):
+        with pytest.raises(R.RegistrationRefused) as e:
+            R.registration_after_draw({"lane": "circuits"}, {"key": key}, "ab" * 64, "cd" * 64, coins, lambda *a: True,
+                                      "ef" * 64)
+        assert str(e.value) == R.NO_LEDGER_AFTER_DRAW_WHY
 
 
 def _held(prog, q, rp):
@@ -1137,7 +1183,7 @@ def _chunked(second: str, marked: tuple[str, ...]):
     prog, q = Program(bind(defn), registered=marked), P.template_instance_query(PAIR.id)
     pins = [_pin(prog, v) for v in marked]
     body, digest = _weights(pins)
-    params = {"query": q, "registered": None, "weights_of_record": {"document": body.hex(), "digest": digest}}
+    params = {"query": q, "registered": None, "registration": {"record": body.hex(), "head": R.DEVELOPMENT}}
     return prog, q, {e["value"]: e for e in pins}, M.read_pins(params, prog)
 
 

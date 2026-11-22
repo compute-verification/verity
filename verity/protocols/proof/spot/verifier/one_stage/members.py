@@ -533,17 +533,21 @@ ReadPins = tuple[list[str], list[tuple[str, range]], list[tuple[int, str, int, i
                  Mapping[str, Mapping[str, Any]]]
 
 
-def read_pins(params: Mapping[str, Any], program: Program) -> ReadPins:
+def read_pins(params: Mapping[str, Any], program: Program, verify: Ch.Verify | None = None) -> ReadPins:
     """`Docket.readPins` on the parameters' own verifier (`docket.read_pins`): refused by name (`docket.read_pins_why`)
     where the program marks an input the verifier does not expect and the partition is no template query applying to
-    it, or the parameters carry no weights' registration of record R8 accepts."""
-    w = params.get("weights_of_record")
+    it, or the parameters carry no registration record R8 accepts; their ``registration`` read as
+    `OneStage.registrationParsed` reads it (`docket.registration_parsed`, the ledger's signatures checked by `verify`)."""
+    try:
+        reg = DK.registration_parsed(params.get("registration"), params.get("challenger"), params.get("window_root"), verify)
+    except DK.RegistrationRefused as e:
+        raise Outside(f"{e}, which the parameters' parser refuses") from None
     registered = params.get("registered") or {}
     roots = DK.held_entries(program, registered, params.get("row_schemas"), params.get("window_root"),
                             params.get("held"), params.get("supplied") or {}, params.get("pinned") or {},
                             params.get("outputs") or {}, params.get("log") or [])
     got = DK.read_pins(program, params["query"], registered,
-                       None if w is None else (bytes.fromhex(w["document"]), w["digest"]), roots)
+                       None if reg is None else reg[:2], roots)
     if got is None:
         raise _Refused(DK.read_pins_why(program, params["query"]))
     return got
@@ -1055,8 +1059,8 @@ def _wired_rows(program: Program, query: Mapping[str, Any], desc: Mapping[str, A
         ranges = P._template(program, query, "the members' partition").ranges
         cuts = EG.io_cuts(desc, ranges)
         got = EG.edges(desc, ranges, {"templates": {t: {} for _k, t, _a, _c in ranges}, "cuts": cuts})
-    except (ValueError, P.QueryRefused):
-        return {}
+    except (ValueError, P.QueryRefused) as e:
+        got = {"refusal": str(e)}
     if "refusal" in got:
         return {}
     lbase = _local_bases(ranges)
@@ -1574,7 +1578,7 @@ def _members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence:
         _laid(ms, record)
         _class(ms)
         _tree_ports_held(ms, record, _wired_rows(program, params["query"], params["program"], ms))
-        rp = read_pins(params, program)
+        rp = read_pins(params, program, verify)
         pins_held(ms, EG._Root(params["program"]), P._template(program, params["query"], "the members' partition").ranges,
                   program, DK.marked_gates(program), rp)
         roots, ft = _members_roots(ms, record)

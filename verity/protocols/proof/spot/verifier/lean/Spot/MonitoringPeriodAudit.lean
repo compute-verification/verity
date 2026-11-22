@@ -326,7 +326,9 @@ def executionPhaseAt (inner : Inner) (p : AuditParams) (r : Read) (ledger pins :
     return { st with before := st.before.push record, undecided := st.undecided <|> some s!"{at_}: {why}" }
 
 /-- The circuit that the period listing session `ses` committed when the ledger opened it: `none` when no period
-lists the session, or the one that does committed no circuit. -/
+lists the session, or the one that does committed no circuit. "Registration" here is a period's circuit digest,
+another thing than the registration the challenger signs for a lane, the digest of the deployment's registration
+record (`Challenger.registrationOf`). -/
 def registrationOf (r : Read) (ses : String) : Option String :=
   (r.periods.find? (·.windows.contains ses)).bind fun mp =>
     match mp.circuit with

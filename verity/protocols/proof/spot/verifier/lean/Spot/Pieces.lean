@@ -90,10 +90,12 @@ difftest against `one_stage`'s Python, beside the whole protocol (`spot-one-stag
   (`Challenger`): a coin commitment and an opening as `from_json` reads them, `live_reason` and `order_reason`.
 * `challenger_key`, `challenger_record`, `challenger_trusted`: the challenger's signed record (`ChallengerRecord`): the
   verifier's key and a record as `from_json` reads them, with `record_message`, and `trusted_reason`.
-* `challenger_close`, `challenger_released`, `challenger_ledger`, `challenger_day`, `challenger_head`,
+* `challenger_close`, `challenger_released`, `challenger_ledger`, `challenger_day`, `challenger_registration`,
+  `challenger_head`,
   `challenger_session`, `challenger_credited`, `challenger_pinned`: the challenger's session (`ChallengerSession`): its
   close as `from_json` reads it, with `close_message`; `log_chain`, `released_log_of` and `by_family`; `audited_session`,
-  the auditor's ledger; `declared_day`, a window's day and its lane's declarations before it; `ledger_head`, the ledger's
+  the auditor's ledger; `declared_day`, a window's day and its lane's declarations before it; `registration_of`, the
+  registration an epoch's lane signed before it; `ledger_head`, the ledger's
   published heads; `trusted_session_of` and `credited_session`, a window counted toward its
   period's circuit, each over `pinned_session`: a session from a commit the host's pins log records and the auditor's
   first-parent list of main holds.
@@ -1237,7 +1239,8 @@ def table : List (String × (Json → V Json)) :=
    ("challenger_record", Challenger.recordPiece), ("challenger_trusted", Challenger.trustedPiece),
    ("challenger_close", Challenger.closePiece), ("challenger_released", Challenger.releasedPiece),
    ("challenger_ledger", Challenger.ledgerPiece), ("challenger_day", Challenger.dayPiece),
-   ("challenger_head", Challenger.headPiece),
+   ("challenger_registration", Challenger.registrationPiece), ("challenger_registration_head", Challenger.registrationHeadPiece),
+   ("challenger_registration_held", Challenger.registrationHeldPiece), ("challenger_head", Challenger.headPiece),
    ("challenger_session", Challenger.challengePhasePiece), ("challenger_credited", Challenger.creditedPiece),
    ("challenger_pinned", Challenger.pinnedPiece), ("challenger_read", Challenger.readPiece),
    ("challenger_draw_coins", Challenger.sampleCoinsPiece), ("challenger_within", Challenger.withinPiece),

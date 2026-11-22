@@ -283,16 +283,22 @@ def declared(a: argparse.Namespace) -> dict[str, Any]:
 
 
 def weighed(a: argparse.Namespace) -> dict[str, Any]:
-    """The weights' registration of record (records_audit's ``--registered``), as `verifier.check` takes it; empty
-    without."""
-    return {"weights_of_record": a.weights_of_record} if getattr(a, "weights_of_record", None) is not None else {}
+    """The deployment's registration record (records_audit's ``--registration``, `registration_param`) and, on the
+    ledger's path, the challenger whose key reads it, as `verifier.check` takes them; empty without."""
+    reg = getattr(a, "registration_json", None)
+    if reg is None:
+        return {}
+    from verity.protocols.proof.spot.verifier.challenger import challenger_session as AC
+    ch = getattr(a, "registration_challenger", None)
+    return {"registration": reg, **({"challenger": ch, "verify": AC.lms_verify, "window_root": a.window_root} if ch else {})}
 
 
 def registering(a: argparse.Namespace, history: dict | None = None) -> dict[str, Any]:
     """`tie` as a stream's `register` takes it (the log is the stream's, `stream_of`), with the window's history tables
-    (``history``, `audit`'s), which the run of record holds the window's registered roots to, and `weighed`."""
+    (``history``, `audit`'s), which the run of record holds the window's registered roots to, and `weighed` but its
+    ``window_root``, which `register` takes as its own."""
     return {**{k: v for k, v in tie(a).items() if k != "log"}, **({"history": history} if history is not None else {}),
-            **weighed(a)}
+            **{k: v for k, v in weighed(a).items() if k != "window_root"}}
 
 
 def program_values(program: Program) -> tuple[tuple[str, int, int], ...]:
@@ -1157,7 +1163,9 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         checks["door"] = {"ok": False, "codes": [code],
                           "detail": {"why": f"{DOOR_REFUSES} {k} of {m.template}: {why[:2000]}", "member": k,
                                      "template": m.template, "block": k, "units": [m.base, m.base + m.n]}}
-        summary.update(checks_before_draw={c: v["ok"] for c, v in checks.items()}, checks=checks)
+        # a staged member's checks (`m{k}`) are booleans until `own_files` folds them
+        summary.update(checks_before_draw={c: v["ok"] if "ok" in v else all(v.values()) for c, v in checks.items()},
+                       checks=checks)
         (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True))
         print("A5 " + json.dumps({"refused_before_draw": summary["checks_before_draw"], "checks": checks}, default=str))
         return summary, False
@@ -1265,7 +1273,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     hist = history(publics) if history is not None else None
     checks["registration"] = V.check(rec, program, query, sampling_design, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table,
                                      partition=part, history=hist, members=link_members(members) if per_member(members, not plain(a)) else (),
-                                     **verifying(a), **declared(a), **weighed(a)).to_json()
+                                     **{**verifying(a), **declared(a), **weighed(a)}).to_json()
     progress("registration", t_audit, ok=checks["registration"].get("ok"))
     if mine.row_tables:
         bad = TB.check_row_tables(mine, publics, {r["port"]: r["root"] for r in rec["roots"]}, step_roots)
@@ -1586,7 +1594,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         result["registered_reads"] = TB.reported_reads(reads, row_verdicts)
     result["checks_before_draw"] = checks
     result["case_v2"] = case_written(out)
-    members_lean(out, result, pm)
+    members_lean(out, result, pm, names=[mm["m"].key for mm in members])
     one_statement_held(result, rec, members, pm)
     if after:
         result["checks_after_draw"] = after
@@ -1809,16 +1817,18 @@ def one_statement_held(result: dict, rec: dict, members: Sequence[dict], pm: dic
 
 
 def members_lean(out: Path, result: dict, pm: dict | str | None,
-                 check: Callable[[dict], tuple] = MB.case_check_out) -> None:
+                 check: Callable[[dict], tuple] = MB.case_check_out, names: Sequence[str] = ()) -> None:
     """`OneStageZk.checkMembersAt` on the audit's own per-member case (``out/case-v2.json``, `members.case_check`), its
     verdict ``result["checks"]["members_lean"]`` in every audit, ``ran`` whether Lean answered: the audit accepts only
     where Lean accepts too, and where Lean and the Python verdict differ, the check's code is `MEMBERS_DISAGREE` and its
     detail both texts. An audit with no per-member case (``pm`` not `members_proof`'s members) keeps the Python's
-    verdict and says why under ``reason``; one whose case Lean could not read is refused. Where ``check`` gives the
+    verdict and says why under ``reason``; one whose case Lean could not read is refused. Where Lean did not run, the
+    window's members (``names``) are listed under ``not_verified``: no Lean ran on them. Where ``check`` gives the
     outcome's line as the executable printed it (`members.case_check_out`), the detail holds it and its SHA-512."""
     checks = result.setdefault("checks", {})
     if not isinstance(pm, dict):
-        checks["members_lean"] = {"ok": True, "ran": False, "codes": [], "reason": pm or ONE_MEMBER}
+        checks["members_lean"] = {"ok": True, "ran": False, "codes": [], "reason": pm or ONE_MEMBER,
+                                  "not_verified": list(names)}
         return
     case = out / "case-v2.json"
     try:
@@ -1826,7 +1836,8 @@ def members_lean(out: Path, result: dict, pm: dict | str | None,
             raise MB.LeanError(f"no per-member case: {case_written(out)['why']}")
         verdict, why, *printed = check(json.loads(case.read_text()))
     except MB.LeanError as e:
-        checks["members_lean"] = {"ok": False, "ran": False, "codes": ["lean-not-run"], "reason": str(e)}
+        checks["members_lean"] = {"ok": False, "ran": False, "codes": ["lean-not-run"], "reason": str(e),
+                                  "not_verified": list(names)}
         result["accepted"] = False
         return
     failed = sorted(k for k, c in checks.items() if isinstance(c, dict) and not c.get("ok", True))

@@ -503,6 +503,24 @@ def opened_reason(got: dict, withhold: bool) -> str | None:
     return None if got.get("signed") is True else "its challenger signed no record"
 
 
+def gate_raw(ssh: list[str], gate: str, words: str) -> bytes:
+    """What infra's gate `gate` (USER@HOST) answers to `words` over `ssh` (`challenger_gate.ssh_args`); `CoinError` where
+    it refuses."""
+    p = subprocess.run([*ssh, gate, words], capture_output=True)
+    if p.returncode:
+        raise Ch.CoinError(f"infra's gate refused {words.split()[0]}: {p.stderr.decode().strip() or p.stdout.decode().strip()}")
+    return p.stdout
+
+
+def ledger_lines_at(source: str, ssh_key: str | None = None) -> list[str]:
+    """The auditor's ledger's lines at `source`: ``gate:USER@HOST``, read through infra's gate's ``ledger`` verb with the
+    lane's gate key `ssh_key`; else a published head's path (`remote.ledger_lines`). Not verified here: a copy can be
+    shortened, never altered, so every reader tests it under the pinned key (`challenger._checked`)."""
+    if source.startswith("gate:"):
+        return [x for x in gate_raw(G.ssh_args(ssh_key), source[len("gate:"):], "ledger").decode().split("\n") if x]
+    return R.ledger_lines(source)
+
+
 class GateClient:
     """The challenger host's session through infra's gate `gate` (USER@HOST) with the lane's gate key `ssh_key`, its challenger
     listening on `peer`'s 127.0.0.1 (this machine's name in the host's /etc/vy/peers), and the challenger key the deployment
@@ -515,10 +533,7 @@ class GateClient:
         self.session: str | None = None
 
     def _raw(self, words: str) -> bytes:
-        p = subprocess.run([*self.ssh, self.gate, words], capture_output=True)
-        if p.returncode:
-            raise Ch.CoinError(f"infra's gate refused {words.split()[0]}: {p.stderr.decode().strip() or p.stdout.decode().strip()}")
-        return p.stdout
+        return gate_raw(self.ssh, self.gate, words)
 
     def open(self, root: str, layout: list, minutes: int = MINUTES, scheme: str = SCHEME,
              withhold: bool = False) -> tuple[str, str, str | None]:

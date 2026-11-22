@@ -688,7 +688,7 @@ def weights_registration_of_serve(a: argparse.Namespace) -> dict[str, Any]:
     import numpy as np
 
     from verity_vllm.pipeline.advice import registered_weights
-    from verity_vllm.program.predict.window_weights import DEPLOYMENT_RECORD, OF_RECORD, REGISTRATION, register
+    from verity_vllm.program.predict.window_weights import DEPLOYMENT_RECORD, REGISTRATION, register
 
     out = Path(a.out)
     if out.name != REGISTRATION or (a.deployment_record and Path(a.deployment_record) != out.with_name(DEPLOYMENT_RECORD)):
@@ -700,8 +700,7 @@ def weights_registration_of_serve(a: argparse.Namespace) -> dict[str, Any]:
                       tables={"cos_sin": np.load(cos_sin)} if cos_sin.is_file() else None)
     doc = json.loads(out.read_text())
     roots = registered_weights(doc, serve)
-    return {"roots": len(roots), "unrooted": sorted(doc["unrooted"]), "out": a.out, "deployment": digest,
-            "of_record": hashlib.sha512(out.with_name(OF_RECORD).read_bytes()).hexdigest()}
+    return {"roots": len(roots), "unrooted": sorted(doc["unrooted"]), "out": a.out, "deployment": digest}
 
 
 def window_class_of(arg: str | None) -> Any:
