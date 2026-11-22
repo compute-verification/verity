@@ -40,7 +40,6 @@ inputs = ["verity/protocols/proof/spot/verifier/one_stage/lean_child.py", "verit
           "verity/protocols/proof/spot/verifier/one_stage/partition.py",
           "verity/protocols/proof/spot/verifier/one_stage/proofs.py",
           "verity/protocols/proof/spot/verifier/one_stage/one_circuit.py",
-          "verity/protocols/proof/spot/verifier/one_stage/certified_rows.py",
           "verity/protocols/proof/spot/verifier/one_stage/verifier.py",
           "verity/protocols/proof/spot/verifier/one_stage/caller.py",
           "verity/protocols/proof/spot/verifier/one_stage/audit.py",
