@@ -407,22 +407,12 @@ theorem matchesPublic_population {reg : Array (String × Json)} {rec s r d pop :
   · rfl
 
 /-- **v2 holds the public file's instances to the record's population** (`publicHeld`). -/
-theorem publicHeld_population {rec : Json} {pubB : ByteArray} {hd : Json}
-    (h : _root_.Spot.OneStageZk.publicHeld rec pubB = .ok ())
+theorem publicHeld_population {rec : Json} {pubB : ByteArray} {registered : Option Json} {hd : Json}
+    (h : _root_.Spot.OneStageZk.publicHeld rec pubB registered = .ok ())
     (hh : _root_.Spot.FilePart.header pubB = .ok hd) :
     _root_.Spot.jeq (_root_.Spot.getD hd "instances")
-      (_root_.Spot.getD rec "population") = true := by
-  unfold _root_.Spot.OneStageZk.publicHeld at h
-  obtain ⟨_, he, h⟩ := ebind_ok h
-  rw [hh] at he
-  cases he
-  dsimp only at h
-  obtain ⟨_, -, h⟩ := ebind_ok h
-  try dsimp only at h
-  split at h
-  · cases h
-  · rename_i hc
-    exact matchesPublic_population (by simpa using hc)
+      (_root_.Spot.getD rec "population") = true :=
+  Properties.Spot.Credited.publicHeld_instances h hh
 
 /-- **A natural number `jeq` holds to a value is the value's natural number.** -/
 theorem nat_of_jeq {m n : ℕ} {j : Json}
@@ -480,7 +470,8 @@ theorem setupTables_population {tags : Flock.Tags} {cf pf : ByteArray} {coins : 
 /-- **A population v2 loads from the public file it held to the record is the record's**: the load reads the header's
 `instances` (`Bridge.loadPublic_core`), which `publicHeld` holds to the record's population. -/
 theorem population_held {rec : Json} {pubB : ByteArray} {tags : Flock.Tags} {c : Flock.Circuit}
-    {pop : Flock.Public} {n : ℕ} (hph : _root_.Spot.OneStageZk.publicHeld rec pubB = .ok ())
+    {pop : Flock.Public} {n : ℕ} {registered : Option Json}
+    (hph : _root_.Spot.OneStageZk.publicHeld rec pubB registered = .ok ())
     (hl : Flock.HmRow.loadPublic tags c pubB = .ok pop)
     (hn : _root_.Spot.nat? (_root_.Spot.getD rec "population") = some n) : pop.n = n := by
   rw [← Flock.With.loadPublicWith_std] at hl

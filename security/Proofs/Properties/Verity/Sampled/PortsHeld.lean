@@ -566,17 +566,6 @@ theorem portsHeld_of_headerHeldAt {reads : Array (String × String)} {held : Arr
   · rw [hrp', hDom' p hpD] at hd2
     exact hd2
 
-theorem header_wf {pubB : ByteArray} {hd : Json} (h : FilePart.header pubB = .ok hd) : Wf hd := by
-  unfold FilePart.header at h
-  split at h
-  · cases hx : (Flock.JsonParse.parse _).mapError _ with
-    | error e => rw [hx] at h; cases h
-    | ok j =>
-      rw [hx] at h
-      cases h
-      exact FlockDeploy.wf_norm j
-  · first | cases h | (simp only [throw, throwThe, MonadExceptOf.throw, reduceCtorEq] at h; done)
-
 theorem membersPortsHeld : MembersPortsHeld := by
   intro p ms c ξ e sts bs pub prof h
   obtain ⟨r, hr, -, -⟩ := OneStageZk.checkMembersAt_accept h
@@ -593,7 +582,7 @@ theorem membersPortsHeld : MembersPortsHeld := by
   obtain ⟨rd, hrd, hpop⟩ := ebind_ok hpop
   obtain ⟨hl, hhl, hpop⟩ := ebind_ok hpop
   exact ⟨a, hd, rd, hl, ha, hh, hrd, hhl,
-    portsHeld_of_headerHeldAt (header_wf hh) ⟨_, rfl, Std.TreeMap.Raw.WF.ofList⟩ (slicePortsOf_nodup hps hnd) hpop⟩
+    portsHeld_of_headerHeldAt (Properties.Spot.Credited.header_wf hh) ⟨_, rfl, Std.TreeMap.Raw.WF.ofList⟩ (slicePortsOf_nodup hps hnd) hpop⟩
 
 /-- **`MembersPortsHeld`'s nontrivial lemma**: at a registration whose roots are not a list, the verifier's roots of
 the members refuse (`OneStageZk.rootsOf`, before any hash), so a verifier that accepted it would accept with no roots

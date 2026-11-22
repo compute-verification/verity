@@ -369,7 +369,7 @@ theorem checkBlobsAt_run {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.On
     {pub : _root_.Spot.OneStage.Public} {prof : _root_.Core.Integrity}
     (hm : p.members = none) (h : _root_.Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     ∃ r pubB, e.sessions.size = 1 ∧ bs.get p.own.pub "public file" = .ok pubB ∧
-      _root_.Spot.OneStageZk.publicHeld c.record pubB = .ok () ∧
+      _root_.Spot.OneStageZk.publicHeld c.record pubB p.own.registered = .ok () ∧
       _root_.Spot.OneStageZk.run p.own e.sessions (some e.base.provedUnits) bs = .ok r ∧ r.all = true := by
   replace h := (_root_.Spot.OneStageZk.checkBlobsAt_accept_one hm h).1
   replace h := _root_.Spot.OneStageZk.checkOneAt_body h

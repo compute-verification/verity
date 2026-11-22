@@ -8,6 +8,8 @@ public import Proofs.Properties.Poub.Remote.Sort
 public import Proofs.Flock.Bridge.V5.Accepted
 public import Proofs.Flock.Claims.Complete.Json.Stmt
 public import Proofs.Flock.SpotFlock.SampleInts
+public import Proofs.Flock.SpotFlock.OwnReads
+public import Proofs.Flock.Claims.JsonNorm
 
 /-!
 # v2 credits its one session with the coins' sample
@@ -346,6 +348,69 @@ theorem population_of_matchesPublic {reg : Array (String × Json)} {rec s r d po
     | (simp only [Id.run_pure, Properties.Spot.fail_ne_nil] at h; done)
     | exact bool_of_not_not (by assumption)
 
+theorem header_wf {pubB : ByteArray} {hd : Json} (h : FilePart.header pubB = .ok hd) : Claims.Json.Wf hd := by
+  unfold FilePart.header at h
+  split at h
+  · cases hx : (Flock.JsonParse.parse _).mapError _ with
+    | error e => rw [hx] at h; cases h
+    | ok j =>
+      rw [hx] at h
+      cases h
+      exact FlockDeploy.wf_norm j
+  · first | cases h | (simp only [throw, throwThe, MonadExceptOf.throw, reduceCtorEq] at h; done)
+
+/-- Taking port `p` out of a header (`dropHeaderPort`) keeps its `instances` and an object's well-formed tree. -/
+theorem instances_dropHeaderPort {h : Json} (hw : ∀ m, h = .obj m → m.WF) (p : String) :
+    getD (OneStageZk.dropHeaderPort h p) "instances" = getD h "instances" ∧
+      ∀ m, OneStageZk.dropHeaderPort h p = .obj m → m.WF := by
+  unfold OneStageZk.dropHeaderPort
+  cases h with
+  | obj m =>
+    have hm := hw m rfl
+    simp only [Json.setObjVal!]
+    refine ⟨?_, fun m' he => ?_⟩
+    · simp only [getD, field?, Json.getObjVal?, Std.TreeMap.Raw.get?_eq_getElem?,
+        Std.TreeMap.Raw.getElem?_insert hm]
+      simp
+    · cases he
+      exact hm.insert
+  | _ => exact ⟨rfl, fun m he => by cases he⟩
+
+theorem instances_foldDrop (reg : Array (String × Json)) :
+    ∀ (l : List String) (h : Json), (∀ m, h = .obj m → m.WF) →
+      getD (l.foldl (fun h p => if reg.any (·.1 == p) then h else OneStageZk.dropHeaderPort h p) h) "instances" =
+        getD h "instances"
+  | [], _, _ => rfl
+  | p :: l, h, hw => by
+    rw [List.foldl_cons]
+    split
+    · exact instances_foldDrop reg l h hw
+    · obtain ⟨h1, h2⟩ := instances_dropHeaderPort hw p
+      rw [instances_foldDrop reg l _ h2, h1]
+
+/-- `publicHeld` holds the header's `instances` to the record's population, whichever ports of the verifier's
+`registered` file it leaves uncompared. -/
+theorem publicHeld_instances {rec : Json} {pubB : ByteArray} {registered : Option Json} {hd : Json}
+    (h : OneStageZk.publicHeld rec pubB registered = .ok ()) (hh : FilePart.header pubB = .ok hd) :
+    jeq (getD hd "instances") (getD rec "population") = true := by
+  have hw : ∀ m, hd = .obj m → m.WF := fun m he => (SpotFlock.ReadsJson.wf_obj (he ▸ header_wf hh)).1
+  unfold OneStageZk.publicHeld at h
+  obtain ⟨_, he, h⟩ := bind_ok h
+  rw [hh] at he
+  cases he
+  try dsimp only at h
+  obtain ⟨_, -, h⟩ := bind_ok h
+  obtain ⟨_, -, h⟩ := bind_ok h
+  try dsimp only at h
+  split at h
+  · first
+      | (cases h; done)
+      | simp [bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
+  · rename_i hne
+    have hj := population_of_matchesPublic (Array.isEmpty_iff.1 (bool_of_not_not hne))
+    rw [← Array.foldl_toList, instances_foldDrop _ _ _ hw] at hj
+    exact hj
+
 /-- The load of a public file keeps its header's `instances` as its count of instances. -/
 theorem instances_of_loadPublic {tags : Flock.Tags} {c : Flock.Circuit} {pi : Flock.HmIn.Ports} {f : ByteArray}
     {P : Flock.Public} (hp : Flock.HmIn.loadPublic tags c pi f = .ok P) :
@@ -425,20 +490,8 @@ theorem population_of_checkBlobsAt {p : OneStageZk.Params} {c : OneStage.Commitm
       rw [hn] at hpop
       cases hpop
     | some n => exact ⟨n, rfl⟩
-  have hj : jeq (getD P.header "instances") (getD c.record "population") = true := by
-    unfold OneStageZk.publicHeld at hph
-    obtain ⟨hd, hhd, hph⟩ := bind_ok hph
-    rw [Units.headerOf_loadPublic hl] at hhd
-    obtain rfl := Except.ok.inj hhd
-    try dsimp only at hph
-    obtain ⟨_, -, hph⟩ := bind_ok hph
-    try dsimp only at hph
-    split at hph
-    · first
-        | (cases hph; done)
-        | simp [bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at hph
-    · rename_i hne
-      exact population_of_matchesPublic (Array.isEmpty_iff.1 (bool_of_not_not hne))
+  have hj : jeq (getD P.header "instances") (getD c.record "population") = true :=
+    publicHeld_instances hph (Units.headerOf_loadPublic hl)
   have hi : getD P.header "instances" = .num ⟨Int.ofNat P.n, 0⟩ := by
     unfold getD field?
     rw [instances_of_loadPublic hl]
