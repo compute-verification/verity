@@ -524,8 +524,11 @@ the sampled ones and the session roots it states the registered roots, each read
 registered value, the receipt names the commitment's digest, and those verdicts accept; `samplingDesign` has a profile's sample `d`
 (`Record.profileSample`) and the registered population is a natural number `n`, and the check publishes `publicOf` and
 the profile `profileOf`, whose credited blocks `Core.Integrity.creditedProblem` does not refuse; and the registration's
-test after the draw (`OneStage.registrationAfterDraw`) returned no refusal on the evidence's coins. That test reads a
-ledger the evidence carries; that the registration it finds was signed before the session's coins is not said here. -/
+test after the draw (`OneStage.registrationAfterDraw`: the registration held by `Challenger.registrationHeld`, the
+period's circuit by `Challenger.periodCircuit` the docket's program) returned no refusal on the messages the evidence
+carries. This says only that the test returned no refusal. For it to give the registration before the challenges, a
+property of `Challenger.registrationHeld` would have to be stated: where it passes on a transcript the auditor signed, the
+registration message it finds is signed before the session's first challenge. -/
 def AcceptMeans : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Core.Integrity),
     OneStage.check p c e = .accept pub prof →
