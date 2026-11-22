@@ -2861,6 +2861,7 @@ def test_the_registration_after_the_draw_is_held_in_the_check_as_python_does(ser
                   "law": sampling_design, "leaf_layer": LEAF, "log": [], "partition": s.partition,
                   "ports": s.ports, "program": s.desc, "query": s.query, "registered": None, "scheme": SCHEME,
                   "window_root": lg.window["root"], "work_table": None,
+                  "parameters": _json([[n, t.to_json()] for n, t in s.program.fn.signature()[0]]),
                   "registration": {"record": body.hex(), "ledger": before, "lane": lane}}
         held = R.registration_parsed(params["registration"], params["challenger"], params["window_root"], lms_verify)
         assert held is not None and held[1] == digest

@@ -1641,7 +1641,7 @@ def test_the_gates_coins_take_the_peer_and_key_record_to_the_challengers_session
         RA.main([*args, *gate])
     assert seen.pop("local") is LC.Local
     assert seen == {"challenger": "gate:research@gate", "root": RUN, "ranks": [0], "main": "main.txt", "ssh_key": "gate.key",
-                    "peer": "vy-nebius-1", "key_record": "key.json", "deployed": False}
+                    "peer": "vy-nebius-1", "key_record": "key.json", "deployed": False, "host": None}
     seen.clear()
     with pytest.raises(SystemExit, match="2"):
         RA.main([*args, *gate, "--deployed-key"])
@@ -1650,7 +1650,7 @@ def test_the_gates_coins_take_the_peer_and_key_record_to_the_challengers_session
         RA.main([*args, "--challenger", "local", "--deployed-key"])
     assert seen.pop("local") is LC.Local
     assert seen == {"challenger": "local", "root": RUN, "ranks": [0], "main": "main.txt", "ssh_key": None, "peer": None,
-                    "key_record": None, "deployed": True}
+                    "key_record": None, "deployed": True, "host": None}
 
 
 def test_the_audit_reserves_a_port_for_every_session_its_sample_can_open(tmp_path, monkeypatch):

@@ -6,7 +6,6 @@ the partition's. It runs Lean's registration check beside
 the Python twin (minutes, with the executable built): no cheaper test holds a window's own committed rows to Lean's R7."""
 from __future__ import annotations
 
-import hashlib
 import json
 
 import numpy as np
@@ -14,6 +13,7 @@ import pytest
 
 from verity.circuits.codec import descriptor_chunks, descriptor_id, program_digest
 from verity.circuits.evaluation.batch import evaluate_batch
+from verity.commitments import docket_digest as DD, domains as DM
 from verity.commitments import registered_value as RV
 from verity.commitments import row_table as RT
 from verity.commitments.gates import embedding as E
@@ -91,12 +91,21 @@ def _pinned(out) -> tuple[I.Window, Table, dict, dict]:
     assert written["embed"] == table.entry()
     rec = DK.record(prog, query, DESIGN, SCHEME, window["roots"], {"kind": "served", "row": 7, "run": "r-table"},
                     leaf_layer=window["leaf_layer"], registered=[v.entry() for v in values.values()] + [written["embed"]])
-    body = json.dumps({"program": WEIGHTS_RECORD, "values": {"embed": table.entry()}}).encode()
+    body = json.dumps({"format": DM.REGISTRATION, "program": WEIGHTS_RECORD, "deployment": {"kind": "test"},
+                       "registered": [table.entry()], "previous": None}).encode()
     check = {"program": prog, "query": query, "sampling_design": DESIGN, "scheme": SCHEME,
              "ports": {r["port"]: {"leaves": r["leaves"], "domain": r["domain"]} for r in window["roots"]},
              "leaf_layer": window["leaf_layer"], "registered": {v: x.words for v, x in values.items()},
-             "schemas": {v: V2 for v in values}, "weights_of_record": (body, hashlib.sha512(body).hexdigest())}
+             "schemas": {v: V2 for v in values}, "registration": {"record": body.hex(), "head": R.DEVELOPMENT}}
     return win, table, rec, check
+
+
+def _docket(check: dict) -> dict:
+    """``check`` as `docket.check` takes it: the registration's record and its digest (`weights_of_record`)."""
+    reg = check["registration"]
+    body = None if reg is None else bytes.fromhex(reg["record"])
+    return {**{k: v for k, v in check.items() if k != "registration"},
+            "weights_of_record": None if body is None else (body, DD.digest(json.loads(body)))}
 
 
 def test_a_tables_anchors_from_cs_marks_and_its_pin_are_the_rows_r7_recomputes_from_the_programs_digest(tmp_path):
@@ -111,7 +120,7 @@ def test_a_tables_anchors_from_cs_marks_and_its_pin_are_the_rows_r7_recomputes_f
         assert row.program == pd and list(row.salts) == RV.supplied_salts(pd, f"embed/{of}", 1), of
     got = V.check(rec, **check)
     assert got.ok and got.codes == (), got
-    assert R.check(rec, **check).ok
+    assert R.check(rec, **_docket(check)).ok
 
 
 def _entry(rec: dict, value: str, **change) -> dict:
@@ -125,8 +134,8 @@ def _entry(rec: dict, value: str, **change) -> dict:
     ("the table's entry at another root", lambda rec, check: (_entry(rec, "embed", root="11" * 64), check), "R7-pin"),
     ("the table's entry in another domain only", lambda rec, check: (_entry(rec, "embed", domain="11" * 64), check),
      "R7-pin"),
-    ("no pin of the table", lambda rec, check: (rec, {**check, "weights_of_record": None}), "R7-anchor-unpinned"),
-    ("no pin of the table: a mark is no source", lambda rec, check: (rec, {**check, "weights_of_record": None}),
+    ("no pin of the table", lambda rec, check: (rec, {**check, "registration": None}), "R7-anchor-unpinned"),
+    ("no pin of the table: a mark is no source", lambda rec, check: (rec, {**check, "registration": None}),
      "R7-supplied-source"),
     ("the record leaves the table out", lambda rec, check: (_entry(rec, "embed"), check), "R7-values"),
 ], ids=lambda x: x if isinstance(x, str) else "")
@@ -135,7 +144,7 @@ def test_a_table_input_is_held_to_the_pin_never_the_records_entry(tmp_path, name
     both verifiers by the code."""
     win, table, rec, check = _pinned(tmp_path / "window")
     rec, check = change(rec, check)
-    got, mine = V.check(rec, **check), R.check(rec, **check)
+    got, mine = V.check(rec, **check), R.check(rec, **_docket(check))
     assert code in got.codes and code in mine.codes, (got, mine)
 
 
@@ -145,9 +154,9 @@ def test_a_scheme_that_also_supplies_a_marked_anchor_is_refused(tmp_path):
     win, table, rec, check = _pinned(tmp_path / "window")
     both = {**check, "supplied": {"embed/root": [[{"bytes": table.tree.root.hex()}]],
                                   "embed/domain": [[{"bytes": table.dom.domain_id.hex()}]]}}
-    for verifier in (V, R):
+    for verifier, kw in ((V, both), (R, _docket(both))):
         with pytest.raises(ValueError, match="C's mark names its function, and the scheme supplies rows for it too"):
-            verifier.check(rec, **both)
+            verifier.check(rec, **kw)
 
 
 def test_a_tables_root_and_domain_marks_give_the_rows_the_record_commits():
