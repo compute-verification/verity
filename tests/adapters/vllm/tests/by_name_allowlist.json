@@ -7,6 +7,7 @@
   "P4": "Phase 4 — acquisition plan from required values + correspondence; occurrence resolution over correspondence records",
   "P4W": "Phase 4 — input provenance by discovery (named_parameters ∪ named_buffers) with a basis per input (Draft 3 §5, §12.1.2)",
   "P5": "Phase 5 — checks renamed and scope-bearing; the finalize board / commit_summary retired; admission on the live-allocation model",
+  "PRF-648": "the registered compiler and its advice fix the declared circuit before the serve, for every class",
   "P6": "Phase 6 — delete per-model profiles and by-name tables after the findings harvest",
   "stays": "stays — legitimate semantic knowledge or serialization/policy vocabulary (re-classify if a Definition annotation replaces it)"
  },
@@ -126,6 +127,7 @@
   {"file": "verity_vllm/definitions/registry/b1.py", "kind": "model-name", "symbol": "<module>", "pattern": "^HuggingFaceTB/SmolLM2\\-360M$", "class": "L", "retires": "stays", "tag": "", "inventory": "provenance pins of Definitions"},
   {"file": "verity_vllm/definitions/registry/b1.py", "kind": "model-name", "symbol": "<module>", "pattern": "^Qwen/Qwen2\\.5\\-0\\.5B$", "class": "L", "retires": "stays", "tag": "", "inventory": "provenance pins of Definitions"},
   {"file": "verity_vllm/definitions/registry/b1.py", "kind": "model-name", "symbol": "<module>", "pattern": "^Qwen/Qwen2\\.5\\-1\\.5B$", "class": "L", "retires": "stays", "tag": "", "inventory": "provenance pins of Definitions"},
-  {"file": "verity_vllm/definitions/registry/spec.py", "kind": "model-name", "symbol": "<module>", "pattern": "^Qwen/Qwen2\\.5\\-0\\.5B$", "class": "L", "retires": "stays", "tag": "", "inventory": "provenance pins of Definitions"}
+  {"file": "verity_vllm/definitions/registry/spec.py", "kind": "model-name", "symbol": "<module>", "pattern": "^Qwen/Qwen2\\.5\\-0\\.5B$", "class": "L", "retires": "stays", "tag": "", "inventory": "provenance pins of Definitions"},
+  {"file": "verity_vllm/program/predict/window_circuit.py", "kind": "path-predicate", "symbol": "fixed_program", "pattern": "^\\(cls\\.slots,\\ cls\\.prompt,\\ cls\\.outputs\\)\\ not\\ in\\ FIXED_CLASSES$", "class": "P", "retires": "PRF-648", "tag": "", "inventory": "—", "decision": "vllm: the declared circuit's digest is computed before the serve for class 1,1,1 only, and every other class is refused by name until the registered compiler and its advice replace it"}
  ]
 }
