@@ -523,14 +523,17 @@ sample of `samplingDesign` over the registered population, the proved units and 
 the sampled ones and the session roots it states the registered roots, each read the verdicts it states report is of a
 registered value, the receipt names the commitment's digest, and those verdicts accept; `samplingDesign` has a profile's sample `d`
 (`Record.profileSample`) and the registered population is a natural number `n`, and the check publishes `publicOf` and
-the profile `profileOf`, whose credited blocks `Core.Integrity.creditedProblem` does not refuse. -/
+the profile `profileOf`, whose credited blocks `Core.Integrity.creditedProblem` does not refuse; and the registration's
+test after the draw (`OneStage.registrationAfterDraw`) returned no refusal on the evidence's coins. That test reads a
+ledger the evidence carries; that the registration it finds was signed before the session's coins is not said here. -/
 def AcceptMeans : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Core.Integrity),
     OneStage.check p c e = .accept pub prof →
       ∃ samplingDesign d n, Registered p.verifier c.record samplingDesign ∧ Drawn e.draw (getD c.record "population") samplingDesign ∧
         UnitsProved p.windowValues c e ∧ VerdictsAccept e.verdicts ∧
         Record.profileSample samplingDesign = some d ∧ nat? (getD c.record "population") = some n ∧
-        pub = publicOf p e samplingDesign d n ∧ prof = profileOf p c e d n ∧ prof.creditedProblem = none
+        pub = publicOf p e samplingDesign d n ∧ prof = profileOf p c e d n ∧ prof.creditedProblem = none ∧
+        OneStage.registrationAfterDraw p e.coins = .ok ()
 
 /-- The commitment's digest, which the receipt is held to, is the window record's digest of the record it decodes:
 `SHA-512(format || 0 || canon(record))`, the record's own format (v1 or v2) as the tag. -/

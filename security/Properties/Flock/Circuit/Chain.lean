@@ -673,11 +673,12 @@ def UnitIndicesAgree : Prop :=
   ∀ (pub : Flock.Public) (us vs : Array ℕ),
     Flock.Registered.unitIndices pub = .ok us → Spot.FilePart.indicesOf pub.header = .ok vs → us = vs
 
-/-- **Gap: a held port is the record's tree.** A registered port `portTreeHeld` holds, which opens a committed tree
-(`treePortOf`), carries the record's root, domain and leaf count at that tree's port. -/
+/-- **Gap: a held port is the record's tree.** A registered port `portTreeHeld` holds at any reader rows `wired`,
+which opens a committed tree (`treePortOf`), carries the record's root, domain and leaf count at that tree's port. -/
 def PortTreeHeldRecord : Prop :=
-  ∀ (byPort : Std.HashMap String Lean.Json) (who : String) (tmpl : Option String) (q : Flock.Registered.Port)
-    (t : String), Spot.OneStageZk.portTreeHeld byPort who tmpl q = .ok () → Spot.OneStageZk.treePortOf q = some t →
+  ∀ (byPort : Std.HashMap String Lean.Json) (who : String) (tmpl : Option String) (wired : Array (String × String))
+    (q : Flock.Registered.Port) (t : String),
+    Spot.OneStageZk.portTreeHeld byPort who tmpl wired q = .ok () → Spot.OneStageZk.treePortOf q = some t →
     ∃ e, byPort.get? t = some e ∧ Spot.getD e "root" = .str (Flock.hexOf q.root) ∧
       Spot.getD e "domain" = .str (Flock.hexOf q.domain) ∧ Spot.nat? (Spot.getD e "leaves") = some q.leaves
 

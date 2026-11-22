@@ -1317,9 +1317,14 @@ theorem acceptMeans_iff (p : Params) (c : Commitment) (e : Evidence) (pub : Publ
       ∃ samplingDesign d n, Registered p.verifier c.record samplingDesign ∧ Drawn e.draw (getD c.record "population") samplingDesign ∧
         UnitsRead p c e ∧ VerdictsAccept e.verdicts ∧
         Record.profileSample samplingDesign = some d ∧ nat? (getD c.record "population") = some n ∧
-        pub = publicOf p e samplingDesign d n ∧ prof = profileOf p c e d n ∧ prof.creditedProblem = none := by
+        pub = publicOf p e samplingDesign d n ∧ prof = profileOf p c e d n ∧ prof.creditedProblem = none ∧
+        OneStage.registrationAfterDraw p e.coins = .ok () := by
   unfold OneStage.check
-  simp only []
+  rcases hra : OneStage.registrationAfterDraw p e.coins with why | ⟨⟨⟩⟩
+  · simp only [reduceCtorEq, false_iff]
+    rintro ⟨-, -, -, -, -, -, -, -, -, -, -, -, h⟩
+    cases h
+  simp only [and_true]
   by_cases h1 : Docket.check c.record p.verifier = #[]
   · obtain ⟨samplingDesign, hreg⟩ := (docket_nil _ _).1 h1
     have hd := registered_samplingDesign hreg
@@ -1396,9 +1401,10 @@ theorem acceptMeans_complete (p : Params) (c : Commitment) (e : Evidence) (sampl
     (hr : Registered p.verifier c.record samplingDesign)
     (hd : Drawn e.draw (getD c.record "population") samplingDesign)
     (hu : UnitsRead p c e) (hv : VerdictsAccept e.verdicts) (hp : Record.profileSample samplingDesign = some d)
-    (hn : nat? (getD c.record "population") = some n) (hc : (profileOf p c e d n).creditedProblem = none) :
+    (hn : nat? (getD c.record "population") = some n) (hc : (profileOf p c e d n).creditedProblem = none)
+    (hra : OneStage.registrationAfterDraw p e.coins = .ok ()) :
     OneStage.check p c e = .accept (publicOf p e samplingDesign d n) (profileOf p c e d n) :=
-  (acceptMeans_iff p c e _ _).2 ⟨samplingDesign, d, n, hr, hd, hu, hv, hp, hn, rfl, rfl, hc⟩
+  (acceptMeans_iff p c e _ _).2 ⟨samplingDesign, d, n, hr, hd, hu, hv, hp, hn, rfl, rfl, hc, hra⟩
 
 /-- Naming no window value, the opened roots are the record's own reads less its ports' at their own roots. -/
 theorem openedRoots_nil (rec : Json) (vs : Array (String × Json)) :
