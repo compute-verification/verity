@@ -662,12 +662,11 @@ def install(sched: Any, cfg: Mapping[str, Any]) -> list[Any]:
         atexit.register(tc.stop)
         done.append(tc)
     if cfg.get("boundary_rows"):
-        from verity_vllm.pipeline.boundary_windows import BoundaryWindows
+        from verity_vllm.pipeline.serve_openai import install_boundary
 
-        sink = _lines(out / f"boundary.{pid}.jsonl")
         kept = Path(cfg["private"]) if cfg.get("private") else out
-        done.append(BoundaryWindows.of(cfg["boundary_rows"], kept / "boundary", sink, public=_public(cfg))
-                    .install(sched, hooks))
+        done.append(install_boundary(cfg["boundary_rows"], None, None, out, _public(cfg)[1:], sched=sched, kept=kept,
+                                     lines=out / f"boundary.{pid}.jsonl", hooks=hooks).windows)
     done.append(hooks)
     return done
 

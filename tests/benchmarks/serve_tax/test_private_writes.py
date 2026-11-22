@@ -19,6 +19,8 @@ PASSES = {"_lines": 0, "_lines_behind": 0, "plan_of": 0, "write_trace": 0, "C.dr
 #: inside those, the parameter they write, which their callers' entries stand for
 PASSED = {("_lines", "path"), ("_lines_behind", "path"), ("plan_of", "f"), ("write_trace", "f"), ("write_host", "path")}
 BARE = {k for k in PASSES if "." not in k}
+#: functions that write the path given as a keyword, by name: the keyword
+KEYWORDS = {"install_boundary": "lines"}
 
 WRITES = {
     "benchmarks/prod_repro/priced.py": {
@@ -184,6 +186,8 @@ def written(call: ast.Call) -> ast.expr | None:
         return call.args[0]
     if name in ("shutil.copy", "shutil.copy2", "shutil.copyfile", "shutil.copytree", "shutil.move"):
         return call.args[1]
+    if last in KEYWORDS:
+        return next((k.value for k in call.keywords if k.arg == KEYWORDS[last]), None)
     i = PASSES.get(name, PASSES.get(last) if last in BARE else None)
     return call.args[i] if i is not None and len(call.args) > i else None
 

@@ -708,37 +708,45 @@ def boundary_config(opts: Options) -> dict[str, Any] | None:
     return cfg
 
 
-def install_boundary(cfg: Mapping[str, Any], llm: Any, engine: Any, out: Path, public: Sequence[Path]) -> Callable[[], None]:
-    """The first stage on this process's engine: rank 0's logits builder where ``cfg`` names ``logits`` (its sampler
-    wrapped after the engine's warm-up, as serve-tax's plugin wraps it at the first served step), then `BoundaryWindows`
-    on its scheduler, each window's classes under ``out``/boundary/ and their lines in ``out``/boundary.jsonl. Returns
-    the stop: the open window closed and committed, the builder stopped, the scheduler's hooks taken off."""
+def install_boundary(cfg: Mapping[str, Any], llm: Any, engine: Any, out: Path, public: Sequence[Path], *,
+                     sched: Any = None, kept: Path | None = None, lines: Path | None = None,
+                     hooks: Any = None) -> Callable[[], None]:
+    """The first stage on an engine, the one way it is installed: rank 0's logits builder where ``cfg`` names ``logits``
+    and ``llm`` is this process's (its sampler wrapped after the engine's warm-up; a server whose ranks are other
+    processes, serve-tax's plugin, wraps their runners itself), then `BoundaryWindows` on ``sched`` (else ``engine``'s
+    scheduler), each window's classes under ``kept`` (else ``out``)/boundary/ and their lines in ``lines`` (else
+    ``out``/boundary.jsonl), on ``hooks`` (else hooks of its own). Returns the stop (the open window closed and
+    committed, the builder stopped, its own hooks taken off), the windows as its ``windows``."""
     from verity_vllm.engine.handle import model_runner, scheduler
     from verity_vllm.engine.hooks import Hooks
     from verity_vllm.pipeline import boundary_logits as BL
     from verity_vllm.pipeline.boundary_windows import BoundaryWindows
 
     stop_builder = None
-    if lc := cfg.get("logits"):
+    if (lc := cfg.get("logits")) and llm is not None:
         hook = BL.SamplerHook.install(model_runner(llm.vllm))
         stop_builder = BL.Channel.of(lc, out, *public).start(BL.Builder(hook.logits, BL.Kept.of(lc, out, *public)))
-    lines = (out / "boundary.jsonl").open("a")
+    fh = (lines or out / "boundary.jsonl").open("a")
     lock = threading.Lock()
 
     def sink(rec: dict) -> None:
         with lock:
-            lines.write(json.dumps(rec, separators=(",", ":")) + "\n")
-            lines.flush()
+            fh.write(json.dumps(rec, separators=(",", ":")) + "\n")
+            fh.flush()
 
-    hooks = Hooks(tag="boundary-rows")
-    bw = BoundaryWindows.of(cfg, out / "boundary", sink, public=(out, *public)).install(scheduler(engine), hooks)
+    own = hooks is None
+    hooks = Hooks(tag="boundary-rows") if own else hooks
+    bw = BoundaryWindows.of(cfg, (kept or out) / "boundary", sink, public=(out, *public)).install(
+        scheduler(engine) if sched is None else sched, hooks)
 
     def stop() -> None:
         bw.stop()
         if stop_builder is not None:
             stop_builder.set()
-        hooks.uninstall()
-        lines.close()
+        if own:
+            hooks.uninstall()
+        fh.close()
+    stop.windows = bw  # type: ignore[attr-defined]
     return stop
 
 
