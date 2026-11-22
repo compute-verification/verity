@@ -234,6 +234,7 @@ exec {shlex.quote(shutil.which("mv"))} "$@"
 ''')
     r = _piece(node | {"FAKE_LAKE_FAILS": BW_EXE, "STAMPS_FILE": str(d / "stamps.txt")}, d)
     assert r.returncode == 7, r.stdout + r.stderr
+    assert f"{BW_EXE} didn't build" in _stamps(d), r.stdout + r.stderr
     assert seen.read_text().strip() == "stamped"
 
 
