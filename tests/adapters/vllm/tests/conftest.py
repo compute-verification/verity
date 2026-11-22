@@ -163,6 +163,14 @@ def _one_exchange_a_test():
 
 
 @pytest.fixture(autouse=True)
+def _no_run_result(monkeypatch):
+    """No test writes into a research run's result (`tests/test_tests_write_no_measurement.py`): a script a test runs
+    under `research run` would write into the run's own OUT, so each test starts with both unset."""
+    for name in ("RESEARCH_RUN_DIR", "OUT"):
+        monkeypatch.delenv(name, raising=False)
+
+
+@pytest.fixture(autouse=True)
 def _sweep_dir_in_tmp(tmp_path_factory, monkeypatch):
     """A launcher's sweep directory default (`SWEEP_DIR`, else /workspace/cp/sweep) exists on a GPU node, so a test that leaves
     SWEEP_DIR unset would write its workload dirs there; every test gets its own instead, which a test can still override."""
