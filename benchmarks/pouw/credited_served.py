@@ -534,7 +534,7 @@ def stage(a) -> int:
             rs, ss, entry = allregs[v].statement([j])
             tables[p] = np.asarray([RV.row_words(r, allregs[v].word_bits, RV.SCHEMA_HM96_SHA512_ROW_V2) for r in rs],
                                    dtype=np.uint16)
-            salts[p], registered[p] = ss, entry
+            salts[p], registered[p] = ss, {**entry, "value": f["ports"][p]["value"]}
         for p, rw in table_override.items():
             tables[p] = rw
         for p, (kw, mw, ff) in fed.items():
