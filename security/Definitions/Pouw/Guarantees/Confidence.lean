@@ -14,7 +14,8 @@ The actual-circuit model's composition and fit.
   strategy with the other coins fixed, as in its own game, the other verifiers' gates the prover's. So each
   protocol's random oracle, when its guarantee varies one (PoUW's budget), is among its own coins `Ω i`, and its
   answers are computed gates whose operation those coins fix, not input gates, which protocol `i`'s coins reach only
-  at `V i`. The feasible set is a set of runs, so it doesn't depend on which party runs a gate.
+  at `V i`. The feasible runs are a set of runs at each joint challenge, so they don't depend on which party runs a
+  gate; protocol `i` is sound against them on its own slice, the other protocols' challenges fixed.
 * `Fit`: when `μ` adds over the confidence set and some run of it implements `P`, `req_μ(P)` is at most the residual
   `min(cap, obs) − cert`, given that every run of the set uses at most `cap` and at most `obs`.
 
@@ -28,15 +29,18 @@ namespace ResourceAccounting.Guarantees
 open Finset
 
 open Classical in
-/-- **Composition.** For `k` protocols with coins `Ω i`, verifiers at `V i` accepting on `acc i` and guarantees `E i`
-sound at `δ i` against `𝓕`, and every joint strategy `S` causal from every tick with runs in `𝓕` in which the input
-gates off `V i` depend on no coin of protocol `i`: all accept and some `E i` fails, read on protocol `i`'s slice at `r`
-(`x ↦ S (update r i x)` at `r i`), for at most a `∑ δ i` fraction of the coins. -/
+/-- **Composition.** For `k` protocols with challenges `Ω i`, verifiers at `V i` accepting on `acc i` and guarantees
+`E i` sound at `δ i` against the feasible runs of each slice (`x ↦ 𝓕 (update r i x)`, the other challenges fixed at
+`r`), and every joint strategy `S` causal from every tick whose run at each joint challenge `r` is in `𝓕 r`, in which
+the input gates off `V i` don't depend on protocol `i`'s challenge: all accept and some `E i` fails, read on protocol
+`i`'s slice at `r` (`x ↦ S (update r i x)` at `r i`), for at most a `∑ δ i` fraction of the joint challenges. -/
 def Composition : Prop :=
   ∀ {L : Type*} [LinearOrder L] {k : ℕ} (Ω : Fin k → Type) [∀ i, Fintype (Ω i)] [∀ i, DecidableEq (Ω i)]
-    (𝓕 : Set (Actual.Run L)) (V : Fin k → Finset L) (acc : Fin k → Set (ℕ × L × ℕ × ℕ × ℕ) → Prop)
+    (𝓕 : ((i : Fin k) → Ω i) → Set (Actual.Run L)) (V : Fin k → Finset L)
+    (acc : Fin k → Set (ℕ × L × ℕ × ℕ × ℕ) → Prop)
     (E : (i : Fin k) → (Ω i → Actual.Run L) → Ω i → Prop) (δ : Fin k → ℝ) (S : ((i : Fin k) → Ω i) → Actual.Run L),
-    (∀ i, Sound (Ω i) 𝓕 (V i) (acc i) (E i) (δ i)) → (∀ r, S r ∈ 𝓕) → CausalFrom S →
+    (∀ i r, Sound (Ω i) (fun x => 𝓕 (Function.update r i x)) (V i) (acc i) (E i) (δ i)) → (∀ r, S r ∈ 𝓕 r) →
+    CausalFrom S →
     (∀ i r r', (∀ j, j ≠ i → r j = r' j) → (S r).inputs (↑(V i))ᶜ = (S r').inputs (↑(V i))ᶜ) →
     ((univ.filter fun r => (∀ i, acc i ((S r).view (V i))) ∧
         ¬∀ i, E i (fun x => S (Function.update r i x)) (r i)).card : ℝ) ≤

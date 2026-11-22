@@ -32,9 +32,9 @@ The *runtime* `t_A(P)` (`Actual.runtime`) reads the strategy too: the least `t` 
 outputs in the run with that value (`Actual.Computes`).
 
 A guarantee `E` reads a strategy and a coin (a property of the run, or of how the strategy varies with the coins). It
-is *sound at `δ`* against the feasible runs `𝓕` (`Sound`) when every strategy causal from every tick with runs in `𝓕`
-whose prover's inputs (every input gate off `V`) don't depend on the coins accepts with `¬E` on at most a `δ` fraction
-of the coins, uniform over a finite `Ω`. For a quantity `μ` of a run: `req μ 𝓕 P` is the least `μ` of a feasible run
+is *sound at `δ`* against the feasible runs `𝓕 r` at each challenge `r` (`Sound`) when every strategy causal from every
+tick whose run at each challenge is in `𝓕 r`, and whose prover's inputs (every input gate off `V`) don't depend on the
+challenge, accepts with `¬E` on at most a `δ` fraction of the challenges, uniform over a finite `Ω`. For a quantity `μ` of a run: `req μ 𝓕 P` is the least `μ` of a feasible run
 that implements `P`, `Additive` says every run of a set that implements `P` has `μ ≥ cert + req`, and the residual is
 `min(cap, obs) − cert`.
 -/
@@ -174,12 +174,14 @@ def portSignals {Ω L E : Type*} (S : Ω → Actual.Run L) (link : ∀ r, Fin (S
   ports.map fun p => (S r).signal (link r) p.1 p.2 u
 
 open Classical in
-/-- **`E` is sound at `δ`** against the feasible runs `𝓕`, for the verifier at `V` accepting on `acc` of its view with
-coins uniform over `Ω`: every strategy causal from every tick with runs in `𝓕` whose input gates off `V` don't depend on
-the coins has `Pr_r[acc ∧ ¬E] ≤ δ`. `E` reads the strategy and the coin. -/
-def Sound {L : Type*} [LinearOrder L] (Ω : Type) [Fintype Ω] (𝓕 : Set (Actual.Run L)) (V : Finset L)
+/-- **`E` is sound at `δ`** against the feasible runs `𝓕 r` at each challenge `r`, for the verifier at `V` accepting on
+`acc` of its view with the challenge uniform over `Ω`: every strategy causal from every tick whose run at each challenge
+`r` is in `𝓕 r`, and whose input gates off `V` don't depend on the challenge, has `Pr_r[acc ∧ ¬E] ≤ δ`. `E` reads the
+strategy and the challenge. The feasible runs are taken a challenge at a time so that a premise that the challenge
+device's inputs hold the challenge is a premise about the feasible runs; one set of runs is the constant family. -/
+def Sound {L : Type*} [LinearOrder L] (Ω : Type) [Fintype Ω] (𝓕 : Ω → Set (Actual.Run L)) (V : Finset L)
     (acc : Set (ℕ × L × ℕ × ℕ × ℕ) → Prop) (E : (Ω → Actual.Run L) → Ω → Prop) (δ : ℝ) : Prop :=
-  ∀ S : Ω → Actual.Run L, (∀ r, S r ∈ 𝓕) → CausalFrom S → (∀ r r', (S r).inputs (↑V)ᶜ = (S r').inputs (↑V)ᶜ) →
+  ∀ S : Ω → Actual.Run L, (∀ r, S r ∈ 𝓕 r) → CausalFrom S → (∀ r r', (S r).inputs (↑V)ᶜ = (S r').inputs (↑V)ᶜ) →
     ((univ.filter fun r => acc ((S r).view V) ∧ ¬E S r).card : ℝ) ≤ δ * Fintype.card Ω
 
 /-- `req_μ(P)`: the least `μ` of a run of `𝓕` that implements `P` (`impl`), `⊤` when none does. -/
