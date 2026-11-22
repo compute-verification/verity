@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The two-stage variant on the smallest served window: one request, one token, its one span sampled whole. Builds
-# flock-circuit and the Lean verifiers as two_stage_small.sh does; then, under one leased card, serve-openai with
-# --boundary-rows (the first stage at the serve: the class's edges, its ids and the select's logits) and no Commit,
+# flock-circuit and the Lean verifiers by two_stage_small.sh's steps (two_stage_build.sh); then, under one leased card,
+# serve-openai with --boundary-rows (the first stage at the serve: the class's edges, its ids and the select's logits) and no Commit,
 # one greedy request of PROMPT ids for one token, and the server's stop; then on the host: `two_stage.py first` on a
 # local challenger session, the capture from the logits the serve kept (two_stage_served.py: no replay), and
 # `two_stage.py second` (the interior, the second stage on a session of its own, a --zk session per member on the CPU,
@@ -14,6 +14,7 @@
 # records (two_stage_small.sh's selection); the serve's directory, the logits' rows and salts and the capture stay in
 # PRIV (outside the run dir, 0700), which $OUT/private.txt names.
 set -euo pipefail
+PUBF=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/public_files.py
 REPO=$(git rev-parse --show-toplevel); cd "$REPO"
 O=${OUT:?research run sets OUT}; mkdir -p "$O"
 W=$(mktemp -d); SERVER=
@@ -47,27 +48,7 @@ if [ "${1:-}" = card ]; then  # under the lease: the serve, its one request, the
   exit "$s"
 fi
 
-export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:$PATH
-{ nproc; free -g | head -2; git rev-parse HEAD; } | tee "$O/machine.txt"
-command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
-command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
-uv sync --all-packages --extra torch-cpu > "$O/sync.log" 2>&1 || { tail -20 "$O/sync.log"; exit 5; }
-{ (cd verity/protocols/proof/flock/verifier && lake build verity-verify-proof flock-zk-server) \
-    && (cd verity/protocols/proof/spot/verifier/lean && lake build spot-verifier); } > "$O/build-lean.log" 2>&1 &
-LP=$!
-mkdir -p "$O/m0-build"
-RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$W MODE=build GPU=0 bash verity/protocols/proof/flock/prover/pod/60-circuit.sh > "$O/m0-build/build.log" 2>&1 \
-  || { tail -40 "$O/m0-build/build.log"; exit 6; }
-BIN=$W/flock-gpu-link/flock/target/release/flock-circuit
-wait $LP || { tail -40 "$O/build-lean.log"; exit 7; }
-LEAN=$REPO/verity/protocols/proof/flock/verifier/.lake/build/bin/verity-verify-proof
-sha256sum "$BIN" "$LEAN" | tee "$O/binaries.sha256"
-M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proof/flock/prover/python:$REPO/adapters/vllm:$REPO/adapters/torch
-export RAYON_NUM_THREADS=$(nproc)
-UNSHALLOW=(); [ "$(git rev-parse --is-shallow-repository)" = true ] && UNSHALLOW=(--unshallow)
-{ git fetch -q "${UNSHALLOW[@]}" origin +refs/heads/main:refs/remotes/origin/main \
-    || git fetch -q "${UNSHALLOW[@]}" origin +refs/remotes/origin/main:refs/remotes/origin/main; } > "$O/fetch-main.log" 2>&1 \
-  && git rev-list --first-parent refs/remotes/origin/main > "$O/main.txt" || { tail -5 "$O/fetch-main.log"; exit 4; }
+. benchmarks/one_stage/two_stage_build.sh
 UPY=(env PYTHONPATH="$M0PATH" uv run --no-sync python)
 
 if [ "$DRY" = 1 ]; then
@@ -103,7 +84,7 @@ RECORDS=(-type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -nam
          ! -path './*/archive/*' ! -path '*-work/*' ! -path './challenger-host/*')
 for d in first second; do
   mkdir -p "$O/$d"
-  (cd "$W/$d" && find . "${RECORDS[@]}" -size -64M -print0 | python3 "$REPO/benchmarks/one_stage/public_files.py" filter \
-     | xargs -0 -r -I{} cp --parents {} "$O/$d/") || true
+  (cd "$W/$d" && find . "${RECORDS[@]}" -size -64M -print0 | python3 "$PUBF" filter | xargs -0 -r -I{} cp --parents {} "$O/$d/") \
+    || true
 done
 exit "$rc"
