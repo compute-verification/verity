@@ -339,8 +339,25 @@ def test_prover_circuit_takes_the_registered_circuit_holds_its_compiler_and_advi
     assert summary["fixed_before_draw"]["ok"] and (summary["compiler"], summary["advice"]) == (
         written.bound["compiler"], written.bound["advice"])
     assert seen["summary"]["compiled"] == "not checked" and not (tmp_path / "o" / "compile").exists()
-    line, = (x for x in capsys.readouterr().out.splitlines() if x.startswith("RECORDS "))
+    out = capsys.readouterr().out.splitlines()
+    line, = (x for x in out if x.startswith("RECORDS "))
     assert "compiled: not checked (the circuit is the one the prover registered)" in line
+    assert out[0] == f"DEVELOPMENT {RA.DEVELOPMENT_RESTS['circuit']}" and summary["development"] == [RA.DEVELOPMENT_RESTS["circuit"]]
+    assert RA.DEVELOPMENT_RESTS["circuit"].startswith("the circuit is the record's own, pinned by no one")
+
+
+def test_a_circuit_pinned_neither_by_circuit_nor_by_the_compile_check_is_refused_by_name_without_development():
+    """`development` refuses an audit whose circuit is the record's own (no ``--circuit``, no ``--opening``) unless the
+    caller says ``--development``, and names nothing for one pinned either way."""
+    a = SimpleNamespace(circuit=None, opening=None, day=None, day_ledger=None, day_params=None, development=False)
+    with pytest.raises(SystemExit, match="refused, the circuit is the record's own, pinned by no one"):
+        RA.development(a)
+    assert RA.development(_with(a, development=True)) == [RA.DEVELOPMENT_RESTS["circuit"]]
+    assert RA.development(_with(a, circuit="ab" * 64)) == RA.development(_with(a, opening="o.json")) == []
+
+
+def _with(a: SimpleNamespace, **kw: object) -> SimpleNamespace:
+    return SimpleNamespace(**{**vars(a), **kw})
 
 
 @pytest.mark.parametrize("given", [[], ["--registered-digest", "ab" * 64], ["--registered-digest-source", "stand-in"],

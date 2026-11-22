@@ -160,7 +160,9 @@ auditing tree. The compile command is ``argv --advice FILE --out FILE``:
 command rebuilds: the circuit is the one the prover registered (``circuit.json``, which the docket binds). The docket must
 bind a compiler and advice, and `source` and `fixed_before_draw` still hold the docket to them, its length still charged;
 the compile check does not run, nor its two negatives and `after_draw`, which read the advice's opening. The summary's
-``compiled`` and the ``RECORDS`` line's ``compile`` say so (`NOT_CHECKED`, `PROVER_CIRCUIT`).
+``compiled`` and the ``RECORDS`` line's ``compile`` say so (`NOT_CHECKED`, `PROVER_CIRCUIT`), and the first line and the
+summary's ``development`` that the circuit is the record's own, pinned by no one (`development`): an audit pins its
+circuit by ``--circuit`` or by the compile check, and refuses otherwise.
 
 ``--challenger``: the sample on the auditor's challenger's coins (`a5_coins`), the only coins a sample is on, as `prove_path.py audit`
 takes them: ``local``, a development session on this machine (with ``--deployed-key``, under a key made at the deployed
@@ -744,7 +746,9 @@ DAY_SOURCES = {"device": "the challenger's signed ledger (--day-ledger)",
 
 #: what a development audit rests on that nothing the auditor holds fixes, each said in its first line and its
 #: summary's ``development`` (`development`)
-DEVELOPMENT_RESTS = {"day": "the day is the developer's own, signed by no one (--day and --day-log under an auditor of "
+DEVELOPMENT_RESTS = {"circuit": "the circuit is the record's own, pinned by no one (circuit.json held to no --circuit "
+                                "digest and no compile check)",
+                     "day": "the day is the developer's own, signed by no one (--day and --day-log under an auditor of "
                             "no keys)"}
 
 
@@ -754,13 +758,15 @@ def keyed(params: str | None) -> bool:
 
 
 def development(a: argparse.Namespace) -> list[str]:
-    """What the audit ``a`` rests on that nothing the auditor holds fixes (`DEVELOPMENT_RESTS`): a ``--day`` with neither
-    ``--day-ledger`` nor ``--day-params`` keys. Refused (SystemExit, naming each) unless the caller says
-    ``--development``."""
-    rests = [k for k, on in (("day", a.day is not None and not a.day_ledger and not keyed(a.day_params)),) if on]
+    """What the audit ``a`` rests on that nothing the auditor holds fixes (`DEVELOPMENT_RESTS`): a circuit pinned neither
+    by ``--circuit`` nor by the compile check (``--opening``), and a ``--day`` with neither ``--day-ledger`` nor
+    ``--day-params`` keys. Refused (SystemExit, naming each) unless the caller says ``--development``."""
+    rests = [k for k, on in (("circuit", not a.circuit and not a.opening),
+                             ("day", a.day is not None and not a.day_ledger and not keyed(a.day_params))) if on]
     if rests and not a.development:
         raise SystemExit("records_audit audit: refused, " + "; ".join(DEVELOPMENT_RESTS[k] for k in rests)
-                         + ": give --day-ledger or --day-params with the auditor's keys, or --development to run on it")
+                         + ": give --circuit or --opening, and --day-ledger or --day-params with the auditor's keys, or "
+                         "--development to run on it")
     return [DEVELOPMENT_RESTS[k] for k in rests]
 
 #: where R8's weights' registration of record's digest came from, as the summary's ``weights_of_record`` says
@@ -1235,6 +1241,8 @@ def audit(a: argparse.Namespace) -> int:
     rec = json.loads((wdir / "registration.json").read_text())
     w = rec.get("window") or {}
     body = (wdir / "circuit.json").read_bytes()
+    # the record's own hash only under --opening, whose compile check holds the record to the compiler's output, or
+    # under --development (`development`)
     held: dict[str, Any] = {"run": a.run, "circuit": a.circuit or hashlib.sha512(body).hexdigest(),
                             "compiled": True, "compiler": None, "advice": None}
     compiled = None
