@@ -92,14 +92,6 @@ distributions, 6 to 24 rows of 20,000 to 131,072 keys in rows as wide as GLM-5.3
 first guess is garbage, a near miss or the pin's overflow. Every row is compared eagerly and replayed from a CUDA
 graph. It writes `definition.json` and the run's validation, passed only where every row is the Definition's and every
 mode's fallback was reached.
-`stress.py units --shapes decode|prefill --out DIR [--result RUN_DIR/result.json]` (`units.py`) times both `MODES`
-(the bisecting pass as `present`, the refining one as `cut`) a call over the pin's kernel, on random values and on a
-near miss and the pin's overflow planted on `shift32`: at decode, `cooperative_topk` at `definition`'s shapes; at
-prefill, `top_k_per_row_prefill` on causal rows, 2,048 to 8,192 rows over 16,384 to 32,768 keys. It writes
-`units.jsonl` in the form `benchmarks/prod_repro/priced.py`'s `units` reads (`--prefill-units` at prefill shapes) and a
-result of kind `dsa-topk-units/v1`, its fingerprint naming the shapes, passed only where `priced.units` itself reads a
-time of each pass at every shape with no row failed and with every row failed, every pass's output is
-`reference_rows`', and every planted row reached its fallback.
 `stress.py plugin`, run from a site directory under `VERITY_DSA_TOPK=canonical`, loads the plugin as vLLM does and calls
 each case through the indexer's own entry points (`plugin.json`).
 

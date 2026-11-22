@@ -4742,7 +4742,7 @@ def bounds_text(doc: object, profile: str) -> str:
     return " and ".join(said[b] for b in doc.profiles[profile].within)
 
 
-#: the kind of a profile's job's result, as the kit's writer writes it and `verity bench serving_cost profile` reads it
+#: the kind of a profile's job's result, as the kit's writer writes it
 PROFILE_KIND = "serve-tax-profile/v1"
 #: the latencies and the share within the bounds a profile's result holds beside its cost, each side's, with their units
 SIDE_FIGURES = {"ttft_p50_s": "s", "ttft_p99_s": "s", "tpot_p50_s": "s", "tpot_p99_s": "s", "within": "share"}

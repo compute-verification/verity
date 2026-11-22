@@ -14,8 +14,4 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/circuits", "verity/c
           "adapters/vllm/verity_vllm/definitions/registry/__init__.py",
           "adapters/vllm/verity_vllm/definitions/registry/dsa_topk.py",
           "adapters/vllm/verity_vllm/definitions/registry/prims.py",
-          "verity/circuits/ops", "verity/circuits/silicon", "benchmarks/dsa_topk",
-          "benchmarks/prod_repro/priced.py",
-          # priced.py imports serve_tax.py (production.toml through verity_config) and verity.device's card reader
-          "benchmarks/serve_tax/serve_tax.py", "benchmarks/production.toml", "tools/config/verity_config",
-          "verity/device.py", "verity/channel.py"]
+          "verity/circuits/ops", "verity/circuits/silicon", "benchmarks/dsa_topk"]

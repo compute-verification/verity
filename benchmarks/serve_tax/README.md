@@ -544,7 +544,7 @@ no `.git` needed. A tree that none of these names is refused before anything is 
   two server lifetimes each, three reps a lifetime, which makes six paired reps. Its result is the run's result (kind `serve-tax-profile/v1`), written
   through the kit's report: the cost under the model's metric id (`vllm/serving-cost-glm53`), its member the arm over
   stock and the profile (`glm-5.3-h200-prod-record-over-prod-coding-agent`), with its interval, and each side's latencies
-  and share within the bounds as measurements beside it. `verity bench serving_cost profile RUN` reads it back. The
+  and share within the bounds as measurements beside it. The
   result prints three lines in this order:
   - our extra card time a token. On a load of requests in flight, stock's output tokens a second at full load over
     ours, less one: the median of the six paired ratios with the kit's interval (`serving_cost`), its noise floor
