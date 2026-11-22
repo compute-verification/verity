@@ -263,10 +263,10 @@ ID_PAYLOAD = 503
 
 
 def id_request_fields(request: bytes, payload: int) -> dict[str, Any] | str:
-    """The fields (`id_request`'s keywords) of `request`, its head and body as the server read them, where it is an id
-    request as the network attester forwards it: without the release headers it puts on the server's copy
-    (`with_release`), exactly `id_request` of its own fields in the scan's B = P + 9-byte cells (P = ``payload``). For
-    anything else, why it is not one."""
+    """The fields (`id_request`'s keywords) of `request`, its head and body as the server read them, where it
+    is an id request as the network attester forwards it: without the release headers it puts on the
+    server's copy (`with_release`), exactly `id_request` of its own fields in the scan's B = P + 9-byte
+    cells (P = ``payload``). For anything else, why it is not one."""
     head, _, body = request.partition(b"\r\n\r\n")
     line, *fields = head.split(b"\r\n")
     kept = b"".join(f + b"\r\n" for f in fields if _name(f) not in (RELEASE_HEADER, RUN_HEADER, BUCKET_HEADER))
