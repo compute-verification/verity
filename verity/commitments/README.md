@@ -20,7 +20,7 @@ Not yet: a supplied input's domain source kind in `Supplied`, with a table's row
 | the gates | the commitment's reads as Boolean Definitions a proof block runs | `gates/` |
 | the device code | the row commitment and SHA-512 a CUDA kernel includes; the salt stream | `cuda/` |
 | the salt expander | the one challenge derivation, and the keyed SHA-512 stream a derived hiding salt reads | `randomness/` |
-| the domains | every versioned string hashed under, in Lean with its Python mirror | `identity/`, `domains.py` |
+| the domains | every versioned string hashed under, in Lean, which Python reads | `identity/`, `domains.py` |
 | the Lean | frame-v3, hm96, the sample, the session coins | `lean/` |
 | signatures and channels | LMS over SHA-512, a device's signed period roots, the SHA-512 AEAD | `crypto/`, `lms/`, `attest/` |
 

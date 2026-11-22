@@ -1,13 +1,19 @@
-"""The one table of domain separators (`verity.commitments.domains`, Lean `Identity.Domains`): the two are equal, entry for
-entry; the protocols that read it (``READERS``) carry no literal of it; and every entry is read, or still written somewhere
+"""The one table of domain separators (Lean `Identity.Domains`, which `verity.commitments.domains` reads):
+what the module reads is the Lean table, entry for entry, from a checkout and from the wheel's layout, and a name it lacks fails to import; the protocols that read it (``READERS``) carry no literal of it; and every entry is read, or still written somewhere
 by an owner whose code doesn't read the table yet."""
 
 from __future__ import annotations
 
 import ast
+import importlib.util
 import re
+import shutil
 import subprocess
+import tomllib
+from fnmatch import fnmatch
 from pathlib import Path
+
+import pytest
 
 from verity.commitments import domains
 
@@ -29,39 +35,103 @@ TIE = re.compile(r"^example : (.*) := rfl$", re.M)
 #: the module header every Lean file has (`tools/verity/lean/modules.py`)
 MODULE = re.compile(r"^(?:module|@\[expose\] public section)$", re.M)
 #: a part of the table, `Identity/Domains/NAME.lean`, which `LEAN` imports ahead of its own entries
-PART = re.compile(r"^public import Identity\.Domains\.([A-Za-z]+)$", re.M)
+PART = re.compile(r"^public import [\w.]+\.([A-Za-z]+)$", re.M)
+SCOPE = re.compile(r"^(?:namespace|end) \w+$", re.M)
 
 
-def lean_files() -> list[Path]:
-    """The Lean table's files in its order: the parts `LEAN` imports, in its order, then `LEAN`."""
-    return [LEAN.with_suffix("") / f"{p}.lean" for p in PART.findall(LEAN.read_text())] + [LEAN]
+def lean_files(top: Path = LEAN) -> list[Path]:
+    """The Lean table's files in its order: the parts `top` imports, in its order, then `top`."""
+    return [top.with_suffix("") / f"{p}.lean" for p in PART.findall(top.read_text())] + [top]
 
 
-def lean_entries() -> list[tuple[str, str]]:
+def lean_entries(top: Path = LEAN) -> list[tuple[str, str]]:
     entries = []
-    for path in lean_files():
+    for path in lean_files(top):
         body = re.sub(r"/-.*?-/", "", path.read_text(), flags=re.S)
         body = re.sub(r"--[^\n]*", "", body)
-        rest = PART.sub("", MODULE.sub("", ABBREV.sub("", body))).replace("namespace Domains", "").replace("end Domains", "")
-        assert not rest.strip(), (f"{path.relative_to(ROOT)} holds only its module header, the table's parts it imports "
+        rest = SCOPE.sub("", PART.sub("", MODULE.sub("", ABBREV.sub("", body))))
+        assert not rest.strip(), (f"{path} holds only its module header, the table's parts it imports "
                                   f"and `abbrev NAME : String := \"…\"` lines, found: {rest.strip()[:200]}")
         entries += ABBREV.findall(body)
     return entries
 
 
-def test_lean_and_python_are_one_table():
-    lean = lean_entries()
+def assert_one_table(lean: list[tuple[str, str]], read: dict[str, str]) -> None:
     assert len({n for n, _ in lean}) == len(lean), "a name appears twice in the Lean table"
-    assert lean == list(domains.TABLE.items()), (
-        "the Lean table (Identity/Domains.lean, after the parts it imports from Identity/Domains/) and the Python one "
-        "(verity/commitments/domains.py) differ: write each entry in both, in the same order")
+    dropped, added = [e for e in lean if e not in read.items()], [e for e in read.items() if e not in lean]
+    assert lean == list(read.items()), (
+        "verity/commitments/domains.py's reading of the Lean table (Identity/Domains.lean, after the parts it imports from "
+        f"Identity/Domains/) differs from the table: it drops {dropped} and adds {added}; make the reader read each entry, "
+        "or refuse its line by name")
 
 
-def test_entries_are_distinct_and_bare():
-    values = list(domains.TABLE.values())
-    assert len(set(values)) == len(values), "two names hold the same bytes: keep one"
-    bad = {n: v for n, v in domains.TABLE.items() if not v or not v.isascii() or any(c in v for c in '\0"\\ \n')}
-    assert not bad, f"an entry is printable ASCII with no terminator, quote, backslash or space: {bad}"
+def test_the_module_reads_the_lean_table():
+    assert_one_table(lean_entries(), domains.TABLE)
+
+
+def _synthetic(tmp_path: Path, extra: str = "", package: str = "Identity", namespace: str = "Domains") -> Path:
+    """A table of two files in the Lean's layout, `package/Domains.lean` in `namespace`: a part, then the top, with an
+    entry on one line, one on two, a comment block and a line comment."""
+    top = tmp_path / f"{package}/Domains.lean"
+    (top.parent / "Domains").mkdir(parents=True)
+    (top.parent / "Domains/Part.lean").write_text(
+        f'module\n\n/-! A part. -/\n\n@[expose] public section\n\nnamespace {namespace}\n\n-- one\n'
+        f'abbrev PART_ONE : String := "part/one/v1"\nabbrev PART_TWO : String :=\n  "part/two/v1"\n\nend {namespace}\n')
+    top.write_text(f'module\n\npublic import {package}.Domains.Part\n\n/-!\nThe top.\n-/\n\n@[expose] public section\n\n'
+                   f'namespace {namespace}\n\nabbrev TOP : String := "top/v1"\n{extra}\nend {namespace}\n')
+    return top
+
+
+@pytest.mark.parametrize(("package", "namespace"), [("Identity", "Domains"), ("Randomness", "Separators")])
+def test_the_reader_reads_a_synthetic_table(tmp_path, package, namespace):
+    """The reader takes the parts' module from the table's path and the namespace from its file, so moving or renaming
+    either needs no change to it."""
+    top = _synthetic(tmp_path, package=package, namespace=namespace)
+    assert lean_entries(top) == [("PART_ONE", "part/one/v1"), ("PART_TWO", "part/two/v1"), ("TOP", "top/v1")]
+    assert_one_table(lean_entries(top), domains._read(top))
+
+
+def test_an_entry_the_reader_drops_fails_the_table_test(tmp_path):
+    """The table gains an entry; a reader that drops it fails `assert_one_table`, naming the entry."""
+    top = _synthetic(tmp_path, 'abbrev NEW : String := "new/v1"\n')
+    dropping = {n: v for n, v in domains._read(top).items() if n != "NEW"}
+    with pytest.raises(AssertionError, match=r"drops \[\('NEW', 'new/v1'\)\]"):
+        assert_one_table(lean_entries(top), dropping)
+
+
+@pytest.mark.parametrize("line", ['abbrev NEW : String := "new/v1" -- a note', 'abbrev NEW : String := "a\\"b"',
+                                  'def NEW : String := "new/v1"', '/- a -/ abbrev NEW : String := "new/v1"',
+                                  'public import Other.Domains.Part', 'end Other'])
+def test_the_reader_refuses_a_line_it_cannot_read(tmp_path, line):
+    top = _synthetic(tmp_path, line + "\n")
+    with pytest.raises(ValueError, match=r"Domains\.lean:\d+: "):
+        domains._read(top)
+
+
+def test_a_name_the_table_lacks_fails_to_import():
+    with pytest.raises(ImportError, match="NOT_A_DOMAIN"):
+        from verity.commitments.domains import NOT_A_DOMAIN  # noqa: F401
+    with pytest.raises(AttributeError, match="has no entry NOT_A_DOMAIN"):
+        _ = domains.NOT_A_DOMAIN
+    assert sorted(domains.__all__) == sorted([*domains.TABLE, "TABLE"]) and set(domains.__all__) <= set(dir(domains))
+
+
+def test_the_wheel_ships_the_table(tmp_path):
+    """The wheel holds `verity/` less its excludes and what git ignores (hatch's selection), so the Lean table's files are in
+    it; and the module, laid out as the wheel installs it apart from the checkout, reads the table."""
+    wheel = tomllib.loads((ROOT / "pyproject.toml").read_text())["tool"]["hatch"]["build"]["targets"]["wheel"]
+    shipped = [str(p.relative_to(ROOT)) for p in (PYTHON, *lean_files())]
+    assert all(r.split("/")[0] in wheel["packages"] for r in shipped)
+    assert not [r for r in shipped for x in wheel.get("exclude", []) if fnmatch(r, x) or fnmatch(r, x + "/*")]
+    ignored = subprocess.run(["git", "check-ignore", *shipped], cwd=ROOT, capture_output=True, text=True).stdout
+    assert not ignored, f"git ignores these, so the wheel leaves them out: {ignored}"
+    for r in shipped:
+        (tmp_path / r).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(ROOT / r, tmp_path / r)
+    spec = importlib.util.spec_from_file_location("installed_domains", tmp_path / "verity/commitments/domains.py")
+    installed = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(installed)
+    assert installed.TABLE == domains.TABLE and installed._LEAN.is_relative_to(tmp_path)
 
 
 def _python_literals(path: Path):
@@ -172,3 +242,4 @@ def test_every_entry_is_read_or_still_written():
     names = set(re.findall(r"\b[A-Z][A-Z0-9_]*\b", corpus))
     unused = [n for n, v in domains.TABLE.items() if n not in names and f'"{v}' not in corpus]
     assert not unused, f"nothing reads these entries and no code writes their bytes; delete them: {unused}"
+

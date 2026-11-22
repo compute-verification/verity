@@ -97,8 +97,11 @@ inputs = ["benchmarks/prod_repro", "calibration/hardware/cards", "verity/__init_
     "verity/circuits/evaluation",
     # and over committed rows: the hm96 row leaf, the frame, the LMS check and their SHA-512 gates
     "verity/commitments/__init__.py",
-    # the table of domain separators, where the certificate reads its mark's tag
+    # the table of domain separators, where the certificate reads its mark's tag, and the Lean table it reads at import
     "verity/commitments/domains.py",
+    "verity/commitments/identity/Identity/Domains.lean",
+    "verity/commitments/identity/Identity/Domains/Pouw.lean",
+    "verity/commitments/identity/Identity/Domains/Shared.lean",
     "verity/commitments/identity.py",
     "verity/commitments/indexed.py",
     "verity/commitments/limits.py",
