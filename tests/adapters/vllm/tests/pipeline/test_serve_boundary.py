@@ -55,7 +55,7 @@ def test_the_smallest_window_is_committed_on_the_serves_scheduler(tmp_path, monk
     sched = Scheduler()
     monkeypatch.setattr(handle, "scheduler", lambda engine: sched)
     monkeypatch.setattr(BW, "check_template", lambda t: PAIR)
-    stop = SO.install_boundary({"check": "pair", "per_prompt": 0, "per_output": 1}, NS(), NS(), tmp_path, [])
+    stop = BW.install_boundary({"check": "pair", "per_prompt": 0, "per_output": 1}, NS(), NS(), tmp_path, [])
     try:
         sched.add_request(NS(request_id="a", prompt_token_ids=[1], num_cached_tokens=0, sampling_params=NS(**GREEDY)))
         sched.outputs = {0: NS(outputs=[NS(request_id="a", new_token_ids=[7], finish_reason=NS(name="LENGTH"))])}

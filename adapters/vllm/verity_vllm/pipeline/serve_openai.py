@@ -138,6 +138,7 @@ from verity_vllm.engine.served_seed import DEFAULT_SEED, UNSEEDED, rule_of
 from verity_vllm.llm import option_settings
 from verity_vllm.pipeline import (commit_coins as CC, seal_process as SP, serve_guard as SG, serve_learn as SL, serve_release as RL, serve_day as SD, serve_poub as SR,
                                    serve_row as RW, serve_seal as SS)
+from verity_vllm.pipeline import boundary_windows as BW
 from verity_vllm.pipeline.scheme_plugin import write_reports
 from verity_vllm.pipeline.serve_admit import (Admission, Delta, admission_order, admission_settings, engine_id_of, keep_scheduler_rows,
                                               new_http_id, protocols_doc)
@@ -708,48 +709,6 @@ def boundary_config(opts: Options) -> dict[str, Any] | None:
     return cfg
 
 
-def install_boundary(cfg: Mapping[str, Any], llm: Any, engine: Any, out: Path, public: Sequence[Path], *,
-                     sched: Any = None, kept: Path | None = None, lines: Path | None = None,
-                     hooks: Any = None) -> Callable[[], None]:
-    """The first stage on an engine, the one way it is installed: rank 0's logits builder where ``cfg`` names ``logits``
-    and ``llm`` is this process's (its sampler wrapped after the engine's warm-up; a server whose ranks are other
-    processes, serve-tax's plugin, wraps their runners itself), then `BoundaryWindows` on ``sched`` (else ``engine``'s
-    scheduler), each window's classes under ``kept`` (else ``out``)/boundary/ and their lines in ``lines`` (else
-    ``out``/boundary.jsonl), on ``hooks`` (else hooks of its own). Returns the stop (the open window closed and
-    committed, the builder stopped, its own hooks taken off), the windows as its ``windows``."""
-    from verity_vllm.engine.handle import model_runner, scheduler
-    from verity_vllm.engine.hooks import Hooks
-    from verity_vllm.pipeline import boundary_logits as BL
-    from verity_vllm.pipeline.boundary_windows import BoundaryWindows
-
-    stop_builder = None
-    if (lc := cfg.get("logits")) and llm is not None:
-        hook = BL.SamplerHook.install(model_runner(llm.vllm))
-        stop_builder = BL.Channel.of(lc, out, *public).start(BL.Builder(hook.logits, BL.Kept.of(lc, out, *public)))
-    fh = (lines or out / "boundary.jsonl").open("a")
-    lock = threading.Lock()
-
-    def sink(rec: dict) -> None:
-        with lock:
-            fh.write(json.dumps(rec, separators=(",", ":")) + "\n")
-            fh.flush()
-
-    own = hooks is None
-    hooks = Hooks(tag="boundary-rows") if own else hooks
-    bw = BoundaryWindows.of(cfg, (kept or out) / "boundary", sink, public=(out, *public)).install(
-        scheduler(engine) if sched is None else sched, hooks)
-
-    def stop() -> None:
-        bw.stop()
-        if stop_builder is not None:
-            stop_builder.set()
-        if own:
-            hooks.uninstall()
-        fh.close()
-    stop.windows = bw  # type: ignore[attr-defined]
-    return stop
-
-
 def engine_options(opts: Options) -> dict[str, Any]:
     kw: dict[str, Any] = {"max_num_seqs": opts.max_num_seqs, "max_model_len": opts.max_model_len, "async_scheduling": opts.async_scheduling,
                           "max_num_batched_tokens": opts.max_num_batched_tokens, "gpu_memory_utilization": float(opts.gpu_memory_utilization),
@@ -883,7 +842,7 @@ def main(opts: Options, plan_of: Callable[[Path, Any, Callable[[], Any]], Any] |
     llm, com = build(opts, session, row := RW.of(opts))
     engine = llm.vllm.llm_engine
     public = [Path(opts.copy_records_to)] if opts.copy_records_to else []
-    stop_boundary = install_boundary(boundary, llm, engine, out, public) if boundary is not None else None
+    stop_boundary = BW.install_boundary(boundary, llm, engine, out, public) if boundary is not None else None
     given = {} if opts.protocol in PROTOCOLS or opts.id_payload is None else {"payload": opts.id_payload}
     proto = framings()[opts.protocol](opts.force_include_usage, **given)
     reference = getattr(proto, "base", proto)

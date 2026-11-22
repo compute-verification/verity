@@ -170,7 +170,8 @@ PUBLIC = {
                                           "registers under the verifier's own rule",
     "verity_vllm.pipeline.boundary_windows": "I1: the boundary commitment as the engine core serves: the hook on the "
                                              "scheduler that commits each window's finished requests by class "
-                                             "(BoundaryWindows), which benchmarks/serve_tax's plugin installs",
+                                             "(BoundaryWindows), and the one installer of the first stage on an engine "
+                                             "(install_boundary), which serve_openai and benchmarks/serve_tax's plugin call",
     "verity_vllm.pipeline.boundary_tables": "I1: a two-stage window's history tables at serve: rank 0's step hook on Model "
                                             "Runner V2 (StepHook), the builder and its channel to the boundary commitment "
                                             "(Builder, Channel), and the rows and salts kept on the node for round 2 (Kept), "
