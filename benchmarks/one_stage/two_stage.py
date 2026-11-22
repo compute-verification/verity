@@ -922,7 +922,7 @@ def verifier_reads(d: Design, window: CS.Binding, interior: Mapping[str, Any], b
     return out
 
 
-def references(d: Design, q: int, out: Path) -> dict[str, Any]:
+def references(d: Design, q: int, out: Path, sample: Sequence[int] | None = None) -> dict[str, Any]:
     """Params for a development run (`service.template_circuits`' ``proofs``): by template, in the check's order, its
     circuit file's SHA-512 and its reference statement's header and registered reads, and for a table read whose
     circuit file the verifier's template check accepts, that record beside the digest (`read_record`). The reference is
@@ -933,11 +933,13 @@ def references(d: Design, q: int, out: Path) -> dict[str, Any]:
     port the value it reads (`verifier_reads`: a link's value, a return's or a parameter's that round 1 commits, a
     read's verdict's of registered tables, else the port holding it), its words and schema. Both are
     a function of the class's layout and ``q`` alone, so an auditor fixes them before the run, one a sample size its
-    first-stage sampling design can sample; this command builds them after the sample, which is why its run is a development run."""
+    first-stage sampling design can sample; this command builds them after the sample, which is why its run is a development run.
+    A class whose replay block reads round 1's rows at a port (`Design.inputs`) names those rows in its program, so its
+    references are the replay ``sample``'s."""
     from toy import reference_salts
     from verity_flock.class_statement import member_stager
 
-    window = d.window("00" * 64, range(q))
+    window = d.window("00" * 64, range(q) if sample is None else sample)
     bind = {"partition": window.partition_digest, "program": window.partition["program"]}
     linked = {(x.template, x.port): x.value
               for x in (*d.links, *(x for x in d.returns if x.held), *d.inputs, *d.verdicts)}
@@ -1206,7 +1208,7 @@ def prove(a: argparse.Namespace, r: Replayed, out: Path,
     d, sample, layout = r.design, r.sample, r.first.layout
     mine = d.window(r.first.docket.digest, sample)
     if proofs is None:
-        proofs = references(d, len(sample), out / "references")
+        proofs = references(d, len(sample), out / "references", sample if d.inputs else None)
     S.template_circuits(proofs, r.first.stream.spec.check.query)
     (out / "proofs.json").write_text(json.dumps(proofs, indent=1, sort_keys=True))
     sets = {m.template: (composer(template_fn(m.template), m), template_fn(m.template)) for m in mine.members}
