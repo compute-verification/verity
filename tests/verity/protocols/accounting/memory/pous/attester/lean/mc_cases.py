@@ -310,14 +310,6 @@ def sessions(sample, signer: AtLeaf | None = None) -> Session:
     return Session(signed, c.commitment, c.openings(), expected, (signer.public_key,), signer)
 
 
-def unsalted(c: mc.SessionCommitment, ended: str, rounds) -> bytes:
-    """The session's message without a salt, under the unsalted tag: what a salted check must refuse."""
-    head = SC.header(c.session, c.coin_root, hashlib.sha512(c.coin_key).digest(), c.binding, c.blocks, c.k, c.limit_ns, c.block_bytes, ended,
-                     len(rounds))
-    return hashlib.sha512(b"verity-pous/memory-challenger/session/v1\0" + len(head).to_bytes(8, "big") + head
-                          + mc.records_digest(rounds)).digest()
-
-
 def _round(s: Session, x: int, **edits) -> Session:
     rounds = list(s.signed.rounds)
     r = x % len(rounds)

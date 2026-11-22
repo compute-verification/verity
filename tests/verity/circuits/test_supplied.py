@@ -356,7 +356,7 @@ def test_a_number_in_a_string_is_not_one():
 
 
 def test_a_last_opening_stands_for_its_round():
-    """`session_proofs.clear_reasons` reads the last opening of a round: an earlier, wrong one does not count."""
+    """The last opening of a round stands for it, as `MemoryAttester.InProofs.clearReasons` reads it: an earlier, wrong one does not count."""
     bad = {**VECTORS["openings"][0], "index": 6}
     got = G.body(*held(coin=coin_of([bad, *VECTORS["openings"]])), "x", mark(ROUND, round=0))
     assert got == ([("bytes", VECTORS["round_coin"][0])], 12)

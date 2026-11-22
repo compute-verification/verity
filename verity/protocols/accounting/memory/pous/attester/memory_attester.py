@@ -67,8 +67,8 @@ tests, as is an unsigned one.
 device signs the setup's published outputs it was given (`sign_setup_record`): a `SetupRecord`, the blocks, commitment,
 salt and root the session's answers are checked against, never that setup's check passed (the device sees no store and
 runs no check at setup), as raw bytes under `SETUP_RECORD_TAG` (`SetupRecord.value`), never 64 bytes long, so never a
-session's record or the wipe's.  `setup_record_ok` checks one against a session's scheme, key and id.  The Lean
-`MemoryChallenger.SetupRecord` is the definition, held to these by difftest.
+session's record or the wipe's.  The Lean `MemoryChallenger.SetupRecord` is the definition and checks one against a
+session's scheme, key and id (`setupRecordOk`).
 
 Times are the challenger's monotonic clock in ns (`time.perf_counter_ns`, Linux's CLOCK_MONOTONIC); the challenger
 refuses a clock coarser than a microsecond (`CLOCK_RESOLUTION_NS`).
@@ -543,21 +543,6 @@ def sign_setup_record(signer: Signer, session: bytes, *, blocks: int, commitment
     return SignedSetupRecord(record, signer.scheme, signer.public_key, signer.sign(session, record.value()))
 
 
-def setup_record_ok(signed: SignedSetupRecord, *, scheme: str, public_key: bytes, session: bytes,
-                    schemes: Mapping[str, Verify] = SCHEMES) -> bool:
-    """`signed` is under `scheme`, which `schemes` accepts, and `public_key`, and its signature verifies on its record's
-    bytes under `session`."""
-    if signed.scheme != scheme or signed.public_key != public_key:
-        return False
-    verify = schemes.get(signed.scheme)
-    if verify is None:
-        return False
-    try:
-        return bool(verify(signed.public_key, session, signed.record.value(), signed.signature))
-    except (ValueError, TypeError, OverflowError):
-        return False
-
-
 def covering_certificate(scheme: Scheme, k: int, limit_ns: int, *, experimental: bool = False) -> CapacityBound:
     """The first of `scheme`'s certificates that covers `k` rounds within `limit_ns`, as `protocol.TimedAudit` picks it;
     `ValueError` when none does, or when the scheme is experimental and `experimental` is not set."""
@@ -907,4 +892,4 @@ __all__ = ["CLOCK_RESOLUTION_NS", "COIN_DOMAIN", "COMMITTED", "HM96", "LMS", "MA
            "SessionCommitment", "SessionLog", "SessionLogError", "SetupRecord", "SignedSession", "SignedSetupRecord",
            "Signer", "Verdict", "Verify", "block_digest", "coin_digest", "coin_key", "collector_paused",
            "covering_certificate", "lms_verify", "message", "records_digest", "register", "resolution_of",
-           "setup_record_message", "setup_record_ok", "sign_setup_record", "verdict", "verify_coin"]
+           "setup_record_message", "sign_setup_record", "verdict", "verify_coin"]

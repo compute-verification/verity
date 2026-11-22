@@ -2214,7 +2214,6 @@
     {"file": "tests/verity/protocols/accounting/memory/pous/verifier/test_pous_challenger_party.py", "count": 3},
     {"file": "tests/verity/protocols/accounting/memory/pous/verifier/test_pous_memory_attester.py", "count": 2},
     {"file": "tests/verity/protocols/accounting/memory/pous/verifier/test_pous_run.py", "count": 2},
-    {"file": "tests/verity/protocols/accounting/memory/pous/verifier/test_pous_session_proofs.py", "count": 1},
     {"file": "tests/verity/protocols/accounting/memory/pous/verifier/test_pous_setup_proof.py", "count": 1},
     {"file": "tests/verity/protocols/accounting/memory/pous/verifier/test_pous_verdict_circuit.py", "count": 1},
     {"file": "tests/verity/protocols/accounting/memory/pous/verifier/test_pous_wipe_parties.py", "count": 2},
