@@ -79,7 +79,7 @@ def PouwPerExecutionPhase {T : ℕ} {Ω : Fin T → Type} [∀ t, Fintype (Ω t)
 window `win b`) are fixed before its coins, and the units it samples (`drawn`) and the faulty blocks it detects
 (`detected`) read only its coins and the earlier windows'; its sample misses its `m` faulty blocks with probability at most
 `(1 − q)^m` (`Flock.Guarantees.SamplingBlock.sampleMiss_le`, under A3), and it detects none of them while sampling one
-with probability at most `ks t` (`SamplingBlock.accepted_drawnIncorrect_le`). That the deployment's windows are such
+with probability at most `ks t`, which no proved guarantee states for an accepted run. That the deployment's windows are such
 windows is not stated. The share `q` is a hypothesis: a window that samples a uniform `kd`-subset of its `n` units has
 the miss bound at `q ≤ kd/n`, which the count a `rate:NUM/DEN` rule names meets at `q = NUM/DEN` over whatever `n` the
 window registers, while under a fixed count the largest `q` that holds falls as the prover pads `n`. -/

@@ -21,7 +21,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 `live-verifier` as `flock_verify_sound`'s claims under `--zk` take it: the record is the live session's, and the sample
 file at every sample of the live sampling design proves the sampled proof blocks and sets the statement up with the outcome's link points.
 `RecordCustodyZKLaw` at one public-output table, `RecordCustodyZKHLaw` at one hidden-output table, `RecordCustodyZKJLaw`
-and `RecordCustodyZKHJLaw` at `J`. `RecordCustodyZK` and `RecordCustodyZKJ` (`Assumptions.Zk`) state the sample fact as
+and `RecordCustodyZKHJLaw` at `J`. `RecordCustodyZKJ` (`Assumptions.Zk`) states the sample fact as
 the sample file being `verity-verify-proof draw`'s instead.
 -/
 

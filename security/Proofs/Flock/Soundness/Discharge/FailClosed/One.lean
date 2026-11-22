@@ -100,8 +100,7 @@ and the live subset sample. The other eight
 are corollaries of these: `flock_headline_exec` and `flock_headline_exec_hidden` state the `_dec` bounds at any decoder
 given its `DecodesOn` (`hdec`), which the `_dec` forms prove for the verifier's decoder; the soundness halves of
 `zk_session_composed` and `zk_session_composedHJ` are `zk_session_sound` and `zk_session_soundHJ`; the four `_custody`
-forms take the record (`hRec`) and sample (`hDraw`) facts from one named assumption (`Assumptions.Zk.RecordCustodyZK`,
-`RecordCustodyZKJ`), and the two `_custody_json` forms the sample fact from the sample file being `verity-verify-proof draw`'s
+forms take the record (`hRec`) and sample (`hDraw`) facts from one named assumption (`Assumptions.Zk.RecordCustodyZKJ`), and the two `_custody_json` forms the sample fact from the sample file being `verity-verify-proof draw`'s
 (`hdj`). The headlines remain, pinned, as lemmas. The claims take the headlines' record and sample facts as one named
 assumption too: without `--zk` `Assumptions.RecordCustodyExec` (`RecordCustodyExecH` at hidden outputs), under `--zk`
 `Assumptions.Zk.RecordCustodyZKLaw` (`RecordCustodyZKHLaw` at hidden outputs, `RecordCustodyZKJLaw` and

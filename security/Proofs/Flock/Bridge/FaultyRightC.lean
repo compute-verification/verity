@@ -41,13 +41,12 @@ import Std.Tactic.BVDecide.Normalize.BitVec
 /-!
 # A unit right on its canonical openings is not faulty
 
-`faultyRightC`, the canonical form of `FaultyRightTarget` (`Bridge.Targets`), proves `FaultyRightTargetC`
-(`Bridge.Canon`). `canon g v` is any predicate on the value of an opening at wire `g`; the bridge's is `canonRow`: the
+`faultyRightC` proves `FaultyRightTargetC` (`Bridge.Canon`). `canon g v` is any predicate on the value of an opening at wire `g`; the bridge's is `canonRow`: the
 wire has a row, and the value is RowShaped at its row's width. A unit `u` is not faulty in `witDep C Cm H roots Xr`
 when its committed wires each carry, in some canonical opening of their registered commit string, their value in `C`'s
 evaluation on `Xr`'s inputs (`RightRegZc`'s second conjunct), and each of its canonical registered openings opens its
 wire's position under `Cm` and `roots`. It reads the transport only at the right openings, so at
-`canon := fun _ _ => True` it is `FaultyRightTarget`.
+`canon := fun _ _ => True` it says the same of every opening.
 
 * `reads_lower_args`: a lowered gate reads the positions of its wire's arguments, or a row's AND its own two XORs.
 * `need_posOf`: every gate of `need` that the unit reads from outside or commits is the position of a wire in `P.io u`
@@ -242,7 +241,7 @@ theorem correct_of_local {n : ℕ} (P : Spot.Sampling.Partition C n) (u : Fin n)
     (fun g hg b hk => (hloc g hg).trans (hκ g hg b hk)) val
     (fun g hg hk => (hval g hg hk).trans (congrArg some (hloc g hg).symm)) ι
 
-/-- **A unit right on its canonical openings is not faulty** (`FaultyRightTarget` at canonical openings), at constants
+/-- **A unit right on its canonical openings is not faulty** (at canonical openings), at constants
 `κ` that fix only inputs: a constant the unit reads is `.const`, which carries its value when `hκ` holds there, and any
 other wire it reads is transported (`correct_blockOf_of` at `C`'s evaluation on `Xr`). -/
 theorem faultyRightC {n : ℕ} (P : Spot.Sampling.Partition C n) {Pos Val Opn Com : Type}

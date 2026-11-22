@@ -257,9 +257,9 @@ with carried leaves (`CarriedBlocks`), on a set `I` of its sessions each of whic
 each carried leaf read at its one value in every session that shares it, is at most
 $$\sum_{t \in I} (\varepsilon_{ks,t} + \delta_{link,t}) + \sum_\ell \delta_{carry,\ell,I},$$
 with no sampling term. Two sessions that share one registered value are the case where `I` is those two and the value
-is one carried leaf whose `sessions` are both. Its premises are `IntegrityPooledCarried`'s.
+is one carried leaf whose `sessions` are both. Its premises are the carried monitoring period's (`CarriedBlocks`).
 
-What it does not say: anything of a session that samples (`kd < n`: that is `IntegrityPooledCarried`'s pooled bound);
+What it does not say: anything of a session that samples (`kd < n`), which no proved guarantee bounds;
 which value the shared leaf holds, only that both sessions are held to one value, the plurality of its finder over them
 (`CarriedBlocks.Xm`); anything of zero knowledge; or anything of sessions outside the monitoring-period game, where
 each session's statement is fixed before any session's coins.

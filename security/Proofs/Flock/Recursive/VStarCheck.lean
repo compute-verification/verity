@@ -621,7 +621,7 @@ Assumption record. No claim: an obligation, a fact about our code, open until ga
 assumes that the V* statement files `vstar stage` writes parse to the circuits the guarantee names, which is a
 deterministic computation on public inputs. It follows from `VStarParses` (`vstarParsesScoped_of`), which the lock
 already lists, and it asks less: `VStarParses` also asks every listed file to parse. At every inner shape and binding,
-`FlockC3.VStarList.vstarParsesScoped_of_list` builds a family `Vs` that satisfies it. So it fixes which `Vs` the
+a family `Vs` that satisfies it exists (V*'s list, with `defaultCircuit` where a parse is out of scope). So it fixes which `Vs` the
 guarantee speaks of, and taking `VStarParses` instead would weaken the guarantee. It is no hash premise and no premise
 about the world. -/
 def VStarParsesScoped {S : ℕ} (t₀ : Flock.Tags) (i : RecVStar.Inner) (bind : Fin S → VStar.Bindings)

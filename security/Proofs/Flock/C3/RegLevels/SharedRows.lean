@@ -21,7 +21,7 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
 /-!
 # `SharedOwnRoot`: two sessions register a shared value under one root, from `checkShared`
 
-`row_agree` reads two of V*'s accepted sessions' entries for one value at one root, leaf count, domain and leaf schema. The
+`SharedOwnRoot` reads two of V*'s accepted sessions' entries for one value at one root, leaf count, domain and leaf schema. The
 verifier's statement check runs `RecVStar.checkShared` against its record of V*'s shared rows (`--rec-rows`, one file
 for every session of the family): a port of a session's reads file reading a value some entry of `rows` reads has the
 first such entry's registration (`portDiff?` but reads), and a port reading R's tops `rec-top-stacked-L<l>`, or level 0's

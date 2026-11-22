@@ -17,8 +17,7 @@ error; the first term is at most `L.miss K` at `E = (K ≤ |incorrect X|)`.
 `Sound` is `Spot.Sampling.extraction_audit_le`'s statement, over any units, so `extraction_audit_le A hks hlink E σ`
 proves it.
 
-**Instances.** `Flock.Guarantees.SampledKSLiveV5` and `SampledKSLiveV3`, deployed and proved, apply
-`extraction_audit_le` (V3 also `extraction_audit_count`, which `Sound` does not state). `Claims.SamplingGeneric.CompilerKS`
+**Instances.** `Flock.Guarantees.SampledKSLiveV5`, proved, applies `extraction_audit_le`. `Claims.SamplingGeneric.CompilerKS`
 and `FlockSoundness.SampledGeneric` state the layer apart and prove it; nothing deployed instantiates either.
 -/
 

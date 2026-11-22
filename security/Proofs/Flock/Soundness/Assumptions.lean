@@ -190,9 +190,7 @@ hm96-sha512's `ZkView.My` and `ZkView.saltHash`.
 It is the common-reference-string step (`common-reference-string`), not a hardness assumption, and no reduction takes it
 to a property of SHA-512: `K*` is one public constant, so there is no secret and no adversary to reduce, and a bad key
 is not a set an algorithm is asked to find. Where a theorem's bound is stated at `hidingGap My saltHash` instead
-(`CROnly.hm96Hiding_gap`), it takes no premise at all: so are `Flock.Guarantees.RecursiveZK`,
-`Flock.Guarantees.RecursiveCircuitPrivate`, `Flock.Guarantees.RecursiveCircuitIndist`,
-`Flock.Guarantees.RecursiveCircuitPrivateLeaves`, `Flock.Guarantees.ZeroKnowledgeHidden` and
+(`CROnly.hm96Hiding_gap`), it takes no premise at all: so are `Flock.Guarantees.ZeroKnowledgeHidden` and
 `FailClosed.flock_verify_sound`'s zero-knowledge views. A key sampled per session
 from the operating system (A3) would replace it by the average over keys, `2^-257` (`CROnly.hm96_sha512_sum`), as the
 committed coins' bound at a fresh uniform key already is (`ZkCoins.CommittedLeHm96`). -/

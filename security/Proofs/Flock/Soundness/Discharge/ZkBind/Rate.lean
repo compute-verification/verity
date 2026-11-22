@@ -110,8 +110,7 @@ theorem cap_div_le {L k : ℕ} {ρ : ℝ} (hkρ : (2 : ℝ) ^ L ≤ ρ * (Real.e
   exact hkρ
 
 /-- **The count curve bounds every planned rate**: under a cap `L`, `2^L ≤ ρ·(e·k)` gives `rateZ … ≤ ρ` at every sample
-`S`, registration `R` and table `i`. `ZkHidden.hr_planZHJ` is the same at the hidden-output plan of `J` tables, which
-the recursive audit's `_hr` reads. -/
+`S`, registration `R` and table `i`. -/
 theorem hr_planZAt {L k : ℕ} {ρ : ℝ} (hL : ZkLogLenCap L) (hkρ : (2 : ℝ) ^ L ≤ ρ * (Real.exp 1 * k))
     (S : Finset (Fin n)) (R : Reg) (i : Fin (planZAt (Reg := Reg) dj y₀ S R).length) :
     rateZ (planZAt (Reg := Reg) dj y₀ S R) i k ≤ ρ :=

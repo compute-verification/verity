@@ -135,9 +135,9 @@ V*'s (`VStarCheck`, which `RecursiveAudit` doesn't read yet), V*'s outer session
 in them, which never stops (`OuterAbort`), and V*'s outer sessions (`Sessions`) and their zero knowledge, (ii)'s
 `_hOuter`, at the honest prover's code, its self-check included (`OuterZK`), and (ii) stated about the ZK server's code
 and V*'s, with no zero knowledge of V*'s sessions taken (`ZkServer`), its proof (`ZkServerZK`), the committed-coin
-statements' `_hOuter` (`OuterSessionsZK`) at V*'s sessions on V*'s staging (`OuterSessionZK`) and at V*'s statements
-run by the session loop's switched prover (`Loop`), `RecursiveZK` there with the session released at a stop the coins
-fix, its simulator reading only V*'s public statements (`LoopZK`), `ZkServerZK`'s bound when each digest reads the
+case's commitments (`OuterSessionZK`), the outer session's zero knowledge at V*'s statements run by the session
+loop's switched prover (`Loop`), the recursive audit's zero knowledge there with the session released at a stop the
+coins fix, its simulator reading only V*'s public statements (`LoopZK`), `ZkServerZK`'s bound when each digest reads the
 salts the ZK server answered before it (`ZkServerSalted`), what the ZK server's code sends at every salt list fixed by
 one run (`ZkServerRun`), a finished session's sends the schedule's transcript (`ZkServerTemplate`), `flock-zk-server
 live`, the deployed send check, sending what the ZK server's run sends (`ZkServerLive`), and `ZkServerSends` from them
@@ -145,8 +145,8 @@ with the honest worker's half left an obligation (`ZkServerAccepts`, with (ii) f
 from it), the honest worker's requests and rounds read back by `decode`, `frames` and `split` as it meant them
 (`ZkServerWire`), a plain value's text parsing back to its canonical form with no fraction or exponent
 (`ZkServerJson`), the live ZK server's sends at any requests (`ZkServerAny`) and at any worker that reads its answers
-(`ZkServerAdaptive`), the live session at a worker whose requests are fixed (`ZkServerFixed`), `RecursiveZK` at the
-loop at such a worker, with no `ZkServerSends` (`LoopAny`), and at the deployed tables (`LoopAnyDeployed`), each
+(`ZkServerAdaptive`), the live session at a worker whose requests are fixed (`ZkServerFixed`), the recursive audit's
+zero knowledge at the loop at such a worker, with no `ZkServerSends` (`LoopAny`), and at the deployed tables (`LoopAnyDeployed`), each
 of the loop's two guarantees' premises at one instance and its bound failing at another (`LoopWitness`), and the
 recursive audit at public units, the inner
 statement the verifier's own from its partition object and program (`PublicAudit`), its proof

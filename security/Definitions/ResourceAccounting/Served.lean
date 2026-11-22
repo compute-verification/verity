@@ -206,31 +206,21 @@ statement is over the registered circuit; these are the checks that make its `co
 
 A checked record asks nothing more of this statement: `Tie`, `ValueChecked` and `CreditTie` take no premise on it. What
 a proof layer (`ResourceAccounting.TS.ProofLayer`) realizing a value-checked `zTree` window must supply at a unit's record port
-is that realization's to prove, at the premises `ResourceAccounting.Guarantees.TS.SessionSoundAt` takes
-(`Proofs.Pouw.TS.Session.Assumptions`):
+is that realization's to prove, and no guarantee states it for a served run:
 * `pf.accepted` holds of a proof only where its unit's check words are `1`: verity-verify-proof `--zk --registered` reads the
-  `ok` row at its known content (`AcceptedLive`);
-* `pf.rel` holds its record to the product and its `dq`, as `Held` reads them, and the layer pins each committed value's
-  derivation (`ProofLayer.Pins`; `ServedChecksHold` at the session's value layer). The unit's Definition with its check
-  words fixed to `1` (`PouwH1TileZy_v1` with `ok = 1`) is `ResourceAccounting.Guarantees.TS.TileSessionSound`'s relation
-  (`TileRel`), under its premise `ResourceAccounting.TS.Tile.TileComputes` (the circuit computes its Definition at its
-  registered reads; that the Definition's `ok = 1` gives the cells' checks is proved, at a `K` its EXACT binds at).
-  `CheckedSessionSound`'s relation (`CheckedRel`) is only that the opened rows are an assignment the circuit's
-  evaluation agrees with, which says nothing of the product or `dq`;
+  `ok` row at its known content;
+* `pf.rel` holds its record to the product and its `dq`, as `Held` reads them, and the layer fixes each committed value's
+  derivation (`ProofLayer.Pins`). The unit's Definition with its check words fixed to `1` (`PouwH1TileZy_v1` with
+  `ok = 1`) gives the cells' checks, at a `K` its EXACT binds at;
 * `pf.opened` holds the leaves of the round's record tables, the records committed under its root before σ_w;
-* `ServedRootsLinked`'s `rows` read the unit's `zy` and A ports at its round root's tables, which
-  `Flock.SecurityProofs.ServedRowsLinked` gives at the sampled proof blocks under `RowsSession.ServedRegistered`.
+* the rows read the unit's `zy` and A ports at its round root's tables.
 
 A leaf proved as several statements is one unit: option A's 33 statements (32 lanes
 `PouwH1LaneZy_v1` and their combine `PouwH1Combine_v1`) are one `Cd` unit, the leaf's, and the lanes' partials are
 values of the proof layer that realizes it, not gates of `Cd`. They take no class, `ValueChecked`'s fifth clause ranges
 over the unit's records only, and no gate of the unit reads another unit's computed word through them. That the 33
 statements, accepted over shared committed values, realize the one unit's checks is that linked realization's to
-prove: BRIDGE2's `ResourceAccounting.Guarantees.TS.LeafLanesSound`, from `CheckedSessionSound` at each statement, under its
-premises `LaneLowers` and `CombineLowers` (each statement's pieces at their lowerings, whose composition computing its
-Definition is proved), with the leaf and the
-receipt the ones the statements' committed rows decode to (the known ports' are checked, and each A, B and partials
-row is one row of one registered tree that every statement reading it reads in full).
+prove, and no guarantee states it.
 -/
 
 @[expose] public section

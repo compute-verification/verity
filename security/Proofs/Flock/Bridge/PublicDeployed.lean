@@ -41,16 +41,16 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # `deltaPub` is below 1 at the deployment's parameters
 
-`SampledKSLivePub` bounds a cheating prover's success by `Bridge.deltaPub`, which says something only below 1. At the
+`Bridge.deltaPub`, the error of the sampled audit at public inputs, says something only below 1. At the
 deployment's parameters, `ρ = 1/2`, `k = ⌈2^24/e⌉` (`kDep`) and `M = R_w = 2^192`, it is:
 
-* `rateM1_kDep`: `SampledKSLivePub`'s rate hypothesis holds, `2^23/(e·kDep) ≤ 1/2`;
+* `rateM1_kDep`: the rate hypothesis holds, `2^23/(e·kDep) ≤ 1/2`;
 * `ksClosedM1_le`: the knowledge term is at most `2^-155` at budgets `q_F, q_S ≤ 2^82`;
 * `link_le`: the link factor is at most `2^-150` at a per-run cost `t' ≤ 2^81`;
 * `deltaPub_le_deployed`: so `deltaPub` is the sample's miss plus at most `2^-100`, for `W ≤ 2^40` committed wires;
 * `miss_le_pow`, `miss_le_exp`: the miss `C(n−K₀, k_d)/C(n, k_d)` is at most `(1 − K₀/n)^{k_d} ≤ e^{−K₀k_d/n}`;
 * `Flock.Guarantees.DeltaPubDeployed`: at `K₀ ≤ n ≤ K₀·k_d` (a sample of `k_d` units expects at least one of `K₀` bad
-  ones), the miss is at most `1/e`, so `deltaPub < 1` at `SampledKSLivePub`'s budgets `q_F = 2(t' + v)`, `q_S = t' + v`
+  ones), the miss is at most `1/e`, so `deltaPub < 1` at the budgets `q_F = 2(t' + v)`, `q_S = t' + v`
   and link cost `t' + v` per run, for `t', v ≤ 2^80`.
 -/
 
@@ -245,10 +245,10 @@ end Flock.Bridge
 
 namespace Flock.Guarantees
 
-/-- **`SampledKSLivePub`'s error is below 1 at the deployment's parameters.** At `k = kDep = ⌈2^24/e⌉`, `ρ = 1/2` and
+/-- **`deltaPub` is below 1 at the deployment's parameters.** At `k = kDep = ⌈2^24/e⌉`, `ρ = 1/2` and
 `M = R_w = 2^192`, its rate hypothesis holds (`1 ≤ k`, `rateM1 k ≤ ρ`), and `deltaPub < 1` at its budgets
 `q_F = 2(t' + v)` and `q_S = t' + v` and link cost `t' + v` per run, for a prover's per-run time `t' ≤ 2^80` and one
-opening's verification `v ≤ 2^80`, at most `2^40` committed wires (`W`, `Bridge.ioSum`) and a sample of `k_d` of `n` units
+opening's verification `v ≤ 2^80`, at most `2^40` committed wires (`W`) and a sample of `k_d` of `n` units
 with `K₀ ≤ n ≤ K₀·k_d`. -/
 def DeltaPubDeployed : Prop :=
   1 ≤ Bridge.kDep ∧ FlockSoundness.Discharge.ZkLink.rateM1 Bridge.kDep ≤ 1 / 2 ∧
@@ -258,7 +258,7 @@ def DeltaPubDeployed : Prop :=
 
 end Flock.Guarantees
 
-/-- **`SampledKSLivePub`'s error is below 1 at the deployment's parameters** (`Flock.Guarantees.DeltaPubDeployed`). -/
+/-- **`deltaPub` is below 1 at the deployment's parameters** (`Flock.Guarantees.DeltaPubDeployed`). -/
 theorem Flock.SecurityProofs.DeltaPubDeployed : Flock.Guarantees.DeltaPubDeployed := by
   refine ⟨Flock.Bridge.one_le_kDep, Flock.Bridge.rateM1_kDep, ?_⟩
   intro n kd K₀ W t' v hn0 hK hn hW ht0 ht hv0 hv

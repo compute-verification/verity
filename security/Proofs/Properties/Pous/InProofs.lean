@@ -30,9 +30,9 @@ opening verifies to its index).
 `RunGives`, in `Verity.InProofs`'s shape at `K₀ = 1`: if an accepted run leaves a proof block whose value `right`
 rejects with probability at most `ε`, `right ≤ PieceOk`, and an accepted run's proof blocks open the carried rows to one
 value or its SHA-512 inputs hold a collision (`Carried`), then the event `r.accepts ∧ ClearOk ∧ verdict rejects the
-session the run opens (challengePhaseOf) ∧ no collision in r.hashInputs` has probability at most `ε`. The guarantee that
-instantiates it builds `r.ports` from the counted extractor `IntegrityMonitoringPeriod` reads and `r.hashInputs` from the run, sets
-`right` to each proof block's circuit, takes `Gives` from `IntegrityMonitoringPeriod` at `K₀ = 1` over the session's statements
+session the run opens (challengePhaseOf) ∧ no collision in r.hashInputs` has probability at most `ε`. No proved
+guarantee instantiates it: one would build `r.ports` from a counted extractor and `r.hashInputs` from the run, set
+`right` to each proof block's circuit, take `Gives` from a sampled audit's bound at `K₀ = 1` over the session's statements
 (sampling term `0` under `All`, so `ε` is the statements' `ε_ks + ε_bind` summed) and `Carried` from the carried form;
 `cr/sha-512` then bounds the collision at a finder built from the prover, outside this lemma.
 -/

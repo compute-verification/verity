@@ -65,7 +65,7 @@ check doesn't discharge it:
   window's sampling coin, and to bind the H1 tiles' rows to those anchors.
 * `RegisteredBeforeDraw`: protocol structure. The check reads only that the service's answer cites the registration's
   digest (`Evidence.commitment`), not when the sampling coin was released against it, so it doesn't discharge it.
-* `ServiceSound δks`: Flock's soundness at each sampled proof block under live coins (`Flock.Guarantees.EndToEndRegisteredRows`
+* `ServiceSound δks`: Flock's soundness at each sampled proof block under live coins (`Flock.Guarantees.EndToEndRegisteredSampled`
   for one session) with one-stage's acceptance (`Properties.Spot.AcceptMeans`) and the check's
   (`Properties.Pouw.Check.AcceptMeans`), both proved; `rel` the relation of the statement the service proves (H1's
   subprotocol: the window's staged statement, `stagedAt`).

@@ -5,7 +5,7 @@ public import Flock.Registered
 
 /-!
 The circuit and public files `verify --zk` holds to the form the sampled audit's knowledge soundness covers
-(`Flock.Guarantees.SampledKSLiveV3`): every port a `sha512/row/v1`, `sha512/row/v2` or `sha512/row-seg/v1` row as the
+(`Flock.Guarantees.SampledKSLiveV5`): every port a `sha512/row/v1`, `sha512/row/v2` or `sha512/row-seg/v1` row as the
 scope check reads them (`rowsOk`), each of its own name, no two ports whose registered frame-v3 roots over the public
 file's population are one root under different domains (`collides`), every row under `2^64` bits (`wordsOk`), and the
 published tree's domains each 64 bytes and of their own port (`idsSized`, `dupId`), with no two ports' published roots

@@ -64,8 +64,7 @@ excludes and `regFinder` prices once per audit: no new event, no guarantee recor
   `128 l + e` of the port named `h` (`rowsOk`'s row 0, `leavesOk`, `srcKey_inOrder`).
 * `srcHReads_of`: `SrcHReads` from those, the columns of the RecSparse circuit's `h` (`HCols`, an obligation no theorem
   discharges) and the algebra unit's row of rep
-  `i`'s `h` (`HAlgRows`, which `FlockC3.Reps.hAlgRows_of_res` proves at a holo shape from the verifier's checks and
-  the algebra parts' `ResZeroAtLH`).
+  `i`'s `h` (`HAlgRows`, an obligation no theorem discharges).
 -/
 
 @[expose] public section
@@ -670,8 +669,7 @@ theorem readsUnsegC3 (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (dg : Byt
 `U` of rep `i`'s steps is such that where a RecSparse copy at unit `i` holds rep `i`'s phase, its session is
 `.sparse _ hr` and some part's session reads, at unit `i`, the row port `m<hr>` (a row port of its statement, which
 `checkRows` pins), whose bit `128 l + e` is bit `e` of `hOfW U.sh U.d.w`'s element `l` (`hOfW_valOf` at `.h l`,
-`RepMaps`' columns of `U.d.w`, with `U.d` from `RepUnitOfAlg`). `FlockC3.Reps.hAlgRows_of_res` proves it at a holo
-inner shape from the verifier's checks and each algebra part's `ResZeroAtLH` at the decoder's rep. -/
+`RepMaps`' columns of `U.d.w`, with `U.d` from `RepUnitOfAlg`). No theorem discharges it. -/
 def HAlgRows (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray) (N k Rw : ℕ)
     (stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin (vstarCount F.ish)) → (F.Vs j).Bits) → C3Run (holoAt st hp))
     (w : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin (vstarCount F.ish)) → (F.Vs j).Bits) → Fin 2 →
@@ -751,8 +749,8 @@ theorem hSite_of_checked {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {rows
 
 /-- **`SrcHReads` from the verifier's checks** (`hSite_of_checked`, `readsUnsegC3`) and the pieces: the reads at the
 units' own rows (`ReadsOwnAt`, from `ReachedChecked` by `readsOwnAt_of`), the RecSparse circuit's `h` keys (`HCols`,
-a hypothesis; its keys `hKey_of_check`) and the algebra unit's row of rep `i`'s `h` (`HAlgRows`,
-`hAlgRows_of_res`). -/
+a hypothesis; its keys `hKey_of_check`) and the algebra unit's row of rep `i`'s `h` (`HAlgRows`, a
+hypothesis). -/
 theorem srcHReads_of {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {rows : Option (Array Flock.Registered.Port)}
     {wr : List (Cm × (ℐ).Coin) → Lean.Json × String} {reg : Lean.Json} (hchk : ChecksAccepted F rows wr reg)
     {dg : ByteArray → ByteArray} {N k Rw : ℕ} (hro : ReadsOwnAt F dg N k Rw)

@@ -27,8 +27,8 @@ copy of it. The tape's salts are pairwise distinct as bytes, and so are its pads
 salt or pad the workers saw under one number is not used under another.
 
 Coins go to the workers exactly as the challenger sent them (`Item.coins`), and only after every commitment the schedule
-owes (`State.owed`): in the inner phase each round's coins are live, sampled after its commitments, as `RecursiveKS`'s game
-and `RecursiveZK` sample them. A public input may also declare the challenger's commitments to its coins
+owes (`State.owed`): in the inner phase each round's coins are live, sampled after its commitments, as the recursive audit's
+knowledge-soundness game and `RecursiveZKLoop` sample them. A public input may also declare the challenger's commitments to its coins
 (`PublicInput.coins`): for each stream, one per round, the hm96-sha512 commit string `b ‖ c` (`commitBC`, the commit items'
 commitment) of the round's coin message (`coinMsg`: the stream, the round and the coins) under a salt of the challenger's.
 A coins item then carries that salt as its opening, and it leaves only if the opening opens the round's commitment to its

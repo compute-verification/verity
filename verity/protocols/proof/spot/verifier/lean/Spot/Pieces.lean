@@ -56,7 +56,7 @@ difftest against `one_stage`'s Python, beside the whole protocol (`spot-one-stag
   `OneStageZk.tablesMatch`);
 * `bound`: the exact bounds on incorrect proof blocks at δ;
 * `harm_bound`: the harm they hold at δ in closed form (`Bound.densityBound`);
-* `max_harm`: a certificate's bracket around `Flock.Guarantees.JointStratified`'s exact supremum of that harm
+* `max_harm`: a certificate's bracket around the exact supremum of that harm
   (`Bound.maxHarmCheck`), which `certify` is held to;
 * `hidden_offsets`, `hidden_locate`, `hidden_witness`: the sample over hidden positions (`HiddenSample`): the honest table's
   offsets and total, the honest prover's witnesses, and the witness for a named call;
@@ -550,7 +550,7 @@ def harmBound (j : Json) : V Json := do
     ("value", .str (toString value))]
 
 /-- `{"rows": [{"size", "k", "harm", "take", "lo", "hi"}], "delta", "multiplier"}` to `{"lower", "upper"}`, ratios around
-`StratifiedBlock.maxHarm` at δ (`Bound.maxHarmCheck`); refused where a row is not exactly those keys, natural numbers and
+the exact supremum of the harm at δ (`Bound.maxHarmCheck`); refused where a row is not exactly those keys, natural numbers and
 a ratio harm, `k ≤ size`, δ not in (0, 1), the multiplier not a ratio, or the certificate fails. -/
 def maxHarm (j : Json) : V Json := do
   if keys? j != some #["delta", "multiplier", "rows"] then throw "exactly {rows, delta, multiplier}"

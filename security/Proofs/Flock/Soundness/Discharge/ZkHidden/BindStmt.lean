@@ -28,7 +28,7 @@ set_option Elab.async false
 /-!
 # The binding half at the session's statement circuit
 
-`SoundBind.lean`'s `sitesShH` … `rsZH` and `DefsJ.lean`'s `sitesShHJ` … `rsZHJ` take the session's circuit
+`SoundBind.lean`'s `sitesShH` and `placeZH` and `DefsJ.lean`'s `sitesShHJ` … `rsZHJ` take the session's circuit
 from `HmOut.parse`, which refuses a templated file. Here they are at the statement circuit `c`
 (`HmOut.parseStmt (zkTags I) … = .ok c`, a templated file's committed circuit unrolled), with the rows' fit `hv1`
 given (`TableH.accS`'s):
@@ -207,7 +207,7 @@ theorem sitesShHSt_parse :
 variable (hU : Built c.unit) {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
 
 include hscope hU hpub in
-/-- **`BcSiteH` at every satisfiable site** of the public plan (`sitesShH_bcSite` at `tableH_bcSiteSt`). -/
+/-- **`BcSiteH` at every satisfiable site** of the public plan (at `tableH_bcSiteSt`). -/
 theorem sitesShHSt_bcSite :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S)
       (M : Binding.Msg (planShH dj y₀) (tabShH dj y₀) S R u),
@@ -231,7 +231,7 @@ theorem sitesShHSt_bcSite :
       exact y₀.x.refused_unsat S
     exact absurd hM (hns _)
 
-/-- **`lay` at the public plan**, at the statement circuit (`layShH`). -/
+/-- **`lay` at the public plan**, at the statement circuit. -/
 noncomputable abbrev layShHSt :
     Binding.Layout ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planShH (Reg := Reg) dj y₀) (tabShH dj y₀)
       (((keyProg c hU n).partition (Layout.outsOf c hU n)).placeDecoder (planShH dj y₀) (tabShH dj y₀)
@@ -239,7 +239,7 @@ noncomputable abbrev layShHSt :
   keyLayoutH (sitesShHSt_parse dj y₀ ht hcS hv1) (Layout.outsOf c hU n) (fun _ => pub)
     (Layout.scopeOkH_spec hU hscope).2.1 hv1 (Layout.outsOut_outsOf c hU n)
 
-/-- **`rs` at the public plan**, at the statement circuit (`rsShH`), its keys from `Hidden.keysRow_stmt`. -/
+/-- **`rs` at the public plan**, at the statement circuit, its keys from `Hidden.keysRow_stmt`. -/
 noncomputable abbrev rsShHSt : Binding.HmRowsX (layShHSt dj y₀ ht hcS hv1 hscope hU (pub := pub) (Reg := Reg)) :=
   keyRowsH (sitesShHSt_parse dj y₀ ht hcS hv1) (Layout.outsOf c hU n) (fun _ => pub)
     (Layout.scopeOkH_spec hU hscope).2.1 hv1 (Layout.outsOut_outsOf c hU n)
@@ -259,7 +259,7 @@ noncomputable def placeZHSt (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u �
   placeCast (planAtZKH_S dj y₀ S R u)
     (keyPlaceH (sitesShHSt_parse dj y₀ ht hcS hv1) (Layout.outsOf c hU n) S R u h)
 
-/-- **The decoders agree**, at the statement circuit (`decAgreeH`). -/
+/-- **The decoders agree**, at the statement circuit. -/
 theorem decAgreeHSt :
     DecAgree (P := (keyProg c hU n).partition (Layout.outsOf c hU n)) (planAtZKH_S (Reg := Reg) dj y₀)
       (decZ := decodeOfPlace execArith ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planAtZKH dj y₀)
@@ -270,7 +270,7 @@ theorem decAgreeHSt :
   simp only [decodeOfPlace, Partition.placeDecoder, hu, ↓reduceDIte, placeZHSt, decode_placeCast]
   exact congrArg (fun z => UnitPlace.decode _ z g) hM.symm
 
-/-- **`lay` at the hidden-output `--zk` tables**, at the statement circuit (`layZH`). -/
+/-- **`lay` at the hidden-output `--zk` tables**, at the statement circuit (`LayoutZ.ofShadow`). -/
 noncomputable abbrev layZHSt :
     LayoutZ execArith ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planAtZKH (Reg := Reg) dj y₀)
       (tabAtZKH dj y₀)
@@ -280,12 +280,12 @@ noncomputable abbrev layZHSt :
   LayoutZ.ofShadow (planAtZKH_S dj y₀) (layShHSt dj y₀ ht hcS hv1 hscope hU (pub := pub))
     (decAgreeHSt dj y₀ ht hcS hv1 hU)
 
-/-- **`rs` at the hidden-output `--zk` tables**, at the statement circuit (`rsZH`). -/
+/-- **`rs` at the hidden-output `--zk` tables**, at the statement circuit (`HmRowsZX.ofShadow`). -/
 noncomputable abbrev rsZHSt : HmRowsZX (layZHSt dj y₀ ht hcS hv1 hscope hU (pub := pub) (Reg := Reg)) :=
   HmRowsZX.ofShadow (planAtZKH_S dj y₀) (decAgreeHSt dj y₀ ht hcS hv1 hU)
     (rsShHSt dj y₀ ht hcS hv1 hscope hU hpub)
 
-/-- **`hHm` at the hidden-output `--zk` tables' rows**, at the statement circuit (`rsZH_computes`). -/
+/-- **`hHm` at the hidden-output `--zk` tables' rows**, at the statement circuit. -/
 theorem rsZHSt_computes : (rsZHSt dj y₀ ht hcS hv1 hscope hU hpub (Reg := Reg)).Computes :=
   HmRowsZX.ofShadow_computes (planAtZKH_S dj y₀) (decAgreeHSt dj y₀ ht hcS hv1 hU) _
     (rsShHSt_computes dj y₀ ht hcS hv1 hscope hU hpub)

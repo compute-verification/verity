@@ -22,8 +22,8 @@ derivation; so each is an argument of the lemma here, fixed before the run.
 `SpanGives`, in `Verity.InProofs`'s shape at `K₀ = 1`: if an accepted run leaves a proof block whose value `right`
 rejects with probability at most `ε`, and every value `right` accepts decodes (`decode`) to an opening `checkOpening`
 passes at its sampled position, then the verifier accepts while `checkWindow` refuses the decoded openings with probability at most
-`ε`. The guarantee that instantiates it builds `r.ports` from the counted extractor `IntegrityMonitoringPeriod` reads, sets `right`
-to the opening unit's circuit, and takes `Gives` from `IntegrityMonitoringPeriod` at `K₀ = 1` over the window's statements, whose
+`ε`. No proved guarantee instantiates it: one would build `r.ports` from a counted extractor, set `right` to the
+opening unit's circuit, and take `Gives` from a sampled audit's bound at `K₀ = 1` over the window's statements, whose
 sampling term is `0` under `All`; `ε` is then the statements' `ε_ks + ε_bind` summed.
 -/
 

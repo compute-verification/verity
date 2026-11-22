@@ -8,9 +8,8 @@ public import Properties.Pouw.MonitoringPeriod
 
 `Properties.Pouw.MonitoringPeriod.ServiceSound` bounds, in each window, the event that PoUW's deployed check
 (`PouwVerifier.protocol.check`) accepts the window and some unit it publishes as sampled (`Public.drawn`) has an opening that
-fails its relation. `ResourceAccounting.TS.ProofLayer.SoundAt` bounds each proof of a window's proof layer the same way, and
-`ResourceAccounting.Guarantees.TS.SessionSoundAt` concludes it of a layer whose proofs are Flock sessions. This module states
-the step between the two:
+fails its relation. `ResourceAccounting.TS.ProofLayer.SoundAt` bounds each proof of a window's proof layer the same way; no proved guarantee concludes it of a layer whose proofs are
+Flock sessions. This module states the step between the two:
 
 * `Sessions.layer`: a window verdict `acc` with its sampled proof blocks (`drawn`), each unit `u` read at its key `key u` of the
   window's openings, as a proof layer of `n_π` proofs a window. Proof `i` is one session: `sessOf x w u` is the session
@@ -66,8 +65,7 @@ end Sessions
 of PoUW's deployed check (`PouwVerifier.protocol.check` at parameters `p`, each window's registration and answer any
 function of the period's coins, `ws`), openings `opened` and relations `rel` of the sampled proof blocks, and every assignment
 `sessOf` of each window's sampled proof blocks to `n_π` sessions: if each session of the check's layer is accepted with a
-statement that fails at its openings with probability at most `δ` (`ResourceAccounting.Assumptions.TS.ProofSoundAt`, which
-`ResourceAccounting.Guarantees.TS.SessionSoundAt` concludes of Flock sessions), then in every window the check accepts and
+statement that fails at its openings with probability at most `δ` (`ResourceAccounting.Assumptions.TS.ProofSoundAt`), then in every window the check accepts and
 some unit it publishes as sampled fails its relation with probability at most `n_π · δ` (`ServiceSound`). -/
 def CheckProofSystemSound : Prop :=
   ∀ {C Ξ V : Type} [Fintype C] [Fintype Ξ] {m Np n nπ : ℕ} (p : PouwVerifier.Params)

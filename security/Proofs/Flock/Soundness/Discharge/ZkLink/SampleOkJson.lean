@@ -32,7 +32,7 @@ sample, the `J`-table sessions' sampling design (`ofJson_toJson_sampleOf_subset`
 strata's tiling, each stratum's count, a subset sample's size, the units in the population), so it accepts only a sample the
 sampling design can make; the round trip claims nothing about the others.
 
-So `SampleFileZK`, the second half of `RecordCustodyZK` and of `RecordCustodyZKJ`, follows from each sample file being the
+So `SampleFileZK`, the second half of `RecordCustodyZKJ`, follows from each sample file being the
 JSON value `verity-verify-proof draw` printed for the verifier's own sample (`sampleFileZK_of_toJson`, `sampleFileZK_of_toJson_subset`,
 `sampleFileZK_of_toJson_work`), under every sampling design but a Bernoulli sampling design (`sampleFileZK_of_toJson_samplingDesign`).
 That equality is of Lean `Json` values, whose objects are trees shaped by the order their keys were inserted in:
