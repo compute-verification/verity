@@ -339,6 +339,17 @@ def test_an_entry_overrides_the_registry_and_the_checked_in_config_names_known_r
         assert set(e["rules"]) <= {"idle", "deadline", "lease"} and e["rules"], e["name"]
 
 
+def test_a_registry_file_that_does_not_parse_costs_only_its_own_machine_what_the_registry_gave(tmp_path, capsys):
+    (tmp_path / "a.toml").write_text('host = "1.2.3.4"\n<<<<<<< HEAD\ndeadline = "2026-10-23T21:00:00Z"\n')
+    (tmp_path / "b.toml").write_text('nebius_instance_id = "i-b"\ndeadline = "2026-10-23T21:00:00Z"\n')
+    got = V.vms({"vm": [{"name": "a", "rules": ["deadline"], "id": "i-a", "deadline": "2026-10-20T04:00:00Z"},
+                        {"name": "a", "rules": ["deadline"]}, {"name": "b", "rules": ["deadline"]}]}, tmp_path)
+    assert [(g["id"], g["host"], g["deadline"] and V.iso(g["deadline"])) for g in got] == [
+        ("i-a", None, "2026-10-20T04:00:00Z"), (None, None, None), ("i-b", None, "2026-10-23T21:00:00Z")]
+    assert f"a: {tmp_path / 'a.toml'} unread, so only the entry's own id, host and deadline count (TOMLDecodeError" in \
+        capsys.readouterr().out
+
+
 def test_a_commit_file_that_cannot_be_read_is_reported_as_none_and_logged(tmp_path, capsys):
     sup, clock, _ = supervisor(tmp_path, [])
     (tmp_path / "src" / "COMMIT").mkdir(parents=True)
