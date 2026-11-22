@@ -443,6 +443,15 @@ theorem fieldRootIn_carries {rec : Json} {ft : Std.HashMap String (Array (String
   obtain ⟨h1, h2, h3, h4⟩ := getD_e4 (getD e "domain") (getD e "leaves") (getD e "root") port
   exact ⟨h1, r0, hm, hp, h2.trans hr, h3.trans hd, h4.trans hl⟩
 
+/-- **`fieldRootIn`'s root names its tree `<template>/<field>`.** -/
+theorem fieldRootIn_tree {ft : Std.HashMap String (Array (String × Json))} {template field port : String} {r : Json}
+    (h : OneStageZk.fieldRootIn ft template field port = some r) : getD r "tree" = .str (template ++ "/" ++ field) := by
+  unfold OneStageZk.fieldRootIn at h
+  obtain ⟨⟨f, e⟩, hfe, rfl⟩ := Option.map_eq_some_iff.1 h
+  have hf : f = field := beq_iff_eq.1 (Array.find?_some hfe)
+  subst hf
+  with_unfolding_all rfl
+
 /-- **Each root `ownFieldsOf` returns is one of `roots`, or a tree `ft` files.** -/
 theorem ownFieldsOf_mem {ft : Std.HashMap String (Array (String × Json))} {name : String} {roots : Array Json} :
     ∀ x ∈ OneStageZk.ownFieldsOf ft name roots, x ∈ roots ∨ ∃ t, ∃ fe ∈ ft.getD t #[], x = fe.2 := by
@@ -508,7 +517,7 @@ theorem of_or_not {a b : Bool} (h : ¬ (a || !b) = true) : b = true := by
   cases a <;> cases b <;> simp_all
 
 /-- **Step 4: `fieldRoots`' roots**: each root it gives a member is one `roots` gave it, or the record's root at the
-writer's output field `<w.writer>/<w.out>` of a wire `w` of `W` into a member of that name, at `w`'s port. -/
+writer's output field `<w.writer>/<w.out>` of a wire `w` of `W` into a member of that name, named as its tree. -/
 theorem fieldRoots_good {p : OneStageZk.Params} {ms : Array OneStageZk.Member} {rec : Json} {P : Spot.Program}
     {rs : Array Flock.TemplateQuery.TRange} {W : Spot.Wires.Wiring}
     (hP : Program.parse p.own.program = .ok P) (hrs : Partition.evaluate P (getD p.own.partition "query") = .ok rs)
@@ -522,6 +531,8 @@ theorem fieldRoots_good {p : OneStageZk.Params} {ms : Array OneStageZk.Member} {
   refine foldlM_inv (AllGood p ms rec) _ (· ∈ ms) ?_ _ roots out (fun a ha => Array.mem_toList_iff.1 ha) hg h
   intro acc m acc' hm hf hacc
   try dsimp only at hf
+  split at hf
+  · exact absurd hf (by simp [throw, throwThe, MonadExceptOf.throw, bind, Except.bind])
   split at hf
   · exact absurd hf (by simp [throw, throwThe, MonadExceptOf.throw, bind, Except.bind])
   cases hf
@@ -538,15 +549,12 @@ theorem fieldRoots_good {p : OneStageZk.Params} {ms : Array OneStageZk.Member} {
     try dsimp only
     split
     · exact hgot
-    · rename_i hc
-      have hin := of_or_not hc
-      split
+    · split
       · rename_i r hr
         intro x hx
         rcases Array.mem_push.1 hx with hx | rfl
         · exact hgot x hx
-        · obtain ⟨hp, hcar⟩ := fieldRootIn_carries hft hr
-          exact Or.inr (Or.inr ⟨P, rs, W, hP, hrs, hW, w, hw, ⟨m, hm, rfl, hin⟩, hp, hcar⟩)
+        · exact Or.inr (Or.inl ⟨_, fieldRootIn_tree hr, (fieldRootIn_carries hft hr).2⟩)
       · exact hgot
   · exact hacc n x hx
 

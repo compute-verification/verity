@@ -1466,6 +1466,9 @@ def main(argv: list[str] | None = None) -> int:
                    "network attester's scan-state value (its verifier's `blocks.SCAN_STATE`)")
     a = ap.parse_args(argv)
     if a.cmd == "period":
+        own_tree()
+        import a5 as A5
+        print(A5.tied_root_line([a.tied]), flush=True)
         try:
             got = period(a.window, a.audit, pins_of(a.pin, a.pins), a.tied)
         except (ValueError, RuntimeError) as e:
