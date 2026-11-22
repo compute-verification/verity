@@ -904,7 +904,7 @@ def verifier_reads(d: Design, window: CS.Binding, interior: Mapping[str, Any], b
                                     registered=REG)
                 continue
             x = linked.get((m.template, p))
-            if (m.template, p) in back and p not in dict(m.outs):
+            if (m.template, p) in back:
                 y = back[m.template, p]
                 ports[p] = LK.reads(boundary, y.value, words, m.schema(p), y.rows(sample), m.base, registered=REG)
                 continue
