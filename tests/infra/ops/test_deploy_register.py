@@ -998,7 +998,7 @@ def test_the_manifests_address_files_are_made_from_the_register_and_each_reads_a
     assert "vy-nebius-2" in reg.live and "vy-nebius-2" not in peers, "its machine is stopped and its register address is another's"
     assert all(ln[-1] == f"research@{reg.live[ln[0]]['host']}" and "/home/research/.ssh/vy-cluster" in ln for ln in lines)
     shared = {n for n, node in deploy.load().items() for e in node.entries if e.src and e.src.endswith("/peers")}
-    assert shared == {f"vy-nebius-cpu-{i}" for i in range(1, 18)}, \
+    assert shared == {f"vy-nebius-cpu-{i}" for i in range(1, 18) if i != 10}, \
         "the list goes on the shared nodes it names and no other: a roll stops at a node whose machine the register lacks"
     assert {e.accept for e in entries.values() if e.src.endswith("/peers")} == {"/home/research/.ssh/vy-cluster.pub"}
 
