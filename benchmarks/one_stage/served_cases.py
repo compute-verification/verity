@@ -69,7 +69,7 @@ written: that digest is what remote's record tie compares (`Core.Remote.windows`
   window record W the passes are held to with its rounds and dropped rounds, whose digest remote ties to the record R is
   chained right after (`Core.Remote.V1.window`), and its evidence, each
   pass's files the opened tiles read by the SHA-512 of the blob holding them, the blobs the parts' own. Its answer is the
-  Lean verdict of record's (`pouw-pearlplus` on the same passes, coins, samples, coin record and W, which the check of
+  Lean twin's verdict (`pouw-pearlplus` on the same passes, coins, samples, coin record and W, which the check of
   this case runs on the blobs instead of the files, and at no class: its public is the exact work, `PEARL_PLUS_PUBLIC`)
   under the commitment's digest, SHA-512(`PEARL_PLUS_TAG` ‖ 0 ‖
   commitment), since Pearl+'s package builds no executable of the protocol's form alone. The manifests carry the
@@ -87,7 +87,8 @@ Pearl+'s ``blobs``) and ``answer.json``, its Lean answer line (and, given ``--fr
 ``policy.json``). A composition is handed only the directories whose answer's protocol is one of its product's
 subprotocols: remote's are SPOT's, the inference-only case's and Pearl+'s,
 onsite's the same three among its own, and neither's one-stage v1's case or v2's bare case. The Lean runs on
-files in a 0700 scratch directory under ``--private``; Pearl+'s answer is the Lean verdict of record's.
+files in a 0700 scratch directory under ``--private``; Pearl+'s answer is the Lean twin's verdict, which counts only once
+the composite judges the case.
 
 **No check runs outside a memory limit of its own, and none is started that cannot fit** (`lean_answer`, `Limits`).
 Each check is its own process in a systemd user scope of its own (``MemoryMax`` ``CHECK_MEM_GB``, default
@@ -156,6 +157,9 @@ PEARL_PLUS_WINDOW = {"dropped", "record", "rounds"}
 #: the work the protocol's check publishes (`PouwVerifier.PearlPlus.Protocol.publicJson`, δ aside): the exact credit, which
 #: holds no class, so where the verdict of record printed the grid form, its exact work in that form's place
 PEARL_PLUS_PUBLIC = ("checked_macs", "credited", "credited_tiles", "epsilon", "rho")
+#: the fixed operands' standing it publishes beside them (`publicJson`'s ``operands``, `verify_run.operands_of`): not
+#: committed where the Lean's tie names W's weights untied, which a version-1 W does, and committed before the coin else
+PEARL_PLUS_OPERANDS = ("committed-before-coin", "not-committed")
 DIRS = {V1: "sampled-proofs-v1", SAMPLED: "sampled-proofs", INFERENCE_ONLY: "inference-only",
         PEARL_PLUS: "pouw-pearl-plus", V2: "sampled-proofs-v2"}
 PEARL_PLUS_PIECE = Path("private/pearlplus/case")
@@ -357,10 +361,13 @@ def pearlplus_case(d: Path, digest: str) -> tuple[dict[str, Any], str, Any]:
     _need(not gone, f"the parts name {len(gone)} blob(s) that aren't files in {d / 'blobs'}")
     commitment = codec.canonical_json({"manifests": parts["manifests"], "record": digest, "window": window})
     accepted = lean["verdict"] == "accept"
+    _need(not accepted or isinstance(lean.get("tie"), dict), "the parts' Lean verdict accepts with its passes held to no W")
     work = {**(lean.get("work") or {}), **(lean.get("exact_work") or {})}
     answer = {"protocol": PEARL_PLUS, "verdict": lean["verdict"], "reason": lean.get("reason"),
               "commitment": hashlib.sha512(PEARL_PLUS_TAG + b"\0" + commitment).hexdigest(),
-              "public": {**{k: work[k] for k in PEARL_PLUS_PUBLIC if k in work}, "delta": parts["delta"]} if accepted else None,
+              "public": {**{k: work[k] for k in PEARL_PLUS_PUBLIC if k in work}, "delta": parts["delta"],
+                         "operands": PEARL_PLUS_OPERANDS["weights" in lean["tie"]],
+                         "compared_with_registered_weights": False} if accepted else None,
               "profile": {"draws": parts["params"].get("draws"), "drawn": lean.get("drawn"),
                           "passes": len(parts["manifests"])} if accepted else None}
     case = {"params": parts["params"], "commitment": commitment.hex(),

@@ -1864,8 +1864,8 @@ def test_a_pearlplus_piece_names_the_challenger_its_session_was_opened_on(tmp_pa
 
 def test_a_pearlplus_piece_replays_its_own_served_run_and_credits_nothing(tmp_path, capsys, live):
     """``pearlplus``: Pearl+'s own served run, accepted by Pearl+'s verdict over its passes and its epoch's salt its live
-    session's, is accepted with that verdict's line and credit and its shares (the timed passes' MACs and their credit at
-    θ over the timed call's wall), and its row in the record stays missing, naming the first condition of record it fails
+    session's, is accepted with that verdict's line and its shares as a cost only (the timed passes' declared MACs at θ
+    over the timed call's wall; no credit, the verdict being Pearl+'s standalone verifier's), and its row in the record stays missing, naming the first condition of record it fails
     (a compose with no key pin), so the record composes pending; the pieces' line says it's a development run's, and
     names the session."""
     calls, args = live
@@ -1877,12 +1877,12 @@ def test_a_pearlplus_piece_replays_its_own_served_run_and_credits_nothing(tmp_pa
     assert doc["coins"] == {**S.pearlplus_coins_from(S.UNNAMED_CHALLENGER), "check": {"session": SID, "closed": served["coins"]["closed"],
                                                            "passes": 4, "reason": None}}
     assert (doc["scheme"], doc["passes"], doc["line"]) == ("pearl-c-h100-v1-h3", 4, verified["line"])
-    assert doc["credit"] == verified["answer"]["public"]["work"]
+    assert doc["credit"] is None
     tensor = doc["shares"]["readings"]["tensor"]
     rho = 4096 * 132 * 1830e6
-    assert doc["shares"]["macs"] == {"declared_linears": 6000, "credited": 5300} and doc["shares"]["verdict"] == "accept"
-    assert doc["shares"]["credit"] == {"rho": "1/100", "epsilon": "1/100", "delta": "1/100", "draws": 459}
-    assert (tensor["declared_linears"], tensor["credited"]) == (6000 / rho / 2.0, 5300 / rho / 2.0)
+    assert doc["shares"]["macs"] == {"declared_linears": 6000, "credited": None} and doc["shares"]["verdict"] == "accept"
+    assert doc["shares"]["credit"] is None
+    assert (tensor["declared_linears"], tensor["credited"]) == (6000 / rho / 2.0, None)
     row = S.piece_row("work", tmp_path / "pieces")
     why = f"{S.DEV_VERDICT}: the compose holds the coins to no key pin (--key-sha512, H1_KEY_SHA512)"
     assert (row["verdict"], row["why"], row["development"]["verdict"]) == ("missing", why, "accept")
@@ -1894,13 +1894,13 @@ def test_a_pearlplus_piece_replays_its_own_served_run_and_credits_nothing(tmp_pa
     assert "POUW (development run, credits nothing) " in capsys.readouterr().out
     assert (got["pouw"]["verdict"], got["pouw"]["passes"], got["pouw"]["credited"]) == ("accept", 4, False)
     assert (got["pouw"]["coin_source"], got["pouw"]["session"], got["pouw"]["coins"]) == (S.LIVE_SOURCE, SID, None)
-    assert got["pouw"]["credit"] == {"credited": 5500, "checked_macs": 5600, "epsilon": "1/100"}
-    assert got["pouw"]["shares_at_tensor_clock"]["declared_linears"] == tensor["declared_linears"]
+    assert got["pouw"]["credit"] is None
+    assert got["pouw"]["shares_at_tensor_clock"] == {"declared_linears": tensor["declared_linears"], "credited": None}
 
 
 def test_a_pearlplus_pieces_verdict_is_the_leans_whatever_the_python_verify_says(tmp_path, live):
-    """The piece's verdict, credit and line are the Lean step's (`PEARLPLUS_LEAN` and its check): a Lean accept beside a
-    Python reject accepts with the Lean's work, a Lean reject beside a Python accept rejects with the Lean's reason, and
+    """The piece's verdict and line are the Lean step's (`PEARLPLUS_LEAN` and its check), and untied it quotes no credit: a
+    Lean accept beside a Python reject accepts, a Lean reject beside a Python accept rejects with the Lean's reason, and
     a piece with no Lean answer rejects (`PEARLPLUS_NO_LEAN`) whatever the Python's verdict."""
     served, verified = _pearlplus_run()
     _served, rejected = _pearlplus_run(accepted=False)
@@ -1909,14 +1909,14 @@ def test_a_pearlplus_pieces_verdict_is_the_leans_whatever_the_python_verify_says
     (a / S.PEARLPLUS_LEAN).write_text(json.dumps({"verdict": "accept", "reason": None, "work": work}))
     (a / S.PEARLPLUS_LEAN_CHECK).write_text(json.dumps({"line": "ACCEPT lean", "timed": verified["timed"]}))
     doc = S.pearlplus(a, served, rejected, **live[1])
-    assert (doc["verdict"], doc["reasons"], doc["credit"], doc["line"]) == ("accept", [], work, "ACCEPT lean")
-    assert doc["shares"]["verdict"] == "accept" and doc["shares"]["macs"]["credited"] == 5300
+    assert (doc["verdict"], doc["reasons"], doc["credit"], doc["line"]) == ("accept", [], None, "ACCEPT lean")
+    assert doc["shares"]["verdict"] == "accept" and doc["shares"]["macs"]["credited"] is None
     (b := tmp_path / "b").mkdir()
     (b / S.PEARLPLUS_LEAN).write_text(json.dumps({"verdict": "reject", "reason": "pass 0 tile 3: B opening", "work": None}))
     doc = S.pearlplus(b, served, verified, **live[1])
     assert (doc["verdict"], doc["reasons"], doc["credit"]) == (
         "reject", ["Pearl+'s verdict rejects the run: pass 0 tile 3: B opening"], None)
-    assert doc["shares"]["macs"]["credited"] == 0
+    assert doc["shares"]["macs"]["credited"] is None
     doc = S.pearlplus(tmp_path / "c", served, verified, **live[1])
     assert doc["verdict"] == "reject" and doc["reasons"] == [f"{S.PEARLPLUS_NO_LEAN} ({S.PEARLPLUS_LEAN}: none written)"]
 
@@ -2124,14 +2124,14 @@ def test_a_published_serve_dir_carries_none_of_the_give_ups_counts(tmp_path, liv
         assert (private / rel).read_text() == text and not [v for v in own if v in shown], rel
         assert "a_rows" not in shown and "bad_tiles" not in shown and "credit kept" not in shown, rel
     pub = json.loads((out / "pieces" / "pouw" / "development.json").read_text())
-    assert "give_up" not in pub and pub["credit"] == work and pub == {k: v for k, v in json.loads(
+    assert "give_up" not in pub and pub["credit"] is None and pub == {k: v for k, v in json.loads(
         full["pieces/pouw/development.json"]).items() if k != "give_up"}
     assert not (out / "pieces" / "pouw" / "piece.log").exists()
     log = [S.public_line(x) for x in full["pieces/pouw/piece.log"].splitlines()]
     assert log[0].endswith("volunteer FAIL: " + S.GAVE_UP) and log[1].endswith("pass-00002: FAIL: " + S.GAVE_UP)
     assert log[2].endswith("round 2: tiles left over a cap after its give-up")
     shown = json.loads(log[3].removeprefix("POUW-DEV "))
-    assert shown == {k: v for k, v in line.items() if k != "give_up"} and shown["credit"]["epsilon"] == work["epsilon"]
+    assert shown == {k: v for k, v in line.items() if k != "give_up"} and shown["credit"] is None
     assert json.loads(json.loads(log[4].removeprefix("POUW "))["stdout"]) == {"credit": work} and log[5] == "POUW " + S.CUT
     assert S.publish(out, private) == []
     plain = _pearlplus(tmp_path / "plain", served, verified, **live[1])
@@ -2328,14 +2328,14 @@ def test_a_pearlplus_piece_holds_its_accept_to_the_coin_it_published(tmp_path, c
     (True, False, "Pearl+'s verdict rejects the run: pass 1 tile 7: B opening"),
 ])
 def test_a_pearlplus_piece_rejects_a_run_pearlpluss_verdict_rejects(tmp_path, served, verified, reason, live):
-    """A run Pearl+'s verdict rejects still carries its shares, its declared linears beside a credit of 0."""
+    """A run Pearl+'s verdict rejects still carries its shares, its declared linears beside no credit (untied, a cost only)."""
     s, v = _pearlplus_run(verified is not False)
     doc = _pearlplus(tmp_path / "pieces" / "pouw", s, v, **live[1])
     assert (doc["verdict"], doc["reasons"][0], doc["why"]) == ("reject", reason, S.pearlplus_why(S.UNNAMED_CHALLENGER))
     rho = 4096 * 132 * 1830e6
-    assert doc["shares"]["macs"] == {"declared_linears": 6000, "credited": 0}
+    assert doc["shares"]["macs"] == {"declared_linears": 6000, "credited": None}
     assert doc["shares"]["verdict"] == "reject"
-    assert S.development_line(doc)["shares_at_tensor_clock"] == {"declared_linears": 6000 / rho / 2.0, "credited": 0}
+    assert S.development_line(doc)["shares_at_tensor_clock"] == {"declared_linears": 6000 / rho / 2.0, "credited": None}
     row = S.piece_row("work", tmp_path / "pieces")
     assert (row["verdict"], row["reason"]) == ("reject", "; ".join(doc["reasons"]))
 
@@ -2358,7 +2358,7 @@ def test_the_pearlplus_command_refuses_by_name_where_a_step_wrote_no_document(tm
     out.mkdir(parents=True)
     (out / S.DEVELOPMENT).write_text("{}")
     assert S.main(["pearlplus", str(out), "--served", str(tmp_path / "served.json"), "--verify", str(tmp_path / "v.json")]) == 2
-    sentence = f"{S.PEARLPLUS_NO_VERDICT}: {wrote_none}, so Pearl+ has no verdict and the piece writes no answer"
+    sentence = f"{S.PEARLPLUS_NO_VERDICT}: {wrote_none}, so Pearl+ has no verdict and the piece writes no answer: no compute credit is stated"
     assert capsys.readouterr().out == f"POUW-REFUSED {sentence}\n"
     assert not (out / S.DEVELOPMENT).exists() and (out / S.REFUSED).read_text() == sentence + "\n"
     assert S.piece_row("work", tmp_path / "pieces") == {"verdict": BR.REFUSED, "owner": "compute-accounting",
@@ -2470,7 +2470,7 @@ def test_a_pearlplus_piece_on_in_process_coins_claims_no_verdict(tmp_path, monke
     assert (doc["verdict"], doc["reasons"], doc["credited"]) == (S.UNCLAIMED, [], False)
     assert (doc["why"], doc["coin_source"], doc["coins"]) == (S.PEARLPLUS_WHY_IN_PROCESS, "in-process",
                                                               S.PEARLPLUS_COINS_IN_PROCESS)
-    assert doc["credit"] == verified["answer"]["public"]["work"] and doc["shares"]["verdict"] == "accept"
+    assert doc["credit"] is None and doc["shares"]["verdict"] == "accept"
     row = S.piece_row("work", tmp_path / "pieces")
     assert (row["verdict"], row["why"], row["development"]["verdict"]) == ("missing", S.PEARLPLUS_WHY_IN_PROCESS,
                                                                            S.UNCLAIMED)
@@ -2869,7 +2869,7 @@ def test_the_record_reads_pearlpluss_tie_from_the_window_tied_to_w_under_window_
     ("Lean other run", f"the Lean verdict is on run {'c2' * 8}... at source {SAMPLE_COIN[:16]}..., not the verifier's "
                        "coin record's"),
     ("Lean untied", "the Lean verdict holds its passes to no window record W (served_passes.py lean, the Lean's --tie W), "
-                    "so nothing ties them to the window"),
+                    "so nothing ties them to the window: no compute credit is stated"),
     ("R not after W", f"the window's registration R is chained after {'ab' * 8}..., not right after Pearl+'s window "
                       f"record W {PEARL_W[:16]}..."),
     ("audit untied", f"the window's records audit is not tied to Pearl+'s window record W {PEARL_W[:16]}... "

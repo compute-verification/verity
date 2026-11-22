@@ -160,23 +160,25 @@ def shares(serve_dir: Path, credit: dict[str, Any] | None = None, model: str | N
             "replay": replay_term(*replay, wall) if replay else None}
 
 
-def pearlplus_shares(served: dict[str, Any], verified: dict[str, Any]) -> dict[str, Any]:
+def pearlplus_shares(served: dict[str, Any], verified: dict[str, Any], *, credits: bool = True) -> dict[str, Any]:
     """Pearl+'s served run's shares at each reading of the clock (module docstring): ``served`` is `served_passes.py
     serve`'s document, ``verified`` its ``verify``'s, whose ``timed`` credit an accepted verdict carries; a rejected one
-    credits 0."""
+    credits 0. With ``credits`` False (a verdict of Pearl+'s standalone verifier, `verify_run.STANDALONE`) the shares are a
+    cost only: ``credit`` and every ``credited`` are None."""
     wall = served["generate_s"]
     if not (isinstance(wall, (int, float)) and wall > 0):
         raise ValueError(f"the served run's timed call has no wall: {wall!r}")
     timed = [p for p in served["passes"] if p.get("timed")]
     declared = sum(p["macs"] or 0 for p in timed)
     answer = verified.get("answer") or {}
-    credited = verified["timed"]["credited"] if answer.get("verdict") == "accept" else 0
+    credited = (verified["timed"]["credited"] if answer.get("verdict") == "accept" else 0) if credits else None
     work = (answer.get("public") or {}).get("work") or {}
     return {"schema": SCHEMA, "wall_s": wall, "passes": len(timed), "verdict": answer.get("verdict"),
-            "credit": {k: work.get(k) for k in ("rho", "epsilon")} | {"delta": verified.get("delta"), "draws": verified.get("draws")},
+            "credit": ({k: work.get(k) for k in ("rho", "epsilon")} | {"delta": verified.get("delta"), "draws": verified.get("draws")}
+                       if credits else None),
             "macs": {"declared_linears": declared, "credited": credited},
             "readings": {r: {"clock_mhz": CLOCKS_MHZ[r], "theta_macs_s": rho, "declared_linears": declared / rho / wall,
-                             "credited": credited / rho / wall}
+                             "credited": None if credited is None else credited / rho / wall}
                          for r, rho in RHO.items()}}
 
 

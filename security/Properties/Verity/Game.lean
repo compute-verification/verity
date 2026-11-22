@@ -123,7 +123,8 @@ The statement's form is the causal game, the committed files, one fixed extracto
   (`coinsRead`) is the targets' to bind to the device's whole log (`Logged`).
 * **PoUW counts MACs at onsite and remote.** In a composite that lists Pearl+'s id (onsite, remote and its plain
   sibling), Pearl+'s claim reads the
-  credit its compiled check publishes on its case (`PearlPlusCredits`): the play computed at least `(1 − ρ)(1 − ε) · W`
+  credit its compiled check publishes on its case, whichever fixed operands' standing it publishes beside it
+  (`PearlPlusCredits`): the play computed at least `(1 − ρ)(1 − ε) · W`
   MACs on the served run's matmul tiles after the run's coin, each tile that passes Pearl+'s rule at its credited
   cells' MACs (`macs`), for the run's claimed MACs `W`, the cap's share `ρ` and the sample's `ε` it published: the
   tolerant audit's event (`Pouw.GγSampledTol`) with no sampled tile credited nothing. In any other list, gates of
@@ -313,16 +314,21 @@ opaque rowsHeld : Verity.Registration.Composite → Sent → Prop
 def ComponentAccepts (k : Verity.Registration.Composite) (a : Subprotocol) (s : Sent) : Prop :=
   ∃ P, component k a = some P ∧ CaseAccepts k P s
 
-/-- **The credit Pearl+'s check publishes in what the prover sent composite `k`**: the three byte strings decode,
-Pearl+'s case decodes under the parameters `k` names for it, and Pearl+'s check on the blobs sent accepts it with the
-credit `w` (`PouwVerifier.PearlPlus.Protocol.checkBlobs`), whose `macs`, `rho` and `epsilon` its answer publishes. -/
-def PearlPlusCredits (k : Verity.Registration.Composite) (s : Sent) (w : PouwVerifier.PearlPlus.Credit) : Prop :=
+/-- **The credit Pearl+'s check publishes in what the prover sent composite `k`, and its fixed operands' standing**: the
+three byte strings decode, Pearl+'s case decodes under the parameters `k` names for it, and Pearl+'s check on the blobs
+sent accepts it with the credit `w` and the standing `op` (`PouwVerifier.PearlPlus.Protocol.checkBlobs`), whose `macs`,
+`rho` and `epsilon` and whose `op` its answer publishes: `.committedBeforeCoin` where the run's epoch record is at
+version 2 and registered every fixed operand Pearl+'s tiles read before the salt coin, `.notCommitted` where it is at
+version 1. In both, no fixed operand is compared with a registered weight. The standing is published, and the claim
+does not yet rest on it: `Holds` binds `op` existentially, so the same work bound is claimed at `.notCommitted`. -/
+def PearlPlusCredits (k : Verity.Registration.Composite) (s : Sent) (w : PouwVerifier.PearlPlus.Credit)
+    (op : PouwVerifier.PearlPlus.Operands) : Prop :=
   ∃ ps c ev, Decoded s ps c ev ∧ ∃ x ∈ Properties.Composition.triples (s.components k) ps ev,
     x.2.2.id = PouwVerifier.PearlPlus.Protocol.protocolId ∧ ∃ p cm e prof,
       (canonicalJson x.2.1.params.toUTF8 >>= PouwVerifier.PearlPlus.Protocol.paramsOf) = .ok p ∧
       PouwVerifier.PearlPlus.Protocol.commitmentOf x.2.2.commitment = .ok cm ∧
       PouwVerifier.PearlPlus.Protocol.evidenceOf x.2.2.evidence = .ok e ∧
-      PouwVerifier.PearlPlus.Protocol.checkBlobs p cm e (Blobs.ofArray s.blobs) = .accept w prof
+      PouwVerifier.PearlPlus.Protocol.checkBlobs p cm e (Blobs.ofArray s.blobs) = .accept ⟨w, op⟩ prof
 
 /-- **Composite `k` accepted what the prover sent as a `same` composition**: the three byte strings decode to an
 accepted composition of `k`'s subprotocols on the blobs sent, whose record subprotocols (`tied k`) committed to one
@@ -872,7 +878,8 @@ realized (at least `S` bits of device memory held on average, at least `Q` bits 
 network attesters), whose window and capacity account are the parameters' (`world_window`, `world_capacity`), so PoUS's
 own coins choose neither. The wipe's: the play, read at the wipe's boundary as the wipe's game, doesn't keep foreign
 content past the published survivor threshold (`Verity.Wipe.OfRun.Kept`). PoUW's where `k` lists Pearl+'s id (onsite,
-remote) is Pearl+'s, in MACs, not a period claim: a credit `w` Pearl+'s check published on the blobs sent (`PearlPlusCredits`), with the play computing at
+remote) is Pearl+'s, in MACs, not a period claim: a credit `w` Pearl+'s check published on the blobs sent, at whichever
+fixed operands' standing `op` it published beside it (`PearlPlusCredits`), with the play computing at
 least `(1 − ρ)(1 − ε) · W` MACs on the run's tiles (`macs`), where `W` is the credit's `macs` (the MACs of the cells
 its passes credit), `ρ` its cap share `rho` and `ε` its `epsilon`, the miss table's value at `X_O`, the samples that
 landed on tiles over their inert-work bound (credited nothing under `over_cap` `uncredited`; `X_O = 0` in a run
@@ -916,7 +923,7 @@ def Holds (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteAr
   | .sampled, o => (V.live k θ F c).Holds (V.certOf θ) σ .sampled o
   | .pouw, o =>
     if PouwVerifier.PearlPlus.Protocol.protocolId ∈ k then
-      ∃ w, PearlPlusCredits k o.sent w ∧ (1 - (w.rho : ℝ)) * (1 - (w.epsilon : ℝ)) * w.macs ≤ V.macs θ F c σ o
+      ∃ w op, PearlPlusCredits k o.sent w op ∧ (1 - (w.rho : ℝ)) * (1 - (w.epsilon : ℝ)) * w.macs ≤ V.macs θ F c σ o
     else (V.live k θ F c).Holds (V.certOf θ) σ .pouw o
   | .pous, o => (V.live k θ F c).Holds (V.certOf θ) σ .pous o
   | .poub, o => (V.live k θ F c).Holds (V.certOf θ) σ .poub o

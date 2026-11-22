@@ -1566,7 +1566,8 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
     line, the Lean verdict's credit at the scheme's named assumption (``credit``, its ``work``) and the rounds the prover dropped from
     its retention before the coin (``dropped``, which credit nothing and stay declared), its shares are
     `served_shares.pearlplus_shares`'s wherever the run served within its caps, whatever the verdict (a rejected or
-    missing one credits 0), and it credits nothing (`pearlplus_why`, or `PEARLPLUS_WHY_IN_PROCESS`). ``unretained``, the
+    missing one credits 0); with no ``tie`` the verdict is Pearl+'s standalone verifier's (`verify_run.STANDALONE`), so
+    the piece is a cost only: ``credit`` is None and the shares credit None (``credits=False``), and it credits nothing (`pearlplus_why`, or `PEARLPLUS_WHY_IN_PROCESS`). ``unretained``, the
     same load served with no pass retained (``serve --no-retain``), adds the shares' ``unretained``
     (`served_shares.pearlplus_unretained`), or why there are none; it is a measurement and never decides the verdict.
     ``volunteered``, the prover's give-up before the coin (``served_passes.py volunteer``'s document), is ``give_up``
@@ -1601,7 +1602,7 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
                   *(["served_passes.py verify wrote no document"] if verified is None else [])]
     if wrote_none:
         said = (f"{PEARLPLUS_NO_VERDICT}: {' and '.join(wrote_none)}, so Pearl+ has no verdict and the piece writes "
-                "no answer")
+                "no answer: no compute credit is stated")
         (out / REFUSED).write_text(said + "\n")
         raise PearlplusRefused(said)
     reasons = []
@@ -1666,8 +1667,8 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
         except (OSError, ValueError, AttributeError) as e:
             doc["tie"] = {"record": None, "why": f"W can't be read: {type(e).__name__}: {e}"[:400]}
     checked = _json(out / PEARLPLUS_LEAN_CHECK)
-    doc.update(line=checked.get("line") if isinstance(checked, Mapping) else None, credit=lean.get("work"),
-               dropped=verified.get("dropped"))
+    doc.update(line=checked.get("line") if isinstance(checked, Mapping) else None,
+               credit=None if tie is None else lean.get("work"), dropped=verified.get("dropped"))
     if coin is not None:
         doc["coin"] = pearlplus_coin(coin, answer)
         if doc["coin"]["reason"] is not None and answer.get("verdict") == "accept":
@@ -1682,7 +1683,7 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
             doc["shares"] = SS.pearlplus_shares(dict(served), {
                 "answer": {"verdict": lean.get("verdict"), "public": {"work": lean.get("work")}},
                 "timed": checked.get("timed") if isinstance(checked, Mapping) else None,
-                "delta": verified.get("delta"), "draws": verified.get("draws")})
+                "delta": verified.get("delta"), "draws": verified.get("draws")}, credits=tie is not None)
         except (KeyError, TypeError, ValueError) as e:
             reasons.append(f"no shares: {type(e).__name__}: {e}"[:600])
         if doc["shares"] is not None and unretained is not None:
@@ -2050,7 +2051,7 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
     w = (lean.get("tie") or {}).get("record")
     if not isinstance(w, str):
         return None, ("the Lean verdict holds its passes to no window record W (served_passes.py lean, the Lean's --tie W), "
-                      "so nothing ties them to the window")
+                      "so nothing ties them to the window: no compute credit is stated")
     if spot is None:
         return None, "the compose names no window registration to tie W to (--window-tie, else --sampled-proofs)"
     try:

@@ -81,7 +81,10 @@ one-stage audit, PoUW as Pearl+'s run verdict, `PouwVerifier.PearlPlus.Protocol.
 `verity/protocols/run/verifier/remote/CoreRemote.lean`, id `verity/remote/v1`). It accepts only when every subprotocol accepts
 its own case, its commitment binds the subprotocols' commitments, the policy and the one-stage audit committed to one
 record, and Pearl+'s run commitment names that record (`Core.Remote.V1.run`); any one's rejection rejects it
-(`Core.Composition.tiedSameB`, `verity/protocols/run/verifier/lean/README.md`). H1's development executable
+(`Core.Composition.tiedSameB`, `verity/protocols/run/verifier/lean/README.md`). An accepted run of Pearl+'s publishes its
+credit and its fixed operands' standing (`PouwVerifier.PearlPlus.Protocol.publicJson`): `operands` is
+``committed-before-coin`` where the run's epoch record is at version 2, ``not-committed`` at version 1, and
+`compared_with_registered_weights` is false at both. H1's development executable
 (`Core.Remote.protocol`, `verity/remote/v0`, which no configuration names) has PoUW's credit period check, `PouwVerifier.Period.protocol`
 (`verity/pouw/period/v1`), as onsite does, in Pearl+'s place, every execution phase of the credit period naming the record as its
 Commit record (`Core.Remote.executionPhases`). H1's serving side is deleted, so nothing serves an H1 execution phase

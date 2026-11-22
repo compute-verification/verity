@@ -4,7 +4,9 @@ there; its `over_cap` rules and their default are `verify_run`'s; and the window
 (`PouwPearlPlus/Tie.lean`), why it refuses a version-2 W that registers no fixed operand, a version-1 W that registers one and
 a W of another version, W's version, and the name it gives a version-1 W's untied fixed operands, are `verify_run`'s and
 `pearl_c.window`'s; the rows of a class's fixed load and why passes of another load are refused are `verify_run`'s;
-and the grid a class-held run's give-up is padded to (`PouwPearlPlus/Grid.lean`) is H1's window grid, as `verify_run`'s."""
+and the grid a class-held run's give-up is padded to (`PouwPearlPlus/Grid.lean`) is H1's window grid, as `verify_run`'s;
+and the fixed operands' standing an accepted run publishes (`PouwPearlPlus/Protocol.lean`'s `publicJson`) has
+`verify_run`'s names."""
 
 from __future__ import annotations
 
@@ -45,6 +47,15 @@ def test_the_lean_parses_the_options_the_cases_pass():
                              "--draw-live": True, "--salt-live": True}
 
 
+def test_the_standalone_notice_is_verify_runs_and_printed_before_the_verdict():
+    """Both standalone verifiers print the same first line: a benchmark's and the prover's tool, not an accepted run."""
+    main = (LEAN / "Main.lean").read_text()
+    notice = re.search(r'def STANDALONE : String :=\s*"([^"]*)" \+\+\s*"([^"]*)"', main).groups()
+    assert "".join(notice) == VR.STANDALONE
+    assert "not an accepted run" in VR.STANDALONE and "no compute credit" in VR.STANDALONE
+    assert "  IO.println STANDALONE\n  IO.println (output ans (published input ans)).compress\n" in main
+
+
 def test_the_over_inert_bound_rules_and_default_are_verify_runs():
     check = (LEAN / "Check.lean").read_text()
     names = dict(re.findall(r'\| \.(\w+) => "([a-z]+)"', _block(check, "def OverInertBound.name ")))
@@ -68,6 +79,19 @@ def test_the_tie_names_are_verify_runs():
     assert int(re.search(r"def W_VERSION : Nat := (\d+)", tie).group(1)) == VR.PWR.VERSION
     unknown = re.search(r'def UNKNOWN_VERSION : String :=\s*s!"([^"]*)" \+\+\s*"([^"]*)"', tie).groups()
     assert "".join(unknown).replace("{W_VERSION}", str(VR.PWR.VERSION)) == VR.PWR.UNKNOWN_VERSION
+
+
+def test_the_fixed_operands_standing_pearl_plus_publishes_is_verify_runs():
+    protocol = (LEAN / "Protocol.lean").read_text()
+    names = tuple(re.search(rf'def {n} : String := "([^"]*)"', protocol).group(1)
+                  for n in ("OPERANDS_COMMITTED", "OPERANDS_NOT_COMMITTED"))
+    assert names == (VR.OPERANDS_COMMITTED, VR.OPERANDS_NOT_COMMITTED)
+    published = _block(protocol, "def publicJson ")
+    assert '("operands", .str (operandsName pub.operands))' in published
+    assert '("compared_with_registered_weights", .bool false)' in published
+    assert VR.operands_of({"record": "00", "tables": 6}) == VR.OPERANDS_COMMITTED
+    assert VR.operands_of({"record": "00", "tables": 4, "weights": VR.WEIGHTS_UNTIED}) == VR.OPERANDS_NOT_COMMITTED
+    assert VR.operands_of(None) == VR.OPERANDS_NOT_COMMITTED
 
 
 def test_the_fixed_loads_rows_and_refusal_are_verify_runs():

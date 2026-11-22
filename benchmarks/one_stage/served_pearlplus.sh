@@ -62,7 +62,7 @@
 #      id, its answer in PIECE_DIR/coin-put.json, which names the run's Attempt carrying out/'s copy as its custody);
 #      the RULE line then reads the ledger again: whether the sample session was the lane's first reserve after the
 #      period's close (`served_verdicts.py pearlplus-period rule`, kept as period.json's rule);
-#   4b. once verify wrote its document, `served_passes.py lean` takes the Lean verdict of record, PouwVerifier.PearlPlus's
+#   4b. once verify wrote its document, `served_passes.py lean` takes the Lean twin's verdict, PouwVerifier.PearlPlus's
 #      pouw-pearlplus (PEARLPLUS_LEAN_EXE, else built here, its log
 #      pouw-pearlplus-build.log; one that doesn't build answers nothing), on the same passes, epoch coins, samples, coin
 #      record and W (--tie), of record (--of-record) on a live session's coins, within PEARLPLUS_LEAN_TIMEOUT seconds

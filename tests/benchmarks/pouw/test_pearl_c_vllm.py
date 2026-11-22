@@ -1346,7 +1346,8 @@ def test_served_passes_verify_accepts_only_when_every_pass_with_calls_is_accepte
     one the run left open: it accepts an honest pass and credits its MACs at its scheme's named assumption in a core
     answer (`test_answer_names_its_schemes_assumption`), and the
     same pass with a weight row flipped (opened on the excluded row's tile, whatever the sample) fails the whole run.  A
-    test instance's verdict credits nothing.  The line names the credit and the sample, and neither the exclusion tiles'
+    test instance's verdict credits nothing.  Tied to no epoch record, it publishes its fixed operands not committed
+    (`OPERANDS_NOT_COMMITTED`).  The line names the credit and the sample, and neither the exclusion tiles'
     count nor the MACs the pass declares, which its given-up rows decide."""
     path, *_ = honest_pass
     served = {"run": RUN, "passes": [{"pass": 0, "units": 2, "tiles": 4, "manifest": str(path)},
@@ -1357,6 +1358,8 @@ def test_served_passes_verify_accepts_only_when_every_pass_with_calls_is_accepte
     work = answer["public"]["work"]
     assert work["credited"] == 0 < work["checked_macs"] and work["credited_tiles"] > 0 and answer["profile"]["delta"] == "1/100"
     assert answer["profile"]["test_instance"] and "a test instance's, credited nothing" in doc["line"]
+    assert (answer["public"]["operands"], answer["public"]["compared_with_registered_weights"]) == (
+        VR.OPERANDS_NOT_COMMITTED, False) and "tie" not in answer["public"]
     named = VR.assumption_of(pouw_schemes.get(answer["public"]["scheme"]))
     assert answer["public"]["assumption"] == named and f"({named})" in doc["line"]
     assert len(answer["profile"]["tiles"]) == 4 and {i for i, _ in answer["profile"]["tiles"]} == {0}
@@ -2081,19 +2084,23 @@ def window_record(*paths: Path, version: int = 2) -> dict:
 def test_the_run_verdict_holds_its_window_record_to_each_calls_a_and_y_and_each_weights_b_root_and_domain(tmp_path):
     """``served_passes.py verify --tie W`` accepts a run whose execution phase record registers each call's A rows and y at the roots
     the verdict credits, under the domains it recomputes from the salt and the call's index, and each weight's B rows at
-    the root the execution phase commits it under (PoUW's weights tree), and names W's digest in its answer.  A W whose root, domain
+    the root the execution phase commits it under (PoUW's weights tree), and names W's digest in its answer, which
+    publishes its fixed operands committed before the coin (`OPERANDS_COMMITTED`) and compared with no registered weight.  A W whose root, domain
     (another salt's, call's or weight's), rows, words or word bits differ for any call or weight, which misses one, names
     one twice or one the run doesn't hold, or which is not a v2 record, rejects the run before the coin.  So does a
     version-2 W that registers every call right and no weight: it reads as untied, by `UNTIED_WEIGHTS`, through
     ``served_passes.py verify`` too; and a W stating another version, or a version-1 one registering a weight.  A W that
     states no version (version 1, the run of record's: written before W registered the weights) and registers every call
     right is held to the calls alone and accepts, its tie on the calls' tables naming its weights untied
-    (`WEIGHTS_UNTIED`), in the answer and the verdict's line."""
+    (`WEIGHTS_UNTIED`), in the answer and the verdict's line, its fixed operands published not committed
+    (`OPERANDS_NOT_COMMITTED`)."""
     path = proved_pass(tmp_path, PROMOTED[0])[0]
     coins, w, man = published(path), window_record(path), json.loads(path.read_text())
     (wfile := tmp_path / "w.json").write_text(json.dumps(w))
     rc, doc, answer = served_verify(path.parent, tmp_path / "verify.json", "--manifest", str(path), "--tie", str(wfile))
     assert rc == 0 and answer["public"]["tie"] == {"record": DD.digest(w), "tables": 6}, doc["line"]
+    assert (answer["public"]["operands"], answer["public"]["compared_with_registered_weights"]) == (
+        VR.OPERANDS_COMMITTED, False)
     assert f"tied to W {DD.digest(w)[:16]} on its 6 tables" in doc["line"] and doc["tie_record"] == str(wfile)
     salt, (u0, u1) = bytes.fromhex(man["salt"]), man["matmuls"]
     b0, b1 = (next(e for e in w["registered"] if e["value"] == f"pearl-b/{x}") for x in (0, 1))
@@ -2142,6 +2149,8 @@ def test_the_run_verdict_holds_its_window_record_to_each_calls_a_and_y_and_each_
     (ofile := tmp_path / "v1.json").write_text(json.dumps(old))
     rc, doc, answer = served_verify(path.parent, tmp_path / "v1-verify.json", "--manifest", str(path), "--tie", str(ofile))
     assert rc == 0 and answer["public"]["tie"] == untied, doc["line"]
+    assert (answer["public"]["operands"], answer["public"]["compared_with_registered_weights"]) == (
+        VR.OPERANDS_NOT_COMMITTED, False)
     assert f"on its 4 tables, {VR.WEIGHTS_UNTIED}" in doc["line"]
 
 

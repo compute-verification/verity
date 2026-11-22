@@ -372,19 +372,27 @@ PEARL_PLUS = Recorded("verity/pouw/pearl-plus/v1", {REJECT: (
     P.outcome("verity/pouw/pearl-plus/v1", REJECT, PEARL_PLUS_REFUSED))})
 #: `PouwVerifier.PearlPlus.Protocol.commitmentTag`
 PEARL_PLUS_TAG = "verity/pouw/pearl-plus/manifests/v1"
+#: `PouwVerifier.PearlPlus.Protocol.OPERANDS_COMMITTED` and `OPERANDS_NOT_COMMITTED`, by whether the tie names untied weights
+PEARL_PLUS_OPERANDS = ("committed-before-coin", "not-committed")
 
 
 def pearl_plus_answer(commitment: bytes, verified: dict) -> dict:
     """Pearl+'s outcome on a served run whose Python verdict ``served_passes.py verify`` recorded (`verified`, its
     ``verify.json``), framed as `PouwVerifier.PearlPlus.Protocol` frames the check's: its digest SHA-512(`PEARL_PLUS_TAG` ‖
-    0 ‖ the commitment's bytes), and on acceptance its public the credit at δ (`publicJson`) and its profile the samples
-    asked for, the tiles sampled and the passes (`profileJson`)."""
+    0 ‖ the commitment's bytes), and on acceptance its public the credit at δ, its fixed operands' standing from the
+    verdict's tie (`operandsOf`: `PEARL_PLUS_OPERANDS`' first where the tie names no untied weights, its second where it
+    does) and that no fixed operand was compared with a registered weight (`publicJson`), and its profile the samples
+    asked for, the tiles sampled and the passes (`profileJson`). A verdict tied to no epoch record has no such answer:
+    the protocol's commitment always names one."""
     a, digest = verified["answer"], hashlib.sha512(PEARL_PLUS_TAG.encode() + b"\0" + commitment).digest()
     if a["verdict"] != ACCEPT:
         return P.outcome(PEARL_PLUS.id, a["verdict"], a["reason"], digest)
-    w, pr = a["public"]["work"], a["profile"]
+    w, pr, tie = a["public"]["work"], a["profile"], a["public"].get("tie")
+    if tie is None:
+        raise ValueError("the verdict is tied to no epoch record, which Pearl+'s protocol always names")
     public = {"credited": w["credited"], "credited_tiles": w["credited_tiles"], "delta": pr["delta"],
-              "epsilon": w["epsilon"], "checked_macs": w["checked_macs"], "rho": w["rho"]}
+              "epsilon": w["epsilon"], "checked_macs": w["checked_macs"], "rho": w["rho"],
+              "operands": PEARL_PLUS_OPERANDS["weights" in tie], "compared_with_registered_weights": False}
     profile = {"draws": verified["draws"], "drawn": len(pr["tiles"]) - pr["exclusion_tiles"],
                "passes": len(a["public"]["passes"])}
     return P.outcome(PEARL_PLUS.id, ACCEPT, None, digest, public, profile)
