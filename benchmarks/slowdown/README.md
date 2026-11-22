@@ -251,6 +251,26 @@ Every estimate carries the weakest status among its citations, read from the loc
 citations are its argument's and those of the cuts that bound it, and `draft:no-straddle` wherever a bound holds
 uncertified or unregistered gates at a structure whose `s_×` is above 1, with the structure's `evidence` (which no status reads).
 
+## Terms
+
+The training slowdown theorem's terms and notation, which only this area uses; the rest are the Glossary's.
+
+- **Cut**: a set of wires cuts A from B if it meets every path from A to B; κ(A → B) is the smallest such set's size, and κ_θ(B) that with A the inputs outside θ. Code: `Slowdown.Cut.Separates`.
+- **Matmul structure**: a set of matmuls on a Boolean circuit, each with weight words w_{i,l}, activation words x_{l,j}, output words y_{i,j} and per (i,j,l) a MAC, a connected set of gates that reads w_{i,l} and x_{l,j} and feeds y_{i,j}; distinct indices give distinct words, MACs are pairwise disjoint and outputs pairwise distinct. Code: `Slowdown.Cut.Work`, `Slowdown.Cut.Matmul`.
+- **Pairs within reach**: π(S) = Σ_m |S ∩ W_m|·|S ∩ X_m|, the weight–activation pairs of one matmul in S, and Π_θ(k) the most of them k wires can cut off from the inputs outside θ. Code: `Slowdown.Cut.Work.pi`.
+- **Property T1**: "operands are hard": a matmul structure satisfies T1 with (k, β) relative to θ if every set S of operand words with κ_θ(S) ≤ k has Σ_{u∈S} β(u) ≤ κ_θ(S).
+- **Property T2**: "exports are wide": a matmul structure satisfies T2 with β_y if every set A of gates has κ(A → E(A)) ≥ β_y·|E(A)|.
+- **Slowdown**: ρ := nc/|C| for a training circuit that is also a (c,k,n)-inference circuit; the training slowdown theorem gives ρ ≥ cν/μ. Code: `Slowdown.Cut.Guarantees.Bound`, `Slowdown.Cut.Guarantees.HE`, `Slowdown.Cut.Guarantees.HEShared`.
+- **Training circuit**: (C, θ) is a (k,q,ω,β_y)-training circuit if it has a matmul structure with prices β that satisfies T1 with (k, β) and T2 with β_y, where words one matmul multiplies are joined: no word is a weight and an activation of one matmul, a joined pair is joined by one matmul only, no ω+1 operand words are pairwise joined, and β(u)β(v) ≥ q for joined u, v.
+- **Word**: a set of wires of a circuit; its width is its number of wires.
+- **α, λ, μ**: the slowdown theorem's constants, μ the most MACs an inference block holds on average.
+- **β, β_y, q, ω**: the operand words' prices, the price per output, the least product of joined prices, and the largest set of pairwise joined words less one.
+- **E(A)**: the outputs fed by a MAC inside A that have no wire in A.
+- **F**: √(2(1 − 1/ω)), 1 when no word is both a weight and an activation and 2/√3 with backpropagation.
+- **N, O**: a matmul structure's number of MACs and the total width of its outputs.
+- **ν, o**: N/|C|, the MACs per gate, and O/N, the output width per MAC.
+- **W_m, X_m**: matmul m's weight words and activation words.
+
 ## Names
 
 The package and its outputs (`benchmarks/slowdown`, `slowdown.md`, `slowdown.json`) and the
