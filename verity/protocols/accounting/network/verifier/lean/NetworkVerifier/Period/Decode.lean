@@ -639,8 +639,8 @@ refused. A start unit so commits no more bits than an ingress bucket does, so th
 instance's bits (`Scan.terms`) bounds what any incorrect proof block of the scan commits.
 
 An input gate is read as one thing: the row, state and egress arguments read input nodes of their own, none a lane's
-slot entries' (`argsApart`). The input gates are counted as a sum of bits against the parameters' and the slot
-entries', so two arguments on one node would leave that sum room for an input node nothing reads, and a state argument
+slot entries' (`argsApart`). The input gates are counted as a sum of bits (`Flock.Program.inputBits`, every binding's
+together) against the parameters' and the slot entries', so two arguments on one node would leave that sum room for an input node nothing reads, and a state argument
 on a lane's slot entries' node would make a slot entry a state gate.
 
 And every input gate is read: each of those arguments is all its node's leaves, each lane's slot entries' node holds
@@ -677,12 +677,9 @@ def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
     "scan: the ingress template doesn't return a u16, a state of its sin's leaves and a view of an egress bucket's \
       state's leaves, or the start template doesn't take and return a state of those leaves, so a tie of the scan's \
       state or view would equate rows of two lengths (NetworkVerifier.Period.ingressReturn, startReturn)"
-  let inputs := root.body.nodes.foldl (fun n x => n + match prog.defs[x.fn]? with
-    | some d => ((Flock.Program.inputWidth? d.key).map (· * x.members)).getD 0
-    | none => 0) 0
   let nb := T / s.every
-  need (inputs == paramBits ds.params + T * paramBits (di.params.extract 0 2) + T * paramBits de.params +
-      s.lanes * nb * bitsOf ety)
+  need (((Flock.Program.inputBits prog).map (·.total)).toOption == some (paramBits ds.params +
+      T * paramBits (di.params.extract 0 2) + T * paramBits de.params + s.lanes * nb * bitsOf ety))
     "scan: an input gate that is no template's row, state or egress parameter, nor one of the slot entries"
   need (InferenceOnlyVerifier.Desc.rootLaidOut prog && InferenceOnlyVerifier.Desc.inputsAtRoot prog && InferenceOnlyVerifier.Desc.walkable prog)
     "scan: not laid out as Flock's decoder lays a Program out, or past what its resolution walks \

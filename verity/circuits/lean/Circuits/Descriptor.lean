@@ -585,6 +585,61 @@ def inputWidth? (id : String) : Option Nat := (inputId? id).map (·.2)
 
 def isInputId (id : String) : Bool := (inputId? id).isSome
 
+/-- A declared circuit's input bits by binding: bound for each run, at registration, and supplied. -/
+structure InputBits where
+  run : Nat := 0
+  registration : Nat := 0
+  supplied : Nat := 0
+  deriving BEq, Repr, Inhabited
+
+def InputBits.total (b : InputBits) : Nat := b.run + b.registration + b.supplied
+
+/-- **The input bits by kind** of the declared circuit `P`: over the root's nodes, each input node's width
+(`inputWidth?`) times its members (`Node.members`), summed by its binding. It reads the root's nodes and their callees'
+ids, never a gate or a template's body. It counts a whole input node: which of a registered node's bits are held to a
+pin, and which leaves are read, are for its callers. Refused by name where a callee's binding is not its id's
+(`input-binding`) or a bound callee's id has no width (`input-width`). -/
+def inputBits (P : Prog) : V InputBits := do
+  let some root := P.defs[P.root]? | throw "input-bits: the root is no callee of the description"
+  let mut b : InputBits := {}
+  for h : k in [0:root.body.nodes.size] do
+    let x := root.body.nodes[k]
+    let some d := P.defs[x.fn]? | throw s!"input-bits: root node {k} calls no callee of the description"
+    match inputId? d.key, d.binding with
+    | none, none => pure ()
+    | none, some t => throw s!"input-width: root node {k}: {d.key} is bound at {t} but its id names no width"
+    | some (t, w), some t' =>
+      unless t == t' do
+        throw s!"input-binding: root node {k}: {d.key} is bound at {t'}, not its id's {t}"
+      let n := w * x.members
+      b := if t == RUN then { b with run := b.run + n }
+        else if t == REGISTRATION then { b with registration := b.registration + n }
+        else { b with supplied := b.supplied + n }
+    | some (t, _), none => throw s!"input-binding: root node {k}: {d.key} is an input id ({t}) with no binding"
+  return b
+
+private def inputsProbe (ns : List (String × Option String × Form × Nat)) : Prog :=
+  let defs := (ns.map fun (key, binding, _, _) =>
+    ({ key, id := key, prim := true, params := #[], ret := .value 1, binding, gates := 1, paramLeaves := 0,
+       outLeaves := 1 } : Defn)).toArray
+  let nodes := (ns.zipIdx.map fun ((_, _, form, n), fn) => ({ form, fn, args := #[], out := .value 1, n } : Node)).toArray
+  { defs := defs.push { (default : Defn) with key := "Root_v1", id := "Root_v1", body := { (default : Body) with nodes } },
+    index := {}, root := defs.size, programFn := "Root_v1", sha512 := .empty }
+
+private def refusedAs (code : String) (ns : List (String × Option String × Form × Nat)) : Bool :=
+  match inputBits (inputsProbe ns) with
+  | .error e => e.startsWith (code ++ ":")
+  | .ok _ => false
+
+#guard (inputBits (inputsProbe [("Input8_v1", some RUN, .prim, 9), ("RegisteredInput16_v1", some REGISTRATION, .batch, 3),
+  ("SuppliedInput4_v1", some SUPPLIED, .prim, 1), ("Input2_v1", some RUN, .batch, 5), ("Step_v1", none, .scan, 7)])).toOption ==
+  some { run := 18, registration := 48, supplied := 4 }
+#guard (inputBits (inputsProbe [])).toOption == some {}
+#guard refusedAs "input-binding" [("Input8_v1", some "later", .prim, 1)]
+#guard refusedAs "input-binding" [("Input8_v1", some REGISTRATION, .prim, 1)]
+#guard refusedAs "input-binding" [("Input8_v1", none, .batch, 2)]
+#guard refusedAs "input-width" [("Step_v1", some RUN, .prim, 1)]
+
 /-- A gate or a constant bit of the Boolean profile (§9). -/
 inductive GateKind where
   | and (n : Nat) | xor (n : Nat) | not | const (b : Bool)
