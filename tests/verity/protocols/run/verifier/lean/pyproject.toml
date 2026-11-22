@@ -50,7 +50,7 @@ inputs = ["verity/lean_process.py", "tests/verity/circuits/stand_in.py", "tests/
           # pouw_credit_cases.registry_window, which POUW_PERIOD_CASES' windows read, builds them from PoUW's H1 circuits
           "verity/protocols/accounting/compute/pouw/prover/__init__.py", "verity/protocols/accounting/compute/pouw/prover/circuit",
           "verity/protocols/policy/training_detection/inference_only/verifier", "verity/protocols/accounting/network",
-          "verity/protocols/accounting/memory/pous", "verity/protocols/accounting/memory/poub/verifier",
+          "verity/protocols/accounting/memory/pous", "verity/protocols/accounting/memory/wipe", "verity/protocols/accounting/memory/poub/verifier",
           "verity/protocols/accounting/memory/poub/prover/__init__.py", "verity/protocols/accounting/memory/poub/prover/audit_prover.py",
           "verity/protocols/accounting/memory/poub/prover/p2_prover.py", "verity/protocols/accounting/memory/poub/prover/p2_party_prover.py",
           "verity/protocols/accounting/memory/pous/attester/lean", "verity/commitments/attest/lean",

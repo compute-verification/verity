@@ -33,8 +33,8 @@ inputs = ["verity/lean_process.py", "tests/verity/protocols/accounting/memory/po
           "verity/circuits", "verity/commitments",
           "verity/commitments/crypto", "verity/commitments/randomness",
           # PoUS's setup, P2 and vk, which a P2 store is under (`p2.py`)
-          "verity/protocols/accounting/memory/pous",
-          "verity/protocols/accounting/memory/pous/prover",
+          "verity/protocols/accounting/memory/pous", "verity/protocols/accounting/memory/wipe",
+          "verity/protocols/accounting/memory/pous/prover", "verity/protocols/accounting/memory/wipe/prover",
           # the deployment layer and its wire, which the session's parties run on (`session_parties.py`), the prover's
           # party (`session_prover.py`), which test_session_parties.py runs against the verifier's, and the monitoring
           # periods, which `monitoring` reads

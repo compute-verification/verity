@@ -147,8 +147,8 @@ inputs = ["verity/lean_process.py", "benchmarks/serve_tax", "benchmarks/producti
     "verity/protocols/accounting/compute/pouw/prover/serving/__init__.py",
     "verity/protocols/accounting/compute/pouw/verifier/serving.py",
     "verity/protocols/accounting/memory/poub",
-    "verity/protocols/accounting/memory/pous/attester",
+    "verity/protocols/accounting/memory/pous/attester", "verity/protocols/accounting/memory/wipe/attester",
     "verity/protocols/accounting/memory/pous/scheme.py",
     "verity/protocols/accounting/memory/wipe/scheme.py",
-    "verity/protocols/accounting/memory/pous/verifier",
+    "verity/protocols/accounting/memory/pous/verifier", "verity/protocols/accounting/memory/wipe/verifier",
 ]

@@ -20,7 +20,7 @@ untraced = [
 # run and the Lean programs they start (pous-timed-audit, memory-challenger-verdict) read, which no tracer sees: those
 # packages and their path dependencies (each lakefile's `[[require]]`).
 inputs = ["verity/lean_process.py", "verity/protocols/proof/spot/verifier/one_stage/lean_child.py", "verity/protocols/proof/spot/verifier/challenger/coins.py", "verity/protocols/proof/spot/verifier/one_stage/link_points.py",
-          "verity/__init__.py", "verity/errors.py", "verity/ports.py", "verity/protocols/accounting/memory/pous",
+          "verity/__init__.py", "verity/errors.py", "verity/ports.py", "verity/protocols/accounting/memory/pous", "verity/protocols/accounting/memory/wipe",
           # served_piece.py reads PoUS's declaration through the schemes' one table, and the launcher's
           # declared_unchecked every declaration in it
           "verity/protocols/run/__init__.py", "verity/protocols/run/schemes.py",
@@ -31,10 +31,10 @@ inputs = ["verity/lean_process.py", "verity/protocols/proof/spot/verifier/one_st
           # and attaches it on the adapter's exchange; the case's tests load SPOT's prover and the table's poub declaration
           "adapters/vllm/verity_vllm/messages.py", "verity/protocols/proof/spot/prover/__init__.py",
           "verity/protocols/proof/spot/prover/workload.py", "verity/protocols/accounting/memory/poub/scheme.py",
-          "verity/protocols/interface", "verity/protocols/accounting/memory/pous/prover",
+          "verity/protocols/interface", "verity/protocols/accounting/memory/pous/prover", "verity/protocols/accounting/memory/wipe/prover",
           "verity/protocols/proof/flock/verifier", "verity/commitments/identity", "verity/commitments/randomness",
           "verity/circuits/base", "verity/circuits/lean", "verity/commitments/lean",
-          "verity/commitments/lms", "tools/difftest", "verity/protocols/accounting/memory/pous/attester",
+          "verity/commitments/lms", "tools/difftest", "verity/protocols/accounting/memory/pous/attester", "verity/protocols/accounting/memory/wipe/attester",
           "verity/commitments", "verity/commitments/crypto",
           "verity/commitments/randomness",
           "calibration/census/hardware.json", "benchmarks/numerical/python/verity_numerical/bench/placement.py",

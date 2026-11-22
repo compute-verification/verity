@@ -11,7 +11,7 @@ untraced = ["test_pous_wipe_store.py", "test_pous_wipe_stream.py"]
 # TimedINC): test_pous_trusted fails while a file it hashes is outside these, naming the lines to add.
 inputs = ["verity/lean_process.py", "verity/protocols/accounting/memory/pous/attester/timed_audit.py", "verity/__init__.py", "verity/errors.py",
           "verity/circuits",
-          "verity/protocols/accounting/memory/pous/prover",
+          "verity/protocols/accounting/memory/pous/prover", "verity/protocols/accounting/memory/wipe/prover",
           # the wipe's declaration, whose attach runs the subprotocol (`wipe_served`), and the interface it is declared in
           "verity/protocols/accounting/memory/pous/scheme.py", "verity/protocols/accounting/memory/wipe/scheme.py",
           "verity/protocols/accounting/scheme.py",
@@ -46,4 +46,4 @@ inputs = ["verity/lean_process.py", "verity/protocols/accounting/memory/pous/att
           "verity/protocols/proof/spot/verifier/one_stage", "verity/protocols/proof/spot/verifier/challenger",
           "verity/protocols/proof/spot/verifier/levels.py", "verity/protocols/proof/spot/verifier/service.py",
           "verity/protocols/proof/spot/verifier/window_place.py",
-          "verity/protocols/accounting/memory/pous/verifier"]
+          "verity/protocols/accounting/memory/pous/verifier", "verity/protocols/accounting/memory/wipe/verifier"]

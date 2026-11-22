@@ -35,7 +35,7 @@ timeout_s = 7200
 
 [[tool.verity.tests.reads]]
 tests = ["test_inference_only_theta_difftest.py"]
-paths = ["verity/circuits", "verity/commitments", "adapters/vllm/verity_vllm/definitions", "verity/protocols/proof/flock/prover", "verity/protocols/proof/flock/prover/pod", "verity/protocols/proof/flock/prover/agreement", "verity/protocols/proof/flock/prover/tool.py", "verity/protocols/accounting/network/prover", "verity/protocols/accounting/memory/pous/prover", "verity/protocols/accounting/compute/pouw/prover", "verity/protocols/accounting/memory/poub/verifier/commitments", "verity/commitments/periods"]
+paths = ["verity/circuits", "verity/commitments", "adapters/vllm/verity_vllm/definitions", "verity/protocols/proof/flock/prover", "verity/protocols/proof/flock/prover/pod", "verity/protocols/proof/flock/prover/agreement", "verity/protocols/proof/flock/prover/tool.py", "verity/protocols/accounting/network/prover", "verity/protocols/accounting/memory/pous/prover", "verity/protocols/accounting/memory/wipe/prover", "verity/protocols/accounting/compute/pouw/prover", "verity/protocols/accounting/memory/poub/verifier/commitments", "verity/commitments/periods"]
 
 [[tool.verity.tests.reads]]
 tests = [

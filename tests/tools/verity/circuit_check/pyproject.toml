@@ -105,7 +105,7 @@ inputs = ["verity/lean_process.py", "tools/verity/circuit_check", "verity/__init
           "verity/protocols/accounting/compute/pouw/prover/serving/row_table_kernels.py",
           "verity/protocols/accounting/memory/pous/prover/__init__.py", "verity/protocols/accounting/network/prover/__init__.py",
           # the PoUS prover's sidecars import the verifier when the catalog builds their bindings on a cold cache
-          "verity/protocols/accounting/memory/pous/verifier", "verity/protocols/accounting/memory/pous/prover/circuit.py",
+          "verity/protocols/accounting/memory/pous/verifier", "verity/protocols/accounting/memory/wipe/verifier", "verity/protocols/accounting/memory/pous/prover/circuit.py",
           "verity/protocols/accounting/memory/pous/prover/circuit.circuit-check.py", "verity/protocols/accounting/memory/pous/prover/circuit.circuit-check.json",
           "verity/protocols/accounting/memory/pous/prover/answer_circuit.py", "verity/protocols/accounting/memory/pous/prover/answer_circuit.circuit-check.py",
           "verity/protocols/accounting/memory/pous/prover/decode_circuit.py", "verity/protocols/accounting/memory/pous/prover/decode_circuit.circuit-check.py",
@@ -227,7 +227,7 @@ tests = ["test_ambient.py", "test_cache.py", "test_structural.py", "test_structu
 paths = [
     "benchmarks/numerical/python/verity_numerical/bench",
     "verity/protocols/accounting/network",
-    "verity/protocols/accounting/memory/pous",
+    "verity/protocols/accounting/memory/pous", "verity/protocols/accounting/memory/wipe",
     "verity/circuits", "verity/commitments", "adapters/vllm/verity_vllm/definitions", "verity/protocols/proof/flock/prover", "verity/protocols/proof/flock/prover/pod", "verity/protocols/proof/flock/prover/agreement", "verity/protocols/proof/flock/prover/tool.py", "verity/protocols/accounting/compute/pouw/prover", "verity/protocols/accounting/memory/poub/__init__.py", "verity/protocols/accounting/memory/poub/verifier/__init__.py", "verity/protocols/accounting/memory/poub/verifier/commitments", "verity/commitments/periods",
 ]
 
@@ -246,7 +246,7 @@ tests = [
 paths = [
     "verity/protocols/proof/flock/prover/python/verity_flock/subcircuit_templates.circuit-check.py",
     "verity/protocols/accounting/network",
-    "verity/protocols/accounting/memory/pous",
+    "verity/protocols/accounting/memory/pous", "verity/protocols/accounting/memory/wipe",
     "verity/circuits", "verity/commitments", "adapters/vllm/verity_vllm/definitions", "verity/protocols/proof/flock/prover", "verity/protocols/proof/flock/prover/pod", "verity/protocols/proof/flock/prover/agreement", "verity/protocols/proof/flock/prover/tool.py", "verity/protocols/accounting/compute/pouw/prover", "verity/protocols/accounting/memory/poub/__init__.py", "verity/protocols/accounting/memory/poub/verifier/__init__.py", "verity/protocols/accounting/memory/poub/verifier/commitments", "verity/commitments/periods",
 ]
 
@@ -260,7 +260,7 @@ paths = [
     "benchmarks/numerical/python/verity_numerical/bench",
     "tools/verity/circuit_check/src/circuit_check",
     "verity/protocols/accounting/network",
-    "verity/protocols/accounting/memory/pous",
+    "verity/protocols/accounting/memory/pous", "verity/protocols/accounting/memory/wipe",
     "verity/circuits", "verity/commitments", "adapters/vllm/verity_vllm/definitions", "verity/protocols/proof/flock/prover", "verity/protocols/proof/flock/prover/pod", "verity/protocols/proof/flock/prover/agreement", "verity/protocols/proof/flock/prover/tool.py", "verity/protocols/accounting/compute/pouw/prover", "verity/protocols/accounting/memory/poub/__init__.py", "verity/protocols/accounting/memory/poub/verifier/__init__.py", "verity/protocols/accounting/memory/poub/verifier/commitments", "verity/commitments/periods",
     "verity/protocols/proof/spot/prover/__init__.py", "verity/protocols/proof/spot/prover/produced.py",
     "verity/protocols/proof/spot/prover/served.py",
@@ -293,7 +293,7 @@ paths = [
     "verity/protocols/proof/flock/prover/python/verity_flock/subcircuit_templates.circuit-check.py",
     "tools/verity/circuit_check/src/circuit_check",
     "verity/protocols/accounting/network",
-    "verity/protocols/accounting/memory/pous",
+    "verity/protocols/accounting/memory/pous", "verity/protocols/accounting/memory/wipe",
     "verity/circuits", "verity/commitments", "adapters/vllm/verity_vllm/definitions", "verity/protocols/proof/flock/prover", "verity/protocols/proof/flock/prover/pod", "verity/protocols/proof/flock/prover/agreement", "verity/protocols/proof/flock/prover/tool.py", "verity/protocols/accounting/compute/pouw/prover", "verity/protocols/accounting/memory/poub/__init__.py", "verity/protocols/accounting/memory/poub/verifier/__init__.py", "verity/protocols/accounting/memory/poub/verifier/commitments", "verity/commitments/periods",
 ]
 
@@ -302,7 +302,7 @@ tests = ["test_units.py"]
 paths = [
     "tools/verity/circuit_check/src/circuit_check",
     "verity/protocols/accounting/network",
-    "verity/protocols/accounting/memory/pous",
+    "verity/protocols/accounting/memory/pous", "verity/protocols/accounting/memory/wipe",
     "verity/circuits", "verity/circuits/ops", "verity/circuits/silicon",
     "verity/commitments/gates",
     "verity/protocols/proof/flock/prover/python/verity_flock",

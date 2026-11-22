@@ -150,7 +150,7 @@ inputs = ["verity/lean_process.py", "verity/__init__.py", "tools/config/verity_c
           # declaration (test_pearl_c_vllm_run); Pearl+'s imports the adapters' pearl_plus_op and messages
           "verity/config.py", "verity/party.py", "verity/release.py", "verity/protocols/experimental/dither",
           "verity/protocols/accounting/memory/poub/scheme.py", "verity/protocols/accounting/memory/poub/verifier",
-          "verity/protocols/accounting/memory/pous",
+          "verity/protocols/accounting/memory/pous", "verity/protocols/accounting/memory/wipe",
           "verity/protocols/policy/__init__.py", "verity/protocols/policy/training_detection/__init__.py",
           "verity/protocols/policy/training_detection/inference_only/__init__.py",
           "verity/protocols/policy/training_detection/inference_only/scheme.py",

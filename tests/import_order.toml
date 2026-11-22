@@ -30,7 +30,7 @@ order = [
     ["verity/protocols/proof/spot_flock"],
     ["verity/protocols/proof/spot_flock_recursion"],
     ["verity/protocols/registration"],
-    ["verity/protocols/accounting/memory/pous"],
+    ["verity/protocols/accounting/memory/pous", "verity/protocols/accounting/memory/wipe"],
     ["verity/protocols/accounting/memory/poub"],
     ["verity/protocols/accounting/compute/pouw"],
     ["verity/protocols/experimental"],
@@ -198,8 +198,8 @@ loaded_by = [
     "verity/protocols/accounting/memory/poub/prover/p2_party_prover.py",
     "verity/protocols/accounting/memory/poub/prover/session_prover.py",
     "verity/protocols/accounting/memory/pous/prover/challenger_prover.py",
-    "verity/protocols/accounting/memory/wipe/prover/wipe_prover.py",
     "verity/protocols/accounting/memory/pous/prover/workload.py",
+    "verity/protocols/accounting/memory/wipe/prover/wipe_prover.py",
     "verity/protocols/accounting/network/prover/admission.py",
     "verity/protocols/accounting/network/prover/id_relay.py",
     "verity/protocols/accounting/network/prover/ids_protocol.py",
@@ -544,6 +544,7 @@ reaches = [
 [[place]]
 paths = [
     "verity/protocols/accounting/memory/pous/attester",
+    "verity/protocols/accounting/memory/wipe/attester",
 ]
 loads = [
     "verity/channel.py",
@@ -566,6 +567,7 @@ loaded_by = [
 [[place]]
 paths = [
     "verity/protocols/accounting/memory/pous/prover",
+    "verity/protocols/accounting/memory/wipe/prover",
 ]
 loads = [
     "verity/channel.py",
@@ -582,6 +584,7 @@ loads = [
 [[place]]
 paths = [
     "verity/protocols/accounting/memory/pous/verifier",
+    "verity/protocols/accounting/memory/wipe/verifier",
     "verity/protocols/accounting/memory/pous/attester/challenger_session.py",
     "verity/protocols/accounting/memory/pous/attester/memory_attester.py",
 ]
@@ -612,10 +615,10 @@ loaded_by = [
     "verity/protocols/accounting/memory/pous/prover/responder.py",
     "verity/protocols/accounting/memory/pous/prover/setup_proof.py",
     "verity/protocols/accounting/memory/pous/prover/weight_store.py",
+    "verity/protocols/accounting/memory/pous/scheme.py",
     "verity/protocols/accounting/memory/wipe/prover/wipe_prover.py",
     "verity/protocols/accounting/memory/wipe/prover/wipe_run.py",
     "verity/protocols/accounting/memory/wipe/prover/wipe_store.py",
-    "verity/protocols/accounting/memory/pous/scheme.py",
 ]
 
 [[place]]
@@ -943,9 +946,9 @@ loaded_by = [
     "verity/protocols/accounting/memory/poub/prover/session_prover.py",
     "verity/protocols/accounting/memory/poub/scheme.py",
     "verity/protocols/accounting/memory/pous/prover/challenger_prover.py",
-    "verity/protocols/accounting/memory/wipe/prover/wipe_prover.py",
     "verity/protocols/accounting/memory/pous/prover/workload.py",
     "verity/protocols/accounting/memory/pous/scheme.py",
+    "verity/protocols/accounting/memory/wipe/prover/wipe_prover.py",
     "verity/protocols/accounting/network/prover/workload.py",
     "verity/protocols/accounting/network/scheme.py",
     "verity/protocols/policy/training_detection/inference_only/scheme.py",
