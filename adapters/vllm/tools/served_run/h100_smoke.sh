@@ -92,12 +92,17 @@ OUT=${OUT:-${RESEARCH_RUN_DIR:-$SR}/out}
 #   the lane the epochs reserve on (served_verdicts.sh's H1_LANE), with no default: the first request waits, at most
 #   REGISTRATION_HOLD_S seconds, until the challenger's ledger REGISTRATION_LEDGER signs the registration the serve wrote,
 #   every entry tested under the pinned key record REGISTRATION_KEY (else PP_CHALLENGER_KEY) and the chain
-#   (`served_verdicts.py registration-hold`). With PP_CHALLENGER=gate:USER@HOST (and PP_GATE_KEY) the ledger is fetched
+#   (`served_verdicts.py registration-hold`); the period-open line printed before it names REGISTRATION_CAP (no
+#   default) and, as --circuit, the epoch's Program digest computed before the serve from the class (fixed_circuit.py),
+#   which the closed epoch's docket must name. With PP_CHALLENGER=gate:USER@HOST (and PP_GATE_KEY) the ledger is fetched
 #   from the gate's `ledger` at each look into REGISTRATION_LEDGER (ledger_fetch.py). Unset: the development path.
 HOLD=(benchmarks/one_stage/served_verdicts.py registration-hold) FETCH=()
 if [ -n "${REGISTRATION_LANE:-}" ]; then
   [ -z "${H1_LANE:-}" ] || [ "$H1_LANE" = "$REGISTRATION_LANE" ] || { echo "SMOKE REFUSED lane: REGISTRATION_LANE" \
     "$REGISTRATION_LANE is not H1_LANE $H1_LANE, the lane the epochs reserve on"; exit 3; }
+  [[ "${REGISTRATION_CAP:-}" =~ ^[1-9][0-9]*$ ]] || { echo "SMOKE REFUSED registration: REGISTRATION_LANE's period" \
+    "opens with --cap REGISTRATION_CAP, the challenger sessions the run opens on the lane, a positive integer with no" \
+    "default"; exit 3; }
   [[ "${REGISTRATION_HOLD_S:-}" =~ ^[1-9][0-9]*$ ]] || { echo "SMOKE REFUSED registration: REGISTRATION_LANE holds the" \
     "first request at most REGISTRATION_HOLD_S seconds, a positive integer with no default"; exit 3; }
   [ -r "${REGISTRATION_KEY:-${PP_CHALLENGER_KEY:-}}" ] || { echo "SMOKE REFUSED registration: REGISTRATION_LANE needs" \
@@ -284,6 +289,15 @@ if [ "${1:-}" = card ]; then  # under the lease: the wipe where the application 
   "$PY" benchmarks/prove_path/prove_path.py weights-registration --serve-run "$D" --checkpoint-dir "$SNAP" --out "$WREG" \
     --deployment-record "$DREG" > "$SR/weights_registration.log" 2>&1 \
     || { say "SMOKE FAILED weights-registration ($SR/weights_registration.log)"; exit 1; }
+  if [ -n "${REGISTRATION_LANE:-}" ]; then
+    FIXED=$("$PY" adapters/vllm/tools/served_run/fixed_circuit.py --serve-run "$D" --class "$CLASS" 2> "$SR/fixed_circuit.err" \
+      | "$PY" -c 'import json, sys; print(json.load(sys.stdin)["program"])') \
+      || { say "SMOKE REFUSED registration: no epoch's circuit fixed before the serve: $(tail -1 "$SR/fixed_circuit.err")"; exit 3; }
+    echo "$FIXED" > "$SR/fixed_program"
+    echo "REGISTRATION PERIOD-OPEN on the challenger's host: vy-challenger-gate period-open --name $REGISTRATION_LANE" \
+      "--lane $REGISTRATION_LANE --cap $REGISTRATION_CAP --circuit $FIXED" \
+      "--registration $("$PY" -c 'import json, sys; from verity.commitments import docket_digest as DD; print(DD.digest(json.load(open(sys.argv[1]))))' "$DREG")"
+  fi
   if [ ${#FETCH[@]} -gt 0 ]; then "$PY" "${FETCH[@]}" > "$SR/ledger_fetch.log" 2>&1 & FETCHER=$!; fi
   rc=0; ${REGISTRATION_LANE:+timeout -k 10s "$REGISTRATION_HOLD_S"} "$PY" "${HOLD[@]}" "$DREG" 2>&1 \
     | tee "$SR/registration_hold.log" || rc=$?
@@ -338,6 +352,12 @@ timeout -k 1m "$WC_TIMEOUT" "$PY" "${WC[@]}" > "$SR/window-commit.json" 2> "$SR/
   || { e=$?; say "$said"$'\n'"$(plan_lines)"$'\n'"SMOKE FAILED window-commit of window $K, exit $e ($SR/window-commit.err)"; exit 1; }
 mkdir -p "$OUT/window"
 cp "$VW/registration.json" "$VW/circuit.json" "$DREG" "$OUT/window/"
+if [ -s "$SR/fixed_program" ]; then
+  got=$("$PY" -c 'import json, sys; print(json.load(open(sys.argv[1]))["program"])' "$VW/registration.json")
+  [ "$got" = "$(cat "$SR/fixed_program")" ] || { say "$said; SMOKE FAILED circuit: the closed epoch's docket names Program" \
+    "$got, not the one fixed before the serve and opened as the period's --circuit, $(cat "$SR/fixed_program")"; exit 1; }
+  said+="; CIRCUIT the closed epoch's docket names the Program fixed before the serve, the period's --circuit"
+fi
 said+="; $("$PY" - "$SR/window-commit.err" "$VW/registration.json" "$K" "$CLASS" "$SR" "$MNBT" <<'EOF'
 import json, math, sys
 from verity.commitments import docket_digest as DD
@@ -354,5 +374,5 @@ EOF
 )" || { say "$said; SMOKE FAILED counts: no WINDOW-ROWS line or registration ($SR/window-commit.err)"; exit 1; }
 said+=$'\n'"$(plan_lines)"
 said+=$'\n'"$(grep '^TOKENIZE' "$SR/tokenize.log" | tail -1)"
-said+=$'\n'"SMOKE DONE window $K: served, planned, its strings made on the card and its record written, its circuit registered by the prover; no proof is made, and Lean verifies nothing; no sampled verdict, so no δ or ε; the circuit digest is kept private and NO public value fixes it before the coins"
+said+=$'\n'"SMOKE DONE window $K: served, planned, its strings made on the card and its record written, its circuit registered by the prover; no proof is made, and Lean verifies nothing; no sampled verdict, so no δ or ε; $([ -s "$SR/fixed_program" ] && echo "its Program digest was fixed before the serve and named in the period-open line" || echo "the circuit digest is kept private and NO public value fixes it before the coins")"
 say "$said"
