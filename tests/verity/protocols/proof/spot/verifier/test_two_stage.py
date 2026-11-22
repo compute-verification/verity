@@ -531,8 +531,9 @@ def test_the_rule_and_the_spec_state_one_form():
     for retired in (RULE.to_json(), {"rule": "two-stage", "replay": "subset:4", "check": "all"}, "two-stage:subset:4"):
         with pytest.raises(ValueError, match="a selection rule is All, Law or TwoStage"):
             _spec(selection=retired)
-    with pytest.raises(ValueError, match="interior values"):
-        _spec(values=VALUES[:2])
+    assert _spec(values=VALUES[:2]).values == VALUES[:2]
+    with pytest.raises(ValueError, match="boundary values"):
+        _spec(values=VALUES[2:])
     with pytest.raises(ValueError, match="one-stage selection has none"):
         _spec(selection=S.SamplingDesign("rate:1/2"))
     assert S.selection_sampling_design(RULE, N) == {"law": "subset", "k": Q}
