@@ -4,15 +4,17 @@ port (`{"port": name}`, the previous record's port), and core's one-stage check 
 windows and refuses tampered history by name."""
 from __future__ import annotations
 
+import json
+
 import pytest
-from verity.commitments import docket_digest as DD
+from verity.commitments import docket_digest as DD, domains as DM
 from verity.circuits.codec import descriptor_id, program_digest
 from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.partition_object import calls
 from verity.circuits.types import Array, Value, field_starts, field_types
 from verity.protocols.proof.spot.verifier.one_stage import docket as R
 from verity.protocols.proof.spot.prover import docket as DK
-from verity.protocols.proof.spot.verifier.one_stage import partition as P
+from verity.protocols.proof.spot.verifier.one_stage import partition as P, registered as G
 from verity.commitments import registered_value as RV
 
 from tests.program.test_workload_program import _edge_wl, _groups
@@ -25,6 +27,7 @@ SERVED = {"kind": "served", "run": "r-edge"}
 OPEN = ("a1" * 64, "b2" * 64)                    # each window's open root, from the challenger's signed open
 WORDS = {p: 1 for p in ("edge.kv", "edge.ik", "edge.iks", "edge.last")}    # the toy's rows: one leaf each
 PORTS = ("edge.kv", "edge.ik", "edge.iks", "edge.last")
+THETA, WEIGHTS_RECORD = "shared.weights", "e1" * 64
 
 
 def _windows() -> tuple[W.WorkloadProgram, W.WorkloadProgram]:
@@ -35,6 +38,17 @@ def _windows() -> tuple[W.WorkloadProgram, W.WorkloadProgram]:
                   theta_registered=True)
     w1 = _edge_wl({1: (3, 2, 0, False), 2: (3, 4, 0, True)}, W.Edge(ins=((1, _groups(2)), (2, _groups(4)))), theta_registered=True)
     return w0, w1
+
+
+def _weights_of_record(wl: W.WorkloadProgram) -> tuple[bytes, str]:
+    """The deployment's registration record pinning the weights both windows bind at registration, and its digest: what
+    R8 holds a registered input to (`docket.weights_held`)."""
+    n, bits = G.shape(wl.program, THETA, 1), G.width(wl.program, THETA)
+    pin = {"value": THETA, "root": "f0" * 64, "leaves": n, "words": 1,
+           "domain": RV.domain(WEIGHTS_RECORD, THETA, 1, n, bits).domain_id.hex(), **RV.width_entry(bits)}
+    rec = {"format": DM.REGISTRATION, "program": WEIGHTS_RECORD, "deployment": {"kind": "test"}, "registered": [pin],
+           "previous": None}
+    return json.dumps(rec).encode(), DD.digest(rec)
 
 
 def _query(wl: W.WorkloadProgram) -> dict:
@@ -67,8 +81,11 @@ def two():
                     {**SERVED, "row": 0})
     roots1 = [{"port": p, "root": "cd" * 64, **own1[p]} for p in own1]
     rec1 = DK.record(w1.program, _query(w1), DESIGN, SCHEME, roots1, {**SERVED, "row": 1}, previous=DD.digest(rec0), registered=E.entries(com))
-    kw = {"sampling_design": DESIGN, "scheme": SCHEME, "ports": own1, "window_root": OPEN[1], **E.history(w1.ports, WORDS)}
-    return {"w0": w0, "w1": w1, "com": com, "ports0": ports0, "rec0": rec0, "rec1": rec1, "roots1": roots1, "kw": kw}
+    pin = _weights_of_record(w0)
+    kw = {"sampling_design": DESIGN, "scheme": SCHEME, "ports": own1, "window_root": OPEN[1], **E.history(w1.ports, WORDS),
+          "weights_of_record": pin}
+    return {"w0": w0, "w1": w1, "com": com, "ports0": ports0, "rec0": rec0, "rec1": rec1, "roots1": roots1, "kw": kw,
+            "pin": pin}
 
 
 def _check1(t: dict, rec: dict, log: list) -> R.Verdict:
@@ -84,7 +101,7 @@ def test_an_honest_two_window_serve_registers_and_verifies_its_history(two):
     assert w1.ports == PORTS
     assert [p for p, _, _, _ in W.edge_ports(w0.edge.static()["out"])] == list(PORTS)
     assert E.history(w1.ports, WORDS)["outputs"] == {p: {"port": p} for p in PORTS}
-    assert R.check(t["rec0"], w0.program, _query(w0), DESIGN, SCHEME, ports=t["ports0"]).ok
+    assert R.check(t["rec0"], w0.program, _query(w0), DESIGN, SCHEME, ports=t["ports0"], weights_of_record=t["pin"]).ok
     v = _check1(t, t["rec1"], [t["rec0"]])
     assert v.ok, v.codes
     held = {e["value"]: e for e in t["rec1"]["registered"]}
@@ -106,7 +123,8 @@ def test_window_ws_verifier_refuses_an_edge_port_under_another_domain(two):
         other = E.roots({"edge.last": RV.Registered.commit(t["com"]["edge.last"].program, "edge.last", t["com"]["edge.last"].rows,
                                                             word_bits=16, window=window)})
         roots = [r if r["port"] != "edge.last" else other[0] for r in t["rec0"]["roots"]]
-        assert R.check({**t["rec0"], "roots": roots}, t["w0"].program, _query(t["w0"]), DESIGN, SCHEME, ports=t["ports0"]).codes == ("R3-domain",)
+        assert R.check({**t["rec0"], "roots": roots}, t["w0"].program, _query(t["w0"]), DESIGN, SCHEME, ports=t["ports0"],
+                       weights_of_record=t["pin"]).codes == ("R3-domain",)
 
 
 def _with(t: dict, port: str, entry: dict) -> dict:
