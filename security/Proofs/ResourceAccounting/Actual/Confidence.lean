@@ -15,7 +15,7 @@ import Mathlib.Tactic.NormNum.OfScientific
 
 `Composition`: a run outside the confidence set fails some `E i`, so the event is in the union over `i` of
 "`acc i` and `¬E i`". Fixing every coin but protocol `i`'s leaves a strategy against protocol `i` alone: the same runs,
-so feasible, still causal from every tick (the state is the run's own, `causalFrom_comp`), and its input gates off
+so feasible at the slice's challenges, still causal from every tick (the state is the run's own, `causalFrom_comp`), and its input gates off
 `V i` fixed; `E i` reads that slice. Averaging over the fixed coins (`card_filter_mul`: each run of coins is counted
 once for each value of coin `i`) gives `δ i`, and the union bound the sum. `global_of_causal` is the global form of
 causality: what the prover does before `t` depends on the coins only through what it reads from outside before `t`,
@@ -25,6 +25,8 @@ additivity at the run that implements `P`.
 -/
 
 @[expose] public section
+
+universe u
 
 namespace ResourceAccounting.SecurityProofs
 
@@ -109,7 +111,7 @@ theorem Composition : Guarantees.Composition := by
       fun i => by
     have hs : ∀ r, ((univ.filter fun x => acc i ((S (Function.update r i x)).view (V i)) ∧
         ¬E i (fun x' => S (Function.update r i x')) x).card : ℝ) ≤ δ i * Fintype.card (Ω i) := fun r =>
-      hE i (fun x => S (Function.update r i x)) (fun x => h𝓕 _) (Actual.causalFrom_comp hS _)
+      hE i r (fun x => S (Function.update r i x)) (fun x => h𝓕 _) (Actual.causalFrom_comp hS _)
         (fun x x' => hV i _ _ fun j hj => by simp [Function.update_of_ne hj])
     rcases (Fintype.card (Ω i)).eq_zero_or_pos with h0 | hpos
     · have : IsEmpty ((j : Fin k) → Ω j) := by
@@ -136,6 +138,30 @@ theorem Composition : Guarantees.Composition := by
     _ ≤ (∑ i, δ i) * Fintype.card ((j : Fin k) → Ω j) := by
         rw [sum_mul]
         exact sum_le_sum fun i _ => each i
+
+open Classical in
+/-- **One set of feasible runs is the constant family**: `Sound` at `fun _ => 𝓕` says what a guarantee sound against
+the one set `𝓕` says, so a guarantee stated against one set keeps its meaning. -/
+theorem sound_const_iff {L : Type*} [LinearOrder L] (Ω : Type) [Fintype Ω] (𝓕 : Set (Actual.Run L)) (V : Finset L)
+    (acc : Set (ℕ × L × ℕ × ℕ × ℕ) → Prop) (E : (Ω → Actual.Run L) → Ω → Prop) (δ : ℝ) :
+    Sound Ω (fun _ => 𝓕) V acc E δ ↔
+      ∀ S : Ω → Actual.Run L, (∀ r, S r ∈ 𝓕) → CausalFrom S → (∀ r r', (S r).inputs (↑V)ᶜ = (S r').inputs (↑V)ᶜ) →
+        ((univ.filter fun r => acc ((S r).view V) ∧ ¬E S r).card : ℝ) ≤ δ * Fintype.card Ω :=
+  Iff.rfl
+
+open Classical in
+/-- **`Composition` at one set of feasible runs**: its instance at the constant family, each protocol sound against
+the one set `𝓕` and every run of the strategy in it, so nothing it said against one set is narrowed. -/
+theorem composition_const (h : Guarantees.Composition.{u}) {L : Type u} [LinearOrder L] {k : ℕ} (Ω : Fin k → Type)
+    [∀ i, Fintype (Ω i)] [∀ i, DecidableEq (Ω i)] (𝓕 : Set (Actual.Run L)) (V : Fin k → Finset L)
+    (acc : Fin k → Set (ℕ × L × ℕ × ℕ × ℕ) → Prop) (E : (i : Fin k) → (Ω i → Actual.Run L) → Ω i → Prop)
+    (δ : Fin k → ℝ) (S : ((i : Fin k) → Ω i) → Actual.Run L)
+    (hE : ∀ i, Sound (Ω i) (fun _ => 𝓕) (V i) (acc i) (E i) (δ i)) (h𝓕 : ∀ r, S r ∈ 𝓕) (hS : CausalFrom S)
+    (hV : ∀ i r r', (∀ j, j ≠ i → r j = r' j) → (S r).inputs (↑(V i))ᶜ = (S r').inputs (↑(V i))ᶜ) :
+    ((univ.filter fun r => (∀ i, acc i ((S r).view (V i))) ∧
+        ¬∀ i, E i (fun x => S (Function.update r i x)) (r i)).card : ℝ) ≤
+      (∑ i, δ i) * Fintype.card ((i : Fin k) → Ω i) :=
+  h Ω (fun _ => 𝓕) V acc E δ S (fun i _ => hE i) h𝓕 hS hV
 
 theorem Fit : Guarantees.Fit := by
   intro L 𝓕 𝓒 μ impl cert cap obs hA ⟨R, hR, hi⟩ hcap
