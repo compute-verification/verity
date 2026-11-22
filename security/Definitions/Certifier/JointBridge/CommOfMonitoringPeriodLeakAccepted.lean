@@ -82,7 +82,8 @@ bound `Dj`, at `δ`, with the claim at `K`. Every field is a property of the dep
   most that run's `PrBad` at the leak relation at the network attester's rows, `RLeakCertifier` (`period_le`). Past
   `RLeakCertifier` and the scope, `ExecutionPhaseGood` holds the trace's values at the registered inputs and the records' coverage
   (`Covered`, length and jitter): `period_le` holds them on acceptance. The registered values are the gap
-  `MonitoringPeriodLeakAccepted` names, which the registration's commitment binds; no proof here gives it. `period_le` is the
+  `MonitoringPeriodLeakAccepted` names; no proof here gives it, and the commitment's binding reaches only a registered
+  input the extracted trace opens. `period_le` is the
   per-window bound that the trusted network attester's records give; deriving it from `MonitoringPeriodLeakAccepted` at the
   deployed period and `trusted`, rather than reading it as a field, is the follow-up. -/
 structure RealizesCommOfMonitoringPeriodLeakAccepted {ι : Type} {d : Device ι} {α : Type} [Fintype α] {C : Verity.Circuit}

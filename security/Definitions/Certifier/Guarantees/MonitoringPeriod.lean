@@ -62,7 +62,9 @@ audits, not from a premise:
 
 The union of the windows' failures over the monitoring period's live coins is not stated here. `ExecutionPhaseGood` is the
 event the first part bounds, plus one condition no proof here gives: the registration's values at the prover's
-registered inputs, which the registration's commitment binds. The network attester's rows are not pinned: they vary
+registered inputs (`RegisteredInputsHeld`, written inline). The commitment's binding reaches only a registered input the
+extracted trace opens; at one it leaves unopened `traceVal` is `false` and no collision follows.
+The network attester's rows are not pinned: they vary
 with the secret. The first part covers an extracted trace that leaves them outside the incorrect proof blocks, where every
 transfer gate is opened; the count charges an incorrect proof block's rows through the Program, from the free inputs, the
 incorrect sets, their committed bits and the timing. A proof block the sample missed is in the incorrect set.
