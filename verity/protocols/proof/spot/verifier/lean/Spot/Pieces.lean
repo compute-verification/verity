@@ -16,6 +16,7 @@ difftest against `one_stage`'s Python, beside the whole protocol (`spot-one-stag
 * `run_input_roots`: each member's ports at C's run input nodes' trees, and a held or tied node's reader without one;
 * `wired_roots`: each member's wired rows' roots at their writers' field trees, and the reads they may open, from C;
 * `run_input_rows`: the row of a run input node each unit of a port reads (`Flock.OneCircuit.pos`, from C);
+* `anchor_width`: C's digest anchors whose record entry is not one row of their mark's bits / 16 words;
 * `registered`: the verifier's own entries for the values its parameters expect registered;
 * `domain`: a registered value's commitment domain, or a produced value's (`Produced.domain`);
 * `produced`: a produced values' record's codes against the verifier's own entries, and the roots the verifiers
@@ -1225,10 +1226,19 @@ def tablesServed (j : Json) : V Json := do
     | _ => throw "a table is [name, root, domain], its root and domain hex strings"
   return Json.mkObj [("served", Json.bool (Run.tablesServed (getD j "record") tables))]
 
+/-- `{"marks": [[input, mark], ...], "record"}` to `{"inputs"}`: C's digest anchors whose record entry is not one row
+of their mark's bits / 16 words (`Docket.anchorWidth`). -/
+def anchorWidth (j : Json) : V Json := do
+  let .arr xs := getD j "marks" | throw "marks is not a list"
+  let marks ← xs.mapM fun
+    | .arr #[.str n, m] => return (n, ← Supplied.markOf n m)
+    | _ => throw "a mark is [input, mark]"
+  return Json.mkObj [("inputs", Lean.toJson (Docket.anchorWidth (getD j "record") marks))]
+
 def table : List (String × (Json → V Json)) :=
   [("decode", decode), ("partition", partition), ("committed_bits", committedBits), ("unit_gates", unitGates),
    ("fanout", fanout), ("ungated_openers", ungatedOpeners), ("gated", gatedList), ("run_input_roots", runInputRoots), ("run_input_rows", runInputRows), ("registration", docket),
-   ("registered", registered), ("wired_roots", wiredRoots),
+   ("registered", registered), ("wired_roots", wiredRoots), ("anchor_width", anchorWidth),
    ("domain", domain), ("produced", produced), ("known_port", knownPort), ("check_draw", checkDraw), ("draw", draw), ("ran_out", ranOut),
    ("select", select), ("design", design), ("slots", slots),
    ("file_population", FilePart.piece), ("tables_held", OneStageZk.tablesPiece),

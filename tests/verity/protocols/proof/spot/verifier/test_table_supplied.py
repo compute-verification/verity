@@ -165,6 +165,28 @@ def test_a_table_input_is_held_to_the_pin_never_the_records_entry(tmp_path, name
     assert code in got.codes and code in mine.codes, (got, mine)
 
 
+def test_an_anchor_registered_at_another_width_than_cs_node_is_refused(tmp_path):
+    """The table's root and domain anchors registered as the same 512 bits in two rows of 16 words, each entry's domain
+    and root committed at that width and the verifier's ``registered`` naming it too: consistent, so only C's node
+    (`registered.root/v1`, `registered.domain/v1`, layout ``digest``, 512 bits: one row of 32 words) tells it wrong, and
+    both verifiers refuse it by that alone (`R7-anchor-width`)."""
+    win, table, rec, check = _pinned(tmp_path / "window", HELD)
+    pd = program_digest(check["program"])
+    wide = {}
+    for of, want in (("root", table.tree.root), ("domain", table.dom.domain_id)):
+        name, words = f"embed/{of}", I.digest_words(want)
+        honest = RV.Registered.commit(pd, name, [words], RV.supplied_salts(pd, name, 1), schema=V2).entry()
+        assert honest == win.registered[name].entry(), of
+        wide[name] = RV.Registered.commit(pd, name, [words[:16], words[16:]], RV.supplied_salts(pd, name, 2),
+                                          schema=V2).entry()
+        assert (wide[name]["leaves"], wide[name]["words"]) == (2, 16)
+    rec = {**rec, "registered": [wide.get(e["value"], e) for e in rec["registered"]]}
+    check = {**check, "registered": {name: 16 for name in wide}}
+    got, mine = V.check(rec, **check), R.check(rec, **_docket(check))
+    assert got.codes == mine.codes == ("R7-anchor-width",), (got, mine)
+    assert mine.detail["R7-anchor-width"]["inputs"] == ["embed/root", "embed/domain"]
+
+
 def test_a_scheme_that_also_supplies_a_marked_anchor_is_refused(tmp_path):
     """A table's anchor that C marks takes its rows from the mark alone: a scheme that also supplies rows for it is refused
     by both verifiers, one source for a supplied value."""

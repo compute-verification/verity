@@ -107,9 +107,10 @@ committed once, in its one tree, and are never a registered value. R7 refuses a 
 `registered.root/v1` or `registered.domain/v1`, whose value V neither the verifier's `pinned` nor the weights'
 registration of record pins (`anchorUnpinned`, `R7-anchor-unpinned`); a value the registration of record pins whose
 record entry is not that pin in root, leaf count, words and domain, or an anchor's value it pins that the record
-registers no entry of (`offPin`, `R7-pin`); and a parameter bound as a supplied input that the parameters' `supplied`
-gives no source, or a table input whose table the registration of record pins not (`unsourced`, `R7-supplied-source`:
-a mark is no source). Both read C's marks (`Verifier.marks`, from the program descriptor's `inputs`). A table input's
+registers no entry of (`offPin`, `R7-pin`); an anchor in the `digest` layout whose record entry is not one row of
+its mark's bits / 16 words (`anchorWidth`, `R7-anchor-width`: the width is C's node's); and a parameter bound as a
+supplied input that the parameters' `supplied` gives no source, or a table input whose table the registration of record
+pins not (`unsourced`, `R7-supplied-source`: a mark is no source). Both read C's marks (`Verifier.marks`, from the program descriptor's `inputs`). A table input's
 rows are the held table's root and domain id (`heldTables`), never the record's entry; the table itself is one of R7's
 expected entries, built from its pin (`tableEntries`), so a record that leaves it out, or registers a pinned table no
 mark names, is refused `R7-values`.
@@ -547,6 +548,18 @@ def offPin (rec : Json) (v : Verifier) : Array String :=
       | some e => !(getD e "root" == Json.str p.root && nat? (getD e "leaves") == some p.leaves
           && nat? (getD e "words") == some p.words && getD e "domain" == Json.str p.domain)
     if off then some p.value else none
+
+/-- `docket.anchor_width`: C's supplied anchors (a mark of `ANCHOR_FUNCTIONS` in the `digest` layout) whose record entry
+(`rec`'s last `registered` entry of the input) is not one row of the mark's bits / 16 words; R7 refuses them
+(`R7-anchor-width`). The width is C's node's, never the verifier's `registered` nor the record's. -/
+def anchorWidth (rec : Json) (marks : Array (String × Supplied.Mark)) : Array String :=
+  let got : Array Json := match getD rec "registered" with | .arr es => es | _ => #[]
+  marks.filterMap fun (n, mk) =>
+    if !(ANCHOR_FUNCTIONS.contains mk.fn && mk.layout == "digest") then none else
+    match got.reverse.find? (fun e => getD e "value" == Json.str n) with
+    | none => none
+    | some e => if mk.bits % 16 == 0 && nat? (getD e "leaves") == some 1
+        && nat? (getD e "words") == some (mk.bits / 16) then none else some n
 
 /-- Whether the root nodes inside gates `[first, first + count)` of `P` are all primitive supplied inputs
 (`SuppliedInput<w>_v1`), as `Partition.regInputs` reads registered ones. -/
@@ -997,6 +1010,7 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
     c := kept (runInputNamed v).isEmpty c "R7-run-input"
     c := kept (anchorUnpinned v).isEmpty c "R7-anchor-unpinned"
     c := kept (offPin rec v).isEmpty c "R7-pin"
+    c := kept (anchorWidth rec v.marks).isEmpty c "R7-anchor-width"
   -- a supplied input's rows have a source whatever the record registers
   c := kept (unsourced v).isEmpty c "R7-supplied-source"
   -- R8
@@ -1069,6 +1083,7 @@ def checkRef (rec : Json) (v : Verifier) : Array String := Id.run do
     c := kept (runInputNamed v).isEmpty c "R7-run-input"
     c := kept (anchorUnpinned v).isEmpty c "R7-anchor-unpinned"
     c := kept (offPin rec v).isEmpty c "R7-pin"
+    c := kept (anchorWidth rec v.marks).isEmpty c "R7-anchor-width"
   -- a supplied input's rows have a source whatever the record registers
   c := kept (unsourced v).isEmpty c "R7-supplied-source"
   -- R8

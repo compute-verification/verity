@@ -284,6 +284,30 @@ def pinX : Json := (pin "x").2
 #guard (codes VX (put · "registered" (some (Json.arr #[put pinX "domain" (some (Json.str OTHER))])))).contains "R7-pin"
 #guard !(codes VX (put · "registered" (some (Json.arr #[pinX])))).contains "R7-pin"
 
+/-! R7's hold on a digest anchor's width (`anchorWidth`): the record's entry of an anchor input is one row of its mark's
+bits / 16 words, the width C's node gives, whatever the verifier's `registered` names. -/
+
+def anchorEntry (n : String) (leaves words : Nat) : Json :=
+  Json.mkObj [("value", .str n), ("root", .str ROOT), ("leaves", Lean.toJson leaves), ("words", Lean.toJson words),
+    ("domain", .str OTHER)]
+def MW : Array (String × Supplied.Mark) := #[("x/root", anchorMark "x"), ("x/domain", anchorMark "x" "registered.domain/v1")]
+def VW : Verifier := { VX with marks := MW }
+
+#guard anchorWidth (recOf #[anchorEntry "x/root" 1 32, anchorEntry "x/domain" 1 32]) MW == #[]
+-- the same 512 bits in two rows of 16 words, or one row of 16: refused, each anchor by its input's name
+#guard anchorWidth (recOf #[anchorEntry "x/root" 2 16, anchorEntry "x/domain" 2 16]) MW == #["x/root", "x/domain"]
+#guard anchorWidth (recOf #[anchorEntry "x/root" 1 16]) MW == #["x/root"]
+#guard anchorWidth (recOf #[anchorEntry "x/root" 1 32, anchorEntry "x/root" 2 16]) MW == #["x/root"]
+-- no entry is `R7-values`' and `R7-pin`'s; another layout or function is not an anchor's width
+#guard anchorWidth (recOf #[]) MW == #[]
+#guard anchorWidth (recOf #[anchorEntry "x/root" 2 16]) #[("x/root", { anchorMark "x" with layout := "le" })] == #[]
+#guard anchorWidth (recOf #[anchorEntry "x/root" 2 16]) #[("x/root", { anchorMark "x" with fn := "record.root/v1" })] == #[]
+-- the width is the mark's bits: 256 bits make one row of 16 words
+#guard anchorWidth (recOf #[anchorEntry "x/root" 1 16]) #[("x/root", { anchorMark "x" with bits := 256 })] == #[]
+-- the whole check names it
+#guard (codes VW (put · "registered" (some (Json.arr #[anchorEntry "x/root" 2 16])))).contains "R7-anchor-width"
+#guard !(codes VW (put · "registered" (some (Json.arr #[anchorEntry "x/root" 1 32])))).contains "R7-anchor-width"
+
 /-! R7's refusal of a supplied input with no source (`unsourced`, `R7-supplied-source`): `x`'s node a supplied input
 and no source for it in the parameters' `supplied`. -/
 

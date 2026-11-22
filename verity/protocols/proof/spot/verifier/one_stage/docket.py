@@ -193,6 +193,8 @@ ANCHOR_FUNCTIONS = ("registered.root/v1", "registered.domain/v1")
 PIN_WHY = ("a value the weights' registration of record pins is registered in the record at that pin, in root, leaf count, "
            "words and domain, and a supplied anchor's value, which a supplied function reads from the record's entry, "
            "is registered there")
+ANCHOR_WIDTH_WHY = ("C's node fixes a digest anchor's width: its value is one row of the node's bits / 16 words, and a "
+                    "record entry at another width is refused whatever width the verifier's registered names")
 SUPPLIED_SOURCE_WHY = ("a supplied input's rows are the verifier's own: the parameters' supplied names its source, C's "
                        "mark its function, or it is an earlier record's output; with none, nothing fixes its root")
 ANCHOR_UNPINNED_WHY = ("a supplied anchor reads a registered value's root or domain, and the verifier holds that value "
@@ -781,6 +783,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
             c.fail("R7-anchor-unpinned", {"values": loose, "why": ANCHOR_UNPINNED_WHY})
         if off := off_pin(marks, rec["registered"], weights_of_record):
             c.fail("R7-pin", {"values": off, "why": PIN_WHY})
+        if wide := anchor_width(marks, rec["registered"]):
+            c.fail("R7-anchor-width", {"inputs": wide, "why": ANCHOR_WIDTH_WHY})
     # a supplied input's rows have a source whatever the record registers
     if unsourced := unsourced_supplied(program, sup, outputs, marks, weights_of_record):
         c.fail("R7-supplied-source", {"values": unsourced, "why": SUPPLIED_SOURCE_WHY})
@@ -887,6 +891,23 @@ def off_pin(marks: Mapping[str, Mapping[str, Any]], got: Any, of_record: tuple[b
         if (e is None and x in anchors) or (e is not None and any(
                 e.get(k) != pin[k] or type(e.get(k)) is bool for k in ("root", "leaves", "words", "domain"))):
             out.append(x)
+    return out
+
+
+def anchor_width(marks: Mapping[str, Mapping[str, Any]], got: Any) -> list[str]:
+    """C's supplied anchors (`marks`, a mark of `ANCHOR_FUNCTIONS` in the ``digest`` layout) whose record entry (the
+    record's last ``registered`` entry of the input) is not one row of the mark's bits / 16 words; R7 refuses them
+    (`R7-anchor-width`). The width is C's node's, never the verifier's ``registered`` nor the record's. The Lean's
+    `Docket.anchorWidth` is this."""
+    entries = [e for e in got if isinstance(e, Mapping)] if isinstance(got, list) else []
+    out: list[str] = []
+    for n, m in marks.items():
+        if m["supplied"] not in ANCHOR_FUNCTIONS or m["layout"] != "digest":
+            continue
+        e = next((e for e in reversed(entries) if e.get("value") == n), None)
+        if e is not None and (m["bits"] % 16 or any(
+                type(e.get(k)) is not int or e.get(k) != want for k, want in (("leaves", 1), ("words", m["bits"] // 16)))):
+            out.append(n)
     return out
 
 
