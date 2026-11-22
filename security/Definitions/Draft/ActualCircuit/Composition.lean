@@ -33,10 +33,12 @@ open Classical in
 forced matrix multiplication (a) and the policy give: in the order registration, forced matrix multiplication, policy,
 with verifiers at `V₀`, `P.V`, `P.V`, acceptances the registration valid, `acceptsOn`, and compute accounting's number
 `n = Φ · (td − ts) + ρ · h − Wb · Nmin` at most `lim`, under the four's premises and for every joint strategy `S` that
-`Composition` reads, all accept and either the actual circuit is outside the egress set of the subtree at `i`, or at a
+`Composition` reads, all accept and either the actual circuit is outside the egress set (some rated subtree sends more than its
+registered boundary capacity), or at a
 view holding forced matrix multiplication's challenge with the node's help at most `h` a run implementing `impl` has
 `req_μ(impl) > lim`, for at most a `δdet + δskip` share of the challenges. The credits are read on the joint run through
-forced matrix multiplication's slice.
+forced matrix multiplication's slice. The device is fixed at `x` and the credit at `Wb · Nmin`, (a)'s; compute
+accounting's statement reads both from the view (`ComputeAccountingEpoch`).
 
 Not vacuous because the conclusion of its consequent fails for verifiers that accept every view against the joint
 strategy that holds the challenge and runs a program with `req_μ > lim` and no forced work, where the premise that fails
@@ -44,7 +46,7 @@ is `PouwDetectionAt`. -/
 def FourFromParts : Prop :=
   Guarantees.Composition.{0} → Guarantees.Fit.{0} → RegistrationEgress → ForcedMatmulEpoch → PolicyEpoch.{0} →
   ∀ (D : Registration.Digests) (Aud : Registration.Auditor) (c : Registration.Composite) (reg : Registration)
-    (i : String) (β : Fin (Site.ofLog reg).links.length → ℕ)
+    (β : Fin (Site.ofLog reg).links.length → ℕ)
     (Ω : Fin 3 → Type) [∀ j, Fintype (Ω j)] [∀ j, DecidableEq (Ω j)]
     (P : Verdict (Ω 1) (Site.ofLog reg).Place) (𝓕 : Set (Actual.Run (Site.ofLog reg).Place))
     (V₀ : Finset (Site.ofLog reg).Place) (rd : Readout (Ω 1) (Site.ofLog reg).Place)
@@ -58,17 +60,15 @@ def FourFromParts : Prop :=
     let V : Fin 3 → Finset (Site.ofLog reg).Place := ![V₀, P.V, P.V]
     let accs : Fin 3 → VerifierView (Site.ofLog reg).Place → Prop :=
       ![fun _ => Registration.Valid D Aud c reg, acceptsOn P rd, fun _ => n ≤ lim]
-    (Site.ofLog reg).RatedOn β
-        ↑(boundary (Site.ofLog reg).placeEnds ((Site.ofLog reg).placesIn ((Site.ofLog reg).under i))) →
-      (Site.ofLog reg).HostsWhole i → RunsOnRegisteredLinks reg β 𝓕 →
+    RunsOnRegisteredLinks reg β 𝓕 →
       PouwDetectionAt 𝓕 P rd Nmin δdet → PouwFloorAt 𝓕 P rd X π m Wb ρ δskip →
-      AtRegisteredRate 𝓕 X π Φ →
-      Additive (creditedRuns (Ω := Ω 1) 𝓕 P X π m Wb Nmin ρ h) (epochUse P X π ρ) (Wb * Nmin)
+      AtRegisteredRate 𝓕 P.V X π (fun _ => Φ) →
+      Additive (creditedRuns (Ω := Ω 1) 𝓕 P X π m (fun _ => x) x (Wb * Nmin) ρ h) (epochUse P X π ρ) (Wb * Nmin)
         (req (epochUse P X π ρ) 𝓕 impl) impl →
       (∀ r, S r ∈ 𝓕) → CausalFrom S →
       (∀ j r r', (∀ k, k ≠ j → r k = r' k) → (S r).inputs (↑(V j))ᶜ = (S r').inputs (↑(V j))ᶜ) →
       ((univ.filter fun r => (∀ j, accs j ((S r).view (V j))) ∧
-          ¬((S r).A ∈ egressSet reg i β ∧
+          ¬((S r).A ∈ egressSet reg β ∧
             (rd.chal ((S r).view P.V) = r 1 → (S r).A.ingress (X ∪ P.V) (Set.Ico P.ts P.td) ≤ h → impl (S r) →
               req (epochUse P X π ρ) 𝓕 impl ≤ (lim : ℕ∞)))).card : ℝ) ≤
         (δdet + δskip) * Fintype.card ((j : Fin 3) → Ω j)
