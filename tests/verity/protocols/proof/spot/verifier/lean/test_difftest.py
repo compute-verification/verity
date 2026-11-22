@@ -3479,6 +3479,43 @@ def test_a_run_input_slice_reads_the_rows_lean_derives(pieces, starts, n, ranges
     assert pieces.call("run_input_rows", {**case, "leaves": n // 64 + 1})[0] == "reject"
 
 
+@pytest.mark.parametrize("starts, n, ranges, members", [
+    ([64, 192, 320], 512, (3,), [["T/m0", [[0, 1]]], ["T/m1", [[1, 3]]]]),
+    ([320], 1024, (1,), [["T/m0", [[0, 1]]]]),
+    ([0], 1024, (1,), [["T/m0", [[0, 1]]]]),
+])
+def test_a_members_slice_of_a_run_input_node_opens_the_whole_nodes_tree_in_lean_and_python(pieces, starts, n, ranges,
+                                                                                         members):
+    """Members whose units read some rows of a run input node, from a first row above zero at a stride (rows 1, 3, 5 of
+    8; row 5 of 16; row 0 of 16, the scan's state's shape): `members.run_input_roots_at` and `OneStageZk.runInputRootsAt`
+    each hold the member's port at the record's one tree of the whole node, at C's row count, and a tree of only the rows
+    read is refused by name by both (`run_tree_why`, leaf count)."""
+    prog, read, words, rows, _case = _slice_rows(starts, n, ranges)
+    PROGRAMS[PO.program_sha512(prog)] = prog
+    assert read.param == "input/n0" and rows == [s // 64 for s in starts] and len(rows) < n // 64
+    R, digest = EG._Root(json.loads(D.canonical(codec.encode_program(prog)))), P.program_digest(prog)
+    query = PO.template_instances_query([_periods_tests().COORD])
+    ranges_ = P._template(prog, query, "q").ranges
+    nodes = {w: ln for _m, us in members for _p, w, ln in M.member_inputs(R, ranges_, "T", us)}
+    assert nodes[0] == 64
+
+    def tree(w: int, ln: int, rows_: int | None = None) -> dict:
+        rs = R.nodes[w]["out_leaves"] * R.nodes[w]["members"] // ln
+        wd = ln * (EG._bits(R.nodes[w]["ret"]) // R.nodes[w]["out_leaves"]) // 16
+        k = rs if rows_ is None else rows_
+        return {"port": f"input/n{w}", "root": f"{w:02x}" * 64, "leaves": k,
+                "domain": RV.domain(digest, f"input/n{w}", wd, k, 16, window=WROOT).domain_id.hex()}
+    assert tree(0, 64)["leaves"] == n // 64
+    base = {"program": _json(codec.encode_program(prog)), "query": _json(query), "members": members,
+            "roots": [tree(w, ln) for w, ln in sorted(nodes.items())], "window_root": WROOT}
+    got = run_input_roots(base)
+    assert got["refused"] is None and all(["x", "input/n0"] in r for _n, r in got["roots"]), got
+    assert D.replay(RUN_INPUT_ROOTS, base, pieces) == ("output", D.canonical(got))
+    part = {**base, "roots": [tree(0, 64, len(rows)), *base["roots"][1:]]}
+    assert run_input_roots(part) == {"roots": None, "refused": M.run_tree_why(0, "leaf count")}
+    assert D.replay(RUN_INPUT_ROOTS, part, pieces) == ("output", D.canonical(run_input_roots(part)))
+
+
 def test_a_run_input_read_off_one_stride_is_refused_by_the_read_and_derived_by_the_lean(pieces):
     """Units at rows 1, 3, 4: `run_input_reads` refuses them (no one stride, so no one `Read`), and the Lean derives
     each unit's row from C all the same, so its verdict rests on no `Read`."""
