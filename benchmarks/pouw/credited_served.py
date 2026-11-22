@@ -509,7 +509,7 @@ def stage(a) -> int:
     print("READS " + json.dumps(rec["reads"]), flush=True)
     allregs = {wparam: pv[wparam], **regs}
     from verity.circuits.program import RUN
-    names = [n for n, _t in program.root.signature()[0]]
+    names = [n for n, _t in program.fn.signature()[0]]
     rec["reads_bound"] = {p: [v, names.index(v), program.bindings[names.index(v)]] for p, (v, _j) in at.items()}
     print("READS-BOUND " + json.dumps(rec["reads_bound"]), flush=True)
 
