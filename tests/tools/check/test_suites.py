@@ -1147,6 +1147,19 @@ def test_the_tests_get_neither_the_runners_research_variables_nor_its_pycache_pr
     assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout + p.stderr
 
 
+def test_a_failed_suite_whose_log_a_test_removed_is_reported_and_the_run_goes_on(tmp_path):
+    """A test that removes or moves the run's files (one did, through a script's publish of its OUT) can take its own
+    suite's log with it: the run says the log is gone and reports the suite failed, where it stopped on a traceback
+    and reported nothing."""
+    root = tmp_path / "tree"
+    _env_workspace(root, {"pkg": "import os\nfrom pathlib import Path\n\ndef test_gone():\n"
+                                 "    Path(os.environ['VERITY_SUITE_REPORT']).with_suffix('.log').unlink()\n"
+                                 "    assert False\n"})
+    p = _run_suite(root, tmp_path, "--fresh")
+    assert p.returncode != 0 and "its log is gone" in p.stdout, p.stdout + p.stderr
+    assert "FileNotFoundError" not in p.stdout + p.stderr, p.stdout + p.stderr
+
+
 def test_a_fresh_run_builds_the_verifier_and_runs_the_suites_with_lakes_artifact_cache_off(tmp_path):
     """`--fresh` compiles what it tests (`UNCACHED_ENV`): its `lake build` of the verifier and the tests of a suite that runs
     Lake get Lake's local artifact cache off, where Lake would unpack what an earlier build on the node left there instead of

@@ -3135,7 +3135,9 @@ def main(argv: list[str] | None = None) -> int:
         elif r.log is not None and not (r.ran_all and r.child_reads):     # failed on its children's reads alone: said above
             if not r.reported:
                 print("        the guard wrote no report, so nothing vouches for what the tests read")
-            print("        " + "\n        ".join(r.log.read_text().splitlines()[-25:]) + f"\n        log: {r.log}")
+            tail = (r.log.read_text().splitlines()[-25:] if r.log.is_file()
+                    else ["its log is gone: a test removed or moved it, so its failing tests can't be read here"])
+            print("        " + "\n        ".join(tail) + f"\n        log: {r.log}")
 
     if a.json and any(r.status == "failed" for r in results):
         failing(a.json, results)
