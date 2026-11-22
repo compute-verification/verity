@@ -3071,13 +3071,13 @@ def bad_lengths(p: dict) -> list[dict]:
 
 
 def bad_audits(p: dict) -> list[dict]:
-    """Parameters whose audits `auditOf` refuses, each one change to `p`: an audit without its monitoring period, with a
+    """Parameters whose audits `auditOf` refuses, each one change to `p`: an audit with a key it doesn't read, with a
     negative free count, not a list, and an audit whose Program isn't a descriptor, is of another schema, or has no
     template in its root (the stand-in unit alone)."""
     good = json.loads(audit_descriptor(((1, 2),)))
     bare = json.loads(D.canonical(codec.encode_program(Program(bind(AUDIT_UNIT, OUT=2)))))
     one = lambda **kw: p | {"audits": [{"free": 0, "program": good} | kw]}  # noqa: E731
-    return [p | {"audits": [{"free": 0, "program": good}]}, one(free=-1), p | {"audits": "x"}, one(program="x"),
+    return [one(steps=0), one(free=-1), p | {"audits": "x"}, one(program="x"),
             one(program=good | {"schema": "verity-ir/v0"}), one(program=bare)]
 
 
