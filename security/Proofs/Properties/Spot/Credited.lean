@@ -10,6 +10,7 @@ public import Proofs.Flock.Claims.Complete.Json.Stmt
 public import Proofs.Flock.SpotFlock.SampleInts
 public import Proofs.Flock.SpotFlock.OwnReads
 public import Proofs.Flock.Claims.JsonNorm
+import all Lean.Data.Json.Basic
 
 /-!
 # v2 credits its one session with the coins' sample
@@ -359,25 +360,25 @@ theorem header_wf {pubB : ByteArray} {hd : Json} (h : FilePart.header pubB = .ok
       exact FlockDeploy.wf_norm j
   · first | cases h | (simp only [throw, throwThe, MonadExceptOf.throw, reduceCtorEq] at h; done)
 
-/-- Taking port `p` out of a header (`dropHeaderPort`) keeps its `instances` and an object's well-formed tree. -/
-theorem instances_dropHeaderPort {h : Json} (hw : ∀ m, h = .obj m → m.WF) (p : String) :
-    getD (OneStageZk.dropHeaderPort h p) "instances" = getD h "instances" ∧
-      ∀ m, OneStageZk.dropHeaderPort h p = .obj m → m.WF := by
-  unfold OneStageZk.dropHeaderPort
+/-- A value `getObjVal?` reads a key of is an object. -/
+theorem obj_of_getObjVal {h v : Json} {k : String} (hk : h.getObjVal? k = .ok v) : ∃ m, h = .obj m := by
   cases h with
-  | obj m =>
-    have hm := hw m rfl
-    simp only [Json.setObjVal!]
-    refine ⟨?_, fun m' he => ?_⟩
-    · simp only [getD, field?, Json.getObjVal?, Std.TreeMap.Raw.get?_eq_getElem?,
-        Std.TreeMap.Raw.getElem?_insert hm]
-      simp
-    · cases he
-      exact hm.insert
-  | _ => exact ⟨rfl, fun m he => by cases he⟩
+  | obj m => exact ⟨m, rfl⟩
+  | _ => simp [Json.getObjVal?] at hk
+
+/-- Taking port `p` out of an object header (`dropHeaderPort`) keeps it an object of a well-formed tree, and keeps its
+`instances`. -/
+theorem instances_dropHeaderPort {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) (p : String) :
+    ∃ m', OneStageZk.dropHeaderPort (.obj m) p = .obj m' ∧ m'.WF ∧
+      getD (.obj m') "instances" = getD (.obj m) "instances" := by
+  unfold OneStageZk.dropHeaderPort
+  simp only [Json.setObjVal!]
+  refine ⟨_, rfl, hm.insert, ?_⟩
+  simp only [getD, field?, Json.getObjVal?, Std.TreeMap.Raw.get?_eq_getElem?, Std.TreeMap.Raw.getElem?_insert hm]
+  simp
 
 theorem instances_foldDrop (reg : Array (String × Json)) :
-    ∀ (l : List String) (h : Json), (∀ m, h = .obj m → m.WF) →
+    ∀ (l : List String) (h : Json), (∃ m, h = .obj m ∧ m.WF) →
       getD (l.foldl (fun h p => if reg.any (·.1 == p) then h else OneStageZk.dropHeaderPort h p) h) "instances" =
         getD h "instances"
   | [], _, _ => rfl
@@ -385,15 +386,19 @@ theorem instances_foldDrop (reg : Array (String × Json)) :
     rw [List.foldl_cons]
     split
     · exact instances_foldDrop reg l h hw
-    · obtain ⟨h1, h2⟩ := instances_dropHeaderPort hw p
-      rw [instances_foldDrop reg l _ h2, h1]
+    · obtain ⟨m, rfl, hm⟩ := hw
+      obtain ⟨m', he, hm', hi⟩ := instances_dropHeaderPort hm p
+      rw [he, instances_foldDrop reg l _ ⟨m', rfl, hm'⟩, hi]
 
-/-- `publicHeld` holds the header's `instances` to the record's population, whichever ports of the verifier's
+/-- `publicHeld` holds an object header's `instances` to the record's population, whichever ports of the verifier's
 `registered` file it leaves uncompared. -/
 theorem publicHeld_instances {rec : Json} {pubB : ByteArray} {registered : Option Json} {hd : Json}
-    (h : OneStageZk.publicHeld rec pubB registered = .ok ()) (hh : FilePart.header pubB = .ok hd) :
+    (h : OneStageZk.publicHeld rec pubB registered = .ok ()) (hh : FilePart.header pubB = .ok hd)
+    (hobj : ∃ m, hd = .obj m) :
     jeq (getD hd "instances") (getD rec "population") = true := by
-  have hw : ∀ m, hd = .obj m → m.WF := fun m he => (SpotFlock.ReadsJson.wf_obj (he ▸ header_wf hh)).1
+  have hw : ∃ m, hd = .obj m ∧ m.WF := by
+    obtain ⟨m, rfl⟩ := hobj
+    exact ⟨m, rfl, (SpotFlock.ReadsJson.wf_obj (header_wf hh)).1⟩
   unfold OneStageZk.publicHeld at h
   obtain ⟨_, he, h⟩ := bind_ok h
   rw [hh] at he
@@ -491,7 +496,7 @@ theorem population_of_checkBlobsAt {p : OneStageZk.Params} {c : OneStage.Commitm
       cases hpop
     | some n => exact ⟨n, rfl⟩
   have hj : jeq (getD P.header "instances") (getD c.record "population") = true :=
-    publicHeld_instances hph (Units.headerOf_loadPublic hl)
+    publicHeld_instances hph (Units.headerOf_loadPublic hl) (obj_of_getObjVal (instances_of_loadPublic hl))
   have hi : getD P.header "instances" = .num ⟨Int.ofNat P.n, 0⟩ := by
     unfold getD field?
     rw [instances_of_loadPublic hl]

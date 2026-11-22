@@ -409,10 +409,10 @@ theorem matchesPublic_population {reg : Array (String × Json)} {rec s r d pop :
 /-- **v2 holds the public file's instances to the record's population** (`publicHeld`). -/
 theorem publicHeld_population {rec : Json} {pubB : ByteArray} {registered : Option Json} {hd : Json}
     (h : _root_.Spot.OneStageZk.publicHeld rec pubB registered = .ok ())
-    (hh : _root_.Spot.FilePart.header pubB = .ok hd) :
+    (hh : _root_.Spot.FilePart.header pubB = .ok hd) (hobj : ∃ m, hd = .obj m) :
     _root_.Spot.jeq (_root_.Spot.getD hd "instances")
       (_root_.Spot.getD rec "population") = true :=
-  Properties.Spot.Credited.publicHeld_instances h hh
+  Properties.Spot.Credited.publicHeld_instances h hh hobj
 
 /-- **A natural number `jeq` holds to a value is the value's natural number.** -/
 theorem nat_of_jeq {m n : ℕ} {j : Json}
@@ -477,6 +477,7 @@ theorem population_held {rec : Json} {pubB : ByteArray} {tags : Flock.Tags} {c :
   rw [← Flock.With.loadPublicWith_std] at hl
   obtain ⟨nl, hd, counts, -, hhd, hi, -⟩ := Flock.Bridge.loadPublic_core _ _ _ _ _ hl
   have hj := publicHeld_population hph (header_of_headerOf hhd)
+    (Properties.Spot.Credited.obj_of_getObjVal (FlockComplete.JsonRT.nat_ok hi))
   have hg : _root_.Spot.getD hd "instances" = .num ⟨Int.ofNat pop.n, 0⟩ := by
     simp only [_root_.Spot.getD, _root_.Spot.field?, FlockComplete.JsonRT.nat_ok hi]
     rfl
