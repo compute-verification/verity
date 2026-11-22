@@ -1426,7 +1426,9 @@ def test_a_windows_audit_is_a_period_audit_whose_scan_state_reads_count_register
     capsys.readouterr()
     assert RA.main(["period", "--window", str(got.dir), "--audit", str(audit), "--out", str(tmp_path / "p.json"), "--tied", TIED]) == 0
     assert json.loads((tmp_path / "p.json").read_text()) == p
-    assert json.loads(capsys.readouterr().out.splitlines()[-1].removeprefix("PERIOD ")) == {
+    said = capsys.readouterr().out.splitlines()
+    assert said[0] == f"TIED-ROOT {json.dumps([TIED])}: none held it: no test holds a tied node's shared root to the record"
+    assert json.loads(said[-1].removeprefix("PERIOD ")) == {
         "verdict": "accept", "reason": None, "free": p["free"], "commitment": DD.digest(rec), "program": rec["program"]}
     refused = RA.period(got.dir, _audited(got.dir, tmp_path / "r", accepted=False), {}, TIED)["answer"]
     assert refused["verdict"] == "reject" and refused["commitment"] == DD.digest(rec)

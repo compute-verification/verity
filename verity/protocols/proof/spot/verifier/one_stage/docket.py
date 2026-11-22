@@ -407,17 +407,10 @@ def weights_held(program: Program, query: Mapping[str, Any], registered: Iterabl
             shape.append(v)
     if shape:
         out.append(("R8-weights-shape", {"values": shape}))
-    def untemplated() -> tuple[list[tuple[str, Any]], dict[str, Any]]:
+    if not _templated(program, query):
         if of_record is not None or marked:
             out.append(("R8-weights-query", {"query": dict(query)}))
         return out, {}
-
-    try:
-        templated = P.is_template_query(query) and P.units(program, query) >= 0
-    except P.QueryRefused:
-        return untemplated()
-    if not templated:
-        return untemplated()
     loose = {v: g for v in marked if v not in pins and v not in held for g in G.held_gates(program, [v])}
     read = {g for _, _, g in P.input_reads(program, query, loose.values())} if loose else set()
     if unpinned := [v for v, g in loose.items() if g in read]:
@@ -472,6 +465,25 @@ def read_pins(program: Program, query: Mapping[str, Any], registered: Iterable[s
     return loose, held, ranges, pins, roots
 
 
+def _templated(program: Program, query: Mapping[str, Any]) -> bool:
+    """Whether ``query`` is a template query that applies to ``program``."""
+    try:
+        return P.is_template_query(query) and P.units(program, query) >= 0
+    except P.QueryRefused:
+        return False
+
+
+def _own_entries(program: Program, registered: Mapping[str, int], schemas: Mapping[str, str] | None,
+                 window_root: str | None, held: Sequence[str] | None, supplied: Mapping[str, Any],
+                 pinned: Mapping[str, str], outputs: Mapping[str, Any]) -> dict[str, Any] | ValueError:
+    """`Docket.ownEntries`: the verifier's own entries of its registered values, or why they don't compute."""
+    try:
+        window, fixed = _window(window_root, held, registered, supplied, pinned, outputs)
+        return G.registered_entries(program, registered, schemas, window, fixed)
+    except ValueError as e:
+        return e
+
+
 def held_entries(program: Program, registered: Mapping[str, int], schemas: Mapping[str, str] | None,
                  window_root: str | None, held: Sequence[str] | None, supplied: Mapping[str, Any],
                  pinned: Mapping[str, str], outputs: Mapping[str, Any], log: Iterable[Mapping[str, Any]]
@@ -479,10 +491,8 @@ def held_entries(program: Program, registered: Mapping[str, int], schemas: Mappi
     """`Docket.heldEntries`: ``{value: {"root", "leaves", "domain"}}`` for each value the verifier expects registered
     whose root it holds itself, its ``pinned`` root, else the one an earlier record of the log registered under the
     domain it takes now (`held_roots`), as R7 holds it; none where its entries don't compute."""
-    try:
-        window, fixed = _window(window_root, held, registered, supplied, pinned, outputs)
-        mine = G.registered_entries(program, registered, schemas, window, fixed)
-    except ValueError:
+    mine = _own_entries(program, registered, schemas, window_root, held, supplied, pinned, outputs)
+    if isinstance(mine, ValueError):
         return {}
     logged = held_roots(log)
     out = {}
