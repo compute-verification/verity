@@ -27,7 +27,10 @@ what the decoder reads alike from equivalent entries (`Proofs.Properties.Inferen
 the canonical entry's flat parts (`Proofs.Properties.InferenceOnly.DigestRefs`), equivalent one by one in equivalent entries
 (`Proofs.Properties.InferenceOnly.DigestParts`), and `DigestPins` from the statement that equivalent entries pin the decoded
 Definition (`Proofs.Properties.InferenceOnly.DigestPins`), and that statement by induction from what the decoder reads
-of each entry (`Proofs.Properties.InferenceOnly.DigestReads`), which no statement here reads.
+of each entry (`Proofs.Properties.InferenceOnly.DigestReads`), which no statement here reads. Its two halves are proved
+in `Proofs.Properties.InferenceOnly.DigestReadsPin` and `Proofs.Properties.InferenceOnly.DigestDecodeReads`, which gives
+`DigestPins` (`digestPins`); both are built from `Proofs.InferenceOnly`, since they read `BodiesOk`, which imports this
+module.
 -/
 
 @[expose] public section

@@ -12,15 +12,11 @@ alone (`DefReads`, the decoder's invariant `DecodeReads`); and two Definitions s
 entries, whose callees are one Definition in turn, are one Definition (`ReadsPin`). `entriesPin_of_reads` joins them by
 strong induction on the decoder's index: a node's callee sits at a smaller index, and `key` reaches it.
 
-`DecodeReads` and `ReadsPin` are stated and not yet proved:
-- `DecodeReads` is the decoder's invariant over `getDef`, `composite` and `staticFns`, carried as `BodiesOk`'s `Inv`
-  is (`GetSpec`, `CompSpec`, `StatSpec` by induction on the fuel), with `composite`'s node loop read field by field.
-- `ReadsPin` reads both canonical entries field by field: the `DigestDecode` lemmas give the same id, form, parameters,
-  types and counts, `flat_of_parse` with `written_jsonEquiv` and `part_jsonEquiv` the same parts, and the callees'
-  `Same` the same callee fields for `buildNode` and the offsets.
+`ReadsPin` is proved in `Proofs.Properties.InferenceOnly.DigestReadsPin` (`readsPin`), and `DecodeReads` in
+`Proofs.Properties.InferenceOnly.DigestDecodeReads` (`decodeReads`, with `entriesPin` and `digestPins`).
 -/
 
-public section
+@[expose] public section
 
 namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
@@ -53,7 +49,8 @@ def leavesOf (d : Defn) (outs : Array Ty) : Bool → Nat → Option Nat :=
   fun p i => if p then d.params[i]?.map (·.2.leaves) else outs[i]?.map (·.leaves)
 
 /-- What node `k` of the composite `d` reads of its entry's node `nd`: its form, output, axes and counts, each
-argument's type and parts, the callee's arguments as `buildNode` builds them, and the next offset. -/
+argument's type and parts (a scan's at least one, as the decoder checks), the callee's arguments as `buildNode` builds
+them, and the next offset. -/
 def NodeReads (P : Prog) (types : Array Ty) (d : Defn) (outs : Array Ty) (k : Nat) (nd : Json) : Prop :=
   let node := d.body.nodes[k]!
   let callee := P.defs[node.fn]!
@@ -65,6 +62,7 @@ def NodeReads (P : Prog) (types : Array Ty) (d : Defn) (outs : Array Ty) (k : Na
     else node.n = 1) ∧
   (if node.form == .scan then (nd.getObjVal? "n_xs").toOption.bind natJ? = some node.nxs else node.nxs = 0) ∧
   (∃ (ajs : Array Json) (raw : Array Arg), nd.getObjVal? "args" = .ok (.arr ajs) ∧ raw.size = ajs.size ∧
+    (node.form = .scan → 0 < ajs.size) ∧
     (∀ a < ajs.size,
       (∃ t : Int, intJ? (((ajs[a]!).getObjVal? "type").toOption.getD Json.null) = some t ∧ 0 ≤ t ∧
         t < types.size ∧ (raw[a]!).ty = types[t.toNat]!) ∧
@@ -110,8 +108,8 @@ def DefReads (j : Json) (P : Prog) (i : Nat) (d : Defn) : Prop :=
   P.index[d.key]? = some i ∧ (PrimReads j d ∨ CompReads j P i d)
 
 /-- **The decoder builds each Definition from its entry and its callees.** For a Program text that decodes and
-parses, the index names each Definition by its key, and each Definition is what `DefReads` says. Stated and not yet
-proved: the invariant over `getDef`, `composite` and `staticFns`, carried as `BodiesOk`'s `Inv` is. -/
+parses, the index names each Definition by its key, and each Definition is what `DefReads` says (`decodeReads`, in
+`Proofs.Properties.InferenceOnly.DigestDecodeReads`). -/
 def DecodeReads : Prop :=
   ∀ (text : String) (j : Json) (P : Prog), Flock.Program.decode text.toUTF8 = .ok P → Flock.JsonParse.parse text = .ok j →
     (∀ (c : String) (i : Nat), P.index[c]? = some i → i < P.defs.size ∧ (P.defs[i]!).key = c) ∧
@@ -119,8 +117,7 @@ def DecodeReads : Prop :=
 
 /-- **Equivalent canonical entries and the same callees give the same Definition.** Two Definitions of one key, each
 built from its descriptor's entry as `DefReads` says, whose canonical entries are equivalent and whose nodes' callees of
-one key are one Definition, are one Definition. Stated and not yet proved: the canonical entries read field by field
-(`DigestDecode`, `DigestRefs`, `DigestParts`). -/
+one key are one Definition, are one Definition (`readsPin`, in `Proofs.Properties.InferenceOnly.DigestReadsPin`). -/
 def ReadsPin : Prop :=
   ∀ (j j' : Json) (P P' : Prog) (i i' : Nat) (ce ce' : Json), Wf j → Wf j' → i < P.defs.size → i' < P'.defs.size →
     (P.defs[i]!).key = (P'.defs[i']!).key → DefReads j P i (P.defs[i]!) → DefReads j' P' i' (P'.defs[i']!) →
