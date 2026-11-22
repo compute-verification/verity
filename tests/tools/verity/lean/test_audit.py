@@ -654,6 +654,21 @@ def test_a_deployed_guarantee_s_witness_declared_only_in_an_exempt_module_fails_
     assert proofs({"Q.lean": "import Q.Thms\n", "Q/Thms.lean": witness}) == []
 
 
+def test_a_lock_the_witness_judge_can_t_parse_fails_before_the_build(tmp_path):
+    """`witnesses.unread`: where a run does not build a package, its lock or a `proved_in` package's lock that doesn't
+    parse fails, naming the lock, and never reads as no failure."""
+    lock = {"roots": ["P"], "proved_in": ["Proofs"], "deployed": ["P.SecurityProofs.G"],
+            "witnesses": {"P.SecurityProofs.G": {"honest": ["P.SecurityProofs.G_honest"]}}}
+    pkg = sourced(tmp_path / "pkg", {"P.lean": "\n"}, lock)
+    q = sourced(pkg / "Proofs", {"Q.lean": "\n"}, {"roots": ["Q"]})
+    (q / A.POLICY).write_text("{not json")
+    fails = A.unbuilt_judged(pkg)
+    assert [(f.code, f.entry) for f in fails] == [("witnesses.unread", None)]
+    assert str(pkg / A.POLICY) in fails[0] and "JSONDecodeError" in fails[0] and "valid JSON" in fails[0]
+    (pkg / A.POLICY).write_text("{not json")
+    assert [f.code for f in A.unbuilt_judged(pkg)] == ["witnesses.unread"]
+
+
 def test_source_declarations_reads_a_name_under_the_namespaces_open_at_it():
     src = ("namespace A.B\nsection\n@[simp] private theorem t : True := trivial\nend\nend A.B\n"
            "-- theorem c : True := trivial\nnamespace C\nlemma _root_.D.e : True := trivial\nnoncomputable def f := 1\nend C\n")

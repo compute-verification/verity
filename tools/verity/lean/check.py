@@ -6927,11 +6927,15 @@ def unbuilt_by_sources(pkgs: list[Path], updated: set[Path], repo: Path = ROOT, 
 
 def unbuilt_judged(pkg: Path) -> list[Failure]:
     """What the judge fails on ``pkg``'s live lock and sources with no build, for a package a run does not build
-    (`unbuilt_by_sources`): `witness_unbuilt_failures`, which reads `witnesses`, so it decides no build."""
+    (`unbuilt_by_sources`): `witness_unbuilt_failures`, which reads `witnesses`, so it decides no build.  A lock or source
+    it can't read or parse fails as `witnesses.unread`: a malformed lock always fails."""
     try:
         return witness_unbuilt_failures(pkg, load(pkg))
-    except (OSError, ValueError):
-        return []
+    except (OSError, ValueError) as e:
+        return [Failure("witnesses.unread", None, f"witnesses: {pkg}: {type(e).__name__}: {e}, reading its lock "
+                        f"{pkg / POLICY}, the lock of a package its `proved_in` names, or a module of their sources, so "
+                        f"whether each deployed guarantee's witness is built is unknown: make each lock valid JSON with no "
+                        f"both `pins` and `guarantees` (`check.py --update` writes it) and each source readable")]
 
 
 def judged_line(pkgs: list[Path], unbuilt: dict[Path, list[Failure]], seconds: float) -> str:
