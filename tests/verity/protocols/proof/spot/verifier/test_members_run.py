@@ -99,6 +99,17 @@ def tree_entry(member: str, **changes) -> dict:
     return {"domain": d, "leaves": n, "port": "o0", "root": r, "tree": t, **changes}
 
 
+def run_reads(slice_: dict) -> set[tuple[str, str]]:
+    """The member's reads of its run inputs at their node's tree (``input/n<k>``), which an honest member's registered
+    file holds."""
+    return {(r["port"], r["tree"]) for r in slice_.get("roots", []) if str(r.get("tree", "")).startswith("input/")}
+
+
+def population_why(units, strata, header, slice_, reads=(), held=None, subset=False):
+    """`members.population_why` with the member's run input reads (`run_reads`) beside ``reads``."""
+    return M.population_why(units, strata, header, slice_, {*reads, *run_reads(slice_)}, held, subset=subset)
+
+
 def header(member: str, **changes) -> dict:
     return {"frame_v3": frame(member),
             "instances": sum(hi - lo for lo, hi in UNITS[member]), "scheme": SCHEME,
@@ -325,7 +336,7 @@ def test_a_members_files_are_refused_by_the_first_of_leans_checks_that_applies(t
     other.write_bytes(json.dumps(header(B, instances=5)).encode() + b"\nthe rows")
 
     def why(circuit, public, formed):
-        return M.files_why(circuit, public, (), UNITS[B], strata, slice_, lambda *a: formed)
+        return M.files_why(circuit, public, (), UNITS[B], strata, slice_, lambda *a: formed, run_reads(slice_))
     assert PF.template_why(empty) == PF.NO_ROW_WHY and PF.template_why(plain) is None
     for unread in M.UNREAD:
         assert why(empty, other, f"{unread}x)") == f"{unread}x)"
@@ -340,10 +351,12 @@ def test_a_members_files_are_refused_by_the_first_of_leans_checks_that_applies(t
 def test_the_members_population_check_reads_the_registrations_strata(tmp_path):
     strata = P.strata(PROGRAM, QUERY)
     slice_ = slices(UNITS, RECORD)[B]
-    assert M.population_why(UNITS[B], strata, header(B), slice_) is None
-    assert M.population_why([[2, 6]], strata, header(B), slice_) == M.MEMBER_STRATA
-    assert M.population_why(UNITS[B], strata[::-1], header(B), slice_) == M.MEMBER_STRATA
-    assert M.population_why(UNITS[B], strata, "no header", slice_) == M.MEMBER_UNITS
+    assert population_why(UNITS[B], strata, header(B), slice_) is None
+    assert run_reads(slice_) == {("x", "input/n1")}
+    assert M.population_why(UNITS[B], strata, header(B), slice_) == M.shared_unread("x", "input/n1")
+    assert population_why([[2, 6]], strata, header(B), slice_) == M.MEMBER_STRATA
+    assert population_why(UNITS[B], strata[::-1], header(B), slice_) == M.MEMBER_STRATA
+    assert population_why(UNITS[B], strata, "no header", slice_) == M.MEMBER_UNITS
 
 
 def test_under_a_subset_design_the_strata_need_only_cover_the_units():
@@ -354,20 +367,20 @@ def test_under_a_subset_design_the_strata_need_only_cover_the_units():
     assert [(t, [tuple(r) for r in rs]) for t, rs in strata] == [(PAIR.id, [(0, 2), (5, 7)]), (TRIPLE.id, [(2, 5)])]
     assert not P.in_order(program, QUERY, 7) and P.covers(program, QUERY, 7) and not P.covers(program, QUERY, 6)
     slice_ = slices(UNITS, RECORD)[B]
-    assert M.population_why(UNITS[B], strata, header(B), slice_, subset=True) is None
-    assert M.population_why(UNITS[B], strata, header(B), slice_) == M.MEMBER_STRATA
-    assert M.population_why(UNITS[B], strata, "no header", slice_, subset=True) == M.MEMBER_UNITS
+    assert population_why(UNITS[B], strata, header(B), slice_, subset=True) is None
+    assert population_why(UNITS[B], strata, header(B), slice_) == M.MEMBER_STRATA
+    assert population_why(UNITS[B], strata, "no header", slice_, subset=True) == M.MEMBER_UNITS
     assert P.cover([("p", [[0, 2], [5, 7]]), ("t", [[2, 5], [5, 5]])]) == 7
     assert P.cover_ranges([[0, 2], [5, 7], [2, 5], [5, 4]]) == 7
     for bad in ([("p", [[0, 3], [5, 7]]), ("t", [[2, 5]])], [("p", [[0, 2], [6, 7]]), ("t", [[2, 5]])],
                 [("p", [[0, 2], [5, 7], [7, 6]]), ("t", [[2, 5]])]):
         assert P.cover(bad) is None
-        assert M.population_why(UNITS[B], bad, header(B), slice_, subset=True) == M.MEMBER_COVER
-    assert M.population_why([[2, 8]], strata, header(B), slice_, subset=True) == M.MEMBER_COVER
+        assert population_why(UNITS[B], bad, header(B), slice_, subset=True) == M.MEMBER_COVER
+    assert population_why([[2, 8]], strata, header(B), slice_, subset=True) == M.MEMBER_COVER
     in_order = P.strata(PROGRAM, QUERY)
-    assert M.population_why([[2, 8]], in_order, header(B), slice_, subset=True) == M.MEMBER_STRATA
+    assert population_why([[2, 8]], in_order, header(B), slice_, subset=True) == M.MEMBER_STRATA
     assert P.cover(in_order) == 5 and P.in_order(PROGRAM, QUERY, 5) and P.covers(PROGRAM, QUERY, 5)
-    assert all(M.population_why(UNITS[B], in_order, header(B), slice_, subset=s) is None for s in (False, True))
+    assert all(population_why(UNITS[B], in_order, header(B), slice_, subset=s) is None for s in (False, True))
     assert M.subset_design({"law": "subset", "k": 1})
     assert not any(map(M.subset_design, ({"law": "stratified", "k": 1}, {"law": "work", "k": 1}, "rate:1/7",
                                          "stratified-rate:1/2")))
@@ -437,13 +450,13 @@ def test_a_members_slice_outside_the_run_is_the_runs_own():
                                  tree_entry(m), input_entry(m)]}
                    for m, n in ((A, 2), (B, 3))}
     strata = P.strata(PROGRAM, QUERY)
-    assert all(M.population_why(UNITS[m], strata, header(m), got[m]) is None for m in (A, B))
+    assert all(population_why(UNITS[m], strata, header(m), got[m]) is None for m in (A, B))
     wired = RECORD | {"roots": [*RECORD["roots"], {**RECORD["roots"][0], "port": f"{B}/y"}]}
     both = slices(UNITS, wired)
     assert [r["port"] for r in both[B]["roots"]] == ["out", "y", "o0", "x"] and both[A] == got[A]
-    assert M.population_why(UNITS[B], strata, header(B), both[B]) == "public file: not the registration's: roots, domains"
+    assert population_why(UNITS[B], strata, header(B), both[B]) == "public file: not the registration's: roots, domains"
     named = header(B, frame_v3=frame(B, y=ROOTS[A]))
-    assert M.population_why(UNITS[B], strata, named, both[B]) is None
+    assert population_why(UNITS[B], strata, named, both[B]) is None
     for record, why in ((RECORD | {"roots": [*RECORD["roots"], {"port": M.TABLE_PORT, "root": "00" * 64}]}, M.ROW_TABLES),
                         (RECORD | {"population": 6}, M.MEMBERS_LAID),
                         (RECORD | {"roots": {}}, "roots: the registration's roots are not a list")):
@@ -494,7 +507,7 @@ def test_a_members_own_output_port_reads_its_templates_field_tree():
     assert set(DK.public_ports({"roots": [RECORD["roots"][0], {**tree, "port": "a/o0"}]})) == {"out", "o0"}
     strata = P.strata(PROGRAM, QUERY)
     named = header(B, frame_v3=frame(B, o0=("33" * 64, "cc" * 64)))
-    assert M.population_why(UNITS[B], strata, named, got[B]) is None
+    assert population_why(UNITS[B], strata, named, got[B]) is None
 
 
 def test_a_members_rows_of_a_shared_tree_are_its_registered_reads_there():
@@ -510,15 +523,15 @@ def test_a_members_rows_of_a_shared_tree_are_its_registered_reads_there():
     def own(o0: str, out: str = ROOTS[B][0]) -> dict:
         return header(B, frame_v3={"domain_ids": {"out": ROOTS[B][1], "o0": "dd" * 64, "x": INPUTS[B][3]},
                                    "roots": {"out": out, "o0": o0, "x": INPUTS[B][2]}})
-    assert M.population_why(UNITS[B], strata, own("44" * 64), got, {("o0", "b/o0")}) is None
-    assert M.population_why(UNITS[B], strata, own("44" * 64), got) == M.shared_unread("o0", "b/o0")
-    assert M.population_why(UNITS[B], strata, own("44" * 64), got, {("o0", "a/o0")}) == M.shared_unread("o0", "b/o0")
-    assert M.population_why(UNITS[B], strata, own("44" * 64, out="55" * 64), got, {("o0", "b/o0")}) == (
+    assert population_why(UNITS[B], strata, own("44" * 64), got, {("o0", "b/o0")}) is None
+    assert population_why(UNITS[B], strata, own("44" * 64), got) == M.shared_unread("o0", "b/o0")
+    assert population_why(UNITS[B], strata, own("44" * 64), got, {("o0", "a/o0")}) == M.shared_unread("o0", "b/o0")
+    assert population_why(UNITS[B], strata, own("44" * 64, out="55" * 64), got, {("o0", "b/o0")}) == (
         "public file: not the registration's: roots")
-    assert M.population_why(UNITS[B], strata, own("44" * 64) | {"instances": 99}, got, {("o0", "b/o0")}) == (
+    assert population_why(UNITS[B], strata, own("44" * 64) | {"instances": 99}, got, {("o0", "b/o0")}) == (
         M.POPULATION_WHY)
     named = header(B, frame_v3=frame(B, o0=("33" * 64, "cc" * 64)))
-    assert M.population_why(UNITS[B], strata, named, got) is None
+    assert population_why(UNITS[B], strata, named, got) is None
 
 
 def registered_file(ports: dict[str, str]) -> dict:
@@ -540,16 +553,16 @@ def test_a_members_port_is_held_by_its_registered_reads_only_at_a_registered_val
         return header(B, frame_v3=frame(B, (out, ROOTS[B][1]), w=("77" * 64, "dd" * 64)))
 
     def why(ports: dict[str, str]) -> str | None:
-        return M.population_why(UNITS[B], strata, own(), got, *M.registered_reads(registered_file(ports)))
+        return population_why(UNITS[B], strata, own(), got, *M.registered_reads(registered_file(ports)))
     assert why({"w": "h1/w"}) is None
     for v in ("b/o0", "input/n3", "committed/w"):
         assert why({"w": v}) == M.unregistered_why("w", v)
     assert why({"v": "h1/w"}) == M.unwired_why("w")
-    assert M.population_why(UNITS[B], strata, own(), got) == M.unwired_why("w")
+    assert population_why(UNITS[B], strata, own(), got) == M.unwired_why("w")
     held = registered_file({"w": "h1/w"})["ports"]
-    assert M.population_why(UNITS[B], strata, own(), got, {("w", "h1/z")}, held) == M.unregistered_why("w", "h1/z")
-    assert M.population_why(UNITS[B], strata, own(), got, {("w", "h1/w")}) == M.unregistered_why("w", "h1/w")
-    assert M.population_why(UNITS[B], strata, own(out="55" * 64), got,
+    assert population_why(UNITS[B], strata, own(), got, {("w", "h1/z")}, held) == M.unregistered_why("w", "h1/z")
+    assert population_why(UNITS[B], strata, own(), got, {("w", "h1/w")}) == M.unregistered_why("w", "h1/w")
+    assert population_why(UNITS[B], strata, own(out="55" * 64), got,
                             *M.registered_reads(registered_file({"w": "h1/w", "out": "h1/w"}))) == (
         "public file: not the registration's: roots")
 
