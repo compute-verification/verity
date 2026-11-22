@@ -1,53 +1,82 @@
 # Verity: the system and its repository at the end state
 
 This file is Verity's architecture: the system and its repository at the end state, in sections 1 to 7.
-[GLOSSARY.md](GLOSSARY.md) is the Glossary. [AGENTS.md](AGENTS.md) says what is true on `main` now, and section 7 lists where `main` differs.
+Sections 1 and 2 state the settled design, the section after them what is still open, and section 7 where `main` differs.
+[GLOSSARY.md](GLOSSARY.md) is the Glossary. [AGENTS.md](AGENTS.md) says what is true on `main` now.
 
 ## 1. The system in one picture
 
-Verity lets a developer prove to an auditor that the workloads it runs have certain properties, and that its hardware did little else. The auditor never runs the workload, and learns the verdicts and nothing more.
+Verity lets a developer prove to an auditor that the workloads its hardware runs have stated properties, and that its hardware did little else. The auditor never runs the workload. It learns the workload's outputs and the protocols' outputs, and nothing else.
+
+Verity is two protocols. The inner protocol is everything that checks the workload, and it may see private information. The outer protocol is a zero-knowledge argument that the inner verifier accepts an inner transcript consistent with the outer transcript. The outer protocol is the only path from private information to the auditor.
 
 ```mermaid
 flowchart LR
     subgraph dev["The developer's datacenter"]
-        W["Workload<br/>for example vLLM serving a model"]
-        A["Adapter<br/>makes the workload speak Verity"]
-        P["Prover<br/>commits every value,<br/>proves what is asked"]
-        D["The auditor's devices at the site<br/>network attester, memory attester"]
+        W["Workload<br/>developer-isolated"]
+        IP["Inner prover<br/>developer-isolated"]
+        T["Inner transcript<br/>one for every protocol of a run"]
+        IV["Inner verifiers<br/>developer-trusted, developer-isolated"]
+        AT["Attesters<br/>inner verifiers on auditor-trusted,<br/>developer-isolated devices, with keys"]
+        OP["Outer prover<br/>developer-trusted, developer-isolated"]
     end
     subgraph aud["The auditor"]
-        C["Challenger<br/>samples the challenges"]
-        V["Verifier<br/>checks proofs and decides"]
-        L["Account<br/>adds up each monitoring period<br/>and its failure chance"]
+        OV["Outer verifier<br/>auditor-trusted"]
+        A["What the auditor learns:<br/>workload outputs, protocol outputs"]
     end
-    W <-->|"workload transcript, private"| A
-    A <--> P
-    D -->|"signed records of what they saw"| P
-    C -->|"challenges, after the commitments"| P
-    P -->|"commitments, then zero-knowledge proofs"| V
-    C -->|"the same challenges"| V
-    V -->|"accept or reject,<br/>and what was established"| L
+    W <--> IP
+    IP -->|"messages"| T
+    T <-->|"messages, results"| IV
+    AT -->|"signed messages, challenges"| T
+    T --> OP
+    OP <-->|"outer transcript, zero knowledge"| OV
+    OV -->|"accept or reject, protocol outputs"| A
+    W -->|"workload outputs"| A
 ```
 
-- **Only messages cross between boxes.** The workload transcript never leaves the developer. The protocol transcript is what the prover and the verifier exchange.
-- **The auditor's devices hand what they see to the prover, signed.** The auditor sees only proofs about it. This is today's rule, and it is still to be confirmed.
-- **Challenges come only from the auditor's side**, and only after the commitments they sample are recorded: from the challenger, and at the site from the memory attester, which samples the challenges of its own timed rounds.
-- **Whatever the auditor decides, the verifier decides, and the verifier is Lean.**
+- **Only messages cross between machines.** Every message is in one of two transcripts: the inner transcript, which every protocol of a run shares, or the outer transcript, between the outer prover and the outer verifier.
+- **Only developer-isolated devices learn private information.** Such a device reaches the auditor only through a developer-trusted device, so what leaves is the workload's outputs and what the outer protocol releases.
+- **A challenge is a message in the transcript sent by an auditor-trusted device.**
+- **Whatever the auditor decides, a verifier decides, and every verifier is Lean.**
 
 ## 2. The ideas that organize everything
 
-1. **Three roles, messages only.** The workload is outside Verity. The prover is the developer's. The verifier is the auditor's, with its devices at the site.
-2. **A protocol is the unit.** One protocol establishes one property of the workload. Every protocol has the same three sides: its verifier, its parties and the messages they exchange, and what it needs of the workload. Every protocol's directory has the same three parts: `verifier/` (its verifier), `prover/` (the developer's side, with the GPU code it runs) and `attester/` (the auditor's own devices, never the developer's GPUs).
-3. **Four protocols: three layers and `run`.** The proof layer is the proof system (Flock), with sampling (SPOT) and recursion on it, which any protocol calls to prove a statement about committed values; it takes the circuit, its pieces and the sampling rule as given, and reads no registration. The accounting layer measures resources: compilation first, then compute (PoUW), memory (PoUS and PoUB) and network (network attestation), each attester part of its accounting protocol. It gives the policy layer verified properties of blocks, and nothing else. The policy layer holds one protocol, inference-only. `run`, the top-level protocol, is the orchestrator: for one monitoring period it passes the public parameters in, calls every protocol in order over each execution phase, passes what they give between them and between periods, and holds the top-level state, with no logic of its own. Hardware is one of its public parameters, not registration. Registration is a protocol, run once before any period, because its verifier can reject (the simplest rule: one registration, on day one). Remote and onsite are each a list of protocols `run` runs.
-4. **Verity knows circuits and values, never models.** Only an adapter names PyTorch, vLLM or a model, and Verity's values are bit strings, not typed tensors. A new serving system is a new adapter and changes nothing in `verity/`. The workload is the developer's private input: a compiler (a function from advice to a circuit and its partitions), the advice (requests among it; its length is the number, in log space, of choices the prover made after registration about its registered circuit) and the trace (the compiled circuit's values). The adapter holds the compiler, written in the circuit language, finds the engine's values and calls Verity's commitment functions; everything soundness or zero knowledge rests on is in `verity/`. A workload reads its circuit's inputs from an input dataset, and Verity quantifies over all of them.
-5. **What decides is Lean. What must be fast is Python and CUDA. Public facts are TOML.** Python never returns accept or reject and never re-implements a verifier.
-6. **Parameters flow one way.** A protocol is pure logic: it takes every parameter as a public input and holds none. `security/` states and proves what holds as a function of the parameters. Calibration chooses the parameters, and each value carries its source: a data sheet, a measurement of ours, or a named premise. Nothing imports calibration code. An application is one file that sets every parameter of a run, with which protocols run and which party runs on which machine; `verity run NAME` runs it.
-7. **Benchmarks measure performance and cost, and nothing else.** A benchmark never decides a verdict and never chooses a parameter: a run that chooses one, or tests an assumption a parameter rests on, is calibration. What a guarantee gives at an application's parameters is a security figure, not a benchmark. Every benchmark's numbers show on one dashboard.
-8. **Trust follows the directory.** What the auditor runs and must trust is each protocol's `verifier/` and `attester/`. What a reader checks to believe a guarantee is its statement and its named assumptions in `security/`, and that Lean's kernel accepted its proof, which the check does again on every change. Nothing else in the repository is trusted.
-9. **What a guarantee may rest on.** That SHA-512 resists collisions, that Lean's kernel is right, that the auditor's verifier and devices are honest and sample uniformly random challenges, and the few assumptions approved by name. Anything else a guarantee needs is an open premise with an owner and a date, printed beside the figure.
-10. **GPU code implements and never defines.** A kernel computes what its owner states: a commitment, a protocol's circuit, an operation the adapter serves. It lives beside the prover or adapter that runs it, a run names it by the hash of its binary, and a benchmark measures the same binary the served run loads.
+1. **Two protocols, inner and outer.** The outer protocol is a zero-knowledge argument that the inner verifier accepts an inner transcript consistent with the outer transcript. It is the same for every application. Its zero knowledge holds for any inner prover and any choice of challenges, so nothing the inner protocol does can make it leak. The inner protocol is everything else, and it may see private information.
+2. **Three properties of a device.** A device is auditor-trusted if it correctly runs what the auditor wants, developer-trusted if it correctly runs what the developer wants, and developer-isolated if its only channel to the auditor is through a developer-trusted device. Only developer-isolated devices learn private information. No device needs to be both auditor-trusted and developer-trusted. An attester is not a separate role: it is an inner verifier on an auditor-trusted, developer-isolated device, used for physical facts, which cannot be proved.
+
+    | Runs | On a device that is |
+    | --- | --- |
+    | The workload and the inner prover | developer-isolated; they need not be developer-trusted |
+    | An inner verifier | developer-trusted and developer-isolated, covered by the outer proof; or auditor-trusted and developer-isolated, with keys, its messages signed |
+    | The outer prover | developer-trusted and developer-isolated |
+    | The outer verifier | auditor-trusted |
+
+3. **One type: the protocol.** A protocol is a prover and a verifier, each a next-message machine over a transcript. Protocols call protocols: a prover calls the provers of the protocols it calls, and a verifier calls their verifiers and uses their results. The same call with the same arguments is one run. There is no primitive or composite kind, no separate step that composes protocols, and no tie that holds two protocols' values equal afterwards. The inner protocol is one protocol, the policy, and whatever it calls. Resource accounting is a protocol that calls others: its verifier computes numbers from their results and the hardware description, and its prover may send messages of its own but commits to nothing another protocol already sent.
+4. **One inner transcript.** All protocols of a run share one inner transcript, and each machine sees only the message types it uses. Each message type has one sender. A message several protocols use, such as the registration or the commitment to the declared circuit, is sent once. Everything an inner verifier writes is a function of the transcript, and it may write a result as a message so that other protocols can read it. A challenge is a message sent by an auditor-trusted device.
+5. **Every guarantee is about the actual circuit.** The actual circuit is what the developer's hardware computed; the declared circuit is what the prover says it computed; registered information is what was committed in advance. Each protocol's guarantee has one form: if it accepts in an epoch then, except with small probability, the actual circuit lies in a set whose members have a stated property. The inner protocol's guarantee is the intersection of those sets. An epoch is one round, in which the hardware runs and then the run is verified; a monitoring period is many epochs.
+6. **What the auditor learns.** The auditor learns the workload's outputs and the protocols' outputs. The protocols' outputs are zero knowledge. Verity does not interfere with the workload's outputs. Timing is outside the model for now.
+7. **The directories.** Every protocol's directory has the same three parts: `verifier/` (its verifier), `prover/` (the developer's side, with the GPU code it runs) and `attester/` (an inner verifier on the auditor's own devices, never the developer's GPUs). The directories group protocols by layer. The proof layer is the proof system (Flock), with sampling (SPOT) and recursion on it, which any protocol calls to prove a statement about committed values. The accounting layer is resource accounting and what it calls: compilation, compute (PoUW), memory (PoUS and PoUB), network (network attestation) and registration. The policy layer holds one protocol, inference-only, which calls resource accounting. `run` runs the inner protocol in each epoch of a monitoring period, with no rule of its own. The hardware description is a public parameter, not registration. Registration is a protocol because its verifier can reject (the simplest rule: one registration, on day one). Remote and onsite are two applications, which differ in the devices the auditor has at the site.
+8. **Verity knows circuits and values, never models.** Only an adapter names PyTorch, vLLM or a model, and Verity's values are bit strings, not typed tensors. A new serving system is a new adapter and changes nothing in `verity/`. The workload is the developer's private input: a compiler (a function from advice to a circuit and its partitions), the advice (requests among it; its length is the number, in log space, of choices the prover made after registration about its declared circuit) and the trace (the declared circuit's values). The adapter holds the compiler, written in the circuit language, finds the engine's values and calls Verity's commitment functions; everything soundness or zero knowledge rests on is in `verity/`. A workload reads its circuit's inputs from an input dataset, and Verity quantifies over all of them.
+9. **What decides is Lean. What must be fast is Python and CUDA. Public facts are TOML.** Python never returns accept or reject and never re-implements a verifier.
+10. **Parameters flow one way.** A protocol is pure logic: it takes every parameter as a public input and holds none. `security/` states and proves what holds as a function of the parameters. Calibration chooses the parameters, and each value carries its source: a data sheet, a measurement of ours, or a named premise. Nothing imports calibration code. An application is one file that sets every parameter of a run, with which protocols run and which party runs on which machine; `verity run NAME` runs it.
+11. **Benchmarks measure performance and cost, and nothing else.** A benchmark never decides a verdict and never chooses a parameter: a run that chooses one, or tests an assumption a parameter rests on, is calibration. What a guarantee gives at an application's parameters is a security figure, not a benchmark. Every benchmark's numbers show on one dashboard.
+12. **Trust follows the device.** The auditor relies on its auditor-trusted devices to run what it wants: the outer verifier, the challenger and the attesters. An inner verifier on the developer's devices is each protocol's `verifier/`, and the auditor relies on the outer proof that it accepted, not on the device. What a reader checks to believe a guarantee is its statement and its named assumptions in `security/`, and that Lean's kernel accepted its proof, which the check does again on every change. Nothing else in the repository is trusted.
+13. **What a guarantee may rest on.** That SHA-512 resists collisions, that Lean's kernel is right, that the auditor's verifier and devices are honest and sample uniformly random challenges, and the few assumptions approved by name. Anything else a guarantee needs is an open premise with an owner and a date, printed beside the figure.
+14. **GPU code implements and never defines.** A kernel computes what its owner states: a commitment, a protocol's circuit, an operation the adapter serves. It lives beside the prover or adapter that runs it, a run names it by the hash of its binary, and a benchmark measures the same binary the served run loads.
+
+## Open
+
+These are not settled. Each is stated with the options named so far, and none is picked.
+
+- **Scheduling.** Whether "a machine sends its next message once the messages it depends on exist" is the only rule. Deadlines and timed rounds exist, and that rule does not express them.
+- **Units.** The proposal: every statement is about one epoch, and the statements for a session and for a monitoring period are derived from it by one stated rule. A guarantee proved on a sample has a tolerance that is counted once over a monitoring period; adding each epoch's error loses that.
+- **Compilation.** Nothing yet holds the declared circuit to the registered compiler's output on the committed advice. The options: prove the compile step in a proof block every epoch; have the verifier run a lowering on a few numbers read from the advice; register the largest circuit of a class, with a stated rule that restricts it by the advice's numbers; fix the circuit of a class before serving; or hold nothing and charge the declared circuit's description as unregistered input.
+- **Calls before the run.** Whether every call can be resolved before the run. What depends on the run, such as the sample, is then a message and not an argument.
+- **The form of a statement.** Being settled: "if I accept in an epoch then, except with probability e, the actual circuit is outside a set I rely on or inside my set", for every prover. Each set relied on is one another protocol establishes or one that is assumed. A premise is proved, assumed (a physical fact about the developer's hardware) or conjectured (a mathematical claim independent of any developer). The hardware description is a node of assumed sets. Acceptance is the compiled verifier's answer on the transcript. Each statement ships with an honest accepted run and a circuit outside its set, and the proof's dependency graph equals the call graph. Open within it: how to state the protocols that establish facts about the transcript only (registration, SPOT's proofs, compilation, the outer protocol); what status a not yet proved lemma about our own verifier's code has; and where trust in the auditor's own devices is stated.
 
 ## 3. One period, step by step
+
+This section describes `main` today; sections 1 and 2 state the design it moves to.
 
 ```mermaid
 sequenceDiagram
@@ -86,8 +115,8 @@ The compiler is the adapter's, written in the circuit language and registered up
 | **PoUS** and **PoUB** `verity/protocols/accounting/memory/pous`, `poub` | Memory. PoUS: how much of the registered store each device held, with the memory wipe inside it (between two stretches of serving, a server's whole memory is overwritten, so nothing it held before survives). PoUB: how many reads of the store a node made, and so how much of its memory's read rate is left uncertified. | The registered memory and its data sheets, the prover's commitments, the memory attester's signed records, the challenger's challenges. Through `run`, the network attester's counts of what entered and left the node. | Bits held and bits read for the period, each with its error, to `run`'s account. | Compute; the weights; another protocol's code. |
 | **Network attestation** `verity/protocols/accounting/network` | Network: what left on a link is what the registered circuit produces from what entered. The auditor's device sits on every registered link out of a host, releases traffic on a fixed schedule and signs a record of what crossed. | The registered links, the network attester's signed records, the prover's commitments to requests and responses, the challenger's challenges. | To `run`'s account: the period's exfiltration capacity (how many bits could have left unseen), with its error. Through `run`, to memory: what entered and left each node. | Compute, memory, the weights. |
 | **Inference-only** `verity/protocols/policy/training_detection/inference_only` | The policy: the registered circuit divides into inference blocks that each read few unregistered inputs. | The circuit's description, and from the accounting layer, verified properties of its blocks. From training, as data: how much such a circuit slows training. | Accept or reject, to `run`. | Values, traffic. |
-| **Registration** `verity/protocols/registration` | The protocol that runs once, before any challenge, a protocol because its verifier can reject (the simplest rule: one registration, on day one). The developer sends the registration: the circuit compiler, and commitments to other information such as the model's weights. The hardware is a public parameter of `run`, not registration; today's registration still carries it, and its verifier accepts only if each device's figures are its data sheet's and every registered device is accounted for by a protocol on the run's list. It measures nothing itself: it fixes what the other accounting protocols account for. | The registration, the auditor's data sheets, the run's list of protocols. | Accepted or refused. An accepted registration is what the other accounting protocols, the policy and `run` then read. A protocol that calls the proofs passes them the registered circuit, and the proofs read no registration. | How any other protocol works inside. |
-| **Run** `verity/protocols/run` | The top-level protocol, what an auditor runs: the orchestrator, with no logic of its own. For one monitoring period it passes the public parameters in, calls every protocol in order over each execution phase (compilation first, the rest of the accounting layer, then the policy layer), passes what they give between them and between periods, and holds the top-level state. Remote and onsite are each a list of protocols on one registration; it accepts only if every protocol accepts and they agree on the commitments. Its Lean composition theorem covers any list: a prover who adapts across all the protocols at once is still held to each one's claim, except with the summed error. | The public parameters, the hardware among them; the workload; registration's outcome and each protocol's. | One verdict, and the period's account. | How any one protocol works inside. |
+| **Registration** `verity/protocols/registration` | The protocol that runs once, before any challenge, a protocol because its verifier can reject (the simplest rule: one registration, on day one). The developer sends the registration: the circuit compiler, and commitments to other information such as the model's weights. The hardware is a public parameter of `run`, not registration; today's registration still carries it, and its verifier accepts only if each device's figures are its data sheet's and every registered device is accounted for by a protocol on the run's list. It measures nothing itself: it fixes what the other accounting protocols account for. | The registration, the auditor's data sheets, the run's list of protocols. | Accepted or refused. An accepted registration is what the other accounting protocols, the policy and `run` then read. A protocol that calls the proofs passes them the declared circuit, and the proofs read no registration. | How any other protocol works inside. |
+| **Run** `verity/protocols/run` | What an auditor runs: the inner protocol, the policy and every protocol it calls, in each epoch of a monitoring period, with no rule of its own. Protocols share one inner transcript, so nothing is held equal afterwards. The inner protocol's guarantee is the intersection of its protocols' sets: a prover who adapts across all of them at once is still held to each one's, except with the summed error. | The public parameters, the hardware description among them; the workload. | One verdict an epoch, and the monitoring period's account. | How any one protocol works inside. |
 | **Party, channel, device, protocol, config** five files in `verity/` | The shared types: what a party is, what two parties exchange, the registered hardware, what a protocol declares, the file a run starts from. | Nothing. | Types every protocol uses. | Any one protocol. |
 | **Runtime** `verity/runtime/` | Runs a configuration's parties on real machines: sockets, randomness, clock, transcripts. | A configuration. | Running parties and their transcripts. | Any protocol's rules. |
 | **Hardware** `calibration/hardware/`, to move to library/hardware/ | One data sheet per GPU, host or server model: what one device can do in a second and what it holds. Each figure names its source and says whether it is a ceiling or a measurement. Data, no code. The auditor brings it. | The vendor's published figures and our own measurements, written in by hand. | Figures an application passes to `run` as public parameters. Today the protocols take a device's capacity from the registration. | Everything. It never holds a figure the audited device reports about itself. |
@@ -102,12 +131,12 @@ The compiler is the adapter's, written in the circuit language and registered up
 
 Who runs what, and who must trust it:
 
-| Runs it | What | Who must trust it |
+| Runs on | What | Who must trust it |
 | --- | --- | --- |
-| The developer | The workload, the adapter, every protocol's `prover/` | Nobody. A wrong prover can only get honest work rejected. |
-| The developer | The ZK server | The developer, for zero knowledge. |
-| The auditor | Every protocol's `verifier/`, in Lean | The auditor. |
-| The auditor, on machines the developer does not control | Every protocol's `attester/`, and the challenger in SPOT's and `run`'s `verifier/`: the challenger, the network attester, the memory attester | The auditor. |
+| Developer-isolated devices | The workload, the adapter, the inner prover (every protocol's `prover/`) | Nobody. A wrong prover can only get honest work rejected. |
+| Developer-trusted, developer-isolated devices | The outer prover (the ZK server), and inner verifiers (each protocol's `verifier/`, in Lean) that the outer proof covers | The developer, for zero knowledge. The auditor relies on the outer proof, not on the device. |
+| Auditor-trusted, developer-isolated devices, on machines the developer does not control | Every protocol's `attester/`: the network attester, the memory attester, inner verifiers whose messages are signed | The auditor. |
+| Auditor-trusted devices | The outer verifier, in Lean, and the challenger | The auditor. |
 
 ## 5. How the parts depend on each other
 
@@ -215,8 +244,8 @@ verity/
   party.py         what a party is
   channel.py       what two parties exchange: a message and its types
   device.py        the registered hardware: hosts, devices, memory, links
-  protocol.py      what a protocol declares: its parties and messages, what it needs of the workload,
-                   which part of the hardware it accounts for
+  protocol.py      the one type: a prover and a verifier, each a next-message machine over the transcript,
+                   and the message types each reads and sends
   config.py        reads the one public file a run starts from
   runtime/         runs parties over channels: sockets, randomness and clock, transcripts
   protocols/       each protocol with verifier/ (its Lean verifier), prover/ (with the GPU code it runs) and attester/
@@ -224,7 +253,7 @@ verity/
     accounting/    compilation first, then compute/pouw, memory/pous, memory/poub, network
     registration/  runs once, before any challenge: the circuit compiler, the commitments to other information
     policy/        training_detection/inference_only, on accounting/
-    run/           the top-level protocol: every other in order over a monitoring period; remote and onsite
+    run/           runs the inner protocol in each epoch of a monitoring period; remote and onsite
     experimental/  a protocol being tried, which no application lists: dither, pearl_c4
     interface/     the shape every protocol's verifier has in Lean, with the registered hardware's type and the
                    account, which every protocol's package reads
@@ -273,6 +302,20 @@ The rules that keep the parts apart. A test enforces each one:
 
 Each difference's owner and day are in `tests/tree.toml` (its `[[not_yet]]` lines and its dated `[[tree]]` entries) and on the Goals page. A landing that closes a row deletes the row here.
 
+**Against sections 1 and 2**
+
+- Each protocol declares its own parties, channels and message types (`verity/protocol.py`). The runtime runs one protocol a run (`verity/runtime/runner.py`) and keeps one transcript a party (`verity/runtime/transcript.py`), not one inner transcript for every protocol of a run.
+- The same thing is sent more than once. There are several registrations, and `run`'s own is not written; the weights are committed three times, and the store's root twice.
+- A run's order is written by hand, in `verity/protocols/run/period.py`, `tools/verity/cli/verity_cli/served_table.py` and `benchmarks/one_stage/served_verdicts.sh`, not derived from the calls.
+- The challenges of one epoch come from several places, and several verifiers make their own.
+- A compose step holds things equal afterwards: `run`'s Lean (`verity/protocols/run/verifier/lean/CoreComposition/`) binds digests across protocols, with `same` and ties. No new compose rule or tie is added.
+- Only registration's verifier is a function of messages alone. Elsewhere a verifier's answer also depends on challenges it makes itself, on unsigned clocks, or on flags, environment values and files kept between runs.
+- No deployed guarantee is about the actual circuit. A model of the actual circuit exists (`security/Definitions/ResourceAccounting/Actual.lean`), and a composition theorem over it is proved, but no protocol's statement is an instance of it.
+- The registered compiler exists in the vLLM adapter, and nothing holds the declared circuit to its output. The Lean counts of unregistered input do not charge the advice.
+- The outer protocol covers only the proof system's own verifier, and the zero-knowledge server is not proved.
+- The applications state no hardware description and no policy limits, and resource accounting has no verifier of its own.
+- No accepted run on a served epoch is recorded yet.
+
 **Files that only change place**
 
 | What | Today | At the end |
@@ -302,14 +345,13 @@ Each difference's owner and day are in `tests/tree.toml` (its `[[not_yet]]` line
 | The team's platform is in its own repository, today's `compute-verification/infra` | `infra/`, the run recorder and the agents' guard are in this one until their day in `tests/tree.toml`. The move tool stays, since its maps are this tree's records |
 | Python never returns accept or reject, and no Python copy of a Lean verifier stays | Several protocols still decide in Python, and the copies stand with their generators and difftests |
 | Each accounting protocol takes the hardware from `run`'s public parameters and says which part it accounts for | None does; the Lean folds the hardware from the registration log (`Site.ofLog`) |
-| `run` holds each period's order in one function, compilation first | The order is `run`'s (`run_period` and its two lists of steps), but each step's body is still the runner's (`benchmarks/one_stage/served_verdicts.sh`); compilation accepts every circuit, and nothing verifies it |
 | The security model has the auditor's devices as parties, each with a key the auditor pins and its whole signing history | Only the challenger is a party, so no onsite memory or network claim can be proved yet |
 | A device's figures have one source: the data sheet `run` is passed | Written in two places that disagree (the H200's tensor rate at two clocks) |
 | "Registration" names one thing: SPOT's own record of a run takes another name | SPOT's prose, its Lean (`Spot.Docket`), its module (`one_stage/docket.py`) and the names it alone defines call it the docket. Its Python still calls the docket `registration` where the name is one other lanes' functions share (`rows.registration`, `network_attester_rows.registration`, the network attester service's). Its CLI flags and subcommands (`--registration`, `--window-registration`, `weights-registration`, `public-registration`), file names, formats and keys keep the word: they are wire words that scripts and records already carry |
 | The circuit checker is handed the served circuits and names none | It names them |
 | The compiler cuts a period's circuit into pieces wired to each other | For the applications' model the pieces are wired only where the eight GPUs combine results, so the audit's second round runs over a stand-in |
-| A wire that crosses a block boundary has one commitment, which every block reading or writing it shares | Each block commits its own rows, and a wiring check (`HmLinks`) ties them only where an audit's case names a wiring; an accept without one covers each sampled block on its own inputs |
-| SPOT has one form, with levels the auditor fixes before any coin: one level the basic form, two the default | SPOT's Python runs one stage (`verifier/one_stage/`) and refuses a two-stage docket by name; the Lean's two-stage form is separate code, and no two-level audit is accepted in Lean |
+| A wire that crosses a block boundary has one commitment, which every block reading or writing it shares | Each block commits its own rows, and a wiring check (`HmLinks`) ties them only where an audit's case names a wiring; an accepted run without one covers each sampled block on its own inputs |
+| SPOT has one variant, with levels the auditor fixes before any challenge: one level the basic case, two the default | SPOT's Python runs one stage (`verifier/one_stage/`) and refuses a two-stage docket by name; the Lean's two-stage variant is separate code, and no two-level audit is accepted in Lean |
 | Each deployed guarantee is an instance of a layer theorem (session, sampling, recursion, `run`'s composition), for soundness and for zero knowledge | Most are proved on their own |
 | The ZK, sampling and recursion layers are each a generic compiler, generic in the argument system and the circuit type | Flock over Boolean circuits is the one instance |
 | Every kernel the serving settings run has a circuit held to the kernel on an H200 | Three of five on `main` (the cache's write and both its reads) |
@@ -318,7 +360,7 @@ Each difference's owner and day are in `tests/tree.toml` (its `[[not_yet]]` line
 | Every area of `security/` has a lead | 826 of its 4,816 files fall to lean because no lead claims them |
 | A memory-read session is proved in zero knowledge | Each span's openings go to the verifier as they are |
 | PoUS's setup is a proof about the store | Its verifier reads the whole store |
-| PoUS's session is checked inside a proof | Its verifier reads the memory attester's signed record as it is: for each round, which block was asked, when it was sent and answered, and the block's SHA-512 digest. It also reads a table of every block's digest. A digest hides nothing from someone who holds a candidate block |
+| PoUS's session is checked inside a proof | Its verifier reads the memory attester's signed messages as they are: for each round, which block was asked, when it was sent and answered, and the block's SHA-512 digest. It also reads a table of every block's digest. A digest hides nothing from someone who holds a candidate block |
 
 ## Documentation
 
