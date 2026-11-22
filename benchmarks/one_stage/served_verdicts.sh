@@ -236,7 +236,8 @@
 # live challenger with PP_CHALLENGER=gate:USER@HOST (records_audit's, with its peer V3C_PEER, default PP_PEER, the node
 # it runs on, PP_CHALLENGER_KEY and PP_GATE_KEY), where it runs, on the served node or a deferral's follow-on. There
 # `served_verdicts.py gate --root` first finds no session on the window's run root (the gate opens a root once, ever) and
-# no period of lane H1_LANE open (a reserve would join it), its V3C-GATE line saying so and when. A local or loopback
+# no period of lane H1_LANE open (a reserve would join it) but, under REGISTRATION_LANE, the registering one with $DREG's
+# digest, which the epoch's reserves join, its V3C-GATE line saying so and when. A local or loopback
 # session is a development session, which the preflight refuses unless DEVELOPMENT=1 (a development run), as it refuses a
 # V3C_PEER other than the node's peer Pearl+'s session names, and in a follow-on the served node's. SPOT's step 3 samples on a local development challenger session's coins on the served node (run.sh's PP_CHALLENGER
 # default, local, pinned on PP_MAIN's line, else MAIN_FILE's, else origin's main's) unless PP_CHALLENGER names the live
@@ -905,7 +906,8 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
   [ -n "$FOLLOW" ] || pool=(--lean-workers "${V3C_LEAN_WORKERS:-1}" --audit-mem-gb "$V3C_AUDIT_MEM_GB")
   pool+=(${V3C_NEGATIVE_WORKERS:+--negative-workers "$V3C_NEGATIVE_WORKERS"})
   if v3c_live; then  # the gate opens the run root once, ever, and a reserve joins the lane's open period: neither, first
-    gl=$("$PY" "$SV" gate --gate "$(v3c_gate)" --lane "${H1_LANE:-vllm}" --main "$main" --root "$run" 2>&1); rc=$?
+    gl=$("$PY" "$SV" gate --gate "$(v3c_gate)" --lane "${H1_LANE:-vllm}" --main "$main" --root "$run" \
+      ${REGISTRATION_LANE:+--registration-record "$DREG"} 2>&1); rc=$?
     say "V3C-$(tail -1 <<< "$gl" | cut -c1-1200) (checked $(date -u +%Y-%m-%dT%H:%M:%SZ))"
     [ "$rc" = 0 ] || return 1
     ch+=(--peer "$V3C_PEER" --challenger-key "$PP_CHALLENGER_KEY" ${PP_GATE_KEY:+--gate-key "$PP_GATE_KEY"})
@@ -2351,6 +2353,8 @@ if [ -n "${REGISTRATION_LANE:-}" ]; then
     || { say "PREFLIGHT: REGISTRATION_LANE holds the serve after its weights step until REGISTRATION_LEDGER carries the lane's registration, at most REGISTRATION_HOLD_S seconds, a positive integer with no default, not '${REGISTRATION_HOLD_S:-}'"; exit 3; }
   [ -r "${REGISTRATION_KEY:-${PP_CHALLENGER_KEY:-}}" ] \
     || { say "PREFLIGHT: REGISTRATION_LANE's ledger is checked under the challenger's key record REGISTRATION_KEY (default PP_CHALLENGER_KEY), which is unset or not a readable file"; exit 3; }
+  [ -z "${H1_LANE:-}" ] || [ "$H1_LANE" = "$REGISTRATION_LANE" ] \
+    || { say "PREFLIGHT: REGISTRATION_LANE $REGISTRATION_LANE is not H1_LANE $H1_LANE, the lane the epoch's sessions reserve on, and the verifier refuses a session on another lane than the registration's"; exit 3; }
 fi
 if [ -n "$V3C" ] && [ -z "$COMPOSE" ]; then  # V3c's audit's coins: the live challenger's, or a development run's
   case $V3C_CHALLENGER in

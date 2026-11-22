@@ -3206,6 +3206,26 @@ def test_the_gate_refuses_a_root_an_open_in_its_ledger_names(monkeypatch):
     assert not ok and line.startswith("GATE refused: lane vllm's open period p1 (a reserve would join it); root cdcd")
 
 
+def test_the_gate_expects_the_registering_period_the_epoch_joins(monkeypatch):
+    """``gate --registration-record``: the lane's open period is the epoch's to join where its open registers the
+    deployment's record, so it is ready; one registering another record, or none, still refuses; a root already opened
+    refuses either way."""
+    reg = "ab" * 64
+    answers = {"ledger": [{"kind": "period-open", "session": None,
+                           "body": {"period": "p-reg", "lane": "vllm", "registration": reg}}], "pins": []}
+    monkeypatch.setattr(S, "_gate_out", lambda gate, verb: "".join(json.dumps(e) + "\n" for e in answers[verb]).encode())
+    ok, line = S.gate_ready(GATE, "vllm", root="cd" * 64, registration=reg)
+    assert ok and line.startswith("GATE ready: lane vllm's open period p-reg (the registering period, which the epoch's "
+                                  "reserves join); root cdcdcdcdcdcdcdcd… has no session yet;"), line
+    for other in ("ee" * 64, None):
+        ok, line = S.gate_ready(GATE, "vllm", root="cd" * 64, registration=other)
+        assert not ok and line.startswith("GATE refused: lane vllm's open period p-reg (a reserve would join it)"), line
+    answers["ledger"].append({"kind": "open", "session": "s1", "schema": "verity/challenger-auditor/v2",
+                              "body": {"window": {"root": "cd" * 64}}})
+    ok, line = S.gate_ready(GATE, "vllm", root="cd" * 64, registration=reg)
+    assert not ok and "already has its session s1" in line
+
+
 FAKE_PROVE_PATH = '''import json, sys
 a = sys.argv[1:]
 assert a[0] == "window-circuit"
@@ -3324,9 +3344,9 @@ def test_the_audits_registration_is_the_challengers_signed_head_where_a_lane_is_
                         "--challenger-key", "/s/challenger-key.json", "--registration-lane", "vllm"]
 
 
-def _registering_host(tmp_path: Path, registration: str | None) -> tuple[Path, Path]:
-    """A local challenger's host whose ledger opens lane ``circuits``' period, with ``registration`` where given, and its
-    key record: (the ledger, the key record)."""
+def _registering_host(tmp_path: Path, registration: str | None, closed: bool = False) -> tuple[Path, Path]:
+    """A local challenger's host whose ledger opens lane ``circuits``' period, with ``registration`` where given, and,
+    where `closed`, closes it, and its key record: (the ledger, the key record)."""
     from verity.protocols.proof.spot.prover.audit import local_challenger as LC
     from verity.protocols.proof.spot.verifier.challenger import challenger as CH, challenger_session as AC
 
@@ -3334,6 +3354,9 @@ def _registering_host(tmp_path: Path, registration: str | None) -> tuple[Path, P
     local.A.period(local.host, ["period-open", "p-registration", "circuits", local.by, "4", "ab" * 64,
                                 *([f"registration={registration}"] if registration else [])],
                    signer=local.signer, pinned=local.pin, now=datetime(2026, 1, 1, tzinfo=UTC), active=lambda _s: False)
+    if closed:
+        local.A.period(local.host, ["period-close", "p-registration", "circuits", local.by], signer=local.signer,
+                       pinned=local.pin, now=datetime(2026, 1, 1, 1, tzinfo=UTC), active=lambda _s: False)
     key = tmp_path / "challenger-key.json"
     key.write_text(json.dumps({"schema": CH.KEY_RECORD_SCHEMA, "W": local.key.W, "H": local.key.H,
                                "pubkey": local.key.public.hex(),
@@ -3382,7 +3405,22 @@ def test_the_serve_holds_until_the_local_challengers_ledger_registers_its_record
     assert "no registering period-open of lane circuits" in none.stdout
     ledger, key = _registering_host(tmp_path / "other", "ee" * 64)
     other = _hold(tmp_path / "other", ledger, key)
-    assert other.returncode == 2 and "the ledger signs registration eeeeeeeeeeeeeeee... for lane circuits" in other.stdout
+    assert other.returncode == 2 and f"refused: {S.REGISTERED_OTHER_DIGEST} (lane circuits's period p-registration " \
+        "registers eeeeeeeeeeeeeeee..." in other.stdout, other.stdout
+
+
+def test_the_hold_tells_a_closed_registering_period_and_a_lane_registered_before_apart_from_another_digest(tmp_path):
+    """`registration-hold`'s refusals by name: the lane registered to this record, but its registering period closed
+    with none of the lane's open (`REGISTERED_PERIOD_CLOSED`); the lane registered to another record by a period now
+    closed (`LANE_REGISTERED_BEFORE`); and, the period still open, to another record (`REGISTERED_OTHER_DIGEST`)."""
+    digest = DD.digest(DEPLOYMENT_RECORD)
+    for name, registration, closed, why in (("closed", digest, True, S.REGISTERED_PERIOD_CLOSED),
+                                            ("before", "ee" * 64, True, S.LANE_REGISTERED_BEFORE),
+                                            ("other", "ee" * 64, False, S.REGISTERED_OTHER_DIGEST)):
+        ledger, key = _registering_host(tmp_path / name, registration, closed)
+        got = _hold(tmp_path / name, ledger, key, "--once")
+        assert got.returncode == 2 and got.stdout.splitlines()[-1].startswith(f"REGISTRATION-HOLD refused: {why} ("), \
+            got.stdout
 
 
 def test_the_hold_with_no_lane_says_the_development_line_and_past_its_limit_refuses_by_name(tmp_path):
