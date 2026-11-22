@@ -619,6 +619,7 @@ loaded_by = [
     "verity/protocols/accounting/memory/wipe/prover/wipe_prover.py",
     "verity/protocols/accounting/memory/wipe/prover/wipe_run.py",
     "verity/protocols/accounting/memory/wipe/prover/wipe_store.py",
+    "verity/protocols/accounting/memory/wipe/scheme.py",
 ]
 
 [[place]]
@@ -949,6 +950,7 @@ loaded_by = [
     "verity/protocols/accounting/memory/pous/prover/workload.py",
     "verity/protocols/accounting/memory/pous/scheme.py",
     "verity/protocols/accounting/memory/wipe/prover/wipe_prover.py",
+    "verity/protocols/accounting/memory/wipe/scheme.py",
     "verity/protocols/accounting/network/prover/workload.py",
     "verity/protocols/accounting/network/scheme.py",
     "verity/protocols/policy/training_detection/inference_only/scheme.py",
