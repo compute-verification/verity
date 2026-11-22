@@ -26,6 +26,14 @@ NO_CASE = {
         "concats nest at most `Steps.FUEL` = 2^62 deep (the grid's own parse, `parsePartsIn 4`, reads a fixed shape one level deep)",
     "definitions nest deeper than this verifier follows": "definitions nest at most `Steps.FUEL` = 2^62 deep",
     "program: not UTF-8": "the port's descriptor is a JSON string, which is UTF-8; `Program.decode` takes bytes",
+    "input-bits: the root is no callee of the description": "`inputBits`'s: `decode` refuses a root outside `defs`",
+    "input-bits: root node {k} calls no callee of the description": "`inputBits`'s: `decode` refuses a node outside `defs`",
+    "input-width: root node {k}: {d.key} is bound at {t} but its id names no width":
+        "`inputBits`'s, reached by `test_input_bits_port.py`, which pins its code",
+    "input-binding: root node {k}: {d.key} is bound at {t'}, not its id's {t}":
+        "`inputBits`'s, reached by `test_input_bits_port.py`, which pins its code",
+    "input-binding: root node {k}: {d.key} is an input id ({t}) with no binding":
+        "`inputBits`'s, reached by `test_input_bits_port.py`, which pins its code",
 }
 
 
