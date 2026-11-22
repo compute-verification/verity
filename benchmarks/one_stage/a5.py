@@ -1074,7 +1074,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
           ports: int | None = None, drawn: tuple[dict, dict, dict] | None = None,
           history: Callable[[dict[str, bytes]], dict | None] | None = None,
           session: threading.Thread | None = None,
-          run_inputs: Mapping[str, Any] | None = None) -> tuple[dict, bool]:
+          run_inputs: Mapping[str, Any] | None = None,
+          linked: Sequence[Mapping[str, Any]] | None = None) -> tuple[dict, bool]:
     """One window's audit: serving's window ``served`` held to the verifier's own ``mine`` (and its docket's ``window`` to
     ``source``; a window with row tables, its tables to its linked members' strings, its registered `row-table` root and
     ``step_roots``, what serving recorded before each step's coin, `tables.check_row_tables`), one Lean sample by its sampling design
@@ -1098,7 +1099,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     docket's check holds the window's registered roots before the sample, and the stream's dockets for its run
     of record; None for a window with none. ``session``: the thread of the challenger session the audit samples on
     (`a5_coins.start`'s, which the caller holds), ended before a negative's worker is forked (`session_ended`); None
-    where the caller hands none, and its thread is then one more the workers' fork refuses while it lives."""
+    where the caller hands none, and its thread is then one more the workers' fork refuses while it lives. ``linked``:
+    a second stage's linked ports at round 1's record (`second_stage.round_one_held`), which its case's params carry."""
     out.mkdir(parents=True, exist_ok=True)
     t_audit = time.time()
     program, query, part, pd, n_all, sampling_design = mine.program, mine.query, mine.partition, mine.partition_digest, mine.population, mine.law
@@ -1549,7 +1551,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                    {"draw": union_sample, "proved_units": sorted(proved), "receipt": receipt, "statement": statement,
                     "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
                    served=sorted(served_units), v2=v2_proof(done, not plain(a)) if pm is None else None, partition=part,
-                   per_member=pm, **stage_case(a, relay is not None))
+                   per_member=pm, linked=linked, **stage_case(a, relay is not None))
         if drawn is not None:
             summary["handed"] = {"verdicts": verdicts, "statement": statement, "sessions": sessions,
                                  "proved_units": sorted(proved), "instances": instances, "served": sorted(served_units),
@@ -1574,7 +1576,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                    {"draw": union_sample, "proved_units": given["proved_units"], "receipt": receipt, "statement": statement,
                     "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
                    served=given["served"], v2=v2_proof(done, not plain(a)) if pm is None else None, partition=part,
-                   tied=verifying(a), per_member=pm,
+                   tied=verifying(a), per_member=pm, linked=linked,
                    coins=AC.evidence(a.coins.evidence(), segment), window_root=a.window_root,
                    family=stream.family(draw), member_trees=relay is not None, challenger_key=a.coins.held()["key"])
     result["draw_counts"] = counts
@@ -1726,7 +1728,8 @@ def write_case(out: Path, program, query: dict, sampling_design: dict, ports: di
                session_roots: dict, served: list[int], v2: dict | str | None = None,
                partition: dict | None = None, tied: dict | None = None, per_member: dict | str | None = None,
                coins: dict | None = None, window_root: str | None = None, family: str | None = None,
-               member_trees: bool = False, challenger_key: dict | None = None) -> None:
+               member_trees: bool = False, challenger_key: dict | None = None,
+               linked: Sequence[Mapping[str, Any]] | None = None) -> None:
     """The audit as `Spot.OneStage`'s case (`replay.Case.case`: the docket, the evidence
     `audit_record` was handed and the verifier's params, δ the audit's as an exact ratio, with ``partition`` the
     verifier's own partition object, which v2 verifies the sessions against, and the window's ``tied`` values, `tie`),
@@ -1747,6 +1750,8 @@ def write_case(out: Path, program, query: dict, sampling_design: dict, ports: di
 
         d = str(Fraction(delta).limit_denominator(10**12))
         p = RP.params(program, query, sampling_design, ports, leaf_layer, d, work_table=work_table, partition=partition, **(tied or {}))
+        if linked:
+            p["linked"] = [dict(x) for x in linked]
         e = RP.evidence(record, instances=instances, sessions=sessions, session_roots=session_roots, served=served)
         c = RP.Case("", "a5", rec["format"], "audit", "audit", program, p, rec, e, None)
         (out / "case.json").write_text(json.dumps(c.case(), sort_keys=True))

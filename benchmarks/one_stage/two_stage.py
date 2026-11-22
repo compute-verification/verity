@@ -1115,8 +1115,9 @@ def second_stage(a: argparse.Namespace, sets: dict, window: CS.Binding, window_d
     a.coins, a.rule, a.window_root, a.compose_cache, a.transfer_gate = None, None, None, None, []
     a.tie = {"log": [brec], **(tie or {})}
     port = a.port or RA.free_ports(a5.RANK_PORTS)
+    linked = SS.round_one_held(SS.replay_links(replay[0], replay[1], brec) or (), brec)
     s, ok = a5.audit(a, sets, out / "audit", window, window_dir, source, port, provenance, registered=reads, drawn=second,
-                     run_inputs=IR.run_input_ports(window))
+                     run_inputs=IR.run_input_ports(window), linked=linked)
     rec_file = out / "audit" / "audit.json"
     record = json.loads(rec_file.read_text()) if rec_file.exists() else {}
     got = {"audit": {x: s.get(x) for x in ("checks_before_draw", "refused", "audit", "draw", "draw_counts", "negatives",

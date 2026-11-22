@@ -588,7 +588,7 @@ def python(c: Case) -> dict:
         DM.ONE_STAGE_PROTOCOL, verdict, reason, digest, public, profile)
     codes = R.check(rec, program, p["query"], p["law"], p["scheme"], p["ports"], p["leaf_layer"], p["anchors"], p["log"],
                     p["partition"], p["work_table"], p["registered"], outputs=p.get("outputs"),
-                    schemas=p.get("row_schemas"), window_root=p.get("window_root")).codes
+                    schemas=p.get("row_schemas"), window_root=p.get("window_root"), linked=p.get("linked") or ()).codes
     if codes:
         return out("reject", f"registration: {', '.join(codes)}")
     try:
