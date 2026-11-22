@@ -146,13 +146,12 @@ def RunInputsAtOneTree : Prop :=
                 getD r "port" = .str port ∧ getD r "tree" = .str (Flock.Registered.freshValue w) ∧
                 IsRecordRoot c.record (Flock.Registered.freshValue w) r
 
-/-- **Where `OneStageZk.runInputRoots` passes, the roots the readers of a tied run input node bring are one root**:
-for members of distinct names and a run input node `w` of C inside the tied values' gates, there is one root `r0` such
-that each root a member holds of its own (`roots`, as `runInputRoots` is handed it) at a port it reads `w` at
-(`OneStageZk.memberInputs`; the first such entry, as `OneStageZk.tiedRootsAt` reads it) is `r0` or `==` to it
-(`OneStageZk.TIED_ROOTS_WHY` otherwise; core's `==` on `Json` is opaque to the kernel, so not `=`). A member that holds
-no root of its own at such a port is not refused by `tiedRootsAt`: this says nothing of the root its slice later reads
-there. -/
+/-- **Where `OneStageZk.runInputRoots` passes, every reader of a tied run input node brings a root, and those roots are
+one root**: for members of distinct names and a run input node `w` of C inside the tied values' gates, there is one
+root `r0` such that each member holds a root of its own (`roots`, as `runInputRoots` is handed it) at each port it reads
+`w` at (`OneStageZk.memberInputs`; the first such entry, as `OneStageZk.tiedRootsAt` reads it;
+`OneStageZk.TIED_NO_ROOT_WHY` otherwise), and that root is `r0` or `==` to it (`OneStageZk.TIED_ROOTS_WHY` otherwise;
+core's `==` on `Json` is opaque to the kernel, so not `=`). That `r0` is the right root is not said here. -/
 def TiedInputsAtOneRoot : Prop :=
   ∀ (v : Docket.Verifier) (P : Flock.Program.Prog) (rs : Array Flock.TemplateQuery.TRange)
     (ms : Array OneStageZk.Member) (rec : Json) (roots out : Std.HashMap String (Array Json)),
@@ -160,8 +159,8 @@ def TiedInputsAtOneRoot : Prop :=
     ∀ w, Flock.Registered.runNode P w = true →
       ((Docket.tiedGates v).any fun (first, count) => Partition.within P first count w) = true →
       ∃ r0 : Json, ∀ m ∈ ms, ∀ ins, OneStageZk.memberInputs P rs m = .ok ins →
-        ∀ (port : String) (len : Nat), (port, w, len) ∈ ins → ∀ r : Json,
-          ((roots.getD m.name #[]).find? (getD · "port" == .str port)).map (getD · "root") = some r →
-            r0 = r ∨ (r0 == r) = true
+        ∀ (port : String) (len : Nat), (port, w, len) ∈ ins → ∃ r : Json,
+          ((roots.getD m.name #[]).find? (getD · "port" == .str port)).map (getD · "root") = some r ∧
+            (r0 = r ∨ (r0 == r) = true)
 
 end Properties.Spot

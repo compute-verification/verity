@@ -769,20 +769,20 @@ theorem seenLe_push {s : Array (Nat × Json)} {w : Nat} {r : Json} : SeenLe s (s
   rw [Array.find?_push, hx]
   rfl
 
-/-- What a member's step leaves of node `w`: each root `own` holds at a port the member reads `w` at has `w`'s entry
-in `t`, that root or `==` to it. -/
+/-- What a member's step leaves of node `w`: `own` holds a root at each port the member reads `w` at, and `w`'s entry
+in `t` is that root or `==` to it. -/
 def TiedHeld (P : Flock.Program.Prog) (rs : Array Flock.TemplateQuery.TRange) (m : OneStageZk.Member)
     (own : Array Json) (w : Nat) (t : Array (Nat × Json)) : Prop :=
   ∀ ins, OneStageZk.memberInputs P rs m = .ok ins → ∀ (port : String) (len : Nat), (port, w, len) ∈ ins →
-    ∀ r : Json, (own.find? (getD · "port" == .str port)).map (getD · "root") = some r →
+    ∃ r : Json, (own.find? (getD · "port" == .str port)).map (getD · "root") = some r ∧
       ∃ x, t.find? (fun e => e.1 == w) = some x ∧ (x.2 = r ∨ (x.2 == r) = true)
 
 theorem tiedHeld_mono {P : Flock.Program.Prog} {rs : Array Flock.TemplateQuery.TRange} {m : OneStageZk.Member}
     {own : Array Json} {w : Nat} {s t : Array (Nat × Json)} (h : TiedHeld P rs m own w s) (hle : SeenLe s t) :
     TiedHeld P rs m own w t := by
-  intro ins hins port len hmem r hr
-  obtain ⟨x, hx, hxr⟩ := h ins hins port len hmem r hr
-  exact ⟨x, hle w x hx, hxr⟩
+  intro ins hins port len hmem
+  obtain ⟨r, hr, x, hx, hxr⟩ := h ins hins port len hmem
+  exact ⟨r, hr, x, hle w x hx, hxr⟩
 
 theorem foldlM_collectLe {ε α σ : Type} (f : σ → α → Except ε σ) (Le : σ → σ → Prop) (G : α → σ → Prop)
     (refl : ∀ s, Le s s) (trans : ∀ s t u, Le s t → Le t u → Le s u) (mono : ∀ a s t, G a s → Le s t → G a t)
@@ -802,8 +802,8 @@ theorem foldlM_collectLe {ε α σ : Type} (f : σ → α → Except ε σ) (Le 
     · exact mono _ _ _ hg hle'
     · exact hall b hb
 
-/-- `tiedRootsAt` keeps `seen`'s entries and leaves each tied node `w` a member reads where `own` holds a root its
-entry, that root or `==` to it. -/
+/-- `tiedRootsAt` keeps `seen`'s entries, and `own` holds a root at each port a member reads a tied node `w` at, which
+`w`'s entry is or is `==` to. -/
 theorem tiedRootsAt_ok {P : Flock.Program.Prog} {rs : Array Flock.TemplateQuery.TRange} {tied : Array (Nat × Nat)}
     {m : OneStageZk.Member} {own : Array Json} {seen seen' : Array (Nat × Json)}
     (h : OneStageZk.tiedRootsAt P rs tied m own seen = .ok seen') (w : Nat) (hw : Flock.Registered.runNode P w = true)
@@ -813,52 +813,44 @@ theorem tiedRootsAt_ok {P : Flock.Program.Prog} {rs : Array Flock.TemplateQuery.
   obtain ⟨ins0, hins0, h⟩ := ebind_ok h
   rw [← Array.foldlM_toList] at h
   have H := foldlM_collectLe (ε := String) (α := String × Nat × Nat) (σ := Array (Nat × Json)) _ SeenLe
-    (fun (e : String × Nat × Nat) t => e.2.1 = w → ∀ r : Json,
-      (own.find? (getD · "port" == .str e.1)).map (getD · "root") = some r →
+    (fun (e : String × Nat × Nat) t => e.2.1 = w → ∃ r : Json,
+      (own.find? (getD · "port" == .str e.1)).map (getD · "root") = some r ∧
         ∃ x, t.find? (fun e => e.1 == w) = some x ∧ (x.2 = r ∨ (x.2 == r) = true))
     (fun _ _ _ hx => hx) (fun _ _ _ h1 h2 w x hx => h2 w x (h1 w x hx))
-    (fun _ _ _ hg hle hw' r hr => by
-      obtain ⟨x, hx, hxr⟩ := hg hw' r hr
-      exact ⟨x, hle w x hx, hxr⟩)
+    (fun _ _ _ hg hle hw' => by
+      obtain ⟨r, hr, x, hx, hxr⟩ := hg hw'
+      exact ⟨r, hr, x, hle w x hx, hxr⟩)
     ?_ ins0.toList seen seen' h
-  · refine ⟨H.1, fun ins hins port len hmem r hr => ?_⟩
+  · refine ⟨H.1, fun ins hins port len hmem => ?_⟩
     rw [hins0] at hins
     cases hins
-    exact H.2 (port, w, len) (Array.mem_toList_iff.2 hmem) rfl r hr
+    exact H.2 (port, w, len) (Array.mem_toList_iff.2 hmem) rfl
   · intro s e t hst
     obtain ⟨p, w', len⟩ := e
     dsimp only at hst ⊢
     split at hst
     · rename_i hc
       cases hst
-      refine ⟨fun _ _ hx => hx, fun hww r _ => ?_⟩
+      refine ⟨fun _ _ hx => hx, fun hww => ?_⟩
       subst hww
       simp [hw, ht] at hc
     · split at hst
-      · rename_i hn
-        cases hst
-        refine ⟨fun _ _ hx => hx, fun _ r hr => ?_⟩
-        rw [hn] at hr
-        cases hr
+      · exact absurd hst (by simp [throw, throwThe, MonadExceptOf.throw])
       · rename_i r0 hr0
         split at hst
         · rename_i x r' hx
           split at hst
           · rename_i hb
             cases hst
-            refine ⟨fun _ _ hx => hx, fun hww r hr => ?_⟩
+            refine ⟨fun _ _ hx => hx, fun hww => ?_⟩
             subst hww
-            rw [hr0] at hr
-            cases hr
-            exact ⟨(x, r'), hx, Or.inr hb⟩
+            exact ⟨r0, hr0, (x, r'), hx, Or.inr hb⟩
           · exact absurd hst (by simp [throw, throwThe, MonadExceptOf.throw])
         · rename_i hx
           cases hst
-          refine ⟨seenLe_push, fun hww r hr => ?_⟩
+          refine ⟨seenLe_push, fun hww => ?_⟩
           subst hww
-          rw [hr0] at hr
-          cases hr
-          refine ⟨(w', r0), ?_, Or.inl rfl⟩
+          refine ⟨r0, hr0, (w', r0), ?_, Or.inl rfl⟩
           rw [Array.find?_push, hx]
           simp
 
@@ -965,8 +957,8 @@ theorem runInputsAtOneTree : RunInputsAtOneTree := by
   · obtain ⟨hm', hp'⟩ := rootsByPort_get hg
     exact isRecordRoot_of_carries h3 ⟨r1, hm', hp', hro, hd, hl⟩
 
-/-- **`TiedInputsAtOneRoot`**: where `runInputRoots` passes, the roots the readers of a tied run input node bring at
-the ports that read it are one root, up to core's `==`. -/
+/-- **`TiedInputsAtOneRoot`**: where `runInputRoots` passes, every reader of a tied run input node brings a root at
+each port that reads it, and those roots are one root, up to core's `==`. -/
 theorem tiedInputsAtOneRoot : TiedInputsAtOneRoot := by
   intro v P rs ms rec roots out hn h w hw ht
   unfold OneStageZk.runInputRoots at h
@@ -976,8 +968,9 @@ theorem tiedInputsAtOneRoot : TiedInputsAtOneRoot := by
   have H := forIn_tied (roots := roots) (P := P) (rs := rs) (w := w) ?_ ms.toList (roots, #[]) acc
     (by simpa using hn) (fun _ _ => rfl) hacc
   · refine ⟨match acc.2.find? (fun e => e.1 == w) with | some x => x.2 | none => .null, ?_⟩
-    intro m hm ins hins port len hmem r hr
-    obtain ⟨x, hx, hxr⟩ := H.2 m (Array.mem_toList_iff.2 hm) ins hins port len hmem r hr
+    intro m hm ins hins port len hmem
+    obtain ⟨r, hr, x, hx, hxr⟩ := H.2 m (Array.mem_toList_iff.2 hm) ins hins port len hmem
+    refine ⟨r, hr, ?_⟩
     simp only [hx]
     exact hxr
   · intro m s r hq hf
