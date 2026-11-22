@@ -273,7 +273,7 @@ path = "verity/protocols/accounting/memory/pous/scheme.py"
 means = "PoUS as a resource scheme, registered as pous"
 
 [[tree]]
-path = "verity/protocols/accounting/memory/pous/wipe_scheme.py"
+path = "verity/protocols/accounting/memory/wipe/scheme.py"
 means = "the memory wipe as a resource scheme, registered as wipe"
 
 [[tree]]

@@ -1,9 +1,9 @@
 """The streamed wipe's memory attester, on the challenger host: its side of one wipe (`WipeMemoryAttester`, the
 steps `streamed_wipe`'s docstring states), that side as a process of its own over `wipe_party`'s wire (`serve`, `report`,
 `main`), and as a party of the deployment layer (`verity.runtime`), `MemoryAttesterParty`, over the messages
-`verity.protocols.accounting.memory.pous.verifier.wipe_parties` declares.
+`verity.protocols.accounting.memory.wipe.verifier.wipe_parties` declares.
 
-`python -m verity.protocols.accounting.memory.pous.attester.wipe_challenger --device DIR [--listen HOST:PORT] [--reads K]
+`python -m verity.protocols.accounting.memory.wipe.attester.wipe_challenger --device DIR [--listen HOST:PORT] [--reads K]
 [--streamer build|PATH [--threads T]]` is the challenger's side (`main`, which `wipe_party.command` starts): it reads the
 request `{"labels", "limit_ns", "node", "tiers"}` as one JSON line on stdin, prints `{"listening": PORT}`, serves one
 prover (`serve`) and prints its report (`report`). With `--streamer` the fill is `wipe_stream`'s, native on this host's
@@ -51,10 +51,10 @@ from verity.protocol import ProtocolDef, Start
 from verity.channel import Message, Phase, Refused
 from verity.protocols.accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.accounting.memory.pous.attester import onsite
-from verity.protocols.accounting.memory.pous.attester import wipe_stream
+from verity.protocols.accounting.memory.wipe.attester import wipe_stream
 from verity.protocols.accounting.memory.pous.attester.memory_attester import CLOCK_RESOLUTION_NS, SessionLog, Signer
-from verity.protocols.accounting.memory.pous.verifier import streamed_wipe as sw
-from verity.protocols.accounting.memory.pous.verifier.streamed_wipe import (
+from verity.protocols.accounting.memory.wipe.verifier import streamed_wipe as sw
+from verity.protocols.accounting.memory.wipe.verifier.streamed_wipe import (
     COMPLETE,
     LABEL_BYTES,
     LATE,
@@ -73,8 +73,8 @@ from verity.protocols.accounting.memory.pous.verifier.streamed_wipe import (
     start_message,
     wipe_key,
 )
-from verity.protocols.accounting.memory.pous.verifier import wipe_party as WP
-from verity.protocols.accounting.memory.pous.verifier.wipe_parties import (
+from verity.protocols.accounting.memory.wipe.verifier import wipe_party as WP
+from verity.protocols.accounting.memory.wipe.verifier.wipe_parties import (
     CHALLENGER,
     COMPONENT,
     MANIFEST,

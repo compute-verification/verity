@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity.protocols.accounting.memory.pous.verifier import streamed_wipe as sw
+from verity.protocols.accounting.memory.wipe.verifier import streamed_wipe as sw
 
 SOURCE = Path(__file__).with_name("wipe_stream.c")
 GATES = ((0, 64), ((1 << 40) - 3, 8), ((1 << 64) - 4, 4))

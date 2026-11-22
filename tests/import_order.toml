@@ -198,7 +198,7 @@ loaded_by = [
     "verity/protocols/accounting/memory/poub/prover/p2_party_prover.py",
     "verity/protocols/accounting/memory/poub/prover/session_prover.py",
     "verity/protocols/accounting/memory/pous/prover/challenger_prover.py",
-    "verity/protocols/accounting/memory/pous/prover/wipe_prover.py",
+    "verity/protocols/accounting/memory/wipe/prover/wipe_prover.py",
     "verity/protocols/accounting/memory/pous/prover/workload.py",
     "verity/protocols/accounting/network/prover/admission.py",
     "verity/protocols/accounting/network/prover/id_relay.py",
@@ -458,7 +458,7 @@ loaded_by = [
 paths = [
     "verity/protocols/accounting/memory/poub/scheme.py",
     "verity/protocols/accounting/memory/pous/scheme.py",
-    "verity/protocols/accounting/memory/pous/wipe_scheme.py",
+    "verity/protocols/accounting/memory/wipe/scheme.py",
 ]
 loads = [
     "verity/commitments",
@@ -560,7 +560,7 @@ reaches = [
     "verity/runtime",
 ]
 loaded_by = [
-    "verity/protocols/accounting/memory/pous/prover/wipe_run.py",
+    "verity/protocols/accounting/memory/wipe/prover/wipe_run.py",
 ]
 
 [[place]]
@@ -612,9 +612,9 @@ loaded_by = [
     "verity/protocols/accounting/memory/pous/prover/responder.py",
     "verity/protocols/accounting/memory/pous/prover/setup_proof.py",
     "verity/protocols/accounting/memory/pous/prover/weight_store.py",
-    "verity/protocols/accounting/memory/pous/prover/wipe_prover.py",
-    "verity/protocols/accounting/memory/pous/prover/wipe_run.py",
-    "verity/protocols/accounting/memory/pous/prover/wipe_store.py",
+    "verity/protocols/accounting/memory/wipe/prover/wipe_prover.py",
+    "verity/protocols/accounting/memory/wipe/prover/wipe_run.py",
+    "verity/protocols/accounting/memory/wipe/prover/wipe_store.py",
     "verity/protocols/accounting/memory/pous/scheme.py",
 ]
 
@@ -943,7 +943,7 @@ loaded_by = [
     "verity/protocols/accounting/memory/poub/prover/session_prover.py",
     "verity/protocols/accounting/memory/poub/scheme.py",
     "verity/protocols/accounting/memory/pous/prover/challenger_prover.py",
-    "verity/protocols/accounting/memory/pous/prover/wipe_prover.py",
+    "verity/protocols/accounting/memory/wipe/prover/wipe_prover.py",
     "verity/protocols/accounting/memory/pous/prover/workload.py",
     "verity/protocols/accounting/memory/pous/scheme.py",
     "verity/protocols/accounting/network/prover/workload.py",

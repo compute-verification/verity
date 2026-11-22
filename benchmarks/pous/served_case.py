@@ -56,7 +56,7 @@ from verity import lean_process as LC
 from verity.protocols.accounting.memory.pous.prover import weight_store as ws
 from verity.protocols.accounting.memory.pous.verifier import period
 from verity.protocols.accounting.memory.pous.verifier import run as R
-from verity.protocols.accounting.memory.pous.verifier import wipe_period
+from verity.protocols.accounting.memory.wipe.verifier import wipe_period
 from verity.protocols.run import schemes as registry
 from verity.protocols.accounting import scheme as S
 from verity.commitments import advice

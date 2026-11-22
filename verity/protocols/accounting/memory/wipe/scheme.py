@@ -8,7 +8,7 @@ wipe's target, `WipeSound`, as a premise. Its sides: over is the prior content's
 is unsaid: `Pous.Guarantees.StreamedWipe`'s compression term `k·C(N,g+1)·2^(M+E)/2^(q+(g+1)b)` has no Lean constant of
 its own (`StreamedWipe.bound` adds the sampling term `(g/N)^k`), and `Adv_PRF` (`StreamedWipe.prfAdvantage`) has no
 value, so no `Term` evaluates it. Its settings are `period.json`'s ``wipe`` and the challenger's binding, and its attach
-(`verity.protocols.accounting.memory.pous.prover.wipe_served`) runs the whole wipe before the model loads. Its memory
+(`verity.protocols.accounting.memory.wipe.prover.wipe_served`) runs the whole wipe before the model loads. Its memory
 attester, its development flags and the onsite command it launches are PoUS's
 (`verity.protocols.accounting.memory.pous.scheme`).
 """
@@ -24,8 +24,9 @@ from verity.protocol import VERIFIER, Channel
 from verity.protocols.accounting.memory.pous.attester import memory_attester as MA
 from verity.protocols.accounting.memory.pous.scheme import (DEVELOPMENT, MEMORY_ATTESTER, RUN_KEYS, TRUSTED_DEVICE,
                                                             onsite_command)
-from verity.protocols.accounting.memory.pous.verifier import period, wipe_period
-from verity.protocols.accounting.memory.pous.verifier import wipe_parties as WP
+from verity.protocols.accounting.memory.pous.verifier import period
+from verity.protocols.accounting.memory.wipe.verifier import wipe_period
+from verity.protocols.accounting.memory.wipe.verifier import wipe_parties as WP
 from verity.protocols.accounting.scheme import Executable, Lacks, Launch, Order, Reading, Scheme, register
 
 #: the wipe's own term, unsaid, and why
@@ -53,12 +54,12 @@ def _wipe_reading(row: Mapping[str, Any]) -> Reading:
 
 
 def _wipe_check_settings(values: Any) -> str | None:
-    from verity.protocols.accounting.memory.pous.prover import wipe_served
+    from verity.protocols.accounting.memory.wipe.prover import wipe_served
     return wipe_served.check_settings(values)
 
 
 def _wipe_attach(exchange: Any, ctx: Any) -> Any:
-    from verity.protocols.accounting.memory.pous.prover import wipe_served
+    from verity.protocols.accounting.memory.wipe.prover import wipe_served
     return wipe_served.attach(exchange, {**ctx, "party": MEMORY_ATTESTER, "development_of": period.development_of})
 
 
@@ -94,7 +95,7 @@ WIPE = register(Scheme(
     needs=frozenset(),
     depends=(),
     pieces={"prover": Launch(optional=("address", "host", "command"), development="address",
-                            entry="verity.protocols.accounting.memory.pous.wipe_scheme:launch_wipe",
+                            entry="verity.protocols.accounting.memory.wipe.scheme:launch_wipe",
                             executables=(Executable("verity/protocols/accounting/memory/pous/attester/lean", "wipe-protocol"),))},
     answers=Lacks("its case is answered by the composite's case writer, not yet by functions of this package"),
     unchecked=MA.UNCHECKED,

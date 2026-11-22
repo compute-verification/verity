@@ -5522,6 +5522,22 @@
         "input_datasets/README.md": "library/datasets/README.md",
         "tests/input_datasets/": "tests/library/datasets/"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/memory/pous/wipe_scheme.py": "verity/protocols/accounting/memory/wipe/scheme.py",
+        "verity/protocols/accounting/memory/pous/attester/wipe_challenger.py": "verity/protocols/accounting/memory/wipe/attester/wipe_challenger.py",
+        "verity/protocols/accounting/memory/pous/attester/wipe_stream.c": "verity/protocols/accounting/memory/wipe/attester/wipe_stream.c",
+        "verity/protocols/accounting/memory/pous/attester/wipe_stream.py": "verity/protocols/accounting/memory/wipe/attester/wipe_stream.py",
+        "verity/protocols/accounting/memory/pous/prover/wipe_prover.py": "verity/protocols/accounting/memory/wipe/prover/wipe_prover.py",
+        "verity/protocols/accounting/memory/pous/prover/wipe_run.py": "verity/protocols/accounting/memory/wipe/prover/wipe_run.py",
+        "verity/protocols/accounting/memory/pous/prover/wipe_served.py": "verity/protocols/accounting/memory/wipe/prover/wipe_served.py",
+        "verity/protocols/accounting/memory/pous/prover/wipe_store.py": "verity/protocols/accounting/memory/wipe/prover/wipe_store.py",
+        "verity/protocols/accounting/memory/pous/verifier/streamed_wipe.py": "verity/protocols/accounting/memory/wipe/verifier/streamed_wipe.py",
+        "verity/protocols/accounting/memory/pous/verifier/wipe_parties.py": "verity/protocols/accounting/memory/wipe/verifier/wipe_parties.py",
+        "verity/protocols/accounting/memory/pous/verifier/wipe_party.py": "verity/protocols/accounting/memory/wipe/verifier/wipe_party.py",
+        "verity/protocols/accounting/memory/pous/verifier/wipe_period.py": "verity/protocols/accounting/memory/wipe/verifier/wipe_period.py"
+      }
     }
   ]
 }

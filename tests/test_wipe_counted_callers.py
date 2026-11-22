@@ -14,7 +14,7 @@ from pathlib import Path
 from test_repository import ROOT, _tracked
 
 NAMES = ("outcome_counted", "counted_profile")
-OWNER = "verity/protocols/accounting/memory/pous/verifier/wipe_period.py"
+OWNER = "verity/protocols/accounting/memory/wipe/verifier/wipe_period.py"
 MIRROR_TESTS = "tests/verity/protocols/accounting/memory/pous/attester/lean/"
 #: The files that may name them besides `OWNER` and `MIRROR_TESTS`, each with why.
 ALLOWED: dict[str, str] = {}

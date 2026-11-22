@@ -21,8 +21,8 @@ import wipe_cases as WC
 import wipe_protocol_case as C
 from hypothesis import strategies as st
 
-from verity.protocols.accounting.memory.pous.verifier import streamed_wipe as sw
-from verity.protocols.accounting.memory.pous.verifier import wipe_period as WP
+from verity.protocols.accounting.memory.wipe.verifier import streamed_wipe as sw
+from verity.protocols.accounting.memory.wipe.verifier import wipe_period as WP
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 

@@ -12,12 +12,12 @@ import pytest
 
 from verity import hooks as H
 from verity.protocols.accounting import scheme as S
-from verity.protocols.accounting.memory.pous.prover import wipe_run
-from verity.protocols.accounting.memory.pous.prover import wipe_served as WS
+from verity.protocols.accounting.memory.wipe.prover import wipe_run
+from verity.protocols.accounting.memory.wipe.prover import wipe_served as WS
 from verity.protocols.accounting.memory.pous.scheme import MEMORY_ATTESTER
-from verity.protocols.accounting.memory.pous.wipe_scheme import WIPE
+from verity.protocols.accounting.memory.wipe.scheme import WIPE
 from verity.protocols.accounting.memory.pous.verifier.period import UNPINNED
-from verity.protocols.accounting.memory.pous.verifier.wipe_period import LIMIT_NS
+from verity.protocols.accounting.memory.wipe.verifier.wipe_period import LIMIT_NS
 
 PIN = {"party": "memory-challenger", "protocol": "wipe", "scheme": "lms-sha512/n64-w1-h20/v0", "key-sha512": "ab" * 64}
 BOUND = {"host": "auditor", "address": "auditor:7000", "command": ["ssh", "auditor"]}

@@ -23,14 +23,14 @@ from verity.protocol import ProtocolDef
 from verity.party import Finish
 from verity.runtime.runner import run
 from verity.protocols.accounting.memory.pous.attester import memory_attester as mc
-from verity.protocols.accounting.memory.pous.attester import wipe_challenger as WC
-from verity.protocols.accounting.memory.pous.prover import wipe_prover as WR
-from verity.protocols.accounting.memory.pous.prover import wipe_run
-from verity.protocols.accounting.memory.pous.prover import wipe_store as WS
-from verity.protocols.accounting.memory.pous.verifier import streamed_wipe as sw
-from verity.protocols.accounting.memory.pous.verifier import wipe_parties as WPS
-from verity.protocols.accounting.memory.pous.verifier import wipe_party as WP
-from verity.protocols.accounting.memory.pous.verifier import wipe_period as W
+from verity.protocols.accounting.memory.wipe.attester import wipe_challenger as WC
+from verity.protocols.accounting.memory.wipe.prover import wipe_prover as WR
+from verity.protocols.accounting.memory.wipe.prover import wipe_run
+from verity.protocols.accounting.memory.wipe.prover import wipe_store as WS
+from verity.protocols.accounting.memory.wipe.verifier import streamed_wipe as sw
+from verity.protocols.accounting.memory.wipe.verifier import wipe_parties as WPS
+from verity.protocols.accounting.memory.wipe.verifier import wipe_party as WP
+from verity.protocols.accounting.memory.wipe.verifier import wipe_period as W
 from verity.channel import canonical
 from verity.commitments.crypto import lms
 

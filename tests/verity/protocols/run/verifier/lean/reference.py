@@ -58,8 +58,8 @@ from verity_difftest import protocol as P
 from verity.commitments import docket_digest as DD
 from verity.protocols.accounting.network.verifier import registered as RH
 from verity.protocols.accounting.network.verifier import span
-from verity.protocols.accounting.memory.pous.verifier import streamed_wipe as sw
-from verity.protocols.accounting.memory.pous.verifier import wipe_period as WP
+from verity.protocols.accounting.memory.wipe.verifier import streamed_wipe as sw
+from verity.protocols.accounting.memory.wipe.verifier import wipe_period as WP
 from verity.protocols.accounting.compute.pouw.verifier import core_check, credit, period_check
 from verity.protocols.proof.spot.verifier.challenger import challenger as CH
 

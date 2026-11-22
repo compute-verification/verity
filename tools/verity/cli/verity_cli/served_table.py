@@ -59,7 +59,7 @@ from verity.protocols.accounting.memory.poub.verifier import p2_parties as P2
 from verity.protocols.accounting.memory.pous.attester import challenger_session as CS
 from verity.protocols.registration.verifier import registration as RL
 from verity.protocols.accounting.memory.pous.attester import memory_attester as mc
-from verity.protocols.accounting.memory.pous.verifier import wipe_parties as WP
+from verity.protocols.accounting.memory.wipe.verifier import wipe_parties as WP
 from verity.protocols.proof.spot.prover.audit import local_challenger as LC
 from verity.protocols.proof.spot.verifier import parties as SP
 from verity.protocols.proof.spot.verifier.challenger import challenger_party as CP

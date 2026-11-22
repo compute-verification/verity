@@ -1,5 +1,5 @@
 """PoUS as a resource scheme (`verity.protocols.accounting.scheme`), registered as ``pous``. The memory wipe's
-(`verity.protocols.accounting.memory.pous.wipe_scheme`) reads its memory attester, development flags and onsite
+(`verity.protocols.accounting.memory.wipe.scheme`) reads its memory attester, development flags and onsite
 command from here.
 
 PoUS is decided by `PousCheck.RunProtocol.protocol` (`verifier/check/PousVerifier/RunProtocol.lean`), whose
@@ -36,7 +36,7 @@ from verity.protocols.accounting.memory.pous.attester import challenger_session 
 from verity.protocols.accounting.memory.pous.attester import memory_attester as MA
 from verity.protocols.accounting.memory.pous.prover import workload
 from verity.protocols.accounting.memory.pous.verifier import period
-from verity.protocols.accounting.memory.pous.verifier import wipe_parties as WP
+from verity.protocols.accounting.memory.wipe.verifier import wipe_parties as WP
 from verity.protocols.accounting.memory.pous.verifier.schemes import p2 as P2
 from verity.protocols.accounting.scheme import (Block, Charge, Executable, Lacks, Launch, Order, Reading, Scheme,
                                                          register)

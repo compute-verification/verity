@@ -2638,7 +2638,7 @@
     {"file": "verity/protocols/accounting/memory/pous/attester/lean/MemoryAttester/Difftest.lean", "count": 1},
     {"file": "verity/protocols/accounting/memory/pous/attester/lean/MemoryAttester/Records.lean", "count": 6},
     {"file": "verity/protocols/accounting/memory/pous/attester/memory_attester.py", "count": 3},
-    {"file": "verity/protocols/accounting/memory/pous/attester/wipe_challenger.py", "count": 2},
+    {"file": "verity/protocols/accounting/memory/wipe/attester/wipe_challenger.py", "count": 2},
     {"file": "verity/protocols/accounting/memory/pous/prover/p2/p2_gpu/p2dec.cu", "count": 1},
     {"file": "verity/protocols/accounting/memory/pous/prover/p2/p2_store/store.py", "count": 1},
     {"file": "verity/protocols/accounting/memory/pous/prover/period_prover.py", "count": 1},

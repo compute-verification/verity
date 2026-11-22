@@ -39,15 +39,15 @@ from verity import hooks as H
 from verity.runtime.stream import Side
 from verity.protocols.accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.accounting import scheme as S
-from verity.protocols.accounting.memory.pous.prover import wipe_run
-from verity.protocols.accounting.memory.pous.prover import wipe_served
-from verity.protocols.accounting.memory.pous.wipe_scheme import WIPE
-from verity.protocols.accounting.memory.pous.prover import wipe_store as WS
+from verity.protocols.accounting.memory.wipe.prover import wipe_run
+from verity.protocols.accounting.memory.wipe.prover import wipe_served
+from verity.protocols.accounting.memory.wipe.scheme import WIPE
+from verity.protocols.accounting.memory.wipe.prover import wipe_store as WS
 from verity.protocols.accounting.memory.pous.verifier.period import decided_by
-from verity.protocols.accounting.memory.pous.verifier import streamed_wipe as sw
-from verity.protocols.accounting.memory.pous.attester import wipe_challenger as WC
-from verity.protocols.accounting.memory.pous.verifier import wipe_party as WP
-from verity.protocols.accounting.memory.pous.verifier import wipe_period as W
+from verity.protocols.accounting.memory.wipe.verifier import streamed_wipe as sw
+from verity.protocols.accounting.memory.wipe.attester import wipe_challenger as WC
+from verity.protocols.accounting.memory.wipe.verifier import wipe_party as WP
+from verity.protocols.accounting.memory.wipe.verifier import wipe_period as W
 
 TEST_ID = mc.TEST_PREFIX + W.PROTOCOL
 SMALL = sw.WipeParams(64, W.READS, 1, 1_000, (("gpu", 64 * sw.LABEL_BYTES),))

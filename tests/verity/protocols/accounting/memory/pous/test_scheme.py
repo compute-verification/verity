@@ -1,5 +1,5 @@
 """PoUS and the wipe as resource schemes (`verity.protocols.accounting.memory.pous.scheme`,
-`verity.protocols.accounting.memory.pous.wipe_scheme`): found by name, at their verifiers' own ids, with the codec the
+`verity.protocols.accounting.memory.wipe.scheme`): found by name, at their verifiers' own ids, with the codec the
 adapter attaches, and citing only Lean names the locks record."""
 from __future__ import annotations
 
@@ -11,8 +11,9 @@ import pytest
 from verity.protocols.run import schemes as table
 from verity.protocols.accounting import scheme as S
 from verity.protocols.accounting.memory.pous.scheme import POUS, POUS_TERM
-from verity.protocols.accounting.memory.pous.wipe_scheme import WIPE
-from verity.protocols.accounting.memory.pous.verifier import period, schemes, wipe_period
+from verity.protocols.accounting.memory.wipe.scheme import WIPE
+from verity.protocols.accounting.memory.pous.verifier import period, schemes
+from verity.protocols.accounting.memory.wipe.verifier import wipe_period
 
 ROOT = Path(__file__).resolve().parents[6]
 LOCKS = (ROOT / "security" / "lean-audit.json", ROOT / "security" / "Properties" / "lean-audit.json")

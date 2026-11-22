@@ -30,7 +30,7 @@ from verity.protocols.accounting.memory.pous.attester import onsite
 from verity.protocols.accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.accounting.memory.pous.attester import challenger_party as CP
 from verity.protocols.accounting.memory.pous import scheme as PL
-from verity.protocols.accounting.memory.pous import wipe_scheme
+from verity.protocols.accounting.memory.wipe import scheme as wipe_scheme
 from verity.protocols.accounting.network import scheme as NS
 from verity.protocols.policy.training_detection.inference_only.verifier import parties as IO
 from verity.protocols.proof.spot.verifier.service import SamplingDesign
@@ -1371,7 +1371,7 @@ def test_the_runs_streamer_is_built_and_run_outside_the_serve_dir(tmp_path):
     attach (`wipe_stream`), so nothing under the serve dir, which may be mounted noexec (/dev/shm), is run: the key stays
     under it (TMPDIR), the streamer runs from outside it and derives `streamed_wipe.label`'s labels, and both are gone
     when the wipe ends."""
-    from verity.protocols.accounting.memory.pous.verifier import streamed_wipe as sw
+    from verity.protocols.accounting.memory.wipe.verifier import streamed_wipe as sw
     p, log = served_wipe(tmp_path, {})
     assert p.returncode == 3 and "the stand-in attach" in (tmp_path / "wipe" / "refused.txt").read_text(), p.stdout + p.stderr
     handed, serve = json.loads(log.read_text()), tmp_path / "serve"

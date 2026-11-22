@@ -2,7 +2,7 @@
 challenger host, `trusted-device`) while the prover stays on its node: `challenger_party`'s shape, for the wipe. This
 module is what both sides and the verifier share: the wire's frames, the request (`request_of`, `params_of`), the
 report's readers (`commitment_of`, `signed_of`) and where the challenger ran (`placement`). The challenger's side is
-`verity/protocols/accounting/memory/pous/attester/wipe_challenger.py` (`serve`, `report`, `main`).
+`verity/protocols/accounting/memory/wipe/attester/wipe_challenger.py` (`serve`, `report`, `main`).
 
 The challenger listens and the prover connects. The challenger streams the fill as frames `F ‖ u64 first ‖ u32 count ‖
 labels` and ends it with `D`, which the prover acknowledges with `A` once it holds the fill, so that no read's time
@@ -19,7 +19,7 @@ prover connected) and `t1` (the session signed, or ended unsigned) on the challe
 interval a network attester counts the session's egress over.
 
 `command(device, extra)` is the argv that starts the challenger's side (`python -m
-verity.protocols.accounting.memory.pous.attester.wipe_challenger`, `MODULE`) on this machine; the prover's end of the session,
+verity.protocols.accounting.memory.wipe.attester.wipe_challenger`, `MODULE`) on this machine; the prover's end of the session,
 which answers it, is `pous/prover/wipe_run.py`'s (`session`, `answer`). The wipe's two parties as the deployment layer
 runs them speak `wipe_parties`'s messages: `pous/attester/wipe_challenger.py` and `pous/prover/wipe_prover.py`.
 """
@@ -36,7 +36,7 @@ from verity.protocols.accounting.memory.pous.attester import memory_attester as 
 
 from . import streamed_wipe as sw
 
-MODULE = "verity.protocols.accounting.memory.pous.attester.wipe_challenger"
+MODULE = "verity.protocols.accounting.memory.wipe.attester.wipe_challenger"
 """The module `command` starts as the challenger's side: `wipe_challenger.main`."""
 PREMISE = mc.PREMISE
 PARTY = "memory-challenger"

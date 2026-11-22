@@ -40,7 +40,7 @@ from verity.protocols.accounting.memory.pous.attester import challenger_session 
 from verity.protocols.accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.accounting.memory.pous.prover import challenger_prover as CR
 from verity.protocols.accounting import scheme as resource_scheme
-from verity.protocols.accounting.memory.pous import wipe_scheme
+from verity.protocols.accounting.memory.wipe import scheme as wipe_scheme
 from verity.protocols.accounting.memory.pous.prover import served as pous_served
 from verity.protocols.accounting.memory.pous.verifier import period
 from verity.protocols.accounting.memory.pous.verifier import setup as pous_setup

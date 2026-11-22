@@ -32,7 +32,7 @@ from verity.protocols.accounting.memory.pous.attester import memory_attester as 
 from verity.protocols.accounting.memory.pous.verifier import period as pous
 from verity.protocols.accounting.memory.pous.prover import period_prover
 from verity.protocols.accounting.memory.pous.verifier import run as R
-from verity.protocols.accounting.memory.pous.verifier import streamed_wipe as sw
+from verity.protocols.accounting.memory.wipe.verifier import streamed_wipe as sw
 from verity.protocols.accounting.memory.poub.verifier import coins, p2_case, p2_lean, p2_parties, receipts
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
