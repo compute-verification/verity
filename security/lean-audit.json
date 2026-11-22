@@ -4116,7 +4116,7 @@
   },
   "Flock.SecurityProofs.SampledKSTwo": {
    "honest": ["Flock.SecurityProofs.SampledKSTwo_honest"],
-   "nontrivial": "Claims.SamplingGeneric.compilerKSTwo_nontrivial"
+   "nontrivial": "Flock.SecurityProofs.SampledKSTwo_nontrivial"
   },
   "Claims.SecurityProofs.InfluenceTwoPatterns": {
    "honest": ["Claims.Witness.SamplingGeneric.influenceTwoPatterns_honest"],
@@ -11310,6 +11310,39 @@
     "reads": ["FlockSoundness.Assumptions.UniformRandomBytes"]
    },
    "type_hash": "d4ebf4c0bc865e16721edc6ddde768037bc76d2d998f272b9881b1cdee7baa55"
+  },
+  "Flock.SecurityProofs.SampledKSTwo_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Flock.SecurityProofs.SampledKSTwo_nontrivial :",
+    "  Exists fun c =>",
+    "    Exists fun reg =>",
+    "      Exists fun two =>",
+    "        Exists fun L₁ =>",
+    "          Exists fun L₂ =>",
+    "            Exists fun R =>",
+    "              Exists fun s =>",
+    "                Exists fun b₁ =>",
+    "                  Exists fun b₂ =>",
+    "                    Exists fun iroots =>",
+    "                      Exists fun cap =>",
+    "                        Exists fun x =>",
+    "                          Not",
+    "                            (Claims.SamplingGeneric.CompiledTwo.KS FlockDeploy.sha512",
+    "                              (SamplingDeploy.compiledTwo (FlockDeploy.deployZk Flock.Readable.relation)",
+    "                                (SamplingDeploy.codeTwoStage c reg L₁ L₂ b₁ R s b₂) iroots two",
+    "                                (SamplingDeploy.replayTwo (c.atOrder (SamplingDeploy.orderOf s)) reg L₁",
+    "                                  (SamplingDeploy.bytesFirst c L₁ (SamplingDeploy.orderOf s) b₁))",
+    "                                cap))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.SamplingGeneric.CompiledTwo.Scope"],
+    "reads": []
+   },
+   "type_hash": "f98ccb957d3b91540593f258e56e5b71ed8f60f12bbb4e602e5171246462fcec"
   },
   "Flock.SecurityProofs.SamplingClaimsStated": {
    "owner": "@proofs",
