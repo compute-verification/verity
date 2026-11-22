@@ -10,7 +10,7 @@
 
 * **Digest.** `SHA-512("verity/registration/v1\\0" || canon(record))`.
 * **Rule.** Everything a sampled proof block's statement can depend on is fixed by the record, or by objects the verifier already
-  holds, before the sample. The verifier checks R1-R8 (`check`) against its own copies, then, where they pass, the
+  holds, before the sample. The verifier checks R1-R9 (`check`) against its own copies, then, where they pass, the
   caller's check (`caller.check`: Declared day, Binding, Seed salt, Registered compiler, and the pool's marks and chain,
   which `check` reads only to parse), writes a `receipt` with its own clock, and only then samples.
 * **The checks** (`check`): the record has exactly these keys, and
@@ -38,7 +38,9 @@
     the network period check ties its rows to the dockets that computed them, which this check doesn't, so the
     verdict publishes each tied name it let through (`Verdict.rests_on_period_check`), and with any its acceptance is
     none on its own; it refuses a tied name that isn't a run Input of the program's own, or that it expects registered
-    or holds (`R8-tied`).
+    or holds (`R8-tied`);
+  - R9: the program's root reaches an opener (`OPENERS`) only inside a circuit template `GATED` holds by its id and closure
+    digest at an evaluated binding (`ungated_openers`, `R9-ungated-opener`).
 * **Receipt**: `{"format": "verity/registration-receipt/v1", "registration": <digest>, "verifier", "received": "<UTC,
   %Y-%m-%dT%H:%M:%SZ>"}`, and the sample names it.
 * **The public file** (`matches_public`): the verifier holds its own (scheme, roots, their domains, its instance count)
@@ -196,9 +198,11 @@ ANCHOR_UNPINNED_WHY = ("a supplied anchor reads a registered value's root or dom
                        "to no pin: neither its own pinned roots nor a pin of the weights' registration of record")
 #: the circuit templates that open a commitment and return its verdict (`ungated_openers`)
 OPENERS = ("FrameV3Read_v1", "FrameV3ReadAt_v1", "MerkleRead_v1", "LmsVerify_v1")
-#: the circuit templates whose returned rows are gated on their opener's verdict, each `(id, closure digest)` at a binding a
-#: registered circuit names: Lean's `Docket.GATED`, which only shrinks with circuits' lint's gated entries
-GATED: tuple[tuple[str, str], ...] = ()
+#: the circuit templates whose returned rows are gated on their opener's verdict, each `(id, closure digest)` at a binding
+#: circuits' lint evaluated (Lean's `Docket.GATED`): a circuit reaching a binding no lint evaluated is refused
+GATED: tuple[tuple[str, str], ...] = (
+    ("EmbeddingRead_v4", "3d82aec036532f091d97f8e701c5204813a0df7eca1c43c63761d1a7d471c95d731f5e64bb6ef208b7f689aaa7ce5394ab25bc206ac4418eb7559dc35f338dd5"),
+)
 UNGATED_OPENER_WHY = ("a circuit template that calls an opener and returns rows whether or not its opening held lets the "
                       "prover commit rows of its choice: C reaches an opener only inside a gated template the verifier "
                       "holds by its closure digest")
@@ -468,7 +472,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
           coins: Mapping[str, str] | None = None, released: Mapping[str, int] | None = None,
           commitments: Mapping[str, str] | None = None, attester_keys: Sequence[str] = (),
           weights_of_record: tuple[bytes, str] | None = None) -> Verdict:
-    """R1-R8 against the verifier's own copies: its program and query, its sampling design and scheme, the ports its layout derives
+    """R1-R9 against the verifier's own copies: its program and query, its sampling design and scheme, the ports its layout derives
     (`{port: {"leaves", "domain"}}`), the digest of its copy of the leaf layer, its anchors, its log of this prover's
     earlier records, the parameters it expects registered (`registered`: `{parameter: words}`), of those the ones it
     fills itself (`supplied`: `{parameter: [[source, ...], ...]}`, `registered.sources`; and C's supplied inputs, by their
@@ -655,7 +659,11 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
         c.fail("R8-shared-input", {"inputs": shared, "why": SHARED_WHY})
     for code, d in weights:
         c.fail(code, {"refused": d, "why": WEIGHTS_WHY[code]})
-    if ungated := ungated_openers(GATED, encode_program(program)):
+    try:
+        ungated = ungated_openers(GATED, encode_program(program))
+    except (KeyError, IndexError, TypeError) as e:
+        ungated = [f"the walk refuses the descriptor: {e!r}"]
+    if ungated:
         c.fail("R9-ungated-opener", {"templates": ungated, "why": UNGATED_OPENER_WHY})
     if members:
         try:

@@ -31,19 +31,20 @@ WEIGHTS_RECORD = "cd" * 64
 
 
 class Table:
-    """`EMB`'s four-row table under `hm96-sha512/row-seg/v1`, as core registers it."""
+    """A ``v``-row table of ``h`` words a row under `hm96-sha512/row-seg/v1`, as core registers it: `EMB`'s by default."""
 
-    def __init__(self) -> None:
+    def __init__(self, v: int = 4, h: int = 16) -> None:
         rng = np.random.default_rng(7)
-        self.rows = rng.integers(0, 1 << 16, (4, 16), dtype=np.uint16)
-        self.salts = [bytes(rng.integers(0, 256, E.SALT_BYTES, dtype=np.uint8)) for _ in range(4)]
-        self.dom = RV.domain(WEIGHTS_RECORD, "embed", 16, 4)
+        self.rows = rng.integers(0, 1 << 16, (v, h), dtype=np.uint16)
+        self.salts = [bytes(rng.integers(0, 256, E.SALT_BYTES, dtype=np.uint8)) for _ in range(v)]
+        self.dom = RV.domain(WEIGHTS_RECORD, "embed", h, v)
         self.tree = RT.commit(self.dom, [bit_row((r.tolist(), 16)) for r in self.rows], self.salts)
         self.name = self.value = "embed"
-        self.root, self.words, self.leaves, self.word_bits = self.tree.root, 16, 4, 16
+        self.root, self.words, self.leaves, self.word_bits = self.tree.root, h, v, 16
 
     def entry(self) -> dict:
-        return {"value": "embed", "root": self.tree.root.hex(), "leaves": 4, "words": 16, "domain": self.dom.domain_id.hex()}
+        return {"value": "embed", "root": self.tree.root.hex(), "leaves": self.leaves, "words": self.words,
+                "domain": self.dom.domain_id.hex()}
 
     def held(self) -> dict:
         return {"embed": {"root": self.tree.root.hex(), "domain": self.dom.domain_id.hex()}}
@@ -53,16 +54,19 @@ class Table:
         return [p[k:k + 64] for k in range(0, len(p), 64)]
 
 
-def _window(out) -> tuple[I.Window, Table, dict]:
-    """Three reads of one table through `Window.supply`, `close` and `write`, as `one_linear.py` writes a window."""
-    table = Table()
-    reg = I.Registered({"embed": 64}, (I.Table("embed", "embed", 0, 16, 4),), (),
-                       (I.TableRead(EID, "root", "embed", "root", 0, 3), I.TableRead(EID, "domain", "embed", "domain", 0, 3)),
-                       (I.TableOpening(EID, "embed", "tok", ("row", "salt", "path"), "o1", 0, 3),))
-    win = I.Window(I.Circuit("embedding", ((EMB, 3),), registered=reg), RUN, DESIGN, 2, registered={"embed": table})
+def _window(out, emb=EMB) -> tuple[I.Window, Table, dict]:
+    """Three reads of one table through `Window.supply`, `close` and `write`, as `one_linear.py` writes a window, by
+    ``emb``, an `EmbeddingRead_v2` or `EmbeddingRead_v4` binding."""
+    v, h = emb.bindings["V"], emb.bindings["H"]
+    eid, ref = descriptor_id(emb), E.reference_opening if emb.base_id == "EmbeddingRead_v4" else E.reference
+    table = Table(v, h)
+    reg = I.Registered({"embed": v * h}, (I.Table("embed", "embed", 0, h, v),), (),
+                       (I.TableRead(eid, "root", "embed", "root", 0, 3), I.TableRead(eid, "domain", "embed", "domain", 0, 3)),
+                       (I.TableOpening(eid, "embed", "tok", ("row", "salt", "path"), "o1", 0, 3),))
+    win = I.Window(I.Circuit("embedding", ((emb, 3),), registered=reg), RUN, DESIGN, 2, registered={"embed": table})
     win.supply()
-    toks = [3, 3, 1]
-    got = [E.reference(4, t, table.tree.root, table.dom.domain_id, table.rows[t].tolist(), table.salts[t], table.path(t))
+    toks = [v - 1, v - 1, 1 % v]
+    got = [ref(v, t, table.tree.root, table.dom.domain_id, table.rows[t].tolist(), table.salts[t], table.path(t))
            for t in toks]
 
     def digest(d: bytes) -> np.ndarray:
@@ -71,17 +75,17 @@ def _window(out) -> tuple[I.Window, Table, dict]:
     ins = [np.array(toks, dtype=np.uint32), np.stack([digest(table.tree.root)] * 3), np.stack([digest(table.dom.domain_id)] * 3),
            table.rows[toks], np.stack([np.frombuffer(table.salts[t], ">u8").astype(np.uint64) for t in toks]),
            np.stack([np.stack([digest(s) for s in table.path(t)]) for t in toks])]
-    win.record(EMB, ins, [np.array([h for h, _ in got], dtype=np.uint16), np.array([ok for _, ok in got], dtype=np.uint16)])
+    win.record(emb, ins, [np.array([h for h, _ in got], dtype=np.uint16), np.array([ok for _, ok in got], dtype=np.uint16)])
     out.mkdir()
     win.write(win.close(), out, {"table": "salt"}, registrar=DK)
     return win, table, json.loads((out / "registration.json").read_text())
 
 
-def _pinned(out) -> tuple[I.Window, Table, dict, dict]:
+def _pinned(out, emb=EMB) -> tuple[I.Window, Table, dict, dict]:
     """`_window`'s window with its record and check: the record registers the anchors' entries and the table's entry
     `Window.write` registers, the check holds a weights' registration of record pinning the table (`embed`) at its root,
     leaves, words and domain, and names no source for the anchors, whose rows are C's marks'."""
-    win, table, window = _window(out)
+    win, table, window = _window(out, emb)
     prog, query = win.window.program, win.window.query
     assert G.marks(json.loads(b"".join(descriptor_chunks(prog)))) == {
         f"embed/{of}": {"supplied": f"registered.{of}/v1", "args": {"value": "embed"}, "layout": "digest", "bits": 512}
@@ -99,12 +103,18 @@ def _pinned(out) -> tuple[I.Window, Table, dict, dict]:
     return win, table, rec, check
 
 
+#: the gated read at the one binding the verifier holds (`docket.GATED`): class 1,1,1's own binding,
+#: ``EmbeddingRead_v4{V=128256,H=2048}``, is not on the list until circuits' lint has evaluated it
+GATED_EMB = I.resolve("EmbeddingRead_v4{V=2,H=1}")
+
+
 def test_a_tables_anchors_from_cs_marks_and_its_pin_are_the_rows_r7_recomputes_from_the_programs_digest(tmp_path):
-    """C marks the table's root and domain anchors with `registered.root/v1` and `registered.domain/v1` of the table's
-    registered value, the weights' registration of record pins the table, the record registers the table's entry
-    `Window.write` writes, and no scheme or parameter supplies rows for the anchors: R7 recomputes their rows from the
-    pin, the rows `interface.supplied` commits, in both verifiers, salted with the program's digest: an accepted run."""
-    win, table, rec, check = _pinned(tmp_path / "window")
+    """C reads the table through the gated read at a binding the verifier holds, marks the table's root and domain
+    anchors with `registered.root/v1` and `registered.domain/v1` of the table's registered value, the weights'
+    registration of record pins the table, the record registers the table's entry `Window.write` writes, and no scheme
+    or parameter supplies rows for the anchors: R7 recomputes their rows from the pin, the rows `interface.supplied`
+    commits, in both verifiers, salted with the program's digest: an accepted run."""
+    win, table, rec, check = _pinned(tmp_path / "window", GATED_EMB)
     pd = program_digest(check["program"])
     for of in ("root", "domain", "opened"):
         row = win.registered[f"embed/{of}"]
@@ -112,6 +122,17 @@ def test_a_tables_anchors_from_cs_marks_and_its_pin_are_the_rows_r7_recomputes_f
     got = V.check(rec, **check)
     assert got.ok and got.codes == (), got
     assert R.check(rec, **check).ok
+
+
+@pytest.mark.parametrize("emb", ["EmbeddingRead_v2{V=4,H=16}", "EmbeddingRead_v4{V=4,H=16}"])
+def test_a_circuit_reaching_an_opener_outside_a_held_gated_template_is_refused(tmp_path, emb):
+    """The same window read through the ungated read, whose rows return whether or not the opening held, or through the
+    gated read at a binding the verifier doesn't hold (no lint evaluated it): refused by both verifiers by
+    `R9-ungated-opener` alone, R7 holding the table as for the gated read."""
+    win, table, rec, check = _pinned(tmp_path / "window", I.resolve(emb))
+    got, mine = V.check(rec, **check), R.check(rec, **check)
+    assert got.codes == mine.codes == ("R9-ungated-opener",), (got, mine)
+    assert mine.detail["R9-ungated-opener"]["templates"] == [emb], mine
 
 
 def _entry(rec: dict, value: str, **change) -> dict:

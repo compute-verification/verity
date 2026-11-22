@@ -15,9 +15,11 @@ namespace Spot
 
 open Flock (V)
 
+/-- `json` is the descriptor `prog` decodes, `Docket.ungatedOpeners`'s reading; null outside `Program.parse`. -/
 structure Program where
   desc : Flock.TemplateQuery.Desc
   prog : Flock.Program.Prog
+  json : Lean.Json := .null
   deriving Inhabited
 
 /-- The program its descriptor's bytes describe. -/
@@ -26,7 +28,8 @@ def Program.parse (bytes : ByteArray) : V Program := do
   if !(prog.defs[prog.root]!).body.recut.isEmpty then
     throw ("recut-root: the root reads an input node at a width other than its registered one; " ++
       "Spot registers no such Program")
-  return { desc := .ofProg prog, prog }
+  let json := match Flock.Program.readJson bytes with | some (.ok j) => j | _ => .null
+  return { desc := .ofProg prog, prog, json }
 
 /-- `partition_object.program_sha512`: SHA-512 of the canonical descriptor without `annotations`. -/
 def Program.sha512 (p : Program) : ByteArray := p.desc.sha512
