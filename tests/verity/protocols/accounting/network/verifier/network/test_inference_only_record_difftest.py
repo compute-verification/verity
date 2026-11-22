@@ -104,8 +104,7 @@ KEYED = {f"2x3 {what}, {how}": "templates" for what in vectors.KEYED for how in 
 HISTORIES = {f"2x3 {what}": stage for what, (stage, _) in vectors.HISTORIES.items()}
 #: of those, the one the form takes that the interface refuses, and the one whose opening is against a history
 LOOSE, OPENED = f"2x3 {vectors.LOOSE}", "2x3 the opening against a history"
-#: the cases on `registered.run`, each with the stage that refuses it, None where the form takes it; the interface reads
-#: no `run` key and refuses each at `inputs`
+#: the cases on `registered.run`, each with the stage that refuses it, None where the form takes it
 RUN = {f"2x3 {what}": stage for what, (stage, _) in vectors.RUN_BOUND.items()}
 #: the cases on a row format, each with the stage that refuses it, or None
 FORMATS = {(f"2x3 {what}" if shape is None else what): stage for what, (stage, shape, _) in vectors.FORMATS.items()}
@@ -691,9 +690,6 @@ def test_the_reference_reads_a_record_as_the_interface_does(random_cases, shaped
         if m["shape"] == LOOSE:
             assert (stage, refusal) == ("inputs", None)
             continue
-        if m["shape"] in RUN:
-            assert refusal == RUN[m["shape"]] and stage == "inputs", (m["shape"], stage, refusal)
-            continue
         bare = refusal == "blocks" and "blocks" not in json.loads(inst["record"])
         assert stage == (None if refusal in OWN or bare else refusal), (m["shape"], m.get("how"))
         if read is None or refusal is not None:
@@ -710,6 +706,8 @@ def test_the_reference_reads_a_record_as_the_interface_does(random_cases, shaped
         T = ref.reference.trusted_of(tr)
         theta = sorted(p for p in x.params if ref.theta(T, x.params, p, ref.width_of(doc, p)))
         assert theta == m["theta"]
+        # a parameter bound for each run is pinned by nothing, whatever root the log holds for it
+        theta = [p for p in theta if p not in x.run]
         roots = T["log"][T["run"]]["window"].get("registered_roots", {})
         pins = {p: T["log"][0]["registered"][k]["root"] for p in theta
                 for k in [max(k for k, en in enumerate(T["log"][0]["registered"]) if en["value"] == p)]}
