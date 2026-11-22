@@ -648,12 +648,13 @@ and population, a refusal naming the codes that fail; then its `units.indices` t
 (`indicesHeld`). A port the registration holds no root of that the verifier's `registered` file reads at a run input
 node's tree (`freshReads`) is not compared: its header root is over the port's table rows (`HmRow.checkPublic`), each
 of which `Flock.Registered.checkPort` opens under that file's root at the position C gives, and `registeredTreesHeld`
-holds that root to the record's `input/n<w>`. -/
-def publicHeld (rec : Json) (pubB : ByteArray) (registered : Option Json := none) : V Unit := do
+holds that root to the record's `input/n<w>`. Nor is one a link names (`linked`): its root is round 1's. -/
+def publicHeld (rec : Json) (pubB : ByteArray) (registered : Option Json := none) (linked : Array Docket.Linked := #[]) :
+    V Unit := do
   let h ← FilePart.header pubB
   let reg ← publicPorts rec
   let fresh ← freshReads registered
-  let h' := fresh.foldl (fun h p => if reg.any (·.1 == p) then h else dropHeaderPort h p) h
+  let h' := (fresh ++ linked.map (·.port)).foldl (fun h p => if reg.any (·.1 == p) then h else dropHeaderPort h p) h
   let fv := getD h' "frame_v3"
   let c := Record.matchesPublicBy reg rec (getD h' "scheme") (getD fv "roots") (getD fv "domain_ids")
     (getD h' "instances")
@@ -663,7 +664,7 @@ def publicHeld (rec : Json) (pubB : ByteArray) (registered : Option Json := none
 /-- `publicHeld` passes only on a public file whose header's `units.indices` are the registration's population units in
 order (`indicesHeld`): the unit `provedUnits` credits for instance `i` is `i`, fixed by the registration before any coin. -/
 theorem indicesHeld_of_publicHeld {rec : Json} {pubB : ByteArray} {registered : Option Json}
-    (h : publicHeld rec pubB registered = .ok ()) :
+    {linked : Array Docket.Linked} (h : publicHeld rec pubB registered linked = .ok ()) :
     ∃ hd, FilePart.header pubB = .ok hd ∧ indicesHeld rec hd = true := by
   unfold publicHeld at h
   cases hh : FilePart.header pubB with
@@ -1188,7 +1189,7 @@ def checkOneBody (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Ev
     treesHeld p.own ts e bs
     popHeld p.base.verifier c.record
     let pubB ← bs.get p.own.pub "public file"
-    publicHeld c.record pubB p.own.registered
+    publicHeld c.record pubB p.own.registered p.base.verifier.linked
     registeredTreesHeld (rootsByPort c.record) "the verifier" p.own.registered
     run p.own e.sessions (some e.base.provedUnits) bs
   match r with

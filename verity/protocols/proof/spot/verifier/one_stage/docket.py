@@ -1372,13 +1372,15 @@ def fresh_reads(registered: Mapping[str, Any] | None) -> list[str]:
     return [p for p, e in ((registered or {}).get("ports") or {}).items() if G.is_fresh_value(e.get("value"))]
 
 
-def public_held(rec: Mapping[str, Any], header: Mapping[str, Any], registered: Mapping[str, Any] | None = None) -> Verdict:
+def public_held(rec: Mapping[str, Any], header: Mapping[str, Any], registered: Mapping[str, Any] | None = None,
+                linked: Sequence[Mapping[str, Any]] = ()) -> Verdict:
     """`OneStageZkStatement.publicHeld`'s comparison: the one statement's public file's ``header`` against the record at
     `public_ports`, each port the registration holds no root of that the verifier's ``registered`` file reads at a run
-    input node's tree (`fresh_reads`) left out of its roots and domains. Raises `ValueError` where `public_ports` does."""
+    input node's tree (`fresh_reads`) or a link names (``linked``: its root is round 1's) left out of its roots and
+    domains. Raises `ValueError` where `public_ports` does."""
     reg = public_ports(rec)
     fv = header.get("frame_v3") or {}
-    drop = {p for p in fresh_reads(registered) if p not in reg}
+    drop = {p for p in [*fresh_reads(registered), *(x["port"] for x in linked)] if p not in reg}
     roots = {p: r for p, r in (fv.get("roots") or {}).items() if p not in drop}
     domains = {p: d for p, d in (fv.get("domain_ids") or {}).items() if p not in drop}
     return matches_public(rec, header.get("scheme"), roots, domains, header.get("instances"), reg=reg)

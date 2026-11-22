@@ -1178,16 +1178,25 @@ def positionsOf (P : Flock.Program.Prog) (ss : Array Json) : Array Pos :=
     | none => acc) #[]
 
 /-- Registered-reads entry `e` of template `t`'s session port `port` at the rows the verifier holds (`Own.positions`):
-its `reads` and `reads_from` the ones C gives (`positionsOf`), null where C gives none, so `placedOk` and `rowsOk`
+its `reads` and `reads_from` the ones C gives (`positionsOf`), else `orElse`'s, else null, so `placedOk` and `rowsOk`
 refuse the read whatever the file states; `e` itself where the verifier holds no positions. -/
-def atPos (own : Own) (t port : String) (e : Json) : Json :=
+def atPos (own : Own) (t port : String) (e : Json) (orElse : Option Json := none) : Json :=
   match own.positions with
   | none => e
   | some ps => match ps.find? (fun x => x.template == t && x.port == port) with
     | some x => setKey (setKey e "reads" (Json.arr (x.rel.map fun r => match r with
         | some n => Lean.toJson n
         | none => .null))) "reads_from" (Lean.toJson x.first)
-    | none => setKey (setKey e "reads" .null) "reads_from" .null
+    | none => orElse.getD (setKey (setKey e "reads" .null) "reads_from" .null)
+
+/-- Entry `e` of part `p`'s port at each slot's unit's row of its cell's replay block (`linkedRow`, of rows `r`), from
+the part's first slot: the rows the verifier holds for a link's output C gives no position (a return round 1's record
+commits), `atPos`'s `orElse` there. -/
+def linkedRows (own : Own) (p : Part) (r : Rows) (e : Json) : Json :=
+  setKey (setKey e "reads" (Json.arr ((List.range (own.sample.size * p.n)).toArray.map fun k =>
+    match linkedRow own p r (p.lo + k) with
+    | some n => Lean.toJson n
+    | none => .null))) "reads_from" (Lean.toJson p.lo)
 
 /-- Every read of registered-reads entry `e` (slot `reads_from + k` reads row `reads[k]`, null for none) is by one of
 part `p`'s slots `u`, of the first row of the unit `unit u` names, in a tree of `units` units' rows, `leaves / units`
@@ -1252,7 +1261,8 @@ def readOk (own : Own) (named : Bool) (p : Part) (port : String) (e : Json) : Bo
         match (Record.byPort own.boundary).find? (·.1 == v), nat? (getD own.boundary "population"),
             rowsOf own p.template port with
           | some (_, b), some m, some r =>
-            sameAt e b && placedOk q p (atPos own p.template port e) (m * r.per) (linkedRow own p r)
+            sameAt e b && placedOk q p (atPos own p.template port e (some (linkedRows own p r e))) (m * r.per)
+              (linkedRow own p r)
           | _, _, _ => false
   | .str v, none, some w =>
     v == portOf named w.writer w.wport && match (Record.byPort own.interior).find? (·.1 == v), writerOf own w,

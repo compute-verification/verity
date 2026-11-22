@@ -229,8 +229,11 @@ private def exPlaced (rel : List Nat) : Own :=
 #guard (exCheck (exPlaced [1, 1, 1, 3, 3, 3]) #[exReading "bx" 5 6 4 [1, 1, 1, 3, 3, 3]]).codes.isEmpty
 #guard (exCheck (exPlaced [1, 1, 1, 3, 3, 3]) #[exReading "bx" 5 6 4 [0, 0, 0, 0, 0, 0]]).codes.isEmpty
 #guard (exCheck (exPlaced [1, 1, 1, 3, 3, 2]) #[exReading "bx" 5 6 4 [1, 1, 1, 3, 3, 3]]).codes == #["second-read"]
-#guard (exCheck { exPlaced [] with positions := some #[] } #[exReading "bx" 5 6 4 [1, 1, 1, 3, 3, 3]]).codes ==
-  #["second-read"]
+-- a link's port C gives no position (a return round 1's record commits) is read at round 1's rows, each slot its
+-- unit's row of its replay block, whatever the file states; at another tree than round 1's it is refused
+#guard (exCheck { exPlaced [] with positions := some #[] } #[exReading "bx" 5 6 4 [0, 0, 0, 0, 0, 0]]).codes.isEmpty
+#guard (exCheck { exPlaced [] with positions := some #[] } #[exReading "bx" 5 6 16 [1, 1, 1, 3, 3, 3]]).codes ==
+  #["second-read", "second-link-root"]
 #guard (exCheck { exOwn with links := none } #[exHonest]).codes == #["second-links"]
 #guard (check { exOwn with links := none } none).codes == #["second-links"]
 #guard (check { exOwn with links := some #[⟨"Other_v0", "x", "bx"⟩] } none).codes == #["second-links"]

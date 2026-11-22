@@ -934,6 +934,11 @@ private def xReadT (value : String) : Json :=
 -- a port the registration holds a root of is compared, whatever the registered file reads it at
 #guard refusal (publicHeld (portsRecord ["input/n3", "x"]) (portsPublic ["x"]) (some (xReadT "input/n3"))) ==
   "public file: not the registration's: roots, domains"
+-- nor one a link names (its root round 1's), and a port the registration holds a root of is compared, linked or not
+#guard refusal (publicHeld (portsRecord ["y", "input/n3"]) (portsPublic ["y", "x"]) none
+  #[{ template := "T", port := "x", value := "x", entry := Json.null }]) == ""
+#guard refusal (publicHeld (portsRecord ["input/n3", "x"]) (portsPublic ["x"]) none
+  #[{ template := "T", port := "x", value := "x", entry := Json.null }]) == "public file: not the registration's: roots, domains"
 
 /-- A registration holding run input node 3's tree at the root of `c`s, `d`'s domain and 2 leaves. -/
 private def freshTreeT (c : Char) : Json :=

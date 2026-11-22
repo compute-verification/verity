@@ -349,6 +349,9 @@ def test_the_one_statement_leaves_out_a_port_only_where_its_registered_file_read
     assert R.public_held(record(["y", "input/n3"]), header(["y", "x"]), reads("input/n3")).ok
     assert R.public_held(record(["y", "input/n3"]), header(["y", "x"]), reads("w")).codes == ("roots",)
     assert R.public_held(record(["input/n3", "x"]), header(["x"]), reads("input/n3")).codes == ("roots", "domains")
+    linked = [{"template": "T", "port": "x", "value": "x", "entry": None}]
+    assert R.public_held(record(["y", "input/n3"]), header(["y", "x"]), linked=linked).ok
+    assert R.public_held(record(["input/n3", "x"]), header(["x"]), linked=linked).codes == ("roots", "domains")
 
     def tree(c):
         return {"roots": [{"domain": "d" * 128, "leaves": 2, "port": "input/n3", "root": c * 128}]}

@@ -796,14 +796,17 @@ def _same_at(e: Any, x: Any) -> bool:
             and _nat(leaves) and leaves <= MAX_LEAVES)
 
 
-def _at_pos(own: Own, t: str, port: str, e: Any) -> Any:
+def _at_pos(own: Own, t: str, port: str, e: Any, or_else: Any = None) -> Any:
     """`SecondStage.atPos`: registered-reads entry `e` of template `t`'s session port `port` at the rows the verifier
-    holds (`Own.positions`): its ``reads`` and ``reads_from`` the ones C gives, None where C gives none, so `_placed_ok`
-    and `_rows_ok` refuse the read whatever the file states; `e` itself where the verifier holds no positions."""
+    holds (`Own.positions`): its ``reads`` and ``reads_from`` the ones C gives, else ``or_else``, else None, so
+    `_placed_ok` and `_rows_ok` refuse the read whatever the file states; `e` itself where the verifier holds no
+    positions."""
     if own.positions is None or not isinstance(e, dict):
         return e
     x = next((x for x in own.positions if x.template == t and x.port == port), None)
-    return {**e, "reads": None, "reads_from": None} if x is None else {**e, "reads": list(x.rel), "reads_from": x.first}
+    if x is None:
+        return {**e, "reads": None, "reads_from": None} if or_else is None else or_else
+    return {**e, "reads": list(x.rel), "reads_from": x.first}
 
 
 def _rows_ok(q: int, p: Part, e: Any, units: int, unit: Callable[[int], int | None]) -> bool:
@@ -849,6 +852,14 @@ def _linked_row(own: Own, p: Part, r: Rows, u: int) -> int | None:
     return own.sample[i] * r.per + x if 0 <= i < len(own.sample) and x is not None and x < r.per else None
 
 
+def _linked_rows(own: Own, p: Part, r: Rows, e: Any) -> Any:
+    """`SecondStage.linkedRows`: entry `e` at each slot's unit's row of its cell's replay block (`_linked_row`), from
+    the part's first slot, `_at_pos`'s ``or_else`` for a link's output C gives no position."""
+    if not isinstance(e, dict):
+        return e
+    return {**e, "reads": [_linked_row(own, p, r, p.lo + k) for k in range(len(own.sample) * p.n)], "reads_from": p.lo}
+
+
 def _wired_row(p: Part, r: Rows, u: int) -> int | None:
     """`SecondStage.wiredRow`: the row slot `u` of part `p` reads at a port a wire names, of rows `r`: its unit's writer
     unit's (`row_at`), of the `per` its cell's replay block holds in the writer's output port."""
@@ -882,7 +893,8 @@ def _read_ok(own: Own, named: bool, p: Part, port: str, e: Any) -> bool:
         if not (b is not None and _nat(m) and r is not None):
             return False
         lr = r
-        return _same_at(e, b) and _placed_ok(q, p, ep, m * lr.per, lambda u: _linked_row(own, p, lr, u))
+        return _same_at(e, b) and _placed_ok(q, p, _at_pos(own, p.template, port, e, _linked_rows(own, p, lr, e)),
+                                             m * lr.per, lambda u: _linked_row(own, p, lr, u))
     wire = _wire_of(own, p.template, port)
     if wire is not None:
         x, pw, r = _by_port(own.interior).get(v), _writer_of(own, wire), _rows_of(own, p.template, port)
