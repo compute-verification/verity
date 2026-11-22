@@ -367,6 +367,16 @@ def DEVELOPMENT_WHY : String :=
   "the registration's digest was taken from the serving node's own file and is held by no one else: nobody but the " ++
     "prover's side attests that the registration was fixed before the coins, so this run states no bound from the sample"
 
+/-- What an accepted run says first about where its registration was taken: parameters with no registration are the
+development path and say what it says (`DEVELOPMENT_WHY`); one taken from the ledger says nothing first. -/
+def registrationFirst : Option RegistrationSource → Option String
+  | some (.ledger _) => none
+  | _ => some DEVELOPMENT_WHY
+
+#guard registrationFirst none == some DEVELOPMENT_WHY
+#guard registrationFirst (some .development) == some DEVELOPMENT_WHY
+#guard registrationFirst (some (.ledger "circuits")) == none
+
 def REGISTRATION_FORM : String :=
   "the registration is {record, ledger, lane} or {record, head: \"development\"}: the deployment's registration " ++
     "record's bytes in hex, with the auditor's ledger (its lines) and the lane the auditor names, or the development " ++
@@ -417,7 +427,7 @@ def NO_LEDGER_AFTER_DRAW_WHY : String :=
 run's registration rests on: on the auditor's ledger the epoch's session ends with (`coins`' `ledger`), the epoch is
 held to the digest the run was held to before the draw, signed for the auditor's lane before the session's first entry
 (`Challenger.registrationHeld`); with no ledger, refused (`NO_LEDGER_AFTER_DRAW_WHY`). Nothing to test on the
-development path or with no record. -/
+development path or with no record, which an accepted run says first (`registrationFirst`). -/
 def registrationAfterDraw (p : Params) (coins : Json) : V Unit := do
   let some (.ledger lane) := p.registration | return ()
   let (some (key, _), some w, some (_, digest)) := (p.challenger, p.verifier.windowRoot, p.verifier.weightsOfRecord)

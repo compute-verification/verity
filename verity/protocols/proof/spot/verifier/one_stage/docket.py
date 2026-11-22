@@ -228,6 +228,15 @@ DEVELOPMENT = "development"
 DEVELOPMENT_WHY = ("the registration's digest was taken from the serving node's own file and is held by no one else: "
                    "nobody but the prover's side attests that the registration was fixed before the coins, so this run "
                    "states no bound from the sample")
+
+
+def registration_first(source: str | None) -> str | None:
+    """`OneStage.registrationFirst`: what an accepted run says first about where its registration was taken, by its
+    source (``"ledger"``, `DEVELOPMENT`, or None for parameters with none): none and the development path say
+    `DEVELOPMENT_WHY`; the ledger says nothing first."""
+    return None if source == "ledger" else DEVELOPMENT_WHY
+
+
 REGISTRATION_FORM = ("the registration is {record, ledger, lane} or {record, head: \"development\"}: the deployment's "
                      "registration record's bytes in hex, with the auditor's ledger (its lines) and the lane the auditor "
                      "names, or the development path named")
