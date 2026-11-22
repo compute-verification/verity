@@ -3,9 +3,9 @@ module
 public import Spot.OneStageZk
 
 /-!
-# The per-member form tests its record against the root its coins verify under (`MembersRootHeld`)
+# The per-member variant tests its record against the root its coins verify under (`MembersRootHeld`)
 
-Everything the window's record registers hangs from the window's open root R: the registration check takes every
+Everything the epoch's record registers hangs from the epoch's open root R: the registration check takes every
 registered value's domain under it (`Docket.check`, through `Docket.ownEntries`), and the members' check holds each
 run input node's one tree to the domain under it (`OneStageZk.runInputRoots`, `OneStageZk.runTreeHeld`). The verifier
 reads R from its own parameters (`Docket.Verifier.windowRoot`), never from the record or the evidence.
@@ -22,8 +22,8 @@ namespace Properties.Spot
 
 /-- **Where the audit accepts, the root its record's tests read is the root its coins verify under**: the check on the
 blobs (`OneStageZk.checkBlobs`) accepts only at coins `ξ` that the challenger session the auditor's ledger opens on
-the verifier's window root R released, under the verifier's key and family, after the registration's digest; and on
-parameters that name members, the registration check passed with R as the window root, the challenger's coin trees
+the verifier's epoch root R released, under the verifier's key and family, after the registration's digest; and on
+parameters that name members, the registration check passed with R as the epoch root, the challenger's coin trees
 read under R, and every member's run input trees held to their domains under R. -/
 def MembersRootHeld : Prop :=
   ∀ (p : _root_.Spot.OneStageZk.Params) (c : _root_.Spot.OneStage.Commitment) (e : _root_.Spot.OneStageZk.Evidence)

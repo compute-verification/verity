@@ -3,7 +3,7 @@ module
 public import Properties.Spot.RootHeld
 public import Proofs.Properties.Challenger
 
-/-! # Proof that the per-member form tests its record against the root its coins verify under (`Properties.Spot.MembersRootHeld`) -/
+/-! # Proof that the per-member variant tests its record against the root its coins verify under (`Properties.Spot.MembersRootHeld`) -/
 
 @[expose] public section
 
@@ -20,7 +20,7 @@ theorem atCoins_accept {Coins Pub Prof : Type} {x : Flock.V Coins} {k : Coins �
   | ok ξ => rw [hx] at h; exact ⟨ξ, rfl, h⟩
   | error r => rw [hx] at h; cases h
 
-/-- Where v2's coins are read under the challenger `d`, the parameters name its key, family and window, and its digest
+/-- Where v2's coins are read under the challenger `d`, the parameters name its key, family and epoch, and its digest
 is the registration's. -/
 theorem source_some {p : OneStageZk.Params} {c : OneStage.Commitment} {d : Properties.Challenger.Draws}
     (h : Properties.Challenger.oneStageZkSource p c = some d) :
@@ -30,7 +30,7 @@ theorem source_some {p : OneStageZk.Params} {c : OneStage.Commitment} {d : Prope
     simp only [hch, hw] at h <;> try cases h
   exact ⟨rfl, rfl, rfl⟩
 
-/-- **The coins v2 reads are the challenger session's on the verifier's window root.** -/
+/-- **The coins v2 reads are the challenger session's on the verifier's epoch root.** -/
 theorem coins_root {p : OneStageZk.Params} {c : OneStage.Commitment} {e : OneStageZk.Evidence} {ξ : ByteArray}
     (h : OneStageZk.coinsOf p c e = .ok ξ) :
     ∃ key label R, p.base.challenger = some (key, label) ∧ p.base.verifier.windowRoot = some R ∧
@@ -65,7 +65,7 @@ theorem verifier_with {v : Docket.Verifier} {R : String} (h : v.windowRoot = som
     { v with windowRoot := some R } = v := by
   rw [← h]
 
-/-- **The trees v2 reads are the challenger session's on the verifier's window root.** -/
+/-- **The trees v2 reads are the challenger session's on the verifier's epoch root.** -/
 theorem trees_root {p : OneStage.Params} {e : OneStage.Evidence} {key : Challenger.ChallengerKey} {label R : String}
     {ts : Array Challenger.LoggedTree} (hch : p.challenger = some (key, label)) (hw : p.verifier.windowRoot = some R)
     (h : OneStageZk.treesOf p e = .ok ts) : Challenger.trustedTreesOf key R e.coins = .ok ts := by
@@ -76,8 +76,8 @@ theorem trees_root {p : OneStage.Params} {e : OneStage.Evidence} {key : Challeng
   | error r => rw [ht] at h; cases h
   | ok t => rw [ht] at h; exact h
 
-/-- **Where the per-member form's structure holds, the trees it read are the challenger session's on the verifier's
-window root.** -/
+/-- **Where the per-member variant's structure holds, the trees it read are the challenger session's on the verifier's
+epoch root.** -/
 theorem membersStructure_trees {p : OneStageZk.Params} {ms : Array OneStageZk.Member} {c : OneStage.Commitment}
     {e : OneStageZk.Evidence} {sts : Array OneStageZk.StatementFiles} {bs : Core.Blobs}
     {key : Challenger.ChallengerKey} {label R : String} (hch : p.base.challenger = some (key, label))
@@ -94,7 +94,7 @@ theorem membersStructure_trees {p : OneStageZk.Params} {ms : Array OneStageZk.Me
   exact ⟨ts, trees_root hch hw hts⟩
 
 /-- **Where the members' roots return, every member's run input trees were held** (`OneStageZk.runInputRoots`, at the
-verifier's own window root). -/
+verifier's own epoch root). -/
 theorem membersRootsOf_runInputRoots {p : OneStageZk.Params} {ms : Array OneStageZk.Member} {rec : Json}
     {roots : Std.HashMap String (Array Json)} (h : OneStageZk.membersRootsOf p ms rec = .ok roots) :
     ∃ P rs roots₀ roots', Program.parse p.own.program = .ok P ∧
@@ -118,7 +118,7 @@ namespace Properties.Spot.SecurityProofs
 
 open Properties.Spot.RootHeldProof
 
-/-- **`MembersRootHeld`**: where the audit accepts, the window root its record's tests read is the root of the
+/-- **`MembersRootHeld`**: where the audit accepts, the epoch root its record's tests read is the root of the
 challenger session whose signed coins it drew its sample from and whose coin trees it held the sessions to. -/
 theorem membersRootHeld : MembersRootHeld := by
   intro p c e bs pub prof h
