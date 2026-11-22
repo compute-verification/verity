@@ -6815,7 +6815,8 @@ def _serve_calls(tmp_path: Path, env: dict[str, str]) -> tuple[int, list[str], l
 
 RELEASE_RUN = "5e" * 16
 #: what `served_verdicts.sh serve` issues through the venv's python at its defaults with H1 off, in order: the endpoint,
-#: the weights' docket, the load's release run and the load; a front's call and its line come before the load
+#: the weights' docket, the registration's hold (with no REGISTRATION_LANE, the development path's line), the load's
+#: release run and the load; a front's call and its line come before the load
 #: what the serve's one --protocols-config holds with no protocol's: release order, the network attester's setting
 RELEASE_ORDER = json.dumps({NETWORK_ATTESTER.name: {"order": "release-order"}})
 SERVE_OPENAI = (
@@ -6830,6 +6831,7 @@ WEIGHTS_REGISTRATION = (
     "/workspace/hf/hub/models--verity-int8--Llama-3.2-1B-INT8/snapshots/15b0976d400d796ee589e7737d03a919526bf800 "
     "--out TMP/serve/weights_registration.json --deployment-record "
     "TMP/serve/deployment-registration.json")
+REGISTRATION_HOLD = "TMP/tree/benchmarks/one_stage/served_verdicts.py registration-hold TMP/serve/deployment-registration.json"
 NEW_RELEASE_RUN = "-c import uuid; print(uuid.uuid4().hex)"
 SERVE_LOAD = "{load} " f"--port 18190 --release {RELEASE_RUN} --out TMP/serve/load.jsonl"
 VARIED_LOAD = SERVE_LOAD.format(load="TMP/tree/adapters/vllm/tools/served_run/serve_load.py --model verity-int8/Llama-3.2-1B-INT8 "
@@ -6866,10 +6868,10 @@ LOADS = pytest.mark.parametrize("env, issued, said", [
 def test_the_serve_step_issues_these_commands_and_lines_under_each_load(tmp_path, env, issued, said):
     """Under LOAD varied (the default), dataset and front, with and without a rehearsal's front, the serve step issues
     through the venv's python exactly these commands in this order and publishes exactly these lines: the endpoint, the
-    weights' docket, the front's call and its line where one is set, the load's release run and the load. A change
+    weights' docket, the registration's hold, the front's call and its line where one is set, the load's release run and the load. A change
     to the runner that alters one of them under these loads fails here."""
     rc, calls, lines = _serve_calls(tmp_path, env)
-    assert rc == 0 and calls == [SERVE_OPENAI, WEIGHTS_REGISTRATION, *issued], (rc, calls)
+    assert rc == 0 and calls == [SERVE_OPENAI, WEIGHTS_REGISTRATION, REGISTRATION_HOLD, *issued], (rc, calls)
     assert lines == SAID_UP + said + SAID_STOPPED
 
 
@@ -6886,7 +6888,7 @@ def test_under_every_other_load_the_serve_step_starts_nothing_of_a_session(tmp_p
     caller's own rehearsal front does, and issues and says what it does without them."""
     rc, calls, lines = _serve_calls(tmp_path, {**env, "LOAD_CMD": _notes(tmp_path, "a session's load"),
                                                "CERTIFIER_CLOSE": _notes(tmp_path, "a session's close")})
-    assert rc == 0 and calls == [SERVE_OPENAI, WEIGHTS_REGISTRATION, *issued], (rc, calls)
+    assert rc == 0 and calls == [SERVE_OPENAI, WEIGHTS_REGISTRATION, REGISTRATION_HOLD, *issued], (rc, calls)
     assert lines == SAID_UP + said + SAID_STOPPED
     assert not [c for c in calls if "--session" in c or "attester_piece.py close" in c or "a session's" in c]
     assert sum("attester_piece.py" in c for c in calls) == ("CERTIFIER_FRONT" in env)
@@ -6917,7 +6919,7 @@ def test_a_sessions_serve_step_runs_the_callers_load_between_the_front_and_the_c
     got, calls, lines = _serve_calls(tmp_path, {"LOAD": "session", "CERTIFIER_FRONT": SESSION_FRONT,
                                                 "LOAD_CMD": _notes(tmp_path, "the caller's load", load_rc),
                                                 "CERTIFIER_CLOSE": SESSION_CLOSE, **extra})
-    assert got == rc and calls == [SERVE_OPENAI, WEIGHTS_REGISTRATION, *issued], (got, calls)
+    assert got == rc and calls == [SERVE_OPENAI, WEIGHTS_REGISTRATION, REGISTRATION_HOLD, *issued], (got, calls)
     assert lines == SAID_UP + said + SAID_STOPPED
     assert not [c for c in calls if "serve_load.py" in c or c == NEW_RELEASE_RUN]
 
