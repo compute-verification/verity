@@ -27,6 +27,9 @@ FIELDS = ("file", "kind", "symbol", "detail")
 OPENERS = {"FrameV3Read_v1": ("value", "path"), "FrameV3ReadAt_v1": ("value", "path"),
            "MerkleRead_v1": ("leaf", "path"), "LmsVerify_v1": ("message", "C", "y", "path")}
 GATED, VERDICT, UNGATED = "gated", "verdict", "ungated"
+RECORD = Path(__file__).resolve().parent / "openers_gated.json"
+#: the bindings a registered circuit uses of a template that reaches an opener: (module, template, statics)
+SERVED = (("verity.commitments.gates.embedding", "EmbeddingRead_v4", {"V": 128256, "H": 2048}),)
 
 
 def _imports() -> tuple[Any, Any, Any, Any]:
@@ -331,6 +334,38 @@ def report(got: dict, undecided: dict, stats: dict) -> str:
     return "\n".join(lines)
 
 
+def evaluated(fn: Any) -> dict:
+    """``fn``'s entry of the record, from a walk and a three-valued run of that very binding; refused (ValueError) unless
+    every output is gated or a verdict."""
+    from verity.circuits import codec as C
+    from verity.circuits.program import Program
+
+    _BD, T, D, _BC = _imports()
+    T.load_registries()
+    members, callees, undecided, _slow = walk([fn])
+    if undecided:
+        raise ValueError(f"{fn.id}: undecided: {undecided}")
+    cs = Gating(reaching(members, callees)).classify(fn)
+    if any(c == UNGATED for _, c in cs):
+        raise ValueError(f"{fn.id}: ungated outputs {cs}: not a record entry")
+    params, ret = fn.signature()
+    shell = D.CompositeDefinition(f"Show[{fn.id}]", 1, (), lambda S: (tuple(params), ret), lambda B, S, *a: B.call(fn, *a),
+                                  register=False)
+    key = C.descriptor_id(fn)
+    return {"template": fn.base_id, "key": key, "closure_digest": C.closure_digest(C.encode_program(Program(shell)), key),
+            "class": VERDICT if any(c == VERDICT for _, c in cs) else GATED, "outputs": [list(x) for x in cs],
+            "evaluated": True}
+
+
+def record() -> dict:
+    import importlib
+
+    D = _imports()[2]
+    return {"rule": "circuit templates that reach an opener and gate on its verdict, at each binding a registered circuit "
+                    "uses, each evaluated at that binding (tests/lint/test_repo_openers_gated.py --write)",
+            "entries": [evaluated(D.bind(getattr(importlib.import_module(m), t), **st)) for m, t, st in SERVED]}
+
+
 @pytest.mark.slow
 def test_no_new_ungated_opener() -> None:
     got, undecided, stats = classes()
@@ -363,3 +398,13 @@ def test_a_gated_read_and_an_ungated_one() -> None:
     got, undecided, stats = classes([v4, D.bind(E.EmbeddingRead, V=2, H=16), v2])
     assert not undecided and stats["compared"] == 1
     assert {fn.id: cs for fn, cs in got.values()} == {v4.id: [("0", GATED), ("1", GATED)], v2.id: [("0", UNGATED), ("1", VERDICT)]}
+
+
+@pytest.mark.slow
+def test_the_record_is_the_walks() -> None:
+    assert json.loads(RECORD.read_text(encoding="utf-8")) == record(), (
+        f"{RECORD.name} is not what evaluating each binding gives: python3 {Path(__file__).relative_to(ROOT)} --write")
+
+
+if __name__ == "__main__" and sys.argv[1:] == ["--write"]:
+    RECORD.write_text(json.dumps(record(), indent=2) + "\n", encoding="utf-8")
