@@ -32,6 +32,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -628,7 +629,6 @@ def test_a_declared_records_count_is_its_free_inputs_and_the_advice_against_the_
         (tmp_path / f"{name}.json").write_text(json.dumps(reg))
     for pins, reg, roots in [((), None, {}), ((), "core", PIN_A), (("a=" + "ab" * 64,), "core", PIN_A),
                              (("a=" + "AB" * 64,), "own", PIN_A), (("a=" + "ab" * 64,), "other", {"a": "cd" * 64}),
-                             (("a=" + "ab" * 64,), "none", {}), (("a=" + "ab" * 64,), None, {}),
                              (("a=" + "ab" * 64,), "activations", PIN_A), (("a=" + "ab" * 64,), "registered", PIN_A)]:
         capsys.readouterr()
         argv = ["count", "--circuit", str(tmp_path / "c.json"), "--bits", "1687", *(f"--pin={p}" for p in pins),
@@ -657,6 +657,34 @@ def test_a_declared_records_count_is_its_free_inputs_and_the_advice_against_the_
             RA.main(["count", "--circuit", str(tmp_path / "c.json"), "--bits", "1687", *bad])
     with pytest.raises(ValueError, match="or its listed members"):
         RA.declared_count({"templates": doc["templates"]}, 0)
+
+
+def test_count_with_pins_refuses_a_registration_that_is_absent_not_there_or_records_no_root(tmp_path, capsys):
+    """``count`` with pins holds them to a named ``--registration``: none named, a path to no file, or a registration that
+    records no root (`interface.NO_REGISTERED_ROOTS`, through the shared reader) each refuse by name."""
+    (tmp_path / "c.json").write_bytes(IF.circuit_bytes(_registered_circuit().description()))
+    (tmp_path / "none.json").write_text(json.dumps({"window": 63}))
+    base = ["count", "--circuit", str(tmp_path / "c.json"), "--bits", "1687", "--pin", "a=" + PIN_A["a"]]
+    for extra, why in (([], "--pin/--pins name registered parameters and no --registration"),
+                       (["--registration", str(tmp_path / "absent.json")], "which is not there"),
+                       (["--registration", str(tmp_path / "none.json")], re.escape(IF.NO_REGISTERED_ROOTS))):
+        with pytest.raises(SystemExit, match=why):
+            RA.main([*base, *extra])
+    assert RA.registration_roots({"window": 63}) == {}
+    with pytest.raises(ValueError, match=re.escape(IF.NO_REGISTERED_ROOTS)):
+        RA.registration_roots({"window": 63}, required=True)
+
+
+def test_count_with_no_pins_says_first_that_no_registered_information_is_read(tmp_path, capsys):
+    """``count`` with no pins over a circuit with registered parameters is the development path: its first line, on
+    stderr beside the count, says no registered information is read, and every registered read is free."""
+    doc = _registered_circuit().description()
+    (tmp_path / "c.json").write_bytes(IF.circuit_bytes(doc))
+    assert RA.main(["count", "--circuit", str(tmp_path / "c.json"), "--bits", "1687"]) == 0
+    got = capsys.readouterr()
+    assert got.err.splitlines()[0] == f"DEVELOPMENT {RA.DEVELOPMENT_RESTS['pins']}"
+    assert RA.DEVELOPMENT_RESTS["pins"].startswith("no registered information is read: no pins were named")
+    assert json.loads(got.out) == RA.declared_count(doc, 1687)
 
 
 def test_a_windows_roots_are_its_registered_roots_and_its_committed_values_entries_roots():

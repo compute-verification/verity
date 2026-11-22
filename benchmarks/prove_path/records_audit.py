@@ -510,11 +510,12 @@ def pins_of(pin: Iterable[tuple[str, str]], files: Iterable[str] = ()) -> dict[s
 ENTRY_GROUPS = ("activations", "registered")
 
 
-def window_roots(w: Mapping[str, Any]) -> dict[str, str]:
+def window_roots(w: Mapping[str, Any], required: bool = False) -> dict[str, str]:
     """The roots a window's docket records for its parameters, by parameter: its registered roots
-    (``registered_roots``, `interface.registered_roots`) and each committed value's entry's root (`ENTRY_GROUPS`). Refused
-    (ValueError) where an entry names no root of hex digits or two of them give one parameter two roots."""
-    roots = IF.registered_roots(w)
+    (``registered_roots``, `interface.registration_roots`) and each committed value's entry's root (`ENTRY_GROUPS`).
+    Refused (ValueError) where an entry names no root of hex digits, two of them give one parameter two roots, or, where
+    ``required``, the docket records no root at all (`interface.NO_REGISTERED_ROOTS`)."""
+    groups = []
     for g in ENTRY_GROUPS:
         if w.get(g) is None:
             continue
@@ -524,16 +525,19 @@ def window_roots(w: Mapping[str, Any]) -> dict[str, str]:
             raise ValueError(f"the window's {g} is {{program, values: {{param: entry}}}}, each entry with its root: "
                              f"{type(e).__name__}: {e}") from e
         IF.held_params({}, got)
+        groups.append(got)
+    roots = IF.registration_roots(w, required=required and not any(groups))
+    for got in groups:
         if two := sorted(v for v, r in got.items() if roots.setdefault(v, r).lower() != r.lower()):
             raise ValueError(f"the window's registration records two roots for {two}")
     return roots
 
 
-def registration_roots(rec: Mapping[str, Any]) -> dict[str, str]:
+def registration_roots(rec: Mapping[str, Any], required: bool = False) -> dict[str, str]:
     """The roots a window's registration records for its parameters (`window_roots`): core's docket's window's, or
     an integration's own window registration's, whose ``window`` is no mapping (vLLM's advice registration names the
-    window's index there)."""
-    return window_roots(IF.registration_window(rec))
+    window's index there). Refused as `window_roots` refuses."""
+    return window_roots(IF.registration_window(rec), required)
 
 
 def pinned(doc: Any) -> dict[str, dict[str, Any]]:
@@ -748,7 +752,9 @@ DAY_SOURCES = {"device": "the challenger's signed ledger (--day-ledger)",
 DEVELOPMENT_RESTS = {"circuit": "the circuit is the record's own, pinned by no one (circuit.json held to no --circuit "
                                 "digest and no compile check)",
                      "day": "the day is the developer's own, signed by no one (--day and --day-log under an auditor of "
-                            "no keys)"}
+                            "no keys)",
+                     "pins": "no registered information is read: no pins were named (--pin, --pins), so every registered "
+                             "read is free"}
 
 
 def keyed(params: str | None) -> bool:
@@ -1279,6 +1285,7 @@ def audit(a: argparse.Namespace) -> int:
         ties, untied = window_pins(own, doc, resolve, docket)
         if twice := sorted((set(ties) | set(untied)) & set(pins)):
             raise ValueError(f"values {twice} are both pinned and the window's own")
+        roots = window_roots(own, required=bool(pins))
         pins |= ties | untied
         w_tie = json.loads(Path(a.tie_file).read_text()) if a.tie_file else None
         decl = IF.declarations(doc)[2]
@@ -1287,7 +1294,6 @@ def audit(a: argparse.Namespace) -> int:
         if twice := sorted(set(tie_pins) & set(pins)):
             raise ValueError(f"values {twice} are both pinned and the earlier registration's")
         pins |= tie_pins
-        roots = window_roots(own)
         for e in docket.get("registered") or ():
             if e.get("value") in tie_pins and roots.setdefault(e["value"], e["root"]) != e["root"]:
                 raise ValueError(f"the window's registration records two roots for {e['value']!r}")
@@ -1609,7 +1615,8 @@ def main(argv: list[str] | None = None) -> int:
                    "registration of values {program, values} (vLLM's committer's weights registration, "
                    "window_weights.weights_registration), with --pin's (repeatable)")
     p.add_argument("--registration", help="the window's registration, whose roots for its parameters (`registration_roots`) are held "
-                   "to the pins (none: no root is the window's, and every registered read is free)")
+                   "to the pins: named wherever pins are, and refused where it is not there or, with pins, records no "
+                   "root; with no pins, the development path, said first on stderr (DEVELOPMENT_RESTS['pins'])")
     p = sub.add_parser("period", help="a window's audit as one compute audit of the network attester's period (`period`)")
     p.add_argument("--window", required=True, type=Path, help="the window's directory: circuit.json, registration.json")
     p.add_argument("--audit", required=True, type=Path, help="the audit's --out: summary.json, window/program.json, "
@@ -1641,8 +1648,21 @@ def main(argv: list[str] | None = None) -> int:
             pins = pins_of(a.pin, a.pins)
         except ValueError as e:
             ap.error(f"--pin/--pins: {e}")
-        roots = registration_roots(json.loads(Path(a.registration).read_text())) if a.registration else {}
-        print(json.dumps(declared_count(json.loads(Path(a.circuit).read_text()), a.bits, pins=pins, roots=roots),
+        if a.registration and not Path(a.registration).is_file():
+            raise SystemExit(f"records_audit count: refused, --registration names {a.registration}, which is not there")
+        if pins and not a.registration:
+            raise SystemExit("records_audit count: refused, --pin/--pins name registered parameters and no --registration "
+                             "gives the window's roots to hold them to: give --registration, or no pins (the development "
+                             "path, on which every registered read is free)")
+        doc = json.loads(Path(a.circuit).read_text())
+        if not pins and (doc.get("registered") or {}).get("params"):
+            print(f"DEVELOPMENT {DEVELOPMENT_RESTS['pins']}", file=sys.stderr, flush=True)
+        try:
+            roots = (registration_roots(json.loads(Path(a.registration).read_text()), required=bool(pins))
+                     if a.registration else {})
+        except ValueError as e:
+            raise SystemExit(f"records_audit count: refused, --registration {a.registration}: {e}") from None
+        print(json.dumps(declared_count(doc, a.bits, pins=pins, roots=roots),
                          sort_keys=True))
         return 0
     if a.cmd == "warm":
