@@ -108,7 +108,8 @@ def test_one_member_on_the_windows_challenger_session_is_refused_by_both_at_its_
     registered = params["proofs"]["registered"]
     rc, answer, err = check(params)
     assert answer["verdict"] != "accept" and held["detail"]["registered-trees"] in answer["reason"], (answer, held, err)
-    assert "a wired port's tree is not derived from C yet" in answer["reason"], answer["reason"]
+    assert ("the field tree it opens is neither its own output's nor one C wires into it"
+            in answer["reason"]), answer["reason"]
 
     # the public file names the run input ports, which the registration holds only at their one tree each, and both
     # leave each out only as the registered file reads it there: the executable refused past publicHeld

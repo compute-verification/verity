@@ -938,7 +938,7 @@ def test_a_port_held_in_its_writers_tree_is_registered_at_the_root_and_rows_the_
     for k, m in enumerate(ms[1:], 1):
         assert CS.shared_ports(doc, k)["x"][2] == tree and m.port("x") not in c.roots
         e, read = CS.shared_entries(tmp_path, doc, k)["x"], files[m.key]["ports"]["x"]
-        assert e["value"] == read["value"] == CS.own_value(tree) and read["root"] == c.roots[tree].hex()
+        assert e["value"] == read["value"] == tree and read["root"] == c.roots[tree].hex()
         assert e["positions"] == w.leaves(m, "x").tolist()
         assert read["reads"] == w.reads(m, "x").tolist() and read["reads_from"] == m.base and "tree" not in read
         for i, path in zip(e["positions"], e["paths"], strict=True):
