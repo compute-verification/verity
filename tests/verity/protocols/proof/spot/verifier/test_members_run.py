@@ -373,10 +373,8 @@ def test_under_a_subset_design_the_strata_need_only_cover_the_units():
                                          "stratified-rate:1/2")))
     rate, strat = (M.resolved({"law": law, "query": QUERY}, program) for law in ("rate:2/7", "stratified-rate:1/2"))
     assert M.subset_design(rate) and not M.subset_design(strat) and M._kind(strat) == "stratified"
-    with pytest.raises(M._Refused) as e:
-        M.resolved({"law": "rate:9/7", "query": QUERY}, program)
-    assert str(e.value) == ("the parameters' law does not resolve to a sampling design: a law stated as text is a rate, "
-                            "rate:NUM/DEN[:T], stratified-rate:NUM/DEN or work-rate:NUM/DEN, not 'rate:9/7'")
+    unresolved = M.resolved({"law": "rate:9/7", "query": QUERY}, program)
+    assert not M.subset_design(unresolved) and M._kind(unresolved) == "unnamed"
     assert "stratified" in M.strata_design("stratified")
 
 

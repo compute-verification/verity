@@ -457,7 +457,10 @@ registered one lowers to `RegisteredInput<w>_v1` nodes. A node is a supplied-inp
 function, its arguments and the input's width are C's, under both digests, so a coin fills the input and never chooses the
 function, the block or which C; a scheme passes no function and no row at run time.
 
-**The mark.** A supplied parameter's `inputs` entry is `[name, n, <mark>]`, every other one `[name, n]`:
+**The mark.** `inputs` is a top-level field of C's descriptor, under its digest: every parameter of the program function
+in order, `n` its input nodes in the root (`program.input_nodes`), written only where the Program supplies a parameter and
+every supplied one has a mark (`Program.inputs_entry`), so no other Program's descriptor has it. A supplied parameter's
+`inputs` entry is `[name, n, <mark>]`, every other one `[name, n]`:
 
 ~~~text
 <mark> = {"supplied": <function>, "args": {<arg>: <natural or string>, ...}, "layout": "le" | "halves" | "digest", "bits": b}
