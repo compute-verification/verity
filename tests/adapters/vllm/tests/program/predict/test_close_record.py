@@ -234,17 +234,20 @@ def test_a_deployment_registers_once_and_each_epochs_close_reads_its_registratio
 
 
 def _deployment(tmp_path, monkeypatch):
-    """The small model's deployment registered once at the test grain (`register`), and its registration's document."""
+    """The small model's deployment registered once at the test grain (`register`) with the rotary table it serves, as a
+    serve registers it, and its registration's document."""
     import functools
 
     from tests.program.predict.test_window_circuit import GRAIN, S, _checkpoint
+    from verity_vllm.program import model as M
 
     monkeypatch.setattr(WW, "weights_registration", functools.partial(WW.weights_registration, grain=GRAIN))
     reg, (d, man) = S._registered(), _checkpoint(tmp_path / "ck")
+    field = next(f for f in WW.weights_record(reg, d, man, grain=GRAIN)["fields"] if f.get("pinned") == "analytic")
     out = tmp_path / "deployment"
     out.mkdir()
     (out / "serve.json").write_text(json.dumps({"model": "org/m", "revision": "r"}))
-    WW.register(reg, out, d, man)
+    WW.register(reg, out, d, man, tables={"cos_sin": M.cos_sin_table(field["analytic"]["C"])})
     return reg, out, json.loads((out / WW.REGISTRATION).read_text()), GRAIN
 
 
@@ -255,7 +258,7 @@ def test_an_epochs_declared_circuit_at_class_1_1_1_reads_only_weights_the_deploy
 
     reg, _out, doc, grain = _deployment(tmp_path, monkeypatch)
     declared = WC.lower(reg, WC.WindowClass(1, 1, 1), None, grain).circuit.registered
-    assert [p for p in declared.params if p.startswith("weights/")] and WW.unpinned(declared, doc) == []
+    assert not doc["unrooted"] and [p for p in declared.params if p.startswith("weights/")] and WW.unpinned(declared, doc) == []
     WW.require_pinned(declared, doc)
 
 
