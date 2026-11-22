@@ -1189,15 +1189,6 @@ def atPos (own : Own) (t port : String) (e : Json) (orElse : Option Json := none
         | none => .null))) "reads_from" (Lean.toJson x.first)
     | none => orElse.getD (setKey (setKey e "reads" .null) "reads_from" .null)
 
-/-- Entry `e` of part `p`'s port at each slot's unit's row of its cell's replay block (`linkedRow`, of rows `r`), from
-the part's first slot: the rows the verifier holds for a link's output C gives no position (a return round 1's record
-commits), `atPos`'s `orElse` there. -/
-def linkedRows (own : Own) (p : Part) (r : Rows) (e : Json) : Json :=
-  setKey (setKey e "reads" (Json.arr ((List.range (own.sample.size * p.n)).toArray.map fun k =>
-    match linkedRow own p r (p.lo + k) with
-    | some n => Lean.toJson n
-    | none => .null))) "reads_from" (Lean.toJson p.lo)
-
 /-- Every read of registered-reads entry `e` (slot `reads_from + k` reads row `reads[k]`, null for none) is by one of
 part `p`'s slots `u`, of the first row of the unit `unit u` names, in a tree of `units` units' rows, `leaves / units`
 each. -/
@@ -1233,6 +1224,15 @@ def linkedRow (own : Own) (p : Part) (r : Rows) (u : Nat) : Option Nat := do
   let b ← own.sample[p.span u]?
   let x ← rowAt r.runs (p.unit u)
   if x < r.per then some (b * r.per + x) else none
+
+/-- Entry `e` of part `p`'s port at each slot's unit's row of its cell's replay block (`linkedRow`, of rows `r`), from
+the part's first slot: the rows the verifier holds for a link's output C gives no position (a return round 1's record
+commits), `atPos`'s `orElse` there. -/
+def linkedRows (own : Own) (p : Part) (r : Rows) (e : Json) : Json :=
+  setKey (setKey e "reads" (Json.arr ((List.range (own.sample.size * p.n)).toArray.map fun k =>
+    match linkedRow own p r (p.lo + k) with
+    | some n => Lean.toJson n
+    | none => .null))) "reads_from" (Lean.toJson p.lo)
 
 /-- The row slot `u` of part `p` reads at a port a wire names, of rows `r`: its unit's writer unit's (`rowAt`), of the
 `per` its cell's replay block holds in the writer's output port. -/
