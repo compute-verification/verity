@@ -65,6 +65,20 @@ def test_a_pod_with_its_door_is_sent_verbs_at_its_gated_account(sent, the_door, 
     assert capsys.readouterr().err == ""
 
 
+def test_on_the_pod_itself_the_wake_runs_here_and_no_ssh_is_made(sent, the_door, monkeypatch, tmp_path):
+    """The verified queue launches from the control pod, which can't reach its own outside door: the pod is the machine that
+    holds the guard's state, and what its root shell took is run there."""
+    state = tmp_path / "guard-budgets.json"
+    state.write_text(json.dumps(STATE))
+    monkeypatch.setattr(budgets, "GUARD_STATE", str(state))
+    monkeypatch.delenv("RESEARCH_GUARD_HOST", raising=False)
+    assert budgets.guard_host() == "local"
+    assert remote.wake_on_control(IID) == "STOPPED"
+    assert [(a, c) for a, c, _ in sent] == [(["bash", "-c"], f"{remote.CONTROL_WAKE} {IID}")]
+    monkeypatch.setenv("RESEARCH_GUARD_HOST", "vy-control-verity")
+    assert budgets.guard_host() == "vy-control-verity", "a named host wins over the file"
+
+
 def test_a_checkout_without_the_entry_is_told_to_sync_once_root_refuses_it(sent, no_door, monkeypatch):
     denied = lambda argv, **kw: subprocess.CompletedProcess(argv, 255, "", "root@h: Permission denied (publickey).\n")  # noqa: E731
     monkeypatch.setattr(door.subprocess, "run", denied)

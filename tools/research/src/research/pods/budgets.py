@@ -38,6 +38,7 @@ line's max_pod_hours.  The guard's view is the one that counts: a line the guard
 """
 from __future__ import annotations
 
+import contextlib
 import datetime as dt
 import json
 import subprocess
@@ -230,8 +231,16 @@ def default_source() -> Path:
 # ---- the create gate ---------------------------------------------------------------------------------------------------------------------
 
 def guard_host() -> str:
-    """The budgets guard's host, the control pod: $RESEARCH_GUARD_HOST, else GUARD_HOST; `local` when this machine is it."""
-    return settings.get("RESEARCH_GUARD_HOST") or GUARD_HOST
+    """The budgets guard's host, the control pod: $RESEARCH_GUARD_HOST, else `local` on the machine that holds the guard's own
+    state (GUARD_STATE, which the guard writes there and nowhere else), else GUARD_HOST. The pod can't reach its own outside
+    ssh door, so a process on it (the verified queue's launches) asks it here."""
+    named = settings.get("RESEARCH_GUARD_HOST")
+    if named:
+        return named
+    with contextlib.suppress(OSError):
+        if Path(GUARD_STATE).is_file():
+            return "local"
+    return GUARD_HOST
 
 
 def read_guard_state(host: str | None = None, path: str | None = None) -> tuple[dict[str, Any], float]:
