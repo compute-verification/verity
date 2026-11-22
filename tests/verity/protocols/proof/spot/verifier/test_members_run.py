@@ -373,7 +373,8 @@ def test_under_a_subset_design_the_strata_need_only_cover_the_units():
                                          "stratified-rate:1/2")))
     rate, strat = (M.resolved({"law": law, "query": QUERY}, program) for law in ("rate:2/7", "stratified-rate:1/2"))
     assert M.subset_design(rate) and not M.subset_design(strat) and M._kind(strat) == "stratified"
-    assert M.resolved({"law": "rate:9/7", "query": QUERY}, program) is None
+    unresolved = M.resolved({"law": "rate:9/7", "query": QUERY}, program)
+    assert not M.subset_design(unresolved) and M._kind(unresolved) == "unnamed"
     assert "stratified" in M.strata_design("stratified")
 
 
