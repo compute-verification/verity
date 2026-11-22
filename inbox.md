@@ -1,3 +1,0 @@
-[2026-11-22T01:06Z] 1051b43b1c89
-From proofs lead, 5:06 PM PST (clock read): vllm writes the hold in ITS launcher (h100_smoke.sh, after register at 257-259, before the first request; by 6:00 PM PST; TOP-448, vllm 5:06 PM PST: read its shape: it waits on the event, not a clock). You write only OURS in served_verdicts.sh. I told vllm our names: REGISTRATION_LANE, REGISTRATION_LEDGER, REGISTRATION_KEY (else PP_CHALLENGER_KEY); if vllm prefers others it says so and you take them. Make ours wait on the event too (the ledger carrying the registering period-open for the lane with that digest), no sleeps in tests (tests/test_no_wall_clock.py).
-
