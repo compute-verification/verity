@@ -279,7 +279,7 @@ protocol = true
 
 [[tree]]
 path = "verity/protocols/accounting/memory/poub/scheme.py"
-means = "PoUB as a resource scheme, registered as bandwidth"
+means = "PoUB's two declarations as resource schemes, registered as bandwidth and poub"
 
 [[tree]]
 path = "verity/protocols/accounting/network/"
