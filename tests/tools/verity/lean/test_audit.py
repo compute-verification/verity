@@ -38,7 +38,7 @@ EMITTERS = {"judge": 0, "unreported": None, "dropped": None, "verifier_failures"
             "witness_failures": None, "four_name_failures": None, "inline_failures": 0, "assumption_records": 2, "shape": None, "spec_reads": None, "tree_failures": None, "scans": None, "listings": 0, "dependency_scans": 0,
             "assign": 1, "proved": 0, "replay_step": 0, "tests": 0, "run_paths": None, "sampled_recompile": 0,
             "orphan_failures": None, "layer_failures": None, "sources_judge": None, "source_graph_failures": None,
-            "setup_refused": None}
+            "setup_refused": None, "witness_unbuilt_failures": None, "unbuilt_judged": None}
 
 
 def coded(failures) -> list:
@@ -629,6 +629,50 @@ def test_a_failure_the_sources_show_before_the_build_is_the_one_the_audit_of_the
     # with --update the listing of a changed file is a note in both, and a failure in neither
     updating = A.sources_judge(pkg, A.load(pkg), tmp_path, update=True)
     assert [f.code for f in updating] == [c for c in EARLY if c != "compile-time.digest"]
+
+
+def test_a_deployed_guarantee_s_witness_declared_only_in_an_exempt_module_fails_before_the_build(tmp_path):
+    """`witnesses.witness-unbuilt`: a deployed guarantee whose honest witness the proving package's sources declare only
+    in a module its lock lists `exempt` fails on the sources and the lock, with no build (`unbuilt_judged`, for a package
+    a run does not build), where the lock's word that a witness exists would otherwise pass; the same witness in a module a root imports passes, as does one the sources declare nowhere,
+    which the build's audit judges."""
+    witness = "namespace P.SecurityProofs\n\ntheorem G_honest : True := trivial\n\nend P.SecurityProofs\n"
+    lock = {"roots": ["P"], "proved_in": ["Proofs"], "deployed": ["P.SecurityProofs.G"],
+            "witnesses": {"P.SecurityProofs.G": {"honest": ["P.SecurityProofs.G_honest"],
+                                                 "nontrivial": "P.SecurityProofs.G_nontrivial"}}}
+    pkg = sourced(tmp_path / "pkg", {"P.lean": "\n"}, lock)
+
+    def proofs(sources):
+        q = sourced(pkg / "Proofs", sources, {"roots": ["Q"], "exempt": {"Q.Honest": "out of the build"}})
+        (q / "lakefile.toml").write_text('name = "proofs"\n')
+        return A.witness_unbuilt_failures(pkg, A.load(pkg))
+    fails = proofs({"Q.lean": "import Q.Thms\n", "Q/Thms.lean": "\n", "Q/Honest.lean": witness})
+    assert [(f.code, f.entry) for f in fails] == [("witnesses.witness-unbuilt", "P.SecurityProofs.G_honest")]
+    assert "Q.Honest (listed under `exempt` in Proofs)" in fails[0] and "put its module under a root" in fails[0]
+    assert A.unbuilt_judged(pkg) == fails
+    (pkg / "Proofs" / "Q" / "Honest.lean").unlink()
+    assert proofs({"Q.lean": "import Q.Thms\n", "Q/Thms.lean": witness}) == []
+
+
+def test_a_lock_the_witness_judge_can_t_parse_fails_before_the_build(tmp_path):
+    """`witnesses.unread`: where a run does not build a package, its lock or a `proved_in` package's lock that doesn't
+    parse fails, naming the lock, and never reads as no failure."""
+    lock = {"roots": ["P"], "proved_in": ["Proofs"], "deployed": ["P.SecurityProofs.G"],
+            "witnesses": {"P.SecurityProofs.G": {"honest": ["P.SecurityProofs.G_honest"]}}}
+    pkg = sourced(tmp_path / "pkg", {"P.lean": "\n"}, lock)
+    q = sourced(pkg / "Proofs", {"Q.lean": "\n"}, {"roots": ["Q"]})
+    (q / A.POLICY).write_text("{not json")
+    fails = A.unbuilt_judged(pkg)
+    assert [(f.code, f.entry) for f in fails] == [("witnesses.unread", None)]
+    assert str(pkg / A.POLICY) in fails[0] and "JSONDecodeError" in fails[0] and "valid JSON" in fails[0]
+    (pkg / A.POLICY).write_text("{not json")
+    assert [f.code for f in A.unbuilt_judged(pkg)] == ["witnesses.unread"]
+
+
+def test_source_declarations_reads_a_name_under_the_namespaces_open_at_it():
+    src = ("namespace A.B\nsection\n@[simp] private theorem t : True := trivial\nend\nend A.B\n"
+           "-- theorem c : True := trivial\nnamespace C\nlemma _root_.D.e : True := trivial\nnoncomputable def f := 1\nend C\n")
+    assert A.source_declarations(src) == {"A.B.t", "D.e", "C.f"}
 
 
 #: sources that pass the judge of the sources: a `module` header that names a module twice, as the build's imports do
@@ -2210,7 +2254,10 @@ def test_no_step_before_the_judge_reads_a_section_build_inputs_leaves_out():
                  "moves_refused": whole,                                         # refuses a moves file, before any step
                  "base_locks": whole,                                            # the base's locks a move is held to
                  "write_staged": whole,                                          # the run's writer of the locks it staged
-                 "_finish.write": whole}                                         # the judge's writer of the lock it judged
+                 "_finish.write": whole,                                         # the judge's writer of the lock it judged
+                 # the judge's, of a package not built, and of a prover's roots and `exempt`
+                 "unbuilt_judged": {"deployed", "witnesses", "roots", "exempt", "proved_in"},
+                 "witness_unbuilt_failures": whole}
     for name, got in by_path.items():
         if name not in apart:
             reads.setdefault(name, set()).update(A.JUDGED if got is None else got)

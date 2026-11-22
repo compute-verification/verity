@@ -4087,6 +4087,67 @@ def deployed_witness_failures(lock: dict) -> list[str]:
             if not (isinstance(ws.get(g), dict) and name_list(ws[g].get("honest")))]
 
 
+def source_declarations(src: str) -> set[str]:
+    """The full names ``src`` declares, read from its text with no build: each declaration's head (`DECLARES`) at a line's
+    start, under the `namespace`s open there (`section`, `mutual` and `end` kept
+    in step).  An approximation: what a macro, a `variable` or an `export` declares it doesn't see."""
+    names, scopes = set(), []
+    for line in strip_comments(src).splitlines():
+        s = line.strip()
+        if m := re.match(r"namespace\s+(\S+)", s):
+            scopes.append(m.group(1).split("."))
+        elif re.match(r"(?:noncomputable\s+)?section\b|mutual\b", s):
+            scopes.append([])
+        elif re.match(r"end\b", s):
+            if scopes:
+                scopes.pop()
+        elif (m := DECLARES.match(s)) and (k := re.match(r"\s+([^\s:({\[]+)", s[m.end():])):
+            n = k.group(1)
+            names.add(n.removeprefix("_root_.") if n.startswith("_root_.") else ".".join([*sum(scopes, []), n]))
+    return names
+
+
+def witness_unbuilt_failures(pkg: Path, policy: dict) -> list[Failure]:
+    """`witnesses.witness-unbuilt` for each honest or `nontrivial` witness of a guarantee `deployed` lists whose sources,
+    in the package or a package its `proved_in` names, declare it only in modules no root of that package imports (an
+    `exempt` file, or one nothing reaches): the build would replay no such witness, and the lock alone can't say where a
+    witness is declared.  Read from the sources (`source_declarations`, `source_graph`) with no build, so a witness the
+    reading finds nowhere is left to the facts (`witness_pin`); the judge runs it, and `unbuilt_judged` where nothing is
+    built."""
+    ws = policy.get("witnesses") if isinstance(policy.get("witnesses"), dict) else {}
+    wanted = [(g, role, n) for g in name_list(policy.get("deployed")) if isinstance(w := ws.get(g), dict)
+              for role, names in (("honest", name_list(w.get("honest"))),
+                                  ("nontrivial", [w["nontrivial"]] if isinstance(w.get("nontrivial"), str)
+                                   else name_list(w.get("nontrivial"))))
+              for n in names]
+    if not wanted:
+        return []
+    short = {n.rsplit(".", 1)[-1] for _, _, n in wanted}
+    declared: dict[str, list[tuple[str, str, dict]]] = {}
+    built: set[str] = set()
+    own = {"roots": policy.get("roots"), "exempt": policy.get("exempt")}
+    for label, q, qpol in [(".", pkg, own), *[(p, q, load(q)) for p, q in provers(pkg, policy) if q.is_dir()]]:
+        roots = name_list(qpol.get("roots"))
+        graph, _ = source_graph(q, roots)
+        built |= {m for m in graph if under(roots, m)}
+        for m, rel in lean_modules(q).items():
+            src = (q / rel).read_text(errors="replace")
+            if any(s in src for s in short):
+                for n in source_declarations(src):
+                    declared.setdefault(n, []).append((m, label, qpol.get("exempt") or {}))
+    fails = []
+    for g, role, n in wanted:
+        at = declared.get(n, [])
+        if at and not any(m in built for m, _, _ in at):
+            where = ", ".join(f"{m} ({'listed under `exempt` in ' if under(ex, m) else 'imported by no root of '}"
+                              f"{label})" for m, label, ex in at)
+            fails.append(Failure("witnesses.witness-unbuilt", n, f"witnesses: {n}, {g}'s `{role}` witness, is declared "
+                                 f"only in {where}, which no root builds, so nothing replays it: put its module under a "
+                                 f"root, or name a witness a root builds, or drop {g} from `deployed` with its "
+                                 f"`trust_gap` and `trust.extra` entries"))
+    return fails
+
+
 def trust_gap_kept(lock: dict) -> dict[str, list[str]]:
     """The `trust_gap` an update writes: each entry of a deployed guarantee less the premises its gap no longer has, and no
     entry left empty or of a guarantee `deployed` doesn't list.  It adds nothing, so the gap only shrinks."""
@@ -6870,6 +6931,19 @@ def unbuilt_by_sources(pkgs: list[Path], updated: set[Path], repo: Path = ROOT, 
     return out
 
 
+def unbuilt_judged(pkg: Path) -> list[Failure]:
+    """What the judge fails on ``pkg``'s live lock and sources with no build, for a package a run does not build
+    (`unbuilt_by_sources`): `witness_unbuilt_failures`, which reads `witnesses`, so it decides no build.  A lock or source
+    it can't read or parse fails as `witnesses.unread`: a malformed lock always fails."""
+    try:
+        return witness_unbuilt_failures(pkg, load(pkg))
+    except (OSError, ValueError) as e:
+        return [Failure("witnesses.unread", None, f"witnesses: {pkg}: {type(e).__name__}: {e}, reading its lock "
+                        f"{pkg / POLICY}, the lock of a package its `proved_in` names, or a module of their sources, so "
+                        f"whether each deployed guarantee's witness is built is unknown: make each lock valid JSON with no "
+                        f"both `pins` and `guarantees` (`check.py --update` writes it) and each source readable")]
+
+
 def judged_line(pkgs: list[Path], unbuilt: dict[Path, list[Failure]], seconds: float) -> str:
     """What a `--build` run says once `unbuilt_by_sources` has judged ``pkgs``, before it waits for a slot: how many it
     judged, how long that took, and the packages it does not build (``unbuilt``), or that no failure decides nothing."""
@@ -7237,7 +7311,8 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
 
     def judged(lock: dict) -> list[str]:
         roles = tree_roles(pkg, lock)
-        return spec_reads(lock, facts, reads_home(pkg, lock), roles) + tree_failures(lock, facts, roles) + shape(lock, facts)
+        return spec_reads(lock, facts, reads_home(pkg, lock), roles) + tree_failures(lock, facts, roles) + \
+            shape(lock, facts) + witness_unbuilt_failures(pkg, lock)
     on_lock = fails + judged(current)
     drp = dropped(pkg, files, facts)
     fails = cross + fails + drp + on_lock[len(fails):]
@@ -7480,7 +7555,8 @@ def audit_from_facts(pkg: Path, out: Path, facts_from: Path, update: bool = Fals
 
     def judged(lock: dict) -> list[str]:
         roles = tree_roles(pkg, lock)
-        return spec_reads(lock, facts, reads_home(pkg, lock), roles) + tree_failures(lock, facts, roles) + shape(lock, facts)
+        return spec_reads(lock, facts, reads_home(pkg, lock), roles) + tree_failures(lock, facts, roles) + \
+            shape(lock, facts) + witness_unbuilt_failures(pkg, lock)
     on_lock = fails + judged(current)
     fails = restore_failures(find.get("cross", [])) + fails + restore_failures(find.get("dropped", [])) + on_lock[len(fails):]
     rep["unread_spec"] = unread_spec(facts, read_by_dependents(pkg, repo))
@@ -7934,7 +8010,7 @@ def main(argv: list[str]) -> int:
                                        moved if mine else None, due, log=print, base=bases.get(pkg), defer=bool(moved))
             elif pkg in unbuilt:
                 built[pkg].set()                        # unpassed, and unsealed: no package that builds rests on it
-                rep = {"package": str(pkg), "seconds": {}, "failures": list(unbuilt[pkg])}
+                rep = {"package": str(pkg), "seconds": {}, "failures": list(unbuilt[pkg]) + unbuilt_judged(pkg)}
             else:
                 rep = audit(pkg, out, a.build, a.update and mine, (not a.no_replay) and a.facts_only is None, a.fresh,
                             built=lambda: (passed.add(pkg), seal(pkg)),
