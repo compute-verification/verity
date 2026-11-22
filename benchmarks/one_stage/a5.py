@@ -328,8 +328,8 @@ def stream_of(a: argparse.Namespace, mine: CS.Binding, members: list[dict], want
     schemas = {t: s for t, (s, _n) in mine.trees.items()}
     # a run input node's tree input/n<w> is no member's: its leaves are in the schema its readers' files name
     for mm in members:
-        if (f := mm["st"].get("registered_file")) is not None:
-            for e in json.loads(f.read_text())["ports"].values():
+        if (f := mm["st"].get("registered")) is not None:
+            for e in f["ports"].values():
                 if REG.is_fresh_value(e.get("value")):
                     schemas.setdefault(e["value"], e.get(RV.SCHEMA_KEY, RV.SCHEMA))
     strata = [s["template"] for s in D.derive(mine.program, mine.query, mine.law, mine.work_table).get("strata") or ()]
@@ -533,7 +533,7 @@ def registered_negatives(a: argparse.Namespace, mm: dict, sdir: Path, workers: i
     one after another, or with more ``workers`` up to that many at once on a `LeanPool` within the audit's memory,
     every case's files put in the session's archive (`a0.archive_put`) before any case is verified."""
     st, n = mm["st"], mm["m"].n
-    honest = json.loads(st["registered_file"].read_text())
+    honest = st["registered"]
     port, last = next(iter(honest["ports"])), next(reversed(honest["ports"]))
     p = honest["ports"][port]
     declared = declared_ports(st["interface_file"], mm["m"].template) if honest.get(REG.BOUND) and st.get("interface_file") else []
@@ -585,11 +585,10 @@ def registered_negatives(a: argparse.Namespace, mm: dict, sdir: Path, workers: i
     def statement(name: str) -> dict:
         """The statement a case is verified against, its registered reads written."""
         doc, _why, staged = cases[name]
-        alt = {x: y for x, y in st.items() if x != "registered_file"
+        alt = {x: y for x, y in st.items() if x not in a0.REGISTERED_KEYS
                and not (x == "interface_file" and name == "bound-ports-without-interface")} | ({"dir": staged} if staged else {})
         if doc is not None:
-            alt["registered_file"] = sdir / f"{name}.json"
-            alt["registered_file"].write_text(json.dumps(doc, sort_keys=True))
+            alt |= a0.registered_written(sdir / f"{name}.json", doc)
         return alt
 
     def verify(name: str, alt: dict | None = None) -> dict:
@@ -1022,8 +1021,7 @@ def own_files(served: Path, mine: CS.Binding, rec: dict, form: tuple[list, dict]
             own = REG.bind_ports(reads[m.key], fv_roots, {p: {"root": roots[mine.tree(m, p)]["root"],
                                                               "domain": want[mine.tree(m, p)]["domain"]}
                                                           for p in fv_roots if mine.tree(m, p) in roots})
-            mm["st"]["registered_file"] = mm["st"]["dir"] / "registered.json"
-            mm["st"]["registered_file"].write_text(json.dumps(own, sort_keys=True))
+            mm["st"] |= a0.registered_written(mm["st"]["dir"] / "registered.json", own)
             if iface is not None:
                 mm["st"]["interface_file"] = iface
         why = header_why(mine, rec, form, mm, own)
@@ -1958,9 +1956,8 @@ def v2_proof(done: Sequence[dict], zk: bool) -> dict | str:
         return f"v2 verifies one table's session on its circuit and public file; this audit sampled {len(done)} members"
     mm, sdir = done[0]["mm"], done[0]["sdir"]
     st, n = mm["st"], mm["m"].n
-    reads = st.get("registered_file")
     return {"proof": PF.Proof(st["dir"] / "circuit.txt", st["dir"] / f"pub-{n}.bin", session_dirs(sdir)),
-            "public": st["public"], "registered": json.loads(reads.read_text()) if reads else None,
+            "public": st["public"], "registered": st.get("registered"),
             "tables": looked_up_tables(st["dir"])}
 
 
@@ -2004,8 +2001,7 @@ def members_proof(members: Sequence[dict], done: Sequence[dict], zk: bool, one: 
         if isinstance(g, bool) or not isinstance(g, int) or g < 1:
             return f"member {m.key}'s circuit names no vus_per_block (its META's: {g!r})"
         sessions = session_dirs(sdirs[m.key]) if m.key in sdirs else ()
-        reads = st.get("registered_file")
-        out.append(PF.Member(m.key, PF.Proof(mm["circuit"], st["dir"] / f"pub-{m.n}.bin", sessions), st["public"], json.loads(reads.read_text()) if reads else None, ((m.base, m.base + m.n),), g))
+        out.append(PF.Member(m.key, PF.Proof(mm["circuit"], st["dir"] / f"pub-{m.n}.bin", sessions), st["public"], st.get("registered"), ((m.base, m.base + m.n),), g))
         tables.update((f.name, f) for f in looked_up_tables(mm["circuit"].parent) if f.name not in tables)
     return {"members": out, "tables": [tables[x] for x in sorted(tables)]}
 
