@@ -3458,6 +3458,65 @@ COMMITTED_BITS = D.Port(PIECES, "committed_bits", committed_bits, st.one_of(
 UNIT_GATES = D.Port(PIECES, "unit_gates", unit_gates, st.one_of(
     st.builds(lambda c: {"program": c[0], "query": c[1]}, partitions()), JSON), package=PACKAGE)
 FANOUT = D.Port(PIECES, "fanout", fanout, st.one_of(fanout_cases(), JSON), package=PACKAGE)
+
+
+def ungated_openers(j):
+    """The definitions of a program that reach an opener outside a gated one (`docket.ungated_openers`,
+    `Docket.ungatedOpeners`), refused for a malformed `gated`."""
+    j = _json(j)
+    if not isinstance(j, dict):
+        raise D.Reject("not an object")
+    desc = _obj(j.get("program"), "program")
+    gated = j.get("gated")
+    if not isinstance(gated, list) or not all(
+            isinstance(g, list) and len(g) == 2 and all(isinstance(x, str) for x in g) for g in gated):
+        raise D.Reject("gated: each entry is [id, closure digest]")
+    if PO.program_sha512(desc) not in PROGRAMS:
+        raise RuntimeError(f"the strategy drew a descriptor this file has no program for: {PO.program_sha512(desc)[:16]}")
+    return {"templates": R.ungated_openers([tuple(g) for g in gated], desc)}
+
+
+#: circuits of one call of a read each: the ungated read and the gated read at two bindings `docket.GATED` doesn't hold
+OPENER_READS = ("EmbeddingRead_v2{V=2,H=1}", "EmbeddingRead_v4{V=2,H=1}", "EmbeddingRead_v4{V=4,H=1}")
+
+
+@functools.cache
+def _opener_desc(tid: str) -> dict:
+    from verity.commitments.periods import interface as I
+    program = PN.population_program(I.resolve(tid), 1)
+    PROGRAMS[PO.program_sha512(desc := codec.encode_program(program))] = program
+    return desc
+
+
+def _gated_lists(desc: dict) -> list:
+    """`docket.GATED`, none, each of its entries at another digest or under another id, and every read's own digest."""
+    own = [[e["id"], codec.closure_digest(desc, k)] for k, e in desc["definitions"].items()
+           if e["id"].startswith("EmbeddingRead")]
+    held = [list(g) for g in R.GATED]
+    return [held, [], [[i, "00" * 64] for i, _ in held], [["EmbeddingRead_v2", d] for _, d in held], own, held + own]
+
+
+@st.composite
+def opener_cases(draw) -> dict:
+    """A circuit of `OPENER_READS`, or a population program of `PAIR`, which reaches no opener, under a list of
+    `_gated_lists`."""
+    if draw(st.integers(0, 3)) == 0:
+        program = PN.population_program(PAIR, draw(st.integers(1, 3)))
+        PROGRAMS[PO.program_sha512(desc := codec.encode_program(program))] = program
+    else:
+        desc = _opener_desc(draw(st.sampled_from(OPENER_READS)))
+    return {"program": desc, "gated": draw(st.sampled_from(_gated_lists(desc)))}
+
+
+UNGATED_OPENERS = D.Port(PIECES, "ungated_openers", ungated_openers, st.one_of(opener_cases(), JSON), package=PACKAGE)
+
+
+def gated_list(j):
+    """The verifier's own list of gated templates (`docket.GATED`, `Docket.GATED`), whatever the input."""
+    return [list(g) for g in R.GATED]
+
+
+GATED_LIST = D.Port(PIECES, "gated", gated_list, JSON, package=PACKAGE)
 RUN_INPUT_ROOTS = D.Port(PIECES, "run_input_roots", run_input_roots, st.one_of(*[run_input_cases()] * 6, JSON),
                          package=PACKAGE)
 
@@ -5188,7 +5247,8 @@ pieces = D.server_fixture(DECODE)
 callers = D.server_fixture(CALLER)
 
 
-PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (UNIT_GATES, 300), (FANOUT, 400), (RUN_INPUT_ROOTS, 400),
+PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (UNIT_GATES, 300), (FANOUT, 400), (UNGATED_OPENERS, 60),
+              (RUN_INPUT_ROOTS, 400),
               (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
               (PRODUCED, 500), (KNOWN_PORT, 300),
               (CHECK_SAMPLE, 500), (DRAW, 500), (RAN_OUT, 300), (SELECT, 600), (DESIGN, 300), (SLOTS, 400),
@@ -5418,6 +5478,34 @@ def test_r7_refuses_a_pinned_values_entry_whose_domain_alone_differs_as_python_d
         reg = registration(given)
         assert ("R7-pin" in reg["codes"]) == refused, (e, reg)
         assert D.replay(REGISTRATION, given, pieces) == ("output", D.canonical(reg)), e
+
+
+def test_the_verifiers_gated_list_is_the_lints_generated_one(pieces):
+    """The list R9 holds gated templates by, compiled into the Lean (`Docket.GATED`) and in the Python (`docket.GATED`), is
+    exactly the entries of circuits' generated list (`tests/lint/openers_gated.json`), each evaluated at its binding: the
+    file is what the constant is held to, never what the verifier reads."""
+    root = next(p for p in Path(__file__).resolve().parents if (p / "tests" / "lint").is_dir())
+    entries = json.loads((root / "tests/lint/openers_gated.json").read_text())["entries"]
+    assert all(e["class"] == "gated" and e["evaluated"] is True for e in entries), entries
+    want = [[e["template"], e["closure_digest"]] for e in entries]
+    assert gated_list(None) == want
+    assert D.replay(GATED_LIST, None, pieces) == ("output", D.canonical(want))
+
+
+def test_r9_refuses_a_read_outside_a_held_gated_template_as_the_python_does(pieces):
+    """R9's walk, Lean's answer the Python's: under the verifier's list (`docket.GATED`, the served binding
+    `EmbeddingRead_v4{V=128256,H=2048}` alone) each small read is named, the ungated `EmbeddingRead_v2` and the gated
+    `EmbeddingRead_v4` at bindings not on it; under a list holding each read's own closure digest, none is named (the
+    walk holds what the list holds); under its own id at another digest, each is named."""
+    for tid in OPENER_READS:
+        desc = _opener_desc(tid)
+        own = [[e["id"], codec.closure_digest(desc, k)] for k, e in desc["definitions"].items() if k == tid]
+        for held, want in (([list(g) for g in R.GATED], [tid]), (own, []),
+                           ([[i, "00" * 64] for i, _ in own], [tid])):
+            case = {"program": desc, "gated": held}
+            got = ungated_openers(case)
+            assert got == {"templates": want}, (tid, held, got)
+            assert D.replay(UNGATED_OPENERS, case, pieces) == ("output", D.canonical(got)), (tid, held)
 
 
 def test_r8_reads_the_readers_python_does(pieces):

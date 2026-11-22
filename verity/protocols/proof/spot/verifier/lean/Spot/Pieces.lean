@@ -255,6 +255,22 @@ def fanout (j : Json) : V Json := do
   let some rs := Partition.templateRanges? p (getD j "query") | throw "not a template query that applies"
   return Json.mkObj [("fanout", Lean.toJson (Partition.fanout p.prog rs))]
 
+/-- `{"program", "gated"}`, a program object and `[[id, closure digest], …]`, to `{"templates"}`: the Definitions of the
+program `Program.parse` reads that reach an opener outside a gated one (`Docket.ungatedOpeners`); refused where the
+program or the walk is. -/
+def ungatedOpeners (j : Json) : V Json := do
+  let .obj _ := getD j "program" | throw "program is not an object"
+  let p ← Program.parse (← Flock.canon (getD j "program")).toUTF8
+  let .arr gs := getD j "gated" | throw "gated is not a list"
+  let gated ← gs.mapM fun g => match g with
+    | .arr #[.str i, .str d] => pure (i, d)
+    | _ => throw "gated: each entry is [id, closure digest]"
+  return Json.mkObj [("templates", Json.arr ((← Docket.ungatedOpeners gated p.json).map Json.str))]
+
+/-- Any input to `[[id, closure digest], …]`: the verifier's own list of gated templates (`Docket.GATED`). -/
+def gatedList (_ : Json) : V Json :=
+  pure (Json.arr (Docket.GATED.map fun (i, d) => Json.arr #[Json.str i, Json.str d]))
+
 /-- A member of the per-member form named `name` at the units `units`, with no files. -/
 private def unitsMember (name : String) (units : Array (Nat × Nat)) : OneStageZk.Member :=
   let own : OneStageZk.Own :=
@@ -1211,7 +1227,7 @@ def tablesServed (j : Json) : V Json := do
 
 def table : List (String × (Json → V Json)) :=
   [("decode", decode), ("partition", partition), ("committed_bits", committedBits), ("unit_gates", unitGates),
-   ("fanout", fanout), ("run_input_roots", runInputRoots), ("run_input_rows", runInputRows), ("registration", docket),
+   ("fanout", fanout), ("ungated_openers", ungatedOpeners), ("gated", gatedList), ("run_input_roots", runInputRoots), ("run_input_rows", runInputRows), ("registration", docket),
    ("registered", registered), ("wired_roots", wiredRoots),
    ("domain", domain), ("produced", produced), ("known_port", knownPort), ("check_draw", checkDraw), ("draw", draw), ("ran_out", ranOut),
    ("select", select), ("design", design), ("slots", slots),

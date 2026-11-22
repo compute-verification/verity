@@ -1,6 +1,6 @@
 /-
 The docket (`one_stage/docket.py`): what serving is committed to, fixed before the verifier samples, its
-digest, and R1–R8 against the verifier's own copies (`check`).
+digest, and R1–R9 against the verifier's own copies (`check`).
 
     {"format": "verity/registration/v1", "protocol": "verity/sampled-proofs/one-stage/v1",
      "program": "<SHA-512 of the program>", "query": "<SHA-512 of the query>", "partition": "<partition digest>",
@@ -125,6 +125,10 @@ of no registered input excuses nothing. The pins it accepts of inputs the verifi
 R7 reads: the members' check holds each member's registered read of such an input to its pin's root, leaf count and
 domain (`OneStageZk.pinsHeld`).
 
+R9 refuses a program whose root reaches an opener (`OPENERS`) other than inside a circuit template whose returned rows
+are gated on the opener's verdict, held by its id and closure digest at an evaluated binding (`GATED`,
+`ungatedOpeners`, `R9-ungated-opener`): an ungated template returns rows whether or not its opening held.
+
 A verifier of the per-member form (`OneStageZk`) names its members (`members`: each its units and its circuit's units a
 proof block, META `vus_per_block`), and after R8 the check refuses a member whose fewest and most sampled proof blocks under the
 sampling design the sample runs on, over the samples that end, give different link points, a sampling design it can't
@@ -139,6 +143,7 @@ public import Spot.Draw
 public import Spot.Registered
 public import Spot.Supplied
 public import Spot.LinkPoints
+public import Circuits.DefinitionDigest
 public import Std.Data.HashMap
 
 @[expose] public section
@@ -213,7 +218,7 @@ def Pool.spentBefore (p : Pool) (log : Array Json) : Bool :=
       jeq (getD (getD e "window") "pool_week") (Lean.toJson p.week)
   | none => false
 
-/-- The verifier's own copies that R1–R8 hold the record to. -/
+/-- The verifier's own copies that R1–R9 hold the record to. -/
 structure Verifier where
   program : Program
   query : Json
@@ -861,6 +866,63 @@ def linkRefused (v : Verifier) : Bool :=
 twice, so `check_eq_checkRef`'s `simp`, which leaves it folded, doesn't copy the codes before it into both cases. -/
 def kept (ok : Bool) (c : Array String) (code : String) : Array String := if ok then c else addCode c code
 
+/-- The circuit templates that open a commitment and return its verdict (`ungatedOpeners`). -/
+def OPENERS : Array String := #["FrameV3Read_v1", "FrameV3ReadAt_v1", "MerkleRead_v1", "LmsVerify_v1"]
+
+/-- The circuit templates whose returned rows are gated on their opener's verdict, each `(id, closure digest)` at a
+binding circuits' lint evaluated, compiled in: a test holds it equal to the lint's generated list
+(`tests/lint/openers_gated.json`). A binding no lint evaluated is not here, so a circuit reaching it is refused. -/
+def GATED : Array (String × String) := #[
+  ("EmbeddingRead_v4", "251987cf5a07b53f7d20fd62d4c2cdc4af5dcd00e629cc6b2afce45437c88826290e96b4d91b5d0934835f7bbfd7fef9181ae7b97aa4f730642d11e71d2a6f5d")]
+
+/-- The keys of descriptor `j`'s Definitions that call an opener (`OPENERS`) and that its root reaches through its nodes'
+callees and word primitives' Boolean Definitions without passing a gated one, a Definition whose id and
+`closureDigest` are a pair of `gated`, sorted. Each Definition is read once, and a closure digest is computed only for a
+Definition whose id `gated` names. -/
+def ungatedOpeners (gated : Array (String × String)) (j : Json) : V (Array String) := do
+  let defs := j.getObjValD "definitions"
+  let callees := match j.getObjValD "callees" with | .arr xs => xs | _ => #[]
+  let boolean := j.getObjValD "boolean"
+  let nodesOf := fun (e : Json) => match (e.getObjValD "body").getObjValD "nodes" with | .arr xs => xs | _ => #[]
+  let idOf := fun (e : Json) => match e.getObjValD "id" with | .str s => s | _ => ""
+  let fuel := match defs with
+    | .obj kvs => kvs.foldl (fun n _ e => n + (nodesOf e).size + 1) 1
+    | _ => 1
+  let .str root := j.getObjValD "root" | throw "program: no root"
+  let mut seen : Std.HashSet String := {}
+  let mut out : Array String := #[]
+  let mut todo : List String := [root]
+  for _ in [0:fuel] do
+    match todo with
+    | [] => break
+    | k :: rest =>
+      todo := rest
+      if seen.contains k then continue
+      seen := seen.insert k
+      let e := defs.getObjValD k
+      if let .null := e then throw s!"program: the root reaches {k}, no Definition of its descriptor"
+      let i := idOf e
+      if OPENERS.contains i then continue
+      if gated.any (·.1 == i) then
+        if gated.contains (i, ← Flock.DefinitionDigest.closureDigest j k) then continue
+      let kids ← if Flock.DefinitionDigest.isComposite e then
+          (nodesOf e).toList.mapM fun n => match (n.getObjValD "fn").getNat?.toOption.bind (callees[·]?) with
+            | some (.str c) => pure c
+            | _ => throw s!"program: {k}: a node's callee is outside callees"
+        else pure (match boolean.getObjValD i with | .str b => [b] | _ => [])
+      if kids.any (fun c => OPENERS.contains (idOf (defs.getObjValD c))) then out := out.push k
+      todo := kids ++ todo
+  unless todo.isEmpty do throw "program: the root's callees outrun its descriptor's nodes"
+  pure (out.qsort (· < ·))
+
+/-- R9: the verifier's program reaches an opener only inside a template `gated` holds (`ungatedOpeners`), refused
+(`R9-ungated-opener`) where it doesn't or the walk refuses its descriptor. The list is an argument: `check` passes
+`GATED`. -/
+def openersHeld (gated : Array (String × String)) (v : Verifier) : Bool :=
+  match ungatedOpeners gated v.program.json with
+  | .ok xs => xs.isEmpty
+  | .error _ => false
+
 /-- R8's codes added to `c`: a tied name it can't let through (`R8-tied`, `tiedBad`), then, in the variant with no
 members, a run Input node the proof blocks don't each read alone outside the registered and tied parameters' gates
 (`R8-shared-input`, `Partition.readAlone`), then R8's hold on the program's registered inputs (`weightsCodes`). One
@@ -871,7 +933,7 @@ def r8Codes (v : Verifier) (c : Array String) : Array String :=
     (kept (!v.members.isEmpty || Partition.readAlone v.program v.query (heldGates v ++ tiedGates v))
       (kept (tiedBad v).isEmpty c "R8-tied") "R8-shared-input")
 
-/-- `registration.check`'s failure codes, R1–R8 in order, then `link-points` (`linkRefused`): empty when the record
+/-- `registration.check`'s failure codes, R1–R9 in order, then `link-points` (`linkRefused`): empty when the record
 holds. -/
 def check (rec : Json) (v : Verifier) : Array String := Id.run do
   let v2 := v.v2
@@ -938,7 +1000,7 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
   -- a supplied input's rows have a source whatever the record registers
   c := kept (unsourced v).isEmpty c "R7-supplied-source"
   -- R8
-  c := r8Codes v c
+  c := kept (openersHeld GATED v) (r8Codes v c) "R9-ungated-opener"
   return if linkRefused v then addCode c "link-points" else c
 
 /-- `check` as first written, R3 quadratic in the ports: each root's port compared, re-canonicalized, with every port
@@ -1010,7 +1072,7 @@ def checkRef (rec : Json) (v : Verifier) : Array String := Id.run do
   -- a supplied input's rows have a source whatever the record registers
   c := kept (unsourced v).isEmpty c "R7-supplied-source"
   -- R8
-  c := r8Codes v c
+  c := kept (openersHeld GATED v) (r8Codes v c) "R9-ungated-opener"
   return if linkRefused v then addCode c "link-points" else c
 
 /-! ## `check` is `checkRef` -/

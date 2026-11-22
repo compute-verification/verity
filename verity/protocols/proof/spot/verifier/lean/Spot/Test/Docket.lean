@@ -346,4 +346,35 @@ def addEntry (e : Json) (j : Json) : Json := match getD j "registered" with
 -- a pinned table that no mark of C names, registered in the record: refused, the pin widens nothing
 #guard (codes { VT with marks := #[] } (addEntry (tablePin "t").2)).contains "R7-values"
 
+/-- A descriptor whose root calls `R`, of id `rid`, which calls `FrameV3Read_v1`; with `via`, the root calls `R` only
+through `G_v1`. -/
+def openerJ (rid : String) (via : Bool := false) : Json :=
+  let node := fun (k : Nat) => Json.mkObj [("args", Json.arr #[]), ("fn", Lean.toJson k), ("out", Lean.toJson (0 : Nat))]
+  let ret := Json.mkObj [("affine", Json.arr #["n", Lean.toJson (0 : Nat), Lean.toJson (0 : Nat), Lean.toJson (1 : Nat)])]
+  let comp := fun (i : String) (ks : Array Nat) =>
+    Json.mkObj [("id", i), ("form", "composite"), ("body", Json.mkObj [("nodes", Json.arr (ks.map node)), ("ret", ret)])]
+  Json.mkObj [("root", "Root_v1"), ("callees", Json.arr #["R", "FrameV3Read_v1", "G_v1"]),
+    ("types", Json.arr #[Json.arr #["Value", Lean.toJson (1 : Nat)]]),
+    ("definitions", Json.mkObj [("Root_v1", comp "Root_v1" (if via then #[2] else #[0])), ("G_v1", comp "G_v1" #[0]),
+      ("R", comp rid #[1]), ("FrameV3Read_v1", Json.mkObj [("id", "FrameV3Read_v1"), ("form", "primitive")])])]
+
+/-- `G_v1`'s closure digest in `openerJ rid true`. -/
+def gDigest (rid : String) : String := (Flock.DefinitionDigest.closureDigest (openerJ rid true) "G_v1").toOption.getD ""
+
+-- R9: a template reaching an opener is named under no list, and under a list naming another template
+#guard (ungatedOpeners #[] (openerJ "EmbeddingRead_v2")).toOption == some #["R"]
+#guard (ungatedOpeners GATED (openerJ "EmbeddingRead_v2")).toOption == some #["R"]
+-- reached only through a template the list holds by its closure digest: not named
+#guard gDigest "EmbeddingRead_v2" != ""
+#guard (ungatedOpeners #[("G_v1", gDigest "EmbeddingRead_v2")] (openerJ "EmbeddingRead_v2" true)).toOption == some #[]
+-- the same id at another digest holds nothing
+#guard (ungatedOpeners #[("G_v1", "00")] (openerJ "EmbeddingRead_v2" true)).toOption == some #["R"]
+-- an opener itself is not walked into, and a callee outside the descriptor refuses the walk
+#guard (ungatedOpeners #[] (openerJ "FrameV3Read_v1")).toOption == some #["Root_v1"]
+#guard (ungatedOpeners #[] (Json.mkObj [("root", "X")])).toOption == none
+-- the check: a program that reaches an opener outside `GATED`, or a verifier with no descriptor, is refused by R9
+#guard (codes { V3 with program := { V3.program with json := openerJ "EmbeddingRead_v2" } }).contains "R9-ungated-opener"
+#guard (codes { V3 with program := { V3.program with json := .null } }).contains "R9-ungated-opener"
+#guard !(codes V3).contains "R9-ungated-opener"
+
 end Spot.Test.Docket

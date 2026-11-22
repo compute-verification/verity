@@ -10,7 +10,7 @@
 
 * **Digest.** `SHA-512("verity/registration/v1\\0" || canon(record))`.
 * **Rule.** Everything a sampled proof block's statement can depend on is fixed by the record, or by objects the verifier already
-  holds, before the sample. The verifier checks R1-R8 (`check`) against its own copies, then, where they pass, the
+  holds, before the sample. The verifier checks R1-R9 (`check`) against its own copies, then, where they pass, the
   caller's check (`caller.check`: Declared day, Binding, Seed salt, Registered compiler, and the pool's marks and chain,
   which `check` reads only to parse), writes a `receipt` with its own clock, and only then samples.
 * **The checks** (`check`): the record has exactly these keys, and
@@ -38,7 +38,9 @@
     the network period check ties its rows to the dockets that computed them, which this check doesn't, so the
     verdict publishes each tied name it let through (`Verdict.rests_on_period_check`), and with any its acceptance is
     none on its own; it refuses a tied name that isn't a run Input of the program's own, or that it expects registered
-    or holds (`R8-tied`).
+    or holds (`R8-tied`);
+  - R9: the program's root reaches an opener (`OPENERS`) only inside a circuit template `GATED` holds by its id and closure
+    digest at an evaluated binding (`ungated_openers`, `R9-ungated-opener`).
 * **Receipt**: `{"format": "verity/registration-receipt/v1", "registration": <digest>, "verifier", "received": "<UTC,
   %Y-%m-%dT%H:%M:%SZ>"}`, and the sample names it.
 * **The public file** (`matches_public`): the verifier holds its own (scheme, roots, their domains, its instance count)
@@ -158,7 +160,7 @@ from verity.commitments import domains as DM
 from verity.commitments import history as HT
 from verity.commitments.window import WINDOW_DOMAIN, window_domain
 from verity.circuits import partition_object as PO
-from verity.circuits.codec import canonical_json, descriptor_chunks
+from verity.circuits.codec import canonical_json, closure_digest, descriptor_chunks, encode_program
 from verity.circuits.program import REGISTRATION, Program
 from verity.circuits.supplied import SUPPLIED, registered_values
 from verity.protocols.proof.spot.verifier.challenger import challenger as Ch
@@ -195,6 +197,17 @@ SUPPLIED_SOURCE_WHY = ("a supplied input's rows are the verifier's own: the para
                        "mark its function, or it is an earlier record's output; with none, nothing fixes its root")
 ANCHOR_UNPINNED_WHY = ("a supplied anchor reads a registered value's root or domain, and the verifier holds that value "
                        "to no pin: neither its own pinned roots nor a pin of the weights' registration of record")
+#: the circuit templates that open a commitment and return its verdict (`ungated_openers`)
+OPENERS = ("FrameV3Read_v1", "FrameV3ReadAt_v1", "MerkleRead_v1", "LmsVerify_v1")
+#: the circuit templates whose returned rows are gated on their opener's verdict, each `(id, closure digest)` at a binding
+#: circuits' lint evaluated (Lean's `Docket.GATED`, both held equal to `tests/lint/openers_gated.json`): a circuit reaching a
+#: binding no lint evaluated is refused
+GATED: tuple[tuple[str, str], ...] = (
+    ("EmbeddingRead_v4", "251987cf5a07b53f7d20fd62d4c2cdc4af5dcd00e629cc6b2afce45437c88826290e96b4d91b5d0934835f7bbfd7fef9181ae7b97aa4f730642d11e71d2a6f5d"),
+)
+UNGATED_OPENER_WHY = ("a circuit template that calls an opener and returns rows whether or not its opening held lets the "
+                      "prover commit rows of its choice: C reaches an opener only inside a gated template the verifier "
+                      "holds by its closure digest")
 #: R8's refusals of the program's registered inputs against the weights' registration of record (`weights_held`)
 WEIGHTS_WHY = {
     "R8-weights-digest": "the deployment's registration record is not the one registered: its digest is not the "
@@ -591,7 +604,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
           coins: Mapping[str, str] | None = None, released: Mapping[str, int] | None = None,
           commitments: Mapping[str, str] | None = None, attester_keys: Sequence[str] = (),
           weights_of_record: tuple[bytes, str] | None = None) -> Verdict:
-    """R1-R8 against the verifier's own copies: its program and query, its sampling design and scheme, the ports its layout derives
+    """R1-R9 against the verifier's own copies: its program and query, its sampling design and scheme, the ports its layout derives
     (`{port: {"leaves", "domain"}}`), the digest of its copy of the leaf layer, its anchors, its log of this prover's
     earlier records, the parameters it expects registered (`registered`: `{parameter: words}`), of those the ones it
     fills itself (`supplied`: `{parameter: [[source, ...], ...]}`, `registered.sources`; and C's supplied inputs, by their
@@ -778,6 +791,12 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
         c.fail("R8-shared-input", {"inputs": shared, "why": SHARED_WHY})
     for code, d in weights:
         c.fail(code, {"refused": d, "why": WEIGHTS_WHY[code]})
+    try:
+        ungated = ungated_openers(GATED, encode_program(program))
+    except (KeyError, IndexError, TypeError) as e:
+        ungated = [f"the walk refuses the descriptor: {e!r}"]
+    if ungated:
+        c.fail("R9-ungated-opener", {"templates": ungated, "why": UNGATED_OPENER_WHY})
     if members:
         try:
             refused = LP.refused(*LP.sampling_design_of(program, query, sampling_design, work_table), members)
@@ -787,6 +806,29 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
             if refused:
                 c.fail("link-points", {"members": refused})
     return c.verdict(fanout=fan, rests_on_period_check=through)
+
+
+def ungated_openers(gated: Iterable[tuple[str, str]], desc: Mapping[str, Any]) -> list[str]:
+    """The keys of descriptor `desc`'s definitions that call an opener (`OPENERS`) and that the root reaches through its
+    nodes' callees and word primitives' Boolean definitions without passing a gated one, a definition whose id and
+    `closure_digest` are a pair of `gated`, sorted (Lean's `Docket.ungatedOpeners`). Each definition is read once."""
+    gated, defs, callees, boolean = set(gated), desc["definitions"], desc["callees"], desc.get("boolean", {})
+    ids = {i for i, _ in gated}
+    seen, out, todo = set(), [], [desc["root"]]
+    while todo:
+        k = todo.pop()
+        if k in seen:
+            continue
+        seen.add(k)
+        e = defs[k]
+        if e["id"] in OPENERS or (e["id"] in ids and (e["id"], closure_digest(desc, k)) in gated):
+            continue
+        kids = ([callees[n["fn"]] for n in e["body"]["nodes"]] if e["form"] == "composite"
+                else [boolean[e["id"]]] if e["id"] in boolean else [])
+        if any(defs[c]["id"] in OPENERS for c in kids):
+            out.append(k)
+        todo += kids
+    return sorted(out)
 
 
 def _readers(program: Program, query: Mapping[str, Any], registered: Iterable[str], held: Iterable[str],
