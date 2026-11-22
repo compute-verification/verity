@@ -1124,8 +1124,8 @@ def audit(a: argparse.Namespace) -> int:
     if a.registration and taken not in REGISTRATION_SOURCES or (a.registration_ledger and not (a.challenger_key
                                                                                                and a.registration_lane)):
         raise SystemExit(REGISTRATION_NEEDS)
-    if a.registration:
-        print("REGISTRATION " + REGISTRATION_SOURCES[taken], flush=True)
+    print("REGISTRATION " + (DK.registration_first(taken if a.registration else None) or REGISTRATION_SOURCES[taken]),
+          flush=True)
     own_tree()
     import a5 as A5
     from verity.protocols.proof.spot.verifier.challenger import challenger_session as AC
@@ -1258,9 +1258,11 @@ def audit(a: argparse.Namespace) -> int:
     if tied.get("log"):
         row["tie"] = tie_row(tied)
     row["circuit_registration"] = s.get("registration")
-    if a.registration:
-        row["registration"] = {"digest": a.registration_digest,
-                               "source": "ledger" if a.registration_ledger else DK.DEVELOPMENT}
+    row["registration"] = {"digest": a.registration_digest if a.registration else None,
+                           "source": "ledger" if a.registration_ledger else DK.DEVELOPMENT}
+    lean_members = (s.get("audit") or {}).get("members_lean") or {}
+    if lean_members.get("ran") is False:
+        row["not_verified"] = {"members": list(lean_members.get("not_verified") or []), "why": lean_members.get("reason")}
     if a.registration_ledger:
         row["registration_halves"] = ["before the draw"]
         try:
@@ -1303,12 +1305,16 @@ def audit(a: argparse.Namespace) -> int:
     row["ok"] = row["ok"] and not row["coins_session"]["error"]
     row["ok"] = row["ok"] and (not a.registration_ledger or "after the draw" in row["registration_halves"])
     row["ok"] = row["ok"] and (acts is None or acts["ok"])
+    row["of_record"] = row["ok"] and row["registration"]["source"] == "ledger" and "not_verified" not in row
     (out / "summary.json").write_text(json.dumps(row, indent=1, sort_keys=True, default=str))
-    print("RECORDS " + json.dumps({x: row.get(x) for x in ("ok", "circuit", "population", "draw", "draw_counts", "outputs", "seconds")}
+    if "not_verified" in row:
+        print("NOT-VERIFIED " + json.dumps(row["not_verified"], sort_keys=True))
+    print("RECORDS " + json.dumps({x: row.get(x) for x in ("ok", "of_record", "circuit", "population", "draw", "draw_counts", "outputs", "seconds")}
                                   | {"compile": PROVER_CIRCUIT if a.prover_circuit else (compiled or {}).get("ok"),
                                      "fixed_before_draw": (row.get("fixed_before_draw") or {}).get("ok"),
                                      "circuit_registration": row["circuit_registration"],
-                                     **({"registration": row["registration"]} if "registration" in row else {}),
+                                     "registration": row["registration"],
+                                     **({"not_verified": row["not_verified"]} if "not_verified" in row else {}),
                                      **({x: row[x] for x in ("registration_halves", "registration_after_draw") if x in row}),
                                      "accepted": (s.get("audit") or {}).get("accepted"),
                                      "negatives_refused": all((row.get("negatives") or {"none": False}).values()),

@@ -1567,7 +1567,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         result["registered_reads"] = TB.reported_reads(reads, row_verdicts)
     result["checks_before_draw"] = checks
     result["case_v2"] = case_written(out)
-    members_lean(out, result, pm)
+    members_lean(out, result, pm, names=[mm["m"].key for mm in members])
     one_statement_held(result, rec, members, pm)
     if after:
         result["checks_after_draw"] = after
@@ -1796,16 +1796,18 @@ def member_reads(registered: Mapping[str, Any] | None, key: str) -> tuple[set[tu
 
 
 def members_lean(out: Path, result: dict, pm: dict | str | None,
-                 check: Callable[[dict], tuple] = MB.case_check_out) -> None:
+                 check: Callable[[dict], tuple] = MB.case_check_out, names: Sequence[str] = ()) -> None:
     """`OneStageZk.checkMembersAt` on the audit's own per-member case (``out/case-v2.json``, `members.case_check`), its
     verdict ``result["checks"]["members_lean"]`` in every audit, ``ran`` whether Lean answered: the audit accepts only
     where Lean accepts too, and where Lean and the Python verdict differ, the check's code is `MEMBERS_DISAGREE` and its
     detail both texts. An audit with no per-member case (``pm`` not `members_proof`'s members) keeps the Python's
-    verdict and says why under ``reason``; one whose case Lean could not read is refused. Where ``check`` gives the
+    verdict and says why under ``reason``; one whose case Lean could not read is refused. Where Lean did not run, the
+    window's members (``names``) are listed under ``not_verified``: no Lean ran on them. Where ``check`` gives the
     outcome's line as the executable printed it (`members.case_check_out`), the detail holds it and its SHA-512."""
     checks = result.setdefault("checks", {})
     if not isinstance(pm, dict):
-        checks["members_lean"] = {"ok": True, "ran": False, "codes": [], "reason": pm or ONE_MEMBER}
+        checks["members_lean"] = {"ok": True, "ran": False, "codes": [], "reason": pm or ONE_MEMBER,
+                                  "not_verified": list(names)}
         return
     case = out / "case-v2.json"
     try:
@@ -1813,7 +1815,8 @@ def members_lean(out: Path, result: dict, pm: dict | str | None,
             raise MB.LeanError(f"no per-member case: {case_written(out)['why']}")
         verdict, why, *printed = check(json.loads(case.read_text()))
     except MB.LeanError as e:
-        checks["members_lean"] = {"ok": False, "ran": False, "codes": ["lean-not-run"], "reason": str(e)}
+        checks["members_lean"] = {"ok": False, "ran": False, "codes": ["lean-not-run"], "reason": str(e),
+                                  "not_verified": list(names)}
         result["accepted"] = False
         return
     failed = sorted(k for k, c in checks.items() if isinstance(c, dict) and not c.get("ok", True))

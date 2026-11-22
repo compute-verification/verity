@@ -297,9 +297,11 @@ def test_source_and_the_negatives_refuse_what_the_records_dont_bind(written, tmp
                         "registration-binding-a-compiler-for-a-fixed-circuit"} and all(x["refused"] for x in got.values())
 
 
-def _prover_circuit_audit(w: SimpleNamespace, monkeypatch, tmp_path: Path, flags: list[str]) -> tuple[int, dict]:
+def _prover_circuit_audit(w: SimpleNamespace, monkeypatch, tmp_path: Path, flags: list[str],
+                          members_lean: dict | None = None) -> tuple[int, dict]:
     """`main`'s audit of written window ``w`` under ``flags`` in place of ``--circuit``, its sessions (`a5.audit`) stubbed:
-    the stub's docket is the window's own, received before the draw, and its verdict is `source`'s on that docket.
+    the stub's docket is the window's own, received before the draw, and its verdict is `source`'s on that docket, with
+    ``members_lean`` its Lean members verdict where given.
     -> (the exit code, what the stub saw: ``source``, ``negatives``, ``summary``)."""
     import a5 as A5
     from verity.protocols.proof.spot.verifier.challenger import challenger_session as AC
@@ -311,7 +313,8 @@ def _prover_circuit_audit(w: SimpleNamespace, monkeypatch, tmp_path: Path, flags
         (out / "registration.json").write_text(json.dumps(w.rec))
         (out / "receipt.json").write_text(json.dumps({"registration": DD.digest(w.rec), "verifier": A5.CHALLENGER}))
         seen.update(source=source(w.rec["window"]), negatives=more, summary=summary)
-        return {"audit": {"accepted": True}, "draw": {"units": [0]}, "registration": DD.digest(w.rec)}, seen["source"]["ok"]
+        return {"audit": {"accepted": True, **({"members_lean": members_lean} if members_lean else {})},
+                "draw": {"units": [0]}, "registration": DD.digest(w.rec)}, seen["source"]["ok"]
 
     session = SimpleNamespace(skip=lambda r: None, join=lambda: None, evidence=lambda: {}, shutdown=lambda: None)
     monkeypatch.setattr(RA, "free_ports", lambda span: 20000)
@@ -338,10 +341,40 @@ def test_prover_circuit_takes_the_registered_circuit_holds_its_compiler_and_advi
                                                                                               "not checked")
     assert summary["fixed_before_draw"]["ok"] and (summary["compiler"], summary["advice"]) == (
         written.bound["compiler"], written.bound["advice"])
-    assert summary["circuit_registration"] == DD.digest(written.rec) and "registration" not in summary
+    assert summary["circuit_registration"] == DD.digest(written.rec)
     assert seen["summary"]["compiled"] == "not checked" and not (tmp_path / "o" / "compile").exists()
     line, = (x for x in capsys.readouterr().out.splitlines() if x.startswith("RECORDS "))
     assert "compiled: not checked (the circuit is the one the prover registered)" in line
+
+
+def test_parameters_with_no_registration_say_the_development_line_first_and_are_no_run_of_record(
+        written, tmp_path, monkeypatch, capsys):
+    """An audit with no ``--registration`` is the development path: it says first what that path says
+    (`docket.registration_first`, `OneStage.registrationFirst`), publishes the development source with no digest, and,
+    with no ledger registration, is not a run of record."""
+    rc, _seen = _prover_circuit_audit(written, monkeypatch, tmp_path, ["--prover-circuit", "--development"])
+    assert rc == 0
+    first = next(x for x in capsys.readouterr().out.splitlines() if x.strip())
+    assert first == "REGISTRATION " + R.DEVELOPMENT_WHY == "REGISTRATION " + R.registration_first(None)
+    summary = json.loads((tmp_path / "o" / "summary.json").read_text())
+    assert summary["registration"] == {"digest": None, "source": "development"}
+    assert summary["ok"] and summary["of_record"] is False
+
+
+def test_members_no_lean_ran_on_are_listed_by_name_first_and_the_run_is_not_of_record(written, tmp_path, monkeypatch,
+                                                                                         capsys):
+    """Where Lean's members check did not run (`a5.members_lean`'s ``ran`` false), the result lists the window's
+    members by name as not verified, in the summary and in the line printed before ``RECORDS``, and the run is not a
+    run of record."""
+    lean = {"ok": True, "ran": False, "codes": [], "reason": "why", "not_verified": ["a/c0", "a/c1"]}
+    rc, _seen = _prover_circuit_audit(written, monkeypatch, tmp_path, ["--prover-circuit", "--development"], lean)
+    assert rc == 0
+    out = capsys.readouterr().out.splitlines()
+    i = next(k for k, x in enumerate(out) if x.startswith("RECORDS "))
+    assert out[i - 1] == "NOT-VERIFIED " + json.dumps({"members": ["a/c0", "a/c1"], "why": "why"}, sort_keys=True)
+    summary = json.loads((tmp_path / "o" / "summary.json").read_text())
+    assert summary["not_verified"] == {"members": ["a/c0", "a/c1"], "why": "why"} and summary["of_record"] is False
+    assert json.loads(out[i][len("RECORDS "):])["not_verified"]["members"] == ["a/c0", "a/c1"]
 
 
 def _deployment_record(tmp_path: Path) -> Path:
