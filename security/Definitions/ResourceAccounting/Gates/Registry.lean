@@ -6,8 +6,8 @@ public import Definitions.ResourceAccounting.Gates.Model
 # The registry's primitives, each in one class (trusted)
 
 Every primitive of the registry in exactly one class of the model (`Model.lean`), as the ruling closes the free
-set, 262 ids: the 194 of `verity/circuits/ops/prims.py` at
-`615eabc13a`; S8-PORT's (`ops/s8.py` and `ops/boolean/s8.py` at `45351115eb`): the s8 family's two steps
+set, 261 ids: the 194 of `verity/circuits/ops/prims.py` at
+`615eabc13a` but `F32ErfRn_v1`; S8-PORT's (`ops/s8.py` and `ops/boolean/s8.py` at `45351115eb`): the s8 family's two steps
 `BlackwellS8ImmaDot32` and `BlackwellU8S8ImmaDot32` and LimbSplit's four limb steps (`S32LowByte`, `S32ByteCarry`,
 `S32ClampS8`, `S32ClampRest`), each as its word Definition (`_v1`) and on bits (`_v2`); PIN's spot check
 (`segment_e2e.py`, in history at `61f13c2275`): `PouwSegDot_v1`, `PouwDuoAbsorb_v1`, `PouwSel32_v1`,
@@ -162,7 +162,6 @@ def registry : List (String × Class) := [
   ("F32Div_v1", .budgeted .rounding),
   ("F32Div_v2", .budgeted .rounding),
   ("F32Eq_v1", .budgeted .compareSelect),
-  ("F32ErfRn_v1", .budgeted .rounding),
   ("F32ExpRn_v1", .budgeted .rounding),
   ("F32Fabs_v1", .budgeted .rounding),
   ("F32FmaFtz_v1", .budgeted .rounding),

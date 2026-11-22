@@ -15,19 +15,70 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_call
 from verity.circuits.evaluation.reference import standalone_call
 
-from tests.check.test_sampled_replay_fp8 import INTER, G, H, _program_fp8
 from tests.check.test_sampled_replay_v2_addresses import _v2_manifest
-from verity_vllm.acquire import plan
-from verity_vllm.check import oracle_compare as OC
-from verity_vllm.check.replay import coverage
 from verity_vllm.definitions.numerics import fp8_twins
 from verity_vllm.definitions.registry import fp8
-from verity_vllm.pipeline import manifest as M
 from verity_vllm.query import program_view as PV
 from verity_vllm.query import scale_products as SP
-from verity_vllm.query.manifest import format as fmt
 
 GU, DN = "model.layers.0.mlp.gate_up_proj", "model.layers.0.mlp.down_proj"
+
+EPS = '{"f64":"0x1.4f8b588e368f1p-17"}'
+V, H, INTER, LP, T, G = 8, 256, 128, 2, 2, 128     # H, INTER multiples of the 128 block; gate_up N = 2 INTER = 256
+
+
+def _program_fp8():
+    """One request Program: per token row Embedding -> RMSNormTriton -> [Fp8GroupQuant -> ScaledMmFp8Block](gate_up) -> SiluMul ->
+    [Fp8GroupQuant -> ScaledMmFp8Block](down) -> RMSNormFused(norm); per step Gemm(logits, tied embed) -> TokenSelect.  Row names / args
+    in the Build's instance-sequence schema (the FP8 rows exactly as derive_step emits them: `<module>/per_token_group_fp8_quant_<s>[k]`,
+    `<module>/cutlass_scaled_mm_<s>[k]`, the GEMM's args = (quant refs [0,K), quant refs [K, K+K/G), weight slice, scale slice))."""
+    fields = [("model.model.embed_tokens.weight", V * H, 16, f"Array<{V},Array<{H},Value<16>>>"),
+              ("model.model.layers.0.input_layernorm.weight", H, 16, f"Array<{H},Value<16>>"),
+              ("model.model.layers.0.mlp.gate_up_proj.weight", 2 * INTER * H, 8, f"Array<{2 * INTER},Array<{H},Value<8>>>"),
+              ("model.model.layers.0.mlp.gate_up_proj.weight_scale_inv", (2 * INTER // G) * (H // G), 32, f"Array<{2 * INTER // G},Array<{H // G},Value<32>>>"),
+              ("model.model.layers.0.mlp.down_proj.weight", H * INTER, 8, f"Array<{H},Array<{INTER},Value<8>>>"),
+              ("model.model.layers.0.mlp.down_proj.weight_scale_inv", (H // G) * (INTER // G), 32, f"Array<{H // G},Array<{INTER // G},Value<32>>>"),
+              ("model.model.norm.weight", H, 16, f"Array<{H},Value<16>>")]
+    off, woff, wbits = 0, {}, {}
+    for n, c, b, _t in fields:
+        woff[n] = (off, off + c)
+        wbits[n] = b
+        off += c
+    wtype = "{" + ", ".join(f"{n}: {t}" for n, _c, _b, t in fields) + "}"
+    rows, i = [], 0
+
+    def add(spec, name, args):
+        nonlocal i
+        rows.append({"i": i, "spec": spec, "form": "call", "name": name, "args": args})
+        i += 1
+        return i - 1
+
+    W = lambda n: [["p", 1, woff[n][0], woff[n][1]]]  # noqa: E731
+    sel_prev = None
+    for s in range(1 + T):
+        toks = list(range(LP)) if s == 0 else [0]
+        norm_rows = []
+        for k in toks:
+            ids = [["p", 0, k, k + 1]] if s == 0 else [["n", sel_prev, 0, 1]]
+            e = add(f"Embedding_v1{{V={V},H={H}}}", f"model.model.embed_tokens/embedding_{s}[{k}]", [ids, W("model.model.embed_tokens.weight")])
+            ln = add(f"RMSNormTriton_v1{{N={H},EPS={EPS}}}", f"model.model.layers.0.input_layernorm/triton_launch_{s}[{k}]",
+                     [[["n", e, 0, H]], W("model.model.layers.0.input_layernorm.weight")])
+            q1 = add(f"Fp8GroupQuant_v1{{K={H},G={G}}}", f"model.model.layers.0.mlp.gate_up_proj/per_token_group_fp8_quant_{s}[{k}]", [[["n", ln, 0, H]]])
+            gu = add(f"ScaledMmFp8BlockSharedScale_v1{{K={H},N={2 * INTER},G={G}}}", f"model.model.layers.0.mlp.gate_up_proj/cutlass_scaled_mm_{s}[{k}]",
+                     [[["n", q1, 0, H]], [["n", q1, H, H + H // G]], W("model.model.layers.0.mlp.gate_up_proj.weight"),
+                      W("model.model.layers.0.mlp.gate_up_proj.weight_scale_inv")])
+            act = add(f"SiluMul_v1{{I={INTER}}}", f"model.model.layers.0.mlp.act_fn/silu_and_mul_{s}[{k}]", [[["n", gu, 0, 2 * INTER]]])
+            q2 = add(f"Fp8GroupQuant_v1{{K={INTER},G={G}}}", f"model.model.layers.0.mlp.down_proj/per_token_group_fp8_quant_{s}[{k}]", [[["n", act, 0, INTER]]])
+            dn = add(f"ScaledMmFp8BlockSharedScale_v1{{K={INTER},N={H},G={G}}}", f"model.model.layers.0.mlp.down_proj/cutlass_scaled_mm_{s}[{k}]",
+                     [[["n", q2, 0, INTER]], [["n", q2, INTER, INTER + INTER // G]], W("model.model.layers.0.mlp.down_proj.weight"),
+                      W("model.model.layers.0.mlp.down_proj.weight_scale_inv")])
+            nm = add(f"RMSNormFusedCuda_v2{{N={H},EPS={EPS}}}", f"model.model.norm/fused_add_rms_norm_{s}[{k}]",
+                     [[["n", dn, 0, H]], [["n", e, 0, H]], W("model.model.norm.weight")])
+            norm_rows.append(nm)
+        lg = add(f"Gemm_v1{{K={H},N={V}}}", f"model.logits_processor/triton_launch_{s}c[0]", [[["n", norm_rows[-1], 0, H]], W("model.model.embed_tokens.weight")])
+        sel_prev = add(f"TokenSelect_v1{{V={V}}}", f"argmax_{s}[0]", [[["n", lg, 0, V]]])
+    inst = {"schema": "cb-a/instance-sequence/v1", "digest": "f" * 64, "params": [["prompt", f"Array<{LP},Value<32>>"], ["weights", wtype]], "rows": rows}
+    return inst, woff, wbits
 
 
 def fp8_program(shared: bool) -> dict:
@@ -109,11 +160,3 @@ def test_manifest_sites_refuses_two_geometries_at_one_site():
         SP.manifest_sites(man)
 
 
-def test_the_family_is_in_every_vocabulary():
-    assert SP.FAMILY in fmt.FAMILIES and plan.ROUTE_OF_FAMILY[SP.FAMILY] == "scale_tap" and SP.FAMILY in coverage.QUERY_FAMILY_MECHANISM
-    assert M.DEFAULT_TAPS == (SP.POLICY,)
-    entry = {"identity": {"op_path": DN, "output_member": SP.MEMBER}, "name": f"{DN}/{SP.MEMBER}"}
-    assert OC._family_of(entry) == "hidden_stream"
-    g = {"family": fp8.ScaledMmFp8BlockSharedScale.id, "statics": {"K": 256, "N": 384, "G": 128},
-         "definition": f"{fp8.ScaledMmFp8BlockSharedScale.id}{{K=256,N=384,G=128}}", "calls": 3, "where": DN}
-    assert W_.check_calls([g], acquired=SP.TAP_WORDS, specialize=PV.specialization)["acquired_interior_words"] == 3 * 3 * 2

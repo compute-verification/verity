@@ -18,7 +18,6 @@
     {"file": "verity_vllm/compiler/served_tie.py", "kind": "core-private", "symbol": "_body", "detail": "verity.commitments.gates.bits._Consts"},
     {"file": "verity_vllm/compiler/served_tie.py", "kind": "core-private", "symbol": "_body", "detail": "verity.commitments.gates.bits._coll", "count": 7},
     {"file": "verity_vllm/compiler/served_tie.py", "kind": "core-private", "symbol": "_body_step", "detail": "verity.commitments.gates.bits._Consts"},
-    {"file": "verity_vllm/compiler/served_tie.py", "kind": "core-private", "symbol": "_body_step", "detail": "verity.commitments.gates.bits._coll", "count": 3},
-    {"file": "verity_vllm/definitions/registry/lifted.py", "kind": "core-patch", "symbol": "with_ordinary", "detail": "verity.circuits.defs.REGISTRY.add()"}
+    {"file": "verity_vllm/compiler/served_tie.py", "kind": "core-private", "symbol": "_body_step", "detail": "verity.commitments.gates.bits._coll", "count": 3}
   ]
 }

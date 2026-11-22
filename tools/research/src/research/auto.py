@@ -43,7 +43,8 @@ takes only a machine that holds it built (`_holds`), saying how many of its tree
 is taken only while no machine is known to hold it, and the reason says so. With none, the launch is refused with what
 each machine lacks and the two ways on (`_for_package`). A late twin moves only to such a machine too.
 
-A GPU job, a run naming its own node, or one asking more CPUs than a pool slot has stays on node 2's queue. A machine that can't
+A GPU job, a run naming its own node, or one asking more CPUs than a pool slot has stays on node 2's queue, unless it asks more
+than node 2's share too (`too_big`, refused at launch). A machine that can't
 be read is skipped; with node 2 unread and no pool fitting, the job is refused (`Unplaceable`) with where to run it. A pool
 run waits up to slot_only.POOL_WAIT_S (4 h) in its line and then exits 75 without running; its --timeout counts from taking
 the slot, and a wait inside it for a Lean audit slot (lean_slot.py) moves it later by as long. While it waits there, whatever
@@ -494,6 +495,25 @@ def _pools(docs: dict[str, dict | str]) -> list[tuple[str, str]]:
         return (int(m.group(1)) if m else math.inf, machine)
 
     return [(machine, SPILL_POOL) for machine in sorted((m for m in docs if m != AUTO_NODE), key=number)]
+
+
+def too_big(docs: dict[str, dict | str], cpus: int) -> str | None:
+    """Why an ask of ``cpus`` whole cores is refused at launch, or None: more than any slot `read` found in a pool (a slot that
+    runs checks only, `trains`, is no place for it) and more than node 2's share, which takes the job as a queued one while
+    it can be read (`off`). With node 2 off, `choose` refuses the job itself, saying why node 2 isn't there."""
+    n2 = docs.get(AUTO_NODE)
+    if off(n2) is not None:
+        return None
+    biggest = (n2["share"]["share"], f"{AUTO_NODE}'s share") if isinstance(n2["share"].get("share"), int) else (0, "")
+    for machine, pool in _pools(docs):
+        doc = docs[machine].get(pool) if isinstance(docs[machine], dict) else None
+        for s in (doc.get("slots") or []) if isinstance(doc, dict) else []:
+            if not s.get("trains") and (n := cpulist(s["cpus"])) > biggest[0]:
+                biggest = (n, f"{machine}'s {pool} pool")
+    if cpus <= biggest[0]:
+        return None
+    return (f"--cpus {cpus} asks more whole cores than any slot auto reads gives (the largest is {biggest[0]}, on {biggest[1]}): "
+            f"name a machine and a slot that has them (`--on MACHINE --pool POOL --slot NAME`), or ask for at most {biggest[0]}.")
 
 
 def share_cpus(source: Path) -> str | None:

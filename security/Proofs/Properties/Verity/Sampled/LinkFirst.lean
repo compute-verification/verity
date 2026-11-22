@@ -49,7 +49,8 @@ theorem checkBlobsAt_orderHeld {p : _root_.Spot.OneStageZk.Params}
   swap
   · obtain ⟨r, hr, -, -⟩ := _root_.Spot.OneStageZk.checkMembersAt_accept h
     exact (_root_.Spot.OneStageZk.membersRun_held hr).1
-  unfold _root_.Spot.OneStageZk.checkOneAt at h
+  replace h := _root_.Spot.OneStageZk.checkOneAt_body h
+  unfold _root_.Spot.OneStageZk.checkOneBody at h
   dsimp only at h
   split at h
   · cases h

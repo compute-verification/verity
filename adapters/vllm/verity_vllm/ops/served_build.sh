@@ -3,8 +3,7 @@
 # (`verity-vllm served-match`, adapters/vllm/verity_vllm/pipeline/served_match.py), with no Commit stage after it. vLLM serves
 # the match workload with every value of every engine step committed; the Build is derived from the serving process's own
 # compile artifact, and its Program is checked word for word against the committed values. Its build.json is what
-# adapters/vllm/verity_vllm/ops/served_commit.sh takes as the required manifest and benchmarks/served_commit/served_arm.sh as
-# PIN_BUILD.
+# benchmarks/served_commit/served_arm.sh takes as PIN_BUILD.
 #
 # Run from the source tree's root, on one RTX PRO 6000, with the match workload in $RESEARCH_RUN_DIR/inputs/match.json:
 #

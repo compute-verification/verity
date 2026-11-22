@@ -603,7 +603,7 @@ theorem toy_sketch {Ω : Type} [Fintype Ω] (ver : Node → Record → Prop)
 
 theorem binding_empty {n κ : ℕ} {X : Type} [Fintype X] [IsEmpty (Fin n)] {m : ℕ} {s : Fin n → ℕ}
     (D : ResourceAccounting.Remote.Sample.Run n m s κ X) (R : Receipts n κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
-    (rest : SampleCoins n κ X → Fin n → ℕ → ℕ) : R.binding D prf rest = 0 := by
+    (rest : SampleCoins n κ X → Fin n → ℕ → ℕ) : R.binding (D.opened prf rest) = 0 := by
   simp [Receipts.binding, Pous.pr_eq_card]
 
 theorem toy_delta : (Toy.node.delta : ℝ) = 1 / 2 := by
@@ -646,7 +646,7 @@ theorem _root_.Properties.Poub.Line.SecurityProofs.lineHeld_nontrivial :
             (((recordCommitted node recs correct).play (Committed.junk com t)).distinguisher prf
               (node.delta : ℝ) t)).toReal +
           (∑ t, (recordCommitted node recs correct).hide com prf (node.delta : ℝ) t).toReal +
-          (R.binding ((recordCommitted node recs correct).play com) prf rest).toReal)) :=
+          (R.binding (((recordCommitted node recs correct).play com).opened prf rest)).toReal)) :=
   ⟨Toy.node, 0, Unit, Unit, inferInstance, fun t => isEmptyElim t, fun _ _ _ => 0, fun _ _ => Toy.rec,
     fun _ _ _ => ∅, fun _ => (), Toy.trace, Toy.receipts, 0, 0, noOutside _, quietIngress _, toy_paced _,
     toy_covers _, toy_sketch _ _, covered_noOutside _ _, ingressCounted_quiet _, fun _ t => isEmptyElim t,
@@ -701,7 +701,7 @@ theorem SecurityProofs.lineHeldAtSubprotocol_nontrivial :
             (((recordCommitted node recs correct).play (Committed.junk com t)).distinguisher prf
               (node.delta : ℝ) t)).toReal +
           (∑ t, (recordCommitted node recs correct).hide com prf (node.delta : ℝ) t).toReal +
-          (R.binding ((recordCommitted node recs correct).play com) prf rest).toReal)) :=
+          (R.binding (((recordCommitted node recs correct).play com).opened prf rest)).toReal)) :=
   ⟨Toy.node, 0, Unit, Unit, inferInstance, fun t => isEmptyElim t, fun _ _ _ => 0, fun _ _ => Toy.rec,
     fun _ _ _ => ∅, fun _ => (), Toy.trace, Toy.receipts, 0, 0, fun _ => .empty, fun _ => .empty, fun _ => .empty,
     noOutside _, quietIngress _, toy_paced _, toy_covers _, toy_sketch _ _, covered_noOutside _ _,

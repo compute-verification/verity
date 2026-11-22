@@ -20,7 +20,7 @@ from verity_config import dumps, sha256, value
 
 from verity_bench import kit, settings
 from verity_bench.steady_spec import SteadyPoint, SteadySpec
-from verity_bench.vllm.presets import ResolvedSpec, SweepPoint, expand_sweep, former_name, resolve_spec
+from verity_bench.vllm.presets import ResolvedSpec, SweepPoint, expand_sweep, resolve_spec
 
 
 @dataclass(frozen=True)
@@ -275,7 +275,7 @@ def again(plan: Plan, names: Sequence[str]) -> Plan:
 def _relative_spec(source: str | Path, root: Path) -> str:
     path = Path(source)
     if not path.is_file():
-        path = root / "benchmarks" / "harness" / "specs" / f"{former_name(source) or source}.toml"
+        path = root / "benchmarks" / "harness" / "specs" / f"{source}.toml"
     try:
         return path.resolve().relative_to(root.resolve()).as_posix()
     except ValueError:

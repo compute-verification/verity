@@ -14,7 +14,6 @@ import pytest
 
 from tests import fake_vllm
 from verity_vllm.engine import build, engine_profile, run_facts
-from verity_vllm.pipeline.tp import rank_worker
 
 
 def _module(name: str, **attrs) -> ModuleType:
@@ -192,11 +191,3 @@ class _RC:
     other: int
 
 
-@pytest.mark.parametrize("rc", [_RC(b"\x01", 5), NS(run_root=b"\x01", other=5)])
-def test_claimed_puts_the_drivers_root_on_a_copy(rc):
-    claimed = rank_worker.TP2CaptureWorkerExtension._claimed
-    assert claimed(None, rc, None) is rc and claimed(None, rc, "01") is rc
-    got = claimed(None, rc, "02")
-    assert got is not rc and (got.run_root, got.other, type(got)) == (b"\x02", 5, type(rc)) and rc.run_root == b"\x01"
-    with pytest.raises(ValueError):
-        claimed(None, rc, "zz")

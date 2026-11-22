@@ -22,7 +22,6 @@ launch (`verity_set_tap_v8`); the kernel arms only if its compile-time tile equa
 from __future__ import annotations
 
 import time
-from collections.abc import Mapping
 from typing import Any
 
 from verity_vllm.engine import hooks
@@ -102,15 +101,9 @@ def tap_row3(ns: Any) -> int:
     return int(ns.verity_tap_row3()) if hasattr(ns, "verity_tap_row3") else 0
 
 
-#: `verity_tap_row3()` of the tap build a manifest built under the guarded-max policy needs (ROW word 3 the guarded max of each key
-#: block after a row's first, and the MS class after FIN); no manifest is built under it since the M1 stream left the manifest
+#: `verity_tap_row3()` of a guarded-max tap build (ROW word 3 the guarded max of each key block after a row's first, and the MS class
+#: after FIN); the stream bytes of record are the default build's, which writes neither
 TAP_ROW3 = 1
-
-
-def guarded_max_policy(manifest: Mapping[str, Any] | None) -> bool:
-    """Whether a manifest was built under the guarded-max policy (its query header has a `guarded_max` record)."""
-    q = (manifest or {}).get("query")
-    return isinstance(q, dict) and isinstance(q.get("guarded_max"), dict)
 
 
 def tap_ms(src: int) -> bool:
@@ -159,17 +152,16 @@ class HiddenM1Source:
         self.active = False
 
     def require_row3(self, guarded_max: bool) -> None:
-        """Refuse a build whose ROW word 3 or MS class is not the manifest's: a manifest built under the guarded-max policy
-        (`guarded_max_policy`) needs a build that writes the guarded max and the MS class, any other manifest one that writes neither
-        (the stream bytes of record)."""
+        """Refuse a build whose ROW word 3 or MS class is not the caller's: a guarded-max Commit needs a build that writes the guarded
+        max and the MS class, any other one that writes neither (the stream bytes of record)."""
         want = TAP_ROW3 if guarded_max else 0
         policy = "is under the guarded-max policy" if guarded_max else "has no guarded-max policy"
         if self.stats["row3"] != want:
-            raise RuntimeError(f"hidden tap {self.ns_name}: ROW word 3 mode {self.stats['row3']} (verity_tap_row3), the manifest "
+            raise RuntimeError(f"hidden tap {self.ns_name}: ROW word 3 mode {self.stats['row3']} (verity_tap_row3), the Commit "
                                f"{policy} and needs mode {want}")
         if bool(self.stats.get("ms")) != bool(guarded_max):
             raise RuntimeError(f"hidden tap {self.ns_name}: source mask {self.src} {'writes' if self.stats.get('ms') else 'lacks'} the MS "
-                               f"class (verity_tap_src & 64), the manifest {policy}")
+                               f"class (verity_tap_src & 64), the Commit {policy}")
 
     def extra_step_bytes(self, envelope: dict[str, Any], model: Any) -> dict[str, int]:
         """The MS class on top of the arena bound's six classes (`native_host.step_bound_bytes`): a build that writes it adds, per token
@@ -457,23 +449,16 @@ def hidden_class_for(flash_attn_version: int | None) -> str:
     return HIDDEN_STREAM_BY_FA[3 if flash_attn_version == 3 else 2]
 
 
-def attention_hidden(manifest: Any, model: Any) -> dict[str, Any]:
-    """The attention hidden class this Commit binds, `{"family": class | None, "why": ...}`: None when the model instantiated no
-    FlashAttention impl (`engine.build.flash_attn_versions`; MLA / DSA sparse MLA, GLM-5.3: no `varlen_fwd`, no M1 tap fires) or the
-    required-value `manifest` names none (`query.required`: the M1 stream is no Value of the Program); else the hidden family its
-    identities name, or without a manifest the impls' FA version's class."""
+def attention_hidden(model: Any) -> dict[str, Any]:
+    """The attention hidden class of `model`'s attention impls, `{"family": class | None, "why": ...}`: None when the model
+    instantiated no FlashAttention impl (`engine.build.flash_attn_versions`; MLA / DSA sparse MLA, GLM-5.3: no `varlen_fwd`, no M1 tap
+    fires), else the impls' FA version's class.  The M1 stream is no Value of the Program, so no capture plan names it and the served
+    road neither attaches the hidden source nor requires this class."""
     from verity_vllm.engine.build import flash_attn_versions
 
     vs = flash_attn_versions(model)
     if not vs:
         return {"family": None, "why": "no attention impl carries vllm_flash_attn_version (MLA)"}
-    fams = sorted({r.get("family") for r in (manifest or {}).get("identities") or ()} & set(HIDDEN_STREAM_BY_FA.values()))
-    if len(fams) > 1:
-        raise ValueError(f"required manifest names two attention hidden families {fams}")
-    if fams:
-        return {"family": fams[0], "why": "required manifest identities"}
-    if manifest is not None:
-        return {"family": None, "why": "the required manifest names no attention hidden stream"}
     return {"family": hidden_class_for(int(next(iter(vs))) if len(vs) == 1 and None not in vs else None),
             "why": f"the attention impls' vllm_flash_attn_version {sorted(vs, key=str)}"}
 
@@ -508,12 +493,10 @@ def require_hidden_on_every_rank(made: list[dict[str, Any]], required_classes: t
     return out
 
 
-def make_hidden_source(committer, so_path: str, ns: str | None = None, flash_attn_version: int | None = None, fa2_cls=None, fa3_cls=None,
-                       manifest=None):
+def make_hidden_source(committer, so_path: str, ns: str | None = None, flash_attn_version: int | None = None, fa2_cls=None, fa3_cls=None):
     """The M1 source matching the tap build at `so_path` (an FA3 v9 build exposes `verity_set_tap_v9`; FA2 v7/v8 builds `verity_set_tap`).
     Refuses a tap of the other attention implementation than the engine's `flash_attn_version` (when given): the FA2 tap loaded under
-    FA3 never fires -- that is a configuration error to report at attach time, not a zero to discover at the verdict.  With the
-    required-value `manifest`, also refuses a build whose ROW word 3 or MS class is not the manifest's (`require_row3`)."""
+    FA3 never fires -- that is a configuration error to report at attach time, not a zero to discover at the verdict."""
     import torch
 
     ns = ns or __import__("pathlib").Path(so_path).stem
@@ -523,10 +506,7 @@ def make_hidden_source(committer, so_path: str, ns: str | None = None, flash_att
         raise RuntimeError(f"hidden tap {so_path} is an {'FA3' if is_fa3 else 'FA2'} build but the engine executes FA{flash_attn_version}: "
                            f"use {'verity_fa3_matReq.so (pod_fa3_tap.sh)' if flash_attn_version == 3 else 'verity_fa2_matReq.so (pod_fa2_tap.sh)'}")
     cls = (fa3_cls or HiddenM1SourceFA3) if is_fa3 else (fa2_cls or HiddenM1Source)     # a committer may supply its native (C++) twins
-    src = cls(committer, so_path, ns=ns)
-    if manifest is not None:
-        src.require_row3(guarded_max_policy(manifest))
-    return src
+    return cls(committer, so_path, ns=ns)
 
 
 __all__ = ["HiddenM1Source", "HiddenM1SourceFA3", "make_hidden_source", "attention_hidden", "with_hidden_class", "CHUNK_WORDS",

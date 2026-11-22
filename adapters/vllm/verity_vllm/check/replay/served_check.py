@@ -30,8 +30,7 @@ them, what it never reached), the record's C2 population scope.
 """
 from __future__ import annotations
 
-from collections import Counter
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -53,14 +52,12 @@ from verity_vllm.definitions.registry import fa2_split as W2
 from verity_vllm.definitions.registry import fa3_check_inf as F3
 from verity_vllm.definitions.registry import inductor as IR
 from verity_vllm.definitions.registry import moe as MOE
-from verity_vllm.query.manifest.bind import split_name
-from verity_vllm.query.manifest.format import SERVED_FAMILY
 from verity_vllm.query.manifest.format import SERVED_IDS as IDS
 from verity_vllm.query.manifest.format import SERVED_LOGITS as LOGITS
 from verity_vllm.query.manifest.format import SERVED_POSITIONS as POSITIONS
 from verity_vllm.query.manifest.format import SERVED_SAMPLED as SAMPLED
 
-__all__ = ["ROWS", "ServedCheck", "Step", "population"]
+__all__ = ["ROWS", "ServedCheck", "Step"]
 
 #: the rows of a request a GEMM or an attention op is evaluated on: all of a request's rows up to this many, else its first, its
 #: last and evenly spread ones
@@ -395,74 +392,3 @@ class ServedCheck:
                 "steps": {str(s): v for s, v in sorted(self.steps.items())}}
 
 
-def check(build: dict[str, Any], steps: Iterable[Step], weight: Callable[[str], np.ndarray], *, seed: int | None, rows: int = ROWS,
-          prompts: Mapping[str, list[int]] | None = None, log: Callable[[str], None] | None = None) -> dict[str, Any]:
-    """The check over every step of the run, given in engine-step order."""
-    c = ServedCheck(build, weight, rows=rows, prompts=prompts, log=log, seed=seed)
-    for st in steps:
-        c.step(st)
-    return c.report()
-
-
-#: how many findings of each kind `population` names
-NAMED = 6
-
-
-def population(build: dict[str, Any], rep: dict[str, Any], *, ranks: list[int]) -> dict[str, Any]:
-    """The check's reach (`report`) reconciled against the Build's identities, its Q(P), identity by identity: an identity
-    (engine step, request, value) is reached when the report notes its value at that step for that request (a request of the
-    step's committed batch; the ids only of a request whose prompt or previous sampled id they were compared to).  A noted value
-    of a request the Build has no identity for is outside the query, an identity the report never reaches is without rows, and an
-    identity's rows (element_range / width) must be the request's committed rows at the step (one for the logits and the sampled
-    id).  The fields `c2_rules._query_population_scope` grades: `query_total`, `query_checks` (``ok`` False on any finding), `scope`."""
-    prog = build["program"]
-    width = {n: v["width"] for n, v in prog["values"].items()} | {LOGITS: prog["logits"]["gemm"][1], SAMPLED: 1}
-    want: dict[tuple[int, str, str, str], dict[str, Any]] = {}
-    fam: Counter = Counter()
-    for i in build["identities"]:
-        fam[i["family"]] += 1
-        want[(int(i["engine_step"]), str(i["request_id"]), str(i["op_path"]), str(i["output_member"]))] = i
-    reached: Counter = Counter()
-    outside, disagree, seen = [], [], set()
-    for s, notes in rep["steps"].items():
-        noted = notes.get("batch")                                               # a step in no step plan of the Build notes none
-        rows_of = noted.get("rows") if noted else None
-        batch = rows_of if rows_of else {}
-        for name, v in notes.items():
-            if name in ("batch", "coverage"):
-                continue
-            op, member = split_name(name)
-            listed = v.get("requests") if name == IDS else batch                 # an ids note that lists no request compared none
-            for r in (listed if listed else []):
-                at = {"request_id": r, "step": int(s), "op_path": op, "member": member}
-                i = want.get(key := (int(s), r, op, member))
-                if i is None:
-                    outside.append(at)
-                    continue
-                seen.add(key)
-                reached[i["family"]] += 1
-                lo, hi = i["element_range"]
-                rows = 1 if name in (LOGITS, SAMPLED) else batch[r]
-                if hi - lo != rows * width[name]:
-                    disagree.append({**at, "manifest_height": (hi - lo) / width[name], "program_rows": rows})
-    without = [{"request_id": k[1], "step": k[0], "op_path": k[2], "member": k[3]} for k in want if k not in seen]
-    manifest_ranks = sorted({int(i["rank"]) for i in build["identities"]})
-    total, n_reached = len(build["identities"]), sum(reached.values())
-    ranks_equal = manifest_ranks == sorted(ranks)
-    checks = {"vus_outside_query": {"n": len(outside), "first": outside[:NAMED]},
-              "identities_without_rows": {"n": len(without), "first": without[:NAMED]},
-              "rows_disagree": {"n": len(disagree), "first": disagree[:NAMED]},
-              "ranks": {"replay": sorted(ranks), "manifest": manifest_ranks, "equal": ranks_equal},
-              "accounted": n_reached + len(without) == total,
-              "unstated_families": sorted(set(fam) - {SERVED_FAMILY})}
-    checks["ok"] = not (outside or without or disagree or checks["unstated_families"]) and ranks_equal and checks["accounted"]
-    qid = build["kind"]
-    sampled = "GEMM, fused-MoE router and expert GEMM" if any("moe" in c for c in prog["calls"]) else "GEMM"
-    scope = (f"{qid}(P) = {total} identities ({', '.join(f'{k} {v}' for k, v in sorted(fam.items()))}): one per (engine step, request, "
-             f"value) of the served Program; the exact replay reaches {n_reached} ({100.0 * n_reached / max(total, 1):.1f}%): every call "
-             f"on every row, each {sampled} and attention op on up to {rep.get('rows_per_request')} drawn rows of each request a step, "
-             "the logits and the sampled id of every request")
-    return {"query_total": {"source": "the served Build of record (acquire.served)", "query_id": qid, "identities": total,
-                            "by_family": dict(sorted(fam.items())), "manifest_digest": build["manifest_digest"],
-                            "program_digest": build["program_digest"]},
-            "query_checks": checks, "scope": scope}

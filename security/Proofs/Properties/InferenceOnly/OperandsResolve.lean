@@ -112,7 +112,7 @@ theorem resolvable_spec (P : Prog) (h : Desc.resolvable P = true) :
         ((P.defs[d]!).body.nodes[k]!).n = 0 → ((P.defs[d]!).body.nodes[k]!).out.leaves = 0 := by
   unfold Desc.resolvable at h
   simp only [Bool.and_eq_true, List.all_eq_true, List.mem_range] at h
-  obtain ⟨h1, h2⟩ := h
+  obtain ⟨⟨h1, -⟩, h2⟩ := h
   refine ⟨by simpa [Array.isEmpty_iff] using h1, fun d hd hp k hk hf hn => ?_⟩
   have h3 := h2 d hd
   rw [hp, Bool.false_or] at h3
@@ -123,6 +123,12 @@ theorem resolvable_spec (P : Prog) (h : Desc.resolvable P = true) :
   rw [hf, hn] at h4
   have e : (Form.scan != Form.scan) = false := rfl
   simpa [e] using h4
+
+/-- What `Desc.resolvable` checks of the root's reads: it reads no input node recut, so `resolve` is its walk. -/
+theorem resolvable_recut (P : Prog) (h : Desc.resolvable P = true) : (P.defs[P.root]!).body.recut = #[] := by
+  unfold Desc.resolvable at h
+  simp only [Bool.and_eq_true] at h
+  exact Array.isEmpty_iff.mp h.1.2
 
 section
 variable (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false)
@@ -329,8 +335,10 @@ include hL
 
 /-- **Resolution ends at a gate** from any state `Resolve.Inv` holds of, within `Flock.Steps.FUEL` when four times the
 root's activations are. -/
-theorem resolve_ok (hfuel : 4 * (Desc.activations P)[P.root]! ≤ Flock.Steps.FUEL) (B : ℕ) (sc : Scope) (r : Ref)
+theorem resolve_ok (hfuel : 4 * (Desc.activations P)[P.root]! ≤ Flock.Steps.FUEL)
+    (hrc : (P.defs[P.root]!).body.recut = #[]) (B : ℕ) (sc : Scope) (r : Ref)
     (hs : Resolve.Inv P B (sc, r)) : ∃ a, resolve P sc r = .ok a := by
+  rw [Flock.Program.resolve_eq hrc]
   obtain ⟨a, ha, -⟩ := Walk.run_of_potential (what := "scope resolution") (step := resolveStep P) (Resolve.Inv P B)
     (phi P) (fun _ => True)
     (fun s hs' => by
@@ -362,12 +370,13 @@ theorem forIn_list_ne {α β ε : Type} (l : List α) (f : α → β → Except 
 
 /-- **`operands` returns** when every reference it resolves does. -/
 theorem operands_ok (P : Prog) (sc : Scope) (node : Node) (m : ℕ)
+    (hrc : sc.base ≠ P.root ∨ (P.defs[P.root]!).body.recut = #[])
     (h : ∀ i < node.args.size, ∀ t < (if (node.form == Form.batch && (node.args[i]!).dims.isSome) = true then
         ((P.defs[node.fn]!).params[i]!).2.leaves else (node.args[i]!).seq.count),
       ∃ a, resolve P sc (if (node.form == Form.batch) = true then (node.args[i]!).memberRef m t
         else (node.args[i]!).seq.get t) = .ok a) :
     ∃ ops, operands P sc node m = .ok ops := by
-  unfold operands
+  rw [operands_of hrc]
   simp only [Std.Legacy.Range.forIn_eq_forIn_range', bind, Except.bind]
   split
   · rename_i err herr
@@ -433,12 +442,13 @@ theorem operands_prim (hc : Desc.calleesFirst P = true) (hrp : (P.defs[P.root]!)
     (hz : ∀ d < P.defs.size, (P.defs[d]!).prim = false →
       ∀ k < (P.defs[d]!).body.nodes.size, ((P.defs[d]!).body.nodes[k]!).form = .scan →
         ((P.defs[d]!).body.nodes[k]!).n = 0 → ((P.defs[d]!).body.nodes[k]!).out.leaves = 0)
-    (hfuel : 4 * (Desc.activations P)[P.root]! ≤ Flock.Steps.FUEL) (sc : Scope) (hg : Resolve.Good P sc) (k : ℕ)
+    (hfuel : 4 * (Desc.activations P)[P.root]! ≤ Flock.Steps.FUEL) (hrc : (P.defs[P.root]!).body.recut = #[])
+    (sc : Scope) (hg : Resolve.Good P sc) (k : ℕ)
     (hk : k < (P.defs[sc.d]!).body.nodes.size) (hpk : (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).prim = true)
     (m : ℕ) (hm : m < ((P.defs[sc.d]!).body.nodes[k]!).members) :
     ∃ ops, operands P sc ((P.defs[sc.d]!).body.nodes[k]!) m = .ok ops := by
   obtain ⟨-, hargs, -, -, hop⟩ := (hB sc hg).1 k hk
-  refine operands_ok P sc _ m fun i hi t ht => ?_
+  refine operands_ok P sc _ m (.inr hrc) fun i hi t ht => ?_
   have hidx := hop hpk i hi m hm t ht
   have hr : (if (((P.defs[sc.d]!).body.nodes[k]!).form == Form.batch) = true then
       (((P.defs[sc.d]!).body.nodes[k]!).args[i]!).memberRef m t
@@ -448,7 +458,7 @@ theorem operands_prim (hc : Desc.calleesFirst P = true) (hrp : (P.defs[P.root]!)
           Resolve.memberIdx (((P.defs[sc.d]!).body.nodes[k]!).args[i]!) m t else t) := by
     split <;> simp only [Resolve.memberRef_eq]
   rw [hr]
-  exact resolve_ok P hroot hB hL hc hrp hz hfuel _ sc _
+  exact resolve_ok P hroot hB hL hc hrp hz hfuel hrc _ sc _
     (Resolve.start_ok P hroot hB hL sc hg k hk _ (hargs i _ hidx))
 
 end
@@ -476,7 +486,7 @@ theorem operandsResolve_of (hB : Resolve.BodiesOk) : Walk.OperandsResolve := by
     have : ((Desc.activations P)[P.root]! + 1) * 2 ≤
         ((Desc.activations P)[P.root]! + 1) * ((Desc.depths P)[P.root]! + 2) := Nat.mul_le_mul_left _ (by omega)
     omega
-  obtain ⟨ops, hops⟩ := operands_prim P ⟨hr, hrp⟩ hB' hlay hc hpar hz hfuel sc
+  obtain ⟨ops, hops⟩ := operands_prim P ⟨hr, hrp⟩ hB' hlay hc hpar hz hfuel (resolvable_recut P hres) sc
     (reach_walkQ P ⟨hr, hrp⟩ hB' hlay hg' hR).1 k hk hpk m hm
   rw [hops]
   exact fun h => by cases h

@@ -17,19 +17,13 @@ Build's autotune winners and the Build derived here must carry its program diges
 
 The process's own compile dirs are under DIR (`engine.env.own_compile_dirs`); the committer retains on the host
 (``VERITY_RETAIN=host``, which the run exports).
-
-The Commit's served mode (`pipeline.commit --compiled-taps served`, `ops/served_commit.sh`) runs the same derivation and check in
-its treatment process through `ServedCommit`, on the Build of record's pinned artifact: its Inductor dir seeded with the Build's
-winners, and its own Build's artifact the Build of record's or the Commit refuses (rc 3) before it serves a measured run.
 """
 from __future__ import annotations
 
 import glob
 import json
 import os
-import sys
 import time
-import traceback
 from collections.abc import Callable
 from dataclasses import dataclass
 from types import SimpleNamespace
@@ -40,9 +34,8 @@ from verity_vllm.engine import env as engine_env
 from verity_vllm.engine.handle import engine_of
 from verity_vllm.log import init_logger
 from verity_vllm.pipeline.row_json import read_json, write_json
-from verity_vllm.query.manifest.format import SERVED_IDS
 
-__all__ = ["Options", "ServedCommit", "main"]
+__all__ = ["Options", "main"]
 
 logger = init_logger(__name__)
 
@@ -161,7 +154,7 @@ def _own_dirs() -> dict[str, str]:
     """This process's own compile dirs (`engine.env.compile_dirs`); a process that was given none is refused."""
     dirs = engine_env.compile_dirs()
     if dirs is None:
-        raise UsageError("this process was not given its own compile dirs (engine.env.own_compile_dirs, ops/served_commit.sh)")
+        raise UsageError("this process was not given its own compile dirs (engine.env.own_compile_dirs)")
     return dirs
 
 
@@ -231,136 +224,6 @@ def check_committed(build: dict[str, Any], com: Any, weight: Callable[[str], Any
         filed = com.step_rows.get(s)    # a step the committer recorded no row order for is checked with no request rows
         check.step(SC.Step(s, [(logical_request(rid, order), lo, hi) for rid, lo, hi in filed] if filed else [], values))
     return check.report()
-
-
-class ServedCommit:
-    """The served row in a Commit's treatment process (`pipeline.commit --compiled-taps served`): the source's hooks before vLLM
-    compiles, the Build of record's value modules once the engine is up, this process's own Build after the warm-ups
-    (build_rebuilt.json, which `compiled verify` holds the Build of record to), and each run's C2: the Build's Program on the
-    committed values, each request's rows a sample under the seed of a challenge sampled after the run root is fixed (the Commit is its
-    run's own auditor), and the linkage that is the check's input rule (the prompt at a request's first step, then its previous
-    step's sampled id)."""
-
-    #: empty and None until `engine` reads them off the engine that was built
-    facts: dict[str, Any]
-    weight: Callable[[str], Any] | None
-
-    def __init__(self, build: dict[str, Any], fault: str | None) -> None:
-        from verity_vllm.acquire import served_artifact as SA
-        from verity_vllm.acquire.sources.served_compiled_source import (
-            ServedCompiledSource,
-        )
-
-        if engine_env.compile_dirs() is None:
-            raise UsageError("--compiled-taps served: the Build reads this process's own compile artifact; export its own "
-                             f"TORCHINDUCTOR_CACHE_DIR and VLLM_CACHE_ROOT with {engine_env.INDUCTOR_DIR_MARK}=1 (ops/served_commit.sh)")
-        self.pin = SA.pinned(build)
-        engine_env.apply_compile_fresh()
-        self.build, self.facts, self.weight = build, {}, None
-        self.src = ServedCompiledSource(fault=fault)
-        self.src.install_hooks()
-
-    def engine(self, eng: Any) -> dict[str, Any]:
-        """After the engine is built: what versions.json records of the source and the engine."""
-        self.src.note_engine(eng.model)
-        self.src.use_build(self.build)
-        self.facts, self.weight = facts_of(eng), served_weights(eng.model)
-        if self.src.errors or not self.src.slots:
-            raise UsageError(f"--compiled-taps served: no captured slots / errors {self.src.errors}")
-        return {"compiled_source": self.src.summary(), "served_facts": self.facts}
-
-    def attach(self, com: Any) -> None:
-        if not hasattr(com, "_nc") or not hasattr(com, "attach_source"):
-            raise UsageError(f"--compiled-taps served needs the native_collect committer (got {com.name})")
-        self.src.attach(com)
-
-    def rebuild(self, workload: dict[str, Any], out: str) -> dict[str, Any]:
-        """This process's own Build (build_rebuilt.json); exits 3 (`[delta] REFUSE`) when the compile artifact it read is not the
-        Build of record's (artifact_check.json names each kernel and winner that differs; a refused Build read no kernels, and
-        its process's winners are checked)."""
-        from verity_vllm.acquire import served_artifact as SA
-        from verity_vllm.acquire.inductor_templates import Unmodelled
-
-        schedule, steps = schedule_of(workload)
-        try:
-            b = build_here(self.src, self.facts, schedule, steps, out)
-        except Unmodelled as e:
-            b = {"program_digest": None, "manifest_digest": None, "complete": False, "unmodelled": {"build_refused": str(e)},
-                 "populations": {"identities": 0}, "identities": []}
-        with open(f"{out}/build_rebuilt.json", "w") as f:
-            json.dump(b, f, indent=1)
-        loaded = b.get("artifact") or {"winners": SA.winners(_own_dirs()["inductor"])}
-        diff = SA.differences(self.pin, loaded, SA.PARTS if "artifact" in b else ("winners",))
-        with open(f"{out}/artifact_check.json", "w") as f:
-            json.dump({"pinned": self.pin["digest"], "loaded": loaded.get("digest"), "equal": not diff, "differences": diff}, f, indent=1)
-        if diff:
-            logger.error("[delta] REFUSE: this process loaded compile artifact %s, not the Build of record's %s (%d differences: %s)",
-                         str(loaded.get("digest", "of a refused Build"))[:16], self.pin["digest"][:16], len(diff), diff[:3])
-            sys.exit(3)
-        logger.info("[delta] compile artifact %s: this process's is the Build of record's", self.pin["digest"][:16])
-        return b
-
-    def c2(self, com: Any, rc: Any, reqs: list[dict[str, Any]], challenge: str, replay_seed: int | None) -> dict[str, Any]:
-        """One run's C2: ``components`` (sampled_replay, boundary_linkage), the ``value_correspondence`` fields of record
-        (``compiled_check`` among them), ``ok`` and a log ``line``."""
-        from verity_vllm.acquire.sources import served_compiled_source as S
-        from verity_vllm.check.replay import served_check as SC
-        from verity_vllm.pipeline import c2_replay as C2
-
-        seed, seed_src, seed_form, chal = C2.seed_of(SimpleNamespace(replay_seed=replay_seed, replay_challenge=challenge), rc)
-        order = {str(q["request_id"]): f"r{i}" for i, q in enumerate(reqs)}
-        prompts = {f"r{i}": [int(t) for t in q["prompt_token_ids"]] for i, q in enumerate(reqs)}
-        try:
-            if self.weight is None:
-                raise UsageError("--compiled-taps served: a run's C2 before `engine` read the served weights")
-            rep = check_committed(self.build, com, self.weight, prompts, order, seed=seed)
-        except Exception as e:  # noqa: BLE001  -- recorded: the run's C2 fails with the error
-            rep = {"ok": False, "error": repr(e)[:300], "traceback": traceback.format_exc()[-1200:], "tally": {}, "steps": {}, "failures": []}
-        n, exact = sum(t[1] for t in rep["tally"].values()), sum(t[0] for t in rep["tally"].values())
-        ok = bool(rep.get("ok")) and not rep.get("error") and not self.src.errors
-        horizon: dict[str, list[int]]
-        prompt_linked: dict[str, bool]
-        pairs, unlinked, horizon, prompt_linked = 0, [], {}, {}
-        for p in sorted(self.build["steps_plan"], key=lambda p: int(p["step"])):
-            s = int(p["step"])
-            step = rep["steps"].get(str(s))                 # a step the check did not run has no report,
-            ids = step.get(SERVED_IDS) if step else None    # and one that did not check the served ids none of them
-            ids_ok = bool(ids.get("ok")) if ids else False
-            for rq in p["requests"]:
-                pairs += 1
-                horizon.setdefault(rq["request_id"], [s, s])[1] = s
-                prompt_linked.setdefault(rq["request_id"], ids_ok)
-                if not ids_ok:
-                    unlinked.append({"step": s, "request": rq["request_id"]})
-        chain = S.linkage(com)
-        linked_ok = bool(pairs and not unlinked and chain["passed"])
-        pop = self.build["populations"]
-        # one process serves the row (build_here refuses a second split graph): the check reads rank 0's committed values
-        sampled = {"result": ok, "seed": seed, "seed_source": seed_src, "seed_form": seed_form,
-                   "sample": {"seed": seed, "seed_source": seed_src, "seed_form": seed_form, "challenge": chal,
-                              "rows_per_request": rep.get("rows_per_request"), "picks": rep.get("picks")},
-                   "population": {"n": pop["identities"], "digest": self.build["manifest_digest"], "not_evaluable": {},
-                                  **SC.population(self.build, rep, ranks=[0])},
-                   "n": n, "exact": exact, "tally": rep.get("tally"), "steps_checked": rep.get("steps_checked"),
-                   "steps_unrun": rep.get("steps_unrun"), "mismatch": rep.get("failures"), "errors": self.src.errors,
-                   "why": rep.get("error") or ("every value replays word for word from the committed values" if ok else "see mismatch/errors"),
-                   "method": "sampled-exact-replay: the served Build's Program (acquire.served) on the committed values word for word "
-                             "(served_check.py): every call of every piece on every row; each GEMM and attention op on a seeded sample of "
-                             "each request's rows; the logits and the sampled ids of every request"}
-        linkage = {"result": linked_ok, "pairs": pairs, "unlinked_n": len(unlinked), "linked": pairs - len(unlinked), "unlinked": unlinked[:16],
-                   "horizon": horizon, "prompt_linked": prompt_linked, "embed_op_path": SERVED_IDS, "committed_chain": chain,
-                   "method": "per (engine step, request): the committed ids are the declared prompt at the request's first step and its "
-                             "previous step's sampled id at every later step (served_check inputs); committed sampled(s) == committed ids(s+1)",
-                   "why": None if linked_ok else f"{len(unlinked)} (step, request) boundaries unlinked; committed chain {chain}"}
-        check = {"ok": ok, "checked": n, "equal": exact, "launches_checked": n, "launches_exact": exact, "error": rep.get("error"),
-                 "seed": seed, "tally": rep.get("tally"), "failures": rep.get("failures"), "steps_checked": rep.get("steps_checked"),
-                 "steps_unrun": rep.get("steps_unrun")}
-        line = (f"{'OK' if ok else 'FAIL'} {exact}/{n} values exact over steps {rep.get('steps_checked')} (unrun {rep.get('steps_unrun')}), "
-                f"seed {seed_form} {seed}; linkage {pairs - len(unlinked)}/{pairs}, committed chain {chain}; source stats "
-                f"{self.src.summary()['stats']}; first failures {rep.get('failures', [])[:2]} {rep.get('error') or ''}"
-                + (f"\n{rep['traceback']}" if rep.get("traceback") else ""))
-        return {"components": {"sampled_replay": sampled, "boundary_linkage": linkage}, "ok": ok and linked_ok, "line": line,
-                "value_correspondence": {"population": pop, "n": n, "seed": seed, "compiled_check": check}}
 
 
 def main(a: Options) -> int:

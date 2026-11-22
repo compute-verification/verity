@@ -2,7 +2,8 @@
 `NvLogf_v3` agrees with `NvLogf_v2`, `NvLogf_v5` with `NvLogf_v4` (and with `NvLogf_v3` but on a subnormal input), and the
 log1pf builder with `nv_log1pf_gpu`, on every special word, every exponent of both signs, the sweeps around their branch points,
 and random words. The uniform and noise of a Philox word agree on its
-edges (0, all ones, the floor, the f32 rounding of large words). `GumbelStreamKey_v2` agrees with `GumbelStreamKey_v1`;
+edges (0, all ones, the floor, the f32 rounding of large words), and `GumbelNoiseLane_v4` with `GumbelNoiseLane_v2` on random
+and edge lanes. `GumbelStreamKey_v2` agrees with `GumbelStreamKey_v1`;
 `GumbelSetup_v1{N}`'s outputs are the lane operands restated; `GumbelLane_v1` on those operands is ``x + GumbelNoiseLane_v1(key,
 v)`` (or ``x``) at every lane index; and `GumbelSelectF32_v2{V}` agrees with `GumbelSelectF32_v1{V}` on logit rows (ties,
 signed zeros, subnormals, infinities, NaNs, a NaN first logit; temp 1, +0, -0, a subnormal and a NaN) at one and two levels
@@ -39,24 +40,24 @@ F32 = GB.F32
 M32 = 0xFFFFFFFF
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
-    "NvLogf_v3": (43280, 74409, 2800, "69ad963aa5ff5276e47ea1065d7ab2b65ec7d522b15b9849c2b724ae1acd5bbe9f612a6ba6e097e109ef99207b56b94226c8ff2d2f18a1708448e95693343a3b"),
-    "NvLogf_v5": (43206, 74322, 2808, "c5e4532599511ffa703b6078303a35b89de154eda8a81927031eb896e48eab3c8559fd17f7ec892d022bec660863fa3021bf1595b71aa6465f5dde63036d12bf"),
-    "GumbelSetup_v1{N=5}": (1138, 4005, 160, "665163a8e11b818c93cfec66672ff17fd69654c4ac363d8e7e35cc706113df75af13272602207635a6d1d1aff74455febde42587166cfbb27d0931d776cb0274"),
-    "GumbelSetup_v1{N=64}": (3859, 13430, 160, "9b9c10135574f923cfbb8b6139811415e652dc2b22dac77ca97cb99ebd1978135cc6cdab0e514097e6da603a835f0c778286c678b26c2a9b1bc68147aa811c7f"),
-    "GumbelStreamKey_v2": (9245, 39200, 305, "12e3eed59d4c4a8bb162063b135d04ce5f8164bf0b568e458555a537ea4dcfbe8916f97d6c488c36ad4eaddd75421179883ada1f965e1e2bf6d1f6741e8fb8ac"),
-    "GumbelStreamKeyHead_v1": (4960, 20667, 305, "fe6d2ab0625dacc3b0fb5573482132b8343ccd14f138f4afe69ce3c7a0399d1fd5f0c36349d43daf1bf18993b984e1543ba0c03362134420f7a3abc27c229589"),
-    "GumbelStreamKeyTail_v1": (4285, 18533, 0, "2c31e3ac773074d314192bcf2525a37bf132b13774d0624564bee2738244d3a6eff61a05949a888a6744e57c6b57d55db5f97f2166a5223059c2c06ed7ac5d32"),
-    "GumbelLaneHead_v1": (1556, 6643, 35, "4487033a1bf1192c3abb681b2df58de39529b3c5431d2d6a82d274d6f91a4a9be982447252b14ac8eed5762444635cfd1953c22e27bae49d082e41daea1eb7a9"),
-    "GumbelLaneRounds_v1": (5035, 21681, 81, "e8a27237e45e078260046e86707d68c70aca8cd642141084ffbf5f7665803d25e0aa82f71e10cea14a88843e613c11e98b4fafd5d556d69ecbe7dbc6990c2a59"),
+    "NvLogf_v3": (43280, 74409, 2800, "d4bf09128b06993f8e086639ec8e8eb663b1a41bf3609c8a5037a259cac015ed9b2f3579ea1657f416c0d9c3be9e15d5fd886d0c50e1b4af48717b71ad3caf30"),
+    "NvLogf_v5": (43206, 74322, 2808, "ce26f8b460baf135179dcb9bf93b0cf356d8efdf690eb0ba70e532716af2bc14fbda0607021db91b4a9a429f865fc14ee5829bcc7bf5bbf01536660344c30f20"),
+    "GumbelSetup_v1{N=5}": (1138, 4005, 160, "1dd829064609e120fc2dfba1ad8e5981ea7570609eb5644c7aad39aa562ecdf1da1326bc03954d111a73328cb77fa5c49aba8509dc5894ec6a56ac38811c8caf"),
+    "GumbelSetup_v1{N=64}": (3859, 13430, 160, "f16cb90fa87a3abc69b439af7b6bd9ca78e2d156c4a2658b6f8917d8058cccf2c854a1e5d7b9f55f7084d8b18d359904f596a32b2f29031499934eb3a6a3ad78"),
+    "GumbelStreamKey_v2": (9245, 39200, 305, "ccb93514f963c09022926cf333a8fcd0ece741dfe8f4ba5dc5703e7c57dbb5eb61622ebcb1b6f25edd076dcb32a25c599b4e0f30caf6b4c4afa66c8dffaf9b48"),
+    "GumbelStreamKeyHead_v1": (4960, 20667, 305, "80c441d2f4f46737b2e47b9b631104ea6c6f65a9e273d27ebf312e9ca9541bd48ac45f287eb0748af4bc53a7aa82b9f8c605e5dc7d85eba0f7c6f0df72a0581b"),
+    "GumbelStreamKeyTail_v1": (4285, 18533, 0, "5dff514d5acb95550d83068d534bae0aa3745bc739a89140f15689cd239229e152a52f25dc5804a642ae895737df59fabbcc8b6b3c93d1a6b6dc51a2238c9d0a"),
+    "GumbelLaneHead_v1": (1556, 6643, 35, "99cea5fdd18b81483485f3ce3e8ea41d0ed797ed2161165e89c87254a4d639a6110e5a8dea2363b40110541d0fd61fd27181fb88be3378c04357a8011f4b04fa"),
+    "GumbelLaneRounds_v1": (5035, 21681, 81, "40b3efe2a47c1ff471581cd7dc56911663d5e6986b25a622b29e23f2e2bb600e2cba6845ce3d74acc55fd1467182cc31c259a053bdcf5b090024fac69ef3a16e"),
 }
 #: the same for the Definitions that reach the lane's noise (slow to trace)
 LANE_PINS = {
-    "GumbelLaneTail_v1": (92314, 162277, 6115, "beb5c6bac7ca2e8918bf4cb12111467bce5c480b9440ae4ae770cec422a1eafafe41997c70ee4feb2b4792f6feee11159662d120959f462cc08da535b8be12a2"),
-    "GumbelLane_v1": (98905, 190601, 6231, "41cba3705e0fe255a2a472256d27b1789c995d7fc7f6ce5535859adfc2cae502ac2917414236498f625fba46eb48afb06fad2d3af94edaaa788ab4b917e172e8"),
-    "GumbelNoiseGroup_v1{G=64}": (6329920, 12198464, 398784, "b48fafac10e3ab3b059f99587d4b6bfa5e45bed8d9bd2882fec6d14abda01f6b3cbedb2281e14844e6a116663557c8ae9b453c28a82ae5d3a6a233158d710ea5"),
-    "GumbelNoise_v1{V=65}": (6428825, 12389065, 405015, "df8df2b1f311f90e6e8d90eb439269663cf8327c3a3c8ddd300d12d17511da6a760321383cccffdc4669840abb82a656057ad9ad0a84170fbda3963952d25bfb"),
-    "GumbelSelectF32_v2{V=5}": (505349, 997312, 31762, "26d127cdc687e94c2fe212e228e2e050236c103fd4020ab440d84acb5df7af446c8cfd761b462979a87cf48e96318d1015881b624f123be08dd3697b7df11788"),
-    "GumbelSelectF32_v2{V=65}": (6448490, 12458099, 407786, "50615df3a5d769c3d865e0da9ee65ca187b3458f1f1f85b1d5738fdad87a501de38ae87bf4f91597d15704712616de4aac58ca8a42f25252f361e9fb3f3bdd49"),
+    "GumbelLaneTail_v1": (92314, 162277, 6115, "d7e24960d319f4c7b1a13d61fc94140d08f5c12290517e795b8258fc008463b2b3cca5c54b293e1d4d069ed791752269d1a81c1079efc5cc0a4201951dbc6070"),
+    "GumbelLane_v1": (98905, 190601, 6231, "0c11138c17998388d2a7e95c1d00d630b26cdf3d3a1e8b70c31ff35313ee005e924e87e171dbb9c357dbc71784862b0623a5097206e3b643603b350f5c2df26b"),
+    "GumbelNoiseGroup_v1{G=64}": (6329920, 12198464, 398784, "3f4ffd6e7ff649f4d61009b56758816d7d348be83ba2d09c7bda13ba8c602d19a9e02e958b3a46b95738c599d543b8dac0daa11d533d978d7c1e46eaeb655335"),
+    "GumbelNoise_v1{V=65}": (6428825, 12389065, 405015, "eb48cce9d9856a8f56c4806114fb46d09ce50d8339569a5e38e025cb25179f2a5f6fb6cde21660d8a2316d01e72577222d7467cfd4cac8550b1530d6afb25f4d"),
+    "GumbelSelectF32_v2{V=5}": (505349, 997312, 31762, "f1b8c89e94bdd016ff3c2e900c8e0d218719e1412ed1495ce8e16bb77548882e33acff291bb6872e39944f45cee916b86f5384778d82a1f641a569edcd8fd2b8"),
+    "GumbelSelectF32_v2{V=65}": (6448490, 12458099, 407786, "0162869527423ebc1cf3a76efe0ca07b8f5bb5407c57a4f452e6cbcbb3565e8930e438ccc91745223a07908e22cabbbe30967b8c82643c7f8acffa49f569e303"),
 }
 
 #: each stage's gates at Gemma-2's vocabulary (the noisy row: 256,000 lanes of GumbelLane_v1)
@@ -268,6 +269,36 @@ def test_stream_key_agrees_with_its_word_definition() -> None:
     assert not bad.size, f"{bad.size} of {n} keys differ, first {[(int(seed[i]), int(pos[i])) for i in bad[:5]]}"
 
 
+def _rand_noise_gpu(w: int) -> int:
+    """`_rand_noise` through the GPU-NaN logs, `GumbelNoiseLane_v2`'s."""
+    xi = w - (1 << 32) if w >> 31 else w
+    if xi < 0:
+        xi = -xi - 1
+    u = max(SM.mul_ftz(struct.unpack("<I", struct.pack("<f", float(xi)))[0], SM.TL_RAND_SCALE_BITS), SM.TL_RAND_MIN_BITS)
+    return SM.nv_logf_gpu(SM.nv_log1pf_gpu(u ^ 0x80000000) ^ 0x80000000) ^ 0x80000000
+
+
+@pytest.mark.slow
+def test_the_noise_lane_v4_is_v2_and_reaches_no_nan_where_v1_and_v2_differ() -> None:
+    """`GumbelNoiseLane_v4` is `GumbelNoiseLane_v2` on random keys and lanes with their edges. The two words differ only
+    where a log returns a NaN; the logs see only the uniform, whose extremes are the Philox words 0, all ones and those
+    beside every power of two (the floor 2^-31' and 1.0), so there and on random words `_v1`'s chain and `_v2`'s agree."""
+    target = bind(GB.GumbelNoiseLaneV4)
+    assert TR.word_of(target).id == "GumbelNoiseLane_v2"
+    rng = _rng("lane-v4")
+    n = 4096
+    key, v = (rng.integers(0, 1 << 32, n, dtype=np.uint64) for _ in range(2))
+    g = np.array(np.meshgrid(KEY_EDGES, LANE_EDGES)).reshape(2, -1)
+    key[:g.shape[1]], v[:g.shape[1]] = g
+    got = BS.evaluate_words(target, key.astype(np.uint32), v.astype(np.uint32)).astype(np.uint64).reshape(-1)
+    want = np.array([SM.GumbelNoiseLaneV2.evaluate(int(a), int(b)) for a, b in zip(key, v)], np.uint64)
+    bad = np.flatnonzero(got != want)
+    assert not bad.size, f"{bad.size} of {n} lanes differ, first {[(int(key[i]), int(v[i])) for i in bad[:5]]}"
+    p = np.array([(1 << k) + d for k in range(32) for d in (-2, -1, 0, 1, 2)], np.int64)
+    w = np.concatenate([p, -p - 1, rng.integers(0, 1 << 32, 20_000)]).astype(np.int64).astype(np.uint64) & np.uint64(M32)
+    assert [hex(int(x)) for x in w if _rand_noise(int(x)) != _rand_noise_gpu(int(x))] == []
+
+
 def lane_values(key: int, n: int = GB.G) -> tuple[list[int], list[int], list[int]]:
     """`GumbelSetup_v1{N=n}`'s lane values restated: the round keys ``key + r PHILOX_KEY_A`` (r in `LANE_ROUNDS`), round 1's
     product ``key * PHILOX_ROUND_A`` (low and high words), and per offset ``lo < n`` the low six bits of round 2's counter word
@@ -392,7 +423,7 @@ BULK = [(1, 4096), (2, 4096), (5, 2048), (63, 512), (64, 512), (65, 512), (129, 
 @pytest.mark.slow
 def test_gumbel_select_agrees_with_its_word_definition() -> None:
     """Every size in one test, so one process traces the lane. At V = 1 against the restatement (`GumbelSelectF32_v1{V=1}`'s
-    scan has no iterations, which `verity.circuits.layout.resolve_gate` misreads: `test_sampling_boolean`'s word-view xfail). The
+    scan has no iterations, which `verity.circuits.layout.resolve_gate` misreads, so the word view is not taken there). The
     body is `gumbel_select_calls`: the stages in order (and the lane products' two constant bits), as a served Program calls
     them at its root."""
     for V, n in BULK:

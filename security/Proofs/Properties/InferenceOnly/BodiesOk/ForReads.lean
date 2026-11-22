@@ -1,6 +1,7 @@
 module
 
-public import Proofs.Properties.InferenceOnly.BodiesOk.Decode
+public import Proofs.Properties.Flock.Decoder.Decode
+public import InferenceOnlyVerifier.Desc
 import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
 import Mathlib.Data.NNRat.Floor
 import Mathlib.Tactic.Echelon.Zsqrtd
@@ -18,7 +19,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Properties.InferenceOnly.BodiesOk
-import Proofs.Properties.InferenceOnly.BodiesOk.Basic
+import Proofs.Properties.Flock.Decoder.Basic
 
 /-!
 # What `ReadsExact` reads of the decoder and of `BodiesOk`
@@ -113,7 +114,8 @@ theorem bodyOk_prim (P : Prog) (hok : ∀ i < P.defs.size, DefOk P.defs i P.defs
 /-- **Every Definition `Desc.reached` marks is `Resolve.BodyOk`**, on a decoded Program whose order
 `Prog.orderViolation` passes. -/
 theorem bodyOk_reached (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
-    (hov : P.orderViolation = none) (d : ℕ) (hd : (Desc.reached P)[d]! = true) :
+    (hov : P.orderViolation = none) (d : ℕ) (hd : (Desc.reached P)[d]! = true)
+    (hrc : (P.defs[P.root]!).body.recut = #[] := by assumption) :
     d < P.defs.size ∧ Resolve.BodyOk P d := by
   obtain ⟨st, hP, hinv, -⟩ := decode_spec bytes P hdec
   obtain ⟨S, hS0, hS⟩ := order_closed P hov
@@ -129,13 +131,15 @@ theorem bodyOk_reached (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.deco
 /-- **Every Definition `Desc.analyze` summarizes is `Resolve.BodyOk`**: `ReadsExact.memoOf` summarizes `d` exactly when
 `(Desc.reached P)[d]! && d != P.root`. -/
 theorem bodyOk_summarized (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
-    (hov : P.orderViolation = none) (d : ℕ) (hd : ((Desc.reached P)[d]! && d != P.root) = true) :
+    (hov : P.orderViolation = none) (d : ℕ) (hd : ((Desc.reached P)[d]! && d != P.root) = true)
+    (hrc : (P.defs[P.root]!).body.recut = #[] := by assumption) :
     d < P.defs.size ∧ Resolve.BodyOk P d :=
   bodyOk_reached bytes P hdec hov d (by simp only [Bool.and_eq_true] at hd; exact hd.1)
 
 /-- **The root's body is `Resolve.BodyOk`**, on a decoded Program whose order `Prog.orderViolation` passes. -/
 theorem bodyOk_root (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
-    (hov : P.orderViolation = none) : Resolve.BodyOk P P.root := by
+    (hov : P.orderViolation = none)
+    (hrc : (P.defs[P.root]!).body.recut = #[] := by assumption) : Resolve.BodyOk P P.root := by
   obtain ⟨st, hP, hinv, hroot⟩ := decode_spec bytes P hdec
   obtain ⟨S, hS0, hS⟩ := order_closed P hov
   have hok : ∀ i < P.defs.size, DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1
@@ -143,7 +147,8 @@ theorem bodyOk_root (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode 
 
 /-- **The decoder's facts `ReadsExact.Decoded` reads**, with this module's `PartNonneg` (`ReadsExact`'s, by
 `partNonneg_iff`, `decoded_reads`). -/
-theorem decoded (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P) :
+theorem decoded (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
+    (hrc : (P.defs[P.root]!).body.recut = #[] := by assumption) :
     ∀ d < P.defs.size, ((P.defs[d]!).prim = true → (P.defs[d]!).outLeaves = 1) ∧
       ((P.defs[d]!).prim = false → (P.defs[d]!).outLeaves = (P.defs[d]!).body.ret.count) ∧
       ∀ k < (P.defs[d]!).body.nodes.size, ∀ i < ((P.defs[d]!).body.nodes[k]!).args.size,
@@ -167,7 +172,7 @@ theorem decoded (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode byte
   have hfs : ((P.defs[d]!).body.nodes[k]!).fn < P.defs.size := by omega
   have hcc : CalleeOk P.defs[((P.defs[d]!).body.nodes[k]!).fn]! := (hok _ hfs).1
   cases hpc : (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).prim
-  · rw [(hcc.2 hpc).1]; exact hnd.2.2.2.2.2 i hi e L hdm hL
+  · rw [(hcc.2 hpc).1]; exact hnd.2.2.2.2.2.1 i hi e L hdm hL
   · rw [(hcc.1 hpc).1] at hip; exact absurd hip (Nat.not_lt_zero _)
 
 end InferenceOnlyVerifier.Properties.SecurityProofs.BodiesOk

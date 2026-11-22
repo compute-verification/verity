@@ -6,7 +6,7 @@ sweeps and tornados span), `source` (a datasheet, a measurement, a Lean name, a 
 (`datasheet`, `measured`, `declared`, `assumed`, `ruled`, `conjecture`)::
 
     [location.h200-hgx]
-    phi = { value = 1.583e16, unit = "FLOP/s", source = "census h100-sxm5-80gb/e4m3 x 8", status = "datasheet" }
+    phi = { value = 1.583e16, unit = "FLOP/s", source = "census h100-sxm-80gb-sm/e4m3's datasheet reading x 8", status = "datasheet" }
 
 What another file states is read from it, not restated in a layer (`sourced`; a file that sets one of these keys is
 refused). From `verity`: the monitoring periods are core's (`PERIODS`), each the registry's `horizon.<name>.seconds`; the
@@ -37,7 +37,7 @@ from dataclasses import dataclass, fields, replace
 from pathlib import Path
 from typing import Any
 
-from verity.protocols.proofs.spot.verifier import profile
+from verity.protocols.proof.spot.verifier import profile
 from verity.protocol import DELTAS, MONITORING_PERIODS
 from verity.circuits import partition_v2
 from verity.device import load_card, number
@@ -226,7 +226,7 @@ def carded(params: Mapping[str, Param]) -> list[Param]:
 
 def _deltas() -> list[Param]:
     window, report = float(profile.WINDOW_DELTA), [float(d) for d in DELTAS]
-    core = "verity.protocols.proofs.spot.verifier.profile WINDOW_DELTA, the per-window delta"
+    core = "verity.protocols.proof.spot.verifier.profile WINDOW_DELTA, the per-window delta"
     credit = "CircuitCredit's per-window failure p = delta_s + delta_bind + delta_ks (eps_agg's source)"
     return [
         Param("regime.remote.window_delta_coin", window, status="derived",

@@ -5,12 +5,6 @@
 # note_prefix (the text its note starts with), arrival_rule ("round": the arrive_step rule before realized_arrive_steps),
 # arrivals (when not the id's: staggered for "<...>-arrivals", else none), shared_prefix, target and reasons (as --target and --reason).
 
-[checkpoint."dsv4-pro__fp8"]
-repo = "deepseek-ai/DeepSeek-V4-Pro"
-revision = "b5968e9190ef611bbf34a7229255be88a0e937c1"
-case = "DSV4_PRO"
-tokenizer = "8f9f37ca37fdc4f5fd36d5cf4d3b0e8392edb4e894fd10cc0d70b4957c8633cf"
-
 [checkpoint."gemma2-2b__bf16"]
 repo = "unsloth/gemma-2-2b"
 revision = "25319945f7fd83b8b903e12081777b7eef2ba993"
@@ -88,16 +82,6 @@ repo = "HuggingFaceTB/SmolLM2-135M"
 revision = "93efa2f097d58c2a74874c7e644dbc9b0cee75a2"
 case = "B0"
 tokenizer = "9ca9acddb6525a194ec8ac7a87f24fbba7232a9a15ffa1af0c1224fcd888e47c"
-
-[row."dsv4-pro__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager"]
-note_prefix = "R12 "
-arrival_rule = "round"
-target = { compute_capability = [9, 0], num_sms = 132, batch_invariant = false }
-
-[row."dsv4-pro__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__greedy__eager"]
-note_prefix = "R12 "
-arrival_rule = "round"
-target = { compute_capability = [9, 0], num_sms = 132, batch_invariant = false }
 
 [row."gemma2-2b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager"]
 note_prefix = "R12 "

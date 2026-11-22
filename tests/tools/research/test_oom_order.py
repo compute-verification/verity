@@ -226,7 +226,7 @@ def test_the_script_is_stdlib_only_and_deploy_toml_runs_it_as_root_on_both_nodes
     for path in ("/usr/local/lib/vy-monitoring/oom_order.py", "/etc/systemd/system/vy-oom-order.service",
                  "/etc/systemd/system/vy-oom-order.timer"):
         row, = (e for e in m["file"] if e["path"] == path)
-        assert set(row["nodes"]) == {"vy-nebius-1", "vy-nebius-2"} | cpu, f"{path}: {fix}"
+        assert set(row["nodes"]) == {"vy-nebius-2"} | cpu, f"{path}: {fix}"
     for path in ("/etc/systemd/system/user-1001.slice.d/50-vy-headroom.conf", "/etc/systemd/system/session-.scope.d/50-vy-job-memory.conf",
                  "/etc/systemd/system/user@1001.service.d/50-vy-oom.conf", "/etc/systemd/system/ssh.service.d/50-vy-memory.conf"):
         assert cpu <= {n for e in m["file"] if e["path"] == path for n in e["nodes"]}, f"{path}: {fix}"

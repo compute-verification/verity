@@ -62,7 +62,7 @@ from verity.commitments import salt_file as SF
 from verity.commitments.gates import sha512_stream as SS
 from verity.commitments.periods import interface as IF
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2
-from verity.protocols.proofs.spot.prover import docket as DK
+from verity.protocols.proof.spot.prover import docket as DK
 from verity.commitments import rate as D
 from verity.commitments import randomness as RND
 from verity.commitments import registered_value as RV
@@ -216,12 +216,13 @@ class Tie:
             n = self.units()
             table = D.rate_table(*c.program(), min(design["k"], n), n, {tid: 1 for tid in c.ids})
         win = IF.Window(c, self.run, design, cap, registered=values, work_table=table)
-        win.registered = {**(values or {}), **self.supplied_values(win.window.partition_digest)}
+        win.registered = {**(values or {}), **self.supplied_values(win.window.program_digest)}
         return win
 
     def supplied_values(self, program: str) -> dict[str, RV.Registered]:
         """Each chain's supplied values committed as core's ``registered_value.Registered`` under ``program`` (the window's
-        partition digest) at their public salts, so the committer and the verifier make the same value."""
+        program digest, `rows.Binding.program_digest`: what the verifier's `Supplied.root` salts with) at their public salts,
+        so the committer and the verifier make the same value."""
         return {n: RV.Registered.commit(program, n, [row], RV.supplied_salts(program, n, 1), schema=SCHEMA_HM96_SHA512_ROW_V2)
                 for c in self.chains for n, row in c.supplied().items()}
 
@@ -367,16 +368,16 @@ def commit(registered: Any, salts_to: str | Path, checkpoint_dir: str, checkpoin
 def audit_inputs(registration: Any, record: dict[str, Any], t: Tie, design: dict[str, Any], cap: int) -> dict[str, Any]:
     """What the verifier hands the records audit of the committer's tie window: ``registered``, its ``--registered`` file
     (the registration's entries, held to the verifier's weights record's shapes by `window_weights.registration_pins`,
-    and the tie's supplied values under the window's partition digest); ``circuit`` and ``run``, the tie's circuit
+    and the tie's supplied values under the window's program digest); ``circuit`` and ``run``, the tie's circuit
     record's SHA-512 and run root; ``units``. Refused (ValueError) where the registration isn't the record's."""
     WW.registration_pins(registration, record)
     reg = WeightsRegistration.of(registration, "the weights registration")
     win = t.window(design, cap)
-    supplied = {n: v.entry() for n, v in t.supplied_values(win.window.partition_digest).items()}
+    supplied = {n: v.entry() for n, v in t.supplied_values(win.window.program_digest).items()}
     return {"circuit": hashlib.sha512(IF.circuit_bytes(win.circuit_record())).hexdigest(), "run": t.run,
             "units": t.units(),
             "registered": [{"program": reg.program, "values": {p: dict(e) for p, e in reg.values.items()}},
-                           {"program": win.window.partition_digest, "values": supplied}]}
+                           {"program": win.window.program_digest, "values": supplied}]}
 
 
 def checked_pins(registration: Any, record: dict[str, Any], t: Tie, summary: dict[str, Any], design: dict[str, Any],

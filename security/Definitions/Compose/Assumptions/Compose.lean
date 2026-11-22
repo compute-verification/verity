@@ -173,7 +173,8 @@ bound. `Break` is an event of the play's own answers, so no constant bounds it f
 At `s = folded`, `κ = 4` and `θ` from `Scheme.seedRate` (`seedTheta`) it is the template luck GRIND proves:
 `ResourceAccounting.Guarantees.TS.TemplateMoment` (32 columns, a word dead with probability at most `2^-w` over the row bits,
 then lucky at most `½` over the column bits, `θ = 1/(256·r)` a product) and `PrivateMoment`, the `½` from
-`ResourceAccounting.Guarantees.HMu.CoinPointMassHalf`. What stays assumed: that a seed group's gain decomposes into its
+`ResourceAccounting.Guarantees.HMu.CoinPointMassHalf`, for a Program whose flow graph the Build admits, which no
+statement yet gives of a decoded Program. What stays assumed: that a seed group's gain decomposes into its
 segments' (argued in GRIND, not stated); E3 in its one-oracle form, that query `q`'s own answer reaches round `r`'s
 gain only through `same` (the round's skips and the values the run commits for its tiles may read every other answer
 of the window, but not `q`'s, which decides only whether they are the honest ones); the binding term; and the oracle

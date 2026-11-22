@@ -23,8 +23,7 @@ set -uo pipefail
 case "${1:-}" in -h|--help) sed -n '2,/^set /p' "$0" | sed '$d; s/^# \{0,1\}//'; exit 0 ;; esac
 OUT=${OUT:?run under research run}
 HERE=$(cd "$(dirname "$0")" && pwd)
-NVCC=${NVCC:-$(python3 "$HERE/../../../benchmarks/kernels/machine.py" toolkit 13.0)/bin/nvcc} || { echo "dump.sh: no CUDA 13.0 (machine.py, above)" >&2; exit 2; }
-[ -x "$NVCC" ] || { echo "dump.sh: no nvcc at $NVCC" >&2; exit 2; }
+. "$HERE/../nvcc.sh"
 BIN=$(dirname "$NVCC")
 CUOBJDUMP=${CUOBJDUMP:-$BIN/cuobjdump}
 JOBS=${JOBS:-$(nproc)}

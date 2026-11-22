@@ -1,7 +1,7 @@
 """The typed outputs of one sweep stage for the `research` store (`outputs.json`, schema research/outputs/v0.1).
 
-    verity-vllm research-outputs write <evidence-dir> <row-id> <stage>... [--run-dir DIR] [--input build=art:...] [--input match=art:...]
-    verity-vllm research-outputs digest <evidence-dir> <row-id>      # the Program digest of record (build_summary.json)
+    cli.run(research_outputs) write <evidence-dir> <row-id> <stage>... [--run-dir DIR] [--input build=art:...] [--input match=art:...]
+    cli.run(research_outputs) digest <evidence-dir> <row-id>      # the Program digest of record (build_summary.json)
 
 `run_row_v2.sh` calls this on EXIT of a `stage` run (the runner set RESEARCH_RUN_DIR): the stage's small account files are copied
 from the evidence dir into `$RESEARCH_RUN_DIR/outputs/<name>/` and declared in `$RESEARCH_RUN_DIR/outputs.json`, which
@@ -30,7 +30,7 @@ all, and gets each stage's entries that stages.txt records (`build_stages`):
     (all)   -> run-files/v1 `logs`    row.log and every top-level *.log of the evidence dir
 
 No entry holds a private file (`private`), wherever it sits, and these stay on the node, prover-side:
-- a replay bundle or a slim keep (`cpu_replay.keep`), which hold clear values: committed values with their salts, the requests and
+- a replay bundle or a slim keep, which hold clear values: committed values with their salts, the requests and
   served tokens, and opened weights;
 - the requests' prompt and served token ids: the Match's token records (`tokens.json`), the Commit's token record
   (`tokens_p<pair>.json`), the sampler value check's rows (`match_stoch.json`) and the C2 replay's executed-prefix facts
@@ -69,7 +69,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.check.match.rank_match import RECORDER_DIGESTS
 from verity_vllm.config import option, row_batch
 from verity_vllm.pipeline import private_names
 from verity_vllm.pipeline.cli import write
@@ -88,13 +87,13 @@ PRIVATE_NAMES = private_names.LIST
 #: never in a stage's outputs (`private`): the replay bundles and the slim keeps, which hold clear values; nor the files
 #: PRIVATE names, wherever they sit: request values, where each rank ran and when each process ran
 KEPT_APART, PRIVATE = private_names.load()
-#: a Commit's served tokens' digests, a line of each run's (`pipeline.commit`), compared across processes on the node
-#: (`pipeline.compiled_merge`): unsalted, so kept apart from `runs.jsonl`
+#: a Commit's served tokens' digests, a line of each run's (`pipeline.commit`), compared across processes on the node:
+#: unsalted, so kept apart from `runs.jsonl`
 TOKENS_DIGESTS = "tokens_digests.jsonl"
 #: `pipeline.commit --tensor-digests`' unsalted digest of every retained tensor a step, compared across pairs on the node
 TENSOR_DIGESTS = "tensor_digests_pair*.json"
-if not {TOKENS_DIGESTS, TENSOR_DIGESTS, RECORDER_DIGESTS} <= set(PRIVATE):
-    raise RuntimeError(f"{PRIVATE_NAMES} lists {sorted({TOKENS_DIGESTS, TENSOR_DIGESTS, RECORDER_DIGESTS} - set(PRIVATE))} as "
+if not {TOKENS_DIGESTS, TENSOR_DIGESTS} <= set(PRIVATE):
+    raise RuntimeError(f"{PRIVATE_NAMES} lists {sorted({TOKENS_DIGESTS, TENSOR_DIGESTS} - set(PRIVATE))} as "
                        "private: add them to its `private`")
 
 BUILD_FILES = ["build_summary.json", "build_workload/workload_program.json", "build_workload/descriptor.json.gz", "manifest.json",

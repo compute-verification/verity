@@ -43,9 +43,9 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
-from verity.protocols.resource_accounting.network.attester.runner_cli import PACED_MS
-from verity.protocols.resource_accounting.network.verifier import id_form
-from verity.protocols.resource_accounting.network.verifier.link_frame import HEADER
+from verity.protocols.accounting.network.attester.runner_cli import PACED_MS
+from verity.protocols.accounting.network.verifier import id_form
+from verity.protocols.accounting.network.verifier.link_frame import HEADER
 
 ROOT = Path(__file__).resolve().parents[2]
 METRIC = "network-accounting/serving-slowdown-under-pacing"

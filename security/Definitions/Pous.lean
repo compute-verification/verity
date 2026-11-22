@@ -28,6 +28,7 @@ public import Definitions.Pous.Model.SampledAudit
 public import Definitions.Pous.Model.Scheme
 public import Definitions.Pous.Model.SegLift
 public import Definitions.Pous.Model.StreamedWipe
+public import Definitions.Pous.Model.StreamedWipeResidual
 public import Definitions.Pous.P2.Clip
 public import Definitions.Pous.P2.Cost
 public import Definitions.Pous.P2.Mutable
@@ -42,7 +43,7 @@ a time on live coins, and accepts when each answer is correct and on time.
 
 ## Read first
 
-The lock's `deployed` guarantees for PoUS:
+PoUS's guarantees at its deployed parameters; the lock's `deployed` lists one of them, `StreamedWipe`:
 
 * `Pous.Period.PeriodHeld` (`Properties.Pous.Period`): over one period, the deployed check accepts while the capacity
   account held fewer than `S · len` bit-ticks with probability at most `δ + ε_max`. It is PoUS's row in

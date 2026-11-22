@@ -175,6 +175,22 @@ def NvExpf(B, S, x):
     return B.call(P.F32Mul, e, B.call(F32BitsShl23, jb))
 
 
+MINUS_126, HALF = 0xC2FC0000, 0x3F000000
+C_MINUS_126 = b1.const(32, MINUS_126)
+_DSV4_CAPTURE = EVIDENCE["dsv4_moe_capture"]
+
+
+@composite("Ex2Approx", 1, [], lambda S: ((("t", F32),), F32),
+           conformance=f"exact-model-tested: ex2.approx.f32 on every word of [-150, -125] and a sweep (2,883,585 words) is this "
+                       f"lowering, and inside both routers' rows on a cc 9.0 GPU (132 SMs; {_DSV4_CAPTURE['run_record']}, the "
+                       f"harness at {_DSV4_CAPTURE['harness']}, tests/properties/dsv4_moe_capture_gpu.py)")
+def Ex2Approx(B, S, t):
+    """``ex2.approx.f32`` (not .ftz): ``t < -126`` (ordered) halves t before MUFU.EX2 and squares the result (FMUL)."""
+    small = B.call(F32GtStrict, B.call(C_MINUS_126), t)
+    y = B.call(P.MufuEx2Ftz, B.call(P.SelectF32, small, B.call(P.F32Mul, t, B.call(C_HALF)), t))
+    return B.call(P.SelectF32, small, B.call(P.F32Mul, y, y), y)
+
+
 ONE32 = b1.f32c(1.0)
 NEG_10000 = b1.f32c(-10000.0)
 PTX_NAN = b1.const(32, F32_NAN_PTX)

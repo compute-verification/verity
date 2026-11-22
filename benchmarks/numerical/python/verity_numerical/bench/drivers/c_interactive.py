@@ -1,5 +1,5 @@
 """C-interactive (Flock, live verifier): the circuit statement (``circuit:<template>``, ``verity/flock-circuit``, planned with
-``--relation circuit:<template>``) runs ``verity/protocols/proofs/flock/prover/pod/61-circuit-cell.sh`` on both pods
+``--relation circuit:<template>``) runs ``verity/protocols/proof/flock/prover/pod/61-circuit-cell.sh`` on both pods
 (``verity_flock.circuit_bench``; the verifier stages only its public files), then ``verity_flock.register``.
 
 Both pods receive the input set (directory or ``art:`` id) as the same tarball. The prover pod runs against the verifier pod:
@@ -29,7 +29,7 @@ FAMILY = "C-Flock"
 INTERACTIVE = True
 RESULT = "result.json"
 IR_PREFIX = "irf:"
-CIRCUIT_SCRIPT = "verity/protocols/proofs/flock/prover/pod/61-circuit-cell.sh"
+CIRCUIT_SCRIPT = "verity/protocols/proof/flock/prover/pod/61-circuit-cell.sh"
 CIRCUIT_PREFIX = "circuit:"
 #: relations other than the template module's that ``cell plan --relation`` may name
 RELATIONS = (CIRCUIT_PREFIX,)

@@ -3,20 +3,20 @@ module
 public import Properties.Poub.Remote
 
 /-!
-# When the verifier reads a window's openings coin (`Poub`)
+# When the verifier reads a window's sample's coins (`Poub`)
 
 The code's half of the opening sample's premises (`ResourceAccounting.Remote.Sample.Assumptions`): what `verifyWindow` and the
 session give of `Refused` and of `Live`, stated against the verifier's functions, for every input of their types.
 
 A session's coins are `coins[0 … W − 1]`, window `t`'s challenge at `t` (`releaseCoin`), and `coins[W + t]`, window
-`t`'s openings coin, which only `close t` reads, to sample the window's receipts (`draws`).
+`t`'s sample's coins, which only `close t` reads, to sample the window's receipts (`draws`).
 
-* `AcceptSamplesOpenable` (`Refused`, per window): an accepted window's samples are the sampler's values on its openings
-  key, and each is a receipt of the window with an opening that passes `checkOpening` (`Openable`). So the receipts a
+* `AcceptSamplesOpenable` (`Refused`, per window): an accepted window's samples are the draw's values on its sample's
+  coins, and each is a receipt of the window with an opening that passes `checkOpening` (`Openable`). So the receipts a
   window opens are among its openable ones, the model's correct receipts.
 * `OpeningsUnreadUntilSampled` (`Live`, the coin order): a run, on the same events, gives the same results and the same
   state, whatever the coins at `W + t` and above, as long as window `t` is not sampled by its end. Every challenge and
-  the earlier windows' openings coins may be read; window `t`'s openings coin and the later ones are not.
+  the earlier windows' samples' coins may be read; window `t`'s sample's coins and the later ones are not.
 * `RecordKeptAfterSample` (`Live`, the receipts fixed at the sample): once window `t` is sampled, the rest of the
   session keeps its samples, its record (what `verify` checks the openings against: its challenge, the previous window's
   last root and its passes' roots, plans and heads, so its size `U_t`) and which of its receipts are openable, whatever
@@ -35,7 +35,7 @@ reads the trace's held blocks, which the code never sees: that a credited pass's
 no opening passes is the hash binding of the receipts and the store's commitments, not a property of the verifier's
 functions.
 
-The statements need `1 ≤ W` (with no window, `start` reads `coins[0]`, window 0's openings coin) and
+The statements need `1 ≤ W` (with no window, `start` reads `coins[0]`, window 0's sample's coins) and
 `1 ≤ min_passes` (with none, an empty window sampled on its deadline could take a root afterwards, once the window
 before it is sampled), which `audit.py`'s `Params` and the difftest's `positive` check.
 -/
@@ -53,15 +53,13 @@ def Openable (reg : Registration) (appends : Array Append) (w : WindowRecord) (u
     receiptIndex (w.passes.map (·.plan.length)) i p = u ∧
     checkOpening reg reg.digest appends w (receipterOf reg w i) i p o = none
 
-/-- An accepted window's samples are the sampler's values `us` on its openings key, and each value is an openable
-receipt of the window. -/
+/-- An accepted window's samples are the draw's values `us` on its sample's coins (`SampleValues`), and each value is an
+openable receipt of the window. -/
 def AcceptSamplesOpenable : Prop :=
   ∀ (reg : Registration) (appends : Array Append) (w : WindowRecord) (coin : ByteArray) (samples : Nat)
     (openings : Array Opening),
     verifyWindow reg appends w coin samples openings = some .accept →
-      ∃ L us, FlockSoundness.Randomness.subset (openingsKey reg.digest w.index coin)
-          (min samples (w.passes.map (·.plan.length)).toList.sum) (w.passes.map (·.plan.length)).toList.sum
-          [.str "openings"] L = some us ∧
+      ∃ us, SampleValues samples (w.passes.map (·.plan.length)).toList.sum coin us ∧
         ∀ u ∈ us, Openable reg appends w u
 
 /-- Window `t`'s samples in a session, `none` until `close t` samples them. -/
@@ -90,7 +88,7 @@ def RecordKeptAfterSample : Prop :=
         ∀ u, Openable reg s'.appends (s'.record t) u ↔ Openable reg s.appends (s.record t) u
 
 /-- **The release order** (the deployment's, which the code cannot give): `D` gives the events a session sees on its
-coins (the prover's and the world's choices fixed, the coin commitment among them), and window `t`'s openings coin
+coins (the prover's and the world's choices fixed, the coin commitment among them), and window `t`'s sample's coins
 reaches none of them before the one that samples the window. While the first `k` events leave window `t` unsampled, the
 next is the same on coins that agree below `W + t`. It is what `Live` needs beyond `OpeningsUnreadUntilSampled`, up to the sample, and
 `RecordKeptAfterSample`, after it. -/

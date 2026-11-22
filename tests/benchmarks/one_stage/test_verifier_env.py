@@ -18,7 +18,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity.protocols.proofs.spot.verifier.one_stage.proofs import EXE
+from verity.protocols.proof.spot.verifier.one_stage.proofs import EXE
+from verity.protocols.proof.spot.verifier.one_stage.settings import ABORT_ON_PANIC
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
@@ -61,7 +62,7 @@ def test_a0s_lean_verify_runs_under_the_allocator_setting_unless_the_caller_sets
     (out / "sessions" / "s").mkdir(parents=True)
     (out / "sessions" / "s" / "session.json").write_text("{}")
     assert a0.lean_verify(EXE, st, 8, out, zk=True)["accepted"]
-    names = differing(children["verify"], {**os.environ, NAME: want})
+    names = differing(children["verify"], {**os.environ, NAME: want, ABORT_ON_PANIC: "1"})
     assert names == []
 
 
@@ -77,7 +78,7 @@ def test_a0s_kept_verifier_runs_under_the_allocators_default_unless_the_caller_s
     caller(monkeypatch, own)
     monkeypatch.setattr(a0.subprocess, "Popen", child)
     a0.VerifyMembers("lean", tmp_path / "archive", "0" * 128, tmp_path / "verify-members.log")
-    names, value = differing(children["verify-members"], os.environ), children["verify-members"].get(NAME)
+    names, value = differing(children["verify-members"], {**os.environ, ABORT_ON_PANIC: "1"}), children["verify-members"].get(NAME)
     assert names == []
     assert value == own
 
@@ -105,5 +106,5 @@ def test_server_rates_lean_runs_under_the_allocator_setting_unless_the_caller_se
         lean.close()
     count = len(children)
     assert count == 1
-    names = differing(children[0], {**os.environ, NAME: want})
+    names = differing(children[0], {**os.environ, NAME: want, ABORT_ON_PANIC: "1"})
     assert names == []

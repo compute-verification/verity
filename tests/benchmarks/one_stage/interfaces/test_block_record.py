@@ -15,7 +15,7 @@ import pytest
 
 from verity.protocol import MONITORING_PERIODS, block_count
 from verity_e2e_demo import block_record as R
-from verity.protocols.resource_accounting.memory.poub.verifier import ledger
+from verity.protocols.accounting.memory.poub.verifier import ledger
 
 FIXTURES = Path(__file__).parent / "fixtures"
 #: the census's deployments, which the block record's reference deployment is held to here (the record itself is public
@@ -475,7 +475,7 @@ def test_the_subprotocols_are_the_onsite_applications_components_through_their_r
     stored record's legs are a mapping, written with sorted keys)."""
     import tomllib
 
-    from verity.protocols.compose import schemes
+    from verity.protocols.run import schemes
     legs = SCHEMA["properties"]["legs"]
     assert set(legs["required"]) == set(legs["properties"]) == set(R.SUBPROTOCOLS)
     assert R.SUBPROTOCOLS == tuple(R.RUNNER_KEYS) == R.PRODUCTS["onsite"]

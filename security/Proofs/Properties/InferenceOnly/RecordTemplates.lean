@@ -140,6 +140,7 @@ theorem range_fn {P : Prog} {tids : Array String} {rs : Array TRange} (hP : Read
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) tids = .ok rs) {r r' : TRange}
     (hr : r ∈ rs.toList) (hr' : r' ∈ rs.toList) (h : r.template = r'.template) :
     ((P.defs[P.root]!).body.nodes[r.node]!).fn = ((P.defs[P.root]!).body.nodes[r'.node]!).fn := by
+  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Walk.walkable_recut P hP.2.2.2.2.1
   obtain ⟨-, hall⟩ := ranges_spec (read_bodies hP).1 hP.2.2.2.2.2.2 (readProg_inputs hP) hrs
   obtain ⟨hk, ht, -⟩ := hall r hr
   obtain ⟨hk', ht', -⟩ := hall r' hr'

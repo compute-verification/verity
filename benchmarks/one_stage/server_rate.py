@@ -82,10 +82,11 @@ import time
 from collections import Counter
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "verity/protocols/proofs/flock/prover/python"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "verity/protocols/proof/flock/prover/python"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from verity.protocols.proofs.spot.verifier.one_stage.proofs import verifier_env
+from verity.protocols.proof.spot.verifier.one_stage import lean_child as LC
+from verity.protocols.proof.spot.verifier.one_stage.proofs import verifier_env
 from verity_flock import circuit as FC
 from verity_flock.proof_server import ProofServer, Statement
 
@@ -153,8 +154,7 @@ def tmpl_unit(d: Path, binary: str | None) -> Path | None:
     if not placed.exists():
         (d / "unit.tmpl").write_text(FC.template_of(text))
         part = d / "unit.placed.part"
-        p = subprocess.run([binary, str(d / "unit.tmpl"), "--layout", meta["layout"], "--out", str(part)],
-                           capture_output=True, text=True)
+        p = LC.run([binary, str(d / "unit.tmpl"), "--layout", meta["layout"], "--out", str(part)])
         (d / "tmpl-unit.log").write_text(p.stdout + p.stderr)
         if p.returncode:
             raise RuntimeError(f"flock-tmpl-unit: exit {p.returncode} ({d / 'tmpl-unit.log'})")
@@ -378,8 +378,8 @@ class Lean:
         self.lean, self.out, self.statement, self.program, self.partition = lean, out, statement, program, partition
         self.archive = Path(tempfile.mkdtemp(prefix="server-rate-archive-"))
         tables = sorted(str(f) for f in (d / "tables").glob("*") if f.is_file()) if (d / "tables").is_dir() else []
-        p = subprocess.run([lean, "archive-put", str(self.archive), str(d / "circuit.txt"), str(d / "pub.bin"), *tables,
-                            *(str(f) for f in (program, partition) if f)], capture_output=True, text=True)
+        p = LC.run([lean, "archive-put", str(self.archive), str(d / "circuit.txt"), str(d / "pub.bin"), *tables,
+                    *(str(f) for f in (program, partition) if f)])
         (out / "archive-put.log").write_text(p.stdout + p.stderr)
         self.keys = {Path(x.split()[1]).name: x.split()[0] for x in p.stdout.splitlines() if len(x.split()) == 2}
         self._one = threading.Lock()
@@ -403,7 +403,8 @@ class Lean:
             wall = time.monotonic() - t
             f.write(stdout)
         line = next((x for x in stdout.splitlines() if x.startswith("VERDICT ")), None)
-        v = (json.loads(line.split(" ", 1)[1]) if line
+        dead = LC.panic_line(log.read_text(errors="replace")) or LC.exit_why(p.returncode, LC.VERIFY_EXITS)
+        v = ({"accepted": False, "why": dead} if dead else json.loads(line.split(" ", 1)[1]) if line
              else {"accepted": False, "why": no_verdict(self.statement, p.returncode, log.read_text(errors="replace"))})
         return {"accepted": v.get("accepted") is True, "why": v.get("why"), **{k: v[k] for k in PROGRAM_FIELDS if k in v},
                 "wall_s": round(wall, 2), "cpu_s": round(ru.ru_utime + ru.ru_stime, 2), "user_s": round(ru.ru_utime, 2),

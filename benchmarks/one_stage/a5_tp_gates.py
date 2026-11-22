@@ -77,16 +77,15 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from a5_network_attester import composer as row_composer, free_ports, refusal  # noqa: E402
-from verity.protocols.resource_accounting.network.prover.network_attester_zk import WardenRowIdentity  # noqa: E402
+from a5_network_attester import WardenRowIdentity, composer as row_composer, free_ports, refusal  # noqa: E402
 from verity.circuits import evaluation as E  # noqa: E402
 from verity.circuits.defs import bind  # noqa: E402
 from verity.circuits.ops import fp32 as W  # noqa: E402
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
-from verity.protocols.resource_accounting.network.verifier import network_attester_rows as WR  # noqa: E402
-from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P  # noqa: E402
-from verity.protocols.proofs.spot.prover import docket as DK  # noqa: E402
+from verity.protocols.accounting.network.verifier import network_attester_rows as WR  # noqa: E402
+from verity.protocols.proof.spot.verifier import service as S  # noqa: E402
+from verity.protocols.proof.spot.verifier.one_stage import partition as P  # noqa: E402
+from verity.protocols.proof.spot.prover import docket as DK  # noqa: E402
 from verity.commitments import registered_value as RV  # noqa: E402
 from verity.commitments.periods import rows as CS  # noqa: E402
 from verity_vllm.commit import index as IX  # noqa: E402
@@ -447,8 +446,8 @@ def main(argv=None) -> int:
     if a.requests < 2:
         ap.error("--requests ≥ 2: the gates bind each request's peer reads to its own partials, and not another request's")
     import a5
-    from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
-    from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
+    from verity.protocols.proof.spot.verifier.challenger import challenger_session as AC
+    from verity.protocols.proof.spot.prover.audit import local_challenger as LC
 
     out = a.out
     parts = partials(a.hidden, a.tokens, a.requests, a.seed)

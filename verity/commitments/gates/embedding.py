@@ -64,7 +64,8 @@ from .hm96 import reference as hm96_leaf
 from .rowleaf import DIGEST, digest, digest_bits
 from .rowleaf import reference as row_digest
 
-__all__ = ["EmbeddingRead", "EmbeddingReadSelect", "FILL", "SCHEMA", "arguments", "read", "reference"]
+__all__ = ["EmbeddingRead", "EmbeddingReadGuard", "EmbeddingReadSelect", "EmbeddingReadWord", "FILL", "SCHEMA", "arguments",
+           "opening", "read", "reference", "reference_opening"]
 
 BIT = BL.BIT
 BF16 = Array(16, BIT)
@@ -97,6 +98,14 @@ def reference(V: int, tok: int, root: bytes, domain_id: bytes, row: Sequence[int
         return [FILL] * len(row), 1
     leaf = hm96_leaf(row_digest(*bit_row((row, 16))), salt)[2]
     return list(row), opens(SCHEMA, root, domain_id, leaf, t, path)
+
+
+def reference_opening(V: int, tok: int, root: bytes, domain_id: bytes, row: Sequence[int], salt: bytes,
+                      path: Sequence[bytes]) -> tuple[list[int], int]:
+    """`EmbeddingRead_v3{V, H = len(row)}`'s reference: (h, ok), ``ok`` the verdict word, 1 iff the token is below V and
+    the row opens there, else 0; h as `reference`'s."""
+    h, ok = reference(V, tok, root, domain_id, row, salt, path)
+    return h, int((tok & 0xFFFFFFFF) < V and ok == 1)
 
 
 def arguments(V: int, tok: int, root: bytes, domain_id: bytes, row: Sequence[int], salt: bytes,
@@ -141,6 +150,30 @@ EmbeddingReadSelect = _part(
     "(h, ok): h = row if tok < V (unsigned), else 0x7FFF in every word; ok = opens, or 1 when tok >= V")
 
 
+def _guard(C, S, tok, opened) -> list:
+    inside = _below(C, tok, S.V)
+    return [[inside], [C.AND(inside, opened[0])] + [ZERO] * 15]
+
+
+def _sig_guard(S):
+    _check(S.V, 1)
+    return (("tok", TOKEN), ("opens", BIT)), Tuple(BIT, Array(16, BIT))
+
+
+EmbeddingReadGuard = _part(
+    "EmbeddingReadGuard", ("V",), _sig_guard, _guard,
+    "(in, ok): in = tok < V (unsigned); ok = in AND opens, the bit of a verdict word, its other 15 bits zero")
+
+
+def _word(C, S, inside, word) -> list:
+    return [f ^ C.AND(inside[0], r ^ f) for r, f in zip(word, const_bits(FILL, 16))]
+
+
+EmbeddingReadWord = _part(
+    "EmbeddingReadWord", (), lambda S: ((("in", BIT), ("word", BF16)), BF16), _word,
+    "one word of the row if in, else 0x7FFF: a copy of the selection a word, so a batch over the row steps whole copies")
+
+
 # --- the read ----------------------------------------------------------------------------------------------------------------
 
 def _refs(c: Coll) -> list:
@@ -173,3 +206,34 @@ EmbeddingRead = CompositeDefinition(
 
 def read(V: int, H: int):
     return bind(EmbeddingRead, V=V, H=H)
+
+
+def _signature_v3(S):
+    params, _ = _signature(S)
+    return params, Tuple(Array(S.H, WORD), WORD)
+
+
+def _body_v3(B, S, tok, root, domain, row, salt, path):
+    D = merkle_depth(S.V)
+    bits = B.call(bind(WordBits, W=32), tok)
+    x = B.call(digest(16 * S.H), Coll(Array(16 * S.H, BIT), row.refs))
+    leaf = Coll(DIGEST, TR._refs(_refs(B.call(Hm96Sha512Leaf, x, salt))[2 * DIGEST.leaves:]))
+    pos = Coll(Array(D, BIT), TR._refs(_refs(bits)[:D]))
+    opened = B.call(frame_read(D, SCHEMA), root, domain, leaf, pos, path)
+    inside, ok = B.call(bind(EmbeddingReadGuard, V=S.V), bits, opened)
+    h = B.batch(bind(EmbeddingReadWord), inside, row, axes=(None, 0))
+    return coll_concat(Tuple(Array(S.H, WORD), WORD),
+                       [B.batch(bind(BitsWord, W=16), h, axes=(0,)), B.call(bind(BitsWord, W=16), ok)])
+
+
+EmbeddingRead_v3 = CompositeDefinition(
+    "EmbeddingRead", 3, ("V", "H"), _signature_v3, _body_v3, conformance="exact-model-tested",
+    doc="a table's row read at a hidden key, its table registered one key a row under hm96-sha512/row-seg/v1: (h, ok), h the "
+        "witness row if tok < V (unsigned) else 0x7FFF in every word, ok the verdict word, 1 iff tok < V and the row under "
+        "salt opens at position tok to root in the dense frame-v3-sha512 tree of domain id domain, else 0 "
+        "(Sha512RowSeg_v1, Hm96Sha512Leaf_v1, FrameV3Read_v1, EmbeddingReadGuard_v1, EmbeddingReadWord_v1, BitsWord_v1{16})")
+
+
+def opening(V: int, H: int):
+    """`EmbeddingRead_v3{V, H}`: a read whose verdict is a word and is 0 for a key outside [0, V)."""
+    return bind(EmbeddingRead_v3, V=V, H=H)

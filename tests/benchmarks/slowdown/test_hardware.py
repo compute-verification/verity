@@ -15,12 +15,12 @@ CENSUS_DIR = Path(__file__).resolve().parents[3] / "calibration" / "census"
 CENSUS = {d["id"]: d for d in json.loads((CENSUS_DIR / "hardware.json").read_text())}
 
 
-@pytest.mark.parametrize(("name", "device"), [("h100-hgx", "h100-sxm5-80gb"), ("h200-hgx", "h100-sxm5-80gb")])
-def test_a_location_is_its_census_devices_where_the_census_has_them(name, device):
+@pytest.mark.parametrize(("name", "device"), [("h100-hgx", "h100-sxm-80gb-sm"), ("h200-hgx", "h100-sxm-80gb-sm")])
+def test_a_location_is_its_census_devices_datasheet_reading_where_the_census_has_them(name, device):
     loc, u = hardware.location(REG, name), hardware.units(REG)
-    assert math.isclose(loc.phi, u.gates(loc.devices * CENSUS[f"{device}/e4m3"]["flop_per_second"]))
-    assert math.isclose(REG.param(f"location.{name}.flops").low,
-                        loc.devices * CENSUS[f"{device}/bf16"]["flop_per_second"])
+    sheet = {k: next(r for r in CENSUS[f"{device}/{k}"]["readings"] if r["name"] == "datasheet")["flop_per_second"] for k in ("e4m3", "bf16")}
+    assert math.isclose(loc.phi, u.gates(loc.devices * sheet["e4m3"]))
+    assert math.isclose(REG.param(f"location.{name}.flops").low, loc.devices * sheet["bf16"])
     if name != "h200-hgx":
         assert math.isclose(loc.memory, loc.devices * CENSUS[f"{device}/e4m3"]["memory_bytes"] * 8)
 

@@ -10,7 +10,7 @@ import random
 import pytest
 from verity.circuits.boolean.forms import Circuit
 from verity.commitments.gates.bits import ands
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.protocols.proof.spot.verifier.one_stage import registered as G
 
 from verity_vllm.compiler import replay_chain as RC
 

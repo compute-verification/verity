@@ -30,7 +30,7 @@ export PYTHONPATH=$PWD:$PWD/tools/config:$PWD/adapters/vllm:$PWD/benchmarks/pouw
 export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES%%,*} CUDA_DEVICE_ORDER=PCI_BUS_ID SERVED_TREE=$PWD
 UUID=${GPU_LEASE_UUID:?run under gpu-lease}; UUID=${UUID%%,*}; export E2E_GPU_UUID=$UUID
 nvidia-smi --query-gpu=uuid,name,compute_cap,clocks.sm,clocks.mem,driver_version --format=csv,noheader -i "$UUID" > "$OUT/identity.csv"
-KERNEL=verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120; K=$(basename "$KERNEL")
+KERNEL=verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm120; K=$(basename "$KERNEL")
 # the card file naming the device, and the kernel directory its card takes (`bench_arm.kernel_directory`): $K's, or refused
 TAKES=$(PYTHONPATH=${PYTHONPATH:-}:$PWD/benchmarks/pouw/pearl_c_vllm:$PWD/benchmarks/harness "$PY" -c 'import sys
 from bench_arm import kernel_directory; from e2e import SCHEME; from verity_bench.kit import card_short
@@ -39,7 +39,8 @@ print(kernel_directory(sys.argv[1] or SCHEME, card_short(sys.argv[2].strip())).n
 UNPACK=$(mktemp -d); trap 'rm -rf "$UNPACK"' EXIT
 tar -xf "${SHIP_TAR:?}" -C "$UNPACK"
 SHIP=$(dirname "$(find "$UNPACK" -name MANIFEST.sha256 | head -1)")
-(cd "$SHIP" && sha256sum -c --quiet MANIFEST.sha256) && cmp -s "$SHIP/run.py" "$KERNEL/run.py" || { echo "ship"; exit 3; }
+(cd "$SHIP" && sha256sum -c --quiet MANIFEST.sha256) && cmp -s "$SHIP/run.py" "$KERNEL/run.py" \
+  && cmp -s "$SHIP/driver.py" "$KERNEL/../pearl_c/driver.py" || { echo "ship"; exit 3; }
 PEARLC_EXPECT_UUID=$UUID SHAPES="" VARIANTS=sm120 "$PY" "$SHIP/run.py" "$SHIP/check/check.json" > "$OUT/gpu1-check.jsonl"
 ARGS=(--model "$MODEL" --kernel "$KERNEL" --cubin "$SHIP/$K.cubin" --out "$OUT/e2e.json"
       --reps "${REPS:-2}" ${SCHEDULE:+--schedule "$SCHEDULE"} ${SCHEME:+--scheme "$SCHEME"} ${GRAPHS:+--graphs} ${FP8_GRAPHS:+--fp8-graphs} ${WHOLE_STEP:+--whole-step}

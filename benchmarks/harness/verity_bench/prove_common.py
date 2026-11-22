@@ -4,7 +4,6 @@ and reading a labelled record and a row's fields. `prove_records`' docstring sta
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, TypeGuard
@@ -119,20 +118,6 @@ def card(store: Any, art: str, slot: str, workload: Workload) -> dict:
     if got != {"schema": CARD_SCHEMA, "slot": slot, "model": workload.model}:
         raise ValueError(f"{art} isn't a `{slot}` card of {workload.model} ({CARD_SCHEMA}): it is {got}")
     return doc["value"]
-
-
-def _field(row: Mapping[str, Any], name: str) -> Any:
-    """A row's field by its dotted name, or `_ABSENT`."""
-
-    at: Any = row
-    for key in name.split("."):
-        if not isinstance(at, Mapping) or key not in at:
-            return _ABSENT
-        at = at[key]
-    return at
-
-
-_ABSENT = object()
 
 
 def _count(x: Any) -> TypeGuard[int]:

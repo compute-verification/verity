@@ -1,9 +1,10 @@
 {
  "format": 2,
- "roots": ["Difftest", "DifftestExample", "AnnotDifftest", "FlockJsonDifftest"],
+ "roots": ["Difftest", "DifftestExample", "AnnotDifftest", "FlockJsonDifftest", "ProgramDifftest"],
  "exempt": {
   "AnnotDifftestMain": "the annot-difftest executable's entry point, one line: Difftest.serve AnnotDifftest.table, audited under AnnotDifftest; a root of its own would put a second `main` beside DifftestExample's",
-  "FlockJsonDifftestMain": "the flock-json-difftest server's entry point, one line: Difftest.serve of FlockJsonDifftest.table, which tests/test_flock_json_port.py drives against the Python mirror; audited under FlockJsonDifftest (a root beside DifftestExample, which declares `main` too)"
+  "FlockJsonDifftestMain": "the flock-json-difftest server's entry point, one line: Difftest.serve of FlockJsonDifftest.table, which tests/test_flock_json_port.py drives against the Python mirror; audited under FlockJsonDifftest (a root beside DifftestExample, which declares `main` too)",
+  "ProgramDifftestMain": "the program-difftest server's entry point, one line: Difftest.serve of ProgramDifftest.table, which tests/tools/difftest/test_program_decode_port.py drives against codec.decode_program; audited under ProgramDifftest (a root beside DifftestExample, which declares `main` too)"
  },
  "layers": {
   "Difftest": {
@@ -25,6 +26,11 @@
    "imports": ["Difftest", "Base.JsonParse"],
    "except": [],
    "why": "the JSON parser's port reads the parser it holds to its Python mirror, and Lean core's parser through the harness"
+  },
+  "ProgramDifftest": {
+   "imports": ["Difftest", "Base.Bytes", "Circuits.Build", "Circuits.Encode", "Circuits.Program"],
+   "except": [],
+   "why": "the decoder's port reads the decoder, the encoder and the builder it holds to codec.decode_program, codec.descriptor_chunks and Program, and the bytes it hands them, through the harness, as a port does"
   }
  },
  "guarantees": {},

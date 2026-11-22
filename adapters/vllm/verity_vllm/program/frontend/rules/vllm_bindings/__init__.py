@@ -62,11 +62,9 @@ from verity_vllm.program.frontend.rules.vllm_bindings.elementwise import (
     Bf16ScalarChainRule,
     GeluTanhAndMulRule,
     ScalarTensorMulRule,
-    SiluAndMulWithClampRule,
 )
 from verity_vllm.program.frontend.rules.vllm_bindings.fp8 import (
     CutlassScaledMmFp8BlockRule,
-    DeepGemmFp8EinsumRule,
     DynamicDeepGemmFp8LinearRule,
     PerTokenGroupFp8QuantRule,
     SameDtypeCastRule,
@@ -124,7 +122,7 @@ from verity_vllm.program.frontend.rules.vllm_bindings.triton_launches import (
 VLLM_BINDING_RULES = [TritonRmsNormRule(), FusedQKvRmsNormRule(), TritonGemmRule(), CublasLinearRule(), LlBf16GemmRule(), CublasRouterRule(),
                       KvCacheUpdateRule(), UnifiedAttentionWithOutputRule(), AllocViewRule(), IntIdWidenRule(),
                       CachePadRule(), KvPrefixRule(), CudaRmsNormRule(), CudaFusedAddRmsNormRule(), FusedAddRmsNormBIRule(), ScalarTensorMulRule(),
-                      GeluTanhAndMulRule(), SiluAndMulWithClampRule(), Bf16ScalarChainRule(),
+                      GeluTanhAndMulRule(), Bf16ScalarChainRule(),
                       # the unfused norm chain (forward_native norms as ATen on an f32 copy)
                       WidenBf16ToF32Rule(), NarrowF32ToBf16Rule(), SquareRule(), MeanDimBIRule(), RsqrtRule(), AddScalarRule(), AddWidenedRule(),
                       MulF32Rule(),
@@ -132,7 +130,7 @@ VLLM_BINDING_RULES = [TritonRmsNormRule(), FusedQKvRmsNormRule(), TritonGemmRule
                       AllReduce2Rule(), AllGather2Rule(), AllReduceRule(), FusedAllReduceRmsNormRule(), AllGatherRule(), EmbeddingShardRule(),
                       # WORLD-ary rules after the world-2 ones
                       # the block-scaled FP8 linear (Fp8LinearMethod -> CutlassFp8BlockScaledMMKernel) + the same-dtype cast it ends with
-                      DynamicDeepGemmFp8LinearRule(), DeepGemmFp8EinsumRule(), PerTokenGroupFp8QuantRule(), CutlassScaledMmFp8BlockRule(),
+                      DynamicDeepGemmFp8LinearRule(), PerTokenGroupFp8QuantRule(), CutlassScaledMmFp8BlockRule(),
                       SameDtypeCastRule(),
                       # the exact-int8 profile's int8 linear and int8 attention (engine.int8_ops)
                       Int8RowQuantRule(), Int8ScaledMmRule(), Int8UnifiedAttentionRule()]
@@ -159,15 +157,6 @@ def vllm_ruleset():
     from verity_vllm.program.frontend.rules.vllm_dsa_fp8 import (
         VLLM_DSA_FP8_RULES,  # the same leaves over an fp8_ds_mla KV cache
     )
-    from verity_vllm.program.frontend.rules.vllm_dsv4 import (
-        VLLM_DSV4_RULES,  # DeepSeek-V4's sparse MLA leaves
-    )
-    from verity_vllm.program.frontend.rules.vllm_marlin_moe import (
-        VLLM_MARLIN_MOE_RULES,  # the MXFP4 Marlin MoE's leaves
-    )
-    from verity_vllm.program.frontend.rules.vllm_mhc import (
-        VLLM_MHC_RULES,  # DeepSeek-V4's mHC ops
-    )
     from verity_vllm.program.frontend.rules.vllm_moe import (
         VLLM_MOE_RULES,  # the fused-MoE block's leaf kernels
     )
@@ -181,8 +170,8 @@ def vllm_ruleset():
         VLLM_SAMPLING_RULES,  # the seeded temperature + top-p token select (GumbelTopPTokenSelect_v1{V,S})
     )
     return RuleSet("default+vllm-bindings", VLLM_DSA_PATTERN_RULES + base + VLLM_BINDING_RULES + VLLM_MOE_RULES + VLLM_MOE_FP8_RULES + VLLM_MOE_ROUTER_RULES
-                   + VLLM_DSA_RULES + VLLM_DSA_ABSORB_RULES + VLLM_DSA_DENSE_RULES + VLLM_DSA_FP8_RULES + list(VLLM_SAMPLING_RULES) + VLLM_MHC_RULES + VLLM_DSV4_RULES
-                   + VLLM_MARLIN_MOE_RULES, list(DEFAULT_RULES.families))
+                   + VLLM_DSA_RULES + VLLM_DSA_ABSORB_RULES + VLLM_DSA_DENSE_RULES + VLLM_DSA_FP8_RULES + list(VLLM_SAMPLING_RULES),
+                   list(DEFAULT_RULES.families))
 
 
 __all__ = ["AllocViewRule", "GEMM_PINS", "LayerNormAtenRule", "MEAN_PINS", "QKV_RMS_PINS", "RMS_PINS", "TritonGemmRule", "VLLM_BINDING_RULES", "_OBSERVED", "_pins_ok",

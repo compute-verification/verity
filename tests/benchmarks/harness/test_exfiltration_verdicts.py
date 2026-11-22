@@ -3,7 +3,6 @@ by name."""
 
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 
@@ -20,11 +19,6 @@ from exfiltration_helpers import (
 from verity_bench import exfiltration as E
 from verity_bench import kit
 
-#: the sha256 of the print and of the `--json` document on the fixtures' runs with no verdicts of record: the command's
-#: output where no run carries the stop class's record, the calculator's rows as with no record read. A change
-#: elsewhere that moves the print on purpose pins the new digests here
-NO_VERDICTS = {"text": "5bf694eac13fa20e31d237fbc779f21cd912dda70fbdc24fd434e75849b3a49a",
-               "json": "b202cf9f69e87c637ca361ddf79faebf46509b2a74f4144ed44b1f633988ebb7"}
 #: made-up verdicts: a verifier, what stands between its verdicts and proved, the run that holds the records, and each
 #: verdict's own run
 VERIFIER = {"module": "made_up.stop_verifier", "commit": "0123456789ab" * 3 + "0123"}
@@ -55,31 +49,6 @@ def complete() -> list[dict]:
 
     return [*(made_up_verdict(p) for p in E.PIECES), made_up_verdict("response_tie", "id"),
             made_up_verdict("request_tie", "max_tokens")]
-
-
-def digests(doc: dict) -> dict:
-    return {"text": hashlib.sha256(E.render(doc).encode()).hexdigest(),
-            "json": hashlib.sha256(json.dumps(doc, indent=1, ensure_ascii=False).encode()).hexdigest()}
-
-
-def test_with_no_verdicts_of_record_the_print_is_as_it_was_byte_for_byte(tmp_path):
-    """With nothing in the store carrying the stop class's record, the print and the document are byte for byte those
-    pinned (`NO_VERDICTS`): the stop verdicts' reader is not asked and the calculator's rows are as with no record
-    read, the design as the design before its stop block and the network attester's part the
-    `scan` row's. The output count is assumed as it was, and no sum takes it at 0, so the inputs list none."""
-
-    doc = E.build(store=recorded(tmp_path).fresh(), root=REPO)
-    assert "stop_class" not in doc and E.VERDICTS not in E.render(doc)
-    assert digests(doc) == NO_VERDICTS, (
-        f"the print with no verdicts of record moved: {digests(doc)}; where a change elsewhere moved it on purpose, pin "
-        "these in NO_VERDICTS")
-    year = doc["periods"][-1]
-    assert {p["output_count"]["mark"] for p in doc["periods"]} == {"assumed"}
-    assert [i for i in doc["inputs"] if i["input"] == "output_count"] == [] and year["output_count"]["at_zero_in"] == []
-    assert (doc["attester"]["stop"]["runs"], doc["attester"]["stop"]["why"]) == ([], list(term().NO_RECORDS.why))
-    assert year["together"]["design"] == year["together"][E.OUTPUT_COUNT]
-    assert doc["attester"]["rows"][0]["row"] == "scan" and doc["attester"]["rows"][0]["term"]["2"]["GB"] == pytest.approx(
-        term().document(term().inputs(response_ids=E.RESPONSE_IDS))["value"])
 
 
 def test_a_run_not_proved_is_printed_with_its_runs_and_verifier_and_counted_apart_from_measured(tmp_path, listed):

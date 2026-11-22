@@ -8,7 +8,7 @@ Row ``i`` (``n_bits`` bits, ``rowleaf.bit_row``'s bytes) with salt ``y_i`` has, 
     leaf_i = row_leaf(D, i, tree_leaf(key, bc_i), "hm96-sha512/row/v2")
 
 and the root is the ``frame-v3-sha512`` root of the leaves over ``D = CommitmentDomain(binding, -1, RangeIndexedDomain(R),
-"sha512")``: the binding is what the commitment may not outlive (the consumer's, such as `partition_v2.BINDING`), ``-1`` the
+"sha512")``: the binding is what the commitment may not outlive (the consumer's), ``-1`` the
 boundary owner, R the row count, which the consumer's statement fixes.  An opening of row i is the row, its salt and the path;
 `verify` recomputes the leaf and walks the path.  A proof that holds the rows privately proves ``bc_i`` from the row and the salt
 (the backend's hm96 gadget) and the verifier finishes natively, as for every hm96 port.  Salts are fresh from the OS unless given

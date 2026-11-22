@@ -438,9 +438,12 @@ def test_the_flags_reach_the_audit():
     ap = argparse.ArgumentParser()
     a5.lean_options(ap)
     assert a5.LEAN_WORKERS == 1
-    assert vars(ap.parse_args([])) == {"lean_workers": 1, "audit_mem_gb": None, "negative_workers": 1}
+    one = {"lean_workers": 1, "stage_workers": 1, "stage_worker_gb": a5.STAGE_WORKER_GIB, "audit_mem_gb": None,
+           "negative_workers": 1}
+    assert vars(ap.parse_args([])) == one
     assert vars(ap.parse_args(["--lean-workers", "2", "--audit-mem-gb", "290"])) == {
-        "lean_workers": 2, "audit_mem_gb": 290.0, "negative_workers": 1}
+        **one, "lean_workers": 2, "audit_mem_gb": 290.0}
+    assert vars(ap.parse_args(["--stage-workers", "4", "--stage-worker-gb", "8"]))["stage_workers"] == 4
     with pytest.raises(SystemExit):
         ap.parse_args(["--lean-workers", "0"])
 

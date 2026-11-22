@@ -118,15 +118,15 @@ theorem cont_swap (t : Fin n) (ω ζ : SampleCoins n κ X) : cont t (cont t ω �
 theorem held_cont [Fintype X] (D : Remote.Sample.Run n m s κ X) (R : Receipts n κ X)
     (prf : Fin n → Pous.Bits κ → Blocks m)
     (rest : SampleCoins n κ X → Fin n → ℕ → ℕ) (t : Fin n) (ω ζ : SampleCoins n κ X) (p : ℕ) :
-    R.held D prf rest t (cont t ω ζ) p = R.held D prf rest t ω p :=
-  ResourceAccounting.SecurityProofs.TS.Plurality.plural_sp (opens := R.Shows D prf rest t p) (cont_left t) ω ζ
+    R.held (D.opened prf rest) t (cont t ω ζ) p = R.held (D.opened prf rest) t ω p :=
+  ResourceAccounting.SecurityProofs.TS.Plurality.plural_sp (opens := R.Shows (D.opened prf rest) t p) (cont_left t) ω ζ
 
 /-- **The held row is the likeliest**: no row is shown alone on more of window `t`'s continuations of `ω`. -/
 theorem tally_le_held [Fintype X] (D : Remote.Sample.Run n m s κ X) (R : Receipts n κ X)
     (prf : Fin n → Pous.Bits κ → Blocks m)
     (rest : SampleCoins n κ X → Fin n → ℕ → ℕ) (t : Fin n) (ω : SampleCoins n κ X) (p : ℕ) (v : Hash.Row) :
-    tally (cont t) (R.Shows D prf rest t p) ω v ≤
-      tally (cont t) (R.Shows D prf rest t p) ω (R.held D prf rest t ω p) :=
+    tally (cont t) (R.Shows (D.opened prf rest) t p) ω v ≤
+      tally (cont t) (R.Shows (D.opened prf rest) t p) ω (R.held (D.opened prf rest) t ω p) :=
   ResourceAccounting.SecurityProofs.TS.Plurality.tally_le_plural ω v
 
 theorem toReal_pr {α : Type} [Fintype α] (P : α → Prop) : (Pous.pr P).toReal = prob P := by
@@ -148,26 +148,26 @@ theorem window_le [Fintype X] (D : Remote.Sample.Run n m s κ X) (R : Receipts n
     (prf : Fin n → Pous.Bits κ → Blocks m)
     (rest : SampleCoins n κ X → Fin n → ℕ → ℕ) (L : Fin n → Finset ℕ) (hL : ∀ t ω, D.opened prf rest t ω ⊆ L t)
     (t : Fin n) :
-    prob (fun ω => ∃ p ∈ D.opened prf rest t ω, R.Moved D prf rest t ω p) ≤
-      √((L t).card * s t * ((R.fork D prf rest t).toReal + (R.split D prf rest t).toReal)) := by
-  set a : ℕ → ℝ := fun p => prob (ResourceAccounting.SecurityProofs.TS.Plurality.Mov (cont t) (R.Shows D prf rest t p))
+    prob (fun ω => ∃ p ∈ D.opened prf rest t ω, R.Moved (D.opened prf rest) t ω p) ≤
+      √((L t).card * s t * ((R.fork (D.opened prf rest) t).toReal + (R.split (D.opened prf rest) t).toReal)) := by
+  set a : ℕ → ℝ := fun p => prob (ResourceAccounting.SecurityProofs.TS.Plurality.Mov (cont t) (R.Shows (D.opened prf rest) t p))
     with ha
-  set Fk : ℕ → SampleCoins n κ X × SampleCoins n κ X → Prop := fun p y => Frk (cont t) (R.Shows D prf rest t p) y.1 y.2
+  set Fk : ℕ → SampleCoins n κ X × SampleCoins n κ X → Prop := fun p y => Frk (cont t) (R.Shows (D.opened prf rest) t p) y.1 y.2
     with hFk
-  have h1 : prob (fun ω => ∃ p ∈ D.opened prf rest t ω, R.Moved D prf rest t ω p) ≤ ∑ p ∈ L t, a p := by
+  have h1 : prob (fun ω => ∃ p ∈ D.opened prf rest t ω, R.Moved (D.opened prf rest) t ω p) ≤ ∑ p ∈ L t, a p := by
     refine (prob_mono fun ω hω => ?_).trans
-      (prob_exists_le (L t) fun p ω => ResourceAccounting.SecurityProofs.TS.Plurality.Mov (cont t) (R.Shows D prf rest t p) ω)
+      (prob_exists_le (L t) fun p ω => ResourceAccounting.SecurityProofs.TS.Plurality.Mov (cont t) (R.Shows (D.opened prf rest) t p) ω)
     obtain ⟨p, hp, hacc, hne⟩ := hω
     exact ⟨p, hL t ω hp, (R.opened t ω p).row, ⟨hp, hacc, rfl⟩, hne⟩
   have hsq : ∀ p, a p ^ 2 ≤ prob (Fk p) := fun p =>
-    ResourceAccounting.SecurityProofs.TS.Plurality.moved_le_forked (opens := R.Shows D prf rest t p) (cont_left t)
+    ResourceAccounting.SecurityProofs.TS.Plurality.moved_le_forked (opens := R.Shows (D.opened prf rest) t p) (cont_left t)
       (cont_swap t)
   have hsum : ∑ p ∈ L t, prob (Fk p) ≤ s t * prob (fun y => ∃ p ∈ L t, Fk p y) :=
     sum_prob_le (L t) Fk (fun y => D.opened prf rest t y.1) (s t) (fun p y h => by
       obtain ⟨v, v', ⟨hp, -⟩, -⟩ := h
       exact hp) (fun y => card_opened_le D prf rest t y.1)
   have hbreak : prob (fun y => ∃ p ∈ L t, Fk p y) ≤
-      (R.fork D prf rest t).toReal + (R.split D prf rest t).toReal := by
+      (R.fork (D.opened prf rest) t).toReal + (R.split (D.opened prf rest) t).toReal := by
     rw [Receipts.fork, Receipts.split, toReal_pr, toReal_pr]
     refine (prob_mono fun y hy => ?_).trans (prob_or_le _ _)
     obtain ⟨p, -, v, v', ⟨hp, hac, rfl⟩, ⟨hp', hac', rfl⟩, hne⟩ := hy
@@ -183,11 +183,11 @@ theorem window_le [Fintype X] (D : Remote.Sample.Run n m s κ X) (R : Receipts n
     · exact Or.inr ⟨p, hp, hp', hk⟩
   have hA : 0 ≤ ∑ p ∈ L t, a p := Finset.sum_nonneg fun p _ => prob_nonneg _
   have hfin : (∑ p ∈ L t, a p) ^ 2 ≤
-      (L t).card * s t * ((R.fork D prf rest t).toReal + (R.split D prf rest t).toReal) := by
+      (L t).card * s t * ((R.fork (D.opened prf rest) t).toReal + (R.split (D.opened prf rest) t).toReal) := by
     calc (∑ p ∈ L t, a p) ^ 2 ≤ (L t).card * ∑ p ∈ L t, a p ^ 2 := sq_sum_le_card_mul_sum_sq
       _ ≤ (L t).card * ∑ p ∈ L t, prob (Fk p) :=
           mul_le_mul_of_nonneg_left (Finset.sum_le_sum fun p _ => hsq p) (Nat.cast_nonneg _)
-      _ ≤ (L t).card * (s t * ((R.fork D prf rest t).toReal + (R.split D prf rest t).toReal)) :=
+      _ ≤ (L t).card * (s t * ((R.fork (D.opened prf rest) t).toReal + (R.split (D.opened prf rest) t).toReal)) :=
           mul_le_mul_of_nonneg_left (hsum.trans (mul_le_mul_of_nonneg_left hbreak (Nat.cast_nonneg _)))
             (Nat.cast_nonneg _)
       _ = _ := by ring
@@ -196,10 +196,10 @@ theorem window_le [Fintype X] (D : Remote.Sample.Run n m s κ X) (R : Receipts n
 /-- A fork break is a collision the window's fork finder outputs. -/
 theorem fork_le_finder [Fintype X] [Nonempty X] (D : Remote.Sample.Run n m s κ X) (R : Receipts n κ X)
     (prf : Fin n → Pous.Bits κ → Blocks m) (rest : SampleCoins n κ X → Fin n → ℕ → ℕ) (t : Fin n) (q : ℕ) :
-    (R.fork D prf rest t).toReal ≤ (R.finder D prf rest t q).Pr (fun u => (R.hash u).bytes) := by
+    (R.fork (D.opened prf rest) t).toReal ≤ (R.finder (D.opened prf rest) t q).Pr (fun u => (R.hash u).bytes) := by
   rw [Receipts.fork, toReal_pr, Claims.Finder.Pr, claims_pr]
   refine prob_mono (Ω := SampleCoins n κ X × SampleCoins n κ X) fun y hy => ?_
-  have hex : ∃ uv, R.Finds D prf rest t y.1 y.2 uv := by
+  have hex : ∃ uv, R.Finds (D.opened prf rest) t y.1 y.2 uv := by
     obtain ⟨p, hp, hp', h | h⟩ := hy
     · obtain ⟨u, hu, v, hv, hc⟩ := h
       exact ⟨(u, v), hc, p, hp, hp', Or.inl ⟨hu, hv⟩⟩
@@ -215,7 +215,7 @@ theorem ReceiptsBindingOfFork : ResourceAccounting.Guarantees.Remote.ReceiptsBin
   intro n m s κ X _ D R prf rest L hL
   rw [Receipts.binding, Binding.toReal_pr]
   refine (prob_mono fun ω hω => ?_).trans ((prob_exists_le Finset.univ fun t ω =>
-    ∃ p ∈ D.opened prf rest t ω, R.Moved D prf rest t ω p).trans
+    ∃ p ∈ D.opened prf rest t ω, R.Moved (D.opened prf rest) t ω p).trans
       (Finset.sum_le_sum fun t _ => Binding.window_le D R prf rest L hL t))
   obtain ⟨t, h⟩ := hω
   exact ⟨t, Finset.mem_univ _, h⟩
@@ -236,14 +236,14 @@ and under `cr/sha-512` the binding term is at most `Σ_t √(|L_t|·s_t)·q_t/2^
 theorem binding_le_of_fixed [Fintype X] [Nonempty X] (D : Remote.Sample.Run n m s κ X) (R : Receipts n κ X)
     (prf : Fin n → Pous.Bits κ → Blocks m) (rest : SampleCoins n κ X → Fin n → ℕ → ℕ) (L : Fin n → Finset ℕ)
     (q : Fin n → ℕ) (hL : ∀ t ω, D.opened prf rest t ω ⊆ L t)
-    (hq : ∀ t, Claims.StrictBirthday (fun u => (R.hash u).bytes) (R.finder D prf rest t (q t)))
+    (hq : ∀ t, Claims.StrictBirthday (fun u => (R.hash u).bytes) (R.finder (D.opened prf rest) t (q t)))
     (hF : ∀ t ω ζ p, R.verifier t (cont t ω ζ) p = R.verifier t ω p ∧ R.root t (cont t ω ζ) p = R.root t ω p ∧
       R.rank t (cont t ω ζ) p = R.rank t ω p) :
-    (R.binding D prf rest).toReal ≤ ∑ t, √((L t).card * s t) * q t / 2 ^ (256.5 : ℝ) := by
+    (R.binding (D.opened prf rest)).toReal ≤ ∑ t, √((L t).card * s t) * q t / 2 ^ (256.5 : ℝ) := by
   refine (ReceiptsBindingOfCR D R prf rest L q hL hq).trans (le_of_eq (Finset.sum_congr rfl fun t _ => ?_))
-  have hs : (R.split D prf rest t).toReal = 0 := by
+  have hs : (R.split (D.opened prf rest) t).toReal = 0 := by
     rw [Receipts.split, toReal_pr]
-    have : (fun y : SampleCoins n κ X × SampleCoins n κ X => R.Split D prf rest t y.1 y.2) = fun _ => False := by
+    have : (fun y : SampleCoins n κ X × SampleCoins n κ X => R.Split (D.opened prf rest) t y.1 y.2) = fun _ => False := by
       funext y
       exact propext ⟨fun ⟨p, _, _, h⟩ => h (hF t y.1 y.2 p), False.elim⟩
     rw [this]

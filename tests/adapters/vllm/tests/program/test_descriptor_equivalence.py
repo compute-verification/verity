@@ -19,7 +19,6 @@ from verity.circuits import (
     decode_program,
     encode_program,
 )
-from verity.circuits.codec import SCHEMA_V0, SCHEMA_V1
 from verity.circuits.refs import Affine, Concat, Explicit, Strided, concat
 
 from tests.program.descriptor_equivalence import (
@@ -28,8 +27,7 @@ from tests.program.descriptor_equivalence import (
     canonical_runs_by_leaf,
     compare,
 )
-from tests.program.test_running_example import Add16, Id16, Mul16, make_program
-from verity_vllm.definitions.registry import b1
+from tests.program.test_running_example import Add16, Id16, Mul16
 
 V16 = Value(16)
 
@@ -68,51 +66,8 @@ def test_canonical_runs_equal_the_leaf_by_leaf_reference_and_ignore_representati
     assert canonical_runs(Affine("n", 0, 0, 3)) != canonical_runs(Strided("n", 0, 0, 1, 0, 0, 3))
 
 
-def _round_trip(P, schema):
-    return decode_program(json.loads(json.dumps(encode_program(P, schema=schema))), REGISTRY)
-
-
-def test_the_same_program_under_v0_and_v1_encodings_is_equivalent_with_boundaries_and_evaluation():
-    P = make_program()
-    rep = compare(_round_trip(P, SCHEMA_V0), _round_trip(P, SCHEMA_V1), gate_samples=50, call_samples=8)
-    assert rep["verdict"] == "equivalent"
-    assert rep["definitions"] > 0 and rep["reference_sequences"] > 0
-    assert rep["boundaries_compared"] > 0  # `S.out` (escaping, whole-circuit consumer scan) of sampled calls
-    assert rep["calls_evaluated"] > 0
-    # AttentionHead{T}: the zero-stride pad (v1 and post-B.1 v0) against the pre-B.1 explicit single-leaf parts
-    sp = bind(b1.AttentionHead, T=5, D=64)
-    Q = Program(sp)
-    old_style = _explode_broadcasts(encode_program(Q, schema=SCHEMA_V0))
-    assert len(json.dumps(old_style)) > 3 * len(json.dumps(encode_program(Q)))
-    rep = compare(decode_program(old_style, REGISTRY), _round_trip(Q, SCHEMA_V1), gate_samples=50, call_samples=8)
-    assert rep["verdict"] == "equivalent" and rep["boundaries_compared"] > 0
-
-
-def _explode_broadcasts(desc: dict) -> dict:
-    """The pre-B.1 writing of a descriptor: every zero-stride `strided` inside a `concat` becomes `count`
-    single-leaf `affine` parts (the same ordered references, one produced value)."""
-    def fix(r):
-        if "concat" in r:
-            out: list = []
-            for p in r["concat"]:
-                if "strided" in p and p["strided"][4] == 0 and p["strided"][5] == 0:
-                    s, i, b, _, _, _, c = p["strided"]
-                    out.extend({"affine": [s, i, b, 1]} for _ in range(c))
-                else:
-                    out.append(fix(p))
-            return {"concat": out}
-        if "strided" in r and r["strided"][4] == 0 and r["strided"][5] == 0 and r["strided"][6] > 1:
-            s, i, b, _, _, _, c = r["strided"]
-            return {"concat": [{"affine": [s, i, b, 1]} for _ in range(c)]}
-        return r
-    desc = json.loads(json.dumps(desc))
-    for d in desc["definitions"].values():
-        if d["form"] == "composite":
-            for n in d["body"]["nodes"]:
-                for a in n["args"]:
-                    a["refs"] = fix(a["refs"])
-            d["body"]["ret"] = fix(d["body"]["ret"])
-    return desc
+def _round_trip(P):
+    return decode_program(json.loads(json.dumps(encode_program(P))), REGISTRY)
 
 
 @composite("EqPair", 1, [], lambda S: ((("x", Array(2, V16)),), V16))
@@ -140,4 +95,4 @@ def test_programs_that_differ_are_rejected():
     with pytest.raises(Mismatch, match="reference"):
         compare(P, decode_program(dq, REGISTRY))
     # a program that is the same everywhere is accepted, whatever its encoding
-    assert compare(P, _round_trip(P, SCHEMA_V0))["verdict"] == "equivalent"
+    assert compare(P, _round_trip(P))["verdict"] == "equivalent"

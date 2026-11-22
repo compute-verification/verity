@@ -2,7 +2,7 @@
 
 This directory (namespace `FlockSoundness`) proves Flock's interactive mode sound at the oracle layer, compiled, and as
 knowledge soundness, proves zero knowledge for a model of the session's views, and holds the audit layer (`Audit/`). The
-verifier it is about is the Lean package `verity/protocols/proofs/flock/verifier/`. The guarantees and the premises each
+verifier it is about is the Lean package `verity/protocols/proof/flock/verifier/`. The guarantees and the premises each
 takes are the lock's (`security/lean-audit.json`); the named assumptions are stated in
 `security/Definitions/Assumptions/Flock.lean`, and `ASSUMPTIONS.md` beside this file discusses them.
 

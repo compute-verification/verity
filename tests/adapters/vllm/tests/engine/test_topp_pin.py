@@ -100,16 +100,3 @@ def test_arm_installs_when_vllms_module_is_imported_and_imports_nothing_itself(c
         sys.modules.pop("fake_vllm_sampler", None)
 
 
-def test_the_pin_is_armed_at_import_by_every_rank_and_by_the_driver_before_it_builds() -> None:
-    import ast
-    import inspect
-
-    from verity_vllm.engine import build
-    from verity_vllm.pipeline.tp import rank_worker
-
-    top = ast.parse(inspect.getsource(topp_pin)).body
-    assert any(isinstance(n, ast.Expr) and ast.unparse(n) == "arm()" for n in top)
-    assert any(isinstance(n, ast.ImportFrom) and n.module == "verity_vllm.engine" and "topp_pin" in {a.name for a in n.names}
-               for n in ast.parse(inspect.getsource(rank_worker)).body)
-    src = inspect.getsource(build.build_engine)
-    assert src.index("topp_pin.arm()") < src.index("hooked(lambda: LLM(**kw))")

@@ -155,13 +155,13 @@ def test_reroot_and_diff_are_readers_that_name_host_only_differences_apart_from_
     pb.write_text(json.dumps(v1))
     pc.write_text(json.dumps(other))
     before = {p.name: p.stat().st_mtime_ns for p in (pa, pb, pc)}
-    assert cli.main(["weights-of-record", "--diff", str(pa), str(pb)]) == 0
+    assert cli.run(WR, ["--diff", str(pa), str(pb)]) == 0
     out = capsys.readouterr().out
     assert "same weights of record: True" in out and "host-only " + FIELD in out and "re-root under " + WR.SCHEMA in out
-    assert cli.main(["weights-of-record", "--diff", str(pa), str(pc)]) == 1
+    assert cli.run(WR, ["--diff", str(pa), str(pc)]) == 1
     assert "DIFFER model.model.norm.weight: digest" in capsys.readouterr().out
     assert {p.name: p.stat().st_mtime_ns for p in (pa, pb, pc)} == before
     # deriving still needs --checkpoint-dir (a manual check now that --diff exists without one)
     with pytest.raises(SystemExit):
-        cli.main(["weights-of-record", "--program-dir", str(tmp_path)])
+        cli.run(WR, ["--program-dir", str(tmp_path)])
     assert "--checkpoint-dir is required" in capsys.readouterr().err

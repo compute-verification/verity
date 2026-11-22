@@ -28,13 +28,13 @@ from pathlib import Path
 
 import pytest
 
-from tests.verity.protocols.resource_accounting.network.attester.relay_runs import PARAMS, SESSION, _response, _Writer, ws
-from verity.protocols.resource_accounting.network.verifier import relay_check as RC
-from verity.protocols.resource_accounting.network.verifier import network_attester_rows as WR
-from verity.protocols.resource_accounting.network.verifier.run_clock import VirtualClock
-from verity.protocols.resource_accounting.network.verifier.io_tie import TRAILER
+from tests.verity.protocols.accounting.network.attester.relay_runs import PARAMS, SESSION, _response, _Writer, ws
+from verity.protocols.accounting.network.verifier import relay_check as RC
+from verity.protocols.accounting.network.verifier import network_attester_rows as WR
+from verity.protocols.accounting.network.verifier.run_clock import VirtualClock
+from verity.protocols.accounting.network.verifier.io_tie import TRAILER
 from verity.release import WATERMARK_END, watermark_head, with_release
-from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttester, NetworkAttesterParams, audit, cells, read_cell
+from verity.protocols.accounting.network.verifier.network_attester import NetworkAttester, NetworkAttesterParams, audit, cells, read_cell
 
 HERE = (Path(__file__).resolve().parents[3] / "benchmarks" / "network_traces")
 FIXTURES = Path(__file__).resolve().parent / "fixtures"

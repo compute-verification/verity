@@ -1275,6 +1275,50 @@ def test_on_auto_keeps_a_gpu_job_or_one_too_big_for_any_slot_on_node_2(tmp_path,
     assert [(s["node"], s["gpus"], s["cpus"]) for s in placed] == [(N2, 1, None), (N2, None, 16)]
 
 
+def _cores_site(tmp_path, monkeypatch, docs):
+    launched, placed = [], []
+    monkeypatch.setattr(auto, "read", lambda source, cpus, **kw: docs)
+    monkeypatch.setattr(remote, "launch", _refusing(launched))
+    monkeypatch.setattr(remote, "queue_placement", _refusing(placed))
+    monkeypatch.chdir(_auto_repo(tmp_path))
+    return launched, placed, ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto"]
+
+
+def test_on_auto_refuses_a_cores_ask_no_slot_it_reads_can_give_and_names_the_largest(tmp_path, monkeypatch, capsys):
+    docs = {N2: share(waiters=5, size=16), CPU1: pool(slot("r0", cpus="100-122")), CPU5: pool(slot("r1", cpus="0-31"))}
+    launched, placed, runs = _cores_site(tmp_path, monkeypatch, docs)
+    assert main([*runs, "--cpus", "40", "--mem-gb", "128", "--", "pytest"]) == 2
+    assert launched == placed == []
+    assert capsys.readouterr().err.strip().splitlines()[-1] == (
+        f"research run --on auto: refused: --cpus 40 asks more whole cores than any slot auto reads gives (the largest is 32, on "
+        f"{CPU5}'s research pool): name a machine and a slot that has them (`--on MACHINE --pool POOL --slot NAME`), or ask for at "
+        "most 32.")
+
+
+def test_a_cores_ask_only_one_machines_slot_can_give_is_placed_there_with_the_cores_it_asked(tmp_path, monkeypatch):
+    docs = {N2: share(waiters=5, size=16), CPU1: pool(slot("r0", cpus="100-122")), CPU5: pool(slot("r1", cpus="0-31", held=True))}
+    launched, placed, runs = _cores_site(tmp_path, monkeypatch, docs)
+    assert main([*runs, "--cpus", "32", "--mem-gb", "128", "--", "pytest"]) == 3
+    (kw,) = launched
+    assert kw["machine_name"] == CPU5 and kw["env"]["CHECK_RUN_CORES"] == "32", "slot.py takes a slot of 32 cores, not an idle one of 23"
+    assert placed == []
+
+
+def test_a_cores_ask_above_every_slot_but_within_node_2s_share_stays_on_its_queue(tmp_path, monkeypatch):
+    docs = {N2: share(waiters=5), CPU1: pool(slot("r0", cpus="100-122"))}
+    launched, placed, runs = _cores_site(tmp_path, monkeypatch, docs)
+    assert main([*runs, "--cpus", "32", "--mem-gb", "128", "--", "pytest"]) == 3
+    assert launched == [] and [(s["node"], s["cpus"]) for s in placed] == [(N2, 32)]
+
+
+def test_an_ask_without_cpus_is_placed_as_before_and_names_no_cores_to_the_slot(tmp_path, monkeypatch):
+    docs = {N2: share(waiters=5, size=16), CPU1: pool(slot("r0", cpus="100-122"))}
+    launched, placed, runs = _cores_site(tmp_path, monkeypatch, docs)
+    assert main([*runs, "--mem-gb", "16", "--", "pytest"]) == 3
+    (kw,) = launched
+    assert kw["machine_name"] == CPU1 and "CHECK_RUN_CORES" not in kw["env"]
+
+
 def test_on_auto_refuses_a_job_too_big_for_any_slot_while_node_2_is_down(tmp_path, monkeypatch, capsys):
     launched, placed = [], []
     monkeypatch.setattr(auto, "read", lambda source, cpus: {N2: DOWN, CPU1: pool(slot("r0"))})

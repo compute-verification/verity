@@ -66,6 +66,31 @@ def test_a_sealed_rows_sha512_window_opens_as_a_deferred_commits_row_dir(tmp_pat
     assert "committed_not_retained" not in s and "committed_not_retained" not in json.loads(Path(s["bundle"], "MANIFEST.json").read_text())
 
 
+def test_the_seal_reads_the_binding_map_its_windows_close_built(tmp_path, monkeypatch):
+    """The close builds the window's binding map (`binding_of`) and hands the seal its record; the seal builds none of its own, and
+    what it records and leaves beside the bundle is what a seal of the same window that builds the map records."""
+    torch = pytest.importorskip("torch")
+    from tests.check.opened import commit_steps
+
+    com, rc = commit_steps({0: [("model.embed_tokens", bytes(range(256)) * 2)], 1: [("runner.sampler", b"\x01\x02\x03\x04")]})
+    com.weights_tree, com.model = {"root": (rc.weight_registration or {}).get("root"), "names": []}, torch.nn.Module()
+    leds = _ledgers()
+    reqs, rows = ss.window_requests(ROWS, NAMES.get, leds.get)
+    kw = dict(rec={"window": 5, "run_id": "t/w5", "steps": len(rc.steps), "passed": True}, reqs=reqs, request_rows=rows,
+              tokens={k: v.streamed for k, v in leds.items()}, sampling={}, label="serve-openai:t", code="c0de",
+              engine_of_record={"vllm": "test"})
+    s = ss.seal_window(com, rc, tmp_path / "sealed" / "w5", **kw)
+    e = tmp_path / "closed" / "w5"
+    bmap, binding = ss.binding_of(ss.view_of(com), rc, e, rows)
+    one = (tmp_path / "sealed" / "w5" / "commit" / "binding_map_p0.json").read_text()
+    assert (e / "commit" / "binding_map_p0.json").read_text() == one and len(bmap["entries"]) == binding["entries_n"]
+    monkeypatch.setattr(ss, "binding_of", lambda *a: pytest.fail("the seal built a binding map its close had built"))
+    t = ss.seal_window(com, rc, e, **kw, binding=binding)
+    assert "error" not in t and (e / "commit" / "binding_map_p0.json").read_text() == one
+    keep = ("binding_map_digest", "binding_map_entries")
+    assert {k: t[k] for k in keep} == {k: s[k] for k in keep}
+
+
 #: a served step as `--retain-exclude hidden_m1` commits it: an attention interior between two module outputs
 INTERIOR = [("model.layers.0.self_attn.qkv_proj/0", 300), ("fa2.m1/L0/s0/g32x8x1/S", None), ("model.layers.0.self_attn.o_proj/0", 200)]
 
@@ -147,9 +172,8 @@ def test_a_committed_byte_not_retained_outside_the_excluded_interiors_is_refused
 PARTS = Path(__file__).parent / "fixtures" / "llama32_1b_bi_eager_served_window_parts.json"
 SERVED_ROWS = {0: [("runner-a", 0, 3, 0, 3), ("runner-b", 3, 5, 0, 2)], 1: [("runner-a", 0, 1, 3, 3), ("runner-b", 1, 2, 2, 2)]}
 SERVED_NAMES = {"runner-a": "b0-1", "runner-b": "b0-2"}
-#: the digest the row's manifest names (``manifest_digest``): the fixture keeps a cut of its identities, so not one computed
-#: over them, and the seal records the digest the manifest names without recomputing it
-MANIFEST_DIGEST = "ef" * 64
+#: the registered compiler the row's Build of record binds, which the sealed record names
+COMPILER = {"name": "verity-vllm/compiler", "digest": "ef" * 64}
 _ITEM = {"bfloat16": 2, "float32": 4, "int32": 4, "int64": 8}
 
 
@@ -161,22 +185,38 @@ def _i64(xs, T):
     return b"".join(int(x).to_bytes(8, "little") for x in [*xs, *[0] * (T - len(xs))])
 
 
-def _sealed_parts(tmp_path, with_manifest: bool, port=None, embed_ids=None, name=None, kept=None, by=None):
+def _plan(fx) -> list[dict[str, Any]]:
+    """The fixture's rows of the row's Programs (those naming their Definition) as `capture_plan.captured` gives a capture plan,
+    each row's members in the order its Definition returns them (the record's tuple slots)."""
+    slot = {(m["bound"][0], m["bound"][1]): int(m["name"].rsplit("/", 1)[1]) for ms in fx["committed"].values() for m in ms
+            if m["name"].rsplit("/", 1)[-1].isdecimal()}
+    path = {(str(c), int(k)): p for p, (c, k) in (fx.get("op_path_aliases") or {}).items()}
+    rows: dict[tuple[str, int], dict[str, Any]] = {}
+    for r in fx["identities"]:
+        if r.get("spec"):
+            at = (r["op_path"], int(r.get("invocation", 0)))
+            d = rows.setdefault(at, {"op_path": path.get(at, at[0]), "row": 0, "spec": r["spec"], "members": []})
+            if r["output_member"] not in [m[0] for m in d["members"]]:
+                d["members"].append((r["output_member"], 0, ""))
+    for (op, _k), d in rows.items():
+        d["members"].sort(key=lambda m, op=op: slot.get((op, m[0]), 0))
+    return list(rows.values())
+
+
+def _sealed_parts(tmp_path, with_plan: bool, port=None, embed_ids=None, name=None, kept=None, by=None):
     """The record's committed tensors of steps 0 and 1 (shapes cut to the served window's 5 and 2 token rows) committed and sealed
-    as a served window of two requests, by a committer that carries the row's manifest (as `serve_seal.committer` leaves it) or not.
-    With ``port`` ({step: (ids, positions)}) each step's stream starts with the step-input port and, as `serve_seal.single_ids`
-    leaves the committer, the embedding's own ids aren't committed, unless ``embed_ids`` ({step: ids}) commits them beside it;
+    as a served window of two requests, by a committer that carries the row's capture plan or not.
+    With ``port`` ({step: (ids, positions)}) each step's stream starts with the step-input port and the embedding's own ids
+    aren't committed, unless ``embed_ids`` ({step: ids}) commits them beside it;
     its `served_record.SamplerInputsSource` kept the rows ``kept`` (`SERVED_ROWS` by default). Sealed by `serve_seal.seal_window`,
     or ``by``."""
-    fx, seal = _parts_window(tmp_path, with_manifest, port=port, embed_ids=embed_ids, name=name, kept=kept)
+    fx, seal = _parts_window(tmp_path, with_plan, port=port, embed_ids=embed_ids, name=name, kept=kept)
     d, s = seal(by or ss.seal_window)
     return fx, d, s
 
 
-def _parts_window(tmp_path, with_manifest: bool, port=None, embed_ids=None, name=None, kept=None, manifest_path=None, drop=()):
-    """`_sealed_parts`' window, committed, and how to seal it: ``seal(by)`` gives its row dir and what ``by`` returned. The row's
-    manifest, naming its digest (`MANIFEST_DIGEST`), is read from ``manifest_path`` (the fixture's path by default), without the
-    keys ``drop``."""
+def _parts_window(tmp_path, with_plan: bool, port=None, embed_ids=None, name=None, kept=None):
+    """`_sealed_parts`' window, committed, and how to seal it: ``seal(by)`` gives its row dir and what ``by`` returned."""
     torch = pytest.importorskip("torch")
     from tests.check.opened import commit_steps
     from verity_vllm.commit.served_record import (
@@ -205,15 +245,12 @@ def _parts_window(tmp_path, with_manifest: bool, port=None, embed_ids=None, name
     if port:
         com.sources = [StepInputPort(com, T), SamplerInputsSource(com)]
         com.sources[1].rows = SERVED_ROWS if kept is None else kept
-    if with_manifest:
-        man = {k: fx[k] for k in ("identities", "op_path_aliases", "program_digest", "populations")}
-        man["manifest_digest"] = MANIFEST_DIGEST
-        com.required_manifest = {k: v for k, v in man.items() if k not in drop}
-        com.required_manifest_path = str(manifest_path or PARTS)
+    if with_plan:
+        com.capture_plan, com.compiler, com.op_path_aliases = _plan(fx), dict(COMPILER), fx.get("op_path_aliases") or {}
     leds = {"b0-1": sc.LiveRequest("cmpl-1", "e1", [1, 2, 3], {"params": {"max_tokens": 2}}, "b0-1", streamed=[7, 9]),
             "b0-2": sc.LiveRequest("cmpl-2", "e2", [4, 5], {"params": {"max_tokens": 2}}, "b0-2", streamed=[8, 6])}
     reqs, rows = ss.window_requests(SERVED_ROWS, SERVED_NAMES.get, leds.get)
-    d = tmp_path / (name or ("w5" if with_manifest else "w5-raw"))
+    d = tmp_path / (name or ("w5" if with_plan else "w5-raw"))
 
     def seal(by):
         return d, by(com, rc, d, rec={"window": 5, "run_id": "t/w5", "steps": len(rc.steps), "passed": True}, reqs=reqs,
@@ -230,16 +267,15 @@ def _store(d, s, opened: bool = False):
 
     r = DR.of_record(s["bundle"], str(d))
     bmap = json.loads((d / "commit" / "binding_map_p0.json").read_text())
-    return r, bmap, CommittedStore.of_record(bmap, OpenedReader(r.store, r.run) if opened else (lambda *_a: None), r.manifest)
+    return r, bmap, CommittedStore.of_record(bmap, OpenedReader(r.store, r.run) if opened else (lambda *_a: None), r.aliases)
 
 
 def test_a_served_windows_identities_are_what_the_rows_programs_read(tmp_path):
     """PROVE-PATH's read on serve-openai's w5 (b0-1, step 1, gate_up_proj/out), and the rest
-    of what the row's Programs read: a Gemm's `out`, RoPE's `query` / `key` (layer 1 through the row's alias), an RMSNorm's
+    of what the row's Programs read: a Gemm's `out`, RoPE's `query` / `key`, an RMSNorm's
     `norm_scale` and an `fa2.m1` member, each bound exactly as the Commit of record bound the same tensor."""
-    fx, d, s = _sealed_parts(tmp_path, with_manifest=True)
+    fx, d, s = _sealed_parts(tmp_path, with_plan=True)
     r, bmap, store = _store(d, s)
-    assert r.manifest == {"op_path_aliases": fx["op_path_aliases"]} and r.ctx["served_window"]["op_path_aliases"] == fx["op_path_aliases"]
     for rid in ("b0-1", "b0-2"):
         for step in (0, 1):
             for op, member in [("model.layers.0.mlp.gate_up_proj", "out"), ("model.layers.1.mlp.down_proj", "out"),
@@ -255,54 +291,57 @@ def test_a_served_windows_identities_are_what_the_rows_programs_read(tmp_path):
     assert got == want, "every committed tensor is bound to the identity the Commit of record bound it to"
 
 
-def test_without_the_rows_manifest_a_window_binds_raw_names(tmp_path):
-    """A window sealed with no manifest: so a name is its identity, and the Programs' reads miss by name."""
-    _fx, d, s = _sealed_parts(tmp_path, with_manifest=False)
+def test_a_served_windows_shared_module_is_read_through_the_alias_table_it_sealed(tmp_path):
+    """The rotary embedding every layer shares binds as layer 0's k-th call: a store opened without the window's sealed table
+    (`deferred_rows.of_record`'s ``aliases``) misses layer 1's read by name, and layer 0's reads are the same either way."""
+    from verity_vllm.check.replay.opening import CommittedStore
+
+    _fx, d, s = _sealed_parts(tmp_path, with_plan=True)
+    r, bmap, store = _store(d, s)
+    bare = CommittedStore.of_record(bmap, lambda *_a: None)
+    l0, l1 = "model.layers.0.self_attn.rotary_emb", "model.layers.1.self_attn.rotary_emb"
+    assert r.aliases[l1] == [l0, 1]
+    assert store.has("b0-1", 1, l1, "query") and not bare.has("b0-1", 1, l1, "query")
+    assert bare.words("b0-1", 1, l1, "query", 0, 1) == (None, f"no committed identity for (b0-1, step 1, {l1}/query)")
+    assert bare.entries("b0-1", 1, l0, "query")[0] == store.entries("b0-1", 1, l0, "query")[0] != []
+
+
+def test_without_the_capture_plan_a_window_binds_raw_names(tmp_path):
+    """A window sealed with no capture plan: so a name is its identity, and the Programs' reads miss by name."""
+    _fx, d, s = _sealed_parts(tmp_path, with_plan=False)
     r, _bmap, store = _store(d, s)
     assert r.manifest is None and store.has("b0-1", 1, "model.layers.0.mlp.gate_up_proj", "0")
     assert not store.has("b0-1", 1, "model.layers.0.mlp.gate_up_proj", "out")
     assert not store.has("b0-1", 1, "model.layers.1.self_attn.rotary_emb", "query")
-    assert "required_manifest" not in r.ctx["served_window"]
+    assert "compiler" not in r.ctx["served_window"]
 
 
-def test_a_sealed_windows_record_binds_the_rows_manifest_by_its_digest(tmp_path):
-    """The context names the row's required manifest by its path, its Program digest and its own digest, the one over its
-    identities that predict row writes as ``manifest_digest`` (B-OF-RECORD holds both digests to predict's record)."""
-    fx, seal = _parts_window(tmp_path, True, port=PORT, manifest_path=tmp_path / "pred" / "manifest.json")
+def test_a_sealed_windows_record_binds_the_registered_compiler(tmp_path):
+    """The context names the registered compiler the row's Build of record binds, by its name and digest (B-OF-RECORD holds
+    it to predict's record)."""
+    _fx, seal = _parts_window(tmp_path, True, port=PORT)
     d, s = seal(ss.seal_window)
     r = _store(d, s)[0]
-    assert r.ctx["served_window"]["required_manifest"] == {"path": str(tmp_path / "pred" / "manifest.json"),
-                                                           "program_digest": fx["program_digest"],
-                                                           "manifest_digest": MANIFEST_DIGEST}
+    assert r.ctx["served_window"]["compiler"] == COMPILER and "required_manifest" not in r.ctx["served_window"]
 
 
-@pytest.mark.parametrize("key", ["manifest_digest", "program_digest"])
-def test_a_rows_manifest_that_names_no_digest_is_refused_at_the_seal(tmp_path, key):
-    """A committer carrying a manifest without its digest (one predict row didn't write) seals nothing: the record would bind
-    the manifest by a digest it holds as None."""
-    _fx, seal = _parts_window(tmp_path, True, port=PORT, drop=(key,))
-    with pytest.raises(ValueError, match=f"{PARTS.name} names no {key}, and a sealed window binds its manifest by it"):
-        seal(ss.seal_window)
-    d = tmp_path / "w5"
-    assert not (d / "commit" / "replay_bundle_p0").exists() and not (d / "commit" / "verdict.json").exists()
+def test_the_arena_is_sized_from_the_declared_window_class_alone():
+    """`arena_envelope`: the class ``--window-class`` declares, its slots a step, each of at most its prompt, its positions a
+    sequence; the engine's flags size nothing."""
+    opts = SimpleNamespace(window_class="4,27,2", max_num_seqs=16, max_num_batched_tokens=8192, max_model_len=4096)
+    assert ss.arena_envelope(ss.window_class_of(opts)) == {"batch": 4, "max_prompt": 27, "max_new": 1,
+                                                           "max_num_batched_tokens": 108, "max_model_len": 29}
 
 
-def test_serve_openai_refuses_a_rows_manifest_that_names_no_digest_before_it_serves(tmp_path, monkeypatch):
-    """`manifest_of_record`, which `committer` reads before the engine serves: a manifest naming no ``manifest_digest`` is
-    refused by name, and one naming both digests is the Commit's."""
-    import re
-
-    from verity_vllm.commit import partition
-    from verity_vllm.config import UsageError
-
-    monkeypatch.setattr(partition, "require_partition", lambda man, *_a: man)
-    p = tmp_path / "manifest.json"
-    p.write_text(json.dumps({"program_digest": "ab" * 64, "identities": []}))
-    opts = SimpleNamespace(required_manifest=str(p))
-    with pytest.raises(UsageError, match=re.escape(f"{p} names no manifest_digest")):
-        ss.manifest_of_record(opts)
-    p.write_text(json.dumps({"program_digest": "ab" * 64, "manifest_digest": "cd" * 64, "identities": []}))
-    assert ss.manifest_of_record(opts)["manifest_digest"] == "cd" * 64
+def test_a_shared_modules_kth_path_binds_as_its_first_paths_kth_call():
+    """A rotary embedding shared by every layer runs once, under layer 0's hooks, per layer: the plan's layer-k rows bind as
+    its k-th call (`served_binder_of` over the runtime tree's aliases), in the plan's member order."""
+    plan = [{"op_path": f"model.layers.{k}.self_attn.rotary_emb", "row": 0, "spec": "RoPE_v1", "members": [("query", 0, ""), ("key", 0, "")]}
+            for k in range(3)]
+    aliases = {f"model.layers.{k}.self_attn.rotary_emb": ["model.layers.0.self_attn.rotary_emb", k] for k in (1, 2)}
+    names = ["model.layers.0.self_attn.rotary_emb/0", "model.layers.0.self_attn.rotary_emb/1"] * 3
+    got = ss.served_binder_of(plan, [0], {}, False, aliases).bind(0, names)
+    assert [g[:3] for g in got] == [("model.layers.0.self_attn.rotary_emb", m, k) for k in range(3) for m in ("query", "key")]
 
 
 #: each request's token rows of each step (`SERVED_ROWS`)
@@ -352,7 +391,7 @@ def test_a_port_byte_changed_is_what_the_programs_read(tmp_path):
 
 @pytest.mark.parametrize("embed_ids", [{0: [1, 2, 3, 4, 9], 1: [7, 8]}, {0: PORT[0][0], 1: PORT[1][0]}], ids=["other-ids", "same-ids"])
 def test_a_window_that_commits_the_models_ids_beside_the_port_is_refused(tmp_path, embed_ids):
-    """A stream carrying the embedding's own ids beside the port's (a committer `single_ids` didn't leave, or a prover's) is refused
+    """A stream carrying the embedding's own ids beside the port's (a committer that commits the embedding's input, or a prover's) is refused
     at the seal whether or not they equal the port's: the row's Programs would read one of two copies of their input."""
     with pytest.raises(ValueError, match="one copy of \\[\\('model.embed_tokens', 'in'\\)\\].*step 0: model.embed_tokens/in"):
         _sealed_parts(tmp_path, True, port=PORT, embed_ids=embed_ids)
@@ -373,43 +412,21 @@ def test_a_window_whose_port_positions_are_not_what_its_rows_ran_is_refused(tmp_
         _sealed_parts(tmp_path, True, port=port, kept=kept)
 
 
-def test_the_committer_commits_the_steps_ids_once_as_the_ports():
-    """`single_ids` drops the embedding from the acquisition plan's input sites, so the committer acquires no ``model.embed_tokens/in``."""
-    torch = pytest.importorskip("torch")
-    from tests.check.opened import committer
-
-    com = committer()
-    com.plan_inputs = {"model.embed_tokens", "model.layers.0.mlp.act_fn"}
-    emb = torch.nn.Embedding(4, 2)
-    assert com._acquires_input("model.embed_tokens", emb)
-    ss.single_ids(com, json.loads(PARTS.read_text()))
-    assert com.plan_inputs == {"model.layers.0.mlp.act_fn"} and not com._acquires_input("model.embed_tokens", emb)
-
-
-def test_the_ports_identities_are_the_manifests_ids_and_compiled_positions():
+def test_the_ports_identities_are_the_plans_embedding_input_and_compiled_positions():
     """On the eager row the port's ids are the Embedding's input and its positions nothing the Programs read; on the compiled path
     both are piece 0's inputs, and a tensor of the step under one of those names beside the port is a second copy."""
     from verity_vllm.commit.served_record import PORT_NAMES, StepInputPort
 
-    assert ss.port_identities(json.loads(PARTS.read_text())) == {PORT_NAMES[0]: ("model.embed_tokens", "in")}
-    compiled = {"identities": [{"op_path": "c00.input", "output_member": m, "family": "served_kernel_values", "engine_step": 0}
-                               for m in ("ids", "positions")] + [{"op_path": "logits_processor", "output_member": "out", "family": "served_kernel_values", "engine_step": 0}]}
+    assert ss.port_identities(_plan(json.loads(PARTS.read_text()))) == {PORT_NAMES[0]: ("model.embed_tokens", "in")}
+    compiled = [{"op_path": "c00.input", "members": [("ids", 0, ""), ("positions", 0, "")], "row": 0},
+                {"op_path": "logits_processor", "members": [("out", 0, "")], "row": 0}]
     assert ss.port_identities(compiled) == {PORT_NAMES[0]: ("c00.input", "ids"), PORT_NAMES[1]: ("c00.input", "positions")}
     b = ss.served_binder(compiled, [0], [StepInputPort(SimpleNamespace(chunk=4096), 512)])
     assert b.bind(0, [*PORT_NAMES, "c00.input/ids"]) == [("c00.input", "ids", 0, "consumer-input"), ("c00.input", "positions", 0, "consumer-input"),
                                                           ("c00.input", "ids", 0, "unbound")]
-    two = {"identities": [{"op_path": op, "output_member": "in", "family": "input_token_ids"} for op in ("model.embed_tokens", "model.mm_proj")]}
-    with pytest.raises(ValueError, match="2 input-ids identities"):
+    two = [{"op_path": op, "members": [("out", 0, "")], "row": 0, "spec": "Embedding_v1{V=8}"} for op in ("model.embed_tokens", "model.mm_proj")]
+    with pytest.raises(ValueError, match="2 input-ids reads"):
         ss.port_identities(two)
-
-
-def test_a_committer_without_the_commit_of_records_parts_is_named():
-    manifest = {"identities": [{"family": "norm_scales"}, {"family": "fa2_hidden_m1_stream"}, {"family": "instance_outputs"}]}
-    com = SimpleNamespace(name="native_collect_v2_auto_nw_hp+rows-sha512+sampler_inputs")
-    assert ss.parts_missing(com, manifest, hidden_required=True) == ["hidden_m1", "norm_scale", "plan"]
-    com.name = "native_collect_v2_auto_nw_hp+rows-sha512+hidden_m1+norm_scale+plan"
-    assert ss.parts_missing(com, manifest, hidden_required=True) == []
-    assert ss.parts_missing(SimpleNamespace(name="c+plan"), {"identities": []}, hidden_required=False) == []
 
 
 def test_a_steps_stream_starts_with_its_input_ids_then_positions_padded_to_the_token_budget():
@@ -613,7 +630,7 @@ def _both(d: Path, seal: Any, by: Any) -> tuple[dict[str, Any], dict[str, Any], 
 def test_an_execution_block_sealed_in_its_own_process_writes_what_the_serving_process_writes(tmp_path, seal_process, window):
     """`seal_process.SealProcess`: the store's files written by the serving process, the binding map, the checks, the store's
     store.json, the context, the manifest and the records by the seal's: the files `seal_window` writes, byte for byte but for
-    when the manifest says it was sealed, and the result it returns. An execution block with the port and the row's manifest
+    when the manifest says it was sealed, and the result it returns. An execution block with the port and the row's capture plan
     (its binder, its positions' check, its port layout), and one committed without its attention interior
     (`store_dump.not_retained`)."""
     if window == "port":

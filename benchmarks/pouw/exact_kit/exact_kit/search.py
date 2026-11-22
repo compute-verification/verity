@@ -10,7 +10,7 @@ from collections.abc import Callable
 
 import numpy as np
 
-#: what `theory/fold_kernel_check.py` and the tests read
+#: what the tests read
 __all__ = ["meet", "meet_kernel"]
 
 

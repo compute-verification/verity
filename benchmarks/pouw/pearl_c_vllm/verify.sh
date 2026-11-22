@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # The window's verify passes judged after the window, CPU only: each retained pass under $WORK/passes/<window run id>
 # alone gets Pearl+'s verdict in Lean (PouwVerifier.PearlPlus's pouw-pearlplus, through `served_passes.py lean`), the verdict
-# this job acts on, beside the Python twin the Lean is held to (`served_passes.py verify --manifest`, J processes), whose
-# own verdict nothing here reads; each pass's documents are copied into $OUT (this run's out/).
+# this job acts on, beside the Python twin, which draws the sample and writes the coin record the Lean reads
+# (`served_passes.py verify --manifest`, J processes), and whose own verdict gates nothing: the Lean step compares the two
+# as a measurement; each pass's documents are copied into $OUT (this run's out/).
 #   research run --on MACHINE --project verity --source <run tree> --cwd clone \
 #     --env GPU_LEASE_WHO=<you> -- bash benchmarks/pouw/pearl_c_vllm/verify.sh <window run id> [J]
 # --cwd clone: the Lean step builds pouw-pearlplus in the tree (`served_passes.py lean --exe build`) unless
@@ -15,10 +16,9 @@
 # sample's order (default 256) on the scalar reference too.  TEST_INSTANCE=1: the passes are a test instance's
 # (`--test-instance`; the verdict credits nothing).
 # Writes $OUT/<pass>-verify.json (the twin's document), <pass>-lean-check.json (both verdicts, the Lean's command line and
-# its line), <pass>-lean.json (the Lean's answer, where it gave one the twin agrees with) and <pass>-manifest.json.
-# Exits 0 only where the Lean accepted the prefill and decode passes and rejected every negative control's pass (control,
-# and control-leaves where the window retained it); a pass the Lean gave no verdict on (it refused, disagreed with the twin
-# or didn't build) fails it.  An ACCEPT is replay-verified (development shortcut; the protocol's check is a ZK proof,
+# its line, and the fields where they differ), <pass>-lean.json (the Lean's answer, wherever it gave one) and
+# <pass>-manifest.json. Exits 0 only where the Lean accepted the prefill and decode passes; a pass the Lean gave no verdict
+# on (it refused, didn't answer in time or didn't build) fails it.  An ACCEPT is replay-verified (development shortcut; the protocol's check is a ZK proof,
 # PouwVerifier).
 set -euo pipefail
 WORK=${WORK:-/workspace/pouw/mvp-e2e}; PY=${VERITY_BENCH_VENV:-$WORK/venv312}/bin/python
@@ -31,9 +31,8 @@ if [ ! -f "$PASSES/coins.json" ]; then
   exit 2
 fi
 status=0
-for pass in prefill decode control control-leaves; do
+for pass in prefill decode; do
   D=$PASSES/$pass
-  [ "$pass" = control-leaves ] && [ ! -f "$D/manifest.json" ] && continue
   rm -f "$D/pearlplus-verify.json" "$D/pearlplus-lean-check.json"
   "$PY" "$SP" verify --passes "$PASSES" --manifest "$D/manifest.json" --coin-record "$D/coin.json" \
     --out "$D/pearlplus-verify.json" --answer "$D/pearlplus-answer.json" --draws "${DRAWS:-3}" --jobs "$JOBS" \
@@ -41,11 +40,10 @@ for pass in prefill decode control control-leaves; do
   rc=0
   "$PY" "$SP" lean --passes "$PASSES" --manifest "$D/manifest.json" --verify "$D/pearlplus-verify.json" \
     --exe "${PEARLPLUS_LEAN_EXE:-build}" --out "$D/pearlplus-lean.json" || rc=$?
-  case "$pass" in control*) want=1 verdict=REJECT;; *) want=0 verdict=ACCEPT;; esac
-  if [ "$rc" = "$want" ] && [ -s "$D/pearlplus-lean.json" ]; then
-    echo "verify.sh: $pass: the Lean's $verdict, as a ${pass%%-*} pass must have"
+  if [ "$rc" = 0 ] && [ -s "$D/pearlplus-lean.json" ]; then
+    echo "verify.sh: $pass: the Lean's ACCEPT, as a $pass pass must have"
   else
-    echo "verify.sh: $pass: the Lean's exit $rc, where a ${pass%%-*} pass must have its $verdict (exit $want)"
+    echo "verify.sh: $pass: the Lean's exit $rc, where a $pass pass must have its ACCEPT (exit 0)"
     status=1
   fi
   cp "$D/manifest.json" "$OUT/$pass-manifest.json"

@@ -5,16 +5,13 @@ database's index (``config.RECORDS``)."""
 from __future__ import annotations
 
 import json
-import os
-import sys
+import tomllib
 from pathlib import Path
 
 import pytest
 
 from tests.pipeline.test_global_program_regress import _derived_dir, _manifest
-from tests.row_paths import row_paths
 from verity_vllm import config as C
-from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import global_program as gp
 from verity_vllm.pipeline import workload as W
 
@@ -50,7 +47,8 @@ def _from_its_id(tmp_path: Path, row: str) -> dict:
 
 
 def test_the_generator_writes_a_row_of_record_at_its_public_cap_and_a_research_row_as_before(tmp_path):
-    row = sorted(C.rows_of_record())[0]
+    listed = tomllib.loads(W.GENERATION.read_text())["row"]
+    row = sorted(r for r in C.rows_of_record() if r in listed)[0]
     rec = _from_its_id(tmp_path, row)
     assert rec["sampling"]["ignore_eos"] is True and "done only at its public cap" in rec["note"]
     assert C.done_source(C.RowConfig.of(rec).workload) == "public-cap"
@@ -124,17 +122,6 @@ def test_a_research_row_keeps_its_eos_stops_until_the_index_lists_it(monkeypatch
         C.RowConfig.load(EOS_ROW)
 
 
-def test_the_row_precheck_refuses_a_row_of_record_that_stops_at_eos_before_writing_anything(monkeypatch, tmp_path, capsys):
-    from verity_vllm.pipeline import row
-    _of_record(monkeypatch, tmp_path, SINGLE)
-    sweep = tmp_path / "sweep"
-    env = {**{k: v for k, v in os.environ.items() if k not in ("VERITY_TREE", "RESEARCH_RUN_DIR", "RESEARCH_RUN_ID")}, **row_paths(tmp_path)}
-    o = cli.parse("row", ["run", SINGLE, "LLAMA32_1B", "unsloth/Llama-3.2-1B", "9535bd9b", "--sweep-dir", str(sweep), "--py", sys.executable,
-                          "--native-collect-default", str(tmp_path / "nc_build")], env)
-    assert row.run_row(o, "build,match,commit") == 3
-    err = capsys.readouterr().err
-    assert f"PRECHECK_FAIL_DONE_SOURCE: {SINGLE}: a row of record" in err and "its done source is 'eos-token'" in err
-    assert not sweep.exists()
 
 
 def _swept(path: str, row: str) -> str:

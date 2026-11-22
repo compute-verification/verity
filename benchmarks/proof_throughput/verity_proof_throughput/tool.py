@@ -16,7 +16,7 @@ def parse_point(argv: list[str]) -> dict[str, str]:
 
 
 CLOSURE = ["benchmarks/proof_throughput/**", "benchmarks/numerical/python/verity_numerical/bench/**",
-           "verity/protocols/proofs/flock/prover/**", "verity/protocols/proofs/flock/prover/pod/**", "verity/protocols/proofs/flock/prover/agreement/**", "verity/protocols/proofs/flock/prover/tool.py", "verity/circuits/**", "uv.lock"]
+           "verity/protocols/proof/flock/prover/**", "verity/protocols/proof/flock/prover/pod/**", "verity/protocols/proof/flock/prover/agreement/**", "verity/protocols/proof/flock/prover/tool.py", "verity/circuits/**", "uv.lock"]
 
 PROVER_POINT = Tool(
     name="proof_throughput_prover",
@@ -33,7 +33,7 @@ VERIFIER_POINT = Tool(
     name="proof_throughput_verifier",
     version="1",
     command=["bash", "benchmarks/proof_throughput/verify.sh"],
-    closure=[*CLOSURE, "verity/protocols/proofs/flock/verifier/**", "verity/protocols/proofs/spot/verifier/one_stage/verifier_env.sh"],
+    closure=[*CLOSURE, "verity/protocols/proof/flock/verifier/**", "verity/protocols/proof/spot/verifier/one_stage/verifier_env.sh"],
     key_params=["bundle"],
     key_conditions=[],
     produces=["research/result/v0.1", "run-files/v1"],

@@ -29,9 +29,8 @@ Each tick, under KEEPER_DIR/.lock (which set and stop take too), for each target
   - cancels, as `stop --cancel` does, each live chunk still waiting for its lease at its until or granted after it, and each
     whose lease (granted then, or now if it still waits) meets a hold within its max_min: max_min counts from the grant (the
     `since` of gpu-lease's owner lines in KEEPER_LEASE_DIR), so a chunk that cleared every hold when it started can be granted
-    into one. The holds are a timed window booked in KEEPER_WINDOWS (node 2's fill windows file) and the daily
-    KEEPER_DAILY_HOLD (node 1's quiet hold, HH:MM-HH:MM UTC), read each tick; holds that can't be read (a windows file missing
-    or unreadable, or a line in it that isn't a booking) cancel nothing and start nothing;
+    into one. The holds are the timed windows booked in KEEPER_WINDOWS (node 2's fill windows file), read each tick; holds that
+    can't be read (a windows file missing or unreadable, or a line in it that isn't a booking) cancel nothing and start nothing;
   - starts nothing for a target that is malformed (skipped and logged, never guessed at), stopped, paused or past its `until`,
     nor while a hold is on or would be reached by a chunk granted now within its max_min;
   - otherwise tops the live chunks (running, or waiting for their lease) up to `n`. Each takes the next seed, written to the
@@ -73,7 +72,6 @@ NODE = os.environ.get("KEEPER_NODE", "")
 GPU_LEASE = shlex.split(os.environ.get("KEEPER_GPU_LEASE", "gpu-lease"))
 LEASE_DIR = Path(os.environ.get("KEEPER_LEASE_DIR", "/run/gpu-lease"))
 WINDOWS = os.environ.get("KEEPER_WINDOWS", "")
-DAILY_HOLD = os.environ.get("KEEPER_DAILY_HOLD", "")
 MAX_FAILURES = int(os.environ.get("KEEPER_MAX_FAILURES", "3"))
 MAX_N = int(os.environ.get("KEEPER_MAX_N", "8"))
 MAX_GPUS = int(os.environ.get("KEEPER_MAX_GPUS", "8"))
@@ -265,26 +263,9 @@ def booked() -> list[tuple[float, float]]:
     return out
 
 
-def daily(spec: str, t: float) -> list[tuple[float, float]]:
-    """KEEPER_DAILY_HOLD (`12:10-13:30`, UTC) from the day before `t` to three days after it."""
-    if not spec:
-        return []
-    m = re.fullmatch(r"(\d\d):(\d\d)-(\d\d):(\d\d)", spec.strip())
-    if not m:
-        raise ValueError(f"KEEPER_DAILY_HOLD {spec!r} is not HH:MM-HH:MM")
-    h0, m0, h1, m1 = map(int, m.groups())
-    day = datetime.fromtimestamp(t, UTC).replace(hour=0, minute=0, second=0, microsecond=0)
-    out = []
-    for d in range(-1, 4):
-        s, e = day + timedelta(days=d, hours=h0, minutes=m0), day + timedelta(days=d, hours=h1, minutes=m1)
-        out.append((s.timestamp(), (e if e > s else e + timedelta(days=1)).timestamp()))
-    return out
-
-
-def holds(now: float) -> list[tuple[str, float, float]]:
-    """The booked windows and the daily hold around now, (kind, start, end) by start; OSError or ValueError when they can't be read."""
-    return sorted([("window", s, e) for s, e in booked()] + [("daily hold", s, e) for s, e in daily(DAILY_HOLD, now)],
-                  key=lambda x: x[1])
+def holds() -> list[tuple[str, float, float]]:
+    """The booked windows, (kind, start, end) by start; OSError or ValueError when they can't be read."""
+    return sorted([("window", s, e) for s, e in booked()], key=lambda x: x[1])
 
 
 def held(spans: list[tuple[str, float, float]], now: float, end: float) -> str | None:
@@ -536,7 +517,7 @@ def tick_target(name: str, now: float) -> None:
         return
     reap(name, st)
     try:
-        spans, unreadable = holds(now), None
+        spans, unreadable = holds(), None
     except (OSError, ValueError) as e:
         spans, unreadable = None, f"the holds can't be read ({e})"
     stop_overruns(name, st, spans, now)

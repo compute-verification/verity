@@ -8,7 +8,7 @@ import pytest
 from slowdown import params
 from slowdown.params import Param, Registry
 
-from verity.protocols.proofs.spot.verifier import profile
+from verity.protocols.proof.spot.verifier import profile
 from verity import protocol
 from verity.circuits import partition_v2
 

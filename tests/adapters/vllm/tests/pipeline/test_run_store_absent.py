@@ -16,11 +16,9 @@ from verity_vllm.pipeline import (
     serve_seal,
     source_identity,
 )
-from verity_vllm.pipeline.row_driver import RESEARCH
-from verity_vllm.pipeline.tp import commit as tp_commit
 
 RUN_STORE = ("research", "research.pythonpath", "research.store", "research.store.tool", "research.telemetry",
-             "research.telemetry.source_identity", RESEARCH)
+             "research.telemetry.source_identity")
 
 
 @pytest.fixture
@@ -36,11 +34,9 @@ def no_run_store(monkeypatch):
 
 ENTRIES = {
     "the Commit": lambda: source_identity.precheck("commit"),
-    "the TP Commit's tree of record": tp_commit.tree_of_record,
     "the commit plan's key": lambda: commit_plan.key(SimpleNamespace(workload=None)),
     "the advice digest": advice.registered_compiler,
     "the seal": lambda: serve_seal.seal_of(SimpleNamespace(run_id="r")),
-    "row stage": lambda: config.run_store(RESEARCH, "row stage"),
 }
 
 
@@ -53,7 +49,7 @@ def test_the_refusal_names_its_entry_point(no_run_store, entry):
 
 def test_the_source_identity_command_is_refused_not_skipped(no_run_store, capsys):
     with pytest.raises(SystemExit) as e:
-        cli.main(["source-identity"])
+        cli.run(source_identity, [])
     assert e.value.code == 2
     assert "the source-identity precheck of stage 'precheck' is refused" in capsys.readouterr().err
 

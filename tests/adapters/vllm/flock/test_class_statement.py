@@ -28,7 +28,7 @@ from verity_flock import partition_units as PU  # noqa: E402
 
 #: a registered Definition of two q-word classes, bound through Flock's catalog resolver
 ROPE = ["--definition", "RoPE_v1{NHEADS=32,D=64}", "--resolver",
-        f"{Path(__file__).parents[4] / 'verity' / 'protocols' / 'proofs' / 'flock' / 'prover' / 'pod' / 'catalog.py'}:definition"]
+        f"{Path(__file__).parents[4] / 'verity' / 'protocols' / 'proof' / 'flock' / 'prover' / 'pod' / 'catalog.py'}:definition"]
 
 
 @pytest.fixture(scope="module")
@@ -75,7 +75,7 @@ def test_table_free_classes_compose_and_prove(units, tmp_path: Path):
 
 
 def _gemm_fp():
-    spec = importlib.util.spec_from_file_location("gemm_fp", Path(__file__).parents[4] / "verity" / "protocols" / "proofs" / "flock" / "prover" / "pod" / "gemm_fp.py")
+    spec = importlib.util.spec_from_file_location("gemm_fp", Path(__file__).parents[4] / "verity" / "protocols" / "proof" / "flock" / "prover" / "pod" / "gemm_fp.py")
     gemm_fp = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(gemm_fp)
     return gemm_fp
@@ -408,7 +408,7 @@ def _frame_prefixes(dtype: str, K: int) -> tuple[dict, list]:
 def _gemm_fp():
     import importlib.util
 
-    spec = importlib.util.spec_from_file_location("gemm_fp", Path(__file__).parents[4] / "verity" / "protocols" / "proofs" / "flock" / "prover" / "pod" / "gemm_fp.py")
+    spec = importlib.util.spec_from_file_location("gemm_fp", Path(__file__).parents[4] / "verity" / "protocols" / "proof" / "flock" / "prover" / "pod" / "gemm_fp.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -444,49 +444,6 @@ def test_core_row_prefixes_name_the_row_length_only_and_no_old_frames_prefix():
             low = CS.class_lowering(act, uc, f"unit-class/{fr}", groups, fr == "packed")
             assert frames[fr] == [FC.Port(f"p{i}", w).layout().prefix for i, w in enumerate(low.definition.port_words)]
         assert CS.element_rows(act, uc, groups)[2] == [ROW_BITS[dtype](128)] * 2
-
-
-def test_the_slot_circuits_are_built_only_when_a_shape_is_not_in_the_stage_cache(monkeypatch, tmp_path: Path):
-    import verity
-
-    src = {}                                                       # the packages' sources, as the stage key's code digest reads them
-    for name, pkg in (("verity_flock", Path(CS.__file__).parent), ("verity", Path(verity.__file__).parent)):
-        src[name] = tmp_path / "src" / name
-        for f in pkg.rglob("*.py"):
-            (src[name] / f.relative_to(pkg)).parent.mkdir(parents=True, exist_ok=True)
-            (src[name] / f.relative_to(pkg)).write_bytes(f.read_bytes())
-    find_spec = importlib.util.find_spec
-    monkeypatch.setattr(importlib.util, "find_spec", lambda name, *a: SimpleNamespace(submodule_search_locations=[str(src[name])])
-                        if name in src else find_spec(name, *a))
-
-    def fresh(s):
-        (CS._CTX["out"] / s[:16]).mkdir(parents=True, exist_ok=True)
-        (CS._CTX["out"] / s[:16] / "circuit.txt").write_text(s)
-        return {"shape": s, "stage": {"n": 16}}
-
-    built = []
-    monkeypatch.setenv("FLOCK_STAGE_CACHE", str(tmp_path / "cache"))
-    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
-    monkeypatch.setitem(CS._CTX, "source_digest", None)
-    monkeypatch.setattr(CS, "cache_slot_circuits", lambda: built.append(1))
-    monkeypatch.setattr(CS, "_stage_job_fresh", fresh)
-
-    def cached(name):
-        CS._CTX.pop("source_digest")                                   # main() reads the code's digest once per process
-        assert CS.main([*ROPE, "--partition", "q-word", "--stage-only", "--sample", "2", "--out", str(tmp_path / name)]) == 0
-        recs = [json.loads(ln) for ln in (tmp_path / name / "staged.jsonl").read_text().splitlines()]
-        assert len(recs) == 2 and len({"stage_cached" in r for r in recs}) == 1
-        return "stage_cached" in recs[0]
-
-    assert not cached("first") and built == [1]
-    assert cached("again") and built == [1]                            # a cache hit composes nothing
-    sha = src["verity"] / "commitments" / "gates" / "sha512.py"
-    assert "CARRY_EVERY = 5" in sha.read_text()
-    sha.write_text(sha.read_text().replace("CARRY_EVERY = 5", "CARRY_EVERY = 4"))
-    assert not cached("sha512-parameter") and built == [1, 1]          # a SHA-512 parameter is in the key
-    cs = src["verity_flock"] / "class_statement.py"
-    cs.write_text(cs.read_text() + "\n# another version\n")
-    assert not cached("code") and built == [1, 1, 1]                   # and so is the code's version
 
 
 def test_the_stage_keys_code_digest_is_one_tree_over_a_namespaces_portions(monkeypatch, tmp_path: Path):

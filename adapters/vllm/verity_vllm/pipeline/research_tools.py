@@ -2,9 +2,7 @@
 
 Five Tools — ``vllm.build``, ``vllm.plan`` (the Commit's plan, on CPU, before the GPU), ``vllm.match``,
 ``vllm.commit``, ``vllm.replay`` (a deferred Commit's C2 replay, on CPU) — one per stage of a sweep row.  Each stage runs as one ``research run --tool vllm.<stage>
--- verity-vllm row stage <stage> ...`` Attempt and publishes typed Artifacts
-(``verity_vllm.pipeline.research`` writes the ``outputs.json`` the publisher
-consumes).
+-- verity-vllm row stage <stage> ...`` Attempt and publishes typed Artifacts.
 
 Rules encoded here (Phase 5a of the v2 plan):
 

@@ -32,7 +32,7 @@ run) is committed in each window's rows (rows 0 and 1 of the charge's value, its
 prover chains it from the book's priors, as `charges` starts from `priors` and passes each execution phase's carry on.
 No verifier holds one window's carry-out row to the next window's carry-in, so the chain is the honest prover's and not
 a checked fact: the check that would hold it is
-`verity/protocols/resource_accounting/network/verifier/charge_check.py`'s `check_chain` over
+`verity/protocols/accounting/network/verifier/charge_check.py`'s `check_chain` over
 `interface/charge/charge_chain.check_rows`, and no verifier calls it.
 
 **What is left.** That `ChargeCount_v1`'s circuit computes `executionPhase` is not proved in Lean. circuit-check holds the circuit

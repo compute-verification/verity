@@ -14,8 +14,8 @@ from math import ceil, log2
 from pathlib import Path
 
 from verity.commitments.periods.interface import K_MAX, proof_block_k_log
-from verity.protocols.proofs.spot.prover.costfit import Observation
-from verity.protocols.proofs.spot.prover.optimize import SHA512_ANDS
+from verity.protocols.proof.spot.prover.costfit import Observation
+from verity.protocols.proof.spot.prover.optimize import SHA512_ANDS
 
 #: the measured inputs, kept with the measurements that made them
 MEASURED = Path(__file__).resolve().parents[0] / "inputs.json"
@@ -160,7 +160,7 @@ def cap(ands: int, rows: Sequence[int]) -> int:
 def s8_coord_ands(k: int) -> int:
     """One s8 coordinate's ANDs with its rows' openings, as `costfit` counts them: K/32 steps, the epilogue, two K-byte
     operand rows and three one-block rows (the scales and the output), each at `optimize.row_ands`."""
-    from verity.protocols.proofs.spot.prover.optimize import row_ands
+    from verity.protocols.proof.spot.prover.optimize import row_ands
 
     return k // 32 * S8_STEP + EPILOGUE + 2 * row_ands(k) + 3 * row_ands(1)
 

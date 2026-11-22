@@ -36,7 +36,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
 /-!
-# The ε a served window's credit reports (`PouwCheck.Credit.established`, `PouwWindow.epsAt`)
+# The ε a served window's credit reports (`PouwVerifier.Credit.established`, `PouwWindow.epsAt`)
 
 The claim behind every ε a credit reports. `periodCredit` reports, for each credited window,
 `established layout got served K`: `PouwWindow.epsAt K δ C W 1` at `δ = DELTA = 2⁻⁴⁰`, with `C` the credited calls'
@@ -58,7 +58,7 @@ at least ε of the credited work with probability at most δ.
   block cap as its lanes and their combine, `pouw.leaf_lanes`): a set of blocks doing at least `ε·C` of the work, no
   leaf's blocks doing more than the leaf, has no block in a sampled group with probability at most `δ`. δ counts leaves.
 
-The sample is the one `PouwCheck.workUnits` runs: `Flock.Draw.stratified` over the strata `samplingDesign` gives, stratum `i` sampling
+The sample is the one `PouwVerifier.workUnits` runs: `Flock.Draw.stratified` over the strata `samplingDesign` gives, stratum `i` sampling
 `Flock.Draw.subset` of its `k_i` units from its own stream of `need` bytes (`drawnOn`). The streams are modelled as
 independent and uniform, as `Properties.Served.SampleMissesSubset` models them: the service derives stratum `i`'s stream
 as `stream key ["draw", template] need`, its label distinct for each stratum (the templates are distinct,
@@ -75,7 +75,7 @@ namespace Properties.Pouw.Credit
 
 open Properties.Pouw.Strata (unitWork)
 
-/-- The units the work sample over `strata` samples from the streams `g`, one per stratum (`PouwCheck.workUnits`'s
+/-- The units the work sample over `strata` samples from the streams `g`, one per stratum (`PouwVerifier.workUnits`'s
 `Flock.Draw.stratified`, stratum `i`'s stream `g i`'s bytes, as `Properties.Spot.bytesOf` reads them); none
 where a stream runs out. -/
 def drawnOn (strata : Array Flock.Draw.Stratum) (g : (i : Fin strata.size) → Fin strata[i].need → Fin 256) :
@@ -83,7 +83,7 @@ def drawnOn (strata : Array Flock.Draw.Stratum) (g : (i : Fin strata.size) → F
   Flock.Draw.stratified strata (Array.ofFn fun i => Properties.Spot.bytesOf (g i))
 
 /-- The credited calls' served work: each call of `layout` in `got` at its served rows `served` is m_s·(n/C) live
-positions of C·K MACs each (`PouwCheck.Credit.servedWork`), never its M slot rows' units (`callWork`). -/
+positions of C·K MACs each (`PouwVerifier.Credit.servedWork`), never its M slot rows' units (`callWork`). -/
 def creditedWork (layout : Json) (got served : List ℕ) : ℕ :=
   ∑ i ∈ (Finset.range (PouwVerifier.Credit.servedWork layout served).length).filter (· ∈ got),
     ((PouwVerifier.Credit.servedWork layout served).getD i (0, 0)).1 *
@@ -168,14 +168,14 @@ def lanesLayout : Json :=
     ("linears", Json.arr #[Json.arr #[Json.str "w", toJson (2048 : ℕ), toJson (512 : ℕ)]]),
     ("m", toJson (32 : ℕ)), ("tile", Json.arr #[toJson (32 : ℕ), toJson (32 : ℕ)])]
 
-/-- Its strata (`PouwCheck.Credit.strata`): K = 2048's, its sixteen leaves at 32·32·2048 each. -/
+/-- Its strata (`PouwVerifier.Credit.strata`): K = 2048's, its sixteen leaves at 32·32·2048 each. -/
 def lanesStrata : Array Flock.Draw.WorkStratum :=
   #[{ template := "k2048", units := #[(0, 16)], k := 0, work := 32 * 32 * 2048, floor := 1 }]
 
 /-- The K its period committed. -/
 def lanesK : ℕ := 8
 
-/-- Its strata under `work:8` (`PouwCheck.Credit.samplingDesign`): eight samples from K = 2048's sixteen leaves. -/
+/-- Its strata under `work:8` (`PouwVerifier.Credit.samplingDesign`): eight samples from K = 2048's sixteen leaves. -/
 def lanesSamplingDesign : Array Flock.Draw.Stratum := #[{ template := "k2048", units := #[(0, 16)], k := 8 }]
 
 /-- The blocks: leaf `u`'s are `33u, …, 33u + 32`, its 32 lanes and then their combine. -/

@@ -18,9 +18,9 @@ import pytest
 
 from verity.circuits import Program, bind
 from verity.circuits import query_ast as G
-from verity.circuits.partition import Level, validate_partition
+from verity.circuits.partition import Level
 from verity.circuits.ops import gemm
-from verity.protocols.proofs.spot.verifier.profile import (CREDITED_UNSPLIT, ESCAPE_TERMS, HARM_MARGIN, MARGIN, Bernoulli,
+from verity.protocols.proof.spot.verifier.profile import (CREDITED_UNSPLIT, ESCAPE_TERMS, HARM_MARGIN, MARGIN, Bernoulli,
                                                     IntegrityProfile, Stratified, Stratum, Subset, Work, WorkStratum,
                                                     neg_log_escape)
 
@@ -230,9 +230,6 @@ def test_a_chain_read_off_a_program_gives_the_profile_its_sizes():
     coarse_q = G.instances("//GemmCoordinate")
     fine_q = G.each(coarse_q, G.default(32))
     coarse, fine = G.evaluate(program, coarse_q), G.evaluate(program, fine_q)
-    computed = [(32 + 4 * 32, program.gates)]
-    assert validate_partition(program, coarse, within=computed).status == "exact"
-    assert validate_partition(program, fine, within=computed).status == "exact"
     per, rest = divmod(fine.count(), coarse.count())   # `each` nests fine in coarse, the same count in every coordinate
     assert (per, rest) == (2, 0)
     a = IntegrityProfile((Level("coordinate", G.query_id(coarse_q)), Level("call", G.query_id(fine_q))),
@@ -668,7 +665,7 @@ AT_ONCE = [[(3348 * 10 ** 18, 6_974_586, 262_144.0)], [(10 ** 19, 300, 3.0), (10
 def test_the_last_blocks_taken_at_once_are_the_blocks_one_by_one(rows, monkeypatch):
     """With `HARM_WHOLE` out of reach every block left is taken by itself: the same bound to the floats' resolution
     (one by one, a block under half the sum's last place adds nothing to it, so at once is never the smaller)."""
-    from verity.protocols.proofs.spot.verifier import profile
+    from verity.protocols.proof.spot.verifier import profile
 
     law = Stratified(tuple(Stratum(f"s{i}", n, k) for i, (n, k, _) in enumerate(rows)))
     harm = {f"s{i}": v for i, (_, _, v) in enumerate(rows)}

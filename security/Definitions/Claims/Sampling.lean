@@ -5,7 +5,7 @@ public import Definitions.Claims
 /-!
 # Claims: the sampling compiler (frozen before any proof work)
 
-The claims block of SPOT (`verity/protocols/proofs/spot/`), one-stage sampling, on the
+The claims block of SPOT (`verity/protocols/proof/spot/`), one-stage sampling, on the
 shared definitions of `Definitions.Core.Interaction`, in the template's eight items and the README glossary's terms. Parametric in
 the deployed sampled verifier (`Deploy`), as Flock's block is in `Flock.Deploy`: binding it to the compiled verifier is
 the code side's.
@@ -333,7 +333,7 @@ structure Query where
   params : Msg
 
 /-- **The sampling statement**: the program (named by its digest; both parties hold it), as its descriptor's canonical
-bytes (`desc`, `verity-ir/descriptor/v1`, which a template query reads) and its gates (`prog`, the descriptor
+bytes (`desc`, `verity-ir/descriptor/v2`, which a template query reads) and its gates (`prog`, the descriptor
 flattened), the partition query, the sampling design, and the roots the trace is committed under. -/
 structure AuditStatement where
   desc : Msg

@@ -122,8 +122,9 @@ def test_a_measurement_cites_the_run_that_measured_it() -> None:
 MEASURED_ONLY = {"gpu": {"store.l15", "store.l1i", "store.l0i", "store.const_l0"}, "host": {"disk.read"}}
 
 #: The entries one card of a kind holds alone, each with its card: a ceiling only that card's protocol states, built on
-#: its MEASURED_ONLY entries, so no other card of the kind has what it sums.
-ONE_CARD = {"gpu": {"store.chip": "rtx-pro-6000-server"}}
+#: its MEASURED_ONLY entries, so no other card of the kind has what it sums; and the wipe's fill floor
+#: (`store.wipe_fill`), given only for the card the served wipe runs on.
+ONE_CARD = {"gpu": {"store.chip": "rtx-pro-6000-server", "store.wipe_fill": "h200-sxm-141gb"}}
 
 
 @pytest.mark.parametrize("kind", CARD_KINDS)
@@ -338,7 +339,8 @@ def test_the_drift_an_auditor_reads_for_a_provider_virtual_machine() -> None:
     in that host; and the reading beside it is 31.2 ppm."""
     drift = load_card("nebius-vm-monotonic-raw", directory=CARD_FILES)["drift"]
     assert S.number(drift["max"]) == Fraction(1, 2000) and drift["max"]["mark"] == "premise"
-    assert "ClockRateWithin(host, 5e-4)" in drift["max"]["source"] and "trusted-device" in drift["max"]["source"]
+    source = drift["max"]["source"]
+    assert "Verity.Assumptions.ClockWithin at the drift 5e-4" in source and "trusted-device" in source
     assert S.number(drift["read"]) == Fraction(312, 10 ** 7)
 
 

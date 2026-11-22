@@ -20,11 +20,11 @@ from verity.commitments import docket_digest as DD
 from verity.commitments import domains as DM
 from verity.commitments import MerkleTree
 from verity.commitments.merkle import tree_levels
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.manifest import _write
-from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
+from verity.protocols.accounting.compute.pouw.prover.serving import pearl_c as PPD
+from verity.protocols.accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
+from verity.protocols.accounting.compute.pouw.prover.serving.pearl_c import window as PWR
+from verity.protocols.accounting.compute.pouw.prover.serving.pearl_c.manifest import _write
+from verity.protocols.accounting.compute.pouw.verifier.audit import (
     HM96,
     ROW_SCHEMA,
     activation_binding,
@@ -32,7 +32,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     rows_domain,
     weight_binding,
 )
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.protocols.proof.spot.verifier.one_stage import registered as G
 from verity.commitments import registered_value as RV
 
 from verity_vllm.program.predict.window_class import PearlTables
@@ -188,10 +188,12 @@ def committed(d: Path, calls: list[tuple[int, int, int, int, int]], s: int = 0, 
     ``calls/<index>.salts``; y: `served_y.retain_y`, its salts in ``y/<index>.salts``), each value's rows, as round ``s``'s,
     as the circuit's proof blocks make them (u16 words, an FP32 word's low first), and each weight's B rows (N rows of K
     FP32 words, a random BF16 weight widened), committed as PoUW commits them (at `weight_binding`, owner -2) under the
-    salts of the weights' registration, returned with them."""
+    salts of the weights' registration, kept as the pass keeps them (``weights/<w>.rows.bf16`` and ``weights/<w>.salts``)
+    and returned with them."""
     rng, mm, b, weights, b_salts = np.random.default_rng(seed), [], {}, {}, {}
     rows: dict[str, np.ndarray] = {}
-    (d / "calls").mkdir(parents=True, exist_ok=True)
+    for sub in ("calls", "weights"):
+        (d / sub).mkdir(parents=True, exist_ok=True)
     for c, (i, m, real, k, n) in enumerate(calls):
         x, y = (rng.integers(0, 1 << 16, (real, w), dtype=np.uint16) for w in (k, n))
         a: np.ndarray = np.zeros((m, k), "<u4")
@@ -206,7 +208,9 @@ def committed(d: Path, calls: list[tuple[int, int, int, int, int]], s: int = 0, 
         b[c] = rng.integers(0, 1 << 16, (n, k), dtype=np.uint16).astype("<u4") << 16
         b_salts[c] = fresh_salts(n)
         root_b = _root(weight_binding(c), -2, [r.tobytes() for r in b[c]], b_salts[c])
-        weights[str(c)] = {"n": n, "k": k, "root": root_b.hex()}
+        weights[str(c)] = {"n": n, "k": k, "root": root_b.hex(),
+                           "rows": _write(d / "weights" / f"{c}.rows.bf16", (b[c] >> 16).astype("<u2").tobytes(), digest=False),
+                           "salts": _write(d / "weights" / f"{c}.salts", b"".join(b_salts[c]))}
     return ({"entry": ENTRY, "scheme": SCHEME, "salt": SALT.hex(), "weights": weights, "matmuls": mm}, rows, b, b_salts)
 
 
@@ -217,27 +221,29 @@ def test_the_audited_windows_values_are_ws_from_the_rows_its_proof_blocks_make(t
     """`reuse` commits each value W registers from the rows the audited circuit's proof blocks make of it, under the salts
     the pass kept, as Pearl+ committed the call's A rows and y, so each value's entry is W's and its tree opens each row at
     W's root, at the round W numbers it (round 2, the timed call's first), W at version 2 or at version 1 (built at the
-    version it states). W holds no salt. Rows the proof blocks make otherwise (one bit of one A row), another pass's
-    salts, a W other than the passes' record at its version (a version-2 W's values under a header that states none), or
-    the passes at another round is refused, and so is a caller that names no directory of the passes."""
+    version it states); W's weights are none of them. W holds no salt. Rows the proof blocks make otherwise (one bit of
+    one A row), another pass's salts, a W other than the passes' record at its version (a version-2 W's values under a
+    header that states none), or the passes at another round is refused, and so is a caller that names no directory of
+    the passes."""
     man, rows, _b, _s = committed(tmp_path / "p", CALLS, s=2)
     w = PWR.record([man], rounds=[2])
     kept = [(tmp_path / "p" / u["salts"]["path"]).read_bytes().hex() for u in man["matmuls"]]
     assert not any(k[:128] in json.dumps(w) for k in kept)
     got = PWR.reuse(w, [man], lambda name, n, empty: rows[name], rounds=[2], dirs=[tmp_path / "p"])
-    theirs = {e["value"]: e for e in w["registered"] if not e["value"].startswith("pearl-b/")}
-    assert sorted(got) == sorted(theirs) == ["pearl-a/2/0", "pearl-a/2/1", "pearl-y/2/0", "pearl-y/2/1"]
-    assert {v: x.entry() for v, x in got.items()} == theirs
+    theirs = {e["value"]: e for e in w["registered"]}
+    calls = {v: e for v, e in theirs.items() if not v.startswith("pearl-b/")}
+    assert sorted(got) == sorted(calls) == ["pearl-a/2/0", "pearl-a/2/1", "pearl-y/2/0", "pearl-y/2/1"]
+    assert {v: x.entry() for v, x in got.items()} == calls
     for v, x in got.items():
         root = bytes.fromhex(theirs[v]["root"])
         assert all(G.verify_read(x.domain, root, p, x.bcs[p], x.path(p), G.SCHEMA_SEG) for p in range(x.leaves))
     old = PWR.record([man], rounds=[2], version=1)
     of = [tmp_path / "p"]
     assert {v: x.entry() for v, x in PWR.reuse(old, [man], lambda name, n, empty: rows[name], rounds=[2], dirs=of).items()} \
-        == theirs
+        == calls
     named = PWR.record([man], rounds=[2], naming={"day": 3, "declaration": "5d" * 64})
     assert {v: x.entry() for v, x in PWR.reuse(named, [man], lambda name, n, empty: rows[name], rounds=[2], dirs=of).items()} \
-        == theirs
+        == calls
     with pytest.raises(ValueError, match="W names a declared day by its number"):
         PWR.reuse({**w, "window": {**w["window"], "day": 3}}, [man], lambda name, n, empty: rows[name], rounds=[2], dirs=of)
     with pytest.raises(NotImplementedError, match="the passes' directories"):
@@ -258,7 +264,7 @@ def test_the_audited_windows_values_are_ws_from_the_rows_its_proof_blocks_make(t
 
 def test_two_commits_of_the_same_rows_take_other_salts_and_roots_and_each_is_reused(tmp_path):
     """Each leaf's salt is fresh bytes from the OS: two passes committing the same rows keep other salts, so their A, y
-    and B roots differ, and `reuse` takes each pass's values under its own kept salts."""
+    and B roots differ, and `reuse` takes each pass's calls' values under its own kept salts."""
     one, rows, _b, s1 = committed(tmp_path / "one", CALLS, s=2)
     two, rows2, _b2, s2 = committed(tmp_path / "two", CALLS, s=2)
     assert all(np.array_equal(rows[v], rows2[v]) for v in rows)
@@ -272,7 +278,7 @@ def test_two_commits_of_the_same_rows_take_other_salts_and_roots_and_each_is_reu
         w = PWR.record([man], rounds=[2])
         got = PWR.reuse(w, [man], lambda name, n, empty: rows[name], rounds=[2], dirs=[tmp_path / d])
         assert {v: x.entry() for v, x in got.items()} == {e["value"]: e for e in w["registered"]
-                                                           if not e["value"].startswith("pearl-b/")}
+                                                          if not e["value"].startswith("pearl-b/")}
 
 
 def test_ws_b_rows_are_at_pouws_weight_root_the_hm96_root_of_the_same_rows(tmp_path):

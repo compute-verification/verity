@@ -21,8 +21,10 @@ import numpy as np
 import pytest
 from test_class_statement_unit_stager import _toy
 from test_lean_verifier import lake_build
-from test_struct_lower import TOY_READS, toy_reads  # noqa: F401
+from stand_in import exact
+from test_struct_lower import TOY_MIX, TOY_READ, TOY_READS, TOY_WORDS, toy_reads  # noqa: F401
 from tmpl_toy import ROWS, toy_tmpl
+from verity.circuits import boolean as BL
 from verity.circuits import population as PN
 from verity.circuits.defs import bind
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
@@ -32,9 +34,34 @@ from verity_flock import class_statement as CS
 from verity_flock import struct_lower as S
 from verity_flock import tmpl as T
 
-LEAN = Path(__file__).resolve().parents[4] / "verity" / "protocols" / "proofs" / "flock" / "verifier"
+LEAN = Path(__file__).resolve().parents[4] / "verity" / "protocols" / "proof" / "flock" / "verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "verity-verify-proof"
 MODE = "iv/hybrid/4"
+
+
+def _toy_mix_bits(B, x, y):
+    return [B.call(BL.XOR, BL.operands(a, b)) for a, b in zip(x, y)]
+
+
+def _toy_read_bits(B, x):
+    """The toy's table as the XOR of the minterms its words set: the unit's Boolean map computes the read, as the structural
+    stager lays it."""
+    inv = [B.call(BL.NOT, a) for a in x]
+
+    def nibble(v, at):
+        return B.call(BL.and_gate(4), BL.operands(*[x[at + i] if v >> i & 1 else inv[at + i] for i in range(4)]))
+
+    lo, hi = [nibble(v, 0) for v in range(16)], [nibble(v, 4) for v in range(16)]
+    minterm = [B.call(BL.AND, BL.operands(hi[v >> 4], lo[v & 15])) for v in range(256)]
+    out = []
+    for j in range(8):
+        on = [minterm[v] for v in range(256) if int(TOY_WORDS[v]) >> j & 1]
+        out.append(B.call(BL.constant(0)) if not on else on[0] if len(on) == 1 else B.call(BL.xor_gate(len(on)), BL.operands(*on)))
+    return out
+
+
+exact(TOY_MIX, _toy_mix_bits)
+exact(TOY_READ, _toy_read_bits)
 
 def _map(t: T.Tmpl, mode: str) -> tuple[int, list[int]]:
     lays = T.layout(t, mode)
@@ -90,7 +117,7 @@ def test_a_layout_mode_is_one_the_verifier_reads():
 @pytest.mark.slow
 def test_the_templated_statement_is_the_flat_one_with_its_unit_as_its_template(monkeypatch):
     """The toy's templated statement: format and statement the templated ones, META the flat statement's but for ``format``,
-    ``statement`` and ``layout``; its template section the unit's template, which `tmpl.unroll` takes to the flat file's
+    ``statement`` and ``layout``, without ``subcircuit`` or ``unit_sha256``; its template section the unit's template, which `tmpl.unroll` takes to the flat file's
     unit section line for line; its other sections the flat file's but the unit's; its unit range's slot the laid-out unit's
     (a layout one column past the flat unit's slot moves ``unit_log`` and the range to the next); and a size class's
     ``definition`` is refused."""
@@ -98,7 +125,9 @@ def test_the_templated_statement_is_the_flat_one_with_its_unit_as_its_template(m
     flat, tm = CS.UnitStager(*args), CS.UnitStager(*args, layout=MODE)
     assert tm.text.split("\n", 1)[0] == f"{FC.TMPL_FORMAT} {args[1]}" and flat.text.split("\n", 1)[0] == f"{FC.FORMAT} {args[1]}"
     assert (tm.meta["format"], tm.meta["statement"], tm.meta["layout"]) == (FC.TMPL_FORMAT, FC.TMPL_STATEMENT, MODE)
-    assert sorted(k for k in set(flat.meta) | set(tm.meta) if flat.meta.get(k) != tm.meta.get(k)) == ["format", "layout", "statement"]
+    assert sorted(k for k in set(flat.meta) | set(tm.meta) if flat.meta.get(k) != tm.meta.get(k)) == [
+        "format", "layout", "statement", "subcircuit", "unit_sha256"]
+    assert "subcircuit" not in tm.meta and "unit_sha256" not in tm.meta
     sections = _sections(flat.text)
     assert _sections(tm.text) == {k: v for k, v in sections.items() if k != "unit"}
     t = T.parse(FC.template_of(tm.text))
@@ -325,7 +354,7 @@ def test_lean_reads_the_templated_statement_as_the_flat_one(verifier, bound, tmp
     units derived from the verifier's own copy of the Program): the templated statement is the templated tags', its class
     `circuit.class_digest`'s (``HmRow.classOf`` of its canonical META and the rest), and its instance count, regions, Δ,
     partition and partition check the flat statement's."""
-    from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+    from verity.protocols.proof.spot.verifier.one_stage import partition as P
     from verity.circuits.codec import canonical_json, encode_program
 
     args, rows, _kw = _toy(0)

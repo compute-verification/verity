@@ -245,12 +245,18 @@ theorem schema_of_setup {xS : Msg} {ins : FlockDeploy.Ins} {spec : _root_.Flock.
         _root_.Flock.Registered.portSchema st.c.ports[p]! = reg.schema := by
   intro st hst reg hreg
   obtain ⟨-, hsetup⟩ := FlockDeploy.setupOf_some hset
-  have hck : _root_.Flock.checkRegistered st (some own) = .ok () := by
-    rw [← hown]
-    exact setup_checkRegistered hsetup st hst
+  obtain ⟨own', hw⟩ := derived_of_setup hset hown st hst
+  have hck : _root_.Flock.checkRegistered st (some own') = .ok () := by
+    have h := setup_checkRegistered hsetup st hst
+    rw [hown, hw] at h
+    exact h
   obtain ⟨tb, idx, -, -, hp⟩ := FlockSoundness.Discharge.ZkReg.check_tables
     (FlockSoundness.Discharge.ZkReg.checkRegistered_ok hck)
-  exact _root_.Flock.Registered.checkPort_schema (hp reg hreg)
+  obtain ⟨reg', hreg', hsame⟩ := _root_.Flock.Registered.withPositions_reads hw reg hreg
+  obtain ⟨p, hp1, hp2⟩ := _root_.Flock.Registered.checkPort_schema (hp reg' hreg')
+  have hname : reg'.name = reg.name := by rw [hsame]
+  have hsch : reg'.schema = reg.schema := by rw [hsame]
+  exact ⟨p, by rw [← hname]; exact hp1, by rw [← hsch]; exact hp2⟩
 
 /-! ## The registered read named like a port -/
 

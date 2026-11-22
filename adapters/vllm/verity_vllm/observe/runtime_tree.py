@@ -4,7 +4,7 @@ taken from a live engine (`runtime_tree_of`) or from a model instantiated on the
 only: needs vLLM).  Module-tree facts are NOT correspondence: they say which modules the runtime HAS, not which module a Program Call was
 lowered from (that is `verity_torch.correspondence.runtime`, read through `correspondence.reader_for_acquire`).  Serialisable so the CPU gate runs off-pod.
 
-    verity-vllm runtime-tree --model <hf repo> --revision <rev> [--dtype bfloat16] [--max-model-len N] [--tp W] --out tree.json
+    cli.run(runtime_tree) --model <hf repo> --revision <rev> [--dtype bfloat16] [--max-model-len N] [--tp W] --out tree.json
 
 The runner is not built on the meta path; its facts are declared (`runner.source`) -- the two facts `NativeHostCommitter.install` /
 `_select_modules` read from a live engine: the runner exposes `sample()` (True) and whether its `sampler` attribute is an nn.Module

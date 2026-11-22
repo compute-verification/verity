@@ -40,7 +40,7 @@ for f in ${KV_FIELDS:-512 768}; do
   [[ $tag == *m* ]] && flags+=(-DKV_MASK=1)
   [[ $tag == *f6* ]] && flags+=(-DKV_FOLD6=1)
   nvcc -O3 -gencode "$GENCODE" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v -DKV_FIELD=$n \
-    "${flags[@]}" -o "$B/kv-$lib.so" verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.cu > "$O/kv-$lib.ptxas" 2>&1 || { tail -30 "$O/kv-$lib.ptxas"; exit 4; }
+    "${flags[@]}" -o "$B/kv-$lib.so" verity/protocols/accounting/memory/poub/prover/word_codec/kv.cu > "$O/kv-$lib.ptxas" 2>&1 || { tail -30 "$O/kv-$lib.ptxas"; exit 4; }
   LIBS+=(--lib "$lib=$B/kv-$lib.so")
 done
 sha256sum "$B"/*.so > "$O/libs.sha256"
@@ -50,7 +50,7 @@ fi
 KV_SCRIPT=${KV_SCRIPT:-kv_bench.py}
 # kv_bench.py is with PoUB's prover; any other KV_SCRIPT is a file of this directory
 case $KV_SCRIPT in
-  kv_bench.py) KV=verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv_bench.py
+  kv_bench.py) KV=verity/protocols/accounting/memory/poub/prover/word_codec/kv_bench.py
     LIBS+=(--clock-max-mhz "$("$PY" -c 'from pathlib import Path; from verity.device import load_card
 print(load_card("rtx-pro-6000-server", directory=Path("calibration/hardware/cards"))["clock"]["sm"]["value"])')") || exit 3 ;;
   *) KV=$WC/$KV_SCRIPT ;;

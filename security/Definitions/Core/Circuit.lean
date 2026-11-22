@@ -18,7 +18,8 @@ For a set `S` of gates, in the Glossary's notation (`GLOSSARY.md`):
 * `size S`: the number of gates in `S`. The size of a circuit is `size computed`, its number of non-input gates;
 * `width S`: the total width of their values;
 * `into S`: in(S), the gates outside `S` with a wire into `S`;
-* `exits S`: out(S), the gates of `S` that a gate outside `S` reads, and the output gates in `S`.
+* `exits S`: out(S), the gates of `S` that a gate outside `S` reads, and the output gates in `S`;
+* `restrict S`: C_S, `S`'s gates computing as in `C`, every other gate an input, and out(S) its outputs.
 
 A trace is one run's data, a value for every gate. `eval a` is the honest trace on the inputs `a`, and
 `run fix` evaluates with the gates that `fix` names held at the values it gives (how a proof block is recomputed,
@@ -95,6 +96,26 @@ def InputsAgree (X a : C.Trace) : Prop :=
 inductive Feeds : Fin C.N → Fin C.N → Prop
   | refl (t : Fin C.N) : Feeds t t
   | step {g h t : Fin C.N} : g ∈ C.reads h → Feeds h t → Feeds g t
+
+/-- **`C_S`, the circuit of the gates `S`**: `S`'s computed gates compute as in `C`, from what they read in `C`; every
+other gate, in(S) among them, is an input; its outputs are out(S). Gates keep their indices, so a trace of `C` is a trace
+of `C_S`. -/
+def restrict (S : Finset (Fin C.N)) : Circuit where
+  N := C.N
+  w := C.w
+  isInput g := decide ¬ (g ∈ S ∧ C.isInput g = false)
+  reads g := if g ∈ S ∧ C.isInput g = false then C.reads g else ∅
+  reads_lt g a ha := by
+    split_ifs at ha
+    · exact C.reads_lt g a ha
+    · simp at ha
+  input_reads g hg := if_neg (of_decide_eq_true hg)
+  op g v := if g ∈ S ∧ C.isInput g = false then C.op g v else 0
+  op_congr g v v' h := by
+    split_ifs with hS
+    · exact C.op_congr g v v' fun a ha => h a (by rw [if_pos hS]; exact ha)
+    · rfl
+  outputs := C.exits S
 
 end Circuit
 

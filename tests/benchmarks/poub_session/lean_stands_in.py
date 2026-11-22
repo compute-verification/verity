@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 import auditor_line as al
 
-from verity.protocols.resource_accounting.memory.poub.verifier.poub_session import verifier_process as VP
+from verity.protocols.accounting.memory.poub.verifier.poub_session import verifier_process as VP
 
 REAL = {(m, name): getattr(m, name) for m, name in (
     (al, "periods_answer"), (al, "complete_answer"), (al, "on_main_answer"), (al, "served_session_answer"),

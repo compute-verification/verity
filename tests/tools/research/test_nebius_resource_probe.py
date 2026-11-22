@@ -189,16 +189,3 @@ def test_a_reservation_that_does_not_parse_is_skipped_by_name_and_the_rest_count
     r = P.ramlock(tmp_path)
     assert (r["reserved_gb"], r["stale"]) == (12.0, 0)
     assert "resource_probe: reservation b.json skipped (JSONDecodeError" in capsys.readouterr().err
-
-
-def test_the_write_probes_kubectl_that_times_out_names_no_pod_and_says_why(monkeypatch, capsys):
-    spec = importlib.util.spec_from_file_location("nebius_write_probe_kubectl", NEBIUS / "write_probe.py")
-    w = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(w)
-
-    def slow(*a, **kw):
-        raise w.subprocess.TimeoutExpired("kubectl", 60)
-
-    monkeypatch.setattr(w.subprocess, "run", slow)
-    assert w.kube_pods("/nowhere/kubeconfig") == {}
-    assert "write_probe: kubectl's pods unread, so no pod is named (TimeoutExpired" in capsys.readouterr().err

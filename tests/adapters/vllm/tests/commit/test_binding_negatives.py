@@ -86,13 +86,6 @@ def reference(stream) -> dict[str, bytes]:
     return ref
 
 
-def open_population(c, run, bmap, pop, k: int = 16, salt: bytes = b"t"):
-    picks = B.challenge_identities(pop, bmap, run.run_root, k, salt=salt, source=COIN)
-    assert picks, "no identities sampled"
-    bound = [(ident, e, leaf) for ident, e, leaf in picks if e is not None]
-    unbound = [ident for ident, e, _ in picks if e is None]
-    ops = c.open([(e["identity"]["step"], leaf) for _, e, leaf in bound])
-    return picks, bound, unbound, ops
 
 
 def lookup(ref):
@@ -128,223 +121,38 @@ def correspondence(ops, bound, ref) -> dict:
 
 # ---------------------------------------------------------------------- positive
 
-def test_honest_run_covers_population_and_openings_correspond():
-    stream = produce()
-    c, run, bmap = commit(stream)
-    pop = list(B.expected_population(structure(), workload()))
-    cov = B.coverage_check(pop, bmap)
-    assert cov["ok"], cov
-    assert cov["expected_n"] == len(pop) and cov["missing_n"] == 0 and cov["extra_n"] == 0
-    assert B.map_context_check(bmap, run) == (True, "PASS")
-    picks, bound, unbound, ops = open_population(c, run, bmap, pop)
-    assert not unbound
-    assert all(c.verify(run, o) for o in ops)
-    assert max(e["identity"]["step"] for _, e, _ in bound) == STEPS - 1, "the forced late-step pick is in the sample"
-    fams = {e["identity"]["op_path"].split(".")[-1] for _, e, _ in bound}
-    assert {"embed_tokens", "input_layernorm", "qkv_proj", "rotary_emb", "sampler"} <= fams
-    vc = correspondence(ops, bound, reference(stream))
-    assert vc["ok"] and vc["checked"] == len(ops), vc
-    # the map is fixed before the challenge: its digest is over the entries, and the challenge changes with it
-    assert bmap["digest"] == hashlib.sha256(__import__("json").dumps(bmap["entries"], sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()
-    other = dict(bmap, digest="00" * 32)
-    assert B.challenge_identities(pop, other, run.run_root, 16, salt=b"t", source=COIN) != picks
-    # registered inputs (weights): required by the population when registered, covered by the map's registered-input entry, never sampled as a leaf
-    st_w = dict(structure(), weights_registered=True)
-    pop_w = list(B.expected_population(st_w, workload()))
-    assert not B.coverage_check(pop_w, bmap)["ok"]                      # this run registered no weights -> missing
-    bmap_w = B.build_binding_map(c._layouts, run.steps, run.run_root, PD, chunk=CHUNK, weight_registration={"root": "ab" * 32})
-    assert B.coverage_check(pop_w, bmap_w)["ok"]
-    assert all(e is not None and e["kind"] == "leaf" for _, e, _ in B.challenge_identities(pop_w, bmap_w, run.run_root, 40, source=COIN))
 
 
-def test_map_leaves_are_the_committers_leaves():
-    """A map built without `chunk`, as the TP worker builds it, indexes the committer's own leaves. rows-sha512 commits 4 KiB rows, and a
-    map in 256 B units sent its population samples past each step's stream: `identity_of` raised IndexError on every
-    rank."""
-    stream = produce()
-    c = committer()
-    rows = c.chunk
-    run = c.commit_offline(stream)
-    bmap = B.build_binding_map(c._layouts, run.steps, run.run_root, PD)
-    leaves = [e for e in bmap["entries"] if e["kind"] == "leaf"]
-    assert leaves and all(e["leaf_lo"] == e["stream_offset"] // rows for e in leaves)
-    pop = list(B.expected_population(structure(), workload()))
-    picks, bound, unbound, ops = open_population(c, run, bmap, pop)
-    assert not unbound and all(c.verify(run, o) for o in ops)
-    vc = value_correspondence(ops, [e for _, e, _ in bound], lookup(reference(stream)), chunk=rows)
-    assert vc["ok"] and vc["checked"] == len(ops), vc
-    with pytest.raises(ValueError, match=f"{rows}-byte leaves"):
-        B.build_binding_map(c._layouts, run.steps, run.run_root, PD, chunk=256)
 
 
 # ---------------------------------------------------------------------- 1. drop /1, bind /0 twice
 
-def test_drop_member_and_duplicate_other_is_rejected():
-    stream = produce()
-    victim = f"model.layers.{LAYERS - 1}.input_layernorm"
-    mutated = [[(victim + "/0" if n == victim + "/1" else n, raw) for n, raw in tensors] for tensors in stream]   # same count, /0 twice
-    c, run, bmap = commit(mutated)
-    # the count and identity checks pass: equal counts, and the per-step name multiset is the same in every step (step 0 is itself mutated)
-    man = {"modules": sorted({n.split("/")[0] for n in step_names()}), "attention_layers": [], "fa2_hidden_per_layer": 0, "sampler_ids": 1}
-    assert c.identity_check(man)["ok"] is True, "the identity check alone does not see the dropped member"
-    assert sum(s.n_tensors for s in run.steps) == sum(len(t) for t in stream)
-    cov = B.coverage_check(list(B.expected_population(structure(), workload())), bmap)
-    assert not cov["ok"]
-    assert cov["missing_n"] == STEPS and all(m["op_path"] == victim and m["output_member"] == "1" for m in cov["missing"]), cov
-    # the second `/0` is a second acquisition of that member in the step -> invocation 1, which the population does not require:
-    # it is reported as EXTRA (allowed), never as coverage of `/1`
-    assert cov["extra_n"] == STEPS and all(k[2] == 1 and k[4] == "0" for k in map(tuple, cov["extra"])), cov
 
 
 # ---------------------------------------------------------------------- 2. omit a producer family
 
-def test_omitted_family_is_rejected():
-    stream = [[(n, raw) for n, raw in tensors if "qkv_proj" not in n] for tensors in produce()]
-    c, run, bmap = commit(stream)
-    cov = B.coverage_check(list(B.expected_population(structure(), workload())), bmap)
-    assert not cov["ok"] and cov["missing_n"] == STEPS * LAYERS
-    assert {m["op_path"].rsplit(".", 1)[-1] for m in cov["missing"]} == {"qkv_proj"}
 
 
 # ---------------------------------------------------------------------- 3. omit one request / step / rank
 
-def test_omitted_step_is_rejected():
-    c, run, bmap = commit(produce(steps=STEPS - 1))
-    cov = B.coverage_check(list(B.expected_population(structure(), workload(steps=STEPS))), bmap)
-    assert not cov["ok"] and {m["step"] for m in cov["missing"]} == {STEPS - 1}
-    # and openings sampled from the expected population reach the missing late step: they cannot be opened
-    picks = B.challenge_identities(list(B.expected_population(structure(), workload(steps=STEPS))), bmap, run.run_root, 8, source=COIN)
-    assert any(e is None and ident[2] == STEPS - 1 for ident, e, _ in picks)
 
 
-def test_omitted_request_is_rejected():
-    # B=2: every per-token member's leading dimension is split between r0 and r1 by the engine's row order of that step (request_rows:
-    # (request, token_lo, token_hi)); entries carry REQUEST-LOCAL element ranges + the global element offset (the manifest's convention)
-    stream = produce()
-    lens = {i: len(raw) for i, (n, raw) in enumerate(stream[0])}                                # by tensor ordinal (the shared rotary repeats its name)
-    rows_ok = {s: [("r0", 0, 100), ("r1", 100, max(lens.values()))] for s in range(STEPS)}      # tensors differ in length: only members whose
-    c, run, bmap2 = commit(stream, request_rows=rows_ok)                                        # rows == tokens split; others bind whole to both
-    pop2 = list(B.expected_population(structure(), workload(requests=("r0", "r1"))))
-    cov = B.coverage_check(pop2, bmap2)
-    assert cov["ok"], cov
-    e_r1 = [e for e in bmap2["entries"] if e["identity"]["request_id"] == "r1" and e["identity"]["element_range"][1] != lens[e["tensor_ordinal"]]]
-    assert e_r1 and all(e["identity"]["element_range"][0] == 0 and e["element_offset"] == 100 for e in e_r1), "request-local ranges + global offset"
-    # a manifest range for r1 that exceeds what r1's rows hold is NOT covered by r0's rows or by the whole-member entry of another request
-    big = [B.identity(PD, "r1", 1, 0, "model.embed_tokens", "out", 0, 10 ** 9, 0)]
-    assert not B.coverage_check(big, bmap2)["ok"]
-    # the same run without r1 in the row map (B=1 map: everything is r0) -> every r1 identity is missing
-    honest = B.build_binding_map(c._layouts, run.steps, run.run_root, PD, chunk=CHUNK)
-    cov = B.coverage_check(pop2, honest)
-    assert not cov["ok"] and {m["request_id"] for m in cov["missing"]} == {"r1"}
-    assert cov["bound_n"] == len(pop2) // 2
-    # a request dropped from ONE step's row map is a missing identity in that step only
-    rows_gap = {s: (rows_ok[s] if s != 1 else [("r0", 0, max(lens.values()))]) for s in range(STEPS)}
-    _c, _run, bmap_gap = commit(stream, request_rows=rows_gap)
-    cov = B.coverage_check(pop2, bmap_gap)
-    assert not cov["ok"] and {(m["request_id"], m["step"]) for m in cov["missing"]} == {("r1", 1)}
 
 
-def test_global_manifest_addresses_must_follow_engine_row_order(tmp_path):
-    """B=2 global manifest (the required-value manifest's shape: workload ids in `requests_declared`, GLOBAL element ranges, batch-level rows with
-    `request_id "*"` + `engine_step`): ranges at the engine's row order are covered; ranges assuming declaration order when the runner
-    put r1's rows first are `address_mismatch` (bound elsewhere, NOT covered) -- the live Llama B2 step-0 disagreement."""
-    stream = produce()
-    lens = {i: len(raw) for i, (n, raw) in enumerate(stream[0])}
-    n_tok = max(lens.values())
-    rows = {s: [("r1", 0, 40), ("r0", 40, n_tok)] for s in range(STEPS)}                        # engine: the short request's rows FIRST
-    _c, _run, bmap = commit(stream, request_rows=rows)
-    WID = ["req-aaaa-0000", "req-bbbb-1111"]
-    emb = [e for e in bmap["entries"] if e["name"] == "model.embed_tokens" and e["identity"]["step"] == 1]
-    per_tok = {e["identity"]["request_id"]: e for e in emb}
-    assert per_tok["r1"]["element_offset"] == 0 and per_tok["r0"]["element_offset"] == 40 * (lens[1] // n_tok)
-
-    def manifest(r1_lo: int, r1_hi: int) -> str:
-        from verity_vllm.query.manifest.format import manifest_digest as _mdig
-
-        ids = [{"family": "instance_outputs", "program_digest": "other-program", "request_id": WID[1], "step": 1, "invocation": 0, "op_path": "model.embed_tokens",
-                "output_member": "out", "element_range": [r1_lo, r1_hi], "rank": 0},
-               {"family": "instance_outputs", "program_digest": "other-program", "request_id": "*", "requests": WID, "step": "*", "engine_step": 2, "invocation": 0,
-                "op_path": "model.rotary_emb", "output_member": "0", "element_range": [0, None], "rank": 0}]
-        doc = {"schema": "verity-sweep/required-manifest/v1", "global": True, "program_digest": "other-program", "manifest_digest": _mdig(ids),
-               "requests_declared": [{"request_id": WID[0], "index": 0}, {"request_id": WID[1], "index": 1}], "identities": ids}
-        p = tmp_path / f"m_{r1_lo}.json"
-        p.write_text(__import__("json").dumps(doc))
-        return str(p)
-
-    r1_len = per_tok["r1"]["identity"]["element_range"][1]
-    ok_pop, hdr = B.load_required_manifest(manifest(0, r1_len), PD, requests=["r0", "r1"], steps=STEPS, arrivals={"r0": 0, "r1": 0})
-    assert hdr["global"] and hdr["requests_declared_n"] == 2 and len(ok_pop) == 3                # 1 per-request row + the batch row x 2 requests
-    assert {p[1] for p in ok_pop} == {"r0", "r1"} and all(p[2] == 2 for p in ok_pop if p[4] == "model.rotary_emb")   # engine_step is absolute
-    cov = B.coverage_check(ok_pop, bmap)
-    assert cov["ok"] and cov["address_mismatch_n"] == 0, cov
-    r0_len = per_tok["r0"]["identity"]["element_range"][1]
-    bad_pop, _ = B.load_required_manifest(manifest(r0_len, r0_len + r1_len), PD, requests=["r0", "r1"], steps=STEPS, arrivals={"r0": 0, "r1": 0})
-    cov = B.coverage_check(bad_pop, bmap)                                                       # declaration-order address for r1: bound, wrong place
-    assert not cov["ok"] and cov["missing_n"] == 1 and cov["address_mismatch_n"] == 1
-    assert cov["missing"][0]["request_id"] == "r1" and cov["missing"][0]["bound_at"] == [[[0, r1_len], 0]]
 
 
-def test_omitted_rank_is_rejected():
-    c, run, bmap = commit(produce(), rank=0)
-    cov = B.coverage_check(list(B.expected_population(structure(), workload(ranks=(0, 1)))), bmap)
-    assert not cov["ok"] and {m["rank"] for m in cov["missing"]} == {1} and cov["bound_n"] == cov["expected_n"] // 2
 
 
 # ---------------------------------------------------------------------- 4. late read: openings verify, value wrong
 
-def test_late_read_verifies_but_fails_correspondence():
-    stream = produce()
-    victim = "model.layers.0.self_attn.qkv_proj/0"
-    overwritten = [[(n, bytes(b ^ 0x5A for b in raw) if n == victim else raw) for n, raw in tensors] for tensors in stream]   # RoPE-in-place twin
-    c, run, bmap = commit(overwritten)
-    pop = list(B.expected_population(structure(), workload()))
-    assert B.coverage_check(pop, bmap)["ok"]                    # the identity IS bound (to the wrong bytes)
-    e = B.map_index(bmap)[("r0", 1, 0, "model.layers.0.self_attn.qkv_proj", "0", 0)][0]
-    ops = c.open([(1, e["leaf_lo"] + 1)])
-    assert all(c.verify(run, o) for o in ops), "openings verify against the committed root"
-    vc = value_correspondence(ops, [e], lookup(reference(stream)), chunk=CHUNK)
-    assert not vc["ok"] and vc["bad"][0]["why"] == "opened bytes != producer bytes"
 
 
 # ---------------------------------------------------------------------- 5. relabel data from a different occurrence
 
-def test_relabelled_occurrence_is_rejected():
-    stream = produce()
-    a, b = "model.layers.0.self_attn.qkv_proj/0", "model.layers.1.self_attn.qkv_proj/0"
-    swapped = []
-    for tensors in stream:
-        d = dict(tensors)
-        swapped.append([(n, d[b] if n == a else d[a] if n == b else raw) for n, raw in tensors])
-    c, run, bmap = commit(swapped)
-    pop = list(B.expected_population(structure(), workload()))
-    assert B.coverage_check(pop, bmap)["ok"]                    # identity coverage cannot see it: both identities have a binding
-    idx = B.map_index(bmap)
-    ea, eb = idx[("r0", 2, 0, a.split("/")[0], "0", 0)][0], idx[("r0", 2, 0, b.split("/")[0], "0", 0)][0]
-    ops = c.open([(2, ea["leaf_lo"]), (2, eb["leaf_lo"])])
-    assert all(c.verify(run, o) for o in ops)
-    ref = reference(stream)
-    vc = value_correspondence(ops, [ea, eb], lookup(ref), chunk=CHUNK)
-    assert not vc["ok"] and vc["bad_n"] == 2
 
 
 # ---------------------------------------------------------------------- 6. wrong root or layout
 
-def test_wrong_root_or_layout_is_rejected():
-    stream = produce()
-    c, run, bmap = commit(stream)
-    c2, run2, bmap2 = commit(stream, program=b"other-program")          # same bytes, other Program -> other roots
-    assert run.run_root != run2.run_root
-    ok, why = B.map_context_check(bmap, run2)
-    assert not ok and "run_root" in why
-    ok, why = B.map_context_check(dict(bmap, run_root=run2.run_root.hex()), run2)
-    assert not ok and "step_root" in why
-    ok, why = B.map_context_check(dict(bmap, layout="chunk-leaf-v2"), run)
-    assert not ok and "layout" in why
-    pop = list(B.expected_population(structure(), workload()))
-    picks, bound, unbound, ops = open_population(c, run, bmap, pop)
-    assert all(c.verify(run, o) for o in ops)
-    assert not any(c.verify(run2, o) for o in ops), "openings of run A never verify against run B's roots"
-    assert not any(c2.verify(run, o) for o in ops), "a verifier holding the other context rejects them"
 
 
 # ---------------------------------------------------------------------- B8 global binding map (request-local addressing + composition)
@@ -424,75 +232,14 @@ def b8_manifest(tmp_path, declared: dict[int, list[tuple[str, int]]]) -> str:
     return str(p)
 
 
-def b8_check(tmp_path, rows, declared=None):
-    declared = declared or b8_declared()
-    stream = b8_stream(rows)
-    _c, _run, bmap = commit(stream, request_rows=rows)
-    pop, hdr = B.load_required_manifest(b8_manifest(tmp_path, declared), PD, requests=[f"r{k}" for k in range(8)], steps=max(B8_CAP), arrivals={f"r{k}": 0 for k in range(8)})
-    cov = B.coverage_check(pop, bmap)
-    comp = B.composition_check(hdr, bmap)
-    return bmap, pop, cov, comp
 
 
-def test_b8_global_map_positive_engine_order_differs_from_declaration(tmp_path):
-    declared = b8_declared()
-    rows = b8_engine_rows(declared)
-    # the engine's row order really differs from the declaration order once requests finish (r7 condensed into r2's slot at step 1, ...)
-    assert [r for r, _lo, _hi in rows[0]] == [f"r{k}" for k in range(8)]
-    assert [r for r, _lo, _hi in rows[2]] != [r for r, _n in declared[2]] and set(r for r, _lo, _hi in rows[2]) == set(r for r, _n in declared[2])
-    bmap, pop, cov, comp = b8_check(tmp_path, rows)
-    assert cov["ok"] and cov["address_mismatch_n"] == 0, cov["missing"][:3]
-    assert comp["ok"] and comp["checked_steps"] == max(B8_CAP), comp
-    assert {e["identity"]["request_id"] for e in bmap["entries"]} == {f"r{k}" for k in range(8)}
-    # every per-token entry is request-local ([0, rows)) at the engine's offset
-    emb0 = {e["identity"]["request_id"]: e for e in bmap["entries"] if e["name"] == "model.embed_tokens/in" and e["identity"]["step"] == 0}
-    assert emb0["r1"]["identity"]["element_range"] == [0, 9] and emb0["r1"]["element_offset"] == 5
 
 
-def test_b8_omit_r5_fails_named(tmp_path):
-    rows = b8_engine_rows(b8_declared())
-    rows = {e: [(r, lo, hi) for r, lo, hi in rr if r != "r5"] for e, rr in rows.items()}
-    rows = {e: _repack(rr) for e, rr in rows.items()}                  # the server never ran r5: its rows are not in the members
-    _bmap, _pop, cov, comp = b8_check(tmp_path, rows)
-    assert not cov["ok"] and {m["request_id"] for m in cov["missing"]} == {"r5"}
-    assert not comp["ok"] and comp["problems"][0]["engine_step"] == 0 and comp["problems"][0]["missing"] == ["r5 x1"], comp["problems"][0]
-    assert "r5" in comp["error"]
 
 
-def test_b8_relabel_r3_as_r2_fails_named(tmp_path):
-    rows = b8_engine_rows(b8_declared())
-    rows = {e: [("r2" if r == "r3" else r, lo, hi) for r, lo, hi in rr] for e, rr in rows.items()}
-    _bmap, _pop, cov, comp = b8_check(tmp_path, rows)
-    assert not cov["ok"] and {m["request_id"] for m in cov["missing"]} == {"r3"}                # r3's identities have no binding under its name
-    p0 = comp["problems"][0]
-    assert not comp["ok"] and p0["engine_step"] == 0 and p0["missing"] == ["r3 x6"] and p0["unexpected"] == ["r2 x6"] and p0["duplicated"] == ["r2"], p0
-    # step 1 (all decode, every block 1 row; r2 itself finished after step 0): the relabel is invisible to widths -- the composition
-    # still names it: r3 missing, an r2 the declaration does not have
-    p1 = next(p for p in comp["problems"] if p["engine_step"] == 1)
-    assert p1["missing"] == ["r3 x1"] and p1["unexpected"] == ["r2 x1"]
 
 
-def test_b8_duplicate_r0_into_missing_r7_slot_fails_named(tmp_path):
-    declared = b8_declared()
-    rows = b8_engine_rows(declared)
-    # at the decode steps where both run (1, 2) r7 is omitted and an r0 acquisition is bound a second time under r7's name (same rows,
-    # same offset); step 0 and the steps after r0 finished stay honest
-    bad = {}
-    for e, rr in rows.items():
-        if e not in (1, 2):
-            bad[e] = rr
-            continue
-        rr = _repack([(r, lo, hi) for r, lo, hi in rr if r != "r7"])
-        r0 = next(x for x in rr if x[0] == "r0")
-        bad[e] = rr + [("r7", r0[1], r0[2])]
-    _bmap, pop, cov, comp = b8_check(tmp_path, bad)
-    # decode rows are 1 wide for every request: request-local coverage alone is BLIND to the duplicate (r7's ranges are "bound")
-    assert cov["ok"], cov["missing"][:3]
-    # the composition is not: r7's block overlaps r0's (same rows bound twice) and the sampled slot count / partition disagree
-    assert not comp["ok"] and comp["problems"][0]["engine_step"] == 1
-    p1 = comp["problems"][0]
-    assert p1["overlaps"] and "r7" in p1["overlaps"][0] and "r0" not in p1["missing"], p1
-    assert "overlaps" in comp["error"] and "r7" in comp["error"]
 
 
 def _repack(rr: list[tuple[str, int, int]]) -> list[tuple[str, int, int]]:
@@ -578,46 +325,7 @@ def test_manifest_program_digest_must_be_a_string(tmp_path):
         B.load_required_manifest(_write(tmp_path, "pdlist.json", doc), PD)
 
 
-def test_composition_check_skips_a_one_request_manifest_whose_engine_steps_are_numbers():
-    """A B=1 `build` manifest's engine_steps are the request's engine-step NUMBERS (ints, rc3
-    schema); only build-global writes the dict composition.  The int list must be skipped (recorded), never indexed as a dict."""
-    bmap: dict[str, list] = {"entries": []}
-    r = B.composition_check({"engine_steps": [0, 1, 2, 3], "composition_reference": {}}, bmap)
-    assert r["ok"] and r["checked_steps"] == 0 and "no engine-step composition" in r["skipped"]
-    r = B.composition_check({"engine_steps": list(range(32))}, bmap)
-    assert r["ok"] and r["checked_steps"] == 0
-    r = B.composition_check({}, bmap)
-    assert r["ok"] and r["checked_steps"] == 0
-    # a global manifest with no reference member stays a hard error (composition unverifiable), not a skip
-    r = B.composition_check({"engine_steps": [{"engine_step": 0, "members": [{"request_id": "r0", "step": 0, "rows": 4}], "rows": 4, "n_seq": 1}]}, bmap)
-    assert not r["ok"] and "composition unverifiable" in r["error"]
 
 
-def test_commit_delta_refuses_a_required_manifest_without_the_build_program_digest():
-    """--required-manifest without --program-digest is a named refusal before any engine is built (commit_delta calls this right
-    after parse_args): a manifest cannot vouch for its own Program."""
-    with pytest.raises(SystemExit, match="REFUSED: --required-manifest requires --program-digest.*cannot vouch for its own Program"):
-        B.require_build_program_digest("/x/manifest.json", None)
-    with pytest.raises(SystemExit):
-        B.require_build_program_digest("/x/manifest.json", "  ")
-    B.require_build_program_digest("/x/manifest.json", PD)                    # given: proceeds (the manifest/Build equality is checked later)
-    B.require_build_program_digest(None, None)                                # no manifest: nothing to refuse
 
 
-def test_load_required_manifest_accepts_a_one_request_manifest_whose_engine_steps_are_numbers(tmp_path):
-    """`required_manifest build` (B=1) writes `engine_steps` as ints (arrival + s), which a composition normalisation must not
-    subscript ('int' object is not subscriptable -> every B=1 Commit 'binding map not built').  The loader must keep the numbers, declare NO composition, and composition_check must skip (named) on that header."""
-    p, doc = _b8_doc(tmp_path)
-    doc["global"] = False
-    doc.pop("requests_declared")
-    doc.pop("composition_reference")
-    doc["engine_steps"] = [0, 1, 2]                                        # what `build` writes for one request arriving at engine step 0
-    p1 = _write(tmp_path, "b1_numbers.json", doc)
-    pop, hdr = B.load_required_manifest(p1, PD, requests=[f"r{k}" for k in range(8)], steps=max(B8_CAP), arrivals={f"r{k}": 0 for k in range(8)})
-    assert pop and hdr["engine_steps"] == [] and hdr["engine_step_numbers"] == [0, 1, 2]
-    res = B.composition_check(hdr, {"entries": []})
-    assert res["ok"] and res["checked_steps"] == 0 and "no engine-step composition" in res["skipped"]
-    # ... and the global (dict) form still normalises to the composition the check holds the map to
-    p2, doc2 = _b8_doc(tmp_path)
-    _pop2, hdr2 = B.load_required_manifest(p2, PD, requests=[f"r{k}" for k in range(8)], steps=max(B8_CAP), arrivals={f"r{k}": 0 for k in range(8)})
-    assert hdr2["engine_steps"] and hdr2["engine_step_numbers"] == [int(es["engine_step"]) for es in doc2["engine_steps"]]

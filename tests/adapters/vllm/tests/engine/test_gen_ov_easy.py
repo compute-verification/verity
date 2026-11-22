@@ -65,9 +65,7 @@ def test_config_json_copy_is_the_pinned_hub_file():
     assert hashlib.sha256(raw).hexdigest() == B7.CONFIG_SHA256 == entry["config_sha256"]
     assert entry["downloaded"] is True and entry["local_path"].endswith(f"/snapshots/{B7.REVISION}")
     assert B7.C["model"] == entry["repo"] and B7.C["revision"] == entry["revision"]
-    hf = REPO / "data" / "hf_configs" / "B7.config.json"
-    if hf.exists():
-        assert json.loads(hf.read_text()) == json.loads(raw) == B7.HF_CONFIG
+    assert json.loads(raw) == B7.HF_CONFIG
 
 
 def test_case_b7_is_the_contracts_pinned_7b_role_no_manifest_change():

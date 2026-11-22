@@ -5,7 +5,7 @@ public import Definitions.Pouw.PearlC.Unscale
 public import Properties.Pouw.Commit
 
 /-!
-# Pearl+'s run verdict: what its Lean code (`PouwCheck.PearlPlus.check`) does
+# Pearl+'s run verdict: what its Lean code (`PouwVerifier.PearlPlus.check`) does
 
 The properties of the executable verdict (`verity/protocols/accounting/pouw/verifier/lean/pearlplus/`, the port of
 `benchmarks/pouw/pearl_c_vllm/verify_run.verify_passes`), stated against `check` and the functions it runs, for every input:
@@ -73,13 +73,14 @@ def noiseOf (p : Pass) (tid : Nat) : Reject FixedNoise :=
 
 /-! ## The run -/
 
-/-- **What `plan` establishes**: the run's passes are `load`'s of its manifests under the epoch's coins, all of one salt
+/-- **What `plan` establishes**: every call of the run's manifests holds its place's index (`passesPlaced`, pass i round
+`rounds[i]`), and the run's passes are `load`'s of its manifests under the epoch's coins, all of one salt
 and, unless the input is a test instance's, each at the served instance, `k_min` `K_MIN` and `TILE × TILE` tiles; its commitment is `runCommitment` of them, its source is the coin record's where the verifier holds one (whose commitment is this run's)
 and else the source given, and its tiles are the sample's, keyed by the source and the commitment, then each pass's
 exclusion tiles. -/
 def PlanMeans : Prop :=
   ∀ (i : Input) (pl : Plan), plan i = .ok pl →
-    passesDistinct i.manifests = none ∧ i.manifests.mapM (load i.coins) = .ok pl.passes ∧
+    passesPlaced i.manifests i.rounds = none ∧ i.manifests.mapM (load i.coins) = .ok pl.passes ∧
     (∀ p ∈ pl.passes, p.salt = pl.passes[0]!.salt) ∧
     (i.testInstance = false → ∀ p ∈ pl.passes, p.scheme.kMin = K_MIN ∧ p.scheme.tileM = TILE ∧ p.scheme.tileN = TILE) ∧
     pl.root = runCommitment pl.passes ∧
@@ -101,7 +102,7 @@ def AcceptMeans : Prop :=
           i.overInertBound = .uncredited ∧ ∃ why, checkTile p (noiseOf p tid) tid o = .overInertBound why)
 
 /-- **A run the verdict refuses before any tile is opened carries no commitment**: a refusal of `plan` (`after-coin`, a
-pass that doesn't load, passes that share a call) answers with no plan and no verdicts, under the run's `over_cap` rule and
+pass that doesn't load, a call whose index is not its place) answers with no plan and no verdicts, under the run's `over_cap` rule and
 with the tie where the refusal came after it. -/
 def RefusedBeforeTheCoin : Prop :=
   ∀ (i : Input) (opener : Nat → Nat → Except String TileOpening) (r : Refusal), plan i = .error r →

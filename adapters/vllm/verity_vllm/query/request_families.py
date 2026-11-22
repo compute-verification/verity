@@ -70,9 +70,6 @@ def header_families(q: dict[str, Any], pop: Any, world: int, moe_layers: set[int
         q["policy"]["protocol_required"].append(f"TP-04 (world {world}): every collective output and its rank-local partial, with every "
                                                 "port of the partial's producer")
         q["tp"] = {"world": world, "collectives": len(pop.collectives), "peer_inputs": len(pop.peer_inputs)}
-        if pop.witness:
-            q["tp"]["witness_inputs"] = {fmt.SCHEDULE_PARAM: {"readers": len(pop.witness_readers),
-                                                              "binding": "each reader's own committed rank (port 0)"}}
     if moe_layers:
         q["required_families"].append("moe_block_stream")
         q["moe_layers"] = sorted(moe_layers)

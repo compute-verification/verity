@@ -3,10 +3,10 @@
 `rtx_node` is one of our two RTX PRO 6000 nodes as both read with `nvidia-smi topo -m`, `lspci -tv` and `lsmem`:
 two sockets, each an Intel Xeon 6776P with its host DRAM and a PCIe root complex (a switch); eight RTX PRO 6000 GPUs,
 GPUs 0–3 on socket 0 and 4–7 on socket 1, each on a root port of its own; one NIC, on socket 1. Its device model is
-`ResourceAccounting.Device`'s one Python mirror, `verity.protocols.resource_accounting.memory.poub.verifier.timing`: a GPU's S_chip, read and write
+`ResourceAccounting.Device`'s one Python mirror, `verity.protocols.accounting.memory.poub.verifier.timing`: a GPU's S_chip, read and write
 rates, SHA-512 oracle and squaring ceilings, and half the host's on each socket, so the node sums to
 `ledger.Node.stated` of its figures (`benchmarks/poub_session/sheets.py`). Beside them: each GPU's memory and its rate for each kind of work
-(`logical.work`: tensor-core multiply-adds by precision at the dense datasheet peaks `calibration/census/hardware.json` names; CUDA-core word
+(`logical.work`: tensor-core multiply-adds by precision at the `datasheet` reading of `calibration/census/hardware.json`'s `rtx-pro-6000-server-tensor` lines; CUDA-core word
 operations, `cuda:op`, and Boolean gates, `cuda:gate`, at its integer rate times 32 lanes), each socket's host DRAM
 (half the node's online memory) and each PCIe link at PCIe 5.0 x16's rate. A capacity not measured yet is `math.inf`,
 the upper bound that claims nothing; the residuals are declared. A GPU's memory, the host's DRAM, a PCIe lane's rate and
@@ -20,6 +20,7 @@ the outside world over a WAN. `two_sites` is a fleet: two leaf-spines joined by 
 """
 from __future__ import annotations
 
+import json
 import math
 import sys
 from pathlib import Path
@@ -30,6 +31,8 @@ from .physical import Assumption, Cadence, Datacenter, DeviceEntry, Fleet, LinkE
 
 CARD_FILES = Path(__file__).resolve().parents[3] / "calibration/hardware/cards"
 NODE_FILES = Path(__file__).resolve().parents[3] / "calibration/hardware/nodes"
+HARDWARE = Path(__file__).resolve().parents[3] / "calibration/census/hardware.json"
+READING = "datasheet"
 
 NODE = load_node("rtx-pro-6000-server-x8", directory=NODE_FILES, cards_directory=CARD_FILES)
 GPU_CARD = load_card(NODE["device"]["sku"], directory=CARD_FILES)
@@ -49,10 +52,17 @@ GPU_MEMORY = Assumption("rtx-pro-6000/memory", int(number(GPU_CARD["store"]["dra
 GPU_READ = Assumption("rtx-pro-6000/memory-read", T.gpu_read_bytes_per_s * 8, "bit/s", "measured")
 GPU_WRITE = Assumption("rtx-pro-6000/memory-write", T.gpu_write_bytes_per_s * 8, "bit/s", "datasheet")
 GPU_RESIDUAL = Assumption("rtx-pro-6000/residual", 1 * GB, "bits", "declared")
+
+
+def _macs(line: str) -> int:
+    entry = next(e for e in json.loads(HARDWARE.read_text()) if e["id"] == f"rtx-pro-6000-server-tensor/{line}")
+    return int(next(r for r in entry["readings"] if r["name"] == READING)["flop_per_second"]) // 2
+
+
 GPU_RATE = {
-    "mac:bf16": Assumption("rtx-pro-6000-server/bf16", 250_000_000_000_000, "multiply-adds/s", "datasheet"),
-    "mac:fp8": Assumption("rtx-pro-6000-server/e4m3", 500_000_000_000_000, "multiply-adds/s", "datasheet"),
-    "mac:fp4": Assumption("rtx-pro-6000-server/e2m1", 1_000_000_000_000_000, "multiply-adds/s", "datasheet"),
+    "mac:bf16": Assumption("rtx-pro-6000-server/bf16", _macs("bf16"), "multiply-adds/s", "datasheet"),
+    "mac:fp8": Assumption("rtx-pro-6000-server/e4m3", _macs("e4m3"), "multiply-adds/s", "datasheet"),
+    "mac:fp4": Assumption("rtx-pro-6000-server/e2m1", _macs("e2m1"), "multiply-adds/s", "datasheet"),
     "cuda:op": Assumption("rtx-pro-6000/cuda-ops", INF, "ops/s", "measured"),
     "cuda:gate": Assumption("rtx-pro-6000/gates", 2.6e13 * 32, "gate/s", "datasheet"),
     "oracle": Assumption("rtx-pro-6000/sha512", T.gpu_sha512_per_s, "compressions/s", "measured"),

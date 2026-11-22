@@ -728,7 +728,7 @@ def test_the_plan_the_readme_and_research_give_the_command_that_makes_a_job_user
     group = VS.JOB_GROUP
     assert jobuser.JOB_GROUP == LO.JOB_GROUP == group
     make, grant = f"sudo groupadd -f --system {group}", f"sudo usermod -aG {group} USER"
-    for text in (LO.plan_text("vy-nebius-1"), LO.plan_text(CPU13), (LOCKOUT / "README.md").read_text(), VS.__doc__):
+    for text in (LO.plan_text("vy-nebius-2"), LO.plan_text(CPU13), (LOCKOUT / "README.md").read_text(), VS.__doc__):
         assert make in text and grant in text
     deploy = next(ln for ln in LO.plan_text(CPU13).splitlines() if ln.startswith("1. deploy"))
     assert make in deploy and grant in deploy, "vy-sudo is the one asked from the deploy on, so the plan has it there"
@@ -748,7 +748,7 @@ def test_the_plan_the_readme_and_research_give_the_command_that_makes_a_job_user
 def test_each_committed_allowlist_is_its_profiles_render_and_every_rule_names_its_evidence():
     assert [p.file for p in LO.PROFILES] == ["50-vy-research", "50-vy-research-cpu"] and LO.CLUSTER.file == LO.ALLOWLIST
     for p in LO.PROFILES:
-        node = "vy-nebius-1" if p is LO.CLUSTER else "vy-nebius-cpu-13"
+        node = "vy-nebius-2" if p is LO.CLUSTER else "vy-nebius-cpu-13"
         assert (LOCKOUT / "sudoers" / p.file).read_text() == LO.render(p), f"regenerate: python3 lockout/lockout.py render --node {node}"
         for r in p.rules + p.ubuntu:
             assert r.cmd.startswith("/") and r.evidence.strip()
@@ -761,7 +761,7 @@ def test_each_committed_allowlist_is_its_profiles_render_and_every_rule_names_it
 
 
 def test_a_node_has_the_profile_of_its_kind_and_no_other_machine_has_one(tmp_path):
-    assert LO.profile("vy-nebius-1") is LO.profile("vy-nebius-2") is LO.CLUSTER
+    assert LO.profile("vy-nebius-2") is LO.CLUSTER
     assert LO.profile("vy-nebius-cpu-13") is LO.profile("vy-nebius-cpu-1") is LO.CPU
     for name in ("", "vy-nebius-3", "vy-nebius-cpu-0", "vy-nebius-cpu-13 ", "vy-nebius-cpu-x", "vy-challenger-1", "vy-auditor-1"):
         with pytest.raises(ValueError):
@@ -999,19 +999,17 @@ def test_untrusted_names_every_path_or_parent_someone_but_root_can_change():
     assert LO.untrusted(["/t"], lstat) == ["/t: mode 1777"], "a sticky dir is fine above a path, not as one a root unit writes in"
 
 
-def test_kubeconfigs_and_the_tmux_command_a_switch_back_runs():
-    assert LO.kubeconfig_admin("users:\n- name: a\n  user:\n    client-certificate-data: X\n    client-key-data: Y\n")
-    assert not LO.kubeconfig_admin(LO.research_kubeconfig("tok", "CA"))
+def test_the_tmux_command_a_switch_back_runs():
     text = (NEBIUS / "units" / "vy-write-probe@.service").read_text()
-    cmd = LO.tmux_command(text, "vy-write-probe@vy-nebius-1.service")
-    assert "--node vy-nebius-1" in cmd and "%i" not in cmd and "$$" not in cmd and "cd / &&" in cmd
-    assert (LO.unit_file("vy-write-probe@vy-nebius-1.service"), LO.service_of("vy-monitors.timer")) == ("vy-write-probe@.service", "vy-monitors.service")
+    cmd = LO.tmux_command(text, "vy-write-probe@vy-nebius-2.service")
+    assert "--node vy-nebius-2" in cmd and "%i" not in cmd and "$$" not in cmd and "cd / &&" in cmd
+    assert (LO.unit_file("vy-write-probe@vy-nebius-2.service"), LO.service_of("vy-monitors.timer")) == ("vy-write-probe@.service", "vy-monitors.service")
 
 
 def test_a_switch_stops_the_tmux_loop_before_its_unit_starts_and_a_dry_run_only_says_so(tmp_path, monkeypatch):
     said: list[str] = []
-    LO.step_switch(LO.Ctx(apply=False, say=said.append), "vy-nebius-1", ["vy-write-probe@vy-nebius-1.service"], back=False)
-    assert [s.split()[0] for s in said] == ["would:", "would:", "would:", "vy-write-probe@vy-nebius-1.service:"] and "C-c" in said[0]
+    LO.step_switch(LO.Ctx(apply=False, say=said.append), "vy-nebius-2", ["vy-write-probe@vy-nebius-2.service"], back=False)
+    assert [s.split()[0] for s in said] == ["would:", "would:", "would:", "vy-write-probe@vy-nebius-2.service:"] and "C-c" in said[0]
     monkeypatch.setattr(LO, "UNITS", tmp_path)
     (tmp_path / "vy-write-probe@.service").write_text("[Service]\nExecStart=/bin/true\n")
     log: list[list[str]] = []
@@ -1023,11 +1021,11 @@ def test_a_switch_stops_the_tmux_loop_before_its_unit_starts_and_a_dry_run_only_
             return subprocess.CompletedProcess(argv, 0, "bash\n", "")
         return base(argv)
     waits: list[float] = []
-    LO.step_switch(LO.Ctx(apply=True, run=run, say=said.append), "vy-nebius-1", ["vy-write-probe@vy-nebius-1.service"], back=False, wait=waits.append)
+    LO.step_switch(LO.Ctx(apply=True, run=run, say=said.append), "vy-nebius-2", ["vy-write-probe@vy-nebius-2.service"], back=False, wait=waits.append)
     steps = [a[5] if a[0] == "runuser" else a[1] for a in log]
     assert steps == ["has-session", "send-keys", "list-panes", "kill-session", "enable", "is-active"] and waits == []
     with pytest.raises(LO.Failed):
-        LO.step_switch(LO.Ctx(apply=False, say=said.append), "vy-nebius-1", ["vy-nope.service"], back=False)
+        LO.step_switch(LO.Ctx(apply=False, say=said.append), "vy-nebius-2", ["vy-nope.service"], back=False)
 
 
 def test_the_sudoers_step_needs_a_clean_preflight_installs_both_files_and_rolls_back(tmp_path):
@@ -1041,13 +1039,13 @@ def test_the_sudoers_step_needs_a_clean_preflight_installs_both_files_and_rolls_
     t = 1_791_000_000.0
     bad = [LO.Check("vy-admin", False, "missing"), LO.Check("py-spy", True, "")]
     with pytest.raises(LO.Failed, match="preflight fails: vy-admin"):
-        LO.step_sudoers(ctx, "vy-nebius-1", [], t, lib, sd, backup, checks=bad)
+        LO.step_sudoers(ctx, "vy-nebius-2", [], t, lib, sd, backup, checks=bad)
     assert not (sd / LO.ALLOWLIST).exists()
     (lib / LO.ALLOWLIST).write_text(LO.render() + "research ALL=(ALL) NOPASSWD: ALL\n")
-    with pytest.raises(LO.Failed, match="isn't `vy-lockout render --node vy-nebius-1`'s"):
-        LO.step_sudoers(ctx, "vy-nebius-1", ["vy-admin"], t, lib, sd, backup, checks=bad)
+    with pytest.raises(LO.Failed, match="isn't `vy-lockout render --node vy-nebius-2`'s"):
+        LO.step_sudoers(ctx, "vy-nebius-2", ["vy-admin"], t, lib, sd, backup, checks=bad)
     (lib / LO.ALLOWLIST).write_text(LO.render())
-    LO.step_sudoers(ctx, "vy-nebius-1", ["vy-admin"], t, lib, sd, backup, checks=bad)
+    LO.step_sudoers(ctx, "vy-nebius-2", ["vy-admin"], t, lib, sd, backup, checks=bad)
     assert (sd / LO.ALLOWLIST).read_text() == LO.render() and LO.expiry((sd / LO.FALLBACK).read_text()) == t + 24 * 3600
     assert not (sd / LO.CLOUD_INIT).exists() and (backup / "sudoers" / LO.CLOUD_INIT).exists()
     assert ["systemctl", "enable", "--now", "vy-sudo-fallback-expire.timer"] in log
@@ -1058,8 +1056,6 @@ def test_the_sudoers_step_needs_a_clean_preflight_installs_both_files_and_rolls_
 def test_preflight_fails_each_check_on_an_unprepared_node(tmp_path):
     (tmp_path / "etc").mkdir()
     (tmp_path / "etc" / "group").write_text("lxd:x:110:ubuntu\nsystemd-journal:x:999:\n")
-    (tmp_path / "home" / "research" / ".kube").mkdir(parents=True)
-    (tmp_path / "home" / "research" / ".kube" / "config").write_text("    client-key-data: X\n")
     for r in LO.RUNS_ROOTS:
         (tmp_path / r.lstrip("/")).mkdir(parents=True)
 
@@ -1069,10 +1065,10 @@ def test_preflight_fails_each_check_on_an_unprepared_node(tmp_path):
         if "has-session" in argv:
             return subprocess.CompletedProcess(argv, 0, "", "")
         return subprocess.CompletedProcess(argv, 1, "", "")
-    checks = {c.name: c for c in LO.preflight("vy-nebius-1", run, tmp_path)}
+    checks = {c.name: c for c in LO.preflight("vy-nebius-2", run, tmp_path)}
     failing = {n for n, c in checks.items() if not c.ok}
-    assert {"vy-admin", "vy-admin-login", "vy-admin-session", "ubuntu-unprivileged", "py-spy", "kubeconfig", "journal-group", "allowlist",
-            "switched:vy-write-probe@vy-nebius-1.service", "tool:/usr/local/sbin/vy-sudo"} <= failing
+    assert {"vy-admin", "vy-admin-login", "vy-admin-session", "ubuntu-unprivileged", "py-spy", "journal-group", "allowlist",
+            "switched:vy-write-probe@vy-nebius-2.service", "tool:/usr/local/sbin/vy-sudo"} <= failing
     assert all(checks[n].fix for n in failing)
 
 
@@ -1196,13 +1192,13 @@ def test_harden_back_puts_back_only_what_the_node_has(tmp_path, monkeypatch):
 
 
 def test_the_plan_has_every_step_with_its_rollback():
-    text = LO.plan_text("vy-nebius-1")
-    assert [ln.split(".")[0] for ln in text.splitlines() if not ln.startswith(" ")] == [str(i) for i in range(1, 10)]
-    assert text.count("   rollback: ") == 9 and "vy-write-probe@vy-nebius-1.service (tmux write-probe)" in text
+    text = LO.plan_text("vy-nebius-2")
+    assert [ln.split(".")[0] for ln in text.splitlines() if not ln.startswith(" ")] == [str(i) for i in range(1, 8)]
+    assert text.count("   rollback: ") == 7 and "vy-write-probe@vy-nebius-2.service (tmux write-probe)" in text
     cpu = LO.plan_text(CPU13)
     steps = [ln.split(":")[0] for ln in cpu.splitlines() if not ln.startswith(" ")]
     assert steps == ["1. deploy", "2. vy-admin", "3. seal", "4. harden", "5. sudoers", "6. watch"], "no loop to switch, no cluster"
-    assert cpu.count("   rollback: ") == 6 and not [w for w in ("tmux", "kubeconfig", "root.env") if w in cpu]
+    assert cpu.count("   rollback: ") == 6 and not [w for w in ("tmux",) if w in cpu]
     assert f"vy-lockout sudoers --node {CPU13} --apply" in cpu and "--login vy-admin" in cpu and f"audit --since=-24h --node {CPU13}" in cpu
     assert f"`research deploy install {CPU13} --only lockout --by WHO`" in cpu, "a whole install leaves deploy.toml's step lockout out"
     manifest = tomllib.loads((NEBIUS / "deploy.toml").read_text())

@@ -26,7 +26,7 @@ import pytest
 import verity_vllm
 from tests import fake_vllm
 from verity import hooks as H
-from verity.protocols.resource_accounting.scheme import Lacks
+from verity.protocols.accounting.scheme import Lacks
 from verity_vllm import config, messages
 from verity_vllm import llm as L
 from verity_vllm.config import EnginePin
@@ -220,15 +220,13 @@ def test_a_refused_set_raises_before_the_engine_is_built(built):
 def test_storage_attaches_by_its_name_though_the_selector_has_no_such_protocol(built, monkeypatch):
     """``pous`` is no protocol of the selector (`config.PROTOCOLS`) but PoUS's declared scheme's name, which is attached
     by name: what refuses it here is PoUS's own attach (`served.launcher_refusals`: the in-process LLM hands it no salt
-    source), not the selector.  A name that is neither stays the selector's to refuse, with its message."""
+    source), not the selector."""
     attached: list[str] = []
     attach = messages.Exchange.attach
     monkeypatch.setattr(messages.Exchange, "attach", lambda ex, s, given, **ctx: (attached.append(s.name), attach(ex, s, given, **ctx))[1])
     with pytest.raises(ValueError, match="no salt_source"):
         L.LLM(LLAMA[0], revision=LLAMA[1], protocols="pous")
     assert attached == ["pous"]
-    with pytest.raises(ValueError, match=r"protocol entry 'zk:v1': unknown protocol 'zk' \(known: pouw, sampled-proofs\)"):
-        L.LLM(LLAMA[0], revision=LLAMA[1], protocols="pous,zk:v1")
 
 
 def test_pearl_plus_attaches_by_its_name_on_the_build_and_close_releases_it(built, monkeypatch):
@@ -246,15 +244,6 @@ def test_pearl_plus_attaches_by_its_name_on_the_build_and_close_releases_it(buil
     assert released == [True]
     with pytest.raises(ValueError, match="pearl-plus runs on cuda"):
         L.LLM(LLAMA[0], revision=LLAMA[1], protocols="pearl-plus", protocols_config={"pearl-plus": {"device": "cpu"}})
-
-
-def test_a_declared_schemes_option_is_refused_and_its_name_is_named(built):
-    with pytest.raises(ValueError, match="pouw:pearl-c-h100-v1-h3: names the declared scheme pearl-plus, .*by its name, 'pearl-plus'"):
-        L.LLM(LLAMA[0], revision=LLAMA[1], protocols="pouw:pearl-c-h100-v1-h3")
-    with pytest.raises(ValueError, match="unknown protocol 'pous'"):
-        L.LLM(LLAMA[0], revision=LLAMA[1], protocols="pous:p2-16448/v4")
-    with pytest.raises(ValueError, match="protocol 'pouw' is enabled twice"):
-        L.LLM(LLAMA[0], revision=LLAMA[1], protocols="pearl-plus,pouw:eps1-sm120-h1fx1")
 
 
 def test_listed_schemes_attach_by_name_in_their_order(built, monkeypatch):

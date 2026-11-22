@@ -66,8 +66,6 @@ NOT_PATHS = {
     ("security/Proofs/Pous/Chain/Flat.lean", "P3MeetsLucky.lean"): "the band chain's Lean, outside this tree",
     ("security/Proofs/Pous/Chain/Flat.lean", "P3MeetsFinal.lean"): "the band chain's Lean, outside this tree",
     ("security/Definitions/Hash/Guarantees.lean", "EmbeddingRead.h"): "a Lean name, the read's row `h`",
-    ("security/Proofs/Flock/Claims/Recursion/DecodeTies.lean", "DecAt.sh"): "a Lean name, `DecAt`'s shape `sh`",
-    ("security/Proofs/Flock/Claims/Recursion/VerdictRowRDeployed.lean", "DecAt.sh"): "a Lean name, `DecAt`'s shape `sh`",
     ("security/Proofs/Flock/Claims/ZK/FrameOpenLive.lean", "d.h"): "a Lean name, the frame's pads",
     ("security/Proofs/Flock/Recursive/HPortTie.lean", "lc.h"): "a Lean name, a field of `holoRep_refines`' output",
     ("security/Proofs/Flock/Soundness/Discharge/Composed/Inner.lean", "l.c"): "a Lean name, `verifyInner`'s target",
@@ -76,7 +74,7 @@ NOT_PATHS = {
 #: file a demo branch edits isn't rewritten until it lands. Unlike `NOT_PATHS` it has no currency check, so the demo
 #: branch's landing, which drops the mention, needs no edit here; the entry leaves after it.
 WAITING = {
-    ("security/Definitions/Certifier/Schedule.lean", "verity/protocols/resource_accounting/communication/certifier/schedule.py"):
+    ("security/Definitions/Certifier/Schedule.lean", "verity/protocols/accounting/communication/certifier/schedule.py"):
         "the `remote` demo branch rewrites this docstring",
     ("security/Definitions/Pouw/Guarantees/Headline.lean", "fixtures/fold_bulk_loops.json"): "both demo branches edit the file",
     ("security/Definitions/Pouw/Guarantees/Headline.lean", "fold_bulk.cu"): "both demo branches edit the file",
@@ -231,17 +229,17 @@ def test_a_directory_verity_had_before_a_move_reads_as_a_path():
 def test_an_end_state_document_may_name_what_the_tree_file_plans():
     """An end-state document may name a path at or under a dated `[[tree]]` entry or under a path in a `[[not_yet]]`
     line's `to`; another document may not, and an undated entry or a lone `verity/` in a `to` plans nothing."""
-    layout = {"tree": [{"path": "verity/protocols/"}, {"path": "verity/protocols/compose/", "day": "2026-11-15"}],
+    layout = {"tree": [{"path": "verity/protocols/"}, {"path": "verity/protocols/run/", "day": "2026-11-15"}],
               "not_yet": [{"path": "verity/definitions/", "to": "its protocol part to verity/circuits/, the rest out of verity/"}]}
     plan = planned(layout)
-    assert plan == frozenset({"verity/protocols/compose", "verity/circuits"})
+    assert plan == frozenset({"verity/protocols/run", "verity/circuits"})
     files = frozenset({"ARCHITECTURE.md", "README.md", "verity/protocols/a.py", "verity/circuits/b.py"})
     tree = (files, frozenset({"verity", "verity/protocols", "verity/circuits"}), frozenset())
-    text = "`verity/protocols/compose/` `verity/protocols/compose/verifier/` `verity/circuits/ops/` `verity/protocols/c.py`"
+    text = "`verity/protocols/run/` `verity/protocols/run/verifier/` `verity/circuits/ops/` `verity/protocols/c.py`"
     docs = {"ARCHITECTURE.md": text, "README.md": text}
     assert dead_paths(tree, read=docs.__getitem__, plan=plan) == [
         ("ARCHITECTURE.md", 1, "verity/protocols/c.py"),
-        ("README.md", 1, "verity/protocols/compose/"), ("README.md", 1, "verity/protocols/compose/verifier/"),
+        ("README.md", 1, "verity/protocols/run/"), ("README.md", 1, "verity/protocols/run/verifier/"),
         ("README.md", 1, "verity/circuits/ops/"), ("README.md", 1, "verity/protocols/c.py")]
 
 

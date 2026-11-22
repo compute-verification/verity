@@ -7,8 +7,8 @@ each scheduler, commits the same rows under the same rows-sha512 roots, and ever
 
 `ab` serves SERVE-OPENAI-ARGS (``--run-id``, order ``release-order``, a bench row, the Commit's options, ``--window-steps
 1``) twice, synchronously and then with ``--async-scheduling``, each a `serve` of this module in its own process, and sends
-each the same ``--batches`` loads of ``adapters/vllm/tools/served_run/serve_load.py --fixed``: ``--requests`` requests of ``--prompt-ids``
-ids for one step, the learn-only warm-up's static shape (`serve_learn.shape_of`), each batch its own release run and seed.
+each the same ``--batches`` loads through the one sender (`verity_vllm.inputs.sender.play`): ``--requests`` requests of
+``--prompt-ids`` seeded ids for one step, released together, the learn-only warm-up's static shape (`serve_learn.shape_of`), each batch its own release run and seed.
 A step's rows-sha512 root binds its salt key, fresh from the OS generator in a served run, the run id and the row's
 Program, so `serve` runs serve-openai with the step keys derived from ``--row-key-seed`` (`fixed_row_keys`) and the bench
 row taken whichever scheduler it declares (`either_row`): the two arms differ only in the scheduler. `compare` then holds
@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import random
 import signal
 import subprocess
 import sys
@@ -26,7 +27,8 @@ import threading
 from pathlib import Path
 from typing import Any
 
-LOAD = Path(__file__).resolve().parents[5] / "adapters" / "vllm" / "tools" / "served_run" / "serve_load.py"
+from verity_vllm.inputs import sender
+
 
 
 def fixed_row_keys(seed: str) -> None:
@@ -47,10 +49,9 @@ def either_row() -> None:
     from verity_vllm.pipeline import serve_row as RW
 
     def of(opts: Any) -> dict[str, Any] | None:
-        if not opts.required_manifest:
+        if not opts.row_build:
             return None
-        from verity_vllm.pipeline import serve_seal as SS
-        path = Path(SS.programs_root_of(opts)) / RW.WORKLOAD_PROGRAM
+        path = Path(RW.programs_root_of(opts)) / RW.WORKLOAD_PROGRAM
         return {"async_scheduling": json.loads(path.read_text())["applicability"]["engine"]["async_scheduling"], "source": str(path)}
 
     RW.of = of
@@ -107,9 +108,16 @@ def arm(name: str, out: Path, a: argparse.Namespace) -> Path:
         drain = threading.Thread(target=lambda: log.writelines(lines))
         drain.start()
         for b in range(1, a.batches + 1):
-            subprocess.run([sys.executable, str(LOAD), "--port", str(port), "--model", model, "--fixed", str(a.requests),
-                            "--window-steps", "1", "--prompt-range", f"{a.prompt_ids}:{a.prompt_ids}", "--release", f"ab{b}",
-                            "--seed", str(b), "--out", str(d / "load.jsonl")], check=True)
+            rng = random.Random(b)
+            reqs = [{"user": f"ab{b}.{j:05d}", "at_s": 0.0,
+                     "body": {"model": model, "user": f"ab{b}.{j:05d}", "prompt": [rng.randrange(1000, 100000)
+                                                                                  for _ in range(a.prompt_ids)],
+                              "max_tokens": 1, "ignore_eos": True, "temperature": 0.0, "stream": True,
+                              "return_token_ids": True}} for j in range(a.requests)]
+            got, *_ = sender.play(port, reqs, release=f"ab{b}")
+            sender.write(d / "load.jsonl", reqs, got, release=f"ab{b}")
+            if errors := [g for g in got if isinstance(g, dict) and "error" in g]:
+                raise RuntimeError(f"{name}: batch {b}: {errors[0]['error']}")
         srv.send_signal(signal.SIGTERM)
         print(f"{name}: serve-openai exited {srv.wait()}", flush=True)
         drain.join()

@@ -1,5 +1,5 @@
 #!/bin/bash
-# vy-lean-build-setup: what vy-lean-sandbox needs on vy-nebius-1, as root; safe to run again (a second run changes nothing).
+# vy-lean-build-setup: what vy-lean-sandbox needs on vy-nebius-cpu-4, as root; safe to run again (a second run changes nothing).
 #
 #   - the system user lean-build: no home, no login shell, a locked password, no sudo, in no group but its own (never research,
 #     sudo, docker or adm), so it reads neither /home/research (0750) nor /etc/verity's keys. It never runs outside a unit

@@ -1,22 +1,19 @@
 """A served window's cases, each on the window's docket R and beside its own Lean answer, in the directory
 form a composition of the window's subprotocols reads as a case: SPOT's one-stage v1 case (no composite's),
 both composites' SPOT case (one-stage v2's in the form ``one-stage``) and the inference-only case from its
-records audit, PoUW's period case held to the same record, Pearl+'s run case naming it, and with ``--v2`` one-stage v2's
+records audit, Pearl+'s run case naming the same record, and with ``--v2`` one-stage v2's
 bare case too:
 
     served_cases.py (--audit DIR | --serve-dir D) --private DIR [--alpha N/D --gamma G | --from-division]
-                    [--log FILE] [--period DIR] [--pearlplus DIR] [--v1-exe PATH] [--sampled-exe PATH]
+                    [--log FILE] [--pearlplus DIR] [--v1-exe PATH] [--sampled-exe PATH]
                     [--inference-only-exe PATH] [--v2 [--v2-exe PATH]]
 
 ``--audit`` is the window's `records_audit.py audit --circuit --registered` out directory (`served_verdicts.sh`'s
-``$VW/audit``); ``--serve-dir`` finds it as the one ``D/v3c-w*/audit`` that holds a case, and reads the serve's H1 log
-(``D/h1/log.jsonl``, `H1_LOG`), PoUW's period case (``D/private/pouw/period``, `PERIOD_PIECE`), Pearl+'s case's
+``$VW/audit``); ``--serve-dir`` finds it as the one ``D/v3c-w*/audit`` that holds a case, and reads Pearl+'s case's
 parts (``D/private/pearlplus/case``, `PEARL_PLUS_PIECE`), the serve's first registration record
 (``D/deployment-registration.json``, `DEPLOYMENT`) and each window's docket records as the harness keeps them
 (`RECORDS`) where it holds them.
-Every case commits to the same record R, ``window/case.json``'s commitment, the record the audit sampled against (under
-H1's tie, `served_verdicts.sh`'s H1_TIE, the record H1 named as the window's Commit record before its sample coin,
-`serve_tie`), and each must name R's digest, SHA-512(format ‖ 0 ‖ canon(record)) (`registration.digest`), or nothing is
+Every case commits to the same record R, ``window/case.json``'s commitment, the record the audit sampled against, and each must name R's digest, SHA-512(format ‖ 0 ‖ canon(record)) (`registration.digest`), or nothing is
 written: that digest is what remote's record tie compares (`Core.Remote.windows`).
 
 * **`verity/sampled-proofs/one-stage/v1`** (`window_case`, `V1`): a5's ``window/case.json`` as a5 wrote it
@@ -40,10 +37,9 @@ written: that digest is what remote's record tie compares (`Core.Remote.windows`
     ``--from-division`` read off the case's own division, `division_policy`, so the check confirms that the division
     complies and they're no security setting, which the case's private ``policy.json`` says beside them; without
     either no case is written), ``log`` (the deployment's records before R, from its first, whose ``previous`` is
-    null, as the policy's check reads them. It has three sources, tried in this order, and the first that is there is
-    the whole log, none filled in from another: (1) ``--log``, a file the caller hands; (2) with ``--serve-dir``, the
-    serve's H1 log through R's ``previous``, `h1_log`, each window's docket W and record R up to the window's W;
-    (3) the serve's own records, walked back from R's ``previous`` by digest to a record whose
+    null, as the policy's check reads them. It has two sources, tried in this order, and the first that is there is
+    the whole log, none filled in from another: (1) ``--log``, a file the caller hands;
+    (2) the serve's own records, walked back from R's ``previous`` by digest to a record whose
     ``previous`` is null, `pearl_log`: on a serve whose window record is Pearl+'s, that W and before it the serve's
     first registration record, W from Pearl+'s case's parts on the served node and, on a copy of the compose hand-off,
     which holds no part of Pearl+'s case, from the files the hand-off lists (`RECORDS`, `DEPLOYMENT`). Whoever handed
@@ -65,13 +61,6 @@ written: that digest is what remote's record tie compares (`Core.Remote.windows`
   compose its v0, which publishes the division and its blocks' profiles, as a stated exception (`composite.EXCEPTIONS`).
   The policy's Lean package and the Python its check is held to are named by the module `POLICY`, loaded when this
   case is asked for; on a tree that leaves the policy out the case is refused saying so.
-* **PoUW's period case** (`period_case`, `PERIOD`: `verity/pouw/period/v1`, both composites' work subprotocol):
-  `pouw_piece.py period`'s case and answer as it wrote them (``--period``; with ``--serve-dir``, `served_pouw.sh`'s
-  ``D/private/pouw/period`` when it holds a case), taken once every window of the period names R as its Commit record
-  (`credit.commit_of`, as `Core.Remote.executionPhaseRecords` reads it): the case commits to the auditor's ledger, so the tie
-  is its windows'. A period with a window on another record, or on none, is refused here, before any composite runs,
-  and so is handed to neither: remote would reject it on the tie, and onsite, which doesn't check it, would credit
-  another record's work beside this window's. Without a period case none is made, and a composite names it missing.
 * **Pearl+'s run case** (`pearlplus_case`, `PEARL_PLUS`: `verity/pouw/pearl-plus/v1`, the work subprotocol of remote's
   composite of record, `Core.Remote.V1`): from the parts Pearl+'s piece wrote on the served node (``--pearlplus``; with
   ``--serve-dir``, `PEARL_PLUS_PIECE` when it holds them: `served_passes.py case`), its params (the epoch's coin
@@ -92,14 +81,13 @@ written: that digest is what remote's record tie compares (`Core.Remote.windows`
   is made only when asked.
 
 Each case goes to its own directory under ``--private`` (``sampled-proofs-v1/``, ``sampled-proofs/``,
-``inference-only/``, ``pouw-period/``, ``pouw-pearl-plus/``, ``sampled-proofs-v2/``; 0700, files 0600): ``case.json``
-(``{"params", "commitment", "evidence"}``, hex commitment and evidence, and SPOT's, v2's, the period's and
+``inference-only/``, ``pouw-pearl-plus/``, ``sampled-proofs-v2/``; 0700, files 0600): ``case.json``
+(``{"params", "commitment", "evidence"}``, hex commitment and evidence, and SPOT's, v2's and
 Pearl+'s ``blobs``) and ``answer.json``, its Lean answer line (and, given ``--from-division``, the inference-only case's
 ``policy.json``). A composition is handed only the directories whose answer's protocol is one of its product's
-subprotocols: remote's are SPOT's, the inference-only case's and the period's (v1's, Pearl+'s in the period's
-place), onsite's the same three among its own, and neither's one-stage v1's case or v2's bare case. The Lean runs on
-files in a 0700 scratch directory under ``--private``; the period's answer is the one `pouw_piece.py` wrote, and
-Pearl+'s the Lean verdict of record's.
+subprotocols: remote's are SPOT's, the inference-only case's and Pearl+'s,
+onsite's the same three among its own, and neither's one-stage v1's case or v2's bare case. The Lean runs on
+files in a 0700 scratch directory under ``--private``; Pearl+'s answer is the Lean verdict of record's.
 
 **No check runs outside a memory limit of its own, and none is started that cannot fit** (`lean_answer`, `Limits`).
 Each check is its own process in a systemd user scope of its own (``MemoryMax`` ``CHECK_MEM_GB``, default
@@ -140,18 +128,16 @@ from typing import Any
 
 from verity.commitments import docket_digest as DD
 from verity.commitments import domains as DM
-from verity.protocols.proofs.spot.verifier import levels as LV
-from verity.protocols.resource_accounting.compute.pouw.verifier import credit as Cr
-from verity.protocols.resource_accounting.compute.pouw.verifier import period_check as PC
-from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
-from verity.protocols.proofs.spot.verifier.one_stage import verifier as VF
+from verity.protocols.proof.spot.verifier import levels as LV
+from verity.protocols.proof.spot.verifier.one_stage import lean_child as LC, proofs as PF
+from verity.protocols.proof.spot.verifier.one_stage import verifier as VF
 from verity.circuits import codec
 
 ROOT = Path(__file__).resolve().parents[2]
 V1 = DM.ONE_STAGE_PROTOCOL
 V1_LEAN = (VF.PACKAGE, "spot-one-stage")
 SAMPLED = "verity/sampled-proofs/v1"
-SAMPLED_LEAN = (ROOT / "verity/protocols/proofs/spot_flock_recursion/verifier/lean", "vstar-recursive")
+SAMPLED_LEAN = (ROOT / "verity/protocols/proof/spot_flock_recursion/verifier/lean", "vstar-recursive")
 #: `vstar-recursive`'s command for SPOT (`VStarRecursiveMain.main` sends ``sampled`` to
 #: `VStar.Recursive.Sampled.protocol`), ahead of ``check``
 SAMPLED_CMD = ("sampled",)
@@ -160,30 +146,24 @@ INFERENCE_ONLY = "verity/inference-only/v0"
 #: the module beside this file that says where the tree holds the policy's check: its Lean package and executable
 #: (``LEAN``) and the Python that check is held to (``reference``), which `policy` loads by name
 POLICY = "inference_only_lean"
-PERIOD = PC.ID
 PEARL_PLUS = "verity/pouw/pearl-plus/v1"
-#: what Pearl+'s commitment's digest hashes ahead of a zero byte and the commitment (`PouwCheck.PearlPlus.Protocol`)
+#: what Pearl+'s commitment's digest hashes ahead of a zero byte and the commitment (`PouwVerifier.PearlPlus.Protocol`)
 PEARL_PLUS_TAG = b"verity/pouw/pearl-plus/manifests/v1"
 #: the keys of `served_passes.py case`'s parts that make the case and its answer
 PEARL_PLUS_PARTS = {"params", "manifests", "window", "evidence", "lean", "delta"}
-#: the commitment's window (`PouwCheck.PearlPlus.Protocol.windowKeys`)
+#: the commitment's window (`PouwVerifier.PearlPlus.Protocol.windowKeys`)
 PEARL_PLUS_WINDOW = {"dropped", "record", "rounds"}
-#: the work the protocol's check publishes (`PouwCheck.PearlPlus.Protocol.publicJson`, δ aside): the exact credit, which
+#: the work the protocol's check publishes (`PouwVerifier.PearlPlus.Protocol.publicJson`, δ aside): the exact credit, which
 #: holds no class, so where the verdict of record printed the grid form, its exact work in that form's place
-PEARL_PLUS_PUBLIC = ("credited", "credited_tiles", "epsilon", "macs", "rho")
-DIRS = {V1: "sampled-proofs-v1", SAMPLED: "sampled-proofs", INFERENCE_ONLY: "inference-only", PERIOD: "pouw-period",
+PEARL_PLUS_PUBLIC = ("checked_macs", "credited", "credited_tiles", "epsilon", "rho")
+DIRS = {V1: "sampled-proofs-v1", SAMPLED: "sampled-proofs", INFERENCE_ONLY: "inference-only",
         PEARL_PLUS: "pouw-pearl-plus", V2: "sampled-proofs-v2"}
-#: Under ``--serve-dir``: the serve's H1 log, a line a record H1's tie wrote (`serve_tie.LOG`: ``{"window", "kind",
-#: "file", "digest"}``, its file under the log's directory), the period case `served_pouw.sh` has `pouw_piece.py` write,
-#: and the parts of Pearl+'s case `served_pearlplus.sh` has `served_passes.py case` write.
-H1_LOG = Path("h1/log.jsonl")
-PERIOD_PIECE = Path("private/pouw/period")
 PEARL_PLUS_PIECE = Path("private/pearlplus/case")
 #: Under ``--serve-dir``: the serve's first registration record, where the serve wrote one before its first request
 #: (`served_verdicts.sh`'s weights step: every weight's root, chained after nothing)
 DEPLOYMENT = Path("deployment-registration.json")
 #: The docket records a serve dir holds beside its first, by where the harness keeps them: each window's Pearl+
-#: record W (`served_verdicts.sh`'s `pearl_tie`) and each window's record R as its audit wrote it. The compose hand-off
+#: record W and each window's record R as its audit wrote it. The compose hand-off
 #: lists every one there is (`served_verdicts.sh`'s `handoff_inputs`), so a copy of it holds each record a window's log
 #: can name
 RECORDS = ("pearlplus/w*/registration.json", "v3c-w*/audit/window/registration.json")
@@ -360,34 +340,6 @@ def sampled_case(audit: Path) -> dict[str, Any]:
     return with_levels(v2_case(audit))
 
 
-def period_case(d: Path, digest: str) -> tuple[dict[str, Any], str, Any]:
-    """PoUW's period case in ``d`` as `pouw_piece.py period` wrote it, its answer line and its verdict, once every window
-    of the period names the record of digest ``digest`` as its Commit record (`credit.commit_of`, as
-    `Core.Remote.executionPhaseRecords` reads each window's ``commit``): the record tie remote checks (`Core.Remote.windows`)."""
-    case = _json(d / "case.json")
-    _need(isinstance(case, dict) and CASE_KEYS <= set(case) <= CASE_KEYS | {"blobs"},
-          f"{d}/case.json is not a case: it holds {sorted(CASE_KEYS)} and its blobs")
-    try:
-        line = (d / "answer.json").read_text().strip()
-        answer = json.loads(line)
-    except (OSError, ValueError) as e:
-        raise Refused(f"the period's case has no answer line: {type(e).__name__}: {e}") from None
-    _need(isinstance(answer, dict) and answer.get("protocol") == PERIOD,
-          f"the period's answer is {answer.get('protocol') if isinstance(answer, dict) else None!r}'s, not {PERIOD}'s")
-    try:
-        windows = json.loads(bytes.fromhex(case["evidence"]))["windows"]
-    except (TypeError, ValueError, KeyError) as e:
-        raise Refused(f"the period's evidence names no windows: {type(e).__name__}: {e}") from None
-    _need(isinstance(windows, list) and windows != [], "the period's evidence names no windows")
-    for i, w in enumerate(windows):
-        got, why = Cr.commit_of(w.get("commit") if isinstance(w, Mapping) else None)
-        _need(why is None, f"window {i} of the period names no Commit record, so not the window's registration record "
-              f"{digest[:16]}…: {why[1] if why else ''}")
-        _need(got[0].hex() == digest, f"window {i} of the period names the Commit record {got[0].hex()[:16]}…, not the "
-              f"window's registration record {digest[:16]}…: remote's record tie rejects it")
-    return case, line, answer.get("verdict")
-
-
 def pearlplus_case(d: Path, digest: str) -> tuple[dict[str, Any], str, Any]:
     """Pearl+'s run case (module docstring) from the parts `served_passes.py case` wrote in ``d``, its commitment naming
     the record of digest ``digest``, its answer line and its verdict."""
@@ -457,33 +409,8 @@ def _chain(log: Sequence[Mapping[str, Any]], rec: Mapping[str, Any]) -> None:
         prev = DD.digest(r)
 
 
-def h1_log(path: Path, rec: Mapping[str, Any]) -> list[dict[str, Any]]:
-    """The deployment's records before ``rec``, oldest first, as the serve's H1 log ``path`` names them (`H1_LOG`), through
-    the one ``rec`` names as its ``previous``: under H1's tie each window's docket W and record R, up to the
-    window's own W, which its R is chained right after. Empty when ``rec`` names no previous record."""
-    if rec.get("previous") is None:
-        return []
-    try:
-        lines = [json.loads(x) for x in path.read_text().splitlines() if x.strip()]
-    except (OSError, ValueError) as e:
-        raise Refused(f"the record names a previous record, and the serve's H1 log isn't readable: {type(e).__name__}: "
-                      f"{e}") from None
-    log = []
-    for x in lines:
-        _need(isinstance(x, dict) and isinstance(x.get("file"), str) and isinstance(x.get("digest"), str),
-              f"a line of the serve's H1 log names no record file and digest: {str(x)[:200]}")
-        r = _json(path.parent / x["file"])
-        _need(isinstance(r, dict) and DD.digest(r) == x["digest"],
-              f"the serve's H1 log names {x['file']} as the record of digest {x['digest'][:16]}…, which it isn't")
-        log.append(r)
-        if x["digest"] == rec["previous"]:
-            return log
-    raise Refused("the record's previous is no record the serve's H1 log names, so its log doesn't chain from the "
-                  "deployment's first record")
-
-
 def pearl_log(serve: Path | None, parts: Path | None, rec: Mapping[str, Any]) -> list[dict[str, Any]]:
-    """The deployment's records before ``rec``, oldest first, on any serve dir without an H1 log, Pearl+'s or not:
+    """The deployment's records before ``rec``, oldest first, on any serve dir, Pearl+'s or not:
     walked back from the record ``rec`` names as its ``previous`` to one whose ``previous`` is null, each taken by the
     digest the record after it names, however many there are. On the harness's serve tied to Pearl+ that is the record
     W Pearl+'s passes are held to, which ``rec`` is chained right after (the tie `Core.Remote.V1.window` checks), and
@@ -693,8 +620,8 @@ def lean_answer(exe: str | os.PathLike, case: Mapping[str, Any], scratch: Path,
                                 bytes.fromhex(case["evidence"]))):
             f.write_bytes(b)
             os.chmod(f, 0o600)
-        p = subprocess.run([*(within.scope or ()), str(exe), *cmd, "check", *map(str, files), *case.get("blobs", ())],
-                           capture_output=True, text=True)
+        p = LC.run([*(within.scope or ()), str(exe), *cmd, "check", *map(str, files), *case.get("blobs", ())],
+                   ok_statuses=LC.CHECK_EXITS)
     lines = p.stdout.strip().splitlines()
     try:
         answer = json.loads(lines[-1])
@@ -744,15 +671,6 @@ def audit_of(a: argparse.Namespace) -> Path:
     return found[0]
 
 
-def period_of(a: argparse.Namespace) -> Path | None:
-    """The period case's directory: ``--period``, else with ``--serve-dir`` `PERIOD_PIECE` when it holds a case."""
-    if a.period is not None:
-        return a.period
-    if a.serve_dir is not None and (a.serve_dir / PERIOD_PIECE / "case.json").is_file():
-        return a.serve_dir / PERIOD_PIECE
-    return None
-
-
 def pearlplus_of(a: argparse.Namespace) -> Path | None:
     """Pearl+'s case's parts: ``--pearlplus``, else with ``--serve-dir`` `PEARL_PLUS_PIECE` when it holds them."""
     if a.pearlplus is not None:
@@ -763,13 +681,13 @@ def pearlplus_of(a: argparse.Namespace) -> Path | None:
 
 
 def produce(a: argparse.Namespace) -> int:
-    private, bad, period, pearlplus = a.private.resolve(), 0, period_of(a), pearlplus_of(a)
+    private, bad, pearlplus = a.private.resolve(), 0, pearlplus_of(a)
     try:
         audit = audit_of(a)
         v1 = window_case(audit)
         rec, digest = record_of(v1)
     except Refused as e:
-        for id in [V1, SAMPLED, INFERENCE_ONLY] + ([PERIOD] if period else []) + ([PEARL_PLUS] if pearlplus else []) \
+        for id in [V1, SAMPLED, INFERENCE_ONLY] + ([PEARL_PLUS] if pearlplus else []) \
                 + ([V2] if a.v2 else []):
             print("NOT_WRITTEN " + json.dumps({"protocol": id, "reason": str(e)}, sort_keys=True), flush=True)
         return 1
@@ -808,8 +726,6 @@ def produce(a: argparse.Namespace) -> int:
     def inference_only() -> dict[str, Any]:
         if a.log is not None:
             log = _json(a.log)
-        elif a.serve_dir is not None and (a.serve_dir / H1_LOG).is_file():
-            log = h1_log(a.serve_dir / H1_LOG, rec)
         elif pearlplus is not None or a.serve_dir is not None:
             log = pearl_log(a.serve_dir, pearlplus, rec)
         else:
@@ -824,11 +740,6 @@ def produce(a: argparse.Namespace) -> int:
         return inference_only_case(v1, alpha, gamma, log, circuit_of(audit))
 
     one(INFERENCE_ONLY, inference_only, inference_only_exe)
-    if period is not None:
-        try:
-            written(PERIOD, *period_case(period, digest))
-        except Refused as e:
-            refused(PERIOD, e)
     if pearlplus is not None:
         try:
             written(PEARL_PLUS, *pearlplus_case(pearlplus, digest))
@@ -837,6 +748,10 @@ def produce(a: argparse.Namespace) -> int:
     if a.v2:
         one(V2, lambda: v2_case(audit), functools.cache(lambda: a.v2_exe or PF.v2_executable()))
     return bad
+
+
+#: what a request for PoUW H1's period case, or a serve dir of H1's, is refused with
+H1_REFUSED = "PoUW H1 is deleted, so its period case and its serves are; PoUW's case is Pearl+'s (--pearlplus)"
 
 
 class Parser(argparse.ArgumentParser):
@@ -856,9 +771,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--from-division", action="store_true",
                     help="α and Γ read off the case's own division (division_policy) instead of given")
     ap.add_argument("--log", type=Path, help="the deployment's registration records before the window's, a JSON list "
-                    "(default with --serve-dir: its H1 log's, h1_log, else the serve's own registration records, pearl_log)")
-    ap.add_argument("--period", type=Path, help="PoUW's period case, pouw_piece.py period's --out (default with "
-                    f"--serve-dir: its {PERIOD_PIECE} when it holds a case)")
+                    "(default with --serve-dir: the serve's own registration records, pearl_log)")
+    ap.add_argument("--period", type=Path, help=argparse.SUPPRESS)
     ap.add_argument("--pearlplus", type=Path, help="Pearl+'s case's parts, served_passes.py case's --out (default with "
                     f"--serve-dir: its {PEARL_PLUS_PIECE} when it holds them)")
     ap.add_argument("--v1-exe", help=f"{V1_LEAN[1]} (default: built here)")
@@ -868,6 +782,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--v2", action="store_true", help="one-stage v2's case too (v2_case), in sampled-proofs-v2/")
     ap.add_argument("--v2-exe", help=f"{PF.V2_EXE}, with --v2 (default: built here)")
     a = ap.parse_args(argv)
+    if a.period is not None:
+        ap.error(f"--period: {H1_REFUSED}")
+    if a.serve_dir is not None and (a.serve_dir / "h1" / "log.jsonl").is_file():
+        ap.error(f"--serve-dir holds PoUW H1's log (h1/log.jsonl): {H1_REFUSED}")
     if a.from_division and (a.alpha is not None or a.gamma is not None):
         ap.error("--from-division reads α and Γ off the division: not with --alpha or --gamma")
     if a.v2_exe is not None and not a.v2:

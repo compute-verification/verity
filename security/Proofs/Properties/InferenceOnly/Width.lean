@@ -645,12 +645,12 @@ theorem tail_eq (W : ℕ → ℕ) (ivs : Array (ℕ × ℕ × ℕ)) (cls : Array
 
 /-! ## Segments -/
 
-/-- A piece's gates with their widths: element `t` of row `r` is gate `base + r * rowStride + t * stride`, with one row
+/-- A piece's gates with their widths: element `t` of row `r` is gate `base + rowOff r + t * stride`, with one row
 when it has none (as `Desc.Piece.pis` reads it); a parameter's leaves are no gates. -/
 def pieceGates (q : Piece) : List (ℤ × ℕ) :=
   match q.tgt with
   | .gate w => (List.range (max q.rows 1)).flatMap fun (r : ℕ) => (List.range q.len).map fun (t : ℕ) =>
-      (q.base + (r : ℤ) * q.rowStride + (t : ℤ) * q.stride, w)
+      (q.base + q.rowOff r + (t : ℤ) * q.stride, w)
   | .ref _ _ => []
 
 def piecesGates (ps : Array Piece) : List (ℤ × ℕ) := ps.toList.flatMap pieceGates
@@ -696,13 +696,15 @@ theorem piecesGates_shift (δ : ℤ) (ps : Array Piece) :
   funext q
   rcases hq : q.tgt with p | w
   · simp [pieceGates, hq]
-  · simp only [pieceGates, hq, List.map_flatMap, List.map_map]
+  · simp only [pieceGates, hq, List.map_flatMap, List.map_map, Piece.rowOff]
     congr 1; funext r; congr 1; funext t
     simp only [Function.comp, Prod.mk.injEq, and_true]
     ring
 
-theorem copy_gates (s : Seg) (m : ℕ) : piecesGates (s.copy m) = (piecesGates s.ps).map fun x => (x.1 + m * s.shift, x.2) :=
-  piecesGates_shift _ _
+theorem copy_gates (s : Seg) (m : ℕ) (h : s.lanes = false) :
+    piecesGates (s.copy m) = (piecesGates s.ps).map fun x => (x.1 + m * s.shift, x.2) := by
+  simp only [Seg.copy, h, Bool.false_eq_true, ↓reduceIte]
+  exact piecesGates_shift _ _
 
 theorem FGs_append (A B : List Cl) : FGs (A ++ B) = FGs A ∪ FGs B := by
   ext a; simp only [mem_FGs, Finset.mem_union, List.mem_append]
@@ -756,32 +758,10 @@ theorem copiesStep_inv (hG : GateIvsExact) (W : ℕ → ℕ) (s : Seg) (acc : Ar
   simp only [hr, ↓reduceIte]
   have hseg : segGates s = (List.range s.reps).flatMap fun m => piecesGates (s.copy m) := by
     simp [segGates, hr]
-  have hcopy : ∀ m < s.reps, ∀ x ∈ piecesGates s.ps, ((x.1 + m * s.shift, x.2) : ℤ × ℕ) ∈ segGates s := by
-    intro m hm x hx
-    rw [hseg, List.mem_flatMap]
-    exact ⟨m, List.mem_range.2 hm, by rw [copy_gates]; exact List.mem_map.2 ⟨x, hx, rfl⟩⟩
-  have hnn0 : ∀ x ∈ piecesGates s.ps, 0 ≤ x.1 := fun x hx => by
-    simpa using hnn _ (hcopy 0 (by omega) x hx)
-  have hW0 : ∀ x ∈ piecesGates s.ps, W x.1.toNat = x.2 := fun x hx => by
-    simpa using hW _ (hcopy 0 (by omega) x hx)
-  obtain ⟨hrA, hrG⟩ := gate_rep hG s.ps hnn0 W hW0
-  have hsound := (hG s.ps hnn0).1
-  set r := gateIvs s.ps with hrdef
-  by_cases he : r.isEmpty
-  · simp only [he, ↓reduceIte]
-    have hnil : piecesGates s.ps = [] := by
-      rcases hl : piecesGates s.ps with _ | ⟨x, l⟩
-      · rfl
-      · exfalso
-        obtain ⟨iv, hiv, -⟩ := (hG s.ps hnn0).2 x (by rw [hl]; exact List.mem_cons_self ..)
-        rw [← hrdef] at hiv
-        simp [Array.isEmpty_iff.1 (by simpa using he)] at hiv
-    have : gs (segGates s) = ∅ := by
-      rw [hseg]; ext a; simp [mem_gs, copy_gates, hnil]
-    rw [this, Finset.union_empty]; exact ⟨hI, hF, rfl⟩
-  simp only [he, ↓reduceIte, Bool.false_eq_true]
-  split_ifs with hcase
-  · -- the copies' intervals
+  have hcopies : Agree W (acc.1 ++ (Array.range s.reps).flatMap fun m => gateIvs (s.copy m)).toList ∧
+      (∀ x ∈ acc.2.toList, FrameOk W x) ∧
+      ivGates (acc.1 ++ (Array.range s.reps).flatMap fun m => gateIvs (s.copy m)).toList ∪ FGs acc.2.toList =
+        ivGates acc.1.toList ∪ FGs acc.2.toList ∪ gs (segGates s) := by
     have hrep : ∀ m < s.reps, Agree W (gateIvs (s.copy m)).toList ∧
         ivGates (gateIvs (s.copy m)).toList = gs (piecesGates (s.copy m)) := by
       intro m hm
@@ -810,6 +790,38 @@ theorem copiesStep_inv (hG : GateIvsExact) (W : ℕ → ℕ) (s : Seg) (acc : Ar
           exact ⟨m, hm, by rw [(hrep m hm).2, mem_gs]; exact ⟨x, hx, rfl⟩⟩
       rw [this]
       exact Finset.union_right_comm _ _ _
+  by_cases hrw : s.lanes = true
+  · simp only [hrw, ↓reduceIte]; exact hcopies
+  have hrw' : s.lanes = false := by simpa using hrw
+  simp only [hrw', Bool.false_eq_true, ↓reduceIte]
+  have hcg : ∀ m, piecesGates (s.copy m) = (piecesGates s.ps).map fun x => (x.1 + m * s.shift, x.2) :=
+    fun m => copy_gates s m hrw'
+  have hcopy : ∀ m < s.reps, ∀ x ∈ piecesGates s.ps, ((x.1 + m * s.shift, x.2) : ℤ × ℕ) ∈ segGates s := by
+    intro m hm x hx
+    rw [hseg, List.mem_flatMap]
+    exact ⟨m, List.mem_range.2 hm, by rw [hcg]; exact List.mem_map.2 ⟨x, hx, rfl⟩⟩
+  have hnn0 : ∀ x ∈ piecesGates s.ps, 0 ≤ x.1 := fun x hx => by
+    simpa using hnn _ (hcopy 0 (by omega) x hx)
+  have hW0 : ∀ x ∈ piecesGates s.ps, W x.1.toNat = x.2 := fun x hx => by
+    simpa using hW _ (hcopy 0 (by omega) x hx)
+  obtain ⟨hrA, hrG⟩ := gate_rep hG s.ps hnn0 W hW0
+  have hsound := (hG s.ps hnn0).1
+  set r := gateIvs s.ps with hrdef
+  by_cases he : r.isEmpty
+  · simp only [he, ↓reduceIte]
+    have hnil : piecesGates s.ps = [] := by
+      rcases hl : piecesGates s.ps with _ | ⟨x, l⟩
+      · rfl
+      · exfalso
+        obtain ⟨iv, hiv, -⟩ := (hG s.ps hnn0).2 x (by rw [hl]; exact List.mem_cons_self ..)
+        rw [← hrdef] at hiv
+        simp [Array.isEmpty_iff.1 (by simpa using he)] at hiv
+    have : gs (segGates s) = ∅ := by
+      rw [hseg]; ext a; simp [mem_gs, hcg, hnil]
+    rw [this, Finset.union_empty]; exact ⟨hI, hF, rfl⟩
+  simp only [he, ↓reduceIte, Bool.false_eq_true]
+  split_ifs with hcase
+  · exact hcopies
   · -- one frame
     simp only [Bool.or_eq_true, decide_eq_true_eq, not_or, not_le, gt_iff_lt, not_lt] at hcase
     obtain ⟨hsh, hspan⟩ := hcase
@@ -854,7 +866,7 @@ theorem copiesStep_inv (hG : GateIvsExact) (W : ℕ → ℕ) (s : Seg) (acc : Ar
     have hFG : FG x = gs (segGates s) := by
       ext a
       rw [FG, mem_frame, mem_gs, hseg]
-      simp only [List.mem_flatMap, List.mem_range, copy_gates, List.mem_map]
+      simp only [List.mem_flatMap, List.mem_range, hcg, List.mem_map]
       constructor
       · rintro ⟨m, hm, b, hb, rfl⟩
         rw [hres, hrG, mem_gs] at hb
@@ -974,10 +986,10 @@ theorem freshWidthExact_of (hG : GateIvsExact) : FreshWidthExact := by
 
 /-! ## `gateIvs`, from `ivsOf` -/
 
-/-- A piece's elements: element `t` of row `r` is `base + r * rowStride + t * stride`, with one row when it has none. -/
+/-- A piece's elements: element `t` of row `r` is `base + rowOff r + t * stride`, with one row when it has none. -/
 def elems (q : Piece) : List ℤ :=
   (List.range (max q.rows 1)).flatMap fun (r : ℕ) => (List.range q.len).map fun (t : ℕ) =>
-    q.base + (r : ℤ) * q.rowStride + (t : ℤ) * q.stride
+    q.base + q.rowOff r + (t : ℤ) * q.stride
 
 theorem pieceGates_gate {q : Piece} {w : ℕ} (h : q.tgt = .gate w) : pieceGates q = (elems q).map fun e => (e, w) := by
   simp [pieceGates, h, elems, List.map_flatMap, Function.comp_def]
@@ -1265,26 +1277,153 @@ theorem ivsOfExact_of (hP : PisExact) : IvsOfExact := by
   · obtain ⟨x, hx, ha⟩ := (hP q (hnn q hq)).2 e he
     exact (ivsOf_spec qs e.toNat).2 ⟨x, by rw [Array.toList_flatMap, List.mem_flatMap]; exact ⟨q, hq, hx⟩, ha⟩
 
+/-! ## The used leaves' intervals (`Desc.Ivs.norm`, `Desc.Ivs.covers`) -/
+
+/-- `Desc.Ivs.norm`'s step: an interval starting within the last one's extends it, else it follows. -/
+def normStep (acc : Array (Nat × Nat)) (p : Nat × Nat) : Array (Nat × Nat) :=
+  match acc.back? with
+  | some (c, e) => if p.1 ≤ e then acc.pop.push (c, max p.2 e) else acc.push p
+  | none => acc.push p
+
+theorem norm_eq (xs : Array (Nat × Nat)) :
+    Desc.Ivs.norm xs =
+      ((xs.filter fun p => p.1 < p.2).toList.mergeSort fun x y => decide (x.1 ≤ y.1)).foldl normStep #[] := by
+  unfold Desc.Ivs.norm
+  rfl
+
+/-- `List.mergeSort` by starts sorts by them. -/
+theorem sorted_starts (L : List (Nat × Nat)) :
+    (L.mergeSort fun x y => decide (x.1 ≤ y.1)).Pairwise (fun x y => x.1 ≤ y.1) :=
+  (List.pairwise_mergeSort (le := fun x y : Nat × Nat => decide (x.1 ≤ y.1))
+    (fun a b c hab hbc => by simp only [decide_eq_true_eq] at *; omega)
+    (fun a b => by simp only [Bool.or_eq_true, decide_eq_true_eq]; omega) L).imp fun h => by simpa using h
+
+theorem inIvs_push (acc : Array (Nat × Nat)) (p : Nat × Nat) (a : Nat) :
+    inIvs (acc.push p).toList a ↔ inIvs acc.toList a ∨ (p.1 ≤ a ∧ a < p.2) := by
+  rw [Array.toList_push, inIvs_append]
+  simp [inIvs]
+
+/-- Every leaf `Desc.Ivs.norm`'s steps keep is in an interval they were given. -/
+theorem normFold_sub : ∀ (l : List (Nat × Nat)) (acc : Array (Nat × Nat)) (a : Nat),
+    inIvs (l.foldl normStep acc).toList a → inIvs acc.toList a ∨ inIvs l a
+  | [], acc, a, h => Or.inl h
+  | p :: l, acc, a, h => by
+    rw [List.foldl_cons] at h
+    have hp : inIvs (p :: l) a ↔ (p.1 ≤ a ∧ a < p.2) ∨ inIvs l a := by
+      rw [show p :: l = [p] ++ l from rfl, inIvs_append]; simp [inIvs]
+    rw [hp]
+    rcases normFold_sub l (normStep acc p) a h with h | h
+    · unfold normStep at h
+      rcases hb : acc.back? with _ | ⟨c, e⟩ <;> rw [hb] at h <;> dsimp only at h
+      · rw [inIvs_push] at h; tauto
+      · obtain ⟨ys, rfl⟩ := Array.back?_eq_some_iff.1 hb
+        split at h
+        · rename_i hpe
+          rw [Array.pop_push, inIvs_push] at h
+          rw [inIvs_push]
+          rcases h with h | ⟨h1, h2⟩
+          · exact Or.inl (Or.inl h)
+          · by_cases hae : a < e
+            · exact Or.inl (Or.inr ⟨h1, hae⟩)
+            · exact Or.inr (Or.inl ⟨by omega, by omega⟩)
+        · rw [inIvs_push] at h; tauto
+    · exact Or.inr (Or.inr h)
+
+/-- Over intervals sorted by their starts, `Desc.Ivs.norm`'s steps keep every leaf they are given. -/
+theorem normFold_sup : ∀ (l : List (Nat × Nat)) (acc : Array (Nat × Nat)), l.Pairwise (fun x y => x.1 ≤ y.1) →
+    (∀ p ∈ l, ∀ x, acc.back? = some x → x.1 ≤ p.1) → ∀ a,
+      inIvs acc.toList a ∨ inIvs l a → inIvs (l.foldl normStep acc).toList a
+  | [], acc, _, _, a, h => by
+    rcases h with h | ⟨iv, hiv, -⟩
+    · exact h
+    · simp at hiv
+  | p :: l, acc, hs, hb, a, h => by
+    rw [List.foldl_cons]
+    have hs' := List.pairwise_cons.1 hs
+    apply normFold_sup l (normStep acc p) hs'.2
+    · intro q hq x hx
+      unfold normStep at hx
+      rcases hb' : acc.back? with _ | ⟨c, e⟩ <;> rw [hb'] at hx <;> dsimp only at hx
+      · rw [Array.back?_push] at hx; cases hx; exact hs'.1 q hq
+      · split at hx
+        · rw [Array.back?_push] at hx; cases hx
+          exact Nat.le_trans (hb p List.mem_cons_self (c, e) hb') (hs'.1 q hq)
+        · rw [Array.back?_push] at hx; cases hx; exact hs'.1 q hq
+    · have hp : inIvs (p :: l) a ↔ (p.1 ≤ a ∧ a < p.2) ∨ inIvs l a := by
+        rw [show p :: l = [p] ++ l from rfl, inIvs_append]; simp [inIvs]
+      rw [hp] at h
+      unfold normStep
+      rcases hb' : acc.back? with _ | ⟨c, e⟩ <;> dsimp only
+      · rw [inIvs_push]; tauto
+      · obtain ⟨ys, rfl⟩ := Array.back?_eq_some_iff.1 hb'
+        have hc : c ≤ p.1 := hb p List.mem_cons_self _ hb'
+        split
+        · rename_i hpe
+          rw [Array.pop_push, inIvs_push]
+          rw [inIvs_push] at h
+          rcases h with (h | ⟨h1, h2⟩) | (⟨h1, h2⟩ | h)
+          · exact Or.inl (Or.inl h)
+          · exact Or.inl (Or.inr ⟨h1, by omega⟩)
+          · exact Or.inl (Or.inr ⟨by omega, by omega⟩)
+          · exact Or.inr h
+        · rw [inIvs_push]; tauto
+
+
+theorem inIvs_nonempty (xs : Array (Nat × Nat)) (a : Nat) :
+    inIvs (xs.filter fun p => p.1 < p.2).toList a ↔ inIvs xs.toList a := by
+  simp only [inIvs, Array.toList_filter, List.mem_filter, decide_eq_true_eq]
+  constructor
+  · rintro ⟨iv, ⟨hiv, -⟩, h⟩; exact ⟨iv, hiv, h⟩
+  · rintro ⟨iv, hiv, h⟩; exact ⟨iv, ⟨hiv, by omega⟩, h⟩
+
+/-- **Every leaf of `Desc.Ivs.norm`'s intervals is in one it was given.** -/
+theorem norm_sub (xs : Array (Nat × Nat)) (a : Nat) (h : inIvs (Desc.Ivs.norm xs).toList a) :
+    inIvs xs.toList a := by
+  rw [norm_eq] at h
+  rcases normFold_sub _ #[] a h with h | ⟨iv, hiv, h⟩
+  · obtain ⟨iv, hiv, -⟩ := h; simp at hiv
+  · rw [← inIvs_nonempty]
+    exact ⟨iv, (List.mergeSort_perm _ _).mem_iff.1 hiv, h⟩
+
+/-- **`Desc.Ivs.norm` keeps exactly its intervals' leaves.** -/
+theorem norm_mem (xs : Array (Nat × Nat)) (a : Nat) :
+    inIvs (Desc.Ivs.norm xs).toList a ↔ inIvs xs.toList a := by
+  refine ⟨norm_sub xs a, fun h => ?_⟩
+  rw [norm_eq]
+  apply normFold_sup _ #[] (sorted_starts _) (fun p _ x hx => by simp at hx)
+  rw [← inIvs_nonempty] at h
+  obtain ⟨iv, hiv, h⟩ := h
+  exact Or.inr ⟨iv, (List.mergeSort_perm _ _).mem_iff.2 hiv, h⟩
+
+/-- **What `Desc.Ivs.covers` checks**: every leaf below `n` is in an interval. -/
+theorem covers_mem (s : Desc.Ivs) (n : Nat) (h : s.covers n = true) (a : Nat) (ha : a < n) :
+    inIvs s.toList a := by
+  unfold Desc.Ivs.covers at h
+  simp only [Bool.or_eq_true, beq_iff_eq, Bool.and_eq_true, decide_eq_true_eq] at h
+  rcases h with h | ⟨⟨h1, h2⟩, h3⟩
+  · omega
+  · refine ⟨s[0]!, ?_, by omega, by omega⟩
+    rw [getElem!_pos s 0 (by omega)]
+    exact Array.getElem_mem_toList _
+
 /-! ## `Piece.pis` -/
 
 /-- `Piece.pis`'s first element of a progression `b + i * s`, `i < k`: its smallest. -/
 def rlo (s : ℤ) (k : ℕ) (b : ℤ) : ℕ := (if s ≥ 0 then b else b + ((k - 1 : ℕ) : ℤ) * s).toNat
 
-/-- `Piece.pis`'s one row. -/
-def one (q : Piece) : Array PI :=
-  if q.len == 0 then #[]
-  else if q.stride == 0 || q.len == 1 then #[⟨q.base.toNat, 1, 1, 1⟩]
-  else
-    let lo := (if q.stride > 0 then q.base else q.at (q.len - 1)).toNat
-    if q.stride.natAbs == 1 then #[⟨lo, q.len, 1, 1⟩] else #[⟨lo, 1, q.stride.natAbs, q.len⟩]
+/-- The periods levels count: their radices' product (`Lane.periods`). -/
+def prodL (L : List (ℕ × ℤ)) : ℕ := L.foldl (fun a p => a * p.1) 1
 
 theorem pis_eq (q : Piece) : q.pis =
-    if q.rows ≤ 1 || q.len == 0 then one (q.row 0)
+    if q.rows ≤ 1 || q.len == 0 then (q.row 0).rowPis
+    else if !q.lv.isEmpty then
+      if q.start == 0 && q.rows == prodL q.lv then q.levelIvs.map fun p => ⟨p.1, p.2 - p.1, 1, 1⟩
+      else q.rowsOf.flatMap Piece.rowPis
     else if q.stride.natAbs == 1 || q.len == 1 then
       #[⟨rlo q.rowStride q.rows (rlo q.stride q.len q.base : ℤ), q.len, q.rowStride.natAbs, q.rows⟩]
     else if q.rowStride.natAbs == 1 && q.stride.natAbs ≥ q.rows then
       #[⟨rlo q.stride q.len (rlo q.rowStride q.rows q.base : ℤ), q.rows, q.stride.natAbs, q.len⟩]
-    else q.rowsOf.flatMap one := rfl
+    else q.rowsOf.flatMap Piece.rowPis := rfl
 
 /-- **A progression is its smallest element on.** Of `b + i * s`, `i < k`, all naturals: they are
 `rlo s k b + j * |s|`, `j < k`. -/
@@ -1358,8 +1497,8 @@ theorem grid (b s₁ s₂ : ℤ) (k₁ k₂ : ℕ) (hk₁ : 0 < k₁) (hk₂ : 0
     exact_mod_cast this
 
 theorem one_spec (q : Piece) (hnn : ∀ t < q.len, 0 ≤ q.base + (t : ℤ) * q.stride) (a : ℕ) :
-    (∃ x ∈ (one q).toList, inPI x a) ↔ ∃ t < q.len, (a : ℤ) = q.base + (t : ℤ) * q.stride := by
-  unfold one
+    (∃ x ∈ q.rowPis.toList, inPI x a) ↔ ∃ t < q.len, (a : ℤ) = q.base + (t : ℤ) * q.stride := by
+  unfold Piece.rowPis
   by_cases h0 : q.len = 0
   · simp [h0]
   have hb := hnn 0 (by omega)
@@ -1405,7 +1544,7 @@ theorem one_spec (q : Piece) (hnn : ∀ t < q.len, 0 ≤ q.base + (t : ℤ) * q.
         push_cast; linarith)
 
 theorem mem_elems {q : Piece} {e : ℤ} : e ∈ elems q ↔
-    ∃ r < max q.rows 1, ∃ t < q.len, e = q.base + (r : ℤ) * q.rowStride + (t : ℤ) * q.stride := by
+    ∃ r < max q.rows 1, ∃ t < q.len, e = q.base + q.rowOff r + (t : ℤ) * q.stride := by
   unfold elems
   constructor
   · intro h
@@ -1415,40 +1554,211 @@ theorem mem_elems {q : Piece} {e : ℤ} : e ∈ elems q ↔
   · rintro ⟨r, hr, t, ht, rfl⟩
     exact List.mem_flatMap.2 ⟨r, List.mem_range.2 hr, List.mem_map.2 ⟨t, List.mem_range.2 ht, rfl⟩⟩
 
+/-! ### A whole lane, level by level (`Piece.levelIvs`) -/
+
+theorem rowPis_cnt (q : Piece) : ∀ x ∈ q.rowPis.toList, 0 < x.cnt := by
+  intro x hx
+  unfold Piece.rowPis at hx
+  dsimp only at hx
+  split_ifs at hx with h1 h2 h3 <;> simp at hx <;> subst hx <;> simp_all <;> omega
+
+theorem ivs_fold (a : ℕ) : ∀ (L : List PI) (out : Array (ℕ × ℕ)), (∀ x ∈ L, 0 < x.cnt) →
+    (inIvs (L.foldl PI.emit out).toList a ↔ inIvs out.toList a ∨ ∃ x ∈ L, inPI x a)
+  | [], out, _ => by simp
+  | x :: L, out, h => by
+    rw [List.foldl_cons, ivs_fold a L _ (fun y hy => h y (List.mem_cons_of_mem _ hy)),
+      emit_spec out x (h x List.mem_cons_self)]
+    simp only [List.mem_cons, or_and_right, exists_or, exists_eq_left, or_assoc]
+
+theorem ivs_spec (xs : Array PI) (h : ∀ x ∈ xs.toList, 0 < x.cnt) (a : ℕ) :
+    inIvs (PI.ivs xs).toList a ↔ ∃ x ∈ xs.toList, inPI x a := by
+  unfold PI.ivs
+  rw [← Array.foldl_toList, ivs_fold a _ _ h]
+  simp [inIvs]
+
+theorem ivPI_mem (L : Array (ℕ × ℕ)) (a : ℕ) :
+    (∃ x ∈ (L.map fun p => (⟨p.1, p.2 - p.1, 1, 1⟩ : PI)).toList, inPI x a) ↔ inIvs L.toList a := by
+  simp only [Array.toList_map, List.mem_map, inIvs]
+  constructor
+  · rintro ⟨_, ⟨p, hp, rfl⟩, hx⟩
+    obtain ⟨c, hc, t, ht, rfl⟩ := hx
+    dsimp only at hc ht ⊢
+    exact ⟨p, hp, by omega, by omega⟩
+  · rintro ⟨p, hp, h1, h2⟩
+    exact ⟨_, ⟨p, hp, rfl⟩, 0, by dsimp only; omega, a - p.1, by dsimp only; omega, by dsimp only; omega⟩
+
+/-- `Piece.levelIvs`'s step at a level of radix `r` and step `d`. -/
+def lvStep (I : Ivs) (p : ℕ × ℤ) : Ivs :=
+  Ivs.norm ((Array.range p.1).flatMap fun (c : Nat) => I.map fun (x : ℕ × ℕ) =>
+    (((x.1 : Int) + (c : Int) * p.2).toNat, ((x.2 : Int) + (c : Int) * p.2).toNat))
+
+theorem levelIvs_eq (q : Piece) : q.levelIvs = q.lv.foldl lvStep (Ivs.norm (PI.ivs (q.row 0).rowPis)) := rfl
+
+theorem lvStep_mem (I : Ivs) (r : ℕ) (d : ℤ) (a : ℕ) :
+    inIvs (lvStep I (r, d)).toList a ↔ ∃ c < r, ∃ b : ℕ, inIvs I.toList b ∧ (a : ℤ) = b + c * d := by
+  unfold lvStep
+  rw [norm_mem]
+  simp only [inIvs, Array.toList_flatMap, Array.toList_map, Array.toList_range, List.mem_flatMap, List.mem_map,
+    List.mem_range]
+  constructor
+  · rintro ⟨_, ⟨c, hc, x, hx, rfl⟩, h1, h2⟩
+    dsimp only at h1 h2
+    rw [Int.toNat_le] at h1
+    rw [Int.lt_toNat] at h2
+    have hb : 0 ≤ (a : ℤ) - c * d := by omega
+    have hbe := Int.toNat_of_nonneg hb
+    exact ⟨c, hc, ((a : ℤ) - c * d).toNat, ⟨x, hx, by omega, by omega⟩, by omega⟩
+  · rintro ⟨c, hc, b, ⟨x, hx, h1, h2⟩, h⟩
+    refine ⟨_, ⟨c, hc, x, hx, rfl⟩, ?_, ?_⟩ <;> dsimp only
+    · rw [Int.toNat_le]; omega
+    · rw [Int.lt_toNat]; omega
+
+/-- One level's shifts of `R`: `b + c * d`, `c < r`. -/
+def shift (R : ℤ → Prop) (r : ℕ) (d : ℤ) (z : ℤ) : Prop := ∃ c < r, ∃ b, R b ∧ z = b + (c : ℤ) * d
+
+/-- `R` shifted level by level, innermost first. -/
+def Reach : (ℤ → Prop) → List (ℕ × ℤ) → ℤ → Prop
+  | R, [], y => R y
+  | R, (r, d) :: L, y => Reach (shift R r d) L y
+
+/-- Every set `Reach` passes through, but the last, is of naturals. -/
+def NN : (ℤ → Prop) → List (ℕ × ℤ) → Prop
+  | _, [] => True
+  | R, (r, d) :: L => (∀ y, R y → 0 ≤ y) ∧ NN (shift R r d) L
+
+theorem fold_reach : ∀ (L : List (ℕ × ℤ)) (I : Ivs) (R : ℤ → Prop), (∀ a : ℕ, inIvs I.toList a ↔ R a) → NN R L →
+    ∀ a : ℕ, inIvs (L.foldl lvStep I).toList a ↔ Reach R L a
+  | [], I, R, hI, _, a => by simpa [Reach] using hI a
+  | (r, d) :: L, I, R, hI, hN, a => by
+    rw [List.foldl_cons]
+    refine fold_reach L _ (shift R r d) (fun a => ?_) hN.2 a
+    rw [lvStep_mem]
+    constructor
+    · rintro ⟨c, hc, b, hb, h⟩
+      exact ⟨c, hc, b, (hI b).1 hb, h⟩
+    · rintro ⟨c, hc, b, hb, h⟩
+      have h0 := hN.1 b hb
+      have hbe := Int.toNat_of_nonneg h0
+      exact ⟨c, hc, b.toNat, (hI _).2 (by rw [hbe]; exact hb), by omega⟩
+
+theorem sub_reach : ∀ (L : List (ℕ × ℤ)) (R : ℤ → Prop), (∀ p ∈ L, 0 < p.1) → ∀ y, R y → Reach R L y
+  | [], _, _, _, h => h
+  | (r, d) :: L, R, hL, y, h =>
+    sub_reach L (shift R r d) (fun p hp => hL p (List.mem_cons_of_mem _ hp)) y
+      ⟨0, hL (r, d) List.mem_cons_self, y, h, by simp⟩
+
+theorem nn_of : ∀ (L : List (ℕ × ℤ)) (R : ℤ → Prop), (∀ p ∈ L, 0 < p.1) → (∀ y, Reach R L y → 0 ≤ y) → NN R L
+  | [], _, _, _ => trivial
+  | (r, d) :: L, R, hL, h =>
+    ⟨fun y hy => h y (sub_reach ((r, d) :: L) R hL y hy),
+      nn_of L (shift R r d) (fun p hp => hL p (List.mem_cons_of_mem _ hp)) h⟩
+
+theorem foldl_mul : ∀ (L : List (ℕ × ℤ)) (k : ℕ), L.foldl (fun a p => a * p.1) k = k * prodL L
+  | [], k => by simp [prodL]
+  | p :: L, k => by
+    simp only [prodL, List.foldl_cons]
+    rw [foldl_mul L (k * p.1), foldl_mul L (1 * p.1)]
+    ring
+
+theorem prodL_cons (r : ℕ) (d : ℤ) (L : List (ℕ × ℤ)) : prodL ((r, d) :: L) = r * prodL L := by
+  rw [prodL, List.foldl_cons, foldl_mul]
+  simp
+
+theorem prodL_pos : ∀ L : List (ℕ × ℤ), prodL L ≠ 0 → ∀ p ∈ L, 0 < p.1
+  | [], _ => by simp
+  | (r, d) :: L, h => by
+    rw [prodL_cons] at h
+    intro p hp
+    rcases List.mem_cons.1 hp with rfl | hp
+    · exact Nat.pos_of_ne_zero (left_ne_zero_of_mul h)
+    · exact prodL_pos L (right_ne_zero_of_mul h) p hp
+
+theorem go_cons₂ (r : ℕ) (d : ℤ) (x : ℕ × ℤ) (xs : List (ℕ × ℤ)) (n : ℕ) :
+    Flock.Program.Lane.leafAt.go ((r, d) :: x :: xs) n =
+      ((n % r : ℕ) : ℤ) * d + Flock.Program.Lane.leafAt.go (x :: xs) (n / r) := rfl
+
+theorem go_zero : ∀ L : List (ℕ × ℤ), Flock.Program.Lane.leafAt.go L 0 = 0
+  | [] => rfl
+  | [(r, d)] => by simp [Flock.Program.Lane.leafAt.go]
+  | (r, d) :: x :: xs => by rw [go_cons₂, Nat.zero_mod, Nat.zero_div, go_zero (x :: xs)]; simp
+
+/-- **A level's digits.** `Reach` is `R` shifted by the levels' offset at each period below their product. -/
+theorem reach_go : ∀ (L : List (ℕ × ℤ)) (R : ℤ → Prop) (y : ℤ),
+    Reach R L y ↔ ∃ n < prodL L, ∃ b, R b ∧ y = b + Flock.Program.Lane.leafAt.go L n
+  | [], R, y => by
+    constructor
+    · intro h; exact ⟨0, by simp [prodL], y, h, by simp [go_zero]⟩
+    · rintro ⟨n, hn, b, hb, rfl⟩
+      simp only [prodL, List.foldl_nil, Nat.lt_one_iff] at hn
+      subst hn
+      simpa [go_zero, Reach] using hb
+  | (r, d) :: L, R, y => by
+    show Reach (shift R r d) L y ↔ _
+    rw [reach_go L, prodL_cons]
+    constructor
+    · rintro ⟨m, hm, z, ⟨c, hc, b, hb, rfl⟩, rfl⟩
+      refine ⟨c + r * m, ?_, b, hb, ?_⟩
+      · have := Nat.mul_le_mul_left r (show m + 1 ≤ prodL L by omega)
+        rw [Nat.mul_succ] at this
+        omega
+      · rcases L with _ | ⟨x, xs⟩
+        · simp only [prodL, List.foldl_nil, Nat.lt_one_iff] at hm
+          subst hm
+          simp [Flock.Program.Lane.leafAt.go]
+        · rw [go_cons₂, Nat.add_mul_mod_self_left, Nat.mod_eq_of_lt hc,
+            Nat.add_mul_div_left _ _ (by omega), Nat.div_eq_of_lt hc, Nat.zero_add]
+          ring
+    · rintro ⟨n, hn, b, hb, rfl⟩
+      have hr : 0 < r := by
+        rcases Nat.eq_zero_or_pos r with h | h
+        · simp [h] at hn
+        · exact h
+      refine ⟨n / r, (Nat.div_lt_iff_lt_mul hr).2 (by rw [Nat.mul_comm]; exact hn), _,
+        ⟨n % r, Nat.mod_lt _ hr, b, hb, rfl⟩, ?_⟩
+      rcases L with _ | ⟨x, xs⟩
+      · simp only [prodL, List.foldl_nil, Nat.mul_one] at hn
+        simp [Flock.Program.Lane.leafAt.go, Nat.mod_eq_of_lt hn]
+      · rw [go_cons₂]; ring
+
+/-- **A whole lane's intervals are its elements.** Of a lane piece from period 0 through all its levels' periods, whose
+elements are naturals. -/
+theorem levelIvs_spec (q : Piece) (hP : q.rows = prodL q.lv) (hr : 0 < q.rows)
+    (hnn : ∀ r < q.rows, ∀ t < q.len, 0 ≤ q.base + Flock.Program.Lane.leafAt.go q.lv r + (t : ℤ) * q.stride)
+    (h0 : q.rowOff 0 = 0) (a : ℕ) :
+    inIvs q.levelIvs.toList a ↔
+      ∃ r < q.rows, ∃ t < q.len, (a : ℤ) = q.base + Flock.Program.Lane.leafAt.go q.lv r + (t : ℤ) * q.stride := by
+  have hfin : ∀ y, Reach (fun y => ∃ t < q.len, y = q.base + (t : ℤ) * q.stride) q.lv y ↔
+      ∃ r < q.rows, ∃ t < q.len, y = q.base + Flock.Program.Lane.leafAt.go q.lv r + (t : ℤ) * q.stride := by
+    intro y
+    rw [reach_go, ← hP]
+    constructor
+    · rintro ⟨n, hn, b, ⟨t, ht, rfl⟩, rfl⟩; exact ⟨n, hn, t, ht, by ring⟩
+    · rintro ⟨n, hn, t, ht, rfl⟩; exact ⟨n, hn, _, ⟨t, ht, rfl⟩, by ring⟩
+  have hN : NN (fun y => ∃ t < q.len, y = q.base + (t : ℤ) * q.stride) q.lv :=
+    nn_of q.lv _ (prodL_pos q.lv (by omega)) fun y hy => by
+      obtain ⟨r, hr', t, ht, rfl⟩ := (hfin y).1 hy
+      exact hnn r hr' t ht
+  have hrow : ∀ t < q.len, 0 ≤ (q.row 0).base + (t : ℤ) * (q.row 0).stride := fun t ht => by
+    have := hnn 0 hr t ht
+    simpa [Piece.row, h0, go_zero] using this
+  have hI : ∀ a : ℕ, inIvs (Ivs.norm (PI.ivs (q.row 0).rowPis)).toList a ↔
+      ∃ t < q.len, (a : ℤ) = q.base + (t : ℤ) * q.stride := fun a => by
+    rw [norm_mem, ivs_spec _ (rowPis_cnt _), one_spec (q.row 0) hrow a]
+    simp [Piece.row, h0]
+  rw [levelIvs_eq, fold_reach q.lv _ _ hI hN a, hfin]
+
 theorem pis_spec (q : Piece) (hnn : ∀ e ∈ elems q, 0 ≤ e) (a : ℕ) :
     (∃ x ∈ q.pis.toList, inPI x a) ↔
-      ∃ r < max q.rows 1, ∃ t < q.len, (a : ℤ) = q.base + (r : ℤ) * q.rowStride + (t : ℤ) * q.stride := by
-  have hnn' : ∀ r < max q.rows 1, ∀ t < q.len, 0 ≤ q.base + (r : ℤ) * q.rowStride + (t : ℤ) * q.stride :=
+      ∃ r < max q.rows 1, ∃ t < q.len, (a : ℤ) = q.base + q.rowOff r + (t : ℤ) * q.stride := by
+  have hnn' : ∀ r < max q.rows 1, ∀ t < q.len, 0 ≤ q.base + q.rowOff r + (t : ℤ) * q.stride :=
     fun r hr t ht => hnn _ (mem_elems.2 ⟨r, hr, t, ht, rfl⟩)
-  have hrow : ∀ r < max q.rows 1, ∀ a : ℕ, (∃ x ∈ (one (q.row r)).toList, inPI x a) ↔
-      ∃ t < q.len, (a : ℤ) = q.base + (r : ℤ) * q.rowStride + (t : ℤ) * q.stride := by
+  have hrow : ∀ r < max q.rows 1, ∀ a : ℕ, (∃ x ∈ (q.row r).rowPis.toList, inPI x a) ↔
+      ∃ t < q.len, (a : ℤ) = q.base + q.rowOff r + (t : ℤ) * q.stride := by
     intro r hr a
     exact one_spec (q.row r) (fun t ht => hnn' r hr t ht) a
-  rw [pis_eq]
-  split_ifs with h1 h2 h3
-  · simp only [Bool.or_eq_true, decide_eq_true_eq, beq_iff_eq] at h1
-    rw [hrow 0 (by omega) a]
-    rcases h1 with h1 | h1
-    · constructor
-      · rintro ⟨t, ht, ha⟩; exact ⟨0, by omega, t, ht, by simpa using ha⟩
-      · rintro ⟨r, hr, t, ht, ha⟩
-        obtain rfl : r = 0 := by omega
-        exact ⟨t, ht, by simpa using ha⟩
-    · rw [h1]; simp
-  · simp only [Bool.or_eq_true, decide_eq_true_eq, beq_iff_eq, not_or] at h1 h2
-    simp only [List.mem_singleton, exists_eq_left]
-    rw [grid q.base q.stride q.rowStride q.len q.rows (by omega) (by omega) h2
-      (fun j hj i hi => hnn' j (by omega) i hi) a]
-    rw [show max q.rows 1 = q.rows by omega]
-  · simp only [Bool.or_eq_true, decide_eq_true_eq, beq_iff_eq, not_or, Bool.and_eq_true] at h1 h2 h3
-    simp only [List.mem_singleton, exists_eq_left]
-    rw [grid q.base q.rowStride q.stride q.rows q.len (by omega) (by omega) (Or.inl h3.1)
-      (fun j hj i hi => by have := hnn' i (by omega) j hj; linarith) a]
-    rw [show max q.rows 1 = q.rows by omega]
-    constructor
-    · rintro ⟨j, hj, i, hi, ha⟩; exact ⟨i, hi, j, hj, by linarith⟩
-    · rintro ⟨i, hi, j, hj, ha⟩; exact ⟨j, hj, i, hi, by linarith⟩
-  · simp only [Bool.or_eq_true, decide_eq_true_eq, beq_iff_eq, not_or] at h1
+  have hrows : 1 ≤ q.rows → ((∃ x ∈ (q.rowsOf.flatMap Piece.rowPis).toList, inPI x a) ↔
+      ∃ r < max q.rows 1, ∃ t < q.len, (a : ℤ) = q.base + q.rowOff r + (t : ℤ) * q.stride) := by
+    intro h1
     simp only [Piece.rowsOf, Array.toList_flatMap, Array.toList_map, Array.toList_range, List.flatMap_map,
       List.mem_flatMap, List.mem_range]
     constructor
@@ -1458,6 +1768,55 @@ theorem pis_spec (q : Piece) (hnn : ∀ e ∈ elems q, 0 ≤ e) (a : ℕ) :
     · rintro ⟨r, hr, t, ht, h⟩
       obtain ⟨x, hx, ha⟩ := (hrow r hr a).2 ⟨t, ht, h⟩
       exact ⟨x, ⟨r, by omega, hx⟩, ha⟩
+  rw [pis_eq]
+  by_cases h1 : (q.rows ≤ 1 || q.len == 0) = true
+  · rw [if_pos h1]
+    simp only [Bool.or_eq_true, decide_eq_true_eq, beq_iff_eq] at h1
+    rw [hrow 0 (by omega) a]
+    rcases h1 with h1 | h1
+    · constructor
+      · rintro ⟨t, ht, ha⟩; exact ⟨0, by omega, t, ht, ha⟩
+      · rintro ⟨r, hr, t, ht, ha⟩
+        obtain rfl : r = 0 := by omega
+        exact ⟨t, ht, ha⟩
+    · rw [h1]; simp
+  rw [if_neg h1]
+  simp only [Bool.or_eq_true, decide_eq_true_eq, beq_iff_eq, not_or] at h1
+  by_cases h2 : (!q.lv.isEmpty) = true
+  · rw [if_pos h2]
+    have hne : q.lv ≠ [] := by simpa using h2
+    by_cases h3 : (q.start == 0 && q.rows == prodL q.lv) = true
+    · rw [if_pos h3]
+      simp only [Bool.and_eq_true, beq_iff_eq] at h3
+      have hoff : ∀ r, q.rowOff r = Flock.Program.Lane.leafAt.go q.lv r := fun r => by
+        simp [Piece.rowOff, hne, h3.1]
+      rw [ivPI_mem, levelIvs_spec q h3.2 (by omega) (fun r hr t ht => by rw [← hoff]; exact hnn' r (by omega) t ht)
+        (by rw [hoff, go_zero]) a, show max q.rows 1 = q.rows by omega]
+      simp only [hoff]
+    · rw [if_neg h3]
+      exact hrows (by omega)
+  rw [if_neg h2]
+  have hoff : ∀ r : ℕ, q.rowOff r = (r : ℤ) * q.rowStride := fun r => by
+    have hl : q.lv = [] := by simpa using h2
+    simp [Piece.rowOff, hl]
+  simp only [hoff] at hnn' ⊢
+  split_ifs with h3 h4
+  · simp only [Bool.or_eq_true, decide_eq_true_eq, beq_iff_eq] at h3
+    simp only [List.mem_singleton, exists_eq_left]
+    rw [grid q.base q.stride q.rowStride q.len q.rows (by omega) (by omega) h3
+      (fun j hj i hi => hnn' j (by omega) i hi) a]
+    rw [show max q.rows 1 = q.rows by omega]
+  · simp only [Bool.or_eq_true, decide_eq_true_eq, beq_iff_eq, not_or, Bool.and_eq_true] at h3 h4
+    simp only [List.mem_singleton, exists_eq_left]
+    rw [grid q.base q.rowStride q.stride q.rows q.len (by omega) (by omega) (Or.inl h4.1)
+      (fun j hj i hi => by have := hnn' i (by omega) j hj; linarith) a]
+    rw [show max q.rows 1 = q.rows by omega]
+    constructor
+    · rintro ⟨j, hj, i, hi, ha⟩; exact ⟨i, hi, j, hj, by linarith⟩
+    · rintro ⟨i, hi, j, hj, ha⟩; exact ⟨j, hj, i, hi, by linarith⟩
+  · have := hrows (by omega)
+    simp only [hoff] at this
+    exact this
 
 /-- **`PisExact` holds.** -/
 theorem pisExact : PisExact := by

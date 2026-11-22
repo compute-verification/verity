@@ -13,7 +13,7 @@ Any other refusal (the machine held exclusively, ssh down) is only logged. A pas
 
 Nodes' drift from main is the monitors relay's `drift` monitor's (`research.monitors.deploy_drift`), not this probe's.
 
-  python3 preflight_probe.py --tree CHECKOUT [--machines vy-nebius-1 vy-nebius-2] [--every 3600] [--state PATH] [--once] [--dry-run]
+  python3 preflight_probe.py --tree CHECKOUT [--machines vy-nebius-2] [--every 3600] [--state PATH] [--once] [--dry-run]
 """
 from __future__ import annotations
 
@@ -96,7 +96,7 @@ def slack_post(dry: bool) -> Callable[[str, "str | None"], "str | None"]:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="preflight_probe", description=__doc__.split("\n\n")[0])
     ap.add_argument("--tree", required=True, type=Path, help="a clean checkout of verity, kept at origin/main (detached)")
-    ap.add_argument("--machines", nargs="+", default=["vy-nebius-1", "vy-nebius-2"])
+    ap.add_argument("--machines", nargs="+", default=["vy-nebius-2"])
     ap.add_argument("--every", type=float, default=3600.0)
     ap.add_argument("--state", type=Path, default=Path.home() / ".research" / "preflight-probe.json")
     ap.add_argument("--once", action="store_true")

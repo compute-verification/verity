@@ -1,6 +1,7 @@
 module
 
 public import Definitions.ResourceAccounting.Actual
+public import Definitions.ResourceAccounting.BlockProperties
 public import Definitions.Compose.Additive
 public import Definitions.ResourceAccounting.Actual.Sampler
 public import Definitions.Poub.Bandwidth
@@ -76,7 +77,8 @@ account on one device model.
 
 ## Read first
 
-The lock's `deployed` guarantees for the area, the bandwidth audit's and PoUB's, each with the module that states it:
+The area's guarantees at its deployed parameters, the bandwidth audit's and PoUB's, each with the module that states
+it; the locks' `deployed` lists three of them, `Remote.SketchBoundDeployed`, `Remote.AuditRO` and `LineHeld`:
 
 * `Accounting.Guarantees.RemoteRunConservationDeployed` (`Definitions.Poub.Guarantees.RateAuditDeployed`):
   PoUB at its deployed parameters.

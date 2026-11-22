@@ -44,7 +44,7 @@ def test_a_run_may_name_a_pool_of_its_own_under_the_locks_directory_and_nothing_
 
 
 def test_the_refusal_names_the_pools_this_machine_has(tmp_path):
-    """A `verity lean try --on vy-nebius-1` without `--pool` is refused naming the pools to add, not only slot.py by hand."""
+    """A `verity lean try --on vy-nebius-2` without `--pool` is refused naming the pools to add, not only slot.py by hand."""
     (tmp_path / "proofs").write_text("p0 0-15\n")
     why = S.refusal(tmp_path / "marker", {"proofs": str(tmp_path / "proofs"), "soundness": str(tmp_path / "soundness")})
     assert "add `--pool proofs` to `research run` or `verity lean try`" in why
@@ -406,7 +406,7 @@ def test_deploy_installs_slot_py_whole_as_each_pool_machines_own_copy_where_slot
             if e["path"].startswith(beside) or beside.startswith(e["path"].rstrip("/") + "/")] == [S.NODE_SLOT], "and nothing beside it"
     (row,) = rows
     cpu = {n for n in manifest["nodes"] if re.fullmatch(r"vy-nebius-cpu-\d+", n)}
-    assert set(row["nodes"]) == cpu | {"vy-nebius-1", "vy-nebius-2"} and len(row["nodes"]) == len(set(row["nodes"]))
+    assert set(row["nodes"]) == cpu | {"vy-nebius-2"} and len(row["nodes"]) == len(set(row["nodes"]))
     assert row["no_restart"] and "run" not in row and "hold" not in row
     spec = importlib.util.spec_from_file_location("check_slot_for_its_copy", REPO / S.SLOT_PATHS[0])
     slot = importlib.util.module_from_spec(spec)
@@ -469,7 +469,7 @@ def test_it_stops_every_process_of_a_live_run_outside_the_slots_but_its_runner(t
 
 
 def test_renice_moves_a_direct_runs_processes_to_nice_19_once_and_leaves_slot_runs_alone(tmp_path, monkeypatch, capsys):
-    """On node 1 lanes' direct runs must not take the cores the candidates' checks need. `--renice 19` stops nothing: it renices every
+    """On cpu-4 to cpu-6 lanes' direct runs must not take the cores the candidates' checks need. `--renice 19` stops nothing: it renices every
     process of a live run outside the slots, its runner too, and logs a run only while it moved a process."""
     runs, proc, marker, log = tmp_path / "runs", tmp_path / "proc", tmp_path / "direct-runs-nice", tmp_path / "direct-nice.jsonl"
     gate = _run(runs, "r-gate", "running", ["python3", "tools/check/slot.py", "--", "true"], pgid=10, runner=9)
@@ -494,13 +494,13 @@ def test_an_auditor_host_stops_every_live_run_but_the_commands_its_marker_lists(
     """On vy-challenger-1 a run launched from a tree older than the launcher's auditor refusal is stopped, unless its command
     is exactly a line of /etc/vy/auditor; slot.py's runs get no pass there."""
     runs, proc, marker, log = tmp_path / "runs", tmp_path / "proc", tmp_path / "auditor", tmp_path / "auditor-only.jsonl"
-    ok = _run(runs, "r-ok", "running", ["bash", "verity/protocols/compose/verifier/live_challenger/run.sh"], pgid=10, runner=9)
+    ok = _run(runs, "r-ok", "running", ["bash", "verity/protocols/run/verifier/live_challenger/run.sh"], pgid=10, runner=9)
     slot = _run(runs, "r-slot", "running", ["python3", "tools/check/slot.py", "--", "true"], pgid=20, runner=19)
-    extra = _run(runs, "r-extra", "running", ["bash", "verity/protocols/compose/verifier/live_challenger/run.sh", "x"], pgid=30, runner=29)
+    extra = _run(runs, "r-extra", "running", ["bash", "verity/protocols/run/verifier/live_challenger/run.sh", "x"], pgid=30, runner=29)
     for pid, run in ((10, ok), (20, slot), (30, extra)):
         _proc(proc, pid, pid, run)
-    marker.write_text("# comment\n\nbash verity/protocols/compose/verifier/live_challenger/run.sh\n")
-    assert S.auditor_commands(marker) == [["bash", "verity/protocols/compose/verifier/live_challenger/run.sh"]]
+    marker.write_text("# comment\n\nbash verity/protocols/run/verifier/live_challenger/run.sh\n")
+    assert S.auditor_commands(marker) == [["bash", "verity/protocols/run/verifier/live_challenger/run.sh"]]
     assert [o["run"] for o in S.offenders(runs, lambda c: S.auditor_allows(c, marker))] == ["r-extra", "r-slot"]
     sent = []
     monkeypatch.setattr(S.os, "kill", lambda pid, sig: sent.append(pid))
@@ -510,7 +510,7 @@ def test_an_auditor_host_stops_every_live_run_but_the_commands_its_marker_lists(
     assert sent == [30, 20]
     assert {json.loads(ln)["why"] for ln in log.read_text().splitlines()} == {f"not a command of the auditor device's {marker}"}
     marker.write_text("")
-    assert S.auditor_commands(marker) == [] and not S.auditor_allows(["bash", "verity/protocols/compose/verifier/live_challenger/run.sh"], marker)
+    assert S.auditor_commands(marker) == [] and not S.auditor_allows(["bash", "verity/protocols/run/verifier/live_challenger/run.sh"], marker)
     assert S.auditor_commands(tmp_path / "absent") == []
 
 

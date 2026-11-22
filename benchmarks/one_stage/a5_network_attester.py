@@ -8,7 +8,7 @@ this window stands in for one, its cells a network attester run's (`network_atte
   bucket t, S = lanes·r slots of B bytes, slot j at bytes j·B (words j·B/2), a connection's cells at the slots its
   wiring gives it, a slot no connection holds B zero bytes.
 * **The window** (`window`), under ``<ROOT>/rank0`` and the sampling design ``work-rate:1/8``: 2n units of the transfer-gate template
-  `WardenRowIdentity{S·B}` (`network_attester_zk.py`'s toy, one bucket row's 8·S·B bits in and the same bits out) in two chunks, and
+  `WardenRowIdentity{S·B}` (the toy, one bucket row's 8·S·B bits in and the same bits out) in two chunks, and
   the rest, ``--rest`` units of `WardenRowIdentity{2B}` over rows of their own (another template, so another stratum),
   standing in for the compiled model steps. The verifier's work table (`serving_rows.work_table_of`) proves every
   transfer-gate unit (work 0, floor all of them: selection All) beside the rest's sampled share, and a5's transfer-gate
@@ -74,21 +74,43 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from verity.protocols.resource_accounting.network.verifier import record_files as RF, relay_check as RC  # noqa: E402
-from verity.protocols.resource_accounting.network.prover.network_attester_zk import WardenRowIdentity, flip  # noqa: E402
-from verity.circuits.defs import bind  # noqa: E402
+from verity.protocols.accounting.network.verifier import record_files as RF, relay_check as RC  # noqa: E402
+from verity.circuits import boolean as BL  # noqa: E402
+from verity.circuits.defs import CompositeDefinition, bind  # noqa: E402
+from verity.circuits.types import Array  # noqa: E402
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
-from verity.protocols.resource_accounting.network.verifier import network_attester_rows as WR  # noqa: E402
-from verity.protocols.resource_accounting.network.verifier.link_frame import DATA, HEADER  # noqa: E402
-from verity.protocols.resource_accounting.network.verifier.certificate import Certificate  # noqa: E402
-from verity.protocols.resource_accounting.network.verifier.grid import BlockGrid  # noqa: E402
-from verity.protocols.resource_accounting.network.verifier.network_attester import END, NetworkAttesterParams  # noqa: E402
-from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P  # noqa: E402
-from verity.protocols.proofs.spot.prover import docket as DK  # noqa: E402
+from verity.protocols.accounting.network.verifier import network_attester_rows as WR  # noqa: E402
+from verity.protocols.accounting.network.verifier.link_frame import DATA, HEADER  # noqa: E402
+from verity.protocols.accounting.network.verifier.certificate import Certificate  # noqa: E402
+from verity.protocols.accounting.network.verifier.grid import BlockGrid  # noqa: E402
+from verity.protocols.accounting.network.verifier.network_attester import END, NetworkAttesterParams  # noqa: E402
+from verity.protocols.proof.spot.verifier import service as S  # noqa: E402
+from verity.protocols.proof.spot.verifier.one_stage import partition as P  # noqa: E402
+from verity.protocols.proof.spot.prover import docket as DK  # noqa: E402
 from verity_vllm.commit import index as IX  # noqa: E402
 from verity.commitments.periods import rows as CS  # noqa: E402
 from verity_vllm.pipeline import serving_rows as SRW  # noqa: E402
+
+
+def _signature(S):
+    return (("row", Array(8 * S.B, BL.BIT)),), Array(8 * S.B, BL.BIT)
+
+
+def _body(B, S, row):
+    return B.batch(BL.NOT, B.batch(BL.NOT, row, axes=(0,)), axes=(0,))
+
+
+WardenRowIdentity = CompositeDefinition(
+    "WardenRowIdentity", 1, ("B",), _signature, _body, conformance="exact-model-tested", register=False,
+    doc="WardenRowIdentity{B}: one network attester bucket row's 8·B bits, each through two NOTs: the toy unit whose port opens "
+        "a row of the network attester's signed root")
+
+
+def flip(row: bytes, byte: int = -1, bit: int = 0) -> bytes:
+    b = bytearray(row)
+    b[byte] ^= 1 << bit
+    return bytes(b)
+
 
 #: the stand-in's session root, as a TP Commit's run root is its ranks' session root
 ROOT = hashlib.sha512(b"verity/a5/warden-stand-in/v1").hexdigest()
@@ -445,8 +467,8 @@ def main(argv=None) -> int:
     if a.altered and a.made_for:
         ap.error("one refused statement a run: --altered or --made-for")
     import a5
-    from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
-    from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
+    from verity.protocols.proof.spot.verifier.challenger import challenger_session as AC
+    from verity.protocols.proof.spot.prover.audit import local_challenger as LC
 
     out = a.out
     at = links(a.run, a.units)

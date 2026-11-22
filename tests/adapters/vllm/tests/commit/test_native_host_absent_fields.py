@@ -133,7 +133,7 @@ def _checked(man: dict[str, Any], names: list[str]) -> dict[str, Any]:
     return com.identity_check(man)
 
 
-@pytest.mark.parametrize("field", ["router_softmax_layers", "moe_hash_layers"])
+@pytest.mark.parametrize("field", ["router_softmax_layers"])
 @pytest.mark.parametrize("layers", [*LEFT_OUT, []])
 def test_a_manifest_that_lists_no_layer_with_one_more_moe_tensor_wants_the_plain_count(field: str, layers: Any) -> None:
     man = _with({**XI._com().expected_manifest(), "moe_layers": [0], "moe_tensors_per_layer": 2}, **{field: layers})
@@ -142,7 +142,7 @@ def test_a_manifest_that_lists_no_layer_with_one_more_moe_tensor_wants_the_plain
     assert bad["ok"] is False and bad["violations"][0]["moe_layers_bad"] == {0: 3}
 
 
-@pytest.mark.parametrize("field", ["router_softmax_layers", "moe_hash_layers"])
+@pytest.mark.parametrize("field", ["router_softmax_layers"])
 def test_a_layer_the_manifest_lists_for_one_more_moe_tensor_wants_it(field: str) -> None:
     man = {**XI._com().expected_manifest(), "moe_layers": [0], "moe_tensors_per_layer": 2, field: [0]}
     assert _checked(man, _moe_step(3))["ok"] is True

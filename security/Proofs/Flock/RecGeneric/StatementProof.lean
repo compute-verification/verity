@@ -6,6 +6,7 @@ public import Proofs.Flock.RecGeneric.ZK
 public import Proofs.Flock.RecGeneric.SampledProof
 public import Proofs.Flock.RecGeneric.Lift
 public import Proofs.Flock.RecGeneric.BadDev
+public import Definitions.Flock.Recursive.Generic
 
 /-!
 # L1, proved
@@ -18,7 +19,7 @@ gives witnesses outside `R_O` (`Comp.PrAt_le_lift`), at most `d_i` times one rer
 bad sample costs the gated link (`Comp.Pr_badO_le_link`) and a rejecting judged rerun costs `B_I`
 (`Comp.Pr_innerRejects_le_fork`). So the inner stage pays `Comp.err` past the outer terms (`Comp.PrBadGood_le_err`),
 and with `E_O`'s failure at each of `E^rep`'s `N_I` reruns (`Claims.servedERep_bad_le_good`, `Comp.OuterKSAt`) the
-composite pays `Comp.err` (`Comp.PrBad_le_err`), which is L1, `Definitions.Claims.RecursionGeneric`'s `CompositionKS`
+composite pays `Comp.err` (`Comp.PrBad_le_err`), which is L1, `Definitions.Flock.Recursive.Generic`'s `CompositionKS`
 (`compositionKS`). With B1, L1 gives the recursive audit through the sampled compiler
 (`Flock.SecurityProofs.RecursiveSampledKS`).
 -/

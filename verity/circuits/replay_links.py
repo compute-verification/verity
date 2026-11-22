@@ -395,7 +395,7 @@ def link_runs(defs: Mapping[str, Any], key: str) -> list[tuple[Link, int, tuple[
     fn = defs.get(key)
     if fn is None or isinstance(fn, PrimitiveDefinition):
         return None
-    recut_unread(fn, "second_stage.link_runs")
+    recut_unread(fn, "replay_links.link_runs")
     cs, shares = _callers_of(defs, fn), []
     for k, node in enumerate(fn.body.nodes):
         got = _node_links(cs, fn, k, node)
@@ -460,7 +460,7 @@ def wire_runs(defs: Mapping[str, Any], key: str) -> list[tuple[Wire, int, tuple[
     fn = defs.get(key)
     if fn is None or isinstance(fn, PrimitiveDefinition):
         return None
-    recut_unread(fn, "second_stage.wire_runs")
+    recut_unread(fn, "replay_links.wire_runs")
     cs, shares = _callers_of(defs, fn), []
     for k, node in enumerate(fn.body.nodes):
         got = _node_wires(cs, fn, k, node)

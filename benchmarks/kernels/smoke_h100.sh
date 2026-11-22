@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# The kernels' part of a smoke run on one H100 (sm_90a): for every hm96 leaf kernel that takes its salts as data, the card's
-# leaves and roots are held to the reference's for the same salt bytes, and each build takes its machine-code gate on the
-# node's own toolkit. One command, which the smoke's runner calls while it holds the card (cwd anywhere):
+# The kernels' part of a smoke run on one H100 (sm_90a): Pearl-C's kernels, which take their salts as data, are held on the
+# card to the fixture's bytes for the same salts, and each build takes its machine-code gate on the node's own toolkit. One
+# command, which the smoke's runner calls while it holds the card (cwd anywhere):
 #
 #   bash benchmarks/kernels/smoke_h100.sh OUT
 #
@@ -11,13 +11,10 @@
 #     python             the Python the tests run with has torch, numpy and pytest
 #     pearl_c.build      Pearl-C for sm_90a, `pearl_c_sm90/build.sh`: refused on a stack frame or spill (ptxas) and by its
 #                        SASS gate; the debit cubin with its two gates
-#     pearl_c.gate       the harness's SASS gate (.FTZ, FP32 MUFU) on both cubins, enforced here (build.sh only records it)
+#     pearl_c.gate       the harness's SASS gate (.FTZ, FP32 MUFU) on both cubins, enforced here (build.sh enforces it on pearl_c_sm90.cubin alone)
 #     pearl_c.fixture    the check's fixture, regenerated: it carries the salts the kernels read
 #     pearl_c.host       tests/benchmarks/pouw's Pearl-C sm_90a, hash and key tests. None of them reads a card: they hold
 #                        the host twins, and one builds the cubin with the toolkit and takes its gate
-#     commit_gpu.build   `commit_gpu.cu` for the card's gencode; commit_gpu.gate, the harness's gate on the binary
-#     commit_gpu.cases   `reference.py prepare`'s quick cases, each with its salts
-#     collect            pytest's collection of the device tests below
 #     card_sku           vLLM's settings read the card file's name from CARD_SKU and refuse it unset, which collection
 #                        does not reach (only the tests that serve a window build vLLM's committer); where this host
 #                        has a card, `machine.py sku` names its record and the settings build for sm_90a under it
@@ -26,21 +23,6 @@
 #                        set for the steps below to that record's name (`machine.py sku NAME`), which the reason states
 #     pearl_c.check      `run.py`'s check on the fixture (check_chains and the rest): every kernel's bytes against the
 #                        fixture's, no timing (SHAPES is empty)
-#     rows.device        the row engine's tests, `sha512_rows`: the device's leaves against the host's and the reference's
-#     slots.device       the slot commit's device tests, `commit_slots/test_gpu.py`: strided and misaligned salt buffers,
-#                        graph replay under `resalt`
-#     zy.device          the z/y commit's device tests, `test_pouw_h1_registered_device.py`; its one strict xfail (a window
-#                        served on the device, which waits for compute-accounting's switch) is named in the reason
-#     zy.h1_zy_gpu       `h1_zy_gpu.py` at one repetition: each call's device records equal to the two kernels apart
-#     device_libs.gate   the harness's gate on every device library the four steps above loaded, a build reused from the
-#                        cache included, as the dynamic loader recorded it (LD_DEBUG) in a directory made fresh for the
-#                        run: a library an earlier run left in the scratch that nothing loaded is not gated, a shared
-#                        object with no device code (Triton's host modules) is named and passed over, and the reason
-#                        says which libraries are pinned and which unpinned (`device_libs_gate.py`)
-#     commit_gpu.selftest, commit_gpu.check, commit_gpu.check_small
-#                        the binary's selftest, then `reference.py check` of it on the cases, with and without
-#                        COMMIT_GPU_SMALL=1
-# On the card a test that skips for want of a device or nvcc is a FAIL: nothing passes by not running.
 #
 # What it does not check: anything for sm_120a (the RTX PRO 6000's builds wait for that machine); any timing or rate
 # (nothing here is a measurement, and no number a step prints is a result); the 512-bit receipt kernels, which are not on
@@ -49,8 +31,8 @@
 # pearl_c.host); and the served path itself.
 #
 # OUT (the argument, else $OUT) gets only public verdicts and logs: smoke.json (each step, its verdict, seconds and the
-# sha256 of the cubin or binary it built or ran), logs/STEP.log, the gates' records and the checks' lines. Fixtures, cases,
-# salts and builds stay in a scratch directory outside OUT (--scratch DIR, else a fresh one under /dev/shm or /tmp,
+# sha256 of the cubin it built or ran), logs/STEP.log, the gates' records and the checks' lines. Fixtures, salts and
+# builds stay in a scratch directory outside OUT (--scratch DIR, else a fresh one under /dev/shm or /tmp,
 # removed at exit). Exits nonzero if any step FAILs.
 #
 #   --dry           run the part off the card and stop; the card's steps are SKIPs. On a machine with no CUDA 13.0 the
@@ -60,7 +42,7 @@
 #                   command without `--dry`, holds the card for the card's steps alone.
 #
 # Needs, outside the hold: the workspace synced with CUDA torch (`uv sync --all-packages --extra torch`; PY names another
-# Python), g++, and in the toolkit nvcc, cuobjdump, nvdisasm, cuBLASLt and NVML's library. CUDA_HOME overrides the toolkit.
+# Python), g++, and in the toolkit nvcc, cuobjdump and nvdisasm. CUDA_HOME overrides the toolkit.
 set -uo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 
@@ -90,17 +72,12 @@ case "$O/" in "$SCRATCH"/*) echo "smoke_h100.sh: the output $O is under the scra
 [ "$OWN_SCRATCH" = 1 ] && trap 'rm -rf "$SCRATCH"' EXIT
 
 PY=${PY:-$ROOT/.venv/bin/python}
-POUW=$ROOT/verity/protocols/resource_accounting/compute/pouw/prover
+POUW=$ROOT/verity/protocols/accounting/compute/pouw/prover
 PEARL=$POUW/kernels/pearl_c_sm90
-CG=$ROOT/verity/commitments/cuda/commit_gpu
-TAG=a0r0l
-ROWS_T=$ROOT/tests/verity/commitments/cuda/sha512_rows
-SLOTS_T=$ROOT/tests/verity/commitments/cuda/commit_slots
-ZY_T=$ROOT/tests/adapters/vllm
-ZY_FILE=tests/protocols/test_pouw_h1_registered_device.py
+VLLM_T=$ROOT/tests/adapters/vllm
 ROWS=$SCRATCH/rows.txt
 SKIPPED=77
-CUDA="" GENCODE="" NVCC_VERSION="" GPU="" CARD_OK=0 LOADED=""
+CUDA="" GENCODE="" NVCC_VERSION="" GPU="" CARD_OK=0
 # the target the smoke's builds are for: Pearl-C's tree says its own (build.sh --arch; it refuses another's GENCODE)
 TARGET=$(bash "$PEARL/build.sh" --arch) && [[ "$TARGET" =~ ^[a-z]+_[0-9]+[a-z]?$ ]] || {
   echo "smoke_h100.sh: $PEARL/build.sh --arch names no one target its kernels are built for (it said: ${TARGET:-nothing})" >&2; exit 2; }
@@ -207,7 +184,7 @@ p_pearl_build() {
   CUDA_HOME=$CUDA GENCODE=$GENCODE bash "$PEARL/build.sh" "$SCRATCH/pearl_c" || { REASON="build.sh refused the build (the target, ptxas, the SASS gate or the debit cubin's gates)"; return 1; }
   mkdir -p "$O/pearl_c"
   cp "$SCRATCH/pearl_c"/{sass.json,ptxas.txt,toolchain.txt} "$SCRATCH/pearl_c/debit"/{debit_ptxas.txt,debit_mma.txt} "$O/pearl_c/"
-  cp "$PEARL/run.py" "$SCRATCH/pearl_c/"
+  cp "$PEARL/run.py" "$PEARL/../pearl_c/driver.py" "$SCRATCH/pearl_c/"
   SHA=$(sha "$SCRATCH/pearl_c/pearl_c_sm90.cubin")
   REASON="nvcc $NVCC_VERSION: no stack frame or spill, the SASS gate passes; debit cubin $(sha "$SCRATCH/pearl_c/debit/debit_sm90.cubin" | cut -c1-16)"
 }
@@ -244,44 +221,6 @@ p_pearl_host() {
   REASON="$REASON; host twins, $built; none reads a card"
 }
 
-p_cg_build() {
-  [ -n "$CUDA" ] || { no_toolkit; return; }
-  mkdir -p "$SCRATCH/commit_gpu"
-  (cd "$ROOT" && PATH=$CUDA/bin:$PATH "$CUDA/bin/nvcc" -O3 -std=c++17 -gencode "$GENCODE" -Xptxas -v -DSHA_ADD=0 -DSHA_ROT=0 -DSHA_ROLL=1 \
-    -o "$SCRATCH/commit_gpu/commit_gpu_$TAG" "$CG/commit_gpu.cu" -lcublasLt -lnvidia-ml) || {
-    REASON="nvcc failed (it links cuBLASLt and NVML's library)"; return 1; }
-  SHA=$(sha "$SCRATCH/commit_gpu/commit_gpu_$TAG")
-  REASON="commit_gpu_$TAG, nvcc $NVCC_VERSION, -gencode $GENCODE"
-}
-
-p_cg_gate() {
-  [ -n "$CUDA" ] || { no_toolkit; return; }
-  local bin=$SCRATCH/commit_gpu/commit_gpu_$TAG
-  [ -x "$bin" ] || { REASON="no binary (step commit_gpu.build)"; return 1; }
-  SHA=$(sha "$bin")
-  mkdir -p "$O/commit_gpu"
-  gate "$O/commit_gpu/harness_gate.json" "$bin" || { REASON="the harness's gate flags an instruction"; return 1; }
-  REASON="no .FTZ or FP32 MUFU outside ptxas's pinned sequences"
-}
-
-p_cg_cases() {
-  mkdir -p "$SCRATCH/commit_gpu"
-  rm -rf "$SCRATCH/commit_gpu/cases"
-  (cd "$ROOT" && PYTHONPATH=. "$PY" "$CG/reference.py" prepare "$SCRATCH/commit_gpu/cases" quick > "$SCRATCH/commit_gpu/prepare.jsonl") || {
-    REASON="reference.py prepare failed"; return 1; }
-  REASON="$(wc -l < "$SCRATCH/commit_gpu/prepare.jsonl") quick cases with their salts, in the scratch"
-}
-
-p_collect() {
-  local n total=0 said=""
-  for pair in "$ROWS_T:test_engine.py" "$SLOTS_T:test_gpu.py" "$ZY_T:$ZY_FILE"; do
-    n=$(cd "${pair%%:*}" && "$PY" -m pytest --collect-only -q -p no:cacheprovider "${pair#*:}" | tee /dev/stderr | awk '/::/ { n++ } /^[^ ]+\.py: [0-9]+$/ { n += $2 } END { print n + 0 }')
-    [ "${n:-0}" -gt 0 ] || { REASON="pytest collects nothing from ${pair#*:}"; return 1; }
-    said="$said${said:+, }${pair#*:} $n"; total=$((total + n))
-  done
-  REASON="$total tests the card's steps run: $said"
-}
-
 # what a --dry's builds answer for: the commit, the tree's edits, the toolkit and the Python
 stamp() {
   (cd "$ROOT" && git rev-parse HEAD 2> /dev/null || echo "no git $RANDOM$RANDOM"
@@ -292,7 +231,7 @@ stamp() {
 # vLLM's reading of CARD_SKU (the first argument; empty: unset), from the suite's directory: the arch it builds for, or
 # its refusal's first line
 vllm_arch() {
-  (cd "$ZY_T" && if [ -n "$1" ]; then export CARD_SKU=$1; else unset CARD_SKU; fi
+  (cd "$VLLM_T" && if [ -n "$1" ]; then export CARD_SKU=$1; else unset CARD_SKU; fi
    "$PY" -c 'from verity_vllm import settings
 from verity_vllm.config import cuda_arch
 try:
@@ -339,10 +278,6 @@ else
   step pearl_c.gate p_pearl_gate
   step pearl_c.fixture p_pearl_fixture
   step pearl_c.host p_pearl_host
-  step commit_gpu.build p_cg_build
-  step commit_gpu.gate p_cg_gate
-  step commit_gpu.cases p_cg_cases
-  step collect p_collect
   step card_sku p_card_sku
   if [ "$OWN_SCRATCH" = 0 ]; then
     mkdir -p "$PREPARED/out"
@@ -371,7 +306,6 @@ c_card() {
   sku=$(python3 "$ROOT/benchmarks/kernels/machine.py" sku "$name") && [ -n "$sku" ] || { REASON="no card record names $name, so there is no CARD_SKU to set"; return 1; }
   [ -z "${CARD_SKU:-}" ] || [ "$CARD_SKU" = "$sku" ] || { REASON="CARD_SKU is $CARD_SKU here, and $name's record is $sku"; return 1; }
   export CUDA_VISIBLE_DEVICES=$index PEARLC_EXPECT_UUID=$uuid CARD_SKU=$sku
-  LOADED=$(mktemp -d "$SCRATCH/loaded.XXXXXX") || { REASON="no directory for the loader's record"; return 1; }
   GPU=$name CARD_OK=1
   REASON="$name, index $index, its record states $arch; CARD_SKU=$sku set for the card's steps"
 }
@@ -398,82 +332,11 @@ c_pearl_check() {
   esac
 }
 
-# device_tests DIR NAME FILE: a suite's device tests, their libraries built under the scratch (the builds' cache is in
-# the home directory), every process's loads recorded under LOADED
-device_tests() {
-  held || return 1
-  mkdir -p "$SCRATCH/home"
-  HOME=$SCRATCH/home PATH=$CUDA/bin:$PATH LD_LIBRARY_PATH=$CUDA/lib64:${LD_LIBRARY_PATH:-} LD_DEBUG=files LD_DEBUG_OUTPUT=$LOADED/ld \
-    tests "$1" "$O/logs/$2.xml" card "$3"
-}
-c_rows() { device_tests "$ROWS_T" rows.device test_engine.py; }
-c_slots() { device_tests "$SLOTS_T" slots.device test_gpu.py; }
-c_zy() { device_tests "$ZY_T" zy.device "$ZY_FILE"; }
-
-c_zy_gpu() {
-  held || return 1
-  mkdir -p "$SCRATCH/home" "$SCRATCH/zy"
-  (cd "$ZY_T" && HOME=$SCRATCH/home PATH=$CUDA/bin:$PATH LD_LIBRARY_PATH=$CUDA/lib64:${LD_LIBRARY_PATH:-} \
-    LD_DEBUG=files LD_DEBUG_OUTPUT=$LOADED/ld "$PY" tests/protocols/h1_zy_gpu.py --out "$SCRATCH/zy" --reps 1 > "$SCRATCH/zy/h1_zy_gpu.log" 2>&1)
-  local rc=$?
-  # the verdicts without the script's timings, which one repetition does not measure
-  sed -E 's/  kernels .*//; /^step \(/d' "$SCRATCH/zy/h1_zy_gpu.log"
-  [ $rc = 0 ] && grep -q '^h1_zy_gpu: PASS' "$SCRATCH/zy/h1_zy_gpu.log" || { REASON="a call's records differ, or the kernels did not build (exit $rc)"; return 1; }
-  REASON="each of the four calls' device records equal the two kernels apart"
-}
-
-c_libs_gate() {
-  held || return 1
-  local said rc
-  said=$(python3 "$ROOT/benchmarks/kernels/device_libs_gate.py" --home "$SCRATCH/home" --record "$LOADED" \
-    --cuda-bin "$CUDA/bin" --json "$O/device_libs_gate.json")
-  rc=$?
-  printf '%s\n' "$said"
-  REASON=${said##*$'\n'}
-  SHA=$(sed -n 's/^loaded: //p' <<< "$said" | while read -r lib; do printf '%s=%s,' "$(basename "$(dirname "$lib")")/$(basename "$lib")" "$(sha "$lib")"; done)
-  SHA=${SHA%,}
-  return $rc
-}
-
-cg_bin() {
-  held || return 1
-  BIN=$SCRATCH/commit_gpu/commit_gpu_$TAG
-  [ -x "$BIN" ] && [ -d "$SCRATCH/commit_gpu/cases" ] || { REASON="no binary or cases (steps commit_gpu.build, commit_gpu.cases)"; return 1; }
-  SHA=$(sha "$BIN")
-  mkdir -p "$O/commit_gpu"
-  export LD_LIBRARY_PATH=$CUDA/lib64:${LD_LIBRARY_PATH:-}
-}
-
-c_cg_selftest() {
-  cg_bin || return 1
-  "$BIN" selftest > "$O/commit_gpu/selftest.jsonl" || { REASON="the selftest exits $? (commit_gpu/selftest.jsonl)"; return 1; }
-  REASON="the binary's selftest passes"
-}
-
-# cg_check NAME [VAR=VALUE]: reference.py check of the binary on the cases
-cg_check() {
-  cg_bin || return 1
-  local name=$1; shift
-  (cd "$ROOT" && env "$@" PYTHONPATH=. "$PY" "$CG/reference.py" check "$BIN" "$SCRATCH/commit_gpu/cases" "$TAG" > "$O/commit_gpu/$name.jsonl") || {
-    REASON="reference.py check exits $?: a case's root differs from the reference's, or the binary did not run (commit_gpu/$name.jsonl)"; return 1; }
-  REASON="$(grep -c . "$O/commit_gpu/$name.jsonl") lines, every case's root equal to the reference's for its salts"
-}
-c_cg_check() { cg_check check; }
-c_cg_check_small() { cg_check check_small COMMIT_GPU_SMALL=1; }
-
 dry() { REASON="needs the card (--dry)"; return "$SKIPPED"; }
 card_step() { if [ "$DRY" = 1 ]; then step "$1" dry; else step "$1" "$2"; fi; }
 
 card_step card c_card
 card_step pearl_c.check c_pearl_check
-card_step rows.device c_rows
-card_step slots.device c_slots
-card_step zy.device c_zy
-card_step zy.h1_zy_gpu c_zy_gpu
-card_step device_libs.gate c_libs_gate
-card_step commit_gpu.selftest c_cg_selftest
-card_step commit_gpu.check c_cg_check
-card_step commit_gpu.check_small c_cg_check_small
 
 COMMIT=$(cd "$ROOT" && git rev-parse HEAD 2> /dev/null || echo "${RESEARCH_SOURCE_SHA:-unknown}")
 DRY=$DRY COMMIT=$COMMIT TOOLKIT=$CUDA NVCC=$NVCC_VERSION GENCODE=$GENCODE GPU=$GPU python3 - "$ROWS" "$O/smoke.json" << 'EOF'

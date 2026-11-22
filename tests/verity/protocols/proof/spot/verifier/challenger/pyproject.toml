@@ -1,0 +1,62 @@
+# A suite of `verity`'s tests: they run in the workspace's environment, against the editable `verity`.
+[tool.pytest.ini_options]
+testpaths = ["."]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = [
+    "test_challenger_session.py",
+    "test_challenger_session_reserve.py",
+]
+artifacts = [
+    "verity/protocols/proof/flock/verifier/.lake/build/bin/verity-verify-proof",
+    "verity/protocols/proof/flock/verifier/.lake/build/bin/flock-zk-server",
+]
+# The scripts under `benchmarks/` the moved audit commands still load off `sys.path`, and what their `benchmarks/` suites read
+inputs = [
+    "verity",
+    "tests/verity/circuits/stand_in.py",
+    "benchmarks/one_stage",
+    "benchmarks/prove_path",
+    "calibration/sampling_plan",
+    "benchmarks/network_traces",
+    "tools/config/verity_config",
+    "verity/protocols/accounting/compute/pouw/prover/clear",
+    "verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c",
+    "benchmarks/pouw/pearl_c_sm120",
+    "benchmarks/pouw/pearl_c_sm90",
+    "benchmarks/pouw/pearl_c_vllm",
+    "tests/benchmarks/pouw/test_pearl_c_vllm.py",
+    "tests/benchmarks/pouw/test_pearl_c_hash_decode.py",
+    "tests/benchmarks/pouw/test_pearl_c_sm90_prefill.py",
+    "benchmarks/pouw/run_result.py",
+    "benchmarks/pouw/settings.py",
+    "calibration/hardware/cards",
+    "verity/protocols/proof/spot/verifier/lean/lakefile.toml",
+    "verity/protocols/run/verifier/live_challenger",
+    "tools/difftest/python/verity_difftest",
+    "benchmarks/spot_proved/stage.py",
+    "benchmarks/served_units/stage.py",
+    "tools/verity/circuit_check/src/circuit_check/__init__.py",
+    "tools/verity/circuit_check/src/circuit_check/cache.py",
+    "tools/verity/circuit_check/src/circuit_check/entries.py",
+    "tools/verity/circuit_check/src/circuit_check/targets.py",
+    "benchmarks/one_stage/interfaces/verity_e2e_demo",
+    "adapters/vllm/tools/served_run/serve_load.py",
+    "calibration/census/deployments.json",
+    "benchmarks/numerical/python/verity_numerical/__init__.py",
+    "benchmarks/numerical/python/verity_numerical/bench/__init__.py",
+    "verity/protocols/policy/training_detection/inference_only/verifier/lean/lakefile.toml",
+    "adapters/vllm/verity_vllm",
+    "adapters/torch/verity_torch",
+    "benchmarks/pous/p2_v1",
+    "benchmarks/pous/onsite_pieces.sh",
+    "verity/protocols/accounting/memory/poub/prover/p2_stage/layout.py",
+    "verity/protocols/accounting/memory/poub/prover/p2_stage/stage.py",
+    "verity/protocols/accounting/memory/poub/attester/live_verifier/host.py",
+    "benchmarks/prove_path/prove_path.py",
+    "benchmarks/prove_path/sources.json",
+    "adapters/vllm/manifests/checkpoints.json",
+    "adapters/vllm/manifests/checkpoints-int8.json",
+]

@@ -25,6 +25,7 @@ namespace MemoryAttester.Properties.SecurityProofs.Device
 
 open MemoryAttester Flock
 open Tree (CF)
+open Flock.SessionCoins (COMPLETE LATE)
 
 /-- How a device's record has ended, if it has. -/
 def Ends (st : Recorded) : Prop := st.ended = none ∨ st.ended = some COMPLETE ∨ st.ended = some LATE
@@ -59,33 +60,34 @@ theorem plain_of_recorded (r : Run) {e : String} (h : r.recorded.ended = some e)
 
 /-! ## The strings a session hashes -/
 
-theorem coinKey_mem (pk : ByteArray) (c : ChallengePhaseCommitment) (e : String) (rounds : Array Round) :
-    c.coinKey ∈ challengePhaseStrings pk c e rounds := by
+theorem coinKey_mem (pk : ByteArray) (c : ChallengePhaseCommitment) (salt : ByteArray) (e : String) (rounds : Array Round) :
+    c.coinKey ∈ challengePhaseStrings pk c salt e rounds := by
   simp [challengePhaseStrings]
 
-theorem stream_mem {pk : ByteArray} {c : ChallengePhaseCommitment} {e : String} {rounds : Array Round} {st : ByteArray}
-    (hs : recordsStream rounds = .ok st) : HmRow.rowPrefixV2 (8 * st.size) ++ st ∈ challengePhaseStrings pk c e rounds := by
+theorem stream_mem {pk : ByteArray} {c : ChallengePhaseCommitment} {salt : ByteArray} {e : String} {rounds : Array Round}
+    {st : ByteArray} (hs : recordsStream rounds = .ok st) :
+    HmRow.rowPrefixV2 (8 * st.size) ++ st ∈ challengePhaseStrings pk c salt e rounds := by
   simp [challengePhaseStrings, hs]
 
-theorem challengePhase_mem {pk : ByteArray} {c : ChallengePhaseCommitment} {e : String} {rounds : Array Round} {d : ByteArray}
-    (hr : recordsDigest rounds = .ok d) :
-    SESSION_TAG ++ be64 (header c e rounds.size).toUTF8.size.toUInt64 ++ (header c e rounds.size).toUTF8 ++ d ∈
-      challengePhaseStrings pk c e rounds := by
+theorem challengePhase_mem {pk : ByteArray} {c : ChallengePhaseCommitment} {salt : ByteArray} {e : String}
+    {rounds : Array Round} {d : ByteArray} (hr : recordsDigest rounds = .ok d) :
+    SESSION_TAG ++ salt ++ be64 (header c e rounds.size).toUTF8.size.toUInt64 ++ (header c e rounds.size).toUTF8 ++ d ∈
+      challengePhaseStrings pk c salt e rounds := by
   simp [challengePhaseStrings, hr]
 
-theorem signed_mem {pk : ByteArray} {c : ChallengePhaseCommitment} {e : String} {rounds : Array Round} {rec : ByteArray}
-    (hm : message c e rounds = .ok rec) (hI : (pk.extract 0 16).size = 16) :
+theorem signed_mem {pk : ByteArray} {c : ChallengePhaseCommitment} {salt : ByteArray} {e : String} {rounds : Array Round}
+    {rec : ByteArray} (hm : message c salt e rounds = .ok rec) (hI : (pk.extract 0 16).size = 16) :
     field MEMORY_CHALLENGER_TAG.toUTF8 ++ pk.extract 0 16 ++ field (field c.session) ++ field rec ∈
-      challengePhaseStrings pk c e rounds := by
+      challengePhaseStrings pk c salt e rounds := by
   simp [challengePhaseStrings, hm, hI]
 
 theorem own_mem {s : SignedChallengePhase} {dev : Challengers} {x : ByteArray}
-    (hx : x ∈ challengePhaseStrings s.publicKey s.commitment s.ended s.rounds) : x ∈ runStrings s dev :=
+    (hx : x ∈ challengePhaseStrings s.publicKey s.commitment s.salt s.ended s.rounds) : x ∈ runStrings s dev :=
   List.mem_append_left _ hx
 
 theorem device_mem {s : SignedChallengePhase} {dev : Challengers} {r : Run} (hr : r ∈ dev.sessions s.publicKey) {e : String}
     (he : r.recorded.ended = some e) {x : ByteArray}
-    (hx : x ∈ challengePhaseStrings s.publicKey r.commitment e r.recorded.rounds) : x ∈ runStrings s dev := by
+    (hx : x ∈ challengePhaseStrings s.publicKey r.commitment r.salt e r.recorded.rounds) : x ∈ runStrings s dev := by
   refine List.mem_append_right _ (List.mem_flatMap.mpr ⟨r, hr, ?_⟩)
   simpa only [he] using hx
 
@@ -107,21 +109,21 @@ theorem same_challengePhase {s : SignedChallengePhase} {dev : Challengers} (cf :
     ∃ r ∈ dev.sessions s.publicKey, r.commitment = s.commitment ∧ r.recorded.ended = some s.ended ∧
       r.recorded.rounds = s.rounds := by
   obtain ⟨r, hr, ended, rec, hend, hmsg, hmcm⟩ := hsig
-  have hm : message s.commitment s.ended s.rounds = .ok m := hm
-  obtain ⟨d, hd, rfl⟩ := Inputs.message_ok hm
+  have hm : message s.commitment s.salt s.ended s.rounds = .ok m := hm
+  obtain ⟨hsz, d, hd, rfl⟩ := Inputs.message_ok hm
   obtain ⟨st, hst, rfl⟩ := Inputs.recordsDigest_ok hd
-  obtain ⟨d', hd', rfl⟩ := Inputs.message_ok hmsg
+  obtain ⟨hsz', d', hd', rfl⟩ := Inputs.message_ok hmsg
   obtain ⟨st', hst', rfl⟩ := Inputs.recordsDigest_ok hd'
   obtain ⟨hI, rfl⟩ := Inputs.signedMessage_ok hM
   obtain ⟨-, hMM⟩ := Inputs.signedMessage_ok hmcm
   have e1 := cf _ (own_mem (signed_mem hm hI)) _ (device_mem hr hend (signed_mem hmsg hI)) hMM
   have e2 := Inputs.signed_split (by rw [Tree.hash_size, Tree.hash_size]) e1
   have e3 := cf _ (own_mem (challengePhase_mem hd)) _ (device_mem hr hend (challengePhase_mem hd')) e2
-  obtain ⟨e4, e5⟩ := Inputs.challengePhase_split (by rw [Tree.hash_size, Tree.hash_size]) e3
+  obtain ⟨-, e4, e5⟩ := Inputs.challengePhase_split (by rw [hsz, hsz']) (by rw [Tree.hash_size, Tree.hash_size]) e3
   have hp : Header.Plain s.ended := he ▸ Header.plain_complete
   obtain ⟨hb, hbb, hbl, hck, hcr, hk, hl, hs, hen, hn⟩ :=
     Header.header_inj hp (plain_of_recorded r hend) (String.toByteArray_inj.mp e4)
-  have hkey := cf _ (own_mem (coinKey_mem _ _ _ _)) _ (device_mem hr hend (coinKey_mem _ _ _ _)) hck
+  have hkey := cf _ (own_mem (coinKey_mem _ _ _ _ _)) _ (device_mem hr hend (coinKey_mem _ _ _ _ _)) hck
   have e6 := cf _ (own_mem (stream_mem hst)) _ (device_mem hr hend (stream_mem hst')) e5
   refine ⟨r, hr, (commitment_ext hs hcr hkey hbl hk hl hbb hb).symm, by rw [hend, hen], ?_⟩
   exact (Inputs.stream_inj hst hst' hn e6).symm

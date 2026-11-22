@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One-stage audit, run A9, on a CPU machine: GLM-5.3 TP8 B1's routed-expert GEMMs in the static pair form (a9.py), then the
-# units that fit M0 through the one-stage audit (a11.py --load-values), on hidden_zk's builds as a11.sh runs them. From a clone:
+# units that fit M0 through the one-stage audit (a11.py --load-values), on hidden_zk's builds. From a clone:
 #   A9_MEM_GB=256 bash benchmarks/one_stage/a9.sh
 #   (a job run from a clone of the tree, 32 CPUs, 256 GB, up to 300 min, with a11-values-r0-s01.tar, a9-experts-r0-l3.tar, derive-report.json sent)
 # Inputs: a11_slice.py's value slice (inputs/a11-values*.tar), a11_slice.ckpt_experts' share (inputs/a9-experts*.tar), the
@@ -16,12 +16,12 @@ export HZ_CACHE=${A11_CACHE:-$HOME/.cache/verity-a11}
 mkdir -p "$HZ_CACHE"
 source benchmarks/pouw/hidden_zk/job.sh
 export PATH=$HOME/.elan/bin:$PATH
-export PYTHONPATH=$SRC:$SRC/verity/protocols/proofs/flock/prover/python:$SRC/adapters/vllm:$SRC/adapters/torch:$SRC/tools/config:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
+export PYTHONPATH=$SRC:$SRC/verity/protocols/proof/flock/prover/python:$SRC/adapters/vllm:$SRC/adapters/torch:$SRC/tools/config:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
 IN=${RESEARCH_RUN_DIR:?}/inputs
 command -v research >/dev/null && research keep "$HZ_CACHE" --owner @circuits --expires 4d --priority low --root / \
   --why "A11/A9's builds (flock-circuit, verity-verify-proof, the venv), keyed by their inputs" >> "$OUT/job.log" 2>&1
 setup
-(cd verity/protocols/proofs/spot/verifier/lean && lake build spot-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
+(cd verity/protocols/proof/spot/verifier/lean && lake build spot-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
 mkdir -p "$OUT/a9"
 SAVED=$W/a9-saved && mkdir -p -m 0700 "$SAVED"

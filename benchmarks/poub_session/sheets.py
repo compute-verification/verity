@@ -13,7 +13,7 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from verity.device import load_card, load_node, node_kinds, number  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier import timing  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier import timing  # noqa: E402
 
 CARD_FILES = Path(__file__).resolve().parents[2] / "calibration/hardware/cards"
 NODE_FILES = Path(__file__).resolve().parents[2] / "calibration/hardware/nodes"

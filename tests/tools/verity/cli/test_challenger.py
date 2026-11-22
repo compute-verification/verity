@@ -140,20 +140,24 @@ def test_a_failed_stop_of_pearl_plus_gate_fails_the_challenger_and_the_run(stand
     assert Host.made[0].stopped
 
 
-def test_spots_piece_hands_the_runner_the_loopback_host_a_development_run_under_the_placement_hold_and_a_gate_first(
+def test_spots_piece_hands_the_runner_the_loopback_host_its_development_marker_whatever_the_hold_and_a_gate_first(
         monkeypatch):
+    """The hold's development run is served_verdicts.sh's to decide (placement.sh's ``development_under_hold``): the
+    hooks hand the same variables held or not."""
     cfg, piece = R.load(CONFIG, REG), T.PIECES["sampled-proofs"][T.WORKERS]
     loop = {"loopback": ADDRESS, "main-file": "/s/public/challenger/main.txt"}
-    monkeypatch.delenv("VERITY_HOLD_PLACEMENT", raising=False)
-    assert piece.variables(cfg, {"challenger": {"sampled-proofs": loop}}) == {
-        "PP_CHALLENGER": f"loopback:{ADDRESS}", "MAIN_FILE": "/s/public/challenger/main.txt"}
-    assert piece.variables(cfg, {}) == {}
-    monkeypatch.setenv("VERITY_HOLD_PLACEMENT", "1")
-    assert piece.variables(cfg, {"challenger": {"sampled-proofs": loop}}) == {
-        "PP_CHALLENGER": f"loopback:{ADDRESS}", "MAIN_FILE": "/s/public/challenger/main.txt", "DEVELOPMENT": "1"}
-    gated = piece.variables(cfg, {"challenger": {"sampled-proofs": {**loop, "gate": "user@gate-1"}}})
-    assert gated["PP_CHALLENGER"] == "gate:user@gate-1" and "DEVELOPMENT" not in gated
-    assert piece.variables(cfg, {}) == {"DEVELOPMENT": "1"}
+    for hold in (None, "1"):
+        if hold is None:
+            monkeypatch.delenv("VERITY_HOLD_PLACEMENT", raising=False)
+        else:
+            monkeypatch.setenv("VERITY_HOLD_PLACEMENT", hold)
+        assert piece.variables(cfg, {"challenger": {"sampled-proofs": loop}}) == {
+            "PP_CHALLENGER": f"loopback:{ADDRESS}", "MAIN_FILE": "/s/public/challenger/main.txt",
+            "PP_DEVELOPMENT_UNDER_HOLD": "1"}
+        assert piece.variables(cfg, {}) == {"PP_DEVELOPMENT_UNDER_HOLD": "1"}
+        gated = piece.variables(cfg, {"challenger": {"sampled-proofs": {**loop, "gate": "user@gate-1"}}})
+        assert gated["PP_CHALLENGER"] == "gate:user@gate-1"
+        assert "DEVELOPMENT" not in gated and "PP_DEVELOPMENT_UNDER_HOLD" not in gated
 
 
 def test_verity_run_starts_it_first_binds_what_it_wrote_and_stops_it_at_the_end(stand_ins, capsys):
@@ -192,3 +196,29 @@ def test_the_auditors_own_gate_runs_the_challenger_where_it_says_and_half_of_it_
     capsys.readouterr()
     with pytest.raises(Refused, match="challenger.pearl-plus.gate of what challenger writes, not all of it"):
         R.starting(REG, [T.CHALLENGER], {T.CHALLENGER: {"pearl-plus": {"gate": "gate-command"}}})
+
+
+def test_it_says_before_each_long_build_what_is_being_built_and_that_it_takes_minutes(stand_ins, monkeypatch, capsys):
+    """One line before the Lean verifier's build and Pearl+'s gate start, one before the loopback host's key is made at the
+    deployed height: each printed before the work it says, not after."""
+    state, calls, _ = stand_ins
+    seen = []
+    run, Made = T.subprocess.run, T.CP.Host
+
+    def run_say(argv, **kw):
+        if len(argv) > 2 and argv[2] == "init":
+            seen.append(("gate", capsys.readouterr().err))
+        return run(argv, **kw)
+
+    class HostSay(Made):
+        def __init__(self, *a, **kw):
+            seen.append(("host", capsys.readouterr().err))
+            super().__init__(*a, **kw)
+
+    monkeypatch.setattr(T.subprocess, "run", run_say)
+    monkeypatch.setattr(T.CP, "Host", HostSay)
+    T.STARTS[T.CHALLENGER].serve(R.load(CONFIG, REG), state)
+    gate, host = dict(seen)["gate"], dict(seen)["host"]
+    assert "building the Lean verifier and Pearl+'s gate" in gate and "takes minutes" in gate and "loopback" not in gate
+    assert "making the loopback host's key at the deployed height" in host and "takes minutes" in host
+    assert [w for w, _ in seen] == ["gate", "host"]

@@ -7,8 +7,8 @@ of the trace:
 
     descriptor.json.gz   the predicted Program, under the trace's annotations: the runtime correspondence (per Call, the fx occurrence
                          it was lowered from, its module, views and slots), which only the trace yields
-    instances.json.gz    the predicted Program's instance sequence (`pipeline.build.write_instances`), with the Call and weight
-                         names the trace gave it (`traced_names`), which no digest covers and Match and the manifest read, and
+    instances.json.gz    the predicted Program's instance sequence (`pipeline.build_instances.write_instances`), with the Call and weight
+                         names the trace gave it (`traced_names`), which no digest covers and Match reads, and
                          the predictor's checks (`BuildResult.checks`), which the replay reads
     the rest (CARRIED)   as the trace wrote them, with `aot` in result.json and construction_manifest.json: what predicted the
                          Program, from which trace
@@ -20,16 +20,17 @@ the predictor (`program.frontend.inputs_trace`).
 A single-GPU row's Build of record needs no trace at all (`write_row`, `predict row`): from the row's declared inputs, each request
 Program with the names its trace gives it (`naming.write_build`, `build_request_<shape>/`), GP-01's workload over them
 (`write_workload`, `build_workload/`: its artifact `workload_program.json`, with the `lag` and `applicability.engine.async_scheduling`
-the declared target resolves, and its `descriptor.json.gz`, which GM-01 holds the digest and the lag to), the row's required-value
-manifest over them (`manifest.json`, the row's own query and policies, `row_build`) and
-`predicted.json` (`records.predicted_row`), what predicted it and the manifest's sha256. That is the row's Build of record, the
-ahead-of-time compiler's, which a traced Build only cross-checks. `compare --predicted DIR` holds it to
-a traced Build of the same row: every Program digest, and the manifest's digest, Program digest and identities.
+the declared target resolves, and its `descriptor.json.gz`, which GM-01 holds the digest and the lag to), and `predicted.json`
+(`records.predicted_row`): the registered compiler (`pipeline.advice.registered_compiler`) and those Programs' digests, nothing of
+any window, whose circuit each window's registration binds. The compiler's digest covers every file of the integration's import
+closure in the work tree, the adapter's included, so the record is written from the tree that serves: `serve_row.row_refusal`
+refuses one from any other. That is the row's Build of record, the ahead-of-time compiler's, which a traced Build only
+cross-checks. `compare --predicted DIR` holds it to a traced Build of the same row: every Program digest.
 
     verity-vllm predict emit --row ROW --rank R --config CONFIG_JSON --trace DIR --out DIR (--wrapper step --M N --pos0 N |
                              --wrapper request --LP N --T N) [--aot JSON]
     verity-vllm predict compare ROW_DIR --row ROW --config CONFIG_JSON --out comparison.json [--workers N] [--predicted DIR]
-    verity-vllm predict row --row ROW --out DIR [--config CONFIG_JSON] [--jobs N]
+    verity-vllm predict row --row ROW --out DIR [--config CONFIG_JSON]
 """
 from __future__ import annotations
 
@@ -64,7 +65,6 @@ from verity_vllm.config import (
 from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
 from verity_vllm.pipeline import epoch
 from verity_vllm.program import prefix_plan as PP
-from verity_vllm.query.required import QUERY_OF_RECORD
 from verity_vllm.records.predicted_row import FILE, PredictedRow
 from verity_vllm.records.schema_ids import AOT_COMPARISON_SCHEMA
 
@@ -114,7 +114,7 @@ def emit(phi: Phi, wrapper: str, trace: str, out: str, *, M: int = 1, pos0: int 
          aot: dict | None = None) -> dict:
     """One derive dir of a switched row's Build at `out`: the predicted Program, with the data `trace` (the traced derive dir at the
     same rank and shape) holds about it.  Returns the `aot` block it records."""
-    from verity_vllm.pipeline.build import write_instances
+    from verity_vllm.pipeline.build_instances import write_instances
     res = json.loads(Path(trace, "result.json").read_text())
     recorded = res.get("program")   # the trace's record of its Program; a result without it names no digest, and is refused below
     traced = recorded if recorded else {}
@@ -220,12 +220,6 @@ def compare(row_dir: str, row: str, config: str, workers: int = 0, predicted: st
     return doc
 
 
-def _manifest_facts(path: Path) -> dict[str, Any]:
-    from verity_vllm.records.required_manifest import RequiredManifest
-    m = RequiredManifest.load(path)
-    return {"manifest_digest": m.manifest_digest, "program_digest": m.program_digest, "identities": len(m.identities)}
-
-
 def _request_shape(name: str) -> tuple[int, int]:
     """(LP, T) of a predicted request Program's name, `build_request_LP<n>_T<n>` as `write_row` names it."""
     named: Any = REQUEST.fullmatch(name)   # None for a name of another form, which has no groups: its AttributeError
@@ -235,8 +229,7 @@ def _request_shape(name: str) -> tuple[int, int]:
 
 def compare_row(row_dir: str, predicted: str, traced: dict | None = None) -> dict[str, Any]:
     """A predicted row's Build (`write_row`, under `predicted`) against the traced Build of the same row under `row_dir`: each
-    request Program and the workload by digest, and the required-value manifest by its digest (over its identities), Program
-    digest and identity count."""
+    request Program and the workload by digest."""
     traced = traced if traced is not None else epoch.build_programs(Path(row_dir))
     if list(traced) != ["0"]:
         raise UsageError(f"{row_dir}: a predicted row is one rank's, and the traced Build has ranks {sorted(traced)}")
@@ -245,15 +238,12 @@ def compare_row(row_dir: str, predicted: str, traced: dict | None = None) -> dic
     parts = {"workload": (p["workload"], rec.workload_digest),
              **{n: (by_shape.get(_request_shape(n)), d) for n, d in rec.requests.items()}}
     out: dict[str, Any] = {n: {"traced": t, "predicted": q, "equal": bool(t) and t == q} for n, (t, q) in parts.items()}
-    t, q = _manifest_facts(Path(row_dir, "manifest.json")), _manifest_facts(Path(predicted, "manifest.json"))
-    out["manifest"] = {"traced": t, "predicted": q, "equal": bool(t["manifest_digest"]) and t == q}
     return {"dir": str(Path(predicted).resolve()), "parts": out, "equal": all(v["equal"] for v in out.values())}
 
 
-def write_row(row: str, out: str, *, config: str | None = None, jobs: int = 1, log=None) -> PredictedRow:
+def write_row(row: str, out: str, *, config: str | None = None, log=None) -> PredictedRow:
     """A single-GPU row's Build of record at `out` from its declared inputs alone (module docstring): no trace, no vLLM.  The
     checkpoint's `config.json` is `config`, else the pin's (`pinned_hf_config`).  Returns the record it writes beside them."""
-    from verity_vllm.pipeline import manifest as MN
     w = json.loads(workload_file(row_file(row)).read_text())
     if PP.prefix_caching(w):
         raise UsageError(f"{row}: the row serves with prefix caching, and its workload Program's cached components are not predicted")
@@ -274,22 +264,16 @@ def write_row(row: str, out: str, *, config: str | None = None, jobs: int = 1, l
         if log:
             log(f"[predict] {name}: {r.digest[:16]}… ({r.n_root_nodes} nodes)")
     wl = write_workload(phi, comps, os.path.join(out, "build_workload"))
-    policy = dict(word="16/32", norm_scales=True, taps=MN.taps_of(True, True), query=QUERY_OF_RECORD,
-                  jobs=jobs or MN.cpus(), log=log)
-    if len(phi.requests) > 1:
-        man = MN.build_global(w, out, workload_digest=wl.digest, **policy)
-    else:
-        man = MN.build(os.path.join(out, next(iter(requests))), workload=w, **policy)
-    raw = json.dumps(man, separators=(",", ":")).encode()
-    Path(out, "manifest.json").write_bytes(raw)
-    if MN.incomplete_rc(man):
-        raise UsageError(f"{row}: the predicted Build's manifest is incomplete (named above), so it has no {FILE}")
     rec = PredictedRow(row=row, config=str(found), code_version=S.code_version(), requests=requests, workload_digest=wl.digest,
-                       lag=wl.lag, manifest_digest=man["manifest_digest"], manifest_sha256=hashlib.sha256(raw).hexdigest(),
-                       program_digest=man["program_digest"], identities=man["populations"]["identities"],
-                       secs=round(time.time() - t0, 1))
+                       lag=wl.lag, compiler=_compiler(), secs=round(time.time() - t0, 1))
     Path(out, FILE).write_text(json.dumps(rec.dump(), indent=1) + "\n")
     return rec
+
+
+def _compiler() -> dict[str, str]:
+    from verity_vllm.pipeline.advice import registered_compiler
+    c = registered_compiler()
+    return {"name": c.name, "digest": c.digest}
 
 
 def write_workload(phi: Phi, comps: dict, out: str):
@@ -342,11 +326,10 @@ class CompareOptions:
 
 @dataclass(frozen=True, kw_only=True)
 class RowOptions:
-    """A single-GPU row's Build of record from its declared inputs alone: each request Program named, GP-01's workload, the manifest."""
+    """A single-GPU row's Build of record from its declared inputs alone: each request Program named, GP-01's workload, the compiler."""
     row: str = option("--row")
-    out: str = option("--out", help="the Build's dir (build_request_<shape>/, build_workload/, manifest.json, predicted.json)")
+    out: str = option("--out", help="the Build's dir (build_request_<shape>/, build_workload/, predicted.json)")
     config: str | None = option("--config", default=None, help="the checkpoint's config.json (default: the pin's, pinned_hf_config)")
-    jobs: int = option("--jobs", type=int, default=0, help="processes for the manifest's word check and components (0: the CPUs)")
     cmd: str = field(default="row", init=False)
 
 
@@ -358,8 +341,8 @@ def main(a: EmitOptions | CompareOptions | RowOptions) -> int:
         print(json.dumps({"out": a.out, "digest": block["predicted_digest"], "timings": block["timings"]}))
         return 0
     if isinstance(a, RowOptions):
-        rec = write_row(a.row, a.out, config=a.config, jobs=a.jobs, log=lambda s: print(s, file=sys.stderr, flush=True))
-        print(json.dumps({k: getattr(rec, k) for k in ("row", "workload_digest", "manifest_digest", "program_digest", "identities", "secs")}))
+        rec = write_row(a.row, a.out, config=a.config, log=lambda s: print(s, file=sys.stderr, flush=True))
+        print(json.dumps({k: getattr(rec, k) for k in ("row", "workload_digest", "compiler", "secs")}))
         return 0
     doc = compare(a.row_dir, a.row, a.config, a.workers, a.predicted)
     Path(a.out).write_text(json.dumps(doc, indent=1) + "\n")

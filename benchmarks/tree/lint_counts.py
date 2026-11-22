@@ -29,8 +29,6 @@ How a list is read:
   ``allowed()`` returns the list's registry marks too, which its ``found`` takes.  The ruff lint has no ``found()``:
   its findings are its ``scan()``'s, as its own ``--prune`` reads them.  The Python verdicts' list is no ratchet's
   (``NO_RATCHETS``): it is a reading's, its lint finds nothing outside it and its module has no ``allowed()``.
-* ``lean_retired_terms``, which ``tests/test_retired_terms.py`` holds: the Lean files' sites of its ``offenders`` and
-  its ``lean_allowed()``, as its own ``--prune`` reads them.
 * ``superseded_versions``, which circuit-check's suite holds (``tests/tools/verity/circuit_check/``): the files of
   the superseded versions its ``superseded(registered())`` finds, and of the versions its list's entries name and the
   superseded ones its ``held`` lines name, each one site.
@@ -79,8 +77,7 @@ ROOT_LINT = "tests/lint"
 ADAPTER = "adapters/vllm"
 ADAPTER_LINT = f"{ADAPTER}/tests/lint"
 #: a repository list that no ``tests/lint/test_NAME.py`` holds: (how it is read, the module that holds it)
-ELSEWHERE = {"lean_retired_terms": ("lean_terms", "tests/test_retired_terms.py"),
-             "superseded_versions": ("superseded", "tests/tools/verity/circuit_check/test_superseded_versions.py")}
+ELSEWHERE = {"superseded_versions": ("superseded", "tests/tools/verity/circuit_check/test_superseded_versions.py")}
 #: the lists whose lint runs ruff
 RUFF = ("repo_ruff", "ruff", "ruff_vllm")
 #: what would have a lint import, or mypy follow, another checkout's code
@@ -133,13 +130,6 @@ def root(name, module):
     return (mod.found(*marks) if hasattr(mod, "found") else Counter(k for k, *_ in mod.scan())), have
 
 
-def lean_terms(name, module):
-    path = tree / module
-    sys.path.insert(0, str(path.parent))                 # a root test imports its neighbours by name
-    mod = importlib.import_module(path.stem)
-    return Counter(f for f, *_ in mod.offenders(mod._tracked())[0] if f.endswith(".lean")), mod.lean_allowed()
-
-
 def superseded(name, module):
     path = tree / module
     sys.path.insert(0, str(path.parent))
@@ -172,7 +162,7 @@ def adapter(name, module):
 results = []
 for name, how, module in jobs:
     try:
-        got, have = {"root": root, "lean_terms": lean_terms, "superseded": superseded, "adapter": adapter}[how](name, module)
+        got, have = {"root": root, "superseded": superseded, "adapter": adapter}[how](name, module)
         results.append({"list": name, "found": [*got.items()], "allowed": [*have.items()]})
     except NoRatchet as e:
         results.append({"list": name, "no_ratchet": str(e)})

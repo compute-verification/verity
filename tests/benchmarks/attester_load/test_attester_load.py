@@ -3,34 +3,23 @@ No test runs an arm: an arm reads the machine's clock."""
 
 from __future__ import annotations
 
-import contextlib
 import importlib.util
-import io
 import json
-import subprocess
 from pathlib import Path
 
 import pytest
 from verity_bench import kit
 
-from verity.protocols.resource_accounting.network.prover import scan_zk
 
 ROOT = Path(__file__).resolve().parents[3]
 _spec = importlib.util.spec_from_file_location("attester_load_run", ROOT / "benchmarks/attester_load/run.py")
 R = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(R)
 
-#: the onsite application's schedule (`network_attester.W63K4`), as `scan_zk.py schedule --class w63k4` prints it
+#: the onsite application's schedule (`network_attester.W63K4`)
 W63K4 = {"cell_bytes": 512, "slots": 4, "bucket_ms": 100, "delay": 27, "lanes": 4, "queue": 4, "window": 32,
          "ingress_cells": 47, "ingress_buckets": 12, "egress_cells": 5, "every": 16}
 STAMP = {"card": "none", "gpus": [], "driver": None, "cuda": None, "node": "test", "commit": None}
-
-
-def _scan_zk_in_process(argv, **_kw) -> subprocess.CompletedProcess:
-    buf = io.StringIO()
-    with contextlib.redirect_stdout(buf):
-        code = scan_zk.main(argv[2:])
-    return subprocess.CompletedProcess(argv, code, buf.getvalue(), "")
 
 
 def arm_doc(failed: list[str]) -> dict:
@@ -56,8 +45,7 @@ def written(monkeypatch, doc: dict, out: Path) -> tuple[int, list[dict]]:
     return n, json.loads(result.read_text())["measurements"] if result.exists() else []
 
 
-def test_the_default_schedule_is_the_application_s(monkeypatch) -> None:
-    monkeypatch.setattr(R.subprocess, "run", _scan_zk_in_process)
+def test_the_default_schedule_is_the_application_s() -> None:
     assert R.schedule("w63k4", {}) == W63K4
     assert R.schedule("w63k4", {"delay": 4, "bucket_ms": None}) == W63K4 | {"delay": 4}
 

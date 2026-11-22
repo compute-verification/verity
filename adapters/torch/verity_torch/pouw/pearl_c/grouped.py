@@ -50,11 +50,11 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul, Shape
+from verity.protocols.accounting.compute.pouw.verifier.protocol import Matmul, Shape
 
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import CALL_CAPACITY
+from verity.protocols.accounting.compute.pouw.prover.serving.pearl_c import CALL_CAPACITY
 from verity_torch.pouw.pearl_c.host import _Driver, _event, _put, _zeros, fresh_into
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.kernel import _load
+from verity.protocols.accounting.compute.pouw.prover.serving.pearl_c.kernel import _load
 from verity_torch.pouw.pearl_c.passes import call_index
 from verity_torch.pouw.pearl_c.screen import scatter_into, screen_into
 
@@ -458,11 +458,11 @@ def _gemm_grouped(run: Any, ws: tuple[int, ...], x: Any, counts: tuple[int, ...]
     if not us:
         return x.new_zeros((0, n)) if bias is None else x.new_zeros((0, n)) + bias
     rows, tiles, pos, real = sum(u.seg for u in us), sum(u.tiles for u in us), len(cur.matmuls), len(x)
-    index = call_index(run, len(us))
     if run.hashing and (cur.tiles + tiles > run.capacity or pos + len(us) > CALL_CAPACITY
                         or cur.flag_rows + real > len(run.flag_buf)):
         raise RuntimeError(f"{run.entry}: the pass is over its capacity ({run.capacity} tiles, {CALL_CAPACITY} calls, "
                            f"{len(run.flag_buf)} screened rows); end it and begin another")
+    index = call_index(run, len(us))
     cuda = run.device.type == "cuda"
     if cuda and torch.cuda.is_current_stream_capturing():
         raise RuntimeError(f"{run.entry}: a grouped call's counts are the host's, so a CUDA graph capture can't take it")
@@ -484,7 +484,7 @@ def _gemm_grouped(run: Any, ws: tuple[int, ...], x: Any, counts: tuple[int, ...]
         to = run.sides[run._side_turn % len(run.sides)]
         run._side_turn += 1
     if run.hashing:                                     # read on the main lane alone, which starts after the caller
-        fresh_into(b["salts_a"], rows, raw if cuda else None)
+        fresh_into(b["salts_a"], rows, raw if cuda else None, salts=cur.salts)
     graphed = cuda and run.graphs and run.fused_screen
     if graphed and c.execs:
         _replay(run, g, c, j, slot, nbytes, b, x, raw, main, lane_raw, to)

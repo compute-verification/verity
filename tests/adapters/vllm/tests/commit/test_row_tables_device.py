@@ -17,7 +17,7 @@ from typing import Any
 import numpy as np
 import pytest
 from verity.commitments import row_table as RT
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+from verity.protocols.accounting.compute.pouw.prover.serving import (
     row_table_kernels as K,
 )
 
@@ -123,19 +123,14 @@ def test_two_files_with_one_name_are_refused_before_the_compiler_runs(tmp_path, 
     assert not list(rec.iterdir()) and not (tmp_path / "built").exists()
 
 
-def test_every_build_takes_its_sources_from_the_one_directory_of_pouws_prover():
-    """`CUDA_DIR` and `pouw.device`'s directory are one directory, found from the package that holds it and not from where the
-    adapter's own files are, so it is the same in a checkout and in an installed adapter; and every source a build names is a
-    file there, the device builds' too, which only nvcc compiles and no test without it reads."""
-    pytest.importorskip("torch")
-    from verity.protocols.resource_accounting.compute.pouw import prover
-    from verity_torch.pouw.h1 import receipts
-    from verity_torch.pouw.h1 import registered_device as RD
+def test_every_row_table_build_takes_its_sources_from_the_one_directory_of_pouws_prover():
+    """`CUDA_DIR` is found from the package that holds it and not from where the adapter's own files are, so it is the
+    same in a checkout and in an installed adapter; and every source the row tables' builds name is a file there, the
+    device build's too, which only nvcc compiles and no test without it reads."""
+    from verity.protocols.accounting.compute.pouw import prover
 
     assert K.CUDA_DIR == Path(prover.__file__).resolve().parent / "kernels" / "pouw_cuda"
-    named = {*K.DEVICE_SOURCES, *K.HOST_SOURCES, *RD.DEVICE_SOURCES,
-             *RD.HOST_SOURCES, *RD.ZY_DEVICE_SOURCES, *RD.ZY_HOST_SOURCES, receipts.NOISE_CU}
-    assert sorted(s for s in named if not (K.CUDA_DIR / s).is_file()) == []
+    assert sorted(s for s in {*K.DEVICE_SOURCES, *K.HOST_SOURCES} if not (K.CUDA_DIR / s).is_file()) == []
 
 
 def _declared(name: str) -> list[Any]:

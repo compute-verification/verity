@@ -1,5 +1,4 @@
-"""The Commit record: one run of a Commit pair, a line of `commit/runs.jsonl`, as the verdict reads it (`check.verdict.build` and
-`execution_of_record`).
+"""The Commit record: one run of a Commit pair, a line of `commit/runs.jsonl`, as the verdict reads it.
 
 Its writers are `pipeline.commit` (`verity/commit-integ/delta/v1`; the retired `verity_capture/bench/commit_delta.py` before it),
 `pipeline.tp.commit` (`verity/commit-integ/delta-tp/v1`; the retired `tp2_commit.py` before it) and `pipeline.serve_seal` (a sealed

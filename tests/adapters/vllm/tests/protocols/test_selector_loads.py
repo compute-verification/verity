@@ -8,7 +8,7 @@ ASK = """
 import sys
 from verity_vllm import protocols as P
 P.adapter("sampled-proofs")
-print("\\n".join(m for m in sys.modules if m.startswith("verity.protocols.resource_accounting.compute")))
+print("\\n".join(m for m in sys.modules if m.startswith("verity.protocols.accounting.compute")))
 """
 
 

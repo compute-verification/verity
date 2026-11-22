@@ -302,6 +302,16 @@ def test_a_lifted_guarantee_s_twin_is_read_from_its_recorded_definition(tmp_path
     assert row == old | {"pin": LIFTED, "type_hash": "l", "source": "t", "status": "pinned"}
 
 
+def test_a_guarantee_listed_with_its_owner_only_is_no_twin_until_it_is_recorded(tmp_path):
+    """Another lane's guarantee that its lock lists before `check.py --update` records it (owner only, no signature)
+    leaves the twins as they were."""
+    audit, lean = lifted_audit(tmp_path)
+    audit["guarantees"] |= {"Pous.SecurityProofs.Other": {"owner": "@lane"}, LIFTED_OLD: {"owner": "@lane"}}
+    assert set(P.guarantees(audit)) == {LIFTED}
+    (row,) = P.extract(P.guarantees(audit), "t", {LIFTED: "l"}, P.lifted_definitions(audit, lean))
+    assert row["pin"] == LIFTED
+
+
 @pytest.mark.parametrize("source, recorded, match", [
     (LIFTED_SOURCE, False, "no Guarantees definition"),
     (LIFTED_SOURCE.replace("def GapSm120", "def OtherSm120"), True, "no Guarantees definition"),

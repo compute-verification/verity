@@ -82,7 +82,6 @@ def node(tmp_path, monkeypatch):
         monkeypatch.setattr(k, "GPU_LEASE", ["/bin/gpu-lease"])
         monkeypatch.setattr(k, "LEASE_DIR", tmp_path / "lease")
         monkeypatch.setattr(k, "WINDOWS", str(tmp_path / "windows"))
-        monkeypatch.setattr(k, "DAILY_HOLD", "")
         monkeypatch.setattr(k, "clock", lambda: now[0])
         for seam in ("launch", "unit_live", "cancel_chunk"):
             monkeypatch.setattr(k, seam, getattr(sd, seam))
@@ -226,14 +225,9 @@ def test_nothing_starts_in_a_booked_window_or_where_its_max_min_would_reach_one(
     assert seeds(sd) == [0]
 
 
-def test_nothing_starts_in_node_1s_daily_hold_and_an_unreadable_windows_file_holds_everything(node, tmp_path, monkeypatch):
+def test_an_unreadable_windows_file_holds_everything(node, tmp_path):
     k, sd, now, _ = node
-    monkeypatch.setattr(k, "DAILY_HOLD", "12:10-13:30")
     k.set_target("sweep", target(k, n=1, max_min=90, until="2026-10-05T20:00Z"))
-    for hhmm in ("2026-10-04T12:30", "2026-10-04T11:00", "2026-10-05T12:09"):   # in the hold; 90 min reach it; so does the next day's
-        now[0] = t(hhmm)
-        k.tick()
-    assert sd.started == []
     (tmp_path / "windows").unlink()
     (tmp_path / "windows").mkdir()                # there, but not a file it can read: fail closed
     now[0] = t("2026-10-05T14:00")

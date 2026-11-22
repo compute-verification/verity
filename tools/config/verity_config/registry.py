@@ -1,5 +1,6 @@
 """Canonical GPU names; naming systems remain distinct fields.  A card's figures (memory, bandwidth, SMs, clocks) and
-the names nvidia-smi gives it (`driver`) are the card files', not this registry's."""
+the names nvidia-smi gives it (`driver`) are the card files', not this registry's: `card` names that file
+(`calibration/hardware/cards/<card>.toml`), and an entry naming none is refused."""
 
 from __future__ import annotations
 
@@ -16,11 +17,11 @@ REGISTRY = Path(__file__).with_name("registry")
 class Gpu:
     id: str
     display_name: str
-    census_id: str
     nebius_platforms: tuple[str, ...]
     nebius_preset: str
     runpod_type_id: str
     count_per_node: int
+    card: str = ""
 
 
 @dataclass(frozen=True)
@@ -41,5 +42,9 @@ def gpus(path: str | Path = REGISTRY / "gpus.toml") -> dict[str, Gpu]:
     if doc.schema != "verity-config/gpus/v0":
         raise ConfigError(f"{path}: unknown GPU registry schema {doc.schema!r}")
     _unique(doc.gpu, "GPU")
+    for gpu in doc.gpu:
+        if not gpu.card:
+            raise ConfigError(f"{path}: GPU {gpu.id} names no card: set its `card` to the stem of its card file in "
+                              "calibration/hardware/cards/, adding that file first if it has none")
     return {gpu.id: gpu for gpu in doc.gpu}
 

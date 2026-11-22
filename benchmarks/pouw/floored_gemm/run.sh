@@ -13,7 +13,7 @@ export O=${OUT:?}
 CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit 13.0) || exit 2
 export CUDA_HOME PATH=$CUDA_HOME/bin:$PATH
 GENCODE=$(python3 benchmarks/kernels/machine.py gencode "$(python3 benchmarks/kernels/machine.py arch)") || exit 2
-export D=verity/protocols/resource_accounting/compute/pouw/prover/kernels/floored_gemm
+export D=verity/protocols/accounting/compute/pouw/prover/kernels/floored_gemm
 export B; B=$(mktemp -d /tmp/floored-gemm.XXXXXX); trap 'rm -rf "$B"' EXIT
 STAGE=${STAGE:-all}
 git rev-parse HEAD > "$O/commit.txt" 2>&1

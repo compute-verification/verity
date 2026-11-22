@@ -1,6 +1,6 @@
 """Resolve a raw observation log against a pinned profile (torch-free).
 
-    uv run verity-vllm resolve-log data/logs/m1.jsonl.gz \
+    uv run verity-vllm resolve-log LOG.jsonl.gz \
         --profile vllm_d9105ea80_sm89_eager [--step N] [--dump-trees] [--max-depth 6] [--out PATH] [--strict]
 
 Per step: `StepContext` (header, StepStart, SampleEnd, StepLinks, Roots by allocation — the weight/buffer Roots of the

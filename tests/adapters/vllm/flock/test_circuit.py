@@ -360,8 +360,8 @@ def test_the_leaf_scheme_is_the_lean_verifiers_and_the_provers():
     import re
     from pathlib import Path
 
-    flock = (Path(__file__).resolve().parents[4] / "verity" / "protocols" / "proofs" / "flock" / "prover")
-    lean_flock = Path(__file__).resolve().parents[4] / "verity/protocols/proofs/flock/verifier"
+    flock = (Path(__file__).resolve().parents[4] / "verity" / "protocols" / "proof" / "flock" / "prover")
+    lean_flock = Path(__file__).resolve().parents[4] / "verity/protocols/proof/flock/verifier"
     words = {k: v for k, v in FC.LEAF_SCHEME.items() if k in ("id", "inner", "salt_source", "key")}
     lean = r'\("(\w+)", (?:s )?"([^"]*)"\)'
     rust = _body(flock / "live" / "src" / "circuit.rs", "pub fn leaf_scheme()")
@@ -381,8 +381,8 @@ def test_the_zk_hooks_name_the_provers_randomness():
     import re
     from pathlib import Path
 
-    flock = (Path(__file__).resolve().parents[4] / "verity" / "protocols" / "proofs" / "flock" / "prover")
-    lean = _body(Path(__file__).resolve().parents[4] / "verity/protocols/proofs/flock/verifier/Flock/Zk.lean", "def hooks")
+    flock = (Path(__file__).resolve().parents[4] / "verity" / "protocols" / "proof" / "flock" / "prover")
+    lean = _body(Path(__file__).resolve().parents[4] / "verity/protocols/proof/flock/verifier/Flock/Zk.lean", "def hooks")
     os_words = dict(re.findall(r'let (\w+) := if os then "([^"]*)" else', lean))
     assert set(os_words) == {"pads", "draws"}, os_words
     want = {k: re.search(rf'\("{k}", s s!"([^"]*)"\)', lean)[1].replace("{pads}", os_words["pads"])

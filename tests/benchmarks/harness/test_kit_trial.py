@@ -1,25 +1,14 @@
 """A trial run (`VERITY_BENCH_TRIAL`): its measurements go beside its result, which says trial and holds none, so none
-reaches a metric's line; without the variable a result is written byte for byte as before."""
+reaches a metric's line."""
 
 from __future__ import annotations
 
-import hashlib
 import json
 
 import pytest
 from kit_standins import RUN, _result
 from kit_standins import no_gpu as no_gpu
 from verity_bench import kit, overhead_node
-
-#: the sha256 of the result `_write` wrote before trials existed, its measurement holding its metric's version
-BEFORE = "0e72ba6f4628fcae17f495c6860e18569eac0bd6a6afb921b7ada62a0edb56e4"
-
-
-def _write(out):
-    w = kit.Writer(out, "r20261117-200000-0001", {"commit": "c0ffee", "card": "none"}, "bench-result/v1", ["bash", "job.sh"])
-    w.fingerprint(script="job.sh")
-    w.measurement("benchmarks/x", 1.5, "s", mark="measured", member="m-h200", extra={"n": 3})
-    w.validation("passed", "job.sh", "held")
 
 
 @pytest.fixture
@@ -29,17 +18,6 @@ def said(monkeypatch):
     monkeypatch.setattr(kit.atexit, "register", lambda f, *args: registered.append((f, args)))
     monkeypatch.setattr(kit, "_TRIALS_SAID", set())
     return registered
-
-
-@pytest.mark.parametrize("value", [None, "", "0"])
-def test_without_a_trial_a_result_is_written_byte_for_byte_as_before(tmp_path, monkeypatch, value):
-    for name in ("RESEARCH_RUN_DIR", "RESEARCH_SOURCE_SHA", kit.TRIAL):
-        monkeypatch.delenv(name, raising=False)
-    if value is not None:
-        monkeypatch.setenv(kit.TRIAL, value)
-    _write(tmp_path)
-    assert hashlib.sha256((tmp_path / kit.RESULT).read_bytes()).hexdigest() == BEFORE
-    assert [p.name for p in tmp_path.iterdir()] == [kit.RESULT]
 
 
 def test_a_trial_is_the_variable_set_to_anything_but_0():

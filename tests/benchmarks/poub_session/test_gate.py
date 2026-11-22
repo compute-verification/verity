@@ -52,11 +52,11 @@ def git(r: Path, *cmd: str) -> str:
 @pytest.fixture
 def repo(tmp_path: Path) -> tuple[Path, str]:
     r, origin = tmp_path / "repo", tmp_path / "origin.git"
-    (r / "verity/protocols/resource_accounting/memory/poub/verifier").mkdir(parents=True)
+    (r / "verity/protocols/accounting/memory/poub/verifier").mkdir(parents=True)
     git(tmp_path, "init", "-q", "--bare", str(origin))
     git(r, "init", "-q", "-b", "main")
     for x in ("0", "1"):
-        (r / "verity/protocols/resource_accounting/memory/poub/verifier/store.py").write_text(f"x = {x}\n")
+        (r / "verity/protocols/accounting/memory/poub/verifier/store.py").write_text(f"x = {x}\n")
         git(r, "add", ".")
         git(r, "commit", "-q", "-m", f"c{x}")
     git(r, "remote", "add", "origin", str(origin))
@@ -68,7 +68,7 @@ def off_main(repo: tuple[Path, str]) -> tuple[Path, str]:
     """The repository checked out at a commit on top of main that origin/main doesn't hold."""
     r, _ = repo
     git(r, "checkout", "-q", "-b", "side")
-    (r / "verity/protocols/resource_accounting/memory/poub/verifier/store.py").write_text("x = 2\n")
+    (r / "verity/protocols/accounting/memory/poub/verifier/store.py").write_text("x = 2\n")
     git(r, "commit", "-q", "-am", "side")
     return r, git(r, "rev-parse", "HEAD")
 
@@ -106,7 +106,7 @@ def probe(tmp_path: Path, repo: tuple[Path, str], *, ledger=CLOSED_7, pinned=Non
 def test_the_probe_passes_reading_only(tmp_path, repo):
     p, out, calls = probe(tmp_path, repo)
     assert p.returncode == 0, p.stdout + p.stderr
-    tree = subprocess.run(["git", "rev-parse", f"{repo[1]}:verity/protocols/resource_accounting/memory/poub/verifier"], cwd=repo[0],
+    tree = subprocess.run(["git", "rev-parse", f"{repo[1]}:verity/protocols/accounting/memory/poub/verifier"], cwd=repo[0],
                           capture_output=True, text=True, check=True).stdout.strip()
     doc = json.loads((out / "probe.json").read_text())
     assert doc["refused"] == [] and doc["challenger_pinned_at_commit"]
@@ -360,24 +360,6 @@ def host(tmp_path: Path, verb: str = "host", **form: str) -> tuple[subprocess.Co
     p = subprocess.run(["bash", str(GATE), verb], cwd=tmp_path, env=env, capture_output=True, text=True)
     sent = out / "gate.requests"
     return p, [line.split(" ", 2)[2] for line in sent.read_text().splitlines()] if sent.exists() else None
-
-
-@pytest.mark.parametrize("form, want", [
-    ({}, PACED),
-    ({"PACED": "64:60000:33273:7", "PACE_PASS_MS": "46"},
-     "--paced 64:60000:33273:7 --pace-pass-ms 46 --minutes 30 --jitter-ms 50 --quantile max"),
-    ({"SESSIONS": "1", "WINDOWS": "7", "WINDOW_MS": "60000", "SAMPLES": "33273"},
-     "--sessions 1 --windows 7 --window-ms 60000 --samples 33273 --minutes 30 --jitter-ms 50 --quantile max"),
-    ({"SESSIONS": "2"}, "--sessions 2 --minutes 30 --jitter-ms 50 --quantile max"),
-    ({"BIND": "1", "MODEL": "TINY", "ARENA_BLOCKS": "7"}, PACED),
-], ids=["default", "paced", "one-coin-a-window", "sessions-alone", "a-model-named"])
-def test_the_hosts_run_is_asked_for_paced_sessions_or_with_sessions_for_one_coin_a_window(tmp_path, form, want):
-    """The request names one form: PACED's words at PACE_PASS_MS, by default the four paced sessions, or SESSIONS
-    sessions with the WINDOWS, WINDOW_MS and SAMPLES that are set and nothing of a pace. It names no model, engines or
-    arenas, whatever the environment holds: the verifier holds no checkpoint."""
-    p, sent = host(tmp_path, **form)
-    assert p.returncode == 0, p.stdout + p.stderr
-    assert sent == [f"run --peer vy-nebius-2 --port 7951 --period ma-remote-coins-9 --pin {PIN} {want}"]
 
 
 @pytest.mark.parametrize("verb", ["host", "probe", "fire", "form"])

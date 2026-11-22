@@ -4,7 +4,7 @@ an honest session is accepted and its γ terms computed, a prover that dropped b
 second session waits out the first's deadline, and KV pages appended and released mid-session (a memory map's steps)
 are audited, accepted when held and rejected when dropped. The Lean verifier decides, `audit.AuditRun` keeps the books
 beside it, and the two must agree at every event, window verdict and record field. The sessions run on PoUB's harness
-(`tests/verity/protocols/resource_accounting/memory/poub/session_harness.py`)."""
+(`tests/verity/protocols/accounting/memory/poub/session_harness.py`)."""
 from __future__ import annotations
 
 import dataclasses
@@ -22,17 +22,17 @@ import pytest
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "poub_session"))
-sys.path.insert(0, str((HERE.parents[2] / "verity/protocols/resource_accounting/memory/poub/prover/poub_session/prover.py").parent))
+sys.path.insert(0, str((HERE.parents[2] / "verity/protocols/accounting/memory/poub/prover/poub_session/prover.py").parent))
 sys.path.insert(0, str(HERE.parents[2]))
 
-from verity.protocols.resource_accounting.memory.poub.verifier import audit, coins, ledger, receipts as rb, timing  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier import codec as rcodec  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier import audit, coins, ledger, receipts as rb, timing  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier import codec as rcodec  # noqa: E402
 
 import prover  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier.session import verifier  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier.session import wire  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier.session import verifier  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier.session import wire  # noqa: E402
 
-from tests.verity.protocols.resource_accounting.memory.poub.session_harness import (  # noqa: E402
+from tests.verity.protocols.accounting.memory.poub.session_harness import (  # noqa: E402
     FIGURES,
     P512,
     PassClock,
@@ -40,7 +40,7 @@ from tests.verity.protocols.resource_accounting.memory.poub.session_harness impo
     run,
 )
 
-FIGURES_FILE = Path(__file__).resolve().parents[3] / "tests/verity/protocols/resource_accounting/memory/poub/figures.json"
+FIGURES_FILE = Path(__file__).resolve().parents[3] / "tests/verity/protocols/accounting/memory/poub/figures.json"
 FIGURES = timing.Figures.of_json(json.loads(FIGURES_FILE.read_text()))
 
 BARE = dataclasses.replace(FIGURES, gpu_chip_bytes=0, host_chip_bytes=0, gpu_squarings_per_s={"p512": 0.0})
@@ -87,7 +87,8 @@ def test_an_accepted_sessions_gamma_is_the_leans(monkeypatch):
 def test_a_session_whose_windows_all_accept_is_not_accepted_unless_the_leans_outcome_is(monkeypatch, outcome):
     """The session's acceptance is the Lean's `outcome` at its end: an honest session whose every window verdict
     accepts, while the Lean's `outcome` is anything but `accepted` (another word, none, or no answer), is not
-    accepted, and the record says `disagreement` at the event `outcome`; the books' acceptance is the veto beside it."""
+    accepted, its failure the Lean's word, or undecided where the Lean gave none; the windows' acceptance decides
+    nothing beside it."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
     end = verifier.Pair.end
 
@@ -98,8 +99,8 @@ def test_a_session_whose_windows_all_accept_is_not_accepted_unless_the_leans_out
 
     monkeypatch.setattr(verifier.Pair, "end", other)
     (r,), (pr,) = run("honest")
-    assert not r["accepted"] and not pr["accepted"] and r["failure"]["failure"] == "disagreement"
-    assert r["disagreement"]["event"] == "outcome" and r["disagreement"]["python"] == {"windows_accepted": True}
+    assert not r["accepted"] and not pr["accepted"] and r["disagreement"] is None
+    assert r["failure"]["failure"] == (outcome if outcome == "rejected" else verifier.DIVERGED)
 
 
 def test_a_session_on_the_pass_clock_runs_one_schedule(monkeypatch):
@@ -382,23 +383,23 @@ def test_kv_pages_appended_and_released_mid_session_are_audited(monkeypatch):
 
 
 def test_a_session_reserves_append_coins_only_when_its_plan_appends_and_an_append_past_them_is_refused(monkeypatch):
-    """Each session's coins are W challenges, W openings coins and its append coins: none, and no append family, under
+    """Each session's coins are W challenges, each window's sample's coins and its append coins: none, and no append family, under
     a plan of honest sessions (the hello says so), and `coins.APPENDS` under one with a kv session, on which both are
     accepted.  At `appends=0` the kv session's first append has no coin: the books reject it as `coin` and the Lean,
-    which takes only the append coins released, otherwise, so the session is refused there as `disagreement`, the
-    honest one accepted."""
+    which takes only the append coins released, otherwise, so the driver can't follow the Lean's session and it ends
+    undecided there (`DIVERGED`), the honest one accepted."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
-    from verity.protocols.resource_accounting.memory.poub.verifier.session import challengers
+    from verity.protocols.accounting.memory.poub.verifier.session import challengers
 
     layouts, local = [], challengers.Local.open
 
-    def opened(self, registration, k, windows, appends):
-        c = local(self, registration, k, windows, appends)
+    def opened(self, registration, k, windows, appends, *, samples):
+        c = local(self, registration, k, windows, appends, samples=samples)
         layouts.append(c.commitment.families)
         return c
 
     monkeypatch.setattr(challengers.Local, "open", opened)
-    pair = ((coins.CHALLENGE, 3), (coins.OPENINGS, 3))
+    pair = ((coins.CHALLENGE, 3), (coins.SAMPLE, 3 * coins.sample_coins(8)))
     (r,), (p,) = run("honest", samples=8)
     assert r["accepted"] and p["accepted"] and layouts == [pair]
     layouts.clear()
@@ -409,7 +410,7 @@ def test_a_session_reserves_append_coins_only_when_its_plan_appends_and_an_appen
     (honest, kv), (ph, pk) = run("honest,kv:2", sessions=2, samples=8, kv_every=4, kv_pool=8, appends=0)
     assert layouts == [pair] * 2
     assert honest["accepted"] and ph["accepted"] and honest["challenger"]["reason"] is None
-    assert not kv["accepted"] and kv["failure"]["failure"] == "disagreement" and kv["appended"] == 0
+    assert not kv["accepted"] and kv["failure"]["failure"] == verifier.DIVERGED and kv["appended"] == 0
     assert kv["disagreement"]["event"] == "append" and kv["disagreement"]["python"]["failure"] == "coin"
     assert kv["challenger"]["reason"] is None and not pk["accepted"]
 
@@ -419,7 +420,7 @@ def test_a_window_with_no_samples_settles_malformed_whatever_its_batches():
     `AuditRun.verify` and the Lean's settle give it."""
     from types import SimpleNamespace
 
-    from verity.protocols.resource_accounting.memory.poub.verifier.session.checks import Checks
+    from verity.protocols.accounting.memory.poub.verifier.session.checks import Checks
 
     class Books:
         _fail = audit.AuditRun._fail
@@ -436,9 +437,9 @@ def test_a_window_with_no_samples_settles_malformed_whatever_its_batches():
 
 
 def test_the_check_workers_bound_each_windows_wrong_receipts_as_its_profile_does():
-    from verity.protocols.resource_accounting.memory.poub.verifier.session.checks import Checks
+    from verity.protocols.accounting.memory.poub.verifier.session.checks import Checks
 
-    from verity.protocols.proofs.spot.verifier.profile import IntegrityProfile, Subset
+    from verity.protocols.proof.spot.verifier.profile import IntegrityProfile, Subset
 
     profiles = [IntegrityProfile(("receipt",), (n,), {"receipt": Subset(k)}, 2.0 ** -40, drawn={"receipt": k})
                 for n, k in ((4096, 64), (10 ** 6, 300), (10 ** 6, 301))]
@@ -811,7 +812,7 @@ def test_a_paced_session_puts_each_group_of_k_passes_under_a_live_coin_and_a_dro
 def test_a_paced_group_is_sampled_as_its_k_th_root_arrives(k):
     """A paced window takes at most k roots, so its k-th makes them final once its boundary has left
     (`audit.AuditRun.close`), which the loop sends before that root: each group's samples go out as that root arrives,
-    the last group's too, so the openings coin's request on the challenger's log names the group's last root when it
+    the last group's too, so the sample's coins' request on the challenger's log names the group's last root when it
     came, not one root or a deadline later."""
     (r,), _ = run("honest", paces=[verifier.pace_of(f"{k}:{4 * k}:40:2", 1.0)])
     assert r["accepted"]
@@ -820,14 +821,14 @@ def test_a_paced_group_is_sampled_as_its_k_th_root_arrives(k):
 
 @pytest.mark.parametrize("k", [1, 3])
 def test_a_k_1_paced_root_asks_the_challenger_for_its_two_coins_in_one_round_trip(tmp_path, monkeypatch, k):
-    """At k = 1 a group's root closes it and the next boundary is due at once, so the group's openings coin and the
+    """At k = 1 a group's root closes it and the next boundary is due at once, so the group's sample's coins and the
     challenge the boundary releases, chal_(g+2), go to the challenger in one round trip, in that order, both after that
-    root (`coins.SessionCoins.ahead`); the last two groups' boundaries release no coin, so their openings coins go alone. At
-    k = 3 a coin leaves at the following group's second root, so every coin goes alone. The session's transcript
+    root (`coins.SessionCoins.ahead`); the last two groups' boundaries release no coin, so their samples' coins go alone. At
+    k = 3 a coin leaves at the following group's second root, so every challenge goes alone and a sample's coins together. The session's transcript
     replays to its verdict through both verifiers. The clock ticks as each pass starts as well as when it ends, so
     time passes between a coin leaving and the root after it, as on the verifier's own clock: at one tick a pass, a
     paced window's 1 ns is a whole pass and each boundary waits for the tick its next root comes at."""
-    monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/protocols/resource_accounting/memory/poub/verifier/lean"))
+    monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/protocols/accounting/memory/poub/verifier/lean"))
     ticking = TickingBackend.run_pass
 
     def run_pass(self, seed: bytes, plan=None):
@@ -837,9 +838,9 @@ def test_a_k_1_paced_root_asks_the_challenger_for_its_two_coins_in_one_round_tri
     monkeypatch.setattr(TickingBackend, "run_pass", run_pass)
     import json
 
-    from verity.protocols.resource_accounting.memory.poub.verifier.session import challengers
+    from verity.protocols.accounting.memory.poub.verifier.session import challengers
     import replay
-    from verity.protocols.proofs.spot.verifier.challenger import challenger as C
+    from verity.protocols.proof.spot.verifier.challenger import challenger as C
 
     asked = []
 
@@ -851,21 +852,23 @@ def test_a_k_1_paced_root_asks_the_challenger_for_its_two_coins_in_one_round_tri
             asked.append([(label, index, bytes(after)) for label, index, after in requests])
             return [C.LiveChallenger.open(self, *r) for r in requests]
 
-    monkeypatch.setattr(challengers.Local, "open", lambda self, registration, e, windows, appends: Asked(
-        coins.SCHEME, e, coins.families(windows, appends), os.urandom))
+    monkeypatch.setattr(challengers.Local, "open", lambda self, registration, e, windows, appends, *, samples: Asked(
+        coins.SCHEME, e, coins.families(windows, appends, samples=samples), os.urandom))
     (r,), _ = run("honest", paces=[verifier.pace_of(f"{k}:{4 * k}:40:2", 1.0)], transcript=tmp_path)
     assert r["accepted"] and r["challenger"]["reason"] is None
     case = json.loads(Path(r["transcript"]["path"]).read_bytes())
     roots = [bytes.fromhex(e["root"]) for e in case["events"] if e["kind"] == "receive"]
     n, last = r["windows"], [roots[k * g + k - 1] for g in range(r["windows"])]
     window = asked[0][0][2]
+    m = coins.sample_coins(case["params"]["samples"])
     if k == 1:
         assert asked == ([[("poub/challenge", 0, window)], [("poub/challenge", 1, window)]]
-                         + [[("poub/openings", g, last[g]), ("poub/challenge", g + 2, last[g])] for g in range(n - 2)]
-                         + [[("poub/openings", g, last[g])] for g in (n - 2, n - 1)])
+                         + [[*(("poub/sample", g * m + j, last[g]) for j in range(m)), ("poub/challenge", g + 2, last[g])]
+                            for g in range(n - 2)]
+                         + [[("poub/sample", g * m + j, last[g]) for j in range(m)] for g in (n - 2, n - 1)])
     else:
-        assert all(len(b) == 1 for b in asked) and len(asked) == 2 * n
-        assert [b[0][2] for b in asked if b[0][0] == "poub/openings"] == last
+        assert [len(b) for b in asked] == [1, 1] + [m, 1] * (n - 2) + [m, m]
+        assert [q[2] for b in asked for q in b if q[0] == "poub/sample"] == [x for x in last for _ in range(m)]
     with replay.server() as s:
         row = replay.replay(case, s)
     assert row["agree"] and row["lean"]["outcome"] == "accepted" and row["lean"]["refused"] == 0, row
@@ -873,7 +876,7 @@ def test_a_k_1_paced_root_asks_the_challenger_for_its_two_coins_in_one_round_tri
 
 def test_the_auditor_line_reads_each_groups_coin_and_last_root_off_the_challengers_log():
     """`auditor_line.auditor_seen`: group g's coin at challenge coin g's release, and its last root at the first request
-    on the challenger's log that names the root openings coin g was asked after. On a log that is the verifier's stamps
+    on the challenger's log that names the root sample g's coins were asked after. On a log that is the verifier's stamps
     shifted, the line's groups are the verifier's; a later openings request lengthens them by as much; and an earlier
     request naming that root, chal_(g+2)'s at k = 1, is the one read."""
     import json
@@ -890,7 +893,7 @@ def test_the_auditor_line_reads_each_groups_coin_and_last_root_off_the_challenge
         lines = [json.dumps({"event": "commitment", "root": "0" * 128})]
         for g in range(n):
             for label, after, at in (("poub/challenge", f"{g - 2:0128x}" if named and g >= 2 else "f" * 128, R[g] - 1),
-                                     ("poub/openings", f"{g:0128x}", A[g] + late)):
+                                     ("poub/sample", f"{g:0128x}", A[g] + late)):
                 lines.append(json.dumps({"event": "root", "label": label, "index": g, "root": after,
                                          "received_at": at + 100}))
                 lines.append(json.dumps({"event": "release", "label": label, "index": g, "after": after,
@@ -904,14 +907,14 @@ def test_the_auditor_line_reads_each_groups_coin_and_last_root_off_the_challenge
     shifted, how = al.auditor_seen(log(0, False), seen)
     assert [w["released_ns"] for w in shifted] == [x + 100 for x in R]
     assert [w["arrivals_ns"] for w in shifted] == [[x + 100] for x in A]
-    assert how == {"last_root_first_named_by": {"poub/openings": n}}
+    assert how == {"last_root_first_named_by": {"poub/sample": n}}
     assert al.group_l(shifted) == al.group_l(seen) and lmax({**r, "windows_seen": shifted}) == lmax(r)
     late, _ = al.auditor_seen(log(3, False), seen)
     assert al.group_l(late) == [max(A[g] + 103, R[g + 1] + 100) - R[g] - 100 for g in range(n - 1)]
     named, how = al.auditor_seen(log(3, True), seen)
     assert [w["arrivals_ns"] for w in named] == ([[R[g + 2] + 99] for g in range(n - 2)]
                                                  + [[A[g] + 103] for g in (n - 2, n - 1)])
-    assert how == {"last_root_first_named_by": {"poub/challenge": n - 2, "poub/openings": 2}}
+    assert how == {"last_root_first_named_by": {"poub/challenge": n - 2, "poub/sample": 2}}
     with pytest.raises(ValueError, match="not one of each for each of"):
         al.auditor_seen(log(0, False)[:-4], seen)
 
@@ -1001,13 +1004,13 @@ def test_the_auditor_line_reads_a_last_root_by_its_request_not_by_its_value():
     lines = [json.dumps({"event": "commitment", "root": "0" * 128})]
     for g in range(n):
         for label, after, at in (("poub/challenge", X if g == 3 else f"{2 * g:0128x}", 1000 * g + 999),
-                                 ("poub/openings", {2: X, 4: Y, 1: Y}.get(g, f"{2 * g + 1:0128x}"), 1000 * g + 2500)):
+                                 ("poub/sample", {2: X, 4: Y, 1: Y}.get(g, f"{2 * g + 1:0128x}"), 1000 * g + 2500)):
             lines.append(json.dumps({"event": "root", "label": label, "index": g, "root": after, "received_at": at}))
             lines.append(json.dumps({"event": "release", "label": label, "index": g, "after": after,
                                      "released_at": at + 1}))
     got, how = al.auditor_seen(lines, seen)
     assert [w["arrivals_ns"] for w in got] == [[1000 * g + 2500] for g in range(n)]
-    assert al.group_l(got) == [1500] * (n - 1) and how == {"last_root_first_named_by": {"poub/openings": n}}
+    assert al.group_l(got) == [1500] * (n - 1) and how == {"last_root_first_named_by": {"poub/sample": n}}
 
 
 def test_a_paced_session_whose_openings_come_beside_its_passes_gets_the_same_verdicts_from_both_verifiers():
@@ -1277,7 +1280,7 @@ def test_a_transcript_replays_each_session_to_its_verdict_through_both_verifiers
     the prover that dropped half its blocks rejected at the window and sample it was rejected at live, at a receipt,
     which only a transcript's openings can show. The file is the path, bytes and sha256 verifier.json gives it."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
-    monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/protocols/resource_accounting/memory/poub/verifier/lean"))
+    monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/protocols/accounting/memory/poub/verifier/lean"))
     import hashlib
     import json
 
@@ -1305,7 +1308,7 @@ def test_a_transcript_replays_each_session_to_its_verdict_through_both_verifiers
 def test_a_paced_sessions_transcript_names_its_pace_and_replays_paced(tmp_path, monkeypatch):
     """A paced session's transcript names its pace (`audit.Pace`'s k and T), which both verifiers hold each window's
     roots to, so its replay is the paced session's: accepted, with its record's pace."""
-    monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/protocols/resource_accounting/memory/poub/verifier/lean"))
+    monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/protocols/accounting/memory/poub/verifier/lean"))
     import json
 
     import replay
@@ -1322,13 +1325,13 @@ def test_a_paced_sessions_transcript_names_its_pace_and_replays_paced(tmp_path, 
 def test_a_session_sampled_four_windows_a_coin_is_accepted_through_both_verifiers_and_a_skipper_is_not(
         tmp_path, monkeypatch):
     """`--groups-per-coin 4` over five windows: two samples, windows 0–3 and window 4, each sampled at its last window's
-    close on its own openings coin (`audit.Params.groups_per_coin`), the challenger reserving ⌈5/4⌉ = 2 of them. The
+    close on its own sample's coins (`audit.Params.groups_per_coin`), the challenger reserving ⌈5/4⌉ = 2 of them. The
     first sample's two receipts leave at least two of its windows a share of none, which the close accepts and no
     openings follow; the Lean verifier agrees at every event and on the record, which names g, and the session's
     transcript replays to the same verdict through both verifiers. A prover that dropped half its blocks is rejected
     at a receipt."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
-    monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/protocols/resource_accounting/memory/poub/verifier/lean"))
+    monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/protocols/accounting/memory/poub/verifier/lean"))
     import json
 
     import replay
@@ -1370,12 +1373,12 @@ def test_the_leans_line_of_a_transcript_is_the_line_of_the_record_session_run_ma
     beside it or not, with the times seen on the verifier's clock the record's own. A kept record that isn't the run's,
     a record or transcript of another registration than the one given, a transcript cut short of its verdict,
     `samples` other than its parameters' and times seen off the record's are refused, and a transcript that names two
-    windows a coin beside one openings coin a window is malformed; on the challenger's clock the times aren't held to
+    windows a coin beside one sample a window is malformed; on the challenger's clock the times aren't held to
     the record."""
     import copy
     import json
 
-    from verity.protocols.resource_accounting.memory.poub.verifier.session import lean_verifier as lv
+    from verity.protocols.accounting.memory.poub.verifier.session import lean_verifier as lv
 
     got = {}
     (r,), _ = run("honest", paces=[verifier.pace_of("2:8:40:2", 1.0)], transcript=tmp_path,
@@ -1407,7 +1410,7 @@ def test_the_leans_line_of_a_transcript_is_the_line_of_the_record_session_run_ma
             "refused": "the Lean verifier gave the session no record"}
         with pytest.raises(lv.LeanError, match="samples: the session's"):
             call({**bare, "session": case, "samples": inputs["samples"] + 1})
-        with pytest.raises(lv.LeanError, match="coins of 32 bytes"):
+        with pytest.raises(lv.LeanError, match="samples' coins, each whole or 32 bytes"):
             call({**bare, "session": {**case, "params": {**case["params"], "groups_per_coin": 2}}})
         why = verifier.line.record_run_json(late)["refused"]
         assert why.startswith("window 1 was seen released at") and call({**late, "session": case}) == {"refused": why}
@@ -1425,7 +1428,7 @@ def test_the_leans_line_of_a_transcript_sampled_four_windows_a_coin_reads_the_sa
     import copy
     import json
 
-    from verity.protocols.resource_accounting.memory.poub.verifier.session import lean_verifier as lv
+    from verity.protocols.accounting.memory.poub.verifier.session import lean_verifier as lv
 
     got = {}
     (r,), (pr,) = run("honest", paces=[verifier.pace_of("2:8:40:2", 1.0)], groups_per_coin=4, transcript=tmp_path,
@@ -1458,9 +1461,9 @@ def test_the_leans_line_of_a_transcript_sampled_four_windows_a_coin_reads_the_sa
         lean.close()
 
 
-def test_books_whose_record_is_not_the_leans_refuse_the_session_as_disagreement(monkeypatch):
-    """An accepted session's record is held to the Lean's whole, each pass's arrival, head and stale bound among what
-    the ledger reads: books whose record has another stale bound refuse the session at its end as `disagreement`."""
+def test_books_whose_record_is_not_the_leans_take_no_part_in_the_verdict(monkeypatch):
+    """An accepted session's record is the Lean's: books whose record has another stale bound leave the session
+    accepted, its record the Lean's."""
     import dataclasses
 
     record = audit.AuditRun.record
@@ -1473,8 +1476,7 @@ def test_books_whose_record_is_not_the_leans_refuse_the_session_as_disagreement(
 
     monkeypatch.setattr(audit.AuditRun, "record", stale)
     (r,), _ = run("honest")
-    assert not r["accepted"] and r["failure"]["failure"] == "disagreement", r["failure"]
-    assert r["disagreement"]["event"] == "record"
+    assert r["accepted"] and r["failure"] is None and r["disagreement"] is None, r["failure"]
 
 
 LEAN = verifier.lv.Lean
@@ -1560,10 +1562,11 @@ def test_a_lean_that_answers_nothing_until_the_passes_end_delays_no_coin_root_or
 
 
 @pytest.mark.parametrize("held", [False, True])
-def test_an_event_the_verifiers_answer_differently_is_refused_as_disagreement(monkeypatch, held_lean, held):
+def test_an_event_the_lean_answers_otherwise_than_the_books_ends_the_session_undecided(monkeypatch, held_lean, held):
     """Each event goes to both verifiers at one reading of the clock, and their results are compared: a root the Lean
-    reads without its step is its `step` rejection where `audit.AuditRun` takes the root, and the session is refused
-    at that window as `disagreement`, also when the Lean's answer comes only after the prover's last pass."""
+    reads without its step is its `step` rejection where `audit.AuditRun` takes the root, and the session ends
+    undecided at that window (`DIVERGED`), never rejected on the books' word, also when the Lean's answer comes only
+    after the prover's last pass."""
     if not held:
         monkeypatch.setattr(verifier.lv, "Lean", LEAN)
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
@@ -1576,10 +1579,10 @@ def test_an_event_the_verifiers_answer_differently_is_refused_as_disagreement(mo
     monkeypatch.setattr(verifier.lv, "receive_event", stepless)
     closed = []
     (r,), _ = run("honest", then=lambda v: closed.append(v.close_registration(b"test-node")))
-    assert not r["accepted"] and r["failure"] == {"t": 1, "failure": "disagreement", "at": None}
+    assert not r["accepted"] and r["failure"] == {"t": 1, "failure": verifier.DIVERGED, "at": None}
     d = r["disagreement"]
     assert d["event"] == "receive" and d["lean"]["failure"] == "step" and d["python"] == {"ok": True}
-    assert closed[0]["sessions"] == ["disagreement"] and "python" not in closed[0]
+    assert closed[0]["sessions"] == [verifier.DIVERGED] and "python" not in closed[0]
 
 
 def test_an_append_is_answered_with_its_coin_and_a_root_message_is_applied_in_order():
@@ -1593,7 +1596,7 @@ def test_an_append_is_answered_with_its_coin_and_a_root_message_is_applied_in_or
     params = audit.Params(8, 10 ** 9, 1, 2, 2.0 ** -40, window_ns=10, codec=P512, receipt=reg.receipt, rows=reg.rows)
 
     def session():
-        s = audit.AuditRun(params, reg, None, coins.local(reg.digest, 0, params.windows, os.urandom), clock=lambda: 0,
+        s = audit.AuditRun(params, reg, None, coins.local(reg.digest, 0, params.windows, os.urandom, samples=params.samples), clock=lambda: 0,
                            not_before_ns=0)
         s.start()
         return s
@@ -1657,7 +1660,7 @@ def test_a_root_message_names_the_withdrawn_blocks_among_its_releases():
     root = (b"\7" * 64).hex()
 
     def session():
-        s = audit.AuditRun(params, reg, None, coins.local(reg.digest, 0, params.windows, os.urandom), clock=lambda: 0,
+        s = audit.AuditRun(params, reg, None, coins.local(reg.digest, 0, params.windows, os.urandom, samples=params.samples), clock=lambda: 0,
                            not_before_ns=0)
         s.start()
         verifier.Verifier.append(s, {"type": "append", "root": root, "count": 3})

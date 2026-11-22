@@ -43,6 +43,7 @@ namespace MemoryAttester.Properties.InProofs
 
 open Verity.InProofs Verity.Game
 open scoped ENNReal
+open Flock.SessionCoins (COMPLETE)
 
 /-- **The values at a session's proof block's ports**, each kind reading its own: the signature's the digest `m` and the
 signature `sig`; the signed digest's `m`, how the session ended (`ended`) and its rounds; a round's its record
@@ -50,6 +51,7 @@ signature `sig`; the signed digest's `m`, how the session ended (`ended`) and it
 structure Vals where
   m : ByteArray
   sig : ByteArray
+  salt : ByteArray
   ended : String
   rounds : Array Round
   round : Round
@@ -57,7 +59,7 @@ structure Vals where
 /-- **The session a run opens**: the commitment, scheme and key the verifier holds, how it ended and its rounds at the
 signed digest's proof block, and the signature at the signature's. -/
 def challengePhaseOf (c : ChallengePhaseCommitment) (scheme : String) (pk : ByteArray) (sd sg : Vals) : SignedChallengePhase :=
-  { commitment := c, ended := sd.ended, rounds := sd.rounds, scheme := scheme, publicKey := pk, signature := sg.sig }
+  { commitment := c, salt := sd.salt, ended := sd.ended, rounds := sd.rounds, scheme := scheme, publicKey := pk, signature := sg.sig }
 
 /-- **The verifier's clear checks**: the scheme is accepted, the key trusted, and each round `j`'s coin opening (the last
 for `j`, as `verdict` reads it) opens its coin to the public index `idx j`. -/
@@ -73,7 +75,7 @@ def PieceOk (schemes : Schemes) (scheme : String) (pk : ByteArray) (c : Challeng
     (expected : Nat → Option ByteArray) (idx : Nat → Nat) (u : Fin (c.k + 2)) (v : Vals) : Prop :=
   if u.val = 0 then ∀ p, schemes.lookup scheme = some p → lmsVerify p pk c.session v.m v.sig = .ok true
   else if u.val = 1 then
-    message c v.ended v.rounds = .ok v.m ∧ v.ended = COMPLETE ∧ v.rounds.size = c.k ∧
+    message c v.salt v.ended v.rounds = .ok v.m ∧ v.ended = COMPLETE ∧ v.rounds.size = c.k ∧
       ∀ j (hj : j < v.rounds.size), 0 ≤ v.rounds[j].elapsedNs ∧ v.rounds[j].elapsedNs ≤ c.limitNs
   else
     v.round.j = u.val - 2 ∧ v.round.index = idx (u.val - 2) ∧ v.round.index < c.blocks ∧
@@ -152,6 +154,7 @@ namespace MemoryAttester.Properties.InProofs.SecurityProofs
 
 open MemoryAttester MemoryAttester.Properties.InProofs MemoryAttester.Properties.SecurityProofs
 open Verity.InProofs Properties.ResourceAccounting.InProofs Verity.Game
+open Flock.SessionCoins (COIN_BINDING COIN_SCHEMA COMPLETE)
 
 theorem runGives : RunGives := by
   intro schemes trusted expected c openings scheme pk idx Ω μ r right ε g h hc
@@ -203,13 +206,18 @@ def honestRound : Round := ⟨0, 0, 0, 0, honestDigest⟩
 def honestOpening : CoinOpening := ⟨0, 0, honestSalt, #[]⟩
 
 theorem honest_leaf : ∃ leaf, coinLeaf honestCoinKey honestWipe 0 0 honestSalt = .ok leaf := by
-  have hk : honestCoinKey.size = HM96.keyBytes ∧ honestCoinKey.get! (HM96.keyBytes - 1) &&& 128 = 0 := by
-    refine ⟨by simp [honestCoinKey, ByteArray.size, HM96, Flock.Hm96.sha512, Flock.Hm96.keyBytes, Flock.Hm96.keyBits], ?_⟩
-    have h255 : HM96.keyBytes - 1 = 255 := by simp [HM96, Flock.Hm96.sha512, Flock.Hm96.keyBytes, Flock.Hm96.keyBits]
+  have hk : honestCoinKey.size = Flock.SessionCoins.HM96.keyBytes ∧
+      honestCoinKey.get! (Flock.SessionCoins.HM96.keyBytes - 1) &&& 128 = 0 := by
+    refine ⟨by simp [honestCoinKey, ByteArray.size, Flock.SessionCoins.HM96, Flock.Hm96.sha512, Flock.Hm96.keyBytes,
+      Flock.Hm96.keyBits], ?_⟩
+    have h255 : Flock.SessionCoins.HM96.keyBytes - 1 = 255 := by
+      simp [Flock.SessionCoins.HM96, Flock.Hm96.sha512, Flock.Hm96.keyBytes, Flock.Hm96.keyBits]
     rw [h255]
     set_option maxRecDepth 100000 in decide
-  have hs : honestSalt.size = HM96.saltBytes := by simp [honestSalt, ByteArray.size, HM96, Flock.Hm96.sha512]
-  simp [coinLeaf, coinDigest, beN, checkKey, checkSalt, Bind.bind, Except.bind, Pure.pure, Except.pure, hk, hs]
+  have hs : honestSalt.size = Flock.SessionCoins.HM96.saltBytes := by
+    simp [honestSalt, ByteArray.size, Flock.SessionCoins.HM96, Flock.Hm96.sha512]
+  simp [coinLeaf, Flock.SessionCoins.coinLeaf, Flock.SessionCoins.coinDigest, Flock.SessionCoins.beN,
+    Flock.SessionCoins.checkKey, Flock.SessionCoins.checkSalt, Bind.bind, Except.bind, Pure.pure, Except.pure, hk, hs]
 
 /-- The commitment of a session of one round over one block, its coin root the one leaf `leaf`. -/
 def honestCommitment (leaf : ByteArray) : ChallengePhaseCommitment :=
@@ -218,16 +226,24 @@ def honestCommitment (leaf : ByteArray) : ChallengePhaseCommitment :=
 
 theorem honest_coin {leaf : ByteArray} (h : coinLeaf honestCoinKey honestWipe 0 0 honestSalt = .ok leaf) :
     verifyCoin (honestCommitment leaf) honestOpening = true := by
-  simp [verifyCoin, honestCommitment, honestOpening, h]
-  simp [Flock.FV3.Domain.verifyOpening, Flock.FV3.Domain.climb, Flock.FV3.Scheme.climbL, domain,
+  have h' : Flock.SessionCoins.coinLeaf honestCoinKey honestWipe 0 0 honestSalt = .ok leaf := h
+  simp [verifyCoin, Flock.SessionCoins.verify, honestCommitment, honestOpening, h']
+  simp [Flock.FV3.Domain.verifyOpening, Flock.FV3.Domain.climb, Flock.FV3.Scheme.climbL, domain, Flock.SessionCoins.domain,
     Flock.FV3.Sha512.Domain.make, Flock.FV3.Domain.make, Flock.FV3.Domain.leaf, Flock.FV3.Scheme.hash, Flock.FV3.hash,
     Flock.FV3.Sha512.scheme, Properties.Certifier.Bytes.hash_size]
   exact ⟨by decide, Properties.CertifierDevice.Proofs.Lms.beq_self _⟩
 
 theorem honestDigest_size : honestDigest.size = 64 := by decide
 
-theorem honest_message (leaf : ByteArray) : ∃ m, message (honestCommitment leaf) COMPLETE #[honestRound] = .ok m :=
-  MemoryAttester.Session.Properties.SecurityProofs.message_one _ _ honestDigest_size
+/-- The honest session's record salt: `RECORD_SALT_BYTES` zero bytes. -/
+def honestRecordSalt : ByteArray := ⟨Array.replicate RECORD_SALT_BYTES 0⟩
+
+theorem honestRecordSalt_size : honestRecordSalt.size = RECORD_SALT_BYTES := by
+  simp [honestRecordSalt, ByteArray.size]
+
+theorem honest_message (leaf : ByteArray) :
+    ∃ m, message (honestCommitment leaf) honestRecordSalt COMPLETE #[honestRound] = .ok m :=
+  MemoryAttester.Session.Properties.SecurityProofs.message_one _ honestRecordSalt_size _ honestDigest_size
 
 theorem runGives_honest : RunGivesHonest := by
   obtain ⟨k, hkg, I, hk⟩ := Wipe.honest_keygen
@@ -252,7 +268,8 @@ theorem runGives_honest : RunGivesHonest := by
     unfold lmsVerify
     simp only [hpub, ne_eq, not_true_eq_false, ↓reduceIte, hdec, hI, hM, hver, Bind.bind, Except.bind]
   have hcoin := honest_coin hleaf
-  let V : Vals := ⟨m, sig.encode, COMPLETE, #[honestRound], honestRound⟩
+  let V : Vals := ⟨m, sig.encode, honestRecordSalt, COMPLETE, #[honestRound],
+    honestRound⟩
   have hlook : SCHEMES.lookup LMS = some Lms.deployed := rfl
   have hpiece : ∀ u, PieceOk SCHEMES LMS k.publicKey (honestCommitment leaf) (fun _ => some honestDigest) (fun _ => 0) u
       V := by
@@ -295,7 +312,7 @@ theorem runGives_honest : RunGivesHonest := by
       by simp [challengePhaseOf, constRun, V, honestRound, Round.elapsedNs, honestCommitment]⟩
 
 /-- The values of a session that ended nowhere: no digest, no signature, no rounds. -/
-def noRun : Vals := ⟨.empty, .empty, "", #[], default⟩
+def noRun : Vals := ⟨.empty, .empty, .empty, "", #[], default⟩
 
 theorem runGives_nontrivial : RunGivesNontrivial := by
   refine ⟨default, .empty, fun _ => noRun, fun h => ?_⟩

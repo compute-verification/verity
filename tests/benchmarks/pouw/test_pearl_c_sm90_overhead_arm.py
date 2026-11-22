@@ -27,14 +27,14 @@ sys.path.insert(0, str(POUW / "harness"))
 
 import arm as A  # noqa: E402
 import baselines as B  # noqa: E402
-from verity.protocols.resource_accounting.compute.pouw.verifier import audit  # noqa: E402
-from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd  # noqa: E402
-from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Shape as Unit  # noqa: E402
-from verity.protocols.proofs.spot.verifier.profile import WINDOW_DELTA  # noqa: E402
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD  # noqa: E402
-from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes  # noqa: E402
+from verity.protocols.accounting.compute.pouw.verifier import audit  # noqa: E402
+from verity.protocols.accounting.compute.pouw.verifier import window as Wd  # noqa: E402
+from verity.protocols.accounting.compute.pouw.verifier.protocol import Shape as Unit  # noqa: E402
+from verity.protocols.proof.spot.verifier.profile import WINDOW_DELTA  # noqa: E402
+from verity.protocols.accounting.compute.pouw.prover.serving import pearl_c as PPD  # noqa: E402
+from verity.protocols.accounting.compute.pouw.prover import schemes as pouw_schemes  # noqa: E402
 from verity_torch.pouw.pearl_c import run_device as PPDR
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY  # noqa: E402
+from verity.protocols.accounting.compute.pouw.prover.serving.pearl_c import served_y as SY  # noqa: E402
 from verity_torch.pouw.pearl_c import served_y_device as SYD  # noqa: E402
 
 
@@ -98,11 +98,11 @@ def test_the_arms_declared_verdict_is_the_leans(tmp_path, monkeypatch, capsys):
     """The declaration's commands on an honest retained pass and on a no-write control the twin rejects (each
     `test_pearl_c_vllm.proved_pass`'s, a test instance's, so the twin is given ``--test-instance``), with a stand-in
     ``pouw-pearlplus`` for ``--exe build``, read as the harness reads them (`verify.judge`, `verify.judge_control`): the
-    twin's own line is no verdict; the transcript is accepted on the Lean step's ACCEPT alone, and not where the Lean
-    disagrees with the twin or answers nothing; the control is rejected on the Lean's REJECT alone."""
+    twin's own line is no verdict; the transcript is accepted on the Lean step's ACCEPT alone, where the Lean
+    differs from the twin too, and not where the Lean answers nothing; the control is rejected on the Lean's REJECT alone."""
     import stat
 
-    from verity.protocols.resource_accounting.compute.pouw.verifier import verifier as PV
+    from verity.protocols.accounting.compute.pouw.verifier import verifier as PV
 
     V = _load("pouw_harness_verify", POUW / "harness" / "verify.py")
     T = sys.modules.get("test_pearl_c_vllm") or _load("test_pearl_c_vllm", POUW.parents[1] / "tests" / "benchmarks" / "pouw" / "test_pearl_c_vllm.py")
@@ -147,11 +147,13 @@ def test_the_arms_declared_verdict_is_the_leans(tmp_path, monkeypatch, capsys):
     got = V.judge(honest, [twin, agreed], "shape")
     assert got["accepted"] and got["accept_line"] == agreed["lines"][-1] and got["accept_line"].startswith("ACCEPT ")
     work = doc["answer"]["public"]["work"]
-    for said, rc in ((printout(doc, work={**work, "credited": work["credited"] + 1}), 0), ("", 0)):
-        refused = lean(lean_cmd, said, rc)
-        assert refused["exit"] == 2 and refused["lines"][-1].startswith("lean REFUSED: ")
-        assert V.judge(honest, [twin, refused], "shape") == {"sha256": hashlib.sha256(honest.read_bytes()).hexdigest(), "exits": [0, 2],
-                                                             "accepted": False, "why": "a verifier command exited [0, 2]"}
+    other = lean(lean_cmd, printout(doc, work={**work, "credited": work["credited"] + 1}), 0)
+    got = V.judge(honest, [twin, other], "shape")
+    assert got["accepted"] and got["accept_line"] == other["lines"][-1] and "the Python's differs in work" in got["accept_line"]
+    refused = lean(lean_cmd, "", 0)
+    assert refused["exit"] == 2 and refused["lines"][-1].startswith("lean REFUSED: ")
+    assert V.judge(honest, [twin, refused], "shape") == {"sha256": hashlib.sha256(honest.read_bytes()).hexdigest(), "exits": [0, 2],
+                                                         "accepted": False, "why": "a verifier command exited [0, 2]"}
 
     said_control = V.verdicts_dir(tmp_path / "run", "negative/arm/shape/manifest.json")
     twin_cmd, lean_cmd = ([V.fill(x, values | {"transcript": str(control), "dir": str(control.parent),

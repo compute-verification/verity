@@ -1,5 +1,23 @@
-"""`verity bench serving_cost STAGE`: the serving cost in five stages (`benchmarks/README.md`), each reading the stored
-record of the stage before it by its run id, and `profile RUN`, a serving profile's stored result."""
+"""`verity bench serving_cost STAGE`: the serving cost of a model too large to optimize on, in five stages, each run under
+`research run --store-read`. A stage reads the record of the stage before it from the store by the run id that stored it
+(never a path), refuses a run whose result is not that record's kind or did not pass, and launches none (`MAKERS`, `HOLDS`,
+`FINGERPRINT` state each record). `profile RUN` reads a serving profile's stored result.
+
+1. `minify RUN`: a small copy of the model from random weights on one card, keeping the selectors that choose each code
+   path; stores its identity and size class and, per part and code path, a unit cost (`measured`, with its call count).
+2. `exact`: `circuit-check` on the full model's bindings and a replay on the copy; stores a verdict, not a number, saying
+   whether the replay was Python or a proof the Lean verifier accepted (fingerprint `replay`). It passes only where both
+   passed and every binding is held; a replay is held to the minify run its fingerprint names, else `held_to_minify` false.
+3. `capture RUN`: a short run of the real model; stores per part and path its counts (calls a step, steps a request), the
+   baseline step time and the value-dependent inputs a price needs. A capture naming an exact run needs it passed.
+4. `price`: minify's unit costs (`--units RUN`, repeatable: two runs disagreeing on one shape's cost, or not together
+   covering a rows x keys grid, are refused) times capture's counts over capture's baseline step time; writes
+   `benchmarks/serving-cost-priced`, never the measured line, `member` model-card-arm, `partial` while any (part, path) is
+   unpriced and `modeled` otherwise, naming the runs it read in `inputs`. A load-dependent cost (an admission held back) is a
+   stage-3 count times the step time, never a copy's unit cost; a path the copy never takes is listed unpriced.
+5. `confirm --measured RUN`: the measured less the priced, in percentage points, its own measurement with both runs in
+   `inputs`; the measured figure stays the measuring run's.
+Stage 1 writes no serving-cost percentage and no point under the real model's metric: a copy does not read its cost."""
 from __future__ import annotations
 
 import argparse

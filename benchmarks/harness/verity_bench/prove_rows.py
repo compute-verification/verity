@@ -15,7 +15,6 @@ from verity_bench import prove as P
 from verity_bench import prove_flock as PF
 from verity_bench import steady, steady_node
 from verity_bench.prove_common import (
-    _ABSENT,
     ART_RATES,
     CHECKS,
     OWN_VERDICT,
@@ -23,9 +22,8 @@ from verity_bench.prove_common import (
     STEADY,
     WORKLOADS,
     _count,
-    _field,
 )
-from verity_bench.steady import CARD_NUMA
+from verity_bench.steady import _ABSENT, CARD_NUMA, _field
 
 #: the tool a run of the harness's steady-state point is recorded under (`verity_bench.tool.STEADY_POINT`'s name): its
 #: attempt carries the point's verdict on all ten checks as its result's validation (`own_verdict`)

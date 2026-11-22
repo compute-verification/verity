@@ -102,23 +102,9 @@ def test_moe_tensors_of_a_run_whose_manifest_lists_no_moe_layer_fail_the_step() 
     assert (got["violations"][0]["step"], got["violations"][0]["moe_layers_bad"]) == (1, {-1: 3})
 
 
-class _Moe:
-    """A MoE source: it says which layer each name it commits is of."""
-
-    short_name = "moe"
-
-    @staticmethod
-    def layer_of(name: str) -> int | None:
-        return 7 if name.endswith("/up") else None
-
-
-def test_a_name_s_moe_layer_is_the_moe_source_s_or_else_its_plane_s() -> None:
-    com = XI._com()
-    plane = com._moe_layer_of()
+def test_a_moe_names_layer_is_its_planes() -> None:
+    plane = XI._com()._moe_layer_of()
     assert (plane("moe/L3/up"), plane("model.layers.0.mlp.experts/up")) == (3, None)
-    com.sources = [*com.sources, _Moe()]
-    source = com._moe_layer_of()
-    assert (source("moe/L3/up"), source("model.layers.0.mlp.experts/up"), source("moe/L3/sum")) == (7, 7, None)
 
 
 # --- the staging rule handed to the per-layer rule -----------------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 """Writes wgmma.cuh: sm_90a wgmma wrappers whose operand lists (up to 128 accumulator registers) are too long to type.
 
-  python gen_wgmma.py        # rewrites wgmma.cuh beside it; tests/test_dc.py checks the file is current
+  python gen_wgmma.py        # rewrites wgmma.cuh beside it
 """
 from __future__ import annotations
 

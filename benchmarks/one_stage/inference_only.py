@@ -1,5 +1,5 @@
 """A served run's inference-only verdict: its registered circuit accepted as at most n (c, k)-inference blocks, or refused,
-by `InferenceOnlyCheck.Count`'s rule (`verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyCheck/Count.lean`), against a policy the run
+by `InferenceOnlyCheck.Count`'s rule (`verity/protocols/policy/training_detection/inference_only/verifier/lean/InferenceOnlyCheck/Count.lean`), against a policy the run
 registered before it served.
 
     inference_only.py policy --class S,P,O --model REPO --revision REV --lease-min M [--utilization U]
@@ -16,7 +16,7 @@ unless ``--serve`` states φ, and fixes (c, k, n) with every input to them and i
   a checkpoint served in BF16 needs; with ``--pearl-tables`` cut at its linears at that PoUW scheme, Pearl+'s
   (`window_class.PearlTables`), as `prove_path.py window-circuit` records a window served under Pearl+), read from its
   description (`class_doc`), whose one block Definition is a slot's session over every position (`block_counts.session`);
-- c, that Definition's Boolean gates by the gate table (`table_of`), and k, its fresh-input bits (`block_counts.fresh`) with
+- c, that Definition's Boolean gates by the gate table (`count.table`), and k, its fresh-input bits (`block_counts.fresh`) with
   θ every weight parameter the circuit registers held (`weights_of_record.PARAM`), B's k (`inference_blocks.budgets`): what
   the weights registration pins before the first request, so a run whose pins hold fewer weights reads more fresh bits
   than k and is refused. B's own c is the templates' gates, not the table's Boolean gates the count rule reads;
@@ -33,11 +33,9 @@ unless ``--serve`` states φ, and fixes (c, k, n) with every input to them and i
 
 Nothing in the policy reads the run, and n is no count of it, so the check can fail.
 
-**The gate table** is `definitions.boolean.gate_table`'s, each primitive's two-input gates through its Boolean version,
-plus `PRICES` for a primitive it can't price: `BitAtx{W}_v1` (bit i of a word, 0 outside it), which the table prices by
-its Boolean version where it has one, and otherwise by an explicit circuit of it (`bit_at_gates`) that this suite
-evaluates against the primitive. Any other primitive the table can't price leaves the count undecided, and the verdict
-refuses (`gate-table`).
+**The gate table** is each word primitive's body in the session Program's Boolean map, counted
+(`verity.circuits.count.table`). A primitive the table can't price leaves the count undecided, and the verdict refuses
+(`gate-table`).
 
 **The verdict** (`verdict`, `VERDICT_FORMAT`) reads the run's registered circuit: the picked window's circuit record at the
 policy's class (``--circuit``, `served_verdicts.sh`'s step 3), whose session is the run's block Definition, its gates
@@ -78,7 +76,6 @@ import importlib.util
 import json
 import math
 import os
-import re
 import subprocess
 import sys
 import tempfile
@@ -97,7 +94,7 @@ from verity_bench import kit  # noqa: E402
 import served_verdicts as SV  # noqa: E402
 
 POLICY_FORMAT = "verity-bench/inference-only-policy/v1"
-VERDICT_FORMAT = "verity-bench/inference-only-verdict/v5"
+VERDICT_FORMAT = "verity-bench/inference-only-verdict/v6"
 #: what the public verdict says of the counts: a count on the grid, floored or not, still gives the count of windows
 #: (at 4 blocks a window, exactly for 5 to 16 of them), so it publishes the judgment against n alone
 COUNTS = "none published: n judged on the blocks' exact count, which only the serve dir's private verdict holds"
@@ -107,7 +104,7 @@ THETA = ("the inputs the session Program names registered and in θ, chosen by t
          "not held to a pinned root by the Lean verifier's call")
 WIRED = ("the Lean verifier counts the rows the record's wires fill and the pinned tables' openings as fresh, because "
          "the session Program it is given carries no wires")
-INFERENCE_ONLY_PACKAGE = ROOT / "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean"
+INFERENCE_ONLY_PACKAGE = ROOT / "verity/protocols/policy/training_detection/inference_only/verifier/lean"
 INFERENCE_ONLY_REFERENCE = INFERENCE_ONLY_PACKAGE / "scripts" / "inference_only_reference.py"
 #: `prove_path.py window-circuit`'s default ``--cap``: the units a stated member holds in the class's record
 CAP = 64
@@ -124,7 +121,6 @@ RATE_SOURCE = ("served_shares.RHO['tensor']: 132 SMs x 4,096 int8 MACs a clock a
 SPAN_SOURCE = "the serve's GPU lease limit, served_verdicts.sh's LEASE_MIN (gpu-lease --max-min), which no serve outlasts"
 WORK_SOURCE = ("one slot of the class's fixed load (window_class.Tables.schedule) priced as served_shares.step_macs prices "
                "a served step: its linears at θ, its attention and LM head at θ/2, so counted twice in θ's MACs")
-BIT_AT = re.compile(r"BitAtx([1-9][0-9]*)_v1")
 #: the kinds of a block's fresh bits (``k_by_kind``): ``linears``, the outputs of the linears a PoUW cut leaves outside
 #: the circuit, and ``scan_state``, the scan state row
 KINDS = ("linears", "scan_state")
@@ -132,77 +128,6 @@ KINDS = ("linears", "scan_state")
 
 class Undecided(Exception):
     """The count rule can't decide the run: the message says why, and the verdict refuses."""
-
-
-# -- the gate table ---------------------------------------------------------------------------------------------------
-
-def bit_at_makes(width: int) -> bool:
-    """Whether `bit_at_gates` makes `BitAtx{width}`: ``width`` a power of two up to 2^31."""
-    return 0 < width <= 1 << 31 and width & (width - 1) == 0
-
-
-def bit_at_gates(width: int) -> list[tuple[str, int, int]]:
-    """An explicit Boolean circuit of `BitAtx{width}` (`registry.sampling.bit_at`: bit i of the word, 0 for i outside
-    [0, width)), for ``width`` a power of two up to 2^31, each gate ``(op, a, b)`` (``b`` -1 for a Not) over wires: the
-    word's bits 0 .. width-1, the index's 32 bits (two's complement, bit 0 first), then one a gate, the last the output.
-    It tests the index's bits above log2(width) all zero (a Not of each, then their And), selects the word's bit by the
-    rest (a mux tree, a ⊕ (s ∧ (a ⊕ b)) a mux) and Ands the two: two-input Ands and Xors and Nots, one gate each as the
-    census counts them (`census.BooleanWork`)."""
-    if not bit_at_makes(width):
-        raise ValueError(f"BitAtx{width}: a power of two up to 2^31 has an index test this circuit makes")
-    b = width.bit_length() - 1
-    gates: list[tuple[str, int, int]] = []
-
-    def gate(op: str, x: int, y: int = -1) -> int:
-        gates.append((op, x, y))
-        return width + 32 + len(gates) - 1
-
-    zero = [gate("not", width + j) for j in range(b, 32)]
-    ok = zero[0]
-    for z in zero[1:]:
-        ok = gate("and", ok, z)
-    level = list(range(width))
-    for j in range(b):
-        level = [gate("xor", lo, gate("and", width + j, gate("xor", lo, hi))) for lo, hi in zip(level[0::2], level[1::2])]
-    gate("and", level[0], ok)
-    return gates
-
-
-def run_gates(gates: Sequence[tuple[str, int, int]], width: int, word: int, i: int) -> int:
-    """`bit_at_gates`' circuit on ``word`` and the i32 ``i``."""
-    w = [(word >> j) & 1 for j in range(width)] + [((i & 0xFFFFFFFF) >> j) & 1 for j in range(32)]
-    for op, x, y in gates:
-        w.append(1 - w[x] if op == "not" else (w[x] & w[y]) if op == "and" else (w[x] ^ w[y]))
-    return w[-1]
-
-
-def price(key: str) -> dict[str, Any] | None:
-    """A primitive's gates by `PRICES`' rule, where it has one: ``{gates, by}``."""
-    m = BIT_AT.fullmatch(key)
-    if m is None or not bit_at_makes(int(m[1])):
-        return None
-    return {"gates": len(bit_at_gates(int(m[1]))),
-            "by": f"bit_at_gates({m[1]}): an explicit circuit of it, no Boolean version circuit-check checks"}
-
-
-PRICES = ("BitAtx{W}_v1", price)
-
-
-def table_of(fns: Sequence[Any]) -> tuple[dict[str, int], dict[str, dict[str, Any]], list[str]]:
-    """The gate table over the primitives ``fns`` reach: `definitions.boolean.gate_table`'s, each primitive it can't
-    price priced by `price` where it can be, and the keys of the rest."""
-    from verity.circuits.ops.boolean import versions as BL
-    import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
-
-    table, unpriced = BL.gate_table(fns)
-    priced, left = {}, []
-    for key in unpriced:
-        p = price(key)
-        if p is None:
-            left.append(key)
-        else:
-            table[key], priced[key] = p["gates"], p
-    return table, priced, left
 
 
 def digest(doc: Any) -> str:
@@ -237,23 +162,21 @@ def stated_serve(doc: Mapping[str, Any], model: str, revision: str) -> dict[str,
 def class_doc(serve: Mapping[str, Any], cls: Any, scheme: str | None = None) -> tuple[dict[str, Any], list[str]]:
     """The class's circuit under ``serve``'s φ (`window_circuit.class_circuit`, the circuit `prove_path.py window-circuit
     --class` records for a window the class takes), with a PoUW ``scheme`` cut at its linears (`window_class.PearlTables`),
-    as the description its session and fresh bits are read from, the way `inference_blocks.budgets` reads B's k (no
-    member stated, which is work per template the counts don't read), and the parameters it registers; `Undecided` where
-    the vocabulary can't express it."""
+    as its record at `prove_path.py`'s default cap (`interface.descriptor_record`), which names the program digest the block
+    counts hold its templates to, and the parameters it registers; `Undecided` where the vocabulary can't express it."""
     sys.path.insert(0, str(ROOT / "benchmarks" / "prove_path"))
     import prove_path as PP
+    import rehearsal_limits as RL
+    from verity.commitments.periods import interface as IF
     from verity_vllm.program.predict.common import Unexpressible
-    from verity_vllm.program.predict.window_circuit import check_provable, class_circuit
     from verity_vllm.program.predict.window_class import PearlTables
 
     try:
-        circuit = class_circuit(PP.registered_of_serve(serve, None, None, PP.CAP_BITS), cls,
-                                tables=PearlTables(scheme) if scheme else None)
-        check_provable(circuit)
+        circuit = RL.class_circuit_of(PP.registered_of_serve(serve, None, None, PP.CAP_BITS), cls,
+                                      PearlTables(scheme) if scheme else None)
     except Unexpressible as e:
         raise Undecided(f"the class's circuit under the policy's φ: {e}") from e
-    doc = {**circuit.description(), "name": circuit.name, "partition": "",
-           "blocks": circuit.blocks.doc(sum(circuit.units.values()), "")}
+    doc = IF.descriptor_record(circuit, 64)
     return doc, sorted(circuit.registered.params if circuit.registered is not None else ())
 
 
@@ -269,7 +192,7 @@ def kind_of(param: str) -> str | None:
     """The kind (`KINDS`) of the fresh bits a registered parameter's reads fill: ``linears`` for Pearl+'s y of a cut
     linear (`window.y_value`), ``scan_state`` for the scan state row (`scan_state.SCAN_STATE`), else none."""
     from verity_vllm.program.predict import scan_state
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR
+    from verity.protocols.accounting.compute.pouw.prover.serving.pearl_c import window as PWR
 
     if param == scan_state.SCAN_STATE:
         return "scan_state"
@@ -294,18 +217,18 @@ def kinds_of(doc: Mapping[str, Any], m: int, pins: Mapping[str, str] | None, roo
 
 def session_row(doc: Mapping[str, Any], pins: Mapping[str, str] | None, roots: Mapping[str, str] | None) -> dict[str, Any]:
     """A circuit record's block class: its session Definition's digest and key, m slots and positions, gates by
-    `table_of`'s table, fresh bits at ``pins`` and ``roots`` (`block_counts`) and those by kind (`kinds_of`), and the
+    the gate table's (`count.table`), fresh bits at ``pins`` and ``roots`` (`block_counts`) and those by kind (`kinds_of`), and the
     table."""
     from verity.circuits import codec, partition_v2 as PV2
     from verity_vllm.program.predict import block_counts as BC
 
+    from verity.circuits import count as K
+
     try:
-        fn, m, positions = BC.session(doc)
+        program, m, positions = BC.session(doc)
     except (KeyError, TypeError, ValueError) as e:
         raise Undecided(f"the record's inference blocks: {e}") from e
-    table, priced, unpriced = table_of([fn])
-    if unpriced:
-        raise Undecided(f"gate-table: no gates for {', '.join(unpriced)}, which the block computes")
+    fn, table = program.fn, K.table(program)
     g, miss = BC.gates(fn, table, {})
     if miss:
         raise Undecided(f"gate-table: no gates for {', '.join(sorted(miss))}, which the block computes")
@@ -315,7 +238,7 @@ def session_row(doc: Mapping[str, Any], pins: Mapping[str, str] | None, roots: M
     except (KeyError, TypeError, ValueError) as e:
         raise Undecided(f"the record's fresh bits: {e}") from e
     return {"definition": PV2.id_digest(fn), "key": codec.descriptor_id(fn), "slots": m, "positions": positions,
-            "gates": g, "fresh": k, "k_by_kind": by_kind, "table": table, "priced": priced}
+            "gates": g, "fresh": k, "k_by_kind": by_kind, "table": table}
 
 
 def session_work(cls: Any, model: str) -> dict[str, int]:
@@ -349,9 +272,10 @@ def capacity(work: int, lease_min: int, utilization: Fraction, clock: str = CLOC
 
 def window_class(arg: str) -> Any:
     """``--class``'s SLOTS,PROMPT,OUTPUTS as a `window_circuit.WindowClass` (`prove_path.window_class_of`'s)."""
+    from verity_vllm.inputs.serves import window_class_parts
     from verity_vllm.program.predict.window_circuit import WindowClass
 
-    return WindowClass(*(int(x) for x in arg.split(",")))
+    return WindowClass(*window_class_parts(arg))
 
 
 def policy(cls_arg: str, model: str, revision: str, lease_min: int, utilization: Fraction, source: str,
@@ -375,7 +299,7 @@ def policy(cls_arg: str, model: str, revision: str, lease_min: int, utilization:
             "session": {k: row[k] for k in ("definition", "key", "slots", "positions")},
             "c": row["gates"], "k": row["fresh"], "k_by_kind": row["k_by_kind"], "n": cap["n"],
             "theta": f"every weight parameter the class's circuit registers ({len(pins)}), held",
-            "table": {"sha512": digest(row["table"]), "entries": len(row["table"]), "priced": row["priced"]},
+            "table": {"sha512": digest(row["table"]), "entries": len(row["table"])},
             "n_inputs": {**cap, "utilization_source": source, "span_source": SPAN_SOURCE,
                          "work": {**work, "source": WORK_SOURCE}}}
 
@@ -467,8 +391,8 @@ def count_instance(doc: Mapping[str, Any], table: Mapping[str, int], c: int, k: 
     Definition."""
     from verity_vllm.program.predict import block_counts as BC
 
-    fn, m, _ = BC.session(doc)
-    return session_instance(fn, m, table, c, k, n, held)
+    program, m, _ = BC.session(doc)
+    return session_instance(program.fn, m, table, c, k, n, held)
 
 
 def session_instance(fn: Any, m: int, table: Mapping[str, int], c: int, k: int, n: int,
@@ -598,7 +522,7 @@ def verdict(pol: Mapping[str, Any] | None, doc: Mapping[str, Any] | None, serve_
                 raise Undecided(f"the policy's k_by_kind {split} doesn't sum to its k = {k}")
             if dict(split) != row["k_by_kind"]:
                 raise Undecided(f"the policy's k_by_kind {dict(split)} is not the run's circuit's {row['k_by_kind']}")
-        base["table"] = {"sha512": digest(row["table"]), "entries": len(row["table"]), "priced": row["priced"]}
+        base["table"] = {"sha512": digest(row["table"]), "entries": len(row["table"])}
         base["registered_session"] = row["definition"] == pol["session"]["definition"]
         sealed, out = class_windows(serve_dir, pol["class"])
         private |= {"sealed": sealed, "outside_class": {str(w): why for w, why in out.items()}}

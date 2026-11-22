@@ -3,7 +3,7 @@ the one-stage audit A6 ran on stand-in coordinates: each Definition kind (family
 is a template, its units staged from the step's own values, sampled by the stratified sampling design in one audit, proved by M0 under
 ``--zk`` and held by the Lean verifier.
 
-    PYTHONPATH=<tree>:<tree>/verity/protocols/proofs/flock/prover/python:<tree>/adapters/vllm:<tree>/adapters/torch \\
+    PYTHONPATH=<tree>:<tree>/verity/protocols/proof/flock/prover/python:<tree>/adapters/vllm:<tree>/adapters/torch \\
       python benchmarks/one_stage/a11.py --values DIR --kinds kinds.json --roles derive-report.json --bin flock-circuit \\
       --lean verity-verify-proof --out DIR [--per-kind 8] [--steps 1,0] [--layers 0,3] [--k K]
 
@@ -81,8 +81,8 @@ from verity.circuits.program import Program  # noqa: E402
 from verity.circuits.refs import runs  # noqa: E402
 from verity_flock import circuit as FC  # noqa: E402
 from verity_flock import class_statement as CS  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R, verifier as V  # noqa: E402
-from verity.protocols.proofs.spot.prover import docket as DK  # noqa: E402
+from verity.protocols.proof.spot.verifier.one_stage import partition as P, docket as R, verifier as V  # noqa: E402
+from verity.protocols.proof.spot.prover import docket as DK  # noqa: E402
 from verity.commitments import randomness as RND  # noqa: E402
 
 ROW = "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager"

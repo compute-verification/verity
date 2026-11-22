@@ -1,4 +1,4 @@
-"""PoUS attached by its scheme's name on the build's exchange (`compose.schemes.get("pous")`, `messages.Exchange`), over a
+"""PoUS attached by its scheme's name on the build's exchange (`run.schemes.get("pous")`, `messages.Exchange`), over a
 tiny int8 model's weights, on the CPU: what it holds, what it refuses, its period and its rejects.
 
 The weights are a toy int8 model's (`Model`), registered as a served run registers them (`RegisteredValues`, a tied weight
@@ -22,16 +22,16 @@ from typing import Any
 import pytest
 import torch
 from verity import hooks as H
-from verity.protocols.compose import schemes
-from verity.protocols.resource_accounting.memory.pous.attester import challenger_party as CP
-from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
-from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
-from verity.protocols.resource_accounting.memory.pous.prover import challenger_prover as CR
-from verity.protocols.resource_accounting.memory.pous.prover import period_prover
-from verity.protocols.resource_accounting.memory.pous.prover import served
-from verity.protocols.resource_accounting.memory.pous.prover import weight_store as ws
-from verity.protocols.resource_accounting.memory.pous.verifier import period, setup
-from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import P2Params
+from verity.protocols.run import schemes
+from verity.protocols.accounting.memory.pous.attester import challenger_party as CP
+from verity.protocols.accounting.memory.pous.attester import challenger_session as CS
+from verity.protocols.accounting.memory.pous.attester import memory_attester as mc
+from verity.protocols.accounting.memory.pous.prover import challenger_prover as CR
+from verity.protocols.accounting.memory.pous.prover import period_prover
+from verity.protocols.accounting.memory.pous.prover import served
+from verity.protocols.accounting.memory.pous.prover import weight_store as ws
+from verity.protocols.accounting.memory.pous.verifier import period, setup
+from verity.protocols.accounting.memory.pous.verifier.schemes.p2 import P2Params
 from verity.runtime.stream import Side
 
 from verity_vllm import messages
@@ -45,7 +45,7 @@ ROOT = Path(__file__).resolve().parents[5]
 
 
 def _signer_module():
-    path = ROOT / "tests" / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "verifier" / "pous_test_signer.py"
+    path = ROOT / "tests" / "verity" / "protocols" / "accounting" / "memory" / "pous" / "verifier" / "pous_test_signer.py"
     spec = importlib.util.spec_from_file_location("pous_test_signer", path)
     assert spec is not None and spec.loader is not None, path
     mod = importlib.util.module_from_spec(spec)
@@ -355,9 +355,9 @@ def test_a_dropped_block_rejects(toy, tmp_path):
 def test_attaching_pous_by_name_loads_no_selector_and_no_other_scheme():
     """Attaching PoUS by name imports neither the adapter's selector nor any module of another scheme's package:
     useful work's, the network attester's or PoUB's."""
-    ra = "verity.protocols.resource_accounting."
+    ra = "verity.protocols.accounting."
     probe = ("import sys\n"
-             "from verity.protocols.compose import schemes\n"
+             "from verity.protocols.run import schemes\n"
              "from verity_vllm import messages\n"
              "messages.Exchange().attach(schemes.get(schemes.named('option', 'pous:p2-16448/v4')), {},\n"
              "                           salt_source='a5' * 32, experimental=True)\n"
@@ -436,10 +436,9 @@ def _subprotocol(opt, tmp_path, n):
     return got, json.loads((out / "pous.json").read_text())
 
 
-def test_where_a_period_names_the_lean_tools_the_subprotocols_answer_is_theirs_and_must_be_the_pythons(toy, tmp_path, monkeypatch):
+def test_where_a_period_names_the_lean_tools_the_subprotocols_answer_is_theirs_alone(toy, tmp_path, monkeypatch):
     """The run tool is asked every period with the run's case and the setup tool at the first alone, with the setup's;
-    the subprotocol answers with the run tool's answer, and refuses one that differs from the Python's in more than its
-    reason, writing nothing."""
+    the subprotocol answers with the run tool's answer, a reject where the Python accepted among them."""
     say, runs, served_ = _lean(monkeypatch, tmp_path)
     opt, _ = _held(toy)
     got, doc = _subprotocol(opt, tmp_path, 0)
@@ -451,10 +450,10 @@ def test_where_a_period_names_the_lean_tools_the_subprotocols_answer_is_theirs_a
     got, doc = _subprotocol(opt, tmp_path, 1)
     assert served_[2:] == [("RUN", [runs[1].case])] and set(doc["lean"]) == {"run"} and got["reason"] == "the Lean's words"
 
-    say["run"] = lambda answer: answer | {"verdict": "reject"}
-    with pytest.raises(RuntimeError, match="^pous-run-protocol answered .*'verdict': 'reject'.*, the Python .*'verdict': 'accept'"):
-        _subprotocol(opt, tmp_path, 2)
-    assert not (tmp_path / "out2").exists()
+    say["run"] = lambda answer: answer | {"verdict": "reject", "public": None, "profile": None, "reason": "no"}
+    got, doc = _subprotocol(opt, tmp_path, 2)
+    assert runs[2].answer["verdict"] == "accept" and got["verdict"] == "reject" and got["reason"] == "no"
+    assert doc["answer"] == got
 
 
 def test_a_setup_the_lean_refuses_fails_the_first_period_whatever_the_python_said(toy, tmp_path, monkeypatch):

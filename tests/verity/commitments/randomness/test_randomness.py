@@ -6,6 +6,7 @@ import ast
 import hashlib
 import importlib.util
 import json
+import random
 from collections import Counter
 from fractions import Fraction
 from itertools import combinations
@@ -164,6 +165,32 @@ def test_streams_are_prefix_consistent_and_index_separated():
     assert KEY.stream("a", 100)[:33] == KEY.stream("a", 33)
     assert KEY.stream("a", 32) != KEY.stream("b", 32) and KEY.stream(("a", 1), 32) != KEY.stream(("a", 2), 32)
     assert KEY.stream(("a", "b"), 32) != KEY.stream("ab", 32)
+
+
+def test_a_block_is_its_slice_of_the_stream():
+    rng = random.Random(7)
+    for _ in range(64):
+        key = Key(rng.randbytes(32))
+        index = tuple(rng.choice((rng.randbytes(rng.randrange(9)), "t" * rng.randrange(4), rng.randrange(1 << 40)))
+                      for _ in range(rng.randrange(1, 4)))
+        a = rng.randrange(40)
+        b = a + rng.randrange(1, 6)
+        assert b"".join(key.block(index, c) for c in range(a, b)) == key.stream(index, 64 * b)[64 * a:]
+
+
+@pytest.mark.parametrize("case", VECTORS["cases"], ids=lambda c: c["domain"])
+def test_blocks_give_the_pinned_stream(case):
+    key = derive(bytes.fromhex(case["source"]), case["domain"], _context(case["context"]))
+    s = case["stream"]
+    n = len(s["bytes"]) // 2
+    assert b"".join(key.block(_index(s["index"]), c) for c in range(-(-n // 64)))[:n].hex() == s["bytes"]
+
+
+@pytest.mark.parametrize("c", [-1, 1 << 64, True, 1.0])
+def test_a_block_counter_is_a_u64(c):
+    with pytest.raises(ValueError, match="counter"):
+        KEY.block("a", c)
+    assert KEY.block("a", (1 << 64) - 1) != KEY.block("a", 0)
 
 
 def test_sharded_samples_equal_unsharded_samples():

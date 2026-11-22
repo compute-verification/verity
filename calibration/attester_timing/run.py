@@ -501,7 +501,7 @@ def _hello(attester: str, tree: Path) -> tuple[str, int]:
     is, the network attester in its cells."""
     if attester == "relay":
         return parties.HELLO.hex(), SCHEDULE["slots"] * (SCHEDULE["cell_bytes"] - HEADER_BYTES)
-    code = ("import sys; from verity.protocols.resource_accounting.network.verifier.network_attester import cells; "
+    code = ("import sys; from verity.protocols.accounting.network.verifier.network_attester import cells; "
             "print(cells(bytes.fromhex(sys.argv[1]), int(sys.argv[2])).hex())")
     done = subprocess.run([sys.executable, "-c", code, parties.HELLO.hex(), str(SCHEDULE["cell_bytes"])],
                           env=os.environ | {"PYTHONPATH": str(tree)}, capture_output=True, text=True, check=True)

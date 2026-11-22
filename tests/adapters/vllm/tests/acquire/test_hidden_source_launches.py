@@ -13,7 +13,7 @@ from typing import Any
 import pytest
 import torch
 
-from tests.acquire.test_vocab_range_source import Recorder, exactness_in_tree
+from tests.acquire.recorder import Recorder, exactness_in_tree
 from verity_vllm.acquire.sources import hidden_source as H
 from verity_vllm.engine import hooks
 
@@ -398,13 +398,13 @@ def test_the_source_made_for_a_build_is_its_attention_backends_and_another_backe
     fa2, fa3 = H.make_hidden_source(com, FA2_SO), H.make_hidden_source(com, FA3_SO, flash_attn_version=3)
     assert type(fa2) is H.HiddenM1Source and type(fa3) is H.HiddenM1SourceFA3
     assert (fa2.ns_name, fa3.ns_name) == ("verity_fa2_matReq", "verity_fa3_matReq")           # the build file's stem
-    assert type(H.make_hidden_source(com, FA2_SO, flash_attn_version=2, manifest={"query": {}})) is H.HiddenM1Source
+    assert type(H.make_hidden_source(com, FA2_SO, flash_attn_version=2)) is H.HiddenM1Source
     with pytest.raises(RuntimeError, match=r"is an FA2 build but the engine executes FA3: use verity_fa3_matReq.so"):
         H.make_hidden_source(com, FA2_SO, flash_attn_version=3)
     with pytest.raises(RuntimeError, match=r"is an FA3 build but the engine executes FA2: use verity_fa2_matReq.so"):
         H.make_hidden_source(com, FA3_SO, flash_attn_version=2)
     with pytest.raises(RuntimeError, match=r"ROW word 3 mode 0 .*guarded-max policy and needs mode 1"):
-        H.make_hidden_source(com, FA2_SO, manifest={"query": {"guarded_max": {"words": 5}}})
+        fa2.require_row3(True)
 
     class Native(H.HiddenM1Source):
         """A committer's own source for the build."""

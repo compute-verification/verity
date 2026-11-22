@@ -45,7 +45,7 @@ ph() { printf '%s\t%s\t%s\n' "$1" "$2" "$(date +%s.%N)" >> "$O/phases.tsv"; }
 . benchmarks/one_stage/toolkit.sh
 cuda_13_3 "$O/cuda.log" || { log "no CUDA 13.3 on this node ($O/cuda.log)"; exit 1; }
 export PT_CUDA=13.3
-SWEEP=verity/protocols/proofs/flock/prover/pod/70-class-sweep.sh
+SWEEP=verity/protocols/proof/flock/prover/pod/70-class-sweep.sh
 # this run's records the bundle carries for verify.sh, beside the circuit, the public file and the sessions
 BUNDLED="results.jsonl law.json gpu-mem.txt gpu.csv hardware.json software.json binary.sha256 staged.jsonl instances.json
 stage-rec.json phases.tsv point.json index.jsonl"
@@ -63,7 +63,7 @@ fi
 [ -x "$BIN" ] && [ -x "$PYBIN" ] || { log "missing the prover ($BIN) or the venv ($PYBIN)"; exit 1; }
 sha256sum "$BIN" | cut -d' ' -f1 > "$O/binary.sha256"
 ph build end
-export PYTHONPATH=$REPO:$REPO/tools/config:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/adapters/torch:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/proof_throughput
+export PYTHONPATH=$REPO:$REPO/tools/config:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proof/flock/prover/python:$REPO/adapters/vllm:$REPO/adapters/torch:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/proof_throughput
 PT() { "$PYBIN" -m verity_proof_throughput "$@"; }
 # the population (the class sweep's PT_VU, PT_N) and the verifier's stratified sampling design for B (law.json)
 read -r PT_VU PT_N < <(PT population --workload "$WORKLOAD" --B "$B" --out "$O") && [ -n "${PT_N:-}" ] || { log "no such workload or B"; exit 1; }

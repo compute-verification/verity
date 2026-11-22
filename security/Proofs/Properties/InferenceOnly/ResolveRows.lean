@@ -119,7 +119,8 @@ theorem input_node (c : Defn) (nd : Node) (hc : BodiesOk.CalleeOk c) (hn : Bodie
     rw [bs_members nd (Or.inl hf), hsh.1, BodiesOk.leaves_array, hw, BodiesOk.leaves_value, Nat.mul_one]
 
 /-- What the decoder establishes of each node of the root and of the Definition it calls. -/
-theorem decoded_root (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P) :
+theorem decoded_root (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
+    (hrc : (P.defs[P.root]!).body.recut = #[] := by assumption) :
     ∀ k < (P.defs[P.root]!).body.nodes.size,
       ((P.defs[P.root]!).body.nodes[k]!).fn < P.defs.size ∧
         BodiesOk.CalleeOk (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!) ∧
@@ -194,10 +195,11 @@ theorem argIdx_lt (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode by
     (hf : ((P.defs[P.root]!).body.nodes[k]!).form = .call ∨ ((P.defs[P.root]!).body.nodes[k]!).form = .batch)
     {m : ℕ} (hm : m < ((P.defs[P.root]!).body.nodes[k]!).members) {i : ℕ}
     (hi : i < ((P.defs[P.root]!).body.nodes[k]!).args.size) {t : ℕ}
-    (ht : t < ((P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).params[i]!).2.leaves) :
+    (ht : t < ((P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).params[i]!).2.leaves)
+    (hrc : (P.defs[P.root]!).body.recut = #[] := by assumption) :
     argIdx ((P.defs[P.root]!).body.nodes[k]!) i m t <
       ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).count := by
-  obtain ⟨-, hc, hno⟩ := decoded_root bytes P hdec k hk
+  obtain ⟨-, hc, hno⟩ := decoded_root bytes P hdec hrc k hk
   rcases hf with hf | hf
   · rw [argIdx_call hf]
     have hcp : (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = false := hno.2.2.2.1 (Or.inl hf)
@@ -227,7 +229,8 @@ from the root to that node's gate of the leaf.** -/
 theorem arg_leaf {k : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
     (hu : Desc.isInputNode P ((P.defs[P.root]!).body.nodes[k]!) = false) {i : ℕ}
     (hi : i < ((P.defs[P.root]!).body.nodes[k]!).args.size) {x : ℕ}
-    (hx : x < ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).count) :
+    (hx : x < ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).count)
+    (hrc : (P.defs[P.root]!).body.recut = #[] := by assumption) :
     ∃ n j, LeafAt P k i x n j ∧ n < (P.defs[P.root]!).body.nodes.size ∧
       j < ((P.defs[P.root]!).body.nodes[n]!).out.leaves ∧
       (P.defs[P.root]!).body.offsets[n + 1]! =
@@ -269,7 +272,7 @@ theorem arg_leaf {k : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
   rw [hget'] at href
   have hjlt : base + (x - ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]!) <
       ((P.defs[P.root]!).body.nodes[n]!).out.leaves := href.2
-  obtain ⟨-, hc, hno⟩ := decoded_root bytes P hdec n hn'
+  obtain ⟨-, hc, hno⟩ := decoded_root bytes P hdec hrc n hn'
   have hprim : (P.defs[((P.defs[P.root]!).body.nodes[n]!).fn]!).prim = true := by
     have h0 := hin'
     unfold Desc.isInputNode at h0
@@ -295,7 +298,8 @@ theorem unit_leaf {k : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
     (hf : ((P.defs[P.root]!).body.nodes[k]!).form = .call ∨ ((P.defs[P.root]!).body.nodes[k]!).form = .batch)
     {m : ℕ} (hm : m < ((P.defs[P.root]!).body.nodes[k]!).members) {i : ℕ}
     (hi : i < ((P.defs[P.root]!).body.nodes[k]!).args.size) {t : ℕ}
-    (ht : t < ((P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).params[i]!).2.leaves) (d off : ℕ) :
+    (ht : t < ((P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).params[i]!).2.leaves) (d off : ℕ)
+    (hrc : (P.defs[P.root]!).body.recut = #[] := by assumption) :
     ∃ n j, LeafAt P k i (argIdx ((P.defs[P.root]!).body.nodes[k]!) i m t) n j ∧
       n < (P.defs[P.root]!).body.nodes.size ∧ j < ((P.defs[P.root]!).body.nodes[n]!).out.leaves ∧
       (P.defs[P.root]!).body.offsets[n + 1]! =
@@ -304,7 +308,7 @@ theorem unit_leaf {k : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
         g = (P.defs[P.root]!).body.offsets[n]! + j := by
   have hx := argIdx_lt bytes P hdec hown hk hu hf hm hi ht
   obtain ⟨n, j, hleaf, hn, hj, ho, hstep⟩ := arg_leaf bytes P hdec hov hlay hown hk hu hi hx
-  exact ⟨n, j, hleaf, hn, hj, ho, fun g hg => run_two (rs_unit P d off k m i t hf) hstep _ hg⟩
+  exact ⟨n, j, hleaf, hn, hj, ho, fun g hg => run_two (rs_unit P d off k m i t hf) hstep _ (Flock.Program.resolve_run hg)⟩
 
 /-- **No two leaves of units' parameters are one gate.** -/
 theorem unit_leaf_inj {k k' : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
@@ -322,13 +326,14 @@ theorem unit_leaf_inj {k k' : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
     {g : ℕ} (h : resolve P (.child P.rootScope d off k m) ⟨true, i, t⟩ = .ok g)
     (h' : resolve P (.child P.rootScope d' off' k' m') ⟨true, i', t'⟩ = .ok g) :
     k = k' ∧ m = m' ∧ i = i' ∧ t = t' := by
+  have hrc := Flock.Program.resolve_recut rfl h
   obtain ⟨hroot, -, hL, -, -, -⟩ := decoded_walk bytes P hdec hov hlay
   obtain ⟨n, j, hleaf, hn, hj, ho, hg⟩ := unit_leaf bytes P hdec hov hlay hown hk hu hf hm hi ht d off
   obtain ⟨n', j', hleaf', hn', hj', ho', hg'⟩ := unit_leaf bytes P hdec hov hlay hown hk' hu' hf' hm' hi' ht' d' off'
   have hgg := (hg g h).symm.trans (hg' g h')
   obtain ⟨rfl, rfl⟩ := node_of_gate P (hL P.root hroot.1) hroot.2 hn hn' hj hj' ho ho' hgg
   obtain ⟨rfl, rfl, hxx⟩ := leafAt_inj hown hk hu hi hk' hu' hi' hleaf hleaf'
-  obtain ⟨-, -, hno⟩ := decoded_root bytes P hdec k hk
+  obtain ⟨-, -, hno⟩ := decoded_root bytes P hdec hrc k hk
   rcases hf with hf | hf
   · rw [argIdx_call hf, argIdx_call hf] at hxx
     rw [prim_members _ (Or.inr hf)] at hm hm'
@@ -342,7 +347,7 @@ theorem unit_leaf_inj {k k' : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
         exact Array.mem_toList_iff.2 (Array.getElem_mem hk)
       · rw [getElem!_pos _ i hi]
         exact Array.getElem_mem hi
-    obtain ⟨-, -, -, -, hsh, hdims⟩ := hno
+    obtain ⟨-, -, -, -, hsh, hdims, -⟩ := hno
     rw [hf] at hsh
     rcases hsh.2 i hi with ⟨hnone, -⟩ | ⟨ax, mt, hrem, -, hdax⟩
     · rw [hnone] at hd

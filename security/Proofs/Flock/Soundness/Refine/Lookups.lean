@@ -107,31 +107,18 @@ theorem setupHidden_back (hext : TablesExtend T T') {tags : Tags} {cf : ByteArra
   exact okLe_refl _
 
 /-- **A one-table session `Stmt.setupTables` sets up with tables `T'` that extend `T` is the one it sets up with `T`**,
-where the circuit file `HmOut.parse`s with `T` and its statement is untyped. -/
+where `ProvedScope.circuitOf` reads the circuit file with `T` and its statement is untyped. -/
 theorem setupTables_back (hext : TablesExtend T T') {tags : Tags} {cf : ByteArray} {count : ℕ} {c : Circuit}
-    (hcount : count ≤ 1) (ht : tags.typed = false) (hp : HmOut.parse tags cf T = .ok c) (pf : ByteArray)
+    (hcount : count ≤ 1) (ht : tags.typed = false) (hp : ProvedScope.circuitOf tags cf T = .ok c) (pf : ByteArray)
     (coins : Coins) (draw partition : Option Lean.Json) (program : Option ByteArray)
     (work : Option (ℕ × Array (String × ℕ × ℕ))) (stratified : Option ℕ)
     (closure : Option (Std.HashMap ℕ (Array ℕ))) (own : Option ByteArray) :
     OkLe (Stmt.setupTables tags cf pf coins count T' draw partition program work stratified closure own)
       (Stmt.setupTables tags cf pf coins count T draw partition program work stratified closure own) := by
-  have hi := HmOut.parse_isTmpl hp
-  have hpc : HmOut.parseCommit tags cf T = .ok c := by
-    rw [HmOut.parseCommit, ite_eq_right (by simp [hi])]
-    exact hp
-  have hr : HmRow.parse tags cf T = .ok c := by
-    unfold HmOut.parse at hp
-    rw [ite_eq_right (by simp [hi])] at hp
-    dsimp only at hp
-    rw [ite_eq_left (by simp [ht])] at hp
-    obtain ⟨c', hc', hp⟩ := ebind_ok hp
-    obtain ⟨_, -, hp⟩ := ebind_ok hp
-    cases hp
-    exact hc'
   unfold Stmt.setupTables
   ok_le_walk
-  · exact setupHidden_back hext hpc _ _ _ _ _ _
-  · exact setupH_back hext ht hr _ _ _ _ _
+  · exact setupHidden_back hext (by rwa [ProvedScope.circuitOf, if_pos ‹tags.hiddenOutputs = true›] at hp) _ _ _ _ _ _
+  · exact setupH_back hext ht (by rwa [ProvedScope.circuitOf, if_neg ‹¬tags.hiddenOutputs = true›] at hp) _ _ _ _ _
   all_goals exact absurd hcount ‹_›
 
 /-- **A circuit `ProvedScope.circuitOf` reads with `T` it reads with `T'`**, on either tag. -/

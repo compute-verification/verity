@@ -9,7 +9,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from verity.protocols.compose import schemes as declarations
+from verity.protocols.run import schemes as declarations
 
 from verity_vllm.pipeline.serve_commit import SAMPLING_FIELDS
 
@@ -225,7 +225,7 @@ PROTOCOLS = {"vllm": VllmProtocol, "plain": PlainProtocol}
 def framings() -> dict[str, Callable[..., Any]]:
     """Each completion framing by its ``--protocol`` name, called with ``force_include_usage``: the adapter's own
     (`PROTOCOLS`) and each declared scheme's (`Scheme.framings`) over `VllmProtocol`, given its settings by keyword. The
-    names are `compose.schemes.KEYS`', so no scheme is imported until its framing is called."""
+    names are `run.schemes.KEYS`', so no scheme is imported until its framing is called."""
     out: dict[str, Callable[..., Any]] = dict(PROTOCOLS)
     for name in sorted({f for k in declarations.KEYS.values() for f in k.get("framings", ())}):
         out[name] = (lambda n: lambda force_include_usage=False, **given: declarations.get(declarations.named("framings", n))

@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Properties.Verity.Recursive.BaseSetup
+public import Proofs.Flock.Claims.DeployReads
 public import Proofs.Properties.Verity.Sampled.Record.PartSame
 public import Proofs.Flock.Claims.Deploy
 
@@ -34,7 +34,7 @@ open Lean (Json)
 open Flock (V SessionSpec Stmt Setup)
 open Flock.PartCong (PartSame)
 open FlockDeploy (Coin Final Ins)
-open Verity.Recursive.BaseSetup (bind_ok forIn_mem body_ok body_yield noIdentifier_of_check)
+open FlockDeploy.BaseSetup (bind_ok forIn_mem body_bind_ok body_bind_yield noIdentifier_of_check)
 
 private theorem ok_bind {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {a : α} {b : β} (hx : x = .ok a)
     (hf : f a = .ok b) : (x >>= f) = .ok b := by
@@ -125,8 +125,10 @@ def scopeOf (I : Flock.Witness.Inputs) (rd : Spot.OneStageZk.Reads) : V Unit := 
 
 /-! ## v2's setup, unfolded -/
 
+set_option maxHeartbeats 1000000 in
 /-- **`buildSessionOf`, unfolded**: an hm96-sha512 row statement, `Stmt.setupTables` (under hidden outputs, on
-`ProvedScope.circuitOf`'s parse, which is it: `Stmt.setupTables_eq`), each table's registered reads and the identifier's
+`ProvedScope.circuitOf`'s parse, which is it: `Stmt.setupTables_eq`), each table's registered reads (at the reads
+`Registered.withPositions` derives) and the identifier's
 absence (`noIdentifier`), and `Registered.checkFull` at the sample. -/
 theorem setupTables_of_build {tags : Flock.Tags} {cB pB : ByteArray} {coins : Flock.Coins}
     {tables : List (String × ByteArray)} {count : ℕ} {draw partition : Option Json} {program : Option ByteArray}
@@ -135,7 +137,8 @@ theorem setupTables_of_build {tags : Flock.Tags} {cB pB : ByteArray} {coins : Fl
       count draw partition program registered = .ok (spec, sts)) :
     tags.hm96Rows = true ∧
       Flock.Stmt.setupTables tags cB pB coins count tables draw partition program = .ok (spec, sts) ∧
-      (∀ st ∈ sts, Flock.checkRegistered st registered = .ok () ∧ FlockDeploy.noIdentifier st = .ok ()) ∧
+      (∀ st ∈ sts, (Flock.Registered.withPositions st.c st.pub program registered >>= Flock.checkRegistered st) = .ok () ∧
+        FlockDeploy.noIdentifier st = .ok ()) ∧
       Flock.Registered.checkFull registered draw = .ok () := by
   unfold Spot.OneStageZk.buildSessionOf at hb
   have hh : tags.hm96Rows = true := by
@@ -144,25 +147,20 @@ theorem setupTables_of_build {tags : Flock.Tags} {cB pB : ByteArray} {coins : Fl
   simp only [hh, Bool.not_true, Bool.false_eq_true, ↓reduceIte, pure_bind] at hb
   have hstep : ∃ x : SessionSpec × Array Stmt,
       Flock.Stmt.setupTables tags cB pB coins count tables draw partition program = .ok x ∧
-      (∀ st ∈ x.2, Flock.checkRegistered st registered = .ok () ∧
+      (∀ st ∈ x.2, (Flock.Registered.withPositions st.c st.pub program registered >>= Flock.checkRegistered st) = .ok () ∧
         Spot.OneStageZk.checkIdentifier st = .ok ()) ∧
       Flock.Registered.checkFull registered draw = .ok () ∧ (x.1, x.2) = (spec, sts) := by
-    split at hb
+    obtain ⟨x, hs, hb⟩ := bind_ok hb
+    obtain ⟨⟨⟩, hloop, hb⟩ := bind_ok hb
+    obtain ⟨⟨⟩, hfull, hb⟩ := bind_ok hb
+    refine ⟨x, ?_, fun st hst => (body_bind_ok (W := fun st => Flock.Registered.withPositions st.c st.pub program registered)
+      (C := Flock.checkRegistered) (B := Spot.OneStageZk.checkIdentifier)).1 (forIn_mem body_bind_yield hloop st hst), hfull,
+      Except.ok.inj hb⟩
+    split at hs
     · next hhid =>
-      obtain ⟨x, hs, hb⟩ := bind_ok hb
-      obtain ⟨⟨⟩, hloop, hb⟩ := bind_ok hb
-      obtain ⟨⟨⟩, hfull, hb⟩ := bind_ok hb
-      refine ⟨x, ?_, fun st hst => (body_ok (A := fun st => Flock.checkRegistered st registered)
-        (B := Spot.OneStageZk.checkIdentifier)).1 (forIn_mem body_yield hloop st hst), hfull,
-        Except.ok.inj hb⟩
       rw [Flock.Stmt.setupTables_eq]
       simpa only [Flock.ProvedScope.circuitOf, hhid, eq_self_iff_true, ↓reduceIte] using hs
-    · obtain ⟨x, hs, hb⟩ := bind_ok hb
-      obtain ⟨⟨⟩, hloop, hb⟩ := bind_ok hb
-      obtain ⟨⟨⟩, hfull, hb⟩ := bind_ok hb
-      exact ⟨x, hs, fun st hst => (body_ok (A := fun st => Flock.checkRegistered st registered)
-        (B := Spot.OneStageZk.checkIdentifier)).1 (forIn_mem body_yield hloop st hst), hfull,
-        Except.ok.inj hb⟩
+    · exact hs
   obtain ⟨⟨spec', sts'⟩, hs, hpt, hfull, hx⟩ := hstep
   simp only [Prod.mk.injEq] at hx
   obtain ⟨rfl, rfl⟩ := hx
@@ -191,6 +189,21 @@ theorem sessionAt_ok {I : Flock.Witness.Inputs} {rd : Spot.OneStageZk.Reads} {dr
   obtain ⟨⟨⟩, hrc, h⟩ := bind_ok h
   obtain rfl : r = (spec, sts) := Except.ok.inj h
   exact ⟨hprog, hinner, hb, hsc, hsh, hrc⟩
+
+/-- **A one-table session with hidden outputs checks the circuit `ProvedScope.circuitOf` parses**: every table
+`sessionAt` sets up at `I` is `Stmt.setupHiddenOf`'s on that parse (`Stmt.setupTablesOf_one`), whose circuit it is. -/
+theorem sessionAt_circuitOf {I : Flock.Witness.Inputs} {rd : Spot.OneStageZk.Reads} {draw : Option Json}
+    {spec : SessionSpec} {sts : Array Stmt} (h : Spot.OneStageZk.sessionAt I rd draw = .ok (spec, sts))
+    (hh : (Flock.Witness.zkTags I).hiddenOutputs = true) (hc : I.count ≤ 1) :
+    ∀ st ∈ sts, Flock.ProvedScope.circuitOf (Flock.Witness.zkTags I) I.circuitFile I.tables = .ok st.c := by
+  obtain ⟨-, -, hb, -⟩ := sessionAt_ok h
+  obtain ⟨-, hs, -⟩ := setupTables_of_build hb
+  rw [Flock.Stmt.setupTables_eq] at hs
+  obtain ⟨st, hst, ho⟩ := Flock.Stmt.setupTablesOf_one hh hc hs
+  intro st' hst'
+  obtain rfl : st' = st := by simpa [show sts = #[st] from hst] using hst'
+  simp only [Flock.ProvedScope.circuitOf, hh, ↓reduceIte]
+  exact (FlockSoundness.Discharge.Hidden.setupHiddenOf_spec ho).parse
 
 /-- **`setupAt`, unfolded**: `sessionAt`'s session `(spec, sts)`, whose tables' verifier-side setups are the model's
 (`FlockDeploy.tabsOf`), and the sample's sampling design where there is a sample. -/
@@ -252,7 +265,9 @@ theorem setup_of_setupAt {si : Ins} {I : Flock.Witness.Inputs} {rd : Spot.OneSta
   simp only [hm.read_tags, hm.read_setup hdraw, hdraw, hm.zk, hm.registered, hm.stmtTags, hm.tables,
     hm.circuitFile, hpart, hm.program]
   simp only [hh, Bool.not_true, Bool.false_eq_true, ↓reduceIte, hci', hs0, bind, Except.bind, pure, Except.pure]
-  rw [forIn_ok_of_all fun a ha u => by simp only [(hregs a ha).1, (hregs a ha).2]]
+  rw [forIn_ok_of_all fun a ha u => by
+    obtain ⟨r, hw, hc⟩ := bind_ok (hregs a ha).1
+    simp only [hw, hc, (hregs a ha).2]]
   rcases draw with _ | d
   · simp only [hfull, hchecks, hsh, hcoins, hpub, ↓reduceIte, Option.isSome_none, Bool.false_eq_true]
   · have hl : Flock.ProvedScope.sampleDesign true (Flock.Witness.zkTags I) false (some d) = .ok () := by

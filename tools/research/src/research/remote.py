@@ -196,7 +196,7 @@ RUNNER_FAILED_LINES = 5                       # launcher.log lines in a RunnerFa
 CANCEL_GRACE_S = 20                           # research cancel: SIGTERM, then the runner SIGKILLs what of the run is left this long after
 GUARD_IDLE_MIN_DEFAULT = 90
 GUARD_ENVIRON = "/proc/1/environ"             # RunPod injects RUNPOD_POD_ID and the pod-scoped RUNPOD_API_KEY into the container's first process
-DIRECT_GPUS_FILE = "/etc/vy/direct-gpus"      # the Nebius cluster's split (pods/nebius/sky/cluster_up.sh): `none` once Kueue owns every GPU
+DIRECT_GPUS_FILE = "/etc/vy/direct-gpus"      # the node's split (`cluster policy apply`): `none` once the queue owns every GPU
 GPU_LEASE_HOST_FILE = "/etc/vy/gpu-lease-host"  # present: gpu-lease hands out every GPU here (vm_setup.sh writes it on a GPU VM)
 DIRECT_CPUS_FILE = "/etc/vy/direct-cpus"      # the CPUs a direct run starts on (a cpu list, e.g. 0-95): the rest are pinned benchmarks'.
                                               # A command may still pin itself elsewhere (taskset -c 128-159 ...); absent: no default

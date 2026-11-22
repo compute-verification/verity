@@ -10,8 +10,8 @@ import cards
 import figure1 as f
 import pytest
 from render import _fit, _lines, _zeros, appendix_stem, render, render_appendix, stem
-from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams
-from verity.protocols.proofs.spot.prover.optimize import Cell
+from verity.protocols.accounting.network.verifier.network_attester import NetworkAttesterParams
+from verity.protocols.proof.spot.prover.optimize import Cell
 
 SCOPES = ("world year", "datacenter week")
 #: the designs every bit charged, which plan in about a second; the capped ones take seconds a point
@@ -56,13 +56,15 @@ def test_every_input_is_a_card_with_its_source(out):
 
 
 def test_a_model_without_a_workload_card_is_refused(card_dir):
-    (card_dir / "workload.deepseek-v4-pro.json").unlink()
     with pytest.raises(FileNotFoundError, match="no workload card for DeepSeek-V4-Pro"):
         f.cards("DeepSeek-V4-Pro")
 
 
 def test_a_model_runs_once_its_workload_card_lands(card_dir):
-    (card_dir / "workload.deepseek-v4-pro.json").unlink()
+    for slot in ("proof_overhead", "replay"):
+        cards.write(cards.load(slot, "GLM-5.3") | {"model": "DeepSeek-V4-Pro"})
+    with pytest.raises(FileNotFoundError, match="no workload card for DeepSeek-V4-Pro"):
+        f.cards("DeepSeek-V4-Pro")
     work = cards.load("workload", "GLM-5.3")
     work["value"].pop("params")
     cards.write(work | {"model": "DeepSeek-V4-Pro"})
@@ -599,6 +601,8 @@ def test_a_request_serves_at_most_the_attesters_registered_cap(card_dir):
     assert (c["served_bits"].status, c["served_bits"].provisional) == (card["status"], card["provisional"])
     assert f.served_tokens(c)[:2] == (schedule.max_tokens_cap, 32) and f.CAP_RULE in f.served_tokens(c)[2]
     assert f.served_tokens(every) == (every["tokens_per_request"].value, 32, "every one of the request's tokens")
+    for slot in ("workload", "proof_overhead", "replay"):
+        cards.write(cards.load(slot, "GLM-5.3") | {"model": "DeepSeek-V4-Pro"})
     assert "max_tokens_cap" not in f.cards("DeepSeek-V4-Pro")
     with pytest.raises(ValueError, match="has no attester card registering a response cap"):
         f.cards("DeepSeek-V4-Pro", served="cap")

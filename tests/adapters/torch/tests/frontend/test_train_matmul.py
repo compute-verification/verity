@@ -136,10 +136,11 @@ def test_gpu_order_products_are_refused_with_their_capture() -> None:
 
 def test_gpu_tf32_mm_is_cublas_tf32_gemm(monkeypatch) -> None:
     """With allow_tf32 an f32 mm at a shape the TF32 capture covers (`cublas_bf16.TRAIN_TF32`) is one batch of `GemmTf32_v1{K, N}`
-    over a's rows, b row- or column-major (a rotation codec's y @ R and y @ R^T), and each word is the TF32 step's chain from +0
-    (`mhc_twin.tf32_dot8`; checked at a stand-in shape, the captured ones being thousands of rows).  An operand that is not
-    dense is refused with the capture it needs."""
-    from verity_vllm.definitions.numerics import mhc_twin as MT
+    over a's rows, b row- or column-major (a rotation codec's y @ R and y @ R^T), and each word is `GemmTf32_v1`'s on its row
+    and column (checked at a stand-in shape, the captured ones being thousands of rows).  An operand that is not dense is
+    refused with the capture it needs."""
+    from verity.circuits.defs import bind
+    from verity.circuits.evaluation.reference import evaluate
 
     tf32 = training_rules(cc=CC, tf32=True)
     meta = [torch.empty(4096, 64, device="meta"), torch.empty(64, 64, device="meta")]
@@ -152,9 +153,8 @@ def test_gpu_tf32_mm_is_cublas_tf32_gemm(monkeypatch) -> None:
     monkeypatch.setattr(CB, "TRAIN_TF32", CB.TRAIN_TF32 + ((3, 16, 4),))
     a, b = _data(3, 16, seed=8), _data(16, 4, seed=9)
     A, B = (np.asarray(_bits(t), np.uint32).reshape(t.shape) for t in (a, b))
-    acc: np.ndarray = np.zeros(12, np.uint32)
-    for k in range(0, 16, 8):
-        acc = MT.tf32_dot8(acc, np.repeat(A[:, k:k + 8], 4, axis=0), np.tile(B[k:k + 8].T, (3, 1)))
+    gemm = bind(CB.GemmTf32, K=16, N=1)
+    want = [int(np.ravel(evaluate(gemm, [int(v) for v in r], [int(v) for v in c]))[0]) for r in A for c in B.T]
     for bm in (b, b.t().contiguous().t()):
         got = _out(_program(lambda x, y: (x @ y,), a, bm, rules=tf32), a, bm)
-        assert got.astype(np.uint32).tolist() == acc.tolist()
+        assert got.astype(np.uint32).tolist() == want

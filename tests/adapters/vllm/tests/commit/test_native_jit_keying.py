@@ -122,19 +122,6 @@ def test_the_real_source_binds_the_names_the_python_side_calls():
     assert len(names) >= 40
 
 
-def test_release_json_records_the_collector_source_digest():
-    """release_json keeps the source_digest= / bindings= a collector build line prints beside the sha."""
-    from verity_vllm.pipeline import release_json as rj
-
-    arts = rj.parse_artifacts("FA2-TAP-OK 2222 /b.so arch=8.9",
-                              "3333 /workspace/cp/nc_build/ab12cd34ef56/verity_native_collect.so source_digest=ab12cd34ef56ff bindings=48")
-    assert arts["verity_native_collect.so"] == {"sha256": "3333", "path": "/workspace/cp/nc_build/ab12cd34ef56/verity_native_collect.so",
-                                                "source_digest": "ab12cd34ef56ff", "bindings": "48"}
-    # the two-token line still parses (records written by earlier releases)
-    assert rj.parse_artifacts("FA2-TAP-OK 2 /b", "3 /nc/verity_native_collect.so")["verity_native_collect.so"] == \
-        {"sha256": "3", "path": "/nc/verity_native_collect.so"}
-
-
 def test_ext_keys_its_build_dir_by_the_digest_and_refuses_a_stale_load():
     with open(os.path.join(HERE, "..", "..", "..", "..", "..", "adapters", "vllm", "verity_vllm", "commit", "committer", "native_ext.py")) as f:
         src = f.read()

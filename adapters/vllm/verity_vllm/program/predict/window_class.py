@@ -1,5 +1,5 @@
 """The window class a window circuit is of (`window_circuit`): its public bounds and its slots' timing (`WindowClass`, N1's
-scan class, and `CLASS_OF_RECORD`), the windows its slots take (`takes`), and the layout of PoUW's tables of a window that
+scan class, and `CLASS_OF_RECORD`), a window's requests within them (`takes`, `Request`), and the layout of PoUW's tables of a window that
 its circuit reads, a parameter of the circuit with two instances on one fixed load (`FixedLoad`): H1's (`Tables`), which
 the circuit reads where the model makes them, and Pearl+'s (`PearlTables`), for a circuit cut at its linears.
 
@@ -9,10 +9,10 @@ a read of an output row (`interface.Read`), which fills no input and holds the p
 row, so a table that isn't what the model computed fails the proof of the proof block that reads it. Each quantizer at
 that K is `Int8RowQuant_v5{K, R, ROUND}` at its round, whose ``o2`` is H1's leaf of its row (its codes four to a u32, then its scale: the
 node's words whole), read as row c·m + i of its round's A table, c its index among its position's int8 linears of that K
-and i its position's row; each position's token row (its lane's of the slot's `ScanSlots_v3`, its `TokenFeed_v1`'s or the
+and i its position's row; each position's token row (its lane's `ScanSlots_v5`'s, its `TokenFeed_v1`'s or the
 previous select's) is read as row i of its round's input-ids table. A position's round and row are a fixed load's (`Tables.at`):
-every request of the class's prompt length and outputs, all admitted at round 0 in slot order, so the circuit is still the
-class's alone, and a window that isn't that load is refused (`takes`). The circuit's program takes the tables as its values
+every request of the class's prompt length and outputs, all admitted at round 0 in slot order, so the circuit is the
+class's, and a window that isn't that load is refused (`FixedLoad.held`). The circuit's program takes the tables as its values
 (`interface.Registered.values`), round by round the A table then the input-ids table, so the window's registration registers
 them as its program's, the outputs of the Commit record's registration of them.
 
@@ -27,8 +27,7 @@ that reads row i of its call's y and hands its BF16 words on to its readers in r
 where a unit of N / W rows would be no proof block). The circuit's program takes them as its values, round by round and
 call by call the A rows then the y. Pearl+'s window record, at its version 2, registers each weight w's B rows too,
 ``pearl-b/<w>`` (`PearlTables.b`), at the root of the tree PoUW reads B from; the circuit, cut at its linears, reads none
-of them. Its
-census (`window_cut.census`) counts each cut linear by shape, and none is tied to PoUW's credited product yet.
+of them.
 """
 from __future__ import annotations
 
@@ -36,13 +35,13 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+from verity.protocols.accounting.compute.pouw.prover.serving import (
     NCP_SCHEMES as SCHEMES,
 )
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+from verity.protocols.accounting.compute.pouw.prover.serving import (
     PEARL_C_ROW_ALIGN as ROW_ALIGN,
 )
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+from verity.protocols.accounting.compute.pouw.prover.serving import (
     a_value,
     b_value,
     y_value,
@@ -132,6 +131,12 @@ class FixedLoad:
         L, S = cls.prompt, cls.slots
         return [[(k, 0, L) for k in range(S)]] + [[(k, L + s - 1, 1) for k in range(S)] for s in range(1, cls.outputs)]
 
+    def held(self, compiled: Any, cls: WindowClass) -> None:
+        """Refuse a window whose rows by step aren't the fixed load's (`schedule`), the public rows the tables are read at."""
+        if (got := [[(r.request, r.start, r.n) for r in step] for step in compiled.steps]) != self.schedule(cls):
+            raise Unexpressible(f"the window's rows by step {got} (request, start, n), not its class's fixed load "
+                                f"{self.schedule(cls)}, the rows {self.WHAT} are read at")
+
 
 @dataclass(frozen=True)
 class Tables(FixedLoad):
@@ -166,7 +171,7 @@ class PearlTables(FixedLoad):
     K words a row; `linear_cut.LinearARow`), its `rows` rows then zero rows up to `a_rows`, and its y (each BF16 word widened
     to FP32, N words a row; `linear_cut.LinearOut`), its `rows` rows. A cut linear hands its y on to its readers in rows of
     ``words``, doubled where its unit would be no proof block (`window_cut.linears`). ``scheme`` is the PoUW scheme the
-    window's Pearl+ serves under, whose credited product a tie would hold y to (`window_cut.census`): the deployment
+    window's Pearl+ serves under, whose credited product a tie would hold y to: the deployment
     states it, since it names the device."""
     WHAT = "Pearl+'s tables"
     scheme: str
@@ -205,27 +210,25 @@ class PearlTables(FixedLoad):
         return -(-PearlTables.rows(cls, s) // ROW_ALIGN) * ROW_ALIGN
 
 
-def takes(compiled: Any, cls: WindowClass, placed: Sequence[tuple[int, int | None]] | None = None,
-          tables: FixedLoad | None = None) -> None:
-    """Refuse a window ``cls``'s slots don't take (`window_circuit`); with ``tables``, one whose rows by step aren't the
-    fixed load's (`FixedLoad.schedule`), the public rows its tables are read at."""
+@dataclass(frozen=True)
+class Request:
+    """A served request as its window's circuit lowers it: the boundary bucket it is anchored at, its lane there (its slot
+    of the scan state row), its prompt ids and its outputs."""
+    anchor: int
+    lane: int
+    prompt: int
+    outputs: int
+
+    @property
+    def positions(self) -> int:
+        """Its Program's positions: its prompt's, then every output but the last."""
+        return self.prompt + self.outputs - 1
+
+
+def takes(compiled: Any, cls: WindowClass, placed: Sequence[tuple[int, int | None]] | None = None) -> tuple[Request, ...]:
+    """The window's requests in request order (`Request`), each at its lane, the requests anchored at a boundary its lanes
+    in order; refused where they are past ``cls``'s envelope (`window_circuit`)."""
     units = [u for u in compiled.requests if u is not None]
-    if len(units) > cls.slots:
-        raise Unexpressible(f"{len(units)} requests in a window of a class of {cls.slots} slots")
-    placed = [(cls.boundaries[0], None)] * len(units) if placed is None else list(placed)
-    if len(placed) != len(units):
-        raise ValueError(f"{len(placed)} placements for the window's {len(units)} requests")
-    anchored: dict[int, int] = {}
-    for u, (anchor, end) in zip(units, placed):
-        if anchor not in cls.boundaries:
-            raise Unexpressible(f"request {u.request}: anchored at bucket {anchor}, none of its class's boundaries "
-                                f"{list(cls.boundaries)}")
-        if end is not None and end < anchor:
-            raise Unexpressible(f"request {u.request}: its last output at bucket {end}, before its anchor {anchor}")
-        anchored[anchor] = anchored.get(anchor, 0) + 1
-    for anchor, n in sorted(anchored.items()):
-        if n > cls.lanes:
-            raise Unexpressible(f"{n} requests anchored at bucket {anchor}, past the {cls.lanes} slots a boundary has")
     for u in units:
         if u.carried_in or u.carried_out or u.C or u.parse is not None:
             raise Unexpressible(f"request {u.request}: carried across windows, a prefix-cache hit or byte ingress, which the "
@@ -233,13 +236,56 @@ def takes(compiled: Any, cls: WindowClass, placed: Sequence[tuple[int, int | Non
         if u.policy != GREEDY:
             raise Unexpressible(f"request {u.request}: a {u.policy.get('kind')} request, and the class Program is greedy (a "
                                 "Program that reads a seed isn't lowered yet)")
-        if cls.prompt < u.LP or cls.outputs < u.T + 1:
-            raise Unexpressible(f"request {u.request}: {u.LP} prompt ids and {u.T + 1} outputs, past its class's {cls.prompt} and "
+    return _placed(cls, [(u.request, u.LP, u.T + 1) for u in units], placed)
+
+
+def requests_of(advice: Any, cls: WindowClass) -> tuple[Request, ...]:
+    """The decoded advice's requests (`steps.advice_of`) in request order (`Request`), each of its prompt and outputs and
+    at its lane of the class's one boundary: neither C's shape nor the advice holds the bucket a request arrived in, so a
+    class of more boundaries is refused, as are requests past ``cls``'s envelope, carried across windows or served from the
+    prefix cache."""
+    if len(cls.boundaries) != 1:
+        raise Unexpressible(f"{cls}: a class of {len(cls.boundaries)} boundaries, and a served Program reads boundary 0's scan "
+                            "state row: the advice holds no request's bucket, which no block checks as a committed value yet")
+    if advice.carried:
+        raise Unexpressible(f"{len(advice.carried)} requests carried into the window, which its lowering doesn't take yet")
+    for st in advice.steps:
+        for r in st.rows:
+            if r.cache_hit or r.sources:
+                raise Unexpressible(f"request {r.request}: a prefix-cache hit, which the window's lowering doesn't take yet")
+    return _placed(cls, [(i, q.prompt_len, q.output_len) for i, q in enumerate(advice.requests)], None)
+
+
+def _placed(cls: WindowClass, sizes: Sequence[tuple[int, int, int]],
+            placed: Sequence[tuple[int, int | None]] | None) -> tuple[Request, ...]:
+    """Each ``(request, prompt, outputs)`` of ``sizes`` as its `Request` at its placement (`takes`), refused past the envelope."""
+    if len(sizes) > cls.slots:
+        raise Unexpressible(f"{len(sizes)} requests in a window of a class of {cls.slots} slots")
+    placed = [(cls.boundaries[0], None)] * len(sizes) if placed is None else list(placed)
+    if len(placed) != len(sizes):
+        raise ValueError(f"{len(placed)} placements for the window's {len(sizes)} requests")
+    anchored: dict[int, int] = {}
+    out = []
+    for (i, prompt, outputs), (anchor, end) in zip(sizes, placed):
+        if anchor not in cls.boundaries:
+            raise Unexpressible(f"request {i}: anchored at bucket {anchor}, none of its class's boundaries "
+                                f"{list(cls.boundaries)}")
+        if anchor != cls.boundaries[0]:
+            raise Unexpressible(f"request {i}: anchored at bucket {anchor}, and a served Program reads boundary 0's scan state "
+                                "row: C's shape holds no request's bucket, which no block checks as a committed value yet")
+        if end is not None and end < anchor:
+            raise Unexpressible(f"request {i}: its last output at bucket {end}, before its anchor {anchor}")
+        out.append(Request(anchor, anchored.get(anchor, 0), prompt, outputs))
+        anchored[anchor] = anchored.get(anchor, 0) + 1
+    for anchor, n in sorted(anchored.items()):
+        if n > cls.lanes:
+            raise Unexpressible(f"{n} requests anchored at bucket {anchor}, past the {cls.lanes} slots a boundary has")
+    for i, prompt, outputs in sizes:
+        if cls.prompt < prompt or cls.outputs < outputs:
+            raise Unexpressible(f"request {i}: {prompt} prompt ids and {outputs} outputs, past its class's {cls.prompt} and "
                                 f"{cls.outputs}")
-    if tables is not None and (got := [[(r.request, r.start, r.n) for r in step] for step in compiled.steps]) \
-            != tables.schedule(cls):
-        raise Unexpressible(f"the window's rows by step {got} (request, start, n), not its class's fixed load "
-                            f"{tables.schedule(cls)}, the rows {tables.WHAT} are read at")
+    return tuple(out)
 
 
-__all__ = ["CLASS_OF_RECORD", "FixedLoad", "GREEDY", "PearlTables", "Tables", "WindowClass", "takes"]
+__all__ = ["CLASS_OF_RECORD", "FixedLoad", "GREEDY", "PearlTables", "Request", "Tables", "WindowClass", "requests_of",
+           "takes"]

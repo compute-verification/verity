@@ -6,9 +6,7 @@ from `weights_pin.result`, `boundary_linkage` from `boundary_linkage.result`, `l
 `required_value_coverage` from `binding.coverage.ok` / `coverage.ok` / `manifest_verify.ok`, `runtime_match` from `tokens_equal_ref`).
 On #57 (the negative) the X-03 family must FAIL with the named difference `fa2_layers_bad` (`program_source_identity/identity_layout`).
 
-`actual` READS `<row>/verdict.json` when the row (or the v2 candidate) has one and otherwise REBUILDS it in memory from the row's
-Commit evidence (`verdict.from_record`, never written into the row dir).  CPU, ms per row; the v1 reference rows carry no verdict.json,
-so on them this check IS the retroactive gate of Phase 5b (old facts -> new record with no loss of decision).
+`actual` READS `<row>/verdict.json` when the row (or the v2 candidate) has one, and skips by name otherwise.
 """
 from __future__ import annotations
 
@@ -102,7 +100,4 @@ def actual(row: resolver.Row) -> dict:
         return dict(_lift(resolver.read_json(cand), row.cls), source="candidate")
     if row.has("verdict.json"):
         return dict(_lift(row.json("verdict.json"), row.cls), source="recorded")
-    # the core `verity` loads with this, which only a row without a verdict.json needs: the module itself does not load it
-    from verity_vllm.check.verdict import from_record
-    row_dir = row.path("commit/verdict.json", verify=False).parent.parent
-    return dict(_lift(from_record(row_dir).to_dict(), row.cls), source="reconstructed")
+    raise resolver.NotResolvable(f"{row.key}: no verdict.json recorded or in a candidate; the verdict is not rebuilt from the Commit")

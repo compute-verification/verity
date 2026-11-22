@@ -1,6 +1,6 @@
 """`verity.circuits.ops.boolean.versions`'s choice of a word's Boolean version does not follow the order its candidates were registered
-in (`_load` gathers them in that order, `_find` chooses): two versions of one name give the newest in either order, and two
-names for one word are refused as ambiguous in either order.  An ``opt_in`` version is weighed only with ``opt_in=True``."""
+in (`_load` gathers them in that order, `_find` chooses): two versions of one name, or two names, for one word are refused as
+ambiguous in either order.  An ``opt_in`` version is weighed only with ``opt_in=True`` or when its family is named."""
 from __future__ import annotations
 
 import pytest
@@ -36,9 +36,12 @@ def fresh(monkeypatch):
 
 
 @pytest.mark.parametrize("order", [1, -1], ids=["older-first", "newer-first"])
-def test_two_versions_of_one_name_give_the_newest_in_either_order(fresh, order):
+def test_two_versions_of_one_name_are_refused_as_ambiguous_in_either_order(fresh, order):
     fresh(*[_not("BooleanFindTestNot", 2), _not("BooleanFindTestNot", 3)][::order])
-    assert descriptor_id(B.boolean_version(WORD)) == "BooleanFindTestNot_v3"
+    with pytest.raises(B.NoBooleanVersion) as e:
+        B.boolean_version(WORD)
+    assert e.value.missing == {WORD.id: "ambiguous: ['BooleanFindTestNot_v2', 'BooleanFindTestNot_v3'] all name it as "
+                                        "their word"}
 
 
 @pytest.mark.parametrize("order", [1, -1], ids=["a-first", "b-first"])
@@ -55,5 +58,7 @@ def test_an_opt_in_version_is_weighed_only_when_asked_for(fresh):
     newer.opt_in = True
     fresh(_not("BooleanFindTestNot", 2), newer)
     assert descriptor_id(B.boolean_version(WORD)) == "BooleanFindTestNot_v2"
-    assert descriptor_id(B.boolean_version(WORD, opt_in=True)) == "BooleanFindTestNot_v3"
+    with pytest.raises(B.NoBooleanVersion, match=r"ambiguous: \['BooleanFindTestNot_v2', 'BooleanFindTestNot_v3'\]"):
+        B.boolean_version(WORD, opt_in=True)
+    assert descriptor_id(B.boolean_version(WORD, family="BooleanFindTestNot_v3")) == "BooleanFindTestNot_v3"
     assert descriptor_id(B.boolean_version(WORD)) == "BooleanFindTestNot_v2"

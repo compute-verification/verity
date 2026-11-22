@@ -111,7 +111,7 @@ from verity.circuits.refs import array_of, coll_concat, tuple_of
 from verity.circuits.types import Array, Tuple
 from verity.device import compute_capability, load_card, number
 
-from verity_vllm.definitions.evidence import EVIDENCE
+from verity_vllm.definitions.evidence import EVIDENCE, card_files
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry.prims import BF16
 from verity_vllm.definitions.registry.tp_allreduce_nodes import (NODE_FILE, NODE_RECORDS, multimem_tree, multimem_trees, node_key,
@@ -167,9 +167,7 @@ NCCL_TREE_CARD = "rtx-pro-6000-server"
 
 
 def _rtx_pro_6000() -> tuple[str, int]:
-    from verity_torch.pouw.row_table_device import CARD_FILES
-
-    card = load_card(NCCL_TREE_CARD, directory=CARD_FILES)
+    card = load_card(NCCL_TREE_CARD, directory=card_files())
     return "%d.%d" % compute_capability(card), int(number(card["sm"]["count"]))
 #: the records of three runs on an RTX PRO 6000 node: Llama-3.1-70B int8's TP4 capture (GPUs 2, 3, 6, 7, NCCL 2.29.7), the replay
 #: of its every all-reduce through `AllReduceNcclTree_v1` (`tests/properties/tp4_nccl_tree_replay.py replay`: 5152 calls,

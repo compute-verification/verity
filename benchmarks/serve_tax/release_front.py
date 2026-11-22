@@ -23,7 +23,7 @@ for p in (ROOT / "benchmarks/network_e2e/traces", ROOT / "adapters/vllm"):
         sys.path.insert(0, str(p))
 
 from corpus import StandIn  # noqa: E402 (the tree's, put on sys.path above)
-from verity.protocols.resource_accounting.network.prover.admission import BUCKET_HEADER, RELEASE_HEADER, RUN_HEADER, WATERMARK_PATH  # noqa: E402
+from verity.protocols.accounting.network.prover.admission import BUCKET_HEADER, RELEASE_HEADER, RUN_HEADER, WATERMARK_PATH  # noqa: E402
 from verity_vllm.pipeline.scheme_plugin import SAMPLED_PATHS  # noqa: E402
 
 #: the headers the front writes itself, dropped from what it relays

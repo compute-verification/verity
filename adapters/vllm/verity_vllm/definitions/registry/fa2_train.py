@@ -12,7 +12,7 @@ no dropout, the default scale) of bf16 values, torch's `pytorch_flash` kernels, 
     Fa2TrainSplitHead_v1{T,D,BN}        a head of T = 4 BN rows in four splits
 
 torch builds these kernels without fast math, so every f32 operation is the GPU's without flush-to-zero: FADD, FMUL, FFMA, FMNMX,
-`ex2.approx.f32` (`dsv4_moe.Ex2Approx`) and the combine's `expf` (`moe.NvExpf`).  The serving kernels flush and contract the
+`ex2.approx.f32` (`moe.Ex2Approx`) and the combine's `expf` (`moe.NvExpf`).  The serving kernels flush and contract the
 exponent (`fa2_check_inf`); these don't.  A block's scores are `DotBf16_v2{D, HopperBF16WgmmaDot16}`, a masked key's -inf; its
 max is FMNMX over the visible scores (and -inf once if a key is masked); past the first block the max folds in the running one
 and the rescale `ex2((m_prev - m) * L)` reads it unguarded (FA2's `Check_inf` is off past the masking step); each probability is
@@ -51,8 +51,7 @@ from verity_vllm.definitions.registry.b1 import (
     _lane,
     scale_log2_bits,
 )
-from verity_vllm.definitions.registry.dsv4_moe import Ex2Approx
-from verity_vllm.definitions.registry.moe import NvExpf
+from verity_vllm.definitions.registry.moe import Ex2Approx, NvExpf
 from verity_vllm.definitions.registry.prims import A16, BF16, F32
 from verity_vllm.definitions.registry.sparse_mla_split import MufuLg2Ftz
 from verity_vllm.definitions.registry.topp_word_gates import NvLogfV2

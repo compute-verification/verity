@@ -5,11 +5,12 @@ Current terms and notation, one line each, ``- **Term** (area): definition. Code
 ## Terms
 
 - **ACCEL model**: 𝓜, the physical model the accounting reads, each device resource at its data-sheet rate; its six instruction kinds, the ACCEL ops, are priced by a card's rates. Code: `Verity.Accel.Machine`, `Accel.Op`.
+- **Accounting layer**: the accounting protocols (`verity/protocols/accounting`), compilation first, then compute, memory and network, each attester inside one; it gives the policy layer verified properties of blocks, and nothing else. Code: `Scheme`.
 - **Actual circuit**: everything the hardware computed in a period, hidden work included, each gate placed at a device and a tick. Code: `ResourceAccounting.Placed`.
-- **Adapter**: what attaches Verity end to end to a serving system, one directory per system under `adapters/`.
+- **Adapter**: what attaches Verity to one serving system (`adapters/`), only what completeness rests on: its compiler, and finding the engine's values for Verity's commitment functions.
 - **Admissible set**: 𝒜 = 𝓕 ∩ ⋂_p 𝒜_p, where an accepted run lies except with probability Σ_p δ_p and the cryptographic terms. Code: `ResourceAccounting.Slowdown.restricted`.
 - **Adversary resource model**: the world's compute, which every result is stated against (`world-inference-2027` in `calibration/census/adversary.json`).
-- **Advice**: the at most ℓ_a bits the developer reports each execution phase, committed before the coins and never interpreted; the registered compiler turns it into an execution block. Code: `Compiler.run`.
+- **Advice**: the bits of the prover's choices after registration about its registered circuit, requests among them: their length is those choices' number in log space, at most ℓ_a an execution phase, committed before the coins and never interpreted. Code: `Compiler.run`.
 - **After-landing run** (landing): the whole check (`--kind after-landing`), run beside each candidate and beside `main` each time it moves.
 - **Application**: a configuration that sets every parameter of a run, one file in `applications/`; `verity run NAME` runs `applications/NAME.toml`. Remote and onsite are applications.
 - **Approach**: a line of work with a hypothesis, an owner and a status (live, parked, killed, superseded, merged).
@@ -18,13 +19,13 @@ Current terms and notation, one line each, ``- **Term** (area): definition. Code
 - **Attempt** (jobs): the evidence store's record of one run, completed or failed, with its outputs; `research run` makes one.
 - **Attestation period** (network attestation): m consecutive execution phases on one link under one signed root, which a verdict covers. Code: `NetworkVerifier.Period`.
 - **Auditor**: the party that checks the developer's proofs, with a challenger online and a verifier offline, and places its devices on machines the developer doesn't control. Code: `TrustedDevice`.
-- **Benchmark** (benchmarks): one command that measures and records its numbers (`verity bench NAME`, a directory's runner under `benchmarks/`). A benchmark measures performance or cost and nothing else: it decides no verdict and chooses no parameter, and a run that chooses a parameter or tests an assumption one rests on is calibration. What a guarantee gives at an application's parameters is a security figure, not a benchmark.
+- **Benchmark** (benchmarks): one command that measures and records its numbers (`verity bench NAME`, a directory's runner under `benchmarks/`): it decides no verdict and chooses no parameter.
 - **Benchmark result** (benchmarks): what one run of a benchmark recorded in one configuration. Code: `verity_numerical.bench.cell`.
 - **Binding unit** (circuit-check): one root function, `_model_roots` entry or `TEMPLATE_PARAMS` entry of a binding file. Code: `circuit_check.cache`.
 - **Block**: a set of a circuit's gates, with its ticks where it has a span, always named with a prefix (proof, server, replay, outer, inner, execution, inference, multiplication, check, Flock's); outside APIs keep their names.
 - **Boolean circuit**: a circuit over {0,1} in which every gate has at most two predecessors.
 - **Boolean Definition** (circuits): a Definition whose gates are only gates; a word Definition's gates output w-bit words, which the word view reads as integers. Code: `verity.circuits.boolean.is_boolean`, `boolean.word_type`.
-- **Calibration**: choosing parameters from measurements and data sheets (`calibration/`): the hardware's data sheets, the probes of a card, and the harnesses that test an assumption a parameter rests on. Its output is a parameter's value with its source: a data sheet, a measurement of ours, or a named premise. Nothing imports calibration code.
+- **Calibration**: choosing parameters from measurements and data sheets (`calibration/`), and testing an assumption one rests on; its output is a value with its source: a data sheet, a measurement of ours, or a named premise. Nothing imports calibration code.
 - **Candidate** (landing): `main`'s tip, or the candidate below it, with one `Queue: #N` merge per PR on top, pushed as `queue/<sha12>` and checked as one.
 - **Card assumption**: what the card computes in time T, the ACCEL machine computes within T at the card's rates; its evidence is the opcode table. Code: `CardWithinAccel`.
 - **Card table**: one SKU's rates, stores, formats and clock ceiling at its firmware maximum (`calibration/hardware/cards/<sku>.toml`). Code: `Verity.Accel.Card`.
@@ -35,7 +36,8 @@ Current terms and notation, one line each, ``- **Term** (area): definition. Code
 - **Circuit prover** (Flock): Flock's prover of a statement over an expanded circuit, one written out gate by gate (`verity/flock-circuit`). Code: `verity_flock.circuit`.
 - **Commit-and-prove argument**: what proves that each sampled proof block computes its committed outputs from its committed inputs, with errors ε_ks, ε_bind and ε_zk; Flock instantiates it. Code: `BindSound`.
 - **Commitment scheme**: how serving commits the values being proven (frame-v3, `vllm-v1`), with a stable id and the hash assumptions it rests on. Code: `verity.commitments`.
-- **Compose**: the protocol on top of the audits that ties quantities on one registration by key; remote and onsite are its two lists of protocols. Code: `Composite`.
+- **Compiler**, **registered compiler**: B, the adapter's function from advice to a circuit and its partitions, written in the circuit language with a public length cap and fixed at setup. Code: `Verity.RegisteredCircuit.builder`.
+- **Completeness tests**: the developer's tools that hold a circuit to what an engine computes (circuit-check, hardware captures, the vLLM adapter's `check/match/`), never proved.
 - **Confidence set**: M_δ, the sets B of proof blocks with P_a(B) > δ; except with probability δ + ε_ks + ε_bind the audit rejects or the incorrect set is in M_δ. Code: `influenceSet`.
 - **Configuration**: the `.toml` in `applications/` that `verity run` reads: its protocols, where each party runs, its channels and the auditor's pinned device keys.
 - **Covert residual**: what the device's limits leave the other accounts: F·T − V work, BW·T − Q_cert bits read, M − S_cert bits held. Code: `ResourceAccounting.Guarantees.CovertResidual`.
@@ -54,7 +56,6 @@ Current terms and notation, one line each, ``- **Term** (area): definition. Code
 - **Fixture registry**: `artifacts.json`, the root index of the tree's replicated data files: each file's path by its `art:` id, its bytes in the evidence store. `research data` registers and fetches one.
 - **Format** (circuits): a label on a port's elements (BF16, FP32, E4M3, int32, token id) saying how their bits encode a value, outside the content digest. Code: `verity.circuits.metadata`.
 - **Free compute**: U, the actual circuit outside verified compute, from ε_undecl, ε_skip and ε_unreg. Code: `Slowdown.Slowdown.residualShare`.
-- **Fresh input**: x, what is not fixed before the period (prompts, network bits, what a memory wipe leaves), read at most to a block's fresh-input budget. Code: `Partition.IsCK.reads`.
 - **Gate**: a wire with predecessors, computing a function of their values; in `verity.circuits` (where an input is an input gate) a constant bit of an operation, an AND or XOR of bits, or NOT. Code: `verity.circuits.boolean`.
 - **GPU lease** (jobs): a booking of a node's GPUs for one workload while it runs (`gpu-lease`).
 - **Guarantee**: a proved `Prop` in which named assumptions imply a conclusion, stated in its package's `Guarantees`, proved in `SecurityProofs` and recorded in the lock, on which something relies as proved.
@@ -64,19 +65,21 @@ Current terms and notation, one line each, ``- **Term** (area): definition. Code
 - **Inert work** (PoUW): a Pearl tile's operations that don't affect its output; a sampled tile over ι of it earns nothing. Code: `Pouw.PearlC.Skip`.
 - **Inference block**: a (c,k)-inference block of (C, θ) is a set I of gates with |I| ≤ c and |in(I) ∖ θ| ≤ k, one full chat session that reads registered information freely but receives at most k other bits. Code: `Partition.IsCK`.
 - **Inference circuit**: (C, θ) is a (c,k,n)-inference circuit if its gates can be partitioned into at most n (c,k)-inference blocks; the inference-only policy proves it of the registered circuit. Code: `Verity.Partition`.
+- **Input dataset**: what a workload reads its circuit's inputs from, through one read API (`library/datasets/`); Verity quantifies over all of them, and timing is a view over one.
 - **Input** (circuits): one assignment of values to a subcircuit's input gates, with the chip's output; an input set is a batch of them, captured or synthetic.
 - **Input block** (circuits): the part of a partition holding every input gate, certified against each input's external anchor and never sampled. Code: `INPUT_UNIT`.
-- **Integrity profile** (SPOT): the verification phase's per-stratum bounds on how many proof blocks are incorrect. Code: `verity.protocols.proofs.spot.verifier.profile.IntegrityProfile`.
+- **Integrity profile** (SPOT): the verification phase's per-stratum bounds on how many proof blocks are incorrect. Code: `verity.protocols.proof.spot.verifier.profile.IntegrityProfile`.
 - **Joint audit**: the compute, bandwidth and capacity audits on one device at once, each with its own coins; all accept while an account is below its certificate with probability at most their errors summed. Code: `ResourceAccounting.Guarantees.Joint`.
 - **Land verdict** (landing): a reviewer's `land` or `hold` on one PR head, recorded as a label; the owner's own doesn't count.
 - **Landing gate** (landing): a script at `main` a head passes at its ready mark's preflight, and a candidate on its whole change from its merge base with `main` in its check's `landing-gates` step (`landing_gates`); a warn gate's failure only warns (`warn_gates`).
-- **Level**, **outer block**, **inner block** (SPOT): SPOT has one form, with levels. A level is a partition of the circuit into blocks with its sampling design; each level's blocks lie inside the previous level's, and the auditor fixes every level before any coin. Live coins sample level by level, and each block sampled at the last level gets a zero-knowledge proof. With two levels the first level's blocks are outer blocks and the second's inner blocks. One level is the basic form, and two are the default unless the audit is composed with useful work. Code and Lean still name the one- and two-level cases by stage, and no two-level audit is yet accepted in Lean (`ARCHITECTURE.md`, section 7).
+- **Level**, **outer block**, **inner block** (SPOT): a level is a partition of the circuit into blocks with its sampling design, its blocks inside the previous level's; the auditor fixes every level before any coin, live coins sample level by level, and each block sampled at the last level gets a zero-knowledge proof. With two levels the first's are outer blocks, the second's inner blocks. Code and Lean still name them by stage.
 - **Lemma**: a proved statement that isn't a guarantee, kept in `SecurityProofs` outside the spec.
+- **Library**: `library/`, what applications and benchmarks share and Verity never looks at: input datasets, and to come, workload circuits and data sheets.
 - **Lock**: a package's guarantee records in its `lean-audit.json`; a changed record means a guarantee says something else.
 - **Logical layer**: what the cryptography proves with no device assumption: how much of one resource all the developer's hardware used in a period.
 - **Low-risk lane** (landing): the verified queue taking a PR on its ready mark alone when its change touches nothing drive.toml's `lowrisk_excludes` names.
 - **Matmul structure** (training): a set of matmuls on a Boolean circuit, each with weight words w_{i,l}, activation words x_{l,j}, output words y_{i,j} and per (i,j,l) a MAC, a connected set of gates that reads w_{i,l} and x_{l,j} and feeds y_{i,j}; distinct indices give distinct words, MACs are pairwise disjoint and outputs pairwise distinct. Code: `Slowdown.Cut.Work`, `Slowdown.Cut.Matmul`.
-- **Memory attester**: an auditor-trusted device beside a network attester, on a machine the developer doesn't control (never a process on the developer's node), that runs PoUS's timed rounds and signs each (`verity.protocols.resource_accounting.memory.pous.attester.memory_attester`'s `MemoryAttester`). Its per-round on-time bits stay in its signed record; PoUS publishes the verdict.
+- **Memory attester**: an auditor-trusted device beside a network attester on a machine the developer doesn't control, that runs PoUS's timed rounds and signs each (`pous.attester.memory_attester`'s `MemoryAttester`). Its per-round on-time bits stay in its signed record; PoUS publishes the verdict.
 - **Memory wipe**: the streamed-label wipe opening each server block: the device fills its store with seeded labels and the memory attester times spot reads. Code: `Verity.Wipe`.
 - **Metric** (benchmarks): one named number a benchmark records, one `[[metric]]` of its directory's `metrics.toml`.
 - **Milestone**: a set of end-to-end examples, each with how far it runs and how far its guarantee is proved (`applications/README.md`).
@@ -84,14 +87,14 @@ Current terms and notation, one line each, ``- **Term** (area): definition. Code
 - **Monitoring period**: the time a result is about, reported for a week, a month and a year; its pooled total at one δ is the result.
 - **Necessary subcomputation**: what every successful training run must compute, counted as products, products with partial sums, or outputs that determine the update.
 - **Network attestation** (network attestation): the network protocol, and a network attester's signed record of what crossed a link, which is witness. Code: `certificate.CertifiedRecord`.
-- **Network attester**: an auditor-trusted device on each node's uplink, untrusted by the developer (`verity.protocols.resource_accounting.network.attester`), which attests the traffic it carries in network attestations and scrubs its timing; every node uplink passes through one. It is an *active warden* in network steganography's sense, altering the traffic to close covert channels where a passive warden only watches, but "network attester" is its one name: "warden" appears only in that phrase, and "tap" never names it.
+- **Network attester**: an auditor-trusted device on each node's uplink, untrusted by the developer (`verity.protocols.accounting.network.attester`), which attests the traffic it carries in network attestations and scrubs its timing; every node uplink passes through one. It is its one name: "warden" appears only in network steganography's *active warden*, and "tap" never names it.
 - **Node lease** (jobs): a node's own deadline (`~/.research/lease`), after which it stops once every run on it has custody.
 - **Noise period** (Dither): L′, the period of Dither's noise along K, a length; a segment is L/L′ noise periods.
 - **Nontrivial lemma**: a guarantee's companion showing the guarantee fails for a verifier that accepts everything.
 - **Off-gate step** (landing): a step of the check off the merge gate (`off_gate`, `warn_steps`), whose red holds nothing.
 - **Operation** (circuits): a Definition whose own definition is gates (floating-point constants, SHA-512's round constants, the MUFU tables), one pinned, versioned list. Code: `verity.circuits.operations`, `operations.program_data`.
 - **Pairs within reach** (training): π(S) = Σ_m |S ∩ W_m|·|S ∩ X_m|, the weight–activation pairs of one matmul in S, and Π_θ(k) the most of them k wires can cut off from the inputs outside θ. Code: `Slowdown.Cut.Work.pi`.
-- **Parameter**: a value a protocol's behaviour depends on and does not fix: a sampling rate, a period's length, a size class, a hardware figure. A protocol takes every parameter as a public input and holds none. `security/` states what holds as a function of the parameters, calibration chooses them, and an application sets them all.
+- **Parameter**, **public parameter**: a value a protocol's behaviour depends on and does not fix: a sampling rate, a period's length, a size class, the hardware. A protocol holds none: an application sets them, `run` passes them in, and calibration chooses them.
 - **Partition**: a division of a program's computed gates into proof blocks, given as a named query a verifier evaluates (`Q_call`, `Q_word`). Code: `verity.circuits.partition_object`.
 - **Pass** (landing): a part of the check, reused while its declared inputs are unchanged; a verdict is a review's.
 - **Period**: a span of time; from the longest, a monitoring period, an attestation period, an execution phase and a tick.
@@ -100,14 +103,16 @@ Current terms and notation, one line each, ``- **Term** (area): definition. Code
 - **Pinned** (circuits): fixed before the run, and of an instruction, its silicon model matched every hardware probe. Code: `verity.circuits.silicon.instructions`.
 - **Place** (Site): a registered location or the outside, where a gate is placed; a link ends only at a host, a network attester, a challenger or the outside. Code: `Site.places`, `Site.linkEnd`.
 - **Policy**: a condition the verifier checks from the registered circuit and its registered information alone, a protocol with no rounds, such as inference-only. Code: `InferenceOnly.Complies`, `InferenceOnlyVerifier`.
+- **Policy layer**: the policies (`verity/protocols/policy`), on the accounting layer's verified properties of blocks.
 - **Pool** (jobs): a node's named set of run slots (`research run --pool NAME`).
 - **Port** (circuits): a named array of fixed-width elements on a Definition's boundary; a proof block may commit part of an element.
 - **Prefix sums** (Dither): T_s, Dither's committed running sums along a segment, stored as 16-bit elements.
 - **Preflight** (landing): `research queue ready`'s checks of a head before the ready mark.
-- **Pricing argument**: fresh-input bits per counted object, which give the yields. Code: `Slowdown.Guarantees.ThreadedReads`.
+- **Pricing argument**: unregistered-input bits per counted object, which give the yields. Code: `Slowdown.Guarantees.ThreadedReads`.
 - **Program**: the computation a proof claims something about: one circuit, stored compressed as Definitions called from a root body. Code: `verity.circuits.Program`.
 - **Proof block**: one part of a partition, proved on its own, a set of gates whose inputs and outputs are bit strings and whose outputs fit its Definition's public size class (16 to 262,144 bits). Code: `verity.circuits.parts`, `sizeClasses`.
-- **Proof system**: the one system behind every protocol: Flock ZK on the workers behind the ZK server, with the auditor's challenger and verifier; a protocol states only its `Spec`. Code: `verity.protocols.proofs.spot.verifier.service`.
+- **Proof layer**: Flock, with SPOT and recursion on it (`verity/protocols/proof`), what the other protocols call to prove.
+- **Proof system**: the one system behind every protocol: Flock ZK on the workers behind the ZK server, with the auditor's challenger and verifier; a protocol states only its `Spec`. Code: `verity.protocols.proof.spot.verifier.service`.
 - **Property T1** (training): "operands are hard": a matmul structure satisfies T1 with (k, β) relative to θ if every set S of operand words with κ_θ(S) ≤ k has Σ_{u∈S} β(u) ≤ κ_θ(S).
 - **Property T2** (training): "exports are wide": a matmul structure satisfies T2 with β_y if every set A of gates has κ(A → E(A)) ≥ β_y·|E(A)|.
 - **Protocol soundness**: a configuration's guarantee that when the verifier accepts, the monitoring period's claims hold except with probability δ. Code: `Verity.Soundness`.
@@ -118,14 +123,13 @@ Current terms and notation, one line each, ``- **Term** (area): definition. Code
 - **Record limit** (network attestation): K, a cap on the values a device's record takes in a period. Code: `ResourceAccounting.RecordsWithin`.
 - **Records run** (landing): a candidate's run of `lean-audit` alone before its check when it changes Lean, a lock or the spec, whose regenerated records are committed and checked.
 - **Registered circuit**: D = E_1 ‖ … ‖ E_n, what the developer claims it computed, the registered compiler's output on θ and the advice. Code: `Verity.RegisteredCircuit`.
-- **Registered compiler**: B, a circuit with a public length cap, fixed at setup, that compiles each phase's advice into its execution block. Code: `Verity.RegisteredCircuit.builder`.
 - **Registered hardware**: hardware in the auditors' inventory; the rest is unregistered hardware, its devices L_unreg.
 - **Registered information**: θ, what the developer commits in advance, the same in every circuit compared: weights, programs, stored data, the registered compiler. Code: `Verity.RegisteredCircuit.θ`.
 - **Registered input**: a program input bound at registration: weights, constants and tables such as `gelu_tanh_bf16`. Code: `RegisteredInput<w>_v1`.
-- **Registration**: the append-only log of the site, θ and the registered compiler, from which the Site is folded. Code: `Verity.Registration`, `Site.ofLog`.
+- **Registration**: the protocol run once before any challenge, a protocol because its verifier can reject; its append-only log holds θ, the registered compiler and today the site, from which the Site is folded. Code: `Verity.Registration`, `Site.ofLog`.
 - **Replay block** (SPOT): a part of a Program the prover re-executes from the last committed state to build a sampled proof block's witness. Code: `ReplayGrain`.
 - **Resource account**: what a schedule charges: compute in AND gates, bandwidth in bits read from device memory, capacity in bit-ticks held. Code: `ResourceAccounting.Resource`.
-- **Run**: one execution of a protocol or a circuit (a circuit's is its trace); SPOT's is one registration from public check to verdict. Code: `Spot.Run`.
+- **Run**: the top-level protocol (`verity/protocols/run`), with no logic of its own: over one monitoring period it passes the public parameters in, calls every protocol in order and holds the top-level state; remote and onsite are its two lists. One execution of a protocol is a run of it (`Spot.Run`). Code: `Composite`.
 - **Run input**: a program input bound per request: its data and parameters, such as temperature, top-p and the Philox positions. Code: `Input<w>_v1`.
 - **Sampling design**: how the challenger's coins select the proof blocks to prove (`subset:K`, `stratified:K`, `work:K`), stated in a Spec as a rate (`rate:NUM/DEN`).
 - **Schedule**: the device's steps, one per tick, each charging resource accounts, fitting the device when every charge is within its limit. Code: `ResourceAccounting.Schedule`.
@@ -133,12 +137,12 @@ Current terms and notation, one line each, ``- **Term** (area): definition. Code
 - **Segment** (Dither): L consecutive inner indices of one output cell between two committed prefix sums; a Dither proof block is one segment.
 - **Selection rule** (SPOT): which proof blocks of a docket are proved: all, a one-stage sampling design, or a timed run's sequential sample. Code: `Spec.selection`.
 - **Served MACs** (circuits): the multiply-accumulates of a circuit's served steps, a hardware count, not size. Code: `ResourceAccounting.Gates.Census.servedMacs`.
-- **Server block**: the actual circuit's gates on one registered server between two memory wipes, with gate budget c_S = ⌊Φ_s·Δ_wipe⌋ and fresh-input budget k_S. Code: `Verity.Block`, `Verity.Blocks`.
+- **Server block**: the actual circuit's gates on one registered server between two memory wipes, with gate budget c_S = ⌊Φ_s·Δ_wipe⌋ and unregistered-input budget k_S. Code: `Verity.Block`, `Verity.Blocks`.
 - **Serving**: the live inference path, which makes canonical what the hardware decides; its cost is serving overhead.
 - **Session** (Flock): one run of Flock's prover against its verifier on one staged statement, under its own live coins, its openings released once at close.
 - **Site**: the registered hardware as one public object: its devices' data sheets, a tree of owned locations, and links with their ends, β and latency. Code: `Verity.Site`.
 - **Size**: a circuit's or a region's AND-gate count, what Flock pays for and what every protocol credits and every result reports; (c, k) budgets and `Circuit.size` count every gate.
-- **Slot** (vLLM adapter): one sequence of a served batch, one row of a step's activations. Code: `commit_slots`.
+- **Slot** (vLLM adapter): one sequence of a served batch, one row of a step's activations.
 - **Slowdown** (training): ρ := nc/|C| for a training circuit that is also a (c,k,n)-inference circuit; the training slowdown theorem gives ρ ≥ cν/μ. Code: `Slowdown.Cut.Guarantees.Bound`, `Slowdown.Cut.Guarantees.HE`, `Slowdown.Cut.Guarantees.HEShared`.
 - **Slowdown lower bound**: the bound on hidden training beside verified compute, in counted operations, the one place 𝓜's resources appear. Code: `Slowdown.Guarantees.Slowdown`.
 - **Spec** (Lean): every declaration of a Lean package that a reader must trust to read its guarantees.
@@ -148,11 +152,12 @@ Current terms and notation, one line each, ``- **Term** (area): definition. Code
 - **Subcircuit template** (circuits): a named circuit with typed parameters for shape and silicon semantics, such as `gemm_coordinate(K, semantics)`. Code: `verity.circuits.silicon.instructions.INSTRUCTIONS`.
 - **Subtree** (Site): a registered location with every location under it, whose egress limit is its registered links' capacity out. Code: `Site.under`, `ResourceAccounting.Guarantees.EgressRegistered`.
 - **Suspect** (landing): a PR of a failed candidate whose change touches what a failure its base doesn't share names; a lone suspect is ejected, and several are bisected.
-- **Trace**: the values of one run's gates; the messages between prover and verifier are the proof transcript. Code: `verity.circuits.evaluation.reference.Trace`.
+- **Trace**: the values of the compiled circuit's gates in one run; the messages between prover and verifier are the proof transcript. Code: `verity.circuits.evaluation.reference.Trace`.
 - **Training circuit** (training): (C, θ) is a (k,q,ω,β_y)-training circuit if it has a matmul structure with prices β that satisfies T1 with (k, β) and T2 with β_y, where words one matmul multiplies are joined: no word is a weight and an activation of one matmul, a joined pair is joined by one matmul only, no ω+1 operand words are pairwise joined, and β(u)β(v) ≥ q for joined u, v.
 - **Transfer block** (network attestation): the transfer gates a network attester releases on one link, in one direction, in one tick (`bucket_ms`), proved as its own proof block. Code: `NetworkAttesterParams.grid`.
 - **Trusted computing base**: what a guarantee's conclusion depends on beyond its assumptions, each spec and its code; the assurance TCB adds Lean's kernel, Mathlib, ArkLib, the Lean check, `check` and upstream's Rust verifier.
 - **Two-stage design** (SPOT): serving commits only values read across replay-block boundaries; the first stage samples replay blocks, which the prover replays and commits, and the second samples k_t of each template t's n_t proof blocks on fresh coins.
+- **Unregistered input**: x, what is not fixed before the period (prompts, network bits, what a memory wipe leaves), read at most to a block's unregistered-input budget. Code: `Partition.IsCK.reads`.
 - **Utilization**: the registered programs' operations per second over the card's ceiling, an honest developer's cost, not a share of a bound.
 - **Value**: the bit a gate takes in one run, always hidden under a hiding leaf and touched only inside a zero-knowledge proof; gates, wires, ports and shapes are public.
 - **Value acquisition** (vLLM adapter): taking a value's bytes where vLLM computes it, by a Python hook or a native tap compiled into a kernel (`acquire/`).
@@ -163,15 +168,15 @@ Current terms and notation, one line each, ``- **Term** (area): definition. Code
 - **Wire**: a vertex of a circuit, taking a value; an input or a gate.
 - **Word** (training): a set of wires of a circuit; its width is its number of wires.
 - **Workers**: the developer's servers and GPUs, which run the computation and nearly all proving, trusted by neither party.
-- **Workload**: what a datacenter runs over a monitoring period, inference and training alike: its Programs, their inputs and their placement (`verity-vllm/workload/v2`).
+- **Workload**: the developer's private input: a compiler, the advice and the trace, over a monitoring period, inference and training alike (`verity-vllm/workload/v2`).
 - **Yield**: the most counted objects a block can complete within its budgets: q_S for a server block, q(c, k) for an inference block.
 - **ZK server**: the only path from the workers to the auditor, which commits every outbound message under a fresh salt and releases one outer proof per statement on a schedule.
 
 ## Notation
 
 - **α**: an annotation, the gates α(ℓ) each label ℓ holds; blocks, placements, covers and selections are annotations. Code: `Verity.Annotation`.
-- **C, |C|, C(x)**: a circuit, its number of gates, and the value of its output gates on the fresh input x. Code: `Verity.Circuit`, `Circuit.size`, `Circuit.eval`.
-- **(c, k), 𝒞_{c,k}**: an inference block's gate and fresh-input budgets, and the circuits with a partition into such blocks. Code: `Partition.IsCK`.
+- **C, |C|, C(x)**: a circuit, its number of gates, and the value of its output gates on the unregistered input x. Code: `Verity.Circuit`, `Circuit.size`, `Circuit.eval`.
+- **(c, k), 𝒞_{c,k}**: an inference block's gate and unregistered-input budgets, and the circuits with a partition into such blocks. Code: `Partition.IsCK`.
 - **𝒜_p, δ_p**: protocol p's admissible set and failure bound, Pr[accept ∧ (A, x) ∉ 𝒜_p] ≤ δ_p. Code: `ResourceAccounting.Slowdown.envelope`, `Verity.Sound`.
 - **A[X, J], Φ_X**: the gates of A placed in location X during ticks J, and X's rate in gates per second, |A[X, J]| ≤ Φ_X·|J|. Code: `ResourceAccounting.Placed.region`, `ResourceAccounting.Placed.ComputeRate`.
 - **α, λ, μ** (training): the slowdown theorem's constants, μ the most MACs an inference block holds on average.
@@ -194,7 +199,7 @@ Current terms and notation, one line each, ``- **Term** (area): definition. Code
 - **HW, INV**: the hardware model, and the inventory's assumptions of coverage and of honest attesters, challengers and hosts. Code: `ResourceAccounting.Hardware`, `ResourceAccounting.Covered`.
 - **η, P_α, η_cov**: a success probability; the properties a bound lower-bounds pointwise; and the exception's bound, Pr[success ∧ ¬⋁_α P_α] ≤ η_cov.
 - **in(S), out(S)**: the wires outside a set S of gates that are predecessors of a gate in S, and S's gates read outside it with its output gates. Code: `Circuit.into`, `Circuit.exits`.
-- **k_exfil(Y), k_infil(Y)**: block Y's exfiltration capacity, log2 of its accepted observable outputs, and what reaches Y beyond its fresh-input budget.
+- **k_exfil(Y), k_infil(Y)**: block Y's exfiltration capacity, log2 of its accepted observable outputs, and what reaches Y beyond its unregistered-input budget.
 - **N, O** (training): a matmul structure's number of MACs and the total width of its outputs.
 - **ν, o** (training): N/|C|, the MACs per gate, and O/N, the output width per MAC.
 - **R**: (θ, D, 𝓘), the committed trace with the registered circuit and its inference blocks. Code: `Verity.Committed`.

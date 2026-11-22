@@ -40,9 +40,9 @@ import hashlib
 
 from verity.commitments import docket_digest as DD
 from verity.commitments import domains as DM
-from verity.protocols.resource_accounting.compute.pouw.verifier import credit as C
-from verity.protocols.resource_accounting.compute.pouw.verifier import weights as W
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+from verity.protocols.accounting.compute.pouw.verifier import credit as C
+from verity.protocols.accounting.compute.pouw.verifier import weights as W
+from verity.protocols.proof.spot.verifier.one_stage import docket as R
 from verity.commitments import registered_value as RV
 
 H1 = hashlib.sha512(b"the H1 window Program's descriptor").hexdigest()

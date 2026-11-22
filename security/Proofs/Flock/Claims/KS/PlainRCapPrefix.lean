@@ -2,7 +2,6 @@ module
 
 public import Proofs.Flock.C3.Compose.HoloStreamSizes
 public import Proofs.Flock.Claims.KS.PlainRCaps
-public import Proofs.Flock.Claims.Recursion.NextRHonest
 import Flock.With.Returns
 import Flock.With.SimVerify
 import all Init.Data.Array.Basic

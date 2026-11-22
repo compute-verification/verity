@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import CALL_RANGE
+from verity.protocols.accounting.compute.pouw.verifier.protocol import CALL_RANGE, ROUND_CALLS, call_place
 
 from verity_torch.pouw.pearl_c.ends import _RunState
 
@@ -52,42 +52,56 @@ def room(run: Any, tiles: int, rows: int, calls: int) -> Any:
     return p
 
 
+#: rounds one epoch (one salt) holds: past it an index would leave -h3's row seed's range (`protocol.CALL_RANGE`)
+EPOCH_ROUNDS = CALL_RANGE // ROUND_CALLS
+
+#: why a caller's own index is refused, by name
+CHOSEN_INDEX = ("a call's index is its place, its round in the epoch and its position in the round "
+                "(round * ROUND_CALLS + position), which the device derives and no caller chooses: -h3's row seed reads "
+                "the index, so a chosen one chooses the row's noise.  A check that runs a pass twice runs each under a "
+                "device run of its own (`PearlCDeviceRun.twin`: the same coins give the same salt, and each numbers its "
+                "rounds from 0)")
+
+
 def call_index(run: Any, calls: int = 1) -> int:
-    """The index of ``run``'s next call, numbered across the whole epoch (the install's salt), never per pass: -h3's row
-    seed binds the salt and the index but no pass, so two passes of one salt sharing an index would repeat their seeds and
-    tickets.  The pass's own buffers stay positional (``index - run.cur.base``); a pass begun without a base
-    (`finish`'s) takes `EpochCalls.epoch_calls`.  ``RuntimeError`` where ``calls`` more calls would reach
-    `protocol.CALL_RANGE`, which the verifier refuses."""
+    """The index of ``run``'s next call: its place (`protocol.call_place`, the verifier's), the round the pass's number among
+    the epoch's passes with calls (the install's salt; a pass takes its round at its first call, so a pass without calls
+    takes none) and the position the call's among the pass's calls.  -h3's row seed binds the salt and the index, so a
+    place is one seed, and nothing here takes an index from a caller.  The pass's own buffers stay positional
+    (``index - run.cur.base``).  ``RuntimeError`` where the epoch has no round left (`EPOCH_ROUNDS`), or ``calls`` more
+    calls would pass the round's `ROUND_CALLS`; `host.SaltsRefused` where the pass's salts are closed, before any round
+    or base is taken, at every hashing."""
     p = run.cur
+    p.salts.check()
     if p.base is None:
-        p.base = run.epoch_calls()
-    index = p.base + len(p.matmuls)
-    if index + calls > CALL_RANGE:
-        raise RuntimeError(f"{run.entry}: the epoch is at call {index}, and {calls} more would reach 2^32 calls, the range of "
-                           "-h3's row seed (`protocol.CALL_RANGE`); end the epoch: reinstall under a new salt")
-    run._used = max(run._used, index + calls)
-    return index
+        if run._rounds >= EPOCH_ROUNDS:
+            raise RuntimeError(f"{run.entry}: the epoch has used its {EPOCH_ROUNDS} rounds, and a call of another would "
+                               "reach 2^32 calls, the range of -h3's row seed (`protocol.CALL_RANGE`); end the epoch: "
+                               "reinstall under a new salt")
+        p.base, run._rounds = call_place(run._rounds, 0), run._rounds + 1
+    position = len(p.matmuls)
+    if position + calls > ROUND_CALLS:
+        raise RuntimeError(f"{run.entry}: the round is at call {position}, and {calls} more would pass its {ROUND_CALLS} "
+                           "calls (`ROUND_CALLS`); end the pass and begin another")
+    return p.base + position
 
 
 class EpochCalls(_RunState):
-    """A device run's call numbering across its epoch (`call_index`): where each pass's first call is numbered from."""
-    _used = 0                         # one past the highest index `call_index` has given out
-    repeat_at: int | None = None      # the next pass's first index, once (`pass_base`'s ``at``)
+    """A device run's rounds across its epoch (`call_index`): how many of its passes have had a call."""
+    _rounds = 0                       # the epoch's passes with calls so far: the next one's round
 
-    def epoch_calls(self) -> int:
-        """One past the highest call index any pass of the epoch has used (0 before the first call): where the next pass
-        numbers from."""
-        cur = self.cur
-        if cur is not None and cur.base is not None:
-            self._used = max(self._used, cur.base + len(cur.matmuls))
-        return self._used
+    def rounds(self) -> int:
+        """The epoch's rounds so far, the open pass's included once it has a call: the round the next pass with calls
+        takes."""
+        return self._rounds
 
-    def pass_base(self, at: int | None = None) -> int:
-        """The next pass's first index: `epoch_calls`, or ``at`` (else `repeat_at`, which it clears) for a check that repeats
-        an earlier pass's calls to compare their bytes; the two share indices, so they are never credited together
-        (`credit.passes_distinct` refuses them)."""
-        used, at, self.repeat_at = self.epoch_calls(), self.repeat_at if at is None else at, None
-        return used if at is None else at
+    @property
+    def repeat_at(self) -> None:
+        return None
+
+    @repeat_at.setter
+    def repeat_at(self, at: Any) -> None:
+        raise ValueError(f"{self.entry}: repeat_at = {at!r}: {CHOSEN_INDEX}")
 
 
 def pass_dir(run: Any) -> str | None:

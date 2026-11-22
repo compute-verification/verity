@@ -8,5 +8,5 @@ REGISTRY = Registry(__file__, (),
     Setting("SPOT_LEVELS", str, None, VALUE, "the levels of blocks a served command commits and audits (SPOT: 1, or 2: "
                                              "outer blocks, then inner blocks inside each sampled outer block): what the "
                                              "prover served, never what the verifier checks; a command that can't run it "
-                                             "refuses it by name (`verity.protocols.proofs.spot.verifier.levels`)"),
+                                             "refuses it by name (`verity.protocols.proof.spot.verifier.levels`)"),
 )

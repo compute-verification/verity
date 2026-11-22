@@ -59,7 +59,7 @@ from verity_difftest import protocol as PR
 from verity.commitments import docket_digest as DD
 from verity.circuits import population as PN
 from verity.commitments import domains as DM
-from verity.protocols.proofs.spot.verifier.one_stage import (
+from verity.protocols.proof.spot.verifier.one_stage import (
     audit,
     draw as DR,
     partition as P,
@@ -1565,7 +1565,7 @@ def registered_gemm(run: Run) -> Iterator[Case]:
 #: paths into history, read at the run's commit: a move adds its new path at the end and never rewrites these.
 ERA_PARTS = {"verity": ("verity",), "catalog": ("catalog/verity_catalog",), "kernels": ("kernels/verity_kernels",),
              "served_zk": ("benchmarks/pouw/served_zk", "verity/protocols/accounting/pouw/prover/kernels/served_zk",
-                           "verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk")}
+                           "verity/protocols/accounting/compute/pouw/prover/kernels/served_zk")}
 
 
 def era_path(commit: str, part: str, exists: Callable[[str, str], bool] | None = None) -> str:
@@ -1656,8 +1656,8 @@ def served_window(run: Run) -> Iterator[Case]:
     scheme is `served_commit.SCHEME` and the audit took no sessions; in it (`verity/proof-service/outcome/v0`) the scheme
     is the service's and the audit took the delivered sessions. Neither took the served sample or the sessions' roots, and
     no verdict of record reports registered reads."""
-    from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
-    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import leaves as L, pc8
+    from verity.protocols.accounting.compute.pouw.verifier import window as Wd
+    from verity.protocols.accounting.compute.pouw.prover.circuit import leaves as L, pc8
     from verity.commitments.rowleaf import ROLE_W, SCHEMA_HM96_SHA512_ROW_V2
     pv = run.json("out/request/params.json")
     rec = run.json("out/request/registration.json")
@@ -1804,7 +1804,7 @@ def served_audit(run: Run) -> Iterator[Case]:
     no sessions and none of the later checks' inputs. Before `served_commit.run_of` the verifier took the run its served
     domains bind from the record's own window, not the request's binding, so the other request's docket passed R3
     (`receive-foreign` RECEIVED, the run's failed check)."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import leaves as L, pc8
+    from verity.protocols.accounting.compute.pouw.prover.circuit import leaves as L, pc8
     from verity.commitments.rowleaf import ROLE_W, ROLE_X
     commit = run.commit()
     if commit is None:

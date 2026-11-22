@@ -360,7 +360,8 @@ theorem checkBlobsAt_checkAt {p : _root_.Spot.OneStageZk.Params}
   swap
   · obtain ⟨r, -, -, hc⟩ := _root_.Spot.OneStageZk.checkMembersAt_accept h
     exact ⟨_, _, _, hc⟩
-  unfold _root_.Spot.OneStageZk.checkOneAt at h
+  replace h := _root_.Spot.OneStageZk.checkOneAt_body h
+  unfold _root_.Spot.OneStageZk.checkOneBody at h
   try simp only [] at h
   split at h
   · cases h
@@ -437,6 +438,9 @@ def V2Accepts (bs : Core.Blobs) (a b e : ByteArray) (p : _root_.Spot.OneStageZk.
     _root_.Spot.OneStageZk.coinsOf p c ev = .ok ξ ∧ Properties.Challenger.oneStageZkSource p c = some dr ∧
     ∃ pub prof, _root_.Spot.OneStageZk.checkBlobsAt p c ξ ev bs = .accept pub prof
 
+theorem twoLevels_error {α : Type} (x : Flock.V α) : ∃ e, VStar.Recursive.Sampled.twoLevels x = .error e := by
+  cases x <;> exact ⟨_, rfl⟩
+
 /-- The sampled component's one-stage parameters are `OneStageZk.paramsEitherOfJson`'s, of either form, at what it
 reads past the form. -/
 theorem dispatch_params {j : Lean.Json} {p : _root_.Spot.OneStageZk.Params}
@@ -448,6 +452,8 @@ theorem dispatch_params {j : Lean.Json} {p : _root_.Spot.OneStageZk.Params}
   all_goals first
     | (cases h; done)
     | (cases h; exact ⟨_, by assumption⟩)
+    | (obtain ⟨_, he⟩ := twoLevels_error (VStar.Recursive.SampledTwo.paramsOfJson j); rw [he] at h; cases h)
+    | (exfalso; revert h; split <;> (intro h; cases h))
 
 /-- The sampled component's one-stage evidence is `OneStageZk.evidenceEitherOf`'s, of either form, at the bytes it
 reads past the form. -/

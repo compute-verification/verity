@@ -3,11 +3,10 @@
     verity-vllm serve-openai --model REPO --revision SHA --out DIR [--port 18082] [--precision verity_int8|int8_exact|pin|bfloat16]
         [--protocol vllm|plain|ids [--id-payload 503]] [--no-commit] [--window-steps 64] [--no-learn-warmup]
         [--force-include-usage | --no-force-include-usage] [--retain-exclude hidden_m1] [--learn-host-budget-mb 4096]
-        [--retain host|device [--retain-device-gb 32] [--release-after spot,pouw_h1 [--draws-dir DIR]]]
-        [--required-manifest PREDICTED/manifest.json --hidden-so SO --norm-tap-so SO] [--seal]
+        [--retain host|device [--retain-device-gb 32] [--release-after spot [--draws-dir DIR]]]
+        [--row-build PREDICTED --window-class S,P,O --hidden-so SO] [--seal]
         [--no-seal-off-loop] [--no-seal-process] [--seal-hold-gb 64] [--seal-warm-gb 0] [--window-gb 32] [--disk-floor-gb GB (with --seal)]
         [--copy-records-to $OUT] [--switch-interval-ms 0.1] [--async-scheduling]
-        [--protocols pouw:eps1-sm120-h1fx1 [--protocols-config JSON] [--challenger-gate CMD --challenger-peer NAME]]
         [--protocols pearl-plus --precision bfloat16 --protocols-config JSON
          [--challenger-gate CMD --challenger-peer NAME --challenger-lane LANE]]
         [--remote-verifier HOST:PORT [--remote-kv-lib SO] [--remote-filler-gib 0]]
@@ -79,14 +78,13 @@ under order ``tick`` is null, with why in its ``no_slice`` and once in ``serve.j
 body's ``user``, its release and its place among the engine's adds, the runner's ids, the prompt ids, the streamed ids, its
 ingress, its finish, its committed rows and seeds, and its check), ``request_users.jsonl`` (`serve_commit.REQUEST_USERS`) and
 `serve_loop.advice_trace`'s file. The Commit is rows-sha512 (``--scheme``: hm96-sha512 rows in frame-v3-sha512 trees,
-64-byte roots), as the bench row's declared Commit commits, with its committer parts built from the row's ``--required-manifest``
-and taps (the acquisition plan under ``acquisition/``): the manifest of the row's Build of record, which the ahead-of-time compiler
-writes (``verity-vllm predict row``; `serve_row.row_refusal` refuses any other, a traced Build's among them; `serve_seal.scheme_refusal`).
+64-byte roots), as the bench row's declared Commit commits, over the row's ``--row-build``,
+the row's Build of record, which the ahead-of-time compiler writes (``verity-vllm predict row``; `serve_row.row_refusal` refuses any
+other, a traced Build's among them; `serve_seal.scheme_refusal`), and taps.
 ``--seal`` seals each closed window as a deferred Commit's row dir (`serve_seal`), each seal a line of ``seals.jsonl``. ``--retain-exclude hidden_m1``
 commits the attention interiors without retaining them, and each seal's manifest names them (`serve_release.RetentionOptions`). ``--retain device --release-after P,Q`` holds each window's values in a
 device pool until every subprotocol named has sampled the window, then keeps on host, and seals, only the leaves their sampled
-blocks open (`serve_release`; PoUW H1's, ``pouw``, from its arm in process once each window's sampling coin is open,
-`serve_h1.H1Windows.drawn`, any other's through ``--draws-dir``). Each
+blocks open (`serve_release`, each protocol's samples through ``--draws-dir``). Each
 window's finalize, its readback and records run on a thread of their own (`seal_stages.Sealer`), then its seal on a second,
 beside the next window's finalize, each in window order, while the engine serves on: the engine loop's part of a close only detaches the window from the
 committer (`NativeHostCommitter.detach`), and it waits only while the windows awaiting their finalize and seal hold
@@ -100,18 +98,14 @@ and each seal, and at the stop before the seals still pending; every other field
 finish, and ``summary.json`` counts the requests and checks, the seals, and the admissions' order (the attester's frontend's ``summary``);
 it is written before the pending seals too, and its ``final`` is true only once every window's records are written.
 
-``--protocols pouw:eps1-sm120-h1fx1`` serves PoUW H1 on this server's own Commit, one H1 window a Commit window
-(`serve_h1`), each window's H1 outcome its ``windows.jsonl`` line's ``pouw_h1``. With ``--challenger-gate`` and
-``--challenger-peer`` each window's coins come from a session of its own on the auditor device's challenger, reserved
-through the challenger's gate (`serve_h1.GateSessions`); without them they are in-process, and no window credits anything.
 ``--protocols`` listing declared schemes, each by its name (``pearl-plus``, ``--precision bfloat16``; its option
-``pouw:pearl-c-h100-v1-h3`` is refused, naming it), attaches each by name on the engine's build in the list's order, the earlier outer
+``pouw:pearl-c-h100-v1-h3`` is refused, naming it, and a retired protocol by name: `config.RETIRED`), attaches each by name on the engine's build in the list's order, the earlier outer
 (`listed`, `messages.attach_listed`), and releases each at shutdown before its report (`write_reports`): Pearl+ one epoch a Commit window,
 its passes, ``coins.json`` and ``served.json`` under ``pearl/w<k>/``, its report under ``schemes/pearl-plus/``. With
 ``--challenger-gate``, ``--challenger-peer`` and ``--challenger-lane`` each epoch's salt comes from a session of its own
 reserved under the lane, its epoch number kept in ``VERITY_PROTOCOLS_CONFIG``'s ``private``; without them it is in-process
 and credits nothing.
-``--day N`` declares day N's one circuit in ``--day-log`` before the model loads, and each window's registration names it (`serve_day`).
+``--day N`` declares day N's one circuit in ``--day-log`` before the model loads (`serve_day`).
 ``--remote-verifier HOST:PORT`` proves the engine's store (its weights, and ``--remote-filler-gib``) to
 PoUB's verifier in lockstep with the server's engine steps from its first, a pass a step (`serve_poub`): its
 record is ``remote_session.json``, and a rejected session fails the exit.
@@ -139,11 +133,10 @@ from typing import Any
 from verity import hooks as H
 from verity_vllm import messages as M
 from verity_vllm import settings
-from verity_vllm.config import UsageError, group, option
+from verity_vllm.config import UsageError, group, option, retired
 from verity_vllm.engine.served_seed import DEFAULT_SEED, UNSEEDED, rule_of
 from verity_vllm.llm import option_settings
-from verity_vllm.pipeline import (commit_coins as CC, seal_process as SP, serve_guard as SG, serve_h1 as SH,
-                                   serve_learn as SL, serve_release as RL, serve_day as SD, serve_poub as SR,
+from verity_vllm.pipeline import (commit_coins as CC, seal_process as SP, serve_guard as SG, serve_learn as SL, serve_release as RL, serve_day as SD, serve_poub as SR,
                                    serve_row as RW, serve_seal as SS)
 from verity_vllm.pipeline.scheme_plugin import write_reports
 from verity_vllm.pipeline.serve_admit import (Admission, Delta, admission_order, admission_settings, engine_id_of, keep_scheduler_rows,
@@ -204,6 +197,9 @@ class Options:
                                  "CUSTOM); pin: the pin's engine profile; bfloat16: the pin's profile at dtype bfloat16, "
                                  "unquantized (Pearl+'s)")
     max_num_seqs: int = option("--max-num-seqs", type=int, default=8)
+    window_class: str | None = option("--window-class", default=None,
+                                      help="S,P,O: the window class the application declares (S slots, each of at most P prompt ids and O outputs); the "
+                                         "Commit's arena is sized from it alone, and the engine admits no more")
     max_model_len: int = option("--max-model-len", type=int, default=512)
     max_num_batched_tokens: int = option("--max-num-batched-tokens", type=int, default=2048, help="tokens a step schedules")
     prefix_caching: bool = option("--prefix-caching", action="boolean_optional", default=False, help="serve with vLLM's prefix cache")
@@ -220,7 +216,7 @@ class Options:
                                        "window closes before a step that would bring in one more (the running ones carry on)")
     scheme: str = option("--scheme", choices=SS.SCHEMES, default=SS.ROWS,
                          help="the Commit's scheme, rows-sha512 (the declared Commit's committer, hm96-sha512 rows, 64-byte roots; "
-                              "needs --required-manifest); its kernels are JIT-built with ninja, which must be on PATH")
+                              "needs --row-build); its kernels are JIT-built with ninja, which must be on PATH")
     seal: bool = option("--seal", action="boolean_optional", default=False,
                         help="seal each closed window as a deferred Commit's row dir, OUT/windows/w<k>/ (serve_seal.seal_window)")
     sealing: SP.SealingOptions = group(SP.SealingOptions)
@@ -245,14 +241,13 @@ class Options:
                                        help="the interpreter's switch interval while serving (Python's is 5 ms): how long the engine's "
                                             "thread may wait for the GIL after each torch call while the seal's thread runs Python "
                                             "(0: leave Python's)")
-    required_manifest: str | None = option("--required-manifest", default=None,
-                                           help="rows-sha512: the row's required manifest, DIR/manifest.json of its Build of record "
-                                                "(`verity-vllm predict row --out DIR`), which the Commit of record's committer parts, "
-                                                "the sealed binding map and the engine's scheduler are built from")
+    row_build: str | None = option("--row-build", default=None,
+                                   help="rows-sha512: the row's Build of record, the DIR of `verity-vllm predict row --out DIR`, "
+                                        "whose registered compiler every sealed window binds and whose workload Program the "
+                                        "engine's scheduler follows")
     hidden_so: str | None = option("--hidden-so", default=None, help="rows-sha512: the attention hidden tap (as the Commit's --hidden-so)")
     hidden_ns: str | None = option("--hidden-ns", default=None, help="its op namespace (default: the .so's stem)")
     tap_cap_mb: int | None = option("--tap-cap-mb", type=int, default=None, help="the hidden tap's bounded device buffer, MiB (as the Commit's)")
-    norm_tap_so: str | None = option("--norm-tap-so", default=None, help="rows-sha512: the norm-scale tap (as the Commit's --norm-tap-so)")
     served_rows_class: str | None = option("--served-rows-class", default=None,
                                            help="the compile slice's size class the served rows are committed under, as JSON "
                                                 "{R, W, A, IW, Q, D, P, K} (serve_commit.SERVED_CLASS; default R --max-num-seqs, "
@@ -261,14 +256,12 @@ class Options:
                                        help="vLLM's --enable-force-include-usage: the usage chunk on every stream, and usage on each "
                                             "chunk (default on)")
     protocols: str | None = option("--protocols", default=None,
-                                   help=f"{SH.ENTRY}: PoUW H1 on this server's Commit, one H1 window a Commit window (serve_h1); "
-                                        "else a configuration's declared schemes in its order, each its name or its option, "
-                                        "attached by name, the earlier outer (messages.attach_listed)")
+                                   help="a configuration's declared schemes in its order, each by its name, attached by name, "
+                                        "the earlier outer (messages.attach_listed)")
     protocols_config: str | None = option("--protocols-config", default=None,
-                                          help="--protocols' settings, {\"pouw\": {...}}: a JSON object, or a JSON file "
-                                               "(serve_h1.config_of, listed)")
+                                          help="--protocols' settings, {name: {...}}: a JSON object, or a JSON file "
+                                               "(serve_admit.protocols_doc, listed)")
     gate: CC.GateOptions = group(CC.GateOptions)
-    h1: SH.H1Options = group(SH.H1Options)
     remote: SR.RemoteOptions = group(SR.RemoteOptions)
     retention: RL.RetentionOptions = group(RL.RetentionOptions)
     learning: SL.LearnOptions = group(SL.LearnOptions)
@@ -582,18 +575,16 @@ def listed(opts: Any, out: Path) -> list[tuple[Any, dict[str, Any]]]:
     """``--protocols``' entries in their order, each the declared scheme it names (`messages.named`) with its settings:
     ``--protocols-config``'s entry under its name (`option_settings`), with what the serve holds of the keys the scheme declares: its passes under
     ``out/pearl``, its salt a session an epoch reserved under ``--challenger-lane`` as ``--challenger-peer`` (the
-    challenger at this node's 127.0.0.1, at the port the gate's open answers), else in-process.  Empty when no entry
-    names a declared scheme (H1's, `serve_h1`); `UsageError` when only some do, or one is a declared scheme's option
-    (`messages.option`), naming the scheme's name."""
+    challenger at this node's 127.0.0.1, at the port the gate's open answers), else in-process.  Empty without
+    ``--protocols``; `UsageError` naming each entry that names no declared scheme (a retired protocol by name, with why:
+    `config.RETIRED`), or that is a declared scheme's option (`messages.option`), naming the scheme's name."""
     entries = [e for e in (x.strip() for x in (opts.protocols or "").split(",")) if e]
     if spelled := [f"{e} is {s.name}'s option: list it as --protocols {s.name}" for e in entries if (s := M.option(e))]:
         raise UsageError(f"--protocols {opts.protocols}: {'; '.join(spelled)}, its settings under {s.name!r}")
     found = [(e, M.named(e)) for e in entries]
-    if all(s is None for _, s in found):
-        return []
     if bad := [e for e, s in found if s is None]:
-        raise UsageError(f"--protocols {opts.protocols}: {', '.join(bad)} names no declared scheme, and a list of several "
-                         "attaches declared schemes only")
+        raise UsageError(f"--protocols {opts.protocols}: " + "; ".join(
+            f"{e}: {why}" if (why := retired(e.partition(":")[0])) else f"{e} names no declared scheme" for e in bad))
     g = opts.gate
     held = {"challenger": "127.0.0.1:0" if g.challenger_gate else "", "coins": "" if g.challenger_gate else "in-process",
             "lane": g.challenger_lane or "", "peer": g.challenger_peer or "", "transcript_dir": str(out / "pearl")}
@@ -602,6 +593,20 @@ def listed(opts: Any, out: Path) -> list[tuple[Any, dict[str, Any]]]:
                 for e, s in found]
     except ValueError as e:
         raise UsageError(f"--protocols-config: {e}") from None
+
+
+def unlisted_refusal(opts: Any) -> str | None:
+    """Why ``opts`` can't serve without ``--protocols``, None when they can: the challenger's options are a listed
+    scheme's, and ``--protocols-config`` needs a scheme or an admission order to read it."""
+    g = opts.gate
+    if bool(g.challenger_gate) != bool(g.challenger_peer):
+        return ("--challenger-gate and --challenger-peer go together: the gate's command and this machine's name in the "
+                "auditor device's peers, where its challenger reaches the server (ssh -R)")
+    if g.challenger_gate or g.challenger_lane:
+        return "--challenger-gate, --challenger-peer and --challenger-lane reserve a listed scheme's sessions: they need --protocols"
+    if opts.protocols_config and admission_order(opts) == "arrival":
+        return "--protocols-config without --protocols or an admission order"
+    return None
 
 
 def private() -> str | None:
@@ -613,21 +618,17 @@ def private() -> str | None:
 def scheme_refusal(opts: Any, found: list[tuple[Any, dict[str, Any]]]) -> str | None:
     """Why ``opts`` can't serve the schemes `listed` ``found``, None when they can: each one's settings as it checks them,
     and a scheme with an option (Pearl+'s) reads the BF16 checkpoint's linears unquantized, under the server's
-    rows-sha512 Commit, and puts no draw into ``--release-after pouw``."""
-    from verity.protocols.resource_accounting.scheme import settings as checked
+    rows-sha512 Commit."""
+    from verity.protocols.accounting.scheme import settings as checked
 
-    g, after = opts.gate, getattr(getattr(opts, "retention", None), "release_after", "") or ""
-    if h1 := [f"--{k.replace('_', '-')}" for k, v in vars(opts.h1).items() if v]:
-        return f"{', '.join(h1)}: PoUW H1's, not {opts.protocols}'s"
+    g = opts.gate
     if g.challenger_gate and not private():
         return (f"--challenger-gate under {opts.protocols}: VERITY_PROTOCOLS_CONFIG's private, the directory outside the run "
                 "output where each scheme keeps its salt epoch's number, as scheme_plugin's")
     if (pearl := any(s.option for s, _ in found)) and opts.precision != "bfloat16":
         return f"--protocols {opts.protocols} reads the BF16 checkpoint's linears: it needs --precision bfloat16"
-    if pearl and (not opts.commit or opts.scheme != "rows-sha512" or not opts.required_manifest):
-        return f"--protocols {opts.protocols} runs under --commit, --scheme rows-sha512 and the row's --required-manifest"
-    if "pouw" in (p.strip() for p in after.split(",")):
-        return f"--release-after pouw waits for PoUW H1's draw of each window, and {opts.protocols} puts none"
+    if pearl and (not opts.commit or opts.scheme != "rows-sha512" or not opts.row_build):
+        return f"--protocols {opts.protocols} runs under --commit, --scheme rows-sha512 and the row's --row-build"
     try:
         for scheme, given in found:
             checked(scheme, given)
@@ -698,6 +699,14 @@ def engine_options(opts: Options) -> dict[str, Any]:
     return kw
 
 
+def one_gpu(kw: dict[str, Any]) -> dict[str, Any]:
+    """``kw``, refused when it builds an engine over more than one GPU."""
+    if (tp := int(kw.get("tensor_parallel_size") or 1)) != 1 or int(kw.get("pipeline_parallel_size") or 1) != 1:
+        raise UsageError(f"the multi-GPU model is not served: tensor_parallel_size {tp}, pipeline_parallel_size "
+                         f"{kw.get('pipeline_parallel_size') or 1}; serve-openai builds its engine on one GPU")
+    return kw
+
+
 def register_int8(precision: str, register: Callable[[Sequence[str]], Any] | None = None) -> str | None:
     """Register ``precision``'s int8 parts (`engine.int8_ranks.register`, or ``register``) before the engine is built, the
     ``verity_int8`` quantization method under every precision; returns the int8 scope its layers must then run (None: not
@@ -738,7 +747,7 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
         raise UsageError("--window-steps is at least 1")
     if opts.window_requests < 0:
         raise UsageError("--window-requests is at least 0 (0: no bound)")
-    from verity.protocols.resource_accounting.scheme import settings as checked
+    from verity.protocols.accounting.scheme import settings as checked
     try:
         if (admit := admission_order(opts)) != "arrival":
             checked(M.providing("admission"), admission_settings(opts))
@@ -758,7 +767,7 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
     if why := SS.scheme_refusal(opts):
         raise UsageError(why)
     found = listed(opts, Path(opts.out or "."))
-    if why := (scheme_refusal(opts, found) if found else SH.refusal(opts)) or SR.refusal(opts) or SL.refusal(opts) or SD.refusal(opts):
+    if why := (scheme_refusal(opts, found) if found else unlisted_refusal(opts)) or SR.refusal(opts) or SL.refusal(opts) or SD.refusal(opts):
         raise UsageError(why)
     if opts.commit and which("ninja") is None:
         raise UsageError("the Commit JIT-builds its kernels with ninja, which is not on PATH: put the environment's bin (where its "
@@ -789,7 +798,7 @@ def build(opts: Options, session: SR.ServeSession | None = None, row: Mapping[st
                         process=H.ENGINE)
     from verity_vllm.llm import LLM
 
-    llm = RW.checked(opts, row, LLM(opts.model, revision=opts.revision, **(dict if session is None else session.engine_args)(engine_options(opts))))
+    llm = RW.checked(opts, row, LLM(opts.model, revision=opts.revision, **one_gpu((dict if session is None else session.engine_args)(engine_options(opts)))))
     if scope is not None:
         from verity_vllm.program.frontend.kernel_readback import int8_exact_of
         if (got := int8_exact_of(llm.model)) != scope:
@@ -799,10 +808,13 @@ def build(opts: Options, session: SR.ServeSession | None = None, row: Mapping[st
     return llm, (SL.warmed(SS.committer(opts, llm), llm, opts) if opts.commit else None)
 
 
-def main(opts: Options) -> int:
+def main(opts: Options, plan_of: Callable[[Path, Any, Callable[[], Any]], Any] | None = None) -> int:
+    """The serve; ``plan_of(out, opts, flush)`` makes the plan each committed window's close compiles (`CommitWindows.plan`),
+    which the command's entry passes (`program.predict.serve`); a committing serve refuses to run without it."""
     preflight(opts)
     (out := Path(opts.out)).mkdir(parents=True, exist_ok=True)
-    day, session = SD.declare(opts, out), SR.session_of(opts, out)
+    SD.declare(opts, out)
+    session = SR.session_of(opts, out)
     llm, com = build(opts, session, row := RW.of(opts))
     engine = llm.vllm.llm_engine
     given = {} if opts.protocol in PROTOCOLS or opts.id_payload is None else {"payload": opts.id_payload}
@@ -813,12 +825,14 @@ def main(opts: Options) -> int:
     tok = llm.get_tokenizer()
     trace = advice_trace(out, llm)
     mirror = records_mirror(out, opts.copy_records_to)
-    windows = sealer = warmed = arm = None
+    windows = sealer = warmed = None
     draws, draws_dir = RL.release_of(opts, out, com)
     if com is not None:
         from verity_vllm.engine.step_trace import scheduler_config
 
-        arm = None if listed(opts, out) else SH.arm_of(opts, llm, com, out, flush=trace.drain, day=day)
+        if plan_of is None:
+            raise ValueError("a committing serve plans each window at its close: run `verity-vllm serve-openai` "
+                             "(`program.predict.serve.main`), which passes the plan")
         sealer = SP.sealer_of(opts)                      # its process spawned before the pool grows
         warmed = SS.warm_pool(com, opts.seal_warm_gb)
         windows = CommitWindows(com, out, run_id=opts.run_id, window_steps=opts.window_steps, idle_close_steps=opts.idle_close_steps,
@@ -828,9 +842,7 @@ def main(opts: Options) -> int:
                                 served=served_statics(scheduler_config(trace.sched), served_class(opts)),
                                 no_slice=no_slice(opts), sealer=sealer,
                                 window_bytes=int(opts.window_gb * SS.GB) or None, disk=SG.disk_floor_of(opts), mirror=mirror,
-                                request_cap=opts.window_requests, arm=arm, release=draws)
-        if arm is not None:
-            arm.drawing(draws)
+                                request_cap=opts.window_requests, release=draws, plan=plan_of(out, opts, trace.drain))
     if draws_dir is not None:
         draws_dir.start()
     if session is not None:
@@ -879,10 +891,9 @@ def main(opts: Options) -> int:
               "finalize_on_loop": windows.finalize_on_loop if windows is not None else None,
               "window_gb": opts.window_gb or None, "disk_floor": SG.disk_record(windows), "copy_records_to": opts.copy_records_to,
               "weights": getattr(com, "weights", None), "window_steps": opts.window_steps, "idle_close_steps": opts.idle_close_steps,
-              "window_requests": opts.window_requests or None, "protocols": arm.describe() if arm is not None else None,
-              "remote_session": session.describe() if session is not None else None, "row_scheduling": row,
-              "committer_options": {k: getattr(opts, k) for k in ("required_manifest", "hidden_so", "hidden_ns", "tap_cap_mb", "norm_tap_so")},
-              "required_manifest_path": getattr(com, "required_manifest_path", None), **RL.retention_record(opts, com),
+              "window_requests": opts.window_requests or None, "remote_session": session.describe() if session is not None else None, "row_scheduling": row,
+              "committer_options": {k: getattr(opts, k) for k in ("row_build", "hidden_so", "hidden_ns", "tap_cap_mb")},
+              "compiler": getattr(com, "compiler", None), **RL.retention_record(opts, com),
               "arena": getattr(com, "arena_sizing_record", None), "engine": llm.engine_record, "run_id": opts.run_id,
               "switch_interval_s": sys.getswitchinterval(), "watchdog": {"period_s": watchdog.period_s, "min_s": watchdog.min_s},
               "clocks": {"perf_counter": time.perf_counter(), "time": time.time()}, **SS.target_of(llm.model, opts.async_scheduling)}
@@ -916,8 +927,6 @@ def main(opts: Options) -> int:
             sealer.close()
         if draws_dir is not None:                        # the pending seals have had their windows' samples
             draws_dir.stop()
-        if arm is not None:                              # each H1 window's release (off the loop) ends before ``final``
-            arm.drain()
         watchdog.stop()
         summary = stopped(True)
         print(f"SERVE-OPENAI stopped: {json.dumps(summary)}", flush=True)

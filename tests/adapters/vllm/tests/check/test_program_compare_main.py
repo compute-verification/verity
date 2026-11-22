@@ -1,4 +1,4 @@
-"""`program-compare`'s `main` run in process: the document it writes at `--out`, the brief it prints, and the padding audit of an
+"""`program_compare.main` run in process: the document it writes at `--out`, the brief it prints, and the padding audit of an
 unfolded side. The Programs are the two-rank toy's (`test_tp2_d90_fixture`): rank 0's fold and its rank Program.  Two parts of
 the module are held on values built by hand: the padding audit, and the window of a step's divergence report."""
 from __future__ import annotations

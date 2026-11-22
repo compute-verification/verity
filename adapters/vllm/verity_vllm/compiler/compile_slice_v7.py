@@ -10,7 +10,7 @@
 
 **The inputs' lengths** are a public output beside the verdict, a port of its own: ``lengths[k]``, arrival slot k's
 ``a_P`` in ``cert`` (its prompt's token count), a u32 least significant bit first, zero-extended, and 0 at an empty slot
-(``a_valid`` 0). It is ``cert``'s value, no new input, and what the ingress tie reads (`tie_service.IngressInputs.compiled`);
+(``a_valid`` 0). It is ``cert``'s value, no new input, and what the ingress tie reads;
 an input's place is its slot's, the certified arrival order. The outputs are 16 + 32·K bits, in the least public size
 class that holds them (`partition_v2.size_class`). The lengths are opened, and no charge counts them.
 

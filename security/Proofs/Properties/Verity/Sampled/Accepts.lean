@@ -161,8 +161,8 @@ with no public inputs, at the session `Exec.setupOfP` sets up there. -/
 theorem v2Verified_accepts {p : _root_.Spot.OneStageZk.Params} {e : _root_.Spot.OneStageZk.Evidence}
     {bs : _root_.Core.Blobs} {record : String} {spec : Flock.SessionSpec} {tabs : Array Flock.Setup}
     {rest : Json × Json} {proofs : Array ByteArray} (h : V2Verified p e bs record spec tabs rest proofs) :
-    ∃ tags0 circuitB pubB sts, Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧
-      bs.get p.own.circuit "circuit" = .ok circuitB ∧ bs.get p.own.pub "public file" = .ok pubB ∧
+    ∃ tags0 circuitB pubB sts, Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧
+      p.own.circuitFile = .ok circuitB ∧ bs.get p.own.pub "public file" = .ok pubB ∧
       Exec.setupOfP (ZkExec.zkInputs (toExec (_root_.Spot.OneStageZk.inputsOf tags0 p.own circuitB pubB bs)))
         none record = .ok (spec, sts) ∧
       AcceptsZKP (toExec (_root_.Spot.OneStageZk.inputsOf tags0 p.own circuitB pubB bs)) none
@@ -192,12 +192,41 @@ theorem acceptsZKP_congr {I I' : Exec.Inputs} (h : ZkExec.zkInputs I = ZkExec.zk
   unfold AcceptsZKP
   rw [h]
 
+/-- An untyped statement's circuit file that `HmOut.parse` reads is what `HmOut.parseCommit` and `HmRow.parse`
+read. -/
+theorem parse_both {tags : Flock.Tags} {cf : ByteArray} {T : List (String × ByteArray)} {c : Flock.Circuit}
+    (ht : tags.typed = false) (hp : Flock.HmOut.parse tags cf T = .ok c) :
+    Flock.HmOut.parseCommit tags cf T = .ok c ∧ Flock.HmRow.parse tags cf T = .ok c := by
+  have hi := Flock.HmOut.parse_isTmpl hp
+  refine ⟨?_, ?_⟩
+  · rw [Flock.HmOut.parseCommit, ite_eq_right (by simp [hi])]
+    exact hp
+  · unfold Flock.HmOut.parse at hp
+    rw [ite_eq_right (by simp [hi])] at hp
+    dsimp only at hp
+    rw [ite_eq_left (by simp [ht])] at hp
+    obtain ⟨c', hc', hp⟩ := ebind_ok hp
+    obtain ⟨_, -, hp⟩ := ebind_ok hp
+    cases hp
+    exact hc'
+
+/-- **The circuit the checks read is the one the file parses to**: an untyped statement's circuit file that
+`HmOut.parse` reads as `c` with the tables `T` is the circuit `ProvedScope.circuitOf` reads with them. -/
+theorem circuitOf_flat {tags : Flock.Tags} {cf : ByteArray} {T : List (String × ByteArray)} {c : Flock.Circuit}
+    (ht : tags.typed = false) (hp : Flock.HmOut.parse tags cf T = .ok c) :
+    Flock.ProvedScope.circuitOf tags cf T = .ok c := by
+  obtain ⟨hpc, hr⟩ := parse_both ht hp
+  unfold Flock.ProvedScope.circuitOf
+  split
+  · exact hpc
+  · exact hr
+
 /-- **More lookup tables set up `I`'s session** (`Refine.setupTables_back`): where `T'` finds by name whatever `I`'s
 tables find, `I`'s statement is untyped with at most one table and its circuit file parses at `--zk`'s tags, the
 session `Exec.setupOfP` sets up at `--zk`'s inputs with the tables `T'` is the one it sets up with `I`'s. -/
 theorem setupOfP_back {I : Exec.Inputs} {T' : List (String × ByteArray)} (hext : TablesExtend I.tables T')
     (hcount : I.count ≤ 1) (ht : I.tags.typed = false) {c : Flock.Circuit}
-    (hp : Flock.HmOut.parse (ZkExec.zkTags I) I.circuitFile I.tables = .ok c) (own : Option ByteArray)
+    (hp : Flock.ProvedScope.circuitOf (ZkExec.zkTags I) I.circuitFile I.tables = .ok c) (own : Option ByteArray)
     (record : String) :
     OkLe (Exec.setupOfP (ZkExec.zkInputs { I with tables := T' }) own record)
       (Exec.setupOfP (ZkExec.zkInputs I) own record) :=
@@ -207,17 +236,17 @@ theorem setupOfP_back {I : Exec.Inputs} {T' : List (String × ByteArray)} (hext 
 premises. -/
 theorem acceptsZKP_back {I : Exec.Inputs} {T' : List (String × ByteArray)} (hext : TablesExtend I.tables T')
     (hcount : I.count ≤ 1) (ht : I.tags.typed = false) {c : Flock.Circuit}
-    (hp : Flock.HmOut.parse (ZkExec.zkTags I) I.circuitFile I.tables = .ok c) {own : Option ByteArray}
+    (hp : Flock.ProvedScope.circuitOf (ZkExec.zkTags I) I.circuitFile I.tables = .ok c) {own : Option ByteArray}
     {t : Exec.Transcript} (h : AcceptsZKP { I with tables := T' } own t) : AcceptsZKP I own t := by
   obtain ⟨spec, sts, hs, hshape, hv⟩ := h
   exact ⟨spec, sts, setupOfP_back hext hcount ht hp own t.record _ hs, hshape, hv⟩
 
 /-- **v2 reads `A`'s files on the blobs sent**: under v2's parameters in what the prover sent (`ParamsAt`), the circuit
-and the public file v2 finds on the blobs by its parameters' digests are `A`'s, and the lookup tables the blobs hold
+file v2 derives (`Own.circuitFile`) and the public file it finds on the blobs by its parameters' digest are `A`'s, and the lookup tables the blobs hold
 (`Spot.OneStageZk.tablesOf`) find by name whatever `A`'s find (`TablesExtend`). -/
 structure FilesOn (A : Live) (s : Verity.Sent) : Prop where
   circuit : ∀ p, ParamsAt s.params p → ∀ b,
-    (_root_.Core.Blobs.ofArray s.blobs).get p.own.circuit "circuit" = .ok b → b = A.I.circuitFile
+    p.own.circuitFile = .ok b → b = A.I.circuitFile
   publicFile : ∀ p, ParamsAt s.params p → ∀ b,
     (_root_.Core.Blobs.ofArray s.blobs).get p.own.pub "public file" = .ok b → b = A.I.publicFile
   tables : TablesExtend A.I.tables (_root_.Spot.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray s.blobs))
@@ -408,11 +437,9 @@ theorem filesOn_of {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} {F B : A
     (hheld : Properties.Spot.HoldsRegisteredTables p₀.own (_root_.Core.Blobs.ofArray s.blobs))
     (ht : TablesSent T s) : FilesOn A s := by
   have hc : ∀ p, ParamsAt s.params p → ∀ b,
-      (_root_.Core.Blobs.ofArray s.blobs).get p.own.circuit "circuit" = .ok b → b = A.I.circuitFile := by
-    intro p hp b hg
-    rw [hs] at hg
+      p.own.circuitFile = .ok b → b = A.I.circuitFile := fun p hp b hg => by
     rw [hA.circuit]
-    exact get_named (hD.circuit p (hθ ▸ hp)) hreg.1 hg
+    exact (circuitFileOf_eq (hθ ▸ hp) hg).symm
   refine ⟨hc, fun p hp b hg => ?_, ?_⟩
   · rw [hs] at hg
     rw [hA.publicFile]
@@ -450,7 +477,12 @@ theorem accepts_sent {V : Vocab d α} {k : Verity.Registration.Composite} {A : L
     hA.stratified hA.closure
   rw [hz] at hs
   rw [hA.own]
-  have hp := Flock.Desc.parse_flat A.hD
+  have htm : (ZkExec.zkTags A.I).hiddenOutputs = true ∧ (ZkExec.zkTags A.I).isTmpl = true :=
+    statement_zkTags hA.tags _ _
+  obtain ⟨c, hc, -⟩ := parseTmpl_of_parseStmt htm.2 A.hD
+  have hp : Flock.ProvedScope.circuitOf (ZkExec.zkTags A.I) A.I.circuitFile A.I.tables = .ok c := by
+    rw [circuitOf_tmpl htm.1 htm.2]
+    exact hc
   exact ⟨record, proofs, spec, sts, hrec, hpr, setupOfP_back hF.tables hA.count.le A.ht hp none record _ hs,
     acceptsZKP_back hF.tables hA.count.le A.ht hp ((acceptsZKP_congr hz).1 hat)⟩
 

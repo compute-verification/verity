@@ -258,8 +258,7 @@ def build_engine(checkpoints: str | Path = "manifests/checkpoints.json", *, max_
                                           execution=execution, env=env)
     from vllm import LLM  # after apply_env
 
-    from verity_vllm.engine import moe_align, sparse_mla, topp_pin
-    moe_align.arm()
+    from verity_vllm.engine import sparse_mla, topp_pin
     sparse_mla.arm()
     topp_pin.arm()
 

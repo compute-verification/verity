@@ -1,6 +1,6 @@
 """The coins a two-stage design's second stage reads, and the chance it refuses an honest run.
 
-The second stage (`service.select_second`, Lean's `Spot.Select.selectSecond`) samples `ks[t]` of the `ns[t]` proof
+The second stage (Lean's `Spot.Select.selectSecond`) samples `ks[t]` of the `ns[t]` proof
 blocks of each cell: template `t` of the check, in each sampled replay block.  A cell's sampler first reads
 `2 k_t · width(n_t) + 64` bytes of the stage's coins (`coins.draw_first`, Lean's `Flock.Draw.Stratum.need`), and as
 many again only where it rejects a word, which it does a uniform word with probability under 2^-64.  Lean bounds what
@@ -22,8 +22,8 @@ from math import ceil
 from typing import Any
 
 import figure1 as f1
-from verity.protocols.proofs.spot.verifier.challenger.challenger import COIN_BYTES, MAX_COINS
-from verity.protocols.proofs.spot.prover.optimize import Cell
+from verity.protocols.proof.spot.verifier.challenger.challenger import COIN_BYTES, MAX_COINS
+from verity.protocols.proof.spot.prover.optimize import Cell
 
 #: the bytes SPOT[Flock]'s stages read of one round's coin, 65,536 field elements of 16 bytes (Lean's `SpotFlock.L`)
 ROUND_BYTES = 65536 * 16

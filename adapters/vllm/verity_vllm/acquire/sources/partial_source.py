@@ -495,7 +495,7 @@ class TPPartialSource:
         oracle is `steps_without_oracle` -- each of them FAILS (exhaustive over the family or not a record).  Covers the manifest's
         `tp_rank_partials` family only (this Match is collective-level; instance outputs have no TP Match oracle).
 
-        Each MoE align call's committed witness (`<experts>/align.*`, `moe_align_source`) is paired with the capture's
+        Each MoE align call's committed witness (`<experts>/align.*`) is paired with the capture's
         (`align.rank<r>.jsonl`) by (step, module), exhaustively; a differing one FAILS by name with what it implies
         (`oracle_witness.implied`), and no tensor is exempt from the value compare (`oracle_witness.judge`)."""
         import torch

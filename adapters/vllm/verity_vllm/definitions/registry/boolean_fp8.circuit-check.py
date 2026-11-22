@@ -8,8 +8,8 @@ from typing import Any, Callable
 #: K = 1,536, G = 128), checked at these spots (`circuit_check.ranges`; ``circuit-check --ranges ScaledMmFp8BlockSharedScale_v2
 #: ScaledMmFp8BlockCoordinateGivenScale_v2``).  At N < G its body is the K/G tile scale products and N coordinates
 #: (`ScaledMmFp8BlockCoordinateGivenScale_v2{K,G}`) reading them; from K = 1,536 at N = 8 and K = 2,048 at N = 4 it is over the
-#: partition's gate budget, and is partitioned by those callees (`circuit_check.checks.by_callees`), so the coordinate is held at
-#: the same K, where each is within the budget and partitioned itself.  A family has one rule, so each spans K by the step that
+#: partition's gate budget, and its size class is read off its return type (`circuit_check.checks.partition`), so the coordinate is
+#: held at the same K, where each is within the budget.  A family has one rule, so each spans K by the step that
 #: reaches every served K from 256
 RANGES = {
     "ScaledMmFp8BlockSharedScale_v2{K=256..6144 step 256,N=4..8 step 4,G=128}": (

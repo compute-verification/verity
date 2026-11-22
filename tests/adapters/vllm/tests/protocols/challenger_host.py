@@ -27,12 +27,12 @@ from pathlib import Path
 
 import numpy as np
 from verity.commitments.crypto import lms
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import challenger as PHC
-from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
-from verity.protocols.resource_accounting.compute.pouw.verifier import weights as Wt
-from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
-from verity.protocols.proofs.spot.verifier.challenger import challenger as LC
-from verity.protocols.proofs.spot.verifier.challenger import remote as R
+from verity.protocols.accounting.compute.pouw.prover.serving.coins import challenger as PHC
+from verity.protocols.accounting.compute.pouw.verifier import credit as CR
+from verity.protocols.accounting.compute.pouw.verifier import weights as Wt
+from verity.protocols.accounting.compute.pouw.verifier import window as Wd
+from verity.protocols.proof.spot.verifier.challenger import challenger as LC
+from verity.protocols.proof.spot.verifier.challenger import remote as R
 
 HOST = "vy-challenger-1"
 #: the commit every open here was run from (``pinned``), the host's pins log recording it as main's, and the
@@ -48,8 +48,8 @@ TREE = Path(__file__).resolve().parents[5]
 
 @functools.cache
 def models():
-    """Infra's model registry, ``verity/protocols/compose/verifier/live_challenger/models.py``, as a module of its own."""
-    path = TREE / "verity/protocols/compose/verifier/live_challenger/models.py"
+    """Infra's model registry, ``verity/protocols/run/verifier/live_challenger/models.py``, as a module of its own."""
+    path = TREE / "verity/protocols/run/verifier/live_challenger/models.py"
     spec = importlib.util.spec_from_file_location("live_challenger_models", path)
     assert spec is not None and spec.loader is not None, f"{path} is no module"
     module = importlib.util.module_from_spec(spec)
@@ -143,7 +143,7 @@ def session_id(n: int) -> str:
 
 
 class Gate:
-    """Infra's challenger gate (`verity/protocols/compose/verifier/live_challenger/auditor.py`, v2) in this process, its ledger's entries
+    """Infra's challenger gate (`verity/protocols/run/verifier/live_challenger/auditor.py`, v2) in this process, its ledger's entries
     written as the gate's `append` writes them and signed under `private` at rising one-time keys, from `leaf` on:
     `reserve` appends a window's reserve entry (``withheld=True``: ``reserve --withhold``), `open` its open entry
     (two-step after its reserve, else one-step) and returns the gate's open answer (``commitment`` null, as before
@@ -209,8 +209,8 @@ class Gate:
                     model: str | None = None, weights_root: str | None = None, length: dict | None = None,
                     **override) -> dict:
         """The period's open as the gate's ``period-open`` writes it, with its ``cap``, ``circuit``, ``draw_k`` (the
-        proof system's committed sample K, `credit.K_FIELD`), ``rows`` (the table rows T, `credit.ROWS_FIELD`) and
-        ``length`` (``--length``, `credit.LENGTH_FIELD`) when
+        proof system's committed sample K, `window.K_FIELD`), ``rows`` (the table rows T, `window.ROWS_FIELD`) and
+        ``length`` (``--length``, `window.LENGTH_FIELD`) when
         given, and with ``model`` (``--model``) or
         ``weights_root`` (``--weights-root``) what the registry resolves them to (`Registry.opened`), Refused
         (`models.Refused`) for a root it has no entry of."""
@@ -354,11 +354,11 @@ class Ledger:
                     model: str | None = None, weights_root: str | None = None, circuit_files: dict | None = None,
                     length: dict | None = None, leaf: int | None = None) -> None:
         """Lane vllm's period `name`, holding the sessions reserved until its `period_close`, under `cap` and `circuit`,
-        with ``draw_k`` (`credit.K_FIELD`), ``rows`` (the table rows T, `credit.ROWS_FIELD`), ``model`` (the gate's
+        with ``draw_k`` (`window.K_FIELD`), ``rows`` (the table rows T, `window.ROWS_FIELD`), ``model`` (the gate's
         ``--model``: `registry`'s registration's weights' root,
         signed with its ``model``) or ``weights_root`` (``--weights-root``, Refused unless a registration's),
         ``circuit_files`` (each K's circuit file's SHA-512, ``{k<K>: SHA-512}``) and ``length`` (the gate's ``--length``,
-        `credit.LENGTH_FIELD`) when given."""
+        `window.LENGTH_FIELD`) when given."""
         signed = self.registry.opened(circuit, model, weights_root)
         self._period, self._windows = name, []
         self.append("period-open", None, {"period": name, "lane": "vllm", "by": "vllm", "cap": cap, "circuit": circuit,

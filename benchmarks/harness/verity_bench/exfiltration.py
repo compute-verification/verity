@@ -3,16 +3,7 @@
 missing or run, not proved. It computes neither part itself: it composes the two calculators that do, and runs on any
 machine that reaches the store, with no GPU and no node.
 
-* **The share of total compute** is given (`--share`) and assumed. Beside it the command prints the share a served
-  two-stage run measures (`served_share`, `--served-run`): the audit's GPU-seconds on the run (its proving, staging,
-  replay and interior commitment, and the serving charge over stock vLLM on the same load) over the window's serving
-  GPU-seconds, each read from the run's record and marked measured, a field the record lacks marked missing with its
-  gap and the share then not claimed; and where it is claimed, the compute audit's part at it beside the part at the
-  given share. A part whose entries are all on 0 GPUs adds no GPU-seconds and is printed `ON_CPUS` beside its 0.
-  Proving read from its sessions' seconds, their wait included (`PROVE_SOURCE`), is measured, at most, and so is the
-  share that sums it. Without a record it prints the share as `NO_RUN`. With a record SPOT's holes are read at the served run's
-  own commits (`spot_status.served`), and where the tree holds `served_row`, its section on what the audit showed
-  is printed between the figures and the holes.
+* **The share of total compute** is given (`--share`) and assumed. It prints the share a served run measures as `NO_RUN`: no run's record is read.
 
 * **The compute audit's part** is the break-even planner's bound, read from its rows of record. A record is named in
   the store, never in code (`served_table`'s rule): the runs that carry `run_of_record=RECORD` and no `superseded_by`,
@@ -83,7 +74,7 @@ part, and the command sums them per scope and monitoring period under each of th
 `TOGETHER` (`together`): at the jitter bound of record, and under the label at the other. It prices no advice.
 
 * **How the stop class is charged** is the answer of the stop verdicts' reader
-  (`verity/protocols/resource_accounting/network/prover/stop_verdicts.py`'s `of_runs`), which the command hands the calculator (`attester`'s
+  (`verity/protocols/accounting/network/prover/stop_verdicts.py`'s `of_runs`), which the command hands the calculator (`attester`'s
   ``stop``). The rows the calculator reads from verdict records (its document's `stop`'s `rows`: those that hold
   the lengths by a stop block) are charged below their schedules only on the execution phases the answer holds, and
   their whole schedules on every other. The runs handed to the reader are every run that carries the record
@@ -125,7 +116,6 @@ the fingerprint. What it prints is the same in a run as outside one.
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import json
 import sys
 from collections.abc import Callable, Mapping, Sequence
@@ -150,14 +140,10 @@ from verity_bench.exfiltration_common import (
     NETWORK_CHECK_SHARE,
     NO_BOUND,
     NO_RUN,
-    ON_CPUS,
     OUTPUT_COUNT,
     PERIOD_ERROR,
     PIECES,
     PLAN_FILE,
-    PROVE_SOURCE,
-    PROVE_SOURCE_GAP,
-    PROVE_SOURCES,
     RECORD,
     RESPONSE_IDS,
     ROW,
@@ -166,8 +152,6 @@ from verity_bench.exfiltration_common import (
     SCHEMA,
     SCOPES,
     SECURITY,
-    SERVED_PARTS,
-    SERVING_GAP,
     SHARE,
     STEP,
     TERM_SCHEMA,
@@ -185,7 +169,6 @@ from verity_bench.exfiltration_common import (
 from verity_bench.exfiltration_document import _inputs, _row_label, build
 from verity_bench.exfiltration_planner import _sources, at_share, record_job, record_run, rows_of_record
 from verity_bench.exfiltration_render import render
-from verity_bench.exfiltration_served import served_share
 from verity_bench.exfiltration_text import _listed, _n, _names, _p, _part, _pct, _table
 from verity_bench.exfiltration_verdicts import verdict
 from verity_bench.served_table import RUN_OF_RECORD, SUPERSEDED_BY
@@ -205,14 +188,10 @@ __all__ = [
     "NETWORK_CHECK_SHARE",
     "NO_BOUND",
     "NO_RUN",
-    "ON_CPUS",
     "OUTPUT_COUNT",
     "PERIOD_ERROR",
     "PIECES",
     "PLAN_FILE",
-    "PROVE_SOURCE",
-    "PROVE_SOURCES",
-    "PROVE_SOURCE_GAP",
     "RECORD",
     "RESPONSE_IDS",
     "ROW",
@@ -222,8 +201,6 @@ __all__ = [
     "SCHEMA",
     "SCOPES",
     "SECURITY",
-    "SERVED_PARTS",
-    "SERVING_GAP",
     "SHARE",
     "STEP",
     "SUPERSEDED_BY",
@@ -253,7 +230,6 @@ __all__ = [
     "record",
     "render",
     "rows_of_record",
-    "served_share",
     "verdict",
 ]
 
@@ -384,10 +360,6 @@ def main(argv: Sequence[str] | None = None, metrics: Mapping[str, str] | None = 
                     help="the δ of each execution phase's scan of the network attester, which its rows' ε sum (default: "
                          "the δ at which the row printed that sums the most execution phases, the world's year, carries "
                          f"an ε of {PERIOD_ERROR}, assumed; no term depends on it)")
-    ap.add_argument("--served-run", type=Path, metavar="FILE",
-                    help="a served two-stage run's record as its reader gives it, one JSON object (`served_share`): the "
-                         "share of compute it measures is printed beside the given share, with the compute audit's part "
-                         f"at it (default: none, and the share is \"{NO_RUN}\")")
     ap.add_argument("--local-only", action="store_true", help="read this machine's catalog alone, not the store's remote")
     ap.add_argument("--from", dest="record", metavar="DIR",
                     help="read the planner's rows from one run's record directory (its job.json and out/), with no "
@@ -398,23 +370,14 @@ def main(argv: Sequence[str] | None = None, metrics: Mapping[str, str] | None = 
                  "without --json: run `verity bench exfiltration --from DIR`")
     try:
         rec = None if a.record is None else kit.record(a.record)
-        served = None if a.served_run is None else json.loads(a.served_run.read_text())
         doc = build(share=a.share, network_check=a.network_check_share, row=a.row, step=a.step, variant=a.variant,
-                    response_ids=a.response_ids, scan_delta=a.scan_delta, served=served, local_only=a.local_only,
+                    response_ids=a.response_ids, scan_delta=a.scan_delta, local_only=a.local_only,
                     record=None if rec is None else rec.path)
-        doc["spot_holes"] = (spot_status.served(served) if served is not None else
-                             spot_status.status(doc["runs"]) if rec is None else
+        doc["spot_holes"] = (spot_status.status(doc["runs"]) if rec is None else
                              spot_status.status(doc["runs"], store=_Commits(rec.path)))
     except (ValueError, RuntimeError, OSError) as e:
         print(f"verity bench exfiltration: {e}", file=sys.stderr)
         return 2
-    shown = None
-    if served is not None and importlib.util.find_spec("verity_bench.served_row") is not None:
-        from verity_bench import served_row  # type: ignore[attr-defined]  # optional; it reads this module's names
-
-        shown = served_row.account(served)
-    if shown is not None:
-        doc["served_run"] = shown
     if rec is not None:
         said = record_job(rec.path).get("made_up")
         text = render(doc)
@@ -422,7 +385,7 @@ def main(argv: Sequence[str] | None = None, metrics: Mapping[str, str] | None = 
             doc["made_up_says"] = str(said)
             head, _, rest = text.partition("\n")
             text = f"{head}\n  what the record says of itself: {said}\n{rest}"
-        text += ("" if shown is None else "\n\n" + served_row.render(shown)) + "\n\n" + spot_status.render(doc["spot_holes"])
+        text += "\n\n" + spot_status.render(doc["spot_holes"])
         assert report is not None
         return report(doc, text, made_up=bool(said), withdrawn=rec.withdrawn)
     if metrics and settings.is_set("RESEARCH_RUN_DIR"):
@@ -432,8 +395,7 @@ def main(argv: Sequence[str] | None = None, metrics: Mapping[str, str] | None = 
             print(f"verity bench exfiltration: {e}", file=sys.stderr)
             return 2
     print(json.dumps(doc, indent=1, ensure_ascii=False) if a.json else
-          render(doc) + ("" if shown is None else "\n\n" + served_row.render(shown))
-          + "\n\n" + spot_status.render(doc["spot_holes"]))
+          render(doc) + "\n\n" + spot_status.render(doc["spot_holes"]))
     return 0
 
 

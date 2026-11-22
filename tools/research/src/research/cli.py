@@ -12,12 +12,16 @@
                                                  # on whole cores of its own, waiting on the node while none are free; or, when it starts
                                                  # sooner there, a slot of a CPU node's research pool (research/auto.py's `spill`: every CPU node);
                                                  # a machine that can start no run is passed over, and the launch says which and why;
+                                                 # a --cpus N it places takes a slot of at least N cores, and one above every slot auto
+                                                 # reads and node 2's share is refused (auto.too_big);
                                                  # where it went and why is kept with the run: `inspect` prints it on the VM that launched
                                                  # it, and the machine's request.json holds it (`auto`); a Lean records run below its
                                                  # package's floor is refused at launch with the run to launch instead (auto.below_floor)
   research run --on MACHINE|auto|--queue [--cold-lean-build REASON] [...] -- CMD...   # a raw `lake build` of an analysis package
                                                  # (security/) is refused at launch, naming the Lean tools that restore it from a kept
                                                  # tree; REASON builds it cold on purpose, recorded in job.json (treelock.analysis_build)
+  research run --on MACHINE ...   # a machine the register marks stopped (`research pods stopped MACHINE`, `stopped_since`) is refused
+                                                 # at launch: a run sent at it by name would start it (--on auto passes over it; `--back` first)
   research run --on MACHINE --project P [--source GITDIR] [--send FILE ...] [--env K=V ...] [--env-host MACHINE ...] [--exclusive] [--mem-gb N [--mem-wait S]]
                [--gpus N | --card N,...] [--timed] [--pool NAME [--slot NAME] [--pool-wait S]] [--end UTC]
                [--custody-ttl 6h | --no-custody-r2] [--preflight TOOL] [...] -- CMD...   # run custody on the store's remote is the default
@@ -252,12 +256,15 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                          "a slot of a CPU node's research pool when it starts sooner there (research/auto.py's `spill`: every CPU node); the "
                          "launch says where it went and when it should start. A Lean try or records run (lean_changed.py --try "
                          "FILE, --records PKG; `verity lean try`) goes only to a machine whose kept Lean tree holds its package "
-                         "built, and is refused with what each machine lacks where none does. A machine that can start no run takes none, and one "
+                         "built, and is refused with what each machine lacks where none does. A --cpus N it places takes a slot of at least N "
+                         "cores, and one above every slot it reads and node 2's share is refused. A machine that can start no run takes none, and one "
                          "that refuses the launch for that is passed over for the next, the launch saying which and why. A run "
                          "that waits in a pool's line, whatever on, asks again and moves to a pool where a place has stood 2 "
                          "min, while the VM that launched it is up and holds its asker: a VM holds only so many alive at a time "
                          "(research/asker.py's MAX_ASKERS; the launch and `research status RUN` say). So does a run sent by "
-                         "name to a machine's research pool (--pool research), unless --stay")
+                         "name to a machine's research pool (--pool research), unless --stay. A machine the register marks stopped "
+                         "(`research pods stopped NAME`) is refused by name, as a launch would start it (`--back` first); `auto` passes "
+                         "over it")
     ap.add_argument("--accept-wait", action="store_true",
                     help="with --on auto: queue the run though it isn't expected to start within 10 minutes "
                          "(research/auto.py's START_WITHIN_MIN). Such a launch is warned in one line, or refused once "
@@ -530,6 +537,9 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
         from .pods import slurm
 
         return slurm.launch(ns, harness_opts, command, m)
+    if ns.on not in (None, "auto") and not ns.queue and not ns.claimed and (why := _stopped_refusal(ns.on)):
+        print(f"research run: refused: {why}", file=sys.stderr)
+        return 2
     if getattr(ns, "auto", False):
         _auto_size(ns, harness_opts, command)
         from . import auto
@@ -540,6 +550,18 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
             return 2
         return _auto_launch(ns, harness_opts, command, clones)
     return _run_placed(ns, harness_opts, command, clones)
+
+
+def _stopped_refusal(name: str) -> str | None:
+    """Why a run sent by name at machine `name` is refused, or None: the register marks it stopped (`registry.left_out`, the one
+    reading of `stopped_since`), and a launch there would start it again."""
+    from .pods import registry
+
+    entry = registry.recorded(name, remote.machines_path()) or {}
+    if out := registry.left_out({"stopped_since": entry.get("stopped_since")}, 0):
+        return (f"{name} is marked {out} (the register): it was stopped on purpose, and a run sent at it by name would start it. "
+                f"Send the run with --on auto, or, if you mean to start it, run `research pods stopped {name} --back` first.")
+    return None
 
 
 def _cards(given: list[str]) -> list[int]:
@@ -1506,8 +1528,7 @@ THREAD_POOL_VARS = ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"
 #: `--on auto`: an agent's suite, build or probe belongs on a node, not its VM. It is
 #: queued onto vy-nebius-2's Verity share (infra/cluster/descriptions/nebius.toml: whole cores of its own inside its check slots,
 #: never a slot a candidate waits for; it waits on the node while none are free) as kind AUTO_KIND (infra/cluster/kinds/infra.toml),
-#: or spills to a CPU node's pool where it starts sooner (research.auto). Not node 1, whose CPUs candidates' checks and lanes' direct runs
-#: already oversubscribe (top, 02:53Z).
+#: or spills to a CPU node's pool where it starts sooner (research.auto).
 AUTO_KIND = "agent-test"
 #: AUTO_KIND's shape and time where the run gives none (cluster.kinds' cpu-test phase, kinds/infra.toml's max_wall_min): what a
 #: pool slot must give for the run to spill there
@@ -1604,6 +1625,9 @@ def _auto_spill(ns: argparse.Namespace, harness_opts: list[str], command: list[s
         try:
             if not docs:
                 docs.update(auto.read(Path(ns.source), cpus, **({"lean": True} if lean else {}), **({"needs": needs} if needs else {})))
+            if ns.cpus and (big := auto.too_big(docs, ns.cpus)):
+                print(f"research run --on auto: refused: {big}", file=sys.stderr)
+                return None
             target, why = auto.choose(docs, cpus, mem, lean_pool=lean, needs=needs)
         except auto.Unplaceable as e:
             print(f"research run --on auto: refused: {e}", file=sys.stderr)
@@ -1630,6 +1654,8 @@ def _auto_spill(ns: argparse.Namespace, harness_opts: list[str], command: list[s
     if remote.flag_value(harness_opts, "--timeout") is None:
         harness_opts = [*harness_opts, "--timeout", f"{(ns.max_min or AUTO_MAX_MIN) * 60}"]
     ns.queue, ns.on, ns.pool, ns.lane = False, machine, pool, ns.lane or "auto"
+    if ns.cpus:                                                # slot.py then takes a slot of at least that many cores, not any idle one
+        ns.env = [*ns.env, f"CHECK_RUN_CORES={ns.cpus}"]
     ns.cpus = ns.max_min = ns.question = ns.disk_gb = None     # the slot's cores are the run's
     ns.mem_gb = mem     # --pool hands it to the slot, which reserves the larger of its mem= and this (a 40-GB slot alone holds a suite to 2 workers)
     ns.budget_gb = budget if budget > mem else None            # and the slot gives the run this much to plan its processes on

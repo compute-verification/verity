@@ -13,7 +13,6 @@ W = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(W)
 
 MB = 10**6
-POD = "6a323904-1111-2222-3333-444455556666"
 
 
 def proc_entry(proc: Path, pid: int, *, ppid: int = 1, start: int = 1000, written: int = 0, cgroup: str = "/user.slice",
@@ -45,8 +44,6 @@ def set_written(proc: Path, pid: int, written: int, tid: int | None = None) -> N
 def test_each_allocation_is_named_and_only_uncovered_workspace_writers_are_unmatched(tmp_path):
     proc = tmp_path / "proc"
     proc_entry(proc, 100, cgroup="/user.slice/user-1001.slice/session-17.scope", writes=("/workspace/scratch/big.bin",))
-    proc_entry(proc, 200, cgroup=f"/kubepods.slice/kubepods-besteffort.slice/kubepods-besteffort-pod{POD.replace('-', '_')}.slice/cri-containerd-ab.scope",
-               writes=("/workspace/cp/row/bundle.npz",))
     proc_entry(proc, 300, cgroup="/user.slice/user-1001.slice/user@1001.service/app.slice/fill-verity-179.scope", cwd="/workspace/jobs/x")
     proc_entry(proc, 401, env={"RESEARCH_RUN_ID": "r20261001-030000-abcd"})
     proc_entry(proc, 400, ppid=401, cgroup="/user.slice/user-1001.slice/session-9.scope", writes=("/workspace/research/runs/r/out",))
@@ -58,15 +55,13 @@ def test_each_allocation_is_named_and_only_uncovered_workspace_writers_are_unmat
     proc_entry(proc, 800, cgroup="/user.slice/user-1001.slice/session-18653.scope", writes=("/workspace/research/store/catalog.sqlite",),
                cmd="python3 -m research run --runs-dir /workspace/research/runs --id r20261001-040538-950d --claimed")
     before = W.snapshot(str(proc))
-    for pid in (100, 200, 300, 400, 450, 500, 700, 800):
+    for pid in (100, 300, 400, 450, 500, 700, 800):
         set_written(proc, pid, 1200 * MB)
     set_written(proc, 600, 500 * MB)
-    rows = W.writers(before, W.snapshot(str(proc)), 60.0, 10.0, lambda: {POD: ("default", "nd-commit-0-x", "deployments-gpu")},
-                     "vy-nebius-1", str(proc))
+    rows = W.writers(before, W.snapshot(str(proc)), 60.0, 10.0, "vy-nebius-2", str(proc))
     got = {r["pid"]: (r["allocation"], r["matched"]) for r in rows}
     assert got == {
         100: ("none:/user.slice/user-1001.slice/session-17.scope", False),
-        200: ("kueue:deployments-gpu/nd-commit-0-x", True),
         300: ("fill:fill-verity-179", True),
         400: ("run:r20261001-030000-abcd", True),
         450: ("run:r20261001-022442-80e9", True),
@@ -76,27 +71,6 @@ def test_each_allocation_is_named_and_only_uncovered_workspace_writers_are_unmat
     r100 = next(r for r in rows if r["pid"] == 100)
     assert (r100["mb_per_s"], r100["paths"], r100["user"], r100["cmd"]) == (20.0, ["/workspace/scratch/big.bin"], "root", "python3 job.py")
     assert next(r for r in rows if r["pid"] == 300)["paths"] == ["/workspace/jobs/x"]
-
-
-def test_a_pod_without_kueue_admission_or_unknown_to_kubectl_is_unmatched_and_kubectl_is_read_once(tmp_path):
-    proc = tmp_path / "proc"
-    other = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
-    for pid, uid in ((10, POD), (11, other), (12, POD.replace("6a32", "7b43"))):
-        proc_entry(proc, pid, cgroup=f"/kubepods/besteffort/pod{uid}/c1", writes=("/workspace/x",))
-    before = W.snapshot(str(proc))
-    for pid in (10, 11, 12):
-        set_written(proc, pid, 900 * MB)
-    calls = []
-
-    def pods():
-        calls.append(1)
-        return {POD: ("default", "sky-jobs-controller", None), other: ("gpu-operator", "dcgm-exporter", None)}
-
-    got = {r["pid"]: (r["allocation"], r["matched"]) for r in W.writers(before, W.snapshot(str(proc)), 60.0, 10.0, pods, "n1", str(proc))}
-    assert got == {10: ("pod:default/sky-jobs-controller (no Kueue admission)", False),
-                   11: ("system:gpu-operator/dcgm-exporter", True),
-                   12: (f"pod:{POD.replace('6a32', '7b43')} (not in kubectl's list)", False)}
-    assert calls == [1]
 
 
 def test_a_runner_is_not_charged_for_the_children_it_reaped_and_its_jobs_are_fill_jobs(tmp_path):
@@ -113,12 +87,12 @@ def test_a_runner_is_not_charged_for_the_children_it_reaped_and_its_jobs_are_fil
     set_written(proc, 61, 1200 * MB)
     set_written(proc, 61, 600 * MB, tid=62)
     got = {r["pid"]: (r["allocation"], r["matched"], r["mb_per_s"])
-           for r in W.writers(before, W.snapshot(str(proc)), 60.0, 10.0, dict, "vy-nebius-2", str(proc))}
+           for r in W.writers(before, W.snapshot(str(proc)), 60.0, 10.0, "vy-nebius-2", str(proc))}
     assert got == {61: ("fill:fp4-gc-judge-388eeb55", True, 30.0)}
     before = W.snapshot(str(proc))
     set_written(proc, 50, 1200 * MB)
     got = {r["pid"]: (r["allocation"], r["matched"])
-           for r in W.writers(before, W.snapshot(str(proc)), 60.0, 10.0, dict, "vy-nebius-2", str(proc))}
+           for r in W.writers(before, W.snapshot(str(proc)), 60.0, 10.0, "vy-nebius-2", str(proc))}
     assert got == {50: ("fill:runner", True)}
 
 
@@ -128,7 +102,7 @@ def test_a_reused_pid_is_a_new_process_and_a_timed_window_pauses_the_probe(tmp_p
     before = W.snapshot(str(proc))
     (proc / "100" / "stat").write_text("100 (python3) S 1 " + " ".join(["0"] * 17) + " 2000 0 0\n")
     set_written(proc, 100, 5000 * MB)
-    assert W.writers(before, W.snapshot(str(proc)), 60.0, 10.0, dict, "n2", str(proc)) == []
+    assert W.writers(before, W.snapshot(str(proc)), 60.0, 10.0, "n2", str(proc)) == []
     status = tmp_path / "status.txt"
     status.write_text("2026-10-01T03:47:17Z free GPUs 7/8, kept free -, waiters -, timed False, window waiting False, backfill False\n")
     assert not W.window_running(str(status))

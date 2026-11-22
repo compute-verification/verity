@@ -8,6 +8,4 @@ testpaths = ["."]
 inputs = ["benchmarks/served_errors", "benchmarks/spot_figures/cards/workload.glm-5.3.json",
     "security/Proofs/Pouw/PearlC/ServedH100Rev1Gap.lean",
     "security/Proofs/Flock/Claims/NumbersDeploy.lean",
-    "security/Proofs/Properties/Verity/Recursive.lean",
-    "security/Proofs/Properties/Verity/Recursive/Audit.lean",
 ]

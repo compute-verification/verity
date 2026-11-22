@@ -4,9 +4,7 @@
     vy-lockout plan NODE                      every step in order, with its check and its rollback
     vy-lockout preflight NODE [--json]        each check the sudoers step needs, pass or fail, and how to fix a failure
     vy-lockout switch NODE (--unit U | --all) [--apply] [--back]     a tmux loop -> its systemd unit (--back: unit -> tmux)
-    vy-lockout root-units NODE [--apply] [--back]                    the loops that need cluster-admin, as root
     vy-lockout roots [--apply] [--back]       the runs roots root's and sticky, so a sealed run can't be renamed or replaced
-    vy-lockout kubeconfig [--apply] [--back]  research's kubeconfig: cluster-admin out, a read-only token in
     vy-lockout harden [--apply] [--back]      ubuntu out of lxd, py-spy without cap_sys_ptrace, research in systemd-journal
     vy-lockout sudoers --node NODE [--apply] [--skip CHECK]...       research's ALL -> the node's allowlist, with the 24 h fallback
     vy-lockout fallback on [--hours H] | off | expire                the fallback; `on` only for vy-admin
@@ -15,7 +13,7 @@
     vy-lockout rollback [--apply]             the sudoers step undone: cloud-init's grant back, the allowlist and fallback out
     vy-lockout render [--node NODE]           the node's allowlist as sudoers: its file under sudoers/ is this, byte for byte
 
-NODE is vy-nebius-1, vy-nebius-2 or a CPU node (vy-nebius-cpu-N). A CPU node has no loop to switch and no cluster, so its plan
+NODE is vy-nebius-2 or a CPU node (vy-nebius-cpu-N). A CPU node has no loop to switch, so its plan
 is deploy, vy-admin, seal, harden, sudoers, watch, and its allowlist is its own, smaller one (PROFILES).
 
 Without --apply every step says what it would do and changes nothing. A step with --apply stops at its first failure. Each
@@ -29,7 +27,6 @@ vy-sudo-fallback-expire.timer (root, every 10 min and at boot) enforces: past it
 from __future__ import annotations
 
 import argparse
-import base64
 import calendar
 import fnmatch
 import json
@@ -56,11 +53,7 @@ CLOUD_INIT = "90-cloud-init-users"
 JOB_GROUP = "vy-job"                                       # vy-sudo's JOB_GROUP: a job's unit runs only as an account listed in it
 BACKUP = Path("/root/vy-lockout")
 UNITS = Path("/etc/systemd/system")
-ENVS = Path("/etc/vy/env")
-DROPIN = "50-vy-root.conf"
 RUNS_ROOTS = ("/workspace/research/runs", "/workspace/jobs/runs")
-K3S_CONFIG = "/etc/rancher/k3s/k3s.yaml"
-RESEARCH_KUBE = Path("/home/research/.kube")
 PY_SPY = "/usr/local/bin/py-spy"
 FALLBACK_HOURS = 24
 SHELLS = ("bash", "sh", "zsh", "dash")
@@ -146,8 +139,7 @@ def profile(node: str) -> Profile:
     raise ValueError(f"{node or 'no node'}: one of {', '.join(SWITCH)} or a CPU node (vy-nebius-cpu-N)")
 
 EXCLUDED = {
-    "k3s kubectl, kubectl": "journal n1 410,831 + 106: reads go through research's read-only kubeconfig (research-view.yaml); "
-                            "no cluster-admin",
+    "k3s kubectl, kubectl": "journal n1 410,831 + 106: no cluster-admin",
     "find, xargs, du, readlink, grep, ls, cat, awk, stat, head, sha256sum, lsof, fuser": "journal n1 ~35,000: other users' /proc and "
         "files; as root, any of them reads every secret on the node (`xargs du` too: `du --files0-from=FILE` prints FILE in its errors)",
     "rm, mv, cp, chown, chmod, install, tee, sed, rsync, tar, mkdir": "writes as root (n1 423 rm, n2 111 rm, 6 install, 7 tee): "
@@ -268,27 +260,20 @@ def audit(journal: str, p: Profile = CLUSTER) -> list[tuple[int, str]]:
 class Loop:
     unit: str                     # the unit that replaces it
     tmux: str | None              # research's tmux session it replaces (None: nothing ran it before)
-    root: bool = False            # a root unit in the root-units step (it needs cluster-admin or other users' /proc)
-    code: tuple[str, ...] = ()    # what a root unit runs: files and trees that must be root's and nobody else's to write
-    writes: tuple[str, ...] = ()  # directories it writes in: root's too, or a symlink there redirects a root write anywhere
 
 
-#: Each node's loops in switch order: observers first, then the workers. Stop order for --back is the reverse. Node 1's other tmux sessions (fp-feed, gm-*, kueue-shadow, q30b-backstop) are
-#: lanes' and stay research's; node 2's pouw-infra-* are compute accounting's user units (deploy.toml), not switched here.
+#: Each node's loops in switch order: observers first, then the workers. Stop order for --back is the reverse. Node 2's pouw-infra-* are compute accounting's user units (deploy.toml), not
+#: switched here.
 SWITCH = {
-    "vy-nebius-1": (
-        Loop("vy-write-probe@vy-nebius-1.service", "write-probe"),
-    ),
     "vy-nebius-2": (
         Loop("vy-write-probe@vy-nebius-2.service", "write-probe"),
         Loop("vy-monitors.timer", None),
     ),
 }
-COMMON_CODE = ("/etc/vy/env", K3S_CONFIG)
 
 
 def unit_file(unit: str) -> str:
-    """The unit file a unit loads: a template's for an instance (vy-write-probe@vy-nebius-1.service -> vy-write-probe@.service)."""
+    """The unit file a unit loads: a template's for an instance (vy-write-probe@vy-nebius-2.service -> vy-write-probe@.service)."""
     name, _, kind = unit.rpartition(".")
     base, at, _inst = name.partition("@")
     return f"{base}@.{kind}" if at else unit
@@ -347,11 +332,6 @@ def untrusted(paths: tuple[str, ...] | list[str], lstat: Callable = os.lstat, wa
             check(os.path.realpath(p))
     seen: set[str] = set()
     return [b for b in bad if not (b in seen or seen.add(b))]
-
-
-def kubeconfig_admin(text: str) -> bool:
-    """Whether a kubeconfig carries a client certificate's key (k3s's admin identity), rather than a token."""
-    return bool(re.search(r"^\s*client-key(-data)?:", text, re.M))
 
 
 def groups_of(user: str, group_file: str = "/etc/group") -> set[str]:
@@ -431,10 +411,6 @@ def preflight(node: str, run: Runner = _run, root: Path = Path("/"), session: Ca
     getcap = run(["getcap", PY_SPY])
     out.append(Check("py-spy", "cap_sys_ptrace" not in getcap.stdout, getcap.stdout.strip() or f"{PY_SPY}: no capability",
                      "vy-lockout harden --apply (cap_sys_ptrace lets anyone read any process's memory)"))
-    admin = [str(p) for p in sorted(at(RESEARCH_KUBE).glob("*")) if p.is_file() and kubeconfig_admin(p.read_text(errors="replace"))] \
-        if at(RESEARCH_KUBE).is_dir() else []
-    out.append(Check("kubeconfig", not admin, "research holds a cluster-admin kubeconfig: " + ", ".join(admin) if admin else
-                     "no client key under ~research/.kube", "vy-lockout kubeconfig --apply, then rotate k3s's client certificates"))
     out.append(Check("journal-group", "systemd-journal" in (groups_of("research", str(at("/etc/group"))) if at("/etc/group").exists()
                                                              else set()), "research reads the journal without sudo",
                      "vy-lockout harden --apply"))
@@ -456,10 +432,6 @@ def preflight(node: str, run: Runner = _run, root: Path = Path("/"), session: Ca
             ls = run(["runuser", "-u", "research", "--", "tmux", "has-session", "-t", f"={loop.tmux}"])
             out.append(Check(f"switched:{loop.unit}", ls.returncode != 0, f"tmux {loop.tmux} {'still runs' if ls.returncode == 0 else 'gone'}",
                              f"vy-lockout switch {node} --unit {loop.unit} --apply"))
-        if loop.root:
-            drop = at(UNITS / f"{unit_file(service_of(loop.unit))}.d" / DROPIN)
-            out.append(Check(f"root-unit:{loop.unit}", drop.is_file(), "runs as root" if drop.is_file() else "runs as research",
-                             f"vy-lockout root-units {node} --apply"))
     for tool in ("/usr/local/sbin/vy-sudo", "/usr/local/sbin/vy-seal-runs", "/usr/local/sbin/vy-lockout"):
         bad = untrusted([str(at(tool))]) if root == Path("/") else []
         out.append(Check(f"tool:{tool}", at(tool).is_file() and not bad, "; ".join(bad) or "root's",
@@ -552,28 +524,6 @@ def step_switch(ctx: Ctx, node: str, units: list[str], back: bool, wait: Callabl
         ctx.say(f"{lp.unit}: {'active' if ctx.apply else 'would be active'}" + (f", replacing tmux {lp.tmux}" if lp.tmux else ""))
 
 
-def step_root_units(ctx: Ctx, node: str, back: bool, lib: Path = LIB, units: Path = UNITS, envs: Path = ENVS) -> None:
-    loops = [lp for lp in SWITCH[node] if lp.root]
-    if not back:
-        bad = untrusted([*COMMON_CODE, *sorted({p for lp in loops for p in lp.code + lp.writes})])
-        if bad:
-            for b in bad:
-                ctx.say(f"  not root's alone: {b}")
-            raise Failed(f"{len(bad)} paths a root unit would run or write are not root's alone: chown root:root and chmod go-w "
-                         "each (or move what writes there), then rerun")
-        if ctx.apply and not (envs / "root.env").is_file():
-            raise Failed(f"{envs / 'root.env'} is not installed: research deploy install first")
-    for lp in loops:
-        d = units / f"{unit_file(service_of(lp.unit))}.d"
-        if back:
-            ctx.do(["rm", "-f", str(d / DROPIN)])
-        else:
-            ctx.do(["install", "-D", "-m", "0644", "-o", "root", "-g", "root", str(lib / "vy-root.conf"), str(d / DROPIN)])
-    ctx.do(["systemctl", "daemon-reload"])
-    for lp in loops:
-        ctx.do(["systemctl", "try-restart", service_of(lp.unit)])
-
-
 def step_roots(ctx: Ctx, back: bool, backup: Path = BACKUP) -> None:
     rec = backup / "roots.json"
     if back:
@@ -595,41 +545,6 @@ def step_roots(ctx: Ctx, back: bool, backup: Path = BACKUP) -> None:
     if ctx.apply and not rec.exists():
         backup.mkdir(mode=0o700, parents=True, exist_ok=True)
         rec.write_text(json.dumps(saved, indent=1) + "\n")
-
-
-def research_kubeconfig(token: str, ca_b64: str, server: str = "https://127.0.0.1:6443") -> str:
-    return ("apiVersion: v1\nkind: Config\nclusters:\n- name: vy-nebius-1\n  cluster:\n"
-            f"    server: {server}\n    certificate-authority-data: {ca_b64}\n"
-            "users:\n- name: research-view\n  user:\n"
-            f"    token: {token}\n"
-            "contexts:\n- name: research-view\n  context:\n    cluster: vy-nebius-1\n    user: research-view\n"
-            "current-context: research-view\n")
-
-
-def step_kubeconfig(ctx: Ctx, back: bool, lib: Path = LIB, kube: Path = RESEARCH_KUBE, backup: Path = BACKUP) -> None:
-    saved = backup / "kube"
-    if back:
-        ctx.do(["cp", "-a", f"{saved}/.", str(kube)], f"restore {kube} from {saved}")
-        return
-    ctx.do(["k3s", "kubectl", "apply", "-f", str(lib / "research-view.yaml")])
-    if not ctx.apply:
-        ctx.say(f"would: move every file of {kube} to {saved}, and write {kube / 'config'} with research-view's token (0600 research)")
-        return
-    r = ctx.run(["k3s", "kubectl", "-n", "vy-lockout", "get", "secret", "research-view-token", "-o", "jsonpath={.data.token}"])
-    token = base64.b64decode(r.stdout.strip()).decode() if r.returncode == 0 and r.stdout.strip() else ""
-    m = re.search(r"certificate-authority-data:\s*(\S+)", Path(K3S_CONFIG).read_text())
-    if not token or not m:
-        raise Failed("research-view's token or the cluster CA isn't there yet: rerun in a few seconds")
-    saved.mkdir(mode=0o700, parents=True, exist_ok=True)
-    for p in sorted(kube.glob("*")):
-        if p.is_file():
-            shutil.move(str(p), saved / p.name)
-    cfg = kube / "config"
-    fd = os.open(cfg, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w") as fh:
-        fh.write(research_kubeconfig(token, m.group(1)))
-    shutil.chown(cfg, "research", "research")
-    ctx.say(f"+ {cfg}: research-view (read-only); the old files are in {saved}")
 
 
 def step_harden(ctx: Ctx, back: bool) -> None:
@@ -705,7 +620,7 @@ def plan_text(node: str) -> str:
     loops, cluster = SWITCH.get(node, ()), profile(node) is CLUSTER
     rows = [
         ("deploy", (f"from an agent VM: `research deploy install {node} --by WHO --apply` (stages /usr/local/lib/vy-lockout"
-                    ", the tools and node 1's /etc/vy/env/root.env" if cluster else
+                    ", the tools" if cluster else
                     f"from an agent VM: `research deploy install {node} --only lockout --by WHO`, which prints what it would write "
                     "and the allowlist research keeps, and refuses while the node holds a check slot; then the same with `--apply` "
                     "(stages /usr/local/lib/vy-lockout and the tools") + "; installs nothing into "
@@ -730,11 +645,7 @@ def plan_text(node: str) -> str:
                  "(sealed dirs stay sealed: /var/lib/vy-seal-runs/sealed.jsonl has each one's former owner and mode)"),
         *([("switch", "one loop at a time, in this order: " + ", ".join(f"{lp.unit}" + (f" (tmux {lp.tmux})" if lp.tmux else "")
                                                                   for lp in loops) + f"; `vy-lockout switch {node} --unit U --apply`",
-            f"vy-lockout switch {node} --unit U --back --apply, newest first"),
-           ("root-units", f"`vy-lockout root-units {node}` lists what isn't root's alone; fix each, then --apply",
-            f"vy-lockout root-units {node} --back --apply"),
-           ("kubeconfig", "`vy-lockout kubeconfig --apply`; then `k3s certificate rotate` in a quiet window (copies of the old admin "
-                          "key elsewhere stop working)", "vy-lockout kubeconfig --back --apply")] if cluster else []),
+            f"vy-lockout switch {node} --unit U --back --apply, newest first")] if cluster else []),
         ("harden", "`vy-lockout harden --apply`", "vy-lockout harden --back --apply"),
         ("sudoers", f"`vy-lockout preflight {node}` all ok, then `vy-lockout sudoers --node {node} --apply`: allowlist + 24 h "
                     "fallback, cloud-init's grant moved aside. From here `research deploy install` (sudo python3) needs vy-admin's "
@@ -775,11 +686,9 @@ def main(argv: list[str] | None = None) -> int:
     g.add_argument("--all", action="store_true")
     p.add_argument("--back", action="store_true")
     p.add_argument("--apply", action="store_true")
-    p = sub.add_parser("root-units")
-    p.add_argument("node", choices=sorted(SWITCH))
-    for name in ("roots", "kubeconfig", "harden"):
+    for name in ("roots", "harden"):
         sub.add_parser(name)
-    for name in ("root-units", "roots", "kubeconfig", "harden"):
+    for name in ("roots", "harden"):
         sp = sub.choices[name]
         sp.add_argument("--back", action="store_true")
         sp.add_argument("--apply", action="store_true")
@@ -796,7 +705,7 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("rollback")
     p.add_argument("--apply", action="store_true")
     p = sub.add_parser("render")
-    p.add_argument("--node", type=node_name, default="vy-nebius-1")
+    p.add_argument("--node", type=node_name, default="vy-nebius-2")
     ns = ap.parse_args(argv)
     if ns.cmd == "render":
         sys.stdout.write(render(profile(ns.node)))
@@ -827,12 +736,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if ns.cmd == "switch":
             step_switch(ctx, ns.node, [lp.unit for lp in SWITCH[ns.node]] if ns.all else ns.unit, ns.back)
-        elif ns.cmd == "root-units":
-            step_root_units(ctx, ns.node, ns.back)
         elif ns.cmd == "roots":
             step_roots(ctx, ns.back)
-        elif ns.cmd == "kubeconfig":
-            step_kubeconfig(ctx, ns.back)
         elif ns.cmd == "harden":
             step_harden(ctx, ns.back)
         elif ns.cmd == "sudoers":

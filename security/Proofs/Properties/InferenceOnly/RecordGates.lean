@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Properties.InferenceOnly.DecodeKeys
+public import Proofs.Properties.Flock.Decoder.DecodeKeys
 public import Proofs.Properties.InferenceOnly.RecordTakes
 public import Proofs.Properties.InferenceOnly.RecordUnits
 public import Proofs.Properties.InferenceOnly.OperandsResolve
@@ -44,12 +44,14 @@ Definition of the root's key before the root (`DecodeKeys.root_first`). -/
 theorem readProg_of_decode {bytes : ByteArray} {P : Prog} (hdec : Flock.Program.decode bytes = .ok P)
     (hov : P.orderViolation = none) (hl : Desc.rootLaidOut P = true) (hin : Desc.inputsAtRoot P = true)
     (hwk : Desc.walkable P = true) (hkey : Spot.RecordText.keyedAsInput P = false) : ReadProg P :=
+  have hrc := Walk.walkable_recut P hwk
   ⟨⟨bytes, hdec⟩, hov, hl, hin, hwk, hkey, DecodeKeys.root_first bytes P hdec⟩
 
 /-- **The template query passes over the input nodes of a Program the record check reads**: a root node's callee is
 a Definition before the root and the first of its key (`DecodeKeys.decode_keys`), and where its key is an input id
 it is a primitive, since no root node calls a composite keyed as an input. -/
 theorem readProg_inputs {P : Prog} (hP : ReadProg P) : InputsRead P := by
+  have hrc := Walk.walkable_recut P hP.2.2.2.2.1
   obtain ⟨⟨bytes, hdec⟩, -, -, -, -, hkey, -⟩ := hP
   obtain ⟨hr, -, -⟩ := BodiesOk.decode_root bytes P hdec
   obtain ⟨st, hPd, hinv, -⟩ := BodiesOk.decode_spec bytes P hdec
@@ -130,6 +132,7 @@ laid out, and every reference of a body that resolution reaches in range. -/
 theorem read_bodies {P : Prog} (hP : ReadProg P) :
     P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false ∧ (∀ d < P.defs.size, Walk.LaidOut P d) ∧
       ∀ sc, Resolve.Good P sc → Resolve.BodyOk P sc.d := by
+  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Walk.walkable_recut P hP.2.2.2.2.1
   obtain ⟨⟨bytes, hdec⟩, hov, -, -, hwk, -, -⟩ := hP
   obtain ⟨hr, hrp, -⟩ := BodiesOk.decode_root bytes P hdec
   unfold Desc.walkable at hwk
@@ -176,9 +179,10 @@ theorem gate_located {P : Prog} (hP : ReadProg P) {g : ℕ} (hg : g < gates P) :
         ((Desc.activations P)[P.root]! + 1) * ((Desc.depths P)[P.root]! + 2) := Nat.mul_le_mul_left _ (by omega)
     omega
   have hg' : g < (P.defs[P.root]!).gates := hg
-  obtain ⟨⟨p, ops, sc⟩, hx⟩ := Walk.gate_ok_of P hc hlay hr hrp (Walk.depth_lt_fuel P hwk) hg'
+  obtain ⟨⟨p, ops, sc⟩, hx⟩ := Walk.gate_ok_of P hc hlay hr hrp (Walk.walkable_recut P hwk) (Walk.depth_lt_fuel P hwk) hg'
     (fun sc hR _ k hk hpk m hm e => by
-      obtain ⟨ops, hops⟩ := OperandsResolve.operands_prim P ⟨hr, hrp⟩ hB hlay hc hpar hz hfuel sc
+      obtain ⟨ops, hops⟩ := OperandsResolve.operands_prim P ⟨hr, hrp⟩ hB hlay hc hpar hz hfuel
+        (OperandsResolve.resolvable_recut P hres) sc
         (OperandsResolve.reach_walkQ P ⟨hr, hrp⟩ hB hlay hg' hR).1 k hk hpk m hm
       rw [hops]
       exact fun h => by cases h)

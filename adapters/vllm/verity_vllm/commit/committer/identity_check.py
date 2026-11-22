@@ -90,18 +90,15 @@ def expected_manifest(acquired: list[tuple[str, Any]], sources: list[Any], runne
         modules += [s for s in (sites() if sites is not None else ()) if s not in modules]
     return {"modules": modules, "attention_layers": attn_layers, "fa2_hidden_per_layer": 1 if fa2 else 0, "sampler_ids": 1 if any(n == "runner.sampler" for n in modules) else 0,
             "moe_layers": moe_layers, "moe_tensors_per_layer": (getattr(moe_src, "stats", {}).get("tensors_per_layer", 6) if moe_src is not None else 0),
-            "moe_hash_layers": sorted(getattr(moe_src, "hash_layers", ())),        # a hash layer's router commits one more (`moe_source`: ids, in)
             "router_softmax_layers": sorted(int(k) for k in rs_src.layers) if rs_src is not None else [], "tp_sites": sorted(tp_src.site_names()) if tp_src is not None else [], "tp_rank": (tp_src.rank if tp_src is not None else None),
             # partials per site per step: 1, or a mid-module site's call count (OlmoeAttention: 2 gathers); the calls its instance's flags rule out are listed
             "tp_site_counts": (dict(tp_src.site_counts()) if tp_src is not None and hasattr(tp_src, "site_counts") else {}), "tp_sites_ruled_out": list(getattr(tp_src, "mid_sites_ruled_out", None) or [])}
 
 
 def moe_layer_of(sources: list[Any]) -> Any:
-    """The MoE source's `layer_of`: the layer of each name it commits (its planes, or its values at calls under a MoE module),
-    which it holds to its own rule; None for every name without one.  Without the source (an offline committer), a plane's layer."""
+    """The layer of each MoE plane's name (`moe/L<k>/<plane>`); None for every other name."""
     from verity_vllm.acquire.sources.moe_source import plane_layer
-    src = next((s for s in sources if getattr(s, "short_name", "") == "moe"), None)
-    return getattr(src, "layer_of", None) or plane_layer
+    return plane_layer
 
 
 def identity_check(man: dict[str, Any], layouts: dict[int, Any], sources: list[Any], decls: list[Any],
@@ -114,7 +111,7 @@ def identity_check(man: dict[str, Any], layouts: dict[int, Any], sources: list[A
     differ), else the uniform rule "every layer the same positive count"; (3) exactly one sampled-ids tensor; (4) the multiset of
     module-tensor NAMES (with multiplicity: a shared RotaryEmbedding is legitimately called once per layer) is the same in every step of
     the run -- the per-step call structure of the model does not depend on the token count.  A step that drops one tensor and
-    duplicates another keeps its count and FAILS (1) or (4).  With a route source (`acquire.sources.route_source`: the capture map's
+    duplicates another keeps its count and FAILS (1) or (4).  With a route source (the capture map's
     model), the names the map lists are held to the map's names for the step's routes (`routes_bad`) instead of (1) and (4), and (1)
     covers the hooked modules the map has no entry for.  `step_rows` is the collector's row record of each step's active sequences
     and `policy` the committer's own staging rule, each None where it has none (`step_sequences`, `plane_policy`)."""
@@ -176,9 +173,8 @@ def identity_check(man: dict[str, Any], layouts: dict[int, Any], sources: list[A
         moe_bad: dict[int, int] = {}
         if man.get("moe_layers"):
             moe_counts = Counter(k for n in names.elements() if (k := moe_of(n)) is not None)
-            want, rs_layers, hash_layers = (int(man.get("moe_tensors_per_layer") or 0), set(_listed(man, "router_softmax_layers")),
-                                            set(_listed(man, "moe_hash_layers")))
-            moe_bad = {k: moe_counts.get(k, 0) for k in man["moe_layers"] if moe_counts.get(k, 0) != want + (k in rs_layers) + (k in hash_layers)}
+            want, rs_layers = int(man.get("moe_tensors_per_layer") or 0), set(_listed(man, "router_softmax_layers"))
+            moe_bad = {k: moe_counts.get(k, 0) for k in man["moe_layers"] if moe_counts.get(k, 0) != want + (k in rs_layers)}
             moe_bad.update({k: c for k, c in moe_counts.items() if k not in man["moe_layers"]})
         elif any(n.startswith("moe/") for n in names):
             moe_bad = {-1: sum(c for n, c in names.items() if n.startswith("moe/"))}      # MoE tensors from no declared source

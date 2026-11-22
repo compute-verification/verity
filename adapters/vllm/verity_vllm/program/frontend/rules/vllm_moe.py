@@ -30,8 +30,8 @@ DECLARED construction (`vllm_bindings.active_target_profile().effective_moe_cons
     expert id as a VALUE operand, the activation, the routed sum; every intermediate (`topk_weights`, `topk_ids`, the pair caches) is a
     value of the Program.
   * `padded` (the `Padded*` rules below): the block as ONE kind per token, `MoeFfnFixedL_v1{E,TOPK,VPT,H,I}(x_t, logits_t, W13, W2)`
-    (`registry.moe_pad`: ALL E expert bodies on their own fixed weights, the TOPK slot outputs selected by the router ids, `MoeSum_v1`;
-    its lift of record the hand-authored `LMoeFfnL_v1`, the unselected slots DISABLED).  The rules bind the same six launches in the same
+    (`registry.moe_pad`: ALL E expert bodies on their own fixed weights, the TOPK slot outputs selected by the router ids, `MoeSum_v1`).
+    The rules bind the same six launches in the same
     order with the SAME pins (`_launch_pins`), but the intermediates are not values: `topk_softmax` rebinds `w` / `ids` to a `PaddedRoute`
     MARKER (the logits rows it was computed from), the align kernel to a `PaddedSchedule` marker over it, the up GEMM's `c` to `PaddedUp`
     (the hidden rows + W13 it read), `silu_and_mul`'s `out` to `PaddedAct`, the down GEMM's `c` to `PaddedDown` (+ W2), and `moe_sum` --
@@ -869,8 +869,7 @@ class PaddedMoeSumRule(InPlaceRule):
         ctx.rebind(out, from_rows(outs, (M,)), self, what="output")
         w13, w2 = ctx.weight_of(up.w13_node), ctx.weight_of(dn.w2_node)
         ctx.record(self, node, {"E": E, "TOPK": TOPK, "VPT": VPT, "H": H, "I": INTER, "rows": M, "schedule": up.schedule, "moe_construction": PADDED,
-                                "W13_is_parameter": w13.name if w13 else None, "W2_is_parameter": w2.name if w2 else None,
-                                "lift_of_record": "LMoeFfnL_v1 (hand-authored; registry.lifted.register_hand_lift)"},
+                                "W13_is_parameter": w13.name if w13 else None, "W2_is_parameter": w2.name if w2 else None},
                    emitted=f"{fn.id} x{M}")
 
 

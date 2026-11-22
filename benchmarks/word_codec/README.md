@@ -2,11 +2,11 @@
 
 Memory accounting's store is encoded under Sloth codecs, and this directory holds them. Each codec here is a byte-exact Python reference, a CUDA kernel and an arithmetic twin of the kernel: the word codec (Sloth in one
 61-bit word, which `benchmarks/vllm_encoded` serves), the KV cache's codec `verity/word-codec/kv/v0`, whose kernel is
-PoUB's prover's (`verity/protocols/resource_accounting/memory/poub/prover/word_codec/`), and the wide codecs.
+PoUB's prover's (`verity/protocols/accounting/memory/poub/prover/word_codec/`), and the wide codecs.
 
 **Backs:** the codec whose word the named assumptions
 `ResourceAccounting.Assumptions.SquaringFloor` and `ChainSum` price is `kv/v0`, and the bandwidth audit's vectors test
-(`tests/verity/protocols/resource_accounting/memory/poub/verifier/test_poub_vectors.py`) holds the audit's codec to it.
+(`tests/verity/protocols/accounting/memory/poub/verifier/test_poub_vectors.py`) holds the audit's codec to it.
 
 ## Try it
 

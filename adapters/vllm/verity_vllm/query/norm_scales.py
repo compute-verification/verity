@@ -1,5 +1,5 @@
 """The norm scale as a required value: one 32-bit word per norm Call per row, the one committed interior value `Q_word_v1{16,32}`
-derives for a norm.  Opt-in (`manifest build --norm-scales`, the row's NORM_TAP): with it off nothing here runs, and no manifest,
+derives for a norm.  Opt-in: with it off nothing here runs, and no manifest,
 Program, root or verdict changes.
 
 Two kinds of norm carry the scale:
@@ -7,7 +7,7 @@ Two kinds of norm carry the scale:
 * kernel norms (`KERNEL_SCALES`): `RMSNormTriton_v1` (vLLM's batch-invariant Triton `_rms_norm_kernel`, whose `inv_rms` is the Call's
   `inv` gate) and `RMSNormFusedCuda_v2` (vLLM's generic `fused_add_rms_norm_kernel`, whose `s_variance` is the `RsqrtApprox` gate).
   The scale is interior to the Call, so no Program Value carries it: `kernel_rows` adds one `norm_scales` identity per (step, norm
-  module), ranging over the module's Call rows at that step, and the norm-scale tap acquires it (`acquire.sources.norm_scale_source`);
+  module), ranging over the module's Call rows at that step, which no source acquires since the capture plan (its classes hold no norm scale);
 * an ATen-chain norm (`CALL_SCALES`): the unfused chain's `RsqrtF32_v1{N=1}` Call, whose output is the row's scale and is interior to
   the norm's module body.  `population` makes it protocol-required and spells it `norm_scale` in the `norm_scales` family.
 

@@ -20,8 +20,12 @@ statement reads, the audit fails on any difference, and a changed record is show
 bash tools/verity/lean/setup.sh PKG
   elan, PKG's lean-toolchain, its pinned dependencies, Mathlib's cache when Mathlib is a dependency, and main's cached
   build of PKG (`cache.py`)
-python tools/verity/lean/cache.py get [PKG...]
-  main's cached build of each package, every file sha256-checked
+python tools/verity/lean/cache.py get [PKG...] [--branch NAME]
+  main's cached build of each package, every file sha256-checked (with --branch, the newer of main's and the branch's)
+python tools/verity/lean/cache.py get --bin DIR [PKG...] [--branch NAME] [--exact]
+  each package's built executables (its Lean verifiers among them) in DIR/<package>/ (the path quoted), sha256-checked,
+  with no Lean here, and the commit they were built at in DIR/<package>.json (--exact: HEAD's own build or nothing):
+  for the prover and development, not for a verdict of record
 python tools/verity/lean/check.py [--build] PKG...
   audit these packages (--build: setup.sh and lake build first)
 python tools/verity/lean/check.py --update PKG...
@@ -168,7 +172,7 @@ keeps or drops from and never adds to.
   than the kernel checks), each an exempt module that passes when it exits 0, on data used only with the SHA-256
   under `data` (`tests`, `run_paths`; `--no-runs` skips them). Generated data stays out of Git and out of the key of
   `check`'s audit step, so a test of the package's own checks that the generator still writes the recorded data
-  (PoUW's `tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_lean_package.py`).
+  (PoUW's `tests/verity/protocols/accounting/compute/pouw/verifier/test_lean_package.py`).
 - `axioms` (optional): the allowed axioms.
 - `assumptions_module`, `assumptions`, `domain`, `open`: the premises the guarantees take, by kind
   (`assumption_records`, `unfolding`, `read_props`). A named assumption is declared in a module `assumptions_module`
@@ -324,9 +328,9 @@ The auditor:
 - `upstream.py`, `Upstream.lean`: the watch on what a pinned dependency proves about what a package assumes.
 - `merge.py`: git's merge drivers for `lean-audit.json`, import lines, lakefile lists and the limits.
 - `claim_ids.py`: the claim ids' table, `verity/commitments/claim_ids.json`, from the ids the locks' premise entries
-  carry (`--write`; `tests/test_claim_ids_table.py` holds the table to it).
-- `cache.py`: the build cache: main's compiled modules, published on merge and restored sha256-checked; the audit
-  never reads it. `run_daily.py`: its daily publish.
+  carry (`--write`).
+- `cache.py`: the build cache: main's compiled modules and built executables (and a branch's, under `branch/<name>/`),
+  published on merge and restored sha256-checked; the audit never reads it. `run_daily.py`: its daily publish.
 
 Lean's job in `check` and the tools around the audit:
 

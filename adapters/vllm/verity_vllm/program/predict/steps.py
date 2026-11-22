@@ -112,7 +112,7 @@ request instead: a refused request's rows and Program leave the compilation, and
 KV; `refused` names why. It records `check_compiled`'s refusal (`batch_rule`) rather than raising it.
 
 The compiler digest is `score.code_version()`, with ℓ beside it. `Compiled.transfer_gates` lists the templates whose units hold
-transfer gates (the ingress parse and the token selects), each of which a window proves whole. `trace_commands` (`traced`) lists the Build traces (`verity-vllm build
+transfer gates (the ingress parse and the token selects, each by its name or its body: `egress`, which refuses a select's name over another body), each of which a window proves whole. `trace_commands` (`traced`) lists the Build traces (`verity-vllm build
 --wrapper request`, in class G at the unit's `--launch-context` and `--batched`) of a compilation's Programs, and `compare` holds the compiled digests to them. With `named=True` each Program
 carries what its trace's Build says beside it (`Compiled.named`, `naming`), so an auditor writes that Build with no vLLM.
 """
@@ -143,6 +143,7 @@ from verity_vllm.records.schema_ids import COMPILED_STEPS_SCHEMA
 
 from . import reads
 from .build import Unexpressible, build_program, decoder, model_shape
+from .by_body import egress
 from .common import cyclic_gc_off, edge_config
 from .hits import Rows, check_sources, hit_chunks, producers_of
 from .ingress_policy import ingress_body, policy_of, request_of
@@ -152,10 +153,6 @@ from .traced import NO_EDGE_TRACE, NO_PARTIAL_TRACE, trace_dir
 from .traced import trace_commands as trace_commands
 
 SCHEMA = COMPILED_STEPS_SCHEMA
-#: the token-select families, whose units' sampled ids are a request Program's egress (`Compiled.transfer_gates`)
-EGRESS = ("TokenSelect", "GumbelTopPTokenSelect")
-
-
 @dataclass(frozen=True)
 class Registered:
     """The registration's static part: φ without workload or sampling (the model, target, TP, engine, execution and profile), the
@@ -282,8 +279,8 @@ class Compiled:
         (`RequestUnit.parse`) and its Program's token selects, whose sampled ids are the egress until an in-circuit renderer takes
         their place. No model-step template is among them."""
         ids = {u.parse.id for u in self.requests if u is not None and u.parse is not None}
-        callees = {n.fn.id for p in self.programs.values() for n in p.fn.body.nodes}
-        ids |= {i for i in callees if i.split("{")[0].rsplit("_v", 1)[0] in EGRESS}
+        callees = {n.fn.id: n.fn for p in self.programs.values() for n in p.fn.body.nodes}
+        ids |= {i for i, fn in callees.items() if egress(fn)}
         return tuple(sorted(ids))
 
     def summary(self) -> dict:

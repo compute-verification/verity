@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import io
 
 import pytest
 
@@ -26,9 +25,7 @@ from verity_vllm.observe.events import (
 from verity_vllm.observe.fold.tree import build_trees, op_histogram, step_events
 from verity_vllm.observe.log import (
     LogWriter,
-    dumps,
     read_log,
-    read_log_lines,
     split_steps,
 )
 
@@ -95,7 +92,6 @@ def test_log_roundtrip_file(tmp_path):
         assert w.count == len(evs)
     back = list(read_log(p))
     assert back == evs
-    assert list(read_log_lines(io.StringIO(dumps(evs)))) == evs
 
 
 def test_split_steps_and_trees():

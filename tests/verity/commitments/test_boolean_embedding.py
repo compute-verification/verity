@@ -67,10 +67,10 @@ def _columns(rows) -> list[np.ndarray]:
     return [np.array([r[k] for r in rows], dtype=np.uint8) for k in range(len(rows[0]))]
 
 
-def _evaluate(V: int, H: int, cases: list[tuple]) -> list[tuple[list[int], int]]:
+def _evaluate(V: int, H: int, cases: list[tuple], target=E.read) -> list[tuple[list[int], int]]:
     args = [E.arguments(V, *c) for c in cases]
     toks = np.array([[c[0] & 0xFFFFFFFF] for c in cases], dtype=object)
-    got = evaluate_batch(E.read(V, H), toks, *(np.array([a[k] for a in args], dtype=object) for k in range(1, 6)))
+    got = evaluate_batch(target(V, H), toks, *(np.array([a[k] for a in args], dtype=object) for k in range(1, 6)))
     return [([int(w) for w in g[:H]], int(g[H])) for g in np.asarray(got).reshape(len(cases), -1)]
 
 
@@ -161,3 +161,30 @@ def test_the_read_costs_the_pinned_gates() -> None:
         assert E.EmbeddingReadSelect.traced(V, H).counts == dict(zip(("and", "xor", "not"), counts)), (V, H)
     for (V, H), gates in READS.items():
         assert E.read(V, H).gates == gates, (V, H)
+
+
+def test_the_opening_returns_its_verdict_as_a_word() -> None:
+    """`EmbeddingRead_v3`: the read's ports, its row as whole words and its verdict a 16-bit word after them, so every
+    return leaf is a word; its row is a batch of one-word selections over the row parameter, which a lowering steps a
+    whole copy at a time."""
+    target = E.opening(5, 2)
+    widths = lambda d: [(n, t.leaf_widths()) for n, t in d.signature()[0]]
+    assert widths(target) == widths(E.read(5, 2))
+    assert target.signature()[1].leaf_widths() == [16] * 3
+
+
+@pytest.mark.slow
+def test_an_opening_is_1_on_its_row_and_0_on_a_wrong_row_key_or_root() -> None:
+    """A few minutes of tracing at D = 3 over two-word rows, as the v2 read's: the honest opening's verdict word is 1 and its
+    row the row; one with another row, another root, or a key at or past V (V, 2^31, the largest unsigned) is the word 0,
+    which a reader that requires 1 refuses; and the evaluation is the reference's."""
+    rng = random.Random("embedding-opening-gates")
+    V, H = 5, 2
+    dom, rows, salts, table = _table(rng, V, H)
+    honest = (3, table.root, dom.domain_id, rows[3], salts[3], _path(table, 3))
+    bad_row = [rows[3][0] ^ 1, rows[3][1]]
+    cases = [honest, (*honest[:3], bad_row, *honest[4:]), (3, rng.randbytes(64), *honest[2:]),
+             *((tok, *honest[1:]) for tok in (V, 1 << 31, (1 << 32) - 1))]
+    want = [E.reference_opening(V, *c) for c in cases]
+    assert [ok for _, ok in want] == [1, 0, 0, 0, 0, 0] and want[0][0] == rows[3]
+    assert _evaluate(V, H, cases, E.opening) == want

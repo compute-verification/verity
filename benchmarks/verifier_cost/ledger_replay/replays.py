@@ -3,8 +3,9 @@
   python replays.py DIR W...
 
 Per W, DIR/period-W.json is one request of `pouw-period serve`, a line: an honest period of W windows in the form the
-period's guarantee covers, as PoUW's period difftest generates one (`pouw_credit_cases.period_instance`). One line of
-JSON a W on stdout: the period's windows, its ledger's entries and sessions, the reference's verdict
+period's guarantee covers, as PoUW's period difftest generates one (`pouw_credit_cases.period_instance`), over the
+registry's pinned window at K = 64 (``real``). One line of JSON a W on stdout: the period's windows, its ledger's entries
+and sessions, the reference's verdict
 (`period_check.case_twin`), and how many times the reference replayed the ledger on the way (`replays`, the calls of
 `challenger._verify`).
 """
@@ -17,16 +18,17 @@ from pathlib import Path
 
 import verity_difftest as D
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tests/verity/protocols/accounting/compute/pouw/verifier/lean/check"))
 import pouw_credit_cases as credit_cases
 import pouw_period_cases as period_cases
-from verity.protocols.resource_accounting.compute.pouw.verifier import period_check
-from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
+from verity.protocols.accounting.compute.pouw.verifier import period_check
+from verity.protocols.proof.spot.verifier.challenger import challenger as Ch
 
 
 def count(windows: int) -> tuple[dict, dict]:
     """An honest period of `windows` windows as a `serve` case, and its row."""
-    d = credit_cases.period_instance(random.Random(f"replays/{windows}"), "honest", windows=windows, **period_cases.COVERED)
+    d = credit_cases.period_instance(random.Random(f"replays/{windows}"), "honest", windows=windows, real=True,
+                                     **period_cases.COVERED)
     case = period_cases.serve(d)
     replays = 0
     verify = Ch._verify

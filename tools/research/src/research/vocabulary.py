@@ -1,8 +1,8 @@
-"""The tree's retired terms and what to write instead, as `tests/test_retired_terms.py` states them: `TERMS`, retired
+"""The tree's retired terms and what to write instead, as `tests/lint/test_repo_retired_terms.py` states them: `TERMS`, retired
 everywhere but the Lean, and `DOC_TERMS`, retired in the maintained docs' prose (tests/lint/retired_terms.md). `research msg`
 warns when a post uses one (`retired`).
 
-The table has one home, the test, which every lane's rename edits; this reads its assignments from the checkout rather
+The table has one home, the lint, which every lane's rename edits; this reads its assignments from the checkout rather
 than keeping a second copy. A checkout without it, or a table this can't read (`table()["error"]`), flags nothing: a post is
 never held on it."""
 from __future__ import annotations
@@ -12,7 +12,7 @@ import re
 from functools import cache
 from pathlib import Path
 
-TABLE = "tests/test_retired_terms.py"
+TABLE = "tests/lint/test_repo_retired_terms.py"
 #: The table's names this reads, each an assignment of literals, f-strings, `re.compile` and the names before it.
 NAMES = ("TERMS", "_SEP", "_TERM", "DOC_TERMS", "_SPACE", "_DOC_TERM", "_CODE")
 

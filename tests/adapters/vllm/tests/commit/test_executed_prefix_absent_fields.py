@@ -7,7 +7,6 @@ from typing import Any
 
 import pytest
 
-from tests.records.test_commit_binding import EOS, _binding
 from verity_vllm.commit import executed_prefix as EP
 from verity_vllm.records.schema_ids import NOT_EXECUTED_RECONCILIATION_SCHEMA
 
@@ -18,10 +17,6 @@ LINK = {"ok": True, "required": True, "lag_attested": True, "problems": [], "rec
         "served_by_request": {"r0": 2}, "tokens_committed": {"r0": True}}
 
 
-def _epr() -> dict:
-    """The executed prefixes of the records' fixture binding: r0 stopped by EOS after 2 tokens under LAG 1 and executed 3 steps; r1
-    served all 3 of its own."""
-    return _binding()["coverage"]["executed_prefix_of_record"]
 
 
 @pytest.mark.parametrize("epr", [{}, {"requests": None}, {"requests": {}}])
@@ -29,41 +24,8 @@ def test_a_record_of_no_request_gives_no_fact(epr):
     assert EP.executed_prefix_facts(epr, None, None, {}, {}) == {}
 
 
-def test_the_facts_read_the_programs_stop_rule_as_declared():
-    """`stop.eos` left out or null is an undeclared stop rule (`eos_declared` None, no `eos_ids`); an empty list declares no id, so
-    the last served token is not one."""
-    epr, served = _epr(), {"r0": [5, EOS]}
-    for stop in ({}, {"eos": None}):
-        f = EP.executed_prefix_facts(epr, None, None, {}, stop, served_tokens=served)["r0"]
-        assert f["eos_declared"] is None and f["eos_ids"] is None and f["lag"] == -1
-    empties: list[Any] = [[], ()]
-    for empty in empties:
-        f = EP.executed_prefix_facts(epr, None, None, {}, {"eos": empty}, served_tokens=served)["r0"]
-        assert f["eos_declared"] is False and f["eos_ids"] == []
-    f = EP.executed_prefix_facts(epr, None, None, {}, {"eos": [EOS, 3], "declared_lag": 1}, served_tokens=served)["r0"]
-    assert f["eos_declared"] is True and f["eos_ids"] == [3, EOS] and f["lag"] == 1 and f["served"] == [5, EOS]
 
 
-@pytest.mark.parametrize("linkage, linked", [
-    (None, False),
-    ({}, False),
-    ({"result": True}, False),
-    ({"result": True, "horizon": None}, False),
-    ({"result": True, "horizon": {}}, False),
-    ({"result": True, "horizon": {"r1": {"linked_steps": 3}}}, False),
-    ({"result": True, "horizon": {"r0": None}}, False),
-    ({"result": True, "horizon": {"r0": {}}}, False),
-    ({"result": True, "horizon": {"r0": {"linked_steps": 2}}}, False),
-    ({"result": True, "horizon": {"r0": {"linked_steps": 3}}}, True),
-    ({"result": False, "horizon": {"r0": {"linked_steps": 3}}}, False),
-])
-def test_a_linkage_that_states_no_horizon_for_the_request_does_not_link_its_prefix(linkage, linked):
-    """On the Commit's token record the prefix is linked only where the boundary linkage passed and ran over exactly the request's
-    executed prefix: no linkage, no `horizon`, none for the request and one without `linked_steps` link nothing."""
-    epr = _epr()
-    assert epr["requests"]["r0"]["executed_prefix_len"] == 3
-    f = EP.executed_prefix_facts(epr, {"coverage": COVERED | {"commit_account_link": LINK}}, linkage, {"r0": 0}, {"eos": [EOS], "declared_lag": 1})
-    assert f["r0"]["linked"] is linked and f["r0"]["a_r"] == 2 and f["r0"]["lag_attested"] is True
 
 
 def test_a_binding_map_without_entries_commits_no_row_past_the_stop():
@@ -146,20 +108,8 @@ def test_a_classification_that_states_nothing_reconciles_with_one_that_counts_no
         assert got["ok"] is False and "total" not in got and "no not_executed_by_rule block" in got["problems"][0]
 
 
-@pytest.mark.parametrize("by_request", [None, {}, {"r1": {"n_exec": 3}}, {"r0": None}, {"r0": {}}, {"r0": 3}, {"r0": {"n_exec": None}}])
-def test_a_request_the_population_states_no_n_exec_for_is_not_reconciled(by_request):
-    got = EP.reconcile_not_executed(None, {"applied": True, "by_request": by_request}, _epr())
-    assert got["ok"] is False and got["total"] is False
-    assert got["n_exec"]["r0"] == {"commit": 3, "population": None, "equal": False}
-    assert got["problems"][0] == "r0: executed prefix of record 3 != the population's n_exec None (two prefixes on one record)"
 
 
-def test_a_request_is_reconciled_on_the_populations_n_exec():
-    by_request = {"r0": {"n_exec": 3}, "r1": {"n_exec": 3, "arrive": 1}}
-    got = EP.reconcile_not_executed(None, {"applied": True, "by_request": by_request}, _epr())
-    assert got == _reconciled(n_exec={r: {"commit": 3, "population": 3, "equal": True} for r in ("r0", "r1")})
-    off = EP.reconcile_not_executed(None, {"by_request": by_request}, _epr())
-    assert off["problems"] == ["population.not_executed_by_rule not applied on a record with an EOS-stopped request"] and off["n_exec"]["r0"]["equal"]
 
 
 @pytest.mark.parametrize("totals, n_ex", [(None, 0), ({}, 0), ({"by_family": None}, 0), ({"by_family": {"rows": None}}, 0),

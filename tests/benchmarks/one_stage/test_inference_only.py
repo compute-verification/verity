@@ -19,7 +19,6 @@ The tests stand the reference in for the Lean verifier; the slow test runs `infe
 from __future__ import annotations
 
 import json
-import random
 import stat
 import sys
 from fractions import Fraction
@@ -33,9 +32,8 @@ sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
 import inference_only as IO  # noqa: E402
 import served_cases as SC  # noqa: E402
 import served_verdicts as SV  # noqa: E402
-from verity.circuits.ops.boolean import versions as BL  # noqa: E402
+from verity.circuits import count as K  # noqa: E402
 from verity_vllm.definitions.registry.catalog import load  # noqa: E402
-from verity_vllm.definitions.registry.sampling import bit_at  # noqa: E402
 from verity.commitments.periods import interface as IF  # noqa: E402
 from verity_vllm.program.predict import block_counts as BC  # noqa: E402
 
@@ -72,7 +70,7 @@ def kinded() -> dict:
     registered read of a parameter no pin holds: a block's 18,432 fresh bits, 2,048 of the scan state and 16,384 of
     the linears' outputs."""
     from verity_vllm.program.predict.scan_state import SCAN_STATE
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.window import y_value
+    from verity.protocols.accounting.compute.pouw.prover.serving.pearl_c.window import y_value
 
     fn = _fn(GEMM)
     gid, rows = IF.descriptor_id(fn), dict(IF.layout(fn).rows)
@@ -89,47 +87,21 @@ KINDED = {"linears": 16_384, "scan_state": 2_048}
 
 @pytest.fixture(scope="module")
 def feed() -> dict:
-    """Two slots of `FEED`, which reads `BitAtx32_v1` (no Boolean version), one step."""
+    """Two slots of `FEED`, which reads `BitAtx32_v1`, one step."""
     entries = (IF.InferenceEntry(FEED, 0, (2,), ("slot",), 0),)
     return IF.descriptor_record(IF.Circuit("test/feed", ((_fn(FEED), 2),),
                                            blocks=IF.Blocks(slots=2, steps=1, inference=entries)), 1)
 
 
-def test_bit_at_is_priced_by_a_circuit_that_computes_it():
-    """`bit_at_gates(W)` is bit i of a W-bit word, 0 for an i32 outside [0, W), on every index near the range and its
-    extremes and on random words and indices; at W = 32 it is 147 two-input gates. A width the circuit can't make has no
-    price, and nor has any other primitive."""
-    rng = random.Random(20261103)
-    for width in (1, 2, 8, 32, 64):
-        gates, prim = IO.bit_at_gates(width), bit_at(width)
-        b = width.bit_length() - 1
-        assert len(gates) == (32 - b) + (31 - b) + 3 * (width - 1) + 1
-        words = [0, (1 << width) - 1, 1, 1 << (width - 1)] + [rng.getrandbits(width) for _ in range(40)]
-        indices = list(range(-3, width + 3)) + [-(1 << 31), (1 << 31) - 1, 1 << 30, -width] + \
-            [rng.getrandbits(32) - (1 << 31) for _ in range(50)]
-        for w in words:
-            for i in indices:
-                assert IO.run_gates(gates, width, w, i) == prim.evaluate(w, i & 0xFFFFFFFF), (width, w, i)
-    assert len(IO.bit_at_gates(32)) == 147 and IO.price("BitAtx32_v1")["gates"] == 147
-    for key in ("BitAtx3_v1", "BitAtx0_v1", "BitAtx32_v2", GEMM, "TokenFeed_v1{NP=4,FIRST=false}"):
-        assert IO.price(key) is None
-    with pytest.raises(ValueError):
-        IO.bit_at_gates(48)
-
-
-def test_a_block_reading_bit_at_is_priced_and_one_with_no_price_is_undecided(feed, monkeypatch):
-    """`FEED`'s block counts `BitAtx32_v1` at its price, which the table names: the gate table's own, and where the gate
-    table has none for it the explicit circuit's, the same count; with no price for it the block's gates are undecided
-    (`gate-table`) and not guessed."""
+def test_a_block_reading_bit_at_is_priced_by_its_body_and_one_with_no_price_is_undecided(feed, monkeypatch):
+    """`FEED`'s block counts `BitAtx32_v1` at its body's count in the session Program, which the table names; where the table
+    has none for it the block's gates are undecided (`gate-table`) and not guessed."""
     row = IO.session_row(feed, None, None)
-    table, unpriced = BL.gate_table([BC.session(feed)[0]])
-    assert unpriced == [] and table["BitAtx32_v1"] == 147 and (row["table"], row["priced"]) == (table, {})
-    assert row["gates"] == BC.gates(BC.session(feed)[0], row["table"])[0]
-    bare = {key: gates for key, gates in table.items() if key != "BitAtx32_v1"}
-    monkeypatch.setattr(BL, "gate_table", lambda fns: (dict(bare), ["BitAtx32_v1"]))
-    own = IO.session_row(feed, None, None)
-    assert own["priced"]["BitAtx32_v1"]["gates"] == 147 and (own["table"], own["gates"]) == (table, row["gates"])
-    monkeypatch.setattr(IO, "price", lambda key: None)
+    program = BC.session(feed)[0]
+    table = K.table(program)
+    assert table["BitAtx32_v1"] == 147 and row["table"] == table
+    assert row["gates"] == BC.gates(program.fn, table)[0]
+    monkeypatch.setattr(K, "table", lambda p: {key: g for key, g in table.items() if key != "BitAtx32_v1"})
     with pytest.raises(IO.Undecided, match="gate-table: no gates for BitAtx32_v1"):
         IO.session_row(feed, None, None)
 
@@ -295,7 +267,7 @@ def test_a_run_within_its_policy_is_accepted_and_its_public_form_holds_no_count(
     assert pub["classes"] == [[row["definition"], row["gates"], row["fresh"]]] and not {"blocks", "total"} & set(pub)
     assert (pub["slots"], pub["positions"], pub["c"], pub["k"], pub["n"]) == (2, row["positions"], row["gates"],
                                                                               row["fresh"], 6)
-    assert (pub["format"], pub["counts"]) == ("verity-bench/inference-only-verdict/v5", IO.COUNTS)
+    assert (pub["format"], pub["counts"]) == ("verity-bench/inference-only-verdict/v6", IO.COUNTS)
     assert pub["record_count"] == {"held": 0, "wired": 0, "openings": 0, "fresh": row["fresh"], "by": IO.RECORD_COUNT}
     assert pub["theta"] == {"inputs": [], "by": IO.THETA}
     assert IO.COUNTS.startswith("none published") and "exact count" in IO.COUNTS
@@ -445,7 +417,7 @@ def test_the_command_line_writes_the_public_verdict_and_the_private_one_0600(sma
     pub = json.loads((tmp_path / "out" / "inference-only.json").read_text())
     full = json.loads((d / "private" / "inference-only.json").read_text())
     assert pub["verdict"] == "accept" and full["sealed"] == 3 and not {"sealed", "blocks", "total"} & set(pub)
-    assert (full["blocks"][0][3], full["total"], pub["format"]) == (6, 6, "verity-bench/inference-only-verdict/v5")
+    assert (full["blocks"][0][3], full["total"], pub["format"]) == (6, 6, "verity-bench/inference-only-verdict/v6")
     assert stat.S_IMODE((d / "private" / "inference-only.json").stat().st_mode) == 0o600
     assert full["lean_detail"]["flags"] == ["--count", "--detail"] and full["lean_detail"]["out"]["complies"] is True
     assert "lean_detail" not in pub

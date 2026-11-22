@@ -9240,12 +9240,35 @@ def test_a_seal_takes_a_fresh_directory_so_a_reused_pid_reads_no_stale_copy(tmp_
             "the seal reads this build's `.olean`, not the stale copy a reused pid left"
     finally:
         seals.close()
+
     gone = tmp_path / "noproc"
     gone.mkdir()
     (base / "999999-abcd").mkdir()                               # a dead run's directory, the new `<pid>-<suffix>` layout
     A.Seals(base).sweep(proc=gone)
     assert not stale.exists() and not (base / "999999-abcd").exists(), \
         "sweep removes a directory whose pid prefix names a gone process, old `<pid>` and new `<pid>-<suffix>` alike"
+
+
+def test_a_seal_seeds_every_root_an_exempt_prefix_covers(tmp_path, monkeypatch):
+    """`Facts.lean` imports every root by name, so a root under an `exempt` prefix (an exempt module `X` beside the root
+    `X.A`) is still sealed; without it the facts step finds no `.olean` for `X.A` in the seal's copies."""
+    pkg = tmp_path / "pkg"
+    lib = pkg / ".lake" / "build" / "lib" / "lean"
+    (lib / "X").mkdir(parents=True)
+    (pkg / "X").mkdir()
+    for m in ("X", "X/A", "X/B"):
+        (pkg / f"{m}.lean").write_text("")
+        (lib / f"{m}.olean").write_bytes(b"")
+    seeded = []
+
+    def graph(pkg, modules, out, log):
+        seeded.extend(modules.read_text().split())
+        return {"graph": {}, "search": []}
+
+    monkeypatch.setattr(A, "graph", graph)
+    (tmp_path / "work").mkdir()
+    A.Sealed(pkg, "x", tmp_path / "seal").take(["X.A"], {"X": "a scratch module"}, tmp_path / "work", log=lambda s: None)
+    assert seeded == ["X.A"], f"the root `X.A` is sealed and the exempt `X` and the unrooted `X.B` are not: {seeded}"
 
 
 def test_two_packages_of_one_name_sealed_side_by_side_get_a_directory_each(tmp_path, monkeypatch):

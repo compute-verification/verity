@@ -1,6 +1,6 @@
 """The replay row kernel of `DsaRMSNorm_v1{N, EPS}` (`registry.dsa_norm`, `_fused_norm_rope_kernel`'s `_rms_norm`) and its vectorised
 twin, `dsa_rmsnorm_rows`: the registry body over rows, each step `derived_rows`' word function of its primitive.  `block_rmsnorm_rows`
-is the same body over a masked block, `TritonBlockRMSNorm_v1{N, BLOCK, WARPS, EPS}` (whose row kernel is `dsv4_rows`').  The row
+is the same body over a masked block, `TritonBlockRMSNorm_v1{N, BLOCK, WARPS, EPS}` (whose row kernel is `mla_rows`').  The row
 kernel registers from `rows` (kernel "rows")."""
 from __future__ import annotations
 

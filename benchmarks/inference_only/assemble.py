@@ -17,16 +17,16 @@ commits, the `circuit.json` window-commit writes beside it. It writes (`record.R
 * **The registration log** (`registered/log.jsonl`, one record a line): the ``--first`` records (the deployment's
   registration of the weights, first), W, and with ``--registration`` the window's registration R chained right after
   W, the chain held from its first record (each record's ``previous`` the digest of the one before, the first's none)
-  and R naming the Program's digest and the circuit record's SHA-512. Without R no record of the log names the
-  Program, and the record check refuses the record (`NO_REGISTRATION`).
+  and R binding the circuit record (`interface.tied_record`: its SHA-512, program, partition and run). Without R no
+  record of the log names the Program, and the record check refuses the record (`NO_REGISTRATION`).
 * **The rate rule's limits** (`inference-only-limits.json`), where the serve wrote none: α = k/c and Γ = c of the
   policy's own c and k (`rate_limits.of_policy`), refused where those give none.
 * **The count** (`block-counts-CLASS.json`): the class circuit record's inference blocks judged against the policy's
-  c, k and n by the integration's count (`count`), at the verifier's pins ``--pins`` and R's registered roots; its
-  exact counts go to the run directory's `private/`, outside `out/`. A weight read is held, and not fresh, only where
-  ``--pins`` pins its parameter at the root R registers: with no ``--pins`` every registered read is a free input
-  (`interface.input_count`), so every weight read counts as fresh bits against k, the most a block can be charged,
-  and the step's line says so.
+  c, k and n by the integration's count (`count`), at the verifier's pins ``--pins`` and R's registered roots, and
+  only with R (`NO_COUNT`); its exact counts go to the run directory's `private/`, outside `out/`. A weight read is
+  held, and not fresh, only where ``--pins`` pins its parameter at the root R registers: with no ``--pins`` every
+  registered read is a free input (`interface.input_count`), so every weight read counts as fresh bits against k, the
+  most a block can be charged, and the step's line says so.
 
 A refusal of the serve's files exits 2 with its reason, before anything is written."""
 from __future__ import annotations
@@ -52,6 +52,8 @@ SERVED = {"circuit": "record/circuit-record.json", "phi": "record/serve-phi.json
 LIMITS = R.OUT_FILES["limits"]
 NO_REGISTRATION = ("no registration chained after W names the Program (--registration R, the window's registration "
                    "that `prove_path.py window-commit --pearl-passes` writes), so the record check refuses the record")
+NO_COUNT = ("since no registration R binds the circuit record (--registration R), so nothing holds it to the registered "
+            "circuit and it is not counted")
 
 
 class Refused(Exception):
@@ -142,11 +144,13 @@ def assemble(served: Path, first: Sequence[Path] = (), registration: Path | None
     w = _json(files["window"])
     log = [*(_json(p) for p in first), w]
     if registration is not None:
+        from verity.commitments.periods import interface as IF
+
         reg = _json(registration)
-        if reg.get("program") != want:
-            raise Refused(f"R names Program {str(reg.get('program'))[:16]}..., not the circuit record's {str(want)[:16]}...")
-        if (reg.get("window") or {}).get("circuit") != hashlib.sha512(body).hexdigest():
-            raise Refused("R's window.circuit is not the SHA-512 of the serve's circuit record")
+        try:
+            IF.tied_record(body, reg, files["circuit"])
+        except ValueError as e:
+            raise Refused(f"R: {e}") from None
         log.append(reg)
     chained(log)
     text = build(_json(files["phi"]), cls, scheme)
@@ -178,6 +182,9 @@ def assemble(served: Path, first: Sequence[Path] = (), registration: Path | None
         said.append(f"{LIMITS}: alpha = {bounds['alpha'][0]}/{bounds['alpha'][1]} and gamma = {bounds['gamma']}, "
                     f"{bounds['from']}")
     tag = "-".join(map(str, cls))
+    if registration is None:
+        said.append(f"block-counts-{tag}.json: none, {NO_COUNT}")
+        return said
     run_dir = out.parent if out.name == "out" else out
     private = run_dir / "private"
     private.mkdir(mode=0o700, exist_ok=True)

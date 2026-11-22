@@ -20,13 +20,13 @@ import pytest
 
 from verity.commitments import coin_tree as CT
 from verity.commitments.crypto import lms
-from verity.protocols.proofs.spot.verifier.challenger import challenger as C, remote as R
-from verity.protocols.proofs.spot.verifier.one_stage import closing as K
+from verity.protocols.proof.spot.verifier.challenger import challenger as C, remote as R
+from verity.protocols.proof.spot.verifier.one_stage import closing as K
 
 HERE = (Path(__file__).resolve().parent)
 sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
-from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import member_trees as MT  # noqa: E402
+from verity.protocols.proof.spot.verifier.challenger import challenger_session as AC  # noqa: E402
+from verity.protocols.proof.spot.verifier.one_stage import member_trees as MT  # noqa: E402
 
 KEY = lms.keygen(lms.Params(64, 4, 4), bytes([7]) * 64)
 WINDOW = "ab" * 64

@@ -16,11 +16,11 @@ sys.path.insert(0, str(ROOT / "benchmarks" / "poub_session"))
 sys.path.insert(0, str(ROOT))
 
 import refresh_result as R  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier import audit  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier.session import lean_verifier as lv  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier.session import verifier  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier import audit  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier.session import lean_verifier as lv  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier.session import verifier  # noqa: E402
 
-from tests.verity.protocols.resource_accounting.memory.poub import session_harness as H  # noqa: E402
+from tests.verity.protocols.accounting.memory.poub import session_harness as H  # noqa: E402
 
 
 @pytest.fixture
@@ -69,7 +69,7 @@ def test_with_refresh_unset_no_message_and_no_result_holds_the_word(sent):
     assert [h["type"] for h in sent].count("session") == 2
     assert "refresh" not in json.dumps(sent) and "refresh" not in json.dumps(rs)
     assert "fresh_slots" not in json.dumps(sent) and "fresh_slots" not in json.dumps(rs)
-    assert [set(h) for h in sent if h["type"] == "session"] == [{"type", "k", "windows", "lifetime", "pace"}] * 2
+    assert [set(h) for h in sent if h["type"] == "session"] == [{"type", "k", "windows", "samples", "lifetime", "pace"}] * 2
 
 
 def test_a_session_set_to_refresh_on_a_tree_whose_parameters_hold_none_is_refused_before_it_starts(monkeypatch, sent):
@@ -103,18 +103,9 @@ def test_the_lean_verifiers_parameters_name_refresh_only_when_it_is_on(params_wi
         assert lv.params_json(slotted)["fresh_slots"] == 4
 
 
-def test_a_refresh_session_the_lean_verifier_ran_without_reading_the_setting_is_never_accepted(params_with_refresh):
-    """A Lean verifier that accepts a refresh session and whose record doesn't say refresh ran it under today's rule:
-    the session is refused (`disagreement` where the Lean accepted it), never accepted."""
-    rs, _ = H.run("kv:2,kv:2", sessions=2, refresh=(False, True), kv_every=4, kv_pool=8, lifetime=2)
-    lean_reads_it = (rs[1].get("lean_record") or {}).get("refresh") is True
-    if not lean_reads_it:
-        assert not rs[1]["accepted"]
-
-
 def test_a_refresh_session_is_accepted_on_the_lean_verifiers_verdict_and_its_record_is_the_books(params_with_refresh):
-    """The setting reaches both verifiers whole: the Lean's record of the session, each window's probation in it,
-    is the books' field for field (`Pair.end`), or the session would end `disagreement`."""
+    """The setting reaches the Lean verifier whole: its record of the session says refresh, each window's probation
+    in it."""
     (r,), _ = H.run("kv:2", refresh=(True,), kv_every=4, kv_pool=8, lifetime=2, windows=6, samples=16)
     assert r["accepted"] and r["verdict"] == "lean" and r["refresh"] is True and r.get("disagreement") is None
     assert r["lean_record"]["refresh"] is True

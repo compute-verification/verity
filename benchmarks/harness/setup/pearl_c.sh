@@ -1,13 +1,13 @@
 # Sourced by run_point.sh (a spec's `setup`): builds Pearl-C's sm_120 cubin from this source tree with
-# verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120/build.sh (nvcc, then its SASS gate) and exports PEARLC_CUBIN, which the Pearl-C
+# verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm120/build.sh (nvcc, then its SASS gate) and exports PEARLC_CUBIN, which the Pearl-C
 # arm (benchmarks/pouw/pearl_c_vllm/bench_arm.py) loads. The cubin, ptxas's report, sass.json, toolchain.txt and the sources' and cubin's
 # sha256 go to $RESEARCH_RUN_DIR/out/setup. Built per point, so the cubin always matches the commit's run.py.
 PC_OUT=${RESEARCH_RUN_DIR:-$PWD}/out/setup/pearl_c_sm120
 mkdir -p "$(dirname "$PC_OUT")"
 CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit 13.0) || exit 4
 PC_GENCODE=$(python3 benchmarks/kernels/machine.py gencode "$(python3 benchmarks/kernels/machine.py arch)") || exit 4
-CUDA_HOME=$CUDA_HOME GENCODE=$PC_GENCODE bash verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120/build.sh "$PC_OUT" \
-  || { echo "setup: verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120/build.sh failed" >&2; exit 4; }
-sha256sum verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120/pearl_c_sm120.cu verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120/*.cuh \
-  verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120/run.py "$PC_OUT/pearl_c_sm120.cubin" > "$PC_OUT/sha256.txt"
+CUDA_HOME=$CUDA_HOME GENCODE=$PC_GENCODE bash verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm120/build.sh "$PC_OUT" \
+  || { echo "setup: verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm120/build.sh failed" >&2; exit 4; }
+# shellcheck disable=SC2046  # sources.txt's paths hold no space
+sha256sum $(cat "$PC_OUT/sources.txt") verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm120/run.py verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c/driver.py "$PC_OUT/pearl_c_sm120.cubin" > "$PC_OUT/sha256.txt"
 export PEARLC_CUBIN=$PC_OUT/pearl_c_sm120.cubin

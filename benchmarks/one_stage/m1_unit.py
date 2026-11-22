@@ -30,7 +30,7 @@ population Program of its one Definition at ``--n`` instances and that Program's
 (`population.wired_population_program`), which Lean's verify reads (``--program``, ``--partition``); without a
 Program it refuses every session once its checks pass.
 
-    PYTHONPATH=<tree>:<tree>/verity/protocols/proofs/flock/prover/python:<tree>/adapters/vllm:<tree>/adapters/torch \\
+    PYTHONPATH=<tree>:<tree>/verity/protocols/proof/flock/prover/python:<tree>/adapters/vllm:<tree>/adapters/torch \\
       python benchmarks/one_stage/m1_unit.py --spec 'RMSNormFusedCudaVector8_v3{N=6144,EPS=...,BLOCK=256}' --out DIR \\
       [--structural iv/hybrid/4 [--tmpl-unit-bin flock-tmpl-unit] | --reads slots] [--bin flock-circuit --lean verity-verify-proof] [--n 1]
 
@@ -461,7 +461,7 @@ def main() -> int:
     t = time.time()
     held, bind, base = {}, {}, 0
     if a.bin and not (a.call_n or a.chunk_k or a.call_w or a.row or a.vchunks):
-        from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+        from verity.protocols.proof.spot.verifier.one_stage import partition as P
         from verity.circuits.codec import canonical_json, descriptor_id, encode_program
         from verity.circuits.population import wired_population_program
 

@@ -25,7 +25,7 @@ checkout.
 - The Lean check (`tools/verity/lean/check.py`) fails on an import outside `layers` or `trees`, and on a `.lean` file
   that no root imports.
 - One pin's command (`tools/check/pins.py`) runs Lean in this package's Lake environment:
-  `tests/verity/protocols/resource_accounting/compute/pouw/verifier/ncp_lean.py` writes a scratch file importing `Definitions.Pouw.NCP.RouteU` into
+  `tests/verity/protocols/accounting/compute/pouw/verifier/ncp_lean.py` writes a scratch file importing `Definitions.Pouw.NCP.RouteU` into
   `security/`, and the command runs it there and removes it.
 
 ## Areas

@@ -1,4 +1,4 @@
-# The write probe on each node, the instance its node's name (vy-write-probe@vy-nebius-1): hostnames aren't node names here.
+# The write probe on each node, the instance its node's name (vy-write-probe@vy-nebius-2): hostnames aren't node names here.
 [Unit]
 Description=who writes to /workspace on %i, and whether an allocation covers them (write_probe.py probe)
 RequiresMountsFor=/workspace

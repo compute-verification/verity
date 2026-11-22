@@ -3,6 +3,7 @@ its fixture with ``--write`` is a writer whose failure names its command (`tools
 from __future__ import annotations
 
 import importlib.util
+import json
 import re
 import sys
 from pathlib import Path
@@ -36,8 +37,10 @@ def test_every_test_that_rewrites_its_fixture_is_a_writer():
 
 
 def test_every_writer_s_test_names_its_command():
+    fetched = {v for k, v in json.loads((ROOT / "artifacts.json").read_text()).items() if k.startswith("art:")}
     for w in PINS.WRITERS:
-        assert (ROOT / w.path).is_file() and (ROOT / w.module).is_file(), f"{w}: no such fixture or test module"
+        assert ((ROOT / w.path).is_file() or w.path in fetched) and (ROOT / w.module).is_file(), (
+            f"{w}: no such fixture (tracked, or a fetched fixture of artifacts.json) or test module")
         text = (ROOT / w.module).read_text()
         assert WRITES.search(text), f"{w.module}: no `--write` under `__main__`: drop its `Writer`"
         assert w.command in text, f"{w.module}: its staleness failure names `{w.command}`, the one command that rewrites {w.path}"

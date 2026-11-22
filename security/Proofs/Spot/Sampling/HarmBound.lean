@@ -27,14 +27,14 @@ closed form. Stratum `s` has `n_s` units of which `k_s` are sampled uniformly wi
   bound at `τ`, so its value `∑ s g_s x_s` is a harm bound. The greedy fill, strata taken whole in decreasing
   `g_s n_s / k_s` until the budget `ln(1/δ)` runs out, the last one fractionally, is separated by that last stratum's
   `g_s n_s / k_s`, or by `0` when the budget never runs out. This is `density_bound` in the sampling optimizer
-  (`verity.protocols.proofs.spot.prover.optimize`).
+  (`verity.protocols.proof.spot.prover.optimize`).
 * `work_isHarmBound_fill`: the same under the work sampling design with harm the credited work `w_s`, so its value bounds
   `workOf σ w B`.
 * `IsHarmBound.natFloor`, `stratified_isHarmBound_bits`, `Partition.audit_exfiltration_stratified`: **the exfiltration
   form**. With harm a unit's output bits `b_s`, the floor of the fill's value is `audit_exfiltration`'s `H`.
 * `stratumRisk`, `le_stratumRisk`, `stratified_isHarmBound_exact`: the same weak duality with each stratum's exact risk
   `ln(C(n_s, k_s)/C(n_s − c, k_s))` in place of `k_s c / n_s`, which is at most it. Core's
-  `verity.protocols.proofs.spot.verifier.profile.Stratified.harm_bound` is that knapsack's value over the exact risk increments: below the
+  `verity.protocols.proof.spot.verifier.profile.Stratified.harm_bound` is that knapsack's value over the exact risk increments: below the
   closed form's, and a harm bound by this theorem at the price its greedy fill stops at, not by the closed form.
 -/
 

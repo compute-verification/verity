@@ -16,7 +16,7 @@ Primitives are the registry's, the two IMMA steps among them: `BlackwellS8ImmaDo
 `BlackwellU8S8ImmaDot32_v1` (the s8 family's u8·s8 step without .satfinite). A case that binds the s8 family
 (`verity.circuits.ops.s8`: `S8Dot_v1`, `S8Matmul_v1`, `LimbSplit_v1`) names it in ``needs``.
 Every honest case does, since property/v1 refuses a bare IMMA. The receipt fold (`PouwDuoAbsorb_v1`) is
-registered nowhere yet, so ``fold-reused`` uses its LOP3+IMAD step (`tests/verity/protocols/resource_accounting/compute/pouw/verifier/receipts/fixtures/receipt_folds_r9.py`) as a
+registered nowhere yet, so ``fold-reused`` uses its LOP3+IMAD step (`tests/verity/protocols/accounting/compute/pouw/verifier/receipts/fixtures/receipt_folds_r9.py`) as a
 Definition of its own.
 """
 from __future__ import annotations
@@ -38,10 +38,9 @@ from verity.circuits.ops import (
     scalar,  # noqa: F401  (I32Add, SelectI32, F32Fmaxf, F32Fminf register on import)
 )
 from verity_vllm.definitions.registry import (  # noqa: F401
+    boolean_gate_ops,
     dsa,
-    dsv4_qnorm_insert,
     flashmla,
-    marlin_moe,
     topp_word_gates,
 )
 from verity_vllm.definitions.registry.ref_prims import gather_f32

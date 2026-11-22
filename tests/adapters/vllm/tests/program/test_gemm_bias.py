@@ -34,7 +34,6 @@ from verity_vllm.program.frontend.rules.vllm_bindings import gemm_pins_for, vllm
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.frontend.vllm_derive import derive_report
 from verity_vllm.query import required as RQ
-from verity_vllm.query.manifest import format as RM
 from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView
 from verity_vllm.query.units import ValueRef as R
 
@@ -92,16 +91,6 @@ def test_gemm_bias_v2_is_bit_equal_to_gemm_v2_then_bias_add_on_edge_and_random_v
             assert got.tolist() == want.tolist()
             compared += 1
     assert compared >= 24
-
-
-@pytest.mark.parametrize("spec", [bind(gemm_bias.GemmBias, K=K, N=N), bind(gemm_bias.GemmBiasV2, K=K, N=N, DOT=hopper.HopperBF16WgmmaDot16)],
-                         ids=lambda s: s.id.split("{")[0])
-def test_the_replay_evaluates_a_one_call_biased_linear_from_a_committed_row_and_two_weight_slices(spec):
-    from verity_vllm.check.replay.evaluate import evaluate as replay_evaluate
-    x, w, b = _vectors(1, 5)[-1]
-    out = replay_evaluate(spec.id.split("{")[0], RM.spec_statics(spec.id), [[np.array(x, np.uint16)], [], []],
-                          [None, np.array(w, np.uint16), np.array(b, np.uint16)])["0"]
-    assert out.tolist() == list(evaluate(spec, x, w, b))
 
 
 def test_q_word_cuts_gemm_bias_v2_into_one_unit_per_output_word_with_no_committed_interior():
@@ -327,6 +316,7 @@ def test_a_one_call_biased_qkv_commits_one_member_and_no_call_boundary():
     `call_boundaries` row per (step, layer) at the pre-bias word `qkv_proj/triton_launch_1/out`, host-evaluated at Commit.  Under
     `Q_word` the one-Call form has none, and the module's one member `out` binds the Linear's committed slot `0`."""
     from verity_vllm.query.manifest.bind import Binder
+    from verity_vllm.query.manifest.format import manifest_rows
     res = {"program": {"digest": "d0", "function": "f"}, "attention_impls_observed": {},
            "target": {"declared": {"compute_capability": [12, 0]}}}
     man = {}
@@ -340,7 +330,7 @@ def test_a_one_call_biased_qkv_commits_one_member_and_no_call_boundary():
     assert rows(man[True], "call_boundaries") == []
     assert rows(man[False], "call_boundaries") == [(f"{q}/triton_launch_1", "out", (0, 2 * N), "Gemm_v2") for q in qkv]
     assert [r for r in rows(man[True], "instance_outputs") if r[0] in qkv] == [(q, "out", (0, 2 * N), "GemmBias_v2") for q in qkv]
-    assert Binder.of_manifest(man[True], rank=0).bind(0, [f"{qkv[0]}/in", *(f"{q}/0" for q in qkv)]) == [
+    assert Binder(manifest_rows(man[True]), rank=0, aliases=man[True].get("op_path_aliases")).bind(0, [f"{qkv[0]}/in", *(f"{q}/0" for q in qkv)]) == [
         (qkv[0], "in", 0, "label"), *((q, "out", 0, "slot") for q in qkv)]
     rest = lambda m: sorted(json.dumps({k: v for k, v in x.items() if k != "position"}, sort_keys=True) for x in m["identities"]  # noqa: E731
                             if x["family"] != "call_boundaries" and x["op_path"] not in qkv)

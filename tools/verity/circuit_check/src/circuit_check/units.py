@@ -25,7 +25,7 @@ the ones its name digests (a cache may hold records another run built, copied in
 binding is built as the catalog builds it and its record stored again.  The task list is then
 what `cli._tasks` would build: `targets.select` over what the roots reach in `targets.reachable`'s order, PoUW's roots whole,
 each target's units (`targets.BINDINGS`), whether it is a Call (`targets.call_families`: the word Call families,
-`targets.callee_calls`, and the Boolean version of each suite Definition of one, made from its binding where no built binding
+and the Boolean version of each suite Definition of one, made from its binding where no built binding
 holds it, `_materialize`) and its key.  Two bindings can reach two Definitions of one id (``WidgetStep_v1`` with its DOT bound, from `boolean_version`, and
 unbound, from its sidecar): `targets.reachable` keeps the one it pops first, and so each id is taken from the record of the
 binding it is first reached through (`derive`).  A target that misses is made from that binding, along the path its record
@@ -374,7 +374,7 @@ def _materialize(entries: list[Entry], objects: dict[str, Any], fid: str, in_uni
 
 def call_families(entries: list[Entry], d: Derived, objects: dict[str, Any], in_unit: bool = True) -> set[str]:
     """The families of `targets.call_families` the suite's Definitions are of: the word Call families (`targets.
-    word_call_families`, which refuses a vocabulary kind that doesn't bind), `targets.callee_calls`, the Boolean version of each
+    word_call_families`, which refuses a vocabulary kind that doesn't bind), the Boolean version of each
     one made on demand (`targets.on_demand_boolean_families`) and of those Boolean versions of a suite Definition of one
     (`targets.boolean_family`) that are of a suite family: each from its object, made (`_materialize`) only where it could be of
     a suite family no other one gave (`targets.boolean_links`)."""
@@ -393,7 +393,7 @@ def call_families(entries: list[Entry], d: Derived, objects: dict[str, Any], in_
             if fid not in objects and (n.get("di", fid) in keys or n.get("n") in names):
                 if (f := TG.boolean_family(_materialize(entries, objects, fid, in_unit, d.via.get(fid)))) is not None:
                     found.add(f)
-    return words | found | set(TG.callee_calls())
+    return words | found
 
 
 def _sited(v: Any) -> Any:

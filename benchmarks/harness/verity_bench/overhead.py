@@ -125,10 +125,10 @@ class Gpu:
 FP8 = ("fp8-e4m3", "fp8-e4m3-rowwise", "fp8-blk128")
 #: the GPUs the door measures on, each by its node file
 DOOR = (
-    Gpu("h200-sxm-141gb-x1", {"fp8": FP8}, ("cublaslt", "cutlass", "deepgemm"), True, "h100-sxm5-80gb/e4m3"),
-    Gpu("h100-sxm-80gb-x1", {"fp8": FP8}, ("cublaslt", "cutlass", "deepgemm"), True, "h100-sxm5-80gb/e4m3"),
+    Gpu("h200-sxm-141gb-x1", {"fp8": FP8}, ("cublaslt", "cutlass", "deepgemm"), True, "h100-sxm-80gb-sm/e4m3"),
+    Gpu("h100-sxm-80gb-x1", {"fp8": FP8}, ("cublaslt", "cutlass", "deepgemm"), True, "h100-sxm-80gb-sm/e4m3"),
     Gpu("rtx-pro-6000-server-x8", {"fp8": FP8, "nvfp4": ("nvfp4",)}, ("cublaslt", "cutlass"), False,
-        "rtx-pro-6000-server/e4m3"),
+        "rtx-pro-6000-server-tensor/e4m3"),
 )
 
 
@@ -167,7 +167,7 @@ WITHOUT_Y = "without y's commitment (y tree not timed)"
 
 @dataclass(frozen=True)
 class Scheme:
-    """A scheme the door times against stock: the declared scheme `id` (`compose.schemes.get`) and the benchmark's own
+    """A scheme the door times against stock: the declared scheme `id` (`run.schemes.get`) and the benchmark's own
     binding of it. `arm` is its PoUW harness arm (`module:Class` in `arm_path`, as `bench.py --arm` and `--arm-path` take
     them), timed beside stock kernels of `family`, the stock scaling its useful output's quantization matches: the
     declaration's ``product_family``. `epsilon` (`module:function` in `arm_path`) is its soundness error at a shape on a
@@ -192,8 +192,8 @@ class Scheme:
         return False if self.control_family is not None else self._declared("y_committed")
 
     def _declared(self, field: str) -> Any:
-        from verity.protocols.compose import schemes
-        from verity.protocols.resource_accounting.scheme import declared
+        from verity.protocols.run import schemes
+        from verity.protocols.accounting.scheme import declared
 
         return declared(schemes.get(self.id), field)
 

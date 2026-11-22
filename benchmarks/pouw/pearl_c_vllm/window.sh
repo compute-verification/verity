@@ -13,7 +13,7 @@
 #     retained pass, its directory gets a retention record (`research keep`, priority keep, never expiring, owned by
 #     the benchmark's handle; KEEP_PRIORITY, KEEP_EXPIRES and KEEP_OWNER override them), and the window fails KEEP
 #     without one.
-# The verdicts run after the window, on the CPU (verify.sh <run id>: the Lean's, held to the Python twin); an ACCEPT is
+# The verdicts run after the window, on the CPU (verify.sh <run id>: the Lean's, beside the Python twin's); an ACCEPT is
 # replay-verified (development shortcut; the protocol's check is a ZK proof, PouwVerifier).  Needs setup.sh's $WORK.
 # The venv's tools (ninja, which FlashInfer's JIT calls) come first on PATH, and FLASHINFER_CUDA_ARCH_LIST is setup.sh's, so
 # FlashInfer finds the sampling module setup.sh built, with the same flags, in the build's own cache (flashinfer_env.sh; a
@@ -33,14 +33,14 @@
 # passes --capture: the arm's vLLM graph sizes, the decode batch's alone by default.  BATCH passes --batch.
 # STATEMENT (with WHOLE_STEP=1) passes --statement: hm96_rows.cu's cubin (a path, or "build" to build it here with
 # the machine's toolkit at 13.0's nvcc), adding e2e.py's pearlc-zk mode, each decode forward's rows committed in the ZK statement's format too.
-# PEARLC_KERNEL=verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90 runs every mode on an H100 or H200 instead (identity: the card's name and cc 9.0),
+# PEARLC_KERNEL=verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm90 runs every mode on an H100 or H200 instead (identity: the card's name and cc 9.0),
 # under `gpu-lease 1`: the ship is pearl_c_sm90/ship.sh's tree tarred as pearl-c-sm90-ship.tar, its device check runs
-# VARIANTS=h100, SCHEME defaults to the kernel scheme Pearl+ declares (compose.schemes' pearl-plus option), and the Python is VERITY_BENCH_VENV's (default /workspace/cp/venv312)
+# VARIANTS=h100, SCHEME defaults to the kernel scheme Pearl+ declares (run.schemes' pearl-plus option), and the Python is VERITY_BENCH_VENV's (default /workspace/cp/venv312)
 # with no setup.sh: no ready.json and no FlashInfer build, since every request e2e.py serves samples greedily. MODEL (the
 # checkpoint's directory) is given, TAG names it in e2e.py's shape names, and WORK defaults to /workspace/research/pearl-c-sm90
 # (the research user's, where those nodes keep a run's data).
 set -euo pipefail
-KERNEL=${PEARLC_KERNEL:-verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120}; K=$(basename "$KERNEL")
+KERNEL=${PEARLC_KERNEL:-verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm120}; K=$(basename "$KERNEL")
 OUT=${OUT:-${RESEARCH_RUN_DIR:?run this under research run, or give OUT}}
 mkdir -p "$OUT"
 MODE=${MODE:-window}
@@ -48,7 +48,7 @@ fail() { echo "WINDOW_FAIL_$1: ${*:2}" | tee "$OUT/window.fail" >&2; exit 3; }
 case $K in
   pearl_c_sm90)
     VARIANTS=h100
-    SCHEME=${SCHEME:-$(python3 -m verity.protocols.compose.schemes pearl-plus option)}; SCHEME=${SCHEME#*:}
+    SCHEME=${SCHEME:-$(python3 -m verity.protocols.run.schemes pearl-plus option)}; SCHEME=${SCHEME#*:}
     WORK=${WORK:-/workspace/research/pearl-c-sm90}; PY=${VERITY_BENCH_VENV:-/workspace/cp/venv312}/bin/python
     MODEL=${MODEL:?on $K, MODEL names the checkpoint directory}
     [ -x "$PY" ] || fail SETUP "no Python at $PY: VERITY_BENCH_VENV names the node's pinned-vLLM environment"
@@ -82,7 +82,7 @@ if [ "${STATEMENT:-}" = build ]; then
   GENCODE=$(python3 benchmarks/kernels/machine.py gencode "$(python3 benchmarks/kernels/machine.py arch)") \
     || fail STATEMENT "no -gencode for this machine's card to build hm96_rows.cu"
   "$CUDA_HOME/bin/nvcc" -O3 -std=c++17 -gencode "$GENCODE" -cubin -o "$OUT/hm96_rows.cubin" \
-    verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/hm96_rows.cu || fail STATEMENT "hm96_rows.cu did not build"
+    verity/protocols/accounting/compute/pouw/prover/kernels/served_zk/hm96_rows.cu || fail STATEMENT "hm96_rows.cu did not build"
   STATEMENT=$OUT/hm96_rows.cubin
 fi
 [ -z "${STATEMENT:-}" ] || SWITCHES+=(--statement "$STATEMENT")
@@ -101,6 +101,7 @@ mkdir -p "$OUT/ship" && tar -xf "${SHIP_TAR:-${RESEARCH_RUN_DIR:-$OUT}/inputs/${
 SHIP=$(dirname "$(find "$OUT/ship" -name MANIFEST.sha256 | head -1)")
 (cd "$SHIP" && sha256sum -c --quiet MANIFEST.sha256) || fail SHIP "MANIFEST.sha256 does not hold"
 cmp -s "$SHIP/run.py" "$KERNEL/run.py" || fail SHIP "the ship's run.py is not the run tree's"
+cmp -s "$SHIP/driver.py" "$KERNEL/../pearl_c/driver.py" || fail SHIP "the ship's driver.py is not the run tree's"
 
 PEARLC_EXPECT_UUID=$UUID SHAPES="" VARIANTS=$VARIANTS "$PY" "$SHIP/run.py" "$SHIP/check/check.json" > "$OUT/gpu1-check.jsonl" \
   || fail GPU1_CHECK "run.py's device check failed (exit $?); see gpu1-check.jsonl"

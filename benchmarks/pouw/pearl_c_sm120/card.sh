@@ -26,7 +26,7 @@ if [ "${1:-}" != gpu ]; then
 fi
 export PEARLC_EXPECT_UUID=${GPU_LEASE_UUID:?run under gpu-lease}; PEARLC_EXPECT_UUID=${PEARLC_EXPECT_UUID%%,*}
 cd "$SHIP"
-sha256sum pearl_c_sm120.cubin run.py check/check.json > "$OUT/ship.sha256"
+sha256sum pearl_c_sm120.cubin run.py driver.py check/check.json > "$OUT/ship.sha256"
 rc=0
 load check; SHAPES= VARIANTS="sm120 sm120-unpromoted" python3 run.py check/check.json > "$OUT/check.jsonl" 2> "$OUT/check.txt" || rc=$?
 load run; r=0; VARIANTS=${VARIANTS:-sm120} python3 run.py check/check.json > "$OUT/run.jsonl" 2> "$OUT/run.txt" || r=$?

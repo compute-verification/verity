@@ -323,18 +323,18 @@ def commit(root: Path, *, seed: int = 23) -> dict[str, Any]:
 
 
 def hook(c: dict[str, Any], out_dir: Path, run: str = "served-experts") -> Path:
-    """The row driver's window in ``out_dir``: the in-Commit hook at the Commit's C2 site (`c2_replay.serving_rows`, its request
+    """The row driver's window in ``out_dir``: the in-Commit hook at the Commit's C2 site (`served_rope.readers`, its request
     as the row stage writes it, the tables' registration and key in it) over the committer and the served weights, once the run
     root is final: ``served``."""
-    from verity_vllm.pipeline import c2_replay as C2
+    from tests.pipeline.served_rope import readers
 
     req = out_dir.with_name(out_dir.name + ".request.json")
     req.write_text(json.dumps({"dir": str(out_dir), "partition": str(c["partition"]), "run": run,
                                "committer": {"source": "served_experts"}, "tables": c["tables"]}))
     args = SimpleNamespace(program_dir=str(c["row_dir"] / "build_request"), programs_root=None, program_digest=c["inst"]["digest"],
                            label=LABEL, serving_rows=str(req))
-    C2.serving_rows(SimpleNamespace(args=args, out=c["out"], pair=1, com=c["com"], rc=c["rc"], reqs=c["reqs"], sampling={"max_tokens": 1},
-                                    row=c["row"], manifest=None, weights_of=lambda prefix: CPU.provider(c["served"], prefix, set())))
+    readers(SimpleNamespace(args=args, out=c["out"], pair=1, com=c["com"], rc=c["rc"], reqs=c["reqs"], sampling={"max_tokens": 1},
+                      row=c["row"], manifest=None, weights_of=lambda prefix: CPU.provider(c["served"], prefix, set())))
     if (out_dir / "error.txt").exists():
         raise RuntimeError(f"the in-Commit hook failed: {(out_dir / 'error.txt').read_text()[-2000:]}")
     return out_dir
@@ -418,7 +418,8 @@ def main(argv: list[str]) -> int:
                       "partition": str(c["partition"]), "run_root": c["run_root"], "weights_root": c["weights_root"],
                       "checkpoint": str(c["checkpoint"]), "checkpoints_manifest": str(c["checkpoints_manifest"]), "tables": c["tables"],
                       "hook": str(hook(c, root / "hook")), "request": REQUEST, "units": UNITS,
-                      "served": {k: s[k] for k in ("row_dir", "bundle", "manifest_sha256")}}))
+                      "served": {"row_dir": s["row_dir"], "bundle": s["bundle"],
+                                 "manifest_sha256": RB.open_bundle(s["bundle"])["manifest_sha256"]}}))
     return 0
 
 

@@ -55,6 +55,7 @@ def _rms(B, S, x, w):
 
 DsaRMSNormV2 = flat("DsaRMSNorm", 2, ["N", "EPS"], lambda S: ((("x", Array(S.N, BF16)), ("w", Array(S.N, BF16))), Array(S.N, BF16)),
                     _rms, DN.DsaRMSNorm)
+DsaRMSNormV2.opt_in = True  # type: ignore[attr-defined]  (`DsaRMSNorm_v3` is the word's Boolean version; this one serves a reader that names it)
 
 
 def _sum_sq(B, S, x):
@@ -64,6 +65,7 @@ def _sum_sq(B, S, x):
 
 DsaRMSNormSumSqV2 = flat("DsaRMSNormSumSq", 2, ["N", "EPS"], lambda S: ((("x", Array(S.N, BF16)),), F32), _sum_sq,
                          DN.DsaRMSNormSumSq)
+DsaRMSNormSumSqV2.opt_in = True  # type: ignore[attr-defined]  (`DsaRMSNormSumSq_v3` is the word's Boolean version; this one serves a reader that names it)
 
 
 def _apply(B, S, x, w, r):
@@ -74,6 +76,7 @@ def _apply(B, S, x, w, r):
 DsaRMSNormApplyV2 = flat("DsaRMSNormApply", 2, ["G"],
                          lambda S: ((("x", Array(S.G, BF16)), ("w", Array(S.G, BF16)), ("r", F32)), Array(S.G, BF16)), _apply,
                          DN.DsaRMSNormApply)
+DsaRMSNormApplyV2.opt_in = True  # type: ignore[attr-defined]  (`DsaRMSNormApply_v3` is the word's Boolean version; this one serves a reader that names it)
 
 
 def _block_rms(B, S, x, w):

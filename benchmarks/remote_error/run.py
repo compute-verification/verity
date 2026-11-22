@@ -91,7 +91,7 @@ KINDS = {
 DETERMINED = ("a", "a, upper bound", "b")
 BASES = ("proved at these parameters", "formula proved, value evaluated here", "assumed", "open", "excluded")
 
-FLOCK = "verity/protocols/proofs/flock/verifier/Flock"
+FLOCK = "verity/protocols/proof/flock/verifier/Flock"
 S = "security/Proofs/Properties/Verity/Sampled.lean"
 INSTANCE = "security/Proofs/Properties/Verity/Sampled/Instance.lean"
 STRICTZ = "security/Proofs/Flock/Soundness/Discharge/ZkLink/StrictZ.lean"

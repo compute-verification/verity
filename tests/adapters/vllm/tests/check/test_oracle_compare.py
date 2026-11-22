@@ -10,7 +10,6 @@ import hashlib
 import json
 import os
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 import pytest
@@ -249,98 +248,6 @@ def _two_step_case(tmp_path):
     return d, bmap, committed
 
 
-def test_b2swapeq_relabel_on_the_shared_decode_step_fails_named(tmp_path):
-    """b2swapeq: r0 <-> r1 labels exchanged ONLY on the decode step where both have one row (step 1, NOT
-    snapshotted by the Match): every byte and every count is unchanged, coverage/composition/openings/root-compare all pass -- the
-    per-request ids oracle (tokens.json at the StepStart rows, every step) names the swap: r1's slot holds r0's token and vice versa."""
-    d, bmap, committed = _two_step_case(tmp_path)
-    for e in bmap["entries"]:                                                   # the collector's request->row map swapped at step 1
-        i = e["identity"]
-        if i["step"] == 1 and i["request_id"] in ("r0", "r1") and i["output_member"] in ("in", "sampled_token_ids"):
-            e["element_offset"] = 1 - int(e["element_offset"])
-    res = OC.oracle_compare(OC.MatchOracle(d), bmap, reader(committed))
-    assert res["result"] is False and res["grade"] == "mismatch" and res["mismatch_n"] == 4      # ids + sampled for both requests
-    assert {(m["identity"]["step"], m["identity"]["request_id"]) for m in res["mismatch"]} == {(1, "r0"), (1, "r1")}
-    assert {m["family"] for m in res["mismatch"]} == {"input_token_ids", "sampled_token_ids"}
-    assert res["attribution"]["complete"] is False
-    from verity_vllm.check.commit_pass import commit_verdict
-    commit = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64},
-              "binding": _bnd(2), "oracle_compare": res,
-              "value_correspondence": {"method": "oracle-compare(partial) + root-compare-vs-independent-run", "result": False, "oracle_compare": {"why": res["why"]}}}
-    ok, why = commit_verdict(commit, True, min_openings=64)
-    assert not ok and "step 1" in why and "req r" in why
-
-
-def test_b2_attribution_ambiguous_when_two_requests_share_ids_on_an_unsnapshotted_step(tmp_path):
-    """Both requests sampled the SAME id at step 0 and so feed the same id at step 1 (not snapshotted): a swap there is undetectable by the
-    ids oracle -> the step is reported ambiguous, the grade is partial (never attribution-complete), the B>=2 verdict is not PASS."""
-    d, vals = make_match(str(tmp_path), sampled=[777, 777])
-    bmap, committed = make_bmap(vals, steps=(0, 1))
-    bmap["entries"] = [e for e in bmap["entries"] if not (e["identity"]["step"] == 1 and e["identity"]["output_member"] == "in")]
-    for lab in ("r1", "r0"):
-        bmap["entries"].append({"identity": {"program_digest": "p" * 64, "request_id": lab, "step": 1, "invocation": 0, "op_path": "model.embed_tokens", "output_member": "in",
-                                             "element_range": [0, 1], "rank": 0}, "kind": "leaf", "name": "model.embed_tokens/in", "element_offset": 0 if lab == "r1" else 1,
-                                "encoding": {"dtype": "int32", "shape": [2]}})
-    committed = {**committed, **{(1, k[1]): v for k, v in committed.items() if k[0] == 0}}
-    committed[(0, "runner.sampler/sampled_token_ids")] = np.array([777, 777], dtype="<i8").tobytes()
-    committed[(1, "model.embed_tokens/in")] = np.array([777, 777], dtype="<i4").tobytes()
-    committed[(1, "runner.sampler/sampled_token_ids")] = np.array([1, 1], dtype="<i8").tobytes()
-    # the log's step-1 samples are [1, 2]: make them equal too so the step is fully ambiguous
-    p = os.path.join(d, "capture", "log.jsonl.gz")
-    with gzip.open(p, "rt") as fh:
-        lines = fh.read().splitlines()
-    lines = [json.dumps({"$e": "SampleEnd", "step": 1, "sampled_token_ids": [1, 1]}) if '"step": 1' in ln and "SampleEnd" in ln else ln for ln in lines]
-    with gzip.open(p, "wt") as fh:
-        fh.write("\n".join(lines) + "\n")
-    res = OC.oracle_compare(OC.MatchOracle(d), bmap, reader(committed))
-    assert res["mismatch_n"] == 0 and res["result"] is None
-    assert res["attribution"]["ambiguous_steps"] == [1] and res["attribution"]["complete"] is False and res["grade"] == "partial"
-    assert "ambiguous at steps [1]" in res["why"]
-    from verity_vllm.check.commit_pass import commit_verdict
-    commit = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64},
-              "binding": _bnd(2), "oracle_compare": res, "value_correspondence": {"method": "oracle-compare(partial)", "result": None}}
-    ok, why = commit_verdict(commit, True, min_openings=64)
-    assert not ok and why.startswith("C2 of record not established")          # the replay + linkage is the attribution check of record
-
-
-def test_verdict_b2_requires_a_live_oracle_compare():
-    """At B>=2 a Commit without the live oracle-compare (no --match-dir) is FAIL named, whatever root-compare says; at B=1 the
-    root-compare with provenance remains acceptable."""
-    from verity_vllm.check.commit_pass import commit_verdict
-    base = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64},
-            "value_correspondence": {"method": "root-compare-vs-independent-run", "result": True}}
-    # the C2 of record is the sampled replay + boundary linkage at EVERY B; a row record without it is
-    # FAIL named (at B=1 too: a root-compare alone was an unsound PASS), and a complete oracle attribution no longer substitutes
-    ok, why = commit_verdict({**base, "binding": _bnd(2)}, True, min_openings=64)
-    assert not ok and why.startswith("C2 of record not established") and "no --program-dir" in why
-    ok, why = commit_verdict({**base, "binding": _bnd(1)}, True, min_openings=64)
-    assert not ok and why.startswith("C2 of record not established")
-    oc: dict[str, Any] = {"result": None, "compared": 0, "why": "oracle compare not run: FileNotFoundError(...)"}
-    ok, why = commit_verdict({**base, "binding": _bnd(4), "oracle_compare": oc}, True, min_openings=64)
-    assert not ok and why.startswith("C2 of record not established")
-    oc = {"result": None, "compared": 100, "grade": "attribution-complete", "attribution": {"complete": True, "unverified_n": 0, "ambiguous_steps": []}}
-    ok, why = commit_verdict({**base, "binding": _bnd(2), "oracle_compare": oc}, True, min_openings=64)
-    assert not ok and why.startswith("C2 of record not established")
-    # with the C2 of record present the oracle stays a diagnostic: PASS at B2 without any Match record
-    c2 = {"sampled_replay": {"result": True, "grade": "complete"}, "boundary_linkage": {"result": True, "pairs": 6, "linked": 6},
-          "weights_pin": {"result": True, "compared": 98}}                                   # the checkpoint pin is part of the record
-    ok_, why_ = commit_verdict({**base, **c2, "binding": _bnd(2)}, True, min_openings=64)
-    assert ok_ is True and why_.startswith("PASS (B=2: per-(step,request) attribution not verified on this record"), why_   # PASS, gap named
-
-
-def test_verdict_gates_on_oracle_mismatch():
-    from verity_vllm.check.commit_pass import commit_verdict
-    commit = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64},
-              "value_correspondence": {"method": "oracle-compare + offline-suite", "result": False,
-                                       "oracle_compare": {"result": False, "why": "C2 oracle mismatch: 2 identities differ from the Match oracle (first: step 0 model.layers.0.self_attn.qkv_proj/0 inv 0 req r1 range [0, 12] -- bytes differ)"}}}
-    ok, why = commit_verdict(commit, True, min_openings=64)
-    assert not ok and why.startswith("C2 oracle mismatch") and "qkv_proj/0" in why
-    commit["value_correspondence"] = {"method": "oracle-compare(partial)", "result": None}
-    assert commit_verdict(commit, True, min_openings=64) == (True, "PASS")
-    commit["value_correspondence"] = {"method": "oracle-compare", "result": True}
-    assert commit_verdict(commit, True, min_openings=64) == (True, "PASS")
-
-
 def test_missing_oracle_files_refused(tmp_path):
     with pytest.raises(FileNotFoundError):
         OC.MatchOracle(str(tmp_path))
@@ -513,64 +420,6 @@ def test_producers_of_reads_spec_and_ordinal_from_manifest_rows():
     assert p[("a.b", "0")] == {"spec": "Gemm_v1", "ordinal": None, "operand": None} and p[("a.n", "1")]["ordinal"] == 0 and p[("a.n", "0")]["ordinal"] == 1
     assert p[("a.n", "1")]["operand"] == "AddWidenedBf16_v1" and p[("a.n", "0")]["operand"] is None
     assert ("weights", "w") not in p and p[("a.c", "0")].get("conflict") is True and p[("a.c", "0")]["spec"] is None
-
-
-def test_foreign_oracle_is_refused_by_name_before_any_value_compare(tmp_path):
-    """A Match record of ANOTHER workload given as --match-dir: refused by name (request ids / prompt lengths / caps),
-    nothing compared, result False 'foreign oracle' -- never a value mismatch that happens to point the right way."""
-    d, vals = make_match(str(tmp_path))
-    bmap, committed = make_bmap(vals)
-    own = {"requests": [{"request_id": U0, "index": 0, "prompt_len": 5, "max_tokens": 1}, {"request_id": U1, "index": 1, "prompt_len": 3, "max_tokens": 1}]}
-    res = OC.oracle_compare(OC.MatchOracle(d), bmap, reader(committed), workload=own)
-    assert res["result"] is True and res["workload_check"]["ok"] is True and res["workload_check"]["compared"] == 2
-    # another row's workload (one request, another uuid)
-    foreign = {"requests": [{"request_id": "cccccccc-2222-2222-2222-222222222222", "index": 0, "prompt_len": 5, "max_tokens": 1}]}
-    res = OC.oracle_compare(OC.MatchOracle(d), bmap, reader(committed), workload=foreign)
-    assert res["result"] is False and res["grade"] == "foreign-oracle" and res["compared"] == 0 and res["mismatch_n"] == 0
-    assert res["why"].startswith("foreign oracle") and "request ids differ" in res["why"]
-    # same uuids, another declared shape (prompt_len) or a swapped labelling: named too
-    res = OC.oracle_compare(OC.MatchOracle(d), bmap, reader(committed),
-                            workload={"requests": [{"request_id": U0, "index": 0, "prompt_len": 7, "max_tokens": 1}, {"request_id": U1, "index": 1, "prompt_len": 3, "max_tokens": 1}]})
-    assert res["result"] is False and "oracle prompt has 5 ids != declared prompt_len 7" in res["why"]
-    res = OC.oracle_compare(OC.MatchOracle(d), bmap, reader(committed),
-                            workload={"requests": [{"request_id": U1, "index": 0, "prompt_len": 3, "max_tokens": 1}, {"request_id": U0, "index": 1, "prompt_len": 5, "max_tokens": 1}]})
-    assert res["result"] is False and "label r0 in the oracle != r1 declared" in res["why"]
-    # no workload passed: not checked, said so, values still compared
-    res = OC.oracle_compare(OC.MatchOracle(d), bmap, reader(committed))
-    assert res["result"] is True and res["workload_check"]["ok"] is None
-    # the verdict names it
-    from verity_vllm.check.commit_pass import commit_verdict
-    commit = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64}, "binding": _bnd(2),
-              "value_correspondence": {"method": "oracle-compare(partial) + offline-suite", "result": False, "oracle_compare": {"result": False, "why": "foreign oracle: x"}},
-              "oracle_compare": {"result": False, "why": "foreign oracle: x", "compared": 0}}
-    ok, why = commit_verdict(commit, True, min_openings=64)
-    assert not ok and why.startswith("foreign oracle")
-
-
-def test_verdict_names_the_failing_component_not_the_oracle_partial_note():
-    """b2flip1_s5 + --expect-root: the oracle ran partial (result None, why = its coverage note) and the ROOT compare failed;
-    first_fail_reason must quote the root-compare cause, never the oracle's partial note.  [R2] components carry their own result/reference."""
-    from verity_vllm.check.commit_pass import commit_verdict
-    partial_note = "attribution-complete: steps [2, 3, 4, 5] not snapshotted by the Match (MATCH_SNAP_STEPS); ids + sampled ids verified on every step"
-    vc = {"method": "oracle-compare(partial) + offline-suite + root-compare-vs-independent-run (--expect-root)", "result": False,
-          "why": "root_compare: run root 0123456789abcdef != expected root fedcba9876543210 (--expect-root)",
-          "oracle_compare": {"result": None, "why": partial_note, "grade": "attribution-complete", "compared": 848, "mismatch_n": 0},
-          "components": {"root_compare": {"result": False, "why": "run root 0123456789abcdef != expected root fedcba9876543210 (--expect-root)",
-                                          "reference": "--expect-root (caller-pinned root; independent only if produced by another tree/pod)"},
-                         "oracle_compare": {"result": None, "why": partial_note, "grade": "attribution-complete", "reference": "live Match oracle of this attempt (--match-dir)"}}}
-    commit = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64}, "binding": _bnd(1),
-              "value_correspondence": vc, "oracle_compare": {"result": None, "why": partial_note, "compared": 848, "attribution": {"complete": True}}}
-    ok, why = commit_verdict(commit, True, min_openings=64)
-    assert not ok and why.startswith("root_compare: run root 0123456789abcdef != expected root") and "not snapshotted" not in why
-    # the oracle's own failure still wins the text when IT failed
-    vc["oracle_compare"] = {"result": False, "why": "C2 oracle mismatch: 1 identity differs (first: step 1 model.layers.0.mlp.down_proj/0 req r0)"}
-    ok, why = commit_verdict(commit, True, min_openings=64)
-    assert not ok and why.startswith("C2 oracle mismatch")
-    # a replay failure recorded as a component is named as such
-    vc["oracle_compare"] = {"result": None, "why": partial_note}
-    vc["components"] = {"replay": {"result": False, "why": "replay root != committed root", "reference": "replay"}}
-    ok, why = commit_verdict(commit, True, min_openings=64)
-    assert not ok and why == "replay: replay root != committed root"
 
 
 def test_f_r16_24_the_oracle_provenance_carries_the_tie_facts_of_the_match_record_it_read(tmp_path):

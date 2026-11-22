@@ -12,7 +12,7 @@ untraced = ["test_registration_difftest.py", "test_site_difftest.py"]
 inputs = ["verity/__init__.py", "verity/device.py", "verity/channel.py", "verity/errors.py", "calibration/hardware",
           "verity/protocols/interface", "verity/circuits/difftest", "verity/circuits/base", "verity/circuits/lean",
           "verity/commitments/lean", "tools/difftest",
-          "verity/protocols/__init__.py", "verity/protocols/resource_accounting/__init__.py",
+          "verity/protocols/__init__.py", "verity/protocols/accounting/__init__.py",
           "verity/protocols/registration/__init__.py", "verity/protocols/registration/verifier/__init__.py",
           "verity/protocols/registration/verifier/registration.py", "verity/protocols/registration/verifier/site_log.py",
           "verity/protocols/registration/verifier/lean"]

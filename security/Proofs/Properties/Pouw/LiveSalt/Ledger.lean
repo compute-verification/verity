@@ -548,7 +548,7 @@ theorem find_mem {ledger : Json} {sid : String} {p : LedgerEntry → Bool} {x : 
   exact ⟨hm.1, hm.2, List.find?_some h⟩
 
 /-- The ledger of a session pinned on root `R` shows its reserve, its one open on `R` and its end, from the entries
-`PouwCheck.liveSaltCheck` finds and checks. -/
+`PouwVerifier.liveSaltCheck` finds and checks. -/
 theorem ledgerShows_of {ledger : Json} {ck : ChallengerKey} {pins main : Json} {a : Audited} {R : ByteArray}
     {rv op en : LedgerEntry} (hR : Flock.hexOf R ≠ "")
     (hpin : pinnedChallengePhase ledger (Json.mkObj [("root", .str (Flock.hexOf R))]) ck pins main = .ok a)

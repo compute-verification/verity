@@ -38,6 +38,6 @@ inputs = ["adapters/vllm/manifests", "adapters/vllm/verity_vllm/config.py", "ada
           "calibration/hardware/cards/h200-sxm-141gb.toml", "calibration/hardware/cards/dgx-h200.toml", "calibration/hardware/cards/rtx-pro-6000-server.toml",
           "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/definitions",
           "adapters/torch/verity_torch", "verity/__init__.py",
-          "verity/protocols/__init__.py", "verity/protocols/workload_classification/__init__.py", "verity/protocols/workload_classification/training_detection/__init__.py",
-          "verity/protocols/workload_classification/training_detection/inference_only/__init__.py", "benchmarks/slowdown/__init__.py", "calibration/circuit_properties",
+          "verity/protocols/__init__.py", "verity/protocols/policy/__init__.py", "verity/protocols/policy/training_detection/__init__.py",
+          "verity/protocols/policy/training_detection/inference_only/__init__.py", "benchmarks/slowdown/__init__.py", "calibration/circuit_properties",
           "calibration/hardware/cards"]

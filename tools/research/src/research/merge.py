@@ -603,7 +603,7 @@ def required_steps(repo: Path, base: str, commit: str, tool: str, at: str | None
 def rule_touches(rule: list[str], changed: list[str]) -> list[str]:
     """The prefixes of a `Tool.merge_requires` rule that ``changed`` touches.  A rule is path prefixes and `!` patterns: a
     changed file counts when it is under a prefix and matches no pattern (one without a `/` is matched against the file's name,
-    one with a `/` against its path), so `["verity/protocols/proofs/flock/prover/", "verity/protocols/proofs/flock/verifier/", "!README.md"]` leaves out every
+    one with a `/` against its path), so `["verity/protocols/proof/flock/prover/", "verity/protocols/proof/flock/verifier/", "!README.md"]` leaves out every
     README.md under either."""
     import fnmatch
 
@@ -816,7 +816,7 @@ def _mirror_target(name: str) -> tuple[list[str], str]:
 def push_mirror(repo: Path, sha: str, name: str, target=None, run=subprocess.run) -> bool:
     """``sha`` to the main of ``name``'s bare repository: a plain push, so only a fast-forward, past this checkout's own pre-push
     guard, which judges pushes that move origin's main (a hand landing has no check attempt of its tree, so the guard would refuse
-    node 1's copy of it). False, after one line naming the failure and the command that reruns it,
+    the mirror's copy of it). False, after one line naming the failure and the command that reruns it,
     when it doesn't land."""
     from .remote import git_push_url
 
@@ -962,7 +962,7 @@ def _move(repo: Path, remote: str, ref: str, was: str, tip: str, log=print) -> b
 def caught_up(repo: Path, remote: str, tool: str = "check", since: str = "", log=print,
               runs: dict[str, str] | None = None) -> str | None:
     """Run the after-landing steps once for what landed on ``remote``'s main since AFTER_LAND_REF there (or ``since``, main before
-    the caller's own push, when the remote has no marker yet): push main's tip to node 1's mirror, start ``tool``'s `after_land`
+    the caller's own push, when the remote has no marker yet): push main's tip to the mirror, start ``tool``'s `after_land`
     on the tip, with the attempt ``runs`` names for it (a later landing's `post_train.py` tests the ones before it too), start the
     Lean cache publish when what landed touches a Lean package (`lean_publish`), post each landing to the merge thread
     (`report_landings`) and label the runs each one names (`label_landed`), then move the marker to the tip.  The spec DM

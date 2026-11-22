@@ -223,6 +223,17 @@ def test_is_boolean_refuses_a_word_primitive():
     assert BL.is_boolean(BL.AND) and BL.is_boolean(bind(ADD2))
 
 
+@pytest.mark.parametrize("binding", ["run", "registration", "supplied"])
+def test_a_1_bit_input_of_any_binding_is_boolean_and_a_16_bit_one_is_not(binding):
+    from verity.circuits.program import input_prim
+
+    one, word = input_prim(1, binding), input_prim(16, binding)
+    assert BL.is_boolean(one) and not BL.is_boolean(word)
+    reads = CompositeDefinition(f"ExampleNot{binding.title()}Input1", 1, (), lambda S: ((), BIT),
+                                lambda B, S: B.call(BL.NOT, B.call(one)), register=False)
+    assert BL.is_boolean(bind(reads))
+
+
 if __name__ == "__main__" and "--write" in sys.argv:
     PATH.write_text(json.dumps(build(), indent=1) + "\n")
     print(f"wrote {PATH}")

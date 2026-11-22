@@ -48,15 +48,12 @@ ship_cuda() {
 }
 
 # FLAGS: SHIP_NVCC's command line for a cubin of the arch $1 (sm_90a, sm_120a), its -gencode from $1's architecture file
-# (machine.py gencode): no FTZ, fast-math, FMA contraction or approximate division or square root, and no line info, so
-# a cubin's bytes don't depend on the directory it's built in
+# (machine.py gencode): the one statement of a shipped cubin's flags (cubin_flags.sh, which says what it refuses)
 ship_cubin_flags() {
   local gencode
   gencode=$(python3 "$ROOT/benchmarks/kernels/machine.py" gencode "$1") || exit 1
-  FLAGS=(-O3 -std=c++17 -gencode "$gencode" -fmad=false -Xptxas -v -cubin)
-  case " ${FLAGS[*]} " in
-    *ftz*|*fast-math*|*fast_math*|*prec-div*|*prec-sqrt*|*lineinfo*) echo "a refused flag: ${FLAGS[*]}" >&2; exit 1;;
-  esac
+  . "$ROOT/verity/protocols/accounting/compute/pouw/prover/kernels/cubin_flags.sh"
+  cubin_flags "$gencode" || exit 1
 }
 
 # SRC: the paths named (from ROOT) copied into the frame, under a path of one length, for nvcc to compile from in place of

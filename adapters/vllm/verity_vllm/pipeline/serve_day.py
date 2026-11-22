@@ -1,11 +1,10 @@
 """serve-openai's day (``--day DAY --day-log LOG --day-program DIGEST``): before the day's first window, the server declares
-the one circuit it serves that day in the deployment's registration log, and every window it ties names that declaration.
+the one circuit it serves that day in the deployment's registration log, which a window's registration names (`Day.naming`).
 
 * **The declaration.** A ``verity/registration/declaration/v1`` entry
   (`verity.protocols.registration.verifier.registration.Declaration`):
   the day, by its index among the monitoring period's days (the caller's, on the auditor's clock), the SHA-512 of the
-  program the day's windows register (``--day-program``: under ``--h1-window-commit`` the audited window circuit's, R's
-  ``program``), and its block Definitions by descriptor key (``--day-blocks``).
+  program the day's windows register (``--day-program``), and its block Definitions by descriptor key (``--day-blocks``).
 * **The log.** LOG is the deployment's one registration log as committed (`registration.committed`: ``{"composite",
   "entries"}``), kept across serve runs. `declare` appends the declaration to it only once core's own check
   (`registration.check`, under ``--day-params``' auditor, else an empty one) accepts the whole log with it, so a second
@@ -15,12 +14,11 @@ the one circuit it serves that day in the deployment's registration log, and eve
   composite. The read, the check and the write hold an exclusive lock on ``LOG.lock``, so two servers of one deployment
   can't both declare a day.
 * **Where it is registered.** The serve dir's `FILE` (the entry, the digest windows name it by and the log's head after
-  it), ``serve.json``'s ``day``, and, under ``--h1-window-commit``, the first line of the window log ``h1/log.jsonl``
-  (`serve_tie`, kind ``declaration``), which the windows' W and R then follow.
-* **Each window names it.** Each W (`pouw_h1_commit.registration`) carries ``window.day`` and ``window.declaration``, the
+  it) and ``serve.json``'s ``day``.
+* **A window names it.** A window's registration carries ``window.day`` and ``window.declaration`` (`Day.naming`), the
   declaration's digest with no ``previous`` (`named`), which R2 rebuilds from the day, program and blocks of the log's
-  entry or of the challenger device's signed one, so both paths name it alike. Before an R is named the window's Commit
-  record, its ``program`` must be the day's (`Day.refusal`): the server's own guard, the window's visible refusal. What counts is R2's (SPOT's ``R2-declared``, which the audit
+  entry or of the challenger device's signed one, so both paths name it alike. A record whose ``program`` isn't the day's
+  is refused (`Day.refusal`): the server's own guard. What counts is R2's (SPOT's ``R2-declared``, which the audit
   runs with the day and the log's declarations).
 * **The registered compiler.** The log registers B once, as an information entry's item of kind ``builder``. The run
   knows its compiler where it binds its advice (`advice.write`), so that is where `register_compiler` registers the
@@ -58,15 +56,14 @@ class DayOptions:
     """serve-openai's ``--day`` group (`declare`)."""
 
     day: int | None = option("--day", type=int, default=None, metavar="N",
-                             help="declare day N's one circuit in --day-log before the first window, and name it in each "
-                                  "window's registration (serve_day); a second declaration of day N is refused before the "
+                             help="declare day N's one circuit in --day-log before the first window "
+                                  "(serve_day); a second declaration of day N is refused before the "
                                   "model loads (default: none, every byte as without it)")
     day_log: str | None = option("--day-log", default=None, metavar="LOG",
                                  help="with --day: the deployment's registration log (verity/registration/log/v1, committed "
                                       "JSON), appended to in place")
     day_program: str | None = option("--day-program", default=None, metavar="HEX",
-                                     help="with --day: the SHA-512 of the program the day's windows register (under "
-                                          "--h1-window-commit, the audited window circuit's)")
+                                     help="with --day: the SHA-512 of the program the day's windows register")
     day_blocks: str = option("--day-blocks", default="", metavar="KEYS",
                              help="with --day: the program's block Definitions by descriptor key, comma-separated")
     day_params: str | None = option("--day-params", default=None, metavar="FILE",
@@ -111,7 +108,7 @@ class Day:
                 "file": FILE}
 
     def line(self) -> dict[str, Any]:
-        """Its line in a window log (`serve_tie`)."""
+        """Its line in a window log."""
         return {"window": None, "kind": "declaration", "file": f"../{FILE}", "digest": self.digest}
 
 

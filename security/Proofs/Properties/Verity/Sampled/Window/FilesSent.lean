@@ -43,11 +43,12 @@ theorem blobWith_digest {h : Option Hash.Digest} {B : Array ByteArray} {f : Byte
   have hp := Array.find?_some hf
   simpa using hp
 
-/-- **The members' digests at the parameters `θ`**: each member's circuit file's and public file's, as v2's
-parameters name them (`digestOf`); none where they name no members. -/
+/-- **The members' digests at the parameters `θ`**: each member's circuit file's, the SHA-512 of the one the door
+derives (`Own.circuitFile`), and its public file's, as v2's parameters name it (`digestOf`); none where they name no
+members. -/
 def memberDigests (θ : ByteArray) : List (Option Hash.Digest) :=
   match (paramsOf θ).bind (·.members) with
-  | some ms => ms.toList.flatMap fun vm => [digestOf vm.own.circuit, digestOf vm.own.pub]
+  | some ms => ms.toList.flatMap fun vm => [vm.own.circuitFile.toOption.map fun c => Verity.sha512 c.data.toList, digestOf vm.own.pub]
   | none => []
 
 /-- **The blobs sent hold each member's registered file**, at the play's parameters: at each member's digest

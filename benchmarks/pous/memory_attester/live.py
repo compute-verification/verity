@@ -1,5 +1,5 @@
-"""The memory attester's process in the harness's timed audit (`p2-v3-mc-gpu`): `verity.protocols.resource_accounting.memory.pous.verifier.
-memory_attester` against the responder, over the harness's responder wire (`verity/protocols/resource_accounting/memory/pous/attester/timed_audit.py`).
+"""The memory attester's process in the harness's timed audit (`p2-v3-mc-gpu`): `verity.protocols.accounting.memory.pous.verifier.
+memory_attester` against the responder, over the harness's responder wire (`verity/protocols/accounting/memory/pous/attester/timed_audit.py`).
 
     python benchmarks/pous/memory_attester/live.py --ready READY.json --leaves DIGESTS.bin --out AUDIT.json [--audits N]
         [--pings N] [--k K] [--verifier-cpu C] [--limit-ns N] [--calibrate-only] [--clock logical] [--strict]
@@ -35,16 +35,13 @@ against C's leaf).
   `tree.sha512`) and `state.json` (`lms.LeafState`, which refuses a used leaf across runs).  A missing key is made there
   first (`--keygen-workers`; about 1.1G SHA-512 hashes).  `--signer test` signs with the PoUS tests' test signer (`pous_test_signer.py`: LMS at a small height under a
   `test/` id), its leaf state in that temporary directory.
-- **The verdict** is `memory_attester.verdict` under `memory_attester.SCHEMES`, which accepts S1's scheme alone, so a
-  test-signed session is rejected: it fails closed.  `judge` computes it twice on every session, with the Lean port's
-  (`lean_verdict`, built with `lake` on first use) and with the Python, which stays the reference, and keeps both in the
-  witness (`verdicts`).  `RECORD_VERDICT` names the one that is the record's (the Lean's); where the two disagree, on the
-  accept bit or the reasons, the session is rejected for it (`DISAGREE`, listing both).
-  `tests/verity/protocols/resource_accounting/memory/pous/attester/lean/test_verdict.py` holds the Lean to the Python on generated records.
+- **The verdict** is the Lean port's (`lean_verdict`, `memory-attester-verdict`, built with `lake` before the first
+  session signs) under `memory_attester.SCHEMES`, which accepts S1's scheme alone, so a test-signed session is rejected:
+  it fails closed.  Where `lake` can't build it, the audit stops with that `BuildError` and no session signs.
   `accepted_under_signer` is the same verdict under the signer's own mapping (`memory_attester.SCHEMES` for `lms`, the
   test signer's for `test`): for `test`, every check but the scheme's acceptance, and never the verdict.
 - **The record** separates what is published (`public`: the commitment, the verdict, the coin openings) from the witness
-  (`witness`: the signed session, the record's reasons, both verdicts, C's digests at the blocks the rounds revealed,
+  (`witness`: the signed session, the verdict's reasons, C's digests at the blocks the rounds revealed,
   per-round on-time and digest bits), and keeps the responder's reports beside: with the signer's public key, every input
   of the verdict, so a record replays.
 - **The signed sessions** go to `--sessions` (`sessions-<--out's name>` beside it) as the session loop ends, however it
@@ -71,7 +68,8 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from verity.protocols.resource_accounting.memory.pous.attester.timed_audit import (  # noqa: E402
+from verity.commitments import session_coins as SC
+from verity.protocols.accounting.memory.pous.attester.timed_audit import (  # noqa: E402
     ALLOWANCE_KIND,
     HEADER,
     OP_CHALLENGE,
@@ -87,12 +85,8 @@ from verity.protocols.resource_accounting.memory.pous.attester.timed_audit impor
 )
 
 ROOT = Path(__file__).resolve().parents[3]
-TEST_SIGNER = ROOT / "tests" / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "verifier" / "pous_test_signer.py"
-LEAN_VERDICT = ROOT / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "attester" / "lean" / "verdict.py"
-RECORD_VERDICT = "lean"
-"""Which verdict is the record's: `"lean"` (`lean_verdict`) or `"python"` (`memory_attester.verdict`, the reference).
-`judge` computes both on every session and records both either way."""
-DISAGREE = "the Lean and Python verdicts disagree"
+TEST_SIGNER = ROOT / "tests" / "verity" / "protocols" / "accounting" / "memory" / "pous" / "verifier" / "pous_test_signer.py"
+LEAN_VERDICT = ROOT / "verity" / "protocols" / "accounting" / "memory" / "pous" / "attester" / "lean" / "verdict.py"
 WARMUP_PINGS = 8
 """Pings before each session's first round, after the previous session's signature: a session's round 0 otherwise follows
 the challenger's own Python work (one measured round 0 took 655.8 µs, 26 µs of it at the responder)."""
@@ -149,7 +143,7 @@ def write_sessions(path: str | os.PathLike, sig: Any, sessions: list[dict[str, A
 
 
 def rtt_cap_ns() -> int:
-    from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2
+    from verity.protocols.accounting.memory.pous.verifier.schemes import p2
     return p2.RTT_ALLOWANCE_CAP_NS
 
 
@@ -157,7 +151,7 @@ def lms_signer(directory: str | os.PathLike, workers: int = 1, params: Any = Non
     """The memory attester's S1 signer whose key is in `directory`, made there first when absent; at `params` other than
     `lms.DEPLOYED` (tests), under a `test/` id."""
     from verity.commitments.crypto import lms
-    from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
+    from verity.protocols.accounting.memory.pous.attester import memory_attester as mc
 
     p = params or lms.DEPLOYED
     d = Path(directory)
@@ -194,7 +188,7 @@ def lms_signer(directory: str | os.PathLike, workers: int = 1, params: Any = Non
 
 def session_log(path: str | os.PathLike, new_key: bool) -> Any:
     """The memory attester's used-session log at `path` (`memory_attester.SessionLog`), made there when the key is new."""
-    from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
+    from verity.protocols.accounting.memory.pous.attester import memory_attester as mc
 
     if new_key and not Path(path).exists():
         mc.SessionLog.create(path)
@@ -204,7 +198,7 @@ def session_log(path: str | os.PathLike, new_key: bool) -> Any:
 def signer_schemes(scheme: str) -> Mapping[str, Any]:
     """The mapping a session signed under `scheme` is judged by beside `memory_attester.SCHEMES`: that one for S1's
     scheme, the test signer's for a test one."""
-    from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
+    from verity.protocols.accounting.memory.pous.attester import memory_attester as mc
 
     return mc.SCHEMES if scheme in mc.SCHEMES else test_signer().SCHEMES
 
@@ -212,40 +206,30 @@ def signer_schemes(scheme: str) -> Mapping[str, Any]:
 def setup_root(params: Any, salt: bytes, digests: bytes) -> bytes:
     """What a session audits: the root the setup publishes for the `C*` whose block digests are `digests`, under `salt`
     (`VerifierKey.root`)."""
-    from verity.protocols.resource_accounting.memory.pous.verifier.verifier import VerifierKey
+    from verity.protocols.accounting.memory.pous.verifier.verifier import VerifierKey
 
     return VerifierKey.from_row_digests(params, salt, [digests[64 * i:64 * (i + 1)] for i in range(params.blocks)]).root
 
 
-def verdicts(s: dict[str, Any], expected: Callable[[int], bytes], trusted: set[bytes],
-             schemes: Mapping[str, Any] | None = None) -> tuple[Any, dict[str, dict[str, Any]]]:
-    """Session `s` judged by the Lean verdict and by the Python's: the record's verdict, which is `RECORD_VERDICT`'s unless
-    the two disagree (accept bit or reasons), and then a rejection for it naming both; and both as recorded.  A record the
-    Lean refuses to read (`ValueError`) is its rejection."""
-    from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
+def verdict(s: dict[str, Any], expected: Callable[[int], bytes], trusted: set[bytes],
+            schemes: Mapping[str, Any] | None = None) -> Any:
+    """Session `s` judged by the Lean verdict; a record it refuses to read (`ValueError`) is its rejection."""
+    from verity.protocols.accounting.memory.pous.attester import memory_attester as mc
 
-    args = (s["signed"], s["commitment"], s["openings"], expected)
     kw = {"trusted": trusted, **({} if schemes is None else {"schemes": schemes})}
-    got = {"python": mc.verdict(*args, **kw)}
     try:
-        got["lean"] = lean_verdict().verdict(*args, **kw)
+        return lean_verdict().verdict(s["signed"], s["commitment"], s["openings"], expected, **kw)
     except ValueError as e:
-        got["lean"] = mc.Verdict(False, (str(e),))
-    both = {name: {"accepted": v.accepted, "reasons": list(v.reasons)} for name, v in sorted(got.items())}
-    v = got[RECORD_VERDICT]
-    if both["lean"] != both["python"]:
-        v = mc.Verdict(False, (f"{DISAGREE}: lean {json.dumps(both['lean'])}, python {json.dumps(both['python'])}",),
-                       v.late, v.wrong)
-    return v, both
+        return mc.Verdict(False, (str(e),))
 
 
 def judge(sessions: list[dict[str, Any]], expected: Callable[[int], bytes], trusted: set[bytes],
           signer_schemes: Mapping[str, Any]) -> list[dict[str, Any]]:
-    """Each session's verdict under `memory_attester.SCHEMES` and under the signer's own mapping (`verdicts`)."""
+    """Each session's verdict under `memory_attester.SCHEMES` and under the signer's own mapping (`verdict`)."""
     out = []
     for s in sessions:
-        v, both = verdicts(s, expected, trusted)
-        t, both_t = verdicts(s, expected, trusted, signer_schemes)
+        v = verdict(s, expected, trusted)
+        t = verdict(s, expected, trusted, signer_schemes)
         rounds = s["signed"].rounds
         answers = [{"index": r.index, "elapsed_ns": r.elapsed_ns, "device_ns": d, "server_ns": sv,
                     "correct": r.digest == expected(r.index), "on_time": r.elapsed_ns <= s["commitment"].limit_ns}
@@ -254,12 +238,12 @@ def judge(sessions: list[dict[str, Any]], expected: Callable[[int], bytes], trus
                     "public": {"commitment": s["commitment"].to_json(), "verdict": v.public(),
                                "openings": [o.to_json() for o in s["openings"]]},
                     "witness": {"signed": s["signed"].to_json(), "reasons": list(v.reasons),
-                                "record_verdict": RECORD_VERDICT, "verdicts": both, "verdicts_under_signer": both_t,
                                 "expected": {str(r.index): expected(r.index).hex() for r in rounds
                                              if 0 <= r.index < s["commitment"].blocks},
                                 "reasons_under_signer": list(t.reasons)},
                     "accepted": v.accepted, "accepted_under_signer": t.accepted,
                     "sign_ns": s["sign_ns"]})
+    lean_verdict().finish()
     return out
 
 
@@ -267,7 +251,7 @@ def signature_control(doc: dict[str, Any], expected: Callable[[int], bytes]) -> 
     """The bad-signature control, on the honest audit's signed sessions: each with one signature bit flipped, and each with
     one round's receipt time moved 1 ns earlier after signing (an on-time bit forged), judged under the signer's own
     mapping (`signer_schemes`); every one must be rejected for its signature, and the unedited sessions must pass."""
-    from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
+    from verity.protocols.accounting.memory.pous.attester import memory_attester as mc
 
     schemes = signer_schemes(doc["signer"]["scheme"])
     out = {"sessions": 0, "unedited_accepted": 0, "flipped_rejected": 0, "edited_rejected": 0}
@@ -278,7 +262,8 @@ def signature_control(doc: dict[str, Any], expected: Callable[[int], bytes]) -> 
         trusted = {signed.public_key}
 
         def reasons(s: mc.SignedSession) -> tuple[str, ...]:
-            return mc.verdict(s, commitment, openings, expected, trusted=trusted, schemes=schemes).reasons
+            return verdict({"signed": s, "commitment": commitment, "openings": openings}, expected, trusted,
+                           schemes).reasons
 
         sig = bytearray(signed.signature)
         sig[len(sig) // 2] ^= 1
@@ -288,10 +273,11 @@ def signature_control(doc: dict[str, Any], expected: Callable[[int], bytes]) -> 
         bad = "the signature does not verify"
         out["sessions"] += 1
         out["unedited_accepted"] += reasons(signed) == ()
-        out["flipped_rejected"] += bad in reasons(mc.SignedSession(commitment, signed.ended, signed.rounds, signed.scheme,
+        out["flipped_rejected"] += bad in reasons(mc.SignedSession(commitment, signed.salt, signed.ended, signed.rounds, signed.scheme,
                                                                    signed.public_key, bytes(sig)))
-        out["edited_rejected"] += bad in reasons(mc.SignedSession(commitment, signed.ended, tuple(rounds), signed.scheme,
+        out["edited_rejected"] += bad in reasons(mc.SignedSession(commitment, signed.salt, signed.ended, tuple(rounds), signed.scheme,
                                                                   signed.public_key, signed.signature))
+    lean_verdict().finish()
     out["passed"] = bool(out["sessions"]) and out["flipped_rejected"] == out["edited_rejected"] == out["sessions"]
     return out
 
@@ -309,9 +295,9 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
     test signer), in a temporary directory with the test signer's leaf state, removed once the sessions are signed.  Each
     session's live coins and session id are `os.urandom`'s, or `seeded_session(seed, j)` with `seed`, which only a
     test-signed audit on the logical clock takes (`SEEDED_ONLY`)."""
-    from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
-    from verity.protocols.resource_accounting.memory.pous.verifier import audit as pous_audit
-    from verity.protocols.resource_accounting.memory.pous.verifier.protocol import StorageProfile
+    from verity.protocols.accounting.memory.pous.attester import memory_attester as mc
+    from verity.protocols.accounting.memory.pous.verifier import audit as pous_audit
+    from verity.protocols.accounting.memory.pous.verifier.protocol import StorageProfile
 
     if seed is not None and not (isinstance(clock, LogicalClock) and signer == "test"):
         raise ValueError(SEEDED_ONLY)
@@ -332,7 +318,7 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
     cert = scheme.certificate
     k = k or (cert.k if cert is not None else pous_audit.CHALLENGES)
     binding = setup_root(params, salt, digests)
-    base = {"memory_attester": "memory_attester.MemoryAttester", "protocol": mc.PROTOCOL, "coin_tree": mc.COIN_TREE, "records": mc.RECORDS,
+    base = {"memory_attester": "memory_attester.MemoryAttester", "protocol": SC.PROTOCOL, "coin_tree": SC.COIN_TREE, "records": SC.RECORDS,
             "strict": strict, "warmup_pings": WARMUP_PINGS, "limit_ns": limit, "limit_fixed_before_load": fixed, "deadline_ns": deadline_ns,
             "allowance": "cap", "allowance_kind": ALLOWANCE_KIND, "rtt_allowance_ns": limit - deadline_ns, "rtt_cap_ns": cap,
             "k": k, "scheme": scheme.name, "setup_root": binding.hex(), **({} if seed is None else {"seed": seed.hex()})}
@@ -426,7 +412,7 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
 
 
 def main(argv: list[str] | None = None) -> int:
-    from verity.protocols.resource_accounting.memory.pous.verifier import audit as pous_audit
+    from verity.protocols.accounting.memory.pous.verifier import audit as pous_audit
 
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--ready", required=True)

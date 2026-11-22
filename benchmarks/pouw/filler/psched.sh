@@ -14,7 +14,7 @@ export O=${OUT:?}
 CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit 13.0) || exit 4  # the machine's toolkit at 13.0
 GENCODE=$(python3 benchmarks/kernels/machine.py gencode "$(python3 benchmarks/kernels/machine.py arch)") || exit 4
 export PATH=$CUDA_HOME/bin:$PATH
-D=benchmarks/pouw/filler K=verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler
+D=benchmarks/pouw/filler K=verity/protocols/accounting/compute/pouw/prover/kernels/filler
 export B; B=$(mktemp -d /tmp/psched.XXXXXX); trap 'rm -rf "$B"' EXIT
 export PS_ARMS=${PS_ARMS:-"32:2048:92:fixed:8:4:256:0.8"}
 export PS_REPS=${PS_REPS:-15} PS_PGATE_S=${PS_PGATE_S:-"128 256"}

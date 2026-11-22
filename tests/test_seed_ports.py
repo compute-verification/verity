@@ -18,8 +18,8 @@ in any call, an `In(...)` whose kind isn't a literal (or is passed positionally 
 computed `kind=`, and a
 `{"kind": "position"}` dict (a port as `PortTypes.from_json` reads it). A flagged place not named in `ALLOWED` fails, and so
 does an entry that matches nothing any more. A descriptor decoded by `codec.decode_program` carries its ports as data;
-PoUW never takes a prover's descriptor (`Traced.check_descriptor`, `Compiled.check_descriptor` compare its digest with
-the verifier's own build)."""
+PoUW never takes a prover's descriptor (`Compiled.check_descriptor` compares its digest with the verifier's own
+build)."""
 
 from __future__ import annotations
 
@@ -28,25 +28,21 @@ import ast
 from test_repository import ROOT, _tracked
 
 SEEDS = {
-    "verity/protocols/resource_accounting/compute/pouw/prover/circuit/seeds.py::_coin_salt": "PoUW's seed: (salt, position) to the unit's seed, under compile's checks",
+    "verity/protocols/accounting/compute/pouw/prover/circuit/seeds.py::_coin_salt": "PoUW's seed: (salt, position) to the unit's seed, under compile's checks",
 }
 UNITS = {
-    "verity/protocols/resource_accounting/compute/pouw/prover/circuit/h1tile.py::_unit_ports": "an H1 tile's position beside its receipt sink: a unit",
-    "verity/protocols/resource_accounting/compute/pouw/prover/circuit/h1zy.py::_unit_ports":
+    "verity/protocols/accounting/compute/pouw/prover/circuit/h1tile.py::_unit_ports": "an H1 tile's position beside its receipt sink: a unit",
+    "verity/protocols/accounting/compute/pouw/prover/circuit/h1zy.py::_unit_ports":
         "an H1 tile with its z/y record checked: its position beside its receipt sink, a unit",
-    "verity/protocols/resource_accounting/compute/pouw/prover/circuit/h1zy.py::_lane_ports":
+    "verity/protocols/accounting/compute/pouw/prover/circuit/h1zy.py::_lane_ports":
         "a lane of an H1 leaf: the leaf's position beside its ok sink (its partial's check), a unit",
-    "tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_circuit_h1zy.py::test_the_port_rules_follow_the_coin_into_a_lane_its_statement_calls":
+    "tests/verity/protocols/accounting/compute/pouw/verifier/test_circuit_h1zy.py::test_the_port_rules_follow_the_coin_into_a_lane_its_statement_calls":
         "the lane's stand-in statement template, a position beside its ok sink",
-    "verity/protocols/resource_accounting/compute/pouw/prover/circuit/compile.py::_compiled_ports": "the compiled root's positions beside its receipts sink",
-    "tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_circuit_compile.py::UNIT_PORTS": "compile's test units, a position beside a receipt sink",
-    "verity/protocols/resource_accounting/compute/pouw/prover/circuit/h1window.py::_ports": "an H1 window's positions beside its units' receipt sinks",
-    "tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_circuit_h1window.py::TILE_PORTS":
+    "verity/protocols/accounting/compute/pouw/prover/circuit/compile.py::_compiled_ports": "the compiled root's positions beside its receipts sink",
+    "tests/verity/protocols/accounting/compute/pouw/verifier/test_circuit_compile.py::UNIT_PORTS": "compile's test units, a position beside a receipt sink",
+    "verity/protocols/accounting/compute/pouw/prover/circuit/h1window.py::_ports": "an H1 window's positions beside its units' receipt sinks",
+    "tests/verity/protocols/accounting/compute/pouw/verifier/test_circuit_h1window.py::TILE_PORTS":
         "the window tests' stand-in tile, a position beside its receipt sink",
-    "tests/adapters/vllm/tests/protocols/test_pouw_h1_served.py::StandIn":
-        "vllm's served-trees tests' stand-in tile, a position beside its receipt sink",
-    "tests/adapters/vllm/tests/protocols/test_pouw_h1_drawn.py::StandInJ10R":
-        "vllm's drawn-statements tests' stand-in J10-R tile, a position beside its receipt sink",
     "verity/circuits/population.py::_instance_ports":
         "a population of units: each instance's position beside its receipt sink, declared only for a template with a sink",
     "tests/verity/circuits/test_population_ports.py::Unit": "the population tests' stand-in unit, a position beside its sink",
@@ -83,9 +79,6 @@ TESTS = {
         "a seed whose population declares no ports and is refused (E_PORT_KIND): a population never mints a seed",
     "tests/verity/circuits/test_population_values.py::Unit":
         "a unit of a population with values: its position beside its receipt sink, so the ports see the members alone",
-    "tests/adapters/vllm/tests/protocols/test_pouw_h1_drawn.py::StandInSeed":
-        "the sampled J10-R test's stand-in tile reads its coin and position through a seed, so credit's real Lean check "
-        "accepts the stand-in statement (every input bit read)",
 }
 ALLOWED = SEEDS | UNITS | KEY_COUNTS | WINDOWS | TESTS
 
@@ -156,7 +149,7 @@ def test_only_pouw_mints_a_seed() -> None:
     assert not offenders, (
         "a position port outside PoUW's seeds.py: a Definition with a coin port and a position port and no sink is a seed, "
         "whose noise no port rule follows, so only PoUW's compile pass may build one. Mint seeds in "
-        "verity/protocols/resource_accounting/compute/pouw/prover/circuit/seeds.py, give a unit's position port a sink return (UNITS), declare a key count "
+        "verity/protocols/accounting/compute/pouw/prover/circuit/seeds.py, give a unit's position port a sink return (UNITS), declare a key count "
         "with no coin port beside it (KEY_COUNTS), or name a test that builds one in TESTS with its reason:\n"
         + "\n".join(offenders))
     assert not set(ALLOWED) - used, f"ALLOWED entries that match nothing any more: {sorted(set(ALLOWED) - used)}"

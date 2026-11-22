@@ -1,30 +1,11 @@
-"""The second stage's coins (`second_stage`): its first read against the bytes the second stage's sampler takes, the
-units a first read is counted in, a planner's design's cells, and the figures at a design."""
-import hashlib
+"""The second stage's coins (`second_stage`): the units a first read is counted in, a planner's design's cells, and
+the figures at a design."""
 from fractions import Fraction
 
 import pytest
 import second_stage as s2
-from verity.protocols.proofs.spot.verifier.challenger.challenger import COIN_BYTES, MAX_COINS
-from verity.protocols.proofs.spot.prover.optimize import Cell
-from verity.protocols.proofs.spot.verifier import service
-
-
-def test_the_first_read_is_the_bytes_the_second_stage_takes():
-    """`service.select_second` on fixed bytes takes each cell's `2 k·width(n) + 64` bytes once, template by template
-    and in each by sampled replay block, `first_read` in all: no word of these bytes is rejected, so no cell reads
-    again."""
-    sample, ns, ks = (3, 8, 20), (5, 300, 70000), (5, 17, 1000)
-    asked = []
-
-    def coins(n: int) -> bytes:
-        asked.append(n)
-        return hashlib.shake_256(len(asked).to_bytes(4, "big")).digest(n)
-
-    got = service.select_second(sample, ns, ks, coins)
-    assert asked == [2 * k * s2.width(n) + 64 for n, k in zip(ns, ks) for _ in sample]
-    assert sum(asked) == s2.first_read(len(sample), ns, ks)
-    assert len(got["units"]) == len(sample) * sum(ks)
+from verity.protocols.proof.spot.verifier.challenger.challenger import COIN_BYTES, MAX_COINS
+from verity.protocols.proof.spot.prover.optimize import Cell
 
 
 def test_a_word_is_the_population_s_bits_and_64_more():

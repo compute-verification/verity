@@ -462,8 +462,8 @@ def test_a_bound_statement_hands_lean_its_partition_and_is_refused_without_it(mo
 @pytest.mark.parametrize("refuses", [True, False])
 def test_a_flock_verify_that_does_not_know_the_statement_is_said_as_that(tmp_path, statement, refuses):
     """A Lean verifier that refuses the statement's name (exit 2, "unknown statement" on stderr, no VERDICT line) is
-    recorded as a refusal of the name, and for a wide-leaf name as a verifier that does not list it; any other
-    exit with no verdict keeps the plain reason."""
+    recorded as a refusal of the name, and for a wide-leaf name as a verifier that does not list it; a status `verify`
+    does not document is `lean-exit`, whatever it wrote."""
     lean = tmp_path / "lean"
     end = "echo 'unknown statement; known: [verity/flock-circuit]' >&2; exit 2" if refuses else "exit 3"
     lean.write_text(f'#!/bin/sh\n[ "$1" = verify ] || exit 0\n{end}\n')
@@ -476,7 +476,7 @@ def test_a_flock_verify_that_does_not_know_the_statement_is_said_as_that(tmp_pat
     v.close()
     assert got["accepted"] is False
     if not refuses:
-        assert got["why"] == "no verdict (rc 3)"
+        assert got["why"] == f"{SR.LC.LEAN_EXIT}: status 3"
         return
     assert got["why"].startswith("no verdict (rc 2): this ")
     assert f" does not know the statement {statement!r} and refused it unread" in got["why"]

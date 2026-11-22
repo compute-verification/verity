@@ -11,24 +11,19 @@ each step closed by an `o_proj` reading the W_UV product and a sampling event:
 from __future__ import annotations
 
 import copy
-import json
-from collections import defaultdict
 
 import pytest
 from verity_torch.frontend.emit import NAMESPACE
 
 from tests.acquire.glm53_model import CMAP, ENV
 from tests.program import test_dsa_derive as T
-from verity_vllm.acquire.sources import attention_source as AS
 from verity_vllm.commit import capture_map as CM
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.definitions.registry import hopper
-from verity_vllm.pipeline import manifest as M
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules import vllm_dsa
 from verity_vllm.program.frontend.rules.vocab import PROFILES
 from verity_vllm.query.manifest import format as MF
-from verity_vllm.query.manifest.bind import Binder
 from verity_vllm.query.program_view import CallView, Port, ProgramView, from_instances
 from verity_vllm.query.required import Population, request_manifest
 from verity_vllm.query.units import ValueRef
@@ -46,7 +41,7 @@ RES = {"program": {"digest": "d0", "function": "f"}, "target": {"declared": {"co
 
 
 def _derived():
-    from verity_vllm.pipeline.build import _instance_rows
+    from verity_vllm.pipeline.build_instances import _instance_rows
 
     with pytest.MonkeyPatch.context() as mp:
         saved = dict(VB._OBSERVED)
@@ -119,53 +114,10 @@ def _unread_stand_ins(P: ProgramView) -> set[int]:
     return {c.id for c in P.calls if c.name.startswith(f"{MODULE['layers.0']}.o_proj/")}
 
 
-def test_the_indexers_logits_and_top_k_are_unreturned_and_not_required(glm):
-    P, corr, man = glm
-    pop = Population(P, corr)
-    dead = {c.id for c in P.calls if c.family in ("DsaMqaLogits_v3", "DsaTopKShortRow_v1")}
-    assert len(dead) == 2 * 3 and pop.unreturned == dead | _unread_stand_ins(P)
-    assert not {v.call for v in pop.required.values} & dead
-    listed = {(r["spec"], r["step"]) for r in man["unreturned"]}
-    assert {(P.call(c).family, pop.step_of(c)) for c in dead} <= listed and man["unreturned_digest"]
-    q_c = {c.id for c in P.calls if corr.name(c.id).hint == "q_c"}
-    assert q_c and q_c <= {v.call for v in pop.required.values} and not q_c & corr.tensorless, "q_c's fx node returns it"
-    assert man["complete"] is True and man["unmodelled"] == {}
-    assert not {"logits", "topk"} & {r["output_member"] for r in man["identities"]}
-    boundaries = [r for r in man["identities"] if r["family"] == "call_boundaries"]
-    assert {r["spec"].split("{")[0] for r in boundaries} == CALL_BOUNDARIES and all(AS.claims(r) == AS.BINDER for r in boundaries)
 
 
-def test_the_word_check_skips_the_unreturned_indexer_calls(glm):
-    P, corr, _man = glm
-    r = request_manifest(P, corr, RES, request_id="r0")
-    assert r.unreturned == Population(P, corr).unreturned and r.unreturned
-    dsa = ("DsaMqaLogits_v3", "DsaTopKShortRow_v1")
-    def flagged(unreturned):
-        wc = M.word_check(P, corr, r.required, "16/32", strict=False, unreturned=unreturned)
-        return {v["definition"].split("{")[0] for v in wc["violations"]} & set(dsa)
-    assert flagged(frozenset()) == set(dsa) and flagged(r.unreturned) == set()
 
 
-def test_the_manifest_build_word_check_flags_no_indexer_call(glm, tmp_path, monkeypatch):
-    """`manifest.build` as each rank's check runs it, its `16/32` word check included, over the GLM Program: the check it runs names no
-    DSA Call (strict, it raised output-not-committed on the unreturned indexer logits and top-k at the end of every rank's check).  The
-    fixture's own stand-ins (o_proj's `Gemm_v1{N=4}`, the argmax) are no registered Definitions, so the check runs unstrict here."""
-    P, corr, _man = glm
-    (tmp_path / "result.json").write_text(json.dumps(RES))
-    monkeypatch.setattr(M, "from_instances", lambda _path: P)
-    monkeypatch.setattr(M.Correspondence, "of", classmethod(lambda cls, *_a, **_k: corr))
-    checks: list[dict] = []
-    word_check = M.word_check
-
-    def lax_word_check(*a, **k):
-        checks.append(word_check(*a, **{**k, "strict": False}))
-        return checks[-1]
-
-    monkeypatch.setattr(M, "word_check", lax_word_check)
-    man = M.build(str(tmp_path), request_id="r0", word="16/32")
-    (wc,) = checks
-    assert wc["calls"] and man["complete"] is True
-    assert not [v for v in wc["violations"] if v["definition"].startswith(("Dsa", "SparseMla"))], wc["violations"]
 
 
 def test_without_the_runtime_record_the_logits_stay_required():
@@ -177,30 +129,8 @@ def test_without_the_runtime_record_the_logits_stay_required():
     assert {c.id for c in P.calls if c.family == "DsaMqaLogits_v3"} <= {v.call for v in pop.required.values}
 
 
-def _bound(man: dict, step: int, routes: tuple[str, ...]) -> list[tuple[str, str]]:
-    """The identities the attention binder's names of `routes` bind at `step`, with the ports the source declares for them."""
-    taps = {n: tap["id"] for n, (tap, _i) in CM.committer_names(CMAP, ENV, routes=routes, rank=0).items() if tap["commit"]["binder"] == AS.BINDER}
-    ports = {n.rsplit("/", 1)[1]: AS.TAP_PORTS[t] for n, t in taps.items() if t in AS.TAP_PORTS}
-    return [(op, m) for op, m, _k, how in Binder(man["identities"], ports=ports).bind(step, list(taps)) if how != "unbound"]
 
 
-def test_each_attention_value_binds_from_what_the_capture_map_commits(glm):
-    _P, _corr, man = glm
-    rows = defaultdict(set)
-    for r in man["identities"]:
-        if r["op_path"].split("/")[0] in MODULE.values() and r["family"] != "input_token_ids":     # the stand-in's activations are Program inputs
-            assert r["family"] == ("call_boundaries" if "/" in r["op_path"] else "instance_outputs"), r
-            rows[r.get("engine_step", r["step"])].add((r["op_path"], r["output_member"] if "/" not in r["op_path"] else r["spec"].split("{")[0]))
-    indexer, shared = MODULE["layers.0"], MODULE["layers.1"]
-    for step, got in rows.items():
-        assert {m for op, m in got if op == indexer} == ATTENTION | INDEX and {m for op, m in got if op == shared} == ATTENTION
-        assert sorted(m for op, m in got if "/" in op) == sorted([*CALL_BOUNDARIES] * 2)
-    for step in rows:
-        want = {(r["op_path"], r["output_member"]) for r in man["identities"] if r.get("engine_step", r["step"]) == step
-                and r["op_path"].split("/")[0] in MODULE.values() and r["family"] != "input_token_ids"}
-        bound = [b for routes in (("sparse-mqa",), ("dense-mha",)) for b in _bound(man, step, routes)]
-        assert want <= set(bound), sorted(want - set(bound))
-        assert all(bound.count(b) <= 2 for b in bound), "no identity bound twice on one route"
 
 
 def test_the_wrapper_prefix_of_glm53_rows_is_determined_from_the_attention_paths_parent():

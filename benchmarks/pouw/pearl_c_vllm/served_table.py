@@ -75,7 +75,7 @@ def model_row(name: str, inputs: dict, verifies: list[dict], fresh: dict | None,
 
 
 def window_row(window_run: str, audit_run: str, audit: dict, proving: dict[str, str]) -> dict:
-    """A salt-to-deadline window's row from its audit (`archive/pouw-blake3/exhaustion/audit.py`'s audit.json), refused unless
+    """A salt-to-deadline window's row from its replay audit's audit.json, refused unless
     every check of the audit held."""
     if not audit.get("ok"):
         bad = [c["check"] for c in audit.get("checks", []) if not c["ok"]]
@@ -149,7 +149,7 @@ def markdown(table: dict) -> str:
         fr = [w["fraction"] for w in windows]
         lines += ["", ("A replay audit is a diagnostic, not a verification: only a sampled "
                   "proof over Flock with ZK verifies a computation. Each window's audit recomputes its drawn tiles on the "
-                  "CPU (`archive/pouw-blake3/exhaustion/audit.py`), so its fraction is the replay diagnostic: certified = "
+                  "CPU, so its fraction is the replay diagnostic: certified = "
                   "(1 − γ)(1 − ε_s)·credited / capacity, the lower end at δ_s = 1/20 over the audit's draws; uncertified = "
                   "credited / capacity, with capacity the cards' fastest cuBLASLt FP8 GEMMs in the window (before and after, "
                   "averaged). The overhead is capacity / credited, the served kernel's time per GEMM over cuBLASLt's. Proving "

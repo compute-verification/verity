@@ -6,8 +6,7 @@ is attested, replayed, derived and sent, the windows and the string), re-exporte
 load this one by path. This module adds a trace's attested record (`record_of`), its I1 v0 advice (`advice_of`) and,
 for a trace served with a draft, which no I1 v0 says, its schedule (`schedule_of`, `schedule_code`'s),
 a trace's residual windows (`windows_of`) and the books held out from it (`held_out_books`), and the table
-(`measure`, `render`), which is of I1 v0 and so has an error row for a trace served with a draft (`by_class.py`
-reads one):
+(`measure`, `render`), which is of I1 v0 and so has an error row for a trace served with a draft:
 
     python v1.py LABEL=DIR ... --stops IDS [--T 600 --ingress client --jobs N] --out TABLE.json
 """
@@ -50,7 +49,7 @@ def _load(name: str) -> Any:
     return sys.modules[key]
 
 
-R, C, D, CV = _load("replay"), _load("code"), _load("derived"), _load("code_v1")
+R, D, CV = _load("replay"), _load("derived"), _load("code_v1")
 
 
 # --- from a trace ------------------------------------------------------------------------------------------------------

@@ -66,11 +66,11 @@ KINDS: dict[str, str] = {
     "lean-review/v1": "a `check.py --update` run's audit.json (tools/verity/lean): per package its review, statement_changes, and the guarantees "
                       "and reads it compared with (before) beside those it wrote; a `lean_review` label on pr:<n>@<head> may name it, "
                       "as a record nothing waits on",
-    "flock-upstream-build/v1": "upstream Flock's verifier builds for the agreement job (verity/protocols/proofs/flock/prover/agreement/upstream-build.sh): "
+    "flock-upstream-build/v1": "upstream Flock's verifier builds for the agreement job (verity/protocols/proof/flock/prover/agreement/upstream-build.sh): "
                                "a tar.gz of upstream-<PR #83 commit> binaries and BUILD.json; meta {flock, rustc, host, bundle_sha256, "
-                               "binaries}, pinned by verity/protocols/proofs/flock/prover/agreement/upstream.json",
+                               "binaries}, pinned by verity/protocols/proof/flock/prover/agreement/upstream.json",
     "flock-agreement-inputs/v1": "the stored inputs the agreement job's replayable sets name (a ci-bundle's store/, tar.gz); meta "
-                                 "{arts}, pinned by verity/protocols/proofs/flock/prover/agreement/upstream.json",
+                                 "{arts}, pinned by verity/protocols/proof/flock/prover/agreement/upstream.json",
     "redteam-findings/v1": "meta {findings: [...]}; refs.target",
     "circuit-check-report/v1": "a `circuit-check --out` report (tools/verity/circuit_check): payload file circuit-check.json; meta "
                                "{targets, failures}; a subcircuit catalog's counts cite its targets",
@@ -110,21 +110,21 @@ KINDS: dict[str, str] = {
     "vllm-verdict/v1": "one Commit verdict (a Verity check/verdict, represented durably): payload tree = commit_verdict.json + "
                        "commit_summary.json (compat), never a C2 replay's facts of record (sampled_replay*.json, served tokens), "
                        "which stay on the node; meta {row, verdict, ...}; refs.build, refs.match",
-    "vllm-replay-slim/v1": "a decided CPU replay's slim keep (verity_vllm.pipeline.cpu_replay.keep): payload tree = slim.json + the slim "
+    "vllm-replay-slim/v1": "a decided CPU replay's slim keep: payload tree = slim.json + the slim "
                            "committed store (only the leaves and Merkle nodes its picks and linkage opened) + weights tree + binding map + "
                            "context; meta {row, stage, run_root, program_digest, picked, bytes, dump_sha256, commit_pass}. No stage "
                            "publishes one any more: a keep holds clear values (opened committed values with their salts, the "
                            "requests and served tokens, opened weights) and stays on the node",
     "execution-evidence/v1": "application evidence of one stage's execution (stages.txt, admission.json) — not telemetry, and "
                              "never when or where each process ran (timeline.jsonl, topology.json stay on the node); meta {row, stage}",
-    "advice-encoding/v1": "network accounting's advice coded under registered codebooks, bits per network attester's window "
-                          "(benchmarks/network_e2e/encodings/measure.py): payload tree = table.json (per trace, window, "
+    "advice-encoding/v1": "network accounting's advice coded under registered codebooks, bits per network attester's window: "
+                          "payload tree = table.json (per trace, window, "
                           "subject and code, and the summary) + table.md + codebook.json (+ codebooks/fold-K.json, each "
                           "fold's held-out codebook); meta {corpus, commit, codebook_digest, T, tau_us}",
-    "vllm-vu-set/v1": "one subcircuit's input set exported from a passing row's sampled VUs (verity_vllm.pipeline.vu_export): payload "
+    "vllm-vu-set/v1": "one subcircuit's input set exported from a passing row's sampled VUs: payload "
                       "tree = manifest.json + index.json + flat port arrays; meta {set, relation, n, content_digest, row, model, run, "
                       "run_root, program_digest, manifest_digest, source, epoch}; refs.run_record",
-    "vllm-vu-store/v1": "one row's hierarchical VU store (verity_vllm.pipeline.vu_store): payload tree = run.json + programs/<digest>/"
+    "vllm-vu-store/v1": "one row's hierarchical VU store: payload tree = run.json + programs/<digest>/"
                         "{program.json, units.jsonl} + values/<sha256>.<dtype>; the flat vllm-vu-set/v1 sets are its extractions",
     "vllm-vu-export/v1": "one row's VU export: payload = export.json (draw, per-family counts, sets); meta {row, model, run, run_root}; "
                          "refs.sets = the vllm-vu-set/v1 artifacts, refs.run_record",
@@ -138,7 +138,7 @@ KINDS: dict[str, str] = {
                                     "adversary's choices in raw/adversary.*.jsonl), and compare/<sampling>/ (compare.json, "
                                     "COMPARE.md: whether every request's output ids match the honest trace's, bits per "
                                     "request, the first divergence)",
-    "challenger-ledger/v1": "the auditor device's challenger ledger (verity/protocols/compose/verifier/live_challenger/auditor.py, publish.sh): payload "
+    "challenger-ledger/v1": "the auditor device's challenger ledger (verity/protocols/run/verifier/live_challenger/auditor.py, publish.sh): payload "
                             "windows.jsonl, one signed open entry a window and one end entry a session; meta {host, entries, sha512, "
                             "key_sha512}",
     "challenger-ledger/v2": "the auditor device's challenger ledger once it holds v2 entries (one window a Commit root, its prover "
@@ -157,7 +157,7 @@ KINDS: dict[str, str] = {
     "challenger-key/v1": "the auditor device's challenger signing key, published by infra apart from the ledger so that a verifier pins "
                          "it from here: payload one JSON file {host, instance, pubkey (hex), pubkey_sha512, W, H, pinned, valid_from_utc, "
                          "retired [{pubkey_sha512, retired_utc, sessions}]}; label challenger-key current|retired",
-    "verifier-run/v1": "one run of the verifier host's PoUB verifier (verity/protocols/resource_accounting/memory/poub/attester/live_verifier/host.py, vy-auditor-1): "
+    "verifier-run/v1": "one run of the verifier host's PoUB verifier (verity/protocols/accounting/memory/poub/attester/live_verifier/host.py, vy-auditor-1): "
                        "payload tree = request.json + out/ (verifier.json, challenger/, verifier.log, registry.json, "
                        "transcripts/*.json.gz + SHA256SUMS) + end.json, and replay/ once replayed; meta {run, by, pinned, peer, "
                        "period, requested_utc, end {rc, ended_utc}, replay}",

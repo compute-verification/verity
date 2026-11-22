@@ -1,5 +1,5 @@
-# This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
-# enforces it.
+# This directory's numbers, one [[metric]] each, by the rules of tests/test_metrics_registry.py,
+# which enforces them.
 
 # one GPU of the node, the card CARD pinned to the CPUs CORES, for MINUTES (55) plus the lease's margin; a node with
 # no pinned-vLLM venv bootstraps one first

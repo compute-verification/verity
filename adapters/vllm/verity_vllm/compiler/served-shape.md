@@ -1,4 +1,4 @@
-Part of network attestation's [PROTOCOL.md](../../../../verity/protocols/resource_accounting/network/verifier/PROTOCOL.md).
+Part of network attestation's [PROTOCOL.md](../../../../verity/protocols/accounting/network/verifier/PROTOCOL.md).
 
 ## The replay at the served shape
 

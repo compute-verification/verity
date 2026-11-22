@@ -4,6 +4,7 @@ public import Definitions.Compose.Guarantees.JointLive
 public import Proofs.Core.Game.Prob
 public import Proofs.Core.Blocks
 public import Proofs.Core.Circuit
+public import Proofs.Core.Rblk
 public import Proofs.Pouw.PearlC.WholeCircuit
 public import Proofs.ResourceAccounting.Lemmas.JointLive
 
@@ -113,6 +114,16 @@ theorem Live.unbound_eval {C : Verity.Circuit} {n : ℕ} (P : Verity.Partition C
   rcases hu with hw | ⟨g, -, hg⟩
   · exact hw (Pouw.PearlC.WholeCircuit.correct_eval P x u)
   · exact hg (ho g)
+
+/-- **A block is unbound exactly where `Rblk` fails**, with the openings read at `pos` under the string commitment. -/
+theorem Live.not_rblk_iff_mem_unbound {C : Verity.Circuit} {n : ℕ} (P : Verity.Partition C n) {α : Type}
+    (Sc : Hash.StringCommitment α) (H : Hash.Msg → Digest) (enc : (g : Fin C.N) → BitVec (C.w g) → α)
+    (L : Layout C) (c : Root → Sc.Com) (u : Fin n) (X : C.Trace) (π : Fin C.N → Sc.Op) :
+    ¬ P.Rblk Sc H enc L c u X π ↔
+      u ∈ unbound P (fun g v => ∃ p, P.pos L g = some p ∧ Sc.Opens H (c p.1) p.2 (enc g v) (π g)) X := by
+  rw [P.rblk_iff, P.into_union_exits_eq_io]
+  simp only [unbound, Finset.mem_filter, Finset.mem_univ, true_and, not_and_or, not_forall, exists_prop]
+  exact or_comm
 
 /-- **The honest prover meets every claim** (`ResourceAccounting.Guarantees.JointPeriodLive_honest`). -/
 theorem JointPeriodLive_honest : ResourceAccounting.Guarantees.JointPeriodLive_honest := by

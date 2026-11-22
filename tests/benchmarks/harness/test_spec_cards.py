@@ -1,6 +1,5 @@
 """The card as a spec's parameter: a spec lists the cards it runs on (`cards`, by their `short`), a run's card is the one
-named (``SPEC@CARD``), else the spec's one, else the driver's, and a card the spec doesn't list is refused by name; a
-former per-card spec id names a stored run's spec and no launch."""
+named (``SPEC@CARD``), else the spec's one, else the driver's, and a card the spec doesn't list is refused by name."""
 
 from __future__ import annotations
 
@@ -10,10 +9,8 @@ from pathlib import Path
 import pytest
 from verity_config import ConfigError
 
-from verity_bench import jobs, kit, served_table, steady_spec
-from verity_bench.cli import main
-from verity_bench.vllm import presets
-from verity_bench.vllm.presets import FORMER_IDS, SPEC_ROOT, load_spec, resolve_spec, split_card
+from verity_bench import jobs, kit, served_table
+from verity_bench.vllm.presets import SPEC_ROOT, load_spec, resolve_spec, split_card
 
 ROOT = Path(__file__).resolve().parents[3]
 POUW = "llama32-1b-1gpu-pouw-protocol-served"
@@ -101,76 +98,8 @@ def test_a_refused_card_is_a_card_the_spec_doesnt_list_and_its_refusal_says_why(
             load_spec(path)
 
 
-@pytest.mark.parametrize("spec", ["llama31-8b-1gpu-pouw-protocol-served", "llama31-8b-1gpu-pouw-protocol-served-b32"])
-def test_a_retired_spec_refuses_every_launch_by_name_and_its_stored_runs_read_under_its_id(spec):
-    for named in (spec, f"{spec}@rtx-pro-6000", f"{spec}@h200"):
-        with pytest.raises(ConfigError, match=rf"^spec '{spec}' is refused: served Pearl-C on sm_120 "
-                                              r"\(`pouw:pearl-c-sm120-v1-h3`\), which is no declared scheme: declaring "
-                                              r"one is compute-accounting's$"):
-            resolve_spec(named)
-    assert not (SPEC_ROOT / f"{spec}.toml").exists() and spec not in presets.former_specs()
-    assert presets.current_spec(spec) == spec and served_table._on_card(spec, "rtx-pro-6000") == spec
-
-
 def test_a_spec_argument_names_its_card_after_an_at_by_id_or_recorded_path():
     assert split_card(POUW) == (POUW, None)
     assert split_card(f"{POUW}@h100") == (POUW, "h100")
     assert split_card(f"benchmarks/harness/specs/{POUW}@h100.toml") == (f"benchmarks/harness/specs/{POUW}.toml", "h100")
     assert jobs._relative_spec(f"{POUW}@h100", ROOT) == served_table.spec_path(f"{POUW}@h100")
-
-
-def test_each_former_id_is_its_spec_on_a_card_that_spec_lists_and_no_file_holds_it():
-    former = tomllib.loads(FORMER_IDS.read_text())["former"]
-    assert former and presets.former_specs() == {old: (e["spec"], e["card"]) for old, e in former.items()}
-    for old, (spec, card) in presets.former_specs().items():
-        assert not (SPEC_ROOT / f"{old}.toml").exists(), old
-        cards = (steady_spec.load_spec(spec).card,) if steady_spec.is_steady(spec) else load_spec(spec).cards
-        assert card in cards, old
-        assert presets.current_spec(old) == (spec if cards == (card,) else f"{spec}@{card}")
-    assert presets.current_spec(POUW) == POUW
-
-
-@pytest.mark.parametrize("old", sorted(presets.former_specs()))
-def test_no_launch_path_takes_a_former_id(old, monkeypatch, capsys):
-    """A former id resolves for a stored run's record alone: loading, resolving and planning it, and the harness's
-    `plan`, `run` and `vllm` commands, each refuse it, naming the spec and card it is now."""
-
-    spec, card = presets.former_specs()[old]
-    now = rf"is '{spec}' on the {card}, `{spec}@{card}`"
-    for launch in (load_spec, resolve_spec, lambda name: jobs.make_plan(name, root=ROOT, commit="a" * 40,
-                                                                        lookup=lambda identity, commit: None)):
-        with pytest.raises(ConfigError, match=now):
-            launch(old)
-    monkeypatch.chdir(ROOT)
-    monkeypatch.setenv("RESEARCH_SOURCE_SHA", "a" * 40)
-    monkeypatch.setattr(jobs, "dispatch", lambda *a, **k: pytest.fail(f"launched {a}"))
-    for argv in (["plan", old, "--local-only"], ["run", old, "--local-only"], ["vllm", "--preset", old, "--out", "out"]):
-        with pytest.raises((SystemExit, ConfigError)) as refused:
-            main(argv)
-        said = capsys.readouterr().err + str(refused.value)
-        assert f"`{spec}@{card}`" in said, argv
-
-
-def test_a_former_arm_id_is_a_declared_schemes_name_now_and_typed_by_hand_is_refused_naming_it():
-    from verity_bench.vllm.arms import resolve_arms
-
-    former = tomllib.loads(FORMER_IDS.read_text())["former_arms"]
-    assert former == {"pouw:pearl-c-h100-v1-h3": "pearl-plus"}
-    for old, now in former.items():
-        assert presets.former_arm(old) == now and now in presets.declared_schemes()
-        with pytest.raises(ValueError, match=rf"benchmark arm '{old}' is '{now}' now"):
-            resolve_arms([old])
-        assert not [s for s in VLLM_SPECS if old in load_spec(s).arms], old
-    assert presets.former_arm("pearl-plus") is None and "pearl-plus" in load_spec(POUW).arms
-
-
-def test_a_run_recorded_under_a_former_id_is_read_as_its_spec_on_its_card():
-    old = next(iter(presets.former_specs()))
-    spec, card = presets.former_specs()[old]
-    assert served_table.spec_name(served_table.spec_path(old)) == f"{spec}@{card}"
-    assert served_table.spec_path(old) in served_table.spec_paths(f"{spec}@{card}")
-    assert served_table.spec_path(spec) in served_table.spec_paths(f"{spec}@{card}")
-    on_others = [o for o, now in presets.former_specs().items() if now[0] == spec and now[1] != card]
-    assert on_others and not set(map(served_table.spec_path, on_others)) & set(served_table.spec_paths(f"{spec}@{card}"))
-    assert set(map(served_table.spec_path, on_others)) <= set(served_table.spec_paths(spec))
-    assert served_table.passing(served_table.spec_paths(spec)).count("?") == len(served_table.spec_paths(spec)) + 1

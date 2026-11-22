@@ -7,7 +7,7 @@ LP=3, STEPS=2) -- the B1-scale descriptors are never built locally.
 What is checked, per program (`Serve{TINY}` as the control, `ServeHopper{TINY}`, `ServeTP2{TINY_TP2}`):
 
 1. encode (v1) -> canonical bytes -> json -> decode -> `descriptor_equivalence.compare(original, decoded)` is
-   `equivalent`, and the same through v0;
+   `equivalent`;
 2. the v1 digest is a function of the program: re-encoding the decoded program gives the same digest
    (the codec tests' `test_v1_kv_cache_arguments_alias_...` claim, now on the ported/sharded definition sets);
 3. the equivalence is discriminating across bindings: `ServeHopper{TINY}` vs `Serve{TINY}` is a `Mismatch`
@@ -26,7 +26,6 @@ from typing import Any
 
 import pytest
 from verity.circuits.codec import (
-    SCHEMA_V0,
     canonical_json,
     decode_program,
     encode_program,
@@ -50,8 +49,8 @@ PROGRAMS = {
 }
 
 
-def _roundtrip(P, schema):
-    desc = encode_program(P, schema=schema) if schema else encode_program(P)
+def _roundtrip(P):
+    desc = encode_program(P)
     raw = canonical_json({k: v for k, v in desc.items() if k != "annotations"})
     desc2 = json.loads(raw)
     D = decode_program(desc2, REGISTRY)
@@ -59,11 +58,10 @@ def _roundtrip(P, schema):
 
 
 @pytest.mark.parametrize("label", list(PROGRAMS))
-@pytest.mark.parametrize("schema", [None, SCHEMA_V0], ids=["v1", "v0"])
 @pytest.mark.slow
-def test_codec_round_trip_is_equivalent(label, schema):
+def test_codec_round_trip_is_equivalent(label):
     P = Program(PROGRAMS[label]())
-    desc, raw, D = _roundtrip(P, schema)
+    desc, raw, D = _roundtrip(P)
     assert D.gates == P.gates
     rep = compare(P, D, gate_samples=500, call_samples=12, eval_samples=2)
     assert rep["verdict"] == "equivalent", rep
@@ -73,12 +71,9 @@ def test_codec_round_trip_is_equivalent(label, schema):
 @pytest.mark.parametrize("label", list(PROGRAMS))
 def test_v1_digest_is_a_function_of_the_program(label):
     P = Program(PROGRAMS[label]())
-    desc, raw, D = _roundtrip(P, None)
+    desc, raw, D = _roundtrip(P)
     again = encode_program(D)
     assert program_digest(again) == program_digest(desc), label
-    # and the v0 digest is stable across the same trip
-    desc0, _, D0 = _roundtrip(P, SCHEMA_V0)
-    assert program_digest(encode_program(D0, schema=SCHEMA_V0)) == program_digest(desc0), label
 
 
 @pytest.mark.parametrize("a,b", [("ServeHopper{TINY}", "Serve{TINY}"), ("ServeTP2{TINY_TP2}", "Serve{TINY}")])

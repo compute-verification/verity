@@ -192,7 +192,7 @@ def test_a_configuration_that_states_no_stop_token_is_passed_over_and_the_rule_c
 GEOMETRY = {"schema": "verity/workload-program/v1/sampler-geometry", "relation": "registered"}
 NO_SMS = ("stochastic sampler but the components declare no num_SMs (applicability.num_sms): the registered split count cannot be evaluated "
           "-- the Program does not model this row's sampler geometry")
-OTHER_SPLITS = f"the components declare splits 3, not the registered split count {registered_splits(SMS)} of num_SMs={SMS}: rebuild them (`pipeline.build.sampler_geometry`)"
+OTHER_SPLITS = f"the components declare splits 3, not the registered split count {registered_splits(SMS)} of num_SMs={SMS}: rebuild them (`pipeline.build_sampling.sampler_geometry`)"
 
 
 @pytest.mark.parametrize("declared, message, stated", [
@@ -246,14 +246,14 @@ def test_a_compose_started_beside_its_derives_hands_on_what_it_loaded_and_ends_5
     line = ["--workload", m, "--derived", derived[0], "--derived", derived[1], "--out", str(tmp_path / "out"), "--follow", "2.5",
             "--follow-done", "done", "--follow-stop", "stop", "--eos-token-ids", "7, 2,", "--theta-registered"]
     loaded: list[dict | None] = [None]
-    assert GP.main(cli.parse("global-program", line, {})) == 5 and not built and capsys.readouterr().out == ""
+    assert GP.main(cli.parse(GP, line, {})) == 5 and not built and capsys.readouterr().out == ""
     assert asked == [(derived, {(3, 2), (5, 0)}, {}, {"timeout": 2.5, "done": "done", "stop": "stop"})]
     loaded[0] = {derived[0]: {"prov": {}}}
-    assert GP.main(cli.parse("global-program", line, {})) == 4
+    assert GP.main(cli.parse(GP, line, {})) == 4
     ((given, more),) = built
     assert given == (m, derived, str(tmp_path / "out")) and more == {
         "checkpoint_dir": None, "eos_token_ids": [7, 2], "artifact_root": None, "early": loaded[0], "canon": {}, "theta_registered": True}
     assert more["canon"] is asked[1][2]                                                    # the definitions the components were loaded into
     del asked[:], built[:]
-    assert GP.main(cli.parse("global-program", line[:8], {})) == 4 and not asked           # without --follow no derive is waited for
+    assert GP.main(cli.parse(GP, line[:8], {})) == 4 and not asked           # without --follow no derive is waited for
     assert built[0][1] == {"checkpoint_dir": None, "eos_token_ids": None, "artifact_root": None, "early": None, "canon": {}, "theta_registered": False}

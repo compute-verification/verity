@@ -16,14 +16,14 @@ from verity.circuits import population as PN
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.types import Array, Value as Bits
-from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R
-from verity.protocols.proofs.spot.prover import docket as DK
+from verity.protocols.proof.spot.verifier import service as S
+from verity.protocols.proof.spot.verifier.one_stage import draw as D, partition as P, docket as R
+from verity.protocols.proof.spot.prover import docket as DK
 from verity.commitments import randomness as RND
 
 HERE = (Path(__file__).resolve().parent)
 sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "verity" / "protocols" / "proofs" / "spot" / "verifier"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "verity" / "protocols" / "proof" / "spot" / "verifier"))
 import a5 as A5  # noqa: E402
 import fake_challenger as FC  # noqa: E402
 

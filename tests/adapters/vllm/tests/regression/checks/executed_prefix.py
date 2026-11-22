@@ -8,7 +8,7 @@ same EOS-stopped set as `global_match.json.lag.eos_stop_requests`, and `ok`.
 Pure and fast (ms).  WEAK by the reference's own admission: no reference row exercises an EOS stop (`lag.exercised = false` everywhere), so
 the LAG arithmetic (a_r + LAG) is never exercised by these rows -- only the length-stop branch and the fail-closed rules on the declared
 inputs are.  A v2 that changes the rule for EOS stops will pass this check and must be covered by a synthetic unit test instead
-(`tests/program/test_continuation.py`, `tests/commit`).
+(`tests/commit`).
 """
 from __future__ import annotations
 

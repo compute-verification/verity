@@ -16,7 +16,7 @@ WIDTH_OF_DTYPE = {torch.bool: 1, torch.uint8: 8, torch.int8: 8, torch.int16: 16,
                   torch.float16: 16, torch.int32: 32, torch.uint32: 32, torch.float32: 32, torch.int64: 64,
                   torch.uint64: 64, torch.float64: 64,
                   # the OCP FP8 words of a block-scaled checkpoint (e4m3 weights/activations, UE8M0 scale bytes): 8-bit
-                  # VALUES; their arithmetic is the registered Definitions' (registry.fp8, .marlin_moe)
+                  # VALUES; their arithmetic is the registered Definitions' (registry.fp8)
                   torch.float8_e4m3fn: 8, torch.float8_e5m2: 8, torch.float8_e8m0fnu: 8}
 
 

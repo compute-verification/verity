@@ -78,9 +78,9 @@ def test_a_probe_of_one_program_projected_to_a_class_is_that_class_census(to):
 
 def test_a_probe_unit_its_definition_doesnt_give_is_refused():
     probe = _census(WindowClass(1, 2, 2), 1)
-    scan = next(lab for lab in probe["templates"] if lab.startswith("ScanSlots_v3{"))
+    scan = next(lab for lab in probe["templates"] if lab.startswith("ScanSlots_v5{"))
     probe["templates"][scan]["bytes"]["value"] += 2
-    with pytest.raises(ValueError, match=r"ScanSlots_v3\{.*\} is not its Definition's rows at the probe's class"):
+    with pytest.raises(ValueError, match=r"ScanSlots_v5\{.*\} is not its Definition's rows at the probe's class"):
         W.project(probe, 2, 4, 2, "sm120")
 
 
@@ -100,19 +100,6 @@ def test_the_attention_at_blocks_of_4_over_6_positions_is_the_hand_count():
                    full: (2, 14, 532)}
     packed = {u.label: (u.out, u.wired) for u in _heads().units(packed=True)}
     assert (packed[first % 4], packed[full], packed["AttnHeadEnd_v1{D=8}"]) == ((1, 11), (1, 12), (1, 1))
-
-
-@pytest.mark.parametrize("levers", [(), ("L3b",), ("W", "R"), ("L3b", "W", "R")])
-def test_a_windows_position_layouts_are_its_output_rows_and_bytes(levers):
-    doc = _census(WindowClass(2, 4, 2))
-    rest, heads = W.split(W.units_of(doc), doc["class"], "sm120")
-    us = W.window_units(rest, heads, frozenset(levers))
-    rows = nbytes = 0
-    for T in range(1, heads.P + 1):
-        for g in W.position_layout(rest, heads, frozenset(levers), T)["groups"]:
-            rows += heads.S * sum(len(u) for u in g["units"])
-            nbytes += heads.S * g["sources"][0]
-    assert (rows, nbytes) == (sum(u.n * u.out for u in us), sum(u.n * u.out_bytes for u in us))
 
 
 @pytest.mark.slow
@@ -160,7 +147,7 @@ def test_serving_streams_commit_is_its_4_kib_rows_and_F_leaves_out_its_fa3_inter
 
 def test_a_compression_is_priced_at_its_circuit_check_pin():
     """The commit's ANDs are its compressions at `Sha512Compress_v1`'s pinned AND rows, not the ripple-carry model's count."""
-    from verity.protocols.proofs.spot.prover.optimize import SHA512_ANDS, pinned_ands
+    from verity.protocols.proof.spot.prover.optimize import SHA512_ANDS, pinned_ands
 
     sizing = json.loads(SIZING.read_text())["sizing"]
     pin = pinned_ands("Sha512Compress_v1")

@@ -7,20 +7,15 @@ derived, and per sampled row (step, row, request, event, pos, served token, reco
 status) as a sha256; plus the snapshot steps the stochastic Match took (`match/run.json` `snapshot_steps`: EVERY engine step -- the value
 check is complete only when every sampled row is snapshotted).
 
-Recomputed: `verity_vllm.check.replay.stoch_recompute.recompute_run` with the CURRENT code over the record's capture (`match/capture/
-log.jsonl.gz` + `snapshots.json` + the value files the sampler chain reads -- files.toml pins exactly those, not the 870 MB of every
-snapshot), the row's workload manifest and the row's Build documents (`build_request*/result.json`: the Program's S;
-`build_workload/workload_program.json`: the stop rule); the snapshot steps are the steps the capture's `snapshots.json` dumped.  In
-candidate mode the candidate's own `match_stoch.json` + `match/run.json` are lifted the same way.  STRONG: a sampler Definition that moves
-a lane, a sample read at another counter, an S derived differently, an unsnapshotted step -- each moves a status, a count or the verdict.
+Read from the record kept on the node or, in candidate mode, from the candidate's own `match_stoch.json` + `match/run.json`, lifted the
+same way.  STRONG: a sampler Definition that moves a lane, a sample read at another counter, an S derived differently, an unsnapshotted
+step -- each moves a status, a count or the verdict.
 
 Applies to stochastic rows only (a greedy row has no match_stoch.json: its Match's rcs = -1).
 """
 from __future__ import annotations
 
 import hashlib
-import os
-from pathlib import Path
 
 from .. import resolver
 
@@ -35,7 +30,6 @@ SUMMARY_KEYS = ("engine_steps_in_record", "sampled_steps_in_log", "steps_chain_a
                 "lag_slot_exercised", "requests_with_eos_before_cap", "requests_at_cap")
 ROW_KEYS = ("step", "row", "request_id", "event", "pos", "served", "token", "V", "S", "chain", "program_S", "S_agree", "declared", "device",
             "device_facts_match", "masked_row_equal_lanes", "masked_row_equal", "status")
-_BUILD_DOCS = ("build_workload/workload_program.json",)
 
 
 def applies(row: resolver.Row) -> str | None:
@@ -62,16 +56,6 @@ def expected(row: resolver.Row) -> dict:
     return lift(row.json("match_stoch.json"), run.get("snapshot_steps"))
 
 
-def _linked(row: resolver.Row, rels, dest: Path) -> None:
-    for rel in rels:
-        src = row.path(rel)
-        dst = dest / rel
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        if dst.is_symlink() or dst.exists():
-            dst.unlink()
-        dst.symlink_to(src)
-
-
 def actual(row: resolver.Row) -> dict:
     if kept := resolver.kept_on_the_node(row, "match_stoch.json"):
         return kept
@@ -82,16 +66,4 @@ def actual(row: resolver.Row) -> dict:
         run_p = row.candidate("match/run.json")
         run = resolver.read_json(run_p) if run_p is not None else {}
         return dict(lift(resolver.read_json(ms_p), run.get("snapshot_steps")), source="candidate")
-    # fold_compare imports torch and stoch_recompute numpy, which only this recompute needs: the module itself loads neither
-    from verity_vllm.check.fold_compare import SnapshotStore
-    from verity_vllm.check.replay import stoch_recompute as SR
-    capture = [rel for rel in row.files if rel.startswith("match/capture/")]
-    if "match/capture/log.jsonl.gz" not in capture or "match/capture/snapshots.json" not in capture:
-        raise resolver.NotResolvable(f"{row.key}: files.toml pins no match/capture/log.jsonl.gz + snapshots.json (the sampler value check's input)")
-    build = [rel for rel in row.files if (rel.startswith("build_request") and rel.endswith("/result.json")) or rel in _BUILD_DOCS]
-    view = resolver.scratch(row) / "stoch_value"
-    _linked(row, capture + build, view)
-    cap = view / "match" / "capture"
-    res = SR.recompute_run(cap / "log.jsonl.gz", cap, workload=row.workload(), build_dir=view,
-                           jobs=int(os.environ.get("VERITY_REGRESSION_STOCH_JOBS") or min(32, os.cpu_count() or 1)))
-    return dict(lift(res, SnapshotStore(cap).steps), source="stoch_recompute")
+    raise resolver.NotResolvable(f"{row.key}: no match_stoch.json kept or in a candidate; the sampler value check is not recomputed")

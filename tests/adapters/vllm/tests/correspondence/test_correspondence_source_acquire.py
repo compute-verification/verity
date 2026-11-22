@@ -6,8 +6,7 @@ from __future__ import annotations
 import pytest
 from verity_torch.correspondence import runtime as RC
 
-from tests.acquire.test_plan import TABLES, base_rows, manifest, tree
-from verity_vllm.acquire import plan as P
+from tests.acquire.test_plan import tree
 from verity_vllm.correspondence.reader_for_acquire import (
     AcquireCorrespondence,
     ReturnSlot,
@@ -32,59 +31,10 @@ def _record(modules_of_calls: list[str], *, prefix: str = "model.") -> dict:
 MODULES = ["body.embed", "body.blocks.0.norm_in", "body.blocks.0.proj_a", "body.blocks.0.act", "body.blocks.0.norm_out", "logits", ""]
 
 
-def test_same_plan_under_both_sources_and_the_source_is_recorded():
-    man, rt = manifest(base_rows(), wrapper_prefix="model."), tree()
-    fallback = AcquireCorrespondence(rt, wrapper_prefix="model.")
-    canonical = AcquireCorrespondence(rt, wrapper_prefix="model.", tables={"build_request": RC.RuntimeCorrespondence.from_json(_record(MODULES))},
-                                      digests={"build_request": "d" * 64})
-    assert fallback.source == "v1_annotations" and canonical.source == "correspondence"
-    a, b = P.acquisition_plan(man, fallback, tables=TABLES), P.acquisition_plan(man, canonical, tables=TABLES)
-    assert a.digest == b.digest                                                   # the content is the same: the source is provenance
-    assert a.correspondence["source"] == "v1_annotations" and "fallback" in a.correspondence and a.correspondence["modules"] == {"applicable": False, "confirmed": 0, "unconfirmed": []}
-    assert b.correspondence["source"] == "correspondence" and b.correspondence["schema"] == RC.SCHEMA and b.correspondence["programs"] == {"build_request": "d" * 64}
-    assert b.correspondence["modules"]["applicable"] and b.correspondence["modules"]["unconfirmed"] == []
-    assert b.correspondence["modules"]["confirmed"] == sum(1 for v in b.values if P.ROUTE_OF_FAMILY.get(v.family) in P.MODULE_ROUTES) + sum(len(v.consumers) for v in b.values)
-    da, db = a.to_json(), b.to_json()
-    assert da["correspondence"] != db["correspondence"] and da["plan_digest"] == db["plan_digest"]
-    assert all(c["absent"] == [] and c["problems"] == [] for c in (da["correspondence"], db["correspondence"]))   # the block's keys stand, empty
-    assert P.plan_digest(db) == db["plan_digest"]
 
 
-def test_unconfirmed_module_is_a_listed_finding_not_a_changed_site():
-    man, rt = manifest(base_rows(), wrapper_prefix="model."), tree()
-    partial = [m for m in MODULES if m != "body.blocks.0.act"]                     # the record owns no Call under body.blocks.0.act
-    corr = AcquireCorrespondence(rt, wrapper_prefix="model.", tables={"build_request": RC.RuntimeCorrespondence.from_json(_record(partial))})
-    plan = P.acquisition_plan(man, corr, tables=TABLES)
-    assert plan.digest == P.acquisition_plan(man, AcquireCorrespondence(rt, wrapper_prefix="model."), tables=TABLES).digest
-    unc = plan.correspondence["modules"]["unconfirmed"]
-    assert [u["value"] for u in unc] == ["body.blocks.0.act/out"] and unc[0]["module"] == "body.blocks.0.act" and unc[0]["role"] == "owning module"
-    act = next(v for v in plan.values if v.value_id == "body.blocks.0.act/out")
-    assert act.chosen is not None and act.chosen.kind == "producer_output"      # the manifest's op_path stands
 
 
-def test_global_manifest_without_wrapper_prefix_determines_it_from_the_runtime_tree():
-    """A GLOBAL manifest (`build-global`) carries no `wrapper_prefix`: the prefix under which the record's `model.body...` paths are the
-    tree's `body...` modules is determined from the tree, so the confirmation is real (not 0 confirmed / all unconfirmed), and the plan's
-    provenance says where the prefix came from.  The plan's content is unchanged either way."""
-    man, rt = manifest(base_rows(), wrapper_prefix="model."), tree()
-    man = {k: v for k, v in man.items() if k != "wrapper_prefix"}                  # as compose_global writes it
-    table = RC.RuntimeCorrespondence.from_json(_record(MODULES))
-    given = AcquireCorrespondence(rt, wrapper_prefix="model.", tables={"p": table})
-    inferred = AcquireCorrespondence(rt, wrapper_prefix="", tables={"p": table})
-    assert given.wrapper_prefix_source == "manifest" and inferred.wrapper_prefix_source == "runtime_tree" and inferred.wrapper_prefix == "model."
-    assert inferred.owned_modules() == given.owned_modules() and inferred.confirmed("body.blocks.0.act") is True
-    pa, pb = P.acquisition_plan(man, given, tables=TABLES), P.acquisition_plan(man, inferred, tables=TABLES)
-    assert pa.digest == pb.digest and pb.correspondence["modules"]["unconfirmed"] == [] and pb.correspondence["modules"]["confirmed"] == pa.correspondence["modules"]["confirmed"] > 0
-    assert pb.correspondence["wrapper_prefix"] == "model." and pb.correspondence["wrapper_prefix_source"] == "runtime_tree"
-    # the fallback has no record to confirm against: no prefix is determined
-    fb = AcquireCorrespondence(rt, wrapper_prefix="")
-    assert fb.wrapper_prefix == "" and fb.wrapper_prefix_source is None
-    # any wrapper attribute chain is determined the same way; a record whose paths meet the tree under NO prefix gets "" and every module
-    # reads unconfirmed (shown in the provenance, not hidden)
-    deep = AcquireCorrespondence(rt, wrapper_prefix="", tables={"p": RC.RuntimeCorrespondence.from_json(_record(MODULES, prefix="serve.wrapped.model."))})
-    assert deep.wrapper_prefix == "serve.wrapped.model." and deep.confirmed("body.blocks.0.act") is True
-    alien = AcquireCorrespondence(rt, wrapper_prefix="", tables={"p": RC.RuntimeCorrespondence.from_json(_record(["zz.a", "zz.b.c", ""], prefix="q."))})
-    assert alien.wrapper_prefix == "" and alien.confirmed("body.blocks.0.act") is False and alien.owned_modules() == ["", "q.zz.a", "q.zz.b.c"]
 
 
 def test_a_path_that_is_the_trees_own_votes_for_no_prefix():

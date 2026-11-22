@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# vy-store-evict (vy-nebius-1 and -2, hourly as ubuntu, vy-store-evict.timer: store_evict.{service,timer}): free /workspace by evicting only local
+# vy-store-evict (vy-nebius-2, hourly as ubuntu, vy-store-evict.timer: store_evict.{service,timer}): free /workspace by evicting only local
 # copies the remote store holds. `research data evict --runs` drops blobs of $VY_EVICT_STORE (/workspace/jobs/store, the job
 # pods' store, owned by ubuntu) whose artifacts are PRESERVED on the remote, and the preserved big files of finished run dirs
 # under $VY_EVICT_RUNS (/workspace/jobs/runs), oldest first, until $VY_EVICT_FREE_GB (2500, keeping the disk near 54% or under)

@@ -16,7 +16,7 @@ import sys
 import pytest
 
 import glm53 as G
-from verity.protocols.proofs.spot.prover.optimize import Objective, certify
+from verity.protocols.proof.spot.prover.optimize import Objective, certify
 
 CARD = G.load()
 ART = re.compile(r"art:[0-9a-f]{64}")

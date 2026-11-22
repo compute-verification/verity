@@ -218,8 +218,8 @@ def _locked(p: Path, held: set[tuple[int, int, int]]) -> bool:
 
 
 def leases(d: Path, proc: Path, held: set[tuple[int, int, int]]) -> dict[str, Any] | None:
-    """gpu-lease's directory `d`: its GPUs, how many are locked (a lease, or on node 1 a fence), each live lease's owner line
-    and each live waiter's wait line, oldest first, and node 1's pool record; None when `d` doesn't exist."""
+    """gpu-lease's directory `d`: its GPUs, how many are locked (a lease), each live lease's owner line
+    and each live waiter's wait line, oldest first; None when `d` doesn't exist."""
     if not os.path.isdir(d):
         return None
     try:

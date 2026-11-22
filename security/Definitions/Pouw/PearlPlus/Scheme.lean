@@ -10,7 +10,7 @@ Pearl+'s instance of `Verity.Scheme`, a family over its game's setting (`Setting
 tiles, the sample's weight, the workload, the adversary and its declarations, the number of samples, the budget, the
 TT_OUT target `g₀`, the gap `γ = γn/γd`, the resolution `D` and the oracle bound `q`. Its game is
 Pearl-C's sampled audit sampled as the run samples (`Pouw.PearlC.GGapSampledDraw`, `Definitions.Pouw.PearlC.TileSample`),
-whose python is `verity.protocols.resource_accounting.compute.pouw.scheme` (`pearl-plus`).
+whose python is `verity.protocols.accounting.compute.pouw.scheme` (`pearl-plus`).
 
 * **Blocks** are the layout's audit tiles, `Fin NT` of `TR.tiling`.
 * **The unit.** The sides are naturals in one unit: `1/(D·γd)` of the cost model's unit (one dense FP8 MAC at the H100's
@@ -19,8 +19,8 @@ whose python is `verity.protocols.resource_accounting.compute.pouw.scheme` (`pea
   which only weakens `over`. The sample's share `ε_s` is not in the sides: `Scheme.missable` carries it.
 * **A tile's cost** is its sample weight `Wd` at its unit's full declaration (every row and column credited, the unit's
   `k` kept, `fullDecl`) times `D·(γd − γn)`, rounded up: at least what any declaration of it adds to `over`, as
-  `pearlCDrawRev1` is monotone in the declared cells and kept width. The python's cost is the tile's MACs at the
-  record's kept width (`TM·TN·K_KEPT`); this one is in the sample's `W_ref` units, at least `K` a cell.
+  `pearlCDrawRev1` is monotone in the declared cells and kept width. The python's cost is the credited block's MACs,
+  its core's statics `TR·TN·K`; this one is in the sample's `W_ref` units, at least `K` a cell.
 * **Accepted** is the audit that accepts only checked tiles (`AuditAccepts` over the good tiles whose declaration is
   consistent and the blank units' tiles), the verifier's `over_cap = reject`. The run of record's tolerant audit
   (`uncredited`, `AuditAcceptsTol`) accepts a run whose sample lands on a tile over its inert-work bound and deducts

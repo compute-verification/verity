@@ -129,7 +129,7 @@ passes for nothing. A commit of the lock records a check regenerated is vouched 
 for byte the ones it regenerated (`regenerated_parent`).
 
 After each landing the loop's after-landing job runs `merge.caught_up` over what reached origin's main since the last one:
-`main` over ssh to node 1's bare repo (120 s; `RESEARCH_MERGE_MIRROR`: host, empty skips; a failure is retried by the next
+`main` over ssh to the mirror's bare repo (120 s; `RESEARCH_MERGE_MIRROR`: host, empty skips; a failure is retried by the next
 landing), the tool's after-landing command, the Lean cache publish, one line per landing in the merge thread, a `landed` label
 on each check run a landing names, and the spec-change DM. Then the sweep (`merge.sweep`, `gh`), from the remote's copy of
 `main`, closes each open PR whose head is on it, naming the commit, retargets each whose base branch's tip is on it (stacks
@@ -137,7 +137,7 @@ GitHub never closes), and deletes a closed one's head branch unless an open one 
 
 A tool's declaration may name result steps a change needs by path (`Tool.merge_requires`, `{step: [path prefixes]}`, read from
 the target's checkout, `merge.required_steps`): `!` patterns leave paths out (`!README.md`: every file of that name under the
-prefixes). `check` requires `lean-agreement` for `verity/protocols/proofs/flock/`'s `prover/`, `pod/`, `agreement/`,
+prefixes). `check` requires `lean-agreement` for `verity/protocols/proof/flock/`'s `prover/`, `pod/`, `agreement/`,
 `verifier/` and `tool.py`, less README.md and PROTOCOL.md. It may also name what runs after a landing (`Tool.after_land`, an
 argv), started detached on the landed commit; `check`'s is its `post_train.py`, the vLLM regression's manifest rebuilds,
 which label the landing's check attempt.
@@ -224,7 +224,7 @@ script goes into the repository and the manifest before it runs; a backup of a r
 `install` keeps, never a `*.bak-*` beside it. A stray leaves through `research deploy attic NODE PATH ... --by WHO --apply`
 (`--backups` for every backup), which moves it under the record's directory, recorded, so `sudo mv` restores it; it refuses
 a path inside a `whole` tree, where the tree's next install drops what main lacks.
-A Lean build kept from node 1's credentials (the Lean cache's daily one) runs in `vy-lean-sandbox` (`lean_sandbox.py`).
+A Lean build kept from the Lean cache's credentials (its daily one) runs in `vy-lean-sandbox` (`lean_sandbox.py`).
 
 Monitors (`research monitors list|check|run|relay`, `research/monitors.py`) wake their owners: node 2's `vy-monitors.timer`
 writes an alert note per incident and per clear, and the relay posts them in `#agent-alerts`.

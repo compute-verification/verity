@@ -11,7 +11,7 @@ parameter.
 ~~~sh
 uv run python -c "
 from verity_numerical.bench import census
-for h in census.raw('calibration/hardware'):
+for h in census.raw('hardware'):
     print(h['id'], f\"{h['flop_per_second']:.3g}\")
 "
 ~~~
@@ -26,7 +26,7 @@ Each file is a JSON array of entries, and each entry validates against its file'
 
 | File | Entries |
 | --- | --- |
-| `hardware.json` | GPU lines: a device (full `device` and short `name`, e.g. "H100 SXM5") running one operand dtype, with its dense tensor-core peak at FP32 accumulate |
+| `hardware.json` | GPU lines: a device (full `device` and short `name`, e.g. "H100 SXM5") running one operand dtype, with its dense tensor-core peak at FP32 accumulate. A device with a card file (`calibration/hardware/cards/`) has its line derived from it: `card` names the card's stem, the clock reading and the card's weight of the operand format, and `readings` keeps the data sheet's own figure beside it, each with its sources and its ratio to the line's figure |
 | `datatypes.json` | operand formats, displayed as the common name first, then the precise format: `BF16`, `FP8 (E4M3)`, `FP4 (NVFP4, E2M1)` |
 | `networks.json` | network profiles: the reference (same datacenter, 1 ms, 100 Gb/s) and the sensitivity profiles |
 | `deployments.json` | deployments, whose figure a result gives beside the adversary resource model's (`adversary.json`): the machines of a datacenter and the window each machine is audited in, stated parameters (results per monitoring period) |
@@ -38,7 +38,8 @@ Each file is a JSON array of entries, and each entry validates against its file'
 ## Ids
 
 - Every entry has an `id` that is unique within its file.
-- A hardware id is `<device slug>/<dtype>`, for example `a100-sxm4-80gb/bf16` or `rtx-4090/e4m3`. The dtype is named as
+- A hardware id is `<device slug>/<dtype>`, for example `a100-sxm4-80gb/bf16` or `rtx-4090/e4m3`; a line derived from a card has the
+  card's stem and its reading as its slug, for example `rtx-pro-6000-server-tensor/e4m3`. The dtype is named as
   the instruction registry names operand dtypes (`bf16`, `e4m3`, `e2m1`); each is a `datatypes.json` id.
 - A subcircuit template id is kebab-case, for example `gemm-coordinate`. A subcircuit (a fully bound template) is
   `<template>/<params>/<semantics>`, for example `gemm-coordinate/k1536/sm90-wgmma-e4m3`,
@@ -101,8 +102,12 @@ that SPOT assigns in the source run; the census records the run's counts, not a 
 
 - Every entry has `sources`: a non-empty list of `{label, href?}`. The label names the document and the table or row
   the value was read from.
-- Hardware lines also state their `methodology`. Peaks are datasheet **dense** figures at the accumulate width the
-  relations use (FP32). An FMA counts as two FLOP, and sparsity figures are never used.
+- Hardware lines also state their `methodology`. Peaks are **dense** figures at the accumulate width the relations use (FP32). An
+  FMA counts as two FLOP, and sparsity figures are never used. A line with a card is the card's figure, 2 x `verity.device.rate`
+  at its `reading`: the card's tensor ceiling (`tensor` where the card marks `clock.tensor` a ceiling, as on the RTX PRO 6000, whose two
+  readings are one clock; `sm` where it does not, as on the H100, whose whitepaper tensor clock a run of `calibration/tensor_duty`
+  exceeded). `tests/calibration/native_peak` recomputes it from the card at that reading and holds each reading's `ratio` to it, so
+  the data sheet's figure is 1.0688 times the RTX PRO 6000 card's and 0.9243 times the H100's. Any other line is the data sheet's.
 - A measured value (rather than a datasheet one) says how it was measured, and names the artifact that holds the
   measurement.
 

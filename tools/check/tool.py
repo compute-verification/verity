@@ -3,7 +3,7 @@
     research run --tool check --project verity --cwd clone -- uv run --locked --all-packages --extra torch-cpu python tools/check/check.py
 
 No key params and no closure: the attempt's source (a clean commit) is the whole input, and `research.merge` reads the attempt by
-that commit.  A merge that changes verity/protocols/proofs/flock/ (the Lean verifier's package verity/protocols/proofs/flock/verifier/ included) or a
+that commit.  A merge that changes verity/protocols/proof/flock/ (the Lean verifier's package verity/protocols/proof/flock/verifier/ included) or a
 package the verifier requires by path (verity/circuits/base/, verity/circuits/lean/ and verity/commitments/lean/), other than a
 README.md or PROTOCOL.md (which nothing the agreement runs reads) or the verifier's sigma/ (the σ-lift check's difftest, a
 Lake package nested in the verifier's that requires it, which Lake doesn't read to build the verifier), needs an attempt whose `lean-agreement` step passed
@@ -13,7 +13,7 @@ or its Lean mirror (`VStar.In`, `core_vstar`) needs `lean-suites` passed, whose 
 `research run --on` refuses a machine that fails `preflight.py` (the pod setup, the Lean dependencies, a store read, AVX-512
 when needed, free disk) before the run is claimed.  Once the verified queue
 has landed a commit, it starts `post_train.py` on it (`merge.after_land`), detached (`after_land`): the vLLM reference regression's manifest rebuilds,
-which check leaves out, and the fast workloads of record's neutrality, and their label on the attempt.  Nothing here imports anything but `research.store.tool`.
+which check leaves out, and their label on the attempt.  Nothing here imports anything but `research.store.tool`.
 """
 from __future__ import annotations
 
@@ -22,19 +22,19 @@ from research.store.tool import Tool
 CHECK = Tool(name="check", version="1", command=["uv", "run", "--locked", "--all-packages", "--extra", "torch-cpu", "python",
                                                      "tools/check/check.py"],
              produces=["check/v1"],
-             merge_requires={"lean-agreement": ["verity/protocols/proofs/flock/prover/", "verity/protocols/proofs/flock/prover/pod/", "verity/protocols/proofs/flock/prover/agreement/",
-                                                 "verity/protocols/proofs/flock/prover/tool.py", "verity/protocols/proofs/flock/verifier/",
+             merge_requires={"lean-agreement": ["verity/protocols/proof/flock/prover/", "verity/protocols/proof/flock/prover/pod/", "verity/protocols/proof/flock/prover/agreement/",
+                                                 "verity/protocols/proof/flock/prover/tool.py", "verity/protocols/proof/flock/verifier/",
                                                  "verity/circuits/base/", "verity/circuits/lean/",
                                                  "verity/commitments/lean/", "!README.md", "!PROTOCOL.md",
-                                                 "!verity/protocols/proofs/flock/verifier/sigma/*"],
-                             "lean-suites": ["verity/protocols/proofs/flock/prover/python/verity_flock/rec_vstage.py",
-                                             "verity/protocols/proofs/flock/prover/python/verity_flock/rec_outer.py",
-                                             "verity/protocols/proofs/flock/prover/python/verity_flock/rec_open.py",
-                                             "verity/protocols/proofs/flock/prover/python/verity_flock/rec_residuals.py",
-                                             "verity/protocols/proofs/flock/prover/python/verity_flock/rec_cap.py",
-                                             "verity/protocols/proofs/flock/prover/python/verity_flock/circuit.py",
-                                             "verity/protocols/proofs/spot/verifier/one_stage/registered.py",
-                                             "verity/protocols/proofs/flock/verifier/VStar/In.lean", "verity/protocols/proofs/recursion/verifier/vstar_cli/", "verity/protocols/proofs/spot_flock/verifier/lean/",
-                                             "verity/protocols/proofs/spot_flock_recursion/verifier/lean/"]},
+                                                 "!verity/protocols/proof/flock/verifier/sigma/*"],
+                             "lean-suites": ["verity/protocols/proof/flock/prover/python/verity_flock/rec_vstage.py",
+                                             "verity/protocols/proof/flock/prover/python/verity_flock/rec_outer.py",
+                                             "verity/protocols/proof/flock/prover/python/verity_flock/rec_open.py",
+                                             "verity/protocols/proof/flock/prover/python/verity_flock/rec_residuals.py",
+                                             "verity/protocols/proof/flock/prover/python/verity_flock/rec_cap.py",
+                                             "verity/protocols/proof/flock/prover/python/verity_flock/circuit.py",
+                                             "verity/protocols/proof/spot/verifier/one_stage/registered.py",
+                                             "verity/protocols/proof/flock/verifier/VStar/In.lean", "verity/protocols/proof/recursion/verifier/vstar_cli/", "verity/protocols/proof/spot_flock/verifier/lean/",
+                                             "verity/protocols/proof/spot_flock_recursion/verifier/lean/"]},
              preflight=["tools/check/preflight.py"],
              after_land=["uv", "run", "-q", "python", "tools/check/post_train.py"])

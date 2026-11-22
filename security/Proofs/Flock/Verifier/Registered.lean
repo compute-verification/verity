@@ -102,7 +102,6 @@ theorem check_ok {c : Circuit} {pub : Public} {own : Array Port} {derived : Bool
     refine ⟨by simpa using hd, ?_⟩
     split at h
     · obtain ⟨_, _, h⟩ := except_bind_ok h
-      obtain ⟨_, _, h⟩ := except_bind_ok h
       split at h
       · rename_i t ht
         obtain ⟨indices, hidx, h⟩ := except_bind_ok h

@@ -1,13 +1,72 @@
-"""Each benchmark or loop declares its numbers in a `metrics.toml` beside the code that records them
-(`benchmarks/README.md`'s "Metrics"): every metric once across all those files, with an id no other row has, under its
-owner's prefix, an owner the handle registry knows and whose `owns` there covers the declaring file, the dashboard's
-words (a headline `title`, a short `unit` and a one-sentence `axis`), a direction, an `every` in minutes, hours or days,
-and a command naming scripts that exist, with the declaring file's directory recording the metric under its id. Each
-row's `version` says what changed above 1, its unit is pinned to its version (`PINS`), the kit's `VERSIONS` is the rows
-above 1, a `runs` is `control`, and no row carries a version key or `runs` until the site's reader takes them. A row `under`
-another is a breakdown of that main number, one level deep; its `kind` is system or platform; the kit's `NEEDS` is the
-rows' `needs`; and no row carries any of the three until the site's reader takes them. A whole-tree invariant, since it reads the
-handle registry and the benchmarks and loops the commands run."""
+"""The rules of a `metrics.toml`, enforced across the tree: every `benchmarks/`, `calibration/`, `applications/`, `infra/` and
+`tools/` directory or loop declares the numbers its lead is held to in a `metrics.toml` beside the code that records them,
+one `[[metric]]` per number. The console's Metrics tab reads every one on `main`. A value is a preserved run's measurement
+named by the row's `id` in its `result.json` (the kit's writer), or a loop's reading sent through `research.metrics`.
+
+Keys (a row with any other key, or without a required one, is refused):
+- `id` (required): `OWNER/NAME`, once across all files, under its owner's prefix.
+- `owner` (required): a handle of `.agents/skills/using-slack/registry.json` whose longest `owns` entry covers the file.
+- `title` (required): the headline, three to six plain words, no digit or backtick.
+- `unit` (required): at most three words; a rate's two sides, either side of " a ", count apart. A span of time or compute
+  is the measurement's `period`/`over`, never the unit.
+- `axis` (required): one sentence on one line, ending with a period: what the chart's y axis is.
+- `better` (required): `lower` or `higher`.
+- `command` (required): the one command that measures it, naming an existing script under a registry root, and the file's
+  directory must record the metric under its id. No machine name, no bare `gpu-lease` (`ALLOWED` lists today's).
+- `every` (required): a count of minutes, hours or days (`5m`, `12h`, `7d`); a value older than it is stale, so a number
+  reaching the tab through the store's index (up to an hour late) needs an `every` well over an hour.
+- `floor`, `goal` (the narrowest goal on the Goals page it serves), `tags`: optional.
+- `version`: a whole number, 1 if absent, written `ID@vN`. It versions what the number means (what is divided by what,
+  what the run includes, which workload), not the code: a refactor, new run, model or card does not raise it (a model or
+  card is a `member`). Raising it takes `changed`, one sentence on what changed. The kit stamps it on each measurement
+  (`kit_report.VERSIONS` holds exactly the rows above 1; callers never give it). A line is id, version and member: older
+  readings leave it and stay in the store; `superseded_by` is for a run that was wrong. A unit changes only with a raised
+  version, pinned in `tests/metric_pins.json` (`uv run python tests/test_metrics_registry.py --pin` after adding,
+  removing or raising a row).
+- `was`: former ids, so a rename keeps its line; none repeats an id or names a row's id.
+- `under = "OWNER/ID"`: a breakdown of that main number, one level deep. `kind`: `system` (default) or `platform`.
+  `needs`: `parameter` where the value depends on a security parameter, `calibration` where it uses a calibration
+  number; each measurement then names them (`parameters` as `{NAME: {value, from, basis}}`, `calibration` as
+  `[{path, key}]` under `calibration/`), by `kit_report.NEEDS`, which must equal the rows.
+- `runs = "control"`: the command reads what only the control pod reaches (its state, GitHub, the Linear app's keys); the
+  rerun loop (`infra/control/metrics_rerun.py`) runs it there once infra lists it. Other rows run on a machine.
+- No `metrics.toml` sits directly under `benchmarks/`.
+- The site's reader takes `version`, `changed`, `was`, `under`, `kind`, `needs`, `runs`; a key it does not take is held
+  back (`SITE_TAKES_*`).
+
+Core benchmarks (`[tool.verity.interface] core = "verity bench NAME"` in the directory's `pyproject.toml`) end in
+`kit.report(name, text, doc, measured, ran_with=, accepted=, why=, made_up=, withdrawn=, from_run=)`, which
+`tests/benchmarks/harness/test_interface.py` holds them to, with the README headings `## What you may change`, `## What
+is fixed`, `## How a cheating change is refused`, and a row with a `goal` for each measurement name:
+1. Takes `--from DIR` (a run's directory: `job.json`, `out/`), read with nothing of ours; a run id only where `research` is
+   installed, fetched first past the store's withdrawals (a run withdrawn whole, or in a file the command reads, is refused).
+2. Prints `ran with: coins COINS; parameters PARAMETERS (DETAIL)` on the line after the first, from `kit.ran_with`: COINS is
+   `deployed challenger`, `local challenger` or `in-process`; PARAMETERS `deployed` or `development`. `verified=True` only
+   where the command checked the challenger's signature against a pinned key; otherwise `coins by the record's own word,
+   not checked`. A record without the field prints `ran with: not stated`.
+3. A number only from a run the Lean verifier accepted: the first line opens `NAME:`; `accepted=False, why=WHY` prints `NAME:
+   no number: WHY`, writes `value` null, and returns exit 1.
+4. `audit: true` only for coins the deployed challenger flipped, verified, at `deployed` parameters; else `a measurement,
+   not an audit`. The kit derives it.
+5. Every printed number is a measurement of a metric of the directory, written once by the run that measured it; a reprint of
+   another run passes `from_run=RUN` and writes none. A fixture passes `made_up=True`: printed as made up, marked `modeled`.
+6. A trial (`VERITY_BENCH_TRIAL` set, not 0) writes `out/trial-measurements.json` and no measurement; it is never of record.
+
+Not enforced here:
+- Marks: each measurement carries a `mark`, `measured`, `modeled` or `partial` (`kit.MARKS`), written first among its
+  `inputs`; a sent reading carries `mark` itself, which the site requires.
+- A value over a span names `period` and `over`, and a value for one line of a metric its `member` (`kit.py`'s docstring).
+  The writer keys on all three. The tab's value is the last one written that names no member (else the last written); the
+  members of the newest run that wrote any are listed beside it. A benchmark writing several periods, scopes or members
+  writes the metric's own (the one its `title`, `unit` and `axis` are for) last.
+- A loop's reading names the `command`, never a run; the tab shows the readings naming no `period`, `over` or `member` of
+  the last 62 days (each of the last day, then one in three hours), and the newest of each member line.
+- The tab lists a number under every top goal its `goal` is or sits under (a top goal: nothing waits on it, but
+  `top/parked`); only under `top/parked`, it reads "parked".
+- A `runs = "control"` row's local `research run` takes no `--on`, `--pool`, `--cpus`, `--mem-gb`, `--gpus` or
+  `--store-read`, and keeps of the pod's stripped keys (`JOBS_TOKEN`, `SLACK_*`, `LINEAR_*`; `LEFT_OUT`) only those its list
+  entry names. A row's owner reruns it within its `every`.
+- A command that declares `core` has its `kit.report` call and headings held only by `test_interface.py`, not here."""
 from __future__ import annotations
 
 import ast
@@ -98,7 +157,7 @@ def _words(m: dict) -> list[str]:
 def _problems(m: dict, handles: set[str], where: str) -> list[str]:
     """What breaks a rule in row `m` of the metrics.toml in directory `where`, each with its fix."""
     keys = set(m)
-    out = [f"lacks {k}: add it, as benchmarks/README.md's \"Metrics\" says" for k in sorted(REQUIRED - keys)]
+    out = [f"lacks {k}: add it, as this file's docstring says" for k in sorted(REQUIRED - keys)]
     out += [f"has unknown key {k}" for k in sorted(keys - REQUIRED - OPTIONAL)] + _words(m)
     i, owner = str(m.get("id", "")), m.get("owner")
     if not _ID.match(i):
@@ -222,14 +281,14 @@ def test_every_metric_is_declared_once_by_a_known_owner_beside_its_producing_scr
     off = [f"  {f}: {m.get('id', '?')}: {p}" for f, m in rows for p in _problems(m, handles, where[f]) + _unowned(f, m, reg)]
     off += _formers(rows) + _breakdowns(rows)
     assert not (broken or repeated or off), (
-        "rows of the metrics.toml files break benchmarks/README.md's \"Metrics\" (fix the row):\n"
+        "rows of the metrics.toml files break this file's docstring (fix the row):\n"
         + "\n".join(broken) + ("\n" if broken else "") + "".join(repeated) + "\n".join(off))
 
 
 def test_no_row_sits_in_the_retired_shared_file() -> None:
     assert not (ROOT / RETIRED).exists(), (
         f"{RETIRED} is retired: move each of its rows, unchanged, into the {NAME} beside the code that records it "
-        f"(benchmarks/README.md's \"Metrics\"), then delete {RETIRED}")
+        f"(this file's docstring), then delete {RETIRED}")
 
 
 def test_a_row_that_breaks_a_rule_is_refused() -> None:
@@ -267,7 +326,7 @@ def test_a_row_without_an_axis_is_refused() -> None:
     assert _words(row) == []
     del row["axis"]
     assert _problems(row, {"vllm"}, "benchmarks/serve_tax")[0] == (
-        "lacks axis: add it, as benchmarks/README.md's \"Metrics\" says")
+        "lacks axis: add it, as this file's docstring says")
     assert _words(row) == []
 
 

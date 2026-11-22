@@ -87,9 +87,9 @@ from typing import Callable, Iterator, Sequence
 
 import cards as spot_cards
 from verity.protocol import MONITORING_PERIODS
-from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams
-from verity.protocols.proofs.spot.prover import plancheck
-from verity.protocols.proofs.spot.prover.optimize import (Cell, Grain, ReplayGrain, grain_costs, leak_count, loc_bits,
+from verity.protocols.accounting.network.verifier.network_attester import NetworkAttesterParams
+from verity.protocols.proof.spot.prover import plancheck
+from verity.protocols.proof.spot.prover.optimize import (Cell, Grain, ReplayGrain, grain_costs, leak_count, loc_bits,
                                                            two_stage_design, two_stage_strata)
 
 HERE = Path(__file__).resolve().parent
@@ -99,7 +99,7 @@ ADVERSARY, DEPLOYMENTS, HARDWARE = ("calibration/census/adversary.json", "calibr
 SLOWDOWN, SLOWDOWN_HARDWARE = "benchmarks/slowdown/data/reference.toml", "benchmarks/slowdown/data/hardware.toml"
 WORLD, DATACENTER, CENSUS_WORLD = "world-h200", "dc-12500-machines-600s", "world-inference-2027"
 #: the H200's dense FP8 peak is the H100 SXM5's (one die, one clock)
-PEAK = "h100-sxm5-80gb/e4m3"
+PEAK, READING = "h100-sxm-80gb-sm/e4m3", "datasheet"
 DESIGNS = {"exfiltration": ("two-stage", "two-stage-uniform", "two-stage-capped", "two-stage-capped-uniform",
                             "two-stage-patterns", "two-stage-patterns-uniform", "request", "one-stage"),
            "skipped_work": ("one-stage", "request")}
@@ -246,7 +246,7 @@ def cards(model: str = "GLM-5.3", request: str = "census", serving: str = "assum
             "partition": _card(work, {k: work["value"].get(k) for k in
                                       ("ranks", "tokens", "strata", "served_macs_per_token")}, "", "strata")}
     census, dc = _entry(ADVERSARY, CENSUS_WORLD), _entry(DEPLOYMENTS, DATACENTER)
-    peak = _entry(HARDWARE, PEAK)
+    peak = next(r for r in _entry(HARDWARE, PEAK)["readings"] if r["name"] == READING)
     registry = _toml(SLOWDOWN)
     fleet = registry["fleet"][WORLD]
     devices = _toml(SLOWDOWN_HARDWARE)["location"][fleet["location"]]["devices"]["value"]
@@ -266,7 +266,7 @@ def cards(model: str = "GLM-5.3", request: str = "census", serving: str = "assum
                                   f"{DEPLOYMENTS} {DATACENTER}: a machine's GPUs"),
         "window": InputCard(dc["window_s"], "s", "modeled", f"{DEPLOYMENTS} {DATACENTER}: the audit window"),
         "peak_flops": InputCard(peak["flop_per_second"], "FLOP/s", "modeled",
-                                f"{HARDWARE} {PEAK}, the H200's dense FP8 peak: {peak['sources'][0]['label']}"),
+                                f"{HARDWARE} {PEAK}, reading {READING}, the H200's dense FP8 peak: {peak['sources'][0]['label']}"),
         "h100_hour_flop": InputCard(census["h100_hour_flop"], "FLOP", "modeled",
                                     f"{ADVERSARY} {CENSUS_WORLD}: an H100-hour at the dense FP8 peak"),
         "ands_per_mac": InputCard(ands / _k(coordinate), "AND/MAC", "modeled",

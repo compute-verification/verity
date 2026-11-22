@@ -28,7 +28,7 @@ from verity.circuits.ops import scalar as SC
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry import ref_prims as R
 from verity_vllm.definitions.registry import torch_words as W
-from verity_vllm.definitions.registry.dsv4_decode_indices import gather_i32
+from verity_vllm.definitions.registry.fp8_moe_experts import gather_i32
 
 from verity_torch.frontend.rules.training_emit import (
     _DT,

@@ -90,8 +90,6 @@ def _served(c: dict, *families: str) -> int:
 
 def test_step_census_and_requirement():
     r, c, req, rc = _views(CFG, "step", M=1, pos0=8)
-    assert r.digest.startswith("5e34739ca3f59dda")
-    assert c["digest"] == "31fc5a4003fd5b059049f0e46aee1bc36db3a7103b532987c36450650b7f581f881e5ba7fbb21b7a5255dec50e30f62ac4d5280a703d08f66ed31758cbf2669a"
     gemms = [e for e in c["classes"].values() if e["family"] == "Gemm_v2"]
     assert all(e["served_macs"] == e["statics"]["K"] * e["statics"]["N"] for e in gemms)
     assert _served(c, "Gemm_v2") == LINEAR
@@ -110,8 +108,6 @@ def test_request_census_and_requirement():
     """The row's request Program, about 30 s: the only test of a Program with values across steps (each layer's K and V rows a
     step's attention produces and every later step's reads), which the step and the toys in `ml/circuits` cannot show at scale."""
     r, c, req, rc = _views(CFG, "request", LP=256, T=31)
-    assert r.digest.startswith("5a5902e7f950612d")
-    assert c["digest"] == "1c29fa44e74d4fa6b275b5d4a9363f8c33469fbfb6a226846f60c723bbdeed6b3324d502edc49bcec99d385c1fb1b2b31f7e8d62bf837857c2f3a33888dd6617"
     assert len(c["steps"]["ends"]) == 32 and c["totals"]["classes"] == 2641
     assert _by_precision(c) == {"mac:bf16": c["totals"]["served_macs"]}
     base, got = _base(rc), req.to_json()

@@ -17,6 +17,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -28,6 +29,10 @@ if importlib.util.find_spec("torch") is not None:  # torch is an extra of this p
     import torch._inductor.config  # noqa: F401
 
 import verity.circuits.defs  # noqa: E402,F401  (loaded before the first test, so the guard's snapshot always holds it)
+
+sys.path.append(str(Path(__file__).resolve().parents[3] / "verity" / "circuits"))
+
+import stand_in  # noqa: E402,F401  (the test primitives' Boolean bodies, registered as it loads)
 
 _MISSING = object()
 
@@ -111,7 +116,7 @@ import subprocess  # noqa: E402
 
 import pytest  # noqa: E402
 import verity_torch.pouw  # noqa: E402,F401 - hands PoUW's serving code its tensors and H1's device, as the adapter's import does
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import (  # noqa: E402
+from verity.protocols.accounting.compute.pouw.prover.serving import (  # noqa: E402
     use_int8_arm,
 )
 
@@ -159,7 +164,7 @@ def _one_exchange_a_test():
 
 @pytest.fixture(autouse=True)
 def _sweep_dir_in_tmp(tmp_path_factory, monkeypatch):
-    """`verity-vllm row`'s sweep directory default (`cli.MACHINE`'s /workspace/cp/sweep) exists on a GPU node, so a test that leaves
+    """A launcher's sweep directory default (`SWEEP_DIR`, else /workspace/cp/sweep) exists on a GPU node, so a test that leaves
     SWEEP_DIR unset would write its workload dirs there; every test gets its own instead, which a test can still override."""
     monkeypatch.setenv("SWEEP_DIR", str(tmp_path_factory.mktemp("sweep")))
 

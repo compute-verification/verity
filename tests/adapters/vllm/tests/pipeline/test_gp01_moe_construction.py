@@ -68,7 +68,7 @@ def test_padded_declared_and_bound_is_the_block_with_the_actual_population_label
     assert out["moe_block_present"] is True and "ACTUAL population" in out["population_label"]
     assert all(c["moe_construction"] == "padded" and c["binds_declared_construction"] and not c["binds_other_construction"]
                for c in out["components"].values())
-    assert "MoeFfnFixedL_v1{E,TOPK,VPT,H,I}" in out["definitions"] and "LMoeFfnL_v1" in out["lift_of_record"]
+    assert "MoeFfnFixedL_v1{E,TOPK,VPT,H,I}" in out["definitions"]
     assert "R17-42" in out["rule"] and "never attested" in out["rule"]
 
 

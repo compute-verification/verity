@@ -179,7 +179,7 @@ theorem CoveringBound : Guarantees.CoveringBound := by
     calc (M.card : ℝ) ≤ ∑ u, ((M.filter fun p => B.o p ∈ (I u).inner).card : ℝ) := by
           exact_mod_cast (card_le_card hsub).trans card_biUnion_le
       _ ≤ ∑ _u : Fin n, ((k / c) ^ 2 + k) := sum_le_sum fun u _ => hblockbound u
-      _ = n * ((k / c) ^ 2 + k) := by simp
+      _ = n * ((k / c) ^ 2 + k) := by rw [sum_const, card_univ, Fintype.card_fin, nsmul_eq_mul]
   refine ⟨hcount, ?_⟩
   have hK : 0 ≤ (k / c) ^ 2 + k := by positivity
   have hdiv : (M.card : ℝ) / ((k / c) ^ 2 + k) ≤ n := by

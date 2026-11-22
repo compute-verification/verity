@@ -1,0 +1,64 @@
+# PoUW's check of one audit window as a core protocol (`core_protocol`'s `Core.Protocol`), the port of
+# `verity/protocols/accounting/compute/pouw/verifier/core_check.py`: the verifier's parameters, the window's registration and its digest,
+# the proof system's answer, and PoUW's rule over them. Lean core only; its properties are stated in
+# `security/Properties/Pouw/Check.lean`, and the difftest (`tests/test_difftest.py`, on the shared harness) holds
+# `pouw-verifier serve` and `pouw-verifier-difftest` (a unit's opening, `PouwVerifier.Opening`; the window's pass and draw,
+# `PouwVerifier.Pass`; a live window's round coins, `PouwVerifier.Rounds`; a served window's credit, `PouwVerifier.Credit`) to
+# the Python on generated cases. `pouw-period` is a period's credit as a core protocol (`PouwVerifier.Period`,
+# `verity/pouw/period/v1`, the work of remote's development composite), held to `period_check.py` by
+# `tests/verity/protocols/accounting/compute/pouw/verifier/lean/check/test_period_difftest.py`.
+# `pouw-leaf-own-window` is the leaf verifier's check of a window unit's leaf statement's `--registered` file at the
+# unit's placement, from the window's descriptor and round log (`PouwVerifier.LeafOwn`).
+name = "pouw_verifier"
+defaultTargets = ["PouwVerifier", "pouw-verifier", "pouw-period", "pouw-verifier-difftest", "pouw-leaf-own-window"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+backward.proofsInPublic = true
+
+[[require]]
+name = "core_protocol"
+path = "../../../../../../interface"
+
+[[require]]
+name = "pouw_window"
+path = "../window"
+
+# `pouw-verifier-difftest`'s `passes-distinct` answers with Pearl+'s own `PouwVerifier.PearlPlus.passesDistinct`
+[[require]]
+name = "pouw_pearlplus"
+path = "../pearlplus"
+
+# `PouwVerifier.Credit` embeds the model pin (`include_str`), which Lake tracks only as this target
+[[input_file]]
+name = "models"
+path = "models.json"
+text = true
+
+# and the H1 window templates' pins (`h1_tiles.json`, `test_h1_tile_pins.py` writes it)
+[[input_file]]
+name = "h1_tiles"
+path = "h1_tiles.json"
+text = true
+
+[[lean_lib]]
+name = "PouwVerifier"
+roots = ["PouwVerifier", "PouwVerifier.Difftest", "PouwVerifier.CreditDifftest", "PouwVerifier.VerifiedDifftest"]
+needs = ["models", "h1_tiles"]
+
+[[lean_exe]]
+name = "pouw-verifier"
+root = "PouwVerifier.Main"
+
+[[lean_exe]]
+name = "pouw-period"
+root = "PouwVerifier.PeriodMain"
+
+[[lean_exe]]
+name = "pouw-verifier-difftest"
+root = "PouwVerifier.DifftestMain"
+
+[[lean_exe]]
+name = "pouw-leaf-own-window"
+root = "PouwVerifier.LeafOwnMain"

@@ -36,8 +36,8 @@ previous one's answer arrived (`challenge` refuses while a batch is open); `rece
 time), refuses an answer that is not one label long, and records batch `b` as `(b, b, 1, send, receipt, wrong,
 SHA-512(u64 index ‖ answer))`, `wrong` 1 when the answer is not the read's label; the first late batch ends the session
 `late`, the first wrong one `wrong`, the `k`-th `complete`; `close()` signs the ended session once, the message
-`memoryChallengerMessage(I, session, message(commitment, ended, start_mark, fill_start, fill_end, batches))` under its
-key. It signs no egress count: the challenger is given none, and the wipe's check takes its one count as evidence
+`memoryChallengerMessage(I, session, message(commitment, salt, ended, start_mark, fill_start, fill_end, batches))` under
+its key, `salt` the 64 bytes it drew for the session. It signs no egress count: the challenger is given none, and the wipe's check takes its one count as evidence
 beside the signed session (`WipeProtocol.Evidence.egress`).
 
 The wipe party reveals one index a batch (`wipe_party.params_of`): a wipe at another batch size under the key is outside
@@ -55,6 +55,7 @@ is an EUF-CMA break only under that one-role reading, as for PoUS's sessions (`C
 namespace MemoryAttester.Properties
 
 open Flock
+open Flock.SessionCoins (LATE)
 
 /-! ## The challenger's wipes -/
 
@@ -78,13 +79,14 @@ structure WipeObserved where
   receiptNs : Int
   answer : ByteArray
 
-/-- A wipe the challenger runs: the commitment it publishes when it opens the session, the labels' key `K`, the `k`
-reads it samples once the fill ends, the start mark it holds before the fill (the SHA-512 of the start certificate its
+/-- A wipe the challenger runs: the commitment it publishes when it opens the session, the labels' key `K`, its record's
+salt, the `k` reads it samples once the fill ends, the start mark it holds before the fill (the SHA-512 of the start certificate its
 mark source returned, empty when it has no source), its clock's readings as the fill starts and as it ends, and what it
 observes of each read it reveals, in order. -/
 structure WipeRun where
   commitment : StreamedWipe.Commitment
   key : ByteArray
+  salt : ByteArray
   reads : Fin commitment.params.k → Fin commitment.params.labels
   startMark : ByteArray
   fillStartNs : Int
@@ -119,9 +121,9 @@ def WipeRun.step (r : WipeRun) (st : WipeRecorded) (o : WipeObserved) : WipeReco
 def WipeRun.recorded (r : WipeRun) : WipeRecorded := r.observed.foldl r.step ⟨#[], #[], none⟩
 
 /-- The record message the challenger signs when it closes the wipe, ended `ended` (`close`): `streamed_wipe.message`
-of its commitment, how it ended, its start mark, the fill's readings and its batch records. -/
+of its commitment, its salt, how it ended, its start mark, the fill's readings and its batch records. -/
 def WipeRun.message (r : WipeRun) (ended : String) : E ByteArray :=
-  StreamedWipe.message r.commitment ended r.startMark r.fillStartNs r.fillEndNs r.recorded.batches
+  StreamedWipe.message r.commitment r.salt ended r.startMark r.fillStartNs r.fillEndNs r.recorded.batches
 
 /-- The memory challengers: the sessions the holder of each key runs under it, PoUS's (`Challengers`) and its wipes. -/
 structure SignedWipeParty where
@@ -151,18 +153,19 @@ def wipeTreeStrings (d : FV3.Sha512.Domain) (values : Array ByteArray) : List By
     (List.range (levels.size - 1)).flatMap fun l => (List.range (levels[l]!.size / 2)).map fun i =>
       FV3.input "node" [d.id, FV3.uint l, FV3.uint i, levels[l]![2 * i]!, levels[l]![2 * i + 1]!]
 
-/-- What SHA-512 hashes for a wipe `(c, ended, the start mark, the fill's readings, batches)` signed under the
+/-- What SHA-512 hashes for a wipe `(c, salt, ended, the start mark, the fill's readings, batches)` signed under the
 key `pk`: its records tree, the input of its `message`, and that of `memoryChallengerMessage`. -/
-def signedWipeStrings (pk : ByteArray) (c : StreamedWipe.Commitment) (ended : String) (startMark : ByteArray)
+def signedWipeStrings (pk : ByteArray) (c : StreamedWipe.Commitment) (salt : ByteArray) (ended : String)
+    (startMark : ByteArray)
     (fillStartNs fillEndNs : Int) (batches : Array StreamedWipe.Batch) : List ByteArray :=
   let head := (StreamedWipe.header c ended startMark fillStartNs fillEndNs batches.size).toUTF8
   (match batches.mapM StreamedWipe.Batch.value with
     | .ok values => wipeTreeStrings (domain StreamedWipe.RECORD_BINDING c.session batches.size) values
     | .error _ => []) ++
     (match StreamedWipe.recordsRoot c.session batches with
-      | .ok root => [StreamedWipe.SESSION_TAG ++ be64 head.size.toUInt64 ++ head ++ root]
+      | .ok root => [StreamedWipe.SESSION_TAG ++ salt ++ be64 head.size.toUInt64 ++ head ++ root]
       | .error _ => []) ++
-    match StreamedWipe.message c ended startMark fillStartNs fillEndNs batches with
+    match StreamedWipe.message c salt ended startMark fillStartNs fillEndNs batches with
     | .ok rec =>
       if (pk.extract 0 16).size = 16 then
         [field MEMORY_CHALLENGER_TAG.toUTF8 ++ pk.extract 0 16 ++ field (field c.session) ++ field rec]
@@ -172,13 +175,13 @@ def signedWipeStrings (pk : ByteArray) (c : StreamedWipe.Commitment) (ended : St
 /-- The strings the run hashes: the signed wipe's, those of each wipe the challenger ends under its key, and those of
 each PoUS session it ends under the key (`challengePhaseStrings`). -/
 def wipeRunStrings (s : StreamedWipe.Signed) (dev : SignedWipeParty) : List ByteArray :=
-  signedWipeStrings s.publicKey s.commitment s.ended s.startMark s.fillStartNs s.fillEndNs s.batches ++
+  signedWipeStrings s.publicKey s.commitment s.salt s.ended s.startMark s.fillStartNs s.fillEndNs s.batches ++
     (dev.wipes s.publicKey).flatMap (fun r => match r.recorded.ended with
       | some e =>
-        signedWipeStrings s.publicKey r.commitment e r.startMark r.fillStartNs r.fillEndNs r.recorded.batches
+        signedWipeStrings s.publicKey r.commitment r.salt e r.startMark r.fillStartNs r.fillEndNs r.recorded.batches
       | none => []) ++
     (dev.device.sessions s.publicKey).flatMap fun r => match r.recorded.ended with
-      | some e => challengePhaseStrings s.publicKey r.commitment e r.recorded.rounds
+      | some e => challengePhaseStrings s.publicKey r.commitment r.salt e r.recorded.rounds
       | none => []
 
 /-! ### The break's two adversaries -/
@@ -311,10 +314,14 @@ def measuredBatch (digest : Nat → ByteArray) (i : Nat) : StreamedWipe.Batch :=
   ⟨i, i, 1, MEASURED_FIRST_SEND_NS + i * MEASURED_MAX_READ_NS, MEASURED_FIRST_SEND_NS + (i + 1) * MEASURED_MAX_READ_NS, 0,
     digest i⟩
 
-/-- The honest session: the commitment, ended `complete` after its `k` batches, an empty start mark (a challenger with
-no mark source) and the fill's readings, signed under S1's scheme with the key `pk` and the signature `sig`. -/
+/-- The honest session's record salt: `RECORD_SALT_BYTES` zero bytes. -/
+def MEASURED_SALT : ByteArray := ⟨Array.replicate RECORD_SALT_BYTES 0⟩
+
+/-- The honest session: the commitment, its record salt, ended `complete` after its `k` batches, an empty start mark (a
+challenger with no mark source) and the fill's readings, signed under S1's scheme with the key `pk` and the signature
+`sig`. -/
 def measuredWipe (digest : Nat → ByteArray) (pk sig : ByteArray) : StreamedWipe.Signed :=
-  ⟨measuredCommitment, StreamedWipe.COMPLETE, .empty, MEASURED_FILL_START_NS, MEASURED_FILL_END_NS,
+  ⟨measuredCommitment, MEASURED_SALT, StreamedWipe.COMPLETE, .empty, MEASURED_FILL_START_NS, MEASURED_FILL_END_NS,
     (Array.range measuredParams.k).map (measuredBatch digest), LMS, pk, sig⟩
 
 /-- The period's parameters for the honest session: its server and session, trusting the one key `pk`. -/
@@ -326,7 +333,7 @@ def unencodedBatch : StreamedWipe.Batch := ⟨-1, 0, 1, 0, 0, 0, .empty⟩
 /-- A session ended `complete` under S1's scheme and the empty key, with that one batch: it has no records root and no
 message, so the run hashes nothing for it and its signature signs nothing. -/
 def unencoded : StreamedWipe.Signed :=
-  ⟨measuredCommitment, StreamedWipe.COMPLETE, .empty, 0, 0, #[unencodedBatch], LMS, .empty, .empty⟩
+  ⟨measuredCommitment, MEASURED_SALT, StreamedWipe.COMPLETE, .empty, 0, 0, #[unencodedBatch], LMS, .empty, .empty⟩
 
 /-- The period's parameters for it, trusting the empty key. -/
 def unencodedParams : WipeProtocol.Params := ⟨MEASURED_SERVER, MEASURED_SESSION, #[.empty]⟩

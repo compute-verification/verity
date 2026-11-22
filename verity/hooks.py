@@ -2,7 +2,7 @@
 with the workload's step and holding handles, never bytes, and the requests a scheme files before the workload runs.
 
 The words are the circuit's: an adapter translates its serving system into them. Each event names its hook (`HOOKS`),
-the channel a scheme subscribes to it through (`verity.protocols.resource_accounting.scheme.Scheme.hooks`).
+the channel a scheme subscribes to it through (`verity.protocols.accounting.scheme.Scheme.hooks`).
 """
 
 from __future__ import annotations
@@ -350,7 +350,7 @@ class ReleaseValue:
 @dataclass(frozen=True)
 class StartBeside:
     """A scheme's request to start the process it registered as ``process``
-    (`verity.protocols.resource_accounting.scheme.register_process`) beside the workload, called with the workload's
+    (`verity.protocols.accounting.scheme.register_process`) beside the workload, called with the workload's
     readers it names by what they do (``server-request``, ``stream-token-ids``), in that order."""
 
     process: str

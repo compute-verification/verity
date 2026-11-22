@@ -18,7 +18,7 @@ from verity_vllm.compiler import replay_step as RS
 ROOT = Path(__file__).parent.parent.parent.parent.parent.parent
 #: a fetched fixture (`artifacts.json`), beside its writer's other vectors, which `suites.py` fetches before the suite runs
 #: (the suite's inputs hold `verity` and the registry), so a missing one fails these tests rather than skipping them
-FIXTURE = "tests/verity/protocols/resource_accounting/network/verifier/fixtures/replay_step_vectors.json"
+FIXTURE = "tests/verity/protocols/accounting/network/verifier/fixtures/replay_step_vectors.json"
 
 
 def _fixture():

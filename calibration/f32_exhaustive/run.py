@@ -5,9 +5,9 @@
 
 ``log`` and ``exp`` run a correctly rounded evaluator (`f32_log_rn_bits`, `f32_exp_rn_bits`) against MPFR's correctly rounded
 result at 24 bits (gmpy2, emin -148, emax 128, subnormalized, nearest even), NaN canonical 0x7FC00000. ``boolean WORD`` runs the
-Boolean version of `ref_prims.WORD` (`verity.circuits.ops.boolean.versions.boolean_version`), bit-sliced
-(`verity.circuits.evaluation.bits.evaluate_words`), against the word primitive's own evaluator; WORD takes one 32-bit word
-and gives one.
+Boolean version of `ref_prims.WORD`, or of the adapter's registered word primitive whose id WORD is (``NcpRneClampI7_v1``)
+(`verity.circuits.ops.boolean.versions.boolean_version`), bit-sliced (`verity.circuits.evaluation.bits.evaluate_words`), against
+the word primitive's own evaluator; WORD takes one 32-bit word and gives one word of at most 32 bits.
 
 Writes DIR/exhaustive-<fn>.json (``exhaustive-boolean-WORD.json``): the inputs checked, the mismatches (up to 1000, each the
 input and the two words) and their count. A pass is a mismatch count of 0 over [0, 2^32).
@@ -52,13 +52,20 @@ def _evaluator(fn: str):
 
 @cache
 def _boolean(name: str):
-    """(`ref_prims`' word primitive ``name``, its Boolean version), refused unless it maps one 32-bit word to one."""
+    """(`ref_prims`' word primitive ``name``, or the registered one whose id it is, and its Boolean version), refused unless it
+    maps one 32-bit word to one of at most 32 bits."""
+    from verity.circuits.codec import lookup_primitive
+    from verity.circuits.defs import REGISTRY
     from verity.circuits.ops.boolean.versions import boolean_version
     from verity_vllm.definitions.registry import ref_prims as RP
+    from verity_vllm.definitions.registry.catalog import load
 
-    word = getattr(RP, name)
+    word = getattr(RP, name, None)
+    if word is None:
+        load()
+        word = lookup_primitive(REGISTRY, name)
     params, ret = word.signature()
-    if [(t.leaves, t.homogeneous_width()) for _, t in params] != [(1, 32)] or (ret.leaves, ret.homogeneous_width()) != (1, 32):
+    if [(t.leaves, t.homogeneous_width()) for _, t in params] != [(1, 32)] or ret.leaves != 1 or ret.homogeneous_width() > 32:
         raise SystemExit(f"{word.id}: not one 32-bit word to one, so not this script's 2^32 inputs")
     return word, boolean_version(word)
 
@@ -83,7 +90,7 @@ def _chunk(args: tuple[str, str | None, int, int]) -> tuple[int, int, list[tuple
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("fn", choices=("log", "exp", "boolean"))
-    ap.add_argument("word", nargs="?", help="boolean: the ref_prims word primitive whose Boolean version is checked (F32Sqrt)")
+    ap.add_argument("word", nargs="?", help="boolean: the ref_prims word primitive, or a registered one's id, whose Boolean version is checked (F32Sqrt)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--procs", type=int, default=len(os.sched_getaffinity(0)))
     ap.add_argument("--lo", type=lambda s: int(s, 0), default=0)

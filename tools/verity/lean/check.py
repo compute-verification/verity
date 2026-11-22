@@ -171,13 +171,15 @@ class Failure(str):
     leading word, spaces as `-`) and the ``entry`` it is about (a guarantee, a module, a file; None when it is about several
     or the package).  What follows from a failure (`RECORD_DIFFERENCE`, `regenerated`; the fast path's allowances, which name
     it by code and entry) reads those, never its text, so a reworded message changes nothing a Lean check settles.  The
-    report's `failure_codes` and `failure_entries` list them beside `failures`."""
+    report's `failure_codes` and `failure_entries` list them beside `failures`.  ``fix`` is what clears it, where the check
+that found it knows (`verity lean judge` prints it)."""
     code: str
     entry: str | None
+    fix: str | None
 
-    def __new__(cls, code: str, entry: str | None, text: str) -> Failure:
+    def __new__(cls, code: str, entry: str | None, text: str, fix: str | None = None) -> Failure:
         self = super().__new__(cls, text)
-        self.code, self.entry = code, entry
+        self.code, self.entry, self.fix = code, entry, fix
         return self
 
     def __reduce__(self):
@@ -2046,7 +2048,8 @@ def orphan_failures(policy: dict, files: dict[str, str], modules: set[str]) -> l
     for m, rel in sorted(files.items()):
         if m not in modules and not under(exempt, m):
             fails.append(Failure("orphan.file", rel, f"orphan: {rel} is not imported by the roots "
-                                 f"({', '.join(policy['roots'])}) nor under `exempt`: nothing builds or audits it"))
+                                 f"({', '.join(policy['roots'])}) nor under `exempt`: nothing builds or audits it",
+                                 f"add {m} to this lock's `roots`, or import it from a root"))
     for p in sorted(exempt):
         if not any(under([p], m) for m in files):
             fails.append(Failure("orphan.stale-exempt", p, f"orphan: `exempt` lists {p}, which matches no file; remove the entry"))
@@ -2090,7 +2093,8 @@ def layer_failures(policy: dict, modules: set[str], imports: dict[str, list[str]
             for i in imports.get(m, []):
                 if i not in held and (i in own or (reach is not None and i not in reach)):
                     fails.append(Failure("layers.import", m, f"layers: {m} imports {i}, outside {layer}'s layer "
-                                         f"({', '.join(rule['imports'])})"))
+                                         f"({', '.join(rule['imports'])})",
+                                         f"add {i} to {layer}'s `imports` in this lock, or move the import"))
     return fails
 
 
@@ -4484,7 +4488,7 @@ def shares(got: dict, h: dict, read: set[int]) -> bool:
 
 def reaches(function: str, reached: set[str]) -> bool:
     """Whether a statement part that reaches the constants ``reached`` applies ``function``: a constant, or a field of one
-    (`PouwCheck.protocol.check`, the `check` field of the structure `PouwCheck.protocol`), whose path is the longest of its
+    (`PouwVerifier.protocol.check`, the `check` field of the structure `PouwVerifier.protocol`), whose path is the longest of its
     prefixes that is a constant, followed by fields, each a constant with that last component (its projection)."""
     parts = function.split(".")
     for i in range(len(parts), 0, -1):
@@ -5912,12 +5916,14 @@ class Sealed:
         lakefiles the dependency scans read, and the search path mapped to the copies.  The seeds are the package's modules
         under the lock's ``roots`` that are not under an ``exempt`` prefix, the set the build builds and `facts_of` reads:
         an exempt module (a scratch file, a `runs` test) is not built, so seeding it would send `Graph.lean` after an
-        `.olean` that is not there.  Idempotent per package (every copy is copy-once), and safe to call while a dependent
+        `.olean` that is not there.  A root that is itself a module is always a seed, even under an ``exempt`` prefix (an
+        exempt `X` beside a root `X.A`), since `Facts.lean` imports every root by name.  Idempotent per package (every copy is copy-once), and safe to call while a dependent
         builds, since it reads only paths a dependent cannot reach once the first `.olean` is copied: the caller takes it
         before the package's build is announced."""
         self.dir.mkdir(parents=True, exist_ok=True)
         lib = self.pkg / ".lake" / "build" / "lib" / "lean"
-        seeds = sorted(m for m in lean_modules(self.pkg) if under(roots, m) and not under(exempt, m))
+        modules = lean_modules(self.pkg)
+        seeds = sorted({m for m in modules if under(roots, m) and not under(exempt, m)} | {r for r in roots if r in modules})
         if missing := [m for m in seeds if not (lib / Path(*m.split(".")).with_suffix(".olean")).is_file()]:
             it = "it" if len(missing) == 1 else "them"
             raise RuntimeError(f"sealing {self.pkg.name}: no `.olean` for {', '.join(missing)} under the roots "

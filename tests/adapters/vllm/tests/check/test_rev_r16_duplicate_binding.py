@@ -15,7 +15,7 @@ duplicate under a NON-required identity = extra, reported) stay `ok`.
 from __future__ import annotations
 
 from verity_vllm.check.replay.opening import CommittedStore
-from verity_vllm.commit.binding import coverage_check, identity, identity_dict
+from verity_vllm.commit.binding import identity, identity_dict
 
 PD = "ab" * 32
 
@@ -35,13 +35,6 @@ def _population():
     return [identity(PD, "r0", 0, 0, "model.norm", "out", 0, 8, 0)]
 
 
-def test_two_bindings_of_one_required_identity_are_ambiguous_and_coverage_is_not_ok():
-    bm = _bmap([_leaf("model.norm/out", lo=0, hi=8, stream_offset=0), _leaf("model.norm/out#2", lo=0, hi=8, stream_offset=64)])
-    cov = coverage_check(_population(), bm)
-    assert cov["ok"] is False and cov["bound_n"] == 1 and cov["missing_n"] == 0 and cov["physical_copies_n"] == 1
-    assert cov["ambiguous_n"] == 1 and cov["unambiguous"] is False
-    a = cov["ambiguous"][0]
-    assert a["op_path"] == "model.norm" and a["bindings_n"] == 2 and a["bound_at"] == ["model.norm/out@0[0,1)", "model.norm/out#2@64[1,2)"]
 
 
 def test_committed_store_no_longer_reads_the_first_binding_silently():
@@ -68,11 +61,6 @@ def test_committed_store_no_longer_reads_the_first_binding_silently():
     assert w is not None and w.tobytes() == honest and why == "bfloat16"
 
 
-def test_fixed_coverage_refuses_an_ambiguous_binding():
-    """The former strict xfail, flipped."""
-    bm = _bmap([_leaf("model.norm/out", lo=0, hi=8, stream_offset=0), _leaf("model.norm/out#2", lo=0, hi=8, stream_offset=64)])
-    cov = coverage_check(_population(), bm)
-    assert cov["ok"] is False and cov.get("unambiguous") is False
 
 
 def test_fixed_committed_store_names_the_ambiguity():
@@ -83,57 +71,7 @@ def test_fixed_committed_store_names_the_ambiguity():
     assert w is None and "ambiguous" in why
 
 
-def test_ambiguity_is_gated_on_required_identities_and_the_honest_shapes_stay_ok():
-    """(a) a duplicate under a NON-required identity is an extra (reported), not ambiguity; (b) chunked entries with DISJOINT ranges under
-    one key are one binding per element -- coverage of a slice inside one chunk is unambiguous and the store reads the covering chunk;
-    (c) a member `*` requirement is ambiguous when any member of that op is bound twice; (d) a wider and a narrower entry both covering the
-    required range are still two bindings of it."""
-    # (a)
-    bm = _bmap([_leaf("model.norm/out", lo=0, hi=8, stream_offset=0),
-                {**_leaf("x/out", lo=0, hi=8, stream_offset=64), "identity": identity_dict(identity(PD, "r0", 0, 0, "x", "out", 0, 8, 0))},
-                {**_leaf("x/out#2", lo=0, hi=8, stream_offset=128), "identity": identity_dict(identity(PD, "r0", 0, 0, "x", "out", 0, 8, 0))}])
-    cov = coverage_check(_population(), bm)
-    assert cov["ok"] is True and cov["ambiguous_n"] == 0 and cov["unambiguous"] is True and cov["physical_copies_n"] == 1 and cov["extra_n"] == 1
-    # (b)
-    chunks = _bmap([_leaf("model.norm/out", lo=0, hi=4, stream_offset=0), _leaf("model.norm/out.1", lo=4, hi=8, stream_offset=64)])
-    cov = coverage_check([identity(PD, "r0", 0, 0, "model.norm", "out", 0, 4, 0), identity(PD, "r0", 0, 0, "model.norm", "out", 4, 8, 0)], chunks)
-    assert cov["ok"] is True and cov["ambiguous_n"] == 0 and cov["bound_n"] == 2
-    seen = []
-
-    def committed(step, name, lo, hi):
-        seen.append(name)
-        return bytes(range(16))[lo:hi]
-
-    w, why = CommittedStore(chunks, committed).words("r0", 0, "model.norm", "out", 4, 8)
-    assert w is not None and seen == ["model.norm/out.1"] and why == "bfloat16"
-    w, why = CommittedStore(chunks, committed).words("r0", 0, "model.norm", "out", 2, 6)          # spans both chunks: no single covering entry
-    assert w is None and "outside the bound identity range" in why
-    # (c)
-    star = [identity(PD, "r0", 0, 0, "model.norm", "*", 0, -1, 0)]
-    assert coverage_check(star, _bmap([_leaf("model.norm/out", lo=0, hi=8, stream_offset=0)]))["ok"] is True
-    cov = coverage_check(star, _bmap([_leaf("model.norm/out", lo=0, hi=8, stream_offset=0), _leaf("model.norm/out#2", lo=0, hi=8, stream_offset=64)]))
-    assert cov["ok"] is False and cov["ambiguous_n"] == 1
-    # (d)
-    cov = coverage_check(_population(), _bmap([_leaf("model.norm/out", lo=0, hi=8, stream_offset=0), _leaf("model.norm/out.w", lo=0, hi=16, stream_offset=64)]))
-    assert cov["ok"] is False and cov["ambiguous_n"] == 1 and cov["ambiguous"][0]["bindings_n"] == 2
 
 
-def test_duplicate_of_another_identity_does_not_hide_a_missing_one():
-    """The half of the C1 rule that DOES hold today (kept as a regression)."""
-    bm = _bmap([_leaf("model.norm/out", lo=0, hi=8, stream_offset=0), _leaf("model.norm/out#2", lo=0, hi=8, stream_offset=64)])
-    pop = _population() + [identity(PD, "r0", 0, 0, "model.embed_tokens", "out", 0, 8, 0)]
-    cov = coverage_check(pop, bm)
-    assert cov["ok"] is False and cov["missing_n"] == 1 and cov["missing"][0]["op_path"] == "model.embed_tokens"
 
 
-def test_commit_verdict_names_the_ambiguous_binding():
-    """The row verdict reads coverage.ok: an ambiguous binding (all bound, none missing) FAILs with the C1 text naming the identity + copies."""
-    from verity_vllm.check.commit_pass import commit_verdict
-    bm = _bmap([_leaf("model.norm/out", lo=0, hi=8, stream_offset=0), _leaf("model.norm/out#2", lo=0, hi=8, stream_offset=64)])
-    cov = coverage_check(_population(), bm)
-    rec = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64},
-           "binding": {"context": {"ok": True}, "coverage": cov, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": 1}}}
-    ok, why = commit_verdict(rec, True, min_openings=64)
-    assert not ok and why.startswith("identity coverage: 1 of 1 required identities have more than one binding (C1 requires one unambiguous binding; first: step 0 model.norm/out inv 0 req r0 rank 0 bound 2 x at ['model.norm/out@0[0,1)', 'model.norm/out#2@64[1,2)'])"), why
-    ok_cov = coverage_check(_population(), _bmap([_leaf("model.norm/out", lo=0, hi=8, stream_offset=0)]))
-    assert ok_cov["ok"] is True and ok_cov["unambiguous"] is True

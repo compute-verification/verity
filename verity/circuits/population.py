@@ -14,9 +14,7 @@ import bisect
 import hashlib
 import math
 import re
-from array import array
 from collections.abc import Iterator, Mapping
-from itertools import accumulate
 from types import SimpleNamespace
 from typing import Any, Callable, Sequence
 
@@ -24,8 +22,8 @@ from .codec import canonical_json, descriptor_id, register_lazy_family
 from .defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
 from .partition_object import template_instances_query
 from .ports import In, Leaves, Out, Ports, port_types
-from .program import Program, is_input
-from .refs import Affine, Coll, Concat, Grid, Refs, Strided, coll_concat, concat, recut, runs, spell
+from .program import Program
+from .refs import Affine, Coll, Concat, Grid, Refs, Strided, coll_concat, concat, recut, spell
 from .types import Array, RecordType, Tuple, Value
 
 #: The population programs' versions, the builders' default first. v1 names its templates (each one's descriptor id) in its
@@ -173,8 +171,10 @@ def wired_population_program(templates: Sequence[tuple[SpecializedDefinition, in
     circuit record ``record`` as one Program over ``templates``, each ``(template, units)`` as the record names them. Each
     range of the record's order (each template one range where it states none) is a batch; each argument's runs of equal
     rows at one stride are one strided part, and the result is `mixed_population_program`'s. An input row is its wire's writer's output
-    row; a registered or boundary read's, the root parameter named for the value it reads; a table read's,
-    ``<param>/<root or domain>``; an opening's port, ``<table>/<port>`` over the opening's units; any other row, the
+    row; a registered or boundary read's, the root parameter named for the value it reads, a supplied input (with its
+    mark) where the record's ``registered["supplied"]`` names it; a table read's,
+    ``<param>/<root or domain>``; an opening's port, ``<table>/<port>`` over the units of that table's openings in the
+    record's order, each opening's after the one before; any other row, the
     population's own ``<j>.<port>``. The registered values are the first parameters, in order, the rest sorted by name. A
     read into a row of narrower leaves reads its root parameter's leaves recut (`refs.recut`). The Program's
     ``annotations["free"]`` are the rows no wire, read, table read, opening or ingress fills, as the record's ``free``
@@ -269,16 +269,20 @@ def wired_population_program(templates: Sequence[tuple[SpecializedDefinition, in
         for u in range(r["at"], r["at"] + r["units"]):
             for c in range(cut(j, r["port"])):
                 fill(r, j, r["port"], u, c, ("whole", name, None))
+    opened: dict[str, int] = {}
     for o in reg.get("openings", ()):
         j = index[o["reader"]]
         for p in o["ports"]:
-            name = f"{o['table']}/{p}"
-            if name in roots:
-                raise ValueError(f"opening {o}: {name} is opened once")
-            root(name, Array(o["units"], dict(sigs[j][0])[p]))
+            name, t = f"{o['table']}/{p}", dict(sigs[j][0])[p]
+            if name in roots and name not in opened:
+                raise ValueError(f"opening {o}: {name} is named like a read's or a table read's root")
+            off = opened.get(name, 0)
+            if off and roots[name].elem != t:
+                raise ValueError(f"opening {o}: {name} opened as {roots[name].elem!r} and as {t!r}")
+            roots[name], opened[name] = Array(off + o["units"], t), off + o["units"]
             for u in range(o["at"], o["at"] + o["units"]):
                 for c in range(cut(j, p)):
-                    fill(o, j, p, u, c, ("whole", name, u - o["at"]))
+                    fill(o, j, p, u, c, ("whole", name, off + u - o["at"]))
     ingress = {(index[g["reader"]], g["port"], u) for g in record.get("ingress", ()) for u in range(g["at"], g["at"] + g["units"])}
     free = []
     for j, ((ps, _), n) in enumerate(zip(sigs, units)):
@@ -346,99 +350,13 @@ def wired_population_program(templates: Sequence[tuple[SpecializedDefinition, in
                                doc="wired units of " + ", ".join(f"{n} x {t.id}" for t, n in templates), register=False)
     free_rows = [{"reader": t, "port": p, "at": at, "units": n, **({} if rows == (0, cut(index[t], p)) else {"cut": list(rows)})}
                  for t, p, at, n, rows in free]
-    return (Program(bind(defn, **named), annotations={"free": free_rows}),
+    supplied = {v: m for v, m in (reg.get("supplied") or {}).items() if v in dict(params)}
+    return (Program(bind(defn, **named), annotations={"free": free_rows}, supplied=supplied),
             template_instances_query([t for t, _ in templates]))
-
-
-Positions = dict[tuple[str, str, int], dict[str, tuple[array, array]]]
 
 
 def _record_digest(record: Mapping[str, Any]) -> str:
     return hashlib.sha512(canonical_json({k: record[k] for k in WIRED_FIELDS if k in record})).hexdigest()
-
-
-def cut_wires(program: Program, record: Mapping[str, Any]) -> tuple[Program, dict[str, Any], Positions]:
-    """``program``, the `wired_population_program` of ``record``, with every wire cut to an input row of the same leaves
-    and nothing else changed (that builder over ``record`` with no wires), and the wires' positions read off its edges:
-    by (reader, port, row of the record's cuts), each writer tree ``<writer>/o<field>`` the reader's own units and the
-    writer's own units they read (`rows.Binding.reads`). The root names its record by digest alone. Refused (ValueError)
-    by name: cut-input, cut-record, cut-form, cut-return, cut-rows, cut-offset, cut-units, cut-fields."""
-    fn = program.fn
-    if not isinstance(fn, SpecializedDefinition) or (fn.defn.name, fn.defn.version) != ("WiredPopulations", 1):
-        raise ValueError(f"cut-input: {descriptor_id(fn)} is no WiredPopulations_v1, so it has no wires to cut")
-    ids, counts = list(fn.bindings["templates"]), [int(n) for n in fn.bindings["counts"]]
-    if fn.bindings["record"] != _record_digest(record) or [list(x) for x in record.get("templates", ())] != [
-            [t, n] for t, n in zip(ids, counts)]:
-        raise ValueError("cut-record: the record is not the one the wired Program's root names by digest")
-    # the root's body, whose parameters are input nodes: a registered value read recut is read from one (`refs.recut`)
-    body, index, cuts = program.root.body, {t: j for j, t in enumerate(ids)}, record.get("cuts", {})
-    nodes, defs, of = body.nodes, {}, []
-    for k, nd in enumerate(nodes):
-        if is_input(nd.fn):
-            of.append(None)
-            continue
-        j = index.get(descriptor_id(nd.fn)) if nd.form == "batch" else None
-        if j is None:
-            raise ValueError(f"cut-form: root node {k} is a {nd.form} of {descriptor_id(nd.fn)}, not a batch of a template")
-        defs.setdefault(j, nd.fn)
-        of.append(j)
-    if len(defs) != len(ids):
-        raise ValueError(f"cut-form: templates {sorted(set(ids) - {ids[j] for j in defs})} have no root batch")
-    sigs = [defs[j].signature() for j in range(len(ids))]
-    ret = [r.leaves for _, r in sigs]
-    bounds = list(accumulate((n * r for n, r in zip(counts, ret)), initial=0))
-    first, pos = [-1] * len(nodes), 0
-    for s, i, lo, hi in runs(body.ret):
-        j = bisect.bisect_right(bounds, pos) - 1
-        if s != "n" or lo != 0 or hi != nodes[i].out.leaves or of[i] != j or first[i] >= 0 or pos + hi > bounds[j + 1]:
-            raise ValueError(f"cut-return: the root returns ({s}, {i}, {lo}, {hi}) at leaf {pos}, not one batch whole in "
-                             "its template's units")
-        first[i], pos = (pos - bounds[j]) // ret[j], pos + hi
-    if pos != bounds[-1] or min((f for f, j in zip(first, of) if j is not None), default=0) < 0:
-        raise ValueError("cut-return: the root returns no batch once each, in its templates' units")
-    fields = [({o: f for f, o in enumerate(accumulate(ls[:-1], initial=0))}, ls)
-              for ls in ([f.leaves for f in _fields(r)] for _, r in sigs)]
-    got: Positions = {}
-    for k, nd in enumerate(nodes):
-        j = of[k]
-        if j is None:
-            continue
-        for (port, t), arg in zip(sigs[j][0], nd.args):
-            kc = int(cuts.get(ids[j], {}).get(port, 1))
-            if kc < 1 or t.leaves % kc or kc > 1 and not (isinstance(t, Array) and t.n % kc == 0):
-                raise ValueError(f"cut-rows: {ids[j]} {port}: {t!r} in {kc} rows")
-            rl = t.leaves // kc
-            at = 0
-            for s, i, lo, hi in runs(arg.refs):
-                if s == "n" and of[i] is not None:
-                    _wired_rows(got, ids, of, first, fields, ret, k, j, port, kc, rl, at, i, lo, hi)
-                at += hi - lo
-    cut, query = wired_population_program([(defs[j], n) for j, n in enumerate(counts)], {**record, "wires": []})
-    return cut, query, got
-
-
-def _wired_rows(got: dict, ids: list[str], of: list[int | None], first: list[int], fields: list, ret: list[int],
-                k: int, j: int, port: str, kc: int, rl: int, at: int, i: int, lo: int, hi: int) -> None:
-    where = f"{ids[j]} {port}: root node {k}'s leaves [{at}, {at + hi - lo}) read root node {i}'s [{lo}, {hi})"
-    if at % rl or (hi - lo) % rl:
-        raise ValueError(f"cut-rows: {where}, not whole rows of {rl} leaves")
-    w, (starts, lens), mine = of[i], fields[of[i]], {}
-    for t in range((hi - lo) // rl):
-        b, o = divmod(lo + t * rl, ret[w])
-        f = starts.get(o)
-        if f is None:
-            raise ValueError(f"cut-offset: {where}, off {ids[w]}'s field's first leaf")
-        if o + rl > ret[w]:
-            raise ValueError(f"cut-units: {where}, a row across two of {ids[w]}'s units")
-        if lens[f] != rl:
-            raise ValueError(f"cut-fields: {where}, a row of {rl} leaves over {ids[w]}'s field of {lens[f]}")
-        g = at // rl + t
-        to = mine.get((g % kc, f))
-        if to is None:
-            to = mine[g % kc, f] = got.setdefault((ids[j], port, g % kc), {}).setdefault(
-                f"{ids[w]}/o{f}", (array("q"), array("q")))
-        to[0].append(first[k] + g // kc)
-        to[1].append(first[i] + b)
 
 
 def _chunks(parts: Sequence[Refs]) -> Iterator[tuple[int, str, int, int, int]]:
@@ -602,5 +520,5 @@ def population(template: SpecializedDefinition, n: int, *, version: int = 1) -> 
     return bind(defn, **named, N=n)
 
 
-__all__ = ["BitsWord", "POPULATION_VERSIONS", "WIRED_FIELDS", "WordBits", "bit_of", "cut_wires", "leaf_type",
+__all__ = ["BitsWord", "POPULATION_VERSIONS", "WIRED_FIELDS", "WordBits", "bit_of", "leaf_type",
            "mixed_population_program", "population", "population_program", "wired_population_program", "word_of"]

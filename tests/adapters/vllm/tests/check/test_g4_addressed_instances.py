@@ -2,7 +2,7 @@
 (`n_instances`), and the component the Match loads has `RootView._bind_splits` remove a single-request Program's splits constants (one
 `Const32[S]` per top-p select) from its compared sequence.  So G4 compares the address map with the compared sequence plus those bound
 constants (`addressed_instances`).  Workload 101's fifth Match failed G4 by exactly its 32 selects: 46,686 declared, 46,654
-compared; its stored Build is `test_g4_addressed_instances_of_record`.
+compared.
 
 The comparison itself runs on the batched toy of `test_global_match.py`, with the two claims a Build's artifact makes of a
 request's component in the request's entry of the global Program (`declaration.from_gprog` puts them there): the component's

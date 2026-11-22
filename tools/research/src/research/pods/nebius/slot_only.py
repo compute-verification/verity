@@ -3,13 +3,13 @@
 exists (deploy.toml installs it on vy-nebius-cpu-1), stop every live `research run` whose workload did not come through a check slot
 (`through_slot`).
 
-With `--renice N` (vy-nebius-1's vy-direct-nice.timer, marker /etc/vy/direct-runs-nice) it stops nothing: it renices each such
+With `--renice N` (the vy-direct-nice.timer of cpu-4 to cpu-6, marker /etc/vy/direct-runs-nice) it stops nothing: it renices each such
 run's processes to N, so the candidates' checks' slots win the cores over lanes' direct runs, and logs each run once, when it is first
 reniced.
 
 With `--auditor` (an auditor device's vy-auditor-only.timer, marker AUDITOR), it stops every live run whose command is not one of the
 marker's lines (`auditor_allows`): the host runs the auditor's own service and nothing else (AGENTS.md's auditor-trusted devices;
-vy-challenger-1's marker lists no command, since its challenger runs as `auditor` through verity/protocols/compose/verifier/live_challenger/auditor.py).
+vy-challenger-1's marker lists no command, since its challenger runs as `auditor` through verity/protocols/run/verifier/live_challenger/auditor.py).
 
 A run outside slot.py lands beside the slots' checks without their lock or cores, and a few such runs take the slice to its
 memory limit beside a merge check. research.remote's launcher refuses such a run before it starts; this
@@ -54,7 +54,7 @@ POOL = re.compile(r"CHECK_SLOTS=/workspace/research/locks/[A-Za-z0-9_-]+/slots")
 LOCKS, POOL_NAME = "/workspace/research/locks", re.compile(r"[A-Za-z0-9_-]+")
 #: `research run --pool NAME`'s pools: `research` is any lane's research runs, where `research run --on auto` spills
 #: (cpu-1's /workspace/research/locks/research/slots: 8-53, cores no check slot holds), `proofs` is proofs' Lean pool,
-#: `network` is network-accounting's proving pool (cpu-1, cpu-2, cpu-4, cpu-5 and node 1 hold one), `soundness` is soundness's
+#: `network` is network-accounting's proving pool (cpu-1, cpu-2, cpu-4 and cpu-5 hold one), `soundness` is soundness's
 #: Lean pool (cpu-4, s0-s11)
 POOLS = {"research": "/workspace/research/locks/research/slots", "proofs": "/workspace/research/locks/proofs/slots",
          "network": "/workspace/research/locks/network/slots", "soundness": "/workspace/research/locks/soundness/slots"}
@@ -77,7 +77,7 @@ def in_pool(pool: str, lane: str, command: list[str], run_max: float | None = No
     (`late_twin`)."""
     if not POOL_NAME.fullmatch(pool):
         raise ValueError(f"no pool {pool!r}: a pool is a name of letters, digits, '_' or '-' (the pools every node may have are "
-                         f"{', '.join(sorted(POOLS))}; a node's own, as node 1's leanrec, are under {LOCKS})")
+                         f"{', '.join(sorted(POOLS))}; a node's own are under {LOCKS})")
     if slot is not None and not POOL_NAME.fullmatch(slot):
         raise ValueError(f"--slot {slot!r}: a slot's name is letters, digits, '_' or '-', as its pool's slots file names it")
     limit = ["--wait-max", f"{wait_s:g}", "--run-max", f"{run_max:g}"] if run_max else []

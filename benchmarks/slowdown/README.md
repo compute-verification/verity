@@ -64,7 +64,7 @@ uv run python benchmarks/slowdown/periods.py --bounds min-cut --scenario referen
   `measured`, `declared`, `assumed`, `ruled`, `conjecture`, `derived`). What another file states is read from it,
   never restated in a file (`params.sourced`). From `verity`: the monitoring periods; the output bits an accepted
   incorrect proof block injects (`step_bits`), the widest public size class of a block's outputs, a power of two from
-  16 to 262,144 bits (`verity.circuits.partition_v2`); the per-execution-phase δ (`verity.protocols.proofs.spot.verifier.profile`),
+  16 to 262,144 bits (`verity.circuits.partition_v2`); the per-execution-phase δ (`verity.protocols.proof.spot.verifier.profile`),
   once for an execution phase's coins and for SPOT's sample and, assumed, twice for the phase's cryptography (PoUW's binding and
   knowledge soundness, neither with a bound); and the reporting δs the incorrect-outputs row reports at. From
   `benchmarks/nci/calibrations.json`: the calibrated policy's `K`, with the least and the
@@ -141,7 +141,7 @@ class's own. `--set bounds.lock_only=false` admits every bound whose premises ar
 (`min_cut.HE`, `min_cut.HE_SHARED`, `min_cut.HE_CHARGED`), each function one side of an inequality they conclude or
 that inequality solved for one term; it is standard library only, so another benchmark loads it by path. The lock
 lists a proof of each of the three. A work of `N` MACs with `O` output wires needs at
-least `m` blocks of at most `k` fresh input bits with `N ≤ m (k + F α) + F (k/2) √(m O / q)`, `α = ½ √(k³ / (q b))`,
+least `m` blocks of at most `k` unregistered input bits with `N ≤ m (k + F α) + F (k/2) √(m O / q)`, `α = ½ √(k³ / (q b))`,
 under (H) at `q = β_w β_x` and (E) at `b` (`training-cut-hardness`, `training-cut-exports`: conjectures).
 
 - `min_cut.bound(c, k, n, N=…, O=…, size=…)` is the bound at a policy `(c, k, n)` on a circuit's own MACs, output

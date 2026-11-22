@@ -39,6 +39,7 @@ the lock's sections, each naming the docstring with the detail. This is the work
   axiom probe's. After editing a file others import, `lake build` its module, then try an importer. Try one that adds
   or renames declarations with `--siblings --on auto` too: a name another module declares otherwise clashes first at
   the package root, an hour into a records run.
+- **Before a merge, `verity lean judge`** (seconds, no build): what the audit refuses before any build.
 - **Build on a CPU machine.** Never `lake update` or change an external dependency (a git `require` or its revision,
   Mathlib, ArkLib, `lean-toolchain`) in a feature PR; a `path` require between in-repo packages that AGENTS.md "Lean"
   allows may go in one, in its own commit with the regenerated `lake-manifest.json`, the requires acyclic. The full
@@ -114,8 +115,7 @@ the lock's sections, each naming the docstring with the detail. This is the work
 
 ## Standards
 
-The checks in `tests/test_lean_packages.py`, `tests/test_retired_terms.py` and `tests/lint/test_lean_bar.py` print their
-fixes. Two they don't hold: Mathlib's names, and no binder `X` or `Y` where ArkLib is imported (its `notation3 "X"` and
+The checks in `tests/test_lean_packages.py` and `tests/lint/test_lean_bar.py` print their fixes. Two they don't hold: Mathlib's names, and no binder `X` or `Y` where ArkLib is imported (its `notation3 "X"` and
 `"Y"` make each a token, and the parse error lands far from the binder).
 
 ## Before the PR

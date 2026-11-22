@@ -11,12 +11,7 @@ from verity.circuits import word as W_
 
 from tests.check.test_sampled_replay_v2_addresses import _tp_rank_program, _v2_manifest
 from tests.properties.vocab_range_exactness import edge_ids, ir_values
-from verity_vllm.acquire import plan
-from verity_vllm.check import oracle_compare as OC
-from verity_vllm.check.replay import coverage
-from verity_vllm.query import program_view as PV
 from verity_vllm.query import vocab_range as VR
-from verity_vllm.query.manifest import format as fmt
 
 V, VS = 16, 8
 
@@ -69,10 +64,3 @@ def test_manifest_sites_refuses_two_ranges_at_one_site():
         VR.manifest_sites(man)
 
 
-def test_the_family_is_in_every_vocabulary():
-    assert VR.FAMILY in fmt.FAMILIES and plan.ROUTE_OF_FAMILY[VR.FAMILY] == "vocab_tap" and VR.FAMILY in coverage.QUERY_FAMILY_MECHANISM
-    entry = {"identity": {"op_path": "model.embed_tokens", "output_member": VR.MEMBER}, "name": f"model.embed_tokens/{VR.MEMBER}"}
-    assert OC._family_of(entry) == "hidden_stream"
-    g = {"family": "EmbeddingShard_v1", "statics": {"VS": 8, "H": 32, "START": 8}, "definition": "EmbeddingShard_v1{VS=8,H=32,START=8}",
-         "calls": 3, "where": "model.embed_tokens"}
-    assert W_.check_calls([g], acquired=VR.TAP_WORDS, specialize=PV.specialization)["acquired_interior_words"] == 9

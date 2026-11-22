@@ -44,19 +44,17 @@ def _served(ep=EP):
     return info, b
 
 
-def _serve_arm(d, name, w, bits, advice_root, *, forged=False, before_draw=None):
+def _serve_arm(d, name, w, bits, advice_root, *, before_draw=None):
     """A `--serve-run` arm of the endpoint's Commit window ``w`` whose committed advice has root ``advice_root`` and v0
     bit count ``bits``, and whose rank's `advice_before_draw` is ``before_draw`` (absent when None). Its serve detail
     self-declares the endpoint's own (public) run id and root for ``w``."""
     c = next(x for x in chain._jsonl(EP / "windows.jsonl") if int(x["window"]) == w)
     adv = {"root": advice_root, "bits": bits}
-    rank = {"ok": True, "audit": {"accepted": not forged, "wrong_units": None if forged else {"bound": 3}},
+    rank = {"ok": True, "audit": {"accepted": True, "wrong_units": {"bound": 3}},
             "population": 10, "draw": [1, 2], "seconds": 1.5, "source": "stand-in", "negatives": {"a": True}}
-    if forged:
-        rank["forged"] = {"ok": True}
     if before_draw is not None:
         rank["advice_before_draw"] = {"ok": before_draw}
-    s = {"ok": True, "forged": forged, "world": 1, "advice": adv, "ranks": {"0": rank}, "run_root": c["run_root"],
+    s = {"ok": True, "forged": False, "world": 1, "advice": adv, "ranks": {"0": rank}, "run_root": c["run_root"],
          "serve": {"ok": True, "codes": [], "window": w,
                    "detail": {"window": w, "run_id": c["run_id"], "published_root": c["run_root"], "advice": adv}}}
     (d / name).mkdir(parents=True)
@@ -104,13 +102,12 @@ def test_the_content_tie_is_opens_and_every_adopted_arm_takes_it(tmp_path):
     forged, apart = _apart(tmp_path / "reg-forged", 1, other), _apart(tmp_path / "reg-apart", 1)
     for name, root in (("forged", forged), ("apart", apart)):
         _serve_arm(tmp_path / name, "served", 1, cnt, root)
-        _serve_arm(tmp_path / name, "served-forged", 1, cnt, root, forged=True)
     g = chain.prove_path([tmp_path / "forged"], info, b["bound"], b, EP,
                          {"1": {"by": "the lane", "registration": str(tmp_path / "reg-forged")}})
     c = g["arms"]["w1 served"]["commit"]
     assert g["bound"] is False and g["tied"] is False and (c["the_registered_root"], c["opens"]) == (True, False)
     assert g["tied_why"].startswith(f"w1 served: the registration's opening at {tmp_path / 'reg-forged'} doesn't "
-                                    "open its root to the report's advice of Commit window 1;")
+                                    "open its root to the report's advice of Commit window 1")
     g = chain.prove_path([tmp_path / "apart"], info, b["bound"], b, EP,
                          {"1": {"by": "the lane", "registration": str(tmp_path / "reg-apart")}})
     assert g["bound"] is True and g["tied"] is True and g["arms"]["w1 served"]["commit"]["opens"] is True

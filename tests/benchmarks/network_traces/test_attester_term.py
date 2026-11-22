@@ -42,7 +42,7 @@ HERE = ((Path(__file__).resolve().parents[3] / "benchmarks" / "network_traces"))
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(HERE))
 import leak_bounds as LB  # noqa: E402
-from verity.protocols.resource_accounting.network.prover import ingress_scan as IS  # noqa: E402
+from verity.protocols.accounting.network.prover import ingress_scan as IS  # noqa: E402
 
 #: a link's execution phases of 128 s over a week, a month and a year
 PHASES = {"week": 4_725, "month": 20_250, "year": 246_375}
@@ -419,7 +419,8 @@ def test_the_scale_is_read_from_the_files_and_every_input_is_marked():
     fleet = tomllib.loads((ROOT / LB.SLOWDOWN).read_text())["fleet"]["world-h200"]
     card = json.loads((ROOT / LB.WORKLOAD).read_text())
     census = next(e for e in json.loads((ROOT / LB.ADVERSARY).read_text()) if e["id"] == "world-inference-2027")
-    peak = next(e for e in json.loads((ROOT / LB.HARDWARE).read_text()) if e["id"] == LB.PEAK)
+    peak = next(r for e in json.loads((ROOT / LB.HARDWARE).read_text()) if e["id"] == LB.PEAK
+                for r in e["readings"] if r["name"] == LB.READING)
     assert inp["world_machines"].value == LB.world_links() == fleet["count"]["value"] == 46_870_000
     assert inp["datacenter_machines"].value == LB.datacenter_links() == 12_500 and inp["machine_gpus"].value == 8
     assert (inp["mfu_serve"].value, inp["mfu_serve"].mark) == (fleet["mfu_serve"]["value"], "assumed")
@@ -452,7 +453,7 @@ def test_the_counts_schedule_is_the_cost_runners_by_default_and_each_part_is_an_
     defaults are that runner's own, read here from its parser: six classes and a delay of 30 buckets, which its
     ingress buckets equal; its 16 lanes and its execution phase of 600 buckets are the schedule the command prints
     the count at beside its own."""
-    from verity.protocols.resource_accounting.network.attester import connection_rows_run as CR
+    from verity.protocols.accounting.network.attester import connection_rows_run as CR
     cost = CR.parser().parse_args(["cost", "--out", "x"])
     assert (len(CR.CLASSES), cost.delay, cost.lanes, cost.window) == (6, 30, 16, 600)
     assert (LB.CLASSES, LB.DELAY, LB.COST_LANES, LB.COST_BUCKETS) == (6, 30, 16, 600)

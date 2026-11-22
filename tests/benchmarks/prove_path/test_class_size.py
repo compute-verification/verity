@@ -2,7 +2,7 @@
 
 * the lowering projected from a probe of 3 positions is, template for template, TINY's exact lowering at a class of 7
   positions (`window_circuit.class_circuit`) and at a class of two lanes (its scan state row another): every template but
-  the heads is a fixed count a position, `TokenFeed_v1` one a prompt position past the first, `ScanSlots_v3` and
+  the heads is a fixed count a position, `TokenFeed_v1` one a prompt position past the first, `ScanSlots_v5` and
   `SelectEntry_v1` one a Program and `SelectCollect_v1` one at every other position;
 * so it is for int8 Llama-3.2-1B on the H200, whose first blocks read a key's value as slices (`AttnBlockFirst_v2`);
 * v19's heads, at a block of 3 keys: a head over T keys is its first block, ceil(T / 3) - 1 full ones (none
@@ -49,7 +49,7 @@ def _registered(config: dict) -> Registered:
 
 def _project(probe: dict[str, int], at: WindowClass, cls: WindowClass) -> dict[str, int]:
     """`class_size.project` with what the adapter hands it: the class's scan binding's label and FA2's first guarded block."""
-    return CZ.project(probe, at, cls, CZ.label(SS.bridge(cls.scan, cls.prompt)), lambda T, BN: fa2_masked_from(T, 1, 0, BN, False))
+    return CZ.project(probe, at, cls, CZ.label(SS.bridge(cls.scan, cls.prompt)[0]), lambda T, BN: fa2_masked_from(T, 1, 0, BN, False))
 
 
 def _census(cls: WindowClass, config: dict = TINY, grain: Grain = GRAIN) -> dict[str, int]:
@@ -60,7 +60,7 @@ def test_the_lowering_projected_from_a_probe_is_the_exact_lowering_at_a_larger_c
     probe, at, two = _census(PROBE), WindowClass(1, 5, 3), WindowClass(2, 5, 3)
     assert PROBE.positions == 3 and at.positions == 7
     assert _project(probe, PROBE, at) == _census(at)
-    assert _project(probe, PROBE, two) == _census(two) and "ScanSlots_v3{NS=4550,NP=5,IDB=17,K0=12,K=45}" in _census(two)
+    assert _project(probe, PROBE, two) == _census(two) and "ScanSlots_v5{NS=4550,NP=5,IDB=17,K0=12,K=45}" in _census(two)
 
 
 def test_first_blocks_of_value_slices_project_as_the_exact_lowering():
@@ -110,10 +110,10 @@ def test_size_prices_the_measured_units_and_refuses_the_unmeasured(monkeypatch):
     with pytest.raises(ValueError, match=r"Foo_v1\{\} \(2\^28\): an instance needs a block past 2\^27 bits"):
         CZ.size({"Gemm_v2{K=2048,N=1}": 4, "Foo_v1{}": 2}, SOURCES)
     assert [CZ.measured(f"TokenFeed_v1{{NP={n},FIRST=false}}", SOURCES)[:2] for n in (1024, 2048)] == [(62, 23), (62, 24)]
-    assert [CZ.measured(lab, SOURCES)[:2] for lab in ("ScanSlots_v3{NS=9353,NP=1024,IDB=17,K0=12,K=45}",
+    assert [CZ.measured(lab, SOURCES)[:2] for lab in ("ScanSlots_v5{NS=9353,NP=1024,IDB=17,K0=12,K=45}",
                                              "OutCollect_v1{KO=64,FIRST=true}", "OutCollect_v1{KO=64,FIRST=false}",
                                              "SlotEntry_v1{KO=64,IDB=17,NP=1024}")] == [
-        (120, 24), (155, 22), (2_141, 22), (5_676, 22)]
+        (30, 22), (155, 22), (2_141, 22), (5_676, 22)]
     assert [CZ.measured(lab, SOURCES)[:2] for lab in ("SelectCollect_v1{V=128256,C=16,KO=64,FIRST=true}",
                                              "SelectCollect_v1{V=128256,C=16,KO=64,FIRST=false}",
                                              "SelectEntry_v1{V=128256,C=16,KO=64,FIRST=false,IDB=17,NP=1024}")] == [

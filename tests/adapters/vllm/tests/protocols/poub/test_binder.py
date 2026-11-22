@@ -15,18 +15,18 @@ if TYPE_CHECKING:
 else:
     torch = pytest.importorskip("torch")
 
-from verity.protocols.resource_accounting.memory.poub.prover.node_store.interface import (
+from verity.protocols.accounting.memory.poub.prover.node_store.interface import (
     Append,
     WindowRecord,
 )
-from verity.protocols.resource_accounting.memory.poub.prover.node_store.registry import (
+from verity.protocols.accounting.memory.poub.prover.node_store.registry import (
     NodeMemory,
     PoubReceipt,
     chain,
 )
-from verity.protocols.resource_accounting.memory.poub.prover.node_store.verify import verify_opening
-from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec, memory_map
-from verity.protocols.resource_accounting.memory.poub.verifier import receipts as rb
+from verity.protocols.accounting.memory.poub.prover.node_store.verify import verify_opening
+from verity.protocols.accounting.memory.poub.verifier import audit, codec, memory_map
+from verity.protocols.accounting.memory.poub.verifier import receipts as rb
 from verity.hooks import RangeAllocated, RangeFreed, RangeWritten, StepBegan, StepEnded
 
 from tests import fake_vllm
@@ -35,7 +35,7 @@ from verity_vllm import messages
 from verity_vllm.engine import admission, kv_blocks
 from verity_vllm.engine.hooks import live
 from verity_vllm.engine.kv_blocks import KERNEL_BLOCK_SIZES
-from verity.protocols.resource_accounting.memory.poub.prover.binder import (
+from verity.protocols.accounting.memory.poub.prover.binder import (
     Binder,
     Every,
     Inbox,

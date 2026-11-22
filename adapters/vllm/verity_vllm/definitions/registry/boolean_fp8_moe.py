@@ -1,8 +1,6 @@
 """`fp8_moe`'s block-scaled FP8 expert GEMMs on bits: version 2 of each, its word body line for line over Boolean Definitions, so each
 one's word view is its `_v1` composite at the same statics (`elementwise.on_bits`).
 
-    MoeExpertFp8BlockCoordinate_v2{K,G,KB,SWAP}, MoeExpertFp8BlockCoordinateW_v2{K,G,KB,SWAP}
-
     SiluMulFp8BlockQuantResult_v2, SiluMulFp8BlockQuantGroup_v2{G}, SiluMulFp8BlockQuant_v2{I,G}
 
     MoeExpertFp8BlockCoordinate(W)_v4{K,G,KB,SWAP,DOT}, MoeExpertFp8BlockGemm(W)_v4{K,N,G,KB,SWAP,DOT}
@@ -49,33 +47,9 @@ E4M3 = Array(8, BL.BIT)
 I32 = Array(32, BL.BIT)
 
 
-def _acc(B, S, xq, sx, wrow, sw, dot=BG.HopperE4m3QgmmaDot32):
+def _acc(B, S, xq, sx, wrow, sw, dot):
     c = _Bits(B)
     return M.triton_block_acc(B, S.K, S.G, S.KB, S.SWAP, xq, sx, wrow, sw, lambda: c.word(0, 32), dot, SC.F32Mul, SC.F32Fma)
-
-
-def _coordinate(B, S, xq, sx, wrow, sw):
-    """`MoeExpertFp8BlockCoordinate_v1`'s body on bits."""
-    return B.call(BG.F2fpBf16, _acc(B, S, xq, sx, wrow, sw))
-
-
-MoeExpertFp8BlockCoordinateV2 = EW.on_bits(
-    "MoeExpertFp8BlockCoordinate", 2, ["K", "G", "KB", "SWAP"],
-    lambda S: ((("xq", Array(S.K, E4M3)), ("sx", Array(S.K // S.G, F32)), ("wrow", Array(S.K, E4M3)), ("sw", Array(S.K // S.G, F32))),
-               BF16),
-    _coordinate, M.MoeExpertFp8BlockCoordinate)
-
-
-def _coordinate_w(B, S, xq, sx, g, wrow, sw):
-    """`MoeExpertFp8BlockCoordinateW_v1`'s body on bits: the accumulator times the routed weight, then the cast."""
-    return B.call(BG.F2fpBf16, B.call(SC.F32Mul, _acc(B, S, xq, sx, wrow, sw), g))
-
-
-MoeExpertFp8BlockCoordinateWV2 = EW.on_bits(
-    "MoeExpertFp8BlockCoordinateW", 2, ["K", "G", "KB", "SWAP"],
-    lambda S: ((("xq", Array(S.K, E4M3)), ("sx", Array(S.K // S.G, F32)), ("g", F32), ("wrow", Array(S.K, E4M3)),
-                ("sw", Array(S.K // S.G, F32))), BF16),
-    _coordinate_w, M.MoeExpertFp8BlockCoordinateW)
 
 
 def _coordinate_dot(B, S, xq, sx, wrow, sw):

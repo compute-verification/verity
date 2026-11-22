@@ -1,12 +1,15 @@
 module
 
 public import Definitions.Core.LevelsCredited
+public import Mathlib.Analysis.SpecialFunctions.Log.Basic
 
 /-!
 # A scheme: what a resource accounting protocol supplies, and what it gets back
 
-A resource accounting protocol is to state its guarantee through these and define none of its own. No guarantee is proved
-through an instance yet: each still stands in its own form.
+A resource accounting protocol is to state its guarantee through these and define none of its own. Three protocols state
+an instance: Pearl+, PoUB's remote route and the network attester. The network attester's `PhaseGetsBack` is proved
+through its instance; PoUB's remote route's `PaidGetsBack` is stated and not proved, and no guarantee is stated through
+Pearl+'s.
 
 * `Scheme`: what a protocol supplies to the proof layers. Its blocks, the units the audit samples; each block's
   cost, the resource it stands for; its charges, the resource it can't tie to a block; the runs the verifier
@@ -30,17 +33,21 @@ through an instance yet: each still stands in its own form.
 * `Scheme.GetsBack`: what a scheme gets back from the audit, a named `Prop`. At cutoff `δ`, an accepted run whose
   log meets the scheme's conditions has `over` above `under` by more than the missable cost under its own design plus
   the charges with probability at most `δ` plus the audit's error plus the scheme's own term.
-* `Scheme.AccountingLayer`: the accounting layer's theorem, stated. For every scheme, `AuditBound` at its accepted
-  runs and incorrect blocks, with its break event bounded by its own term, gives `GetsBack` at every cutoff.
-* `Scheme.GetsBackPeriod`, `Scheme.PeriodLayer`: the same over a period of execution phases, by the union bound over
-  the phases: the probability is `T` times one phase's, and the phases' provers may adapt to one another.
+* `Scheme.AccountingLayer`: the accounting layer's theorem, proved (`Scheme.accountingLayer`). For every scheme,
+  `AuditBound` at its accepted runs and incorrect blocks, with its break event bounded by its own term, gives
+  `GetsBack` at every cutoff.
+* `Scheme.GetsBackPeriod`, `Scheme.PeriodLayer` (proved, `Scheme.periodLayer`): the same over a period of execution
+  phases, by the union bound over the phases: the probability is `T` times one phase's, and the phases' provers may
+  adapt to one another.
+* `Scheme.GetsBackPeriodRate`: over a period at a rate, the missable cost once for the whole period, every phase
+  accepted.
 * `Scheme.Placed`: a scheme's blocks placed in a circuit, each block its gate set. `Placed.credited` is the credited
   set the levels setting and the integrity profile take, and `Placed.Unsplit` says it is credited unsplit
   (`Levels.CreditedUnsplit`): each block is a block of the first level and of every later one.
 
 A scheme names no level, no commitment and no duration: the audit decides which values its blocks open, and the
 probability `pr` is the audit game's, over any prover. The code's interface is
-`verity.protocols.resource_accounting.scheme` (`Scheme`, `Bound`), whose names these are.
+`verity.protocols.accounting.scheme` (`Scheme`, `Bound`), whose names these are.
 -/
 
 @[expose] public section
@@ -102,9 +109,10 @@ design takes `fun _ => L`. -/
 def GetsBack (S : Scheme) (L : S.Run → SamplingDesign S.Block) (pr : (S.Run → Prop) → ℝ≥0∞) (δ ε : ℝ≥0∞) : Prop :=
   pr (fun r => S.accepts r ∧ S.logOK r ∧ S.under r + S.missable (L r) δ + S.charges < S.over r) ≤ δ + ε + S.δscheme
 
-/-- **The accounting layer's theorem** (stated). For every scheme, sampling design of each run and probability on its
-runs that is monotone and subadditive: the audit's bound at the scheme's accepted runs and incorrect blocks, and the
-scheme's break event bounded by its own term, give what the scheme gets back at every cutoff. -/
+/-- **The accounting layer's theorem**, proved by `Scheme.accountingLayer`. For every scheme, sampling design of each
+run and probability on its runs that is monotone and subadditive: the audit's bound at the scheme's accepted runs and
+incorrect blocks, and the scheme's break event bounded by its own term, give what the scheme gets back at every
+cutoff. -/
 def AccountingLayer : Prop :=
   ∀ (S : Scheme) (L : S.Run → SamplingDesign S.Block) (pr : (S.Run → Prop) → ℝ≥0∞) (ε : ℝ≥0∞),
     (∀ p q : S.Run → Prop, (∀ r, p r → q r) → pr p ≤ pr q) →
@@ -121,10 +129,11 @@ def GetsBackPeriod (S : Scheme) (L : S.Run → SamplingDesign S.Block) {R : Type
   pr (fun r => ∃ t, S.accepts (phase t r) ∧ S.logOK (phase t r) ∧
       S.under (phase t r) + S.missable (L (phase t r)) δ + S.charges < S.over (phase t r)) ≤ T * (δ + ε + S.δscheme)
 
-/-- **The accounting layer over a period** (stated). For every scheme and probability on a period's runs that is
-monotone, subadditive and zero on the empty event: what the scheme gets back at each execution phase, the probability
-read through that phase, gives what it gets back over the period. The phases' provers may adapt to one another: each
-phase's bound is over every prover, and the period's is their union bound, with no product of the phases' designs. -/
+/-- **The accounting layer over a period**, proved by `Scheme.periodLayer`. For every scheme and probability on a
+period's runs that is monotone, subadditive and zero on the empty event: what the scheme gets back at each execution
+phase, the probability read through that phase, gives what it gets back over the period. The phases' provers may adapt
+to one another: each phase's bound is over every prover, and the period's is their union bound, with no product of the
+phases' designs. -/
 def PeriodLayer : Prop :=
   ∀ (S : Scheme) (L : S.Run → SamplingDesign S.Block) (R : Type) (T : ℕ) (phase : Fin T → R → S.Run)
     (pr : (R → Prop) → ℝ≥0∞) (δ ε : ℝ≥0∞),
@@ -132,6 +141,17 @@ def PeriodLayer : Prop :=
     (∀ p q : R → Prop, pr (fun r => p r ∨ q r) ≤ pr p + pr q) →
     pr (fun _ => False) = 0 →
     (∀ t, S.GetsBack L (fun p => pr fun r => p (phase t r)) δ ε) → S.GetsBackPeriod L T phase pr δ ε
+
+/-- **What a scheme gets back over a period at a rate** `NUM/DEN` per unit of cost: at cutoff `δ`, every one of the
+period's `T` execution phases is accepted with a log that meets the conditions while, summed over the phases, `over`
+exceeds `under` by more than `⌊ln(1/δ) · DEN/NUM⌋` plus `T` times the charges, with probability at most
+`δ + ε + T · δscheme`, `ε` the phases' audit errors summed. The missable cost enters once for the whole period, not
+once a phase as in `GetsBackPeriod`. The period is accepted only when every phase is: a rejected phase ends it. -/
+def GetsBackPeriodRate (S : Scheme) {R : Type} (T : ℕ) (phase : Fin T → R → S.Run) (pr : (R → Prop) → ℝ≥0∞)
+    (num den : ℕ) (δ ε : ℝ≥0∞) : Prop :=
+  pr (fun r => (∀ t, S.accepts (phase t r) ∧ S.logOK (phase t r)) ∧
+      ∑ t, S.under (phase t r) + ⌊Real.log δ.toReal⁻¹ * den / num⌋₊ + T * S.charges < ∑ t, S.over (phase t r)) ≤
+    δ + ε + T * S.δscheme
 
 /-- **A scheme placed in a circuit** with gates `G`: each block's gate set, two blocks never the same set. -/
 structure Placed (S : Scheme) (G : Type) where

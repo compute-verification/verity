@@ -45,7 +45,7 @@ case " $ARMS " in *" pearl-c-linears "*)
   command -v lake > /dev/null || export PATH="$HOME/.elan/bin:$PATH"
   command -v lake > /dev/null || { echo "h200.sh: lake isn't on PATH (nor in $HOME/.elan/bin), and pearl-c-linears' coins" \
     "come from the Lean verifier (pouw-verifier-difftest): install elan (tools/verity/lean/setup.sh)" >&2; exit 3; }
-  (cd verity/protocols/resource_accounting/compute/pouw/verifier/lean/check && lake build pouw-verifier-difftest) \
+  (cd verity/protocols/accounting/compute/pouw/verifier/lean/check && lake build pouw-verifier-difftest) \
     > "$OUT/logs/lean-coins-build.log" 2>&1 || { echo "h200.sh: pouw-verifier-difftest failed to build (its log is" \
     "$OUT/logs/lean-coins-build.log)" >&2; exit 1; } ;;
 esac

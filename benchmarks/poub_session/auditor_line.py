@@ -18,7 +18,7 @@ names it (`audit.AuditRun.close` asks for the coin after the window's last root)
 k-th root (its boundary leaves before it), so that request leaves as the root arrives; for k = 1, chal_(g+2)'s request
 names the same root too. At one window in flight (`audit.Pace.in_flight` 1) chal_(g+1)'s request names it and openings
 coin g's leaves once chal_(g+1) is back, so this reading, which doesn't take f, ends L_g about a round trip to the
-challenger past s_(g+1). Sampled G > 1 windows a coin (`groups_per_coin`), openings coin c's request names only the last
+challenger past s_(g+1). Sampled G > 1 windows a coin (`groups_per_coin`), sample's coins c's request names only the last
 root of sample c's last window, and another window's A_g is the first request that leaves after its last root,
 chal_(g+2)'s at the earliest, which above k = 1 names a root of window g + 1 and so ends L_g later than the window did.
 Both times are the challenger's monotonic clock in its release log, whose lines its close signs
@@ -57,7 +57,7 @@ ledger's windows and periods (`periods_answer`, past `verify_ledger` and `verify
 
 - *credited*: its window reads through `challenger.credited_session` (its pin first, as *pinned* reads it) with the
   descriptor of the verifier that ran it, `<audit.PROTOCOL_ID> verifier tree <tree>`, `<tree>` being
-  `git rev-parse COMMIT:verity/protocols/resource_accounting/memory/poub/verifier` of the run's recorded commit (`--commit`), so it counts
+  `git rev-parse COMMIT:verity/protocols/accounting/memory/poub/verifier` of the run's recorded commit (`--commit`), so it counts
   only toward a period that committed that verifier; and that commit is on the auditor's first-parent list
   of main (`--main`), as the challenger host's pin must be, so the verdict is that of a tree main's check ran on. A host
   run's request.json beside OUT records the commit its verifier ran at (`pinned`), and a `--commit` other than it is
@@ -153,16 +153,16 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1]))
 
-from verity.protocols.resource_accounting.memory.poub.verifier.session import lean_verifier as lv  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier.session import verifier as V  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier.poub_session import verifier_process as VP  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier.session import wire  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier import audit, coins, ledger, line, pooled, timing  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier.session import lean_verifier as lv  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier.session import verifier as V  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier.poub_session import verifier_process as VP  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier.session import wire  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier import audit, coins, ledger, line, pooled, timing  # noqa: E402
 from verity.device import load_node, number  # noqa: E402
 from verity.protocol import no_bound  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier import store as rstore  # noqa: E402
-from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch  # noqa: E402
-from verity.protocols.proofs.spot.verifier.challenger import remote  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier import store as rstore  # noqa: E402
+from verity.protocols.proof.spot.verifier.challenger import challenger as Ch  # noqa: E402
+from verity.protocols.proof.spot.verifier.challenger import remote  # noqa: E402
 
 import sheets  # noqa: E402
 
@@ -179,7 +179,7 @@ BURSTS = ("stated", "none")
 (`verifier.ingress_bursts`), or none, the reading of gate runs up to 7, whose recorded lines it reproduces at the S_chip
 they were recorded at (`test_auditor_line_lean`; a burst of 0 states the rate down to one nanosecond)."""
 LANE = "memory-accounting"
-VERIFIER_TREE = "verity/protocols/resource_accounting/memory/poub/verifier"
+VERIFIER_TREE = "verity/protocols/accounting/memory/poub/verifier"
 LEAN_VERDICTS = ("lean", "both")
 CHECKS = ("credited", "complete", "accepted", "pinned")
 """What a session's credit needs, each reported per session in this order."""
@@ -299,32 +299,33 @@ def release_log(lines: list[str]) -> dict[str, dict[str, list]]:
 def auditor_seen(lines: list[str], seen: list[dict], per_coin: int = 1) -> tuple[list[dict], dict]:
     """`seen` (a session's `windows_seen`) with each group's coin and last root on the challenger's clock: `released_ns`
     challenge coin g's release, `arrivals_ns` the first receipt of the requests that name the window's last root by
-    their place, openings coin g's and, when it names the same root, chal_(g+2)'s; and which family's came first. Both
+    their place, sample's coins g's and, when it names the same root, chal_(g+2)'s; and which family's came first. Both
     leave only once that root has come, so a root the prover repeats can't make A_g early, as an earlier request
     naming the same value (chal_(g+1)'s, or another window's) would.
 
-    Sampled `per_coin` G > 1 windows a coin (`groups_per_coin`), only a sample's last window closes, so openings coin c's
+    Sampled `per_coin` G > 1 windows a coin (`groups_per_coin`), only a sample's last window closes, so sample's coins c's
     request names the last root of sample c's last window and no request names another window's by place. A_g is then
-    the first receipt of the requests that leave only once window g's last root has come: openings coin g // G's and
+    the first receipt of the requests that leave only once window g's last root has come: sample's coins g // G's and
     chal_(g+2)'s, which at k = 1 names window g's root and above it a root of window g + 1, whose roots come after g's.
     That time is at or after A_g, so L_g is at least window g's own and the line credits no more."""
     fam = release_log(lines)
-    ch, op = fam.get(coins.CHALLENGE), fam.get(coins.OPENINGS)
+    ch, op = fam.get(coins.CHALLENGE), fam.get(coins.SAMPLE)
     n = len(seen)
     draws = -(-n // per_coin)
-    if ch is None or op is None or len(ch["released"]) < n or len(op["after"]) < draws:
+    m = len(op["after"]) // draws if op is not None else 0
+    if ch is None or op is None or len(ch["released"]) < n or m < 1:
         want = (f"one of each for each of {n} groups" if per_coin == 1 else
-                f"one challenge coin for each of {n} groups and one openings coin for each of their {draws} samples")
+                f"one challenge coin for each of {n} groups and a sample's coins for each of their {draws} samples")
         raise ValueError(f"the release log holds {len((ch or {}).get('released', ()))} challenge and "
-                         f"{len((op or {}).get('after', ()))} openings coins, not {want}")
+                         f"{len((op or {}).get('after', ()))} sample coins, not {want}")
     out, by = [], {}
     for g, w in enumerate(seen):
         if per_coin == 1:
-            t, label = op["received"][g], coins.OPENINGS
-            if g + 2 < len(ch["after"]) and ch["after"][g + 2] == op["after"][g] and ch["received"][g + 2] < t:
+            t, label = op["received"][g * m], coins.SAMPLE
+            if g + 2 < len(ch["after"]) and ch["after"][g + 2] == op["after"][g * m] and ch["received"][g + 2] < t:
                 t, label = ch["received"][g + 2], coins.CHALLENGE
         else:
-            t, label = op["received"][g // per_coin], coins.OPENINGS
+            t, label = op["received"][g // per_coin * m], coins.SAMPLE
             if g + 2 < n and ch["received"][g + 2] < t:
                 t, label = ch["received"][g + 2], coins.CHALLENGE
         by[label] = by.get(label, 0) + 1
@@ -873,7 +874,7 @@ def credit_check(s: dict, R: str, lines: list[str], windows: dict, periods: dict
     if verdict not in LEAN_VERDICTS:
         reason = f"its verdict is {verdict}'s, not the Lean's"
     elif s.get("disagreement") is not None:
-        reason = "the two verifiers disagreed"
+        reason = "undecided: the driver's books left the Lean's session"
     elif (s.get("failure") or {}).get("failure") == "undecided":
         reason = s["failure"].get("reason") or "undecided"
     elif s.get("accepted") is not True:
@@ -1227,16 +1228,20 @@ def main(argv: list[str] | None = None) -> int:
         except (lv.LeanError, OSError) as e:
             raise SystemExit(f"auditor_line: no Lean verifier to compute the line ({e}): pass --lean-exe, or "
                              "--line-by python for a reading that is not of record") from None
+    ended = False
     try:
         doc = analyse(a.out, host_bytes=a.host_bytes, pin=a.pin, period=a.period, heads=a.ledger, lane=a.lane,
                       peer=a.peer, rates=rates_at(a.disk_bytes_per_s, a.link_bytes_per_s, a.bursts), desc=desc,
                       commit=commit, pins=pins, main=first_parent, model=model, lean=lean,
                       lockdown=None if a.lockdown is None else read_lockdown(a.lockdown))
+        if lean is not None:
+            ended = True
+            lean.close()
     except (Disagree, lv.LeanError) as e:
         raise SystemExit(f"auditor_line: no line: {e}") from None
     finally:
-        if lean is not None:
-            lean.close()
+        if lean is not None and not ended:
+            lean.close(check=False)
     print(json.dumps(doc, indent=1, default=str))
     if a.table is not None:
         a.table.write_text(table(doc))

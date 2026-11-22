@@ -28,8 +28,8 @@ variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **v2's statement has hm96-sha512 rows**: the tags registered under `Spot.OneStageZk.STATEMENT`. -/
 theorem statement_hm96Rows {t : Flock.Tags}
-    (h : Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some t) : t.hm96Rows = true := by
-  have htg : Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some Flock.Tags.circuit := rfl
+    (h : Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT = some t) : t.hm96Rows = true := by
+  have htg : Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT = some Flock.Tags.circuitTmpl := rfl
   obtain rfl := Option.some.inj (htg.symm.trans h)
   rfl
 

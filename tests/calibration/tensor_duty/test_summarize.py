@@ -30,12 +30,12 @@ def point(of_bound: float, *, host_s: float = SECS, event_s: float = SECS, gt_s:
             "duty_achieved": 1.0, **at}
 
 
-def run(tmp_path: Path, *pts: dict, name: str = "out") -> tuple[int, dict]:
+def run(tmp_path: Path, *pts: dict, name: str = "out", sku: str = H200) -> tuple[int, dict]:
     """summarize.py's exit code and JSON verdict over one out/ directory holding ``pts``."""
     out = tmp_path / name
     out.mkdir()
     (out / "points.jsonl").write_text("".join(json.dumps(p) + "\n" for p in pts))
-    (out / "found.json").write_text(json.dumps({"name": NAME[H200]}))
+    (out / "found.json").write_text(json.dumps({"name": NAME[sku]}))
     rc = S.main([str(out), "--json", str(tmp_path / f"{name}.json")])
     return rc, json.loads((tmp_path / f"{name}.json").read_text())
 
@@ -46,6 +46,20 @@ def test_the_bound_is_the_cards_tensor_rate_and_follows_its_clock() -> None:
     card = copy.deepcopy(card)
     card["clock"]["tensor"]["value"] = 1900
     assert S.readings(card)[0] == 132 * 4096 * 1900e6
+
+
+def test_a_card_whose_tensor_clock_is_no_ceiling_is_bound_by_its_sm_reading(tmp_path: Path) -> None:
+    """The H100 marks `clock.tensor` a vendor's figure, so its bound is the tensor rate at `clock.sm`: a point at 1.0225 of the
+    1830 MHz rate passes, and one over the 1980 MHz rate refutes."""
+    card = load_card(H100, directory=CARD_FILES)
+    sm = 132 * 4096 * 1980e6
+    assert card["clock"]["tensor"]["mark"] != "ceiling" and S.ceiling_reading(card) == "sm"
+    assert S.readings(card) == (sm, sm, 132 * 4096 * 1e6)
+    rc, v = run(tmp_path, point(0.5), point(1.0225), name="under", sku=H100)
+    assert (rc, v["verdict"], v["refuting"], v["bound_reading"]) == (0, "PASS", 0, "sm")
+    assert v["top"]["of_bound"] == pytest.approx(1.0225 * BOUND / sm)
+    rc, v = run(tmp_path, point(1.0225), point(1.01 * sm / BOUND), name="over", sku=H100)
+    assert (rc, v["verdict"], v["refuting"]) == (1, "REFUTED", 1)
 
 
 def test_points_under_the_card_pass(tmp_path: Path) -> None:

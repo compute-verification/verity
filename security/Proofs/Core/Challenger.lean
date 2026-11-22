@@ -1,5 +1,6 @@
 module
 
+public import Definitions.Assumptions.Clock
 public import Definitions.Core.Guarantees.Challenger
 public import Proofs.Core.Game.Prob
 import Mathlib.Algebra.BigOperators.Ring.Finset
@@ -265,5 +266,28 @@ theorem SampleAfterRecorded_nontrivial :
   exact absurd this (not_le.2 (ENNReal.inv_lt_one.2 (by norm_num)))
 
 end SecurityProofs
+
+namespace Assumptions
+
+open Verity.Challenger
+
+/-- Under `clock-within-drift` at a drift below 1, two readings of one device in order are of entries in that order
+of real time: a consumer checks `0 ≤ ra.elapsed rb` and takes `real a ≤ real b` from here. -/
+theorem ClockWithin.real_le {S : Site} {k : String} {real : Attested k → ℝ} (hc : ClockWithin S k real)
+    {x : Site.Loc} (hx : x ∈ S.locs) (hau : x.kind.auditor = true) (hk : x.key = k) {p : String} (hp : p ∈ x.parent)
+    {h : Site.Loc} (hh : h ∈ S.loc? p) {q : ℚ≥0} (hq : q ∈ h.drift) (hq1 : q < 1) {a b : Attested k}
+    {ra rb : Reading k} (hra : ra ∈ a.reading) (hrb : rb ∈ b.reading) (he : 0 ≤ ra.elapsed rb) :
+    real a ≤ real b := by
+  by_contra hlt
+  have hba : real b < real a := lt_of_not_ge hlt
+  have hs := (hc x hx hau hk p hp h hh q hq b a rb hrb ra hra hba.le).1
+  unfold NotSlow at hs
+  have hq' : (q : ℝ) < 1 := by exact_mod_cast hq1
+  have hpos : 0 < (1 - (q : ℝ)) * (real a - real b) := mul_pos (by linarith) (by linarith)
+  have hn : rb.elapsed ra ≤ 0 := by unfold Reading.elapsed at he ⊢; omega
+  have hn' : ((rb.elapsed ra : ℤ) : ℝ) ≤ 0 := by exact_mod_cast hn
+  linarith
+
+end Assumptions
 
 end Verity

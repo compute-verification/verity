@@ -16,6 +16,7 @@ import shutil
 import stat
 import subprocess
 import sys
+from collections.abc import Callable
 from fractions import Fraction
 from pathlib import Path
 
@@ -24,26 +25,28 @@ import pytest
 from verity.circuits import population as PN
 from verity.commitments import docket_digest as DD
 from verity.commitments.crypto import lms
-from verity.commitments.merkle import tree_levels
-from verity.protocols.resource_accounting.compute.pouw.prover.circuit import leaves as L
-from verity.protocols.resource_accounting.compute.pouw.prover.kernels.served_zk import of_record as OR
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_device import DEVICES
-from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
-from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
-from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
-from verity.protocols.resource_accounting.compute.pouw.verifier.audit import Epoch, Workload, weights_root
-from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger as Coins
-from verity.protocols.resource_accounting.compute.pouw.verifier.coins import CoinOpening, coin_reason
-from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Context, Matmul, Shape
-from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
-from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.merkle import CommitmentDomain, tree_levels
+from verity.commitments.rowleaf import row_leaf
+from verity.protocols.accounting.compute.pouw.prover.circuit import leaves as L
+from verity.protocols.accounting.compute.pouw.prover.kernels.served_zk import of_record as OR
+from verity.protocols.accounting.compute.pouw.prover.schemes import pearl_c as C
+from verity.protocols.accounting.compute.pouw.prover.schemes.pearl_c_device import DEVICES
+from verity.protocols.accounting.compute.pouw.verifier import core_check as CC
+from verity.protocols.accounting.compute.pouw.verifier import salt as PS
+from verity.protocols.accounting.compute.pouw.verifier import window as Wd
+from verity.protocols.accounting.compute.pouw.verifier.audit import Epoch, Workload, weights_root
+from verity.protocols.accounting.compute.pouw.verifier.coins import Challenger as Coins
+from verity.protocols.accounting.compute.pouw.verifier.coins import CoinOpening, coin_reason
+from verity.protocols.accounting.compute.pouw.verifier.protocol import Context, Matmul, Shape
+from verity.protocols.proof.spot.verifier.challenger import challenger as Ch
+from verity.protocols.proof.spot.verifier import service as S
+from verity.protocols.proof.spot.verifier.one_stage import docket as R
 
 import of_record_lean as ORL
 import served_commit as SC
 
-_spec = importlib.util.spec_from_file_location("certified_salt", Path(__file__).resolve().parents[2] / "verity/protocols/resource_accounting/compute/pouw/verifier/certified_salt.py")
+_spec = importlib.util.spec_from_file_location("certified_salt", Path(__file__).resolve().parents[2] / "verity/protocols/accounting/compute/pouw/verifier/certified_salt.py")
 CS = sys.modules["certified_salt"] = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(CS)
 
@@ -154,7 +157,12 @@ def _pub(bca: bytes, bcb: bytes) -> bytes:
     row)."""
     schemas = {"a0": L.ROW_SCHEMA["fp8-pi", SC.SIDES["a"]], "b0": L.ROW_SCHEMA["fp8-pi", SC.SIDES["b"]],
                "o0": L.ROW_SCHEMA["tile", SC.SIDES["a"]]}
-    head = {"circuit_sha512": CC.TILES[SC.template(K).id].circuit, "instances": 1, "frame_v3": {"schemas": schemas}}
+    fv = {"frame": "frame-v3-sha512", "owner": -1, "schemas": schemas, "bindings": {}, "domain_ids": {}, "roots": {}}
+    for p, bc in (("a0", bca), ("b0", bcb)):
+        dom = CommitmentDomain(hashlib.sha512(f"tile/{p}".encode()).digest(), -1, RangeIndexedDomain(0, 1), hash="sha512")
+        fv["bindings"][p], fv["domain_ids"][p] = dom.binding.hex(), dom.domain_id.hex()
+        fv["roots"][p] = row_leaf(dom, 0, Wd._HM.tree_leaf(Wd._HM.default_key, bc), schemas[p]).hex()
+    head = {"circuit_sha512": CC.TILES[SC.template(K).id].circuit, "instances": 1, "frame_v3": fv}
     return json.dumps(head).encode() + b"\n" + bca + bcb + bytes(128)
 
 
@@ -168,7 +176,7 @@ def test_rows_are_the_schemes_operands(served):
     none of the call's kept rows."""
     scheme, ctx, noise, words = served
     assert words["a"][M] is None and all(w is not None for w in words["a"][:M] + words["b"])
-    from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Tile
+    from verity.protocols.accounting.compute.pouw.verifier.protocol import Tile
     ops = scheme.encode(ctx, noise, _rows(1, M)[1:2], _rows(2, N)[3:4], Tile((1,), (3,)))
     assert words["a"][1] == L.words_fp8_p(ops.a.codes[0], ops.pa[0])
     assert words["b"][3] == L.words_fp8_p(ops.b.codes[0], ops.pb[0])
@@ -479,13 +487,13 @@ def test_a_window_without_a_registration_deadline_is_refused(served, tmp_path):
     *_, words = served
     params, public, _, _ = _window(words)
     bare = {k: v for k, v in params.items() if k != "registration_deadline"}
-    for refuse in (lambda: SC.Challenger(bare, _coins(), record=ORL.Record(lean=False)),
+    for refuse in (lambda: SC.Challenger(bare, _coins(), record=ORL.Record()),
                    lambda: SC.spec_of(bare, public["level"]), lambda: _register(bare, public)):
         with pytest.raises(ValueError, match="no registration_deadline"):
             refuse()
     with pytest.raises(ValueError, match="carry a registration_deadline"):
-        SC.Challenger(params, _coins(), record=ORL.Record(lean=False), predates_deadline=True)
-    assert SC.Challenger(bare, _coins(), record=ORL.Record(lean=False), predates_deadline=True).predates_deadline
+        SC.Challenger(params, _coins(), record=ORL.Record(), predates_deadline=True)
+    assert SC.Challenger(bare, _coins(), record=ORL.Record(), predates_deadline=True).predates_deadline
     assert SC.spec_of(bare, public["level"], predates_deadline=True).check.registration_deadline is None
     assert SC.spec_of(params, public["level"]).check.registration_deadline == SC.REGISTRATION_DEADLINE
 
@@ -506,7 +514,7 @@ def test_a_pass_registered_again_on_another_stream_is_refused(served):
     *_, words = served
     params, public, _, _ = _window(words)
     rec = _register(params, public)
-    ch = _challenger(params, record=ORL.Record(lean=False))
+    ch = _challenger(params, record=ORL.Record())
     _held(ch, "honest", rec)
     with pytest.raises(S.Refused) as e:
         _held(ch, "again", rec, stream="again")
@@ -524,7 +532,7 @@ def test_a_window_received_after_the_epochs_draw_coin_is_refused(served, tmp_pat
     *_, words = served
     params, public, _, _ = _window(words)
     rec = _register(params, public)
-    ch = _challenger(params, record=ORL.Record(lean=False))
+    ch = _challenger(params, record=ORL.Record())
     _held(ch, "honest", rec)
     ch.select("honest")
     with pytest.raises(S.Refused) as e:
@@ -535,7 +543,7 @@ def test_a_window_received_after_the_epochs_draw_coin_is_refused(served, tmp_pat
     assert ch.select("ctl").units == ch.draws["honest"].units
 
     bare = {k: v for k, v in params.items() if k != "registration_deadline"}
-    old = SC.Challenger(bare, _coins(), record=ORL.Record(lean=False), predates_deadline=True)
+    old = SC.Challenger(bare, _coins(), record=ORL.Record(), predates_deadline=True)
     log = tmp_path / "log"
     log.mkdir()
     (log / "coins.json").write_text(json.dumps(old.coins.commitment.to_json()))
@@ -549,9 +557,9 @@ def test_a_window_received_after_the_epochs_draw_coin_is_refused(served, tmp_pat
     (log / "requests.jsonl").write_text("".join(json.dumps({"request": json.dumps(r), "reply": x}) + "\n"
                                                 for r, x in zip(reqs, replies)))
     (log / "openings.jsonl").write_text("".join(json.dumps(o.to_json()) + "\n" for o in old.openings.values()))
-    assert SC.replay(bare, log, tmp_path / "replay", record=ORL.Record(lean=False)) == []
+    assert SC.replay(bare, log, tmp_path / "replay", record=ORL.Record()) == []
     (tmp_path / "bare.json").write_text(json.dumps(bare))
-    assert SC.main(["replay", str(tmp_path / "bare.json"), str(log), str(tmp_path / "replay2"), "--python-record"], record=ORL.Record) == 0
+    assert SC.main(["replay", str(tmp_path / "bare.json"), str(log), str(tmp_path / "replay2")], record=ORL.Record) == 0
 
 
 #: the network attester's run ids, fixed so the prover can name its run in the stream it records
@@ -635,7 +643,7 @@ def test_rows_formed_before_any_salt_are_refused_in_every_certified_window(serve
     for p in (0, 1):
         params, raw, rec, *_ = _certified_window(words, run, salts[p], sid, prover, p)
         live, ck = _live(tmp_path / f"w{p}.json")
-        ch = SC.Challenger(params, live, clock=lambda: 0.0, record=ORL.Record(lean=False), certifier=client,
+        ch = SC.Challenger(params, live, clock=lambda: 0.0, record=ORL.Record(), certifier=client,
                            prover=prover, coin_record=tmp_path / f"w{p}.json", deployment=_deployment(client, ck),
                            opens=ledger)
         with pytest.raises(S.Refused) as e:
@@ -660,7 +668,7 @@ def test_one_windows_rows_are_refused_under_two_streams(served, tmp_path, monkey
         assert SC.stream_id({"deployment": f"served-zk/{run}"}, s, SC.certifier_run(client)) == sid
         params, raw, rec, *_ = _certified_window(words, run, salts[0], sid, prover)
         live, ck = _live(tmp_path / f"{s}.json")
-        ch = SC.Challenger(params, live, clock=lambda: 0.0, record=ORL.Record(lean=False), certifier=client,
+        ch = SC.Challenger(params, live, clock=lambda: 0.0, record=ORL.Record(), certifier=client,
                            prover=prover, coin_record=tmp_path / f"{s}.json", deployment=_deployment(client, ck),
                            opens=ledger)
         with pytest.raises(S.Refused) as e:
@@ -707,7 +715,7 @@ def test_past_the_salt_rule_a_certified_window_is_recorded_revealed_sampled_unde
 
     def challenger(name: str, certifier=client, prover=prover, p=params, entropy=None) -> SC.Challenger:
         live, ck = _live(tmp_path / f"{name}.json", entropy)
-        return SC.Challenger(p, live, clock=lambda: 0.0, record=ORL.Record(lean=False), certifier=certifier,
+        return SC.Challenger(p, live, clock=lambda: 0.0, record=ORL.Record(), certifier=certifier,
                              prover=prover, coin_record=tmp_path / f"{name}.json",
                              deployment=_deployment(certifier, ck), opens=ledger)
 
@@ -732,8 +740,9 @@ def test_past_the_salt_rule_a_certified_window_is_recorded_revealed_sampled_unde
     ch.record.draw = lambda x: samples.append(x) or sample_of_record(x)
     d = ch.select("honest")
     assert [x["key"] for x in samples] == [ch.deployment.challenger_key.to_json()] == [ch.signed["key"]]
-    assert OR.py_draw({**samples[0], "key": _live(tmp_path / "pinned.json")[1].to_json()}) == \
-        {"refused": [CC.COIN_KEY, CC.OTHER_KEY]}
+    x = {**samples[0], "key": _live(tmp_path / "pinned.json")[1].to_json()}
+    assert tuple(CC.draw_twin(x["coins"], x["recorded"], x["opening"], x["stream"], x["registration"], x["receipt"], x["k"],
+                              x["population"], x["units"], x["key"])) == (CC.COIN_KEY, CC.OTHER_KEY)
     o, st = ch.openings["draw"], ch.regs["honest"][0]
     assert (o.label, o.index, o.after) == (Wd.DRAW, 0, bytes.fromhex(reg.digest))
     assert Ch.live_reason(ch.trusted, o, Wd.DRAW, 0, o.after) is None and ch.trusted == ch.coins.commitment
@@ -743,15 +752,20 @@ def test_past_the_salt_rule_a_certified_window_is_recorded_revealed_sampled_unde
     assert d.units == CC.stream_subset(k, 26, SC.draw_bytes(SC.draw_key(o.coin, st, reg), d.law, 26))
     assert ch.coins_of("honest") == {"commitment": ch.trusted.to_json(), "pass": "certifier", "draw": o.to_json()}
 
-    held, opening = [], CC.opening_twin
-    monkeypatch.setattr(CC, "opening_twin", lambda *a: held.append(a[6]) or opening(*a))
+    held = []
+
+    def salts_held(record):
+        opening = record.opening
+        record.opening = lambda x: held.append(x.get("salt")) or opening(x)
+        return record
+
+    salts_held(ch.record)
     u = d.units[0]
     pub, op = _unit_pub(advice, priv, u), SC.opening(advice, priv, params, u)
     unread = "the window is certified, and its template's unit reads no salt"
     assert ch.check("honest", u, pub, op).startswith(unread)
-    assert SC.check(params, rec, d.draw, u, pub, op, record=ORL.Record(lean=False)).startswith(unread)
-    assert held == [salt, None]
-    monkeypatch.setattr(CC, "opening_twin", opening)
+    assert SC.check(params, rec, d.draw, u, pub, op, record=salts_held(ORL.Record())).startswith(unread)
+    assert held == [salt.hex(), None]
 
     tclient, twin_salts = _certifier(record, seed=b"twin")
     assert twin_salts[0] != salts[0] and SC.certifier_run(tclient) == SC.certifier_run(client)
@@ -795,7 +809,7 @@ def test_past_the_salt_rule_a_certified_window_is_recorded_revealed_sampled_unde
                        ({**params, "context": _params(run, raw)["context"]}, base, "names its PoUW window"),
                        (params, {}, "so it is certified")):
         with pytest.raises(ValueError, match=why):
-            SC.Challenger(p, live, record=ORL.Record(lean=False), **kw)
+            SC.Challenger(p, live, record=ORL.Record(), **kw)
     for edit in ({"challenger_key": _coins().commitment}, {"challenger_key": ck.to_json()}, {"run_id": RUN_ID[:16]},
                  {"run_id": RUN_ID.hex()}, {"certifier_key": CS.KEY_ID}, {"certifier_key": object()}):
         with pytest.raises(ValueError, match=re.escape(SC.DEPLOYMENT_FORM)):
@@ -997,7 +1011,138 @@ def test_the_outcome_publishes_exactly_the_public_items(served):
         with pytest.raises(S.Refused) as e:
             _held(ch, f"{name}-window", rec, stream=name)
         assert _codes(e) == {"late-registration"}
-    assert body["audit"]["verdicts"]["opening"]["units"] == [False] * 4
+        if i == 1:
+            assert body["audit"]["verdicts"]["opening"]["units"] == [False] * 4
+
+
+def _verify(path: Path, bad: int | None = None, named: str | None = None) -> Path:
+    """A stand-in for `verity-verify-proof verify --zk` on one session: it prints a line and the session's `VERDICT` (the
+    directory as given, and its public file's header digest, ``public_header_sha512``, or `named` in its place),
+    rejecting (status 1) the session of unit ``bad``; a session record ``{"panic": ...}`` makes it write a panic line and
+    one ``{"status": N}`` end with status N, each after an accepting verdict."""
+    path.write_text(f"#!{sys.executable}\nimport hashlib, json, sys\nfrom verity.circuits.codec import canonical_json\n"
+                    "a = sys.argv\nd = a[a.index('--session') + 1]\n"
+                    "assert a[1:3] == ['verify', '--zk'] and '--circuit' in a and '--public' in a\n"
+                    "head = open(a[a.index('--public') + 1], 'rb').read().split(b'\\n', 1)[0]\n"
+                    f"h = {named!r} or hashlib.sha512(canonical_json(json.loads(head))).hexdigest()\n"
+                    "s = json.load(open(d + 'session.json'))\n"
+                    f"ok = s.get('unit') != {bad!r}\n"
+                    "print('setup: 3 ms')\n"
+                    "print('VERDICT ' + json.dumps({'session': d, 'accepted': ok, 'why': '' if ok else 'ring-switch claim 2 mismatch', 'zk': True, 'public_header_sha512': h}))\n"
+                    "if 'panic' in s: print('PANIC at Flock.verify Flock.Zk:1:2: index out of bounds', file=sys.stderr)\n"
+                    "sys.exit(s.get('status', 0 if ok else 1))\n")
+    path.chmod(path.stat().st_mode | stat.S_IEXEC)
+    return path
+
+
+def _job_rows(tmp_path: Path, units: list[int], pub: Callable[[int], bytes], opening: Callable[[int], object],
+              session: Callable[[int], dict] = lambda t: {"unit": t}) -> list[dict]:
+    """The job's rows for ``units``, as `job.sh`'s `units_json` writes them: each unit's public file (`pub`), the
+    prover's opening of its rows (`opening`), its circuit and session, and beside them a handed-in Lean output saying
+    ACCEPT (`lean-honest-own.out`), which the outcome never reads."""
+    rows = []
+    for t in units:
+        d = tmp_path / f"u{t}"
+        (d / "s").mkdir(parents=True)
+        (d / "s" / "session.json").write_text(json.dumps(session(t)))
+        (d / "circuit.txt").write_text("circuit")
+        (d / "pub.bin").write_bytes(pub(t))
+        (d / "stage.json").write_text(json.dumps({"definition": "Pc8TileSide", "circuit_sha512": "11" * 64,
+                                                  "class_sha512": "22" * 64, "ands": 7, "k_log": 3, "binding": "hash scratch"}))
+        (d / "opening.json").write_text(json.dumps(opening(t)))
+        (d / "lean-honest-own.out").write_text(f"VERDICT {json.dumps({'session': f'{d}/s/', 'accepted': True, 'why': ''})}\n")
+        (d / "prove.out").write_text(f"LIVE\t{json.dumps({'verdict': {'accepted': True, 'why': ''}})}\n")
+        rows.append({"unit": t, "stage": str(d / "stage.json"), "pub": str(d / "pub.bin"), "circuit": str(d / "circuit.txt"),
+                     "lean": str(d / "lean-honest-own.out"), "opening": str(d / "opening.json"), "rust": str(d / "prove.out"),
+                     "session": str(d / "s" / "session.json")})
+    return rows
+
+
+@pytest.mark.slow
+@LEAN
+def test_the_outcome_runs_the_lean_verifier_itself(served, tmp_path):
+    """The outcome's verdicts on each sampled proof block are the challenger's own runs, on its copy of the block's public
+    file, never what a job hands it. The Lean verdict of record is its run of the verifier on the block's circuit, that
+    copy and the delivered session (`run_lean`): a handed-in output saying ACCEPT beside a session the verifier rejects
+    ends REJECT, and its run's ``VERDICT`` lines' SHA-512 is kept. The opening verdict is its run of the opening check
+    (`Challenger.check`) on the copy and the prover's opening. With no verifier, or where its run writes a panic line or
+    ends with a status `verify` does not document, the outcome is refused by name (`LEAN_RUN`)."""
+    *_, words = served
+    params, public, advice, priv = _window(words)
+    rec = _register(params, public)
+    ch = _challenger(params)
+    _held(ch, "honest", rec)
+    d = ch.select("honest")
+    own_pub, own_op = (lambda t: _unit_pub(advice, priv, t)), (lambda t: SC.opening(advice, priv, params, t))
+
+    def opening(name: str):
+        return lambda unit, pub, op: ch.check(name, unit, pub, op)
+
+    rows = _job_rows(tmp_path / "honest", d.units, own_pub, own_op)
+    ch.deliver("honest", SC._sessions(rows))
+    with pytest.raises(S.Refused) as e:
+        SC._units(rows, None, opening("honest"))
+    assert _codes(e) == {SC.LEAN_RUN}
+    verify = str(_verify(tmp_path / "verify"))
+    honest = SC._units(rows, verify, opening("honest"), jobs=2)
+    want = SC._header_sha512(own_pub(d.units[0]))
+    printed = f"VERDICT {json.dumps({'session': f'{tmp_path}/honest/u{d.units[0]}/s/', 'accepted': True, 'why': '', 'zk': True, 'public_header_sha512': want})}\n"
+    assert honest[0]["verdicts"]["lean"]["output_sha512"] == hashlib.sha512(printed.encode()).hexdigest()
+    assert honest[0]["verdicts"]["lean"]["public_headers"] == [want]
+    assert all(u["verdicts"]["lean"]["accepted"] and u["verdicts"]["lean"]["of_record"] for u in honest)
+    assert all(u["verdicts"]["opening"] == {"of_record": False, "accepted": True, "why": "", "verifier": SC.OPENING_CHECK}
+               for u in honest)
+    bad = d.units[1]
+    forged = SC._units(rows, str(_verify(tmp_path / "verify-bad", bad=bad)), opening("honest"))
+    assert [u["verdicts"]["lean"]["accepted"] for u in forged] == [t != bad for t in d.units]
+    o, pub, _ = ch.outcome("honest", honest)
+    assert o.accepted and pub["verdict"] is True
+
+    def judged(name: str, rows: list[dict], verify: str = verify):
+        ch.register(name, rec, stream=name, replay="honest")
+        assert ch.select(name).units == d.units
+        ch.deliver(name, SC._sessions(rows))
+        units = SC._units(rows, verify, opening(name))
+        o, pub, _ = ch.outcome(name, units)
+        assert not o.accepted and o.verdict.codes == ("reject",) and pub["verdict"] is False
+        return units
+
+    judged("ctl-forged", rows, str(_verify(tmp_path / "verify-bad-ctl", bad=bad)))
+    for i, broken in enumerate(({"panic": 1}, {"status": 7})):
+        rows = _job_rows(tmp_path / f"broken-{i}", d.units, own_pub, own_op, lambda t: {"unit": t, **broken})
+        with pytest.raises(S.Refused) as e:
+            SC._units(rows, str(_verify(tmp_path / f"verify-{i}")), opening("honest"))
+        assert _codes(e) == {SC.LEAN_RUN}
+
+
+def _lone_row(tmp_path: Path) -> tuple[dict, bytes]:
+    pub = _pub(bytes(128), bytes(range(128)))
+    row = _job_rows(tmp_path, [0], lambda t: pub, lambda t: {"opened": t})[0]
+    (tmp_path / "u0" / "lean-honest-own.out").write_text("not a verdict")
+    return row, pub
+
+
+def test_a_verdict_naming_another_header_is_refused(tmp_path):
+    """`run_lean` refuses by name (`PUBLIC_HEADER`) a ``VERDICT`` line whose ``public_header_sha512`` is not the SHA-512 of
+    the challenger's copy's header, so an accepting verdict about another public file is never one of this block."""
+    row, pub = _lone_row(tmp_path)
+    got = SC.run_lean(str(_verify(tmp_path / "verify")), row, Path(row["pub"]))
+    assert got["accepted"] and got["public_headers"] == [SC._header_sha512(pub)]
+    with pytest.raises(S.Refused) as e:
+        SC.run_lean(str(_verify(tmp_path / "verify-named", named="00" * 64)), row, Path(row["pub"]))
+    assert _codes(e) == {SC.PUBLIC_HEADER}
+
+
+def test_the_opening_verdict_is_the_challengers_own_run(tmp_path):
+    """`_units` hands its opening check the challenger's copy of the public file and the prover's opening, and its verdict
+    is that run's; the row's handed-in Lean output (here not a verdict at all) is never read."""
+    row, pub = _lone_row(tmp_path)
+    seen = []
+    units = SC._units([row], str(_verify(tmp_path / "verify")), lambda u, p, op: seen.append((u, p, op)) or "refused here")
+    assert seen == [(0, pub, {"opened": 0})]
+    assert units[0]["verdicts"]["opening"] == {"of_record": False, "accepted": False, "why": "refused here",
+                                               "verifier": SC.OPENING_CHECK}
+    assert units[0]["verdicts"]["lean"]["accepted"]
 
 
 def _through(ch, rec, name="honest"):
@@ -1009,10 +1154,9 @@ def _through(ch, rec, name="honest"):
 
 
 @LEAN
-def test_lean_is_of_record_and_python_its_witness(served, tmp_path):
-    """Each of the execution phase's checks runs Lean's port and Python's reference on one input: the witness holds both verdicts,
-    the same, Lean's of record, and the published items are Lean's.  Undone (`Record(lean=False)`), the references alone
-    give the same outcome and witness no Lean verdict."""
+def test_lean_is_of_record_and_the_witness(served, tmp_path):
+    """Each of the execution phase's checks is Lean's port alone: the witness holds each check's Lean verdict and nothing
+    beside it, and the published items are Lean's."""
     *_, words = served
     params, public, advice, priv = _window(words)
     rec = _register(params, public)
@@ -1020,27 +1164,23 @@ def test_lean_is_of_record_and_python_its_witness(served, tmp_path):
     o, pub, _ = _through(ch, rec)
     w = ch.witness["honest"]
     assert [e["check"] for e in w] == ["registered", "pass", "registration", "caller", "public", "draw", "answer"]
-    assert all(e["same"] and e["of_record"] == "lean" and e["lean"] == e["python"] for e in w)
+    assert all(sorted(e) == ["check", "lean"] for e in w)
+    assert all(e["lean"]["codes"] == [] for e in w if e["check"] in ("registration", "caller"))
     answer = w[-1]["lean"]
     assert o.accepted and answer["verdict"] == "accept" and pub == answer["public"]
-    record = ORL.Record(lean=False)
-    py = _challenger(params, record=record)
-    o2, pub2, _ = _through(py, rec)
-    assert o2.accepted and pub2 == pub and all(e["lean"] is None and e["of_record"] == "python" for e in py.witness["honest"])
     t = ch.draws["honest"].units[0]
     lean = ORL.Record()
     assert SC.check(params, rec, ch.draws["honest"].draw, t, _unit_pub(advice, priv, t), SC.opening(advice, priv, params, t),
                     record=lean) is None
-    assert [(e["check"], e["same"], e["lean"]) for e in lean.witness] == [("opening", True, None),
-                                                                           ("prelude", True, {"reason": None})]
+    assert lean.witness == [{"check": "opening", "lean": None}]
     lean.close()
 
 
 @LEAN
 @pytest.mark.slow
 def test_r1_r6_of_a_window_are_leans(served):
-    """One-stage's R1-R6 of a PoUW registration, honest and with each field changed, through the switch: Lean's codes are
-    Python's, none for the honest record and some for each change."""
+    """One-stage's R1-R6 of a PoUW registration, honest and with each field changed: Lean's codes, the only verdict, none
+    for the honest record and some for each change."""
     *_, words = served
     params, public, _, _ = _window(words)
     rec = _register(params, public)
@@ -1051,11 +1191,11 @@ def test_r1_r6_of_a_window_are_leans(served):
     record = ORL.Record()
 
     def codes(r) -> list[str]:
-        return record.registration(p, r, lambda: R.check(r, prog, q, sampling_design, S.SCHEME, ports, None, (), [], None, None, None))
+        return record.registration(p, r)
 
     assert codes(rec) == []
     honest = record.witness[0]
-    assert honest["lean"] == honest["python"] and honest["lean"]["fanout"] == 1, honest
+    assert honest["lean"]["fanout"] == 1, honest
     root = rec["roots"][0]
     changes = {"protocol": "verity/other/v1", "program": "00" * 64, "partition": "00" * 64, "query": "00" * 64,
                "population": n + 1, "law": {**sampling_design, "k": sampling_design["k"] + 1}, "scheme": "frame-v3/hm96", "leaf_layer": "x",
@@ -1064,17 +1204,8 @@ def test_r1_r6_of_a_window_are_leans(served):
     got["leaves"] = codes({**rec, "roots": [{**root, "leaves": root["leaves"] + 1}, *rec["roots"][1:]]})
     got["one-root"] = codes({**rec, "roots": rec["roots"][:1]})
     assert all(got.values()), got
-    assert all(e["same"] for e in record.witness) and len(record.witness) == len(got) + 1
+    assert all(sorted(e) == ["check", "lean"] for e in record.witness) and len(record.witness) == len(got) + 1
     record.close()
-
-
-def test_the_record_follows_the_switch(monkeypatch):
-    """`Record()` takes its side of record from `pouw.verifier.RECORD_VERDICT`, and an explicit `lean` overrides it."""
-    assert ORL.Record().lean is (OR.V.RECORD_VERDICT == "lean")
-    monkeypatch.setattr(OR.V, "RECORD_VERDICT", "python")
-    assert ORL.Record().lean is False and ORL.Record(lean=True).lean is True
-    monkeypatch.setattr(OR.V, "RECORD_VERDICT", "lean")
-    assert ORL.Record().lean is True and ORL.Record(lean=False).lean is False
 
 
 @pytest.mark.parametrize("call", [lambda: SC.check({}, {}, {}, 0, b"", {}), lambda: SC.Challenger({}, None),
@@ -1100,10 +1231,10 @@ def test_without_the_lean_side_the_commands_that_check_refuse_before_any_work(ar
 
 
 def _stub_calls():
-    from verity.protocols.resource_accounting.compute.pouw.prover.kernels.served_zk import stage_tile as STG
-    from verity.protocols.resource_accounting.compute.pouw.prover.kernels.served_zk import statement as ST
+    from verity.protocols.accounting.compute.pouw.prover.kernels.served_zk import stage_tile as STG
+    from verity.protocols.accounting.compute.pouw.prover.kernels.served_zk import statement as ST
     st = object.__new__(ST.Statement)
-    record = OR.Record(lean=False)
+    record = OR.Record()
     torch = "benchmarks/pouw/served_zk/statement_torch.py"
     calls = [("Stager.stage", lambda: STG.Stager().stage(*[None] * 8), "benchmarks/pouw/hidden_zk/served_stage.py"),
              ("Statement.zeros", lambda: st.zeros(1), torch), ("Statement.empty", lambda: st.empty(1, 1), torch),
@@ -1136,10 +1267,16 @@ def test_the_public_items_rule_of_a_window_is_leans(served):
     rec = _register(params, public)
     ell, n = SC.level_of(rec), rec["population"]
     spec = SC.spec_of(params, ell)
-    record = ORL.Record(lean=True)
+    record = ORL.Record()
 
     def verdict(r: dict) -> dict:
-        return record.public(OR.public_params(spec, r, S.SCHEME), lambda: S.check_public(spec, r).to_json())
+        lean = record.public(OR.public_params(spec, r, S.SCHEME))
+        try:
+            python: str | Exception = record.canonical(S.check_public(spec, json.loads(json.dumps(r))).to_json())
+        except (ValueError, TypeError, KeyError) as e:
+            python = e
+        assert "refused" in lean if isinstance(python, Exception) else record.canonical(lean) == python, (r, lean, python)
+        return lean
 
     assert verdict(rec) == {"ok": True, "codes": [], "detail": {}}
 
@@ -1178,67 +1315,8 @@ def test_the_public_items_rule_of_a_window_is_leans(served):
         r = json.loads(json.dumps(rec))
         for _ in range(rng.choice((1, 1, 2, 3))):
             mutate(rng, r)
-        try:
-            refused += not verdict(r).get("ok")
-        except OR.Disagree as e:
-            raise AssertionError(f"seed {seed}: Python {e.python} where the Lean, of record, gives {e.lean}") from None
+        refused += not verdict(r).get("ok")
     assert refused >= 100, refused
-    assert all(e["same"] for e in record.witness)
-    record.close()
-
-
-@pytest.mark.slow
-@LEAN
-def test_a_disagreement_rejects_the_session(served, monkeypatch):
-    """A Python reference that disagrees with Lean, at each check, refuses the session as ``lean-python-disagree: <check>``
-    with both verdicts in the witness; nothing is retried, and a refused sample is never resampled."""
-    *_, words = served
-    params, public, advice, priv = _window(words)
-    rec = _register(params, public)
-
-    def disagrees(check: str, patch, step) -> S.Refused:
-        ch = _challenger(params, coins=_coins())
-        with monkeypatch.context() as m:
-            patch(m)
-            with pytest.raises(S.Refused) as e:
-                step(ch)
-        assert _codes(e) == {f"{OR.DISAGREE}: {check}"}
-        bad = [x for x in ch.witness["honest"] if not x["same"]]
-        assert [x["check"] for x in bad] == [check] and bad[0]["lean"] != bad[0]["python"]
-        return ch
-
-    disagrees("registered", lambda m: m.setattr(OR, "py_registered", lambda x: {"reason": "forced"}),
-              lambda ch: _held(ch, "honest", rec))
-    disagrees("pass", lambda m: m.setattr(OR, "py_pass", lambda x: {"how": "forced"}), lambda ch: _held(ch, "honest", rec))
-    disagrees("registration", lambda m: m.setattr(SC.R, "check", lambda *a: SC.Verdict(False, ("R1-law",), {})),
-              lambda ch: _held(ch, "honest", rec))
-    disagrees("public", lambda m: m.setattr(SC.S, "check_public", lambda *a: SC.Verdict(False, ("keys",), {})),
-              lambda ch: _held(ch, "honest", rec))
-    ch = disagrees("draw", lambda m: m.setattr(OR, "py_draw", lambda x: {"refused": ["draw", "forced"]}),
-                   lambda ch: (_held(ch, "honest", rec), ch.select("honest")))
-    with pytest.raises(S.Refused) as e:
-        ch.select("honest")
-    assert _codes(e) == {"coin"} and "already open" in e.value.verdict.detail["coin"]
-    case = CC.case_twin
-    ch = disagrees("answer", lambda m: m.setattr(OR.CC, "case_twin", lambda j: {**case(j), "reason": "forced"}),
-                   lambda ch: _through(ch, rec))
-    with pytest.raises(S.Refused) as e:
-        ch.outcome("honest", [_unit(t) for t in ch.draws["honest"].units])
-    assert _codes(e) == {"final"}
-    t = ch.draws["honest"].units[0]
-    monkeypatch.setattr(OR, "py_opening", lambda x: "forced")
-    record = ORL.Record()
-    assert SC.check(params, rec, ch.draws["honest"].draw, t, _unit_pub(advice, priv, t), SC.opening(advice, priv, params, t),
-                    record=record) == f"{OR.DISAGREE}: opening"
-    assert record.witness[0]["python"] == "forced" and record.witness[0]["lean"] is None
-    record.close()
-    monkeypatch.undo()
-    op, served_domain = SC.opening(advice, priv, params, t), SC.window_domain
-    monkeypatch.setattr(SC, "window_domain", lambda params, ell: served_domain({**params, "context": "other"}, ell))
-    record = ORL.Record()
-    assert SC.check(params, rec, ch.draws["honest"].draw, t, _unit_pub(advice, priv, t), op, record=record) == \
-        f"{OR.DISAGREE}: prelude"
-    assert [(e["check"], e["same"]) for e in record.witness] == [("opening", True), ("prelude", False)]
     record.close()
 
 
@@ -1252,19 +1330,19 @@ def test_lean_and_rust_verdicts_are_read_from_their_outputs(tmp_path):
     sha = {d: hashlib.sha512((d / "session.json").read_bytes()).hexdigest() for d in (a, b)}
     line = {"session": f"{a}/", "accepted": False, "why": "ring-switch claim 2 mismatch"}
     (tmp_path / "lean.out").write_text(f"setup: 3 ms\nVERDICT {json.dumps(line)}\n")
-    v = SC.lean_verdict(tmp_path / "lean.out")
+    v = SC.lean_verdict((tmp_path / "lean.out").read_text())
     assert v["of_record"] and v["accepted"] is False and "ring-switch" in v["why"] and len(v["digest"]) == 128
     assert v["sessions"] == [sha[a]] and v["digest"] == hashlib.sha512(SC.canonical_json(line)).hexdigest()
     two = [{"session": str(a), "accepted": True, "why": ""}, {"session": str(b), "accepted": True, "why": ""}]
     (tmp_path / "two.out").write_text("".join(f"VERDICT {json.dumps(x)}\n" for x in two))
-    assert SC.lean_verdict(tmp_path / "two.out")["sessions"] == [sha[a], sha[b]] and SC.lean_verdict(tmp_path / "two.out")["accepted"]
+    assert SC.lean_verdict((tmp_path / "two.out").read_text())["sessions"] == [sha[a], sha[b]] and SC.lean_verdict((tmp_path / "two.out").read_text())["accepted"]
     (tmp_path / "two.out").write_text("".join(f"VERDICT {json.dumps(x)}\n" for x in (two[0], {**two[1], "accepted": False, "why": "w"})))
-    assert SC.lean_verdict(tmp_path / "two.out")["accepted"] is False and SC.lean_verdict(tmp_path / "two.out")["why"] == "w"
+    assert SC.lean_verdict((tmp_path / "two.out").read_text())["accepted"] is False and SC.lean_verdict((tmp_path / "two.out").read_text())["why"] == "w"
     (tmp_path / "gone.out").write_text(f"VERDICT {json.dumps({**line, 'session': str(tmp_path / 'gone')})}\n")
     (tmp_path / "bare.out").write_text('VERDICT {"accepted":true,"why":""}\n')
-    assert SC.lean_verdict(tmp_path / "gone.out")["sessions"] == [None] == SC.lean_verdict(tmp_path / "bare.out")["sessions"]
+    assert SC.lean_verdict((tmp_path / "gone.out").read_text())["sessions"] == [None] == SC.lean_verdict((tmp_path / "bare.out").read_text())["sessions"]
     (tmp_path / "none.out").write_text("")
-    assert SC.lean_verdict(tmp_path / "none.out")["accepted"] is None and SC.lean_verdict(tmp_path / "none.out")["sessions"] == []
+    assert SC.lean_verdict((tmp_path / "none.out").read_text())["accepted"] is None and SC.lean_verdict((tmp_path / "none.out").read_text())["sessions"] == []
     (tmp_path / "prove.out").write_text('LIVE\t{"verdict": {"accepted": true, "why": ""}}\n')
     assert SC.rust_verdict(tmp_path / "prove.out")["accepted"] is True and not SC.rust_verdict(tmp_path / "prove.out")["of_record"]
 
@@ -1298,11 +1376,12 @@ def test_the_cli_runs_the_window_through_the_service(served, tmp_path, monkeypat
         src = "resalt.json" if case == "resalted" else "manifest.json"
         assert SC.main(["coin-variant", f"{t}/{src}", f"{t}/coins.json", f"{t}/opening.json", f"{t}/coin-{case}.json", case]) == 0
     lean = tmp_path / "lean"
-    lean.write_text(f"#!{sys.executable}\nimport json, sys\nfrom verity.protocols.resource_accounting.compute.pouw.verifier.core_check import stream_subset\n"
+    lean.write_text(f"#!{sys.executable}\nimport json, sys\nfrom verity.protocols.accounting.compute.pouw.verifier.core_check import stream_subset\n"
                     "a = sys.argv\np, k = int(a[a.index('--population') + 1]), int(a[a.index('--k') + 1])\n"
                     "w = (p.bit_length() + 64 + 7) // 8\nsrc = bytes.fromhex(a[a.index('--stream') + 1])\n"
                     "sys.exit(1) if len(src) != 2 * k * w + 64 else None\n"
                     "print('DRAW ' + json.dumps({'law': 'subset', 'population': p, 'k': k, 'units': stream_subset(k, p, src)}))\n")
+    verify = _verify(tmp_path / "verify")
     lean.chmod(lean.stat().st_mode | stat.S_IEXEC)
     rec = json.loads((tmp_path / "registration.json").read_text())
     dry = _challenger(params, coins=_coins())        # the process's coins: its sample is the one the job opens
@@ -1313,14 +1392,16 @@ def test_the_cli_runs_the_window_through_the_service(served, tmp_path, monkeypat
         (tmp_path / f"pub{u}.bin").write_bytes(_unit_pub(advice, priv, u))
         (tmp_path / f"op{u}.json").write_text(json.dumps(SC.opening(advice, priv, params, u)))
         assert SC.check(params, rec, {"units": sampled}, u, _unit_pub(advice, priv, u), SC.opening(advice, priv, params, u), record=ORL.Record()) is None
-        (tmp_path / f"open{u}.json").write_text(json.dumps({"of_record": False, "accepted": True, "why": ""}))
         (tmp_path / f"s{u}").mkdir()
         (tmp_path / f"s{u}" / "session.json").write_text(json.dumps({"unit": u}))
+        (tmp_path / f"circuit{u}.txt").write_text("circuit")
         (tmp_path / f"lean{u}.out").write_text(f"VERDICT {json.dumps({'session': f'{t}/s{u}/', 'accepted': True, 'why': ''})}\n")
         (tmp_path / f"stage{u}.json").write_text(json.dumps({"definition": "d", "circuit_sha512": "1", "class_sha512": "2",
                                                              "ands": 1, "k_log": 1, "binding": "hash scratch"}))
-        rows.append({"unit": u, "stage": f"{t}/stage{u}.json", "pub": f"{t}/pub{u}.bin", "lean": f"{t}/lean{u}.out",
-                     "opening": f"{t}/open{u}.json", "session": f"{t}/s{u}/session.json"})
+        (tmp_path / f"prove{u}.out").write_text(f"LIVE\t{json.dumps({'verdict': {'accepted': True, 'why': ''}})}\n")
+        rows.append({"unit": u, "stage": f"{t}/stage{u}.json", "pub": f"{t}/pub{u}.bin", "circuit": f"{t}/circuit{u}.txt",
+                     "lean": f"{t}/lean{u}.out", "opening": f"{t}/op{u}.json", "session": f"{t}/s{u}/session.json",
+                     "rust": f"{t}/prove{u}.out"})
     (tmp_path / "units.json").write_text(json.dumps(rows))
     honest = {"registration": f"{t}/registration.json", "manifest": f"{t}/manifest.json"}
     reqs = [{"op": "coins"},
@@ -1339,7 +1420,7 @@ def test_the_cli_runs_the_window_through_the_service(served, tmp_path, monkeypat
     monkeypatch.setattr(sys, "stdin", io.StringIO("".join(json.dumps(r) + "\n" for r in reqs)))
     monkeypatch.setattr(SC, "Coins", lambda epoch, entropy: _coins())   # the process's coins are the ones that salted the pass
     capsys.readouterr()
-    assert SC.main(["challenger", p, f"{t}/log", "--lean", str(lean)], record=ORL.Record) == 0
+    assert SC.main(["challenger", p, f"{t}/log", "--lean", str(lean), "--verify", str(verify)], record=ORL.Record) == 0
     replies = capsys.readouterr().out.splitlines()
     assert [x.split(" ", 1)[0] for x in replies] == ["COINS", "OPENED", "REFUSED", *["REFUSED"] * len(SC.CASES), "REGISTERED",
                                                      "DRAWN", "REFUSED", "PENDING", "DELIVERED", "ACCEPT", "REFUSED"]
@@ -1364,16 +1445,17 @@ def test_the_cli_runs_the_window_through_the_service(served, tmp_path, monkeypat
     assert [w["reply"] for w in witness] == [x.split(" ", 1)[0] for x in replies]
     noted = [e for w in witness for e in w["of_record"]]
     assert {e["check"] for e in noted} >= {"registered", "registration", "pass", "draw", "answer"}
-    assert all(e["same"] and e["of_record"] == "lean" for e in noted)
+    assert all(sorted(e) == ["check", "lean"] for e in noted)
     accepted = [e for w in witness if w["reply"] == "ACCEPT" for e in w["of_record"]]
     assert accepted and all(e in o["of_record"] for e in accepted)
 
-    assert SC.main(["replay", p, str(log), f"{t}/replay", "--lean", str(lean)], record=ORL.Record) == 0
+    assert SC.main(["replay", p, str(log), f"{t}/replay", "--lean", str(lean), "--verify", str(verify)], record=ORL.Record) == 0
     assert capsys.readouterr().out.startswith("SAME ")
-    assert (tmp_path / "replay").is_dir() and not SC.replay(params, log, tmp_path / "replay2", SC.python_sampler, record=ORL.Record())  # the twin
+    assert (tmp_path / "replay").is_dir() and not SC.replay(params, log, tmp_path / "replay2", SC.python_sampler, record=ORL.Record(),
+                                                            verify=str(verify))  # the twin
     forged = {**sampling, "coin": ("00" if sampling["coin"][:2] != "00" else "01") + sampling["coin"][2:]}
     (log / "openings.jsonl").write_text(json.dumps(salt) + "\n" + json.dumps(forged) + "\n")
-    assert SC.main(["replay", p, str(log), f"{t}/replay3", "--lean", str(lean)], record=ORL.Record) == 1
+    assert SC.main(["replay", p, str(log), f"{t}/replay3", "--lean", str(lean), "--verify", str(verify)], record=ORL.Record) == 1
     out = capsys.readouterr().out
     assert out.startswith("DIFFERENT ") and "does not open against" in out
 
@@ -1406,7 +1488,7 @@ def test_shape_compares_what_the_prover_sends(tmp_path):
 def test_a_staged_unit_opens_under_the_window_root(served, tmp_path):
     """stage_tile.py, run by hidden_zk/served_stage.py, stages a call's tile and a filler tile of a committed execution phase as `Pc8TileSide` units, each in its own
     process, on the committer's side rows and salts: each is over the circuit the verifier pins for the template
-    (`core_check.TILES`, Lean's `PouwCheck.tiles`), and each public file's rows are the side trees' leaves, so the opening
+    (`core_check.TILES`, Lean's `PouwVerifier.tiles`), and each public file's rows are the side trees' leaves, so the opening
     accepts.  Nothing cheaper catches a unit whose committed rows are not the side rows (the index field dropped or moved),
     or a change to the template or to Flock's lowering that moves the circuit off its pin, which only staging shows;
     about a minute at K = 128."""

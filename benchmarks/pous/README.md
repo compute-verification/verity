@@ -30,8 +30,7 @@ fails and the run's `passed` is false.
 | `band-gpu` | The same band and dense kernels with no vLLM dependency. |
 | `p2-v3-gpu` | P2 v4 on the GPU, with the same steps, controls and metrics as `band-gpu`, so the two compare side by side. |
 
-A new implementation is a class in `bench.py`'s `IMPLS`. `streamed_wipe/` times the streamed-label wipe on one node,
-and `wipe_resume/` runs the red team's resume attack on both wipes.
+A new implementation is a class in `bench.py`'s `IMPLS`. `streamed_wipe/` times the streamed-label wipe on one node.
 
 ## On a GPU
 

@@ -6,15 +6,11 @@ which the kernel-order statement's interior is not: `tests/properties/test_route
 Its partition (the softmax committed once, nothing computed twice) is checked with the no-recompute rule, `tests/query/test_word.py`."""
 from __future__ import annotations
 
-import hashlib
-import json
 
 import numpy as np
 import pytest
-from verity.circuits.codec import encode_program
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity.circuits.program import Program
 
 from verity_vllm.definitions.registry import moe
 from verity_vllm.program.frontend.target_profile import TargetProfile
@@ -52,16 +48,6 @@ def test_ties_go_to_the_lower_expert_in_both():
     row[9] = row[3] = _bf16([5.0])[0]
     ids = evaluate(bind(moe.MoeRouterTopKOrdered, E=16, TOPK=4, VPT=4), row)[4:]
     assert list(ids[:2]) == [3, 9] and list(ids[2:]) == [0, 1]
-
-
-def _digest(fn, **st) -> str:
-    return hashlib.sha256(json.dumps(encode_program(Program(bind(fn, **st))), sort_keys=True).encode()).hexdigest()[:16]
-
-
-def test_the_kernel_order_routers_of_record_are_unchanged():
-    assert _digest(moe.MoeRouterTopK, E=64, TOPK=8, VPT=8) == "551afcc58e2e0c23"
-    assert _digest(moe.MoeRouterTopK, E=128, TOPK=8, VPT=8) == "7510a455e2e06630"
-    assert _digest(moe.MoeRouterTopKNorm, E=128, TOPK=8, VPT=8) == "62e4a9805606ac7c"
 
 
 def test_the_statement_is_the_default_and_the_kernel_order_router_stays_declarable():

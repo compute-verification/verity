@@ -12,6 +12,7 @@ import sys
 import pytest
 
 from verity_vllm.pipeline import cli
+from verity_vllm.acquire import compiled as CV
 from verity_vllm.query.manifest.format import manifest_digest
 from verity_vllm.records.schema_ids import MANIFEST_VERIFY_SCHEMA
 
@@ -37,7 +38,7 @@ def _verify(tmp_path, capsys, used: dict, rebuilt: dict) -> tuple[int, str, dict
     paths = [tmp_path / name for name in ("build.json", "build_rebuilt.json", "manifest_verify.json")]
     paths[0].write_text(json.dumps(used))
     paths[1].write_text(json.dumps(rebuilt))
-    rc = cli.main(["compiled", "verify", "--manifest", str(paths[0]), "--rebuilt", str(paths[1]), "--out", str(paths[2])])
+    rc = cli.run(CV, ["verify", "--manifest", str(paths[0]), "--rebuilt", str(paths[1]), "--out", str(paths[2])])
     return rc, capsys.readouterr().out.strip().splitlines()[-1], json.loads(paths[2].read_text())
 
 
@@ -82,7 +83,7 @@ def test_a_build_is_opened_at_the_path_as_given(tmp_path, monkeypatch, side, for
     out = tmp_path / "manifest_verify.json"
     monkeypatch.chdir(tmp_path)     # the suite's read guard takes an open of "" for a read of the directory the test runs in
     with pytest.raises(refusal):
-        cli.main(["compiled", "verify", "--manifest", args["--manifest"], "--rebuilt", args["--rebuilt"], "--out", str(out)])
+        cli.run(CV, ["verify", "--manifest", args["--manifest"], "--rebuilt", args["--rebuilt"], "--out", str(out)])
     assert not out.exists()
 
 

@@ -7,7 +7,6 @@ one the tree has, so the build a card waits on doesn't end at a moved file; the 
 directory `session.cu`'s includes reach, and its build's checks run on the Python its steps run on."""
 from __future__ import annotations
 
-import re
 import sys
 from pathlib import Path
 
@@ -82,41 +81,3 @@ def test_the_whole_store_pass_asks_a_leaf_pass_for_its_receipts_and_puts_the_mod
     assert s.ran == during
     assert (s.leaf_ctas, s.leaf_receipts, s.poison) == (leaf, kept, False)
 
-
-def test_every_path_rows_sh_names_is_in_the_tree():
-    script = (ROOT / "benchmarks/poub_session/rows.sh").read_text()
-    names = dict(re.findall(r"\b(RS|PR)=(\S+)", script))
-    assert names == {"RS": "benchmarks/poub_session", "PR": "verity/protocols/resource_accounting/memory/poub/prover"}
-    paths = {m.group(1).replace("$RS", names["RS"]).replace("$PR", names["PR"])
-             for m in re.finditer(r"((?:\$RS|\$PR|verity|benchmarks|tools)/[\w./-]+)", script)}
-    paths = {p.rstrip(".") for p in paths if ".lake/" not in p}
-    assert {"verity/protocols/resource_accounting/memory/poub/prover/poub_session/session.cu",
-            "verity/protocols/resource_accounting/memory/poub/prover/poub_session/prover.py",
-            "verity/protocols/resource_accounting/memory/poub/verifier/poub_session/verifier_process.py"} <= paths
-    assert sorted(p for p in paths if not (ROOT / p).exists()) == []
-
-
-def test_the_base_tree_links_every_directory_session_cu_includes_reach():
-    script = (ROOT / "benchmarks/poub_session/rows.sh").read_text()
-    pr = "verity/protocols/resource_accounting/memory/poub/prover"
-    links = {m.group(1).replace("$PR", pr) for m in re.finditer(r'ln -s "\$TREE/([^"]+)" "\$B/base/\1"', script)}
-    assert "verity/circuits" in links
-    reached, todo = set(), [ROOT / pr / "poub_session/session.cu"]
-    while todo:
-        f = todo.pop()
-        for name in re.findall(r'^#include "([^"]+)"', f.read_text(), re.M):
-            p = (f.parent / name).resolve()
-            assert p.is_file(), f"{f.relative_to(ROOT)} includes {name}, which is no file of the tree"
-            if p not in reached:
-                reached.add(p)
-                todo.append(p)
-    outside = sorted(str(p.relative_to(ROOT)) for p in reached if not any(p.is_relative_to(ROOT / d) for d in links))
-    assert outside == [], f"rows.sh's base tree links {sorted(links)}: link the directories of {outside} too"
-
-
-def test_the_build_checks_run_on_the_python_the_steps_run_on():
-    lines = (ROOT / "benchmarks/poub_session/rows.sh").read_text().splitlines()
-    runs = [i for i, line in enumerate(lines) if re.search(r"\$RS/\w+\.py", line) and not line.lstrip().startswith("#")]
-    py = [i for i, line in enumerate(lines) if line.startswith("export PY=")]
-    assert len(runs) >= 4 and len(py) == 1 and py[0] < min(runs)
-    assert [lines[i] for i in runs if re.search(r"\bpython3? \$RS/", lines[i])] == []

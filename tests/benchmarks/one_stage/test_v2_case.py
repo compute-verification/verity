@@ -87,7 +87,7 @@ def test_a_window_of_several_members_has_no_v2_case_and_leaves_only_missing(tmp_
 @pytest.mark.parametrize("summary", [True, False])
 def test_a_window_of_one_member_is_the_one_statement_case(tmp_path, RP, summary):
     """A window of one member, listed by its summary or, with none, ``m0`` alone with its pin its ``compose.log``'s, gets
-    v2's one statement: ``proofs`` exactly the pin, the kept public file's digest and the registered file, which v2's
+    v2's one statement: ``proofs`` exactly the kept public file's digest and the registered file, which v2's
     Lean reads, and the sessions under the evidence's names."""
     w, pin = tmp_path / "window", V.compose_command(LOG.read_text())["pin"]
     names = _members_window(w, RP, [{"k": 0, "template": "t", "n": 4, "base": 0}], [0], {"t": pin} if summary else None)
@@ -97,7 +97,7 @@ def test_a_window_of_one_member_is_the_one_statement_case(tmp_path, RP, summary)
     assert n == 1 and how == ("circuit file kept; public digest the kept file's own, taken after the audit: the window "
                               "keeps none from staging")
     assert v2["params"] == {"partition": {"rule": "r"}, "proofs": {
-        "circuit": pin, "public": V.PF.file_sha512(w / "m0" / "pub-4.bin"), "registered": None}}
+        "public": V.PF.file_sha512(w / "m0" / "pub-4.bin"), "registered": None}}
     e = json.loads(bytes.fromhex(v2["evidence"]))
     assert list(e["proofs"]) == ["sessions"] and [x["name"] for x in e["proofs"]["sessions"]] == names
     assert v2["blobs"] == [str(w / f) for f in ("m0/circuit.txt", "m0/pub-4.bin", "session-m0/sessions/a/session.json")]
@@ -119,7 +119,7 @@ def test_the_one_statement_names_the_members_registered_file_and_the_tables_its_
 
 def _v2(tmp_path: Path, blobs: list[Path]) -> dict:
     return {"blobs": [str(b) for b in blobs], "commitment": b"registration".hex(), "evidence": b'{"proofs":{}}'.hex(),
-            "params": {"proofs": {"circuit": "00" * 64, "public": "11" * 64, "registered": None}}}
+            "params": {"proofs": {"public": "11" * 64, "registered": None}}}
 
 
 def test_a_case_with_its_blobs_is_written_private(tmp_path):
@@ -171,9 +171,8 @@ def test_a_window_keeping_no_staged_digest_gets_the_kept_public_files_own_which_
     audit, so the case shows only that the kept files verify, and `how` says which digest it is."""
     w = _window(tmp_path)
     v2, how, n = V.case(w, tmp_path / "scratch")
-    pin = V.compose_command(LOG.read_text())["pin"]
     assert v2["params"] == {"delta": "1/100", "partition": {"rule": "r"},
-                            "proofs": {"circuit": pin, "public": PUBLIC, "registered": None}}
+                            "proofs": {"public": PUBLIC, "registered": None}}
     assert n == 1 and how == ("circuit file kept; public digest the kept file's own, taken after the audit: the window "
                               "keeps none from staging")
     s = w / "session-m0" / "sessions" / "a"
@@ -181,11 +180,11 @@ def test_a_window_keeping_no_staged_digest_gets_the_kept_public_files_own_which_
                                             s / "rep-0.bin")]
     e = json.loads(bytes.fromhex(v2["evidence"]))
     assert "verdicts" not in e and [x["name"] for x in e["proofs"]["sessions"]] == e["sessions"] == ["s0"]
-    (w / "case-v2.json").write_text(json.dumps({"params": {"proofs": {"circuit": pin, "registered": None}}}))
+    (w / "case-v2.json").write_text(json.dumps({"params": {"proofs": {"registered": None}}}))
     assert V.case(w, tmp_path / "scratch") == (v2, how, n)
 
 
-STAGED = {"params": {"proofs": {"circuit": "cc" * 64, "public": PUBLIC, "registered": None}}}
+STAGED = {"params": {"proofs": {"public": PUBLIC, "registered": None}}}
 
 
 def test_the_case_names_the_public_digest_the_audit_staged_and_says_whether_before_the_sample(tmp_path, RP, capsys):

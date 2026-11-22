@@ -25,7 +25,10 @@
 # and network_ssd_io_m3 in multiples of 93 GiB) and NEBIUS_RATE_USD_PER_HOUR; NEBIUS_DATA_DISK names the data disk
 # (default <vm>-data), so a VM can boot on another one's kept data disk, its filesystem untouched; NEBIUS_FILESYSTEM_ID attaches an
 # existing shared filesystem at /workspace/fs, and NEBIUS_PREEMPTIBLE=1 makes the VM preemptible, at most at the per-GPU-hour limit of
-# the pricing policy NEBIUS_SPOT_POLICY_ID (else whatever the spot price is).  GPU clocks are locked only on gpu-rtx6000.
+# the pricing policy NEBIUS_SPOT_POLICY_ID (else whatever the spot price is).  GPU clocks are locked only on gpu-rtx6000: its GPU is
+# the entry of tools/config's GPU registry (verity_config.gpus) whose nebius_platforms lists it, and that entry's `card` its card file
+# (calibration/hardware/cards/<card>.toml, read by verity.device.load_card), whose clock.memory is the memory lock; the graphics lock is GPU_LOCK_MHZ below,
+# refused above the card's clock.sm.
 # Billing starts when the VM is Running and is per second; --yes is required for anything that starts it.
 set -euo pipefail
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -52,6 +55,41 @@ if [ "$dry" = 0 ]; then
   [ "$yes" = 1 ] || die "this starts billing at \$$RATE_USD_PER_HOUR/h: pass --yes (or --dry-run)"
   [[ $max_hours =~ ^[0-9]+$ ]] && [ "$max_hours" -ge 1 ] || die "--max-hours H (whole hours >= 1): the VM stops itself after it"
 fi
+# The set-up's chosen graphics lock, beneath the card's clock.sm ceiling: a setting of this launcher, not a card's figure.
+GPU_LOCK_MHZ=2100
+lock_clocks=$([ "$PLATFORM_PREFIX" = gpu-rtx6000 ] && echo 1 || echo 0)
+clocks=""
+if [ "$lock_clocks" = 1 ]; then
+  clocks=$(python3 - "$src/../../.." "$PLATFORM_PREFIX" "$GPU_LOCK_MHZ" <<'PY'
+import os, sys
+from pathlib import Path
+root, platform, gpu = os.path.normpath(sys.argv[1]), sys.argv[2], int(sys.argv[3])
+sys.path.insert(0, os.path.join(root, "tools/config"))
+from verity_config import ConfigError, gpus
+from verity_config.registry import REGISTRY
+try:
+    entries = [g for g in gpus().values() if platform in g.nebius_platforms]
+except ConfigError as e:
+    sys.exit(f"launch.sh: {e}")
+if len(entries) != 1:
+    sys.exit(f"launch.sh: {platform} locks its GPUs' clocks, and {len(entries)} entries of {REGISTRY / 'gpus.toml'} list it in "
+             "nebius_platforms: list it in its GPU's entry alone")
+(entry,) = entries
+sys.path.insert(0, root)
+from verity.device import load_card
+from verity.errors import InvalidArtifact
+cards = Path(root) / "calibration/hardware/cards"
+try:
+    clock = load_card(entry.card, directory=cards)["clock"]
+    sm, memory = clock["sm"]["value"], clock["memory"]["value"]
+except (KeyError, InvalidArtifact) as e:
+    sys.exit(f"launch.sh: {entry.id}'s card {entry.card}: {cards / (entry.card + '.toml')} has no clock.sm and clock.memory to lock the GPUs to ({e!r})")
+if gpu > sm:
+    sys.exit(f"launch.sh: GPU_LOCK_MHZ={gpu} is above {entry.card}'s clock.sm, {sm} MHz: lower it beneath the card's ceiling")
+print(f"VY_GPU_CLOCK_MHZ={gpu}\nVY_MEM_CLOCK_MHZ={memory}")
+PY
+) || exit 2
+fi
 deadline_epoch=""
 if [ -n "$deadline" ]; then
   deadline_epoch=$(date -u -d "$deadline" +%s 2> /dev/null) || die "--deadline $deadline is not a UTC time (2026-10-07T15:00:00Z)"
@@ -67,7 +105,7 @@ ssh_pubkey() {
 # render_user_data PUBKEY LEASE_EPOCH: the cloud-init document (scripts gzip+base64 so no YAML quoting can bend them)
 render_user_data() {
   VY_PUBKEY=$1 VY_LEASE_EPOCH=$2 VY_NAME=$VM_NAME VY_USER=$SSH_USER VY_DEV=$DATA_DEVICE_ID VY_DEADLINE=$deadline_epoch VY_FS=${FS_ID:+vy-fs} \
-    VY_CLOCKS=$([ "$PLATFORM_PREFIX" = gpu-rtx6000 ] && echo 1 || echo 0) python3 - "$here" "$src/research/pods/sh" <<'PY'
+    VY_CLOCKS=$lock_clocks VY_CLOCK_LINES=$clocks python3 - "$here" "$src/research/pods/sh" <<'PY'
 import base64, gzip, os, re, sys, tomllib
 nebius, sh = sys.argv[1], sys.argv[2]
 LIMIT = 32768  # Nebius refuses a longer spec.cloud_init_user_data
@@ -92,7 +130,8 @@ def blob(path):
     return base64.b64encode(gzip.compress(shipped(path), mtime=0)).decode()
 env = (f"VY_USER={os.environ['VY_USER']}\nVY_DATA_DEVICE_ID={os.environ['VY_DEV']}\nVY_BOOT_LEASE_S=7200\n"
        f"VY_LEASE_EPOCH={os.environ['VY_LEASE_EPOCH']}\nVY_DEADLINE_EPOCH={os.environ['VY_DEADLINE']}\n"
-       f"VY_FS_TAG={os.environ['VY_FS']}\nVY_LOCK_CLOCKS={os.environ['VY_CLOCKS']}\n")
+       f"VY_FS_TAG={os.environ['VY_FS']}\nVY_LOCK_CLOCKS={os.environ['VY_CLOCKS']}\n"
+       + "".join(f"{line}\n" for line in os.environ["VY_CLOCK_LINES"].splitlines()))
 files = [("/etc/vy/vy.env", "0644", base64.b64encode(gzip.compress(env.encode(), mtime=0)).decode()),
          ("/usr/local/sbin/vy-setup", "0755", blob(f"{nebius}/vm_setup.sh")),
          ("/usr/local/sbin/vy-nebius-stop", "0755", blob(f"{nebius}/vm_stop.sh")),

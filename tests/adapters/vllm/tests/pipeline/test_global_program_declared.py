@@ -13,13 +13,11 @@ from __future__ import annotations
 
 import copy
 import json
-from pathlib import Path
 
 import pytest
 
 from verity_vllm.check.match.declaration import MODELLED_ENGINE
 from verity_vllm.config import VLLM
-from verity_vllm.pipeline import coverage_workloads as gw
 from verity_vllm.pipeline import global_program as GP
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.records.workload import Workload, WorkloadSampling
@@ -31,17 +29,14 @@ STOPS_AT_EOS = ("a request may stop before max_tokens only when its last served 
 GPU = {"compute_capability": [8, 9], "num_sms": 142}
 
 
-class _CharTok:
-    path, sha256 = Path("snap/tokenizer.json"), "5a" * 32
-
-    def encode(self, text):
-        return [ord(c) for c in text]
-
-    def decode(self, ids):
-        return "".join(map(chr, ids))
-
-
-DOC = gw.workload_doc(case="B0", model="org/m", tok=_CharTok(), profile="B8-mixed", ctx="C256", seed=3, tokenizer_revision="ab" * 20, sampling_seed=7)
+#: (prompt_len, max_tokens, arrive_step) of each request, in index order
+SHAPES = ((98, 9, 0), (128, 12, 1), (108, 10, 1), (244, 24, 1), (108, 10, 9), (233, 23, 13), (138, 13, 13), (164, 16, 14))
+DOC = {"schema": "verity-vllm/workload/v2", "model": "org/m", "case": "B0",
+       "engine": {"revision": "ab" * 20, "vllm": "d9105ea80", "args": {"max_num_batched_tokens": 2112}},
+       "seed": 0, "variants": {"greedy": {"temperature": 0.0, "top_p": 1.0, "top_k": 0}}, "seeds": [],
+       "sampling": {"variant": "greedy", "seed": None, "n": 1},
+       "requests": [{"request_id": f"q{i}", "index": i, "prompt_len": p, "max_tokens": m, "arrive_step": a,
+                     "prompt_token_ids": [97 + (i + j) % 26 for j in range(p)]} for i, (p, m, a) in enumerate(SHAPES)]}
 
 
 def _requests(change=None):

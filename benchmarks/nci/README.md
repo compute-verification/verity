@@ -1,7 +1,7 @@
 # The inference-only policy's literature index and slowdown board
 
 This directory is data and a calculator for the question negotiators will ask about the
-[inference-only policy](../../verity/protocols/workload_classification/training_detection/inference_only/verifier/README.md):
+[inference-only policy](../../verity/protocols/policy/training_detection/inference_only/verifier/README.md):
 if both sides adopt it, how fast can a malicious developer still advance frontier capability? It holds every source the
 answer relies on, each claim quoted verbatim; the parameters the bounds depend on, each estimate saying which findings
 it merges and how; the policies they are evaluated under; and the board, one training method in one configuration per

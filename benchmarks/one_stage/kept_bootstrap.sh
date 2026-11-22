@@ -41,9 +41,9 @@ with zipfile.ZipFile(w) as z:
 print(re.search(r"^Requires-Dist: (torch==\S+)", meta, re.M)[1])
 EOF
 ) || exit 2
-srcs=$(cd "$A" && find verity_vllm/ops/pod_fa2_tap.sh verity_vllm/ops/pod_fa3_tap.sh verity_vllm/ops/pod_norm_tap.sh \
+srcs=$(cd "$A" && find verity_vllm/ops/pod_fa2_tap.sh verity_vllm/ops/pod_fa3_tap.sh \
   verity_vllm/ops/pod_router_tap.sh verity_vllm/ops/cuda_headers.sh verity_vllm/acquire/fa2_tap_src verity_vllm/acquire/fa3_tap_src \
-  verity_vllm/acquire/norm_tap_src verity_vllm/acquire/router_tap_src manifests/checkpoints.json manifests/checkpoints-int8.json \
+  verity_vllm/acquire/router_tap_src manifests/checkpoints.json manifests/checkpoints-int8.json \
   -type f ! -name '*.pyc' ! -path '*/__pycache__/*' | LC_ALL=C sort | xargs sha256sum) || { echo "kept_bootstrap.sh: a key input is missing" >&2; exit 2; }
 key=$(printf '%s\n' "wheel+pins $(sha256sum "$BOOT" | cut -c1-64) $torch" "$srcs" "cuda $(realpath "$CUDA_HOME") $nvcc" "arch $arch" \
   "cases $CASES row_taps=${ROW_TAPS:-1} hdims=${FA2_TAP_HDIMS:-}")

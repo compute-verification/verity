@@ -19,7 +19,7 @@ doesn't have yet.
 How the work is done, and nothing the verifier reads:
 
 - **The kernel** that computes the served model's matrix multiplications
-  (`verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90/`: `pearl_c_sm90.cu`, the inert-work counter
+  (`verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm90/`: `pearl_c_sm90.cu`, the inert-work counter
   `debit_sm90.cu`, `build.sh`, built by `benchmarks/harness/setup/pearl_c_sm90.sh`). Any code may replace it that
   commits the same operand rows, checked words and served outputs bit for bit: the verifier recomputes a sampled tile
   from its opened rows and never sees how they were computed (`checkTile`). `build.sh` refuses a binary that fails
@@ -59,7 +59,7 @@ What the number is of, and the verifier that decides it. Change any of these and
   by come from the model's shape and the class (`MODELS`, `model_macs` in `run.py`); attention is counted and never
   credited.
 - **The verifier**: the Lean program `pouw-pearlplus` (package `pouw_pearlplus` in
-  `verity/protocols/resource_accounting/compute/pouw/verifier/lean/pearlplus/`, `PouwCheck.PearlPlus`'s `check`) and its Python twin
+  `verity/protocols/accounting/compute/pouw/verifier/lean/pearlplus/`, `PouwVerifier.PearlPlus`'s `check`) and its Python twin
   `benchmarks/pouw/pearl_c_vllm/verify_run.py`, which must agree. The number needs the Lean verdict.
 - **The scheme**: `pearl-c-h100-v1-h3` alone (`schemeOf` refuses the RTX PRO 6000's schemes by name), with 64 × 64
   tiles and a matrix depth k (the length of the products' dot products) of at least 1,024 (`TILE`, `K_MIN`) or
@@ -105,7 +105,7 @@ one.
 record of another commitment is `after-coin`; a verdict of record refuses a sample the serving machine took itself
 (`of-record`). One
 sampling session a root, ever, is the challenger's own rule, in Python on the auditor's device (`open_refusal` in
-`verity/protocols/compose/verifier/live_challenger/auditor.py`), not in Lean. On your own machine nothing refuses a
+`verity/protocols/run/verifier/live_challenger/auditor.py`), not in Lean. On your own machine nothing refuses a
 retried sample.
 
 **Dropping passes after the sample.** The run's commitment covers the retained passes (`runCommitment`) and must be
@@ -119,8 +119,9 @@ Inert work below the bound, and any other skip, is what TT_OUT rev1 bounds.
 `liveRow`), and an excluded row must fail them; a filler row is zero and no row holds a word past the kept width
 (`not zero past the kept width`). `checkRecords` limits voluntary rows.
 
-**Crediting one call twice.** `passesDistinct` refuses `repeated-call` (an index repeated under one salt) and
-`call-range`; `workloadReason` refuses repeated matmul indices.
+**Crediting one call twice, or choosing its noise.** `passesPlaced` holds each call's index to its place, round s's call
+c at s·2^16 + c (`callPlace`): it refuses `call-place` (another index), `repeated-call` (two passes at one round) and
+`call-range` (a round or a position past 2^16); `workloadReason` refuses repeated matmul indices.
 
 **A smaller instance, or another scheme.** The verifier refuses a matrix multiplication outside the scheme's domain
 (`domainReason`: k under 1,024 other than 256, k past 2^16, m or n past 2^24) and passes at a k_min or
@@ -155,7 +156,7 @@ uv run verity bench compute --protocol pearl-plus --from tests/benchmarks/comput
 uv run verity bench compute --protocol pearl-plus --from DIR --per-call --top 5
 ~~~
 
-`--protocol` names the useful-work scheme by its registered name (`verity.protocols.resource_accounting.scheme`):
+`--protocol` names the useful-work scheme by its registered name (`verity.protocols.accounting.scheme`):
 `pearl-plus` is the one a served run answers for today, and `dither` raises `NotImplementedError`, since no kernel
 serves it and no verifier answers for a served run of it. `--from DIR` reads a run's record from the directory DIR,
 through no network and with no key. `verity bench` starts

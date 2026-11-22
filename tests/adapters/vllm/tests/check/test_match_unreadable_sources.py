@@ -9,7 +9,6 @@ from pathlib import Path
 
 from tests.check.test_global_match import R0, R1, _check, assemble
 from tests.observe.test_fold_synthetic import memory  # noqa: F401 - `memory` is the fixture
-from verity_vllm.check import verdict as V
 from verity_vllm.check.match import declaration as GD
 from verity_vllm.check.match import global_match as gm
 
@@ -36,9 +35,3 @@ def test_g1_fails_by_name_on_an_unreadable_versions_json(memory, tmp_path):
     assert any("capture/versions.json is present but unreadable (JSONDecodeError" in p for p in _check(res, "G1")["problems"])
 
 
-def test_engine_args_parse_as_json_else_stay_strings(tmp_path):
-    (tmp_path / "commit.log").write_text("$ python commit_delta.py --engine-arg enforce_eager=true --engine-arg kv_cache_dtype=fp8 "
-                                         "--engine-arg max_model_len=4096 --engine-arg cfg=[1,2\n")
-    es = V.execution_of_record(tmp_path)["engine_settings"]
-    assert {k: es[k] for k in ("enforce_eager", "kv_cache_dtype", "max_model_len", "cfg")} == {
-        "enforce_eager": True, "kv_cache_dtype": "fp8", "max_model_len": 4096, "cfg": "[1,2"}

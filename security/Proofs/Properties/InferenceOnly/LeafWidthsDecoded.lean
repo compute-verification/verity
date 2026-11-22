@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Properties.InferenceOnly.DecodeKeys
+public import Proofs.Properties.Flock.Decoder.DecodeKeys
 public import Proofs.Properties.InferenceOnly.LeafWidthsBody
 
 /-!
@@ -20,7 +20,8 @@ namespace InferenceOnlyVerifier.Properties.SecurityProofs.LeafWidths
 open Flock.Program
 
 /-- **Every body of a decoded Program is `BodyInner`, and the width check passed it.** -/
-theorem decoded_inner (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) :
+theorem decoded_inner (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P)
+    (hrc : (P.defs[P.root]!).body.recut = #[] := by assumption) :
     ∀ d < P.defs.size, BodyInner (P.defs[d]!).body ∧
       ∃ defs' key w w', (Widths.bodyBad defs' key (P.defs[d]!).body).run w = .ok none w' := by
   obtain ⟨st, hP, hinv, -⟩ := BodiesOk.decode_spec bytes P h
@@ -31,21 +32,23 @@ theorem decoded_inner (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) 
 
 /-- **The decoder ran the width check**: a composite Definition of a decoded Program returns its body's return type,
 its body is `BodyInner`, and the width check passed it. -/
-theorem decoded_checked (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) :
+theorem decoded_checked (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P)
+    (hrc : (P.defs[P.root]!).body.recut = #[] := by assumption) :
     ∀ d < P.defs.size, (P.defs[d]!).prim = false →
       (P.defs[d]!).body.retType = (P.defs[d]!).ret ∧ BodyInner (P.defs[d]!).body ∧
         ∃ defs' key w w', (Widths.bodyBad defs' key (P.defs[d]!).body).run w = .ok none w' :=
-  fun d hd hp => ⟨DecodeKeys.decode_ret bytes P h d hd hp, decoded_inner bytes P h d hd⟩
+  fun d hd hp => ⟨DecodeKeys.decode_ret bytes P h d hd hp, decoded_inner bytes P h hrc d hd⟩
 
 /-- **Every composite body of a decoded Program reads every leaf at its width**, and returns the Definition's
 type. -/
-theorem decoded_wide (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) :
+theorem decoded_wide (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P)
+    (hrc : (P.defs[P.root]!).body.recut = #[] := by assumption) :
     ∀ d < P.defs.size, (P.defs[d]!).prim = false →
       (P.defs[d]!).body.retType = (P.defs[d]!).ret ∧ BodyWide (P.defs[d]!).body := by
   obtain ⟨st, hP, hinv, -⟩ := BodiesOk.decode_spec bytes P h
   have hok : ∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1
   intro d hd hp
-  obtain ⟨hrt, hI, defs', key, w, w', hrun⟩ := decoded_checked bytes P h d hd hp
+  obtain ⟨hrt, hI, defs', key, w, w', hrun⟩ := decoded_checked bytes P h hrc d hd hp
   obtain ⟨hc, hB⟩ := hok d hd
   refine ⟨hrt, bodyBad_sound P.defs defs' d key _ w w' hB hI ?_ hrun⟩
   rw [hrt]

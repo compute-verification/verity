@@ -36,17 +36,16 @@ from verity.commitments import salt_file as SF
 from verity.commitments.periods import interface as IF
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2
 from verity.commitments import registered_value as RV
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
-    registered_commit,
-)
+from verity.commitments.periods.rows import registered as registered_commit
 
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.config import CHECKPOINTS
 from verity_vllm.records.weights_registration import WeightsRegistration
 
+from . import window_circuit as WC
 from .common import _arr_shape
 from .window_builder import WEIGHTS, Grain, table_param, weight_param
-from .window_circuit import WindowClass, class_program, lower
+from .window_circuit import WindowClass
 
 #: the class `weights_record` reads the weights record and the weight parameters of: every class's are the model's, at a grain
 WEIGHTS_CLASS = WindowClass(1, 2, 2)
@@ -126,8 +125,7 @@ def _table_words(f: dict[str, Any], served: Any) -> np.ndarray:
 def weight_value(program: str, param: str, words: Any, salts: bytes | None = None, keep_rows: bool = False) -> RV.Registered:
     """Weight parameter ``param``'s registered value: its rows (``words`` in rows of its width) committed as core's
     `registered_value.Registered` commits ``hm96-sha512/row/v2`` rows, or a table's ``hm96-sha512/row-seg/v1`` rows (the leaves
-    its opening reads in-circuit, `gates.embedding`), with `pouw.h1.registered.commit` (on the GPU where this process has
-    one) under ``program``, the weights record's program digest, row j under ``salts``' 192 bytes j (the registration's,
+    its opening reads in-circuit, `gates.embedding`), with `rows.registered` under ``program``, the weights record's program digest, row j under ``salts``' 192 bytes j (the registration's,
     `salt_file`), or fresh OS bytes: a hiding commitment, so its root says nothing of the weight to anyone without the
     salts, a verifier holding a candidate checkpoint included. ``keep_rows``: hold the rows (a window's committer, which
     opens them)."""
@@ -144,7 +142,7 @@ def value_salts(v: RV.Registered) -> bytes:
 
 def _fields(registered: Any) -> tuple[Any, list[tuple[str, list[int], int]]]:
     """The class Program the weights are read of and its weights record's fields (name, shape, value bits)."""
-    r = class_program(registered, WEIGHTS_CLASS)
+    r = WC.class_program(registered, WEIGHTS_CLASS.positions)
     return r, [(n, list(_arr_shape(t)), next(iter(t.width_set()))) for n, t in dict(r.program.fn.signature()[0])[WEIGHTS].fields]
 
 
@@ -154,7 +152,7 @@ def _weights(registered: Any, grain: Grain, served_params: Any = ()) -> tuple[An
     window's record's, ``weights/<label>@<words>``: its slice units' rows of a weight, `pipeline.weight_rows`) with their
     words, wired or not, and those by field. Refused (ValueError) for a served parameter of no field, or of a table."""
     r, fields = _fields(registered)
-    every = lower(registered, WEIGHTS_CLASS, None, grain).circuit.registered.params
+    every = WC.lower(registered, WEIGHTS_CLASS, None, grain).circuit.registered.params
     params = {p: every[p] for p in weight_params(every)}
     words = {n: int(np.prod(s, dtype=np.int64)) * int(b) // 16 for n, s, b in fields}
     for p in served_params:
@@ -254,14 +252,18 @@ def weight_values(registered: Any, served: Any, registration: str | Path | None,
 
 
 def record_words(registered: Any, checkpoint_dir: str, checkpoints_manifest: str | None = None,
-                 kv_cache_dtype: str = "auto") -> dict[str, np.ndarray]:
+                 kv_cache_dtype: str = "auto", tables: Any = None) -> dict[str, np.ndarray]:
     """Each field of the class Program's weights record composed from ``checkpoint_dir``'s shards (`check.weights_of_record`),
     by field, its words as digested: the words a committer serving that checkpoint serves (`weight_values`), where it reads
-    them from the checkpoint rather than the engine's tensors."""
+    them from the checkpoint rather than the engine's tensors. A field held to an analytic table is ``tables``' served words
+    for it (`weights_registration`'s), refused outside its bound; one ``tables`` doesn't name is left out."""
     r, fields = _fields(registered)
     out: dict[str, np.ndarray] = {}
-    _composed(registered, r, fields, checkpoint_dir, checkpoints_manifest, kv_cache_dtype,
-              lambda name, words: out.__setitem__(name, np.array(words)))
+    rec = _composed(registered, r, fields, checkpoint_dir, checkpoints_manifest, kv_cache_dtype,
+                    lambda name, words: out.__setitem__(name, np.array(words)))
+    for f in rec["fields"]:
+        if f.get("pinned") == "analytic" and (tables or {}).get(f["analytic"]["table"]) is not None:
+            out[f["field"]] = _table_words(f, tables[f["analytic"]["table"]])
     return out
 
 

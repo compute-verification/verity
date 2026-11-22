@@ -13,12 +13,9 @@ from typing import Any
 import pytest
 
 from tests.check.test_oracle_compare import make_match
-from tests.check.test_verdict import _base, _row_dir
 from tests.check.test_weightsource_mla import _tensors, _write
 from verity_vllm.check import checkpoint_index as CI
-from verity_vllm.check import executed_prefix as EPL
 from verity_vllm.check import match_oracle as MO
-from verity_vllm.check import verdict as V
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.pipeline import cli
 
@@ -45,27 +42,6 @@ def test_a_checkpoint_index_opens_its_config_by_the_joined_name(tmp_path, opened
     assert (os.path.join(str(tmp_path), "config.json"), "r") in opened
 
 
-def test_the_match_account_opens_its_two_files_by_their_joined_names(tmp_path, opened):
-    match_dir = tmp_path / "attempt" / "match"
-    (match_dir / "capture").mkdir(parents=True)
-    (match_dir / "capture" / "tokens.json").write_text('{"requests": []}')
-    (tmp_path / "attempt" / "global_match.json").write_text("{}")
-    account = EPL.load_match_account(str(match_dir))
-    assert account["tokens"] == {"requests": []}
-    assert (os.path.join(str(match_dir), "capture", "tokens.json"), "rb") in opened
-    assert (os.path.join(str(tmp_path / "attempt"), "global_match.json"), "rb") in opened
-
-
-def test_a_verdict_opens_a_wrappers_result_by_the_name_the_glob_found(tmp_path, opened):
-    d, _ = _row_dir(tmp_path, _base(), commit_pass=True, rc=0)
-    step = "e6" * 32
-    (d / "build_step").mkdir()
-    (d / "build_step" / "result.json").write_text(json.dumps({"ok": True, "program": {"digest": "p" * 64, "correspondence_digest": step}}))
-    v = V.from_record(d, rc=0)
-    assert v.correspondence_digests == {"step": step}
-    assert (str(d / "build_step" / "result.json"), "r") in opened
-
-
 @pytest.mark.parametrize("as_bytes", [False, True])
 def test_the_of_record_set_reads_the_manifest_it_is_handed_in_text_or_in_bytes(tmp_path, as_bytes):
     """The manifest's Program digest joins the set, under the name as a string and under the same name in bytes."""
@@ -87,9 +63,9 @@ def test_a_diff_of_two_records_opens_each_name_as_the_command_line_gives_it(tmp_
         p.write_text("{}")
     monkeypatch.chdir(tmp_path)
     with pytest.raises(raised):
-        cli.main(["weights-of-record", "--diff", name.format(a=a), str(b)])
+        cli.run(WR, ["--diff", name.format(a=a), str(b)])
     with pytest.raises(raised):
-        cli.main(["weights-of-record", "--diff", str(a), name.format(a=b)])
+        cli.run(WR, ["--diff", str(a), name.format(a=b)])
 
 
 def test_the_oracles_tie_facts_open_the_two_files_by_their_joined_names(tmp_path, opened):
