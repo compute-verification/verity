@@ -1,11 +1,12 @@
 """The auditor's step before an audit on a local challenger: the challenger's host opens the lane's period with the
 deployment's registration record's digest (`registration=`), before any session, and the key record the audit reads.
 
-    local_registration.py HOST MAIN WINDOW LANE OUT [--deployed-key]
+    local_registration.py HOST MAIN WINDOW LANE OUT [--deployed-key] [--pins PINS]
 
 HOST is the host the audit reopens (``records_audit.py audit --challenger-host``), MAIN the verifier's copy of main's
 first-parent history, WINDOW the staged window whose docket names the program. OUT gets ``registration.json`` (the
-record: no registered entries) and ``challenger-key.json``; the host's ledger is ``HOST/var/windows.jsonl``.
+record: with PINS, the window's pins file ``[{program, values}]``, its entries under their one program; else none
+under the docket's program) and ``challenger-key.json``; the host's ledger is ``HOST/var/windows.jsonl``.
 """
 from __future__ import annotations
 
@@ -27,12 +28,20 @@ def main(argv: list[str] | None = None) -> int:
     for name in ("host", "main", "window", "lane", "out"):
         p.add_argument(name)
     p.add_argument("--deployed-key", action="store_true", help="the key at lms.DEPLOYED, as the audit's --deployed-key")
+    p.add_argument("--pins", help="the window's pins file, [{program, values}], whose entries the record registers")
     a = p.parse_args(argv)
     out, window = Path(a.out), Path(a.window)
     out.mkdir(parents=True, exist_ok=True)
     docket = json.loads((window / "registration.json").read_text())
-    record = {"format": DM.REGISTRATION, "program": docket["program"], "deployment": {"kind": "one-stage-local"},
-              "registered": [], "previous": None}
+    program, registered = docket["program"], []
+    if a.pins:
+        groups = json.loads(Path(a.pins).read_text())
+        if len(groups) > 1:
+            raise SystemExit(f"--pins {a.pins}: {len(groups)} programs; a registration record registers under one")
+        if groups:
+            program, registered = groups[0]["program"], list(groups[0]["values"].values())
+    record = {"format": DM.REGISTRATION, "program": program, "deployment": {"kind": "one-stage-local"},
+              "registered": registered, "previous": None}
     (out / "registration.json").write_text(json.dumps(record, sort_keys=True))
     digest = DD.digest(record)
     at = dict(params=(lms.DEPLOYED.W, lms.DEPLOYED.H), workers=len(os.sched_getaffinity(0))) if a.deployed_key else {}

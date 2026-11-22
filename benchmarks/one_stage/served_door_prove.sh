@@ -88,7 +88,7 @@ if [ -n "${AUDIT_RULE:-}" ]; then  # the staged window on the audit's road: reco
   REG_FLAGS=""
   if [ -n "${REGISTRATION_LANE:-}" ]; then  # the auditor opens the lane's period with the registration before any session
     ( unset PYTHONPATH; $UV run -q python benchmarks/one_stage/local_registration.py $S/challenger-host $S/main.txt \
-        $S/window "$REGISTRATION_LANE" $S/registration --deployed-key ) > $O/registration.txt 2>&1 || { tail -c 3000 $O/registration.txt; exit 5; }
+        $S/window "$REGISTRATION_LANE" $S/registration --deployed-key --pins $S/window/pins.json ) > $O/registration.txt 2>&1 || { tail -c 3000 $O/registration.txt; exit 5; }
     grep -h '^REGISTERED' $O/registration.txt
     REG_FLAGS="--challenger-host $S/challenger-host --registration $S/registration/registration.json --registration-ledger $S/challenger-host/var/windows.jsonl --challenger-key $S/registration/challenger-key.json --registration-lane $REGISTRATION_LANE"
   fi
