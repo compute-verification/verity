@@ -210,8 +210,8 @@ def weighedCodes (v : Verifier) : Array String :=
 #guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord [pin "x" 1, pin "y"]) } == #["R8-weights-shape"]
 -- an entry is exactly its own keys, and no value is registered twice: an entry with a `reads` key, or a value twice,
 -- is another form
-#guard weighedCodes { weighed E3R with weightsOfRecord :=
-  some (ofRecord [("x", (pin "x").2.setObjVal! "reads" (Json.arr #[])), pin "y"]) } == #["R8-weights-form"]
+def readsPin : String × Json := ("x", (pin "x").2.setObjVal! "reads" (Json.arr #[]))
+#guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord [readsPin, pin "y"]) } == #["R8-weights-form"]
 #guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord [pin "x", pin "x", pin "y"]) } ==
   #["R8-weights-form"]
 -- what the members' check holds reads to (`readPins`): with marked inputs, none without a registration or with one R8
