@@ -64,7 +64,8 @@ def run(tmp_path: Path, *args: str, **env: str) -> subprocess.CompletedProcess:
     if not tree.exists():
         make_tree(tmp_path)
     held = {k: v for k, v in os.environ.items()
-            if k not in {"VY_CHALLENGER_1_HOST", "HANDOFF", "NODE", "VERITY_HOLD_PLACEMENT", "COMPOSE_OFF_NODE", "PRODUCT", *ROW_OF_CARDS}}
+            if k not in {"VY_CHALLENGER_1_HOST", "HANDOFF", "NODE", "VERITY_HOLD_PLACEMENT", "COMPOSE_OFF_NODE", "PRODUCT",
+                         "REGISTRATION_LANE", "H1_LANE", "GATE_KEY_NAME", *ROW_OF_CARDS}}
     return subprocess.run(["bash", str(tree / SERVED_RUN / "run.sh"), *args], capture_output=True, text=True, check=False,
                           env={**held, "HOME": str(tmp_path), **env})
 
@@ -105,6 +106,13 @@ def test_the_window_run_takes_the_gates_coins_by_default_with_mains_line(tmp_pat
     main = [Path(s) for s in flags(got, "--send") if s.endswith("/main.txt")]
     assert len(main) == 1 and main[0].read_text().split() == [git(tmp_path / "tree", "rev-parse", "HEAD")]
 
+
+
+def test_a_lanes_gate_runs_reach_the_gate_with_its_own_key(tmp_path):
+    lane = {"REGISTRATION_LANE": "rehearsal-1"}
+    window = env_of(run(tmp_path, "window", "--dry-run", **ROW_OF_CARDS, **lane))
+    audit = env_of(run(tmp_path, "audit", "--dry-run", SERVED_RUN="r-window", AUDIT_NODE="vy-nebius-cpu-16", **lane))
+    assert (window["PP_GATE_KEY"], audit["PP_GATE_KEY"]) == ("${HOME}/.ssh/rehearsal-1_ed25519", "~/.ssh/rehearsal-1_ed25519")
 
 @pytest.mark.parametrize("args", [("window",), ("window", "--tie"), ("window", "--development"), ("setup",)])
 def test_no_address_reaches_a_dry_runs_command(tmp_path, args):

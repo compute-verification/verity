@@ -24,9 +24,16 @@ from pathlib import Path
 here, run, dev, tie = Path(sys.argv[1]), sys.argv[2], sys.argv[3] == "1", sys.argv[4] == "1"
 script = f"adapters/vllm/tools/served_run/{run}.sh"
 placement = tomllib.loads((here / "placement.toml").read_text())
+given = {k: v for f, a in zip(sys.argv[5:], sys.argv[6:]) if f == "--env" for k, _, v in [a.partition("=")]}
+held = {**{k: v for k, v in os.environ.items() if v}, **{k: v for k, v in given.items() if v}}
+lane = held.get("REGISTRATION_LANE") or held.get("H1_LANE") or "vllm"
+# the lane's own gate key is LANE_ed25519; vllm's keeps the name it is registered under
+held.setdefault("GATE_KEY_NAME", "vllm_lane" if lane == "vllm" else lane)
 if run == "bindings":
     from verity_cli.served_table import pieces
-    cfg, values, out = tomllib.loads(Path(sys.argv[5]).read_text()), placement["node"]["vy-spot-glm53"]["bindings"], {}
+    bound = placement["node"]["vy-spot-glm53"]["bindings"].items()
+    values = {k: v.replace("${GATE_KEY_NAME}", held["GATE_KEY_NAME"]) for k, v in bound}
+    cfg, out = tomllib.loads(Path(sys.argv[5]).read_text()), {}
     for piece in (x for p in cfg["party"] for x in pieces(cfg, p["name"])):
         if mine := {k: values[k] for k in (*piece.binds, *piece.optional) if k in values}:
             out.setdefault(piece.reaches or piece.party, {})[piece.component] = mine
@@ -39,8 +46,6 @@ if dev and "development" not in r.get("coins", {}):
 if tie and "tie" not in r:
     sys.exit(f"run.sh: the {run} run has no tied form: drop --tie")
 coins = {} if run == "settings" else r.get("coins", {}).get("development" if dev else "gate", {})
-given = {k: v for f, a in zip(sys.argv[5:], sys.argv[6:]) if f == "--env" for k, _, v in [a.partition("=")]}
-held = {**{k: v for k, v in os.environ.items() if v}, **{k: v for k, v in given.items() if v}}
 PARAMETER = re.compile(r"\$\{(\w+)(?::-([^}]*))?\}")
 ON_NODE = {"HOME", *(k for n in placement["node"].values() for k in n.get("env_files", {}))}
 

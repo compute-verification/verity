@@ -6663,8 +6663,10 @@ def _serve_argv(tmp_path: Path, env: dict[str, str]) -> tuple[int, list[str]]:
     for path, body in ((venv / "python", python), (bin_ / "sleep", "exit 0")):
         path.write_text(f"#!/bin/sh\n{body}\n")
         path.chmod(0o755)
+    (key := tmp_path / ".ssh" / "vllm_lane_ed25519").parent.mkdir()
+    key.write_text("")
     env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(tmp_path / "serve"),
-           "OUT": str(tmp_path / "out"), "VY_CHALLENGER_1_HOST": CHALLENGER_HOST, **env}
+           "OUT": str(tmp_path / "out"), "VY_CHALLENGER_1_HOST": CHALLENGER_HOST, "PP_GATE_KEY": str(key), **env}
     run = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "serve"], cwd=tree, env=env, check=False,
                          capture_output=True)
     (tmp_path / "run.log").write_bytes(run.stdout + run.stderr)
@@ -6735,6 +6737,24 @@ def test_a_serve_on_the_lanes_default_gate_reads_the_challenger_hosts_address_fr
         assert rc == 10 and ("--challenger-gate" in argv) == bool(gate), (rc, argv)
         assert not gate or argv[argv.index("--challenger-gate") + 1] == GATE
 
+
+
+def test_a_serve_on_the_lanes_default_gate_reaches_it_with_the_lanes_own_key_or_is_refused_before_serving(tmp_path):
+    """The lane's default gate command reaches the challenger with PP_GATE_KEY, the lane's own key (rehearsal-1's here),
+    and with that key unset or no file the serve is refused by its name before serve-openai starts: no gate call falls
+    back to another key."""
+    env = {"POUW": "pearlplus", "PEARLPLUS_TIE": "1", "PEARLC_KERNEL": "pearl_c_sm90", "PEARLC_CUBIN": "/c/pearl_c_sm90.cubin",
+           "DATASET": "llama32_1b_fixed_4_27_2", "TIMING": "at-once", "H1_LANE": "rehearsal-1"}
+    (key := tmp_path / "rehearsal-1_ed25519").write_text("")
+    rc, argv = _serve_argv(tmp_path / "held", {**env, "PP_GATE_KEY": str(key)})
+    assert rc == 10 and argv[argv.index("--challenger-gate") + 1] == (
+        f"ssh -i {key} -o IdentitiesOnly=yes -o BatchMode=yes research@{CHALLENGER_HOST}"), (rc, argv)
+    assert argv[argv.index("--challenger-lane") + 1] == "rehearsal-1"
+    for name, held in (("absent", str(tmp_path / "absent_ed25519")), ("unset", "")):
+        rc, argv = _serve_argv(tmp_path / name, {**env, "PP_GATE_KEY": held})
+        said = (tmp_path / name / "out" / "verdicts.txt").read_text().splitlines()
+        assert (rc, argv, not (tmp_path / name / "calls").exists()) == (3, [], True), (rc, argv)
+        assert len(said) == 1 and said[0].startswith(f"PREFLIGHT: PP_GATE_KEY ({held or 'unset'}) is no readable file"), said
 
 @pytest.mark.parametrize("env, budget", [({}, "512"), ({"T": "2048"}, "2048")])
 def test_the_engine_gets_one_token_budget(tmp_path, env, budget):
@@ -6815,7 +6835,8 @@ def _serve_calls(tmp_path: Path, env: dict[str, str]) -> tuple[int, list[str], l
 
 RELEASE_RUN = "5e" * 16
 #: what `served_verdicts.sh serve` issues through the venv's python at its defaults with H1 off, in order: the endpoint,
-#: the weights' docket, the load's release run and the load; a front's call and its line come before the load
+#: the weights' docket, the registration's hold (with no REGISTRATION_LANE, the development path's line), the load's
+#: release run and the load; a front's call and its line come before the load
 #: what the serve's one --protocols-config holds with no protocol's: release order, the network attester's setting
 RELEASE_ORDER = json.dumps({NETWORK_ATTESTER.name: {"order": "release-order"}})
 SERVE_OPENAI = (
@@ -6830,6 +6851,7 @@ WEIGHTS_REGISTRATION = (
     "/workspace/hf/hub/models--verity-int8--Llama-3.2-1B-INT8/snapshots/15b0976d400d796ee589e7737d03a919526bf800 "
     "--out TMP/serve/weights_registration.json --deployment-record "
     "TMP/serve/deployment-registration.json")
+REGISTRATION_HOLD = "TMP/tree/benchmarks/one_stage/served_verdicts.py registration-hold TMP/serve/deployment-registration.json"
 NEW_RELEASE_RUN = "-c import uuid; print(uuid.uuid4().hex)"
 SERVE_LOAD = "{load} " f"--port 18190 --release {RELEASE_RUN} --out TMP/serve/load.jsonl"
 VARIED_LOAD = SERVE_LOAD.format(load="TMP/tree/adapters/vllm/tools/served_run/serve_load.py --model verity-int8/Llama-3.2-1B-INT8 "
@@ -6866,10 +6888,10 @@ LOADS = pytest.mark.parametrize("env, issued, said", [
 def test_the_serve_step_issues_these_commands_and_lines_under_each_load(tmp_path, env, issued, said):
     """Under LOAD varied (the default), dataset and front, with and without a rehearsal's front, the serve step issues
     through the venv's python exactly these commands in this order and publishes exactly these lines: the endpoint, the
-    weights' docket, the front's call and its line where one is set, the load's release run and the load. A change
+    weights' docket, the registration's hold, the front's call and its line where one is set, the load's release run and the load. A change
     to the runner that alters one of them under these loads fails here."""
     rc, calls, lines = _serve_calls(tmp_path, env)
-    assert rc == 0 and calls == [SERVE_OPENAI, WEIGHTS_REGISTRATION, *issued], (rc, calls)
+    assert rc == 0 and calls == [SERVE_OPENAI, WEIGHTS_REGISTRATION, REGISTRATION_HOLD, *issued], (rc, calls)
     assert lines == SAID_UP + said + SAID_STOPPED
 
 
@@ -6886,7 +6908,7 @@ def test_under_every_other_load_the_serve_step_starts_nothing_of_a_session(tmp_p
     caller's own rehearsal front does, and issues and says what it does without them."""
     rc, calls, lines = _serve_calls(tmp_path, {**env, "LOAD_CMD": _notes(tmp_path, "a session's load"),
                                                "CERTIFIER_CLOSE": _notes(tmp_path, "a session's close")})
-    assert rc == 0 and calls == [SERVE_OPENAI, WEIGHTS_REGISTRATION, *issued], (rc, calls)
+    assert rc == 0 and calls == [SERVE_OPENAI, WEIGHTS_REGISTRATION, REGISTRATION_HOLD, *issued], (rc, calls)
     assert lines == SAID_UP + said + SAID_STOPPED
     assert not [c for c in calls if "--session" in c or "attester_piece.py close" in c or "a session's" in c]
     assert sum("attester_piece.py" in c for c in calls) == ("CERTIFIER_FRONT" in env)
@@ -6917,7 +6939,7 @@ def test_a_sessions_serve_step_runs_the_callers_load_between_the_front_and_the_c
     got, calls, lines = _serve_calls(tmp_path, {"LOAD": "session", "CERTIFIER_FRONT": SESSION_FRONT,
                                                 "LOAD_CMD": _notes(tmp_path, "the caller's load", load_rc),
                                                 "CERTIFIER_CLOSE": SESSION_CLOSE, **extra})
-    assert got == rc and calls == [SERVE_OPENAI, WEIGHTS_REGISTRATION, *issued], (got, calls)
+    assert got == rc and calls == [SERVE_OPENAI, WEIGHTS_REGISTRATION, REGISTRATION_HOLD, *issued], (got, calls)
     assert lines == SAID_UP + said + SAID_STOPPED
     assert not [c for c in calls if "serve_load.py" in c or c == NEW_RELEASE_RUN]
 
