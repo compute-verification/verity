@@ -1206,7 +1206,6 @@ inference_policy() {  # in TREE, before the lease: the policy's (c, k, n) at the
   c=$(io_class)
   [ -n "$c" ] || { ROAD_NOT_RUN="CLASSES names no class but record"; say "INFERENCE-ONLY POLICY: none, since $ROAD_NOT_RUN"; return 0; }
   [ -z "$PEARLPLUS_TIE" ] || phi=(--serve "$D/pearlplus/serve-phi.json" --pearl-tables "${PEARLPLUS_ARM#pouw:}")
-  [ "${1:-}" != window ] || phi=(--serve "$D/serve.json")  # the window's serve's own φ, after it served
   out=$(CUDA_VISIBLE_DEVICES='' "$PY" benchmarks/one_stage/inference_only.py policy --class "$c" --model "$REPO" \
     --revision "$REV" --lease-min "${LEASE_MIN:-60}" --tree "$(tree_sha)" "${phi[@]}" --out "$IO_POLICY" \
     2> "$D/inference-only-policy.err")
@@ -1214,6 +1213,13 @@ inference_policy() {  # in TREE, before the lease: the policy's (c, k, n) at the
   say "${out:-INFERENCE-ONLY POLICY failed $(failed "$rc" "$D/inference-only-policy.err")}"
   [ "$rc" != 0 ] || limits
   return "$rc"
+}
+#: what the window's policy step rests on that no signed message fixes, its first line (records_audit's DEVELOPMENT shape)
+POLICY_DEVELOPMENT="the policy is the developer's own file, signed by no one (IO_POLICY, written before the serve by inference_only.py policy)"
+policy_held() {  # the window's policy step, after the serve: the policy written before it (IO_POLICY), which it reads and never writes
+  say "INFERENCE-POLICY DEVELOPMENT $POLICY_DEVELOPMENT"
+  [ -s "$IO_POLICY" ] || { ROAD_WHY="INFERENCE-ONLY POLICY refused: no policy at IO_POLICY ($IO_POLICY); the window's step reads the one written before the serve (inference_only.py policy) and writes none"; say "$ROAD_WHY"; return 1; }
+  say "INFERENCE-ONLY POLICY read from IO_POLICY ($IO_POLICY), its file's SHA-512 $(sha512sum "$IO_POLICY" | cut -c1-16)…; whether it was written before the serve began is the verdict's to say"
 }
 # The limits of the policy's rate rule (verity/inference-only/v0's α and Γ, which the composite's inference-only case is
 # checked at), fixed with the policy, so before serve-openai starts: the run's ALPHA and GAMMA where both are set, else
@@ -2144,7 +2150,7 @@ EOF
         || { say "ADVICE: its registration has no public form"; road_stop advice 14; }
       say "ADVICE: committed (its root a hiding commitment); its content and length are held to no registered compiler (candidate 135)"
       RAN+=(advice) ;;
-    inference-policy) road_step inference-policy inference_policy window ;;
+    inference-policy) road_step inference-policy policy_held ;;
     circuits)  # a count an earlier call left in OUT is no count of this one's, which inference-only reads
       local c
       for c in $CLASSES; do rm -f "$OUT/window-circuit-${c//,/-}.json"; done

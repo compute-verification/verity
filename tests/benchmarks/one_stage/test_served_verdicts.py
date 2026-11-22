@@ -7314,3 +7314,40 @@ def test_a_missing_or_malformed_audit_summary_is_an_error_by_name_never_a_verdic
     assert S.main(["window-record", str(path)]) == 2
     out = capsys.readouterr().out
     assert out.startswith("WINDOW-RECORD ERROR: ") and why in out and "accept" not in out.replace("accepted", ""), out
+
+
+def _policy_step(tmp_path: Path, policy: str | None) -> tuple[int, list[str]]:
+    """The window road's ``inference-policy`` step (`policy_held`) with IO_POLICY holding ``policy`` (absent where None),
+    and the road's end: its exit and what it said."""
+    lines = (HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh").read_text().splitlines()
+    fns = [x for x in lines if x.startswith(("POLICY_DEVELOPMENT=", "step_not_run()", "step_refused()"))]
+    for name in ("road_step", "road_end", "policy_held"):
+        i = next(i for i, x in enumerate(lines) if x.startswith(f"{name}() {{"))
+        fns += lines[i:lines.index("}", i) + 1]
+    (out := tmp_path / "out").mkdir(parents=True)
+    if policy is not None:
+        (tmp_path / "policy.json").write_text(policy)
+    stubs = 'say() { printf "%s\\n" "$*" | tee -a "$OUT/verdicts.txt"; }\nRAN=() REFUSED=() NOT_RUN=()\ndeclare -A WHY=()'
+    body = "\n".join([stubs, *fns, "road_step inference-policy policy_held; road_end 20"])
+    p = subprocess.run(["bash", "-c", body], env={**os.environ, "OUT": str(out), "IO_POLICY": str(tmp_path / "policy.json")},
+                       capture_output=True, text=True, check=False)
+    return p.returncode, p.stdout.splitlines()
+
+
+def test_the_window_policy_step_refuses_by_name_when_no_policy_was_written_before_the_serve(tmp_path):
+    """The window's policy step reads IO_POLICY and writes none: with no file there it is refused, naming IO_POLICY."""
+    rc, said = _policy_step(tmp_path, None)
+    assert rc == 20 and not (tmp_path / "policy.json").exists(), said
+    assert any(x.startswith("INFERENCE-ONLY POLICY refused: no policy at IO_POLICY") for x in said), said
+    end, = (x for x in said if x.startswith("ROAD END"))
+    assert "refused or undecided 1 (inference-policy)" in end, said
+
+
+def test_the_window_policy_step_says_first_that_the_policy_is_the_developers_own_and_reads_it_unchanged(tmp_path):
+    """Its first line is the development line, and it ran without changing the policy written before the serve."""
+    rc, said = _policy_step(tmp_path, '{"format": "verity-bench/inference-only-policy/v1"}')
+    assert said[0] == ("INFERENCE-POLICY DEVELOPMENT the policy is the developer's own file, signed by no one (IO_POLICY, "
+                       "written before the serve by inference_only.py policy)"), said
+    end, = (x for x in said if x.startswith("ROAD END"))
+    assert rc == 0 and "ran 1 (inference-policy)" in end, said
+    assert (tmp_path / "policy.json").read_text() == '{"format": "verity-bench/inference-only-policy/v1"}'
