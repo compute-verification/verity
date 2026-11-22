@@ -1,8 +1,8 @@
 # PoUB
 
-The bandwidth audit establishes, window by window, how many bits of a registered store the hardware read from its
+The bandwidth audit establishes, epoch by epoch, how many bits of a registered store the hardware read from its
 memory. It establishes it from a store committed before any coin, passes over it each keyed by a live coin and
-committed by its root before the window's deadline, and openings of sampled receipts checked against the store.
+committed by its root before the epoch's deadline, and openings of sampled receipts checked against the store.
 
 Two declarations exist in `scheme.py`, each its own protocol with its own verifier and store, and no setting turns one
 into the other: `bandwidth` (PoUB-P2, `verity/remote-bandwidth/p2/v0`) over PoUS's store `C*`, the one an application
@@ -32,11 +32,11 @@ Not yet: openings and plans reach the verifier in the clear, no session proves i
 | `bandwidth` | served | never written | served | never written | never written | served |
 | `poub` | never written | exists | exists | exists | exists | exists |
 
-Both take a pass's seed from its window's challenge and the previous pass's root, and send each pass's root and then the
-window's sampled openings to the verifier party; `bandwidth`'s closer also reads PoUS's memory attester.
+Both take a pass's seed from its epoch's challenge and the previous pass's root, and send each pass's root and then the
+epoch's sampled openings to the verifier party; `bandwidth`'s closer also reads PoUS's memory attester.
 
 A new implementation supplies: a store with its registration (its blocks and their tree), the passes over it, and a Lean verifier of its session.
-Fixed for every implementation: the live coins and the window's deadline, the receipt layout of its own term (`DELTA_SCHEME`), the sampled openings and the pooled bound.
+Fixed for every implementation: the live coins and the epoch's deadline, the receipt layout of its own term (`DELTA_SCHEME`), the sampled openings and the pooled bound.
 
 ## Interfaces
 

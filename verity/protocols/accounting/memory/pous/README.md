@@ -19,7 +19,7 @@ The memory wipe is a protocol of its own (`wipe`) whose files share this directo
 | the Lean verifier | `pous-run-protocol`: setup's decode of `C*` against the commitment, then the signed session at its point | `verifier/check/` |
 | the auditor's device | the memory attester: the salt, a coin tree committed before the session, each answer timed on its clock, the session signed | `attester/challenger_session.py`, `attester/memory_attester.py`, `attester/lean/` |
 | the reference | the codecs behind one API, setup, the timed audit and the period's answer, in Python | `verifier/` |
-| its circuits | `PousP2SetupCheck_v2`, one unit a store block; the session's, decode's, answer's and verdict's Definitions | `prover/setup_circuit.py`, `prover/*_circuit.py` |
+| its circuits | `PousP2SetupCheck_v2`, one unit a store block; the session's, decode's, answer's and verdict's circuit templates | `prover/setup_circuit.py`, `prover/*_circuit.py` |
 | its device code | P2's encode and decode on the GPU (`libp2v1.so`) | `prover/p2/p2_store/`, `prover/p2/p2_gpu/` |
 
 ## What varies
@@ -55,4 +55,4 @@ uv run tools/check/suites.py verity/protocols/accounting/memory/pous/verifier/ch
 ~~~
 
 It builds the Lean verifier and holds each executable to the Python on the CPU: setup, the timed audit's wire on the
-spec's vectors, a recorded run's verdict and the verdict unit against its Definition. It ends `1 suites: 1 passed`.
+spec's vectors, a recorded run's verdict and the verdict unit against its circuit template. It ends `1 suites: 1 passed`.
