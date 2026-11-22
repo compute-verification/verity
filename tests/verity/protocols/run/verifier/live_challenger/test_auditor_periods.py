@@ -414,8 +414,8 @@ def test_a_period_open_refuses_a_length_it_cant_check(host, signer, length):
 
 REGISTRATION = "7d" * 64
 V0 = "verity/inference-only/v0"
-POLICY = {"policy": f"--policy {V0}", "alpha": "--alpha 3/1000", "gamma": "--gamma 4096",
-          "registration": f"--registration {REGISTRATION}"}
+POLICY = {"policy": f"--policy {V0}", "alpha": "--alpha 3/1000", "gamma": "--gamma 4096"}
+REG = f"--registration {REGISTRATION}"
 
 
 def test_an_inference_only_periods_open_commits_its_policy_and_registration_as_given_and_another_open_none(host, signer):
@@ -425,7 +425,7 @@ def test_an_inference_only_periods_open_commits_its_policy_and_registration_as_g
     (`by`), α never reduced and no natural rounded; an open with none of them signs no policy, and the ledger's check
     reads both as it read them before."""
     body = ok(ssh(host, signer, f"period-open --name p1 --cap 2 --circuit {CIRCUIT} --draw-k 27 "
-                                f"{' '.join(POLICY.values())}", "hash"))["body"]
+                                f"{' '.join(POLICY.values())} {REG}", "hash"))["body"]
     assert (body["policy"], body["alpha"], body["gamma"], body["registration"]) == (V0, [3, 1000], 4096, REGISTRATION)
     assert (body["by"], body["draw_k"]) == ("hash", 27)
     line = A.read_ledger(host.ledger)[0]
@@ -446,11 +446,27 @@ def test_an_inference_only_periods_open_commits_its_policy_and_registration_as_g
         "p2": ("hash", 1, CIRCUIT, [])}
 
 
-@pytest.mark.parametrize("given", [c for n in (1, 2, 3) for c in itertools.combinations(POLICY, n)], ids="+".join)
-def test_a_period_open_with_part_of_an_inference_only_periods_policy_and_registration_is_refused(host, signer, given):
-    """No period signs part of a policy: α and Γ without the id of the protocol that reads them, one without the
-    other, the policy without the registration θ is read from, or the registration without the policy. The refusal
-    names each flag that is missing, and it is the signing step's, so no caller of `period` gets one signed."""
+def test_a_period_opens_registration_stands_on_its_own_and_a_policy_requires_one(host, signer):
+    """The registration log's head is signed with or without a policy: a period that is not inference-only signs it
+    alone. An inference-only period's policy, given or registered, is refused without it, and nothing is signed."""
+    body = ok(ssh(host, signer, f"period-open --name p1 --cap 2 --circuit {CIRCUIT} {REG}", "hash"))["body"]
+    assert body["registration"] == REGISTRATION and not set(A.POLICY_FIELDS) & set(body)
+    ok(ssh(host, signer, "period-close --name p1", "hash"))
+    seq = len(A.read_ledger(host.ledger))
+    ok(admin(host, signer, REGISTER))
+    for policy in (" ".join(POLICY.values()), "--policy-name llama-1b"):
+        refused(ssh(host, signer, f"period-open --name p2 --cap 2 --circuit {CIRCUIT} {policy}", "hash"),
+                "period-open p2: --registration SHA512 missing: an inference-only period's open signs its policy and its "
+                "registration together")
+    assert len(A.read_ledger(host.ledger)) == seq
+
+
+@pytest.mark.parametrize("given", [c for n in range(1, len(POLICY)) for c in itertools.combinations(POLICY, n)],
+                         ids="+".join)
+def test_a_period_open_with_part_of_an_inference_only_periods_policy_is_refused(host, signer, given):
+    """No period signs part of a policy: α and Γ without the id of the protocol that reads them, or one without the
+    other. The refusal names each flag that is missing, and it is the signing step's, so no caller of `period` gets
+    one signed."""
     missing = " and ".join(A.POLICY_FIELDS[f] for f in A.POLICY_FIELDS if f not in given) + " missing"
     for key in ("hash", None):
         lane = "" if key else " --lane hash"
@@ -479,7 +495,7 @@ def test_a_period_open_refuses_a_policy_or_a_registration_it_cant_read(host, sig
     """The policy's id is one the gate knows, so no line's α and Γ are read in a form or unit it wasn't given in. α
     and Γ are signed exactly as given, so each is one plain decimal form or refused: no sign, no leading zero, no
     fraction or exponent, a denominator of at least 1, at most 39 digits; the registration is a SHA-512 in lowercase."""
-    args = {**POLICY, flag.removeprefix("--"): f"{flag} {value}"}
+    args = {**POLICY, "registration": REG, flag.removeprefix("--"): f"{flag} {value}"}
     rc, doc = ssh(host, signer, f"period-open --name p1 --cap 2 --circuit {CIRCUIT} {' '.join(args.values())}", "hash")
     refused((rc, doc), f"{flag} {shlex.split(value)[0][:200]!r}: ")
     assert "\n" not in doc["refused"] and A.read_ledger(host.ledger) == []
@@ -501,14 +517,14 @@ def test_a_period_open_that_names_a_registered_policy_signs_the_auditors_policy_
     assert rc == 0 and [json.loads(x) for x in out.splitlines()][0] == line and f'"gamma":{most},'.encode() in out
     body = ok(ssh(host, signer, f"period-open --name p1 --cap 2 --circuit {CIRCUIT} --policy-name llama-1b "
                                 f"--registration {REGISTRATION}", "hash"))["body"]
-    assert {f: body[f] for f in (*A.POLICY_FIELDS, "policy_name", "by")} == {
+    assert {f: body[f] for f in (*A.POLICY_FIELDS, "registration", "policy_name", "by")} == {
         "policy": V0, "alpha": [3, 1000], "gamma": 4096, "registration": REGISTRATION, "policy_name": "llama-1b",
         "by": "hash"}
     ok(ssh(host, signer, "period-close --name p1", "hash"))
     body = ok(admin(host, signer, f"period-open --name k1 --lane kernels --cap 1 --circuit {CIRCUIT} "
                                   f"--registration {REGISTRATION} --policy-name wide.2"))["body"]
     assert (body["alpha"], body["gamma"], body["policy_name"], body["by"]) == ([2, 4], most, "wide.2", "vy-admin")
-    own = ok(ssh(host, signer, f"period-open --name p2 --cap 2 --circuit {CIRCUIT} {' '.join(POLICY.values())}",
+    own = ok(ssh(host, signer, f"period-open --name p2 --cap 2 --circuit {CIRCUIT} {' '.join(POLICY.values())} {REG}",
                  "hash"))["body"]
     assert "policy_name" not in own and own["by"] == "hash"
     assert sorted(checked(host)) == ["k1", "p1", "p2"]
@@ -559,15 +575,14 @@ def test_the_step_run_as_auditor_registers_a_policy_from_its_command_line(host, 
     (f"--policy-name llama-1b --alpha 1/2 --registration {REGISTRATION}", "not with --policy, --alpha or --gamma"),
     (f"--policy-name llama-1b --gamma 1 --registration {REGISTRATION}", "not with --policy, --alpha or --gamma"),
     (f"--policy-name llama-1b {' '.join(POLICY.values())}", "not with --policy, --alpha or --gamma"),
-    ("--policy-name llama-1b", "--registration SHA512 missing"),
     (f"--policy-name llama-2b --registration {REGISTRATION}", "holds no policy llama-2b"),
     (f"--policy-name 'a b' --registration {REGISTRATION}", "--policy-name 'a b': "),
 ])
 def test_a_period_open_refuses_a_registered_policys_name_beside_values_of_its_own_or_one_not_registered(
         host, signer, flags, why):
     """The name is signed only over the registry's own values: an open that names a registered policy and gives an id,
-    α or Γ of its own is refused, by the step that signs, as is a name the registry lacks or one without the
-    registration, so no lane's values go out under the auditor's name."""
+    α or Γ of its own is refused, by the step that signs, as is a name the registry lacks,
+    so no lane's values go out under the auditor's name."""
     ok(admin(host, signer, REGISTER))
     for key in ("hash", None):
         lane = "" if key else " --lane hash"

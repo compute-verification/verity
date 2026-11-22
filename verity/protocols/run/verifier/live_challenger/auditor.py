@@ -5,7 +5,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
     vy-challenger-gate open --session S --root R
     vy-challenger-gate period-open --name P --cap N --circuit SHA512 [--draw-k K] [--rows T] [--model M | --weights-root W]
                                    [--circuit-files JSON] [--length JSON]
-                                   [(--policy ID --alpha N/D --gamma G | --policy-name NAME) --registration SHA512]
+                                   [--policy ID --alpha N/D --gamma G | --policy-name NAME] [--registration SHA512]
                                    [--lane LANE]
     vy-challenger-gate period-close --name P
     vy-challenger-gate policy-register --name NAME --policy ID --alpha N/D --gamma G
@@ -107,13 +107,15 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   descriptor digests; an open without it commits none), and with `--length JSON` the fixed length its windows serve (`length`,
   `{"max_tokens": [n, ...], "stop": "fixed"}`: each request's public max_tokens, served to that cap whatever it samples,
   which PoUW's credit holds each window's served rows to; an open without it commits none, and credit counts none of
-  its windows). An inference-only period's open also commits the policy its check holds the serve to and the
-  registration θ is read from, all four or none (part of them is refused): `--policy ID` (`policy`), the id of the
+  its windows). An inference-only period's open also commits the policy its check holds the serve to, all three or
+  none (part of them is refused): `--policy ID` (`policy`), the id of the
   protocol whose params read α and Γ, which names their form and unit (`POLICIES`; another id is refused);
   `--alpha N/D` (`alpha`, ``[N, D]``) and `--gamma G` (`gamma`), naturals as those params read them
-  (`InferenceOnlyCheck.Protocol`), signed as given, with no default; and `--registration SHA512` (`registration`), the digest of
-  the deployment's first registration record (`InferenceOnlyCheck.Theta.digest`), the one θ's provenance cites. The open's
-  `by` is who gave them, the lane's key or vy-admin; an open with none of the four commits no policy. With
+  (`InferenceOnlyCheck.Protocol`), signed as given, with no default. Any period's open may commit
+  `--registration SHA512` (`registration`): the digest of the registration log's head, the deployment's registration
+  record, the log's first record (`InferenceOnlyCheck.Theta.digest`); an open with a policy must, and one without a
+  policy may commit it on its own. The open's `by` is who gave them, the lane's key or vy-admin; an open with none of
+  the three commits no policy. With
   `--policy-name NAME` in place of the first three, the open signs the id, α and Γ of the policy vy-admin registered
   under that name (the policy registry) and the name (`policy_name`), which no open carries otherwise: the auditor's
   policy, whoever opens the period. Its windows are
@@ -898,12 +900,13 @@ def gamma_of(s: str) -> int:
 
 
 def registration_of(s: str) -> str:
-    """A period-open's registration (`--registration`, written as `registration`): the digest of the deployment's first
-    registration record, the one that registers θ and that θ's provenance cites (`InferenceOnlyCheck.Theta.digest`: SHA-512
-    of the record's format, a zero byte and its canonical JSON), in lowercase hex, or Refused."""
+    """A period-open's registration (`--registration`, written as `registration`), with or without a policy: the digest
+    of the registration log's head, the deployment's registration record, the log's first record
+    (`InferenceOnlyCheck.Theta.digest`: SHA-512 of the record's format, a zero byte and its canonical JSON), in lowercase
+    hex, or Refused."""
     if not ROOT.fullmatch(s):
-        raise Refused(f"--registration {s[:200]!r}: the digest of the deployment's first registration record, which "
-                      "registers θ, a SHA-512 digest in 128 lowercase hex")
+        raise Refused(f"--registration {s[:200]!r}: the digest of the registration log's head, the deployment's "
+                      "registration record, a SHA-512 digest in 128 lowercase hex")
     return s
 
 
@@ -913,9 +916,8 @@ PERIOD_FIELDS = {"draw_k": sample_k_of, "rows": rows_of, "weights_root": weights
                  "model": model_of, "length": length_of, "policy": policy_of, "alpha": alpha_of, "gamma": gamma_of,
                  "policy_name": policy_name_of, "registration": registration_of}
 #: what an inference-only period's open signs, all of it or none, each with its flag: the policy its check holds the
-#: serve to (its id, α and Γ), and the registration θ is read from
-POLICY_FIELDS = {"policy": "--policy ID", "alpha": "--alpha N/D", "gamma": "--gamma G",
-                 "registration": "--registration SHA512"}
+#: serve to (its id, α and Γ)
+POLICY_FIELDS = {"policy": "--policy ID", "alpha": "--alpha N/D", "gamma": "--gamma G"}
 #: what a registered policy's line states of it, which an open that names it (`policy_name`) signs from the registry
 REGISTERED = ("policy", "alpha", "gamma")
 
@@ -1973,8 +1975,9 @@ USAGE = ("verbs: reserve --peer NAME --scheme S --families JSON [--epoch E] [--m
          "[--withhold] "
          "| open --session S --root R "
          "| period-open --name P --cap N --circuit SHA512 [--draw-k K] [--rows T] [--model M | --weights-root W] [--circuit-files JSON] "
-         "[--length JSON] [(--policy ID --alpha N/D --gamma G | --policy-name NAME: a registered policy's) "
-         "--registration SHA512: an inference-only period's, all of them] [--lane LANE: vy-admin's] "
+         "[--length JSON] [--policy ID --alpha N/D --gamma G | --policy-name NAME: a registered policy's; an "
+         "inference-only period's, all of them, with --registration] [--registration SHA512: the registration log's head] "
+         "[--lane LANE: vy-admin's] "
          "| period-close --name P "
          "| policy-register --name NAME --policy ID --alpha N/D --gamma G (vy-admin's) "
          "| declare --program SHA512 [--blocks K,...] [--day D] [--for LANE: vy-admin's] "
@@ -2249,9 +2252,9 @@ def period(host: Host, args: list[str], *, signer, pinned: str, now: datetime, a
     K (`draw_k`) and table rows (`rows`), its model (`models.opened`: the registry's weights' root and model for the circuit, or for a circuit
     the registry has no entry of the model alone, from core's pin in `tree`), its fixed length (`length`) and each K's
     circuit file's SHA-512
-    (`circuit_files`), and an inference-only period's policy and registration (`policy`, `alpha`, `gamma`,
-    `registration`: all four or none, `POLICY_FIELDS`; with `policy_name`, the first three as the policy registry
-    states them under that name, and the name); it closes once none of its windows
+    (`circuit_files`), an inference-only period's policy (`policy`, `alpha`, `gamma`: all three or none,
+    `POLICY_FIELDS`; with `policy_name`, as the policy registry states them under that name, and the name), and the
+    registration log's head (`registration`), which a policy requires and which may stand alone; it closes once none of its windows
     still runs, its close listing each window with its outcome."""
     if len(args) not in (range(6, 6 + len(PERIOD_FIELDS) + 1) if args[:1] == ["period-open"] else (4,)):
         raise Refused(f"period: {args}")
@@ -2275,8 +2278,12 @@ def period(host: Host, args: list[str], *, signer, pinned: str, now: datetime, a
         missing = [flag for f, flag in POLICY_FIELDS.items() if f not in given]
         if 0 < len(missing) < len(POLICY_FIELDS):
             raise Refused(f"period-open {name}: {' and '.join(missing)} missing: an inference-only period's open signs "
-                          f"its policy and its registration together ({', '.join(POLICY_FIELDS.values())}), and a "
-                          "period that is not inference-only none of them")
+                          f"its policy together ({', '.join(POLICY_FIELDS.values())}), and a period that is not "
+                          "inference-only none of them")
+        if not missing and "registration" not in given:
+            raise Refused(f"period-open {name}: --registration SHA512 missing: an inference-only period's open signs its "
+                          f"policy and its registration together ({', '.join(POLICY_FIELDS.values())}, --registration "
+                          "SHA512)")
         model, root = given.pop("model", None), given.pop("weights_root", None)
         if model is not None or root is not None:
             M = registry()
