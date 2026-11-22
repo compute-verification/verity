@@ -40,7 +40,7 @@ import Mathlib.Topology.Sheaves.Init
 
 `MonitoringPeriodLeakAccepted` (`Definitions.Certifier.Guarantees.MonitoringPeriod`) fixes each epoch's statement, so
 its count never ranges over the declared circuit. Here epoch `i`'s declared circuit is the registered compiler's
-output on the advice of epochs `1, …, i` (`Verity.Compiler.run`), each advice string at most the compiler's cap `ℓa`
+output on the advice of epochs `0, …, i` (`Verity.Compiler.run`), each advice string at most the compiler's cap `ℓa`
 bits, registered information fixed before the first epoch. The count is over the secrets for which some such advice
 makes every epoch meet its good event, and it charges `ℓa + 1` bits an epoch beyond the per-circuit count: there are
 fewer than `2^(ℓa + 1)` strings of at most `ℓa` bits, whatever length the prover commits in each epoch.
