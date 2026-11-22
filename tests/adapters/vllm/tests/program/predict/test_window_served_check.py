@@ -61,13 +61,25 @@ def test_a_tiny_window_the_older_composer_refuses_passes_and_names_its_small_tem
 @pytest.mark.slow
 def test_run_inputs_of_the_tiny_window_are_read_across_its_ranges():
     """About a minute, the population's Program built: the one class here whose run input nodes are each read by several
-    ranges of C's root, which `interface.run_input_reads` takes as one read a node, unit i its row i."""
+    ranges of C's root, which `interface.run_input_reads` takes as one read a template's port, unit i its row i, each
+    read a slice of its node. Four nodes, five reads: the scan's state is one node, which both of the class's
+    ``ScanSlots_v5`` templates read; the lookup's row, salt and path are a node each (its table's root and domain are
+    registered, so no run input)."""
     circuit = _window(S._registered(), CLASS, *WHOLE, GRAIN)
     built = circuit.program()
     tp = PO.TemplatePartition(*built)
     filled = IF.filled_ports(circuit.registered, circuit.wires, circuit.ingress, circuit.boundary_reads)
     runs = IF.run_input_reads(circuit.templates, *built, filled, circuit.cuts)
-    assert runs and len({r.param for r in runs}) == len(runs)
+    nodes: dict[str, list] = {}
+    for r in runs:
+        nodes.setdefault(r.param, []).append(r)
+    assert (len(runs), len(nodes)) == (5, 4) and len({(r.reader, r.port) for r in runs}) == len(runs)
+    shared = [n for n, rs in nodes.items() if len(rs) > 1]
+    assert len(shared) == 1 and len({r.reader for r in nodes[shared[0]]}) == 2
+    assert all(r.reader.startswith("ScanSlots_v5{") and r.port == "state" for r in nodes[shared[0]])
+    lookup = [r for n, rs in nodes.items() if n != shared[0] for r in rs]
+    assert all(r.reader.startswith("EmbeddingRead_v4{") for r in lookup)
+    assert sorted(r.port for r in lookup) == ["path", "row", "salt"]
     assert any(Counter(t for _k, t, _a, _n in tp.ranges)[r.reader] > 1 for r in runs)
     assert IF.members(circuit, 64, built, runs)
 
