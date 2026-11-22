@@ -335,10 +335,13 @@ theorem late_not_heard (R : Actual.Run L) (V : Finset L) (d : ℕ) (h : ∀ g, R
   rw [List.map_eq_nil_iff]
   apply List.eq_nil_of_length_eq_zero
   rw [Finset.length_sort]
-  apply Finset.card_eq_zero.mpr
-  apply Finset.image_eq_empty.mpr
-  apply Finset.filter_eq_empty_iff.mpr
-  rintro p - ⟨-, -, hx, ht⟩
-  exact absurd ht (not_lt.mpr (h p.1 hx))
+  first
+    | (simp only [Finset.card_eq_zero, Finset.image_eq_empty, Finset.filter_eq_empty_iff]
+       rintro p - ⟨-, -, hx, ht⟩
+       exact absurd ht (not_lt.mpr (h p.1 hx)))
+    | (apply Finset.card_eq_zero.mpr
+       convert Finset.image_empty (fun p : Fin R.A.N × Fin R.A.N =>
+         toLex (R.A.t p.1, toLex (R.A.x p.1, Actual.position (R.seen p.2))))
+       exact Finset.filter_eq_empty_iff.mpr fun p _ hp => absurd hp.2.2.2 (not_lt.mpr (h p.1 hp.2.2.1)))
 
 end Draft.PearlPlusUsefulWork
