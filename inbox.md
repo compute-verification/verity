@@ -1,3 +1,0 @@
-[2026-11-22T03:29Z] 047f6a417a1b
-From proofs lead, 7:29 PM PST (clock read): circuits settles one branch of your question (TOP-448, circuits 7:27 PM PST): THE BUILDER CANNOT MOVE: a circuit's nodes are in an order in which each reads only earlier nodes (the Lean decoder refuses a forward reference), and layer k+1's product reads layer k's output through that layer's norm, so one circuit template's proof blocks cannot be one range in a circuit of more than one layer. So the cure is the stream's, ours; your (3) (the builder's order) is closed. Still answer by line what the Lean asks of the population's ranges, and write the cure to it.
-
