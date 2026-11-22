@@ -26,7 +26,7 @@ import pytest
 from verity.circuits.codec import canonical_json
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation import bits as BS
-from verity.commitments.periods import flock_inputs as FI, links as LK, rows as CS, wiring as WI
+from verity.commitments.periods import flock_inputs as FI, rows as CS, wiring as WI
 from verity.protocols.proof.spot.verifier import second_stage as SS, service as S
 from verity.protocols.proof.spot.verifier.one_stage import partition as P, docket as R
 from verity_vllm.pipeline import boundary_rows as BR, interior_rows as IR, serving_rows as SRW
@@ -228,10 +228,11 @@ def test_the_replay_side_refuses_a_capture_that_is_not_the_sampled_spans_or_a_re
     assert not (tmp / "never").exists()
 
 
-def test_the_interior_commits_the_return_under_the_serves_salts_and_its_header_opens_round_1s_rows(run):
-    """The output that writes the block's return is committed under the serve's salts at the rows its units write: each
-    of its Q·O strings is round 1's leaf's at ``sample[i]·O + j``, and the member's header names round 1's port, those
-    rows and each one's path in round 1's tree, whose root is the boundary record's."""
+def test_the_interior_gives_the_return_by_reference_to_round_1s_rows_and_commits_no_tree_for_it(run):
+    """The output that writes the block's return is given by reference to round 1's rows its units write (`rows.ValueRows`):
+    each of its Q·O strings and salts is round 1's leaf's at ``sample[i]·O + j``, the interior has no tree for it, and the
+    member's header names round 1's port, those rows and each one's path in round 1's tree, whose root is the boundary
+    record's."""
     again, r, c, tmp = run["again"], run["r"], run["class"], run["tmp"]
     sample = [int(u) for u in again.sample.units]
     at = [s * O + j for s in sample for j in range(O)]
@@ -246,7 +247,7 @@ def test_the_interior_commits_the_return_under_the_serves_salts_and_its_header_o
     with pytest.raises(ValueError, match="recommit to another root"):
         replace(c, salts={**c.salts, "o0": os.urandom(len(c.salts["o0"]))}).port("o0")
     entry = CS.registered_header(json.loads((tmp / "interior" / "window.json").read_text()), 0)["o0"]
-    assert entry == port.header(at) and LK.Port.of(mine, f"{TID}/o0").root != port.root
+    assert entry == port.header(at) and CS.WI.tree(TID, "o0") not in mine.roots
 
 
 @pytest.mark.slow
