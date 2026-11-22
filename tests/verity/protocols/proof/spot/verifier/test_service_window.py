@@ -161,8 +161,8 @@ def test_a_window_in_another_form_runs_on_the_challengers_own_copy_of_it():
     scan registers its generator form) runs to an accepted outcome by the Lean run on a stream given the challenger's
     own copy of that form (`Stream(program=)`), whose digest names it; a stream without it builds the mixed population and
     refuses the docket (`R2-program`, `R2-partition`), and the stream with it refuses a docket of the mixed
-    population (`R2-program`) and counts that aren't its form's ranges (`population`). A form is a window's, of its
-    templates, one range each, in its order: refused with one template, values or another order."""
+    population (`R2-program`) and counts that aren't its form's ranges (`population`). A form is a window's, its proof
+    blocks ranges of exactly the window's templates: refused with one template, values or a template missing."""
     gathered = _gathered()
     rec, ports = _record(form=gathered), _ports(program=gathered)
     assert {"R2-program", "R2-partition"} <= set(_refused(lambda: _stream().register(rec, ports, counts=COUNTS)))
@@ -182,10 +182,43 @@ def test_a_window_in_another_form_runs_on_the_challengers_own_copy_of_it():
     from test_service import _spec as pair_spec
     for unit, spec, kw, why in ((PAIR, pair_spec(), {}, "takes no values"),
                                 (WINDOW, _spec(), {"values": (VALUE,)}, "takes no values"),
-                                (WINDOW, _spec(), {"program": PN.mixed_population_program([(TRIPLE, 9), (PAIR, 1)])},
-                                 "one range a template")):
+                                (WINDOW, _spec(), {"program": PN.mixed_population_program([(TRIPLE, 9)])},
+                                 "has no instance of")):
         with pytest.raises(ValueError, match=why):
             FC.Stream(spec, unit, budget=2, delta=DELTA, challenger="c", **{"program": gathered, **kw})
+
+
+def test_a_two_layer_window_runs_to_an_accepted_outcome_by_the_lean_run_under_a_subset_design():
+    """A declared circuit of two layers, each PAIR then TRIPLE: each template's proof blocks two ranges, interleaved, so
+    its population is a disjoint cover of its units 0, ..., N - 1 but not those units in slot order
+    (`partition.covers`, `Slots.popCovers`; not `partition.in_order`, `Slots.popOk`). Under a subset design the stream
+    takes it, each template's count its ranges summed, and the docket reaches the draw and an accepted outcome with the
+    whole run the Lean's (`Run.run`); under a stratified one it is refused (`strata-design`), and a docket whose counts
+    leave a range out is refused (`population`)."""
+    pair, triple = P.template_id(PAIR), P.template_id(TRIPLE)
+    counts = {pair: 2, triple: 8}
+    layers = PN.mixed_population_program([(PAIR, 1), (TRIPLE, 4), (PAIR, 1), (TRIPLE, 4)])
+    assert P.ranges(layers, QUERY) == [(pair, 0, 1), (triple, 1, 4), (pair, 5, 1), (triple, 6, 4)]
+    assert P.covers(layers, QUERY, 10) and not P.in_order(layers, QUERY, 10) and not P.covers(layers, QUERY, 9)
+    subset = S.SamplingDesign("rate:3/10")
+    law = S.selection_sampling_design(subset, 10, S.selection_sizes(subset, layers, QUERY))
+    rec, ports = _record(counts, form=layers, sampling_design=law), _ports(counts, program=layers)
+
+    def stream(selection):
+        return FC.Stream(_spec(selection=selection), WINDOW, budget=2, delta=DELTA, challenger="challenger-test",
+                         clock=Clock(), program=layers)
+    assert _refused(lambda: stream(SAMPLING_DESIGN).register(_record(counts, form=layers), ports, counts=counts)) == (
+        "strata-design",)
+    on = stream(subset)
+    assert _refused(lambda: on.register(rec, ports, counts={pair: 1, triple: 8})) == ("population",)
+    assert _refused(lambda: on.register(rec, ports, counts={pair: 2, triple: 4})) == ("population",)
+    reg = on.register(rec, ports, counts=counts)
+    assert on._entries[reg.order].program is layers
+    draw = on.select(reg)
+    assert len(draw.units) == 3 and V.check_draw(draw.draw, rec, on._entries[reg.order].law).ok
+    assert on.deliver(draw, [SESSION]) is None
+    out = on.outcome(draw, _lean(), {"statement": "stub"})
+    assert out.accepted and "run" not in on.records[-1]["audit"]["checks"]
 
 
 def test_a_tied_window_runs_to_an_accepted_outcome_by_the_lean_run():

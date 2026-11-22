@@ -7188,6 +7188,41 @@ def test_the_run_takes_a_cover_of_the_units_only_under_a_subset_design(pieces):
     assert not P.covers(SETUPS[3].program, SETUPS[3].query, SETUPS[3].population + 1)
 
 
+def test_the_run_takes_a_two_layer_epoch_under_a_subset_design(pieces):
+    """A declared circuit of two layers, each PAIR then TRIPLE, so each template's proof blocks two ranges interleaved:
+    the population the Python draws from (`partition.ranges`, `partition.covers`) is the Lean's (`Slots.popCovers`),
+    position for position, and Lean's run is the Python's whole. Under a subset design it passes the population check;
+    under a stratified one it is refused (`strata-design`); a population one past the cover or one short of it, a range
+    missing from it, is refused by both, at its docket."""
+    s = Setup(PN.mixed_population_program([(PAIR, 1), (TRIPLE, 4), (PAIR, 1), (TRIPLE, 4)]),
+              P.template_instances_query([PAIR.id, TRIPLE.id]))
+    PROGRAMS[s.sha512] = s.program
+    n = s.population
+    assert [(t, lo, m) for t, lo, m in P.ranges(s.program, s.query)] == [
+        (PAIR.id, 0, 1), (TRIPLE.id, 1, 4), (PAIR.id, 5, 1), (TRIPLE.id, 6, 4)]
+    assert n == 10 and P.covers(s.program, s.query, n) and not P.in_order(s.program, s.query, n)
+    for m in (n - 1, n + 1):
+        assert not P.covers(s.program, s.query, m) and not P.in_order(s.program, s.query, m)
+    case = {"population": n, "program": s.desc, "query": s.query}
+    assert D.replay(POP_ORDER, case, pieces) == ("output", D.canonical({"layout": False, "ranges": False}))
+    source = hashlib.shake_256(b"run").hexdigest(600)
+    for kind in ("subset", "stratified"):
+        case = _run_case(_v1_audit(kind, s), source, 2, ["credited"])
+        out = run(copy.deepcopy(case))
+        assert D.replay(RUN, case, pieces) == ("output", D.canonical(out)), (kind, out)
+        if kind == "subset":
+            assert out.get("codes") not in (["population-order"], ["strata-design"]) and out.get("step") != "register", out
+        else:
+            assert (out.get("step"), out.get("codes")) == ("register", ["strata-design"]), out
+    for m in (n - 1, n + 1):
+        a = _v1_audit("subset", s)
+        a["record"]["population"] = m
+        case = _run_case(a, source, 2, ["credited"])
+        out = run(copy.deepcopy(case))
+        assert D.replay(RUN, case, pieces) == ("output", D.canonical(out)), (m, out)
+        assert out.get("step") == "register" and out.get("codes"), (m, out)
+
+
 def test_a_two_stage_run_takes_no_cover(pieces):
     """Under a two-stage rule the run takes the units in order only, Lean's the Python's whole: the interleaved layout
     `SETUPS[4]` under a subset design is refused at its grain (`grain`: its query is two templates', and a grain is one

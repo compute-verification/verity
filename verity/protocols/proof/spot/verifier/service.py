@@ -1487,8 +1487,8 @@ class Stream:
     supplied value of `Digest`s in Digest order); the stream's digest names them. Or a window's stream takes `program`, the challenger's own copy of
     the window's Program where it is another form than the mixed population (the network attester's scan in its
     generator form, one batch a template reading a shared input, say): its proof blocks under the check's query are the
-    templates', one range each, in the window's order, and it is each docket's population program, a docket
-    whose `counts` aren't its ranges' refused (`population`); the stream's digest names it. `log` is the prover's records the challenger logged before the
+    templates' ranges, any number a template, numbered in the declared circuit's order (`Slots.popOk`), and it is each
+    docket's population program, a docket whose `counts` aren't each template's ranges summed refused (`population`); the stream's digest names it. `log` is the prover's records the challenger logged before the
     stream, a docket of another Program whose values this stream's dockets reuse (`register`'s
     `outputs`), say: the stream's log starts with them, in order, so R6 and R7 read them, and none of them is sampled.
 
@@ -1543,12 +1543,9 @@ class Stream:
             if not isinstance(program, Program):
                 raise ValueError(f"a window's program is a Program, not {type(program).__name__}")
             try:
-                got = [tid for tid, _lo, _n in P.ranges(program, query)]
+                P.ranges(program, query)
             except (P.QueryRefused, ValueError) as e:
                 raise ValueError(f"the check's query does not apply to the window's program: {e}") from None
-            if got != [P.template_id(u) for u in units]:
-                raise ValueError(f"the window's program's proof blocks are not one range a template, in the window's "
-                                 f"order: its ranges are {got}")
         try:
             earlier = [(dict(r), DD.digest(r)) for r in log]
             R.held_roots(r for r, _d in earlier)
@@ -1922,7 +1919,9 @@ class Stream:
                 and all(type(counts[i]) is int and counts[i] >= 1 for i in ids) and sum(counts.values()) == n):
             return None
         if self.program is not None:
-            ranges = {tid: m for tid, _lo, m in P.ranges(self.program, self.query)}
+            ranges: dict[str, int] = {}
+            for tid, _lo, m in P.ranges(self.program, self.query):
+                ranges[tid] = ranges.get(tid, 0) + m
             return self.program if ranges == dict(counts) else None
         fn = PN.mixed_population_program([(t, counts[i]) for t, i in zip(self.templates, ids)], values=self.values).fn
         return Program(fn, registered=[v for v, _, _ in self.values])
