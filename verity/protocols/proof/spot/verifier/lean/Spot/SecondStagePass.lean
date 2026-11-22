@@ -330,7 +330,8 @@ theorem readOk_wired {own : Own} {named : Bool} {p : Part} {port : String} {e : 
     ∃ x pw r, getD e "value" = .str (portOf named w.writer w.wport) ∧
       (portOf named w.writer w.wport, x) ∈ Record.byPort own.interior ∧ writerOf own w = some pw ∧
       rowsOf own p.template port = some r ∧ pw.n = r.per ∧ sameAt e x = true ∧
-      placedOk own.sample.size p e (own.sample.size * r.per) (wiredRow p r) = true := by
+      placedOk own.sample.size p (atPos own p.template port e) (own.sample.size * r.per)
+        (wiredRow p r) = true := by
   unfold readOk at h
   rw [hl, hw] at h
   cases hv : getD e "value" with
@@ -368,7 +369,8 @@ theorem check_ok_wired {own : Own} {ss : Array Json} (h : (check own (some ss)).
         ∃ x pw r, getD e "value" = .str (portOf (byTemplate own.interior) w.writer w.wport) ∧
           (portOf (byTemplate own.interior) w.writer w.wport, x) ∈ Record.byPort own.interior ∧
           writerOf own w = some pw ∧ rowsOf own p.template port = some r ∧ pw.n = r.per ∧ sameAt e x = true ∧
-          placedOk own.sample.size p e (own.sample.size * r.per) (wiredRow p r) = true := by
+          placedOk own.sample.size p (atPos own p.template port e) (own.sample.size * r.per)
+            (wiredRow p r) = true := by
   obtain ⟨-, ps, hp, -, -, hst, -, -⟩ := check_ok h
   refine ⟨ps, hp, fun i hi => ?_⟩
   obtain ⟨s, p, hs, hf, -, -, hc⟩ := hst i hi
@@ -660,7 +662,8 @@ theorem checkAny_ok_wired {own : Own} {ss : Array Json}
         ∃ x pw r, getD e "value" = .str (portOf (byTemplate own.interior) w.writer w.wport) ∧
           (portOf (byTemplate own.interior) w.writer w.wport, x) ∈ Record.byPort own.interior ∧
           writerOf own w = some pw ∧ rowsOf own p.template port = some r ∧ pw.n = r.per ∧ sameAt e x = true ∧
-          placedOk own.sample.size p e (own.sample.size * r.per) (wiredRow p r) = true := by
+          placedOk own.sample.size p (atPos own p.template port e) (own.sample.size * r.per)
+            (wiredRow p r) = true := by
   obtain ⟨-, ps, hp, -, -, hst, -, -⟩ := checkAny_ok h
   refine ⟨ps, hp, fun i hi => ?_⟩
   obtain ⟨s, p, hs, hf, -, -, hc⟩ := hst i hi

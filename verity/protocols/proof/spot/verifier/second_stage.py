@@ -323,6 +323,17 @@ def held_of(program: str, window_root: str | None, held: Sequence[str] | None = 
 
 
 @dataclass(frozen=True)
+class Pos:
+    """`SecondStage.Pos`: template `template`'s session port `port` reads row ``rel[k]`` at unit ``first + k`` (None
+    for none), as C gives it (`Flock.OneCircuit.pos`)."""
+
+    template: str
+    port: str
+    rel: tuple[int | None, ...]
+    first: int
+
+
+@dataclass(frozen=True)
 class Own:
     """What the verifier holds of the run: the replay sample, the parts (`parts`), the interior and boundary
     dockets' records, the second sample's units, the design's links (`replay_links`, None when the replay block's
@@ -361,6 +372,9 @@ class Own:
     widths: tuple[Width, ...] = ()
     wired_key: bool = WIRED_KEY
     held: Held | None = None
+    #: the rows each statement's port reads, as the verifier derives them from C (`SecondStage.positionsOf`); None: as
+    #: the file states them (``reads``, ``reads_from``), which only tests take. Lean's run of record always sets it.
+    positions: tuple[Pos, ...] | None = None
 
 
 def supplied_of(supplied: Any) -> tuple[tuple[str, tuple[tuple[tuple[str, str], ...], ...]], ...]:
@@ -774,6 +788,16 @@ def _same_at(e: Any, x: Any) -> bool:
             and _nat(leaves) and leaves <= MAX_LEAVES)
 
 
+def _at_pos(own: Own, t: str, port: str, e: Any) -> Any:
+    """`SecondStage.atPos`: registered-reads entry `e` of template `t`'s session port `port` at the rows the verifier
+    holds (`Own.positions`): its ``reads`` and ``reads_from`` the ones C gives, None where C gives none, so `_placed_ok`
+    and `_rows_ok` refuse the read whatever the file states; `e` itself where the verifier holds no positions."""
+    if own.positions is None or not isinstance(e, dict):
+        return e
+    x = next((x for x in own.positions if x.template == t and x.port == port), None)
+    return {**e, "reads": None, "reads_from": None} if x is None else {**e, "reads": list(x.rel), "reads_from": x.first}
+
+
 def _rows_ok(q: int, p: Part, e: Any, units: int, unit: Callable[[int], int | None]) -> bool:
     """`SecondStage.rowsOk`: every read of registered-reads entry `e` (slot ``reads_from + k`` reads row ``reads[k]``,
     None for none) is by one of part `p`'s slots `u`, of the first row of the unit ``unit(u)`` names, in a tree of
@@ -832,8 +856,9 @@ def _read_ok(own: Own, named: bool, p: Part, port: str, e: Any) -> bool:
     sampled block, each slot only its unit's row of its cell's (`_wired_row`); a port a wire names, only its writer's output port of the interior record, of
     the writer's units a block, each slot only its unit's writer unit's row in its cell's replay block (`_wired_row`);
     any other, its own port of the interior record, each slot only its own first row, or a value either docket
-    registers, never a boundary port. Each at its root, domain and leaves, at most `MAX_LEAVES` of them."""
-    v, q = _get(e, "value"), len(own.sample)
+    registers, never a boundary port. Each at its root, domain and leaves, at most `MAX_LEAVES` of them, and each
+    slot's row the one the verifier holds (`_at_pos`: C's, in Lean's run of record)."""
+    v, q, ep = _get(e, "value"), len(own.sample), _at_pos(own, p.template, port, e)
     if not isinstance(v, str):
         return False
     link = _link_of(own, p.template, port)
@@ -843,12 +868,13 @@ def _read_ok(own: Own, named: bool, p: Part, port: str, e: Any) -> bool:
         x, r = _registered_entry(own.interior, v), _rows_of(own, p.template, port)
         if x is not None:
             ir = r
-            return ir is not None and _same_at(e, x) and _placed_ok(q, p, e, q * ir.per, lambda u: _wired_row(p, ir, u))
+            return (ir is not None and _same_at(e, x)
+                    and _placed_ok(q, p, ep, q * ir.per, lambda u: _wired_row(p, ir, u)))
         b, m = _by_port(own.boundary).get(v), _get(own.boundary, "population")
         if not (b is not None and _nat(m) and r is not None):
             return False
         lr = r
-        return _same_at(e, b) and _placed_ok(q, p, e, m * lr.per, lambda u: _linked_row(own, p, lr, u))
+        return _same_at(e, b) and _placed_ok(q, p, ep, m * lr.per, lambda u: _linked_row(own, p, lr, u))
     wire = _wire_of(own, p.template, port)
     if wire is not None:
         x, pw, r = _by_port(own.interior).get(v), _writer_of(own, wire), _rows_of(own, p.template, port)
@@ -856,11 +882,11 @@ def _read_ok(own: Own, named: bool, p: Part, port: str, e: Any) -> bool:
             return False
         wr = r
         return (_same_at(e, x) and pw.n == wr.per
-                and _placed_ok(q, p, e, q * wr.per, lambda u: _wired_row(p, wr, u)))
+                and _placed_ok(q, p, ep, q * wr.per, lambda u: _wired_row(p, wr, u)))
     x = _by_port(own.interior).get(v)
     if x is not None:
         return (v == _port_of(named, p.template, port) and _same_at(e, x)
-                and _rows_ok(q, p, e, q * p.n, lambda u: u - p.lo))
+                and _rows_ok(q, p, ep, q * p.n, lambda u: u - p.lo))
     if v in _by_port(own.boundary):
         return False
     x = _registered_entry(own.boundary, v)
@@ -971,7 +997,8 @@ def _sampled_codes(own: Own, named: bool, k: int, p: Part, s: Stmt) -> list[str]
     slots = sampled_slots(q, p, own.drawn)
     checks = (("second-verified", _verified_ok(own, s)),
               ("second-tables", _tables_ok(own, s)),
-              ("second-header", _sampled_header_ok(own, named, k, s.template, s.header, slots, reads)),
+              ("second-header", _sampled_header_ok(own, named, k, s.template, s.header, slots,
+                                                   [(port, _at_pos(own, p.template, port, e)) for port, e in reads])),
               ("second-population", _sampled_ok(q, p, own.drawn, s.header)),
               ("second-roots", _roots_ok(named, own.interior, s.template, s.header, [name for name, _ in reads])),
               ("second-sample", _jeq(s.draw, whole_sample(len(slots)))),
@@ -1353,7 +1380,7 @@ def attach(rec: Mapping[str, Any], v: Verdict, reads: Sequence[Mapping[str, str]
 
 
 __all__ = ["OWN_TREE", "PLACE_NONE_WHY", "PLACE_TWO_WHY", "READ_ROW_FIELDS", "READ_RUN_FIELDS", "REGISTERED", "RETURN_WHY",
-           "ROUND1_TREE", "WIRED_KEY", "WRITER_TREE", "Checked", "Held", "Link", "Own", "Part",
+           "ROUND1_TREE", "WIRED_KEY", "WRITER_TREE", "Checked", "Held", "Link", "Own", "Part", "Pos",
            "Rows", "Run", "Width", "Wire",
            "at_run", "attach", "blank_reads", "blank_run", "check", "check_twin", "complete", "complete_twin", "held_to_lean",
            "inputs_failure", "interior_order_ok",
