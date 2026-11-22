@@ -1166,7 +1166,8 @@ def outcome_of(stream: S.Stream, second: S.Draw, handed: dict, evidence: Sequenc
     `Stream.outcome` on what the interior's audit record took (``handed``, a5's), each verdict of record naming the
     sessions, with both stages' coin evidence, the sessions' ``statements`` and the params ``proofs``: accepted, the
     checks each stage's audit record failed (each record taking the sessions' reads of its docket's own ports at
-    their own roots, `audit.less_own_reads`), the codes of round 2's check in the interior's (``statements``), and
+    their own roots, `audit.less_own_reads`), the codes of round 2's check in the interior's (``statements``), the
+    fields where the Lean's run and the stream's record differ, with each side's value (``run``, its check's detail), and
     whether the outcome is complete (`complete`): the two-stage form allowed, the replay block the
     registered request Definition (`REQUEST_DEFINITION`) and both audit records accepted and complete, so never
     here. A reader that wants a complete audit of the boundary stream reads that, never ``accepted`` alone."""
@@ -1187,7 +1188,8 @@ def outcome_of(stream: S.Stream, second: S.Draw, handed: dict, evidence: Sequenc
             "not_covered": NOT_COVERED if o.accepted is True else None,
             **{k: None if r is None else sorted(x for x, c in r["checks"].items() if not c["ok"]) for k, r in audits.items()},
             "registered": {k: ((r or {}).get("checks") or {}).get("registered") for k, r in audits.items()},
-            "statements": ((body["audit"].get("checks") or {}).get("statements") or {}).get("codes")}
+            "statements": ((body["audit"].get("checks") or {}).get("statements") or {}).get("codes"),
+            "run": ((body["audit"].get("checks") or {}).get("run") or {}).get("detail")}
 
 
 def held(s: Mapping[str, Any], r2: Mapping[str, Any] | None, o: Mapping[str, Any] | None,
