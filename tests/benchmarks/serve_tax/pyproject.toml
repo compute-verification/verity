@@ -149,5 +149,6 @@ inputs = ["verity/lean_process.py", "benchmarks/serve_tax", "benchmarks/producti
     "verity/protocols/accounting/memory/poub",
     "verity/protocols/accounting/memory/pous/attester",
     "verity/protocols/accounting/memory/pous/scheme.py",
+    "verity/protocols/accounting/memory/pous/wipe_scheme.py",
     "verity/protocols/accounting/memory/pous/verifier",
 ]

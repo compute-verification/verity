@@ -31,7 +31,7 @@ from verity import hooks as H
 from verity.runtime.stream import Side
 from verity.protocols.accounting import scheme as S
 from verity.protocols.accounting.memory.pous.prover import wipe_served
-from verity.protocols.accounting.memory.pous.scheme import WIPE
+from verity.protocols.accounting.memory.pous.wipe_scheme import WIPE
 from verity.protocols.accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.accounting.memory.pous.prover import wipe_run
 from verity.protocols.accounting.memory.pous.prover import wipe_store as WS

@@ -458,6 +458,7 @@ loaded_by = [
 paths = [
     "verity/protocols/accounting/memory/poub/scheme.py",
     "verity/protocols/accounting/memory/pous/scheme.py",
+    "verity/protocols/accounting/memory/pous/wipe_scheme.py",
 ]
 loads = [
     "verity/commitments",

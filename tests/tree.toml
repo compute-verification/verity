@@ -270,7 +270,11 @@ protocol = true
 
 [[tree]]
 path = "verity/protocols/accounting/memory/pous/scheme.py"
-means = "PoUS and the memory wipe as resource schemes, registered as pous and wipe"
+means = "PoUS as a resource scheme, registered as pous"
+
+[[tree]]
+path = "verity/protocols/accounting/memory/pous/wipe_scheme.py"
+means = "the memory wipe as a resource scheme, registered as wipe"
 
 [[tree]]
 path = "verity/protocols/accounting/memory/poub/"

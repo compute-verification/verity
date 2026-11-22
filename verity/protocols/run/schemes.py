@@ -41,7 +41,7 @@ DECLARATIONS: Mapping[str, str] = MappingProxyType({
     "poub": f"{_MEMORY}.poub.scheme",
     "pous": f"{_MEMORY}.pous.scheme",
     "sampled-proofs": "verity.protocols.proof.spot.scheme",
-    "wipe": f"{_MEMORY}.pous.scheme",
+    "wipe": f"{_MEMORY}.pous.wipe_scheme",
 })
 
 #: the modules whose ``MESSAGES`` hold workload message types no scheme declares: useful work's (its monitoring period)

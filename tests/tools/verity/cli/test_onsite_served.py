@@ -30,6 +30,7 @@ from verity.protocols.accounting.memory.pous.attester import onsite
 from verity.protocols.accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.accounting.memory.pous.attester import challenger_party as CP
 from verity.protocols.accounting.memory.pous import scheme as PL
+from verity.protocols.accounting.memory.pous import wipe_scheme
 from verity.protocols.accounting.network import scheme as NS
 from verity.protocols.policy.training_detection.inference_only.verifier import parties as IO
 from verity.protocols.proof.spot.verifier.service import SamplingDesign
@@ -1025,7 +1026,7 @@ def test_the_wipe_runs_in_the_workload_under_the_configurations_pin_and_no_party
     got = T.live(R.load(CONFIG, REG), state, [T.WORKERS, T.PROVER]).outcomes
     assert got[T.PROVER] == got[T.WORKERS] == {"outcome": {"served-window": 0}, "refused": None}
     hooks = dict(x.split("=", 1) for x in (state / "out" / "hooks.txt").read_text().splitlines())
-    assert (hooks["WIPE_CMD"], hooks["WIPE_KEY_SHA512"]) == (f'bash {PL.WIPE_SCRIPT} "$1" "$2" "$3"', WIPE_PIN)
+    assert (hooks["WIPE_CMD"], hooks["WIPE_KEY_SHA512"]) == (f'bash {wipe_scheme.WIPE_SCRIPT} "$1" "$2" "$3"', WIPE_PIN)
     assert (hooks["WIPE_ADDRESS"], hooks["WIPE_CHALLENGER"], hooks["WIPE_COMMAND"]) == (
         "192.0.2.1:7001", "auditor-1", "ssh auditor-1")
 
@@ -1189,7 +1190,7 @@ def test_unbound_the_memory_attesters_are_the_runs_and_each_piece_says_so_before
     cfg = R.load(CONFIG, REG)
     got = T.variables(cfg, NO_ATTESTERS)
     assert got["POUS_ARGS"] == "--run-keys --rounds 320"
-    assert got["WIPE_CMD"] == f'bash {PL.WIPE_SCRIPT} "$1" "$2" "$3" --run-keys'
+    assert got["WIPE_CMD"] == f'bash {wipe_scheme.WIPE_SCRIPT} "$1" "$2" "$3" --run-keys'
     assert not [k for k, v in got.items() if k != "VERITY_PINS" and any(p in v for p in PIN.values())]
     assert not {"WIPE_ADDRESS", "WIPE_CHALLENGER", "WIPE_COMMAND"} & set(got)
     rc, plan, err = dry(capsys, "--bindings", bindings(tmp_path, NO_ATTESTERS))

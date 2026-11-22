@@ -14,7 +14,8 @@ from verity import hooks as H
 from verity.protocols.accounting import scheme as S
 from verity.protocols.accounting.memory.pous.prover import wipe_run
 from verity.protocols.accounting.memory.pous.prover import wipe_served as WS
-from verity.protocols.accounting.memory.pous.scheme import MEMORY_ATTESTER, WIPE
+from verity.protocols.accounting.memory.pous.scheme import MEMORY_ATTESTER
+from verity.protocols.accounting.memory.pous.wipe_scheme import WIPE
 from verity.protocols.accounting.memory.pous.verifier.period import UNPINNED
 from verity.protocols.accounting.memory.pous.verifier.wipe_period import LIMIT_NS
 

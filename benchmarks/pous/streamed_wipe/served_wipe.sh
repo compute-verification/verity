@@ -190,7 +190,7 @@ if [ -z "${WIPE_OWN_LEASE:-}" ]; then  # once, before any lease: the node's link
   rm -f "$DIR"/{answer,served,summary,wipe,period}.json "$DIR/refused.txt" "$DIR/stamps.txt" \
     "$SERVE_DIR"/private/wipe/{answer,case,wipe.case}.json
   stamp start
-  # the wipe's launcher's form (`memory/pous/scheme.py`'s `launch_wipe`), until it hands SETTINGS: `--run-keys`, or the bound attester's
+  # the wipe's launcher's form (`verity/protocols/accounting/memory/pous/wipe_scheme.py`'s `launch_wipe`), until it hands SETTINGS: `--run-keys`, or the bound attester's
   # WIPE_CHALLENGER, WIPE_ADDRESS and WIPE_COMMAND
   if [ "$SETTINGS" = --run-keys ]; then
     for v in WIPE_KEY_SHA512 WIPE_ADDRESS WIPE_CHALLENGER WIPE_COMMAND; do
