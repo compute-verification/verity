@@ -41,11 +41,10 @@ Definitions only. The sampled leak bounds count the accepted observation sequenc
 at a statement's registered inputs (`AsReg`). A monitoring period's good event takes those values to be the
 registration's: the extracted trace holds them at every registered input (`RegisteredInputsHeld`).
 
-It is an open premise of a statement that reads it, and the conclusion of none. The registration commits its values
-under the statement's roots (`RegOpens`), and an extracted trace that opens a registered input to another value makes,
-with the registration's opening there, two passing openings of one position to different values: under the
-commitment's binding the calls that check them collide, and `Breg` is that collision's finder. Where no input is
-registered it holds of every trace.
+It is an open premise of a statement that reads it, and the conclusion of none. A registered input that is a gate of an
+incorrect proof block is charged by the incorrect set's term. One that a correct proof block reads is opened, and no
+test of the verifier and no theorem holds the opened value to the registration's. Where no input is registered it holds
+of every trace.
 -/
 
 @[expose] public section
@@ -56,8 +55,7 @@ open Claims Claims.Sampling
 
 /-- **The trace holds the registration's values at the registered inputs**: at the statement `s` and the extracted
 witness `w`, the trace's committed value at every gate of `reg` is `ρ`'s. An open premise where a statement reads it,
-which the registration's openings under the statement's roots (`RegOpens`) discharge under the commitment's binding;
-at `reg = ∅` it holds of every trace. -/
+discharged by no theorem; at `reg = ∅` it holds of every trace. -/
 def RegisteredInputsHeld (H : Msg → Msg) (Cm : CommitmentScheme Bool) (reg : Finset ℕ) (ρ : ℕ → Bool)
     (s : AuditStatement) (w : Wit) : Prop :=
   ∀ g ∈ reg, traceVal s.prog (w.val H Cm s) g = ρ g

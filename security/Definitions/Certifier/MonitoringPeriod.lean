@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Certifier.TapRows
+public import Definitions.Certifier.RegisteredInputs
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -42,8 +43,8 @@ attester's rows (`RLeakCertifier`) at the audit's extracted witness, with the re
 holding the registration's values at the registered inputs, and the observations complete. Which observations the
 relation counts is picked out by the network attester's registration of its rows (`CertifierRegisters`), not by the trace:
 `RLeakCertifier` fails, on an accepted run, only where the extraction fails or the trace's openings collide with the network
-attester's (`Btap`). The registration's values at the prover's registered inputs are the one condition the event holds
-that no statement here bounds.
+attester's (`Btap`). Two conditions the event holds are given by no statement here: the registration's values at the
+prover's registered inputs (`RegisteredInputsHeld`) and the observations' jitter below `Dj`.
 -/
 
 @[expose] public section
@@ -66,15 +67,15 @@ def SameRegistration {L S : ℕ} (D : Compiled Coin A) (lay : AuditStatement →
 
 /-- **A window's good event**: at the window's statement `x` and the audit's extracted witness `w`, the leak relation at
 the network attester's rows holds (the network attester's openings `tops s`), `x` is in the audit's scope and
-registered as `s₀`, the trace holds `ρ` at the registered inputs, and the run's observations `o` have the horizon's
-length, jitter below `Dj` and every status complete. -/
+registered as `s₀`, the trace holds `ρ` at the registered inputs (`RegisteredInputsHeld`), and the run's observations
+`o` have the horizon's length, jitter below `Dj` and every status complete. -/
 def ExecutionPhaseGood (H : Msg → Msg) (D : Compiled Coin A) (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S)
     (k : AuditStatement → ℕ) (δ : ℝ) (reg : AuditStatement → Finset ℕ) (Dj : ℕ) (s₀ : AuditStatement) (ρ : ℕ → Bool)
     (tops : AuditStatement → List (Opening Bool)) (x : Msg) (w : Wit) (o : List (Obs L K S)) : Prop :=
   RLeakCertifier H D.commit D.parse D.partition L K S lay k δ (fun s => AsReg s.prog (lay s) (k s) (reg s)) Dj tops x w ∧
     ScopeAcc D lay k x ∧
     ∃ s, D.parse x = some s ∧ SameRegistration D lay k reg s₀ s ∧
-      (∀ g ∈ reg s, traceVal s.prog (w.val H D.commit s) g = ρ g) ∧ Covered (k s) o ∧ o.length = k s ∧
+      RegisteredInputsHeld H D.commit (reg s) ρ s w ∧ Covered (k s) o ∧ o.length = k s ∧
       ∀ y ∈ o, y.jitter < Dj
 
 end Period
