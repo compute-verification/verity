@@ -5546,8 +5546,8 @@ def test_the_verifiers_gated_list_is_the_lints_generated_one(pieces):
 
 
 def test_r9_refuses_a_read_outside_a_held_gated_template_as_the_python_does(pieces):
-    """R9's walk, Lean's answer the Python's: under the verifier's list (`docket.GATED`, the served binding
-    `EmbeddingRead_v4{V=128256,H=2048}` alone) each small read is named, the ungated `EmbeddingRead_v2` and the gated
+    """R9's walk, Lean's answer the Python's: under the verifier's list (`docket.GATED`, circuits' evaluated
+    bindings, none of these) each small read is named, the ungated `EmbeddingRead_v2` and the gated
     `EmbeddingRead_v4` at bindings not on it; under a list holding each read's own closure digest, none is named (the
     walk holds what the list holds); under its own id at another digest, each is named."""
     for tid in OPENER_READS:

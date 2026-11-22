@@ -206,6 +206,8 @@ OPENERS = ("FrameV3Read_v1", "FrameV3ReadAt_v1", "MerkleRead_v1", "LmsVerify_v1"
 #: binding no lint evaluated is refused
 GATED: tuple[tuple[str, str], ...] = (
     ("EmbeddingRead_v4", "251987cf5a07b53f7d20fd62d4c2cdc4af5dcd00e629cc6b2afce45437c88826290e96b4d91b5d0934835f7bbfd7fef9181ae7b97aa4f730642d11e71d2a6f5d"),
+    ("EmbeddingRead_v4", "6439d86d5848546d128ab274309dd17e698876418d610f64a36dd0963432e3d51970d7f5d72ac3c012adc742d40ba98d5795d3d318711e58c7a5b1700a1cd3c1"),
+    ("EmbeddingRead_v4", "810b35ccde49f9d5dc7e79b69111ceb1af8aa600c6c8230d95b732757d9abda31fdf789d39af6c950f421bc4df6d8d9efa8fd639d10df8f8873741d172b3ea77"),
 )
 UNGATED_OPENER_WHY = ("a circuit template that calls an opener and returns rows whether or not its opening held lets the "
                       "prover commit rows of its choice: C reaches an opener only inside a gated template the verifier "
