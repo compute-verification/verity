@@ -44,8 +44,6 @@ abbrev SHA512_ROW_SEG_SEGMENT : String := "verity/sha512-row-seg/v1/segment"
 abbrev RANDOMNESS_DERIVE : String := "verity/randomness/derive/v2"
 abbrev RANDOMNESS_STREAM : String := "verity/randomness/stream/v2"
 abbrev RANDOMNESS_SHARD : String := "verity/randomness/shard/v2"
-abbrev RANDOMNESS_DERIVE_V1 : String := "verity/randomness/derive/v1"
-abbrev RANDOMNESS_STREAM_V1 : String := "verity/randomness/stream/v1"
 
 -- Shared: SPOT's one-stage statement, registrations and partitions; Flock's public inputs and descriptors
 abbrev ONE_STAGE_PROTOCOL : String := "verity/sampled-proofs/one-stage/v1"

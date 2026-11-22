@@ -265,7 +265,7 @@ def test_workloads_of_record_serve_a_public_fixed_length(served):
     """The execution phase registers its rows' fixed length, the verifier's max_tokens per slot served under ignore_eos, so its
     useful work is public.  A fixed-length execution phase registers; a row served until EOS, a served length other than
     max_tokens, or a max_tokens other than the verifier's is refused as ``window-form``; and an execution phase with no length
-    item (registered before the rule) is refused as not of record.  The committer's max_tokens is the served request's
+    item is refused as ``public-items``.  The committer's max_tokens is the served request's
     (`e2e.SERVED_TOKENS`), and the runner's record of it has the name the committer reads."""
     import e2e
     assert (SC.MAX_TOKENS, SC.SERVED_RECORD) == (e2e.SERVED_TOKENS, e2e.SERVED_RECORD)
@@ -279,10 +279,9 @@ def test_workloads_of_record_serve_a_public_fixed_length(served):
             _register(p, pub)
         assert _codes(e) == {"window-form"} and e.value.verdict.detail["window-form"].startswith(code), code
     p, pub, _, _ = _window(words, served=None)
-    assert set(pub["items"]) == set(Wd.LEGACY_REGISTERED)
     with pytest.raises(S.Refused) as e:
         _register(p, pub)
-    assert _codes(e) == {"window-form"} and e.value.verdict.detail["window-form"].startswith("no-fixed-length")
+    assert _codes(e) == {"public-items"}
 
 
 def _salt_after(params) -> bytes:
@@ -380,9 +379,9 @@ def test_the_challenger_holds_every_item_to_its_own(served):
         unfixed = json.loads(json.dumps(rec))
         unfixed["window"]["public"]["length"] = SC.served_length(record)
         assert refused(unfixed) == {"window-form"}
-    legacy = json.loads(json.dumps(rec))
-    del legacy["window"]["public"]["length"]
-    assert refused(legacy) == {"window-form"}
+    no_length = json.loads(json.dumps(rec))
+    del no_length["window"]["public"]["length"]
+    assert refused(no_length) == {"public-items"}
     assert "x" not in ch.regs
     reg = _held(ch, "honest", rec)
     assert reg.receipt["registration"] == DD.digest(rec) == reg.digest and reg.order == 0
@@ -741,7 +740,7 @@ def test_past_the_salt_rule_a_certified_window_is_recorded_revealed_sampled_unde
     d = ch.select("honest")
     assert [x["key"] for x in samples] == [ch.deployment.challenger_key.to_json()] == [ch.signed["key"]]
     x = {**samples[0], "key": _live(tmp_path / "pinned.json")[1].to_json()}
-    assert tuple(CC.draw_twin(x["coins"], x["recorded"], x["opening"], x["stream"], x["registration"], x["receipt"], x["k"],
+    assert tuple(CC.draw_twin(x["coins"], x["opening"], x["stream"], x["registration"], x["receipt"], x["k"],
                               x["population"], x["units"], x["key"])) == (CC.COIN_KEY, CC.OTHER_KEY)
     o, st = ch.openings["draw"], ch.regs["honest"][0]
     assert (o.label, o.index, o.after) == (Wd.DRAW, 0, bytes.fromhex(reg.digest))

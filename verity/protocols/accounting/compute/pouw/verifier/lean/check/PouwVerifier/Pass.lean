@@ -36,10 +36,7 @@ root W and its `pass_index`), not an execution phase's open root, and the sessio
 complete, having released that coin. It sits here, not beside `saltCheck`, because `passEpoch` reads it and
 `PouwVerifier.Rounds` imports this module. `saltChallengePhase` is the session both read.
 
-Both read the coin versions of `coinVersion`: the current one, whose binding and weights' root are `tagged`'s whole
-SHA-512, and, only in a replay of a recorded pass, the e2e-service passes', which keep its first 32 bytes. A replay of a
-recorded sample also reads the e2e-service's first coin commitments, named as the current one but on SHA-256 as core was
-then: bound by `taggedSha256`, after the current binding, and sampled by `deriveV1` and `streamV1`.
+Both read the coin versions of `coinVersion`, whose binding and weights' root are `tagged`'s whole SHA-512.
 -/
 
 @[expose] public section
@@ -63,7 +60,6 @@ def EPOCH_OPEN_TAG : ByteArray := "verity/pouw-epoch-open/v1".toUTF8
 def WEIGHTS_ROOT_BYTES : Nat := 64
 def STREAM_BYTES : Nat := 64
 def PROVER_BYTES : Nat := 64
-def COINS_RECORDED : String := Domains.POUW_EPOCH_COINS_RECORDED
 def DRAW_DOMAIN : String := "verity/pouw/served-zk-draw/v1"
 def U64 : Int := 2 ^ 64
 def OPENING_FORM : String :=
@@ -74,7 +70,6 @@ def WEIGHTS_FORM : String := "the pass's weights are not an object from each wei
 /-- `COIN_VERSIONS`: the bytes of `tagged` a coin scheme's binding and weights' root keep, and the weights' root's tag. -/
 def coinVersion (scheme : String) : Option (Nat × String) :=
   if scheme == PouwCommit.SCHEME then some (64, Domains.POUW_WEIGHTS_ROOT)
-  else if scheme == COINS_RECORDED then some (32, Domains.POUW_WEIGHTS_ROOT_RECORDED)
   else none
 
 structure Coins where
@@ -108,10 +103,10 @@ example : jsonStrIs (at? (Json.mkObj [("salt", .str "ab"), ("schema", .null)]) "
 example : jsonTrue (at? (Json.mkObj [("closed", .bool true), ("complete", .bool true)]) "complete") = true := by decide
 
 /-- `coins_of`. -/
-def coinsOf (j : Json) (recorded : Bool) : Except String Coins := do
+def coinsOf (j : Json) : Except String Coins := do
   let bad := s!"a coin commitment's scheme is {pyRepr PouwCommit.SCHEME}"
   let some (.str scheme) := PouwWindow.field? j "scheme" | throw bad
-  unless scheme == PouwCommit.SCHEME || (recorded && scheme == COINS_RECORDED) do throw bad
+  unless scheme == PouwCommit.SCHEME do throw bad
   let some epoch := PouwWindow.natOf? (at? j "epoch") | throw "an epoch is a nonnegative integer"
   let some root := (hex? (at? j "root")).filter (·.size == 64) | throw "a coin commitment's root is 64 bytes"
   let some (keep, tag) := coinVersion scheme | throw bad
@@ -128,45 +123,17 @@ def openingOf (j : Json) : Except String CoinOpening := do
   let some path := ps.toList.mapM fun p => (hex? p).filter (·.size == 64) | throw OPENING_FORM
   pure ⟨epoch, label, after, coin, salt, path⟩
 
-/-- `core_check.tagged_sha256`: `tagged` as it was on SHA-256, the binding of `COIN_EARLY`. -/
-def taggedSha256 (tag : String) (parts : List PouwCommit.Part) : ByteArray :=
-  Flock.Sha256.hash (parts.foldl (fun acc p => acc ++ PouwCommit.frame p) (tag.toUTF8.push 0))
-
-/-- `core_check.derive_v1`: `derive` as it was (`verity/randomness/derive/v1`, SHA-256), `COIN_EARLY`'s sample key. -/
-def deriveV1 (source : ByteArray) (domain : String) (context : List (String × PouwCommit.Part)) : ByteArray :=
-  let ctx := ((context.toArray.qsort fun a b => a.1 < b.1).toList.foldl
-    (fun acc kv => acc ++ PouwCommit.frame (.str kv.1) ++ PouwCommit.frame kv.2) ByteArray.empty)
-  Flock.Sha256.hash (Domains.RANDOMNESS_DERIVE_V1.toUTF8.push 0 ++ PouwCommit.frame (.bytes source) ++
-    PouwCommit.frame (.str domain) ++ PouwCommit.frame (.bytes ctx))
-
-/-- `core_check.stream_v1`: `Key.stream` as it was (`verity/randomness/stream/v1`, SHA-256 blocks), `COIN_EARLY`'s sample
-stream. -/
-def streamV1 (key : ByteArray) (index : List PouwCommit.Part) (n : Nat) : ByteArray :=
-  let head := Domains.RANDOMNESS_STREAM_V1.toUTF8.push 0 ++ key ++ FlockSoundness.Randomness.frames index
-  ((List.range ((n + 31) / 32)).foldl (fun acc c => acc ++ Flock.Sha256.hash (head ++ PouwCommit.be8 c))
-    ByteArray.empty).extract 0 n
-
-/-- `core_check.coin_version`: `coins.coin_reason` under the commitment's scheme, and whether the coin opened under the
-binding of the e2e-service's first coin commitments (`COIN_EARLY`: `PouwCommit.SCHEME` bound by `taggedSha256`), which
-`early` also tries when the current one doesn't open. -/
-def coinVersionAt (c : Coins) (o : CoinOpening) (label : String) (after : ByteArray) (early : Bool) :
-    Except String (Option String × Bool) := do
-  let rank := if label == "salt" then 0 else 1
-  if o.epoch != c.epoch then return (some s!"coin is epoch {o.epoch}'s, not epoch {c.epoch}'s", false)
-  if o.label != label then return (some s!"coin is the epoch's {pyRepr o.label} coin, not its {pyRepr label} coin", false)
-  if o.coin.size != PouwCommit.COIN_BYTES || o.salt.size != 192 then return (some "coin opening is malformed", false)
-  let opens (b : ByteArray) : Except String Bool := do
-    let d ← Domain.mk? .sha512 b (-1) 2
-    d.verify c.root rank (leafValue o.coin o.salt) o.path fun v => pure (d.leaf rank c.scheme v)
-  let old ← if ← opens ((tagged c.scheme [.int c.epoch]).extract 0 c.keep) then pure false
-    else if early && c.scheme == PouwCommit.SCHEME && (← opens (taggedSha256 c.scheme [.int c.epoch])) then pure true
-    else return (some "coin does not open against the epoch's coin commitment", false)
-  if o.after != after then return (some "coin was not opened after what the verifier recorded", old)
-  return (none, old)
-
 /-- `core_check.coin_reason`: `coins.coin_reason` under the commitment's scheme. -/
-def coinReasonAt (c : Coins) (o : CoinOpening) (label : String) (after : ByteArray) : Except String (Option String) :=
-  (·.1) <$> coinVersionAt c o label after false
+def coinReasonAt (c : Coins) (o : CoinOpening) (label : String) (after : ByteArray) : Except String (Option String) := do
+  let rank := if label == "salt" then 0 else 1
+  if o.epoch != c.epoch then return some s!"coin is epoch {o.epoch}'s, not epoch {c.epoch}'s"
+  if o.label != label then return some s!"coin is the epoch's {pyRepr o.label} coin, not its {pyRepr label} coin"
+  if o.coin.size != PouwCommit.COIN_BYTES || o.salt.size != 192 then return some "coin opening is malformed"
+  let d ← Domain.mk? .sha512 ((tagged c.scheme [.int c.epoch]).extract 0 c.keep) (-1) 2
+  unless ← d.verify c.root rank (leafValue o.coin o.salt) o.path (fun v => pure (d.leaf rank c.scheme v)) do
+    return some "coin does not open against the epoch's coin commitment"
+  if o.after != after then return some "coin was not opened after what the verifier recorded"
+  return none
 
 /-- `PouwCommit.foldRoots` at `tag`, its first `keep` bytes: `core_check.weights_root`
 (`audit.weights_root`, an execution phase's, under a scheme's version) and `Credit.weightsRoot` (`weights.weights_root`, the
@@ -422,10 +389,10 @@ def livePassSalt (m live : Json) : R (ByteArray × String) := do
 
 /-- `core_check._coin_salt`: a pass salted by execution-phase coins the verifier holds as a commitment (`coinsOf`), its salt coin
 opened against them after the weights' root. -/
-def coinPassSalt (m coins : Json) (recorded : Bool) (us : List Matmul) (roots : List (Nat × ByteArray)) :
+def coinPassSalt (m coins : Json) (us : List Matmul) (roots : List (Nat × ByteArray)) :
     R (ByteArray × String) := do
-  let c ← (coinsOf coins recorded).mapError fun e => ("coin", s!"the verifier's coins are malformed: {e}")
-  let (o, claimed) ← (do pure (← openingOf (at? m "salt_opening"), ← coinsOf (at? m "coins") recorded))
+  let c ← (coinsOf coins).mapError fun e => ("coin", s!"the verifier's coins are malformed: {e}")
+  let (o, claimed) ← (do pure (← openingOf (at? m "salt_opening"), ← coinsOf (at? m "coins")))
     |>.mapError fun e => ("coin", s!"the pass's coins are malformed: {e}")
   if !claimed.same c then coin "the pass's coin commitment is not the epoch's"
   checkWorkload us roots
@@ -455,7 +422,7 @@ def epochSalt (m : Json) (coins : Json) (recorded : Bool) (reveal : Option ByteA
       else do
         if coins == .null then
           coin "the pass's salt coin opens against the epoch's published coin commitment, which the verifier holds"
-        coinPassSalt m coins recorded us roots
+        coinPassSalt m coins us roots
     else if (PouwWindow.field? m "beacon").isSome then do
       let some beacon := (hex? (at? m "beacon")).filter (·.size > 0)
         | manifest "the recorded pass's beacon is not nonempty hex"
@@ -512,7 +479,7 @@ signed record with the key it is signed under, `{key, record}`: that key must be
 record the prover signed under a key of its own, over coins it holds, is refused), this check verifies the record under
 it (`Spot.Challenger.recordReason`; a bare live commitment is refused, `SIGNED_LIVE`), and they have their
 `pouw/draw` coin 0 (`Spot.Challenger.liveReason`). -/
-def drawCheck (coins : Json) (recorded : Bool) (opening stream registration receipt k population units key : Json) :
+def drawCheck (coins : Json) (opening stream registration receipt k population units key : Json) :
     R Unit := do
   let liveScheme := match PouwWindow.field? coins "scheme" with
     | some (.str s) => s == PouwWindow.LIVE_SCHEME
@@ -532,7 +499,7 @@ def drawCheck (coins : Json) (recorded : Bool) (opening stream registration rece
       if let some why := PouwWindow.drawEpochReason c then coin why
       pure (.inr c)
     else match key with
-      | .null => .inl <$> (coinsOf coins recorded).mapError malformed
+      | .null => .inl <$> (coinsOf coins).mapError malformed
       | _ => throw ("coin-key", SEEDED_PINNED)
   let (.str reg, .str st) := (registration, stream)
     | throw ("draw", "the registration is not a SHA-512 digest, or the stream's digest not a string")
@@ -548,20 +515,18 @@ def drawCheck (coins : Json) (recorded : Bool) (opening stream registration rece
   if !(1 ≤ n && k ≤ n) then throw ("draw", "the law is not subset:k over N with k <= N and N >= 1")
   let opened := fun (e : String) => ("coin", s!"the draw's {e}")
   let after ← port (pyFromHex reg)
-  let (why, old, drawn) ← match c with
+  let (why, drawn) ← match c with
     | .inl c => do
         let o ← (openingOf opening).mapError opened
-        let (why, old) ← port (coinVersionAt c o "draw" after recorded)
-        pure (why, old, o.coin)
+        pure ((← port (coinReasonAt c o "draw" after)), o.coin)
     | .inr c => do
         let o ← (LiveOpening.ofJson opening).mapError opened
-        pure ((← port (Spot.Challenger.liveReason c o PouwWindow.DRAW 0 after)), false, o.coin)
+        pure ((← port (Spot.Challenger.liveReason c o PouwWindow.DRAW 0 after)), o.coin)
   if let some why := why then coin s!"the draw's {why}"
   let ctx := [("stream", FlockSoundness.Randomness.Part.str st), ("registration", FlockSoundness.Randomness.Part.str reg),
     ("receipt", FlockSoundness.Randomness.Part.str (receiptDigest kvs))]
   let bytes := 2 * k * Flock.Draw.width n + 64
-  let src ← if old then pure (streamV1 (deriveV1 drawn DRAW_DOMAIN ctx) [.str "draw"] bytes)
-    else do pure (FlockSoundness.Randomness.stream (← port (PouwCommit.key? drawn DRAW_DOMAIN ctx)) [.str "draw"] bytes)
+  let src := FlockSoundness.Randomness.stream (← port (PouwCommit.key? drawn DRAW_DOMAIN ctx)) [.str "draw"] bytes
   let some got := Flock.Draw.subset k n src
     | throw ("sampler", "the draw's stream ran out")
   let same := match units with

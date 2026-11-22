@@ -68,7 +68,7 @@ theorem registered_ok (p : Params) (c : ExecutionPhaseCommitmentRecord) (f : Fix
     case neg => rw [ite_eq_left h1] at h; cases h
     rw [ite_eq_right (Classical.not_not.mpr h1)] at h
     by_cases h2 : (keys c.window.items).getD [] = registeredSorted
-    case neg => rw [ite_eq_left h2] at h; split at h <;> cases h
+    case neg => rw [ite_eq_left h2] at h; cases h
     rw [ite_eq_right (Classical.not_not.mpr h2)] at h
     cases hL : PouwWindow.lengthProblem (get c.window.items "length") p.maxTokens
     case some r => simp only [hL] at h; cases h

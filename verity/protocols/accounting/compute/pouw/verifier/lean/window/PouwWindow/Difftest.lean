@@ -21,7 +21,7 @@ to Python.
 * `k_prime` (`eps`, `delta` as `[num, den]`, `credited`, `n`, `w_max`); `eps_at` (`k`, `delta`, `credited`, `n`,
   `w_max`: ε as `str(Fraction)`); `sampling` (`eps`, `delta`, `work`, `tile_work`,
   `bits`); `work_to_json` (`work`, `tile_work`);
-* `constants`: `PUBLIC`, `REGISTERED`, `LEGACY_REGISTERED`, `KINDS`, `GRID_BITS` and `STOP_FIXED`;
+* `constants`: `PUBLIC`, `REGISTERED`, `KINDS`, `GRID_BITS` and `STOP_FIXED`;
 * the fixed length: `length_item` (`max_tokens`); `length_problem` (`item`, `max_tokens`);
 * the entry row: `entry_row`, `entry_words` (`entry`, as `Entry.to_json`); `entry_from_row` (`row` hex),
   `entry_from_words` (`words`); `layout_problem`, `pass_tiles`, `tiles`, `entry_digest` (`row`); `entry_bc` (`row`,
@@ -199,7 +199,7 @@ def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
     pure (← sampling (← rat j "eps") (← rat j "delta") (← work j) (← int j "tile_work") (← nat j "bits")).toJson),
   ("work_to_json", fun j => do pure ((← work j).itemJson (← int j "tile_work"))),
   ("constants", fun _ => pure <| Json.mkObj [("PUBLIC", Json.arr (publicItems.map PublicItem.toJson).toArray),
-    ("REGISTERED", toJson registered), ("LEGACY_REGISTERED", toJson legacyRegistered), ("KINDS", toJson kinds),
+    ("REGISTERED", toJson registered), ("KINDS", toJson kinds),
     ("GRID_BITS", toJson gridBits), ("STOP_FIXED", toJson stopFixed)]),
   ("length_item", fun j => do pure (lengthItem (← natList j "max_tokens"))),
   ("length_problem", fun j => do pure (toJson (lengthProblem (← get j "item") (← natList j "max_tokens")))),

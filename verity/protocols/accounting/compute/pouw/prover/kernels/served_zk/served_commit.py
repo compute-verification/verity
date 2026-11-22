@@ -242,7 +242,7 @@ def served_length(served: Mapping[str, Any]) -> dict:
 
 def items_of(params: dict, ell: int, root_w: str | None, length: Mapping[str, Any] | None = None) -> dict:
     """The registered public items at level `ell` (`pouw.window.REGISTERED`), the rows' length item `length`; with none,
-    `pouw.window.LEGACY_REGISTERED`, an execution phase the verifier refuses as registered before the fixed-length rule."""
+    the others alone."""
     w = work_at(params, ell)
     return {"work": w.to_json(tile_work(params)), "check": check_item(params),
             "sampling": Wd.sampling(Fraction(params["eps"]), Fraction(params["delta"]), w, tile_work(params), params["grid_bits"]),
@@ -449,9 +449,6 @@ def public_problem(params: dict, rec: Any) -> Verdict:
     if window["kind"] != "served" or window["context"] != params["context"]:
         c.fail("public-context", {"registered": [window["kind"], window["context"]], "verifier": ["served", params["context"]]})
     items = window["public"]
-    if isinstance(items, Mapping) and set(items) == set(Wd.LEGACY_REGISTERED):
-        c.fail("window-form", "no-fixed-length: registered before the fixed-length rule (19 Oct), so not of record")
-        return c.verdict()
     if not isinstance(items, Mapping) or set(items) != set(Wd.REGISTERED):
         c.fail("public-items", {"registered": sorted(items) if isinstance(items, Mapping) else items,
                                 "declared": sorted(Wd.REGISTERED)})
@@ -986,7 +983,6 @@ class Challenger:
         self.record = record
         self.core = core_params(params)
         self.witness: dict[str, list[dict]] = {}
-        self.recorded: dict[str, bool] = {}
         ticks = itertools.count()
         self.clock = clock or (lambda: float(next(ticks)))
         self.streams: dict[tuple[str, int], S.Stream] = {}
@@ -1135,7 +1131,6 @@ class Challenger:
         if replay is None:
             self._distinct(name, manifest)
         self.regs[name] = (st, reg)
-        self.recorded[name] = bool(recorded)
         if replay is None:
             self.passes[name] = how
         else:
@@ -1185,7 +1180,6 @@ class Challenger:
         except PS.Reopened as e:
             raise _refused("reregistered", str(e)) from None
         self.regs[name] = (st, reg)
-        self.recorded[name] = False
         self.passes[name] = how
         self.salts[name] = salt
         return reg
@@ -1228,7 +1222,7 @@ class Challenger:
         finally:
             self._key = None
         out = self._of_record(name, self.record.draw, {
-            "coins": self._coins_json(), "recorded": self.recorded[name],
+            "coins": self._coins_json(),
             "opening": self.openings["draw"].to_json(), "stream": st.digest, "registration": reg.digest,
             "receipt": dict(reg.receipt), "k": reg.record["law"]["k"], "population": reg.record["population"],
             "units": list(d.units),

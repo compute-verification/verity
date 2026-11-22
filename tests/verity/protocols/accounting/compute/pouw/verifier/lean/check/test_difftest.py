@@ -13,7 +13,7 @@ mutation each aimed at every refusal or at a reading both sides share), compared
 reason.
 
 Its `pass` and `draw` against `core_check.pass_epoch_twin` and `core_check.draw_twin`: one `Port` each, over the cases
-`pouw_pass_cases` generates (honest passes of each coin version, a recorded beacon's, a certified window's and a live
+`pouw_pass_cases` generates (honest passes under seeded coins, a recorded beacon's, a certified window's and a live
 Pearl-C pass's, and honest samples, then one mutation each aimed at every refusal), compared output for output: how the
 salt was had, or the same refusal.
 
@@ -256,11 +256,6 @@ def test_pass_and_draw(pass_server):
                  "the auditor's ledger opens no challenger session for this window"):
         assert any(_template(part) in k for k in PASSED), part
     assert "draw accept" in PASSED and len(PASSED) > 40
-    for seed in range(4):   # `COIN_EARLY`'s samples: accepted only as a replay of a recorded run, by both sides
-        early, _ = passes.honest_draw(random.Random(f"early/{seed}"), CC.COIN_EARLY, early=True)
-        live = {**early, "recorded": False}
-        assert (draw(early), draw(live)["refused"][0]) == (None, "coin")
-        D.replay(DRAW, early, pass_server), D.replay(DRAW, live, pass_server)
 
 
 CREDITED: Counter[str] = Counter()

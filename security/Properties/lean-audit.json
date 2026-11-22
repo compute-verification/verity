@@ -25798,7 +25798,7 @@
    }
   },
   "PouwVerifier.Check": {
-   "digest": "9fea49614a796dfc8b45d8c6f0bb5a99831ba703e836a9c6cd659c14319cdfb2",
+   "digest": "77fea9e90c987afa200061ad67921d8fa9bebfea20a40c1dce80df9a97d784d3",
    "definitions": {
     "PouwVerifier.Ascending": "01ebb8591ea217e2ace991aaaa97fef8aaa807a7cd13ae5ae63eef26157749f8",
     "PouwVerifier.Fixed": "9face7dfef08ede71dccbae41751b9c890e99f159b2b75a585f95bbca38b6ec5",
@@ -25819,11 +25819,10 @@
     "PouwVerifier.expected": "4e229d76850e6f868784e9fb4923512790146dcf051d64b3243e3bb9eadacf28",
     "PouwVerifier.instDecidableAscending": "0444979b3a87cfbcbba68da36f3367874e58fa9e362f5e56a25fac5f905c01b5",
     "PouwVerifier.instDecidableUnitsOk": "342b562ee867b59d1c478fdfb41822c0d414819be9e5cea28bd2d59ee21cc483",
-    "PouwVerifier.legacySorted": "9d4594939c458099c4d45249b687ea4b0ee4018f4dbf87c6e14fa1cd63c3925a",
     "PouwVerifier.levelOf": "750f605c5a461682d065d9f17f78b809a0c6c81de9655f48b27cffdccdef4fc9",
     "PouwVerifier.oneStage": "5db26d0193f2e316d207475083549c0e4a35fa42c138c763858505adeffb991a",
     "PouwVerifier.outcome": "d84f1e9217cca774a47c3b72beb0aa3990b3f98cdd338f8709ede9266aae0b96",
-    "PouwVerifier.registered": "359baca2c39236a2cf40437244c21bc3d476634f4b4478799f3c7f84c54d8cc2",
+    "PouwVerifier.registered": "ae613faba2aab1caa415cce500b2bbbba46ba4f98f8afa6c30fd738fa7ca3dc2",
     "PouwVerifier.registeredSorted": "2742e1280eb91cb4cd720d9c5649aaa54dbc18d044fa15ac4aa0a8b5d7d1d5b5",
     "PouwVerifier.rootWJson": "961758e410d562c9649d76e4aa3963143b550955891bdf80978f0715f999ec30",
     "PouwVerifier.sampledJson": "a0f0ed2646dc4cdbc6caa46846ca54f3f1f84e34c2ebd6207b9ff94cfd41239d",
@@ -26392,13 +26391,12 @@
    }
   },
   "PouwWindow.Public": {
-   "digest": "8bc42f3a6e98bb6a14b7072117bcc3a340395c32ccce34728220e646e1717c3d",
+   "digest": "03683755a9adce01d831b05a5760309bfcac25e1f70a17ac5695998322fb2c32",
    "definitions": {
     "PouwWindow.PublicItem": "69e07e7940f3c15848721f22dd6c73ec562657c37f8528bbd80fc0d80eb318a1",
     "PouwWindow.PublicItem.item": "46dc234e6fc0f30b3cf4cafc12b26947ed8de5c0cf3440ae8a652441031c2e23",
     "PouwWindow.PublicItem.kind": "8c89285f8e1e4767f57fa6b6b8c299712d5a31b34d06f6e657036fa04c924af6",
     "PouwWindow.PublicItem.source": "f4d4ccf1e7df54b028aa9d10d7cadd796e6773be6bcf16aa8ae64862ad504e7f",
-    "PouwWindow.legacyRegistered": "283147c1c56c6d9d1ad24674e32b1b74d987e8059db10e46bfe6ee934604794a",
     "PouwWindow.publicItems": "a2e8bf792d0a1ba55e6ffbae36150f7ed9f8ea9a1b8bf2e7eed5daee99855e29",
     "PouwWindow.registered": "679c6eb48d59b5fe15606c0ea0e2df4b0585d157d32baecc61cd8c08d63172bf"
    }

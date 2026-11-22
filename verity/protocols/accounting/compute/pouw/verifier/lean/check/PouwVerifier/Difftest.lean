@@ -23,7 +23,7 @@ harness (`verity/core/difftest`):
   `recorded`, `reveal`, `committed`, `stream` and `prover`, a certified execution phase's, as hex, null or absent otherwise, and
   `live`, a live Pearl-C pass's verifier's `{key, ledger, main, pins, session}`, null or absent otherwise):
   `core_check.pass_epoch`, as `{"how"}` or `{"refused": [code, why]}`.
-* `draw` (`coins`, `recorded`, `opening`, `stream`, `registration`, `receipt`, `k`, `population`, `units`, each as
+* `draw` (`coins`, `opening`, `stream`, `registration`, `receipt`, `k`, `population`, `units`, each as
   `core_check.draw` takes it): null, or `{"refused": [code, why]}`.
 * `salt` (`key`, `ledger`, `pins`, `main`, `window` and `session` as `rounds` reads them, `weights` and `requests` the
   execution phase's weights' root and round-0 request table's root, `opening` the salt coin, each as `core_check.salt` takes it):
@@ -99,7 +99,7 @@ def passOf (j : Json) : Except String Json := do
 
 def drawOf (j : Json) : Except String Json := do
   let f := get j
-  refusal (fun _ => Json.null) (drawCheck (← f "coins") (← flag j "recorded") (← f "opening") (← f "stream")
+  refusal (fun _ => Json.null) (drawCheck (← f "coins") (← f "opening") (← f "stream")
     (← f "registration") (← f "receipt") (← f "k") (← f "population") (← f "units") (Spot.getD j "key"))
 
 def saltOf (j : Json) : Except String Json := do

@@ -84,7 +84,7 @@ EXPECT = {
     "record-context": "window:", "record-extra-item": "public-items:", "record-missing-item": "public-items:",
     "params-length-stop": "params: length is not", "params-length-empty": "params: length is not",
     "params-length-zero": "params: length is not", "params-length-keys": "params: length is not",
-    "params-length-other": "window-form: max-tokens:", "record-legacy": "window-form: no-fixed-length:",
+    "params-length-other": "window-form: max-tokens:",
     "record-eos-row": "window-form: eos-keyed-row:", "record-length-mismatch": "window-form: length-mismatch: slot",
     "record-length-count": "window-form: length-mismatch:", "record-max-tokens": "window-form: max-tokens:",
     "record-length-keys": "window-form: length is not", "record-length-stop-type": "window-form: length's stop",
@@ -547,7 +547,6 @@ PASS_EXPECT = {
     "verifier-coins": ("coin", "the verifier's coins are malformed: an epoch is"),
     "opening-form": ("coin", "the pass's coins are malformed: a coin opening is"),
     "pass-coins-form": ("coin", "the pass's coins are malformed: a coin commitment's"),
-    "recorded-scheme": ("coin", "the verifier's coins are malformed: a coin commitment's scheme is 'verity/pouw/epoch-coins/v1'"),
     "not-the-epochs": ("coin", "the pass's coin commitment is not the epoch's"),
     "indices": ("coin", "matmul indices are unique"), "dims": ("coin", "every matmul on weight"),
     "weights-set": ("coin", "every weight of the workload is committed, and only those"),
@@ -589,7 +588,6 @@ PASS_EXPECT = {
 
 DRAW_EXPECT = {
     "honest": None, "verifier-coins": ("coin", "the verifier's coins are malformed"),
-    "recorded-scheme": ("coin", "the verifier's coins are malformed: a coin commitment's scheme is"),
     "registration": ("draw", "the registration is not a SHA-512 digest"), "stream": ("draw", "the registration is not a SHA-512"),
     "receipt": ("draw", "the receipt is not"), "law": ("draw", "the law is not subset:k over N"),
     "opening-form": ("coin", "the draw's a coin opening is"), "label": ("coin", "the draw's coin is the epoch's 'salt' coin"),
@@ -597,7 +595,6 @@ DRAW_EXPECT = {
     "foreign": ("coin", "the draw's coin does not open"), "tampered": ("coin", "the draw's coin does not open"),
     "early": ("coin", "the draw's coin was not opened after what the verifier recorded"),
     "units": ("draw", "the units are not the draw coin's subset:"), "other-key": ("draw", "the units are not the draw coin's"),
-    "early-coins-live": ("coin", "the draw's coin does not open"),
     "live-coins": ("coin", "the challenger record is malformed: "),
     "live-not-epoch": ("coin", "the coin commitment's coins are not a live window's draw session's"),
     "live-bare": ("coin", CC.SIGNED_LIVE),
@@ -619,7 +616,7 @@ DRAW_EXPECT = {
 
 
 def test_every_pass_mutation_hits_its_refusal():
-    """`core_check.pass_epoch_twin` re-starts an honest pass's execution phase (each coin version, and a recorded beacon's) and refuses
+    """`core_check.pass_epoch_twin` re-starts an honest pass's execution phase (the execution phase's coins, and a recorded beacon's) and refuses
     each mutation, over a few cases each, with the refusal it aims at."""
     assert set(PASS_EXPECT) == set(passes.PASS_NAMES) | {"honest"}
     for name, want in PASS_EXPECT.items():
@@ -632,11 +629,10 @@ def test_every_pass_mutation_hits_its_refusal():
 
 
 def test_each_honest_pass_is_had_as_it_was_salted():
-    """Each kind of honest pass is accepted, and says how its salt was had: by the execution phase's coins (either version), a
+    """Each kind of honest pass is accepted, and says how its salt was had: by the execution phase's coins, a
     recorded replay's beacon, the network attester's reveal over the weights, stream and prover it recorded before
     it, or a live Pearl-C pass's session of the auditor's challenger, opened on its salt execution phase's root."""
-    want = {"coin": "coin", "recorded-coin": "coin", "beacon": "recorded beacon", "certified": "certifier",
-            "live": "live coin"}
+    want = {"coin": "coin", "beacon": "recorded beacon", "certified": "certifier", "live": "live coin"}
     for kind, how in want.items():
         for seed in range(6):
             case = passes.pass_instance(random.Random(f"{kind}/{seed}"), kind=kind)
@@ -660,7 +656,7 @@ def test_every_draw_mutation_hits_its_refusal():
                 (name, seed, got)
     for seed in range(6):
         live, _ = passes.honest_live_draw(random.Random(f"live/{seed}"))
-        seeded, _ = passes.honest_draw(random.Random(f"seeded/{seed}"), Co.SCHEME, early=False)
+        seeded, _ = passes.honest_draw(random.Random(f"seeded/{seed}"))
         assert CC.draw_twin(*passes.draw_args(live)) is None and CC.draw_twin(*passes.draw_args(seeded)) is None
         assert CC.draw_twin(*passes.draw_args({**live, "opening": seeded["opening"]}))[1].startswith(
             "the draw's a live coin opening is")
@@ -676,7 +672,7 @@ def _live_draw(sk: lms.PrivateKey, coins: str, reg: str, stream: str, receipt: d
     o = ch.open(Wd.DRAW, 0, bytes.fromhex(reg))
     ctx, size = Wd.draw_key_context(stream, reg, receipt), 2 * k * Wd.width(n) + 64
     return {"coins": {"key": Ch.ChallengerKey(4, 2, lms.public_key(sk)).to_json(), "record": record.to_json()},
-            "recorded": False, "opening": o.to_json(), "stream": stream, "registration": reg, "receipt": receipt, "k": k,
+            "opening": o.to_json(), "stream": stream, "registration": reg, "receipt": receipt, "k": k,
             "population": n, "units": Wd.stream_subset(k, n, derive(o.coin, Wd.DRAW_DOMAIN, ctx).stream("draw", size)),
             "key": pinned}
 
@@ -947,16 +943,14 @@ def test_one_session_salts_one_window():
 
 
 def test_the_versioned_coin_rule_is_the_coins_on_the_current_version():
-    """On `coins.SCHEME`, `core_check.coin_reason` and `weights_root` are `coins.coin_reason` and `audit.weights_root`;
-    the recorded version differs from it in its binding and weights' root."""
+    """On `coins.SCHEME`, `core_check.coin_reason` and `weights_root` are `coins.coin_reason` and `audit.weights_root`."""
     rng = random.Random(3)
     for seed in range(8):
         ch = Co.Challenger(seed % 3, rng.randbytes)
         roots = {rng.randrange(99): rng.randbytes(64) for _ in range(3)}
         assert CC.weights_root(Co.SCHEME, roots) == weights_root(roots)
-        assert CC.weights_root(CC.COINS_RECORDED, roots) != weights_root(roots)[:32]
         o = ch.open("salt", weights_root(roots))
-        c = CC.coins_of(ch.commitment.to_json(), False)
+        c = CC.coins_of(ch.commitment.to_json())
         for label, after, op in (("salt", o.after, o), ("salt", bytes(64), o), ("draw", o.after, o),
                                  ("salt", o.after, Co.CoinOpening(o.epoch + 1, o.label, o.after, o.coin, o.salt, o.path)),
                                  ("salt", o.after, Co.CoinOpening(o.epoch, o.label, o.after, o.coin[:-1] + b"x", o.salt, o.path))):
