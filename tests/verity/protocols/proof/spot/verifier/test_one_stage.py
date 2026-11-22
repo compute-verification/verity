@@ -31,6 +31,7 @@ from verity.protocols.proof.spot.verifier.one_stage import (
 )
 from verity.protocols.proof.spot.prover import docket as DK
 from verity.commitments import randomness as RND
+from verity.commitments.live_coin import PUBLIC_BYTES
 
 XOR8 = PrimitiveDefinition("OneStageTestXor8", 1, (("a", Value(8)), ("b", Value(8))), Value(8), lambda a, b: a ^ b,
                            register=False)
@@ -1146,13 +1147,19 @@ def test_the_registration_is_the_challengers_signed_head_or_the_development_path
 
 def test_the_half_after_the_draw_refuses_by_name_what_it_cannot_test():
     """`docket.registration_after_draw` (`OneStage.registrationAfterDraw`): no epoch or challenger key, or no lane the
-    auditor names, refuses by name; the ledger's own refusals are `challenger.registration_held`'s, held to the Lean's by
-    the challenger difftest."""
+    auditor names, or evidence with no ledger, refuses by name; the ledger's own refusals are
+    `challenger.registration_held`'s, held to the Lean's by the challenger difftest and, through the whole check, by
+    `test_difftest.py`."""
     for registration, challenger, root, why in (({"lane": "circuits"}, {"key": {}}, "ab" * 64, R.NO_SIGNED_HEAD_WHY),
                                                 ({"lane": "circuits"}, None, None, R.NO_SIGNED_HEAD_WHY)):
         with pytest.raises(R.RegistrationRefused) as e:
             R.registration_after_draw(registration, challenger, root, "cd" * 64, {"ledger": []}, lambda *a: True)
         assert str(e.value) == why
+    key = {"H": 4, "W": 4, "public": "00" * PUBLIC_BYTES}
+    for coins in ({}, {"ledger": None}, None):
+        with pytest.raises(R.RegistrationRefused) as e:
+            R.registration_after_draw({"lane": "circuits"}, {"key": key}, "ab" * 64, "cd" * 64, coins, lambda *a: True)
+        assert str(e.value) == R.NO_LEDGER_AFTER_DRAW_WHY
 
 
 def _held(prog, q, rp):

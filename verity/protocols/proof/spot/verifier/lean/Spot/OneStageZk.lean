@@ -802,15 +802,7 @@ theorem evidenceEitherOf_one {b : ByteArray} {e : Evidence} (h : evidenceEitherO
     · exact h
   · cases h
 
-/-- `check`'s half after the draw of a registration taken from the ledger (`OneStage.registrationAfterDraw`), on the
-parameters and evidence `protocol` reads; nothing where either is refused, which `protocol.answer` refuses itself. -/
-def registrationAfterDraw (params evidence : ByteArray) : V Unit :=
-  match Core.canonicalJson params >>= fun j => (j, ·) <$> paramsEitherOfJson j, evidenceEitherOf evidence with
-  | .ok (j, p), .ok e => OneStage.registrationAfterDraw p.base j e.base.coins
-  | _, _ => pure ()
-
-/-- `protocol.main`'s commands, with `check` an accept only where its registration's half after the draw holds
-(`registrationAfterDraw`), and `verdicts OWN PROOFS [BLOB ...]`: the sessions' verdicts alone (`verdicts`, with no
+/-- `protocol.main`'s commands, and `verdicts OWN PROOFS [BLOB ...]`: the sessions' verdicts alone (`verdicts`, with no
 proved units to bind), from the verifier's own inputs (`ownOfJson`) and the evidence's `proofs` (`proofsOf`), each file
 canonical JSON; one line, `{"verdicts": [verdict, ...]}` in session order or `{"refused": why}`, exit 0 or 1. The
 difftest holds it to `verity-verify-proof verify --zk` (`one_stage.proofs.verify`). `restrict C PARTITION BLOCK OUT`:
@@ -838,21 +830,6 @@ def main (args : List String) : IO UInt32 := do
       | .error e => IO.eprintln s!"restrict: {e}"; return 1
     | .error e, _ => IO.eprintln s!"restrict: the partition object: {e}"; return 2
     | _, none => IO.eprintln "restrict: BLOCK is not a unit index"; return 2
-  | "check" :: params :: commitment :: evidence :: blobs =>
-    let bs ← blobs.toArray.mapM fun (f : String) => IO.FS.readBinFile f
-    let pB ← IO.FS.readBinFile params
-    let eB ← IO.FS.readBinFile evidence
-    let a := protocol.answer pB (← IO.FS.readBinFile commitment) eB bs
-    let a := match a.verdict, registrationAfterDraw pB eB with
-      | .accept, .error why => { a with verdict := .reject, reason := some why, published := none, profile := none }
-      | _, _ => a
-    match a.canonical with
-    | .ok line =>
-      IO.println line
-      return match a.verdict with | .accept => 0 | .reject => 1 | .undecided => 2
-    | .error e =>
-      IO.eprintln s!"{protocol.id}: the outcome is not canonical JSON: {e}"
-      return 70
   | _ => protocol.main args
 
 #guard registeredInputName "RegisteredInput96_v1"

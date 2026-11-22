@@ -115,7 +115,7 @@ settings = _by_path("spot_verifier_lean_settings", Path(__file__).resolve().with
 stand_in = _by_path("stand_in", Path(__file__).resolve().parents[5] / "circuits" / "stand_in.py")
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from test_challenger_difftest import DEPLOYED, SAMPLE_MUTATIONS, ORDERS, Ch, Drawn, _flip, _mutated, lms_verify  # noqa: E402
+from test_challenger_difftest import DEPLOYED, LANES, SAMPLE_MUTATIONS, ORDERS, Ch, Drawn, _flip, _mutated, lms_verify  # noqa: E402
 
 PACKAGE = (Path(__file__).resolve().parents[7] / "verity" / "protocols" / "proof" / "spot" / "verifier" / "lean")
 CALLER_PACKAGE = PACKAGE.parents[2] / "spot_flock/verifier/lean"
@@ -2816,6 +2816,72 @@ def _audit_v1_accepts(s: Setup, seed: str, server) -> tuple:
     assert D.replay(ONE_STAGE, _json({"commitment": _hex(rec), "evidence": _hex(v1), "params": params}),
                     server)[0] == "accept", s.templates
     return rec, ch, base, params
+
+
+def test_the_registration_after_the_draw_is_held_in_the_check_as_python_does(server):
+    """The registration's half after the draw in the whole check (`OneStage.check`, which `checkAt` runs; its twin
+    `docket.registration_after_draw`), on a v1 audit from the challenger's coins whose parameters take the registration
+    from the ledger: the ledger that signs the record's digest for the session's lane before the session accepts; one
+    whose registration was signed after the session opened, a lane the session is not on, and a ledger after the draw
+    that holds the epoch to another digest than the one before it each pass the half before the draw and are rejected
+    by the check by name, Lean's reason the Python's."""
+    s = BLOCKED
+    sampling_design = {"k": 2, "law": "subset"}
+    rec = DK.record(s.program, s.query, sampling_design, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
+                   WINDOW, leaf_layer=LEAF, partition=s.partition)
+    body = _record_body([])
+    digest = DD.digest(json.loads(body))
+    rng = random.Random("registration-after-draw")
+    ch, d, _ = _challenger_sample(rng, s, sampling_design, rec)
+    while ch.ledger.period_open is None:
+        ch, d, _ = _challenger_sample(rng, s, sampling_design, rec)
+    lg, proved = ch.ledger, DR.proved(d)
+    events, opened = list(lg.events), lg.period_open
+
+    def lines(registration: str, earlier: str | None = None, after: bool = False) -> list[str]:
+        lg.period_open = {**opened, "registration": registration}
+        lg.events = [(k, sid, lg.period_open if b is opened else b) for k, sid, b in events]
+        if after:
+            lg.events = [e for e in lg.events if e[0] not in ("period-open", "period-close")] + [
+                ("period-open", None, lg.period_open)]
+        if earlier is not None:
+            at = 2 if lg.v1 else 0
+            first = {**opened, "lane": earlier, "period": "p-first", "registration": registration}
+            lg.events[at:at] = [("period-open", None, first), (
+                "period-close", None, {"complete": False, "lane": earlier, "period": "p-first", "windows": []})]
+        return lg.lines()
+
+    def run(before: list[str], after: list[str], lane: str = lg.lane) -> tuple[str, str | None, str | None]:
+        coins = {**ch.evidence(ch.segment.to_json()), "ledger": after}
+        evidence = {"coins": coins, "draw": d, "instances": len(proved), "proved_units": proved,
+                    "receipt": R.receipt(rec, "v", received=RECEIVED), "served": sorted(d["units"]),
+                    "session_roots": {r["port"]: r["root"] for r in rec["roots"]},
+                    "sessions": [], "statement": {}, "verdicts": {"lean": {"accepted": True, "of_record": True}}}
+        params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "delta": "1/20",
+                  "law": sampling_design, "leaf_layer": LEAF, "log": [], "partition": s.partition,
+                  "ports": s.ports, "program": s.desc, "query": s.query, "registered": None, "scheme": SCHEME,
+                  "window_root": lg.window["root"], "work_table": None,
+                  "registration": {"record": body.hex(), "ledger": before, "lane": lane}}
+        held = R.registration_parsed(params["registration"], params["challenger"], params["window_root"], lms_verify)
+        assert held is not None and held[1] == digest
+        try:
+            R.registration_after_draw(params["registration"], params["challenger"], params["window_root"], digest, coins,
+                                      lms_verify)
+            py = None
+        except R.RegistrationRefused as e:
+            py = str(e)
+        out = server.exchange(_json({"commitment": _hex(rec), "evidence": _hex(evidence), "params": params}))
+        return out["verdict"], out.get("reason"), py
+
+    honest = lines(digest)
+    assert run(honest, honest) == ("accept", None, None)
+    other_lane = next(x for x in LANES if x != lg.lane)
+    for before, after, lane in ((lines(digest, after=True),) * 2 + (lg.lane,),
+                                (lines(digest, earlier=other_lane),) * 2 + (other_lane,),
+                                (honest, lines("ee" * 64), lg.lane)):
+        verdict, reason, py = run(before, after, lane)
+        assert py is not None and py.startswith("registration, after the draw: "), py
+        assert (verdict, reason) == ("reject", py)
 
 
 def test_v2_takes_a_cover_of_the_population_under_a_subset_design(server, server_v2):

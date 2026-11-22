@@ -235,6 +235,8 @@ NO_SIGNED_HEAD_WHY = ("registration: the parameters carry the deployment's regis
                       "that sign its digest, and name no development path: the challenger signs the registration before "
                       "the first coin")
 REGISTRATION_DIGEST_WHY = "registration: the record's digest is not the registration the challenger signed for this epoch's lane"
+NO_LEDGER_AFTER_DRAW_WHY = ("registration, after the draw: the registration was taken from the auditor's ledger, and the "
+                            "evidence's coins carry no ledger the epoch's session ended with to hold it to")
 _LOWER_HEX = re.compile(r"(?:[0-9a-f]{2})*")
 
 
@@ -290,7 +292,8 @@ def registration_after_draw(registration: Any, challenger: Any, window_root: Any
                             verify: Ch.Verify) -> None:
     """`OneStage.registrationAfterDraw` for a registration `registration_parsed` took from the ledger and held the run
     to ``digest``: on the ledger the epoch's session ends with (``coins``' ``ledger``), the epoch is held to ``digest``,
-    signed for the auditor's lane before the session's first entry (`challenger.registration_held`)."""
+    signed for the auditor's lane before the session's first entry (`challenger.registration_held`); with no ledger,
+    refused (`NO_LEDGER_AFTER_DRAW_WHY`)."""
     if not isinstance(window_root, str):
         raise RegistrationRefused(NO_SIGNED_HEAD_WHY)
     try:
@@ -301,6 +304,8 @@ def registration_after_draw(registration: Any, challenger: Any, window_root: Any
     if not isinstance(lane, str):
         raise RegistrationRefused(REGISTRATION_FORM)
     ledger = coins.get("ledger") if isinstance(coins, dict) else None
+    if not isinstance(ledger, list):
+        raise RegistrationRefused(NO_LEDGER_AFTER_DRAW_WHY)
     try:
         Ch.registration_held(ledger, {"root": window_root}, lane, digest, key, verify)
     except Ch.CoinError as e:

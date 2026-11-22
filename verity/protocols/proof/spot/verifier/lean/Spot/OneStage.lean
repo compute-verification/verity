@@ -121,8 +121,9 @@ open Flock (V)
 
 /-- Where the deployment's registration record's digest was taken (`registrationParsed`). -/
 inductive RegistrationSource where
-  /-- the registration the challenger signed for the epoch's lane before its first coin (`Challenger.registrationOf`) -/
-  | ledger
+  /-- the registration the challenger signed for the auditor's `lane` before the epoch's first coin
+  (`Challenger.registrationOf`) -/
+  | ledger (lane : String)
   /-- the record's own digest, taken from the serving node's own file and held by no one else -/
   | development
   deriving DecidableEq, Inhabited, Repr
@@ -386,7 +387,7 @@ it stands before the epoch's session opens, signs for the auditor's `lane` under
 (`Challenger.registrationHead`), which the record's digest (`Flock.WindowRecord.digestHex`, the inference-only check's
 `Theta.digest`) must be (`REGISTRATION_DIGEST_WHY`); with no challenger or epoch, refused (`NO_SIGNED_HEAD_WHY`). It
 only refuses early: that the registration preceded the epoch's first entry is `registrationAfterDraw`'s, which the
-executable's `check` runs on the ledger the session ends with. The development path is taken only where the
+check runs on the ledger the session ends with (`check`). The development path is taken only where the
 parameters name it (`head: "development"`): the record is held to its own digest (`DEVELOPMENT_WHY`). -/
 def registrationParsed (j : Json) (challenger : Option (Challenger.ChallengerKey × String))
     (windowRoot : Option String) : V (Option (ByteArray × String × RegistrationSource)) := do
@@ -404,18 +405,26 @@ def registrationParsed (j : Json) (challenger : Option (Challenger.ChallengerKey
   let (some (key, _), some _) := (challenger, windowRoot) | throw NO_SIGNED_HEAD_WHY
   let head ← (Challenger.registrationHead key lane (getD r "ledger")).mapError (s!"registration: {·}")
   unless head == digest do throw REGISTRATION_DIGEST_WHY
-  return some (body, head, .ledger)
+  return some (body, head, .ledger lane)
+
+/-- The refusal of evidence that carries no ledger the epoch's session ended with, where the registration was taken
+from the ledger: the half after the draw has nothing to test. -/
+def NO_LEDGER_AFTER_DRAW_WHY : String :=
+  "registration, after the draw: the registration was taken from the auditor's ledger, and the evidence's coins carry " ++
+    "no ledger the epoch's session ended with to hold it to"
 
 /-- The half after the draw of a registration taken from the ledger (`registrationParsed`), the one an accepted
 run's registration rests on: on the auditor's ledger the epoch's session ends with (`coins`' `ledger`), the epoch is
 held to the digest the run was held to before the draw, signed for the auditor's lane before the session's first entry
-(`Challenger.registrationHeld`). Nothing to test on the development path or with no record. -/
-def registrationAfterDraw (p : Params) (j coins : Json) : V Unit := do
-  let some .ledger := p.registration | return ()
+(`Challenger.registrationHeld`); with no ledger, refused (`NO_LEDGER_AFTER_DRAW_WHY`). Nothing to test on the
+development path or with no record. -/
+def registrationAfterDraw (p : Params) (coins : Json) : V Unit := do
+  let some (.ledger lane) := p.registration | return ()
   let (some (key, _), some w, some (_, digest)) := (p.challenger, p.verifier.windowRoot, p.verifier.weightsOfRecord)
     | throw NO_SIGNED_HEAD_WHY
-  let .str lane := getD (getD j "registration") "lane" | throw REGISTRATION_FORM
-  (Challenger.registrationHeld key lane digest (Json.mkObj [("root", Json.str w)]) (getD coins "ledger")).mapError
+  let ledger := getD coins "ledger"
+  unless ledger matches .arr _ do throw NO_LEDGER_AFTER_DRAW_WHY
+  (Challenger.registrationHeld key lane digest (Json.mkObj [("root", Json.str w)]) ledger).mapError
     (s!"registration, after the draw: {·}")
 
 /-- The parameters as parsed, before `paramsOfJson`'s refusal of the sampling design: the stream's run reads them and
@@ -759,12 +768,15 @@ def creditedGate {α : Type} (prof : Core.Integrity) (o : Core.Outcome α Core.I
   | some why => .reject why
   | none => o
 
-/-- R1–R8, the sample's checks, the record's checks and the verdicts (module docstring, **check**), at no coins: the
-check `checkAt` runs once the coins drew the sample. R1–R8 is SPOT's check alone (`Docket.check`): this audit
+/-- The registration's half after the draw (`registrationAfterDraw`), R1–R8, the sample's checks, the record's checks
+and the verdicts (module docstring, **check**), at no coins: the check `checkAt` runs once the coins drew the sample. R1–R8 is SPOT's check alone (`Docket.check`): this audit
 refuses no record for the caller's facts (the declared day, the binding, the seed salt, the registered compiler, the
 pool's marks and chain, and the verdicts); SPOT, its caller, gates it (`VStar.Recursive.Caller.gate`), and
 this package's executables that run it on their own (`spot-one-stage` and `-zk`) do not. -/
 def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Core.Integrity :=
+  match registrationAfterDraw p e.coins with
+  | .error why => .reject why
+  | .ok () =>
   let v := p.verifier
   let rec_ := c.record
   let codes := Docket.check rec_ v
