@@ -76,6 +76,7 @@ public import Proofs.ResourceAccounting.Requirement
 public import Proofs.Pouw.RequirementPouw
 public import Proofs.ResourceAccounting.Sanity
 public import Proofs.Poub.Stacking
+public import Proofs.Poub.RefreshCut
 public import Proofs.ResourceAccounting.RegisteredCircuit.Witness
 public import Proofs.ResourceAccounting.RegisteredCircuit.WitnessPrefill
 public import Proofs.ResourceAccounting.Sketch

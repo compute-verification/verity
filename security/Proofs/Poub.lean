@@ -19,10 +19,11 @@ public import Proofs.Poub.RemoteHeld.SketchP2
 public import Proofs.Poub.RemoteHeld.Line
 public import Proofs.Poub.RemoteHeld.Subprotocol
 public import Proofs.Poub.Stacking
+public import Proofs.Poub.RefreshCut
 
 /-!
 # The proofs of PoUB's guarantees
 
 The bandwidth audit's (`Bandwidth`, `BandwidthAudit`, `RateAudit*`), the remote audit's (`Remote`, `RemoteHeld`), the
-bound receipts', the stacking bound's and their lemmas. `Proofs.ResourceAccounting` imports the same modules.
+bound receipts', the stacking bound's, refresh's cut (`RefreshCut`) and their lemmas. `Proofs.ResourceAccounting` imports the same modules.
 -/
