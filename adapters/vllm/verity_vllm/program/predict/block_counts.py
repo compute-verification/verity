@@ -258,7 +258,7 @@ def main(a: Options) -> int:
             raise ValueError(f"{circuit}: no registration is given, so nothing holds the circuit record to the registered "
                              "circuit, and it is not counted")
         reg = json.loads(Path(registration).read_text())
-        d.add(IF.tied_record(Path(circuit).read_bytes(), reg, circuit), IF.registered_roots(reg))
+        d.add(IF.tied_record(Path(circuit).read_bytes(), reg, circuit), IF.registration_roots(reg, required=pins is not None))
     pub, private = d.judgment(json.loads(a.declaration.read_text()))
     pub = RBC.BlockJudgment.of(pub.dump(), "block-counts")
     write_private(a.private, private)

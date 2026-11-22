@@ -2585,6 +2585,27 @@ def registered_roots(window: Mapping[str, Any]) -> dict[str, str]:
     return dict(roots)
 
 
+#: a registration message whose roots a reader holds pins to records none, so no registered read would be held
+NO_REGISTERED_ROOTS = ("the registration message records no registered roots, under its window or beside it, so every "
+                       "registered read would count as fresh")
+
+
+def registration_window(message: Mapping[str, Any]) -> Mapping[str, Any]:
+    """Where a registration message records its period's registration: core's message's ``window`` (`Window.write`), or
+    an integration's own message itself, whose ``window`` is its index."""
+    w = message.get("window")
+    return w if isinstance(w, Mapping) else message
+
+
+def registration_roots(message: Mapping[str, Any], required: bool = True) -> dict[str, str]:
+    """`registered_roots` of the message's period (`registration_window`); refused (ValueError, `NO_REGISTERED_ROOTS`)
+    where it records none and ``required``."""
+    roots = registered_roots(registration_window(message))
+    if required and not roots:
+        raise ValueError(NO_REGISTERED_ROOTS)
+    return roots
+
+
 def input_count(doc: Mapping[str, Any], resolve: Callable[[str], Any] = resolve, pins: Mapping[str, str] | str | None = None,
                 roots: Mapping[str, str] | None = None) -> dict[str, int]:
     """A circuit record's inputs by what fills them, in bits, from its description alone (a stated record's templates, wires

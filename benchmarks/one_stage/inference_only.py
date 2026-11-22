@@ -652,7 +652,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     pins = (dict(WeightsRegistration.of(json.loads(a.pins.read_text()), str(a.pins)).roots)
             if a.pins is not None and a.pins.is_file() else None)
-    roots = IF.registered_roots(json.loads(a.registration.read_text())) if a.registration.is_file() else None
+    roots = (IF.registration_roots(json.loads(a.registration.read_text()), required=pins is not None)
+             if a.registration.is_file() else None)
     with tempfile.TemporaryDirectory(dir=a.private.parent if a.private.parent.is_dir() else None) as scratch:
         pub, full = verdict(pol, doc, a.serve_run, pins, roots, a.retroactive, a.lean, Path(scratch), a.lean_timeout)
     _write(a.private, full, private=True)
