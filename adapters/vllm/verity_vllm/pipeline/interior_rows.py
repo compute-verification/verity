@@ -560,7 +560,8 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
             k = next(j for j, m in enumerate(window.members) if m.template == r.reader)
             x = data[k]["rows"][r.port]
             got = np.asarray(x.value.rows)[list(x.positions)] if isinstance(x, CS.ValueRows) else np.asarray(x)
-            fed[r.param] = RV.Registered.commit(prog, r.param, got.tolist(), schema=window.members[k].schema(r.port))
+            fed[r.param] = RV.Registered.commit(prog, r.param, got.tolist(), schema=window.members[k].schema(r.port),
+                                                window=window.run)
             data[k]["rows"][r.port] = CS.ValueRows(fed[r.param], tuple(range(len(got))))
         c = CS.commit(window, data, salts_of=fresh or None)
     provenance = {"row": row, "interior": True, "replay_sample": [int(u) for u in sample],

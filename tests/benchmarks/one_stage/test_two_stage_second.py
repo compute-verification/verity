@@ -396,7 +396,7 @@ def test_an_unlinked_class_is_committed_and_proved_blockwise_and_round_2_refuses
     vocabulary of 4,096, the smallest whose combine has a row past one hash block, which Flock's composer needs):
     `replayed` refuses it by name, and with ``unlinked`` commits the sampled spans' chunks and combines as the
     interior, registering no value, and samples K of each in every sampled span. The verifier's reads then put every
-    port at the interior's own, and round 2 refuses the statements by ``second-wires`` alone: the sessions prove each
+    port at the interior's own, a port that reads a run input node at that node's one tree, and round 2 refuses the statements by ``second-wires`` alone: the sessions prove each
     block and tie none to another or to round 1. Slow (about 10 s): it lowers both templates twice."""
     v = 4096
     got, check = SM.serve(tmp_path, v, O, N, inline=True), BR.check_template(SM.template(v))
@@ -414,9 +414,11 @@ def test_an_unlinked_class_is_committed_and_proved_blockwise_and_round_2_refuses
     assert sorted(u // chunks for u in drawn if u < Q * chunks) == list(range(Q))
     assert sorted((u - Q * chunks) // O for u in drawn if u >= Q * chunks) == list(range(Q))
     mine = d.window(again.docket.digest, sample)
-    assert CS.expected_ports(mine) == r.interior.ports
+    assert CS.expected_ports(mine) | IR.run_input_ports(mine) == r.interior.ports
     reads = TS.verifier_reads(d, mine, r.record, again.record, sample)
-    assert all(e["value"] == f"{m.template}/{p}" for m in mine.members for p, e in reads[m.key]["ports"].items())
+    runs = {(x.reader, x.port): x.param for x in IR.run_inputs(mine)}
+    assert runs and all(e["value"] == runs.get((m.template, p), f"{m.template}/{p}")
+                        for m in mine.members for p, e in reads[m.key]["ports"].items())
     proofs = TS.references(d, Q, tmp_path / "references")
     S.template_circuits(proofs, again.stream.spec.check.query)
     stmts, verdicts = _handed(tmp_path / "interior", tmp_path / "served", mine, reads, drawn)
