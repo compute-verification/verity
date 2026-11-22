@@ -215,7 +215,7 @@ def _from_serve_dir(tmp_path, record):
     """The runner's preflight with only the serve dir named (``D``): no ``PRED``, ``WINDOW_CLASS`` or ``SERVE_ROOT``, a
     serve.json of ``record`` in it."""
     d = tmp_path / "serve"
-    d.mkdir(exist_ok=True)
+    d.mkdir(parents=True, exist_ok=True)
     (d / "serve.json").write_text(json.dumps(record))
     env = {k: v for k, v in os.environ.items() if k not in ("PRED", "WINDOW_CLASS", "SERVE_ROOT")}
     env |= {"D": str(d), "OUT": str(tmp_path / "out"), "VENV": sys.prefix, "PRODUCT": "remote", "CUDA_HOME": str(tmp_path),
