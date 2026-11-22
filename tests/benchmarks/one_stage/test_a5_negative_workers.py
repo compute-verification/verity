@@ -393,7 +393,7 @@ def test_the_registered_reads_negatives_are_the_same_entries_in_the_same_order_o
     the same order, each verify run once under its own name. At once, every case's files are put, in the cases'
     order, before any case is verified; one after another, each verify puts its own as before."""
     ports = {f"p{j}": {"value": f"v{j}", "root": f"{j}" * 128, "leaves": 4, "reads": [0, 1, 2, 3]} for j in range(2)}
-    (tmp_path / "registered.json").write_text(json.dumps({"format": "verity/registered-reads/v1", "ports": ports}))
+    reads = a0.registered_written(tmp_path / "registered.json", {"format": "verity/registered-reads/v1", "ports": ports})
     member = tmp_path / "m"
     member.mkdir()
     head = {"registered": {p: {"value": e["value"], "positions": e["reads"], "paths": [""] * 4} for p, e in ports.items()}}
@@ -411,7 +411,7 @@ def test_the_registered_reads_negatives_are_the_same_entries_in_the_same_order_o
 
     monkeypatch.setattr(a5.a0, "lean_verify", lean_verify)
     monkeypatch.setattr(a5.a0, "archive_put", archive_put)
-    mm = {"st": {"registered_file": tmp_path / "registered.json", "dir": member}, "m": SimpleNamespace(n=4)}
+    mm = {"st": {**reads, "dir": member}, "m": SimpleNamespace(n=4)}
     one = a5.registered_negatives(SimpleNamespace(lean="lean"), mm, tmp_path / "one")
     assert seen == list(one) and len(one) == 4 and all(e["refused"] for e in one.values())
     seen.clear()
@@ -493,15 +493,15 @@ def _bound_member(tmp_path: Path) -> dict:
     beside them, a session recorded, and its files' archive shared as a run's members share it."""
     ports = {f"p{j}": {"value": f"v{j}", "root": f"{j + 1}" * 128, "leaves": 4, "reads": [0, 1, 2, 3]} for j in range(2)}
     tmp_path.mkdir(parents=True, exist_ok=True)
-    (tmp_path / "registered.json").write_text(json.dumps(
-        {"format": "verity/registered-reads/v1", "ports": ports, a5.REG.BOUND: {"b0": {"root": "b" * 128, "domain": "d" * 128}}}))
+    reads = a0.registered_written(tmp_path / "registered.json", {
+        "format": "verity/registered-reads/v1", "ports": ports, a5.REG.BOUND: {"b0": {"root": "b" * 128, "domain": "d" * 128}}})
     (tmp_path / "interface.json").write_text("{}")
     member = tmp_path / "m"
     member.mkdir()
     (member / "circuit.txt").write_text("circuit")
     head = {"registered": {p: {"value": e["value"], "positions": e["reads"], "paths": [""] * 4} for p, e in ports.items()}}
     (member / "pub-4.bin").write_bytes(json.dumps(head).encode() + b"\n" + bytes(range(8)))
-    return {"st": {"registered_file": tmp_path / "registered.json", "interface_file": tmp_path / "interface.json",
+    return {"st": {**reads, "interface_file": tmp_path / "interface.json",
                    "dir": member, "archived": {}}, "m": SimpleNamespace(n=4, template="t")}
 
 
