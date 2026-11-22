@@ -539,7 +539,8 @@ PM = {"members": [], "tables": []}
 def test_the_audit_accepts_only_where_leans_members_check_accepts_its_case_too(tmp_path):
     """`a5.members_lean` with a per-member case: Lean's `checkMembersAt` on it is required (``ran``); where it and the
     Python verdict differ the audit refuses with `MEMBERS_DISAGREE` and both texts, and an audit whose case Lean could not
-    read is refused, ``ran`` false, its reason the one `case_written` gives."""
+    read is refused, ``ran`` false, its reason the one `case_written` gives, the window's members listed as not
+    verified."""
     def lean(verdict, why=None):
         return lambda case: (verdict, why)
 
@@ -563,9 +564,10 @@ def test_the_audit_accepts_only_where_leans_members_check_accepts_its_case_too(t
     (tmp_path / "none" / "case-v2-error.txt").parent.mkdir()
     (tmp_path / "none" / "case-v2-error.txt").write_text("ValueError: no case\n")
     r = _audited(tmp_path / "none", True, case=False)
-    a5.members_lean(tmp_path / "none", r, PM, lean("accept"))
+    a5.members_lean(tmp_path / "none", r, PM, lean("accept"), names=["a/c0", "a/c1"])
     assert not r["accepted"] and r["checks"]["members_lean"] == {
-        "ok": False, "ran": False, "codes": ["lean-not-run"], "reason": "no per-member case: ValueError: no case"}
+        "ok": False, "ran": False, "codes": ["lean-not-run"], "reason": "no per-member case: ValueError: no case",
+        "not_verified": ["a/c0", "a/c1"]}
 
 
 def test_an_audit_with_no_per_member_case_says_leans_members_check_did_not_run_and_why(tmp_path):
