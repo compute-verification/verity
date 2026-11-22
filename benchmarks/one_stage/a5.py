@@ -1163,7 +1163,9 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         checks["door"] = {"ok": False, "codes": [code],
                           "detail": {"why": f"{DOOR_REFUSES} {k} of {m.template}: {why[:2000]}", "member": k,
                                      "template": m.template, "block": k, "units": [m.base, m.base + m.n]}}
-        summary.update(checks_before_draw={c: v["ok"] for c, v in checks.items()}, checks=checks)
+        # a staged member's checks (`m{k}`) are booleans until `own_files` folds them
+        summary.update(checks_before_draw={c: v["ok"] if "ok" in v else all(v.values()) for c, v in checks.items()},
+                       checks=checks)
         (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True))
         print("A5 " + json.dumps({"refused_before_draw": summary["checks_before_draw"], "checks": checks}, default=str))
         return summary, False
