@@ -248,9 +248,10 @@ structure CallAnalysis {Reg Tr : Type} (U : UnitStmts Tr n) (c : Fin C)
 registration and the state `τ` the prover brings to the session, `Pr[accept ∧ extraction of a drawn unit fails]` is at
 most `κ_c + g_c(τ)`. The bound depends on the state: a compiled table bounds it pointwise in the state. Main's window
 proves each sampled proof block in its own `--zk` session over hm96 hiding leaves, whose analysis is `analysisZC`
-(`Proofs/Flock/Soundness/Discharge/ZkLink/Analysis.lean`); its joint inequality `jointZC_ksBound` gives `κ_c = 0` and
-`g_c(τ) = ⨆_j ksBoundAccZ_j(τ)/(1 − rateZ_j)`, `ksBoundAccZ = ε_c⁻ + √(k·adv₀)` the state's collision finders'
-advantages (`Pouw.Window.flockKnowledgeSound_analysisZC`). No constant bounds it for every state of a hashed session: a
+(`Proofs/Flock/Soundness/Discharge/ZkLink/Analysis.lean`); its joint inequality `jointZC_ksBound` bounds each sampled
+proof block's `ks` at `κ_c = 0` and `g_c(τ) = ⨆_j ksBoundAccZ_j(τ)/(1 − rateZ_j)`, `ksBoundAccZ = ε_c⁻ + √(k·adv₀)` the
+state's collision finders' advantages. `ExecutionPhaseDelta` takes this as a hypothesis of each call; its instance at
+`analysisZC` is not stated and not in the tree. No constant bounds it for every state of a hashed session: a
 state that holds a hash collision passes with extraction failing, `ks ≈ 1`, so a constant holds only at the oracle
 layer. In the window the state is the one the calls before and the whole sample left, and the window's collision term
 `coll` sums the calls' `g_c` along its run. -/

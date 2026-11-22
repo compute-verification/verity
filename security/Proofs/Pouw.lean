@@ -19,14 +19,9 @@ public import Proofs.Pouw.SakLb
 public import Proofs.Pouw.Dimension.CausalProofs
 public import Proofs.Pouw.Dimension.EmbedProofs
 public import Proofs.Pouw.Dimension.ForestProofs
-public import Proofs.Pouw.Dimension.H100FloorProofs
-public import Proofs.Pouw.Dimension.H100MeasuredProofs
-public import Proofs.Pouw.Dimension.H100PeakTcProofs
 public import Proofs.Pouw.Dimension.H100Proofs
 public import Proofs.Pouw.Dimension.H100WProofs
 public import Proofs.Pouw.Dimension.Lifting
-public import Proofs.Pouw.Dimension.MinRankProofs
-public import Proofs.Pouw.Dimension.MixingProofs
 public import Proofs.Pouw.Dimension.OpenPipeProofs
 public import Proofs.Pouw.Dimension.PipeProofs
 public import Proofs.Pouw.Dimension.Proofs
@@ -61,7 +56,6 @@ public import Proofs.Pouw.MerkleExtract
 public import Proofs.Pouw.OnsiteFreed
 public import Proofs.Pouw.ShaRealize
 public import Proofs.Pouw.ShaRealizeWitness
-public import Proofs.Pouw.Milestone
 public import Proofs.Pouw.NCP
 public import Proofs.Pouw.NCP.ChainProofs
 public import Proofs.Pouw.NCP.ExtraIdentityProofs
@@ -89,9 +83,7 @@ public import Proofs.Pouw.PearlC
 public import Proofs.Pouw.PearlC.AccumProofs
 public import Proofs.Pouw.PearlC.AtomErr
 public import Proofs.Pouw.PearlC.InertBound
-public import Proofs.Pouw.PearlC.InertBoundLoopGap
 public import Proofs.Pouw.PearlC.ChainInertBoundKernelGap
-public import Proofs.Pouw.PearlC.ChainInertBoundLoopGap
 public import Proofs.Pouw.PearlC.ChainOnlyGap
 public import Proofs.Pouw.PearlC.Completeness
 public import Proofs.Pouw.PearlC.DeadlineWitness
@@ -105,7 +97,6 @@ public import Proofs.Pouw.PearlC.DeviceRev1Gap
 public import Proofs.Pouw.PearlC.DeviceSm120InertBoundRev1Gap
 public import Proofs.Pouw.PearlC.DeviceSm120Gap
 public import Proofs.Pouw.PearlC.DeviceSm120KernelGap
-public import Proofs.Pouw.PearlC.DeviceSm120LoopGap
 public import Proofs.Pouw.PearlC.EncChecks
 public import Proofs.Pouw.PearlC.FlockTile
 public import Proofs.Pouw.PearlC.Forming
@@ -140,7 +131,6 @@ public import Proofs.Pouw.PearlC.RowPrimChecks
 public import Proofs.Pouw.PearlC.RowInertBoundAtGap
 public import Proofs.Pouw.PearlC.RowSeedCode
 public import Proofs.Pouw.PearlC.RowSeedGap
-public import Proofs.Pouw.PearlC.RowSeedKGap
 public import Proofs.Pouw.PearlC.RowSeedSkip
 public import Proofs.Pouw.PearlC.ServedFadd8Rev1Gap
 public import Proofs.Pouw.PearlC.ServedH100Rev1Gap
@@ -150,14 +140,12 @@ public import Proofs.Pouw.PearlC.ServedMixedRev1Gap
 public import Proofs.Pouw.PearlC.ServedRev1Gap
 public import Proofs.Pouw.PearlC.Sm120Checks
 public import Proofs.Pouw.PearlC.Tile4Circuit
-public import Proofs.Pouw.PearlC.TileInertBoundRev1Gap
 public import Proofs.Pouw.PearlC.TileCircuit
 public import Proofs.Pouw.PearlC.TileValues
 public import Proofs.Pouw.PearlC.TileGapTol
 public import Proofs.Pouw.PearlC.TileSampleGap
 public import Proofs.Pouw.PearlC.TileGap
 public import Proofs.Pouw.PearlC.UOnlyGap
-public import Proofs.Pouw.PearlC.UOnlyLoopGap
 public import Proofs.Pouw.PearlC.W1BudgetAbort
 public import Proofs.Pouw.PearlC.W1Checks
 public import Proofs.Pouw.PearlC.Records
@@ -174,7 +162,6 @@ public import Proofs.Pouw.PearlC.RowStats
 public import Proofs.Pouw.PearlC.PeelExists
 public import Proofs.Pouw.PearlC.PeelExists4
 public import Proofs.Pouw.PearlC.TileCheckWords
-public import Proofs.Pouw.PearlC.TileCheckWordsRev1
 public import Proofs.Pouw.PearlPlus
 public import Proofs.Pouw.Pool
 public import Proofs.Pouw.PoolWitness
@@ -203,11 +190,10 @@ public import Definitions.Pouw.TileBound.Defs
 public import Mathlib.Tactic.IntervalCases
 public import Definitions.Pouw.TileBound.Fp8Defs
 public import Proofs.Pouw.TileBound.Proofs
-public import Proofs.Pouw.TileBound.Witness
-public import Proofs.Pouw.Window
+public import Proofs.Pouw.Window.Copies
+public import Proofs.Pouw.Window.Served
 public import Proofs.Pouw.Witness
 public import Proofs.Pouw.Lemmas.Game
-public import Proofs.Pouw.Dimension.H100LoopFreeProofs
 public import Proofs.Pouw.PearlC.RowSeedFragment
 
 /-!

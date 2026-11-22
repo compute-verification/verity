@@ -303,8 +303,7 @@ namespace Pouw.PearlC
 open Pouw.Fp8Atom Pouw.PearlC.Assumptions
 
 /-- **v1 under rev1, 8192³, the exact in-loop value**: FP32 at 8.376, the statement's cast at 8.0 and the A-only
-forming at its measured 1.047, `g = 911793839/178414700000` (0.51105%). `pearlCGapSm120v1LoopRev1_8192` bounds it
-from above (`qa` rounded up to 2). -/
+forming at its measured 1.047, `g = 911793839/178414700000` (0.51105%). -/
 def _root_.Pouw.Guarantees.PearlC.GapSm120v1LoopCast8Rev1_8192 : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ) (sem : PearlCSem Q R S) (hTT : TTOutPearlCDevRev1W1 (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt (devSm120v1 Prices.sm120Loop) sem (1 / 400)),
     GGap (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt) (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 400) (8 - 8953 / 1000))
@@ -487,8 +486,7 @@ namespace Pouw.PearlC
 open Pouw.Fp8Atom Pouw.PearlC.Assumptions
 
 /-- **v2 at the cap 1/1,000, 8192³, the exact in-loop value**: FP32 at 8.376, the statement's cast at 8.0 and the
-A-only forming at its measured 1.047, `g = 1519901/419652350` (0.36218%). `pearlCGapSm120v2LoopInertShare1000_8192` bounds
-it from above (`qa` rounded up to 2). -/
+A-only forming at its measured 1.047, `g = 1519901/419652350` (0.36218%). -/
 def _root_.Pouw.Guarantees.PearlC.GapSm120v2LoopCast8InertShare1000_8192 : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ) (sem : PearlCSem Q R S) (hTT : TTOutPearlCDevW1 (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt (devSm120v2 Prices.sm120Loop) sem (1 / 1000)),
     GGap (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt) (pearlCProtocolDevK (devSm120v2 Prices.sm120Loop) sem (1 / 1000) (8 - 8953 / 1000))

@@ -10,8 +10,8 @@ public import Mathlib.Analysis.SpecialFunctions.Pow.Real
 # The game's statements (trusted)
 
 The game's headline statements over its named assumptions (`Pouw.Assumptions.TT`), each a `Prop`: `G_g` from TT, the
-milestone's requirement and exhaustion, the overhead budget, the decode's exactness over the integers and in int32, D1's
-completeness, the witnesses for TT and Nz, and that the game can be lost. Their proofs are the theorems
+milestone's resource exhaustion, the overhead budget, the decode's exactness over the integers and in int32, D1's
+completeness, and the witnesses for TT and Nz. Their proofs are the theorems
 `Pouw.Proofs.* : GameStatements.X`. (a) is the guarantee `Pouw.Guarantees.GapFromTT`; (b), (c) and (d) are guarantees in
 `Pouw.Guarantees.Game`.
 -/
@@ -34,20 +34,6 @@ def GapFromTT : Prop :=
       (P.Wref U.layout u : ℝ) ≤ Ωmax * ((U.layout.shape u).Wmm : ℝ)) →
     Assumptions.TT CM P D g₀ δ →
     GGap CM P D (reductionGap g₀ Ωmax) δ
-
-/-- **(d′) The milestone requirement, in budget form**. For the named instance `D1.m1` on its domain
-and any `W_ref`: if `W_ref ≤ Ω_max·W_mm` with `Ω_max ≤ 199/198`, the cost model runs `H_ref` at cost `≤ W_ref`
-(`AdmitsRef`), and TT(0.5%) holds with error `δ`, then §3.3's requirement holds with `g = 1 − (199/200)/Ω_max ≤ 1%`
-and the same failure probability `δ`. Whether the milestone meets `Ω_max ≤ 199/198` is a count of `H_ref`'s M_4090 schedule, not proved here. -/
-def MilestoneRequirement : Prop :=
-  ∀ (CM : CostModel D1.M1Q D1.M1R Salt) (Wref : Layout → ℕ → ℕ) (qref : Workload → ℕ) (Ωmax : ℝ)
-    (δ : ℕ → ℕ → ℝ),
-    0 < Ωmax → Ωmax ≤ 199 / 198 →
-    (∀ U : Workload, U.InDomain D1.m1Domain → ∀ u < U.layout.N,
-      (Wref U.layout u : ℝ) ≤ Ωmax * ((U.layout.shape u).Wmm : ℝ)) →
-    AdmitsRef CM (D1.m1 Wref).toProtocol D1.m1Domain qref →
-    Assumptions.TT CM (D1.m1 Wref).toProtocol D1.m1Domain Params.gap0 δ →
-    Requirement CM D1.m1Domain (reductionGap Params.gap0 Ωmax) δ ∧ reductionGap Params.gap0 Ωmax ≤ 1 / 100
 
 /-- **(d″) Milestone resource exhaustion**: (d) for `D1.m1` on its domain, at `g = 1 − (199/200)/Ω_max`. -/
 def MilestoneExhaustion : Prop :=
@@ -137,8 +123,7 @@ def MilestoneInstance : Prop :=
 
 /-- **The milestone's `W_ref`**: the explicit `H_ref` schedule `D1.m1Wref` lies between `W_mm` and
 `Ω_M1·W_mm` on every in-domain unit, with `Ω_M1 = 65769/65536 ≤ 199/198`, and the reduction's gap there is
-`14017/1644225 ≈ 0.8525%`. With (d′) this gives §3.3's requirement at that gap from `AdmitsRef` at `m1Wref` (that
-M_4090 runs `H_ref` within the schedule, not proved) and TT(0.5%). -/
+`14017/1644225 ≈ 0.8525%`. -/
 def MilestoneWref : Prop :=
   (∀ U : Workload, U.InDomain D1.m1Domain → ∀ u < U.layout.N,
     (U.layout.shape u).Wmm ≤ D1.m1Wref U.layout u ∧
@@ -152,20 +137,6 @@ def HonestComplete : Prop :=
     P.Complete D → U.InDomain D → (∀ u < U.layout.N, ActOK (U.layout.shape u) (act u)) →
     correctSet P U H s (honestTrace P H s U act) = range U.layout.N ∧
     ∀ g : ℝ, 0 ≤ g → g < 1 → ¬ Wins P U g (totalWref P U.layout) (honestTrace P H s U act) H s
-
-/-- **The game can be lost** (non-vacuity in the other direction), for every D1 instance with noise in `[−63, 63]`
-and at most `c` queries per unit on the milestone domain, with `W_ref ≥ Ω·W_mm` for some `Ω ≥ 1`: in the free model
-`G_g` fails for every `δ(16c, 16) < 1`, and in the witness model it fails below the witness's tight gap, for every
-`g < 1 − 1/Ω`. -/
-def GameCanBeLost : Prop :=
-  ∀ (Q R : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Nonempty R] (P : D1.Params Q R Salt) (c : ℕ) (Ω : ℝ),
-    P.NoiseRange → P.QueryBound c → 16 * c ≤ 2 ^ 64 → 1 ≤ Ω →
-    (∀ U : Workload, U.InDomain D1.m1Domain → ∀ u < U.layout.N,
-      Ω * ((U.layout.shape u).Wmm : ℝ) ≤ (P.Wref U.layout u : ℝ)) →
-    (∀ g : ℝ, g < 1 → ∀ δ : ℕ → ℕ → ℝ,
-      GGap (freeModel Q R Salt) P.toProtocol D1.m1Domain g δ → 1 ≤ δ (16 * c) 16) ∧
-    (∀ g : ℝ, g < 1 - 1 / Ω → ∀ δ : ℕ → ℕ → ℝ,
-      GGap (outputPriced Q R Salt) P.toProtocol D1.m1Domain g δ → 1 ≤ δ (16 * c) 16)
 
 /-- **R_copy's bound** (tt-attacks §6; the second, noise-dependent witness): under Nz, a copy adversary's correct
 units are worth more than its cost at TT's rate, `∑_{u ∈ K'} 16·N_u > cost/(1 − g₀)`, with probability at most

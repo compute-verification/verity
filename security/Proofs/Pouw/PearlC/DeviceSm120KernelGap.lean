@@ -1736,8 +1736,7 @@ theorem pearlCSampledSm120v2LoopCast8p72ChainOnlyInertShare1000_16384
     (by norm_num) hTT
 
 /-- **v1 under rev1, 8192³, the exact in-loop value**: FP32 at 8.376, the statement's cast at 8.0 and the A-only
-forming at its measured 1.047, `g = 911793839/178414700000` (0.51105%). `pearlCGapSm120v1LoopRev1_8192` bounds it
-from above (`qa` rounded up to 2). -/
+forming at its measured 1.047, `g = 911793839/178414700000` (0.51105%). -/
 theorem pearlCGapSm120v1LoopCast8Rev1_8192
     (hTT : TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
     GGap CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 400) (8 - 8953 / 1000))
@@ -1750,8 +1749,7 @@ theorem pearlCGapSm120v1LoopCast8Rev1_8192
     (by norm_num) hTT
 
 /-- **v1 under rev1, per audit tile, 8192³, the exact in-loop value**: FP32 at 8.376, the statement's cast at 8.0 and
-the A-only forming at its measured 1.047, `g = 911793839/178414700000` (0.51105%). `pearlCSampledSm120v1LoopRev1_8192`
-bounds it from above (`qa` rounded up to 2). -/
+the A-only forming at its measured 1.047, `g = 911793839/178414700000` (0.51105%). -/
 theorem pearlCSampledSm120v1LoopCast8Rev1_8192
     (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
     GGapSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 400) (8 - 8953 / 1000))
@@ -1769,8 +1767,7 @@ theorem pearlCSampledSm120v1LoopCast8Rev1_8192
     (by norm_num) hTT
 
 /-- **v1 under rev1, 16384³, the exact in-loop value**: FP32 at 8.376, the statement's cast at 8.0 and the A-only
-forming at its measured 1.047, `g = 84929011/16808380000` (0.50528%). `pearlCGapSm120v1LoopRev1_16384` bounds it from
-above (`qa` rounded up to 2). -/
+forming at its measured 1.047, `g = 84929011/16808380000` (0.50528%). -/
 theorem pearlCGapSm120v1LoopCast8Rev1_16384
     (hTT : TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
     GGap CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 400) (8 - 8953 / 1000))
@@ -1783,8 +1780,7 @@ theorem pearlCGapSm120v1LoopCast8Rev1_16384
     (by norm_num) hTT
 
 /-- **v1 under rev1, per audit tile, 16384³, the exact in-loop value**: FP32 at 8.376, the statement's cast at 8.0 and
-the A-only forming at its measured 1.047, `g = 84929011/16808380000` (0.50528%). `pearlCSampledSm120v1LoopRev1_16384`
-bounds it from above (`qa` rounded up to 2). -/
+the A-only forming at its measured 1.047, `g = 84929011/16808380000` (0.50528%). -/
 theorem pearlCSampledSm120v1LoopCast8Rev1_16384
     (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
     GGapSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 400) (8 - 8953 / 1000))
@@ -1802,8 +1798,7 @@ theorem pearlCSampledSm120v1LoopCast8Rev1_16384
     (by norm_num) hTT
 
 /-- **v2 at the cap 1/1,000, 8192³, the exact in-loop value**: FP32 at 8.376, the statement's cast at 8.0 and the
-A-only forming at its measured 1.047, `g = 1519901/419652350` (0.36218%). `pearlCGapSm120v2LoopInertShare1000_8192` bounds
-it from above (`qa` rounded up to 2). -/
+A-only forming at its measured 1.047, `g = 1519901/419652350` (0.36218%). -/
 theorem pearlCGapSm120v2LoopCast8InertShare1000_8192
     (hTT : TTOutPearlCDev CM (devSm120v2 Prices.sm120Loop) sem (1 / 1000)) :
     GGap CM (pearlCProtocolDevK (devSm120v2 Prices.sm120Loop) sem (1 / 1000) (8 - 8953 / 1000))
@@ -1816,8 +1811,7 @@ theorem pearlCGapSm120v2LoopCast8InertShare1000_8192
     (by norm_num) hTT
 
 /-- **v2 at the cap 1/1,000, per audit tile, 8192³, the exact in-loop value**: FP32 at 8.376, the statement's cast at
-8.0 and the A-only forming at its measured 1.047, `g = 1519901/419652350` (0.36218%).
-`pearlCSampledSm120v2LoopInertShare1000_8192` bounds it from above (`qa` rounded up to 2). -/
+8.0 and the A-only forming at its measured 1.047, `g = 1519901/419652350` (0.36218%). -/
 theorem pearlCSampledSm120v2LoopCast8InertShare1000_8192
     (hTT : TTOutTilePearlCDev CM (devSm120v2 Prices.sm120Loop) sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDevK (devSm120v2 Prices.sm120Loop) sem (1 / 1000) (8 - 8953 / 1000))
@@ -1835,8 +1829,7 @@ theorem pearlCSampledSm120v2LoopCast8InertShare1000_8192
     (by norm_num) hTT
 
 /-- **v2 at the cap 1/1,000, 16384³, the exact in-loop value**: FP32 at 8.376, the statement's cast at 8.0 and the
-A-only forming at its measured 1.047, `g = 109351/30713050` (0.35604%). `pearlCGapSm120v2LoopInertShare1000_16384` bounds it
-from above (`qa` rounded up to 2). -/
+A-only forming at its measured 1.047, `g = 109351/30713050` (0.35604%). -/
 theorem pearlCGapSm120v2LoopCast8InertShare1000_16384
     (hTT : TTOutPearlCDev CM (devSm120v2 Prices.sm120Loop) sem (1 / 1000)) :
     GGap CM (pearlCProtocolDevK (devSm120v2 Prices.sm120Loop) sem (1 / 1000) (8 - 8953 / 1000))
@@ -1849,8 +1842,7 @@ theorem pearlCGapSm120v2LoopCast8InertShare1000_16384
     (by norm_num) hTT
 
 /-- **v2 at the cap 1/1,000, per audit tile, 16384³, the exact in-loop value**: FP32 at 8.376, the statement's cast at
-8.0 and the A-only forming at its measured 1.047, `g = 109351/30713050` (0.35604%).
-`pearlCSampledSm120v2LoopInertShare1000_16384` bounds it from above (`qa` rounded up to 2). -/
+8.0 and the A-only forming at its measured 1.047, `g = 109351/30713050` (0.35604%). -/
 theorem pearlCSampledSm120v2LoopCast8InertShare1000_16384
     (hTT : TTOutTilePearlCDev CM (devSm120v2 Prices.sm120Loop) sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDevK (devSm120v2 Prices.sm120Loop) sem (1 / 1000) (8 - 8953 / 1000))

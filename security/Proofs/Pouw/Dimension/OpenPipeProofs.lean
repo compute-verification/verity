@@ -7,7 +7,7 @@ import Mathlib.LinearAlgebra.Dimension.Constructions
 import Mathlib.LinearAlgebra.FreeModule.StrongRankCondition
 import Mathlib.Tactic.NormNum.GCD
 import Mathlib.Tactic.Positivity.Finset
-import Proofs.Pouw.Dimension.MixingProofs
+import Definitions.Pouw.Assumptions.Dimension.Mixing
 import Proofs.Pouw.Dimension.PipeProofs
 
 /-!
@@ -246,78 +246,5 @@ theorem algBoundOpenQuad : AlgBoundOpenQuad := by
 theorem algBoundOpenQuad8 : AlgBoundOpenQuad8 := by
   intro k m n N R A B U L P hind hMR hU hL hP hout
   exact algBoundOpenQuad k m n N R A B U L P 16 8 hind hMR hU hL hP hout
-
-theorem openOK_append (pb cs : ℕ) :
-    ∀ (P Q : List (Instr (Noise N m n k))) (Vs : List (Noise N m n k → ℚ)), OpenOK pb cs Vs P →
-      OpenOK pb cs (Vs ++ vals P) Q → OpenOK pb cs Vs (P ++ Q) := by
-  intro P
-  induction P with
-  | nil => intro Q Vs _ hQ; simpa [vals] using hQ
-  | cons ins P ih =>
-    intro Q Vs hP hQ
-    cases ins with
-    | free c w => exact hP.elim
-    | priced p f => exact ⟨hP.1, ih Q (Vs ++ [f]) hP.2 (by simpa [vals, val] using hQ)⟩
-
-theorem openOK_big (pb cs : ℕ) :
-    ∀ (P : List (Instr (Noise N m n k))) (Vs : List (Noise N m n k → ℚ)),
-      (∀ ins ∈ P, ∃ p f, ins = Instr.priced p f ∧ pb ≤ p) → OpenOK pb cs Vs P := by
-  intro P
-  induction P with
-  | nil => intros; trivial
-  | cons ins P ih =>
-    intro Vs h
-    obtain ⟨p, f, rfl, hp⟩ := h _ (List.mem_cons_self ..)
-    exact ⟨Or.inl hp, ih _ fun ins hm => h ins (List.mem_cons_of_mem _ hm)⟩
-
-/-- **An open-pipe program that no closed pipe is.** -/
-theorem openPipeWitness : OpenPipeWitness := by
-  intro k hk h16 m n N A B U u₀ hU hu₀ hm hn
-  have hu₀N : u₀ < N := Finset.mem_range.1 (hU hu₀)
-  obtain ⟨R, -, hadm, hind, hMR, -⟩ := pipeWordWitness k hk h16 m n N A B U u₀ hU hu₀ hm hn
-  let a : Noise N m n k → ℚ := fun ω => (e1Of ω u₀ 0 16 : ℚ)
-  let b : Noise N m n k → ℚ := fun ω => (f1Of ω 16 0 : ℚ)
-  have ha : a ∈ V0 N m n k := e1_mem_V0 hu₀N hm (by omega)
-  have hb : b ∈ V0 N m n k := f1_mem_V0 (by omega) hn
-  set w₀ := word k m n N R A B u₀ 0
-  have hpos : 0 < nonFinal k m n := Nat.mul_pos (by omega) (Nat.mul_pos hm hn)
-  have hx : (u₀, 0) ∈ U ×ˢ range (nonFinal k m n) := Finset.mem_product.2 ⟨hu₀, Finset.mem_range.2 hpos⟩
-  have hw₀ : Instr.priced 16 w₀ ∈ honest k m n N R A B U 16 := mem_honest.2 ⟨u₀, hu₀, 0, hpos, rfl⟩
-  have hbig : ∀ p f, Instr.priced p f ∈ honest k m n N R A B U 16 → 16 ≤ p := fun p f hm => by
-    obtain ⟨u, _, q, _, heq⟩ := mem_honest.1 hm
-    exact (Instr.priced.inj heq).1.le
-  refine ⟨R, honest k m n N R A B U 16 ++ [Instr.priced 8 (a * b + w₀)], a, b, hadm, hind, hMR, ?_, ?_, ?_, ha, hb,
-    List.mem_append_left _ hw₀, List.mem_append_right _ (List.mem_singleton_self _), ?_⟩
-  · refine openOK_append 16 8 _ _ [] (openOK_big 16 8 _ _ fun ins hm => ?_) ?_
-    · obtain ⟨u, _, q, _, rfl⟩ := mem_honest.1 hm
-      exact ⟨16, _, rfl, le_rfl⟩
-    · refine ⟨Or.inr ⟨le_rfl, a, b, w₀, Or.inr ⟨w₀, ?_, 1, (one_smul _ _).symm⟩, rfl, Or.inl ⟨ha, hb⟩⟩, trivial⟩
-      exact List.mem_append_right _ (List.mem_map.2 ⟨_, hw₀, rfl⟩)
-  · intro hC
-    have hpo : prodOuts (honest k m n N R A B U 16 ++ [Instr.priced 8 (a * b + w₀)]) = [a * b + w₀] := by
-      rw [prodOuts_append, prodOuts_eq_nil hbig, List.nil_append]
-      simp [prodOuts]
-    have hstep := hC.2.2 0 (by rw [hpo]; simp)
-    simp only [hpo, List.take_zero, List.getElem_cons_zero] at hstep
-    obtain ⟨a', b', c', ha', hb', hc', heq⟩ := hstep
-    have hV : ∀ x, PipeOpnd ([] : List (Noise N m n k → ℚ)) x → x ∈ V0 N m n k := fun x h =>
-      h.resolve_right (by simp)
-    have hsum : (Submodule.Quotient.mk (a' * b') : QPart N m n k) + Submodule.Quotient.mk ((-a) * b) =
-        Submodule.Quotient.mk w₀ := by
-      have h1 : (Submodule.Quotient.mk (a * b + w₀) : QPart N m n k) = Submodule.Quotient.mk (a' * b' + c') :=
-        congrArg _ heq
-      rw [Submodule.Quotient.mk_add, Submodule.Quotient.mk_add, (Submodule.Quotient.mk_eq_zero _).2 (hV _ hc'),
-        add_zero] at h1
-      rw [neg_mul, Submodule.Quotient.mk_neg, ← h1]
-      abel
-    have h0 := gridTwoAtom k m n N R A B U hind (minRankGe_mono (by norm_num) hMR) hU _
-      ⟨a', hV _ ha', b', hV _ hb', rfl⟩ _ ⟨-a, Submodule.neg_mem _ ha, b, hb, rfl⟩
-      (by rw [hsum]; exact Submodule.subset_span ⟨⟨(u₀, 0), hx⟩, rfl⟩)
-    rw [hsum] at h0
-    exact pipe_word_nmem A B hind hU hx ((Submodule.Quotient.mk_eq_zero _).1 h0)
-  · intro u hu p hp
-    exact mem_slots_of_priced (List.mem_append_left _ (mem_honest.2 ⟨u, hu, p, hp, rfl⟩)) _
-  · rw [cost_append, honest_cost]
-    simp [cost, Instr.price]
 
 end Pouw.Dimension.OpenPipe

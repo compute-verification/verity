@@ -1,7 +1,9 @@
 module
 
 public import Proofs.Pouw.M1
-public import Proofs.Pouw.Milestone
+public import Proofs.Pouw.Theorem1
+public import Proofs.Pouw.Exact
+public import Proofs.Pouw.Lemmas.Game
 public import Proofs.Pouw.QTree
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Prob
@@ -12,7 +14,6 @@ public import Proofs.Pouw.Break
 
 * `ttWitness`: in `outputPriced`, TT(0.5%) holds with error 0 and one program runs `H_ref` at `≤ W_ref`, for `D1.m1`.
 * `honestComplete`: the honest reference is correct on every unit and does not win at `T = W`.
-* `gameCanBeLost`: the honest program at budget 0 (free model) or `W_mm` (witness model) wins with probability 1.
 -/
 
 @[expose] public section
@@ -97,7 +98,7 @@ theorem ttWitness : GameStatements.TTWitness := by
   refine (outputPriced_cost_le _ H U act [] s).trans (Finset.sum_le_sum fun u hu => ?_)
   exact_mod_cast hW U hU u (Finset.mem_range.1 hu)
 
-/-! ## Honest completeness and a game that can be lost -/
+/-! ## Honest completeness and the honest adversaries -/
 
 theorem honest_correctSet (P : Protocol Q R S) (D : Layout → Prop) (U : Workload) (H : Q → R) (s : S)
     (act : ℕ → Mat) (hP : P.Complete D) (hU : U.InDomain D) (hact : ∀ u < U.layout.N, ActOK (U.layout.shape u) (act u)) :
@@ -125,99 +126,16 @@ theorem honestComplete : GameStatements.HonestComplete := by
 
 theorem zero_actOK (sh : Shape) : ActOK sh (0 : Mat) := fun _ _ _ _ => by unfold InInt7; norm_num
 
-theorem sixteen_Wref {Q R : Type} (P : D1.Params Q R Salt) {Ω : ℝ}
-    (hW : ∀ U : Workload, U.InDomain D1.m1Domain → ∀ u < U.layout.N,
-      Ω * ((U.layout.shape u).Wmm : ℝ) ≤ (P.Wref U.layout u : ℝ)) :
-    16 * 2 ^ 44 * Ω ≤ ∑ u ∈ range 16, (P.toProtocol.Wref M1.sixteen.layout u : ℝ) := by
-  have h : ∀ u ∈ range 16, Ω * 2 ^ 44 ≤ (P.toProtocol.Wref M1.sixteen.layout u : ℝ) := fun u hu => by
-    have := hW M1.sixteen M1.sixteen_inDomain u (Finset.mem_range.1 hu)
-    have e : ((M1.sixteen.layout.shape u).Wmm : ℝ) = 2 ^ 44 := by
-      show ((milestoneShape.Wmm : ℕ) : ℝ) = 2 ^ 44
-      unfold milestoneShape Shape.Wmm
-      norm_num
-    rw [e] at this
-    exact this
-  have := Finset.sum_le_sum h
-  simp only [Finset.sum_const, Finset.card_range, nsmul_eq_mul] at this
-  push_cast at this
-  linarith
-
-theorem honest_wins_sixteen {Q R : Type} (P : D1.Params Q R Salt) (hN : P.NoiseRange) {Ω : ℝ}
-    (hW : ∀ U : Workload, U.InDomain D1.m1Domain → ∀ u < U.layout.N,
-      Ω * ((U.layout.shape u).Wmm : ℝ) ≤ (P.Wref U.layout u : ℝ))
-    (H : Q → R) (s : Salt) {g T : ℝ} (hT : T / (1 - g) < 16 * 2 ^ 44 * Ω) :
-    Wins P.toProtocol M1.sixteen g T (honestTrace P.toProtocol H s M1.sixteen fun _ => 0) H s := by
-  unfold Wins
-  rw [honest_correctSet P.toProtocol _ M1.sixteen H s _ (d1_complete_m1Domain P hN) M1.sixteen_inDomain
-    fun _ _ => zero_actOK _]
-  exact lt_of_lt_of_le hT (sixteen_Wref P hW)
-
 theorem salt_nonempty : Nonempty Salt := ⟨⟨0, Nat.two_pow_pos 128⟩⟩
-
-/-- The honest reference as an adversary of the free model: no preprocessing, activation input 0. -/
-def freeHonest {Q R : Type} (P : D1.Params Q R Salt) : Adversary (freeModel Q R Salt) :=
-  ⟨done [], fun U act _ s => honestProg P U act s, fun _ => 0⟩
-
-theorem freeHonest_bounded {Q R : Type} (P : D1.Params Q R Salt) {c : ℕ} (hc : P.QueryBound c) (U : Workload) :
-    (freeHonest P).Bounded U 0 (U.layout.N * c) := fun H s =>
-  ⟨le_rfl, (Nat.zero_add _).le.trans (calls_honestProg P H U _ s hc)⟩
 
 theorem pricedHonest_bounded {Q R : Type} (P : D1.Params Q R Salt) {c : ℕ} (hc : P.QueryBound c) (U : Workload) :
     (pricedHonest P).Bounded U (∑ u ∈ range U.layout.N, ((U.layout.shape u).Wmm : ℝ)) (U.layout.N * c) :=
   fun H s => ⟨outputPriced_cost_le _ H U _ _ s, (Nat.zero_add _).le.trans (calls_honestProg P H U _ s hc)⟩
-
-theorem freeHonest_trace {Q R : Type} (P : D1.Params Q R Salt) (U : Workload) (H : Q → R) (s : Salt) :
-    (freeHonest P).trace U H s = honestTrace P.toProtocol H s U fun _ => 0 :=
-  eval_honestProg P H U _ s
-
-theorem pricedHonest_trace {Q R : Type} (P : D1.Params Q R Salt) (U : Workload) (H : Q → R) (s : Salt) :
-    (pricedHonest P).trace U H s = honestTrace P.toProtocol H s U fun _ => 0 :=
-  eval_honestProg P H U _ s
 
 theorem sum_Wmm_sixteen : ∑ u ∈ range M1.sixteen.layout.N, ((M1.sixteen.layout.shape u).Wmm : ℝ) = 16 * 2 ^ 44 := by
   show ∑ u ∈ range 16, ((milestoneShape.Wmm : ℕ) : ℝ) = 16 * 2 ^ 44
   rw [Finset.sum_const, Finset.card_range]
   unfold milestoneShape Shape.Wmm
   norm_num
-
-theorem lost_free {Q R : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Nonempty R] (P : D1.Params Q R Salt)
-    (c : ℕ) (Ω : ℝ) (hN : P.NoiseRange) (hc : P.QueryBound c) (hc64 : 16 * c ≤ 2 ^ 64) (hΩ : 1 ≤ Ω)
-    (hW : ∀ U : Workload, U.InDomain D1.m1Domain → ∀ u < U.layout.N,
-      Ω * ((U.layout.shape u).Wmm : ℝ) ≤ (P.Wref U.layout u : ℝ))
-    (g : ℝ) (_hg : g < 1) (δ : ℕ → ℕ → ℝ) (hG : GGap (freeModel Q R Salt) P.toProtocol D1.m1Domain g δ) :
-    1 ≤ δ (16 * c) 16 := by
-  have := salt_nonempty
-  have h := hG M1.sixteen M1.sixteen_inDomain 0 le_rfl (M1.sixteen.layout.N * c) hc64 (freeHonest P)
-    (freeHonest_bounded P hc M1.sixteen)
-  refine le_of_eq_of_le (pr_eq_one fun x => ⟨?_, not_breaks_of_hashless freeModel_hashless _ _ _ _⟩).symm h
-  rw [freeHonest_trace]
-  exact honest_wins_sixteen P hN hW x.1 x.2 (by rw [zero_div]; positivity)
-
-theorem lost_priced {Q R : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Nonempty R] (P : D1.Params Q R Salt)
-    (c : ℕ) (Ω : ℝ) (hN : P.NoiseRange) (hc : P.QueryBound c) (hc64 : 16 * c ≤ 2 ^ 64) (hΩ : 1 ≤ Ω)
-    (hW : ∀ U : Workload, U.InDomain D1.m1Domain → ∀ u < U.layout.N,
-      Ω * ((U.layout.shape u).Wmm : ℝ) ≤ (P.Wref U.layout u : ℝ))
-    (g : ℝ) (hg : g < 1 - 1 / Ω) (δ : ℕ → ℕ → ℝ)
-    (hG : GGap (outputPriced Q R Salt) P.toProtocol D1.m1Domain g δ) : 1 ≤ δ (16 * c) 16 := by
-  have := salt_nonempty
-  have hB := pricedHonest_bounded P hc M1.sixteen
-  rw [sum_Wmm_sixteen] at hB
-  have h := hG M1.sixteen M1.sixteen_inDomain (16 * 2 ^ 44) (by positivity) (M1.sixteen.layout.N * c) hc64
-    (pricedHonest P) hB
-  refine le_of_eq_of_le (pr_eq_one fun x => ⟨?_, not_breaks_of_hashless outputPriced_hashless _ _ _ _⟩).symm h
-  rw [pricedHonest_trace]
-  refine honest_wins_sixteen P hN hW x.1 x.2 ?_
-  have hΩ0 : 0 < Ω := by linarith
-  have h1 : 1 / Ω < 1 - g := by linarith
-  have h1' : (0 : ℝ) < 1 - g := lt_of_le_of_lt (by positivity) h1
-  rw [div_lt_iff₀ h1']
-  rw [div_lt_iff₀ hΩ0] at h1
-  nlinarith
-
-/-- **The game can be lost.** -/
-theorem gameCanBeLost : GameStatements.GameCanBeLost := by
-  intro Q R _ _ _ _ P c Ω hN hc hc64 hΩ hW
-  exact ⟨fun g hg δ hG => lost_free P c Ω hN hc hc64 hΩ hW g hg δ hG,
-    fun g hg δ hG => lost_priced P c Ω hN hc hc64 hΩ hW g hg δ hG⟩
 
 end Pouw.Proofs

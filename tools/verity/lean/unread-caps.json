@@ -14,8 +14,8 @@
    "declarations": 27
   },
   "Definitions/Pouw": {
-   "modules": 21,
-   "declarations": 89
+   "modules": 16,
+   "declarations": 78
   },
   "Definitions/ResourceAccounting": {
    "modules": 1,
@@ -42,8 +42,8 @@
    "declarations": 3
   },
   "Proofs/Pouw": {
-   "modules": 44,
-   "declarations": 374
+   "modules": 28,
+   "declarations": 289
   },
   "Proofs/ResourceAccounting": {
    "modules": 2,

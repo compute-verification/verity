@@ -61,14 +61,15 @@ lands.
 
 **The window's sampling design** is the service's (decision 102, `window.py`): one uniform `K′`-subset of the `n` padded units
 (`subset:K′`, `Verity.SamplingDesign.subset`), the `N_real` real tiles padded with fillers to `pad(N_real + 1)`, sampled after the receipt,
-each sampled proof block proved alone (no closures). `WindowWork.ExecutionPhaseBoundOfService` discharges `ExecutionPhaseBound` there, its first
+each sampled proof block proved alone (no closures). `WindowWork.ExecutionPhaseBoundOfService`, not in the tree, would discharge `ExecutionPhaseBound` there, its first
 term the subset sampling design's own escape, which is 0 where `K′ = N`. The clear audit's
-`Sampled(t)` (`verity/protocols/accounting/pouw/prover/clear/clear_audit.py`) is `t` independent work-weighted samples
+`Sampled(t)` (`verity/protocols/accounting/compute/pouw/prover/clear/clear_audit.py`) is `t` independent work-weighted samples
 with replacement, not the code's sample.
 
-Gap (6)'s `Pouw.Guarantees.Window.ExecutionPhaseDelta` (branch `cursor/pouw-window-eps-stmt2-c7a9`) bounds the same event in
-core's game (`Verity.Game`), with the window's knowledge and binding errors composed from its calls'. What makes it a
-discharge of `ExecutionPhaseBound` is named there (`Proofs.Pouw.Window.Flock`).
+Gap (6)'s `Pouw.Guarantees.Window.ExecutionPhaseDelta` (stated, not proved) bounds the same event in core's game
+(`Verity.Game`), with the window's knowledge and binding errors composed from its calls'. The calls' knowledge soundness
+is its hypothesis; its instance at Flock's `--zk` analysis, which a discharge of `ExecutionPhaseBound` through it needs,
+is not stated (`ExecutionPhaseBound`'s discharges, below).
 
 **Pearl-C is out of scope**: it has its own game and premises (`TTOutTile`, `TileProofSound`,
 `Pouw.Guarantees.PearlCSampledByDeadline`).
@@ -304,13 +305,13 @@ counted queries (`Prover.Bounded`) only where the sessions are one oracle progra
 program's calls, which `ProverModel.sessCalls` doesn't yet tie (see `ProverModel`). `W` holds PoUW's units only, so a
 filler, which is no PoUW unit, adds nothing to it.
 
-Its discharges:
+Its discharges, neither in the tree:
 * `ExecutionPhaseBoundOfService`, at the service's sampling design;
 * gap (6)'s `Pouw.Guarantees.Window.ExecutionPhaseDelta` at `𝓑 = harmSets W_ref ε ∧ CopyClosed`, with the service's
-  sessions as its calls at `η = 0` (`ServiceMissProb`), gives it at `β(H, s)` its right side at the play, through
-  Flock's analysis in `Proofs.Pouw.Window.Flock` (`CallAnalysis.ofFlock`, and its premise `FlockKnowledgeSound`;
-  branch `cursor/pouw-window-eps-stmt2-c7a9`), with the
-  deployed incorrect sets copy-closed (`Pouw.Window.IncorrectCopyClosed`) and `Realizes` at them. -/
+  sessions as its calls at `η = 0` (`ServiceMissProb`), would give it at `β(H, s)` its right side at the play, with the
+  calls' knowledge soundness, a hypothesis of `ExecutionPhaseDelta`, instantiated at Flock's `--zk` analysis (not
+  stated; the bridge that last held it is `Proofs/Pouw/Window/Flock.lean` at `e637bd47ef5`), the deployed incorrect
+  sets copy-closed (`Pouw.Window.IncorrectCopyClosed`) and `Realizes` at them. -/
 def ExecutionPhaseBound (P : Protocol Q R S) (U : Workload) (ε : ℝ) {n : ℕ} {Reg : Type} {Lr : Reg → SamplingDesign n}
     {session : (Q → R) → S → Finset (Fin n) → Reg → FlockSoundness.Game Bool}
     (Ccom : (Q → R) → S → Reg → Pouw.Trace)

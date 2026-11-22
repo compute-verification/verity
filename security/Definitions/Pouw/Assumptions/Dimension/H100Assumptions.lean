@@ -8,7 +8,7 @@ import Mathlib.Analysis.SpecialFunctions.Pow.Real
 /-!
 # `MH100`'s price table and the hypothesis `H32`
 
-**Draft semantics, pending review**, for `H32` and `FragLanes` only (the review below).
+**Draft semantics, pending review**, for `H32` only (the review below).
 
 `MH100` (`Pouw.Dimension.H100`) is the H100 (`sm_90`) analogue of `M4090`. Its prices are a parameter `Prices100`, in
 units of one dense int8 MAC at the datasheet's 4,096 MACs per SM per clock, so that a measurement can replace any
@@ -36,20 +36,17 @@ quarter, of the `wgmma` rate per MAC.
   may be in any unit (every price scaled alike), with `c` its least price per register.
 * **`H32 pr`** (named hypothesis, by analogy with the 4090's H_16): `Floor 32 pr`. It is to be measured on an H100; its
   satisfiability witness is `H32Sat` (`h100Nominal`). At the nominal prices it has no slack: the single-register
-  writers and the k-minimal `wgmma` shapes cost exactly 32. Round 7's measured table meets it (`h32Measured`). So do
-  Round 8's loop-free table (`h32LoopFree`) and the floor table (`h32Floor`), with no slack. It is a floor per
+  writers and the k-minimal `wgmma` shapes cost exactly 32. Round 7's measured table meets it, and so does
+  Round 8's loop-free table, with no slack. It is a floor per
   instruction class: co-issued mixes write a register as often as every 21.45 units loop-free, and 21.33 at full
   dispatch (`H32`'s docstring), so the bounds are additive-W1 work, not time.
 * **`FloorTc a c pr`** (named hypothesis): `a` per register, except `c` for the tensor-core instructions outside the
   `wgmma` shapes. Its witness is `FloorTcSat` (`h100Legacy`, a hypothetical part).
-* **`FragLanes S p q W`** (named hypothesis): every multiplicand register in `W` depends on at most `q`
-  lanes. It restricts the adversary's cheap tensor-core instructions for the k8 lemma, and it is not needed where
-  `H32` holds. Its witness is `FragLanesSat`.
 
 ## Review against the H200's measurements
 
 Each definition below was checked against what was measured on one H200 SXM (`sm_90a`), in `Prices100`'s unit, as
-`Pouw.Dimension.H100W`'s review lists the measurements. The H200's table is `h100Floor` entry for entry.
+`Pouw.Dimension.H100W`'s review lists the measurements. Rounded down, the H200's table is 32 in every class.
 
 * **`Shape100`, with its `k`, `elems` and `regPrice`**: **matches** at `nominalMac`. Each shape's `k` and `elems` are
   PTX's. Dense `wgmma` m64n256 costs 32.003 a register for s8, e4m3, e5m2, f16, bf16 and tf32 with FP32 accumulate,
@@ -67,8 +64,9 @@ Each definition below was checked against what was measured on one H200 SXM (`sm
 * **`H32`**: **matches** for every form that was priced. None of 963 `sm_90` SASS forms costs under 32 a register
   alone (the least is DMUL at 32.00), and each class's cheapest writer is within 1% above 32. 26 forms are unpriced:
   21 `LDGMC`, 4 `LDL` and `LEPC`. So its marker stays until they are priced.
-* **`FragLanes`**: it restricts the adversary's multiplicands, which no measurement can check, so its marker stays.
-  The H200 doesn't need it, since no tensor-core form there costs under 32 a register.
+* **The k8 lemma's lane bound** (`Pouw.Dimension.H100Frag`, a hypothesis of `AccInOfFrag` and `DenseWritesFrag`):
+  it restricts the adversary's multiplicands, which no measurement can check. The H200 doesn't need it, since no
+  tensor-core form there costs under 32 a register.
 -/
 
 @[expose] public section
@@ -141,7 +139,7 @@ def Floor (c : ℕ) (pr : Prices100) : Prop :=
 register written.
 
 It is a floor per instruction class, not per register in time. Round 8 found
-no single writer below 32 loop-free (`h32LoopFree`, `h32Floor`). On the H200, none of 963 `sm_90` SASS forms costs
+no single writer below 32 loop-free. On the H200, none of 963 `sm_90` SASS forms costs
 under 32 alone, and 26 are unpriced (the module's review). But writers on separate pipes co-issue, and mixes go
 below 32 per register: as low as 21.45 loop-free (1:1 DADD + FADD with an immediate in place of one source each), and
 21.33 at full dispatch (the FP64 pipe's bound). On the H200, 2:1:1 DADD + IMAD + FADD writes one every 21.54. So a
@@ -170,27 +168,11 @@ def h100Nominal : Prices100 where
 them), which cost at least `c`. `Floor c pr` is `FloorTc c c pr`, so `H32 pr` is `FloorTc 32 32 pr`.
 
 On the H100 SXM, Round 7 measured legacy m16n8k8 f16 → f32 `mma.sync` at 34.0 per register, and no tensor-core
-instruction below 32 (`tc = 32`, from b1 `wgmma`). So the measured table is plain `H32` (`h32Measured`), not
+instruction below 32 (`tc = 32`, from b1 `wgmma`). So the measured table is plain `H32`, not
 `FloorTc 32 c` with `c` below 32. The 31.2–31.8 for legacy k8 was measured on the H800 PCIe,
 power-limited at 350 W. `FloorTc 32 c` with `c` below 32 describes such a part, or the hypothetical `h100Legacy`
 (`tc = 31`). The H200 is not one: its legacy m16n8k8 f16 → f32 costs 32.014, and it meets plain `H32`. -/
 def FloorTc (a c : ℕ) (pr : Prices100) : Prop :=
   (∀ s : Shape100, a ≤ s.regPrice pr) ∧ c ≤ pr.tc ∧ a ≤ pr.ffma ∧ a ≤ pr.int32 ∧ a ≤ pr.fp64 ∧ a ≤ pr.other
-
-/-- **Hypothesis `FragLanes S p q W`** (named; draft semantics): every multiplicand register in `W`
-depends on at most `q` of the lanes `p` on `S`, that is, some `q` lanes determine it on `S`.
-
-It restricts the adversary's cheap tensor-core instructions, those below `a` per register under `FloorTc a c`. The k8
-lemma takes their multiplicands from `W` (`AccFragIn`, `Pouw.Dimension.H100Frag`). It is not a fact about the
-hardware, and it can fail: a fragment shared across column tiles may depend on every lane, and then the lemma's bound
-is false (`FragShareGain`). So the k8 lemma is cited only against adversaries whose cheap tensor-core multiplicands
-meet `FragLanes` (`DenseWritesFragLanes`), not against every adversary.
-
-It is not needed at Round 8's loop-free prices. The H100 SXM's legacy k8 `mma.sync` costs 32.00 per register loop-free,
-which meets `H32` with no slack. So `DistinctWritesLoopFree` and `DistinctWritesFloor` (`Pouw.Dimension.H100Floor`)
-charge 32 per distinct non-free target with no hypothesis on any instruction's multiplicands. Its
-satisfiability witness is `FragLanesSat`: the lane words meet `FragLanes 1`. -/
-def FragLanes {G Λ : Type} (S : Set G) (p : Λ → G → ℚ) (q : ℕ) (W : Set (G → ℚ)) : Prop :=
-  ∀ w ∈ W, ∃ J : Finset Λ, J.card ≤ q ∧ ∀ g ∈ S, ∀ g' ∈ S, (∀ j ∈ J, p j g = p j g') → w g = w g'
 
 end Pouw.Dimension.H100
