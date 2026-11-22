@@ -15,7 +15,9 @@ from __future__ import annotations
 
 import functools
 import importlib
+import sys
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 from verity.circuits import boolean as BL
@@ -34,6 +36,7 @@ from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import interior_rows as IR
 from verity_vllm.pipeline import serving_rows as SRW
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "benchmarks" / "one_stage"))
 TS = importlib.import_module("two_stage")
 
 #: experts a table, a block's K e4m3 bytes, a table row's u16 words; the tables a span reads and the blocks on each

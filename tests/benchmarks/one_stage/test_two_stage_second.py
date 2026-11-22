@@ -47,26 +47,34 @@ def _layout(inline: bool = False) -> BR.Layout:
     return SM.layout(V, O, N, inline)
 
 
+#: the small run's class (``two_stage_small.sh``): the greedy select in one unit, inlined, its record of round 1
+#: committing the select's inputs beside the ids it returns
+SELECT = SM.template(V, 1)
+COMBINE = f"GreedyCombine_v2{{V={V},N={V}}}"
+
+
 @pytest.fixture(scope="module")
 def served(tmp_path_factory) -> dict:
-    """The class's files as the serve writes them and the capture of every request's sampler inputs, each under a launch
-    of its own (`two_stage_small.serve`); the class reopened from its files, as the replay side opens it."""
+    """The small run's class's files as the serve writes them, the rows of the select's inputs it kept and the capture
+    of every request's sampler inputs, each under a launch of its own (`two_stage_small.serve`); the class reopened
+    from its files, as the replay side opens it."""
     tmp = tmp_path_factory.mktemp("second")
-    got, check = SM.serve(tmp, V, O, N), BR.check_template(TID)
-    return {"tmp": tmp, "check": check, "capture": got["capture"], "class": BR.reopen(got["class"], check),
-            "pub": json.loads((got["class"] / BR.COMMIT).read_text())}
+    got, check = SM.serve(tmp, V, O, N, inline=True, units=1, logits=True), BR.check_template(SELECT)
+    return {"tmp": tmp, "check": check, "capture": got["capture"], "kept": got["logits"],
+            "class": BR.reopen(got["class"], check), "pub": json.loads((got["class"] / BR.COMMIT).read_text())}
 
 
 @pytest.fixture(scope="module")
 def run(served) -> dict:
     """The first stage under the class's own rule (`two_stage.rule_of`), ``stage1.json`` read again, and the replay
     side's half (`two_stage.replayed`)."""
-    check, tmp = served["check"], served["tmp"]
-    got = TS.first(served["pub"], check, TS.rule_of(_layout(), f"rate:{Q}/{N}", K, 60.0),
-                   FC.Challenger("first", label=TS.family_of(served["class"].layout)))
+    check, tmp, c = served["check"], served["tmp"], served["class"]
+    got = TS.first(served["pub"], check, TS.rule_of(c.layout, f"rate:{Q}/{N}", K, 60.0),
+                   FC.Challenger("first", label=TS.family_of(c.layout)))
     first_stage = json.loads(json.dumps(got.first_stage()))
     again = TS.resume(first_stage, check, FC.Challenger("second"))
-    r = TS.replayed(again, served["class"], served["capture"], tmp / "interior", clock=iter((100.0, 102.5)).__next__)
+    r = TS.replayed(again, c, served["capture"], tmp / "interior", kept=served["kept"],
+                    clock=iter((100.0, 102.5)).__next__)
     return {**served, "first_stage": first_stage, "again": again, "r": r}
 
 
@@ -101,7 +109,8 @@ def test_a_class_whose_block_makes_no_wires_has_no_second_stage_and_one_of_insta
     only when asked, its templates' proof blocks with no link, wire or return; its rule registers no value of the
     block's. The class of whole instances reads the block's ``logits`` at one template's port, one row a served token,
     and returns its ``o0``, unit j of a block writing its row j: held where round 1's record commits the port, as the
-    small class's does, and not where it doesn't."""
+    small class's does, and not where it doesn't. The return is read at round 1's tree, so the interior commits no
+    tree for it: its one value is the run input node the block's ``logits`` are read from."""
     with pytest.raises(ValueError, match="makes no wires round 2 derives"):
         TS.design(_layout(inline=True))
     u = TS.design(_layout(inline=True), unlinked=True)
@@ -117,7 +126,7 @@ def test_a_class_whose_block_makes_no_wires_has_no_second_stage_and_one_of_insta
     assert bare.returns == (replace(d.returns[0], held=False),) and bare.links == d.links
     rule = TS.rule_of(_layout(), f"rate:{Q}/{N}", K)
     assert rule.span_values == (("logits", O, (V, 16)),)
-    assert [n for n, _s in rule.interior] == [f"{TID}/o0"]
+    assert [n for n, _s in rule.interior] == ["input/n1"] and WI.tree(TID, "o0") not in dict(rule.interior)
 
 
 def _words(bits: np.ndarray) -> np.ndarray:
@@ -182,7 +191,8 @@ def test_a_class_wired_to_a_writer_of_two_units_a_block_is_committed_by_its_repl
 
 def test_the_interior_is_registered_after_round_1_under_no_name_round_1_has_and_sampled(run):
     """The written record is the one registered: after the boundary docket, over the sampled spans in the
-    sample's order, registering the block's ``logits`` and nothing round 1's record names; the second stage samples
+    sample's order. Every port of the block is one a link names, the select's inputs and the ids it returns, which
+    round 1's record commits, so the interior registers no value and no root of its own; the second stage samples
     K proof blocks in each sampled span."""
     again, r, tmp = run["again"], run["r"], run["tmp"]
     sample = [int(u) for u in again.sample.units]
@@ -190,9 +200,8 @@ def test_the_interior_is_registered_after_round_1_under_no_name_round_1_has_and_
     assert r.record["previous"] == again.docket.digest and r.record["window"]["replay_sample"] == sample
     assert r.record["window"]["run"] == IR.interior_run(again.docket.digest, sample)
     earlier = {x["port"] for x in again.record["roots"]} | {e["value"] for e in again.record.get("registered", ())}
-    assert earlier == {*BR.PORTS, "o0"}
-    assert [e["value"] for e in r.record["registered"]] == ["logits"]
-    assert not earlier & ({x["port"] for x in r.record["roots"]} | {"logits"})
+    assert earlier == {*BR.PORTS, "o0", "logits"}
+    assert r.record["roots"] == [] and not r.record.get("registered") and r.tie == {}
     assert r.launches == {f"r{u}": f"launch:r{u}" for u in sample}
     assert r.draw.replay_sample == again.sample and [u // O for u in r.draw.units] == list(range(Q))
 
@@ -239,16 +248,17 @@ def test_the_interior_gives_the_return_by_reference_to_round_1s_rows_and_commits
     at = [s * O + j for s in sample for j in range(O)]
     port, mine = c.port("o0"), r.interior.committed
     assert port.root == c.roots["o0"] and port.leaves == N * O and port.words == 2
-    n = CS.BC_BYTES
-    assert mine.bc[f"{TID}/o0"] == b"".join(port.bcs[a * n:(a + 1) * n] for a in at)
-    assert mine.salts[f"{TID}/o0"] == port.salts_at(at) != mine.salts[f"{TID}/logits"][:len(at) * CS.SALT_BYTES]
+    n, m = CS.BC_BYTES, mine.window.members[0]
+    assert m.template == COMBINE
+    assert mine.bc[m.port("o0")] == b"".join(port.bcs[a * n:(a + 1) * n] for a in at)
+    assert mine.salts[m.port("o0")] == port.salts_at(at)
     assert [x.value for x, _v in r.interior.returns] == ["o0"]
     with pytest.raises(ValueError, match="no value the class commits rows of"):
         c.port("logits")
     with pytest.raises(ValueError, match="recommit to another root"):
         replace(c, salts={**c.salts, "o0": os.urandom(len(c.salts["o0"]))}).port("o0")
     entry = CS.registered_header(json.loads((tmp / "interior" / "window.json").read_text()), 0)["o0"]
-    assert entry == port.header(at) and CS.WI.tree(TID, "o0") not in mine.roots
+    assert entry == port.header(at) and not mine.roots
 
 
 @pytest.mark.slow
@@ -278,76 +288,57 @@ def _linked_header(got: dict, codes: list[str]) -> None:
         raise LinkedHeaderRefused(got)
 
 
-@LINKED_HEADER
-def test_round_2_takes_the_hand_over_with_the_return_read_at_round_1s_rows_but_for_the_logits_the_prover_registers(run):
-    """What `two_stage.prove` hands over, held to round 2 (`two_stage.round_two`, the form allowed): the verifier's
-    window (`Design.window`, public items alone) is the one the interior was committed under; the verifier's reads
-    (`verifier_reads`) put the ``logits`` port at the value the interior registers, each unit at its own row, and the
-    ``o0`` port at round 1's port of that name, at the root, leaves and domain the boundary record gives it, unit j of
-    the i-th sampled block at row ``sample[i]·O + j``; the development params (`references`) name the circuit the
-    sessions' public files name and the same two values; and the public files the served path writes for the written
-    window (`flock_input_files`, as a5 stages the sessions), each named by a stand-in verdict of record, pass every
-    check of round 2 but one. ``second-inputs``: the ``logits`` the token select reads are a value the prover registers
-    after the first stage's sample, which no record of round 1 commits and the verifier doesn't fill, so the block's
-    audit is not one of the model's. Were ``logits`` a value the verifier filled round 2 would accept: the code stops
-    no other check, the return's read among them. With the return read at the interior's own port instead, as a record
-    of round 1 without the port leaves it, round 2 refuses that read too (``second-read``), which is not the params'
-    either (``second-values``). Slow (about 15 s): it lowers the template for the references and the sessions' files."""
+def test_round_2_takes_the_hand_over_with_every_port_read_at_round_1s_tree(run):
+    """What `two_stage.prove` hands over, held to round 2 (`two_stage.round_two_twin`): the verifier's window
+    (`Design.window`, public items alone) is the one the interior was committed under; the verifier's reads
+    (`verifier_reads`) are position-free (`READS_V2`) and put the select's ``logits`` and its ``o0`` at round 1's ports
+    of those names, at the root, leaves and domain the boundary record gives each; the development params
+    (`references`, the replay sample's: the program names round 1's rows) name the circuit the sessions' public files name and the same two values; and the public files the
+    served path writes for the written window (`flock_input_files`, as a5 stages the sessions), each named by a
+    stand-in verdict of record, pass round 2 with no code. The interior commits no tree for the return, so the verifier
+    reads none of its own; a statement reading the return under the interior's own name, at a root not round 1's,
+    round 2 refuses (``second-read``). Slow (about 15 s): it
+    lowers the template for the references and the sessions' files."""
     again, r, tmp = run["again"], run["r"], run["tmp"]
     d, brec, sample, drawn = r.design, again.record, [int(u) for u in again.sample.units], list(r.draw.units)
     mine, w = d.window(again.docket.digest, sample), r.interior.committed.window
     assert (mine.partition_digest, mine.run, mine.population) == (w.partition_digest, w.run, w.population)
     assert CS.expected_ports(mine) == r.interior.ports
-    check = R.check(r.record, mine.program, mine.query, mine.law, CS.SCHEME, CS.expected_ports(mine), r.interior.leaf_layer,
-                    (), [brec], mine.partition, registered=r.tie["registered"], schemas=r.tie["schemas"])
-    assert check.ok, check.codes
     assert TS.interior_source(mine, sample)(r.record["window"])["ok"]
     assert TS.interior_source(mine, sample[::-1])(r.record["window"])["codes"] == ["replay_sample"]
 
     reads = TS.verifier_reads(d, mine, r.record, brec, sample)
     (key, file), = reads.items()
-    value, = r.record["registered"]
-    assert file["ports"]["logits"] == {
-        "value": "logits", "root": value["root"], "leaves": Q * O, "words": V, "word_bits": 16, "domain": value["domain"],
-        "row_schema": mine.members[0].schema("logits"), "reads": list(range(Q * O)), "reads_from": 0}
-    served, = (x for x in brec["roots"] if x["port"] == "o0")
-    assert file["ports"]["o0"] == {
-        "value": "o0", "root": served["root"], "leaves": N * O, "words": 2, "word_bits": 16, "domain": served["domain"],
-        "row_schema": mine.members[0].schema("o0"), "reads": [s * O + j for s in sample for j in range(O)], "reads_from": 0}
+    assert file["format"] == TS.REG.READS_V2
+    m = mine.members[0]
+    for port, words in (("logits", V), ("o0", 2)):
+        served, = (x for x in brec["roots"] if x["port"] == port)
+        assert file["ports"][port] == {
+            "value": port, "root": served["root"], "leaves": N * O, "words": words, "word_bits": 16,
+            "domain": served["domain"], "row_schema": m.schema(port)}
     with pytest.raises(ValueError, match="a replay sample of 1 for a window of 2"):
         TS.verifier_reads(d, mine, r.record, brec, sample[:1])
 
-    proofs = TS.references(d, Q, tmp / "references")
+    proofs = TS.references(d, Q, tmp / "references", sample)
     S.template_circuits(proofs, again.stream.spec.check.query)
     assert not (tmp / "references" / "m0" / "inst.bin").exists()
     assert {p: e["value"] for p, e in proofs["templates"][0]["registered"]["ports"].items()} == {
         "logits": "logits", "o0": "o0"}
 
     stmts, verdicts = _handed(tmp / "interior", tmp / "served", mine, reads, drawn)
-    parts = SS.parts(Q, P.strata(mine.program, mine.query))
-    assert TS.pins(proofs, stmts) == {TID: True}
+    assert TS.pins(proofs, stmts) == {COMBINE: True}
     layout = again.layout
-    assert r.tie.get("supplied") is None and "pinned" not in r.tie and "outputs" not in r.tie
-    got = TS.round_two_twin(layout.program, d.key, sample, mine, r.record, brec, drawn, stmts, {"verdicts": verdicts}, proofs,
-                       r.tie)
-    _linked_header(got, [TS.INPUTS_REFUSED])
-    inputs = {"value": "logits", "why": SS.INPUTS_WHY}
-    assert got == {"ok": False, "codes": [TS.INPUTS_REFUSED], "detail": {TS.INPUTS_REFUSED: inputs}}
     assert [(x.port, x.value) for x in SS.replay_links(layout.program, d.key, brec)] == [("logits", "logits"), ("o0", "o0")]
-    assert parts[0].n == O
-    filled = {**r.tie, "supplied": {"logits": [[{"bytes": "00000000"}]]}}
-    got = TS.round_two_twin(layout.program, d.key, sample, mine, r.record, brec, drawn, stmts, {"verdicts": verdicts}, proofs,
-                       filled)
-    _linked_header(got, [])
-    assert got == {"ok": True, "codes": [], "detail": {}}
+    args = (layout.program, d.key, sample, mine, r.record, brec, drawn)
+    assert TS.round_two_twin(*args, stmts, {"verdicts": verdicts}, proofs, r.tie) == {"ok": True, "codes": [], "detail": {}}
 
-    own = TS.verifier_reads(replace(d, returns=()), mine, r.record, brec, sample)
-    assert own[key]["ports"]["o0"]["value"] == f"{TID}/o0" and own[key]["ports"]["o0"]["reads"] == list(range(Q * O))
+    with pytest.raises(ValueError, match="names port .*o0' 0 times"):
+        TS.verifier_reads(replace(d, returns=()), mine, r.record, brec, sample)
+    own = {key: {**file, "ports": {**file["ports"], "o0": {**file["ports"]["o0"], "value": f"{COMBINE}/o0", "root": "00" * 64}}}}
     stmts, verdicts = _handed(tmp / "interior", tmp / "served-own", mine, own, drawn)
-    got = TS.round_two_twin(layout.program, d.key, sample, mine, r.record, brec, drawn, stmts, {"verdicts": verdicts}, proofs,
-                       r.tie)
-    assert (got["ok"], got["codes"]) == (False, [TS.INPUTS_REFUSED, "second-read", "second-values"])
-    assert got["detail"]["second-read"] == {"statement": 0, "template": TID}
+    got = TS.round_two_twin(*args, stmts, {"verdicts": verdicts}, proofs, r.tie)
+    assert (got["ok"], got["codes"][0]) == (False, "second-read")
+    assert got["detail"]["second-read"] == {"statement": 0, "template": COMBINE}
 
 
 def test_a_second_stage_whose_interior_gives_a_replay_block_an_input_never_held():

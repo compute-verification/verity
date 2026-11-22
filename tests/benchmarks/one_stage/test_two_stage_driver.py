@@ -45,7 +45,7 @@ from verity_vllm.pipeline import (boundary_rows as BR, boundary_stop as BS, boun
 
 REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO / "benchmarks" / "one_stage"))
-sys.path.insert(0, str(REPO / "tests" / "verity" / "protocols" / "proofs" / "spot" / "verifier"))
+sys.path.insert(0, str(REPO / "tests" / "verity" / "protocols" / "proof" / "spot" / "verifier"))
 TS = importlib.import_module("two_stage")
 FC = importlib.import_module("fake_challenger")
 AC = importlib.import_module("verity.protocols.proof.spot.verifier.challenger.challenger_session")
