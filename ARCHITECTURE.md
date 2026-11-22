@@ -314,7 +314,7 @@ Each difference's owner and day are in `tests/tree.toml` (its `[[not_yet]]` line
 - The registered compiler exists in the vLLM adapter, and nothing holds the declared circuit to its output. The Lean counts of unregistered input do not charge the advice.
 - The outer protocol covers only the proof system's own verifier, and the zero-knowledge server is not proved.
 - The applications state no hardware description and no policy limits, and resource accounting has no verifier of its own.
-- No accepted run on a served epoch is recorded yet.
+- The sampled proofs have no accepted run on a served epoch yet, and no run's registration is signed by an auditor-trusted device.
 
 **Files that only change place**
 
