@@ -1153,12 +1153,14 @@ def test_the_half_after_the_draw_refuses_by_name_what_it_cannot_test():
     for registration, challenger, root, why in (({"lane": "circuits"}, {"key": {}}, "ab" * 64, R.NO_SIGNED_HEAD_WHY),
                                                 ({"lane": "circuits"}, None, None, R.NO_SIGNED_HEAD_WHY)):
         with pytest.raises(R.RegistrationRefused) as e:
-            R.registration_after_draw(registration, challenger, root, "cd" * 64, {"ledger": []}, lambda *a: True)
+            R.registration_after_draw(registration, challenger, root, "cd" * 64, {"ledger": []}, lambda *a: True,
+                                      "ef" * 64)
         assert str(e.value) == why
     key = {"H": 4, "W": 4, "public": "00" * PUBLIC_BYTES}
     for coins in ({}, {"ledger": None}, None):
         with pytest.raises(R.RegistrationRefused) as e:
-            R.registration_after_draw({"lane": "circuits"}, {"key": key}, "ab" * 64, "cd" * 64, coins, lambda *a: True)
+            R.registration_after_draw({"lane": "circuits"}, {"key": key}, "ab" * 64, "cd" * 64, coins, lambda *a: True,
+                                      "ef" * 64)
         assert str(e.value) == R.NO_LEDGER_AFTER_DRAW_WHY
 
 

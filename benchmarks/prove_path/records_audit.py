@@ -1332,7 +1332,7 @@ def audit(a: argparse.Namespace) -> int:
         row["registration_halves"] = ["before the draw"]
         try:
             DK.registration_after_draw(a.registration_json, a.registration_challenger, mine.run, a.registration_digest,
-                                       published, AC.lms_verify)
+                                       published, AC.lms_verify, program_digest(mine.program))
             row["registration_halves"].append("after the draw")
         except DK.RegistrationRefused as e:
             row["registration_after_draw"] = str(e)

@@ -2821,10 +2821,11 @@ def _audit_v1_accepts(s: Setup, seed: str, server) -> tuple:
 def test_the_registration_after_the_draw_is_held_in_the_check_as_python_does(server):
     """The registration's half after the draw in the whole check (`OneStage.check`, which `checkAt` runs; its twin
     `docket.registration_after_draw`), on a v1 audit from the challenger's coins whose parameters take the registration
-    from the ledger: the ledger that signs the record's digest for the session's lane before the session accepts; one
-    whose registration was signed after the session opened, a lane the session is not on, and a ledger after the draw
-    that holds the epoch to another digest than the one before it each pass the half before the draw and are rejected
-    by the check by name, Lean's reason the Python's."""
+    from the ledger: the ledger that signs the record's digest for the session's lane before the session, in a period
+    whose open commits the docket's program as its circuit, accepts; one whose registration was signed after the session
+    opened, a lane the session is not on, a ledger after the draw that holds the epoch to another digest than the one
+    before it, and a period that commits another circuit (the SHA-512 of the descriptor's bytes as written, or any other) each
+    pass the half before the draw and are rejected by the check by name, Lean's reason the Python's."""
     s = BLOCKED
     sampling_design = {"k": 2, "law": "subset"}
     rec = DK.record(s.program, s.query, sampling_design, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
@@ -2838,8 +2839,10 @@ def test_the_registration_after_the_draw_is_held_in_the_check_as_python_does(ser
     lg, proved = ch.ledger, DR.proved(d)
     events, opened = list(lg.events), lg.period_open
 
-    def lines(registration: str, earlier: str | None = None, after: bool = False) -> list[str]:
-        lg.period_open = {**opened, "registration": registration}
+    program = P.program_digest(s.program)
+
+    def lines(registration: str, earlier: str | None = None, after: bool = False, circuit: str = program) -> list[str]:
+        lg.period_open = {**opened, "registration": registration, "circuit": circuit}
         lg.events = [(k, sid, lg.period_open if b is opened else b) for k, sid, b in events]
         if after:
             lg.events = [e for e in lg.events if e[0] not in ("period-open", "period-close")] + [
@@ -2867,7 +2870,7 @@ def test_the_registration_after_the_draw_is_held_in_the_check_as_python_does(ser
         assert held is not None and held[1] == digest
         try:
             R.registration_after_draw(params["registration"], params["challenger"], params["window_root"], digest, coins,
-                                      lms_verify)
+                                      lms_verify, program)
             py = None
         except R.RegistrationRefused as e:
             py = str(e)
@@ -2883,6 +2886,11 @@ def test_the_registration_after_the_draw_is_held_in_the_check_as_python_does(ser
         verdict, reason, py = run(before, after, lane)
         assert py is not None and py.startswith("registration, after the draw: "), py
         assert (verdict, reason) == ("reject", py)
+    written = hashlib.sha512(json.dumps(s.desc).encode()).hexdigest()
+    assert written != program
+    for circuit in (written, "dd" * 64):
+        other = lines(digest, circuit=circuit)
+        assert run(honest, other) == ("reject", R.PERIOD_CIRCUIT_WHY, R.PERIOD_CIRCUIT_WHY)
 
 
 def test_v2_takes_a_cover_of_the_population_under_a_subset_design(server, server_v2):

@@ -46,8 +46,7 @@ def main(argv: list[str] | None = None) -> int:
     digest = DD.digest(record)
     at = dict(params=(lms.DEPLOYED.W, lms.DEPLOYED.H), workers=len(os.sched_getaffinity(0))) if a.deployed_key else {}
     local = LC.Local(Path(a.host), R.main_lines(a.main), **at)
-    circuit = hashlib.sha512((window / "circuit.json").read_bytes()).hexdigest()
-    opened = local.A.period(local.host, ["period-open", "p-registration", a.lane, local.by, "4", circuit,
+    opened = local.A.period(local.host, ["period-open", "p-registration", a.lane, local.by, "4", docket["program"],
                                          f"registration={digest}"], signer=local.signer, pinned=local.pin,
                             now=datetime.now(UTC), active=lambda _s: False)
     key = local.key
