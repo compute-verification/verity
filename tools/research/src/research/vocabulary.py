@@ -81,7 +81,8 @@ def instead(term: str, t: dict | None = None) -> str:
     """What to write for a retired `term` as written: the entry of TERMS or DOC_TERMS that names it."""
     t, said = table() if t is None else t, term.lower()
     for names, write in [*t.get("TERMS", {}).items(), *t.get("DOC_TERMS", {}).items()]:
-        for name in (n.strip().lower() for n in names.split(",")):
-            if name and (name in said or said in name or name.startswith(said.rstrip("s"))):
+        for name in (n.strip().lower().replace("-", " ") for n in names.split(",")):
+            if name and (re.search(rf"(?<!\w){re.escape(name)}(?!\w)", said) or said in name
+                         or name.startswith(said.rstrip("s"))):
                 return write
     return "see tests/lint/retired_terms.md"
