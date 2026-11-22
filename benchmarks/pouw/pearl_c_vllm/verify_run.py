@@ -24,7 +24,7 @@ pass is not an accepted run and states no compute credit. A Pearl+ pass counts o
   B's rows and tree levels per fixed operand, the tile tree.  Each is checked against the published roots.  Under ``hm96-sha512``
   (-h3's) a node is 64 bytes and each value is followed by its salt, the opened leaf's alone: an A row's, a tile's and a
   y row's from the salts the pass kept beside its rows (a call's ``salts``, the manifest's ``salts_t``, a y's ``salts``),
-  a B row's from the salts the pass kept beside the fixed operand's rows (its ``salts``), which the served arm draws
+  a B row's from the salts the pass kept beside the fixed operand's rows (its ``salts``), which the served arm takes
   fresh each epoch (`pouw.scheme`'s ``open``, `fresh_salts`: the served checkpoint is not registered) as a bench does
   (`run_device.fresh_weight_salts`), 192 bytes a leaf, and the scheme reads the value less its salt.
 - **The tiles** are `clear_work.audit`'s: its t work-weighted samples (`draw`, as Pearl+'s credited blocks,
