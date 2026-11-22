@@ -29,10 +29,11 @@ untraced = [
 # harness's Lean, Flock's verifier library and the LMS verifier; the tests import the harness's Python and the
 # reference, one_stage with the profile, and what they import of verity.ml (the circuits, the partition object, the
 # commitments' domains, and LMS for the challenger's signed record), and the storage session's release and the values
-# its supplied functions take at it (`test_supplied_difftest.py`, with the circuits' own test of the same).
+# its supplied functions take at it (`test_supplied_difftest.py`, with the circuits' own test of the same), and circuits'
+# generated list of gated templates, which R9's compiled list is held to.
 inputs = ["tests/verity/circuits/stand_in.py", "tests/verity/circuits/pous_session_vectors.json", "tests/verity/circuits/test_supplied.py", "verity/__init__.py", "verity/errors.py", "verity/protocols",
           "verity/protocols/proof/flock/verifier",
           "verity/circuits", "verity/commitments", "adapters/vllm/verity_vllm/definitions", "tools/difftest",
           "verity/channel.py",
           "verity", "tests/verity/commitments/periods/test_interface.py", "adapters/vllm/verity_vllm/__init__.py",
-          "calibration/hardware/cards/rtx-pro-6000-server.toml"]
+          "calibration/hardware/cards/rtx-pro-6000-server.toml", "tests/lint/openers_gated.json"]

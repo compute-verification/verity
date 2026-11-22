@@ -103,32 +103,26 @@ def _pinned(out, emb=EMB) -> tuple[I.Window, Table, dict, dict]:
     return win, table, rec, check
 
 
-#: the gated read at the one binding the verifier holds (`docket.GATED`): class 1,1,1's own binding,
-#: ``EmbeddingRead_v4{V=128256,H=2048}``, is not on the list until circuits' lint has evaluated it
-GATED_EMB = I.resolve("EmbeddingRead_v4{V=2,H=1}")
-
-
 def test_a_tables_anchors_from_cs_marks_and_its_pin_are_the_rows_r7_recomputes_from_the_programs_digest(tmp_path):
-    """C reads the table through the gated read at a binding the verifier holds, marks the table's root and domain
-    anchors with `registered.root/v1` and `registered.domain/v1` of the table's registered value, the weights'
-    registration of record pins the table, the record registers the table's entry `Window.write` writes, and no scheme
-    or parameter supplies rows for the anchors: R7 recomputes their rows from the pin, the rows `interface.supplied`
-    commits, in both verifiers, salted with the program's digest: an accepted run."""
-    win, table, rec, check = _pinned(tmp_path / "window", GATED_EMB)
+    """C marks the table's root and domain anchors with `registered.root/v1` and `registered.domain/v1` of the table's
+    registered value, the weights' registration of record pins the table, the record registers the table's entry
+    `Window.write` writes, and no scheme or parameter supplies rows for the anchors: R7 recomputes their rows from the
+    pin, the rows `interface.supplied` commits, in both verifiers, salted with the program's digest. Its read is at no
+    binding the verifier holds gated (`docket.GATED`: the served binding alone), so R9 alone refuses it."""
+    win, table, rec, check = _pinned(tmp_path / "window")
     pd = program_digest(check["program"])
     for of in ("root", "domain", "opened"):
         row = win.registered[f"embed/{of}"]
         assert row.program == pd and list(row.salts) == RV.supplied_salts(pd, f"embed/{of}", 1), of
-    got = V.check(rec, **check)
-    assert got.ok and got.codes == (), got
-    assert R.check(rec, **check).ok
+    got, mine = V.check(rec, **check), R.check(rec, **check)
+    assert got.codes == mine.codes == ("R9-ungated-opener",), (got, mine)
 
 
-@pytest.mark.parametrize("emb", ["EmbeddingRead_v2{V=4,H=16}", "EmbeddingRead_v4{V=4,H=16}"])
+@pytest.mark.parametrize("emb", ["EmbeddingRead_v2{V=4,H=16}", "EmbeddingRead_v4{V=2,H=1}", "EmbeddingRead_v4{V=4,H=16}"])
 def test_a_circuit_reaching_an_opener_outside_a_held_gated_template_is_refused(tmp_path, emb):
     """The same window read through the ungated read, whose rows return whether or not the opening held, or through the
-    gated read at a binding the verifier doesn't hold (no lint evaluated it): refused by both verifiers by
-    `R9-ungated-opener` alone, R7 holding the table as for the gated read."""
+    gated read at a binding the verifier doesn't hold: refused by both verifiers by `R9-ungated-opener` alone, naming
+    the read. The binding the verifier holds, class 1,1,1's own, is too large to commit a table of here."""
     win, table, rec, check = _pinned(tmp_path / "window", I.resolve(emb))
     got, mine = V.check(rec, **check), R.check(rec, **check)
     assert got.codes == mine.codes == ("R9-ungated-opener",), (got, mine)

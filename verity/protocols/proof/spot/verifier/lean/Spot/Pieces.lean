@@ -264,6 +264,10 @@ def ungatedOpeners (j : Json) : V Json := do
     | _ => throw "gated: each entry is [id, closure digest]"
   return Json.mkObj [("templates", Json.arr ((← Docket.ungatedOpeners gated p.json).map Json.str))]
 
+/-- Any input to `[[id, closure digest], …]`: the verifier's own list of gated templates (`Docket.GATED`). -/
+def gatedList (_ : Json) : V Json :=
+  pure (Json.arr (Docket.GATED.map fun (i, d) => Json.arr #[Json.str i, Json.str d]))
+
 /-- A member of the per-member form named `name` at the units `units`, with no files. -/
 private def unitsMember (name : String) (units : Array (Nat × Nat)) : OneStageZk.Member :=
   let own : OneStageZk.Own :=
@@ -1191,7 +1195,7 @@ def tablesServed (j : Json) : V Json := do
 
 def table : List (String × (Json → V Json)) :=
   [("decode", decode), ("partition", partition), ("committed_bits", committedBits), ("unit_gates", unitGates),
-   ("fanout", fanout), ("ungated_openers", ungatedOpeners), ("run_input_roots", runInputRoots), ("run_input_rows", runInputRows), ("registration", docket),
+   ("fanout", fanout), ("ungated_openers", ungatedOpeners), ("gated", gatedList), ("run_input_roots", runInputRoots), ("run_input_rows", runInputRows), ("registration", docket),
    ("registered", registered),
    ("domain", domain), ("produced", produced), ("known_port", knownPort), ("check_draw", checkDraw), ("draw", draw), ("ran_out", ranOut),
    ("select", select), ("design", design), ("slots", slots),

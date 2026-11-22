@@ -3402,8 +3402,7 @@ def ungated_openers(j):
     return {"templates": R.ungated_openers([tuple(g) for g in gated], desc)}
 
 
-#: circuits of one call of a read each: the ungated read, the gated read at the binding `docket.GATED` holds and at
-#: one it doesn't
+#: circuits of one call of a read each: the ungated read and the gated read at two bindings `docket.GATED` doesn't hold
 OPENER_READS = ("EmbeddingRead_v2{V=2,H=1}", "EmbeddingRead_v4{V=2,H=1}", "EmbeddingRead_v4{V=4,H=1}")
 
 
@@ -3436,6 +3435,14 @@ def opener_cases(draw) -> dict:
 
 
 UNGATED_OPENERS = D.Port(PIECES, "ungated_openers", ungated_openers, st.one_of(opener_cases(), JSON), package=PACKAGE)
+
+
+def gated_list(j):
+    """The verifier's own list of gated templates (`docket.GATED`, `Docket.GATED`), whatever the input."""
+    return [list(g) for g in R.GATED]
+
+
+GATED_LIST = D.Port(PIECES, "gated", gated_list, JSON, package=PACKAGE)
 RUN_INPUT_ROOTS = D.Port(PIECES, "run_input_roots", run_input_roots, st.one_of(*[run_input_cases()] * 6, JSON),
                          package=PACKAGE)
 
@@ -5379,20 +5386,33 @@ def test_r7_refuses_a_pinned_values_entry_whose_domain_alone_differs_as_python_d
         assert D.replay(REGISTRATION, given, pieces) == ("output", D.canonical(reg)), e
 
 
+def test_the_verifiers_gated_list_is_the_lints_generated_one(pieces):
+    """The list R9 holds gated templates by, compiled into the Lean (`Docket.GATED`) and in the Python (`docket.GATED`), is
+    exactly the entries of circuits' generated list (`tests/lint/openers_gated.json`), each evaluated at its binding: the
+    file is what the constant is held to, never what the verifier reads."""
+    root = next(p for p in Path(__file__).resolve().parents if (p / "tests" / "lint").is_dir())
+    entries = json.loads((root / "tests/lint/openers_gated.json").read_text())["entries"]
+    assert all(e["class"] == "gated" and e["evaluated"] is True for e in entries), entries
+    want = [[e["template"], e["closure_digest"]] for e in entries]
+    assert gated_list(None) == want
+    assert D.replay(GATED_LIST, None, pieces) == ("output", D.canonical(want))
+
+
 def test_r9_refuses_a_read_outside_a_held_gated_template_as_the_python_does(pieces):
-    """R9's walk, Lean's answer the Python's: the ungated read (`EmbeddingRead_v2`) is named under any list; the gated
-    read (`EmbeddingRead_v4`) is not named at the binding `docket.GATED` holds, V=2, H=1, the one circuits' lint
-    evaluated, and is named at V=4, H=1, a binding no lint evaluated, and under its own id at another digest. Class
-    1,1,1's own binding, V=128256, H=2048, is not on the list until circuits' lint has evaluated it."""
-    want = {("EmbeddingRead_v2{V=2,H=1}", True): ["EmbeddingRead_v2{V=2,H=1}"],
-            ("EmbeddingRead_v4{V=2,H=1}", True): [], ("EmbeddingRead_v4{V=4,H=1}", True): ["EmbeddingRead_v4{V=4,H=1}"]}
+    """R9's walk, Lean's answer the Python's: under the verifier's list (`docket.GATED`, the served binding
+    `EmbeddingRead_v4{V=128256,H=2048}` alone) each small read is named, the ungated `EmbeddingRead_v2` and the gated
+    `EmbeddingRead_v4` at bindings not on it; under a list holding each read's own closure digest, the gated read is not
+    named and the ungated one still is; under its own id at another digest, each is named."""
     for tid in OPENER_READS:
         desc = _opener_desc(tid)
-        for gated, held in (([list(g) for g in R.GATED], True), ([[i, "00" * 64] for i, _ in R.GATED], False)):
-            case = {"program": desc, "gated": gated}
+        own = [[e["id"], codec.closure_digest(desc, k)] for k, e in desc["definitions"].items() if k == tid]
+        gated = tid.startswith("EmbeddingRead_v4")
+        for held, want in (([list(g) for g in R.GATED], [tid]), (own, [] if gated else [tid]),
+                           ([[i, "00" * 64] for i, _ in own], [tid])):
+            case = {"program": desc, "gated": held}
             got = ungated_openers(case)
-            assert got == {"templates": want[tid, True] if held else [tid]}, (tid, gated, got)
-            assert D.replay(UNGATED_OPENERS, case, pieces) == ("output", D.canonical(got)), (tid, gated)
+            assert got == {"templates": want}, (tid, held, got)
+            assert D.replay(UNGATED_OPENERS, case, pieces) == ("output", D.canonical(got)), (tid, held)
 
 
 def test_r8_reads_the_readers_python_does(pieces):

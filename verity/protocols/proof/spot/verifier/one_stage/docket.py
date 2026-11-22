@@ -199,9 +199,10 @@ ANCHOR_UNPINNED_WHY = ("a supplied anchor reads a registered value's root or dom
 #: the circuit templates that open a commitment and return its verdict (`ungated_openers`)
 OPENERS = ("FrameV3Read_v1", "FrameV3ReadAt_v1", "MerkleRead_v1", "LmsVerify_v1")
 #: the circuit templates whose returned rows are gated on their opener's verdict, each `(id, closure digest)` at a binding
-#: circuits' lint evaluated (Lean's `Docket.GATED`): a circuit reaching a binding no lint evaluated is refused
+#: circuits' lint evaluated (Lean's `Docket.GATED`, both held equal to `tests/lint/openers_gated.json`): a circuit reaching a
+#: binding no lint evaluated is refused
 GATED: tuple[tuple[str, str], ...] = (
-    ("EmbeddingRead_v4", "3d82aec036532f091d97f8e701c5204813a0df7eca1c43c63761d1a7d471c95d731f5e64bb6ef208b7f689aaa7ce5394ab25bc206ac4418eb7559dc35f338dd5"),
+    ("EmbeddingRead_v4", "251987cf5a07b53f7d20fd62d4c2cdc4af5dcd00e629cc6b2afce45437c88826290e96b4d91b5d0934835f7bbfd7fef9181ae7b97aa4f730642d11e71d2a6f5d"),
 )
 UNGATED_OPENER_WHY = ("a circuit template that calls an opener and returns rows whether or not its opening held lets the "
                       "prover commit rows of its choice: C reaches an opener only inside a gated template the verifier "

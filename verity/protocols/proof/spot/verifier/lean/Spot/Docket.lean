@@ -865,9 +865,10 @@ def kept (ok : Bool) (c : Array String) (code : String) : Array String := if ok 
 def OPENERS : Array String := #["FrameV3Read_v1", "FrameV3ReadAt_v1", "MerkleRead_v1", "LmsVerify_v1"]
 
 /-- The circuit templates whose returned rows are gated on their opener's verdict, each `(id, closure digest)` at a
-binding circuits' lint evaluated. A binding no lint evaluated is not here, so a circuit reaching it is refused. -/
+binding circuits' lint evaluated, compiled in: a test holds it equal to the lint's generated list
+(`tests/lint/openers_gated.json`). A binding no lint evaluated is not here, so a circuit reaching it is refused. -/
 def GATED : Array (String × String) := #[
-  ("EmbeddingRead_v4", "3d82aec036532f091d97f8e701c5204813a0df7eca1c43c63761d1a7d471c95d731f5e64bb6ef208b7f689aaa7ce5394ab25bc206ac4418eb7559dc35f338dd5")]
+  ("EmbeddingRead_v4", "251987cf5a07b53f7d20fd62d4c2cdc4af5dcd00e629cc6b2afce45437c88826290e96b4d91b5d0934835f7bbfd7fef9181ae7b97aa4f730642d11e71d2a6f5d")]
 
 /-- The keys of descriptor `j`'s Definitions that call an opener (`OPENERS`) and that its root reaches through its nodes'
 callees and word primitives' Boolean Definitions without passing a gated one, a Definition whose id and
