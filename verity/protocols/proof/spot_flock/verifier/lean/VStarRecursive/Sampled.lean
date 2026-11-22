@@ -99,6 +99,15 @@ def evidenceOf (b : ByteArray) : V Evidence := do
   if (field? rest "proofs").isNone then throw s!"the evidence names no proofs: {V1_REFUSED}"
   return .inl (← OneStageZk.evidenceEitherOf (← Flock.canon rest).toUTF8)
 
+/-- One level's half after the draw of a registration taken from the ledger (`OneStageZk.registrationAfterDraw`), on
+the parameters and evidence `paramsOfJson` and `evidenceOf` read; nothing at two levels, which `paramsOfJson` refuses
+itself, or where either is refused. -/
+def registrationAfterDraw (params : Json) (evidence : ByteArray) : V Unit :=
+  match split params "parameters" true, Core.canonicalJson evidence >>= (split · "evidence" false) with
+  | .ok (1, p), .ok (1, e) => do
+    OneStageZk.registrationAfterDraw (← Flock.canon p).toUTF8 (← Flock.canon e).toUTF8
+  | _, _ => pure ()
+
 /-- The levels of a case of the parameters or the evidence. -/
 def levelsOfCase {α β : Type} : α ⊕ β → Nat
   | .inl _ => 1

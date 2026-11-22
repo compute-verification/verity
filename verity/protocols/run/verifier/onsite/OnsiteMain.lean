@@ -5,4 +5,4 @@ public import CoreOnsite
 
 @[expose] public section
 
-def main (args : List String) : IO UInt32 := Core.Onsite.protocol.main args
+def main (args : List String) : IO UInt32 := Core.Onsite.protocol.mainWith Core.Remote.registrationHeld args

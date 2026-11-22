@@ -68,7 +68,7 @@ def main (args : List String) : IO UInt32 := do
   match args with
   | ids :: rest =>
     match ofIds ((ids.splitOn ",").filter (· ≠ "")) with
-    | .ok P => P.main rest
+    | .ok P => P.mainWith Core.Remote.registrationHeld rest
     | .error e => IO.eprintln s!"product: {e}"; return 64
   | [] => IO.eprintln "usage: product IDS id | check PARAMS COMMITMENT EVIDENCE | serve"; return 64
 
