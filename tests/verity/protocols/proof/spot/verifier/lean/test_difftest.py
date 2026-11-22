@@ -7223,6 +7223,74 @@ def test_the_run_takes_a_two_layer_epoch_under_a_subset_design(pieces):
         assert out.get("step") == "register" and out.get("codes"), (m, out)
 
 
+def _by_unit(strata) -> list:
+    """Each unit's circuit template, by index, from `[template, [[lo, hi], ...]]` strata."""
+    out: dict[int, str] = {}
+    for t, rs in strata:
+        for lo, hi in rs:
+            for u in range(lo, hi):
+                assert u not in out, (u, t, out[u])
+                out[u] = t
+    assert sorted(out) == list(range(len(out))), sorted(out)
+    return [out[u] for u in range(len(out))]
+
+
+def test_a_two_layer_epochs_population_is_the_leans_unit_for_unit(pieces):
+    """The population the Python stream draws from on a two-layer epoch, each unit's circuit template by index (the
+    ranges `service.Stream._program` sums, `partition.ranges`), is the Lean's entry by entry: `Partition.strata` as the
+    `partition` piece returns it, which `Draw.derive` reads, gives each unit the same circuit template, and the
+    population is the same N."""
+    s = Setup(PN.mixed_population_program([(PAIR, 1), (TRIPLE, 4), (PAIR, 1), (TRIPLE, 4)]),
+              P.template_instances_query([PAIR.id, TRIPLE.id]))
+    PROGRAMS[s.sha512] = s.program
+    stream = [t for t, lo, m in P.ranges(s.program, s.query) for _ in range(m)]
+    assert stream == [PAIR.id, *[TRIPLE.id] * 4, PAIR.id, *[TRIPLE.id] * 4]
+    case = {"params": _v1_audit("subset", s)["params"]}
+    tag, lean = D.replay(PARTITION, case, pieces)
+    assert tag == "output" and lean == D.canonical(partition(copy.deepcopy(case))), lean
+    lean = json.loads(lean)
+    assert lean["population"] == len(stream) and _by_unit(lean["strata"]) == stream
+
+
+def test_a_declared_circuit_whose_circuit_templates_are_not_the_streams_is_refused_by_both(pieces):
+    """A declared circuit with a range of a circuit template the query does not name, or with no range of one it names,
+    has no population under the query: the Python's template query refuses each (`partition_object.TemplateQuery`,
+    `QueryInapplicable`: "an instance is a call or batch of one of", "the program has no instance of"), which `Stream`
+    refuses at construction, and so does the Lean's (`Flock.TemplateQuery`, `query-refused`, the same two texts), so
+    `Slots.popOk` holds on neither side."""
+    query = _json(P.template_instances_query([PAIR.id, TRIPLE.id]))
+    for program, why, ns in ((PN.mixed_population_program([(PAIR, 1), (TRIPLE, 4), (QUAD, 2), (PAIR, 1), (TRIPLE, 4)]),
+                              "an instance is a call or batch of one of", (10, 12)),
+                             (PN.mixed_population_program([(TRIPLE, 4), (TRIPLE, 4)]), "the program has no instance of",
+                              (8, 10))):
+        PROGRAMS[PO.program_sha512(program)] = program
+        with pytest.raises(ValueError, match=why):
+            P.ranges(program, query)
+        for n in ns:
+            case = {"population": n, "program": _json(codec.encode_program(program)), "query": query}
+            assert pop_order(copy.deepcopy(case)) == {"layout": False, "ranges": False}
+            assert D.replay(POP_ORDER, case, pieces) == ("output", D.canonical({"layout": False, "ranges": False}))
+
+
+def test_a_docket_of_other_ranges_at_the_same_counts_is_refused_by_both(pieces):
+    """A docket whose circuit templates are the stream's and whose ranges sum to the same count a template, but whose
+    declared circuit is another (each template one range, not two), is refused at registration by both, `R2-program`
+    (`docket.py`'s R2 and `Docket.check`): a stream's ranges are its own declared circuit's, so the counts
+    `_program` holds are never read against another's."""
+    layers = Setup(PN.mixed_population_program([(PAIR, 1), (TRIPLE, 4), (PAIR, 1), (TRIPLE, 4)]),
+                   P.template_instances_query([PAIR.id, TRIPLE.id]))
+    blocks = Setup(PN.mixed_population_program([(PAIR, 2), (TRIPLE, 8)]), layers.query)
+    PROGRAMS[layers.sha512], PROGRAMS[blocks.sha512] = layers.program, blocks.program
+    assert {t: sum(len(range(lo, hi)) for lo, hi in rs) for t, rs in P.strata(layers.program, layers.query)} == \
+        {t: sum(len(range(lo, hi)) for lo, hi in rs) for t, rs in P.strata(blocks.program, blocks.query)}
+    a = _v1_audit("subset", blocks)
+    a["params"]["program"] = layers.desc
+    case = _run_case(a, hashlib.shake_256(b"run").hexdigest(600), 2, ["credited"])
+    out = run(copy.deepcopy(case))
+    assert D.replay(RUN, case, pieces) == ("output", D.canonical(out)), out
+    assert out.get("step") == "register" and "R2-program" in out.get("codes", []), out
+
+
 def test_a_two_stage_run_takes_no_cover(pieces):
     """Under a two-stage rule the run takes the units in order only, Lean's the Python's whole: the interleaved layout
     `SETUPS[4]` under a subset design is refused at its grain (`grain`: its query is two templates', and a grain is one
