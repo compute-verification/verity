@@ -27,12 +27,18 @@ tie's request frames) is the same with them or without. A lost release is the se
 server sees itself. N, A and n are read back from the signed ingress records: the network attester's `END` cells in
 record order and the bucket of each (`network_attester.NetworkAttester`). A client's own release headers are dropped;
 bytes that aren't an HTTP/1 request with its whole head pass unchanged. A live shim that rebuilds the POST copies the
-headers onto it (`release_of`, `release_head`)."""
+headers onto it (`release_of`, `release_head`).
+
+**The id variant's bytes**, which the server writes and the network attester's cells carry unchanged: the link frame's
+header (`FRAME_HEADER`), the canonical id request (`id_request`, read back by `id_request_fields`), a response's id events (`id_event`) and its last
+bytes (`TRAILER`)."""
 
 from __future__ import annotations
 
+import json
 import re
-from typing import Mapping, Sequence
+import struct
+from typing import Any, Mapping, Sequence
 
 RELEASE_HEADER, RUN_HEADER, BUCKET_HEADER = b"x-verity-release", b"x-verity-release-run", b"x-verity-release-bucket"
 #: the bytes of a network attester's run id, which it samples at its construction
@@ -165,3 +171,109 @@ def read_watermark(line: bytes, last: tuple[int, ...] | None = None) -> tuple[in
         raise ValueError(f"watermark-lost: watermark ({t}, {n}) after {last}: its lost releases {list(lost)} rise from "
                          f"{least} below n")
     return t, n, lost
+
+
+#: a link frame's header: its kind, its stream and its payload's length; a frame is B bytes, the header, the payload,
+#: then zero fill
+FRAME_HEADER = struct.Struct(">BII")
+#: a request's length (u32be), which opens it in the link's DATA payloads
+REQUEST_LENGTH = struct.Struct(">I")
+ID_DIGITS = 10
+EVENT_END = b"\n\n"
+EVENT_HEAD = (b'data: {"object":"chat.completion.chunk","created":0,"model":"verity","choices":[{"index":0,'
+              b'"delta":{"base64":"')
+ID_EVENT_HEAD = EVENT_HEAD[:EVENT_HEAD.index(b'"delta"')] + b'"token_id":'
+ID_EVENT_TAIL = b',"finish_reason":null}]}' + EVENT_END
+ID_EVENT_BYTES = len(ID_EVENT_HEAD) + ID_DIGITS + len(ID_EVENT_TAIL)
+#: a response's last bytes, after its id events
+TRAILER = b"data: [DONE]" + EVENT_END
+#: an id request's HTTP head, up to its length (`id_request`)
+ID_REQUEST_HEAD = (b"POST /v1/completions HTTP/1.1\r\nhost: server\r\ncontent-type: application/json\r\n"
+                   b"content-length:")
+#: the room of an id request's `model` and `user`, each its JSON string padded with spaces
+ID_NAME_BYTES = 64
+
+
+def id_event(token_id: int, size: int = ID_EVENT_BYTES) -> bytes:
+    """The canonical event of one token id in `size` bytes: `ID_EVENT_HEAD`, the id right-aligned in 10 decimal
+    characters, then `ID_EVENT_TAIL` with spaces (JSON whitespace) ahead of its blank line to fill `size`."""
+    if type(token_id) is not int or not 0 <= token_id < 1 << 32:
+        raise ValueError(f"a token id is a u32, not {token_id!r}")
+    if type(size) is not int or size < ID_EVENT_BYTES:
+        raise ValueError(f"an id event is at least {ID_EVENT_BYTES} bytes, not {size!r}")
+    tail = ID_EVENT_TAIL[:-len(EVENT_END)] + b" " * (size - ID_EVENT_BYTES) + EVENT_END
+    return ID_EVENT_HEAD + b"%10d" % token_id + tail
+
+
+def _u32_field(x: int, what: str) -> bytes:
+    if type(x) is not int or not 0 <= x < 1 << 32:
+        raise ValueError(f"{what} is a u32, not {x!r}")
+    return b"%*d" % (ID_DIGITS, x)
+
+
+def _ratio_field(x: float, what: str) -> bytes:
+    s = b"%8.6f" % x if isinstance(x, (int, float)) and not isinstance(x, bool) else b""
+    if not (s and 0 <= x < 10 and float(s) == x):
+        raise ValueError(f"{what} is a number in [0, 10) of at most six decimals, not {x!r}")
+    return s
+
+
+def _name_field(s: str, what: str) -> bytes:
+    raw = json.dumps(s).encode() if isinstance(s, str) else b""
+    if not raw or len(raw) > ID_NAME_BYTES:
+        raise ValueError(f"{what} is a string of at most {ID_NAME_BYTES} bytes as JSON, not {s!r}")
+    return raw.ljust(ID_NAME_BYTES)
+
+
+def id_request(*, model: str, user: str, prompt: Sequence[int], max_tokens: int, temperature: float = 0.0,
+               top_p: float = 1.0, seed: int = 0, frame_bytes: int, offset: int = REQUEST_LENGTH.size) -> bytes:
+    """A canonical `/v1/completions` request of a token-id prompt, whose every field is at a place fixed by the
+    prompt's length and the frame size alone, in `frame_bytes`-byte link frames: `ID_REQUEST_HEAD`, its body's length
+    in `ID_DIGITS` characters (HTTP's optional whitespace before it), in the first frame, then the body, streamed,
+    with no stop strings: `max_tokens` and `seed` in `ID_DIGITS` characters, `temperature` and `top_p` in eight (six
+    decimals), `model` and `user` each in `ID_NAME_BYTES`, and each prompt id after `[` or `,`. No field straddles a
+    frame: spaces (JSON's whitespace) before one that would move it, with its key, to the next. `offset` is the
+    request's first byte's place in its first frame's payload: `REQUEST_LENGTH`'s 4 bytes on the active network
+    attester's link, 0 in the network attester's cells, which carry the bytes alone."""
+    if offset not in (0, REQUEST_LENGTH.size):
+        raise ValueError(f"an id request starts its first frame's payload at 0 or {REQUEST_LENGTH.size}, not {offset!r}")
+    if not prompt or isinstance(prompt, (str, bytes)):
+        raise ValueError("an id request's prompt is at least one token id")
+    pieces = [b'{"max_tokens":' + _u32_field(max_tokens, "max_tokens"),
+              b',"temperature":' + _ratio_field(temperature, "temperature"),
+              b',"top_p":' + _ratio_field(top_p, "top_p"), b',"seed":' + _u32_field(seed, "a seed"),
+              b',"stop":[],"stream":true', b',"model":' + _name_field(model, "a model"),
+              b',"user":' + _name_field(user, "a user"), b',"prompt":',
+              *((b"," if k else b"[") + _u32_field(t, "a prompt id") for k, t in enumerate(prompt)), b"]}"]
+    room = frame_bytes - FRAME_HEADER.size
+    at = offset + len(ID_REQUEST_HEAD) + ID_DIGITS + 4
+    if at > room or max(map(len, pieces)) > room:
+        raise ValueError(f"a {frame_bytes}-byte frame has no room for an id request's head or a field")
+    parts = []
+    for p in pieces:
+        gap = -at % room if at // room != (at + len(p) - 1) // room else 0
+        parts.append(b" " * gap + p)
+        at += gap + len(p)
+    raw = b"".join(parts)
+    return ID_REQUEST_HEAD + b"%*d" % (ID_DIGITS, len(raw)) + b"\r\n\r\n" + raw
+
+
+#: the scan's cell payload, P = B − 9 at its B = 512-byte cells
+ID_PAYLOAD = 503
+
+
+def id_request_fields(request: bytes, payload: int) -> dict[str, Any] | str:
+    """The fields (`id_request`'s keywords) of `request`, its head and body as the server read them, where it
+    is an id request as the network attester forwards it: without the release headers it puts on the
+    server's copy (`with_release`), exactly `id_request` of its own fields in the scan's B = P + 9-byte
+    cells (P = ``payload``). For anything else, why it is not one."""
+    head, _, body = request.partition(b"\r\n\r\n")
+    line, *fields = head.split(b"\r\n")
+    kept = b"".join(f + b"\r\n" for f in fields if _name(f) not in (RELEASE_HEADER, RUN_HEADER, BUCKET_HEADER))
+    try:
+        b = json.loads(body)
+        got = {k: b[k] for k in ("model", "user", "prompt", "max_tokens", "temperature", "top_p", "seed")}
+        canonical = id_request(**got, frame_bytes=payload + FRAME_HEADER.size, offset=0)
+    except (ValueError, KeyError, TypeError) as e:
+        return f"no id request's fields: {e!r}"
+    return got if canonical == line + b"\r\n" + kept + b"\r\n" + body else "not the id request of its fields"

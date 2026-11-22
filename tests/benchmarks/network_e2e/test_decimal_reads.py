@@ -1,14 +1,18 @@
-"""A digit `int` does not read is no number: one case for each kind of place in `verity_vllm` that asks whether a string
-is one (`tests/lint/test_isdecimal.py` holds the rule for every place). `²` is a digit to `str.isdigit` and none to
-`str.isdecimal`, and `int("²")` raises a bare `ValueError`.
+"""A digit `int` does not read is no number: the id relay (`benchmarks/network_e2e/ids_front.py`) reads a request's stated
+length from bytes. `²` is a digit to `str.isdigit` and none to `str.isdecimal`, and `int("²")` raises a bare `ValueError`.
 A place that reads bytes asks their text: `bytes` has no `isdecimal`, and its `²` is a byte no number is written with."""
 from __future__ import annotations
 
 import asyncio
+import importlib.util
+from pathlib import Path
 
 import pytest
 
-from verity.protocols.accounting.network.prover import id_relay
+_SPEC = importlib.util.spec_from_file_location("ids_front", Path(__file__).resolve().parents[3] / "benchmarks" / "network_e2e" / "ids_front.py")
+assert _SPEC is not None and _SPEC.loader is not None
+id_relay = importlib.util.module_from_spec(_SPEC)
+_SPEC.loader.exec_module(id_relay)
 
 NO_DECIMAL = "²"
 

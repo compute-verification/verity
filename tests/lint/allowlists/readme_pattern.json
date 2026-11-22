@@ -58,8 +58,6 @@
   "verity/protocols/accounting/memory/pous/attester/README.md": "not yet in the pattern",
   "verity/protocols/accounting/memory/pous/attester/lean/README.md": "not yet in the pattern",
   "verity/protocols/accounting/memory/pous/verifier/README.md": "not yet in the pattern",
-  "verity/protocols/policy/training_detection/inference_only/README.md": "no README yet",
-  "verity/protocols/policy/training_detection/inference_only/verifier/README.md": "not yet in the pattern",
   "verity/runtime/README.md": "not yet in the pattern"
  }
 }

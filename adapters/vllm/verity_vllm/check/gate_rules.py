@@ -565,7 +565,7 @@ def gate_holdout(run: RunArtifacts) -> GateResult:
 def gate_vu_partition(run: RunArtifacts) -> GateResult:
     """Proof-block partition: `query_use.json` (`verity-ir/query-use/v1`, written by the partition track: use configuration + verdict).
     Pass iff `verdict.partition.status == "exact"` and `verdict.width.status == "ok"` (no violators, no unsupported); fail with
-    the partition codes / width violators otherwise.  Absent document -> `skipped` ("no query-use document"); a document that
+    the partition codes, the width violators or what the evaluator left undecided otherwise.  Absent document -> `skipped` ("no query-use document"); a document that
     is not this schema, or lacks the verdict fields, -> `error`.  Reads only fields of the frozen document shape (the freeze
     doc); never touches G1..G7."""
     doc = run.json("query_use")
@@ -591,29 +591,19 @@ def gate_vu_partition(run: RunArtifacts) -> GateResult:
     unsupported = list(listed[2]) if listed[2] else []
     w_max = width.get("w_max", use.get("w_max"))
     v_status = v.get("status")                      # "ok" | "fail" | "not-ready" | "unsupported" (qpart INTERFACE NOTE 21:45Z)
-    # Two classes of finding (lead's decision 22:22Z).  FAIL: a wrong partition (overlap / gap), a width violation, `not-ready` (a
-    # Definition / gate wider than w_max inside the partition), the evaluator's own `fail`, a foreign document.  UNSUPPORTED: the
-    # evaluator could not decide (partition / width / status `unsupported`, member classes with undecidable w_out) -- neither pass nor
-    # fail: G8 is `unsupported`, the run verdict INCOMPLETE, never REJECTED on that basis.  A fail-class finding dominates.
+    # anything the evaluator did not decide (a status `unsupported`, a member class with undecidable w_out) is a failure by name
     problems: list[str] = []
-    undecided: list[str] = []
     if use.get("kind") != QUERY_USE_KIND:
         problems.append(f"use.kind {use.get('kind')!r} != {QUERY_USE_KIND!r}")
-    if p_status == "unsupported":
-        undecided.append("partition 'unsupported'" + (f" {codes[:6]}" if codes else ""))
-    elif p_status != "exact":
+    if p_status != "exact":
         problems.append(f"partition {p_status!r}" + (f" {codes[:6]}" if codes else ""))
-    if w_status == "unsupported":
-        undecided.append("width 'unsupported'")
-    elif w_status != "ok":
+    if w_status != "ok":
         problems.append(f"width {w_status!r}")
     if violators:
         problems.append(f"{len(violators)} member class(es) with w_out > w_max={w_max}: {violators[:4]}")
     if unsupported:
-        undecided.append(f"{len(unsupported)} member class(es) with undecidable w_out: {unsupported[:4]}")
-    if v_status == "unsupported":
-        undecided.append("verdict.status 'unsupported'")
-    elif v_status != "ok":                          # `fail` / `not-ready` (and anything unknown): surfaced verbatim, not a pass
+        problems.append(f"{len(unsupported)} member class(es) with undecidable w_out: {unsupported[:4]}")
+    if v_status != "ok":                            # `fail` / `not-ready` / `unsupported` (and anything unknown): surfaced verbatim, not a pass
         problems.append(f"verdict.status {v_status!r}")
     # binding: the companion query document (`RUN_DIR/query.json`, qpart 22:14Z) must carry the same binding_id and the run's digest
     binding: dict[str, Any] = {"checked": False}
@@ -642,13 +632,8 @@ def gate_vu_partition(run: RunArtifacts) -> GateResult:
         "readiness_32": {"ok": rd.get("ok"), "max_w": rd.get("max_w"), "n_violators": len(over_32) if over_32 else 0} if rd else None,
         "evaluator": doc.get("evaluator"),
         "binding": binding, "binding_checked": binding["checked"],
-        "undecided": undecided,
     }
-    if problems:
-        return _result(problems, ev, detail)
-    if undecided:
-        return GateResult("", "", "unsupported", ev, detail, "unsupported (" + "; ".join(undecided) + ")")
-    return _result([], ev, detail)
+    return _result(problems, ev, detail)
 
 
 # ---------------------------------------------------------------------------------------------------------

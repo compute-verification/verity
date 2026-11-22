@@ -596,7 +596,7 @@ def test_the_codes_violators_and_undecided_classes_a_query_use_verdict_lists_are
     assert r.status == "fail" and r.reason.startswith("partition 'overlap' ['P1', 'P2']; width 'over'; 1 member class(es) with w_out > w_max=32: ['V_v1']")
     assert r.detail["partition"]["codes"] == ["P1", "P2"] and r.detail["readiness_32"]["n_violators"] == 2
     assert [r.detail["width"][k] for k in ("n_violators", "violators", "n_unsupported", "unsupported")] == [1, ["V_v1"], 1, ["W_v1"]]
-    assert r.detail["undecided"] == ["1 member class(es) with undecidable w_out: ['W_v1']"]
+    assert "1 member class(es) with undecidable w_out: ['W_v1']" in r.reason
 
 
 @pytest.mark.parametrize("path, value", [*unstated("use", empty={}), (("use",), [G.QUERY_USE_KIND])])

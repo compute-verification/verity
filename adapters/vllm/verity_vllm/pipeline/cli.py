@@ -48,7 +48,6 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "int8-checkpoint": ("verity_vllm.engine.int8_checkpoint", "make or re-make an int8 checkpoint (exact-int8 linears) from a BF16 or FP8-block pin"),
     "gemm-correspondence": ("verity_vllm.program.gemm_target_correspondence", "a target's bf16 linear vs its registered GEMM Definition"),
     "device-pin": ("verity_vllm.pipeline.device_pin", "probe this device's cuBLAS routes and route conditions: its device pin (probe)"),
-    "ids-front": ("verity_vllm.pipeline.ids_front", "the network attester's id form in front of vLLM's own OpenAI server"),
     "m1-capture": ("verity_vllm.pipeline.match_capture", "capture the observation log under the observer"),
     "match": ("verity_vllm.pipeline.match", "Match stage driver of one configuration"),
     "meta-inventory": ("verity_vllm.engine.meta_inventory", "a checkpoint's modules on the meta device, from its config.json alone"),

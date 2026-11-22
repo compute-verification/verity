@@ -519,36 +519,6 @@ def wide_gates(program: Program, w_max: int = 32) -> list[tuple[int, str, int]]:
     return out
 
 
-class ListFamily:
-    """A hand-made `Family` (freeze doc: ordered, lazy, results may overlap or omit gates) over an explicit list of
-    GateSets.  `tiling()` is None, so partition validation must take the general interval-sweep path -- this is how the
-    counterexample suite builds overlapping / gapped families the structural constructors cannot express."""
-
-    def __init__(self, sets: Iterable) -> None:
-        self._sets = list(sets)
-
-    def count(self) -> int:
-        return len(self._sets)
-
-    def by_index(self, i: int):
-        return self._sets[i]
-
-    def index_of(self, s) -> int | None:
-        for i, t in enumerate(self._sets):
-            if t == s:
-                return i
-        return None
-
-    def __iter__(self):
-        return iter(self._sets)
-
-    def __len__(self) -> int:
-        return len(self._sets)
-
-    def tiling(self):
-        return None
-
-
 def gateset_kind(gs) -> tuple:
     """A structural 'kind' of a GateSet / Part for population tests: per part, the enclosing definition's base id (statics
     dropped -- so the enclosing head's `T` does not key the kind) and the set of (callee id, form) of its items.  Two VUs
@@ -580,5 +550,5 @@ __all__ = [
     "ScanCarryOnly", "SCAN_N",
     "root_scope", "is_input_node", "is_const_node", "item_part", "node_part", "items_part", "body_parts", "find_nodes", "child_scope",
     "first_composite_child", "gates_of", "gate_width", "root_outputs", "oracle_out", "oracle_in", "oracle_w_out",
-    "interface_w_out_bound", "wide_gates", "gateset_kind", "spec_base_id", "ListFamily",
+    "interface_w_out_bound", "wide_gates", "gateset_kind", "spec_base_id",
 ]

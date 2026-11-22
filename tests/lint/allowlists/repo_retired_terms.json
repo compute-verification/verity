@@ -2310,7 +2310,7 @@
     {"file": "verity/circuits/ops/boolean/int8.py", "count": 2},
     {"file": "verity/circuits/ops/boolean/norm_quant.circuit-check.py", "count": 1},
     {"file": "verity/circuits/ops/words.py", "count": 3},
-    {"file": "verity/circuits/partition.py", "count": 2},
+    {"file": "verity/circuits/partition.py", "count": 1},
     {"file": "verity/circuits/parts.py", "count": 1},
     {"file": "verity/circuits/requirement_units.circuit-check.py", "count": 1},
     {"file": "verity/circuits/requirement_units.py", "count": 30},

@@ -7,7 +7,9 @@ the scan's sampled blocks.
 
 Not yet: on the tip the network audit is not run: the attester's piece writes NOT RUN, nothing proves a scan block, and
 no window's verdict reads the scan or the period check. A period whose schedule has connection rows has no Lean verdict
-at all: the Lean period check refuses it, and only a Python check reads those rows.
+at all: the Lean period check refuses it, and only a Python check reads those rows. The period check adds each audit's
+count of unregistered input (`free`) into its bound as its caller hands it, without computing it from the registered
+circuit; and the jitter bound it uses is not in the attester's signed schedule, so any value of at least 1 is accepted.
 Even when run, under a uniform sample the scan's few blocks may all go unsampled, so the bound holds for a window only at
 the sample's chance of hitting them, until accounting blocks can always be proved.
 
@@ -25,7 +27,7 @@ the named assumption `trusted-device`.
 | its host programs | keys, the serve and rehearsal, the load relay, the connection rows | `attester/` |
 | the attester's program | the records' bytes and grid as Lean the relay is held to | `attester/program/lean/` |
 | the scan | the Definitions that carry the state between buckets and compute what may leave | `prover/ingress_scan.py`, `prover/egress.py` |
-| the engine's admission | when the engine may take a request: by arrival, release order or tick | `prover/admission.py`, `prover/id_relay.py` |
+| the engine's admission | when the engine may take a request: by arrival, release order or tick | `prover/admission.py` |
 | the Lean verifier | the signatures, the openings of the signed rows, the period's check | `verifier/lean/` (`network-period`, `network-records`, `network-rows`) |
 | the scheme | what the network attester attaches to a serve | `scheme.py` |
 
@@ -34,7 +36,7 @@ the named assumption `trusted-device`.
 | what varies | on `onsite_full.toml`'s road, the one application that lists the attester |
 | --- | --- |
 | admission order | `arrival` served; `release-order` exists; `tick` exists |
-| framing | `ids` served (`--protocol ids`, the id relay); plain HTTP exists |
+| framing | `ids` served (`--protocol ids`; the id relay of `benchmarks/network_e2e`); plain HTTP exists |
 | ports | the scan's own state port exists; the compiler's named external ports never written |
 | schedule form | form 1 exists; form 2 exists |
 | connection rows | exists |

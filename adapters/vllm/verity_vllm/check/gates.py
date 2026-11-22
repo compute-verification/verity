@@ -45,8 +45,7 @@ Gates:
                                `skipped` ("no query-use document") when absent, pass iff verdict.partition.status == "exact"
                                and verdict.width.status == "ok" (no violators, no unsupported) and verdict.status == "ok";
                                `fail` (with the codes) on overlap / gap / violation / `not-ready` / `fail` / a binding
-                               mismatch with `query.json`; `unsupported` (a fifth status, lead 22:22Z) when the evaluator
-                               could not decide -- neither pass nor fail, the run verdict INCOMPLETE, never REJECTED.
+                               mismatch with `query.json`, and on anything the evaluator could not decide (`unsupported`).
                                A run without the document keeps today's verdict: G8 `skipped` never makes it INCOMPLETE.
 
     R1 reference integrity     FAIL-CLOSED (`REF_INTEGRITY_RULE`; explicitly authorised checker
@@ -63,7 +62,7 @@ Every gate is a pure function `gate_Gx(run: RunArtifacts) -> GateResult`; nothin
 root_policy or golden.  A missing artifact makes the gate `skipped` (with the producing stage's log as evidence), a
 malformed one `error`; a gate never raises.  `evaluate_gates(run_dir)` runs the seven gates, G8 and R1; `verdict(results)` folds
 them into ACCEPTED / REJECTED / INCOMPLETE (G1..G7 as before; G8 / R1 contribute only `fail` -> REJECTED, `error` /
-`unsupported` / `unverified` -> INCOMPLETE; a record that predates them keeps the verdict of G1..G7).
+`unverified` -> INCOMPLETE; a record that predates them keeps the verdict of G1..G7).
 
 The fold summary the driver writes (`match --worker fold`) is defined here: its fields are `FOLD_SUMMARY_FIELDS`, and
 its id is `FOLD_SUMMARY_SCHEMA`, which `records.schema_ids` states.
@@ -161,7 +160,7 @@ def evaluate_gates(run_dir: str | Path, *, manifest: dict | None = None) -> list
 
 def verdict(results: list[GateResult]) -> str:
     """ACCEPTED iff all seven frozen gates pass; REJECTED if any gate fails; INCOMPLETE otherwise (skipped / error / missing).  Gates outside the frozen set (G8, R1)
-    contribute only `fail` -> REJECTED and `error` / `unsupported` / `unverified` -> INCOMPLETE: a run without a query-use document (G8 `skipped`) or a record that
+    contribute only `fail` -> REJECTED and `error` / `unverified` -> INCOMPLETE: a run without a query-use document (G8 `skipped`) or a record that
     predates G8 / R1 keeps the verdict of G1..G7.  [R9 ref] R1 `unverified` (no fold error evidence) is INCOMPLETE, never ACCEPTED — the fail-closed rule."""
     return match_verdict([r.result() for r in results], GATES)
 

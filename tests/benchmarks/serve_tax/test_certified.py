@@ -73,9 +73,9 @@ def test_the_schedule_has_a_lane_and_a_queue_place_for_each_request_in_flight():
 def test_each_sides_commands_are_the_fronts_the_attesters_and_the_shims(tmp_path: Path):
     cells = S.certifier_cells(None, {"chat": (96,)})
     assert S.front_argv(8000, 18746, S.cell_payload(cells), tmp_path / "front.jsonl")[1:] == [
-        "-m", "verity_vllm.pipeline.cli", "ids-front", "--upstream", "127.0.0.1:8000", "--listen", "127.0.0.1:18746",
-        "--id-payload", "4087", "--log", str(tmp_path / "front.jsonl")]
+        str(S.FRONT), "--upstream", "127.0.0.1:8000", "--listen", "127.0.0.1:18746", "--id-payload", "4087", "--log", str(tmp_path / "front.jsonl")]
     argv = S.attester_argv(cells, tmp_path / "certifier", 18746, tmp_path / "key", "ab" * 32, 16)
+    assert S.FRONT.is_file()
     assert argv[1:3] == [str(S.ATTESTER), "serve"] and S.ATTESTER.is_file() and "--watermark" in argv
     named = {argv[i]: argv[i + 1] for i in range(3, len(argv) - 1) if argv[i].startswith("--") and argv[i] != "--watermark"}
     assert named == {"--out": str(tmp_path / "certifier"), "--listen": "127.0.0.1:0", "--upstream": "127.0.0.1:18746",
@@ -207,7 +207,7 @@ def test_the_servers_side_starts_the_engine_then_the_id_front_and_holds_them(
     feed = out / "server" / "tick.9.jsonl"
 
     def popen(argv, stdout, stderr, env, **how):
-        name = "front" if "ids-front" in argv else "server"
+        name = "front" if str(S.FRONT) in argv else "server"
         if name == "server":
             assert how == {"start_new_session": True} and json.loads(env[S.PLUGIN_ENV])["idle_reset"] is True
             cfg = json.loads(env["VERITY_PROTOCOLS_CONFIG"])

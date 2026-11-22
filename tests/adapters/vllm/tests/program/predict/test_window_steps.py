@@ -176,11 +176,20 @@ def test_the_window_steps_runs_remote_from_the_record_and_publishes_no_descripti
     assert {"plans.jsonl", "handoff/", "circuit.json", "predicted.json"} <= set(names), names
 
 
+def _script_env(tmp_path, d, pred, **env):
+    """``env`` over the caller's environment, a key given as None dropped, with the script's paths under ``tmp_path``:
+    a caller's OUT or RESEARCH_RUN_DIR (a `research run`'s own) never reaches `served_verdicts.sh`, which writes there."""
+    env = {k: v for k, v in {**os.environ, **env}.items() if v is not None}
+    env.update({"D": str(d), "PRED": str(pred), "OUT": str(tmp_path / "out"), "SERVE_ROOT": str(tmp_path),
+                "RESEARCH_RUN_DIR": str(tmp_path / "run"), "VENV": sys.prefix, "PRODUCT": "remote", "CUDA_HOME": str(tmp_path),
+                "PEARLC_CHALLENGER_GATE": ""})
+    assert all(Path(env[k]).resolve().is_relative_to(Path(tmp_path).resolve()) for k in ("OUT", "RESEARCH_RUN_DIR", "D")), env
+    return env
+
+
 def _preflight(tmp_path, steps=("steps", "preflight"), **env):
     (tmp_path / "serve").mkdir(exist_ok=True)
-    env = {**os.environ, "D": str(tmp_path / "serve"), "PRED": str(tmp_path / "predicted"), "OUT": str(tmp_path / "out"),
-           "SERVE_ROOT": str(tmp_path), "VENV": sys.prefix, "PRODUCT": "remote", "CUDA_HOME": str(tmp_path),
-           "PEARLC_CHALLENGER_GATE": "", **env}
+    env = _script_env(tmp_path, tmp_path / "serve", tmp_path / "predicted", **env)
     p = subprocess.run(["bash", "benchmarks/one_stage/served_verdicts.sh", *steps], cwd=ROOT, env=env, capture_output=True,
                        text=True)
     return p.returncode, p.stdout + p.stderr
@@ -213,8 +222,7 @@ def test_a_run_naming_no_application_is_refused_by_name(tmp_path):
     """The runner is `verity run`'s, which hands it the application's list: with none, what it lists can't be checked, so
     the run is refused before the window's preflight, compute accounting's scheme set or not."""
     for pouw in ("", "pearlplus"):
-        env = {k: v for k, v in os.environ.items() if k != "APPLICATION_PROTOCOLS"}
-        rc, out = _preflight(tmp_path, (), **env, POUW=pouw)
+        rc, out = _preflight(tmp_path, (), APPLICATION_PROTOCOLS=None, POUW=pouw)
         assert rc == 3 and out.strip().splitlines()[-1] == (
             "PREFLIGHT: the runner is verity run's: no application was named (APPLICATION_PROTOCOLS), so what it lists "
             "cannot be checked"), out
@@ -249,8 +257,7 @@ def _sealed(tmp_path, window, drop=()):
     (d / "windows" / "w0" / "commit" / "verdict.json").write_text(json.dumps({"run_root": RUN_ROOT}))
     (d / "windows" / "w0" / "commit" / "runs.jsonl").write_text(json.dumps({"commit": {"binding": {}}}) + "\n")
     (pred / "predicted.json").write_text(json.dumps({"compiler": COMPILER, "workload_digest": WORKLOAD}))
-    env = {**os.environ, "D": str(d), "PRED": str(pred), "OUT": str(tmp_path / "out"), "SERVE_ROOT": str(tmp_path),
-           "VENV": sys.prefix, "PRODUCT": "remote", "CUDA_HOME": str(tmp_path), "PEARLC_CHALLENGER_GATE": ""}
+    env = _script_env(tmp_path, d, pred)
     p = subprocess.run(["bash", "benchmarks/one_stage/served_verdicts.sh", "window-seal", "0"], cwd=ROOT, env=env,
                        capture_output=True, text=True)
     return p.returncode, p.stdout + p.stderr

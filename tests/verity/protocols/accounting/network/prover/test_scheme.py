@@ -107,12 +107,10 @@ class _Exchange:
         return lambda: None
 
 
-def test_requests_are_the_id_relay_unless_admission_is_configured() -> None:
+def test_without_admission_the_scheme_files_nothing() -> None:
     ex = _Exchange()
-    NS.NETWORK_ATTESTER.attach(ex, {})
-    assert ex.filed == [("network-attester", NS.START_ID_RELAY)]
-    assert NS.NETWORK_ATTESTER.requests({}) == (NS.START_ID_RELAY,) and NS.NETWORK_ATTESTER.requests({"settings": {"order": "release-order"}}) == ()
-    assert set(NS.NETWORK_ATTESTER.processes) == {"id-relay"}
+    assert NS.NETWORK_ATTESTER.attach(ex, {}) is None and ex.filed == []
+    assert NS.NETWORK_ATTESTER.requests({}) == () and not NS.NETWORK_ATTESTER.processes
 
 
 def test_settings_are_the_admissions_with_their_defaults_and_refuse_what_admission_would() -> None:

@@ -25,16 +25,14 @@ from verity.protocol import Channel, Role
 from verity.protocols.accounting.scheme import Block, Charge, Layout, Order, Port, Scheme, Term, register
 from verity.protocols.accounting.network.verifier import parties as NC, period_check
 from verity import hooks as H
-from verity.protocols.accounting.network.prover import id_relay, workload
-from verity.protocols.accounting.network.prover.ids_protocol import IdsProtocol
+from verity.protocols.accounting.network.prover import workload
 from verity.protocols.accounting.network.prover.admission import ORDERS, Admitter, FrontFeed, engine, tick_config
 
 DEFINITIONS = (IngressScanStart, IngressScanBucket, EgressBucket, IoTieRoute, IoTieContent, IoTieBucket, IoTieRequest,
                ResponseTieStop, ResponseTieNoStop, LengthsRow)
 
 
-#: the scheme's settings and their defaults: ``order`` ``arrival`` admits no request in release order (the id relay
-#: instead); ``release-order`` and ``tick`` are `prover.admission.Admitter`'s, which reads the rest under ``tick``;
+#: the scheme's settings and their defaults: ``order`` ``arrival`` admits no request in release order; ``release-order`` and ``tick`` are `prover.admission.Admitter`'s, which reads the rest under ``tick``;
 #: ``log``, a directory for the engine's tick log (`prover.admission.engine`), none where empty
 SETTINGS = {"order": "arrival", "hold_ms": 5000, "bucket_us": 100_000, "sat_us": 0, "free_us": 0, "token_ns": 0,
             "log": ""}
@@ -61,8 +59,7 @@ def settings(given: Mapping[str, Any]) -> dict[str, Any]:
 def attach(exchange: Any, ctx: Mapping[str, Any]) -> Any:
     """The scheme on a served run's ``exchange`` under ``ctx["settings"]`` (`settings`). Under an ``order`` other than
     ``arrival``, its admission (`prover.admission.Admitter`, with ``ctx``'s ``source``, ``submit``, ``abort``, ``take``,
-    ``pull``, ``log``, ``clock`` and ``schedule``), installed and returned; else the id relay beside the workload
-    (`START_ID_RELAY`). Where the front and the engine run in two processes (``ctx["process"]``), each process's side of
+    ``pull``, ``log``, ``clock`` and ``schedule``), installed and returned; else nothing. Where the front and the engine run in two processes (``ctx["process"]``), each process's side of
     the certified tick, on the server's feed directory (`prover.admission.FrontFeed`, `prover.admission.engine`)."""
     s = settings(ctx.get("settings", {}))
     if ctx.get("process") in (H.FRONT, H.ENGINE) and "feed" not in ctx:
@@ -73,8 +70,6 @@ def attach(exchange: Any, ctx: Mapping[str, Any]) -> Any:
     if ctx.get("process") == H.ENGINE:
         return engine(s, ctx["feed"]).install(exchange, NETWORK_ATTESTER.name)
     if s["order"] == "arrival":
-        for r in requests(ctx):
-            exchange.request(NETWORK_ATTESTER.name, r)
         return None
     kw = {k: ctx[k] for k in ("source", "submit", "abort", "take", "pull", "log", "clock", "schedule") if k in ctx}
     return Admitter(s, **kw).install(exchange, NETWORK_ATTESTER.name)
@@ -83,15 +78,6 @@ def attach(exchange: Any, ctx: Mapping[str, Any]) -> Any:
 def output_bits(definition: Any) -> Callable[[Mapping[str, int]], int]:
     """A block's cost: its return bits at the public shape (its statics), all of which a wrong block may set."""
     return lambda shape: sum(bind(definition, **shape).signature()[1].leaf_widths())
-
-
-#: the scheme's request that starts the id relay beside the workload
-START_ID_RELAY = H.StartBeside("id-relay", id_relay.READERS)
-
-
-def requests(ctx: Mapping[str, Any]) -> tuple[Any, ...]:
-    """The id relay beside the workload under ``order`` ``arrival`` (`attach`), else nothing."""
-    return (START_ID_RELAY,) if settings(ctx.get("settings", {}))["order"] == "arrival" else ()
 
 
 def _scan_state_layout(shape: Mapping[str, int]) -> Layout:
@@ -111,7 +97,6 @@ NETWORK_ATTESTER = register(Scheme(
     catalog={"attester": "verity.protocols.accounting.network.verifier.network_attester",
              "scan_state_rows": "verity.protocols.accounting.network.prover.scan_state_rows"},
     messages=workload.MESSAGES,
-    framings={IdsProtocol.name: IdsProtocol},
     provides=("admission",),
     protocol="verity/certifier/v0",
     resource="egress",
@@ -142,9 +127,7 @@ NETWORK_ATTESTER = register(Scheme(
               "one-design": "the proof layer's sample of the scan; the attester's piece writes NOT RUN "
                                     "(`attester_piece.NOT_RUN`)"},
     ports=(Port("scan-state", "input", IngressScanStart.id, "sin", layout=_scan_state_layout, value=SCAN_STATE), Port("released", "output", EgressBucket.id, "o1")),
-    requests=requests,
     attach=attach,
-    processes={"id-relay": id_relay.process},
     parties=(Role("network-attester", "auditor", per="link", needs=("clock", "coins", "signing-key")),
              Role("workers", "developer", needs=("serve",)),
              Role("verifier", "auditor", needs=("audit", "component", "product"))),
@@ -202,4 +185,4 @@ def launch_attester(declaration: Scheme) -> tuple[Any, tuple[str, ...]]:
 
 
 __all__ = ["ATTESTER_PIECE", "DEFINITIONS", "FRONT_TOKENS", "ID_FORM", "NETWORK_ATTESTER", "SCAN_CLASS", "SETTINGS",
-           "START_ID_RELAY", "attach", "launch_attester", "output_bits", "requests", "settings"]
+           "attach", "launch_attester", "output_bits", "settings"]

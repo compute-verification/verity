@@ -144,7 +144,7 @@ def test_verdict_rules():
 
 def test_verdict_is_the_match_verdict_over_check_results():
     """The word is `verdict.match_verdict` over the gates' CheckResults, equal to the status rule it replaced for every status a gate
-    produces (a frozen gate: pass / fail / skipped / error; G8 adds unsupported, R1 unverified), with and without a frozen gate absent."""
+    produces (a frozen gate: pass / fail / skipped / error; R1 adds unverified), with and without a frozen gate absent."""
     def by_status(results):
         core = [r for r in results if r.id in G.GATES]
         extra = [r for r in results if r.id not in G.GATES]
@@ -152,20 +152,20 @@ def test_verdict_is_the_match_verdict_over_check_results():
         if "fail" in st or any(r.status == "fail" for r in extra):
             return "REJECTED"
         if ("skipped" in st or "error" in st or {r.id for r in core} != set(G.GATES)
-                or any(r.status in ("error", "unsupported", "unverified") for r in extra)):
+                or any(r.status in ("error", "unverified") for r in extra)):
             return "INCOMPLETE"
         return "ACCEPTED"
 
     frozen = ("pass", "fail", "skipped", "error")
     n = 0
     for a, b in itertools.product(frozen, repeat=2):
-        for g8 in frozen + ("unsupported",):
+        for g8 in frozen:
             for r1 in frozen + ("unverified",):
                 res = [G.GateResult(g, G.GATE_NAMES[g], s) for g, s in zip(G.ALL_GATES, (a, b, "pass", "pass", "pass", "pass", "pass", g8, r1))]
                 for rs in (res, res[:6] + res[7:]):
                     assert G.verdict(rs) == by_status(rs), [(r.id, r.status) for r in rs]
                     n += 1
-    assert n == 800
+    assert n == 640
     r = G.GateResult("G3", G.GATE_NAMES["G3"], "fail", reason="x").result()
     assert (r.name, r.outcome, r.reason, r.claim) == ("G3", "FAIL", "x", G.GATE_NAMES["G3"])
 
@@ -603,29 +603,22 @@ def test_G8_pass(tmp_path):
 
 
 def test_G8_evaluator_status_not_ok_is_surfaced(tmp_path):
-    """qpart: `verdict.status` is ok | fail | not-ready | unsupported; anything but ok is not a pass, and the string is in the reason
-    and verbatim in `detail.status`.  `not-ready` / `fail` -> fail (REJECTED); `unsupported` -> G8 `unsupported` (lead 22:22Z:
-    neither pass nor fail, INCOMPLETE, never REJECTED)."""
+    """qpart: `verdict.status` is ok | fail | not-ready | unsupported; anything but ok is a fail (REJECTED), the string in the
+    reason and verbatim in `detail.status`, and so is anything the evaluator left undecided."""
     arts = passing_artifacts()
-    for st in ("not-ready", "fail"):
+    for st in ("not-ready", "fail", "unsupported"):
         arts["query_use.json"] = query_use_doc(status=st)                       # partition/width fields still look fine
         r = gate(tmp_path, arts, "G8")
         assert r.status == "fail" and f"verdict.status '{st}'" in r.reason and r.detail["verdict_status"] == r.detail["status"] == st
         assert G.verdict(G.evaluate_gates(tmp_path)) == "REJECTED"
-    arts["query_use.json"] = query_use_doc(status="unsupported")
-    r = gate(tmp_path, arts, "G8")
-    assert r.status == "unsupported" and r.reason == "unsupported (verdict.status 'unsupported')" and r.detail["status"] == "unsupported"
-    assert G.verdict(G.evaluate_gates(tmp_path)) == "INCOMPLETE"
     arts["query_use.json"] = query_use_doc(partition="unsupported", codes=["sweep-limit"], status="unsupported")
     r = gate(tmp_path, arts, "G8")
-    assert r.status == "unsupported" and "partition 'unsupported' ['sweep-limit']" in r.reason and "verdict.status 'unsupported'" in r.reason
-    assert r.detail["undecided"] == ["partition 'unsupported' ['sweep-limit']", "verdict.status 'unsupported'"]
+    assert r.status == "fail" and "partition 'unsupported' ['sweep-limit']" in r.reason and "verdict.status 'unsupported'" in r.reason
     res = G.evaluate_gates(tmp_path)
-    assert G.verdict(res) == "INCOMPLETE" and {x.status for x in res if x.id in G.GATES} == {"pass"}
-    # a fail-class finding dominates: undecided width + a violation -> fail, REJECTED
-    arts["query_use.json"] = query_use_doc(width="violation", violators=[4], unsupported=[9], status="fail")
+    assert G.verdict(res) == "REJECTED" and {x.status for x in res if x.id in G.GATES} == {"pass"}
+    arts["query_use.json"] = query_use_doc(unsupported=[9], status="ok")
     r = gate(tmp_path, arts, "G8")
-    assert r.status == "fail" and "w_out > w_max" in r.reason and r.detail["undecided"] == ["1 member class(es) with undecidable w_out: [9]"]
+    assert r.status == "fail" and r.reason == "1 member class(es) with undecidable w_out: [9]"
     assert G.verdict(G.evaluate_gates(tmp_path)) == "REJECTED"
 
 
@@ -666,7 +659,7 @@ def test_G8_partition_fail_carries_the_codes(tmp_path):
     assert r.status == "fail" and "partition 'gap'" in r.reason
     arts["query_use.json"] = query_use_doc(partition="unsupported", codes=["limit-intervals"], status="unsupported")
     r = gate(tmp_path, arts, "G8")
-    assert r.status == "unsupported" and "partition 'unsupported' ['limit-intervals']" in r.reason     # undecided, not a fail
+    assert r.status == "fail" and "partition 'unsupported' ['limit-intervals']" in r.reason
 
 
 def test_G8_width_fail(tmp_path):
@@ -677,8 +670,8 @@ def test_G8_width_fail(tmp_path):
     assert r.detail["width"]["max_seen"] == 48 and r.detail["width"]["n_violators"] == 2 and r.detail["width"]["violators"] == [7, 9]
     arts["query_use.json"] = query_use_doc(width="unsupported", unsupported=[3], status="unsupported")
     r = gate(tmp_path, arts, "G8")
-    assert r.status == "unsupported" and "undecidable w_out" in r.reason and r.detail["width"]["n_unsupported"] == 1
-    assert G.verdict(G.evaluate_gates(tmp_path)) == "INCOMPLETE"
+    assert r.status == "fail" and "undecidable w_out" in r.reason and r.detail["width"]["n_unsupported"] == 1
+    assert G.verdict(G.evaluate_gates(tmp_path)) == "REJECTED"
     # `status: ok` claimed but violators listed: still a fail (no violators, no unsupported is part of the rule)
     arts["query_use.json"] = query_use_doc(width="ok", violators=[1])
     assert gate(tmp_path, arts, "G8").status == "fail"
@@ -720,7 +713,6 @@ def test_G8_never_changes_G1_G7_or_their_frozen_set():
     assert G.verdict(ok + [G.GateResult("G8", "VU partition", "pass")]) == "ACCEPTED"
     assert G.verdict(ok + [G.GateResult("G8", "VU partition", "fail")]) == "REJECTED"
     assert G.verdict(ok + [G.GateResult("G8", "VU partition", "error")]) == "INCOMPLETE"
-    assert G.verdict(ok + [G.GateResult("G8", "VU partition", "unsupported")]) == "INCOMPLETE"   # undecided, never REJECTED
     inc = copy.deepcopy(ok)
     inc[6].status = "skipped"
     assert G.verdict(inc + [G.GateResult("G8", "VU partition", "pass")]) == "INCOMPLETE"  # G8 pass never rescues G1..G7
@@ -799,13 +791,11 @@ def test_card_vu_partition_row(tmp_path):
     card = _card(tmp_path, arts)
     assert card.verdict == "REJECTED"
     assert card.counts["vu_partition"] == "gap, 1435 sets, max w_out 40/32; codes ['GAP:root/4'], 1 violators, status fail FAIL"
-    # unsupported (lead 22:22Z): neither PASS nor FAIL, the reason first, verdict INCOMPLETE
+    # undecided: a fail by name
     arts["query_use.json"] = query_use_doc(width="unsupported", unsupported=[2, 5], status="unsupported", count=900)
     card = _card(tmp_path, arts)
-    assert card.verdict == "INCOMPLETE" and card.gates["G8"]["status"] == "unsupported"
-    assert card.counts["vu_partition"] == ("unsupported (width 'unsupported'; 2 member class(es) with undecidable w_out: [2, 5]; "
-                                           f"verdict.status 'unsupported'); exact, 900 sets, max w_out {QU_MAX_SEEN}/{QU_WMAX}")
-    assert "| G8 | VU partition (structural) | **unsupported** | unsupported (width 'unsupported';" in CARD.summarize_md(card)
+    assert card.verdict == "REJECTED" and card.gates["G8"]["status"] == "fail"
+    assert card.counts["vu_partition"] == f"exact, 900 sets, max w_out {QU_MAX_SEEN}/{QU_WMAX}; 2 unsupported, status unsupported FAIL"
     # a record that predates G8 (gates.json without it): n/a, verdict unchanged
     assert CARD.vu_partition_text({g: {"status": "pass"} for g in G.GATES}) == "n/a (record predates G8)"
     old = [G.GateResult(g, G.GATE_NAMES[g], "pass") for g in G.GATES]

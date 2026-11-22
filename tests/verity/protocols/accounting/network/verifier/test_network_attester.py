@@ -21,7 +21,7 @@ from verity.protocols.accounting.network.verifier.run_clock import VirtualClock
 from verity.protocols.accounting.network.verifier.grid import Reason
 from verity.protocols.accounting.network.verifier.pacer import Report
 from verity.protocols.accounting.network.verifier.release import one_request, to_watermark
-from verity.release import (WATERMARK_END, read_watermark, release_head, release_of, watermark_chunk,
+from verity.release import (WATERMARK_END, _u32_field, read_watermark, release_head, release_of, watermark_chunk,
                                     watermark_head, with_release)
 from tests.verity.protocols.accounting.network.verifier.test_network_attester_release import NOT_ONE_REQUEST, ONE_REQUEST
 from verity.protocols.accounting.network.verifier.network_attester import (END, FAIL, INTEGER_FIELDS, KIND_NAMES, PARAMETERS_TAG, REASONS,
@@ -640,7 +640,7 @@ def departures() -> dict[str, tuple[bytes, int]]:
     """Responses out of the id form, each with the egress cell it first leaves the form at."""
     e = [IT.id_event(x, GP) for x in (3, 4, 5)]
     head = IDF.EVENT_HEAD[:IDF.EVENT_HEAD.index(b'"delta"')]
-    ordinal = (head + b'"request":' + IDF._u32_field(1, "an ordinal") + b',"token_id":' + IDF._u32_field(4, "a token id")
+    ordinal = (head + b'"request":' + _u32_field(1, "an ordinal") + b',"token_id":' + _u32_field(4, "a token id")
                + b',"finish_reason":null}]}' + IDF.EVENT_END)
     spaced = e[1].replace(b'"token_id":', b'"token_id": ')
     named = b'"id":"cmpl-1",'

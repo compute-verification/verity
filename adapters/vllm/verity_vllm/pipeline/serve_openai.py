@@ -19,9 +19,9 @@ is the reference: under ``--protocol vllm`` (the default) a request is parsed by
 validation, ``to_sampling_params``) and every chunk is its ``CompletionStreamResponse``, serialized the way its
 ``completion_stream_generator`` does; ``max_tokens`` is bounded by its ``get_max_tokens`` rule. `serve_protocol.PlainProtocol`
 (``--protocol plain``) is the same framing without vLLM, for the CPU tests; `serve_protocol.framing_agrees` holds the two to
-each other and the server records the result at start. ``--protocol ids`` (the network attester's declared framing, `serve_protocol.framings`) answers a network
-attester's id request (exactly ``id_form.id_request`` in its ``--id-payload`` + 9-byte cells, its release headers aside) in the
-scan's id form: no HTTP head, one ``io_tie.id_event`` of ``--id-payload`` bytes a token, no usage chunk, then ``data: [DONE]``; a stream the
+each other and the server records the result at start. ``--protocol ids`` (the network attester's id form, `ids_protocol.IdsProtocol`) answers a network
+attester's id request (exactly ``release.id_request`` in its ``--id-payload`` + 9-byte cells, its release headers aside) in the
+scan's id form: no HTTP head, one ``release.id_event`` of ``--id-payload`` bytes a token, no usage chunk, then ``data: [DONE]``; a stream the
 engine fails stops after its ids so far and the connection closes, with no ``[DONE]`` and no text (its reason only in
 ``summary.json``'s ``stream_errors`` and the log), so the network attester sees it unterminated. Every
 other request (the network attester's shim and probes, the load) is answered as ``--protocol vllm`` answers it.
@@ -43,7 +43,7 @@ The engine is `verity_vllm.LLM` (in-process engine core, Model Runner V2), stepp
 thread (`serve_loop.EngineLoop`): each HTTP request is admitted with ``add_request`` under the engine id ``cmpl-<hex>-0`` (vLLM's
 ``f"{request_id}-{i}"``), and vLLM's scheduler batches whatever is admitted; each engine output goes back to its
 request's connection as it comes. The HTTP side is an asyncio server on its own thread, one request per connection. It
-takes a request's first line only as the network attester does (`serve_head.request_line`), and answers 400 to any other:
+takes a request's first line only as the network attester does (`verity.release.with_release`), and answers 400 to any other:
 those are the bytes the network attester passes on without its release.
 The admission's settings are ``--protocols-config``'s entry under the name of the scheme that provides admission
 (`admission_settings`), and their ``order`` (`admission_order`) decides it: requests reach the engine in the order the
@@ -165,6 +165,15 @@ def request_line(line: str) -> tuple[str, str] | None:
     return parts[0], parts[1]
 
 
+def header_fields(fields: Sequence[bytes]) -> dict[str, str]:
+    """A request's header fields by name, the last of a name. A name is the field's bytes before its colon, lower-cased,
+    less the ASCII whitespace around it: what the network attester names a field when it drops a client's own release
+    headers (`verity.release.with_release`). Named more loosely (`str.strip` takes ``\\xa0`` too, for one), a field the
+    network attester kept would be read here as its release, after its own."""
+    return {k.strip().lower().decode("latin-1"): v.strip().decode("latin-1")
+            for k, _, v in (f.partition(b":") for f in fields if f)}
+
+
 PRECISIONS = ("verity_int8", "int8_exact", "pin", "bfloat16")
 #: precision -> (the int8 parts it registers, the int8 scope its layers must then run; None: not checked). Every precision
 #: registers the linears, which is the ``verity_int8`` quantization method a pin's checkpoint may name.
@@ -187,8 +196,7 @@ class Options:
     run_id: str = option("--run-id", env="RESEARCH_RUN_ID", default="local", help="the Commit's run id (default $RESEARCH_RUN_ID)")
     protocol: str = option("--protocol", choices=tuple(framings()), default="vllm",
                            help="vllm: vLLM's own request and response classes; plain: the same framing without them; ids: a "
-                                "network attester's id requests streamed in the scan's id form, raw, and every other request as vllm "
-                                "(the network attester's declared framing, Scheme.framings)")
+                                "network attester's id requests streamed in the scan's id form, raw, and every other request as vllm")
     id_payload: int | None = option("--id-payload", type=int, default=None,
                              help="--protocol ids: each id event's bytes, the network attester's cell payload B − 9 (default 503: the scan's "
                                   "B = 512)")
@@ -306,8 +314,7 @@ class Server:
             if first is None:
                 return await self._json(writer, 400, error_body(NO_REQUEST_LINE, 400, "BadRequestError"))
             method, path = first
-            headers = {k.strip().lower().decode("latin-1"): v.strip().decode("latin-1")
-                       for k, _, v in (f.partition(b":") for f in fields if f)}
+            headers = header_fields(fields)
             served = self.ex.route(path.split("?", 1)[0])
             if served is not None:
                 return await self.serve_route(served[1], first_line, headers, reader, writer)

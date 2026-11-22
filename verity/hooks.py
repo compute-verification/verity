@@ -321,7 +321,7 @@ class RefuseInput:
 
 
 class Broken(Exception):
-    """Why a reader of the workload's (`StartBeside`'s readers) ends before its stream does."""
+    """Why a reader of the workload's ends before its stream does."""
 
 
 @dataclass(frozen=True)
@@ -347,22 +347,12 @@ class ReleaseValue:
     restore: Callable[[], Handle]
 
 
-@dataclass(frozen=True)
-class StartBeside:
-    """A scheme's request to start the process it registered as ``process``
-    (`verity.protocols.accounting.scheme.register_process`) beside the workload, called with the workload's
-    readers it names by what they do (``server-request``, ``stream-token-ids``), in that order."""
-
-    process: str
-    readers: tuple[str, ...] = ()
-
-
-type Request = (RequireProperty | ComputeBlockWith | StartOnBoundary | StartBeside | ReuseOldestFreed | ServeRoute
+type Request = (RequireProperty | ComputeBlockWith | StartOnBoundary | ReuseOldestFreed | ServeRoute
                 | RefuseInput | FixRanges | ReleaseValue)
 
 
 __all__ = ["EVENTS", "HOOKS", "BlockDue", "ComputeBlockWith", "Declared", "Gate", "Handle",
            "Broken", "ENGINE", "FRONT", "PIECE", "FixRanges", "Front", "InputArrived", "Kernel", "OutputsComplete", "RangeAllocated", "RangeFreed", "RangeWritten",
            "RangesDeclared", "RefuseInput", "RegisteredValues", "ReleaseValue", "Request", "RequireProperty", "ReuseOldestFreed",
-           "PhaseClosed", "PhaseCommitted", "PhaseOpened", "Route", "ServeRoute", "StartBeside", "StartOnBoundary", "StepBegan", "StepComputed", "StepDue", "StepEnded", "ValueProduced",
+           "PhaseClosed", "PhaseCommitted", "PhaseOpened", "Route", "ServeRoute", "StartOnBoundary", "StepBegan", "StepComputed", "StepDue", "StepEnded", "ValueProduced",
            "unmet"]

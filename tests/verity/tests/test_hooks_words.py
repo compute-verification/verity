@@ -27,9 +27,6 @@ KEPT = {
     "headers": "InputArrived.headers and Route's argument; network's Admitter reads the release headers (release_of); "
                "neutral: the input's release, an opaque byte string a named port carries",
     "body": "Route's argument, the request body as it streams in; neutral: the port's bytes",
-    "server-request": "StartBeside's reader name, the id relay's (network's id_relay.READERS, the vLLM ids_front); "
-                      "neutral: an input reader",
-    "stream-token-ids": "StartBeside's reader name, the id relay's output-id stream; neutral: an output reader",
     "slots": "StepBegan.slots (the scheduler's running slots; vLLM's admission fills it, network's TickGate reads it) "
              "and RangesDeclared.slots (a KV block's token slots, PoUB's binder); neutral: capacity, and a range's words",
     "slot_bytes": "RangesDeclared.slot_bytes, a KV slot's bytes (PoUB's binder); neutral: word_bytes",

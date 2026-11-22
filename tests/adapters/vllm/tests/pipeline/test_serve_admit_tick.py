@@ -26,7 +26,6 @@ from verity_vllm.engine import admission, hooks
 from verity_vllm.pipeline import cli
 from verity.protocols.accounting.network.prover import admission as na
 from verity_vllm.pipeline import serve_admit as sa
-from verity.protocols.accounting.network.prover import serve_head as hd
 from verity_vllm.pipeline import serve_openai as so
 
 TICK = na.Tick(bucket_us=100_000, sat_us=30_000, free_us=40_000)
@@ -846,15 +845,14 @@ REQUEST_LINES = [(b"POST /v1/completions HTTP/1.1", True), (b"GET /health HTTP/1
 
 
 def test_serve_openai_takes_for_a_requests_line_what_the_network_attester_does():
-    """`hd.request_line` over first lines well formed and not: it gives a line's method and target where the network
+    """`so.request_line` over first lines well formed and not: it gives a line's method and target where the network
     attester puts its release on a request that begins with the line, and None where the network attester passes the
     bytes on as the client wrote them."""
     for line, is_one in REQUEST_LINES:
         sent = line + b"\r\nhost: s\r\nx-verity-release: 9\r\n\r\n"
         stamped = REL.with_release(sent, 3, bytes.fromhex(RUN), 1)
         assert (stamped != sent, REL.release_of(stamped)) == (is_one, (3, bytes.fromhex(RUN), 1) if is_one else None), line
-        assert hd.request_line(line) == (tuple(line.decode().split(" ")[:2]) if is_one else None), line
-        assert so.request_line(line.decode("latin-1")) == hd.request_line(line), line
+        assert so.request_line(line.decode("latin-1")) == (tuple(line.decode().split(" ")[:2]) if is_one else None), line
 
 
 def test_serve_openai_refuses_what_the_network_attester_passes_on_without_its_release_over_http():
@@ -904,7 +902,7 @@ def test_serve_openai_names_a_header_as_the_network_attester_does():
     colon, on which the network attester then puts its release (`release.with_release`), dropping those of the
     client's it takes for release headers. One over HTTP, the byte ``\\xa0`` (its body not JSON, so it is answered at
     once): the frontend has read the network attester's release of it, not the client's. Then each of the 256 bytes in
-    each place: whichever fields the network attester kept, the server's headers (`hd.header_fields`) give its
+    each place: whichever fields the network attester kept, the server's headers (`so.header_fields`) give its
     release, as its own reader does."""
     run = bytes.fromhex(RUN)
 
@@ -925,7 +923,7 @@ def test_serve_openai_names_a_header_as_the_network_attester_does():
         for pre, post in ((bytes([b]), b""), (b"", bytes([b]))):
             line, *fields = stamped(pre, post, 3)[:-4].split(b"\r\n")
             assert REL.release_of(stamped(pre, post, 3)) == (3, run, 1)
-            assert REL.release_fields(hd.header_fields(fields)) == (3, RUN, 1), (pre, post)
+            assert REL.release_fields(so.header_fields(fields)) == (3, RUN, 1), (pre, post)
 
 
 def test_the_flag_takes_tick_with_the_engine_class_step_times_under_the_schemes_name(tmp_path):
