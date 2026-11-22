@@ -396,8 +396,18 @@ def test_boundary_rows_installs_the_integrations_boundary_windows_from_the_confi
             got["sched"] = sched
             return self
 
+    def install_boundary(cfg, llm, engine, out, public, *, sched=None, kept=None, lines=None, hooks=None):
+        def sink(rec):
+            with (lines or out / "boundary.jsonl").open("a") as f:
+                f.write(json.dumps(rec) + "\n")
+
+        def stop():
+            pass
+        stop.windows = Windows.of(cfg, (kept or out) / "boundary", sink, public=(out, *public)).install(sched, hooks)
+        return stop
+
     stub = types.ModuleType("verity_vllm.pipeline.boundary_windows")
-    stub.BoundaryWindows = Windows
+    stub.BoundaryWindows, stub.install_boundary = Windows, install_boundary
     monkeypatch.setitem(sys.modules, stub.__name__, stub)
     if "verity_vllm.pipeline" in sys.modules:
         monkeypatch.setattr(sys.modules["verity_vllm.pipeline"], "boundary_windows", stub, raising=False)
