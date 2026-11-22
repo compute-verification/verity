@@ -8,26 +8,26 @@ public import Definitions.Registration.Physical
 # Compute accounting's statement (draft)
 
 Compute accounting calls forced matrix multiplication and computes one number from its result and the hardware
-description: the node's free compute in the epoch, its registered rate times the epoch's length less the work forced
-matrix multiplication credits (`freeNumber`). The registered rate is read off the registered Site (`registeredRate`,
-`Verity.Site.device` priced at a price per operation class); the credited work is `Wb · Nmin`, which (a) establishes.
+description: the registered rate (`registeredRate`, `Verity.Site.device` priced at a price per operation class) times
+the epoch's length, plus `ρ` times network accounting's bound on the node's ingress, less the work forced matrix
+multiplication credits, `Wb · Nmin`. That number is `ResourceAccounting.Guarantees.Fit`'s residual at `cap = obs`:
+a bound on what the node's work could implement beside the forced work, `req_μ`, read off the actual circuit.
 
-* `freeSet`: the actual circuits in which, if the node took in no help during the epoch, its work on the marking, what
-  forced matrix multiplication does not credit, is at most a number.
 * `AtRegisteredRate`: the hardware premise, that in every feasible run the node's work over any span is at most the
   registered rate times its length (`Placed.ComputeRate`).
-* `ComputeAccountingEpoch`: the protocol's own statement, forced matrix multiplication's challenges and error with the
-  free set in place of the forced set.
-* `ComputeAccountingGiven`: what it adds to forced matrix multiplication, at error `0` and on no challenge of its own:
-  every feasible actual circuit in the forced set lies in the free set. This is how it enters the composition, whose
-  protocols draw independent challenges: compute accounting draws none beyond the ones it calls.
+* `epochUse`, `creditedRuns`: `Fit`'s measure and set of runs for one epoch.
+* `ComputeAccountingEpoch`: the protocol's statement, (a)'s challenges and error with `Fit`'s conclusion in place of
+  (a)'s.
+
+The bound on ingress, `h`, is network accounting's own statement; this statement reads it as a hypothesis on the run,
+met by intersection with network accounting's set, and does not state it.
 -/
 
 @[expose] public section
 
 namespace Draft.ActualCircuit
 
-open ResourceAccounting Verity
+open ResourceAccounting ResourceAccounting.PouwWork Verity
 
 variable {L : Type}
 
@@ -38,17 +38,6 @@ def registeredRate (digest : Site.Sheet → String) (Aud : Registration.Auditor)
     (cuda oracle : ℕ) (p : Price) : ℕ :=
   ((Site.device (ι := Empty) digest Aud S x cuda oracle Empty.elim).map (·.priced p)).getD 0
 
-/-- **The free number**: the rate `Φ` times the epoch's length `len`, less the credited work `W`; `0` when the credit
-is the larger. -/
-def freeNumber (Φ len W : ℕ) : ℕ := Φ * len - W
-
-open Classical in
-/-- **The free set**: the actual circuits in which, if the node `X` took in no help during the ticks `I`, its computed
-gates during `I` on the marking `m` have work at most `n` at the pricing `π`. -/
-def freeSet (V X : Finset L) (I : Set ℕ) (π : (A : Placed L) → Fin A.N → ℕ) (m : (A : Placed L) → Finset (Fin A.N))
-    (n : ℕ) : Set (Placed L) :=
-  {A | A.ingress (X ∪ V) I = 0 → A.work (π A) (A.region X I ∩ m A) ≤ n}
-
 /-- **The node computes at most at the registered rate**, in every feasible run: over any span `[a, b)` its work at the
 pricing `π` is at most `Φ (b − a)` (`Placed.ComputeRate` at the one location `X`). A hardware premise, the device's true
 peak capacity bounded by the registered figure. Nothing else ties `X` to the Site's device or the per-gate `π` to the
@@ -56,38 +45,50 @@ per-class price `registeredRate` reads. -/
 def AtRegisteredRate (𝓕 : Set (Actual.Run L)) (X : Finset L) (π : (A : Placed L) → Fin A.N → ℕ) (Φ : ℕ) : Prop :=
   ∀ R ∈ 𝓕, R.A.ComputeRate {X} (π R.A) fun _ => Φ
 
-/-- **Compute accounting in one epoch.** If the verifier accepts in the epoch `[P.ts, P.td)` then, except with
-probability `δdet + δluck + δskip` over forced matrix multiplication's challenges, the actual circuit lies in the free
-set at the number the verifier computes, the registered rate of `x` on the registered Site times the epoch's length
-less `Wb · Nmin`: had the node taken in no help during the epoch, its work forced matrix multiplication does not credit
-is at most that number. Premises: (a)'s, and that the node computes at most at the registered rate
-(`AtRegisteredRate`). -/
-def ComputeAccountingEpoch : Prop :=
-  ∀ (Ω : Type) [Fintype Ω] (L : Type) [LinearOrder L] (P : PouwWork.Verdict Ω L) (𝓕 : Set (Actual.Run L))
-    (acc : Transcript L → Prop) (X : Finset L) (π : (A : Placed L) → Fin A.N → ℕ)
-    (m : (A : Placed L) → Finset (Fin A.N)) (Wb Nmin ρ : ℕ) (δdet δluck δskip : ℝ)
-    (digest : Site.Sheet → String) (Aud : Registration.Auditor) (reg : Registration) (x : Site.Loc)
-    (cuda oracle : ℕ) (p : Price),
-    AcceptIsVerdict 𝓕 P acc →
-    ForStrategies Ω 𝓕 P.V (fun S => Assumptions.PouwDetection S P Nmin δdet ∧ Assumptions.PouwLuck S P Nmin δluck ∧
-      Assumptions.PouwFloorOff S P X (fun r => π (S r).A) (fun r => m (S r).A) Wb Nmin ρ δskip) →
-    AtRegisteredRate 𝓕 X π (registeredRate digest Aud (Site.ofLog reg) x cuda oracle p) →
-    Sound Ω 𝓕 P.V acc
-      (Lies P.V fun _ => freeSet P.V X (Set.Ico P.ts P.td) π m
-        (freeNumber (registeredRate digest Aud (Site.ofLog reg) x cuda oracle p) (P.td - P.ts) (Wb * Nmin)))
-      (δdet + δluck + δskip)
+open Classical in
+/-- **`Fit`'s measure in one epoch**: the node's work during the epoch at `π`, the marking included, plus `ρ` times
+what it took in. -/
+noncomputable def epochUse {Ω : Type} (P : Verdict Ω L) (X : Finset L) (π : (A : Placed L) → Fin A.N → ℕ) (ρ : ℕ)
+    (R : Actual.Run L) : ℕ :=
+  R.A.work (π R.A) (R.A.region X (Set.Ico P.ts P.td)) + ρ * R.A.ingress (X ∪ P.V) (Set.Ico P.ts P.td)
 
-/-- **What compute accounting adds to forced matrix multiplication.** For any challenges and any acceptance, except
-with probability `0` the actual circuit lies outside the forced set at `W` or inside the free set at
-`Φ · (td − ts) − W`, given that the node computes at most at the rate `Φ` (`AtRegisteredRate`). Deterministic: it is
-the inclusion of the forced set in the free set over the feasible actual circuits, the work during the epoch split into
-the marking and the rest. -/
-def ComputeAccountingGiven : Prop :=
-  ∀ (Ω : Type) [Fintype Ω] (L : Type) [LinearOrder L] (𝓕 : Set (Actual.Run L)) (V X : Finset L) (ts td : ℕ)
-    (π : (A : Placed L) → Fin A.N → ℕ) (m : (A : Placed L) → Finset (Fin A.N)) (Φ W : ℕ) (acc : Transcript L → Prop),
-    AtRegisteredRate 𝓕 X π Φ →
-    Sound Ω 𝓕 V acc
-      (Lies V fun _ => (forcedSet V X (Set.Ico ts td) π m W)ᶜ ∪ freeSet V X (Set.Ico ts td) π m (freeNumber Φ (td - ts) W))
-      0
+/-- **`Fit`'s runs in one epoch**: the feasible runs in which the node's credits outside the marking plus `ρ` times its
+help are at least `Wb · Nmin` ((a)'s conclusion) and its help is at most `h` (network accounting's), `credits` and `help`
+read on the one run (the strategy constant at it). -/
+def creditedRuns {Ω : Type} (𝓕 : Set (Actual.Run L)) (P : Verdict Ω L) (X : Finset L)
+    (π : (A : Placed L) → Fin A.N → ℕ) (m : (A : Placed L) → Finset (Fin A.N)) (Wb Nmin ρ h : ℕ) :
+    Set (Actual.Run L) :=
+  {R | R ∈ 𝓕 ∧ ∀ r : Ω,
+    Wb * Nmin ≤ credits (fun _ : Ω => R) P X (fun _ => π R.A) (fun _ => m R.A) r + ρ * help (fun _ : Ω => R) P X r ∧
+    help (fun _ : Ω => R) P X r ≤ h}
+
+/-- **Compute accounting in one epoch.** It bounds what the node's work could implement beside the work credited
+outside the marking `m`, and `Additive` is claimed only at a marking at which the new A3 (`PouwFloorAt`) holds; at the
+empty marking `Additive` fails unless the program costs nothing, and the statement says nothing.
+
+If the verifier accepts in the epoch `[P.ts, P.td)` then, except with probability `δdet + δskip` over forced matrix
+multiplication's challenges, at a view holding the challenge, if the node's help was at most `h` and the run implements
+`impl`, then `req_μ(impl) ≤ Φ · (td − ts) + ρ · h − Wb · Nmin` at `μ = epochUse` and `Φ` the registered rate of `x`:
+`Fit`'s conclusion at `cap = obs`. Premises: (a)'s, the hardware premise (`AtRegisteredRate`) and `Fit`'s additivity
+over `creditedRuns`.
+
+Not vacuous because its conclusion fails for the verifier that accepts every view against the strategy that holds the
+challenge and runs a program costing more than `Φ · (td − ts) + ρ · h` less `Wb · Nmin` with no forced work, where the
+premise that fails is `PouwDetectionAt`. -/
+def ComputeAccountingEpoch : Prop :=
+  ∀ (Ω : Type) [Fintype Ω] (L : Type) [LinearOrder L] (P : Verdict Ω L) (𝓕 : Set (Actual.Run L))
+    (rd : Readout Ω L) (X : Finset L) (π : (A : Placed L) → Fin A.N → ℕ)
+    (m : (A : Placed L) → Finset (Fin A.N)) (Wb Nmin ρ h : ℕ) (δdet δskip : ℝ)
+    (digest : Site.Sheet → String) (Aud : Registration.Auditor) (reg : Registration) (x : Site.Loc)
+    (cuda oracle : ℕ) (p : Price) (impl : Actual.Run L → Prop),
+    PouwDetectionAt 𝓕 P rd Nmin δdet → PouwFloorAt 𝓕 P rd X π m Wb ρ δskip →
+    AtRegisteredRate 𝓕 X π (registeredRate digest Aud (Site.ofLog reg) x cuda oracle p) →
+    Additive (creditedRuns (Ω := Ω) 𝓕 P X π m Wb Nmin ρ h) (epochUse P X π ρ) (Wb * Nmin)
+      (req (epochUse P X π ρ) 𝓕 impl) impl →
+    Sound Ω 𝓕 P.V (acceptsOn P rd)
+      (fun S r => HoldsChallenge rd P.V S r → help S P X r ≤ h → impl (S r) →
+        req (epochUse P X π ρ) 𝓕 impl ≤
+          ((registeredRate digest Aud (Site.ofLog reg) x cuda oracle p * (P.td - P.ts) + ρ * h - Wb * Nmin : ℕ) : ℕ∞))
+      (δdet + δskip)
 
 end Draft.ActualCircuit
