@@ -1480,7 +1480,7 @@ class Verifier:
             out["end_ns"] = record.end_ns
             out["ledger"] = self.ledgers(record, [list(w.arrived_ns) for w in record.windows],
                                          [w.plans for w in session.windows])
-            if pace is not None:
+            if pace is not None and "refused" not in out["ledger"]:
                 inputs = out["ledger"]["inputs"]
                 try:
                     out["ledger"]["paced"] = paced_line(
@@ -1539,7 +1539,9 @@ class Verifier:
         (`timing_parts`) when the calibration has a bare read of each tier covering the registered store and a window
         had two roots.  Each reading's γ terms are the Lean verifier's, held to the ledger's (`gamma_answer`).  A
         reading the ledger refuses, or whose terms the Lean's don't hold, carries why, and the session then declares
-        nothing.  Of what `declared` carries beside them, a paced session's fixed windows (`ledger.Gamma.windows`) and
+        nothing; a node whose figures refuse the card's maximum squaring rate at the record's codec, its GPUs' on-chip
+        storage, or the link burst its charged links read, refuses the whole ledger, which then carries only that refusal (`refused`), in each
+        reading and in `declared`.  Of what `declared` carries beside them, a paced session's fixed epochs (`ledger.Gamma.windows`) and
         the sketch's and the sample's terms in its errors (`sketch`, `draw`) are the Python ledger's.  With the
         session's plans, `memory` is the node's HBM it shows held by kind (`memory`), KV credited on no verdict yet.
         `delta` is the memory line's δ in its six parts (`ledger.delta_parts`, each ratio text), whose sum `declared`'s
@@ -1551,11 +1553,24 @@ class Verifier:
         (`slack_log2`); a record without it was charged `UNRECORDED_SLACK_LOG2`."""
         cal = self.calibration
         reported = float(cal["read_bytes_per_s"])
-        stated = ledger.Node.stated(
-            self.figures, disk_bytes_per_s=self.disk_bytes_per_s, link_bytes_per_s=self.link_bytes_per_s,
-            disk_burst_bytes=self.disk_burst_bytes, link_burst_bytes=self.link_burst_bytes).raised(reported)
+        def refused(why: str, spec: float, measured: float) -> dict:
+            return {"refused": why, "declared": {"refused": why},
+                    **{name: {"capacity_bytes_per_s": r, "refused": why}
+                       for name, r in (("spec", spec), ("measured", measured))}}
+
+        try:
+            stated = ledger.Node.stated(
+                self.figures, disk_bytes_per_s=self.disk_bytes_per_s, link_bytes_per_s=self.link_bytes_per_s,
+                disk_burst_bytes=self.disk_burst_bytes, link_burst_bytes=self.link_burst_bytes)
+        except ValueError as e:
+            measured = max(self.figures.read_bytes_per_s, reported)
+            return refused(str(e), max(self.figures.spec_bytes_per_s, measured), measured)
+        stated = stated.raised(reported)
         spec, measured = stated.spec_bytes_per_s, stated.read_bytes_per_s
-        rebuild = stated.rebuild(record.codec)
+        try:
+            rebuild = stated.rebuild(record.codec)
+        except ValueError as e:
+            return refused(str(e), spec, measured)
         hbm, dram = stated.tiers["hbm"], stated.tiers["dram"]
         node = {"gpus": hbm.devices, "gpu_spec_bytes_per_s": hbm.spec_bytes_per_s,
                 "gpu_read_bytes_per_s": hbm.read_bytes_per_s, "host_spec_bytes_per_s": dram.spec_bytes_per_s,
@@ -1753,7 +1768,11 @@ def main(argv: Sequence[str] | None = None, *, verify: Verify | None = None,
                      "--figures-sha512 pins: the figures are the verifier's configuration's, never the prover's")
     if a.memory_of is not None:
         v = json.loads(a.memory_of.read_text())
-        print(json.dumps([{"k": s["k"], "memory": recorded_memory(s, chip_bytes=figures.chip_bytes,
+        try:
+            chip_bytes = figures.chip_bytes
+        except ValueError as e:
+            ap.error(f"--memory-of {a.memory_of}: {e}")
+        print(json.dumps([{"k": s["k"], "memory": recorded_memory(s, chip_bytes=chip_bytes,
                                                                   host_bytes=figures.host_dram_bytes)} | (
             {"paced": recorded_paced(s, v["registration"], figures=figures, host_bytes=figures.host_dram_bytes,
                                      ingress_bytes_per_s=a.ingress_bytes_per_s)} if s.get("pace") else {})
@@ -1865,6 +1884,8 @@ def main(argv: Sequence[str] | None = None, *, verify: Verify | None = None,
             lg, pub = r.get("ledger", {}).get("spec", {}), r.get("record", {}).get("public", {})
             mem = r.get("ledger", {}).get("memory", {})
             lines = r.get("ledger", {}).get("declared", {}).get("memory", {})
+            if (why := r.get("ledger", {}).get("refused")) is not None:
+                print(f"verifier: session {k}: its ledger is refused, and no share is printed: {why}", flush=True)
             if (pl := r.get("ledger", {}).get("paced")) is not None:
                 line = f"refused: {pl['refused']}" if "refused" in pl else "; ".join(
                     f"{form} credited weights {pl[form]['share']:.4%} hbm {pl[form]['hbm_share']:.4%} filler "

@@ -11,7 +11,8 @@
 # was requested at: host.py refuses one whose pin moved. Rerunning it for an installed COMMIT skips the unpack and reads no TAR,
 # and writes the figures and logs the pin again.
 #
-#   git archive COMMIT verity benchmarks/poub_session calibration/hardware tools/research/src/research \
+#   git archive COMMIT verity benchmarks/poub_session calibration/hardware calibration/rate_squaring/gamma.py \
+#     tools/research/src/research \
 #     tools/research/store.pod.toml | ssh vy-admin@HOST sudo vy-verifier-pin COMMIT
 set -euo pipefail
 die() { echo "vy-verifier-pin: $*" >&2; exit "${2:-1}"; }

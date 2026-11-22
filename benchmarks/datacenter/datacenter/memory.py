@@ -155,11 +155,15 @@ def answer_time(dc: Datacenter, challenger: str, registered: str, actual: str, b
 
 def regen_time(dc: Datacenter, store: StoreEntry, bits: float) -> float:
     """Seconds the prover needs to rebuild `bits` of `store` from its seed at its block's summed `rate["square-1024"]`,
-    as `ledger.Node.rebuild` sums a node's; infinite for a store that can't be rebuilt."""
+    as `ledger.Node.rebuild` sums a node's; infinite for a store that can't be rebuilt, and refused for one that can on a
+    block that states no maximum squaring rate, which bounds no rebuild."""
     block = dc.zone_of(store.device)
     devices = block.devices if block is not None else dc.devices.values()
     rate = sum(float(d.rate["square-1024"]) for d in devices if "square-1024" in d.rate and not d.trusted)
-    return bits * store.regen / rate if store.regen and rate else float("inf")
+    if store.regen and not rate:
+        raise ValueError(f"no maximum squaring rate at 1024 bits is stated on {store.device}'s block, so the store "
+                         f"{store.name}'s rebuild time has no bound: state its devices' `square-1024` rate")
+    return bits * store.regen / rate if store.regen else float("inf")
 
 
 def into(dc: Datacenter, device: str) -> float:

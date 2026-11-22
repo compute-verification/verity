@@ -114,7 +114,7 @@ class Node:
     spec_bytes_per_s: float
     read_bytes_per_s: float
     chip_bytes: int
-    squarings_per_s: Mapping[str, float]
+    squarings_per_s: Mapping[str, float | str]
     gpu_write_bytes_per_s: float
     host_write_bytes_per_s: float
     disk_bytes_per_s: float = 0.0
@@ -135,7 +135,8 @@ class Node:
             _rate(getattr(self, name), name)
         squarings = dict(self.squarings_per_s)
         for width, rate in squarings.items():
-            _rate(rate, f"the squaring ceiling at {width}")
+            if type(rate) is not str or not rate:
+                _rate(rate, f"the maximum squaring rate at {width}")
         object.__setattr__(self, "squarings_per_s", MappingProxyType(squarings))
         tiers = dict(self.tiers)
         if not all(type(t) is Tier for t in tiers.values()):
@@ -149,16 +150,20 @@ class Node:
         """The node of `figures`: R measured is the larger of its `read_bytes_per_s` and the prover's reported read, R
         at spec the larger of its `spec_bytes_per_s` and that, so a prover reporting a slower read can't shrink a term.
         Its rebuild burst is S_chip, what a batch in flight holds on the chips; its disk burst one second at the disks'
-        rate, which is a highest second; its link burst `figures.link_burst_bytes` when the links are charged.  Its
-        tiers are every GPU's HBM and the host's DRAM, which no reported read raises."""
+        rate, which is a highest second; its link burst `figures.link_burst_bytes` when the links are charged, refused
+        by the figures' reason where none is established and none is handed in.  Its tiers are every GPU's HBM and the
+        host's DRAM, which no reported read raises."""
         f = figures
+        chip = f.chip_bytes
         disk = disk_bytes_per_s if disk_burst_bytes is None else disk_burst_bytes
         link = (f.link_burst_bytes if link_bytes_per_s else 0.0) if link_burst_bytes is None else link_burst_bytes
+        if type(link) is str:
+            raise ValueError(link)
         tiers = {"hbm": Tier(f.gpus, f.gpu_spec_bytes_per_s, f.gpu_read_bytes_per_s, f.gpu_chip_bytes),
                  "dram": Tier(1, f.host_spec_bytes_per_s, f.host_read_bytes_per_s, f.host_chip_bytes)}
-        return cls(f.spec_bytes_per_s, f.read_bytes_per_s, f.chip_bytes, f.squarings_per_s,
+        return cls(f.spec_bytes_per_s, f.read_bytes_per_s, chip, f.squarings_per_s,
                    f.gpu_write_bytes_per_s, f.host_write_bytes_per_s, disk_bytes_per_s, link_bytes_per_s,
-                   float(f.chip_bytes), disk, link, tiers).raised(reported_read_bytes_per_s)
+                   float(chip), disk, link, tiers).raised(reported_read_bytes_per_s)
 
     def raised(self, reported_read_bytes_per_s: float) -> Node:
         """The node with R measured raised to the prover's reported read and R at spec to that, which a report can
@@ -167,10 +172,14 @@ class Node:
         return replace(self, spec_bytes_per_s=max(self.spec_bytes_per_s, measured), read_bytes_per_s=measured)
 
     def rebuild(self, codec: audit.Codec) -> audit.Rebuild:
-        """μ_rebuild's model at the record's codec: the node's squaring ceiling at its width."""
+        """μ_rebuild's model at the record's codec: the node's maximum squaring rate at its width, refused by the reason its
+        figures give where none is established."""
         if codec.field.name not in self.squarings_per_s:
             raise ValueError(f"the node states no squaring ceiling at {codec.field.name}, the record's codec's width")
-        return audit.Rebuild(codec, self.squarings_per_s[codec.field.name])
+        rate = self.squarings_per_s[codec.field.name]
+        if type(rate) is str:
+            raise ValueError(rate)
+        return audit.Rebuild(codec, rate)
 
     def to_json(self) -> dict:
         return {"chip_bytes": self.chip_bytes, "disk_burst_bytes": self.disk_burst_bytes,
@@ -189,7 +198,7 @@ class Node:
         if type(j) is not dict or sorted(j) != keys:
             raise ValueError(f"a node's capacities are an object of exactly {', '.join(keys)}")
         if type(j["squarings_per_s"]) is not dict:
-            raise ValueError("squarings_per_s maps each codec width to its squaring ceiling")
+            raise ValueError("squarings_per_s maps each codec width to its maximum squaring rate or its refusal")
         tiers = j["tiers"]
         if type(tiers) is not dict or not all(type(t) is dict and sorted(t) == sorted(TIER_KEYS) for t in tiers.values()):
             raise ValueError(f"tiers maps each memory tier's name to an object of exactly {', '.join(TIER_KEYS)}")

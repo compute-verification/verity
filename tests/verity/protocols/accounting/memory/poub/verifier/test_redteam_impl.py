@@ -4,9 +4,7 @@ fixed and pass.  The exploits run on `test_poub`'s store and drivers."""
 
 from __future__ import annotations
 
-import json
 import pytest
-from pathlib import Path
 from poub_fakes import Clock, Entropy
 from test_poub import SCHEDULE, N, drive, finish, params, store  # noqa: F401
 
@@ -20,7 +18,6 @@ from verity.protocols.accounting.memory.poub.verifier import (
 )
 from verity.protocols.accounting.memory.poub.verifier.audit import AuditRun
 
-FIGURES = timing.Figures.of_json(json.loads((Path(__file__).resolve().parents[7] / "tests/verity/protocols/accounting/memory/poub/figures.json").read_text()))
 
 BLOCK = 4096
 CAPACITY = N * BLOCK / 300e-9    # a pass of the store fills its 300 ns at the node's capacity
@@ -66,7 +63,7 @@ def test_rb2_the_record_names_its_codec(store) -> None:
     assert store.registration.codec.name == "p1024/k2/masked"
     assert store.registration.codec.name in s.record().public().values()
     assert s.record().public()["codec_params"] == {"c": 105, "field": "p1024", "masked": True, "n": 1024, "rounds": 2}
-    stated = FIGURES.squarings_per_s["p1024"]
+    stated = 2e11  # a maximum squaring rate at p1024 for the test, in squarings a second: the node's figures refuse one
     with pytest.raises(ValueError, match="record's codec p1024/k2/masked"):
         audit.ledger(s.record(), capacity_bytes_per_s=CAPACITY, chip_bytes=0,
                      rebuild=audit.Rebuild(codec.DEFAULT, stated))

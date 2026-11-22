@@ -67,8 +67,10 @@ GPU_RATE = {
     "cuda:gate": Assumption("rtx-pro-6000/gates", 2.6e13 * 32, "gate/s", "datasheet"),
     "oracle": Assumption("rtx-pro-6000/sha512", T.gpu_sha512_per_s, "compressions/s", "measured"),
     **{f"square-{w[1:]}": Assumption(f"rtx-pro-6000/squarings-{w}", r, "squarings/s", "declared")
-       for w, r in T.gpu_squarings_per_s.items()},
+       for w, r in T.gpu_squarings_per_s.items() if type(r) is not str},
 }
+"""One GPU's rates. A width whose maximum squaring rate the figures refuse (`sheets.squaring_ceilings`) has no `square-`
+rate, and `regen_time` refuses a rebuildable store on it."""
 HOST_CHIP = Assumption("xeon-6776p/caches", T.host_chip_bytes // 2 * 8, "bits", "declared")
 HOST_DRAM = Assumption("host-dram/socket-capacity", int(number(NODE["memory"]["dram"]["bytes"])) // 2 * 8, "bits",
                        "measured")

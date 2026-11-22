@@ -123,8 +123,11 @@ MEASURED_ONLY = {"gpu": {"store.l15", "store.l1i", "store.l0i", "store.const_l0"
 
 #: The entries one card of a kind holds alone, each with its card: a ceiling only that card's protocol states, built on
 #: its MEASURED_ONLY entries, so no other card of the kind has what it sums; and the wipe's fill floor
-#: (`store.wipe_fill`), given only for the card the served wipe runs on.
-ONE_CARD = {"gpu": {"store.chip": "rtx-pro-6000-server", "store.wipe_fill": "h200-sxm-141gb"}}
+#: (`store.wipe_fill`), given only for the card the served wipe runs on; and the clock's second reading
+#: (`clock.sm_boost`), which only a card with a maximum squaring rate established needs: a card that gains one states
+#: its own data sheet's reading, and the entry goes.
+ONE_CARD = {"gpu": {"store.chip": "rtx-pro-6000-server", "store.wipe_fill": "h200-sxm-141gb",
+                    "clock.sm_boost": "rtx-pro-6000-server"}}
 
 
 @pytest.mark.parametrize("kind", CARD_KINDS)

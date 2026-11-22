@@ -446,7 +446,9 @@ def main(argv: list[str] | None = None) -> int:
     mem = v.get("ledger", {}).get("memory", {})
     print(f"serve: {a.plan}: prover accepted={prover_result.get('accepted')} verifier accepted={v.get('accepted')} "
           f"failure={v.get('failure')} steps={trace.steps} requests={len(trace.requests)} "
-          f"blocks={out['store']['blocks']} memory held={mem.get('windows', [{}])[0].get('held')}", flush=True)
+          f"blocks={out['store']['blocks']} " + (f"its ledger is refused, so no share: {why}"
+                                                 if (why := v.get("ledger", {}).get("refused")) is not None else
+                                                 f"memory held={mem.get('windows', [{}])[0].get('held')}"), flush=True)
     accepted = prover_result.get("accepted") is True and (not a.local or v.get("accepted") is True)
     return 0 if accepted else REJECTED
 

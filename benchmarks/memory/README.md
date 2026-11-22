@@ -17,7 +17,7 @@ VLLM_PY=/path/to/your/vllm/bin/python uv run verity bench memory --local
 ~~~
 
 Both from the root of a clone of `main`. Nothing of ours is needed: no account, key, token, store or host. It needs the
-card, vLLM, the CUDA toolkit and Lean below. The first line it prints is the share with its error, and the next says
+card, vLLM, the CUDA toolkit and Lean below. The first line it prints is the share with its error, or why there is none, and the next says
 what the session ran with. `verity bench memory --help` lists its other ways in.
 
 ## What you need
@@ -25,9 +25,12 @@ what the session ran with. `verity bench memory --help` lists its other ways in.
 - **[uv](https://docs.astral.sh/uv/getting-started/installation/)**, which runs every command here.
 - **A Linux machine with an NVIDIA GPU whose card file (`calibration/hardware/cards/`) lists the name nvidia-smi
   gives it in `driver`.** The share is of the card's node file (`calibration/hardware/nodes/`), the one whose
-  `device.sku` is that card (`LOCAL_NODE` names another): an H200 or an RTX PRO 6000 Blackwell today. On a card with
-  a card file and no node file, such as an H100, the session runs and prints no share, since the node's read rate
-  holds its host's and no host of it is on record. A card with no card file is refused before anything starts, and a
+  `device.sku` is that card (`LOCAL_NODE` names another): an H200 or an RTX PRO 6000 Blackwell today. A share also
+  needs the node's maximum squaring rate at the session's codec width (`benchmarks/poub_session/sheets.py`'s
+  `squaring_ceilings`): none is established on an H200, nor at the deployed codec's 1,024 bits on an RTX PRO 6000, so
+  there the session runs and prints the ledger's refusal, naming the card, the width and the fix, and no share. On a
+  card with a card file and no node file, such as an H100, the session runs and prints no share, since the node's read
+  rate holds its host's and no host of it is on record. A card with no card file is refused before anything starts, and a
   result against a sheet that is not `main`'s is not comparable.
 - **A vLLM environment, `VLLM_PY`:** a Python with vLLM installed (`uv venv V && uv pip install --python V/bin/python
   vllm`). Without it `--local` runs nothing and says how to make one. It serves the checkpoint and fetches it:

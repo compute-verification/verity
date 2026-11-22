@@ -167,7 +167,7 @@ inputs = ["tools/research", ".agents/skills", "verity/README.md", ".gitignore", 
           "tools/verity/graph/verity_graph/__init__.py",
           # the cards' registry, which pods/nebius/fleet.py reads by path for each platform's machine class and
           # launch.sh, through verity_config's reader, for a clock-locking platform's card file
-          "tools/config/verity_config", "calibration/hardware", "benchmarks/poub_session/sheets.py",
+          "tools/config/verity_config", "calibration/hardware", "benchmarks/poub_session/sheets.py", "calibration/rate_squaring/gamma.py",
           "tools/check/merge_map.py", "tools/check/merge_rows.py",
           "tools/check/added_lines.py", "tests/lint/retired_terms.md", "tests/lint/test_repo_lane_text.py",
           "tests/lint/test_repo_retired_terms.py",

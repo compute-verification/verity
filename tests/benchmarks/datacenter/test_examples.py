@@ -23,7 +23,10 @@ def test_a_node_is_one_block_of_eight_gpus_on_two_sockets_with_the_measured_pcie
     assert sum(float(d.write) for d in ds if d.write) == pytest.approx(
         (8 * node.gpu_write_bytes_per_s + node.host_write_bytes_per_s) * 8)
     for w, rate in node.squarings_per_s.items():
-        assert sum(float(d.rate[f"square-{w[1:]}"]) for d in ds if d.rate) == pytest.approx(rate)
+        if type(rate) is str:
+            assert not any(f"square-{w[1:]}" in d.rate for d in ds if d.rate), rate
+        else:
+            assert sum(float(d.rate[f"square-{w[1:]}"]) for d in ds if d.rate) == pytest.approx(rate)
     assert dc.validate() == []
     (block,) = dc.blocks
     assert block.name == "n" and dc.fabric == [] and dc.boundary == []
@@ -36,8 +39,7 @@ def test_a_node_is_one_block_of_eight_gpus_on_two_sockets_with_the_measured_pcie
         ("n.gpu0", "n.pcie0"), ("n.pcie0", "n.cpu0"), ("n.cpu0", "n.cpu1"), ("n.pcie1", "n.cpu1"), ("n.nic0", "n.pcie1")]
     assert all(e.latency is None and e.delay == 0.0 for e in dc.links)  # not measured: a delay that claims nothing
     gpu = dc.devices["n.gpu0"]
-    assert set(gpu.rate) == {"mac:bf16", "mac:fp8", "mac:fp4", "cuda:op", "cuda:gate", "oracle", "square-1024",
-                             "square-512"}
+    assert set(gpu.rate) == {"mac:bf16", "mac:fp8", "mac:fp4", "cuda:op", "cuda:gate", "oracle", "square-512"}
     assert gpu.rate["cuda:gate"].value == 2.6e13 * 32
 
 

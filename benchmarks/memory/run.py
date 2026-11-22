@@ -566,9 +566,15 @@ def one_card(kind: str) -> tuple[dict, int]:
     what the verifier states from `one_card_figures`) and its HBM, from the tree's data sheets
     (`timing.Figures.of_sheets`) at one card, so the share is of that card's read rate and its host's. A host card
     that states no measured disk read is taken at its ceiling (`disk.read_max`); the figures no sheet states are
-    `sheets.UNSHEETED`'s."""
+    `sheets.UNSHEETED`'s, and its maximum squaring rate `sheets.squaring_ceilings`', refused where none is established.
+    Where the figures refuse one the node is stated from, its capacities are that refusal (`refused`), and the session
+    runs for the verifier's ledger to refuse it too."""
     figures = one_card_figures(kind)
-    return poub_ledger.Node.stated(figures).to_json(), figures.hbm_bytes
+    try:
+        node = poub_ledger.Node.stated(figures).to_json()
+    except ValueError as e:
+        node = {"refused": str(e)}
+    return node, figures.hbm_bytes
 
 
 def one_card_figures(kind: str) -> timing.Figures:
