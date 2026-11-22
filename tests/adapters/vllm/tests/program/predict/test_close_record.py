@@ -126,7 +126,8 @@ def test_the_serves_close_records_its_window_with_strings_from_where_its_rows_ar
     assert s["where"] == "HostTwin" and s["acquired"] > 0 and s["acquired"] + s["host"] > s["acquired"]
     assert s["twin"]["equal"] and s["twin"]["ports"] == min(2, s["twin"]["of"]) > 0
     reg = json.loads((to / "registration.json").read_text())
-    assert SS.SCAN_STATE in [e["value"] for e in reg["registered"]] and DD.digest(reg)
+    assert SS.SCAN_STATE not in [e["value"] for e in reg.get("registered", [])] and DD.digest(reg)
+    assert SS.SCAN_STATE not in reg["window"].get("registered_roots", {})
     assert {"rows", "record", "close", "write"} <= set(got["seconds"])
 
 
