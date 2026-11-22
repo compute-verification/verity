@@ -1170,10 +1170,11 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             opened = {(p, mine.tree(m, p)) for p, _ in m.outs if mine.tree(m, p) != m.port(p)}
             # and at the run input nodes' trees its registered file reads (`interface.registered_file`'s run inputs), as
             # Lean's members check reads them off that file (`Member.reads`)
-            opened |= {(p, e["value"]) for p, e in ((registered or {}).get(m.key) or {}).get("ports", {}).items()
-                       if REG.is_fresh_value(e.get("value"))}
+            # and at a registered value's root, which a second stage's link reads at round 1's (`registeredAt`)
+            reads, held = MB.registered_reads((registered or {}).get(m.key))
+            opened |= reads
             why = form if isinstance(form, str) else MB.population_why([[m.base, m.base + m.n]], form[0], header, form[1][m.key],
-                                                                        opened)
+                                                                        opened, held)
             ok = {"pin": header.get("circuit_sha512") == made["pin"],
                   "partition": meta.get("partition") == {"rule": P.FORMAT, "digest": pd},
                   "program": meta.get("program_sha512") == part["program"],
