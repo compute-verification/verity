@@ -41,7 +41,6 @@ Current terms and notation, one line each, ``- **Term** (area): definition. Code
 - **Completeness tests**: the developer's tools that hold a circuit to what an engine computes (circuit-check, hardware captures, the vLLM adapter's `check/match/`), never proved.
 - **Confidence set**: M_δ, the sets B of proof blocks with P_a(B) > δ; except with probability δ + ε_ks + ε_bind the audit rejects or the incorrect set is in M_δ. Code: `influenceSet`.
 - **Configuration**: the `.toml` in `applications/` that `verity run` reads: its protocols, where each party runs, its channels and the auditor's pinned device keys.
-- **Cut** (training): a set of wires cuts A from B if it meets every path from A to B; κ(A → B) is the smallest such set's size, and κ_θ(B) that with A the inputs outside θ. Code: `Slowdown.Cut.Separates`.
 - **Data sheet**: one SKU's rates, stores, formats and clock ceiling at its firmware maximum (`calibration/hardware/cards/<sku>.toml`). Code: `Verity.Accel.Card`.
 - **Declared circuit**: D = E_1 ‖ … ‖ E_n, what the prover commits to having computed in an epoch: the registered compiler's output on θ and the advice; a Program is its stored form. Code: `Verity.RegisteredCircuit`.
 - **Declared use**: what a proof block counts for in its statement, as a number; PoUW's is the work the block does. SPOT's sums to S, the declared circuit's AND count under a public lowering pinned at registration, with Pr[accept ∧ under (1 − ε_skip)·S right] ≤ δ_coin + δ_crypto; Dither's also needs SAK, over noised operands only. Code: `SAKResidual`.
@@ -82,7 +81,6 @@ Current terms and notation, one line each, ``- **Term** (area): definition. Code
 - **Lock**: a package's guarantee records in its `lean-audit.json`; a changed record means a guarantee says something else.
 - **Logical layer**: what the cryptography proves with no device assumption: how much of one resource all the developer's hardware used in a period.
 - **Low-risk lane** (landing): the verified queue taking a PR on its ready mark alone when its change touches nothing drive.toml's `lowrisk_excludes` names.
-- **Matmul structure** (training): a set of matmuls on a Boolean circuit, each with weight words w_{i,l}, activation words x_{l,j}, output words y_{i,j} and per (i,j,l) a MAC, a connected set of gates that reads w_{i,l} and x_{l,j} and feeds y_{i,j}; distinct indices give distinct words, MACs are pairwise disjoint and outputs pairwise distinct. Code: `Slowdown.Cut.Work`, `Slowdown.Cut.Matmul`.
 - **Memory attester**: an auditor-trusted device beside a network attester on a machine the developer doesn't control, that runs PoUS's timed rounds and signs each (`pous.attester.memory_attester`'s `MemoryAttester`). Its per-round on-time bits stay in its signed record; PoUS publishes the verdict.
 - **Memory wipe**: the streamed-label wipe opening each server block: the device fills its store with seeded labels and the memory attester times spot reads. Code: `Verity.Wipe`.
 - **Metric** (benchmarks): one named number a benchmark records, one `[[metric]]` of its directory's `metrics.toml`.
@@ -97,7 +95,6 @@ Current terms and notation, one line each, ``- **Term** (area): definition. Code
 - **Nontrivial lemma**: a guarantee's companion showing the guarantee fails for a verifier that accepts everything.
 - **Off-gate step** (landing): a step of `verity check` off the merge gate (`off_gate`, `warn_steps`), whose red holds nothing.
 - **Operation** (circuits): a circuit template defined by gates (floating-point constants, SHA-512's round constants, the MUFU tables), one pinned, versioned list. Code: `verity.circuits.operations`, `operations.program_data`.
-- **Pairs within reach** (training): π(S) = Σ_m |S ∩ W_m|·|S ∩ X_m|, the weight–activation pairs of one matmul in S, and Π_θ(k) the most of them k wires can cut off from the inputs outside θ. Code: `Slowdown.Cut.Work.pi`.
 - **Parameter**, **public parameter**: a value a protocol's behaviour depends on and does not fix: a sampling rate, a period's length, a size class, the hardware. A protocol holds none: an application sets them, `run` passes them in, and calibration chooses them.
 - **Partition**: a division of a program's computed gates into proof blocks, given as a named query a verifier evaluates (`Q_call`, `Q_word`). Code: `verity.circuits.partition_object`.
 - **Pass** (landing): a part of `verity check`, reused while its declared inputs are unchanged; a verdict is a review's.
@@ -117,8 +114,6 @@ Current terms and notation, one line each, ``- **Term** (area): definition. Code
 - **Proof block**: one part of a partition, proved on its own, a set of gates whose inputs and outputs are bit strings and whose outputs fit its circuit template's public size class (16 to 262,144 bits). Code: `verity.circuits.parts`, `sizeClasses`.
 - **Proof layer**: Flock, with SPOT and recursion on it (`verity/protocols/proof`), what the other protocols call to prove.
 - **Proof system**: the one system behind every protocol: Flock ZK on the workers behind the ZK server, with the auditor's challenger and verifier; a protocol states only its `Spec`. Code: `verity.protocols.proof.spot.verifier.service`.
-- **Property T1** (training): "operands are hard": a matmul structure satisfies T1 with (k, β) relative to θ if every set S of operand words with κ_θ(S) ≤ k has Σ_{u∈S} β(u) ≤ κ_θ(S).
-- **Property T2** (training): "exports are wide": a matmul structure satisfies T2 with β_y if every set A of gates has κ(A → E(A)) ≥ β_y·|E(A)|.
 - **Protocol soundness**: a configuration's guarantee that when the verifier accepts, the monitoring period's claims hold except with probability δ. Code: `Verity.Soundness`.
 - **Proving**: proof generation, whose cost is proving overhead.
 - **Pure move** (landing): a change that only renames paths, certified by `move_check`; its PR lands on its ready mark alone once certified (`tools/move/README.md`).
@@ -144,7 +139,6 @@ Current terms and notation, one line each, ``- **Term** (area): definition. Code
 - **Session** (Flock): one run of Flock's prover against its verifier on one staged statement, under its own live challenges, its openings released once at close.
 - **Size**: a circuit's or a region's AND-gate count, what Flock pays for, declared use counts and every result reports; (c, k) budgets and `Circuit.size` count every gate.
 - **Slot** (vLLM adapter): one sequence of a served batch, one row of a step's activations.
-- **Slowdown** (training): ρ := nc/|C| for a training circuit that is also a (c,k,n)-inference circuit; the training slowdown theorem gives ρ ≥ cν/μ. Code: `Slowdown.Cut.Guarantees.Bound`, `Slowdown.Cut.Guarantees.HE`, `Slowdown.Cut.Guarantees.HEShared`.
 - **Slowdown lower bound**: the bound on unverified training beside verified compute, in counted operations, the one place 𝓜's resources appear. Code: `Slowdown.Guarantees.Slowdown`.
 - **Spec** (Lean): every declaration of a Lean package that a reader must trust to read its guarantees.
 - **SPOT**: the Sample-and-PrOve Transform: from a proof system Π knowledge sound for one proof block, SPOT[Π] commits every proof block and proves the sampled ones; SPOT[Flock] is deployed. Code: `Claims.SamplingGeneric`, `Claims.Sampling`.
@@ -153,7 +147,6 @@ Current terms and notation, one line each, ``- **Term** (area): definition. Code
 - **Suspect** (landing): a PR of a failed candidate whose change touches what a failure its base doesn't share names; a lone suspect is ejected, and several are bisected.
 - **Tolerance**: how much declared use could be wrong without the sample showing it, except with small probability.
 - **Trace**: the values on the declared circuit's wires in one run; the messages between prover and verifier are the proof transcript. Code: `verity.circuits.evaluation.reference.Trace`.
-- **Training circuit** (training): (C, θ) is a (k,q,ω,β_y)-training circuit if it has a matmul structure with prices β that satisfies T1 with (k, β) and T2 with β_y, where words one matmul multiplies are joined: no word is a weight and an activation of one matmul, a joined pair is joined by one matmul only, no ω+1 operand words are pairwise joined, and β(u)β(v) ≥ q for joined u, v.
 - **Transfer block** (network attestation): the transfer gates a network attester releases on one link, in one direction, in one tick (`bucket_ms`), proved as its own proof block. Code: `NetworkAttesterParams.grid`.
 - **Trusted computing base**: what a guarantee's conclusion depends on beyond its assumptions, each spec and its code; the assurance TCB adds Lean's kernel, Mathlib, ArkLib, the Lean check, `check` and upstream's Rust verifier.
 - **Two-stage design** (SPOT): serving commits only values read across replay-block boundaries; the first stage samples replay blocks, which the prover replays and commits, and the second samples k_t of each template t's n_t proof blocks on new challenges.
@@ -166,7 +159,6 @@ Current terms and notation, one line each, ``- **Term** (area): definition. Code
 - **Verified queue** (landing): the one landing path (`research queue vqueue`), which merges ready PRs onto `main` as candidates and moves `main` only to one with no new failure.
 - **Verifier**: the auditor's side: a live part, which the challenger runs, and a check, the Lean verifier, run offline and cross-checked by upstream Flock's Rust verifier.
 - **Wire**: a vertex of a circuit, taking a value; an input or a gate.
-- **Word** (training): a set of wires of a circuit; its width is its number of wires.
 - **Workers**: the developer's servers and GPUs, which run the computation and nearly all proving, trusted by neither party.
 - **Workload**: the developer's private input: a compiler, the advice and the trace, over a monitoring period, inference and training alike (`verity-vllm/workload/v2`).
 - **Yield**: the most counted objects a block can complete within its budgets: q_S for a server block, q(c, k) for an inference block.
@@ -179,19 +171,15 @@ Current terms and notation, one line each, ``- **Term** (area): definition. Code
 - **(c, k), 𝒞_{c,k}**: an inference block's gate and unregistered-input budgets, and the circuits with a partition into such blocks. Code: `Partition.IsCK`.
 - **𝒜_p, δ_p**: protocol p's admissible set and failure bound, Pr[accept ∧ (A, x) ∉ 𝒜_p] ≤ δ_p. Code: `ResourceAccounting.Slowdown.envelope`, `Verity.Sound`.
 - **A[X, J], Φ_X**: the gates of A placed in location X during ticks J, and X's rate in gates per second, |A[X, J]| ≤ Φ_X·|J|. Code: `ResourceAccounting.Placed.region`, `ResourceAccounting.Placed.ComputeRate`.
-- **α, λ, μ** (training): the slowdown theorem's constants, μ the most MACs an inference block holds on average.
-- **β, β_y, q, ω** (training): the operand words' prices, the price per output, the least product of joined prices, and the largest set of pairwise joined words less one.
 - **Break, B^τ, 𝒟_b^τ**: the event that the fixed finder or forger succeeds, charged and never assumed away, and the finder and PRF distinguisher at server block b built from τ.
 - **cost(C)**: GPU-hours, each server's occupied time times its GPUs on C's worst input. Code: `ResourceAccounting.Slowdown.cost`.
 - **δ_coin, δ_crypto**: the bound on the samples live challenges select, and SHA-512's binding, knowledge-soundness and PRF advantage bounds. Code: `Verity.Sound`.
-- **E(A)** (training): the outputs fed by a MAC inside A that have no wire in A.
 - **ε, δ**: an adversary's advantage, earning at cost T at most (1 + ε)·T, and the failure probability. Code: `Pouw.Gε`, `Pouw.PearlC.δPearlC`.
 - **ε_break**: the gates of the incorrect set F. Code: `Slowdown.Guarantees.Slowdown`.
 - **ε_skip**: work the proofs could miss, a share of C_X: PoUW's misses and the wrong certificates. Code: `ResourceAccounting.Compose`.
 - **ε_undecl**: registered hardware not running proved work, a share of the registered capacity C_X. Code: `Slowdown.Slowdown.residualShare`.
 - **ε_unreg**: unregistered hardware's share of the fleet's capacity, Φ(L_unreg) = ε_unreg·Φ_total. Code: `Slowdown.Slowdown.unregisteredShare`.
 - **ε_Wipe,b**: the streamed wipe's failure bound at server block b, 2^-128 + Adv_PRF. Code: `Pous.Guarantees.StreamedWipeMeetsServer5GB`.
-- **F** (training): √(2(1 − 1/ω)), 1 when no word is both a weight and an activation and 2/√3 with backpropagation.
 - **g** (PoUW): the gap, G_g at g being G_ε at ε = g/(1 − g). Code: `Pouw.GGap`.
 - **𝒢, 𝒴**: the training task, one random input x and a success test C(x) ∈ 𝒴 on the output. Code: `ResourceAccounting.Slowdown.Task`.
 - **γ**: the honest overhead: honest busy SM-time is at most (1 + γ) times the fastest stock time for the same MACs. Code: `Pouw.RelativeSecurity.Efficient`.
@@ -200,8 +188,6 @@ Current terms and notation, one line each, ``- **Term** (area): definition. Code
 - **η, P_α, η_cov**: a success probability; the properties a bound lower-bounds pointwise; and the exception's bound, Pr[success ∧ ¬⋁_α P_α] ≤ η_cov.
 - **in(S), out(S)**: the wires outside a set S of gates that are predecessors of a gate in S, and S's gates read outside it with its output gates. Code: `Circuit.into`, `Circuit.exits`.
 - **k_exfil(Y), k_infil(Y)**: block Y's exfiltration capacity, log2 of its accepted observable outputs, and what reaches Y beyond its unregistered-input budget.
-- **N, O** (training): a matmul structure's number of MACs and the total width of its outputs.
-- **ν, o** (training): N/|C|, the MACs per gate, and O/N, the output width per MAC.
 - **R**: (θ, D, 𝓘), the committed trace with the declared circuit and its inference blocks. Code: `Verity.Committed`.
 - **s_×**: the fewest gates of a counted operation, so U free gates complete at most U/s_× of them.
 - **slowdown(𝒢, 𝒜, η)**: T_𝒢(η; 𝒜)/T_𝒢(η; 𝓕), training cost under the protocols over training cost without them. Code: `ResourceAccounting.Slowdown.slowdown`.
@@ -209,5 +195,4 @@ Current terms and notation, one line each, ``- **Term** (area): definition. Code
 - **T_min, T_ref**: the least GPU-hours that fit the necessary subcomputation, and the reference training algorithm's; T_min/T_ref ≤ slowdown(𝒢, 𝒜, η).
 - **τ**: a prover strategy. Code: `Verity.Game.Strategy`.
 - **V(X, J), U(X, J)**: the verified compute and the free gates at X during J. Code: `Slowdown.Slowdown.residualShare`.
-- **W_m, X_m** (training): matmul m's weight words and activation words.
 - **x(g), t(g)**: the device and the tick a gate g of A is placed at. Code: `ResourceAccounting.Placed.x`, `ResourceAccounting.Placed.t`.
