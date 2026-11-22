@@ -1212,18 +1212,19 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "NetTiming.RegisteredInputsHeld": {
-   "owner": "@lean",
-   "issue": "LEAN-343",
-   "due": "2026-11-25",
-   "waits": "NetTiming.SecurityProofs.MonitoringPeriodLeakAccepted",
-   "why": "MonitoringPeriodLeakAccepted counts only the secrets whose every epoch meets ExecutionPhaseGood, which holds this condition inline, unnamed; nothing bounds the accepted runs whose extracted trace does not hold the registered values at the registered inputs"
-  },
   "NetTiming.Regenerates": {
    "owner": "@network-accounting",
    "digest": "0d433e5271a1ae85c0d7fde2eacabd9de68f97a6760809219bdf1ab0ba5234ec",
    "issue": "LEAN-186",
    "due": "2026-11-30"
+  },
+  "NetTiming.RegisteredInputsHeld": {
+   "owner": "@lean",
+   "digest": "cc323ff7646936e9a47ffe0e5ecfa89e25f863da08c30035c70aa6a82bb734b6",
+   "issue": "LEAN-343",
+   "due": "2026-11-25",
+   "waits": "NetTiming.SecurityProofs.MonitoringPeriodLeakAccepted",
+   "why": "MonitoringPeriodLeakAccepted counts only the secrets whose every epoch meets ExecutionPhaseGood, which holds this condition inline, unnamed; nothing bounds the accepted runs whose extracted trace does not hold the registered values at the registered inputs"
   },
   "NetTiming.ScopeAcc": {
    "owner": "@network-accounting",
