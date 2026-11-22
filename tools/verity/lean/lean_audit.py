@@ -853,6 +853,24 @@ def prune(pkg: Path) -> int:
     return n
 
 
+
+def unclaimed(pkg: Path) -> int:
+    """Remove the kept outputs of modules no library or executable of the package claims (`module_keys.Package.claims`),
+    their sources kept: Lake builds only a module a library's root prefixes, and loads any other's kept `.olean` as a
+    built dependency's, where a cold build finds none. The number removed; none where `module_keys` can't read the
+    lakefile."""
+    p = MK.package(pkg)
+    if isinstance(p, str):
+        return 0
+    n = 0
+    for sub in ("lib/lean", "ir"):
+        base = pkg / ".lake" / "build" / sub
+        for f in sorted(base.rglob("*")) if base.is_dir() else ():
+            if f.is_file() and not p.claims(".".join([*f.relative_to(base).parent.parts, f.name.split(".")[0]])):
+                f.unlink()
+                n += 1
+    return n
+
 #: the kept builds a node holds before its least recently used go: every tree whose manifest or lakefile differs adds one
 #: (dozens of them fill a 200 GB disk). Each package's newest stays past it (`WarmBuilds.evict`): a cap below the ~30
 #: packages would have every check evict some and rebuild them cold
@@ -900,7 +918,8 @@ class WarmBuilds:
             else:
                 shutil.copytree(src, dst, symlinks=True)
                 os.utime(src)
-        log(f"lean-audit: {pkg}: build warm ({k[:12]}){'' if audited else ', a copy'}; {prune(work / pkg)} stale output(s) removed")
+        stale = prune(work / pkg) + unclaimed(work / pkg)
+        log(f"lean-audit: {pkg}: build warm ({k[:12]}){'' if audited else ', a copy'}; {stale} stale output(s) removed")
 
     def give_back(self, work: Path, passed: set[Path]) -> None:
         for pkg in passed:

@@ -567,6 +567,7 @@ def build(pkg: str, tree: Path, lake: str, targets: list[str] | None = None, san
     default targets it links the dependencies' compiler plugins alone (`check.py`'s `plugin_targets`). A `lake build` in
     the sandbox reads the tree at the fixed path: ``at``, `bound`'s words (by default `bound`'s own), which a caller
     that stores what it compiled hands `built_report` too. ``cmd`` runs at the tree's own, where its arguments name files.
+    A `lake build` first removes the kept outputs of modules no target of the package claims (`lean_audit.unclaimed`).
 
     Outside the sandbox Lake restores nothing from a cache, its own included, whatever the environment or a lakefile
     says: there it restores by a hard link, and the restored file keeps the cache file's time, which `outdated` reads as
@@ -574,6 +575,8 @@ def build(pkg: str, tree: Path, lake: str, targets: list[str] | None = None, san
     `enableArtifactCache` unset; a lakefile that sets it is read before the environment, so `LAKE_CACHE_DIR` names an empty
     directory of this command's own, removed after it, and such a package finds there only what this command built."""
     at = bound(pkg, tree) if at is None else at
+    if cmd is None:
+        LA.unclaimed(tree / pkg)
     if cmd is None and targets is None and (plugins := AUDIT.plugin_targets(tree / pkg)):
         rc, text = build(pkg, tree, lake, plugins, sandbox, at=at)
         if rc:
