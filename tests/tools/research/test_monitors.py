@@ -2006,6 +2006,26 @@ def test_unverified_main_rings_ci_and_top_each_hour_past_three_the_verified_queu
         M.unverified_main(M.Ctx(now=T0, root=tmp_path))
 
 
+def test_unverified_main_is_quiet_while_the_loop_ticks_and_passes_with_nothing_to_decide(tmp_path):
+    """With nothing marked to land (every PR held for a landing), the loop ticks and passes and decides nothing for hours:
+    no fault, and ci and top were rung each hour of it. The relay reads the loop's own `tick rc=` lines: a passing tick in
+    the last ten minutes keeps it quiet; a failed last tick, or no tick for ten minutes, rings as before."""
+    decisions, log = tmp_path / M.VQUEUE_DECISIONS, tmp_path / M.VQUEUE_LOG
+    decisions.parent.mkdir(parents=True)
+    decisions.write_text(json.dumps({"action": "lacks", "at": M.iso(T0 - 10 * 3600)}) + "\n")
+
+    def tick(ago: int, rc: int) -> str:
+        return f"research queue vqueue: tick 3699: 7.6 s\n{M.iso(T0 - ago)} tick rc={rc} 54e9c1d72d8\n"
+
+    log.write_text(tick(900, 0) + tick(25, 0))
+    assert M.unverified_main(M.Ctx(now=T0, root=tmp_path)) == [], "a loop that ticks and passes has nothing to decide"
+    log.write_text(tick(50, 0) + tick(25, 1))
+    (f,) = M.unverified_main(M.Ctx(now=T0, root=tmp_path))
+    assert f.key == "vqueue:10" and f.owners == ("ci", "top"), "a failed last tick rings"
+    log.write_text(tick(M.TICKING_S + 60, 0))
+    assert [f.key for f in M.unverified_main(M.Ctx(now=T0, root=tmp_path))] == ["vqueue:10"], "a stopped loop rings"
+
+
 def test_the_nightly_check_rings_infra_once_main_has_had_no_outcome_for_36_hours(tmp_path):
     """A nightly check that stops starting, or never ends, says nothing by itself. The relay reads the loop's state on the
     control pod: quiet while its newest outcome (an error is one: the loop posts those itself) is under 36 h old, one incident
