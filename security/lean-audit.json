@@ -1223,8 +1223,7 @@
    "digest": "cc323ff7646936e9a47ffe0e5ecfa89e25f863da08c30035c70aa6a82bb734b6",
    "issue": "LEAN-343",
    "due": "2026-11-25",
-   "waits": "NetTiming.SecurityProofs.MonitoringPeriodLeakAccepted",
-   "why": "MonitoringPeriodLeakAccepted counts only the secrets whose every epoch meets ExecutionPhaseGood, which holds this condition inline, unnamed; nothing bounds the accepted runs whose extracted trace does not hold the registered values at the registered inputs"
+   "why": "ExecutionPhaseGood (MonitoringPeriodLeakAccepted's good event) and ExecutionPhaseGoodChecked (the Checked, Fails, FailsAtMost and Charged statements') hold it as a conjunct, and nothing bounds the accepted runs that fail it; no theorem discharges it as stated, so its due date is the restatement's: the verifier's test widened to every registered input, then the statement charging the accepted runs that fail it"
   },
   "NetTiming.ScopeAcc": {
    "owner": "@network-accounting",
@@ -3195,7 +3194,7 @@
   "ResourceAccounting.SecurityProofs.Remote.SketchBoundDeployed"
  ],
  "trust_gap": {
-  "NetTiming.SecurityProofs.MonitoringPeriodLeakAccepted": ["Claims.SamplingGeneric.Compiled.KS", "NetTiming.CertifierRegisters", "NetTiming.ScopeAcc"],
+  "NetTiming.SecurityProofs.MonitoringPeriodLeakAccepted": ["Claims.SamplingGeneric.Compiled.KS", "NetTiming.CertifierRegisters", "NetTiming.RegisteredInputsHeld", "NetTiming.ScopeAcc"],
   "ResourceAccounting.SecurityProofs.Remote.SketchBoundDeployed": [
    "ResourceAccounting.Assumptions.SketchHashRandom",
    "ResourceAccounting.Assumptions.SketchRank",
