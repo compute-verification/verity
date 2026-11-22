@@ -14,6 +14,7 @@ difftest against `one_stage`'s Python, beside the whole protocol (`spot-one-stag
   and `link-points` after them where it is handed the per-member form's members;
 * `fanout`: a template query's fan-out and the run Input nodes its proof blocks don't each read alone;
 * `run_input_roots`: each member's ports at C's run input nodes' trees, and a held or tied node's reader without one;
+* `wired_roots`: each member's wired rows' roots at their writers' field trees, and the reads they may open, from C;
 * `run_input_rows`: the row of a run input node each unit of a port reads (`Flock.OneCircuit.pos`, from C);
 * `registered`: the verifier's own entries for the values its parameters expect registered;
 * `domain`: a registered value's commitment domain, or a produced value's (`Produced.domain`);
@@ -89,10 +90,12 @@ difftest against `one_stage`'s Python, beside the whole protocol (`spot-one-stag
   (`Challenger`): a coin commitment and an opening as `from_json` reads them, `live_reason` and `order_reason`.
 * `challenger_key`, `challenger_record`, `challenger_trusted`: the challenger's signed record (`ChallengerRecord`): the
   verifier's key and a record as `from_json` reads them, with `record_message`, and `trusted_reason`.
-* `challenger_close`, `challenger_released`, `challenger_ledger`, `challenger_day`, `challenger_head`,
+* `challenger_close`, `challenger_released`, `challenger_ledger`, `challenger_day`, `challenger_registration`,
+  `challenger_head`,
   `challenger_session`, `challenger_credited`, `challenger_pinned`: the challenger's session (`ChallengerSession`): its
   close as `from_json` reads it, with `close_message`; `log_chain`, `released_log_of` and `by_family`; `audited_session`,
-  the auditor's ledger; `declared_day`, a window's day and its lane's declarations before it; `ledger_head`, the ledger's
+  the auditor's ledger; `declared_day`, a window's day and its lane's declarations before it; `registration_of`, the
+  registration an epoch's lane signed before it; `ledger_head`, the ledger's
   published heads; `trusted_session_of` and `credited_session`, a window counted toward its
   period's circuit, each over `pinned_session`: a session from a commit the host's pins log records and the auditor's
   first-parent list of main holds.
@@ -292,6 +295,35 @@ def runInputRoots (j : Json) : V Json := do
     | .ok rs => Json.mkObj [("roots", Json.arr (rs.map fun (n, r) => Json.arr #[.str n,
         Json.arr (r.map fun r => Json.arr #[getD r "port", getD r "tree"])])), ("refused", .null)]
     | .error e => Json.mkObj [("roots", .null), ("refused", .str e)]
+
+/-- `{"program", "query", "members", "roots"}`, as `runInputRoots`', to `{"roots", "rows"}`: each member's wired rows'
+`[port, tree, root]` (`OneStageZk.fieldRoots` over the record's output field trees, the member holding no root of its
+own) and the `[row, tree]` its registered reads may open (`OneStageZk.wiredRows`, once each and sorted), both from C;
+refused as
+`fieldRoots` refuses, and for another query or one that doesn't apply. -/
+def wiredRoots (j : Json) : V Json := do
+  let .obj _ := getD j "program" | throw "program is not an object"
+  let p ← Program.parse (← Flock.canon (getD j "program")).toUTF8
+  let some rs := Partition.templateRanges? p (getD j "query") | throw "not a template query that applies"
+  let .arr xs := getD j "members" | throw "members is not a list"
+  let ms ← xs.mapM fun
+    | .arr #[.str name, .arr us] => do
+      let units ← us.mapM fun
+        | .arr #[a, b] => match nat? a, nat? b with
+          | some lo, some hi => pure (lo, hi)
+          | _, _ => throw "a member's units are [first, end]"
+        | _ => throw "a member's units are [first, end]"
+      pure (unitsMember name units)
+    | _ => throw "a member is [name, [[first, end], ...]]"
+  let rec_ := Json.mkObj [("roots", getD j "roots")]
+  let W ← OneStageZk.derivedWiring p.prog rs
+  let rs3 := rs.map fun r => (r.template, r.first, r.count)
+  let roots ← OneStageZk.fieldRoots W rs3 ms (OneStageZk.fieldTreesOf (OneStageZk.templatesOf (ms.toList.map (·.name))) rec_) {}
+  return Json.mkObj [("roots", Json.arr (ms.map fun m => Json.arr #[.str m.name,
+      Json.arr ((roots.getD m.name #[]).map fun r => Json.arr #[getD r "port", getD r "tree", getD r "root"])])),
+    ("rows", Json.arr (ms.map fun m => Json.arr #[.str m.name,
+      Json.arr ((((OneStageZk.wiredRows W rs3 m).foldl (fun acc x => if acc.contains x then acc else acc.push x) #[]).qsort
+        fun a b => a.1 < b.1 || (a.1 == b.1 && a.2 < b.2)).map fun (r, t) => Json.arr #[.str r, .str t])]))]
 
 /-- `{"program", "indices", "port", "value", "leaves"}`, a program object, units, and a port read at the tree ``value`` of
 ``leaves`` rows, to `{"rows", "from"}`: the row each unit reads from the first (`Flock.OneCircuit.pos`, from C), or its
@@ -1180,7 +1212,7 @@ def tablesServed (j : Json) : V Json := do
 def table : List (String × (Json → V Json)) :=
   [("decode", decode), ("partition", partition), ("committed_bits", committedBits), ("unit_gates", unitGates),
    ("fanout", fanout), ("run_input_roots", runInputRoots), ("run_input_rows", runInputRows), ("registration", docket),
-   ("registered", registered),
+   ("registered", registered), ("wired_roots", wiredRoots),
    ("domain", domain), ("produced", produced), ("known_port", knownPort), ("check_draw", checkDraw), ("draw", draw), ("ran_out", ranOut),
    ("select", select), ("design", design), ("slots", slots),
    ("file_population", FilePart.piece), ("tables_held", OneStageZk.tablesPiece),
@@ -1207,7 +1239,8 @@ def table : List (String × (Json → V Json)) :=
    ("challenger_record", Challenger.recordPiece), ("challenger_trusted", Challenger.trustedPiece),
    ("challenger_close", Challenger.closePiece), ("challenger_released", Challenger.releasedPiece),
    ("challenger_ledger", Challenger.ledgerPiece), ("challenger_day", Challenger.dayPiece),
-   ("challenger_head", Challenger.headPiece),
+   ("challenger_registration", Challenger.registrationPiece), ("challenger_registration_head", Challenger.registrationHeadPiece),
+   ("challenger_registration_held", Challenger.registrationHeldPiece), ("challenger_head", Challenger.headPiece),
    ("challenger_session", Challenger.challengePhasePiece), ("challenger_credited", Challenger.creditedPiece),
    ("challenger_pinned", Challenger.pinnedPiece), ("challenger_read", Challenger.readPiece),
    ("challenger_draw_coins", Challenger.sampleCoinsPiece), ("challenger_within", Challenger.withinPiece),

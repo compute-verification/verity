@@ -18,7 +18,10 @@ its cap, committing no cap or circuit or closing with other windows, a record on
 or refused hellos the ledger didn't seal, the ledger's published heads forked, each malformed form. A lane's days (`LEDGER`,
 `DAY`: `declared_day`) are a declaration in the ledger before the opens of each day it names, then a declaration
 malformed, v1 or in a session, a day declared twice, an open on a day its lane hasn't declared or on no day, and the day
-of a window no session opens, a v1 open's or a dayless one's. The pins log's
+of a window no session opens, a v1 open's or a dayless one's. An epoch's registration (`REGISTRATION`:
+`registration_of`) is the first period-open of its lane signed before its first entry that names one, the same head
+named again after it, then none, one only on another lane or only after the epoch, a second head, a malformed one,
+and the forms. The pins log's
 (`PINNED`) are a session whose open seals the host's pins log and pins its commit, then a commit off main or pinned
 after the open, no pins log, a malformed one or line, one cut or with a sealed line edited, and an open sealing
 none. A sample's coins (`READ`, `SAMPLE_COINS`: `read_reason` and `coins_reason`, `Spot.ChallengerCoins`) are
@@ -635,6 +638,38 @@ def day(j: Any) -> Any:
 
     def go():
         return Ch.declared_day(j["ledger"], j["window"], Ch.ChallengerKey.from_json(j["key"]), lms_verify)
+    return _refusing(go)
+
+
+def registration(j: Any) -> Any:
+    _request(j, ["key", "ledger", "window"])
+
+    def go():
+        return {"registration": Ch.registration_of(j["ledger"], j["window"], Ch.ChallengerKey.from_json(j["key"]),
+                                                   lms_verify)}
+    return _refusing(go)
+
+
+def registration_head(j: Any) -> Any:
+    _request(j, ["key", "lane", "ledger"])
+
+    def go():
+        if not isinstance(j["lane"], str):
+            raise Ch.CoinError("the lane is not a string")
+        return {"registration": Ch.registration_head(j["ledger"], j["lane"], Ch.ChallengerKey.from_json(j["key"]),
+                                                     lms_verify)}
+    return _refusing(go)
+
+
+def registration_held(j: Any) -> Any:
+    _request(j, ["digest", "key", "lane", "ledger", "window"])
+
+    def go():
+        if not (isinstance(j["lane"], str) and isinstance(j["digest"], str)):
+            raise Ch.CoinError("the lane or digest is not a string")
+        Ch.registration_held(j["ledger"], j["window"], j["lane"], j["digest"], Ch.ChallengerKey.from_json(j["key"]),
+                             lms_verify)
+        return {"held": True}
     return _refusing(go)
 
 
@@ -1464,6 +1499,103 @@ def day_case(rng: random.Random, name: str) -> Any:
             j["ledger"] = lg.lines()
             del j[rng.choice(sorted(j))]
     return j
+
+
+REGISTRATION_NAMES = ["honest", "same-twice", "no-ledger", "none", "other-lane", "after", "second", "form", "no-open",
+                      "window-form", "key-form", "request"]
+
+
+def registration_case(rng: random.Random, name: str) -> Any:
+    return _registration_parts(rng, name)[0]
+
+
+def _registration_parts(rng: random.Random, name: str) -> tuple[Any, str, str, str]:
+    """`registration_case`'s request, with the registration the honest ledger signs, another digest and the lane."""
+    s = _ledger_session(rng)
+    lg = Ledger(rng, s, period=rng.choice(["open", "closed"]) if name != "after" else None)
+    while name == "after" and lg.period_open is not None:
+        lg = Ledger(rng, s)
+    head, other = rng.randbytes(64).hex(), rng.randbytes(64).hex()
+    j = {"key": s.key.to_json(), "ledger": None, "window": lg.window}
+    if lg.period_open is not None and name not in ("none", "other-lane"):
+        lg.period_open["registration"] = head
+    at = 2 if lg.v1 else 0
+
+    def earlier(lane: str, named: Any) -> None:
+        first = {"by": "operator", "cap": 4, "circuit": rng.choice(CIRCUITS),
+                 "key_sha512": hashlib.sha512(s.pub).hexdigest(), "lane": lane, "period": "p-first", "registration": named}
+        lg.events[at:at] = [("period-open", None, first), ("period-close", None,
+                                                            {"complete": False, "lane": lane, "period": "p-first",
+                                                             "windows": []})]
+    match name:
+        case "same-twice":
+            earlier(lg.lane, head)
+        case "no-ledger":
+            j["ledger"] = None
+            return j, head, other, lg.lane
+        case "other-lane":
+            earlier(rng.choice([x for x in LANES if x != lg.lane]), head)
+        case "after":
+            if lg.period_open is None:
+                lg.events.append(("period-open", None, {"by": "operator", "cap": 4, "circuit": rng.choice(CIRCUITS),
+                                                        "key_sha512": hashlib.sha512(s.pub).hexdigest(),
+                                                        "lane": lg.lane, "period": "p-after", "registration": head}))
+        case "second":
+            earlier(lg.lane, other)
+        case "form":
+            lg.period_open["registration"] = rng.choice(["", head.upper(), head[:-2], 5, None, [head]])
+        case "no-open":
+            j["window"] = _window(rng)
+        case "window-form":
+            w = lg.window["root"]
+            j["window"] = rng.choice([{"root": w, "period": "p-0"}, {"root": w.upper()}, None])
+        case "key-form":
+            j["key"] = key_case(rng, rng.choice(KEY_NAMES[1:]))
+        case "request":
+            j["ledger"] = lg.lines()
+            del j[rng.choice(sorted(j))]
+            return j, head, other, lg.lane
+    j["ledger"] = lg.lines()
+    return j, head, other, lg.lane
+
+
+REGISTRATION_HEAD_NAMES = ["honest", "none", "other-lane", "second", "same-twice", "form", "lane-form", "key-form",
+                           "request"]
+
+
+def registration_head_case(rng: random.Random, name: str) -> Any:
+    """The half before the draw: `registration_case`'s ledger, read for the auditor's lane (`other-lane`: one the ledger
+    opens no period on)."""
+    j, _, _, lane = _registration_parts(rng, {"lane-form": "honest", "request": "honest"}.get(name, name))
+    out = {"key": j["key"], "lane": lane, "ledger": j["ledger"]}
+    match name:
+        case "other-lane":
+            out["lane"] = "lane-the-ledger-never-opens"
+        case "lane-form":
+            out["lane"] = rng.choice([None, 5, [lane]])
+        case "request":
+            del out[rng.choice(sorted(out))]
+    return out
+
+
+REGISTRATION_HELD_NAMES = ["honest", "after", "none", "second", "digest-other", "lane-other", "no-open", "window-form",
+                           "key-form", "request"]
+
+
+def registration_held_case(rng: random.Random, name: str) -> Any:
+    """The half after the draw: `registration_case`'s ledger, holding the session, against the digest the run was held to
+    before the draw and the auditor's lane."""
+    base = {"digest-other": "honest", "lane-other": "honest", "request": "honest"}.get(name, name)
+    j, head, other, lane = _registration_parts(rng, base)
+    out = {"digest": head, "key": j["key"], "lane": lane, "ledger": j["ledger"], "window": j["window"]}
+    match name:
+        case "digest-other":
+            out["digest"] = other
+        case "lane-other":
+            out["lane"] = rng.choice([x for x in LANES if x != lane])
+        case "request":
+            del out[rng.choice(sorted(out))]
+    return out
 
 
 HEAD_NAMES = ["honest", "no-heads", "empty", "heads-type", "head-refused", "fork", "key-form", "request"]
@@ -2781,6 +2913,14 @@ LEDGER = D.Port(PIECES, "challenger_ledger", ledger, _cases(ledger_case, LEDGER_
                 need_rejects=False, of_record="lean")
 DAY = D.Port(PIECES, "challenger_day", day, _cases(day_case, DAY_NAMES), package=PACKAGE, need_rejects=False,
              of_record="lean")
+REGISTRATION = D.Port(PIECES, "challenger_registration", registration, _cases(registration_case, REGISTRATION_NAMES),
+                      package=PACKAGE, need_rejects=False, of_record="lean")
+REGISTRATION_HEAD = D.Port(PIECES, "challenger_registration_head", registration_head,
+                           _cases(registration_head_case, REGISTRATION_HEAD_NAMES), package=PACKAGE, need_rejects=False,
+                           of_record="lean")
+REGISTRATION_HELD = D.Port(PIECES, "challenger_registration_held", registration_held,
+                           _cases(registration_held_case, REGISTRATION_HELD_NAMES), package=PACKAGE, need_rejects=False,
+                           of_record="lean")
 HEAD = D.Port(PIECES, "challenger_head", head, _cases(head_case, HEAD_NAMES), package=PACKAGE, need_rejects=False,
               of_record="lean")
 SESSION = D.Port(PIECES, "challenger_session", session, _cases(session_case, SESSION_NAMES), package=PACKAGE,
@@ -2818,7 +2958,10 @@ RUNS = [(COMMITMENT, commitment_case, COMMITMENT_NAMES, 300), (OPENING, opening_
         (REASON, reason_case, REASON_NAMES, 400), (ORDER, order_case, ORDER_NAMES, 400), (KEY, key_case, KEY_NAMES, 200),
         (RECORD, record_case, RECORD_NAMES, 200), (TRUSTED, trusted_case, TRUSTED_NAMES, 300),
         (CLOSE, close_case, CLOSE_NAMES, 200), (RELEASED, released_case, RELEASED_NAMES, 300),
-        (LEDGER, ledger_case, LEDGER_NAMES, 300), (DAY, day_case, DAY_NAMES, 200), (HEAD, head_case, HEAD_NAMES, 100),
+        (LEDGER, ledger_case, LEDGER_NAMES, 300), (DAY, day_case, DAY_NAMES, 200),
+        (REGISTRATION, registration_case, REGISTRATION_NAMES, 200), (HEAD, head_case, HEAD_NAMES, 100),
+        (REGISTRATION_HEAD, registration_head_case, REGISTRATION_HEAD_NAMES, 200),
+        (REGISTRATION_HELD, registration_held_case, REGISTRATION_HELD_NAMES, 200),
         (SESSION, session_case, SESSION_NAMES, 300), (CREDITED, credited_case, CREDITED_NAMES, 200),
         (PINNED, pinned_case, PINNED_NAMES, 200), (READ, read_case, READ_NAMES, 200),
         (SAMPLE_COINS, sample_coins_case, SAMPLE_COINS_NAMES, 200), (SEED_SALT, seed_salt_case, SEED_SALT_NAMES, 200),

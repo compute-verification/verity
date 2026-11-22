@@ -40,7 +40,7 @@ from verity.commitments.periods.rows import registered as registered_commit
 
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.config import CHECKPOINTS
-from verity_vllm.records.weights_registration import OF_RECORD, WeightsRegistration
+from verity_vllm.records.weights_registration import WeightsRegistration
 
 from . import window_circuit as WC
 from .common import _arr_shape
@@ -385,12 +385,10 @@ def register(registered: Any, out: str | Path, checkpoint_dir: str, checkpoints:
              tables: Any = None) -> str:
     """The deployment's one registration, written into ``out`` before its first epoch: the committer's weights
     registration (`REGISTRATION`, `weights_registration`), its salts beside it, under which every later epoch commits its
-    weights, its projection (`OF_RECORD`) and its record (`DEPLOYMENT_RECORD`, `deployment_record`).
+    weights, and its record (`DEPLOYMENT_RECORD`, `deployment_record`).
     -> the record's digest (`docket_digest.digest`). Refused (ValueError) where ``out`` holds a registration, naming its
     digest."""
     from verity.commitments import docket_digest as DD
-
-    from verity_vllm.records import weights_registration as WRG
 
     out = Path(out)
     if (out / DEPLOYMENT_RECORD).is_file() or (out / REGISTRATION).is_file():
@@ -401,11 +399,10 @@ def register(registered: Any, out: str | Path, checkpoint_dir: str, checkpoints:
                                tables=tables)
     rec = deployment_record(doc)
     (out / REGISTRATION).write_text(json.dumps(doc, indent=1) + "\n")
-    WRG.write_of_record(out / REGISTRATION)
     (out / DEPLOYMENT_RECORD).write_text(json.dumps(rec, indent=1) + "\n")
     return DD.digest(rec)
 
 
-__all__ = ["DEPLOYMENT", "DEPLOYMENT_RECORD", "OF_RECORD", "REGISTRATION", "WEIGHTS_CLASS", "Grain", "WeightsRegistration",
+__all__ = ["DEPLOYMENT", "DEPLOYMENT_RECORD", "REGISTRATION", "WEIGHTS_CLASS", "Grain", "WeightsRegistration",
            "deployment_record", "record_words", "register", "registration_pins", "value_salts", "weight_value",
            "weight_values", "weights_record", "weights_registration"]

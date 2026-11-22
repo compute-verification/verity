@@ -8,6 +8,7 @@
 # row reads one output field of its writer whole, from that field's tree.
 # TEMPLATE: the block's template's descriptor id.
 # research run --on auto --cwd source --mem-gb 96 --cpus 16 --timeout 3h -- bash benchmarks/one_stage/served_door_prove.sh
+[ -n "${AUDIT_RULE:-}" ] || echo "NOT AN ACCEPTED RUN: the registered file the verifier read was written by the staging side, so this is not an accepted run"
 set -uxo pipefail
 TEMPLATE=${TEMPLATE:-'OutCollect_v1{KO=2,FIRST=true}'}
 export TU_PINNED=slot RAYON_NUM_THREADS=$(nproc)
@@ -84,12 +85,19 @@ if [ -n "${AUDIT_RULE:-}" ]; then  # the staged window on the audit's road: reco
   r=$?; cat $O/time-window.txt; grep -h '^STEP' $O/window.txt | cut -c1-3000; [ $r = 0 ] || { tail -c 4000 $O/window.txt; exit 5; }
   cp $S/window/registration.json $S/window/circuit.json $O/
   git -C $REPO rev-list --first-parent HEAD > $S/main.txt 2>/dev/null || git -C $REPO rev-parse HEAD > $S/main.txt || echo 00 > $S/main.txt
+  REG_FLAGS=""
+  if [ -n "${REGISTRATION_LANE:-}" ]; then  # the auditor opens the lane's period with the registration before any session
+    ( unset PYTHONPATH; $UV run -q python benchmarks/one_stage/local_registration.py $S/challenger-host $S/main.txt \
+        $S/window "$REGISTRATION_LANE" $S/registration --deployed-key --pins $S/window/pins.json ) > $O/registration.txt 2>&1 || { tail -c 3000 $O/registration.txt; exit 5; }
+    grep -h '^REGISTERED' $O/registration.txt
+    REG_FLAGS="--challenger-host $S/challenger-host --registration $S/registration/registration.json --registration-ledger $S/challenger-host/var/windows.jsonl --challenger-key $S/registration/challenger-key.json --registration-lane $REGISTRATION_LANE"
+  fi
   M0=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proof/flock/prover/python:$REPO/adapters/vllm
   ( unset PYTHONPATH FC_COINS TU_PINNED; export PATH=$(dirname $RT_BIN):$PATH; RUST_MIN_STACK=$((64 << 20)) timed audit $UV run -q python benchmarks/prove_path/records_audit.py audit \
       --window $S/window --sampling-design "$AUDIT_RULE" --circuit $(sha512sum $S/window/circuit.json | cut -c1-128) \
       --run $(python3 -c 'print("ab" * 64)') --challenger local --deployed-key --registered $S/window/pins.json \
-      --registered-digest $(sha512sum $S/window/pins.json | cut -c1-128) --registered-digest-source stand-in --main $S/main.txt --m0-pythonpath $M0 \
-      --bin $B --lean $LEAN_BIN --zk-server $FW_BIN --lower $LOW_BIN --tmpl-unit-bin $UNIT_BIN --ports ${AUDIT_PORTS:-64} ${AUDIT_FLAGS:-} --out $S/audit ) > $O/audit.log 2> $O/audit.err
+      --main $S/main.txt --m0-pythonpath $M0 \
+      --bin $B --lean $LEAN_BIN --zk-server $FW_BIN --lower $LOW_BIN --tmpl-unit-bin $UNIT_BIN --ports ${AUDIT_PORTS:-64} ${AUDIT_FLAGS:-} $REG_FLAGS --out $S/audit ) > $O/audit.log 2> $O/audit.err
   r=$?; echo "audit rc $r"; cat $O/time-audit.txt; grep -h '^RECORDS\|^REFUSED\|^DRAW\|^MEMBER\|^VERDICT\|^CHECK\|^UNLOWERED\|^A5' $O/audit.log | cut -c1-3000
   tail -c 3000 $O/audit.err
   cp -r $S/audit/summary.json $S/audit/window/summary.json $S/audit/window/case-v2.json $O/ 2>/dev/null

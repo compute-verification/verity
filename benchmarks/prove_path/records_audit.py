@@ -132,8 +132,8 @@ its members from them and the registered reads and window ingress it declares be
 registered only at a parameter ``--pin`` or ``--pins`` names (`pins_of`), with the root the verifier fixed before the run,
 and only where the window's registration (``--registration``) records that root for it (`registration_roots`,
 `interface.held_params`), any other free. A pin names its parameter alone: for vLLM's window circuit, each weight's
-``weights/<label>@<words>``, at the hiding root the committer registered for it once per model and key before the first
-window's coins (``--pins REGISTRATION``, the ``{program, values}`` the audit's ``--registered`` takes:
+``weights/<label>@<words>``, at the hiding root the committer registered for it once per deployment before its first
+epoch's coins (``--pins REGISTRATION``, the committer's registration file:
 `verity_vllm.program.predict.window_weights.weights_registration`), never a root the verifier computes from a checkpoint,
 and which `verity-vllm advice --weights-of-record` records in each window's registration. Its rotary table has a root
 only where the committer registered the words its engine serves (within the analytic table's bound); else its reads stay
@@ -220,6 +220,7 @@ from verity.protocols.run import schemes  # noqa: E402
 from verity.protocols.proof.spot.verifier import service as S  # noqa: E402
 from verity.protocols.proof.spot.verifier.one_stage import docket as DK  # noqa: E402
 from verity.commitments import registered_value as RV  # noqa: E402
+from verity.circuits import supplied as SU  # noqa: E402
 from verity.circuits.codec import program_digest  # noqa: E402
 from verity.commitments.periods import history as HW, interface as IF  # noqa: E402
 
@@ -658,6 +659,19 @@ def tie_of(circuit: Mapping[str, Any], w: Mapping[str, Any] | None, prefix: str 
              "outputs": outputs, "schemas": {**fresh["schemas"], **{v: IF.value_format(reg, v)[0] for v in values}}}, pins)
 
 
+def anchored(tied: Mapping[str, Any], docket: Mapping[str, Any], program: Any, reg: Any) -> dict[str, Any]:
+    """``tied`` with each table's root and domain anchor C's marks name (`supplied.anchors`) among the values the
+    verifier expects registered (``registered``, at the words of the docket's entry of it, and ``schemas``), which R7
+    recomputes from the table's pin. Refused (ValueError) for an anchor the docket registers other than once."""
+    if not (anchors := SU.anchors(program)):
+        return dict(tied)
+    got = {v: [e for e in docket.get("registered") or () if e.get("value") == v] for v in anchors}
+    if bad := sorted(v for v, es in got.items() if len(es) != 1):
+        raise ValueError(f"the docket registers the table anchors {bad} other than once")
+    return {**tied, "registered": {**tied.get("registered", {}), **{v: int(es[0]["words"]) for v, es in got.items()}},
+            "schemas": {**tied.get("schemas", {}), **{v: IF.value_format(reg, v)[0] for v in anchors}}}
+
+
 #: what holds the roots of Pearl+'s window record to the ones its passes credited, which an audit tied to it rests on
 PEARL_CREDIT = ("W's roots are the ones Pearl+'s verdict credits (`served_passes.py verify --tie W`), the prover's "
                 "development verifier: it reads the prover's salt key and opens drawn rows in the clear, values this audit's "
@@ -709,15 +723,76 @@ def _held_naming(named: Mapping[str, Any], day: int, digests: set[str], where: s
 DAY_SOURCES = {"device": "the challenger's signed ledger (--day-ledger)",
                "development": "development: --day and the prover's --day-log, not device-bound"}
 
-#: where R8's weights' registration of record's digest came from, as the summary's ``weights_of_record`` says
-WEIGHTS_SOURCES = {"stand-in": "held to a registration the serving node wrote at this serve's start, its digest the file's "
-                               "own, pinned by no one: a stand-in"}
-#: the sources of a digest not built yet, each refused by name
-WEIGHTS_SOURCES_NOT_BUILT = {"tree-pin": "a digest pinned in the tree before the serve needs the one registration made "
-                                         "before any serve, which is not built",
-                             "ledger": "a digest read from the challenger's signed ledger is not built"}
-REGISTERED_DIGEST_WHY = ("--registered needs --registered-digest and --registered-digest-source: the verifier holds the "
-                         "file to the digest it is handed and computes none from the file")
+#: where the registration R8 holds the deployment's registration record to was taken, as the audit's first line and the
+#: summary's ``registration`` say: the challenger's signed ledger, or the development path, named
+REGISTRATION_SOURCES = {"ledger": "the registration log's head the challenger signed for the epoch's lane before its first "
+                                  "coin (--registration-ledger)",
+                        DK.DEVELOPMENT: DK.DEVELOPMENT_WHY}
+REGISTRATION_NEEDS = ("--registration needs --registration-ledger (with --challenger-key and --registration-lane) or "
+                      "--registration-head development: the registration's digest is read from the challenger's signed "
+                      "ledger for the auditor's lane, and the "
+                      "development path is taken only where named")
+
+
+def registration_param(a: argparse.Namespace) -> dict[str, Any]:
+    """The parameters' ``registration`` (`docket.registration_parsed`) of ``--registration``: the record's bytes in hex,
+    with the ledger's lines and the auditor's lane, or the development path named."""
+    from verity.protocols.proof.spot.verifier.challenger import challenger as Ch, challenger_session as AC
+    body = Path(a.registration).read_bytes().hex()
+    if a.registration_ledger:
+        try:
+            lines = AC.ledger_lines_at(a.registration_ledger, getattr(a, "gate_key", None))
+        except Ch.CoinError as e:
+            raise SystemExit(f"REGISTRATION refused: {e}") from None
+        return {"record": body, "ledger": lines, "lane": a.registration_lane}
+    return {"record": body, "head": DK.DEVELOPMENT}
+
+
+#: the lanes a run of record is on: infra names ``record-N`` for runs of record alone, and a run on any other lane
+#: (``rehearsal-N`` included) is never promoted
+RECORD_LANE = re.compile(r"record-[1-9][0-9]*")
+
+
+def of_record_why(row: dict[str, Any]) -> str | None:
+    """Why the audit's run is not a run of record, None where it is: it accepted, its registration is the challenger's
+    signed head on a lane named ``record-N`` (`RECORD_LANE`), held to the key the operator posted, and no member was left
+    unverified."""
+    reg = row["registration"]
+    if not row["ok"]:
+        return "the audit did not accept"
+    if reg["source"] != "ledger":
+        return "its registration is the development path, not the challenger's signed head"
+    if not RECORD_LANE.fullmatch(reg.get("lane") or ""):
+        return f"its lane {reg.get('lane')} is not a lane of record (record-N); a run on another lane is never promoted"
+    if not reg.get("key_pinned"):
+        return "the challenger's key was not held to the operator's posted digest (--challenger-key-sha512)"
+    if "not_verified" in row:
+        return "members were left unverified"
+    return None
+
+
+def registration_line(a: argparse.Namespace) -> tuple[str, dict[str, Any]]:
+    """The audit's first line and the summary's ``registration``: with ``--registration-ledger``, the lane, the
+    deployment's registration record's digest (which `docket.registration_parsed` refuses unless the ledger's head for the
+    lane is it) and the challenger's key (its public key's SHA-512) it is held to; else the development line."""
+    taken = "ledger" if a.registration_ledger else a.registration_head
+    if not a.registration_ledger:
+        return ("REGISTRATION " + (DK.registration_first(taken if a.registration else None) or REGISTRATION_SOURCES[taken]),
+                {"digest": None, "source": DK.DEVELOPMENT})
+    from verity.commitments import docket_digest as DD
+    from verity.protocols.proof.spot.verifier.challenger import challenger as Ch
+    try:
+        digest = DD.digest(json.loads(Path(a.registration).read_text()))
+        key = hashlib.sha512(Ch.key_of_record(json.loads(Path(a.challenger_key).read_text())).public).hexdigest()
+    except (OSError, ValueError, KeyError, TypeError, Ch.CoinError) as e:
+        raise SystemExit(f"REGISTRATION refused: the record or the challenger's key record is unreadable or malformed "
+                         f"({type(e).__name__}: {e})") from None
+    pinned = getattr(a, "challenger_key_sha512", None)
+    if pinned is not None and pinned != key:
+        raise SystemExit(f"REGISTRATION refused: the challenger's key record holds key {key[:16]}..., not the pinned "
+                         f"{pinned[:16]}... (--challenger-key-sha512)")
+    held = {"digest": digest, "source": "ledger", "lane": a.registration_lane, "key": key, "key_pinned": pinned is not None}
+    return f"REGISTRATION lane {a.registration_lane} digest {digest} key {key}: {REGISTRATION_SOURCES['ledger']}", held
 
 
 def device_day(lines: list[str], root: str, key: Any, verify: Callable[[Any, bytes, bytes], bool],
@@ -1110,13 +1185,12 @@ def forged_outcome(s: dict, wdir: Path, member: int | None = None, more: Mapping
 def audit(a: argparse.Namespace) -> int:
     """The audit (module docstring) into ``a.out``: ``summary.json`` and a ``RECORDS`` line, its ``definitions`` the module
     each member template's Definition is in and ``loaded`` the ``verity*`` packages the process loaded. -> 0 when it passed."""
-    if a.registered and not (a.registered_digest and a.registered_digest_source):
-        raise SystemExit(REGISTERED_DIGEST_WHY)
-    if a.registered_digest_source in WEIGHTS_SOURCES_NOT_BUILT:
-        raise SystemExit(f"--registered-digest-source {a.registered_digest_source}: "
-                         f"{WEIGHTS_SOURCES_NOT_BUILT[a.registered_digest_source]}")
-    if a.registered:
-        print("WEIGHTS " + WEIGHTS_SOURCES[a.registered_digest_source], flush=True)
+    taken = "ledger" if a.registration_ledger else a.registration_head
+    if a.registration and taken not in REGISTRATION_SOURCES or (a.registration_ledger and not (a.challenger_key
+                                                                                               and a.registration_lane)):
+        raise SystemExit(REGISTRATION_NEEDS)
+    first, a.registration_row = registration_line(a)
+    print(first, flush=True)
     own_tree()
     import a5 as A5
     from verity.protocols.proof.spot.verifier.challenger import challenger_session as AC
@@ -1128,12 +1202,22 @@ def audit(a: argparse.Namespace) -> int:
     try:
         mine, doc, sets = verifier_window(wdir, a.sampling_design, Path(a.template_sets) if a.template_sets else None)
         A5.progress("window", t0, members=len(mine.members))
-        weights = Path(a.registered).read_bytes() if a.registered else None
-        pins = pinned(json.loads(weights)) if weights is not None else {}
-        if weights is not None:
-            a.weights_of_record = (weights, a.registered_digest)
+        pins = pinned(json.loads(Path(a.registered).read_bytes())) if a.registered else {}
+        if a.registration:
+            from verity.protocols.proof.spot.verifier.challenger import challenger as Ch
+            a.registration_json = registration_param(a)
+            a.registration_challenger = None if not a.registration_ledger else {
+                "key": Ch.key_of_record(json.loads(Path(a.challenger_key).read_text())).to_json(), "label": AC.family(0)}
+            try:
+                body, head, _ = DK.registration_parsed(a.registration_json, a.registration_challenger, mine.run,
+                                                       AC.lms_verify)
+            except DK.RegistrationRefused as e:
+                raise SystemExit(f"REGISTRATION refused: {e}") from None
+            a.registration_digest = head
+            rec = json.loads(body)
             marks = set(DK.marked_inputs(mine.program))
-            held = DK.weights_held(mine.program, mine.query, (), a.weights_of_record)[1]
+            held = DK.weights_held(mine.program, mine.query, (), (body, head))[1]
+            pins |= pinned({"program": rec["program"], "values": {e["value"]: e for e in rec["registered"]}})
             # disjoint only by the marks: a marked input's pin is R8's (held), never the file's own entry (pinned)
             pins = {v: e for v, e in pins.items() if v not in marks} | {v: {"value": v, **e} for v, e in held.items()}
         def resolve(t: str) -> Any:
@@ -1150,6 +1234,7 @@ def audit(a: argparse.Namespace) -> int:
         w_tie = json.loads(Path(a.tie_file).read_text()) if a.tie_file else None
         decl = IF.declarations(doc)[2]
         tied, tie_pins = tie_of(doc, w_tie, a.tie_prefix, phase_values(docket, decl.values if decl else ()))
+        tied = anchored(tied, docket, mine.program, decl)
         if twice := sorted(set(tie_pins) & set(pins)):
             raise ValueError(f"values {twice} are both pinned and the earlier registration's")
         pins |= tie_pins
@@ -1211,7 +1296,7 @@ def audit(a: argparse.Namespace) -> int:
     A5.progress("records", t0, negatives=len(more))
     manager, a.coins, finisher = AC.start(a.challenger, mine.run, [0], out / "challenger", a.main, ssh_key=a.gate_key,
                                           peer=a.peer, key_record=a.challenger_key, deployed=a.deployed_key,
-                                          local=LC.Local)
+                                          host=Path(a.challenger_host) if a.challenger_host else None, local=LC.Local)
     try:
         s, ok = A5.audit(a, sets, out / "window", mine, wdir, lambda x: source(x, held), a.port,
                          {"verifier_window_s": window_s, "circuit": held["circuit"], **({"compile": compiled} if compiled else {}),
@@ -1227,7 +1312,7 @@ def audit(a: argparse.Namespace) -> int:
     row = {"seconds": round(time.time() - t0, 1), "verifier_window_s": window_s, "circuit": held["circuit"],
            "compiler": held["compiler"], "advice": held["advice"], "compile": compiled, "law": a.sampling_design,
            "sampling_design": a.sampling_design, **({"compiled": NOT_CHECKED} if a.prover_circuit else {}),
-           **{x: s.get(x) for x in ("run_root", "population", "members", "registration", "source", "refused", "checks_before_draw",
+           **{x: s.get(x) for x in ("run_root", "population", "members", "source", "refused", "checks_before_draw",
                                     "audit", "draw", "draw_counts", "negatives", "negatives_skipped", "coins",
                                     "timing", "outputs", "negative_workers", "plain", "arm", "coin_trees")}}
     bits = int((held["advice"] or {}).get("bits", 0))
@@ -1238,9 +1323,19 @@ def audit(a: argparse.Namespace) -> int:
         row["registered"] = {"pins": counted, "roots": roots, "members": len(reads), "own": {**ties, **untied}}
     if tied.get("log"):
         row["tie"] = tie_row(tied)
-    if a.registered:
-        row["weights_of_record"] = {"digest": a.weights_of_record[1],
-                                    "source": WEIGHTS_SOURCES[a.registered_digest_source]}
+    row["circuit_registration"] = s.get("registration")
+    row["registration"] = {**a.registration_row, "digest": a.registration_digest if a.registration else None}
+    lean_members = (s.get("audit") or {}).get("members_lean") or {}
+    if lean_members.get("ran") is False:
+        row["not_verified"] = {"members": list(lean_members.get("not_verified") or []), "why": lean_members.get("reason")}
+    if a.registration_ledger:
+        row["registration_halves"] = ["before the draw"]
+        try:
+            DK.registration_after_draw(a.registration_json, a.registration_challenger, mine.run, a.registration_digest,
+                                       published, AC.lms_verify)
+            row["registration_halves"].append("after the draw")
+        except DK.RegistrationRefused as e:
+            row["registration_after_draw"] = str(e)
     if day:
         row["day"] = {"day": day["day"], "declared": [d["program"] for d in day["declarations"] if d["day"] == day["day"]],
                       "source": DAY_SOURCES["device" if a.day_ledger else "development"]}
@@ -1273,12 +1368,22 @@ def audit(a: argparse.Namespace) -> int:
             row["ok"] = row["ok"] and pe["edits"] > 0 and pe["refused"] == pe["edits"]
             print("PROOF-EDITS " + json.dumps({x: pe.get(x) for x in ("edits", "refused", "member", "session")}))
     row["ok"] = row["ok"] and not row["coins_session"]["error"]
+    row["ok"] = row["ok"] and (not a.registration_ledger or "after the draw" in row["registration_halves"])
     row["ok"] = row["ok"] and (acts is None or acts["ok"])
+    row["not_of_record"] = of_record_why(row)
+    row["of_record"] = row["not_of_record"] is None
     (out / "summary.json").write_text(json.dumps(row, indent=1, sort_keys=True, default=str))
-    print("RECORDS " + json.dumps({x: row.get(x) for x in ("ok", "circuit", "population", "draw", "draw_counts", "outputs", "seconds")}
+    if row["not_of_record"] is not None:
+        print("NOT-OF-RECORD " + row["not_of_record"])
+    if "not_verified" in row:
+        print("NOT-VERIFIED " + json.dumps(row["not_verified"], sort_keys=True))
+    print("RECORDS " + json.dumps({x: row.get(x) for x in ("ok", "of_record", "not_of_record", "circuit", "population", "draw", "draw_counts", "outputs", "seconds")}
                                   | {"compile": PROVER_CIRCUIT if a.prover_circuit else (compiled or {}).get("ok"),
                                      "fixed_before_draw": (row.get("fixed_before_draw") or {}).get("ok"),
-                                     "weights_source": (row.get("weights_of_record") or {}).get("source"),
+                                     "circuit_registration": row["circuit_registration"],
+                                     "registration": row["registration"],
+                                     **({"not_verified": row["not_verified"]} if "not_verified" in row else {}),
+                                     **({x: row[x] for x in ("registration_halves", "registration_after_draw") if x in row}),
                                      "accepted": (s.get("audit") or {}).get("accepted"),
                                      "negatives_refused": all((row.get("negatives") or {"none": False}).values()),
                                      "definitions": row["definitions"], "loaded": row["loaded"],
@@ -1380,13 +1485,21 @@ def main(argv: list[str] | None = None) -> int:
                    "(challenger-key/v1), never the session's key.json")
     p.add_argument("--gate-key", help="with --challenger gate:USER@HOST: the lane's own gate key (default ssh's own)")
     p.add_argument("--main", help="with --challenger: the verifier's copy of main's first-parent history")
+    p.add_argument("--challenger-host", help="with --challenger local: the host to reopen, whose ledger the auditor "
+                   "opened the lane's period in before the audit (benchmarks/one_stage/local_registration.py)")
     p.add_argument("--registered", help="the registered values' entries the verifier pinned before the run, {program, "
                    "values} (`pinned`), for a circuit that reads them")
-    p.add_argument("--registered-digest", help="with --registered, which is refused without it: the SHA-512 the file is "
-                   "held to (`docket.weights_held`)")
-    p.add_argument("--registered-digest-source", choices=sorted({*WEIGHTS_SOURCES, *WEIGHTS_SOURCES_NOT_BUILT}),
-                   help="with --registered-digest: where it came from, which the audit's first line and the summary's "
-                   "weights_of_record say (`WEIGHTS_SOURCES`); tree-pin and ledger are refused, not built")
+    p.add_argument("--registration", help="the deployment's registration record (verity/registration/v2), whose "
+                   "registered entries R8 holds the circuit's registered inputs to (`docket.registration_parsed`)")
+    p.add_argument("--registration-ledger", help="with --registration and --challenger-key: the auditor's ledger, whose "
+                   "challenger signed the record's digest for the epoch's lane before its first coin")
+    p.add_argument("--challenger-key-sha512", help="with --registration-ledger: the SHA-512 of the challenger's public key "
+                   "the operator posted from the device, which the key record must hold; a run of record needs it")
+    p.add_argument("--registration-lane", help="with --registration-ledger: the lane the auditor names, whose "
+                   "period-open signs the registration; the session the audit draws on must be on it")
+    p.add_argument("--registration-head", choices=[DK.DEVELOPMENT],
+                   help="with --registration, no ledger: the development path, named; the audit's first line says the "
+                   "digest was taken from the serving node's own file and is held by no one else")
     p.add_argument("--tie", dest="tie_file", help="the earlier registration W (PoUW H1's of the window, or Pearl+'s window "
                    "record) that registered first the values the circuit's program takes, which the window's registration "
                    "registers as W's, chained right after it (`tie_of`); a circuit with values needs it")

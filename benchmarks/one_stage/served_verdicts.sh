@@ -18,7 +18,14 @@
 #     the checkpoint CKPT, REPO's snapshot at REV under HF_HOME, and the rotary table at the words the engine serves,
 #     $D/private/cos_sin_cache.npy, once within the analytic table's bound, committed under fresh OS salts in the salt file
 #     $D/weights_registration.salts/ (0700, `salt_file.beside`), neither of which a record copies); WEIGHTS says how many it roots and which it leaves unrooted, and
-#     why, or NO WEIGHTS REGISTRATION why not, and then every weight read counts free.
+#     why, or NO WEIGHTS REGISTRATION why not, and then every weight read counts free. Under REGISTRATION_LANE the serve
+#     then holds (`registration_hold`): it prints the deployment's registration record's digest and the period-open that
+#     registers it, and sends no request until the auditor's ledger REGISTRATION_LEDGER carries that period-open for the
+#     lane (a path, or gate:USER@HOST read through the gate's ledger verb under PP_GATE_KEY), checked under the
+#     challenger's key record REGISTRATION_KEY (default PP_CHALLENGER_KEY), held to the SHA-512 REGISTRATION_KEY_SHA512
+#     the operator posted where given, within
+#     REGISTRATION_HOLD_S seconds, else stops refused; the audit is then held to that head (`wreg_args`). With no lane it
+#     prints the development line and does not hold.
 #  2. requests: REQUESTS greedy requests (default SLOTS) from the network attester's traffic generator (`adapters/vllm/tools/served_run/serve_load.py --varied`:
 #     prompts of PROMPTS tokens, at most MAX_TOKENS outputs), numbered under one release run and sent together (RATE a second),
 #     so the engine's idle closes them into one window. With LOAD=dataset (default varied) they are the input dataset
@@ -229,7 +236,8 @@
 # live challenger with PP_CHALLENGER=gate:USER@HOST (records_audit's, with its peer V3C_PEER, default PP_PEER, the node
 # it runs on, PP_CHALLENGER_KEY and PP_GATE_KEY), where it runs, on the served node or a deferral's follow-on. There
 # `served_verdicts.py gate --root` first finds no session on the window's run root (the gate opens a root once, ever) and
-# no period of lane H1_LANE open (a reserve would join it), its V3C-GATE line saying so and when. A local or loopback
+# no period of lane H1_LANE open (a reserve would join it) but, under REGISTRATION_LANE, the registering one with $DREG's
+# digest, which the epoch's reserves join, its V3C-GATE line saying so and when. A local or loopback
 # session is a development session, which the preflight refuses unless DEVELOPMENT=1 (a development run), as it refuses a
 # V3C_PEER other than the node's peer Pearl+'s session names, and in a follow-on the served node's. SPOT's step 3 samples on a local development challenger session's coins on the served node (run.sh's PP_CHALLENGER
 # default, local, pinned on PP_MAIN's line, else MAIN_FILE's, else origin's main's) unless PP_CHALLENGER names the live
@@ -601,10 +609,9 @@ case $COMPOSE_OFF_NODE in 0 | 1) ;; *) say "PREFLIGHT: COMPOSE_OFF_NODE is 1 (th
 [ -z "${V3C_GPUS:-}" ] || command -v gpu-lease > /dev/null \
   || { say "PREFLIGHT: V3C_GPUS's cards are held under gpu-lease while V3c's audit proves on them, and this node has no gpu-lease"; exit 3; }
 CKPT=${CKPT:-$HF_HOME/hub/models--${REPO//\//--}/snapshots/$REV} WREG=$D/weights_registration.json
-# the registration of record ({program, values}) the serve's first close writes beside WREG, which the audits hand the check
-WOR=$D/weights_of_record.json
-NO_WOR="the weights' registration of record (weights_of_record.json, {program, values}) is absent: the serve's first close writes it beside weights_registration.json"
-# the serve's first registration record: the weights registration as a record of the log, which Pearl+'s W is chained after
+NO_DREG="the deployment's registration record (deployment-registration.json) is absent: the serve writes it before its first request"
+# the deployment's registration record, the registration log's first record, written once before the first request:
+# the audits hand it to the verifier on the development path, and Pearl+'s W is chained after it
 DREG=$D/deployment-registration.json
 NO_WEIGHTS="NO WEIGHTS REGISTRATION: no window registers a weight's root, so every weight read counts free"
 weights() {  # under the lease (its commit hashes on the leased GPU), before the first request: the committer's registration
@@ -613,11 +620,11 @@ weights() {  # under the lease (its commit hashes on the leased GPU), before the
   local rc=$? log=$LOGS/weights_registration.txt
   grep -o '"deployment": "[0-9a-f]\{128\}"' "$log" | tail -1 > "$OUT/weights_registration.txt"
   if [ "$rc" != 0 ] || [ ! -f "$WREG" ]; then
-    rm -f "$DREG" "$WOR"
+    rm -f "$DREG"
     say "$NO_WEIGHTS (weights-registration $(failed "$rc" "$log"))"
     return
   fi
-  cp "$WREG" "$WOR" "$OUT/"
+  cp "$WREG" "$OUT/"
   say "WEIGHTS $("$PY" - "$WREG" <<'EOF'
 import json, sys
 r = json.load(open(sys.argv[1]))
@@ -828,8 +835,32 @@ v3c_compose_args() {  # the warm's and the audit's disk floor and text keeping, 
   grep -q -- '--min-free-gb' "$TREE/benchmarks/prove_path/records_audit.py" || return 0
   printf '%s\n' --min-free-gb "$V3C_MIN_FREE_GB" ${V3C_KEEP_CIRCUITS:+--keep-circuits}
 }
-wreg_args() {  # --registered $WOR held to its file's own digest: no pin precedes the serve's registration, so a stand-in
-  printf '%s\n' --registered "$WOR" --registered-digest "$(sha512sum "$WOR" | cut -c1-128)" --registered-digest-source stand-in
+wreg_args() {  # the deployment's registration record: under REGISTRATION_LANE, held to the head the auditor's challenger
+  # signed for that lane in its ledger REGISTRATION_LEDGER under the key record REGISTRATION_KEY (default
+  # PP_CHALLENGER_KEY); with no lane, the development path, named
+  if [ -n "${REGISTRATION_LANE:-}" ]; then
+    printf '%s\n' --registration "$DREG" --registration-ledger "${REGISTRATION_LEDGER:-}" \
+      --challenger-key "${REGISTRATION_KEY:-${PP_CHALLENGER_KEY:-}}" --registration-lane "$REGISTRATION_LANE" \
+      ${REGISTRATION_KEY_SHA512:+--challenger-key-sha512 "$REGISTRATION_KEY_SHA512"}
+  else
+    printf '%s\n' --registration "$DREG" --registration-head development
+  fi
+}
+registration_hold() {  # after weights wrote $DREG, before the epoch's first reserve: under REGISTRATION_LANE, held until
+  # REGISTRATION_LEDGER carries the lane's registering period-open with $DREG's digest, at most REGISTRATION_HOLD_S
+  # seconds; with no lane, the development line and no hold
+  local rc
+  if [ -n "${REGISTRATION_LANE:-}" ]; then
+    [ -s "$DREG" ] || { say "REGISTRATION-HOLD refused: $NO_DREG"; return 1; }
+    timeout -k 10s "$REGISTRATION_HOLD_S" "$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" registration-hold "$DREG" \
+      --lane "$REGISTRATION_LANE" --ledger "$REGISTRATION_LEDGER" --key "${REGISTRATION_KEY:-${PP_CHALLENGER_KEY:-}}" \
+      ${REGISTRATION_KEY_SHA512:+--key-sha512 "$REGISTRATION_KEY_SHA512"} ${PP_GATE_KEY:+--gate-key "$PP_GATE_KEY"} | publish_lines
+  else
+    "$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" registration-hold "$DREG" | publish_lines
+  fi
+  rc=$?
+  [ "$rc" != 124 ] || say "REGISTRATION-HOLD refused: $REGISTRATION_LEDGER carried no registering period-open of lane $REGISTRATION_LANE within REGISTRATION_HOLD_S=${REGISTRATION_HOLD_S}s"
+  return "$rc"
 }
 v3c_warm() {  # every template of the committed window composed into $VW/compose-cache, V3C_WARM_JOBS at a time
   local ca; mapfile -t ca < <(v3c_compose_args)
@@ -851,7 +882,7 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
   [ -n "${DAY:-}" ] && day=(--day "$DAY" --day-log "$DAY_LOG" ${DAY_PARAMS:+--day-params "$DAY_PARAMS"})
   run=$("$PY" -c 'import json, sys; print(next(json.loads(l)["run_root"] for l in open(sys.argv[1]) if l.strip() and json.loads(l)["window"] == int(sys.argv[2])))' \
     "$D/windows.jsonl" "$K") || { say "V3C-AUDIT: no run root for the window in windows.jsonl"; return 1; }
-  [ -f "$WOR" ] || { say "V3C-AUDIT: $NO_WOR"; return 1; }
+  [ -f "$DREG" ] || { say "V3C-AUDIT: $NO_DREG"; return 1; }
   mkdir -p "$OUT/v3c-audit"
   if [ -n "${MAIN_FILE:-}" ]; then  # main's first-parent line, which the audit's challenger session pins on
     [ -s "$MAIN_FILE" ] || { say "V3C-AUDIT: MAIN_FILE $MAIN_FILE, main's first-parent line its challenger session pins on, is missing or empty"; return 1; }
@@ -875,7 +906,8 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
   [ -n "$FOLLOW" ] || pool=(--lean-workers "${V3C_LEAN_WORKERS:-1}" --audit-mem-gb "$V3C_AUDIT_MEM_GB")
   pool+=(${V3C_NEGATIVE_WORKERS:+--negative-workers "$V3C_NEGATIVE_WORKERS"})
   if v3c_live; then  # the gate opens the run root once, ever, and a reserve joins the lane's open period: neither, first
-    gl=$("$PY" "$SV" gate --gate "$(v3c_gate)" --lane "${H1_LANE:-vllm}" --main "$main" --root "$run" 2>&1); rc=$?
+    gl=$("$PY" "$SV" gate --gate "$(v3c_gate)" --lane "${H1_LANE:-vllm}" --main "$main" --root "$run" \
+      ${REGISTRATION_LANE:+--registration-record "$DREG"} 2>&1); rc=$?
     say "V3C-$(tail -1 <<< "$gl" | cut -c1-1200) (checked $(date -u +%Y-%m-%dT%H:%M:%SZ))"
     [ "$rc" = 0 ] || return 1
     ch+=(--peer "$V3C_PEER" --challenger-key "$PP_CHALLENGER_KEY" ${PP_GATE_KEY:+--gate-key "$PP_GATE_KEY"})
@@ -1038,6 +1070,11 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   fi
   say "SERVE $(grep -m1 'SERVE-OPENAI listening' "$D/serve.log" | cut -c1-300)"
   weights
+  if ! registration_hold; then
+    kill -TERM "$srv" 2>/dev/null; wait "$srv"
+    pearl_period close
+    return 11
+  fi
   if [ -n "${CERTIFIER_FRONT:-}" ]; then  # the network certifier in front of the endpoint, before the requests
     # below: its group closes into a window of its own, the run's earliest: never the window of record under
     # PEARLPLUS_TIE (that is the fixed load's), and otherwise the window of record only where it has the most requests.
@@ -1353,7 +1390,7 @@ private_pieces() {
 # follow-on runs at. Each is listed where it exists.
 deferred_inputs() {
   {
-    printf '%s\n' weights_registration.json weights_of_record.json deployment-registration.json "$(v3c_record)" windows.jsonl seals.jsonl \
+    printf '%s\n' weights_registration.json deployment-registration.json "$(v3c_record)" windows.jsonl seals.jsonl \
       requests.jsonl declaration.json \
       "$SERVED_ARM/summary.json" "$SERVED_ARM/window/audit.json" \
       "$SERVED_ARM/window/registration.json" "$SERVED_ARM/runs.json" \
@@ -2029,8 +2066,8 @@ road_sampled() {  # step 3 on the window's road: the window's record, its Lean c
   # the commit verdict's run root, which the seal step held to the record's
   run=$("$PY" -c 'import json, sys; print(json.load(open(sys.argv[1]))["run_root"])' "$D/windows/w$K/commit/verdict.json") \
     || { step_not_run sampled-proofs "the window's commit verdict has no run root"; return; }
-  # the registration of record pins the roots a window's registered weight reads open against
-  [ -f "$WOR" ] || { step_not_run sampled-proofs "$NO_WOR"; return; }
+  # the deployment's registration record pins the roots a window's registered weight reads open against
+  [ -f "$DREG" ] || { step_not_run sampled-proofs "$NO_DREG"; return; }
   mapfile -t regs < <(wreg_args)
   (umask 077; mkdir -p "$s") && mkdir -p "$OUT/sampled-proofs" "$LOGS/sampled-proofs"
   git -C "$TREE" rev-list --first-parent "${MAIN_SHA:-HEAD}" > "$main" 2>/dev/null && [ -s "$main" ] \
@@ -2309,6 +2346,16 @@ case $DEVELOPMENT in '' | 1) ;; *) say "PREFLIGHT: DEVELOPMENT is 1, a developme
 case ${VERITY_HOLD_PLACEMENT:-} in '' | 0 | 1) ;; *) say "PREFLIGHT: VERITY_HOLD_PLACEMENT is 1, which restores the refusals that rest on where coins are flipped or composites made, or 0 or unset, not $VERITY_HOLD_PLACEMENT"; exit 3 ;; esac
 [ "$H1_KEY_SHA512" = "$H1_KEY_OF_RECORD" ] || [ "$DEVELOPMENT" = 1 ] || ! hold_placement \
   || { say "PREFLIGHT: H1_KEY_SHA512 replaces the challenger key of record (vy-challenger-1's), which under VERITY_HOLD_PLACEMENT=1 only a development run takes: unset H1_KEY_SHA512, DEVELOPMENT=1, or VERITY_HOLD_PLACEMENT unset"; exit 3; }
+if [ -n "${REGISTRATION_LANE:-}" ]; then
+  [ -n "${REGISTRATION_LEDGER:-}" ] \
+    || { say "PREFLIGHT: REGISTRATION_LANE holds the audit to the registration the auditor's challenger signed for that lane, read from its ledger REGISTRATION_LEDGER, which is unset"; exit 3; }
+  [[ "${REGISTRATION_HOLD_S:-}" =~ ^[1-9][0-9]*$ ]] \
+    || { say "PREFLIGHT: REGISTRATION_LANE holds the serve after its weights step until REGISTRATION_LEDGER carries the lane's registration, at most REGISTRATION_HOLD_S seconds, a positive integer with no default, not '${REGISTRATION_HOLD_S:-}'"; exit 3; }
+  [ -r "${REGISTRATION_KEY:-${PP_CHALLENGER_KEY:-}}" ] \
+    || { say "PREFLIGHT: REGISTRATION_LANE's ledger is checked under the challenger's key record REGISTRATION_KEY (default PP_CHALLENGER_KEY), which is unset or not a readable file"; exit 3; }
+  [ -z "${H1_LANE:-}" ] || [ "$H1_LANE" = "$REGISTRATION_LANE" ] \
+    || { say "PREFLIGHT: REGISTRATION_LANE $REGISTRATION_LANE is not H1_LANE $H1_LANE, the lane the epoch's sessions reserve on, and the verifier refuses a session on another lane than the registration's"; exit 3; }
+fi
 if [ -n "$V3C" ] && [ -z "$COMPOSE" ]; then  # V3c's audit's coins: the live challenger's, or a development run's
   case $V3C_CHALLENGER in
     local | loopback:*)

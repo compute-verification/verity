@@ -1244,16 +1244,14 @@ def test_a_served_runs_weights_registration_is_the_committers_under_fresh_salts(
 
     def clear() -> None:
         """Another deployment's registration at the same path: a deployment registers once."""
-        for f in (out, out.with_name("deployment-registration.json"), out.with_name("weights_of_record.json")):
+        for f in (out, out.with_name("deployment-registration.json")):
             f.unlink(missing_ok=True)
         shutil.rmtree(salts, ignore_errors=True)
 
     capsys.readouterr()
     assert register() == 0
     reg, said = json.loads(out.read_text()), json.loads(capsys.readouterr().out)
-    body = (tmp_path / "weights_of_record.json").read_bytes()
-    assert body == canonical_json({"program": reg["program"], "values": reg["values"]})
-    assert said["of_record"] == hashlib.sha512(body).hexdigest() and RA.pinned(json.loads(body)) == reg["values"]
+    assert "of_record" not in said and not (tmp_path / "weights_of_record.json").exists()
     assert salts.stat().st_mode & 0o777 == 0o700 and set(SF.params(salts)) == set(reg["values"])
     assert all(SF.read(salts, q, [0]).hex() not in out.read_text() for q in reg["values"])
     pins = ADV.registered_weights(reg, serve)

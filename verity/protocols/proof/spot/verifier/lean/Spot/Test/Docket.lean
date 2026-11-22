@@ -175,10 +175,13 @@ def pin (value : String) (more : Nat := 0) (domain : Option String := none) : St
     ("words", Lean.toJson e.words), ("domain", Json.str d)]
   (value, Json.mkObj (kvs ++ if e.wordBits == Registered.WORD_BITS then [] else [(Registered.WIDTH_KEY, Lean.toJson e.wordBits)]))
 
-/-- The registration of record of `pins`, with the keys `more` beside `program` and `values`, and its SHA-512. -/
-def ofRecord (pins : List (String × Json)) (more : List (String × Json) := []) : ByteArray × String :=
-  let b := (Json.compress (Json.mkObj ([("program", Json.str ROOT), ("values", Json.mkObj pins)] ++ more))).toUTF8
-  (b, Flock.hexOf (Flock.Sha512.hash b))
+/-- The deployment's registration record registering `pins` under the program `ROOT`, its bytes and its digest
+(`Flock.WindowRecord.digestHex`). -/
+def ofRecord (pins : List (String × Json)) : ByteArray × String :=
+  let r := Json.mkObj [("format", Json.str Flock.WindowRecord.FORMAT_V2), ("program", Json.str ROOT),
+    ("deployment", Json.mkObj [("kind", Json.str "test")]), ("registered", Json.arr (pins.map (·.2)).toArray),
+    ("previous", Json.null)]
+  ((Json.compress r).toUTF8, (Flock.WindowRecord.digestHex r).toOption.getD "")
 
 def PINS : List (String × Json) := [pin "x", pin "y"]
 
@@ -205,10 +208,11 @@ def weighedCodes (v : Verifier) : Array String :=
 #guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord [pin "x", pin "y" 0 (some OTHER)]) } ==
   #["R8-weights-domain", "R8-unpinned"]
 #guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord [pin "x" 1, pin "y"]) } == #["R8-weights-shape"]
--- the document is exactly `{program, values}`: a `reads` key, or any other, is another form
-def READS : List (String × Json) := [("reads", Json.arr #[Json.arr #["E_v1", "x", "x"]])]
-#guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord PINS READS) } == #["R8-weights-form"]
-#guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord PINS [("reads", Json.arr #[])]) } ==
+-- an entry is exactly its own keys, and no value is registered twice: an entry with a `reads` key, or a value twice,
+-- is another form
+def readsPin : String × Json := ("x", (pin "x").2.setObjVal! "reads" (Json.arr #[]))
+#guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord [readsPin, pin "y"]) } == #["R8-weights-form"]
+#guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord [pin "x", pin "x", pin "y"]) } ==
   #["R8-weights-form"]
 -- what the members' check holds reads to (`readPins`): with marked inputs, none without a registration or with one R8
 -- refuses; with one R8 accepts, the marked inputs, their gates, the ranges reading them and R8's pins

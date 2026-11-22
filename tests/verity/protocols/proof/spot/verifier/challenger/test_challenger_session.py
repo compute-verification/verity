@@ -148,3 +148,22 @@ def test_a_session_that_never_listens_or_fails_otherwise_raises():
     with pytest.raises(AC.Ch.CoinError):
         AC.connect_when_listening("127.0.0.1:7811", None, hello_refused, 120, clock, sleep)
     assert slept == []
+
+
+def test_the_ledger_is_read_from_a_published_head_or_through_the_gates_ledger_verb(tmp_path, monkeypatch):
+    """`ledger_lines_at`: a path is read as it stands; ``gate:USER@HOST`` asks infra's gate for ``ledger`` over ssh with
+    the lane's gate key, and a refusal raises."""
+    lines = ['{"seq": 0}', '{"seq": 1}']
+    (tmp_path / "windows.jsonl").write_text("".join(x + "\n" for x in lines))
+    assert AC.ledger_lines_at(str(tmp_path / "windows.jsonl")) == lines
+    bin_ = tmp_path / "bin"
+    bin_.mkdir()
+    (bin_ / "ssh").write_text(f'#!/bin/sh\necho "$@" > {tmp_path}/argv\n'
+                              f'[ "$8" = ledger ] || {{ echo "no such verb" >&2; exit 2; }}\ncat {tmp_path}/windows.jsonl\n')
+    (bin_ / "ssh").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_}:{__import__('os').environ['PATH']}")
+    assert AC.ledger_lines_at("gate:research@challenger", "/keys/lane") == lines
+    assert (tmp_path / "argv").read_text().split() == [
+        "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-i", "/keys/lane", "research@challenger", "ledger"]
+    with pytest.raises(AC.Ch.CoinError, match="infra's gate refused pins: no such verb"):
+        AC.gate_raw(["ssh"], "research@challenger", "pins")

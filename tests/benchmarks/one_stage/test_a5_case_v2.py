@@ -98,8 +98,7 @@ def test_v2_case_is_the_sampled_members_one_statement_whatever_the_windows_other
         d.mkdir()
         st = {"dir": d, "meta": {"vus_per_block": k + 1}, "public": str(k) * 2 * 64}
         if reads is not None:
-            st["registered_file"] = d / "registered.json"
-            st["registered_file"].write_text(json.dumps(reads))
+            st |= a5.a0.registered_written(d / "registered.json", reads)
         return {"k": k, "m": SimpleNamespace(base=base, n=n), "pin": str(k) * 128, "st": st}
 
     ms = [member(0, 0, 2), member(1, 2, 3, {"ports": {}})]
@@ -369,8 +368,7 @@ def staged(tmp_path: Path, k: int, key: str, base: int, n: int, *, lookups: str 
         (d / "tables" / f"{t}.u32").write_bytes(t.encode())
     st = {"dir": d, "public": sha(d / f"pub-{n}.bin"), "meta": {"vus_per_block": 4}}
     if reads is not None:
-        st["registered_file"] = d / "registered.json"
-        st["registered_file"].write_text(json.dumps(reads))
+        st |= a5.a0.registered_written(d / "registered.json", reads)
     return {"k": k, "m": types.SimpleNamespace(n=n, base=base, key=key), "st": st, "pin": f"{k:02x}" * 64,
             "circuit": d / "circuit.txt"}
 
@@ -573,15 +571,16 @@ def test_the_audit_accepts_only_where_leans_members_check_accepts_its_case_too(t
 def test_an_audit_with_no_per_member_case_says_leans_members_check_did_not_run_and_why(tmp_path):
     """`a5.members_lean` writes its verdict in every audit: one with no per-member case, a window of one member
     (`members_proof`'s None) or sessions that are not ``--zk`` (its reason), keeps the Python's verdict with ``ran``
-    false and that reason, and Lean is not asked."""
+    false and that reason, lists the window's members by name as not verified, and Lean is not asked."""
     def never(case):
         raise AssertionError("Lean was asked")
 
     for pm, why in ((None, a5.ONE_MEMBER), ("v2 verifies --zk sessions; this audit's are plain",
                                            "v2 verifies --zk sessions; this audit's are plain")):
         r = _audited(tmp_path / str(bool(pm)), True)
-        a5.members_lean(tmp_path / str(bool(pm)), r, pm, never)
-        assert r["accepted"] and r["checks"]["members_lean"] == {"ok": True, "ran": False, "codes": [], "reason": why}
+        a5.members_lean(tmp_path / str(bool(pm)), r, pm, never, names=["a/c0", "a/c1"])
+        assert r["accepted"] and r["checks"]["members_lean"] == {"ok": True, "ran": False, "codes": [], "reason": why,
+                                                                 "not_verified": ["a/c0", "a/c1"]}
 
 
 @pytest.mark.slow

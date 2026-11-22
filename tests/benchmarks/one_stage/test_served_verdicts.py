@@ -3206,6 +3206,26 @@ def test_the_gate_refuses_a_root_an_open_in_its_ledger_names(monkeypatch):
     assert not ok and line.startswith("GATE refused: lane vllm's open period p1 (a reserve would join it); root cdcd")
 
 
+def test_the_gate_expects_the_registering_period_the_epoch_joins(monkeypatch):
+    """``gate --registration-record``: the lane's open period is the epoch's to join where its open registers the
+    deployment's record, so it is ready; one registering another record, or none, still refuses; a root already opened
+    refuses either way."""
+    reg = "ab" * 64
+    answers = {"ledger": [{"kind": "period-open", "session": None,
+                           "body": {"period": "p-reg", "lane": "vllm", "registration": reg}}], "pins": []}
+    monkeypatch.setattr(S, "_gate_out", lambda gate, verb: "".join(json.dumps(e) + "\n" for e in answers[verb]).encode())
+    ok, line = S.gate_ready(GATE, "vllm", root="cd" * 64, registration=reg)
+    assert ok and line.startswith("GATE ready: lane vllm's open period p-reg (the registering period, which the epoch's "
+                                  "reserves join); root cdcdcdcdcdcdcdcd… has no session yet;"), line
+    for other in ("ee" * 64, None):
+        ok, line = S.gate_ready(GATE, "vllm", root="cd" * 64, registration=other)
+        assert not ok and line.startswith("GATE refused: lane vllm's open period p-reg (a reserve would join it)"), line
+    answers["ledger"].append({"kind": "open", "session": "s1", "schema": "verity/challenger-auditor/v2",
+                              "body": {"window": {"root": "cd" * 64}}})
+    ok, line = S.gate_ready(GATE, "vllm", root="cd" * 64, registration=reg)
+    assert not ok and "already has its session s1" in line
+
+
 FAKE_PROVE_PATH = '''import json, sys
 a = sys.argv[1:]
 assert a[0] == "window-circuit"
@@ -3232,7 +3252,7 @@ def _circuits(tmp_path: Path, classes: str, answers: dict, **extra: str) -> tupl
     (tree / "benchmarks" / "prove_path" / "prove_path.py").write_text(FAKE_PROVE_PATH)
     (tree / "answers.json").write_text(json.dumps(answers))
     (tmp_path / "serve" / "weights_registration.json").write_text("{}")
-    (tmp_path / "serve" / "weights_of_record.json").write_text('{"program": "", "values": {}}')
+    (tmp_path / "serve" / "deployment-registration.json").write_text(json.dumps(DEPLOYMENT_RECORD))
     for path, body in ((venv / "python", f'exec {sys.executable} "$@"'),
                        (bin_ / "timeout", f'echo "$1" >> {tmp_path}/limits; shift; exec "$@"')):
         path.write_text(f"#!/bin/sh\n{body}\n")
@@ -3244,6 +3264,10 @@ def _circuits(tmp_path: Path, classes: str, answers: dict, **extra: str) -> tupl
     return rc, (tmp_path / "out" / "verdicts.txt").read_text().splitlines(), (tmp_path / "limits").read_text().split()
 
 
+#: a deployment's registration record as the serve writes it before its first request, registering nothing
+DEPLOYMENT_RECORD = {"format": "verity/registration/v2", "program": "04" * 64, "deployment": {}, "registered": [], "previous": None}
+
+
 FAKE_WEIGHTS = '''import json, os, sys
 a = sys.argv[1:]
 assert a[0] == "weights-registration"
@@ -3253,8 +3277,6 @@ if os.environ.get("REFUSE"):
 entry = {"value": "weights/w@64", "root": "ab" * 64, "leaves": 2, "words": 64, "domain": "cd" * 64}
 doc = {"model": {"repo": "org/m", "revision": "0123456789abcdef"}, "values": {"weights/w@64": entry}, "unrooted": {}}
 open(a[a.index("--out") + 1], "w").write(json.dumps(doc))
-open(os.path.join(os.path.dirname(a[a.index("--out") + 1]), "weights_of_record.json"), "w").write(
-    json.dumps({"program": "04" * 64, "values": {"weights/w@64": entry}}))
 said = {"out": a[a.index("--out") + 1], "roots": 1, "unrooted": []}
 if "--deployment-record" in a:
     open(a[a.index("--deployment-record") + 1], "w").write(json.dumps({"registered": [entry], "previous": None}))
@@ -3295,12 +3317,136 @@ def test_the_weights_step_writes_the_serves_first_registration_record_and_says_w
     assert first["previous"] is None and first == json.loads((out / "deployment-registration.json").read_text())
     assert json.loads((out / "weights_registration.json").read_text())["values"] == {"weights/w@64": first["registered"][0]}
     script = (HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh").read_text()
-    assert json.loads((out / "weights_of_record.json").read_text())["values"] == {"weights/w@64": first["registered"][0]}
-    assert "printf '%s\\n' weights_registration.json weights_of_record.json deployment-registration.json " in script
+    assert not (out / "weights_of_record.json").exists()
+    assert "printf '%s\\n' weights_registration.json deployment-registration.json " in script
     rc, lines = _weights(tmp_path / "refused", REFUSE="1")
     assert rc == 1 and len(lines) == 1 and lines[0].startswith("NO WEIGHTS REGISTRATION: "), lines
     assert lines[0].endswith(f"(weights-registration (no exception, exit 2): {PRIVATE})") and "of record" not in lines[0]
     assert not [f.name for f in (tmp_path / "refused" / "serve").iterdir() if f.is_file()]
+
+
+@pytest.mark.parametrize("lane", [None, "vllm"])
+def test_the_audits_registration_is_the_challengers_signed_head_where_a_lane_is_named_and_the_development_path_else(lane):
+    """`wreg_args`: with REGISTRATION_LANE, the audit is held to the head the challenger signed for that lane in
+    REGISTRATION_LEDGER under the key record (REGISTRATION_KEY, else PP_CHALLENGER_KEY); with none, the development path,
+    named."""
+    script = (HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh").read_text()
+    start = script.index("\nwreg_args() {") + 1
+    fn = script[start:script.index("\n}\n", start) + 3]
+    env = {"PATH": os.defpath, "DREG": "/s/deployment-registration.json", "REGISTRATION_LEDGER": "/s/windows.jsonl",
+           "PP_CHALLENGER_KEY": "/s/challenger-key.json", **({"REGISTRATION_LANE": lane} if lane else {})}
+    said = subprocess.run(["bash", "-c", "set -uo pipefail\n" + fn + "wreg_args"], env=env, check=True,
+                          capture_output=True, text=True).stdout.splitlines()
+    if lane is None:
+        assert said == ["--registration", "/s/deployment-registration.json", "--registration-head", "development"]
+    else:
+        assert said == ["--registration", "/s/deployment-registration.json", "--registration-ledger", "/s/windows.jsonl",
+                        "--challenger-key", "/s/challenger-key.json", "--registration-lane", "vllm"]
+
+
+def _registering_host(tmp_path: Path, registration: str | None, closed: bool = False) -> tuple[Path, Path]:
+    """A local challenger's host whose ledger opens lane ``circuits``' period, with ``registration`` where given, and,
+    where `closed`, closes it, and its key record: (the ledger, the key record)."""
+    from verity.protocols.proof.spot.prover.audit import local_challenger as LC
+    from verity.protocols.proof.spot.verifier.challenger import challenger as CH, challenger_session as AC
+
+    local = LC.Local(tmp_path / "host", [AC.on_main([])])
+    local.A.period(local.host, ["period-open", "p-registration", "circuits", local.by, "4", "ab" * 64,
+                                *([f"registration={registration}"] if registration else [])],
+                   signer=local.signer, pinned=local.pin, now=datetime(2026, 1, 1, tzinfo=UTC), active=lambda _s: False)
+    if closed:
+        local.A.period(local.host, ["period-close", "p-registration", "circuits", local.by], signer=local.signer,
+                       pinned=local.pin, now=datetime(2026, 1, 1, 1, tzinfo=UTC), active=lambda _s: False)
+    key = tmp_path / "challenger-key.json"
+    key.write_text(json.dumps({"schema": CH.KEY_RECORD_SCHEMA, "W": local.key.W, "H": local.key.H,
+                               "pubkey": local.key.public.hex(),
+                               "pubkey_sha512": hashlib.sha512(local.key.public).hexdigest()}))
+    return local.host.ledger, key
+
+
+def _hold(tmp_path: Path, ledger: Path, key: Path, *more: str) -> subprocess.CompletedProcess:
+    (tmp_path / "dreg.json").write_text(json.dumps(DEPLOYMENT_RECORD))
+    return subprocess.run([sys.executable, str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.py"),
+                           "registration-hold", str(tmp_path / "dreg.json"), "--lane", "circuits", "--ledger", str(ledger),
+                           "--key", str(key), *more], capture_output=True, text=True, check=False)
+
+
+def test_the_serve_holds_until_the_local_challengers_ledger_registers_its_record_and_refuses_without(tmp_path):
+    """`registration-hold` on a local challenger: the serve's hold prints the record's digest and the period-open that
+    registers it, and, following the ledger as it grows, proceeds once the lane's period-open carries that digest; a
+    ledger with no registration for the lane refuses by name where it ends, and one registering another digest refuses
+    at once; the key record must hold the posted key where one is given; ``gate:USER@HOST`` reads the ledger through
+    the gate's ``ledger`` verb with the lane's gate key."""
+    digest = DD.digest(DEPLOYMENT_RECORD)
+    ledger, key = _registering_host(tmp_path / "held", digest)
+    held = _hold(tmp_path / "held", ledger, key)
+    assert held.returncode == 0, held.stdout + held.stderr
+    said = held.stdout.splitlines()
+    k = hashlib.sha512(bytes.fromhex(json.loads(key.read_text())["pubkey"])).hexdigest()
+    assert said[0].startswith(f"REGISTRATION-HOLD digest {digest} lane circuits key {k}: ") and f"--registration {digest}" in said[0]
+    assert said[-1].startswith(f"REGISTRATION-HELD digest {digest} lane circuits key {k}: ")
+    assert _hold(tmp_path / "held", ledger, key, "--key-sha512", k).returncode == 0
+    pinned = _hold(tmp_path / "held", ledger, key, "--key-sha512", "11" * 64)
+    assert pinned.returncode == 2 and "not the pinned 1111111111111111..." in pinned.stdout, pinned.stdout
+    bin_ = tmp_path / "bin"
+    _script(bin_ / "ssh", f'[ "$8" = ledger ] && [ "$6" = /keys/lane ] && cat {ledger}\n')
+    env = {**os.environ, "PATH": f"{bin_}:{os.environ['PATH']}"}
+    gate = subprocess.run([sys.executable, str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.py"),
+                           "registration-hold", str(tmp_path / "held" / "dreg.json"), "--lane", "circuits", "--ledger",
+                           "gate:research@challenger", "--gate-key", "/keys/lane", "--key", str(key), "--once"],
+                          capture_output=True, text=True, check=False, env=env)
+    assert gate.returncode == 0 and gate.stdout.splitlines()[-1].startswith("REGISTRATION-HELD "), gate.stdout + gate.stderr
+    _script(bin_ / "ssh", "echo refused >&2; exit 2\n")
+    down = subprocess.run(gate.args, capture_output=True, text=True, check=False, env=env)
+    assert down.returncode == 1 and "infra's gate refused ledger: refused" in down.stdout, down.stdout
+    ledger, key = _registering_host(tmp_path / "none", None)
+    none = _hold(tmp_path / "none", ledger, key, "--once")
+    assert none.returncode == 1 and none.stdout.splitlines()[-1].startswith("REGISTRATION-HOLD refused: "), none.stdout
+    assert "no registering period-open of lane circuits" in none.stdout
+    ledger, key = _registering_host(tmp_path / "other", "ee" * 64)
+    other = _hold(tmp_path / "other", ledger, key)
+    assert other.returncode == 2 and f"refused: {S.REGISTERED_OTHER_DIGEST} (lane circuits's period p-registration " \
+        "registers eeeeeeeeeeeeeeee..." in other.stdout, other.stdout
+
+
+def test_the_hold_tells_a_closed_registering_period_and_a_lane_registered_before_apart_from_another_digest(tmp_path):
+    """`registration-hold`'s refusals by name: the lane registered to this record, but its registering period closed
+    with none of the lane's open (`REGISTERED_PERIOD_CLOSED`); the lane registered to another record by a period now
+    closed (`LANE_REGISTERED_BEFORE`); and, the period still open, to another record (`REGISTERED_OTHER_DIGEST`)."""
+    digest = DD.digest(DEPLOYMENT_RECORD)
+    for name, registration, closed, why in (("closed", digest, True, S.REGISTERED_PERIOD_CLOSED),
+                                            ("before", "ee" * 64, True, S.LANE_REGISTERED_BEFORE),
+                                            ("other", "ee" * 64, False, S.REGISTERED_OTHER_DIGEST)):
+        ledger, key = _registering_host(tmp_path / name, registration, closed)
+        got = _hold(tmp_path / name, ledger, key, "--once")
+        assert got.returncode == 2 and got.stdout.splitlines()[-1].startswith(f"REGISTRATION-HOLD refused: {why} ("), \
+            got.stdout
+
+
+def test_the_hold_with_no_lane_says_the_development_line_and_past_its_limit_refuses_by_name(tmp_path):
+    """`registration_hold` in `served_verdicts.sh`: with no REGISTRATION_LANE it holds nothing and publishes the
+    development line; where its limit passes (``timeout``'s 124), it refuses naming the ledger, the lane and the limit."""
+    from verity.protocols.proof.spot.verifier.one_stage import docket as DK
+
+    script = (HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh").read_text()
+    start = script.index("\nregistration_hold() {") + 1
+    fn = script[start:script.index("\n}\n", start) + 3]
+    bin_ = tmp_path / "bin"
+    _script(bin_ / "timeout", "exit 124\n")
+    (tmp_path / "dreg.json").write_text(json.dumps(DEPLOYMENT_RECORD))
+    out = tmp_path / "verdicts.txt"
+    pre = (f'set -uo pipefail\nsay() {{ echo "$*" >> "{out}"; }}\npublish_lines() {{ tee -a "{out}"; }}\n'
+           f'NO_DREG=none\n')
+    env = {"PATH": f"{bin_}:{os.defpath}", "PY": sys.executable, "TREE": str(HERE.parents[2]), "DREG": str(tmp_path / "dreg.json")}
+    dev = subprocess.run(["bash", "-c", pre + fn + "registration_hold"], env=env, capture_output=True, text=True, check=False)
+    assert dev.returncode == 0 and out.read_text().splitlines() == [f"REGISTRATION {DK.DEVELOPMENT_WHY}"], dev.stderr
+    out.unlink()
+    late = subprocess.run(["bash", "-c", pre + fn + "registration_hold"], capture_output=True, text=True, check=False,
+                          env={**env, "REGISTRATION_LANE": "circuits", "REGISTRATION_LEDGER": "/s/windows.jsonl",
+                               "REGISTRATION_KEY": "/s/key.json", "REGISTRATION_HOLD_S": "600"})
+    assert late.returncode == 124 and out.read_text().splitlines() == [
+        "REGISTRATION-HOLD refused: /s/windows.jsonl carried no registering period-open of lane circuits within "
+        "REGISTRATION_HOLD_S=600s"], late.stderr
 
 
 def test_a_class_that_counts_passes_and_the_class_of_record_is_not_counted_unasked(tmp_path):
@@ -3644,7 +3790,7 @@ def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = 
               tmp_path / "row" / "build_summary.json", tmp_path / "h.so", tmp_path / "n.so"):
         f.write_text("")
     (d / "weights_registration.json").write_text("{}")
-    (d / "weights_of_record.json").write_text('{"program": "", "values": {}}')
+    (d / "deployment-registration.json").write_text(json.dumps(DEPLOYMENT_RECORD))
     if not (d / "windows.jsonl").exists():
         _write(d, "windows.jsonl", [{"window": 7, "run_root": "ab" * 64}])
     (tmp_path / "main.txt").write_text(TOY_MAIN)

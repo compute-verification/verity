@@ -161,6 +161,7 @@ from verity.circuits import partition_object as PO
 from verity.circuits.codec import canonical_json, descriptor_chunks
 from verity.circuits.program import REGISTRATION, Program
 from verity.circuits.supplied import SUPPLIED, registered_values
+from verity.protocols.proof.spot.verifier.challenger import challenger as Ch
 
 from . import draw as D, link_points as LP, partition as P, registered as G
 from verity.commitments import registered_value as RV
@@ -196,10 +197,10 @@ ANCHOR_UNPINNED_WHY = ("a supplied anchor reads a registered value's root or dom
                        "to no pin: neither its own pinned roots nor a pin of the weights' registration of record")
 #: R8's refusals of the program's registered inputs against the weights' registration of record (`weights_held`)
 WEIGHTS_WHY = {
-    "R8-weights-digest": "the weights' registration is not the one of record: its SHA-512 is not the digest the "
-                         "auditor's side holds for it",
-    "R8-weights-form": "the weights' registration is not {program, values: {value: {value, root, leaves, words, domain}}}, "
-                       "one object or a list of them, with no other key",
+    "R8-weights-digest": "the deployment's registration record is not the one registered: its digest is not the "
+                         "registration the challenger signed for the epoch's lane",
+    "R8-weights-form": "the deployment's registration record is not a verity/registration/v2 record with a top-level "
+                       "program and registered entries {value, root, leaves, words, domain}, no value twice",
     "R8-weights-domain": "a pin names another value, a root that is not 64 bytes of hex, or a domain other than the one "
                          "its own program, value and shape make",
     "R8-weights-shape": "a registered input's leaves, words or width are not its pin's",
@@ -220,26 +221,135 @@ def query_digest(query: Mapping[str, Any]) -> str:
     return hashlib.sha512(canonical_json(dict(query))).hexdigest()
 
 
+#: `OneStage.DEVELOPMENT`: the parameters' name for the development path, the only source of the registration but the
+#: challenger's ledger
+DEVELOPMENT = "development"
+#: `OneStage.DEVELOPMENT_WHY`: what an accepted run on the development path says first
+DEVELOPMENT_WHY = ("the registration's digest was taken from the serving node's own file and is held by no one else: "
+                   "nobody but the prover's side attests that the registration was fixed before the coins, so this run "
+                   "states no bound from the sample")
+
+
+def registration_first(source: str | None) -> str | None:
+    """`OneStage.registrationFirst`: what an accepted run says first about where its registration was taken, by its
+    source (``"ledger"``, `DEVELOPMENT`, or None for parameters with none): none and the development path say
+    `DEVELOPMENT_WHY`; the ledger says nothing first."""
+    return None if source == "ledger" else DEVELOPMENT_WHY
+
+
+REGISTRATION_FORM = ("the registration is {record, ledger, lane} or {record, head: \"development\"}: the deployment's "
+                     "registration record's bytes in hex, with the auditor's ledger (its lines) and the lane the auditor "
+                     "names, or the development path named")
+NO_SIGNED_HEAD_WHY = ("registration: the parameters carry the deployment's registration record and no challenger and ledger "
+                      "that sign its digest, and name no development path: the challenger signs the registration before "
+                      "the first coin")
+REGISTRATION_DIGEST_WHY = "registration: the record's digest is not the registration the challenger signed for this epoch's lane"
+NO_LEDGER_AFTER_DRAW_WHY = ("registration, after the draw: the registration was taken from the auditor's ledger, and the "
+                            "evidence's coins carry no ledger the epoch's session ended with to hold it to")
+_LOWER_HEX = re.compile(r"(?:[0-9a-f]{2})*")
+
+
+#: the code a refusal of the parameters' ``registration`` fails a verdict with alone (`registration_parsed`)
+REGISTRATION_REFUSED = "R8-registration"
+
+
+class RegistrationRefused(ValueError):
+    """`OneStage.registrationParsed`'s refusal of the parameters' ``registration``, its text the Lean's."""
+
+
+def registration_parsed(registration: Any, challenger: Any, window_root: Any,
+                        verify: Ch.Verify | None) -> tuple[bytes, str, str] | None:
+    """`OneStage.registrationParsed`: the deployment's registration record's bytes, the registration it is held to and
+    its source (``"ledger"`` or `DEVELOPMENT`), from the parameters' ``registration``; None without one. With
+    ``ledger``, the half before the draw: the head the ledger signs for the auditor's ``lane`` under ``challenger``'s key
+    (`challenger.registration_head`), which the record's digest must be; that it preceded the epoch's first entry is
+    `registration_after_draw`'s. The development path only where named."""
+    if registration is None:
+        return None
+    r = registration if isinstance(registration, dict) else {}
+    hexed = r.get("record")
+    if not (isinstance(hexed, str) and _LOWER_HEX.fullmatch(hexed)):
+        raise RegistrationRefused(REGISTRATION_FORM)
+    body = bytes.fromhex(hexed)
+    try:
+        rec = json.loads(body.decode("utf-8"))
+        digest = DD.digest(rec)
+    except (ValueError, KeyError, TypeError, AttributeError):
+        raise RegistrationRefused(REGISTRATION_FORM) from None
+    if sorted(r) == ["head", "record"]:
+        if r["head"] != DEVELOPMENT:
+            raise RegistrationRefused(REGISTRATION_FORM)
+        return body, digest, DEVELOPMENT
+    if sorted(r) != ["lane", "ledger", "record"] or not isinstance(r["lane"], str):
+        raise RegistrationRefused(REGISTRATION_FORM)
+    if not isinstance(window_root, str) or verify is None:
+        raise RegistrationRefused(NO_SIGNED_HEAD_WHY)
+    try:
+        key = Ch.ChallengerKey.from_json(challenger["key"])
+    except (Ch.CoinError, KeyError, TypeError):
+        raise RegistrationRefused(NO_SIGNED_HEAD_WHY) from None
+    try:
+        head = Ch.registration_head(r["ledger"], r["lane"], key, verify)
+    except Ch.CoinError as e:
+        raise RegistrationRefused(f"registration: {e}") from None
+    if head != digest:
+        raise RegistrationRefused(REGISTRATION_DIGEST_WHY)
+    return body, head, "ledger"
+
+
+def registration_after_draw(registration: Any, challenger: Any, window_root: Any, digest: str, coins: Any,
+                            verify: Ch.Verify) -> None:
+    """`OneStage.registrationAfterDraw` for a registration `registration_parsed` took from the ledger and held the run
+    to ``digest``: on the ledger the epoch's session ends with (``coins``' ``ledger``), the epoch is held to ``digest``,
+    signed for the auditor's lane before the session's first entry (`challenger.registration_held`); with no ledger,
+    refused (`NO_LEDGER_AFTER_DRAW_WHY`)."""
+    if not isinstance(window_root, str):
+        raise RegistrationRefused(NO_SIGNED_HEAD_WHY)
+    try:
+        key = Ch.ChallengerKey.from_json(challenger["key"])
+    except (Ch.CoinError, KeyError, TypeError):
+        raise RegistrationRefused(NO_SIGNED_HEAD_WHY) from None
+    lane = registration.get("lane") if isinstance(registration, dict) else None
+    if not isinstance(lane, str):
+        raise RegistrationRefused(REGISTRATION_FORM)
+    ledger = coins.get("ledger") if isinstance(coins, dict) else None
+    if not isinstance(ledger, list):
+        raise RegistrationRefused(NO_LEDGER_AFTER_DRAW_WHY)
+    try:
+        Ch.registration_held(ledger, {"root": window_root}, lane, digest, key, verify)
+    except Ch.CoinError as e:
+        raise RegistrationRefused(f"registration, after the draw: {e}") from None
+
+
 def _of_record(of_record: tuple[bytes, str]) -> tuple[list[tuple[str, Any]], dict[str, dict[str, Any]]]:
-    """The weights' registration of record's pins, by value, after its digest, its form and each pin's domain, which
-    the pin's own program, value and shape make (`registered_value.domain`); the refusals and the pins that pass."""
+    """The deployment's registration record's pins, by value, held to the registration ``of_record[1]`` (the one the
+    challenger signed for the epoch's lane, or on the development path the record's own digest), after its form, its
+    digest (`docket_digest.digest`, the inference-only check's ``Theta.digest``) and each pin's domain, which the record's
+    program, the value and its shape make (`registered_value.domain`); the refusals and the pins that pass."""
     body, digest = of_record
-    if not (isinstance(body, bytes) and isinstance(digest, str) and hashlib.sha512(body).hexdigest() == digest):
-        got = hashlib.sha512(body).hexdigest() if isinstance(body, bytes) else None
+    try:
+        rec = json.loads(body.decode("utf-8"))
+    except (ValueError, AttributeError) as e:
+        return [("R8-weights-form", f"{type(e).__name__}: {e}")], {}
+    try:
+        got = DD.digest(rec) if isinstance(rec, dict) else None
+    except (ValueError, KeyError, TypeError) as e:
+        return [("R8-weights-digest", {"registration": None, "of_record": digest, "why": f"{type(e).__name__}: {e}"})], {}
+    if got is None or got != digest:
         return [("R8-weights-digest", {"registration": got, "of_record": digest})], {}
     try:
-        doc = json.loads(body.decode("utf-8"))
-        docs = doc if isinstance(doc, list) else [doc]
-        if not all(isinstance(d, dict) and set(d) == {"program", "values"}
-                   and isinstance(d["program"], str) and isinstance(d["values"], dict) and all(
-                isinstance(e, dict) and set(RV.ENTRY_KEYS) <= set(e) <= {*RV.ENTRY_KEYS, RV.WIDTH_KEY}
+        if not (rec.get("format") == DM.REGISTRATION and isinstance(rec.get("program"), str)
+                and isinstance(rec.get("registered"), list) and all(
+                isinstance(e, dict) and isinstance(e.get("value"), str)
+                and set(RV.ENTRY_KEYS) <= set(e) <= {*RV.ENTRY_KEYS, RV.WIDTH_KEY}
                 and all(type(e[k]) is int and e[k] >= 0 for k in ("leaves", "words") + ((RV.WIDTH_KEY,) if RV.WIDTH_KEY in e else ()))
-                for e in d["values"].values()) for d in docs):
+                for e in rec["registered"])):
             raise TypeError("an entry")
-        if len(names := [v for d in docs for v in d["values"]]) != len(set(names)):
+        if len(names := [e["value"] for e in rec["registered"]]) != len(set(names)):
             raise ValueError("a value pinned twice")
     except (ValueError, KeyError, TypeError) as e:
         return [("R8-weights-form", f"{type(e).__name__}: {e}")], {}
+    docs = [{"program": rec["program"], "values": {e["value"]: e for e in rec["registered"]}}]
     bad, pins = [], {}
     for program, v, e in sorted((d["program"], v, e) for d in docs for v, e in d["values"].items()):
         try:
@@ -884,8 +994,8 @@ def _output_port(log: Sequence[Mapping[str, Any]], record: str, port: str, key: 
     for r in log:
         try:
             d = DD.digest(r)
-        except (TypeError, ValueError):
-            continue
+        except (TypeError, ValueError) as e:
+            d = f"no digest: {e}"
         if d != record:
             continue
         roots = r.get(key)
@@ -1336,7 +1446,8 @@ def registered_trees_held(rec: Mapping[str, Any], who: str, registered: Mapping[
     for name, e in sorted(((registered or {}).get("ports") or {}).items()):
         v = e.get("value", "")
         if not v.startswith(COMMITTED) and field_tree_name(v) and (tmpl is None or f"{tmpl}/{name}" != v):
-            return f"registered: {who}'s port {name}: a wired port's tree is not derived from C yet"
+            return (f"registered: {who}'s port {name}: the field tree it opens is neither its own output's nor one C "
+                    "wires into it at this row")
         t = v[len(COMMITTED):] if v.startswith(COMMITTED) else v if G.is_fresh_value(v) or field_tree_name(v) else None
         if t is None:
             continue

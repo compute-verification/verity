@@ -126,7 +126,8 @@ def test_the_serves_close_records_its_window_with_strings_from_where_its_rows_ar
     assert s["where"] == "HostTwin" and s["acquired"] > 0 and s["acquired"] + s["host"] > s["acquired"]
     assert s["twin"]["equal"] and s["twin"]["ports"] == min(2, s["twin"]["of"]) > 0
     reg = json.loads((to / "registration.json").read_text())
-    assert SS.SCAN_STATE in [e["value"] for e in reg["registered"]] and DD.digest(reg)
+    assert SS.SCAN_STATE not in [e["value"] for e in reg.get("registered", [])] and DD.digest(reg)
+    assert SS.SCAN_STATE not in reg["window"].get("registered_roots", {})
     assert {"rows", "record", "close", "write"} <= set(got["seconds"])
 
 
@@ -199,7 +200,6 @@ def test_a_deployment_registers_once_and_each_epochs_close_reads_its_registratio
 
     from tests.program.predict.test_window_circuit import GRAIN, S, _checkpoint
     from verity_vllm.program.predict.window_weights import DEPLOYMENT_RECORD, REGISTRATION, register
-    from verity_vllm.records.weights_registration import OF_RECORD
 
     monkeypatch.setattr(WW, "weights_registration", functools.partial(WW.weights_registration, grain=GRAIN))
     reg, (d, man) = S._registered(), _checkpoint(tmp_path / "ck")
@@ -214,8 +214,8 @@ def test_a_deployment_registers_once_and_each_epochs_close_reads_its_registratio
         return {str(f.relative_to(out)): f.read_bytes() for f in sorted(out.rglob("*")) if f.is_file()}
 
     files = held()
-    assert {REGISTRATION, DEPLOYMENT_RECORD, OF_RECORD, "serve.json"} < set(files)
-    assert all(f.startswith(SF.beside(out / REGISTRATION).name + "/") for f in set(files) - {REGISTRATION, DEPLOYMENT_RECORD, OF_RECORD, "serve.json"})
+    assert {REGISTRATION, DEPLOYMENT_RECORD, "serve.json"} < set(files)
+    assert all(f.startswith(SF.beside(out / REGISTRATION).name + "/") for f in set(files) - {REGISTRATION, DEPLOYMENT_RECORD, "serve.json"})
     doc, rec = json.loads(files[REGISTRATION]), json.loads(files[DEPLOYMENT_RECORD])
     assert DD.digest(rec) == digest and rec == WW.deployment_record(doc) and "protocol" not in rec
     assert (rec["format"], rec["program"], rec["previous"]) == (DM.REGISTRATION, doc["program"], None)

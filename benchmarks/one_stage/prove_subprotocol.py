@@ -1067,6 +1067,11 @@ def defs_ok(rec: dict) -> bool:
         and "negatives" in rec
 
 
+#: The first line of the output: this script builds the verifier's registered file beside its prover.
+NOT_ACCEPTED = ("NOT AN ACCEPTED RUN: the registered file the verifier read was written by the staging side, so this is "
+                "not an accepted run")
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="prove_subprotocol.py", description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="command", required=True)
@@ -1104,6 +1109,7 @@ def main(argv=None) -> int:
         p_.add_argument("--tmpl-unit-bin", default=None, help="flock-tmpl-unit, which places a templated statement's unit rows "
                                                              "for its prover")
     a = ap.parse_args(argv)
+    print(NOT_ACCEPTED, flush=True)
     a.out.mkdir(parents=True, exist_ok=True)
     gpus = [int(x) for x in a.gpus.split(",")] if a.gpus else None
 

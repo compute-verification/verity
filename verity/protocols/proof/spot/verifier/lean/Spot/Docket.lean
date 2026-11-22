@@ -115,9 +115,9 @@ expected entries, built from its pin (`tableEntries`), so a record that leaves i
 mark names, is refused `R7-values`.
 
 R8 then holds the program's registered inputs (the parameters it binds at registration, `Partition.regInputs`) to the
-weights' registration of record the auditor's side hands it (`weightsOfRecord`: its bytes and the SHA-512 it holds; a
-document at another digest, `R8-weights-digest`, or of another form, `R8-weights-form`, is refused alone), each pin's
-domain the one its own document's program makes (`R8-weights-domain`) and its shape the parameter's
+deployment's registration record (`weightsOfRecord`: its bytes and the registration the challenger signed for the
+epoch's lane; a record at another digest, `R8-weights-digest`, or of another form, `R8-weights-form`, is refused
+alone), each pin's domain the one the record's program makes (`R8-weights-domain`) and its shape the parameter's
 (`R8-weights-shape`). A program with a registered input, or a verifier with a registration, under a query that is no
 template query that applies is refused (`R8-weights-query`). An input bound at registration that is neither pinned nor
 expected registered and that a template parameter reads is refused at one reader as at several (`R8-unpinned`), and a pin
@@ -134,6 +134,7 @@ each member's sampled proof blocks one count, and one that runs out of coins fai
 module
 
 public import Flock.WindowRecord
+public import Flock.JsonParse
 public import Spot.Draw
 public import Spot.Registered
 public import Spot.Supplied
@@ -277,8 +278,9 @@ structure Verifier where
   verifier built from a registration it read under the deployment's key, which R7 holds the record's entry for the
   value to (`checkOutputs`, `certifiedHeld`) -/
   certified : Array (Registered.Entry × String) := #[]
-  /-- the weights' registration of record: its bytes and the SHA-512 (hex) the auditor's side holds for it, which R8
-  holds the program's registered inputs to (`weightsCodes`); none where it is handed none -/
+  /-- the deployment's registration record (its bytes) and the registration it is held to, a SHA-512 (hex): the one
+  the challenger signed for the epoch's lane (`OneStage.registrationParsed`), or on the development path the record's
+  own digest; R8 holds the program's registered inputs to the record (`weightsCodes`); none where it is handed none -/
   weightsOfRecord : Option (ByteArray × String) := none
   /-- C's supplied marks (`Supplied.marks`), by input, which R7 holds each anchor of to a pin (`anchorUnpinned`) -/
   marks : Array (String × Supplied.Mark) := #[]
@@ -359,28 +361,31 @@ def pinForm (e : Json) : Option (Nat × Nat × Nat) :=
     | some l, some w, some b => some (l, w, b)
     | _, _, _ => none
 
-/-- The documents of the weights' registration of record, each `(program, values)`: one object, or a list of them,
-each exactly a string `program` and an object `values` of well-formed entries (`pinForm`), no value in two; none
-otherwise. -/
+/-- The deployment's registration record's entries, `(program, values)`: a `verity/registration/v2` record whose
+top-level `program` is the program every registered entry's domain is under and whose `registered` is a list of
+well-formed entries (`pinForm`), each naming its `value`, no value twice; none otherwise. -/
 def pinDocs (doc : Json) : Option (Array (String × Array (String × Json))) := do
-  let docs := match doc with | .arr ds => ds | d => #[d]
-  let docs ← docs.mapM fun d => do
-    if keys? d != some #["program", "values"] then none
-    match getD d "program", getD d "values" with
-    | .str p, .obj kvs => if kvs.toArray.all (fun (_, e) => (pinForm e).isSome) then some (p, kvs.toArray) else none
-    | _, _ => none
-  let names := docs.flatMap fun (_, vs) => vs.map (·.1)
+  guard (jsonStrIs (getD doc "format") Flock.WindowRecord.FORMAT_V2)
+  let .str p := getD doc "program" | none
+  let .arr es := getD doc "registered" | none
+  let vs ← es.mapM fun e => do
+    let .str v := getD e "value" | none
+    let _ ← pinForm e
+    pure (v, e)
+  let names := vs.map (·.1)
   if (sortStrings names).toList.eraseDups.length != names.size then none
-  return docs
+  return #[(p, vs)]
 
-/-- `docket._of_record`: the weights' registration of record's pins, after its digest (`R8-weights-digest`), its form
-(`R8-weights-form`), each one refused by the first code; then each pin whose value, domain or root is not its own
-(`R8-weights-domain`): its domain is the one its own document's program, value and shape make
+/-- `docket._of_record`: the pins of the deployment's registration record `body` (its bytes), held to `digest`, the
+registration the challenger signed for the epoch's lane or, on the development path, the record's own: its digest
+(`Flock.WindowRecord.digestHex`, the inference-only check's `Theta.digest`) not `digest` is `R8-weights-digest`; a
+record of another form, `R8-weights-form`, each one refused by the first code; then each pin whose value, domain or
+root is not its own (`R8-weights-domain`): its domain is the one the record's program, its value and its shape make
 (`Registered.domain`), its root lowercase hex of 64 bytes. The codes and the pins that pass. -/
 def pinsOf (body : ByteArray) (digest : String) : Except String (Array String × Array Pin) := do
-  if Flock.hexOf (Flock.Sha512.hash body) != digest then throw "R8-weights-digest"
   let some text := String.fromUTF8? body | throw "R8-weights-form"
   let .ok doc := Flock.JsonParse.parse text | throw "R8-weights-form"
+  unless (Flock.WindowRecord.digestHex doc).toOption == some digest do throw "R8-weights-digest"
   let some docs := pinDocs doc | throw "R8-weights-form"
   let mut bad := false
   let mut pins := #[]
