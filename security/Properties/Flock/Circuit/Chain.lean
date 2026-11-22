@@ -591,8 +591,8 @@ gate of a run Input node outside the tied gates is a port of the member's file (
 `OneStageZk.runInputRootsAt` holds; and (2) any two reads of gates of one tied run Input node, by one member or two,
 are at slice roots with one root. Half (2) rests on `OneStageZk.tiedRootsAt`, which `OneStageZk.runInputRoots` runs
 on each member before its run input roots: a second root for a tied node, among the roots the members hold of their own
-at the ports that read it, is refused (`OneStageZk.TIED_ROOTS_WHY`); a member that holds no root of its own at such a
-port is let through. -/
+at the ports that read it, is refused (`OneStageZk.TIED_ROOTS_WHY`), and so is a member that holds no root of its own
+at such a port (`OneStageZk.TIED_NO_ROOT_WHY`). -/
 def RunReadsAtOneTree : Prop :=
   ∀ p ms c Pp rs, MembersAccept p ms c Pp rs →
     (∀ m ∈ ms, ∀ (a : Spot.OneStageZk.Admit) (j x g : ℕ) (row : String) (s : ℕ),
