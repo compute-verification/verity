@@ -154,7 +154,7 @@ def test_a_missing_interpreter_is_refused_by_name_with_the_fix_and_an_interprete
     assert p.returncode == 3 and not calls, p.stdout + p.stderr
     assert f"SMOKE REFUSED interpreter: the interpreter PY={gone} does not exist on this node: pass PY=/path/to/python" in p.stdout, \
         p.stdout + p.stderr
-    broken = tmp_path / "broken"
+    broken = tmp_path / "broken-py"
     broken.write_text("#!/bin/sh\necho 'ModuleNotFoundError: no module named verity_x' >&2\nexit 1\n")
     broken.chmod(0o755)
     p, calls = run_dry(tmp_path / "broken", PY=str(broken))
