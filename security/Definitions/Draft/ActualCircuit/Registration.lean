@@ -1,0 +1,85 @@
+module
+
+public import Definitions.Registration.Guarantees
+public import Definitions.ResourceAccounting.Guarantees.RegisteredSite
+public import Definitions.Draft.ActualCircuit.Epoch
+
+/-!
+# Registration's statement (draft)
+
+Registration runs once, before the first epoch, and draws no challenge: its verifier accepts when the registration is
+valid (`Verity.Registration.Valid`), a decision on registered information alone. Three statements:
+
+* `RegistrationBinds`: what it establishes about the transcript, what the developer is bound to before the first
+  epoch: the registered facts `Verity.Guarantees.RegistrationSound` names, and that no later entry changes the Site's
+  sheets, locations and links, θ, the registered compiler or a day's declared circuit as registered.
+* `RegistrationSet`: the statement in the shape every protocol's has. Its set is all actual circuits: registration by
+  itself says nothing about what the hardware computed.
+* `RegistrationEgress`: the one property of the actual circuit that follows from it, under the physical premise that
+  every wire runs on a registered link within its rate: what leaves a subtree of the registered Site over `[a, b)` is
+  at most the registered capacity across its boundary times `b − a`, `ResourceAccounting.Guarantees.EgressRegistered`
+  at the Site registration folds (`Verity.Site.ofLog`). Its error is `0`, and its content is the premise's.
+-/
+
+@[expose] public section
+
+namespace Draft.ActualCircuit
+
+open ResourceAccounting Verity
+
+/-- **What registration establishes, about the transcript.** A valid registration's view holds the registered facts
+and its entries are chained (`Verity.Guarantees.RegistrationSound`); and whatever is appended after it, the Site's
+sheets, locations and links, θ, the registered compiler and each day's declared circuit, as registered, are unchanged
+and come first. This is what the developer is bound to before the first epoch: the auditor holds the registration, and
+every later entry is appended to it. -/
+def RegistrationBinds : Prop :=
+  Guarantees.RegistrationSound ∧
+    ∀ (reg more : Registration),
+      (Site.ofLog reg).sheets <+: (Site.ofLog (reg ++ more)).sheets ∧
+      (Site.ofLog reg).locs <+: (Site.ofLog (reg ++ more)).locs ∧
+      (Site.ofLog reg).links <+: (Site.ofLog (reg ++ more)).links ∧
+      Registration.theta reg <+: Registration.theta (reg ++ more) ∧
+      (∀ b ∈ Registration.builder? reg, Registration.builder? (reg ++ more) = some b) ∧
+      ∀ j, ∀ d ∈ Registration.declared reg j, Registration.declared (reg ++ more) j = some d
+
+/-- **Registration's statement, in the shape every protocol's has.** If the verifier accepts (the registration is
+valid) then, except with probability `0` over any challenges, the actual circuit lies in the set of all actual
+circuits. The set is all circuits: registration fixes registered information and the hardware description, and by
+itself constrains nothing the hardware computed. Its content is about the transcript (`RegistrationBinds`). -/
+def RegistrationSet : Prop :=
+  ∀ {L : Type*} [LinearOrder L] (Ω : Type) [Fintype Ω] (𝓕 : Set (Actual.Run L)) (V : Finset L)
+    (D : Registration.Digests) (A : Registration.Auditor) (c : Registration.Composite) (reg : Registration),
+    Sound Ω 𝓕 V (fun _ => Registration.Valid D A c reg) (Lies V fun _ => Set.univ) 0
+
+/-- **Every wire runs on a registered link within its rate**, in every feasible run (the physical premise of
+`ResourceAccounting.Guarantees.EgressRegistered`, `Placed.Links`, at the Site registration folds): for some assignment of
+wires to links, the actual circuit, each device and memory leaf taken to its host, meets `Placed.Links` at the
+registered links' ends and the rates `β`. New: a premise on the feasible set. -/
+def RunsOnRegisteredLinks (reg : Registration) (β : Fin (Site.ofLog reg).links.length → ℕ)
+    (𝓕 : Set (Actual.Run (Site.ofLog reg).Place)) : Prop :=
+  ∀ R ∈ 𝓕, ∃ link : Fin R.A.N → Fin R.A.N → Fin (Site.ofLog reg).links.length,
+    (R.A.onto (Site.ofLog reg).linkPlace).Links (Site.ofLog reg).placeEnds β link
+
+/-- **The egress set** of the subtree at `i` of the registered Site: the actual circuits whose egress from the subtree
+over every `[a, b)` is at most the registered capacity of the links with exactly one end in it times `b − a`. -/
+def egressSet (reg : Registration) (i : String) (β : Fin (Site.ofLog reg).links.length → ℕ) :
+    Set (Placed (Site.ofLog reg).Place) :=
+  {A | ∀ a b : ℕ, A.egress ((Site.ofLog reg).placesIn ((Site.ofLog reg).under i)) (Set.Ico a b) ≤
+    linkCapacity (Site.ofLog reg).placeEnds β ((Site.ofLog reg).placesIn ((Site.ofLog reg).under i)) * (b - a)}
+
+/-- **The property of the actual circuit that follows from registration.** If the verifier accepts (the registration
+is valid) then, except with probability `0`, the actual circuit lies in the egress set of the subtree at `i`
+(`egressSet`), given that each link across the subtree's boundary is registered with a rate (`Site.RatedOn`), that the
+subtree holds each host whole (`Site.HostsWhole`), and that every wire of every feasible run runs on a registered link
+within its rate (`RunsOnRegisteredLinks`). It is `ResourceAccounting.Guarantees.EgressRegistered` at the registered
+Site read on each run: deterministic, so no challenge and no epoch enter it. -/
+def RegistrationEgress : Prop :=
+  ∀ (D : Registration.Digests) (A : Registration.Auditor) (c : Registration.Composite) (reg : Registration)
+    (i : String) (β : Fin (Site.ofLog reg).links.length → ℕ) (Ω : Type) [Fintype Ω]
+    (𝓕 : Set (Actual.Run (Site.ofLog reg).Place)) (V : Finset (Site.ofLog reg).Place),
+    (Site.ofLog reg).RatedOn β
+        ↑(boundary (Site.ofLog reg).placeEnds ((Site.ofLog reg).placesIn ((Site.ofLog reg).under i))) →
+      (Site.ofLog reg).HostsWhole i → RunsOnRegisteredLinks reg β 𝓕 →
+      Sound Ω 𝓕 V (fun _ => Registration.Valid D A c reg) (Lies V fun _ => egressSet reg i β) 0
+
+end Draft.ActualCircuit
