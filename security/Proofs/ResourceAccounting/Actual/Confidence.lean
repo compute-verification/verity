@@ -26,6 +26,8 @@ additivity at the run that implements `P`.
 
 @[expose] public section
 
+universe u
+
 namespace ResourceAccounting.SecurityProofs
 
 open Finset
@@ -150,7 +152,7 @@ theorem sound_const_iff {L : Type*} [LinearOrder L] (Ω : Type) [Fintype Ω] (�
 open Classical in
 /-- **`Composition` at one set of feasible runs**: its instance at the constant family, each protocol sound against
 the one set `𝓕` and every run of the strategy in it, so nothing it said against one set is narrowed. -/
-theorem composition_const.{u} (h : Guarantees.Composition.{u}) {L : Type u} [LinearOrder L] {k : ℕ} (Ω : Fin k → Type)
+theorem composition_const (h : Guarantees.Composition.{u}) {L : Type u} [LinearOrder L] {k : ℕ} (Ω : Fin k → Type)
     [∀ i, Fintype (Ω i)] [∀ i, DecidableEq (Ω i)] (𝓕 : Set (Actual.Run L)) (V : Fin k → Finset L)
     (acc : Fin k → Set (ℕ × L × ℕ × ℕ × ℕ) → Prop) (E : (i : Fin k) → (Ω i → Actual.Run L) → Ω i → Prop)
     (δ : Fin k → ℝ) (S : ((i : Fin k) → Ω i) → Actual.Run L)
