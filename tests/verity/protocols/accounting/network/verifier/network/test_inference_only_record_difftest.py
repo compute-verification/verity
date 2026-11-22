@@ -1,8 +1,8 @@
 """The inference-only policy's check of an execution phase's circuit record (`InferenceOnlyCheck.Record`) against the Python
 reference: the Python half.
 
-`verity/protocols/policy/training_detection/inference_only/verifier/lean/scripts/record_difftest_vectors.py` writes 718 cases (600 random circuits,
-two in five broken in one way, 92 shaped ones, most in the shape of a served class, and 26 toys of edges) and, on each,
+`verity/protocols/policy/training_detection/inference_only/verifier/lean/scripts/record_difftest_vectors.py` writes 725 cases (600 random circuits,
+two in five broken in one way, 99 shaped ones, most in the shape of a served class, and 26 toys of edges) and, on each,
 `scripts/inference_only_record_reference.py`'s results, which visit every row of every unit. `check` runs the Lean half in its
 Lean audit (`runs` in that package's `lean-audit.json`): `InferenceOnlyCheck/RecordDifftestMain.lean` fails unless
 `Record`, `RecordCount`, `RecordRows` and `RecordChosen` give Python's results on every case, and unless SPOT's reader reads the
@@ -127,7 +127,7 @@ def shaped() -> dict[str, dict]:
 
 @pytest.mark.slow
 def test_the_data_is_what_the_audit_pins(tmp_path):
-    """All 718 cases and the reference's results, byte for byte as the record pins them."""
+    """All 725 cases and the reference's results, byte for byte as the record pins them."""
     made = {n: hashlib.sha256(p.read_bytes()).hexdigest() for n, p in vectors.write(tmp_path).items()}
     assert made == RUN["data"]
     assert RUN["args"] == ["{record_difftest/cases.jsonl}", "{record_difftest/python.jsonl}", str(vectors.total())]

@@ -851,6 +851,18 @@ HISTORIES: dict[str, tuple] = {
 }
 LOOSE = "a history of no template's rows"
 
+#: `lowered(2, 3)`'s record with `registered.run`, the registered parameters bound for each run, a case each: the stage
+#: that refuses the record, None where the form takes it, and the edit that makes it. A parameter bound for each run is
+#: never θ: its reads are the prover's choice.
+RUN_BOUND: dict[str, tuple] = {
+    "no parameter bound for each run": (None, lambda d: d["registered"].update(run=[])),
+    "a parameter bound for each run": (None, lambda d: d["registered"].update(run=["weights/norm"])),
+    "a parameter bound for each run named twice": ("inputs", lambda d: d["registered"].update(run=["weights/norm"] * 2)),
+    "a parameter bound for each run that is no parameter": ("inputs", lambda d: d["registered"].update(run=["nope"])),
+    "a parameter bound for each run named by no string": ("inputs", lambda d: d["registered"].update(run=[3])),
+    "parameters bound for each run that are no list": ("inputs", lambda d: d["registered"].update(run="weights/norm")),
+}
+
 #: `lowered(2, 3)`'s record with its opening declaring its `row`, a case each: the stage that refuses the record, None
 #: where the form takes it, and the opening's `row`. Only the row a table read returns is taken: the first of the
 #: reader's two outputs, the second its verdict, of a reader of six input rows.
@@ -966,8 +978,12 @@ def shaped() -> list[dict]:
     Then `Norm`'s batch split into two root nodes (`SPLITS`, `split`): side by side and with `Gemm`'s between, each
     taken with the served shape's verdict, and with the record one unit short of their sum, refused (`templates`).
 
-    Last, `read_in_leaves` with its input node registered at twice its reader's width (`recut`), refused
-    (`recut-unread`)."""
+    Then `read_in_leaves` with its input node registered at twice its reader's width (`recut`), refused
+    (`recut-unread`).
+
+    Last, the accepted case with `registered.run` (`RUN_BOUND`): with none named it counts as the accepted case does,
+    and with `weights/norm` named that parameter's reads are the prover's choice and the rate refuses; a name twice,
+    a name of no parameter, one of no string and names that are no list are refused with the declarations (`inputs`)."""
     out = []
     first = None
     for n, (S, T) in enumerate([(2, 3), (4, 35)]):
@@ -1166,6 +1182,10 @@ def shaped() -> list[dict]:
     first("a read at another width", read_in_leaves(),
           48 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + len(HISTORIES) + len(FORMATS) + len(ROW_ROLE) + len(SPLITS),
           held=("weights/wide",), committed=("weights/wide",), pins=[], policy={}, reroot=recut, broken="recut-unread")
+    for k, (what, (stage, declare)) in enumerate(RUN_BOUND.items()):
+        first(f"2x3 {what}", lowered(2, 3),
+              49 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + len(HISTORIES) + len(FORMATS) + len(ROW_ROLE) + len(SPLITS) + k,
+              edit=declare, broken=stage)
     return out
 
 
@@ -2211,7 +2231,7 @@ NAMES = ("cases", "python")
 
 def total() -> int:
     """How many cases the audit's data has: the random ones, `shaped()`'s and `edged()`'s."""
-    return len(EDGED) + COUNT + 32 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + len(HISTORIES) + len(FORMATS) + len(ROW_ROLE) + 1 + len(SPLITS) + 1
+    return len(EDGED) + COUNT + 32 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + len(HISTORIES) + len(FORMATS) + len(ROW_ROLE) + 1 + len(SPLITS) + 1 + len(RUN_BOUND)
 
 
 def results(case: dict) -> dict:
