@@ -332,22 +332,25 @@ def read_pins_why(program: Program, query: Mapping[str, Any]) -> str:
 
 
 def read_pins(program: Program, query: Mapping[str, Any], registered: Iterable[str], of_record: tuple[bytes, str] | None,
-              roots: Mapping[str, Mapping[str, Any]] | None = None
+              roots: Mapping[str, Mapping[str, Any]] | None = None, linked: Sequence[Mapping[str, Any]] = ()
               ) -> tuple[list[str], list[tuple[str, range]], list[tuple[int, str, int, int]], dict[str, dict[str, Any]],
-                         Mapping[str, Mapping[str, Any]]] | None:
+                         Mapping[str, Mapping[str, Any]], dict[str, Mapping[str, Any]]] | None:
     """`Docket.readPins`: what the members' check holds each registered read to, on R8's own derivation
     (`weights_held`): the marked inputs the verifier does not expect, their gates as ``(value, gates)``, the template
-    ranges some member of which reads one (`partition.member_reads`), the accepted pins, and the roots the verifier
-    itself holds (``roots``, `held_entries`). None where there is such an input and no registration of record, or R8
-    refuses it; the first three empty where every marked input is expected."""
+    ranges some member of which reads one (`partition.member_reads`), the accepted pins, the roots the verifier
+    itself holds (``roots``, `held_entries`) and round 1's record's entry of each value a link names (``linked``,
+    `second_stage.round_one_held`), which is never loose. None where there is such an input and no registration of
+    record, or R8 refuses it; the first three empty where every marked input is expected."""
     roots = roots or {}
+    by_link = {x["value"]: x["entry"] for x in linked}
     expected = set(registered)
-    loose = [v for v in marked_inputs(program) if v not in expected]
+    loose = [v for v in marked_inputs(program) if v not in expected and v not in by_link]
+    values = list(by_link)
     if not loose:
-        return [], [], [], weights_held(program, query, registered, of_record, roots)[1], roots
+        return [], [], [], weights_held(program, query, registered, of_record, roots, values)[1], roots, by_link
     if of_record is None:
         return None
-    codes, pins = weights_held(program, query, registered, of_record, roots)
+    codes, pins = weights_held(program, query, registered, of_record, roots, values)
     if codes:
         return None
     part = P.evaluate(program, query)
@@ -355,7 +358,7 @@ def read_pins(program: Program, query: Mapping[str, Any], registered: Iterable[s
         return None
     held = [(v, g) for v in loose for g in G.held_gates(program, [v])]
     ranges = [r for r in part.ranges if P.member_reads(program, held, r[0], 0, r[3])]
-    return loose, held, ranges, pins, roots
+    return loose, held, ranges, pins, roots, by_link
 
 
 def held_entries(program: Program, registered: Mapping[str, int], schemas: Mapping[str, str] | None,

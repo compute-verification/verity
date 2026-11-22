@@ -530,7 +530,7 @@ def read_form_why(k: int, param: str, what: str) -> str:
 
 
 ReadPins = tuple[list[str], list[tuple[str, range]], list[tuple[int, str, int, int]], dict[str, dict[str, Any]],
-                 Mapping[str, Mapping[str, Any]]]
+                 Mapping[str, Mapping[str, Any]], Mapping[str, Mapping[str, Any]]]
 
 
 def read_pins(params: Mapping[str, Any], program: Program) -> ReadPins:
@@ -543,7 +543,8 @@ def read_pins(params: Mapping[str, Any], program: Program) -> ReadPins:
                             params.get("held"), params.get("supplied") or {}, params.get("pinned") or {},
                             params.get("outputs") or {}, params.get("log") or [])
     got = DK.read_pins(program, params["query"], registered,
-                       None if w is None else (bytes.fromhex(w["document"]), w["digest"]), roots)
+                       None if w is None else (bytes.fromhex(w["document"]), w["digest"]), roots,
+                       params.get("linked") or ())
     if got is None:
         raise _Refused(DK.read_pins_why(program, params["query"]))
     return got
@@ -696,9 +697,10 @@ def _port_param(port: str, e: Mapping[str, Any]) -> str:
 
 def _pin_of(rp: ReadPins, v: str) -> tuple[str, int, str] | None:
     """`OneTree.pinOf`: R8's accepted pin of ``v``, else the root the verifier itself holds of it (`docket.held_entries`),
-    as ``(root, leaves, domain)``; never a root the record names."""
-    pin = rp[3].get(v) or rp[4].get(v)
-    return None if pin is None else (pin["root"], pin["leaves"], pin["domain"])
+    else round 1's record's entry of a value a link names, as ``(root, leaves, domain)``; never a root the record
+    names."""
+    pin = rp[3].get(v) or rp[4].get(v) or rp[5].get(v)
+    return None if pin is None else (pin.get("root"), pin.get("leaves"), pin.get("domain"))
 
 
 def pins_held(ms: Mapping[str, Any], R: EG._Root, ranges: Sequence[Sequence[Any]], program: Program,

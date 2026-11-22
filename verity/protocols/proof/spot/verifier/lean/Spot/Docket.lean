@@ -604,15 +604,19 @@ structure ReadPins where
   pins : Array (Registered.Entry × String)
   /-- the roots the verifier itself holds (`heldEntries`) -/
   roots : Array (Registered.Entry × String)
+  /-- the values a link names, each at round 1's record (`Verifier.linked`) -/
+  linked : Array Linked
 
 /-- What the members' check holds each registered read to, on the docket's own derivation (`weightsOf v`, of the one
-parameters' verifier), with the roots the verifier itself holds (`heldEntries`). None where the program marks an input
+parameters' verifier), with the roots the verifier itself holds (`heldEntries`) and round 1's record's entry of each
+value a link names (`Verifier.linked`), which is never loose. None where the program marks an input
 the verifier does not expect and the verifier holds no weights' registration of record, or R8 refuses it; the first
 three empty where every marked input is one the verifier expects. -/
 def readPins (v : Verifier) : Option ReadPins :=
-  let loose := (v.params.filter (marked v)).filter fun p => !v.registered.any (·.1 == p.name)
+  let loose := (v.params.filter (marked v)).filter fun p =>
+    !v.registered.any (·.1 == p.name) && !v.linked.any (·.value == p.name)
   let roots := heldEntries v
-  if loose.isEmpty then some ⟨#[], #[], #[], (weightsOf v).2, roots⟩ else
+  if loose.isEmpty then some ⟨#[], #[], #[], (weightsOf v).2, roots, v.linked⟩ else
   let (codes, pins) := weightsOf v
   if v.weightsOfRecord.isNone || !codes.isEmpty then none else
   match Partition.templateRanges? v.program v.query with
@@ -620,7 +624,7 @@ def readPins (v : Verifier) : Option ReadPins :=
   | some rs =>
     let held := loose.flatMap fun p => (p.gates.map fun (first, count) => #[(p.name, first, count)]).getD #[]
     some ⟨loose.map (·.name), held,
-      rs.filter fun r => !(Partition.memberReads v.program.prog held r 0 r.count).isEmpty, pins, roots⟩
+      rs.filter fun r => !(Partition.memberReads v.program.prog held r 0 r.count).isEmpty, pins, roots, v.linked⟩
 
 /-- Why `readPins v` is none: no template query applying (`WEIGHTS_QUERY_WHY`), else no registration R8 accepts
 (`WEIGHTS_UNREGISTERED_WHY`). -/

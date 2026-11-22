@@ -83,12 +83,18 @@ def portParam (q : Flock.Registered.Port) : String :=
   (Flock.Registered.paramRow (if q.param.isEmpty then q.name else q.param)).1
 
 /-- The registration of record's entry of the registered input `v`: R8's accepted pin (`rp.pins`), else the root the
-verifier itself holds of it (`rp.roots`, `Docket.heldEntries`); as `(root, leaves, domain)`. No arm reads a root the
-record names: a root the prover registers is held to nothing but itself. -/
+verifier itself holds of it (`rp.roots`, `Docket.heldEntries`), else round 1's record's entry of a value a link names
+(`rp.linked`); as `(root, leaves, domain)`. No arm reads a root the record names: a root the prover registers is held
+to nothing but itself. -/
 def pinOf (rp : Docket.ReadPins) (v : String) : Option (String × Nat × String) :=
   match rp.pins.find? (·.1.value == v) with
   | some (e, root) => some (root, e.leaves, e.domain)
-  | none => (rp.roots.find? (·.1.value == v)).map fun (e, root) => (root, e.leaves, e.domain)
+  | none => match rp.roots.find? (·.1.value == v) with
+    | some (e, root) => some (root, e.leaves, e.domain)
+    | none => (rp.linked.find? (·.value == v)).bind fun l =>
+      match getD l.entry "root", nat? (getD l.entry "leaves"), getD l.entry "domain" with
+      | .str r, some n, .str d => some (r, n, d)
+      | _, _, _ => none
 
 /-- **Every port of a registered input is at its registration of record**: for each member, at each parameter its
 units read at a registered input node of C (`memberInputs`) whose gates are a marked value `v`'s
