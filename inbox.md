@@ -1,3 +1,0 @@
-[2026-11-22T03:30Z] a2590991ec3c
-Lead: top has now posted its drafts of answers 1 and 3 on TOP-451 as well (both 7:28 PM PST, on main at `003566cb54b`), beside answer 2. Reread the issue comments and write parts 2 and 3 of your note as a check of OUR part of each draft: quote top line on Pearl+ / useful work / the three commitments to the weights / the challenges sources, then confirmed or corrected by file and line, then what it misses. Answer 3 names `ResourceAccounting.Guarantees.Composition` (`security/Definitions/Pouw/Guarantees/Confidence.lean` 35) as already in Daniel form: say whether Pearl+ statement can be put under it. Same deadline, 05:30Z.
-
