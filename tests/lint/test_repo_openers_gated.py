@@ -55,7 +55,8 @@ def _imports() -> tuple[Any, Any, Any, Any]:
 
 class Imports:
     """Whether a module's code can reach an opener's module: its imports, function-level ones included, and its packages',
-    closed over; ``mentions`` the modules whose source names an opener without that."""
+    closed over; ``mentions`` the modules whose source names an opener without that, and ``unresolved`` each name it
+    couldn't find, with why."""
 
     def __init__(self) -> None:
         from verity.commitments.gates import frame_v3, lms, merkle
@@ -67,12 +68,13 @@ class Imports:
         self.edges: dict[str, set[str]] = {}
         self.memo: dict[str, bool] = {}
         self.mentions: set[str] = set()
+        self.unresolved: dict[str, str] = {}
 
-    @staticmethod
-    def origin(name: str) -> str | None:
+    def origin(self, name: str) -> str | None:
         try:
             spec = importlib.util.find_spec(name)
-        except (ImportError, ValueError, AttributeError):
+        except (ImportError, ValueError, AttributeError) as e:
+            self.unresolved[name] = f"{type(e).__name__}: {e}"
             return None
         return spec.origin if spec is not None and spec.origin and spec.origin.endswith(".py") else None
 
@@ -465,15 +467,15 @@ def callers(desc: dict) -> list[str]:
 
 def targets() -> dict[str, Any]:
     """Each GPU card's target (`target_profile.card_facts`), by its cards' names, one per compute capability and SM count."""
+    from verity.device import load_card
     from verity_vllm.config import CARD_FILES
     from verity_vllm.program.frontend.target_profile import TargetProfile, card_facts
 
     got: dict[tuple, list[str]] = {}
     for p in sorted(CARD_FILES.glob("*.toml")):
-        try:
-            cc, sms, _name = card_facts(p.stem)
-        except ValueError:
+        if load_card(p.stem, directory=CARD_FILES).get("kind") != "gpu":
             continue
+        cc, sms, _name = card_facts(p.stem)
         got.setdefault((cc, sms), []).append(p.stem)
     return {"+".join(names): TargetProfile(compute_capability=cc, num_sms=sms) for (cc, sms), names in got.items()}
 
