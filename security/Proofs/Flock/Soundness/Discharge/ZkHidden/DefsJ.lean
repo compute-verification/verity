@@ -56,7 +56,7 @@ the one-table hidden-output piece (`ZkHidden/Defs.lean`, `SoundBind.lean`, `Soun
 * `tableShHJ`, `planShHJ`, `tabShHJ`, `sitesShHJ`: the public hidden-output tables (`HiddenExec.TableH`) at the same
   samples, each at the inputs it is set up on (table `j`'s, or table 0's, `y₀`'s, at a refused table), and their sites.
 * `placeZHJ`, `layZHJ`, `rsZHJ`, `rsZHJ_computes`: `keyPlaceH`, `keyLayoutH` and `keyRowsH` at those sites, moved to the
-  `--zk` tables (`SoundBind.lean`'s `placeZH`, `layZH`, `rsZH` at `J` tables).
+  `--zk` tables (`SoundBind.lean`'s `placeZH` at `J` tables, `LayoutZ.ofShadow`, `HmRowsZX.ofShadow`).
 * `TagsOkZHJ`, `SampleOkZKHJ`, `opnAtZHJ`, `runsZCJH_live`: `TagsOkZJ` with hidden outputs, `SampleOkZKJ` and `opnAtZJ` with
   `setupHidden`, and `runsZCJ_live` under hidden outputs. It holds from the sessions alone (`runsZCJH_liveU`), so
   `runsZCJH_liveSt` and `runsZCJH_liveISt` state it at the statement circuit (`HmOut.parseStmt`).
@@ -474,7 +474,7 @@ theorem tableShHJ_bcSite {S' : Finset (Fin n)} (Tb : (I' : Inputs) × TableH I' 
   exact tableH_bcSite p₁ p₂ hscope (fun _ => d) hU ((loadPublicH_tagsAt _ _ _ _ _).trans hpub) hpt x h
 
 include hU hpub hpt in
-/-- **`BcSiteH` at every satisfiable public site** at `J` tables (`sitesShH_bcSite`): at a table `verify --zk` sets up
+/-- **`BcSiteH` at every satisfiable public site** at `J` tables: at a table `verify --zk` sets up
 by `tableH_bcSite` at table `j`'s inputs; at a refused one no message satisfies the table. -/
 theorem sitesShHJ_bcSite :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S)

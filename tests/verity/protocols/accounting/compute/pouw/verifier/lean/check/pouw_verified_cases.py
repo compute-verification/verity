@@ -22,7 +22,7 @@ A `lanes` case (`lanes_instance`, `LANES_NAMES`) is a 32 × 32 execution phase w
 form, one or two sampled leaves at the lanes-form K and perhaps tile-form units, and the lanes evidence: each sampled leaf's
 lanes and combine statements among the units' in a shuffled order, and the produced record of their partials under the
 execution phase's sample root. No leaf statement is run (each is refused at its ``--registered`` file,
-`credit.leaf_registered_file`), so its answers are the tile-form units'. Its mutations: a K outside `LeafLanesSound`'s
+`credit.leaf_registered_file`), so its answers are the tile-form units'. Its mutations: a K outside the lanes form's
 reach, no lanes evidence, a leaf's statement dropped, a leaf Program other than the committed one or not the execution
 phase's own, a statement twice, of an unsampled unit or none of the leaf's, the produced record's P- codes, a table the
 leaf reads unregistered, the sample malformed, and the evidence's or the circuit files' lanes form broken.

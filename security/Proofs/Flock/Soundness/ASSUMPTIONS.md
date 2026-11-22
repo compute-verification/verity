@@ -26,8 +26,8 @@ hypothesis carries what the statement doesn't say yet: that the acceptance is th
 Soundness rests on five. Three are `Prop`s in `Definitions/Assumptions/Flock.lean`, hypotheses: SHA-512's
 collision resistance in two forms, and the randomness of the challenger's coins the proof-block sample reads. The fourth, A6,
 is the challenger's live-coin part's randomness for the round coins, which the model embodies. The fifth, `live-verifier`, is
-the record's custody (nothing in the record authenticates its writer): `--zk`'s soundness (`zk_session_sound_custody`) takes it as
-`Assumptions.Zk.RecordCustodyZK`, in `Assumptions/Zk.lean`. The table's last row is zero
+the record's custody (nothing in the record authenticates its writer): `--zk`'s soundness (`zk_session_soundJ_custody`) takes it as
+`Assumptions.Zk.RecordCustodyZKJ`, in `Assumptions/Zk.lean`. The table's last row is zero
 knowledge's, not soundness's: a model claim about the honest prover. The development declares no
 `axiom`. So a mis-stated assumption can make a theorem vacuous, but it can never make Lean prove something false.
 
@@ -37,8 +37,8 @@ knowledge's, not soundness's: a model claim about the honest prover. The develop
 | `Assumptions.SHA512CRExpected` (A2) | `ecr/sha-512` | `T/2^256`, for `T` evaluations in expectation | the link finders (`LinkCR`, `hCR`) |
 | `Assumptions.UniformRandomBytes` (A3); per test, `UniformRandomBytesTest` | `uniform/io-getrandombytes` | every event has its probability for uniform bytes, the CSPRNG idealized; per test, one event, within `η` | the proof-block sample (`ht`; `hA3` in the headline); per test, zero knowledge's salts (`Discharge.ZkView.OsSalts`, `recursiveZK_os_gap`) and the ZK server's tape (`Claims.ZKServer.OsTape`) |
 | none: the model's coins (A6) | `uniform/flock-coin-server` | each round's coins uniform, flipped after the prover's message; under `--zk` or `--coins tree`, committed at `Hello` and opened after it, at a cost of `N·2^-256` (A6, tree coins) | the round coins |
-| `Assumptions.Zk.RecordCustodyZK` | `live-verifier` | none: the record `verify --zk` reads is the one the verifier's challenger wrote for the live session (`RecordsLiveZK`), and its sample file the one `verity-verify-proof draw` printed for the verifier's own sample (`SampleFileZK`) | `--zk`'s `hRec` and `hDraw` (`zk_session_sound_custody`, `hCust`; `hDraw` at each sample of `SamplingDesign.execOS` is `sampleOkZK_of_exec`); at `J` tables `Assumptions.Zk.RecordCustodyZKJ`, the same at `RecordsLiveZKJ` and the subset sampling design (`zk_session_soundJ_custody`; `hDraw` is `sampleOkZKJ_of_file`), and under hidden outputs (`zk_session_soundHJ_custody`; `hDraw` is `sampleOkZKHJ_of_file`) |
-| `Assumptions.RecordCustodyExec` (`…ExecH`); `Zk.RecordCustodyZKLaw` (`…ZKHLaw`, `…ZKJLaw`, `…ZKHJLaw`) | `live-verifier` | none: as `RecordCustodyZK`, with `SampleOk` (`SampleOkZK`, and forms) at each sample of the sampling design | `SoundExec*`'s and `SoundZ*`'s `hCust` |
+| `Assumptions.Zk.RecordCustodyZKJ` | `live-verifier` | none: the record `verify --zk` reads is the one the verifier's challenger wrote for the live session (`RecordsLiveZKJ`), and its sample file the one `verity-verify-proof draw` printed for the verifier's own sample | `--zk`'s `hRec` and `hDraw` at `J` tables and the subset sampling design (`zk_session_soundJ_custody`; `hDraw` is `sampleOkZKJ_of_file`), and under hidden outputs (`zk_session_soundHJ_custody`; `hDraw` is `sampleOkZKHJ_of_file`) |
+| `Assumptions.RecordCustodyExec` (`…ExecH`); `Zk.RecordCustodyZKLaw` (`…ZKHLaw`, `…ZKJLaw`, `…ZKHJLaw`) | `live-verifier` | none: as `RecordCustodyZKJ`, with `SampleOk` (`SampleOkZK`, and forms) at each sample of the sampling design | `SoundExec*`'s and `SoundZ*`'s `hCust` |
 | none: the model's Ligerito prover (`LigProver`) | none: a model claim, as A6's | the honest Ligerito prover's level-≥ 1 bytes are a function of the table, the statement, the public coins, the restart and fresh salts; nothing proves it (`LigProver`'s docstring, `Discharge/Composed/Inner.lean`) | zero knowledge's view, not soundness: `Composed.zk_session_view`, `zk_session_composed` and `ZkEveryCoin.zk_session_view_all` hold for every such prover `P`, as do `ZkHidden.zk_session_viewH`, `zk_session_viewHJ` and `zk_session_composedHJ` |
 
 Both collision-resistance `Prop`s are **per finder, and per prover**. Some finder outputs a collision after no
@@ -72,7 +72,7 @@ hash, nor false of every hash.
     `q` is checked in Lean: the stopped finder's cost, `truncCost`, is at most `q` on every outcome. But that is the
     modeled cost, the per-run cost times the runs played (`cT`), so under the strict form the per-run cost must bound
     every run on every outcome, not on average: the prover's evaluations and the verifier's, whose verdict `accω` reads
-    (as `SampledKSLiveV2` charges its link finders). The extraction (`rdT`) reads only openings that verification
+    (as `SampledKSLiveV5` charges its link finders). The extraction (`rdT`) reads only openings that verification
     checked, and its decoding (`cand`) evaluates no SHA-512 but is charged nowhere, so it must fit in the per-run cost
     or in `q`'s slack.
 

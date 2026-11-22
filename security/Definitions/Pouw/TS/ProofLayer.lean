@@ -44,11 +44,11 @@ TS model's accounting:
   failure). Its fork form (`ProofLayer.Forked`, as ruled): two runs off one commitment, both accepted, open it
   differently;
 * **proof soundness at `δ_ZK`**: an accepted proof's opening satisfies its relation on its path, outside `δ_ZK` a proof
-  (`ProofLayer.SoundAt`); Flock's `Flock.Guarantees.EndToEndHiddenSampled` is this bound for a session, against the
-  committed transcript fixed at registration. The relation also reads the rows link: the proof's input rows are the
+  (`ProofLayer.SoundAt`); Flock's `Flock.Guarantees.EndToEndRegisteredSampled` is this bound for a session, against
+  the committed transcript fixed at registration. The relation also reads the rows link: the proof's input rows are the
   rows its registered roots open to, and its output rows (the sinks committed after the coin) the Program's on those
-  rows and the coin. `Flock.Guarantees.EndToEndRegisteredRows` states that bound for one session. The bridge
-  from it to this premise is open: a window's proofs as Flock sessions under the window's coins, with `opened` the
+  rows and the coin. No guarantee states that bound for one session, and the bridge from a session's bound to this
+  premise is open: a window's proofs as Flock sessions under the window's coins, with `opened` the
   rows Flock's bound reads;
 * **pinning**: the relations pin every committed value's derivation (`ProofLayer.Pins`), a property of the
   Definitions the proofs pass. A check that takes an absorbed word as free witness lacks it (`PouwSegCheck_v2`: its
@@ -145,8 +145,8 @@ def Forked (w : Fin S) (x z : Paths Ω S) : Prop :=
 def Unsound (x : Paths Ω S) (w : Fin S) (i : Fin nπ) : Prop := pf.accepted x w i ∧ ¬ pf.rel x w i (pf.opened x w i)
 
 /-- **Proof soundness at `δ_ZK`**: each proof is accepted with an opening that fails its relation on the path with
-probability at most `δ_ZK` over the window's coins. Flock's `Flock.Guarantees.EndToEndRegisteredRows` states
-this bound for one session; the bridge from a session's bound to this one is open. -/
+probability at most `δ_ZK` over the window's coins. No guarantee states this bound for one session with the rows
+link, and the bridge from a session's bound to this one is open. -/
 def SoundAt [Fintype Ω] (δzk : ℝ) : Prop := ∀ w i, prob (fun x => pf.Unsound x w i) ≤ δzk
 
 /-- **The relations pin every committed value**: on every path, values that satisfy every proof's relation there are

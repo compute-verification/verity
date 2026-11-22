@@ -49,7 +49,7 @@ set_option Elab.async false
 /-!
 # A shaped registered opening opens the deployed commitment at a leaf map
 
-`Transports.lean` at a leaf map (`LeafMap.lean`): `opens_commitDepL` opens `commitDepL` under `rootsOfL` at a row's
+The deployed commitment at a leaf map (`LeafMap.lean`): `opens_commitDepL` opens `commitDepL` under `rootsOfL` at a row's
 position, with data `dataOfL`: the salt, the row's frame-v3 path in its port's own tree (`sibsV` over `leavesL`), zero
 bytes up to `L.d` levels, and the value's bits. At the session's binding with or without shared rows (`vbS`, at
 `ZkReg.rsZHJS`), `transports_shapedS` reads a registered opening through it, and `transportsLiveCR` is
@@ -60,9 +60,6 @@ What the verifier checks, at every public file it accepts (`ref_lt_cnt`): a unit
 instances). At the public file's leaf map each port's domain is its published one (`LeafMap.ofPublic_dom`); at
 `dupId = false` those differ, and `RootFixesDomainL` makes their roots differ (`rootsDistinctL_of_fixes`): the verifier
 opens a row at its own port, of its own leaf count.
-
-`transportsLiveC_of_R`: at `pub.tables = none` the leaf map is `LeafMap.ident` and `TransportsLiveCR` is
-`TransportsLiveC`.
 -/
 
 namespace Flock.Bridge
@@ -165,7 +162,7 @@ theorem rootsDistinctL_of_fixes {c : Flock.Circuit} {pub : Flock.Public} {L : Le
 
 end Layout
 
-/-- **A shaped registered opening opens the deployed commitment at a leaf map.** `opens_commitDep` at `L`: at a claims
+/-- **A shaped registered opening opens the deployed commitment at a leaf map**: at a claims
 position `i` whose registered row `r` sits at port `r.port`, of the port's bits (`16 w` of them), at leaf
 `r.leaf < L.cnt r.port`, under roots no earlier port shares, a value `v` `RowShaped` of the row's width under a salt of
 `saltLen` bytes, whose hm96 leaf at its port's bytes (`encPortH`, the port's own format) is the registered leaf of
@@ -427,8 +424,8 @@ noncomputable def rowsOfL (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ) (L :
   (HiddenExec.rowOfH c hU n (Discharge.Layout.outsOf c hU n) g).map fun r =>
     ⟨r.2.1.val, L.ref r.2.1.val r.1.val, Discharge.Layout.portRowW c r.2.1, r.2.2.val⟩
 
-/-- **A shaped registered opening opens the deployed commitment at the public file's leaf map** (`transports_shaped`
-with or without shared rows): at a file whose ports are rows the verifier reads (`RowsOk`), each row in its
+/-- **A shaped registered opening opens the deployed commitment at the public file's leaf map**, with or without shared
+rows: at a file whose ports are rows the verifier reads (`RowsOk`), each row in its
 port's format, at roots no two ports share and refs below their ports' counts. -/
 theorem transports_shapedS (R : Reg) (hrows : RowsOk c)
     (hfirst : ∀ q q' : ℕ, q' < q → q < c.ports.size →
@@ -480,17 +477,5 @@ theorem transportsLiveCR : Bridge.TransportsLiveCR := by
     (hscope := hscope) (hU := hU) (hpub := hpub) _ hrows
     (Bridge.rootsDistinctL_of_fixes (Bridge.LeafMap.ofPublic_dom _ _ _) hdup hroots)
     (fun u q => Bridge.ref_lt_cnt hpub u.isLt q.isLt) hr p v y hv hvw hy he
-
-/-- **`TransportsLiveCR` is `TransportsLiveC` at one leaf per unit**: at `pub.tables = none` the public file's leaf map
-is `LeafMap.ident`, at which `rootsOfL`, `commitDepL` and `RootFixesDomainL` are `rootsOf`, `commitDep` and
-`RootFixesDomain`, and `ZkReg.rsZHJS` is `rsZHJ`. -/
-theorem transportsLiveC_of_R (h : Bridge.TransportsLiveCR) : Bridge.TransportsLiveC := by
-  intro n Reg I ht D hD hU pub hpub hpt hscope hrows hdup hroots kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hTags
-    hCust τ
-  have hL := Bridge.LeafMap.ofPublic_none (c := D.unroll) n hpt
-  have := h n Reg I ht D hD hU pub hpub hscope hrows hdup (by rw [hL]; exact hroots) kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω Lb
-    src hTags hCust τ
-  rw [hL] at this
-  exact this
 
 end Flock.Guarantees

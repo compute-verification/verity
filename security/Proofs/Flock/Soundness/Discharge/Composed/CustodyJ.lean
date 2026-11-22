@@ -30,7 +30,7 @@ verity-verify-proof's own arithmetic. This file splits them:
 
 * `sampleOkZKJ_of_size`: from `SampleFileZK dj samplingDesign pop` at any sampling design, at a sample `S` whose file decodes only to `q` units, with
   `nTab I` dividing `q`, `SampleOkZKJ` holds at `mPtsOf c.g (q / nTab I)` link points. The stratified sampling design meets it at
-  `q = ∑ s, k s` (`ZkReg/Guarded.lean`, `sampleOkZKJ_of_exec`).
+  `q = ∑ s, k s` (`ZkReg/Guarded.lean`).
 * `sampleOkZKJ_of_file`: from `SampleFileZK dj (subset kd) pop`, with `nTab I` dividing `kd`, `SampleOkZKJ` holds at
   `mPtsOf c.g (kd / nTab I)` link points at every sample `S`. `UnitSample.ofJson` decodes a subset sample only at its `k`
   units, so a sample file it decodes is a sample of `kd` units, and part `j` (`partSample`) of it decodes to its `kd / nTab I`

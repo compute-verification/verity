@@ -28,7 +28,7 @@ import Proofs.Flock.Soundness.ZK.Hiding
 # Proof of (ii) at the ZK server and V*'s code
 
 `Flock.SecurityProofs.RecursiveZkServerPrivate : Flock.Guarantees.RecursiveZkServerPrivate` is
-`RecursiveCircuitPrivateLeaves`' argument at the commit strings the ZK server sends, where that one is at their leaves,
+the circuit-privacy argument over hm96 leaves (`regLeaves_hides`) at the commit strings the ZK server sends,
 with the inner coins live: message `i` reads the commit strings before it, so T1 is taken over adaptive leaves.
 
 * `ZkView.commitString_split`: the executable's commit string of `x` at a salt's bytes is `commitBytes (x ⊕ M·y, c(y))`
@@ -37,8 +37,8 @@ with the inner coins live: message `i` reads the commit strings before it, so T1
 * `ZkServerZK.zkServerPairs_adaptive`: the ZK server's commit strings are T1's adaptive leaves (`ZK.adaptiveLeaves`).
 * `ZkServerZK.recursiveZK_enc`: `recursiveZK_le` with the auditor reading the commitments through any encoding `H` of
   their two halves (`encAt`, `encIdeal`), at any hm96 hiding bound `δ`, T1 over the adaptive leaves
-  (`ZK.ideal_leaves_adaptive`); `ZkServerZK.private_enc`: `RecursiveCircuitPrivate`'s two ways there, with the
-  registration's hiding.
+  (`ZK.ideal_leaves_adaptive`); `ZkServerZK.private_enc`: the recursive audit's circuit privacy, both ways, there,
+  with the registration's hiding.
 * `ZkServerZK.fwRealPr_eq`: the ZK server's real view is that at `H = commitBytes`, by `ZkServerSends` at the OS's
   bytes, taken to salts (`ZkView.saltsEquiv`).
 * `RecursiveZkServerPrivate`: `private_enc` at `commitBytes`, V*'s sessions' zero knowledge
@@ -260,7 +260,7 @@ noncomputable def idealAt {D Out Rv Ωa Ωs V : Type} [Fintype Ωa] [Fintype Ωs
   prCoin fun z : (Ωa × (Fin nh → ZkView.Bits × ZkView.Salt)) × Ωs =>
     E (v, z.1.1, encIdeal H z.1.2, sim o v z.1.1 (encIdeal H z.1.2) z.2)
 
-/-- **`RecursiveCircuitPrivate` through any encoding of the commitments**, at any hm96 hiding bound `δ`: at each
+/-- **The recursive audit's circuit privacy through any encoding of the commitments**, at any hm96 hiding bound `δ`: at each
 registration salt, `recursiveZK_enc` (and on the event's complement, the other way), then the registration's hiding as
 a test with values in `[0, 1]` (`Hides.avg_le`). -/
 theorem private_enc {D Out Prog Wit Rr Rv Ωa Ωp Ωo Ωs V : Type} [Fintype Rr] [Nonempty Rr] [Fintype Ωa]

@@ -1,4 +1,4 @@
-"""`certify`'s harm bounds held to `Flock.Guarantees.JointStratified`'s exact supremum, `StratifiedBlock.maxHarm`: the
+"""`certify`'s harm bounds held to the exact supremum, `Spot.Bound`'s `maxHarm`: the
 most ANDs, or output bits, a wrong set whose exact stratified escape is at least δ holds, at the same δ and the same
 weights.  The supremum is bracketed in Lean (`Spot.Bound.maxHarmCheck`, the `max_harm` piece of
 `spot-difftest`) from a certificate `optimize.max_harm` finds: `lower` the harm of one set of the confidence

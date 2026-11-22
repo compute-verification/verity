@@ -41,8 +41,7 @@ import Mathlib.Topology.Sheaves.Init
 `Properties.Pouw.MonitoringPeriod.CheckedCreditMonitoringPeriod` with served H1's verdict on a window, `Credit.executionPhase`, in place of
 `protocol.check`, and with the tiles' sample the sampling block's stratified sample: the window's units are one subcircuit
 of the sampling block, their stratum `s_T` of the block's assignment `σ`, and its `k s_T` units are sampled uniformly
-inside it, independently of the other strata (`Spot.Sampling.SamplingDesign.stratified σ k hk`,
-`JointStratified`). The period's population is that stratum's size, `N_p = |stratum σ s_T|` (`tileCount`), and its
+inside it, independently of the other strata (`Spot.Sampling.SamplingDesign.stratified σ k hk`). The period's population is that stratum's size, `N_p = |stratum σ s_T|` (`tileCount`), and its
 sample size is the block's `k s_T`, read from the block's sample, not chosen here.
 
 * `stratum`, `tileCount`, `tileAt`, `tileDraw`: the sampling block's stratum `s` of `σ` (`SamplingDesign.stratum`, restated:

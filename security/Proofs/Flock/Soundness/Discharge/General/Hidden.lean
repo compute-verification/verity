@@ -43,12 +43,10 @@ guarantees discharged by the decoders that read no shape of the circuit (`Hidden
 
 * `flock_headline_exec_hidden_gen`: `HdecCor.flock_headline_exec_hidden_dec` at `instProg c n`
   (`HiddenExec.flock_headline_exec_hidden_inst`);
-* `zk_session_soundH_gen`: `ZkHidden.zk_session_soundH` at `instProg c n` (`ZkHidden.zk_flock_countC_execOS_atHI`);
-* `zk_session_soundH_custody_gen`: `ZkHidden.zk_session_soundH_custody` at `instProg c n`.
+* `zk_session_soundH_gen`: `ZkHidden.zk_session_soundH` at `instProg c n` (`ZkHidden.zk_flock_countC_execOS_atHI`).
 
 None takes `c.unit.inGroups.size = 1`, `c.outNet = c.unitNet` or `pub.tables = none`. At `J` tables and against the
-registration, `ZkHidden.zk_session_soundHJI` and `ZkReg.zk_session_soundHJR_custody_regI` already take only the
-conditions `scopeGenH` gives (`hrf`, `hpr`, `hw`).
+registration, `ZkHidden.zk_session_soundHJI` already takes only the conditions `scopeGenH` gives (`hrf`, `hpr`, `hw`).
 -/
 
 namespace FlockSoundness.Discharge.General
@@ -219,58 +217,6 @@ theorem zk_session_soundH_gen
     (execAccept := fun o => o.1 = true) (StrictCR.TreeRewind.ofNever hnever) (ofNever_finderCR hs512.H hnever 0)
   rw [StrictCR.TreeRewind.ofNever_bound, ENNReal.ofReal_zero, add_zero] at hc'
   exact zk_headline_exec_on execArith hs512 _ I wr _ dg _ _ _ _ N hdec τ _ _ hc'
-
-/-- **One hidden-output `--zk` sampled session is sound under `live-verifier`, at the general form.**
-`zk_session_soundH_gen` at the link points of the sampling design's own samples, `mPtsOf c.g (∑ s, ks s)`, with the record's custody
-(`RecordCustodyZK`) in place of `hRec` and `hDraw`, as `ZkHidden.zk_session_soundH_custody` is
-`zk_session_soundH`'s. -/
-theorem zk_session_soundH_custody_gen
-    (I : Inputs) (ht : I.tags.typed = false)
-    -- the session's circuit and public file
-    {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
-    {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
-    (hgen : Layout.scopeGenH c = true)
-    -- the sampling design and A3
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
-    {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
-    (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the record, at the link points of the sampling design's samples
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    (y₀ : SampleSetupZKH I (mPtsOf c.g (∑ s, ks s)) S₀ (dj S₀))
-    (wr : Finset (Fin n) → Reg → LiveOut (mPtsOf c.g (∑ s, ks s)) → Exec.Transcript)
-    (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the verify command's tags, and live-verifier: the record and its sample file are the live session's
-    (hTags : TagsOkH I) (hCust : Assumptions.Zk.RecordCustodyZK I dj wr (.stratified Kd (Array.ofFn St)) pop)
-    -- the count curve's parameters
-    {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
-    (hr : ∀ S R j, rateZ (planAtZKH (Reg := Reg) dj y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t') (K₀ : ℕ)
-    -- the live prover
-    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
-      (liveOf dg (mPtsOf c.g (∑ s, ks s)) N wr)))
-    {qF qS : ℝ} :
-    let σ := simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _
-      (runsZC_liveHI I ht hc dj y₀ wr _ tablesAtZKH_liveI hTags hCust.1
-        (fun ω => sampleOkZKH_of_exec I hc σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ
-    -- cr/sha-512 for the knowledge finders of its simulation
-    (∀ ω j, TableCRZ execArith hs512 (planAtZKH dj y₀
-        ((SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) (reg σ)) j
-      (zcStrat execArith hs512 (planAtZKH dj y₀) (cont σ ω)) qF qS) →
-    prob (fun o => LiveAcceptsZK I o ∧
-        K₀ ≤ (((instProg c n).partition (outsOfI c n)).incorrect
-          (XplurZC execArith hs512 ((instProg c n).partition (outsOfI c n)) (planAtZKH dj y₀) (tabAtZKH dj y₀)
-            ((rsZG dj y₀ ht hc hgen hpub hU).bindingZ (rsZG_computes dj y₀ ht hc hgen hpub hU))
-            (reg σ) (cont σ) k Rw)).card)
-        (auditLive (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
-          (liveOf dg (mPtsOf c.g (∑ s, ks s)) N wr)) τ ≤
-      (SamplingDesign.stratified σs ks hks).miss K₀ +
-        ksAvgStrictZ (planAtZKH dj y₀) (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
-          (reg σ) +
-        linkBoundZC execArith hs512 ((instProg c n).partition (outsOfI c n)) (planAtZKH dj y₀) (tabAtZKH dj y₀)
-          ((rsZG dj y₀ ht hc hgen hpub hU).bindingZ (rsZG_computes dj y₀ ht hc hgen hpub hU))
-          k Rw M ρ t' (reg σ) (cont σ) :=
-  zk_session_soundH_gen I ht dj y₀ wr dg N hc hU hpub hgen σs ks hks St hS Kd pop Lb src hA3
-    (fun ω => sampleOkZKH_of_exec I hc σs ks hks St hS Kd pop Lb src dj hCust.2 ω) hTags hCust.1 hk hRw hM hρ hr ht' K₀ τ
 
 /-! At `J` tables, `ZkHidden.zk_session_soundHJI` and `ZkReg.checked_of_acceptsHJI` take the conditions `scopeGenH`
 gives; these are their rows with those conditions read off it. -/

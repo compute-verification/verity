@@ -12,7 +12,7 @@ proof block's public gates:
 * `HiddenExec.rowOfHP_ne_none_of_io`: a committed wire of a sampled proof block other than the constant, the zero and a public
   gate has a row (`Layout.single_gateP`; a computed one is a returned output's, `OutsOutP`, so an output row's bit);
 * `Bridge.openingsCanonV5_row`: at a wire with a row `(u', q, k)`, the opening is canonical (`canonOpen`) at the row
-  the public file's leaf map registers (`LeafMap.ref`), as in `openingsCanonH`;
+  the public file's leaf map registers (`LeafMap.ref`), as at hidden outputs;
 * `Bridge.openingsCanonV5_const`: at a constant wire, the opening's bit is the decoder's (`opening_spec`): the constant
   column's 1 and a zero column's 0 at the public place (`constCols_keyProgHP`, `zeroCols_keyProgHP`), and at a public
   gate, which has no row (`HiddenExec.rowOfHP_pub`), the bit its place holds (`Layout.block_gateAt`), the public input
@@ -32,7 +32,7 @@ variable {c : Flock.Circuit} {hU : Built c.unit} {n : ℕ} {pi : HmIn.Ports} {Re
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length} {si : SitesHP plan tab}
 
 /-- **A committed wire of a sampled proof block other than the constant, the zero and a public gate has a row** at public
-inputs (`rowOfH_ne_none_of_io` at `keyProgP`): a committed gate with no row is the zero, the constant, a public gate or
+inputs (at `keyProgP`): a committed gate with no row is the zero, the constant, a public gate or
 a computed gate of the proof block (`Layout.single_gateP`), and a computed one is a returned output's (`OutsOutP`), so an
 output row's bit (`outBitRow_ne_none`). -/
 theorem rowOfHP_ne_none_of_io

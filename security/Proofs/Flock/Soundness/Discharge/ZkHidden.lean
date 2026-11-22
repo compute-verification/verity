@@ -15,7 +15,6 @@ public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJP
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.RunsJP
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJP
-public import Proofs.Flock.Soundness.Discharge.ZkHidden.Rate
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundJ
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJ
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJJson

@@ -16,7 +16,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.C3.RegLevels.OpensRegs
-import Proofs.Flock.C3.Reps.ReadWhole
 import Proofs.Flock.Soundness.Discharge.Aliased.Rows
 import Proofs.Flock.VBridge.Family.UnitName
 import Proofs.Flock.Verifier.HmNets
@@ -33,12 +32,11 @@ so the Δ key (`Aliased.srcKey`, copy 0) of each of the unit's input bits is the
 * `repKeys_part`: part `p`'s circuit has those keys at V*'s part `pt.S`'s ports (`RepKeys`);
 * `srcKey_v`, `srcKey_row`: so the `v` column `vBase + q` is bit `q` of the port V* names `v`, and the row column
   `rowCol q` is a bit of the row port it lies in (`rowCol_at`), named as V* names it;
-* `part_counts`, `part_link`: V*'s part `pt.S` has the verifier's part's row ports and v (`nsOf F.sh p`, `nvOf F.sh p`;
-  `VStarFamily.hpart`, `RecVStar.checkPart`), so the keys hold at the verifier's part (`partRep`, which `rowCol` and
-  `vBase` read only through those counts): `partVCols` and `partRowCols` (`PartRowCols`);
-* its row ports are named the whole S's at the part's ports (`RecVStar.portNames`, `partPorts`), so a row column of
-  element `a` is keyed by that element's bit of its port in w, named as that port (`wIdx_get`, `rowBit`), and two
-  parts' keys of one element's bit are one bit of rows of one name (`starts_inj`, `partRowBits_holds`).
+* `part_counts`: V*'s part `pt.S` has the verifier's part's row ports and v (`nsOf F.sh p`, `nvOf F.sh p`;
+  `VStarFamily.hpart`, `RecVStar.checkPart`), which is all `partRep`'s `rowCol` and `vBase` read;
+* its row ports are named the whole S's at the part's ports (`RecVStar.portNames`, `partPorts_eq`), so a row column of
+  element `a` is keyed by that element's bit of its port in w, named as that port (`wIdx_get`, `rowBit_of`), and two
+  elements' positions are one only at one element (`starts_inj`).
 -/
 
 @[expose] public section
@@ -457,83 +455,6 @@ theorem part_counts (hne : Nonempty (Reg × L.Ω × Reg₂)) {p : ℕ} {j : Fin 
     (by rw [e F.sh (OfVStar.shape?_holo F.hsh)]; exact hpart)
   rw [e F.sh (OfVStar.shape?_holo F.hsh)] at h
   exact h
-
-/-- **The verifier's part `p`'s row ports and v are V*'s part's**, and V*'s part's row ports are named the whole S's
-at `p`'s ports (`part_counts` at the part `check_part` gives, which is `nsOf` and `nvOf`'s, `part_eq`, and whose ports
-are `partsOf`'s, `partPorts_eq`). -/
-theorem part_link (hne : Nonempty (Reg × L.Ω × Reg₂)) {p : ℕ} {j : Fin F.stmts.size} {nm : String}
-    {pt : VStar.Part} (hj : F.stmts[j] = .inner p nm pt) :
-    nsOf F.sh p = pt.S.ports.map (·.2) ∧ nvOf F.sh p = pt.S.gf.nv ∧
-      pt.S.ports.map (·.1) = (partsOf F.sh)[p]!.2.1.toList.map ((RecVStar.portNames F.sh)[·]!) := by
-  have hname := F.hUnitName_of hne
-  obtain ⟨⟨R, ω, R₂⟩⟩ := hne
-  have hnm : (F.Vs j).c.unit.name = RecResiduals.unitName F.vsh.m F.vsh.kLog F.vsh.claims p :=
-    (hname j p nm pt hj).trans (statements_name F.hstmts _ hj)
-  have hchk : RecResiduals.check (F.Vs j).c = .ok () := (parse_facts (F.zs R ω [] R₂ j).hc).recResiduals
-  obtain ⟨S, ns, nv, hpart, -⟩ := OfVStar.check_part hchk (resParams_of_check hchk hnm) F.hsh (F.hplain j)
-  obtain ⟨h1, h2, h3⟩ := F.part_counts ⟨(R, ω, R₂)⟩ hj hpart
-  obtain ⟨GS, gs, hS, hg⟩ := FlockC3.Reps.ReadWhole.part_ok hpart
-  have hp := OfVStar.part_lt hS hg hpart
-  obtain ⟨-, hns, hnv⟩ := OfVStar.part_eq hS hg hp hpart
-  have hgp : (partsOf F.sh)[p]! = gs[p] := by rw [partsOf_eq hS hg, getElem!_pos gs p hp]
-  exact ⟨by rw [nsOf, hgp, ← hns, h1], by rw [nvOf, hgp, ← hnv, h2],
-    by rw [hgp]; exact h3 _ (OfVStar.partPorts_eq hS hg hp)⟩
-
-/-- **The `v` columns' keys at part `p`'s statement**: `srcKey_v` at V*'s part (`repKeys_part`), which is the verifier's
-(`part_link`). -/
-theorem partVCols (hne : Nonempty (Reg × L.Ω × Reg₂)) {p : ℕ} {j : Fin F.stmts.size} {nm : String}
-    {pt : VStar.Part} (hj : F.stmts[j] = .inner p nm pt) :
-    ∃ qv : Fin (F.Vs j).c.ports.size, (F.Vs j).c.ports[qv].name = "v" ∧
-      ∀ q < 128 * nvOf F.sh p, ∃ _ : q < Layout.portRowW (F.Vs j).c qv,
-        Aliased.srcKey (F.Vs j).c
-            (0 * (Rows.ofNet (F.Vs j).hU).nIn + (OfVStar.vBase (OfVStar.partRep (nsOf F.sh p) (nvOf F.sh p)) + q)) =
-          .msg qv.val (q / 8) (q % 8) := by
-  obtain ⟨hns, hnv, -⟩ := F.part_link hne hj
-  rw [hns, hnv, OfVStar.vBase_snd (OfVStar.partRep_snd _ _)]
-  exact OfVStar.srcKey_v (F.repKeys_part hne hj) _
-
-/-- **`PartRowCols` at part `p`'s statement**: `srcKey_row` at V*'s part (`repKeys_part`), which is the verifier's
-(`part_link`). -/
-theorem partRowCols (hne : Nonempty (Reg × L.Ω × Reg₂)) {p : ℕ} {j : Fin F.stmts.size} {nm : String}
-    {pt : VStar.Part} (hj : F.stmts[j] = .inner p nm pt) :
-    ∀ q < 128 * (nsOf F.sh p).sum,
-      ∃ (q' : Fin (F.Vs j).c.ports.size) (k' : ℕ) (_ : k' < Layout.portRowW (F.Vs j).c q'),
-        Aliased.srcKey (F.Vs j).c (0 * (Rows.ofNet (F.Vs j).hU).nIn + rowColOf F.sh p q) =
-          .msg q'.val (k' / 8) (k' % 8) := by
-  obtain ⟨hns, -, -⟩ := F.part_link hne hj
-  intro q hq
-  rw [hns] at hq
-  obtain ⟨i, -, e, -, -, -, he, hk⟩ := OfVStar.srcKey_row (F.repKeys_part hne hj) (Rows.ofNet (F.Vs j).hU).nIn hq
-  refine ⟨i, e, he, ?_⟩
-  rw [rowColOf, hns, OfVStar.rowCol_snd _ pt.S.ports (OfVStar.partRep_snd _ _)]
-  exact hk
-
-/-- **`PartRowCols` holds** at every family with a history. -/
-theorem partRowCols_holds (hne : Nonempty (Reg × L.Ω × Reg₂)) : F.PartRowCols :=
-  fun _ _ _ _ hj => F.partRowCols hne hj
-
-/-- **A row column of part `p`'s statement is keyed by its element's bit of its port in w**: `rowBit_of` at V*'s part
-(`repKeys_part`), which is the verifier's, named the whole S's at `p`'s ports (`part_link`). -/
-theorem rowBit (hne : Nonempty (Reg × L.Ω × Reg₂)) {p : ℕ} {j : Fin F.stmts.size} {nm : String}
-    {pt : VStar.Part} (hj : F.stmts[j] = .inner p nm pt) {a e : ℕ} (ha : a < (wIOf F.sh p).size) (he : e < 128)
-    {q : Fin (F.Vs j).c.ports.size} {b : ℕ}
-    (hk : Aliased.srcKey (F.Vs j).c (0 * (Rows.ofNet (F.Vs j).hU).nIn + rowColOf F.sh p (128 * a + e)) =
-      .msg q.val (b / 8) (b % 8)) :
-    ∃ x o : ℕ, o < (RecResiduals.portSizes F.sh)[x]! ∧
-      (wIOf F.sh p)[a] = (RecResiduals.starts (RecResiduals.portSizes F.sh))[x]! + o ∧ b = 128 * o + e ∧
-        (F.Vs j).c.ports[q].name = (RecVStar.portNames F.sh)[x]! := by
-  obtain ⟨hns, -, hnm⟩ := F.part_link hne hj
-  rw [rowColOf, hns, OfVStar.rowCol_snd _ pt.S.ports (OfVStar.partRep_snd _ _)] at hk
-  exact OfVStar.rowBit_of (F.repKeys_part hne hj) _ hns.symm hnm ha he hk
-
-/-- **`PartRowBits` holds** at every family with a history: two parts' keys of one element's bit are that element's
-bit of its port in w (`rowBit`), one port and one element of it (`starts_inj`). -/
-theorem partRowBits_holds (hne : Nonempty (Reg × L.Ω × Reg₂)) : F.PartRowBits := by
-  intro p p' j j' nm pt nm' pt' hj hj' a a' e ha ha' hw he q b q' b' hk hk' _ _
-  obtain ⟨x, o, ho, hx, hb, hn⟩ := F.rowBit hne hj ha he hk
-  obtain ⟨x', o', ho', hx', hb', hn'⟩ := F.rowBit hne hj' ha' he hk'
-  obtain ⟨rfl, rfl⟩ := OfVStar.starts_inj _ ho ho' (hx.symm.trans (hw.trans hx'))
-  exact ⟨hb.trans hb'.symm, hn.trans hn'.symm⟩
 
 end VStarFamily
 

@@ -37,8 +37,7 @@ injective, and candidate 3's statements after RecSparse are R's levels and openi
   (`PubRowsChecked`) and
   `checkStmt` (`StmtsChecked`, `AcceptsZKV`'s second conjunct), n1b's checks; the checked family meets it
   (`checksAccepted_checked`, by `checks_of_keepOwn`). `ChecksReached` is it at the transcripts a session writes, which
-  the checked family meets too (`checksReached_checked`), and `hPubRows_of_checked` is `hPubRows_of_check'` with it,
-  `rowsHeld` and `SparseAtShapeChecked`.
+  the checked family meets too (`checksReached_checked`).
 * `ownIn_of_checks`: where `ChecksAccepted` holds, the accepted sessions' reads hold the verifier's message-round ports
   of their statement (`OwnIn` at `ownAt`), by `checkOwn`'s second and third loops (`checkOwn_ok`,
   `ownIn_of_checkStmt`); `ownIn_checked` is it at the checked family.
@@ -510,7 +509,7 @@ theorem checksAccepted_checked {coins : String → Option Flock.RecCoins.Source}
 
 /-- **(n1b) The checked family passes the verifier's checks where a session accepts a transcript it writes**, at one it
 writes: the checked session keeps its own list only where a transcript it writes and accepts passes `ChecksC3`
-(`Flock.Guarantees.keepOwn`, `checks_of_keepOwn`). `Compose.hbr_honest` reads it at `hPubRows_of_checked`. -/
+(`Flock.Guarantees.keepOwn`, `checks_of_keepOwn`). -/
 theorem checksReached_checked {coins : String → Option Flock.RecCoins.Source}
     {rows : Option (Array Flock.Registered.Port)}
     {zr : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → (j : Fin (vstarCount ish)) →
@@ -551,33 +550,6 @@ theorem ownIn_checked {coins : String → Option Flock.RecCoins.Source} {rows : 
   ownIn_of_checks (checksAccepted_checked (coins := coins) (rows := rows) (zr := zr) (hCust := hCust) (h := h))
 
 local notation "𝓗" => C3Family.honest (xR := xR) ish hss bind hob zs own sel bc dec wr reg
-
-/-- **(n1) The public rows at the honest family, from the verifier's checks**: `hPubRows_of_check'` with the
-rec-sparse shape read at a transcript the session writes and accepts whose public rows and statements the verifier
-checks (`ChecksReached`), where `SparseAtShapeChecked` holds (`sparseAtShapeChecked`) and every unit is sampled
-(`rowsHeld`). The port the check finds by name is the session's: the statement check refuses a circuit naming a port
-twice (`names_of_checkStmt`), so `PortsNamed` holds at every accepted session. -/
-theorem hPubRows_of_checked {rows : Option (Array Flock.Registered.Port)} (hchk : ChecksReached 𝓗 rows wr reg)
-    (hsp : SparseAtShapeChecked 𝓗) : HPubRows 𝓗 := by
-  intro R ω t R₂ j hex rg hrg u q x hname hread b hrow
-  obtain ⟨R', tr', hw, hacc, hchk', hst⟩ := hchk R ω t R₂ j hex
-  obtain ⟨cs, w, c, hcs, hc, hb⟩ :=
-    heldRow_some (show heldRow (innerCommitsAt (wr t).1 (wr t).2 st reg) ish.sparse rg.value x = some b from hrow)
-  have hfix : (RecVStar.fixedRow { reps := #[] } rg.value 0).isSome = true := by
-    rw [fixedRow_isSome { reps := #[] } cs rg.value 0 x none ish.sparse]
-    simp [hc]
-  obtain ⟨d, D, dp, idx, hd, hD, hdp, hidx, hu⟩ := rowsHeld 𝓗 R ω t R₂ j R' tr' hw hacc rg hrg hfix u x hread
-  obtain ⟨sj, hsj, hck⟩ := stmt_of_session ((𝓗).zs R ω t R₂ j) hacc hst hd u
-  have hfind := port_find_of_unique (names_of_checkStmt hck hsj) q
-  rw [hname] at hfind
-  rw [hcs] at hchk'
-  obtain ⟨spec₀, sts₀, hs₀, hpr₀, hlb₀⟩ := hchk'
-  have hlab := label_of_checked ((𝓗).zs R ω t R₂ j) hacc ⟨spec₀, sts₀, hs₀, hlb₀⟩ hd hD hdp hidx hu
-  obtain ⟨w', c', hc', hdig⟩ := pubRow_of_checked ((𝓗).zs R ω t R₂ j) hacc (cs := cs) ⟨spec₀, sts₀, hs₀, hpr₀⟩ hrg
-    hfix hfind hd hD hdp hidx hu (by rw [hlab]; exact hread)
-  have he := (fixedRow_or (hsp j sj _ _ _ _ _ _ _ hsj hck) hc).symm.trans hc'
-  simp only [Option.some.injEq, Except.ok.injEq, Prod.mk.injEq] at he
-  exact hdig.trans (he.2.symm.trans hb.symm)
 
 end Family
 

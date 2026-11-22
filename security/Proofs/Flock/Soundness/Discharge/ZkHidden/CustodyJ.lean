@@ -29,12 +29,9 @@ every sample of the live subset sampling design (`hDraw`); the record and its sa
 verity-verify-proof's own arithmetic:
 
 * `sampleOkZKHJ_of_sizeG`: from `SampleFileZK` under any sampling design, at a sample whose file decodes only to `kd` units, with `nTab I`
-  dividing `kd`, `SampleOkZKHJ` holds at `mPtsOf g (kd / nTab I)` link points, at any `g` every table's session has;
-  `sampleOkZKHJ_of_size` is it at the circuit file's `HmOut.parse`, `sampleOkZKHJ_of_fileG` at the subset sampling design.
-* `sampleOkZKHJ_of_size`: from `SampleFileZK` under any sampling design, at a sample whose file decodes only to `kd` units, with `nTab I`
-  dividing `kd`, `SampleOkZKHJ` holds at `mPtsOf c.g (kd / nTab I)` link points, `c` the circuit file's `HmOut.parse`
-  (setupHidden's `m_pts`, `setupHidden_mPts_sampled` and `setupHidden_mPts_of_proved`).
-* `sampleOkZKHJ_of_file`: `sampleOkZKJ_of_file` at setupHidden, `sampleOkZKHJ_of_size` at `SampleFileZK dj (subset kd) pop`,
+  dividing `kd`, `SampleOkZKHJ` holds at `mPtsOf g (kd / nTab I)` link points, at any `g` every table's session has
+  (setupHidden's `m_pts`, `setupHidden_mPts_sampled`); `sampleOkZKHJ_of_fileG` is it at the subset sampling design.
+* `sampleOkZKHJ_of_file`: `sampleOkZKJ_of_file` at setupHidden, `sampleOkZKHJ_of_sizeG` at `SampleFileZK dj (subset kd) pop`,
   at every sample `S`; `sampleOkZKHJ_of_fileSt` at the statement circuit (`HmOut.parseStmt`).
 * `zk_session_soundHJ_custody`: `zk_session_soundHJ` with `RecordCustodyZKJ` (`live-verifier`) for `hRec` and `hDraw`,
   at `mPtsOf c.g (kd / nTab I)` link points and `nTab I ∣ kd`.
@@ -146,19 +143,6 @@ theorem sampleOkZKHJ_of_sizeG (I : Inputs) {g : ℕ}
         omega
     · rw [setupHidden_mPts_of_provedG (hg j _ _ hst) (fun D' h' => ?_) hst]
       rw [hpd D' h', Array.size_extract, hsz, Nat.min_eq_left hjq, Nat.add_sub_cancel_left, hn]
-
-/-- **The challenger's live-coin part's sample is `SampleOkZKHJ` at a sample of `kd` units, under any sampling design.** On untyped `--statement` tags
-whose circuit file `HmOut.parse` accepts under the `--zk` tags as `c`: when the record's sample file is the verifier's sample
-under `samplingDesign` over `[0, pop)` (`SampleFileZK`), the sample file at `S` decodes only to a sample of `kd` units, and the session's
-tables divide `kd`, `S` is `SampleOkZKHJ` at `mPtsOf c.g (kd / nTab I)` link points: each table proves its `kd / nTab I`
-consecutive units, whatever the sampling design. -/
-theorem sampleOkZKHJ_of_size (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
-    (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (samplingDesign : Draw.SamplingDesign) (kd pop : ℕ) (hdiv : kd % nTab I = 0)
-    (dj : Finset (Fin n) → Lean.Json) (hdj : SampleFileZK dj samplingDesign pop) (S : Finset (Fin n))
-    (hsz : ∀ D, Draw.UnitSample.ofJson (dj S) = .ok D → D.units.size = kd) :
-    SampleOkZKHJ I dj (mPtsOf c.g (kd / nTab I)) S :=
-  sampleOkZKHJ_of_sizeG I (fun _ _ _ h => congrArg Flock.Circuit.g (setupHidden_c_of_parse
-    ((parseH_tagsAt ((zkTags_typed I).trans ht) _ _ _ _).trans hc) h)) samplingDesign kd pop hdiv dj hdj S hsz
 
 /-- **The challenger's live-coin part's samples are `SampleOkZKHJ`, at any `g` every table's session has.** When the record's sample file
 is the verifier's sample under the subset sampling design `subset kd` over `[0, pop)` (`SampleFileZK`) and the session's tables divide

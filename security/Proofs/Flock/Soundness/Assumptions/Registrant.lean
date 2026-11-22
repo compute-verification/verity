@@ -23,9 +23,7 @@ under it, so acceptance says nothing about whether the prover can open what it r
 prover can register a `c` it knows no salt for. `RegistrantCovers` (`registrant-holds-openings`) is the premise that
 excludes it: the guarantee covers only provers that hold a row and salt under every leaf they registered at a row the
 session's reads file `own` names, dishonest provers included, and a prover that registers a hash it can't open is
-outside it. `FlockC3.Compose.registrantCovers_attained` (`Proofs.Flock.C3.Compose.RowsReg`) meets it at every family
-of V*'s sessions whose registrant opens the rows the verifier reads, together with the guarantee's other hypotheses on
-them.
+outside it.
 -/
 
 @[expose] public section

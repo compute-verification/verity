@@ -21,8 +21,8 @@ import Proofs.Flock.Soundness.Discharge.FailClosed.Mask
 # Proof of Flock's zero-knowledge guarantee under hidden outputs
 
 `Flock.SecurityProofs.ZeroKnowledgeHidden : Flock.Guarantees.ZeroKnowledgeHidden` is `zk_session_viewHJ`. With
-`Flock.SecurityProofs.EndToEndHidden` at the same `dj` and `y₀` it is `zk_session_composedHJ`'s composition: sound and
-zero knowledge on one plan.
+the one-stage audit's bound under hidden outputs at the same `dj` and `y₀` it is `zk_session_composedHJ`'s
+composition: sound and zero knowledge on one plan.
 -/
 
 @[expose] public section

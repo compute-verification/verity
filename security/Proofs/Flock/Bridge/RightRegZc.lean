@@ -19,8 +19,7 @@ right and more are incorrect:
   openings too;
 * `OpeningsCanon canon`: in every satisfying witness of a sampled proof block, the opening of each of its committed wires'
   commit strings (`ValueBindingZ.opening`) is canonical at the wire;
-* `analysisZCRegC`, `zk_flock_countC_regC`: `analysisZCReg` and its count curve with "wrong" `incorrectRegZc`, under
-  `OpeningsCanon`. Its knowledge and binding errors are `analysisZCReg`'s, and its `cover` is the same argument: the
+* `analysisZCRegC`: `analysisZCReg` with "wrong" `incorrectRegZc`, under `OpeningsCanon`. Its knowledge and binding errors are `analysisZCReg`'s, and its `cover` is the same argument: the
   unit's openings from the satisfying message are canonical (`OpeningsCanon`), so the unit is right with them.
 * `zk_flock_missProbC_regC`: the same bound at a set `W` of units, `Pr[accept ∧ W ⊆ incorrect] ≤ missProb W + ε_ks + ε_bind`.
 -/
@@ -163,27 +162,7 @@ theorem zk_linkSoundC_regC
     (zk_linkSoundC A Hs P planZ tab vb hlow hRw hM hρ hr hj ht R τ tgt)
   simp only [analysisZCRegC, analysisZC, ↓reduceIte]
 
-/-- **The compiled `--zk` count curve, "wrong" with canonical openings**: `zk_flock_countC_reg`'s bound, with the units
-incorrect on the registration with canonical openings (`incorrectRegZc`), when a sampled proof block's openings are canonical
-(`OpeningsCanon`). -/
-theorem zk_flock_countC_regC (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u)
-    (hcan : OpeningsCanon A P planZ tab vb canon) {k Rw M : ℕ}
-    (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)
-    {a : (S : Finset (Fin n)) → (R : Reg) → Strategy (sessionZC A Hs (planZ S R)) → Fin (planZ S R).length → ℝ}
-    (hj : JointZC A Hs planZ k a) {t' : ℝ} (ht : 0 ≤ t') (K : ℕ)
-    (σ : Strategy (audit L Reg (batchedSessionZC A Hs planZ))) :
-    prob (fun o => o.1 = true ∧
-        K ≤ (incorrectRegZc A P planZ tab vb canon (reg σ) (XplurZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw)).card)
-        (audit L Reg (batchedSessionZC A Hs planZ)) σ ≤
-      L.miss K + ksAvgZC A Hs planZ k a (reg σ) (cont σ) +
-        linkBoundZC A Hs P planZ tab vb k Rw M ρ t' (reg σ) (cont σ) :=
-  extraction_audit_count (analysisZCRegC A Hs P planZ tab vb canon (fun R τ => XplurZC A Hs P planZ tab vb R τ k Rw) k
-      (fun S R j => (hr S R j).trans_lt hρ) hlow hown hcan a hj)
-    (zc_knowledgeSound_regC A Hs P planZ tab vb canon _ _ hlow hown hcan hj)
-    (zk_linkSoundC_regC A Hs P planZ tab vb canon hlow hown hcan hRw hM hρ hr hj ht) K σ
-
-/-- **The compiled `--zk` missProb bound, "wrong" with canonical openings**: `zk_flock_countC_regC` at a set `W` of units
-in place of a count, `Pr[accept ∧ W ⊆ incorrect] ≤ missProb W + ε_ks(σ) + ε_bind(σ)`. -/
+/-- **The compiled `--zk` missProb bound, "wrong" with canonical openings**: at a set `W` of units, `Pr[accept ∧ W ⊆ incorrect] ≤ missProb W + ε_ks(σ) + ε_bind(σ)`. -/
 theorem zk_flock_missProbC_regC (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u)
     (hcan : OpeningsCanon A P planZ tab vb canon) {k Rw M : ℕ}
     (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)
@@ -220,24 +199,5 @@ theorem zk_flock_missProbC_regC_levels {G : Type} [Fintype G] [DecidableEq G] (L
         linkBoundZC A Hs P planZ tab vb k Rw M ρ t' (reg σ) (cont σ) := by
   rw [hD W]
   exact zk_flock_missProbC_regC A Hs P planZ tab vb canon hlow hown hcan hRw hM hρ hr hj ht W σ
-
-/-- **`zk_flock_countC_regC` at a levels design**: where `blk` places the units injectively as the last level's blocks of
-`Lv` and the levels miss each set's blocks as the law `L` misses the set, `Pr[accept ∧ K ≤ |incorrect|]` is at most
-`δ + ε_ks(σ) + ε_bind(σ)` for every `K` above the levels' count at `δ` (`Levels.miss_le_of_countAt_lt`). -/
-theorem zk_flock_countC_regC_levels {G : Type} [Fintype G] [DecidableEq G] (Lv : Verity.Levels G)
-    {blk : Fin n → Finset G} (hblk : Function.Injective blk) (hin : ∀ u, blk u ∈ Lv.blocks)
-    (hD : ∀ S, Lv.design.missProb (S.image blk) = L.missProb S) {δ : ℝ≥0∞} {K : ℕ} (hK : Lv.countAt δ < K)
-    (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u)
-    (hcan : OpeningsCanon A P planZ tab vb canon) {k Rw M : ℕ}
-    (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)
-    {a : (S : Finset (Fin n)) → (R : Reg) → Strategy (sessionZC A Hs (planZ S R)) → Fin (planZ S R).length → ℝ}
-    (hj : JointZC A Hs planZ k a) {t' : ℝ} (ht : 0 ≤ t')
-    (σ : Strategy (audit L Reg (batchedSessionZC A Hs planZ))) :
-    prob (fun o => o.1 = true ∧
-        K ≤ (incorrectRegZc A P planZ tab vb canon (reg σ) (XplurZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw)).card)
-        (audit L Reg (batchedSessionZC A Hs planZ)) σ ≤
-      δ + ksAvgZC A Hs planZ k a (reg σ) (cont σ) + linkBoundZC A Hs P planZ tab vb k Rw M ρ t' (reg σ) (cont σ) :=
-  (zk_flock_countC_regC A Hs P planZ tab vb canon hlow hown hcan hRw hM hρ hr hj ht K σ).trans
-    (add_le_add (add_le_add (Lv.miss_le_of_countAt_lt L hblk hin hD hK) le_rfl) le_rfl)
 
 end FlockSoundness.Discharge.ZkLink

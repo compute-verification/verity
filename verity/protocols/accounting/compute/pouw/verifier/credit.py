@@ -36,7 +36,7 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   same, and each sampled leaf's `leaf_lanes.statements` are checked against their one-call leaf Programs and its
   partials ``<prefix>partials@<u>`` against one produced record under the sample root (`_leaf_asks`), then refused at the
   file credit builds at the leaf's served place (`leaf_registered_file`: a leaf statement reads rows in full, which
-  proofs' verifier cannot mark). A leaf outside what `LeafLanesSound` covers is ``lanes-shape`` (`lanes_shape`). The
+  proofs' verifier cannot mark). A leaf outside the lanes form is ``lanes-shape`` (`lanes_shape`). The
   verdict is the Lean's here too (`PouwVerifier.Lanes`, through `PouwVerifier.Verified`).
 * **The seed's inputs are the verifier's** (`registered_file`'s ``pub``): each unit's public row, the salt, position
   and roots its seed and its receipt's fold keys are derived from, is a row of its call's public table
@@ -325,7 +325,7 @@ _TEMPLATE = re.compile(r"k[1-9][0-9]*|live")
 #: circuit files ``lane<K>`` and ``combine<K>``, and in `LEAF_PROGRAMS` each one's leaf Program's descriptor digest
 LEAF_PROGRAMS = "leaf_programs"
 _LEAF_FILE = re.compile(r"(lane|combine)([1-9][0-9]*)")
-#: the tiles a sampled leaf may be proved as lanes at: `LeafLanesSound` is stated over `Fin 32` lanes and 32 × 32 cells
+#: the tiles a sampled leaf may be proved as lanes at: `PouwWindow.Lanes` is stated over `Fin 32` lanes and 32 × 32 cells
 LANES_TILES = ((32, 32),)
 #: the lanes evidence: the window's statements, each sampled leaf's leaf Programs' descriptors and the produced record
 LANES_KEYS = ("leaf_programs", "produced", "statements")
@@ -1683,8 +1683,8 @@ def form_of(files: dict, k: int) -> str | None:
 
 
 def lanes_shape(layout: dict, shape: dict, k: int) -> str | None:
-    """Why a sampled leaf at K = `k` of the window `layout` (its descriptor's `shape_of` `shape`) is outside what proofs'
-    `LeafLanesSound` covers (``lanes-shape``), naming the proof it waits on, or None. Generic in R × C, the statement set
+    """Why a sampled leaf at K = `k` of the window `layout` (its descriptor's `shape_of` `shape`) is outside the lanes
+    form (``lanes-shape``), naming what it waits on, or None. Generic in R × C, the statement set
     is `leaf_lanes.statements` (R/4)(C/8) lanes; the refusal is the proof's reach, `LANES_TILES` and K."""
     (r, c), j10r = layout["tile"], shape["tiles"][k]["j10r"]
     if (r, c) not in LANES_TILES:

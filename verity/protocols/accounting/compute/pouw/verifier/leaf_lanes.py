@@ -42,7 +42,7 @@ index's ``pub`` among them) or an output row, is not one of its ``--registered``
   ``admit`` (the leaf's R admit bits, `bits_words`) and ``o0`` (`OK_ROW`); the salts they're committed under are the
   caller's. Read least significant bit first, as `ResourceAccounting.TS.Lanes.decLane` reads a field, the salt is its 16
   big-endian 32-bit halves with half 0 the least significant, and the position its low half above its high one. Lean's
-  is proofs' `PouwWindow.knownRows`, the rows `LeafLanesSound` takes, whose difftest reads this through h1_lanes'
+  is proofs' `PouwWindow.knownRows`, the rows the lanes statements read, whose difftest reads this through h1_lanes'
   `known_rows` (`benchmarks/pouw/h1_lanes/leaf.py`), a wrapper over it.
 
 **A J10-R leaf** (``j10r``, the leaf's K: a unit over `PouwH1Tile_v5`) is proved as `h1zy`'s v2 statements, each lane in
@@ -374,8 +374,7 @@ def registered_file(ports: Mapping[str, tuple[str, int]], entries: Mapping[str, 
     and ``partials``, the combine's ``p<x>``, by the value it reads, whatever table that is placed in) is marked
     ``read_in_full`` (`READ_IN_FULL`): the verifier holds it to one row of the registered row's words, every bit of
     which the statement reads (Flock's `KnownRead.fullRows`), so the statements that read one row (four lanes an A row,
-    four a B row, lane l and the combine a partials row) read its same bits (proofs' `PouwWindow.Lanes.readFull`, which
-    `LeafLanesSound` takes). So is a J10-R leaf's port of a carry or of ``oks`` (`read_in_full`), but never an ``o0``,
+    four a B row, lane l and the combine a partials row) read its same bits (proofs' `PouwWindow.Lanes.readFull`). So is a J10-R leaf's port of a carry or of ``oks`` (`read_in_full`), but never an ``o0``,
     an output row, of which the circuit returns only the ok bit."""
     out = {}
     for port, (value, row) in ports.items():

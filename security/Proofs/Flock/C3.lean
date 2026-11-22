@@ -14,7 +14,6 @@ public import Proofs.Flock.C3.Compose.LaterHeld
 public import Proofs.Flock.C3.Compose.LaterHeldW
 public import Proofs.Flock.C3.Compose.LaterHolo
 public import Proofs.Flock.C3.Compose.PartRead
-public import Proofs.Flock.C3.Compose.RowsReg
 public import Proofs.Flock.C3.Compose.RsFacts
 public import Proofs.Flock.C3.Compose.SparseEnds
 public import Proofs.Flock.C3.Compose.SrcClauses
@@ -70,7 +69,6 @@ public import Proofs.Flock.C3.Reps.OpensRead
 public import Proofs.Flock.C3.Reps.ReadCol
 public import Proofs.Flock.C3.Reps.ReadRow
 public import Proofs.Flock.C3.Reps.ReadSib
-public import Proofs.Flock.C3.Reps.ReadWhole
 public import Proofs.Flock.C3.Reps.RepCoins
 public import Proofs.Flock.C3.Reps.RepsRead
 public import Proofs.Flock.C3.Reps.ResRead
@@ -148,8 +146,7 @@ discharge what it takes besides: VBridge at candidate 3's table (`_hbr`) and V*'
 * (f) `C3/RegLevels/`, `FlockC3.RegLevels`: R's levels against the registered cap (`HRegLevels`; n5).
 * (g) `C3/PubRows/`, `FlockC3.PubRows`: the public rows per value prefix (`HPubRows`) and the tape (`HTape`), at the
   honest family from the verifier's check (n1), and the commitments there (`hCommits_honest`).
-* (h) `C3/VStarList/`, `FlockC3.VStarList`: V*'s statements over the verifier's list (`vstarParsesScoped_of_list`), R's
-  shape from the verifier's checks (`stacked_of_openingShape`, `claims_of_stackedShape`), R's `ℓ` and the slots'
+* (h) `C3/VStarList/`, `FlockC3.VStarList`: V*'s list (`vstarCount_eq`), R's shape from the verifier's checks (`stacked_of_openingShape`, `claims_of_stackedShape`), R's `ℓ` and the slots'
   units from check 5 (`ellOk_of_sparseRange`, `units_of_sparseRange`), and the event's `AcceptsC3` from the
   verifier's acceptance (`acceptsC3_of_verify`).
 -/

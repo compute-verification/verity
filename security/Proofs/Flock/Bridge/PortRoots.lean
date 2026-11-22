@@ -38,27 +38,16 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 
 /-!
-# Two ports with one registered root and different domains are a SHA-512 collision
+# A port's registered root is SHA-512 of its top frame
 
-The deployed check opens a position at the first registered port whose root is the position's (`regPath`'s `find?`
-over `portsOf`), so a row of port `q` is checked in port `q'`'s tree when an earlier `q'` has `q`'s root. Each
-port's root is `FV3.root` over its own domain, the public file's published one (`domOf`), and that root is SHA-512 of
-one top frame (the top node's, or with one leaf that leaf's, or with none the pad's; `root_top`), whose first part is
-the domain. With one leaf the frame ends in the port's leaf schema and its payload, and two frames at different row
-schemas differ (`step_schema`), so two frames at one domain's place are at one schema. So two ports with one root and
-different domains give two different inputs with one SHA-512 digest (`rootsOf_collides`).
+Each port's root is `FV3.root` over its own domain, the public file's published one (`domOf`), and that root is SHA-512
+of one top frame (the top node's, or with one leaf that leaf's, or with none the pad's; `root_top`), whose first part
+is the domain. With one leaf the frame ends in the port's leaf schema and its payload, and two frames at different row
+schemas differ (`step_schema`), so two frames at one domain's place are at one schema (`topIn_ne`).
 
-* `RootFixesDomain`: an earlier port with a port's root has its domain. Off that collision it holds
-  (`fixes_of_none`). Two ports of one domain may share a root with no collision, and may have different schemas, so
-  what the deployed check needs is the distinct-roots form, at a public file whose ports' published domains are
-  pairwise distinct (`PortRoots.dupId`, which the verifier refuses): `rootsDistinct_of_fixes`. Then the check opens a
-  row of `q` in `q`'s own tree, at `q`'s schema.
-* `rootsFinder`: a finder with no coins that recomputes every port's root (`rootsCost` SHA-512 calls) and outputs the
-  first pair of top frames that `rootsOf_collides` finds (`rootsColl`). Under `ecr/sha-512` (`Claims.ExpectedCR`, read
-  through `Claims.ecrBound`) at that finder, a file that holds such a collision has `ecrBound ≥ 1`
-  (`one_le_ecrBound`), and one that holds none has `ecrBound = rootsCost / 2^256` (`ecrBound_of_none`). So a
-  probability bounded at every file with `RootFixesDomain` is bounded at every file with that term added
-  (`le_add_ecrBound`).
+* `pairs m`, `rootsCost c nl`: the ordered pairs of ports, and the SHA-512 calls that recompute every port's root;
+* `finderPr_one`, `finderPr_zero`: a finder whose every output is a collision finds one with probability 1, and one
+  with none with probability 0.
 -/
 
 @[expose] public section
@@ -163,10 +152,6 @@ theorem regLeafOf_size (c : Flock.Circuit) (pub : Flock.Public) (q u : ℕ) : (r
   unfold regLeafOf Flock.Hm96.Default512.treeLeaf
   exact Flock.Sha512.hash_size _
 
-theorem rootsOf_getD (c : Flock.Circuit) (pub : Flock.Public) (nl : ℕ) {q : ℕ} (hq : q < c.ports.size) :
-    (rootsOf c pub nl).getD q [] = bs (Flock.FV3.root (domOf c pub q) (leaves c pub nl q) Flock.Sha512.hash) := by
-  simp [rootsOf, leaves, List.getD_eq_getElem?_getD, hq]
-
 theorem one_le_log2ceil {n : ℕ} (h : 2 ≤ n) : 1 ≤ Flock.log2ceil n := by
   unfold Flock.log2ceil
   rw [ite_eq_right (by omega)]
@@ -226,31 +211,7 @@ theorem topIn_ne {c : Flock.Circuit} {pub : Flock.Public} {nl q q' : ℕ} (hd : 
       (.cons (by rw [lev_top_size c pub (by omega) q' (by omega), lev_top_size c pub (by omega) q (by omega)])
         .nil))))
 
-/-- **Two ports with one registered root and different domains give an explicit SHA-512 collision**: their top
-frames (`topIn`). -/
-theorem rootsOf_collides {c : Flock.Circuit} {pub : Flock.Public} {nl q q' : ℕ} (hq' : q' < c.ports.size)
-    (hq : q < c.ports.size) (hd : domOf c pub q' ≠ domOf c pub q)
-    (hr : (rootsOf c pub nl).getD q' [] = (rootsOf c pub nl).getD q []) :
-    Registered.Collides (topIn c pub nl q', topIn c pub nl q) := by
-  rw [rootsOf_getD c pub nl hq', rootsOf_getD c pub nl hq] at hr
-  have hr := bs_inj hr
-  rw [root_top, root_top] at hr
-  exact ⟨topIn_ne hd, hr⟩
-
 /-! ## The guard the deployed check needs -/
-
-/-- **An earlier port with a port's registered root has its domain** (its published one), in the form of
-`TransportsLiveCS`'s port-roots guard. -/
-def RootFixesDomain (c : Flock.Circuit) (pub : Flock.Public) (nl : ℕ) : Prop :=
-  ∀ q q' : ℕ, q' < q → q < c.ports.size →
-    (rootsOf c pub nl).getD q' [] = (rootsOf c pub nl).getD q [] → domOf c pub q' = domOf c pub q
-
-/-- **The distinct-roots form of the guard**, `TransportsLiveCS`'s hypothesis: from `RootFixesDomain`, at a public
-file whose ports' published domains are pairwise distinct (`PortRoots.dupId`, which the verifier refuses). -/
-theorem rootsDistinct_of_fixes {c : Flock.Circuit} {pub : Flock.Public} {nl : ℕ}
-    (hn : Flock.PortRoots.dupId c pub = false) (hf : RootFixesDomain c pub nl) :
-    ∀ q q' : ℕ, q' < q → q < c.ports.size → (rootsOf c pub nl).getD q' [] ≠ (rootsOf c pub nl).getD q [] :=
-  fun q q' hlt hq he => Flock.PortRoots.idOf_ne_of_dupId_false hn hlt hq (hf q q' hlt hq he)
 
 /-! ## The finder, and the term in `ecr/sha-512` -/
 
@@ -265,52 +226,9 @@ theorem mem_pairs {m q' q : ℕ} : (q', q) ∈ pairs m ↔ q' < q ∧ q < m := b
   · rintro ⟨h1, h2⟩
     exact ⟨q, h2, q', h1, rfl, rfl⟩
 
-/-- The first pair of ports, earlier first, with one registered root and different domains. -/
-def collPair (c : Flock.Circuit) (pub : Flock.Public) (nl : ℕ) : Option (ℕ × ℕ) :=
-  (pairs c.ports.size).find? fun p =>
-    decide ((rootsOf c pub nl).getD p.1 [] = (rootsOf c pub nl).getD p.2 [] ∧ domOf c pub p.1 ≠ domOf c pub p.2)
-
-/-- **The collision a registration's roots expose**: `collPair`'s two top frames. -/
-def rootsColl (c : Flock.Circuit) (pub : Flock.Public) (nl : ℕ) : Option (Msg × Msg) :=
-  (collPair c pub nl).map fun p => (bs (topIn c pub nl p.1), bs (topIn c pub nl p.2))
-
 /-- **SHA-512 calls to recompute every port's root**: per port, `nl` hm96 tree leaves, `nl` frame-v3 leaves, and at
 most `2 · nextPow2 nl` pads and nodes. -/
 def rootsCost (c : Flock.Circuit) (nl : ℕ) : ℕ := c.ports.size * (2 * nl + 2 * Flock.nextPow2 nl)
-
-/-- **The roots finder**: no coins; it recomputes every port's registered root and outputs `rootsColl`. -/
-def rootsFinder (c : Flock.Circuit) (pub : Flock.Public) (nl : ℕ) : Claims.Finder where
-  S := Unit
-  out _ := rootsColl c pub nl
-  cost _ := rootsCost c nl
-
-theorem rootsColl_collides {c : Flock.Circuit} {pub : Flock.Public} {nl : ℕ} {x y : Msg}
-    (h : rootsColl c pub nl = some (x, y)) : Claims.Collision sha512Msg x y := by
-  obtain ⟨⟨q', q⟩, hp, he⟩ := Option.map_eq_some_iff.mp h
-  obtain ⟨rfl, rfl⟩ := Prod.mk.inj he
-  have hmem := mem_pairs.mp (List.mem_of_find?_eq_some hp)
-  have hpr := List.find?_some hp
-  simp only [decide_eq_true_eq] at hpr
-  obtain ⟨hne, hh⟩ := rootsOf_collides (hmem.1.trans hmem.2) hmem.2 hpr.2 hpr.1
-  refine ⟨fun e => hne (bs_inj e), ?_⟩
-  simp only [sha512Msg, bytes_bs, hh]
-
-theorem fixes_of_none {c : Flock.Circuit} {pub : Flock.Public} {nl : ℕ} (h : rootsColl c pub nl = none) :
-    RootFixesDomain c pub nl := by
-  intro q q' hlt hq he
-  have hc : collPair c pub nl = none := Option.map_eq_none_iff.mp h
-  have := List.find?_eq_none.mp hc (q', q) (mem_pairs.mpr ⟨hlt, hq⟩)
-  simp only [decide_eq_true_eq, not_and, not_not] at this
-  exact this he
-
-/-- **The decidable form of the guard**: no colliding pair of ports (`rootsColl c pub nl = none`) iff an earlier port
-with a port's root has its domain. -/
-theorem rootsColl_none_iff {c : Flock.Circuit} {pub : Flock.Public} {nl : ℕ} :
-    rootsColl c pub nl = none ↔ RootFixesDomain c pub nl := by
-  refine ⟨fixes_of_none, fun h => Option.map_eq_none_iff.mpr (List.find?_eq_none.mpr fun ⟨a, b⟩ hp => ?_)⟩
-  obtain ⟨hlt, hq⟩ := mem_pairs.mp hp
-  simp only [decide_eq_true_eq, not_and, not_not]
-  exact h b a hlt hq
 
 theorem finderPr_one {H : Msg → Msg} {F : Claims.Finder}
     (h : ∀ s, ∃ u v, F.out s = some (u, v) ∧ Claims.Collision H u v) : F.Pr H = 1 := by
@@ -322,52 +240,5 @@ theorem finderPr_zero {H : Msg → Msg} {F : Claims.Finder}
     (h : ∀ s, ¬ ∃ u v, F.out s = some (u, v) ∧ Claims.Collision H u v) : F.Pr H = 0 := by
   unfold Claims.Finder.Pr Claims.Pr Claims.prUniform
   simp [h]
-
-theorem ex_cost (c : Flock.Circuit) (pub : Flock.Public) (nl : ℕ) :
-    Claims.Ex (fun s => ((rootsFinder c pub nl).cost s : ℝ)) = rootsCost c nl := by
-  have hc : (Fintype.card (rootsFinder c pub nl).S : ℝ) ≠ 0 := Nat.cast_ne_zero.mpr Fintype.card_ne_zero
-  unfold Claims.Ex
-  change (∑ _s : (rootsFinder c pub nl).S, (rootsCost c nl : ℝ)) / _ = _
-  rw [Finset.sum_const, Finset.card_univ, nsmul_eq_mul, mul_comm, mul_div_assoc, div_self hc, mul_one]
-
-/-- **A registration whose roots expose a collision has `ecr/sha-512`'s term at least 1** at the roots finder, at
-any budget of at least its calls. -/
-theorem one_le_ecrBound {c : Flock.Circuit} {pub : Flock.Public} {nl : ℕ} (hc : rootsColl c pub nl ≠ none) {q : ℝ}
-    (hq : (rootsCost c nl : ℝ) ≤ q) : 1 ≤ Claims.ecrBound sha512Msg (rootsFinder c pub nl) q := by
-  obtain ⟨⟨x, y⟩, hxy⟩ := Option.ne_none_iff_exists'.mp hc
-  have hPr : (rootsFinder c pub nl).Pr sha512Msg = 1 :=
-    finderPr_one fun _ => ⟨x, y, hxy, rootsColl_collides hxy⟩
-  unfold Claims.ecrBound
-  split_ifs with h
-  · rw [ENNReal.one_le_ofReal]
-    have h1 := h.1
-    unfold Claims.ExpectedCR at h1
-    rw [hPr, ex_cost] at h1
-    exact h1.trans (div_le_div_of_nonneg_right hq (by positivity))
-  · exact le_top
-
-/-- **A registration whose roots expose no collision has `ecr/sha-512`'s term `rootsCost / 2^256`** at the roots
-finder. -/
-theorem ecrBound_of_none {c : Flock.Circuit} {pub : Flock.Public} {nl : ℕ} (hc : rootsColl c pub nl = none) :
-    Claims.ecrBound sha512Msg (rootsFinder c pub nl) (rootsCost c nl) =
-      ENNReal.ofReal ((rootsCost c nl : ℝ) / 2 ^ (256 : ℝ)) := by
-  have hPr : (rootsFinder c pub nl).Pr sha512Msg = 0 :=
-    finderPr_zero fun _ ⟨_, _, he, _⟩ => Option.some_ne_none _ (he.symm.trans hc)
-  unfold Claims.ecrBound
-  rw [ite_eq_left]
-  refine ⟨?_, (ex_cost c pub nl).le⟩
-  unfold Claims.ExpectedCR
-  rw [hPr, ex_cost]
-  positivity
-
-/-- **The port-roots guard costs one `ecr/sha-512` term**: a probability `p ≤ 1` that is at most `x` at every
-registration whose roots fix their domains (`RootFixesDomain`) is at most `x` plus `ecr/sha-512`'s term at the roots
-finder, at every registration. -/
-theorem le_add_ecrBound {c : Flock.Circuit} {pub : Flock.Public} {nl : ℕ} {p x : ℝ≥0∞} (hp : p ≤ 1)
-    (h : RootFixesDomain c pub nl → p ≤ x) :
-    p ≤ x + Claims.ecrBound sha512Msg (rootsFinder c pub nl) (rootsCost c nl) := by
-  cases hc : rootsColl c pub nl with
-  | none => exact (h (fixes_of_none hc)).trans le_self_add
-  | some z => exact hp.trans ((one_le_ecrBound (by simp [hc]) le_rfl).trans le_add_self)
 
 end Flock.Bridge.PortRoots

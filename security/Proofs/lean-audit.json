@@ -67,7 +67,6 @@
   "Proofs.Properties.Spot.Tables",
   "Proofs.Properties.Spot.SecondRefused",
   "Proofs.Properties.Spot.Rate",
-  "Proofs.Flock.Bridge.RatePeriod",
   "Proofs.Properties.Pous.TimedAudit",
   "Proofs.Properties.Pous.MemoryAttester",
   "Proofs.Properties.Pous.MemoryAttester.Attest",

@@ -18,7 +18,6 @@ public import Proofs.Flock.Soundness.Discharge.Composed.Inner.LincheckReplay
 public import Proofs.Flock.Soundness.Discharge.Composed.Setup
 public import Proofs.Flock.Soundness.Discharge.Composed.RegWords
 public import Proofs.Flock.Soundness.Discharge.Composed.SoundJ
-public import Proofs.Flock.Soundness.Discharge.Composed.Custody
 public import Proofs.Flock.Soundness.Discharge.Composed.CustodyJ
 public import Proofs.Flock.Soundness.Discharge.Composed.CustodyJJson
 public import Proofs.Flock.Soundness.Discharge.Composed.PublicJ

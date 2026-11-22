@@ -88,7 +88,7 @@ variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Verity.Boolean.Circuit} {n : 
   (vb : ValueBindingZ A P planZ tab decode Hc) (canon : Fin C.N → vb.Opening → Prop) {L : SamplingDesign n}
 
 /-- **The sampled proof blocks of the compiled `--zk` audit, against the registration with canonical openings**: it
-accepts with a sampled proof block in `incorrectRegZc` with probability at most `ε_ks + ε_bind`, `zk_flock_countC_regC`'s
+accepts with a sampled proof block in `incorrectRegZc` with probability at most `ε_ks + ε_bind`, the count bound's
 terms without the miss term. -/
 theorem zk_flock_sampledC_regC (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u)
     (hcan : OpeningsCanon A P planZ tab vb canon) {k Rw M : ℕ}

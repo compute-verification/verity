@@ -23,7 +23,7 @@ set_option Elab.async false
 /-!
 # The rows at the hidden-output `--zk` tables of `J` tables, with or without shared rows
 
-`ZkHidden.rsZHJ` takes `pub.tables = none`, as `ZkHidden.rsZH` does at one table (`BindH.lean`), so here are `rsShHJ`,
+`ZkHidden.rsZHJ` takes `pub.tables = none`, so here are `rsShHJ`,
 `rsZHJ` and their `Computes` without it: `tableShHJ_bcSiteS` is `ZkHidden.tableShHJ_bcSite` from
 `HiddenExec.tableH_bcSiteS`, at table `j`'s inputs. `layShHJ` is the shadow layout `layZHJ` moves to the `--zk` tables,
 where the registered reads (`Registered.ReadsX`) are read.

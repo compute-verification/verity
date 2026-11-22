@@ -37,7 +37,7 @@ groups, on where the outputs are returned, or on shared-row tables:
   the parse at the reference setup's statement (`instKeysRowH`), a unit per VU from the check;
 * `placeZHI`, `decAgreeHI`, `layZHI`, `rsZHI`, `rsZHI_computes` (and `…HJI`): moved to the `--zk` tables
   (`LayoutZ.ofShadow`, `HmRowsZX.ofShadow`);
-* `zk_flock_countC_execOS_atHI`: `zk_flock_countC_execOS_atH` at those.
+* `zk_flock_countC_execOS_atHI`: the compiled `--zk` count curve at the hidden-output tables at those.
 -/
 
 namespace FlockSoundness.Discharge.ZkHidden

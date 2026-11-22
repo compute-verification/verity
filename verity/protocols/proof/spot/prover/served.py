@@ -3,10 +3,10 @@ open it (`register_served`).
 
 A *served tree* is a frame-v3-sha512 tree of `hm96-sha512/row/v1` rows that serving committed and that a proof block reads:
 a template's operands, Dither's z/y leaves or receipt roots, H1's per-call A, y and z tables. Its root is a hiding
-commitment, which binds nothing on its own: `EndToEndRegisteredRows` links a proof's value layer to a committed row only at
-a registered read. So the service registers each served tree as a port of the verifier's own `--registered` file before
-the session's statement and coin (`RowsSession.ServedRegistered`), and verifies with `verity-verify-proof --zk --registered`;
-`Flock.Guarantees.ServedRowsLinked` then gives the committed tree's row at every served read.
+commitment, which binds nothing on its own: a proof's value layer reaches a committed row only at a registered read.
+So the service registers each served tree as a port of the verifier's own `--registered` file before the session's
+statement and coin, and verifies with `verity-verify-proof --zk --registered`. No listed guarantee yet gives the
+committed tree's row at every served read.
 
 **The port form.** A served tree is the registered value of the program parameter whose rows it commits (`value`): its
 `leaves` rows, each `words` leaves of `word_bits` bits (16 or 32), under `root` and `domain`. It enters the docket as one `registered` entry (`registered_value.ENTRY_KEYS`, plus `word_bits` when it is not 16), which R7 holds to the

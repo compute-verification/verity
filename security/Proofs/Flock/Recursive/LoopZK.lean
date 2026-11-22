@@ -38,9 +38,9 @@ import Proofs.Flock.Soundness.CROnly.Hiding
 import Proofs.Flock.Soundness.ZK.Hiding
 
 /-!
-# `RecursiveZK` at the session loop, released at a stop
+# The recursive audit's zero knowledge at the session loop, released at a stop
 
-`Flock.Guarantees.RecursiveZKLoop` is `RecursiveZK` where the ZK server's code (`Flock.ZkServer.run`) sends the
+`Flock.Guarantees.RecursiveZKLoop` is the recursive audit's zero knowledge where the ZK server's code (`Flock.ZkServer.run`) sends the
 commitments, the inner coins live, and the outer session is V*'s statements run by the session loop's switched prover
 (`OuterZK.LoopSessions.atWorker` at `OuterZK.loopRef`). The auditor is released its whole view cut at a stop of a public
 family, the stop any function of everything.
@@ -115,7 +115,7 @@ noncomputable def loopIdeal {Ωa Θ : Type} {nh : ℕ} (t : ℕ)
       Claims.ZKMal.CoinOpen.shaH OuterZK.loopK (OuterZK.loopSim L₀ src t) CB Vs (c.1.1, fun i => idealLeaf (c.1.2 i))
       (θ c.1.1 fun i => idealLeaf (c.1.2 i)) c.2)
 
-/-- **The recursive audit at the session loop is zero knowledge, released at a stop.** `RecursiveZK` where the
+/-- **The recursive audit at the session loop is zero knowledge, released at a stop.** Where the
 commitments are what the ZK server's code sends and the outer session is V*'s statements run by the session loop. The
 auditor's tape is `Ωa` and the worker's randomness `Ωp`. The worker sends the ZK server (`Flock.ZkServer.run` at the
 pinned schedule `s`) its requests `reqs a p l`; the ZK server salts the `nh` messages and tree tops they commit,
@@ -151,7 +151,7 @@ $$\varepsilon_V + n_h \cdot \delta_{K^*},$$
 added once: the stop leaks at most `log₂ |St|` bits. `ε_V` is V*'s statements' error (`OuterZK.LoopSessions.err`): the
 supremum over contexts of their errors, `Flock.zk_deployZk_sw_stops`'s at `t` rewinds and the pinned key's hiding gap
 (`OuterZK.loopEps`), and the composed prover's fork term at `m·4t·3^t`. `δ_{K*}` is the commitments' hiding gap at
-hm96-sha512's pinned key, as in `RecursiveZK`. At `St = Ωk = Unit` and `cut` the identity, this is the whole view's
+hm96-sha512's pinned key. At `St = Ωk = Unit` and `cut` the identity, this is the whole view's
 bound. -/
 def RecursiveZKLoop : Prop :=
   ∀ {Ωa Ωp Θ St Ωk W : Type} [Fintype Ωa] [Nonempty Ωa] [Fintype Ωp] [Nonempty Ωp] [Fintype St] [Nonempty St]

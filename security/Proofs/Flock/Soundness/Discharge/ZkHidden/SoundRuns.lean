@@ -25,17 +25,17 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.Verdict
 import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
 
 /-!
-# `RunsZC` at the live hidden-output `--zk` tables, from `TablesAtZKHLive`
+# `RunsZC` at the live hidden-output `--zk` tables
 
-`runsZC_liveH`: `ZkExec.runsZC_live`'s proof under hidden outputs. `TablesAtZKHLive` puts the sample's table at
+`ZkExec.runsZC_live`'s proof under hidden outputs. `tablesAtZKH_liveU` puts the sample's table at
 `tablesAtZKH` (`SampleSetupZKH.table`, at the executable's dimensions, pads and inner code: `table_seamH`, `table_layH`),
 the acceptance peels to the one table's two `verifyRep` successes (`setupTables_okH`, `zk_verify_ok`) and each rep's run
 (`zk_verifyRep_ok`), and `zk_rep_run_plays` and `zk_table_verdict`, which read the table only through those seams, make
 each run a `RepRun` for `decAtZ` and the table's verdict accept at the two results.
 
-`runsZC_liveHU` is the proof, from the session alone (`tablesAtZKH_liveU`). `runsZC_liveHI` and `runsZC_liveH` read it
-on every circuit `HmOut.parse` accepts (where the unit returns the outputs, for `runsZC_liveH`), and `runsZC_liveHISt` and
-`runsZC_liveHSt` on every statement circuit (`HmOut.parseStmt`, a templated file's template unrolled).
+`runsZC_liveHU` is the proof, from the session alone (`tablesAtZKH_liveU`). `runsZC_liveHI` reads it on every circuit
+`HmOut.parse` accepts, and `runsZC_liveHISt` and `runsZC_liveHSt` on every statement circuit (`HmOut.parseStmt`, a
+templated file's template unrolled; where the unit returns the outputs, for `runsZC_liveHSt`).
 -/
 
 @[expose] public section
@@ -193,10 +193,6 @@ theorem runsZC_liveHU {n mPts : ℕ} {Reg : Type} (I : Inputs) (ht : I.tags.type
 
 theorem runsZC_liveHI : RunsZCLiveHI := by
   intro n mPts Reg I ht c _ dj S₀ y₀ wr L _ hT hRec hDraw
-  exact runsZC_liveHU I ht dj y₀ wr L hT hRec hDraw
-
-theorem runsZC_liveH : RunsZCLiveH := by
-  intro n mPts Reg I ht c _ _ dj S₀ y₀ wr L _ hT hRec hDraw
   exact runsZC_liveHU I ht dj y₀ wr L hT hRec hDraw
 
 theorem runsZC_liveHISt : RunsZCLiveHISt := by

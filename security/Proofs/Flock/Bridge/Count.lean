@@ -1,7 +1,8 @@
 module
 
 public import Proofs.Flock.Bridge.Lowers
-public import Proofs.Flock.Bridge.Targets
+public import Proofs.Flock.Bridge.Statement
+public import Proofs.Flock.EndToEndHidden.Statement
 public import Proofs.Flock.Claims.Sampling.EndToEndSample
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -38,17 +39,13 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 
 /-!
-# The bridge's slot count, `P_a`, count lemma and scope
+# The bridge's slot count, `P_a` and scope
 
 `partOf P κ ns` is one class, the population's `n` proof blocks in strata of sizes `ns` (`blocks_length_partOf`), each
 unit's block holding the input rows it owns. A one-stage design `r` misses a set `B` on it with `r`'s own miss on the
 strata `ns` at `B`'s population slots (`pa_partOf_window`); `subset kd`'s is the subset miss, whatever the strata
 (`pa_partOf_subset`), so `C(n − K₀, kd)/C(n, kd)` at the first `K₀` slots (`pa_subset_range`) and `0` under `All`'s
-`subset n` at any `B` holding a slot (`pa_all`). From them: `PartBlocksTarget`, `PaTarget` (`P_a(B) = r.Pa ns B` for `B`
-of population slots), and
-`CountTarget`: under `subset kd`, a witness outside `RelS` at `δ = C(n − K₀, kd)/C(n, kd)` has at least
-`min K₀ (n − kd + 1)` faulty population slots, because `C(·, kd)` is strictly increasing from `kd` on
-(`choose_lt_of_lt`). A unit whose owned input row doesn't open is one of them.
+`subset n` at any `B` holding a slot (`pa_all`); `pa_partOf`: `P_a(B) = r.Pa ns B` for `B` of population slots.
 
 Scope: `designOf r` is well formed on `partOf P κ ns` when `r` is well formed on the strata `ns`
 (`designOf_wellFormed`).
@@ -65,8 +62,6 @@ variable {C : Verity.Boolean.Circuit} {n : ℕ} {κ : Fin C.N → Option Bool}
 theorem blocks_length_partOf (P : Spot.Sampling.Partition C n) {ns : List ℕ} (hns : ns.sum = n) :
     (partOf P κ ns).blocks.length = n := by
   simp [blocks_partOf P hns]
-
-theorem partBlocks : PartBlocksTarget := fun P _ _ hns => blocks_length_partOf P hns
 
 theorem window_zero_filter (n : ℕ) (B : Finset ℕ) : Claims.Sampling.window 0 n B = B.filter (· < n) := by
   ext v
@@ -110,40 +105,6 @@ theorem pa_partOf (P : Spot.Sampling.Partition C n) {ns : List ℕ} (hns : ns.su
     (r : Claims.Sampling.OneStage) (B : Finset ℕ) (hB : B ⊆ Finset.range n) :
     (designOf r).Pa (partOf P κ ns) B = r.Pa ns B := by
   rw [pa_partOf_window P hns, Claims.Sampling.EndToEndSample.window_zero fun v hv => Finset.mem_range.1 (hB hv)]
-
-theorem pa : PaTarget := fun P κ _ hns r B hB => pa_partOf (κ := κ) P hns r B hB
-
-/-- `C(·, k)` is strictly increasing from `k` on. -/
-theorem choose_lt_of_lt {a b k : ℕ} (hk : 1 ≤ k) (hab : a < b) (hkb : k ≤ b) : a.choose k < b.choose k := by
-  obtain ⟨m, rfl⟩ : ∃ m, b = m + 1 := ⟨b - 1, by omega⟩
-  obtain ⟨j, rfl⟩ : ∃ j, k = j + 1 := ⟨k - 1, by omega⟩
-  rw [Nat.choose_succ_succ']
-  have h1 : a.choose (j + 1) ≤ m.choose (j + 1) := Nat.choose_le_choose _ (by omega)
-  have h2 : 0 < m.choose j := Nat.choose_pos (by omega)
-  omega
-
-theorem count : CountTarget := by
-  classical
-  intro C n P ns hns kd K₀ hkd hkdn H Cm κ desc q roots w h
-  have hle : (designOf (.subset kd)).Pa (partOf P κ ns)
-      (Claims.Sampling.faulty H Cm (stmtOf P κ (.subset kd) desc q roots) (partOf P κ ns) w) ≤
-      ((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ) := not_lt.1 h
-  rw [pa_partOf_subset P hns, window_zero_filter] at hle
-  have hFn : ((Claims.Sampling.faulty H Cm (stmtOf P κ (.subset kd) desc q roots) (partOf P κ ns) w).filter
-      (· < n)).card ≤ n := by
-    calc _ ≤ (Finset.range n).card :=
-          Finset.card_le_card fun v hv => Finset.mem_range.2 (Finset.mem_filter.1 hv).2
-      _ = n := Finset.card_range n
-  generalize (Claims.Sampling.faulty H Cm (stmtOf P κ (.subset kd) desc q roots) (partOf P κ ns) w).filter (· < n) = F
-    at hle hFn ⊢
-  have hpos : (0 : ℝ) < (n.choose kd : ℝ) := by exact_mod_cast Nat.choose_pos hkdn
-  have hc : (n - F.card).choose kd ≤ (n - K₀).choose kd := by
-    exact_mod_cast (div_le_div_iff_of_pos_right hpos).1 hle
-  by_contra hlt
-  rw [not_le, lt_min_iff] at hlt
-  obtain ⟨h1, h2⟩ := hlt
-  have := choose_lt_of_lt hkd (show n - K₀ < n - F.card by omega) (show kd ≤ n - F.card by omega)
-  omega
 
 /-! ## Scope -/
 

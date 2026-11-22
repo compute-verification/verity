@@ -674,7 +674,7 @@ open FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkBind FlockSoundn
   FlockSoundness.Discharge.Composed in
 /-- **The session's planned rate is at most `ρ` wherever `2^23 ≤ ρ·(e·k)`**: every table of the plan, a set-up one or
 the reference setup's refused one, has a schedule `Zk.schedule` returned, whose level 0's `logLen` is at most `23`
-(`zkLogLenCap_23`), as `hr_planZHJ_23` for the plan without the verifier's own words. -/
+(`zkLogLenCap_23`). -/
 theorem hr_planZHJP {n mPts : ℕ} {I : FlockSoundness.Discharge.Exec.Inputs} {own : Option ByteArray}
     (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} {d₀ : Json}
     (y₀ : SampleSetupZHJP (inputsJ I 0) own mPts S₀ d₀) {Reg : Type} {k : ℕ} {ρ : ℝ}

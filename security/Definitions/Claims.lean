@@ -15,7 +15,7 @@ stated over Core's interaction model (`Definitions.Core.Interaction`, with the s
 
 ## Read first
 
-* `Flock.Guarantees.SampledKSLiveV3` (`Proofs.Flock.Bridge.ScopeGate`): the live verifier accepts a statement outside
+* `Flock.Guarantees.SampledKSLiveV5` (`Proofs.Flock.Bridge.V5.KSLive`): the live verifier accepts a statement outside
   the sampling compiler's relation `Claims.Sampling.RelS` (`Definitions.Claims.Sampling`) only with bounded
   probability. It is SPOT's row in `security/README.md`.
 * `Flock.Guarantees.SampledKSLiveV5` (`Proofs.Flock.Bridge.V5.Statement`): the same at the verifier's public inputs,

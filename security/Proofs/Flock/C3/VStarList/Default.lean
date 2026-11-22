@@ -25,7 +25,7 @@ import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
 # Piece (h): a circuit for the statements no file binds
 
 `VStarParsesScoped` fixes `Vs j` only where the verifier lists statement `j`, V*'s file for it is written and its
-parse is in scope; elsewhere `vstarParsesScoped_of_list` needs some `VStmt`, so some circuit whose unit `Net.ofRows`
+parse is in scope; elsewhere V*'s list needs some `VStmt`, so some circuit whose unit `Net.ofRows`
 built and that `Layout.scopeOk` accepts. `defaultCircuit` is one, kernel-checked: a single net `unit` of one input word and no computed row.
 -/
 

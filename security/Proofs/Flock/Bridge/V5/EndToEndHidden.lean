@@ -1,12 +1,11 @@
 module
 
 public import Proofs.Flock.Bridge.V5.Statement
-public import Proofs.Flock.Bridge.EndToEndHiddenC
 
 /-!
 # `EndToEndHiddenV5`, from `OpeningsCanonTargetV5`
 
-`EndToEndHiddenC.lean` at the verifier's public inputs:
+The one-stage audit under hidden outputs with canonical openings, at the verifier's public inputs:
 
 * `Layout.keyProgP_readsOwn`: `keyProgP`'s proof blocks read only their own gates and input gates (`keyProgP_reads`);
 * `zk_session_soundHJ_custody_escCP`: at verity-verify-proof `--zk --public-inputs`'s acceptance (`zk_headline_exec_tablesA`
@@ -14,8 +13,8 @@ public import Proofs.Flock.Bridge.EndToEndHiddenC
   `rsZHJP`, a set `W` of proof blocks is wrong with probability at most the sample's missProb of `W` and the extraction's
   terms (`zk_flock_missProbC_regC`), at any sample `L`;
 * `Flock.Bridge.endToEndHiddenV5_of`: `OpeningsCanonTargetV5` gives `EndToEndHiddenV5`, at the verifier's sample
-  `execSel` under the sampling design, whose missProb of `W` is at most the sampling design's `P_a` of `W` under A3 (`execSel_missProb_le`), and the
-  last term in closed form as `endToEndHiddenC_of`'s.
+  `execSel` under the sampling design, whose missProb of `W` is at most the sampling design's `P_a` of `W` under A3
+  (`execSel_missProb_le`).
 -/
 
 @[expose] public section

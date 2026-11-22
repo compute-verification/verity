@@ -25,11 +25,6 @@ opens only the rows its sampled proof blocks read, while registration opens none
 faulty slot, and `δ` bounds those slots with the rest. An input no unit reads is in no slot. The deployed
 `Slots.layout` still lays a separate input class, which the claims' design reads `all`, so `partOf` is not yet its
 partition.
-
-`SampledKSLiveStated` freezes the statement and the definitions it reads; no proof of `SampledKSLive` exists yet.
-`SampledKSLive` holds at `kd = 0` (`δ = 1`), and elsewhere follows from `EndToEndHidden` at
-`min K₀ (n − kd + 1)` by `Bridge.TransportsLive`, `Bridge.FaultyRightTarget` and `Bridge.CountTarget`
-(`Bridge.AssemblyTarget`).
 -/
 
 @[expose] public section
@@ -128,53 +123,5 @@ def SampledKSLive : Prop :=
         ENNReal.ofReal ((∑ p : vb.Pos,
             (Fintype.card (ΩcZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb L p) : ℝ) / Fintype.card L.Ω) *
           (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ))
-
-open Classical in
-/-- **The registered openings open the deployed commitment** (at `SampledKSLive`'s commitment, roots, hash and
-registration): in `EndToEndHidden`'s setting, at every unit `u`, every committed wire `g` of `u` and every opening `o`
-of `g`'s registered commit string at the prover's registration, some data `d` opens `g`'s claims position
-(`posOf Cc g`) to `o`'s bit there, `vb.bit (vb.val o) g`, under the registration's roots at SHA-512 (`Cd.Opens`). -/
-def _root_.Flock.Bridge.TransportsLive : Prop :=
-  ∀ (n : ℕ) (Reg : Type)
-    (I : Inputs) (ht : I.tags.typed = false)
-    (D : Flock.Desc) (hD : Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D) (hU : Built D.unroll.unit)
-    (pub : Public) (hpub : HmOut.loadPublic (zkTags I) D.unroll I.publicFile = .ok pub) (hpt : pub.tables = none)
-    (hscope : Discharge.Layout.scopeOkH D.unroll = true)
-    (kd : ℕ) (_hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
-    (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
-    (y₀ : SampleSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀)
-    (wr : (S : Finset (Fin n)) → (R : Reg) →
-      LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length (mPtsOf D.unroll.g (kd / nTab I)) → Discharge.Exec.Transcript)
-    (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the verifier's operating-system bytes, and A3
-    (Ω : Type) [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ) (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256)
-    -- the verify command's tags, and live-verifier
-    (hTags : TagsOkZHJ I)
-    (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr kd)
-    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr))),
-    let P := (keyProg D.unroll hU n).partition (Discharge.Layout.outsOf D.unroll hU n)
-    let vb := (rsZHJ dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub hpt).bindingZ
-      (rsZHJ_computes dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub hpt)
-    let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
-      (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
-      (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
-        (runsZCJH_live I ht (Flock.Desc.parse_flat hD) (Discharge.Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags
-          hCust.1
-          fun _ => sampleOkZKHJ_of_file I ht (Flock.Desc.parse_flat hD) kd n hdiv dj hCust.2 _)) τ
-    -- the deployed commitment's layout: the game's rows, read off the circuit file
-    let Cc := (keyProg D.unroll hU n).circuit (Discharge.Layout.outsOf D.unroll hU n)
-    let rows : Fin Cc.N → Option Bridge.RowAt := fun g =>
-      (FlockSoundness.Discharge.HiddenExec.rowOfH D.unroll hU n (Discharge.Layout.outsOf D.unroll hU n) g).map fun r =>
-        ⟨r.2.1.val, r.1.val, Discharge.Layout.portRowW D.unroll r.2.1, r.2.2.val⟩
-    -- the registration's frame-v3 roots, over the public file's rows
-    let roots := Bridge.rootsOf D.unroll pub n
-    let Cd := Bridge.commitDep Cc rows D.unroll pub n roots
-    ∀ u, ∀ g ∈ P.io u, ∀ o : vb.Opening, vb.com o = vb.cs (reg σ) (vb.pos g) →
-      ∃ d : Hash.Msg, Cd.Opens Claims.Sampling.sha512Msg roots ⟨Bridge.posOf Cc g, vb.bit (vb.val o) g, d⟩ = true
-
-/-- **`SampledKSLive` is stated**: it, and the definitions it reads, equal to itself. -/
-def SampledKSLiveStated : Prop :=
-  let s := SampledKSLive
-  s = s
 
 end Flock.Guarantees

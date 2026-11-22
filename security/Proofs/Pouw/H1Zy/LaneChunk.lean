@@ -8,21 +8,15 @@ import Mathlib.Tactic.NormNum.Abs
 import Mathlib.Tactic.NormNum.DivMod
 import Mathlib.Tactic.NormNum.OfScientific
 import Mathlib.Tactic.Ring.RingNF
-import Proofs.Pouw.H1Zy.Combine
-import Proofs.Pouw.H1Zy.Lane
 
 /-!
-# A lane's chunks, accepted at one carry chain, check the whole lane (`laneOk_of_chunks`)
+# A lane's chunks in sequence are the whole lane
 
-`n` chunk statements of a lane (`Pouw.H1Zy.chunkOk`, `PouwH1LaneZyChunk_v1{TILE, n, c}`), each `ok = 1`, chunk `c + 1`'s
-carry in the row chunk `c`'s carry out is, check the whole lane: `laneOk` at the chain machine's words (`chainOf`) on the
-lane the chunks read (`joinIn`: each row's codes the chunks' concatenated, `joinRows`, its scales chunk 0's, and the last
-chunk's record, partials, public inputs and index). The chain lemma (`run_join`, `zRun_join`): the whole `K`'s segments
-are the chunks' in sequence, so the chain's state and each cell's z after chunk `c` are the whole lane's after its first
-`(c + 1) K_c / 32` segments. An induction over `c` (`chunkCarry_eq`) pins each carry in, through the chunk before's
-carry-out check, to that state, and each chunk's scales, through its scale check, to chunk 0's. So the last chunk's
-checks are the lane's on the joined rows, at `z = gemmAccS8` over the whole `K` (`zRun_zero`), which `laneOk_spec`
-(with `gemmAccS8_eq`, at `32 ∣ K` and `K < 2^17`) makes the exact dot.
+`n` chunk statements of a lane (`Pouw.H1Zy.chunkOk`, `PouwH1LaneZyChunk_v1{TILE, n, c}`) read the lane's rows in
+chunks (`joinIn`: each row's codes the chunks' concatenated, `joinRows`, its scales chunk 0's, and the last chunk's
+record, partials, public inputs and index). The chain lemma (`run_join`, `zRun_join`): the whole `K`'s segments are the
+chunks' in sequence, so the chain's state and each cell's z after chunk `c` are the whole lane's after its first
+`(c + 1) K_c / 32` segments; from zero, `zRun` is `GemmAccumulatorS8`'s steps (`zRun_zero`).
 -/
 
 @[expose] public section
@@ -116,138 +110,11 @@ theorem mux_false_eq_true {b t : Bool} : mux b t false = true ↔ b = false ∧ 
 theorem ChunkIn.l_eq {Kc nw : ℕ} {P : Type} {x y : ChunkIn Kc nw P} (h : x.lane = y.lane) : x.l = y.l :=
   Fin.ext (by simp only [ChunkIn.l, ChunkIn.sel, h])
 
-/-- **An accepted chunk's checks**: no high index bit, past chunk 0 its scales the carried ones, and before the last chunk
-its carry out what it computed. -/
-theorem chunkOk_parts {Kc nw : ℕ} {P : Type} (M : ChainSteps P nw) (dqW : BitVec 32 → BitVec 32 → BitVec 32 → BitVec 16)
-    {n c : ℕ} {x : ChunkIn Kc nw P} (h : chunkOk M dqW n c x = true) :
-    tree orBit false (List.ofFn fun t : Fin 11 => x.lane ⟨5 + t.val, by omega⟩) = false ∧
-      (c ≠ 0 → x.sa = x.carryIn.sa ∧ x.sw = x.carryIn.sw) ∧
-      (c + 1 ≠ n → x.carryOut = chunkCarry M c x) := by
-  simp only [chunkOk] at h
-  obtain ⟨hh, ht⟩ := mux_false_eq_true.1 h
-  rw [tree_andBit] at ht
-  refine ⟨hh, fun hc => ?_, fun hc => ?_⟩
-  · simp only [hc, ↓reduceIte] at ht
-    constructor
-    · funext s
-      have := ht (eq32 (x.sa s) (x.carryIn.sa s)) (List.mem_append_left _ (List.mem_append_left _ (List.mem_ofFn.2 ⟨s, rfl⟩)))
-      simpa [eq32] using this
-    · funext t
-      have := ht (eq32 (x.sw t) (x.carryIn.sw t)) (List.mem_append_left _ (List.mem_append_right _ (List.mem_ofFn.2 ⟨t, rfl⟩)))
-      simpa [eq32] using this
-  · simp only [hc, ↓reduceIte] at ht
-    simpa using ht _ (List.mem_append_right _ (List.mem_singleton_self _))
-
 /-! ## The induction over chunks -/
-
-/-- **Each chunk computes the whole lane's state**: at accepted chunks linked by their carries, chunk `c` computes the
-chain's state and each cell's z after the whole lane's first `(c + 1) K_c / 32` segments, with chunk 0's scales. -/
-theorem chunkCarry_eq {n Kc nw : ℕ} {P : Type} (M : ChainSteps P nw)
-    (dqW : BitVec 32 → BitVec 32 → BitVec 32 → BitVec 16) (hn : 0 < n) (hKc : 32 ∣ Kc)
-    (xs : Fin n → ChunkIn Kc nw P)
-    (hpub : ∀ c, (xs c).pub = (xs (lastFin n hn)).pub) (hlane : ∀ c, (xs c).lane = (xs (lastFin n hn)).lane)
-    (hcarry : ∀ (c : ℕ) (h : c + 1 < n), (xs ⟨c + 1, h⟩).carryIn = (xs ⟨c, by omega⟩).carryOut)
-    (hok : ∀ c : Fin n, chunkOk M dqW n c.val (xs c) = true) :
-    ∀ (c : ℕ) (hc : c < n), chunkCarry M c (xs ⟨c, hc⟩) =
-      { chain := M.run (xs (lastFin n hn)).pub (xs (lastFin n hn)).l 0 (joinIn xs hn).a (joinIn xs hn).b
-          (M.init (xs (lastFin n hn)).pub (xs (lastFin n hn)).l) ((c + 1) * (Kc / 32))
-        z := fun s t => zRun ((joinIn xs hn).a s) ((joinIn xs hn).b t) 0 ((c + 1) * (Kc / 32))
-        sa := (xs ⟨0, hn⟩).sa
-        sw := (xs ⟨0, hn⟩).sw } := by
-  intro c
-  induction c with
-  | zero =>
-    intro hc
-    have hp := hpub ⟨0, hc⟩
-    have hl := ChunkIn.l_eq (hlane ⟨0, hc⟩)
-    have hr := run_join M (xs (lastFin n hn)).pub (xs (lastFin n hn)).l hKc (fun d => (xs d).a) (fun d => (xs d).b)
-      (M.init (xs (lastFin n hn)).pub (xs (lastFin n hn)).l) ⟨0, hc⟩ (Kc / 32) le_rfl
-    simp only [zero_mul, ChainSteps.run, zero_add] at hr
-    simp only [chunkCarry, ↓reduceIte, zero_mul, zero_add, one_mul, hp, hl, Carry.mk.injEq, and_true]
-    refine ⟨hr, ?_⟩
-    funext s t
-    have hz := zRun_join (fun d => (xs d).a s) (fun d => (xs d).b t) hKc 0 ⟨0, hc⟩ (Kc / 32) le_rfl
-    simp only [zero_mul, zRun, zero_add] at hz
-    exact hz
-  | succ c ih =>
-    intro hc
-    have hc' : c < n := by omega
-    have ihc := ih hc'
-    have hprev := (chunkOk_parts M dqW (hok ⟨c, hc'⟩)).2.2 (show c + 1 ≠ n by omega)
-    have hin : (xs ⟨c + 1, hc⟩).carryIn = _ := (hcarry c hc).trans (hprev.trans ihc)
-    have hsc := (chunkOk_parts M dqW (hok ⟨c + 1, hc⟩)).2.1 (show c + 1 ≠ 0 by omega)
-    have hp := hpub ⟨c + 1, hc⟩
-    have hl := ChunkIn.l_eq (hlane ⟨c + 1, hc⟩)
-    have hr := run_join M (xs (lastFin n hn)).pub (xs (lastFin n hn)).l hKc (fun d => (xs d).a) (fun d => (xs d).b)
-      (M.init (xs (lastFin n hn)).pub (xs (lastFin n hn)).l) ⟨c + 1, hc⟩ (Kc / 32) le_rfl
-    have hk : (c + 1) * (Kc / 32) + Kc / 32 = (c + 1 + 1) * (Kc / 32) := by ring
-    rw [hk] at hr
-    simp only [chunkCarry, Nat.add_one_ne_zero, ↓reduceIte, hp, hl, hin, Carry.mk.injEq]
-    refine ⟨hr, ?_, ?_, ?_⟩
-    · funext s t
-      have hz := zRun_join (fun d => (xs d).a s) (fun d => (xs d).b t) hKc 0 ⟨c + 1, hc⟩ (Kc / 32) le_rfl
-      rw [hk] at hz
-      exact hz
-    · rw [hsc.1, hin]
-    · rw [hsc.2, hin]
-
-/-- **A lane's chunks, accepted at one carry chain, check the whole lane.** `n > 0` chunk statements of one lane, each
-`ok = 1` at the chain machine `M` and the dequant `dqW`, with one public input and index, and chunk `c + 1`'s carry in
-chunk `c`'s carry out, give the whole lane's `ok = 1` at `M`'s words on the lane they read (`joinIn`). -/
-theorem laneOk_of_chunks {n Kc nw : ℕ} {P : Type} (M : ChainSteps P nw)
-    (dqW : BitVec 32 → BitVec 32 → BitVec 32 → BitVec 16) (hn : 0 < n) (hKc : 32 ∣ Kc)
-    (xs : Fin n → ChunkIn Kc nw P)
-    (hpub : ∀ c, (xs c).pub = (xs (lastFin n hn)).pub) (hlane : ∀ c, (xs c).lane = (xs (lastFin n hn)).lane)
-    (hcarry : ∀ (c : ℕ) (h : c + 1 < n), (xs ⟨c + 1, h⟩).carryIn = (xs ⟨c, by omega⟩).carryOut)
-    (hok : ∀ c : Fin n, chunkOk M dqW n c.val (xs c) = true) :
-    laneOk (chainOf M) dqW (joinIn xs hn) = true := by
-  have hlast := chunkCarry_eq M dqW hn hKc xs hpub hlane hcarry hok (n - 1) (by omega)
-  have hn1 : n - 1 + 1 = n := by omega
-  have hks : (n * Kc) / 32 = n * (Kc / 32) := Nat.mul_div_assoc n hKc
-  have h := hok (lastFin n hn)
-  simp only [lastFin] at h hlast
-  simp only [chunkOk, hn1, ↓reduceIte] at h
-  obtain ⟨hh, ht⟩ := mux_false_eq_true.1 h
-  rw [tree_andBit] at ht
-  rw [hlast] at ht
-  simp only [hn1] at ht
-  have hsa : (xs ⟨n - 1, by omega⟩).sa = (xs ⟨0, hn⟩).sa := by
-    have := congrArg Carry.sa (chunkCarry_eq M dqW hn hKc xs hpub hlane hcarry hok (n - 1) (by omega))
-    simpa [chunkCarry] using this
-  have hsw : (xs ⟨n - 1, by omega⟩).sw = (xs ⟨0, hn⟩).sw := by
-    have := congrArg Carry.sw (chunkCarry_eq M dqW hn hKc xs hpub hlane hcarry hok (n - 1) (by omega))
-    simpa [chunkCarry] using this
-  rw [hsa, hsw] at ht
-  simp only [laneOk, chainOf, hks]
-  refine mux_false_eq_true.2 ⟨hh, ?_⟩
-  rw [tree_andBit]
-  intro b hb
-  apply ht
-  refine List.mem_append_right _ ?_
-  simpa only [zRun_zero, gemmAccS8, hks, joinIn, lastFin, LaneIn.sel, ChunkIn.sel, LaneIn.l, ChunkIn.l] using hb
 
 /-- A chunk binds where its lane does: at `n > 0` chunks of `K_c` entries, `n K_c < 2^17` gives `K_c < 2^17`, the lane
 field's range at every chunk. -/
 theorem chunk_lt {n Kc : ℕ} (hn : 0 < n) (hK : n * Kc < 2 ^ 17) : Kc < 2 ^ 17 :=
   lt_of_le_of_lt (Nat.le_mul_of_pos_left Kc hn) hK
-
-/-- **What a lane's accepted chunks give** (`laneOk_spec` at `laneOk_of_chunks`), at `K = n K_c` with `32 ∣ K_c` and
-`K < 2^17`: the last chunk's index has no high bit; each of the lane's cells has record z the s32 word of the exact dot
-of its joined A and B rows' codes over the whole `K` and record y `dqW` of it at chunk 0's scales; and the last chunk's
-partials row is the chain machine's words on the joined rows, masked by the admit bits' OR. -/
-theorem chunks_spec {n Kc nw : ℕ} {P : Type} (M : ChainSteps P nw)
-    (dqW : BitVec 32 → BitVec 32 → BitVec 32 → BitVec 16) (hn : 0 < n) (hKc : 32 ∣ Kc) (hK : n * Kc < 2 ^ 17)
-    (xs : Fin n → ChunkIn Kc nw P)
-    (hpub : ∀ c, (xs c).pub = (xs (lastFin n hn)).pub) (hlane : ∀ c, (xs c).lane = (xs (lastFin n hn)).lane)
-    (hcarry : ∀ (c : ℕ) (h : c + 1 < n), (xs ⟨c + 1, h⟩).carryIn = (xs ⟨c, by omega⟩).carryOut)
-    (hok : ∀ c : Fin n, chunkOk M dqW n c.val (xs c) = true) :
-    let y := joinIn xs hn
-    (∀ t : Fin 11, y.lane ⟨5 + t.val, by omega⟩ = false) ∧
-    (∀ s t, y.zr (laneRow y.l s) (laneCol y.l t) = BitVec.ofInt 32 (∑ k, (y.a s k).toInt * (y.b t k).toInt) ∧
-      y.yr (laneRow y.l s) (laneCol y.l t) =
-        dqW (BitVec.ofInt 32 (∑ k, (y.a s k).toInt * (y.b t k).toInt)) (y.sa s) (y.sw t)) ∧
-    ∀ w, y.partials w = mask32 (chainOf M y.pub y.l y.a y.b w) (tree orBit false (List.ofFn y.admit)) :=
-  laneOk_spec (chainOf M) dqW (joinIn xs hn) (Dvd.dvd.mul_left hKc n) hK
-    (laneOk_of_chunks M dqW hn hKc xs hpub hlane hcarry hok)
 
 end Pouw.H1Zy

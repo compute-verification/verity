@@ -93,7 +93,7 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.InferenceOnly", "Proofs.Slowd
   "Proofs.Properties.Certifier.Records", "Proofs.Properties.Spot.PlanCheck", "Proofs.Properties.Spot.Units",
   "Proofs.Properties.Certifier.Registered",
   "Proofs.Properties.Spot.Credited", "Proofs.Properties.Spot.HistoryTable", "Proofs.Properties.Core.Period",
-  "Proofs.Properties.Spot.Rate", "Proofs.Flock.Bridge.RatePeriod", "Proofs.Properties.Spot.MonitoringPeriod",
+  "Proofs.Properties.Spot.Rate", "Proofs.Properties.Spot.MonitoringPeriod",
   "Proofs.Properties.Spot.MonitoringPeriodLedger", "Proofs.Properties.Spot.MonitoringPeriodSigned",
   "Proofs.Properties.NetworkPeriod", "Proofs.Properties.Spot.SecondRefused", "Proofs.Properties.ResourceAccounting.Requirement",
   "Proofs.Properties.NetworkScan", "Proofs.Properties.Poub.Remote", "Proofs.Properties.Poub.Remote.Coins",

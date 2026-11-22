@@ -1,7 +1,8 @@
 module
 
 public import Proofs.Flock.C3.Compose.Family
-public import Proofs.Flock.C3.Compose.RowsReg
+public import Proofs.Flock.C3.Compose.Honest
+public import Proofs.Flock.VBridge.Family.Registered
 public import Proofs.Flock.VBridge.Family.Pub
 import all Init.Data.Array.Basic
 import Mathlib.Tactic.Echelon.Zsqrtd
@@ -399,18 +400,6 @@ def RowsHeld (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) : Prop :=
         HmOut.drawn (F.Vs j).c (F.zs R ω t R₂ j).pub
           (drawJ (F.zs R ω t R₂ j).I d (partOf (F.zs R ω t R₂ j).I d u.val)) = .ok dp ∧
         Registered.unitIndices dp = .ok idx ∧ u.val ∈ D.proved
-
-/-- **(n1) Every family holds its rows**: a transcript a session writes and accepts records the sampling design's sample file (the
-record's custody, `hRec`), the table each unit is sampled into has a sampled statement (`sampled_of_acceptsZKR`), and that
-table's sample proves the unit (the challenger's live-coin part's sample, `hDraw`), since V*'s sampling design, the full sample, samples every unit
-(`execOS_subset_full_mem`). -/
-theorem rowsHeld (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) : RowsHeld F := by
-  rintro R ω t R₂ j R' tr ⟨ω', o, rfl⟩ hacc _ _ _ u _ _
-  have hd := ((F.zs R ω t R₂ j).hRec _ _ _ (acceptsZK_of_R hacc)).1
-  obtain ⟨D, dp, idx, hD, hdp, hidx⟩ := FlockSoundness.Discharge.ZkReg.sampled_of_acceptsZKR (F.zs R ω t R₂ j).I
-    (F.zs R ω t R₂ j).ht (F.zs R ω t R₂ j).hcH (F.zs R ω t R₂ j).hpub (F.zs R ω t R₂ j).hTags hacc hd u.val
-  exact ⟨_, D, dp, idx, hd, hD, hdp, hidx, ((F.zs R ω t R₂ j).hDraw ω' (partOf (F.zs R ω t R₂ j).I _ u.val)).1 D hD u
-    (FlockSoundness.Discharge.Composed.mem_partS (execOS_subset_full_mem (F.Vs j).samplingDesign.src ω' u))⟩
 
 /-- **(n1) Each of V*'s circuits names each port once** (G's `PortNamesUnique`): the check reads the first port of a
 name. -/

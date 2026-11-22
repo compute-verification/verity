@@ -88,7 +88,7 @@ public import Proofs.Flock.Soundness.TmplValue
 public import Proofs.Flock.Soundness.Lower
 public import Proofs.Flock.Soundness.TmplValueUnit
 public import Proofs.Flock.Soundness.TmplUnitNet
-public import Proofs.Flock.Soundness.TmplReads
+public import Proofs.Flock.C3.Reps.ResRead
 public import Proofs.Flock.Soundness.ExecCircuit
 public import Proofs.Flock.Soundness.ExecCheck
 public import Proofs.Flock.Soundness.ExecLookup

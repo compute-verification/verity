@@ -9,15 +9,15 @@ public import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
 /-!
 # The challenger's live-coin part's samples and the decoder at the verifier's public inputs, under the record's custody
 
-`ZkReg.sampleOkZKHJ_of_file` and the decoder the `--zk` session's simulator reads, at verity-verify-proof `--zk --public-inputs`
+`ZkHidden.sampleOkZKHJ_of_file` and the decoder the `--zk` session's simulator reads, at verity-verify-proof `--zk --public-inputs`
 (`own`):
 
-* `setupHidden_mPts_sampledP`, `setupHidden_mPts_of_provedP`: `setupHidden_mPts_sampled` and `setupHidden_mPts_of_proved`
+* `setupHidden_mPts_sampledP`, `setupHidden_mPts_of_provedP`: `setupHidden_mPts_sampled` and `setupHidden_mPts_of_provedG`
   at `own`, from `Hidden.setupHidden_specP` and the sample over the public input ports (`HmIn.drawn`, which is
   `HmRow.drawn` at the circuit with those ports as its output ports), at the statement circuit `c`
   (`HmOut.parseStmt`, whose `g` is the committed circuit's: `unrolled_g`).
 * `sampleOkZKHJP_of_size`: from `SampleFileZK dj samplingDesign pop`, at a sample `S` whose file decodes only to `kd` units, with
-  `nTab I` dividing `kd`, `SampleOkZKHJP` holds at `mPtsOf c.g (kd / nTab I)` link points, by `sampleOkZKHJ_of_size`'s
+  `nTab I` dividing `kd`, `SampleOkZKHJP` holds at `mPtsOf c.g (kd / nTab I)` link points, by `sampleOkZKHJ_of_sizeG`'s
   argument.
 * `decodesZCJH_custodyP`: `decodesZCJH_liveIP` with `hRec` and `hDraw` read off `RecordCustodyZKJPLaw` (`live-verifier`
   at `own` and the registration's sampling design), at a sampling design whose sample files decode only to `kd` units.
@@ -54,7 +54,7 @@ theorem setupHidden_mPts_sampledP {d : Json}
   rw [s.mPts, s.nbl, s.blocksReal, s.n, hn]
   rfl
 
-/-- **`m_pts` from the circuit and the sample's proved count at `own`** (`setupHidden_mPts_of_proved`). -/
+/-- **`m_pts` from the circuit and the sample's proved count at `own`** (`setupHidden_mPts_of_provedG`). -/
 theorem setupHidden_mPts_of_provedP {c : Flock.Circuit} {d : Json} {N₀ : ℕ} (hty : tags.typed = false)
     (hcS : HmOut.parseStmt tags cf tables = .ok c) (hD : ∀ D, Draw.UnitSample.ofJson d = .ok D → D.proved.size = N₀)
     (h : Stmt.setupHidden tags cf pf coins tables (some d) partition program own = .ok st) :
@@ -68,7 +68,7 @@ end MPts
 
 variable {n : ℕ} {Reg : Type}
 
-/-- **The challenger's live-coin part's samples are `SampleOkZKHJP` at a sample of `kd` units, under any sampling design** (`sampleOkZKHJ_of_size` at
+/-- **The challenger's live-coin part's samples are `SampleOkZKHJP` at a sample of `kd` units, under any sampling design** (`sampleOkZKHJ_of_sizeG` at
 `own`). -/
 theorem sampleOkZKHJP_of_size (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hcS : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c) (samplingDesign : Draw.SamplingDesign) (kd pop : ℕ)

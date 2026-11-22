@@ -10,7 +10,7 @@ import all Init.Data.Ord.String
 # A well-formed value is sorted
 
 A well-formed value (`Claims.Json.Wf`: every object a well-formed tree) holds each object's keys in increasing order
-(`sortedKeys_of_wf`), so what `CanonRead` and `CanonLine` prove of sorted values holds of every value a parser returns.
+(`sortedKeys_of_wf`), so what the canonical text's lemmas prove of sorted values holds of every value a parser returns.
 The file reads the canonical text's lemmas and the values' induction, and nothing of a session, a record or a device.
 -/
 

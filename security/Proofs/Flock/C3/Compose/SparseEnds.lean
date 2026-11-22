@@ -17,7 +17,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.C3.HoloValues.Shape
 
 /-!
-# n10: the sparse phases' part ends in a coin, at a count the class fixes; R's ring switches are read at their rounds
+# n10: the sparse phases' part ends in a coin, at a count the class fixes
 
 `partEnds_sparse`: `PartEnds sparsePart` at `sparseCoins`, from the reps' and the sparse phases' ties. The part is the
 cap's and the points' steps, then the reps' and the sparse phases'. A sparse phase takes its exact shape, which ends in
@@ -25,10 +25,9 @@ a coin (`sparseKinds_ends`). A rep's spine is only a prefix, but every early ret
 whose verdict is false (`holoRepC_on`), so an accepting rep takes its whole shape (`SpineOn.kinds`), which reads only
 the statement, the extra claims' number (two per region) and the reps' schedule `e.sch`.
 
-`rsRead_of_layer`: `RsRead` where each accepted run has a copy of each part's `rec-opening` unit registering w
+The facts about R's ring switches: each accepted run has a copy of each part's `rec-opening` unit registering w
 (`OpenAll`), the accepted runs' copies of a part's unit are one (`OneCopy`), and the copy's ring-switch wires are read
-wires of their rounds' commit strings (`RsSk`, `RsIo`). The layers are good at an accepted outer proof, so each bit of
-w's element at a ring switch's slot is the layer's at one wire in both runs.
+wires of their rounds' commit strings (`RsSk`, `RsIo`).
 -/
 
 @[expose] public section
@@ -199,7 +198,7 @@ open FlockC3.Sparse (SparseTie SrcSparseTie sparseKinds)
 open FlockVBridge.InnerAccepts (firstSteps)
 open FlockVBridge (keyInst)
 open FlockVBridge.Family (skOf maskOf)
-open FlockVBridge.OfVStar (OpeningZeroAtL rowCol partRep fill_rowCol readCol_rsAt part_eqOpening wIdx_size)
+open FlockVBridge.OfVStar (OpeningZeroAtL rowCol partRep fill_rowCol part_eqOpening wIdx_size)
 open FlockVBridge.PartS (wIdx)
 
 /-- **The sparse phases' part's coins**: the points', two reps' at the class's statement, extra claims (two per
@@ -321,63 +320,6 @@ def RsIo (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin 
     (w : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Array F128) : Prop :=
   ∀ i < 2, ∀ s un g, RsWire zs dg N k Rw sh w i s un g →
     g ∈ ((Placed.keyProg (Vs s).c (Vs s).hU (Vs s).nv).partition (Layout.outsOf (Vs s).c (Vs s).hU (Vs s).nv)).io un
-
-/-- **R's ring switches are read at their rounds** (`RsRead`): each run's ring switch is w's at its slots
-(`eq_of_rsAt`); the second run has a copy at the first's part (`OpenAll`), which is the first's copy (`OneCopy`), so a
-bit of w's element there, which the copy reads (`readCol_rsAt`), is the filled layer's at one wire in both
-(`fill_rowCol`, `copyVal_input`), the layer's there,
-the layers being good (`fill_io`), and a read wire of stage `c₀ + i`'s commit strings (`RsSk`, `RsIo`). -/
-theorem rsRead_of_layer
-    {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {dg : ByteArray → ByteArray}
-    {N k Rw : ℕ} {sh : Flock.Shape} {w : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Array F128}
-    {own : Fin S → Array Flock.Registered.Port} {sel : ℕ → String → ℕ → Prop} {c₀ : ℕ}
-    (h1 : OneCopy zs dg N k Rw sh w) (hall : OpenAll zs dg N k Rw sh w) (hsk : RsSk zs dg N k Rw sh w own sel c₀)
-    (hio : RsIo zs dg N k Rw sh w) : RsRead zs dg N k Rw sh w own sel c₀ := by
-  intro i hi R ω t R₂ τ o R' ω' t' R₂' τ' o' hA hA' hX S0 gs x x' hS hg hx hx'
-  have ex := FlockC3.Opening.eq_of_rsAt hS hg hx
-  have ex' := FlockC3.Opening.eq_of_rsAt hS hg hx'
-  obtain ⟨s, un, j, p, k₀, v, hj, hpg, S₁, ns, nv, hz, hpart, hxb⟩ := hx
-  obtain ⟨s₂, un₂, j₂, v₂, hz₂⟩ := hall R' ω' t' R₂' τ' o' hA' S0 gs hS hg p hpg
-  have hc1 : OpenCopy zs dg N k Rw sh w gs s un j p := ⟨R, ω, t, R₂, τ, o, v, hA, hz⟩
-  obtain ⟨rfl, hu, rfl⟩ := h1 gs s s₂ un un₂ j j₂ p hc1 ⟨R', ω', t', R₂', τ', o', v₂, hA', hz₂⟩
-  obtain rfl : un = un₂ := Fin.ext hu
-  obtain ⟨_, _, _, _, _, _, _, _, _, S₂, ns₂, nv₂, hpart₂, hw, _, _⟩ := id hz
-  obtain ⟨rfl, rfl, rfl⟩ : S₁ = S₂ ∧ ns = ns₂ ∧ nv = nv₂ := by
-    simpa only [Prod.mk.injEq] using Except.ok.inj (hpart.symm.trans hpart₂)
-  have hAg : (zs R ω t R₂ s).RegAgree (layers zs dg N k Rw R ω t R₂ τ s) := (hA.1 s).2.2
-  have hAg' : (zs R' ω' t' R₂' s).RegAgree (layers zs dg N k Rw R' ω' t' R₂' τ' s) := (hA'.1 s).2.2
-  funext tt
-  obtain ⟨e, he, hwi, -⟩ := hxb tt
-  obtain ⟨e₁, hwi₁, hx1⟩ := ex tt
-  obtain ⟨e₂, hwi₂, hx2⟩ := ex' tt
-  obtain rfl : e = e₁ := Option.some.inj (hwi.symm.trans hwi₁)
-  obtain rfl : e = e₂ := Option.some.inj (hwi.symm.trans hwi₂)
-  rw [hx1, hx2]
-  obtain ⟨hk, hke⟩ := Array.getElem?_eq_some_iff.mp he
-  refine FlockVBridge.AccChain.eq_of_bitOf fun b hb₀ => ?_
-  obtain ⟨-, hns, -⟩ := part_eqOpening hS hg hpg hpart
-  have hq : k₀ + tt.val < ns.sum := by rw [hns, ← wIdx_size]; exact hk
-  have hrd := readCol_rsAt (zs R ω t R₂ s) hz hS hg hpg hpart he hwi hb₀
-  obtain ⟨hcn, -⟩ := hw (128 * (k₀ + tt.val) + b) (by omega) hrd
-  have hcw : rowCol (partRep ns nv).ports 0 (128 * (k₀ + tt.val) + b) < (Rows.ofNet (Vs s).hU).w := by
-    simp only [Rows.w]; omega
-  obtain ⟨g, hgd⟩ : ∃ g : Fin (Layout.keyN (Vs s).c (Vs s).hU (Vs s).nv),
-      g = (keyInst (Vs s).hU (Vs s).nv (Layout.outsOf (Vs s).c (Vs s).hU (Vs s).nv) un).wire
-        ((Rows.ofNet (Vs s).hU).stackCol (Vs s).c.upv hj ⟨_, hcw⟩) := ⟨_, rfl⟩
-  have hW : RsWire zs dg N k Rw sh w i s un g :=
-    ⟨gs, j, p, hj, hpg, S0, S₁, ns, nv, k₀ + tt.val, tt, e, b, hcw, hc1, hS, hg, hpart, he, hwi, hb₀, hgd⟩
-  have hm : layers zs dg N k Rw R ω t R₂ τ s g = layers zs dg N k Rw R' ω' t' R₂' τ' s g := by
-    have h := congrFun (congrFun hX s) g
-    simp only [maskOf] at h
-    split_ifs at h with hC
-    · exact h
-    · exact (hC ⟨hsk i hi s un g hW, un, hio i hi s un g hW⟩).elim
-  subst hgd
-  rw [RecAlgebra.getElem!_el, RecAlgebra.getElem!_el, ← hke, ← fill_rowCol _ hz hj hS hg hpg hpart hk hb₀ hrd,
-    ← fill_rowCol _ hz₂ hj hS hg hpg hpart hk hb₀ hrd]
-  refine (FlockVBridge.copyVal_input _ _ hj hcn).trans (Eq.trans ?_ (FlockVBridge.copyVal_input _ _ hj hcn).symm)
-  exact (FlockVBridge.Decode.fill_io _ hAg (hio i hi s un _ hW)).trans
-    (hm.trans (FlockVBridge.Decode.fill_io _ hAg' (hio i hi s un _ hW)).symm)
 
 end
 

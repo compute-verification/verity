@@ -865,7 +865,7 @@ cannot know what it verifies; it compares nothing), or with one that is not META
 ports whose registered roots, each framed at its port's schema, over the public file's population are one root under
 different domains, a row of `2^64` bits or more, a published domain (`frame_v3.domain_ids`) missing or not 64 bytes, two
 ports of one published domain, or two ports whose published roots are one root under different domains;
-`Flock.Guarantees.SampledKSLiveV3` is over that acceptance; `--ks-form`, which used to turn this on,
+`Flock.Guarantees.SampledKSLiveV5` is over that acceptance; `--ks-form`, which used to turn this on,
 is accepted under `--zk` and changes nothing), and under `--zk` without `--rec-inner` (a V* session is the recursion's)
 tags, files and a sample outside the rest of that form (`KsScope.checkOf`: a typed statement, one with public outputs,
 without retained rounds or without `hm96-sha512/v1` leaves; a circuit outside `ProvedScope.scopeOkH`, which a unit

@@ -28,9 +28,8 @@ import Proofs.Flock.Level3.Assembly
 * `opening_rounds`: `opening_ok` at the coins of `stacked/rep0`, which `RecCoins.opening` runs at.
 * `run_of_sessionAt`: at an accepted outer proof, R's run on the messages w holds, at R's claims at w (`claimsO`), from
   round 0 of `stacked/rep0`'s coins (`rep0`), has zero residuals (`openingReadAt_of_sessionAt`'s argument).
-* `levelTie_of_sessionAt`, `srcLevelTie_of_maps`: `levelTie_of_maps` at `opsAt`, with the run from `SessionAt`, the
-  claims' and ring switches' sizes from `coinClaim` and `decodedO`, the opening's play from the tie at V*'s layer
-  (`OpenTieL`) at the tied run, and the layers good from acceptance. Left, in `levelTie_of_maps`' form (`MapsLeft`):
+* `opsAt`, `MapsLeft`: the openings at R's maps, and what `levelTie_of_maps` takes there beyond the run, the claims'
+  and ring switches' sizes, the opening's play and the layers good (`MapsLeft`):
   custody (the coins nonempty, the opening's steps' coins), R's openings at `readMaps`' rows (`OpensAtMaps`), the
   Ligerito steps' weave (`lgSteps_of_lig` makes it a play's tape) and the openings, the cap; and the claim tie, in
   `openingReadAt_src`'s form.
@@ -218,111 +217,5 @@ def MapsLeft (M : FlockC3.Reps.StackedMaps stmt Vs) (zs : (s : Fin S) → (Vs s)
         (ligMsgs (pR sh e0 w ops sb e) capDig sh.sched)
         (((List.range' k₂ (c.size - k₂)).map (fun i => (c)[i]!)).map (coinArr fOf))) ∧
     ∀ ℓ j, u.os.1 2 ℓ j = openRow (pR sh e0 w ops sb e) sh.sched ℓ j
-
-/-- **R's levels at a tied run, from V*'s sessions** at one accepted outer proof: `levelTie_of_maps` at `opsAt` over
-`readMaps M`, its run and sizes from `SessionAt`, its opening's play from the tie at V*'s layer, and the rest
-`MapsLeft`'s. -/
-theorem levelTie_of_sessionAt
-    {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {dg : ByteArray → ByteArray}
-    {N k Rw : ℕ} {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o}
-    (hacc : FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o) (M : FlockC3.Reps.StackedMaps stmt Vs)
-    {sh : Flock.Shape} (hell : hp.EllOk (execClassAt st).cls.kLog)
-    (hsh : Flock.RecOpening.shape? (holoAt st hp).cls.shape.mReg 2 = some sh) {unit : String}
-    {c3 : Flock.RecCoins.C3} {w : Array Flock.F128} {kap : Array (Array (Array Flock.F128))} {e0 : ℕ → ByteArray}
-    {sb : ℕ → ℕ → ℕ → ByteArray} {e : ℕ → ℕ → ByteArray} {cap₀ : Cap Dig} {v : C3Run (holoAt st hp)}
-    (hs : FlockC3.Opening.SessionAt (zs R ω t R₂) (layers zs dg N k Rw R ω t R₂ τ) sh unit c3 w
-      (opsAt (readMaps M sh.sched) sh (layers zs dg N k Rw R ω t R₂ τ) kap c3 unit w))
-    (hclaim : ∀ a b, FlockC3.Opening.coinClaim c3 unit sh 0 = .ok a → FlockC3.Opening.coinClaim c3 unit sh 1 = .ok b →
-      ∀ i, ClaimRel (holoAt st hp).cls.shape.mReg (FlockC3.Opening.claimO sh w ![a, b] i).toClaim
-        ((tie v).claim i).toClaim)
-    (htie : FlockC3.Opening.OpenTieL (zs R ω t R₂) (layers zs dg N k Rw R ω t R₂ τ) sh w (tie v))
-    (hleft : MapsLeft M (zs R ω t R₂) (layers zs dg N k Rw R ω t R₂ τ) sh unit c3 w kap e0 sb e cap₀ (tie v)) :
-    LevelTie cap₀ (holoAt st hp) (tie v) := by
-  obtain ⟨hne, hcap, hcoin, hR, ho⟩ := hleft
-  obtain ⟨as, bs, _, _, ha, hb, hrun, hz⟩ := FlockC3.Opening.run_of_sessionAt hacc hsh hs
-  have hot := FlockC3.Opening.openTie_of_layer hsh
-    (opsAt (readMaps M sh.sched) sh (layers zs dg N k Rw R ω t R₂ τ) kap c3 unit w) htie
-  obtain ⟨ρ, γ, he⟩ := id hot
-  have hor : OpeningReadAt (runSteps (tie v)) (tie v) :=
-    FlockC3.Opening.openingReadAt_of_sessionAt hacc hsh hs hclaim ⟨ρ, γ, by
-      rw [FlockC3.Opening.afterSparse_runSteps, he]
-      exact List.prefix_append _ _⟩
-  have hpl : PlaysT (FlockC3.Opening.openingAt (tie v)) (tie v).op (some (tie v).opened) := by
-    obtain ⟨x, hx⟩ := opening_plays_of hot hor
-    have hx' : PlaysT (FlockC3.Opening.openingAt (tieSparse (tieReps v))) v.op (some x) := hx
-    show PlaysT (FlockC3.Opening.openingAt (tieSparse (tieReps v))) v.op
-      (some ((playOut (FlockC3.Opening.openingAt (tieSparse (tieReps v))) v.op (some v.opened)).getD v.opened))
-    rw [playOut_eq _ hx']
-    exact hx'
-  have hq : ∀ i (hi : i < 2), ((FlockC3.Opening.claimsO sh w c3 unit).map Flock.RecAlgebra.AClaim.toClaim)[i]! =
-      (FlockC3.Opening.claimO sh w ![as, bs] ⟨i, hi⟩).toClaim := by
-    intro i hi
-    rw [FlockC3.Opening.claimsO_eq ha hb]
-    simp only [List.map_toArray, List.map_cons, List.map_nil]
-    obtain _ | _ | i := i
-    · rfl
-    · rfl
-    · exact absurd hi (by omega)
-  have hsz : ∀ (j : ℕ) (q : Flock.RecAlgebra.AClaim Flock.RecAlgebra.Lin),
-      FlockC3.Opening.coinClaim c3 unit sh j = .ok q →
-      q.skip.size = 64 ∧ q.x.size = (holoAt st hp).cls.shape.mReg - 6 := by
-    intro j q hj
-    obtain ⟨sc, -, hpt, h6, hsk, hx⟩ := FlockC3.Opening.coinClaim_ok hj
-    refine ⟨?_, ?_⟩
-    · rw [hsk, FlockLevel3.eqTable_size, Array.size_extract, hpt, Nat.min_eq_left h6]
-      rfl
-    · rw [hx, Array.size_extract, hpt, Nat.min_self, FlockC3.Opening.shape_m hsh]
-      rfl
-  have hshape : ∀ k' < 2, ((msgsO sh w (opsAt (readMaps M sh.sched) sh (layers zs dg N k Rw R ω t R₂ τ) kap c3
-      unit w)).rs[k']!).size = 128 ∧
-      (((FlockC3.Opening.claimsO sh w c3 unit).map Flock.RecAlgebra.AClaim.toClaim)[k']!).skip.size = 64 ∧
-      (((FlockC3.Opening.claimsO sh w c3 unit).map Flock.RecAlgebra.AClaim.toClaim)[k']!).x.size =
-        (holoAt st hp).cls.shape.mReg - 6 := by
-    intro k' hk'
-    rw [hq k' hk']
-    refine ⟨FlockC3.Opening.decodedO_rs_size w _ (by rw [FlockC3.Opening.shape_claims hsh]; exact hk'), ?_⟩
-    obtain _ | _ | k' := k'
-    · exact hsz 0 as ha
-    · exact hsz 1 bs hb
-    · exact absurd hk' (by omega)
-  exact levelTie_of_maps (readMaps M sh.sched) (zs R ω t R₂) (layers zs dg N k Rw R ω t R₂ τ)
-    (fun s => (hacc.1 s).2) (kap := kap) (a := FlockC3.Opening.claimsO sh w c3 unit) (k₀ := 0)
-    (c := FlockC3.Opening.rep0 c3 unit) rfl hell hsh hrun hz hne e0 sb e hcap
-    (fun ℓ _ j _ => row_size_readMaps M sh _ ℓ j) (by simp [FlockC3.Opening.claimsO_eq ha hb]) hshape
-    (fun i => by rw [hq i.val i.isLt]; exact hclaim as bs ha hb i) hpl hot hcoin
-    (fun rsr rs k₂ lgr lg h₁ h₂ => hR rsr rs k₂ lgr lg _ h₁ h₂) ho
-
-/-- **(n14) R's levels at the tied source, from V*'s sessions**: `SrcLevelTie` at `tiedSrc stp`, at R's openings
-`opsAt` over `readMaps M` at the coins `c3`, w, the verifier's `kappa` `kap` and the proof's bytes `e0`, `sb`, `e` read
-off each history and its layers: at every accepted outer proof R's opening is in V*'s sessions (`SessionAt`), the claim
-tie holds (`openingReadAt_src`'s), the source's opening is on the ring switches V*'s layer holds (`OpenTieL`), and
-`MapsLeft`. -/
-theorem srcLevelTie_of_maps
-    {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {dg : ByteArray → ByteArray}
-    {N k Rw : ℕ} {cap₀ : Cap Dig} (M : FlockC3.Reps.StackedMaps stmt Vs) {sh : Flock.Shape}
-    (hell : hp.EllOk (execClassAt st).cls.kLog)
-    (hsh : Flock.RecOpening.shape? (holoAt st hp).cls.shape.mReg 2 = some sh) (unit : String)
-    (stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp))
-    (c3 : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Flock.RecCoins.C3)
-    (w : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Array Flock.F128)
-    (kap : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Array (Array (Array Flock.F128)))
-    (e0 : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → ℕ → ByteArray)
-    (sb : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → ℕ → ℕ → ℕ → ByteArray)
-    (e : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → ℕ → ℕ → ByteArray)
-    (h : ∀ R ω t R₂ τ o, FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o →
-      let Lb := layers zs dg N k Rw R ω t R₂ τ
-      FlockC3.Opening.SessionAt (zs R ω t R₂) Lb sh unit (c3 R ω t Lb) (w R ω t Lb)
-          (opsAt (readMaps M sh.sched) sh Lb (kap R ω t Lb) (c3 R ω t Lb) unit (w R ω t Lb)) ∧
-        (∀ a b, FlockC3.Opening.coinClaim (c3 R ω t Lb) unit sh 0 = .ok a →
-          FlockC3.Opening.coinClaim (c3 R ω t Lb) unit sh 1 = .ok b →
-          ∀ i, ClaimRel (holoAt st hp).cls.shape.mReg (FlockC3.Opening.claimO sh (w R ω t Lb) ![a, b] i).toClaim
-            ((tiedSrc stp R ω t Lb).claim i).toClaim) ∧
-        FlockC3.Opening.OpenTieL (zs R ω t R₂) Lb sh (w R ω t Lb) (tiedSrc stp R ω t Lb) ∧
-        MapsLeft M (zs R ω t R₂) Lb sh unit (c3 R ω t Lb) (w R ω t Lb) (kap R ω t Lb) (e0 R ω t Lb) (sb R ω t Lb)
-          (e R ω t Lb) cap₀ (tiedSrc stp R ω t Lb)) :
-    FlockC3.RegLevels.SrcLevelTie zs dg N k Rw (tiedSrc stp) cap₀ := by
-  intro R ω t R₂ τ o hacc
-  obtain ⟨hs, hclaim, htie, hleft⟩ := h R ω t R₂ τ o hacc
-  exact levelTie_of_sessionAt (v := stp R ω t (layers zs dg N k Rw R ω t R₂ τ)) hacc M hell hsh hs hclaim htie hleft
 
 end FlockC3.RegLevels

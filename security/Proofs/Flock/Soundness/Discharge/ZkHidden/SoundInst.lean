@@ -29,8 +29,7 @@ set_option Elab.async false
 /-!
 # One hidden-output `--zk` sampled session of `J` tables, at the template instance's program
 
-`zk_session_soundHJ`, `zk_session_soundHJ_custody`, `zk_session_soundHJ_custody_reg` and
-`zk_session_soundHJ_custody_sampled_reg` at `instProg c n` in place of `Placed.keyProg c hU n`: the units are those of
+`zk_session_soundHJ`, `zk_session_soundHJ_custody`, and its bounds with "wrong" `incorrectRegZ`, at `instProg c n` in place of `Placed.keyProg c hU n`: the units are those of
 the whole template instance's program, partitioned at the output words' bits (`outsOfI`), each read at its site in the
 hidden-output table it is sampled into (`placeZHJI`) and bound to the rows it commits, input or output (`rsZHJI`).
 
@@ -177,7 +176,7 @@ theorem rsZHJI_incorrectRegZ (dj : Finset (Fin n) → Lean.Json) {I : Inputs} {S
   rfl
 
 /-- **One hidden-output `--zk` sampled session of `J` tables is sound against the registration, at the challenger's live-coin part's
-custody, at `instProg`.** `zk_session_soundHJ_custody_reg` with the template instance's program: "wrong" is
+custody, at `instProg`.** `zk_session_soundHJ_custody` with the template instance's program, where "wrong" is
 `incorrectRegZ` at the prover's registration `reg σ`, read through the rows' value binding (`rsZHJI`). -/
 theorem zk_session_soundHJ_custody_regI
     (I : Inputs) (ht : I.tags.typed = false)
@@ -232,7 +231,7 @@ theorem zk_session_soundHJ_custody_regI
     (ksAvgZC_le_strict execArith hs512 (planZHJ dj y₀) k (reg σ) (cont σ) hCR)) le_rfl
 
 /-- **One hidden-output `--zk` sampled session of `J` tables is sound at the units it samples, at `instProg`.**
-`zk_session_soundHJ_custody_sampled_reg` with the template instance's program: the executable verifier accepts and some
+`zk_session_soundHJ_custody_sampled_at` with the template instance's program: the executable verifier accepts and some
 unit the session drew is in `incorrectRegZ`. The sample is the session's, so no sampling design over it is assumed. -/
 theorem zk_session_soundHJ_custody_sampled_regI
     (I : Inputs) (ht : I.tags.typed = false)

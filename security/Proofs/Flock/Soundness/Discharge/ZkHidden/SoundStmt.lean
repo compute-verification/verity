@@ -30,7 +30,7 @@ set_option Elab.async false
 /-!
 # The hidden-output `--zk` session theorems at the session's statement circuit
 
-`zk_flock_countC_execOS_atH`, `zk_session_soundH`, `zk_session_soundHJ` and `zk_session_composedHJ` read the session's
+`zk_session_soundH`, `zk_session_soundHJ` and `zk_session_composedHJ` and the count curve read the session's
 circuit from `HmOut.parse`, which refuses a templated file. Their `…St` forms here read it from `HmOut.parseStmt`
 (`hcS`, a templated file's committed circuit unrolled), with the rows' fit `hv1 : RowsFitS c` given, as `TableH.accS`
 takes it: the places and rows are `BindStmt`'s (`placeZHSt`, `rsZHSt`; `placeZHJSt`, `rsZHJSt`), the live runs
@@ -50,7 +50,7 @@ local notation "𝔽" => FlockLevel3.GF128
 variable {mPts n : ℕ} {Reg : Type}
 
 /-- **The compiled `--zk` count curve at the hidden-output `--zk` tables**, at the session's statement circuit
-(`zk_flock_countC_execOS_atH` with `placeZHSt` and `rsZHSt`). -/
+(with `placeZHSt` and `rsZHSt`). -/
 theorem zk_flock_countC_execOS_atHSt {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (y₀ : SampleSetupZKH I mPts S₀ (dj S₀)) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hcS : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c) (hv1 : Hidden.Any.RowsFitS c)

@@ -35,7 +35,7 @@ its template, and V5 the statement circuit it unrolls to, which has its ports, p
 * `SampledKSLiveV5Accepted`: `SampledKSLiveV5R` with its event `LiveAcceptsKSP ∧ RunPopOk` in place of `LiveAcceptsZKP`
   and without the four hypotheses, under the sampling design the verifier samples under from the registration (`Bridge.SamplesUnder`),
   no Bernoulli sampling design, and at `δ` the sampling design's own miss of `B`, as V5 has them; `sampledKSLiveV5Accepted_of` derives it from
-  `SampledKSLiveV5R` as `sampledKSLiveV3_of` derives V3 from V2, and `sampledKSLiveV5Accepted` proves it. The session's
+  `SampledKSLiveV5R`, and `sampledKSLiveV5Accepted` proves it. The session's
   simulator is V5's: its sample files decode to `kd` units whatever the population (`Bridge.samplingDesignSized_samplesUnder`,
   `Bridge.samplingDesignSized_size`), so it reads no population check.
 -/

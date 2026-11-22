@@ -14,7 +14,7 @@ that today's check accepts, except with a stated probability.
 A run of such a check is `n` proof blocks over the run's outcomes `Ω` (`Run`): whether the verifier accepts it, a value
 of type `V u` at each proof block `u`'s ports, and the SHA-512 inputs the run carries. Its proof blocks may be of several
 kinds, so each has a type of values of its own. Every field is free here: a guarantee that instantiates a row's lemma
-builds `ports` from the counted extractor `IntegrityMonitoringPeriod` reads, and `hashInputs` from the run, so that neither is a
+builds `ports` from the counted extractor of its sampling block, and `hashInputs` from the run, so that neither is a
 value the prover picks.
 
 `Gives μ r ok K₀ ε`: the verifier accepts while at least `K₀` proof blocks' values fail `ok`, with probability at most

@@ -20,12 +20,9 @@ import Mathlib.Tactic.NormNum.RealSqrt
 /-!
 # n1: the public rows, the tape and the commitments at the honest family
 
-* `hPubRows_of_check'`: `HPubRows` at `C3Family.honest`, from the verifier's check of each accepted session's public
-  file (`ChecksPubRows`: `RecVStar.checkPubRows` on each statement the session's record sets up, as `FlockVerify`'s
-  `--rec-inner` path runs it after setup; `AcceptsZKR` does not make it, gap n1b) where the check reads every row
-  `HPubRows` does: every unit, which a transcript the session writes samples (`rowsHeld`, at the labels `checkLabels`
-  makes the units), the first port of a name (`PortsNamed`) and a rec-sparse unit's rows at its own shape
-  (`SparseAtShape`, `PubRows/Check.lean`).
+* `ChecksPubRows`: the verifier's check of each accepted session's public file (`RecVStar.checkPubRows` on each
+  statement the session's record sets up, as `FlockVerify`'s `--rec-inner` path runs it after setup; `AcceptsZKR` does
+  not make it, gap n1b).
 * `hTape_of_frame`: `HTape` at the honest family from `HFrame`. The stages' obligations read only the decode, and no
   step after the openings changes it, so they don't give `HTape`: at the honest family it is exactly `HFrame`
   (`hTape_iff_frame`, `PubRows/Frame.lean`), the tape's cap and link points first and the openings alone after the
@@ -112,31 +109,6 @@ theorem hTape_iff_frame {dg : ByteArray → ByteArray} {N k Rw : ℕ} : HTape �
 /-- **(n1) The tape at the honest family, from its frame**, an obligation on the decoder that n6 states at a fixed one. -/
 theorem hTape_of_frame {dg : ByteArray → ByteArray} {N k Rw : ℕ} (hfr : HFrame 𝓗 dg N k Rw) : HTape 𝓗 dg N k Rw :=
   hTape_iff_frame.2 hfr
-
-/-- **(n1) The public rows at the honest family, from the verifier's check**, where it reads every row `HPubRows`
-does: a transcript a session writes and accepts samples every unit (`rowsHeld`), labelled as the units by the check's
-`checkLabels` (`label_of_checked`), each circuit names each port once (`PortsNamed`) and V*'s rec-sparse units are at
-the verifier's shape (`SparseAtShape`). -/
-theorem hPubRows_of_check' (hchk : ChecksPubRows 𝓗 wr reg) (hnames : PortsNamed 𝓗) (hsp : SparseAtShape 𝓗) :
-    HPubRows 𝓗 := by
-  intro R ω t R₂ j ⟨R', tr', hw, hacc⟩ rg hrg u q x hname hread b hrow
-  obtain ⟨cs, w, c, hcs, hc, hb⟩ :=
-    heldRow_some (show heldRow (innerCommitsAt (wr t).1 (wr t).2 st reg) ish.sparse rg.value x = some b from hrow)
-  have hfix : (RecVStar.fixedRow { reps := #[] } rg.value 0).isSome = true := by
-    rw [fixedRow_isSome { reps := #[] } cs rg.value 0 x none ish.sparse]
-    simp [hc]
-  obtain ⟨d, D, dp, idx, hd, hD, hdp, hidx, hu⟩ := rowsHeld 𝓗 R ω t R₂ j R' tr' hw hacc rg hrg hfix u x hread
-  have hfind := port_find_of_unique (hnames j) q
-  rw [hname] at hfind
-  have hchk' := hchk R ω t R₂ j R' tr' hw hacc
-  rw [hcs] at hchk'
-  obtain ⟨spec₀, sts₀, hs₀, hpr₀, hlb₀⟩ := hchk'
-  have hlab := label_of_checked ((𝓗).zs R ω t R₂ j) hacc ⟨spec₀, sts₀, hs₀, hlb₀⟩ hd hD hdp hidx hu
-  obtain ⟨w', c', hc', hdig⟩ := pubRow_of_checked ((𝓗).zs R ω t R₂ j) hacc (cs := cs) ⟨spec₀, sts₀, hs₀, hpr₀⟩ hrg
-    hfix hfind hd hD hdp hidx hu (by rw [hlab]; exact hread)
-  have he := (fixedRow_or (hsp j) hc).symm.trans hc'
-  simp only [Option.some.injEq, Except.ok.injEq, Prod.mk.injEq] at he
-  exact hdig.trans (he.2.symm.trans hb.symm)
 
 /-- **The commitments at the honest family**: each accepted session's row of a stage's commit string holds, by
 `HPubRows` at the session's port of `own`'s name, value and reads (`OwnIn`), the row the verifier holds there, which is

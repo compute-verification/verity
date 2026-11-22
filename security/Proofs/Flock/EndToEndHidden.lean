@@ -24,14 +24,10 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.PublicJ
 import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched
 
 /-!
-# Proof of Flock's end-to-end guarantee under hidden outputs
+# Flock's end-to-end statements under hidden outputs: the per-test form and the reference setup
 
-`Flock.SecurityProofs.EndToEndHidden : Flock.Guarantees.EndToEndHidden` is `zk_session_soundHJ_custody_reg` with its
-first and last terms in closed form, as `EndToEnd` is `zk_session_soundJ_custody_reg`'s (`Spot.Sampling.SamplingDesign.subset_miss`, and
-`linkBoundZC` at A2). `Flock.SecurityProofs.EndToEndHiddenSampled : Flock.Guarantees.EndToEndHiddenSampled` is
-`zk_session_soundHJ_custody_sampled_reg` with its last term in closed form. Each reads the circuit the descriptor
-unrolls to, which `HmOut.parse` reads from the file (`Flock.Desc.parse_flat`). `EndToEndHiddenFlat` and
-`EndToEndHiddenDrawnFlat` are the two at the flat descriptor `Desc.single c` (`Flock.Desc.parse_single`).
+`EndToEndHiddenPerTestFlat_of`: `EndToEndHiddenPerTest` gives its flat form, at the flat descriptor `Desc.single c`
+(`Flock.Desc.parse_single`).
 
 `EndToEndHidden_refSetup` shows the hidden-output statements' reference setup `y₀` (theirs and `EndToEndRegistered`'s)
 is no extra condition: every sample verity-verify-proof accepts gives one, at any number of tables.
@@ -42,34 +38,6 @@ is no extra condition: every sample verity-verify-proof accepts gives one, at an
 namespace Flock.SecurityProofs
 
 open FlockSoundness Spot.Sampling
-
-/-- **Flock's one-stage audit, end to end, under hidden outputs.** -/
-theorem EndToEndHidden : Flock.Guarantees.EndToEndHidden := by
-  intro n Reg I ht D hD hU pub hpub hpt hscope kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hA3 hTags hCust k Rw M hk
-    hRw hM ρ hρ hr t' ht' K₀ hK₀ τ qF qS L P vb σ hCR hA2
-  have h := Discharge.ZkHidden.zk_session_soundHJ_custody_reg I ht (Flock.Desc.parse_flat hD) hU hpub hpt hscope kd hkd hdiv dj y₀ wr dg N Lb
-    src hA3 hTags hCust hk hRw hM hρ hr ht' K₀ τ (qF := qF) (qS := qS) hCR
-  rw [SamplingDesign.subset_miss hkd hK₀, Discharge.ZkLink.linkBoundZC, ite_eq_left hA2] at h
-  exact h
-
-/-- **Flock's one-stage audit, end to end, under hidden outputs, at the sampled proof blocks.** -/
-theorem EndToEndHiddenSampled : Flock.Guarantees.EndToEndHiddenSampled := by
-  intro n Reg I ht D hD hU pub hpub hpt hscope kd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hTags hCust k Rw M hk hRw hM ρ
-    hρ hr t' ht' τ qF qS L P vb σ hCR hA2
-  have h := Discharge.ZkHidden.zk_session_soundHJ_custody_sampled_reg I ht (Flock.Desc.parse_flat hD) hU hpub hpt hscope kd hdiv dj y₀ wr dg N
-    Lb src hTags hCust hk hRw hM hρ hr ht' τ (qF := qF) (qS := qS) hCR
-  rw [Discharge.ZkLink.linkBoundZC, ite_eq_left hA2] at h
-  exact h
-
-/-- **Flock's one-stage audit, end to end, under hidden outputs, at a flat circuit file.** -/
-theorem EndToEndHiddenFlat : Flock.Guarantees.EndToEndHiddenFlat := by
-  intro n Reg I ht c hc
-  exact EndToEndHidden n Reg I ht (.single c) (Flock.Desc.parse_single hc)
-
-/-- **Flock's one-stage audit, end to end, under hidden outputs, at the sampled proof blocks, at a flat circuit file.** -/
-theorem EndToEndHiddenDrawnFlat : Flock.Guarantees.EndToEndHiddenDrawnFlat := by
-  intro n Reg I ht c hc
-  exact EndToEndHiddenSampled n Reg I ht (.single c) (Flock.Desc.parse_single hc)
 
 /-- `EndToEndHiddenPerTest` gives its flat form, at `Desc.single c`. -/
 theorem EndToEndHiddenPerTestFlat_of (h : Flock.Guarantees.EndToEndHiddenPerTest) :
@@ -84,7 +52,7 @@ tables.** `EndToEnd_refSetup` under hidden outputs: on untyped inputs under `Tag
 `HmOut.parse` accepts as `c` (`hU`, `hscope`: its unit returns the outputs), at the record's sample file
 (`SampleFileZK dj (subset kd) pop`), the session's tables dividing `kd`, at a transcript verity-verify-proof `--zk` accepts whose
 record's sample is `dj S`, table 0 has a `SampleSetupZHJ` at `mPtsOf c.g (kd / nTab I)` link points, at its part of `S` and
-its sample: the `y₀` of `EndToEndHidden`, `EndToEndHiddenSampled`, `EndToEndRegistered` and `EndToEndRegisteredSampled`, at
+its sample: the `y₀` of `EndToEndHidden`, `EndToEndRegistered` and `EndToEndRegisteredSampled`, at
 `S₀ = partS I (dj S) S 0` and `d₀ = drawJ I (dj S) 0`. -/
 theorem EndToEndHidden_refSetup {n : ℕ} (I : Inputs) (ht : I.tags.typed = false) (hT : TagsOkZHJ I)
     {c : Flock.Circuit} (hc : Flock.HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)

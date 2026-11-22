@@ -7,7 +7,7 @@ bounds by. `miss K` is the largest escape of a set of `K` incorrect proof blocks
 as `j` grows. `countBound δ` is the largest `K` with `miss K ≥ δ`: except with probability δ (plus the soundness terms), an
 accepted transcript has at most that many incorrect proof blocks. `densityBound` is the harm such a set holds at δ in closed form
 (`optimize.density_bound`, which `certify` reports), in rationals, and `maxHarmCheck` brackets the exact supremum of that
-harm, `Flock.Guarantees.JointStratified`'s `StratifiedBlock.maxHarm`, from a certificate (`optimize.max_harm`).
+harm, from a certificate (`optimize.max_harm`).
 -/
 module
 
@@ -174,8 +174,7 @@ def densityBound (rows : Array (Nat × Nat × Rat)) (δ : Rat) : Rat := fill row
 
 /-! ## The exact supremum, bracketed
 
-`Flock.Guarantees.JointStratified` bounds an accepted sampling block's incorrect proof blocks' ANDs and output bits each by
-`StratifiedBlock.maxHarm`: the most harm `∑ s h_s x_s` of a set holding `x_s` incorrect proof blocks of subcircuit `s` whose exact
+The exact supremum `maxHarm` is the most harm `∑ s h_s x_s` of a set holding `x_s` incorrect proof blocks of subcircuit `s` whose exact
 escape `e(x) = ∏ s C(n_s − x_s, k_s)/C(n_s, k_s)` is at least δ. `maxHarmCheck` checks a certificate for it and returns
 `(lower, upper)` with `lower ≤ maxHarm ≤ upper`:
 
@@ -233,7 +232,7 @@ structure HarmRow where
   lo : Nat
   hi : Nat
 
-/-- `(lower, upper)` around `StratifiedBlock.maxHarm` at δ, from a certificate: the rows and the multiplier `lam`.
+/-- `(lower, upper)` around `maxHarm` at δ, from a certificate: the rows and the multiplier `lam`.
 Refused where the certificate fails: `lam ≤ 0`, a harm below 0, `take` outside its confidence set, or a row's
 `lo ≤ hi ≤ size − k` not placing its maximizer. -/
 def maxHarmCheck (rows : Array HarmRow) (δ lam : Rat) : Except String (Rat × Rat) := do

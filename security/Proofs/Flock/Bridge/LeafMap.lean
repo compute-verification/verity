@@ -36,7 +36,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # The deployed commitment at a leaf map (shared rows)
 
-`rootsOf`, `commitDep` and `TransportsLiveC` read the registration as one leaf per unit at every port: unit `u`'s row at
+`rootsOf` and `commitDep` read the registration as one leaf per unit at every port: unit `u`'s row at
 port `q` is leaf `u` of `q`'s tree, `nl` leaves each. A public file with `shared_rows` tables (`Flock.Tables`) registers
 port `q` over its table's `counts[q]` rows instead, and unit `u` reads leaf `refs[u · np + q]` of it (`Public.digest`).
 The verifier checks the tables (`HmRow.loadPublic`: every count is positive, every ref is below its port's count, the
@@ -53,10 +53,10 @@ digests are the tables' rows), so the leaf map is the verifier's, at every accep
 * Each port in its own row format, as `rootsOf` and `commitDep` read it: its leaves framed at its schema (`schemaOf`,
   `Registered.portSchema`) and its rows hashed in its format (`rowDep`: `sha512/row/v1`, `sha512/row/v2` or
   `sha512/row-seg/v1`). At a `RowsV2` file that is every port at row/v2 (`leavesL_v2`, `commitDepL_v2`).
-* `RootFixesDomainL c L`: `PortRoots.RootFixesDomain` at `rootsOfL` (`rootFixesDomainL_ident`).
-* `Bridge.TransportsLiveCR`: `TransportsLiveC` with or without shared rows (no `pub.tables = none`), at the binding
-  `ZkReg.rsZHJS` and the public file's leaf map, at every file whose ports are rows the verifier reads
-  (`RowsOk`). At `pub.tables = none` it is `TransportsLiveC` (`transportsLiveC_of_R`, `TransportsRefs.lean`).
+* `RootFixesDomainL c L`: an earlier port with a port's root at `rootsOfL` has its domain.
+* `Bridge.TransportsLiveCR`: the canonical registered openings open the deployed commitment, with or without shared
+  rows, at the binding `ZkReg.rsZHJS` and the public file's leaf map, at every file whose ports are rows the verifier
+  reads (`RowsOk`).
 
 No unit's ref is pinned to `⌊u / G⌋` here: these hold at every ref the verifier accepts.
 -/
@@ -225,12 +225,9 @@ theorem layoutIsL_ident (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option 
     (pub : Flock.Public) (nl : ℕ) (roots : List Msg) (cd : SamplingDeploy.Code) :
     LayoutIsL C rows c (LeafMap.ident c pub nl) roots cd ↔ LayoutIs C rows c pub nl roots cd := Iff.rfl
 
-/-- **Equal roots at a leaf map have one domain**: `PortRoots.RootFixesDomain` at `rootsOfL` and `L`'s domains. -/
+/-- **Equal roots at a leaf map have one domain**: an earlier port with a port's root at `rootsOfL` has its domain. -/
 def RootFixesDomainL (c : Flock.Circuit) (L : LeafMap) : Prop :=
   ∀ q q', q' < q → q < c.ports.size → (rootsOfL c L).getD q' [] = (rootsOfL c L).getD q [] → L.dom q' = L.dom q
-
-theorem rootFixesDomainL_ident (c : Flock.Circuit) (pub : Flock.Public) (nl : ℕ) :
-    RootFixesDomainL c (LeafMap.ident c pub nl) ↔ PortRoots.RootFixesDomain c pub nl := Iff.rfl
 
 end Flock.Bridge
 
@@ -245,12 +242,12 @@ open scoped ENNReal
 
 open Classical in
 /-- **The canonical registered openings open the deployed commitment, with or without shared rows**:
-`TransportsLiveC` without `pub.tables = none`, at the binding with or without shared rows (`ZkReg.rsZHJS`) and the
+at the binding with or without shared rows (`ZkReg.rsZHJS`) and the
 public file's leaf map (`LeafMap.ofPublic`): unit `u`'s row at port `q` is leaf `ref q u` of `q`'s tree, under the
 roots `rootsOfL` over each port's own leaves, and some data opens each canonical opening's position to its bit under
 `commitDepL`. It holds at every circuit file whose ports are rows the verifier reads (`RowsOk`: all
 `sha512/row/v1`, or each `sha512/row/v2` or `sha512/row-seg/v1`), each port's leaves at its own schema and each row in
-its own format. At `pub.tables = none` it is `TransportsLiveC` (`transportsLiveC_of_R`). -/
+its own format. -/
 def _root_.Flock.Bridge.TransportsLiveCR : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     (I : Inputs) (ht : I.tags.typed = false)

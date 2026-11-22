@@ -8,10 +8,10 @@ nothing carries across it. Its subcircuits are Definitions (`templates`): the W8
 and the row units (RMSNorm, the quantizer, softmax, the residual add, the gathers, the embedding and
 argmax), each id `stub:` until its Definition lands, its ANDs composed from pinned pieces.
 
-**The sampling design is what Lean proves.** Each subcircuit is one sampling block of the block (`IntegrityMonitoringPeriod`): one Flock `--zk`
+**The sampling design.** Each subcircuit is one sampling block of the block: one Flock `--zk`
 session sampling a uniform `subset:k` of its n units, split over `tables` tables of at most `Template.cap` sampled proof blocks each
-(m = k_log + nbl <= 35). Every subcircuit samples `k = ceil(ln(S/delta)/share)`, so by `IntegrityMonitoringPeriodLog` each sampling block has
-fewer than `K0 = ln(S/delta) n/k` <= share n units incorrect outside delta (the S sampling blocks of the block split delta), and by
+(m = k_log + nbl <= 35). Every subcircuit samples `k = ceil(ln(S/delta)/share)`, so each sampling block has
+fewer than `K0 = ln(S/delta) n/k` <= share n units incorrect outside delta (the S sampling blocks of the block split delta; this bound runs unproved), and by
 `IntegrityHorizon` a subcircuit's sampling blocks over any period have fewer than ln(S/delta) n/k in all. The incorrect ANDs beside
 them (`Stratified.harm_bound`, each unit weighted by its ANDs) are informative: the sampling-design-level bound is proved
 (`Spot.Sampling.stratified_isHarmBound_exact`), but no guarantee in the lock composes it with acceptance.
@@ -218,7 +218,7 @@ class SamplingBlock:
 
 def window(t: Template, k: int, windows: int, r: Rates) -> SamplingBlock:
     """`t`'s sampling block sampling k: its tables (at most `Template.cap` sampled proof blocks each, k rounded up to a multiple of them, as
-    `HiddenWindow.hdiv` needs), its expected proving cost, and at each delta `IntegrityMonitoringPeriodLog`'s K0 (delta split over
+    `HiddenWindow.hdiv` needs), its expected proving cost, and at each delta the unproved K0 (delta split over
     the block's `windows`) and `IntegrityHorizon`'s bound over any number of the subcircuit's sampling blocks."""
     a, cap = t.proved, t.cap
     k = min(t.units, k)

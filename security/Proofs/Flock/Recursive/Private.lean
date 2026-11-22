@@ -22,20 +22,10 @@ import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.ZK.Hiding
 
 /-!
-# Proofs of the recursive audit's circuit privacy, and that it ran the registered private circuit
+# Proofs that a registration by hm96 leaves hides, and that the recursive audit ran the registered private circuit
 
-* `recursiveCircuitPrivate_le`, with `RecursiveZK` as the step: at each
-  registration salt `r`, `RecursiveZK` at an hm96 hiding bound `δ` (`recursiveZK_le`; and, for the other way, the same
-  on the event's complement) moves
-  the ZK server's commitments and V*'s sessions to the ideal leaves and V*'s simulator, which read `r` only through the
-  registration's view `reg P r`; then the registration's hiding, as a test with values in `[0, 1]` (`Hides.avg_le`),
-  moves `reg P r` to `reg p₀ r`. `Flock.SecurityProofs.RecursiveCircuitPrivate` is it at the pinned key's hiding gap
-  (`CROnly.hm96Hiding_gap`).
-* `RecursiveCircuitIndist` is the two ways of `recursiveCircuitPrivate_le` through the simulator at `p₀ = P`, at the gap.
-* `regLeaves_hides`: a registration by hm96 leaves hides at `2·n_r·δ`, `ideal_leaves_swap` from each private circuit to the
-  ideal leaves and back (on the complement); `recursiveCircuitPrivateLeaves_le` is `recursiveCircuitPrivate_le` with it,
-  `RecursiveCircuitPrivateLeaves` that at the gap, and `RecursiveAudit`'s (ii) the same at the ZK server, at the gap
-  (`Proofs.Flock.Recursive.ZkServerZK`).
+* `regLeaves_hides`: a registration by hm96 leaves hides at `2·n_r·δ`, `ideal_leaves_swap` from each private circuit to
+  the ideal leaves and back (on the complement).
 * `RanRegisteredRun`: an accepted outcome off the registered program is, by the binding, one whose opening and the
   registrant's collide; with no such outcome reached (`prob_mono_outcome`), accepting off `p` adds nothing to `B`.
 * `RecursiveRanRegistered`: `RecursiveSound`'s three cases; in its bound's, the same argument at each row the run read
@@ -85,96 +75,6 @@ theorem prCoin_flip {A B : Type} [Fintype A] [Nonempty A] [Fintype B] [Nonempty 
 variable {Out Prog Wit Rr Rv Ωa Ωp Ωo Ωs V : Type} [Fintype Rr] [Nonempty Rr] [Fintype Ωa] [Nonempty Ωa]
   [Fintype Ωp] [Nonempty Ωp] [Fintype Ωo] [Nonempty Ωo] [Fintype Ωs] [Nonempty Ωs]
 
-/-- The simulated view's probability of `E` at the registration's view `v`: ideal commitments and V*'s simulator. -/
-noncomputable def idealAt (nh : ℕ) (sim : Out → Rv → Ωa → (Fin nh → ByteArray) → Ωs → V) (o : Out)
-    (E : Rv × Ωa × (Fin nh → ByteArray) × V → Prop) (v : Rv) : ℝ≥0∞ :=
-  prCoin fun z : (Ωa × (Fin nh → ZkView.Bits × ZkView.Salt)) × Ωs =>
-    E (v, z.1.1, (fun i => Flock.Guarantees.idealLeaf (z.1.2 i)),
-      sim o v z.1.1 (fun i => Flock.Guarantees.idealLeaf (z.1.2 i)) z.2)
-
-/-- The real view's probability of `E` at the registration's randomness `r`. -/
-noncomputable def realAt (reg : Prog → Rr → Rv) (nh : ℕ) (msgs : Prog → Wit → Rr → Ωa → Ωp → Fin nh → ByteArray)
-    (view : Prog → Wit → Rr → Ωa → (Fin nh → ByteArray) → Ωp → (Fin nh → ZkView.Salt) → Ωo → V)
-    (P : Prog) (w : Wit) (E : Rv × Ωa × (Fin nh → ByteArray) × V → Prop) (r : Rr) : ℝ≥0∞ :=
-  prCoin fun z : ((Ωa × Ωp) × (Fin nh → ZkView.Salt)) × Ωo =>
-    E (reg P r, z.1.1.1, (fun i => Flock.Guarantees.zkServerLeaf (msgs P w r z.1.1.1 z.1.1.2 i) (z.1.2 i)),
-      view P w r z.1.1.1 (fun i => Flock.Guarantees.zkServerLeaf (msgs P w r z.1.1.1 z.1.1.2 i) (z.1.2 i))
-        z.1.1.2 z.1.2 z.2)
-
-omit [Fintype Rr] [Nonempty Rr] in
-/-- **`RecursiveZK` at one registration salt, both ways**, at any hm96 hiding bound `δ` (`recursiveZK_le`). -/
-theorem recZK_at (reg : Prog → Rr → Rv) (nh : ℕ) (msgs : Prog → Wit → Rr → Ωa → Ωp → Fin nh → ByteArray)
-    (view : Prog → Wit → Rr → Ωa → (Fin nh → ByteArray) → Ωp → (Fin nh → ZkView.Salt) → Ωo → V)
-    (sim : Out → Rv → Ωa → (Fin nh → ByteArray) → Ωs → V) {εo : ℝ≥0∞} (o : Out) (P : Prog) (w : Wit) (r : Rr)
-    (hOuter : ∀ a p (y : Fin nh → ZkView.Salt) (E : V → Prop),
-      prCoin (fun q : Ωo => E (view P w r a (fun i => Flock.Guarantees.zkServerLeaf (msgs P w r a p i) (y i)) p y q))
-        ≤ prCoin (fun s : Ωs =>
-            E (sim o (reg P r) a (fun i => Flock.Guarantees.zkServerLeaf (msgs P w r a p i) (y i)) s)) + εo)
-    {δ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ)
-    (E : Rv × Ωa × (Fin nh → ByteArray) × V → Prop) :
-    realAt reg nh msgs view P w E r ≤ idealAt nh sim o E (reg P r) + (εo + nh * δ) ∧
-      idealAt nh sim o E (reg P r) ≤ realAt reg nh msgs view P w E r + (εo + nh * δ) := by
-  have zk := fun E' => recursiveZK_le nh (msgs P w r) (view P w r) (sim o (reg P r)) hOuter hT1 E'
-  refine ⟨(zk fun t => E (reg P r, t.1, t.2.1, t.2.2)).trans (le_of_eq (add_assoc _ _ _)), ?_⟩
-  refine prCoin_flip _ _ ((zk fun t => ¬ E (reg P r, t.1, t.2.1, t.2.2)).trans (le_of_eq (add_assoc _ _ _)))
-
-/-- **`RecursiveCircuitPrivate` at any hm96 hiding bound**: `Flock.Guarantees.RecursiveCircuitPrivate` with
-`Claims.Hm96Hiding` at `δ` taken as a hypothesis, and `nh·δ` in place of `nh·hidingGap My saltHash`. -/
-theorem recursiveCircuitPrivate_le (reg : Prog → Rr → Rv) {ε : ℝ≥0∞} (hreg : Hides reg ε)
-    (honest : Out → Prog → Wit → Prop) (nh : ℕ) (msgs : Prog → Wit → Rr → Ωa → Ωp → Fin nh → ByteArray)
-    (view : Prog → Wit → Rr → Ωa → (Fin nh → ByteArray) → Ωp → (Fin nh → ZkView.Salt) → Ωo → V)
-    (sim : Out → Rv → Ωa → (Fin nh → ByteArray) → Ωs → V) {εo : ℝ≥0∞}
-    (hOuter : ∀ o P w, honest o P w → ∀ r a p (y : Fin nh → ZkView.Salt) (E : V → Prop),
-      prCoin (fun q : Ωo => E (view P w r a (fun i => Flock.Guarantees.zkServerLeaf (msgs P w r a p i) (y i)) p y q))
-        ≤ prCoin (fun s : Ωs =>
-            E (sim o (reg P r) a (fun i => Flock.Guarantees.zkServerLeaf (msgs P w r a p i) (y i)) s)) + εo)
-    {δ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ)
-    (p₀ : Prog) (o : Out) (P : Prog) (w : Wit) (hw : honest o P w) (E : Rv × Ωa × (Fin nh → ByteArray) × V → Prop) :
-    Flock.Guarantees.recRealPr reg nh msgs view P w E ≤ Flock.Guarantees.recSimPr reg nh sim o p₀ E + (ε + εo + nh * δ) ∧
-      Flock.Guarantees.recSimPr reg nh sim o p₀ E ≤ Flock.Guarantees.recRealPr reg nh msgs view P w E +
-        (ε + εo + nh * δ) := by
-  have hf1 : ∀ v, idealAt nh sim o E v ≤ 1 := fun v => prCoin_le_one' _
-  have hstep := fun r => recZK_at reg nh msgs view sim o P w r (hOuter o P w hw r) hT1 E
-  have hreal : Flock.Guarantees.recRealPr reg nh msgs view P w E = avg (realAt reg nh msgs view P w E) := rfl
-  have hsim : Flock.Guarantees.recSimPr reg nh sim o p₀ E = avg fun r => idealAt nh sim o E (reg p₀ r) := rfl
-  rw [hreal, hsim]
-  constructor
-  · calc avg (realAt reg nh msgs view P w E)
-        ≤ avg (fun r => idealAt nh sim o E (reg P r) + (εo + nh * δ)) :=
-          avg_mono fun r => (hstep r).1
-      _ = avg (fun r => idealAt nh sim o E (reg P r)) + (εo + nh * δ) := by
-          rw [avg_add, avg_const]
-      _ ≤ (avg (fun r => idealAt nh sim o E (reg p₀ r)) + ε) + (εo + nh * δ) :=
-          add_le_add (hreg.avg_le P p₀ (idealAt nh sim o E) hf1) le_rfl
-      _ = avg (fun r => idealAt nh sim o E (reg p₀ r)) + (ε + εo + nh * δ) := by ring
-  · calc avg (fun r => idealAt nh sim o E (reg p₀ r))
-        ≤ avg (fun r => idealAt nh sim o E (reg P r)) + ε := hreg.avg_le p₀ P (idealAt nh sim o E) hf1
-      _ ≤ avg (fun r => realAt reg nh msgs view P w E r + (εo + nh * δ)) + ε :=
-          add_le_add (avg_mono fun r => (hstep r).2) le_rfl
-      _ = avg (realAt reg nh msgs view P w E) + (ε + εo + nh * δ) := by
-          rw [avg_add, avg_const]; ring
-
-/-- **The recursive audit is circuit private.** -/
-theorem RecursiveCircuitPrivate : Flock.Guarantees.RecursiveCircuitPrivate := by
-  intro Out Prog Wit Rr Rv Ωa Ωp Ωo Ωs V _ _ _ _ _ _ _ _ _ _ reg ε hreg honest nh msgs view sim εo hOuter p₀ o P w hw E
-  exact recursiveCircuitPrivate_le reg hreg honest nh msgs view sim hOuter
-    (CROnly.hm96Hiding_gap ZkView.My ZkView.saltHash) p₀ o P w hw E
-
-/-- **Two private circuits of a class are indistinguishable in the recursive audit.** -/
-theorem RecursiveCircuitIndist : Flock.Guarantees.RecursiveCircuitIndist := by
-  intro Out Prog Wit Rr Rv Ωa Ωp Ωo Ωs V _ _ _ _ _ _ _ _ _ _ reg ε hreg honest nh msgs view sim εo hOuter o P P'
-    w w' hw hw' E
-  have hT1 := CROnly.hm96Hiding_gap ZkView.My ZkView.saltHash
-  have h := (recursiveCircuitPrivate_le reg hreg honest nh msgs view sim hOuter hT1 P o P w hw E).1
-  have h' := (recursiveCircuitPrivate_le reg hreg honest nh msgs view sim hOuter hT1 P o P' w' hw' E).2
-  calc Flock.Guarantees.recRealPr reg nh msgs view P w E
-      ≤ Flock.Guarantees.recSimPr reg nh sim o P E +
-          (ε + εo + nh * ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash)) := h
-    _ ≤ (Flock.Guarantees.recRealPr reg nh msgs view P' w' E +
-          (ε + εo + nh * ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash))) +
-          (ε + εo + nh * ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash)) := add_le_add h' le_rfl
-    _ = _ := by ring
-
 /-- The unit, dropped from an experiment's randomness. -/
 def unitProd (T : Type) : Unit × T ≃ T where
   toFun p := p.2
@@ -215,33 +115,6 @@ theorem regLeaves_hides {nr : ℕ} (rows : Prog → Fin nr → ByteArray) (pub :
           nr * δ := h1
     _ ≤ (prCoin (fun r => E (Flock.Guarantees.regLeaves rows pub P' r)) + nr * δ) + nr * δ := add_le_add h2 le_rfl
     _ = prCoin (fun r => E (Flock.Guarantees.regLeaves rows pub P' r)) + 2 * nr * δ := by ring
-
-/-- **`RecursiveCircuitPrivateLeaves` at any hm96 hiding bound**: `Flock.Guarantees.RecursiveCircuitPrivateLeaves` with
-`Claims.Hm96Hiding` at `δ` taken as a hypothesis, and `δ` in place of `hidingGap My saltHash`. -/
-theorem recursiveCircuitPrivateLeaves_le (nr : ℕ) (rows : Prog → Fin nr → ByteArray) (pub : (Fin nr → ByteArray) → Rv)
-    (honest : Out → Prog → Wit → Prop)
-    (nh : ℕ) (msgs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → Fin nh → ByteArray)
-    (view : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → (Fin nh → ByteArray) → Ωp → (Fin nh → ZkView.Salt) → Ωo → V)
-    (sim : Out → Rv → Ωa → (Fin nh → ByteArray) → Ωs → V) {εo : ℝ≥0∞}
-    (hOuter : ∀ o P w, honest o P w → ∀ r a p (y : Fin nh → ZkView.Salt) (E : V → Prop),
-      prCoin (fun q : Ωo => E (view P w r a (fun i => Flock.Guarantees.zkServerLeaf (msgs P w r a p i) (y i)) p y q))
-        ≤ prCoin (fun s : Ωs =>
-            E (sim o (Flock.Guarantees.regLeaves rows pub P r) a
-              (fun i => Flock.Guarantees.zkServerLeaf (msgs P w r a p i) (y i)) s)) + εo)
-    {δ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ)
-    (p₀ : Prog) (o : Out) (P : Prog) (w : Wit) (hw : honest o P w) (E : Rv × Ωa × (Fin nh → ByteArray) × V → Prop) :
-    Flock.Guarantees.recRealPr (Flock.Guarantees.regLeaves rows pub) nh msgs view P w E ≤
-        Flock.Guarantees.recSimPr (Flock.Guarantees.regLeaves rows pub) nh sim o p₀ E + (2 * nr * δ + εo + nh * δ) ∧
-      Flock.Guarantees.recSimPr (Flock.Guarantees.regLeaves rows pub) nh sim o p₀ E ≤
-        Flock.Guarantees.recRealPr (Flock.Guarantees.regLeaves rows pub) nh msgs view P w E + (2 * nr * δ + εo + nh * δ) :=
-  recursiveCircuitPrivate_le (Flock.Guarantees.regLeaves rows pub) (regLeaves_hides rows pub hT1) honest nh msgs view sim
-    hOuter hT1 p₀ o P w hw E
-
-/-- **The recursive audit is circuit private, the private circuit registered by hm96 leaves.** -/
-theorem RecursiveCircuitPrivateLeaves : Flock.Guarantees.RecursiveCircuitPrivateLeaves := by
-  intro Out Prog Wit Rv Ωa Ωp Ωo Ωs V _ _ _ _ _ _ _ _ nr rows pub honest nh msgs view sim εo hOuter p₀ o P w hw E
-  exact recursiveCircuitPrivateLeaves_le nr rows pub honest nh msgs view sim hOuter
-    (CROnly.hm96Hiding_gap ZkView.My ZkView.saltHash) p₀ o P w hw E
 
 end Private
 

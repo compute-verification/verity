@@ -16,7 +16,7 @@ descriptor, `leafOf` the window's template at K and hashing to `LEAF_PROGRAMS`' 
 `--registered` file credit builds from the descriptor alone (`leafRegisteredFile`: every leaf statement reads an A, B or
 partials row in full, which the verifier's file cannot mark). No leaf statement is verified, and none credits.
 
-Only the form `LeafLanesSound` covers is verified (`lanesShape`): a 32 × 32 tile, at a K the lane tile check takes, at
+Only one lanes variant is verified (`lanesShape`): a 32 × 32 tile, at a K the lane tile check takes, at
 least `LEAST_K`, of one chunk and not J10-R's; any other sampled lanes-form leaf is refused (`lanes-shape`).
 -/
 
@@ -137,7 +137,7 @@ def formOf (files : Json) (k : Nat) : Option String :=
   else if (PouwWindow.field? files s!"{LANE}{k}").isSome then some "lanes" else none
 
 /-- `credit.lanes_shape`: why a sampled leaf at K = `k` of a window of tile `r` × `c`, whose template at K is `tile`, is
-outside what `LeafLanesSound` covers (`lanes-shape`), or none. -/
+outside the lanes variant the verifier takes (`lanes-shape`), or none. -/
 def lanesShape (r c : Nat) (tile : Credit.Tile) (k : Nat) : Option String :=
   if !LANES_TILES.contains (r, c) then
     some (s!"the window's {r} × {c} tile is not one whose lanes LeafLanesSound covers ({LANES_TILES_REPR}: it is " ++

@@ -24,8 +24,8 @@ incorrect set of the trace the extractor recovers.
    with a binding commitment, at every δ ≥ 0, Pr[accept ∧ F ∉ M_δ] ≤ δ + ε_ks + ε_bind, with ε_ks = κ_δ − δ + √(γ·Pr[B])
    from Π's errors at the sampled proof blocks' sessions and ε_bind = Pr[B_ext]; `CompilerZK` carries Π's zero
    knowledge to SPOT[Π]. Their premises (`Arg.KS`, the binding, the scope, the contract) are their domain. At Flock,
-   `Flock.Guarantees.SampledKSLiveV3` (stated in `Proofs/Flock/Bridge/ScopeGate.lean`, proved in
-   `Proofs/Flock/Bridge/KSLive.lean`) proves the bound at the deployed sessions:
+   `Flock.Guarantees.SampledKSLiveV5` (stated in `Proofs/Flock/Bridge/V5/Statement.lean`, proved in
+   `Proofs/Flock/Bridge/V5/KSLive.lean`) proves the bound at the deployed sessions:
    Pr[`verify --zk` accepts ∧ the run's population is the registration's ∧ F ∉ M_δ] ≤ δ + ε̄_ks + ε_link, at
    δ = C(n−K₀, k)/C(n, k) for k of n proof blocks sampled uniformly, with ε̄_ks Flock's error averaged over the sessions
    and ε_link the link's term:
@@ -49,15 +49,16 @@ incorrect set of the trace the extractor recovers.
    (`Proofs/Flock/SessionLoop/Statement.lean`): at the ZK server's session loop on the deployed tables, for every t > 0,
    every V* with one more round than the verifier and every event E, Pr[E(real)] ≤ 2·(Pr[E(sim)] + 8(t+1)·n_L(x)·δ₁ +
    2·3^(−t) + 4t·3^t·Pr[fork collision]), with δ₁ hm96's hiding gap at the pinned key. For the recursive audit,
-   `Flock.Guarantees.RecursiveZK` (`Proofs/Flock/Recursive/Statements.lean`): if the outer session is
-   ε_o-zero-knowledge, every event of the view released at a stop from a public family St is at most |St| times as
-   likely as at the simulator's, plus ε_o + n_h·δ_{K*}.
+   `Flock.Guarantees.RecursiveZKLoop` (`Proofs/Flock/Recursive/LoopZK.lean`, proved and not listed in the lock): with
+   the outer session V*'s statements run by the session loop, every event of the view released at a stop from a public
+   family St is at most |St| times as likely as at the simulator's, plus ε_V + n_h·δ_{K*}, with ε_V V*'s statements'
+   error.
    - Domain: a witness in the relation, at a statement the loop serves, in Flock's scope.
    - Real: `Claims.Hm96Hiding` bounds δ₁ and δ_{K*}, and SHA-512 collision resistance the fork term; at the operating
      system's bytes, `UniformRandomBytesTest` (`recursiveZK_os_gap`).
    - Open: `SwCausalOn`, the tables' side's one unproved premise; per worker, `LoopInnerRound0`, `LiveRoundEq` and
-     `FillRoundEq`; `Loop.Src` (the loop's inputs from its host are the tape's), the prover-side ZK server's randomness,
-     which no party the verifier trusts holds; and `OuterViewZK`.
+     `FillRoundEq`; and `Loop.Src` (the loop's inputs from its host are the tape's), the prover-side ZK server's
+     randomness, which no party the verifier trusts holds.
 4. **Composed soundness.** `Verity.SoundnessOf` (`Properties/Verity/Soundness.lean`) at any list of ids, proved
    as `Verity.soundness_at_of_targets` (`Proofs/Properties/Verity/Soundness.lean`); `Verity.Soundness` and
    `Verity.RemoteSoundness` are it at onsite's and remote's (remote's with the two statements on the committed files
@@ -453,7 +454,7 @@ None of these is assumed silently; each would restate the conclusion:
 | The composites | `Core.Remote.protocol`, `Core.Onsite.protocol`, `Properties.Composition.AcceptMeans` | Proved for the product rule `check`, which both run |
 | The utilization policy | not yet in Lean | Not a policy yet |
 | Protocol soundness | `Verity.soundness_of_subprotocols`, `Verity.remote_soundness_of_subprotocols` | Proved from each subprotocol's target, each a hypothesis until discharged (`Properties/Verity/README.md`) |
-| SPOT | `Flock.Guarantees.SampledKSLiveV3`, `Claims.Sampling.RelS` | Proved; the step from F ∈ M_δ to the credit-weighted φ is open |
+| SPOT | `Flock.Guarantees.SampledKSLiveV5`, `Claims.Sampling.RelS` | Proved; no served run satisfies a listed guarantee of the per-member variant yet; the step from F ∈ M_δ to the credit-weighted φ is open |
 | PoUW | `ResourceAccounting.Guarantees.Compose.CircuitCredit` | Proved; nothing derives Φ_D from it, or shows each credited gate distinct |
 | The inference-only policy | `InferenceOnlyCheck.Properties.SecurityProofs.DescWitnesses`, `InferenceOnly.CompliesRate`, `InferenceOnly.Complies` | Proved at its rate, with each block within (c, k) on the unrolled check's verdict (the lemma `InferenceOnlyCheck.Properties.SecurityProofs.refines`); the step to a (c, k)-partition of the registered circuit itself is open, and k_F (what incorrect proof blocks inject) and k_a (the advice's share) are unbounded |
 | Onsite's k_S | `Pous.Guarantees.StreamedWipe`, `NetTiming.Guarantees.MonitoringPeriodLeakAccepted` | Proved per wipe and per monitoring period, in that order; nothing composes them into k_S |
@@ -512,8 +513,8 @@ what the lock records: named assumptions, open premises (with issue and due date
 
 | Subprotocol | Guarantee | Status |
 |---|---|---|
-| SPOT | `Flock.Guarantees.SampledKSLiveV3` (Start here, item 1) | Proved from the open premise `RecordCustodyZKJPLaw` (in the trust base, provisionally) and the named assumptions `UniformRandomBytes` and SHA-512's collision resistance (`SHA512CRStrict`, `SHA512CRExpected`) at its finders; `RecordCustodyZKJ` is read, not taken. No nontrivial witness (unwitnessed) |
-| PoUW | `Properties.Pouw.MonitoringPeriod.H1CheckedCreditMonitoringPeriod`, the instance at the deployed H1 tile unit of the general `CheckedCreditMonitoringPeriod` (both in `Properties/lean-audit.json`), `Properties/Pouw/MonitoringPeriod.lean` | Proved from open premises alone: `ServiceSound`, `SampleIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `StagedPins`, `UnitFixed`, `OperandHMu`, `ReceiptLuckAt`, `GuessLuckAt`, `EveryExecutionPhase`, `PrefixOf`, `Scope`. The deployed path doesn't meet `SaltIsLiveCoin` yet, and no served path meets `AcceptedLive` (credit only after `verity-verify-proof --zk --registered` accepts) |
+| SPOT | `Flock.Guarantees.SampledKSLiveV5` (Start here, item 1) | Proved from the open premise `RecordCustodyZKJPLaw` (in the trust base, provisionally) and the named assumptions `UniformRandomBytes` and SHA-512's collision resistance (`SHA512CRStrict`, `SHA512CRExpected`) at its finders; `HmRowComputes` is read, not taken. No nontrivial witness (unwitnessed) |
+| PoUW | `Properties.Pouw.MonitoringPeriod.H1CheckedCreditMonitoringPeriod`, the instance at the deployed H1 tile unit of the general `CheckedCreditMonitoringPeriod` (both in `Properties/lean-audit.json`), `Properties/Pouw/MonitoringPeriod.lean` | Proved from open premises alone: `ServiceSound`, `SampleIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `StagedPins`, `UnitFixed`, `OperandHMu`, `ReceiptLuckAt`, `GuessLuckAt`, `EveryExecutionPhase`, `PrefixOf`, `Scope`. The deployed path doesn't meet `SaltIsLiveCoin` yet, and no proved guarantee bounds PoUW's proof layer at what a served run satisfies (credit only after `verity-verify-proof --zk --registered` accepts) |
 | PoUS | `Pous.Period.PeriodHeld`, `Properties/Pous/Period.lean`; in the shared coin game, `Pous.Period.PeriodHeldSha512`, `Properties/Pous/PeriodGame.lean` | Proved from the open premises `DeviceModel` (the device model) and `P2RingAuditSecure` (a conjecture) and the named assumption `Instantiates` (`pous-ring-instantiation`); no honest witness (unwitnessed). The coin-game form adds the named assumption `Hash.Assumptions.Sha512Prf` at the memory attester's two tests (its `ε_prf` in the bound), the domain hypothesis `Fits` (the certificate's fit) and the open premise `ReadsNoPrimitive` (the run reads no primitive), with both witnesses |
 | Bandwidth audit, PoUB's per-pass lemma | `ResourceAccounting.Guarantees.Remote.AuditRO`, `Definitions/Poub/Guarantees/RemotePass.lean` | Proved, in the random-oracle model |
 | Network attestation | `NetTiming.Guarantees.MonitoringPeriodLeakAccepted`, `Definitions/Certifier/Guarantees/MonitoringPeriod.lean` | Proved from the open premises SPOT's `Claims.SamplingGeneric.Compiled.KS`, `CertifierRegisters`, `ScopeAcc` and `TrustedDevice` (in the trust base, provisionally) and the domain hypothesis `Claims.Sampling.CommitmentScheme.Binds`; no named assumption. Each execution phase is bounded alone, with no union over the period yet |

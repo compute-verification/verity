@@ -20,19 +20,17 @@ coins, over window `t`'s own (`∀ ξ, P_a[E_t(ξ[t ↦ a])] ≤ p`).
   `ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod` credits live words over a period's accepted prefix, not time, so it
   does not give `incorrect`'s form.
 * **SPOT** (in place of `SampledDetection`): a window's faulty blocks are fixed before its coins (its incorrect
-  proof blocks at registration, `incorrectRegZ`), and its sample and verdict read its coins and the past. Two per-window bounds,
-  each of which a window of `Flock.Guarantees.IntegrityMonitoringPeriod` has at the strategy that plays it: the sample misses all
+  proof blocks at registration, `incorrectRegZ`), and its sample and verdict read its coins and the past. Two per-window bounds:
+  the sample misses all
   `m` of the window's faulty blocks with probability at most `(1 − q)^m` (`Flock.Guarantees.SamplingBlock.sampleMiss_le`,
   under A3: a uniform `kd`-subset of `n` units misses `m` fixed units with probability
   `C(n − m, kd)/C(n, kd) ≤ (1 − kd/n)^m`), and the window is accepted with a sampled faulty block with probability at most
-  `ε_ks,t + ε_bind,t` (`SamplingBlock.accepted_drawnIncorrect_le`, from `Flock.SecurityProofs.EndToEndHiddenSampled`). That
-  the deployment's window `t`, at each value of the other windows' coins, is such a window with its faulty blocks as
-  its incorrect proof blocks is a bridge not stated either: `IntegrityMonitoringPeriod` plays the windows as one sequential game, not over a
-  product of window coins. No guarantee implies `SampledDetection`'s per-block form: it conditions each block on its
+  `ε_ks,t + ε_bind,t`, which no proved guarantee states for an accepted run. That the deployment's window `t`, at each
+  value of the other windows' coins, is such a window with its faulty blocks as its incorrect proof blocks is a bridge
+  not stated either. No guarantee implies `SampledDetection`'s per-block form: it conditions each block on its
   own window's other blocks, and it folds the knowledge term into `q`, where the protocol's is additive per window. The
   statement does not need it: a block's time is its window's, and each identity's escaped blocks are bounded at the
-  predictable time its faulty blocks reach `K + 1`, the stopped, per-identity form of `IntegrityPooled`'s own
-  argument, which `Spot.Sampling.Periods.prCoin_forall_sum_le_pow` bounds by `(1 − q)^(K+1)`. That is a tail
+  predictable time its faulty blocks reach `K + 1`, a stopped, per-identity pooled argument, which `Spot.Sampling.Periods.prCoin_forall_sum_le_pow` bounds by `(1 − q)^(K+1)`. That is a tail
   bound, so the escape term needs no Markov's inequality: `J (1 − q)^(K+1)` at an escape share `J K B/C`, against
   `SlowdownRemote`'s `J ((1 − q)/q) B/(θC)`.
 * **The halt**: `TerminalDetection` stays a named premise. The halt is code (`Fleet`'s R5-all in
@@ -81,8 +79,7 @@ window holds at any value `ξ` of the other windows' coins, over its own (`ξ[t 
   declared work) are fixed before their window's coins; the units the window samples (`drawn`) and the faulty blocks it
   detects (`detected`, those of a window verity-verify-proof rejects) read only its coins and the earlier windows'. The sample
   misses the window's `m` faulty blocks with probability at most `(1 − q)^m`, `0 ≤ q ≤ 1` (A3, `q ≤ kd/n`), and the
-  window detects none of them while it samples one with probability at most `ks t` (`EndToEndHiddenSampled`,
-  `ks t = ε_ks + ε_bind`).
+  window detects none of them while it samples one with probability at most `ks t` (`ks t = ε_ks + ε_bind`).
 * Window `t` is run by identity `idW t`, one of the `J = |I|` the developer controls, at time `τw t`; a block runs at
   its window's time, and each identity's windows run in their order. Detection is terminal at a lag `Δ ≥ 0`
   (`TerminalDetection`), and one identity's faulty blocks within any span of `Δ` skip at most `Φ Δ`, `Φ H ≤ C` over the

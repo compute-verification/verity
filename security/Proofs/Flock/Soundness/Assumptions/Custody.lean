@@ -19,8 +19,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 # The session's record custody without `--zk`
 
 `live-verifier` (the custody of `security/Proofs/Flock/Soundness/ASSUMPTIONS.md`) as `verity-verify-proof verify` without `--zk` takes it:
-`RecordCustodyExec` at public outputs, `RecordCustodyExecH` at hidden ones. `--zk`'s are `Assumptions.Zk.RecordCustodyZK`
-and `RecordCustodyZKJ`.
+`RecordCustodyExec` at public outputs, `RecordCustodyExecH` at hidden ones. `--zk`'s is `Assumptions.Zk.RecordCustodyZKJ`.
 -/
 
 @[expose] public section

@@ -26,10 +26,8 @@ import Proofs.Flock.C3.RegLevels.LgHeld
 (`coinsEncoded_holoMap`, `coinWordsEncoded_holoMap`, `pointsEncoded_holoMap`), the sparse phases' stages are
 `stageHeldW_sparse` from their starts (`sparseSampledAt_holo`, `stageStarts`), and R's opening's and R's Ligerito's are
 `stagesHeld_of_run`'s, within the history's rounds where the stages take `holoCTs`' count (`coins_total_holo`).
-`stageCoins_holo_held`: `stageCoins_holo` at `holoMap` with `hlater` from `laterCoins_holo` at every accepted outer
-proof and `hlt` from `srcLevelTie_of_maps`, both at R's run in V*'s sessions (`MapsAt`) at the `C3` the verifier
-builds of its hold (`C3Held`), and the reps' `henc` at the map's one-round samples (`coinsEncoded_holoMap`). The
-record facts the stages read are named below (`RecordPoints` … `RepStagesCounted`).
+`MapsAt`: R's run in V*'s sessions at the `C3` the verifier builds of its hold (`C3Held`). The record facts the stages
+read are named below (`RecordPoints` … `RepStagesCounted`).
 `histPts`: a source with its link points set to the history's first coin under `holoMap`, where `hpts`
 (`PointsFromHistory`) is `pointsFromHistory_histPts`. At a free source it does not follow from the rest.
 -/
@@ -216,7 +214,7 @@ theorem pointsFromHistory_histPts {ish : RecVStar.Inner} {tbl : String} {bc : Cm
   rw [pts_histPts, he]
   rfl
 
-/-- **Hypothesis: R's opening is in V*'s sessions at the map `M`** (`srcLevelTie_of_maps`' `h`): at every accepted
+/-- **Hypothesis: R's opening is in V*'s sessions at the map `M`**: at every accepted
 outer proof, R's opening at the openings `opsAt` is in V*'s sessions, the claim tie holds, the source's opening is on
 the ring switches V*'s layer holds (`OpenTieL`), and `MapsLeft`. -/
 def MapsAt (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
@@ -241,80 +239,6 @@ def MapsAt (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fi
       FlockC3.Opening.OpenTieL (zs R ω t R₂) Lb sh (w R ω t Lb) (tiedSrc stp R ω t Lb) ∧
       FlockC3.RegLevels.MapsLeft M (zs R ω t R₂) Lb sh unit (c3 R ω t Lb) (w R ω t Lb) (kap R ω t Lb) (e0 R ω t Lb)
         (sb R ω t Lb) (e R ω t Lb) cap₀ (tiedSrc stp R ω t Lb)
-
-/-- **`stageCoins_holo` at the verifier's map**, `hlater` discharged: at every accepted outer proof `laterCoins_holo`,
-at R's run from `MapsAt`'s session (`run_of_sessionAt`) at the `C3` of the verifier's hold (`C3Held`), the stages'
-total from their ties (`coins_total_holo`), the history's length from `hleaf` (`(ℐ).r` is the table's coin kinds'
-`1 + length` and one more, by `schedInner`), and `hlt` from `MapsAt` (`srcLevelTie_of_maps`). The reps' rounds are
-encoded and sampled at the map's one-round samples (`coinsEncoded_holoMap`; `hdr` at `holoSelOne`, as
-`repsSampled_holoMapAt` gives it). The link points are the record's (`recordPoints_of`): it decodes (`hrec`, a
-hypothesis) and the run's points are the history's first coin
-(`hpts`, `PointsFromHistory`). -/
-theorem stageCoins_holo_held {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
-    {dg : ByteArray → ByteArray} {N k Rw : ℕ}
-    {stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
-    {sh : Flock.Shape} {rep : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData}
-    {vals : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals}
-    {wr : List (Cm × (ℐ).Coin) → Lean.Json × String}
-    {held : Lean.Json × String → Except String RecVStar.InnerCommits} {sparse : Option RecSparse.Shape}
-    {ish : RecVStar.Inner} {tbl unit : String} {bc : Cm → String → Nat → List UInt8} {s : Fin 2 → String}
-    {ix : Fin 2 → ℕ → ℕ} {rr rs : Array RecVStar.SchedRound} {sp : RecSparse.Shape} {shR : RecVStar.StackedShape}
-    {M : FlockC3.Reps.StackedMaps stmt Vs} {osh : Flock.Shape}
-    {c3 : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → RecCoins.C3}
-    {w : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Array F128}
-    {kap : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Array (Array (Array F128))}
-    {e0 : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → ℕ → ByteArray}
-    {sb : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → ℕ → ℕ → ℕ → ByteArray}
-    {e : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → ℕ → ℕ → ByteArray}
-    {cap₀ : Cap Dig} (hleaf : HLeafC3 zs dg N k Rw)
-    (halg : AlgebraDecodes (I := ℐ) zs dg N k Rw sh rep) (hacc : AccChains (I := ℐ) zs dg N k Rw sh rep)
-    (hpr : ProofOfVals zs dg N k Rw sh rep vals)
-    (hsv : SetupOfVals zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) sh rep vals)
-    (hf : FramesOfVals zs dg N k Rw sh rep vals)
-    (hcus : FlockSoundness.Assumptions.InnerRecordCustody wr held sparse (Flock.Guarantees.holoMap st hp Cm ish tbl bc))
-    (hheldR : RepRoundsHeld zs dg N k Rw sh rep wr held s ix)
-    (hdr : RepsSampled zs dg N k Rw sh rep vals (holoSelOne ish tbl) s ix)
-    (hrt : SrcRepTie zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)))
-    (hst : FlockC3.Sparse.SrcSparseTie zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)))
-    (hot : AtSrc zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) fun _ u => ∃ sh w ops,
-      FlockC3.Opening.OpenTie sh w ops u ∧ OpeningReadAt (runSteps u) u)
-    (hell : hp.EllOk (execClassAt st).cls.kLog)
-    (hosh : RecOpening.shape? (holoAt st hp).cls.shape.mReg 2 = some osh)
-    (hmaps : MapsAt zs dg N k Rw M osh unit (repsOfVals stp sh rep vals) c3 w kap e0 sb e cap₀)
-    (hc3 : C3Held wr held ish c3) (hrep : holoRounds ish.m ish.kLog ish.claims = some rr)
-    (hsp : ish.sparse = some sp) (hsh : ish.stacked = some shR) (hcl : shR.claims = RecVStar.STACKED_CLAIMS)
-    (hrs : RecVStar.stackedRounds shR = some rs) (hc : 0 < ish.claims)
-    (hA : repFormsAt (holoAt st hp) = repForms ish.m ish.kLog ish.claims)
-    (hshape : (holoAt st hp).cls.shape = sparseOf sp) (htblS : tbl ≠ s!"{RecVStar.SPARSE}/")
-    (htbl : tbl ≠ s!"{RecVStar.STACKED}/")
-    (hrec : AtSrc zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) fun t _ =>
-      ∃ spec sess, Flock.Record.decode spec (wr t).2 = .ok sess)
-    (hpts : AtSrc zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) fun t u =>
-      FlockC3.HPort.PointsFromHistory ish tbl bc t u)
-    (hheld : AtSrc zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) fun t _ => HeldOk wr held t)
-    (hcnt : AtSrc zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) fun t _ => SparseCountedAt wr held sp t)
-    (hss : AtSrc zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) fun t u =>
-      SparseStagesAt wr held ish unit sp t u)
-    (hx : AtSrc zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) fun t _ => StackedHeldAt wr held rs t)
-    (hts : AtSrc zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) fun _ u => RepStagesCounted rr u) :
-    AtSrc zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) fun t u =>
-      StageCoins (CT := holoCTs st hp) (t.map Prod.snd) u := by
-  have hlt := FlockC3.RegLevels.srcLevelTie_of_maps M hell hosh unit (repsOfVals stp sh rep vals) c3 w
-    kap e0 sb e hmaps
-  refine stageCoins_holo hleaf halg hacc hpr hsv hf hcus hheldR coinsEncoded_holoMap
-    (fun _ _ _ h => selC_of_holoSelOne h) hdr hrt hst hot hlt ?_
-  intro R ω t R₂ τ o hA'
-  obtain ⟨cs, hh⟩ := hheld R ω t R₂ τ o hA'
-  have hc3' := hc3 R ω t (layers zs dg N k Rw R ω t R₂ τ) cs hh
-  have hlen : 1 + (Exec.kindCoinTys (holoKinds (holoAt st hp))).length + 1 ≤ t.length := hleaf R ω t R₂ τ o hA'
-  obtain ⟨spec, sess, hdec, hu⟩ := recordPoints_of hcus (by omega) (hrec R ω t R₂ τ o hA') (hpts R ω t R₂ τ o hA')
-  obtain ⟨xs, hxe, hxs⟩ := hx R ω t R₂ τ o hA' cs hh
-  obtain ⟨hs, -, -, hleft⟩ := hmaps R ω t R₂ τ o hA'
-  obtain ⟨_, _, _, _, -, -, hrun, hz⟩ := FlockC3.Opening.run_of_sessionAt hA' hosh hs
-  obtain ⟨_, _, _, ho, hor⟩ := hot R ω t R₂ τ o hA'
-  exact laterCoins_holo hcus hdec hu hlen hh hc3' hrep hsp hsh hcl hrs hc hA hshape htblS htbl
-    (hts R ω t R₂ τ o hA') (hcnt R ω t R₂ τ o hA' cs hh) (hss R ω t R₂ τ o hA' cs _ hh hc3') hxe hxs hrun hz hleft
-    (coins_total_holo (hrt R ω t R₂ τ o hA') (hst R ω t R₂ τ o hA') ho hor (hlt R ω t R₂ τ o hA'))
 
 end src
 

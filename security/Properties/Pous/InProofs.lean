@@ -34,8 +34,8 @@ Both are stated and not proved. What closes them is proofs' two forms, through t
 - for the session, `Flock.Guarantees.IntegrityAllProvedCarried` at `I` the session's statements (every unit proved),
   whose conclusion is `Verity.InProofs.Gives` at `K₀ = 1` with each carried leaf (the digest `m`, each round's record)
   read at its one value in every statement that shares it, which is `Carried`;
-- for the setup, the sampled period form with carried leaves, `Flock.Guarantees.IntegrityPooledCarried` at
-  `q = 8828/B`, whose conclusion gives `Gives` at `K₀ = ⌊B/100⌋ + 1` with `W`'s rows carried, which is `CarriedW`.
+- for the setup, a pooled sampled-period bound with carried leaves at `q = 8828/B`, which no proved guarantee states,
+  whose conclusion would give `Gives` at `K₀ = ⌊B/100⌋ + 1` with `W`'s rows carried, which is `CarriedW`.
 -/
 
 @[expose] public section
@@ -99,8 +99,8 @@ def SetupComputesBlockOk (q : P2.Params) (salt : ByteArray)
     BlockDecodes q salt (u.val / q.blocksPerSegment) (u.val % q.blocksPerSegment)
       (decode fun name => (r.2.1 name).map (r.1.eval x)).1 (decode fun name => (r.2.1 name).map (r.1.eval x)).2
 
-/-- **PoUS's setup checked inside proofs, as deployed: stated and unproved**; proofs' `IntegrityPooledCarried` at
-`q = 8828/B` closes it through `setupGives`, its `right ≤ BlockOk` from `SetupComputesBlockOk`. For the parameters `q`,
+/-- **PoUS's setup checked inside proofs, as deployed: stated and unproved**; a pooled sampled-period bound with carried
+leaves at `q = 8828/B`, which no proved guarantee states, would close it through `setupGives`, its `right ≤ BlockOk` from `SetupComputesBlockOk`. For the parameters `q`,
 the commitment `c`, the registered weights `W` (each row padded to its slots, SETUPUNIT's `padded`), a setup verifier `V`
 that accepts only a claim (`claimOf`) that `SetupInProofs.check` accepts, and the named assumption
 `SetupComputesBlockOk` at the circuit record's reading `read`, the supplied rows `supplied` and the decoding `decode`: a

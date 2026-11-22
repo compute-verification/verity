@@ -256,7 +256,7 @@ at `√δ_fork` from it. -/
 def BindingForkAt {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type} (pf : ProofLayer Ω S nπ V) (δfork : ℝ) : Prop :=
   ∀ w, prob (fun p : Paths Ω S × Paths Ω S => pf.Forked w p.1 p.2) ≤ δfork
 
-/-- `accounting-ts-proofs-sound` (proof soundness; Flock's `Flock.Guarantees.EndToEndHiddenSampled` for a session).
+/-- `accounting-ts-proofs-sound` (proof soundness; Flock's `Flock.Guarantees.EndToEndRegisteredSampled` for a session).
 **Proof soundness at `δ_ZK`**: each proof of the window is accepted with an opening that fails its relation on the path
 (the round's coin and the words keyed by it that its proof gives there) with probability at most `δ_ZK` over the
 window's coins (`ProofLayer.SoundAt`). Flock's bound is `t·2^-λ` for a prover making `t` hash calls, so it gives

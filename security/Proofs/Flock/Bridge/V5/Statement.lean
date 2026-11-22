@@ -12,7 +12,7 @@ public import Flock.PortRoots
 /-!
 # `SampledKSLiveV5`: the sampled audit's knowledge soundness at the verifier's public inputs (stated)
 
-`SampledKSLiveV2` at verity-verify-proof `--zk --public-inputs`, with or without shared rows, under the sampling design the verifier samples
+The sampled audit's knowledge soundness at verity-verify-proof `--zk --public-inputs`, with or without shared rows, under the sampling design the verifier samples
 under from the registration.
 `own` is the verifier's own recomputation of each proof block's public input words (`HmIn.checkOwn`), and the statement
 holds at every `own`:
@@ -44,8 +44,8 @@ holds at every `own`:
   refs), as `TransportsLiveCR` reads it.
 
 The targets V5's assembly takes (`Bridge.AssemblyTargetV5`): `TransportsLiveV5` (`TransportsLiveCR` at these, at any
-sample), `EndToEndHiddenV5` (`EndToEndHiddenC` at these, from `OpeningsCanonTargetV5`, bounding the event that a set `W`
-of proof blocks is wrong by the sampling design's `P_a` of `W`), and `FaultyRightTargetC` as V2 takes it.
+sample), `EndToEndHiddenV5` (the one-stage audit's bound with canonical openings at these, from `OpeningsCanonTargetV5`, bounding the event that a set `W`
+of proof blocks is wrong by the sampling design's `P_a` of `W`), and `FaultyRightTargetC`.
 -/
 
 @[expose] public section
@@ -68,8 +68,7 @@ noncomputable def _root_.Flock.Bridge.constsOfP (c : Flock.Circuit) (hU : Built 
   | none => (Discharge.Layout.keyPubOf c hU n pi g).map fun x =>
       Discharge.HiddenExec.pubBitOf pi (fun (_ : Unit) => pub) () x.1 x.2.1 x.2.2
 
-/-- **A sampled proof block's openings are canonical at public inputs** (`OpeningsCanonTarget` at `keyProgP`, `rsZHJP` and
-`constsOfP`): in every satisfying witness of a sampled proof block, the opening of each of its committed wires' commit strings
+/-- **A sampled proof block's openings are canonical at public inputs** (at `keyProgP`, `rsZHJP` and `constsOfP`): in every satisfying witness of a sampled proof block, the opening of each of its committed wires' commit strings
 carries the constant at a constant wire (the constant, the zero, and the public gates at their public bits,
 `HiddenExec.keyProgHP_valPinned`), and at any other is a row of its wire's row's width with a salt of `saltLen`
 bytes. -/
@@ -95,7 +94,7 @@ def _root_.Flock.Bridge.OpeningsCanonTargetV5 : Prop :=
       (fun g o => Bridge.canonAt rows κ g (vb.bit (vb.val o) g) (vb.val o) o.2.2)
 
 open Classical in
-/-- **`EndToEndHiddenC` at public inputs, under the registration's sampling design**: its bound at verity-verify-proof
+/-- **The one-stage audit's bound with canonical openings at public inputs, under the registration's sampling design**: its bound at verity-verify-proof
 `--zk --public-inputs`'s acceptance, the session at `own` (`planZHJP`, `rsZHJP`, `simZJA`), `live-verifier` at `own`
 and the sampling design, the verifier's sample under `samplingDesign` on strata of sizes `ns` (`Bridge.execSel`), and "wrong" the proof blocks
 wrong on the registration with canonical openings at `constsOfP`: every proof block of `W` is wrong with probability at
@@ -300,7 +299,7 @@ def _root_.Flock.Bridge.LiveAcceptsKSP {n : ℕ} {Reg : Type} (I : Inputs) (own 
       I.publicFile count draw = .ok ()
 
 open Classical in
-/-- **`SampledKSLiveV2` at the verifier's public inputs, with or without shared rows, under the sampling design the verifier samples
+/-- **The sampled audit's knowledge soundness at the verifier's public inputs, with or without shared rows, under the sampling design the verifier samples
 under from the registration**: verity-verify-proof `--zk --public-inputs` at `own` accepts and the committed trace fixed at
 registration, read as the sampling witness of the session's statement at the constants `constsOfP` (the constant, the
 zero and every proof block's public input bits) and the sampling design's design (`oneStageOf samplingDesign`), is outside `RelS` at `δ`, at

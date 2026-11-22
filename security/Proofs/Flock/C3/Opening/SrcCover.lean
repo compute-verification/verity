@@ -25,8 +25,6 @@ one holding ring switch `i`'s 128 slots of w in a run of its row-port elements. 
 (`cover_rs`): that residual, T against the batched sum, keeps every claim's `t_k[0]` as a term at the zero coins
 `structureOf` runs at (`Lin` keeps a term whose coefficient is zero), so it reads `["wt", 128 k, 0]`
 (`structureOf_rsT`), and a part reading a transpose holds its block in a run (`block_of_partS`).
-`openTieL_of_session` is `OpenTieL` for a source reading the layer there (`ReadsFill`, which w's ring switches are:
-`readsFill_w`), and `openTieL_of_openTie` for a source whose opening is on w's ring switches (`OpenTie`).
 -/
 
 @[expose] public section
@@ -279,7 +277,7 @@ open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
 open Game Spot.Sampling Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockVBridge.Compiled FlockC3.Compose
 open FlockVBridge.Decode (fill)
-open FlockVBridge.OfVStar (fill_rowCol readCol_rsAt)
+open FlockVBridge.OfVStar (fill_rowCol)
 
 variable {nS : ℕ} {Vs : Fin nS → VStmt} {Reg' : Type}
 
@@ -290,57 +288,6 @@ def ReadsFill (zs : (s : Fin nS) → (Vs s).Outer Reg') (Lb : (s : Fin nS) → (
   ∀ (S0 : RecAlgebra.GfS) (gs : Array (Array ℕ × Array ℕ × Array ℕ)), RecOpening.structureOf sh = .ok S0 →
     Flock.RecResiduals.groups S0 (RecOpening.portSizes sh) = .ok gs →
     ∀ (i : Fin 2) (y : Fin 128 → F128), RsAt zs Lb sh gs w i.val y → y = x i
-
-/-- w's ring switches are read where the layer holds them (`eq_of_rsAt`). -/
-theorem readsFill_w {zs : (s : Fin nS) → (Vs s).Outer Reg'} {Lb : (s : Fin nS) → (Vs s).Bits} {m : ℕ}
-    {sh : Flock.Shape} (hsh : RecOpening.shape? m 2 = some sh) (w : Array F128) :
-    ReadsFill zs Lb sh w fun i t => w[128 * i.val + t.val]! := by
-  intro S0 gs hS hg i y hy
-  funext t
-  obtain ⟨e, hwi, hye⟩ := eq_of_rsAt hS hg hy t
-  rw [wiO_rs sh (by rw [shape_claims hsh]; exact i.isLt) t.isLt] at hwi
-  cases hwi
-  exact hye
-
-/-- **(n7's opening tie at V*'s layer, from V*'s sessions)** At V*'s sessions (`SessionAt`), some copy registering w
-holds each ring switch (`cover_rs`, `fill_rowCol` at the columns it reads, `readCol_rsAt`), so a source reading the
-layer there (`ReadsFill`), its opening steps the opening's on what it reads, has the tie at V*'s layer. -/
-theorem openTieL_of_session {zs : (s : Fin nS) → (Vs s).Outer Reg'} {Lb : (s : Fin nS) → (Vs s).Bits} {m : ℕ}
-    {sh : Flock.Shape} (hsh : RecOpening.shape? m 2 = some sh) {unit : String} {c3 : Flock.RecCoins.C3}
-    {w : Array F128} {ops : FlockVBridge.AccChain.Openings} (hs : SessionAt zs Lb sh unit c3 w ops)
-    {x : Fin 2 → Fin 128 → F128} (hx : ReadsFill zs Lb sh w x) {ρ : Fin 2 → Fin 7 → GF128}
-    {γ : Fin 2 → GF128} {e : ExecHolo} {u : C3Run e} (hop : u.op = openSteps (fun i t => fOf (x i t)) ρ γ) :
-    OpenTieL zs Lb sh w u := by
-  obtain ⟨o, -, -, -, ⟨S, gs, sess, un, cp, hS, hg, hz⟩, -⟩ := hs
-  refine ⟨S, gs, x, ρ, γ, hS, hg, fun i => ?_, hop⟩
-  have hi : i.val < sh.claims := by rw [shape_claims hsh]; exact i.isLt
-  obtain ⟨p, hp, k₀, hk₀⟩ := cover_rs hS hg (fun p hp => by
-    obtain ⟨_, _, _, _, _, _, _, _, _, S', ns, nv, hpart, _⟩ := hz p hp
-    exact ⟨S', ns, nv, hpart⟩) hi
-  obtain ⟨_, hj, _, _, _, _, _, _, _, S', ns, nv, hpart, _⟩ := hz p hp
-  have hR : RsAt zs Lb sh gs w i.val fun t => w[128 * i.val + t.val]! :=
-    ⟨sess p, un p, cp p, p, k₀, _, hj, hp, S', ns, nv, hz p hp, hpart, fun t => ⟨_, hk₀ t t.isLt,
-      wiO_rs sh hi t.isLt, fun b hb => by
-        obtain ⟨hk, hke⟩ := Array.getElem?_eq_some_iff.mp (hk₀ t t.isLt)
-        rw [fill_rowCol (zs (sess p)) (hz p hp) hj hS hg hp hpart hk hb
-          (readCol_rsAt (zs (sess p)) (hz p hp) hS hg hp hpart (hk₀ t t.isLt) (wiO_rs sh hi t.isLt) hb), hke,
-          ← RecAlgebra.getElem!_el]⟩⟩
-  rw [← hx S gs hS hg i _ hR]
-  exact hR
-
-/-- **The tie is the tie at V*'s layer, at V*'s sessions** (`openTie_of_layer`'s converse): an opening on the ring
-switches w holds (`OpenTie`) is on what the layer holds there (`openTieL_of_session` at `readsFill_w`, `decodedO_rs`
-at w's slots `wiO_rs`). -/
-theorem openTieL_of_openTie {zs : (s : Fin nS) → (Vs s).Outer Reg'} {Lb : (s : Fin nS) → (Vs s).Bits} {m : ℕ}
-    {sh : Flock.Shape} (hsh : RecOpening.shape? m 2 = some sh) {unit : String} {c3 : Flock.RecCoins.C3}
-    {w : Array F128} {ops : FlockVBridge.AccChain.Openings} (hs : SessionAt zs Lb sh unit c3 w ops) {e : ExecHolo}
-    {u : C3Run e} (h : OpenTie sh w ops u) : OpenTieL zs Lb sh w u := by
-  obtain ⟨ρ, γ, hop⟩ := h
-  refine openTieL_of_session (x := fun i t => w[128 * i.val + t.val]!) hsh hs (readsFill_w hsh w)
-    (hop.trans (congrArg (openSteps · ρ γ) (funext fun i => funext fun t => ?_)))
-  have hi : i.val < sh.claims := by rw [shape_claims hsh]; exact i.isLt
-  show fOf (((decodedO sh w (consO ops)).rs[i.val]!)[t.val]!) = fOf (w[128 * i.val + t.val]!)
-  rw [decodedO_rs w (consO ops) hi t.isLt (wiO_rs sh hi t.isLt)]
 
 end Sessions
 
