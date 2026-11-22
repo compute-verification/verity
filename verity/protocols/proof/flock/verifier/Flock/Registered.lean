@@ -391,6 +391,60 @@ def regRow (P : Program.Prog) (k m : Nat) (param : String) : V (Nat × Nat × Na
   if len == 0 || leaf % len != 0 then throw s!"{ctx}: member {m} reads leaf {leaf} of node {w}, off its rows of {len}"
   return (w, leaf / len, len)
 
+/-- The refusal of the members of root node `k` reading parameter `param` in a form with no closed form here (`what`)
+where its argument reads an input node (`regRows?`). -/
+def READ_FORM_WHY (k : Nat) (param what : String) : String :=
+  s!"registered reads: parameter {param} of root node {k}: {what}, and its argument reads an input node: a parameter " ++
+    "that reads an input reads one node, each row in one lane's run"
+
+/-- `regRow` for the members `[m0, m0 + n)` of root node `k` at once (`Program.laneWire` over their rows, a step of a
+member's leaves apart): the input node, registered or run, every one of them reads `param` at, with a row's leaves;
+none where they read only root nodes that are no input (other blocks' outputs). Rows a lane's levels hold in no mixed
+radix are read a member at a time. Refused by name (`READ_FORM_WHY`): members reading an input node and another node,
+and, where the argument reads an input node anywhere, a row with no closed form here (across members, parts or lanes;
+an explicit part). Its work is the argument's parts and a lane's levels, and a member at a time only where the
+members' rows have no closed form. -/
+def regRows? (P : Program.Prog) (k m0 n : Nat) (param : String) : V (Option (Nat × Nat)) := do
+  let ctx := s!"registered reads: parameter {param} of root node {k}"
+  let node := (Registered.rootNodes P)[k]!
+  let f := P.defs[node.fn]!
+  let (p, row) := paramRow param
+  let some i := (List.range f.params.size).find? (f.params[·]!.1 == p) | throw s!"{ctx}: {f.key} has no parameter {p}"
+  let ty := f.params[i]!.2
+  let (t0, len) ← match row, ty with
+    | none, _ => pure (0, ty.leaves)
+    | some r, .array c e => if r < c then pure (r * e.leaves, e.leaves) else throw s!"{ctx}: row {r} of {c}"
+    | some _, _ => throw s!"{ctx}: a row of a parameter that is no array"
+  let a := node.args[i]!
+  let input (w : Nat) : Bool := regNode P w || Registered.runNode P w
+  let inputs := a.seq.parts.any fun q => (Registered.partNodes q).any input
+  let edge (what : String) : V (Option (Nat × Nat)) := if inputs then throw (READ_FORM_WHY k param what) else pure none
+  let L := match a.dims with | some (_, Lb) => Lb | none => 0
+  if (a.dims.any fun (_, Lb) => Lb == 0 || t0 % Lb + len > Lb) then return ← edge "a row across members"
+  let xOf (m : Nat) : Nat := match a.dims with
+    | none => t0
+    | some (d, Lb) => (t0 / Lb * d) * Lb + t0 % Lb + m * Lb
+  let partOf (x : Nat) : Option Nat := (List.range a.seq.parts.size).find? fun j =>
+    a.seq.starts[j]! ≤ x && x < a.seq.starts[j]! + a.seq.parts[j]!.count
+  let wire (x c len : Nat) (L : Nat) : Option Nat := do
+    let j ← partOf x
+    let q := a.seq.parts[j]!
+    guard (x + (c - 1) * L + len ≤ a.seq.starts[j]! + q.count)
+    let (run, lanes) := Program.partLanes q
+    match Program.laneWire run lanes (x - a.seq.starts[j]!) L len c with
+    | .ok (w, _, _, _) => some w
+    | .error _ => none
+  if let some w := wire (xOf m0) (max n 1) len L then
+    return if input w then some (w, len) else none
+  let mut got : Array Nat := #[]
+  for m in [0:max n 1] do
+    match wire (xOf (m0 + m)) 1 len 0 with
+    | some w => if !got.contains w then got := got.push w
+    | none => return ← edge "a row of no lane's run (an explicit part, or across parts or lanes)"
+  match got.toList with
+  | [w] => return if input w then some (w, len) else none
+  | ws => if ws.any input then throw (READ_FORM_WHY k param s!"its members read root nodes {ws}") else return none
+
 /-- **theta's positions**: `pos : C -> Partition -> Block -> Port -> Position`, the row of the registered value
 `reg` each unit of `indices` reads at `reg`'s parameter (`regRow`), a function of C (`P`): the registered input node's
 leaf over the row's leaves, the leaf order of its tree. Every unit reads one node, whose rows are `reg.leaves`. Its

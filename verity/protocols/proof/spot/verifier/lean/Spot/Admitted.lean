@@ -340,6 +340,32 @@ def F16 : String := r#"{"annotations":{},"boolean":{},"callees":["Input1_v1","No
 
 #guard refusedBy (lowerE F16) "whole-words" "C_S's template E_v1: return field o0 of 1 bits is not a positive whole number of u16 words"
 
+/-- E16 with its input nodes registered values (`RegisteredInput1_v1`): its block's root opens with registered input
+nodes, as a block reading theta does under the marking. -/
+def E16R : String := E16.replace "Input1_v1" "RegisteredInput1_v1"
+
+/-- `restrict`'s C_S for unit 0 of the descriptor `d`. -/
+def restrictE (d : String) : V Flock.Program.Prog := do
+  Spot.Restrict.restrict (← Flock.Program.decode d.toUTF8) #[0]
+
+-- the door's steps (`restrictOn`) on E16R: `restrict`, whose C_S's root opens with a registered input node, `admitted`
+-- with its lift, the lift and `blockTmpl` pass; `lowerBlock` (`lowerE`) refuses it as it refuses E16, whose inputs are
+-- run inputs, at compose's row floor, a block this small; and `ported` refuses the same block by name
+#guard match restrictE E16R with
+  | .ok S => ((S.defs[S.root]?).bind fun r => r.body.nodes[0]? >>= fun x => S.defs[x.fn]?).map (fun f => (f.id, f.binding))
+      == some ("RegisteredInput1_v1", some Flock.Program.REGISTRATION)
+  | .error _ => false
+#guard (admitE E16R).toBool
+#guard (restrictE E16R >>= fun S => admitE E16R >>= fun a => Flock.Lift.lift S a.d).toBool
+#guard (restrictE E16R >>= fun S => admitE E16R >>= fun a => blockTmpl S a).toBool
+#guard match lowerE E16R, lowerE E16 with
+  | .error e, .error e' => e == e' && e == "unit/E_v1: no row has a compression before its last block"
+  | _, _ => false
+#guard match Flock.Program.decode E16R.toUTF8 >>= (Spot.Restrict.portedOf · #[0]) with
+  | .error e => e == "ported: the block reads a registered value (RegisteredInput1_v1), and a parameter does not carry \
+      that it is registered: its rows would be committed afresh"
+  | .ok _ => false
+
 /-- `admitted` on unit 0 of the descriptor `d`, its template `E_v1` changed by `f` in C_S, at the lift `lift`. -/
 def admitWith (d : String) (f : Flock.Program.Defn → Flock.Program.Defn := id)
     (lift : Flock.Program.Prog → Nat → V (Flock.Program.Prog × Nat) := Flock.Lift.lift) : V Admit := do

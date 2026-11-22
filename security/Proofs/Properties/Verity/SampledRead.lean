@@ -40,9 +40,9 @@ digest, one coin of `COIN_BYTES` bytes each. So the read meets the sample's ask 
   parameters sent are those its case accepted (`paramsAt_case`), so at the session v2 sets up on them (`SetsUp`) the
   sample's sampling design is the session's wherever its population is (`samplingDesignAt_of_samplingDesignOf`), and the sample's piece of `CouplingTarget`
   needs only the population.
-* **The session's population** (`popHeld_of_checkBlobsAt`, `popOk_of_popHeld`, `n_of_popOk`, `n_of_popTied`,
-  `coupled_sample_tied`, `coupled_sample_coins_tied`): v2 refuses a record whose population isn't its program's proof
-  blocks in order (`popHeld`), and the session's population (`Live.hpop`) reads the same layout. So at a session whose
+* **The session's population** (`popHeld_of_checkBlobsAt`, `popCovers_of_popHeld`, `n_of_popCovers`, `n_of_popTied`,
+  `coupled_sample_tied`, `coupled_sample_coins_tied`): v2 refuses a record whose population its program's proof
+  blocks don't cover (`popHeld`), and the session's population (`Live.hpop`) reads the same layout. So at a session whose
   descriptor and query are v2's verifier's (`PopTied`, which `SetsUp`'s `params` implies) the sample's population is the
   session's, and the sample's piece asks nothing of the session but its coins.
 
@@ -1078,30 +1078,38 @@ theorem popHeld_of_checkBlobsAt {p : _root_.Spot.OneStageZk.Params}
       simp only [hp, bind_ok, reduceCtorEq, false_and, and_false, exists_false] at hr
 
 /-- **The population `popHeld` passes is one the program holds**: under the verifier's query, the program's proof
-blocks are the record's population units in order (`Slots.popOk`). -/
-theorem popOk_of_popHeld {v : _root_.Spot.Docket.Verifier} {record : Json} {n : ℕ}
+blocks cover the record's population units (`Slots.popCovers`): in order (`Slots.popOk`), or in any order under a
+subset design. -/
+theorem popCovers_of_popHeld {v : _root_.Spot.Docket.Verifier} {record : Json} {n : ℕ}
     (h : _root_.Spot.OneStageZk.popHeld v record = .ok ())
     (hn : _root_.Spot.nat? (_root_.Spot.getD record "population") = some n) :
-    _root_.Spot.Slots.popOk v.program v.query n = true := by
+    _root_.Spot.Slots.popCovers v.program v.query n = true := by
   unfold _root_.Spot.OneStageZk.popHeld at h
   simp only [hn] at h
   by_cases hp : _root_.Spot.Slots.popOk v.program v.query n = true
-  · exact hp
-  · rw [ite_eq_right hp] at h
-    cases h
+  · exact Flock.Bridge.slots_popCovers_of_popOk hp
+  · rw [if_neg hp] at h
+    by_cases hc : _root_.Spot.Slots.popCovers v.program v.query n = true
+    · exact hc
+    · rw [if_neg hc] at h
+      cases h
 
 /-- **The session's population is the one the program holds** where the session's descriptor parses to v2's program
-and its query is v2's: `Live.hpop` and `Slots.popOk` read one layout's population. -/
-theorem n_of_popOk {A : Live} {v : _root_.Spot.Docket.Verifier} {n : ℕ}
+and its query is v2's: `Live.hpop` and `Slots.popCovers` read one layout's population, so they count it alike. -/
+theorem n_of_popCovers {A : Live} {v : _root_.Spot.Docket.Verifier} {n : ℕ}
     (hd : _root_.Spot.Program.parse ⟨A.desc.toArray⟩ = .ok v.program) (hq : A.qr = v.query)
-    (h : _root_.Spot.Slots.popOk v.program v.query n = true) : A.n = n := by
-  unfold _root_.Spot.Slots.popOk at h
+    (h : _root_.Spot.Slots.popCovers v.program v.query n = true) : A.n = n := by
+  unfold _root_.Spot.Slots.popCovers at h
   split at h
   · cases h
   · rename_i l hl
-    have h1 := Flock.Bridge.popOf_units (l := l) A.hpop hd (by rw [hq]; exact hl)
+    obtain ⟨p', l', hp', hl', h1⟩ := Flock.Bridge.popCovers_iff.1 A.hpop
+    rw [hd] at hp'
+    cases hp'
+    rw [hq, hl] at hl'
+    cases hl'
     have h2 := of_decide_eq_true h
-    have := congrArg List.length (h1.symm.trans h2)
+    have := (h1.symm.trans h2).length_eq
     simpa only [List.length_map, List.length_range] using this
 
 /-- **The session's descriptor and query are v2's verifier's** on the parameters `θ`: the tie under which the
@@ -1112,7 +1120,7 @@ def PopTied (θ : ByteArray) (A : Live) : Prop :=
 
 /-- **The session's population is the sample's**: a sample v2 made in a composition composite `k` accepted, on the
 parameters `θ`, ran over the population of a session tied to v2's verifier there, since v2 refuses a record whose
-population isn't its program's proof blocks in order (`popHeld`). -/
+population its program's proof blocks don't cover (`popHeld`). -/
 theorem n_of_popTied {θ : ByteArray} {A : Live} (ht : PopTied θ A) {k : Verity.Registration.Composite}
     {s : Verity.Sent} {dr : Draws} {L : Flock.Draw.SamplingDesign} {n : ℕ} {ξ : ByteArray} {units : Array ℕ}
     (hS : Verity.SameAccepts k s) (hθ : s.params = θ) (hd : Drew k s dr L n ξ units) : A.n = n := by
@@ -1122,7 +1130,7 @@ theorem n_of_popTied {θ : ByteArray} {A : Live} (ht : PopTied θ A) {k : Verity
   rw [paramsAt_case hS hcase hacc hp'] at hdesc hq
   obtain ⟨_, _, _, -, hn, -, -, -⟩ := hL
   obtain ⟨-, -, -, -, -, pub, prof, hck⟩ := hacc
-  exact n_of_popOk hdesc hq (popOk_of_popHeld (popHeld_of_checkBlobsAt hck) hn)
+  exact n_of_popCovers hdesc hq (popCovers_of_popHeld (popHeld_of_checkBlobsAt hck) hn)
 
 /-- **The sample's piece of `CouplingTarget` at a session tied to v2's verifier**: `coupled_sample_setsUp`, with the
 session's population read off `PopTied`, so the piece asks nothing of the session but its coins. -/

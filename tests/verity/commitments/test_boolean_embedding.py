@@ -164,10 +164,11 @@ def test_the_read_costs_the_pinned_gates() -> None:
 
 
 def test_the_opening_returns_its_verdict_as_a_word() -> None:
-    """`EmbeddingRead_v3`: the read's ports, its row as whole words and its verdict a 16-bit word after them, so every
+    """`EmbeddingRead_v4`: the read's ports, its row as whole words and its verdict a 16-bit word after them, so every
     return leaf is a word; its row is a batch of one-word selections over the row parameter, which a lowering steps a
     whole copy at a time."""
     target = E.opening(5, 2)
+    assert target.id == "EmbeddingRead_v4{V=5,H=2}"
     widths = lambda d: [(n, t.leaf_widths()) for n, t in d.signature()[0]]
     assert widths(target) == widths(E.read(5, 2))
     assert target.signature()[1].leaf_widths() == [16] * 3
@@ -177,7 +178,8 @@ def test_the_opening_returns_its_verdict_as_a_word() -> None:
 def test_an_opening_is_1_on_its_row_and_0_on_a_wrong_row_key_or_root() -> None:
     """A few minutes of tracing at D = 3 over two-word rows, as the v2 read's: the honest opening's verdict word is 1 and its
     row the row; one with another row, another root, or a key at or past V (V, 2^31, the largest unsigned) is the word 0,
-    which a reader that requires 1 refuses; and the evaluation is the reference's."""
+    which a reader that requires 1 refuses, with the fill as its row, so a key below V whose row doesn't open gives no row
+    of the prover's; and the evaluation is the reference's."""
     rng = random.Random("embedding-opening-gates")
     V, H = 5, 2
     dom, rows, salts, table = _table(rng, V, H)
@@ -187,4 +189,5 @@ def test_an_opening_is_1_on_its_row_and_0_on_a_wrong_row_key_or_root() -> None:
              *((tok, *honest[1:]) for tok in (V, 1 << 31, (1 << 32) - 1))]
     want = [E.reference_opening(V, *c) for c in cases]
     assert [ok for _, ok in want] == [1, 0, 0, 0, 0, 0] and want[0][0] == rows[3]
+    assert [h for h, _ in want[1:]] == [[E.FILL] * H] * 5
     assert _evaluate(V, H, cases, E.opening) == want

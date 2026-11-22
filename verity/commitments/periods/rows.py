@@ -1480,16 +1480,16 @@ def registered_header(win: Mapping[str, Any], k: int) -> dict[str, Any] | None:
 
 
 def own_value(port: str) -> str:
-    """The value a member's port ``<member>/<port>`` is read as at its own registered root (`own_entries`, `own_reads`).
-    It is never the port's own name: the audit takes a value named as a registration root's port for a registered value
-    of the record (`audit.session_registered`), which a registration listing none refuses."""
+    """The value a member's port ``<member>/<port>`` is read as at its own registered root (`own_entries`, `own_reads`),
+    a port in no shared tree. It is never the port's own name: the audit takes a value named as a registration root's
+    port for a registered value of the record (`audit.session_registered`), which a registration listing none refuses."""
     return f"committed/{port}"
 
 
 def out_value(tree: str) -> str:
-    """The value a member's own output row is read as: its template's field tree ``<template>/o<j>`` by that tree's own
-    name, as Lean's `Flock.Registered.outReads` reads an output row and `OneStageZk.portTreeHeld` holds it to the
-    registration's root."""
+    """The value a row of a field tree ``<template>/o<j>`` is read as, by that tree's own name: a member's own output row,
+    as Lean's `Flock.Registered.outReads` reads it, and a wired port's row, as `Flock.Registered.treeReads` reads it at
+    its writer's leaf; `OneStageZk.portTreeHeld` holds either to the registration's root."""
     return tree
 
 
@@ -1531,7 +1531,7 @@ def _doc_strings(d: Path, win: Mapping[str, Any], j: int, p: str) -> np.ndarray:
 def shared_entries(window_dir: str | Path, win: Mapping[str, Any], k: int,
                    levels: dict[str, list[list[bytes]]] | None = None) -> dict[str, dict[str, Any]]:
     """Header ``registered`` entries (`registered_header`'s form) for member ``k``'s ports held in shared trees
-    (`shared_ports`): each as rows of the value `own_value` names for its tree, whose root and domain the registration
+    (`shared_ports`): each as rows of its tree, by the tree's name (`out_value`), whose root and domain the registration
     holds, its table's row t at the tree's leaf the wiring gives in closed form, with its path. The tree is made from its
     writers' public bodies under ``window_dir`` under its window domain (cached in ``levels`` by tree); the verifier holds
     its root to the registration's."""
@@ -1547,8 +1547,7 @@ def shared_entries(window_dir: str | Path, win: Mapping[str, Any], k: int,
             levels[tree] = tree_levels(dom, [row_leaf(dom, i, INST.tree_leaf(INST.default_key, bytes(bc)), schema)
                                              for i, bc in enumerate(bcs)])
         lv = levels[tree]
-        out[p] = {"value": out_value(tree) if tid == mem["template"] and p == o else own_value(tree),
-                  "positions": at.tolist(),
+        out[p] = {"value": out_value(tree), "positions": at.tolist(),
                   "paths": [b"".join(level[(int(i) >> h) ^ 1] for h, level in enumerate(lv[:-1])).hex() for i in at]}
     return out
 
@@ -1592,7 +1591,8 @@ def own_reads(reads: Mapping[str, Mapping[str, Any]], w: Binding, roots: Mapping
     """The verifier's ``--registered`` files ``reads`` (by member key: a read of a registered value or of a row table) with
     every other port of the member as rows of its own tree at the root the registration holds for it (``roots``, the
     registration's entries by tree), unit ``m.base + i`` reading the leaf of the tree holding it (`Binding.tree`) the
-    wiring gives in closed form (`Binding.reads`), a wired port's the leaves of its writer template's field tree, as the
+    wiring gives in closed form (`Binding.reads`), a wired port's the leaves of its writer template's field tree, read as
+    that tree (`out_value`), as the
     served route's Program has its wires cut to input rows (`interface.served_program`): Lean refuses a statement checked
     against registered reads unless they name every port of its circuit (`Flock.Registered.checkComplete`), so each row
     a member's outputs read opens a root registered before any coin. A member with ports in shared trees
@@ -1615,7 +1615,7 @@ def own_reads(reads: Mapping[str, Mapping[str, Any]], w: Binding, roots: Mapping
                 raise ValueError(f"{m.key} {p}: the registration holds no root for it")
             if port == m.port(p) and int(e["leaves"]) != m.n:
                 continue
-            value = out_value(port) if p in dict(m.outs) and port != m.port(p) else own_value(port)
+            value = out_value(port) if port != m.port(p) else own_value(port)
             ports[p] = {"value": value, "root": e["root"], "leaves": int(e["leaves"]), "words": words[p],
                         "word_bits": RV.WORD_BITS, "domain": e["domain"], RV.SCHEMA_KEY: m.schema(p),
                         "reads": w.reads(m, p).tolist(), RV.READS_FROM: m.base}

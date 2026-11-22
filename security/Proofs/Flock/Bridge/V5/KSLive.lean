@@ -45,9 +45,13 @@ import Proofs.Flock.Bridge.Count
 
 `Flock.Bridge.sampledKSLiveV5R : Flock.Bridge.SampledKSLiveV5R`: `AssemblyTargetV5` (`assemblyTargetV5`) with
 canonical transport at public inputs (`transportsLiveV5`), M1's core (`faultyRightTargetC`) and `EndToEndHiddenV5`
-(`endToEndHiddenV5_of`, from `openingsCanonV5`) plugged in. `Flock.SecurityProofs.SampledKSLiveV5 :
+(`endToEndHiddenV5_of`, from `openingsCanonV5`) plugged in. `Flock.Bridge.sampledKSLiveV5On :
+Flock.Bridge.SampledKSLiveV5On`: the same assembly at the registration's strata summing to `n` and the sampling design on
+them, none of whose targets reads the population. `Flock.SecurityProofs.SampledKSLiveV5 :
 Flock.Guarantees.SampledKSLiveV5`: that bound under the roots guard, with `ecr/sha-512`'s term at the roots finder in place
-of the guard (`Bridge.le_add_ecrBoundL`), at the sampling design `Bridge.designAt` names, which the verifier samples under
+of the guard (`Bridge.le_add_ecrBoundL`), at `PopMatches` from `sampledKSLiveV5R` and at `PopCovers` under a uniform-subset
+`designAt` from `sampledKSLiveV5On` (`nsOf_sum_of_popCovers`, `samplingDesignOn_samplesUnder_cover`), at the sampling
+design `Bridge.designAt` names, which the verifier samples under
 (`Bridge.designAt_cases`) or is `subset 0`, whose `δ` is 1 (`Bridge.pa_partOf_subset`); at tags outside `TagsOkZHJ`,
 probability 0, since passing `Flock.KsScope.checkOf` gives them (`Bridge.tagsOkZHJ_of_ksScope`).
 -/
@@ -58,6 +62,21 @@ probability 0, since passing `Flock.KsScope.checkOf` gives them (`Bridge.tagsOkZ
 theorem Flock.Bridge.sampledKSLiveV5R : Flock.Bridge.SampledKSLiveV5R :=
   Flock.Bridge.assemblyTargetV5 Flock.Bridge.transportsLiveV5 Flock.Bridge.faultyRightTargetC
     (Flock.Bridge.endToEndHiddenV5_of Flock.Bridge.openingsCanonV5)
+
+namespace Flock.Guarantees
+
+open FlockSoundness FlockSoundness.Game Spot.Sampling FlockSoundness.Discharge.Exec FlockSoundness.Refine
+  FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.Placed
+  FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden
+open FlockSoundness.Discharge.Tables (LiveOutJ)
+open scoped ENNReal
+
+/-- **V5's bound under the roots guard, at its strata's facts** (`Flock.Bridge.SampledKSLiveV5On`). -/
+theorem _root_.Flock.Bridge.sampledKSLiveV5On : Bridge.SampledKSLiveV5On :=
+  Bridge.assemblyTargetV5On Bridge.transportsLiveV5 Bridge.faultyRightTargetC
+    (Bridge.endToEndHiddenV5_of Bridge.openingsCanonV5)
+
+end Flock.Guarantees
 
 /-- **`verify --zk`'s form check passes only at hidden-output tags**: `Flock.KsScope.checkOf` refuses first at tags that
 `tagsWhy` names, whatever circuit it is given, so passing it gives `TagsOkZHJ`. -/
@@ -78,7 +97,7 @@ theorem Flock.Bridge.tagsOkZHJ_of_ksScope {I : FlockSoundness.Discharge.Exec.Inp
 /-- **The sampled audit's knowledge soundness, live, at the verifier's public inputs, with or without shared rows**
 (`Flock.Guarantees.SampledKSLiveV5`). -/
 theorem Flock.SecurityProofs.SampledKSLiveV5 : Flock.Guarantees.SampledKSLiveV5 := by
-  intro n Reg I own ht D hD hU pi hpi pub hpub hscope hv2 hdup desc qr hpop lj tb samplingDesign kd hdiv dj S₀ d₀ y₀ wr dg
+  intro n Reg I own ht D hD hU pi hpi pub hpub hscope hv2 hdup desc qr lj tb hpop samplingDesign kd hdiv dj S₀ d₀ y₀ wr dg
     N Ω _ _ Lb src hA3 hCust k Rw M hk hRw hM ρ hρ hr t' ht' B τ qF qS q
   split
   swap
@@ -89,17 +108,23 @@ theorem Flock.SecurityProofs.SampledKSLiveV5 : Flock.Guarantees.SampledKSLiveV5 
     exact hTags (Flock.Bridge.tagsOkZHJ_of_ksScope hk)
   rename_i hTags
   intro L P vb σ Xr Cc Lm rows roots Cd κ r ns δ hTab hLink
+  have hns : ns.sum = n := Or.elim hpop Flock.Bridge.nsOf_sum fun h => Flock.Bridge.nsOf_sum_of_popCovers h.1
   rcases Flock.Bridge.designAt_cases desc qr lj tb n with hlaw | h0
-  · exact Flock.Bridge.le_add_ecrBoundL (FlockSoundness.Game.prob_le_one _ _ τ) fun hroots =>
-      Flock.Bridge.sampledKSLiveV5R n Reg I own ht D hD hU pi hpi pub hpub hscope hv2 hdup hroots desc qr hpop lj tb samplingDesign
-        kd hlaw (Flock.Bridge.notBernoulli_samplesUnder hlaw) hdiv dj S₀ d₀ y₀ wr dg N Ω Lb src hA3 hTags hCust k Rw M hk
-        hRw hM ρ hρ hr t' ht' B τ qF qS q hTab hLink
+  · refine Flock.Bridge.le_add_ecrBoundL (FlockSoundness.Game.prob_le_one _ _ τ) fun hroots => ?_
+    rcases hpop with hm | ⟨hc, hsub⟩
+    · exact Flock.Bridge.sampledKSLiveV5R n Reg I own ht D hD hU pi hpi pub hpub hscope hv2 hdup hroots desc qr hm lj tb
+        samplingDesign kd hlaw (Flock.Bridge.notBernoulli_samplesUnder hlaw) hdiv dj S₀ d₀ y₀ wr dg N Ω Lb src hA3 hTags
+        hCust k Rw M hk hRw hM ρ hρ hr t' ht' B τ qF qS q hTab hLink
+    · exact Flock.Bridge.sampledKSLiveV5On n Reg I own ht D hD hU pi hpi pub hpub hscope hv2 hdup hroots desc qr lj tb
+        samplingDesign kd hlaw (Flock.Bridge.notBernoulli_samplesUnder hlaw) hns
+        (Flock.Bridge.samplingDesignOn_samplesUnder_cover hc hlaw hsub) hdiv dj S₀ d₀ y₀ wr dg N Ω Lb src hA3 hTags
+        hCust k Rw M hk hRw hM ρ hρ hr t' ht' B τ qF qS q hTab hLink
   · have hδ : δ = 1 := by
       change (Flock.Bridge.designOf (Properties.Spot.oneStageOf (Flock.Bridge.designAt desc qr lj tb n))).Pa
         (Flock.Bridge.partOf P κ ns) B = 1
       rw [h0]
       change (Flock.Bridge.designOf (.subset 0)).Pa (Flock.Bridge.partOf P κ ns) B = 1
-      rw [Flock.Bridge.pa_partOf_subset _ (Flock.Bridge.nsOf_sum hpop)]
+      rw [Flock.Bridge.pa_partOf_subset _ hns]
       simp
     refine (FlockSoundness.Game.prob_le_one _ _ τ).trans ?_
     rw [hδ, ENNReal.ofReal_one]

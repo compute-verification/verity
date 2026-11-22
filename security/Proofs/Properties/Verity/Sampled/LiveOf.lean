@@ -416,14 +416,14 @@ theorem proved_of_recordDrawn {m n : ℕ} {units : Array ℕ} {record : String}
   simp only [Array.isEmpty_empty, ite_true]
   exact hS
 
-/-- **The design `designAt` reads samples `samplingDesignK` of it** wherever the registration's population is the descriptor's
-(`Live.hlaw`'s proof, at any parameters). -/
+/-- **The verifier's sampling design is on the registration's strata where they cover the population under a subset
+design** (`Flock.Bridge.samplingDesignOn_samplesUnder_cover`; `subset 0` where the registration names none). -/
 theorem samplingDesignOn_designAt {desc : Hash.Msg} {qr lj : Json} {tb : Option Json} {n : ℕ}
-    (hpop : Flock.Bridge.PopMatches desc qr n) :
+    (hpop : Flock.Bridge.PopCovers desc qr n) (hs : Flock.Bridge.IsSubsetDesign (Flock.Bridge.designAt desc qr lj tb n)) :
     Flock.Bridge.SamplingDesignOn (Flock.Bridge.designAt desc qr lj tb n) (Flock.Bridge.nsOf desc qr)
       (Flock.Bridge.samplingDesignK (Flock.Bridge.designAt desc qr lj tb n)) := by
   rcases Flock.Bridge.designAt_cases desc qr lj tb n with h | h
-  · exact Flock.Bridge.samplingDesignOn_samplesUnder hpop h (Flock.Bridge.notBernoulli_samplesUnder h)
+  · exact Flock.Bridge.samplingDesignOn_samplesUnder_cover hpop h hs
   · rw [h]
     exact ⟨rfl, Nat.zero_le _⟩
 
@@ -604,7 +604,8 @@ theorem accepted_parts {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} (hD 
     rfl
   have hLd := Except.ok.inj (hlawL.symm.trans hlawD)
   rw [hLd] at hdu
-  have hsize := Flock.Bridge.sampleUnits_size (samplingDesignOn_designAt (Flock.Bridge.popMatches_of_popOk hdesc hAc.pop)) hdu
+  have hsize := Flock.Bridge.sampleUnits_size (samplingDesignOn_designAt (Flock.Bridge.popCovers_of_slots hdesc hAc.pop)
+    ⟨_, Flock.Bridge.designAt_subset n (kindOf_paramsAt hp₀ (hone p₀ hp₀))⟩) hdu
   subst hcf
   exact ⟨p₀, tags0, pubB, record, proofs, n, desc, hp₀, ht0, hpf, hAc, htab, hdesc, hlawD, reg, hsc,
     recS, sampledBlocks ev.base.draw, rd, x, hrd, hsize, hsetup⟩
@@ -614,7 +615,7 @@ open FlockSoundness.Discharge.Recursion.Witness (toExec) in
 v2 hands `verity-verify-proof` on the committed files, whose tags are untyped and hidden-output with retained rounds and
 `hm96-sha512/v1` leaves (`FailClosed.check_ok` at v2's statement check under `--zk`), the descriptor and public file
 its ports check reads (`desc_of_ports`), in `Layout.scopeOkH` (`scopeH_of_form`), with the record's population, which the program's proof blocks under the
-verifier's query are in order (`popMatches_of_popOk`). -/
+verifier's query cover (`popCovers_of_slots`). -/
 theorem session_parts {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} (hD : DigestsAt V T θ)
     {k : Verity.Registration.Composite} {F : Array ByteArray} {c : ByteArray} {o : Verity.Exchange}
     (hone : OneStatement θ) (hP : ∃ p, ParamsAt θ p) (hreach : Verity.Game.Reaches (V.game θ F c) o) (hv : V.Verdict k .sampled o)
@@ -632,7 +633,7 @@ theorem session_parts {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} (hD :
       FlockSoundness.Discharge.Layout.scopeOkH D.unroll = true ∧
       Flock.PortRoots.checkOf (.ok D.unroll) (FlockSoundness.Discharge.ZkExec.zkTags I) I.publicFile = .ok () ∧
       pubO.n = n ∧ _root_.Spot.Program.parse ⟨desc.toArray⟩ = .ok p.base.verifier.program ∧
-      Flock.Bridge.PopMatches desc p.base.verifier.query n ∧
+      Flock.Bridge.PopCovers desc p.base.verifier.query n ∧
       samplingDesignAt p.base.verifier n = .ok (Flock.Bridge.designAt desc p.base.verifier.query p.base.verifier.samplingDesign
         p.base.verifier.workTable n) ∧
       ∃ recS units st, recordSampled (.subset units.size) n units recS ∧
@@ -663,7 +664,7 @@ theorem session_parts {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} (hD :
       (_root_.Core.Blobs.ofArray o.sent.blobs)), D, pubO, desc, hp, ht0, rfl, rfl, rfl, rfl, rfl, rfl, htab, rfl, rfl,
     htyp, ⟨hAc.tmpl.1, hret, hleaf.resolve_right fun h => absurd h.1 (by decide)⟩, hDp, hU, hpubO,
     hscD, hports, hAc.loads hpubO,
-    hdesc, Flock.Bridge.popMatches_of_popOk hdesc hAc.pop, hlaw, recS, units, ?_⟩
+    hdesc, Flock.Bridge.popCovers_of_slots hdesc hAc.pop, hlaw, recS, units, ?_⟩
   obtain ⟨st, hst, hshape⟩ := setupAt_hidden rfl
     ((FlockSoundness.Discharge.ZkExec.zkTags_hiddenOutputs _).trans hAc.tmpl.1) hsetup
   exact ⟨st, hrd, hsize, hst, hshape⟩

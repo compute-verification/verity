@@ -35,7 +35,7 @@ from pathlib import Path
 import pytest
 
 import verity_difftest as D
-from verity.circuits import partition_object as PO, population as PN
+from verity.circuits import edges as EG, partition_object as PO, population as PN
 from verity.commitments import coin_tree as CT
 from verity.protocols.proof.spot.verifier.challenger import challenger as Ch
 from verity.protocols.proof.spot.verifier.one_stage import (
@@ -46,6 +46,7 @@ from verity.protocols.proof.spot.verifier.one_stage import (
     proofs as PF,
     docket as R,
 )
+from verity.commitments import registered_value as RV
 from verity.protocols.proof.spot.prover import docket as DK
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -72,6 +73,24 @@ def _sha(b: bytes) -> str:
     return hashlib.sha512(b).hexdigest()
 
 
+def _run_trees(s: Setup, units: dict, window: str, rng: random.Random) -> list[dict]:
+    """A root of each run input node's one tree ``input/n<w>`` the members of `units` read, at C's leaf count and the
+    domain under `window` (`members.run_tree_held`)."""
+    R, prog = EG._Root(s.desc), P.program_digest(s.program)
+    ranges, trees = P._template(s.program, s.query, "the members' partition").ranges, {}
+    for name, us in units.items():
+        for _p, w, ln in M.member_inputs(R, ranges, name, us):
+            if M._input(R, w, run=True):
+                trees.setdefault(w, ln)
+    out = []
+    for w, ln in sorted(trees.items()):
+        node = R.nodes[w]
+        rows, words = node["out_leaves"] * node["members"] // ln, ln * (EG._bits(node["ret"]) // node["out_leaves"]) // 16
+        out.append({"port": f"input/n{w}", "root": rng.randbytes(64).hex(), "leaves": rows,
+                    "domain": RV.domain(prog, f"input/n{w}", words, rows, 16, window=window).domain_id.hex()})
+    return out
+
+
 def _never(_):
     raise AssertionError("a session was verified before the refusal")
 
@@ -91,7 +110,7 @@ class Audit:
     def __init__(self, seed: str, ports: tuple[str, str] = (f"{A}/out", f"{B}/out"), opened: tuple[str, ...] = (A, B),
                  closed: tuple[str, ...] = (A, B), together: bool = False, sampled: tuple[str, ...] = (A, B),
                  setup: Setup | None = None, units: dict | None = None, trees: dict | None = None,
-                 extra: tuple[str, ...] = (), twice: tuple[str, ...] = ()):
+                 extra: tuple[str, ...] = (), twice: tuple[str, ...] = (), law: dict | None = None):
         rng = random.Random(seed)
         units = UNITS if units is None else units
         names = tuple(units)
@@ -102,9 +121,13 @@ class Audit:
         s.ports |= {p: s.ports[ports[1]] for p in extra}
         roots = [{"port": p, "root": rng.randbytes(64).hex(), **s.ports[p]} for p in s.ports]
         roots += [{**r, "root": rng.randbytes(64).hex()} for r in roots if r["port"] in twice]
+        window = {"root": rng.randbytes(64).hex()}
+        roots += _run_trees(s, units, window["root"], rng)
         self.partition = PO.build(s.program, s.query, [[units[n][0] for n in names]])
         self.rec = DK.record(s.program, s.query, DESIGN, SCHEME, roots, WINDOW, leaf_layer=LEAF,
                              partition=self.partition)
+        if law is not None:
+            self.rec = {**self.rec, "law": law}
         held = None
         while held != set(sampled):
             ch, sample, _ = _challenger_sample(rng, s, DESIGN, self.rec, trees=0)
@@ -133,7 +156,7 @@ class Audit:
         for t, after in late:
             ch.s.lines += close(t, after)
         ch.s.close = ch.s.signed(None)
-        ch.ledger = Ledger(rng, ch.s, withheld=True)
+        ch.ledger = Ledger(rng, ch.s, withheld=True, window=window)
         ch.pins, ch.main = _pinned(rng, ch.ledger, "honest")
         proved = DR.proved(sample)
         statements = [{"member": name, "sessions": [sessions[name]]} for name in names if name in sessions]
@@ -347,6 +370,31 @@ def test_a_statement_of_a_member_the_sample_missed_is_refused_by_both_before_any
                        "has no statement")
 
 
+def test_strata_that_cover_the_units_out_of_order_pass_both_population_checks_under_a_subset_design(tmp_path):
+    """PAIR, TRIPLE, PAIR: the strata `PAIR [0, 2) [5, 7)` and `TRIPLE [2, 5)` are a cover of the units, not the units in
+    order stratum by stratum. Under the parameters' subset design both sides take them (`Slots.popCovers`,
+    `members.subset_design`) and end, as on an in-order window, at the first member's stand-in public file, the law
+    stated as the rate `rate:2/7` as the subset object it resolves to (`OneStage.design`, `members.resolved`); under a
+    registration whose law is stratified both refuse it by name, the registration's law named (`STRATA_DESIGN`)."""
+    c = f"{PAIR.id}/c1"
+    ports = (f"{A}/out", f"{B}/out", f"{c}/out")
+    s = Setup(PN.mixed_population_program([(PAIR, 2), (TRIPLE, 3), (PAIR, 2)]),
+              P.template_instances_query([PAIR.id, TRIPLE.id]), names=ports)
+    assert not P.in_order(s.program, s.query, 7) and P.covers(s.program, s.query, 7)
+    a = Audit("members-twin-cover", ports=ports, setup=s, units={A: [[0, 2]], B: [[2, 5]], c: [[5, 7]]},
+              trees={PAIR.id: 4, TRIPLE.id: 3})
+    why, (run, refused) = a.ask(tmp_path / "cover")
+    assert run is None and why == M.run_reason(run, refused), (why, refused)
+    assert M.POPULATION_ORDER not in why and "partition:" not in why, why
+    rated, (run, refused) = a.ask(tmp_path / "cover-rate", params=a.params | {"law": "rate:2/7"})
+    assert run is None and rated == M.run_reason(run, refused) == why, (rated, refused)
+    a = Audit("members-twin-cover-law", ports=ports, setup=s, units={A: [[0, 2]], B: [[2, 5]], c: [[5, 7]]},
+              trees={PAIR.id: 4, TRIPLE.id: 3}, law={"k": 2, "law": "stratified"})
+    why, (run, refused) = a.ask(tmp_path / "cover-law")
+    assert run is None and why == M.run_reason(run, refused), (why, refused)
+    assert M.strata_design("stratified") in why, why
+
+
 def test_leans_parse_and_the_twin_take_a_members_units_from_its_block_and_refuse_the_same_parameters(tmp_path):
     """A member names its block of the partition object's ``blocks`` (`one_circuit.block`, `OneStageZk.membersOf`):
     Lean's parse (`proofs.members_parsed`, the executable's ``members``) reads each member's units as the twin's
@@ -395,8 +443,8 @@ pieces = D.server_fixture(HELD)
 def test_a_wired_port_whose_writers_tree_the_record_names_none_of_is_refused_at_its_readers_header(tmp_path, pieces):
     """`WIRED`'s window with its members named under a template ``g`` that is not C's Definition id: the record's
     tree of the field is ``g/o0``, so `fieldRoots` (`members._wired_roots`) finds no tree of the writer's field and
-    gives the second member's wired port ``x`` no root, which neither run refuses there (both end at the first member's
-    stand-in public file). The reader's public file must name ``x`` (`Flock.HmRow.checkPublic` reads a root of every
+    gives the second member's wired port ``x`` no root (its run input ``w`` has its node's tree, which its read
+    opens), which neither run refuses there (both end at the first member's stand-in public file). The reader's public file must name ``x`` (`Flock.HmRow.checkPublic` reads a root of every
     port of the block circuit), and its header held to that slice is refused by both by name (`UNWIRED_WHY`:
     `OneStageZk.headerHeld`'s `unwired`, `members.population_why`)."""
     units = {f"g/c{k}": u for k, u in enumerate(WIRED.values())}
@@ -407,12 +455,52 @@ def test_a_wired_port_whose_writers_tree_the_record_names_none_of_is_refused_at_
               trees={"g": 8})
     why, (run, refused) = a.ask(tmp_path / "unrooted")
     assert run is None and why == M.run_reason(run, refused) and why.startswith(f"proofs: member {g0}: "), (why, refused)
-    got = M.slices(units, a.rec, program=program, query=query)[g1]
-    assert sorted(r["port"] for r in got["roots"]) == ["o0", "out"], got
+    got = M.slices(units, a.rec, program=program, query=query, window_root=a.params["window_root"])[g1]
+    assert sorted(r["port"] for r in got["roots"]) == ["o0", "out", "w"], got
     roots = {r["port"]: r["root"] for r in got["roots"]} | {"x": "aa" * 64}
     domains = {r["port"]: r["domain"] for r in got["roots"]} | {"x": "dd" * 64}
     h = {"frame_v3": {"domain_ids": domains, "roots": roots}, "instances": 2, "scheme": SCHEME}
-    assert M.population_why(units[g1], P.strata(program, query), h | {"units": {"indices": [2, 3]}}, got) == (
+    wr = ("w", next(r["tree"] for r in got["roots"] if r["port"] == "w"))
+    assert M.population_why(units[g1], P.strata(program, query), h | {"units": {"indices": [2, 3]}}, got, {wr}) == (
         M.unwired_why("x"))
-    j = {"reads": [], "registered": None, "slice": got, "header": h}
+    j = {"reads": [list(wr)], "registered": None, "slice": got, "header": h}
     assert pieces.call("header_held_at", j) == ("output", D.canonical(M.unwired_why("x")))
+
+
+def test_a_wired_port_is_held_by_a_registered_read_of_its_writers_tree_and_refused_without_one(tmp_path, pieces):
+    """`WIRED`'s window, a writer of four members: the second member's wired port ``x`` is its writer's field tree in
+    its slice (`fieldRoots`' ``tree``, `members._wired_roots`), and its header root there is rebuilt from the reader's
+    own rows, so it is not the record's. Both drop the port by a registered read of ``x`` at that tree
+    (`OneStageZk.headerHeldAt`, `members.population_why`), and refuse it by name with no read or a read of another
+    tree (`SHARED_UNREAD`), even with the writer's tree's own root and domain there, which would hold the reader's rows
+    to the tree's leaves in order rather than C's. The slice without the tree is the slice before it was named, refused
+    by both as a root that is not the registration's."""
+    c0, c1 = list(WIRED)[:2]
+    program, query = TI.chain().program()
+    a = Audit("members-twin-wired-held", ports=(f"{c0}/out", f"{c1}/out"), opened=(c0,), closed=(c0,),
+              sampled=(c0, c1), setup=Setup(program, query, names=(f"{c0}/out", f"{c1}/out")), units=WIRED,
+              trees={TI.GID: 8})
+    a.ask(tmp_path / "held")
+    tree = f"{TI.GID}/o0"
+    got = M.slices(WIRED, a.rec, program=program, query=query, window_root=a.params["window_root"])[c1]
+    wr = ["w", next(r["tree"] for r in got["roots"] if r["port"] == "w")]
+    x = next(r for r in got["roots"] if r["port"] == "x")
+    assert x["tree"] == tree and x["root"] == next(r["root"] for r in a.rec["roots"] if r["port"] == tree), got
+    roots = {r["port"]: r["root"] for r in got["roots"]} | {"x": "ab" * 64}
+    domains = {r["port"]: r["domain"] for r in got["roots"]} | {"x": "dd" * 64}
+    h = {"frame_v3": {"domain_ids": domains, "roots": roots}, "instances": 2, "scheme": SCHEME}
+    strata = P.strata(program, query)
+    before = {**got, "roots": [{k: v for k, v in r.items() if k != "tree"} for r in got["roots"]]}
+    for slice_, reads, want, *extra in [(got, [["x", tree]], ""), (got, [], M.shared_unread("x", tree)),
+                                (got, [["x", f"{TI.GID}/o1"]], M.shared_unread("x", tree)),
+                                (got, [["x", f"committed/{tree}"]], M.shared_unread("x", tree)),
+                                (before, [["x", tree]], "public file: not the registration's: roots, domains"),
+                                (got, [], M.shared_unread("x", tree), x)]:
+        hx = h if not extra else {**h, "frame_v3": {"domain_ids": domains | {"x": extra[0]["domain"]},
+                                                    "roots": roots | {"x": extra[0]["root"]}}}
+        held = {p: {"domain": "dd" * 64, "leaves": 8, "root": "aa" * 64, "value": v} for p, v in reads}
+        assert (M.population_why(WIRED[c1], strata, hx | {"units": {"indices": [2, 3]}}, slice_,
+                                 {tuple(r) for r in [*reads, wr]}, held or None) or "") == want, (reads, want)
+        j = {"reads": sorted([*reads, wr]), "slice": slice_, "header": hx,
+             "registered": {"format": "verity/registered-reads/v2", "ports": held} if held else None}
+        assert pieces.call("header_held_at", j) == ("output", D.canonical(want)), (reads, want)

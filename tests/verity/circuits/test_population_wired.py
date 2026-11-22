@@ -88,6 +88,26 @@ def test_a_row_two_fill_is_refused():
         wired_population_program([(A, 2), (B, 2)], rec)
 
 
+def test_a_programs_supplied_marks_are_its_descriptors_inputs_and_round_trip():
+    mark = {"supplied": "const.u16/v1", "args": {"value": 1}, "layout": "le", "bits": 16}
+    rec = _record()
+    rec["registered"]["supplied"] = {"w": mark}
+    prog = wired_population_program([(A, 2), (B, 2)], rec)[0]
+    desc = json.loads(json.dumps(encode_program(prog)))
+    assert desc["inputs"] == [["w", 1, mark], ["0.x", 1], ["0.k", 1]]
+    assert program_digest(prog) == program_digest(desc)
+    reg = DefinitionTable()
+    reg.add(Add)
+    reg.add(Mul)
+    back = decode_program(desc, reg)
+    assert back.supplied == {"w": mark} and encode_program(back) == desc and program_digest(back) == program_digest(prog)
+    plain = wired_population_program([(A, 2), (B, 2)], _record())[0]
+    assert "inputs" not in encode_program(plain)
+    anchored = wired_population_program([(T, 2)], _anchored())[0]
+    assert [e[:2] for e in encode_program(anchored)["inputs"]] == [["e@4/table/domain", 1], ["e@4/table/root", 1],
+                                                                   ["0.x", 1], ["0.k", 1]]
+
+
 def test_a_program_with_no_width_changing_wire_keeps_its_digest():
     assert program_digest(wired_population_program([(A, 2), (B, 2)], _record())[0]) == (
         "576af2e56b9dfe625143d2f38bddf49c1e12b0ed77462fe94cea34322432042f97a527f91f1b21f88fd9f0d6f0faacbfea92b570bab2079dbcd2db7a7a0e7138")
@@ -217,6 +237,34 @@ def test_a_tables_openings_are_one_parameter_each_openings_units_after_the_one_b
     assert evaluate(two.fn, k[2:] + k[:2], x) == evaluate(one.fn, k, x)
     with pytest.raises(ValueError, match="filled twice"):
         wired_population_program([(A, 2)], _opened((0, 2), (1, 1)))
+
+
+DIGEST = Array(8, Array(64, Value(1)))
+T = bind(CompositeDefinition("TWiredAnchored", 1, (),
+                             lambda S: ((("x", Array(2, V16)), ("root", DIGEST), ("domain", DIGEST), ("k", Array(2, V16))),
+                                        Array(2, V16)),
+                             lambda B_, S, x, r, d, k: B_.batch(Add, x, k, axes=(0, 0)), register=False))
+
+
+def _anchored(ports=("root", "domain")):
+    return {"templates": [[descriptor_id(T), 2]], "wires": [], "external": [f"{descriptor_id(T)}/x"],
+            "registered": {"params": {"e@4/table": 8}, "tables": [{"name": "tab", "param": "e@4/table"}], "reads": [],
+                           "roots": [{"reader": descriptor_id(T), "port": p, "table": "tab", "of": of, "at": 0, "units": 2}
+                                     for p, of in zip(ports, ("root", "domain"))], "openings": []}}
+
+
+def test_a_tables_root_and_domain_are_supplied_by_the_tables_registered_name():
+    prog = wired_population_program([(T, 2)], _anchored())[0]
+    assert prog.supplied == {f"e@4/table/{of}": {"supplied": f"registered.{of}/v1", "args": {"value": "e@4/table"},
+                                                 "layout": "digest", "bits": 512} for of in ("root", "domain")}
+    assert {n.name: (n.fn.id, n.n) for n in prog.root.body.nodes if n.fn.id.startswith("Supplied")} == {
+        f"e@4/table/{of}": ("SuppliedInput1_v1", 512) for of in ("root", "domain")}
+    with pytest.raises(ValueError, match="a table's domain is a Digest"):
+        wired_population_program([(T, 2)], _anchored(("root", "k")))
+    rec = _anchored()
+    rec["registered"]["supplied"] = {"e@4/table/root": {**prog.supplied["e@4/table/root"], "args": {"value": "f"}}}
+    with pytest.raises(ValueError, match="marked other than by its table read"):
+        wired_population_program([(T, 2)], rec)
 
 
 @pytest.mark.parametrize("w", [16, 32])

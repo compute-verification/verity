@@ -13,10 +13,7 @@ from typing import Any
 
 from verity_vllm.pipeline import advice as ADV
 
-__all__ = ["DEPLOYMENT", "REGISTRATION", "Record"]
-
-REGISTRATION = "weights_registration.json"
-DEPLOYMENT = "deployment-registration.json"
+__all__ = ["Record"]
 
 
 @dataclass
@@ -38,19 +35,15 @@ class Record:
     _words: dict[str, Any] | None = field(default=None, init=False, repr=False)
 
     def roots(self, registered: Any, out: Path) -> dict[str, str]:
-        """The serve's weights registration at ``out``'s `REGISTRATION`, made once from the checkpoint before the first
-        window's advice is written (`window_weights.weights_registration`, its salts beside it, its deployment record at
-        `DEPLOYMENT`), as each window's advice registration records it (`advice.registered_weights`)."""
-        from verity.commitments import salt_file as SF
-
-        from . import window_weights as WW
+        """The deployment's registration at ``out``'s `window_weights.REGISTRATION` (`window_weights.register`'s), read and
+        never written, as each epoch's advice registration records it (`advice.registered_weights`). Refused (ValueError)
+        where ``out`` holds none: the deployment registers once, before its first epoch."""
+        from .window_weights import REGISTRATION
 
         path = Path(out) / REGISTRATION
         if not path.is_file():
-            doc = WW.weights_registration(registered, SF.beside(path), self.checkpoint_dir, checkpoints_manifest=self.checkpoints,
-                                          tables=served_tables(out))
-            (Path(out) / DEPLOYMENT).write_text(json.dumps(WW.deployment_record(doc), indent=1) + "\n")
-            path.write_text(json.dumps(doc, indent=1) + "\n")
+            raise ValueError(f"{out} holds no registration: a deployment registers once, before its first epoch "
+                             "(`window_weights.register`, `prove_path.py weights-registration`), and an epoch's close reads it")
         serve = json.loads((Path(out) / "serve.json").read_text())
         return ADV.registered_weights(json.loads(path.read_text()), serve)
 
@@ -140,7 +133,7 @@ class Record:
         weights = weight_elements(words)
         slot_of = {(cls.anchor(k), cls.lane(k)): k for k in range(cls.slots)}
         slots = [WRS.Slot(P.fn, cls, placed[slot_of[(P.anchor, P.lane)]][1], weights, s) for P, s in zip(low.programs, served)]
-        values = {**WW.weight_values(registered, words, out / REGISTRATION, keep_rows=True), SS.SCAN_STATE: state}
+        values = {**WW.weight_values(registered, words, out / WW.REGISTRATION, keep_rows=True), SS.SCAN_STATE: state}
         lap("values")
         cost: dict[str, Any] = {}
         key = None

@@ -269,8 +269,8 @@ theorem rowsOk_read {q : â„•} {p : Spot.SecondStage.Part} {e : Json} {units : â„
 /-- **Round 2's row is the read's** (`ReadFact`): at each kind of read `placedRow` names a row for, `second-read`'s
 case for it (`readOk`) passes the entry through `placedOk` or `rowsOk` at that row. -/
 theorem readFact : ReadFact := by
-  intro own named p port v e l u row pos hok hv hl hpl hrd
-  simp only [Spot.SecondStage.readOk, hv] at hok
+  intro own named p port v e l u row pos hpos hok hv hl hpl hrd
+  simp only [Spot.SecondStage.readOk, Spot.SecondStage.atPos, hpos, hv] at hok
   simp only [placedRow, kindOf] at hpl
   cases hlk : Spot.SecondStage.linkOf own p.template port with
   | some lk =>

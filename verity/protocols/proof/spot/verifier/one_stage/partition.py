@@ -23,8 +23,7 @@ and `Q_call` v1 at `X <= 16`, and the programs this protocol builds for the temp
   `Q_word` and `Q_call`), and `unit_gates` gives
   each proof block's root gates. `in_order` holds when the proof blocks read stratum by stratum are the population in order.
   `fanout` gives a template query's fan-out F, at least the most proof blocks one group joined by reads of each other's
-  results holds, and `shared_inputs` the run Input nodes its proof blocks don't each read alone, both a root node at a
-  time (R8, `registration.check`).
+  results holds, a root node at a time (`registration.check`).
 * **Programs**: a partition's program is built by `verity.circuits.population`.
 
 The verifier holds its own copy of the program and applies the query itself (`units`); it never takes a population or a
@@ -41,8 +40,9 @@ from verity.circuits.codec import descriptor_id, program_digest
 from verity.circuits.partition_object import (FORMAT, QueryRefused, program_sha512, template_id,
                                         template_instance_query, template_instances_query)
 from verity.circuits.partition_query import QUERY_X, evaluate, is_template_query, ranges, strata
-from verity.circuits.program import Program, is_input, is_registered
+from verity.circuits.program import RUN, Program, input_id, is_input, is_registered
 from verity.circuits.refs import Affine, Concat, Grid, Strided
+from verity.circuits.types import axis_runs
 
 _PRE_CANONICAL = {"program", "query"}
 
@@ -93,6 +93,35 @@ def in_order(program: Program, query: Mapping[str, Any], n: int) -> bool:
         return False
     us = [u for _t, rs in ss for lo, hi in rs for u in range(lo, hi)]
     return us == list(range(n)) and all(u < len(gates) for u in us)
+
+
+def cover_ranges(rs: Iterable[Sequence[int]]) -> int | None:
+    """`FilePart.coverRanges`: N where the ranges ``[lo, hi)``, in any order, are a disjoint cover of ``0, ..., N - 1``
+    (a range with ``hi <= lo`` holding no unit), else None."""
+    at = 0
+    for lo, hi in sorted(((lo, hi) for lo, hi in rs if lo < hi), key=lambda r: r[0]):
+        if lo != at:
+            return None
+        at = hi
+    return at
+
+
+def cover(strata: Sequence[tuple[str, Sequence[Sequence[int]]]]) -> int | None:
+    """`FilePart.cover`: `cover_ranges` of every stratum's ranges together, None too where a range ends before it
+    starts."""
+    rs = [(lo, hi) for _t, s in strata for lo, hi in s]
+    return None if any(hi < lo for lo, hi in rs) else cover_ranges(rs)
+
+
+def covers(program: Program, query: Mapping[str, Any], n: int) -> bool:
+    """`Slots.popCovers` (run as `Slots.popCoverOk`), `in_order`'s cover form: `query` applies to `program`, the strata's ranges are a disjoint cover
+    of ``0, ..., n - 1`` (`cover`) and every one of those proof blocks has its gates. What a subset design's draw needs:
+    it reads no stratum, and slot `u` is proof block `u`."""
+    try:
+        ss, gates = strata(program, query), unit_gates(program, query)
+    except (QueryRefused, ValueError):
+        return False
+    return cover_ranges(r for _t, s in ss for r in s) == n and n <= len(gates)
 
 
 def _once(inner: int, outer_stride: int, inner_stride: int, count: int) -> bool:
@@ -146,8 +175,8 @@ def fanout(program: Program, query: Mapping[str, Any]) -> int:
     is the group's size exactly where every joined node is a call, and at least it where a joined batch's members read
     other proof blocks' results in parts. It reads each node's references once, never its members or its gates. A
     read of another proof block's values counts only as a reference to that block's result: a value another proof block
-    writes that the program takes as an Input node joins nothing, which is why `shared_inputs` refuses a run Input two
-    proof blocks read. `QueryRefused` for a query other than a template query."""
+    writes that the program takes as an Input node joins nothing: a run Input's rows are one tree the members' check
+    holds. `QueryRefused` for a query other than a template query."""
     part = _template(program, query, "fan-out")
     nodes = program.root.body.nodes
     members = {k: n for k, _t, _lo, n in part.ranges}
@@ -182,10 +211,11 @@ def shared_inputs(program: Program, query: Mapping[str, Any], held: Iterable[ran
     whatever it reads twice. A strided run is taken at its span, and one that names a leaf twice, or two of a batch's
     runs that overlap, count as shared. A served port's rows reach a proof block either as its own leaves or through a
     registered value: a run Input two proof blocks read could hold rows one of them computed, which `fanout` can't see.
-    `QueryRefused` for a query other than a template query."""
+    The variant with no members refuses such a node (`R8-shared-input`); the per-member variant holds each reader to the
+    node's one tree instead. `QueryRefused` for a query other than a template query."""
     part = _template(program, query, "an Input's readers")
     nodes, offsets, held = program.root.body.nodes, program.root.body.offsets, list(held)
-    run_input = {k for k, node in enumerate(nodes) if is_input(node.fn) and not is_registered(node.fn)
+    run_input = {k for k, node in enumerate(nodes) if _run_bound(node.fn)
                  and not any(h.start <= offsets[k] and offsets[k + 1] <= h.stop for h in held)}
     shared: set[int] = set()
     spans: dict[int, list[tuple[int, int]]] = {}
@@ -215,19 +245,91 @@ def shared_inputs(program: Program, query: Mapping[str, Any], held: Iterable[ran
     return sorted(shared)
 
 
-def held_reads(program: Program, query: Mapping[str, Any], held: Iterable[range]) -> list[tuple[range, int]]:
-    """The units of each template query range with each run Input node inside one of `held` its instance node reads, in
-    the order its arguments' runs name them, never its members or its gates. The Lean's `Partition.heldReads`
-    is this. `QueryRefused` for a query other than a template query."""
+def input_reads(program: Program, query: Mapping[str, Any], held: Iterable[range]) -> list[tuple[str, str, range]]:
+    """Each template parameter whose argument reads an Input node inside one of `held`, as ``(template, parameter, the
+    range of `held` it reads)``, a root node at a time, never its members or its gates. `QueryRefused` for a query other
+    than a template query."""
     part = _template(program, query, "an Input's readers")
     nodes, held = program.root.body.nodes, list(held)
-    inside = {k for k, node in enumerate(nodes) if is_input(node.fn) and not is_registered(node.fn)
-              and any(within(program, h, k) for h in held)}
-    out: list[tuple[range, int]] = []
-    for k, _t, lo, n in part.ranges:
-        ws = dict.fromkeys(i for a in nodes[k].args for i, *_ in _runs(a.refs) if i in inside)
-        out.extend((range(lo, lo + n), i) for i in ws)
+    inside = {k: h for k, node in enumerate(nodes) if is_input(node.fn) for h in held if within(program, h, k)}
+    out: list[tuple[str, str, range]] = []
+    for k, t, _lo, _n in part.ranges:
+        params = [p for p, _ in nodes[k].fn.signature()[0]]
+        for p, a in zip(params, nodes[k].args):
+            out.extend((t, p, inside[i]) for i in dict.fromkeys(i for i, *_ in _runs(a.refs) if i in inside))
     return out
+
+
+def held_value(program: Program, held: Sequence[tuple[str, range]], i: int) -> str | None:
+    """The value of `held` whose gates hold root node `i`, an Input node (the first that holds it); None for another node
+    or one outside them. The Lean's `Partition.heldValue` is this."""
+    if not is_input(program.root.body.nodes[i].fn):
+        return None
+    return next((v for v, g in held if within(program, g, i)), None)
+
+
+def member_nodes(program: Program, k: int, m0: int, m1: int) -> list[tuple[str, int]]:
+    """Each ``(parameter, root node)`` whose argument root node `k`'s members ``[m0, m1)`` read names, in parameter and
+    part order, once each. A part counts where it meets the members' own leaves of a mapped argument (a batch's mapped
+    axis, a scan's xs), modulo the period the axis repeats at, and wherever an unmapped argument has it. The Lean's
+    `Partition.memberNodes` is this."""
+    node = program.root.body.nodes[k]
+    out: list[tuple[str, int]] = []
+    for pi, (p, a) in enumerate(zip([p for p, _ in node.fn.signature()[0]], node.args)):
+        dims = _dims(node, pi, a.type)
+        parts = a.refs.parts if isinstance(a.refs, Concat) else [a.refs]
+        starts = a.refs.starts if isinstance(a.refs, Concat) else [0]
+        for q, s in zip(parts, starts):
+            if q.count and _meets(dims, m0, m1, s, q.count):
+                out.extend(x for i in _part_nodes(q) if (x := (p, i)) not in out)
+    return out
+
+
+def held_of(program: Program, held: Sequence[tuple[str, range]], ns: Iterable[tuple[str, int]]) -> list[tuple[str, str]]:
+    """The ``(parameter, value)``s of `ns` whose node is an Input inside the gates of a value of `held` (`held_value`),
+    once each. The Lean's `Partition.heldOf` is this."""
+    out: list[tuple[str, str]] = []
+    for p, i in ns:
+        if (v := held_value(program, held, i)) is not None and (p, v) not in out:
+            out.append((p, v))
+    return out
+
+
+def member_reads(program: Program, held: Sequence[tuple[str, range]], k: int, m0: int, m1: int) -> list[tuple[str, str]]:
+    """The ``(parameter, value)``s of `held` root node `k`'s members ``[m0, m1)`` read (`member_nodes`, `held_of`). The
+    Lean's `Partition.memberReads` is this."""
+    return held_of(program, held, member_nodes(program, k, m0, m1))
+
+
+def _dims(node: Any, pi: int, t: Any) -> tuple[int, int] | None:
+    """``(d, L)`` of argument `pi` of `node` where its members each read a run of `L` leaves at m of `d` (the Lean's
+    `Arg.dims`); None where every member reads all of it."""
+    if node.form == "batch" and node.axes[pi] is not None:
+        _outer, d, leaves = axis_runs(t, node.axes[pi])
+        return d, leaves
+    if node.form == "scan" and 1 <= pi <= node.n_xs:
+        return t.n, t.elem.leaves
+    return None
+
+
+def _meets(dims: tuple[int, int] | None, m0: int, m1: int, s: int, n: int) -> bool:
+    if dims is None:
+        return True
+    d, leaves = dims
+    per = d * leaves
+    if per == 0 or n >= per:
+        return True
+    o = s % per
+    return (o < m1 * leaves and m0 * leaves < o + n) or m0 * leaves + per < o + n
+
+
+def _part_nodes(q: Any) -> list[int]:
+    """The root nodes part `q` of an argument names (the Lean's `Registered.partNodes`)."""
+    if isinstance(q, (Affine, Strided)):
+        return [q.idx] if q.space == "n" else []
+    if isinstance(q, Grid):
+        return [i for s, i, *_ in q.lanes if s == "n"]
+    return [i for s, i, _j in q if s == "n"]
 
 
 def within(program: Program, gates: range, k: int) -> bool:
@@ -236,12 +338,25 @@ def within(program: Program, gates: range, k: int) -> bool:
     return gates.start <= offsets[k] and offsets[k + 1] <= gates.stop
 
 
+def any_run_input(program: Program, gates: range) -> bool:
+    """Whether a root node whose gates lie in `gates` is a run Input node: a registered or supplied value's gates hold
+    none (`R7-run-input`). The Lean's `Partition.anyRunInput` is this."""
+    nodes = program.root.body.nodes
+    return any(within(program, gates, k) and input_id(nodes[k].fn.id) is not None and input_id(nodes[k].fn.id)[0] == RUN
+               for k in range(len(nodes)) if is_input(nodes[k].fn))
+
+
 def run_inputs(program: Program, gates: range) -> bool:
     """Whether the root's nodes whose gates lie in `gates` are run Input nodes, and one does: a parameter R8 may let
     through as tied is one the run binds. The Lean's `Partition.runInputs` is this."""
     nodes = program.root.body.nodes
     inside = [k for k in range(len(nodes)) if within(program, gates, k)]
-    return bool(inside) and all(is_input(nodes[k].fn) and not is_registered(nodes[k].fn) for k in inside)
+    return bool(inside) and all(_run_bound(nodes[k].fn) for k in inside)
+
+
+def _run_bound(fn: Any) -> bool:
+    """Whether `fn` is an input the run binds, neither registered nor supplied (Lean's `binding == RUN`)."""
+    return is_input(fn) and (i := input_id(fn.id)) is not None and i[0] == RUN
 
 
 def _merged(rs: Sequence[tuple[int, int]]) -> list[tuple[int, int]]:
@@ -255,6 +370,6 @@ def _merged(rs: Sequence[tuple[int, int]]) -> list[tuple[int, int]]:
     return out
 
 
-__all__ = ["template_id", "FORMAT", "QueryRefused", "digest", "evaluate", "fanout", "in_order", "is_template_query", "partition",
-           "program_digest", "program_sha512", "ranges", "run_inputs", "shared_inputs", "strata", "template_instance_query",
+__all__ = ["template_id", "FORMAT", "QueryRefused", "cover", "cover_ranges", "covers", "digest", "evaluate", "fanout", "in_order", "is_template_query", "partition",
+           "program_digest", "program_sha512", "held_of", "held_value", "member_nodes", "member_reads", "ranges", "any_run_input", "run_inputs", "shared_inputs", "strata", "template_instance_query",
            "template_instances_query", "unit_gates", "units", "within", "QUERY_X"]

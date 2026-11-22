@@ -58,6 +58,20 @@ def test_a_tiny_window_the_older_composer_refuses_passes_and_names_its_small_tem
     _in_population(circuit, {**named["row_floor"], **named["prover_floor"]})
 
 
+@pytest.mark.slow
+def test_run_inputs_of_the_tiny_window_are_read_across_its_ranges():
+    """About a minute, the population's Program built: the one class here whose run input nodes are each read by several
+    ranges of C's root, which `interface.run_input_reads` takes as one read a node, unit i its row i."""
+    circuit = _window(S._registered(), CLASS, *WHOLE, GRAIN)
+    built = circuit.program()
+    tp = PO.TemplatePartition(*built)
+    filled = IF.filled_ports(circuit.registered, circuit.wires, circuit.ingress, circuit.boundary_reads)
+    runs = IF.run_input_reads(circuit.templates, *built, filled, circuit.cuts)
+    assert runs and len({r.param for r in runs}) == len(runs)
+    assert any(Counter(t for _k, t, _a, _n in tp.ranges)[r.reader] > 1 for r in runs)
+    assert IF.members(circuit, 64, built, runs)
+
+
 def test_a_template_past_the_rows_flock_takes_is_refused_by_name(monkeypatch):
     circuit = _window(S._registered(), CLASS, *WHOLE, GRAIN)
     widest = max(circuit.templates, key=lambda t: len(IF.layout(t[0]).cut(circuit.cuts.get(IF.descriptor_id(t[0])))))[0]

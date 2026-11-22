@@ -105,9 +105,11 @@ def readsAt (e : Json) (u : ℕ) : Option ℕ :=
   | _, _ => none
 
 /-- **Round 2's row is the read's** (`second-read`): where round 2 passes template `p.template`'s read `e` of value `v`
-of `l` leaves at port `port` (`readOk`) and holds slot `u` to a row (`placedRow`), the read of slot `u` is that row. -/
+of `l` leaves at port `port` (`readOk`) and holds slot `u` to a row (`placedRow`), the read of slot `u` is that row;
+at an `own` holding no positions from C (`Own.positions`), where round 2 reads the entry's own. -/
 def ReadFact : Prop :=
   ∀ (own : Spot.SecondStage.Own) (named : Bool) (p : Spot.SecondStage.Part) (port v : String) (e : Json) (l u row pos : ℕ),
+    own.positions = none →
     Spot.SecondStage.readOk own named p port e = true → Spot.getD e "value" = .str v →
       Spot.nat? (Spot.getD e "leaves") = some l → placedRow own p port v l u = some row → readsAt e u = some pos →
         pos = row
