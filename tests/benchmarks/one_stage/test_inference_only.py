@@ -411,8 +411,8 @@ def test_the_command_line_writes_the_public_verdict_and_the_private_one_0600(sma
     (tmp_path / "registration.json").write_text(json.dumps({}))
     (d / "private").mkdir(mode=0o700)
     assert IO.main(["verdict", "--policy", str(tmp_path / "policy.json"), "--serve-run", str(d), "--circuit",
-                    str(tmp_path / "circuit.json"), "--registration", str(tmp_path / "registration.json"), "--pins",
-                    str(tmp_path / "no-weights.json"), "--lean", str(lean), "--out", str(tmp_path / "out" / "inference-only.json"),
+                    str(tmp_path / "circuit.json"), "--registration", str(tmp_path / "registration.json"),
+                    "--lean", str(lean), "--out", str(tmp_path / "out" / "inference-only.json"),
                     "--private", str(d / "private" / "inference-only.json")]) == 0
     pub = json.loads((tmp_path / "out" / "inference-only.json").read_text())
     full = json.loads((d / "private" / "inference-only.json").read_text())
@@ -421,10 +421,28 @@ def test_the_command_line_writes_the_public_verdict_and_the_private_one_0600(sma
     assert stat.S_IMODE((d / "private" / "inference-only.json").stat().st_mode) == 0o600
     assert full["lean_detail"]["flags"] == ["--count", "--detail"] and full["lean_detail"]["out"]["complies"] is True
     assert "lean_detail" not in pub
-    said = capsys.readouterr().out
+    first, said = capsys.readouterr().out.split("\n", 1)
+    assert first == f"INFERENCE-ONLY DEVELOPMENT {IO.NO_PINS}"
+    assert IO.NO_PINS.startswith("no registered information is read: no pins were named")
     assert said.startswith("INFERENCE-ONLY accept: session ") and "(no count published: n is judged on the blocks' exact " \
         "count, held on the node)" in said and said.rstrip().endswith("(0 held, 0 wired, 0 openings)")
     assert str(COUNT) not in (tmp_path / "out" / "inference-only.json").read_text() and str(COUNT) not in said
+
+
+@pytest.mark.parametrize("arg", ["--pins", "--registration"])
+def test_a_named_pins_or_registration_file_that_is_not_there_is_refused_by_name(tmp_path, arg):
+    """A ``--pins`` or ``--registration`` that names no file refuses, naming the argument and the path, before any verdict
+    is written: it never reads as no pins named or as a registration with no roots."""
+    for name in ("policy.json", "circuit.json", "registration.json", "pins.json"):
+        (tmp_path / name).write_text("{}")
+    paths = {"--pins": tmp_path / "pins.json", "--registration": tmp_path / "registration.json"}
+    paths[arg] = tmp_path / "absent.json"
+    argv = ["verdict", "--policy", str(tmp_path / "policy.json"), "--serve-run", str(tmp_path), "--circuit",
+            str(tmp_path / "circuit.json"), *(x for k, v in paths.items() for x in (k, str(v))),
+            "--out", str(tmp_path / "out.json"), "--private", str(tmp_path / "private.json")]
+    with pytest.raises(SystemExit, match=f"INFERENCE-ONLY refused: {arg} names {tmp_path / 'absent.json'}, which is not there"):
+        IO.main(argv)
+    assert not (tmp_path / "out.json").exists() and not (tmp_path / "private.json").exists()
 
 
 def test_a_lean_verifier_that_gives_no_verdict_leaves_the_run_undecided(small, tmp_path):

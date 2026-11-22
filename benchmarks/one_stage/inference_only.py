@@ -124,6 +124,8 @@ WORK_SOURCE = ("one slot of the class's fixed load (window_class.Tables.schedule
 #: the kinds of a block's fresh bits (``k_by_kind``): ``linears``, the outputs of the linears a PoUW cut leaves outside
 #: the circuit, and ``scan_state``, the scan state row
 KINDS = ("linears", "scan_state")
+#: the verdict's first line with no ``--pins``: the development path, on which no root is held registered
+NO_PINS = "no registered information is read: no pins were named (--pins)"
 
 
 class Undecided(Exception):
@@ -645,15 +647,19 @@ def main(argv: Sequence[str] | None = None) -> int:
               f"{i['work']['theta_macs']} θ-MACs⌉ = {i['raw']}, on the grid); session {pol['session']['definition'][:16]}…, "
               f"policy {digest(pol)[:16]}…", flush=True)
         return 0
+    for arg, path in (("--pins", a.pins), ("--registration", a.registration)):
+        if path is not None and not path.is_file():
+            raise SystemExit(f"INFERENCE-ONLY refused: {arg} names {path}, which is not there")
+    if a.pins is None:
+        print(f"INFERENCE-ONLY DEVELOPMENT {NO_PINS}", flush=True)
     pol = json.loads(a.policy.read_text()) if a.policy.is_file() else None
     doc = json.loads(a.circuit.read_text()) if a.circuit.is_file() else None
     from verity.commitments.periods import interface as IF
     from verity_vllm.program.predict.window_weights import WeightsRegistration
 
     pins = (dict(WeightsRegistration.of(json.loads(a.pins.read_text()), str(a.pins)).roots)
-            if a.pins is not None and a.pins.is_file() else None)
-    roots = (IF.registration_roots(json.loads(a.registration.read_text()), required=pins is not None)
-             if a.registration.is_file() else None)
+            if a.pins is not None else None)
+    roots = IF.registration_roots(json.loads(a.registration.read_text()), required=pins is not None)
     with tempfile.TemporaryDirectory(dir=a.private.parent if a.private.parent.is_dir() else None) as scratch:
         pub, full = verdict(pol, doc, a.serve_run, pins, roots, a.retroactive, a.lean, Path(scratch), a.lean_timeout)
     _write(a.private, full, private=True)
