@@ -1,3 +1,0 @@
-[2026-11-22T05:36Z] cac3094b6747
-From proofs lead 9:36 PM PST: CHANGE: do NOT write your own mend of test_window_steps.py's _preflight. vllm's mend of it exists already, marked and approved: PR #11280 at 47504a13984 (not on main yet). TAKE THAT COMMIT onto your branch (merge or cherry-pick it as written; fetch the PR's head) so two mends of the same lines do not conflict on main. If you already wrote yours, drop it in a new commit (no force) in favour of theirs. You stay the ONE writer in the four test files for the eight (vllm agreed, TOP-448 9:35 PM PST; its worker WIRED places each on its side too: read vllm's comment there for what WIRED finds). Re-run your command.
-
