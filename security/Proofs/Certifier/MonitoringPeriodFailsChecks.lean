@@ -65,12 +65,14 @@ premise: it is a lemma about the factor, and no exclusion.
 `MonitoringPeriodLeakCharged` holds, each of the two secrets is charged at most `log2 1` (`bit_charge`), and both are counted
 against `T = 1`. `MonitoringPeriodLeakCharged_nontrivial` is that count alone.
 
-**The premises together** (`MonitoringPeriodLeakCharged_honest`). At the toy code over a monitoring period of no windows and no
-connection, where `MonitoringPeriodLeakChecked_honest` has `MonitoringPeriodLeakChecked`'s premises, the weights `2^-(j+1)` sum to at most
-one (`kraftWeights_halves`). The lemma shows that the premises hold together and nothing more: the toy code's
-verifier rejects every run and the period has no window and no connection, so it shows nothing about a failure, a
-window's check or a run that passes, and where a window is placed and a run is accepted every premise but the weights'
-sum is still to be shown.
+**The premises together** (`MonitoringPeriodLeakCharged_honest`). At the toy code over a monitoring period of no
+windows and no connection, where `MonitoringPeriodLeakChecked`'s premises hold (`MonitoringPeriodLeakAccepted_honest`),
+the weights `2^-(j+1)` sum to at most one (`kraftWeights_halves`). The lemma shows that the premises hold together and
+nothing more: the toy code's verifier rejects every run and the period has no window and no connection, so it shows
+nothing about a failure, a window's check or a run that passes. `MonitoringPeriodLeakChecked_honest` places a window
+that a run passes, with its good event, but does not show the network attester's openings pass under the deployed
+commitment; the charged form takes that registration at every window as a premise (`CertifierRegisters`), so its
+honest lemma stays at a period of no window.
 
 `posL` rejects every run, so no lemma at it is about a run that passes: each shows what the count does where the
 premises hold. Its period has no checked input and one window, so none shows anything about a checked input or about
@@ -264,8 +266,8 @@ theorem kraftWeights_halves (N : ℕ) : KraftWeights (fun j => (2⁻¹ : ℚ≥0
 
 set_option synthInstance.maxSize 1024 in
 /-- **`MonitoringPeriodLeakCharged`'s premises at the toy code**, over a monitoring period of no windows and no connection:
-`MonitoringPeriodLeakChecked`'s premises there (`MonitoringPeriodLeakChecked_honest`), the channel over the one registered parameter as a
-finite set, the network attester's registration at every window (`CertifierRegisters`, which the charged form takes
+`MonitoringPeriodLeakChecked`'s premises there (`MonitoringPeriodLeakAccepted_honest`), the channel over the one
+registered parameter as a finite set, the network attester's registration at every window (`CertifierRegisters`, which the charged form takes
 as a premise), of which the period has none, and the weights `2^-(j+1)` on the number of failures, which sum to at
 most one (`kraftWeights_halves`). The premises hold together there, and the lemma shows nothing more. The toy code
 parses no statement and its verifier rejects every run, so no run passes there, and the period has no window and no
@@ -295,8 +297,8 @@ theorem MonitoringPeriodLeakCharged_honest :
             (fun _ _ _ => [])).commit trivLay 1 (fun _ _ => []) s []
           ((recordingCode noFormat ⟨0, 0, Empty.elim, Empty.elim⟩ fun c => c.elim).2 i)) ∧
       KraftWeights (fun j => (2⁻¹ : ℚ≥0) ^ (j + 1)) (Fintype.card Empty) :=
-  ⟨MonitoringPeriodLeakChecked_honest.1, MonitoringPeriodLeakChecked_honest.2.1, MonitoringPeriodLeakChecked_honest.2.2.1,
-    MonitoringPeriodLeakChecked_honest.2.2.2.1, MonitoringPeriodLeakChecked_honest.2.2.2.2.1,
+  ⟨MonitoringPeriodLeakAccepted_honest.1, MonitoringPeriodLeakAccepted_honest.2, ⟨fun i => i.elim0, fun i => i.elim0⟩,
+    fun i => i.elim0, fun _ _ _ _ _ => funext fun c => c.elim,
     ⟨fun _ _ => ⟨trivial, (), Finset.mem_coe.2 (Finset.mem_univ _), trivial⟩, fun _ _ => rfl⟩, fun i _ => i.elim0,
     kraftWeights_halves _⟩
 
