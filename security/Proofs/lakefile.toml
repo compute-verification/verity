@@ -89,7 +89,7 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.InferenceOnly", "Proofs.Slowd
   "Proofs.Properties.InferenceOnly.OperandsResolve", "Proofs.Properties.InferenceOnly.Agrees",
   "Proofs.Properties.Spot", "Proofs.Properties.Spot.Halt", "Proofs.Properties.Spot.Interval",
   "Proofs.Properties.Spot.FactorUpper", "Proofs.Properties.Spot.TwoStageCheck", "Proofs.Properties.Spot.Bits",
-  "Proofs.Properties.Spot.Wires", "Proofs.Properties.Spot.Edges", "Proofs.Properties.Spot.Tables", "Proofs.Properties.Verity.Sampled.PortsHeld", "Proofs.Properties.Spot.RootsRecord", "Proofs.Properties.Core.Evaluate",
+  "Proofs.Properties.Spot.Wires", "Proofs.Properties.Spot.Edges", "Proofs.Properties.Spot.Tables", "Proofs.Properties.Verity.Sampled.PortsHeld", "Proofs.Properties.Spot.RootsRecord", "Proofs.Properties.Spot.RootHeld", "Proofs.Properties.Core.Evaluate",
   "Proofs.Properties.Certifier.Records", "Proofs.Properties.Spot.PlanCheck", "Proofs.Properties.Spot.Units",
   "Proofs.Properties.Certifier.Registered",
   "Proofs.Properties.Spot.Credited", "Proofs.Properties.Spot.HistoryTable", "Proofs.Properties.Core.Period",
