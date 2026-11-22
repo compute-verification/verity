@@ -611,16 +611,10 @@ def RunReadsAtOneTree : Prop :=
           ∀ r' ∈ sliceRoots c.record roots m', Spot.getD r' "port" = .str row' →
             Spot.getD r "root" = Spot.getD r' "root"
 
-/-- **`TiedReadsAtRecordedRows regs`** (stated, open; the period test's link): on an accepted run of the per-member
-variant, each root a reader of a tied run Input gate holds at the port that reads it, its slice's root (the record's
-entry `<member>/<port>`, `OneStageZk.rootsOf`), is, with its domain, the root and domain of an entry of the `roots` of
-one of the registrations `regs`: rows a registration that computed them committed. The record holds no entry under
-the tied input's own name, and SPOT's verifier compares the readers' roots only with each other
-(`OneStageZk.tiedRootsAt`). The network period test is to give it with `regs` the period's compute audits'
-registrations: `NetworkVerifier.Period.wired` holds the scan's registration's `scan/prog<j>` entry, the scan member's
-entry at its port `prog<j>`, to an audit's `<descriptor id>/c<j>/o0` entry by root and domain
-(`Properties.NetworkPeriod.RowsProgWired`), and `tiedInputWired` holds the tied inputs the answer names to the lanes'
-`prog<j>` (`RowsTiedInputWired`); that the other readers' roots are that root is `RunReadsAtOneTree`'s half (2). -/
+/-- **`TiedReadsAtRecordedRows regs`** (stated, open): on an accepted run of the per-member variant, each root a reader
+of a tied run Input gate holds at the port that reads it (its slice's root) is, with its domain, the root and domain of
+an entry of the `roots` of one of the registrations `regs`. No record names a tied node's root and no test holds it:
+SPOT's verifier compares the readers' roots only with each other (`OneStageZk.tiedRootsAt`). -/
 def TiedReadsAtRecordedRows (regs : Array Lean.Json) : Prop :=
   ∀ p ms c Pp rs, MembersAccept p ms c Pp rs →
     ∀ roots, Spot.OneStageZk.membersRootsOf p ms c.record = .ok roots →
