@@ -17,7 +17,6 @@ import verity_difftest as D
 from hypothesis import strategies as st
 
 import pouw_live_verified_cases as cases
-from pouw_verified_cases import replay
 from verity.protocols.accounting.compute.pouw.verifier import credit as Cr
 from verity.protocols.accounting.compute.pouw.verifier import verifier as V
 
@@ -56,7 +55,7 @@ def live_verified(case: dict) -> dict:
                 VERIFIED["run"] += 1
                 return {"run": asks}
         else:
-            got, refused = Cr._live_verified(case["files"], replay(case["runs"]))(
+            got, refused = Cr._live_verified(case["files"], cases.replay(case["runs"]))(
                 {"statements": case["statements"]}, *args)
     VERIFIED[f"{refused[0]}: {_template(refused[1])}" if refused else "accept"] += 1
     return {"refused": list(refused)} if refused is not None else {"outcomes": got}
@@ -127,7 +126,7 @@ def test_served_live_answers():
             calls: dict[str, list] = {"lean": [], "python": []}
 
             def logged(side: str):
-                run = replay(case["runs"])
+                run = cases.replay(case["runs"])
 
                 def go(proof, **kw):
                     calls[side].append((proof, kw))

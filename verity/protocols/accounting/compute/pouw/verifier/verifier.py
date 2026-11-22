@@ -4,8 +4,8 @@ are its Lean's, `lean/check` (`pouw-verifier`), `lean/commit` (`pouw-commit`) an
 verdicts `verity/protocols/accounting/compute/pouw/prover/kernels/served_zk/of_record.py` publishes. The Python beside them (`core_check`, `coins`, `window`) is kept
 as the reference, and the difftests hold it to the Lean: a disagreement fails with the Lean's verdict. A served H1
 execution phase's statements are judged here too: `credit.window` and `credit.period_credit` take each sampled proof block's outcome from
-`lean("credit-verified", …)` (`PouwVerifier.Verified`), with `credit._verified` the reference, and each round's live
-outcome from `lean("credit-live-verified", …)` (`PouwVerifier.LiveVerified`), with `credit._live_verified` the reference,
+`lean("credit-verified", …)` (`PouwVerifier.Verified`), with `credit._verified` its reference, which no difftest holds to
+it (`lean/check/README.md`), and each round's live outcome from `lean("credit-live-verified", …)` (`PouwVerifier.LiveVerified`), with `credit._live_verified` the reference,
 on the circuit files its credit period's open committed, `lean("credit-committed-files", …)` (`PouwVerifier.CommittedFiles`),
 with `credit.committed_files` the reference. The verdicts acted on are the Lean's only (`of_record`, no Python
 answer beside it): `credit.window`'s and `credit.period_credit`'s, `lean("window", …)` and `lean("period", …)`

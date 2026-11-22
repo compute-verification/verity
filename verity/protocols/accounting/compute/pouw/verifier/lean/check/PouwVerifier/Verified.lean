@@ -7,7 +7,7 @@ public import PouwVerifier.Lanes
 
 The verifier of a window's statements, which `credit.window` and `credit.period_credit` take each sampled
 proof block's proof outcome from (`credit._lean_verified`, through `pouw-verifier-difftest`'s `credit-verified`), with
-`credit._verified` the Python reference the difftest (`tests/test_verified_difftest.py`) holds to it, string for string.
+`credit._verified` its Python reference, which no difftest holds to it (the package's README says why).
 
 A window's evidence carries its statements, one a call with a sampled proof block (`STATEMENT_KEYS`: the call, the paths of its
 circuit file and its public file, and its sessions' directories), never a verdict. The Flock verifier

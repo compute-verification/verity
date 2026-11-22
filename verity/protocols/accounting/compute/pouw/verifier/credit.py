@@ -5,7 +5,7 @@ reference of the Lean `PouwVerifier.Credit` (`lean/check`), held to it by the di
 Lean `PouwVerifier.Credit.executionPhase` takes as given. Those outcomes are the Lean's (`PouwVerifier.Verified`,
 `_lean_verified`):
 the Lean decides which statements the verifier runs on, with which inputs, and what its answers credit; `_verified` is
-its Python reference, held to it by the difftest (`lean/check/tests/test_verified_difftest.py`). Each round's live
+its Python reference, which no difftest holds to it (`lean/check/README.md`). Each round's live
 outcome is the Lean's too (`PouwVerifier.LiveVerified`, `_lean_live_verified`), with `_live_verified` its reference
 (`lean/check/tests/test_live_verified_difftest.py`). And so are the verdicts `window` and `period_credit` return: the Lean
 `Credit.executionPhase`'s and `Credit.periodCredit`'s on those outcomes (`_of_record`, `verifier.of_record`), with no
