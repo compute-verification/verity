@@ -78,7 +78,8 @@ rc=0
 "${UPY[@]}" benchmarks/one_stage/two_stage.py second --first-stage "$W/first/$(basename "$CLASS")/stage1.json" --boundary "$CLASS" \
   --capture "$PRIV/capture" --challenger local --challenger-host "$W/first/challenger-host" --main "$O/main.txt" \
   --m0-pythonpath "$M0PATH" --bin "$BIN" --lean "$LEAN" --kept "$PRIV/kept" --out "$W/second" > "$PRIV/second.log" 2>&1 || rc=$?
-grep '^TWO ' "$PRIV/second.log" | tee "$O/two.txt" || tail -30 "$PRIV/second.log"
+echo "DEVELOPMENT RUN, not an accepted run of record: the second stage's circuit is taken as the staging side wrote it after the first sample, not derived by the verifier" | tee "$O/two.txt"
+grep '^TWO ' "$PRIV/second.log" | tee -a "$O/two.txt" || tail -30 "$PRIV/second.log"
 echo "second rc=$rc" | tee -a "$O/machine.txt"
 RECORDS=(-type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -name index.json
          ! -path './*/archive/*' ! -path '*-work/*' ! -path './challenger-host/*')
