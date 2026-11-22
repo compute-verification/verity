@@ -151,8 +151,6 @@ structure Own where
   pub : String
   registered : Option Json
   first : Nat := 0
-  /-- the ports a link of the second stage names, read at round 1's record (`Docket.Verifier.linked`) -/
-  linked : Array Docket.Linked := #[]
   /-- C decoded and the partition's blocks, once a session: every member's `Own` is `{ shared with … }`, which keeps
   these, so no `Own` is updated at `program` or `partition`. -/
   prog : Thunk (V Flock.Program.Prog) := Thunk.mk fun _ => Flock.Program.decode program
@@ -346,30 +344,18 @@ def checkIdentifier (st : Flock.Stmt) : V Unit :=
       throw s!"identifier: the public header's identifier is outside canonical JSON's RFC 8785 domain: {e}"
     throw "identifier: the public header names an identifier; pass the verifier's own (--identifier F)"
 
-/-- The rows of round 1's value each of statement `st`'s units writes at an output port a link names for its template
-(`Docket.Linked.reads`, by unit), from its least unit on, as `Flock.Registered.withPositions` takes them. -/
-def linkedRows (st : Flock.Stmt) (linked : Array Docket.Linked) : V (Array (String × Array (Option Nat) × Nat)) := do
-  let some (t, _) := Flock.HmRow.queryTemplate st.c | return #[]
-  let mine := linked.filter fun l => l.template == t && !l.reads.isEmpty
-  if mine.isEmpty then return #[]
-  let indices ← Flock.Registered.unitIndices st.pub
-  let first := indices.foldl min (indices.getD 0 0)
-  return mine.map fun l => (l.port, l.reads.extract first (indices.foldl max 0 + 1), first)
-
 /-- `verity-verify-proof`'s `buildSessionOf` on an hm96-sha512 row statement with none of `--work`, `--stratified`,
 `--closure`, `--public-inputs` or `--identifier`. -/
 def buildSessionOf (parsed : V Flock.Circuit) (tags : Flock.Tags) (circuitB pubB : ByteArray) (coins : Flock.Coins)
     (tables : List (String × ByteArray)) (count : Nat) (draw partition : Option Json) (program : Option ByteArray)
-    (registered : Option (Array Flock.Registered.Port)) (linked : Array Docket.Linked := #[]) :
-    V (Flock.SessionSpec × Array Flock.Stmt) := do
+    (registered : Option (Array Flock.Registered.Port)) : V (Flock.SessionSpec × Array Flock.Stmt) := do
   (if !tags.hm96Rows then throw s!"{tags.name}: not an hm96-sha512 row statement" else pure () : V Unit)
   let r ← (if tags.hiddenOutputs then
       Flock.Stmt.setupTablesOf parsed tags circuitB pubB coins count tables draw partition program
     else Flock.Stmt.setupTables tags circuitB pubB coins count tables draw partition program :
       V (Flock.SessionSpec × Array Flock.Stmt))
   for st in r.2 do
-    Flock.checkRegistered st (← Flock.Registered.withPositions st.c st.pub program registered
-      (← linkedRows st linked))
+    Flock.checkRegistered st (← Flock.Registered.withPositions st.c st.pub program registered)
     checkIdentifier st
   Flock.Registered.checkFull registered draw
   return r
@@ -847,15 +833,14 @@ structure Reads where
   registered : Option (Array Flock.Registered.Port)
   known : Array (String × Array (Array Nat × ByteArray))
   params : Array String
-  linked : Array Docket.Linked := #[]
 
 def readsOf : Option Json → V Reads
-  | none => pure { registered := none, known := #[], params := #[] }
+  | none => pure ⟨none, #[], #[]⟩
   | some j => do
     let own ← Flock.Registered.ofJson j
     let known ← Flock.Registered.knownOf j
     Flock.Registered.checkKnownAll own known
-    pure { registered := some own, known, params := ← Flock.Registered.paramsOf j }
+    pure ⟨some own, known, ← Flock.Registered.paramsOf j⟩
 
 /-- The refusal of registered reads at the sample's units alone: not written. -/
 def SAMPLED_READS : String :=
@@ -890,7 +875,7 @@ def sessionAt (I : Flock.Witness.Inputs) (rd : Reads) (draw : Option Json) : V (
   Flock.Registered.checkProgram I.program rd.registered.isSome
   Flock.RecSetup.checkInner none none (pure (none, none))
   let r ← buildSessionOf (Flock.ProvedScope.circuitOf tags I.circuitFile I.tables) tags I.circuitFile I.publicFile
-    (Flock.Witness.zkCoins I) I.tables I.count draw I.partition I.program rd.registered rd.linked
+    (Flock.Witness.zkCoins I) I.tables I.count draw I.partition I.program rd.registered
   setupChecks I rd r.2
   r.2.forM Flock.Zk.shapeOk
   recChecks rd r.2
@@ -1032,7 +1017,7 @@ def run (p : Own) (sessions : Array RunFiles) (provedUnits? : Option (Array Nat)
   (match fitsWhy WORD I.circuitFile I.publicFile I.tables I.program I.partition p.registered with
     | some what => throw s!"{what}: {FITS}"
     | none => pure () : V Unit)
-  let rd := { (← readsOf p.registered) with linked := p.linked }
+  let rd ← readsOf p.registered
   let tags := Flock.Witness.zkTags I
   let scope : V Unit := do
     Flock.ProvedScope.checkOf (Flock.ProvedScope.circuitOf tags I.circuitFile I.tables) tags true pubB I.count false
@@ -1108,7 +1093,7 @@ def rootBTablesAt (inputs : Flock.Tags → ByteArray → ByteArray → V Flock.W
   let tabs : Option (Array Flock.Setup) := (do
     let some tags0 := Flock.Tags.byName? STATEMENT | throw s!"the statement {STATEMENT} is not known"
     let I ← inputs tags0 (← p.circuitFile) (← bs.get p.pub "public file")
-    let (_, tabs, _) ← setupAt I { (← readsOf p.registered) with linked := p.linked } (Flock.Witness.recordDraw record)
+    let (_, tabs, _) ← setupAt I (← readsOf p.registered) (Flock.Witness.recordDraw record)
     pure tabs : V (Array Flock.Setup)).toOption
   sessionTables.mapIdx fun i t => (t, tabs.bind fun ts => ts[i]?.bind fun st => (rootBLen st).toOption)
 
@@ -1354,7 +1339,7 @@ def membersParamsOfJson (j : Json) : V Params := do
   membersKeysHeld pr
   let one := Json.mkObj [("public", Json.str NO_FILE), ("registered", Json.null)]
   let p ← paramsParsed (Json.mkObj (without j "proofs" ++ [("proofs", one)]))
-  let own := { p.own with pub := "", linked := p.base.verifier.linked }
+  let own := { p.own with pub := "" }
   let subset := jsonStrIs (getD p.base.verifier.samplingDesign "law") "subset"
   let ms := (← membersOf own (getD pr "members")).map fun m => { m with subset }
   pure { p with base := { p.base with verifier := { p.base.verifier with members := ms.map fun m => (m.units, m.g) } },
@@ -1707,7 +1692,7 @@ def statementOf (p : Own) (population : ByteArray → V Unit) (tables : List (St
         match fitsWhy WORD circuitB pubB tables (some p.program) (some p.partition) p.registered with
         | some what => throw s!"{what}: {FITS}"
         | none =>
-          readsOf p.registered >>= fun rd => pure (StepAt.ofOwn p tags0 circuitB pubB tables { rd with linked := p.linked } (population pubB))
+          readsOf p.registered >>= fun rd => pure (StepAt.ofOwn p tags0 circuitB pubB tables rd (population pubB))
 
 /-- **The statement a member's session is held to**: `statementOf` at the member's own inputs and its own lookup tables
 (`ownTables`: the blobs' pinned tables its circuit looks up, so a table of the blobs that only another member's circuit

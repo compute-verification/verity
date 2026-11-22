@@ -219,8 +219,6 @@ structure Linked where
   port : String
   value : String
   entry : Json
-  /-- the row of round 1's value each of the second stage's units writes, by unit; empty for a port read as an input -/
-  reads : Array (Option Nat) := #[]
   deriving Inhabited
 
 /-- The verifier's own copies that R1–R8 hold the record to. -/
