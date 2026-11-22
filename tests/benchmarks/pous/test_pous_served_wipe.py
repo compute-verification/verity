@@ -2,9 +2,11 @@
 attached by name with the launcher's settings, one 32 MiB segment in host memory (`wipe_store.HostMemory`), against
 `wipe_side.py`, the challenger's stand-in on a host of its own, in place of the side the settings' ``command`` starts;
 `nvidia-smi` and `gpu-lease` are stand-ins on PATH, and the launcher's Python (``PY``) is one that puts those stand-ins and
-a Lean judge that answers as the Python did in place before it runs the launcher's own code. DIR/answer.json is the
-subprotocol's core answer (verity/wipe/v0) in the form `Answer.toJson` writes (what served_verdicts.py's `piece_row` reads
-through `pouw.core_check.answer_of`), with served.json and the summary beside it. Every refusal, the attach's or the
+a Lean judge that answers as the Python did in place before it runs the launcher's own code. Host memory is a store not
+on a GPU, which no card file states a fill floor for: the executable holds the wipe to 0 bytes, so every run here is a
+development run, and DIR/development.json is the subprotocol's core answer (verity/wipe/v0) in the form `Answer.toJson`
+writes (what served_verdicts.py's `piece_row` reads through `pouw.core_check.answer_of`) with its development line
+(`why`, saying first that no fill floor applies and why) and its ``reasons``, with served.json and the summary beside it. Every refusal, the attach's or the
 launcher's, is made by name before the wipe runs and leaves DIR/refused.txt, one sentence, and no answer.json."""
 
 from __future__ import annotations
@@ -228,6 +230,20 @@ def _is_core_answer(a: dict) -> None:
         assert a["public"] is None and a["profile"] is None
 
 
+#: the development line of a wipe of host memory under a pinned key: no fill floor, and why
+NO_FLOOR = "development run: ran with " + WS.NO_FILL_FLOOR.format(store="host")
+
+
+def _developed(d: Path) -> dict:
+    """DIR's answer, a development run's (`period.publish`): ``development.json``, whose development line says first that
+    no fill floor applies and why, and no ``answer.json``; the core answer returned, the line and its reasons taken off."""
+    developed = json.loads((d / "development.json").read_text())
+    assert not (d / "answer.json").exists() and developed["why"].startswith(NO_FLOOR)
+    assert developed["reasons"] == ([developed["reason"]] if developed["reason"] else [])
+    _is_core_answer(answer := {k: v for k, v in developed.items() if k not in ("why", "reasons")})
+    return answer
+
+
 def _decided(case: dict) -> dict:
     """The answer `wipe.case.json` decides, recomputed from its bytes."""
     p = case["params"]
@@ -239,20 +255,23 @@ def _decided(case: dict) -> dict:
 
 
 def test_the_wipe_on_the_serves_card_writes_its_core_answer(node, tmp_path) -> None:
-    """In the serve's lease, before its engine loads: the wipe attached by name, and DIR/answer.json the accepted core
-    answer of verity/wipe/v0 that the case decides, the challenger the one the settings' command starts on vy-auditor-2
-    (its stand-in's key pinned by the run, not the configuration, so trusted-device's premise reads a rehearsal's), the
-    window's serve dir and the card in served.json, and the piece's last line its `WIPE` headline. The case, which holds
-    the signed session, is the serve dir's, private, with the composite's piece beside it (served_case.py's `CASE` line
-    before the headline), and DIR keeps none of it. summary.json, served.json, the headline and the `CASE` line state
-    the card's uncovered bytes beside the answer, null for this store on no card."""
+    """In the serve's lease, before its engine loads: the wipe attached by name, and DIR/development.json the accepted
+    core answer of verity/wipe/v0 that the case decides, a development run's, its line saying only that no fill floor
+    applies (a store not on a GPU) and why, the challenger the one the settings' command starts on vy-auditor-2 (its
+    stand-in's key pinned by the run, not the configuration, so trusted-device's premise reads a rehearsal's), the
+    window's serve dir, the store and the card in served.json, and the piece's last line its `WIPE` headline. The case,
+    which holds the signed session, is the serve dir's, private, and DIR keeps none of it; a development run is no
+    composite piece, so served_case.py writes none and prints no `CASE` line. summary.json, served.json and the headline
+    state beside the answer the fill floor the executable held the wipe to, 0 bytes, and the card's uncovered bytes, null
+    for this store on no card; summary.json and the headline carry the development line."""
     d = tmp_path / "pieces" / "wipe"
     r = _wipe(node | {"GPU_LEASE_UUID": f"{CARD},GPU-other"}, d)
     assert r.returncode == 0, r.stdout + r.stderr
-    answer = json.loads((d / "answer.json").read_text())
-    _is_core_answer(answer)
+    answer = _developed(d)
+    assert json.loads((d / "development.json").read_text())["why"] == NO_FLOOR
     assert answer["protocol"] == W.PROTOCOL == "verity/wipe/v0" and answer["verdict"] == "accept"
     assert answer == json.loads((d / "wipe.json").read_text())["answer"]
+    assert json.loads((d / "wipe.json").read_text())["served"]["development"] == NO_FLOOR
     public = answer["public"]
     assert public["k"] == W.READS and public["memory_bits"] == W.SEGMENT_LABELS * sw.LABEL_BITS
     assert public["certified"] is False and public["foreign_bits"] > 0
@@ -263,34 +282,32 @@ def test_the_wipe_on_the_serves_card_writes_its_core_answer(node, tmp_path) -> N
     private = tmp_path / "pieces" / "serve-run" / "private" / "wipe"
     case = json.loads((private / "wipe.case.json").read_text())
     assert _decided(case) == answer | {"profile": profile} and not (d / "wipe.case.json").exists()
-    assert json.loads((private / "case.json").read_text()) == case
-    assert json.loads((private / "answer.json").read_text()) == answer | {"profile": profile}
-    assert {f: stat.S_IMODE((private / f).stat().st_mode) for f in ("case.json", "answer.json", "wipe.case.json")} == {
-        "case.json": 0o600, "answer.json": 0o600, "wipe.case.json": 0o600} and stat.S_IMODE(private.stat().st_mode) == 0o700
+    assert not (private / "case.json").exists() and not (private / "answer.json").exists()
+    assert stat.S_IMODE((private / "wipe.case.json").stat().st_mode) == 0o600
+    assert stat.S_IMODE(private.stat().st_mode) == 0o700
     assert case["evidence"][:64] not in "".join(p.read_text() for p in d.iterdir() if p.is_file())
     party = json.loads((tmp_path / "party.json").read_text())
     assert party == {"host": "vy-auditor-2", "command": json.loads(node["FAKE_SETTINGS"])["command"],
                      "address": ["10.96.0.36", 47611]}
     assert json.loads((d / "served.json").read_text()) == {
         "serve_dir": str(tmp_path / "pieces" / "serve-run"), "window": "3", "server": "vy-dc-h200", "card": CARD,
-        "fill": None, "uncovered_card_bytes": None, "run": node.get("RESEARCH_RUN_ID"),
+        "store": "host", "fill_floor_bytes": 0, "uncovered_card_bytes": None, "run": node.get("RESEARCH_RUN_ID"),
         "lease": "the serve's: its engine loads on this card after the wipe", "key_pin": "configuration"}
     summary = json.loads((d / "summary.json").read_text())
     assert summary["verdict"] == "accept" and _decider(summary) and summary["k"] == W.READS
     assert summary["uncovered_card_bytes"] is None and "uncovered_card_bytes" not in answer
+    assert (summary["fill_floor_bytes"], summary["development"]) == (0, NO_FLOOR) and "fill_floor_bytes" not in answer
     key, = case["params"]["trusted"]
     assert summary["key_sha512"] == hashlib.sha512(bytes.fromhex(key)).hexdigest() == PINNED and summary["key_pinned"]
     assert _built(d)
-    *_, built, last = r.stdout.strip().splitlines()
-    assert json.loads(built.removeprefix("CASE ")) == {
-        "piece": str(private), "protocol": W.PROTOCOL, "verdict": "accept", "uncovered_card_bytes": None}
-    assert last.startswith("WIPE {")
+    *before, last = r.stdout.strip().splitlines()
+    assert not any(line.startswith("CASE") for line in before) and last.startswith("WIPE {")
     headline = json.loads(last.removeprefix("WIPE "))
     assert _decider(headline) and headline | {"fill_GBps": None, "t0": None, "t1": None} == {
         "verdict": "accept", "reason": None, "protocol": W.PROTOCOL, "decided_by": headline["decided_by"],
         "executables": headline["executables"], "k": W.READS,
         "segments": 1, "fill_GBps": None, "t0": None, "t1": None, "server": mc.PROVER_MACHINE, "card": CARD, "exit": 0,
-        "key_pin": "configuration", "uncovered_card_bytes": None}
+        "key_pin": "configuration", "uncovered_card_bytes": None, "fill_floor_bytes": 0, "development": NO_FLOOR}
     assert not (tmp_path / "lease.log").exists() and not (d / "refused.txt").exists()
     assert _beside(d) == ["start", "the wipe exit 0", "exit 0"]
 
@@ -312,8 +329,7 @@ def test_outside_a_lease_it_takes_a_card_of_its_own(node, tmp_path) -> None:
     d = tmp_path / "wipe"
     r = _wipe(node, d)
     assert r.returncode == 0, r.stdout + r.stderr
-    _is_core_answer(answer := json.loads((d / "answer.json").read_text()))
-    assert answer["verdict"] == "accept"
+    assert _developed(d)["verdict"] == "accept"
     lease = (tmp_path / "lease.log").read_text().splitlines()
     assert len(lease) == 1 and lease[0].startswith(f"memory-accounting 1 --wait --max-min 30 -- bash {WRAPPER} ")
     served = json.loads((d / "served.json").read_text())
@@ -485,7 +501,7 @@ def test_a_session_signed_under_another_key_than_the_pinned_one_is_rejected(node
     assert r.returncode == 1, r.stdout + r.stderr
     developed = json.loads((d / "development.json").read_text())
     assert not (d / "answer.json").exists() and developed["reasons"] == [UNTRUSTED]
-    assert developed["why"].startswith("development run: ") and "no pinned key" in developed["why"]
+    assert developed["why"].startswith(NO_FLOOR) and "no pinned key" in developed["why"]
     _is_core_answer(answer := {k: v for k, v in developed.items() if k not in ("why", "reasons")})
     assert (answer["verdict"], answer["reason"]) == ("reject", UNTRUSTED)
     case = json.loads((tmp_path / "pieces" / "serve-run" / "private" / "wipe" / "wipe.case.json").read_text())
@@ -508,7 +524,7 @@ def test_a_run_that_pins_no_key_trusts_the_configurations_wipe_pin_and_no_other(
     assert r.returncode == 1, r.stdout + r.stderr
     assert json.loads((d / "period.json").read_text())["wipe"]["trusted_sha512"] == AUDITOR_PIN
     assert json.loads((d / "served.json").read_text())["key_pin"] == "configuration"
-    _is_core_answer(answer := json.loads((d / "answer.json").read_text()))
+    answer = _developed(d)
     assert (answer["verdict"], answer["reason"]) == ("reject", UNTRUSTED)
     case = json.loads((tmp_path / "pieces" / "serve-run" / "private" / "wipe" / "wipe.case.json").read_text())
     assert case["params"]["trusted"] == [] and _decided(case) == answer
@@ -613,7 +629,7 @@ def _public_bytes(r: subprocess.CompletedProcess, d: Path) -> bytes:
     """What of a wipe piece leaves the node in public: its answer or its refusal, its served counts but for ``server``
     (the case's server id, which `wipe-protocol --server NODE --fill BYTES serve` holds the case to), and its last line."""
     out = [r.stdout.strip().splitlines()[-1].encode()]
-    for name in ("answer.json", "refused.txt"):
+    for name in ("answer.json", "development.json", "refused.txt"):
         if (d / name).exists():
             out.append((d / name).read_bytes())
     if (d / "served.json").exists():
@@ -635,8 +651,8 @@ def test_no_machine_name_reaches_an_accepted_wipe_pieces_public_bytes(node, tmp_
     env = node | DISTINCT | {"GPU_LEASE_UUID": CARD}
     r = _wipe(env, d, _distinct(tmp_path / "vy-auditor2-wipe"))
     assert r.returncode == 0, r.stdout + r.stderr
-    assert json.loads((d / "answer.json").read_text())["verdict"] == "accept"
-    _no_name(_public_bytes(r, d) + json.dumps(json.loads((d / "answer.json").read_text())).encode())
+    assert _developed(d)["verdict"] == "accept"
+    _no_name(_public_bytes(r, d))
 
 
 def test_no_machine_name_reaches_a_wipe_whose_side_refuses_it(node, tmp_path) -> None:

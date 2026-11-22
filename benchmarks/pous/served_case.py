@@ -25,14 +25,16 @@ directory composite.py takes as ``--piece``.
 Before anything is written, the case is held to what the run published: for PoUS, the private opening opens the public
 answer's commitment, under the window's binding, to the digest of the case's commitment. The verdict is the
 component's Lean's alone (``--lean-root``: `pous-run-protocol`, or `wipe-protocol` held to the served node and the
-fill floor ``served.json`` names, ``--server NODE --fill BYTES serve``), refused unless it is the run's own answer but
+fill floor ``served.json`` names, ``--server NODE --fill BYTES serve``, refused by name before it runs when
+``served.json`` names a server but no positive fill floor: `held_to`), refused unless it is the run's own answer but
 for the reason. A piece that fails any of these is refused (`Refused`) and nothing is written.
 
 The case and its answer stay on the prover's side, in that 0700 directory, and so does composite.py's ``--out``, where it
 writes every piece's evidence again (``evidence.json``). The auditor's side reads what it read before: each piece's
 public ``answer.json`` (PoUS's under its hiding commitment) and the composite's answer. This prints one ``CASE`` line,
-naming the protocol, the verdict and where the piece is, and for the wipe ``uncovered_card_bytes`` as ``served.json``
-states it (the card file's store.dram less its fill floor, memory no label fills). A served run never runs it on PoUS's piece: `served_piece.py`
+naming the protocol, the verdict and where the piece is, and for the wipe ``fill_floor_bytes`` (the fill floor in bytes
+the executable held the wipe to) and ``uncovered_card_bytes`` as ``served.json`` states them (the card file's store.dram
+less its fill floor, memory no label fills). A served run never runs it on PoUS's piece: `served_piece.py`
 writes that case and its answer itself while it holds ``C*`` (`lean_answer`, `write`), `served_wipe.sh` runs
 it on the wipe's, and the composite takes both as written (`onsite_pieces.sh`'s `onsite_cases`).
 
@@ -276,10 +278,24 @@ def wipe_piece(window: Path, private: Path | None = None, *,
     case = _json(kept)
     prof = None if public.get("profile") is None else {k: v for k, v in public["profile"].items() if k != "placement"}
     own = {k: public.get(k) for k in (*WIPE_FIELDS, "reason")} | {"profile": prof}
-    server = () if served.get("server") is None else ("--server", str(served["server"]),
-                                                       "--fill", str(served.get("fill") or 0))
-    own = judged(case, own, exe, *server)
+    own = judged(case, own, exe, *(() if exe is None else held_to(window, served)))
     return write(private, case, own), own
+
+
+def held_to(window: Path, served: Mapping[str, Any]) -> tuple[str, ...]:
+    """``wipe-protocol``'s ``--server NODE --fill BYTES``, the served node and fill floor ``served.json`` names; none
+    when it names no server. A server named with no fill floor, or one that is no positive integer, is refused by name
+    (`Refused`): the executable would hold the wipe to a floor of 0 bytes, which no wipe fails. A wipe of a store not
+    on a GPU, held to 0 on purpose, is a development run, with no ``answer.json`` for this to judge
+    (`wipe_served.NO_FILL_FLOOR`)."""
+    if served.get("server") is None:
+        return ()
+    fill = served.get("fill_floor_bytes")
+    _need(type(fill) is int and fill > 0,
+          f"{window}/served.json names the server {served['server']} but no fill floor (fill_floor_bytes {fill!r}), "
+          f"so the verifier would hold the wipe to none: state store.wipe_fill in the card file of the SKU the card "
+          f"{served.get('card')} is (calibration/hardware/cards/, served_wipe.sh's WIPE_CARD) and make the serve again")
+    return ("--server", str(served["server"]), "--fill", str(fill))
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -310,7 +326,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             exe = None if a.lean_root is None else declared.built("wipe", "wipe-protocol", a.lean_root)
             private, answer = wipe_piece(a.window, a.private, exe=exe)
             served = a.window / "served.json"
-            stated = {"uncovered_card_bytes": (_json(served) if served.is_file() else {}).get("uncovered_card_bytes")}
+            said = _json(served) if served.is_file() else {}
+            stated = {k: said.get(k) for k in ("uncovered_card_bytes", "fill_floor_bytes")}
         else:
             print(f"CASE: {a.window}/answer.json is no PoUS or wipe answer ({protocol})", file=sys.stderr)
             return 2

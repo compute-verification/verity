@@ -235,8 +235,9 @@ node besides the one to a challenger on its own host, which the subprotocol adds
 the only key a session is accepted under. A challenger on its own host needs it; `None` trusts the key a challenger on
 this node made for the run. `fill_bytes` is the verifier's too, the fill floor the card file gives for the served
 node's card (its `store.wipe_fill`, a floor on the fill and not the card's memory), which the judge holds the session's
-fill to (`wipe-protocol --fill`): a session whose labels fill less is rejected. `None` gives none, and the judge holds
-the fill to 0 bytes."""
+fill to (`wipe-protocol --fill`): a session whose labels fill less is rejected. `None` gives none, a store not on a GPU,
+and the judge holds the fill to 0 bytes (`fill_floor`), which makes the served wipe a development run
+(`wipe_served.NO_FILL_FLOOR`)."""
 LINK_KEYS = {"name", "to", "via", "mbps", "counted_by"}
 DISK = {"paths": None, "bytes": None, "reserve_bytes": wipe_store.DISK_RESERVE, "spare_bytes": 0, "direct": True}
 """`wipe.disk` and its defaults: the targets (`paths`, each a directory the fill takes a file in or a block device
@@ -300,6 +301,12 @@ def config(doc: Mapping[str, Any]) -> dict[str, Any]:
     if (fill := c["fill_bytes"]) is not None and not (type(fill) is int and fill >= 0):
         raise ValueError(f"period.json's wipe.fill_bytes is null or a byte count, not {fill!r}")
     return c
+
+
+def fill_floor(c: Mapping[str, Any]) -> int:
+    """The fill floor in bytes the executable holds the wipe to (`wipe-protocol --fill`): `c`'s ``fill_bytes``, and 0
+    where it states none, a store not on a GPU, which no card file states a floor for."""
+    return 0 if c["fill_bytes"] is None else c["fill_bytes"]
 
 
 def dram_available(meminfo: Path = Path("/proc/meminfo")) -> int:
@@ -490,7 +497,7 @@ def subprotocol(period_dir: Path, node: str, out: Path, *, side_of: Callable[...
     if "wipe-protocol" in tools:
         ready(tools["wipe-protocol"])
         answer = lean = serve(tools["wipe-protocol"], [wipe.case], "--server", node,
-                                   "--fill", str(c["fill_bytes"] or 0))[0]
+                                   "--fill", str(fill_floor(c)))[0]
     else:
         answer = answer | {"profile": None, "public": None, "reason": W.NO_JUDGE, "verdict": "undecided"}
     if answer["profile"] is not None:
@@ -534,6 +541,6 @@ def summary(record: Mapping[str, Any]) -> dict[str, Any]:
 
 
 __all__ = ["CONFIG", "DISK", "DRAM", "LINK_KEYS", "NOT_DISKS", "Side", "Wipe", "answer", "config", "disks",
-           "dram_available", "subprotocol", "run", "segments_of", "session", "store_of", "summary", "timing",
-           "undeclared"]
+           "dram_available", "fill_floor", "subprotocol", "run", "segments_of", "session", "store_of", "summary",
+           "timing", "undeclared"]
 
