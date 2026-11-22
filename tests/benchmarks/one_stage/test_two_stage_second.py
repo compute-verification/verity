@@ -766,3 +766,16 @@ def test_a_held_return_gives_each_unit_its_row_of_round_1s_port_and_a_unit_of_an
     d = NS(returns=(x, IR.Return("T", "o1", "o1", per=4, at=(0, 2))))
     window = NS(population=6, members=[NS(template="U", base=0, n=2), NS(template="T", base=2, n=4)])
     assert TS.returned_rows(d, window, [0, 2]) == {("T", "o0"): [None, None, 1, 3, 9, 11]}
+
+
+def test_a_reference_is_the_sessions_position_free_form():
+    """`two_stage.position_free`, the one form of a session's registered file and its template's reference: Flock's
+    position-free `READS_V2`, no rows. Round 2 holds the two whole but for the run's fields (``second-values``), so a
+    reference in another form is refused."""
+    e = {"value": "logits", "words": 2, "word_bits": 16}
+    run = {"root": "aa" * 64, "domain": "bb" * 64, "leaves": 24}
+    session, ref = TS.position_free({"x": {**e, **run, "reads": [0, 1], "reads_from": 0}}), TS.position_free({"x": e})
+    assert session == {"format": TS.REG.READS_V2, "ports": {"x": {**e, **run}}}
+    own = SS.Own((0,), None, {}, {}, (), links=(SS.Link(TID, "x", "logits"),), ref_reads=((TID, ref),))
+    assert SS._values_ok(own, SS.Stmt(TID, {}, {}, session))
+    assert not SS._values_ok(replace(own, ref_reads=((TID, {**ref, "format": TS.REG.READS_V1}),)), SS.Stmt(TID, {}, {}, session))
