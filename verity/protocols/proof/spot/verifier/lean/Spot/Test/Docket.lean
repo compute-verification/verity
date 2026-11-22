@@ -114,6 +114,10 @@ def V3 : Verifier := verifier
 #guard codes V3 (put · "population" (some (2 : Nat))) == #["R2-population"]
 #guard codes V3 (put · "scheme" (some "t")) == #["R3-scheme"]
 #guard codes V3 (put · "roots" (some (Json.arr #[]))) == #["R3-roots"]
+-- no roots of its own stand only for a second stage whose layout derives no port and whose links name round 1's
+#guard !(codes { V3 with ports := #[], linked := #[{ template := "t", port := "x", value := "x", entry := Json.null }] }
+  (put · "roots" (some (Json.arr #[])))).contains "R3-roots"
+#guard (codes { V3 with ports := #[] } (put · "roots" (some (Json.arr #[])))).contains "R3-roots"
 #guard codes { V3 with ports := V3.ports.push ("q", Json.mkObj [("leaves", (4 : Nat)), ("domain", "d")]) }
   (put · "roots" (some (Json.arr #[Json.mkObj [("port", "o"), ("root", ROOT), ("leaves", (4 : Nat)), ("domain", "d")]]))) ==
   #["R3-ports"]

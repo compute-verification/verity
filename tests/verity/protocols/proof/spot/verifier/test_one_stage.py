@@ -249,6 +249,16 @@ def test_a_root_with_a_trailing_newline_is_refused_at_r3():
     assert _check({**rec, "roots": roots}, prog, q).codes == ("R3-root",)
 
 
+def test_no_roots_stand_only_for_a_second_stage_reading_round_ones():
+    """`Docket.check`'s R3, as Lean's guards on `V3` with no ports: a record of no roots is refused unless the verifier's
+    layout derives no port and a link names a port held at round 1's record (`second_stage.round_one_held`)."""
+    prog, q, rec = _registration(6)
+    linked = [{"template": "t", "port": "x", "value": "x", "entry": {}}]
+    assert "R3-roots" not in _check({**rec, "roots": []}, prog, q, ports={}, linked=linked).codes
+    assert "R3-roots" in _check({**rec, "roots": []}, prog, q, ports={}).codes
+    assert "R3-roots" in _check({**rec, "roots": []}, prog, q, linked=linked).codes
+
+
 def test_registration_refusals():
     prog, q, rec = _registration(6)
     cases = [({"format": "verity/registration/v0"}, "R1-protocol"), ({"law": {"law": "subset", "k": 3}}, "R1-law"),
