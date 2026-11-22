@@ -49,12 +49,13 @@ def forcedSet (V X : Finset L) (I : Set ℕ) (π : (A : Placed L) → Fin A.N �
     (W : ℕ) : Set (Placed L) :=
   {A | A.ingress (X ∪ V) I = 0 → W ≤ A.work (π A) (A.region X I \ m A)}
 
-/-- **The verifier's transcript decides PoUW's rule**: at every challenge where the verifier at `P.V` accepts on its
-transcript by `acc`, PoUW's verdict accepts (`PouwWork.Accepts`, on the challenges and what crossed into `P.V`). New:
-`Sound` and `Composition` read acceptance on the transcript, `PouwWork` on the challenges and the messages in; this
-says the verifier's program computes `P.accept`, a fact of the verifier's code. -/
-def AcceptIsVerdict {Ω : Type} (P : Verdict Ω L) (acc : Transcript L → Prop) : Prop :=
-  ∀ (S : Ω → Actual.Run L) (r : Ω), acc ((S r).view P.V) → Accepts S P r
+/-- **The verifier's transcript decides PoUW's rule**: in every feasible run, at every challenge where the verifier at
+`P.V` accepts on its transcript by `acc`, PoUW's verdict accepts (`PouwWork.Accepts`, on the challenges and what
+crossed into `P.V`). New: `Sound` and `Composition` read acceptance on the transcript, `PouwWork` on the challenges and
+the messages in; this says that in a feasible run the verifier's leaves run its program and that program computes
+`P.accept`, the honest verifier of the trust base and a fact of the verifier's code. -/
+def AcceptIsVerdict {Ω : Type} (𝓕 : Set (Actual.Run L)) (P : Verdict Ω L) (acc : Transcript L → Prop) : Prop :=
+  ∀ (S : Ω → Actual.Run L) (r : Ω), S r ∈ 𝓕 → acc ((S r).view P.V) → Accepts S P r
 
 /-- **(a) Forced matrix multiplication in one epoch.** If the verifier accepts in the epoch `[P.ts, P.td)` then, except
 with probability `δdet + δluck + δskip` over its challenges, the actual circuit lies in `forcedSet` at `W = Wb · Nmin`:
@@ -70,7 +71,7 @@ def ForcedMatmulEpoch : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (L : Type) [LinearOrder L] (P : Verdict Ω L) (𝓕 : Set (Actual.Run L))
     (acc : Transcript L → Prop) (X : Finset L) (π : (A : Placed L) → Fin A.N → ℕ)
     (m : (A : Placed L) → Finset (Fin A.N)) (Wb Nmin ρ : ℕ) (δdet δluck δskip : ℝ),
-    AcceptIsVerdict P acc →
+    AcceptIsVerdict 𝓕 P acc →
     ForStrategies Ω 𝓕 P.V (fun S => Assumptions.PouwDetection S P Nmin δdet ∧ Assumptions.PouwLuck S P Nmin δluck ∧
       Assumptions.PouwFloorOff S P X (fun r => π (S r).A) (fun r => m (S r).A) Wb Nmin ρ δskip) →
     Sound Ω 𝓕 P.V acc (Lies P.V fun _ => forcedSet P.V X (Set.Ico P.ts P.td) π m (Wb * Nmin)) (δdet + δluck + δskip)
@@ -116,17 +117,17 @@ noncomputable def TailSound [LinearOrder L] (Ω : Type) [Fintype Ω] (𝓕 : Set
 
 /-- **(b) Forced matrix multiplication in one epoch, the pooling kept.** If the verifier accepts in the epoch
 `[P.ts, P.td)` then, off a skip event of probability at most `δskip`, the node's shortfall below `Wb · N`
-(`forcedDeficit`, `0` when it took in help) has `E[exp(shortfall/(Wb · Λ)) · 1{accept}] ≤ 1` (`BudgetSound`): so at
-every tolerance `t` at once, except with probability `δskip + exp(−t/(Wb · Λ))`, the shortfall is below `t`
-(`TailSound`), and over a monitoring period the epochs' bounds multiply, the skip events add, and the period's
-tolerance `Wb · Λ · ln(1/δ)` is counted once (`PooledComposition`). Premises: the transcript decides PoUW's rule, and
-for every strategy A2 and A2b pooled (`PouwDetectionBudget`) and A3 at every count with one skip event
+(`forcedDeficit`, `0` when it took in help) has `E[exp(shortfall/(Wb · Λ)) · 1{accept ∧ ¬skip}] ≤ 1`
+(`BudgetSound`): so at every tolerance `t` at once, except with probability `δskip + exp(−t/(Wb · Λ))`, the shortfall
+is below `t` (`TailSound`), and over a monitoring period the epochs' bounds multiply, the skip events add, and the
+period's tolerance `Wb · Λ · ln(1/δ)` is counted once (`PooledComposition`). Premises: `Λ > 0`, the transcript decides
+PoUW's rule, and for every strategy A2 and A2b pooled (`PouwDetectionBudget`) and A3 at every count with one skip event
 (`PouwFloorLinear`). -/
 def ForcedMatmulEpochPooled : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (L : Type) [LinearOrder L] (P : Verdict Ω L) (𝓕 : Set (Actual.Run L))
     (acc : Transcript L → Prop) (X : Finset L) (π : (A : Placed L) → Fin A.N → ℕ)
     (m : (A : Placed L) → Finset (Fin A.N)) (Wb ρ : ℕ) (Λ δskip : ℝ),
-    AcceptIsVerdict P acc →
+    0 < Λ → AcceptIsVerdict 𝓕 P acc →
     ForStrategies Ω 𝓕 P.V (fun S => PouwDetectionBudget S P Λ ∧
       PouwFloorLinear S P X (fun r => π (S r).A) (fun r => m (S r).A) Wb ρ δskip) →
     BudgetSound Ω 𝓕 P.V acc (fun _ => forcedDeficit P.V X (Set.Ico P.ts P.td) π m (Wb * P.N)) (Wb * Λ) δskip
