@@ -450,7 +450,9 @@ def declared_count(doc: Mapping[str, Any], bits: int, resolve: Callable[[str], A
     record's window ingress (`interface.listed_ingress`: what its members read from rows before the window) adds the
     window figure beside it (``window``, those rows subtracted too), which holds only under its ``premise``
     (`WINDOW_PREMISE`). ``unpinned`` names the parameters the record reads whose window root is no pin of the
-    verifier's (none pinned, another root, or none the docket records): their reads of input rows are free. An
+    verifier's (none pinned, another root, or none the docket records): their reads of input rows are free. A value
+    each execution phase registers afresh (`PHASE_OWN`, the scan's state) is no registered information, so neither
+    pinned nor unpinned: where nothing holds it, ``phase_own`` names it and its reads of input rows are free. An
     ``untied`` value
     (`window_pins`: a per-window value no output port of the circuit writes, whose rows the prover chose) is no pin here,
     though the audit opens its reads against its committed root: its input rows are free, and the count names it."""
@@ -458,8 +460,11 @@ def declared_count(doc: Mapping[str, Any], bits: int, resolve: Callable[[str], A
     held = {p: r for p, r in pins.items() if p not in untied} if isinstance(pins, Mapping) else pins
     n = IF.input_count(doc, resolve, held, roots)
     reg = IF.declarations(doc)[2]
-    if unpinned := sorted({r.param for r in (reg.reads if reg else ())} - IF.held_params(held, roots) - untied):
+    loose = {r.param for r in (reg.reads if reg else ())} - IF.held_params(held, roots) - untied
+    if unpinned := sorted(loose - PHASE_OWN):
         n = {**n, "unpinned": unpinned}
+    if phase := sorted(loose & PHASE_OWN):
+        n = {**n, "phase_own": phase}
     if untied:
         n = {**n, "untied": sorted(untied)}
     other = n["free"] + bits

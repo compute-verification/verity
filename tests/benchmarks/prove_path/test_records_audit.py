@@ -580,16 +580,16 @@ def test_the_leak_count_is_the_circuits_unwired_input_bits_and_vacuous_past_the_
     assert got["other_inputs"] == got["inputs"] - 4 * x and got["external"] == 5 * x
 
 
-def _registered_circuit(n: int = 2, free: str | None = None) -> IF.Circuit:
-    """``n`` coordinates whose every input row is a registered read of one parameter ``a``, but port ``free``'s; each read
-    starts on a whole row of its port's words (`interface._reads_of`)."""
+def _registered_circuit(n: int = 2, free: str | None = None, param: str = "a") -> IF.Circuit:
+    """``n`` coordinates whose every input row is a registered read of one parameter ``param``, but port ``free``'s; each
+    read starts on a whole row of its port's words (`interface._reads_of`)."""
     rows, at, reads = IF.layout(BITS).rows, 0, []
     for p, words in rows:
         at = -(-at // words) * words
         if p != free:
-            reads.append(IF.Read(descriptor_id(BITS), p, "a", at=0, radix=(n,), base=at, step=(words,)))
+            reads.append(IF.Read(descriptor_id(BITS), p, param, at=0, radix=(n,), base=at, step=(words,)))
         at += n * words
-    return IF.Circuit("test", ((BITS, n),), registered=IF.Registered({"a": at}, reads=tuple(reads)))
+    return IF.Circuit("test", ((BITS, n),), registered=IF.Registered({param: at}, reads=tuple(reads)))
 
 
 #: the verifier's pin of ``a``, and a window docket's root for it
@@ -685,6 +685,18 @@ def test_count_with_no_pins_says_first_that_no_registered_information_is_read(tm
     assert got.err.splitlines()[0] == f"DEVELOPMENT {RA.DEVELOPMENT_RESTS['pins']}"
     assert RA.DEVELOPMENT_RESTS["pins"].startswith("no registered information is read: no pins were named")
     assert json.loads(got.out) == RA.declared_count(doc, 1687)
+
+
+def test_the_scan_state_read_by_no_pin_is_counted_free_and_named_neither_pinned_nor_unpinned():
+    """The execution phase's own value (`PHASE_OWN`, the scan's state) is no registered information: where nothing holds
+    it, its reads are free and ``phase_own`` names it, never ``unpinned``; held by a pin at the window's root, it is
+    neither."""
+    state, = RA.PHASE_OWN
+    doc = _registered_circuit(param=state).description()
+    got = RA.declared_count(doc, 0)
+    assert (got["phase_own"], "unpinned" in got, got["free"], got["bound"]) == ([state], False, got["inputs"], "vacuous")
+    held = RA.declared_count(doc, 0, pins={state: "ab" * 64}, roots={state: "ab" * 64})
+    assert "phase_own" not in held and "unpinned" not in held and held["free"] == 0
 
 
 def test_a_windows_roots_are_its_registered_roots_and_its_committed_values_entries_roots():
