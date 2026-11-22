@@ -5114,6 +5114,59 @@ pieces = D.server_fixture(DECODE)
 callers = D.server_fixture(CALLER)
 
 
+def anchor_width(j):
+    """C's digest anchors whose record entry is not one row of their mark's bits / 16 words (`docket.anchor_width`,
+    `Docket.anchorWidth`), a mark refused as `registered.mark_of` refuses it."""
+    j = _obj(_json(j), "the case")
+    if not isinstance(j.get("marks"), list):
+        raise D.Reject("marks is not a list")
+    marks = {}
+    for e in j["marks"]:
+        if not (isinstance(e, list) and len(e) == 2 and isinstance(e[0], str)):
+            raise D.Reject("a mark is [input, mark]")
+        try:
+            marks[e[0]] = G.mark_of(e[0], e[1])
+        except ValueError as x:
+            raise D.Reject(str(x)) from x
+    rec = j.get("record")
+    return {"inputs": R.anchor_width(marks, rec.get("registered") if isinstance(rec, dict) else None)}
+
+
+@st.composite
+def anchor_width_cases(draw) -> dict:
+    """Up to three marked inputs, a digest anchor's mostly, at 512 bits or another width, and a record whose entries of
+    them are one row of 32 words or another shape; rarely a mark `registered.mark_of` refuses."""
+    names = draw(st.lists(st.sampled_from(["t/root", "t/domain", "u/root", "w"]), unique=True, max_size=3))
+    fn = st.sampled_from(["registered.root/v1"] * 3 + ["registered.domain/v1"] * 2 + ["pous.session.round_coin/v1"])
+    marks = [[n, {"supplied": draw(fn), "args": {"value": "t"},
+                  "layout": draw(st.sampled_from(["digest"] * 4 + ["le", "halves"])),
+                  "bits": draw(st.sampled_from([512] * 4 + [256, 520, 0]))}] for n in names]
+    if marks and draw(st.integers(0, 5)) == 0:
+        marks[0][1] = draw(JSON)
+    shape = st.sampled_from([(1, 32)] * 4 + [(2, 16), (1, 16), (4, 8), (True, 32), (1, "32"), (1, 33)])
+    entries = []
+    for _ in range(draw(st.integers(0, 4))):
+        leaves, words = draw(shape)
+        entries.append({"value": draw(st.sampled_from([*names, "v"])), "root": "ab" * 64, "leaves": leaves,
+                        "words": words, "domain": "cd" * 64})
+    return {"marks": marks, "record": {"registered": entries} if draw(st.integers(0, 6)) else draw(JSON)}
+
+
+ANCHOR_WIDTH = D.Port(PIECES, "anchor_width", anchor_width, anchor_width_cases(), package=PACKAGE)
+
+
+def test_r7_refuses_an_anchor_entry_at_another_width_than_its_mark_as_python_does(pieces):
+    """`R7-anchor-width`'s anchors, Lean's answer the Python's: a table's root and domain anchor entries at two rows of
+    16 words are refused by the width C's marks give, one row of 32; the honest width is not."""
+    marks = [[f"t/{of}", {"supplied": f"registered.{of}/v1", "args": {"value": "t"}, "layout": "digest", "bits": 512}]
+             for of in ("root", "domain")]
+    for leaves, words, want in ((1, 32, []), (2, 16, ["t/root", "t/domain"])):
+        case = {"marks": marks, "record": {"registered": [
+            {"value": n, "root": "ab" * 64, "leaves": leaves, "words": words, "domain": "cd" * 64} for n, _ in marks]}}
+        assert anchor_width(case) == {"inputs": want}
+        assert D.replay(ANCHOR_WIDTH, case, pieces) == ("output", D.canonical({"inputs": want}))
+
+
 PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (UNIT_GATES, 300), (FANOUT, 400), (RUN_INPUT_ROOTS, 400),
               (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
               (PRODUCED, 500), (KNOWN_PORT, 300),
@@ -5123,7 +5176,7 @@ PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (UNIT_GATE
               (MATCHES_PUBLIC, 400), (PUBLIC_PORTS, 300), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500),
               (CHECK_VERDICTS, 400),
               (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400), (POP_ORDER, 300), (PUBLIC_UNITS, 300),
-              (LINK_POINTS, 500), (REPLAY_LINKS, 300), (FITS, 400), (TEMPLATE_CIRCUITS, 300)]
+              (LINK_POINTS, 500), (REPLAY_LINKS, 300), (FITS, 400), (TEMPLATE_CIRCUITS, 300), (ANCHOR_WIDTH, 300)]
 
 
 @pytest.mark.parametrize("port, examples", PIECE_RUNS, ids=[p.fn for p, _ in PIECE_RUNS])
