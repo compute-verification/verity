@@ -233,7 +233,6 @@ def test_a5s_registered_read_negatives_alter_one_of_a_chunks_two_ports_and_keep_
 
     ports = {f"part{j}": {"value": AT.value_name(j, 0, 0), "root": f"{j}" * 128, "leaves": T, "reads": list(range(T))}
              for j in AT.RANKS}
-    (tmp_path / "registered.json").write_text(json.dumps({"format": "verity/registered-reads/v1", "ports": ports}))
     member = tmp_path / "m"
     member.mkdir()
     head = {"registered": {p: {"value": e["value"], "positions": e["reads"], "paths": [""] * T} for p, e in ports.items()}}
@@ -248,8 +247,8 @@ def test_a5s_registered_read_negatives_alter_one_of_a_chunks_two_ports_and_keep_
         return {"accepted": False, "digest": "d", "why": "setup: registered reads: none"}
 
     monkeypatch.setattr(a5.a0, "lean_verify", lean_verify)
-    a5.registered_negatives(SimpleNamespace(lean="lean"), {"st": {"registered_file": tmp_path / "registered.json", "dir": member},
-                                                            "m": SimpleNamespace(n=T)}, tmp_path)
+    reads = a5.a0.registered_written(tmp_path / "registered.json", {"format": "verity/registered-reads/v1", "ports": ports})
+    a5.registered_negatives(SimpleNamespace(lean="lean"), {"st": {**reads, "dir": member}, "m": SimpleNamespace(n=T)}, tmp_path)
     assert seen == {"chunk-without-registered-reads": None,
                     "registered-read-against-another-root": {**ports, "part0": {**ports["part0"], "root": "00" * 64}},
                     "registered-reads-another-row": {**ports, "part0": {**ports["part0"], "reads": [*range(1, T), 0]}},
@@ -282,7 +281,7 @@ def test_a5s_bound_port_negatives_bind_one_port_at_another_root_or_leave_it_out(
              for j in AT.RANKS}
     bound = {p: {"root": f"{i + 4}" * 128, "domain": f"{i + 6}" * 128} for i, p in enumerate(("o0", "o1"))}
     honest = {"format": "verity/registered-reads/v1", "ports": ports, "bound": bound}
-    (tmp_path / "registered.json").write_text(json.dumps(honest))
+    reads = a5.a0.registered_written(tmp_path / "registered.json", honest)
     seen = {}
 
     def lean_verify(lean, st, n, sdir, zk, log):
@@ -292,7 +291,7 @@ def test_a5s_bound_port_negatives_bind_one_port_at_another_root_or_leave_it_out(
 
     monkeypatch.setattr(a5.a0, "lean_verify", lean_verify)
     out = a5.registered_negatives(SimpleNamespace(lean="lean"), {
-        "st": {"registered_file": tmp_path / "registered.json", "dir": staged_member(tmp_path, ports)},
+        "st": {**reads, "dir": staged_member(tmp_path, ports)},
         "m": SimpleNamespace(n=T)}, tmp_path)
     assert seen["bound-port-at-another-root"] == {**honest, "bound": {**bound, "o0": {**bound["o0"], "root": "00" * 64}}}
     assert seen["bound-port-left-out"] == {**honest, "bound": {"o1": bound["o1"]}}
@@ -313,7 +312,7 @@ def test_a5s_declared_port_negatives_move_a_port_the_interface_declares_into_bou
              for i, p in enumerate(("domain", "o1"))}
     bound = {"x": {"root": "4" * 128, "domain": "6" * 128}}
     honest = {"format": "verity/registered-reads/v1", "ports": ports, "bound": bound}
-    (tmp_path / "registered.json").write_text(json.dumps(honest))
+    reads = a5.a0.registered_written(tmp_path / "registered.json", honest)
     iface = tmp_path / "circuit.json"
     opening = {"reader": "TEmb_v1", "table": "emb", "key": "k", "ports": ["row"], "verdict": "o1", "at": 0, "units": T}
     table = {"name": "emb", "param": "embed", "offset": 0, "words": 64, "rows": 512}
@@ -330,7 +329,7 @@ def test_a5s_declared_port_negatives_move_a_port_the_interface_declares_into_bou
     assert a5.declared_ports(iface, "TEmb_v1") == ["o1"] and a5.declared_ports(iface, "TOther_v1") == []
     fv = {"roots": {"o1": "8" * 128}, "domain_ids": {"o1": "9" * 128}}
     out = a5.registered_negatives(SimpleNamespace(lean="lean"), {
-        "st": {"registered_file": tmp_path / "registered.json", "interface_file": iface,
+        "st": {**reads, "interface_file": iface,
                "dir": staged_member(tmp_path, ports)},
         "m": SimpleNamespace(n=T, template="TEmb_v1"), "header": {"frame_v3": fv}}, tmp_path)
     kept = {**honest, "ports": {"domain": ports["domain"]}}

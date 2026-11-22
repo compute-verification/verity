@@ -21,7 +21,7 @@ import subprocess
 import sys
 import threading
 import time
-from collections.abc import Collection, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from contextlib import AbstractContextManager, nullcontext
 from pathlib import Path
 
@@ -522,6 +522,30 @@ def archiving(held: dict | None, ident: tuple | None) -> AbstractContextManager:
         return held.setdefault(("archiving", ident), threading.Lock())
 
 
+#: The keys of a statement's registered file: its path, the object the audit built and that object's SHA-512 as written.
+REGISTERED_KEYS = ("registered_file", "registered", "registered_sha512")
+
+
+def registered_written(path: Path, doc: dict) -> dict:
+    """The registered file ``doc`` written at ``path``, as a statement's keys (`REGISTERED_KEYS`): the file read after
+    proving is held to the SHA-512 of these bytes (`registered_held`), and the audit's own readers take ``doc``."""
+    body = json.dumps(doc, sort_keys=True).encode()
+    path.write_bytes(body)
+    return {"registered_file": path, "registered": doc, "registered_sha512": hashlib.sha512(body).hexdigest()}
+
+
+def registered_changed_why(path: Path) -> str:
+    return (f"registered file {path}: not the bytes the audit built: a registered file read after proving is the one "
+            "the audit wrote, by its SHA-512, never a file another process changed")
+
+
+def registered_held(st: dict, keys: Mapping[Path, str]) -> str | None:
+    """Why the archive's copy of the statement's registered file (its key in ``keys``, the SHA-512 Lean holds the object
+    it reads to) is not the file the audit built (``st["registered_sha512"]``); None where it is, or ``st`` has none."""
+    want, f = st.get("registered_sha512"), st.get("registered_file")
+    return None if want is None or f is None or keys.get(Path(f)) == want else registered_changed_why(Path(f))
+
+
 def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: str = "lean-verify",
                 flags: Sequence[str] = (), members: VerifyMembers | None = None) -> dict:
     """The verifier: Lean `verity-verify-proof verify` on the session's record, with the circuit and the public file
@@ -550,6 +574,8 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: s
     with archiving(st.get("archived"), identity(files[0])):
         keys = archive_put(lean, archive, files, out / ("archive-put.log" if log == "lean-verify" else f"{log}.archive-put.log"),
                            st.get("archived"), files[:1] if st.get(ARCHIVE_LINK) else ())
+    if (why := registered_held(st, keys)) is not None:
+        return {"accepted": False, "of_record": True, "why": why}
     bound = [y for x in bound_files(st) for y in (f"--{x}", keys.get(Path(st[f"{x}_file"]), ""))]
     args = ["--statement", st.get("statement", STATEMENT_ID), "--archive", str(archive),
             "--circuit", keys.get(files[0], ""), "--public", keys.get(files[1], ""), *bound,
