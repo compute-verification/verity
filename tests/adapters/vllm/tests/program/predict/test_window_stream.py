@@ -1,5 +1,6 @@
-"""The small test model's epoch at class 1,1,1 as the audit's stream meets it: a declared circuit of two layers whose
-circuit templates each have many ranges, interleaved, which `service.Stream` takes as the window's program."""
+"""The small test model's served epoch at class 1,1,1 as the audit's stream meets it: the served lowering (the serve's
+close, `served_lowering`), a declared circuit of two layers whose circuit templates each have many ranges, interleaved,
+which `service.Stream` takes as the window's program."""
 
 from __future__ import annotations
 
@@ -11,25 +12,35 @@ from verity.protocols.proof.spot.verifier.one_stage import partition as P
 
 from tests.program.predict import test_steps as ST
 from tests.program.predict.test_window_circuit import GRAIN
-from verity_vllm.program.predict.window_circuit import WindowClass, class_circuit
+from verity_vllm.program.predict.window_circuit import WindowClass, served_lowering
+
+
+def defs_of(circuit) -> dict:
+    return {P.template_id(fn): fn for fn, _ in circuit.templates}
 
 
 @pytest.mark.slow
-def test_the_class_1_1_1_epoch_is_a_cover_the_stream_takes_at_each_templates_ranges_summed():
-    """At class 1,1,1 the epoch's circuit templates have several ranges each, so the stream's former test (one range a
+def test_the_served_class_1_1_1_epoch_is_a_cover_the_stream_takes_at_each_templates_ranges_summed():
+    """At class 1,1,1 with its one slot filled (one prompt id, one output), the served lowering's circuit templates have
+    several ranges each, its last position a `SelectCollect_v1` unit and a `SlotEntry_v2` unit (the class's circuit
+    makes them one `SelectEntry_v1` unit and is never the declared circuit a served epoch registers), so the stream's former test (one range a
     template, in the window's order) refused it (`stream`). Its units, numbered by the ranges in the declared circuit's
     order, are each unit's circuit template by index as the strata give them, a disjoint cover of the population but
     not in slot order (`partition.covers`, not `partition.in_order`), which the Lean's run takes under a subset design
     only. The stream builds on it, its population program at each template's ranges summed, and refuses counts that
-    leave a range out. About two minutes, the class circuit's build: the one test that holds the stream to a served
+    leave a range out. About two minutes, the served lowering's build: the one test that holds the stream to a served
     epoch's declared circuit, the shape the next rehearsal meets, which the spot suite's toy epochs only stand in for."""
-    circuit = class_circuit(ST._registered(), WindowClass(1, 1, 1), None, GRAIN)
+    advice, ingress = ST._session([(1, 1, {**ST.GREEDY, "max_tokens": 1})], [[(0, 0, 1)]])
+    _compiled, low = served_lowering(ST._registered(), WindowClass(1, 1, 1), advice, ingress, GRAIN)
+    circuit = low.circuit
     w = IF.Window(circuit, "ab" * 64, {"law": "subset", "k": 2}, 64).window
     order = w.query["params"]["templates"]
     ranges = P.ranges(w.program, w.query)
     n = sum(m for _t, _lo, m in ranges)
     assert len(ranges) > len(order) and [t for t, _lo, _m in ranges] != order
-    assert (len(ranges), len(order), n) == (36, 14, 139)
+    assert (len(ranges), len(order), n) == (37, 15, 140)
+    assert [P.template_id(fn).split("{")[0] for fn in (defs_of(circuit)[ranges[-2][0]], defs_of(circuit)[ranges[-1][0]])] \
+        == ["SelectCollect_v1", "SlotEntry_v2"] and ranges[-1][1:] == (139, 1)
     by_ranges = [t for t, _lo, m in ranges for _ in range(m)]
     by_strata = [None] * n
     for t, rs in P.strata(w.program, w.query):
@@ -37,7 +48,7 @@ def test_the_class_1_1_1_epoch_is_a_cover_the_stream_takes_at_each_templates_ran
             by_strata[lo:hi] = [t] * (hi - lo)
     assert by_ranges == by_strata
     assert P.covers(w.program, w.query, n) and not P.in_order(w.program, w.query, n)
-    defs = {P.template_id(fn): fn for fn, _ in circuit.templates}
+    defs = defs_of(circuit)
     units = [defs[t] for t in order]
     spec = S.Spec((S.Value("x", "hm96-sha512/row/v1", "serve"),), S.All(), S.Check(tuple(P.program_digest(Program(u)) for u in units), w.query, proof_deadline=60.0),
                   (), b"window-stream-test")
