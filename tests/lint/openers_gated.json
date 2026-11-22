@@ -1,5 +1,33 @@
 {
-  "rule": "circuit templates that reach an opener and gate on its verdict, at each binding a registered circuit uses, each evaluated at that binding (tests/lint/test_repo_openers_gated.py --write)",
+  "rule": "circuit templates that call an opener and gate on its verdict or return a verdict alone, at each binding an application's epoch circuit or a test's uses, each evaluated at that binding (tests/lint/test_repo_openers_gated.py --write)",
+  "applications": {
+    "applications/onsite_full.toml": {
+      "built": {
+        "h100-sxm-80gb+h200-sxm-141gb": [
+          "EmbeddingRead_v4{V=128256,H=2048}"
+        ],
+        "rtx-pro-6000-server": [
+          "EmbeddingRead_v4{V=128256,H=2048}"
+        ]
+      },
+      "refused": {
+        "b200-sxm-180gb": "UnregisteredTarget: compute capability 10.0: no registered tensor-core pipeline (unregistered:10.0)"
+      }
+    },
+    "applications/remote.toml": {
+      "built": {
+        "h100-sxm-80gb+h200-sxm-141gb": [
+          "EmbeddingRead_v4{V=128256,H=2048}"
+        ],
+        "rtx-pro-6000-server": [
+          "EmbeddingRead_v4{V=128256,H=2048}"
+        ]
+      },
+      "refused": {
+        "b200-sxm-180gb": "UnregisteredTarget: compute capability 10.0: no registered tensor-core pipeline (unregistered:10.0)"
+      }
+    }
+  },
   "entries": [
     {
       "template": "EmbeddingRead_v4",
@@ -16,7 +44,51 @@
           "gated"
         ]
       ],
-      "evaluated": true
+      "evaluated": true,
+      "used_by": [
+        "applications/onsite_full.toml",
+        "applications/remote.toml"
+      ]
+    },
+    {
+      "template": "EmbeddingRead_v4",
+      "key": "EmbeddingRead_v4{V=20,H=8}",
+      "closure_digest": "6439d86d5848546d128ab274309dd17e698876418d610f64a36dd0963432e3d51970d7f5d72ac3c012adc742d40ba98d5795d3d318711e58c7a5b1700a1cd3c1",
+      "class": "gated",
+      "outputs": [
+        [
+          "0",
+          "gated"
+        ],
+        [
+          "1",
+          "gated"
+        ]
+      ],
+      "evaluated": true,
+      "used_by": [
+        "tests"
+      ]
+    },
+    {
+      "template": "EmbeddingRead_v4",
+      "key": "EmbeddingRead_v4{V=256,H=64}",
+      "closure_digest": "810b35ccde49f9d5dc7e79b69111ceb1af8aa600c6c8230d95b732757d9abda31fdf789d39af6c950f421bc4df6d8d9efa8fd639d10df8f8873741d172b3ea77",
+      "class": "gated",
+      "outputs": [
+        [
+          "0",
+          "gated"
+        ],
+        [
+          "1",
+          "gated"
+        ]
+      ],
+      "evaluated": true,
+      "used_by": [
+        "tests"
+      ]
     }
   ]
 }

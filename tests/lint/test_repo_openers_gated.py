@@ -8,9 +8,11 @@ dependence carried beside its value: a returned element that comes out constant 
 parameter reaching an opener's opened value or path is a verdict, and any other is ungated.  A call that reaches no opener
 on parameters all unknown is not entered.  A template the walk can't decide (a body that doesn't build or compile, a
 shape whose next binding classes otherwise, a module that names an opener its imports don't reach) fails.
-``openers_gated.json`` is the record of the gated templates at the bindings registered circuits use (`SERVED`), each
-evaluated at that very binding, with its closure digest; ``--write`` writes it.  The tests that walk are slow: no cheaper
-test finds an opener, which is seen only in the bodies that call it."""
+``openers_gated.json`` is the record of the templates that call an opener at each binding a circuit uses: an
+application's, read off the description of its epoch circuit as the adapter builds it at each GPU card's target, and the
+tests' and trials' (`TESTED`); each is evaluated at that very binding, with its closure digest, and says where it is used.
+``--write`` writes it.  The tests that walk are slow: no cheaper test finds an opener, which is seen only in the bodies
+that call it."""
 from __future__ import annotations
 
 import ast
@@ -34,8 +36,12 @@ OPENERS = {"FrameV3Read_v1": ("value", "path"), "FrameV3ReadAt_v1": ("value", "p
            "MerkleRead_v1": ("leaf", "path"), "LmsVerify_v1": ("message", "C", "y", "path")}
 GATED, VERDICT, UNGATED = "gated", "verdict", "ungated"
 RECORD = Path(__file__).resolve().parent / "openers_gated.json"
-#: the bindings a registered circuit uses of a template that reaches an opener: (module, template, statics)
-SERVED = (("verity.commitments.gates.embedding", "EmbeddingRead_v4", {"V": 128256, "H": 2048}),)
+APPLICATIONS = ROOT / "applications"
+#: the bindings of a template that calls an opener in the circuits tests and processor trials encode, by the module
+#: defining it: each key as the circuit's description names it
+TESTED: dict[str, tuple[str, ...]] = {
+    "verity.commitments.gates.embedding": ("EmbeddingRead_v4{V=256,H=64}", "EmbeddingRead_v4{V=20,H=8}"),
+}
 
 
 def _imports() -> tuple[Any, Any, Any, Any]:
@@ -49,7 +55,8 @@ def _imports() -> tuple[Any, Any, Any, Any]:
 
 class Imports:
     """Whether a module's code can reach an opener's module: its imports, function-level ones included, and its packages',
-    closed over; ``mentions`` the modules whose source names an opener without that."""
+    closed over; ``mentions`` the modules whose source names an opener without that, and ``unresolved`` each name it
+    couldn't find, with why."""
 
     def __init__(self) -> None:
         from verity.commitments.gates import frame_v3, lms, merkle
@@ -61,12 +68,13 @@ class Imports:
         self.edges: dict[str, set[str]] = {}
         self.memo: dict[str, bool] = {}
         self.mentions: set[str] = set()
+        self.unresolved: dict[str, str] = {}
 
-    @staticmethod
-    def origin(name: str) -> str | None:
+    def origin(self, name: str) -> str | None:
         try:
             spec = importlib.util.find_spec(name)
-        except (ImportError, ValueError, AttributeError):
+        except (ImportError, ValueError, AttributeError) as e:
+            self.unresolved[name] = f"{type(e).__name__}: {e}"
             return None
         return spec.origin if spec is not None and spec.origin and spec.origin.endswith(".py") else None
 
@@ -436,13 +444,139 @@ def evaluated(fn: Any) -> dict:
             "evaluated": True}
 
 
-def record() -> dict:
+def callers(desc: dict) -> list[str]:
+    """The keys of ``desc``'s definitions that call an opener and that its root reaches through its nodes' callees and word
+    primitives' Boolean definitions, sorted: the verifier's reading (`docket.ungated_openers` with no gated pair)."""
+    defs, calls, boolean = desc["definitions"], desc["callees"], desc.get("boolean", {})
+    seen, out, todo = set(), [], [desc["root"]]
+    while todo:
+        k = todo.pop()
+        if k in seen:
+            continue
+        seen.add(k)
+        e = defs[k]
+        if e["id"] in OPENERS:
+            continue
+        kids = ([calls[n["fn"]] for n in e["body"]["nodes"]] if e["form"] == "composite"
+                else [boolean[e["id"]]] if e["id"] in boolean else [])
+        if any(defs[c]["id"] in OPENERS for c in kids):
+            out.append(k)
+        todo += kids
+    return sorted(out)
+
+
+def targets() -> dict[str, Any]:
+    """Each GPU card's target (`target_profile.card_facts`), by its cards' names, one per compute capability and SM count."""
+    from verity.device import load_card
+    from verity_vllm.config import CARD_FILES
+    from verity_vllm.program.frontend.target_profile import TargetProfile, card_facts
+
+    got: dict[tuple, list[str]] = {}
+    for p in sorted(CARD_FILES.glob("*.toml")):
+        if load_card(p.stem, directory=CARD_FILES).get("kind") != "gpu":
+            continue
+        cc, sms, _name = card_facts(p.stem)
+        got.setdefault((cc, sms), []).append(p.stem)
+    return {"+".join(names): TargetProfile(compute_capability=cc, num_sms=sms) for (cc, sms), names in got.items()}
+
+
+def epoch(params: dict, target: Any) -> tuple[dict, dict[str, Any]]:
+    """The description of an application's epoch circuit at ``target`` as the serve's close builds it
+    (`window_circuit.served_lowering`), no weights read, every slot of its class taken by a request with the class's
+    prompt and outputs, and its definitions by key; refused (`Unexpressible`, `UnregisteredTarget`) where the adapter can't
+    lower it."""
+    import verity_vllm.pipeline.advice_code.format as I1
+    from verity.circuits import codec as C
+    from verity_vllm.engine.served_seed import DEFAULT_SEED
+    from verity_vllm.inputs import serves
+    from verity_vllm.pipeline import advice as ADV
+    from verity_vllm.program.predict import window_circuit as WC
+    from verity_vllm.program.predict.phi import phi_of_serve
+    from verity_vllm.program.predict.steps import Registered
+
+    s = serves.served(params["model"], params["revision"], params["precision"], params["slots"], params["window-steps"])
+    serve = {"model": s.model, "revision": s.revision, "execution": target.execution_label, "target": target.to_json()}
+    reg = Registered.of(phi_of_serve(serve), DEFAULT_SEED, ADV.CAP_BITS)
+    sampling = {"temperature": 0.0, "top_p": 1.0, "top_k": 0, "seed": None, "max_tokens": s.outputs}
+    steps = [[I1.Row(i, "prefill", 0, s.prompt) for i in range(s.slots)]]
+    steps += [[I1.Row(i, "decode", s.prompt + j, 1) for i in range(s.slots)] for j in range(s.outputs - 1)]
+    advice = I1.Advice(tuple(I1.RequestAdvice(f"q{i}", s.prompt, s.outputs, "length") for i in range(s.slots)),
+                       tuple(I1.StepAdvice(tuple(st)) for st in steps), (0,) * (s.slots * s.outputs))
+    ingress = {f"q{i}": {"prompt": [1] * s.prompt, "model": s.model, "user": f"q{i}", **sampling} for i in range(s.slots)}
+    _compiled, low = WC.served_lowering(reg, WC.WindowClass(s.slots, s.prompt, s.outputs), advice, ingress)
+    program, _query = low.circuit.program()
+    return C.encode_program(program), C.definitions(program)
+
+
+def applications() -> dict[str, dict]:
+    """Each application's bindings of a template that calls an opener, by target its epoch circuit builds at, with each
+    binding's Definition and closure digest in that circuit's description, and the targets that refuse it, with why."""
+    import tomllib
+
+    from verity.circuits import codec as C
+    from verity_vllm.program.frontend.targets import UnregisteredTarget
+    from verity_vllm.program.predict.common import Unexpressible
+
+    _imports()[1].load_registries()
+    out: dict[str, dict] = {}
+    for path in sorted(APPLICATIONS.glob("*.toml")):
+        params = tomllib.loads(path.read_text(encoding="utf-8"))["workload"]["params"]
+        app: dict[str, dict] = {"built": {}, "refused": {}}
+        for name, target in targets().items():
+            try:
+                desc, defs = epoch(params, target)
+            except (Unexpressible, UnregisteredTarget) as e:
+                app["refused"][name] = f"{type(e).__name__}: {e}"
+                continue
+            app["built"][name] = {k: (defs[k], C.closure_digest(desc, k)) for k in callers(desc)}
+        out[path.relative_to(ROOT).as_posix()] = app
+    return out
+
+
+def bound(module: str, key: str) -> Any:
+    """The binding ``key`` names of a template ``module`` registers, its statics integers; refused unless it binds as
+    ``key``."""
     import importlib
 
+    from verity.circuits.codec import descriptor_id
+
     D = _imports()[2]
-    return {"rule": "circuit templates that reach an opener and gate on its verdict, at each binding a registered circuit "
-                    "uses, each evaluated at that binding (tests/lint/test_repo_openers_gated.py --write)",
-            "entries": [evaluated(D.bind(getattr(importlib.import_module(m), t), **st)) for m, t, st in SERVED]}
+    importlib.import_module(module)
+    base, _, rest = key.partition("{")
+    statics = dict(kv.split("=", 1) for kv in rest.rstrip("}").split(",")) if rest else {}
+    fn = D.bind(D.REGISTRY[base], **{k: int(v) for k, v in statics.items()})
+    if (got := descriptor_id(fn)) != key:
+        raise ValueError(f"{key}: binds as {got}")
+    return fn
+
+
+def record() -> dict:
+    apps = applications()
+    used: dict[str, set[str]] = {}
+    fns: dict[str, Any] = {}
+    digests: dict[str, str] = {}
+    for where, app in apps.items():
+        for got in app["built"].values():
+            for k, (fn, digest) in got.items():
+                used.setdefault(k, set()).add(where)
+                fns[k], digests[k] = fn, digest
+    for module, keys in TESTED.items():
+        for k in keys:
+            used.setdefault(k, set()).add("tests")
+            if k not in fns:
+                fns[k] = bound(module, k)
+    entries = []
+    for k in sorted(used):
+        e = evaluated(fns[k])
+        if e["key"] != k or digests.get(k, e["closure_digest"]) != e["closure_digest"]:
+            raise ValueError(f"{k}: evaluated as {e['key']} with closure digest {e['closure_digest']}, the circuit's {digests[k]}")
+        entries.append({**e, "used_by": sorted(used[k])})
+    return {"rule": "circuit templates that call an opener and gate on its verdict or return a verdict alone, at each binding "
+                    "an application's epoch circuit or a test's uses, each evaluated at that binding "
+                    "(tests/lint/test_repo_openers_gated.py --write)",
+            "applications": {where: {"built": {t: sorted(got) for t, got in app["built"].items()}, "refused": app["refused"]}
+                             for where, app in apps.items()},
+            "entries": entries}
 
 
 @pytest.mark.slow
