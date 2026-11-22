@@ -322,10 +322,10 @@ def test_two_members_sessions_close_on_the_windows_challenger_session_and_v2_acc
     assert M.case_check(other) == ("reject", M.run_reason(None, why)) == ("reject", f"proofs: {why}")
 
 
-#: The refusal the afresh audit meets on this branch, by a line of the audit's own words, which fails closed: since a
-#: registered value is leafed once, in its registration's tree, the docket gives the member no root at the port that
-#: reads it, and the members check still asks one of every port the header names.
-AFRESH_REFUSALS = ("port sw has no tree under the member",)
+#: The refusal the afresh audit meets, by the audit's own words: a value registered afresh under the run root is no pin
+#: of the weights' registration of record, so nothing fixes its root before the coin and the docket test refuses it
+#: (`docket.WEIGHTS_WHY["R8-unpinned"]`); a value bound for each run is a run input instead.
+AFRESH_REFUSALS = ("R8-unpinned",)
 
 
 class AfreshRefused(Exception):
@@ -333,12 +333,12 @@ class AfreshRefused(Exception):
 
 
 @pytest.mark.xfail(strict=True, raises=AfreshRefused,
-                   reason="the members check's header rule for a port that reads a registered value; any other "
+                   reason="a value registered afresh is no pin, so nothing fixes its root before the coin; any other "
                    "failure, or the refusal gone, fails this test")
 def test_a_value_the_program_takes_registered_afresh_is_refused_only_by_the_members_header_rule(tmp_path, binaries):
     """No other test runs a value the Program takes, registered afresh under the run root with no earlier record (no
     ``--tie``), through the stream's registration, the prover and the Lean verifier's registered reads. The audit
-    refuses it at the members check's header rule alone (`OneStageZk.UNWIRED_WHY`); past that rule it is to pass."""
+    refuses it as unpinned (`R8-unpinned`), and is right to: its root is the prover's choice after nothing."""
     window = _window(tmp_path / "window", own=STATE)
     rec = json.loads((window / "registration.json").read_text())
     (entry,) = rec["registered"]

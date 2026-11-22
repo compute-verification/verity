@@ -346,16 +346,22 @@ tree. -/
 def TIED_ROOTS_WHY (w : Nat) : String :=
   s!"members: C's tied run input node {w} is read under two roots: every reader of a tied node opens one tree"
 
+/-- The refusal of a member reading tied run input node `w` at port `p` with no root there (`tiedRootsAt`). -/
+def TIED_NO_ROOT_WHY (member p : String) (w : Nat) : String :=
+  s!"member {member}: port {p} reads C's tied run input node {w}, and its slice holds no root there: every reader " ++
+    "of a tied node opens one tree"
+
 /-- `seen`, the root each tied run input node is read under so far, with each node inside the tied gates `tied` that
-member `m` reads (`memberInputs`) at the root `own` holds for its port; refused (`TIED_ROOTS_WHY`) where `seen` holds
-another root for the node. That the root is the right one is the later period check's. -/
+member `m` reads (`memberInputs`) at the root `own` holds for its port; refused where `own` holds no root at the port
+(`TIED_NO_ROOT_WHY`) or `seen` holds another root for the node (`TIED_ROOTS_WHY`). That the root is the right one is
+the later period check's. -/
 def tiedRootsAt (P : Flock.Program.Prog) (rs : Array Flock.TemplateQuery.TRange) (tied : Array (Nat × Nat))
     (m : Member) (own : Array Json) (seen : Array (Nat × Json)) : V (Array (Nat × Json)) := do
   (← memberInputs P rs m).foldlM (init := seen) fun seen (p, w, _) => do
     if !Flock.Registered.runNode P w || !tied.any fun (first, count) => Partition.within P first count w then
       return seen
     match (own.find? (getD · "port" == .str p)).map (getD · "root") with
-    | none => return seen
+    | none => throw (TIED_NO_ROOT_WHY m.name p w)
     | some r => match seen.find? (·.1 == w) with
       | some (_, r') => if r' == r then return seen else throw (TIED_ROOTS_WHY w)
       | none => return seen.push (w, r)

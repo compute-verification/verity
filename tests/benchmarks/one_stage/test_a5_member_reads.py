@@ -8,6 +8,8 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from verity.protocols.proof.spot.verifier.one_stage import members as MB
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "benchmarks" / "one_stage"))
@@ -46,3 +48,15 @@ def test_a_wired_row_is_held_only_by_the_files_read_of_it_at_its_writers_tree():
     assert _why(WIRED, header, _file()) == MB.shared_unread("x", "W/o0")
     assert _why(WIRED, header, None) == MB.shared_unread("x", "W/o0")
     assert _why(WIRED, header, _file(x="W/o0")) is None
+
+
+def test_an_audit_naming_tied_parameters_says_first_that_no_test_held_their_shared_root(tmp_path, capsys):
+    out = tmp_path / "out"
+    out.write_text("")
+    with pytest.raises(FileExistsError):
+        A5.audit(SimpleNamespace(tie={"tied": ["s", "a"]}, window_root=None), {}, out, None, out, dict, 0, {})
+    assert capsys.readouterr().out.splitlines() == [
+        "TIED-ROOT [\"a\", \"s\"]: none held it: no test holds a tied node's shared root to the record"]
+    with pytest.raises(FileExistsError):
+        A5.audit(SimpleNamespace(tie={}, window_root=None), {}, out, None, out, dict, 0, {})
+    assert capsys.readouterr().out == ""

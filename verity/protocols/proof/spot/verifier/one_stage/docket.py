@@ -245,7 +245,8 @@ def _of_record(of_record: tuple[bytes, str]) -> tuple[list[tuple[str, Any]], dic
         try:
             want = RV.domain(program, v, e["words"], e["leaves"], e.get(RV.WIDTH_KEY, RV.WORD_BITS)).domain_id.hex()
         except ValueError:
-            want = None
+            bad.append(v)
+            continue
         if e["value"] != v or e["domain"] != want or not (isinstance(e["root"], str) and len(e["root"]) == 128
                                                           and _HEX.fullmatch(e["root"])):
             bad.append(v)
@@ -290,16 +291,13 @@ def weights_held(program: Program, query: Mapping[str, Any], registered: Iterabl
         try:
             ok = G.shape(program, v, e["words"]) == e["leaves"] and G.width(program, v) == e.get(RV.WIDTH_KEY, RV.WORD_BITS)
         except ValueError:
-            ok = False
+            shape.append(v)
+            continue
         if not ok:
             shape.append(v)
     if shape:
         out.append(("R8-weights-shape", {"values": shape}))
-    try:
-        templated = P.is_template_query(query) and P.units(program, query) >= 0
-    except P.QueryRefused:
-        templated = False
-    if not templated:
+    if not _templated(program, query):
         if of_record is not None or marked:
             out.append(("R8-weights-query", {"query": dict(query)}))
         return out, {}
@@ -357,6 +355,25 @@ def read_pins(program: Program, query: Mapping[str, Any], registered: Iterable[s
     return loose, held, ranges, pins, roots
 
 
+def _templated(program: Program, query: Mapping[str, Any]) -> bool:
+    """Whether ``query`` is a template query that applies to ``program``."""
+    try:
+        return P.is_template_query(query) and P.units(program, query) >= 0
+    except P.QueryRefused:
+        return False
+
+
+def _own_entries(program: Program, registered: Mapping[str, int], schemas: Mapping[str, str] | None,
+                 window_root: str | None, held: Sequence[str] | None, supplied: Mapping[str, Any],
+                 pinned: Mapping[str, str], outputs: Mapping[str, Any]) -> dict[str, Any] | ValueError:
+    """`Docket.ownEntries`: the verifier's own entries of its registered values, or why they don't compute."""
+    try:
+        window, fixed = _window(window_root, held, registered, supplied, pinned, outputs)
+        return G.registered_entries(program, registered, schemas, window, fixed)
+    except ValueError as e:
+        return e
+
+
 def held_entries(program: Program, registered: Mapping[str, int], schemas: Mapping[str, str] | None,
                  window_root: str | None, held: Sequence[str] | None, supplied: Mapping[str, Any],
                  pinned: Mapping[str, str], outputs: Mapping[str, Any], log: Iterable[Mapping[str, Any]]
@@ -364,10 +381,8 @@ def held_entries(program: Program, registered: Mapping[str, int], schemas: Mappi
     """`Docket.heldEntries`: ``{value: {"root", "leaves", "domain"}}`` for each value the verifier expects registered
     whose root it holds itself, its ``pinned`` root, else the one an earlier record of the log registered under the
     domain it takes now (`held_roots`), as R7 holds it; none where its entries don't compute."""
-    try:
-        window, fixed = _window(window_root, held, registered, supplied, pinned, outputs)
-        mine = G.registered_entries(program, registered, schemas, window, fixed)
-    except ValueError:
+    mine = _own_entries(program, registered, schemas, window_root, held, supplied, pinned, outputs)
+    if isinstance(mine, ValueError):
         return {}
     logged = held_roots(log)
     out = {}
