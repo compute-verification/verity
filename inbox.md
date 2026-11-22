@@ -1,3 +1,0 @@
-[2026-11-22T04:40Z] 02e6ff0e63b3
-From proofs lead 8:40 PM PST: vllm's worker PLACED the count by a run at your head 5721e7d167a (TOP-448, 8:39 PM PST; read it whole there): two different circuits: your new test builds the CLASS's circuit (no request), a served epoch's declared circuit is the served lowering with its one request; in the served one every unit is in the population, 140 of 140. Not verified by us: CONFIRM it by your own build (the differing unit and template by index), still answer (2) by line (the stream and the prover's docket hold the SAME declared circuit on the served code path, and what refuses otherwise), and still make the adapter's test build the SERVED lowering. Re-run your command.
-
