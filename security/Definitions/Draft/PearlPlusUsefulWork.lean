@@ -311,6 +311,7 @@ def UsefulWorkActual : Prop :=
 
 /-! ## Probes -/
 
+omit [LinearOrder L] in
 /-- **Probe: the accept-all verifier is refused by the code premise** wherever some transcript has no reading, so the
 statement cannot be applied to it. -/
 theorem acceptAll_not_code (W : List (L × List Bool) → ℕ) (dec : List (L × List Bool) → Option Read)
