@@ -51,13 +51,6 @@
   "verity/protocols/accounting/compute/pouw/verifier/lean/check/README.md": "not yet in the pattern",
   "verity/protocols/accounting/compute/pouw/verifier/lean/window/README.md": "not yet in the pattern",
   "verity/protocols/accounting/compute/pouw/verifier/receipts/README.md": "not yet in the pattern",
-  "verity/protocols/accounting/memory/poub/README.md": "no README yet",
-  "verity/protocols/accounting/memory/poub/attester/live_verifier/README.md": "not yet in the pattern",
-  "verity/protocols/accounting/memory/poub/verifier/README.md": "not yet in the pattern",
-  "verity/protocols/accounting/memory/pous/README.md": "no README yet",
-  "verity/protocols/accounting/memory/pous/attester/README.md": "not yet in the pattern",
-  "verity/protocols/accounting/memory/pous/attester/lean/README.md": "not yet in the pattern",
-  "verity/protocols/accounting/memory/pous/verifier/README.md": "not yet in the pattern",
   "verity/runtime/README.md": "not yet in the pattern"
  }
 }

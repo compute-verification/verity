@@ -18,7 +18,9 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
   names a run's parameters and gets a run; it never names code, a path, a host or a node's capacities. Infra's
   `vy-admin` runs the same gate (`sudo vy-verifier-gate VERB ...`, `by` vy-admin).
 - **What runs.** `/opt/vy-verifier/current` -> `/opt/vy-verifier/<commit>`, a root-owned `git archive` of that commit
-  (`pin.sh`), whose Lean executables pin.sh built; the commit is the directory's name, and every run's request names it
+  (`pin.sh`; the host's deployed files are `tools/research/src/research/pods/nebius/verifier/`, and the compose gate's pin
+  script and wrapper `tools/research/src/research/pods/nebius/compose/`, which infra installs by hand with the pin, since
+  the wrapper names this file's path in the pinned tree), whose Lean executables pin.sh built; the commit is the directory's name, and every run's request names it
   (`pinned`): a run whose pin moved before its unit started doesn't run. pin.sh appends each pin (commit, UTC time) to
   `/opt/vy-verifier/pins.jsonl`, root's and append-only (`record_pin`, `chattr +a`), before it moves `current`; a run
   starts only from the log's last pin, and its request names that line (`pin_log`), so every session can be held to a
