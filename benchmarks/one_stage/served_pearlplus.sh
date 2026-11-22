@@ -105,8 +105,9 @@
 # and the piece runs under umask 077, so every file it or a step writes there is 0600.
 # env: served_verdicts.sh's (VENV, HF_HOME, CUDA_HOME), PEARLPLUS_* above. Its lines name no window. Exit 0 once step 5
 # wrote the piece. Where it has no verdict it writes no answer: on a node that lists no card it serves nothing and
-# refuses before step 1 (pearlplus-no-card; under PEARLPLUS_TIE the window's own serve took the card), and where step 2
-# or step 4 wrote no document step 5 refuses (pearlplus-no-verdict); either way its sentence is PIECE_DIR/refused.txt,
+# refuses before step 1 (pearlplus-no-card; under PEARLPLUS_TIE the window's own serve took the card), untied where step
+# 1's build failed it serves nothing and refuses (pearlplus-no-cubin), and where step 2 or step 4 wrote no document step
+# 5 refuses (pearlplus-no-verdict); each way its sentence is PIECE_DIR/refused.txt,
 # its POUW-REFUSED line says it, and it exits 2.
 set -uo pipefail
 for o in PEARLPLUS_DRAWS:PEARLPLUS_SAMPLES; do n=${o#*:} o=${o%%:*}; [ -z "${!o+x}" ] || [ -n "${!n+x}" ] \
@@ -164,7 +165,10 @@ if [ -n "$TIE" ] && [ -s "${PEARLC_CUBIN:-}" ]; then  # the window serve's, buil
   printf '%s\n' "$PEARLC_KERNEL" "$PEARLC_CUBIN" > "$Q/setup.paths"
   rc=0
 else
-  ( export RESEARCH_RUN_DIR=$Q
+  # machine.py's `arch` reads the run's machine record under RESEARCH_RUN_DIR, so the build's own run dir carries it
+  ( machine=${RESEARCH_RUN_DIR:+$RESEARCH_RUN_DIR/inputs/${RESEARCH_MACHINE:-}.toml}
+    export RESEARCH_RUN_DIR=$Q
+    mkdir -p "$Q/inputs" && { [ ! -f "${machine:-}" ] || cp "$machine" "$Q/inputs/"; } || exit 1
     # shellcheck source=/dev/null
     . benchmarks/harness/setup/pearl_c_sm90.sh && printf '%s\n' "$PEARLC_KERNEL" "$PEARLC_CUBIN" > "$Q/setup.paths" ) \
     > "$Q/setup.log" 2>&1
@@ -185,6 +189,11 @@ print("pass" if d.get("ok") else "FAIL, " + str(d.get("error")).split(".cubin: "
     "the harness's .FTZ and FP32 MUFU gate, recorded and not enforced on sm_90a: $harness"
 else
   say "cubin: pearl_c_sm90.sh failed (exit $rc after $(took "$t")): $(tail -1 "$Q/setup.log" | cut -c1-400)"
+  if [ -z "$TIE" ]; then
+    echo "pearlplus-no-cubin: pearl_c_sm90.sh failed (exit $rc), so Pearl+ serves nothing, has no verdict and the piece" \
+      "writes no answer: $(tail -1 "$Q/setup.log" | cut -c1-400)" | tee "$P/refused.txt" | sed 's/^/POUW-REFUSED /'
+    exit 2
+  fi
 fi
 
 serve() {  # LOG ARGS...: served_passes.py serve of the piece's load under its own lease

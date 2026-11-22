@@ -367,6 +367,46 @@ def test_on_a_node_with_no_card_the_untied_piece_refuses_by_name_and_writes_no_a
     assert S.piece_row("work", pieces) == {"verdict": BR.REFUSED, "owner": S.PIECES["work"][2], "reason": sentence}
 
 
+def test_the_untied_pieces_build_reads_the_runs_machine_record_and_a_failed_build_refuses_by_name(tmp_path):
+    """pearl_c_sm90.sh's target is machine.py's `arch`, read from $RESEARCH_RUN_DIR/inputs/$RESEARCH_MACHINE.toml, and the
+    build runs with RESEARCH_RUN_DIR the piece's own dir: the piece carries the run's record there, so a run whose record
+    `research run --on` copied builds and serves. Where the build fails anyway the untied piece serves nothing and refuses
+    by the build's own reason (pearlplus-no-cubin), never as a serve that wrote no document."""
+    run, p = _untied(tmp_path, "no uncredited"), tmp_path / "piece"
+    setup = tmp_path / "tree" / "benchmarks" / "harness" / "setup" / "pearl_c_sm90.sh"
+    setup.write_text('[ -f "$RESEARCH_RUN_DIR/inputs/$RESEARCH_MACHINE.toml" ] '
+                     '|| { echo "target \'\': no architecture \'\'" >&2; return 4; }\n' + SETUP)
+    (inputs := tmp_path / "run" / "inputs").mkdir(parents=True)
+    (inputs / "toy.toml").write_text("[properties]\n")
+    rc, said, got = run(RESEARCH_RUN_DIR=str(tmp_path / "run"), RESEARCH_MACHINE="toy")
+    assert rc == 0 and [c["argv"][0] if c["argv"] else c["tool"] for c in got][:3] == [
+        "volunteer-needed", "pearl_c_sm90.sh", "serve"], said
+    (inputs / "toy.toml").unlink()
+    rc, said, got = run(RESEARCH_RUN_DIR=str(tmp_path / "run"), RESEARCH_MACHINE="toy")
+    sentence = (p / "refused.txt").read_text().strip()
+    assert (rc, [c["argv"][0] for c in got]) == (2, ["volunteer-needed"]), said
+    assert sentence.startswith("pearlplus-no-cubin: pearl_c_sm90.sh failed (exit 4)") and "no architecture" in sentence
+    assert f"POUW-REFUSED {sentence}" in said
+
+
+def test_pearl_c_sm90_refuses_an_architecture_machine_py_did_not_name_and_never_passes_it_on(tmp_path):
+    """pearl_c_sm90.sh, the piece's step 1, stops at exit 4 with the fix in its message where machine.py's `arch` names no
+    architecture (its machine description absent), and never asks `gencode` for an empty target."""
+    tree, calls = tmp_path / "tree", tmp_path / "calls"
+    (tree / "benchmarks" / "kernels").mkdir(parents=True)
+    (tree / "benchmarks" / "harness" / "setup").mkdir(parents=True)
+    shutil.copy(HERE.parents[2] / "benchmarks" / "harness" / "setup" / "pearl_c_sm90.sh", tree / "benchmarks" / "harness" / "setup")
+    (tree / "benchmarks" / "kernels" / "machine.py").write_text(
+        'import os, sys\nopen(os.environ["CALLS"], "a").write(sys.argv[1] + "\\n")\n'
+        'print("/cuda") if sys.argv[1] == "toolkit" else sys.exit("machine: inputs/toy.toml is not there")\n')
+    r = subprocess.run(["bash", "-c", ". benchmarks/harness/setup/pearl_c_sm90.sh"], cwd=tree, capture_output=True, text=True,
+                       env={"PATH": os.defpath, "CALLS": str(calls), "RESEARCH_RUN_DIR": str(tmp_path / "q"),
+                            "RESEARCH_MACHINE": "toy"}, check=False)
+    assert r.returncode == 4 and calls.read_text().split() == ["toolkit", "arch"], r.stderr
+    assert f"machine.py arch named no architecture, so no cubin is built: it reads the run's machine description at " \
+           f"{tmp_path / 'q'}/inputs/toy.toml" in r.stderr
+
+
 def test_under_the_gate_the_untied_piece_holds_its_pearl_c_period_open_from_its_serve_to_right_before_its_sample(tmp_path):
     """Under the gate the untied piece opens the lane's Pearl-C period right before its retained serve and closes it only
     right before verify samples, after the give-up and retain: while it is open its cap of 1, which the serve's salt session
