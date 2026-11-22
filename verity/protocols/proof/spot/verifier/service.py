@@ -473,9 +473,9 @@ class Spec:
             raise ValueError(f"a selection rule is All, Law or TwoStage, not {self.selection!r}")
         interior = [v.name for v in self.values if v.phase == "interior"]
         if isinstance(self.selection, TwoStage):
-            if not interior or not any(v.phase == "serve" and not v.registered for v in self.values):
-                raise ValueError("a two-stage spec commits boundary values (phase serve) and interior values (phase "
-                                 "interior)")
+            if not any(v.phase == "serve" and not v.registered for v in self.values):
+                raise ValueError("a two-stage spec commits boundary values (phase serve); its interior values (phase "
+                                 "interior) are none where every value the interior reads is round 1's")
             if any(v.phase == "in-deadline" for v in self.values):
                 raise ValueError("a two-stage spec commits no in-deadline values")
         elif interior:
