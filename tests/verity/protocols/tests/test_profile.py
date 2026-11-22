@@ -18,7 +18,7 @@ import pytest
 
 from verity.circuits import Program, bind
 from verity.circuits import query_ast as G
-from verity.circuits.partition import Level, validate_partition
+from verity.circuits.partition import Level
 from verity.circuits.ops import gemm
 from verity.protocols.proof.spot.verifier.profile import (CREDITED_UNSPLIT, ESCAPE_TERMS, HARM_MARGIN, MARGIN, Bernoulli,
                                                     IntegrityProfile, Stratified, Stratum, Subset, Work, WorkStratum,
@@ -230,9 +230,6 @@ def test_a_chain_read_off_a_program_gives_the_profile_its_sizes():
     coarse_q = G.instances("//GemmCoordinate")
     fine_q = G.each(coarse_q, G.default(32))
     coarse, fine = G.evaluate(program, coarse_q), G.evaluate(program, fine_q)
-    computed = [(32 + 4 * 32, program.gates)]
-    assert validate_partition(program, coarse, within=computed).status == "exact"
-    assert validate_partition(program, fine, within=computed).status == "exact"
     per, rest = divmod(fine.count(), coarse.count())   # `each` nests fine in coarse, the same count in every coordinate
     assert (per, rest) == (2, 0)
     a = IntegrityProfile((Level("coordinate", G.query_id(coarse_q)), Level("call", G.query_id(fine_q))),

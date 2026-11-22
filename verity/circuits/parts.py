@@ -15,7 +15,7 @@ This module is the only thing the four query-track modules share by import:
 
     verity/circuits/query_ast.py  GateSet, Family, Query AST, evaluate       (Query API owner)
     verity/circuits/boundary.py   compact in/out/w_out over Parts            (Boundary owner)
-    verity/circuits/partition.py  partition + width validation, verdicts     (Partition owner)
+    verity/circuits/partition.py  gate-width readiness, levels, unit cut     (Partition owner)
     tests/…                 oracle suite, fixtures, canonical queries  (Query-test owner)
 
 Add to it only by agreement of the owners; never remove or rename.

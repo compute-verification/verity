@@ -1,7 +1,6 @@
-"""Counterexamples for the query track: families with an overlap,
-with a gap (a forgotten Input gate, a forgotten constant gate), a set whose interface bound exceeds 32 while the exact
+"""Counterexamples for the query track: a set whose interface bound exceeds 32 while the exact
 w_out is 32 (dead return), sets whose exact w_out exceeds 32 (AttnBlock calls: 640 / 672 bits), scan-carry boundaries,
-fan-out counted once, dead parameters, 64-bit gates -- and the RA rule that `Unsupported` is never a pass.
+fan-out counted once, dead parameters, 64-bit gates.
 
 The three core modules are other owners' (`verity.circuits.query_ast`, `verity.circuits.boundary`, `verity.circuits.partition`): every test
 `importorskip`s what it needs, so this file SKIPS (never fails) until the branches are merged.  The oracle side of every
@@ -9,7 +8,7 @@ assertion is `fixtures_query` (the explicit `query_ast.oracle_in` / `oracle_out`
 from __future__ import annotations
 
 import pytest
-from verity.circuits.parts import Limits, Part, Unsupported
+from verity.circuits.parts import Part, Unsupported
 
 from tests.program import fixtures_query as FX
 
@@ -44,13 +43,6 @@ def PT():
     return _mod("partition")
 
 
-@pytest.fixture(scope="module")
-def PTW():
-    """partition with widths: `validate_width` calls `boundary` at run time."""
-    _mod("boundary")
-    return _mod("partition")
-
-
 def need(mod, *names):
     """First attribute of `mod` among `names`, else skip with an issue line the owner can grep."""
     for n in names:
@@ -58,37 +50,6 @@ def need(mod, *names):
             return getattr(mod, n)
     owner = _OWNER.get(mod.__name__.rsplit(".", 1)[-1], "?")
     pytest.skip(f"ISSUE FOR {owner}: {mod.__name__} lacks {' / '.join(names)}")
-
-
-PASS_WORDS = {"pass", "passed", "ok", "exact", "within", "certified", "valid"}
-FAIL_WORDS = {"fail", "failed", "violation", "violations", "exceeded", "invalid", "overlap", "gap"}
-
-
-def is_pass(status) -> bool:
-    return str(status).lower() in PASS_WORDS
-
-
-def is_fail(status) -> bool:
-    return str(status).lower() in FAIL_WORDS
-
-
-def is_unsupported(x) -> bool:
-    return isinstance(x, Unsupported) or str(getattr(x, "status", x)).lower() == "unsupported"
-
-
-def gateset(GS, *parts: Part):
-    return GS.GateSet(tuple(parts))
-
-
-def finest_sets(GS, program, skip_input: bool = False):
-    return [gateset(GS, p) for p in FX.body_parts(FX.root_scope(program), skip_input=skip_input)]
-
-
-def limits(**kw) -> Limits:
-    lim = Limits()
-    for k, v in kw.items():
-        setattr(lim, k, v)
-    return lim
 
 
 def check_part(BD, program, part: Part, *, exact_required: bool) -> tuple[bool, bool]:
@@ -288,125 +249,8 @@ def test_64_bit_gates_have_width_64(BD):
 
 
 # ---------------------------------------------------------------------------------------------------------
-# partition / width counterexamples (qpart), hand-made families through GateSet (qapi)
+# readiness (qpart)
 # ---------------------------------------------------------------------------------------------------------
-
-
-def test_finest_parts_are_exact(GS, PT):
-    validate = need(PT, "validate_partition")
-    for name in FX.FIXTURE_NAMES:
-        P = FX.fixture(name)
-        v = validate(P, FX.ListFamily(finest_sets(GS, P)))
-        assert v.status == "exact", f"{name}: {v.status} {v.codes}"
-
-
-def test_overlap_is_reported(GS, PT):
-    validate = need(PT, "validate_partition")
-    P = FX.tiny_io_program()
-    sets = finest_sets(GS, P)
-    v = validate(P, FX.ListFamily(sets + [sets[1]]))  # the Add gate twice
-    assert v.status == "overlap", (v.status, v.codes)
-    # overlapping by algebra: the union of two adjacent sets beside the sets themselves
-    v2 = validate(P, FX.ListFamily(sets + [sets[1].union(sets[2])]))
-    assert v2.status == "overlap"
-
-
-def test_gap_missing_input_gate(GS, PT):
-    validate = need(PT, "validate_partition")
-    P = FX.tiny_io_program()
-    sc = FX.root_scope(P)
-    parts = FX.body_parts(sc)
-    dead_input = FX.item_part(sc, 0, 3)
-    sets = [gateset(GS, p) for p in parts if p != dead_input]
-    v = validate(P, FX.ListFamily(sets))
-    assert v.status == "gap", "coverage means ALL gates, a dead Input gate included"
-    # skipping every Input node (today's vu_query convention) is a gap under the new semantics
-    v2 = validate(P, FX.ListFamily(finest_sets(GS, P, skip_input=True)))
-    assert v2.status == "gap"
-
-
-def test_gap_missing_constant_gate(GS, PT):
-    validate = need(PT, "validate_partition")
-    P = FX.tiny_io_program()
-    sc = FX.root_scope(P)
-    jc = FX.find_nodes(sc, callee="Const")[0]
-    sets = [gateset(GS, p) for p in FX.body_parts(sc) if (jc, 0) not in p.items]
-    v = validate(P, FX.ListFamily(sets))
-    assert v.status == "gap"
-
-
-def test_partition_unsupported_is_not_a_verdict(GS, PT):
-    validate = need(PT, "validate_partition")
-    P = FX.rmsnorm_triton_program()
-    fam = FX.ListFamily(finest_sets(GS, P))
-    v = validate(P, fam, limits(max_intervals=4))
-    assert v.status == "unsupported", f"the sweep over {fam.count()} intervals must give up under max_intervals=4, got {v.status}"
-    v_ok = validate(P, fam)
-    assert v_ok.status == "exact"
-
-
-def _loose_bound_part(BD):
-    """The whole body of `Pair` as ONE nested Part: both returned leaves are sourced in the part, so any bound that does not
-    consult the parent's consumption charges both (64 > 32) while the exact w_out is 32 (b is dead at the caller)."""
-    P = FX.dead_return_program()
-    sc = FX.root_scope(P)
-    inner = FX.child_scope(sc, FX.find_nodes(sc, form="call")[0])
-    part = FX.items_part(inner, [it for q in FX.body_parts(inner) for it in q.items])
-    assert FX.oracle_w_out(P, part) == 32
-    assert FX.interface_w_out_bound(part) == 64
-    bound = BD.w_out_bound(part)
-    assert bound >= 32, "w_out_bound must be an upper bound"
-    if bound <= 32:
-        pytest.skip("qbound's bound is already exact for the nested dead return; no bound > 32 > exact case in this fixture set")
-    return P, part
-
-
-def test_width_dead_return_certified_by_exact_path(GS, PTW, BD):
-    """bound > 32 but exact <= 32: the validator must not report a violation on the bound alone -- it must fall through to
-    the exact path (tier 3) and certify the set."""
-    PT = PTW
-    validate_width = need(PT, "validate_width")
-    P, part = _loose_bound_part(BD)
-    assert BD.w_out(part) == 32
-    v = validate_width(P, FX.ListFamily([gateset(GS, part)]), 32)
-    assert not v.violators, f"exact w_out of the Pair body is 32 (bound {BD.w_out_bound(part)}); violators {v.violators}"
-    assert not v.unsupported
-    assert v.max_seen == 32
-    assert is_pass(v.status), v.status
-    # the same set with a 64-bit budget is certified by the bound alone, and with a 31-bit budget it is a true violation
-    assert is_pass(validate_width(P, FX.ListFamily([gateset(GS, part)]), 64).status)
-    v31 = validate_width(P, FX.ListFamily([gateset(GS, part)]), 31)
-    assert v31.violators == [0] or list(v31.violators) == [0], v31.violators
-    assert is_fail(v31.status)
-
-
-def test_width_attn_block_calls_violate(GS, PTW):
-    PT = PTW
-    validate_width = need(PT, "validate_width")
-    P = FX.attention_head_program()
-    sc = FX.root_scope(P)
-    parts = FX.body_parts(sc)
-    blocks = set(FX.find_nodes(sc, form="call", callee="AttnBlock_v3"))
-    idx = [i for i, p in enumerate(parts) if any(j in blocks for j, _ in p.items)]
-    v = validate_width(P, FX.ListFamily([gateset(GS, p) for p in parts]), 32)
-    assert set(v.violators) == set(idx), (v.violators, idx)
-    assert v.max_seen == 672
-    assert not is_pass(v.status)
-    assert v.w_max == 32
-
-
-def test_width_unsupported_never_passes(GS, PTW, BD):
-    """bound > 32 and the exact path starved (`Limits.max_members_exact=0`): the member is Unsupported -- the verdict must
-    not pass and must not call it a violator either."""
-    PT = PTW
-    validate_width = need(PT, "validate_width")
-    P, part = _loose_bound_part(BD)
-    v = validate_width(P, FX.ListFamily([gateset(GS, part)]), 32, limits(max_members_exact=0))
-    if not v.unsupported:
-        pytest.skip("ISSUE FOR qpart: Limits.max_members_exact=0 did not make the exact path Unsupported; cannot exercise the RA rule here")
-    assert not is_pass(v.status), "an Unsupported member must never make the verdict pass"
-    assert not v.violators, "an Unsupported member is not a violator either"
-    assert is_unsupported(v)
 
 
 def test_readiness_32bit_reports_the_64_bit_constants(PT):
@@ -420,50 +264,13 @@ def test_readiness_32bit_reports_the_64_bit_constants(PT):
     assert not getattr(r0, "violators", None)
 
 
-def test_block_partition_default32_is_exact_and_narrow(GS, PTW):
-    """`default(32)` is a partition by construction and every member's w_out <= 32 (out of a single call / member is a
-    subset of its declared returns), except where a primitive gate itself is wider than 32."""
-    PT = PTW
-    validate_partition, validate_width = need(PT, "validate_partition"), need(PT, "validate_width")
-    evaluate, default = need(GS, "evaluate"), need(GS, "default")
-    for name in FX.VLLM_FAMILY_FIXTURES + ("tiny_io", "fan_out", "dead_return", "dead_param", "scan_carry"):
-        P = FX.fixture(name)
-        fam = evaluate(P, default(32))
-        p, w = validate_partition(P, fam), validate_width(P, fam, 32)
-        assert p.status == "exact", f"{name}: {p.status} {p.codes}"
-        assert not w.violators, f"{name}: width violators {w.violators}"
-        assert not w.unsupported, f"{name}: width unsupported {w.unsupported}"
-        assert fam.count() > 0
-    # the 64-bit case: partition exact, width not passed (its readiness is `test_readiness_32bit_reports_the_64_bit_constants`)
-    P = FX.gumbel_program()
-    fam = evaluate(P, default(32))
-    assert validate_partition(P, fam).status == "exact"
-    w = validate_width(P, fam, 32)
-    assert w.violators and w.max_seen == 64 and not is_pass(w.status)
-
-
 # ---------------------------------------------------------------------------------------------------------
-# query-built counterexamples (qapi constructors through the qpart validators)
+# query-built counterexamples (qapi constructors)
 # ---------------------------------------------------------------------------------------------------------
 
 
-def test_query_concat_overlap_and_instances_gap(GS, PT):
-    validate = need(PT, "validate_partition")
-    evaluate, instances, default, concat = (need(GS, "evaluate"), need(GS, "instances"), need(GS, "default"), need(GS, "concat"))
-    P = FX.wrapped_fixture("gemm")
-    # instances of DotBf16 alone: misses Inputs, the cvt gates, the zero accumulators -> gap
-    fam = evaluate(P, instances("//DotBf16_v1"))
-    assert fam.count() == 6
-    v = validate(P, fam)
-    assert v.status == "gap", (v.status, v.codes)
-    # the same instances beside a complete family: overlap
-    v2 = validate(P, evaluate(P, concat(instances("//DotBf16_v1"), default(32))))
-    assert v2.status == "overlap", (v2.status, v2.codes)
-
-
-def test_query_members_gemm(GS, PT, BD):
+def test_query_members_gemm(GS, BD):
     evaluate, members = need(GS, "evaluate"), need(GS, "members")
-    validate = need(PT, "validate_partition")
     P = FX.wrapped_fixture("gemm")
     fam = evaluate(P, members("//Gemm_v1{K=*,N=*}", "@batch:GemmCoordinate_v1"))
     assert fam.count() == 6
@@ -475,8 +282,6 @@ def test_query_members_gemm(GS, PT, BD):
         jc = FX.find_nodes(gemm_scope, form="batch", callee="GemmCoordinate")[0]
         assert s.size() == gemm_scope.spec.body.nodes[jc].fn.gates
         assert FX.oracle_w_out(P, s) == 16
-    # members alone leave the Input gates uncovered: a gap (Input gates are inside the partition)
-    assert validate(P, fam).status == "gap"
 
 
 def test_query_json_roundtrip_and_id(GS):
