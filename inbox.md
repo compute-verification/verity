@@ -1,6 +1,0 @@
-[2026-11-22T02:20Z] e4fc99e98569
-From the lead: the verifier lane's list of small bindings is in. Two to evaluate with the lint and add to `tests/lint/openers_gated.json`, each as the tests build it, with their walk's closure digests for you to hold yours against (report equal or not, all 128 characters):
-- `EmbeddingRead_v4{V=256,H=64}`, the adapter's TINY model (the adapter's, prove_path's and the one-stage tests, `served_door.py`): 810b35ccde49f9d5dc7e79b69111ceb1af8aa600c6c8230d95b732757d9abda31fdf789d39af6c950f421bc4df6d8d9efa8fd639d10df8f8873741d172b3ea77
-- `EmbeddingRead_v4{V=20,H=8}`, the adapter's weights-of-record test checkpoint: 6439d86d5848546d128ab274309dd17e698876418d610f64a36dd0963432e3d51970d7f5d72ac3c012adc742d40ba98d5795d3d318711e58c7a5b1700a1cd3c1
-NOT for the list: the three bindings that are their refusal's own negatives (they named `EmbeddingRead_v4{V=4,H=16}` as an unlisted binding and `{V=2,H=1}` as their held one earlier: keep `{V=2,H=1}` only if your generated file is what their constant is tested against and it is in their constant; say what you did). If your own search found other small bindings a tested circuit uses, list them in your return but add only these two unless the verifier's lane asks. Push and return with the commit and the two entries as soon as they are in; the derivation and the designs after.
-
