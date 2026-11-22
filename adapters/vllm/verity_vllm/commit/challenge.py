@@ -4,38 +4,23 @@ A sample on `verity.commitments.randomness` derives through its `derive` from a 
 (`pipeline.commit_coins`: the auditor device's challenger opens it after the run's root), with the run root and the sample's
 other bindings as context.  Such a sample without its coin is refused by name:
 
-* opening positions (`challenge_positions`): `verity/vllm-commit/opening-positions/v1`;
-* opening identities from the expected population (`identity_picker`): `verity/vllm-commit/opening-identities/v1`;
-* the replay sample (`replay_key`): `verity/sampled-proofs/vu-sample/v1`, the domain of SPOT's former derived
-  proof-block sample, with `per_stratum` units of each stratum sampled uniformly at the stratum's index (`stratum_picks`).
-  No replay calls it.
+* opening positions (`challenge_positions`): `verity/vllm-commit/opening-positions/v1`.
 
-The legacy seeds of the other drivers (replay's tiers, recompute's reference rows, difftest, the relation checkers)
-are here too (`root_seed` .. `case_seed`), with the only generator constructors (`stream`, `generator`): changing one
-moves every sample taken from it.  Every replay of the Commit takes a legacy seed.  `root_seed` reads the run root
-alone, with no coin: the prover fixes the root, so it steers the sample by committing again, in about the lesser of 1/p
-and 2^64 tries, p the chance one sample misses its faults, and a replay under it is a measurement.
-`legacy_replay_seed` hashes a challenge string with the root through SHA-256 and keeps 8 bytes: it is a coin's only
-when the auditor device's challenger issued that string.
+The only generator constructors (`stream`, `generator`) are here too: changing one moves every sample taken from it.
 """
 from __future__ import annotations
 
-import hashlib
 import random
 from bisect import bisect_right
-from collections.abc import Callable, Sequence
 from itertools import accumulate
 from typing import Any
 
 import numpy as np
-from verity.commitments.randomness import Key, derive
+from verity.commitments.randomness import derive
 
-__all__ = ["case_seed", "challenge_positions", "challenge_seed", "generator", "legacy_replay_seed",
-           "reference_rows_seed", "root_seed", "run_root_of", "stratum_picks", "stream"]
+__all__ = ["challenge_positions", "generator", "run_root_of", "stream"]
 
 POSITIONS_DOMAIN = "verity/vllm-commit/opening-positions/v1"
-IDENTITIES_DOMAIN = "verity/vllm-commit/opening-identities/v1"
-REPLAY_KEY_DOMAIN = "verity/sampled-proofs/vu-sample/v1"
 
 
 def _source(source: bytes | None) -> bytes:
@@ -82,69 +67,6 @@ def challenge_positions(run_root: bytes, leaves_per_step: list[int], k: int, sal
 
     key = derive(source, POSITIONS_DOMAIN, {"run_root": run_root, "salt": salt, "layout": ",".join(map(str, leaves_per_step))})
     return [at(key.uniform(total, i)) for i in range(k)]
-
-
-def identity_picker(run_root: bytes, map_digest: str, salt: bytes = b"", *, source: bytes | None) -> Callable[[int, int], int]:
-    """`pick(i, n)`: the i-th sample in [0, n) of an opening-identity challenge bound to (source, root, binding-map digest,
-    salt)."""
-    key = derive(_source(source), IDENTITIES_DOMAIN, {"run_root": run_root, "map_digest": bytes.fromhex(map_digest), "salt": salt})
-    return lambda i, n: key.uniform(n, i)
-
-
-def legacy_replay_seed(challenge: str, run_root: bytes) -> int:
-    """The legacy replay seed under a challenge string: sha256(challenge || "|" || run_root)[:8], SHA-256 cut to 64 bits.
-    It is a coin's only when the auditor device's challenger issued the string after the root (the served C2 under a
-    challenger gate); under a flag's string or the process's own bytes the replay is a measurement.  Its non-legacy form
-    is `replay_key`."""
-    return int.from_bytes(hashlib.sha256(challenge.encode("utf-8") + b"|" + bytes(run_root)).digest()[:8], "big")
-
-
-def replay_key(source: bytes, run_root: bytes) -> Key:
-    """The replay sample's key, derived after the run root."""
-    return derive(_source(source), REPLAY_KEY_DOMAIN, {"run_root": bytes(run_root)})
-
-
-def stratum_picks[T](pools: Sequence[Sequence[T]], per_stratum: int, seed: int | None, key: Key | None = None) -> list[list[T]]:
-    """`per_stratum` members of each pool (all of a smaller pool), in pool order.
-
-    With `seed` (legacy; pass None with a key): one `random.Random(seed)` samples the pools in turn.  With `key`: pool i's
-    members at the positions of `key.subset(min(per_stratum, len(pool)), len(pool), ("vu", i))`."""
-    if key is not None and seed is None:
-        if int(per_stratum) < 0:
-            raise ValueError("stratum_picks needs per_stratum >= 0")
-        return [[pool[j] for j in key.subset(min(int(per_stratum), len(pool)), len(pool), ("vu", i))]
-                for i, pool in enumerate(pools)]
-    if key is not None or seed is None:
-        raise ValueError("stratum_picks takes a legacy seed or a key, not both")
-    rng = random.Random(int(seed))
-    out = []
-    for pool in pools:
-        n = min(int(per_stratum), len(pool))
-        out.append(rng.sample(list(pool), n) if n < len(pool) else list(pool))
-    return out
-
-
-def root_seed(run_root: bytes) -> int:
-    """The legacy seed with no challenge: the run root's first 8 bytes, big-endian.  No coin: the prover fixes the root, so
-    it steers the sample by committing again, in about the lesser of 1/p and 2^64 tries (p: the chance one sample misses
-    its faults).  A replay under it is a measurement."""
-    return int.from_bytes(bytes(run_root)[:8], "big")
-
-
-def challenge_seed(challenge: str, run_root: bytes) -> int:
-    """The legacy seed under a challenge string (`legacy_replay_seed`): bound to the root, so a challenge issued
-    before the root was fixed, or for another run, selects another sample."""
-    return legacy_replay_seed(challenge, run_root)
-
-
-def reference_rows_seed(rows_total: int, rows_pending: int) -> int:
-    """Recompute's reference-row seed: rows sampled in total x 7919 + rows pending a value check."""
-    return int(rows_total) * 7919 + int(rows_pending)
-
-
-def case_seed(seed: int, i: int) -> int:
-    """Difftest's seed for the inputs of case ``i``."""
-    return int(seed) * 1_000_003 + int(i)
 
 
 def stream(seed: Any) -> random.Random:

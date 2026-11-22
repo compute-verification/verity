@@ -1723,7 +1723,6 @@
     {"file": "tests/adapters/vllm/tests/acquire/test_fa2_tap_geometry.py", "count": 1},
     {"file": "tests/adapters/vllm/tests/acquire/test_served_build.py", "count": 1},
     {"file": "tests/adapters/vllm/tests/check/test_build_relocation.py", "count": 7},
-    {"file": "tests/adapters/vllm/tests/check/test_challenge_seeds.py", "count": 1},
     {"file": "tests/adapters/vllm/tests/check/test_compare_skipped_entries.py", "count": 2},
     {"file": "tests/adapters/vllm/tests/check/test_fold_sampler_construction.py", "count": 2},
     {"file": "tests/adapters/vllm/tests/check/test_global_match.py", "count": 69},

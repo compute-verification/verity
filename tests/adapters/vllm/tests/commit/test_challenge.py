@@ -1,10 +1,9 @@
 """The one challenge module: every sample derives through `verity.commitments.randomness.derive` from the run's live coin and is
-refused without one, and the legacy replay seeds stay byte-identical to the outputs recorded before they moved onto it."""
+refused without one."""
 from __future__ import annotations
 
 import hashlib
 import json
-import random
 from pathlib import Path
 
 import pytest
@@ -15,11 +14,6 @@ from verity_vllm.commit import challenge as CH
 V = json.loads(Path(__file__).with_name("challenge_legacy_vectors.json").read_text())
 ROOT = bytes.fromhex(V["run_root"])
 AUDITOR_KEY = b"auditor key 1041"
-
-
-def _vus() -> list[dict]:
-    return [{"stratum": f"s{i % 5}|a|b|{'prefill' if i % 2 else 'decode'}", "op_path": f"m.layers.{i % 3}.mlp", "step": i % 4, "i": i}
-            for i in range(83)]
 
 
 def _run(roots: list[bytes], errors: tuple[str, ...] = ()) -> RunCommitment:
@@ -52,15 +46,9 @@ def test_a_sample_without_its_coin_is_refused():
     """No sample has a default: a caller names its coin, and a missing one (None or empty) is refused by name."""
     with pytest.raises(TypeError, match="source"):
         CH.challenge_positions(ROOT, [10], 3)
-    with pytest.raises(TypeError, match="source"):
-        CH.identity_picker(ROOT, "00" * 32)
     for missing in (None, b""):
         with pytest.raises(ValueError, match="needs a source: the run's live coin"):
             CH.challenge_positions(ROOT, [10], 3, source=missing)
-        with pytest.raises(ValueError, match="needs a source: the run's live coin"):
-            CH.identity_picker(ROOT, "00" * 32, source=missing)
-    with pytest.raises(ValueError, match="needs a source: the run's live coin"):
-        CH.replay_key(b"", ROOT)
 
 
 def test_positions_follow_the_source_root_and_layout():
@@ -95,28 +83,3 @@ def test_a_run_without_a_root_names_its_first_error_where_it_records_one(extra, 
     run = RunCommitment(b"", [StepCommitment(0, b"", b"", 4, 64, 1, b"", 0.0, 0.0, 0)], {}, 0.0, 0.0, 0, 0, extra=extra)
     with pytest.raises(CH.NoRunRoot, match=rf"1 of 1 steps not committed \(steps \[0\]\); first error: {said}$"):
         CH.run_root_of(run)
-
-
-def test_stratum_picks_takes_a_seed_or_a_key():
-    with pytest.raises(ValueError):
-        CH.stratum_picks([[1, 2]], 1, None)
-    with pytest.raises(ValueError):
-        CH.stratum_picks([[1, 2]], 1, 1, key=CH.replay_key(AUDITOR_KEY, ROOT))
-    assert CH.stratum_picks([[1, 2], [3]], 5, None, key=CH.replay_key(AUDITOR_KEY, ROOT)) == [[1, 2], [3]]
-    with pytest.raises(ValueError):
-        CH.stratum_picks([[1, 2]], -1, None, key=CH.replay_key(AUDITOR_KEY, ROOT))
-
-
-def test_stratum_picks_names_what_it_refuses_and_samples_a_legacy_seed_pool_by_pool():
-    key = CH.replay_key(AUDITOR_KEY, ROOT)
-    for seed, k in ((None, None), (1, key)):
-        for per in (1, -1):                                                 # the pair is refused before the count is read
-            with pytest.raises(ValueError, match="takes a legacy seed or a key, not both"):
-                CH.stratum_picks([[1, 2]], per, seed, key=k)
-    with pytest.raises(ValueError, match="needs per_stratum >= 0"):
-        CH.stratum_picks([[1, 2]], -1, None, key=key)
-    pools = [list(range(10)), [7], []]
-    rng = random.Random(5)
-    assert CH.stratum_picks(pools, 3, 5) == [rng.sample(pools[0], 3), [7], []]
-    assert CH.stratum_picks(pools, 3, True) == CH.stratum_picks(pools, 3, 1)       # the seed is read as an int
-    assert CH.stratum_picks(pools, 0, 5) == [[], [], []] == CH.stratum_picks(pools, 0, None, key=key)
