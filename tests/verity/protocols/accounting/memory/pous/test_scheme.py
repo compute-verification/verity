@@ -23,7 +23,7 @@ def test_found_by_name_at_their_verifiers_ids() -> None:
     assert table.get("pous") is POUS and table.get("wipe") is WIPE
     assert (POUS.protocol, WIPE.protocol) == (period.PROTOCOL, wipe_period.PROTOCOL), (
         "the trusted verifiers keep their own ids (they may not import the registry): change period.PROTOCOL or "
-        "wipe_period.PROTOCOL and its declaration's protocol (memory/pous/scheme.py or memory/pous/wipe_scheme.py, through domains) together")
+        "wipe_period.PROTOCOL and its declaration's protocol (memory/pous/scheme.py or memory/wipe/scheme.py, through domains) together")
     assert POUS.unit == WIPE.unit == "bits"
 
 

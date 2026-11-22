@@ -1,4 +1,4 @@
-"""The wipe's attach (`pous.prover.wipe_served`): its settings are the protocol's parameters of `period.json`'s
+"""The wipe's attach (`wipe.prover.wipe_served`): its settings are the protocol's parameters of `period.json`'s
 ``wipe`` and its launcher's facts the rest, and it refuses by name before any session outside its piece's process,
 with no side, private directory, pin, fact or challenger binding, and on a busy card."""
 

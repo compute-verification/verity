@@ -1,7 +1,7 @@
 """The streamed-label wipe (experimental): a proof of secure erasure for a memory wipe, run by the memory challenger.
 Lean `Pous.Guarantees.StreamedWipe` states the guarantee. This module holds the records,
 the derivations and the verdict; the challenger that runs a session is the device's `WipeMemoryAttester`
-(`pous/attester/wipe_challenger.py`).
+(`wipe/attester/wipe_challenger.py`).
 
 The memory attester, the auditor's device on a machine the developer doesn't control, fills every memory tier of one
 server with labels it derives itself, then reveals `k` indices sampled on live coins after the fill and checks each answer

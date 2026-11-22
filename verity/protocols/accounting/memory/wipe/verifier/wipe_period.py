@@ -30,7 +30,7 @@ evidence's count. `outcome_counted` is `outcome` that publishes `certify` at the
 that holds `named` to the network attester's count over the span between those marks; it rejects an evidence with no
 count and a session with no start mark. Nothing here calls it: on its own it certifies on what the evidence states.
 
-What runs one wipe, the prover's end of its session and the answer here, is `pous/prover/wipe_run.py`. What an accepted
+What runs one wipe, the prover's end of its session and the answer here, is `wipe/prover/wipe_run.py`. What an accepted
 wipe's bound doesn't cover is `uncertified`, from its placement (`wipe_party.placement`): the key custody of a session
 not signed under a key the committed configuration's `[[pin]]` entries give the memory attester for the wipe
 (`period.deployment`), an uncounted egress, the node's memory outside the declared tiers, what the prover's store leaves
