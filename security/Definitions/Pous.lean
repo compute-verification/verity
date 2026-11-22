@@ -43,7 +43,7 @@ a time on live coins, and accepts when each answer is correct and on time.
 
 ## Read first
 
-The lock's `deployed` guarantees for PoUS:
+PoUS's guarantees at its deployed parameters; the lock's `deployed` lists one of them, `StreamedWipe`:
 
 * `Pous.Period.PeriodHeld` (`Properties.Pous.Period`): over one period, the deployed check accepts while the capacity
   account held fewer than `S · len` bit-ticks with probability at most `δ + ε_max`. It is PoUS's row in

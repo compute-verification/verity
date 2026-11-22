@@ -34,16 +34,16 @@
    "declarations": 102
   },
   "Proofs/Flock": {
-   "modules": 227,
-   "declarations": 1833
+   "modules": 267,
+   "declarations": 2380
   },
   "Proofs/Pous": {
    "modules": 1,
    "declarations": 3
   },
   "Proofs/Pouw": {
-   "modules": 42,
-   "declarations": 370
+   "modules": 44,
+   "declarations": 374
   },
   "Proofs/ResourceAccounting": {
    "modules": 2,
