@@ -297,7 +297,7 @@ def statementOn (tags0 : Flock.Tags) (fk : FileKept) (sha : Option String) (p : 
       | some what => throw s!"{what}: {FITS}"
       | none =>
         readsOf p.registered >>= fun rd =>
-          pure (StepAt.ofKept p tags0 circuitB pubB tables rd (population pubB) fk.tags fk.kept sha)
+          pure (StepAt.ofKept p tags0 circuitB pubB tables { rd with linked := p.linked } (population pubB) fk.tags fk.kept sha)
 
 /-- **`statementOf` at the inputs' own lookup tables (`ownTables`) is `statementOn` at what `fileOf` keeps of its
 circuit file, read at the blobs' lookup tables, and its program's digest**, where the statement's tags are known. -/

@@ -287,7 +287,7 @@ def o1 : Registered.Port := { o0 with name := "o1", value := fieldTree "T" 1 }
 -- rows the caller gives; its template's own field tree, and rows that are not one of round 1's per unit, refused
 def r1 : Registered.Port := { o0 with value := "o0", leaves := 24 }
 def outLinked (reg : Registered.Port) (at_ : Array (Option Nat) × Nat) : Except String (Array (Option Nat) × Nat) :=
-  outReadsAt outC regP #[0, 1] 0 reg (some at_)
+  outReadsAt outC regP #[0, 1] 0 reg #[("o0", at_)]
 #guard (outLinked r1 (#[some 7, some 19], 0)).toOption == some (#[some 7, some 19], 0)
 def linkedWhy (reg : Registered.Port) (at_ : Array (Option Nat) × Nat) : String :=
   match outLinked reg at_ with
@@ -299,6 +299,7 @@ def linkedWhy (reg : Registered.Port) (at_ : Array (Option Nat) × Nat) : String
 -- an unlinked row as before: round 1's name refused, its own field tree read at the unit's leaf
 #guard (outReadsAt outC regP #[0, 1] 0 r1).toOption.isNone
 #guard (outReadsAt outC regP #[0, 1] 0 o0).toOption == some (#[some 0, some 1], 0)
+#guard (outReadsAt outC regP #[0, 1] 0 o0 #[("o1", (#[some 7, some 19], 0))]).toOption == some (#[some 0, some 1], 0)
 
 -- `withPositions` sends a port past the declared input rows (`outRow?`, META `input_ports`) to `outReads`; a row past
 -- the circuit's is refused

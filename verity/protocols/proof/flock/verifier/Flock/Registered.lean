@@ -581,12 +581,12 @@ verifier's program `P`: the row is output field `j` of each unit of the circuit'
 the field's bits from the field's first in whole words, and that field is committed once, in its tree (`fieldTree t j`),
 so `reg` must be that tree and each unit reads its own leaf in it by `HmLinks.treeLeaf`, the leaf `treeReads` opens for
 a reader of the field. An output of several fields in fewer rows, a row of another width or offset, a port registered
-as another value and a unit of another template are refused by name. A `linked` row (a port the caller's links name,
-with the rows of round 1's tree its units write, from unit `first` on) is read at round 1's tree, `reg`'s root, domain
+as another value and a unit of another template are refused by name. A row `linked` names (by port, with the rows of
+round 1's tree its units write, from unit `first` on) is read at round 1's tree, `reg`'s root, domain
 and leaves, at those rows, and its own field tree is refused (`LINKED_OWN_WHY`), as are rows that are not one row of
 `reg`'s leaves for each unit of `indices` (`LINKED_ROWS_WHY`). -/
 def outReadsAt (c : Circuit) (P : Program.Prog) (indices : Array Nat) (j : Nat) (reg : Port)
-    (linked : Option (Array (Option Nat) × Nat) := none) : V (Array (Option Nat) × Nat) := do
+    (linked : Array (String × Array (Option Nat) × Nat) := #[]) : V (Array (Option Nat) × Nat) := do
   if isFreshValue reg.value then throw (RESERVED_WHY "output row" reg.name reg.value)
   let some (t, _) := HmRow.queryTemplate c
     | throw s!"registered reads: output row {reg.name}: the circuit names no template of C (META program_digests)"
@@ -603,7 +603,7 @@ def outReadsAt (c : Circuit) (P : Program.Prog) (indices : Array Nat) (j : Nat) 
   let (_, _, w0, words) := HmOut.outGroup c j
   if 16 * w0 != before || words != (bits + 15) / 16 then
     throw s!"registered reads: output row {reg.name} is output words [{w0}, {w0 + words}), and {t}'s output field {j} is bits [{before}, {before + bits}): a row is one field's whole words"
-  if let some (rel, first) := linked then
+  if let some (_, rel, first) := linked.find? (·.1 == reg.name) then
     if reg.value == fieldTree t j then throw (LINKED_OWN_WHY reg.name t j)
     if !readsCover rel first indices reg.leaves then throw (LINKED_ROWS_WHY reg.name reg.value)
     return (rel, first)
@@ -621,7 +621,7 @@ def outReadsAt (c : Circuit) (P : Program.Prog) (indices : Array Nat) (j : Nat) 
 
 /-- `reg` reading at `outReadsAt`'s positions from its first unit on, every other field its own. -/
 def outReads (c : Circuit) (P : Program.Prog) (indices : Array Nat) (j : Nat) (reg : Port)
-    (linked : Option (Array (Option Nat) × Nat) := none) : V Port := do
+    (linked : Array (String × Array (Option Nat) × Nat) := #[]) : V Port := do
   let r ← outReadsAt c P indices j reg linked
   return { reg with readsRel := r.1, readsFrom := r.2 }
 
@@ -655,7 +655,7 @@ def withPositions (c : Circuit) (pub : Public) (program : Option ByteArray) (own
   let rows ← OneCircuit.io c P
   some <$> own.mapM fun reg =>
     match ((List.range c.ports.size).find? fun q => (c.ports.getD q default).name == reg.name).bind (outRow? c) with
-    | some j => outReads c P indices j reg ((linked.find? (·.1 == reg.name)).map (·.2))
+    | some j => outReads c P indices j reg linked
     | none => ins c P indices rows reg
 where
   ins (c : Circuit) (P : Program.Prog) (indices : Array Nat) (rows : Array (Nat × Nat × Nat)) (reg : Port) : V Port :=

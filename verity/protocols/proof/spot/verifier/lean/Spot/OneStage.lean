@@ -345,15 +345,25 @@ def PARTITION_QUERY : String :=
 /-- The refusal of linked ports that are not a list of `{template, port, value, entry}`, each `entry` a port of round
 1's record with a string root and domain and a natural leaf count. -/
 def LINKED_FORM : String :=
-  "linked ports are a list of {template, port, value, entry}, each entry round 1's record's root, domain and leaves of " ++
-    "the value"
+  "linked ports are a list of {template, port, value, entry} and optionally reads, each entry round 1's record's root, " ++
+    "domain and leaves of the value, and reads a list of natural numbers or null, by unit"
 
 /-- One linked port (`Docket.Linked`) of the parameters' `linked`, refused by name where malformed (`LINKED_FORM`). -/
 def linkedOf (l : Json) : V Docket.Linked := do
-  exactly l #["entry", "port", "template", "value"] "a linked port"
+  let readsGiven := (field? l "reads").isSome
+  exactly l (if readsGiven then #["entry", "port", "reads", "template", "value"] else #["entry", "port", "template", "value"])
+    "a linked port"
   let e := getD l "entry"
+  let reads ← match getD l "reads" with
+    | .null => pure #[]
+    | .arr xs => xs.mapM fun x => match x with
+      | .null => pure none
+      | x => match nat? x with
+        | some n => pure (some n)
+        | none => throw LINKED_FORM
+    | _ => throw LINKED_FORM
   match getD l "template", getD l "port", getD l "value", getD e "root", getD e "domain", nat? (getD e "leaves") with
-  | .str t, .str p, .str v, .str _, .str _, some _ => pure { template := t, port := p, value := v, entry := e }
+  | .str t, .str p, .str v, .str _, .str _, some _ => pure { template := t, port := p, value := v, entry := e, reads }
   | _, _, _, _, _, _ => throw LINKED_FORM
 
 /-- The parameters as parsed, before `paramsOfJson`'s refusal of the sampling design: the stream's run reads them and

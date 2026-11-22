@@ -1465,6 +1465,14 @@ private def linkedT : Array Docket.Linked := #[{ template := "R", port := "x", v
 -- a port no link names is held to the window's record as before
 #guard refusal (treePortsHeldAt (fun _ => #[]) #[readerT "R/c0" (treeRegT 'a')] treeRecT
   (linkedT.map fun l => { l with port := "z" })) == ""
+-- a linked port's rows of round 1's value by unit (`Docket.Linked.reads`): parsed where given, none where not
+private def linkedJ (reads : List (String × Json)) : Json :=
+  Json.mkObj ([("entry", hexRootT "o0" 'f'), ("port", Json.str "o0"), ("template", Json.str "R"),
+    ("value", Json.str "o0")] ++ reads)
+#guard ((OneStage.linkedOf (linkedJ [("reads", Json.arr #[Lean.toJson (3 : Nat), Json.null])])).toOption.map (·.reads))
+  == some #[some 3, none]
+#guard ((OneStage.linkedOf (linkedJ [])).toOption.map (·.reads)) == some #[]
+#guard (OneStage.linkedOf (linkedJ [("reads", Json.arr #[Json.str "3"])])).toOption.isNone
 -- a wired port, its value `W`'s field tree's name: refused whatever its root
 #guard refusal (treePortsHeldAt (fun _ => #[]) #[readerT "R/c0" (treeRegT 'a' (value := "W/o0"))] treeRecT) == WIRED_TREE_WHY "member R/c0" "x"
 #guard refusal (treePortsHeldAt (fun _ => #[]) #[readerT "R/c0" (treeRegT 'a' (value := "committed/W/o0"))] treeRecT) ==
