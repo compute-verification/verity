@@ -11,7 +11,7 @@ request has no Program. The class circuit (`class_circuit`), every slot's Progra
 positions, is the fixed load's, at which PoUW's tables are read (`FixedLoad`). Arrival steps are values, never structure.
 
 A slot's request comes from the network attester's scan: boundary b's Programs read the scan's state row before it
-(`scan_state.SCAN_STATE`, registered) through `boolean_io_shell.ScanSlots_v5` (`scan_state.bridge`), a template a lane,
+(`scan_state.SCAN_STATE`, a run input) through `boolean_io_shell.ScanSlots_v5` (`scan_state.bridge`), a template a lane,
 which gives its lane its first position's token (its prompt's first id) and the slot it carries on, its occupancy word and
 its head (its prompt's length and ``max_tokens``). A served window has a unit a lane of each boundary, empty lanes
 included; a class circuit's slot holds a unit of every lane's template and reads its own lane's, so its slots lower the
@@ -220,7 +220,8 @@ def class_circuit(registered: Any, cls: WindowClass, programs: int | None = None
     """``cls``'s circuit (module docstring): the class Program lowered once a slot, node by node, slot k reading its lane of the
     scan state row before its anchor (`WindowClass.anchor`), each allocation's slots side by side in its template; its blocks'
     slots are the slots. Its registered parameters are the weights (`window_builder.weight_param`) and ``SCAN_STATE``'s
-    ``cls.buckets`` rows, row a the scan's state row before bucket a (`ingress_scan.window_state`), and with ``tables`` H1's
+    ``cls.buckets`` rows, row a the scan's state row before bucket a (`ingress_scan.window_state`), a run input node
+    (`Registered.run`) the period commits whole, and with ``tables`` H1's
     tables (`Tables`) or Pearl+'s (`PearlTables`). A window's circuit is every slot's; ``programs`` is the first slots only, a probe's census
     (`class_size`). With ``requests``, the served window's circuit instead (`lower`)."""
     return lower(registered, cls, programs, grain, tables=tables, requests=requests).circuit
@@ -337,8 +338,8 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
     else:
         held = ()
     reg = IF.Registered(dict(sorted(params.items())), tuple(b.tables.values()), tuple(IF.coalesce(b.reads)), tuple(roots),
-                        tuple(openings), values=(*held, SS.SCAN_STATE),
-                        formats={v: ROW_FORMAT for v in held} if layout is not None else {})
+                        tuple(openings), values=held,
+                        formats={v: ROW_FORMAT for v in held} if layout is not None else {}, run=(SS.SCAN_STATE,))
     wires = tuple(IF.coalesce(b.wires if order is None else b.allocation_wires()))
     entry_units = {r.entry_unit[0] for r in progs if r.entry_unit is not None}
     if len(entry_units) != 1 or any(r.entry_unit is None for r in progs):

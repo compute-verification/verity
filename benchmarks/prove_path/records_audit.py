@@ -220,6 +220,7 @@ from verity.protocols.run import schemes  # noqa: E402
 from verity.protocols.proof.spot.verifier import service as S  # noqa: E402
 from verity.protocols.proof.spot.verifier.one_stage import docket as DK  # noqa: E402
 from verity.commitments import registered_value as RV  # noqa: E402
+from verity.circuits import supplied as SU  # noqa: E402
 from verity.circuits.codec import program_digest  # noqa: E402
 from verity.commitments.periods import history as HW, interface as IF  # noqa: E402
 
@@ -656,6 +657,19 @@ def tie_of(circuit: Mapping[str, Any], w: Mapping[str, Any] | None, prefix: str 
         pins[v], outputs[v] = {**got[0], "value": v}, {"record": d, "value": name}
     return ({"log": [dict(w)], "registered": {**fresh["registered"], **{v: int(pins[v]["words"]) for v in values}},
              "outputs": outputs, "schemas": {**fresh["schemas"], **{v: IF.value_format(reg, v)[0] for v in values}}}, pins)
+
+
+def anchored(tied: Mapping[str, Any], docket: Mapping[str, Any], program: Any, reg: Any) -> dict[str, Any]:
+    """``tied`` with each table's root and domain anchor C's marks name (`supplied.anchors`) among the values the
+    verifier expects registered (``registered``, at the words of the docket's entry of it, and ``schemas``), which R7
+    recomputes from the table's pin. Refused (ValueError) for an anchor the docket registers other than once."""
+    if not (anchors := SU.anchors(program)):
+        return dict(tied)
+    got = {v: [e for e in docket.get("registered") or () if e.get("value") == v] for v in anchors}
+    if bad := sorted(v for v, es in got.items() if len(es) != 1):
+        raise ValueError(f"the docket registers the table anchors {bad} other than once")
+    return {**tied, "registered": {**tied.get("registered", {}), **{v: int(es[0]["words"]) for v, es in got.items()}},
+            "schemas": {**tied.get("schemas", {}), **{v: IF.value_format(reg, v)[0] for v in anchors}}}
 
 
 #: what holds the roots of Pearl+'s window record to the ones its passes credited, which an audit tied to it rests on
@@ -1150,6 +1164,7 @@ def audit(a: argparse.Namespace) -> int:
         w_tie = json.loads(Path(a.tie_file).read_text()) if a.tie_file else None
         decl = IF.declarations(doc)[2]
         tied, tie_pins = tie_of(doc, w_tie, a.tie_prefix, phase_values(docket, decl.values if decl else ()))
+        tied = anchored(tied, docket, mine.program, decl)
         if twice := sorted(set(tie_pins) & set(pins)):
             raise ValueError(f"values {twice} are both pinned and the earlier registration's")
         pins |= tie_pins
