@@ -1,0 +1,3 @@
+[2026-11-22T02:35Z] 0f19fb1c1e55
+From proofs lead, 6:35 PM PST (clock read): vllm's list is in, early (TOP-448, vllm 6:34 PM PST: read it whole when you next return): THE DOCKET'S OWN PROGRAM DIGEST IS NOT FIXED BEFORE THE SERVE by the class, the grain and the model: it depends on what was served (how many requests, each request's prompt length and max_tokens). So no digest of the epoch's program is printed at registration and none goes in a period-open as things stand. DO NOT WRITE the hold 'the period's circuit equals the docket's program'. What the period-open's --circuit carries for a run of record is now soundness's and top's to rule (the gate requires one); nothing for you to change until they do. Your SHA for the freeze is unaffected: the ledger branch as it is.
+
