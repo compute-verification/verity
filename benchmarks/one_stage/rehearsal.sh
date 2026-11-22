@@ -190,8 +190,10 @@ audit() {
   [ -n "${D:-}" ] && [ -f "$D/private/deferred/deferred.env" ] \
     || refuse "audit runs on the deferral's copy: D=${D:-unset} holds no private/deferred/deferred.env"
   [ -n "${PP_PEER:-}" ] || refuse "PP_PEER is unset: this node's name in the gate's peers file, never the served node's"
-  export D PP_PEER POUW=pearlplus PEARLC_CHALLENGER_LANE=${PEARLC_CHALLENGER_LANE:-vllm} \
-    PP_GATE_KEY=${PP_GATE_KEY:-$HOME/.ssh/vllm_lane_ed25519} \
+  local lane=${REGISTRATION_LANE:-${H1_LANE:-${PEARLC_CHALLENGER_LANE:-vllm}}}
+  # the lane's own gate key: $HOME/.ssh/LANE_ed25519, vllm's the name it is registered under (run.sh's gate_key_name)
+  export D PP_PEER POUW=pearlplus PEARLC_CHALLENGER_LANE=${PEARLC_CHALLENGER_LANE:-$lane} \
+    PP_GATE_KEY=${PP_GATE_KEY:-$HOME/.ssh/$([ "$lane" = vllm ] && echo vllm_lane || echo "$lane")_ed25519} \
     MAIN_FILE=${MAIN_FILE:-${RESEARCH_RUN_DIR:-.}/inputs/main.txt} \
     PP_CHALLENGER_KEY=${PP_CHALLENGER_KEY:-${RESEARCH_RUN_DIR:-.}/inputs/challenger-key.json} \
     V3C_AUDIT_TIMEOUT=${V3C_AUDIT_TIMEOUT:-60h} V3C_ARCHIVE_LINK=${V3C_ARCHIVE_LINK:-1}

@@ -512,7 +512,7 @@ H1_KEY_OF_RECORD=27271eaf917d1a817198cbcfe7684debd9bdb11b9e386460948bb981642fab3
 H1_KEY_SHA512=${H1_KEY_SHA512:-$H1_KEY_OF_RECORD}
 POUW=${POUW:-}
 H1_PEER=${H1_PEER:-vy-dc-h200}
-LANE_GATE="ssh -i $HOME/.ssh/vllm_lane_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes research@${VY_CHALLENGER_1_HOST:-}"
+LANE_GATE="ssh -i ${PP_GATE_KEY:-} -o IdentitiesOnly=yes -o BatchMode=yes research@${VY_CHALLENGER_1_HOST:-}"
 if [ "$POUW" = pearlplus ]; then
   PEARLC_CHALLENGER_GATE=${PEARLC_CHALLENGER_GATE-$LANE_GATE}
   # the peer is the gate's: with the gate empty it takes no default, since what reads the pair (bench_arm.py's live
@@ -569,6 +569,13 @@ host_set() {
         return 3 ;;
     esac
   done
+}
+# key_set GATE: the preflight's refusal of the lane's default gate (LANE_GATE) where PP_GATE_KEY, the lane's own gate key,
+# is unset or no readable file: no gate call falls back to another key
+key_set() {
+  [ "$1" != "$LANE_GATE" ] || { [ -n "${PP_GATE_KEY:-}" ] && [ -r "$PP_GATE_KEY" ]; } && return 0
+  say "PREFLIGHT: PP_GATE_KEY (${PP_GATE_KEY:-unset}) is no readable file: the lane's own gate key, made on this machine with its public half registered under the lane, which the lane's default gate command reaches the challenger with; set it, or give the gate's whole command"
+  return 3
 }
 keep() { [ -d "$D" ] && (umask 077; mkdir -p "$D/private" && printf '%s\n' "$*" >> "$D/private/verdicts.txt"); }
 count() { cat "$1" 2>/dev/null | grep -c .; }
@@ -2182,7 +2189,9 @@ road_steps() {  # in TREE: the steps named, in the caller's order, then the road
   road_end 20
 }
 
-if [ "${1:-}" = serve ]; then host_set VY_CHALLENGER_1_HOST "${PEARLC_CHALLENGER_GATE:-}" || exit 3; serve; exit $?; fi
+if [ "${1:-}" = serve ]; then
+  host_set VY_CHALLENGER_1_HOST "${PEARLC_CHALLENGER_GATE:-}" && key_set "${PEARLC_CHALLENGER_GATE:-}" || exit 3; serve; exit $?
+fi
 if [ "${1:-}" = circuits ]; then K=${2:?served_verdicts.sh circuits WINDOW}; circuits; exit $?; fi
 if [ "${1:-}" = inference-policy ]; then mkdir -p "$D" && logs_dir && inference_policy; exit $?; fi
 if [ "${1:-}" = weights ]; then weights; [ -f "$WREG" ]; exit $?; fi  # D a serve dir with its serve.json: the registration alone

@@ -6663,8 +6663,10 @@ def _serve_argv(tmp_path: Path, env: dict[str, str]) -> tuple[int, list[str]]:
     for path, body in ((venv / "python", python), (bin_ / "sleep", "exit 0")):
         path.write_text(f"#!/bin/sh\n{body}\n")
         path.chmod(0o755)
+    (key := tmp_path / ".ssh" / "vllm_lane_ed25519").parent.mkdir()
+    key.write_text("")
     env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(tmp_path / "serve"),
-           "OUT": str(tmp_path / "out"), "VY_CHALLENGER_1_HOST": CHALLENGER_HOST, **env}
+           "OUT": str(tmp_path / "out"), "VY_CHALLENGER_1_HOST": CHALLENGER_HOST, "PP_GATE_KEY": str(key), **env}
     run = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "serve"], cwd=tree, env=env, check=False,
                          capture_output=True)
     (tmp_path / "run.log").write_bytes(run.stdout + run.stderr)
@@ -6735,6 +6737,24 @@ def test_a_serve_on_the_lanes_default_gate_reads_the_challenger_hosts_address_fr
         assert rc == 10 and ("--challenger-gate" in argv) == bool(gate), (rc, argv)
         assert not gate or argv[argv.index("--challenger-gate") + 1] == GATE
 
+
+
+def test_a_serve_on_the_lanes_default_gate_reaches_it_with_the_lanes_own_key_or_is_refused_before_serving(tmp_path):
+    """The lane's default gate command reaches the challenger with PP_GATE_KEY, the lane's own key (rehearsal-1's here),
+    and with that key unset or no file the serve is refused by its name before serve-openai starts: no gate call falls
+    back to another key."""
+    env = {"POUW": "pearlplus", "PEARLPLUS_TIE": "1", "PEARLC_KERNEL": "pearl_c_sm90", "PEARLC_CUBIN": "/c/pearl_c_sm90.cubin",
+           "DATASET": "llama32_1b_fixed_4_27_2", "TIMING": "at-once", "H1_LANE": "rehearsal-1"}
+    (key := tmp_path / "rehearsal-1_ed25519").write_text("")
+    rc, argv = _serve_argv(tmp_path / "held", {**env, "PP_GATE_KEY": str(key)})
+    assert rc == 10 and argv[argv.index("--challenger-gate") + 1] == (
+        f"ssh -i {key} -o IdentitiesOnly=yes -o BatchMode=yes research@{CHALLENGER_HOST}"), (rc, argv)
+    assert argv[argv.index("--challenger-lane") + 1] == "rehearsal-1"
+    for name, held in (("absent", str(tmp_path / "absent_ed25519")), ("unset", "")):
+        rc, argv = _serve_argv(tmp_path / name, {**env, "PP_GATE_KEY": held})
+        said = (tmp_path / name / "out" / "verdicts.txt").read_text().splitlines()
+        assert (rc, argv, not (tmp_path / name / "calls").exists()) == (3, [], True), (rc, argv)
+        assert len(said) == 1 and said[0].startswith(f"PREFLIGHT: PP_GATE_KEY ({held or 'unset'}) is no readable file"), said
 
 @pytest.mark.parametrize("env, budget", [({}, "512"), ({"T": "2048"}, "2048")])
 def test_the_engine_gets_one_token_budget(tmp_path, env, budget):
