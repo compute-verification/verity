@@ -569,6 +569,14 @@ def _part_nodes(q: tuple) -> list[int]:
     return [i for p, i, *_ in (q[1] if q[0] == "e" else q[2]) if not p]
 
 
+def _lane_wire(part: Any, x: int, L: int, ln: int, c: int) -> int | EG.Refusal:
+    """`Program.laneWire`'s node, or its refusal."""
+    try:
+        return EG._lane_wire(part, x, L, ln, c)[0]
+    except EG.Refusal as e:
+        return e
+
+
 def reg_rows(R: EG._Root, k: int, m0: int, n: int, param: str) -> tuple[int, int] | None:
     """`Flock.OneCircuit.regRows?`: the input node every member of ``[m0, m0 + n)`` of root node ``k`` reads ``param``
     at, with a row's leaves; None where they read only root nodes that are no input; `_Refused` (`read_form_why`) where
@@ -611,10 +619,8 @@ def reg_rows(R: EG._Root, k: int, m0: int, n: int, param: str) -> tuple[int, int
         j = next((j for j, q in enumerate(parts) if starts[j] <= x < starts[j] + EG._count(q)), None)
         if j is None or x + (c - 1) * L + ln > starts[j] + EG._count(parts[j]) or parts[j][0] != "g":
             return None
-        try:
-            return EG._lane_wire(parts[j], x - starts[j], L, ln, c)[0]
-        except EG.Refusal:
-            return None
+        w = _lane_wire(parts[j], x - starts[j], L, ln, c)
+        return None if isinstance(w, EG.Refusal) else w
 
     if (w := wire(x_of(m0), max(n, 1), L)) is not None:
         return (w, ln) if _input(R, w) else None
@@ -1127,17 +1133,24 @@ def tied_roots_why(w: int) -> str:
     return f"members: C's tied run input node {w} is read under two roots: every reader of a tied node opens one tree"
 
 
+def tied_no_root_why(member: str, p: str, w: int) -> str:
+    """`OneStageZk.TIED_NO_ROOT_WHY`: the refusal of a member reading tied run input node ``w`` at port ``p`` with no
+    root there."""
+    return (f"member {member}: port {p} reads C's tied run input node {w}, and its slice holds no root there: every "
+            "reader of a tied node opens one tree")
+
+
 def tied_roots_at(R: EG._Root, program: Program, ranges: Sequence[Sequence[Any]], tied: Sequence[range], name: str,
                   m: Mapping[str, Any], own: Sequence[Mapping[str, Any]], seen: dict[int, Any]) -> dict[int, Any]:
     """`OneStageZk.tiedRootsAt`: ``seen``, the root each tied run input node is read under so far, with each node inside
     the tied gates ``tied`` that member ``name`` reads (`member_inputs`) at the root ``own`` holds for its port; refused
-    (`tied_roots_why`) where ``seen`` holds another root for the node. That the root is the right one is the later
-    period check's."""
+    where ``own`` holds no root at the port (`tied_no_root_why`) or ``seen`` holds another root for the node
+    (`tied_roots_why`). That the root is the right one is the later period check's."""
     for p, w, _ln in member_inputs(R, ranges, name, m["units"]):
         if not _input(R, w, run=True) or not any(P.within(program, g, w) for g in tied):
             continue
         if (e := next((e for e in own if e.get("port") == p), None)) is None:
-            continue
+            raise _Refused(tied_no_root_why(name, p, w))
         if seen.setdefault(w, e.get("root")) != e.get("root"):
             raise _Refused(tied_roots_why(w))
     return seen
@@ -1569,4 +1582,4 @@ __all__ = ["EXITS", "Form", "MEMBERS_LAID", "MEMBER_COVER", "MEMBER_STRATA", "ME
            "TABLE_PORT", "UNREAD", "blobs_of", "case_check", "check", "files_why", "flock_form", "flock_verdict",
            "field_trees_why", "members_run", "population_why", "POPULATION_WHY", "registered_at", "registered_reads",
            "return_fields", "run_reason", "shared_unread", "unregistered_why", "unwired_why", "own_root_why",
-           "pinned_read_why", "pins_held", "port_twice_why", "read_pins", "unpinned_read_why", "run_own_root_why", "run_tree_missing_why", "run_tree_why", "run_tree_unbound_why", "run_input_roots_at", "run_tree_held", "tied_roots_at", "tied_roots_why", "member_inputs", "reg_rows", "read_form_why", "two_reads_why", "slice_no_port_why", "strata_design", "resolved", "subset_design", "subset_designs", "wired_tree_why"]
+           "pinned_read_why", "pins_held", "port_twice_why", "read_pins", "unpinned_read_why", "run_own_root_why", "run_tree_missing_why", "run_tree_why", "run_tree_unbound_why", "run_input_roots_at", "run_tree_held", "tied_roots_at", "tied_roots_why", "tied_no_root_why", "member_inputs", "reg_rows", "read_form_why", "two_reads_why", "slice_no_port_why", "strata_design", "resolved", "subset_design", "subset_designs", "wired_tree_why"]

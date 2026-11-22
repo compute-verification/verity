@@ -679,6 +679,12 @@ STAGE_WORKER_GIB = 16.0
 PROGRESS_EVERY = 50
 
 
+def tied_root_line(tied: Sequence[str]) -> str:
+    """The first line of a run that names tied parameters: which test held a tied node's shared root. None does: the
+    members test holds only that every reader brings a root and that they are equal (`members.tied_roots_at`)."""
+    return f"TIED-ROOT {json.dumps(sorted(tied))}: none held it: no test holds a tied node's shared root to the record"
+
+
 def progress(phase: str, t0: float, **kw: Any) -> None:
     """A ``PROGRESS`` line on stderr, flushed: ``phase``, the seconds since ``t0`` and ``kw``; stdout's lines are the
     audit's answer, which its callers read by their last line."""
@@ -1042,6 +1048,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     of record; None for a window with none. ``session``: the thread of the challenger session the audit samples on
     (`a5_coins.start`'s, which the caller holds), ended before a negative's worker is forked (`session_ended`); None
     where the caller hands none, and its thread is then one more the workers' fork refuses while it lives."""
+    if named := verifying(a).get("tied"):
+        print(tied_root_line(named), flush=True)
     out.mkdir(parents=True, exist_ok=True)
     t_audit = time.time()
     program, query, part, pd, n_all, sampling_design = mine.program, mine.query, mine.partition, mine.partition_digest, mine.population, mine.law

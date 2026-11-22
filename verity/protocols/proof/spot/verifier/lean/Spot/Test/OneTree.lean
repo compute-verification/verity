@@ -179,6 +179,11 @@ private def runRootsT (R : Option String) (rec : Json) (m : Member) (own : Array
   #[Json.mkObj [("port", Json.str "w"), ("root", Json.str "b")]] #[(1, Json.str "a")]) == TIED_ROOTS_WHY 1
 #guard (tiedRootsAt (batchToy true) #[batchRangeT] #[] (chunkT "A/c1" 2 4 none)
   #[Json.mkObj [("port", Json.str "w"), ("root", Json.str "b")]] #[(1, Json.str "a")]).toOption == some #[(1, Json.str "a")]
+-- a reader of a tied node with no root at its port is refused by name, first reader or later
+#guard whyT (tiedRootsAt (batchToy true) #[batchRangeT] #[(4, 4)] (chunkT "A/c1" 2 4 none) #[] #[]) ==
+  TIED_NO_ROOT_WHY "A/c1" "w" 1
+#guard whyT (tiedRootsAt (batchToy true) #[batchRangeT] #[(4, 4)] (chunkT "A/c1" 2 4 none) #[] #[(1, Json.str "a")]) ==
+  TIED_NO_ROOT_WHY "A/c1" "w" 1
 -- no tree in the record, a root of the member's own, another leaf count, another domain, no open root: refused by name
 #guard whyT (runRootsT (some rootT) (Json.mkObj [("roots", Json.arr #[])]) (chunkT "A/c1" 2 4 none)) ==
   RUN_TREE_MISSING_WHY "A/c1" "w" 1
@@ -196,6 +201,8 @@ private def runRootsT (R : Option String) (rec : Json) (m : Member) (own : Array
 -- the refusals' text, which `members` prints word for word
 #guard TIED_ROOTS_WHY 3 == "members: C's tied run input node 3 is read under two roots: every reader of a tied node " ++
   "opens one tree"
+#guard TIED_NO_ROOT_WHY "a" "p" 3 == "member a: port p reads C's tied run input node 3, and its slice holds no root " ++
+  "there: every reader of a tied node opens one tree"
 #guard TWO_READS_WHY "a" "p" 1 2 == "registered reads: member a's units read parameter p at C's input nodes 1 and 2: a " ++
   "parameter that reads an input reads one node, each port one tree"
 #guard RUN_TREE_MISSING_WHY "a" "p" 3 == "member a: port p reads C's run input node 3, and the record holds no root of " ++
