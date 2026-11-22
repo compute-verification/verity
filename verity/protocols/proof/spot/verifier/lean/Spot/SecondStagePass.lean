@@ -330,7 +330,8 @@ theorem readOk_wired {own : Own} {named : Bool} {p : Part} {port : String} {e : 
     ∃ x pw r, getD e "value" = .str (portOf named w.writer w.wport) ∧
       (portOf named w.writer w.wport, x) ∈ Record.byPort own.interior ∧ writerOf own w = some pw ∧
       rowsOf own p.template port = some r ∧ pw.n = r.per ∧ sameAt e x = true ∧
-      placedOk own.sample.size p e (own.sample.size * r.per) (wiredRow p r) = true := by
+      placedOk own.sample.size p (atPos own p.template port e) (own.sample.size * r.per)
+        (wiredRow p r) = true := by
   unfold readOk at h
   rw [hl, hw] at h
   cases hv : getD e "value" with
@@ -368,7 +369,8 @@ theorem check_ok_wired {own : Own} {ss : Array Json} (h : (check own (some ss)).
         ∃ x pw r, getD e "value" = .str (portOf (byTemplate own.interior) w.writer w.wport) ∧
           (portOf (byTemplate own.interior) w.writer w.wport, x) ∈ Record.byPort own.interior ∧
           writerOf own w = some pw ∧ rowsOf own p.template port = some r ∧ pw.n = r.per ∧ sameAt e x = true ∧
-          placedOk own.sample.size p e (own.sample.size * r.per) (wiredRow p r) = true := by
+          placedOk own.sample.size p (atPos own p.template port e) (own.sample.size * r.per)
+            (wiredRow p r) = true := by
   obtain ⟨-, ps, hp, -, -, hst, -, -⟩ := check_ok h
   refine ⟨ps, hp, fun i hi => ?_⟩
   obtain ⟨s, p, hs, hf, -, -, hc⟩ := hst i hi
@@ -502,7 +504,7 @@ theorem sampledCodes_nil {own : Own} {named : Bool} {k : Nat} {p : Part} {s : St
     (h : sampledCodes own named k p s = []) :
     verifiedOk own s = true ∧ tablesOk own s = true ∧
       sampledHeaderOk own named k s.template s.header (sampledSlots own.sample.size p own.drawn)
-        (entries (getD s.registered "ports")) = true ∧
+        ((entries (getD s.registered "ports")).map fun x => (x.1, atPos own p.template x.1 x.2)) = true ∧
       sampledOk own.sample.size p own.drawn s.header = true ∧
       rootsOk named own.interior s.template s.header ((entries (getD s.registered "ports")).map (·.1)) = true ∧
       jeq s.draw (wholeSample (sampledSlots own.sample.size p own.drawn).size) = true ∧
@@ -660,7 +662,8 @@ theorem checkAny_ok_wired {own : Own} {ss : Array Json}
         ∃ x pw r, getD e "value" = .str (portOf (byTemplate own.interior) w.writer w.wport) ∧
           (portOf (byTemplate own.interior) w.writer w.wport, x) ∈ Record.byPort own.interior ∧
           writerOf own w = some pw ∧ rowsOf own p.template port = some r ∧ pw.n = r.per ∧ sameAt e x = true ∧
-          placedOk own.sample.size p e (own.sample.size * r.per) (wiredRow p r) = true := by
+          placedOk own.sample.size p (atPos own p.template port e) (own.sample.size * r.per)
+            (wiredRow p r) = true := by
   obtain ⟨-, ps, hp, -, -, hst, -, -⟩ := checkAny_ok h
   refine ⟨ps, hp, fun i hi => ?_⟩
   obtain ⟨s, p, hs, hf, -, -, hc⟩ := hst i hi
@@ -739,7 +742,7 @@ theorem checkAny_ok_sampled {own : Own} {ss : Array Json}
         ∃ r r', (s.template, r) ∈ own.refs ∧
           atRun own (byTemplate own.interior) (posOf ps s.template) s.template r = some r' ∧
           jeq (blankRun s.header) (blankRun (atSampled r' (sampledSlots own.sample.size p own.drawn)
-            (entries (getD s.registered "ports")))) = true) := by
+            ((entries (getD s.registered "ports")).map fun x => (x.1, atPos own p.template x.1 x.2)))) = true) := by
   obtain ⟨-, ps, hp, -, -, hst, -, -⟩ := checkAny_ok h
   refine ⟨ps, hp, fun i hi => ?_⟩
   obtain ⟨s, p, hs, hf, -, -, hc⟩ := hst i hi

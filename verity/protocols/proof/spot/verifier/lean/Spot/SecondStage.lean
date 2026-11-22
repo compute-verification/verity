@@ -463,6 +463,15 @@ structure Held where
   window : Option String
   fixed : Array String
 
+/-- Template `template`'s session port `port` reads row `rel[k]` at unit `first + k` (none for none), as C gives it
+(`Flock.OneCircuit.pos`, `positionsOf`). -/
+structure Pos where
+  template : String
+  port : String
+  rel : Array (Option Nat)
+  first : Nat
+  deriving Repr, Inhabited, DecidableEq
+
 /-- What the verifier holds of the run: the replay sample `S`, the parts (`parts`), the interior and boundary
 registrations' records, the second sample's units, the design's links (`replayLinks`, none when the replay block's
 Definition makes none), the `{value: root}` the verifiers report the sessions read
@@ -500,6 +509,10 @@ structure Own where
   widths : Array Width := #[]
   wiredKey : Bool := WIRED_KEY
   held : Option Held := none
+  /-- the rows each statement's port reads, as the verifier derives them from C (`positionsOf`); none: as the file
+  states them (`reads`, `reads_from`), which only the examples and the difference tests' inputs take. The run of record
+  (`Run.interiorAudit`) always sets it. -/
+  positions : Option (Array Pos) := none
 
 /-- `second_stage.supplied_of`: the verifier's supplied values from their JSON, `{value: [[source, ...], ...]}`, a
 row a list of sources, each `{kind: name}` of two strings, as `(value, rows)` each, a row its `(kind, name)` sources;
@@ -1132,6 +1145,40 @@ def sameAt (e x : Json) : Bool :=
   jeq (getD e "root") (getD x "root") && jeq (getD e "domain") (getD x "domain") &&
     jeq (getD e "leaves") (getD x "leaves") && leavesOk e
 
+/-- **The rows each statement's port reads, from C**: for each port of statement `s`'s registered reads, the rows the
+session's verifier reads it at, which C, the interior program `P`, gives its header's `units.indices`
+(`Flock.OneCircuit.pos`, as `Flock.Registered.withPositions` derives a registered or run input's). A port C gives no
+rows (no registered or run input node, a value or a row count C doesn't read there, or indices that are no list of
+naturals) has none, and round 2 refuses its read (`atPos`). -/
+def positionsOf (P : Flock.Program.Prog) (ss : Array Json) : Array Pos :=
+  ss.foldl (fun acc j => match Stmt.ofJson? j with
+    | some s =>
+      match (match getD (getD s.header "units") "indices" with | .arr xs => xs.mapM nat? | _ => none) with
+      | some idx =>
+        if idx.isEmpty then acc else
+        (entries (getD s.registered "ports")).foldl (fun acc (port, e) =>
+          let reg : Flock.Registered.Port :=
+            { name := port, value := (match getD e "value" with | .str v => v | _ => ""), root := .empty,
+              leaves := (nat? (getD e "leaves")).getD 0, words := none, wordBits := 16, domain := .empty,
+              readsRel := #[], param := match getD e "param" with | .str x => x | _ => "" }
+          match (Flock.OneCircuit.pos P idx reg).toOption with
+          | some r => acc.push ⟨s.template, port, r.readsRel, r.readsFrom⟩
+          | none => acc) acc
+      | none => acc
+    | none => acc) #[]
+
+/-- Registered-reads entry `e` of template `t`'s session port `port` at the rows the verifier holds (`Own.positions`):
+its `reads` and `reads_from` the ones C gives (`positionsOf`), null where C gives none, so `placedOk` and `rowsOk`
+refuse the read whatever the file states; `e` itself where the verifier holds no positions. -/
+def atPos (own : Own) (t port : String) (e : Json) : Json :=
+  match own.positions with
+  | none => e
+  | some ps => match ps.find? (fun x => x.template == t && x.port == port) with
+    | some x => setKey (setKey e "reads" (Json.arr (x.rel.map fun r => match r with
+        | some n => Lean.toJson n
+        | none => .null))) "reads_from" (Lean.toJson x.first)
+    | none => setKey (setKey e "reads" .null) "reads_from" .null
+
 /-- Every read of registered-reads entry `e` (slot `reads_from + k` reads row `reads[k]`, null for none) is by one of
 part `p`'s slots `u`, of the first row of the unit `unit u` names, in a tree of `units` units' rows, `leaves / units`
 each. -/
@@ -1182,27 +1229,31 @@ rows' `per` a sampled block, each slot only its
 unit's row of its cell's (`wiredRow`); a port a wire names, only its writer's output port of the interior record, of the writer's units a
 block, each slot only its unit's writer unit's row in its cell's replay block (`wiredRow`); any other, its own port of
 the interior record, each slot only its own first row, or a value either registration registers, never a boundary
-port. Each at its root, domain and leaves, at most `MAX_LEAVES` of them. -/
+port. Each at its root, domain and leaves, at most `MAX_LEAVES` of them, and each slot's row the one the verifier holds
+(`atPos`: C's, in the run of record). -/
 def readOk (own : Own) (named : Bool) (p : Part) (port : String) (e : Json) : Bool :=
   let q := own.sample.size
   match getD e "value", linkOf own p.template port, wireOf own p.template port with
   | .str v, some l, _ =>
     v == l.value && match registeredEntry own.interior v, rowsOf own p.template port with
-      | some x, some r => sameAt e x && placedOk q p e (q * r.per) (wiredRow p r)
+      | some x, some r => sameAt e x && placedOk q p (atPos own p.template port e) (q * r.per) (wiredRow p r)
       | some _, none => false
       | none, _ =>
         match (Record.byPort own.boundary).find? (·.1 == v), nat? (getD own.boundary "population"),
             rowsOf own p.template port with
-          | some (_, b), some m, some r => sameAt e b && placedOk q p e (m * r.per) (linkedRow own p r)
+          | some (_, b), some m, some r =>
+            sameAt e b && placedOk q p (atPos own p.template port e) (m * r.per) (linkedRow own p r)
           | _, _, _ => false
   | .str v, none, some w =>
     v == portOf named w.writer w.wport && match (Record.byPort own.interior).find? (·.1 == v), writerOf own w,
         rowsOf own p.template port with
-      | some (_, x), some pw, some r => sameAt e x && pw.n == r.per && placedOk q p e (q * r.per) (wiredRow p r)
+      | some (_, x), some pw, some r =>
+        sameAt e x && pw.n == r.per && placedOk q p (atPos own p.template port e) (q * r.per) (wiredRow p r)
       | _, _, _ => false
   | .str v, none, none =>
     match (Record.byPort own.interior).find? (·.1 == v), (Record.byPort own.boundary).find? (·.1 == v) with
-    | some (_, x), _ => v == portOf named p.template port && sameAt e x && rowsOk q p e (q * p.n) fun u => some (u - p.lo)
+    | some (_, x), _ => v == portOf named p.template port && sameAt e x &&
+        rowsOk q p (atPos own p.template port e) (q * p.n) fun u => some (u - p.lo)
     | none, some _ => false
     | none, none => match registeredEntry own.boundary v <|> registeredEntry own.interior v with
       | some x => sameAt e x
@@ -1310,7 +1361,8 @@ def sampledCodes (own : Own) (named : Bool) (k : Nat) (p : Part) (s : Stmt) : Li
   let reads := entries (getD s.registered "ports")
   [("second-verified", verifiedOk own s),
    ("second-tables", tablesOk own s),
-   ("second-header", sampledHeaderOk own named k s.template s.header (sampledSlots q p own.drawn) reads),
+   ("second-header", sampledHeaderOk own named k s.template s.header (sampledSlots q p own.drawn)
+     (reads.map fun x => (x.1, atPos own p.template x.1 x.2))),
    ("second-population", sampledOk q p own.drawn s.header),
    ("second-roots", rootsOk named own.interior s.template s.header (reads.map (·.1))),
    ("second-sample", jeq s.draw (wholeSample (sampledSlots q p own.drawn).size)),

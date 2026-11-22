@@ -221,6 +221,16 @@ private def exAt (per : Nat) (runs : Array Run) (reads : List Nat) (held : Nat :
 #guard (exCheck (exReported "input/n0" 5 exLinked) #[exReading "input/n0" 5 6 4 [1, 1, 1, 3, 3, 3]]).codes ==
   #["second-read"]
 #guard (exCheck exLinked #[exHonest]).codes == #["second-read"]
+/-- `exLinked` holding `Pair_v0`'s `x` at rows `rel` from slot 0, as C would give them (`Own.positions`). -/
+private def exPlaced (rel : List Nat) : Own :=
+  { exReported "bx" 5 exLinked with positions := some #[⟨"Pair_v0", "x", rel.toArray.map some, 0⟩] }
+-- with positions held, a read's rows are C's, never the file's: C's rows pass whatever the file states, a file with
+-- none among them; a row other than C's gives at a slot is refused by name (second-read), the file's rows right or not
+#guard (exCheck (exPlaced [1, 1, 1, 3, 3, 3]) #[exReading "bx" 5 6 4 [1, 1, 1, 3, 3, 3]]).codes.isEmpty
+#guard (exCheck (exPlaced [1, 1, 1, 3, 3, 3]) #[exReading "bx" 5 6 4 [0, 0, 0, 0, 0, 0]]).codes.isEmpty
+#guard (exCheck (exPlaced [1, 1, 1, 3, 3, 2]) #[exReading "bx" 5 6 4 [1, 1, 1, 3, 3, 3]]).codes == #["second-read"]
+#guard (exCheck { exPlaced [] with positions := some #[] } #[exReading "bx" 5 6 4 [1, 1, 1, 3, 3, 3]]).codes ==
+  #["second-read"]
 #guard (exCheck { exOwn with links := none } #[exHonest]).codes == #["second-links"]
 #guard (check { exOwn with links := none } none).codes == #["second-links"]
 #guard (check { exOwn with links := some #[⟨"Other_v0", "x", "bx"⟩] } none).codes == #["second-links"]

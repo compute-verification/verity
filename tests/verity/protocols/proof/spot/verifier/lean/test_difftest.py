@@ -8081,7 +8081,7 @@ def test_a_two_stage_run_reaches_every_step(pieces):
     evens = [2 * u for u in range(6)]
     for changed, codes in ((reported("out")(reads(out=evens)(case, 0), 0), []),
                            (reported("out")(reads(False, out=evens)(case, 0), 0), ["second-values"]),
-                           (reported("x")(reads(x=list(range(6)))(case, 0), 0), ["second-read"]),
+                           (reported("x")(reads(x=list(range(6)))(case, 0), 0), ["second-read", "second-link-root"]),
                            (elsewhere, ["second-verified"])):
         out = run(copy.deepcopy(changed))
         assert D.replay(RUN, changed, pieces) == ("output", D.canonical(out))
@@ -8193,7 +8193,7 @@ def test_round_two_holds_each_session_to_its_part(pieces):
         ({**honest, "statements": honest["statements"][::-1]}, ["second-order"]),
         (linked, []),
         (wide(linked, 2 ** 64 // linked["boundary"]["population"]), []),
-        (wide(linked, 2 ** 64 // linked["boundary"]["population"] + 1), ["second-read"]),
+        (wide(linked, 2 ** 64 // linked["boundary"]["population"] + 1), ["second-read", "second-link-root"]),
         (own, []),
         (_second_case(SECOND_MIXED, True, sample, drawn, links={pair, triple}), []),
         (_second_case(SECOND_MIXED, True, sample, [1, 4]), []),
@@ -8206,10 +8206,10 @@ def test_round_two_holds_each_session_to_its_part(pieces):
         (_second_with(own, 0, registered={**own["statements"][0]["registered"], "ports": {
             "x": {**mine, "reads": mine["reads"][::-1]}}}), ["second-read"]),
         ({**linked, "links": []}, ["second-read"]),
-        ({**linked, "links": [{"template": triple, "port": "x", "value": BOUT}]}, ["second-read"]),
+        ({**linked, "links": [{"template": triple, "port": "x", "value": BOUT}]}, ["second-read", "second-link-root"]),
         ({**honest, "links": linked["links"], "rows": linked["rows"]}, ["second-read"]),
         ({**own, "links": [*own["links"], {"template": pair, "port": "x", "value": BX}],
-          "rows": [*own["rows"], {"template": pair, "port": "x", "per": 3, "runs": _runs(3, 3)}]}, ["second-read"]),
+          "rows": [*own["rows"], {"template": pair, "port": "x", "per": 3, "runs": _runs(3, 3)}]}, ["second-read", "second-link-root"]),
         ({**honest, "links": linked["links"]}, ["second-links"]),
         ({**linked, "rows": []}, ["second-links"]),
         ({**own, "verdicts": {**own["verdicts"], "lean": {"of_record": True, "accepted": True}}}, ["second-reported"]),
@@ -8316,7 +8316,7 @@ def test_round_two_binds_a_registered_values_port_by_its_held_registration(piece
         ({**reg, "held": {**reg["held"], "fixed": ["lg"]}}, ["second-header"]),
         (_registered_at(honest, triple, "lg", prog, WINDOW_OPEN, both=True), ["second-header", "second-place-two"]),
         ({**reg, "links": reg["links"][:i] + [{**reg["links"][i], "value": "lg-none"}]},
-         ["second-header", "second-read", "second-place-none"]),
+         ["second-header", "second-read", "second-link-root", "second-place-none"]),
         (_second_with(wired, 1, header={**wh, "frame_v3": {**wh["frame_v3"], "bindings": {
             **wh["frame_v3"]["bindings"], "x": as_registered}}}), ["second-header"]),
     ]
@@ -8499,7 +8499,7 @@ def test_round_two_reads_each_unit_at_the_row_its_rows_name(pieces):
         (at(linked, lx, reads=[1, 0, 7, 6]), ["second-read"]),
         (at(linked, lx, reads=[3, 4, 9, 10]), ["second-read"]),
         (at(linked, lx, [[0, 1, 0, 0], [1, 1, 0, 0]]), ["second-read"]),
-        (at(linked, lx, leaves=4, reads=[0, 0, 2, 2]), ["second-read"]),
+        (at(linked, lx, leaves=4, reads=[0, 0, 2, 2]), ["second-read", "second-link-root"]),
         (at(linked, lx, per=2, reads=[0, 1, 4, 5]), ["second-read"]),
         (at(linked, lx, [[0, 2, 2, 1]], reads=[2, 3, 8, 9]), ["second-read"]),
         (at(linked, lx, [[0, 1, 0, 1]]), ["second-links"]),
@@ -8705,14 +8705,15 @@ def test_round_two_reads_a_linked_port_at_the_value_the_interior_registers_for_i
     unit's row of its cell's sampled block (`readOk`, `wiredRow`): Lean's the Python's whole (`second-read`,
     `second_interior_reads`), over the two-template interior after a replay sample of two with TRIPLE's `x` linked
     (`_read_linked`). The read as placed passes; at the boundary port, at another root, domain or leaf count, or at the
-    boundary port's rows it is refused (`second-read`). Each such read is named (`second_interior_reads`, at another
+    boundary port's rows it is refused (`second-read`; but at those rows, `second-link-root` too). Each such read is named (`second_interior_reads`, at another
     root too), and with no such value the boundary port is read as before. A value the verifier supplies (a table's
     root, an index) reaches a template's parameter this way, and only such a value: one the prover registers under
     the link's name is refused (`second-inputs`), though the read of it is placed alike."""
     _, triple = SECOND_MIXED.templates
     linked = _second_case(SECOND_MIXED, True, [0, 2], [1, 4, 6, 9], links={triple})
     for x in range(6):
-        case, codes = _read_linked(linked, x), [] if x == 0 else ["second-read"]
+        case = _read_linked(linked, x)
+        codes = [] if x == 0 else ["second-read"] if x == 5 else ["second-read", "second-link-root"]
         got = second_statements(copy.deepcopy(case))
         assert D.replay(SECOND_STATEMENTS, case, pieces) == ("output", D.canonical(got)), (x, got)
         assert got["codes"] == codes and got["ok"] == (codes == []), (x, got)
@@ -8744,7 +8745,8 @@ def test_round_two_reads_a_linked_port_at_a_supplied_row_seg_value(pieces):
     seg = value[G.SCHEMA_SEG]
     cases = [(_read_linked(linked, 0, seg), []),
              (_row_schema(_read_linked(linked, 0, seg), RV.SCHEMA, reference=False), ["second-values"])]
-    cases += [(_read_linked(linked, 2, seg, value[schema]["root"]), ["second-read"]) for schema in (RV.SCHEMA, G.SCHEMA_V2)]
+    cases += [(_read_linked(linked, 2, seg, value[schema]["root"]), ["second-read", "second-link-root"])
+              for schema in (RV.SCHEMA, G.SCHEMA_V2)]
     for case, codes in cases:
         got = second_statements(copy.deepcopy(case))
         assert D.replay(SECOND_STATEMENTS, case, pieces) == ("output", D.canonical(got)), (codes, got)
@@ -8766,7 +8768,7 @@ def test_round_two_refuses_an_interior_that_registers_a_name_round_one_has(piece
     unreturned = {**honest, "returns": []}
     cases = [*((_shadowing(unreturned, x), ["second-interior-names"]) for x in range(names)),
              (_read_linked(linked, 0, kept=True), ["second-interior-names"]),
-             (_read_linked(linked, 1, kept=True), ["second-interior-names", "second-read"])]
+             (_read_linked(linked, 1, kept=True), ["second-interior-names", "second-read", "second-link-root"])]
     for case, codes in [(honest, []), (linked, []), *cases]:
         got = second_statements(copy.deepcopy(case))
         assert D.replay(SECOND_STATEMENTS, case, pieces) == ("output", D.canonical(got)), (codes, got)
@@ -8805,7 +8807,7 @@ def test_round_two_reads_what_a_replay_block_returns_only_at_round_ones_port(pie
              ({**_read_linked(out, 0), "returns": []}, []),
              ({**_read_linked(out, 0), "returns": None}, []),
              ({**_read_linked(out, 0), "returns": [BX]}, []),
-             (_read_linked(out, 2), ["second-return", "second-read"]),
+             (_read_linked(out, 2), ["second-return", "second-read", "second-link-root"]),
              (_read_linked(out, 0, kept=True), ["second-interior-names", "second-return"]),
              (_returned(honest, 5), ["second-interior-names", "second-return"]),
              (_returned(honest, 6), ["second-return"]),
