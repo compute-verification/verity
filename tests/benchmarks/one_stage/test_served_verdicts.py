@@ -3305,6 +3305,25 @@ def test_the_weights_step_writes_the_serves_first_registration_record_and_says_w
     assert not [f.name for f in (tmp_path / "refused" / "serve").iterdir() if f.is_file()]
 
 
+@pytest.mark.parametrize("lane", [None, "vllm"])
+def test_the_audits_registration_is_the_challengers_signed_head_where_a_lane_is_named_and_the_development_path_else(lane):
+    """`wreg_args`: with REGISTRATION_LANE, the audit is held to the head the challenger signed for that lane in
+    REGISTRATION_LEDGER under the key record (REGISTRATION_KEY, else PP_CHALLENGER_KEY); with none, the development path,
+    named."""
+    script = (HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh").read_text()
+    start = script.index("\nwreg_args() {") + 1
+    fn = script[start:script.index("\n}\n", start) + 3]
+    env = {"PATH": os.defpath, "DREG": "/s/deployment-registration.json", "REGISTRATION_LEDGER": "/s/windows.jsonl",
+           "PP_CHALLENGER_KEY": "/s/challenger-key.json", **({"REGISTRATION_LANE": lane} if lane else {})}
+    said = subprocess.run(["bash", "-c", "set -uo pipefail\n" + fn + "wreg_args"], env=env, check=True,
+                          capture_output=True, text=True).stdout.splitlines()
+    if lane is None:
+        assert said == ["--registration", "/s/deployment-registration.json", "--registration-head", "development"]
+    else:
+        assert said == ["--registration", "/s/deployment-registration.json", "--registration-ledger", "/s/windows.jsonl",
+                        "--challenger-key", "/s/challenger-key.json", "--registration-lane", "vllm"]
+
+
 def test_a_class_that_counts_passes_and_the_class_of_record_is_not_counted_unasked(tmp_path):
     """CLASSES' one class counts under WC_TIMEOUT, its published count without the advice's length; the class of record,
     which CLASSES doesn't name and which would run out of time here, is never started."""

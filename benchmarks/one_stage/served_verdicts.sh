@@ -827,8 +827,15 @@ v3c_compose_args() {  # the warm's and the audit's disk floor and text keeping, 
   grep -q -- '--min-free-gb' "$TREE/benchmarks/prove_path/records_audit.py" || return 0
   printf '%s\n' --min-free-gb "$V3C_MIN_FREE_GB" ${V3C_KEEP_CIRCUITS:+--keep-circuits}
 }
-wreg_args() {  # the deployment's registration record on the development path, named: no challenger here signs its digest
-  printf '%s\n' --registration "$DREG" --registration-head development
+wreg_args() {  # the deployment's registration record: under REGISTRATION_LANE, held to the head the auditor's challenger
+  # signed for that lane in its ledger REGISTRATION_LEDGER under the key record REGISTRATION_KEY (default
+  # PP_CHALLENGER_KEY); with no lane, the development path, named
+  if [ -n "${REGISTRATION_LANE:-}" ]; then
+    printf '%s\n' --registration "$DREG" --registration-ledger "${REGISTRATION_LEDGER:-}" \
+      --challenger-key "${REGISTRATION_KEY:-${PP_CHALLENGER_KEY:-}}" --registration-lane "$REGISTRATION_LANE"
+  else
+    printf '%s\n' --registration "$DREG" --registration-head development
+  fi
 }
 v3c_warm() {  # every template of the committed window composed into $VW/compose-cache, V3C_WARM_JOBS at a time
   local ca; mapfile -t ca < <(v3c_compose_args)
@@ -2308,6 +2315,12 @@ case $DEVELOPMENT in '' | 1) ;; *) say "PREFLIGHT: DEVELOPMENT is 1, a developme
 case ${VERITY_HOLD_PLACEMENT:-} in '' | 0 | 1) ;; *) say "PREFLIGHT: VERITY_HOLD_PLACEMENT is 1, which restores the refusals that rest on where coins are flipped or composites made, or 0 or unset, not $VERITY_HOLD_PLACEMENT"; exit 3 ;; esac
 [ "$H1_KEY_SHA512" = "$H1_KEY_OF_RECORD" ] || [ "$DEVELOPMENT" = 1 ] || ! hold_placement \
   || { say "PREFLIGHT: H1_KEY_SHA512 replaces the challenger key of record (vy-challenger-1's), which under VERITY_HOLD_PLACEMENT=1 only a development run takes: unset H1_KEY_SHA512, DEVELOPMENT=1, or VERITY_HOLD_PLACEMENT unset"; exit 3; }
+if [ -n "${REGISTRATION_LANE:-}" ]; then
+  [ -n "${REGISTRATION_LEDGER:-}" ] && [ -r "$REGISTRATION_LEDGER" ] \
+    || { say "PREFLIGHT: REGISTRATION_LANE holds the audit to the registration the auditor's challenger signed for that lane, read from its ledger REGISTRATION_LEDGER, which is unset or not a readable file"; exit 3; }
+  [ -r "${REGISTRATION_KEY:-${PP_CHALLENGER_KEY:-}}" ] \
+    || { say "PREFLIGHT: REGISTRATION_LANE's ledger is checked under the challenger's key record REGISTRATION_KEY (default PP_CHALLENGER_KEY), which is unset or not a readable file"; exit 3; }
+fi
 if [ -n "$V3C" ] && [ -z "$COMPOSE" ]; then  # V3c's audit's coins: the live challenger's, or a development run's
   case $V3C_CHALLENGER in
     local | loopback:*)
