@@ -403,7 +403,8 @@ the link's value; where the interior record registers a value of that name, at t
 name, at its root, domain and leaves, `per` a replay block of the boundary's population, each slot at its unit's row
 of its replay block's (`linkedRow`). -/
 theorem readOk_linked {own : Spot.SecondStage.Own} {named : Bool} {p : Spot.SecondStage.Part} {port : String}
-    {e : Json} {l : Spot.SecondStage.Link} (hl : Spot.SecondStage.linkOf own p.template port = some l)
+    {e : Json} {l : Spot.SecondStage.Link} (hpos : own.positions = none)
+    (hl : Spot.SecondStage.linkOf own p.template port = some l)
     (hok : Spot.SecondStage.readOk own named p port e = true) :
     Spot.getD e "value" = .str l.value ∧ ∃ r, Spot.SecondStage.rowsOf own p.template port = some r ∧
       ((∃ x, Spot.SecondStage.registeredEntry own.interior l.value = some x ∧
@@ -416,6 +417,7 @@ theorem readOk_linked {own : Spot.SecondStage.Own} {named : Bool} {p : Spot.Seco
           Spot.SecondStage.placedOk own.sample.size p e (m * r.per)
             (Spot.SecondStage.linkedRow own p r) = true)) := by
   unfold Spot.SecondStage.readOk at hok
+  simp only [Spot.SecondStage.atPos, hpos] at hok
   rw [hl] at hok
   cases hv : Spot.getD e "value" with
   | str v =>
@@ -538,7 +540,7 @@ theorem linked_read {x m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage 
   refine ⟨st, rec, smp, w, S, hst, hrec, hsmp, hw, hS, fun port e l hm hl => ?_⟩
   obtain ⟨hv, r, hr, hcase⟩ :=
     readOk_linked (own := ownOf h st rec smp c₀) (named := Spot.SecondStage.byTemplate rec)
-      (p := partAt h (ownOf h st rec smp c₀).sample.size t) (port := port) (e := e) (l := l) hl (hall port e hm)
+      (p := partAt h (ownOf h st rec smp c₀).sample.size t) (port := port) (e := e) (l := l) rfl hl (hall port e hm)
   have hr' : heldRows h (h.names.getD t "") port = some r := hr
   refine ⟨hv, r, hr', ?_⟩
   rcases hcase with ⟨xe, hxe, hsame, hpl⟩ | ⟨hnone, b, m, hb, hpop, hsame, hpl⟩

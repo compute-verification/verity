@@ -63,7 +63,8 @@ def runOwn (i : Spot.Run.Input) (it : Spot.Run.Interior) (sample : Array ℕ)
     fixed := it.params.verifier.pinned.map (·.1) ++ it.params.verifier.outputs.map (·.1), reads := it.reads,
     tables := it.tables,
     held := some ⟨Flock.hexOf it.params.verifier.program.desc.sha512, it.params.verifier.windowRoot,
-      Spot.Docket.fixedOf it.params.verifier⟩ }
+      Spot.Docket.fixedOf it.params.verifier⟩,
+    positions := some (Spot.SecondStage.positionsOf it.params.verifier.program.prog (it.statements.getD #[])) }
 
 /-- **No statement of the run is of only its part's sampled proof blocks** (`SecondStage.anySampled`), at every replay
 sample, strata and second-stage sample: where it holds, round 2's check (`SecondStage.checkAny`) is `SecondStage.check`
