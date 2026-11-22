@@ -389,6 +389,24 @@ def test_the_untied_pieces_build_reads_the_runs_machine_record_and_a_failed_buil
     assert f"POUW-REFUSED {sentence}" in said
 
 
+def test_pearl_c_sm90_refuses_an_architecture_machine_py_did_not_name_and_never_passes_it_on(tmp_path):
+    """pearl_c_sm90.sh, the piece's step 1, stops at exit 4 with the fix in its message where machine.py's `arch` names no
+    architecture (its machine description absent), and never asks `gencode` for an empty target."""
+    tree, calls = tmp_path / "tree", tmp_path / "calls"
+    (tree / "benchmarks" / "kernels").mkdir(parents=True)
+    (tree / "benchmarks" / "harness" / "setup").mkdir(parents=True)
+    shutil.copy(HERE.parents[2] / "benchmarks" / "harness" / "setup" / "pearl_c_sm90.sh", tree / "benchmarks" / "harness" / "setup")
+    (tree / "benchmarks" / "kernels" / "machine.py").write_text(
+        'import os, sys\nopen(os.environ["CALLS"], "a").write(sys.argv[1] + "\\n")\n'
+        'print("/cuda") if sys.argv[1] == "toolkit" else sys.exit("machine: inputs/toy.toml is not there")\n')
+    r = subprocess.run(["bash", "-c", ". benchmarks/harness/setup/pearl_c_sm90.sh"], cwd=tree, capture_output=True, text=True,
+                       env={"PATH": os.defpath, "CALLS": str(calls), "RESEARCH_RUN_DIR": str(tmp_path / "q"),
+                            "RESEARCH_MACHINE": "toy"}, check=False)
+    assert r.returncode == 4 and calls.read_text().split() == ["toolkit", "arch"], r.stderr
+    assert f"machine.py arch named no architecture, so no cubin is built: it reads the run's machine description at " \
+           f"{tmp_path / 'q'}/inputs/toy.toml" in r.stderr
+
+
 def test_under_the_gate_the_untied_piece_holds_its_pearl_c_period_open_from_its_serve_to_right_before_its_sample(tmp_path):
     """Under the gate the untied piece opens the lane's Pearl-C period right before its retained serve and closes it only
     right before verify samples, after the give-up and retain: while it is open its cap of 1, which the serve's salt session

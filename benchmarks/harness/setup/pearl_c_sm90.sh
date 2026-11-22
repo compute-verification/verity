@@ -10,7 +10,13 @@ export PEARLC_BF16_ROWS=${PEARLC_BF16_ROWS:-0}
 PC_OUT=${RESEARCH_RUN_DIR:-$PWD}/out/setup/pearl_c_sm90
 mkdir -p "$(dirname "$PC_OUT")"
 CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit 13.0) || exit 4
-PC_GENCODE=$(python3 benchmarks/kernels/machine.py gencode "$(python3 benchmarks/kernels/machine.py arch)") || exit 4
+PC_ARCH=$(python3 benchmarks/kernels/machine.py arch) && [ -n "$PC_ARCH" ] || {
+  echo "setup: machine.py arch named no architecture, so no cubin is built: it reads the run's machine description at" \
+    "${RESEARCH_RUN_DIR:-\$RESEARCH_RUN_DIR}/inputs/${RESEARCH_MACHINE:-\$RESEARCH_MACHINE}.toml; a caller that points" \
+    "RESEARCH_RUN_DIR at a directory of its own copies the launching run's inputs/\$RESEARCH_MACHINE.toml there first" >&2
+  exit 4
+}
+PC_GENCODE=$(python3 benchmarks/kernels/machine.py gencode "$PC_ARCH") || exit 4
 CUDA_HOME=$CUDA_HOME GENCODE=$PC_GENCODE bash verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm90/build.sh "$PC_OUT" \
   || { echo "setup: verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm90/build.sh failed" >&2; exit 4; }
 # shellcheck disable=SC2046  # sources.txt's paths hold no space

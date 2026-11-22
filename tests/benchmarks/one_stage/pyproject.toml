@@ -123,7 +123,7 @@ inputs = ["tests/verity/circuits/stand_in.py", "library/datasets/input_datasets"
           "verity/protocols/proof/flock/prover/python/verity_flock/input_sets.py",
           "verity/protocols/proof/flock/prover/python/verity_flock/subcircuit_templates.py",
           "verity/protocols/policy/training_detection/inference_only/verifier/lean/lakefile.toml", "adapters/vllm/verity_vllm", "adapters/vllm/workloads/SHA256SUMS",
-          "benchmarks/kernels/machine.py",
+          "benchmarks/kernels/machine.py", "benchmarks/harness/setup/pearl_c_sm90.sh",
           "adapters/torch/verity_torch", "benchmarks/network_traces",
           "benchmarks/pous/p2_v1", "benchmarks/pous/onsite_pieces.sh",
           "verity/protocols/accounting/memory/pous/prover/p2/p2_store/store.py", "verity/protocols/accounting/memory/pous/prover/p2/p2_store/tensors.py", "verity/protocols/accounting/memory/pous/prover/p2/p2_store/gpu.py", "verity/protocols/accounting/memory/pous/verifier/p2_v1/reference.py",
