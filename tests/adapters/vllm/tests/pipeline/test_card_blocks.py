@@ -223,7 +223,6 @@ def test_the_vu_partition_row_prints_n_a_for_what_g8s_detail_leaves_out():
         assert text("fail", {"count": 3, **how}) == "None, 3 sets, max w_out n/a/n/a FAIL", how
     whole = {"count": 3, "partition": {"status": "ok"}, "width": {"max_seen": 16, "w_max": 64}}
     assert text("pass", whole) == "ok, 3 sets, max w_out 16/64 PASS"
-    assert text("unsupported", whole, "unsupported (width 'unsupported')") == "unsupported (width 'unsupported'); ok, 3 sets, max w_out 16/64"
     for codes in _each({}, {"codes": None}, {"codes": []}):
         assert text("fail", {**whole, "partition": {"status": "bad", **codes}}) == "bad, 3 sets, max w_out 16/64 FAIL", codes
     failed = {"count": 3, "partition": {"status": "bad", "codes": ["A", "B", "C", "D", "E"]}, "status": "partial",

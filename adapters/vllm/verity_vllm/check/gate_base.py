@@ -117,7 +117,7 @@ def replay_b_rel(step: int) -> str:
 class GateResult:
     id: str
     name: str
-    status: str                                   # "pass" | "fail" | "skipped" | "error" | "unsupported" (G8 only: undecided)
+    status: str                                   # "pass" | "fail" | "skipped" | "error" | "unverified" (R1 only)
     evidence: list[str] = field(default_factory=list)   # artifact paths consulted (present or missing) and stage logs
     detail: dict = field(default_factory=dict)
     reason: str | None = None
