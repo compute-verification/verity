@@ -1,0 +1,22 @@
+{
+  "rule": "circuit templates that reach an opener and gate on its verdict, at each binding a registered circuit uses, each evaluated at that binding (tests/lint/test_repo_openers_gated.py --write)",
+  "entries": [
+    {
+      "template": "EmbeddingRead_v4",
+      "key": "EmbeddingRead_v4{V=128256,H=2048}",
+      "closure_digest": "251987cf5a07b53f7d20fd62d4c2cdc4af5dcd00e629cc6b2afce45437c88826290e96b4d91b5d0934835f7bbfd7fef9181ae7b97aa4f730642d11e71d2a6f5d",
+      "class": "gated",
+      "outputs": [
+        [
+          "0",
+          "gated"
+        ],
+        [
+          "1",
+          "gated"
+        ]
+      ],
+      "evaluated": true
+    }
+  ]
+}
