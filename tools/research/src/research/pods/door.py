@@ -29,10 +29,14 @@ def gated(host: str) -> bool:
 
 def ask(verb: list[str], before: str, *, host: str | None = None, timeout: float, run=None,
         stdin: str | None = None) -> subprocess.CompletedProcess:
-    """Run `verb` on the control pod through its door; where the pod has no door yet, `before`, the shell command its root took."""
+    """Run `verb` on the control pod through its door; where the pod has no door yet, `before`, the shell command its root took;
+    on the pod itself (`budgets.guard_host` is `local`), `before` here."""
     from . import connect
 
     host = host or budgets.guard_host()
+    kw = {} if stdin is None else {"input": stdin}
+    if host == "local":             # this is the pod: what its root shell took, run here
+        return (run or subprocess.run)(["bash", "-c", before], capture_output=True, text=True, timeout=timeout, **kw)
     command = shlex.join(verb)
     if not gated(host):
         command = before
@@ -40,7 +44,6 @@ def ask(verb: list[str], before: str, *, host: str | None = None, timeout: float
             _told.add(host)
             print(f"research: {host} has no door yet (the machine registry has no ssh entry for it): asking its root shell, as before",
                   file=sys.stderr)
-    kw = {} if stdin is None else {"input": stdin}
     return (run or subprocess.run)([*connect.ssh_base(host), command], capture_output=True, text=True, timeout=timeout, **kw)
 
 
