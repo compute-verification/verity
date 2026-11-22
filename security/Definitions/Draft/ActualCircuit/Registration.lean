@@ -13,7 +13,7 @@ valid (`Verity.Registration.Valid`), a decision on registered information alone.
 * `RegistrationBinds`: what it establishes about the transcript, what the developer is bound to before the first
   epoch: no later entry changes the Site's sheets, locations and links, θ, the registered compiler or a day's declared
   circuit as registered. What is missing is the registered facts themselves (`Verity.Guarantees.RegistrationSound`),
-  which the lock records as failing as stated at the present Site.
+  which the lock lists as failing as stated at the present Site.
 * `RegistrationSet`: the statement in the shape every protocol's has. Its set is all actual circuits: registration by
   itself says nothing about what the hardware computed.
 * `RegistrationEgress`: the one property of the actual circuit that follows from it, under the physical premise that
@@ -30,7 +30,7 @@ open ResourceAccounting Verity
 /-- **What registration binds the developer to before the first epoch.** Whatever is appended after a registration,
 the Site's sheets, locations and links, θ, the registered compiler and each day's declared circuit, as registered, are
 unchanged and come first: the auditor holds the registration, and every later entry is appended to it. Missing: that a
-valid registration's view holds the registered facts (`Verity.Guarantees.RegistrationSound`), which the lock records as
+valid registration's view holds the registered facts (`Verity.Guarantees.RegistrationSound`), which the lock lists as
 failing as stated at the present Site, so it is not in this conjunction. Not vacuous because: I cannot name one; it
 holds of every registration by the definitions of `Site.ofLog` and the registration's readers, and its content is that
 those readers take the first entry. -/
@@ -47,7 +47,7 @@ def RegistrationBinds : Prop :=
 valid) then, except with probability `0` over any challenges, the actual circuit lies in the set of all actual
 circuits. The set is all circuits: registration fixes registered information and the hardware description, and by
 itself constrains nothing the hardware computed. Not vacuous because: I cannot name one; its conclusion holds of every
-strategy and verifier, which is what it records. -/
+strategy and verifier, which is what it states. -/
 def RegistrationSet : Prop :=
   ∀ {L : Type*} [LinearOrder L] (Ω : Type) [Fintype Ω] (𝓕 : Set (Actual.Run L)) (V : Finset L)
     (D : Registration.Digests) (A : Registration.Auditor) (c : Registration.Composite) (reg : Registration),
