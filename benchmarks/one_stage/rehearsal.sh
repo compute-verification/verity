@@ -19,8 +19,7 @@
 #                         circuit cut at Pearl+'s linears from the serve's phi (a stand-in for `serve-phi`, which
 #                         reads the card: the H200's compute capability and SMs); a stand-in window of the class at
 #                         the settings' engine args through what a served window's close reads of it
-#                         (`rehearsal_window.py`: the row dir's Builds hold the Programs the registered compiler
-#                         compiles, the window's commit reads each request's served rows, and W as its writer writes
+#                         (`rehearsal_window.py`: the window's commit reads each request's served rows, and W as its writer writes
 #                         it is a W the served compare takes); the harness's own policy step,
 #                         which fixes the limits and states what they prove; the policy's Lean check on the class's
 #                         own Program (`rehearsal_limits.py`), and the settings' ALPHA, GAMMA and DAY_PROGRAM held to

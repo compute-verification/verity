@@ -3,7 +3,6 @@
   "public": {
     "advice": "benchmarks/network_traces/chain_record.py",
     "block-counts": "benchmarks/one_stage/served_verdicts.sh",
-    "build": "benchmarks/stacked_share/job.sh",
     "int8-checkpoint": "adapters/vllm/tools/served_run/setup.sh",
     "served-match": "adapters/vllm/verity_vllm/ops/served_build.sh",
     "served-pin": "benchmarks/served_commit/served_arm.sh",
