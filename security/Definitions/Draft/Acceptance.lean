@@ -9,11 +9,11 @@ public import Definitions.Core.Site
 `ResourceAccounting.Sound` reads acceptance as a predicate `acc` of the verifier's view. Here `acc` is the verdict the
 verifier's code writes, and the premise that ties the verdict to the transcript is stated once for every protocol:
 
-* `Actual.Run.heard`: the messages that crossed into the verifier's gates `V` before the deadline `d`, in order of
+* `heard`: the messages that crossed into the verifier's gates `V` before the deadline `d`, in order of
   arrival tick, reader and source, each the source gate's value at its width. It is read off the run, not the view:
   what crossed is physics, not the verifier's account of it.
-* `Actual.Run.challenge`: the verifier's input gates' values, in order of position, as one message.
-* `Actual.Run.transcript`: the challenge, then what the verifier heard.
+* `challenge`: the verifier's input gates' values, in order of position, as one message.
+* `transcript`: the challenge, then what the verifier heard.
 * `Accepts`: the verifier's view holds the verdict bit `1` at its decision cell at tick `d`.
 * `AsWritten`, a premise on the feasible runs: in every feasible run the verdict cell holds the code's answer `vf` on
   the transcript, and the input gates hold a challenge (an element of `Chal`) and nothing else.
@@ -36,7 +36,7 @@ open Classical in
 /-- **What the verifier at `V` heard before `d`**: each wire whose reader is a gate of `V` placed before `d` and whose
 source is placed off `V`, in order of the reader's tick, the reader's leaf and the source's position, as the source's
 value at its width. A wire read by two gates of `V` is heard twice. -/
-noncomputable def Actual.Run.heard (R : Actual.Run L) (V : Finset L) (d : ℕ) : List (List Bool) :=
+noncomputable def heard (R : Actual.Run L) (V : Finset L) (d : ℕ) : List (List Bool) :=
   ((((univ ×ˢ univ).filter fun p : Fin R.A.N × Fin R.A.N =>
       p.2 ∈ R.A.reads p.1 ∧ R.A.x p.2 ∉ V ∧ R.A.x p.1 ∈ V ∧ R.A.t p.1 < d).image
     fun p => toLex (R.A.t p.1, toLex (R.A.x p.1, Actual.position (R.seen p.2)))).sort).map
@@ -44,13 +44,13 @@ noncomputable def Actual.Run.heard (R : Actual.Run L) (V : Finset L) (d : ℕ) :
 
 open Classical in
 /-- **The challenge the verifier at `V` holds**: its input gates' values, in order of position, as one bit string. -/
-noncomputable def Actual.Run.challenge (R : Actual.Run L) (V : Finset L) : List Bool :=
+noncomputable def challenge (R : Actual.Run L) (V : Finset L) : List Bool :=
   (((univ.filter fun g => R.A.isInput g = true ∧ R.A.x g ∈ V).image fun g => Actual.position (R.seen g)).sort).flatMap
     Actual.chunk
 
 /-- **The transcript of the verifier at `V` up to its deadline `d`**: its challenge, then the messages it heard. -/
-noncomputable def Actual.Run.transcript (R : Actual.Run L) (V : Finset L) (d : ℕ) : List (List Bool) :=
-  R.challenge V :: R.heard V d
+noncomputable def transcript (R : Actual.Run L) (V : Finset L) (d : ℕ) : List (List Bool) :=
+  challenge R V :: heard R V d
 
 /-- **The verifier accepts**: its view holds the bit `1` at its decision cell, cell `c` of leaf `y`, at tick `d`. -/
 def Accepts (y : L) (c d : ℕ) (v : Set (ℕ × L × ℕ × ℕ × ℕ)) : Prop := (d, y, c, 1, 1) ∈ v
@@ -64,8 +64,8 @@ def AsWritten (𝓕 : Set (Actual.Run L)) (V : Finset L) (y : L) (c d : ℕ) (vf
   y ∈ V ∧ ∀ R ∈ 𝓕,
     (∃ g, R.A.x g = y ∧ R.A.cell g = c ∧ R.A.t g = d) ∧
     (∀ g, R.A.x g = y → R.A.cell g = c → R.A.t g = d →
-      R.A.w g = 1 ∧ ((R.val g).toNat = 1 ↔ vf (R.transcript V d) = true)) ∧
-    R.challenge V ∈ Chal
+      R.A.w g = 1 ∧ ((R.val g).toNat = 1 ↔ vf (transcript R V d) = true)) ∧
+    challenge R V ∈ Chal
 
 /-- **Registration is sound at its code's acceptance.** For the verifier at `V` running registration's code `vf` as
 written (`AsWritten`, the challenge empty, as registration draws none), where every transcript `vf` accepts decodes by
@@ -83,9 +83,9 @@ def RegistrationAccepted : Prop :=
     AsWritten 𝓕 V y c d vf {[]} →
     (∀ τ, vf τ = true → ∃ reg, regOf τ = some reg ∧ Verity.Registration.Valid D Aud co reg ∧
       Verity.Registration.Complete D Aud (Verity.Site.ofLog reg)) →
-    (∀ R ∈ 𝓕, ∀ reg, regOf (R.transcript V d) = some reg → Verity.Registration.Valid D Aud co reg → R.A ∈ 𝒞 reg) →
+    (∀ R ∈ 𝓕, ∀ reg, regOf (transcript R V d) = some reg → Verity.Registration.Valid D Aud co reg → R.A ∈ 𝒞 reg) →
     Sound Ω 𝓕 V (Accepts y c d)
-      (fun S r => ∃ reg, regOf ((S r).transcript V d) = some reg ∧ Verity.Registration.Valid D Aud co reg ∧
+      (fun S r => ∃ reg, regOf (transcript (S r) V d) = some reg ∧ Verity.Registration.Valid D Aud co reg ∧
         (S r).A ∈ 𝒞 reg) 0
 
 end Draft.Acceptance
