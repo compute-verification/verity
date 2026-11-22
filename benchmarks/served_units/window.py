@@ -239,7 +239,7 @@ def stage(units: list[Unit]) -> int:
     fw.mkdir(parents=True, exist_ok=True)
     k, free = key(), shutil.disk_usage(fw).free
     if env("WIN_DEVICE") == "gpu" and not env("SM"):
-        raise SystemExit("window.py: set SM, the GPUs' compute capability the prover is built for (90 for H200, 120 for RTX PRO 6000)")
+        raise SystemExit("window.py: set SM, the GPUs' compute capability the prover is built for (90 for an H100 or H200, 120 for an RTX PRO 6000)")
     if free < reserve + 20 * GB:
         raise SystemExit(f"window.py: {free / GB:.0f} GB free under {fw}, under WIN_FREE_GB={reserve / GB:.0f} plus the build's 20")
     t0 = procs()
