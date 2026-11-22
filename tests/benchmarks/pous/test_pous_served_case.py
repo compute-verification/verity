@@ -212,7 +212,8 @@ def _wipe_window(tmp_path: Path, *, protocol: str = WIPE_ID, egress_mib: int | N
     answer = w.answer | {"profile": w.answer["profile"] | {"placement": {"challenger": "its own host"}}}
     (window / "answer.json").write_text(json.dumps(answer, sort_keys=True) + "\n")
     (window / "wipe.case.json").write_text(json.dumps(w.case, sort_keys=True))
-    (window / "served.json").write_text(json.dumps({"serve_dir": str(serve), "window": "all", "server": "n0"}))
+    (window / "served.json").write_text(json.dumps({"serve_dir": str(serve), "window": "all", "server": "n0",
+                                                    "fill": 64 * sw.LABEL_BYTES, "card": "GPU-0"}))
     return window, serve, w
 
 
@@ -280,6 +281,22 @@ def test_a_wipe_of_another_server_is_refused(tmp_path, wipe_exe):
     with pytest.raises(SC.Refused, match=r"answers the case reject \(the case is a wipe of another server than n1\)"):
         SC.wipe_piece(window, exe=wipe_exe)
     assert not (serve / "private" / "wipe" / "case.json").exists()
+
+
+@pytest.mark.parametrize("fill", ["absent", None, 0, -1, "4096", True])
+def test_a_served_wipe_with_no_fill_floor_is_refused_before_the_lean_runs(tmp_path, fill):
+    """``served.json`` naming the server but no positive fill floor is refused by name, and the executable, which would
+    hold the wipe to a floor of 0 bytes, never starts."""
+    window, serve, _ = _wipe_window(tmp_path)
+    _edit(window / "served.json", lambda d: d.pop("fill") if fill == "absent" else d.update(fill=fill))
+    ran = tmp_path / "ran"
+    exe = tmp_path / "lean"
+    exe.write_text(f"#!/bin/sh\ntouch {ran}\n")
+    exe.chmod(0o755)
+    with pytest.raises(SC.Refused, match=r"names the server n0 but no fill floor .*state store\.wipe_fill in the card "
+                                         r"file of the SKU the card GPU-0 is .* and make the serve again"):
+        SC.wipe_piece(window, exe=exe)
+    assert not ran.exists() and not (serve / "private" / "wipe" / "case.json").exists()
 
 
 def _fake_lean(tmp_path: Path, answer: dict) -> Path:

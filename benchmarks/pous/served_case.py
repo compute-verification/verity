@@ -25,7 +25,8 @@ directory composite.py takes as ``--piece``.
 Before anything is written, the case is held to what the run published: for PoUS, the private opening opens the public
 answer's commitment, under the window's binding, to the digest of the case's commitment. The verdict is the
 component's Lean's alone (``--lean-root``: `pous-run-protocol`, or `wipe-protocol` held to the served node and the
-fill floor ``served.json`` names, ``--server NODE --fill BYTES serve``), refused unless it is the run's own answer but
+fill floor ``served.json`` names, ``--server NODE --fill BYTES serve``, refused by name before it runs when
+``served.json`` names a server but no positive fill floor: `held_to`), refused unless it is the run's own answer but
 for the reason. A piece that fails any of these is refused (`Refused`) and nothing is written.
 
 The case and its answer stay on the prover's side, in that 0700 directory, and so does composite.py's ``--out``, where it
@@ -276,10 +277,22 @@ def wipe_piece(window: Path, private: Path | None = None, *,
     case = _json(kept)
     prof = None if public.get("profile") is None else {k: v for k, v in public["profile"].items() if k != "placement"}
     own = {k: public.get(k) for k in (*WIPE_FIELDS, "reason")} | {"profile": prof}
-    server = () if served.get("server") is None else ("--server", str(served["server"]),
-                                                       "--fill", str(served.get("fill") or 0))
-    own = judged(case, own, exe, *server)
+    own = judged(case, own, exe, *(() if exe is None else held_to(window, served)))
     return write(private, case, own), own
+
+
+def held_to(window: Path, served: Mapping[str, Any]) -> tuple[str, ...]:
+    """``wipe-protocol``'s ``--server NODE --fill BYTES``, the served node and fill floor ``served.json`` names; none
+    when it names no server. A server named with no fill floor, or one that is no positive integer, is refused by name
+    (`Refused`): the executable would hold the wipe to a floor of 0 bytes, which no wipe fails."""
+    if served.get("server") is None:
+        return ()
+    fill = served.get("fill")
+    _need(type(fill) is int and fill > 0,
+          f"{window}/served.json names the server {served['server']} but no fill floor (fill {fill!r}), so the "
+          f"verifier would hold the wipe to none: state store.wipe_fill in the card file of the SKU the card "
+          f"{served.get('card')} is (calibration/hardware/cards/, served_wipe.sh's WIPE_CARD) and make the serve again")
+    return ("--server", str(served["server"]), "--fill", str(fill))
 
 
 def main(argv: Sequence[str] | None = None) -> int:
