@@ -359,22 +359,20 @@ def flipped(body: bytes) -> bytes:
 # --- the verifier's copies ---------------------------------------------------------------------------------------------
 
 def partition_form(program, query: dict, rec: dict, era_templates: list[str]) -> tuple[dict | None, str]:
-    """The verifier's partition object for `rec`: the canonical one over `program` and `query` (null); the canonical
-    envelope over the era's template ids (Definition ids, before descriptor ids); or the pre-canonical `{program, query}`
-    with the era's query form (`Q_template_instance(s)` v0 with `template(s)` and a `width_rule` at the top level)."""
+    """The verifier's partition object for `rec`: the canonical one over `program` and `query` (null), or the
+    pre-canonical `{program, query}` with the era's query form (`Q_template_instance(s)` v0 with `template(s)` and a
+    `width_rule` at the top level). A canonical envelope over another query is no form: the verifier refuses it
+    (`OneStage.PARTITION_QUERY`)."""
     sha = PO.program_sha512(program)
     if P.digest(P.partition(program, query)) == rec["partition"]:
         return None, "canonical"
     lists = (list(era_templates), sorted(era_templates))
-    envelope = [{"format": PO.FORMAT, "program": sha, "query": q} for q in
-                [{"name": "Q_template_instance", "version": 0, "params": {"template": t}} for t in era_templates]
-                + [{"name": "Q_template_instances", "version": 0, "params": {"templates": ts}} for ts in lists]]
     old = [{"program": sha, "query": q} for q in
            [{"name": "Q_template_instance", "template": t, "version": 0, "width_rule": None} for t in era_templates]
            + [{"name": "Q_template_instances", "templates": ts, "version": 0, "width_rule": None} for ts in lists]]
-    for part, how in [*((p, "canonical envelope") for p in envelope), *((p, "pre-canonical") for p in old)]:
+    for part in old:
         if P.digest(part) == rec["partition"] and R.query_digest(part["query"]) == rec["query"]:
-            return part, f"{how} {part['query']['name']} over {era_templates}"
+            return part, f"pre-canonical {part['query']['name']} over {era_templates}"
     raise Gap(f"no partition form over {era_templates} gives the record's partition {rec['partition'][:16]}")
 
 
@@ -385,8 +383,6 @@ def with_program(partition: dict | None, program, drop_template: bool = False) -
     q = dict(partition["query"])
     if drop_template and "templates" in q:
         q["templates"] = q["templates"][:-1]
-    elif drop_template and "templates" in q.get("params", {}):
-        q["params"] = {**q["params"], "templates": q["params"]["templates"][:-1]}
     return {**partition, "program": PO.program_sha512(program), "query": q}
 
 

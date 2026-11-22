@@ -16,11 +16,15 @@ read has the rows `Flock.ReadNet.readTmpl` builds.
 ``sha512/row-seg/v1`` digest hidden under its 192-byte salt (`gates.hm96`), and the leaves a dense frame-v3-sha512 tree of V
 rows, so a row's rank and position are its token.
 
-**What it computes.** With in = (tok < V, tok read as an unsigned 32-bit integer, so a negative i32 is at least 2^31):
+**What v2 computes.** With in = (tok < V, tok read as an unsigned 32-bit integer, so a negative i32 is at least 2^31):
 
     h    = row if in, else 0x7FFF in every word        `Embedding_v1`: h[j] = table[tok][j], 0x7FFF outside [0, V)
     leaf = Hm96Sha512Leaf_v1(Sha512RowSeg_v1{16 H}(row), salt)[2]
     ok   = not in, or FrameV3Read_v1{D, hm96-sha512/row-seg/v1}(root, domain, leaf, tok mod 2^D, path)
+
+`EmbeddingRead_v4{V, H}` (`opening`) takes the same arguments and returns ok as a 16-bit verdict word, ok = in and
+FrameV3Read_v1(...), and h = row if ok, else 0x7FFF in every word: a key outside [0, V) and a row that doesn't open there
+both give ok = 0 and the fill, so a prover may make any key read the fill row, and never a row of its choice.
 
 So when ok = 1 and tok is in [0, V), h is the row registered at position tok under ``root`` and ``domain``: the leaf binds
 the row's digest under the salt (hm96's binding), tok as its rank and position, the schema and the domain id, and the path
@@ -102,10 +106,11 @@ def reference(V: int, tok: int, root: bytes, domain_id: bytes, row: Sequence[int
 
 def reference_opening(V: int, tok: int, root: bytes, domain_id: bytes, row: Sequence[int], salt: bytes,
                       path: Sequence[bytes]) -> tuple[list[int], int]:
-    """`EmbeddingRead_v3{V, H = len(row)}`'s reference: (h, ok), ``ok`` the verdict word, 1 iff the token is below V and
-    the row opens there, else 0; h as `reference`'s."""
+    """`EmbeddingRead_v4{V, H = len(row)}`'s reference: (h, ok), ``ok`` the verdict word, 1 iff the token is below V and
+    the row opens there, else 0; h the row if ok, else the fill."""
     h, ok = reference(V, tok, root, domain_id, row, salt, path)
-    return h, int((tok & 0xFFFFFFFF) < V and ok == 1)
+    ok = int((tok & 0xFFFFFFFF) < V and ok == 1)
+    return (h if ok else [FILL] * len(row)), ok
 
 
 def arguments(V: int, tok: int, root: bytes, domain_id: bytes, row: Sequence[int], salt: bytes,
@@ -208,32 +213,35 @@ def read(V: int, H: int):
     return bind(EmbeddingRead, V=V, H=H)
 
 
-def _signature_v3(S):
+def _signature_v4(S):
     params, _ = _signature(S)
     return params, Tuple(Array(S.H, WORD), WORD)
 
 
-def _body_v3(B, S, tok, root, domain, row, salt, path):
+def _body_v4(B, S, tok, root, domain, row, salt, path):
     D = merkle_depth(S.V)
     bits = B.call(bind(WordBits, W=32), tok)
     x = B.call(digest(16 * S.H), Coll(Array(16 * S.H, BIT), row.refs))
     leaf = Coll(DIGEST, TR._refs(_refs(B.call(Hm96Sha512Leaf, x, salt))[2 * DIGEST.leaves:]))
     pos = Coll(Array(D, BIT), TR._refs(_refs(bits)[:D]))
     opened = B.call(frame_read(D, SCHEMA), root, domain, leaf, pos, path)
-    inside, ok = B.call(bind(EmbeddingReadGuard, V=S.V), bits, opened)
-    h = B.batch(bind(EmbeddingReadWord), inside, row, axes=(None, 0))
+    _inside, ok = B.call(bind(EmbeddingReadGuard, V=S.V), bits, opened)
+    h = B.batch(bind(EmbeddingReadWord), Coll(BIT, TR._refs(_refs(ok)[:1])), row, axes=(None, 0))
     return coll_concat(Tuple(Array(S.H, WORD), WORD),
                        [B.batch(bind(BitsWord, W=16), h, axes=(0,)), B.call(bind(BitsWord, W=16), ok)])
 
 
-EmbeddingRead_v3 = CompositeDefinition(
-    "EmbeddingRead", 3, ("V", "H"), _signature_v3, _body_v3, conformance="exact-model-tested",
-    doc="a table's row read at a hidden key, its table registered one key a row under hm96-sha512/row-seg/v1: (h, ok), h the "
-        "witness row if tok < V (unsigned) else 0x7FFF in every word, ok the verdict word, 1 iff tok < V and the row under "
-        "salt opens at position tok to root in the dense frame-v3-sha512 tree of domain id domain, else 0 "
-        "(Sha512RowSeg_v1, Hm96Sha512Leaf_v1, FrameV3Read_v1, EmbeddingReadGuard_v1, EmbeddingReadWord_v1, BitsWord_v1{16})")
+EmbeddingRead_v4 = CompositeDefinition(
+    "EmbeddingRead", 4, ("V", "H"), _signature_v4, _body_v4, conformance="exact-model-tested",
+    doc="a table's row read at a hidden key, its table registered one key a row under hm96-sha512/row-seg/v1: (h, ok), ok the "
+        "verdict word, 1 iff tok < V (unsigned) and the row under salt opens at position tok to root in the dense "
+        "frame-v3-sha512 tree of domain id domain, else 0; h the table's row at tok where it opens so (ok = 1), else the "
+        "constant 0x7FFF in every word, so a prover may make any key read the fill row, and no key reads a row of the "
+        "prover's choice (Sha512RowSeg_v1, Hm96Sha512Leaf_v1, FrameV3Read_v1, EmbeddingReadGuard_v1, EmbeddingReadWord_v1, "
+        "BitsWord_v1{16})")
 
 
 def opening(V: int, H: int):
-    """`EmbeddingRead_v3{V, H}`: a read whose verdict is a word and is 0 for a key outside [0, V)."""
-    return bind(EmbeddingRead_v3, V=V, H=H)
+    """`EmbeddingRead_v4{V, H}`: a read whose verdict is a word, 0 for a key outside [0, V) or a row that doesn't open there,
+    and whose row is then the fill."""
+    return bind(EmbeddingRead_v4, V=V, H=H)

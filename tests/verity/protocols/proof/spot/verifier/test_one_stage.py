@@ -321,6 +321,36 @@ def test_registration_holds_the_public_file():
     assert R.matches_public(rec, "frame-v3/blake3", ROOTS, doms, 5).codes == ("scheme", "population")
 
 
+def test_the_one_statement_leaves_out_a_port_only_where_its_registered_file_reads_a_run_input_tree():
+    """`docket.public_held` on `OneStageZk`'s guards of `publicHeld`, their records, headers and registered files."""
+    def record(ports):
+        return {"population": 2, "scheme": "s",
+                "roots": [{"domain": f"d{i}", "port": p, "root": f"r{i}"} for i, p in enumerate(ports)]}
+
+    def header(ports):
+        return {"frame_v3": {"domain_ids": {p: f"d{i}" for i, p in enumerate(ports)},
+                             "roots": {p: f"r{i}" for i, p in enumerate(ports)}}, "instances": 2, "scheme": "s"}
+
+    def reads(value):
+        return {"format": "verity/registered-reads/v2", "ports": {"x": {"domain": "d" * 128, "leaves": 2,
+                                                                         "root": "a" * 128, "value": value}}}
+
+    assert R.public_held(record(["y", "input/n3"]), header(["y", "x"])).codes == ("roots",)
+    assert R.public_held(record(["y", "input/n3"]), header(["y", "x"]), reads("input/n3")).ok
+    assert R.public_held(record(["y", "input/n3"]), header(["y", "x"]), reads("w")).codes == ("roots",)
+    assert R.public_held(record(["input/n3", "x"]), header(["x"]), reads("input/n3")).codes == ("roots", "domains")
+
+    def tree(c):
+        return {"roots": [{"domain": "d" * 128, "leaves": 2, "port": "input/n3", "root": c * 128}]}
+
+    assert R.registered_trees_held(tree("a"), "the verifier", reads("input/n3")) is None
+    assert R.registered_trees_held(tree("c"), "the verifier", reads("input/n3")) == (
+        "registered: the verifier's port x opens the committed tree input/n3 at another root than the registration's: a "
+        "statement opens its window's registered tree, never another window's or another member's")
+    assert R.registered_trees_held(tree("a"), "the verifier", reads("input/n4")).startswith(
+        "registered: the verifier's port x opens the committed tree input/n4, and the registration holds no root")
+
+
 def test_the_window_says_served_or_stand_in():
     prog, q, rec = _registration(6, window={"kind": "stand-in", "of": "vllm-v1 run root", "root": "7a" * 32})
     assert rec["window"]["kind"] == "stand-in" and _check(rec, prog, q).ok
@@ -516,6 +546,25 @@ def test_a_record_over_an_explicit_partition_object():
     assert "R2-partition" in _check(rec, prog, q).codes
     assert R.check(rec, prog, q, SAMPLING_DESIGN, SCHEME, ports, leaf_layer="ee" * 64, partition=old).ok
     assert "R2-program" in R.check(rec, prog, q, SAMPLING_DESIGN, SCHEME, ports, leaf_layer="ee" * 64, partition={**old, "program": "0" * 128}).codes
+
+
+def test_a_canonical_partition_object_names_the_verifiers_query():
+    """Only a pre-canonical `{program, query}` may name another query than the verifier's (`OneStage.PARTITION_QUERY`)."""
+    prog = PN.population_program(PAIR, 6)
+    q = P.template_instance_query(PAIR.id)
+    ports = _ports(prog, q, 6)
+    roots = [{"port": p, "root": ROOTS[p], **ports[p]} for p in ports]
+    other = {**P.partition(prog, q), "query": P.template_instances_query([PAIR.id])}
+    rec = DK.record(prog, q, SAMPLING_DESIGN, SCHEME, roots, SERVED, leaf_layer="ee" * 64, partition=other)
+    with pytest.raises(ValueError, match=f"^{R.PARTITION_QUERY}$"):
+        R.check(rec, prog, q, SAMPLING_DESIGN, SCHEME, ports, leaf_layer="ee" * 64, partition=other)
+    honest = DK.record(prog, q, SAMPLING_DESIGN, SCHEME, roots, SERVED, leaf_layer="ee" * 64)
+    assert R.check(honest, prog, q, SAMPLING_DESIGN, SCHEME, ports, leaf_layer="ee" * 64,
+                   partition=_reversed_keys(P.partition(prog, q))).ok
+
+
+def _reversed_keys(j):
+    return {k: _reversed_keys(j[k]) for k in reversed(list(j))} if isinstance(j, dict) else j
 
 
 def test_the_incorrect_block_bound_matches_worst_case_and_scales():
@@ -791,13 +840,12 @@ def _two_programs(registered=()):
     return Program(bind(calls), registered=registered), Program(bind(batch), registered=registered)
 
 
-def test_r8_publishes_the_fan_out_and_refuses_a_run_input_two_proof_blocks_read():
+def test_r8_publishes_the_fan_out_and_refuses_a_shared_run_input_only_in_the_variant_with_no_members():
     """R8, under a template query: the verdict publishes the fan-out F of the verifier's own program (`partition.fanout`),
-    1 for a population program, whose instances each read their own share of the Input node; and it refuses a run
-    Input node whose leaves two proof blocks read (`R8-shared-input`, `partition.shared_inputs`), which F can't see:
-    two calls reading one table whole, or a batch broadcasting it.  The same table registered, as a registered input
-    or as a parameter the verifier expects registered (`registered.held_gates`), is a registered value, which R8
-    doesn't refuse; and a batch reading its own share of the Input, or a call reading a leaf twice, is no
+    1 for a population program and for two calls reading one table whole or a batch broadcasting it. The variant with
+    no members refuses a run Input node whose leaves two proof blocks read (`R8-shared-input`,
+    `partition.shared_inputs`), which F can't see; the per-member variant doesn't, since it holds each reader to the
+    node's one tree (`members.run_input_roots_at`). A registered input, or a call reading a leaf twice, is no
     sharing."""
     prog, q, rec = _registration(6)
     v = _check(rec, prog, q)
@@ -811,21 +859,130 @@ def test_r8_publishes_the_fan_out_and_refuses_a_run_input_two_proof_blocks_read(
                        leaf_layer="ee" * 64)
         v = _check(rec, shared, q)
         assert v.codes == ("R8-shared-input",) and v.detail["R8-shared-input"]["inputs"] == inputs and v.fanout == 1
+        v = _check(rec, shared, q, members=[([[u, u + 1]], 1) for u in range(n)])
+        assert "R8-shared-input" not in v.codes, v.codes
     assert all(P.shared_inputs(p, q) == [] for p in _two_programs(registered=("t",)))
-    assert all(P.shared_inputs(p, q, G.held_gates(p, ["t"])) == [] for p in _two_programs())
-    assert all(P.shared_inputs(p, q, G.held_gates(p, ["x"])) != [] for p in _two_programs())
     t = Array(2, Value(8))
     twice = CompositeDefinition("OneStageTestOneCallTwice", 0, (), lambda S: ((("t", t),), Value(8)),
                                 lambda B, S, x: B.call(PAIR, array_of([x[0], x[0]])), register=False)
     assert P.shared_inputs(Program(bind(twice)), q) == []
 
 
+def test_r7_refuses_a_registered_value_at_a_run_input_node():
+    """`docket.run_input_named` (Lean's `Docket.runInputNamed`, `R7-run-input`, its guards in `Spot/Test/Docket.lean`):
+    a registered name, a supplied one included, whose parameter's gates hold a run Input node is named; the same
+    parameter as a registered input, or a name with no gates, is not."""
+    for shared, marked in zip(_two_programs(), _two_programs(registered=("t",))):
+        assert R.run_input_named(shared, ["t"]) == ["t"]
+        assert R.run_input_named(marked, ["t"]) == []
+        assert R.run_input_named(shared, ["nope"]) == []
+        assert P.any_run_input(shared, G.held_gates(shared, ["t"])[0])
+        assert not P.any_run_input(marked, G.held_gates(marked, ["t"])[0])
+
+
+def test_r7_refuses_a_supplied_anchor_whose_value_no_pin_holds():
+    """`docket.anchor_unpinned` (Lean's `Docket.anchorUnpinned`, `R7-anchor-unpinned`, its guards in
+    `Spot/Test/Docket.lean`) on C's marks (`registered.marks`): a mark of `registered.root/v1` or `registered.domain/v1`
+    of a value V is named unless the verifier's `pinned` or the weights' registration of record pins V, each value
+    once; a registration of record R8 refuses pins nothing, and another function's mark is no anchor."""
+    def mark(fn: str, **args) -> dict:
+        return {"supplied": fn, "args": args, "layout": "digest", "bits": 512}
+    weights = _weights([_pin(_two_programs(registered=("t",))[0])])
+    for fn in R.ANCHOR_FUNCTIONS:
+        marks = {"a": mark(fn, value="t")}
+        assert R.anchor_unpinned(marks, None, None) == ["t"]
+        assert R.anchor_unpinned({**marks, "b": mark(R.ANCHOR_FUNCTIONS[0], value="t")}, None, None) == ["t"]
+        assert R.anchor_unpinned(marks, {"t": "ab" * 64}, None) == []
+        assert R.anchor_unpinned(marks, None, weights) == []
+        assert R.anchor_unpinned(marks, None, (weights[0], "00" * 64)) == ["t"]
+        assert R.anchor_unpinned({"a": mark(fn, value="w")}, None, weights) == ["w"]
+    assert R.anchor_unpinned({"a": mark("record.root/v1", port="t")}, None, None) == []
+
+
+def test_r7_holds_a_pinned_values_record_entry_to_its_pin():
+    """`docket.off_pin` (Lean's `Docket.offPin`, `R7-pin`, its guards in `Spot/Test/Docket.lean`): the record's last
+    entry of a value the weights' registration of record pins is that pin in root, leaf count, words and domain, and an
+    anchor's value it pins has an entry; a pinned value with no entry and no anchor naming it is not named, nor is a
+    value the registration does not pin."""
+    pin = _pin(_two_programs(registered=("t",))[0])
+    weights = _weights([pin])
+    entry = {k: pin[k] for k in ("value", "root", "leaves", "words", "domain")}
+    for fn in R.ANCHOR_FUNCTIONS:
+        marks = {"a": {"supplied": fn, "args": {"value": "t"}, "layout": "digest", "bits": 512}}
+        assert R.off_pin(marks, [entry], weights) == []
+        assert R.off_pin(marks, [], weights) == ["t"]
+        assert R.off_pin(marks, [], None) == []
+    assert R.off_pin({}, [], weights) == []
+    for k, x in (("root", "bb" * 64), ("domain", "bb" * 64), ("leaves", 99), ("words", 99), ("leaves", True)):
+        assert R.off_pin({}, [{**entry, k: x}], weights) == ["t"]
+    assert R.off_pin({}, [entry, {**entry, "root": "bb" * 64}], weights) == ["t"]
+
+
+def test_r7_refuses_a_supplied_input_with_no_source():
+    """`docket.unsourced_supplied` (Lean's `Docket.unsourced`, `R7-supplied-source`, its guards in
+    `Spot/Test/Docket.lean`): a parameter bound as a supplied input that the parameters' ``supplied`` gives no source is
+    named; with a source, or bound otherwise, it is not."""
+    t = Array(2, Value(8))
+    calls = CompositeDefinition("OneStageTestSupplied", 0, (), lambda S: ((("t", t),), Tuple(Value(8), Value(8))),
+                                lambda B, S, x: tuple_of(B.call(PAIR, x), B.call(PAIR, x)), register=False)
+    prog = Program(bind(calls), supplied=("t",))
+    assert R.unsourced_supplied(prog, {}) == ["t"]
+    assert R.unsourced_supplied(prog, {"t": []}) == []
+    assert R.unsourced_supplied(_two_programs(registered=("t",))[0], {}) == []
+
+
+def _table_input(fn: str = "registered.root/v1", value: str = "w") -> Program:
+    """`OneStageTestSupplied`'s program with ``t`` a table input of ``value``: C's mark of ``fn``."""
+    t = Array(2, Value(8))
+    calls = CompositeDefinition("OneStageTestSupplied", 0, (), lambda S: ((("t", t),), Tuple(Value(8), Value(8))),
+                                lambda B, S, x: tuple_of(B.call(PAIR, x), B.call(PAIR, x)), register=False)
+    return Program(bind(calls), supplied={"t": {"supplied": fn, "args": {"value": value}, "layout": "digest", "bits": 512}})
+
+
+def _table_pin(value: str = "w", program: str = "aa" * 64) -> dict:
+    from verity.commitments import registered_value as RV
+    return {"value": value, "root": "ab" * 64, "leaves": 4, "words": 1,
+            "domain": RV.domain(program, value, 1, 4).domain_id.hex()}
+
+
+def test_r7_expects_each_pinned_table_a_table_input_names_built_from_its_pin():
+    """`docket.table_entries` (Lean's `Docket.tableEntries`, its guards in `Spot/Test/Docket.lean`): a table a table
+    input of C names (`supplied.registered_values` past the values the verifier expects) that the registration of
+    record pins is an expected entry built from the pin; a pin no mark names, a mark of a value nothing pins, or a value
+    already expected adds none. `docket.held_tables` is each pin's root and domain."""
+    pin = _table_pin()
+    weights = _weights([pin])
+    want = {"w": {"leaves": 4, "words": 1, "word_bits": 16, "domain": pin["domain"]}}
+    for fn in R.ANCHOR_FUNCTIONS:
+        assert R.table_entries(_table_input(fn), {}, weights) == want
+        assert R.table_entries(_table_input(fn), {"x": 1}, weights) == want
+    assert R.table_entries(_table_input(), {}, None) == {}
+    assert R.table_entries(_table_input(value="z"), {}, weights) == {}
+    assert R.table_entries(_table_input(), {"w": 1}, weights) == {}
+    assert R.table_entries(_table_input("record.root/v1"), {}, weights) == {}
+    assert R.held_tables(weights) == {"w": {"root": "ab" * 64, "domain": pin["domain"]}}
+    assert R.held_tables(None) == {} and R.held_tables((weights[0], "00" * 64)) == {}
+
+
+def test_r7_counts_a_table_inputs_mark_as_no_source():
+    """`docket.unsourced_supplied` on a table input (Lean's `Docket.anchorsUnheld`): C's mark names where its rows come
+    from, never that they exist, so with no pin of its table it is named although its marked rows are there; with the
+    table pinned it is not."""
+    prog = _table_input()
+    marks = G.marks(json.loads(b"".join(codec.descriptor_chunks(prog))))
+    assert set(marks) == {"t"}
+    assert R.unsourced_supplied(prog, {"t": []}, None, marks, None) == ["t"]
+    assert R.unsourced_supplied(prog, {"t": []}, None, marks, _weights([_table_pin("z")])) == ["t"]
+    assert R.unsourced_supplied(prog, {"t": []}, None, marks, _weights([_table_pin()])) == []
+    assert R.unsourced_supplied(prog, {}, None, marks, _weights([_table_pin()])) == ["t"]
+
+
 def test_r8_lets_a_tied_run_input_through_and_publishes_it():
-    """R8's tied values (`registration.check`'s `tied`): a run Input two proof blocks read, named tied, is let through,
-    and the verdict publishes it beside F (`Verdict.rests_on_period_check`), since its acceptance rests on the network
-    period check that ties its rows; not named tied, it is still refused. A tied name that isn't a parameter of the
-    program, one whose Input is a registered input, or one the verifier expects registered or holds is refused
-    (`R8-tied`) and lets nothing through; a tied value is never a registered value."""
+    """R8's tied values (`registration.check`'s `tied`): a run Input named tied is let through, and the verdict
+    publishes it beside F (`Verdict.rests_on_period_check`), since its acceptance rests on the network period check that
+    ties its rows; not named tied, the variant with no members refuses it (`R8-shared-input`). A tied name that isn't a parameter of the program, one whose Input is a registered input, or one the
+    verifier expects registered or holds is refused (`R8-tied`) and lets nothing through; a tied value is never a
+    registered value."""
     q = P.template_instance_query(PAIR.id)
     for shared in _two_programs():
         n = P.units(shared, q)
@@ -844,37 +1001,204 @@ def test_r8_lets_a_tied_run_input_through_and_publishes_it():
         assert v.codes == ("R8-tied",) and v.rests_on_period_check == ("t",)
         assert R._readers(shared, q, {"t": 2}, (), ["t"]) == (1, [], (), ["t"])
         assert R._readers(shared, q, {"t": 2}, ["t"], ["t"])[3] == ["t"]
-        assert R._readers(shared, {"name": "Q_all"}, {}, (), ["t", "nope"]) == (None, [], (), ["nope"])
+        assert R._readers(shared, {"name": "Q_all"}, {}, (), ["t", "nope"]) == (None, [], ("t",), ["nope"])
     for registered in _two_programs(registered=("t",)):
         assert not P.run_inputs(registered, G.held_gates(registered, ["t"])[0])
         assert R._readers(registered, q, {}, (), ["t"]) == (1, [], (), ["t"])
     prog, q, rec = _registration(6)
     v = _check(rec, prog, q, tied=["x"])
-    assert v.ok and v.rests_on_period_check == ()
+    assert v.ok and v.rests_on_period_check == ("x",)
 
 
-def test_a_member_reading_a_held_or_tied_run_input_carries_a_registered_file():
-    """`members._held_read` (Lean's `OneStageZk.heldReadsFiled`): where R8 lets a run Input through as tied or held, a
-    member whose units meet a range reading it and that carries no registered file is refused by name; with every
-    reader's file it passes; a member reading only its own run Input, no file, passes."""
-    from verity.protocols.proof.spot.verifier.one_stage import members as M
+def _pin(prog, value="t", words=2, program="aa" * 64, leaves=None, domain=None):
+    """A pin of `value` of `prog` in a weights' registration of record."""
+    from verity.commitments import registered_value as RV
+    leaves = G.shape(prog, value, words) if leaves is None else leaves
+    width = G.width(prog, value)
+    entry = {"value": value, "root": "ab" * 64, "leaves": leaves, "words": words,
+             "domain": domain or RV.domain(program, value, words, leaves, width).domain_id.hex()}
+    if width != RV.WORD_BITS:
+        entry[RV.WIDTH_KEY] = width
+    return entry
 
+
+def _weights(pins, program="aa" * 64, **more):
+    """A weights' registration of record pinning `pins`, with the keys `more` beside its own, its bytes and their SHA-512."""
+    doc = {"program": program, "values": {e["value"]: e for e in pins}, **more}
+    body = json.dumps(doc).encode()
+    return body, hashlib.sha512(body).hexdigest()
+
+
+def _weighed(prog, q, entries=(), **kw):
+    n = P.units(prog, q)
+    ports = _ports(prog, q, n)
+    rec = DK.record(prog, q, SAMPLING_DESIGN, SCHEME, [{"port": p, "root": ROOTS[p], **ports[p]} for p in ports], SERVED,
+                    leaf_layer="ee" * 64, registered=list(entries))
+    return _check(rec, prog, q, **kw)
+
+
+def test_r8_excuses_a_registered_weight_only_where_it_is_marked_and_pinned():
+    """R8 under a weights' registration of record (`docket.weights_held`): a registered input two proof blocks read
+    passes with the registration and the SHA-512 the auditor's side holds for it, on a v1 record: the pin it accepts is
+    no entry R7 reads. Without the registration it is refused by name (`R8-unpinned`), and at a wrong digest, a wrong
+    domain or a wrong shape the registration is refused. A document with any key beside `program` and `values`, `reads`
+    among them, is another form (`R8-weights-form`). A pin of a parameter the program doesn't mark registered excuses
+    nothing: two proof blocks reading it is refused in the variant with no members (`R8-shared-input`)."""
     q = P.template_instance_query(PAIR.id)
-    for shared in _two_programs():
-        (k,) = [k for k, node in enumerate(shared.root.body.nodes) if is_input(node.fn)]
-        n = P.units(shared, q)
-        ms = {f"m{u}": {"units": [(u, u + 1)], "registered": None if u == n - 1 else []} for u in range(n)}
+    for marked, unmarked in zip(_two_programs(registered=("t",)), _two_programs()):
+        reads = sorted({(t, p, "t") for t, p, _ in P.input_reads(marked, q, G.held_gates(marked, ["t"]))})
+        assert reads and {t for t, _, _ in reads} == {PAIR.id}
+        pin = _pin(marked)
+        weights = _weights([pin])
+        v = _weighed(marked, q, weights_of_record=weights)
+        assert v.ok, v.codes
+        assert R.weights_held(marked, q, (), weights)[1] == {"t": {k: pin[k] for k in ("root", "leaves", "words", "domain")}
+                                                            | {"word_bits": pin.get("word_bits", 16)}}
+        assert _weighed(marked, q, [pin], weights_of_record=weights).codes == ("keys",)
+        v = _weighed(marked, q)
+        assert v.codes == ("R8-unpinned",) and v.detail["R8-unpinned"]["refused"] == {"values": ["t"]}
+        v = _weighed(marked, q, weights_of_record=(weights[0], "00" * 64))
+        assert v.codes == ("R8-weights-digest",)
+        bad = _weights([_pin(marked, domain="11" * 64)])
+        assert _weighed(marked, q, weights_of_record=bad).codes == ("R8-weights-domain", "R8-unpinned")
+        bad = _weights([_pin(marked, leaves=G.shape(marked, "t", 2) + 1)])
+        assert _weighed(marked, q, weights_of_record=bad).codes == ("R8-weights-shape",)
+        for more in ({"reads": [list(r) for r in reads]}, {"reads": []}):
+            assert _weighed(marked, q, weights_of_record=_weights([pin], **more)).codes == ("R8-weights-form",)
+        assert _weighed(unmarked, q, weights_of_record=_weights([_pin(unmarked)])).codes == ("R8-shared-input",)
+        assert _weighed(unmarked, q).codes == ("R8-shared-input",)
+
+
+def test_the_members_check_holds_a_marked_programs_reads_only_to_pins_r8_accepted():
+    """`members.read_pins` (`Docket.readPins`, its guards in `Spot/Test/Docket.lean`) on the one parameters' verifier: a
+    program marking an input the verifier does not expect, with no weights' registration of record or one R8 refuses, is
+    refused by name (`docket.WEIGHTS_UNREGISTERED_WHY`); with one R8 accepts, the members' check holds each member whose
+    own units read it to a port naming it at the pin (`members.pins_held`); a program marking nothing, or only inputs
+    the verifier expects, holds nothing."""
+    from verity.protocols.proof.spot.verifier.one_stage import members as M
+    q = P.template_instance_query(PAIR.id)
+
+    def params(weights=None, registered=None):
+        return {"query": q, "registered": registered,
+                **({} if weights is None else {"weights_of_record": {"document": weights[0].hex(), "digest": weights[1]}})}
+
+    for marked, unmarked in zip(_two_programs(registered=("t",)), _two_programs()):
+        pin = _pin(marked)
+        reads = sorted({(t, p, "t") for t, p, _ in P.input_reads(marked, q, G.held_gates(marked, ["t"]))})
+        for p in (params(), params(_weights([_pin(marked, domain="11" * 64)]))):
+            with pytest.raises(M._Refused) as e:
+                M.read_pins(p, marked)
+            assert str(e.value) == R.WEIGHTS_UNREGISTERED_WHY
         with pytest.raises(M._Refused) as e:
-            M._held_read(ms, {"query": q, "tied": ["t"]}, shared)
-        assert str(e.value) == M.held_read_why(f"m{n - 1}", k)
-        M._held_read({u: {**m, "registered": []} for u, m in ms.items()}, {"query": q, "tied": ["t"]}, shared)
-    prog, q, _ = _registration(6)
-    own = {f"m{u}": {"units": [(u, u + 1)], "registered": None} for u in range(6)}
-    M._held_read(own, {"query": q}, prog)
-    (k,) = [k for k, node in enumerate(prog.root.body.nodes) if is_input(node.fn)]
+            M.read_pins({**params(_weights([pin])), "query": {"name": "Q_all", "version": 0}}, marked)
+        assert str(e.value) == R.WEIGHTS_QUERY_WHY
+        loose, held, ranges, pins, _roots = rp = M.read_pins(params(_weights([pin])), marked)
+        at = sorted({(t, p, v) for k, t, _lo, n in ranges for p, v in P.member_reads(marked, held, k, 0, n)})
+        assert loose == ["t"] and at == [tuple(r) for r in reads]
+        assert set(pins) == {"t"} and pins["t"]["root"] == pin["root"]
+        _k, _t, first, _n = ranges[0]
+        port = {"value": "t", "root": pin["root"], "leaves": pin["leaves"], "domain": pin["domain"]}
+        held = _held(marked, q, rp)
+        held({"a": {"units": [[first, first + 1]], "registered": {"ports": {at[0][1]: port}}}})
+        held({"a": {"units": [[first, first + 1]], "registered": None}})
+        with pytest.raises(M._Refused) as e:
+            held({"a": {"units": [[first, first + 1]], "registered": {"ports": {at[0][1]: {**port, "root": "bb" * 64}}}}})
+        assert str(e.value) == M.pinned_read_why("a", at[0][1], "t", "root")
+        assert M.read_pins(params(), unmarked) == ([], [], [], {}, {})
+        assert M.read_pins(params(registered={"t": 2}), marked) == ([], [], [], {}, {})
+        # expected by name alone: no root to read the port at, whatever root the record names; at the verifier's
+        # own held root (its pinned), read there
+        by_name = M.read_pins(params(registered={"t": 2}), marked)
+        with pytest.raises(M._Refused) as e:
+            _held(marked, q, by_name)({"a": {"units": [[first, first + 1]], "registered": {"ports": {at[0][1]: port}}}})
+        assert str(e.value) == M.unpinned_read_why("a", at[0][1], "t")
+        own = M.read_pins({**params(registered={"t": 2}), "pinned": {"t": pin["root"]}}, marked)
+        assert set(own[4]) == {"t"} and own[4]["t"]["root"] == pin["root"]
+        assert R.weights_held(marked, q, {"t": 2}, None)[0] == [("R8-unpinned", {"values": ["t"]})]
+        assert R.weights_held(marked, q, {"t": 2}, None, own[4])[0] == []
+
+
+def _held(prog, q, rp):
+    """`members.pins_held` over `prog`'s own descriptor and `q`'s ranges, every marked parameter's gates and `rp`."""
+    from verity.protocols.proof.spot.verifier.one_stage import members as M
+    from verity.circuits import edges as EG
+    desc = json.loads(json.dumps(codec.encode_program(prog)))
+    return lambda ms: M.pins_held(ms, EG._Root(desc), P._template(prog, q, "q").ranges, prog, R.marked_gates(prog), rp)
+
+
+def _chunked(second: str, marked: tuple[str, ...]):
+    """A batch of four PAIR members over ``w0``'s rows then ``second``'s, members 0 and 1 reading ``w0``'s and 2 and 3
+    ``second``'s, `marked` marked and pinned: the program, its query, its pins and `members.read_pins` on them."""
+    from verity.protocols.proof.spot.verifier.one_stage import members as M
+    row = Array(2, Array(2, Value(8)))
+    defn = CompositeDefinition("OneStageTestChunks", 0, (), lambda S: ((("w0", row), (second, row)), Array(4, Value(8))),
+                               lambda B, S, w0, w1: B.batch(PAIR, array_of([w0[0], w0[1], w1[0], w1[1]]), axes=(0,), n=4),
+                               register=False)
+    prog, q = Program(bind(defn), registered=marked), P.template_instance_query(PAIR.id)
+    pins = [_pin(prog, v) for v in marked]
+    body, digest = _weights(pins)
+    params = {"query": q, "registered": None, "weights_of_record": {"document": body.hex(), "digest": digest}}
+    return prog, q, {e["value"]: e for e in pins}, M.read_pins(params, prog)
+
+
+def test_a_batch_chunk_reads_one_input_node_a_parameter_and_every_port_there_is_at_its_pin():
+    """Chunks of a batch over two marked weights (`members.member_inputs`, `members.pins_held`; `OneStageZk`'s
+    `batchToy` guards): each honest chunk at its own value's pin passes; a port at its own root, any port of the
+    parameter at another root whatever value it names (a committed tree or a run input's tree included), and a chunk
+    whose units read two input nodes at one parameter are refused by name, the weights' and a weight beside a run
+    input alike."""
+    from verity.protocols.proof.spot.verifier.one_stage import members as M
+    from verity.circuits import edges as EG
+    prog, q, pins, rp = _chunked("w1", ("w0", "w1"))
+    held = _held(prog, q, rp)
+    desc = json.loads(json.dumps(codec.encode_program(prog)))
+    Rt, ranges = EG._Root(desc), P._template(prog, q, "q").ranges
+    (k, _t, first, n), = ranges
+    assert (first, n) == (0, 4)
+
+    def chunk(lo, hi, value=None, root=None, **more):
+        e = pins.get(value)
+        ports = {} if e is None else {"x[0]": {"value": value, "root": root or e["root"], "leaves": e["leaves"],
+                                               "domain": e["domain"]}}
+        ports.update({x: {**ports["x[0]"], "value": v} for x, v in more.items()})
+        return {"units": [[lo, hi]], "registered": {"ports": ports} if ports else None}
+
+    held({"c0": chunk(0, 2, "w0"), "c1": chunk(2, 4, "w1")})
+    w0, w1 = (M.member_inputs(Rt, ranges, "c", [(lo, hi)])[0][1] for lo, hi in ((0, 2), (2, 4)))
+    assert w0 != w1
     with pytest.raises(M._Refused) as e:
-        M._held_read({"m0": {"units": [(0, 6)], "registered": None}}, {"query": q, "registered": {"x": 12}}, prog)
-    assert str(e.value) == M.held_read_why("m0", k)
+        M.member_inputs(Rt, [(len(Rt.nodes), *r[1:]) for r in ranges], "c", [(0, 2)])
+    assert str(e.value) == M.range_node_why("c", len(Rt.nodes))
+    for m, why in ((chunk(0, 2, "w0", "bb" * 64), M.pinned_read_why("c", "x[0]", "w0", "root")),
+                   (chunk(1, 3, "w0"), f"member c: {M.read_form_why(k, 'x', f'its members read root nodes [{w0}, {w1}]')}"),
+                   ({"units": [[0, 1], [2, 3]], "registered": None}, M.two_reads_why("c", "x", w0, w1))):
+        with pytest.raises(M._Refused) as e:
+            held({"c": m})
+        assert str(e.value) == why
+    for v in ("w1", "e", "committed/c/x", "input/n1"):
+        m = chunk(0, 2, "w0")
+        m["registered"]["ports"]["x[1]"] = {**m["registered"]["ports"]["x[0]"], "value": v, "root": "bb" * 64}
+        with pytest.raises(M._Refused) as e:
+            held({"c": m})
+        assert str(e.value) == M.pinned_read_why("c", "x[1]", "w0", "root")
+    prog, q, pins, rp = _chunked("u", ("w0",))
+    held = _held(prog, q, rp)
+    held({"c0": chunk(0, 2, "w0"), "c1": {"units": [[2, 4]], "registered": None}})
+    with pytest.raises(M._Refused) as e:
+        held({"c": chunk(1, 3, "w0")})
+    assert str(e.value).startswith("member c: registered reads: parameter x of root node")
+
+
+def test_r8_refuses_a_registered_input_under_a_query_it_cannot_read_readers_under():
+    """A program marking a registered input, or a verifier holding a weights' registration of record, under a query that
+    is no template query that applies is refused by name (`R8-weights-query`), never passed unread."""
+    marked = _two_programs(registered=("t",))[0]
+    q = PO.query()
+    rec = DK.record(marked, q, SAMPLING_DESIGN, SCHEME, [{"port": p, "root": ROOTS[p], **ps} for p, ps in
+                                                         _ports(marked, q, P.units(marked, q)).items()], SERVED,
+                    leaf_layer="ee" * 64)
+    assert "R8-weights-query" in _check(rec, marked, q).codes
+    assert R.weights_held(marked, q, (), None)[0] == [("R8-weights-query", {"query": q})]
 
 
 def test_registration_check_refuses_a_query_core_does_not_digest():

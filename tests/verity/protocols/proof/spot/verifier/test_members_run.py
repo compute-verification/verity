@@ -21,7 +21,7 @@ from verity.circuits import partition_object as PO, population as PN
 from verity.circuits import codec
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.types import Array, Tuple, Value
-from verity.commitments import coin_tree as CT
+from verity.commitments import coin_tree as CT, registered_value as RV
 from verity.protocols.proof.spot.verifier.challenger import challenger as C
 from verity.protocols.proof.spot.verifier.one_stage import closing as K, docket as DK, members as M, one_circuit as OC
 from verity.protocols.proof.spot.verifier.one_stage import partition as P, proofs as PF
@@ -45,15 +45,22 @@ SPEC = {"block": 8, "rounds_log": 1, "scheme": CT.SCHEME, "streams": [CT.SESSION
 ROOTS = {A: ("11" * 64, "aa" * 64), B: ("22" * 64, "bb" * 64)}
 #: each template's one output field's tree, ``<template>/o0``, its leaves the template's units
 TREES = {A: ("a/o0", 2, "66" * 64, "88" * 64), B: ("b/o0", 3, "77" * 64, "99" * 64)}
+WINDOW_ROOT = "ee" * 64
+#: each template's run input node's one tree, ``input/n<w>``, its rows the node's 64-leaf rows, its domain under the
+#: window's open root (`members.run_tree_held`)
+INPUTS = {m: (f"input/n{w}", n, r, RV.domain(P.program_digest(PROGRAM), f"input/n{w}", 64, n, 16,
+                                              window=WINDOW_ROOT).domain_id.hex())
+          for m, w, n, r in ((A, 0, 2, "33" * 64), (B, 1, 3, "44" * 64))}
 RECORD = {"population": 5, "scheme": SCHEME,
           "roots": [{"domain": ROOTS[m][1], "leaves": 4, "port": f"{m}/out", "root": ROOTS[m][0]} for m in (A, B)] +
-                   [{"domain": d, "leaves": n, "port": t, "root": r} for t, n, r, d in TREES.values()]}
+                   [{"domain": d, "leaves": n, "port": t, "root": r} for t, n, r, d in TREES.values()] +
+                   [{"domain": d, "leaves": n, "port": t, "root": r} for t, n, r, d in INPUTS.values()]}
 SAMPLED = {A: [1], B: [0, 2]}
 
 
 def slices(units: dict, record: dict) -> dict:
     """`members.slices` under the window's program and query."""
-    return M.slices(units, record, program=PROGRAM, query=QUERY)
+    return M.slices(units, record, program=PROGRAM, query=QUERY, window_root=WINDOW_ROOT)
 DESCRIPTOR = json.dumps(json.loads(json.dumps(codec.encode_program(PROGRAM))), sort_keys=True,
                         separators=(",", ":")).encode()
 lean = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -66,11 +73,24 @@ def lowered(member: str) -> bytes:
                     cut=OC.cuts(DESCRIPTOR, PARTITION), formed=OC.formed_in(DESCRIPTOR, PARTITION, UNITS[member]))
 
 
+def reads(member: str, **changes) -> dict:
+    """The member's registered file: its port ``x`` opening its template's run input node's one tree."""
+    t, n, r, d = INPUTS[member]
+    return {"format": "verity/registered-reads/v2",
+            "ports": {"x": {"domain": d, "leaves": n, "root": r, "value": t, **changes}}}
+
+
 def frame(member: str, out: tuple[str, str] | None = None, **more: tuple[str, str]) -> dict:
     """A header's ``frame_v3``: the member's ``out`` and its template's tree at ``o0``, ``out`` and ``more`` each a
     root and a domain."""
-    ports = {"out": out or ROOTS[member], "o0": TREES[member][2:], **more}
+    ports = {"out": out or ROOTS[member], "o0": TREES[member][2:], "x": INPUTS[member][2:], **more}
     return {"domain_ids": {p: d for p, (_, d) in ports.items()}, "roots": {p: r for p, (r, _) in ports.items()}}
+
+
+def input_entry(member: str) -> dict:
+    """The slice's entry of the member's port ``x`` at its run input node's one tree (`OneStageZk.runInputRootsAt`)."""
+    t, n, r, d = INPUTS[member]
+    return {"domain": d, "leaves": n, "port": "x", "root": r, "tree": t}
 
 
 def tree_entry(member: str, **changes) -> dict:
@@ -104,7 +124,7 @@ class Window:
                 self.put(lowered(name))
             except (OC.NotDerived, OC.Refused) as e:
                 self.underived[name] = str(e)
-            members[name] = {"public": self.put(public), "registered": None, "block": k, "vus_per_block": 1}
+            members[name] = {"public": self.put(public), "registered": reads(name), "block": k, "vus_per_block": 1}
             if name not in sessions:
                 continue
             tree, line = challenger.sample_tree(SPEC, bytes([k]) * CT.NONCE_BYTES)
@@ -130,7 +150,7 @@ class Window:
                                                              "reps": {"circuit.rep0.bin": self.put(rep)}}]})
         self.params = {"challenger": {"key": {"W": 8, "H": 5, "public": "00" * C.PUBLIC_BYTES}, "label": "sample"},
                        "partition": PARTITION, "program": program,
-                       "query": QUERY, "window_root": "ee" * 64, "proofs": {"members": members}}
+                       "query": QUERY, "window_root": WINDOW_ROOT, "proofs": {"members": members}}
         self.evidence = {"coins": {"ledger": [], "main": [], "pins": [], "segment": {}, "session": {"log": log}},
                          "proved_units": [u + UNITS[m][0][0] for m in (A, B) if m in sessions for u in SAMPLED[m]],
                          "sessions": [s["name"] for st in statements for s in st["sessions"]],
@@ -193,7 +213,7 @@ def test_a_run_of_accepted_sessions_credits_each_members_units_and_names_no_refu
     # C_S is derived under a directory the run holds only while it runs
     assert circuits == [w.circuit(A), w.circuit(B)]
     assert [PF.file_sha512(st.public) for st in seen] == [ms[A]["public"], ms[B]["public"]]
-    assert all(json.loads(st.program) == w.params["program"] and st.partition == PARTITION and st.registered is None
+    assert all(json.loads(st.program) == w.params["program"] and st.partition == PARTITION
                and [n for n, _ in st.reps] == ["circuit.rep0.bin"] for st in seen)
 
 
@@ -236,7 +256,7 @@ def test_a_session_the_verifier_rejects_is_a_finding_and_the_run_proves_only_the
     ({"scheme": "another"}, "public file: not the registration's: scheme"),
     ({"frame_v3": frame(A, ("33" * 64, "aa" * 64))}, "public file: not the registration's: roots"),
     ({"frame_v3": frame(A, ("11" * 64, "cc" * 64))}, "public file: not the registration's: domains"),
-    ({"frame_v3": frame(A, x=("11" * 64, "aa" * 64))}, M.unwired_why("x")),
+    ({"frame_v3": frame(A, y=("11" * 64, "aa" * 64))}, M.unwired_why("y")),
     ({"instances": 5}, "public file: not the registration's: population"),
     ({"instances": 3, "scheme": 5}, M.POPULATION_WHY),
 ])
@@ -297,8 +317,7 @@ def test_a_members_files_are_refused_by_the_first_of_leans_checks_that_applies(t
     """`files_why` in Lean's order: a circuit that does not parse or a public file that does not load (the form check's
     refusal, the scope's word for word), the template's refusal, the rest of the form, then the population check."""
     strata = P.strata(PROGRAM, QUERY)
-    slice_ = {"population": 3, "roots": [{"domain": ROOTS[B][1], "leaves": 4, "port": "out", "root": ROOTS[B][0]},
-                                         tree_entry(B)], "scheme": SCHEME}
+    slice_ = slices(UNITS, RECORD)[B]
     plain, empty, public, other = (tmp_path / n for n in ("plain", "empty", "public", "other"))
     plain.write_bytes(b"flock-circuit/v1 u\nMETA {}\n")
     empty.write_bytes(b"flock-circuit/v1 u\nMETA {\"units_per_vu\": 0}\nCIRCUIT unit 0\nflock-ir-unit/v2 unit 0 0 1\n")
@@ -320,12 +339,43 @@ def test_a_members_files_are_refused_by_the_first_of_leans_checks_that_applies(t
 
 def test_the_members_population_check_reads_the_registrations_strata(tmp_path):
     strata = P.strata(PROGRAM, QUERY)
-    slice_ = {"population": 3, "roots": [{"domain": ROOTS[B][1], "leaves": 4, "port": "out", "root": ROOTS[B][0]},
-                                         tree_entry(B)], "scheme": SCHEME}
+    slice_ = slices(UNITS, RECORD)[B]
     assert M.population_why(UNITS[B], strata, header(B), slice_) is None
     assert M.population_why([[2, 6]], strata, header(B), slice_) == M.MEMBER_STRATA
     assert M.population_why(UNITS[B], strata[::-1], header(B), slice_) == M.MEMBER_STRATA
     assert M.population_why(UNITS[B], strata, "no header", slice_) == M.MEMBER_UNITS
+
+
+def test_under_a_subset_design_the_strata_need_only_cover_the_units():
+    """PAIR, TRIPLE, PAIR: the strata cover the units out of order, which a subset design's member check takes and a
+    stratified one's refuses; an overlap, a gap and a range past the units are no cover."""
+    program = PN.mixed_population_program([(PAIR, 2), (TRIPLE, 3), (PAIR, 2)])
+    strata = P.strata(program, QUERY)
+    assert [(t, [tuple(r) for r in rs]) for t, rs in strata] == [(PAIR.id, [(0, 2), (5, 7)]), (TRIPLE.id, [(2, 5)])]
+    assert not P.in_order(program, QUERY, 7) and P.covers(program, QUERY, 7) and not P.covers(program, QUERY, 6)
+    slice_ = slices(UNITS, RECORD)[B]
+    assert M.population_why(UNITS[B], strata, header(B), slice_, subset=True) is None
+    assert M.population_why(UNITS[B], strata, header(B), slice_) == M.MEMBER_STRATA
+    assert M.population_why(UNITS[B], strata, "no header", slice_, subset=True) == M.MEMBER_UNITS
+    assert P.cover([("p", [[0, 2], [5, 7]]), ("t", [[2, 5], [5, 5]])]) == 7
+    assert P.cover_ranges([[0, 2], [5, 7], [2, 5], [5, 4]]) == 7
+    for bad in ([("p", [[0, 3], [5, 7]]), ("t", [[2, 5]])], [("p", [[0, 2], [6, 7]]), ("t", [[2, 5]])],
+                [("p", [[0, 2], [5, 7], [7, 6]]), ("t", [[2, 5]])]):
+        assert P.cover(bad) is None
+        assert M.population_why(UNITS[B], bad, header(B), slice_, subset=True) == M.MEMBER_COVER
+    assert M.population_why([[2, 8]], strata, header(B), slice_, subset=True) == M.MEMBER_COVER
+    in_order = P.strata(PROGRAM, QUERY)
+    assert M.population_why([[2, 8]], in_order, header(B), slice_, subset=True) == M.MEMBER_STRATA
+    assert P.cover(in_order) == 5 and P.in_order(PROGRAM, QUERY, 5) and P.covers(PROGRAM, QUERY, 5)
+    assert all(M.population_why(UNITS[B], in_order, header(B), slice_, subset=s) is None for s in (False, True))
+    assert M.subset_design({"law": "subset", "k": 1})
+    assert not any(map(M.subset_design, ({"law": "stratified", "k": 1}, {"law": "work", "k": 1}, "rate:1/7",
+                                         "stratified-rate:1/2")))
+    rate, strat = (M.resolved({"law": law, "query": QUERY}, program) for law in ("rate:2/7", "stratified-rate:1/2"))
+    assert M.subset_design(rate) and not M.subset_design(strat) and M._kind(strat) == "stratified"
+    unresolved = M.resolved({"law": "rate:9/7", "query": QUERY}, program)
+    assert not M.subset_design(unresolved) and M._kind(unresolved) == "unnamed"
+    assert "stratified" in M.strata_design("stratified")
 
 
 def test_the_registrations_roots_are_each_one_members_and_none_a_row_tables(tmp_path):
@@ -345,14 +395,16 @@ def test_the_registrations_roots_are_each_one_members_and_none_a_row_tables(tmp_
     ms = w.params["proofs"]["members"]
     sts = w.evidence["proofs"]["statements"]
     for top in (A, "a"):
-        nested = w.params | {"proofs": {"members": {top: ms[A], f"{A}/x": ms[B]}}}
+        nested = w.params | {"proofs": {"members": {top: ms[A] | {"registered": None},
+                                                    f"{A}/x": ms[B] | {"registered": None}}}}
         statements = [sts[0] | {"member": top}, sts[1] | {"member": f"{A}/x"}]
         run, why = w.run(record=RECORD | {"roots": [{"port": f"{A}/x/out"}]}, params=nested,
                          evidence=w.evidence | {"proofs": {"statements": statements}})
         assert run is None and why == (DK.name_template(A) if top == A else
                                        f"roots: the registration's root {A}/x/out is two members': a member's roots "
                                        "are named <member>/<port>, and a root is one member's")
-    assert w.run(record=RECORD | {"roots": {}}) == (None, "roots: the registration's roots are not a list")
+    bare = w.params | {"proofs": {"members": {n: m | {"registered": None} for n, m in ms.items()}}}
+    assert w.run(record=RECORD | {"roots": {}}, params=bare) == (None, "roots: the registration's roots are not a list")
     assert w.run(record={"scheme": SCHEME, "roots": roots}) == (None, "the record names no population")
 
 
@@ -362,7 +414,7 @@ def test_the_registrations_field_trees_are_the_ones_c_and_the_partition_give(tmp
     registration that omits one, splits one in two (two roots of the tree, or the members' own roots in its place),
     holds one at another leaf count, or holds a tree of no output field, by name, before any session."""
     w = Window(tmp_path)
-    own, (ta, tb) = RECORD["roots"][:2], RECORD["roots"][2:]
+    own, (ta, tb) = [*RECORD["roots"][:2], *RECORD["roots"][4:]], RECORD["roots"][2:4]
 
     def why(*trees: dict) -> tuple:
         return w.run(never, record=RECORD | {"roots": [*own, *trees]})
@@ -382,15 +434,15 @@ def test_a_members_slice_outside_the_run_is_the_runs_own():
     got = slices(UNITS, RECORD)
     assert got == {m: {"population": n, "scheme": SCHEME,
                        "roots": [{"domain": ROOTS[m][1], "leaves": 4, "port": "out", "root": ROOTS[m][0]},
-                                 tree_entry(m)]}
+                                 tree_entry(m), input_entry(m)]}
                    for m, n in ((A, 2), (B, 3))}
     strata = P.strata(PROGRAM, QUERY)
     assert all(M.population_why(UNITS[m], strata, header(m), got[m]) is None for m in (A, B))
-    wired = RECORD | {"roots": [*RECORD["roots"], {**RECORD["roots"][0], "port": f"{B}/x"}]}
+    wired = RECORD | {"roots": [*RECORD["roots"], {**RECORD["roots"][0], "port": f"{B}/y"}]}
     both = slices(UNITS, wired)
-    assert [r["port"] for r in both[B]["roots"]] == ["out", "x", "o0"] and both[A] == got[A]
+    assert [r["port"] for r in both[B]["roots"]] == ["out", "y", "o0", "x"] and both[A] == got[A]
     assert M.population_why(UNITS[B], strata, header(B), both[B]) == "public file: not the registration's: roots, domains"
-    named = header(B, frame_v3=frame(B, x=ROOTS[A]))
+    named = header(B, frame_v3=frame(B, y=ROOTS[A]))
     assert M.population_why(UNITS[B], strata, named, both[B]) is None
     for record, why in ((RECORD | {"roots": [*RECORD["roots"], {"port": M.TABLE_PORT, "root": "00" * 64}]}, M.ROW_TABLES),
                         (RECORD | {"population": 6}, M.MEMBERS_LAID),
@@ -413,8 +465,8 @@ def test_a_members_slice_that_names_a_port_twice_is_refused_whatever_its_roots(t
         slices(UNITS, twice)
     assert str(e.value) == M.port_twice_why(A, "out")
     once = slices(UNITS, RECORD | {"roots": [*RECORD["roots"], {**other, "port": f"{B}/out2"}]})
-    assert [r["port"] for r in once[A]["roots"]] == ["out", "o0"]
-    assert [r["port"] for r in once[B]["roots"]] == ["out", "out2", "o0"]
+    assert [r["port"] for r in once[A]["roots"]] == ["out", "o0", "x"]
+    assert [r["port"] for r in once[B]["roots"]] == ["out", "out2", "o0", "x"]
     assert M.port_twice_why(A, "out") == (f"member {A}: its slice names port out twice: a member's slice holds one root "
                                           "of each port, the one its public file's root there is held to")
     with pytest.raises(M._Refused) as e:
@@ -429,7 +481,7 @@ def test_a_members_own_output_port_reads_its_templates_field_tree():
     has the tree of is refused, in either order of the two roots (`OneStageZk.ownFieldsHeld`), in `slices` and in the
     one statement's ports (`public_ports`): a wire from the field would read the window's tree, the member its own."""
     tree = {"domain": "cc" * 64, "leaves": 3, "port": "b/o0", "root": "33" * 64}
-    got = slices(UNITS, RECORD | {"roots": [*RECORD["roots"][:3], tree]})
+    got = slices(UNITS, RECORD | {"roots": [*RECORD["roots"][:3], tree, *RECORD["roots"][4:]]})
     assert got[B]["roots"][1] == {"domain": "cc" * 64, "leaves": 3, "port": "o0", "root": "33" * 64, "tree": "b/o0"}
     assert got[A] == slices(UNITS, RECORD)[A]
     for roots in ([*RECORD["roots"], {**tree, "port": "a/out"}], [{**tree, "port": "a/out"}, *RECORD["roots"]]):
@@ -452,11 +504,12 @@ def test_a_members_rows_of_a_shared_tree_are_its_registered_reads_there():
     of ``o0`` at another tree, a header root not the registration's is refused by name (`shared_unread`), and one that
     is the registration's still holds."""
     tree = {"domain": "cc" * 64, "leaves": 3, "port": "b/o0", "root": "33" * 64}
-    got = slices(UNITS, RECORD | {"roots": [*RECORD["roots"][:3], tree]})[B]
+    got = slices(UNITS, RECORD | {"roots": [*RECORD["roots"][:3], tree, *RECORD["roots"][4:]]})[B]
     strata = P.strata(PROGRAM, QUERY)
 
     def own(o0: str, out: str = ROOTS[B][0]) -> dict:
-        return header(B, frame_v3={"domain_ids": {"out": ROOTS[B][1], "o0": "dd" * 64}, "roots": {"out": out, "o0": o0}})
+        return header(B, frame_v3={"domain_ids": {"out": ROOTS[B][1], "o0": "dd" * 64, "x": INPUTS[B][3]},
+                                   "roots": {"out": out, "o0": o0, "x": INPUTS[B][2]}})
     assert M.population_why(UNITS[B], strata, own("44" * 64), got, {("o0", "b/o0")}) is None
     assert M.population_why(UNITS[B], strata, own("44" * 64), got) == M.shared_unread("o0", "b/o0")
     assert M.population_why(UNITS[B], strata, own("44" * 64), got, {("o0", "a/o0")}) == M.shared_unread("o0", "b/o0")
@@ -566,35 +619,79 @@ def test_a_members_own_output_opens_its_templates_field_tree(tmp_path):
     assert why(port="x") == M.wired_tree_why(B, "x")
 
 
+def test_a_wired_row_named_as_its_writers_field_is_refused(monkeypatch):
+    """`OneStageZk.fieldRoots`' `WIRED_AS_FIELD_WHY`, as Lean's guard on `wiredSliceT`'s wiring: a reader ``R/c0``'s row
+    ``o1`` C wires from ``W``'s ``o1`` is refused by name, so a slice's entry named as its tree's field is a member's own
+    output; the same wire into a row ``x`` gives ``x`` the writer's tree."""
+    root = {"port": "W/o1", "root": "aa" * 64, "domain": "dd" * 64, "leaves": 2}
+    ranges = [(0, "W", 0, 2), (1, "R", 2, 2)]
+    ms = {"W/c0": {"units": [[0, 2]]}, "R/c0": {"units": [[2, 4]]}}
+
+    def roots(port: str) -> dict:
+        wire = {"reader": "R", "port": port, "writer": "W", "out": "o1", "at": 0, "radix": [2], "base": 0, "step": [1],
+                "cut": [0, 1]}
+        monkeypatch.setattr(M.EG, "has_edge", lambda _d: True)
+        monkeypatch.setattr(M.EG, "io_cuts", lambda _d, _r: {})
+        monkeypatch.setattr(M.EG, "edges", lambda _d, _r, _w: {"wires": [wire]})
+        return M._wired_roots({}, ranges, ms, {"W": [("o1", root)]}, {})
+    with pytest.raises(M._Refused) as e:
+        roots("o1")
+    assert str(e.value) == M.wired_as_field_why("R/c0", "o1")
+    assert [(r["port"], r["tree"], r["root"]) for r in roots("x")["R/c0"]] == [("x", "W/o1", root["root"])]
+
+
+def test_a_wired_row_opens_only_the_writers_field_tree_c_wires_into_it_at_the_records_root():
+    """`OneStageZk.portTreeHeld` at C's wired rows (`wiredRowsOf`, `members._wired_rows`), as Lean's guards on
+    `wiredAtT`: a reader's row ``x`` C wires from ``W``'s ``o0`` opens ``W/o0`` at the record's root; at another root it
+    is refused by name, and another writer's tree, a field of ``W`` C doesn't wire, the other cut row and another
+    member each by `wired_tree_why`."""
+    tree = {"port": "W/o0", "root": "aa" * 64, "domain": "dd" * 64, "leaves": 4}
+    record = {"roots": [tree, {**tree, "port": "W/o1"}, {**tree, "port": "V/o0"}]}
+
+    def why(port: str = "x", value: str = "W/o0", root: str = tree["root"], who: str = "R/c0",
+            wired: frozenset = frozenset({("x", "W/o0")})) -> str | None:
+        reg = {"format": "verity/registered-reads/v2",
+               "ports": {port: {"value": value, "root": root, "domain": tree["domain"], "leaves": 4}}}
+        try:
+            M._tree_ports_held({who: {"registered": reg}}, record, {"R/c0": set(wired)})
+        except M._Refused as e:
+            return str(e)
+        return None
+    assert why() is None
+    assert why(root="44" * 64) == (
+        "registered: member R/c0's port x opens the committed tree W/o0 at another root than the registration's: a "
+        "statement opens its window's registered tree, never another window's or another member's")
+    assert why(value="V/o0") == M.wired_tree_why("R/c0", "x")
+    assert why(value="W/o1") == M.wired_tree_why("R/c0", "x")
+    assert why(who="R/c1") == M.wired_tree_why("R/c1", "x")
+    cut = frozenset({("x#1", "W/o0")})
+    assert why(port="x#1", wired=cut) is None
+    assert why(port="x#0", wired=cut) == M.wired_tree_why("R/c0", "x#0")
+
+
 @lean
 def test_a_fresh_input_opens_the_windows_one_root_of_its_node(tmp_path):
-    """A registered port of run input node 3, its value ``input/n3``, opens the record's one root of the node, the
+    """A registered port of run input node 1, its value ``input/n1``, opens the record's one root of the node, the
     window's and no member's (`OneStageZk.rootsOf`, `public_ports`): the fresh row changed after the coin (another
-    root), a node the record holds no root of, and two members opening node 3 under two roots are each refused by name
+    root), a node the record holds no root of, and two members opening node 1 under two roots are each refused by name
     before any session, and a member named ``input`` is refused."""
     w = Window(tmp_path)
     ms = w.params["proofs"]["members"]
-    tree = {"domain": "cc" * 64, "leaves": 4, "port": "input/n3", "root": "33" * 64}
-    record = RECORD | {"roots": [*RECORD["roots"], tree]}
-
-    def reg(root: str = tree["root"], value: str = "input/n3") -> dict:
-        return {"format": "verity/registered-reads/v2",
-                "ports": {"x": {"value": value, "root": root, "domain": tree["domain"], "leaves": 4}}}
+    tree = next(r for r in RECORD["roots"] if r["port"] == "input/n1")
 
     def why(a: dict | None = None, b: dict | None = None) -> str | None:
-        members = {A: ms[A] | {"registered": a}, B: ms[B] | {"registered": b if b is not None else reg()}}
-        return w.run(record=record, params=w.params | {"proofs": {"members": members}})[1]
-    assert "input/n3" not in (why() or "")
-    assert slices(UNITS, record) == slices(UNITS, RECORD)
+        members = {A: ms[A] | {"registered": a or reads(A)}, B: ms[B] | {"registered": b or reads(B)}}
+        return w.run(params=w.params | {"proofs": {"members": members}})[1]
+    assert why() is None
     assert set(DK.public_ports({"roots": [RECORD["roots"][0], tree]})) == {"out"}
-    assert why(b=reg(root="44" * 64)) == (
-        f"registered: member {B}'s port x opens the committed tree input/n3 at another root than the registration's: a "
+    assert why(b=reads(B, root="55" * 64)) == (
+        f"registered: member {B}'s port x opens the committed tree input/n1 at another root than the registration's: a "
         "statement opens its window's registered tree, never another window's or another member's")
-    assert why(b=reg(value="input/n4")) == (
+    assert why(b=reads(B, value="input/n4")) == (
         f"registered: member {B}'s port x opens the committed tree input/n4, and the registration holds no root "
         "input/n4: a committed tree a statement opens is one its window registered before any coin")
-    assert why(reg(root="44" * 64), reg()).startswith(
-        f"registered: members {A} and {B} read the registered value input/n3 as two (root")
+    assert why(reads(B, root="55" * 64)).startswith(
+        f"registered: members {A} and {B} read the registered value input/n1 as two (root")
     with pytest.raises(ValueError) as e:
         slices({"input": [[0, 2]], B: [[2, 5]]}, RECORD)
     assert str(e.value) == M.INPUT_MEMBER
@@ -602,7 +699,8 @@ def test_a_fresh_input_opens_the_windows_one_root_of_its_node(tmp_path):
 
 def test_what_the_run_does_not_decide_is_outside_and_never_a_pass(tmp_path):
     """Parameters or evidence the per-member parsers refuse (among them ``proved_units`` that are no list of natural
-    numbers, which the run compares with the members' units, and a member handed units of its own), a program other than the parameters', a registered
+    numbers, which the run compares with the members' units, a member handed units of its own, and a query other than
+    the partition object's), a program other than the parameters', a registered
     file whose port is no registered port's, and parameters naming a wiring beside the members."""
     w = Window(tmp_path)
     ms = w.params["proofs"]["members"]
@@ -617,6 +715,8 @@ def test_what_the_run_does_not_decide_is_outside_and_never_a_pass(tmp_path):
         w.run(params=w.params | {"proofs": {"members": {A: ms[A] | {"units": [[2, 1]]}, B: ms[B]}}})
     with pytest.raises(M.Outside, match="partition object"):
         w.run(program=PN.population_program(PAIR, 5))
+    with pytest.raises(M.Outside, match=f"^{M.PARTITION_QUERY}$"):
+        w.run(params=w.params | {"query": w.params["query"] | {"params": {"template": "Other_v1"}}})
     with pytest.raises(M.Outside, match="registered port"):
         w.run(params=w.params | {"proofs": {"members": {A: ms[A] | {"registered": {"ports": {"p": {}}}}, B: ms[B]}}})
     with pytest.raises(M.Outside, match="per-member form"):
@@ -643,8 +743,11 @@ def _periods_interface_tests():
 def test_a_members_run_input_ports_are_held_at_their_nodes_trees_derived_from_c(tmp_path):
     """`OneStageZk.runInputRoots`' mirror on a window whose C reads ``x``, ``sx``, ``wrow`` and ``sw`` from run input
     nodes (`Window` with ``run_inputs``): from C and the partition alone, each member's slice holds each such port at
-    the record's ``input/n<w>`` root, with that tree; a root of a member's own at one refuses by name; a record of no
-    run input's tree gives the slice it gave before."""
+    the record's ``input/n<w>`` root, with that tree, at C's leaf count and the domain under the window's open root
+    (`run_tree_held`), which the writer commits under its run root; under another window's root the domain is refused
+    by name; a root of a member's own at one refuses by name, and so does a record of no run input's tree. Inside a tied
+    parameter's gates, two members reading the node under two roots are refused by name (`tied_roots_why`), under one
+    root they are not."""
     TI = _periods_interface_tests()
     got = {}
 
@@ -653,16 +756,30 @@ def test_a_members_run_input_ports_are_held_at_their_nodes_trees_derived_from_c(
         return {"leaf_layer": "l"}
 
     reg = type("R", (), {"KINDS": ("served",), "record": staticmethod(record), "digest": staticmethod(lambda rec: "d")})
-    win = TI.I.Window(TI.I.Circuit("test", ((TI.COORD, 10),), run_inputs=True), TI.RUN, TI.SAMPLING_DESIGN, 4)
+    win = TI.I.Window(TI.I.Circuit("test", ((TI.COORD, 10),)), TI.RUN, TI.SAMPLING_DESIGN, 4)
     ins, outs = TI.values(10)
     win.record(TI.COORD, ins, outs)
     win.write(win.close(), tmp_path, {"by": "test"}, registrar=reg)
     program, query = win.window.program, win.window.query
     members = {m.name: [[m.base, m.base + m.n]] for m in win.window.members}
-    rec = {"population": 10, "scheme": "frame-v3-sha512/hm96-sha512", "roots": got["roots"]}
     runs = {r.port: r.param for r in win.runs}
-    by_port = {r["port"]: r for r in got["roots"]}
-    sl = M.slices(members, rec, program=program, query=query)
+    root = TI.RUN
+    from verity.circuits import codec, edges as EG
+    Rt = EG._Root(json.loads(json.dumps(codec.encode_program(program))))
+    ranges = P._template(program, query, "q").ranges
+    lens = {w: n for name, us in members.items() for _p, w, n in M.member_inputs(Rt, ranges, name, us)}
+
+    def bound(r: dict) -> dict:
+        w = int(r["port"].removeprefix("input/n"))
+        rows = Rt.nodes[w]["out_leaves"] * Rt.nodes[w]["members"] // lens[w]
+        words = lens[w] * (EG._bits(Rt.nodes[w]["ret"]) // Rt.nodes[w]["out_leaves"]) // 16
+        return {**r, "domain": RV.domain(P.program_digest(program), r["port"], words, rows, 16,
+                                         window=root).domain_id.hex()}
+    roots = got["roots"]
+    assert roots == [bound(r) if r["port"].startswith("input/") else r for r in roots]
+    rec = {"population": 10, "scheme": "frame-v3-sha512/hm96-sha512", "roots": roots}
+    by_port = {r["port"]: r for r in roots}
+    sl = M.slices(members, rec, program=program, query=query, window_root=root)
     for name in members:
         held = {r["port"]: r for r in sl[name]["roots"] if r.get("tree", "").startswith("input/")}
         assert set(held) == set(runs), (name, held)
@@ -670,11 +787,69 @@ def test_a_members_run_input_ports_are_held_at_their_nodes_trees_derived_from_c(
             assert held[p] == {"domain": by_port[t]["domain"], "leaves": by_port[t]["leaves"], "port": p,
                                "root": by_port[t]["root"], "tree": t}
     first = next(iter(members))
+    w = int(runs["x"].removeprefix("input/n"))
+    with pytest.raises(ValueError) as e:
+        M.slices(members, rec, program=program, query=query, window_root="ee" * 64)
+    assert str(e.value).startswith("registered: the record's input/n") and str(e.value).endswith(
+        "has another domain than C's run input node " + str(e.value).split("node ")[1].split(" ")[0] +
+        " and the window's open root give it: a run input node's one tree binds its window")
     own = {"domain": "dd", "leaves": 4, "port": f"{first}/x", "root": "aa" * 64}
     with pytest.raises(ValueError) as e:
-        M.slices(members, {**rec, "roots": [*got["roots"], own]}, program=program, query=query)
-    w = int(runs["x"].removeprefix("input/n"))
+        M.slices(members, {**rec, "roots": [*roots, own]}, program=program, query=query, window_root=root)
     assert str(e.value) == M.run_own_root_why(first, "x", w)
-    old = {**rec, "roots": [r for r in got["roots"] if not r["port"].startswith("input/")]}
-    assert not any(r.get("tree", "").startswith("input/") for s in M.slices(members, old, program=program, query=query).values()
-                   for r in s["roots"])
+    old = {**rec, "roots": [r for r in roots if not r["port"].startswith("input/")]}
+    with pytest.raises(ValueError) as e:
+        M.slices(members, old, program=program, query=query, window_root=root)
+    assert str(e.value).startswith(f"member {first}: port ")
+    offs = program.root.body.offsets
+    tied = [range(offs[w], offs[w + 1])]
+    two = list(members)[:2]
+
+    def mine(*rs: str) -> list[dict]:
+        return [{"domain": "dd", "leaves": 4, "port": f"{n}/x", "root": r} for n, r in zip(two, rs)]
+    with pytest.raises(ValueError) as e:
+        M.slices(members, {**rec, "roots": [*roots, *mine("aa" * 64, "bb" * 64)]}, program=program, query=query,
+                 window_root=root, tied=tied)
+    assert str(e.value) == M.tied_roots_why(w)
+    sl = M.slices(members, {**rec, "roots": [*roots, *mine("aa" * 64, "aa" * 64)]}, program=program,
+                  query=query, window_root=root, tied=tied)
+    assert [next(r["root"] for r in sl[n]["roots"] if r["port"] == "x") for n in two] == ["aa" * 64] * 2
+
+
+def test_the_registered_reads_refusals_are_leans_word_for_word():
+    """The texts of `pinned_read_why`, `unpinned_read_why`, `two_reads_why`, `read_form_why` and the run input tree's
+    refusals, which Lean's guards (`OneStageZk`, `Flock.OneCircuit.READ_FORM_WHY`) hold too."""
+    assert M.tied_roots_why(3) == ("members: C's tied run input node 3 is read under two roots: every reader of a tied "
+                                   "node opens one tree")
+    assert M.pinned_read_why("a", "p", "w", "root") == (
+        "registered: member a's port p reads the registered input w at another root than its pin of record: a "
+        "registered input the weights' registration of record pins is read at the pin's root, leaf count and domain")
+    assert M.unpinned_read_why("a", "p", "u") == (
+        "registered: member a's port p reads the registered input u, which the program marks, R8 accepted no pin of "
+        "and the verifier holds no root of: a marked input is read only at a pin R8 accepted or a root the verifier "
+        "holds")
+    assert M.range_node_why("a", 9) == (
+        "member a: its units meet a range the partition gives at C's root node 9, which C does not have: a range is of "
+        "C's root nodes")
+    assert M.two_reads_why("a", "p", 1, 2) == (
+        "registered reads: member a's units read parameter p at C's input nodes 1 and 2: a parameter that reads an "
+        "input reads one node, each port one tree")
+    assert M.read_form_why(2, "p", "x") == (
+        "registered reads: parameter p of root node 2: x, and its argument reads an input node: a parameter that reads "
+        "an input reads one node, each row in one lane's run")
+    assert M.run_tree_missing_why("a", "p", 3) == (
+        "member a: port p reads C's run input node 3, and the record holds no root of input/n3: a run input node's rows "
+        "are committed once, in its one tree, before any coin")
+    assert M.run_tree_why(3, "domain") == (
+        "registered: the record's input/n3 has another domain than C's run input node 3 and the window's open root give "
+        "it: a run input node's one tree binds its window")
+    assert M.run_tree_unbound_why(3) == (
+        "registered: C's run input node 3 is read from its one tree input/n3, and the verifier names no window open root "
+        "(window_root) for its domain to bind")
+    assert DK.WEIGHTS_QUERY_WHY == (
+        "registered: the program marks registered inputs the verifier does not expect, and the partition is no template "
+        "query that applies to the program, whose ranges its members' reads of them are read off: a marked input is read "
+        "only at a pin R8 accepted")
+    assert DK.WEIGHTS_UNREGISTERED_WHY == (
+        "registered: the program marks registered inputs the verifier does not expect, and the parameters carry no "
+        "weights' registration of record R8 accepts: a marked input is read only at a pin R8 accepted")

@@ -21,7 +21,7 @@ Every other unit holds its Definition's function of the window's values:
   `SelectEntry_v1` the slot's entry (`io_shell.entry_reference`);
 - each token select's group units each group's first maximum above -inf of its logits and its index in the group
   (`chunk_best`), and its ``x0`` unit ``logits[0]``;
-- each embedding read's verdict word, 1 below V and 0 at or past it (`EmbeddingRead_v3`), its opening the table's row, salt
+- each embedding read's verdict word, 1 below V and 0 at or past it (`EmbeddingRead_v4`), its opening the table's row, salt
   and path at the token (the table's registered value, ``registered_value.Registered`` of ``row-seg`` rows or one like it);
 - each attention cut by key block (`window_circuit.CUTS`), every Call of a head but its last (the node's output) its
   Definition on the node's operands (`evaluate_batch`): the head's query, its KV group's keys and values in the Call's

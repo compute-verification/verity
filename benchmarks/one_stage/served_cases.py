@@ -476,16 +476,16 @@ def circuit_of(audit: Path) -> dict[str, Any] | None:
 
 
 def wired(root: Any, circuit: Mapping[str, Any]) -> Any:
-    """`population.wired_population_program` of the circuit record ``circuit``, each template the root's batch of its id."""
-    from verity.circuits.population import wired_population_program
+    """`interface.program_of_record`'s Program of the circuit record ``circuit``, each template the root's batch of its id."""
     from verity.circuits.program import is_input
+    from verity.commitments.periods.interface import program_of_record
 
     fns = {codec.descriptor_id(n.fn): n.fn for n in root.body.nodes if not is_input(n.fn)}
     named = circuit.get("templates")
     _need(isinstance(named, list) and all(isinstance(t, list) and len(t) == 2 and t[0] in fns for t in named),
           "the circuit record's templates aren't the root's")
     try:
-        return wired_population_program([(fns[t], int(n)) for t, n in named], circuit)[0]
+        return program_of_record(circuit, fns.__getitem__)[0]
     except (ValueError, TypeError, KeyError) as e:
         raise Refused(f"the circuit record's wired Program doesn't build: {type(e).__name__}: {e}") from None
 

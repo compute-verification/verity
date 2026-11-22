@@ -80,6 +80,11 @@ def _window(d: Path, n: int = 4):
     return win.window, doc, rec, {m.key: c.public_body(k) for k, m in enumerate(win.window.members)}, table
 
 
+def _ports(doc: dict, mine) -> dict:
+    """The ports the registration is held to, as a5 holds them: the members' and each run input node's tree."""
+    return CS.expected_ports(mine) | I.run_input_ports(doc, mine)
+
+
 def _verifier(mine, rec: dict):
     """The verifier on the window, as a5 holds it: -> its check of the docket ``rec`` at given ports, leaf layer
     and history tables (`verifier.check`), and the sampling design it derives for the window's program and query from
@@ -97,7 +102,7 @@ def test_the_verifier_holds_the_registered_history_root_to_the_writers_bodies(tm
     mine, doc, rec, publics, table = _window(tmp_path / "w")
     roots = I.registered_roots(rec["window"])
     assert roots == {"latent": table.root.hex()}
-    leaf, want = CS.leaf_layer(publics), CS.expected_ports(mine)
+    leaf, want = CS.leaf_layer(publics), _ports(doc, mine)
     hist = HW.params(doc, mine, publics, HW.pins(doc, roots))
     a = argparse.Namespace(rule=RULE, session_timeout=1, window_root=mine.run, delta=0.5)
     assert A5.rated(mine, RULE) == mine
@@ -106,9 +111,15 @@ def test_the_verifier_holds_the_registered_history_root_to_the_writers_bodies(tm
     def check(h: dict | None) -> V.Verdict:
         return verify(want, leaf, h)
 
+    files = I.registered_file(doc, mine, {}, rec["roots"])
+    sts = {}
+    for i, (k, f) in enumerate(files.items()):
+        sts[k] = {"registered_file": tmp_path / f"registered-{i}.json"}
+        sts[k]["registered_file"].write_text(json.dumps(f, sort_keys=True))
+
     def register(h: dict | None) -> S.WindowCommitmentRecord:
-        stream, counts = A5.stream_of(a, mine, [{"defn": G8, "m": m, "st": {}} for m in mine.members], want, leaf,
-                                      FC.Challenger("a5-history"))
+        stream, counts = A5.stream_of(a, mine, [{"defn": G8, "m": m, "st": sts.get(m.key, {})} for m in mine.members],
+                                      want, leaf, FC.Challenger("a5-history"))
         return stream.register(rec, want, leaf_layer=leaf, window_root=a.window_root, counts=counts,
                                work_table=mine.work_table, partition=mine.partition, **A5.registering(a, h))
 
@@ -134,7 +145,7 @@ def _negatives(mine, doc: dict, rec: dict, publics: dict) -> tuple[bool, dict[st
     the sample, and the audit record's own (`a0.audit_negatives`), on the record of two units sampled and proved.
     The sampling design is the verifier's own for the window (`_verifier`), as a5 takes it.
     -> (whether that record accepts, each negative's row)."""
-    leaf, want = CS.leaf_layer(publics), CS.expected_ports(mine)
+    leaf, want = CS.leaf_layer(publics), _ports(doc, mine)
     hist = HW.params(doc, mine, publics, HW.pins(doc, I.registered_roots(rec["window"])))
     check, design = _verifier(mine, rec)
     first = mine.members[0].key
@@ -147,7 +158,7 @@ def _negatives(mine, doc: dict, rec: dict, publics: dict) -> tuple[bool, dict[st
     record = V.audit_record(rec, R.receipt(rec, "verifier-test", received="0"), sample, design, sample["units"], 2,
                             {"statement": "stub"}, VERDICTS, 0.5, sessions=[SESSION], session_roots=registered)
     return record["accepted"], {
-        "R3": a0.negative(check(CS.expected_ports(replace(mine, run="00" * 64)), leaf)),
+        "R3": a0.negative(check(_ports(doc, replace(mine, run="00" * 64)), leaf)),
         "R4": a0.negative(check(want, CS.leaf_layer(flipped))),
         "history-root": a0.negative(check(want, leaf, wrong)),
         "sample": a0.negative(A5.outside_the_partition(sample, rec, design, n)),

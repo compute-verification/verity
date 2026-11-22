@@ -102,6 +102,14 @@ def popOk (p : Program) (query : Json) (n : Nat) : Bool :=
   | .error _ => false
   | .ok l => decide ((popOf l).map (·.unit) = (List.range n).map some)
 
+/-- **The population covers the registration's `n` units**: `popOk` with its order dropped, the layout of `p` under
+`query` defined and its population's units `0, …, n - 1`, each once, in any order. A subset sampling design's check
+(`OneStageZk.popHeld`): its draw reads no stratum, so the strata need only be a disjoint cover of the units. -/
+def popCovers (p : Program) (query : Json) (n : Nat) : Bool :=
+  match layout p query with
+  | .error _ => false
+  | .ok l => decide (((popOf l).map (·.unit)).Perm ((List.range n).map some))
+
 /-- **The checked slots** (`Deploy.checked`) of a sample that proves the units `proved`: every proof block among them and
 every input slot, in slot order. An input slot listed here is opened only where a sampled proof block reads its row. -/
 def checked (l : SlotOrder) (proved : Array Nat) : Array Nat :=

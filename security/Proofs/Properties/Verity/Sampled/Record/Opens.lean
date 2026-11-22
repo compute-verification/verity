@@ -462,7 +462,7 @@ theorem sessionOpens (o : Own) (e : Ext) {ι : Type} {dv : ResourceAccounting.De
     session_lowers A o hc1 (sessionIns_of hn hpl hrd hc1 hpart) hdOk hchk
   obtain ⟨hun, hne, hy⟩ := session_table A o hc1 hpr hdOk hJ hst hshape hud
   refine ⟨Flock.Bridge.blockOf A.P A.κ ⟨u, hun⟩,
-    Flock.Bridge.blocks_partOf_getElem? A.P (Flock.Bridge.nsOf_sum A.hpop) ⟨u, hun⟩, fun val ι hval => ?_⟩
+    Flock.Bridge.blocks_partOf_getElem? A.P (Flock.Bridge.nsOf_sum_of_popCovers A.hpop) ⟨u, hun⟩, fun val ι hval => ?_⟩
   have hrev : (record A o e).reveal (stmtA A) u (run FlockDeploy.sha512 P (record A o e).V x ω r).seen wF =
       revealAt A ⟨u, hun⟩ (Flock.norm J) (Classical.choice hne).2 wF := by
     rw [record_reveal, he]

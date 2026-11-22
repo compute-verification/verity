@@ -64,7 +64,7 @@ theorem partSlots_classes (A : Live) {p : _root_.Spot.Program} {l : _root_.Spot.
   · rw [strataSizes_slotPartition, ← Flock.Bridge.nsOf_eq hp hl]
     unfold strataSizes
     apply List.map_splitLengths_length
-    exact (Flock.Bridge.nsOf_sum A.hpop).le.trans (by simp)
+    exact (Flock.Bridge.nsOf_sum_of_popCovers A.hpop).le.trans (by simp)
 
 /-- **At a session v2 sets up, the statement's registration is v2's parameters'**: the statement's descriptor parses as
 their verifier's program and its query is their verifier's, at the parameters whose verifier's sampling design the sample reads over

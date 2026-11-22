@@ -3232,6 +3232,7 @@ def _circuits(tmp_path: Path, classes: str, answers: dict, **extra: str) -> tupl
     (tree / "benchmarks" / "prove_path" / "prove_path.py").write_text(FAKE_PROVE_PATH)
     (tree / "answers.json").write_text(json.dumps(answers))
     (tmp_path / "serve" / "weights_registration.json").write_text("{}")
+    (tmp_path / "serve" / "weights_of_record.json").write_text('{"program": "", "values": {}}')
     for path, body in ((venv / "python", f'exec {sys.executable} "$@"'),
                        (bin_ / "timeout", f'echo "$1" >> {tmp_path}/limits; shift; exec "$@"')):
         path.write_text(f"#!/bin/sh\n{body}\n")
@@ -3252,6 +3253,8 @@ if os.environ.get("REFUSE"):
 entry = {"value": "weights/w@64", "root": "ab" * 64, "leaves": 2, "words": 64, "domain": "cd" * 64}
 doc = {"model": {"repo": "org/m", "revision": "0123456789abcdef"}, "values": {"weights/w@64": entry}, "unrooted": {}}
 open(a[a.index("--out") + 1], "w").write(json.dumps(doc))
+open(os.path.join(os.path.dirname(a[a.index("--out") + 1]), "weights_of_record.json"), "w").write(
+    json.dumps({"program": "04" * 64, "values": {"weights/w@64": entry}}))
 said = {"out": a[a.index("--out") + 1], "roots": 1, "unrooted": []}
 if "--deployment-record" in a:
     open(a[a.index("--deployment-record") + 1], "w").write(json.dumps({"registered": [entry], "previous": None}))
@@ -3292,7 +3295,8 @@ def test_the_weights_step_writes_the_serves_first_registration_record_and_says_w
     assert first["previous"] is None and first == json.loads((out / "deployment-registration.json").read_text())
     assert json.loads((out / "weights_registration.json").read_text())["values"] == {"weights/w@64": first["registered"][0]}
     script = (HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh").read_text()
-    assert "printf '%s\\n' weights_registration.json deployment-registration.json " in script
+    assert json.loads((out / "weights_of_record.json").read_text())["values"] == {"weights/w@64": first["registered"][0]}
+    assert "printf '%s\\n' weights_registration.json weights_of_record.json deployment-registration.json " in script
     rc, lines = _weights(tmp_path / "refused", REFUSE="1")
     assert rc == 1 and len(lines) == 1 and lines[0].startswith("NO WEIGHTS REGISTRATION: "), lines
     assert lines[0].endswith(f"(weights-registration (no exception, exit 2): {PRIVATE})") and "of record" not in lines[0]
@@ -3640,6 +3644,7 @@ def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = 
               tmp_path / "row" / "build_summary.json", tmp_path / "h.so", tmp_path / "n.so"):
         f.write_text("")
     (d / "weights_registration.json").write_text("{}")
+    (d / "weights_of_record.json").write_text('{"program": "", "values": {}}')
     if not (d / "windows.jsonl").exists():
         _write(d, "windows.jsonl", [{"window": 7, "run_root": "ab" * 64}])
     (tmp_path / "main.txt").write_text(TOY_MAIN)

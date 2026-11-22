@@ -42,10 +42,9 @@ theorem paramsParsed_deployed {j : Json} {p : OneStageZk.Params} (h : OneStageZk
   repeat' split at h
   all_goals try contradiction
   all_goals try (rename_i ht _ _ _ _; simp [throw, throwThe, MonadExceptOf.throw] at ht; done)
-  rename_i hch hk _ _ _ _ _ _
   simp only [pure, Except.pure, Except.ok.injEq] at h
   subst h
-  exact ⟨_, _, hch, deployedKey_params (by simpa using hk)⟩
+  exact ⟨_, _, by assumption, deployedKey_params (by simpa using ‹¬(!OneStageZk.deployedKey _) = true›)⟩
 
 /-- **Every challenger key v2's parameters name is at `Lms.deployed`**, in either form: the v1 part of parameters
 either form's parse returns is that of parameters `paramsParsed` returned but for its registration check's members

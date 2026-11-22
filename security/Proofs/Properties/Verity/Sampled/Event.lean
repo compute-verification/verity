@@ -4,6 +4,8 @@ public import Proofs.Properties.Verity.Sampled.Accepts
 public import Proofs.Properties.Verity.Sampled.Held
 public import Proofs.Flock.Bridge.ScopeGate
 public import Proofs.Flock.Bridge.V5.Accepted
+public import Proofs.Flock.Bridge.PopCovers
+public import Proofs.Flock.SpotFlock.RunsAs.PopulationOf
 
 /-!
 # SPOT's acceptance is in the event V5 bounds
@@ -20,7 +22,8 @@ record and proof files is in that event:
   reads `ProvedScope.circuitOf`'s circuit, as v2's checks do, and at v2's statement that is `HmOut.parseTmpl`'s.
 * **What acceptance gives** (`Accepted`, `checkBlobsAt_event`, `checkBlobs_event`): at the session's inputs and
   transcript, `AcceptsZK`, the ports and roots check and the form check at the record's sample, the program's proof
-  blocks under the verifier's query the record's population `n` in order (`popHeld`), and every public file the
+  blocks under the verifier's query the record's population `n`, in order or, under a subset design, in any order
+  (`popHeld`, `popHeld_bridge`), and every public file the
   session's file loads to of `n` proof blocks (`publicHeld`, `population_held`).
 * **The event** (`Accepted.liveAcceptsKSP`): at any registration and sample.
 
@@ -162,19 +165,110 @@ theorem checkBlobsAt_popHeld {p : _root_.Spot.OneStageZk.Params}
     exact hpop
 
 /-- **`popHeld` passes only where the record names a population `n` that the program's proof blocks under the
-query are, in order** (`Slots.popOk`). -/
-theorem popHeld_ok {v : _root_.Spot.Docket.Verifier} {record : Json}
+query are, in order, or under a subset design in any order** (`Slots.popOk`, else `Slots.popCovers` and
+`OneStageZk.subsetDesign`). -/
+theorem popHeld_cases {v : _root_.Spot.Docket.Verifier} {record : Json}
     (h : _root_.Spot.OneStageZk.popHeld v record = .ok ()) :
     ∃ n, _root_.Spot.nat? (_root_.Spot.getD record "population") = some n ∧
-      _root_.Spot.Slots.popOk v.program v.query n = true := by
+      (_root_.Spot.Slots.popOk v.program v.query n = true ∨
+        (_root_.Spot.Slots.popCovers v.program v.query n = true ∧
+          _root_.Spot.OneStageZk.subsetDesign v record = true)) := by
   unfold _root_.Spot.OneStageZk.popHeld at h
   split at h
   · cases h
   · rename_i n hn
-    split at h
-    · rename_i hp
-      exact ⟨n, hn, hp⟩
-    · cases h
+    refine ⟨n, hn, ?_⟩
+    by_cases hp : _root_.Spot.Slots.popOk v.program v.query n = true
+    · exact Or.inl hp
+    · rw [if_neg hp] at h
+      by_cases hc : _root_.Spot.Slots.popCovers v.program v.query n = true
+      · rw [if_pos hc] at h
+        by_cases hs : _root_.Spot.OneStageZk.subsetDesign v record = true
+        · exact Or.inr ⟨hc, hs⟩
+        · rw [if_neg hs] at h
+          cases h
+      · rw [if_neg hc] at h
+        cases h
+
+/-- **`popHeld` passes only where the record names a population `n` that the program's proof blocks under the
+query cover** (`popHeld_cases`, `Bridge.slots_popCovers_of_popOk`). -/
+theorem popHeld_ok {v : _root_.Spot.Docket.Verifier} {record : Json}
+    (h : _root_.Spot.OneStageZk.popHeld v record = .ok ()) :
+    ∃ n, _root_.Spot.nat? (_root_.Spot.getD record "population") = some n ∧
+      _root_.Spot.Slots.popCovers v.program v.query n = true := by
+  obtain ⟨n, hn, h | h⟩ := popHeld_cases h
+  · exact ⟨n, hn, Flock.Bridge.slots_popCovers_of_popOk h⟩
+  · exact ⟨n, hn, h.1⟩
+
+/-- A sampling design object whose `law` is the text `subset` is of kind `subset`. -/
+theorem kindOf_of_law {lj : Json} (h : _root_.Spot.jsonStrIs (_root_.Spot.getD lj "law") "subset" = true) :
+    _root_.Properties.Spot.SecurityProofs.kindOf lj = "subset" := by
+  unfold _root_.Properties.Spot.SecurityProofs.kindOf
+  unfold _root_.Spot.jsonStrIs at h
+  split at h
+  · rename_i t ht
+    rw [ht]
+    exact beq_iff_eq.1 h
+  · cases h
+
+/-- **The bridge's cases**: at a verifier whose program the descriptor `desc` parses to, a population `n` the program
+and query lay out in order (`Slots.popOk`) is the registration's in order (`Bridge.PopMatches`), and one they lay out
+as a disjoint cover (`Slots.popCovers`) under a design subset at the verifier and the registration
+(`OneStageZk.subsetDesign`) is covered by the registration's strata (`Bridge.PopCovers`) under a subset sampling design
+(`Bridge.IsSubsetDesign` of `Bridge.designAt` at the verifier's query, sampling design object and work table). -/
+theorem bridge_of_cases {v : _root_.Spot.Docket.Verifier} {record : Json} {desc : Hash.Msg} {n : ℕ}
+    (hd : _root_.Spot.Program.parse ⟨desc.toArray⟩ = .ok v.program)
+    (h : _root_.Spot.Slots.popOk v.program v.query n = true ∨
+      (_root_.Spot.Slots.popCovers v.program v.query n = true ∧ _root_.Spot.OneStageZk.subsetDesign v record = true)) :
+    Flock.Bridge.PopMatches desc v.query n ∨
+      (Flock.Bridge.PopCovers desc v.query n ∧
+        Flock.Bridge.IsSubsetDesign (Flock.Bridge.designAt desc v.query v.samplingDesign v.workTable n)) := by
+  rcases h with h | ⟨hc, hs⟩
+  · exact Or.inl (Flock.Bridge.popMatches_of_popOk hd h)
+  · refine Or.inr ⟨Flock.Bridge.popCovers_of_slots hd hc, _, Flock.Bridge.designAt_subset n (kindOf_of_law ?_)⟩
+    unfold _root_.Spot.OneStageZk.subsetDesign at hs
+    exact (Bool.and_eq_true_iff.1 hs).1
+
+/-- **The acceptance bridge**: where `popHeld` passes at a verifier whose program the descriptor `desc` parses to, the
+record names a population `n` that is the registration's population in order (`Bridge.PopMatches`), or that the
+registration's strata cover (`Bridge.PopCovers`) under a sampling design the verifier samples a uniform subset under
+(`Bridge.IsSubsetDesign` of `Bridge.designAt` at the verifier's query, sampling design object and work table). -/
+theorem popHeld_bridge {v : _root_.Spot.Docket.Verifier} {record : Json} {desc : Hash.Msg}
+    (hd : _root_.Spot.Program.parse ⟨desc.toArray⟩ = .ok v.program)
+    (h : _root_.Spot.OneStageZk.popHeld v record = .ok ()) :
+    ∃ n, _root_.Spot.nat? (_root_.Spot.getD record "population") = some n ∧
+      (Flock.Bridge.PopMatches desc v.query n ∨
+        (Flock.Bridge.PopCovers desc v.query n ∧
+          Flock.Bridge.IsSubsetDesign (Flock.Bridge.designAt desc v.query v.samplingDesign v.workTable n))) := by
+  obtain ⟨n, hn, h⟩ := popHeld_cases h
+  exact ⟨n, hn, bridge_of_cases hd h⟩
+
+/-- **The run's bridge**: where the service's `Run.run` does not refuse, at params whose program the descriptor `desc`
+parses to, the record names a population `n` that is the registration's in order (`Bridge.PopMatches`), or, under a
+one-stage rule, that the registration's strata cover (`Bridge.PopCovers`) under the subset sampling design the run
+derives (`Bridge.IsSubsetDesign` of `Bridge.designAt` at the verifier's query, the sampling design object of the rule over
+the population, `Rule.over` then `Rule.samplingDesignOver`, and the work table `Rule.tableOver` gives: the two its draw,
+`Draw.derive`, reads). -/
+theorem run_bridge {i : _root_.Spot.Run.Input} {j : Json} {desc : Hash.Msg}
+    (hd : _root_.Spot.Program.parse ⟨desc.toArray⟩ = .ok i.params.verifier.program)
+    (h : _root_.Spot.Run.run i = .ok j) :
+    (∃ (step : String) (codes : Array String),
+      j = Json.mkObj [("step", Json.str step), ("codes", Json.arr (codes.map Json.str))]) ∨
+    ∃ n, _root_.Spot.nat? (_root_.Spot.getD i.record "population") = some n ∧
+      (Flock.Bridge.PopMatches desc i.params.verifier.query n ∨
+        ((∀ g r k, i.rule ≠ .twoStage g r k) ∧ Flock.Bridge.PopCovers desc i.params.verifier.query n ∧
+          ∃ rule sd wt, i.rule.over n
+              (_root_.Spot.Select.strataSizes i.params.verifier.program i.params.verifier.query) = some rule ∧
+            rule.samplingDesignOver n = .ok sd ∧
+            i.rule.tableOver i.params.verifier.program i.params.verifier.query i.params.verifier.workTable = .ok wt ∧
+            Flock.Bridge.IsSubsetDesign (Flock.Bridge.designAt desc i.params.verifier.query sd wt n))) := by
+  rcases SpotFlock.RunsAs.run_popHeld h with hr | ⟨n, hn, hp | ⟨hc, ht, rule, sd, wt, hr, hsd, hwt, hs⟩⟩
+  · exact Or.inl hr
+  · exact Or.inr ⟨n, hn, Or.inl (Flock.Bridge.popMatches_of_popOk hd hp)⟩
+  · rcases bridge_of_cases (v := { i.params.verifier with samplingDesign := sd, workTable := wt }) hd
+      (Or.inr ⟨hc, hs⟩) with hm | ⟨hcov, hsub⟩
+    · exact Or.inr ⟨n, hn, Or.inl hm⟩
+    · exact Or.inr ⟨n, hn, Or.inr ⟨ht, hcov, rule, sd, wt, hr, hsd, hwt, hsub⟩⟩
 
 /-! ## What acceptance gives -/
 
@@ -182,7 +276,7 @@ theorem popHeld_ok {v : _root_.Spot.Docket.Verifier} {record : Json}
 population `n`: `verify --zk` accepts the transcript (`AcceptsZK`) at a templated statement with hidden outputs; the
 files' ports and roots (`PortRoots.checkOf`) and their form at the record's sample (`KsScope.checkOf`)
 pass on the circuit `verify` reads (`ProvedScope.circuitOf`); the program's proof blocks under the verifier's query are
-`n` units in order (`Slots.popOk`); and every public file the session's file loads to has `n` proof blocks. -/
+`n` units, in any order (`Slots.popCovers`); and every public file the session's file loads to has `n` proof blocks. -/
 structure Accepted (I : Exec.Inputs) (t : Exec.Transcript) (v : _root_.Spot.Docket.Verifier) (n : ℕ) :
     Prop where
   accepts : ZkExec.AcceptsZK I t
@@ -191,7 +285,7 @@ structure Accepted (I : Exec.Inputs) (t : Exec.Transcript) (v : _root_.Spot.Dock
     (ZkExec.zkTags I) I.publicFile = .ok ()
   form : Flock.KsScope.checkOf (Flock.ProvedScope.circuitOf (ZkExec.zkTags I) I.circuitFile I.tables)
     (ZkExec.zkTags I) I.publicFile I.count (Exec.recordDraw t.record) = .ok ()
-  pop : _root_.Spot.Slots.popOk v.program v.query n = true
+  pop : _root_.Spot.Slots.popCovers v.program v.query n = true
   loads : ∀ {tags : Flock.Tags} {c : Flock.Circuit} {pub : Flock.Public},
     Flock.HmOut.loadPublic tags c I.publicFile = .ok pub → pub.n = n
 

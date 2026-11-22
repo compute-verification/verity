@@ -36,9 +36,8 @@ Here, in the namespace `Spot.OneStageZk`:
   `membersEvidenceOf`);
 * the registration held to the verifier's program (`popHeld`) and one statement's check on its files (`statementOf`);
 * a member, its slice of the registration, its population and its statement (`Member`, `Member.statement`);
-* the files' pass over the members (`membersFiles`), and the same pass with each circuit file parsed once and the program's
-  strata evaluated once (`ProgramKept`, `keptFiles`, `membersFilesKept`), which is compiled in its place
-  (`membersFiles_eq_kept`).
+* the files' pass over the members (`membersFiles`); the same pass with each circuit file parsed once is
+  `Spot/OneStageZkKept.lean`'s.
 -/
 
 @[expose] public section
@@ -187,12 +186,14 @@ def Own.circuitFile (p : Own) : V ByteArray :=
   restrictOn (pure p.programJ) p.prog.get p.blocks.get p.cuts.get p.partition p.first
 
 /-- A member of the per-member form: its name, its units as `[lo, hi)` ranges, ascending, its circuit's units a proof
-block (META `vus_per_block`) and its statement's own inputs. -/
+block (META `vus_per_block`), its statement's own inputs, and whether the verifier's sampling design is a subset one
+(`subset`, `membersParamsOfJson`), under which its strata need only cover the units (`Member.heldAt`). -/
 structure Member where
   name : String
   units : Array (Nat × Nat)
   g : Nat
   own : Own
+  subset : Bool := false
 
 /-- The parameters: v1's, the verifier's own inputs, and in the per-member form (module docstring, **per member**)
 its members, `own` then holding C and the partition every member's statement reads and no file. -/
@@ -266,7 +267,9 @@ def SUBSET_ONLY (kind : String) : String :=
     subset sampling design"
 
 /-- The one statement's parameters as parsed, before `paramsOfJson`'s refusal of a sampling design that is no `subset`
-one. The per-member form's parameters read them (`membersParamsOfJson`), under any sampling design v1 parses. -/
+one, refused where the partition object's query is not v1's `query` (`OneStage.PARTITION_QUERY`), in either form; v1
+refuses a null `query` and a partition naming no object `query` first (`OneStage.paramsParsed`). The per-member form's
+parameters read them (`membersParamsOfJson`), under any sampling design v1 parses. -/
 def paramsParsed (j : Json) : V Params := do
   let some pr := field? j "proofs"
     | throw ("the parameters name no proofs (the auditor's public file's digest and the verifier's " ++
@@ -279,6 +282,7 @@ def paramsParsed (j : Json) : V Params := do
   if !deployedKey key then throw KEY_PARAMS
   let some partition := base.verifier.partition
     | throw "partition is null: the sessions are verified against the verifier's own partition object"
+  if !jeq (getD partition "query") base.verifier.query then throw OneStage.PARTITION_QUERY
   let programJ := getD rest "program"
   pure { base, own := { programJ, program := (← Flock.canon programJ).toUTF8, partition, pub, registered },
          members := none }
@@ -458,10 +462,12 @@ def fieldTreesOf (ts : Std.HashSet String) (rec : Json) : Std.HashMap String (Ar
   | _ => {}
 
 /-- The window's tree of template `template`'s field `field` among the trees `ft` (`fieldTreesOf`), under the port
-name `port`: its domain, leaves, root and `tree`; none where the record names no such tree. -/
+name `port`: its domain, leaves, root and `tree`, the tree's own port `<template>/<field>`, which `headerHeldAt` and
+`portTreeHeld` read; none where the record names no such tree. -/
 def fieldRootIn (ft : Std.HashMap String (Array (String × Json))) (template field port : String) : Option Json :=
   ((ft.getD template #[]).find? (·.1 == field)).map fun (_, e) =>
-    Json.mkObj [("domain", getD e "domain"), ("leaves", getD e "leaves"), ("port", .str port), ("root", getD e "root")]
+    Json.mkObj [("domain", getD e "domain"), ("leaves", getD e "leaves"), ("port", .str port), ("root", getD e "root"),
+      ("tree", .str (template ++ "/" ++ field))]
 
 /-- **The registration's tree of a writer template's output field**, under the reader's port name `port`: the record
 `rec`'s root at `<template>/<field>` (`fieldTreesOf`, `fieldRootIn`), the window's one tree of the template's field
@@ -551,10 +557,11 @@ def treePortOf (q : Flock.Registered.Port) : Option String :=
   if q.value.startsWith COMMITTED then some (q.value.drop COMMITTED.length).toString
   else if Flock.Registered.isFreshValue q.value || fieldTreeName q.value then some q.value else none
 
-/-- The refusal of a registered port `port` of `who` whose value is a field tree's name (`fieldTreeName`) that is not
-`who`'s own output at its template's tree: a wired input's writer tree is not opened here yet. -/
+/-- The refusal of a registered port `port` of `who` whose value is a field tree's name (`fieldTreeName`) that is
+neither `who`'s own output at its template's tree nor a row C wires into `who` from that tree (`portTreeHeld`). -/
 def WIRED_TREE_WHY (who port : String) : String :=
-  s!"registered: {who}'s port {port}: a wired port's tree is not derived from C yet"
+  s!"registered: {who}'s port {port}: the field tree it opens is neither its own output's nor one C wires into it " ++
+    "at this row"
 
 /-- The refusal of a registered port `port` of `who` that opens a committed tree `tree` the record holds no root of
 (`registeredTreesHeld`). -/
@@ -572,10 +579,13 @@ def TREE_OTHER (who port tree what : String) : String :=
 tree's port among `byPort` (`rootsByPort`): its root, domain and leaf count are the record's, refused by name
 (`TREE_UNHELD`, `TREE_OTHER`). The domain binds the window, so a tree of another window refuses. A port whose value
 is a field tree's name is opened only as the member's own output, `<tmpl>/<port>` for the member's template `tmpl`,
-whose rows `Flock.Registered.outReads` reads at the leaves C gives; any other refuses first (`WIRED_TREE_WHY`). -/
-def portTreeHeld (byPort : Std.HashMap String Json) (who : String) (tmpl : Option String) (q : Flock.Registered.Port) :
-    V Unit :=
-  if !q.value.startsWith COMMITTED && fieldTreeName q.value && tmpl.all (s!"{·}/{q.name}" != q.value) then
+whose rows `Flock.Registered.outReads` reads at the leaves C gives, or at a reader row `wired` holds at that tree,
+`(row, <writer>/o<j>)` for each wire C states into the member (`fieldRoots`), whose rows
+`Flock.Registered.treeReads` reads at the writer's leaves C gives; any other refuses first (`WIRED_TREE_WHY`). -/
+def portTreeHeld (byPort : Std.HashMap String Json) (who : String) (tmpl : Option String)
+    (wired : Array (String × String)) (q : Flock.Registered.Port) : V Unit :=
+  if !q.value.startsWith COMMITTED && fieldTreeName q.value && tmpl.all (s!"{·}/{q.name}" != q.value) &&
+      !wired.contains (q.name, q.value) then
     throw (WIRED_TREE_WHY who q.name) else
   match treePortOf q with
   | none => pure ()
@@ -591,31 +601,51 @@ def portTreeHeld (byPort : Std.HashMap String Json) (who : String) (tmpl : Optio
 /-- **A registered file's committed trees are its window's**: every port of the registered file `j` of `who` that
 opens a committed tree is held to the record's root of it (`portTreeHeld`, at `byPort`, `rootsByPort`); no file, no
 port, at the member's template `tmpl` (none for the one statement, whose ports open no field tree). One pass over the
-file's ports, each a lookup. -/
-def registeredTreesHeld (byPort : Std.HashMap String Json) (who : String) (j : Option Json) (tmpl : Option String := none) :
-    V Unit :=
+file's ports, each a lookup, at the reader rows `wired` holds at a writer's field tree (`portTreeHeld`). -/
+def registeredTreesHeld (byPort : Std.HashMap String Json) (who : String) (j : Option Json) (tmpl : Option String := none)
+    (wired : Array (String × String) := #[]) : V Unit :=
   match j with
   | none => pure ()
   | some j =>
-    (Flock.Registered.ofJson j).mapError (s!"{who}: {·}") >>= fun own => own.forM (portTreeHeld byPort who tmpl)
+    (Flock.Registered.ofJson j).mapError (s!"{who}: {·}") >>= fun own => own.forM (portTreeHeld byPort who tmpl wired)
+
+/-- The ports the verifier's registered file `registered` reads at a run input node's tree (`isFreshValue`); none
+without a file. -/
+def freshReads : Option Json → V (Array String)
+  | none => pure #[]
+  | some j => do
+    let own ← Flock.Registered.ofJson j
+    pure (own.filterMap fun q => if Flock.Registered.isFreshValue q.value then some q.name else none)
+
+/-- Header `h` with port `p` taken out of its `frame_v3` roots and `domain_ids`. -/
+def dropHeaderPort (h : Json) (p : String) : Json :=
+  let drop := fun (o : Json) => Json.mkObj ((entries o).filter (·.1 != p)).toList
+  let fv := getD h "frame_v3"
+  h.setObjVal! "frame_v3" ((fv.setObjVal! "roots" (drop (getD fv "roots"))).setObjVal! "domain_ids" (drop (getD fv "domain_ids")))
 
 /-- The public file held to the registration `rec` (module docstring, **public**; `registration.matches_public`, as the
 one-stage drivers hold theirs before the sample): its header's scheme, `frame_v3` roots and their `domain_ids`, and
 `instances` against the record's scheme, roots by port as the public file names them (`publicPorts`), their domains
 and population, a refusal naming the codes that fail; then its `units.indices` the population's units in order
-(`indicesHeld`). -/
-def publicHeld (rec : Json) (pubB : ByteArray) : V Unit := do
+(`indicesHeld`). A port the registration holds no root of that the verifier's `registered` file reads at a run input
+node's tree (`freshReads`) is not compared: its header root is over the port's table rows (`HmRow.checkPublic`), each
+of which `Flock.Registered.checkPort` opens under that file's root at the position C gives, and `registeredTreesHeld`
+holds that root to the record's `input/n<w>`. -/
+def publicHeld (rec : Json) (pubB : ByteArray) (registered : Option Json := none) : V Unit := do
   let h ← FilePart.header pubB
   let reg ← publicPorts rec
-  let fv := getD h "frame_v3"
-  let c := Record.matchesPublicBy reg rec (getD h "scheme") (getD fv "roots") (getD fv "domain_ids")
-    (getD h "instances")
+  let fresh ← freshReads registered
+  let h' := fresh.foldl (fun h p => if reg.any (·.1 == p) then h else dropHeaderPort h p) h
+  let fv := getD h' "frame_v3"
+  let c := Record.matchesPublicBy reg rec (getD h' "scheme") (getD fv "roots") (getD fv "domain_ids")
+    (getD h' "instances")
   if !c.codes.isEmpty then throw s!"public file: not the registration's: {", ".intercalate c.codes.toList}"
   if !indicesHeld rec h then throw INDICES_WHY
 
 /-- `publicHeld` passes only on a public file whose header's `units.indices` are the registration's population units in
 order (`indicesHeld`): the unit `provedUnits` credits for instance `i` is `i`, fixed by the registration before any coin. -/
-theorem indicesHeld_of_publicHeld {rec : Json} {pubB : ByteArray} (h : publicHeld rec pubB = .ok ()) :
+theorem indicesHeld_of_publicHeld {rec : Json} {pubB : ByteArray} {registered : Option Json}
+    (h : publicHeld rec pubB registered = .ok ()) :
     ∃ hd, FilePart.header pubB = .ok hd ∧ indicesHeld rec hd = true := by
   unfold publicHeld at h
   cases hh : FilePart.header pubB with
@@ -625,11 +655,14 @@ theorem indicesHeld_of_publicHeld {rec : Json} {pubB : ByteArray} (h : publicHel
     cases hr : publicPorts rec with
     | error e => simp [hh, hr, bind, Except.bind] at h
     | ok reg =>
-      cases hi : indicesHeld rec hd
-      · simp only [hh, hr, hi, bind, Except.bind, Bool.not_false, ↓reduceIte, throw, throwThe,
-          MonadExceptOf.throw] at h
-        split at h <;> simp_all
-      · rfl
+      cases hf : freshReads registered with
+      | error e => simp [hh, hr, hf, bind, Except.bind] at h
+      | ok fresh =>
+        cases hi : indicesHeld rec hd
+        · simp only [hh, hr, hf, hi, bind, Except.bind, Bool.not_false, ↓reduceIte, throw, throwThe,
+            MonadExceptOf.throw] at h
+          split at h <;> simp_all
+        · rfl
 
 /-- `one_stage.proofs.proved_units`: the public file's unit indices (`units.indices`, as the population check reads
 them: `FilePart.indicesOf` of `FilePart.header`) of the instances the session's record drew (`unit_draw.units`),
@@ -1077,15 +1110,35 @@ def oneSession (sessions : Array RunFiles) : V Unit :=
 def POPULATION_ORDER : String :=
   "population-order: the program's proof blocks under the query are not the registration's population units in order"
 
+/-- The sampling design's kind, its `law`'s text (`subset`, `stratified`, `work`, `bernoulli`), for a refusal. -/
+def designKind (d : Json) : String :=
+  match getD d "law" with
+  | .str t => t
+  | _ => "unnamed"
+
+/-- **The subset design** (module docstring, **population**): the verifier's sampling design (`OneStage.design`'s, a
+rate resolved) and the registration's `law` are both of the `subset` kind, All among them. The one design whose
+draw reads no stratum (`Flock.Draw.drawWith`'s `subset`: the drawn indices are the units), so the strata need only be
+a disjoint cover of the population (`Slots.popCovers`, `Member.heldAt`). -/
+def subsetDesign (v : Docket.Verifier) (record : Json) : Bool :=
+  jsonStrIs (getD v.samplingDesign "law") "subset" && jsonStrIs (getD (getD record "law") "law") "subset"
+
 /-- The registration's population held to the verifier's program (module docstring, **population**): the record names
 a population `n`, and under the verifier's query the program's proof blocks are its `n` units in order
-(`Slots.popOk`). This module imports `Spot.PopOrder`, so the call runs from the query's ranges
+(`Slots.popOk`), or under a subset design (`subsetDesign`) they are its units in any order (`Slots.popCovers`); a cover that is not the units in order is refused by name under any other design
+(`FilePart.STRATA_DESIGN`). This module imports `Spot.PopOrder`, so the call runs from the query's ranges
 (`Slots.popOk_eq_popOkRanges`) and builds no proof block: without the import it would run `Slots.layout`, a proof block
 for every input gate of the root. -/
 def popHeld (v : Docket.Verifier) (record : Json) : V Unit :=
   match nat? (getD record "population") with
   | none => throw "the record names no population"
-  | some n => if Slots.popOk v.program v.query n then pure () else throw POPULATION_ORDER
+  | some n =>
+    if Slots.popOk v.program v.query n then pure ()
+    else if Slots.popCovers v.program v.query n then
+      if subsetDesign v record then pure ()
+      else throw (FilePart.STRATA_DESIGN (designKind (if jsonStrIs (getD v.samplingDesign "law") "subset"
+        then getD record "law" else v.samplingDesign)))
+    else throw POPULATION_ORDER
 
 /-- The challenger session's release log in the evidence's `coins`, a line each, as `Challenger.trustedTreesOf` reads
 it. -/
@@ -1117,7 +1170,7 @@ def checkOneBody (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Ev
     treesHeld p.own ts e bs
     popHeld p.base.verifier c.record
     let pubB ← bs.get p.own.pub "public file"
-    publicHeld c.record pubB
+    publicHeld c.record pubB p.own.registered
     registeredTreesHeld (rootsByPort c.record) "the verifier" p.own.registered
     run p.own e.sessions (some e.base.provedUnits) bs
   match r with
@@ -1269,7 +1322,8 @@ def membersParamsOfJson (j : Json) : V Params := do
   let one := Json.mkObj [("public", Json.str NO_FILE), ("registered", Json.null)]
   let p ← paramsParsed (Json.mkObj (without j "proofs" ++ [("proofs", one)]))
   let own := { p.own with pub := "" }
-  let ms ← membersOf own (getD pr "members")
+  let subset := jsonStrIs (getD p.base.verifier.samplingDesign "law") "subset"
+  let ms := (← membersOf own (getD pr "members")).map fun m => { m with subset }
   pure { p with base := { p.base with verifier := { p.base.verifier with members := ms.map fun m => (m.units, m.g) } },
                 own, members := some ms }
 
@@ -1372,10 +1426,26 @@ def MEMBER_STRATA : String :=
   "partition: the registration's strata, read stratum by stratum, are not its units in order, or a unit of the " ++
     "member's is past them: a member's strata are the registration's, each restricted to the member's units"
 
+/-- The refusal of a member, under a subset design, whose registration's strata are no disjoint cover of its units,
+hold a range that ends before it starts, or with a unit past them (`Member.heldAt`). -/
+def MEMBER_COVER : String :=
+  "partition: the registration's strata's ranges are not a disjoint cover of its units 0, 1, …, N - 1, a range of " ++
+    "them ends before it starts, or a unit of the member's is past them"
+
 /-- A member's population check at the registration's `strata` and its public file's header `h`: the member's strata
-are the registration's restricted to its units (`Member.sizes`), and the header's units are exactly the member's, in
-order (`unitsHeld`). -/
+are the registration's restricted to its units (`Member.sizes`), or, under a subset design (`m.subset`) and only where
+the registration's strata are not its units in order (`FilePart.sizes`), as `popHeld` takes the walk first, the
+registration's strata are a disjoint cover of its units and the member's are among them (`FilePart.cover`); and the
+header's units are exactly the member's, in order (`unitsHeld`). `m.subset` is the verifier's law; R1-law
+(`Docket.check`) holds the registration's to the design it derives, so on a check that accepts both are subset
+(`subsetDesign`). -/
 def Member.heldAt (m : Member) (strata : Array (String × Array (Nat × Nat))) (h : Json) : V Unit :=
+  if m.subset && (FilePart.sizes strata).isNone then
+    match FilePart.cover strata with
+    | some n => if !m.units.all (·.2 ≤ n) then throw MEMBER_COVER
+                else if unitsHeld m.indices h then pure () else throw MEMBER_UNITS
+    | none => throw MEMBER_COVER
+  else
   match m.sizes strata with
   | none => throw MEMBER_STRATA
   | some _ => if unitsHeld m.indices h then pure () else throw MEMBER_UNITS
@@ -1440,8 +1510,8 @@ checks on the header as parsed, before it drops any port. -/
 def POPULATION_WHY : String := "public file: not the registration's: population"
 
 /-- The refusal of a member's public file whose port `p` is held in `tree`, its template's field tree that every member of
-the template shares or a run input node's `input/n<w>` that every unit reading the node shares, where the member's registered reads open no row of it at `tree` and the header's root there is not
-the registration's (`headerHeldAt`). -/
+the template shares or a run input node's `input/n<w>` that every unit reading the node shares, where the member's
+registered reads open no row of it at `tree` (`headerHeldAt`). -/
 def SHARED_UNREAD (p tree : String) : String :=
   s!"public file: port {p} is held in the shared tree {tree}, and the member's registered reads open no row of it " ++
     "there: a member's rows of a tree other members' rows share are held to the registration's root by opening it at " ++
@@ -1450,10 +1520,7 @@ def SHARED_UNREAD (p tree : String) : String :=
 /-- The slice `rec` and the header `h` without port `p`'s root and domain. -/
 def dropPort (rec h : Json) (p : String) : Json × Json :=
   let rs := match getD rec "roots" with | .arr rs => rs.filter (getD · "port" != .str p) | _ => #[]
-  let drop := fun (o : Json) => Json.mkObj ((entries o).filter (·.1 != p)).toList
-  let fv := getD h "frame_v3"
-  let fv := (fv.setObjVal! "roots" (drop (getD fv "roots"))).setObjVal! "domain_ids" (drop (getD fv "domain_ids"))
-  (rec.setObjVal! "roots" (.arr rs), h.setObjVal! "frame_v3" fv)
+  (rec.setObjVal! "roots" (.arr rs), dropHeaderPort h p)
 
 /-- Port `p` reads `v` as a registered value of the verifier's: its registered file's ports `held` hold `p` at `v`,
 a value that names no committed tree (`COMMITTED`), no run input's tree (`isFreshValue`) and no field tree
@@ -1471,8 +1538,12 @@ def UNREGISTERED_WHY (p v : String) : String :=
 /-- `headerHeld` at a member's registered reads `reads` (`(port, value)` each): a port the slice `rec` holds at a
 template's field tree (its entry's `tree`, `fieldTreesOf`) that `reads` opens at that tree is held by those reads
 (`Flock.Registered.checkPort` opens every row the header's root is over at the leaf C gives, under the registration's
-root, `portTreeHeld`), so the header's own root and domain there are not compared; one `reads` does not open there
-whose header root or domain is not the registration's refuses by name (`SHARED_UNREAD`). A port the slice holds no
+root, `portTreeHeld`), so the header's own root and domain there are not compared; one the header names that
+`reads` does not open there refuses by name (`SHARED_UNREAD`) where its header root or domain is not the
+registration's, and at a wired row or a run input's tree (a port not the tree's field, `fieldRoots` naming no wired
+row as its writer's field) even where they are: a session opens only the ports its registered file names at the
+leaves C gives, and a root over the member's own rows equal to the tree's holds them at the tree's leaves in order,
+which is C's only for a member's own output. A port the slice holds no
 root of that `reads` names and the header names is held by those reads too where the verifier's registered file's
 ports `held` hold it at that value as a registered value (`registeredAt`): `checkPort` opens every row of it under
 that file's root at the position C gives, and `OneCircuit.pos` reads such a value only at an input port whose units
@@ -1489,8 +1560,8 @@ def headerHeldAt (reads : Array (String × String)) (held : Array Flock.Register
   for (p, t, r) in shared do
     if reads.contains (p, t) then
       cur := dropPort cur.1 cur.2 p
-    else if !(getD (getD fv "roots") p matches .null)
-        && (getD (getD fv "roots") p != getD r "root" || getD (getD fv "domain_ids") p != getD r "domain") then
+    else if !(getD (getD fv "roots") p matches .null) && (!t.endsWith s!"/{p}" || Flock.Registered.isFreshValue t
+        || getD (getD fv "roots") p != getD r "root" || getD (getD fv "domain_ids") p != getD r "domain") then
       throw (SHARED_UNREAD p t)
   for (p, v) in reads do
     if !(Record.byPort rec).any (·.1 == p) && !(getD (getD fv "roots") p matches .null) then
@@ -1636,365 +1707,5 @@ partition's query once for the members in a row that read it, and returns the sa
 def membersFiles (slice : Member → Json) (bs : Core.Blobs) : List Member → V (List (String × StepAt))
   | [] => pure []
   | m :: ms => m.files (slice m) bs >>= fun a => membersFiles slice bs ms >>= fun as => pure ((m.name, a) :: as)
-
-/-- The tags a statement's sessions run under (`Flock.Witness.zkTags`): of the statement's inputs they read only its
-own tags `tags0` and its circuit file. -/
-def tagsAt (tags0 : Flock.Tags) (circuitB : ByteArray) : Flock.Tags :=
-  Flock.Zk.tags tags0 (Flock.Zk.maskLogOf circuitB) 1
-
-/-- **What the files' pass keeps of a circuit file**, each a function of the file, the statement's tags and the
-blobs' lookup tables, so the members that name one file share one: the blob under its digest (`circuit`), the pinned
-tables its META looks up (`lookups`), those of them the blobs hold, the lookup tables of a member that names the file
-(`tables`, as `ownTables` reads them), the tags its statement's sessions run under (`tags`), and what the statement's
-checks read of its parse at those tables (`kept`: the circuit's own verdicts and the circuit without its rows,
-`Spot.CircuitKept.Kept`). It does not hold the parse. -/
-structure FileKept where
-  circuit : V ByteArray
-  lookups : V (List String)
-  tables : V (List (String × ByteArray))
-  tags : Flock.Tags
-  kept : V CircuitKept.Kept
-
-/-- What the files' pass keeps of the circuit file `cf`, at the statement's tags `tags0` and the blobs' lookup tables
-`pinned`: its META read and its rows parsed, at the tables of `pinned` it looks up, here and nowhere else in the pass. -/
-def fileOf (tags0 : Flock.Tags) (pinned : List (String × ByteArray)) (cf : V ByteArray) : FileKept :=
-  match cf with
-  | .error e => { circuit := .error e, lookups := .error e, tables := .error e, tags := tags0, kept := .error e }
-  | .ok circuitB =>
-    match lookupsOf circuitB with
-    | .error e =>
-      { circuit := .ok circuitB, lookups := .error e, tables := .error e, tags := tagsAt tags0 circuitB
-        kept := .error e }
-    | .ok names =>
-      { circuit := .ok circuitB, lookups := .ok names, tables := .ok (pinned.filter fun t => names.contains t.1)
-        tags := tagsAt tags0 circuitB
-        kept := (Flock.ProvedScope.circuitOf (tagsAt tags0 circuitB) circuitB
-            (pinned.filter fun t => names.contains t.1)).map
-          (CircuitKept.keptOf (tagsAt tags0 circuitB) true 1 templateOk) }
-
-/-- What `fileOf` keeps under a digest whose blob is `circuitB`, a circuit file that looks up `names`. -/
-theorem fileOf_ok {tags0 : Flock.Tags} {pinned : List (String × ByteArray)} {cf : V ByteArray}
-    {circuitB : ByteArray} {names : List String} (hc : cf = .ok circuitB)
-    (hl : lookupsOf circuitB = .ok names) :
-    fileOf tags0 pinned cf =
-      { circuit := .ok circuitB, lookups := .ok names, tables := .ok (pinned.filter fun t => names.contains t.1)
-        tags := tagsAt tags0 circuitB
-        kept := (Flock.ProvedScope.circuitOf (tagsAt tags0 circuitB) circuitB
-            (pinned.filter fun t => names.contains t.1)).map
-          (CircuitKept.keptOf (tagsAt tags0 circuitB) true 1 templateOk) } := by
-  unfold fileOf
-  rw [hc]
-  dsimp only
-  rw [hl]
-
-/-- What `fileOf` keeps under a digest whose blob's META's `lookups` does not read: the refusal. -/
-theorem fileOf_unread {tags0 : Flock.Tags} {pinned : List (String × ByteArray)} {cf : V ByteArray} {e : String}
-    {circuitB : ByteArray} (hc : cf = .ok circuitB) (hl : lookupsOf circuitB = .error e) :
-    fileOf tags0 pinned cf =
-      { circuit := .ok circuitB, lookups := .error e, tables := .error e, tags := tagsAt tags0 circuitB
-        kept := .error e } := by
-  unfold fileOf
-  rw [hc]
-  dsimp only
-  rw [hl]
-
-/-- What `fileOf` keeps under a digest no blob has: the refusal. -/
-theorem fileOf_error {tags0 : Flock.Tags} {pinned : List (String × ByteArray)} {cf : V ByteArray} {e : String}
-    (hc : cf = .error e) :
-    fileOf tags0 pinned cf =
-      { circuit := .error e, lookups := .error e, tables := .error e, tags := tags0, kept := .error e } := by
-  unfold fileOf
-  rw [hc]
-
-/-- A bind on a value returned is its continuation at the value. -/
-theorem ok_bind {α β : Type} (a : α) (f : α → V β) : (Except.ok a : V α) >>= f = f a :=
-  rfl
-
-/-- A bind on a refusal is the refusal. -/
-theorem error_bind {α β : Type} (e : String) (f : α → V β) : (Except.error e : V α) >>= f = Except.error e :=
-  rfl
-
-/-- The strata of the partition `partition`'s query over a program as parsed, `parsed`: what a member's population
-check reads of its program and its partition (`Member.population`). -/
-def strataOn (parsed : V Program) (partition : Json) : V (Array (String × Array (Nat × Nat))) :=
-  parsed >>= fun p => Partition.strata p (getD partition "query")
-
-/-- Whether two readings of a query's strata are one: the same strata, or the same refusal. -/
-def sameStrata : V (Array (String × Array (Nat × Nat))) → V (Array (String × Array (Nat × Nat))) → Bool
-  | .ok a, .ok b => decide (a = b)
-  | .error a, .error b => decide (a = b)
-  | _, _ => false
-
-/-- Two readings `sameStrata` takes as one are equal. -/
-theorem sameStrata_eq : ∀ {a b : V (Array (String × Array (Nat × Nat)))}, sameStrata a b = true → a = b
-  | .ok _, .ok _, h => congrArg Except.ok (of_decide_eq_true h)
-  | .error _, .error _, h => congrArg Except.error (of_decide_eq_true h)
-  | .ok _, .error _, h => nomatch h
-  | .error _, .ok _, h => nomatch h
-
-/-- `sameStrata` takes a reading as itself. -/
-theorem sameStrata_refl : ∀ (a : V (Array (String × Array (Nat × Nat)))), sameStrata a a = true
-  | .ok _ => decide_eq_true rfl
-  | .error _ => decide_eq_true rfl
-
-/-- **What the files' pass keeps of a program**, for the members that read it: the bytes, their parse
-(`Program.parse`) and the digest a session's record must name (`programDigest`), each a function of the bytes; and
-the partition the member before read with it, with the strata of that partition's query over the parse (`strata`,
-which `held` says they are), so the members in a row that read one program under one partition evaluate its query
-once. -/
-structure ProgramKept where
-  bytes : ByteArray
-  parsed : V Program
-  sha : Option String
-  partition : Json
-  strata : V (Array (String × Array (Nat × Nat)))
-  held : strata = strataOn parsed partition
-
-/-- What is kept of the program `bytes`, parsed as `parsed` and of the digest `sha`, under the partition
-`partition`: the strata of its query evaluated here. -/
-def programRead (bytes : ByteArray) (parsed : V Program) (sha : Option String) (partition : Json) : ProgramKept :=
-  { bytes, parsed, sha, partition, strata := strataOn parsed partition, held := rfl }
-
-/-- What the files' pass keeps of the program `b` under the partition `partition`: `b` parsed and hashed here, and
-the partition's query evaluated on the parse. -/
-def programOf (b : ByteArray) (partition : Json) : ProgramKept :=
-  programRead b (Program.parse b) (programDigest b) partition
-
-/-- A program kept with any strata that are its partition's is the program kept with them evaluated. -/
-theorem programRead_of {bytes : ByteArray} {parsed : V Program} {sha : Option String} {partition : Json}
-    {strata : V (Array (String × Array (Nat × Nat)))} (h : strata = strataOn parsed partition) :
-    ({ bytes, parsed, sha, partition, strata, held := h } : ProgramKept) = programRead bytes parsed sha partition := by
-  subst h
-  rfl
-
-/-- The strata kept are those of the kept partition's query, so `sameStrata` takes the two as one under a partition
-equal to the kept one. -/
-theorem ProgramKept.same (pk : ProgramKept) {partition : Json} (e : partition = pk.partition) :
-    sameStrata (strataOn pk.parsed partition) pk.strata = true := by
-  subst e
-  rw [← pk.held]
-  exact sameStrata_refl pk.strata
-
-/-- What `withPtrEq` answers is what its continuation answers. -/
-theorem withPtrEq_answer {α : Type} (a b : α) (k : Unit → Bool) (h : a = b → k () = true) :
-    withPtrEq a b k h = k () := by
-  simp only [withPtrEq]
-
-/-- **What is kept of `pk`'s program for a member whose partition is `partition`**: `pk`'s strata where `partition`
-is the partition `pk` evaluated them under, else the strata of `partition`'s query on `pk`'s parse. Compiled, the
-partition the members share is one object, which `withPtrEq` sees without reading it, so no query is evaluated; a
-partition that is another object has its query evaluated and the strata compared (`sameStrata`), and evaluated once
-more where they differ. Either way the result is `programRead` at `partition` (`ProgramKept.under_eq`). -/
-def ProgramKept.under (pk : ProgramKept) (partition : Json) : ProgramKept :=
-  if h : withPtrEq partition pk.partition (fun _ => sameStrata (strataOn pk.parsed partition) pk.strata)
-      (fun e => pk.same e) = true then
-    { bytes := pk.bytes, parsed := pk.parsed, sha := pk.sha, partition, strata := pk.strata
-      held := (sameStrata_eq (a := strataOn pk.parsed partition) (b := pk.strata)
-        ((withPtrEq_answer _ _ _ _).symm.trans h)).symm }
-  else programRead pk.bytes pk.parsed pk.sha partition
-
-/-- What `ProgramKept.under` keeps is `pk`'s program with the strata of `partition`'s query on its parse. -/
-theorem ProgramKept.under_eq (pk : ProgramKept) (partition : Json) :
-    pk.under partition = programRead pk.bytes pk.parsed pk.sha partition := by
-  unfold ProgramKept.under
-  split
-  · exact programRead_of _
-  · rfl
-
-/-- What is kept of the program `b` under the partition `partition` after the member before read `prog`: `prog`
-under `partition` where its bytes are `b` (`ProgramKept.under`), else `b` parsed and hashed anew, so members in a
-row that read one program parse and hash it once, and evaluate their partition's query on it once. -/
-def ProgramKept.next (prog : Option ProgramKept) (b : ByteArray) (partition : Json) : ProgramKept :=
-  match prog with
-  | some pk => if pk.bytes = b then pk.under partition else programOf b partition
-  | none => programOf b partition
-
-/-- What is kept of a program after a member is what `programOf` reads of its bytes under the member's partition. -/
-theorem ProgramKept.next_eq {prog : Option ProgramKept}
-    (h : ∀ pk, prog = some pk → pk = programOf pk.bytes pk.partition) (b : ByteArray) (partition : Json) :
-    ProgramKept.next prog b partition = programOf b partition := by
-  unfold ProgramKept.next
-  cases prog with
-  | none => rfl
-  | some pk =>
-    dsimp only
-    split
-    · rename_i hb
-      have hp : pk.parsed = Program.parse pk.bytes := congrArg ProgramKept.parsed (h pk rfl)
-      have hs : pk.sha = programDigest pk.bytes := congrArg ProgramKept.sha (h pk rfl)
-      subst hb
-      rw [ProgramKept.under_eq, hp, hs] <;> rfl
-    · rfl
-
-/-- `Member.population` on the strata of its partition's query over its program, `strata`, read before it. -/
-def Member.populationOn (m : Member) (strata : V (Array (String × Array (Nat × Nat)))) (slice : Json)
-    (pubB : ByteArray) : V Unit := do
-  let strata ← strata
-  let h ← FilePart.header pubB
-  m.heldAt strata h
-  headerHeldAt (← m.reads) (← m.held) slice h
-
-/-- `Member.population` is `Member.populationOn` at the strata of the member's partition's query over its program's
-parse. -/
-theorem Member.population_on (m : Member) (slice : Json) :
-    m.population slice = m.populationOn (strataOn (Program.parse m.own.program) m.own.partition) slice := by
-  funext pubB
-  exact (bind_assoc (Program.parse m.own.program)
-    (fun p => Partition.strata p (getD m.own.partition "query")) _).symm
-
-/-- `StepAt.ofOwn` on what is kept of the circuit file and the program: the lookup tables `tables` it is handed, the
-tags its sessions run under `tags`, what its checks read of the parse `k`, and the program's digest `sha`. Every
-check that read the parse reads `k`, and the four that load the public file read one load of it
-(`Spot.CircuitKept.loadOf`). -/
-def StepAt.ofKept (p : Own) (tags0 : Flock.Tags) (circuitB pubB : ByteArray) (tables : List (String × ByteArray))
-    (rd : Reads) (population : V Unit) (tags : Flock.Tags) (k : V CircuitKept.Kept) (sha : Option String) : StepAt :=
-  let pub := CircuitKept.loadOf k tags pubB
-  { I := inputsAt tags0 p circuitB pubB tables, rd
-    scope := CircuitKept.checkOf k pub tags true pubB 1 false rd.registered.isSome >>= fun _ => k >>= fun k => k.own
-    ksFiles := CircuitKept.portsOf k pub
-    ksForm := CircuitKept.filesOf k pub tags pubB
-    header := CircuitKept.headerOf k pub
-    g := k.toOption.map (·.c.g)
-    population
-    programSha := sha
-    want := getD p.partition "program" }
-
-/-- The scope check on the parse is the scope check on what is kept of it and the public file's one load, then the
-kept verdict of `templateOk`. -/
-theorem scopeAt_kept (parsed : V Flock.Circuit) (I : Flock.Witness.Inputs) (rd : Reads) :
-    scopeAt parsed I rd =
-      (CircuitKept.checkOf (parsed.map (CircuitKept.keptOf (Flock.Witness.zkTags I) true I.count templateOk))
-          (CircuitKept.loadOf (parsed.map (CircuitKept.keptOf (Flock.Witness.zkTags I) true I.count templateOk))
-            (Flock.Witness.zkTags I) I.publicFile)
-          (Flock.Witness.zkTags I) true I.publicFile I.count false rd.registered.isSome >>= fun _ =>
-        parsed.map (CircuitKept.keptOf (Flock.Witness.zkTags I) true I.count templateOk) >>= fun k => k.own) := by
-  unfold scopeAt
-  rw [CircuitKept.checkOf_kept parsed _ true _ _ false _ templateOk]
-  cases parsed <;> rfl
-
-/-- **`StepAt.ofOwn` is `StepAt.ofKept` at what `fileOf` keeps of its circuit file**: the statement on the parse is
-the statement on the circuit's own verdicts and the circuit without its rows. -/
-theorem StepAt.ofOwn_kept (p : Own) (tags0 : Flock.Tags) (circuitB pubB : ByteArray)
-    (tables : List (String × ByteArray)) (rd : Reads) (population : V Unit) :
-    StepAt.ofOwn p tags0 circuitB pubB tables rd population =
-      StepAt.ofKept p tags0 circuitB pubB tables rd population (tagsAt tags0 circuitB)
-        ((Flock.ProvedScope.circuitOf (tagsAt tags0 circuitB) circuitB tables).map
-          (CircuitKept.keptOf (tagsAt tags0 circuitB) true 1 templateOk)) (programDigest p.program) := by
-  show StepAt.mk _ _ _ _ _ _ _ _ _ _ = StepAt.mk _ _ _ _ _ _ _ _ _ _
-  congr 1
-  · exact scopeAt_kept _ _ _
-  · exact CircuitKept.portsOf_kept _ _ _ true 1 templateOk
-  · exact CircuitKept.filesOf_kept _ _ _ true 1 templateOk
-  · exact CircuitKept.headerOf_kept _ _ _ true 1 templateOk
-  · exact CircuitKept.keptOf_g _ _ true 1 templateOk
-
-/-- `statementOf` at a member's own lookup tables, on what the files' pass keeps of its circuit file (`fk`) and its
-program's digest (`sha`), at the statement's tags `tags0`: the tables kept of the file, then `statementOf`'s checks
-in its order, each read of the circuit file taken from `fk`. -/
-def statementOn (tags0 : Flock.Tags) (fk : FileKept) (sha : Option String) (p : Own)
-    (population : ByteArray → V Unit) (bs : Core.Blobs) : V StepAt :=
-  fk.tables >>= fun tables =>
-  (fk.lookups >>= tablesMatch tables) >>= fun _ =>
-  match tags0.plainLeaves with
-  | true => throw s!"{tags0.name}: a statement with plain SHA-512 leaves: --zk's hiding needs hm96 leaves"
-  | false =>
-    match p.registered.isNone && readsRegistered p.programJ with
-    | true =>
-      throw ("registered: the program reads registered values (a RegisteredInput among its definitions) and the " ++
-        "verifier holds no registered reads: verify with its own registered file")
-    | false =>
-      fk.circuit >>= fun circuitB =>
-      bs.get p.pub "public file" >>= fun pubB =>
-      match fitsWhy WORD circuitB pubB tables (some p.program) (some p.partition) p.registered with
-      | some what => throw s!"{what}: {FITS}"
-      | none =>
-        readsOf p.registered >>= fun rd =>
-          pure (StepAt.ofKept p tags0 circuitB pubB tables rd (population pubB) fk.tags fk.kept sha)
-
-/-- **`statementOf` at the inputs' own lookup tables (`ownTables`) is `statementOn` at what `fileOf` keeps of its
-circuit file, read at the blobs' lookup tables, and its program's digest**, where the statement's tags are known. -/
-theorem statementOf_on {tags0 : Flock.Tags} (ht : Flock.Tags.byName? STATEMENT = some tags0) (p : Own)
-    (population : ByteArray → V Unit) (bs : Core.Blobs) :
-    (ownTables p bs >>= fun tables => statementOf p population tables bs) =
-      statementOn tags0 (fileOf tags0 (tablesOf bs) p.circuitFile) (programDigest p.program) p population bs := by
-  unfold ownTables statementOf statementOn
-  simp only [StepAt.ofOwn_kept, ht]
-  cases hc : p.circuitFile with
-  | error e =>
-    rw [fileOf_error rfl]
-    simp only [error_bind] <;> rfl
-  | ok circuitB =>
-    simp only [ok_bind]
-    cases hl : lookupsOf circuitB with
-    | error e =>
-      rw [fileOf_unread rfl hl]
-      simp only [error_bind] <;> rfl
-    | ok names =>
-      rw [fileOf_ok rfl hl]
-      simp only [ok_bind, pure_bind] <;> rfl
-
-/-- `Member.files` on what the files' pass keeps of the member's circuit file (`fk`) and of its program (`pk`):
-`statementOn` in place of `statementOf`, and the population check on the strata kept of the program. -/
-def Member.filesOn (m : Member) (tags0 : Flock.Tags) (fk : FileKept) (pk : ProgramKept) (slice : Json)
-    (bs : Core.Blobs) : V StepAt :=
-  ((statementOn tags0 fk pk.sha m.own (m.populationOn pk.strata slice) bs >>= fun a =>
-      m.blockHeld a.g >>= fun _ => pure a) >>=
-    fun a => a.filesHeld >>= fun _ => pure a).mapError (s!"member {m.name}: {·}")
-
-/-- `Member.files` is `Member.filesOn` at what `fileOf` keeps of its circuit file, read at the blobs' lookup tables,
-and what `programOf` keeps of its program under its partition. -/
-theorem Member.files_on {tags0 : Flock.Tags} (ht : Flock.Tags.byName? STATEMENT = some tags0) (m : Member)
-    (slice : Json) (bs : Core.Blobs) :
-    m.files slice bs =
-      m.filesOn tags0 (fileOf tags0 (tablesOf bs) m.own.circuitFile) (programOf m.own.program m.own.partition)
-        slice bs := by
-  unfold Member.files Member.statement Member.filesOn
-  rw [statementOf_on ht, Member.population_on] <;> rfl
-
-/-- `membersFiles` on the program `prog` the member before read: each member's files held on what `fileOf` keeps of
-its circuit file, derived from C and the partition (`Own.circuitFile`), and on what is kept of its program under its
-partition (`ProgramKept.next`). A program is parsed and hashed, and its partition's query evaluated on it, once for
-the members in a row that read it under the partition the parameters give them all. -/
-def keptFiles (slice : Member → Json) (bs : Core.Blobs) (tags0 : Flock.Tags) (tables : List (String × ByteArray)) :
-    Option ProgramKept → List Member → V (List (String × StepAt))
-  | _, [] => pure []
-  | prog, m :: ms =>
-    let pk := ProgramKept.next prog m.own.program m.own.partition
-    m.filesOn tags0 (fileOf tags0 tables m.own.circuitFile) pk (slice m) bs >>= fun a =>
-      keptFiles slice bs tags0 tables (some pk) ms >>= fun as => pure ((m.name, a) :: as)
-
-/-- `keptFiles` on a program that is what `programOf` reads of its bytes under its partition is `membersFiles`. -/
-theorem keptFiles_eq {tags0 : Flock.Tags} (ht : Flock.Tags.byName? STATEMENT = some tags0) (slice : Member → Json)
-    (bs : Core.Blobs) : ∀ (ms : List Member) (prog : Option ProgramKept),
-      (∀ pk, prog = some pk → pk = programOf pk.bytes pk.partition) →
-      keptFiles slice bs tags0 (tablesOf bs) prog ms = membersFiles slice bs ms
-  | [], _, _ => rfl
-  | m :: ms, prog, hp => by
-    have hnext : ∀ pk, some (programOf m.own.program m.own.partition) = some pk →
-        pk = programOf pk.bytes pk.partition := by
-      intro pk h
-      cases h
-      rfl
-    rw [keptFiles, membersFiles, Member.files_on ht, ProgramKept.next_eq hp]
-    rw [keptFiles_eq ht slice bs ms _ hnext]
-
-/-- **Every member's files, a circuit file read and parsed once for the members that name it**, and the program's
-strata evaluated once for the members that read it: `keptFiles` from no file and no program kept, at the statement's
-tags and the blobs' lookup tables, each read once. It returns what `membersFiles` returns, a refusal included
-(`membersFiles_eq_kept`), and is compiled in its place. -/
-def membersFilesKept (slice : Member → Json) (bs : Core.Blobs) (ms : List Member) : V (List (String × StepAt)) :=
-  match Flock.Tags.byName? STATEMENT with
-  | some tags0 => keptFiles slice bs tags0 (tablesOf bs) none ms
-  | none => membersFiles slice bs ms
-
-/-- **The files' pass with each circuit file read and parsed once is the files' pass**: `membersFilesKept` returns
-exactly what `membersFiles` returns, a statement for each member or the first refusal, so every statement about
-`membersFiles` is one about the compiled pass. -/
-@[csimp] theorem membersFiles_eq_kept : @membersFiles = @membersFilesKept := by
-  funext slice bs ms
-  unfold membersFilesKept
-  cases ht : Flock.Tags.byName? STATEMENT with
-  | none => rfl
-  | some tags0 => exact (keptFiles_eq ht slice bs ms none (fun _ h => nomatch h)).symm
 
 end Spot.OneStageZk

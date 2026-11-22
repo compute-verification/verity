@@ -83,7 +83,7 @@ ONE = ([(4, 2, G2)], [[(0, 0, 4)], [(0, 4, 1)]])
 EIGHT = ([(1 + i % 4, 2, G2) for i in range(8)], [[(i, 0, 1 + i % 4) for i in range(8)], [(i, 1 + i % 4, 1) for i in range(8)]])
 #: three requests: two at step 0, the third (one output) arriving at step 1
 THREE = ([(4, 2, G2), (2, 2, G2), (3, 1, {**S.GREEDY, "max_tokens": 1})], [[(0, 0, 4), (1, 0, 2)], [(0, 4, 1), (1, 2, 1), (2, 0, 3)]])
-EMB, GROUPS = "EmbeddingRead_v3{V=256,H=64}", "TokenSelectGroups_v1{C=64,G=16}"
+EMB, GROUPS = "EmbeddingRead_v4{V=256,H=64}", "TokenSelectGroups_v1{C=64,G=16}"
 FEED, FEED1 = "TokenFeed_v2{NP=4,FIRST=false}", "TokenFeed_v2{NP=4,FIRST=true}"
 #: a served Program's collectors at a prompt position's dead select (the first position's and every later one's) and its entry
 OUT0, OUT, SLOT_ENTRY = "OutCollect_v2{KO=2,FIRST=true}", "OutCollect_v2{KO=2,FIRST=false}", "SlotEntry_v2{KO=2,IDB=17,NP=1}"
@@ -474,13 +474,13 @@ def test_the_circuit_is_a_class_program_a_slot_in_units_by_template_and_wire_pat
     assert Counter((family[w.reader], w.port, family[w.writer], w.out) for w in circuit.wires) == {
         ("AttnBlockFirst_v1", "k", "RoPEHead_v1", "o0"): 5, ("AttnBlockFirst_v1", "q", "RoPEHead_v1", "o0"): 5,
         ("AttnBlockFirst_v1", "v", "Gemm_v2", "o0"): 5, ("AttnHeadEnd_v1", "l", "AttnBlockFirst_v1", "o1"): 5,
-        ("AttnHeadEnd_v1", "o", "AttnBlockFirst_v1", "o2"): 5, ("EmbeddingRead_v3", "tok", "ScanSlots_v5", "o0"): 2,
-        ("EmbeddingRead_v3", "tok", "TokenFeed_v2", "o0"): 1,
-        ("EmbeddingRead_v3", "tok", "SelectCollect_v1", "o0"): 1, ("Gemm_v2", "x", "AttnHeadEnd_v1", "o0"): 1,
+        ("AttnHeadEnd_v1", "o", "AttnBlockFirst_v1", "o2"): 5, ("EmbeddingRead_v4", "tok", "ScanSlots_v5", "o0"): 2,
+        ("EmbeddingRead_v4", "tok", "TokenFeed_v2", "o0"): 1,
+        ("EmbeddingRead_v4", "tok", "SelectCollect_v1", "o0"): 1, ("Gemm_v2", "x", "AttnHeadEnd_v1", "o0"): 1,
         ("Gemm_v2", "x", "RMSNormFusedCuda_v2", "o0"): 21, ("Gemm_v2", "x", "RMSNormTriton_v5", "o0"): 10,
-        ("Gemm_v2", "x", "SiluMul_v2", "o0"): 1, ("RMSNormFusedCuda_v2", "res", "EmbeddingRead_v3", "o0"): 5,
+        ("Gemm_v2", "x", "SiluMul_v2", "o0"): 1, ("RMSNormFusedCuda_v2", "res", "EmbeddingRead_v4", "o0"): 5,
         ("RMSNormFusedCuda_v2", "res", "RMSNormFusedCuda_v2", "o1"): 5, ("RMSNormFusedCuda_v2", "x", "Gemm_v2", "o0"): 20,
-        ("RMSNormTriton_v5", "x", "EmbeddingRead_v3", "o0"): 1, ("RoPEHead_v1", "x", "Gemm_v2", "o0"): 20,
+        ("RMSNormTriton_v5", "x", "EmbeddingRead_v4", "o0"): 1, ("RoPEHead_v1", "x", "Gemm_v2", "o0"): 20,
         ("SelectCollect_v1", "best", "TokenSelectGroups_v1", "o0"): 2, ("SelectCollect_v1", "head", "ScanSlots_v5", "o3"): 2,
         ("SelectCollect_v1", "idx", "TokenSelectGroups_v1", "o1"): 2,
         ("SelectCollect_v1", "state", "SelectCollect_v1", "o1"): 2, ("SelectCollect_v1", "x0", "Gemm_v2", "o0"): 2,
@@ -636,7 +636,7 @@ def test_the_scan_state_row_is_ingress_scans_and_its_wide_read_is_one_row_a_slot
 def test_the_weights_and_the_embedding_are_registered_reads(window):
     """Each weight a port reads is its own registered parameter at the port's row width (`WB.weight_param`), and the scan
     state is one more (the window's 16 buckets' rows of 4,548 words): GEMM slices, norms and RoPE read their rows from
-    their weight's at public positions, and the embedding is `EmbeddingRead_v3`'s opening of the table over its V rows of
+    their weight's at public positions, and the embedding is `EmbeddingRead_v4`'s opening of the table over its V rows of
     H, keyed by ``tok`` and pinned by its verdict, the table a parameter of its own (`WB.table_param`, its rows ``row-seg``
     leaves). With TINY's tied embeddings the LM head's slices read the embedding at 1,024 words a row, and the token
     select's ``x0`` unit its first row at 64, the table's width but a ``row/v2`` read; o_proj's slices, 8 columns, read
@@ -667,6 +667,23 @@ def test_the_weights_and_the_embedding_are_registered_reads(window):
     rope = [(r.param, r.at, r.radix, r.base, r.step) for r in reg.reads if r.reader == ids["RoPEHead_v1{D=16}"]]
     assert rope[:4] == [(WB.weight_param(cs, 16), 0, (2, 4), 0, (0, 0)), (WB.weight_param(cs, 16), 8, (2, 2), 0, (0, 0)),
                         (WB.weight_param(cs, 16), 12, (2, 4), 0, (0, 0)), (WB.weight_param(cs, 16), 20, (2, 2), 0, (0, 0))]
+
+
+def test_the_tables_root_and_domain_are_its_only_supplied_inputs_and_every_registered_one_a_16_bit_node(window):
+    """The class Program binds the embedding table's root and domain id, read off its table read, as supplied inputs
+    (`SuppliedInput1_v1`, 512 leaves) marked `registered.<root or domain>/v1` of the table's registered name, and nothing
+    else supplied; every registered parameter's node is a `RegisteredInput16_v1`, but the table's own, which the opening
+    reads through its run input ports and no node of its own."""
+    circuit, _ = window
+    prog, _ = circuit.program()
+    table = WB.table_param("model.embed_tokens.weight", 64)
+    assert prog.supplied == {f"{table}/{of}": {"supplied": f"registered.{of}/v1", "args": {"value": table},
+                                               "layout": "digest", "bits": 512} for of in ("root", "domain")}
+    nodes = {nd.name: nd for nd in prog.root.body.nodes if is_input(nd.fn)}
+    assert {v: (nodes[v].fn.id, nodes[v].n) for v in prog.supplied} == {v: ("SuppliedInput1_v1", 512) for v in prog.supplied}
+    assert {n for n, nd in nodes.items() if nd.fn.id.startswith("Supplied")} == set(prog.supplied)
+    assert set(circuit.registered.params) - set(nodes) == {table}
+    assert {nodes[v].fn.id for v in circuit.registered.params if v != table} == {"RegisteredInput16_v1"}
 
 
 def _whole_rows(circuit: IF.Circuit) -> None:
@@ -700,7 +717,7 @@ def test_the_window_forms_its_members_each_read_port_a_table_of_its_weights_rows
     """`interface.members` forms the window's members (as the record's verifier does, `window_of_record`): every read covers
     whole members and reads whole rows, so a GEMM slice's ``w`` is a shared-row table of its weight's rows, and no member
     spans two of the wired order's ranges. Slow (about 70 s
-    on one core) for the population Program `members` builds, `EmbeddingRead_v3`'s Merkle path traced once; the cheap
+    on one core) for the population Program `members` builds, `EmbeddingRead_v4`'s Merkle path traced once; the cheap
     check of the same rows is `test_every_weight_read_is_whole_rows_of_its_own_weight_at_its_ports_width`."""
     circuit, ids = window
     ms = IF.members(circuit, 64)
@@ -715,7 +732,7 @@ def test_core_registers_every_unit_of_the_window(window):
     verifier's) accepts every unit, its ranges the circuit's order's (a template's several ranges its units): every template
     has a gate, so no gather or row copy stands in for its reader's ports, and an instance commits within the widest public
     class. Slow (about a minute) for the
-    population program, `EmbeddingRead_v3`'s Merkle path traced once; no cheaper test runs core's own refusals."""
+    population program, `EmbeddingRead_v4`'s Merkle path traced once; no cheaper test runs core's own refusals."""
     circuit, _ = window
     part = P.evaluate(*circuit.program())
     units: Counter = Counter()
@@ -1360,6 +1377,20 @@ def test_a_tails_rows_are_its_parts_leaves_in_the_order_of_at(split):
     (t,) = [m for m in w.members if m.wired]
     assert [w.tree(t, f"r#{j}") for j in range(4)] == [WI.tree(order[j], "o0") for j in range(4)]
     assert [w.leaves(t, f"r#{j}").tolist() for j in range(4)] == [[0]] * 4
+
+
+def test_a_one_slot_windows_run_inputs_are_the_embedding_openings_three_trees():
+    """At class 1,1,1, with the weights registered input nodes, the window's run inputs are the embedding opening's
+    path, row and salt, each read whole by the one `EmbeddingRead` unit from its node's one tree ``input/n<w>``, which
+    its port names and no member holds a tree of."""
+    circuit = class_circuit(S._registered(), WindowClass(1, 1, 1), None, GRAIN)
+    win = IF.Window(circuit, "ab" * 64, {"law": "stratified", "k": 2}, 64)
+    (emb,) = [IF.descriptor_id(fn) for fn, _ in circuit.templates if fn.name == "EmbeddingRead"]
+    assert sorted((r.reader, r.port) for r in win.runs) == [(emb, "path"), (emb, "row"), (emb, "salt")]
+    assert len({r.param for r in win.runs}) == 3 and all(re.fullmatch(r"input/n\d+", r.param) for r in win.runs)
+    m = next(m for m in win.window.members if m.template == emb)
+    assert {"path", "row", "salt"} <= set(m.values)
+    assert not any(t.rsplit("/", 1)[-1] in ("path", "row", "salt") for t in win.window.trees)
 
 
 def wired(circuit: IF.Circuit) -> tuple[Any, dict[str, Any]]:

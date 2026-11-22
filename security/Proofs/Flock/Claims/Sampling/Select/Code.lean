@@ -114,6 +114,13 @@ theorem ite_eq_ok {c : Prop} [Decidable c] {a j : Json} {rest : V Json}
   · left; rw [ite_eq_left_of_eq_true _ _ (eq_true hc)] at h; exact ⟨hc, Except.ok.inj h⟩
   · right; rw [ite_eq_right_of_eq_false _ _ (eq_false hc)] at h; exact ⟨hc, h⟩
 
+/-- An `if` at `run`'s population check, whose branch is an `if` of its own, which `split` doesn't take apart. -/
+theorem ite_eq_cases {c : Prop} [Decidable c] {a b : V Json} {j : Json}
+    (h : (if c then a else b) = .ok j) : (c ∧ a = .ok j) ∨ (¬c ∧ b = .ok j) := by
+  by_cases hc : c
+  · left; rw [ite_eq_left_of_eq_true _ _ (eq_true hc)] at h; exact ⟨hc, h⟩
+  · right; rw [ite_eq_right_of_eq_false _ _ (eq_false hc)] at h; exact ⟨hc, h⟩
+
 -- `run` unfolds to about 50 decided leaves under one `match` or `if` per step, hence the heartbeat budget.
 set_option maxHeartbeats 4000000 in
 /-- **A decided run passed its registration and ran the sample of record**: `run` either refuses at a step or passed the
@@ -146,5 +153,6 @@ theorem run_decided (i : Input) (j : Json) (h : run i = .ok j) :
     | exact Or.inr ⟨_, _, _, _, by assumption, by assumption, by assumption, by assumption, by assumption,
         by assumption, _, by assumption, _, by assumption, _, _, _, by assumption, by assumption, _, _, _, _, _,
         (Except.ok.inj h).symm⟩
+    | (obtain ⟨_, h⟩ | ⟨_, h⟩ := ite_eq_cases h)
 
 end Spot.Run

@@ -32,15 +32,25 @@ def params (p : Program) : Array Registered.Param :=
   let bit := Json.arr #["Value", (1 : Nat)]
   (Registered.params p.desc (Json.arr #[Json.arr #["x", Json.arr #["Array", (3 : Nat), bit]], Json.arr #["y", bit]])).toOption.getD #[]
 
-/-- A v2 verifier of the descriptor `d`: `x` registered in rows of one word, one port, a uniform sample of one. -/
-def verifier (d : String := Spot.OneStageZk.E3) : Verifier :=
-  let p := program d
-  { program := p, query := QE, samplingDesign := Json.mkObj [("law", "subset"), ("k", (1 : Nat))], workTable := none,
-    scheme := "s", ports := #[("o", Json.mkObj [("leaves", (4 : Nat)), ("domain", "d")])], leafLayer := none,
-    anchors := #[], log := #[], partition := none, registered := #[("x", 1)], params := params p }
+/-- The descriptor `d` with `x`'s node a registered input and `y`'s a run Input. -/
+def regX (d : String) : String :=
+  ((d.replace r#""callees":["Input1_v1","Not_v1","E_v1"]"# r#""callees":["RegisteredInput1_v1","Not_v1","E_v1","Input1_v1"]"#).replace
+    r#""Input1_v1":{"form":"primitive","id":"Input1_v1","params":[],"ret":["Value",1]}"#
+    (r#""Input1_v1":{"form":"primitive","id":"Input1_v1","params":[],"ret":["Value",1]},"# ++
+      r#""RegisteredInput1_v1":{"form":"primitive","id":"RegisteredInput1_v1","params":[],"ret":["Value",1]}"#)).replace
+    r#"{"args":[],"fn":0,"form":"primitive","out":0}"# r#"{"args":[],"fn":3,"form":"primitive","out":0}"#
 
 /-- A root, lowercase hex of 64 bytes. -/
 def ROOT : String := String.ofList (List.replicate 128 'a')
+
+/-- A v2 verifier of the descriptor `d`: `x` registered in rows of one word and pinned at `ROOT`, one port, a uniform
+sample of one. -/
+def verifier (d : String := regX Spot.OneStageZk.E3) : Verifier :=
+  let p := program d
+  { program := p, query := QE, samplingDesign := Json.mkObj [("law", "subset"), ("k", (1 : Nat))], workTable := none,
+    scheme := "s", ports := #[("o", Json.mkObj [("leaves", (4 : Nat)), ("domain", "d")])], leafLayer := none,
+    anchors := #[], log := #[], partition := none, registered := #[("x", 1)], params := params p,
+    pinned := #[("x", ROOT)] }
 
 /-- Another root. -/
 def OTHER : String := String.ofList (List.replicate 128 'b')
@@ -63,7 +73,7 @@ def honest (v : Verifier) : V Json := do
      ("leaf_layer", optStr v.leafLayer), ("anchors", Json.arr v.anchors),
      ("window", Json.mkObj [("kind", "served")]), ("previous", previous)]
   if !v.v2 then return Json.mkObj base
-  let es ← ownEntries v
+  let es ← expectedEntries v
   return Json.mkObj (base ++ [("registered", Json.arr (es.map fun e => Json.mkObj [("value", e.value), ("root", ROOT),
     ("leaves", Lean.toJson e.leaves), ("words", Lean.toJson e.words), ("domain", e.domain)]))])
 
@@ -118,7 +128,8 @@ def V3 : Verifier := verifier
 #guard codes { V3 with outputs := #[("x", "00", .port "p")] } == #["R7-output"]
 #guard codes V3 (put · "registered" (some .null)) == #["R7-registered"]
 #guard codes V3 (put · "registered" (some (Json.arr #[]))) == #["R7-values"]
-#guard codes V3 (putEntry · "registered" "root" "zz") == #["R7-root"]
+-- `x` is pinned, so a root of its that isn't one is also not its pin
+#guard codes V3 (putEntry · "registered" "root" "zz") == #["R7-root", "R7-held"]
 #guard codes V3 (putEntry · "registered" "leaves" (4 : Nat)) == #["R7-leaves"]
 #guard codes V3 (putEntry · "registered" "words" (2 : Nat)) == #["R7-words"]
 #guard codes V3 (putEntry · "registered" "domain" "e") == #["R7-domain"]
@@ -129,8 +140,206 @@ def V3 : Verifier := verifier
 #guard codes { V3 with certified := #[({ value := "c", leaves := 1, words := 1, wordBits := 16, domain := "d" }, OTHER)] }
   (withCertified "c" "d") == #["R7-certified"]
 #guard codes { V3 with tied := #["nope"] } == #["R8-tied"]
-#guard codes (verifier E3S) == #["R8-shared-input"]
+-- two proof blocks reading a run Input: the variant with no members refuses it; the per-member variant holds its
+-- readers to the node's one tree
+#guard codes (verifier (regX E3S)) == #["R8-shared-input"]
+#guard !(codes { verifier (regX E3S) with members := #[(#[(0, 1)], 1), (#[(1, 2)], 1)] }).contains "R8-shared-input"
+-- a registered value at a run Input node: refused by name
+#guard codes (verifier Spot.OneStageZk.E3) == #["R7-run-input"]
+#guard codes (verifier E3S) == #["R7-run-input", "R8-shared-input"]
 -- a member's units past the population of one: `bounds` refuses it
 #guard codes { V3 with members := #[(#[(0, 2)], 1)] } == #["link-points"]
+
+/-! R8's hold on the program's registered inputs (`weightsCodes`): `E3S` with both inputs bound at registration, each read
+by both calls, its leaves one bit each. -/
+
+/-- `E3S` with `x` and `y` registered inputs. -/
+def E3R : String := E3S.replace "Input1_v1" "RegisteredInput1_v1"
+
+/-- A v1 verifier of `d` that expects nothing registered, its program function's parameters given. -/
+def weighed (d : String) : Verifier := let v := verifier d; { v with registered := #[] }
+
+/-- The verifier's own entry for `E3R`'s parameter `value` at one word a row (`Registered.entries`). -/
+def ownEntry (value : String) : Registered.Entry :=
+  match Registered.entries (program E3R).desc (params (program E3R)) #[(value, 1)] with
+  | .ok #[e] => e
+  | _ => { value, leaves := 0, words := 0, wordBits := 0, domain := "" }
+
+/-- A pin of `value` at its own entry's shape, `more` leaves past it, its domain at the registration's program digest
+`ROOT` unless `domain` names one. -/
+def pin (value : String) (more : Nat := 0) (domain : Option String := none) : String × Json :=
+  let e := ownEntry value
+  let leaves := e.leaves + more
+  let d := domain.getD ((Registered.domain ROOT value e.words leaves e.wordBits).toOption.map Flock.hexOf |>.getD "")
+  let kvs : List (String × Json) := [("value", Json.str value), ("root", Json.str ROOT), ("leaves", Lean.toJson leaves),
+    ("words", Lean.toJson e.words), ("domain", Json.str d)]
+  (value, Json.mkObj (kvs ++ if e.wordBits == Registered.WORD_BITS then [] else [(Registered.WIDTH_KEY, Lean.toJson e.wordBits)]))
+
+/-- The registration of record of `pins`, with the keys `more` beside `program` and `values`, and its SHA-512. -/
+def ofRecord (pins : List (String × Json)) (more : List (String × Json) := []) : ByteArray × String :=
+  let b := (Json.compress (Json.mkObj ([("program", Json.str ROOT), ("values", Json.mkObj pins)] ++ more))).toUTF8
+  (b, Flock.hexOf (Flock.Sha512.hash b))
+
+def PINS : List (String × Json) := [pin "x", pin "y"]
+
+/-- The check's codes on the honest record of `v`. -/
+def weighedCodes (v : Verifier) : Array String :=
+  match honest v with
+  | .ok r => check r v
+  | .error e => #[s!"fixture: {e}"]
+
+#guard Partition.inputReads (weighed E3R).program.prog ((Partition.templateRanges? (program E3R) QE).getD #[])
+  #[("x", 0, 3), ("y", 3, 1)] == #[("E_v1", "x", "x"), ("E_v1", "y", "y")]
+-- a registered input two proof blocks read passes with the registration and its digest; the
+-- pins it accepts are no entry R7 reads, and the record stays v1
+#guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord PINS) } == #[]
+#guard ((weightsOf { weighed E3R with weightsOfRecord := some (ofRecord PINS) }).2.map fun (e, r) =>
+  (e.value, e.leaves, r)) == #[("x", (ownEntry "x").leaves, ROOT), ("y", (ownEntry "y").leaves, ROOT)]
+-- without the registration, or at another digest, nothing fixes its root
+#guard weighedCodes (weighed E3R) == #["R8-unpinned"]
+#guard weighedCodes { weighed E3R with weightsOfRecord := some ((ofRecord PINS).1, OTHER) } == #["R8-weights-digest"]
+-- a marked input with no pin is refused
+#guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord [pin "x"]) } == #["R8-unpinned"]
+-- a pin of a parameter the program doesn't mark registered excuses nothing
+#guard weighedCodes { weighed E3S with weightsOfRecord := some (ofRecord PINS) } == #["R8-shared-input"]
+#guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord [pin "x", pin "y" 0 (some OTHER)]) } ==
+  #["R8-weights-domain", "R8-unpinned"]
+#guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord [pin "x" 1, pin "y"]) } == #["R8-weights-shape"]
+-- the document is exactly `{program, values}`: a `reads` key, or any other, is another form
+def READS : List (String × Json) := [("reads", Json.arr #[Json.arr #["E_v1", "x", "x"]])]
+#guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord PINS READS) } == #["R8-weights-form"]
+#guard weighedCodes { weighed E3R with weightsOfRecord := some (ofRecord PINS [("reads", Json.arr #[])]) } ==
+  #["R8-weights-form"]
+-- what the members' check holds reads to (`readPins`): with marked inputs, none without a registration or with one R8
+-- refuses; with one R8 accepts, the marked inputs, their gates, the ranges reading them and R8's pins
+#guard (readPins (weighed E3R)).isNone
+#guard (readPins { weighed E3R with weightsOfRecord := some (ofRecord [pin "x"]) }).isNone
+#guard (readPins { weighed E3R with weightsOfRecord := some (ofRecord PINS) }).map (fun rp =>
+  (rp.loose, rp.held, rp.ranges.map (·.template), rp.pins.size)) == some (#["x", "y"], #[("x", 0, 3), ("y", 3, 1)],
+    #["E_v1", "E_v1"], 2)
+-- nothing marked, or every marked input expected: nothing held
+#guard (readPins (weighed E3S)).map (fun rp => rp.loose.size + rp.ranges.size + rp.pins.size) == some 0
+#guard (readPins { verifier E3R with registered := #[("x", 1), ("y", 1)] }).map
+  (fun rp => rp.loose.size + rp.ranges.size + rp.pins.size) == some 0
+-- expected by name alone excuses nothing: R8-unpinned unless R8 pins it or the verifier holds its root itself
+#guard weightsCodes { verifier E3R with registered := #[("x", 1), ("y", 1)] } == #["R8-unpinned"]
+#guard weightsCodes { verifier E3R with registered := #[("x", 1), ("y", 1)], weightsOfRecord := some (ofRecord PINS) } ==
+  #[]
+#guard weightsCodes { verifier E3R with registered := #[("x", 1), ("y", 1)], pinned := #[("x", ROOT), ("y", ROOT)] } ==
+  #[]
+#guard ((readPins { verifier E3R with registered := #[("x", 1), ("y", 1)], pinned := #[("x", ROOT)] }).map
+  fun rp => rp.roots.map fun (e, r) => (e.value, r)) == some #[("x", ROOT)]
+-- a registered input under a query that is no template query that applies
+#guard weightsCodes { weighed E3R with query := Json.mkObj [("name", "Q_all")] } == #["R8-weights-query"]
+-- why `readPins` is none: no template query applying, else no registration R8 accepts
+#guard readPinsWhy { { weighed E3R with query := Json.mkObj [("name", "Q_all")] } with
+  weightsOfRecord := some (ofRecord PINS) } == WEIGHTS_QUERY_WHY
+#guard readPinsWhy (weighed E3R) == WEIGHTS_UNREGISTERED_WHY
+
+/-! R7's hold on C's supplied anchors (`anchorUnpinned`): a mark of `registered.root/v1` or `registered.domain/v1` of a
+value V is refused unless the verifier's `pinned` or the weights' registration of record pins V. -/
+
+def anchorMark (x : String) (fn : String := "registered.root/v1") : Supplied.Mark :=
+  { fn, args := #[("value", .str x)], layout := "digest", bits := 512 }
+
+#guard codes { V3 with marks := #[("a", anchorMark "w")] } == #["R7-anchor-unpinned"]
+#guard codes { V3 with marks := #[("a", anchorMark "w" "registered.domain/v1")] } == #["R7-anchor-unpinned"]
+#guard anchorUnpinned { V3 with marks := #[("a", anchorMark "w"), ("b", anchorMark "w" "registered.domain/v1")] } ==
+  #["w"]
+#guard anchorUnpinned { V3 with marks := #[("a", anchorMark "w")], pinned := #[("w", ROOT)] } == #[]
+#guard anchorUnpinned { V3 with marks := #[("a", anchorMark "x")], weightsOfRecord := some (ofRecord PINS) } == #[]
+#guard anchorUnpinned { V3 with marks := #[("a", anchorMark "w")], weightsOfRecord := some (ofRecord PINS) } == #["w"]
+-- a registration of record R8 refuses pins nothing
+def V3X : Verifier := { V3 with pinned := #[] }
+#guard anchorUnpinned { V3X with marks := #[("a", anchorMark "x")], weightsOfRecord := some ((ofRecord PINS).1, OTHER) } ==
+  #["x"]
+-- another function's mark is no anchor
+#guard anchorUnpinned { V3 with marks := #[("a", { anchorMark "w" with fn := "record.root/v1" })] } == #[]
+
+/-! R7's hold on a pinned value's record entry (`offPin`): the record's entry of a value the registration of record pins
+is that pin in root, leaf count, words and domain, and an anchor's value it pins has one; any other is refused. -/
+
+def VX : Verifier := { V3 with marks := #[("a", anchorMark "x")], weightsOfRecord := some (ofRecord PINS) }
+def recOf (es : Array Json) : Json := Json.mkObj [("registered", Json.arr es)]
+def pinX : Json := (pin "x").2
+
+#guard offPin (recOf #[pinX]) VX == #[]
+#guard offPin (recOf #[]) VX == #["x"]
+#guard offPin (recOf #[put pinX "root" (some (Json.str OTHER))]) VX == #["x"]
+#guard offPin (recOf #[put pinX "domain" (some (Json.str OTHER))]) VX == #["x"]
+#guard offPin (recOf #[put pinX "leaves" (some (Lean.toJson (99 : Nat)))]) VX == #["x"]
+#guard offPin (recOf #[put pinX "words" (some (Lean.toJson (99 : Nat)))]) VX == #["x"]
+-- the last entry of the value is the one read
+#guard offPin (recOf #[pinX, put pinX "root" (some (Json.str OTHER))]) VX == #["x"]
+-- a pinned value no anchor names may have no entry; a value the registration does not pin is not this check's
+#guard offPin (recOf #[]) { VX with marks := #[] } == #[]
+#guard offPin (recOf #[put pinX "root" (some (Json.str OTHER))]) { VX with marks := #[] } == #["x"]
+#guard offPin (recOf #[]) { VX with weightsOfRecord := none } == #[]
+#guard ANCHOR_FUNCTIONS.all fun fn => offPin (recOf #[]) { VX with marks := #[("a", anchorMark "x" fn)] } == #["x"]
+-- the whole check names it: an entry equal to the pin but in its domain is refused `R7-pin`, the pin itself is not
+#guard (codes VX (put · "registered" (some (Json.arr #[put pinX "domain" (some (Json.str OTHER))])))).contains "R7-pin"
+#guard !(codes VX (put · "registered" (some (Json.arr #[pinX])))).contains "R7-pin"
+
+/-! R7's refusal of a supplied input with no source (`unsourced`, `R7-supplied-source`): `x`'s node a supplied input
+and no source for it in the parameters' `supplied`. -/
+
+def supX : String := (regX Spot.OneStageZk.E3).replace "RegisteredInput1_v1" "SuppliedInput1_v1"
+
+#guard unsourced (verifier supX) == #["x"]
+#guard unsourced { verifier supX with supplied := #[("x", #[])] } == #[]
+#guard unsourced V3 == #[]
+#guard (codes { verifier supX with pinned := #[] }).contains "R7-supplied-source"
+-- C marks no supplied input here, and a record that registers nothing is refused all the same
+#guard (verifier supX).marks.isEmpty
+#guard (codes { verifier supX with pinned := #[], registered := #[] }).contains "R7-supplied-source"
+#guard !(codes { verifier supX with pinned := #[], registered := #[], supplied := #[("x", #[])] }).contains
+  "R7-supplied-source"
+-- a table input's mark is no source: with no held table its rows have none, with the table pinned they do
+#guard unsourced { verifier supX with supplied := #[("x", #[])], marks := #[("x", anchorMark "t")] } == #["x"]
+def supT : Verifier := { verifier supX with supplied := #[("x", #[])], marks := #[("x", anchorMark "y")] }
+#guard unsourced { supT with weightsOfRecord := some (ofRecord PINS) } == #[]
+
+/-! A table named by a table input of C (`tableEntries`): its pin is R7's expected entry and the table inputs' source
+(`heldTables`), never the record's entry. `t` is no parameter of C, pinned by the registration of record and named by
+C's mark. -/
+
+/-- A pin of the table `value`, four leaves of one word, its domain at the registration's program digest `ROOT`. -/
+def tablePin (value : String) : String × Json :=
+  let d := (Registered.domain ROOT value 1 4 Registered.WORD_BITS).toOption.map Flock.hexOf |>.getD ""
+  (value, Json.mkObj [("value", Json.str value), ("root", Json.str ROOT), ("leaves", (4 : Nat)), ("words", (1 : Nat)),
+    ("domain", Json.str d)])
+
+def TDOMAIN : String := match getD (tablePin "t").2 "domain" with | .str d => d | _ => ""
+def VT : Verifier := { V3 with marks := #[("a", anchorMark "t")], weightsOfRecord := some (ofRecord [tablePin "t"]) }
+
+/-- The record's entries of `value`, each with key `k` set to `x`, or the entries without `value` for none. -/
+def putValue (value k : String) (x : Option Json) (j : Json) : Json := match getD j "registered" with
+  | .arr es => put j "registered" (some (Json.arr (match x with
+      | some x => es.map fun e => if getD e "value" == Json.str value then put e k (some x) else e
+      | none => es.filter fun e => getD e "value" != Json.str value)))
+  | _ => j
+
+/-- The record with `e` added to its entries. -/
+def addEntry (e : Json) (j : Json) : Json := match getD j "registered" with
+  | .arr es => put j "registered" (some (Json.arr (es.push e)))
+  | _ => j
+
+#guard TDOMAIN.length == 128
+#guard ((tableEntries VT).map fun e => (e.value, e.leaves, e.words, e.domain)) == #[("t", 4, 1, TDOMAIN)]
+#guard heldTables VT == #[("t", ROOT, TDOMAIN)]
+-- a pin no mark names, a mark of a value nothing pins, a value already expected: no entry
+#guard (tableEntries { VT with marks := #[] }).isEmpty
+#guard (tableEntries { VT with marks := #[("a", anchorMark "z")] }).isEmpty
+#guard (tableEntries { VT with marks := #[("a", anchorMark "x")], weightsOfRecord := some (ofRecord [tablePin "x"]) }).isEmpty
+-- the table registered at its pin passes; left out, or at another root or domain, it is refused
+#guard codes VT == #[]
+#guard codes { VT with marks := #[("a", anchorMark "t"), ("b", anchorMark "t" "registered.domain/v1")] } == #[]
+#guard (codes VT (putValue "t" "root" none)).contains "R7-values"
+#guard (codes VT (putValue "t" "root" (some (Json.str OTHER)))).contains "R7-pin"
+#guard (codes VT (putValue "t" "domain" (some (Json.str OTHER)))).contains "R7-pin"
+-- with no pin of it the table input is refused
+#guard (codes { VT with weightsOfRecord := none }).contains "R7-anchor-unpinned"
+-- a pinned table that no mark of C names, registered in the record: refused, the pin widens nothing
+#guard (codes { VT with marks := #[] } (addEntry (tablePin "t").2)).contains "R7-values"
 
 end Spot.Test.Docket

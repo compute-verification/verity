@@ -599,6 +599,9 @@ case $COMPOSE_OFF_NODE in 0 | 1) ;; *) say "PREFLIGHT: COMPOSE_OFF_NODE is 1 (th
 [ -z "${V3C_GPUS:-}" ] || command -v gpu-lease > /dev/null \
   || { say "PREFLIGHT: V3C_GPUS's cards are held under gpu-lease while V3c's audit proves on them, and this node has no gpu-lease"; exit 3; }
 CKPT=${CKPT:-$HF_HOME/hub/models--${REPO//\//--}/snapshots/$REV} WREG=$D/weights_registration.json
+# the registration of record ({program, values}) the serve's first close writes beside WREG, which the audits hand the check
+WOR=$D/weights_of_record.json
+NO_WOR="the weights' registration of record (weights_of_record.json, {program, values}) is absent: the serve's first close writes it beside weights_registration.json"
 # the serve's first registration record: the weights registration as a record of the log, which Pearl+'s W is chained after
 DREG=$D/deployment-registration.json
 NO_WEIGHTS="NO WEIGHTS REGISTRATION: no window registers a weight's root, so every weight read counts free"
@@ -608,11 +611,11 @@ weights() {  # under the lease (its commit hashes on the leased GPU), before the
   local rc=$? log=$LOGS/weights_registration.txt
   grep -o '"deployment": "[0-9a-f]\{128\}"' "$log" | tail -1 > "$OUT/weights_registration.txt"
   if [ "$rc" != 0 ] || [ ! -f "$WREG" ]; then
-    rm -f "$DREG"
+    rm -f "$DREG" "$WOR"
     say "$NO_WEIGHTS (weights-registration $(failed "$rc" "$log"))"
     return
   fi
-  cp "$WREG" "$OUT/"
+  cp "$WREG" "$WOR" "$OUT/"
   say "WEIGHTS $("$PY" - "$WREG" <<'EOF'
 import json, sys
 r = json.load(open(sys.argv[1]))
@@ -823,6 +826,9 @@ v3c_compose_args() {  # the warm's and the audit's disk floor and text keeping, 
   grep -q -- '--min-free-gb' "$TREE/benchmarks/prove_path/records_audit.py" || return 0
   printf '%s\n' --min-free-gb "$V3C_MIN_FREE_GB" ${V3C_KEEP_CIRCUITS:+--keep-circuits}
 }
+wreg_args() {  # --registered $WOR held to its file's own digest: no pin precedes the serve's registration, so a stand-in
+  printf '%s\n' --registered "$WOR" --registered-digest "$(sha512sum "$WOR" | cut -c1-128)" --registered-digest-source stand-in
+}
 v3c_warm() {  # every template of the committed window composed into $VW/compose-cache, V3C_WARM_JOBS at a time
   local ca; mapfile -t ca < <(v3c_compose_args)
   (cd "$TREE" && env -u PYTHONPATH RAYON_NUM_THREADS="$(nproc)" RUST_MIN_STACK=$((64 << 20)) timeout -k 1m "$V3C_WARM_TIMEOUT" \
@@ -843,6 +849,7 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
   [ -n "${DAY:-}" ] && day=(--day "$DAY" --day-log "$DAY_LOG" ${DAY_PARAMS:+--day-params "$DAY_PARAMS"})
   run=$("$PY" -c 'import json, sys; print(next(json.loads(l)["run_root"] for l in open(sys.argv[1]) if l.strip() and json.loads(l)["window"] == int(sys.argv[2])))' \
     "$D/windows.jsonl" "$K") || { say "V3C-AUDIT: no run root for the window in windows.jsonl"; return 1; }
+  [ -f "$WOR" ] || { say "V3C-AUDIT: $NO_WOR"; return 1; }
   mkdir -p "$OUT/v3c-audit"
   if [ -n "${MAIN_FILE:-}" ]; then  # main's first-parent line, which the audit's challenger session pins on
     [ -s "$MAIN_FILE" ] || { say "V3C-AUDIT: MAIN_FILE $MAIN_FILE, main's first-parent line its challenger session pins on, is missing or empty"; return 1; }
@@ -872,7 +879,7 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
     ch+=(--peer "$V3C_PEER" --challenger-key "$PP_CHALLENGER_KEY" ${PP_GATE_KEY:+--gate-key "$PP_GATE_KEY"})
   fi
   V3C_AUDITED=$(hostname -s)
-  local link=() gpus=() ld=() lease=() bin=$FW/flock-gpu-link/flock/target/release/flock-circuit n
+  local link=() gpus=() ld=() lease=() wr=() bin=$FW/flock-gpu-link/flock/target/release/flock-circuit n
   [ "${V3C_ARCHIVE_LINK:-}" != 1 ] || link=(--archive-link)
   if [ -n "${V3C_GPUS:-}" ]; then
     tk=$(v3c_cuda) || { say "V3C-AUDIT: V3C_GPUS=$V3C_GPUS, and this node has no CUDA 13.3 toolkit for its prover"; return 1; }
@@ -881,10 +888,10 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
     n=${V3C_GPUS//[^,]/}
     lease=(gpu-lease "$((${#n} + 1))" --wait --on "$V3C_GPUS" --mem-gb 0 -- env -u CUDA_VISIBLE_DEVICES)
   fi
-  mapfile -t ca < <(v3c_compose_args)
+  mapfile -t ca < <(v3c_compose_args); mapfile -t wr < <(wreg_args)
   (cd "$TREE" && "${lease[@]}" env -u PYTHONPATH "${ld[@]}" RAYON_NUM_THREADS="$(nproc)" RUST_MIN_STACK=$((64 << 20)) timeout -k 1m "$V3C_AUDIT_TIMEOUT" \
     "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py audit --window "$VW/window" --sampling-design "$V3C_LAW" \
-    --circuit "$(sha512sum "$VW/window/circuit.json" | cut -c1-128)" --run "$run" --registered "$WREG" "${tie[@]}" "${day[@]}" "${cache[@]}" "${ca[@]}" \
+    --circuit "$(sha512sum "$VW/window/circuit.json" | cut -c1-128)" --run "$run" "${wr[@]}" "${tie[@]}" "${day[@]}" "${cache[@]}" "${ca[@]}" \
     "${pool[@]}" "${gpus[@]}" \
     "${ch[@]}" --main "$main" --m0-pythonpath "$m0" --bin "$bin" --lean "$leanb/verity-verify-proof" \
     --zk-server "$leanb/flock-zk-server" --ports "$ports" "${link[@]}" --out "$VW/audit") > "$LOGS/v3c-audit/audit.log" 2> "$LOGS/v3c-audit/audit.err"
@@ -898,6 +905,7 @@ t = json.loads(line[4:])
 w, ok = t["record"][:16], "PASS" if t["chained"] else "FAIL"
 print(f"the audit read its records tied to W {w}…, R chained right after it: {ok}")' 2>&1 \
     | tail -1 | cut -c1-400)"
+  ! grep -q '^WEIGHTS ' "$LOGS/v3c-audit/audit.log" || say "V3C-AUDIT $(grep -m1 '^WEIGHTS ' "$LOGS/v3c-audit/audit.log" | cut -c9-400)"
   say "V3C-AUDIT class $V3C (records_audit.py exit $rc), $("$PY" "$SV" coins --challenger "$V3C_CHALLENGER" \
     --summary "$VW/audit/summary.json" 2>&1 | tail -1 | cut -c1-300): $(grep -m1 '^RECORDS' "$LOGS/v3c-audit/audit.log" | cut -c1-3000)"
   [ -n "$(grep -m1 '^RECORDS' "$LOGS/v3c-audit/audit.log")" ] \
@@ -1325,7 +1333,7 @@ private_pieces() {
 # follow-on runs at. Each is listed where it exists.
 deferred_inputs() {
   {
-    printf '%s\n' weights_registration.json deployment-registration.json "$(v3c_record)" windows.jsonl seals.jsonl \
+    printf '%s\n' weights_registration.json weights_of_record.json deployment-registration.json "$(v3c_record)" windows.jsonl seals.jsonl \
       requests.jsonl declaration.json \
       "$SERVED_ARM/summary.json" "$SERVED_ARM/window/audit.json" \
       "$SERVED_ARM/window/registration.json" "$SERVED_ARM/runs.json" \
@@ -1977,10 +1985,9 @@ road_sampled() {  # step 3 on the window's road: the window's record, its Lean c
   # the commit verdict's run root, which the seal step held to the record's
   run=$("$PY" -c 'import json, sys; print(json.load(open(sys.argv[1]))["run_root"])' "$D/windows/w$K/commit/verdict.json") \
     || { step_not_run sampled-proofs "the window's commit verdict has no run root"; return; }
-  # the weights registration pins the roots a window's registered weight reads open against: given only where it holds some
-  regs=()
-  "$PY" -c 'import json, sys; sys.exit(0 if (json.load(open(sys.argv[1])) or {}).get("values") else 1)' "$WREG" 2> /dev/null \
-    && regs=(--registered "$WREG")
+  # the registration of record pins the roots a window's registered weight reads open against
+  [ -f "$WOR" ] || { step_not_run sampled-proofs "$NO_WOR"; return; }
+  mapfile -t regs < <(wreg_args)
   (umask 077; mkdir -p "$s") && mkdir -p "$OUT/sampled-proofs" "$LOGS/sampled-proofs"
   git -C "$TREE" rev-list --first-parent "${MAIN_SHA:-HEAD}" > "$main" 2>/dev/null && [ -s "$main" ] \
     || { step_not_run sampled-proofs "no first-parent line of main for its challenger session to pin on (${MAIN_SHA:-HEAD} has none in this tree)"; return; }

@@ -198,7 +198,7 @@ theorem unbound_subset_faulty_part
       (Flock.Bridge.stmtOf A.P A.κ (_root_.Properties.Spot.oneStageOf A.design) A.desc ⟨"", 0, []⟩ A.roots))
     (fun _ _ h => Flock.Bridge.opens_of_val h) ?_ op hop hc _ (cast_heq _ _)
   intro opens hK hO
-  exact Flock.Bridge.unbound_subset_faulty_partOf A.P A.κ (Flock.Bridge.nsOf_sum A.hpop) sha512Msg A.Cd
+  exact Flock.Bridge.unbound_subset_faulty_partOf A.P A.κ (Flock.Bridge.nsOf_sum_of_popCovers A.hpop) sha512Msg A.Cd
     (Flock.Bridge.stmtOf A.P A.κ (_root_.Properties.Spot.oneStageOf A.design) A.desc ⟨"", 0, []⟩ A.roots) rfl w
     opens A.κ_isInput hK hO
 

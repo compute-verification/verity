@@ -46,6 +46,37 @@ def params (law : Json := Json.mkObj [("law", "subset"), ("k", (1 : Nat))]) (k :
 #guard why? (OneStageZk.paramsOfJson (params (k := key 2 5))) == OneStageZk.KEY_PARAMS
 #guard why? (OneStageZk.paramsOfJson (params (Json.mkObj [("law", "stratified"), ("k", (1 : Nat))]))) ==
   OneStageZk.SUBSET_ONLY "stratified"
+#guard why? (OneStageZk.paramsOfJson (Spot.Test.Docket.put params "partition" (some (Partition.build
+    (Flock.hexOf (program Spot.OneStageZk.E3).sha512)
+    ((Flock.JsonParse.parse "{\"name\":\"Q_template_instance\",\"params\":{\"template\":\"F_v1\"},\"version\":0}").toOption.getD
+      .null))))) == OneStage.PARTITION_QUERY
+
+/-- The template query over `F_v1`, another query than `params`'s. -/
+def otherQ : Json :=
+  (Flock.JsonParse.parse "{\"name\":\"Q_template_instance\",\"params\":{\"template\":\"F_v1\"},\"version\":0}").toOption.getD
+    .null
+
+/-- `params` as v1 reads them, with the partition object `o`. -/
+def v1With (o : Json) : Json :=
+  Spot.Test.Docket.put (Spot.Test.Docket.put params "proofs" none) "partition" (some o)
+
+#guard why? (OneStage.paramsOfJson (v1With (Partition.build (Flock.hexOf (program Spot.OneStageZk.E3).sha512) otherQ))) ==
+  OneStage.PARTITION_QUERY
+#guard why? (OneStage.paramsOfJson (v1With (Json.mkObj [("program", Flock.hexOf (program Spot.OneStageZk.E3).sha512),
+  ("query", otherQ)]))) == "ok"
+
+/-- `jeq` of the parsed texts `a` and `b`, none where either doesn't parse. -/
+def jeqText (a b : String) : Option Bool :=
+  match Flock.JsonParse.parse a, Flock.JsonParse.parse b with
+  | .ok x, .ok y => some (jeq x y)
+  | _, _ => none
+
+#guard jeqText "{\"b\":1,\"a\":{\"d\":2,\"c\":3}}" "{\"a\":{\"c\":3,\"d\":2},\"b\":1}" == some true
+#guard jeqText "{\"v\":1.0}" "{\"v\":1.0}" == some false
+#guard ["{\"v\":1.0}", "{\"v\":1e0}", "{\"v\":10e-1}"].all fun s =>
+  match Core.canonicalJson s.toUTF8 with
+  | .error _ => true
+  | .ok _ => false
 
 /-- The challenger session's release log after its head: the family `draw`'s root `ab` recorded, a coin tree's round
 opened on the link's stream, then the coin released: a coin of the sample released after a round opened. -/
@@ -75,8 +106,37 @@ def evidence (log : Json) : OneStageZk.Evidence :=
 
 #guard why? (OneStageZk.popHeld V3 (Json.mkObj [("population", (2 : Nat))])) == OneStageZk.POPULATION_ORDER
 
-#guard why? (OneStageZk.heldReadsOf { V3 with query := Json.mkObj [("name", "Q_unit"), ("params", Json.mkObj []),
-  ("version", (0 : Nat))] }) == OneStageZk.HELD_QUERY_WHY
+/-- Ranges of templates `(t, first, count)`, as the query lists them. -/
+def tranges (rs : List (String × Nat × Nat)) : Array Flock.TemplateQuery.TRange :=
+  rs.toArray.map fun (template, first, count) => { node := 0, template, first, count }
+
+-- PAIR, TRIPLE, PAIR: the strata `PAIR [0, 2) [5, 7)`, `TRIPLE [2, 5)`, a cover of 7 that `popOk`'s walk refuses
+#guard Slots.segsOf (tranges [("PAIR", 0, 2), ("TRIPLE", 2, 3), ("PAIR", 5, 2)]) == [(0, 2), (5, 7), (2, 5)]
+#guard !Slots.chain (Slots.segsOf (tranges [("PAIR", 0, 2), ("TRIPLE", 2, 3), ("PAIR", 5, 2)])) 0 7
+#guard FilePart.coverRanges (Slots.segsOf (tranges [("PAIR", 0, 2), ("TRIPLE", 2, 3), ("PAIR", 5, 2)])) == some 7
+-- an overlap, a gap, and a range past the population's 7
+#guard FilePart.coverRanges (Slots.segsOf (tranges [("PAIR", 0, 2), ("TRIPLE", 1, 4), ("PAIR", 5, 2)])) == none
+#guard FilePart.coverRanges (Slots.segsOf (tranges [("PAIR", 0, 2), ("TRIPLE", 2, 2), ("PAIR", 5, 2)])) == none
+#guard FilePart.coverRanges (Slots.segsOf (tranges [("PAIR", 0, 2), ("TRIPLE", 2, 3), ("PAIR", 5, 3)])) != some 7
+-- the contiguous layout: the walk and the cover both take it
+#guard Slots.chain (Slots.segsOf (tranges [("PAIR", 0, 4), ("TRIPLE", 4, 3)])) 0 7
+#guard FilePart.coverRanges (Slots.segsOf (tranges [("PAIR", 0, 4), ("TRIPLE", 4, 3)])) == some 7
+
+/-- The record of a registration under the law `law`. -/
+def lawRecord (law : String) : Json := Json.mkObj [("law", Json.mkObj [("law", law), ("k", (1 : Nat))])]
+
+#guard OneStageZk.subsetDesign V3 (lawRecord "subset")
+#guard !OneStageZk.subsetDesign V3 (lawRecord "stratified")
+#guard !OneStageZk.subsetDesign { V3 with samplingDesign := Json.mkObj [("law", "stratified"), ("k", (1 : Nat))] }
+  (lawRecord "subset")
+#guard !OneStageZk.subsetDesign { V3 with samplingDesign := Json.mkObj [("law", "work"), ("k", (1 : Nat))] }
+  (lawRecord "work")
+#guard OneStageZk.designKind (Json.mkObj [("law", "stratified"), ("k", (1 : Nat))]) == "stratified"
+-- V3's own layout is in order: the walk takes it under any design
+#guard match Partition.units V3.program V3.query with
+  | .ok n => why? (OneStageZk.popHeld V3 (Json.mkObj [("population", n), ("law", Json.mkObj [("law", "stratified"),
+      ("k", (1 : Nat))])])) == "ok"
+  | .error _ => false
 
 /-- A circuit of `upv` units, each returning `leaves` output leaves. -/
 def circuit (upv leaves : Nat) : Flock.Circuit :=

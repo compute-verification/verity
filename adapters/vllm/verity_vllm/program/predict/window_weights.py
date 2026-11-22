@@ -2,7 +2,7 @@
 port's row width (`window_builder.weight_param`: ``weights/<label>@<words>``), and a weight is a value like any other, its
 rows committed under the committer's secret salts (`weight_value`), a hiding commitment.
 
-The committer registers its weights once per model, before the first window's coins (`weights_registration`, a
+The committer registers its weights once per deployment, before its first epoch's coins (`weights_registration`, a
 `records.weights_registration`): each weight parameter's root, refused for a weight whose served words aren't the
 checkpoint's pinned shards' (the checkpoint tie is the committer's own check). The verifier pins those roots and never a
 root it computes: it holds the registration to its own weights record's shapes (`weights_record`, each weight parameter's
@@ -40,7 +40,7 @@ from verity.commitments.periods.rows import registered as registered_commit
 
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.config import CHECKPOINTS
-from verity_vllm.records.weights_registration import WeightsRegistration
+from verity_vllm.records.weights_registration import OF_RECORD, WeightsRegistration
 
 from . import window_circuit as WC
 from .common import _arr_shape
@@ -51,6 +51,9 @@ from .window_circuit import WindowClass
 WEIGHTS_CLASS = WindowClass(1, 2, 2)
 #: what a deployment's first registration record registers, as its header's ``kind`` states (`deployment_record`)
 DEPLOYMENT = "weights"
+#: the files of a deployment's one registration (`register`): the committer's weights registration and its record
+REGISTRATION = "weights_registration.json"
+DEPLOYMENT_RECORD = "deployment-registration.json"
 _GRAIN = Grain()
 
 
@@ -270,8 +273,8 @@ def record_words(registered: Any, checkpoint_dir: str, checkpoints_manifest: str
 def weights_registration(registered: Any, salts_to: str | Path, checkpoint_dir: str, served: Any = None,
                          checkpoints_manifest: str | None = None, kv_cache_dtype: str = "auto",
                          grain: Grain = _GRAIN, tables: Any = None, served_params: Any = ()) -> dict[str, Any]:
-    """The committer's registration of the weights it serves (`records.weights_registration`), written once per model
-    before the first window's coins and pinned by the verifier (core's ``registration.check(pinned=...)``,
+    """The committer's registration of the weights it serves (`records.weights_registration`), written once per
+    deployment before its first epoch's coins and pinned by the verifier (core's ``registration.check(pinned=...)``,
     ``records_audit.py --registered`` and ``--pins``, `registration_pins`): each weight parameter the class circuit
     registers at ``grain``, and each of ``served_params`` (a served window's record's, `_weights`), its `weight_value` under
     fresh OS salts, its entry core's `registered_value.Registered.entry()`. The salts go to the salt file ``salts_to``
@@ -359,9 +362,11 @@ def registration_pins(registration: Any, record: dict[str, Any]) -> dict[str, st
 def deployment_record(registration: Any) -> dict[str, Any]:
     """The deployment's first registration record (`verity/registration/v2`, chained after nothing): each weight parameter
     the committer's ``registration`` roots (`weights_registration`), as the registered value of 16-bit words the
-    registration states (its value, root, leaves, words and domain), by name, under a ``deployment`` header: the weights
-    record's program, the model at its revision, the grain, and the weight parameters the registration leaves unrooted,
-    which no record registers and whose reads stay free. A serve writes it before its first request. On a serve tied to
+    registration states (its value, root, leaves, words and domain), by name, the embedding's table among them, beside
+    the weights record's ``program`` and under a ``deployment`` header: the model at its revision, the grain, and the
+    weight parameters the registration leaves unrooted, which no record registers and whose reads stay free. It names no
+    protocol: one registration stands for every epoch of the deployment, whatever variant audits it. A deployment writes
+    it once, before its first epoch (`register`). On a serve tied to
     Pearl+, Pearl+'s window record W names it as ``previous`` (`registration.digest`), so there a weight's root is in the
     log's first record before W. No other record names it: a window's own record is chained after its W or after nothing,
     and H1's W after nothing, as before. It states what the registration states and nothing of the salts. ValueError unless
@@ -369,12 +374,38 @@ def deployment_record(registration: Any) -> dict[str, Any]:
     reg = WeightsRegistration.of(registration, "the weights registration")
     for p in (*reg.values, *reg.unrooted):
         _param(p)
-    return {"format": DM.REGISTRATION, "protocol": DM.ONE_STAGE_PROTOCOL,
-            "deployment": {"kind": DEPLOYMENT, "program": reg.program, "model": {"repo": reg.repo, "revision": reg.revision},
+    return {"format": DM.REGISTRATION, "program": reg.program,
+            "deployment": {"kind": DEPLOYMENT, "model": {"repo": reg.repo, "revision": reg.revision},
                            "grain": dict(reg.grain), "unrooted": sorted(reg.unrooted)},
             "registered": [dict(reg.values[p]) for p in sorted(reg.values)],
             "previous": None}
 
 
-__all__ = ["DEPLOYMENT", "WEIGHTS_CLASS", "Grain", "WeightsRegistration", "deployment_record", "record_words",
-           "registration_pins", "value_salts", "weight_value", "weight_values", "weights_record", "weights_registration"]
+def register(registered: Any, out: str | Path, checkpoint_dir: str, checkpoints: str | None = None,
+             tables: Any = None) -> str:
+    """The deployment's one registration, written into ``out`` before its first epoch: the committer's weights
+    registration (`REGISTRATION`, `weights_registration`), its salts beside it, under which every later epoch commits its
+    weights, its projection (`OF_RECORD`) and its record (`DEPLOYMENT_RECORD`, `deployment_record`).
+    -> the record's digest (`docket_digest.digest`). Refused (ValueError) where ``out`` holds a registration, naming its
+    digest."""
+    from verity.commitments import docket_digest as DD
+
+    from verity_vllm.records import weights_registration as WRG
+
+    out = Path(out)
+    if (out / DEPLOYMENT_RECORD).is_file() or (out / REGISTRATION).is_file():
+        held = (DD.digest(json.loads((out / DEPLOYMENT_RECORD).read_text())) if (out / DEPLOYMENT_RECORD).is_file()
+                else "no record beside it")
+        raise ValueError(f"{out} holds the deployment's registration already ({held}): a deployment registers once")
+    doc = weights_registration(registered, SF.beside(out / REGISTRATION), checkpoint_dir, checkpoints_manifest=checkpoints,
+                               tables=tables)
+    rec = deployment_record(doc)
+    (out / REGISTRATION).write_text(json.dumps(doc, indent=1) + "\n")
+    WRG.write_of_record(out / REGISTRATION)
+    (out / DEPLOYMENT_RECORD).write_text(json.dumps(rec, indent=1) + "\n")
+    return DD.digest(rec)
+
+
+__all__ = ["DEPLOYMENT", "DEPLOYMENT_RECORD", "OF_RECORD", "REGISTRATION", "WEIGHTS_CLASS", "Grain", "WeightsRegistration",
+           "deployment_record", "record_words", "register", "registration_pins", "value_salts", "weight_value",
+           "weight_values", "weights_record", "weights_registration"]

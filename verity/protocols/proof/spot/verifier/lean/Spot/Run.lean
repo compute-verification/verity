@@ -9,8 +9,11 @@ check the stream ran on it, in the stream's order.
   whose strata or table don't apply), then R1–R8 (`Docket.check`) against the challenger's copies under the sampling design the rule names over
   that population (`Select.Rule.samplingDesignOver`, whatever sampling design the copies carry) and that work table, a `bernoulli` sampling
   design at any `p` (`Draw.bernoulli`: `bernoulli`), a
-  program and query whose population is not the registration's units in order (`Slots.popOk`: `population-order`), and
-  the receipt (`registration.receipt`);
+  program and query whose population is not the registration's units in order (`Slots.popOk`) nor a disjoint cover of
+  them (`Slots.popCovers`: `population-order`), or a cover under a design that is not subset at both the verifier and
+  the registration (`OneStageZk.subsetDesign`: `strata-design`), as `OneStageZk.popHeld` holds it, or a cover under a
+  two-stage rule (`population-order`: its chain reads slot ρ as unit ρ), and the receipt
+  (`registration.receipt`);
 * `select`: a closure map, refused before any coin is read (`closure`: a work sample widened by one is outside the
   sampled audit's soundness statement); the sample of record on the bytes of the challenger's coins (`Select.select`,
   under the rule over the program's population, `Select.resolve`); the verifier has no coins of its own, so a sample that
@@ -65,6 +68,7 @@ public import Spot.OneStage
 public import Spot.Select
 public import Spot.Slots
 public import Spot.PopOrder
+public import Spot.OneStageZkStatement
 public import Spot.Service
 public import Spot.ChallengerCoins
 public import Spot.SecondStage
@@ -385,7 +389,10 @@ def run (i : Input) : V Json := do
   let codes := Docket.check i.record v
   if !codes.isEmpty then return refused "register" codes
   if Draw.bernoulli samplingDesign then return refused "register" #["bernoulli"]
-  if !Slots.popOk v.program v.query n then return refused "register" #["population-order"]
+  if !Slots.popOk v.program v.query n then
+    if !Slots.popCovers v.program v.query n then return refused "register" #["population-order"]
+    if !OneStageZk.subsetDesign v i.record then return refused "register" #["strata-design"]
+    if i.rule matches .twoStage .. then return refused "register" #["population-order"]
   let receipt ← receipt i.record i.challenger i.received
   let derived ← Draw.derive v.program v.query samplingDesign v.workTable
   if i.closure.isSome then return refused "select" #["closure"]
