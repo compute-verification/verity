@@ -748,6 +748,29 @@ def registration_param(a: argparse.Namespace) -> dict[str, Any]:
     return {"record": body, "head": DK.DEVELOPMENT}
 
 
+#: the lanes a run of record is on: infra names ``record-N`` for runs of record alone, and a run on any other lane
+#: (``rehearsal-N`` included) is never promoted
+RECORD_LANE = re.compile(r"record-[1-9][0-9]*")
+
+
+def of_record_why(row: dict[str, Any]) -> str | None:
+    """Why the audit's run is not a run of record, None where it is: it accepted, its registration is the challenger's
+    signed head on a lane named ``record-N`` (`RECORD_LANE`), held to the key the operator posted, and no member was left
+    unverified."""
+    reg = row["registration"]
+    if not row["ok"]:
+        return "the audit did not accept"
+    if reg["source"] != "ledger":
+        return "its registration is the development path, not the challenger's signed head"
+    if not RECORD_LANE.fullmatch(reg.get("lane") or ""):
+        return f"its lane {reg.get('lane')} is not a lane of record (record-N); a run on another lane is never promoted"
+    if not reg.get("key_pinned"):
+        return "the challenger's key was not held to the operator's posted digest (--challenger-key-sha512)"
+    if "not_verified" in row:
+        return "members were left unverified"
+    return None
+
+
 def registration_line(a: argparse.Namespace) -> tuple[str, dict[str, Any]]:
     """The audit's first line and the summary's ``registration``: with ``--registration-ledger``, the lane, the
     deployment's registration record's digest (which `docket.registration_parsed` refuses unless the ledger's head for the
@@ -1347,12 +1370,14 @@ def audit(a: argparse.Namespace) -> int:
     row["ok"] = row["ok"] and not row["coins_session"]["error"]
     row["ok"] = row["ok"] and (not a.registration_ledger or "after the draw" in row["registration_halves"])
     row["ok"] = row["ok"] and (acts is None or acts["ok"])
-    row["of_record"] = (row["ok"] and row["registration"]["source"] == "ledger" and row["registration"]["key_pinned"]
-                        and "not_verified" not in row)
+    row["not_of_record"] = of_record_why(row)
+    row["of_record"] = row["not_of_record"] is None
     (out / "summary.json").write_text(json.dumps(row, indent=1, sort_keys=True, default=str))
+    if row["not_of_record"] is not None:
+        print("NOT-OF-RECORD " + row["not_of_record"])
     if "not_verified" in row:
         print("NOT-VERIFIED " + json.dumps(row["not_verified"], sort_keys=True))
-    print("RECORDS " + json.dumps({x: row.get(x) for x in ("ok", "of_record", "circuit", "population", "draw", "draw_counts", "outputs", "seconds")}
+    print("RECORDS " + json.dumps({x: row.get(x) for x in ("ok", "of_record", "not_of_record", "circuit", "population", "draw", "draw_counts", "outputs", "seconds")}
                                   | {"compile": PROVER_CIRCUIT if a.prover_circuit else (compiled or {}).get("ok"),
                                      "fixed_before_draw": (row.get("fixed_before_draw") or {}).get("ok"),
                                      "circuit_registration": row["circuit_registration"],
