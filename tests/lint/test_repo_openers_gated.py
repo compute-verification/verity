@@ -94,8 +94,11 @@ def roots() -> list[Any]:
 def walk(start: list[Any]) -> tuple[dict[str, list[tuple[int, Any]]], dict[str, set[str]], dict[str, str], list]:
     """Each shape reached from ``start``, with its bindings by size; each built shape's callee shapes; each that couldn't
     be opened, with why; and each body over 5 s to build.  Smallest binding first over the whole walk, one body per shape
-    (an opener's none), each its own nodes alone (`by_calls.unlaid`), so no callee's body is built for it."""
+    (an opener's none), each its own nodes alone (`by_calls.unlaid`), so no callee's body is built for it.  A traced
+    template's (`boolean.trace`: its body is `trace.emit`'s, a body of primitive gates and of calls of traced templates) is
+    none either: it reaches no opener."""
     _BD, _T, D, BC = _imports()
+    from verity.circuits.boolean import trace
     members: dict[str, list[tuple[int, Any]]] = {}
     callees: dict[str, set[str]] = {}
     undecided: dict[str, str] = {}
@@ -124,12 +127,12 @@ def walk(start: list[Any]) -> tuple[dict[str, list[tuple[int, Any]]], dict[str, 
         members.setdefault(k, []).append((size, fn))
         if k in callees or k in undecided:
             continue
-        if fn.base_id in OPENERS:
+        if fn.base_id in OPENERS or fn.defn.body.__module__ == trace.__name__:
             callees[k] = set()
             continue
         t = time.monotonic()
         try:
-            kids = [n.fn for n in BC.unlaid(fn).nodes]
+            kids = list({id(n.fn): n.fn for n in BC.unlaid(fn).nodes}.values())
         except Exception as e:  # noqa: BLE001
             undecided[k] = f"{fn.id[:160]}: its body doesn't build: {type(e).__name__}: {str(e)[:160]}"
             continue
