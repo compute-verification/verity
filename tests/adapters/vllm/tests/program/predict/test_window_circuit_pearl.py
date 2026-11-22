@@ -220,8 +220,8 @@ def test_each_cut_linear_reads_its_row_of_its_calls_a_rows_and_y(low):
             assert sorted(rows[PEARL.a(s, ci)]) == sorted(rows[PEARL.y(s, ci)]) == list(range(m))
             assert (c.registered.params[PEARL.a(s, ci)], c.registered.params[PEARL.y(s, ci)]) == (16 * 2 * K, m * 2 * N)
     pearl = tuple(v for s in M for ci in range(len(CALLS)) for v in (PEARL.a(s, ci), PEARL.y(s, ci)))
-    assert c.registered.values == (*pearl, SS.SCAN_STATE)
-    assert [n for n, _ in c.program()[0].fn.signature()[0][:33]] == list(c.registered.values)
+    assert c.registered.values == pearl and c.registered.run == (SS.SCAN_STATE,)
+    assert [n for n, _ in c.program()[0].fn.signature()[0][:32]] == list(c.registered.values)
     assert c.registered.formats == {v: WK.ROW_FORMAT for v in pearl} == {v: {"row_schema": IF.SEG, "word_bits": 32}
                                                                          for v in pearl}
     sig = dict(c.program()[0].fn.signature()[0][:32])
