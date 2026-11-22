@@ -101,7 +101,7 @@ from . import leaves as L
 from verity.circuits.ops import words as W
 
 __all__ = ["LINES", "PUBLIC", "PearlPlusAdmit", "PearlPlusAdmitV2", "PearlPlusGramRowV5", "PearlPlusSaltDead",
-           "PearlPlusSaltDeadV2", "PearlPlusTileCoreV3", "PearlPlusTileLineV4", "PearlPlusTileSeed", "core", "gram_row", "line",
+           "PearlPlusSaltDeadV2", "PearlPlusTileCoreV3", "PearlPlusTileLineV4", "PearlPlusTileSeed", "PearlPlusTileSeedV5", "core", "gram_row", "line",
            "noise", "reference", "seed", "served"]
 
 F32, U32, BIT, I32, BF16, E4M3, W16 = Value(32), Value(32), Value(1), Value(32), Value(16), Value(8), Value(16)
@@ -267,6 +267,70 @@ _CORE = CompositeDefinition(
 PearlPlusTileCoreV3 = _on_bits(_CORE, 3)
 
 
+# ---- the core in B's rows and the rest, the units a finer laying makes of it ---------------------------------------------
+
+def _row_b_ret(S) -> Tuple:
+    return Tuple(Array(S.K, E4M3), Array(2 * R, BF16), F32, F32, F32, F32, BIT)
+
+
+def _row_b_body(B, S, b, eb, fb, fa, g):
+    d = DEVICES[S.DEV]
+    rb = B.call(bind(PearlCRowB, K=S.K, R=R, DOT=pc8.ATOMS[d.atom.name], G=d.g), b, eb, fb, fa, g)
+    ok = B.call(bind(PearlPlusAdmit, K=S.K), b, rb[2], rb[3], rb[4])
+    return tuple_of(rb[0], rb[1], rb[2], rb[3], rb[4], rb[5], ok)
+
+
+_ROW_B = CompositeDefinition(
+    "PearlPlusTileRowB", 1, ("K", "DEV"),
+    lambda S: ((("b", Array(S.K, F32)), ("eb", LINE), ("fb", Array(S.K, LINE)), ("fa", Array(S.K, LINE)),
+                ("g", pc8.GRAM)), _row_b_ret(S)),
+    _row_b_body, refuse=_refuse_k, register=False, conformance=_CORE.conformance,
+    doc="One row of a -h3 tile's B on words, as the core forms and admits it: `PearlCRowB`'s codes, factors and "
+        "statistics against its line and the noise, and its `PearlPlusAdmit` bit")
+PearlPlusTileRowBV2 = _on_bits(_ROW_B, 2, register=False)
+
+_REST_OWN = ("a", "cert", "salt", "root", "unit", "rows", "fa", "fb")
+
+
+def _rest_params(S) -> tuple:
+    own = dict(_core_params(S))
+    return tuple((p, own[p]) for p in _REST_OWN) + (
+        ("rb", Array(S.TN, Tuple(*_row_b_ret(S).fields[:6]))), ("ok_b", Array(S.TN, BIT)))
+
+
+def _rest_body(B, S, a, cert, salt, root, unit, rows, fa, fb, rb, ok_b):
+    e, k, tm, tr, tn, dev = U._Emit(B), S.K, S.TM, S.TR, S.TN, S.DEV
+    d = DEVICES[dev]
+    at = dict(K=k, R=R, DOT=pc8.ATOMS[d.atom.name], G=d.g)
+    admit = bind(PearlPlusAdmit, K=k)
+    ra = [B.call(bind(PearlCRowA, **at), salt, a[i], root, unit, rows[i], fa, fb) for i in range(tm)]
+    ok_a = [B.call(admit, a[i], ra[i][2], ra[i][3], ra[i][4]) for i in range(tr)]
+    sd = [B.call(bind(PearlPlusSaltDead, K=k, DEV=dev), a[i], ra[i][4], ra[i][5]) for i in range(tm)]
+    oka = [U.ok_word(e, o) for o in ok_a] + [e.c(L.OK.w, 0)] * (tm - tr)
+    tile_inert_bound = bind(inert_bound.Pc8TileCapDefV2, K=k, TM=tm, TN=tn, N=S.N, RHO=S.RHO, RHOR=S.RHOR, DEV=dev)
+    capped = B.call(tile_inert_bound, array_of([r[0] for r in ra]), array_of([rb[j][0] for j in range(tn)]),
+                    array_of([r[1] for r in ra]), array_of([rb[j][1] for j in range(tn)]), array_of(oka), array_of(sd), cert)
+    c, u, verdict = capped[0], capped[1], capped[2]
+    digest = B.call(bind(PearlCRowDigest, K=2 * tm * tn), L.tile_messages(c, u, tm, tn))
+    served = B.call(bind(PearlCUnscale, TM=tr, TN=tn, BIAS=False), u[:tr], array_of([r[4] for r in ra[:tr]]),
+                    array_of([rb[j][4] for j in range(tn)]))
+    finite = [e.call(F32IsFinite, e.call(Bf16ToF32, served[i][j])) for i in range(tr) for j in range(tn)]
+    zero = [e.call(I32Eq, a[i][t], 0) for i in range(tr, tm) for t in range(k)]
+    ok = e.call(Bf16GtStrict, verdict, 0)
+    for bit in ok_a + [ok_b[j] for j in range(tn)] + finite + zero:
+        ok = e.call(BitAnd, ok, bit)
+    return tuple_of(digest, served, ok)
+
+
+_REST = CompositeDefinition(
+    "PearlPlusTileCoreRest", 1, tuple(_CORE.statics), lambda S: (_rest_params(S), _core_ret(S)),
+    _rest_body, refuse=_refuse_core, register=False, conformance=_CORE.conformance,
+    doc="`PearlPlusTileCore_v2` past its B rows: on each B row's codes, factors and statistics and its admission bit "
+        "(`PearlPlusTileRowB_v1`'s), A's rows formed and admitted, the inert-work bound, the digest, y and ok, as the core "
+        "computes them")
+PearlPlusTileCoreRestV2 = _on_bits(_REST, 2, register=False)
+
+
 # ---- the tile's noise ---------------------------------------------------------------------------------------------------
 
 def _times(e: U._Emit, x, n: int):
@@ -355,15 +419,21 @@ def _seed_ret(S) -> Tuple:
     return Tuple(_words(key), *[Array(1, line)] * S.TN, *[Array(S.K // F_ROWS, _words(f.elem))] * F_ROWS)
 
 
-def _seed_on_words(B, S, salt, root, col):
+def _seed_on_words(B, S, salt, root, col, line_calls: bool = False):
     sigma = bind(_SEED_BITS, K=S.K, TN=S.TN)
     bits = dict(sigma.signature()[0])
     cb = Coll(bits["col"], B.batch(bind(WordBits, W=32), Coll(Array(1, U32), col.refs), axes=(0,)).refs)
     out = B.call(sigma, _unpack(B, salt, bits["salt"]), _unpack(B, root, bits["root"]), cb)
     line = bind(_LINE_BITS, SIDE=1, FACTOR=0)
     (_k, kt), (_i, it) = line.signature()[0]
-    eb = B.batch(line, Coll(kt, out[0].refs), Coll(Array(S.TN, it), out[1].refs), axes=(None, 0))
-    held = concat([out[0].refs, eb.refs, out[2].refs])
+    if line_calls:
+        # a map reading eb's indices out of the key's one output steps through part of a node, which the door's lowering refuses
+        n = it.leaves
+        eb = concat([B.call(line, Coll(kt, out[0].refs), Coll(it, out[1].refs.slice(n * j, n * (j + 1)))).refs
+                     for j in range(S.TN)])
+    else:
+        eb = B.batch(line, Coll(kt, out[0].refs), Coll(Array(S.TN, it), out[1].refs), axes=(None, 0)).refs
+    held = concat([out[0].refs, eb, out[2].refs])
     return _pack(B, Coll(Array(held.count, BIT), held), _seed_ret(S))
 
 
@@ -375,6 +445,11 @@ PearlPlusTileSeed = CompositeDefinition(
         "`PearlCNoiseLine_v1`) on the key and each of eb's TN indices, and the key, eb's TN lines and F's indices back "
         "in 16-bit words (`BitsWord{16}`), one field each for the key, each of eb's lines and each of F's `F_ROWS` "
         "groups of K/`F_ROWS` indices, so that each reader reads one field whole by wire, at the width C commits it in")
+PearlPlusTileSeedV5 = CompositeDefinition(
+    "PearlPlusTileSeed", 5, ("K", "TN"), lambda S: (_seed_params(S), _seed_ret(S)),
+    lambda B, S, *xs: _seed_on_words(B, S, *xs, line_calls=True), refuse=_refuse_slices, conformance=_NOISE_CONF,
+    doc="`PearlPlusTileSeed_v4` with E_B's lines one `PearlPlusTileLine_v2`{SIDE=1, FACTOR=0} call each on its index's "
+        "bits of the key's output, in place of a map over them")
 
 
 def _on_words16(bits: CompositeDefinition, version: int, doc: str) -> CompositeDefinition:
@@ -474,8 +549,8 @@ PearlPlusGramRowV5 = _on_words16(
                        "and the row's 32 FP32 words back in 16-bit words, two each, low half first")
 
 
-def seed(k: int, tn: int) -> SpecializedDefinition:
-    return bind(PearlPlusTileSeed, K=k, TN=tn)
+def seed(k: int, tn: int, version: int = 4) -> SpecializedDefinition:
+    return bind(PearlPlusTileSeedV5 if version == 5 else PearlPlusTileSeed, K=k, TN=tn)
 
 
 #: a tile's three kinds of line, (SIDE, FACTOR): E_B's, F_A's, F_B's
@@ -491,12 +566,12 @@ def gram_row(k: int, dev: str, p: int) -> SpecializedDefinition:
     return bind(PearlPlusGramRowV5, K=k, DEV=dev, P=p)
 
 
-def noise(B, k: int, tn: int, dev: str, salt, root, col) -> tuple:
+def noise(B, k: int, tn: int, dev: str, salt, root, col, seed_version: int = 4) -> tuple:
     """A tile's noise in the body under construction from C's words of its ``salt``, ``root`` and ``col``: (eb, fa, fb, g)
     in 16-bit words, `seed`'s Call (eb's TN lines among its fields), then `line` mapped over F's `F_ROWS` groups of
     indices K/`F_ROWS` lines a unit, and a `gram_row` Call for each of F_B's 32 columns, each reading F_B's and F_A's
     lines whole."""
-    s = B.call(seed(k, tn), salt, root, col)
+    s = B.call(seed(k, tn, seed_version), salt, root, col)
     key = s[0]
 
     def run(at: int, n: int):

@@ -15,6 +15,11 @@ its noise derived inside, which are the linear's nodes in C and write its y, and
     PearlPlusTileCoreWords_v6 / PearlPlusTileCoreWired_v3 as _v5 / _v2, with a: Array<TM, bf16[K]> widened inside
         (`Bf16ToF32`) as b is: the tile in the place of a served linear's unit, x read by wire from its writer's BF16
         row (`served_product`)
+    PearlPlusTileCoreWords_v7 / PearlPlusTileCoreWired_v4 as _v6 / _v3, the same function, the core as TN + 1 units on C's
+        words, each a proof block within the composer's limit at K = 256 (one, about 46M ANDs, is not):
+        PearlPlusTileRowBWords_v1{HEAD,K,DEV,TN}: one B row's `PearlCRowB` and admission (about 9.5M ANDs), HEAD 1 on
+        the TN rows whole, the one registered weight row a block reads, passing rows 1 .. TN − 1 on;
+        PearlPlusTileCoreRestWords_v1{as the core}: A's rows, the bound, the digest, y and ok (about 7.8M ANDs)
     cut(t)                                -> [(Definition, n)] the units C's laying makes of node t (`CUTS`)
     tiles(scheme, k, m, n, tile)          -> [Tile]          the linear's TM × TN grid, row-major: one unit of C a tile
     public(scheme, k, t, unit, salt, root) -> {port: value}  tile t's public row (`PUBLIC`), in the node's port order
@@ -184,12 +189,120 @@ PearlPlusTileCoreWiredV3 = CompositeDefinition(
         "output")
 
 
+def _row_b_sigma(S) -> SpecializedDefinition:
+    return bind(PT.PearlPlusTileRowBV2, K=S.K, DEV=S.DEV)
+
+
+def _row_words(S) -> int:
+    """The 16-bit words of one B row's unit output: its codes', factors' and statistics' bits, then its ok word."""
+    return (_row_b_sigma(S).signature()[1].leaves - 1) // 16 + 1
+
+
+def _row_b_words_sig(S):
+    bt = dict(_row_b_sigma(S).signature()[0])
+    x = Array(S.TN, Array(S.K, BF16)) if S.HEAD else Array(S.K, BF16)
+    params = (("b", x),) + tuple((p, PT._word_type(bt[p])) for p in ("eb", "fb", "fa", "g"))
+    return params, Tuple(Array(_row_words(S), PT.W16), *[Array(S.K, BF16)] * ((S.TN - 1) if S.HEAD else 0))
+
+
+def _row_b_words_body(B, S, b, eb, fb, fa, g):
+    sigma, k = _row_b_sigma(S), S.K
+    bt = dict(sigma.signature()[0])
+    rest = B.batch(bind(WordBits, W=16), Coll(Array((S.TN - 1) * k, Value(16)), b.refs.slice(k, S.TN * k)),
+                   axes=(0,)) if S.HEAD and S.TN > 1 else None
+    x = B.batch(Bf16ToF32, Coll(Array(k, BF16), b.refs.slice(0, k)), axes=(0,))
+    xb = Coll(bt["b"], B.batch(bind(WordBits, W=32), Coll(Array(k, Value(32)), x.refs), axes=(0,)).refs)
+    out = B.call(sigma, xb, *(PT._unpack(B, v, bt[p]) for p, v in (("eb", eb), ("fb", fb), ("fa", fa), ("g", g))))
+    n = sigma.signature()[1].leaves - 1
+    words = PT._pack(B, Coll(Array(n, Value(1)), out.refs.slice(0, n)), Array(n // 16, PT.W16))
+    held = [concat([words.refs, U.ok_word(U._Emit(B), out[6]).refs])]
+    for j in range(S.TN - 1 if rest is not None else 0):
+        held.append(PT._pack(B, Coll(Array(16 * k, Value(1)), rest.refs.slice(16 * k * j, 16 * k * (j + 1))),
+                             Array(k, BF16)).refs)
+    return Coll(_row_b_words_sig(S)[1], concat(held))
+
+
+def _refuse_row_b_words(b: dict) -> str | None:
+    head, tn = b.get("HEAD", 0), b.get("TN", 1)
+    if head not in (0, 1) or not (isinstance(tn, int) and tn >= 1):
+        return f"HEAD is 0 or 1 and TN a count of B rows: HEAD = {head!r}, TN = {tn!r}"
+    return PT._refuse_k(b)
+
+
+PearlPlusTileRowBWords = CompositeDefinition(
+    "PearlPlusTileRowBWords", 1, ("HEAD", "K", "DEV", "TN"), _row_b_words_sig, _row_b_words_body,
+    refuse=_refuse_row_b_words, conformance=PT.PearlPlusTileCoreV3.conformance,
+    doc="One of a -h3 tile's B rows on C's words, a unit of `PearlPlusTileCoreWired_v4`: its BF16 words widened "
+        "(`Bf16ToF32`), its line and the noise in 16-bit words their bits, `PearlPlusTileRowB_v2` (σ of the row's "
+        "`PearlCRowB` and `PearlPlusAdmit`), and its codes', factors' and statistics' bits back in 16-bit words, then its "
+        "admission's ok word. HEAD 1: ``b`` is the tile's TN rows whole, the one registered row of the weights a block "
+        "reads; it forms row 0 and writes rows 1 to TN − 1 back in BF16 words, one field each, for the other B row units")
+
+
+def _rest_words_sig(S):
+    rest = bind(PT.PearlPlusTileCoreRestV2, **{s: getattr(S, s) for s in _STATICS})
+    bt, wp = dict(rest.signature()[0]), dict(_word_params(S, _WIDENED[3]))
+    params = tuple((p, wp[p]) for p in _CORE_OWN if p != "b") + tuple((p, PT._word_type(bt[p])) for p in ("fa", "fb"))
+    return params + (("rb", Array(S.TN, Array(_row_words(S), PT.W16))),), _word_ret(S)
+
+
+def _rest_words_body(B, S, a, cert, salt, root, unit, rows, fa, fb, rb):
+    rest = bind(PT.PearlPlusTileCoreRestV2, **{s: getattr(S, s) for s in _STATICS})
+    bt, wt = dict(rest.signature()[0]), dict(_rest_words_sig(S)[0])
+    bits = {}
+    for p, x in zip(PT._REST_OWN, (a, cert, salt, root, unit, rows, fa, fb)):
+        t = wt[p]
+        if p in _WIDENED[3]:
+            x = B.batch(Bf16ToF32, Coll(Array(t.leaves, BF16), x.refs), axes=(0,))
+        w = 32 if p in _WIDENED[3] else t.leaf_widths()[0]
+        bits[p] = Coll(bt[p], B.batch(bind(WordBits, W=w), Coll(Array(t.leaves, Value(w)), x.refs), axes=(0,)).refs)
+    nw = _row_words(S)
+    per, n = 16 * nw, 16 * (nw - 1)
+    rbits = B.batch(bind(WordBits, W=16), Coll(Array(S.TN * nw, Value(16)), rb.refs), axes=(0,))
+    rows_b = Coll(bt["rb"], concat([rbits.refs.slice(j * per, j * per + n) for j in range(S.TN)]))
+    ok_b = Coll(bt["ok_b"], concat([rbits.refs.slice(j * per + n, j * per + n + 1) for j in range(S.TN)]))
+    out = B.call(rest, *(bits[p] for p in PT._REST_OWN), rows_b, ok_b)
+    m = S.TR * S.TN
+    ys = Coll(Array(m, Array(16, Value(1))), out[1].refs)
+    y = concat([B.call(bind(BitsWord, W=16), ys[i]).refs for i in range(m)])
+    return tuple_of(out[0], Coll(Array(S.TR, Array(S.TN, BF16)), y), U.ok_word(U._Emit(B), out[2]))
+
+
+PearlPlusTileCoreRestWords = CompositeDefinition(
+    "PearlPlusTileCoreRestWords", 1, _STATICS, _rest_words_sig, _rest_words_body, refuse=PT.PearlPlusTileCoreV3.refuse,
+    conformance=PT.PearlPlusTileCoreV3.conformance,
+    doc="`PearlPlusTileCoreWired_v3` past its B rows, a unit of `PearlPlusTileCoreWired_v4`: its own ports and F as "
+        "`_v3` takes them, and each B row unit's output words (``rb``, `PearlPlusTileRowBWords_v1`'s first field) their "
+        "bits, `PearlPlusTileCoreRest_v2` (σ of the core past its B rows), y's bits back in BF16 words and ok one word")
+
+
+def _wired4_body(B, S, a, b, cert, salt, root, unit, rows, eb, fa, fb, g):
+    def row_b(head: int) -> SpecializedDefinition:
+        return bind(PearlPlusTileRowBWords, HEAD=head, K=S.K, DEV=S.DEV, TN=S.TN)
+
+    head = B.call(row_b(1), b, eb[0], fb, fa, g)
+    rbs = [head[0]] + [B.call(row_b(0), head[j], eb[j], fb, fa, g)[0] for j in range(1, S.TN)]
+    rest = B.call(bind(PearlPlusTileCoreRestWords, **{s: getattr(S, s) for s in _STATICS}), a, cert, salt, root, unit,
+                  rows, fa, fb, Coll(Array(S.TN, Array(_row_words(S), PT.W16)), concat([r.refs for r in rbs])))
+    return tuple_of(rest[0], rest[1], rest[2])
+
+
+PearlPlusTileCoreWiredV4 = CompositeDefinition(
+    "PearlPlusTileCoreWired", 4, _STATICS,
+    lambda S: (_word_params(S, _WIDENED[3]) + _noise_params(S), _word_ret(S)),
+    _wired4_body, refuse=PT.PearlPlusTileCoreV3.refuse, conformance=PT.PearlPlusTileCoreV3.conformance,
+    doc="`PearlPlusTileCoreWired_v3`, the same function, as TN + 1 units on C's words so that each is a proof block "
+        "within the composer's limit: `PearlPlusTileRowBWords_v1`{HEAD 1} on B's TN rows whole (row 0, and rows 1 to "
+        "TN − 1 passed on), `PearlPlusTileRowBWords_v1`{HEAD 0} on each of rows 1 to TN − 1, and "
+        "`PearlPlusTileCoreRestWords_v1` on the rest of the core's ports and every B row unit's output")
+
+
 def _node_params(S, widened: tuple[str, ...] = _WIDENED[2]) -> tuple:
     return _word_params(S, widened) + (("col", U32),)
 
 
-def _on_words(B, S, a, b, cert, salt, root, unit, rows, col, wired=None):
-    eb, fa, fb, g = PT.noise(B, S.K, S.TN, S.DEV, salt, root, col)
+def _on_words(B, S, a, b, cert, salt, root, unit, rows, col, wired=None, seed_version: int = 4):
+    eb, fa, fb, g = PT.noise(B, S.K, S.TN, S.DEV, salt, root, col, seed_version)
     return B.call(wired or _wired(S), a, b, cert, salt, root, unit, rows, eb, fa, fb, g)
 
 
@@ -207,6 +320,13 @@ PearlPlusTileCoreWordsV6 = CompositeDefinition(
     doc="`PearlPlusTileCoreWords_v5` with a's rows in BF16 words, its core `PearlPlusTileCoreWired_v3`: the tile in the "
         "place of a served linear's unit, x read by wire from its writer's BF16 row and B a registered read of the "
         "weight's BF16 rows")
+PearlPlusTileCoreWordsV7 = CompositeDefinition(
+    "PearlPlusTileCoreWords", 7, _STATICS, lambda S: (_node_params(S, _WIDENED[3]), _word_ret(S)),
+    lambda B, S, *xs: _on_words(B, S, *xs, wired=bind(PearlPlusTileCoreWiredV4, **{s: getattr(S, s) for s in _STATICS}),
+                                seed_version=5),
+    refuse=PT.PearlPlusTileCoreV3.refuse, conformance=PT.PearlPlusTileCoreV3.conformance,
+    doc="`PearlPlusTileCoreWords_v6`, its core `PearlPlusTileCoreWired_v4` (the same function, its core in TN + 1 units) "
+        "and its seed `PearlPlusTileSeed_v5` (E_B's lines a call each, which the door's lowering takes)")
 
 
 def cut(t: SpecializedDefinition) -> list[tuple[SpecializedDefinition, int]]:
@@ -215,13 +335,18 @@ def cut(t: SpecializedDefinition) -> list[tuple[SpecializedDefinition, int]]:
     Calls and each map's members."""
     s = t.bindings
     g = s["K"] // PT.F_ROWS
+    noise = [(PT.seed(s["K"], s["TN"], 5 if t.defn is PearlPlusTileCoreWordsV7 else 4), 1), (PT.line("fa", g), PT.F_ROWS), (PT.line("fb", g), PT.F_ROWS),
+             *((PT.gram_row(s["K"], s["DEV"], p), 1) for p in range(PT.R))]
+    if t.defn is PearlPlusTileCoreWordsV7:
+        rows = [(bind(PearlPlusTileRowBWords, HEAD=h, K=s["K"], DEV=s["DEV"], TN=s["TN"]), n)
+                for h, n in ((1, 1), (0, s["TN"] - 1)) if n]
+        return noise + rows + [(bind(PearlPlusTileCoreRestWords, **s), 1)]
     wired = PearlPlusTileCoreWiredV3 if t.defn is PearlPlusTileCoreWordsV6 else PearlPlusTileCoreWired
-    return [(PT.seed(s["K"], s["TN"]), 1), (PT.line("fa", g), PT.F_ROWS), (PT.line("fb", g), PT.F_ROWS),
-            *((PT.gram_row(s["K"], s["DEV"], p), 1) for p in range(PT.R)), (bind(wired, **s), 1)]
+    return noise + [(bind(wired, **s), 1)]
 
 
 #: staged as its cut (`circuit_check.checks.cut_of`)
-CUTS = {"PearlPlusTileCoreWords_v5": cut, "PearlPlusTileCoreWords_v6": cut}
+CUTS = {"PearlPlusTileCoreWords_v5": cut, "PearlPlusTileCoreWords_v6": cut, "PearlPlusTileCoreWords_v7": cut}
 
 
 def credited_product(scheme: str, k: int, tm: int, tn: int, n: int, real: int | None = None) -> SpecializedDefinition:

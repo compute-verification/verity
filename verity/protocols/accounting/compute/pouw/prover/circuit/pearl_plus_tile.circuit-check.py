@@ -10,7 +10,7 @@ def _pouw_roots() -> list[Any]:
     (two promotion windows, `inert_bound._promoted`) on the H100's record, forming v1 under -h3: a row's admission
     (`PearlPlusAdmit_v1`) and A's salt-dead counts (`PearlPlusSaltDead_v1`) on words and on bits, the core
     (`PearlPlusTileCore_v3`, the σ of its unregistered word body) and the tile's noise units (`PearlPlusTileSeed_v4`, with eb's
-    lines, each `PearlPlusTileLine_v4` (F's K/8) and `PearlPlusGramRow_v5`, on 16-bit words over the σ of
+    lines, and `_v5` with eb's lines a call each at four columns, each `PearlPlusTileLine_v4` (F's K/8) and `PearlPlusGramRow_v5`, on 16-bit words over the σ of
     theirs), there and at K = 32 for two columns of the unpromoted sm_120 chain (G = 0); and the core of a 2 × 1 tile
     whose second row is filler (TR = 1), the smallest with both halves of the real-row rule.  The core is over circuit-check's
     whole-lowering budget, so it keeps a circuit digest, not an AND count; its σ Calls are the pinned units
@@ -27,7 +27,7 @@ def _pouw_roots() -> list[Any]:
     return [bind(T.PearlPlusAdmit, K=k), bind(T.PearlPlusAdmitV2, K=k),
             bind(T.PearlPlusSaltDead, K=k, DEV=dev), bind(T.PearlPlusSaltDeadV2, K=k, DEV=dev),
             T.core(scheme, k, 1, 1, 1),
-            T.seed(k, 1), T.seed(32, 2), T.line("fa", k // T.F_ROWS),
+            T.seed(k, 1), T.seed(32, 2), T.seed(k, 4, 5), T.line("fa", k // T.F_ROWS),
             T.line("fb", k // T.F_ROWS), T.line("fa", 32 // T.F_ROWS),
             T.gram_row(k, dev, 0), T.gram_row(k, dev, T.R - 1), T.gram_row(32, "sm120-unpromoted", 1),
             T.core(filler, k, 2, 1, 1, tr=1)]

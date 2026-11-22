@@ -161,10 +161,11 @@ def cert_of(tile, a, b, salt: bytes, root: bytes) -> list:
              for j in range(TN)]]
 
 
-def lay_tile(program, tile_ids: set[str]):
+def lay_tile(program, tile_ids: set[str], force: set[str] = frozenset()):
     """``program`` with the tile's units (``tile_ids``: the tile and its cut's units) opened (`laying._laid`) until each
-    fits one block (`credited_in_c.fits`); every other unit as it is. Refused by name where another unit is past the
-    limit (``UNFIT``)."""
+    fits one block (`credited_in_c.fits`), and every unit of ``force`` opened whatever `fits` says (its estimate takes
+    a block Lean's compose refuses); every other unit as it is. Refused by name where another unit is past the limit
+    (``UNFIT``)."""
     from verity.circuits import laying as LY
     from verity.circuits.codec import descriptor_id
     while True:
@@ -172,6 +173,7 @@ def lay_tile(program, tile_ids: set[str]):
         over = sorted({m.units[u][0] for u in range(len(m.units)) if not fits(*m.block(u, u + 1))})
         nodes = program.root.body.nodes
         mine = {k for k in over if descriptor_id(nodes[k].fn) in tile_ids}
+        mine |= {k for k, nd in enumerate(nodes) if descriptor_id(nd.fn) in force}
         if other := sorted({descriptor_id(nodes[k].fn) for k in over} - tile_ids):
             raise SystemExit(f"UNFIT: served units past the composer's limit, not the tile's: {other[:6]}")
         if not mine:
@@ -283,6 +285,10 @@ def stage(a) -> int:
         t = now
 
     tile_fn = PC.served_product(SCHEME, K, 1, TN, N)
+    force: set[str] = set()
+    if a.core == "v4":
+        tile_fn = PC.bind(PC.PearlPlusTileCoreWordsV7, **tile_fn.bindings)
+        force = {descriptor_id(PC.bind(PC.PearlPlusTileCoreWiredV4, **tile_fn.bindings))}
     tid = descriptor_id(tile_fn)
     tmp = Path(a.out) / "served"
     tmp.mkdir(parents=True, exist_ok=True)
@@ -295,12 +301,12 @@ def stage(a) -> int:
     phase("served", units=sum(by.values()))
 
     cut = [descriptor_id(u) for u, n_ in PC.cut(tile_fn) for _ in range(n_)]
-    program, m_ = lay_tile(program0, {tid, *cut})
+    program, m_ = lay_tile(program0, {tid, *cut, *force}, force)
     query = LY.query(program)
     m_ = LY.Measure(program, query)
     population = len(m_.units)
     laid = [descriptor_id(nd.fn) for nd in program.root.body.nodes if input_id(nd.fn.id) is None]
-    core = descriptor_id(next(u for u, _n in PC.cut(tile_fn) if u.name.startswith("PearlPlusTileCoreWired")))
+    core = next((descriptor_id(u) for u, _n in PC.cut(tile_fn) if u.name.startswith("PearlPlusTileCoreWired")), None)
     blocks: dict = {}
     for u in range(population):
         ins, outs, ands = m_.block(u, u + 1)
@@ -596,6 +602,8 @@ def main() -> int:
     st.add_argument("--until", choices=("laid", "lower"), default=None)
     st.add_argument("--tn", type=int, default=TN, help="the tile's columns, the grain's GEMM unit's (K · TN words)")
     st.add_argument("--k-max", type=int, default=K_MAX)
+    st.add_argument("--core", choices=("v3", "v4"), default="v3",
+                    help="v4: the tile `PearlPlusTileCoreWords_v7`, its core `PearlPlusTileCoreWired_v4` opened into TN + 1 units")
     dr = sub.add_parser("door")
     dr.add_argument("--lower", required=True)
     dr.add_argument("--lean", required=True)

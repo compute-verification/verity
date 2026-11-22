@@ -8,7 +8,7 @@
 # `credited_served.py door` then puts both through `proofs.verify`.
 # research run --on auto --cwd source --wait --mem-gb 64 --cpus 16 --timeout 180m -- bash benchmarks/pouw/credited_served.sh
 set -uxo pipefail
-STEER=${STEER:-PearlPlusTileCoreWired} TN=${TN:-4}
+STEER=${STEER:-PearlPlusTileCoreWired} TN=${TN:-4} CORE=${CORE:-v3}
 export TU_PINNED=slot RAYON_NUM_THREADS=$(nproc)
 export FC_COINS=tree
 REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:-/tmp/credited-served}/out}; mkdir -p $O
@@ -67,7 +67,7 @@ challenger_built || exit 1
 $UV sync -q --all-packages --extra torch-cpu || exit 4
 export PATH=$W/py/bin:$PATH
 wait $LP; [ -x $LEAN_BIN ] && [ -x $UNIT_BIN ] && [ -x $FW_BIN ] && [ -x $LOW_BIN ] || { tail -20 $O/build-lean.log; exit 1; }
-( unset PYTHONPATH; timed stage $UV run -q python benchmarks/pouw/credited_served.py stage --steer $STEER --tn $TN --lower $LOW_BIN --out $S ) > $O/stage.txt 2>&1
+( unset PYTHONPATH; timed stage $UV run -q python benchmarks/pouw/credited_served.py stage --steer "$STEER" --tn $TN --core $CORE --lower $LOW_BIN --out $S ) > $O/stage.txt 2>&1
 src=$?; cat $O/time-stage.txt 2>/dev/null; grep -h '^SERVED\|^LAID\|^DRAW\|^PHASE\|^EVALUATE\|^LOWER\|^WRITER\|^READS\|^FLIPPED\|^STAGE' $O/stage.txt | cut -c1-3000
 cp $S/stage.json $O/ 2>/dev/null
 [ $src = 0 ] || { tail -c 4000 $O/stage.txt; exit 5; }

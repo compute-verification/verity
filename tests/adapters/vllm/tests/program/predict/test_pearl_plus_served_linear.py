@@ -220,6 +220,26 @@ def test_the_circuit_template_on_bits_is_the_reference_on_the_served_values(line
     assert g[512:512 + TN] == y[0] and g[512 + TN] == ok == 1
 
 
+@pytest.mark.slow
+def test_the_core_in_tn_plus_one_units_is_the_same_function_on_bits(linear):
+    """Slow (four evaluations of the tile on bits): `PearlPlusTileCoreWords_v7`, whose core `PearlPlusTileCoreWired_v4`
+    is TN + 1 units each within the composer's limit, writes `_v6`'s output bit for bit on the served values, and on them
+    with a weight word's exponent bit flipped (where the tile's ok is 0); the only test that the finer laying of the core
+    computes the core's function, not just its parts."""
+    L = linear
+    v7 = PC.bind(PC.PearlPlusTileCoreWordsV7, **L["v6"].bindings)
+    assert v7.signature() == L["v6"].signature()
+    pub = PC.public(SCHEME, K, L["tile"], UNIT, L["salt"], L["root"])
+    flipped = [list(r) for r in L["w16"]]
+    flipped[0][5] ^= 1 << 7
+    for w in (L["w16"], flipped):
+        words = [[L["x"]], w, L["cert"], *(pub[p] for p in PC.PUBLIC)]
+        got = [evaluate_batch(t, *(np.asarray([_flat(x)], dtype=np.int64) for x in words)).reshape(-1).tolist()
+               for t in (L["v6"], v7)]
+        assert got[0] == got[1]
+    assert got[0][512 + TN] == 0
+
+
 def _flat(x) -> list[int]:
     if isinstance(x, (bytes, bytearray)):
         return list(x)
