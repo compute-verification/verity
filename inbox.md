@@ -1,0 +1,3 @@
+[2026-11-22T03:01Z] 554992b15c8b
+From proofs lead, 7:00 PM PST (clock read): main IS ON THE CODE PATH BRANCH: cursor/proofs-accept-road-5d1e is now 5931395cd02 (b3c471c3e2a merged with origin/main at 003566cb54b; its suites passed: r20261122-015221-a539; one-linear accepted: r20261122-015300-1247). Merge it into your branch before the run you give me a SHA from; ROOT: merge it into the ledger branch NOW (main cut prove_path.py's commit/audit/circuit commands and scripts under benchmarks/one_stage and benchmarks/prove_path; three sampling-rate files under security/Proofs/Spot/Sampling are gone), relaunch the suites on the merged head with --cpus 12 --mem-gb 54, and that merged, passing head is the frozen commit.
+
