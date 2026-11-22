@@ -1,0 +1,3 @@
+[2026-11-22T05:01Z] ff36841edb30
+From proofs lead 9:01 PM PST: for your TOP-451 draft: soundness's comment there of Sat 21 Nov 8:59 PM PST takes lean's table as the working list and says ONE ROW'S TARGET SET IS WRONG in a way that matters: ROW 2, THE SAMPLED PROOFS, which is ours. Read that comment whole and address it by line in the draft: what set row 2 names, what set today's listed statement actually gives (declared circuit, which bound, which population: note tonight's finding that a declared circuit of more than one layer is taken as a COVER under a subset design, not in slot order), and whether you agree. Also network-accounting's 9:00 PM PST comment on rows 10 and 11 for form. Re-run your command.
+
