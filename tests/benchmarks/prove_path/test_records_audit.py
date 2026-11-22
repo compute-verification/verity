@@ -1967,11 +1967,11 @@ def test_the_phase_own_value_is_refused_by_name_without_exactly_one_scan_state_p
     assert RA.PHASE_OWN == {"verity/certifier/scan-state/v1"}
 
 
-def test_the_audit_expects_each_marked_tables_anchors_registered_at_the_dockets_words():
+def test_the_audit_expects_each_marked_tables_anchors_registered_at_the_words_of_cs_node():
     """A table's root and domain anchors C's marks name (`supplied.anchors`) join the values the verifier expects
-    registered, at the words of the docket's entry of each, in ``hm96-sha512/row/v2`` rows, beside what the tie
-    hands; a docket registering an anchor other than once is refused by name, and a program with no anchor leaves the
-    tie as it is."""
+    registered, at the words C's node fixes (512 bits, one row of 32), in ``hm96-sha512/row/v2`` rows, beside what the
+    tie hands; a docket registering an anchor other than once is refused by name, and a program with no anchor leaves
+    the tie as it is."""
     mark = {"args": {"value": "t"}, "layout": "digest", "bits": 512}
     program = SimpleNamespace(supplied={"t/root": {**mark, "supplied": "registered.root/v1"},
                                         "t/domain": {**mark, "supplied": "registered.domain/v1"}, "x": None})
@@ -1983,3 +1983,18 @@ def test_the_audit_expects_each_marked_tables_anchors_registered_at_the_dockets_
     with pytest.raises(ValueError, match=r"anchors \['t/domain'\] other than once"):
         RA.anchored(tied, {"registered": docket["registered"][:1]}, program, None)
     assert RA.anchored(tied, docket, SimpleNamespace(supplied={}), None) == tied
+
+
+def test_an_anchor_the_docket_registers_at_another_width_than_cs_node_is_refused_naming_both():
+    """The anchor's width is C's node's (`anchor_words`, `docket.anchor_width`'s), never the docket's entry: an entry at
+    16 words (two rows of the same 512 bits) is refused naming the anchor and both widths, and a mark that fixes no
+    width (not a digest, or bits no multiple of 16) is refused by name."""
+    mark = {"args": {"value": "t"}, "layout": "digest", "bits": 512}
+    program = SimpleNamespace(supplied={"t/root": {**mark, "supplied": "registered.root/v1"},
+                                        "t/domain": {**mark, "supplied": "registered.domain/v1"}})
+    docket = {"registered": [{"value": "t/root", "words": 16}, {"value": "t/domain", "words": 32}]}
+    with pytest.raises(ValueError, match=r"another width than C's node fixes: 't/root' at 16 words, C's node at 32$"):
+        RA.anchored({}, docket, program, None)
+    for other in ({**mark, "layout": "le"}, {**mark, "bits": 520}):
+        with pytest.raises(ValueError, match=r"the table anchor 't/root' is marked in layout"):
+            RA.anchor_words("t/root", other)

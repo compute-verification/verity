@@ -659,16 +659,31 @@ def tie_of(circuit: Mapping[str, Any], w: Mapping[str, Any] | None, prefix: str 
              "outputs": outputs, "schemas": {**fresh["schemas"], **{v: IF.value_format(reg, v)[0] for v in values}}}, pins)
 
 
+def anchor_words(name: str, mark: Mapping[str, Any]) -> int:
+    """The words C's node fixes for the anchor ``name``: one row of its mark's bits / 16, as `docket.anchor_width` holds
+    the record's entry to (`R7-anchor-width`). Refused (ValueError) for a mark that fixes none: not in the ``digest``
+    layout, or bits no multiple of 16."""
+    if mark.get("layout") != "digest" or type(mark.get("bits")) is not int or mark["bits"] % 16:
+        raise ValueError(f"the table anchor {name!r} is marked in layout {mark.get('layout')!r} at {mark.get('bits')!r} "
+                         "bits: C's node fixes its width only for a digest of a multiple of 16 bits")
+    return mark["bits"] // 16
+
+
 def anchored(tied: Mapping[str, Any], docket: Mapping[str, Any], program: Any, reg: Any) -> dict[str, Any]:
     """``tied`` with each table's root and domain anchor C's marks name (`supplied.anchors`) among the values the
-    verifier expects registered (``registered``, at the words of the docket's entry of it, and ``schemas``), which R7
-    recomputes from the table's pin. Refused (ValueError) for an anchor the docket registers other than once."""
+    verifier expects registered (``registered``, at the words C's node fixes, `anchor_words`, and ``schemas``), which R7
+    recomputes from the table's pin. Refused (ValueError) for an anchor the docket registers other than once or at
+    other words than C's, naming the anchor and both widths."""
     if not (anchors := SU.anchors(program)):
         return dict(tied)
     got = {v: [e for e in docket.get("registered") or () if e.get("value") == v] for v in anchors}
     if bad := sorted(v for v, es in got.items() if len(es) != 1):
         raise ValueError(f"the docket registers the table anchors {bad} other than once")
-    return {**tied, "registered": {**tied.get("registered", {}), **{v: int(es[0]["words"]) for v, es in got.items()}},
+    words = {v: anchor_words(v, program.supplied[v]) for v in anchors}
+    if off := [f"{v!r} at {got[v][0].get('words')!r} words, C's node at {w}" for v, w in words.items()
+               if type(got[v][0].get("words")) is not int or got[v][0]["words"] != w]:
+        raise ValueError(f"the docket registers table anchors at another width than C's node fixes: {'; '.join(off)}")
+    return {**tied, "registered": {**tied.get("registered", {}), **words},
             "schemas": {**tied.get("schemas", {}), **{v: IF.value_format(reg, v)[0] for v in anchors}}}
 
 
