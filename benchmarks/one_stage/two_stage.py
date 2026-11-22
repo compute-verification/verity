@@ -672,8 +672,8 @@ class Design:
     reads; and its parameters round 1's record commits as ports (``inputs``, `interior_rows.inputs`: the port that
     reads one and the row of round 1's port each unit reads), which are none of ``links``; and the verdicts of its reads
     of registered tables (``verdicts``, `verdicts`), each at a value the verifier fills with 1, which the interior
-    registers beside ``links``. The interior never registers a return or such a parameter: round 2 reads each only at
-    a port round 1's record commits."""
+    registers beside ``links``. The interior never registers a return or such a parameter, and commits no tree for
+    either: round 2 reads each only at a port round 1's record commits."""
 
     key: str
     members: tuple[CS.Member, ...]
@@ -688,7 +688,8 @@ class Design:
     def window(self, boundary: str, sample: Sequence[int]) -> CS.Binding:
         """The interior window of the replay sample ``sample`` after the boundary docket ``boundary``
         (`interior_rows.interior_window`): public items alone."""
-        return IR.interior_window(self.members, self.cells, boundary, sample, self.wires, self.links, self.rows, self.inputs)
+        return IR.interior_window(self.members, self.cells, boundary, sample, self.wires, self.links, self.rows, self.inputs,
+                                  self.returns)
 
 
 def design(layout: BR.Layout, record: Mapping[str, Any] | None = None, *, unlinked: bool = False,

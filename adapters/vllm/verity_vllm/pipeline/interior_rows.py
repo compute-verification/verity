@@ -285,7 +285,8 @@ def _held(ms: Sequence[CS.Member], cells: Sequence[int], offs: Sequence[int], q:
 
 def interior_window(members: Members, n_rho: Cells, boundary: str, sample: Sequence[int],
                     wires: Sequence[Any] = (), links: Sequence[Link] = (),
-                    rows: Sequence[Any] = (), inputs: Sequence[Input] = ()) -> CS.Binding:
+                    rows: Sequence[Any] = (), inputs: Sequence[Input] = (),
+                    returns: Sequence[Return] = ()) -> CS.Binding:
     """The window of the replay sample's interior, template-major: template t's Q·n_t units from off_t = Q·Σ_{t'<t} n_t',
     laid out as ``members[t]`` (its ports and their words), each a shared-row member of one table row a unit a port,
     under `interior_run`: what the prover commits and the challenger derives the ports of. ``members``: one, or one a
@@ -298,7 +299,9 @@ def interior_window(members: Members, n_rho: Cells, boundary: str, sample: Seque
     ``inputs``: the block's parameters round 1's record commits (`Input`): the program takes each as round 1's port,
     bound at registration under its name and of its rows there (`population_program`'s ``reads``), each unit of the
     port's member reading its row ``Input.rows``, so the interior commits no tree for it and a session opens those rows
-    at round 1's root, at the positions C gives (`Flock.OneCircuit.pos`)."""
+    at round 1's root, at the positions C gives (`Flock.OneCircuit.pos`). ``returns``: the block's returns round 1's record
+    commits (`Return`, ``held``): the output port that writes one is named in its member's ``values`` the same way, so
+    the interior commits no tree for it and its rows are round 1's at `Return.rows`."""
     ms, cells = IL.cells(members, n_rho)
     q = len(sample)
     sizes = [q * n for n in cells]
@@ -307,7 +310,8 @@ def interior_window(members: Members, n_rho: Cells, boundary: str, sample: Seque
     at = {m.template: t for t, m in enumerate(ms)}
     taken = [(x.value, x.leaves or x.per * (max(sample) + 1), at[x.template], x.port, x.rows(sample)) for x in inputs]
     valued = [tuple(x.port for x, k, _at in IL.placed(ms, cells, q, links) if k == t)
-              + tuple(x.port for x in inputs if at[x.template] == t) for t in range(len(ms))]
+              + tuple(x.port for x in inputs if at[x.template] == t)
+              + tuple(x.port for x in returns if x.held and at[x.template] == t) for t in range(len(ms))]
     program, query = CS.population_program([(SRW.template(m.template).fn, n) for m, n in zip(ms, sizes, strict=True)],
                                            values=link_values(links, q), reads=taken)
     def table(h: dict[str, tuple[WI.Wired, ...]], p: str, n: int) -> int:
@@ -341,11 +345,12 @@ def run_input_ports(window: CS.Binding) -> dict[str, dict[str, Any]]:
 
 def interior_ports(members: Members, n_rho: Cells, boundary: str, sample: Sequence[int],
                    wires: Sequence[Any] = (), links: Sequence[Link] = (),
-                   rows: Sequence[Any] = (), inputs: Sequence[Input] = ()) -> dict[str, dict[str, Any]]:
+                   rows: Sequence[Any] = (), inputs: Sequence[Input] = (),
+                   returns: Sequence[Return] = ()) -> dict[str, dict[str, Any]]:
     """The challenger's copy of the interior registration's ports: `interior_window`'s, from the templates' layouts, the
     size class, the boundary registration's digest, its own replay sample, the wires and rows it derives from the replay
-    block, its links and the parameters round 1's record commits."""
-    w = interior_window(members, n_rho, boundary, sample, wires, links, rows, inputs)
+    block, its links and the parameters and returns round 1's record commits."""
+    w = interior_window(members, n_rho, boundary, sample, wires, links, rows, inputs, returns)
     return CS.expected_ports(w) | run_input_ports(w)
 
 
@@ -477,7 +482,8 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
     readers = [(k, vh) for k, m in enumerate(members) if k not in tied and (vh := IL.reader(m)) is not None]
     q = len(sample)
     inputs = [(replace(x, leaves=x.leaves or v.leaves), v) for x, v in inputs]
-    window = interior_window(members, n_rho, boundary, sample, wires, links, rows, [x for x, _v in inputs])
+    window = interior_window(members, n_rho, boundary, sample, wires, links, rows, [x for x, _v in inputs],
+                             [x for x, _v in returns])
     ports, cells = CS.expected_ports(window), IL.cells(window.members, n_rho)[1]
     placed = IL.placed(window.members, cells, q, links)
     if (bool(readers) or bool(tables)) and len(tables) != len(sample) * bool(readers):
@@ -546,9 +552,10 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
             data[k]["rows"][x.port] = CS.ValueRows(v, at)
         linked = {window.members[k].port(x.port) for x, k, _at in placed}
         _as_served(data, cells, back, "outs")
+        for x, v, k, at in back:
+            data[k]["outs"][x.port] = CS.ValueRows(_Round1(v), tuple(at))
         fresh = {m.port(p): os.urandom(ports[t]["leaves"] * CS.SALT_BYTES) for m in window.members for p, _w in m.all_rows
                  if window.wire(m, p) is None and (t := window.tree(m, p)) in ports and m.port(p) not in linked}
-        fresh |= {window.members[k].port(x.port): v.salts_at(at) for x, v, k, at in back}
         for r in run_inputs(window):
             k = next(j for j, m in enumerate(window.members) if m.template == r.reader)
             x = data[k]["rows"][r.port]
@@ -758,7 +765,7 @@ def write(it: Interior, directory: str | Path) -> dict[str, Any]:
             if p in given:
                 v, at = given[p].value, [int(x) for x in given[p].positions]
                 entry[p] = {"value": v.value, "positions": at, "paths": [v.path(x).hex() for x in at]}
-            elif (m.template, p) in back and p not in dict(m.outs):
+            elif (m.template, p) in back:
                 x, v = back[m.template, p]
                 entry[p] = v.header(x.rows(it.record["window"]["replay_sample"]))
             else:

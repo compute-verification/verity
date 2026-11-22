@@ -490,3 +490,42 @@ def test_the_bytes_of_llama_8bs_b32_decode_step_n_copies_and_one_table():
     assert after["public"] - after["x_public"] == before["public"] - before["x_public"] + 12 * units
     assert after["private"] - after["x_private"] == before["private"] - before["x_private"]
     print(json.dumps({"units": units, "chunks": chunks, "row_tables": len(tables), "before": before, "after": after}, indent=1))
+
+
+class _Round1Port:
+    """A registered value of 16-bit leaves an earlier period committed: its rows, salts and ``b || c`` by row."""
+
+    word_bits = 16
+
+    def __init__(self, n: int, words: int, schema: str) -> None:
+        self.value, self.words, self.schema = "round1/o0", words, schema
+        self.rows = np.arange(n * words, dtype=np.uint16).reshape(n, words)
+        self.salts = [bytes([i % 256]) * CS.SALT_BYTES for i in range(n)]
+        self.bcs = [bytes([(i + 7) % 256]) * CS.BC_BYTES for i in range(n)]
+
+
+def _by_reference(values: bool) -> tuple[CS.Binding, list[dict], _Round1Port]:
+    w, _s, _ms = window(row_tables=False)
+    ms = tuple(replace(m, values=("o0",)) if values else m for m in w.members)
+    w = CS.Binding(w.program, w.query, w.law, RUN, ms)
+    n = sum(m.n for m in ms)
+    v = _Round1Port(n, dict(ms[0].outs)["o0"], ms[0].schema("o0"))
+    data = [{"rows": {p: np.zeros((dict(m.tables)[p], words), dtype=np.uint16) for p, words in m.rows},
+             "outs": {"o0": CS.ValueRows(v, tuple(range(m.base, m.base + m.n)))},
+             "refs": np.zeros((m.n, len(m.rows)), dtype=np.int64)} for m in ms]
+    return w, data, v
+
+
+def test_an_output_a_link_names_is_committed_by_reference_with_no_tree_of_its_own():
+    w, data, v = _by_reference(values=True)
+    c = CS.commit(w, data)
+    assert not [t for t in c.roots if t.endswith("o0")] and not [t for t in w.trees if t.endswith("o0")]
+    for m in w.members:
+        assert c.bc[m.port("o0")] == b"".join(v.bcs[i] for i in range(m.base, m.base + m.n))
+        assert np.array_equal(c.rows[m.port("o0")], v.rows[m.base:m.base + m.n])
+
+
+def test_an_output_given_by_reference_that_no_link_names_is_refused():
+    w, data, _v = _by_reference(values=False)
+    with pytest.raises(ValueError, match="named in Member.values and given as a ValueRows"):
+        CS.commit(w, data)

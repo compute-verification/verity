@@ -119,7 +119,7 @@ INDEX_RULE = "hm96-sha512/v1 leaf of SHA-512(\"verity/window-index/v1\\0\" || in
 
 @dataclass(frozen=True)
 class ValueRows:
-    """`commit`'s rows of an input port given by reference: rows ``positions`` of ``value``, a registered value of 16- or
+    """`commit`'s rows of a port given by reference (an input, or an output a link names, `Member.values`): rows ``positions`` of ``value``, a registered value of 16- or
     32-bit leaves (``registered_value.Registered``: ``words``, ``word_bits``, ``rows``, ``salts`` and ``bcs`` by
     row), committed under the value's salts, so each row's ``b || c`` is the value's. ``salts``: those rows' salts
     concatenated, when the caller has sampled them (`value_salts`), else sampled here."""
@@ -227,7 +227,7 @@ class Member:
     link_units: tuple[int, ...] = ()             # a row-table member: per link, how many of its units (consecutive, in order) read it
     links: tuple[tuple[int, int], ...] = ()      # a row-table member: per row of its x table, the period's row table and rank it is
     wired: tuple[WI.Wired, ...] = ()             # per wired port: the leaves of its writer template's output tree its units read
-    values: tuple[str, ...] = ()                 # input ports whose rows are a registered value's, given as `ValueRows`: no tree
+    values: tuple[str, ...] = ()                 # ports whose rows are a registered value's, given as `ValueRows`: no tree
 
     def __post_init__(self) -> None:
         if self.schemas and (sorted(p for p, _ in self.schemas) != sorted(p for p, _ in self.rows + self.outs)
@@ -350,11 +350,14 @@ class Binding:
                 raise ValueError(f"{m.key}: its rows lie in trees other members' rows share (its wired ports, or outputs of a "
                                  "template of several members), each opened by its path: make it a shared-row member "
                                  "(Member.tables)")
-            if m.values and (not m.tables or not set(m.values) <= {p for p, _ in m.rows}
+            if m.values and (not m.tables or not set(m.values) <= {p for p, _ in m.all_rows}
                              or set(m.values) & {w.port for w in m.wired}):
-                raise ValueError(f"{m.key}: its value ports {m.values} are input rows of a shared-row member (Member.tables), "
+                raise ValueError(f"{m.key}: its value ports {m.values} are rows of a shared-row member (Member.tables), "
                                  "none wired: each row opens its registered value's tree by its path, with no tree of its own")
             for w in m.wired:
+                if w.out in self._value_outs.get(w.writer, ()):
+                    raise ValueError(f"{m.key}: its {w.port!r} is wired to {w.writer}'s {w.out!r}, an output its members give "
+                                     "as a registered value's rows, which no tree of this period holds")
                 if dict(m.tables).get(w.port) != len(self.leaves(m, w.port)):
                     raise ValueError(f"{m.key}: its wired {w.port!r} table is the {len(self.leaves(m, w.port))} leaves of "
                                      f"{WI.tree(w.writer, w.out)} its units read (wiring.table), not {dict(m.tables).get(w.port)}")
@@ -507,15 +510,28 @@ class Binding:
 
     @cached_property
     def trees(self) -> dict[str, tuple[str, int]]:
-        """Every tree of the period's members, its schema and leaves: one each (template, output field), and one each
-        member's input port that is neither wired nor a registered value's, in order."""
+        """Every tree of the period's members, its schema and leaves: one each (template, output field) but a registered
+        value's, and one each member's input port that is neither wired nor a registered value's, in order."""
         out: dict[str, tuple[str, int]] = {}
         for m in self.members:
             for p, _w in m.rows:
                 if self.wire(m, p) is None and p not in m.values:
                     out[m.port(p)] = (m.schema(p), dict(m.tables).get(p, m.n))
             for o, _w in m.outs:
-                out.setdefault(WI.tree(m.template, o), (m.schema(o), self.templates[m.template]))
+                if o not in m.values:
+                    out.setdefault(WI.tree(m.template, o), (m.schema(o), self.templates[m.template]))
+        return out
+
+    @cached_property
+    def _value_outs(self) -> dict[str, frozenset[str]]:
+        """Each template's outputs given as a registered value's rows, which every one of its members names in its values."""
+        out: dict[str, frozenset[str]] = {}
+        for t, ms in self.chunks.items():
+            named = [frozenset(o for o, _w in m.outs if o in m.values) for m in ms]
+            if len(set(named)) > 1:
+                raise ValueError(f"{t}: its members give the outputs {sorted(map(sorted, set(named)))} as a registered "
+                                 "value's rows, one output field's rows given in full by some and by reference by others")
+            out[t] = named[0]
         return out
 
 
@@ -575,12 +591,12 @@ class Committed:
                                   for p in ports], axis=1).tobytes()
 
     def by_value(self, k: int) -> dict[str, ValueRows]:
-        """Member ``k``'s input ports given as rows of a registered value (`ValueRows`), by port, in a shared-row member (whose
+        """Member ``k``'s ports given as rows of a registered value (`ValueRows`), by port, in a shared-row member (whose
         body lays each port's rows out whole): the ports whose rows and salts `write` can leave out of its prover body."""
         m = self.window.members[k]
         if not m.tables:
             return {}
-        return {p: s for p, _ in m.rows if isinstance(s := self.given.get(m.port(p)), ValueRows)}
+        return {p: s for p, _ in m.all_rows if isinstance(s := self.given.get(m.port(p)), ValueRows)}
 
     def table_public(self, t: int) -> bytes:
         """Row table ``t``'s public body: every row's ``b || c``, in rank order."""
@@ -882,10 +898,10 @@ def _referenced(m: Member, kind: str, p: str, words: int, n: int, src: Any) -> b
     wired = isinstance(src, str) and src == WIRED
     if kind == "rows" and p in {w.port for w in m.wired} and not wired:
         raise ValueError(f"{m.port(p)}: a wired port commits nothing, its rows its writers' output rows: give it as {WIRED}")
-    if kind == "rows" and (p in m.values) != isinstance(src, ValueRows):
+    if (p in m.values) != isinstance(src, ValueRows):
         raise ValueError(f"{m.port(p)}: a registered value's rows are leafed once, in its registration's tree: a port reading "
-                         "them is named in Member.values and given as a ValueRows, and only such a port")
-    if kind != "rows" or not (wired or isinstance(src, ValueRows)):
+                         "or writing them is named in Member.values and given as a ValueRows, and only such a port")
+    if not (wired or isinstance(src, ValueRows)):
         return False
     if wired and p not in {w.port for w in m.wired}:
         raise ValueError(f"{m.port(p)}: given as {WIRED} rows, but no wire writes it")
@@ -976,6 +992,8 @@ def commit(window: Binding, data: Iterable[dict[str, dict[str, Any]]], *,
                 _shaped(m, kind, p, words, n, a.shape)
                 rows[m.port(p)] = a
         for (p, w), (_, padded) in zip(m.outs, m.out_rows, strict=True):
+            if m.port(p) in refd:
+                continue
             row = np.zeros((m.n, padded), dtype=np.uint16)
             row[:, :w] = rows[m.port(p)]
             rows[m.port(p)] = row
@@ -1017,7 +1035,8 @@ def commit(window: Binding, data: Iterable[dict[str, dict[str, Any]]], *,
             ys[m.port(LINKED)] = b"".join(ys[window.row_tables[t].port][r * SALT_BYTES:(r + 1) * SALT_BYTES] for t, r in m.links)
     t_salt = time.perf_counter()
     given = dict(strings_of or {})
-    outs = {WI.tree(t, o): [m.port(o) for m in chunk] for t, chunk in window.chunks.items() for o, _w in chunk[0].outs}
+    outs = {WI.tree(t, o): [m.port(o) for m in chunk] for t, chunk in window.chunks.items() for o, _w in chunk[0].outs
+            if o not in window._value_outs[t]}
     for t, qs in outs.items():
         schemas[t] = schemas[qs[0]]
     for t, qs in outs.items():
@@ -1838,7 +1857,7 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
                         "units_sha512": hashlib.sha512(ub).hexdigest(),
                         **({"row_schemas": m.row_schemas} if m.schemas else {}),
                         **({"registered": dict(reads) if m.links else _pathless(reads, paths)} if reads else {}),
-                        **({"value_rows": [p for p, _ in m.rows if p in left]} if left else {}),
+                        **({"value_rows": [p for p, _ in m.all_rows if p in left]} if left else {}),
                         **({"wired_rows": [p for p, _ in m.rows if p in wired]} if wired else {}),
                         **({"shared_rows": {**dict(m.tables), **{p: m.n for p, _ in m.out_rows}}} if m.tables else {}),
                         **({"row_links": [list(x) for x in m.links]} if m.links else {}),
