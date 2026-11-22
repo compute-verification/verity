@@ -8,11 +8,10 @@ TINY's slots and the class of record's.
 """
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import re
-from dataclasses import dataclass, replace
+from dataclasses import asdict, dataclass, replace
 from typing import Any
 
 import numpy as np
@@ -957,9 +956,10 @@ def test_a_windows_scan_state_is_a_run_input_committed_whole_and_registered_by_n
     the node, and the registration registers it as a run input, never as a value a pin holds. Written as `prove_path`
     writes it, with no index salt given, its index salt is 192 fresh bytes read back from the window's
     ``index-salt.bin`` under the index leaf it registers. The record registers the embedding table and its two anchors
-    (`supplied.anchors`), and the Python verifier's R7 and R8 take it, but R8 refuses the scan's state run input where two
-    lanes read it, as only the variant with no members does. Slow (minutes) for the window's close, which no cheaper
-    path to `Window.write` skips."""
+    (`supplied.anchors`), and the Python verifier takes it whole, handed what the audit hands it (the deployment's
+    registration record, `deployment_record`, on the development path, and the partition of the records), but R8 refuses
+    the scan's state run input where two lanes read it, as only the variant with no members does. Slow (minutes) for the
+    window's close, which no cheaper path to `Window.write` skips."""
     low, _f, values, _w, slots = _window(cls=cls, lanes=lanes)
     c, words = low.circuit, SS.words(cls.scan)
     assert c.registered.values == () and c.registered.run == (SS.SCAN_STATE,)
@@ -991,13 +991,19 @@ def test_a_windows_scan_state_is_a_run_input_committed_whole_and_registered_by_n
     anchors = SU.anchors(program)
     assert anchors == (f"{TABLE}/domain", f"{TABLE}/root")
     assert {e["value"]: e for e in rec["registered"]} == {v: win.registered[v].entry() for v in (*anchors, TABLE)}
-    body = json.dumps({"program": values[TABLE].program,
-                       "values": {p: v.entry() for p, v in values.items() if p != SS.SCAN_STATE}}).encode()
+    model = _registered().phi.model
+    deployed = WW.deployment_record(WW.WeightsRegistration(
+        program=values[TABLE].program, repo=model["repo"], revision=model["revision"], grain=asdict(GRAIN),
+        values={p: v.entry() for p, v in values.items() if p != SS.SCAN_STATE}, unrooted={}).dump())
+    of_record = R.registration_parsed({"record": json.dumps(deployed).encode().hex(), "head": R.DEVELOPMENT}, None, None,
+                                      None)
+    mine, _doc = IF.of_records(tmp_path, DESIGN, IF.resolve)
     got = R.check(rec, program, win.window.query, DESIGN, CS.SCHEME,
                   {r["port"]: {"leaves": r["leaves"], "domain": r["domain"]} for r in rec["roots"]},
-                  leaf_layer=rec.get("leaf_layer"), registered={v: win.registered[v].words for v in anchors},
-                  schemas={v: CR.SCHEMA_V2 for v in anchors}, weights_of_record=(body, hashlib.sha512(body).hexdigest()))
-    assert {c for c in got.codes if c.startswith(("R7", "R8"))} == ({"R8-shared-input"} if cls.lanes > 1 else set()), got
+                  leaf_layer=rec.get("leaf_layer"), partition=mine.partition,
+                  registered={v: win.registered[v].words for v in anchors}, schemas={v: CR.SCHEMA_V2 for v in anchors},
+                  weights_of_record=of_record[:2])
+    assert set(got.codes) == ({"R8-shared-input"} if cls.lanes > 1 else set()), got
     assert cls.lanes == 1 or got.detail["R8-shared-input"]["inputs"] == [w], got
 
 
