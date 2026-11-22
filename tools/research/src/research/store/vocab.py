@@ -216,6 +216,9 @@ READY = "ready"
 #: once every member below it has one, `hold` keeps it, and every candidate holding it, off `main`; the owner's own doesn't count.
 REVIEWED = "reviewed"
 REVIEW_VERDICTS = ("land", "hold")
+#: Beside a ready mark on a pull request at one head, by its author: each landing gate the mark's preflight couldn't judge that
+#: head with, which the verified queue's loop runs on it before building it in.
+GATES_UNJUDGED = "gates_unjudged"
 #: Beside a ready mark or land verdict on `pr:<n>@<head>`, by its author: the Cursor identity token that authenticates it
 #: (`research.labelauth`), which drive.toml's `signed_verdicts` requires once on.
 LABEL_AUTH = "label_auth"
@@ -435,6 +438,10 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
        "whose own change is the same (in the verified queue's loop, or an older head's carried across the moves `main` landed "
        "since)",
        REVIEW_VERDICTS),
+    _k(GATES_UNJUDGED, GROUP_VERIFICATION, TEXT, "on pr:<n>@<head>, beside a `ready = true` by the same author (`research queue "
+       "ready`): each of drive.toml's landing gates its preflight couldn't judge that head with, and why; the verified queue's "
+       "loop runs the landing gates on that head alone before it builds it into a candidate, once, and leaves it out if they "
+       "refuse it"),
     _k(LABEL_AUTH, GROUP_VERIFICATION, TEXT, "on pr:<n>@<head>, beside a `ready = true` or `reviewed = land` by the same author: "
        "{for, token, delegation?}, a Cursor OIDC token whose nonce is the label's (`research.labelauth`); drive.toml's "
        "`signed_verdicts`, once on, counts such a label only with one"),

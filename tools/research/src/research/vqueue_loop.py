@@ -120,7 +120,9 @@ suites keyed in the base's tree as in its own (`Loop._suites_from`, `suites.py -
 only while the check of `main` passed both suite steps and the base's is judged on them under the policy of its own base
 (`vqueue_slim.lends_suites`).  It passes only once its base's check passed both suite steps (`vqueue_slim.borrowed`), so
 its pass of a suite it left out is that check's, and where its base landed on a check that didn't, it is started again on
-`main` and runs them (`Loop._unanswered`).  A failed step
+`main` and runs them (`Loop._unanswered`).  Under `verdict` too, a candidate that takes the whole check leaves suites to
+its base's whole check, never to a plain base's quick tier; where its base, started on the whole check, landed on the quick
+tier, it waits for `main`'s own check of that tip.  A failed step
 is inherited by its failing tests, those the run beside its base's check failed too.  A shard that failed a step it is
 judged on, or a suite of one, fails it while the other shards still run (an early red, `vqueue_slim.judge`), decided as a
 finished fail is: on the lowest candidate at once, on one above it once its base's check has ended (`vqueue_slim.based`),
@@ -153,19 +155,25 @@ out one that doesn't merge (`skip`, its owner told once per head and base, a con
 naming them where it merges onto `main`; beside a staged batch, also one after which that batch's members, merged again onto
 main's chain's top by its `Commit`, no longer merge, its line naming the batch, `staged`, which keeps it out of the batches
 beside that batch at that head, `vqueue.Ready.staged_conflict`;
-nobody is told of a head what it merges onto holds, `held`, or `main` fetched again does), pushes `queue/<sha12>` (or takes
+nobody is told of a head what it merges onto holds, `held`, or `main` fetched again does).  A member whose ready mark's
+preflight couldn't judge it with drive.toml's landing gates (`gates_unjudged`) is judged by them on its head alone first,
+once a head (`World.gate`, logged `gate`): one they refuse is left out, its owner told the gate's reason, and stays out at
+that head.  Build then pushes `queue/<sha12>` (or takes
 as its own one no line names that is the same build made before, as a tick cut off after its push leaves: `adopted`), logs
 it, enqueues `ready:<sha>` as graph/v2 at its priority and starts the run beside its check; with `records` (a member changes
 Lean, a lock or a spec) it starts the candidate's records run instead (`vqueue_records.start`: drive's lock run, on drive's
 machines, on its tree), logged (`regenerate`), and the candidate is staged, its check waiting; a tick that stages one builds
-its batches of PRs with no Lean change too, the first on the same base.  One after a Commit of its tick
-(`vqueue.Build.after`) is built on the candidate that Commit put on main's chain, whose check's record, as started, it reads as its base's; it is built
+its batches of PRs with no Lean change too, the first on the same base.  Under `--lean-stages` N above 1, while fewer than N
+are staged the tick's Lean batch is staged on the top staged one's tip, its records run its own (`vqueue.Snapshot.lean_stages`).
+One after a Commit of its tick (`vqueue.Build.after`) is built on the candidate that Commit put on main's chain, whose check's
+record, as started, it reads as its base's; it is built
 nowhere, and nothing is logged, when the Commit put none there.  Every check starts at one seam (`Loop._enqueue`: the
 enqueue, its line and the run beside it).
 A candidate holding a heavy PR (`World.heavy`), or every candidate and `main`'s own check while the heavy file holds `*`,
 runs its records run, and, where the check gates, the shard of its check that audits `vqueue_slim.HEAVY_PART`, on
 `--heavy-on`'s machines alone, its other shards on theirs (`Loop._heavy_on`); a records run's resend after a machine's fault
-stays on them, as a check started again does.
+stays on them, as a check started again does.  Under `--lean-stages` above 1 each such run takes one of those machines, the
+first no other candidate's heavy run in flight holds, so two staged Lean batches' heavy parts run on two machines.
 Advance pushes `main` to the candidate with a lease on its base and logs it; then what follows `main` moving
 (`Landing._on_main`) is a step of its own (`on_main`), which the next tick runs again until one is logged done.  A push that
 took but raised logs no advance done: the drop of a passed candidate as on `main` logs it then (`Loop._reached`).  Outside
@@ -216,8 +224,8 @@ never writes drive's state, its priority file, `next`, `checked` or a label, but
 
 On a node it runs as vy-vqueue (tools/research/src/research/pods/nebius/vqueue/loop.sh): one `--once` tick a pass, from ci's
 pinned tree in the loop's own clone, with its args file's flags and the node's log, state, lock, priority and freeze files, and
-`--dry-run` or `--shadow` as its mode says, neither when live.  `--batch`, `--depth` and `--lean` default to 16, 3 and 3, and
-`--fill` to `--depth`.
+`--dry-run` or `--shadow` as its mode says, neither when live.  `--batch`, `--depth`, `--lean` and `--lean-stages` default to
+16, 3, 3 and 1, and `--fill` to `--depth`.
 """
 from __future__ import annotations
 
@@ -247,8 +255,8 @@ from .landing import INFRA as INFRA_HANDLE
 from .executor import BLOCKED, Executor, QueueTransport, fold_results, task_target
 from .queue import (LEAN_SOURCES, MOVE_CHECK, MOVE_SCRIPTS, PR, SIGNED_GUARDS, WORKDIR, DriveFlags, Entry, Member, Queue,
                     QueueError, StoreLabels, _git, _out, _who, base_drivers, conflicting_files, flags_at, forces_cold,
-                    label_verifier, lands_on_mark, lean_change, listed, lowrisk, merged_tree, move_of, own_files,
-                    priority_list, queue_commit, queue_log, review_owners, rules_at, touched_by, unreviewed)
+                    gate_refusal, gates_at, label_verifier, lands_on_mark, lean_change, listed, lowrisk, merged_tree, move_of,
+                    own_files, priority_list, queue_commit, queue_log, review_owners, rules_at, touched_by, unreviewed)
 from .queue import Retired, crossed, held_below, held_waits, lacked_moves, lacks_why, merge_main, moves_between
 from .reds import CIRCUIT_KILLED, CIRCUIT_STEP, RATCHET_STEP, red_owners
 from .store import vocab
@@ -307,6 +315,8 @@ INTERVAL_S = 60
 #: the most members a candidate holds, candidates stacked at once and members of a Lean batch, each with a Lean change that
 #: compiles (a spec's or Lean source's, not a lock's alone: `World._judge`), unless pinned (`PINS`)
 BATCH, DEPTH, LEAN = 16, 3, 3
+#: the most Lean batches staged at once, each after the first on the one staged before it (`vqueue.Snapshot.lean_stages`)
+LEAN_STAGES = 1
 #: the clone's refs the loop fetches into, none of drive's
 NS = "refs/vqueue"
 MAIN = f"{NS}/main"
@@ -347,6 +357,9 @@ JOBS = 8
 DROP_JOBS = 8
 #: what `World.ready` judged of each open head on `main`, in the loop's cache, for the next tick's process (`--once`)
 JUDGED_CACHE = "judged.json"
+#: the landing gates' verdict on each head whose ready mark's preflight couldn't judge it with them, in the loop's cache, so
+#: no head is judged twice (`World.gate`)
+GATES_CACHE = "gates-judged.json"
 #: the most failures of a step off the gate a ring quotes (`Loop._off_gate`)
 OFF_SAID = 10
 #: the old heads mapped across `main`'s moves at once, each in a job the end of a tick detaches and no tick waits on
@@ -1027,11 +1040,17 @@ class World:
         self._made_at = cache / "moves-made.json" if cache is not None else None
         #: `JUDGED_CACHE` (`_take_judged`, `_keep_judged`): the text last read or written, and the code and git that judge
         self._judged_at, self._judged_text, self._judging = (cache / JUDGED_CACHE if cache is not None else None), None, ""
+        #: `GATES_CACHE` (`gate`): the landing gates' refusals of each head they judged, by `{number}@{head}`, none when they
+        #: passed it; and the heads `gate` judged since the loop last took them for its log, as (number, head, `main`, refusals)
+        self._gates_at = cache / GATES_CACHE if cache is not None else None
+        self.gated: dict[str, list[str]] = {}
+        self.gates_ran: list[tuple[int, str, str, list[str]]] = []
         if cache is not None:
             cache.mkdir(parents=True, exist_ok=True)
             q._kept_at, q._mapped_at = cache / "own-changes.json", cache / "mapped-changes.json"
             q._kept = json.loads(q._kept_at.read_text()) if q._kept_at.is_file() else {}
             q._made = json.loads(self._made_at.read_text()) if self._made_at.is_file() else {}
+            self.gated = json.loads(self._gates_at.read_text()) if self._gates_at.is_file() else {}
         self.post: Callable[[str, tuple[str, ...]], bool] = post or merge_thread_post
         #: graph2's subcommands it was found to lack (`_graph2`)
         self.absent: set[str] = set()
@@ -1165,10 +1184,12 @@ class World:
     def ready(self, main: str) -> list[Ready]:
         """The open PRs drive would land from `next` now, as `vqueue.Ready`: a move PR with a land verdict, or, while drive.toml's
         `lowrisk_lane` is on, on its mark alone once its move is certified on `main` (`_uncertified`, `_off_mark`), never under
-        the low-risk rule (`queue.lands_on_mark`).  Why each other open PR into `main` isn't one goes to `left`:
+        the low-risk rule (`queue.lands_on_mark`); one taken on its mark alone, with neither its own land verdict nor one
+        carried to its head, has `Ready.verdict` False.  Why each other open PR into `main` isn't one goes to `left`:
         the queue's word on one it doesn't admit (`Entry.why`; a withdrawn mark's author), else a hold and by whom, no land
-        verdict, the freeze, a move it lacks whose retired names its own change names (`lacked_moves`, also to `lacking`), or
-        an untaken PR whose head it holds; those others than their owners took go to `pulled`."""
+        verdict, the freeze, the landing gates' refusal of its head (`gate`), a move it lacks whose retired names its own
+        change names (`lacked_moves`, also to `lacking`), or an untaken PR whose head it holds; those others than their owners
+        took go to `pulled`."""
         q, labels = self.q, self.labels
         prs = [p for p in self.open().values() if p.base == "main"]
         absent = self._missing(p.head for p in prs)
@@ -1237,6 +1258,11 @@ class World:
                 left.update((n, (entries[n].pr.head, f"it waits for the freeze to end ({self.frozen_file})")) for n in frozen)
                 cause.update((n, "freeze") for n in frozen)
                 took, pulled = [n for n in took if n not in frozen], pulled | set(frozen)
+            gated = {n: r for n in took if (r := self.gated.get(f"{n}@{entries[n].pr.head}"))}
+            left.update((n, (entries[n].pr.head, f"drive.toml's landing gates refuse it at this head: {'; '.join(r)}"))
+                        for n, r in gated.items())
+            cause.update((n, "landing gate") for n in gated)
+            took = [n for n in took if n not in gated]
             # a plain merge of a head below a move leaves its own lines naming what the move retired: such a head lands
             # crossed, and one whose own change names none of it crosses by that merge (`lacked_moves`)
             lacks = dict(zip(took, pool.map(lambda n: self._lacks(main, entries[n].pr.head, files[n]), took)))
@@ -1287,7 +1313,15 @@ class World:
         # a move regenerated on its batch's tip doesn't merge its head, so whether that merges is moot
         return [Ready(n, (p := entries[n].pr).head, *chosen[n][:2], rank=i, conflict=chosen[n][2] and uncertified.get(n) != "",
                       move=bool(p.move), scripts=vqueue.meets(chosen[n][0], MOVE_SCRIPTS),
-                      lean_input=vqueue.meets(chosen[n][0], inputs)) for i, n in enumerate(placed)]
+                      lean_input=vqueue.meets(chosen[n][0], inputs), verdict=why[n] is None or n in carried)
+                for i, n in enumerate(placed)]
+
+    def land_verdict(self, n: int, head: str) -> bool:
+        """Whether #``n`` has a land verdict at ``head`` (`vqueue.Ready.verdict`), for a member in flight at a head it isn't ready
+        at; True once it is closed, as no reader reviews it then."""
+        p = self.open().get(n)
+        return p is None or unreviewed(self.labels.reviews(n, head),
+                                       review_owners(self.q, self.labels, n, head, p.owner, self.open())) is None
 
     def _uncertified(self, p: PR, main: str) -> str:
         """Why move PR ``p``, with no land verdict, doesn't land on its ready mark alone: its map isn't on ``main``, where it
@@ -2058,6 +2092,9 @@ class World:
         tip, merged, left = base, [], []
         self.certified = {}
         for p in sorted(prs, key=lambda p: bool(p.move)):
+            if (skip := self.gate(p, main)) is not None:
+                left.append(skip)
+                continue
             if p.move:
                 regenerated, skip = self._move(p, tip, main)
                 if regenerated is not None:
@@ -2080,6 +2117,34 @@ class World:
                 tip = commit
         self._keep_moves(main)
         return tip, merged, left
+
+    def gate(self, p: PR, main: str) -> Skip | None:
+        """Why ``p`` is left out of a build for drive.toml's `landing_gates` at ``main``, run on its head alone (`gate_refusal`,
+        as the preflight runs them) when its ready mark's preflight couldn't judge it with them (`StoreLabels.unjudged`):
+        once a head, their verdict kept (`GATES_CACHE`) and never run again, so a refusal stands at that head (`ready` leaves
+        it out, with the gate's reason) and a pass lets it be built; while they can't judge it either, it waits, judged again
+        at its next build.  None when its mark's preflight judged it, or these passed it."""
+        if not (said := self.labels.unjudged(p.number, p.head)):
+            return None
+        key = f"{p.number}@{p.head}"
+        if key not in self.gated:
+            try:
+                refused, unjudged = gate_refusal(self.repo, main, p.head, gates_at(self.repo, main))
+            except QueueError as e:
+                refused, unjudged = [], [f"drive.toml's landing gates at `main` {main[:12]} can't be read ({e})"]
+            if unjudged and not refused:
+                return Skip(p, f"its ready mark's preflight couldn't judge it with the landing gates ({said}), nor can they "
+                               f"now: {'; '.join(unjudged)}; it waits, judged again at its next build", waits=True)
+            open_now = self.open()
+            self.gated = {k: v for k, v in self.gated.items() if int(k.split("@")[0]) in open_now}
+            self.gated[key] = refused
+            self.gates_ran.append((p.number, p.head, main, refused))
+            if self._gates_at is not None:
+                self._gates_at.write_text(json.dumps(self.gated, indent=1, sort_keys=True) + "\n")
+        if refused := self.gated[key]:
+            return Skip(p, f"drive.toml's landing gates, which its ready mark's preflight couldn't judge it with, refuse it: "
+                           f"{'; '.join(refused)}", fix="Push the fix and mark the new head.")
+        return None
 
     def _under_staged(self, p: PR, tip: str, commit: str, sha: str, staged: list[PR]) -> Skip | None:
         """``p``, merged onto ``tip`` as ``commit``, left out when staged batch ``sha``'s members (``staged``) merge in order
@@ -2741,7 +2806,8 @@ class Loop:
                  g2_read_s: float = G2_READ_S, g2_fresh: int = G2_FRESH, after: list[str] | None = None,
                  clock: Callable[[], float] = time.monotonic,
                  peak: Callable[[], float] = _peak_gb, timing: Callable[[str], None] = print,
-                 left_out: Callable[[Snapshot], list[Leave]] | None = vqueue.left_out, apart: bool = False):
+                 left_out: Callable[[Snapshot], list[Leave]] | None = vqueue.left_out, lean_stages: int = LEAN_STAGES,
+                 apart: bool = False):
         if gate not in GATES or gate in CHECKS and (slim is None or not _sharded(slim, shards)):
             raise ValueError(f"gate {gate!r} with {shards} shard(s){'' if slim is not None else ' and no run beside a check'}: "
                              f"a gate is one of {', '.join(GATES)}, and `{CHECK_GATE}` (`{VERDICT_GATE}` too) is the run "
@@ -2749,7 +2815,11 @@ class Loop:
         self.world, self.log_path, self.decide, self.shadow, self.dry_run = world, Path(log), decide, shadow, dry_run
         self.batch, self.depth, self.lean, self.pending_s, self.slim = batch, depth, lean, pending_s, slim
         self.fill = fill
-        self.gate, self.shards = gate, shards
+        self.lean_stages, self.gate, self.shards = lean_stages, gate, shards
+        #: under `lean_stages` above 1, the records and check records of the candidates this tick's snapshot read, by sha, and
+        #: the `--heavy-on` machine each heavy launch of the tick took (`_heavy_on`)
+        self._flying: dict[str, Past] = {}
+        self._took: dict[str, str] = {}
         #: whether graph2's verdict is read in shadow where the check gates (`--no-graph2-shadow` turns it off): each read
         #: lists every task of a candidate's check and pulls each pending task's results, which the check's gate never needs
         self.graph2_shadow = graph2_shadow or gate not in CHECKS
@@ -2804,6 +2874,7 @@ class Loop:
             whole = Past.read(self.log_path, 0)
             builds |= {sha: r for sha, r in whole.builds().items() if sha in older}
         mine = {sha for name, sha in refs.items() if name == sha[:12] and sha in builds}
+        self._flying, self._took = {sha: whole if sha in older else past for sha in mine}, {}
         self.checked = {sha for sha in mine if builds[sha].get("checked")}
         foreign = {name: sha for name, sha in refs.items() if sha not in mine or name != sha[:12]}
         cands, judged, wrote, regen = [], {}, [], {}
@@ -2883,9 +2954,10 @@ class Loop:
                         flying=tuple(Ready(m, h, (f := frozenset() if h in gone else w._changed(main, h)),
                                            lean=h not in gone and w._judge(main, h)[0],
                                            move=bool(getattr(w.open().get(m), "move", "")),
-                                           scripts=vqueue.meets(f, MOVE_SCRIPTS)) for m, h in sorted(flying)),
-                        records=self.records is not None, fill=self.fill,
-                        plain=frozenset(self.plain), apart=self.apart, cured=past.cured())
+                                           scripts=vqueue.meets(f, MOVE_SCRIPTS), verdict=w.land_verdict(m, h))
+                                for m, h in sorted(flying)),
+                        records=self.records is not None, fill=self.fill, plain=frozenset(self.plain),
+                        lean_stages=self.lean_stages, apart=self.apart, cured=past.cured())
         steps.lap("chain")
         return Tick(n, main, origin, snap, judged, whole, past.told(), foreign, wrote, below[0], regen, dict(w.carried),
                     dict(w.unauthenticated), riding=riding, staged={c.sha: list(c.members) for c in cands if c.waits})
@@ -3584,7 +3656,10 @@ class Loop:
         if unknown := [n for n in members if n not in w.prs]:
             raise QueueError(f"build: {', '.join(f'#{n}' for n in unknown)} not ready")
         tip, merged, left = w.build([w.prs[n] for n in members], base, t.advanced or t.main, staged)
-        recs = []
+        recs = [self.record(t, "gate", base=base, members=[n], heads=[head], number=n, gated_on=on, done=True,
+                            why=f"refused: {'; '.join(refused)}" if refused else "passed")
+                for n, head, on, refused in w.gates_ran]
+        w.gates_ran = []
         for s in left:
             p, key = s.pr, f"{s.pr.head}@{base}"
             line = dict(base=base, members=[p.number], heads=[p.head], number=p.number,
@@ -3849,11 +3924,28 @@ class Loop:
     def _heavy_on(self, line: dict) -> str:
         """The machines the heavy runs of the candidate of ``line`` take, `World.heavy_on`, when a member of it is a heavy PR or
         the heavy file names every candidate (`World.heavy`, read at each launch), `main`'s own check then too; "" else, and
-        when no machines are named."""
+        when no machines are named.  Under `lean_stages` above 1, with more than one named, the first of them no heavy run of
+        another candidate in flight holds (its records run's or its check's still running, or one this tick launched), so
+        two staged Lean batches take two machines; all of them while each is held."""
         if not (on := getattr(self.world, "heavy_on", "")):
             return ""
         prs, every = self.world.heavy()
-        return on if every or set(line.get("members") or ()) & prs else ""
+        if not (every or set(line.get("members") or ()) & prs):
+            return ""
+        if self.lean_stages < 2 or "," not in on:
+            return on
+        own = {line.get("sha"), line.get("repairs"), line.get("replaces")} - {None}
+        held = {m for sha, m in self._took.items() if sha not in own}
+        for sha, p in self._flying.items():
+            if sha not in own:
+                for rec, key in ((p.regenerated(sha)[1], "on"), (p.slim(sha)[1], "heavy_on")):
+                    if isinstance(rec, dict) and ("verdict" not in rec or rec.get("still_running")) and rec.get(key):
+                        held.update(str(rec[key]).split(","))
+        free = [m for m in on.split(",") if m not in held]
+        if not free:
+            return on
+        self._took[line.get("sha") or ""] = free[0]
+        return free[0]
 
     def _audit_from(self, d: Landing, main: str, line: dict, below: dict | None, lent: Lent | None) -> str | None:
         """The candidate whose check's verdict on lean-audit the check of ``line`` takes in place of running it
@@ -3887,10 +3979,11 @@ class Loop:
 
     def _suites_from(self, d: Landing, main: str, line: dict, below: dict | None, lent: Lent | None) -> str | None:
         """The candidate whose check answers for the suites of the check of ``line`` that are keyed there as here
-        (`vqueue_slim.start`'s ``suites_from``): its base, where the check gates and the base is a candidate in flight
-        (``below``, its record) whose check lends them (`vqueue_slim.lends_suites`, on the record of the check of ``main``,
-        ``lent``).  None else: the check runs every suite it has no pass of."""
-        if self.gate != CHECK_GATE or below is None or lent is None:
+        (`vqueue_slim.start`'s ``suites_from``): its base, where the check gates, or the land verdicts with the check for a
+        candidate that isn't plain, and the base is a candidate in flight (``below``, its record) whose check lends them
+        (`vqueue_slim.lends_suites`, on the record of the check of ``main``, ``lent``): never a plain base, whose record is
+        its quick tier's, which ran no suite whole.  None else: the check runs every suite it has no pass of."""
+        if self.gate not in CHECKS or below is None or lent is None:
             return None
         return line["base"] if self.slim.lends_suites(d, below, lent(main)[0]) else None
 
@@ -4907,6 +5000,11 @@ def main(argv: list[str]) -> int:
                                                            f"changing a Lean input with no Lean change waits, of the first "
                                                            f"in rank, whether or not another PR waits; 0: only pinned ones "
                                                            f"open one, which take no limit (--pins-file) (default {LEAN})")
+    ap.add_argument("--lean-stages", type=int, default=LEAN_STAGES, metavar="N",
+                    help=f"the most Lean candidates staged at once, each with its own records run: the second is staged on "
+                         f"the first's tip, goes onto main's chain after it, its heavy runs on a --heavy-on machine the "
+                         f"first's don't hold, and is dropped and built again when the first is dropped (default "
+                         f"{LEAN_STAGES}: one at a time)")
     ap.add_argument("--wide-file", type=Path, default=WIDE,
                     help=f"the PRs whose Lean change is wide, one number a line, read each tick as --priority-file is: a "
                          f"candidate taking one takes no other member --lean counts, and one stacked on a candidate holding "
@@ -5039,8 +5137,8 @@ def main(argv: list[str]) -> int:
             return _after_landing(world, a.after_landing)
         after = None if a.shadow or a.dry_run else [sys.executable, "-m", "research", "queue", "vqueue", *argv]
         loop = Loop(world, a.log, shadow=a.shadow, dry_run=a.dry_run, batch=a.batch, depth=a.depth, lean=a.lean,
-                    fill=a.depth if a.fill is None else a.fill, pending_s=a.pending_hours * 3600, slim=slim, state=a.state,
-                    tree_ejects=a.tree_ejects, gate=a.gate,
+                    fill=a.depth if a.fill is None else a.fill, lean_stages=max(1, a.lean_stages),
+                    pending_s=a.pending_hours * 3600, slim=slim, state=a.state, tree_ejects=a.tree_ejects, gate=a.gate,
                     shards=a.shards, records=None if a.no_records else vqueue_records, graph2_shadow=not a.no_graph2_shadow,
                     after=after, apart=not a.no_apart)
         if a.once or a.dry_run:

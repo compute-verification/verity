@@ -3334,10 +3334,12 @@ def test_a_preflight_check_waits_what_is_left_of_its_budget_and_with_none_to_run
     assert (got.returncode, why, asked) == (0, "", [timeout])
 
 
-def test_the_preflight_refuses_a_head_a_landing_gate_at_main_fails_with_its_fix_and_notes_one_that_cant_judge(world, capsys):
-    """The sync leaves out what a landing gate refuses; the preflight says so at mark time, and a gate that can't judge there is
-    a note, since the sync judges again."""
-    from research.queue import MarkOnly, StoreLabels, ready
+def test_the_preflight_refuses_a_head_a_landing_gate_at_main_fails_with_its_fix_and_the_mark_records_one_that_cant_judge(world,
+                                                                                                                     capsys):
+    """The sync leaves out what a landing gate refuses; the preflight says so at mark time.  A gate that can't judge there is a
+    warning beside the others, not a check skipped, and the mark records it on the head (`gates_unjudged`), which the verified
+    queue's loop reads to run the gates before it builds the head in; a head the gates judged gets none."""
+    from research.queue import GATE_UNJUDGED_SAYS, MarkOnly, StoreLabels, ready
 
     _preflight_main(world, GATED)
     main = _git(world.origin, "rev-parse", "main")
@@ -3348,9 +3350,16 @@ def test_the_preflight_refuses_a_head_a_landing_gate_at_main_fails_with_its_fix_
     assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is False and _no_worktree_left(world)
     world.gh.put(3, h3 := world.change({"crash.txt": "3\n"}), ready=False)
     assert ready(world.gh, world.store, 3, "lane-3", MarkOnly(), preflight=_preflight(world)) == 0, capsys.readouterr().err
-    said = next(s for s in world.logs if f"preflight: #3 at {h3[:12]}" in s)
-    assert f"checks skipped: the landing gate gates/g.py can't judge {h3[:12]}" in said and "exit 2" in said, said
-    assert "nothing refused" not in said, said
+    said = next(s for s in world.logs if f"preflight: #3 at {h3[:12]} merged onto" in s)
+    assert "can't judge" not in said, said
+    warned = next(s for s in world.logs if f"preflight: warning: #3 at {h3[:12]}" in s)
+    assert f"the landing gate gates/g.py can't judge {h3[:12]}" in warned and "exit 2" in warned, warned
+    assert warned.endswith(GATE_UNJUDGED_SAYS), warned
+    labels = StoreLabels(world.store, log=world.logs.append)
+    assert labels.ready(3, h3) and f"the landing gate gates/g.py can't judge {h3[:12]}" in labels.unjudged(3, h3)
+    world.gh.put(4, h4 := world.change({"good.txt": "4\n"}), ready=False)
+    assert ready(world.gh, world.store, 4, "lane-4", MarkOnly(), preflight=_preflight(world)) == 0, capsys.readouterr().err
+    assert labels.ready(4, h4) and labels.unjudged(4, h4) == ""
 
 
 def test_the_preflight_prints_what_a_warn_gate_at_main_says_as_a_warning_and_takes_the_mark(world, capsys):
