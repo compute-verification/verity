@@ -8,6 +8,7 @@
 # row reads one output field of its writer whole, from that field's tree.
 # TEMPLATE: the block's template's descriptor id.
 # research run --on auto --cwd source --mem-gb 96 --cpus 16 --timeout 3h -- bash benchmarks/one_stage/served_door_prove.sh
+[ -n "${AUDIT_RULE:-}" ] || echo "NOT AN ACCEPTED RUN: the registered file the verifier read was written by the staging side, so this is not an accepted run"
 set -uxo pipefail
 TEMPLATE=${TEMPLATE:-'OutCollect_v1{KO=2,FIRST=true}'}
 export TU_PINNED=slot RAYON_NUM_THREADS=$(nproc)
