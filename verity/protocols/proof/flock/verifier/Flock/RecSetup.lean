@@ -261,7 +261,7 @@ def notDense (form : String) : String :=
   s!"refused: the verifier's inner shape (--rec-inner) is {form}: RecursiveKS covers the dense form only (no holo, " ++
     "no sparse phase), and the verifier refuses every form its proof doesn't cover"
 
-/-- **The recursion's inner shape is dense**: `RecursiveKS` is proved at the dense inner form only (`Form.Dense`: not
+/-- **The recursion's inner shape is dense**: `RecursiveKS` is stated at the dense inner form only (`Form.Dense`: not
 holo, no sparse phase), so under a holo inner shape (`rec-inner --hide`) or a sparse one (candidate 3's RecSparse phase)
 the session is refused, until a proof covers that form. Without an inner shape it passes. -/
 def denseOnly : Option RecVStar.Inner → V Unit

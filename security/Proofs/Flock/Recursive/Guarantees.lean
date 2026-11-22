@@ -24,9 +24,9 @@ import Proofs.Flock.Soundness.ZK.RealLeaves
 /-!
 # Proofs of the recursive audit's guarantees
 
-* `Flock.SecurityProofs.RecursiveSound : Flock.Guarantees.RecursiveSound` (retired from the lock: the
-  recursion's guarantee is `Flock.Guarantees.RecursiveKS`) is `zk_sessions_recursive_fork_read_off` with
-  V*'s bridge
+* `Flock.SecurityProofs.RecursiveSound : Flock.Guarantees.RecursiveSound` (retired from the lock: the recursion's
+  knowledge-soundness statement is `Flock.Guarantees.RecursiveKS`, which no theorem proves) is
+  `zk_sessions_recursive_fork_read_off` with V*'s bridge
   (`Flock.Assumptions.VBridge`) taken apart, the inner verifier reading each round's message whole (`same` is equality,
   `Inner.accepts_of_rel_eq`). It reads no A3, so it proves `Flock.Guarantees.RecursiveSoundNoA3`
   (`Flock.SecurityProofs.RecursiveSoundNoA3`), and `RecursiveSound` from it.

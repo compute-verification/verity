@@ -70,8 +70,8 @@ It needs `VBridge` in full, which a protocol whose last round isn't committed (c
 event asks, as `RecursiveSound`'s does, that the inner statement have no witness, which the vacuity sweep found nearly
 empty (see `RecursiveSound`); the knowledge form is `Claims.Recursion.KS`.
 
-**Retired from the lock** with `RecursiveSound`: the lock lists no theorem of it; the recursion's guarantee
-is `Flock.Guarantees.RecursiveKS`. -/
+**Retired from the lock** with `RecursiveSound`: the lock lists no theorem of it; the recursion's knowledge-soundness
+statement is `Flock.Guarantees.RecursiveKS`, which no theorem proves. -/
 def RecursiveSoundExec : Prop :=
   ∀ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
     {n : ℕ} {L : SamplingDesign n} {Reg Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}

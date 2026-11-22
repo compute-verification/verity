@@ -417,9 +417,10 @@ theorem ksA_deployed (rel relO : Flock.Readable.Parsed → Flock.Readable.Relati
 /-- **`KSFlock` at `deployRec`**: the recursion's KS over the deployed plain inner record (trimmed), its V* sessions at
 the masked outer record (`deployZkRec`), at every inner decoder that meets the spec: `ksA_deployed`, as `KSA` is `KS`.
 No theorem evaluates its level (`Claims.Recursion.lam`) at the deployment. Route 2C's bound λ₂ (`lamLin2`) evaluates to
-at least 135.7 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep_tight`), and `KSLin2` at the deployment's
-dense statements (`KSLin2On` at `RecDeploy.DenseAt`) is proved (`Flock.SecurityProofs.RecursiveKS`), Holo statements
-being candidate 3's own model, and `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). -/
+at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`), and `KSLin2` at the deployment's
+dense statements (`KSLin2On` at `RecDeploy.DenseAt`) is stated (`Flock.Guarantees.RecursiveKS`), and no theorem proves
+it; Holo statements being candidate 3's own model, and `BitsLin2` at those statements follows from it
+(`bitsLin2On_of_ksLin2On`). -/
 theorem ksFlock_deployed (rel relO : Flock.Readable.Parsed → Flock.Readable.Relation) (ivScope : Msg → Bool)
     (b : Brings) (opening : Claims.Recursion.Opening)
     (hF : Claims.Flock.KS FlockDeploy.sha512 (deployZkRec relO))

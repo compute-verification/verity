@@ -32,7 +32,8 @@ form of `Pouw.Guarantees`; its proof is `Flock.SecurityProofs.G : Flock.Guarante
 (`Proofs.Flock.Recursive.Guarantees`).
 
 * `RecursiveSound`, for the auditor, in fork form (not a guarantee: the lock retired it, since its event is
-  possibilistic and nearly empty; the recursion's guarantee is `Flock.Guarantees.RecursiveKS`): either a run of the prover's own strategy finds a SHA-512 collision
+  possibilistic and nearly empty; the recursion's knowledge-soundness statement is `Flock.Guarantees.RecursiveKS`, which
+  no theorem proves): either a run of the prover's own strategy finds a SHA-512 collision
   (between two of V*'s sessions' registrant records, at a round's commitment, or in one of V*'s sessions), or the auditor accepts every one of V*'s sessions on a false
   hidden statement with probability at most V*'s sessions' statistical errors, plus each round's transfer slack, plus
   the inner protocol's soundness error. It assumes no hash. Its one new assumption is `Flock.Assumptions.VBridge`.
@@ -115,13 +116,15 @@ with probability at most `4·hidingGap` (`VacuityProbes.Hm96Opens.opens_to_any_r
 outside this tree). For any cheater the event is then nearly empty, and the bound bounds it, not a wrong
 computation. The fix is the knowledge form the claims API states recursion in; `EndToEndHidden` avoids this by
 extraction. The knowledge form, `Claims.Recursion.KS`, is at the recursion's level `Claims.Recursion.lam`, which no
-theorem evaluates at the deployment. Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 135.7 at the deployed
-records (`RecDeploy.lamLin2_deployed_ge_dep_tight`), and `KSLin2` at the deployment's dense statements (`KSLin2On` at
-`RecDeploy.DenseAt`) is proved (`Flock.SecurityProofs.RecursiveKS`), Holo statements being candidate 3's own model, and
-`BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). This fork form states no bits.
+theorem evaluates at the deployment. Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
+(`RecDeploy.lamLin2_deployed_ge_dep`), and `KSLin2` at the deployment's dense statements (`KSLin2On` at
+`RecDeploy.DenseAt`) is stated (`Flock.Guarantees.RecursiveKS`), and no theorem proves it; Holo statements being
+candidate 3's own model, and `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). This fork form
+states no bits.
 
 **Retired from the lock**: its break is possibilistic, so the lock lists no theorem of it; the recursion's
-guarantee is the knowledge form at the deployed reader, `Flock.Guarantees.RecursiveKS` (`Proofs.Flock.Recursive.KSStatement`). -/
+knowledge-soundness statement is the knowledge form at the deployed reader, `Flock.Guarantees.RecursiveKS`
+(`Proofs.Flock.Recursive.KSStatement`), which no theorem proves. -/
 def RecursiveSound : Prop :=
   ∀ {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
     -- V*'s sampling designs: A3
@@ -493,10 +496,10 @@ opens to the right row except with probability at most `4·hidingGap` (`VacuityP
 it, not a wrong computation. The fix is the knowledge form the claims API states recursion in;
 `EndToEndHidden` avoids this by extraction. The knowledge form, `Claims.Recursion.KS`, is at the recursion's level
 `Claims.Recursion.lam`, which no theorem evaluates at the deployment. Route 2C's bound λ₂ (`lamLin2`) evaluates to at
-least 135.7 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep_tight`), and `KSLin2` at the deployment's dense
-statements (`KSLin2On` at `RecDeploy.DenseAt`) is proved (`Flock.SecurityProofs.RecursiveKS`), Holo statements being
-candidate 3's own model, and `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). This fork form
-states no bits. -/
+least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`), and `KSLin2` at the deployment's dense
+statements (`KSLin2On` at `RecDeploy.DenseAt`) is stated (`Flock.Guarantees.RecursiveKS`), and no theorem proves it;
+Holo statements being candidate 3's own model, and `BitsLin2` at those statements follows from it
+(`bitsLin2On_of_ksLin2On`). This fork form states no bits. -/
 def RecursiveRanRegistered : Prop :=
   ∀ {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
     (_hA3 : ∀ j, FlockSoundness.Assumptions.UniformRandomBytes (Vs j).samplingDesign.Lb (Vs j).samplingDesign.src)

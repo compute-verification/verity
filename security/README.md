@@ -37,10 +37,10 @@ incorrect set of the trace the extractor recovers.
 2. **The recursion.** `Claims.RecGeneric.CompilerKS` (`Definitions/Flock/Recursive/Generic.lean`, proved in
    `Proofs/Flock/RecGeneric/OuterProof.lean`): for every Π_in its repetition extractor shows knowledge sound, binding
    ZK server and knowledge-sound Π_out, the compiled verifier is knowledge sound wherever the compiler's contract holds;
-   its premises are its domain. Deployed, `Flock.Guarantees.RecursiveKS` (`Proofs/Flock/Recursive/KSStatement.lean`):
-   for every decoder within Flock's list-decoding radius and every dense statement, Pr[the recursive verifier accepts ∧
-   the extractor recovers no witness] ≤ κ + √(γ·Pr[B]) plus the inner verifier's bad-abort, forked-coin and first-coin
-   terms.
+   its premises are its domain. Deployed, `Flock.Guarantees.RecursiveKS` (`Proofs/Flock/Recursive/KSStatement.lean`;
+   stated, and no theorem proves it): for every decoder within Flock's list-decoding radius and every dense statement,
+   Pr[the recursive verifier accepts ∧ the extractor recovers no witness] ≤ κ + √(γ·Pr[B]) plus the inner verifier's
+   bad-abort, forked-coin and first-coin terms.
    - Domain: the dense statements (`RecDeploy.DenseAt`); the decoders within the radius (`Claims.Flock.ListWithin`; the
      deployed ones meet it).
    - Real: SHA-512 collision resistance bounds Pr[B], and `Claims.Hm96Hiding` bounds δ₁.
