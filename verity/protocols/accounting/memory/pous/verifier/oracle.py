@@ -7,9 +7,8 @@ so a program's rounds are measured, not claimed.  Local computation between roun
 lockstep.
 
 The queries are the public interface of the primitives: the tweakable permutation `P_t` and `P_t⁻¹` on labels, and
-whatever the key derivation `H` exposes: `Π₂` and `Π₂⁻¹` for the overwrite chain (`primitives.OverwriteChain`), `Π` and
-`Π⁻¹` for the broken sponge modes, or one monolithic `H` query for a random oracle on key queries
-(`primitives.RandomOracleKey`, Lean's `p3Model'`).
+whatever the key derivation `H` exposes: `Π₂` and `Π₂⁻¹` for the overwrite chain (`primitives.OverwriteChain`), or one
+monolithic `H` query for a random oracle on key queries (`primitives.RandomOracleKey`, Lean's `p3Model'`).
 """
 
 from __future__ import annotations
