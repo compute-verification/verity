@@ -481,7 +481,8 @@ def targets() -> dict[str, Any]:
 def epoch(params: dict, target: Any) -> tuple[dict, dict[str, Any]]:
     """The description of an application's epoch circuit at ``target`` as the serve's close builds it
     (`window_circuit.served_lowering`), no weights read, every slot of its class taken by a request with the class's
-    prompt and outputs, and its definitions by key; refused (`Unexpressible`) where the adapter can't lower it."""
+    prompt and outputs, and its definitions by key; refused (`Unexpressible`, `UnregisteredTarget`) where the adapter can't
+    lower it."""
     import verity_vllm.pipeline.advice_code.format as I1
     from verity.circuits import codec as C
     from verity_vllm.engine.served_seed import DEFAULT_SEED
@@ -511,6 +512,7 @@ def applications() -> dict[str, dict]:
     import tomllib
 
     from verity.circuits import codec as C
+    from verity_vllm.program.frontend.targets import UnregisteredTarget
     from verity_vllm.program.predict.common import Unexpressible
 
     _imports()[1].load_registries()
@@ -521,8 +523,8 @@ def applications() -> dict[str, dict]:
         for name, target in targets().items():
             try:
                 desc, defs = epoch(params, target)
-            except Unexpressible as e:
-                app["refused"][name] = str(e)
+            except (Unexpressible, UnregisteredTarget) as e:
+                app["refused"][name] = f"{type(e).__name__}: {e}"
                 continue
             app["built"][name] = {k: (defs[k], C.closure_digest(desc, k)) for k in callers(desc)}
         out[path.relative_to(ROOT).as_posix()] = app
