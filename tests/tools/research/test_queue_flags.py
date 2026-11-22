@@ -41,7 +41,7 @@ def test_the_flags_parse_with_their_types_and_absent_keys_take_the_commands_defa
                         "land_into=None after_landing_no_cache=True landing_gates=gates/g.py warn_gates= warn_steps= verdict_first=False "
                         "stale_days=3 stale_close_days=7 stale_keep= after_landing_shards=1 command_line=on lowrisk_lane=True "
                         "lowrisk_excludes= verdict_excludes= verdict_plain= verdict_carry=off "
-                        "signed_verdicts=off restack_jobs=3")
+                        "signed_verdicts=off restack_jobs=3 quiet_main=None")
     assert [DriveFlags.parse(f'verdict_carry = "{v}"\n').verdict_carry for v in ("off", "shadow", "on")] == ["off", "shadow", "on"]
     assert DriveFlags.parse("stale_keep = [2692, 2693]\n") == DriveFlags(stale_keep=(2692, 2693))
     for text, why in (('on = "m1,m2"', 'on = \'m1,m2\': a list of names, as ["a", "b"]'),
@@ -105,7 +105,7 @@ def test_the_strict_parse_refuses_an_unknown_key_naming_the_keys_it_reads_and_th
                             "warn_gates, warn_steps, verdict_first, stale_days, stale_close_days, stale_keep, "
                             "after_landing_shards, command_line, lowrisk_lane, "
                             "lowrisk_excludes, verdict_excludes, verdict_plain, verdict_carry, "
-                            "signed_verdicts, restack_jobs; "
+                            "signed_verdicts, restack_jobs, quiet_main; "
                             "rename or remove it, or update this research")
 
 
