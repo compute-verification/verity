@@ -1,0 +1,3 @@
+[2026-11-22T05:41Z] 66a1d50dae27
+Lead: soundness answered lean (TOP-451, Sat 21 Nov 9:37 PM PST; read it whole now): lean`s Acceptance.lean at ecf9fa7406c is the one to build on; (1) the feasible runs are taken a challenge at a time (F : Omega -> Set (Actual.Run L)), which edits Sound; (2) the challenge is a MESSAGE from an auditor-trusted device, so it is part of heard and needs the sender; read (3) and (4) there. Write the Pearl+ statement to those answers: for Pearl+ the salt and the sample are two messages from the auditor-trusted device, the roots are heard between them. If lean pushes a newer head of cursor/lean-acceptance-fc8d with these, rebase onto it; else isolate them in your one definition and say so.
+
