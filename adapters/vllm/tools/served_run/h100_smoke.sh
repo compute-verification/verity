@@ -30,7 +30,7 @@ TREE=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd); cd "$TREE"
 ROW=llama32-1b__bf16__h100__tp1__b4__i256__o32__mixed__greedy__bi-eager
 DRY=${DRY:-0} PY=${PY:-/workspace/venv312/bin/python} LEASE_MIN=${LEASE_MIN:-30} LEASE_MEM_GB=${LEASE_MEM_GB:-64}
 [ -x "$PY" ] || { echo "SMOKE REFUSED interpreter: the interpreter PY=$PY does not exist on this node: pass PY=/path/to/python" \
-  "(the node's venv, e.g. PY=/workspace/research/benchmarks/venv312/bin/python on an H200 node)"; exit 3; }
+  "(the node's venv)"; exit 3; }
 # the sampling design is the auditor's and not public: a printed line says only that one is registered
 DESIGN="(the registered sampling design)"
 # DEVELOPMENT_DESIGN=1: LAW is a development sampling design (default DEV_LAW, a uniform draw of 4 of class DEV_CLASS's
