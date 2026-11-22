@@ -109,8 +109,8 @@ noncomputable def BudgetSound [LinearOrder L] (Ω : Type) [Fintype Ω] (𝓕 : S
     (∑ r, if acc ((S r).view V) ∧ ¬ Z r then Real.exp (d ((S r).view V) (S r).A / Λ) else 0) ≤ Fintype.card Ω
 
 /-- **A bound at every tolerance at once**: for every `t`, if the verifier accepts then, except with probability
-`δ + exp(−t/Λ)`, the actual circuit's shortfall is below `t`. `BudgetSound` gives it at every `t` (Markov's inequality on
-`exp(d/Λ)`); it alone does not give a bound on a sum of epochs' shortfalls at one `Λ`, which `BudgetSound` does. -/
+`δ + exp(−t/Λ)`, the actual circuit's shortfall is below `t`. `BudgetSound` at `Λ > 0` gives it at every `t` (Markov's
+inequality on `exp(d/Λ)`); it alone does not give a bound on a sum of epochs' shortfalls at one `Λ`, which `BudgetSound` does. -/
 noncomputable def TailSound [LinearOrder L] (Ω : Type) [Fintype Ω] (𝓕 : Set (Actual.Run L)) (V : Finset L)
     (acc : Transcript L → Prop) (d : Transcript L → Placed L → ℝ) (Λ δ : ℝ) : Prop :=
   ∀ t : ℝ, Sound Ω 𝓕 V acc (Lies V fun τ => {A | d τ A < t}) (δ + Real.exp (-t / Λ))
