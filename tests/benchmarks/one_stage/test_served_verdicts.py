@@ -69,7 +69,7 @@ from verity.commitments import docket_digest as DD
 from verity.commitments import domains as DM
 from verity import device as SITE
 from verity.protocols.registration.verifier import registration as RL
-from verity.protocols.accounting.memory.pous.verifier import wipe_period as W
+from verity.protocols.accounting.memory.wipe.verifier import wipe_period as W
 from verity.protocols.proof.spot.verifier.one_stage.verdict_record import DESIGN
 from verity.protocols.accounting.memory.poub.verifier import ledger
 from verity.protocols.accounting.network.scheme import NETWORK_ATTESTER

@@ -16,13 +16,13 @@ import pytest
 from pous_fakes import Clock
 
 from verity.protocols.accounting.memory.pous.attester import memory_attester as mc
-from verity.protocols.accounting.memory.pous.prover import wipe_run
-from verity.protocols.accounting.memory.pous.prover import wipe_store as WS
-from verity.protocols.accounting.memory.pous.verifier import streamed_wipe as sw
-from verity.protocols.accounting.memory.pous.attester import wipe_challenger as WC
-from verity.protocols.accounting.memory.pous.verifier import wipe_party as WP
-from verity.protocols.accounting.memory.pous.verifier import wipe_period as W
-from verity.protocols.accounting.memory.pous.attester import wipe_stream as WN
+from verity.protocols.accounting.memory.wipe.prover import wipe_run
+from verity.protocols.accounting.memory.wipe.prover import wipe_store as WS
+from verity.protocols.accounting.memory.wipe.verifier import streamed_wipe as sw
+from verity.protocols.accounting.memory.wipe.attester import wipe_challenger as WC
+from verity.protocols.accounting.memory.wipe.verifier import wipe_party as WP
+from verity.protocols.accounting.memory.wipe.verifier import wipe_period as W
+from verity.protocols.accounting.memory.wipe.attester import wipe_stream as WN
 
 KEY = hashlib.sha512(b"wipe stream test").digest()[:32]
 SMALL = sw.WipeParams(1000, W.READS, 1, 1_000, (("gpu", 1000 * sw.LABEL_BYTES),))

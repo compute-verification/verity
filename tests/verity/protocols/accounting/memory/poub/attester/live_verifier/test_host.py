@@ -550,7 +550,7 @@ def test_a_party_runs_its_module_from_the_pinned_tree_as_auditor_with_its_own_de
     assert rc == 0 and out == b'{"listening": 47611}\n{"signed": "x"}\n'
     assert ran == [["runuser", "-u", "auditor", "--", "/usr/bin/env", "-i", "PYTHONDONTWRITEBYTECODE=1",
                     "HOME=/var/lib/vy-verifier", "PATH=/usr/bin:/bin", "/usr/bin/python3", "-s", "-E",
-                    "-m", "verity.protocols.accounting.memory.pous.attester.wipe_challenger", "--device", str(svc.parties / "wipe"),
+                    "-m", "verity.protocols.accounting.memory.wipe.attester.wipe_challenger", "--device", str(svc.parties / "wipe"),
                     "--listen", "0.0.0.0:47611", "--reads", "1024", "--streamer", "build", "--threads", "16", "minutes=60"]]
     reqs = [json.loads(ln) for ln in (svc.parties / "wipe" / "requests.jsonl").read_text().splitlines()]
     assert [(r["verb"], r["by"], r.get("rc")) for r in reqs] == [("wipe_party", LANE, None), ("wipe_party", LANE, 0)]
@@ -634,7 +634,7 @@ def test_party_key_prints_only_the_public_half_made_on_the_host(svc):
 
 def test_the_wipe_party_and_its_key_import_on_a_python_with_no_site_packages():
     """The parties run on the host's python3 (`-s -E`), where no package is installed: the modules resolve in the tree."""
-    code = ("import verity.protocols.accounting.memory.pous.attester.wipe_challenger, verity.protocols.accounting.memory.pous.verifier.period, "
+    code = ("import verity.protocols.accounting.memory.wipe.attester.wipe_challenger, verity.protocols.accounting.memory.pous.verifier.period, "
             "verity.protocols.accounting.memory.pous.attester.challenger_party, verity.protocols.accounting.memory.poub.verifier.p2_parties; "
             "print('ok')")
     p = subprocess.run([sys.executable, "-S", "-s", "-E", "-c", code], capture_output=True, text=True, cwd=ROOT)

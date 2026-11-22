@@ -21,7 +21,7 @@ from verity.commitments import session_coins as SC
 from verity.commitments.crypto import lms
 from verity.protocols.accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.accounting.memory.pous.verifier import session_proofs as SP
-from verity.protocols.accounting.memory.pous.verifier import streamed_wipe as sw
+from verity.protocols.accounting.memory.wipe.verifier import streamed_wipe as sw
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 

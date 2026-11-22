@@ -1,7 +1,7 @@
 # PoUS
 
 PoUS, proof of useful space for model weights, is how the auditor learns how much of the registered store each device
-held. The memory wipe is part of it.
+held. The memory wipe is a protocol of its own (`../../wipe/`).
 
 It runs in two steps. At setup, the developer's node commits to the weights before any salt exists, the verifier samples
 a salt after the commitment, and the node encodes the weights under that salt into the store, which the verifier checks
@@ -51,5 +51,4 @@ In a served run, setup's check is run by no auditor-side entry: the tie (`period
 | P3 | The fast research codec. |
 
 What each codec rests on is its certificate in its module (`band.py`, `dense.py`, `schemes/p2.py`, `scheme.py`). The
-lifecycle is `protocol.py`'s, the memory attester's records are `../attester/memory_attester.py`'s, and the wipe's are
-`streamed_wipe.py`'s.
+lifecycle is `protocol.py`'s, and the memory attester's records are `../attester/memory_attester.py`'s.

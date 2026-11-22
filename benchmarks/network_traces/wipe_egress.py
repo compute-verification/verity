@@ -42,7 +42,7 @@ sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for bench
 from verity.protocols.accounting.network.verifier import record_files as RF
 from verity.protocols.accounting.network.verifier.certificate import Direction
 from verity.protocols.accounting.network.verifier.network_attester import NetworkAttesterParams
-from verity.protocols.accounting.memory.pous.verifier import streamed_wipe as sw
+from verity.protocols.accounting.memory.wipe.verifier import streamed_wipe as sw
 
 FORMAT = "wipe-egress/v1"
 #: how far the wipe challenger host's clock and the network attester host's may disagree

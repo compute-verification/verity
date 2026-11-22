@@ -43,10 +43,10 @@ import wipe_cases as WC
 from verity_difftest import protocol as P
 
 from verity.protocols.accounting.memory.pous.attester import memory_attester as mc
-from verity.protocols.accounting.memory.pous.prover import wipe_store as WS
-from verity.protocols.accounting.memory.pous.verifier import streamed_wipe as sw
-from verity.protocols.accounting.memory.pous.attester import wipe_challenger as WCH
-from verity.protocols.accounting.memory.pous.verifier import wipe_period as WP
+from verity.protocols.accounting.memory.wipe.prover import wipe_store as WS
+from verity.protocols.accounting.memory.wipe.verifier import streamed_wipe as sw
+from verity.protocols.accounting.memory.wipe.attester import wipe_challenger as WCH
+from verity.protocols.accounting.memory.wipe.verifier import wipe_period as WP
 
 ID = WP.PROTOCOL
 TEST_ID = mc.TEST_PREFIX + ID

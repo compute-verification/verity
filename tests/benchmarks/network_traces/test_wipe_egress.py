@@ -17,7 +17,7 @@ import pytest
 
 from verity.protocols.accounting.network.verifier.certificate import Certificate, Direction, LmsKey, certificate_message
 from verity.protocols.accounting.network.verifier.network_attester import NetworkAttesterParams
-from verity.protocols.accounting.memory.pous.verifier import streamed_wipe as sw
+from verity.protocols.accounting.memory.wipe.verifier import streamed_wipe as sw
 from verity.commitments.crypto import lms
 
 HERE = (Path(__file__).resolve().parents[3] / "benchmarks" / "network_traces")

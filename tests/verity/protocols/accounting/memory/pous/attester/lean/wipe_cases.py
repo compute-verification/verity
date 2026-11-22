@@ -23,9 +23,9 @@ import verity_difftest as D
 from hypothesis import strategies as st
 
 from verity.protocols.accounting.memory.pous.attester import memory_attester as mc
-from verity.protocols.accounting.memory.pous.attester import wipe_challenger as WC
-from verity.protocols.accounting.memory.pous.prover import wipe_store as WS
-from verity.protocols.accounting.memory.pous.verifier import streamed_wipe as sw
+from verity.protocols.accounting.memory.wipe.attester import wipe_challenger as WC
+from verity.protocols.accounting.memory.wipe.prover import wipe_store as WS
+from verity.protocols.accounting.memory.wipe.verifier import streamed_wipe as sw
 
 #: Every scheme the port verifies, by id (`MemoryChallenger.KNOWN_SCHEMES`).
 KNOWN = {**mc.SCHEMES, **M.ts.SCHEMES}

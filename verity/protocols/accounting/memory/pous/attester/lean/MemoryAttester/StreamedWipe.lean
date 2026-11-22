@@ -5,7 +5,7 @@ public import MemoryAttester.Verdict
 /-!
 # The streamed-label wipe's verdict
 
-`verity/protocols/accounting/pous/verifier/streamed_wipe.py`'s formats and `verdict`, whose module docstring and `PROTOCOL.md` ("The
+`verity/protocols/accounting/memory/wipe/verifier/streamed_wipe.py`'s formats and `verdict`, whose module docstring and `PROTOCOL.md` ("The
 streamed-label wipe") are the spec: the commitment and its header, the batch record (`Batch.value`), the records root, the
 signed message with its start mark, the start and end messages, the unit an egress count is published in
 (`egressUnits`), and the check of a signed session against the commitment published when it opened. The reasons are the

@@ -66,7 +66,7 @@ from verity import device, hooks as H
 from verity.protocols.run import schemes
 from verity.protocols.accounting import scheme as S
 from verity.protocols.accounting.memory.pous.attester import memory_attester as mc
-from verity.protocols.accounting.memory.pous.prover import wipe_served as WS
+from verity.protocols.accounting.memory.wipe.prover import wipe_served as WS
 from verity.protocols.accounting.memory.pous.verifier import period
 from verity.protocols.accounting.memory.pous.scheme import MEMORY_ATTESTER
 from verity.runtime.stream import Side
@@ -190,7 +190,7 @@ if [ -z "${WIPE_OWN_LEASE:-}" ]; then  # once, before any lease: the node's link
   rm -f "$DIR"/{answer,served,summary,wipe,period}.json "$DIR/refused.txt" "$DIR/stamps.txt" \
     "$SERVE_DIR"/private/wipe/{answer,case,wipe.case}.json
   stamp start
-  # the wipe's launcher's form (`memory/pous/scheme.py`'s `launch_wipe`), until it hands SETTINGS: `--run-keys`, or the bound attester's
+  # the wipe's launcher's form (`verity/protocols/accounting/memory/wipe/scheme.py`'s `launch_wipe`), until it hands SETTINGS: `--run-keys`, or the bound attester's
   # WIPE_CHALLENGER, WIPE_ADDRESS and WIPE_COMMAND
   if [ "$SETTINGS" = --run-keys ]; then
     for v in WIPE_KEY_SHA512 WIPE_ADDRESS WIPE_CHALLENGER WIPE_COMMAND; do
@@ -274,7 +274,7 @@ rm -rf "$K" && (umask 077 && mkdir -p "$K") \
 X=
 if [ "$STREAMS" = here ]; then
   X=$(mktemp -d)
-  cc -O3 -pthread "$ROOT/verity/protocols/accounting/memory/pous/attester/wipe_stream.c" -o "$X/wipe_stream" \
+  cc -O3 -pthread "$ROOT/verity/protocols/accounting/memory/wipe/attester/wipe_stream.c" -o "$X/wipe_stream" \
     || { rm -rf "$K" "$X"; echo "WIPE FAILED: wipe_stream doesn't build"; stamp "wipe_stream didn't build"; exit 7; }
 fi
 rc=0

@@ -1,4 +1,4 @@
-"""The wipe's ``attach`` (`pous/scheme.py`'s ``WIPE``): one wipe of this node's memory (`wipe_run.subprotocol`), run whole
+"""The wipe's ``attach`` (`verity.protocols.accounting.memory.wipe.scheme.WIPE`): one wipe of this node's memory (`wipe_run.subprotocol`), run whole
 before the attach returns. The engine core's process attaches its schemes just before its model runner loads the model
 (`scheme_plugin.attach`), so the wipe ends before any workload byte reaches the card.
 
@@ -63,7 +63,7 @@ from pathlib import Path
 from typing import Any
 
 from verity import hooks as H
-from verity.protocols.accounting.memory.pous.prover import wipe_run, wipe_store
+from verity.protocols.accounting.memory.wipe.prover import wipe_run, wipe_store
 
 NAME = "wipe"
 SMI = "nvidia-smi"

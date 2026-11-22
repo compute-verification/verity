@@ -820,9 +820,9 @@ KNOWN: dict[str, str] = {
         "duplicate of `CircuitRequirement.Store`: becomes a reading of it: PoUS's view of the store entry (memory-accounting)",
     "verity/protocols/accounting/memory/pous/verifier/protocol.py::Certificate":
         "homonym, what an accepted PoUS audit establishes: rename (memory-accounting)",
-    "verity/protocols/accounting/memory/pous/verifier/streamed_wipe.py::Challenger":
+    "verity/protocols/accounting/memory/wipe/verifier/streamed_wipe.py::Challenger":
         "duplicate of `parties.Challenger`: becomes a reading of it (memory-accounting)",
-    "verity/protocols/accounting/memory/pous/verifier/wipe_parties.py::Challenger":
+    "verity/protocols/accounting/memory/wipe/verifier/wipe_parties.py::Challenger":
         "duplicate of `parties.Challenger`: becomes a reading of it (memory-accounting)",
     "verity/protocols/accounting/compute/pouw/prover/circuit/anchors.py::Ledger":
         "homonym, a window's admitted calls: rename (compute-accounting)",

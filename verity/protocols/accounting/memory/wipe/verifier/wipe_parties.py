@@ -1,6 +1,6 @@
 """The streamed wipe as two parties of the deployment layer (`verity.runtime`), the protocol `wipe_party` speaks as a byte
-stream, in messages: the memory attester, whose party is `verity/protocols/accounting/memory/pous/attester/wipe_challenger.py`'s,
-and the prover, whose party is `verity/protocols/accounting/memory/pous/prover/wipe_prover.py`'s. This module holds what both
+stream, in messages: the memory attester, whose party is `verity/protocols/accounting/memory/wipe/attester/wipe_challenger.py`'s,
+and the prover, whose party is `verity/protocols/accounting/memory/wipe/prover/wipe_prover.py`'s. This module holds what both
 speak.
 
 ~~~text
@@ -34,7 +34,7 @@ CHALLENGER, PROVER = "memory-challenger", "prover"
 COMPONENT = "wipe"
 MAX_BATCH = 1 << 10
 MANIFEST = Manifest(
-    ID, VERSION, "verity.protocols.accounting.memory.pous.verifier.wipe_party:request_of",
+    ID, VERSION, "verity.protocols.accounting.memory.wipe.verifier.wipe_party:request_of",
     parties=(Role(CHALLENGER, "auditor", needs=("clock", "coins", "signing-key")),
              Role(PROVER, "developer", per="server", needs=("store",))),
     channels=(Channel(CHALLENGER, PROVER, ("Fill", "FillDone", "Read", "End"), carries_coins=True),

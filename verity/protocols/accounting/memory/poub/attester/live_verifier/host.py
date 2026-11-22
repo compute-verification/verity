@@ -45,7 +45,7 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
   (`verity/protocols/accounting/memory/poub/verifier/lean/replay.py transcript --record verifier.json`), or the record
   alone when the run left no transcript, into `runs/<run>/replay/`; a transcript that isn't the recorded one fails it.
 - **The memory attester's parties**: `wipe_party [--reads K] [--native [--threads T]]` and `challenger_party`
-  run PoUS's streamed-wipe challenger (`verity/protocols/accounting/memory/pous/verifier/wipe_party.py`, port 47611) and its block challenger
+  run PoUS's streamed-wipe challenger (`verity/protocols/accounting/memory/wipe/verifier/wipe_party.py`, port 47611) and its block challenger
   (`challenger_party.py`, port 47610), and `bw_party (--pous-session SID | --fixture) [--session SID --trusted-sha512 HEX] [--minutes M]` PoUB's
   P2 party (`verity/protocols/accounting/memory/poub/verifier/p2_parties.py`, port 47612, with the registration the host
   names; with `--session SID`, the session id the auditor gives the memory attester, it signs the session's close with
@@ -146,7 +146,7 @@ SPECS = 16
 INTS = {"--sessions": (1, 16), "--windows": (1, 64), "--samples": (1, 100_000), "--lifetime": (1, 1024),
         "--minutes": MINUTES}
 DECIMALS = {"--window-ms": (1.0, 600_000.0), "--jitter-ms": (0.0, 1_000.0), "--pace-pass-ms": (0.0, 1_000.0)}
-PARTIES = {"wipe_party": ("wipe", "verity.protocols.accounting.memory.pous.attester.wipe_challenger", 47611),
+PARTIES = {"wipe_party": ("wipe", "verity.protocols.accounting.memory.wipe.attester.wipe_challenger", 47611),
            "challenger_party": ("pous", "verity.protocols.accounting.memory.pous.attester.challenger_party", 47610),
            "bw_party": ("bw", "verity.protocols.accounting.memory.poub.verifier.p2_parties", 47612)}
 PARTY_CODE = {"bw_party": "import sys; from verity.protocols.accounting.memory.pous.attester import onsite; "

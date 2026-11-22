@@ -199,7 +199,7 @@ means = "the proof layer's architecture on one screen, for its five protocols"
 
 [[tree]]
 path = "verity/protocols/accounting/"
-means = "the resource accounting layer: compute/pouw, memory/pous, memory/poub and network, on the proofs"
+means = "the resource accounting layer: compute/pouw, memory/pous, memory/poub, memory/wipe and network, on the proofs"
 
 [[tree]]
 path = "verity/protocols/accounting/scheme.py"
@@ -211,7 +211,7 @@ means = "the compute protocols: pouw"
 
 [[tree]]
 path = "verity/protocols/accounting/memory/"
-means = "the memory protocols: pous and poub"
+means = "the memory protocols: pous, poub and wipe"
 
 [[tree]]
 path = "verity/protocols/policy/"
@@ -270,7 +270,16 @@ protocol = true
 
 [[tree]]
 path = "verity/protocols/accounting/memory/pous/scheme.py"
-means = "PoUS and the memory wipe as resource schemes, registered as pous and wipe"
+means = "PoUS as a resource scheme, registered as pous"
+
+[[tree]]
+path = "verity/protocols/accounting/memory/wipe/"
+means = "the memory wipe: how many bits of a node's prior memory content can survive an accepted wipe"
+protocol = true
+
+[[tree]]
+path = "verity/protocols/accounting/memory/wipe/scheme.py"
+means = "the memory wipe as a resource scheme, registered as wipe"
 
 [[tree]]
 path = "verity/protocols/accounting/memory/poub/"

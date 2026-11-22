@@ -1,5 +1,6 @@
-"""PoUS and the wipe as resource schemes (`verity.protocols.accounting.memory.pous.scheme`): found by name, at
-their verifiers' own ids, with the codec the adapter attaches, and citing only Lean names the locks record."""
+"""PoUS and the wipe as resource schemes (`verity.protocols.accounting.memory.pous.scheme`,
+`verity.protocols.accounting.memory.wipe.scheme`): found by name, at their verifiers' own ids, with the codec the
+adapter attaches, and citing only Lean names the locks record."""
 from __future__ import annotations
 
 from fractions import Fraction
@@ -9,8 +10,10 @@ import pytest
 
 from verity.protocols.run import schemes as table
 from verity.protocols.accounting import scheme as S
-from verity.protocols.accounting.memory.pous.scheme import POUS, POUS_TERM, WIPE
-from verity.protocols.accounting.memory.pous.verifier import period, schemes, wipe_period
+from verity.protocols.accounting.memory.pous.scheme import POUS, POUS_TERM
+from verity.protocols.accounting.memory.wipe.scheme import WIPE
+from verity.protocols.accounting.memory.pous.verifier import period, schemes
+from verity.protocols.accounting.memory.wipe.verifier import wipe_period
 
 ROOT = Path(__file__).resolve().parents[6]
 LOCKS = (ROOT / "security" / "lean-audit.json", ROOT / "security" / "Properties" / "lean-audit.json")
@@ -20,7 +23,7 @@ def test_found_by_name_at_their_verifiers_ids() -> None:
     assert table.get("pous") is POUS and table.get("wipe") is WIPE
     assert (POUS.protocol, WIPE.protocol) == (period.PROTOCOL, wipe_period.PROTOCOL), (
         "the trusted verifiers keep their own ids (they may not import the registry): change period.PROTOCOL or "
-        "wipe_period.PROTOCOL and its declaration's protocol (memory/pous/scheme.py, through domains) together")
+        "wipe_period.PROTOCOL and its declaration's protocol (memory/pous/scheme.py or memory/wipe/scheme.py, through domains) together")
     assert POUS.unit == WIPE.unit == "bits"
 
 
