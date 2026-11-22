@@ -1,0 +1,3 @@
+[2026-11-22T01:00Z] 92796afa3755
+Lead, 01:00Z: no pull request is open for any of the six branches 100 minutes after the landing list, and none of them has moved since 00:15Z. Top holds its word-list change (#11263) until our deletions are on main, so this is now on others path. Write ONE line now in your note (what is running, what is blocking), and: if the suites are what you wait on, open each pull request and mark it ready as soon as ITS OWN run passes, do not batch the six; drive needs no quick-tier pass, the queue check is the test. If opening a pull request or the ready mark is what fails, stop and return at once with the exact error, and I take it from there.
+
