@@ -370,12 +370,12 @@ WINDOW = _port("window", window, credit_cases.window_instance, credit_cases.WIND
 PERIOD = _port("period", period, credit_cases.period_instance, credit_cases.PERIOD_NAMES)
 A_LINK = _port("a-link", a_link, credit_cases.a_link_instance, credit_cases.A_LINK_NAMES)
 WEIGHTS = _port("weights", weights, credit_cases.weights_instance, credit_cases.WEIGHTS_NAMES)
-#: the ports whose cases carry the registry's pinned windows, which each test draws its inputs over (`_pinned`)
+#: the ports whose cases carry the registry's pinned windows, which each test samples its inputs over (`_pinned`)
 WINDOW_DRAWN = _port("window-drawn", window_drawn)
 REGISTERED_FILE = _port("registered-file", registered_file)
 #: their sampled cases, besides each mutation's three seeds: each reads a 60 MB descriptor on both sides, about half a
 #: minute a case
-WINDOW_DRAWN_EXAMPLES, REGISTERED_FILE_EXAMPLES = 5, 8
+PINNED_WINDOW_EXAMPLES, REGISTERED_FILE_EXAMPLES = 5, 8
 
 
 def test_credit(pass_server):
@@ -498,23 +498,23 @@ def _swept(port: D.Port, instance, names: list[str], server) -> dict[tuple[str, 
 
 
 @pytest.mark.slow
-def test_window_drawn(pass_server, pinned_windows):
-    """`window-drawn` over the registry's pinned windows (`pinned_windows`, today's tiles and J10-R's), then each mutation
-    over a few seeds (`replay`): each honest case is drawn, past the layout, and each mutation refused for itself, past
-    the layout but ``descriptor-hex``'s.
+def test_window_sample(pass_server, pinned_windows):
+    """The window's sample port over the registry's pinned windows (`pinned_windows`, today's tiles and J10-R's), then
+    each mutation over a few seeds (`replay`): each honest case is sampled, past the layout, and each mutation refused for
+    itself, past the layout but ``descriptor-hex``'s.
 
     It catches a port that only ever compares two refusals: a descriptor no pin holds is refused at the layout before
-    the draw, on both sides, so over stand-in windows `credit._window_drawn` is never called and a defect in it (as
+    the sample, on both sides, so over stand-in windows the sample's Python is never called and a defect in it (as
     `credit.registered_file` once raised on every call, unseen) passes. It cannot be cheaper: the smallest descriptor a
     pin holds is the registry's window at K = 64, about 60 MB, which each case carries to both sides, so it samples fewer
     cases than `test_credit`'s ports."""
-    port, instance = _pinned(WINDOW_DRAWN, credit_cases.window_drawn_instance, credit_cases.WINDOW_DRAWN_NAMES,
-                             pinned_windows)
+    names = credit_cases.WINDOW_DRAWN_NAMES
+    port, instance = _pinned(WINDOW_DRAWN, credit_cases.window_drawn_instance, names, pinned_windows)
     CREDITED.clear()
-    stats = D.run(port, examples=WINDOW_DRAWN_EXAMPLES, server=pass_server, shrink=False)
-    outs = _swept(port, instance, credit_cases.WINDOW_DRAWN_NAMES, pass_server)
-    print(f"pouw-verifier-difftest window-drawn: {stats}; by outcome: {dict(sorted(CREDITED.items()))}")
-    assert CREDITED["window-drawn accept"], CREDITED
+    stats = D.run(port, examples=PINNED_WINDOW_EXAMPLES, server=pass_server, shrink=False)
+    outs = _swept(port, instance, names, pass_server)
+    print(f"pouw-verifier-difftest {port.fn}: {stats}; by outcome: {dict(sorted(CREDITED.items()))}")
+    assert CREDITED[f"{port.fn} accept"], CREDITED
     for (name, seed), (_case, out) in outs.items():
         assert ("refused" in out) == (name != "honest"), (name, seed, out)
         assert name == "descriptor-hex" or out.get("refused", [None])[0] != "layout", (name, seed, out)
@@ -555,7 +555,7 @@ def test_registered_file(pass_server, pinned_windows):
 @pytest.mark.slow
 def test_the_tile_name_over_another_body_is_refused(pass_server, window_k64):
     """The compiled `Credit.descriptorDrawn` refuses the registry's window at K = 64 (`registry_window`, its template one
-    `credit.TILE_PINS` pins, which `test_window_drawn` draws past its layout) with one Definition under its template over
+    `credit.TILE_PINS` pins, which `test_window_sample` samples past its layout) with one Definition under its template over
     another body (`other_body`: the name `PouwH1WindowTile_v1{UNIT=…,K=64}` and every id the same) as no template at
     K = 64, as `credit.layout_of` does: `Credit.tileOf`'s pin, the closure digest. The descriptor is about 60 MB."""
     case = credit_cases.window_drawn_instance(random.Random("pin/0"), "honest")
