@@ -3287,3 +3287,14 @@ def test_a_stated_record_ties_with_no_run_on_either_side():
     del doc["cap"]
     with pytest.raises(ValueError, match="^the circuit record names no run, so nothing ties"):
         I.tied_record(*_tie(doc))
+
+
+def test_a_registration_messages_roots_are_its_windows_or_its_own_and_none_is_refused_by_name():
+    """Core's message records its roots under ``window`` (`Window.write`), an integration's own beside its ``window``
+    index; a message that records none is refused by name where they are required."""
+    assert I.registration_roots({"window": {"run": RUN, "registered_roots": PIN}}) == PIN
+    assert I.registration_roots({"window": 3, "registered_roots": PIN}) == PIN
+    assert I.registration_roots({"window": {"run": RUN}}, required=False) == {}
+    for message in ({"window": {"run": RUN}, "registered_roots": PIN}, {"window": 3}):
+        with pytest.raises(ValueError, match=re.escape(I.NO_REGISTERED_ROOTS)):
+            I.registration_roots(message)

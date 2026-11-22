@@ -529,8 +529,7 @@ def registration_roots(rec: Mapping[str, Any]) -> dict[str, str]:
     """The roots a window's registration records for its parameters (`window_roots`): core's docket's window's, or
     an integration's own window registration's, whose ``window`` is no mapping (vLLM's advice registration names the
     window's index there)."""
-    w = rec.get("window")
-    return window_roots(w if isinstance(w, Mapping) else rec)
+    return window_roots(IF.registration_window(rec))
 
 
 def pinned(doc: Any) -> dict[str, dict[str, Any]]:
