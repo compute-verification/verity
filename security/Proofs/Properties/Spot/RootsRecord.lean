@@ -530,6 +530,8 @@ theorem fieldRoots_mono {W : Spot.Wires.Wiring} {bases : Array (String × Nat ×
   try dsimp only at hf
   split at hf
   · exact absurd hf (by simp [throw, throwThe, MonadExceptOf.throw, bind, Except.bind])
+  split at hf
+  · exact absurd hf (by simp [throw, throwThe, MonadExceptOf.throw, bind, Except.bind])
   cases hf
   intro n y hy
   rw [Std.HashMap.getD_insert]
@@ -621,7 +623,8 @@ theorem fieldRootIn_tree {ft : Std.HashMap String (Array (String × Json))} {tem
     (h : OneStageZk.fieldRootIn ft template field port = some r) : getD r "tree" = .str (template ++ "/" ++ field) := by
   unfold OneStageZk.fieldRootIn at h
   obtain ⟨⟨f, e⟩, hfe, rfl⟩ := Option.map_eq_some_iff.1 h
-  have hf : f = field := beq_iff_eq.1 (Array.find?_some hfe)
+  have hb := Array.find?_some hfe
+  have hf : f = field := beq_iff_eq.1 hb
   subst hf
   with_unfolding_all rfl
 
