@@ -602,7 +602,7 @@ class Committed:
         m, w = self.window.members[k], self.window
         names = [p for p, _ in m.all_rows]
         rows = {p: dict(m.tables).get(p, m.n) if p not in dict(m.outs) else m.n for p in names}
-        local = {p: w.domain(m.port(p), m.schema(p), rows[p]) if p in m.values
+        local = {p: self._value_domain(m, p, rows[p]) if p in m.values
                  else CommitmentDomain(self.domains[w.tree(m, p)].binding, OWNER, RangeIndexedDomain(0, rows[p]), hash="sha512")
                  for p in names if not w.held(m, p)}
         made, _ = commit_ports({p: d for p, d in local.items()}, {}, {}, {}, schemas={p: m.schema(p) for p in local},
@@ -612,6 +612,14 @@ class Committed:
                 "domain_ids": {p: doms[p].domain_id.hex() for p in names},
                 "bindings": {p: doms[p].binding.hex() for p in names}, "owner": OWNER,
                 "schemas": {p: m.schema(p) for p in names}, "row_key_sha512": hashlib.sha512(INST.default_key).hexdigest()}
+
+    def _value_domain(self, m: Member, p: str, leaves: int) -> CommitmentDomain:
+        """Member ``m``'s registered value port ``p``'s header domain: under the binding its value's tree was committed
+        under where the value names one (an earlier period's port, `links.Port`'s domain), else under its own port's."""
+        b = getattr(getattr(self.given.get(m.port(p)), "value", None), "binding", None)
+        if b is None:
+            return self.window.domain(m.port(p), m.schema(p), leaves)
+        return CommitmentDomain(b, OWNER, RangeIndexedDomain(0, leaves), hash="sha512")
 
 
 def _inner(schema: str, words: int) -> Any:

@@ -686,6 +686,7 @@ class _Round1:
 
     def __init__(self, port: LK.Port) -> None:
         self.port, self.value, self.words, self.schema, self.rows = port, port.value, port.words, port.schema, port.rows
+        self.binding = port.domain.binding
         s, b = CS.SALT_BYTES, CS.BC_BYTES
         self.salts = [port.salts[i * s:(i + 1) * s] for i in range(port.leaves)]
         self.bcs = [port.bcs[i * b:(i + 1) * b] for i in range(port.leaves)]
