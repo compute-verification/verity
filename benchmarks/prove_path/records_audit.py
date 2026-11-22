@@ -43,7 +43,7 @@ committed afresh); a5 adds the member's other ports at the docket's roots (`rows
 of a pinned parameter leave the free inputs where the window's root for it is the pinned root: `declared_count` counts
 them registered, its pins the ``--registered`` file's roots and the window's roots those its docket records
 (`window_roots`: its ``registered_roots``, `interface.Window.write`, and its committed values' entries). A record that
-lists its members (a served window's) declares its reads beside them, as a served window reads its model's weights
+lists its members declares its reads beside them, as a served window reads its model's weights
 (each ``weights/<label>@<words>``, pinned at the root of the committer's weights registration): each read port its
 members' own rows or a shared-row table of them (`interface.listed_reads`), audited and counted as a stated record's
 reads are, and the count names every parameter it reads whose window root is no pin (``unpinned``), whose reads count

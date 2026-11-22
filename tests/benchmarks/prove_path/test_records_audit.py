@@ -15,7 +15,7 @@
   (`declared_count`); the audit counts a record that lists its members and declares its window's ingress so too, and
   prints the window figure beside the run figure with its premise;
 * a circuit reading registered values is audited against the entries the verifier pinned, each under its own domain
-  (`pinned`), and refused before any sample without them, a record that lists its members (a served window's) as one that
+  (`pinned`), and refused before any sample without them, a record that lists its members as one that
   states them; one whose program takes values only tied to the earlier docket that registered them first
   (`tie_of`), its readers' reads registered at that record's roots;
 * a window's audit is one compute audit of the network attester's period (`period`), its scan state's reads registered;
@@ -684,7 +684,7 @@ def _registered(d: Path, n: int = 8, cap: int = 4, name: str = "w", own: bool = 
     committed by core's registered rows, and the verifier's pin of it; ``own``: the window's own value instead,
     registered as a value of the window's Program under a domain bound to its run root, as `prove_path.py
     window-commit` registers the scan's state;
-    ``listed``: its record lists its members and declares the read beside them, a served window's form."""
+    ``listed``: its record lists its members and declares the read beside them."""
     rng = np.random.default_rng(1)
     rows = rng.integers(0, 1 << 16, (4, K // 2), dtype=np.uint16)
     read = IF.Read(TID, "wrow", name, 0, (n // 4, 4), 0, (0, K // 2))
@@ -766,12 +766,13 @@ def test_an_expert_tables_registration_is_a_pin_as_written():
 
 
 def test_a_listed_records_registered_weight_reads_are_audited_and_counted_as_a_stated_records(tmp_path, capsys):
-    """A record that lists its members (a served window's form) declares its registered reads beside them, as a served
-    window reads its model's weights: the verifier's window takes it, each member's ``--registered`` file is the one the
-    stated record of the same window makes but for its run inputs, which a listed record doesn't carry, and its count is the stated record's, the reads registered where the verifier
-    pinned the parameter at the root the window's docket records. Without a pin the audit refuses the window before
-    any sample; the count names the parameter ``unpinned`` and counts its reads free, as it does for a pin of another root
-    or a docket that records none."""
+    """A record that lists its members declares its registered reads beside them (a served epoch writes a stated record
+    instead, carrying each run input in its one tree): the verifier's window takes it, each member's ``--registered``
+    file is the one the stated record of the same window makes but for its run inputs, which a listed record doesn't
+    carry, and its count is the stated record's, the reads registered where the verifier pinned the parameter at the
+    root the window's docket records. Without a pin the audit refuses the window before any sample; the count names the
+    parameter ``unpinned`` and counts its reads free, as it does for a pin of another root or a docket that records
+    none."""
     sampling_design = RND.parse_design(SAMPLING_DESIGN)
     stated, listed = _registered(tmp_path / "s"), _registered(tmp_path / "l", listed=True)
     (ms, sdoc, _), (ml, ldoc, _) = (RA.verifier_window(g.dir, sampling_design, None) for g in (stated, listed))
@@ -1754,8 +1755,9 @@ def test_the_audit_passes_a_refused_window_on_the_check_for_a_forged_unit(writte
 def test_the_audit_counts_a_listed_record_with_window_ingress_and_prints_its_window_figure_with_its_premise(
         written, tmp_path, monkeypatch, capsys):
     """A record that lists its members and declares its window's ingress (here each coordinate's ``x`` and ``sx``, rows
-    before the window, so its members read them as their own rows and not as run inputs) is counted by `declared_count`, not `leak_count`: the audit's ``RECORDS`` line and ``summary.json``
-    carry the run figure, the window ingress still free in it, and beside it the window figure with its premise
+    before the window, so its members read them as their own rows and not as run inputs) is counted by
+    `declared_count`, not `leak_count`: the audit's ``RECORDS`` line and ``summary.json`` carry the run figure, the
+    window ingress still free in it, and beside it the window figure with its premise
     (`WINDOW_PREMISE`). The sessions (`a5.audit`) are stubbed and sample nothing, so the audit doesn't pass; its leak count
     is the records' alone. a5's workers' flags (`a5.lean_options`) reach the stub as given, a5's defaults otherwise, and
     the summary carries a5's ``negative_workers``."""
