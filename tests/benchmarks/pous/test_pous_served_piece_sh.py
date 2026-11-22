@@ -221,6 +221,23 @@ def test_a_lean_that_does_not_build_is_no_answer_and_its_own_error_ends_the_piec
     assert stamps[-1].startswith(("the piece stops: ", "the sessions' part stopped: ")), stamps
 
 
+def test_a_failed_build_is_stamped_before_it_is_visible_as_failed(node, tmp_path):
+    """The piece ends as soon as a reader sees ``failed``, and its exit stops the builder, so the stamp that the build
+    didn't build is written before ``failed`` appears. A stand-in `mv` records, at the move that makes ``failed``
+    visible, whether the stamp is there: the order is read at the event, with no clock."""
+    d = tmp_path / "pieces" / "pous"
+    seen = tmp_path / "stamp-at-move"
+    _exe(tmp_path / "bin" / "mv", f'''#!/usr/bin/env bash
+case "${{*: -1}}" in */failed) grep -qs "{BW_EXE} didn't build" "$STAMPS_FILE" && echo stamped > {shlex.quote(str(seen))} \\
+                                                   || echo unstamped > {shlex.quote(str(seen))};; esac
+exec {shlex.quote(shutil.which("mv"))} "$@"
+''')
+    r = _piece(node | {"FAKE_LAKE_FAILS": BW_EXE, "STAMPS_FILE": str(d / "stamps.txt")}, d)
+    assert r.returncode == 7, r.stdout + r.stderr
+    assert f"{BW_EXE} didn't build" in _stamps(d), r.stdout + r.stderr
+    assert seen.read_text().strip() == "stamped"
+
+
 @pytest.mark.parametrize("create", [1, 2])
 def test_a_file_that_changes_as_the_copy_reads_it_still_builds_the_leans(node, tmp_path, create):
     """tar's exit 1 on the copy of verity/, a file that changed as it read it (another suite's process writing into the
