@@ -14,7 +14,7 @@ of a ``cuda`` store's card in use that counts as idle), and:
 - ``host``, ``address`` and ``command``: the memory attester on a host of its own, all three or none (`period.json`'s
   ``challenger_host`` and ``challenger.wipe``). None is refused unless ``run_keys``;
 - the development facts (`DEVELOPMENT`): ``run_keys``, a challenger on this node under a key the run makes and pins
-  for itself (`run_key`);
+  for itself (`wipe_run.run_key`);
   ``simulated``, a challenger on this node named the stand-in for one on its own host (``placement`` ``"simulated"``);
   ``foreign_bytes`` and ``foreign_past_bound``, the prover a cheat that keeps that much prior content (``"fM"``, one
   label past the bound). A record made under any of them, or under a key the configuration doesn't pin, says why in
@@ -52,7 +52,6 @@ summary. The challenger's run key and session log are in a scratch directory rem
 from __future__ import annotations
 
 import fcntl
-import hashlib
 import json
 import os
 import re
@@ -65,7 +64,6 @@ from pathlib import Path
 from typing import Any
 
 from verity import hooks as H
-from verity.protocols.accounting.memory.pous.attester import onsite
 from verity.protocols.accounting.memory.pous.prover import wipe_run, wipe_store
 
 NAME = "wipe"
@@ -134,13 +132,6 @@ def pin_of(pins: Any, party: str) -> str | None:
     """The memory challenger's (``party``'s) ``key-sha512`` for the wipe among the application's ``[[pin]]`` entries, or
     None."""
     return next((p["key-sha512"] for p in pins if (p.get("party"), p.get("protocol")) == (party, NAME)), None)
-
-
-def run_key(device: Path) -> str:
-    """The SHA-512 of the key a ``run_keys`` wipe's challenger on this node signs under, made here in its directory
-    ``device`` before the session (`onsite.device_key`, which the challenger then loads): the pin the run states for
-    itself, which no configuration gives, so its record is a development run's."""
-    return hashlib.sha512(onsite.device_key(device, workers=len(os.sched_getaffinity(0))).public_key).hexdigest()
 
 
 def busy(device: str, idle_mib: int) -> str | None:
@@ -260,7 +251,7 @@ def attach(exchange: Any, ctx: Mapping[str, Any]) -> Wiped:
         period = Path(t) / "periods" / "p0"
         period.mkdir(parents=True)
         (device := Path(t) / "periods" / "wipe-challenger").mkdir(mode=0o700)
-        key = run_key(device) if s["run_keys"] else ctx.get("trusted") or pin_of(pins, ctx["party"])
+        key = wipe_run.run_key(device) if s["run_keys"] else ctx.get("trusted") or pin_of(pins, ctx["party"])
         doc: dict[str, Any] = {
             "tools": {tool: str(ctx[k]) for tool, k in (("wipe-protocol", "judge"), ("wipe-stream", "wipe_stream"))
                       if ctx.get(k)},
@@ -283,4 +274,4 @@ def attach(exchange: Any, ctx: Mapping[str, Any]) -> Wiped:
 
 
 __all__ = ["BINDING", "DEVELOPMENT", "FACTS", "LAUNCHER", "NAME", "SMI", "UNSET", "Wiped", "attach", "built", "busy", "card_of", "check", "check_settings", "facts_of",
-           "period_wipe", "pin_of", "refusals", "run_key"]
+           "period_wipe", "pin_of", "refusals"]

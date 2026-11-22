@@ -19,7 +19,7 @@ from verity.protocols.accounting.memory.pous.verifier.period import UNPINNED
 from verity.protocols.accounting.memory.pous.verifier.wipe_period import LIMIT_NS
 
 PIN = {"party": "memory-challenger", "protocol": "wipe", "scheme": "lms-sha512/n64-w1-h20/v0", "key-sha512": "ab" * 64}
-#: the hash `run_key` stands in for here: making an LMS key at deployed parameters is the challenger's, not this suite's
+#: the hash `wipe_run.run_key` stands in for here: making an LMS key at deployed parameters is the challenger's, not this suite's
 RUN_KEY = "cd" * 64
 BOUND = {"host": "auditor", "address": "auditor:7000", "command": ["ssh", "auditor"]}
 
@@ -124,7 +124,7 @@ def test_with_no_pin_for_the_party_the_refusal_states_the_pin_to_add(tmp_path) -
 
 def test_a_run_keys_wipe_pins_the_key_its_challenger_signs_under(tmp_path, monkeypatch) -> None:
     """``run_keys`` states no pin from the configuration: the attach makes the challenger's key in the directory the
-    challenger loads it from (`run_key`) and hands its SHA-512 as ``wipe.trusted_sha512``, never None."""
+    challenger loads it from (`wipe_run.run_key`) and hands its SHA-512 as ``wipe.trusted_sha512``, never None."""
     seen, made = [], []
 
     def subprotocol(period, node, out, *, side_of, ready):
@@ -134,7 +134,7 @@ def test_a_run_keys_wipe_pins_the_key_its_challenger_signs_under(tmp_path, monke
         return {"verdict": "accept"}
 
     monkeypatch.setattr(wipe_run, "subprotocol", subprotocol)
-    monkeypatch.setattr(WS, "run_key", lambda device: made.append(device.name) or RUN_KEY)
+    monkeypatch.setattr(wipe_run, "run_key", lambda device: made.append(device.name) or RUN_KEY)
     WIPE.attach(None, _ctx(tmp_path, {"run_keys": True, "store": "python"}))
     assert seen == [RUN_KEY] and made == ["wipe-challenger"]
 
@@ -214,7 +214,7 @@ def test_the_period_names_the_judge_and_the_streamer_its_launcher_built(tmp_path
         return {"verdict": "accept"}
 
     monkeypatch.setattr(wipe_run, "subprotocol", subprotocol)
-    monkeypatch.setattr(WS, "run_key", lambda device: RUN_KEY)
+    monkeypatch.setattr(wipe_run, "run_key", lambda device: RUN_KEY)
     WIPE.attach(None, _ctx(tmp_path, {"run_keys": True, "store": "python"}, **launcher))
     assert seen == [tools] and not set(launcher) & set(WIPE.settings)
 
@@ -234,7 +234,7 @@ def test_a_record_names_the_development_facts_it_ran_under(tmp_path, monkeypatch
         return {"verdict": "accept"}
 
     monkeypatch.setattr(wipe_run, "subprotocol", subprotocol)
-    monkeypatch.setattr(WS, "run_key", lambda device: RUN_KEY)
+    monkeypatch.setattr(wipe_run, "run_key", lambda device: RUN_KEY)
     got = WIPE.attach(None, _ctx(tmp_path, facts | {"store": "python"}))
     assert got.record()["served"]["development"] == development
     assert json.loads((tmp_path / "wipe.json").read_text()) == got.record()

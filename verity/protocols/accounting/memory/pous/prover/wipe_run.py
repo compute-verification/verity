@@ -46,6 +46,7 @@ from pathlib import Path
 from typing import Any, BinaryIO, Protocol, TypeVar
 
 from verity.protocols.accounting.memory.pous.attester import memory_attester as mc
+from verity.protocols.accounting.memory.pous.attester import onsite
 from verity.protocols.accounting.memory.pous.verifier import streamed_wipe as sw
 from verity.protocols.accounting.memory.pous.attester import wipe_challenger as WC
 from verity.protocols.accounting.memory.pous.verifier import wipe_parties as WP
@@ -248,6 +249,13 @@ DRAM = {"bytes": None, "reserve_bytes": 16 << 30}
 """`wipe.dram` and its defaults: the fill's `bytes` on the host's DRAM (`None`: what `dram_available` says less
 `reserve_bytes`; whole segments either way), the DRAM declared whole (`wipe_store.HostMemory(whole=True)`), so that
 what the fill doesn't reach counts in `R`."""
+
+
+def run_key(device: Path) -> str:
+    """The SHA-512 of the key a challenger on this node signs under, made in its directory ``device`` before the session
+    (`onsite.device_key`, which the challenger then loads): the pin a ``run_keys`` wipe states for itself, which no
+    configuration gives, so its record is a development run's."""
+    return hashlib.sha512(onsite.device_key(device, workers=len(os.sched_getaffinity(0))).public_key).hexdigest()
 
 
 def config(doc: Mapping[str, Any]) -> dict[str, Any]:
@@ -533,6 +541,6 @@ def summary(record: Mapping[str, Any]) -> dict[str, Any]:
 
 
 __all__ = ["CONFIG", "DISK", "DRAM", "LINK_KEYS", "NOT_DISKS", "NO_PIN", "Side", "Wipe", "answer", "config", "disks",
-           "dram_available", "subprotocol", "run", "segments_of", "session", "store_of", "summary", "timing",
+           "dram_available", "subprotocol", "run", "run_key", "segments_of", "session", "store_of", "summary", "timing",
            "undeclared"]
 

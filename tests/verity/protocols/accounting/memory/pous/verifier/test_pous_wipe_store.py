@@ -358,7 +358,7 @@ def test_the_cheats_subprotocol_rejects_under_a_simulated_placement(tmp_path, mo
     out.mkdir()
     settings = S.settings(WIPE, {"store": "host", "segments": 1})
     wipe_judge.stand_in(monkeypatch)
-    monkeypatch.setattr(wipe_served, "run_key", lambda d: PINNED)
+    monkeypatch.setattr(wipe_run, "run_key", lambda d: PINNED)
     got = WIPE.attach(None, {"settings": settings, **wipe_served.FACTS, "streamer": "python", "foreign_past_bound": True,
                              "simulated": True, "egress_bits": 0, "run_keys": True, "private": out, "process": H.PIECE, "side_of": side_of,
                              "pins": [], "node": "n0", "judge": "wipe-protocol"})
