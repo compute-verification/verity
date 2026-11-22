@@ -63,57 +63,6 @@ The cost is the mean of the nine lifetime pairs' costs with its Student's t 95% 
 less one, and stock against stock, `prod-again` over `prod` taken the same way, is the noise floor printed beside it
 and never subtracted.
 
-## The cost priced from counts
-
-`priced.py OUT --units TOPK_CUT.jsonl` reads a finished job's `out/` with no GPU. It prices the canonical top-k's layer
-(each arm of ours over `prod-trace`, `--reference`) from what the job kept, against the top-k's device time a call on
-one card (`TOPK_CUT.jsonl`, the timing of `benchmarks/dsa_topk`'s passes at the served decode shapes):
-
-- **The rows each call reads** come from the schedule: each counted pass's decode steps in the arm's step trace, with
-  the rows past the indexer's k keys and the longest of them. A decode step makes 22 calls on each card.
-- **The rows whose fast selection failed** come from the model's outputs. Where a lifetime kept the top-k's counts by
-  step (`dsa_topk_steps.*.jsonl` beside its step trace), each counted step's failed rows are its own, on its slowest
-  card, joined to the trace by step and tokens. Else they are the counters' lifetime totals (`topk_counters.json`): a
-  card's share, scaled to the counted passes' share of the lifetime's decode rows, and a lower bound by the rows a
-  killed process read last. The reader places a step's failed rows in its calls three ways: packed, a request's rows
-  to a call, and one row a call. Where the counts by step hold the calls a remedy failed in (`calls_bisected`,
-  `calls_refined`), it reads that number in place of the placements. The bounds and the point are those placements,
-  with each pass's time ranged over the distributions it was timed on.
-- **Prefill steps** (a step with a row of more than a decode request's tokens) are priced only at prefill unit times,
-  `--prefill-units FILE` in `TOPK_CUT.jsonl`'s form, with their own failed rows where the counts are by step. Without
-  that file they are refused, and the reader gives their measured added seconds instead: ours's prefill steps less the
-  reference's, from both arms' step traces, as a term marked measured.
-- **What it gives:** the layer's cost in percent of the reference's counted serving time, beside the job's own measured
-  layer (`prod_repro.json`'s `layers`) and the difference in points. Beside the measured layer is the same layer with
-  each pass's seconds adjusted for its engine steps (each pass paired with the reference's of the same lifetime and
-  rep, at the slope of ln seconds on ln steps within each arm), marked modelled. The point (`price`, which the serving
-  cost's door calls too) is that layer, plus the measured prefill term where prefill was not priced, plus the job's
-  measured `prod-trace` over `prod`, under `benchmarks/serving-cost-priced` with the member model, card, then arm
-  (`glm-5.3-h200-prod-record`), `mark` `modeled`. It names the job's run as the run that tests it, and each measured term in its
-  inputs. The reader writes it to `priced.json` alone; `verity bench serving_cost price` stores it, and nothing puts a
-  priced point on the measured line `vllm/prod-serving-cost-glm53`.
-- **When it writes no point:** where the counters hold no failed rows, or where the job measured no layer below.
-- **What it doesn't price:** the host's time, and a failed row's own keys (each failed call is priced at its step's
-  longest row).
-
-## A stage's record
-
-`--stage` makes the job's `result.json` the record of one stage of the serving cost, which `verity bench
-serving_cost` reads by the run's id (`stage.py`: its `kind`, its fingerprint and a validation that names every gap):
-
-- **`--stage capture --minify RUN [--exact RUN]`**, on the full model: `serving-cost-capture/v1`, with the minify run
-  (and the exact run) in its fingerprint, beside `served` and `card`, the member's model and card as
-  `serve_tax.member` gives them: the served name of the model `prod_repro.json` names, and the `short` of the one card
-  record naming the cards `out/gpus.csv` lists from inside the lease. It passes where `out/` holds what `priced.py` reads: each arm of ours on the
-  canonical top-k paired lifetime for lifetime with `prod-trace`, each lifetime with a step trace, counted passes and
-  the top-k's counts, and the job's measured `prod-trace` over `prod` with an interval.
-- **`--stage minify`**, on a stand-in (`glm53-standin`): `serving-cost-minify/v1`. After the arms, `topk_units.py`
-  times the top-k on one card under a lease of its own into `out/units.jsonl` (the form `priced.units` reads, each pass
-  the pin's `dsa_topk` offers, every trial kept), and `out/units.json` lists each pass's time a call by rows and keys
-  with its range and how it was measured, and what stays unpriced (the top-k at prefill steps). It passes where every
-  pass offered has both kinds of time and the timer reached its last shape. The stand-in writes no measurement.
-- Either fails where the run's own validation did.
-
 ## What is not yet true
 
 - **Two rules of the cost's method are not yet the report's own.** The job's first lifetime pair, its servers
