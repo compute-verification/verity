@@ -229,6 +229,11 @@ def READS : List (String × Json) := [("reads", Json.arr #[Json.arr #["E_v1", "x
   #[]
 #guard ((readPins { verifier E3R with registered := #[("x", 1), ("y", 1)], pinned := #[("x", ROOT)] }).map
   fun rp => rp.roots.map fun (e, r) => (e.value, r)) == some #[("x", ROOT)]
+-- a value a second stage's link names is held at round 1's record: R8 counts it held, and it is never loose
+#guard weightsCodes { weighed E3R with linked := #[("x" : String), "y"].map fun v =>
+  { template := "E_v1", port := v, value := v, entry := Json.null } } == #[]
+#guard weightsCodes { weighed E3R with linked := #[{ template := "E_v1", port := "x", value := "x", entry := Json.null }] } ==
+  #["R8-unpinned"]
 -- a registered input under a query that is no template query that applies
 #guard weightsCodes { weighed E3R with query := Json.mkObj [("name", "Q_all")] } == #["R8-weights-query"]
 -- why `readPins` is none: no template query applying, else no registration R8 accepts

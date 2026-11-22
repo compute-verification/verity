@@ -1104,8 +1104,8 @@ def test_the_members_check_holds_a_marked_programs_reads_only_to_pins_r8_accepte
         with pytest.raises(M._Refused) as e:
             held({"a": {"units": [[first, first + 1]], "registered": {"ports": {at[0][1]: {**port, "root": "bb" * 64}}}}})
         assert str(e.value) == M.pinned_read_why("a", at[0][1], "t", "root")
-        assert M.read_pins(params(), unmarked) == ([], [], [], {}, {})
-        assert M.read_pins(params(registered={"t": 2}), marked) == ([], [], [], {}, {})
+        assert M.read_pins(params(), unmarked) == ([], [], [], {}, {}, {})
+        assert M.read_pins(params(registered={"t": 2}), marked) == ([], [], [], {}, {}, {})
         # expected by name alone: no root to read the port at, whatever root the record names; at the verifier's
         # own held root (its pinned), read there
         by_name = M.read_pins(params(registered={"t": 2}), marked)
@@ -1116,6 +1116,12 @@ def test_the_members_check_holds_a_marked_programs_reads_only_to_pins_r8_accepte
         assert set(own[4]) == {"t"} and own[4]["t"]["root"] == pin["root"]
         assert R.weights_held(marked, q, {"t": 2}, None)[0] == [("R8-unpinned", {"values": ["t"]})]
         assert R.weights_held(marked, q, {"t": 2}, None, own[4])[0] == []
+        # a value a second stage's link names: held for R8, never loose, read at round 1's record's entry
+        assert R.weights_held(marked, q, (), None, linked=["t"])[0] == []
+        linked = M.read_pins({**params(), "linked": [{"template": "a", "port": at[0][1], "value": "t", "entry": pin}]},
+                             marked)
+        assert linked[0] == [] and linked[5] == {"t": pin}
+        _held(marked, q, linked)({"a": {"units": [[first, first + 1]], "registered": {"ports": {at[0][1]: port}}}})
 
 
 def _held(prog, q, rp):
