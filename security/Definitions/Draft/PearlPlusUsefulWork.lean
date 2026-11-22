@@ -17,7 +17,7 @@ only; nothing here is proved but two small probes, and nothing is in a lock.
 * **The challenge, chosen in one place** (`feasibleAt`): the feasible runs a challenge at a time (soundness's answer
   (1)), the device's input gates holding the challenge's encoding. `SoundAt` is `Sound` over such a family; at a
   constant family it is `Sound` (`soundAt_const`). The other answer (one feasible set, the index bound by the named
-  uniform-draw assumption) is a change to `feasibleAt` alone.
+  assumption that the device's randomness is uniform) is a change to `feasibleAt` alone.
 * **What the code reads** (`Read`, `CodeReadsCredit`): the verifier's function `vf` and the credit `W` are arguments, as
   the definitions may not load the verifier's package. The one premise about them says: on a transcript `vf` accepts,
   the sampled openings sit at the positions the challenge names and verify against the roots, and `W` is the code's
@@ -67,7 +67,7 @@ noncomputable def vtranscript (A : Auditor L) (R : Actual.Run L) : List (List Bo
 /-- **The one place the challenge is chosen.** The feasible runs at challenge `r`: those of `𝓕` whose device's input
 gates hold `enc r`, its encoding (soundness, 9:37 PM PST: the feasible runs a challenge at a time, the challenge in the
 device's input gates and heard by the verifier as a message). Were the other answer taken (one feasible set, the
-challenge in the view bound to the index by the named uniform-draw assumption `UniformRandomBytes`), this definition
+challenge in the view bound to the index by the named assumption that the device's randomness is uniform, `UniformRandomBytes`), this definition
 alone changes: to `𝓕`, with the guard moved into the event. -/
 def feasibleAt {Ω : Type} (𝓕 : Set (Actual.Run L)) (A : Auditor L) (enc : Ω → List Bool) (r : Ω) :
     Set (Actual.Run L) :=
