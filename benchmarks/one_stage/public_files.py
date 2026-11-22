@@ -124,6 +124,7 @@ REFUSALS = {
     "day-without-day-log": "--day needs --day-log, the registration log whose declarations R2 reads",
     "answer-of-another-registration": "the audit's answer commits to another registration than the window's",
     "day-log-without-day": "--day-log and --day-params go with --day",
+    "count-pins-without-registration": "records_audit count: refused, --pin/--pins name registered parameters and no --registration gives the window's roots to hold them to: give --registration, or no pins (the development path, on which every registered read is free)",
     "not-an-object": "not an object",
     "session-check-without-pins": "no gate, key pin or main's first-parent line to check the session by (--gate, --key-sha512, --main)",
     "no-live-session": "the served run names no live session",
