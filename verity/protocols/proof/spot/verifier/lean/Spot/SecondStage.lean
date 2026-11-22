@@ -163,6 +163,7 @@ module
 public import Flock.FV3
 public import Flock.Program
 public import Spot.Bits
+public import Spot.Docket
 public import Spot.Record
 public import Spot.Registered
 public import Spot.Schedule
