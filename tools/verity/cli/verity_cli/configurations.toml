@@ -5,4 +5,4 @@
 # give reads that it matched the pins its machine was handed, any other file's a rehearsal, either with no bound. A
 # second lane's application puts its line in this same file, and no change touches another application's line.
 "applications/onsite_full.toml" = "1b5ce0fd961759db6520418f3427f39e89e5f5594ccc0b92c3f6ce53f1ab14edcd891ace4fca6910133fcf91fec84263c5bc9810454bb685e7a8ca7f983ee7e9"
-"applications/remote.toml" = "7b19e448ad73234ad87ba6877ed26ca1052fbf634b0514f8dbe64da9ca8b4d9a04e5e6c4e652071f6e7e32811e99e8beb08cdee458908811523d600cef2cb916"
+"applications/remote.toml" = "ff8aec9c05375f7de54e060152212fab5d32f52fc49af3e14ac187b02af3d3687bc212df3234e1c61b0994da5aa1cc3e4277edd7d786c9217647ca323d9cb38e"

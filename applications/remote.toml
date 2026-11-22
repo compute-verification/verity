@@ -20,7 +20,7 @@ timing = "at-once"
 law = "rate:1/3481648"
 
 [program]
-commit = "9ac234b8969f1569c4d21ef69fb66e0f3a3e0810"
+commit = "10c78db8427a538d28575b3a7086086b9219f55f"
 
 [params."verity/pouw/pearl-plus/v1"]
 kernel = ""
