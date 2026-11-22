@@ -212,10 +212,39 @@ def test_the_window_steps_refuses_by_name_each_thing_its_record_lacks(tmp_path):
     """An empty serve dir: the preflight names every file it wanted, and nothing named ROW."""
     rc, out = _preflight(tmp_path, POUW="pearlplus", APPLICATION_PROTOCOLS="sampled-proofs pearl-plus")
     assert rc == 3, out
-    assert ("PREFLIGHT: the window's record lacks WINDOW_CLASS, the class the serve took (its --window-class), which "
-            "serve.json doesn't record; D/plans.jsonl, the close's plan of each window; PRED/predicted.json, predict "
-            "row's Build before the lease") in out, out
+    assert ("PREFLIGHT: the window's record lacks WINDOW_CLASS, the class the serve took (its --window-class): "
+            "serve.json's window_class, absent from a serve made before it recorded it, so pass WINDOW_CLASS=S,P,O; "
+            "D/plans.jsonl, the close's plan of each window; PRED/predicted.json, predict row's Build before the lease: "
+            "PRED is serve.json's committer_options.row_build, else D/predicted, so pass PRED=<the directory that holds "
+            "predicted.json>") in out, out
     assert "ROW" not in out
+
+
+def _from_serve_dir(tmp_path, record):
+    """The runner's preflight with only the serve dir named (``D``): no ``PRED``, ``WINDOW_CLASS`` or ``SERVE_ROOT``, a
+    serve.json of ``record`` in it."""
+    d = tmp_path / "serve"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "serve.json").write_text(json.dumps(record))
+    env = {k: v for k, v in os.environ.items() if k not in ("PRED", "WINDOW_CLASS", "SERVE_ROOT")}
+    env |= {"D": str(d), "OUT": str(tmp_path / "out"), "VENV": sys.prefix, "PRODUCT": "remote", "CUDA_HOME": str(tmp_path),
+            "PEARLC_CHALLENGER_GATE": "", "POUW": "pearlplus", "APPLICATION_PROTOCOLS": "sampled-proofs pearl-plus"}
+    p = subprocess.run(["bash", "benchmarks/one_stage/served_verdicts.sh", "steps", "preflight"], cwd=ROOT, env=env,
+                       capture_output=True, text=True)
+    return p.returncode, p.stdout + p.stderr
+
+
+def test_the_serve_dir_alone_gives_the_class_and_the_predicted_build_it_took(tmp_path):
+    """serve.json holds the class the serve took and the directory of predict row's Build it was given, so a run that
+    names only the serve dir needs neither WINDOW_CLASS nor PRED; each is refused by name, with where it comes from, where
+    the serve dir doesn't hold it."""
+    (tmp_path / "predicted").mkdir()
+    (tmp_path / "predicted" / "predicted.json").write_text("{}")
+    rc, out = _from_serve_dir(tmp_path, {"window_class": "2,4,2", "committer_options": {"row_build": str(tmp_path / "predicted")}})
+    assert rc == 3 and "D/plans.jsonl" in out, out
+    assert "WINDOW_CLASS" not in out and "PRED/predicted.json" not in out, out
+    rc, out = _from_serve_dir(tmp_path / "bare", {"scheme": "rows-sha512"})
+    assert rc == 3 and "WINDOW_CLASS, the class the serve took" in out and "PRED/predicted.json" in out, out
 
 
 def test_a_run_naming_no_application_is_refused_by_name(tmp_path):

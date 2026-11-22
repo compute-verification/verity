@@ -150,6 +150,22 @@ def test_cpu_hold_puts_the_claimed_cores_in_the_wrapper_alone_and_leaves_the_cla
                       execvp=lambda f, a: pytest.fail("never runs")) == 2
 
 
+def test_launch_json_keeps_every_env_name_and_the_values_of_the_allowlisted_ones_only(tmp_path, node):
+    _, _ = node
+    req, runs_root = _queued(tmp_path, "q2", tmp_path / "q2.args")
+    doc = json.loads(req.read_text())
+    doc["env"] = {**doc.get("env", {}), "APPLICATION": "applications/remote.toml", "WINDOW_CLASS": "1,1,1",
+                  "HF_TOKEN": "hunter2", "WIPE_CMD": "bash wipe.sh --to 10.0.0.1"}
+    req.write_text(json.dumps(doc))
+    assert remote.launch_request(req)["started"]
+    wait_runner(runs_root / "q2")
+    text = (runs_root / "q2" / "launch.json").read_text()
+    env = json.loads(text)["env"]
+    assert env["APPLICATION"] == "applications/remote.toml" and env["WINDOW_CLASS"] == "1,1,1"
+    assert "HF_TOKEN" in env and env["HF_TOKEN"] is None and env["WIPE_CMD"] is None
+    assert "hunter2" not in text and "10.0.0.1" not in text
+
+
 def open_files() -> list[tuple[int, str]]:
     fds = [f"/proc/self/fd/{f}" for f in os.listdir("/proc/self/fd")]
     return [(int(os.path.basename(p)), os.readlink(p)) for p in fds if os.path.lexists(p)]

@@ -898,7 +898,7 @@ def main(opts: Options, plan_of: Callable[[Path, Any, Callable[[], Any]], Any] |
               "finalize_on_loop": windows.finalize_on_loop if windows is not None else None,
               "window_gb": opts.window_gb or None, "disk_floor": SG.disk_record(windows), "copy_records_to": opts.copy_records_to,
               "weights": getattr(com, "weights", None), "window_steps": opts.window_steps, "idle_close_steps": opts.idle_close_steps,
-              "window_requests": opts.window_requests or None, "remote_session": session.describe() if session is not None else None, "row_scheduling": row,
+              "window_requests": opts.window_requests or None, "window_class": opts.window_class, "remote_session": session.describe() if session is not None else None, "row_scheduling": row,
               "committer_options": {k: getattr(opts, k) for k in ("row_build", "hidden_so", "hidden_ns", "tap_cap_mb")},
               "compiler": getattr(com, "compiler", None), **RL.retention_record(opts, com),
               "arena": getattr(com, "arena_sizing_record", None), "engine": llm.engine_record, "run_id": opts.run_id,

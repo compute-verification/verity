@@ -8,7 +8,7 @@
 #   card's strings, the write), and commits the fixed load's window as its class circuit's units
 #   (`benchmarks/one_stage/window_commit.py window-commit`, as served_verdicts.sh's window_commit() calls it).
 # Does NOT show: an audit, a proof, or a traced Build on the H100.
-# Needs: PY (default the node's /workspace/venv312/bin/python), gpu-lease (it leases one card for the serve alone, at most
+# Needs: PY (default /workspace/venv312/bin/python, refused by name where it does not exist: pass the node's), gpu-lease (it leases one card for the serve alone, at most
 #   LEASE_MIN minutes, default 30), HF_HOME (default /workspace/hf) holding the model; CUDA_HOME (CUDA $TOOLKIT, default
 #   12.9, machine.py's; TOOLKIT=13.0 on the H200, as served_verdicts.sh takes there),
 #   CARD_SKU (machine.py sku), PYTHONPATH and VERITY_PROTOCOLS_CONFIG are set here. APPLICATION (applications/NAME.toml),
@@ -29,6 +29,8 @@ SELF=adapters/vllm/tools/served_run/h100_smoke.sh
 TREE=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd); cd "$TREE"
 ROW=llama32-1b__bf16__h100__tp1__b4__i256__o32__mixed__greedy__bi-eager
 DRY=${DRY:-0} PY=${PY:-/workspace/venv312/bin/python} LEASE_MIN=${LEASE_MIN:-30} LEASE_MEM_GB=${LEASE_MEM_GB:-64}
+[ -x "$PY" ] || { echo "SMOKE REFUSED interpreter: the interpreter PY=$PY does not exist on this node: pass PY=/path/to/python" \
+  "(the node's venv)"; exit 3; }
 # the sampling design is the auditor's and not public: a printed line says only that one is registered
 DESIGN="(the registered sampling design)"
 # DEVELOPMENT_DESIGN=1: LAW is a development sampling design (default DEV_LAW, a uniform draw of 4 of class DEV_CLASS's
@@ -43,7 +45,10 @@ export PYTHONPATH=$TREE:$TREE/library/datasets:$TREE/adapters/vllm:$TREE/adapter
 APPLICATION=${APPLICATION:-applications/remote.toml}
 # the window class (S,P,O: slots, prompt ids, outputs) the serve's arena is sized from, and the model, from the adapter's
 # statement; the dataset and its timing from APPLICATION, which the door reads through before the lease
-SAID=$("$PY" adapters/vllm/tools/served_run/inputs.py application "$APPLICATION") || { echo "SMOKE REFUSED dataset: $SAID"; exit 3; }
+SAID_ERR=$(mktemp)
+SAID=$("$PY" adapters/vllm/tools/served_run/inputs.py application "$APPLICATION" 2> "$SAID_ERR") \
+  || { echo "SMOKE REFUSED dataset: ${SAID:-$(tail -n 5 "$SAID_ERR")}"; rm -f "$SAID_ERR"; exit 3; }
+rm -f "$SAID_ERR"
 read -r MODEL REV PRECISION CLASS DATASET TIMING CAP_BITS <<< "${SAID%%$'\n'*}"
 CAP=${CAP:-$CAP_BITS}
 if [ -n "${WIPE_CMD:-}" ]; then  # the wipe reads the application's pins and configuration as the road hands them to a piece

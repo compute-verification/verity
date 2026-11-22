@@ -166,6 +166,15 @@ from .telemetry.job import ADDRESS_MIN, REDACTED, address_names, hide_addresses,
 REQUEST_SCHEMA = "research/request/v0.1"
 #: the request's {address: machine name} for the registered addresses it holds, which the machine's records name instead
 HIDDEN_ADDRESSES = "hidden_addresses"
+#: the launch's environment variables whose values launch.json keeps beside every name, so a run can be repeated from its record;
+#: any other name is kept with no value, since a value may be a secret or an address
+ENV_VALUES_KEPT = frozenset({"APPLICATION", "WINDOW_CLASS", "TOOLKIT", "PY", "VENV", "D", "PRED", "SERVE_ROOT", "HF_HOME", "CUDA_HOME",
+                             "ONEDNN_MAX_CPU_ISA", "MNBT", "DRY"})
+
+
+def env_record(env: dict[str, Any]) -> dict[str, str | None]:
+    """The launch's environment as launch.json keeps it: each name, its value only where `ENV_VALUES_KEPT` names it."""
+    return {k: str(v) if k in ENV_VALUES_KEPT else None for k, v in sorted(env.items())}
 PRESERVED_SCHEMA = "research/preserved/v0.1"
 READY_SCHEMA = "research/source-ready/v0.1"
 READY_FILE = "READY.json"                     # the only marker that makes <root>/src/<identity>/ executable
@@ -2000,6 +2009,7 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
             hidden = {**address_names(req.get("env") or {}, None, req["command"]), **(req.get(HIDDEN_ADDRESSES) or {})}
             write_json_atomic(run_dir / "launch.json", hide_addresses({"run_id": run_id, "claimed_utc": utc_now_ms(), "runner_pid": proc.pid,
                                                                        "argv": argv, "cwd": req.get("cwd"), "request": str(request_path),
+                                                                       "env": env_record(req.get("env") or {}),
                                                                        "hostname": os.uname().nodename}, hidden))
             first = await_first_record(proc, ack_fd)
         except Exception as e:  # noqa: BLE001  (the runner is started: an error here leaves its launch unconfirmed, never refused)
