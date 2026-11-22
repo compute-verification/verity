@@ -98,8 +98,7 @@ def test_v2_case_is_the_sampled_members_one_statement_whatever_the_windows_other
         d.mkdir()
         st = {"dir": d, "meta": {"vus_per_block": k + 1}, "public": str(k) * 2 * 64}
         if reads is not None:
-            st["registered_file"] = d / "registered.json"
-            st["registered_file"].write_text(json.dumps(reads))
+            st |= a5.a0.registered_written(d / "registered.json", reads)
         return {"k": k, "m": SimpleNamespace(base=base, n=n), "pin": str(k) * 128, "st": st}
 
     ms = [member(0, 0, 2), member(1, 2, 3, {"ports": {}})]
@@ -369,8 +368,7 @@ def staged(tmp_path: Path, k: int, key: str, base: int, n: int, *, lookups: str 
         (d / "tables" / f"{t}.u32").write_bytes(t.encode())
     st = {"dir": d, "public": sha(d / f"pub-{n}.bin"), "meta": {"vus_per_block": 4}}
     if reads is not None:
-        st["registered_file"] = d / "registered.json"
-        st["registered_file"].write_text(json.dumps(reads))
+        st |= a5.a0.registered_written(d / "registered.json", reads)
     return {"k": k, "m": types.SimpleNamespace(n=n, base=base, key=key), "st": st, "pin": f"{k:02x}" * 64,
             "circuit": d / "circuit.txt"}
 
