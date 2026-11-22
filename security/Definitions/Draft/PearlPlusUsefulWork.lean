@@ -164,7 +164,7 @@ variable {Ω : Type} (S : Ω → Actual.Run L) (A : Auditor L)
 def SamePrefix (r r' : Ω) : Prop := ∀ X : Finset L, (S r).before X A.tc = (S r').before X A.tc
 
 /-- The tiles the code reads as opened in the run at `r`, none where it reads nothing. -/
-def openedAt (dec : List (List Bool) → Option Read) (r : Ω) : List (ℕ × List Bool) :=
+noncomputable def openedAt (dec : List (List Bool) → Option Read) (r : Ω) : List (ℕ × List Bool) :=
   ((dec (vtranscript A (S r))).map Read.opened).getD []
 
 open Classical in
@@ -324,7 +324,7 @@ theorem acceptAll_not_code (W : List (List Bool) → ℕ) (dec : List (List Bool
   intro hc
   obtain ⟨ρd, hd, -⟩ := hc τ₀ rfl
   rw [h] at hd
-  exact Option.noConfusion hd
+  cases hd
 
 /-- **Probe (soundness's N1 (b)): a message arriving at or after the deadline is not heard.** Lean's `heard` keeps
 only wires whose reader is placed before `d`, so tiles arriving after the deadline are in no transcript the verdict
@@ -332,11 +332,13 @@ reads. -/
 theorem late_not_heard (R : Actual.Run L) (V : Finset L) (d : ℕ) (h : ∀ g, R.A.x g ∈ V → d ≤ R.A.t g) :
     heard R V d = [] := by
   unfold heard
-  have : ((Finset.univ ×ˢ Finset.univ).filter fun p : Fin R.A.N × Fin R.A.N =>
-      p.2 ∈ R.A.reads p.1 ∧ R.A.x p.2 ∉ V ∧ R.A.x p.1 ∈ V ∧ R.A.t p.1 < d) = ∅ := by
-    apply Finset.filter_eq_empty_iff.mpr
-    rintro p - ⟨-, -, hx, ht⟩
-    exact absurd ht (not_lt.mpr (h p.1 hx))
-  simp [this]
+  rw [List.map_eq_nil_iff]
+  apply List.eq_nil_of_length_eq_zero
+  rw [Finset.length_sort]
+  apply Finset.card_eq_zero.mpr
+  apply Finset.image_eq_empty.mpr
+  apply Finset.filter_eq_empty_iff.mpr
+  rintro p - ⟨-, -, hx, ht⟩
+  exact absurd ht (not_lt.mpr (h p.1 hx))
 
 end Draft.PearlPlusUsefulWork
