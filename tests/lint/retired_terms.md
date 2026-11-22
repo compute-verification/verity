@@ -40,7 +40,7 @@
     A step of a run is a phase (Older names); a stage of a Boolean lowering is a level; a pipeline stage keeps its
     sense (above).
   - **Window**: the code's windows (`verity.commitments.periods`' `Window`, a served window circuit and its window
-    record, PoUW's window and its salt) are one period's served steps, and keep the word until renamed. A span of time
+    record, PoUW's window and its salt) are one epoch's served steps, and keep the word until renamed. A span of time
     is a period, a server's gates between two memory wipes are a server block, and a sliding window is a model's term
     (above). PoUB's window keeps the word: the span one challenge of the remote bandwidth audit covers.
   - **Escape**: an incorrect proof block's chance to pass the sample is its miss probability (Older names); the
@@ -137,8 +137,8 @@ bookkeeping (`tests/conftest.py`), and the check's ratchet gate is off the merge
 | "work", "FLOPs", "MAC-times", "pricing" for what a circuit computes or a protocol credits; pub(μ°), μ°, W_reg and W_b in Dither's docs until restated in AND gates; the Lean's `CircuitWork*` and the device model's `Price`; "κ/2" | size, in AND gates; U/s_×. "Work" stays for resources spent in 𝓜, the slowdown lower bound's unit, so `WorkSound` (freed compute in 𝓜's resources) keeps its name |
 | "row" for a workload; vLLM's `verity-vllm row`, `row.py`, `config.RowConfig`, `row_file`, row ids and row dirs, and "row of record" (`manifests/records.json`), in `adapters/vllm/` until vLLM's workloads move | workload; a workload of record |
 | "benchmark row", "benchmark cell", "bench cell", "measured cell", "metric row", "metrics row"; "proof table" for the proof benchmarks' results; "row" and "cell" for what a benchmark recorded (a table's row, a commitment row and Dither's cell keep their senses) | a benchmark result, or a metric for one named number of it (Terms) |
-| "link-window", "link window"; code and records' `window` (`NetworkAttesterParams.window`), the Lean's `TransferBlocks` and `TransferBlocksAcceptMeans`, until a format version | an execution phase's transfer blocks |
-| "window" for a span of time; `Verity.Window`, `verity.commitments.windows`, `window.kind`, until a format version | period: an execution phase, an attestation period (`NetworkVerifier.Period`), or T ticks |
+| "link-window", "link window"; code and records' `window` (`NetworkAttesterParams.window`), the Lean's `TransferBlocks` and `TransferBlocksAcceptMeans`, until a format version | an epoch's transfer blocks |
+| "window" for a span of time; `Verity.Window`, `verity.commitments.windows`, `window.kind`, until a format version | period: an epoch, an attestation period (`NetworkVerifier.Period`), or T ticks |
 | "timestep" (for `every` buckets) | slot stride: `every` buckets (`every` stays until a format version) |
 | "Commit window", for the steps one Commit covers | Commit period |
 | "session" for anything but Flock's and the ZK server's session (Terms, Session); code and records' `session` in those other senses (`session_id`, the challenger's gate session), until a format version | by sense: a run (one execution of a subprotocol); a release (the ZK server's one outer proof per statement); a network attester's attachment to a link (its 32-byte id); a run's challenge phase (the live challenger's gate session) |
@@ -152,14 +152,14 @@ bookkeeping (`tests/conftest.py`), and the check's ratchet gate is off the merge
 | T_0 and the reference circuit C_0 as overhead's normalizer; T_target ≥ L·T_0/Φ_total | the training cost T_𝒢(η; 𝓕); the time to the task, at least T_𝒢(η; 𝒜) GPU-hours |
 | A_phys, A_i(S), δ_i(S), A′ in roman letters; "layer 1", "layer 2", "layer 3"; "the one theorem", "soundness one theorem" | 𝓕, 𝒜_p, δ_p, 𝒜; the feasible set, protocol soundness, the slowdown lower bound |
 | ε_gap, and its `gap.*` routes in `benchmarks/slowdown` (`gap.floor`, `gap.clock`) until renamed | ε_undecl (`undecl.gpu`, `undecl.clock`) |
-| ε for one GPU, "the uncertified share": model slack, idle pipe, ε_skip and exchanged bits | the free compute at that GPU, ε_undecl + ε_skip; the exchanged bits are fresh input (k_S's r_in and r_side), reported beside it in bits |
+| ε for one GPU, "the uncertified share": model slack, idle pipe, ε_skip and exchanged bits | the free compute at that GPU, ε_undecl + ε_skip; the exchanged bits are unregistered input (k_S's r_in and r_side), reported beside it in bits |
 | 𝒜_phys, "physical class", "the physical model's class"; "envelope" for 𝒜_p, "subprotocol application" for p; 𝒜′, "restricted class", "monitored class", "training class", "faithfulness" for 𝒜′; "class" for a set of computations; "initial information" for what both sides start from; the Lean's `ResourceAccounting.Overhead.physClass`, `envelope`, `restricted` and `Class` and `benchmarks/slowdown`'s, until renamed | the feasible set 𝓕; protocol p's admissible set 𝒜_p; the admissible set 𝒜; set; the initial state a |
 | "server-time" for the cost, "threshold" for T_𝒢(η; S); the Lean's `threshold`, until renamed | GPU-hours; the training cost T_𝒢(η; S) |
 | "server-time block", "serving block", "server-window", "physical block", and "window" for a server's gates between two memory wipes; "the serving-block bound"; the module docs of `Verity.Block` and `benchmarks/slowdown`'s `ServingBlock`, until they are renamed | server block; the slowdown lower bound's sum over server blocks |
 | "server block" for one server's proof blocks in one circuit, "server-time block" for the steps that circuit spans | a server's proof blocks; the circuit's steps |
 | "coverage", "materialization" and "work requirement" for what every successful training run must compute; η_cov's subscript | necessary subcomputation (the covering bounds and the inventory's coverage keep their names) |
 | "exclusion bound" and "exclusion" for the result; for the per-block step, "per-block limit", "per-block cap", "window cap", q, q_T(c, k), and `benchmarks/slowdown`'s `Cap`, until renamed | the slowdown lower bound; the server-block yield q_S, and the inference-block yield q(c, k) |
-| "registered computation", "registered work" | the registered circuit |
+| "registered computation", "registered work" | the declared circuit |
 | "training class" for a premise set and the yield it gives; "allowance", "tier", "route" and "application" for a proof of the yields; `benchmarks/slowdown`'s `CLASSES` and `Allowance`, until renamed | pricing argument (`benchmarks/nci`'s tiers are mechanism sets, `benchmarks/slowdown`'s routes free-compute sources) |
 | "reference construction", "reference run", "reference circuit" | the reference training algorithm |
 | "dark" (compute, fleet, leaves), "unmonitored", "undeclared hardware", ε_dark, L_dark, and the Lean's `Nci.Dampener.unmonitoredShare` and `benchmarks/slowdown`'s `eps_dark`; "monitored" (compute, hardware, a server) | unregistered hardware, ε_unreg, L_unreg; registered hardware (the monitoring period keeps its name) |
@@ -180,10 +180,10 @@ bookkeeping (`tests/conftest.py`), and the check's ratchet gate is off the merge
 | "firewall"; the record ids and domain tags `firewall/v0` and `verity/firewall-*`, the party name `firewall` and the message type `Firewall`, until a format version; `benchmarks/`'s `MODES=firewall`, `--firewall`, `FC_FIREWALL*` and `flock-firewall`, until renamed | the ZK server |
 | `flock-verify`, `remote check` for the verifiers, until renamed | `verity verify proof`, `verity verify remote` |
 | "builder", "advice compiler", "circuit builder" for what compiles the advice; `Builder` | registered compiler |
-| "declared advice", "declaring" or "a declaration" of advice; "declared circuit", "declared work"; "declaration block", "declaration period" | reported advice; registered circuit, the registered circuit's work; execution block, execution phase |
-| a served span: "window", "commit period" for PoUW's span and `window`, "sampling block", until renamed | execution phase |
+| "declared advice", "declaring" or "a declaration" of advice; "declared work"; "declaration block", "declaration period" | reported advice; the declared circuit's work; execution block, epoch |
+| a served span: "window", "commit period" for PoUW's span and `window`, "sampling block", until renamed | epoch |
 | "window" for SPOT's served span with its audit; SPOT's records' `window` (`window_root`) until a format version | run (`Spot.Run`); its served part is the run's serving, and its length the run length |
-| "sampling period" for work plus its audit | an execution phase and its verification phase |
+| "sampling period" for work plus its audit | an epoch |
 | "hm96 rows" in protocol prose (the commitments' docs keep it) | hiding commitments |
 | "proof service" | proof system |
 | "audit coin"; "the audit" as a step | challenger's coins; verification phase |
@@ -193,12 +193,27 @@ bookkeeping (`tests/conftest.py`), and the check's ratchet gate is off the merge
 | "named premise", and "premise" for a named `Prop`: "the card premise" | assumption, or a proposed assumption until a lock lists it: the card assumption ("premise" stays for a theorem's hypothesis) |
 | "before that period's coins exist"; "rejection dominates", "reject dominance" | before any coins are flipped; any rejection rejects |
 | tick(g) | t(g) |
-| D for the chosen-state budget | Λ (D is the registered circuit) |
+| D for the chosen-state budget | Λ (D is the declared circuit) |
 | D_b^τ for the PRF distinguisher | 𝒟_b^τ |
 | γ for PoUW's gap ("the γ-gap game", G_γ, the Lean's `Gγ*`, `gammaOf`, `*Gamma*`, `reductionGamma`, `Params.γ0`); η, and ε in TT_OUT and TT_NCP, for a failure probability (`εPearlC`, `WindowEps`, `epsL5e`); "weights" for a fixed operand (`Layout.wid`, `Workload.weight`, `weightOK`, `WeightsOK`); Pearl's δ for its noise scale (`Params.δ`). They stay in records and pins stored before the rename (`price_twins.py` reads both spellings), the wire names `weights_root` and `verity/pouw/h1/weights/v1`, Python's `gamma` and `gamma0` fields and the claim id `pouw-gamma-per-coin` | the gap g, with advantage ε = g/(1 − g) (`GGap*`, `gapOf`, `*Gap*`, `reductionGap`, `Params.gap0`); the failure probability δ (`δPearlC`, `ExecutionPhaseDelta`, `deltaL5e`); the fixed operand (`fixedId`, `fixed`, `fixedOK`, `FixedOK`); the noise scale σ (`Params.σ`) |
 | Pearl's "debit" and "cap": "debit", "debited element", "unneeded" element, "cap", "cap check", "over-cap" tile; `pearl_c_debit`, `debit_units`, `forming_elements`, `Rule.debitUnits`, `debitOf`, `tileDebitRev1`, `capOK`, `Device.cap`, `CAP`, until renamed | inert work; an inert element; the inert-work share ι; the inert-work bound; a tile over the inert-work bound |
 | "subprotocol" for a protocol a configuration lists | protocol |
 | "(c,k)-partition" for a partition of a circuit's gates into blocks within the budgets (c, k), and "(c, k)-partition" for the same | the (c,k,n)-inference circuit's partition into (c,k)-inference blocks |
+| "window" and "execution phase" for one round of running and verifying, and the code's `window` names; in prose: "execution phase" | epoch |
+| in prose: "fresh input" | unregistered input |
+| "registered" said of anything but information; in prose: "registered circuit" | the declared circuit (registered is said only of information) |
+| "form" for one of a protocol's or statement's versions; in prose: "one-stage form", "two-stage form", "per-member form", "rows form", "basic form" | variant (the one-stage variant, the per-member variant) |
+| in prose: "an accept" | an accepted run |
+| "runs ahead of its proof" for a variant accepted before a proof covers it; in prose: "ahead of its proof" | runs unproved |
+| "a hole" for a gap in a soundness argument | a soundness gap |
+| in prose: "squaring ceiling" | the device's maximum squaring rate |
+| "Definition", "subcircuit" for a circuit template or one with its parameters bound; in prose: "subcircuit template" | circuit template (with its parameters fixed, a circuit; at the lowest level, a primitive gate) |
+| "program" for an executable | the verifier, or the executable |
+| "coin" for what the verifier sends (`coin` in code) | challenge |
+| "card" for a piece of the agreed hardware; in prose: "card assumption", "card table" | device; the device assumption; a data sheet |
+| "credit" for what a proof block counts for | declared use |
+| "the Site" for the agreed hardware (`Verity.Site` in code) | the hardware description |
+| "check" for a repository's test or lint (`verity check` and `circuit-check` keep their names) | test, lint |
 
 The `veritor.*` gate families (`verity/circuits/targets/target.py`) keep their spelling, which `*_FAMILY_DIGEST`
 pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_frozen_families.py`).

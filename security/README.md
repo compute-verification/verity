@@ -184,6 +184,10 @@ The numbers come from the slowdown calculator (`benchmarks/slowdown`), not from 
   by its own **upstream computation** T_j.
 - **Local description length** LDL_{t,R}(y): the length of a shortest program from which a fixed decoder, given the
   registration R, outputs y within t steps.
+- **Export width** (training): b, the least κ(A → E(A))/|E(A)| over sets of gates A with E(A) nonempty: the fewest wires per output through which a set of gates feeds outputs outside it.
+- **Fixed forger**: a construction from the prover's strategy that outputs an LMS forgery, the only thing `euf-cma/lms-sha512-n64` applies to.
+- **Sealed sink** (network attestation): a memory attester whose registered links all end in the subtree, which adds no term. Code: `ResourceAccounting.Guarantees.LeakParts`.
+- **Covert residual**: what the device's limits leave the other accounts: F·T − V work, BW·T − Q_cert bits read, M − S_cert bits held. Code: `ResourceAccounting.Guarantees.CovertResidual`.
 
 ### The protocol
 
