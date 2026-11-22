@@ -760,11 +760,11 @@ coins of their coin kinds in the run's order (`holoCTs`: the link points, then t
 each stream round's coins read off the history's prefix at the last round it takes), and (ii) zero knowledge,
 `RecursiveZkServerPrivate`, as in `PublicAudit`. (i) states no bits. The recursion's knowledge form,
 `Claims.Recursion.KS`, is at its level `Claims.Recursion.lam`, which no theorem evaluates at the deployment. Route 2C's
-bound λ₂ (`lamLin2`) evaluates to at least 135.7 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep_tight`),
+bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`),
 and `KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) is stated
 (`Flock.Guarantees.RecursiveKS`), which no theorem proves and which does not reach the Holo statements (i) is about, and
 `BitsLin2` at the dense statements follows from it (`bitsLin2On_of_ksLin2On`). The dense form, which
-`verity/sampled-proofs/recursive/v1` accepts, is `RecursiveAuditC3`, at `λ₂ = 135.7` and, at the deployment's tables, at
+`verity/sampled-proofs/recursive/v1` accepts, is `RecursiveAuditC3`, at `λ₂` and, at the deployment's tables, at
 `κ + t'·ε`.
 -/
 def RecursiveAuditHolo : Prop :=

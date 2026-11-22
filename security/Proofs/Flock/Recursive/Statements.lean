@@ -116,8 +116,8 @@ with probability at most `4·hidingGap` (`VacuityProbes.Hm96Opens.opens_to_any_r
 outside this tree). For any cheater the event is then nearly empty, and the bound bounds it, not a wrong
 computation. The fix is the knowledge form the claims API states recursion in; `EndToEndHidden` avoids this by
 extraction. The knowledge form, `Claims.Recursion.KS`, is at the recursion's level `Claims.Recursion.lam`, which no
-theorem evaluates at the deployment. Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 135.7 at the deployed
-records (`RecDeploy.lamLin2_deployed_ge_dep_tight`), and `KSLin2` at the deployment's dense statements (`KSLin2On` at
+theorem evaluates at the deployment. Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
+(`RecDeploy.lamLin2_deployed_ge_dep`), and `KSLin2` at the deployment's dense statements (`KSLin2On` at
 `RecDeploy.DenseAt`) is stated (`Flock.Guarantees.RecursiveKS`), and no theorem proves it; Holo statements being
 candidate 3's own model, and `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). This fork form
 states no bits.
@@ -496,7 +496,7 @@ opens to the right row except with probability at most `4·hidingGap` (`VacuityP
 it, not a wrong computation. The fix is the knowledge form the claims API states recursion in;
 `EndToEndHidden` avoids this by extraction. The knowledge form, `Claims.Recursion.KS`, is at the recursion's level
 `Claims.Recursion.lam`, which no theorem evaluates at the deployment. Route 2C's bound λ₂ (`lamLin2`) evaluates to at
-least 135.7 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep_tight`), and `KSLin2` at the deployment's dense
+least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`), and `KSLin2` at the deployment's dense
 statements (`KSLin2On` at `RecDeploy.DenseAt`) is stated (`Flock.Guarantees.RecursiveKS`), and no theorem proves it;
 Holo statements being candidate 3's own model, and `BitsLin2` at those statements follows from it
 (`bitsLin2On_of_ksLin2On`). This fork form states no bits. -/

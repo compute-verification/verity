@@ -33,11 +33,11 @@ The statement is in `../ASSUMPTIONS.md`: `UniformRandomBytes L t` (every event),
   form admits a possibilistic break, and the recursion's knowledge-soundness statement is
   `Flock.Guarantees.RecursiveKS`, which no theorem proves. Those are fork forms and state no bits; the recursion's
   knowledge form, `Claims.Recursion.KS`, is at its level `Claims.Recursion.lam`, which no theorem evaluates at the
-  deployment. Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 135.7 at the deployed records
-  (`RecDeploy.lamLin2_deployed_ge_dep_tight`; at least 100, `RecDeploy.lamLin2_deployed_ge_dep`), and `KSLin2` at the
-  deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`, at the deployed reader) is
-  `Flock.Guarantees.RecursiveKS`, which no theorem proves. Holo statements are candidate 3's own model, and `BitsLin2`
-  at the dense statements follows from `KSLin2` there (`bitsLin2On_of_ksLin2On`).
+  deployment. Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
+  (`RecDeploy.lamLin2_deployed_ge_dep`), and `KSLin2` at the deployment's dense statements (`KSLin2On` at
+  `RecDeploy.DenseAt`, at the deployed reader) is `Flock.Guarantees.RecursiveKS`, which no theorem proves. Holo
+  statements are candidate 3's own model, and `BitsLin2` at the dense statements follows from `KSLin2` there
+  (`bitsLin2On_of_ksLin2On`).
 - **The salts.** Flock's prover reads every hm96 leaf salt, 192 bytes a leaf,
   from the operating system (`getrandom`, the kernel's `getrandom(2)`, which `/dev/urandom` also reads; under the
   ZK server, from its tap), and the recursive audit's ZK server and a registrant read theirs the same way (`os.urandom`).
