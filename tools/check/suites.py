@@ -282,8 +282,10 @@ ENV_PREFIXES = ("VERITY_", "FLOCK_")
 #: what a machine's runner gives a run's workload and check's steps never get (check.py's `ENV_PASS`): the run's `RESEARCH_*` and
 #: the machine's PYTHONPYCACHEPREFIX. Tests that start runs of their own would inherit them, so a suite run inside a `research
 #: run` would reach another verdict than inside check (test_remote_cwd's). Nor the kit's trial switch, which `research run` sets on
-#: a run of a tree that isn't `main`'s, a queue's candidate checks among them: a test that wants a trial sets it itself
-RUNNER_PREFIX, RUNNER_ENV = "RESEARCH_", ("PYTHONPYCACHEPREFIX", "VERITY_BENCH_TRIAL")
+#: a run of a tree that isn't `main`'s, a queue's candidate checks among them: a test that wants a trial sets it itself. Nor `OUT`,
+#: the run's own result directory: a script a test starts writes its results there unless told otherwise, and one that moves what
+#: it doesn't publish (`served_verdicts.py publish`) took the run's own logs with it
+RUNNER_PREFIX, RUNNER_ENV = "RESEARCH_", ("PYTHONPYCACHEPREFIX", "VERITY_BENCH_TRIAL", "OUT")
 #: check.py's: what its steps get inside a recorded run in place of the RESEARCH_* that named the machine's store (`store_custody`)
 CUSTODY_ENV, STORE_REQUIRED_ENV, REGRESSION_ENV = "CHECK_STORE_CUSTODY", "VERITY_STORE_REQUIRED", "VERITY_REGRESSION"
 #: the suites whose tests run `lake` or what `lake build` builds in the Lean verifier: check runs them after its `lean-build`
@@ -3133,7 +3135,9 @@ def main(argv: list[str] | None = None) -> int:
         elif r.log is not None and not (r.ran_all and r.child_reads):     # failed on its children's reads alone: said above
             if not r.reported:
                 print("        the guard wrote no report, so nothing vouches for what the tests read")
-            print("        " + "\n        ".join(r.log.read_text().splitlines()[-25:]) + f"\n        log: {r.log}")
+            tail = (r.log.read_text().splitlines()[-25:] if r.log.is_file()
+                    else ["its log is gone: a test removed or moved it, so its failing tests can't be read here"])
+            print("        " + "\n        ".join(tail) + f"\n        log: {r.log}")
 
     if a.json and any(r.status == "failed" for r in results):
         failing(a.json, results)

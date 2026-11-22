@@ -1135,16 +1135,29 @@ def _env_workspace(root: Path, members: dict[str, str]) -> None:
 def test_the_tests_get_neither_the_runners_research_variables_nor_its_pycache_prefix(tmp_path):
     """Inside a `research run`, the tests get neither the run's RESEARCH_* nor the machine's PYTHONPYCACHEPREFIX, which check's
     steps never get either: an inner run that inherits the prefix writes no bytecode where test_remote_cwd looks for it. Nor the
-    kit's VERITY_BENCH_TRIAL, which `research run` sets on a check of a tree that isn't main's. Another VERITY_ switch still
-    reaches them."""
+    kit's VERITY_BENCH_TRIAL, which `research run` sets on a check of a tree that isn't main's, nor the run's `OUT`, where a
+    script a test starts would write its results and move the run's own logs. Another VERITY_ switch still reaches them."""
     root = tmp_path / "tree"
     _env_workspace(root, {"pkg": "import os\n\ndef test_env():\n    assert os.environ.get('VERITY_SWITCH') == '1'\n"
                                  "    assert not [k for k in os.environ if k.startswith('RESEARCH_') or k in "
-                                 "('PYTHONPYCACHEPREFIX', 'VERITY_BENCH_TRIAL')]\n"})
+                                 "('PYTHONPYCACHEPREFIX', 'VERITY_BENCH_TRIAL', 'OUT')]\n"})
     p = _run_suite(root, tmp_path, "--fresh", extra={"RESEARCH_RUN_ID": "r1", "RESEARCH_RUN_DIR": str(tmp_path / "run"),
                                                      "PYTHONPYCACHEPREFIX": str(tmp_path / "pycache"), "VERITY_SWITCH": "1",
-                                                     "VERITY_BENCH_TRIAL": "1"})
+                                                     "VERITY_BENCH_TRIAL": "1", "OUT": str(tmp_path / "run" / "out")})
     assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout + p.stderr
+
+
+def test_a_failed_suite_whose_log_a_test_removed_is_reported_and_the_run_goes_on(tmp_path):
+    """A test that removes or moves the run's files (one did, through a script's publish of its OUT) can take its own
+    suite's log with it: the run says the log is gone and reports the suite failed, where it stopped on a traceback
+    and reported nothing."""
+    root = tmp_path / "tree"
+    _env_workspace(root, {"pkg": "import os\nfrom pathlib import Path\n\ndef test_gone():\n"
+                                 "    Path(os.environ['VERITY_SUITE_REPORT']).with_suffix('.log').unlink()\n"
+                                 "    assert False\n"})
+    p = _run_suite(root, tmp_path, "--fresh")
+    assert p.returncode != 0 and "its log is gone" in p.stdout, p.stdout + p.stderr
+    assert "FileNotFoundError" not in p.stdout + p.stderr, p.stdout + p.stderr
 
 
 def test_a_fresh_run_builds_the_verifier_and_runs_the_suites_with_lakes_artifact_cache_off(tmp_path):
