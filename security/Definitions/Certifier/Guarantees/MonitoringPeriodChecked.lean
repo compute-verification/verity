@@ -59,8 +59,9 @@ registered and the checked inputs pinned; no factor counts the schedules or a co
 
 **The registered inputs.** `reg` is as `MonitoringPeriodLeakAccepted` has it. The good event (`ExecutionPhaseGoodChecked`, stated here:
 `ExecutionPhaseGood` with the leak relation at a valid run and the window's check the registration's) reads that the trace
-holds the registration's values there as the named premise `RegisteredInputsHeld`, open: the registration's openings
-discharge it under the commitment's binding. Where no input is registered it holds of every trace.
+holds the registration's values there as the named premise `RegisteredInputsHeld`, open. No theorem discharges it: the
+commitment's binding reaches only a registered input the extracted trace opens, and at one it leaves unopened
+`traceVal` is `false`. Where no input is registered it holds of every trace.
 
 The union of the windows' failures over the monitoring period's live coins is not stated here.
 -/

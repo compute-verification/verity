@@ -1218,6 +1218,14 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "NetTiming.RegisteredInputsHeld": {
+   "owner": "@lean",
+   "digest": "cc323ff7646936e9a47ffe0e5ecfa89e25f863da08c30035c70aa6a82bb734b6",
+   "issue": "LEAN-343",
+   "due": "2026-11-25",
+   "waits": "NetTiming.SecurityProofs.MonitoringPeriodLeakAccepted",
+   "why": "MonitoringPeriodLeakAccepted counts only the secrets whose every epoch meets ExecutionPhaseGood, which holds this condition inline, unnamed; nothing bounds the accepted runs whose extracted trace does not hold the registered values at the registered inputs"
+  },
   "NetTiming.ScopeAcc": {
    "owner": "@network-accounting",
    "digest": "4ae13150ab93f5db023464d876b21de5711afc9c810d85edcdb87b9b7a6c2059",
