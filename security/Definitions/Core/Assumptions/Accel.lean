@@ -31,7 +31,7 @@ meeting P1 and P2 (the card's own: what its instructions compute), some program 
 schedule chosen before the content as the card's code is, takes every such `M` to `f M` within `T` seconds
 (`Machine.Fits`). It holds if every instruction the card executes is dominated by an ACCEL op (`Accel.Opcode`)
 reading and writing at least its words, at no more units of each resource (the coverage table,
-`benchmarks/machine_model/data/cover/rows.toml`), since the model's coarsenings (pooling, no latency, no per-clock
+`calibration/machine_model/data/cover/rows.toml`), since the model's coarsenings (pooling, no latency, no per-clock
 limit, free resources) only let a program do more. That domination is not shown for MATCH, REDUX, VOTE, MMAs with f16
 accumulators, FP6 MMAs, FP8 and FP6 MMAs with scale groups, clock and timer reads, or BAR.RED, so the premise is not
 established for a program that executes one. A table is a SKU's at its firmware's maximum (its card file,
