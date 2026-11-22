@@ -556,15 +556,17 @@ def _key_failure(own: Own, t: str) -> str | None:
 def placings(own: Own, named: bool, t: str, p: str) -> list[tuple[str, Any]]:
     """`SecondStage.placings`: every rule that places template `t`'s session port `p`, by the interior record and the
     design alone: `OWN_TREE` at its own port of the record, `WRITER_TREE` at its writer's output port where a wire names
-    it, `REGISTERED` at the interior registration's entry of the value a link names it to read, and `ROUND1_TREE` at
-    the boundary record's port a link names it to read. A port is placed where exactly one holds (`placing_failures`),
-    so a port linked to round 1's tree that the second stage also commits a tree of is refused."""
+    it, and `REGISTERED` at the interior registration's entry of the value a link names it to read; where none of
+    those does, `ROUND1_TREE` at the boundary record's port a link names it to read. A port is placed where exactly one
+    holds (`placing_failures`)."""
     w, x = _wire_of(own, t, p), _link_of(own, t, p)
     e = None if x is None else _registered_entry(own.interior, x.value)
-    return ([(OWN_TREE, _port_of(named, t, p))] if _port_of(named, t, p) in _by_port(own.interior) else []) + (
+    three = ([(OWN_TREE, _port_of(named, t, p))] if _port_of(named, t, p) in _by_port(own.interior) else []) + (
         [] if w is None else [(WRITER_TREE, _port_of(named, w.writer, w.wport))]) + (
-        [] if e is None else [(REGISTERED, e)]) + (
-        [(ROUND1_TREE, x.value)] if x is not None and x.value in _by_port(own.boundary) else [])
+        [] if e is None else [(REGISTERED, e)])
+    if three or x is None:
+        return three
+    return [(ROUND1_TREE, x.value)] if x.value in _by_port(own.boundary) else []
 
 
 def _put_at(v: Any, j: Any, path: Sequence[str]) -> Any:

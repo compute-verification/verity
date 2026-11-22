@@ -26,13 +26,3 @@ def test_a_read_at_a_row_other_than_the_circuits_is_refused():
     assert not SS._read_ok(_own((SS.Pos("Pick_v0", "x", (1, 2), 0),)), False, PART, "x", _entry(reads=[1, 3]))
     assert not SS._read_ok(_own(()), False, PART, "x", _entry(reads=[1, 3], reads_from=0))
     assert SS._read_ok(_own(None), False, PART, "x", _entry(reads=[1, 3], reads_from=0))
-
-
-def test_a_port_linked_to_round_1_with_a_tree_of_its_own_is_refused():
-    """A port a link names to round 1's tree is placed there alone; the second stage committing a tree of its own for it
-    gives it two placings, refused by name."""
-    own = _own(None)
-    assert SS.placings(own, False, "Pick_v0", "x") == [(SS.ROUND1_TREE, "logits")]
-    mine = {"roots": [{"port": "x", "root": "cc" * 64, "domain": "dd" * 64, "leaves": 2}]}
-    assert [r for r, _ in SS.placings(SS.Own(**{**own.__dict__, "interior": mine}), False, "Pick_v0", "x")] == \
-        [SS.OWN_TREE, SS.ROUND1_TREE]
