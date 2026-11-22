@@ -13,6 +13,9 @@ What a row retires:
   exception it names.  A one-word quote followed by a list of senses (``"dark" (compute, fleet, leaves)``) retires
   each phrase (``dark compute``).  The words that ``retired_terms.md``'s narrower senses say still carry two senses
   (**Row**, **Transcript**, ...) and those ``LIVE`` names are not enforced alone, only in the phrases that retire them;
+* each quoted name of a clause that opens ``in prose:``, only as prose: its words, each lower case or capitalized, apart
+  from any identifier character, hyphen, dot or slash and separated only by spaces or a line break (``execution phase``,
+  ``Execution phases``, not ``execution_phase``, ``ExecutionPhase`` or ``--execution-phase``);
 * each identifier written in backticks in a clause that says ``until renamed``, when it is one only code spells
   (``Flock.Firewall``, ``FC_FIREWALL*``, ``DrawIsCoin``: a dot, an underscore, a hyphen, an inner capital or a ``*``,
   which matches any identifier characters); a plain word there (``window``), a path, and a name that owns the next
@@ -168,15 +171,14 @@ DOC_TERMS = {
                                                                               "complement; a prover's acceptance probability "
                                                                               "keeps the word)",
     "egress cone": "reach (E)",
-    "link window": "an execution phase's transfer blocks (`link-window` stays in backticks until a format version)",
+    "link window": "an epoch's transfer blocks (`link-window` stays in backticks until a format version)",
     "block-scaled, blockwise, scale block": "scale group",
     "production": "serving, or proving",
     "builder, advice compiler, circuit builder": "registered compiler",
     "declared advice": "advice",
-    "declared circuit": "registered circuit",
-    "declared work, declared workload, declares its advice": "registered circuit; the developer reports its advice, which "
+    "declared work, declared workload, declares its advice": "declared circuit; the developer reports its advice, which "
                                                              "the registered compiler turns into the execution block",
-    "registered work": "registered circuit (D)",
+    "registered work": "declared circuit (D)",
     "the prover's node, machine, host or site, a machine the prover doesn't control, nothing the prover runs or hosts, "
     "prover-controlled, the prover system":
         "the developer's node, machine, host or site, a machine the developer doesn't control, nothing the developer runs "
@@ -192,7 +194,7 @@ DOC_TERMS = {
     "IR, Verity IR": "circuit or Program (`verity.circuits`)",
     "verifier of record": "the verifier (other checking code is named for what it is: the Rust cross-check, a Python mirror)",
     "audit coin": "the challenger's coins (the step that reads them is the verification phase)",
-    "declaration block, declaration period": "execution block, execution phase",
+    "declaration block, declaration period": "execution block, epoch",
     "uplink tap, the auditor's tap": "the network attester, and its records network attestations",
     "timed verifier": "the memory attester",
     "network transparency": "network accounting",
@@ -210,10 +212,9 @@ DOC_TERMS = {
     "staging decode": "the store's load",
     "pinned theorem, pinned statement": "guarantee",
     "trusted text": "spec",
-    "sampling period, sampling block, PoUW's commit period": "execution phase (work plus its audit: an execution phase and its "
-                                                            "verification phase)",
+    "sampling period, sampling block, PoUW's commit period": "epoch (work plus its audit)",
     "hm96 rows, outside the commitments' docs": "hiding commitments",
-    "integrity period": "execution phase",
+    "integrity period": "epoch",
     "execution transcript": "trace (a proof's or a session's messages stay its transcript)",
     "that period's coins": "before any coins are flipped",
     "rejection dominates, reject dominance": "any rejection rejects the whole",
@@ -235,8 +236,8 @@ DOC_TERMS = {
     "uncertified capacity, uncertified gates, undeclared compute, skippable work, residual compute, monitored residual":
         "free compute, U",
     "dark compute, dark fleet, dark leaves, undeclared hardware": "unregistered hardware, ε_unreg",
-    "unregistered input, unregistered information, novel information": "fresh input, fresh input bits",
-    "registered computation": "the registered circuit",
+    "unregistered information, novel information": "unregistered input, unregistered input bits",
+    "registered computation": "the declared circuit",
     "work requirement": "necessary subcomputation",
     "dampener, compute dampener": "the slowdown, slowdown(𝒢, 𝒜, η) (`Nci.Dampener` and `Dampener*` stay in backticks until renamed)",
     "NCI, novel communication intensity": "the inference-only policy (`Nci*`, `NciCheck` and the `nci` directories stay in backticks until "
@@ -245,6 +246,15 @@ DOC_TERMS = {
            "memory wipe's, or run",
     "remote bandwidth audit, remote bandwidth, remote audit, proof of useful bandwidth":
         "PoUB (the `verity/remote-bandwidth/` ids are bytes and stay, in backticks, until PoUB's next version)",
+    "execution phase": "epoch",
+    "fresh input": "unregistered input",
+    "registered circuit": "the declared circuit (registered is said only of information)",
+    "subcircuit template": "circuit template",
+    "an accept": "an accepted run",
+    "ahead of its proof": "runs unproved",
+    "squaring ceiling": "the device's maximum squaring rate",
+    "one-stage form, two-stage form, per-member form, rows form, basic form": "variant: the one-stage variant, ...",
+    "card assumption, card table": "the device assumption, a data sheet",
 }
 _SPACE = r"(?:[ \t]+|-|[ \t]*\n[ \t]*)"
 _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}units?|(?:physical|thread|KV){_SPACE}blocks?"
@@ -255,7 +265,7 @@ _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}u
                        rf"|acceptance{_SPACE}probabilit(?:y|ies){_SPACE}\$?(?:\\bar\{{?\s?)?P\u0304?\}}?_\{{?a\b"
                        rf"|(?:sampling{_SPACE})?design's{_SPACE}acceptance{_SPACE}probabilit(?:y|ies)"
                        rf"|link{_SPACE}windows?|block{_SPACE}scaled|blockwise|scale{_SPACE}blocks?|productions?"
-                       rf"|remote{_SPACE}check|builders?|advice{_SPACE}compilers?|declared{_SPACE}(?:advice|circuits?|work(?:loads?)?)"
+                       rf"|remote{_SPACE}check|builders?|advice{_SPACE}compilers?|declared{_SPACE}(?:advice|work(?:loads?)?)"
                        rf"|declar(?:es|ed|ing){_SPACE}(?:its|their|the){_SPACE}advice|sampled{_SPACE}units?"
                        rf"|integrity{_SPACE}periods?|execution{_SPACE}transcripts?"
                        rf"|units?{_SPACE}class(?:es)?|audit{_SPACE}coins?"
@@ -272,7 +282,7 @@ _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}u
                        rf"|(?:training|physical|restricted|monitored){_SPACE}class(?:es)?|certified{_SPACE}(?:work|shares?)"
                        rf"|accounted{_SPACE}compute|declared{_SPACE}(?:compute|utilization)|uncertified{_SPACE}(?:capacity|gates)"
                        rf"|undeclared{_SPACE}(?:compute|hardware)|skippable{_SPACE}work|residual{_SPACE}compute|monitored{_SPACE}residuals?"
-                       rf"|dark{_SPACE}(?:compute|fleets?|leaves|hardware)|unregistered{_SPACE}(?:inputs?|information)"
+                       rf"|dark{_SPACE}(?:compute|fleets?|leaves|hardware)|unregistered{_SPACE}information"
                        rf"|novel{_SPACE}information|registered{_SPACE}computations?|work{_SPACE}requirements?"
                        rf"|period's{_SPACE}(?:audit{_SPACE})?coins|reject(?:ion)?{_SPACE}domina\w*|dampeners?"
                        rf"|uplink{_SPACE}taps?|auditor's{_SPACE}taps?"
@@ -283,7 +293,10 @@ _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}u
                        rf"|monitored{_SPACE}(?:compute|hardware|servers?)|staging{_SPACE}decodes?"
                        rf"|pinned{_SPACE}(?:theorems?|statements?)|trusted{_SPACE}texts?"
                        rf"|remote{_SPACE}(?:bandwidth(?:{_SPACE}audits?)?|audits?)|proof{_SPACE}of{_SPACE}useful{_SPACE}bandwidth"
-                       rf"|novel{_SPACE}communication{_SPACE}intensity)\b)|\bIUs?\b|\bNCI\b"
+                       rf"|novel{_SPACE}communication{_SPACE}intensity|execution{_SPACE}phases?|fresh{_SPACE}inputs?"
+                       rf"|registered{_SPACE}circuits?|subcircuit{_SPACE}templates?|an{_SPACE}accepts?"
+                       rf"|ahead{_SPACE}of{_SPACE}its{_SPACE}proof|squaring{_SPACE}ceilings?|card{_SPACE}(?:assumptions?|tables?)"
+                       rf"|(?:one{_SPACE}stage|two{_SPACE}stage|per{_SPACE}member|rows|basic){_SPACE}forms?)\b)|\bIUs?\b|\bNCI\b"
                        rf"|(?i:\bC-Flock\b|\bnetlists?\b|\bverifiers?{_SPACE}of{_SPACE}record\b)|\bM0\b|\bIRs?\b"
                        rf"|\bcommit{_SPACE}periods?\b")
 _CODE = re.compile(r"^[ \t]*(`{3,}|~{3,}).*?^[ \t]*\1[^\n]*$|(`+)[\s\S]*?(?<!`)\2(?!`)", re.M | re.S)
@@ -446,6 +459,8 @@ NARROWS = re.compile(r"\b(?:for|meaning|naming|in|as|of)\b")
 #: an identifier's parts, as the lint splits a term and a file into words: camel humps, runs of capitals, digits, letters
 WORDS = re.compile(r"[A-Z]?[a-zδκ]+|[A-Z]+(?![a-z])|\d+|[δκεΔ]")
 INFLECT = {"noun": ("", "s", "es"), "verb": ("", "s", "es", "n", "ing", "ed")}
+#: what separates a prose term's words: spaces, or a line break and the next line's comment marker
+PROSE_SEP = r"(?:[ \t]+|[ \t]*\n[ \t]*(?:#+|//+|--|\*|;+)?[ \t]*)"
 
 
 def holds(path: str) -> bool:
@@ -461,11 +476,15 @@ def holds(path: str) -> bool:
 class Term:
     """One retired name: its spelling in the table, what the table says instead, and how it is matched."""
 
-    def __init__(self, old: str, new: str, inflect: str = "noun", code: bool = False):
+    def __init__(self, old: str, new: str, inflect: str = "noun", code: bool = False, prose: bool = False):
         self.old, self.new = old, new
         if code:
             body = re.escape(old).replace(r"\.\*", r"\.\w+").replace(r"\*", r"\w*")
             scan = body
+        elif prose:
+            parts, ends = old.split(), "(?:" + "|".join(sorted(INFLECT[inflect], key=len, reverse=True)) + ")"
+            body = PROSE_SEP.join(f"[{p[0]}{p[0].upper()}]{re.escape(p[1:])}" for p in parts) + ends
+            scan = PROSE_SEP.join(re.escape(p.lower()) for p in parts) + ends
         else:
             parts = [p for p in re.split(r"[\s_-]+", old) if p]
             ends = sorted({e for s in INFLECT[inflect] for e in (s, s.upper())}, key=len, reverse=True)
@@ -475,7 +494,7 @@ class Term:
         self.pattern, self.scan = re.compile(body), re.compile(scan)
         self.anchors = frozenset(w.lower() + s for w in [max(WORDS.findall(old) or [old], key=len)]
                                  for s in INFLECT["verb"])
-        self.code = code
+        self.code, self.prose = code, prose
         self.says = self._says(new) if code and "*" in old else None
 
     @staticmethod
@@ -505,6 +524,11 @@ class Term:
         for m in found:
             s, e = m.span()
             before = text[s - 1] if s else ""
+            if self.prose:
+                after = text[e] if e < len(text) else ""
+                if not (before.isalnum() or before in tuple("_-./") or after.isalnum() or after in ("_", "-")):
+                    yield s, e
+                continue
             if before.isalnum() and not (text[s].isupper() and (before.islower() or before.isdigit())):
                 continue
             after = text[e] if e < len(text) else ""
@@ -529,6 +553,10 @@ def terms_of(glossary: str) -> list[Term]:
             continue
         new = re.sub(r"\s+", " ", cells[-1])
         for clause in cells[0].split(";"):
+            if clause.lstrip().startswith("in prose:"):
+                for m in QUOTE.finditer(clause):
+                    out.setdefault(m.group(1), Term(m.group(1), new, prose=True))
+                continue
             quotes, narrowed, words = list(QUOTE.finditer(clause)), False, []
             for i, m in enumerate(quotes):
                 if clause[:m.start()].rstrip().endswith("outside"):
@@ -800,6 +828,33 @@ def test_what_is_a_retired_term() -> None:
         "DrawIsCoin", "Remote.Draw.Session", "--draw", "Verity.Window"]
     assert olds("the domain verity/flock-firewall/v1 and note:x-draw-law, a session, the window") == []
     assert sites_of("a\nb C-Flock\n", by) == [(2, f"'C-Flock' is retired; say Flock ({TABLE})")]
+
+
+PROSE_EXAMPLE = """# Glossary
+## Older names
+
+| Old name, where it stays | Term |
+|---|---|
+| "window" for an epoch; in prose: "execution phase", "an accept" | epoch |
+"""
+
+
+def test_a_prose_row_counts_its_words_only_as_prose() -> None:
+    """A quote of an ``in prose:`` clause counts where its words stand as words, across a comment's line break too, and
+    never as an identifier, a flag, a hyphenated compound or a longer word; the narrowed quote beside it doesn't count."""
+    got = {t.old: t for t in terms_of(PROSE_EXAMPLE)}
+    assert set(got) == {"execution phase", "an accept"} and all(t.prose for t in got.values())
+    by: dict[str, list[Term]] = {}
+    for t in got.values():
+        for a in t.anchors:
+            by.setdefault(a, []).append(t)
+
+    def olds(text: str) -> list[str]:
+        return [w.split(" is retired")[0].strip("'\"") for _, w in sites_of(text, by)]
+    assert olds("the execution phase, Execution phases, an execution\n# phase; an accept, An accept") == [
+        "execution phase", "Execution phases", "execution\\n# phase", "an accept", "An accept"]
+    assert olds("execution_phase, ExecutionPhase, --execution-phase, per-execution-phase, EXECUTION PHASE, "
+                "an accepted run, an acceptance, a window") == []
 
 
 SENSES_EXAMPLE = """# Glossary
