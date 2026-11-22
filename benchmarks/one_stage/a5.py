@@ -1047,7 +1047,8 @@ def header_why(mine: CS.Binding, rec: dict, form: tuple[list, dict] | str, mm: d
                              subset=MB.subset_designs(mine.law, rec))
 
 
-def member_form(a: argparse.Namespace, mine: CS.Binding, rec: dict) -> tuple[list, dict[str, dict]] | str:
+def member_form(a: argparse.Namespace, mine: CS.Binding, rec: dict,
+                linked: Sequence[Mapping[str, Any]] = ()) -> tuple[list, dict[str, dict]] | str:
     """What the per-member form holds each member's public file to (`members.population_why`), read off the verifier's
     window ``mine`` and the docket ``rec``: the docket's strata and each member's slice of the record
     (`members.slices`, Lean's `OneStageZk.Member.slice`: its units, the roots the record names under its name, the
@@ -1063,7 +1064,7 @@ def member_form(a: argparse.Namespace, mine: CS.Binding, rec: dict) -> tuple[lis
         return P.strata(mine.program, mine.query), MB.slices({m.key: [[m.base, m.base + m.n]] for m in mine.members}, record,
                                                          program=mine.program, query=mine.query,
                                                          window_root=a.window_root,
-                                                         tied=MB.tied_gates(mine.program, verifying(a)))
+                                                         tied=MB.tied_gates(mine.program, verifying(a)), linked=linked)
     except (P.QueryRefused, ValueError) as e:
         return str(e)
 
@@ -1140,7 +1141,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     files = (json.loads((served / "window.json").read_text()), rec)
     roots = {r["port"]: r for r in rec["roots"]}
     progress("written", t_audit, members=len(mine.members), population=n_all)
-    form = member_form(a, mine, rec)
+    form = member_form(a, mine, rec, linked or ())
     progress("member-form", t_audit, members=len(mine.members), why=form if isinstance(form, str) else None)
     members, publics, checks, composed, programs_ok, kept, read, makes = [], {}, {}, {}, {}, {}, set(), {}
     door = getattr(a, "door_lower", None)
@@ -1263,7 +1264,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     hist = history(publics) if history is not None else None
     checks["registration"] = V.check(rec, program, query, sampling_design, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table,
                                      partition=part, history=hist, members=link_members(members) if per_member(members, not plain(a)) else (),
-                                     **verifying(a), **declared(a), **weighed(a)).to_json()
+                                     linked=linked, **verifying(a), **declared(a), **weighed(a)).to_json()
     progress("registration", t_audit, ok=checks["registration"].get("ok"))
     if mine.row_tables:
         bad = TB.check_row_tables(mine, publics, {r["port"]: r["root"] for r in rec["roots"]}, step_roots)

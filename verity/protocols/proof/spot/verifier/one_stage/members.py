@@ -1067,8 +1067,8 @@ def _wired_rows(program: Program, query: Mapping[str, Any], desc: Mapping[str, A
 
 
 def slices(members: Mapping[str, Sequence[Sequence[int]]], record: Mapping[str, Any], *, program: Program,
-           query: Mapping[str, Any], window_root: str | None = None, tied: Sequence[range] = ()
-           ) -> dict[str, dict[str, Any]]:
+           query: Mapping[str, Any], window_root: str | None = None, tied: Sequence[range] = (),
+           linked: Sequence[Mapping[str, Any]] = ()) -> dict[str, dict[str, Any]]:
     """Each member's slice of the docket `record` (`OneStageZk.Member.slice`), for the members `members` by name,
     each its units as ranges ``[lo, hi)``: ``{name: {population, roots, scheme}}``, the member's count of units, the
     docket's roots that are its own, its name taken off each port (`OneStageZk.rootsOf`), its template's fields' trees at
@@ -1084,7 +1084,7 @@ def slices(members: Mapping[str, Sequence[Sequence[int]]], record: Mapping[str, 
         _laid(ms, record)
         roots, ft = _members_roots(ms, record)
         roots = _wired(program, query, json.loads(json.dumps(codec.encode_program(program))), ms, record, roots, ft,
-                       window_root, tied)
+                       window_root, tied, linked)
         _ports_once(ms, roots)
     except _Refused as e:
         raise ValueError(str(e)) from None
@@ -1094,11 +1094,13 @@ def slices(members: Mapping[str, Sequence[Sequence[int]]], record: Mapping[str, 
 def _wired(program: Program, query: Mapping[str, Any], desc: Mapping[str, Any], ms: Mapping[str, Any],
            record: Mapping[str, Any], roots: dict[str, list[dict[str, Any]]],
            ft: Mapping[str, Sequence[tuple[str, Mapping[str, Any]]]], window: str | None,
-           tied: Sequence[range]) -> dict[str, list[dict[str, Any]]]:
+           tied: Sequence[range], linked: Sequence[Mapping[str, Any]] = ()) -> dict[str, list[dict[str, Any]]]:
     """`OneStageZk.membersRootsOf` past `_members_roots`: the window's field trees held to C's (`_field_trees_held`),
+    less each output port a link names (``linked``, which round 1's record holds),
     each member's ports at C's run input nodes' trees (`_run_input_roots`), then each member's wired ports at their
     writers' trees (`_wired_roots`)."""
-    _field_trees_held(_derived_field_trees(program, query, ms), _templates(ms), record)
+    named = {f"{x['template']}/{x['port']}" for x in linked}
+    _field_trees_held([w for w in _derived_field_trees(program, query, ms) if w[0] not in named], _templates(ms), record)
     ranges = P._template(program, query, "the members' partition").ranges
     roots = _run_input_roots(program, desc, ranges, window, tied, ms, record, roots)
     return _wired_roots(desc, ranges, ms, ft, roots)
@@ -1575,7 +1577,7 @@ def _members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence:
                   program, DK.marked_gates(program), rp)
         roots, ft = _members_roots(ms, record)
         roots = _wired(program, params["query"], params["program"], ms, record, roots, ft, params.get("window_root"),
-                       tied_gates(program, params))
+                       tied_gates(program, params), params.get("linked") or ())
         _ports_once(ms, roots)
         _sampled(ms, held, evidence["proved_units"])
         try:

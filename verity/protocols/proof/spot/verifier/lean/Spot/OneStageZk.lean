@@ -379,7 +379,8 @@ def runInputRoots (v : Docket.Verifier) (P : Flock.Program.Prog) (rs : Array Flo
   return acc
 
 /-- **The registration's roots each member's statement reads**: `rootsOf`'s, the window's trees of its templates'
-output fields held to the ones C and the partition give (`fieldTreesHeld`, `derivedFieldTrees`), each member's own
+output fields held to the ones C and the partition give (`fieldTreesHeld`, `derivedFieldTrees`), less each output
+port a link names, which round 1's record holds (`Docket.Verifier.linked`), each member's own
 output ports at its template's fields' trees (`ownFieldsOf`, among the window's trees `fieldTreesOf` reads), each
 member's ports at C's run input nodes' trees (`runInputRoots`), and where
 C has an edge, each member's wired ports at their writers' output fields' trees (`fieldRoots`, at C's wiring under the
@@ -390,7 +391,8 @@ def membersRootsWired (p : Params) (ms : Array Member) (rec : Json) : V (Std.Has
   let ft := fieldTreesOf ts rec
   let P ← Program.parse p.own.program
   let rs ← Partition.evaluate P (getD p.own.partition "query")
-  fieldTreesHeld (← derivedFieldTrees P.prog rs ms) ts rec
+  fieldTreesHeld ((← derivedFieldTrees P.prog rs ms).filter fun (t, _) =>
+    !p.base.verifier.linked.any fun l => s!"{l.template}/{l.port}" == t) ts rec
   let roots := ms.foldl (fun acc m => acc.insert m.name (ownFieldsOf ft m.name (acc.getD m.name #[]))) roots
   let roots ← runInputRoots p.base.verifier P.prog rs ms rec roots
   if !hasEdge P.prog then return roots
