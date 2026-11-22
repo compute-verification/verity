@@ -14,7 +14,6 @@
 | `replay_ladder/` | proofs | replaying a saturated window gives the served tokens, across dense and MoE models | `verity bench replay_ladder` |
 | `serve_tax/` | vllm | each serving change's cost over stock compiled vLLM, and the serving cost | `verity bench serve_tax` |
 | `prod_repro/` | vllm | serve, load and replay in one command: what our changes cost over stock | `verity bench prod_repro` |
-| `serving_cost/` | benchmarks | the serving cost of a model too large to optimize on, in five stages | `verity bench serving_cost` |
 | `vllm_encoded/` | — | Llama-3.1-8B in vLLM with weights and KV cache as codec words, receipted by PoUB | `stack.sh` |
 | `inference_only/` | training | the inference-only policy's least training slowdown under the min-cut bound | `verity bench inference_only` |
 | `slowdown/` | training | a lower bound on a training run's slowdown under the regime | `verity bench slowdown` |

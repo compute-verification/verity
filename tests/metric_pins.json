@@ -23,7 +23,6 @@
  "benchmarks/served-overhead-commit": {"version": 1, "unit": "percent"},
  "benchmarks/served-overhead-pous-bandwidth-audit": {"version": 1, "unit": "percent"},
  "benchmarks/served-overhead-pouw": {"version": 1, "unit": "percent"},
- "benchmarks/serving-cost-priced": {"version": 1, "unit": "percent"},
  "ci/lean-mark-to-main-p90": {"version": 1, "unit": "hours"},
  "ci/plain-mark-to-main-p90": {"version": 1, "unit": "hours"},
  "circuits/commitment-hash-rate": {"version": 1, "unit": "GB/s"},
