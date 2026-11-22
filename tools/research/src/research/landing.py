@@ -222,10 +222,16 @@ def detach(repo: Path, argv: list[str], env: dict[str, str], script: str | None 
     return {"dir": d, "pid": p.pid}
 
 
-#: a quick tier's launch job (`quick_launch`): a worktree of its commit in its directory, the `research run` there, the worktree
-#: removed once the run has shipped it, and `RUN <id>` (`RUN_RE`, which `launched` reads) once the run registered
-QUICK_JOB = ('t=$1 c=$2 rid=$3; shift 3; git worktree add -q --detach "$t/tree" "$c" || exit; (cd "$t/tree" && "$@"); rc=$?; '
-             'git worktree remove --force "$t/tree"; rm -rf "$t"; git worktree prune; [ "$rc" = 0 ] && echo "RUN $rid"; exit "$rc"')
+#: a launch job's checkout of commit $c into tree $w with a git dir $g of its own, outside the tree, sharing the clone's objects
+#: and refs but registered nowhere in it (`queue.merged_worktree`'s): no `git worktree add`, `remove` or `prune` in the clone,
+#: whose admin directories train.sh, restack and the other jobs add and prune concurrently; deleting both removes it
+OWN_TREE = ('mkdir -p "$g" "$w" && git rev-parse --path-format=absolute --git-common-dir > "$g/commondir" && '
+            'git rev-parse --verify "$c^{commit}" > "$g/HEAD" && printf "gitdir: %s\\n" "$g" > "$w/.git" && '
+            'git -C "$w" reset -q --hard "$c"')
+#: a quick tier's launch job (`quick_launch`): a checkout of its commit in its directory (`OWN_TREE`), the `research run` there,
+#: the directory removed once the run has shipped it, and `RUN <id>` (`RUN_RE`, which `launched` reads) once the run registered
+QUICK_JOB = ('t=$1 c=$2 rid=$3; shift 3; w="$t/tree" g="$t/git"; ' + OWN_TREE + ' || exit; (cd "$w" && "$@"); rc=$?; '
+             'rm -rf "$t"; [ "$rc" = 0 ] && echo "RUN $rid"; exit "$rc"')
 #: how long a candidate's quick tier waits for a check slot, and runs in one
 QUICK_WAIT_S, QUICK_RUN_S = 3600, 3 * 3600
 
@@ -234,7 +240,7 @@ def quick_launch(repo: Path, commit: str, base: str, machine: str, auth: tuple[s
     """The quick tier of candidate ``commit`` since ``base`` (`queue.QUICK_TIER`, as `research queue ready` runs it remotely:
     `queue.quick_run`) launched detached (`detach`) as a `research run` on ``machine``, in a `--priority` check slot there at
     `AFTER_LANDING_SLOT_RANK`, from
-    a worktree of ``commit`` of its own: the record `launched` reads, whose `RUN` line names the run."""
+    a checkout of ``commit`` of its own (`QUICK_JOB`): the record `launched` reads, whose `RUN` line names the run."""
     from . import runs as R
     from .queue import quick_run
 
@@ -353,15 +359,15 @@ def launched(launch: dict) -> tuple[list[str] | None, str]:
 PLAN_WAIT_S = 2400
 #: the plan's file in its directory (check.py's `AUTO_PLAN`), which each shard sends as its run's input
 AUTO_PLAN = "check-shard-plan.json"
-#: a sharded check's auto plan (`plan_shards`): a worktree of the tip ($2) in the queue's clone, under TRAIN_TREES as train.sh's
-#: are when set, `check.py --shard-plan` there with the rest of its arguments into `AUTO_PLAN` in the plan's directory ($1),
-#: the worktree removed after; its venv kept between plans.  The job exits as check.py did: on an NFS TMPDIR (the control
-#: pod's) `git worktree remove` can stop at a directory a silly-renamed file keeps from emptying and exit 255, so `rm -rf`
-#: takes what it left, and a worktree that won't go fails no plan
-PLAN_JOB = ('set -e; d=$1 r=$PWD; t="${TRAIN_TREES:-${1%/*}}/plan-${1##*/}"; mkdir -p "${t%/*}"; '
-            'export UV_PROJECT_ENVIRONMENT="${t%/*}/plan-venv"; git worktree add -q --detach "$t" "$2"; '
-            'trap \'s=$?; set +e; cd "$r"; git worktree remove --force "$t" 2>/dev/null || rm -rf "$t" 2>/dev/null || '
-            'rm -rf "$t"; git worktree prune; exit $s\' EXIT; cd "$t"; shift 2; '
+#: a sharded check's auto plan (`plan_shards`): a checkout of the tip ($2, `OWN_TREE`, its git dir beside it), under
+#: TRAIN_TREES as train.sh's trees are when set, `check.py --shard-plan` there with the rest of its arguments into `AUTO_PLAN`
+#: in the plan's directory ($1), the checkout removed after; its venv kept between plans.  The job exits as check.py did: on an
+#: NFS TMPDIR (the control pod's) a silly-renamed file can keep a directory from emptying, so `rm -rf` tries again, and a
+#: checkout that won't go fails no plan
+PLAN_JOB = ('set -e; d=$1 c=$2 r=$PWD; w="${TRAIN_TREES:-${1%/*}}/plan-${1##*/}"; g="$w.git"; mkdir -p "${w%/*}"; '
+            'export UV_PROJECT_ENVIRONMENT="${w%/*}/plan-venv"; '
+            'trap \'s=$?; set +e; cd "$r"; rm -rf "$g" "$w" 2>/dev/null || rm -rf "$g" "$w"; exit $s\' EXIT; '
+            + OWN_TREE + ' || exit; cd "$w"; shift 2; '
             'uv run -q python tools/check/check.py --shard-plan --out "$d/' + AUTO_PLAN + '" "$@"')
 
 

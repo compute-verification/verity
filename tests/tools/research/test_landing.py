@@ -1357,22 +1357,13 @@ def test_planned_takes_a_plan_of_a_shard_or_more_once_its_job_exited_0_and_says_
 
 #: `git` as on the control pod's NFS TMPDIR, where `worktree remove` stops at a directory a silly-renamed file (one something
 #: still held when git unlinked it) keeps from emptying, and exits 255
-NFS_GIT = """#!/bin/sh
-if [ "$1 $2" = "worktree remove" ]; then
-  eval "t=\\${$#}"; echo "error: failed to delete '$t': Directory not empty" >&2; exit 255
-fi
-exec GIT "$@"
-"""
-
-
-@pytest.mark.parametrize("removal", ["git", "rm", "none"])
+@pytest.mark.parametrize("stuck", [False, True])
 @pytest.mark.parametrize("rc", [0, 2])
-def test_the_plan_job_plans_in_a_worktree_of_the_tip_and_planned_reads_its_plan(tmp_path, rc, removal):
-    """`PLAN_JOB`, as `detach` runs it (here to its end): `check.py --shard-plan` in a worktree of the tip under TRAIN_TREES,
-    its venv kept beside, the plan written into the plan's directory, the worktree removed after; `planned` gives the plan,
-    or why there is none, and keeps the plan's directory (its shards send the file) but not the job's.  The job exits as
-    check.py did however the worktree goes: by `git worktree remove`; by `rm -rf` once that fails as on the control pod
-    (`NFS_GIT`); or not at all, when `rm -rf` fails too."""
+def test_the_plan_job_plans_in_a_checkout_of_the_tip_and_planned_reads_its_plan(tmp_path, rc, stuck):
+    """`PLAN_JOB`, as `detach` runs it (here to its end): `check.py --shard-plan` in a checkout of the tip under TRAIN_TREES,
+    its venv kept beside, the plan written into the plan's directory, the checkout and its git dir removed after; `planned`
+    gives the plan, or why there is none, and keeps the plan's directory (its shards send the file) but not the job's.  The
+    job exits as check.py did however the checkout goes, even when ``stuck``: `rm -rf` fails as on an NFS TMPDIR."""
     from research.landing import AUTO_PLAN, DETACH_JOB, PLAN_JOB, planned
 
     repo, out, job, trees, bin_ = (tmp_path / x for x in ("repo", "plan", "job", "trees", "bin"))
@@ -1386,9 +1377,7 @@ def test_the_plan_job_plans_in_a_worktree_of_the_tip_and_planned_reads_its_plan(
                              f'printf "%s\\n" "$PWD" "$UV_PROJECT_ENVIRONMENT" "$(git rev-parse HEAD)" "$@" > {tmp_path}/argv\n'
                              'while [ "$1" != --out ]; do shift; done\n'
                              f"echo '{json.dumps(doc)}' > \"$2\"\necho 'shard plan: N = 3'\nexit {rc}\n")
-    if removal != "git":
-        (bin_ / "git").write_text(NFS_GIT.replace("GIT", shutil.which("git")))
-    if removal == "none":
+    if stuck:
         (bin_ / "rm").write_text("#!/bin/sh\nfor a; do t=$a; done\necho \"rm: cannot remove '$t': Directory not empty\" >&2\n"
                                  "exit 1\n")
     for f in bin_.iterdir():
@@ -1400,14 +1389,51 @@ def test_the_plan_job_plans_in_a_worktree_of_the_tip_and_planned_reads_its_plan(
     assert (cwd, venv, head) == (str(trees / "plan-plan"), str(trees / "plan-venv"), tip)
     assert argv == ["run", "-q", "python", "tools/check/check.py", "--shard-plan", "--out", str(out / AUTO_PLAN),
                     "--deferred", "pytest", "--max-shards", "3"]
-    left = removal == "none"
-    assert (trees / "plan-plan").exists() == left and len(_git(repo, "worktree", "list").splitlines()) == 1 + left, \
-        "the worktree is removed, and pruned, unless nothing can remove it"
+    assert (trees / "plan-plan").exists() == (trees / "plan-plan.git").exists() == stuck, \
+        "the checkout and its git dir are removed unless nothing can remove them"
+    assert len(_git(repo, "worktree", "list").splitlines()) == 1
     got = planned({"dir": str(job), "pid": None, "out": str(out)})
     why = "`check.py --shard-plan` exited 2: shard plan: N = 3" + \
-        f"\nrm: cannot remove '{trees / 'plan-plan'}': Directory not empty" * left
+        f"\nrm: cannot remove '{trees / 'plan-plan'}': Directory not empty" * stuck
     assert got == ((doc, None) if rc == 0 else (None, why))
     assert not job.exists() and (out / AUTO_PLAN).is_file()
+
+
+@pytest.mark.parametrize("job", ["quick", "plan"])
+def test_a_launch_jobs_checkout_is_registered_nowhere_in_the_clone_and_outlives_a_prune_there(tmp_path, job):
+    """`QUICK_JOB` and `PLAN_JOB` check their commit out with a git dir of their own (`OWN_TREE`): while the job's command
+    runs, the clone lists no worktree of it, so a `git worktree prune` there (train.sh's, restack's, another job's, one that
+    reads a half-added worktree as stale) can't take its admin directory from under it; it reads its commit and its files
+    after one, and the job leaves nothing to prune."""
+    from research.landing import PLAN_JOB, QUICK_JOB
+
+    repo, bin_, t = tmp_path / "repo", tmp_path / "bin", tmp_path / "launch"
+    for d in (repo, bin_):
+        d.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    (repo / "f").write_text("x\n")
+    _git(repo, "add", "f")
+    _git(repo, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "tip")
+    _git(repo, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "past the tip")
+    tip = _git(repo, "rev-parse", "HEAD^")
+    probe = bin_ / ("uv" if job == "plan" else "probe")
+    probe.write_text("#!/bin/sh\n"
+                     f"git -C {repo} worktree list --porcelain | grep -c '^worktree ' > {tmp_path}/listed\n"
+                     f"rm -f {repo}/.git/worktrees/*/gitdir; git -C {repo} worktree prune\n"
+                     f'{{ git rev-parse HEAD; git status --porcelain | wc -l; cat f; }} > {tmp_path}/read\n')
+    probe.chmod(0o755)
+    env = {**os.environ, "PATH": f"{bin_}:/usr/bin:/bin", "TRAIN_TREES": str(tmp_path / "trees")}
+    if job == "quick":
+        t.mkdir()
+        argv = ["sh", "-c", QUICK_JOB, "sh", str(t), tip, "r1", str(probe)]
+    else:
+        argv = ["sh", "-c", PLAN_JOB, "sh", str(t), tip]
+    p = subprocess.run(argv, cwd=repo, env=env, capture_output=True, text=True)
+    assert p.returncode == 0, p.stderr
+    assert (tmp_path / "listed").read_text().split() == ["1"], "the clone lists only itself while the job's checkout is in use"
+    assert (tmp_path / "read").read_text().split() == [tip, "0", "x"], "the checkout reads its commit after a prune"
+    assert len(_git(repo, "worktree", "list").splitlines()) == 1 and not (repo / ".git" / "worktrees").exists()
+    assert not t.exists() and not any((tmp_path / "trees").glob("plan-*"))
 
 
 # -- the loop's modules
