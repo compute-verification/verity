@@ -1,6 +1,6 @@
 """The small test model's served epoch at class 1,1,1 as the audit's stream meets it: the served lowering (the serve's
 close, `served_lowering`), a declared circuit of two layers whose circuit templates each have many ranges, interleaved,
-which `service.Stream` takes as the window's program."""
+which `service.Stream` takes as the epoch's program."""
 
 from __future__ import annotations
 
@@ -24,12 +24,13 @@ def test_the_served_class_1_1_1_epoch_is_a_cover_the_stream_takes_at_each_templa
     """At class 1,1,1 with its one slot filled (one prompt id, one output), the served lowering's circuit templates have
     several ranges each, its last position a `SelectCollect_v1` unit and a `SlotEntry_v2` unit (the class's circuit
     makes them one `SelectEntry_v1` unit and is never the declared circuit a served epoch registers), so the stream's former test (one range a
-    template, in the window's order) refused it (`stream`). Its units, numbered by the ranges in the declared circuit's
-    order, are each unit's circuit template by index as the strata give them, a disjoint cover of the population but
+    template, in the declared circuit's order) refused it (`stream`). Its units, numbered by the ranges in the declared
+    circuit's order, are each unit's circuit template by index as the strata give them, a disjoint cover of the population but
     not in slot order (`partition.covers`, not `partition.in_order`), which the Lean's run takes under a subset design
     only. The stream builds on it, its population program at each template's ranges summed, and refuses counts that
-    leave a range out. About two minutes, the served lowering's build: the one test that holds the stream to a served
-    epoch's declared circuit, the shape the next rehearsal meets, which the spot suite's toy epochs only stand in for."""
+    leave a range out. Every unit of the declared circuit is in the population the stream registers: its count, and the
+    members' units, are the declared circuit's units, 140 of 140, template by template. About two minutes, the served lowering's build: the one test that holds the stream to a
+    served epoch's declared circuit, the shape the next rehearsal meets, which the spot suite's toy epochs only stand in for."""
     advice, ingress = ST._session([(1, 1, {**ST.GREEDY, "max_tokens": 1})], [[(0, 0, 1)]])
     _compiled, low = served_lowering(ST._registered(), WindowClass(1, 1, 1), advice, ingress, GRAIN)
     circuit = low.circuit
@@ -57,5 +58,10 @@ def test_the_served_class_1_1_1_epoch_is_a_cover_the_stream_takes_at_each_templa
     for t, _lo, m in ranges:
         counts[t] += m
     assert stream._program(n, counts) is w.program
+    declared = {P.template_id(fn): k for fn, k in circuit.templates}
+    in_members = {t: 0 for t in order}
+    for m in w.members:
+        in_members[m.template.split("/c")[0]] += m.n
+    assert counts == declared == in_members and sum(counts.values()) == sum(declared.values()) == n == 140
     t, _lo, m = next(r for r in ranges if counts[r[0]] > r[2])
     assert stream._program(n - m, {**counts, t: counts[t] - m}) is None
