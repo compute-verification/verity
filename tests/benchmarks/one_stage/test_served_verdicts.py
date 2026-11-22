@@ -3795,10 +3795,12 @@ def _day_tree(tmp_path: Path) -> str:
 ], ids=["off", "day", "day-params"])
 def test_under_day_v3cs_audit_holds_the_window_to_the_days_declaration(tmp_path, extra, flags):
     """DAY hands V3c's audit the day and the registration log (records_audit's --day, --day-log, --day-params), whose
-    declarations R2 holds the window's docket to; without DAY the audit gets none of them."""
+    declarations R2 holds the window's docket to, with --development, under which a day of no auditor's keys runs and
+    the audit says so first; without DAY the audit gets none of them."""
     rc, lines, order, _limits = _v3c(tmp_path, records_audit=_day_tree(tmp_path), **extra)
     assert rc == 0 and "audit" in order, (lines, order)
     assert _audited(tmp_path, DAYS) == flags
+    assert ("--development" in json.loads((tmp_path / "order.audit").read_text())) == bool(extra)
 
 
 NO_DAY = ("PREFLIGHT: DAY=N declares day N's circuit: it needs DAY_LOG (the deployment's registration log) and DAY_PROGRAM "

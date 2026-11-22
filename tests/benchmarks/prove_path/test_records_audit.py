@@ -1032,11 +1032,11 @@ def test_the_audit_ties_a_window_whose_circuit_takes_values_to_the_earlier_regis
     named.write_text(json.dumps({**got.w, "window": {"day": 0, "declaration": G.Declaration(0, got.rec["program"]).digest()}}))
     seen.clear()
     assert RA.main([*base, "--out", str(tmp_path / "unnamed"), "--tie", str(got.w_file), "--tie-prefix", "h1/", "--day", "0",
-                    "--day-log", str(tmp_path / "log.json")]) == 1
+                    "--day-log", str(tmp_path / "log.json"), "--development"]) == 1
     assert "not one of day 0's in --day-log" in json.loads(
         (tmp_path / "unnamed" / "summary.json").read_text())["refused"]["records"] and not seen
     assert RA.main([*base, "--out", str(tmp_path / "day"), "--tie", str(named), "--tie-prefix", "h1/", "--day", "0",
-                    "--day-log", str(tmp_path / "log.json")]) == 1
+                    "--day-log", str(tmp_path / "log.json"), "--development"]) == 1
     assert seen["declared"] == {"day": 0, "declarations": [day[0].body()]}
     assert json.loads((tmp_path / "day" / "summary.json").read_text())["day"] == {
         "day": 0, "declared": [got.rec["program"]], "source": RA.DAY_SOURCES["development"]}
@@ -1084,6 +1084,39 @@ def test_a_declared_day_holds_the_registrations_program_to_the_days_one_declarat
         RA.declared_day(None, str(log), None)
     with pytest.raises(ValueError, match="needs --day-log"):
         RA.declared_day(3, None, None)
+
+
+def _day_log(tmp_path: Path, program: str) -> Path:
+    from verity.protocols.registration.verifier import registration as G
+    (log := tmp_path / "log.json").write_bytes(G.committed("remote", G.chain("remote", [G.Declaration(0, program)])))
+    return log
+
+
+def test_a_day_with_no_auditors_keys_is_refused_by_name_without_development(written, tmp_path, monkeypatch):
+    """``--day`` with neither ``--day-ledger`` nor ``--day-params`` naming the auditor's keys is the developer's own day:
+    refused by name before the audit writes anything; ``--day-params`` with keys runs, its day's source the keys'."""
+    from verity import device as ST
+    from verity.protocols.registration.verifier import registration as G
+
+    day = ["--day", "0", "--day-log", str(_day_log(tmp_path, written.rec["program"]))]
+    circuit = ["--circuit", written.rec["window"]["circuit"]]
+    with pytest.raises(SystemExit, match="refused, the day is the developer's own, signed by no one"):
+        _prover_circuit_audit(written, monkeypatch, tmp_path, [*circuit, *day])
+    assert not (tmp_path / "o").exists()
+    (params := tmp_path / "params.json").write_text(json.dumps(G.params("remote", ST.Auditor(keys=(("d", "ab", "lms"),)))))
+    _prover_circuit_audit(written, monkeypatch, tmp_path, [*circuit, *day, "--day-params", str(params)])
+    summary = json.loads((tmp_path / "o" / "summary.json").read_text())
+    assert summary["day"]["source"] == RA.DAY_SOURCES["keys"] and "development" not in summary
+
+
+def test_a_development_day_says_first_and_in_the_summary_that_the_day_is_the_developers_own(
+        written, tmp_path, monkeypatch, capsys):
+    day = ["--day", "0", "--day-log", str(_day_log(tmp_path, written.rec["program"]))]
+    _prover_circuit_audit(written, monkeypatch, tmp_path, ["--circuit", written.rec["window"]["circuit"], *day, "--development"])
+    said = RA.DEVELOPMENT_RESTS["day"]
+    assert capsys.readouterr().out.splitlines()[0] == f"DEVELOPMENT {said}"
+    summary = json.loads((tmp_path / "o" / "summary.json").read_text())
+    assert summary["development"] == [said] and summary["day"]["source"] == RA.DAY_SOURCES["development"]
 
 
 def test_a_declared_day_holds_the_tied_ws_naming_to_a_declaration_of_that_day_in_the_log(tmp_path):

@@ -848,7 +848,8 @@ v3c_warm() {  # every template of the committed window composed into $VW/compose
 v3c_cuda() { FLOCK_WORK=$FW . "$TREE/verity/protocols/proof/flock/prover/pod/cuda-13.3.sh" >&2 && { [ -n "${CUDA_TK:-}" ] && echo "$CUDA_TK" || python3 "$TREE/benchmarks/kernels/machine.py" toolkit 13.3; }; }
 v3c_audit() {  # the committed window audited from its records alone: its circuit and run root the verifier's, the weights pinned
   local run leanb m0 rc gl tk tie=() day=() cache=() ca=() ch=(--challenger "$V3C_CHALLENGER") ports=${V3C_PORTS:-16} main=$OUT/v3c-audit/main.txt
-  [ -n "${DAY:-}" ] && day=(--day "$DAY" --day-log "$DAY_LOG" ${DAY_PARAMS:+--day-params "$DAY_PARAMS"})
+  # --development: a day under DAY_PARAMS with no auditor's keys is the developer's own, and the audit says so first
+  [ -n "${DAY:-}" ] && day=(--day "$DAY" --day-log "$DAY_LOG" ${DAY_PARAMS:+--day-params "$DAY_PARAMS"} --development)
   run=$("$PY" -c 'import json, sys; print(next(json.loads(l)["run_root"] for l in open(sys.argv[1]) if l.strip() and json.loads(l)["window"] == int(sys.argv[2])))' \
     "$D/windows.jsonl" "$K") || { say "V3C-AUDIT: no run root for the window in windows.jsonl"; return 1; }
   [ -f "$WOR" ] || { say "V3C-AUDIT: $NO_WOR"; return 1; }
@@ -907,6 +908,7 @@ t = json.loads(line[4:])
 w, ok = t["record"][:16], "PASS" if t["chained"] else "FAIL"
 print(f"the audit read its records tied to W {w}…, R chained right after it: {ok}")' 2>&1 \
     | tail -1 | cut -c1-400)"
+  ! grep -q '^DEVELOPMENT ' "$LOGS/v3c-audit/audit.log" || say "V3C-AUDIT $(grep -m1 '^DEVELOPMENT ' "$LOGS/v3c-audit/audit.log" | cut -c1-400)"
   ! grep -q '^WEIGHTS ' "$LOGS/v3c-audit/audit.log" || say "V3C-AUDIT $(grep -m1 '^WEIGHTS ' "$LOGS/v3c-audit/audit.log" | cut -c9-400)"
   say "V3C-AUDIT class $V3C (records_audit.py exit $rc), $("$PY" "$SV" coins --challenger "$V3C_CHALLENGER" \
     --summary "$VW/audit/summary.json" 2>&1 | tail -1 | cut -c1-300): $(grep -m1 '^RECORDS' "$LOGS/v3c-audit/audit.log" | cut -c1-3000)"

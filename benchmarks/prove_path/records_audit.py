@@ -82,7 +82,9 @@ audit stopped before its proofs end still says what it was tied to.
 (`verity.protocols.registration.verifier.registration.Declaration`). R2 holds the docket's program to
 it (`declared_day`, one-stage's Declared day), a negative moves the declaration to another program, and the summary's
 ``day`` names the day's declared program and where the day came from (`DAY_SOURCES`). ``--day`` and the prover's log
-are the development fallback: they bind the day to no time the auditor's device signed. ``--day-ledger LEDGER`` reads
+under an auditor of no keys are the development fallback: they bind the day to no time the auditor's device signed, so
+the audit refuses them unless ``--day-params`` names the auditor's keys or the caller says ``--development``
+(`development`). ``--day-ledger LEDGER`` reads
 the day from the challenger's signed ledger instead (`device_day`, the challenger's ``declared_day``): the UTC day of
 the window's signed open and the declarations its lane signed before it, so a window that opens before UTC midnight
 and closes after is its open's day's.
@@ -110,7 +112,7 @@ circuit's text in the cache. The warm starts no compose, and stops, where the ca
         --lower flock-lower-check --out DIR [--delta D] [--port P] [--ports N] [--forged] [--challenger local|loopback:HOST:PORT|gate:USER@HOST --main FILE] \\
         [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--registered FILE] [--tie W [--tie-prefix P]] [--skip-negatives] \\
         [--compose-cache DIR] [--jobs N] [--keep-circuits] [--min-free-gb G] [--day N --day-log LOG [--day-params FILE] | --day-ledger LEDGER] \\
-        [--lean-workers N] [--audit-mem-gb G] [--negative-workers N]
+        [--development] [--lean-workers N] [--audit-mem-gb G] [--negative-workers N]
     records_audit.py warm --window DIR --sampling-design L [--template-sets DIR] --compose-cache DIR [--jobs N] [--mem-gb G]
         [--keep-circuits] [--min-free-gb G]
     records_audit.py count --circuit FILE --bits N [--catalog MODULE ...] [--pin NAME=ROOT ...] [--pins FILE ...] [--registration FILE]
@@ -733,10 +735,33 @@ def _held_naming(named: Mapping[str, Any], day: int, digests: set[str], where: s
                          f"{str(named.get('declaration'))[:16]}…, not one of day {day}'s in {where}")
 
 
-#: where R2's day came from, as the summary's ``day`` says: the challenger device's signed ledger, or the development
-#: fallback, DAY and the prover's own registration log, which binds no day to a time the auditor's device signed
+#: where R2's day came from, as the summary's ``day`` says: the challenger device's signed ledger, the prover's
+#: registration log checked under an auditor's keys, or the development fallback, DAY and the prover's own log under
+#: an auditor of no keys, which binds no day to a time the auditor's device signed
 DAY_SOURCES = {"device": "the challenger's signed ledger (--day-ledger)",
+               "keys": "--day and the prover's --day-log, checked under --day-params' auditor keys",
                "development": "development: --day and the prover's --day-log, not device-bound"}
+
+#: what a development audit rests on that nothing the auditor holds fixes, each said in its first line and its
+#: summary's ``development`` (`development`)
+DEVELOPMENT_RESTS = {"day": "the day is the developer's own, signed by no one (--day and --day-log under an auditor of "
+                            "no keys)"}
+
+
+def keyed(params: str | None) -> bool:
+    """Whether ``--day-params`` names an auditor with keys, under which the log's check reads what its devices signed."""
+    return bool(params) and bool(G.params_of(json.loads(Path(params).read_text()))[1].keys)
+
+
+def development(a: argparse.Namespace) -> list[str]:
+    """What the audit ``a`` rests on that nothing the auditor holds fixes (`DEVELOPMENT_RESTS`): a ``--day`` with neither
+    ``--day-ledger`` nor ``--day-params`` keys. Refused (SystemExit, naming each) unless the caller says
+    ``--development``."""
+    rests = [k for k, on in (("day", a.day is not None and not a.day_ledger and not keyed(a.day_params)),) if on]
+    if rests and not a.development:
+        raise SystemExit("records_audit audit: refused, " + "; ".join(DEVELOPMENT_RESTS[k] for k in rests)
+                         + ": give --day-ledger or --day-params with the auditor's keys, or --development to run on it")
+    return [DEVELOPMENT_RESTS[k] for k in rests]
 
 #: where R8's weights' registration of record's digest came from, as the summary's ``weights_of_record`` says
 WEIGHTS_SOURCES = {"stand-in": "held to a registration the serving node wrote at this serve's start, its digest the file's "
@@ -1139,6 +1164,9 @@ def forged_outcome(s: dict, wdir: Path, member: int | None = None, more: Mapping
 def audit(a: argparse.Namespace) -> int:
     """The audit (module docstring) into ``a.out``: ``summary.json`` and a ``RECORDS`` line, its ``definitions`` the module
     each member template's Definition is in and ``loaded`` the ``verity*`` packages the process loaded. -> 0 when it passed."""
+    rests = development(a)
+    if rests:
+        print("DEVELOPMENT " + "; ".join(rests), flush=True)
     if a.registered and not (a.registered_digest and a.registered_digest_source):
         raise SystemExit(REGISTERED_DIGEST_WHY)
     if a.registered_digest_source in WEIGHTS_SOURCES_NOT_BUILT:
@@ -1199,7 +1227,8 @@ def audit(a: argparse.Namespace) -> int:
         else:
             day = declared_day(a.day, a.day_log, a.day_params, w_tie)
     except (ValueError, KeyError, TypeError) as e:
-        row = {"ok": False, "refused": {"records": f"{type(e).__name__}: {e}"}, "seconds": round(time.time() - t0, 1)}
+        row = {"ok": False, "refused": {"records": f"{type(e).__name__}: {e}"}, "seconds": round(time.time() - t0, 1),
+               **({"development": rests} if rests else {})}
         (out / "summary.json").write_text(json.dumps(row, indent=1, sort_keys=True))
         print("RECORDS " + json.dumps(row, sort_keys=True))
         return 1
@@ -1260,6 +1289,8 @@ def audit(a: argparse.Namespace) -> int:
            **{x: s.get(x) for x in ("run_root", "population", "members", "registration", "source", "refused", "checks_before_draw",
                                     "audit", "draw", "draw_counts", "negatives", "negatives_skipped", "coins",
                                     "timing", "outputs", "negative_workers", "plain", "arm", "coin_trees")}}
+    if rests:
+        row["development"] = rests
     bits = int((held["advice"] or {}).get("bits", 0))
     counted = pin_roots(pins)
     row["leak"] = (declared_count(doc, bits, resolve, counted, roots, untied)
@@ -1273,7 +1304,7 @@ def audit(a: argparse.Namespace) -> int:
                                     "source": WEIGHTS_SOURCES[a.registered_digest_source]}
     if day:
         row["day"] = {"day": day["day"], "declared": [d["program"] for d in day["declarations"] if d["day"] == day["day"]],
-                      "source": DAY_SOURCES["device" if a.day_ledger else "development"]}
+                      "source": DAY_SOURCES["device" if a.day_ledger else "keys" if keyed(a.day_params) else "development"]}
     acts = committed_activations(w)
     if acts is not None:
         row["activations"] = acts
@@ -1368,8 +1399,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--circuit", help="instead: the SHA-512 of the circuit record the verifier registered, a circuit with no compiler")
     p.add_argument("--prover-circuit", action="store_true", help="instead, under DEVELOPMENT=1 only: the circuit the prover "
                    "registered, its compiler and advice held to the docket's, the compile check not run (module docstring)")
-    p.add_argument("--development", action="store_true", help="with --prover-circuit: the caller's DEVELOPMENT=1, which the "
-                   "audit takes as a flag and never reads from the environment")
+    p.add_argument("--development", action="store_true", help="the caller's DEVELOPMENT=1, which the audit takes as a flag "
+                   "and never reads from the environment: the paths that rest on what nothing the auditor holds fixes "
+                   "(--prover-circuit; --day under an auditor of no keys) run only with it, and the audit's first line "
+                   "and its summary's development say each one (DEVELOPMENT_RESTS)")
     p.add_argument("--run", required=True, help="the run root the verifier holds the window to, the one the run published")
     p.add_argument("--template-sets", help="the verifier's own input sets, for templates whose units are not bit rows")
     p.add_argument("--outputs", help="JSON: the verifier's own [lo, hi) ranges of the units whose outputs are served out "
@@ -1426,8 +1459,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--day", type=int, default=None, help="the window's day, by its index among the monitoring period's days: "
                    "R2 holds the registration's program to the day's one declaration in --day-log (`declared_day`)")
     p.add_argument("--day-log", help="with --day: the deployment's registration log (verity/registration/log/v1)")
-    p.add_argument("--day-params", help="with --day: the log's parameters, {auditor, composite} (default the log's composite "
-                   "under an auditor of no sheets or keys)")
+    p.add_argument("--day-params", help="with --day: the log's parameters, {auditor, composite}, the auditor with its keys "
+                   "(without them, or with no keys, --day is refused unless --development: the log's composite under an "
+                   "auditor of no sheets or keys)")
     p.add_argument("--day-ledger", help="the challenger device's own ledger (windows.jsonl, whole: never a copy PoUS cut), "
                    "verified under --challenger-key: R2's day is the window open's signed UTC day and its declarations the "
                    "device's (`device_day`), in place of --day's development fallback")
