@@ -108,9 +108,11 @@ committed once, in its one tree, and are never a registered value. R7 refuses a 
 registration of record pins (`anchorUnpinned`, `R7-anchor-unpinned`); a value the registration of record pins whose
 record entry is not that pin in root, leaf count, words and domain, or an anchor's value it pins that the record
 registers no entry of (`offPin`, `R7-pin`); and a parameter bound as a supplied input that the parameters' `supplied`
-gives no source (`unsourced`, `R7-supplied-source`). `R7-anchor-unpinned` reads C's marks (`Verifier.marks`, from the
-program descriptor's `inputs`), which no descriptor carries until circuits writes the marks into C: until then it
-refuses nothing.
+gives no source, or a table input whose table the registration of record pins not (`unsourced`, `R7-supplied-source`:
+a mark is no source). Both read C's marks (`Verifier.marks`, from the program descriptor's `inputs`). A table input's
+rows are the held table's root and domain id (`heldTables`), never the record's entry; the table itself is one of R7's
+expected entries, built from its pin (`tableEntries`), so a record that leaves it out, or registers a pinned table no
+mark names, is refused `R7-values`.
 
 R8 then holds the program's registered inputs (the parameters it binds at registration, `Partition.regInputs`) to the
 deployment's registration record (`weightsOfRecord`: its bytes and the registration the challenger signed for the
@@ -500,10 +502,29 @@ def anchorValues (v : Verifier) : Array String :=
     | true, some (Json.str x) => if out.contains x then out else out.push x
     | _, _ => out
 
+/-- `docket.held_tables`: each table the weights' registration of record pins (`recordPins`), `(value, root, domain)`:
+the only source of a table input's rows (`Supplied.HELD_ROOT`, `Supplied.HELD_DOMAIN`), never the record's entry. -/
+def heldTables (v : Verifier) : Array (String × String × String) :=
+  (recordPins v).map fun p => (p.value, p.root, p.domain)
+
+/-- `docket.table_entries`: R7's expected entry of each table a table input of C names (`Supplied.registeredValues`
+past the values the verifier expects registered) that the weights' registration of record pins, built from that pin:
+its value, leaves, words, word bits and domain (which `pinsOf` holds to the derived one). A pin no mark names adds
+nothing, so the record registering it is refused `R7-values`. -/
+def tableEntries (v : Verifier) : Array Registered.Entry :=
+  let names := match Supplied.registeredValues (v.registered.map (·.1)) v.marks with
+    | .ok ns => ns.filter fun x => !v.registered.any (·.1 == x)
+    | .error _ => #[]
+  names.filterMap fun x => ((recordPins v).find? (·.value == x)).map fun p =>
+    { value := p.value, leaves := p.leaves, words := p.words, wordBits := p.wordBits, domain := p.domain }
+
+/-- R7's expected entries: the verifier's own (`ownEntries`), then the tables' (`tableEntries`). -/
+def expectedEntries (v : Verifier) : V (Array Registered.Entry) :=
+  return (← ownEntries v) ++ tableEntries v
+
 /-- `docket.anchor_unpinned`: the values V of C's supplied anchors (a mark of `ANCHOR_FUNCTIONS`) that are neither in
 the verifier's `pinned` nor pinned by the weights' registration of record (`pinsOf`'s pins), each once, in the marks'
-order; R7 refuses them (`R7-anchor-unpinned`). It reads C's marks (`Verifier.marks`), a field no circuit description
-carries today, so it refuses nothing yet. -/
+order; R7 refuses them (`R7-anchor-unpinned`). It reads C's marks (`Verifier.marks`). -/
 def anchorUnpinned (v : Verifier) : Array String :=
   let ofRecord := (recordPins v).map (·.value)
   (anchorValues v).filter fun x => !(v.pinned.any (·.1 == x) || ofRecord.contains x)
@@ -531,13 +552,23 @@ def suppliedInputs (P : Flock.Program.Prog) (first count : Nat) : Bool :=
     | some f => f.prim && f.binding == some Flock.Program.SUPPLIED
     | none => false
 
+/-- The table inputs of C (a mark of `ANCHOR_FUNCTIONS`) whose table the verifier holds no value of (`heldTables`): a
+mark names where the rows come from, never that they exist, so these have no source. -/
+def anchorsUnheld (v : Verifier) : Array String :=
+  let held := (heldTables v).map (·.1)
+  v.marks.filterMap fun (n, mk) => match (mk.args.find? (·.1 == "value")).map Prod.snd with
+    | some (Json.str x) => if ANCHOR_FUNCTIONS.contains mk.fn && !held.contains x then some n else none
+    | _ => none
+
 /-- `docket.unsourced_supplied`: the parameters bound as supplied inputs (`suppliedInputs`) that the parameters'
 `supplied` (C's marked rows among them) gives no source and that is no output of an earlier record (`outputs`, a pool's
-reused `pin` among them); R7 refuses them (`R7-supplied-source`). -/
+reused `pin` among them), a table input whose table the verifier holds no value of among them (`anchorsUnheld`); R7
+refuses them (`R7-supplied-source`). -/
 def unsourced (v : Verifier) : Array String :=
+  let unheld := anchorsUnheld v
   (v.params.filter fun p => match p.gates with
-    | some (first, count) => suppliedInputs v.program.prog first count && !v.supplied.any (·.1 == p.name)
-        && !v.outputs.any (·.1 == p.name)
+    | some (first, count) => suppliedInputs v.program.prog first count
+        && (!v.supplied.any (·.1 == p.name) || unheld.contains p.name) && !v.outputs.any (·.1 == p.name)
     | none => false).map (·.name)
 
 /-- The members' check's refusal of a program marking a registered input the verifier does not expect, under parameters
@@ -761,8 +792,8 @@ def poolOpen (rec : Json) (v : Verifier) (p : Pool) : Option (String × String) 
   else match ownEntries v with
     | .ok mine => match mine.find? (·.value == p.pin) with
       | some want =>
-        match Supplied.root rec v.log v.binding v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1))
-            #[] p.pin #[#[("bytes", p.genesis)]] want with
+        match Supplied.root rec v.log v.binding (heldTables v) v.params (Flock.hexOf v.program.desc.sha512)
+            (v.supplied.map (·.1)) #[] p.pin #[#[("bytes", p.genesis)]] want with
         | .ok r => some (want.domain, r)
         | .error _ => none
       | none => none
@@ -896,9 +927,9 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
   if v.log.any (fun e => jeq (getD e "window") (get "window")) then c := addCode c "R6-window"
   -- R7
   if v2 then
-    c := checkOutputs c (get "registered") (ownEntries v) (v.pinned ++ heldRoots v.log (ownEntries v)) v.supplied
-      (Supplied.root rec v.log v.binding v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1))
-        v.schemas)
+    c := checkOutputs c (get "registered") (expectedEntries v) (v.pinned ++ heldRoots v.log (ownEntries v)) v.supplied
+      (Supplied.root rec v.log v.binding (heldTables v) v.params (Flock.hexOf v.program.desc.sha512)
+        (v.supplied.map (·.1)) v.schemas)
       v.outputs v.log (v.certified.map (·.1))
     c := kept (certifiedHeld rec v) c "R7-certified"
     c := kept (runInputNamed v).isEmpty c "R7-run-input"
@@ -968,9 +999,9 @@ def checkRef (rec : Json) (v : Verifier) : Array String := Id.run do
   if v.log.any (fun e => jeq (getD e "window") (get "window")) then c := addCode c "R6-window"
   -- R7
   if v2 then
-    c := checkOutputs c (get "registered") (ownEntries v) (v.pinned ++ heldRoots v.log (ownEntries v)) v.supplied
-      (Supplied.root rec v.log v.binding v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1))
-        v.schemas)
+    c := checkOutputs c (get "registered") (expectedEntries v) (v.pinned ++ heldRoots v.log (ownEntries v)) v.supplied
+      (Supplied.root rec v.log v.binding (heldTables v) v.params (Flock.hexOf v.program.desc.sha512)
+        (v.supplied.map (·.1)) v.schemas)
       v.outputs v.log (v.certified.map (·.1))
     c := kept (certifiedHeld rec v) c "R7-certified"
     c := kept (runInputNamed v).isEmpty c "R7-run-input"

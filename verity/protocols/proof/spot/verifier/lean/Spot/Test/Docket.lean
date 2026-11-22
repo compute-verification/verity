@@ -73,7 +73,7 @@ def honest (v : Verifier) : V Json := do
      ("leaf_layer", optStr v.leafLayer), ("anchors", Json.arr v.anchors),
      ("window", Json.mkObj [("kind", "served")]), ("previous", previous)]
   if !v.v2 then return Json.mkObj base
-  let es ← ownEntries v
+  let es ← expectedEntries v
   return Json.mkObj (base ++ [("registered", Json.arr (es.map fun e => Json.mkObj [("value", e.value), ("root", ROOT),
     ("leaves", Lean.toJson e.leaves), ("words", Lean.toJson e.words), ("domain", e.domain)]))])
 
@@ -298,5 +298,52 @@ def supX : String := (regX Spot.OneStageZk.E3).replace "RegisteredInput1_v1" "Su
 #guard (codes { verifier supX with pinned := #[], registered := #[] }).contains "R7-supplied-source"
 #guard !(codes { verifier supX with pinned := #[], registered := #[], supplied := #[("x", #[])] }).contains
   "R7-supplied-source"
+-- a table input's mark is no source: with no held table its rows have none, with the table pinned they do
+#guard unsourced { verifier supX with supplied := #[("x", #[])], marks := #[("x", anchorMark "t")] } == #["x"]
+def supT : Verifier := { verifier supX with supplied := #[("x", #[])], marks := #[("x", anchorMark "y")] }
+#guard unsourced { supT with weightsOfRecord := some (ofRecord PINS) } == #[]
+
+/-! A table named by a table input of C (`tableEntries`): its pin is R7's expected entry and the table inputs' source
+(`heldTables`), never the record's entry. `t` is no parameter of C, pinned by the registration of record and named by
+C's mark. -/
+
+/-- A pin of the table `value`, four leaves of one word, its domain at the registration's program digest `ROOT`. -/
+def tablePin (value : String) : String × Json :=
+  let d := (Registered.domain ROOT value 1 4 Registered.WORD_BITS).toOption.map Flock.hexOf |>.getD ""
+  (value, Json.mkObj [("value", Json.str value), ("root", Json.str ROOT), ("leaves", (4 : Nat)), ("words", (1 : Nat)),
+    ("domain", Json.str d)])
+
+def TDOMAIN : String := match getD (tablePin "t").2 "domain" with | .str d => d | _ => ""
+def VT : Verifier := { V3 with marks := #[("a", anchorMark "t")], weightsOfRecord := some (ofRecord [tablePin "t"]) }
+
+/-- The record's entries of `value`, each with key `k` set to `x`, or the entries without `value` for none. -/
+def putValue (value k : String) (x : Option Json) (j : Json) : Json := match getD j "registered" with
+  | .arr es => put j "registered" (some (Json.arr (match x with
+      | some x => es.map fun e => if getD e "value" == Json.str value then put e k (some x) else e
+      | none => es.filter fun e => getD e "value" != Json.str value)))
+  | _ => j
+
+/-- The record with `e` added to its entries. -/
+def addEntry (e : Json) (j : Json) : Json := match getD j "registered" with
+  | .arr es => put j "registered" (some (Json.arr (es.push e)))
+  | _ => j
+
+#guard TDOMAIN.length == 128
+#guard ((tableEntries VT).map fun e => (e.value, e.leaves, e.words, e.domain)) == #[("t", 4, 1, TDOMAIN)]
+#guard heldTables VT == #[("t", ROOT, TDOMAIN)]
+-- a pin no mark names, a mark of a value nothing pins, a value already expected: no entry
+#guard (tableEntries { VT with marks := #[] }).isEmpty
+#guard (tableEntries { VT with marks := #[("a", anchorMark "z")] }).isEmpty
+#guard (tableEntries { VT with marks := #[("a", anchorMark "x")], weightsOfRecord := some (ofRecord [tablePin "x"]) }).isEmpty
+-- the table registered at its pin passes; left out, or at another root or domain, it is refused
+#guard codes VT == #[]
+#guard codes { VT with marks := #[("a", anchorMark "t"), ("b", anchorMark "t" "registered.domain/v1")] } == #[]
+#guard (codes VT (putValue "t" "root" none)).contains "R7-values"
+#guard (codes VT (putValue "t" "root" (some (Json.str OTHER)))).contains "R7-pin"
+#guard (codes VT (putValue "t" "domain" (some (Json.str OTHER)))).contains "R7-pin"
+-- with no pin of it the table input is refused
+#guard (codes { VT with weightsOfRecord := none }).contains "R7-anchor-unpinned"
+-- a pinned table that no mark of C names, registered in the record: refused, the pin widens nothing
+#guard (codes { VT with marks := #[] } (addEntry (tablePin "t").2)).contains "R7-values"
 
 end Spot.Test.Docket

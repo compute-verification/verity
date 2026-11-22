@@ -1062,12 +1062,14 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True))
         print("A5 " + json.dumps(why))
         return summary, False
-    want = CS.expected_ports(mine)
     # a circuit record with run inputs registers each run input node's tree beside the members' (`Window`), read off the
     # record only where it is the circuit the audit holds
     held_doc = served / "circuit.json"
-    if held_doc.is_file() and hashlib.sha512(held_doc.read_bytes()).hexdigest() == summary.get("circuit"):
-        want |= IF.run_input_ports(json.loads(held_doc.read_bytes()), mine)
+    held = held_doc.is_file() and hashlib.sha512(held_doc.read_bytes()).hexdigest() == summary.get("circuit")
+
+    def ports_at(w) -> dict:
+        return CS.expected_ports(w) | (IF.run_input_ports(json.loads(held_doc.read_bytes()), w) if held else {})
+    want = ports_at(mine)
     summary.update({"run_root": mine.run, "population": n_all, "partition": pd, "law": sampling_design, "delta": a.delta, "firewall": a.zk_server,
                     "arm": "fw" if a.zk_server else "dev",
                     "members": [{"k": k, "template": m.template, "n": m.n, "base": m.base} for k, m in enumerate(mine.members)]})
@@ -1181,12 +1183,12 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             # the header against the member's slice of the docket: the per-member form's rule, in its one Python
             # at the reads the verifier opens a shared output tree at (`rows.own_reads`'s `rows.out_value`)
             opened = {(p, mine.tree(m, p)) for p, _ in m.outs if mine.tree(m, p) != m.port(p)}
-            # and at the run input nodes' trees its registered file reads (`interface.registered_file`'s run inputs), as
-            # Lean's members check reads them off that file (`Member.reads`)
-            opened |= {(p, e["value"]) for p, e in ((registered or {}).get(m.key) or {}).get("ports", {}).items()
-                       if REG.is_fresh_value(e.get("value"))}
+            # and every read its registered file names, at a run input node's tree or a registered value, with that
+            # file's ports, as Lean's members check reads them (`Member.reads`, `Member.held`)
+            file_reads, held = member_reads(registered, m.key)
+            opened |= file_reads
             why = form if isinstance(form, str) else MB.population_why([[m.base, m.base + m.n]], form[0], header, form[1][m.key],
-                                                                        opened, subset=MB.subset_designs(mine.law, rec))
+                                                                        opened, held, subset=MB.subset_designs(mine.law, rec))
             ok = {"pin": header.get("circuit_sha512") == made["pin"],
                   "partition": meta.get("partition") == {"rule": P.FORMAT, "digest": pd},
                   "program": meta.get("program_sha512") == part["program"],
@@ -1566,6 +1568,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     result["checks_before_draw"] = checks
     result["case_v2"] = case_written(out)
     members_lean(out, result, pm)
+    one_statement_held(result, rec, members, pm)
     if after:
         result["checks_after_draw"] = after
     (out / "audit.json").write_text(json.dumps(result, indent=1, sort_keys=True, default=str))
@@ -1605,7 +1608,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             name = "program-not-the-days-declared (R2)"
             parts.append(workers.submit(name, functools.partial(registration, name, program, want, leaf_layer,
                                                                 day=day["day"], declarations=moved)))
-        other = CS.expected_ports(replace(mine, run="00" * 32))
+        other = ports_at(replace(mine, run="00" * 64))
         name = "domains-bound-to-another-run-root (R3)"
         parts.append(workers.submit(name, functools.partial(registration, name, program, other, leaf_layer)))
         first = members[0]["m"].key
@@ -1762,6 +1765,34 @@ def case_written(out: Path) -> dict:
         return {"written": True}
     said = next((out / f for f in ("case-v2-error.txt", "case-error.txt") if (out / f).is_file()), None)
     return {"written": False, "why": said.read_text().strip() if said is not None else "the audit wrote none, and no reason"}
+
+
+def one_statement_held(result: dict, rec: dict, members: Sequence[dict], pm: dict | str | None) -> None:
+    """The one statement's public file held to the registration as the executable holds it (`docket.public_held`,
+    `OneStageZkStatement.publicHeld`), and that file's committed trees held to the registration's
+    (`docket.registered_trees_held`), at the verifier's registered file its case names (`v2_proof`): an audit of one
+    member whose case is the one statement's (``pm`` none) accepts only where both hold, its verdict
+    ``result["checks"]["one_statement_public"]``."""
+    if pm is not None or len(members) != 1:
+        return
+    mm = members[0]
+    f = mm["st"].get("registered_file")
+    reads = json.loads(f.read_text()) if f else None
+    try:
+        v = R.public_held(rec, mm["header"], reads).to_json()
+    except ValueError as e:
+        v = {"ok": False, "codes": ["public"], "detail": str(e)}
+    if (why := R.registered_trees_held(rec, "the verifier", reads)) is not None:
+        v = {**v, "ok": False, "codes": [*v["codes"], "registered-trees"], "detail": {"registered-trees": why}}
+    result.setdefault("checks", {})["one_statement_public"] = v
+    if not v["ok"]:
+        result["accepted"] = False
+
+
+def member_reads(registered: Mapping[str, Any] | None, key: str) -> tuple[set[tuple[str, str]], Mapping[str, Any]]:
+    """The member ``key``'s registered reads ``(port, value)`` and its registered file's ports, off the registered files
+    ``registered`` by member, as Lean's members check reads them (`Member.reads`, `Member.held`); none without a file."""
+    return MB.registered_reads((registered or {}).get(key) or {"ports": {}})
 
 
 def members_lean(out: Path, result: dict, pm: dict | str | None,

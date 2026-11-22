@@ -321,6 +321,36 @@ def test_registration_holds_the_public_file():
     assert R.matches_public(rec, "frame-v3/blake3", ROOTS, doms, 5).codes == ("scheme", "population")
 
 
+def test_the_one_statement_leaves_out_a_port_only_where_its_registered_file_reads_a_run_input_tree():
+    """`docket.public_held` on `OneStageZk`'s guards of `publicHeld`, their records, headers and registered files."""
+    def record(ports):
+        return {"population": 2, "scheme": "s",
+                "roots": [{"domain": f"d{i}", "port": p, "root": f"r{i}"} for i, p in enumerate(ports)]}
+
+    def header(ports):
+        return {"frame_v3": {"domain_ids": {p: f"d{i}" for i, p in enumerate(ports)},
+                             "roots": {p: f"r{i}" for i, p in enumerate(ports)}}, "instances": 2, "scheme": "s"}
+
+    def reads(value):
+        return {"format": "verity/registered-reads/v2", "ports": {"x": {"domain": "d" * 128, "leaves": 2,
+                                                                         "root": "a" * 128, "value": value}}}
+
+    assert R.public_held(record(["y", "input/n3"]), header(["y", "x"])).codes == ("roots",)
+    assert R.public_held(record(["y", "input/n3"]), header(["y", "x"]), reads("input/n3")).ok
+    assert R.public_held(record(["y", "input/n3"]), header(["y", "x"]), reads("w")).codes == ("roots",)
+    assert R.public_held(record(["input/n3", "x"]), header(["x"]), reads("input/n3")).codes == ("roots", "domains")
+
+    def tree(c):
+        return {"roots": [{"domain": "d" * 128, "leaves": 2, "port": "input/n3", "root": c * 128}]}
+
+    assert R.registered_trees_held(tree("a"), "the verifier", reads("input/n3")) is None
+    assert R.registered_trees_held(tree("c"), "the verifier", reads("input/n3")) == (
+        "registered: the verifier's port x opens the committed tree input/n3 at another root than the registration's: a "
+        "statement opens its window's registered tree, never another window's or another member's")
+    assert R.registered_trees_held(tree("a"), "the verifier", reads("input/n4")).startswith(
+        "registered: the verifier's port x opens the committed tree input/n4, and the registration holds no root")
+
+
 def test_the_window_says_served_or_stand_in():
     prog, q, rec = _registration(6, window={"kind": "stand-in", "of": "vllm-v1 run root", "root": "7a" * 32})
     assert rec["window"]["kind"] == "stand-in" and _check(rec, prog, q).ok
@@ -899,6 +929,52 @@ def test_r7_refuses_a_supplied_input_with_no_source():
     assert R.unsourced_supplied(prog, {}) == ["t"]
     assert R.unsourced_supplied(prog, {"t": []}) == []
     assert R.unsourced_supplied(_two_programs(registered=("t",))[0], {}) == []
+
+
+def _table_input(fn: str = "registered.root/v1", value: str = "w") -> Program:
+    """`OneStageTestSupplied`'s program with ``t`` a table input of ``value``: C's mark of ``fn``."""
+    t = Array(2, Value(8))
+    calls = CompositeDefinition("OneStageTestSupplied", 0, (), lambda S: ((("t", t),), Tuple(Value(8), Value(8))),
+                                lambda B, S, x: tuple_of(B.call(PAIR, x), B.call(PAIR, x)), register=False)
+    return Program(bind(calls), supplied={"t": {"supplied": fn, "args": {"value": value}, "layout": "digest", "bits": 512}})
+
+
+def _table_pin(value: str = "w", program: str = "aa" * 64) -> dict:
+    from verity.commitments import registered_value as RV
+    return {"value": value, "root": "ab" * 64, "leaves": 4, "words": 1,
+            "domain": RV.domain(program, value, 1, 4).domain_id.hex()}
+
+
+def test_r7_expects_each_pinned_table_a_table_input_names_built_from_its_pin():
+    """`docket.table_entries` (Lean's `Docket.tableEntries`, its guards in `Spot/Test/Docket.lean`): a table a table
+    input of C names (`supplied.registered_values` past the values the verifier expects) that the registration of
+    record pins is an expected entry built from the pin; a pin no mark names, a mark of a value nothing pins, or a value
+    already expected adds none. `docket.held_tables` is each pin's root and domain."""
+    pin = _table_pin()
+    weights = _weights([pin])
+    want = {"w": {"leaves": 4, "words": 1, "word_bits": 16, "domain": pin["domain"]}}
+    for fn in R.ANCHOR_FUNCTIONS:
+        assert R.table_entries(_table_input(fn), {}, weights) == want
+        assert R.table_entries(_table_input(fn), {"x": 1}, weights) == want
+    assert R.table_entries(_table_input(), {}, None) == {}
+    assert R.table_entries(_table_input(value="z"), {}, weights) == {}
+    assert R.table_entries(_table_input(), {"w": 1}, weights) == {}
+    assert R.table_entries(_table_input("record.root/v1"), {}, weights) == {}
+    assert R.held_tables(weights) == {"w": {"root": "ab" * 64, "domain": pin["domain"]}}
+    assert R.held_tables(None) == {} and R.held_tables((weights[0], "00" * 64)) == {}
+
+
+def test_r7_counts_a_table_inputs_mark_as_no_source():
+    """`docket.unsourced_supplied` on a table input (Lean's `Docket.anchorsUnheld`): C's mark names where its rows come
+    from, never that they exist, so with no pin of its table it is named although its marked rows are there; with the
+    table pinned it is not."""
+    prog = _table_input()
+    marks = G.marks(json.loads(b"".join(codec.descriptor_chunks(prog))))
+    assert set(marks) == {"t"}
+    assert R.unsourced_supplied(prog, {"t": []}, None, marks, None) == ["t"]
+    assert R.unsourced_supplied(prog, {"t": []}, None, marks, _weights([_table_pin("z")])) == ["t"]
+    assert R.unsourced_supplied(prog, {"t": []}, None, marks, _weights([_table_pin()])) == []
+    assert R.unsourced_supplied(prog, {}, None, marks, _weights([_table_pin()])) == ["t"]
 
 
 def test_r8_lets_a_tied_run_input_through_and_publishes_it():

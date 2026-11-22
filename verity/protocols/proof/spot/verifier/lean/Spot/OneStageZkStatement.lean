@@ -603,23 +603,43 @@ def registeredTreesHeld (byPort : Std.HashMap String Json) (who : String) (j : O
   | some j =>
     (Flock.Registered.ofJson j).mapError (s!"{who}: {·}") >>= fun own => own.forM (portTreeHeld byPort who tmpl)
 
+/-- The ports the verifier's registered file `registered` reads at a run input node's tree (`isFreshValue`); none
+without a file. -/
+def freshReads : Option Json → V (Array String)
+  | none => pure #[]
+  | some j => do
+    let own ← Flock.Registered.ofJson j
+    pure (own.filterMap fun q => if Flock.Registered.isFreshValue q.value then some q.name else none)
+
+/-- Header `h` with port `p` taken out of its `frame_v3` roots and `domain_ids`. -/
+def dropHeaderPort (h : Json) (p : String) : Json :=
+  let drop := fun (o : Json) => Json.mkObj ((entries o).filter (·.1 != p)).toList
+  let fv := getD h "frame_v3"
+  h.setObjVal! "frame_v3" ((fv.setObjVal! "roots" (drop (getD fv "roots"))).setObjVal! "domain_ids" (drop (getD fv "domain_ids")))
+
 /-- The public file held to the registration `rec` (module docstring, **public**; `registration.matches_public`, as the
 one-stage drivers hold theirs before the sample): its header's scheme, `frame_v3` roots and their `domain_ids`, and
 `instances` against the record's scheme, roots by port as the public file names them (`publicPorts`), their domains
 and population, a refusal naming the codes that fail; then its `units.indices` the population's units in order
-(`indicesHeld`). -/
-def publicHeld (rec : Json) (pubB : ByteArray) : V Unit := do
+(`indicesHeld`). A port the registration holds no root of that the verifier's `registered` file reads at a run input
+node's tree (`freshReads`) is not compared: its header root is over the port's table rows (`HmRow.checkPublic`), each
+of which `Flock.Registered.checkPort` opens under that file's root at the position C gives, and `registeredTreesHeld`
+holds that root to the record's `input/n<w>`. -/
+def publicHeld (rec : Json) (pubB : ByteArray) (registered : Option Json := none) : V Unit := do
   let h ← FilePart.header pubB
   let reg ← publicPorts rec
-  let fv := getD h "frame_v3"
-  let c := Record.matchesPublicBy reg rec (getD h "scheme") (getD fv "roots") (getD fv "domain_ids")
-    (getD h "instances")
+  let fresh ← freshReads registered
+  let h' := fresh.foldl (fun h p => if reg.any (·.1 == p) then h else dropHeaderPort h p) h
+  let fv := getD h' "frame_v3"
+  let c := Record.matchesPublicBy reg rec (getD h' "scheme") (getD fv "roots") (getD fv "domain_ids")
+    (getD h' "instances")
   if !c.codes.isEmpty then throw s!"public file: not the registration's: {", ".intercalate c.codes.toList}"
   if !indicesHeld rec h then throw INDICES_WHY
 
 /-- `publicHeld` passes only on a public file whose header's `units.indices` are the registration's population units in
 order (`indicesHeld`): the unit `provedUnits` credits for instance `i` is `i`, fixed by the registration before any coin. -/
-theorem indicesHeld_of_publicHeld {rec : Json} {pubB : ByteArray} (h : publicHeld rec pubB = .ok ()) :
+theorem indicesHeld_of_publicHeld {rec : Json} {pubB : ByteArray} {registered : Option Json}
+    (h : publicHeld rec pubB registered = .ok ()) :
     ∃ hd, FilePart.header pubB = .ok hd ∧ indicesHeld rec hd = true := by
   unfold publicHeld at h
   cases hh : FilePart.header pubB with
@@ -629,11 +649,14 @@ theorem indicesHeld_of_publicHeld {rec : Json} {pubB : ByteArray} (h : publicHel
     cases hr : publicPorts rec with
     | error e => simp [hh, hr, bind, Except.bind] at h
     | ok reg =>
-      cases hi : indicesHeld rec hd
-      · simp only [hh, hr, hi, bind, Except.bind, Bool.not_false, ↓reduceIte, throw, throwThe,
-          MonadExceptOf.throw] at h
-        split at h <;> simp_all
-      · rfl
+      cases hf : freshReads registered with
+      | error e => simp [hh, hr, hf, bind, Except.bind] at h
+      | ok fresh =>
+        cases hi : indicesHeld rec hd
+        · simp only [hh, hr, hf, hi, bind, Except.bind, Bool.not_false, ↓reduceIte, throw, throwThe,
+            MonadExceptOf.throw] at h
+          split at h <;> simp_all
+        · rfl
 
 /-- `one_stage.proofs.proved_units`: the public file's unit indices (`units.indices`, as the population check reads
 them: `FilePart.indicesOf` of `FilePart.header`) of the instances the session's record drew (`unit_draw.units`),
@@ -1141,7 +1164,7 @@ def checkOneBody (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Ev
     treesHeld p.own ts e bs
     popHeld p.base.verifier c.record
     let pubB ← bs.get p.own.pub "public file"
-    publicHeld c.record pubB
+    publicHeld c.record pubB p.own.registered
     registeredTreesHeld (rootsByPort c.record) "the verifier" p.own.registered
     run p.own e.sessions (some e.base.provedUnits) bs
   match r with
@@ -1491,10 +1514,7 @@ def SHARED_UNREAD (p tree : String) : String :=
 /-- The slice `rec` and the header `h` without port `p`'s root and domain. -/
 def dropPort (rec h : Json) (p : String) : Json × Json :=
   let rs := match getD rec "roots" with | .arr rs => rs.filter (getD · "port" != .str p) | _ => #[]
-  let drop := fun (o : Json) => Json.mkObj ((entries o).filter (·.1 != p)).toList
-  let fv := getD h "frame_v3"
-  let fv := (fv.setObjVal! "roots" (drop (getD fv "roots"))).setObjVal! "domain_ids" (drop (getD fv "domain_ids"))
-  (rec.setObjVal! "roots" (.arr rs), h.setObjVal! "frame_v3" fv)
+  (rec.setObjVal! "roots" (.arr rs), dropHeaderPort h p)
 
 /-- Port `p` reads `v` as a registered value of the verifier's: its registered file's ports `held` hold `p` at `v`,
 a value that names no committed tree (`COMMITTED`), no run input's tree (`isFreshValue`) and no field tree

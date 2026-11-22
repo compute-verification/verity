@@ -14,6 +14,7 @@ difftest against `one_stage`'s Python, beside the whole protocol (`spot-one-stag
   and `link-points` after them where it is handed the per-member form's members;
 * `fanout`: a template query's fan-out and the run Input nodes its proof blocks don't each read alone;
 * `run_input_roots`: each member's ports at C's run input nodes' trees, and a held or tied node's reader without one;
+* `run_input_rows`: the row of a run input node each unit of a port reads (`Flock.OneCircuit.pos`, from C);
 * `registered`: the verifier's own entries for the values its parameters expect registered;
 * `domain`: a registered value's commitment domain, or a produced value's (`Produced.domain`);
 * `produced`: a produced values' record's codes against the verifier's own entries, and the roots the verifiers
@@ -293,6 +294,22 @@ def runInputRoots (j : Json) : V Json := do
     | .ok rs => Json.mkObj [("roots", Json.arr (rs.map fun (n, r) => Json.arr #[.str n,
         Json.arr (r.map fun r => Json.arr #[getD r "port", getD r "tree"])])), ("refused", .null)]
     | .error e => Json.mkObj [("roots", .null), ("refused", .str e)]
+
+/-- `{"program", "indices", "port", "value", "leaves"}`, a program object, units, and a port read at the tree ``value`` of
+``leaves`` rows, to `{"rows", "from"}`: the row each unit reads from the first (`Flock.OneCircuit.pos`, from C), or its
+refusal. -/
+def runInputRows (j : Json) : V Json := do
+  let .obj _ := getD j "program" | throw "program is not an object"
+  let p ← Program.parse (← Flock.canon (getD j "program")).toUTF8
+  let .arr xs := getD j "indices" | throw "indices is not a list"
+  let some indices := xs.mapM nat? | throw "an index is not a natural number"
+  let (.str port, .str value, some leaves) := (getD j "port", getD j "value", nat? (getD j "leaves"))
+    | throw "port or value is not a string, or leaves not a natural number"
+  let reg : Flock.Registered.Port := { name := port, value := value, root := .empty, leaves := leaves, words := none,
+                                        wordBits := 16, domain := .empty, readsRel := #[] }
+  let r ← Flock.OneCircuit.pos p.prog indices reg
+  return Json.mkObj [("rows", Json.arr (r.readsRel.map fun | some n => Lean.toJson n | none => Json.null)),
+    ("from", Lean.toJson r.readsFrom)]
 
 /-- `{"params", "record"}` to R1–R8's codes, and under a template query that applies the fan-out the verdict publishes
 (`Partition.fanout?`) and, when any, the tied values R8 let through (`Docket.tiedThrough`), whatever the record.
@@ -1164,7 +1181,7 @@ def tablesServed (j : Json) : V Json := do
 
 def table : List (String × (Json → V Json)) :=
   [("decode", decode), ("partition", partition), ("committed_bits", committedBits), ("unit_gates", unitGates),
-   ("fanout", fanout), ("run_input_roots", runInputRoots), ("registration", docket),
+   ("fanout", fanout), ("run_input_roots", runInputRoots), ("run_input_rows", runInputRows), ("registration", docket),
    ("registered", registered),
    ("domain", domain), ("produced", produced), ("known_port", knownPort), ("check_draw", checkDraw), ("draw", draw), ("ran_out", ranOut),
    ("select", select), ("design", design), ("slots", slots),
