@@ -42,7 +42,7 @@ from verity_vllm.check.replay import definitions as DF
 from verity_vllm.definitions.registry.catalog import load
 from verity_vllm.definitions.replay import replayer
 from verity_vllm.pipeline import c2_replay as C2
-from verity_vllm.pipeline.build import _instance_rows
+from verity_vllm.pipeline.build_instances import _instance_rows
 from verity_vllm.pipeline.build_instances import write_instances
 from verity_vllm.program.predict.build import build_program
 

@@ -160,8 +160,8 @@ bind a compiler and advice, and `source` and `fixed_before_draw` still hold the 
 the compile check does not run, nor its two negatives and `after_draw`, which read the advice's opening. The summary's
 ``compiled`` and the ``RECORDS`` line's ``compile`` say so (`NOT_CHECKED`, `PROVER_CIRCUIT`).
 
-``--challenger``: the sample on the auditor's challenger's coins (`a5_coins`), the only coins a sample is on, as `prove_path.py audit`
-takes them: ``local``, a development session on this machine (with ``--deployed-key``, under a key made at the deployed
+``--challenger``: the sample on the auditor's challenger's coins (`a5_coins`), the only coins a sample is on:
+``local``, a development session on this machine (with ``--deployed-key``, under a key made at the deployed
 LMS parameters, the only ones SPOT's v2 reads a challenger's signatures under), ``loopback:HOST:PORT``, that session on the challenger
 party's host (`challenger_party.py`, `verity run CONFIG --party challenger`), or ``gate:USER@HOST``, the auditor device through its SSH gate with
 the lane's gate key ``--gate-key``, its challenger on ``--peer``'s 127.0.0.1 (so the audit runs on that peer), under the

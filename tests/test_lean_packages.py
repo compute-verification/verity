@@ -111,7 +111,7 @@ def test_the_unwitnessed_list_only_shrinks():
 #: the count of each lock's `unwitnessed` entries that exempt both witnesses with no reason (a bare hash, or {type_hash,
 #: unfolded_hash}), carried from before {type_hash, why} was the form: each owner gives its guarantee a witness, a
 #: reason or its removal from the listed guarantees
-UNREASONED = {"security": 185, "security/Properties": 161, "verity/protocols/proof/flock/verifier": 7}
+UNREASONED = {"security": 180, "security/Properties": 150, "verity/protocols/proof/flock/verifier": 7}
 
 
 def test_no_exemption_is_written_without_a_reason():
