@@ -16,9 +16,9 @@ whole device declared, the driver's reserve included (`wipe_store.Cuda.info`'s `
 outside the fill counts in `R`, the server's disks ahead of it in the same session, `wipe.disk`, and the host's DRAM
 after it, `wipe.dram`), the memory attester on `period.json`'s `challenger_host` (this node by default, a process
 whose key and session log are beside the periods), its side handed in by the caller that starts the run (`side_of`).
-The verifier trusts one memory-challenger key, the one whose SHA-512 `wipe.trusted_sha512` pins: a session signed under another is rejected, and a challenger on its own host with no
-key pinned is refused before its session. Only a challenger on this node, whose key the run made, is trusted under the
-key its session came with. No network attester counts the session's egress yet, so the check is given no
+The verifier trusts one memory-challenger key, the one whose SHA-512 `wipe.trusted_sha512` pins: a session signed under
+another is rejected, and a wipe with no key pinned is refused by name before its session (`NO_PIN`), wherever its
+challenger runs: no key is trusted for being the one a session came with. No network attester counts the session's egress yet, so the check is given no
 count unless `wipe.egress_bits` names one, and an accepted subprotocol certifies nothing either way (`wipe_period.uncounted`): its verdict
 is real and its quantity isn't. The subprotocol's record never says `trusted-device` holds: for a session signed under
 a key a committed configuration's `[[pin]]` entries give the memory attester for the wipe (`period.json`'s
@@ -46,6 +46,7 @@ from pathlib import Path
 from typing import Any, BinaryIO, Protocol, TypeVar
 
 from verity.protocols.accounting.memory.pous.attester import memory_attester as mc
+from verity.protocols.accounting.memory.pous.attester import onsite
 from verity.protocols.accounting.memory.pous.verifier import streamed_wipe as sw
 from verity.protocols.accounting.memory.pous.attester import wipe_challenger as WC
 from verity.protocols.accounting.memory.pous.verifier import wipe_parties as WP
@@ -167,14 +168,11 @@ def run(node: str, params: sw.WipeParams | None = None, *, signer: mc.Signer | N
     secret, coins, key, log and clock, and those arguments are unused. `prover` makes the prover's side,
     which with `stop_after` leaves after that many reads. `egress_mib` is the evidence's egress count, which the
     verifier's check takes beside the signed session (`egress_of`); the challenger never holds it. `trusted_sha512` is the verifier's pin, the SHA-512 in hex of
-    the one memory-challenger key it trusts: a session signed under another key is rejected. With none it trusts the key
-    the session came with, which only a challenger whose key this run made may be given: a `party` on another host than
-    `node` with none pinned is refused (ValueError) before its session.
+    the one memory-challenger key it trusts: a session signed under another key is rejected. With none the wipe is
+    refused (ValueError, `NO_PIN`) before its session.
     `schemes` are the signature schemes it accepts and `protocol` the id it answers under."""
-    if party is not None and party.host != node and trusted_sha512 is None:
-        raise ValueError(f"no key is pinned (trusted_sha512) with the memory attester on {mc.ATTESTER_MACHINE}: the verifier "
-                         "trusts a challenger on its own host only under its pinned key (the SHA-512 of its public "
-                         "key, as its host gives it)")
+    if trusted_sha512 is None:
+        raise ValueError(NO_PIN)
     params = params_for() if params is None else params
     server = node.encode()
     if party is None:
@@ -200,7 +198,7 @@ def run(node: str, params: sw.WipeParams | None = None, *, signer: mc.Signer | N
         report |= {k: got[k] for k in ("connection", "fill", "streamer", "window") if k in got}
     key_sha = hashlib.sha512(key).hexdigest()
     report |= {"key_sha512": key_sha, "key_pinned": key_sha == trusted_sha512}
-    trusted = (key,) if trusted_sha512 in (None, key_sha) else ()
+    trusted = (key,) if key_sha == trusted_sha512 else ()
     return Wipe(W.answer(server, commitment.session, trusted, commitment, signed, schemes, protocol,
                        egress_mib=egress_mib),
                 case(server, commitment.session, trusted, commitment, signed, egress_mib), report, signed)
@@ -232,12 +230,16 @@ a session at another count. `None`: whatever the challenger chooses (`READS` her
 node besides the one to a challenger on its own host, which the subprotocol adds from the connection it made: each `{"name",
 "to", "via"}`, with `mbps` and `counted_by` (the network attester that counts it) when known (`wipe_party.link`).
 `trusted_sha512` is the verifier's pin, the SHA-512 of the memory attester's public key in 128 lowercase hex digits:
-the only key a session is accepted under. A challenger on its own host needs it; `None` trusts the key a challenger on
-this node made for the run. `fill_bytes` is the verifier's too, the fill floor the card file gives for the served
-node's card (its `store.wipe_fill`, a floor on the fill and not the card's memory), which the judge holds the session's
-fill to (`wipe-protocol --fill`): a session whose labels fill less is rejected. `None` gives none, and the judge holds
+the only key a session is accepted under. `None` is refused before the session (`NO_PIN`). `fill_bytes` is the
+verifier's too, the fill floor the card file gives for the served node's card (its `store.wipe_fill`, a floor on the
+fill and not the card's memory), which the judge holds the session's fill to (`wipe-protocol --fill`): a session whose labels fill less is rejected. `None` gives none, and the judge holds
 the fill to 0 bytes."""
 LINK_KEYS = {"name", "to", "via", "mbps", "counted_by"}
+#: why a wipe with no memory-challenger key pinned (`wipe.trusted_sha512`) is refused before its session
+NO_PIN = ("no key is pinned for the memory challenger's wipe sessions (wipe.trusted_sha512), so the verifier trusts no "
+          "key: state the party's [[pin]] in the application's configuration file, with party = \"memory-challenger\", "
+          "protocol = \"wipe\", scheme = \"lms-sha512/n64-w1-h20/v0\" and key-sha512 = the SHA-512 of its public key "
+          "in 128 lowercase hex digits")
 DISK = {"paths": None, "bytes": None, "reserve_bytes": wipe_store.DISK_RESERVE, "spare_bytes": 0, "direct": True}
 """`wipe.disk` and its defaults: the targets (`paths`, each a directory the fill takes a file in or a block device
 written raw, `wipe_store.Disk`), the fill's bytes on them (`None`: all their room, each directory's free space less
@@ -247,6 +249,13 @@ DRAM = {"bytes": None, "reserve_bytes": 16 << 30}
 """`wipe.dram` and its defaults: the fill's `bytes` on the host's DRAM (`None`: what `dram_available` says less
 `reserve_bytes`; whole segments either way), the DRAM declared whole (`wipe_store.HostMemory(whole=True)`), so that
 what the fill doesn't reach counts in `R`."""
+
+
+def run_key(device: Path) -> str:
+    """The SHA-512 of the key a challenger on this node signs under, made in its directory ``device`` before the session
+    (`onsite.device_key`, which the challenger then loads): the pin a ``run_keys`` wipe states for itself, which no
+    configuration gives, so its record is a development run's."""
+    return hashlib.sha512(onsite.device_key(device, workers=len(os.sched_getaffinity(0))).public_key).hexdigest()
 
 
 def config(doc: Mapping[str, Any]) -> dict[str, Any]:
@@ -415,8 +424,8 @@ def subprotocol(period_dir: Path, node: str, out: Path, *, side_of: Callable[...
     memory attester a party of its own on `period.json`'s `challenger_host` (`side_of(period, node, key, local,
     what)`, which the caller that starts the run hands in, the runtime's `Side.of`; on this node by default, a process
     whose key and session log are in `wipe-challenger` beside the periods) and the prover here. The verifier trusts the
-    key `wipe.trusted_sha512` pins and no other; a challenger on its own host with none pinned is refused (ValueError)
-    before its session. A `wipe_store` prover gates its store before the session.
+    key `wipe.trusted_sha512` pins and no other; with none pinned the wipe is refused (ValueError, `NO_PIN`) before its
+    session. A `wipe_store` prover gates its store before the session.
     With `wipe-protocol` among the period's tools, the Lean answers alone (the verifier), held to this node and the
     fill floor (``--server NODE --fill wipe.fill_bytes serve``), once `ready` returns for it (a caller whose build
     runs beside the wipe waits there);
@@ -433,15 +442,13 @@ def subprotocol(period_dir: Path, node: str, out: Path, *, side_of: Callable[...
     what the bound doesn't cover (`uncertified`)."""
     doc = json.loads((Path(period_dir) / "period.json").read_text())
     tools, c = doc.get("tools") or {}, config(doc)
+    if c["trusted_sha512"] is None:
+        raise ValueError(NO_PIN)
     extra = (("--streamer", tools.get("wipe-stream", "build"), *(("--threads", str(c["threads"])) if c["threads"] else ()))
              if c["streamer"] == "native" else ()) + (() if c["reads"] is None else ("--reads", str(c["reads"])))
     party = side_of(doc, node, WP.COMPONENT, wipe_party.command(Path(period_dir).parent / "wipe-challenger", extra),
                     "the wipe")
     egress = None if c["egress_bits"] is None else sw.egress_units(c["egress_bits"])
-    if party.host != node and c["trusted_sha512"] is None:
-        raise ValueError(f"period.json's wipe.trusted_sha512 is unset with the memory attester on {mc.ATTESTER_MACHINE}: the "
-                         "verifier trusts a challenger on its own host only under its pinned key (the SHA-512 of its "
-                         "public key, as its host gives it)")
     memory, store = store_of(c), None
     try:
         tier = c["tier"] or (TIER if memory is None else memory.tier)
@@ -515,7 +522,7 @@ def summary(record: Mapping[str, Any]) -> dict[str, Any]:
     """`wipe.json`'s headline: the verdict and who gave it (`decided_by`: the program, `wipe-protocol` or `python`, and
     the host it ran on; `executables`: its SHA-512, which the node writes about itself and only an auditor-side
     composer comparing it holds), the SHA-512 of the challenger key the session was signed under (`key_sha512`) and whether it is
-    the key the verifier pinned (`key_pinned`; an accept without it trusted the key of a challenger on the node itself),
+    the key the verifier pinned (`key_pinned`; the verifier trusts no other key, so an accepted run has it),
     the reads the challenger ran (`k`), where each party ran, the session's window on the challenger's clock (`t0`,
     `t1`), what the bound doesn't cover, and the fill's and the reads' figures on each side."""
     a, prover, session, fill = record["answer"], record["prover"] or {}, record["session"] or {}, record["report"].get("fill")
@@ -533,7 +540,7 @@ def summary(record: Mapping[str, Any]) -> dict[str, Any]:
                        "sync_ns": (prover.get("fill") or {}).get("sync_ns"), "gate": prover.get("gate")}}
 
 
-__all__ = ["CONFIG", "DISK", "DRAM", "LINK_KEYS", "NOT_DISKS", "Side", "Wipe", "answer", "config", "disks",
-           "dram_available", "subprotocol", "run", "segments_of", "session", "store_of", "summary", "timing",
+__all__ = ["CONFIG", "DISK", "DRAM", "LINK_KEYS", "NOT_DISKS", "NO_PIN", "Side", "Wipe", "answer", "config", "disks",
+           "dram_available", "subprotocol", "run", "run_key", "segments_of", "session", "store_of", "summary", "timing",
            "undeclared"]
 

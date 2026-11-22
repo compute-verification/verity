@@ -55,7 +55,10 @@ M = W.SEGMENT_LABELS * sw.LABEL_BITS
 
 
 def _run(params: sw.WipeParams = SMALL, secret: bytes = b"wipe period", **kw) -> wipe_run.Wipe:
-    return wipe_run.run("n0", params, signer=ts.TestSigner(secret, 2), log=ts.session_log(), schemes=ts.SCHEMES,
+    """One wipe in this process, the verifier pinning the test signer's own key unless ``trusted_sha512`` says otherwise."""
+    signer = ts.TestSigner(secret, 2)
+    kw.setdefault("trusted_sha512", hashlib.sha512(signer.public_key).hexdigest())
+    return wipe_run.run("n0", params, signer=signer, log=ts.session_log(), schemes=ts.SCHEMES,
                  protocol=TEST_ID, clock=kw.pop("clock", Clock(10 ** 9, 1)), coin_secret=b"coins", **kw)
 
 
@@ -80,7 +83,7 @@ def test_an_honest_segment_is_accepted_and_not_certified() -> None:
     key, = w.case["params"]["trusted"]
     assert w.verdict == "accept" and w.report == {"ended": sw.COMPLETE, "host": "n0", "reads": W.READS,
                                                   "key_sha512": hashlib.sha512(bytes.fromhex(key)).hexdigest(),
-                                                  "key_pinned": False}
+                                                  "key_pinned": True}
     assert w.answer["public"] == VACUOUS == W.uncounted(W.params_for())
     assert W.certify(W.params_for(), 3) == {"certified": True, "egress_mib": 3, "eps": f"1/{2 ** 128}",
                                             "foreign_bits": SEGMENT_2152 + 3 * sw.EGRESS_UNIT_BITS, "k": W.READS,
@@ -198,7 +201,7 @@ def test_a_late_read_is_rejected() -> None:
 
     w = _run(clock=clock, prover=Late, egress_mib=0)
     assert w.verdict == "reject" and w.report == {"ended": sw.LATE, "host": "n0", "reads": 6,
-                                                  "key_sha512": w.report["key_sha512"], "key_pinned": False}
+                                                  "key_sha512": w.report["key_sha512"], "key_pinned": True}
     assert "batch 5 is past its deadline of 1000 ns" in w.answer["reason"]
 
 
@@ -270,7 +273,8 @@ def test_a_native_challenger_here_runs_the_streamer_the_period_names(tmp_path, t
     where programs run, and builds its own beside its key (`--streamer build`) only when none is named."""
     period = tmp_path / "periods" / "p0"
     period.mkdir(parents=True)
-    (period / "period.json").write_text(json.dumps({"tools": tools, "wipe": {"streamer": "native", "threads": 4}}))
+    (period / "period.json").write_text(json.dumps({"tools": tools, "wipe": {"streamer": "native", "threads": 4,
+                                                                             "trusted_sha512": "ab" * 64}}))
     started = []
 
     def side_of(doc, node, key, local, what=None):
@@ -538,15 +542,13 @@ UNTRUSTED = "the session is signed by a key that is not a trusted memory challen
 
 def test_the_verifier_trusts_the_pinned_key_alone() -> None:
     """`run`'s `trusted_sha512`: under the digest of the key the session is signed under the wipe is accepted and the
-    key reported pinned; under another digest the same session is rejected, its case naming no trusted key; with no
-    pin the key the session came with is trusted and reported unpinned."""
-    unpinned = _run()
-    own = unpinned.report["key_sha512"]
-    pinned, other = _run(trusted_sha512=own), _run(trusted_sha512=hashlib.sha512(b"another key").hexdigest())
-    assert (unpinned.verdict, unpinned.report["key_pinned"]) == ("accept", False)
+    key reported pinned; under another digest the same session is rejected, its case naming no trusted key."""
+    pinned = _run()
+    own = pinned.report["key_sha512"]
+    other = _run(trusted_sha512=hashlib.sha512(b"another key").hexdigest())
     assert (pinned.verdict, pinned.report["key_pinned"]) == ("accept", True)
     key, = pinned.case["params"]["trusted"]
-    assert unpinned.case["params"]["trusted"] == [key] and hashlib.sha512(bytes.fromhex(key)).hexdigest() == own
+    assert hashlib.sha512(bytes.fromhex(key)).hexdigest() == own
     assert (other.verdict, other.answer["reason"], other.answer["public"]) == ("reject", UNTRUSTED, None)
     assert other.report == pinned.report | {"key_pinned": False} and other.case["params"]["trusted"] == []
 
@@ -572,8 +574,8 @@ def test_a_session_signed_under_another_key_than_the_pinned_one_is_rejected(tmp_
     (None, "no pin was handed to it (ctx['pins'], the application's [[pin]] entries)"),
     ([], "the pins handed to it give the memory-challenger no key for the wipe")])
 def test_a_challenger_on_its_own_host_with_no_key_pinned_is_refused(tmp_path, monkeypatch, pins, why) -> None:
-    """With no pin the verifier would trust the key the session came with, which only a challenger whose key the run
-    made may be given: the attach refuses one on its own host by name before its session starts."""
+    """With no pin the verifier trusts no key: the attach refuses a challenger on its own host by name before its
+    session starts."""
     _, side_of = _side(tmp_path, {})
     started = []
     monkeypatch.setattr(wipe_run, "run", lambda *a, **kw: started.append(a))
@@ -582,10 +584,10 @@ def test_a_challenger_on_its_own_host_with_no_key_pinned_is_refused(tmp_path, mo
     assert not started and not (tmp_path / "private" / "wipe.case.json").exists()
 
 
-def test_run_itself_refuses_a_party_on_another_host_with_no_key_pinned(monkeypatch) -> None:
-    """`run`, whoever calls it: a party on another host than the node with `trusted_sha512` unset is refused before
-    its session starts, so no caller's session is ever judged under the key it came with. The same party under a pin,
-    and an unpinned one on the node itself, reach their sessions."""
+def test_run_itself_refuses_a_wipe_with_no_key_pinned(monkeypatch) -> None:
+    """`run`, whoever calls it and wherever its challenger runs: with `trusted_sha512` unset it is refused by name before
+    its session starts, the fix in the message, so no session is ever judged under the key it came with. The same
+    parties under a pin reach their sessions."""
     started = []
 
     def session(party, *args, **kw):
@@ -593,12 +595,13 @@ def test_run_itself_refuses_a_party_on_another_host_with_no_key_pinned(monkeypat
         raise ConnectionError("the session started")
     monkeypatch.setattr(wipe_run, "session", session)
     there, here = Side("auditor", ("true",)), Side("n0", ("true",))
-    with pytest.raises(ValueError, match=r"no key is pinned \(trusted_sha512\) with the memory attester on the memory attester's machine"):
-        wipe_run.run("n0", SMALL, party=there)
-    assert not started
-    for party, pin in ((there, "ab" * 64), (here, None)):
+    for party in (there, here, None):
+        with pytest.raises(ValueError, match=re.escape(wipe_run.NO_PIN)):
+            wipe_run.run("n0", SMALL, party=party, signer=ts.TestSigner(b"no pin", 2), log=ts.session_log())
+    assert not started and "state the party's [[pin]] in the application's configuration file" in wipe_run.NO_PIN
+    for party in (there, here):
         with pytest.raises(ConnectionError, match="the session started"):
-            wipe_run.run("n0", SMALL, party=party, trusted_sha512=pin)
+            wipe_run.run("n0", SMALL, party=party, trusted_sha512="ab" * 64)
     assert started == ["auditor", "n0"]
 
 

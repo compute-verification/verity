@@ -201,10 +201,10 @@ def test_a_pous_window_whose_session_did_not_complete_has_no_case(served, tmp_pa
 
 def _wipe_window(tmp_path: Path, *, protocol: str = WIPE_ID, egress_mib: int | None = None) -> tuple[Path, Path, wipe_run.Wipe]:
     """A served wipe's public directory as `served_wipe.sh` leaves it, and the serve dir its ``served.json`` names."""
-    w = wipe_run.run("n0", SMALL_WIPE, signer=ts.TestSigner(b"served case wipe", 2, directory=tmp_path),
-              log=ts.session_log(tmp_path), schemes=ts.SCHEMES,
+    signer = ts.TestSigner(b"served case wipe", 2, directory=tmp_path)
+    w = wipe_run.run("n0", SMALL_WIPE, signer=signer, log=ts.session_log(tmp_path), schemes=ts.SCHEMES,
               protocol=protocol, clock=iter(range(10 ** 9, 10 ** 12)).__next__, coin_secret=b"coins",
-              egress_mib=egress_mib)
+              egress_mib=egress_mib, trusted_sha512=hashlib.sha512(signer.public_key).hexdigest())
     assert w.verdict == "accept", w.answer
     serve, window = tmp_path / "serve", tmp_path / "pieces" / "wipe"
     window.mkdir(parents=True)

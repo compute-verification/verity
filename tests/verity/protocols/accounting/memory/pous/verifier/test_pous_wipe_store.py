@@ -14,6 +14,7 @@ declared."""
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import sys
@@ -124,9 +125,10 @@ def test_a_store_keeping_prior_content_past_the_threshold_is_rejected() -> None:
     n, threshold = W.foreign_labels("fM", params), W.certify(params, 0)["foreign_bits"]
     assert (n - 1) * sw.LABEL_BITS <= threshold < n * sw.LABEL_BITS
     store = WS.StoreProver(params, WS.HostMemory(), clock=Clock(step=7), foreign=n)
-    w = wipe_run.run("n0", params, signer=ts.TestSigner(b"store cheat", 2), log=ts.session_log(), schemes=ts.SCHEMES,
+    signer = ts.TestSigner(b"store cheat", 2)
+    w = wipe_run.run("n0", params, signer=signer, log=ts.session_log(), schemes=ts.SCHEMES,
               protocol=mc.TEST_PREFIX + W.PROTOCOL, clock=Clock(step=7), coin_secret=b"coins", egress_mib=0,
-              prover=lambda _: store)
+              prover=lambda _: store, trusted_sha512=hashlib.sha512(signer.public_key).hexdigest())
     store.close()
     assert w.verdict == "reject" and w.report["ended"] == sw.WRONG and "wrong answers" in w.answer["reason"]
 
@@ -356,6 +358,7 @@ def test_the_cheats_subprotocol_rejects_under_a_simulated_placement(tmp_path, mo
     out.mkdir()
     settings = S.settings(WIPE, {"store": "host", "segments": 1})
     wipe_judge.stand_in(monkeypatch)
+    monkeypatch.setattr(wipe_run, "run_key", lambda d: PINNED)
     got = WIPE.attach(None, {"settings": settings, **wipe_served.FACTS, "streamer": "python", "foreign_past_bound": True,
                              "simulated": True, "egress_bits": 0, "run_keys": True, "private": out, "process": H.PIECE, "side_of": side_of,
                              "pins": [], "node": "n0", "judge": "wipe-protocol"})
@@ -439,9 +442,11 @@ def test_one_session_over_a_disk_and_host_memory(tmp_path, foreign: int) -> None
     params = sw.WipeParams(512, W.READS, 1, W.LIMIT_NS, joint.declared())
     store = WS.StoreProver(params, joint, staging=4 * WS.BLOCK, clock=Clock(step=7), foreign=foreign)
     store.gate()
-    w = wipe_run.run("n0", params, signer=ts.TestSigner(b"disk %d" % foreign, 2), log=ts.session_log(), schemes=ts.SCHEMES,
+    signer = ts.TestSigner(b"disk %d" % foreign, 2)
+    w = wipe_run.run("n0", params, signer=signer, log=ts.session_log(), schemes=ts.SCHEMES,
               protocol=mc.TEST_PREFIX + W.PROTOCOL, clock=Clock(step=7), secret=KEY, session_id=bytes(32),
-              coin_secret=b"coins", egress_mib=0, prover=lambda _: store)
+              coin_secret=b"coins", egress_mib=0, prover=lambda _: store,
+              trusted_sha512=hashlib.sha512(signer.public_key).hexdigest())
     [fill] = _fills(tmp_path)
     on_disk, key = fill.read_bytes(), sw.wipe_key(KEY, b"n0", bytes(32))
     assert store.sync_ns == 7 and store.record()["store"]["parts"][0]["tier"] == "disk"
