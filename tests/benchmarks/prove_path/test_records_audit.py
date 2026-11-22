@@ -33,6 +33,7 @@
   another circuit under unchanged digests is refused by name and one whose names make the same circuit is ignored."""
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import shutil
@@ -359,6 +360,31 @@ def test_parameters_with_no_registration_say_the_development_line_first_and_are_
     summary = json.loads((tmp_path / "o" / "summary.json").read_text())
     assert summary["registration"] == {"digest": None, "source": "development"}
     assert summary["ok"] and summary["of_record"] is False
+
+
+def test_a_registration_from_the_ledger_names_its_lane_digest_and_key_first(tmp_path):
+    """With ``--registration-ledger``, the audit's first line and the summary's ``registration`` name the lane, the
+    record's digest and the challenger's key (its public key's SHA-512) the registration is held to; a malformed key
+    record refuses."""
+    from verity.protocols.proof.spot.verifier.challenger import challenger as Ch
+
+    rec, pub = _deployment_record(tmp_path), bytes(range(80))
+    key = tmp_path / "key.json"
+    key.write_text(json.dumps({"schema": Ch.KEY_RECORD_SCHEMA, "W": 4, "H": 5, "pubkey": pub.hex(),
+                               "pubkey_sha512": hashlib.sha512(pub).hexdigest()}))
+    a = argparse.Namespace(registration=str(rec), registration_ledger="ledger.jsonl", registration_head=None,
+                           registration_lane="circuits", challenger_key=str(key))
+    digest, k = DD.digest(json.loads(rec.read_text())), hashlib.sha512(pub).hexdigest()
+    line, held = RA.registration_line(a)
+    assert line == f"REGISTRATION lane circuits digest {digest} key {k}: {RA.REGISTRATION_SOURCES['ledger']}"
+    assert held == {"digest": digest, "source": "ledger", "lane": "circuits", "key": k}
+    key.write_text(json.dumps({"schema": Ch.KEY_RECORD_SCHEMA, "W": 4, "H": 5, "pubkey": pub.hex(),
+                               "pubkey_sha512": "00" * 64}))
+    with pytest.raises(SystemExit, match="REGISTRATION refused"):
+        RA.registration_line(a)
+    dev = argparse.Namespace(registration=str(rec), registration_ledger=None, registration_head=R.DEVELOPMENT,
+                             registration_lane=None, challenger_key=None)
+    assert RA.registration_line(dev) == ("REGISTRATION " + R.DEVELOPMENT_WHY, {"digest": None, "source": "development"})
 
 
 def test_members_no_lean_ran_on_are_listed_by_name_first_and_the_run_is_not_of_record(written, tmp_path, monkeypatch,

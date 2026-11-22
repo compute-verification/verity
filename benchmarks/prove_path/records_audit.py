@@ -730,6 +730,26 @@ def registration_param(a: argparse.Namespace) -> dict[str, Any]:
     return {"record": body, "head": DK.DEVELOPMENT}
 
 
+def registration_line(a: argparse.Namespace) -> tuple[str, dict[str, Any]]:
+    """The audit's first line and the summary's ``registration``: with ``--registration-ledger``, the lane, the
+    deployment's registration record's digest (which `docket.registration_parsed` refuses unless the ledger's head for the
+    lane is it) and the challenger's key (its public key's SHA-512) it is held to; else the development line."""
+    taken = "ledger" if a.registration_ledger else a.registration_head
+    if not a.registration_ledger:
+        return ("REGISTRATION " + (DK.registration_first(taken if a.registration else None) or REGISTRATION_SOURCES[taken]),
+                {"digest": None, "source": DK.DEVELOPMENT})
+    from verity.commitments import docket_digest as DD
+    from verity.protocols.proof.spot.verifier.challenger import challenger as Ch
+    try:
+        digest = DD.digest(json.loads(Path(a.registration).read_text()))
+        key = hashlib.sha512(Ch.key_of_record(json.loads(Path(a.challenger_key).read_text())).public).hexdigest()
+    except (OSError, ValueError, KeyError, TypeError, Ch.CoinError) as e:
+        raise SystemExit(f"REGISTRATION refused: the record or the challenger's key record is unreadable or malformed "
+                         f"({type(e).__name__}: {e})") from None
+    held = {"digest": digest, "source": "ledger", "lane": a.registration_lane, "key": key}
+    return f"REGISTRATION lane {a.registration_lane} digest {digest} key {key}: {REGISTRATION_SOURCES['ledger']}", held
+
+
 def device_day(lines: list[str], root: str, key: Any, verify: Callable[[Any, bytes, bytes], bool],
                w: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """``--day-ledger LEDGER``: the window's day and its prover's declarations as the auditor's challenger device signed
@@ -1124,8 +1144,8 @@ def audit(a: argparse.Namespace) -> int:
     if a.registration and taken not in REGISTRATION_SOURCES or (a.registration_ledger and not (a.challenger_key
                                                                                                and a.registration_lane)):
         raise SystemExit(REGISTRATION_NEEDS)
-    print("REGISTRATION " + (DK.registration_first(taken if a.registration else None) or REGISTRATION_SOURCES[taken]),
-          flush=True)
+    first, a.registration_row = registration_line(a)
+    print(first, flush=True)
     own_tree()
     import a5 as A5
     from verity.protocols.proof.spot.verifier.challenger import challenger_session as AC
@@ -1258,8 +1278,7 @@ def audit(a: argparse.Namespace) -> int:
     if tied.get("log"):
         row["tie"] = tie_row(tied)
     row["circuit_registration"] = s.get("registration")
-    row["registration"] = {"digest": a.registration_digest if a.registration else None,
-                           "source": "ledger" if a.registration_ledger else DK.DEVELOPMENT}
+    row["registration"] = {**a.registration_row, "digest": a.registration_digest if a.registration else None}
     lean_members = (s.get("audit") or {}).get("members_lean") or {}
     if lean_members.get("ran") is False:
         row["not_verified"] = {"members": list(lean_members.get("not_verified") or []), "why": lean_members.get("reason")}
