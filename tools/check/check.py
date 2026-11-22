@@ -2036,9 +2036,6 @@ OPT_IN = {
         "test_difftest.py::test_decimal_primitives_sampled",
         "test_difftest.py::test_activations_on_their_grids",
         "test_difftest.py::test_activations_sampled")},
-    "benchmarks/prove_path": {"VERITY_SLOW": (
-        "test_prove_path.py::test_a_served_windows_fused_cut_is_the_row_drivers_window_given_the_tables_and_the_checkpoint",
-        "test_prove_path.py::test_a_served_windows_fused_cut_is_refused_without_the_tables_or_the_checkpoint")},
 }
 #: where a cold check's opt-in runs write each suite's outcome and log, apart from its steps' own (`suites.json`, `suites/`)
 OPT_IN_DIR = "opt-in"
