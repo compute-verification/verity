@@ -18,7 +18,12 @@
 #     the checkpoint CKPT, REPO's snapshot at REV under HF_HOME, and the rotary table at the words the engine serves,
 #     $D/private/cos_sin_cache.npy, once within the analytic table's bound, committed under fresh OS salts in the salt file
 #     $D/weights_registration.salts/ (0700, `salt_file.beside`), neither of which a record copies); WEIGHTS says how many it roots and which it leaves unrooted, and
-#     why, or NO WEIGHTS REGISTRATION why not, and then every weight read counts free.
+#     why, or NO WEIGHTS REGISTRATION why not, and then every weight read counts free. Under REGISTRATION_LANE the serve
+#     then holds (`registration_hold`): it prints the deployment's registration record's digest and the period-open that
+#     registers it, and sends no request until the auditor's ledger REGISTRATION_LEDGER carries that period-open for the
+#     lane, checked under the challenger's key record REGISTRATION_KEY (default PP_CHALLENGER_KEY), within
+#     REGISTRATION_HOLD_S seconds, else stops refused; the audit is then held to that head (`wreg_args`). With no lane it
+#     prints the development line and does not hold.
 #  2. requests: REQUESTS greedy requests (default SLOTS) from the network attester's traffic generator (`adapters/vllm/tools/served_run/serve_load.py --varied`:
 #     prompts of PROMPTS tokens, at most MAX_TOKENS outputs), numbered under one release run and sent together (RATE a second),
 #     so the engine's idle closes them into one window. With LOAD=dataset (default varied) they are the input dataset
@@ -837,6 +842,21 @@ wreg_args() {  # the deployment's registration record: under REGISTRATION_LANE, 
     printf '%s\n' --registration "$DREG" --registration-head development
   fi
 }
+registration_hold() {  # after weights wrote $DREG, before the epoch's first reserve: under REGISTRATION_LANE, held until
+  # REGISTRATION_LEDGER carries the lane's registering period-open with $DREG's digest, at most REGISTRATION_HOLD_S
+  # seconds; with no lane, the development line and no hold
+  local rc
+  if [ -n "${REGISTRATION_LANE:-}" ]; then
+    [ -s "$DREG" ] || { say "REGISTRATION-HOLD refused: $NO_DREG"; return 1; }
+    timeout -k 10s "$REGISTRATION_HOLD_S" "$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" registration-hold "$DREG" \
+      --lane "$REGISTRATION_LANE" --ledger "$REGISTRATION_LEDGER" --key "${REGISTRATION_KEY:-${PP_CHALLENGER_KEY:-}}" | publish_lines
+  else
+    "$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" registration-hold "$DREG" | publish_lines
+  fi
+  rc=$?
+  [ "$rc" != 124 ] || say "REGISTRATION-HOLD refused: $REGISTRATION_LEDGER carried no registering period-open of lane $REGISTRATION_LANE within REGISTRATION_HOLD_S=${REGISTRATION_HOLD_S}s"
+  return "$rc"
+}
 v3c_warm() {  # every template of the committed window composed into $VW/compose-cache, V3C_WARM_JOBS at a time
   local ca; mapfile -t ca < <(v3c_compose_args)
   (cd "$TREE" && env -u PYTHONPATH RAYON_NUM_THREADS="$(nproc)" RUST_MIN_STACK=$((64 << 20)) timeout -k 1m "$V3C_WARM_TIMEOUT" \
@@ -1044,6 +1064,11 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   fi
   say "SERVE $(grep -m1 'SERVE-OPENAI listening' "$D/serve.log" | cut -c1-300)"
   weights
+  if ! registration_hold; then
+    kill -TERM "$srv" 2>/dev/null; wait "$srv"
+    pearl_period close
+    return 11
+  fi
   if [ -n "${CERTIFIER_FRONT:-}" ]; then  # the network certifier in front of the endpoint, before the requests
     # below: its group closes into a window of its own, the run's earliest: never the window of record under
     # PEARLPLUS_TIE (that is the fixed load's), and otherwise the window of record only where it has the most requests.
@@ -2316,8 +2341,10 @@ case ${VERITY_HOLD_PLACEMENT:-} in '' | 0 | 1) ;; *) say "PREFLIGHT: VERITY_HOLD
 [ "$H1_KEY_SHA512" = "$H1_KEY_OF_RECORD" ] || [ "$DEVELOPMENT" = 1 ] || ! hold_placement \
   || { say "PREFLIGHT: H1_KEY_SHA512 replaces the challenger key of record (vy-challenger-1's), which under VERITY_HOLD_PLACEMENT=1 only a development run takes: unset H1_KEY_SHA512, DEVELOPMENT=1, or VERITY_HOLD_PLACEMENT unset"; exit 3; }
 if [ -n "${REGISTRATION_LANE:-}" ]; then
-  [ -n "${REGISTRATION_LEDGER:-}" ] && [ -r "$REGISTRATION_LEDGER" ] \
-    || { say "PREFLIGHT: REGISTRATION_LANE holds the audit to the registration the auditor's challenger signed for that lane, read from its ledger REGISTRATION_LEDGER, which is unset or not a readable file"; exit 3; }
+  [ -n "${REGISTRATION_LEDGER:-}" ] \
+    || { say "PREFLIGHT: REGISTRATION_LANE holds the audit to the registration the auditor's challenger signed for that lane, read from its ledger REGISTRATION_LEDGER, which is unset"; exit 3; }
+  [[ "${REGISTRATION_HOLD_S:-}" =~ ^[1-9][0-9]*$ ]] \
+    || { say "PREFLIGHT: REGISTRATION_LANE holds the serve after its weights step until REGISTRATION_LEDGER carries the lane's registration, at most REGISTRATION_HOLD_S seconds, a positive integer with no default, not '${REGISTRATION_HOLD_S:-}'"; exit 3; }
   [ -r "${REGISTRATION_KEY:-${PP_CHALLENGER_KEY:-}}" ] \
     || { say "PREFLIGHT: REGISTRATION_LANE's ledger is checked under the challenger's key record REGISTRATION_KEY (default PP_CHALLENGER_KEY), which is unset or not a readable file"; exit 3; }
 fi

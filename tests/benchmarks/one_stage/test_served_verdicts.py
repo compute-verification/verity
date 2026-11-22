@@ -3324,6 +3324,77 @@ def test_the_audits_registration_is_the_challengers_signed_head_where_a_lane_is_
                         "--challenger-key", "/s/challenger-key.json", "--registration-lane", "vllm"]
 
 
+def _registering_host(tmp_path: Path, registration: str | None) -> tuple[Path, Path]:
+    """A local challenger's host whose ledger opens lane ``circuits``' period, with ``registration`` where given, and its
+    key record: (the ledger, the key record)."""
+    from verity.protocols.proof.spot.prover.audit import local_challenger as LC
+    from verity.protocols.proof.spot.verifier.challenger import challenger as CH, challenger_session as AC
+
+    local = LC.Local(tmp_path / "host", [AC.on_main([])])
+    local.A.period(local.host, ["period-open", "p-registration", "circuits", local.by, "4", "ab" * 64,
+                                *([f"registration={registration}"] if registration else [])],
+                   signer=local.signer, pinned=local.pin, now=datetime(2026, 1, 1, tzinfo=UTC), active=lambda _s: False)
+    key = tmp_path / "challenger-key.json"
+    key.write_text(json.dumps({"schema": CH.KEY_RECORD_SCHEMA, "W": local.key.W, "H": local.key.H,
+                               "pubkey": local.key.public.hex(),
+                               "pubkey_sha512": hashlib.sha512(local.key.public).hexdigest()}))
+    return local.host.ledger, key
+
+
+def _hold(tmp_path: Path, ledger: Path, key: Path, *more: str) -> subprocess.CompletedProcess:
+    (tmp_path / "dreg.json").write_text(json.dumps(DEPLOYMENT_RECORD))
+    return subprocess.run([sys.executable, str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.py"),
+                           "registration-hold", str(tmp_path / "dreg.json"), "--lane", "circuits", "--ledger", str(ledger),
+                           "--key", str(key), *more], capture_output=True, text=True, check=False)
+
+
+def test_the_serve_holds_until_the_local_challengers_ledger_registers_its_record_and_refuses_without(tmp_path):
+    """`registration-hold` on a local challenger: the serve's hold prints the record's digest and the period-open that
+    registers it, and, following the ledger as it grows, proceeds once the lane's period-open carries that digest; a
+    ledger with no registration for the lane refuses by name where it ends, and one registering another digest refuses
+    at once."""
+    digest = DD.digest(DEPLOYMENT_RECORD)
+    ledger, key = _registering_host(tmp_path / "held", digest)
+    held = _hold(tmp_path / "held", ledger, key)
+    assert held.returncode == 0, held.stdout + held.stderr
+    said = held.stdout.splitlines()
+    assert said[0].startswith(f"REGISTRATION-HOLD digest {digest} lane circuits: ") and f"--registration {digest}" in said[0]
+    assert said[-1].startswith(f"REGISTRATION-HELD digest {digest} lane circuits: ")
+    ledger, key = _registering_host(tmp_path / "none", None)
+    none = _hold(tmp_path / "none", ledger, key, "--once")
+    assert none.returncode == 1 and none.stdout.splitlines()[-1].startswith("REGISTRATION-HOLD refused: "), none.stdout
+    assert "no registering period-open of lane circuits" in none.stdout
+    ledger, key = _registering_host(tmp_path / "other", "ee" * 64)
+    other = _hold(tmp_path / "other", ledger, key)
+    assert other.returncode == 2 and "the ledger signs registration eeeeeeeeeeeeeeee... for lane circuits" in other.stdout
+
+
+def test_the_hold_with_no_lane_says_the_development_line_and_past_its_limit_refuses_by_name(tmp_path):
+    """`registration_hold` in `served_verdicts.sh`: with no REGISTRATION_LANE it holds nothing and publishes the
+    development line; where its limit passes (``timeout``'s 124), it refuses naming the ledger, the lane and the limit."""
+    from verity.protocols.proof.spot.verifier.one_stage import docket as DK
+
+    script = (HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh").read_text()
+    start = script.index("\nregistration_hold() {") + 1
+    fn = script[start:script.index("\n}\n", start) + 3]
+    bin_ = tmp_path / "bin"
+    _script(bin_ / "timeout", "exit 124\n")
+    (tmp_path / "dreg.json").write_text(json.dumps(DEPLOYMENT_RECORD))
+    out = tmp_path / "verdicts.txt"
+    pre = (f'set -uo pipefail\nsay() {{ echo "$*" >> "{out}"; }}\npublish_lines() {{ tee -a "{out}"; }}\n'
+           f'NO_DREG=none\n')
+    env = {"PATH": f"{bin_}:{os.defpath}", "PY": sys.executable, "TREE": str(HERE.parents[2]), "DREG": str(tmp_path / "dreg.json")}
+    dev = subprocess.run(["bash", "-c", pre + fn + "registration_hold"], env=env, capture_output=True, text=True, check=False)
+    assert dev.returncode == 0 and out.read_text().splitlines() == [f"REGISTRATION {DK.DEVELOPMENT_WHY}"], dev.stderr
+    out.unlink()
+    late = subprocess.run(["bash", "-c", pre + fn + "registration_hold"], capture_output=True, text=True, check=False,
+                          env={**env, "REGISTRATION_LANE": "circuits", "REGISTRATION_LEDGER": "/s/windows.jsonl",
+                               "REGISTRATION_KEY": "/s/key.json", "REGISTRATION_HOLD_S": "600"})
+    assert late.returncode == 124 and out.read_text().splitlines() == [
+        "REGISTRATION-HOLD refused: /s/windows.jsonl carried no registering period-open of lane circuits within "
+        "REGISTRATION_HOLD_S=600s"], late.stderr
+
+
 def test_a_class_that_counts_passes_and_the_class_of_record_is_not_counted_unasked(tmp_path):
     """CLASSES' one class counts under WC_TIMEOUT, its published count without the advice's length; the class of record,
     which CLASSES doesn't name and which would run out of time here, is never started."""

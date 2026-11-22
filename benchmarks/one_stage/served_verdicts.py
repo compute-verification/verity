@@ -187,6 +187,7 @@ import os
 import re
 import shlex
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -1016,6 +1017,58 @@ def pearlplus_period_open(piece_dir: Path, gate: str, name: str, scheme: str, cu
            "open": _gate_json(gate, ["period-open", "--name", name, "--cap", "1", "--circuit", circuit])}
     (piece_dir / PERIOD).write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
     return doc
+
+
+def registration_hold(record: Path, lane: str | None, ledger: Path | None, key: Path | None, once: bool = False,
+                      say: Callable[[str], None] = print) -> int:
+    """``registration-hold``: with no `lane`, the development line, and 0. Under `lane`, the deployment's registration
+    record's digest and the period-open that registers it, then the auditor's `ledger` read as it grows (``tail -F``;
+    as it stands with `once`) until it carries the lane's registering period-open (`challenger.registration_head`, its
+    signatures under the key record `key`): 0 where that is the record's digest; 2 at once where the ledger signs another
+    digest or refuses (a second registration, a malformed entry, a signature); 1 where the ledger ends without one. The
+    wait's limit is the caller's (`timeout`)."""
+    from verity.commitments import docket_digest as DD
+    from verity.protocols.proof.spot.verifier.challenger import challenger as CH, challenger_session as AC
+    from verity.protocols.proof.spot.verifier.one_stage import docket as DK
+
+    if lane is None:
+        say(f"REGISTRATION {DK.DEVELOPMENT_WHY}")
+        return 0
+    digest = DD.digest(json.loads(record.read_text()))
+    try:
+        k = CH.key_of_record(json.loads(key.read_text()))
+    except (OSError, ValueError, CH.CoinError) as e:
+        say(f"REGISTRATION-HOLD refused: the challenger's key record {key} is unreadable or malformed "
+            f"({type(e).__name__}: {e})")
+        return 2
+    say(f"REGISTRATION-HOLD digest {digest} lane {lane}: before the epoch's first reserve, the auditor opens the lane's "
+        f"period with it: vy-challenger-gate period-open --name NAME --lane {lane} --cap CAP --circuit CIRCUIT "
+        f"--registration {digest}; held until {ledger} carries it")
+    follow = subprocess.Popen(["cat" if once else "tail", *([] if once else ["-F", "-n", "+1"]), str(ledger)],
+                              stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+    lines: list[str] = []
+    try:
+        for line in follow.stdout:
+            lines.append(line.rstrip("\n"))
+            try:
+                head = CH.registration_head(lines, lane, k, AC.lms_verify)
+            except CH.CoinError as e:
+                if CH.NO_REGISTRATION in str(e):
+                    continue
+                say(f"REGISTRATION-HOLD refused: {e}")
+                return 2
+            if head != digest:
+                say(f"REGISTRATION-HOLD refused: the ledger signs registration {head[:16]}... for lane {lane}, not this "
+                    f"serve's {digest[:16]}..., and a lane is held to its first registration alone")
+                return 2
+            say(f"REGISTRATION-HELD digest {digest} lane {lane}: the ledger's line {len(lines) - 1} signs it")
+            return 0
+        say(f"REGISTRATION-HOLD refused: {ledger} ended with no registering period-open of lane {lane}: "
+            f"{CH.NO_REGISTRATION}")
+        return 1
+    finally:
+        follow.kill()
+        follow.wait()
 
 
 def period_reserves(lines: Sequence[str], lane: str, period: str) -> list[str] | None:
@@ -2673,6 +2726,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     ppe.add_argument("--wait", type=float, default=0, help="close, with --windows: at most this many seconds waited for "
                                                            "the gate's ledger to end each window's salt session")
     ppe.add_argument("--coin", type=Path, help="rule: the verifier's coin record (served_passes.py verify's coin.json)")
+    rh = sub.add_parser("registration-hold", help="the serve's hold until the auditor's ledger signs its registration "
+                        "for the lane (`registration_hold`); its limit is the caller's timeout")
+    rh.add_argument("record", type=Path, help="the deployment's registration record (deployment-registration.json)")
+    rh.add_argument("--lane", help="REGISTRATION_LANE; none: the development path, no hold")
+    rh.add_argument("--ledger", type=Path, help="REGISTRATION_LEDGER: the auditor's ledger as its host appends it")
+    rh.add_argument("--key", type=Path, help="REGISTRATION_KEY: the challenger's key record")
+    rh.add_argument("--once", action="store_true", help="the ledger as it stands, no wait")
     rg = sub.add_parser("public-registration")
     rg.add_argument("registration", type=Path)
     pl = sub.add_parser("public-lines")
@@ -2806,6 +2866,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     if a.cmd in ("failed", "said"):
         print((failed if a.cmd == "failed" else tool_said)(a.rc, a.logs))
         return 0
+    if a.cmd == "registration-hold":
+        if a.lane is not None and (a.ledger is None or a.key is None):
+            ap.error("registration-hold --lane needs --ledger and --key")
+        signal.signal(signal.SIGTERM, lambda *_: sys.exit(124))
+        return registration_hold(a.record, a.lane, a.ledger, a.key, once=a.once,
+                                 say=lambda x: print(x, flush=True))
     if a.cmd == "public-lines":
         public_lines(sys.stdin, sys.stdout, a.private)
         return 0
