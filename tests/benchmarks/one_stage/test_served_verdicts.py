@@ -3390,7 +3390,7 @@ def test_the_serve_holds_until_the_local_challengers_ledger_registers_its_record
     assert pinned.returncode == 2 and "not the pinned 1111111111111111..." in pinned.stdout, pinned.stdout
     bin_ = tmp_path / "bin"
     _script(bin_ / "ssh", f'[ "$8" = ledger ] && [ "$6" = /keys/lane ] && cat {ledger}\n')
-    env = {**os.environ, "PATH": f"{bin_}:{os.environ['PATH']}"}
+    env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path)}
     gate = subprocess.run([sys.executable, str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.py"),
                            "registration-hold", str(tmp_path / "held" / "dreg.json"), "--lane", "circuits", "--ledger",
                            "gate:research@challenger", "--gate-key", "/keys/lane", "--key", str(key), "--once"],

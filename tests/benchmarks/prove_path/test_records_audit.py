@@ -403,15 +403,15 @@ def test_a_run_is_of_record_only_on_a_lane_named_record_n_and_says_why_otherwise
     """`of_record_why`: an accepted ledger run held to the posted key is of record on ``record-N`` alone; on
     ``rehearsal-1`` or any other lane it is not, and says so; the development path, an unpinned key, an unverified member
     and a refusal each say theirs."""
-    def row(lane="record-1", **kw):
+    def row(lane="record-7", **kw):
         return {"ok": True, "registration": {"source": "ledger", "lane": lane, "key_pinned": True}, **kw}
 
-    assert RA.of_record_why(row()) is None and RA.of_record_why(row("record-12")) is None
-    for lane in ("rehearsal-1", "circuits", "vllm", "record-0", "record-1x", "my-record-1", None):
+    assert RA.of_record_why(row()) is None and RA.of_record_why(row("record-30")) is None
+    for lane in ("rehearsal-1", "circuits", "vllm", "record-0", "record-7x", "my-record-7", None):
         assert RA.of_record_why(row(lane)) == (f"its lane {lane} is not a lane of record (record-N); a run on another lane "
                                               "is never promoted"), lane
     assert "development path" in RA.of_record_why({"ok": True, "registration": {"source": "development", "digest": None}})
-    assert "posted digest" in RA.of_record_why({"ok": True, "registration": {"source": "ledger", "lane": "record-1",
+    assert "posted digest" in RA.of_record_why({"ok": True, "registration": {"source": "ledger", "lane": "record-7",
                                                                             "key_pinned": False}})
     assert RA.of_record_why(row(not_verified={"members": ["a/c0"]})) == "members were left unverified"
     assert RA.of_record_why(row(ok=False)) == "the audit did not accept"

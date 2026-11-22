@@ -1049,7 +1049,6 @@ def registration_hold(record: Path, lane: str | None, ledger: str | None, key: P
     from verity.commitments import docket_digest as DD
     from verity.protocols.proof.spot.verifier.challenger import challenger as CH, challenger_session as AC
     from verity.protocols.proof.spot.verifier.one_stage import docket as DK
-    from verity.protocols.accounting.compute.pouw.prover.serving.coins import window as PHW
 
     if lane is None:
         say(f"REGISTRATION {DK.DEVELOPMENT_WHY}")
@@ -1087,7 +1086,8 @@ def registration_hold(record: Path, lane: str | None, ledger: str | None, key: P
             say(f"REGISTRATION-HOLD refused: {why} (lane {lane}'s period {period} registers {head[:16]}..., this "
                 f"serve's record is {digest[:16]}...)")
             return 2
-        if PHW.open_period(lines, lane) is None:
+        last = [e["body"]["period"] for e in es if e["kind"] == "period-open" and e["body"].get("lane") == lane][-1]
+        if any(e["kind"] == "period-close" and e["body"].get("period") == last for e in es):
             say(f"REGISTRATION-HOLD refused: {REGISTERED_PERIOD_CLOSED} (lane {lane}'s registering period {period})")
             return 2
         say(f"REGISTRATION-HELD digest {digest} lane {lane} key {pinned}: the ledger's line {len(lines) - 1} signs it")
