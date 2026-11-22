@@ -110,28 +110,4 @@ def BlobProtocol.main (P : BlobProtocol) (args : List String) : IO UInt32 := do
     IO.eprintln s!"usage: {P.id} id | check PARAMS COMMITMENT EVIDENCE [BLOB ...] | serve"
     return 64
 
-/-- `main`, with `check`'s accept turned into a reject naming why where `held` refuses the parameters' and evidence's
-bytes: a test the check of record runs that its proved `checkBlobs` does not hold yet. -/
-def BlobProtocol.mainWith (P : BlobProtocol) (held : ByteArray → ByteArray → V Unit) (args : List String) :
-    IO UInt32 := do
-  match args with
-  | "check" :: params :: commitment :: evidence :: blobs =>
-    let bs ← blobs.toArray.mapM fun (f : String) => IO.FS.readBinFile f
-    let pB ← IO.FS.readBinFile params
-    let eB ← IO.FS.readBinFile evidence
-    let a := P.answer pB (← IO.FS.readBinFile commitment) eB bs
-    let a := match a.verdict, held pB eB with
-      | .accept, .error why => { a with verdict := .reject, reason := some why, published := none, profile := none }
-      | _, _ => a
-    match a.canonical with
-    | .ok line =>
-      let out ← IO.getStdout
-      out.putStrLn line
-      out.flush
-      return exitOf a.verdict
-    | .error e =>
-      IO.eprintln s!"{P.id}: the outcome is not canonical JSON: {e}"
-      return 70
-  | _ => P.main args
-
 end Core

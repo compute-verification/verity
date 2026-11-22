@@ -838,7 +838,22 @@ def main (args : List String) : IO UInt32 := do
       | .error e => IO.eprintln s!"restrict: {e}"; return 1
     | .error e, _ => IO.eprintln s!"restrict: the partition object: {e}"; return 2
     | _, none => IO.eprintln "restrict: BLOCK is not a unit index"; return 2
-  | _ => protocol.mainWith registrationAfterDraw args
+  | "check" :: params :: commitment :: evidence :: blobs =>
+    let bs ← blobs.toArray.mapM fun (f : String) => IO.FS.readBinFile f
+    let pB ← IO.FS.readBinFile params
+    let eB ← IO.FS.readBinFile evidence
+    let a := protocol.answer pB (← IO.FS.readBinFile commitment) eB bs
+    let a := match a.verdict, registrationAfterDraw pB eB with
+      | .accept, .error why => { a with verdict := .reject, reason := some why, published := none, profile := none }
+      | _, _ => a
+    match a.canonical with
+    | .ok line =>
+      IO.println line
+      return match a.verdict with | .accept => 0 | .reject => 1 | .undecided => 2
+    | .error e =>
+      IO.eprintln s!"{protocol.id}: the outcome is not canonical JSON: {e}"
+      return 70
+  | _ => protocol.main args
 
 #guard registeredInputName "RegisteredInput96_v1"
 #guard registeredInputName "RegisteredInput1_v1"

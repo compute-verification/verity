@@ -100,25 +100,6 @@ def executionPhases : Tie :=
 
 def protocol : BlobProtocol := tiedSameB "verity/remote/v0" tied [executionPhases] components
 
-/-- A composite's check of record holds SPOT's case to its registration's half after the draw
-(`VStar.Recursive.Sampled.registrationAfterDraw`): SPOT's component of the parameters and of the evidence; nothing
-where either names none, which the composite refuses itself. -/
-def registrationHeld (params evidence : ByteArray) : Flock.V Unit := do
-  let spot (j : Lean.Json) : Option Lean.Json := match j.getObjValD "components" with
-    | .arr cs => cs.find? fun c => match c.getObjValD "id" with
-      | .str i => i == VStar.Recursive.Sampled.PROTOCOL
-      | _ => false
-    | _ => none
-  match Core.canonicalJson params, Core.canonicalJson evidence with
-  | .ok pj, .ok ej => match spot pj, spot ej with
-    | some pc, some ec => match ec.getObjValD "evidence" with
-      | .str hex => match Flock.unhex hex with
-        | .ok eb => VStar.Recursive.Sampled.registrationAfterDraw (pc.getObjValD "params") eb
-        | .error _ => pure ()
-      | _ => pure ()
-    | _, _ => pure ()
-  | _, _ => pure ()
-
 /-- A case of the subprotocol `id` that its own `answer` refuses: empty parameters, commitment and evidence. -/
 private def refusedAs (id : String) : Case :=
   { id := id, params := "{}", commitment := ByteArray.empty, evidence := ByteArray.empty }

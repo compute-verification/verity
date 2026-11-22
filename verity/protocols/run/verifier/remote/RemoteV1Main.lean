@@ -13,4 +13,4 @@ line for each. `benchmarks/one_stage/composite.py` (`remote-v1`) and the composi
 
 @[expose] public section
 
-def main (args : List String) : IO UInt32 := Core.Remote.V1.protocol.mainWith Core.Remote.registrationHeld args
+def main (args : List String) : IO UInt32 := Core.Remote.V1.protocol.main args

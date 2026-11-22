@@ -5,4 +5,4 @@ public import CoreOnsite
 
 @[expose] public section
 
-def main (args : List String) : IO UInt32 := Core.Onsite.counted.mainWith Core.Remote.registrationHeld args
+def main (args : List String) : IO UInt32 := Core.Onsite.counted.main args
