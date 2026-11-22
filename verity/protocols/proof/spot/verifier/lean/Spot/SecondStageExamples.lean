@@ -799,9 +799,11 @@ private def exRound1 : Own :=
 #guard placedBinding exRound1 false "Pair_v0" "x" exV2 exRun == portBinding exRound1.boundary "logits" exV2 "round-1"
 #guard (portBinding exRound1.boundary "logits" exV2 "round-1").isSome
 #guard placedBinding exRound1 false "Pair_v0" "x" exV2 exRun != portBinding exRound1.boundary "logits" exV2 exRun
--- the fallback only: a registered value, or a tree of its own, places the port as before
-#guard match placings { exRound1 with interior := (exReg [exLogits "program-0" (some (exRoot 7))]).interior } false
-  "Pair_v0" "x" with | [.registered _] => true | _ => false
+-- cheat: a port a link names to round 1's tree, also registered by the second stage: two placings, refused by name
+#guard (placingFailures { exRound1 with interior := (exReg [exLogits "program-0" (some (exRoot 7))]).interior }
+  exParts1).map (·.1) == ["second-place-two"]
+-- cheat: a port a link names to round 1's tree that the second stage also commits a tree of: refused by name
+#guard (placingFailures { exRound1 with interior := exInterior } exParts1).map (·.1) == ["second-place-two"]
 -- round 1's record naming no run: unbound
 #guard placedBinding { exRound1 with boundary := exRec 4 [("logits", 8, 9)] } false "Pair_v0" "x" exV2 exRun == none
 

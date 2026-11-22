@@ -901,20 +901,19 @@ inductive Placing where
   | round1 (port : String)
 
 /-- **The rules that place** template `t`'s session port `p`, by the interior record and the design alone: its own
-port of the record, its writer's output port where a wire names it, and the interior registration's entry of the value
-a link names it to read; where none of those does, round 1's own tree of the port of the boundary record a link names
-it to read, which round 2 reads at round 1's root and commits no tree of. A port is placed where exactly one holds
-(`placingFailures`). -/
+port of the record, its writer's output port where a wire names it, the interior registration's entry of the value
+a link names it to read, and round 1's own tree of the port of the boundary record a link names it to read, which round
+2 reads at round 1's root and commits no tree of. A port is placed where exactly one holds (`placingFailures`), so a
+port a link names to round 1's tree that the second stage also commits a tree of, or reads elsewhere, is refused. -/
 def placings (own : Own) (named : Bool) (t p : String) : List Placing :=
-  let three : List Placing := (if (Record.byPort own.interior).any (·.1 == portOf named t p) then [.own (portOf named t p)] else []) ++
+  (if (Record.byPort own.interior).any (·.1 == portOf named t p) then [.own (portOf named t p)] else []) ++
     (match wireOf own t p with | some w => [.writer (portOf named w.writer w.wport)] | none => []) ++
-    match (linkOf own t p).bind fun x => registeredEntry own.interior x.value with
+    (match (linkOf own t p).bind fun x => registeredEntry own.interior x.value with
     | some e => [.registered e]
+    | none => []) ++
+    match linkOf own t p with
+    | some x => if (Record.byPort own.boundary).any (·.1 == x.value) then [.round1 x.value] else []
     | none => []
-  if !three.isEmpty then three else
-  match linkOf own t p with
-  | some x => if (Record.byPort own.boundary).any (·.1 == x.value) then [.round1 x.value] else []
-  | none => []
 
 /-- **The run's fields** of a statement's header, each a path of keys: the only ones a header may differ from its
 template's reference placed in the run in, which other checks hold instead: `instances` and `units.indices`
