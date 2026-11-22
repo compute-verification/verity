@@ -46,3 +46,13 @@ def test_a_wired_row_is_held_only_by_the_files_read_of_it_at_its_writers_tree():
     assert _why(WIRED, header, _file()) == MB.shared_unread("x", "W/o0")
     assert _why(WIRED, header, None) == MB.shared_unread("x", "W/o0")
     assert _why(WIRED, header, _file(x="W/o0")) is None
+
+
+def test_an_output_given_by_round_ones_value_is_read_at_round_ones_port_not_its_field_tree():
+    header = _header({"x": "rx", "o0": "ro"})
+    own = _file(o0="o0")
+    for values, want in (((), MB.unregistered_why("o0", "T/o0")), (("o0",), None)):
+        m = SimpleNamespace(key="t/c0", base=0, n=2, outs=[("o0", 8)], values=values, port=lambda p: p)
+        mine = SimpleNamespace(law=None, tree=lambda m, p: "T/o0" if p == "o0" else p)
+        got = A5.header_why(mine, {}, ([("t", [[0, 2]])], {"t/c0": SLICE}), {"m": m, "header": header}, own)
+        assert got == want

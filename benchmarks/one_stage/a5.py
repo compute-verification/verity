@@ -1042,7 +1042,8 @@ def header_why(mine: CS.Binding, rec: dict, form: tuple[list, dict] | str, mm: d
         return form
     m = mm["m"]
     file_reads, held = MB.registered_reads(own)
-    opened = {(p, mine.tree(m, p)) for p, _ in m.outs if mine.tree(m, p) != m.port(p)} | file_reads
+    opened = {(p, mine.tree(m, p)) for p, _ in m.outs
+              if p not in getattr(m, "values", ()) and mine.tree(m, p) != m.port(p)} | file_reads
     return MB.population_why([[m.base, m.base + m.n]], form[0], mm["header"], form[1][m.key], opened, held,
                              subset=MB.subset_designs(mine.law, rec))
 
