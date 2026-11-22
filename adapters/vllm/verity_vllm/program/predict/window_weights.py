@@ -254,6 +254,27 @@ def weight_values(registered: Any, served: Any, registration: str | Path | None,
     return out
 
 
+def unpinned(circuit_registered: Any, registration: Any) -> list[str]:
+    """The declared circuit's registered weight parameters (``circuit_registered``, its `interface.Registered`: its params
+    less its ``run`` ones and those a mark supplies) that the deployment's ``registration`` (`weights_registration`'s
+    document) pins no root of, sorted: one-stage's R8 refuses each such read (`R8-unpinned`)."""
+    reg = WeightsRegistration.of(registration, "the weights registration")
+    off = {*circuit_registered.run, *circuit_registered.supplied}
+    return sorted(p for p in circuit_registered.params if p.startswith(f"{WEIGHTS}/") and p not in off and p not in reg.values)
+
+
+def require_pinned(circuit_registered: Any, registration: Any) -> None:
+    """Refused (ValueError) by name where the declared circuit reads a registered weight the registration doesn't pin
+    (`unpinned`): an epoch's close checks it before it writes anything."""
+    if missing := unpinned(circuit_registered, registration):
+        named = ", ".join(missing[:4]) + (f" and {len(missing) - 4} more" if len(missing) > 4 else "")
+        c = WEIGHTS_CLASS
+        raise ValueError(f"the epoch's close is refused, nothing written: the deployment's registration pins the weights of "
+                         f"class {c.slots},{c.prompt},{c.outputs} at this grain; this epoch's declared circuit reads "
+                         f"{len(missing)} weight(s) outside it ({named}): register a deployment whose pinned set covers "
+                         "this class")
+
+
 def record_words(registered: Any, checkpoint_dir: str, checkpoints_manifest: str | None = None,
                  kv_cache_dtype: str = "auto", tables: Any = None) -> dict[str, np.ndarray]:
     """Each field of the class Program's weights record composed from ``checkpoint_dir``'s shards (`check.weights_of_record`),
@@ -404,5 +425,5 @@ def register(registered: Any, out: str | Path, checkpoint_dir: str, checkpoints:
 
 
 __all__ = ["DEPLOYMENT", "DEPLOYMENT_RECORD", "REGISTRATION", "WEIGHTS_CLASS", "Grain", "WeightsRegistration",
-           "deployment_record", "record_words", "register", "registration_pins", "value_salts", "weight_value",
-           "weight_values", "weights_record", "weights_registration"]
+           "deployment_record", "record_words", "register", "registration_pins", "require_pinned", "unpinned",
+           "value_salts", "weight_value", "weight_values", "weights_record", "weights_registration"]

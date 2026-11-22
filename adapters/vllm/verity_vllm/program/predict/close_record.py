@@ -121,6 +121,10 @@ class Record:
             seconds[what], t[0] = round(now - t[0], 3), now
 
         cls, out, registered = plan.cls, plan.out, plan._registered()
+        if not (out / WW.REGISTRATION).is_file():
+            raise ValueError(f"{out} holds no registration: a deployment registers once, before its first epoch "
+                             "(`window_weights.register`), and an epoch's close reads it")
+        WW.require_pinned(low.circuit.registered, json.loads((out / WW.REGISTRATION).read_text()))
         run = bytes(binding.rc.run_root).hex()
         opening = json.loads((out / "advice" / f"w{window}" / "private" / "opening.json").read_text())
         bound = AW.opened(plan.compiler, opening, WA)[1]

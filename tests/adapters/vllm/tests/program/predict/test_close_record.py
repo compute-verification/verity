@@ -47,7 +47,7 @@ def _committer(held):
 def _close(tmp_path, monkeypatch):
     """TINY's window at class 2,4,2 as the serve's close holds it: its plan, served values, a committer holding each member
     at its offset in its step's block, and the close's plan and binding; the checkpoint's words, the weights registration
-    and the advice opening stood in."""
+    (pinning the weights `weight_values` commits) and the advice opening stood in."""
     low, fields, _values, _weights, slots = _window()
     served, held = [], {}
     for k, s in enumerate(slots):
@@ -59,6 +59,9 @@ def _close(tmp_path, monkeypatch):
     bodies = {i: {"prompt": p[:lp], "max_tokens": m} for i, (_o, lp, m, p) in zip(ids, LANES)}
     bound = {"compiler": {"name": "c", "digest": "cd" * 64}, "advice": {"root": "ef" * 64, "bits": 0}}
     weight_values = WW.weight_values
+    pins = weight_values(_registered(), fields, None, GRAIN)
+    (tmp_path / WW.REGISTRATION).write_text(json.dumps(WW.WeightsRegistration(
+        "ab" * 64, "org/m", "r", {}, {p: v.entry() for p, v in pins.items()}, {}).dump()))
     monkeypatch.setattr(ADV, "bodies", lambda out, window: bodies)
     monkeypatch.setattr(AW, "opened", lambda compiler, doc, codec=None: (None, bound))
     monkeypatch.setattr(WW, "record_words", lambda *a, **k: fields)
@@ -228,3 +231,47 @@ def test_a_deployment_registers_once_and_each_epochs_close_reads_its_registratio
         served = WW.weight_values(reg, words, out / REGISTRATION, GRAIN)
         assert {p: v.root.hex() for p, v in served.items()} == {e["value"]: e["root"] for e in rec["registered"]}
         assert held() == files
+
+
+def _deployment(tmp_path, monkeypatch):
+    """The small model's deployment registered once at the test grain (`register`), and its registration's document."""
+    import functools
+
+    from tests.program.predict.test_window_circuit import GRAIN, S, _checkpoint
+
+    monkeypatch.setattr(WW, "weights_registration", functools.partial(WW.weights_registration, grain=GRAIN))
+    reg, (d, man) = S._registered(), _checkpoint(tmp_path / "ck")
+    out = tmp_path / "deployment"
+    out.mkdir()
+    (out / "serve.json").write_text(json.dumps({"model": "org/m", "revision": "r"}))
+    WW.register(reg, out, d, man)
+    return reg, out, json.loads((out / WW.REGISTRATION).read_text()), GRAIN
+
+
+def test_an_epochs_declared_circuit_at_class_1_1_1_reads_only_weights_the_deployment_pins(tmp_path, monkeypatch):
+    """The small model's class 1,1,1 declared circuit: every registered weight it reads (its params less its run and supplied
+    ones) is among the deployment's pins, so its close passes the check (`require_pinned`)."""
+    from verity_vllm.program.predict import window_circuit as WC
+
+    reg, _out, doc, grain = _deployment(tmp_path, monkeypatch)
+    declared = WC.lower(reg, WC.WindowClass(1, 1, 1), None, grain).circuit.registered
+    assert [p for p in declared.params if p.startswith("weights/")] and WW.unpinned(declared, doc) == []
+    WW.require_pinned(declared, doc)
+
+
+def test_a_close_whose_declared_circuit_reads_a_weight_the_registration_does_not_pin_is_refused_by_name(tmp_path, monkeypatch):
+    """A registration lacking one pin the class 1,1,1 declared circuit reads: `Record.make` refuses the epoch's close by
+    that weight's name, with the cure, before it reads anything else or writes anything."""
+    from verity_vllm.program.predict import window_circuit as WC
+
+    reg, out, doc, grain = _deployment(tmp_path, monkeypatch)
+    low = WC.lower(reg, WC.WindowClass(1, 1, 1), None, grain)
+    gone = sorted(p for p in low.circuit.registered.params if p.startswith("weights/") and p in doc["values"])[0]
+    (out / WW.REGISTRATION).write_text(json.dumps({**doc, "values": {p: e for p, e in doc["values"].items() if p != gone}}))
+    assert WW.unpinned(low.circuit.registered, json.loads((out / WW.REGISTRATION).read_text())) == [gone]
+    before = sorted(f for f in out.rglob("*"))
+    plan = SimpleNamespace(cls=WC.WindowClass(1, 1, 1), out=out, compiler=None, _registered=lambda: reg)
+    with pytest.raises(ValueError, match=re.escape(f"reads 1 weight(s) outside it ({gone}): register a deployment whose "
+                                                   "pinned set covers this class")):
+        Record("rate:1/4", "unread", tmp_path / "salt").make(plan, 0, None, low, None, None, None)
+    assert sorted(f for f in out.rglob("*")) == before and not (out / "windows").exists()
