@@ -1362,7 +1362,7 @@ def sampledCodes (own : Own) (named : Bool) (k : Nat) (p : Part) (s : Stmt) : Li
   [("second-verified", verifiedOk own s),
    ("second-tables", tablesOk own s),
    ("second-header", sampledHeaderOk own named k s.template s.header (sampledSlots q p own.drawn)
-     (reads.map fun (port, e) => (port, atPos own p.template port e))),
+     (reads.map fun x => (x.1, atPos own p.template x.1 x.2))),
    ("second-population", sampledOk q p own.drawn s.header),
    ("second-roots", rootsOk named own.interior s.template s.header (reads.map (·.1))),
    ("second-sample", jeq s.draw (wholeSample (sampledSlots q p own.drawn).size)),
