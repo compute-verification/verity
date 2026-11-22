@@ -105,7 +105,7 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.InferenceOnly.Desc.Cover", "Properties.InferenceOnly.Theta", "Properties.InferenceOnly.Count",
   "Properties.Spot", "Properties.Spot.Draw", "Properties.Spot.Bits", "Properties.Spot.Interval",
   "Properties.Spot.FactorUpper", "Properties.Spot.TwoStageCheck", "Properties.Spot.Halt", "Properties.Spot.Second",
-  "Properties.Spot.Wires", "Properties.Spot.Edges", "Properties.Spot.Members", "Properties.Spot.Tables", "Properties.Spot.PortsHeld", "Properties.Spot.RootHeld", "Properties.Spot.HistoryTable",
+  "Properties.Spot.Wires", "Properties.Spot.Edges", "Properties.Spot.Members", "Properties.Spot.Tables", "Properties.Spot.PortsHeld", "Properties.Spot.HistoryTable",
   "Properties.Spot.Rate", "Properties.Spot.MonitoringPeriod", "Properties.Spot.MonitoringPeriodLedger",
   "Properties.Spot.ChallengerLog", "Properties.Spot.Labels",
   "Properties.Core.Evaluate", "Properties.Certifier.Records", "Properties.Spot.PlanCheck", "Properties.NetworkPeriod",
