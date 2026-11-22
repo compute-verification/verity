@@ -121,12 +121,13 @@ def buildSession (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins)
     (count : Nat) (draw : Option Lean.Json := none) (partition : Option Lean.Json := none) (program : Option ByteArray := none)
     (work : Option (Nat × Array (String × Nat × Nat)) := none) (stratified : Option Nat := none)
     (closure : Option (Std.HashMap Nat (Array Nat)) := none) (registered : Option (Array Registered.Port) := none)
-    (publicInputs : Option ByteArray := none) (identifier : Option String := none) : V (SessionSpec × Array Stmt) :=
+    (publicInputs : Option ByteArray := none) (identifier : Option String := none)
+    (linked : Array (String × Array (Option Nat)) := #[]) : V (SessionSpec × Array Stmt) :=
   if tags.hm96Rows then do
     let (spec, sts) ← Stmt.setupTables tags circuitB pubB coins count tables draw partition program work stratified closure
       publicInputs
     for st in sts do
-      checkRegistered st (← Registered.withPositions st.c st.pub program registered)
+      checkRegistered st (← Registered.withPositions st.c st.pub program registered linked)
       checkIdentifier st identifier
     Registered.checkFull registered draw
     return (spec, sts)
@@ -190,17 +191,17 @@ def buildSessionOf (parsed : V Circuit) (tags : Tags) (circuitB pubB compB : Byt
     (program : Option ByteArray := none) (work : Option (Nat × Array (String × Nat × Nat)) := none)
     (stratified : Option Nat := none) (closure : Option (Std.HashMap Nat (Array Nat)) := none)
     (registered : Option (Array Registered.Port) := none) (publicInputs : Option ByteArray := none)
-    (identifier : Option String := none) : V (SessionSpec × Array Stmt) :=
+    (identifier : Option String := none) (linked : Array (String × Array (Option Nat)) := #[]) : V (SessionSpec × Array Stmt) :=
   if tags.hiddenOutputs && tags.hm96Rows then do
     let (spec, sts) ← Stmt.setupTablesOf parsed tags circuitB pubB coins count tables draw partition program work stratified
       closure publicInputs
     for st in sts do
-      checkRegistered st (← Registered.withPositions st.c st.pub program registered)
+      checkRegistered st (← Registered.withPositions st.c st.pub program registered linked)
       checkIdentifier st identifier
     Registered.checkFull registered draw
     return (spec, sts)
   else buildSession tags circuitB pubB compB coins tables count draw partition program work stratified closure registered
-    publicInputs identifier
+    publicInputs identifier linked
 
 /-- **`verifyCmd`'s one parse sets up what `buildSession` sets up**: `buildSessionOf` on `ProvedScope.circuitOf`'s circuit is
 `buildSession`. -/
@@ -227,24 +228,24 @@ def buildSessionBy (readDesc : ByteArray → V TemplateQuery.Desc) (readProg : B
     (program : Option ByteArray := none) (work : Option (Nat × Array (String × Nat × Nat)) := none)
     (stratified : Option Nat := none) (closure : Option (Std.HashMap Nat (Array Nat)) := none)
     (registered : Option (Array Registered.Port) := none) (publicInputs : Option ByteArray := none)
-    (identifier : Option String := none) : V (SessionSpec × Array Stmt) :=
+    (identifier : Option String := none) (linked : Array (String × Array (Option Nat)) := #[]) : V (SessionSpec × Array Stmt) :=
   if tags.hiddenOutputs && tags.hm96Rows then do
     let (spec, sts) ← Stmt.setupTablesBy readDesc readProg parsed tags circuitB pubB coins count tables draw partition
       program work stratified closure publicInputs
     for st in sts do
-      checkRegistered st (← Registered.withPositions st.c st.pub program registered)
+      checkRegistered st (← Registered.withPositions st.c st.pub program registered linked)
       checkIdentifier st identifier
     Registered.checkFull registered draw
     return (spec, sts)
   else buildSession tags circuitB pubB compB coins tables count draw partition program work stratified closure registered
-    publicInputs identifier
+    publicInputs identifier linked
 
 /-- **`verifyCmd`'s one reading of its program sets up what `buildSessionOf` sets up**: `buildSessionBy` at the readings a
 `ProgramRead` keeps, of whatever bytes, is `buildSessionOf`. -/
 theorem buildSessionBy_read (read : ByteArray) (parsed : V Circuit) :
     @buildSessionBy (ProgramRead.of read).descAt (ProgramRead.of read).progAt parsed = @buildSessionOf parsed := by
   funext tags circuitB pubB compB coins tables count draw partition program work stratified closure registered publicInputs
-    identifier
+    identifier linked
   rw [ProgramRead.descAt_of, ProgramRead.progAt_of]
   unfold buildSessionOf buildSessionBy
   rw [Stmt.setupTablesOf_eq_by]
@@ -458,6 +459,21 @@ def identifierInput (args : List String) : IO (Except String (Option (Lean.Json 
         return (canon j).map fun s => some (j, s)
       | .ok _ => return .error "identifier: not a JSON object"
       | .error e => return .error s!"identifier: not JSON: {e}"
+
+/-- `--linked F`: by output port, the row of round 1's tree each unit of the population writes there
+(`Registered.linkedOf`), a path, or with `--archive` its SHA-512; none without the flag. -/
+def linkedInput (args : List String) : IO (Except String (Array (String × Array (Option Nat)))) := do
+  let some f := argOf args "--linked" | return .ok #[]
+  let bytes ← match argOf args "--archive" with
+    | none => (try pure (Except.ok (← IO.FS.readBinFile f)) catch e => pure (Except.error s!"linked: {e}"))
+    | some dir => archiveGet dir f
+  match bytes with
+  | .error e => return .error e
+  | .ok b => match String.fromUTF8? b with
+    | none => return .error "linked: not UTF-8"
+    | some t => match Flock.JsonParse.parse t with
+      | .ok j => return Registered.linkedOf j
+      | .error e => return .error s!"linked: not JSON: {e}"
 
 /-- `--rec-inner F`: the verifier's own shape of V*'s inner session (`RecVStar.Inner`, the line `rec-inner` printed), a path,
 or with `--archive` its SHA-512. -/
@@ -905,7 +921,7 @@ which are the same functions (`verifyMember_eq`). The state is what the call kee
 the call sets it once, before the parse is made, and never reads it. -/
 def verifyCmdBy (readers : ByteArray → ProgramRead.Readers) (circuits : CircuitRead.Readers) (args : List String)
     (upstream : Option Lean.Json := none) : StateT (Option CircuitRead) IO UInt32 := do
-  let usage := "usage: verity-verify-proof verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F [--interface F]] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F] [--rec-links ROOT:N]] [--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F [--rec-inner-program F] [--rec-inner-statement ID [--rec-inner-tables DIR] [--rec-inner-draw F]]] [--rec-inner-session DIR [--rec-inner-transcript F [--rec-inner-registration F]]] [--coins tree | --zk [--ks-form]] [--session-tables J] [--plain-tables] --session DIR..."
+  let usage := "usage: verity-verify-proof verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F [--interface F]] [--linked F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F] [--rec-links ROOT:N]] [--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F [--rec-inner-program F] [--rec-inner-statement ID [--rec-inner-tables DIR] [--rec-inner-draw F]]] [--rec-inner-session DIR [--rec-inner-transcript F [--rec-inner-registration F]]] [--coins tree | --zk [--ks-form]] [--session-tables J] [--plain-tables] --session DIR..."
   let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
   -- a session's line: the checks' outcome, then that of the refusals after them. `verify` prints its verdict; `agree`
   -- whether the checks pass exactly when upstream accepted, and never an acceptance
@@ -997,6 +1013,9 @@ def verifyCmdBy (readers : ByteArray → ProgramRead.Readers) (circuits : Circui
   let identifier : Option (Lean.Json × String) ← match ← identifierInput args with
     | .ok i => pure i
     | .error e => IO.eprintln e; return 2
+  let linked ← match ← linkedInput args with
+    | .ok l => pure l
+    | .error e => IO.eprintln e; return 2
   let recLinks ← match RecLinkTree.linksArg args with
     | .ok l => pure l
     | .error e => IO.eprintln e; return 2
@@ -1070,7 +1089,7 @@ def verifyCmdBy (readers : ByteArray → ProgramRead.Readers) (circuits : Circui
         RecBudget.regs recInner registered
         RecBudget.statements recInner
         let r ← buildSessionBy read.desc read.prog parsed tags circuitB pubB compB coins tables count draw partition
-          program work stratified closure registered publicInputs (identifier.map Prod.snd)
+          program work stratified closure registered publicInputs (identifier.map Prod.snd) linked
         if let some own := registered then r.2.forM fun (st : Stmt) => RegBound.check st.c st.pub program own bound declared
         r.2.forM fun (st : Stmt) => Registered.checkCoverBy read.prog st.c program partition registered params
         r.2.forM fun (st : Stmt) => KnownRead.check st.c known
