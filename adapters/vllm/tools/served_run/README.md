@@ -25,12 +25,11 @@ run is a development run. And an H1 commitment's served execution blocks aren't 
 remote's PoUW subprotocol reads. So the remote verdict can't accept on this run yet, and the run's record stays `pending`.
 
 Its run is `moved` (`applications/README.md`, `remote.toml`'s row): it has no passing run of record. Its proof level
-is none. SPOT's guarantee, `Flock.Guarantees.SampledKSLiveV3`, is proved: when the verifier accepts a `--zk`
+is none. SPOT's guarantee, `Flock.Guarantees.SampledKSLiveV5`, is proved: when the verifier accepts a `--zk`
 session, the committed trace is outside the sampling relation with probability at most δ plus the proof system's
 errors. But the remote protocol's composed theorem, `Verity.remote_soundness_of_subprotocols`, takes its three subprotocols'
 targets as open premises, and no Lean statement carries the acceptance of remote's one-stage form, one-stage v2, which runs the proof check
-itself, to `SampledKSLiveV3`'s event (`verity/protocols/run/verifier/remote/README.md`, "What's open"). PoUW's proof layer needs `AcceptedLive`, which no served path
-meets. Onsite's chain has a gap of its own: network attestation's `NetTiming.Guarantees.SampledAuditAccepted` takes
+itself, to `SampledKSLiveV5`'s event (`verity/protocols/run/verifier/remote/README.md`, "What's open"). No proved guarantee bounds PoUW's proof layer for a served run. Onsite's chain has a gap of its own: network attestation's `NetTiming.Guarantees.SampledAuditAccepted` takes
 `Claims.SamplingGeneric.Compiled.KS` as a hypothesis, and the theorem that gives it at the deployed record,
 `SamplingDeploy.ks_compiled`, is not a lock guarantee and takes the verifier's own facts as hypotheses
 (`benchmarks/prove_path/e2e_chains/README.md`).

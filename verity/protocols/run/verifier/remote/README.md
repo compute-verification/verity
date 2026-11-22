@@ -98,8 +98,8 @@ rule and its difftest are the composition's ([README](../lean/README.md),
    undecided, and it accepts if every subprotocol accepts and it binds. On accept, it publishes each subprotocol's public
    outputs.
 5. **Accounting**, per monitoring period. The accepted verification phases' bounds pool over the monitoring period
-   (`Flock.Guarantees.IntegrityPooled` for SPOT, `ResourceAccounting.Guarantees.ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod`
-   for PoUW), and the slowdown calculator turns them into the slowdown bound (see Results).
+   (`ResourceAccounting.Guarantees.ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod` for PoUW; SPOT's pooled bound
+   runs unproved), and the slowdown calculator turns them into the slowdown bound (see Results).
 
 ## The security argument, end to end
 
@@ -118,8 +118,7 @@ fleet-time than it would without the protocol, by the slowdown bound (part 6). T
 endpoint, and part 6 gives its total failure probability over a monitoring period.
 
 The argument has seven parts. **Each part is proved, stated or open on its own: no Lean theorem yet chains one part's
-conclusion into the next part's hypothesis**, apart from the composition, whose targets are premises. The one partial
-link is `ResourceAccounting.Guarantees.TS.SessionSoundAt`, which consumes part 1's theorem for PoUW's proofs. The links that are missing are listed under What's open. Each part gives
+conclusion into the next part's hypothesis**, apart from the composition, whose targets are premises. The links that are missing are listed under What's open. Each part gives
 what it establishes, what it assumes, its Lean and that Lean's status:
 
 - **proved**: its proof is in a lock (`<Area>.SecurityProofs.G : <Area>.Guarantees.G` in
@@ -167,15 +166,15 @@ commitments' hiding gap.
 **Assumes.**
 
 - SHA-512 collision resistance (`cr/sha-512`, `ecr/sha-512`).
-- The verifier's coins are uniform. Part 1's statements pick them in their own sampling design; `SampledKSLiveV3` and
-  `IntegrityPooled` take `FlockSoundness.Assumptions.UniformRandomBytes`.
+- The verifier's coins are uniform. Part 1's statements pick them in their own sampling design; `SampledKSLiveV5`
+  takes `FlockSoundness.Assumptions.UniformRandomBytes`.
 - The challenger's record the verifier reads is the live run's (`Zk.RecordCustodyZKJPLaw`).
 - The hiding commitments' gap at their pinned key, which is below 2^-193 for all but 2^-64 of keys but not proved small
   for the pinned one.
 
 **Lean.**
 
-- Knowledge soundness of the one-stage audit at the sampled proof blocks: `Flock.Guarantees.EndToEndRegisteredRows`,
+- Knowledge soundness of the one-stage audit at the sampled proof blocks: `Flock.Guarantees.EndToEndRegisteredSampled`,
   **proved**.
 - Zero knowledge against an honest verifier at each fixed coin vector: `Flock.Guarantees.ZeroKnowledgeHidden`, **proved**.
   It holds only at coins the prover doesn't refuse and on runs its self-check doesn't stop, and the self-check's inner
@@ -191,12 +190,13 @@ blocks that are proved. If every sampled proof block is proved, only the proof b
 Pr[accept ∧ more incorrect proof blocks than the sample allows at δ] ≤ δ + ε_ks + ε_bind, ε_bind the binding error of the
 links between proof blocks.
 
-**Assumes.** Part 1's assumptions; the challenger is the auditor's device (`Verity.Assumptions.TrustedDevice`, which `SampledKSLiveV3`
+**Assumes.** Part 1's assumptions; the challenger is the auditor's device (`Verity.Assumptions.TrustedDevice`, which `SampledKSLiveV5`
 doesn't read); its coins
 reach the developer only after the commitment (`CoinsAfterCommitment`, in prose only).
 
-**Lean.** `Flock.Guarantees.SampledKSLiveV3`, **proved**. It states its own sampling relation; it doesn't take part 1's
-theorem as a hypothesis. It takes that the session's files parse and the public file has no shared rows; it reads
+**Lean.** `Flock.Guarantees.SampledKSLiveV5`, **proved**; no served run satisfies a listed guarantee of the
+per-member variant yet. It states its own sampling relation; it doesn't take part 1's theorem as a hypothesis. It
+takes that the session's files parse, with or without shared rows; it reads
 the statement's scope, its tags and the sample off acceptance, since `verify --zk` refuses a session outside them
 (`Flock.KsScope.check`).
 
@@ -229,9 +229,8 @@ The time credit adds the data sheet's rates.
   at `PouwVerifier.Credit.executionPhase`'s verdict over J10-R's tile stratum, the guarantee `PouwVerifier.Period.protocol` names
   (`GUARANTEE`) and refuses every other form of an execution phase for, **proved** under the premises above.
 - The time credit: `ResourceAccounting.Guarantees.Compose.CircuitCredit`, **proved**, reading the data sheet.
-- The proofs behind PoUW's credit, `ResourceAccounting.Guarantees.TS.SessionSoundAt`: **proved**, under `AcceptedLive` (no
-  served path meets it yet), `ExecutionPhaseDesign`, `ServedChecksHold` and `ServedRootsLinked`. It concludes
-  `ProofLayer.SoundAt` from part 1's theorem; it doesn't discharge `ServiceSound`.
+- The proofs behind PoUW's credit: **open**. No proved guarantee concludes `ProofLayer.SoundAt` at what a served run
+  satisfies, and `ServiceSound` stays a premise.
 - The verifier's verdicts tied to these theorems: **open** (What's open, below).
 
 ### 4. The inference-only policy
@@ -305,8 +304,9 @@ also needs δ_s below 2⁻¹⁰⁰.
 
 **Assumes.** Parts 1 to 4's assumptions.
 
-**Lean.** `ResourceAccounting.Guarantees.JointPooledLive` (onsite's five audits in one adaptive game, inference-only not among them), `Flock.Guarantees.IntegrityPooled`
-(SPOT) and `ResourceAccounting.Guarantees.ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod` (PoUW): **proved**. `JointPooledLive`
+**Lean.** `ResourceAccounting.Guarantees.JointPooledLive` (onsite's five audits in one adaptive game, inference-only not among them) and
+`ResourceAccounting.Guarantees.ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod` (PoUW): **proved**. SPOT's pooled
+bound over a period runs unproved. `JointPooledLive`
 takes per-period guarantees as hypotheses; no theorem yet instantiates it with parts 2 and 3.
 
 ### 6. The slowdown bound
@@ -384,7 +384,7 @@ SPOT's accept rule and theorems, the Lean slowdown bounds, and the composed soun
 |---|---|---|---|
 | SPOT's accept rule | `Properties.Spot.AcceptMeans` (`security/Properties/Spot.lean`; proof `acceptMeans`) | **proved** | — |
 | A Flock `--zk` proof, read in the sampling relation: Pr[accept ∧ incorrect proof blocks outside what the sample catches at δ] ≤ δ + ε_ks + ε_bind | `Flock.Guarantees.SampledKSLiveV5` (stated in `security/Proofs/Flock/Bridge/V5/Statement.lean`, proved in `security/Proofs/Flock/Bridge/V5/KSLive.lean`) | **proved** | SPOT `--zk`: proved |
-| SPOT over a monitoring period | `Flock.Guarantees.IntegrityMonitoringPeriod`, `IntegrityPooled` (`security/Proofs/Flock/EndToEnd/Period/Statement.lean`) | **proved** | — |
+| SPOT over a monitoring period | none: no proved guarantee states it at what a served run satisfies | **open** | — |
 | The slowdown over remote, per period | `Slowdown.Guarantees.SlowdownRemote` (`security/Definitions/Slowdown/Guarantees/Remote.lean`) | **proved** | none with a proof layer: it takes `PouwSound`, which no PoUW guarantee instantiates |
 | The slowdown over a monitoring period | `Slowdown.Guarantees.SlowdownRemoteMonitoringPeriod` (`security/Definitions/Slowdown/Guarantees/RemoteMonitoringPeriod.lean`; proof `Slowdown.SecurityProofs.SlowdownRemoteMonitoringPeriod` in `security/Proofs/Slowdown/RemoteMonitoringPeriod.lean`) | **proved**, under `TerminalDetection`, with each verification phase's bounds as hypotheses: PoUW's certificate wrong with probability at most `p` (`CircuitCredit`'s conclusion at the phase), the sample missing `m` incorrect proof blocks with probability at most `(1 − q)^m` and a sampled incorrect proof block undetected with probability at most `ks t`, and each day's count verdict with (H) and (E), pooled over the days | none with a proof layer: the per-phase bounds are hypotheses, and no served path discharges them yet |
 | The composed soundness of remote | `Verity.remote_soundness_of_subprotocols : Verity.RemoteSoundness` (`security/Properties/Verity/Soundness.lean`) | **proved**, from two open targets and the two statements on the committed files (the open gap, above) | — |
@@ -405,7 +405,7 @@ measured cost, the unregistered share, the prices), each labelled with its sourc
 - **Chaining the parts in Lean.**
   - `Vocab.SpotSound` and `Vocab.PouwSound` aren't proved at remote, nor `Vocab.ReadsByPath`, which ties the
     policy's clause, proved on the Program its check judges, to the committed files' wires.
-  - `SampledKSLiveV3` doesn't read part 1's theorem.
+  - `SampledKSLiveV5` doesn't read part 1's theorem.
   - `ServiceSound` and `Slowdown.Assumptions.PouwSound` are undischarged premises.
   - `JointPooledLive` isn't instantiated with parts 2 and 3.
 - **The verifier's verdicts.** SPOT's one-stage form is v2 (`verity/sampled-proofs/one-stage/v2`), which runs
@@ -413,7 +413,7 @@ measured cost, the unregistered share, the prices), each labelled with its sourc
   evidence, and the recursive form, which SPOT's soundness doesn't cover, are refused, and the two-stage form is read and
   checked, then accepted while its switch is on, ahead of its proof. Where v2 accepts, its session
   is in V5's event (`Verity.Sampled.checkBlobs_event`), which is coupled to it (`Verity.Sampled.CouplingTarget`).
-- **PoUW's deployed path.** It meets neither `SaltIsLiveCoin`, the roots' binding nor `AcceptedLive`; `TileSampleIsCoin`
+- **PoUW's deployed path.** It meets neither `SaltIsLiveCoin`, the roots' binding nor an accepted proof's check words being `1`; `TileSampleIsCoin`
   is an unproved code fact.
 - **The pooled δ.** δ_ks and δ_bind have no number, so PoUW's failure over a monitoring period has none either.
 - **The inference-only policy's link to the bound** (part 4, links 1, 5 and 6): the policy's clause on the committed
@@ -476,11 +476,6 @@ PoUW, as `H1J10RCheckedCreditMonitoringPeriod` takes them (`security/Properties/
   and `GuessLuckAt`) at J10-R's shared noise, one computational claim over a call's joint coins.
 - `ResourceAccounting.Assumptions.TS.UnitFixed`: the run's fixed and folded words are at least those of the proof blocks it didn't
   skip. It stays an assumption until those words are defined from the committed values.
-- `ResourceAccounting.Assumptions.TS.AcceptedLive`, a premise of the proofs behind PoUW's credit (`SessionSoundAt`'s), not of the period credit: an
-  accepted proof's check words are `1` as `verity-verify-proof --zk --registered` reads them. No served path meets it yet.
-- `ResourceAccounting.Assumptions.TS.ExecutionPhaseDesign`, `ServedChecksHold` and `ServedRootsLinked`, `SessionSoundAt`'s other premises:
-  the sample follows its stated sampling design, the served checks hold, and the served roots are linked to the
-  registered ones.
 - The data sheet: `ResourceAccounting.Assumptions.TS.SheetClock`, `SheetDispatch`, `SheetTensor`, `SheetPipe`, `SheetSmem`,
   `SheetWords`, `SheetSemantics`, `FoldOpt`, `FoldOptFoldedAt` and `FillOpt`: the GPU's clock, rates and semantics are
   the data sheet's, and the folds are optimal. The live-words credit over a monitoring period (`CircuitCreditMonitoringPeriod`,
@@ -511,7 +506,7 @@ the figures: this page keeps none.
   (`Slowdown.Slowdown.hardwareMultiple`): at least 1, and 1 with no protocol.
 - **Beside each.** Its range (each ranged parameter alone at either end of its plausible range), its worst corner (all
   at once), and the bound that sets it, with each assumption's standing.
-- **The failure probability.** The δ is pooled over the monitoring period (`IntegrityPooled`, `CircuitCreditMonitoringPeriod`),
+- **The failure probability.** The δ is pooled over the monitoring period (`CircuitCreditMonitoringPeriod`; SPOT's pooled bound runs unproved),
   not per verification phase. The calculator prints its own: `CertificateSlack`'s p/ε′ at ε′ = 10⁻⁴,
   PoUW's per-phase p assumed at 3·2⁻⁴⁰ (δ_bind, δ_ks unnumbered, part 5), with no term growing with the period.
 

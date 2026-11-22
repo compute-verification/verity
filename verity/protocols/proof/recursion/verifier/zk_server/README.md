@@ -13,7 +13,7 @@ the only exit, running only the compiled Lean, mixing the operating system's ent
 sending to the workers, and releasing fixed-size messages on a fixed schedule; optionally a release gate and a framing
 filter. None of its elements is in place yet: the ZK server runs on the workers' machines, relays the coins to them and
 serves their reads from its tape. The statements the elements realize: `Flock.zk_server_blind`,
-`Flock.Guarantees.RecursiveZK`, `Flock.Guarantees.SessionLoopZKAnyDeployed`,
+`Flock.Guarantees.RecursiveZKLoop`, `Flock.Guarantees.SessionLoopZKAnyDeployed`,
 `Flock.ZkServer.Contract.ZkServerComputes` and `Flock.zk_server_lean_loop`.
 
 ~~~sh
